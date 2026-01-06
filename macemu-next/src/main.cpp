@@ -41,36 +41,40 @@
 #include "extfs.h"
 #include "drivers/platform/timer_interrupt.h"
 
-// WebRTC streaming (optional, enabled via -Dwebrtc=true)
-#if defined(ENABLE_WEBRTC)
-#include "drivers/video/video_output.h"
-#include "drivers/audio/audio_output.h"
+// WebRTC streaming
 #include "config/config_manager.h"
-#include "drivers/video/video_encoder_thread.h"
-#include "drivers/audio/audio_encoder_thread.h"
-// Note: webrtc_server.cpp merged into main.cpp (it was just thread launching)
+#include "drivers/video/video_webrtc.h"
+#include "drivers/audio/audio_webrtc.h"
+#include "webserver/webserver_main.h"
+#include "webserver/api_handlers.h"
+#include "drivers/video/encoders/codec.h"
 
-// WebRTC globals (from webrtc/globals.cpp)
+// WebRTC globals
 namespace webrtc {
 	std::atomic<bool> g_running(true);
 	std::atomic<bool> g_request_keyframe(false);
+	config::MacemuConfig* g_config = nullptr;  // Global config for driver initialization
 }
 
-// Video encoder globals (shared with video namespace)
+// Video encoder globals
 namespace video {
 	std::atomic<bool> g_running(true);
 	std::atomic<bool> g_request_keyframe(false);
 }
 
-// Audio encoder globals (shared with audio namespace)
+// Audio encoder globals
 namespace audio {
+	std::atomic<bool> g_running(true);
+}
+
+// WebServer globals
+namespace webserver {
 	std::atomic<bool> g_running(true);
 }
 
 // Debug flags
 bool g_debug_png = false;
 bool g_debug_mode_switch = false;
-#endif
 
 #define DEBUG 1
 #include "debug.h"
@@ -134,16 +138,76 @@ int main(int argc, char **argv)
 	// Set RAM size before PrefsInit
 	RAMSize = 32 * 1024 * 1024;  // 32MB
 
+	// Check for --config option first (before PrefsInit consumes it)
+	const char *config_file_override = NULL;
+	for (int i = 1; i < argc; i++) {
+		if (argv[i] && strcmp(argv[i], "--config") == 0 && i+1 < argc) {
+			config_file_override = argv[i+1];
+			break;
+		}
+	}
+
 	// Read preferences (minimal)
 	// This processes --config and other options, modifying argc/argv
 	PrefsInit(NULL, argc, argv);
 
-	// Check for ROM file argument (after PrefsInit processes options)
-	if (argc < 2) {
-		fprintf(stderr, "Usage: %s [--config <file>] [--save-config] <rom-file>\n", argv[0]);
-		return 1;
+	// Check for --no-webserver flag
+	bool enable_webserver = true;
+	for (int i = 1; i < argc; i++) {
+		if (argv[i] && strcmp(argv[i], "--no-webserver") == 0) {
+			enable_webserver = false;
+			argv[i] = NULL;  // Remove from argv
+			break;
+		}
 	}
-	const char *rom_path = argv[1];
+
+	// Load WebRTC configuration if needed
+	static config::MacemuConfig webrtc_config;  // Static so lambda can capture
+	if (enable_webserver) {
+		std::string config_path;
+		if (config_file_override) {
+			config_path = config_file_override;
+		} else {
+			const char* home = getenv("HOME");
+			config_path = std::string(home) + "/.config/macemu-next/config.json";
+		}
+		webrtc_config = config::load_config(config_path);
+		webrtc::g_config = &webrtc_config;  // Store pointer for driver init
+		printf("WebRTC config loaded from %s\n", config_path.c_str());
+	}
+
+	// Install platform drivers (video/audio)
+	if (enable_webserver) {
+		// WebRTC mode: Install WebRTC drivers (will launch encoder threads)
+		printf("Installing WebRTC video/audio drivers...\n");
+		g_platform.video_init = [](bool classic) -> bool {
+			return video_webrtc_init(classic, webrtc::g_config);
+		};
+		g_platform.video_exit = video_webrtc_exit;
+		g_platform.video_refresh = video_webrtc_refresh;
+		g_platform.audio_init = audio_webrtc_init;
+		g_platform.audio_exit = audio_webrtc_exit;
+	} else {
+		// Tracing mode: Keep null drivers (no threads)
+		printf("Using null video/audio drivers (headless mode)...\n");
+		// null drivers already installed by platform_init()
+	}
+
+	// Check for ROM file argument (optional when WebRTC enabled)
+	// Skip NULL entries in argv (consumed by PrefsInit)
+	const char *rom_path = NULL;
+	for (int i = 1; i < argc; i++) {
+		if (argv[i] != NULL) {
+			rom_path = argv[i];
+			break;
+		}
+	}
+
+	// ROM file is optional (webserver mode)
+	if (!rom_path) {
+		printf("No ROM file specified. Starting in webserver mode.\n");
+		printf("You can configure the ROM path in the web UI.\n");
+	}
 	PrefsAddInt32("ramsize", RAMSize);
 	PrefsAddInt32("cpu", 4);  // 68040
 	PrefsAddBool("fpu", true);
@@ -171,60 +235,52 @@ int main(int argc, char **argv)
 	printf("RAM at %p (Mac: 0x%08x)\n", RAMBaseHost, RAMBaseMac);
 	printf("ROM at %p (Mac: 0x%08x)\n", ROMBaseHost, ROMBaseMac);
 
-	// Load ROM
-	printf("\nLoading ROM from %s...\n", rom_path);
-	int rom_fd = open(rom_path, O_RDONLY);
-	if (rom_fd < 0) {
-		fprintf(stderr, "Failed to open ROM file: %s\n", rom_path);
-		return 1;
-	}
+	// Load ROM (skip if no ROM path specified - webserver mode)
+	if (rom_path) {
+		printf("\nLoading ROM from %s...\n", rom_path);
+		int rom_fd = open(rom_path, O_RDONLY);
+		if (rom_fd < 0) {
+			fprintf(stderr, "Failed to open ROM file: %s\n", rom_path);
+			return 1;
+		}
 
-	ROMSize = lseek(rom_fd, 0, SEEK_END);
-	printf("ROM size: %d bytes (%d KB)\n", ROMSize, ROMSize / 1024);
+		ROMSize = lseek(rom_fd, 0, SEEK_END);
+		printf("ROM size: %d bytes (%d KB)\n", ROMSize, ROMSize / 1024);
 
-	if (ROMSize != 64*1024 && ROMSize != 128*1024 && ROMSize != 256*1024 &&
-	    ROMSize != 512*1024 && ROMSize != 1024*1024) {
-		fprintf(stderr, "Invalid ROM size (must be 64/128/256/512/1024 KB)\n");
+		if (ROMSize != 64*1024 && ROMSize != 128*1024 && ROMSize != 256*1024 &&
+		    ROMSize != 512*1024 && ROMSize != 1024*1024) {
+			fprintf(stderr, "Invalid ROM size (must be 64/128/256/512/1024 KB)\n");
+			close(rom_fd);
+			return 1;
+		}
+
+		lseek(rom_fd, 0, SEEK_SET);
+		if (read(rom_fd, ROMBaseHost, ROMSize) != (ssize_t)ROMSize) {
+			fprintf(stderr, "Failed to read ROM file\n");
+			close(rom_fd);
+			return 1;
+		}
 		close(rom_fd);
-		return 1;
+
+		printf("ROM loaded successfully (kept in big-endian format)\n");
+	} else {
+		printf("\nNo ROM file specified - skipping ROM load (webserver mode)\n");
+		ROMSize = 0;  // No ROM loaded
 	}
-
-	lseek(rom_fd, 0, SEEK_SET);
-	if (read(rom_fd, ROMBaseHost, ROMSize) != (ssize_t)ROMSize) {
-		fprintf(stderr, "Failed to read ROM file\n");
-		close(rom_fd);
-		return 1;
-	}
-	close(rom_fd);
-
-	printf("ROM loaded successfully (kept in big-endian format)\n");
-
-	// Check if this is a test ROM by looking for magic header "TROM" at offset 0x10
-	// Real Mac ROMs don't have this signature
-	uint32_t test_magic = ((uint32_t)ROMBaseHost[0x10] << 24) |
-	                      ((uint32_t)ROMBaseHost[0x11] << 16) |
-	                      ((uint32_t)ROMBaseHost[0x12] << 8) |
-	                      ((uint32_t)ROMBaseHost[0x13]);
-	bool is_test_rom = (test_magic == 0x54524F4D);  // "TROM"
-
-	if (is_test_rom) {
-		printf("Detected Test ROM (magic: TROM at 0x10)\n");
-	}
-
 	// ============================================================
 	// Initialize Emulator (inlined from InitAll())
 	// ============================================================
 	printf("\n=== Initializing Emulator ===\n");
 
-	// Check ROM version (skip for test ROMs as they may not have valid ROM version)
-	if (!is_test_rom && !CheckROM()) {
+	// Check ROM version (skip if no ROM loaded)
+	if (ROMSize > 0 && !CheckROM()) {
 		ErrorAlert(STR_UNSUPPORTED_ROM_TYPE_ERR);
 		return 1;
 	}
 
 #if EMULATED_68K
 	// Set CPU and FPU type (UAE emulation)
-	if (!is_test_rom) {
+	if (ROMSize > 0) {
 		switch (ROMVersion) {
 			case ROM_VERSION_64K:
 			case ROM_VERSION_PLUS:
@@ -367,13 +423,15 @@ int main(int argc, char **argv)
 
 	printf("\n=== Selected CPU Backend: %s ===\n", cpu_backend);
 
+	// Skip CPU initialization if no ROM loaded (webserver mode)
+	if (ROMSize > 0) {
 #if EMULATED_68K
-	// Init 680x0 emulation (UAE's memory banking system)
-	// NOTE: Required for all backends currently, but Unicorn will use direct access in future
-	if (!Init680x0()) {
-		fprintf(stderr, "CPU initialization failed\n");
-		return 1;
-	}
+		// Init 680x0 emulation (UAE's memory banking system)
+		// NOTE: Required for all backends currently, but Unicorn will use direct access in future
+		if (!Init680x0()) {
+			fprintf(stderr, "CPU initialization failed\n");
+			return 1;
+		}
 #endif
 
 	// ============================================================
@@ -410,13 +468,11 @@ int main(int argc, char **argv)
 	//
 	// Patches include runtime addresses and may differ between runs due to ASLR.
 	// ============================================================
-	if (!is_test_rom) {
+	if (ROMSize > 0) {
 		if (!PatchROM()) {
 			ErrorAlert(STR_UNSUPPORTED_ROM_TYPE_ERR);
 			return 1;
 		}
-	} else {
-		printf("Skipping ROM patches for test ROM\n");
 	}
 
 #if ENABLE_MON
@@ -427,7 +483,7 @@ int main(int argc, char **argv)
 #endif
 
 	printf("\n=== Initialization Complete ===\n");
-	if (!is_test_rom) {
+	if (ROMSize > 0) {
 		printf("ROM Version: 0x%08x\n", ROMVersion);
 	}
 	printf("CPU Type: 680%02d\n", (CPUType == 0) ? 0 : (CPUType * 10 + 20));
@@ -468,122 +524,78 @@ int main(int argc, char **argv)
 			timeout_thread.detach();
 		}
 	}
+	} else {
+		printf("Skipping CPU initialization (no ROM loaded - webserver mode)\n");
+	}
 
-
-#if defined(ENABLE_WEBRTC)
 	// ============================================================
-	// WebRTC Streaming - Launch Worker Threads
+	// HTTP Server (WebRTC Mode Only)
 	// ============================================================
-	printf("\n=== WebRTC Streaming ===\n");
+	if (enable_webserver) {
+		// Set up API context for HTTP handlers
+		std::string config_path;
+		if (config_file_override) {
+			config_path = config_file_override;
+		} else {
+			const char* home = getenv("HOME");
+			config_path = std::string(home) + "/.config/macemu-next/config.json";
+		}
 
-	// Initialize video and audio output buffers
-	VideoOutput video_output(1920, 1080);  // Max 1080p
-	AudioOutput audio_output(48000, 2);     // 48kHz stereo
+		CodecType server_codec = CodecType::PNG;  // Default
+		http::APIContext api_context;
+		api_context.debug_connection = false;
+		api_context.debug_mode_switch = false;
+		api_context.debug_perf = false;
+		api_context.prefs_path = config_path;
+		api_context.roms_path = "./roms";
+		api_context.images_path = "./storage";
+		api_context.server_codec = &server_codec;
+		api_context.notify_codec_change_fn = [](CodecType codec) {
+			fprintf(stderr, "[API] Codec changed to: %d\n", static_cast<int>(codec));
+			// TODO: Notify video encoder to change codec
+		};
 
-	// Load configuration
-	config::MacemuConfig webrtc_config;
-	// TODO: Load from ~/.config/macemu-next/config.json
-	webrtc_config.web.codec = "png";  // Default codec
+		// Launch HTTP server thread
+		printf("\n=== WebRTC Mode ===\n");
+		printf("Launching HTTP server on port %d...\n", webrtc_config.web.http_port);
+		std::thread http_server_thread(webserver::http_server_main,
+		                                &webrtc_config, &api_context);
 
-	printf("Launching WebRTC worker threads...\n");
+		printf("Emulator ready. Open http://localhost:%d in your browser.\n", webrtc_config.web.http_port);
+		printf("The emulator will start when you click 'Start' in the web UI.\n");
+		printf("Press Ctrl+C to exit.\n\n");
 
-	// Launch encoder threads
-	std::thread video_encoder_thread(video::video_encoder_main,
-	                                  &video_output, &webrtc_config);
-	std::thread audio_encoder_thread(audio::audio_encoder_main,
-	                                  &audio_output);
+		// Wait for HTTP server thread to complete (runs until shutdown signal)
+		http_server_thread.join();
+	} else {
+		// Tracing/Headless mode: Run CPU if ROM loaded
+		if (ROMSize > 0) {
+			printf("\n=== CPU Execution Mode (Headless) ===\n");
+			printf("Starting CPU execution...\n");
+			printf("Press Ctrl+C to exit.\n\n");
 
-	// TODO: Launch HTTP server thread (when implemented)
-	// std::thread http_server_thread(webserver::http_server_main, &webrtc_config);
+			// Run CPU execution loop
+			if (g_platform.cpu_execute_fast) {
+				// Fast path (Unicorn, DualCPU)
+				g_platform.cpu_execute_fast();
+			} else {
+				// Slow path - execute one instruction at a time (UAE)
+				while (webserver::g_running.load(std::memory_order_acquire)) {
+					g_platform.cpu_execute_one();
+				}
+			}
+		} else {
+			printf("\n=== Idle Mode ===\n");
+			printf("No ROM loaded.\n");
+			printf("Press Ctrl+C to exit.\n\n");
 
-	printf("WebRTC threads launched:\n");
-	printf("  - Video Encoder: %s codec\n", webrtc_config.web.codec.c_str());
-	printf("  - Audio Encoder: Opus 48kHz stereo\n");
-	printf("  - HTTP Server: (not yet implemented)\n\n");
-
-	// TODO: Wire Platform API to buffers
-	// g_platform.video = &video_output;
-	// g_platform.audio = &audio_output;
-#else
-	printf("\nWebRTC disabled (build with -Dwebrtc=true to enable)\n\n");
-#endif
-
-	// Execution loop - uses platform CPU API
-	int result;
-	uint64_t instruction_count = 0;
-
-	for (;;) {
-		result = g_platform.cpu_execute_one();
-		instruction_count++;
-
-		// Handle execution results
-		// 0=ok, 1=stopped, 2=breakpoint, 3=exception, 4=emulop, 5=divergence
-		switch (result) {
-			case 0:  // CPU_EXEC_OK
-				// Normal execution, continue
-				continue;
-
-			case 1:  // CPU_EXEC_STOPPED
-				// CPU hit STOP instruction
-				printf("\n=== CPU Stopped ===\n");
-				printf("Instructions executed: %lu\n", instruction_count);
-				printf("Final CPU state:\n");
-				printf("  PC = 0x%08X  SR = 0x%04X\n",
-					g_platform.cpu_get_pc(), g_platform.cpu_get_sr());
-				printf("  D0 = 0x%08X  D1 = 0x%08X  D2 = 0x%08X  D3 = 0x%08X\n",
-					g_platform.cpu_get_dreg(0), g_platform.cpu_get_dreg(1),
-					g_platform.cpu_get_dreg(2), g_platform.cpu_get_dreg(3));
-				printf("  D4 = 0x%08X  D5 = 0x%08X  D6 = 0x%08X  D7 = 0x%08X\n",
-					g_platform.cpu_get_dreg(4), g_platform.cpu_get_dreg(5),
-					g_platform.cpu_get_dreg(6), g_platform.cpu_get_dreg(7));
-				printf("  A0 = 0x%08X  A1 = 0x%08X  A2 = 0x%08X  A3 = 0x%08X\n",
-					g_platform.cpu_get_areg(0), g_platform.cpu_get_areg(1),
-					g_platform.cpu_get_areg(2), g_platform.cpu_get_areg(3));
-				printf("  A4 = 0x%08X  A5 = 0x%08X  A6 = 0x%08X  A7 = 0x%08X\n",
-					g_platform.cpu_get_areg(4), g_platform.cpu_get_areg(5),
-					g_platform.cpu_get_areg(6), g_platform.cpu_get_areg(7));
-				goto exit_loop;
-
-			case 4:  // CPU_EXEC_EMULOP
-				// EmulOp executed and returned
-				// This is normal for BasiliskII - EmulOp handles Mac OS traps
-				// Keep running
-				continue;
-
-			case 3:  // CPU_EXEC_EXCEPTION
-				printf("\n=== Unhandled Exception ===\n");
-				printf("Instructions executed: %lu\n", instruction_count);
-				printf("PC = 0x%08x\n", g_platform.cpu_get_pc());
-				goto exit_loop;
-
-			case 2:  // CPU_EXEC_BREAKPOINT
-				printf("\n=== Breakpoint Hit ===\n");
-				printf("PC = 0x%08x\n", g_platform.cpu_get_pc());
-				goto exit_loop;
-
-			case 5:  // CPU_EXEC_DIVERGENCE
-				fprintf(stderr, "\n=== DualCPU Divergence ===\n");
-				fprintf(stderr, "Instructions executed: %lu\n", instruction_count);
-				goto exit_loop;
+			// Wait for shutdown signal
+			while (webserver::g_running.load(std::memory_order_acquire)) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}
 		}
 	}
-exit_loop:
 
-#if defined(ENABLE_WEBRTC)
-	// Signal worker threads to shut down
-	printf("Shutting down WebRTC threads...\n");
-	video::g_running.store(false, std::memory_order_release);
-	audio::g_running.store(false, std::memory_order_release);
-
-	// Wait for threads to exit
-	video_encoder_thread.join();
-	audio_encoder_thread.join();
-	// TODO: http_server_thread.join(); (when implemented)
-
-	printf("All WebRTC threads exited\n");
-#endif
-
-	// Clean up timer
 	printf("\n=== Shutting Down ===\n");
 	stop_timer_interrupt();
 

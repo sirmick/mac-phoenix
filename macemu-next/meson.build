@@ -32,51 +32,51 @@ unicorn_dep = declare_dependency(
 threads_dep = dependency('threads', required: true)
 m_dep = cc.find_library('m', required: true)  # Math library for Unicorn
 
-# WebRTC streaming dependencies (optional for now)
-enable_webrtc = get_option('webrtc')
-if enable_webrtc
-  # JSON configuration
-  nlohmann_json_dep = dependency('nlohmann_json', required: false, fallback: ['nlohmann_json', 'nlohmann_json_dep'])
-  if not nlohmann_json_dep.found()
-    nlohmann_json_inc = include_directories('external/json/include')
-    nlohmann_json_dep = declare_dependency(include_directories: nlohmann_json_inc)
-  endif
-
-  # Video encoders
-  openh264_dep = dependency('openh264', required: false)
-  libvpx_dep = dependency('vpx', required: false)
-  libwebp_dep = dependency('libwebp', required: false)
-
-  # Audio encoder
-  opus_dep = dependency('opus', required: false)
-
-  # HTTP server
-  cpp_httplib_dep = dependency('cpp-httplib', required: false)
-
-  # WebRTC library
-  libdatachannel_dep = dependency('libdatachannel', required: false)
-
-  # libyuv for color conversion (Ubuntu package lacks .pc file, use find_library)
-  libyuv_lib = cc.find_library('yuv', required: false)
-  if libyuv_lib.found()
-    libyuv_dep = declare_dependency(
-      dependencies: [libyuv_lib],
-      include_directories: include_directories('/usr/include')
-    )
-  else
-    libyuv_dep = dependency('', required: false)  # Dummy for .found() check
-  endif
-
-  message('WebRTC dependencies:')
-  message('  nlohmann_json: ' + nlohmann_json_dep.found().to_string())
-  message('  openh264: ' + openh264_dep.found().to_string())
-  message('  libvpx (VP9): ' + libvpx_dep.found().to_string())
-  message('  libwebp: ' + libwebp_dep.found().to_string())
-  message('  opus: ' + opus_dep.found().to_string())
-  message('  cpp-httplib: ' + cpp_httplib_dep.found().to_string())
-  message('  libdatachannel: ' + libdatachannel_dep.found().to_string())
-  message('  libyuv: ' + libyuv_dep.found().to_string())
+# WebRTC streaming dependencies (always enabled)
+# JSON configuration
+nlohmann_json_dep = dependency('nlohmann_json', required: false, fallback: ['nlohmann_json', 'nlohmann_json_dep'])
+if not nlohmann_json_dep.found()
+  nlohmann_json_inc = include_directories('external/json/include')
+  nlohmann_json_dep = declare_dependency(include_directories: nlohmann_json_inc)
 endif
+
+# Video encoders
+openh264_dep = dependency('openh264', required: false)
+libvpx_dep = dependency('vpx', required: false)
+libwebp_dep = dependency('libwebp', required: false)
+
+# Audio encoder
+opus_dep = dependency('opus', required: false)
+
+# HTTP server
+cpp_httplib_dep = dependency('cpp-httplib', required: false)
+
+# OpenSSL (for MD5 in file_scanner.cpp)
+openssl_dep = dependency('openssl', required: true)
+
+# WebRTC library
+libdatachannel_dep = dependency('libdatachannel', required: false)
+
+# libyuv for color conversion (Ubuntu package lacks .pc file, use find_library)
+libyuv_lib = cc.find_library('yuv', required: false)
+if libyuv_lib.found()
+  libyuv_dep = declare_dependency(
+    dependencies: [libyuv_lib],
+    include_directories: include_directories('/usr/include')
+  )
+else
+  libyuv_dep = dependency('', required: false)  # Dummy for .found() check
+endif
+
+message('WebRTC dependencies:')
+message('  nlohmann_json: ' + nlohmann_json_dep.found().to_string())
+message('  openh264: ' + openh264_dep.found().to_string())
+message('  libvpx (VP9): ' + libvpx_dep.found().to_string())
+message('  libwebp: ' + libwebp_dep.found().to_string())
+message('  opus: ' + opus_dep.found().to_string())
+message('  cpp-httplib: ' + cpp_httplib_dep.found().to_string())
+message('  libdatachannel: ' + libdatachannel_dep.found().to_string())
+message('  libyuv: ' + libyuv_dep.found().to_string())
 
 # Build info
 message('Build configuration:')
@@ -89,13 +89,11 @@ subdir('src/cpu')
 subdir('src/core')
 subdir('src/drivers')
 
-# Optional WebRTC streaming
-if enable_webrtc
-  subdir('src/config')
-  subdir('src/webserver')
-  subdir('src/drivers/video/encoders')
-  subdir('src/drivers/audio/encoders')
-endif
+# WebRTC streaming (always enabled)
+subdir('src/config')
+subdir('src/webserver')
+subdir('src/drivers/video/encoders')
+subdir('src/drivers/audio/encoders')
 
 # Main executable
 macemu_next_sources = ['src/main.cpp']
@@ -111,36 +109,36 @@ macemu_next_inc = [
 ]
 macemu_next_cpp_args = []
 
-# Add WebRTC support if enabled
-if enable_webrtc
-  macemu_next_cpp_args += ['-DENABLE_WEBRTC']
-  macemu_next_link_with += [config_lib, webserver_lib, video_encoder_lib, audio_encoder_lib]
-  macemu_next_deps += [nlohmann_json_dep]
+# Add WebRTC support (always enabled)
+macemu_next_link_with += [config_lib, webserver_lib, video_encoder_lib, audio_encoder_lib]
+macemu_next_deps += [nlohmann_json_dep]
 
-  # Add codec dependencies if found
-  if openh264_dep.found()
-    macemu_next_deps += [openh264_dep]
-  endif
-  if libvpx_dep.found()
-    macemu_next_deps += [libvpx_dep]
-  endif
-  if libwebp_dep.found()
-    macemu_next_deps += [libwebp_dep]
-  endif
-  if opus_dep.found()
-    macemu_next_deps += [opus_dep]
-  endif
-  if libyuv_dep.found()
-    macemu_next_deps += [libyuv_dep]
-  endif
-
-  macemu_next_inc += [
-    include_directories('src/config'),
-    include_directories('src/webserver'),
-    include_directories('src/drivers/video'),
-    include_directories('src/drivers/audio'),
-  ]
+# Add codec dependencies if found
+if openh264_dep.found()
+  macemu_next_deps += [openh264_dep]
 endif
+if libvpx_dep.found()
+  macemu_next_deps += [libvpx_dep]
+endif
+if libwebp_dep.found()
+  macemu_next_deps += [libwebp_dep]
+endif
+if opus_dep.found()
+  macemu_next_deps += [opus_dep]
+endif
+if libyuv_dep.found()
+  macemu_next_deps += [libyuv_dep]
+endif
+
+# Add OpenSSL (required for MD5)
+macemu_next_deps += [openssl_dep]
+
+macemu_next_inc += [
+  include_directories('src/config'),
+  include_directories('src/webserver'),
+  include_directories('src/drivers/video'),
+  include_directories('src/drivers/audio'),
+]
 
 macemu_next = executable('macemu-next',
   macemu_next_sources,

@@ -28,9 +28,3 @@ option('ipc_only',
   value: true,
   description: 'Use IPC drivers only (no in-process devices)'
 )
-
-option('webrtc',
-  type: 'boolean',
-  value: false,
-  description: 'Enable WebRTC streaming support (requires additional dependencies)'
-)

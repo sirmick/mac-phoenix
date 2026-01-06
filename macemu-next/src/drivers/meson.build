@@ -3,6 +3,7 @@
 # Video drivers
 video_driver_sources = [
   'video/video_null.cpp',
+  'video/video_webrtc.cpp',
   'video/video_adapter.cpp',
   'video/video_output.cpp',
   'video/video_encoder_thread.cpp',
@@ -11,6 +12,7 @@ video_driver_sources = [
 # Audio drivers
 audio_driver_sources = [
   'audio/audio_null.cpp',
+  'audio/audio_webrtc.cpp',
   'audio/audio_adapter.cpp',
   'audio/audio_output.cpp',
   'audio/audio_encoder_thread.cpp',
@@ -46,6 +48,8 @@ driver_inc = include_directories(
   '../cpu',
   '../cpu/uae_cpu',
   '../platform',
+  '../config',
+  '../webserver',
 )
 
 driver_lib = static_library('drivers',

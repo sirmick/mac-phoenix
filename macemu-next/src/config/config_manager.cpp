@@ -29,6 +29,8 @@ MacemuConfig load_config(const std::string& path) {
             if (web.contains("emulator")) cfg.web.emulator = json_utils::get_string(web, "emulator");
             if (web.contains("codec")) cfg.web.codec = json_utils::get_string(web, "codec");
             if (web.contains("mousemode")) cfg.web.mousemode = json_utils::get_string(web, "mousemode");
+            if (web.contains("http_port")) cfg.web.http_port = json_utils::get_int(web, "http_port");
+            if (web.contains("client_dir")) cfg.web.client_dir = json_utils::get_string(web, "client_dir");
         }
 
         // Common config
@@ -94,6 +96,8 @@ bool save_config(const std::string& path, const MacemuConfig& config) {
         j["web"]["emulator"] = config.web.emulator;
         j["web"]["codec"] = config.web.codec;
         j["web"]["mousemode"] = config.web.mousemode;
+        j["web"]["http_port"] = config.web.http_port;
+        j["web"]["client_dir"] = config.web.client_dir;
 
         // Common config
         j["common"]["ram"] = config.common.ram;

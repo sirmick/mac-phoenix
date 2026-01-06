@@ -53,6 +53,8 @@ struct WebConfig {
     std::string emulator = "m68k";  // "m68k" or "ppc"
     std::string codec = "h264";
     std::string mousemode = "relative";
+    int http_port = 8080;           // HTTP server port
+    std::string client_dir = "./client";  // Client files directory
 };
 
 struct MacemuConfig {

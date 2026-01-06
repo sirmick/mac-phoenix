@@ -77,7 +77,7 @@ echo "│ Step 1/3: Running UAE (interpreter baseline)                  │"
 echo "└────────────────────────────────────────────────────────────────┘"
 
 env EMULATOR_TIMEOUT=$TIMEOUT CPU_TRACE="$TRACE_RANGE" CPU_BACKEND=uae \
-    "$MACEMU_BIN" --config "$CONFIG_FILE" "$ROM" > "$OUTDIR/uae_full.log" 2>&1
+    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver "$ROM" > "$OUTDIR/uae_full.log" 2>&1
 UAE_EXIT=$?
 
 # Extract just trace lines
@@ -97,7 +97,7 @@ echo "│ Step 2/3: Running Unicorn (JIT target)                        │"
 echo "└────────────────────────────────────────────────────────────────┘"
 
 env EMULATOR_TIMEOUT=$TIMEOUT CPU_TRACE="$TRACE_RANGE" CPU_BACKEND=unicorn \
-    "$MACEMU_BIN" --config "$CONFIG_FILE" "$ROM" > "$OUTDIR/unicorn_full.log" 2>&1
+    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver "$ROM" > "$OUTDIR/unicorn_full.log" 2>&1
 UNICORN_EXIT=$?
 
 # Extract just trace lines
@@ -117,7 +117,7 @@ echo "│ Step 3/3: Running DualCPU (lockstep validation)               │"
 echo "└────────────────────────────────────────────────────────────────┘"
 
 env EMULATOR_TIMEOUT=$TIMEOUT DUALCPU_TRACE_DEPTH=20 CPU_BACKEND=dualcpu \
-    "$MACEMU_BIN" --config "$CONFIG_FILE" "$ROM" > "$OUTDIR/dualcpu_full.log" 2>&1 || true
+    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver "$ROM" > "$OUTDIR/dualcpu_full.log" 2>&1 || true
 DUALCPU_EXIT=$?
 
 # Extract just trace lines
