@@ -55,6 +55,7 @@ struct WebConfig {
     std::string mousemode = "relative";
     int http_port = 8080;           // HTTP server port
     std::string client_dir = "./client";  // Client files directory
+    std::string storage_dir = "./storage";  // Storage directory for disk images/ROMs
 };
 
 struct MacemuConfig {

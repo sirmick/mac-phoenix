@@ -173,7 +173,6 @@ int main(int argc, char **argv)
 		}
 		webrtc_config = config::load_config(config_path);
 		webrtc::g_config = &webrtc_config;  // Store pointer for driver init
-		printf("WebRTC config loaded from %s\n", config_path.c_str());
 	}
 
 	// Install platform drivers (video/audio)

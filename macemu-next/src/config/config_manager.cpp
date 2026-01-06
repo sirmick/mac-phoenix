@@ -31,6 +31,7 @@ MacemuConfig load_config(const std::string& path) {
             if (web.contains("mousemode")) cfg.web.mousemode = json_utils::get_string(web, "mousemode");
             if (web.contains("http_port")) cfg.web.http_port = json_utils::get_int(web, "http_port");
             if (web.contains("client_dir")) cfg.web.client_dir = json_utils::get_string(web, "client_dir");
+            if (web.contains("storage_dir")) cfg.web.storage_dir = json_utils::get_string(web, "storage_dir");
         }
 
         // Common config
@@ -75,7 +76,8 @@ MacemuConfig load_config(const std::string& path) {
             if (ppc.contains("keyboardtype")) cfg.ppc.keyboardtype = json_utils::get_int(ppc, "keyboardtype");
         }
 
-        fprintf(stderr, "Config: Loaded from %s (emulator=%s)\n", path.c_str(), cfg.web.emulator.c_str());
+        printf("Loading configuration from: %s\n", path.c_str());
+        printf("Configuration loaded successfully\n");
 
     } catch (const std::exception& e) {
         fprintf(stderr, "Config: Failed to parse JSON: %s\n", e.what());
@@ -98,6 +100,7 @@ bool save_config(const std::string& path, const MacemuConfig& config) {
         j["web"]["mousemode"] = config.web.mousemode;
         j["web"]["http_port"] = config.web.http_port;
         j["web"]["client_dir"] = config.web.client_dir;
+        j["web"]["storage_dir"] = config.web.storage_dir;
 
         // Common config
         j["common"]["ram"] = config.common.ram;
