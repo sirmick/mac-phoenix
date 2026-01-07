@@ -142,6 +142,26 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
                 peer_count_++;
             }
 
+            // Send "connected" acknowledgment (like web-streaming does)
+            const char* codec_name = (codec == CodecType::H264) ? "h264" :
+                                    (codec == CodecType::AV1) ? "av1" :
+                                    (codec == CodecType::VP9) ? "vp9" :
+                                    (codec == CodecType::WEBP) ? "webp" : "png";
+
+            nlohmann::json ack;
+            ack["type"] = "connected";
+            ack["peer_id"] = peer_id;
+            ack["codec"] = codec_name;
+
+            {
+                std::lock_guard<std::mutex> lock(peers_mutex_);
+                auto it = ws_connections_.find(ws);
+                if (it != ws_connections_.end() && it->second) {
+                    it->second->send(ack.dump());
+                    fprintf(stderr, "[WebRTC] Sent 'connected' ack to peer %s\n", peer_id.c_str());
+                }
+            }
+
             // Server creates offer (will be sent via onLocalDescription callback)
             // Note: libdatachannel will automatically generate offer when tracks are added
 
@@ -244,17 +264,18 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     auto ws_connections = &ws_connections_;
     std::mutex* peers_mutex = &peers_mutex_;
 
-    // Send local description (answer) to browser
+    // Send local description (offer or answer) to browser
     peer->pc->onLocalDescription([ws, ws_connections, peers_mutex, peer_id](rtc::Description desc) {
-        nlohmann::json answer;
-        answer["type"] = "answer";
-        answer["peerId"] = peer_id;
-        answer["sdp"] = std::string(desc);
+        nlohmann::json msg;
+        msg["type"] = desc.typeString();  // "offer" or "answer"
+        msg["sdp"] = std::string(desc);
 
         std::lock_guard<std::mutex> lock(*peers_mutex);
         auto ws_it = ws_connections->find(ws);
         if (ws_it != ws_connections->end() && ws_it->second) {
-            ws_it->second->send(answer.dump());
+            ws_it->second->send(msg.dump());
+            fprintf(stderr, "[WebRTC] Sent %s to %s (sdp length=%zu)\n",
+                    desc.typeString().c_str(), peer_id.c_str(), std::string(desc).size());
         }
     });
 
