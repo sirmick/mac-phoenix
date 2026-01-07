@@ -162,8 +162,8 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
                 }
             }
 
-            // Server creates offer (will be sent via onLocalDescription callback)
-            // Note: libdatachannel will automatically generate offer when tracks are added
+            // Trigger offer creation - this will call onLocalDescription when ready
+            peer->pc->setLocalDescription();
 
         } else if (type == "answer") {
             // Client sent answer to our offer
