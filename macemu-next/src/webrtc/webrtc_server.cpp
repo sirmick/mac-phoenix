@@ -389,11 +389,22 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     audio.addSSRC(ssrc + 1, "audio-stream", "stream1", "audio-stream");
     peer->audio_track = peer->pc->addTrack(audio);
 
-    // Set up Opus RTP packetizer
+    // Set up Opus RTP packetizer (following web-streaming pattern)
     auto rtpConfigAudio = std::make_shared<rtc::RtpPacketizationConfig>(
         ssrc + 1, "audio-stream", 111, rtc::OpusRtpPacketizer::defaultClockRate
     );
     auto opusPacketizer = std::make_shared<rtc::OpusRtpPacketizer>(rtpConfigAudio);
+
+    // Add RTCP SR (Sender Report) for proper timestamp synchronization
+    // This is CRITICAL for browsers to correctly sync and play audio
+    auto srReporter = std::make_shared<rtc::RtcpSrReporter>(rtpConfigAudio);
+    opusPacketizer->addToChain(srReporter);
+
+    // Add RTCP NACK (Negative Acknowledgement) responder for packet loss recovery
+    // Improves audio quality on lossy networks
+    auto nackResponder = std::make_shared<rtc::RtcpNackResponder>();
+    opusPacketizer->addToChain(nackResponder);
+
     peer->audio_track->setMediaHandler(opusPacketizer);
 
     peer->audio_track->onOpen([peer_id]() {
