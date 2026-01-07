@@ -119,18 +119,26 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
             fprintf(stderr, "[WebRTC] Client connect request - creating peer connection for %s (codec: %s)\n",
                     peer_id.c_str(), codec_str.c_str());
 
+            // Store WebSocket mapping FIRST (create_peer_connection needs it)
+            {
+                std::lock_guard<std::mutex> lock(peers_mutex_);
+                ws_to_peer_id_[ws] = peer_id;
+            }
+
             // Create peer connection (server-initiated)
             auto peer = create_peer_connection(peer_id, codec);
             if (!peer) {
                 fprintf(stderr, "[WebRTC] Failed to create peer connection\n");
+                // Remove mapping on failure
+                std::lock_guard<std::mutex> lock(peers_mutex_);
+                ws_to_peer_id_.erase(ws);
                 return;
             }
 
-            // Store peer and mapping
+            // Store peer
             {
                 std::lock_guard<std::mutex> lock(peers_mutex_);
                 peers_[peer_id] = peer;
-                ws_to_peer_id_[ws] = peer_id;
                 peer_count_++;
             }
 
