@@ -12,8 +12,8 @@
 
 namespace http {
 
-StaticFileHandler::StaticFileHandler(const std::string& root_dir)
-    : root_dir_(root_dir)
+StaticFileHandler::StaticFileHandler(const std::string& root_dir, const std::string& config_path)
+    : root_dir_(root_dir), config_path_(config_path)
 {}
 
 bool StaticFileHandler::handles(const std::string& path) const {
@@ -99,8 +99,9 @@ std::string StaticFileHandler::get_content_type(const std::string& path) const {
 }
 
 std::string StaticFileHandler::inject_config_template(const std::string& html) const {
-    // Load config from disk
-    config::MacemuConfig cfg = config::load_config("macemu-config.json");
+    // Load config from disk (use provided config path, fallback to relative path)
+    std::string cfg_path = config_path_.empty() ? "macemu-config.json" : config_path_;
+    config::MacemuConfig cfg = config::load_config(cfg_path);
 
     // Build JSON (same structure as /api/config endpoint)
     nlohmann::json j;

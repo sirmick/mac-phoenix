@@ -402,8 +402,8 @@ Response APIRouter::handle_codec_post(const Request& req) {
 // ============================================================================
 
 Response APIRouter::handle_config_get(const Request& req) {
-    // Load and return macemu-config.json
-    config::MacemuConfig cfg = config::load_config("macemu-config.json");
+    // Load and return the unified config
+    config::MacemuConfig cfg = config::load_config(ctx_->prefs_path);
     
     // Convert to JSON
     nlohmann::json j;

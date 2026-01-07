@@ -34,8 +34,8 @@ void http_server_main(const config::MacemuConfig* config,
     fprintf(stderr, "[WebServer] Port: %d\n", port);
     fprintf(stderr, "[WebServer] Client directory: %s\n", client_dir.c_str());
 
-    // Create static file handler
-    auto static_handler = std::make_unique<http::StaticFileHandler>(client_dir);
+    // Create static file handler (with config path for template injection)
+    auto static_handler = std::make_unique<http::StaticFileHandler>(client_dir, api_context->prefs_path);
 
     // Create API router
     auto api_router = std::make_unique<http::APIRouter>(api_context);

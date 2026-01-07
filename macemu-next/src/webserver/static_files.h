@@ -19,7 +19,7 @@ namespace http {
  */
 class StaticFileHandler {
 public:
-    explicit StaticFileHandler(const std::string& root_dir);
+    explicit StaticFileHandler(const std::string& root_dir, const std::string& config_path = "");
 
     // Try to serve a static file for the given path
     // Returns empty response if file not found (check with is_valid())
@@ -34,6 +34,7 @@ private:
     std::string inject_config_template(const std::string& html) const;
 
     std::string root_dir_;
+    std::string config_path_;
 };
 
 } // namespace http
