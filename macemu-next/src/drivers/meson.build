@@ -55,6 +55,7 @@ driver_inc = include_directories(
 driver_lib = static_library('drivers',
   driver_sources,
   include_directories: driver_inc,
+  dependencies: [libdatachannel_dep],
 )
 
 driver_dep = declare_dependency(

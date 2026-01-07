@@ -13,6 +13,7 @@
 #include "video_encoder_thread.h"
 #include "video_output.h"
 #include "../../config/config_manager.h"
+#include "../../webrtc/webrtc_server.h"
 #include "encoders/h264_encoder.h"
 #include "encoders/vp9_encoder.h"
 #include "encoders/webp_encoder.h"
@@ -60,13 +61,18 @@ static std::unique_ptr<VideoCodec> create_video_encoder(CodecType codec) {
 
 /**
  * Send encoded frame to WebRTC
- * TODO: Replace with actual WebRTC send function
  */
 static void send_encoded_frame(const EncodedFrame& frame) {
-    // TODO: Queue frame for WebRTC thread to send via RTP
-    // For now, just count it
-    (void)frame;
     g_frames_encoded++;
+
+    // Send to WebRTC server if available
+    if (webrtc::g_server) {
+        webrtc::g_server->send_video_frame(
+            frame.data.data(),
+            frame.data.size(),
+            frame.is_keyframe
+        );
+    }
 }
 
 /**

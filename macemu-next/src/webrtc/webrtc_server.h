@@ -127,6 +127,10 @@ private:
  */
 void webrtc_server_main(WebRTCServer* server, std::atomic<bool>* running);
 
+// Global WebRTC server instance (set in main.cpp)
+// Used by encoder threads to send video/audio frames to connected peers
+extern WebRTCServer* g_server;
+
 } // namespace webrtc
 
 #endif // WEBRTC_SERVER_H

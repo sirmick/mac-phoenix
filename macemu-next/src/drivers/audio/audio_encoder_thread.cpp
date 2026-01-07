@@ -13,6 +13,7 @@
 #include "audio_output.h"
 #include "encoders/opus_encoder.h"
 #include "encoders/audio_config.h"
+#include "../../webrtc/webrtc_server.h"
 #include <thread>
 
 #include <memory>
@@ -32,13 +33,14 @@ static std::atomic<uint64_t> g_audio_underruns(0);
 
 /**
  * Send encoded audio packet to WebRTC
- * TODO: Replace with actual WebRTC send function
  */
 static void send_encoded_audio(const std::vector<uint8_t>& packet) {
-    // TODO: Queue packet for WebRTC thread to send via RTP
-    // For now, just count it
-    (void)packet;
     g_audio_packets_sent++;
+
+    // Send to WebRTC server if available
+    if (webrtc::g_server) {
+        webrtc::g_server->send_audio_frame(packet.data(), packet.size());
+    }
 }
 
 /**

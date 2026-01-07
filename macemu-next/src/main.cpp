@@ -55,6 +55,7 @@ namespace webrtc {
 	std::atomic<bool> g_running(true);
 	std::atomic<bool> g_request_keyframe(false);
 	config::MacemuConfig* g_config = nullptr;  // Global config for driver initialization
+	WebRTCServer* g_server = nullptr;  // Global WebRTC server for encoder threads to send frames
 }
 
 // Video encoder globals
@@ -576,6 +577,9 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Failed to start WebRTC signaling server\n");
 			return 1;
 		}
+
+		// Set global pointer so encoder threads can send frames
+		webrtc::g_server = &webrtc_server;
 
 		// Launch HTTP server thread
 		std::thread http_server_thread(webserver::http_server_main,
