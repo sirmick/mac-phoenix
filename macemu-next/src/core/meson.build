@@ -5,6 +5,7 @@ core_sources = [
   'cdrom.cpp',
   'disk.cpp',
   'emul_op.cpp',
+  'emulator_init.cpp',  # Deferred initialization support
   'ether.cpp',
   'extfs.cpp',
   'json_config.cpp',
@@ -23,6 +24,7 @@ core_sources = [
   'video.cpp',
   'xpram.cpp',
   '../common/platform.cpp',  # Platform initialization
+  '../common/crash_handler_init.cpp',  # Crash handler with stack traces
 ]
 
 core_inc = include_directories(
@@ -30,6 +32,7 @@ core_inc = include_directories(
   '../common/include',
   '../cpu',
   '../cpu/uae_cpu',
+  '../drivers/platform',  # For timer_interrupt.h
   '../../external/json/include',  # nlohmann/json
 )
 

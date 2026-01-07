@@ -193,17 +193,9 @@ void Start680x0_until_stopped(void)
  *  Now uses platform API to support multiple CPU backends (UAE, Unicorn, DualCPU)
  */
 
-void Execute68kTrap(uint16 trap, struct M68kRegisters *r)
+// UAE-specific trap execution (for use by UAE backend via platform API)
+static void uae_execute_68k_trap_internal(uint16 trap, struct M68kRegisters *r)
 {
-	// Use platform API if available (supports Unicorn, DualCPU, etc.)
-	if (g_platform.cpu_execute_68k_trap) {
-		g_platform.cpu_execute_68k_trap(trap, r);
-		return;
-	}
-
-	// Fallback to UAE-specific implementation (should not reach here in normal operation)
-	fprintf(stderr, "[WARNING] Execute68kTrap: Platform API not available, using UAE fallback\n");
-
 	int i;
 
 	// Save old PC
@@ -240,6 +232,30 @@ void Execute68kTrap(uint16 trap, struct M68kRegisters *r)
 	for (i=0; i<7; i++)
 		r->a[i] = m68k_areg(regs, i);
 	quit_program = false;
+}
+
+// Non-static wrapper for platform API registration
+void uae_execute_68k_trap(uint16 trap, struct M68kRegisters *r)
+{
+	uae_execute_68k_trap_internal(trap, r);
+}
+
+/*
+ *  Execute MacOS 68k trap (platform API version)
+ *  Uses platform abstraction to support multiple CPU backends
+ */
+
+void Execute68kTrap(uint16 trap, struct M68kRegisters *r)
+{
+	// Use platform API if available
+	if (g_platform.cpu_execute_68k_trap) {
+		g_platform.cpu_execute_68k_trap(trap, r);
+		return;
+	}
+
+	// Fallback to UAE internal implementation (should not happen after UAE backend is installed)
+	fprintf(stderr, "[WARNING] Execute68kTrap: Platform API not available, using UAE fallback\n");
+	uae_execute_68k_trap_internal(trap, r);
 }
 
 

@@ -10,6 +10,7 @@
 #include "../config/prefs_manager.h"
 #include "../config/json_utils.h"
 #include "../common/include/sysdeps.h"  // For uint32 type
+#include "../core/emulator_init.h"  // For deferred initialization
 #include <sstream>
 #include <iomanip>
 #include <cstdio>
@@ -255,21 +256,78 @@ Response APIRouter::handle_status(const Request& req) {
 Response APIRouter::handle_emulator_start(const Request& req) {
     (void)req;
 
-    // Check if ROM is loaded (CPU only initializes when ROM is present)
-    if (ROMSize == 0) {
-        fprintf(stderr, "[API] Cannot start - no ROM loaded. User must restart with ROM path.\n");
+    // Check if already initialized
+    if (g_emulator_initialized) {
+        fprintf(stderr, "[API] Emulator already initialized - resuming CPU\n");
+
+        if (!ctx_->cpu_running || !ctx_->cpu_cv) {
+            return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
+        }
+
+        // Resume CPU execution
+        {
+            std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
+            ctx_->cpu_running->store(true, std::memory_order_release);
+        }
+        ctx_->cpu_cv->notify_one();  // Wake up CPU thread
+        fprintf(stderr, "[API] CPU resumed via web UI\n");
+
+        return Response::json("{\"success\": true, \"message\": \"CPU resumed\"}");
+    }
+
+    // Not initialized - need to load ROM and initialize emulator
+    fprintf(stderr, "[API] Emulator not initialized - loading ROM and initializing...\n");
+
+    // Load config to get ROM path
+    config::MacemuConfig config = config::load_config(ctx_->prefs_path);
+
+    std::string emulator_type = config.web.emulator;  // "m68k" or "ppc"
+    std::string rom_filename;
+
+    if (emulator_type == "m68k") {
+        rom_filename = config.m68k.rom;
+    } else if (emulator_type == "ppc") {
+        rom_filename = config.ppc.rom;
+    } else {
+        fprintf(stderr, "[API] ERROR: Unknown emulator type: %s\n", emulator_type.c_str());
         return Response::json(
-            "{\"success\": false, "
-            "\"error\": \"No ROM loaded\", "
-            "\"message\": \"Please configure a ROM, then restart the emulator process\"}"
+            "{\"success\": false, \"error\": \"Invalid emulator type in config\"}"
         );
     }
 
+    if (rom_filename.empty()) {
+        fprintf(stderr, "[API] ERROR: No ROM configured in config file\n");
+        return Response::json(
+            "{\"success\": false, "
+            "\"error\": \"No ROM configured\", "
+            "\"message\": \"Please configure a ROM path in the settings\"}"
+        );
+    }
+
+    // Initialize emulator with ROM
+    std::string storage_dir = config.web.storage_dir;
+
+    fprintf(stderr, "[API] Initializing emulator: %s with ROM: %s\n",
+            emulator_type.c_str(), rom_filename.c_str());
+
+    if (!init_emulator_from_config(emulator_type.c_str(),
+                                    storage_dir.c_str(),
+                                    rom_filename.c_str())) {
+        fprintf(stderr, "[API] ERROR: Failed to initialize emulator\n");
+        return Response::json(
+            "{\"success\": false, "
+            "\"error\": \"Failed to load ROM and initialize CPU\", "
+            "\"message\": \"Check that the ROM file exists and is valid\"}"
+        );
+    }
+
+    fprintf(stderr, "[API] Emulator initialized successfully\n");
+
+    // Start CPU execution
     if (!ctx_->cpu_running || !ctx_->cpu_cv) {
         return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
     }
 
-    // Start CPU execution
     {
         std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
         ctx_->cpu_running->store(true, std::memory_order_release);
@@ -277,7 +335,7 @@ Response APIRouter::handle_emulator_start(const Request& req) {
     ctx_->cpu_cv->notify_one();  // Wake up CPU thread
     fprintf(stderr, "[API] CPU started via web UI\n");
 
-    return Response::json("{\"success\": true, \"message\": \"CPU started\"}");
+    return Response::json("{\"success\": true, \"message\": \"Emulator initialized and CPU started\"}");
 }
 
 Response APIRouter::handle_emulator_stop(const Request& req) {

@@ -10,3 +10,13 @@
 
 # Boot test
 subdir('boot')
+
+# Crash handler test
+crash_test = executable('crash_test',
+  'crash_test.cpp',
+  '../src/common/crash_handler_init.cpp',
+  include_directories: [
+    include_directories('../src/common/include'),
+  ],
+  install: false,
+)

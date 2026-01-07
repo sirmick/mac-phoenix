@@ -40,6 +40,8 @@
 #include "platform.h"
 #include "extfs.h"
 #include "drivers/platform/timer_interrupt.h"
+#include "core/emulator_init.h"  // For deferred initialization
+#include "crash_handler_init.h"  // Crash handler with stack traces
 
 // WebRTC streaming
 #include "config/config_manager.h"
@@ -142,6 +144,9 @@ void EnableInterrupt(void)
 int main(int argc, char **argv)
 {
 	printf("=== macemu-next ===\n\n");
+
+	// Install crash handlers (SIGSEGV, SIGBUS, etc.) with stack traces
+	install_crash_handlers();
 
 	// Initialize platform with null drivers
 	platform_init();
@@ -525,6 +530,9 @@ int main(int argc, char **argv)
 	printf("\n=== Setting up Timer Interrupt ===\n");
 	setup_timer_interrupt();
 
+	// Mark emulator as initialized (for deferred init check)
+	g_emulator_initialized = true;
+
 	// Optional auto-exit timer (set EMULATOR_TIMEOUT=2 for 2 seconds)
 	const char *timeout_env = getenv("EMULATOR_TIMEOUT");
 	if (timeout_env) {
@@ -589,51 +597,55 @@ int main(int argc, char **argv)
 		std::thread webrtc_server_thread(webrtc::webrtc_server_main,
 		                                  &webrtc_server, &webrtc_signaling::g_running);
 
-		// Launch CPU execution thread (if ROM is loaded)
-		std::thread cpu_thread;
-		if (ROMSize > 0) {
-			printf("Launching CPU execution thread (CPU starts in stopped state)...\n");
-			cpu_thread = std::thread([]() {
-				printf("[CPU Thread] Waiting for start signal...\n");
+		// Launch CPU execution thread (always, even if no ROM loaded yet)
+		printf("Launching CPU execution thread (CPU starts in stopped state)...\n");
+		std::thread cpu_thread([]() {
+			printf("[CPU Thread] Waiting for start signal...\n");
 
-				// Wait for CPU to be started via API
-				while (webserver::g_running.load(std::memory_order_acquire)) {
-					// Wait for CPU to be started (no busy polling)
-					{
-						std::unique_lock<std::mutex> lock(cpu_state::g_mutex);
-						cpu_state::g_cv.wait(lock, []() {
-							return cpu_state::g_running.load() || !webserver::g_running.load();
-						});
+			// Wait for CPU to be started via API
+			while (webserver::g_running.load(std::memory_order_acquire)) {
+				// Wait for CPU to be started (no busy polling)
+				{
+					std::unique_lock<std::mutex> lock(cpu_state::g_mutex);
+					cpu_state::g_cv.wait(lock, []() {
+						return cpu_state::g_running.load() || !webserver::g_running.load();
+					});
+				}
+
+				// Check if we should exit
+				if (!webserver::g_running.load(std::memory_order_acquire)) {
+					break;
+				}
+
+				// Check if emulator is initialized
+				if (!g_emulator_initialized) {
+					printf("[CPU Thread] CPU start requested but emulator not initialized yet\n");
+					cpu_state::g_running.store(false);  // Reset flag
+					continue;  // Go back to waiting
+				}
+
+				// CPU is running - execute instructions
+				printf("[CPU Thread] CPU started, executing...\n");
+				if (g_platform.cpu_execute_fast) {
+					// Fast path (Unicorn, DualCPU)
+					while (cpu_state::g_running.load(std::memory_order_acquire) &&
+					       webserver::g_running.load(std::memory_order_acquire)) {
+						g_platform.cpu_execute_one();
 					}
-
-					// Check if we should exit
-					if (!webserver::g_running.load(std::memory_order_acquire)) {
-						break;
-					}
-
-					// CPU is running - execute instructions
-					printf("[CPU Thread] CPU started, executing...\n");
-					if (g_platform.cpu_execute_fast) {
-						// Fast path (Unicorn, DualCPU)
-						while (cpu_state::g_running.load(std::memory_order_acquire) &&
-						       webserver::g_running.load(std::memory_order_acquire)) {
-							g_platform.cpu_execute_one();
-						}
-					} else {
-						// Slow path - execute one instruction at a time (UAE)
-						while (cpu_state::g_running.load(std::memory_order_acquire) &&
-						       webserver::g_running.load(std::memory_order_acquire)) {
-							g_platform.cpu_execute_one();
-						}
-					}
-
-					if (!cpu_state::g_running.load(std::memory_order_acquire)) {
-						printf("[CPU Thread] CPU stopped by user\n");
+				} else {
+					// Slow path - execute one instruction at a time (UAE)
+					while (cpu_state::g_running.load(std::memory_order_acquire) &&
+					       webserver::g_running.load(std::memory_order_acquire)) {
+						g_platform.cpu_execute_one();
 					}
 				}
-				printf("[CPU Thread] CPU execution thread exiting\n");
-			});
-		}
+
+				if (!cpu_state::g_running.load(std::memory_order_acquire)) {
+					printf("[CPU Thread] CPU stopped by user\n");
+				}
+			}
+			printf("[CPU Thread] CPU execution thread exiting\n");
+		});
 
 		printf("Emulator ready. Open http://localhost:%d in your browser.\n", webrtc_config.web.http_port);
 		if (ROMSize > 0) {
