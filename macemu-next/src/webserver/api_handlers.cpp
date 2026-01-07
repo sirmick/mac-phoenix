@@ -9,12 +9,16 @@
 #include "file_scanner.h"
 #include "../config/prefs_manager.h"
 #include "../config/json_utils.h"
+#include "../common/include/sysdeps.h"  // For uint32 type
 #include <sstream>
 #include <iomanip>
 #include <cstdio>
 #include <fstream>
 #include <pwd.h>
 #include <unistd.h>
+
+// Globals from main.cpp for checking emulator state
+extern uint32 ROMSize;  // 0 if no ROM loaded
 
 namespace http {
 
@@ -250,6 +254,16 @@ Response APIRouter::handle_status(const Request& req) {
 
 Response APIRouter::handle_emulator_start(const Request& req) {
     (void)req;
+
+    // Check if ROM is loaded (CPU only initializes when ROM is present)
+    if (ROMSize == 0) {
+        fprintf(stderr, "[API] Cannot start - no ROM loaded. User must restart with ROM path.\n");
+        return Response::json(
+            "{\"success\": false, "
+            "\"error\": \"No ROM loaded\", "
+            "\"message\": \"Please configure a ROM, then restart the emulator process\"}"
+        );
+    }
 
     if (!ctx_->cpu_running || !ctx_->cpu_cv) {
         return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
