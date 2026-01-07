@@ -45,7 +45,8 @@
 
 // WebRTC streaming
 #include "config/config_manager.h"
-#include "config/emulator_config.h"  // NEW: Unified configuration
+#include "config/emulator_config.h"  // Unified configuration
+#include "core/cpu_context.h"  // Phase 2: Self-contained CPU context
 #include "drivers/video/video_webrtc.h"
 #include "drivers/audio/audio_webrtc.h"
 #include "webserver/webserver_main.h"
@@ -82,7 +83,10 @@ namespace webrtc_signaling {
 	std::atomic<bool> g_running(true);
 }
 
-// CPU emulation state
+// Global CPU context (Phase 2: Replaces global memory/CPU state)
+static CPUContext g_cpu_ctx;
+
+// CPU emulation state (kept for compatibility with WebUI thread)
 namespace cpu_state {
 	std::atomic<bool> g_running(false);  // CPU starts stopped, user must click "Start"
 	std::mutex g_mutex;
@@ -202,242 +206,65 @@ int main(int argc, char **argv)
 		// null drivers already installed by platform_init()
 	}
 
-	// Get ROM path from config
+	// ========================================
+	// Initialize CPU Context (Phase 2)
+	// ========================================
+	// This replaces 230 lines of manual initialization with a single function call!
+
+	// Check if we have a ROM to load
 	const char *rom_path = emu_config.rom_path.empty() ? nullptr : emu_config.rom_path.c_str();
 
-	// ROM file is optional (webserver mode)
-	if (!rom_path) {
-		printf("No ROM file specified. Starting in webserver mode.\n");
-		printf("You can configure the ROM path in the web UI.\n");
-	}
-
-	printf("Allocating RAM (%d MB)...\n", RAMSize / (1024 * 1024));
-
-	// Allocate RAM
-	RAMBaseHost = (uint8 *)mmap(NULL, RAMSize + 0x100000,
-	                             PROT_READ | PROT_WRITE,
-	                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (RAMBaseHost == MAP_FAILED) {
-		fprintf(stderr, "Failed to allocate RAM\n");
-		return 1;
-	}
-
-	ROMBaseHost = RAMBaseHost + RAMSize;
-	memset(RAMBaseHost, 0, RAMSize);
-
-#if DIRECT_ADDRESSING
-	MEMBaseDiff = (uintptr)RAMBaseHost;
-	RAMBaseMac = 0;
-	ROMBaseMac = Host2MacAddr(ROMBaseHost);
-#endif
-
-	printf("RAM at %p (Mac: 0x%08x)\n", RAMBaseHost, RAMBaseMac);
-	printf("ROM at %p (Mac: 0x%08x)\n", ROMBaseHost, ROMBaseMac);
-
-	// Load ROM (skip if no ROM path specified - webserver mode)
 	if (rom_path) {
-		printf("\nLoading ROM from %s...\n", rom_path);
-		int rom_fd = open(rom_path, O_RDONLY);
-		if (rom_fd < 0) {
-			fprintf(stderr, "Failed to open ROM file: %s\n", rom_path);
-			return 1;
-		}
+		// CLI mode or WebUI with ROM: Initialize immediately
+		printf("\n=== Initializing CPU Context ===\n");
 
-		ROMSize = lseek(rom_fd, 0, SEEK_END);
-		printf("ROM size: %d bytes (%d KB)\n", ROMSize, ROMSize / 1024);
-
-		if (ROMSize != 64*1024 && ROMSize != 128*1024 && ROMSize != 256*1024 &&
-		    ROMSize != 512*1024 && ROMSize != 1024*1024) {
-			fprintf(stderr, "Invalid ROM size (must be 64/128/256/512/1024 KB)\n");
-			close(rom_fd);
-			return 1;
-		}
-
-		lseek(rom_fd, 0, SEEK_SET);
-		if (read(rom_fd, ROMBaseHost, ROMSize) != (ssize_t)ROMSize) {
-			fprintf(stderr, "Failed to read ROM file\n");
-			close(rom_fd);
-			return 1;
-		}
-		close(rom_fd);
-
-		printf("ROM loaded successfully (kept in big-endian format)\n");
-	} else {
-		printf("\nNo ROM file specified - skipping ROM load (webserver mode)\n");
-		ROMSize = 0;  // No ROM loaded
-	}
-	// ============================================================
-	// Initialize Emulator (inlined from InitAll())
-	// ============================================================
-	printf("\n=== Initializing Emulator ===\n");
-
-	// Check ROM version (skip if no ROM loaded)
-	if (ROMSize > 0 && !CheckROM()) {
-		ErrorAlert(STR_UNSUPPORTED_ROM_TYPE_ERR);
-		return 1;
-	}
-
-#if EMULATED_68K
-	// Set CPU and FPU type (UAE emulation)
-	if (ROMSize > 0) {
-		switch (ROMVersion) {
-			case ROM_VERSION_64K:
-			case ROM_VERSION_PLUS:
-			case ROM_VERSION_CLASSIC:
-				CPUType = 0;
-				FPUType = 0;
-				TwentyFourBitAddressing = true;
+		// Install CPU backend into g_cpu_ctx's platform before init
+		Platform* platform = g_cpu_ctx.get_platform();
+		switch (emu_config.cpu_backend) {
+			case config::CPUBackend::Unicorn:
+				cpu_unicorn_install(platform);
 				break;
-			case ROM_VERSION_II:
-				CPUType = PrefsFindInt32("cpu");
-				if (CPUType < 2) CPUType = 2;
-				if (CPUType > 4) CPUType = 4;
-				FPUType = PrefsFindBool("fpu") ? 1 : 0;
-				if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
-				TwentyFourBitAddressing = true;
+			case config::CPUBackend::DualCPU:
+				cpu_dualcpu_install(platform);
 				break;
-			case ROM_VERSION_32:
-				CPUType = PrefsFindInt32("cpu");
-				if (CPUType < 2) CPUType = 2;
-				if (CPUType > 4) CPUType = 4;
-				FPUType = PrefsFindBool("fpu") ? 1 : 0;
-				if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
-				TwentyFourBitAddressing = false;
+			case config::CPUBackend::UAE:
+			default:
+				cpu_uae_install(platform);
 				break;
 		}
-	}
-	CPUIs68060 = false;
-#endif
 
-	// Initialize Mac subsystems (XPRAM, drivers, audio, video, etc.)
-	// Only initialize if ROM is loaded (skip if running in deferred init mode)
-	// Uses shared init_mac_subsystems() function to avoid duplication with deferred init path
-	if (ROMSize > 0) {
-		if (!init_mac_subsystems()) {
-			fprintf(stderr, "Mac subsystems initialization failed\n");
+		// Initialize M68K - does everything: allocate memory, load ROM,
+		// check ROM, init subsystems, patch ROM, init CPU, set up timer
+		if (!g_cpu_ctx.init_m68k(emu_config)) {
+			fprintf(stderr, "Failed to initialize M68K CPU context\n");
 			return 1;
+		}
+
+		// Mark emulator as initialized (for deferred init check)
+		g_emulator_initialized = true;
+
+		// Copy platform to global for legacy code compatibility
+		// TODO: Remove this when all code uses g_cpu_ctx.get_platform()
+		g_platform = *platform;
+
+		// Optional auto-exit timer (set EMULATOR_TIMEOUT=2 for 2 seconds)
+		const char *timeout_env = getenv("EMULATOR_TIMEOUT");
+		if (timeout_env) {
+			int timeout_sec = atoi(timeout_env);
+			if (timeout_sec > 0) {
+				printf("Auto-exit timer set: %d seconds\n", timeout_sec);
+				std::thread timeout_thread([timeout_sec]() {
+					std::this_thread::sleep_for(std::chrono::seconds(timeout_sec));
+					fprintf(stderr, "\n[Timeout: %d seconds elapsed, exiting]\n", timeout_sec);
+					exit(0);
+				});
+				timeout_thread.detach();
+			}
 		}
 	} else {
-		printf("No ROM loaded - skipping subsystem initialization (will be done when ROM is loaded via API)\n");
-	}
-
-	// ============================================================
-	// Select CPU Backend (from config)
-	// ============================================================
-	const char *cpu_backend = emu_config.cpu_backend_string();
-	printf("\n=== Selected CPU Backend: %s ===\n", cpu_backend);
-
-	// Skip CPU initialization if no ROM loaded (webserver mode)
-	if (ROMSize > 0) {
-#if EMULATED_68K
-		// Init 680x0 emulation (UAE's memory banking system)
-		// NOTE: Required for all backends currently, but Unicorn will use direct access in future
-		if (!Init680x0()) {
-			fprintf(stderr, "CPU initialization failed\n");
-			return 1;
-		}
-#endif
-
-	// ============================================================
-	// Install CPU Backend (BEFORE PatchROM)
-	// ============================================================
-	// We install the backend early so that PatchROM() can use g_platform.mem_*
-	// functions for backend-independent memory access
-	// ============================================================
-
-	switch (emu_config.cpu_backend) {
-		case config::CPUBackend::Unicorn:
-			cpu_unicorn_install(&g_platform);
-			break;
-		case config::CPUBackend::DualCPU:
-			cpu_dualcpu_install(&g_platform);
-			break;
-		case config::CPUBackend::UAE:
-		default:
-			cpu_uae_install(&g_platform);
-			break;
-	}
-
-	printf("CPU Backend: %s\n", g_platform.cpu_name);
-
-	// Configure CPU type (must be called after backend install, before cpu_init)
-	if (g_platform.cpu_set_type) {
-		g_platform.cpu_set_type(CPUType, FPUType);
-	}
-
-	// ============================================================
-	// Install ROM Patches
-	// ============================================================
-	// NOTE: PatchROM() currently still uses UAE's WriteMacInt*() functions directly.
-	// The Platform API provides g_platform.mem_write_*() functions for backend-
-	// independent memory access, but PatchROM() hasn't been converted yet.
-	//
-	// Future: Convert PatchROM() to use g_platform.mem_* functions to enable
-	// Unicorn-only builds without UAE dependency.
-	//
-	// Patches include runtime addresses and may differ between runs due to ASLR.
-	// ============================================================
-	if (ROMSize > 0) {
-		if (!PatchROM()) {
-			ErrorAlert(STR_UNSUPPORTED_ROM_TYPE_ERR);
-			return 1;
-		}
-	}
-
-#if ENABLE_MON
-	// Initialize mon
-	mon_init();
-	mon_read_byte = mon_read_byte_b2;
-	mon_write_byte = mon_write_byte_b2;
-#endif
-
-	printf("\n=== Initialization Complete ===\n");
-	if (ROMSize > 0) {
-		printf("ROM Version: 0x%08x\n", ROMVersion);
-	}
-	printf("CPU Type: 680%02d\n", (CPUType == 0) ? 0 : (CPUType * 10 + 20));
-	printf("FPU: %s\n", FPUType ? "Yes" : "No");
-	printf("24-bit addressing: %s\n", TwentyFourBitAddressing ? "Yes" : "No");
-
-	// ============================================================
-	// Initialize CPU Backend
-	// ============================================================
-	printf("\n=== Starting Emulation ===\n");
-
-	// Backend was already installed before PatchROM() to provide memory access functions
-	// Now we call cpu_init() to complete backend initialization
-	if (!g_platform.cpu_init()) {
-		fprintf(stderr, "Failed to initialize CPU\n");
-		return 1;
-	}
-
-	// Reset CPU to ROM entry point
-	g_platform.cpu_reset();
-	printf("CPU reset to PC=0x%08x\n", g_platform.cpu_get_pc());
-
-	// Set up 60Hz timer (polling-based)
-	printf("\n=== Setting up Timer Interrupt ===\n");
-	setup_timer_interrupt();
-
-	// Mark emulator as initialized (for deferred init check)
-	g_emulator_initialized = true;
-
-	// Optional auto-exit timer (set EMULATOR_TIMEOUT=2 for 2 seconds)
-	const char *timeout_env = getenv("EMULATOR_TIMEOUT");
-	if (timeout_env) {
-		int timeout_sec = atoi(timeout_env);
-		if (timeout_sec > 0) {
-			printf("Auto-exit timer set: %d seconds\n", timeout_sec);
-			std::thread timeout_thread([timeout_sec]() {
-				std::this_thread::sleep_for(std::chrono::seconds(timeout_sec));
-				fprintf(stderr, "\n[Timeout: %d seconds elapsed, exiting]\n", timeout_sec);
-				exit(0);
-			});
-			timeout_thread.detach();
-		}
-	}
-	} else {
-		printf("Skipping CPU initialization (no ROM loaded - webserver mode)\n");
+		// WebUI mode without ROM: Skip init, will be done via API
+		printf("\nNo ROM file specified. Starting in webserver mode.\n");
+		printf("You can configure the ROM path in the web UI.\n");
 	}
 
 	// ============================================================
@@ -507,25 +334,28 @@ int main(int argc, char **argv)
 				}
 
 				// Check if emulator is initialized
-				if (!g_emulator_initialized) {
+				if (!g_cpu_ctx.is_initialized()) {
 					printf("[CPU Thread] CPU start requested but emulator not initialized yet\n");
 					cpu_state::g_running.store(false);  // Reset flag
 					continue;  // Go back to waiting
 				}
 
-				// CPU is running - execute instructions
+				// CPU is running - execute until stopped
 				printf("[CPU Thread] CPU started, executing...\n");
-				if (g_platform.cpu_execute_fast) {
+
+				// Simple execution loop using CPUContext
+				Platform* platform = g_cpu_ctx.get_platform();
+				if (platform->cpu_execute_fast) {
 					// Fast path (Unicorn, DualCPU)
 					while (cpu_state::g_running.load(std::memory_order_acquire) &&
 					       webserver::g_running.load(std::memory_order_acquire)) {
-						g_platform.cpu_execute_one();
+						platform->cpu_execute_one();
 					}
 				} else {
-					// Slow path - execute one instruction at a time (UAE)
+					// Slow path (UAE) - execute one instruction at a time
 					while (cpu_state::g_running.load(std::memory_order_acquire) &&
 					       webserver::g_running.load(std::memory_order_acquire)) {
-						g_platform.cpu_execute_one();
+						platform->cpu_execute_one();
 					}
 				}
 
@@ -537,7 +367,7 @@ int main(int argc, char **argv)
 		});
 
 		printf("Emulator ready. Open http://localhost:%d in your browser.\n", webrtc_config.web.http_port);
-		if (ROMSize > 0) {
+		if (g_cpu_ctx.is_initialized()) {
 			printf("CPU loaded. Click 'Start' in the web UI to begin emulation.\n");
 		} else {
 			printf("No ROM loaded - configure ROM path in web UI.\n");
@@ -551,20 +381,21 @@ int main(int argc, char **argv)
 			cpu_thread.join();
 		}
 	} else {
-		// Tracing/Headless mode: Run CPU if ROM loaded
-		if (ROMSize > 0) {
+		// Headless mode: Run CPU if initialized
+		if (g_cpu_ctx.is_initialized()) {
 			printf("\n=== CPU Execution Mode (Headless) ===\n");
 			printf("Starting CPU execution...\n");
 			printf("Press Ctrl+C to exit.\n\n");
 
-			// Run CPU execution loop
-			if (g_platform.cpu_execute_fast) {
+			// Run CPU execution loop using CPUContext
+			Platform* platform = g_cpu_ctx.get_platform();
+			if (platform->cpu_execute_fast) {
 				// Fast path (Unicorn, DualCPU)
-				g_platform.cpu_execute_fast();
+				platform->cpu_execute_fast();
 			} else {
-				// Slow path - execute one instruction at a time (UAE)
+				// Slow path (UAE) - execute one instruction at a time
 				while (webserver::g_running.load(std::memory_order_acquire)) {
-					g_platform.cpu_execute_one();
+					platform->cpu_execute_one();
 				}
 			}
 		} else {
