@@ -238,8 +238,10 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     // Configure peer connection
     rtc::Configuration config;
-    // Note: Add STUN server here if needed for remote connections
+    // Note: STUN disabled for localhost/LAN mode (matches web-streaming default)
     // config.iceServers.emplace_back("stun:stun.l.google.com:19302");
+    // Allow large video frames (up to 16MB for high-res content)
+    config.maxMessageSize = 16 * 1024 * 1024;
 
     peer->pc = std::make_shared<rtc::PeerConnection>(config);
 
