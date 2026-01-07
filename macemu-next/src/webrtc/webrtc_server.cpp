@@ -296,11 +296,40 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     });
 
     peer->pc->onStateChange([peer_id](rtc::PeerConnection::State state) {
-        fprintf(stderr, "[WebRTC] Peer %s state: %d\n", peer_id.c_str(), (int)state);
+        const char* state_str = "unknown";
+        switch (state) {
+            case rtc::PeerConnection::State::New: state_str = "New"; break;
+            case rtc::PeerConnection::State::Connecting: state_str = "Connecting"; break;
+            case rtc::PeerConnection::State::Connected: state_str = "Connected"; break;
+            case rtc::PeerConnection::State::Disconnected: state_str = "Disconnected"; break;
+            case rtc::PeerConnection::State::Failed: state_str = "Failed"; break;
+            case rtc::PeerConnection::State::Closed: state_str = "Closed"; break;
+        }
+        fprintf(stderr, "[WebRTC] Peer %s state: %s\n", peer_id.c_str(), state_str);
+    });
+
+    peer->pc->onIceStateChange([peer_id](rtc::PeerConnection::IceState state) {
+        const char* state_str = "unknown";
+        switch (state) {
+            case rtc::PeerConnection::IceState::New: state_str = "New"; break;
+            case rtc::PeerConnection::IceState::Checking: state_str = "Checking"; break;
+            case rtc::PeerConnection::IceState::Connected: state_str = "Connected"; break;
+            case rtc::PeerConnection::IceState::Completed: state_str = "Completed"; break;
+            case rtc::PeerConnection::IceState::Disconnected: state_str = "Disconnected"; break;
+            case rtc::PeerConnection::IceState::Failed: state_str = "Failed"; break;
+            case rtc::PeerConnection::IceState::Closed: state_str = "Closed"; break;
+        }
+        fprintf(stderr, "[WebRTC] Peer %s ICE state: %s\n", peer_id.c_str(), state_str);
     });
 
     peer->pc->onGatheringStateChange([peer_id](rtc::PeerConnection::GatheringState state) {
-        fprintf(stderr, "[WebRTC] Peer %s gathering state: %d\n", peer_id.c_str(), (int)state);
+        const char* state_str = "unknown";
+        switch (state) {
+            case rtc::PeerConnection::GatheringState::New: state_str = "New"; break;
+            case rtc::PeerConnection::GatheringState::InProgress: state_str = "InProgress"; break;
+            case rtc::PeerConnection::GatheringState::Complete: state_str = "Complete"; break;
+        }
+        fprintf(stderr, "[WebRTC] Peer %s gathering state: %s\n", peer_id.c_str(), state_str);
     });
 
     // SSRC for RTP streams (static for now, could be per-peer)
