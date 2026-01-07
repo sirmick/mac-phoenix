@@ -187,7 +187,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 #if DIRECT_ADDRESSING
     MEMBaseDiff = (uintptr)RAMBaseHost;
     RAMBaseMac = 0;
-    ROMBaseMac = ram_size_;  // Mac address of ROM
+    ROMBaseMac = Host2MacAddr(ROMBaseHost);
 #endif
 
     fprintf(stderr, "[CPUContext] RAM at %p (Mac: 0x%08x)\n", RAMBaseHost, RAMBaseMac);
