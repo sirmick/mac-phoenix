@@ -42,14 +42,50 @@ static inline void print_backtrace(const char *prefix)
 		for (size_t i = 0; i < size; i++) {
 			fprintf(stderr, "  [%2zu] %s\n", i, strings[i]);
 		}
+		fprintf(stderr, "=== END BACKTRACE ===\n\n");
+		fflush(stderr);
+
+		// Now try to get file:line info using addr2line (may take time)
+		fprintf(stderr, "=== DETAILED BACKTRACE ===\n");
+		for (size_t i = 0; i < size; i++) {
+			// Extract executable path from backtrace_symbols output
+			char exe_buf[512];
+			strncpy(exe_buf, strings[i], sizeof(exe_buf) - 1);
+			exe_buf[sizeof(exe_buf) - 1] = '\0';
+
+			char *paren = strchr(exe_buf, '(');
+			if (paren) {
+				*paren = '\0';  // Null-terminate at '(' to get exe path
+
+				// Build addr2line command
+				char cmd[512];
+				snprintf(cmd, sizeof(cmd), "addr2line -e %s -f -C -p %p 2>/dev/null",
+				         exe_buf, array[i]);
+
+				FILE *fp = popen(cmd, "r");
+				if (fp) {
+					char line[256];
+					if (fgets(line, sizeof(line), fp)) {
+						// Remove newline
+						line[strcspn(line, "\n")] = 0;
+						// Only print if we got useful info (not "?? ??:0")
+						if (strstr(line, "??") == NULL) {
+							fprintf(stderr, "  [%2zu] %s\n", i, line);
+						}
+					}
+					pclose(fp);
+				}
+			}
+		}
+		fprintf(stderr, "=== END DETAILED BACKTRACE ===\n\n");
+		fflush(stderr);
 		free(strings);
 	} else {
 		// Fallback: just print addresses
 		fprintf(stderr, "  (symbols unavailable, printing addresses)\n");
 		backtrace_symbols_fd(array, size, STDERR_FILENO);
+		fprintf(stderr, "=== END BACKTRACE ===\n\n");
 	}
-
-	fprintf(stderr, "=== END BACKTRACE ===\n\n");
 }
 
 /*
