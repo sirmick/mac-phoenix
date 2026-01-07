@@ -1,3 +1,6 @@
 [submodule "web-streaming/libdatachannel"]
 	path = web-streaming/libdatachannel
 	url = https://github.com/paullouisageneau/libdatachannel.git
+[submodule "macemu-next/subprojects/libdatachannel"]
+	path = macemu-next/subprojects/libdatachannel
+	url = https://github.com/paullouisageneau/libdatachannel.git

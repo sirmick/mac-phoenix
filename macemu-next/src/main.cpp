@@ -47,6 +47,7 @@
 #include "drivers/audio/audio_webrtc.h"
 #include "webserver/webserver_main.h"
 #include "webserver/api_handlers.h"
+#include "webrtc/webrtc_server.h"
 #include "drivers/video/encoders/codec.h"
 
 // WebRTC globals
@@ -69,6 +70,11 @@ namespace audio {
 
 // WebServer globals
 namespace webserver {
+	std::atomic<bool> g_running(true);
+}
+
+// WebRTC signaling server globals
+namespace webrtc_signaling {
 	std::atomic<bool> g_running(true);
 }
 
@@ -161,16 +167,18 @@ int main(int argc, char **argv)
 		}
 	}
 
+	// Determine config file path
+	std::string config_path;
+	if (config_file_override) {
+		config_path = config_file_override;
+	} else {
+		const char* home = getenv("HOME");
+		config_path = std::string(home) + "/.config/macemu-next/config.json";
+	}
+
 	// Load WebRTC configuration if needed
 	static config::MacemuConfig webrtc_config;  // Static so lambda can capture
 	if (enable_webserver) {
-		std::string config_path;
-		if (config_file_override) {
-			config_path = config_file_override;
-		} else {
-			const char* home = getenv("HOME");
-			config_path = std::string(home) + "/.config/macemu-next/config.json";
-		}
 		webrtc_config = config::load_config(config_path);
 		webrtc::g_config = &webrtc_config;  // Store pointer for driver init
 	}
@@ -532,14 +540,6 @@ int main(int argc, char **argv)
 	// ============================================================
 	if (enable_webserver) {
 		// Set up API context for HTTP handlers
-		std::string config_path;
-		if (config_file_override) {
-			config_path = config_file_override;
-		} else {
-			const char* home = getenv("HOME");
-			config_path = std::string(home) + "/.config/macemu-next/config.json";
-		}
-
 		CodecType server_codec = CodecType::PNG;  // Default
 		http::APIContext api_context;
 		api_context.debug_connection = false;
@@ -557,18 +557,31 @@ int main(int argc, char **argv)
 			// TODO: Notify video encoder to change codec
 		};
 
-		// Launch HTTP server thread
+		// Initialize WebRTC signaling server
 		printf("\n=== WebRTC Mode ===\n");
 		printf("Launching HTTP server on port %d...\n", webrtc_config.web.http_port);
+
+		webrtc::WebRTCServer webrtc_server;
+		if (!webrtc_server.init(8090)) {  // WebSocket signaling on port 8090
+			fprintf(stderr, "Failed to start WebRTC signaling server\n");
+			return 1;
+		}
+
+		// Launch HTTP server thread
 		std::thread http_server_thread(webserver::http_server_main,
 		                                &webrtc_config, &api_context);
+
+		// Launch WebRTC signaling server thread
+		std::thread webrtc_server_thread(webrtc::webrtc_server_main,
+		                                  &webrtc_server, &webrtc_signaling::g_running);
 
 		printf("Emulator ready. Open http://localhost:%d in your browser.\n", webrtc_config.web.http_port);
 		printf("The emulator will start when you click 'Start' in the web UI.\n");
 		printf("Press Ctrl+C to exit.\n\n");
 
-		// Wait for HTTP server thread to complete (runs until shutdown signal)
+		// Wait for threads to complete (run until shutdown signal)
 		http_server_thread.join();
+		webrtc_server_thread.join();
 	} else {
 		// Tracing/Headless mode: Run CPU if ROM loaded
 		if (ROMSize > 0) {

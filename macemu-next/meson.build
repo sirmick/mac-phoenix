@@ -51,11 +51,41 @@ opus_dep = dependency('opus', required: false)
 # HTTP server
 cpp_httplib_dep = dependency('cpp-httplib', required: false)
 
-# OpenSSL (for MD5 in file_scanner.cpp)
+# OpenSSL (for MD5 in file_scanner.cpp and libdatachannel)
 openssl_dep = dependency('openssl', required: true)
 
-# WebRTC library
-libdatachannel_dep = dependency('libdatachannel', required: false)
+# WebRTC library (libdatachannel) - Build from submodule using CMake
+cmake = import('cmake')
+libdatachannel_opts = cmake.subproject_options()
+libdatachannel_opts.add_cmake_defines({
+  'NO_EXAMPLES': 'ON',
+  'NO_TESTS': 'ON',
+  'NO_WEBSOCKET': 'OFF',  # We need WebSocket server for signaling
+  'NO_MEDIA': 'OFF',      # We need media transport for video/audio
+  'BUILD_SHARED_LIBS': 'OFF',  # Static linking for simplicity
+  'USE_NICE': 'OFF',      # Use built-in libjuice
+})
+
+libdatachannel_proj = cmake.subproject('libdatachannel', options: libdatachannel_opts)
+
+# Use datachannel-static and manually add the sub-libraries
+# (Meson's CMake integration doesn't properly handle transitive static libs)
+libdatachannel_static_dep = libdatachannel_proj.dependency('datachannel-static')
+
+# Manually link all the required static libraries
+build_dir = meson.current_build_dir()
+libdc_dir = build_dir / 'subprojects/libdatachannel'
+
+libdatachannel_dep = declare_dependency(
+  dependencies: [libdatachannel_static_dep],
+  link_args: [
+    '-L' + libdc_dir,
+    '-ldatachannel_static',
+    '-ljuice',
+    '-lsrtp2',
+    '-lusrsctp',
+  ]
+)
 
 # libyuv for color conversion (Ubuntu package lacks .pc file, use find_library)
 libyuv_lib = cc.find_library('yuv', required: false)
@@ -92,6 +122,7 @@ subdir('src/drivers')
 # WebRTC streaming (always enabled)
 subdir('src/config')
 subdir('src/webserver')
+subdir('src/webrtc')
 subdir('src/drivers/video/encoders')
 subdir('src/drivers/audio/encoders')
 
@@ -110,8 +141,8 @@ macemu_next_inc = [
 macemu_next_cpp_args = []
 
 # Add WebRTC support (always enabled)
-macemu_next_link_with += [config_lib, webserver_lib, video_encoder_lib, audio_encoder_lib]
-macemu_next_deps += [nlohmann_json_dep]
+macemu_next_link_with += [config_lib, webserver_lib, webrtc_lib, video_encoder_lib, audio_encoder_lib]
+macemu_next_deps += [nlohmann_json_dep, libdatachannel_dep]
 
 # Add codec dependencies if found
 if openh264_dep.found()
@@ -136,6 +167,7 @@ macemu_next_deps += [openssl_dep]
 macemu_next_inc += [
   include_directories('src/config'),
   include_directories('src/webserver'),
+  include_directories('src/webrtc'),
   include_directories('src/drivers/video'),
   include_directories('src/drivers/audio'),
 ]
