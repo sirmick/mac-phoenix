@@ -330,88 +330,17 @@ int main(int argc, char **argv)
 	CPUIs68060 = false;
 #endif
 
-	// Load XPRAM
-	XPRAMInit(NULL);
-
-	// Load XPRAM default values if signature not found
-	if (XPRAM[0x0c] != 0x4e || XPRAM[0x0d] != 0x75
-	 || XPRAM[0x0e] != 0x4d || XPRAM[0x0f] != 0x63) {
-		D(bug("Loading XPRAM default values\n"));
-		memset(XPRAM, 0, 0x100);
-		XPRAM[0x0c] = 0x4e;	// "NuMc" signature
-		XPRAM[0x0d] = 0x75;
-		XPRAM[0x0e] = 0x4d;
-		XPRAM[0x0f] = 0x63;
-		XPRAM[0x01] = 0x80;	// InternalWaitFlags = DynWait
-		XPRAM[0x10] = 0xa8;	// Standard PRAM values
-		XPRAM[0x11] = 0x00;
-		XPRAM[0x12] = 0x00;
-		XPRAM[0x13] = 0x22;
-		XPRAM[0x14] = 0xcc;
-		XPRAM[0x15] = 0x0a;
-		XPRAM[0x16] = 0xcc;
-		XPRAM[0x17] = 0x0a;
-		XPRAM[0x1c] = 0x00;
-		XPRAM[0x1d] = 0x02;
-		XPRAM[0x1e] = 0x63;
-		XPRAM[0x1f] = 0x00;
-		XPRAM[0x08] = 0x13;
-		XPRAM[0x09] = 0x88;
-		XPRAM[0x0a] = 0x00;
-		XPRAM[0x0b] = 0xcc;
-		XPRAM[0x76] = 0x00;	// OSDefault = MacOS
-		XPRAM[0x77] = 0x01;
+	// Initialize Mac subsystems (XPRAM, drivers, audio, video, etc.)
+	// Only initialize if ROM is loaded (skip if running in deferred init mode)
+	// Uses shared init_mac_subsystems() function to avoid duplication with deferred init path
+	if (ROMSize > 0) {
+		if (!init_mac_subsystems()) {
+			fprintf(stderr, "Mac subsystems initialization failed\n");
+			return 1;
+		}
+	} else {
+		printf("No ROM loaded - skipping subsystem initialization (will be done when ROM is loaded via API)\n");
 	}
-
-	// Set boot volume
-	int16 i16 = PrefsFindInt32("bootdrive");
-	XPRAM[0x78] = i16 >> 8;
-	XPRAM[0x79] = i16 & 0xff;
-	i16 = PrefsFindInt32("bootdriver");
-	XPRAM[0x7a] = i16 >> 8;
-	XPRAM[0x7b] = i16 & 0xff;
-
-	// Init drivers
-	SonyInit();
-	DiskInit();
-	CDROMInit();
-	SCSIInit();
-
-#if SUPPORTS_EXTFS
-	// Init external file system
-	ExtFSInit();
-#endif
-
-	// Init serial ports
-	SerialInit();
-
-	// Init network
-	EtherInit();
-
-	// Init Time Manager
-	TimerInit();
-
-	// Init clipboard
-	ClipInit();
-
-	// Init ADB
-	ADBInit();
-
-	// Init audio
-	AudioInit();
-
-	// Init video
-	if (!VideoInit(ROMVersion == ROM_VERSION_64K || ROMVersion == ROM_VERSION_PLUS || ROMVersion == ROM_VERSION_CLASSIC)) {
-		fprintf(stderr, "Video initialization failed\n");
-		return 1;
-	}
-
-	// Set default video mode in XPRAM
-	XPRAM[0x56] = 0x42;	// 'B'
-	XPRAM[0x57] = 0x32;	// '2'
-	const monitor_desc &main_monitor = *VideoMonitors[0];
-	XPRAM[0x58] = uint8(main_monitor.depth_to_apple_mode(main_monitor.get_current_mode().depth));
-	XPRAM[0x59] = 0;
 
 	// ============================================================
 	// Select CPU Backend (before initialization)

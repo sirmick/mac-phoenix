@@ -32,6 +32,13 @@ bool load_rom_file(const char* rom_path,
 // Returns: true on success, false on error
 bool init_cpu_subsystem(const char* cpu_backend);
 
+// Initialize Mac subsystems (XPRAM, drivers, audio, video, etc.)
+// Must be called after CPU is initialized.
+// This function is called by both main() and init_emulator_from_config()
+// to avoid code duplication.
+// Returns: true on success, false on error
+bool init_mac_subsystems(void);
+
 // Full emulator initialization (ROM + CPU + devices)
 // Can be called from main() at startup OR from API handler.
 // Thread-safe (uses g_emulator_initialized flag).

@@ -26,10 +26,23 @@
 #include "video.h"
 #include "xpram.h"
 #include "timer.h"
+#include "sony.h"
+#include "disk.h"
+#include "cdrom.h"
+#include "scsi.h"
+#include "serial.h"
+#include "ether.h"
+#include "clip.h"
+#include "adb.h"
+#include "audio.h"
 #include "rom_patches.h"
 #include "user_strings.h"
 #include "platform.h"
+#include "extfs.h"
 #include "../platform/timer_interrupt.h"
+
+#define DEBUG 1
+#include "debug.h"
 
 // Global variables (defined in basilisk_glue.cpp or main.cpp)
 extern uint8_t *RAMBaseHost;
@@ -200,6 +213,102 @@ bool init_cpu_subsystem(const char* cpu_backend)
     return true;
 }
 
+// Initialize Mac subsystems (XPRAM, drivers, audio, video, etc.)
+// This is called by both main() and init_emulator_from_config() to avoid duplication
+bool init_mac_subsystems(void)
+{
+    fprintf(stderr, "[Init] Initializing Mac subsystems...\n");
+
+    // Load XPRAM
+    XPRAMInit(NULL);
+
+    // Load XPRAM default values if signature not found
+    extern uint8 XPRAM[256];
+    if (XPRAM[0x0c] != 0x4e || XPRAM[0x0d] != 0x75
+     || XPRAM[0x0e] != 0x4d || XPRAM[0x0f] != 0x63) {
+        D(bug("Loading XPRAM default values\n"));
+        memset(XPRAM, 0, 0x100);
+        XPRAM[0x0c] = 0x4e;	// "NuMc" signature
+        XPRAM[0x0d] = 0x75;
+        XPRAM[0x0e] = 0x4d;
+        XPRAM[0x0f] = 0x63;
+        XPRAM[0x01] = 0x80;	// InternalWaitFlags = DynWait
+        XPRAM[0x10] = 0xa8;	// Standard PRAM values
+        XPRAM[0x11] = 0x00;
+        XPRAM[0x12] = 0x00;
+        XPRAM[0x13] = 0x22;
+        XPRAM[0x14] = 0xcc;
+        XPRAM[0x15] = 0x0a;
+        XPRAM[0x16] = 0xcc;
+        XPRAM[0x17] = 0x0a;
+        XPRAM[0x1c] = 0x00;
+        XPRAM[0x1d] = 0x02;
+        XPRAM[0x1e] = 0x63;
+        XPRAM[0x1f] = 0x00;
+        XPRAM[0x08] = 0x13;
+        XPRAM[0x09] = 0x88;
+        XPRAM[0x0a] = 0x00;
+        XPRAM[0x0b] = 0xcc;
+        XPRAM[0x76] = 0x00;	// OSDefault = MacOS
+        XPRAM[0x77] = 0x01;
+    }
+
+    // Set boot volume
+    int16 i16 = PrefsFindInt32("bootdrive");
+    XPRAM[0x78] = i16 >> 8;
+    XPRAM[0x79] = i16 & 0xff;
+    i16 = PrefsFindInt32("bootdriver");
+    XPRAM[0x7a] = i16 >> 8;
+    XPRAM[0x7b] = i16 & 0xff;
+
+    // Init drivers
+    SonyInit();
+    DiskInit();
+    CDROMInit();
+    SCSIInit();
+
+#if SUPPORTS_EXTFS
+    // Init external file system
+    ExtFSInit();
+#endif
+
+    // Init serial ports
+    SerialInit();
+
+    // Init network
+    EtherInit();
+
+    // Init Time Manager
+    TimerInit();
+
+    // Init clipboard
+    ClipInit();
+
+    // Init ADB
+    ADBInit();
+
+    // Init audio
+    AudioInit();
+
+    // Init video
+    extern uint16 ROMVersion;
+    if (!VideoInit(ROMVersion == ROM_VERSION_64K || ROMVersion == ROM_VERSION_PLUS || ROMVersion == ROM_VERSION_CLASSIC)) {
+        fprintf(stderr, "[Init] ERROR: Video initialization failed\n");
+        return false;
+    }
+
+    // Set default video mode in XPRAM
+    XPRAM[0x56] = 0x42;	// 'B'
+    XPRAM[0x57] = 0x32;	// '2'
+    extern std::vector<monitor_desc *> VideoMonitors;
+    const monitor_desc &main_monitor = *VideoMonitors[0];
+    XPRAM[0x58] = uint8(main_monitor.depth_to_apple_mode(main_monitor.get_current_mode().depth));
+    XPRAM[0x59] = 0;
+
+    fprintf(stderr, "[Init] Mac subsystems initialized successfully\n");
+    return true;
+}
+
 // Full emulator initialization (ROM + CPU + devices)
 bool init_emulator_from_config(const char* emulator_type,
                                 const char* storage_dir,
@@ -250,13 +359,20 @@ bool init_emulator_from_config(const char* emulator_type,
         return false;
     }
 
+    // Initialize Mac subsystems (XPRAM, drivers, audio, video, etc.)
+    // MUST be done before CPU init because PatchROM() may use these
+    if (!init_mac_subsystems()) {
+        fprintf(stderr, "[Init] ERROR: Failed to initialize Mac subsystems\n");
+        return false;
+    }
+
     // Get CPU backend from environment variable
     const char *cpu_backend = getenv("CPU_BACKEND");
     if (!cpu_backend) {
         cpu_backend = "uae";  // Default
     }
 
-    // Initialize CPU subsystem
+    // Initialize CPU subsystem (includes PatchROM and cpu_init)
     if (!init_cpu_subsystem(cpu_backend)) {
         fprintf(stderr, "[Init] ERROR: Failed to initialize CPU subsystem\n");
         return false;
