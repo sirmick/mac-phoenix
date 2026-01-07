@@ -3,6 +3,7 @@ core_sources = [
   'adb.cpp',
   'audio.cpp',
   'cdrom.cpp',
+  'cpu_context.cpp',  # Phase 2: Self-contained CPU context
   'disk.cpp',
   'emul_op.cpp',
   'emulator_init.cpp',  # Deferred initialization support
@@ -30,6 +31,7 @@ core_sources = [
 core_inc = include_directories(
   '.',
   '../common/include',
+  '../config',  # For emulator_config.h
   '../cpu',
   '../cpu/uae_cpu',
   '../drivers/platform',  # For timer_interrupt.h
