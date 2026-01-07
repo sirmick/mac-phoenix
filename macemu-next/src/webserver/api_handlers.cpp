@@ -455,11 +455,22 @@ Response APIRouter::handle_config_get(const Request& req) {
 }
 
 Response APIRouter::handle_config_save(const Request& req) {
-    // Parse incoming JSON
-    auto j = json_utils::parse(req.body);
-    
-    // Build config struct from JSON
-    config::MacemuConfig cfg;
+    // Validate request body is not empty
+    if (req.body.empty()) {
+        return Response::json("{\"success\": false, \"error\": \"Empty request body\"}");
+    }
+
+    // Parse incoming JSON with error handling
+    nlohmann::json j;
+    try {
+        j = json_utils::parse(req.body);
+    } catch (const std::exception& e) {
+        fprintf(stderr, "ERROR: Failed to parse config JSON: %s\n", e.what());
+        return Response::json("{\"success\": false, \"error\": \"Invalid JSON\"}");
+    }
+
+    // Load existing config first, then merge with updates
+    config::MacemuConfig cfg = config::load_config(ctx_->prefs_path);
     
     if (j.contains("version")) cfg.version = json_utils::get_int(j, "version");
     

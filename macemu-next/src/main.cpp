@@ -575,13 +575,39 @@ int main(int argc, char **argv)
 		std::thread webrtc_server_thread(webrtc::webrtc_server_main,
 		                                  &webrtc_server, &webrtc_signaling::g_running);
 
+		// Launch CPU execution thread (if ROM is loaded)
+		std::thread cpu_thread;
+		if (ROMSize > 0) {
+			printf("Launching CPU execution thread...\n");
+			cpu_thread = std::thread([]() {
+				printf("[CPU Thread] Starting CPU execution\n");
+				if (g_platform.cpu_execute_fast) {
+					// Fast path (Unicorn, DualCPU)
+					g_platform.cpu_execute_fast();
+				} else {
+					// Slow path - execute one instruction at a time (UAE)
+					while (webserver::g_running.load(std::memory_order_acquire)) {
+						g_platform.cpu_execute_one();
+					}
+				}
+				printf("[CPU Thread] CPU execution stopped\n");
+			});
+		}
+
 		printf("Emulator ready. Open http://localhost:%d in your browser.\n", webrtc_config.web.http_port);
-		printf("The emulator will start when you click 'Start' in the web UI.\n");
+		if (ROMSize > 0) {
+			printf("The emulator is running.\n");
+		} else {
+			printf("No ROM loaded - web interface only.\n");
+		}
 		printf("Press Ctrl+C to exit.\n\n");
 
 		// Wait for threads to complete (run until shutdown signal)
 		http_server_thread.join();
 		webrtc_server_thread.join();
+		if (cpu_thread.joinable()) {
+			cpu_thread.join();
+		}
 	} else {
 		// Tracing/Headless mode: Run CPU if ROM loaded
 		if (ROMSize > 0) {
