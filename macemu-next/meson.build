@@ -17,9 +17,10 @@ cc = meson.get_compiler('c')
 cpp = meson.get_compiler('cpp')
 
 # Unicorn dependency (always required - all CPUs compiled)
-unicorn_inc = include_directories('external/unicorn/include')
+# Built from submodule with patches applied
+unicorn_inc = include_directories('subprojects/unicorn/include')
 unicorn_lib = cc.find_library('unicorn',
-  dirs: [meson.current_source_dir() / 'external/unicorn/build'],
+  dirs: [meson.current_source_dir() / 'subprojects/unicorn/build'],
   static: true,
   required: true
 )
@@ -33,10 +34,10 @@ threads_dep = dependency('threads', required: true)
 m_dep = cc.find_library('m', required: true)  # Math library for Unicorn
 
 # WebRTC streaming dependencies (always enabled)
-# JSON configuration
+# JSON configuration (nlohmann/json from submodule)
 nlohmann_json_dep = dependency('nlohmann_json', required: false, fallback: ['nlohmann_json', 'nlohmann_json_dep'])
 if not nlohmann_json_dep.found()
-  nlohmann_json_inc = include_directories('external/json/include')
+  nlohmann_json_inc = include_directories('subprojects/nlohmann_json/include')
   nlohmann_json_dep = declare_dependency(include_directories: nlohmann_json_inc)
 endif
 
