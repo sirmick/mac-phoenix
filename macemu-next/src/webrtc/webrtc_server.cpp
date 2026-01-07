@@ -162,8 +162,8 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
                 }
             }
 
-            // Trigger offer creation - this will call onLocalDescription when ready
-            peer->pc->setLocalDescription();
+            // Note: onLocalDescription callback fires automatically when tracks are added
+            // No need to call setLocalDescription() explicitly
 
         } else if (type == "answer") {
             // Client sent answer to our offer
