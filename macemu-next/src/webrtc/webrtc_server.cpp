@@ -167,15 +167,22 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
 
         } else if (type == "answer") {
             // Client sent answer to our offer
-            std::string peer_id = json_utils::get_string(j, "peerId");
             std::string sdp = json_utils::get_string(j, "sdp");
 
-            fprintf(stderr, "[WebRTC] Received answer from %s\n", peer_id.c_str());
-
+            // Look up peer by WebSocket (client doesn't send peerId in answer)
             std::lock_guard<std::mutex> lock(peers_mutex_);
-            auto it = peers_.find(peer_id);
-            if (it != peers_.end()) {
-                it->second->pc->setRemoteDescription(rtc::Description(sdp, "answer"));
+            auto ws_it = ws_to_peer_id_.find(ws);
+            if (ws_it != ws_to_peer_id_.end()) {
+                std::string peer_id = ws_it->second;
+                auto peer_it = peers_.find(peer_id);
+                if (peer_it != peers_.end()) {
+                    fprintf(stderr, "[WebRTC] Received answer from %s (sdp length=%zu)\n",
+                            peer_id.c_str(), sdp.size());
+                    peer_it->second->pc->setRemoteDescription(rtc::Description(sdp, "answer"));
+                    fprintf(stderr, "[WebRTC] Remote description set for %s\n", peer_id.c_str());
+                }
+            } else {
+                fprintf(stderr, "[WebRTC] ERROR: Received answer but no peer found for WebSocket\n");
             }
 
         } else if (type == "offer") {
