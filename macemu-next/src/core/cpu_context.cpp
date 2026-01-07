@@ -77,8 +77,8 @@ CPUContext::CPUContext()
     , twenty_four_bit_(false)
     , state_(CPUState::UNINITIALIZED)
 {
-    // Initialize platform with null drivers
-    // (actual drivers installed by caller before init_m68k)
+    // Platform will be initialized by caller
+    // (cannot copy g_platform here because this constructor runs before main())
     memset(&platform_, 0, sizeof(platform_));
 }
 

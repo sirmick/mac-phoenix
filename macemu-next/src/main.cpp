@@ -218,8 +218,11 @@ int main(int argc, char **argv)
 		// CLI mode or WebUI with ROM: Initialize immediately
 		printf("\n=== Initializing CPU Context ===\n");
 
-		// Install CPU backend into g_cpu_ctx's platform before init
+		// Copy null drivers from g_platform into CPUContext's platform
 		Platform* platform = g_cpu_ctx.get_platform();
+		*platform = g_platform;
+
+		// Install CPU backend into CPUContext's platform
 		switch (emu_config.cpu_backend) {
 			case config::CPUBackend::Unicorn:
 				cpu_unicorn_install(platform);
@@ -233,6 +236,10 @@ int main(int argc, char **argv)
 				break;
 		}
 
+		// IMPORTANT: Copy platform to global BEFORE init_m68k()
+		// because ROM patching and CPU init trigger EmulOps that use g_platform
+		g_platform = *platform;
+
 		// Initialize M68K - does everything: allocate memory, load ROM,
 		// check ROM, init subsystems, patch ROM, init CPU, set up timer
 		if (!g_cpu_ctx.init_m68k(emu_config)) {
@@ -242,10 +249,6 @@ int main(int argc, char **argv)
 
 		// Mark emulator as initialized (for deferred init check)
 		g_emulator_initialized = true;
-
-		// Copy platform to global for legacy code compatibility
-		// TODO: Remove this when all code uses g_cpu_ctx.get_platform()
-		g_platform = *platform;
 
 		// Optional auto-exit timer (set EMULATOR_TIMEOUT=2 for 2 seconds)
 		const char *timeout_env = getenv("EMULATOR_TIMEOUT");
