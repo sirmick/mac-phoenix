@@ -12,6 +12,9 @@
 #include "../drivers/video/encoders/codec.h"  // For CodecType
 #include <string>
 #include <functional>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 
 namespace http {
 
@@ -41,6 +44,11 @@ struct APIContext {
     // Codec state
     CodecType* server_codec;  // Pointer to g_server_codec
     std::function<void(CodecType)> notify_codec_change_fn;  // Notify clients of codec change
+
+    // CPU state (in-process integration)
+    std::atomic<bool>* cpu_running;  // Pointer to cpu_state::g_running
+    std::mutex* cpu_mutex;  // Pointer to cpu_state::g_mutex
+    std::condition_variable* cpu_cv;  // Pointer to cpu_state::g_cv
 
     // Command callbacks (legacy IPC - to be replaced with direct Platform API calls)
     // std::function<void(uint8_t)> send_command_fn;

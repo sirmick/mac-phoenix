@@ -104,7 +104,53 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
 
         fprintf(stderr, "[WebRTC] Signaling message: %s\n", type.c_str());
 
-        if (type == "offer") {
+        if (type == "connect") {
+            // Client is requesting connection - server creates offer
+            std::string peer_id = json_utils::get_string(j, "peerId", "client-" + std::to_string(peer_count_.load()));
+            std::string codec_str = json_utils::get_string(j, "codec", "h264");
+
+            // Map codec string to CodecType
+            CodecType codec = CodecType::H264;
+            if (codec_str == "vp9") codec = CodecType::VP9;
+            else if (codec_str == "av1") codec = CodecType::AV1;
+            else if (codec_str == "png") codec = CodecType::PNG;
+            else if (codec_str == "webp") codec = CodecType::WEBP;
+
+            fprintf(stderr, "[WebRTC] Client connect request - creating peer connection for %s (codec: %s)\n",
+                    peer_id.c_str(), codec_str.c_str());
+
+            // Create peer connection (server-initiated)
+            auto peer = create_peer_connection(peer_id, codec);
+            if (!peer) {
+                fprintf(stderr, "[WebRTC] Failed to create peer connection\n");
+                return;
+            }
+
+            // Store peer and mapping
+            {
+                std::lock_guard<std::mutex> lock(peers_mutex_);
+                peers_[peer_id] = peer;
+                ws_to_peer_id_[ws] = peer_id;
+                peer_count_++;
+            }
+
+            // Server creates offer (will be sent via onLocalDescription callback)
+            // Note: libdatachannel will automatically generate offer when tracks are added
+
+        } else if (type == "answer") {
+            // Client sent answer to our offer
+            std::string peer_id = json_utils::get_string(j, "peerId");
+            std::string sdp = json_utils::get_string(j, "sdp");
+
+            fprintf(stderr, "[WebRTC] Received answer from %s\n", peer_id.c_str());
+
+            std::lock_guard<std::mutex> lock(peers_mutex_);
+            auto it = peers_.find(peer_id);
+            if (it != peers_.end()) {
+                it->second->pc->setRemoteDescription(rtc::Description(sdp, "answer"));
+            }
+
+        } else if (type == "offer") {
             // Extract peer info
             std::string peer_id = json_utils::get_string(j, "peerId");
             std::string sdp = json_utils::get_string(j, "sdp");

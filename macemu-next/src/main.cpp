@@ -78,6 +78,13 @@ namespace webrtc_signaling {
 	std::atomic<bool> g_running(true);
 }
 
+// CPU emulation state
+namespace cpu_state {
+	std::atomic<bool> g_running(false);  // CPU starts stopped, user must click "Start"
+	std::mutex g_mutex;
+	std::condition_variable g_cv;  // Notifies CPU thread when state changes
+}
+
 // Debug flags
 bool g_debug_png = false;
 bool g_debug_mode_switch = false;
@@ -549,6 +556,9 @@ int main(int argc, char **argv)
 		api_context.roms_path = webrtc_config.web.storage_dir + "/roms";
 		api_context.images_path = webrtc_config.web.storage_dir + "/images";
 		api_context.server_codec = &server_codec;
+		api_context.cpu_running = &cpu_state::g_running;  // CPU state control
+		api_context.cpu_mutex = &cpu_state::g_mutex;
+		api_context.cpu_cv = &cpu_state::g_cv;
 		printf("Storage paths:\n");
 		printf("  ROMs:   %s\n", api_context.roms_path.c_str());
 		printf("  Images: %s\n", api_context.images_path.c_str());
@@ -578,27 +588,54 @@ int main(int argc, char **argv)
 		// Launch CPU execution thread (if ROM is loaded)
 		std::thread cpu_thread;
 		if (ROMSize > 0) {
-			printf("Launching CPU execution thread...\n");
+			printf("Launching CPU execution thread (CPU starts in stopped state)...\n");
 			cpu_thread = std::thread([]() {
-				printf("[CPU Thread] Starting CPU execution\n");
-				if (g_platform.cpu_execute_fast) {
-					// Fast path (Unicorn, DualCPU)
-					g_platform.cpu_execute_fast();
-				} else {
-					// Slow path - execute one instruction at a time (UAE)
-					while (webserver::g_running.load(std::memory_order_acquire)) {
-						g_platform.cpu_execute_one();
+				printf("[CPU Thread] Waiting for start signal...\n");
+
+				// Wait for CPU to be started via API
+				while (webserver::g_running.load(std::memory_order_acquire)) {
+					// Wait for CPU to be started (no busy polling)
+					{
+						std::unique_lock<std::mutex> lock(cpu_state::g_mutex);
+						cpu_state::g_cv.wait(lock, []() {
+							return cpu_state::g_running.load() || !webserver::g_running.load();
+						});
+					}
+
+					// Check if we should exit
+					if (!webserver::g_running.load(std::memory_order_acquire)) {
+						break;
+					}
+
+					// CPU is running - execute instructions
+					printf("[CPU Thread] CPU started, executing...\n");
+					if (g_platform.cpu_execute_fast) {
+						// Fast path (Unicorn, DualCPU)
+						while (cpu_state::g_running.load(std::memory_order_acquire) &&
+						       webserver::g_running.load(std::memory_order_acquire)) {
+							g_platform.cpu_execute_one();
+						}
+					} else {
+						// Slow path - execute one instruction at a time (UAE)
+						while (cpu_state::g_running.load(std::memory_order_acquire) &&
+						       webserver::g_running.load(std::memory_order_acquire)) {
+							g_platform.cpu_execute_one();
+						}
+					}
+
+					if (!cpu_state::g_running.load(std::memory_order_acquire)) {
+						printf("[CPU Thread] CPU stopped by user\n");
 					}
 				}
-				printf("[CPU Thread] CPU execution stopped\n");
+				printf("[CPU Thread] CPU execution thread exiting\n");
 			});
 		}
 
 		printf("Emulator ready. Open http://localhost:%d in your browser.\n", webrtc_config.web.http_port);
 		if (ROMSize > 0) {
-			printf("The emulator is running.\n");
+			printf("CPU loaded. Click 'Start' in the web UI to begin emulation.\n");
 		} else {
-			printf("No ROM loaded - web interface only.\n");
+			printf("No ROM loaded - configure ROM path in web UI.\n");
 		}
 		printf("Press Ctrl+C to exit.\n\n");
 

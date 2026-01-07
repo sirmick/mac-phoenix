@@ -234,21 +234,54 @@ Response APIRouter::handle_restart(const Request& req) {
 }
 
 Response APIRouter::handle_status(const Request& req) {
-    // TODO: In-process integration - get status from Platform API
     (void)req;
-    return Response::json("{\"emulator_connected\": true, \"emulator_running\": true}");
+
+    // Get CPU running state
+    bool cpu_running = ctx_->cpu_running ? ctx_->cpu_running->load(std::memory_order_acquire) : false;
+
+    std::ostringstream json;
+    json << "{";
+    json << "\"emulator_connected\": true";
+    json << ", \"emulator_running\": " << (cpu_running ? "true" : "false");
+    json << ", \"cpu_state\": \"" << (cpu_running ? "running" : "stopped") << "\"";
+    json << "}";
+    return Response::json(json.str());
 }
 
 Response APIRouter::handle_emulator_start(const Request& req) {
-    // TODO: In-process integration
     (void)req;
-    return Response::json("{\"success\": false, \"message\": \"Not implemented yet (in-process integration pending)\"}");
+
+    if (!ctx_->cpu_running || !ctx_->cpu_cv) {
+        return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
+    }
+
+    // Start CPU execution
+    {
+        std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
+        ctx_->cpu_running->store(true, std::memory_order_release);
+    }
+    ctx_->cpu_cv->notify_one();  // Wake up CPU thread
+    fprintf(stderr, "[API] CPU started via web UI\n");
+
+    return Response::json("{\"success\": true, \"message\": \"CPU started\"}");
 }
 
 Response APIRouter::handle_emulator_stop(const Request& req) {
-    // TODO: In-process integration - call g_platform.cpu_stop() directly
-    (void)req;  // Suppress warning
-    return Response::json("{\"success\": false, \"message\": \"Not implemented yet (in-process integration pending)\"}");
+    (void)req;
+
+    if (!ctx_->cpu_running) {
+        return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
+    }
+
+    // Stop CPU execution
+    {
+        std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
+        ctx_->cpu_running->store(false, std::memory_order_release);
+    }
+    // No need to notify - CPU will naturally stop after next instruction
+    fprintf(stderr, "[API] CPU stopped via web UI\n");
+
+    return Response::json("{\"success\": true, \"message\": \"CPU stopped\"}");
 }
 
 Response APIRouter::handle_emulator_restart(const Request& req) {
