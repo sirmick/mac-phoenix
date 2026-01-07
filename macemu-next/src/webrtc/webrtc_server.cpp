@@ -283,14 +283,15 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     peer->pc->onLocalCandidate([ws, ws_connections, peers_mutex, peer_id](rtc::Candidate cand) {
         nlohmann::json candidate;
         candidate["type"] = "candidate";
-        candidate["peerId"] = peer_id;
         candidate["candidate"] = std::string(cand);
-        candidate["sdpMid"] = cand.mid();
+        candidate["mid"] = cand.mid();  // Client expects "mid" not "sdpMid"
 
         std::lock_guard<std::mutex> lock(*peers_mutex);
         auto ws_it = ws_connections->find(ws);
         if (ws_it != ws_connections->end() && ws_it->second) {
             ws_it->second->send(candidate.dump());
+            fprintf(stderr, "[WebRTC] Sent ICE candidate to %s (mid=%s)\n",
+                    peer_id.c_str(), cand.mid().c_str());
         }
     });
 
