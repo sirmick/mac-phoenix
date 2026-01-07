@@ -382,6 +382,9 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
     for (const auto& [peer_id, peer] : peers_) {
         if (!peer->ready || !peer->video_track) continue;
 
+        // Check if track is open before sending
+        if (!peer->video_track->isOpen()) continue;
+
         try {
             // Send frame with timestamp
             auto now = std::chrono::steady_clock::now();
@@ -406,6 +409,9 @@ void WebRTCServer::send_audio_frame(const uint8_t* data, size_t size) {
     std::lock_guard<std::mutex> lock(peers_mutex_);
     for (const auto& [peer_id, peer] : peers_) {
         if (!peer->ready || !peer->audio_track) continue;
+
+        // Check if track is open before sending
+        if (!peer->audio_track->isOpen()) continue;
 
         try {
             // Send frame with timestamp
