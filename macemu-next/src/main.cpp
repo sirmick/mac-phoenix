@@ -546,9 +546,12 @@ int main(int argc, char **argv)
 		api_context.debug_mode_switch = false;
 		api_context.debug_perf = false;
 		api_context.prefs_path = config_path;
-		api_context.roms_path = "./roms";
-		api_context.images_path = "./storage";
+		api_context.roms_path = webrtc_config.web.storage_dir + "/roms";
+		api_context.images_path = webrtc_config.web.storage_dir + "/images";
 		api_context.server_codec = &server_codec;
+		printf("Storage paths:\n");
+		printf("  ROMs:   %s\n", api_context.roms_path.c_str());
+		printf("  Images: %s\n", api_context.images_path.c_str());
 		api_context.notify_codec_change_fn = [](CodecType codec) {
 			fprintf(stderr, "[API] Codec changed to: %d\n", static_cast<int>(codec));
 			// TODO: Notify video encoder to change codec

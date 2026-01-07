@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <algorithm>
 #include <cstdio>
+#include <cerrno>
 #include <openssl/md5.h>
 #include <sstream>
 #include <iomanip>
@@ -76,7 +77,10 @@ static void scan_directory_recursive(const std::string& base_dir, const std::str
     std::string current_dir = relative_path.empty() ? base_dir : base_dir + "/" + relative_path;
 
     DIR* dir = opendir(current_dir.c_str());
-    if (!dir) return;
+    if (!dir) {
+        fprintf(stderr, "[Storage] Failed to open directory: %s (errno=%d)\n", current_dir.c_str(), errno);
+        return;
+    }
 
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
@@ -164,9 +168,16 @@ std::vector<FileInfo> scan_directory(const std::string& directory,
 
 // Public: Scan storage directories and build JSON inventory
 std::string get_storage_json(const std::string& roms_path, const std::string& images_path) {
+    fprintf(stderr, "[Storage] Scanning ROMs directory: %s\n", roms_path.c_str());
     auto roms = scan_directory(roms_path, {".rom"}, true, true);
+    fprintf(stderr, "[Storage] Found %zu ROM(s)\n", roms.size());
+
+    fprintf(stderr, "[Storage] Scanning disk images directory: %s\n", images_path.c_str());
     auto disks = scan_directory(images_path, {".img", ".dsk", ".hfv", ".toast"});
+    fprintf(stderr, "[Storage] Found %zu disk image(s)\n", disks.size());
+
     auto cdroms = scan_directory(images_path, {".iso"});
+    fprintf(stderr, "[Storage] Found %zu CD-ROM(s)\n", cdroms.size());
 
     // Note: Client handles deduplication of known ROMs by MD5
     std::ostringstream json;
