@@ -513,44 +513,13 @@ Response APIRouter::handle_config_save(const Request& req) {
         if (ppc.contains("keyboardtype")) cfg.ppc.keyboardtype = json_utils::get_int(ppc, "keyboardtype");
     }
     
-    // Save to ~/.macemu/macemu-config.json
-    const char* home = getenv("HOME");
-    if (!home) {
-        struct passwd* pw = getpwuid(getuid());
-        home = pw ? pw->pw_dir : "/tmp";
-    }
-    std::string config_path = std::string(home) + "/.macemu/macemu-config.json";
-
-    if (!config::save_config(config_path, cfg)) {
+    // Save to the same config file we loaded from
+    if (!config::save_config(ctx_->prefs_path, cfg)) {
         return Response::json("{\"success\": false, \"error\": \"Failed to save config file\"}");
     }
 
     fprintf(stderr, "✅ Config saved to %s (emulator=%s, codec=%s)\n",
-            config_path.c_str(), cfg.web.emulator.c_str(), cfg.web.codec.c_str());
-
-    // Regenerate prefs file so changes take effect immediately on restart
-    std::string prefs_content;
-    std::string prefs_file;
-
-    if (cfg.web.emulator == "ppc") {
-        prefs_content = config::generate_sheepshaver_prefs(cfg, ctx_->roms_path, ctx_->images_path);
-        // SheepShaver reads from ~/.config/SheepShaver/prefs by default
-        std::string config_dir = std::string(home) + "/.config/SheepShaver";
-        prefs_file = config_dir + "/prefs";
-    } else {
-        // m68k -> BasiliskII
-        prefs_content = config::generate_basilisk_prefs(cfg, ctx_->roms_path, ctx_->images_path);
-        // BasiliskII uses --config flag, put prefs in ~/.config/BasiliskII/
-        std::string config_dir = std::string(home) + "/.config/BasiliskII";
-        prefs_file = config_dir + "/prefs";
-    }
-
-    if (!storage::write_prefs_file(prefs_file, prefs_content)) {
-        fprintf(stderr, "⚠️  Warning: Failed to regenerate prefs file: %s\n", prefs_file.c_str());
-        return Response::json("{\"success\": true, \"warning\": \"Config saved but prefs file not updated\"}");
-    }
-
-    fprintf(stderr, "✅ Regenerated prefs file: %s\n", prefs_file.c_str());
+            ctx_->prefs_path.c_str(), cfg.web.emulator.c_str(), cfg.web.codec.c_str());
 
     return Response::json("{\"success\": true}");
 }
