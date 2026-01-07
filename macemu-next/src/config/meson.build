@@ -4,6 +4,7 @@ config_sources = [
   'config_manager.cpp',
   'json_utils.cpp',
   'prefs_manager.cpp',
+  'emulator_config.cpp',
 ]
 
 config_inc = include_directories(

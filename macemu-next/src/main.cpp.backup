@@ -45,7 +45,6 @@
 
 // WebRTC streaming
 #include "config/config_manager.h"
-#include "config/emulator_config.h"  // NEW: Unified configuration
 #include "drivers/video/video_webrtc.h"
 #include "drivers/audio/audio_webrtc.h"
 #include "webserver/webserver_main.h"
@@ -155,38 +154,48 @@ int main(int argc, char **argv)
 	// Initialize random number generator
 	srand(time(NULL));
 
-	// ========================================
-	// Load Unified Configuration
-	// ========================================
-	// This replaces the old prefs system with a clean, single source of truth.
-	// Priority: CLI args > JSON config > Defaults
-	const char* home = getenv("HOME");
-	std::string default_config_path = std::string(home) + "/.config/macemu-next/config.json";
+	// Set RAM size before PrefsInit
+	RAMSize = 32 * 1024 * 1024;  // 32MB
 
-	config::EmulatorConfig emu_config = config::load_emulator_config(
-		default_config_path.c_str(), argc, argv);
+	// Check for --config option first (before PrefsInit consumes it)
+	const char *config_file_override = NULL;
+	for (int i = 1; i < argc; i++) {
+		if (argv[i] && strcmp(argv[i], "--config") == 0 && i+1 < argc) {
+			config_file_override = argv[i+1];
+			break;
+		}
+	}
 
-	// Print configuration for debugging
-	config::print_config(emu_config);
+	// Read preferences (minimal)
+	// This processes --config and other options, modifying argc/argv
+	PrefsInit(NULL, argc, argv);
 
-	// Set RAM size from config (replaces hardcoded 32MB)
-	RAMSize = emu_config.ram_mb * 1024 * 1024;
+	// Check for --no-webserver flag
+	bool enable_webserver = true;
+	for (int i = 1; i < argc; i++) {
+		if (argv[i] && strcmp(argv[i], "--no-webserver") == 0) {
+			enable_webserver = false;
+			argv[i] = NULL;  // Remove from argv
+			break;
+		}
+	}
 
-	// Store old JSON config for legacy code (will be removed later)
-	static config::MacemuConfig webrtc_config;
-	webrtc_config = config::load_config(default_config_path);
-	webrtc::g_config = &webrtc_config;
+	// Determine config file path
+	std::string config_path;
+	if (config_file_override) {
+		config_path = config_file_override;
+	} else {
+		const char* home = getenv("HOME");
+		config_path = std::string(home) + "/.config/macemu-next/config.json";
+	}
 
-	// Initialize prefs system with values from config (for legacy code)
-	int dummy_argc = 0;
-	char** dummy_argv = nullptr;
-	PrefsInit(NULL, dummy_argc, dummy_argv);  // Don't process CLI args (already done)
-	PrefsAddInt32("ramsize", RAMSize);
-	PrefsAddInt32("cpu", emu_config.cpu_type_int());
-	PrefsAddBool("fpu", emu_config.fpu);
+	// Load configuration (needed for both webserver and no-webserver modes)
+	static config::MacemuConfig webrtc_config;  // Static so lambda can capture
+	webrtc_config = config::load_config(config_path);
+	webrtc::g_config = &webrtc_config;  // Store pointer for driver init
 
 	// Install platform drivers (video/audio)
-	if (emu_config.enable_webrtc) {
+	if (enable_webserver) {
 		// WebRTC mode: Install WebRTC drivers (will launch encoder threads)
 		printf("Installing WebRTC video/audio drivers...\n");
 		g_platform.video_init = [](bool classic) -> bool {
@@ -197,19 +206,51 @@ int main(int argc, char **argv)
 		g_platform.audio_init = audio_webrtc_init;
 		g_platform.audio_exit = audio_webrtc_exit;
 	} else {
-		// Headless mode: Keep null drivers (no threads)
+		// Tracing mode: Keep null drivers (no threads)
 		printf("Using null video/audio drivers (headless mode)...\n");
 		// null drivers already installed by platform_init()
 	}
 
-	// Get ROM path from config
-	const char *rom_path = emu_config.rom_path.empty() ? nullptr : emu_config.rom_path.c_str();
+	// Check for ROM file argument (optional when WebRTC enabled)
+	// Skip NULL entries in argv (consumed by PrefsInit)
+	const char *rom_path = NULL;
+	std::string rom_path_from_config;  // Keep string alive
+
+	// First, try command-line argument
+	for (int i = 1; i < argc; i++) {
+		if (argv[i] != NULL) {
+			rom_path = argv[i];
+			break;
+		}
+	}
+
+	// If no command-line ROM and using --no-webserver with --config, read ROM from config
+	if (!rom_path && !enable_webserver && config_file_override) {
+		// Assume m68k emulator (could add logic to select based on config or cli option)
+		std::string storage_dir = webrtc_config.common.extfs;
+		std::string rom_filename = webrtc_config.m68k.rom;
+
+		// Build full ROM path
+		if (rom_filename[0] == '/' || rom_filename[0] == '~') {
+			// Absolute path
+			rom_path_from_config = rom_filename;
+		} else {
+			// Relative to storage_dir/roms
+			rom_path_from_config = storage_dir + "/roms/" + rom_filename;
+		}
+
+		rom_path = rom_path_from_config.c_str();
+		printf("Using ROM from config: %s\n", rom_path);
+	}
 
 	// ROM file is optional (webserver mode)
 	if (!rom_path) {
 		printf("No ROM file specified. Starting in webserver mode.\n");
 		printf("You can configure the ROM path in the web UI.\n");
 	}
+	PrefsAddInt32("ramsize", RAMSize);
+	PrefsAddInt32("cpu", 4);  // 68040
+	PrefsAddBool("fpu", true);
 
 	printf("Allocating RAM (%d MB)...\n", RAMSize / (1024 * 1024));
 
@@ -322,9 +363,33 @@ int main(int argc, char **argv)
 	}
 
 	// ============================================================
-	// Select CPU Backend (from config)
+	// Select CPU Backend (before initialization)
 	// ============================================================
-	const char *cpu_backend = emu_config.cpu_backend_string();
+	// CURRENT ARCHITECTURE (as of 2025):
+	//   - All backends (UAE/Unicorn/DualCPU) use Init680x0()
+	//   - Init680x0() sets up UAE's memory banking system
+	//   - PatchROM() uses UAE's WriteMacInt*() to patch ROM
+	//   - Unicorn copies the patched ROM in unicorn_backend_init()
+	//
+	// FUTURE ARCHITECTURE (goal for Unicorn-only):
+	//   - Remove Init680x0() call for Unicorn backend
+	//   - Use direct memory access (see memory_access.h)
+	//   - PatchROM() uses DirectWriteMacInt*() instead of UAE functions
+	//   - Completely eliminate UAE dependency for Unicorn-only builds
+	//
+	// To achieve this:
+	//   1. Make Init680x0() conditional (only for UAE backend)
+	//   2. Switch PatchROM() to use backend-independent memory functions
+	//   3. Move RAM/ROM variable definitions out of basilisk_glue.cpp
+	//   4. Create unicorn-specific build configuration
+	// ============================================================
+
+	// Select CPU backend via environment variable
+	const char *cpu_backend = getenv("CPU_BACKEND");
+	if (!cpu_backend) {
+		cpu_backend = "uae";  // Default
+	}
+
 	printf("\n=== Selected CPU Backend: %s ===\n", cpu_backend);
 
 	// Skip CPU initialization if no ROM loaded (webserver mode)
@@ -345,17 +410,12 @@ int main(int argc, char **argv)
 	// functions for backend-independent memory access
 	// ============================================================
 
-	switch (emu_config.cpu_backend) {
-		case config::CPUBackend::Unicorn:
-			cpu_unicorn_install(&g_platform);
-			break;
-		case config::CPUBackend::DualCPU:
-			cpu_dualcpu_install(&g_platform);
-			break;
-		case config::CPUBackend::UAE:
-		default:
-			cpu_uae_install(&g_platform);
-			break;
+	if (strcmp(cpu_backend, "unicorn") == 0) {
+		cpu_unicorn_install(&g_platform);
+	} else if (strcmp(cpu_backend, "dualcpu") == 0) {
+		cpu_dualcpu_install(&g_platform);
+	} else {
+		cpu_uae_install(&g_platform);  // Default to UAE
 	}
 
 	printf("CPU Backend: %s\n", g_platform.cpu_name);
@@ -443,14 +503,14 @@ int main(int argc, char **argv)
 	// ============================================================
 	// HTTP Server (WebRTC Mode Only)
 	// ============================================================
-	if (emu_config.enable_webrtc) {
+	if (enable_webserver) {
 		// Set up API context for HTTP handlers
 		CodecType server_codec = CodecType::PNG;  // Default
 		http::APIContext api_context;
-		api_context.debug_connection = emu_config.debug_connection;
-		api_context.debug_mode_switch = emu_config.debug_mode_switch;
-		api_context.debug_perf = emu_config.debug_perf;
-		api_context.prefs_path = default_config_path;
+		api_context.debug_connection = false;
+		api_context.debug_mode_switch = false;
+		api_context.debug_perf = false;
+		api_context.prefs_path = config_path;
 		api_context.roms_path = webrtc_config.web.storage_dir + "/roms";
 		api_context.images_path = webrtc_config.web.storage_dir + "/images";
 		api_context.server_codec = &server_codec;

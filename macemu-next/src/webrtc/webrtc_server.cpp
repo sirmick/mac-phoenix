@@ -275,6 +275,7 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     // Send local description (offer or answer) to browser
     peer->pc->onLocalDescription([ws, ws_connections, peers_mutex, peer_id](rtc::Description desc) {
+        fprintf(stderr, "[WebRTC] !!! onLocalDescription FIRED for %s !!!\n", peer_id.c_str());
         nlohmann::json msg;
         msg["type"] = desc.typeString();  // "offer" or "answer"
         msg["sdp"] = std::string(desc);
@@ -285,6 +286,8 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
             ws_it->second->send(msg.dump());
             fprintf(stderr, "[WebRTC] Sent %s to %s (sdp length=%zu)\n",
                     desc.typeString().c_str(), peer_id.c_str(), std::string(desc).size());
+        } else {
+            fprintf(stderr, "[WebRTC] ERROR: WebSocket not found when sending %s\n", desc.typeString().c_str());
         }
     });
 
@@ -344,14 +347,19 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     // SSRC for RTP streams (static for now, could be per-peer)
     static uint32_t ssrc = 42;  // Arbitrary but consistent
 
+    fprintf(stderr, "[WebRTC] About to add tracks for peer %s\n", peer_id.c_str());
+
     // Add video track (H.264, VP9, or AV1) with proper RTP packetizer
     if (codec == CodecType::H264 || codec == CodecType::VP9 || codec == CodecType::AV1) {
         auto video = rtc::Description::Video("video-stream", rtc::Description::Direction::SendOnly);
 
         if (codec == CodecType::H264) {
+            fprintf(stderr, "[WebRTC] Creating H.264 video track\n");
             video.addH264Codec(96, "profile-level-id=42e01f;packetization-mode=1;level-asymmetry-allowed=1");
             video.addSSRC(ssrc, "video-stream", "stream1", "video-stream");
+            fprintf(stderr, "[WebRTC] Calling addTrack for video\n");
             peer->video_track = peer->pc->addTrack(video);
+            fprintf(stderr, "[WebRTC] addTrack returned, setting media handler\n");
 
             // Set up H.264 RTP packetizer
             auto rtpConfig = std::make_shared<rtc::RtpPacketizationConfig>(
@@ -362,6 +370,7 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
                 rtpConfig
             );
             peer->video_track->setMediaHandler(packetizer);
+            fprintf(stderr, "[WebRTC] Media handler set for video\n");
 
         } else if (codec == CodecType::VP9) {
             video.addVP9Codec(97);
@@ -384,10 +393,13 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     }
 
     // Add audio track (Opus) with proper RTP packetizer
+    fprintf(stderr, "[WebRTC] Creating Opus audio track\n");
     auto audio = rtc::Description::Audio("audio-stream", rtc::Description::Direction::SendOnly);
     audio.addOpusCodec(111);
     audio.addSSRC(ssrc + 1, "audio-stream", "stream1", "audio-stream");
+    fprintf(stderr, "[WebRTC] Calling addTrack for audio\n");
     peer->audio_track = peer->pc->addTrack(audio);
+    fprintf(stderr, "[WebRTC] addTrack returned for audio, setting media handler\n");
 
     // Set up Opus RTP packetizer (following web-streaming pattern)
     auto rtpConfigAudio = std::make_shared<rtc::RtpPacketizationConfig>(
@@ -406,6 +418,7 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     opusPacketizer->addToChain(nackResponder);
 
     peer->audio_track->setMediaHandler(opusPacketizer);
+    fprintf(stderr, "[WebRTC] Media handler set for audio\n");
 
     peer->audio_track->onOpen([peer_id]() {
         fprintf(stderr, "[WebRTC] Audio track opened for %s\n", peer_id.c_str());
