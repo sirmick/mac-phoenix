@@ -63,7 +63,11 @@ static std::unique_ptr<VideoCodec> create_video_encoder(CodecType codec) {
  * Send encoded frame to WebRTC
  */
 static void send_encoded_frame(const EncodedFrame& frame) {
+    static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
+    static int frame_count = 0;
+
     g_frames_encoded++;
+    frame_count++;
 
     // Send to WebRTC server if available
     if (webrtc::g_server) {
@@ -72,6 +76,15 @@ static void send_encoded_frame(const EncodedFrame& frame) {
             frame.data.size(),
             frame.is_keyframe
         );
+
+        if (debug_frames && (frame_count % 60 == 0 || frame.is_keyframe)) {
+            fprintf(stderr, "[VideoEncoder] Sent frame #%d to WebRTC: %zu bytes, keyframe=%d\n",
+                    frame_count, frame.data.size(), frame.is_keyframe);
+        }
+    } else {
+        if (debug_frames && frame_count == 1) {
+            fprintf(stderr, "[VideoEncoder] WARNING: webrtc::g_server is NULL, frames not being sent!\n");
+        }
     }
 }
 
@@ -83,6 +96,10 @@ static void send_encoded_frame(const EncodedFrame& frame) {
  */
 void video_encoder_main(VideoOutput* video_output, config::MacemuConfig* config) {
     fprintf(stderr, "[VideoEncoder] Thread starting\n");
+
+    // Debug flags
+    static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
+    static bool debug_perf = (getenv("MACEMU_DEBUG_PERF") != nullptr);
 
     // Initialize encoder with codec from config
     CodecType current_codec = CodecType::PNG;  // Default
@@ -135,7 +152,15 @@ void video_encoder_main(VideoOutput* video_output, config::MacemuConfig* config)
 
         if (!frame) {
             // Timeout or shutdown
+            if (debug_frames && frames_since_stats == 0) {
+                fprintf(stderr, "[VideoEncoder] No frame available (timeout)\n");
+            }
             continue;
+        }
+
+        if (debug_frames) {
+            fprintf(stderr, "[VideoEncoder] Received frame %dx%d format=%d\n",
+                    frame->width, frame->height, (int)frame->format);
         }
 
         // Initialize encoder on first frame (need width/height)

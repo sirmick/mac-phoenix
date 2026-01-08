@@ -45,35 +45,76 @@ static inline void print_backtrace(const char *prefix)
 		fprintf(stderr, "=== END BACKTRACE ===\n\n");
 		fflush(stderr);
 
-		// Now try to get file:line info using addr2line (may take time)
+		// Now try to get file:line info using addr2line
 		fprintf(stderr, "=== DETAILED BACKTRACE ===\n");
 		for (size_t i = 0; i < size; i++) {
-			// Extract executable path from backtrace_symbols output
+			// Parse backtrace_symbols output: "path(+offset) [address]"
 			char exe_buf[512];
 			strncpy(exe_buf, strings[i], sizeof(exe_buf) - 1);
 			exe_buf[sizeof(exe_buf) - 1] = '\0';
 
 			char *paren = strchr(exe_buf, '(');
+			char *bracket = strchr(exe_buf, '[');
+
 			if (paren) {
 				*paren = '\0';  // Null-terminate at '(' to get exe path
 
-				// Build addr2line command
-				char cmd[512];
-				snprintf(cmd, sizeof(cmd), "addr2line -e %s -f -C -p %p 2>/dev/null",
+				// Extract offset from (+0xOFFSET) if present
+				char *offset_str = paren + 1;
+				char *plus = strchr(offset_str, '+');
+				char *close_paren = strchr(offset_str, ')');
+
+				// Try method 1: Use offset from backtrace_symbols
+				if (plus && close_paren) {
+					*close_paren = '\0';
+					char cmd[512];
+					snprintf(cmd, sizeof(cmd), "addr2line -e %s -f -C -i %s 2>/dev/null",
+					         exe_buf, plus + 1);
+
+					FILE *fp = popen(cmd, "r");
+					if (fp) {
+						char func_line[256];
+						char file_line[256];
+						bool got_info = false;
+
+						// addr2line with -f outputs: function\nfile:line
+						if (fgets(func_line, sizeof(func_line), fp)) {
+							func_line[strcspn(func_line, "\n")] = 0;
+							if (fgets(file_line, sizeof(file_line), fp)) {
+								file_line[strcspn(file_line, "\n")] = 0;
+								// Only print if we got useful info (not "??:0")
+								if (strstr(file_line, "??:0") == NULL && strstr(file_line, "??:?") == NULL) {
+									fprintf(stderr, "  [%2zu] %s at %s\n", i, func_line, file_line);
+									got_info = true;
+								}
+							}
+						}
+						pclose(fp);
+
+						if (got_info) continue;
+					}
+				}
+
+				// Method 2: Try using raw address (fallback)
+				char cmd2[512];
+				snprintf(cmd2, sizeof(cmd2), "addr2line -e %s -f -C -i %p 2>/dev/null",
 				         exe_buf, array[i]);
 
-				FILE *fp = popen(cmd, "r");
-				if (fp) {
-					char line[256];
-					if (fgets(line, sizeof(line), fp)) {
-						// Remove newline
-						line[strcspn(line, "\n")] = 0;
-						// Only print if we got useful info (not "?? ??:0")
-						if (strstr(line, "??") == NULL) {
-							fprintf(stderr, "  [%2zu] %s\n", i, line);
+				FILE *fp2 = popen(cmd2, "r");
+				if (fp2) {
+					char func_line[256];
+					char file_line[256];
+
+					if (fgets(func_line, sizeof(func_line), fp2)) {
+						func_line[strcspn(func_line, "\n")] = 0;
+						if (fgets(file_line, sizeof(file_line), fp2)) {
+							file_line[strcspn(file_line, "\n")] = 0;
+							if (strstr(file_line, "??:0") == NULL && strstr(file_line, "??:?") == NULL) {
+								fprintf(stderr, "  [%2zu] %s at %s\n", i, func_line, file_line);
+							}
 						}
 					}
-					pclose(fp);
+					pclose(fp2);
 				}
 			}
 		}

@@ -96,6 +96,13 @@ static void one_tick(void)
 		one_second();
 	}
 
+	// Trigger video refresh (60Hz frame capture)
+	// This must happen BEFORE triggering CPU interrupts to ensure smooth video
+	extern Platform g_platform;
+	if (g_platform.video_refresh) {
+		g_platform.video_refresh();
+	}
+
 	// Set 60Hz interrupt flag
 	SetInterruptFlag(INTFLAG_60HZ);
 

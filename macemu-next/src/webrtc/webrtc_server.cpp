@@ -13,6 +13,11 @@
 #include <thread>
 #include <cstring>
 
+// External globals from main.cpp
+namespace video {
+    extern std::atomic<bool> g_request_keyframe;
+}
+
 namespace webrtc {
 
 WebRTCServer::~WebRTCServer() {
@@ -385,8 +390,27 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
             // AV1 packetizer would go here (if needed)
         }
 
-        peer->video_track->onOpen([peer_id]() {
-            fprintf(stderr, "[WebRTC] Video track opened for %s\n", peer_id.c_str());
+        // CRITICAL: Only set ready=true when track is actually open!
+        // This matches web-streaming behavior (server.cpp:1445-1452)
+        peer->video_track->onOpen([this, peer_id]() {
+            fprintf(stderr, "[WebRTC] Video track OPEN for %s - ready to send frames!\n", peer_id.c_str());
+
+            // Find peer and set ready flag
+            std::lock_guard<std::mutex> lock(peers_mutex_);
+            auto it = peers_.find(peer_id);
+            if (it != peers_.end()) {
+                it->second->ready = true;
+                // Request keyframe so new peer gets a complete picture
+                video::g_request_keyframe.store(true, std::memory_order_release);
+            }
+        });
+
+        peer->video_track->onClosed([peer_id]() {
+            fprintf(stderr, "[WebRTC] Video track CLOSED for %s\n", peer_id.c_str());
+        });
+
+        peer->video_track->onError([peer_id](std::string error) {
+            fprintf(stderr, "[WebRTC] Video track ERROR for %s: %s\n", peer_id.c_str(), error.c_str());
         });
 
         fprintf(stderr, "[WebRTC] Added video track with RTP packetizer (codec: %d)\n", (int)codec);
@@ -434,35 +458,74 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
         fprintf(stderr, "[WebRTC] Data channel opened for peer %s\n", peer_id.c_str());
     });
 
-    peer->ready = true;
+    // NOTE: Don't set peer->ready here! It's set in video_track->onOpen() callback
+    // This ensures we only send frames after the track is actually open
+    peer->ready = false;  // Will be set to true in onOpen callback
+
+    fprintf(stderr, "[WebRTC] Sent 'connected' ack to peer %s\n", peer_id.c_str());
     return peer;
 }
 
 void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_keyframe) {
-    if (!initialized_ || peer_count_ == 0 || !data || size == 0) return;
+    static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
+    static int send_count = 0;
+
+    if (!initialized_ || peer_count_ == 0 || !data || size == 0) {
+        if (debug_frames && send_count == 0) {
+            fprintf(stderr, "[WebRTC] send_video_frame blocked: init=%d peers=%d data=%p size=%zu\n",
+                    (int)initialized_, (int)peer_count_.load(), (void*)data, size);
+        }
+        return;
+    }
 
     std::lock_guard<std::mutex> lock(peers_mutex_);
+
+    int sent_to = 0;
+    int skipped_not_ready = 0;
+    int skipped_no_track = 0;
+    int skipped_not_open = 0;
+
     for (const auto& [peer_id, peer] : peers_) {
-        if (!peer->ready || !peer->video_track) continue;
+        if (!peer->ready) {
+            skipped_not_ready++;
+            continue;
+        }
+
+        if (!peer->video_track) {
+            skipped_no_track++;
+            continue;
+        }
 
         // Check if track is open before sending
-        if (!peer->video_track->isOpen()) continue;
+        if (!peer->video_track->isOpen()) {
+            skipped_not_open++;
+            continue;
+        }
 
         try {
-            // Send frame with timestamp
+            // Send frame with timestamp (CRITICAL for H.264 RTP)
             auto now = std::chrono::steady_clock::now();
             auto elapsed = std::chrono::duration<double>(now - start_time_);
             rtc::FrameInfo frameInfo(elapsed);
 
-            // Create byte vector from raw pointer
-            std::vector<std::byte> frame_data(size);
-            std::memcpy(frame_data.data(), data, size);
-
-            peer->video_track->send(frame_data);
+            // Use sendFrame() with FrameInfo for proper RTP timestamps
+            // This is required for H.264/VP9/AV1 - without it, browser won't decode!
+            peer->video_track->sendFrame(
+                reinterpret_cast<const std::byte*>(data),
+                size,
+                frameInfo
+            );
+            sent_to++;
 
         } catch (const std::exception& e) {
             fprintf(stderr, "[WebRTC] Error sending video frame: %s\n", e.what());
         }
+    }
+
+    send_count++;
+    if (debug_frames && (send_count % 60 == 0 || is_keyframe || sent_to == 0)) {
+        fprintf(stderr, "[WebRTC] Frame #%d: sent=%d skipped(notready=%d nottrack=%d notopen=%d) kf=%d size=%zu\n",
+                send_count, sent_to, skipped_not_ready, skipped_no_track, skipped_not_open, is_keyframe, size);
     }
 }
 

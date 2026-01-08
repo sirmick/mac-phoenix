@@ -69,16 +69,30 @@ bool video_webrtc_init(bool classic, config::MacemuConfig* config)
 	const video_depth depth = VDEPTH_32BIT;
 	const uint32 resolution_id = 0x80;
 
-	// Allocate framebuffer (32-bit = 4 bytes per pixel)
-	the_buffer_size = width * height * 4;
-	the_buffer = (uint8 *)malloc(the_buffer_size);
-	if (!the_buffer) {
+	// Allocate framebuffer from Mac RAM (at the end of RAM)
+	// Need to allocate BEFORE initializing to get correct address
+	the_buffer_size = width * height * 4;  // 32-bit = 4 bytes per pixel
+
+	// Get RAM info from globals
+	extern uint8 *RAMBaseHost;
+	extern uint32 RAMSize;
+
+	// Allocate framebuffer at end of Mac RAM minus buffer size
+	// IMPORTANT: Framebuffer MUST be in Mac RAM for Host2MacAddr to work!
+	if (the_buffer_size > RAMSize / 2) {
+		fprintf(stderr, "Video: Framebuffer too large (%u bytes) for RAM size (%u bytes)\n",
+		        the_buffer_size, RAMSize);
 		delete g_video_output;
 		g_video_output = nullptr;
 		return false;
 	}
 
+	// Place framebuffer at top of RAM
+	the_buffer = RAMBaseHost + RAMSize - the_buffer_size;
 	memset(the_buffer, 0, the_buffer_size);
+
+	D(bug("Video: Framebuffer at host addr %p, Mac addr 0x%08x\n",
+	      the_buffer, Host2MacAddr(the_buffer)));
 
 	// Build list of supported video modes
 	vector<video_mode> modes;
@@ -94,8 +108,18 @@ bool video_webrtc_init(bool classic, config::MacemuConfig* config)
 	// Create monitor descriptor
 	webrtc_monitor_desc *monitor = new webrtc_monitor_desc(modes, depth, resolution_id);
 
-	// Set Mac frame buffer address
-	monitor->set_mac_frame_base(Host2MacAddr(the_buffer));
+	// Set Mac frame buffer address (now it's in Mac RAM!)
+	uint32 mac_fb_addr = Host2MacAddr(the_buffer);
+	if (mac_fb_addr == 0) {
+		fprintf(stderr, "Video: FATAL - Host2MacAddr returned 0 for buffer at %p\n", the_buffer);
+		fprintf(stderr, "       RAMBaseHost=%p, RAMSize=0x%08x\n", RAMBaseHost, RAMSize);
+		delete g_video_output;
+		delete monitor;
+		g_video_output = nullptr;
+		return false;
+	}
+	monitor->set_mac_frame_base(mac_fb_addr);
+	D(bug("Video: Mac framebuffer address set to 0x%08x\n", mac_fb_addr));
 
 	// Add to global monitor list
 	VideoMonitors.push_back(monitor);
@@ -129,11 +153,9 @@ void video_webrtc_exit(void)
 		delete *i;
 	VideoMonitors.clear();
 
-	// Free framebuffer
-	if (the_buffer) {
-		free(the_buffer);
-		the_buffer = nullptr;
-	}
+	// Note: the_buffer is now part of Mac RAM, not malloc'd
+	// So we don't free() it - it will be freed when RAM is freed
+	the_buffer = nullptr;
 
 	// Delete VideoOutput
 	if (g_video_output) {
@@ -146,14 +168,38 @@ void video_webrtc_exit(void)
 
 /*
  *  Video refresh - called periodically to capture frames
+ *
+ *  Called from main emulation loop to submit frames to the encoder.
+ *  Mac framebuffer is in ARGB format, we convert to BGRA for H.264 encoder.
  */
 void video_webrtc_refresh(void)
 {
-	if (!g_video_output || !the_buffer)
-		return;
+	static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
+	static int refresh_count = 0;
 
-	// Submit frame to encoder (non-blocking)
-	// The encoder thread will read from VideoOutput triple buffer
-	// TODO: Actually copy framebuffer to VideoOutput
-	// For now, encoder will just encode black frames
+	if (!g_video_output || !the_buffer) {
+		if (debug_frames && refresh_count == 0) {
+			fprintf(stderr, "[VideoRefresh] ERROR: g_video_output=%p the_buffer=%p\n",
+			        (void*)g_video_output, (void*)the_buffer);
+		}
+		return;
+	}
+
+	refresh_count++;
+
+	if (debug_frames && (refresh_count % 60 == 0)) {
+		fprintf(stderr, "[VideoRefresh] Called %d times, submitting frame\n", refresh_count);
+	}
+
+	// Get current video mode dimensions
+	// Note: For now we're hardcoded to 1024x768x32
+	const int width = 1024;
+	const int height = 768;
+
+	// Mac framebuffer is already in ARGB format (32-bit)
+	// VideoOutput wants ARGB or BGRA - let's submit as ARGB since that's what Mac uses
+	const uint32_t* pixels = reinterpret_cast<const uint32_t*>(the_buffer);
+
+	// Submit frame to encoder (non-blocking, lock-free)
+	g_video_output->submit_frame(pixels, width, height, PIXFMT_ARGB);
 }
