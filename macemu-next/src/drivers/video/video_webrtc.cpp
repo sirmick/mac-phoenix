@@ -189,7 +189,13 @@ void video_webrtc_refresh(void)
 
 	// Debug: Log first 5 calls and every 60 calls thereafter
 	if (refresh_count <= 5 || (debug_frames && (refresh_count % 60 == 0))) {
-		fprintf(stderr, "[VideoRefresh] Called %d times, submitting frame\n", refresh_count);
+		// Sample a few pixels to see what's in the framebuffer
+		const uint32_t* pixels = reinterpret_cast<const uint32_t*>(the_buffer);
+		uint32_t p0 = pixels[0];          // Top-left corner
+		uint32_t p1 = pixels[1023];       // Top-right corner
+		uint32_t p2 = pixels[512 + 384 * 1024]; // Center
+		fprintf(stderr, "[VideoRefresh] Frame %d: pixels[0]=0x%08x [1023]=0x%08x [center]=0x%08x\n",
+		        refresh_count, p0, p1, p2);
 	}
 
 	// Get current video mode dimensions

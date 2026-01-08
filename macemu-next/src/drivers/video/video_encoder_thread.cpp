@@ -211,6 +211,14 @@ void video_encoder_main(VideoOutput* video_output, config::MacemuConfig* config)
         if (encoded.data.size() > 0) {
             send_encoded_frame(encoded);
             frames_since_stats++;
+
+            // Debug: Log first 10 encoded frames
+            static int encoded_count = 0;
+            encoded_count++;
+            if (encoded_count <= 10) {
+                fprintf(stderr, "[VideoEncoder] Encoded frame #%d: %zu bytes, keyframe=%d, took %ld ms\n",
+                        encoded_count, encoded.data.size(), encoded.is_keyframe, encode_ms);
+            }
         } else {
             fprintf(stderr, "[VideoEncoder] WARNING: Encoding produced empty frame\n");
         }
