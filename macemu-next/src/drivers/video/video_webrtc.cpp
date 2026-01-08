@@ -187,7 +187,8 @@ void video_webrtc_refresh(void)
 
 	refresh_count++;
 
-	if (debug_frames && (refresh_count % 60 == 0)) {
+	// Debug: Log first 5 calls and every 60 calls thereafter
+	if (refresh_count <= 5 || (debug_frames && (refresh_count % 60 == 0))) {
 		fprintf(stderr, "[VideoRefresh] Called %d times, submitting frame\n", refresh_count);
 	}
 
