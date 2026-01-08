@@ -47,7 +47,7 @@
 #include "mon.h"
 #endif
 
-#define DEBUG 0
+#define DEBUG 1
 #include "debug.h"
 
 extern bool tick_inhibit;
