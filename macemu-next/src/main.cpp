@@ -250,6 +250,19 @@ int main(int argc, char **argv)
 		// Mark emulator as initialized (for deferred init check)
 		g_emulator_initialized = true;
 
+		// Auto-start CPU only in headless mode (WebRTC disabled)
+		// In WebRTC mode, user must click "Start" in the web UI
+		if (!emu_config.enable_webrtc) {
+			printf("[CPU] Auto-starting CPU (headless mode)\n");
+			{
+				std::lock_guard<std::mutex> lock(cpu_state::g_mutex);
+				cpu_state::g_running.store(true);
+			}
+			cpu_state::g_cv.notify_one();  // Wake up CPU thread
+		} else {
+			printf("[CPU] WebRTC mode - CPU will start when user clicks 'Start' in web UI\n");
+		}
+
 		// Optional auto-exit timer (set EMULATOR_TIMEOUT=2 for 2 seconds)
 		const char *timeout_env = getenv("EMULATOR_TIMEOUT");
 		if (timeout_env) {

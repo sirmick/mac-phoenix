@@ -1,0 +1,47 @@
+{
+  "_comment": "Trace config matching working BasiliskII setup for debugging",
+  "version": 1,
+  "web": {
+    "emulator": "m68k",
+    "codec": "h264",
+    "mousemode": "relative",
+    "http_port": 8000,
+    "client_dir": "./client",
+    "storage_dir": "/home/mick/macemu/web-streaming/storage/"
+  },
+  "common": {
+    "ram": 64,
+    "screen": "1024x768",
+    "sound": true,
+    "extfs": "./storage"
+  },
+  "m68k": {
+    "rom": "1MB ROMs/1991-10 - 420DBFF3 - Quadra 700&900 & PB140&170.ROM",
+    "modelid": 14,
+    "cpu": 4,
+    "fpu": true,
+    "jit": true,
+    "disks": [
+      "7.6.img"
+    ],
+    "cdroms": [],
+    "idlewait": true,
+    "ignoresegv": true,
+    "swap_opt_cmd": true,
+    "keyboardtype": 5
+  },
+  "ppc": {
+    "rom": "",
+    "modelid": 14,
+    "cpu": 4,
+    "fpu": true,
+    "jit": false,
+    "jit68k": false,
+    "disks": [],
+    "cdroms": [],
+    "idlewait": true,
+    "ignoresegv": true,
+    "ignoreillegal": false,
+    "keyboardtype": 5
+  }
+}

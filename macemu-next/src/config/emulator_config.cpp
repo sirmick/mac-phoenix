@@ -252,6 +252,24 @@ std::string resolve_rom_path(const std::string& rom_filename,
 }
 
 /*
+ * Resolve disk image path from config or CLI argument
+ */
+std::string resolve_disk_path(const std::string& disk_filename,
+                                const std::string& storage_dir) {
+    if (disk_filename.empty()) {
+        return "";
+    }
+
+    // Absolute path
+    if (disk_filename[0] == '/' || disk_filename[0] == '~') {
+        return expand_home(disk_filename);
+    }
+
+    // Relative path - resolve to storage_dir/images/
+    return storage_dir + "/images/" + disk_filename;
+}
+
+/*
  * Load emulator configuration from multiple sources
  */
 EmulatorConfig load_emulator_config(const char* config_path,
@@ -295,7 +313,7 @@ EmulatorConfig load_emulator_config(const char* config_path,
 
     // 5. Resolve disk paths
     // Disk paths from CLI (--disk) are kept as-is (absolute or relative to cwd)
-    // Disk paths from JSON config are resolved relative to storage_dir
+    // Disk paths from JSON config are resolved relative to storage_dir/images/
     std::vector<std::string> resolved_disks;
     for (const auto& disk : config.disk_paths) {
         if (disk.empty()) {
@@ -305,9 +323,8 @@ EmulatorConfig load_emulator_config(const char* config_path,
         if (disk[0] == '/' || disk[0] == '~') {
             resolved_disks.push_back(expand_home(disk));
         } else {
-            // Relative path - resolve to storage_dir/roms/ (for JSON config paths)
-            // CLI paths will be relative to cwd, which is correct
-            resolved_disks.push_back(resolve_rom_path(disk, config.storage_dir));
+            // Relative path - resolve to storage_dir/images/
+            resolved_disks.push_back(resolve_disk_path(disk, config.storage_dir));
         }
     }
     config.disk_paths = resolved_disks;
