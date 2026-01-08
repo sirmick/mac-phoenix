@@ -126,6 +126,22 @@ fi
 AC_SUBST([VPX_CFLAGS])
 AC_SUBST([VPX_LIBS])
 
+dnl Check for libwebp (WebP encoder)
+AC_MSG_CHECKING([for libwebp])
+WEBP_CFLAGS=$($PKG_CONFIG --cflags libwebp 2>/dev/null)
+WEBP_LIBS=$($PKG_CONFIG --libs libwebp 2>/dev/null)
+if test "x$WEBP_LIBS" = "x"; then
+  WEBP_LIBS="-lwebp"
+fi
+if $PKG_CONFIG --exists libwebp 2>/dev/null; then
+  AC_MSG_RESULT([yes])
+  AC_DEFINE([HAVE_WEBP], [1], [Define if libwebp is available])
+else
+  AC_MSG_ERROR([libwebp not found. Install with: apt install libwebp-dev])
+fi
+AC_SUBST([WEBP_CFLAGS])
+AC_SUBST([WEBP_LIBS])
+
 dnl Check for pthread
 AC_CHECK_LIB([pthread], [pthread_create], [], [
   AC_MSG_ERROR([pthread library not found.])
@@ -182,7 +198,7 @@ FPNG_CFLAGS="-msse4.1 -mpclmul"
 
 dnl Combined flags for server
 SERVER_CFLAGS="$LIBDATACHANNEL_INCLUDES $OPENH264_CFLAGS $SVTAV1_CFLAGS $OPENSSL_CFLAGS $FPNG_CFLAGS"
-SERVER_LIBS="$LIBDATACHANNEL_LIB $LIBJUICE $LIBSRTP $USRSCTP $OPENH264_LIBS $OPENSSL_LIBS -lyuv -lpthread -lrt $OPUS_LIBS $SVTAV1_LIBS $VPX_LIBS"
+SERVER_LIBS="$LIBDATACHANNEL_LIB $LIBJUICE $LIBSRTP $USRSCTP $OPENH264_LIBS $OPENSSL_LIBS -lyuv -lpthread -lrt $OPUS_LIBS $SVTAV1_LIBS $VPX_LIBS $WEBP_LIBS"
 
 dnl Substitutions
 AC_SUBST([SERVER_CFLAGS])
@@ -208,6 +224,7 @@ echo "OpenSSL .......................... : yes"
 echo "OpenH264 ......................... : yes"
 echo "SVT-AV1 .......................... : yes"
 echo "libvpx (VP9) ..................... : yes"
+echo "libwebp .......................... : yes"
 echo "Opus ............................. : yes"
 echo "libyuv ........................... : yes"
 echo "libdatachannel ................... : $HAVE_LIBDATACHANNEL"
