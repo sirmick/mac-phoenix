@@ -31,9 +31,7 @@ void platform_init(void)
 	g_platform.video_exit = video_null_exit;
 	g_platform.video_refresh = video_null_refresh;
 
-	// Disk - null driver
-	g_platform.disk_init = disk_null_init;
-	g_platform.disk_exit = disk_null_exit;
+	// Disk - no driver pointers (disk.cpp provides DiskInit/Exit directly)
 
 	// Audio - null driver
 	g_platform.audio_init = audio_null_init;
@@ -54,6 +52,36 @@ void platform_init(void)
 	g_platform.ether_write = ether_null_write;
 	g_platform.ether_start_udp_thread = ether_null_start_udp_thread;
 	g_platform.ether_stop_udp_thread = ether_null_stop_udp_thread;
+
+	// Platform/Sys functions - Unix driver (real file I/O)
+	g_platform.mount_volume = platform_unix_mount_volume;
+	g_platform.file_disk_layout = platform_unix_file_disk_layout;
+	g_platform.floppy_init = platform_unix_floppy_init;
+	g_platform.sys_add_serial_prefs = platform_unix_sys_add_serial_prefs;
+	g_platform.sys_add_floppy_prefs = platform_unix_sys_add_floppy_prefs;
+	g_platform.sys_add_disk_prefs = platform_unix_sys_add_disk_prefs;
+	g_platform.sys_add_cdrom_prefs = platform_unix_sys_add_cdrom_prefs;
+	g_platform.sys_open = platform_unix_sys_open;
+	g_platform.sys_close = platform_unix_sys_close;
+	g_platform.sys_read = platform_unix_sys_read;
+	g_platform.sys_write = platform_unix_sys_write;
+	g_platform.sys_is_readonly = platform_unix_sys_is_readonly;
+	g_platform.sys_is_disk_inserted = platform_unix_sys_is_disk_inserted;
+	g_platform.sys_is_fixed_disk = platform_unix_sys_is_fixed_disk;
+	g_platform.sys_get_file_size = platform_unix_sys_get_file_size;
+	g_platform.sys_eject = platform_unix_sys_eject;
+	g_platform.sys_allow_removal = platform_unix_sys_allow_removal;
+	g_platform.sys_prevent_removal = platform_unix_sys_prevent_removal;
+	g_platform.sys_format = platform_unix_sys_format;
+	g_platform.sys_cd_get_volume = platform_unix_sys_cd_get_volume;
+	g_platform.sys_cd_set_volume = platform_unix_sys_cd_set_volume;
+	g_platform.sys_cd_pause = platform_unix_sys_cd_pause;
+	g_platform.sys_cd_resume = platform_unix_sys_cd_resume;
+	g_platform.sys_cd_play = platform_unix_sys_cd_play;
+	g_platform.sys_cd_stop = platform_unix_sys_cd_stop;
+	g_platform.sys_cd_get_position = platform_unix_sys_cd_get_position;
+	g_platform.sys_cd_scan = platform_unix_sys_cd_scan;
+	g_platform.sys_cd_read_toc = platform_unix_sys_cd_read_toc;
 
 	// Memory
 	g_platform.ram = nullptr;

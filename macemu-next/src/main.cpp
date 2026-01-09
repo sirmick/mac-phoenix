@@ -361,22 +361,40 @@ int main(int argc, char **argv)
 
 				// Simple execution loop using CPUContext
 				Platform* platform = g_cpu_ctx.get_platform();
+				printf("[CPU Thread] CPU started, executing...\n");
+
+				// Add periodic alive check
+				uint64_t instruction_count = 0;
+				uint64_t last_log = 0;
+
 				if (platform->cpu_execute_fast) {
 					// Fast path (Unicorn, DualCPU)
 					while (cpu_state::g_running.load(std::memory_order_acquire) &&
 					       webserver::g_running.load(std::memory_order_acquire)) {
 						platform->cpu_execute_one();
+						instruction_count++;
 					}
 				} else {
 					// Slow path (UAE) - execute one instruction at a time
 					while (cpu_state::g_running.load(std::memory_order_acquire) &&
 					       webserver::g_running.load(std::memory_order_acquire)) {
 						platform->cpu_execute_one();
+						instruction_count++;
+
+						// Log every 10 million instructions to prove CPU is alive
+						if ((instruction_count - last_log) >= 10000000) {
+							fprintf(stderr, "[CPU Thread] Alive: %llu M instructions executed\n",
+							        (unsigned long long)(instruction_count / 1000000));
+							last_log = instruction_count;
+						}
 					}
 				}
 
 				if (!cpu_state::g_running.load(std::memory_order_acquire)) {
-					printf("[CPU Thread] CPU stopped by user\n");
+					printf("[CPU Thread] CPU stopped by user after %llu instructions\n",
+					       (unsigned long long)instruction_count);
+				} else {
+					printf("[CPU Thread] CPU stopped (webserver shutdown)\n");
 				}
 			}
 			printf("[CPU Thread] CPU execution thread exiting\n");

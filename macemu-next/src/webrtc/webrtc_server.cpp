@@ -515,6 +515,20 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
                 size,
                 frameInfo
             );
+
+            // Send metadata via data channel (REQUIRED for web-streaming client)
+            // Format: [cursor_x:2][cursor_y:2][cursor_visible:1][ping_seq:4][timestamps:56]
+            // Total: 65 bytes
+            if (peer->data_channel && peer->data_channel->isOpen()) {
+                uint8_t metadata[65] = {0};
+                // Cursor position (dummy for now - TODO: get real cursor from Mac)
+                metadata[0] = 0; metadata[1] = 0;  // cursor_x
+                metadata[2] = 0; metadata[3] = 0;  // cursor_y
+                metadata[4] = 0;  // cursor_visible
+                // Rest is timestamps (zeros for now)
+                peer->data_channel->send(reinterpret_cast<const std::byte*>(metadata), sizeof(metadata));
+            }
+
             sent_to++;
 
         } catch (const std::exception& e) {

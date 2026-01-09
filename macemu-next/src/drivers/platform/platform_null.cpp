@@ -1,54 +1,56 @@
 /*
  *  platform_null.cpp - Null implementations for host platform functions
  *
- *  These are the host OS functions that BasiliskII needs but we provide
- *  as no-ops for minimal testing.
+ *  These are stub implementations that do nothing or return safe defaults.
+ *  Used for testing and as fallbacks.
  */
 
 #include "sysdeps.h"
+#include "platform.h"
 #include <sys/time.h>
 
 /*
  *  Platform-specific stubs
  */
-
-void MountVolume(const char *path)
+void platform_null_mount_volume(const char *path)
 {
 	(void)path;
 }
 
-void FileDiskLayout(loff_t size, loff_t *start, loff_t *length)
+void platform_null_file_disk_layout(loff_t size, loff_t *start, loff_t *length)
 {
 	(void)size;
 	(void)start;
 	(void)length;
 }
 
-void FloppyInit()
+void platform_null_floppy_init(void)
 {
 }
 
 /*
- *  System stubs
+ *  System preference stubs
  */
-
-void SysAddSerialPrefs()
+void platform_null_sys_add_serial_prefs(void)
 {
 }
 
-void SysAddFloppyPrefs()
+void platform_null_sys_add_floppy_prefs(void)
 {
 }
 
-void SysAddDiskPrefs()
+void platform_null_sys_add_disk_prefs(void)
 {
 }
 
-void SysAddCDROMPrefs()
+void platform_null_sys_add_cdrom_prefs(void)
 {
 }
 
-void *Sys_open(const char *path, bool read_only, bool no_cache)
+/*
+ *  File operation stubs
+ */
+void *platform_null_sys_open(const char *path, bool read_only, bool no_cache)
 {
 	(void)path;
 	(void)read_only;
@@ -56,21 +58,12 @@ void *Sys_open(const char *path, bool read_only, bool no_cache)
 	return NULL;
 }
 
-void Sys_close(void *fh)
+void platform_null_sys_close(void *fh)
 {
 	(void)fh;
 }
 
-size_t Sys_read(void *fh, void *buf, loff_t offset, size_t length)
-{
-	(void)fh;
-	(void)buf;
-	(void)offset;
-	(void)length;
-	return 0;
-}
-
-size_t Sys_write(void *fh, void *buf, loff_t offset, size_t length)
+size_t platform_null_sys_read(void *fh, void *buf, loff_t offset, size_t length)
 {
 	(void)fh;
 	(void)buf;
@@ -79,54 +72,72 @@ size_t Sys_write(void *fh, void *buf, loff_t offset, size_t length)
 	return 0;
 }
 
-bool SysIsReadOnly(void *fh)
+size_t platform_null_sys_write(void *fh, void *buf, loff_t offset, size_t length)
+{
+	(void)fh;
+	(void)buf;
+	(void)offset;
+	(void)length;
+	return 0;
+}
+
+bool platform_null_sys_is_readonly(void *fh)
 {
 	(void)fh;
 	return true;
 }
 
-bool SysIsDiskInserted(void *fh)
+bool platform_null_sys_is_disk_inserted(void *fh)
 {
 	(void)fh;
 	return false;
 }
 
-bool SysIsFixedDisk(void *fh)
+bool platform_null_sys_is_fixed_disk(void *fh)
 {
 	(void)fh;
 	return false;
 }
 
-loff_t SysGetFileSize(void *fh)
+loff_t platform_null_sys_get_file_size(void *fh)
 {
 	(void)fh;
 	return 0;
 }
 
-void SysEject(void *fh)
+void platform_null_sys_eject(void *fh)
 {
 	(void)fh;
 }
 
-void SysAllowRemoval(void *fh)
+void platform_null_sys_allow_removal(void *fh)
 {
 	(void)fh;
 }
 
-void SysPreventRemoval(void *fh)
+void platform_null_sys_prevent_removal(void *fh)
 {
 	(void)fh;
 }
 
-bool SysCDGetVolume(void *fh, uint8 &left, uint8 &right)
+bool platform_null_sys_format(void *fh)
 {
 	(void)fh;
-	left = 255;
-	right = 255;
+	return false;
+}
+
+/*
+ *  CD-ROM operation stubs
+ */
+bool platform_null_sys_cd_get_volume(void *fh, uint8 *left, uint8 *right)
+{
+	(void)fh;
+	*left = 255;
+	*right = 255;
 	return true;
 }
 
-bool SysCDSetVolume(void *fh, uint8 left, uint8 right)
+bool platform_null_sys_cd_set_volume(void *fh, uint8 left, uint8 right)
 {
 	(void)fh;
 	(void)left;
@@ -134,17 +145,17 @@ bool SysCDSetVolume(void *fh, uint8 left, uint8 right)
 	return true;
 }
 
-void SysCDPause(void *fh)
+void platform_null_sys_cd_pause(void *fh)
 {
 	(void)fh;
 }
 
-void SysCDResume(void *fh)
+void platform_null_sys_cd_resume(void *fh)
 {
 	(void)fh;
 }
 
-bool SysCDPlay(void *fh, uint8 m1, uint8 s1, uint8 f1, uint8 m2, uint8 s2, uint8 f2)
+bool platform_null_sys_cd_play(void *fh, uint8 m1, uint8 s1, uint8 f1, uint8 m2, uint8 s2, uint8 f2)
 {
 	(void)fh;
 	(void)m1; (void)s1; (void)f1;
@@ -152,21 +163,21 @@ bool SysCDPlay(void *fh, uint8 m1, uint8 s1, uint8 f1, uint8 m2, uint8 s2, uint8
 	return false;
 }
 
-bool SysCDStop(void *fh, uint8 m, uint8 s, uint8 f)
+bool platform_null_sys_cd_stop(void *fh, uint8 m, uint8 s, uint8 f)
 {
 	(void)fh;
 	(void)m; (void)s; (void)f;
 	return true;
 }
 
-bool SysCDGetPosition(void *fh, uint8 *pos)
+bool platform_null_sys_cd_get_position(void *fh, uint8 *pos)
 {
 	(void)fh;
 	(void)pos;
 	return false;
 }
 
-bool SysCDScan(void *fh, uint8 m, uint8 s, uint8 f, bool reverse)
+bool platform_null_sys_cd_scan(void *fh, uint8 m, uint8 s, uint8 f, bool reverse)
 {
 	(void)fh;
 	(void)m; (void)s; (void)f;
@@ -174,23 +185,16 @@ bool SysCDScan(void *fh, uint8 m, uint8 s, uint8 f, bool reverse)
 	return false;
 }
 
-bool SysCDReadTOC(void *fh, uint8 *toc)
+bool platform_null_sys_cd_read_toc(void *fh, uint8 *toc)
 {
 	(void)fh;
 	(void)toc;
 	return false;
 }
 
-bool SysFormat(void *fh)
-{
-	(void)fh;
-	return false;
-}
-
 /*
  *  Timer implementations (actual working implementations)
  */
-
 void timer_current_time(struct timeval &tv)
 {
 	gettimeofday(&tv, NULL);
@@ -239,7 +243,6 @@ int timer_cmp_time(struct timeval a, struct timeval b)
 /*
  *  Mutex stubs (not used in minimal test)
  */
-
 struct B2_mutex {
 	int dummy;
 };
@@ -267,7 +270,6 @@ void B2_unlock_mutex(B2_mutex *m)
 /*
  *  Interrupt stubs
  */
-
 extern uint32 InterruptFlags;
 
 void SetInterruptFlag(uint32 flag)
@@ -283,7 +285,6 @@ void ClearInterruptFlag(uint32 flag)
 /*
  *  CPU emulation stubs
  */
-
 void FlushCodeCache(void *start, uint32 size)
 {
 	(void)start;
@@ -293,7 +294,6 @@ void FlushCodeCache(void *start, uint32 size)
 /*
  *  ExtFS stubs
  */
-
 ssize_t extfs_read(int fd, void *buf, size_t len)
 {
 	(void)fd; (void)buf; (void)len;
@@ -371,7 +371,6 @@ void extfs_exit()
 /*
  *  Scratch memory (not used in minimal test)
  */
-
 uint8 *ScratchMem = NULL;
 
 /*

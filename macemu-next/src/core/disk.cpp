@@ -151,23 +151,55 @@ static void find_hfs_partition(disk_drive_info &info)
 
 void DiskInit(void)
 {
+	fprintf(stderr, "[DiskInit] Starting disk initialization\n");
+	fflush(stderr);
+
 	// No drives specified in prefs? Then add defaults
-	if (PrefsFindString("disk", 0) == NULL)
+	const char *first_disk = PrefsFindString("disk", 0);
+	fprintf(stderr, "[DiskInit] First disk from prefs: %s\n", first_disk ? first_disk : "NULL");
+	fflush(stderr);
+
+	if (first_disk == NULL) {
+		fprintf(stderr, "[DiskInit] No disks in prefs, calling SysAddDiskPrefs()\n");
+		fflush(stderr);
 		SysAddDiskPrefs();
+	}
 
 	// Add drives specified in preferences
 	int index = 0;
 	const char *str;
 	while ((str = PrefsFindString("disk", index++)) != NULL) {
+		fprintf(stderr, "[DiskInit] Processing disk %d: %s\n", index-1, str);
+		fflush(stderr);
+
 		bool read_only = false;
 		if (str[0] == '*') {
 			read_only = true;
 			str++;
 		}
+		D(bug(" trying to open disk: %s\n", str));
+		fprintf(stderr, "[DiskInit] Calling Sys_open(%s, %d)\n", str, read_only);
+		fflush(stderr);
+
 		void *fh = Sys_open(str, read_only);
-		if (fh)
+
+		fprintf(stderr, "[DiskInit] Sys_open returned: %p\n", fh);
+		fflush(stderr);
+
+		if (fh) {
+			D(bug(" disk opened successfully, fh=%p\n", fh));
 			drives.push_back(disk_drive_info(fh, SysIsReadOnly(fh)));
+			fprintf(stderr, "[DiskInit] SUCCESS: Disk added to drives list\n");
+			fflush(stderr);
+		} else {
+			D(bug(" ERROR: Sys_open returned NULL for %s\n", str));
+			fprintf(stderr, "[DiskInit] ERROR: Sys_open returned NULL for %s\n", str);
+			fflush(stderr);
+		}
 	}
+
+	fprintf(stderr, "[DiskInit] Disk initialization complete, %zu drives\n", drives.size());
+	fflush(stderr);
 }
 
 

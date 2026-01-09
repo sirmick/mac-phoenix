@@ -45,9 +45,9 @@ typedef struct {
 
     /*
      *  Disk Driver
+     *  Note: No disk_init/disk_exit pointers - disk.cpp provides DiskInit/Exit directly
+     *  and calls Sys_* functions for file I/O
      */
-    void (*disk_init)(void);
-    void (*disk_exit)(void);
 
     /*
      *  Audio Driver
@@ -236,9 +236,7 @@ extern bool video_null_init(bool classic);
 extern void video_null_exit(void);
 extern void video_null_refresh(void);
 
-// Disk null driver
-extern void disk_null_init(void);
-extern void disk_null_exit(void);
+// Disk null driver - none needed (disk.cpp provides DiskInit/Exit)
 
 // Audio null driver
 extern void audio_null_init(void);
@@ -259,6 +257,66 @@ extern int16_t ether_null_detach_ph(uint16_t type);
 extern int16_t ether_null_write(uint32_t wds);
 extern bool ether_null_start_udp_thread(int socket_fd);
 extern void ether_null_stop_udp_thread(void);
+
+// Platform/Sys null driver
+extern void platform_null_mount_volume(const char *path);
+extern void platform_null_file_disk_layout(int64_t size, int64_t *start, int64_t *length);
+extern void platform_null_floppy_init(void);
+extern void platform_null_sys_add_serial_prefs(void);
+extern void platform_null_sys_add_floppy_prefs(void);
+extern void platform_null_sys_add_disk_prefs(void);
+extern void platform_null_sys_add_cdrom_prefs(void);
+extern void *platform_null_sys_open(const char *path, bool read_only, bool no_cache);
+extern void platform_null_sys_close(void *fh);
+extern size_t platform_null_sys_read(void *fh, void *buf, int64_t offset, size_t length);
+extern size_t platform_null_sys_write(void *fh, void *buf, int64_t offset, size_t length);
+extern bool platform_null_sys_is_readonly(void *fh);
+extern bool platform_null_sys_is_disk_inserted(void *fh);
+extern bool platform_null_sys_is_fixed_disk(void *fh);
+extern int64_t platform_null_sys_get_file_size(void *fh);
+extern void platform_null_sys_eject(void *fh);
+extern void platform_null_sys_allow_removal(void *fh);
+extern void platform_null_sys_prevent_removal(void *fh);
+extern bool platform_null_sys_format(void *fh);
+extern bool platform_null_sys_cd_get_volume(void *fh, uint8_t *left, uint8_t *right);
+extern bool platform_null_sys_cd_set_volume(void *fh, uint8_t left, uint8_t right);
+extern void platform_null_sys_cd_pause(void *fh);
+extern void platform_null_sys_cd_resume(void *fh);
+extern bool platform_null_sys_cd_play(void *fh, uint8_t m1, uint8_t s1, uint8_t f1, uint8_t m2, uint8_t s2, uint8_t f2);
+extern bool platform_null_sys_cd_stop(void *fh, uint8_t m, uint8_t s, uint8_t f);
+extern bool platform_null_sys_cd_get_position(void *fh, uint8_t *pos);
+extern bool platform_null_sys_cd_scan(void *fh, uint8_t m, uint8_t s, uint8_t f, bool reverse);
+extern bool platform_null_sys_cd_read_toc(void *fh, uint8_t *toc);
+
+// Platform/Sys Unix driver
+extern void platform_unix_mount_volume(const char *path);
+extern void platform_unix_file_disk_layout(int64_t size, int64_t *start, int64_t *length);
+extern void platform_unix_floppy_init(void);
+extern void platform_unix_sys_add_serial_prefs(void);
+extern void platform_unix_sys_add_floppy_prefs(void);
+extern void platform_unix_sys_add_disk_prefs(void);
+extern void platform_unix_sys_add_cdrom_prefs(void);
+extern void *platform_unix_sys_open(const char *path, bool read_only, bool no_cache);
+extern void platform_unix_sys_close(void *fh);
+extern size_t platform_unix_sys_read(void *fh, void *buf, int64_t offset, size_t length);
+extern size_t platform_unix_sys_write(void *fh, void *buf, int64_t offset, size_t length);
+extern bool platform_unix_sys_is_readonly(void *fh);
+extern bool platform_unix_sys_is_disk_inserted(void *fh);
+extern bool platform_unix_sys_is_fixed_disk(void *fh);
+extern int64_t platform_unix_sys_get_file_size(void *fh);
+extern void platform_unix_sys_eject(void *fh);
+extern void platform_unix_sys_allow_removal(void *fh);
+extern void platform_unix_sys_prevent_removal(void *fh);
+extern bool platform_unix_sys_format(void *fh);
+extern bool platform_unix_sys_cd_get_volume(void *fh, uint8_t *left, uint8_t *right);
+extern bool platform_unix_sys_cd_set_volume(void *fh, uint8_t left, uint8_t right);
+extern void platform_unix_sys_cd_pause(void *fh);
+extern void platform_unix_sys_cd_resume(void *fh);
+extern bool platform_unix_sys_cd_play(void *fh, uint8_t m1, uint8_t s1, uint8_t f1, uint8_t m2, uint8_t s2, uint8_t f2);
+extern bool platform_unix_sys_cd_stop(void *fh, uint8_t m, uint8_t s, uint8_t f);
+extern bool platform_unix_sys_cd_get_position(void *fh, uint8_t *pos);
+extern bool platform_unix_sys_cd_scan(void *fh, uint8_t m, uint8_t s, uint8_t f, bool reverse);
+extern bool platform_unix_sys_cd_read_toc(void *fh, uint8_t *toc);
 
 /*
  *  CPU Backend Installation Functions

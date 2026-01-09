@@ -251,7 +251,14 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     fprintf(stderr, "[CPUContext] FPU: %s\n", fpu_type_ ? "Yes" : "No");
     fprintf(stderr, "[CPUContext] 24-bit addressing: %s\n", twenty_four_bit_ ? "Yes" : "No");
 
-    // 6. Initialize Mac subsystems (XPRAM, drivers, etc.)
+    // 6. Apply config to prefs (MUST be done before init_mac_subsystems which calls DiskInit)
+    // Add disk images from config to prefs
+    for (const auto& disk_path : config.disk_paths) {
+        PrefsAddString("disk", disk_path.c_str());
+        fprintf(stderr, "[CPUContext] Added disk to prefs: %s\n", disk_path.c_str());
+    }
+
+    // 7. Initialize Mac subsystems (XPRAM, drivers, etc.)
     if (!init_mac_subsystems()) {
         fprintf(stderr, "[CPUContext] ERROR: Failed to initialize Mac subsystems\n");
         return false;

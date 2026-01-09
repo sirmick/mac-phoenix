@@ -21,14 +21,16 @@ audio_driver_sources = [
 # Other drivers
 other_driver_sources = [
   'disk/disk_null.cpp',
-  'disk/disk_adapter.cpp',
+  # disk_adapter.cpp removed - disk.cpp in core provides DiskInit/Exit, calls Sys_* directly
   'scsi/scsi_null.cpp',
   'scsi/scsi_adapter.cpp',
   'serial/serial_null.cpp',
   'serial/serial_adapter.cpp',
   'ether/ether_null.cpp',
   'ether/ether_adapter.cpp',
+  'platform/platform_adapter.cpp',
   'platform/platform_null.cpp',
+  'platform/platform_unix.cpp',
   'platform/timer_interrupt.cpp',
 ]
 

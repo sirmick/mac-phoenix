@@ -13,6 +13,10 @@
 #define DEBUG 0
 #include "debug.h"
 
+// External RAM pointers (defined in basilisk_glue.cpp)
+extern uint8 *RAMBaseHost;
+extern uint32 RAMSize;
+
 
 // Dummy framebuffer
 static uint8 *the_buffer = NULL;
@@ -44,12 +48,18 @@ bool video_null_init(bool classic)
 	const video_depth depth = VDEPTH_8BIT;
 	const uint32 resolution_id = 0x80;  // Standard resolution ID
 
-	// Allocate framebuffer
+	// IMPORTANT: Framebuffer MUST be in Mac RAM for Host2MacAddr to work!
 	the_buffer_size = width * height;
-	the_buffer = (uint8 *)malloc(the_buffer_size);
-	if (!the_buffer)
-		return false;
 
+	// Check if framebuffer fits in RAM
+	if (the_buffer_size > RAMSize / 2) {
+		fprintf(stderr, "Video: Framebuffer too large (%u bytes) for RAM size (%u bytes)\n",
+		        the_buffer_size, RAMSize);
+		return false;
+	}
+
+	// Place framebuffer at top of RAM (same as video_webrtc)
+	the_buffer = RAMBaseHost + RAMSize - the_buffer_size;
 	memset(the_buffer, 0, the_buffer_size);
 
 	// Build list of supported video modes
@@ -89,11 +99,9 @@ void video_null_exit(void)
 		delete *i;
 	VideoMonitors.clear();
 
-	// Free framebuffer
-	if (the_buffer) {
-		free(the_buffer);
-		the_buffer = NULL;
-	}
+	// Note: the_buffer is now part of Mac RAM, not malloc'd
+	// So we don't free() it - it will be freed when RAM is freed
+	the_buffer = NULL;
 }
 
 
