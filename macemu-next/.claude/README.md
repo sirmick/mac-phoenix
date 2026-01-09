@@ -6,6 +6,18 @@ This folder contains context files that are automatically loaded when Claude wor
 
 ## Files
 
+### 🚨 [debugging_guide.md](debugging_guide.md)
+**ESSENTIAL DEBUGGING REFERENCE** - Read this first!
+
+Contains:
+- Quick reference card of most common commands
+- Step-by-step debugging workflows
+- Output format explanations
+- Troubleshooting solutions
+- Tips and tricks
+
+**When to use**: ANY debugging session, especially boot failures or backend comparison.
+
 ### [context.md](context.md)
 **Automatically loaded** into every Claude session.
 
@@ -24,6 +36,8 @@ Contains:
 **Custom instructions** for Claude's behavior on this project.
 
 Contains:
+- 🚨 **CRITICAL debugging workflows at the top**
+- Common command patterns and environment variables
 - Unicorn-first development guidelines
 - Platform API abstraction rules
 - Validation requirements

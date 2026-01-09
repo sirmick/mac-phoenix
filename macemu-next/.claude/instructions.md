@@ -4,6 +4,125 @@
 
 ---
 
+## 🚨 CRITICAL: How to Debug and Run Commands
+
+### Always work from the macemu-next directory!
+```bash
+cd /home/mick/macemu-dual-cpu/macemu-next
+```
+
+### Primary Debugging Workflows
+
+#### 1. Quick Test Run (Most Common)
+```bash
+# Test UAE backend (2 second timeout, no UI)
+EMULATOR_TIMEOUT=2 CPU_BACKEND=uae ./build/macemu-next --no-webserver
+
+# Test Unicorn backend
+EMULATOR_TIMEOUT=2 CPU_BACKEND=unicorn ./build/macemu-next --no-webserver
+
+# Test with VERBOSE output for debugging
+EMULATOR_TIMEOUT=2 CPU_BACKEND=uae EMULOP_VERBOSE=1 ./build/macemu-next --no-webserver 2>&1 | grep EmulOp
+```
+
+#### 2. Compare Boot Between BasiliskII and macemu-next
+```bash
+# This is THE primary debugging tool for boot issues
+./scripts/compare_boot.sh
+
+# Output goes to scripts/debug_outputs/
+# - basilisk.log: BasiliskII output
+# - macemu.log: macemu-next output
+# Compare EmulOp counts to see where they diverge
+```
+
+#### 3. Full Instruction Trace Comparison
+```bash
+# Generates detailed traces for UAE, Unicorn, and DualCPU
+./scripts/run_traces.sh
+
+# Traces saved to /tmp/macemu_traces_*/
+# Use this when you need to see EXACT instruction sequences
+```
+
+#### 4. Trace Specific Instructions
+```bash
+# First 100 instructions
+EMULATOR_TIMEOUT=2 CPU_BACKEND=uae CPU_TRACE=0-100 ./build/macemu-next --no-webserver 2>&1 | grep "^\[0"
+
+# Compare first instructions between backends
+EMULATOR_TIMEOUT=1 CPU_BACKEND=uae CPU_TRACE=0-10 ./build/macemu-next --no-webserver 2>&1 | grep "^\[0" > /tmp/uae.trace
+EMULATOR_TIMEOUT=1 CPU_BACKEND=unicorn CPU_TRACE=0-10 ./build/macemu-next --no-webserver 2>&1 | grep "^\[0" > /tmp/unicorn.trace
+diff /tmp/uae.trace /tmp/unicorn.trace
+```
+
+### Key Environment Variables
+- `CPU_BACKEND=uae|unicorn|dualcpu` - Select CPU backend
+- `EMULATOR_TIMEOUT=N` - Auto-exit after N seconds (DO NOT use `timeout` command!)
+- `CPU_TRACE=START-END` - Trace instructions (e.g., 0-100, 1000-2000)
+- `EMULOP_VERBOSE=1` - Show EmulOp calls
+- `CPU_TRACE_MEMORY=1` - Include memory accesses in trace
+
+### Building
+```bash
+# Default build (with debug symbols for backtraces)
+meson compile -C build
+
+# Clean rebuild
+meson compile -C build --clean && meson compile -C build
+
+# Reconfigure for debug (only needed once)
+meson configure build -Dbuildtype=debug
+```
+
+### Common Debugging Patterns
+
+#### Finding where boot fails:
+```bash
+# 1. Run comparison
+./scripts/compare_boot.sh
+
+# 2. Check EmulOp counts
+grep -c EmulOp scripts/debug_outputs/basilisk.log
+grep -c EmulOp scripts/debug_outputs/macemu.log
+
+# 3. If counts differ, find divergence point
+diff scripts/debug_outputs/basilisk.log scripts/debug_outputs/macemu.log | head -50
+```
+
+#### Debugging specific EmulOp:
+```bash
+# See all EmulOp 0x7103 calls
+EMULATOR_TIMEOUT=2 CPU_BACKEND=uae EMULOP_VERBOSE=1 ./build/macemu-next --no-webserver 2>&1 | grep "7103"
+
+# Trace around specific PC address
+EMULATOR_TIMEOUT=2 CPU_BACKEND=uae ./build/macemu-next --no-webserver 2>&1 | grep -A5 -B5 "0200008C"
+```
+
+#### When things go wrong:
+```bash
+# Check if binary exists
+ls -la build/macemu-next
+
+# Make sure you're in the right directory
+pwd  # Should show: /home/mick/macemu-dual-cpu/macemu-next
+
+# Check config file
+cat ~/.config/macemu-next/config.json
+
+# For crashes with no source info, ensure debug build:
+meson configure build -Dbuildtype=debug
+meson compile -C build
+```
+
+### ⚠️ NEVER DO THIS:
+- ❌ `timeout 2 ./build/macemu-next` - Use EMULATOR_TIMEOUT env var instead
+- ❌ Run from parent directory - Always cd to macemu-next first
+- ❌ Forget `--no-webserver` flag - Required for headless testing
+- ❌ Use `grep` without understanding the output format
+
+---
+
 ## Working with Michael
 
 **User Preferences**:
