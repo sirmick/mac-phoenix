@@ -24,6 +24,7 @@
 #include "sysdeps.h"
 #include "cpu_emulation.h"
 #include "uae_wrapper.h"  // For TriggerNMI()
+#include "platform.h"      // For g_platform
 #include "main.h"
 #include "macos_util.h"
 #include "rom_patches.h"
@@ -213,6 +214,13 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			r->a[1] = ROMBaseMac + UniversalInfo;						// UniversalInfo
 			r->a[6] = boot_globs;										// BootGlobs
 			r->a[7] = RAMBaseMac + 0x10000;								// Boot stack
+
+			// Clear interrupt mask to enable interrupts (Mac OS expects this)
+			// Both UAE and Unicorn start with SR=0x2700 (all interrupts blocked)
+			// We need SR=0x2000 (supervisor mode but interrupts enabled)
+			// Just update r->sr - the backends will sync this properly
+			r->sr = (r->sr & 0xF8FF) | 0x2000;  // Clear interrupt mask, keep supervisor
+
 			tick_inhibit = false;
 			break;
 		}
@@ -549,9 +557,17 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 		}
 
 		case M68K_EMUL_OP_IRQ:			// Level 1 interrupt
+			static int irq_emulop_count = 0;
+			if (++irq_emulop_count <= 10) {
+				fprintf(stderr, "[EmulOp IRQ #%d] Called, InterruptFlags=0x%x\n",
+				        irq_emulop_count, InterruptFlags);
+			}
 			r->d[0] = 0;
 
 			if (InterruptFlags & INTFLAG_60HZ) {
+				if (irq_emulop_count <= 10) {
+					fprintf(stderr, "[EmulOp IRQ #%d] Clearing INTFLAG_60HZ\n", irq_emulop_count);
+				}
 				ClearInterruptFlag(INTFLAG_60HZ);
 
 				// Increment Ticks variable

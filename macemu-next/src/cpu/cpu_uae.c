@@ -67,9 +67,12 @@ static int uae_backend_execute_one(void) {
 	return 0;  // CPU_EXEC_OK
 }
 
+// Forward declare UAE's fast execution wrapper (C linkage)
+extern void uae_m68k_execute_fast(void);  // Runs until quit_program is set
+
 static void uae_backend_execute_fast(void) {
-	// UAE interpreter doesn't have fast path
-	// Caller should use execute_one() in a loop
+	// Use UAE's fast execution loop (executes until quit_program)
+	uae_m68k_execute_fast();
 }
 
 // State Query
@@ -151,7 +154,12 @@ void cpu_uae_install(Platform *p) {
 
 	// Execution
 	p->cpu_execute_one = uae_backend_execute_one;
-	p->cpu_execute_fast = NULL;  // No fast path
+	// Disable fast path if CPU_TRACE is set (tracing only works in execute_one)
+	if (getenv("CPU_TRACE")) {
+		p->cpu_execute_fast = NULL;  // Force slow path for tracing
+	} else {
+		p->cpu_execute_fast = uae_backend_execute_fast;  // Fast continuous execution loop
+	}
 
 	// State query
 	p->cpu_is_stopped = uae_backend_is_stopped;
@@ -175,6 +183,12 @@ void cpu_uae_install(Platform *p) {
 
 	// Trap execution
 	p->cpu_execute_68k_trap = uae_execute_68k_trap;
+
+	// EmulOp and trap handlers
+	// UAE handles these internally through m68k_emulop/m68k_do_trap
+	// Setting these to NULL means UAE will use its built-in handlers
+	p->emulop_handler = NULL;
+	p->trap_handler = NULL;
 
 	// Memory system (for ROM patching and initialization)
 	p->mem_read_byte = uae_mem_read_byte;

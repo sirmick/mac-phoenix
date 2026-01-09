@@ -120,6 +120,64 @@ When asked to understand or modify code, read in this order:
 
 ---
 
+## IMPORTANT: How to Run Commands Correctly
+
+### Always use the correct working directory
+**ALWAYS run from the macemu-next directory:**
+```bash
+cd /home/mick/macemu-dual-cpu/macemu-next
+```
+
+### Running the emulator
+
+**CRITICAL: Always use --no-webserver flag for testing/debugging!**
+
+```bash
+# Test UAE backend (uses config from ~/.config/macemu-next/config.json)
+EMULATOR_TIMEOUT=5 CPU_BACKEND=uae ./build/macemu-next --no-webserver
+
+# Test Unicorn backend
+EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/macemu-next --no-webserver
+
+# Test DualCPU validation
+EMULATOR_TIMEOUT=10 CPU_BACKEND=dualcpu ./build/macemu-next --no-webserver
+
+# With specific ROM file
+EMULATOR_TIMEOUT=5 CPU_BACKEND=uae ./build/macemu-next --no-webserver ~/quadra.rom
+
+# Generate traces (auto-loads config)
+EMULATOR_TIMEOUT=5 CPU_BACKEND=uae CPU_TRACE=0-1000 ./build/macemu-next --no-webserver > uae.trace
+EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn CPU_TRACE=0-1000 ./build/macemu-next --no-webserver > unicorn.trace
+
+# Running test scripts
+./scripts/run_traces.sh       # Compares UAE, Unicorn, DualCPU traces
+./scripts/compare_boot.sh     # Compares BasiliskII vs macemu-next
+
+# Building (with debug symbols for proper crash backtraces)
+meson configure build -Dbuildtype=debug  # Only needed once
+meson compile -C build
+```
+
+### Environment Variables (ALWAYS use these, not external commands)
+- `CPU_BACKEND=uae|unicorn|dualcpu` - Select backend
+- `EMULATOR_TIMEOUT=N` - Auto-exit after N seconds (DO NOT use timeout command!)
+- `CPU_TRACE=N-M` - Trace instruction range
+- `CPU_TRACE_MEMORY=1` - Include memory accesses
+- `EMULOP_VERBOSE=1` - Log EmulOp calls
+- `DUALCPU_TRACE_DEPTH=N` - DualCPU history depth
+
+### Common mistakes to AVOID:
+- ❌ Forgetting `--no-webserver` (launches web UI instead of test mode)
+- ❌ Passing both config.json AND ROM file as arguments (use one or the other)
+- ❌ Using external `timeout` command instead of `EMULATOR_TIMEOUT`
+- ❌ `cd macemu-next` when already in macemu-next
+- ❌ Wrong relative paths when not in macemu-next directory
+
+### ALWAYS verify current directory first:
+```bash
+pwd  # Should show: /home/mick/macemu-dual-cpu/macemu-next
+```
+
 ## Common Patterns to Follow
 
 ### Pattern 1: Adding Platform API Function

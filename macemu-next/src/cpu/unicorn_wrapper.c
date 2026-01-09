@@ -129,15 +129,41 @@ static void trap_mem_fetch_handler(uc_engine *uc, uc_mem_type type,
         uint32_t emulop_num = (address - TRAP_REGION_BASE) / 2;
         uint16_t opcode = 0x7100 + emulop_num;
 
+        /* Debug: Track EmulOp 0x7103 */
+        static int emulop_7103_count = 0;
+        if (opcode == 0x7103) {
+            if (++emulop_7103_count <= 10) {
+                fprintf(stderr, "[MMIO trap] EmulOp 0x7103 #%d: saved_pc=0x%08X\n",
+                        emulop_7103_count, cpu->trap_ctx.saved_pc);
+                fflush(stderr);
+            }
+        }
+
         /* Call platform EmulOp handler (same as UAE uses) */
         if (g_platform.emulop_handler) {
             bool pc_advanced = g_platform.emulop_handler(opcode, false);
 
             /* Restore PC to instruction AFTER the 0x71xx */
             uint32_t next_pc = cpu->trap_ctx.saved_pc + (pc_advanced ? 0 : 2);
+
+            /* More debug for 0x7103 */
+            if (opcode == 0x7103 && emulop_7103_count <= 10) {
+                uint16_t sr;
+                uc_reg_read(uc, UC_M68K_REG_SR, &sr);
+                fprintf(stderr, "[MMIO trap] After handler: SR=0x%04X, next_pc=0x%08X\n", sr, next_pc);
+                fflush(stderr);
+            }
+
             uc_reg_write(uc, UC_M68K_REG_PC, &next_pc);
 
             cpu->trap_ctx.in_emulop = false;
+
+            /* CRITICAL: Stop execution here!
+             * We're in a memory fetch hook called from within uc_emu_start().
+             * We've handled the EmulOp and set the PC to the next instruction.
+             * Now we need to stop execution so it doesn't continue in the trap region.
+             */
+            uc_emu_stop(uc);
             return;
         }
     }
@@ -329,6 +355,12 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
 static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
 
+    static int hook_count = 0;
+    if (++hook_count <= 10) {
+        fprintf(stderr, "[DEBUG] hook_insn_invalid called #%d\n", hook_count);
+        fflush(stderr);
+    }
+
     /* Read PC (at illegal instruction) */
     uint32_t pc;
     uc_reg_read(uc, UC_M68K_REG_PC, &pc);
@@ -346,17 +378,31 @@ static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
             /* Call platform handler */
             bool pc_advanced = g_platform.emulop_handler(opcode, false);
 
-            /* Sync ALL registers back from platform to Unicorn */
-            if (g_platform.cpu_get_dreg && g_platform.cpu_get_areg) {
-                for (int i = 0; i < 8; i++) {
-                    uint32_t d = g_platform.cpu_get_dreg(i);
-                    uint32_t a = g_platform.cpu_get_areg(i);
-                    uc_reg_write(uc, UC_M68K_REG_D0 + i, &d);
-                    uc_reg_write(uc, UC_M68K_REG_A0 + i, &a);
-                }
-                if (g_platform.cpu_get_sr) {
-                    uint16_t sr = g_platform.cpu_get_sr();
-                    uc_reg_write(uc, UC_M68K_REG_SR, &sr);
+            /* NO REGISTER SYNC NEEDED HERE!
+             * The EmulOp handler (unicorn_platform_emulop_handler) already:
+             * 1. Read registers from Unicorn
+             * 2. Called EmulOp() which modified them
+             * 3. Wrote them back to Unicorn via g_platform.cpu_set_*
+             *
+             * Trying to sync here creates a circular dependency:
+             * - g_platform.cpu_get_* reads from Unicorn (what we just wrote)
+             * - Then writes back the same value to Unicorn
+             * This was preventing the SR change from taking effect!
+             */
+
+            /* Debug: Check SR after EmulOp 0x7103 */
+            if (opcode == 0x7103) {
+                uint16_t sr;
+                uc_reg_read(uc, UC_M68K_REG_SR, &sr);
+                fprintf(stderr, "[hook_insn_invalid] After EmulOp 0x7103: SR=0x%04X (should be 0x2000), pc_advanced=%d\n", sr, pc_advanced);
+                fflush(stderr);
+
+                /* CRITICAL: If this shows 20 million times, we found our issue! */
+                static int emulop_count = 0;
+                if (++emulop_count == 10) {
+                    fprintf(stderr, "[hook_insn_invalid] EmulOp 0x7103 executed 10 times - stopping to prevent infinite loop\n");
+                    fflush(stderr);
+                    exit(1);  /* Force exit to see what's happening */
                 }
             }
 
@@ -738,7 +784,56 @@ bool unicorn_execute_one(UnicornCPU *cpu) {
                 cpu->arch == UCPU_ARCH_M68K ? UC_M68K_REG_PC : UC_PPC_REG_PC,
                 &pc);
 
-    uc_err err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
+    static int exec_count = 0;
+    exec_count++;
+
+    /* Simple debug: Print every millionth call */
+    if (exec_count % 1000000 == 0) {
+        FILE *fp = fopen("/tmp/unicorn_debug.log", "a");
+        if (fp) {
+            fprintf(fp, "[unicorn_execute_one] %d million calls, current PC=0x%08X\n",
+                    exec_count / 1000000, (uint32_t)pc);
+            fclose(fp);
+        }
+    }
+
+    /* CRITICAL: Check for EmulOps BEFORE executing!
+     * Some EmulOps like 0x7103 are VALID M68K instructions (MOVEQ #3,D0).
+     * We must intercept them before Unicorn executes them as regular instructions.
+     */
+    uc_err err;
+    uint16_t opcode = 0;
+    if (cpu->arch == UCPU_ARCH_M68K &&
+        uc_mem_read(cpu->uc, (uint32_t)pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
+        #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        opcode = __builtin_bswap16(opcode);
+        #endif
+
+        /* Check if it's an EmulOp (0x7100-0x713F) */
+        if (opcode >= 0x7100 && opcode < 0x7140) {
+            /* Debug for 0x7103 */
+            if (opcode == 0x7103 && exec_count <= 10) {
+                fprintf(stderr, "[PRE-CHECK] Found EmulOp 0x7103 at PC=0x%08X, exec_count=%d\n",
+                        (uint32_t)pc, exec_count);
+                fflush(stderr);
+            }
+
+            /* Treat as illegal instruction - redirect to trap handler */
+            err = UC_ERR_INSN_INVALID;
+            goto handle_illegal;
+        }
+    }
+
+    err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
+
+    /* Debug: Log first 10 executions at PC 0x0200008C */
+    if ((uint32_t)pc == 0x0200008C && exec_count <= 10) {
+        fprintf(stderr, "[unicorn_execute_one #%d] PC=0x%08X, err=%d (UC_ERR_OK=%d, UC_ERR_INSN_INVALID=%d)\n",
+                exec_count, (uint32_t)pc, err, UC_ERR_OK, UC_ERR_INSN_INVALID);
+        fflush(stderr);
+    }
+
+handle_illegal:
     if (err != UC_ERR_OK) {
         /* Check for illegal instruction (EmulOps and traps) */
         if (err == UC_ERR_INSN_INVALID && cpu->arch == UCPU_ARCH_M68K) {
@@ -751,11 +846,17 @@ bool unicorn_execute_one(UnicornCPU *cpu) {
                 #endif
 
                 static int illegal_count = 0;
-                if (illegal_count < 10 || illegal_count > 3685) {
+                illegal_count++;
+
+                /* Always show first 10 EmulOp 0x7103 */
+                if (opcode == 0x7103 && illegal_count <= 10) {
+                    fprintf(stderr, "[ILLEGAL #%d] EmulOp 0x7103 at PC=0x%08X\n",
+                           illegal_count, (uint32_t)pc);
+                    fflush(stderr);
+                } else if (illegal_count < 10 || illegal_count > 3685) {
                     fprintf(stderr, "[ILLEGAL #%d] PC=0x%08X opcode=0x%04X\n",
                            illegal_count, (uint32_t)pc, opcode);
                 }
-                illegal_count++;
 
                 /* MMIO Trap Approach: Redirect PC to unmapped region */
 
@@ -829,6 +930,64 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
     uc_reg_read(cpu->uc,
                 cpu->arch == UCPU_ARCH_M68K ? UC_M68K_REG_PC : UC_PPC_REG_PC,
                 &pc);
+
+    /* CRITICAL: Check for EmulOps BEFORE executing!
+     * Some EmulOps like 0x7103 are VALID M68K instructions (MOVEQ #3,D0).
+     * We must intercept them before Unicorn executes them as regular instructions.
+     * This is necessary because UC_HOOK_INSN_INVALID only fires for illegal instructions,
+     * and UC_HOOK_CODE is too slow (10x performance hit).
+     */
+    if (cpu->arch == UCPU_ARCH_M68K) {
+        uint16_t opcode = 0;
+        if (uc_mem_read(cpu->uc, (uint32_t)pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
+            #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+            opcode = __builtin_bswap16(opcode);
+            #endif
+
+            /* Check if it's an EmulOp (0x7100-0x713F) */
+            if (opcode >= 0x7100 && opcode < 0x7140) {
+                /* Debug: Log first few EmulOp detections */
+                static int emulop_detect_count = 0;
+                if (++emulop_detect_count <= 10) {
+                    fprintf(stderr, "[unicorn_execute_n] Detected EmulOp 0x%04X at PC=0x%08X\n",
+                            opcode, (uint32_t)pc);
+                    fflush(stderr);
+                }
+
+                /* Handle EmulOp through MMIO trap mechanism */
+                cpu->trap_ctx.saved_pc = (uint32_t)pc;
+                cpu->trap_ctx.in_emulop = true;
+
+                /* Calculate trap address in unmapped region */
+                uint32_t emulop_num = opcode & 0xFF;
+                uint32_t trap_addr = TRAP_REGION_BASE + (emulop_num * 2);
+
+                /* Redirect PC to trap region */
+                uint64_t trap_addr_64 = trap_addr;
+                uc_reg_write(cpu->uc, UC_M68K_REG_PC, &trap_addr_64);
+
+                /* Execute from trap region - will trigger UC_HOOK_MEM_FETCH_UNMAPPED */
+                uc_err err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
+
+                /* Trap handler executed, check for error */
+                if (err != UC_ERR_OK && cpu->trap_ctx.in_emulop) {
+                    set_error(cpu, err);
+                    return false;
+                }
+
+                /* EmulOp successfully handled. The trap handler has set the PC to the next
+                 * instruction. If count > 1, we need to continue executing the remaining
+                 * instructions. For now, just handle one at a time when EmulOps are involved.
+                 */
+                if (count == 1) {
+                    return true;
+                } else {
+                    /* Recursively continue with remaining count */
+                    return unicorn_execute_n(cpu, count - 1);
+                }
+            }
+        }
+    }
 
     uc_err err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, count);
     if (err != UC_ERR_OK) {
