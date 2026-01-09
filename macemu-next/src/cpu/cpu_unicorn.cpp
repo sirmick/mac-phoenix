@@ -17,6 +17,12 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>  // For memset
+#include <atomic>
+
+// Forward declare the webserver running flag from main.cpp
+namespace webserver {
+	extern std::atomic<bool> g_running;
+}
 
 // M68kRegisters structure (from main.h, duplicated to avoid type conflicts)
 struct M68kRegisters {
@@ -81,8 +87,9 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	// Debug: Verify A7 write for RESET EmulOp
 	if (opcode == 0x7103) {
 		uint32_t a7_readback = g_platform.cpu_get_areg(7);
-		fprintf(stderr, "[EmulOp 0x7103] Set A7=0x%08X, readback=0x%08X\n",
-		        regs.a[7], a7_readback);
+		uint16_t sr_readback = g_platform.cpu_get_sr();
+		fprintf(stderr, "[EmulOp 0x7103] Set A7=0x%08X (readback=0x%08X), SR=0x%04X (readback=0x%04X)\n",
+		        regs.a[7], a7_readback, regs.sr, sr_readback);
 	}
 
 	// Return false to indicate PC was not advanced (caller will advance it)
@@ -495,7 +502,22 @@ static int unicorn_backend_execute_one(void) {
 }
 
 static void unicorn_backend_execute_fast(void) {
-	// Unicorn doesn't have fast path
+	if (!unicorn_cpu) return;
+
+	// Fast execution path using JIT
+	// Execute until stopped (runs continuously)
+	// EmulOps are handled by checking at block boundaries via UC_HOOK_BLOCK
+	// This is much faster than checking every instruction
+
+	// Use global running flag from webserver namespace (same as main.cpp)
+	while (webserver::g_running.load(std::memory_order_acquire)) {
+		// Execute a large batch for JIT efficiency
+		// The block hook will handle EmulOps when encountered
+		if (!unicorn_execute_n(unicorn_cpu, 100000)) {
+			// Error or stop requested
+			break;
+		}
+	}
 }
 
 // State Query
@@ -779,7 +801,12 @@ void cpu_unicorn_install(Platform *p) {
 
 	// Execution
 	p->cpu_execute_one = unicorn_backend_execute_one;
-	p->cpu_execute_fast = NULL;  // No fast path
+	// Enable fast path unless CPU_TRACE is set (tracing needs single-step)
+	if (getenv("CPU_TRACE")) {
+		p->cpu_execute_fast = NULL;  // Force slow path for accurate tracing
+	} else {
+		p->cpu_execute_fast = unicorn_backend_execute_fast;  // JIT fast path
+	}
 
 	// State query
 	p->cpu_is_stopped = unicorn_backend_is_stopped;

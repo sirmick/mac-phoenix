@@ -197,6 +197,31 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
 
     uint32_t pc = (uint32_t)address;
 
+    /* CRITICAL: Check for EmulOps at block start
+     * This is necessary because some EmulOps (like 0x7103) are valid M68K instructions
+     * that won't trigger UC_HOOK_INSN_INVALID. We check at each block boundary which
+     * is much more efficient than checking every instruction.
+     */
+    if (cpu->arch == UCPU_ARCH_M68K) {
+        uint16_t opcode = 0;
+        if (uc_mem_read(uc, pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
+            #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+            opcode = __builtin_bswap16(opcode);
+            #endif
+
+            /* Check if it's an EmulOp (0x7100-0x713F) */
+            if (opcode >= 0x7100 && opcode < 0x7140) {
+                /* Stop execution to handle EmulOp */
+                uc_emu_stop(uc);
+
+                /* Set flag so unicorn_execute_n knows to handle EmulOp */
+                cpu->trap_ctx.saved_pc = pc;
+                cpu->trap_ctx.in_emulop = true;
+                return;
+            }
+        }
+    }
+
     /* Count instructions in this block for statistics */
     /* We estimate instruction count by decoding the block */
     /* M68K instructions are variable length (2-10 bytes), so we need to decode */
@@ -990,6 +1015,36 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
     }
 
     uc_err err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, count);
+
+    /* Check if we stopped due to EmulOp detected in block hook */
+    if (cpu->trap_ctx.in_emulop) {
+        /* Handle the EmulOp using MMIO trap mechanism */
+        uint32_t saved_pc = cpu->trap_ctx.saved_pc;
+
+        /* Read the opcode */
+        uint16_t opcode = 0;
+        if (uc_mem_read(cpu->uc, saved_pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
+            #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+            opcode = __builtin_bswap16(opcode);
+            #endif
+
+            /* Calculate trap address in unmapped region */
+            uint32_t emulop_num = opcode & 0xFF;
+            uint32_t trap_addr = TRAP_REGION_BASE + (emulop_num * 2);
+
+            /* Redirect PC to trap region */
+            uint64_t trap_addr_64 = trap_addr;
+            uc_reg_write(cpu->uc, UC_M68K_REG_PC, &trap_addr_64);
+
+            /* Execute from trap region - will trigger UC_HOOK_MEM_FETCH_UNMAPPED */
+            err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
+
+            /* Trap handler executed, return to continue */
+            /* Note: trap handler clears cpu->trap_ctx.in_emulop */
+            return (err == UC_ERR_OK || err == UC_ERR_INSN_INVALID);
+        }
+    }
+
     if (err != UC_ERR_OK) {
         set_error(cpu, err);
         return false;
