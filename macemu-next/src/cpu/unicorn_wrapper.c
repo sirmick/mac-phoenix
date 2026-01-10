@@ -1151,7 +1151,8 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
 
             /* Trap handler executed, return to continue */
             /* Note: trap handler clears cpu->trap_ctx.in_emulop */
-            return (err == UC_ERR_OK || err == UC_ERR_INSN_INVALID);
+            /* UC_ERR_FETCH_UNMAPPED is expected when executing from trap region */
+            return (err == UC_ERR_OK || err == UC_ERR_INSN_INVALID || err == UC_ERR_FETCH_UNMAPPED);
         }
     }
 
