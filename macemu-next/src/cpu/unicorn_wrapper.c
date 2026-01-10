@@ -58,6 +58,10 @@ typedef struct {
     bool in_emulop;        /* Currently handling EmulOp? */
     bool in_trap;          /* Currently handling A-line/F-line trap? */
     uint16_t trap_opcode;  /* Original trap opcode */
+
+    /* Deferred register updates */
+    bool has_deferred_sr_update;   /* SR needs to be updated after uc_emu_start() */
+    uint16_t deferred_sr_value;    /* New SR value to write */
 } TrapContext;
 
 /* Block statistics for timing analysis */
@@ -96,6 +100,16 @@ struct UnicornCPU {
     BlockStats block_stats;
 };
 
+/* Deferred SR update API
+ * Called from EmulOp handler to defer SR updates until after uc_emu_start() returns.
+ * Register writes from within hooks don't persist due to JIT caching.
+ */
+void unicorn_defer_sr_update(void *unicorn_cpu, uint16_t new_sr) {
+    UnicornCPU *cpu = (UnicornCPU *)unicorn_cpu;
+    cpu->trap_ctx.has_deferred_sr_update = true;
+    cpu->trap_ctx.deferred_sr_value = new_sr;
+}
+
 /* Helper: Convert uc_err to string and store in cpu->error */
 static void set_error(UnicornCPU *cpu, uc_err err) {
     if (err != UC_ERR_OK) {
@@ -110,6 +124,13 @@ static void trap_mem_fetch_handler(uc_engine *uc, uc_mem_type type,
                                    uint64_t address, int size,
                                    int64_t value, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
+
+    /* Debug: Log trap region access */
+    static int trap_access_count = 0;
+    if (++trap_access_count <= 10) {
+        fprintf(stderr, "[trap_mem_fetch] Access at 0x%08lx, in_emulop=%d, in_trap=%d\n",
+                address, cpu->trap_ctx.in_emulop, cpu->trap_ctx.in_trap);
+    }
 
     /* Verify address is in trap region */
     if (address < TRAP_REGION_BASE ||
@@ -572,6 +593,8 @@ UnicornCPU* unicorn_create_with_model(UnicornArch arch, int cpu_model) {
 
     /* Register MMIO trap hook for JIT-compatible EmulOp/trap handling */
     /* IMPORTANT: Don't map the trap region - leave it unmapped! */
+    fprintf(stderr, "[UNICORN] Registering MMIO trap hook for range 0x%08X-0x%08X\n",
+            TRAP_REGION_BASE, TRAP_REGION_BASE + TRAP_REGION_SIZE - 1);
     err = uc_hook_add(cpu->uc, &cpu->trap_hook,
                      UC_HOOK_MEM_FETCH_UNMAPPED,
                      trap_mem_fetch_handler,
@@ -584,12 +607,15 @@ UnicornCPU* unicorn_create_with_model(UnicornArch arch, int cpu_model) {
         free(cpu);
         return NULL;
     }
+    fprintf(stderr, "[UNICORN] MMIO trap hook registered successfully\n");
 
     /* Initialize trap context */
     cpu->trap_ctx.saved_pc = 0;
     cpu->trap_ctx.in_emulop = false;
     cpu->trap_ctx.in_trap = false;
     cpu->trap_ctx.trap_opcode = 0;
+    cpu->trap_ctx.has_deferred_sr_update = false;
+    cpu->trap_ctx.deferred_sr_value = 0;
 
     /* Initialize block statistics */
     memset(&cpu->block_stats, 0, sizeof(BlockStats));
@@ -956,6 +982,19 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
                 cpu->arch == UCPU_ARCH_M68K ? UC_M68K_REG_PC : UC_PPC_REG_PC,
                 &pc);
 
+    /* Debug first few executions */
+    static int exec_count = 0;
+    exec_count++;
+    if (exec_count <= 5) {
+        uint16_t opcode = 0;
+        uc_mem_read(cpu->uc, (uint32_t)pc, &opcode, sizeof(opcode));
+        #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        opcode = __builtin_bswap16(opcode);
+        #endif
+        fprintf(stderr, "[unicorn_execute_n #%d] PC=0x%08X, opcode=0x%04X, count=%lu\n",
+                exec_count, (uint32_t)pc, opcode, count);
+    }
+
     /* CRITICAL: Check for EmulOps BEFORE executing!
      * Some EmulOps like 0x7103 are VALID M68K instructions (MOVEQ #3,D0).
      * We must intercept them before Unicorn executes them as regular instructions.
@@ -970,6 +1009,10 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
             #endif
 
             /* Check if it's an EmulOp (0x7100-0x713F) */
+            if (exec_count <= 5) {
+                fprintf(stderr, "[unicorn_execute_n #%d] EmulOp check: opcode=0x%04X, is_emulop=%d\n",
+                        exec_count, opcode, (opcode >= 0x7100 && opcode < 0x7140));
+            }
             if (opcode >= 0x7100 && opcode < 0x7140) {
                 /* Debug: Log first few EmulOp detections */
                 static int emulop_detect_count = 0;
@@ -994,6 +1037,22 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
                 /* Execute from trap region - will trigger UC_HOOK_MEM_FETCH_UNMAPPED */
                 uc_err err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
 
+                /* Apply deferred SR update if needed (register writes don't persist in hooks) */
+                if (cpu->trap_ctx.has_deferred_sr_update) {
+                    uint16_t new_sr = cpu->trap_ctx.deferred_sr_value;
+                    uc_reg_write(cpu->uc, UC_M68K_REG_SR, &new_sr);
+
+                    /* Debug: Verify SR update */
+                    if (opcode == 0x7103 && emulop_detect_count <= 10) {
+                        uint16_t sr_readback;
+                        uc_reg_read(cpu->uc, UC_M68K_REG_SR, &sr_readback);
+                        fprintf(stderr, "[Pre-exec Deferred SR] Applied: 0x%04X (readback=0x%04X)\n",
+                                new_sr, sr_readback);
+                    }
+
+                    cpu->trap_ctx.has_deferred_sr_update = false;
+                }
+
                 /* Trap handler executed, check for error */
                 if (err != UC_ERR_OK && cpu->trap_ctx.in_emulop) {
                     set_error(cpu, err);
@@ -1016,6 +1075,14 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
 
     uc_err err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, count);
 
+    /* Debug: Check PC after execution */
+    if (exec_count <= 5) {
+        uint64_t new_pc;
+        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &new_pc);
+        fprintf(stderr, "[unicorn_execute_n #%d] After uc_emu_start: PC=0x%08X, err=%d, in_emulop=%d\n",
+                exec_count, (uint32_t)new_pc, err, cpu->trap_ctx.in_emulop);
+    }
+
     /* Check if we stopped due to EmulOp detected in block hook */
     if (cpu->trap_ctx.in_emulop) {
         /* Handle the EmulOp using MMIO trap mechanism */
@@ -1036,8 +1103,51 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
             uint64_t trap_addr_64 = trap_addr;
             uc_reg_write(cpu->uc, UC_M68K_REG_PC, &trap_addr_64);
 
+            /* Test if we can read from trap region first */
+            if (exec_count <= 5) {
+                uint16_t test_read = 0;
+                uc_err read_err = uc_mem_read(cpu->uc, trap_addr, &test_read, 2);
+                fprintf(stderr, "[unicorn_execute_n #%d] Test read from 0x%08X: err=%d, val=0x%04X\n",
+                        exec_count, trap_addr, read_err, test_read);
+            }
+
             /* Execute from trap region - will trigger UC_HOOK_MEM_FETCH_UNMAPPED */
+            if (exec_count <= 5) {
+                fprintf(stderr, "[unicorn_execute_n #%d] Executing trap at 0x%08X for opcode 0x%04X\n",
+                        exec_count, trap_addr, opcode);
+            }
             err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
+            if (exec_count <= 5) {
+                fprintf(stderr, "[unicorn_execute_n #%d] Trap execution done, err=%d\n",
+                        exec_count, err);
+            }
+
+            /* Clear the EmulOp flag (trap handler can't modify this from within hook) */
+            cpu->trap_ctx.in_emulop = false;
+
+            /* Restore PC to after the EmulOp (trap handler can't modify PC from within hook) */
+            uint32_t next_pc = saved_pc + 2;  /* EmulOps are 2 bytes */
+            uc_reg_write(cpu->uc, UC_M68K_REG_PC, &next_pc);
+
+            /* Debug: Verify PC restoration */
+            if (exec_count <= 5) {
+                fprintf(stderr, "[unicorn_execute_n #%d] Restored PC after trap: 0x%08X -> 0x%08X\n",
+                        exec_count, saved_pc, next_pc);
+            }
+
+            /* Apply deferred SR update if needed (register writes don't persist in hooks) */
+            if (cpu->trap_ctx.has_deferred_sr_update) {
+                uint16_t new_sr = cpu->trap_ctx.deferred_sr_value;
+                uc_reg_write(cpu->uc, UC_M68K_REG_SR, &new_sr);
+
+                /* Debug: Verify SR update */
+                uint16_t sr_readback;
+                uc_reg_read(cpu->uc, UC_M68K_REG_SR, &sr_readback);
+                fprintf(stderr, "[Deferred SR] Applied: 0x%04X (readback=0x%04X)\n",
+                        new_sr, sr_readback);
+
+                cpu->trap_ctx.has_deferred_sr_update = false;
+            }
 
             /* Trap handler executed, return to continue */
             /* Note: trap handler clears cpu->trap_ctx.in_emulop */
@@ -1049,6 +1159,15 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
         set_error(cpu, err);
         return false;
     }
+
+    /* Debug: Check PC before returning */
+    if (exec_count <= 5) {
+        uint64_t final_pc;
+        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &final_pc);
+        fprintf(stderr, "[unicorn_execute_n #%d] Returning, final PC=0x%08X\n",
+                exec_count, (uint32_t)final_pc);
+    }
+
     return true;
 }
 

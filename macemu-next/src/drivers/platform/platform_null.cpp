@@ -274,11 +274,21 @@ extern uint32 InterruptFlags;
 
 void SetInterruptFlag(uint32 flag)
 {
+	static int call_count = 0;
+	if (++call_count <= 10) {
+		fprintf(stderr, "[SetInterruptFlag #%d] flag=0x%x, InterruptFlags was 0x%x, now 0x%x\n",
+		        call_count, flag, InterruptFlags, InterruptFlags | flag);
+	}
 	InterruptFlags |= flag;
 }
 
 void ClearInterruptFlag(uint32 flag)
 {
+	static int call_count = 0;
+	if (++call_count <= 20) {
+		fprintf(stderr, "[ClearInterruptFlag #%d] flag=0x%x, InterruptFlags was 0x%x, now 0x%x\n",
+		        call_count, flag, InterruptFlags, InterruptFlags & ~flag);
+	}
 	InterruptFlags &= ~flag;
 }
 

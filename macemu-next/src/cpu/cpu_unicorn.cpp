@@ -59,37 +59,51 @@ void unicorn_set_cpu_type(int cpu_type, int fpu_type) {
 	unicorn_backend_set_type(cpu_type, fpu_type);
 }
 
+// Forward declare the deferred SR update mechanism
+extern "C" void unicorn_defer_sr_update(void *unicorn_cpu, uint16_t new_sr);
+
 // Platform EmulOp handler for Unicorn-only mode
-// This needs to use platform API because it's called from within Unicorn's hook context
-// and needs to properly sync registers back to Unicorn
+// This is called from within Unicorn's hook context where register writes don't persist
+// We need to defer SR updates until after uc_emu_start() returns
 static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	(void)is_primary;  // Unicorn is always primary in standalone mode
 
 	// Build M68kRegisters structure from Unicorn state
 	struct M68kRegisters regs;
+	uint16_t old_sr = unicorn_get_sr(unicorn_cpu);
 	for (int i = 0; i < 8; i++) {
 		regs.d[i] = unicorn_get_dreg(unicorn_cpu, i);
 		regs.a[i] = unicorn_get_areg(unicorn_cpu, i);
 	}
-	regs.sr = unicorn_get_sr(unicorn_cpu);
+	regs.sr = old_sr;
 
 	// Call EmulOp handler
 	EmulOp(opcode, &regs);
 
-	// IMPORTANT: Write registers back to Unicorn directly
-	// We're outside uc_emu_start() so register writes will persist
+	// Write data and address registers back (these seem to work)
 	for (int i = 0; i < 8; i++) {
 		g_platform.cpu_set_dreg(i, regs.d[i]);
 		g_platform.cpu_set_areg(i, regs.a[i]);
 	}
-	g_platform.cpu_set_sr(regs.sr);
+
+	// CRITICAL: SR writes don't persist when called from within hooks!
+	// We need to defer the SR update until after uc_emu_start() returns
+	if (regs.sr != old_sr) {
+		// Defer SR update to be applied after uc_emu_start() returns
+		unicorn_defer_sr_update(unicorn_cpu, regs.sr);
+
+		// Debug: Track deferred SR update
+		if (opcode == 0x7103) {
+			fprintf(stderr, "[EmulOp 0x7103] Deferring SR update: 0x%04X -> 0x%04X\n",
+			        old_sr, regs.sr);
+		}
+	}
 
 	// Debug: Verify A7 write for RESET EmulOp
 	if (opcode == 0x7103) {
 		uint32_t a7_readback = g_platform.cpu_get_areg(7);
-		uint16_t sr_readback = g_platform.cpu_get_sr();
-		fprintf(stderr, "[EmulOp 0x7103] Set A7=0x%08X (readback=0x%08X), SR=0x%04X (readback=0x%04X)\n",
-		        regs.a[7], a7_readback, regs.sr, sr_readback);
+		fprintf(stderr, "[EmulOp 0x7103] Set A7=0x%08X (readback=0x%08X)\n",
+		        regs.a[7], a7_readback);
 	}
 
 	// Return false to indicate PC was not advanced (caller will advance it)
@@ -282,11 +296,14 @@ static bool unicorn_backend_init(void) {
 		dummy_region_base, dummy_region_base + dummy_region_size, dummy_region_size / (1024*1024));
 
 	// Map high memory region (0xF0000000-0xFFFFFFFF) for hardware registers
+	// BUT SKIP THE TRAP REGION (0xFF000000-0xFF000FFF) for MMIO trap handling
 	// This matches UAE's behavior where the entire 4GB address space is backed by dummy_bank
 	// Addresses like 0xFFFFFFFE/0xFFFFFFFC are common hardware register placeholders
-	uint32_t high_mem_base = 0xF0000000;
-	uint32_t high_mem_size = 0x10000000;  // 256 MB (top of address space)
-	unicorn_high_mem_buffer = (uint8_t *)malloc(high_mem_size);
+
+	// First part: 0xF0000000 - 0xFEFFFFFF (255 MB)
+	uint32_t high_mem_base1 = 0xF0000000;
+	uint32_t high_mem_size1 = 0x0F000000;  // 240 MB
+	unicorn_high_mem_buffer = (uint8_t *)malloc(high_mem_size1);
 	if (!unicorn_high_mem_buffer) {
 		fprintf(stderr, "Failed to allocate high memory region buffer\n");
 		free(unicorn_dummy_buffer);
@@ -296,9 +313,9 @@ static bool unicorn_backend_init(void) {
 		return false;
 	}
 	// Fill with zeros (UAE's dummy_bank returns 0 for reads)
-	memset(unicorn_high_mem_buffer, 0, high_mem_size);
-	if (!unicorn_map_ram(unicorn_cpu, high_mem_base, unicorn_high_mem_buffer, high_mem_size)) {
-		fprintf(stderr, "Failed to map high memory region to Unicorn\n");
+	memset(unicorn_high_mem_buffer, 0, high_mem_size1);
+	if (!unicorn_map_ram(unicorn_cpu, high_mem_base1, unicorn_high_mem_buffer, high_mem_size1)) {
+		fprintf(stderr, "Failed to map high memory region part 1 to Unicorn\n");
 		free(unicorn_high_mem_buffer);
 		unicorn_high_mem_buffer = NULL;
 		free(unicorn_dummy_buffer);
@@ -307,8 +324,39 @@ static bool unicorn_backend_init(void) {
 		unicorn_cpu = NULL;
 		return false;
 	}
-	fprintf(stderr, "[DEBUG] High memory region mapped: 0x%08X - 0x%08X (%u MB) - UAE compat for hardware registers\n",
-		high_mem_base, high_mem_base + high_mem_size - 1, high_mem_size / (1024*1024));
+	fprintf(stderr, "[DEBUG] High memory region part 1 mapped: 0x%08X - 0x%08X (%u MB)\n",
+		high_mem_base1, high_mem_base1 + high_mem_size1 - 1, high_mem_size1 / (1024*1024));
+
+	// Skip trap region 0xFF000000-0xFF000FFF
+	// Second part: 0xFF001000 - 0xFFFFFFFF (15 MB + 1020 KB)
+	uint32_t high_mem_base2 = 0xFF001000;
+	uint32_t high_mem_size2 = 0x00FFF000;  // ~16 MB - 4KB
+	uint8_t *high_mem_buffer2 = (uint8_t *)malloc(high_mem_size2);
+	if (!high_mem_buffer2) {
+		fprintf(stderr, "Failed to allocate high memory region buffer 2\n");
+		free(unicorn_high_mem_buffer);
+		unicorn_high_mem_buffer = NULL;
+		free(unicorn_dummy_buffer);
+		unicorn_dummy_buffer = NULL;
+		unicorn_destroy(unicorn_cpu);
+		unicorn_cpu = NULL;
+		return false;
+	}
+	// Fill with zeros
+	memset(high_mem_buffer2, 0, high_mem_size2);
+	if (!unicorn_map_ram(unicorn_cpu, high_mem_base2, high_mem_buffer2, high_mem_size2)) {
+		fprintf(stderr, "Failed to map high memory region part 2 to Unicorn\n");
+		free(high_mem_buffer2);
+		free(unicorn_high_mem_buffer);
+		unicorn_high_mem_buffer = NULL;
+		free(unicorn_dummy_buffer);
+		unicorn_dummy_buffer = NULL;
+		unicorn_destroy(unicorn_cpu);
+		unicorn_cpu = NULL;
+		return false;
+	}
+	fprintf(stderr, "[DEBUG] High memory region part 2 mapped: 0x%08X - 0x%08X (%u MB) - TRAP REGION 0xFF000000-0xFF000FFF LEFT UNMAPPED\n",
+		high_mem_base2, high_mem_base2 + high_mem_size2 - 1, high_mem_size2 / (1024*1024));
 
 	// Register unmapped memory hooks as fallback for any remaining unmapped regions
 	// This matches UAE's behavior where ALL unmapped memory returns 0 / ignores writes
@@ -415,9 +463,24 @@ static int unicorn_backend_execute_one(void) {
 		return 3;  // CPU_EXEC_EXCEPTION
 	}
 
+	// Debug: Check PC at entry
+	static int exec_one_count = 0;
+	exec_one_count++;
+	if (exec_one_count <= 5) {
+		uint32_t pc_entry = unicorn_get_pc(unicorn_cpu);
+		fprintf(stderr, "[execute_one #%d] Entry PC=0x%08X\n", exec_one_count, pc_entry);
+	}
+
 	/* CPU tracing (controlled by CPU_TRACE env var) */
 	if (cpu_trace_should_log()) {
 		uint32_t pc = unicorn_get_pc(unicorn_cpu);
+
+		// Debug: Check for wrong PC
+		static int trace_count = 0;
+		if (++trace_count <= 5) {
+			fprintf(stderr, "[CPU TRACE #%d] About to trace PC=0x%08X\n", trace_count, pc);
+		}
+
 		uint16_t opcode = 0;
 		uc_mem_read((uc_engine*)unicorn_get_uc(unicorn_cpu), pc, &opcode, sizeof(opcode));
 		#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -496,6 +559,12 @@ static int unicorn_backend_execute_one(void) {
 	}
 
 	cpu_trace_increment();
+
+	// Debug: Check PC at exit
+	if (exec_one_count <= 5) {
+		uint32_t pc_exit = unicorn_get_pc(unicorn_cpu);
+		fprintf(stderr, "[execute_one #%d] Exit PC=0x%08X\n", exec_one_count, pc_exit);
+	}
 
 	// Unicorn doesn't track STOP state separately
 	return 0;  // CPU_EXEC_OK

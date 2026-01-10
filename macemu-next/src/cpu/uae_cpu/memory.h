@@ -137,10 +137,47 @@ const uintptr MEMBaseDiff = 0;
 extern uintptr MEMBaseDiff;
 #endif
 
+// Memory layout variables (defined in basilisk_glue.cpp)
+extern uint8_t *RAMBaseHost;
+extern uint32_t RAMSize;
+extern uint32_t ROMBaseMac;
+extern uint32_t ROMSize;
+
 #if REAL_ADDRESSING || DIRECT_ADDRESSING
 static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 {
-	return (uae_u8 *)MEMBaseDiff + addr;
+	// Bounds checking for DIRECT_ADDRESSING mode
+	// BasiliskII uses memory banking to handle this, but with direct addressing
+	// we must manually validate addresses to avoid accessing invalid host memory.
+	//
+	// Valid Mac address ranges:
+	//   RAM: 0x00000000 - RAMSize
+	//   ROM: ROMBaseMac - (ROMBaseMac + ROMSize)
+	//
+	// Invalid ranges (NuBus slots, hardware registers, etc.) should return NULL
+	// which triggers a bus error in the Mac 68K emulation.
+
+	if (addr < RAMSize) {
+		// RAM access - most common case, check first
+		return (uae_u8 *)MEMBaseDiff + addr;
+	}
+
+	if (addr >= ROMBaseMac && addr < ROMBaseMac + ROMSize) {
+		// ROM access
+		return (uae_u8 *)MEMBaseDiff + addr;
+	}
+
+	// Out of range access (NuBus slots, hardware registers, etc.)
+	// Return NULL to trigger bus error handling
+	// BasiliskII logs: "Your Mac program just did something terribly stupid"
+	static bool warned = false;
+	if (!warned) {
+		fprintf(stderr, "WARNING: Out-of-range memory access at 0x%08x (valid: RAM 0x00000000-0x%08x, ROM 0x%08x-0x%08x)\n",
+		        addr, RAMSize, ROMBaseMac, ROMBaseMac + ROMSize);
+		fprintf(stderr, "         Subsequent out-of-range accesses will be silently ignored.\n");
+		warned = true;
+	}
+	return NULL;
 }
 static __inline__ uae_u32 do_get_virtual_address(uae_u8 *addr)
 {

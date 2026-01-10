@@ -424,10 +424,12 @@ int main(int argc, char **argv)
 			// Run CPU execution loop using CPUContext
 			Platform* platform = g_cpu_ctx.get_platform();
 			if (platform->cpu_execute_fast) {
-				// Fast path (Unicorn, DualCPU)
+				// Fast path (Unicorn, DualCPU, UAE)
+				fprintf(stderr, "[CPU] Using FAST execution path (cpu_execute_fast)\n");
 				platform->cpu_execute_fast();
 			} else {
-				// Slow path (UAE) - execute one instruction at a time
+				// Slow path - execute one instruction at a time
+				fprintf(stderr, "[CPU] Using SLOW execution path (cpu_execute_one loop)\n");
 				while (webserver::g_running.load(std::memory_order_acquire)) {
 					platform->cpu_execute_one();
 				}

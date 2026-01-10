@@ -2,16 +2,15 @@
 # Comprehensive CPU trace runner for macemu-next
 # Runs UAE, Unicorn, and DualCPU backends with configurable traces
 #
-# Usage: ./run_traces.sh [start] [end] [rom_path] [timeout]
+# Usage: ./run_traces.sh [start] [end] [timeout]
 #   start: First instruction to trace (default: 0)
 #   end: Last instruction to trace (default: 250000)
-#   rom_path: Path to ROM file (default: ~/quadra.rom)
 #   timeout: Emulator timeout in seconds (default: 10)
 #
 # Examples:
 #   ./run_traces.sh                          # 0-250k instructions, 10 sec timeout
 #   ./run_traces.sh 800000 900000            # 800k-900k instructions
-#   ./run_traces.sh 0 100000 ~/rom.bin 5     # 0-100k instructions, 5 sec timeout
+#   ./run_traces.sh 0 100000 5               # 0-100k instructions, 5 sec timeout
 #
 # Output: Creates timestamped directory with trace logs and analysis
 
@@ -40,15 +39,8 @@ fi
 # Parse arguments
 INSN_START="${1:-0}"
 INSN_END="${2:-250000}"
-ROM="${3:-$HOME/quadra.rom}"
-TIMEOUT="${4:-10}"
+TIMEOUT="${3:-10}"
 TRACE_RANGE="$INSN_START-$INSN_END"
-
-# Check ROM exists
-if [ ! -f "$ROM" ]; then
-    echo "Error: ROM file not found: $ROM"
-    exit 1
-fi
 
 # Create output directory
 OUTDIR="/tmp/macemu_traces_$(date +%Y%m%d_%H%M%S)"
@@ -59,7 +51,6 @@ echo "  macemu-next CPU Trace Runner"
 echo "════════════════════════════════════════════════════════════════"
 echo "Binary:      $MACEMU_BIN"
 echo "Config:      $CONFIG_FILE"
-echo "ROM:         $ROM"
 echo "Trace Range: $INSN_START - $INSN_END ($(($INSN_END - $INSN_START)) instructions)"
 echo "Timeout:     ${TIMEOUT}s"
 echo "Output:      $OUTDIR"
@@ -77,7 +68,7 @@ echo "│ Step 1/3: Running UAE (interpreter baseline)                  │"
 echo "└────────────────────────────────────────────────────────────────┘"
 
 env EMULATOR_TIMEOUT=$TIMEOUT CPU_TRACE="$TRACE_RANGE" CPU_BACKEND=uae \
-    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver "$ROM" > "$OUTDIR/uae_full.log" 2>&1
+    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver > "$OUTDIR/uae_full.log" 2>&1
 UAE_EXIT=$?
 
 # Extract just trace lines
@@ -97,7 +88,7 @@ echo "│ Step 2/3: Running Unicorn (JIT target)                        │"
 echo "└────────────────────────────────────────────────────────────────┘"
 
 env EMULATOR_TIMEOUT=$TIMEOUT CPU_TRACE="$TRACE_RANGE" CPU_BACKEND=unicorn \
-    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver "$ROM" > "$OUTDIR/unicorn_full.log" 2>&1
+    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver > "$OUTDIR/unicorn_full.log" 2>&1
 UNICORN_EXIT=$?
 
 # Extract just trace lines
@@ -117,7 +108,7 @@ echo "│ Step 3/3: Running DualCPU (lockstep validation)               │"
 echo "└────────────────────────────────────────────────────────────────┘"
 
 env EMULATOR_TIMEOUT=$TIMEOUT DUALCPU_TRACE_DEPTH=20 CPU_BACKEND=dualcpu \
-    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver "$ROM" > "$OUTDIR/dualcpu_full.log" 2>&1 || true
+    "$MACEMU_BIN" --config "$CONFIG_FILE" --no-webserver > "$OUTDIR/dualcpu_full.log" 2>&1 || true
 DUALCPU_EXIT=$?
 
 # Extract just trace lines

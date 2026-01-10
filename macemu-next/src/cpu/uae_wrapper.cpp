@@ -325,31 +325,37 @@ void uae_mem_set_rom_ptr_with_addr(void *ptr, uint32_t addr, uint32_t size) {
  */
 uint8_t uae_mem_read_byte(uint32_t addr) {
     uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
+    if (!m) return 0;  // Out-of-range access returns 0 (like BasiliskII dummy_bank)
     return do_get_mem_byte(m);
 }
 
 uint16_t uae_mem_read_word(uint32_t addr) {
     uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
+    if (!m) return 0;  // Out-of-range access returns 0
     return do_get_mem_word(m);
 }
 
 uint32_t uae_mem_read_long(uint32_t addr) {
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
+    if (!m) return 0;  // Out-of-range access returns 0
     return do_get_mem_long(m);
 }
 
 void uae_mem_write_byte(uint32_t addr, uint8_t val) {
     uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
+    if (!m) return;  // Out-of-range access ignored (like BasiliskII dummy_bank)
     do_put_mem_byte(m, val);
 }
 
 void uae_mem_write_word(uint32_t addr, uint16_t val) {
     uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
+    if (!m) return;  // Out-of-range access ignored
     do_put_mem_word(m, val);
 }
 
 void uae_mem_write_long(uint32_t addr, uint32_t val) {
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
+    if (!m) return;  // Out-of-range access ignored
     do_put_mem_long(m, val);
 }
 
@@ -392,6 +398,17 @@ void idle_resume(void) {
 void TriggerInterrupt(void) {
     idle_resume();  /* Resume from idle if CPU is halted */
     PendingInterrupt = true;  /* Signal interrupt to CPU backend */
+
+    // NOTE: This function is used by ALL backends (UAE, Unicorn, DualCPU)
+    // even though it's in uae_wrapper.cpp!
+    //
+    // For UAE: Set SPCFLAG_DOINT to trigger m68k_do_specialties() call.
+    // Without this, m68k_do_execute() never enters m68k_do_specialties()
+    // and PendingInterrupt never gets checked.
+    //
+    // For Unicorn: This SPCFLAG is ignored (Unicorn doesn't use UAE flags).
+    // Unicorn handles interrupts via platform.cpu_trigger_interrupt() callback.
+    SPCFLAGS_SET(SPCFLAG_DOINT);
 }
 
 /**
@@ -411,3 +428,20 @@ int intlev(void) {
 }
 
 } /* extern "C" */
+
+/**
+ * Fast execution loop - runs continuously until quit_program is set
+ * This is the high-performance path for CPU emulation.
+ * Note: This is declared with C++ linkage to match newcpu.h
+ */
+extern void m68k_execute(void);  // Forward declare from newcpu.cpp
+
+// Wrapper with C linkage for the platform API
+extern "C" void uae_m68k_execute_fast(void) {
+    fprintf(stderr, "[UAE Fast] Entering m68k_execute() loop...\n");
+    fflush(stderr);
+    m68k_execute();  // Call the C++ version
+    fprintf(stderr, "[UAE Fast] Exited m68k_execute() loop\n");
+    fflush(stderr);
+}
+

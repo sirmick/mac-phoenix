@@ -11,6 +11,7 @@
 
 uae_inc = include_directories('.')
 common_inc = include_directories('../../common/include')
+timer_inc = include_directories('../../drivers/platform')  # For timer_interrupt.h
 
 # Common compiler args for UAE CPU
 uae_common_args = [
@@ -58,7 +59,7 @@ uae_sources = [
 
 uae_lib = static_library('uae_cpu',
   uae_sources,
-  include_directories: [uae_inc, common_inc, include_directories('../..')],
+  include_directories: [uae_inc, common_inc, timer_inc, include_directories('../..')],
   cpp_args: uae_common_args + ['-DNOFLAGS'],  # Add -DNOFLAGS
 )
 

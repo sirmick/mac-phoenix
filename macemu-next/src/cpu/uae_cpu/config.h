@@ -54,6 +54,9 @@
 /* Use pthread services */
 #define USE_PTHREADS_SERVICES 1
 
+/* Use CPU emulation services (enables int32 tick counter for precise timing) */
+#define USE_CPU_EMUL_SERVICES 1
+
 /* Byte order - little endian x86 */
 /* Don't define WORDS_BIGENDIAN on little-endian systems - leave it undefined */
 /*

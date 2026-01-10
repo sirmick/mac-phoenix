@@ -75,6 +75,7 @@ void uae_set_trap_handler(UaeTrapHandler handler, void *user_data);
 
 /* Execution */
 void uae_cpu_execute_one(void);  /* Execute one instruction */
+void uae_m68k_execute_fast(void);     /* Fast execution loop (runs until quit_program) */
 
 /* Disassembly */
 void uae_disasm(uint32_t addr, uint32_t *next_pc, int count);  /* Disassemble instructions */

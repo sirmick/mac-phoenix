@@ -6,11 +6,46 @@
 
 #include "sysdeps.h"
 #include "cpu_emulation.h"
+#include "timer_interrupt.h"  // For poll_timer_interrupt()
 
 // Tick counting for timing
-uae_u32 emulated_ticks = 0;
+//
+// With USE_CPU_EMUL_SERVICES defined (config.h:58), this is int32 (newcpu.h:357)
+// and cpu_do_check_ticks() is called every `emulated_ticks_quantum` instructions.
+//
+// BasiliskII uses emulated_ticks_quantum = 1000 for checking every 1000 instructions.
+// This provides good balance between timer accuracy and CPU overhead.
+static int32 emulated_ticks_quantum = 1000;  // Check timer every 1000 instructions
+int32 emulated_ticks = 1000;                  // Current countdown (initialized to quantum)
+
+/*
+ *  cpu_do_check_ticks() - Poll timer from CPU execution loop
+ *
+ *  Called every ~1000 instructions (when emulated_ticks counts down to 0)
+ *  This is the bridge between CPU execution and the timer system.
+ *
+ *  BasiliskII uses a separate pthread timer that calls TriggerInterrupt() directly.
+ *  macemu-next uses timerfd polling for better multi-backend architecture.
+ */
 void cpu_do_check_ticks(void) {
-    // Stub - no timing checks for now
+    static uint64_t call_count = 0;
+    static uint64_t total_instructions = 0;
+    call_count++;
+    total_instructions += emulated_ticks_quantum;
+
+    // Debug: Log milestone calls
+    if (call_count <= 10 || call_count % 100 == 0) {
+        fprintf(stderr, "[cpu_do_check_ticks] Call #%llu, total instructions: %llu\n",
+                (unsigned long long)call_count, (unsigned long long)total_instructions);
+        fflush(stderr);
+    }
+
+    // Poll the timerfd-based timer system
+    // This will call one_tick() -> SetInterruptFlag() -> TriggerInterrupt() as needed
+    poll_timer_interrupt();
+
+    // Reset counter for next quantum
+    emulated_ticks += emulated_ticks_quantum;
 }
 
 // FPU emulation stubs

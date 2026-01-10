@@ -723,12 +723,26 @@ void MakeFromSR (void)
 {
 	int oldm = regs.m;
 	int olds = regs.s;
+	int old_intmask = regs.intmask;  // Track old value
 
 	regs.t1 = (regs.sr >> 15) & 1;
 	regs.t0 = (regs.sr >> 14) & 1;
 	regs.s = (regs.sr >> 13) & 1;
 	regs.m = (regs.sr >> 12) & 1;
 	regs.intmask = (regs.sr >> 8) & 7;
+
+	// Debug: Log all MakeFromSR calls and interrupt mask changes
+	static int sr_call_count = 0;
+	static int sr_change_count = 0;
+	++sr_call_count;
+	if (sr_call_count <= 10) {
+		fprintf(stderr, "[MakeFromSR #%d] Called: old_intmask=%d new_intmask=%d (SR=0x%04x, PC=0x%08x)\n",
+		        sr_call_count, old_intmask, regs.intmask, regs.sr, m68k_getpc());
+	}
+	if (old_intmask != regs.intmask && ++sr_change_count <= 20) {
+		fprintf(stderr, "[MakeFromSR] *** INTMASK CHANGED ***: %d -> %d (SR=0x%04x, PC=0x%08x)\n",
+		        old_intmask, regs.intmask, regs.sr, m68k_getpc());
+	}
 	SET_XFLG ((regs.sr >> 4) & 1);
 	SET_NFLG ((regs.sr >> 3) & 1);
 	SET_ZFLG ((regs.sr >> 2) & 1);
@@ -1425,9 +1439,21 @@ int m68k_do_specialties (void)
 	if (SPCFLAGS_TEST( SPCFLAG_DOINT )) {
 		SPCFLAGS_CLEAR( SPCFLAG_DOINT );
 		int intr = intlev ();
+		static uint64_t doint_count = 0;
+		if (++doint_count <= 20) {
+			fprintf(stderr, "[DOINT #%llu] intlev=%d intmask=%d InterruptFlags=0x%x\n",
+			        (unsigned long long)doint_count, intr, regs.intmask, InterruptFlags);
+		}
 		if (intr != -1 && intr > regs.intmask) {
+			if (doint_count <= 20) {
+				fprintf(stderr, "[DOINT #%llu] Calling Interrupt(%d)\n",
+				        (unsigned long long)doint_count, intr);
+			}
 			Interrupt (intr);
 			regs.stopped = 0;
+		} else if (doint_count <= 20) {
+			fprintf(stderr, "[DOINT #%llu] BLOCKED: intr=%d intmask=%d\n",
+			        (unsigned long long)doint_count, intr, regs.intmask);
 		}
 	}
 	/* Check for pending interrupts from shared interrupt system */
