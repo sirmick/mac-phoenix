@@ -527,6 +527,21 @@ meson compile -C build
 
 Once native EmulOps are working:
 1. Remove MMIO transport code
+
+---
+
+## Implementation Complete - January 2025
+
+✅ **Success**: A-line EmulOps (0xAE00-0xAE3F) are now working in Unicorn!
+
+**What was done**:
+1. Added DISAS_INSN(emulop_aline) handler in translate.c
+2. Registered 0xAE00-0xAE3F opcodes to trigger EXCP_LINEA
+3. Created rom_patches_aline.cpp with 2-byte EmulOp patches
+4. Updated PatchROM dispatcher to use A-line for Unicorn
+5. Verified with test programs that UC_HOOK_INTR intercepts correctly
+
+**Key insight**: UC_HOOK_INTR with interrupt #10 is the correct way to handle A-line exceptions in Unicorn, not UC_HOOK_INSN_INVALID.
 2. Remove MMIO hook registration
 3. Clean up PatchROM to use single implementation
 4. Update documentation

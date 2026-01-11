@@ -57,8 +57,9 @@
 // Global platform pointer - set by PatchROM caller
 extern Platform g_platform;
 
-// Forward declaration for Unicorn-specific implementation
+// Forward declaration for Unicorn-specific implementations
 extern bool PatchROM_Unicorn(void);
+extern bool PatchROM_ALine(void);
 
 // Global variables
 uint32 UniversalInfo;		// ROM offset of UniversalInfo
@@ -1743,8 +1744,8 @@ bool PatchROM(void)
 {
 	// Detect CPU backend and dispatch to appropriate implementation
 	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
-		fprintf(stderr, "[PatchROM] Detected Unicorn backend - using MMIO transport\n");
-		return PatchROM_Unicorn();
+		fprintf(stderr, "[PatchROM] Detected Unicorn backend - using A-line EmulOps\n");
+		return PatchROM_ALine();  // Use the new A-line implementation
 	} else {
 		D(bug("[PatchROM] Using UAE backend - traditional EmulOps\n"));
 		return PatchROM_UAE();
