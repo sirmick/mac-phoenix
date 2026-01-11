@@ -33,12 +33,12 @@ void cpu_do_check_ticks(void) {
     call_count++;
     total_instructions += emulated_ticks_quantum;
 
-    // Debug: Log milestone calls
-    if (call_count <= 10 || call_count % 100 == 0) {
-        fprintf(stderr, "[cpu_do_check_ticks] Call #%llu, total instructions: %llu\n",
-                (unsigned long long)call_count, (unsigned long long)total_instructions);
-        fflush(stderr);
-    }
+    // Debug: Log milestone calls (disabled for now to reduce noise)
+    // if (call_count <= 10 || call_count % 100 == 0) {
+    //     fprintf(stderr, "[cpu_do_check_ticks] Call #%llu, total instructions: %llu\n",
+    //             (unsigned long long)call_count, (unsigned long long)total_instructions);
+    //     fflush(stderr);
+    // }
 
     // Poll the timerfd-based timer system
     // This will call one_tick() -> SetInterruptFlag() -> TriggerInterrupt() as needed

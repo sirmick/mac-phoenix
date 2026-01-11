@@ -73,6 +73,7 @@ static void emulop_log_verbose(uint16 opcode, M68kRegisters *r)
 	// Map opcode to name for debugging
 	const char *op_name = "UNKNOWN";
 	switch (opcode) {
+		case 0x7001: op_name = "DEBUGSTR"; break;
 		case M68K_EMUL_BREAK: op_name = "BREAK"; break;
 		case M68K_EMUL_OP_SHUTDOWN: op_name = "SHUTDOWN"; break;
 		case M68K_EMUL_OP_RESET: op_name = "RESET"; break;
@@ -159,7 +160,67 @@ static void emulop_log_verbose(uint16 opcode, M68kRegisters *r)
 void EmulOp(uint16 opcode, M68kRegisters *r)
 {
 	emulop_log_verbose(opcode, r);
-	D(bug("EmulOp %04x\n", opcode));
+
+	// Enhanced debug output with descriptive names
+	const char *op_name = NULL;
+	switch (opcode) {
+		case M68K_EMUL_BREAK: op_name = "BREAK"; break;
+		case M68K_EMUL_OP_SHUTDOWN: op_name = "SHUTDOWN"; break;
+		case M68K_EMUL_OP_RESET: op_name = "RESET"; break;
+		case M68K_EMUL_OP_CLKNOMEM: op_name = "CLKNOMEM/RTC"; break;
+		case M68K_EMUL_OP_READ_XPRAM: op_name = "READ_XPRAM"; break;
+		case M68K_EMUL_OP_READ_XPRAM2: op_name = "READ_XPRAM2"; break;
+		case M68K_EMUL_OP_PATCH_BOOT_GLOBS: op_name = "PATCH_BOOT_GLOBS"; break;
+		case M68K_EMUL_OP_FIX_BOOTSTACK: op_name = "FIX_BOOTSTACK"; break;
+		case M68K_EMUL_OP_FIX_MEMSIZE: op_name = "FIX_MEMSIZE"; break;
+		case M68K_EMUL_OP_INSTALL_DRIVERS: op_name = "INSTALL_DRIVERS"; break;
+		case M68K_EMUL_OP_SONY_OPEN: op_name = "SONY_OPEN"; break;
+		case M68K_EMUL_OP_SONY_PRIME: op_name = "SONY_PRIME"; break;
+		case M68K_EMUL_OP_SONY_CONTROL: op_name = "SONY_CONTROL"; break;
+		case M68K_EMUL_OP_SONY_STATUS: op_name = "SONY_STATUS"; break;
+		case M68K_EMUL_OP_DISK_OPEN: op_name = "DISK_OPEN"; break;
+		case M68K_EMUL_OP_DISK_PRIME: op_name = "DISK_PRIME"; break;
+		case M68K_EMUL_OP_DISK_CONTROL: op_name = "DISK_CONTROL"; break;
+		case M68K_EMUL_OP_DISK_STATUS: op_name = "DISK_STATUS"; break;
+		case M68K_EMUL_OP_CDROM_OPEN: op_name = "CDROM_OPEN"; break;
+		case M68K_EMUL_OP_CDROM_PRIME: op_name = "CDROM_PRIME"; break;
+		case M68K_EMUL_OP_CDROM_CONTROL: op_name = "CDROM_CONTROL"; break;
+		case M68K_EMUL_OP_CDROM_STATUS: op_name = "CDROM_STATUS"; break;
+		case M68K_EMUL_OP_VIDEO_OPEN: op_name = "VIDEO_OPEN"; break;
+		case M68K_EMUL_OP_VIDEO_CONTROL: op_name = "VIDEO_CONTROL"; break;
+		case M68K_EMUL_OP_VIDEO_STATUS: op_name = "VIDEO_STATUS"; break;
+		case M68K_EMUL_OP_ETHER_OPEN: op_name = "ETHER_OPEN"; break;
+		case M68K_EMUL_OP_ETHER_CONTROL: op_name = "ETHER_CONTROL"; break;
+		case M68K_EMUL_OP_ETHER_READ_PACKET: op_name = "ETHER_READ_PACKET"; break;
+		case M68K_EMUL_OP_SERIAL_OPEN: op_name = "SERIAL_OPEN"; break;
+		case M68K_EMUL_OP_SERIAL_PRIME: op_name = "SERIAL_PRIME"; break;
+		case M68K_EMUL_OP_SERIAL_CONTROL: op_name = "SERIAL_CONTROL"; break;
+		case M68K_EMUL_OP_SERIAL_STATUS: op_name = "SERIAL_STATUS"; break;
+		case M68K_EMUL_OP_SERIAL_CLOSE: op_name = "SERIAL_CLOSE"; break;
+		case M68K_EMUL_OP_ADBOP: op_name = "ADB_OP"; break;
+		case M68K_EMUL_OP_INSTIME: op_name = "INSTIME"; break;
+		case M68K_EMUL_OP_RMVTIME: op_name = "RMVTIME"; break;
+		case M68K_EMUL_OP_PRIMETIME: op_name = "PRIMETIME"; break;
+		case M68K_EMUL_OP_MICROSECONDS: op_name = "MICROSECONDS"; break;
+		case M68K_EMUL_OP_SCSI_DISPATCH: op_name = "SCSI_DISPATCH"; break;
+		case M68K_EMUL_OP_EXTFS_COMM: op_name = "EXTFS_COMM"; break;
+		case M68K_EMUL_OP_EXTFS_HFS: op_name = "EXTFS_HFS"; break;
+		case M68K_EMUL_OP_BLOCK_MOVE: op_name = "BLOCK_MOVE"; break;
+		case M68K_EMUL_OP_DEBUGUTIL: op_name = "DEBUGUTIL"; break;
+		case M68K_EMUL_OP_IRQ: op_name = "IRQ"; break;
+		case M68K_EMUL_OP_PUT_SCRAP: op_name = "PUT_SCRAP"; break;
+		case M68K_EMUL_OP_GET_SCRAP: op_name = "GET_SCRAP"; break;
+		case M68K_EMUL_OP_CHECKLOAD: op_name = "CHECKLOAD"; break;
+	}
+
+	// Always log EmulOps for test ROMs (not just in debug builds)
+	if (op_name) {
+		fprintf(stderr, "[EmulOp] Executing 0x%04x (%s)\n", opcode, op_name);
+		D(bug("EmulOp %04x (%s)\n", opcode, op_name));
+	} else {
+		fprintf(stderr, "[EmulOp] Executing 0x%04x (unknown)\n", opcode);
+		D(bug("EmulOp %04x\n", opcode));
+	}
 	switch (opcode) {
 		case M68K_EMUL_BREAK: {				// Breakpoint
 			printf("*** Breakpoint\n");
@@ -180,7 +241,34 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 		}
 
+		case 0x7001:						// DebugStr - simple debug output
+			fprintf(stderr, "[DebugStr] D0=0x%08X A6=0x%08X\n",
+			        r->d[0], r->a[6]);
+			break;
+
 		case M68K_EMUL_OP_SHUTDOWN:			// Quit emulator
+			// Debug: Print register values for test ROMs
+			// Check both D0 and D5 for success markers (different test ROMs use different registers)
+			if (r->d[0] == 0xDEADBEEF || r->d[5] == 0xDEADBEEF || r->d[0] == 0xCAFEBABE) {
+				const char *marker_name = (r->d[0] == 0xDEADBEEF) ? "DEADBEEF" :
+				                         (r->d[0] == 0xCAFEBABE) ? "CAFEBABE" :
+				                         "DEADBEEF (D5)";
+				fprintf(stderr, "[TEST SUCCESS] D0=0x%08X D5=0x%08X - Success marker %s found!\n",
+				        r->d[0], r->d[5], marker_name);
+				fprintf(stderr, "[TEST] D7=0x%08X (test counter)\n", r->d[7]);
+			} else if ((r->d[0] & 0xFFFF0000) == 0xBAD00000) {
+				fprintf(stderr, "[TEST FAILURE] D0=0x%08X - Error marker detected!\n", r->d[0]);
+			}
+			// Always print register values for test debugging
+			fprintf(stderr, "[TEST] Register values at SHUTDOWN:\n");
+			fprintf(stderr, "  D0=0x%08X D1=0x%08X D2=0x%08X D3=0x%08X\n",
+			        r->d[0], r->d[1], r->d[2], r->d[3]);
+			fprintf(stderr, "  D4=0x%08X D5=0x%08X D6=0x%08X D7=0x%08X\n",
+			        r->d[4], r->d[5], r->d[6], r->d[7]);
+			fprintf(stderr, "  A0=0x%08X A1=0x%08X A2=0x%08X A3=0x%08X\n",
+			        r->a[0], r->a[1], r->a[2], r->a[3]);
+			fprintf(stderr, "  A4=0x%08X A5=0x%08X A6=0x%08X\n",
+			        r->a[4], r->a[5], r->a[6]);
 			QuitEmulator();
 			break;
 
@@ -305,10 +393,20 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:	// Patch BootGlobs at startup
 			D(bug("Patch BootGlobs\n"));
+			// Debug: Log register values before changes
+			fprintf(stderr, "[PATCH_BOOT_GLOBS] BEFORE: A4=0x%08X, A6=0x%08X, RAMBaseMac=0x%08X, RAMSize=0x%08X\n",
+			        r->a[4], r->a[6], RAMBaseMac, RAMSize);
+
 			WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);			// MemTop
 			WriteMacInt8(r->a[4] - 26, 0);								// No MMU
 			WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) | 1);	// No MMU
 			r->a[6] = RAMBaseMac + RAMSize;
+
+			// Debug: Log register values after changes
+			fprintf(stderr, "[PATCH_BOOT_GLOBS] AFTER:  A4=0x%08X, A6=0x%08X (set to RAMBaseMac+RAMSize=0x%08X)\n",
+			        r->a[4], r->a[6], RAMBaseMac + RAMSize);
+			fprintf(stderr, "[PATCH_BOOT_GLOBS] Memory writes: MemTop at 0x%08X, MMU flags at 0x%08X/0x%08X\n",
+			        r->a[4] - 20, r->a[4] - 26, r->a[4] - 25);
 			break;
 
 		case M68K_EMUL_OP_FIX_BOOTSTACK:	// Set boot stack to 3/4 of RAM (7.5)

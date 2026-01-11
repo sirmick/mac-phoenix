@@ -510,16 +510,19 @@ static int unicorn_backend_execute_one(void) {
 		);
 	}
 
-	/* NOTE: Batch execution enabled after fixing RTE in Unicorn
+	/* NOTE: Batch execution with timeout support
 	 *
 	 * The RTE (Return from Exception) bug has been fixed by modifying Unicorn's
 	 * cpu-exec.c to handle EXCP_RTE (0x100) specially. When RTE is encountered,
 	 * m68k_interrupt_all() is called directly BEFORE clearing exception_index,
 	 * which updates the PC from the stack correctly.
 	 *
-	 * This allows us to use batch execution (count=10000) for significant
-	 * performance improvement. Expected speedup: 1.5-3x due to reduced
-	 * function call overhead (from 802k calls/sec to ~80 calls/sec).
+	 * We use a smaller batch size (1000) to match UAE's tick checking frequency.
+	 * This ensures the timeout mechanism works correctly and the emulator can
+	 * exit cleanly when EMULATOR_TIMEOUT is set.
+	 *
+	 * UAE checks every 1000 instructions via cpu_do_check_ticks(), so we match
+	 * that behavior here for consistency across backends.
 	 *
 	 * IMPORTANT: When CPU tracing is enabled, execute only 1 instruction at a time
 	 * so that the trace log accurately captures every instruction.
@@ -527,7 +530,7 @@ static int unicorn_backend_execute_one(void) {
 	 * See: external/unicorn/qemu/accel/tcg/cpu-exec.c (TARGET_M68K section)
 	 * See: docs/deepdive/UnicornBatchExecutionRTEBug.md
 	 */
-	int count = cpu_trace_is_enabled() ? 1 : 10000;
+	int count = cpu_trace_is_enabled() ? 1 : 1000;
 	if (!unicorn_execute_n(unicorn_cpu, count)) {
 		uint32_t pc = unicorn_get_pc(unicorn_cpu);
 		uint32_t a7 = unicorn_get_areg(unicorn_cpu, 7);
@@ -579,12 +582,26 @@ static void unicorn_backend_execute_fast(void) {
 	// This is much faster than checking every instruction
 
 	// Use global running flag from webserver namespace (same as main.cpp)
+	int exec_count = 0;
 	while (webserver::g_running.load(std::memory_order_acquire)) {
-		// Execute a large batch for JIT efficiency
-		// The block hook will handle EmulOps when encountered
-		if (!unicorn_execute_n(unicorn_cpu, 100000)) {
+		// Execute one instruction at a time to ensure EmulOps are handled
+		// TODO: Fix block hook to properly detect EmulOps mid-batch
+		if (!unicorn_execute_n(unicorn_cpu, 1)) {
 			// Error or stop requested
+			uint32_t pc = unicorn_get_pc(unicorn_cpu);
+			fprintf(stderr, "[unicorn_backend_execute] Stopped at PC=0x%08X after %d executions\n",
+			        pc, exec_count);
 			break;
+		}
+		exec_count++;
+
+		// Debug: Check if we're stuck
+		if (exec_count > 0 && exec_count % 100 == 0) {
+			uint32_t pc = unicorn_get_pc(unicorn_cpu);
+			if (exec_count == 100) {
+				fprintf(stderr, "[unicorn_backend_execute] Still running: PC=0x%08X, %d instructions executed\n",
+				        pc, exec_count);
+			}
 		}
 	}
 }

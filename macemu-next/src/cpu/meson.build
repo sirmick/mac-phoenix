@@ -8,6 +8,7 @@ cpu_sources = [
   'unicorn_wrapper.c',        # Unicorn wrapper
   'unicorn_exception.c',      # Exception simulation for Unicorn
   'unicorn_validation.cpp',   # Validation module (used by dualcpu)
+  'emulop_c_wrapper.cpp',     # C wrapper for EmulOp function
 ]
 
 # Build UAE CPU (always)

@@ -33,6 +33,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "mmio_transport.h"
+
+/* Forward declarations for EmulOp interface (C++ functions callable from C) */
+struct M68kRegistersC {
+    uint32_t d[8];  /* Data registers D0-D7 */
+    uint32_t a[8];  /* Address registers A0-A7 */
+    uint16_t sr;    /* Status register */
+};
+
+extern void EmulOp_C(uint16_t opcode, struct M68kRegistersC *r);
 
 /* Unicorn M68K interrupt API
  * We added uc_m68k_trigger_interrupt() to Unicorn's target/m68k/unicorn.c
@@ -92,6 +102,7 @@ struct UnicornCPU {
     uc_hook trap_hook;  // UC_HOOK_MEM_FETCH_UNMAPPED for MMIO trap region
     uc_hook trace_hook; // UC_HOOK_MEM_READ for CPU tracing
     uc_hook intr_hook;  // UC_HOOK_INTR for exception handling (RTE, STOP, etc.)
+    uc_hook mmio_emulop_hook;  // UC_HOOK_MEM_WRITE for MMIO EmulOp transport
 
     /* MMIO trap context */
     TrapContext trap_ctx;
@@ -218,30 +229,8 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
 
     uint32_t pc = (uint32_t)address;
 
-    /* CRITICAL: Check for EmulOps at block start
-     * This is necessary because some EmulOps (like 0x7103) are valid M68K instructions
-     * that won't trigger UC_HOOK_INSN_INVALID. We check at each block boundary which
-     * is much more efficient than checking every instruction.
-     */
-    if (cpu->arch == UCPU_ARCH_M68K) {
-        uint16_t opcode = 0;
-        if (uc_mem_read(uc, pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
-            #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-            opcode = __builtin_bswap16(opcode);
-            #endif
-
-            /* Check if it's an EmulOp (0x7100-0x713F) */
-            if (opcode >= 0x7100 && opcode < 0x7140) {
-                /* Stop execution to handle EmulOp */
-                uc_emu_stop(uc);
-
-                /* Set flag so unicorn_execute_n knows to handle EmulOp */
-                cpu->trap_ctx.saved_pc = pc;
-                cpu->trap_ctx.in_emulop = true;
-                return;
-            }
-        }
-    }
+    /* NOTE: EmulOp detection removed - now handled by MMIO transport */
+    /* MMIO addresses (0xFF000000-0xFF000FFF) always trap regardless of TB boundaries */
 
     /* Count instructions in this block for statistics */
     /* We estimate instruction count by decoding the block */
@@ -306,11 +295,26 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
         cpu->block_stats.block_size_histogram[100]++;  /* 100+ bucket */
     }
 
-    /* Poll timer every 100 instructions (same as UAE for timing consistency) */
+    /* Poll timer every 1000 instructions (matching UAE's emulated_ticks_quantum) */
     static uint64_t total_instructions = 0;
+    static uint64_t poll_count = 0;
+    static uint64_t cumulative_instructions = 0;
+
     total_instructions += insn_count;
-    if (total_instructions >= 100) {
-        total_instructions = 0;
+    cumulative_instructions += insn_count;
+
+    if (total_instructions >= 1000) {
+        total_instructions -= 1000;  /* Keep remainder for next check */
+        poll_count++;
+
+        /* Debug: Log milestone calls (disabled for now to reduce noise) */
+        // if (poll_count <= 10 || poll_count % 100 == 0) {
+        //     fprintf(stderr, "[cpu_do_check_ticks] Call #%llu, total instructions: %llu\n",
+        //             (unsigned long long)poll_count,
+        //             (unsigned long long)(poll_count * 1000));
+        //     fflush(stderr);
+        // }
+
         poll_timer_interrupt();
     }
 
@@ -541,6 +545,58 @@ static void hook_mem_trace(uc_engine *uc, uc_mem_type type,
     cpu_trace_log_mem_read((uint32_t)address, val, size);
 }
 
+/* MMIO handler for EmulOp transport */
+static void mmio_emulop_handler(uc_engine *uc, uc_mem_type type,
+                                uint64_t address, int size, int64_t value,
+                                void *user_data) {
+    UnicornCPU *cpu = (UnicornCPU *)user_data;
+
+    /* Only handle writes to the MMIO EmulOp region */
+    if (type != UC_MEM_WRITE) return;
+    if (!IS_MMIO_EMULOP(address)) return;
+
+    /* Convert MMIO address to EmulOp opcode */
+    uint16_t opcode = MMIO_TO_EMULOP(address);
+
+    /* Debug logging for first few triggers */
+    static int mmio_count = 0;
+    if (mmio_count++ < 20) {
+        fprintf(stderr, "[MMIO EmulOp] Triggered 0x%04x via write to 0x%08lx\n",
+                opcode, address);
+    }
+
+    /* Build M68kRegistersC from Unicorn state */
+    struct M68kRegistersC regs;
+    memset(&regs, 0, sizeof(regs));
+
+    /* Read data registers D0-D7 */
+    for (int i = 0; i < 8; i++) {
+        uc_reg_read(uc, UC_M68K_REG_D0 + i, &regs.d[i]);
+    }
+
+    /* Read address registers A0-A7 */
+    for (int i = 0; i < 8; i++) {
+        uc_reg_read(uc, UC_M68K_REG_A0 + i, &regs.a[i]);
+    }
+
+    /* Read status register */
+    uc_reg_read(uc, UC_M68K_REG_SR, &regs.sr);
+
+    /* Call the existing EmulOp handler - reuses ALL existing code! */
+    EmulOp_C(opcode, &regs);
+
+    /* Write back any register changes */
+    for (int i = 0; i < 8; i++) {
+        uc_reg_write(uc, UC_M68K_REG_D0 + i, &regs.d[i]);
+    }
+
+    for (int i = 0; i < 8; i++) {
+        uc_reg_write(uc, UC_M68K_REG_A0 + i, &regs.a[i]);
+    }
+
+    uc_reg_write(uc, UC_M68K_REG_SR, &regs.sr);
+}
+
 /* CPU lifecycle */
 UnicornCPU* unicorn_create(UnicornArch arch) {
     return unicorn_create_with_model(arch, -1);  /* Use default CPU model */
@@ -608,6 +664,35 @@ UnicornCPU* unicorn_create_with_model(UnicornArch arch, int cpu_model) {
         return NULL;
     }
     fprintf(stderr, "[UNICORN] MMIO trap hook registered successfully\n");
+
+    /* Setup MMIO EmulOp transport region */
+    /* Map the MMIO region as read/write memory */
+    fprintf(stderr, "[UNICORN] Setting up MMIO EmulOp region at 0x%08lX size 0x%08lX\n",
+            MMIO_EMULOP_BASE, MMIO_EMULOP_SIZE);
+
+    /* Map the memory region for MMIO */
+    err = uc_mem_map(cpu->uc, MMIO_EMULOP_BASE, MMIO_EMULOP_SIZE, UC_PROT_READ | UC_PROT_WRITE);
+    if (err != UC_ERR_OK) {
+        fprintf(stderr, "Failed to map MMIO EmulOp region: %s\n", uc_strerror(err));
+        uc_close(cpu->uc);
+        free(cpu);
+        return NULL;
+    }
+
+    /* Register MMIO write hook for EmulOp transport */
+    err = uc_hook_add(cpu->uc, &cpu->mmio_emulop_hook,
+                     UC_HOOK_MEM_WRITE,
+                     mmio_emulop_handler,
+                     cpu,  /* user_data */
+                     MMIO_EMULOP_BASE,
+                     MMIO_EMULOP_BASE + MMIO_EMULOP_SIZE - 1);
+    if (err != UC_ERR_OK) {
+        fprintf(stderr, "Failed to register MMIO EmulOp hook: %s\n", uc_strerror(err));
+        uc_close(cpu->uc);
+        free(cpu);
+        return NULL;
+    }
+    fprintf(stderr, "[UNICORN] MMIO EmulOp hook registered successfully\n");
 
     /* Initialize trap context */
     cpu->trap_ctx.saved_pc = 0;
@@ -875,7 +960,29 @@ bool unicorn_execute_one(UnicornCPU *cpu) {
         }
     }
 
+    /* Debug: Log when we're about to set A6 to boundary */
+    if ((uint32_t)pc == 0x02000044 && exec_count <= 10) {
+        uint32_t a6_before;
+        uc_reg_read(cpu->uc, UC_M68K_REG_A6, &a6_before);
+        fprintf(stderr, "[BOUNDARY DEBUG] About to execute MOVE.L #0x02000000, A6 at PC=0x%08X\n", (uint32_t)pc);
+        fprintf(stderr, "[BOUNDARY DEBUG] A6 before: 0x%08X\n", a6_before);
+        fflush(stderr);
+    }
+
     err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
+
+    /* Debug: Check A6 after critical instruction */
+    if ((uint32_t)pc == 0x02000044 && exec_count <= 10) {
+        uint32_t a6_after, new_pc;
+        uc_reg_read(cpu->uc, UC_M68K_REG_A6, &a6_after);
+        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &new_pc);
+        fprintf(stderr, "[BOUNDARY DEBUG] After execution: A6=0x%08X, new PC=0x%08X, err=%d\n",
+                a6_after, new_pc, err);
+        if (err != UC_ERR_OK) {
+            fprintf(stderr, "[BOUNDARY DEBUG] Unicorn error: %s\n", uc_strerror(err));
+        }
+        fflush(stderr);
+    }
 
     /* Debug: Log first 10 executions at PC 0x0200008C */
     if ((uint32_t)pc == 0x0200008C && exec_count <= 10) {
@@ -995,83 +1102,16 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
                 exec_count, (uint32_t)pc, opcode, count);
     }
 
-    /* CRITICAL: Check for EmulOps BEFORE executing!
-     * Some EmulOps like 0x7103 are VALID M68K instructions (MOVEQ #3,D0).
-     * We must intercept them before Unicorn executes them as regular instructions.
-     * This is necessary because UC_HOOK_INSN_INVALID only fires for illegal instructions,
-     * and UC_HOOK_CODE is too slow (10x performance hit).
-     */
-    if (cpu->arch == UCPU_ARCH_M68K) {
-        uint16_t opcode = 0;
-        if (uc_mem_read(cpu->uc, (uint32_t)pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
-            #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-            opcode = __builtin_bswap16(opcode);
-            #endif
-
-            /* Check if it's an EmulOp (0x7100-0x713F) */
-            if (exec_count <= 5) {
-                fprintf(stderr, "[unicorn_execute_n #%d] EmulOp check: opcode=0x%04X, is_emulop=%d\n",
-                        exec_count, opcode, (opcode >= 0x7100 && opcode < 0x7140));
-            }
-            if (opcode >= 0x7100 && opcode < 0x7140) {
-                /* Debug: Log first few EmulOp detections */
-                static int emulop_detect_count = 0;
-                if (++emulop_detect_count <= 10) {
-                    fprintf(stderr, "[unicorn_execute_n] Detected EmulOp 0x%04X at PC=0x%08X\n",
-                            opcode, (uint32_t)pc);
-                    fflush(stderr);
-                }
-
-                /* Handle EmulOp through MMIO trap mechanism */
-                cpu->trap_ctx.saved_pc = (uint32_t)pc;
-                cpu->trap_ctx.in_emulop = true;
-
-                /* Calculate trap address in unmapped region */
-                uint32_t emulop_num = opcode & 0xFF;
-                uint32_t trap_addr = TRAP_REGION_BASE + (emulop_num * 2);
-
-                /* Redirect PC to trap region */
-                uint64_t trap_addr_64 = trap_addr;
-                uc_reg_write(cpu->uc, UC_M68K_REG_PC, &trap_addr_64);
-
-                /* Execute from trap region - will trigger UC_HOOK_MEM_FETCH_UNMAPPED */
-                uc_err err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
-
-                /* Apply deferred SR update if needed (register writes don't persist in hooks) */
-                if (cpu->trap_ctx.has_deferred_sr_update) {
-                    uint16_t new_sr = cpu->trap_ctx.deferred_sr_value;
-                    uc_reg_write(cpu->uc, UC_M68K_REG_SR, &new_sr);
-
-                    /* Debug: Verify SR update */
-                    if (opcode == 0x7103 && emulop_detect_count <= 10) {
-                        uint16_t sr_readback;
-                        uc_reg_read(cpu->uc, UC_M68K_REG_SR, &sr_readback);
-                        fprintf(stderr, "[Pre-exec Deferred SR] Applied: 0x%04X (readback=0x%04X)\n",
-                                new_sr, sr_readback);
-                    }
-
-                    cpu->trap_ctx.has_deferred_sr_update = false;
-                }
-
-                /* Trap handler executed, check for error */
-                if (err != UC_ERR_OK && cpu->trap_ctx.in_emulop) {
-                    set_error(cpu, err);
-                    return false;
-                }
-
-                /* EmulOp successfully handled. The trap handler has set the PC to the next
-                 * instruction. If count > 1, we need to continue executing the remaining
-                 * instructions. For now, just handle one at a time when EmulOps are involved.
-                 */
-                if (count == 1) {
-                    return true;
-                } else {
-                    /* Recursively continue with remaining count */
-                    return unicorn_execute_n(cpu, count - 1);
-                }
-            }
-        }
+    /* Special debug for boundary issue */
+    if ((uint32_t)pc == 0x02000044) {
+        uint32_t a6_before;
+        uc_reg_read(cpu->uc, UC_M68K_REG_A6, &a6_before);
+        fprintf(stderr, "[BOUNDARY] About to set A6 to 0x02000000 at PC=0x%08X\n", (uint32_t)pc);
+        fprintf(stderr, "[BOUNDARY] A6 before: 0x%08X\n", a6_before);
     }
+
+    /* NOTE: EmulOp pre-execution check removed - now handled by MMIO transport */
+    /* MMIO writes to 0xFF000000-0xFF000FFF trigger EmulOps reliably in JIT mode */
 
     uc_err err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, count);
 
@@ -1083,77 +1123,26 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
                 exec_count, (uint32_t)new_pc, err, cpu->trap_ctx.in_emulop);
     }
 
-    /* Check if we stopped due to EmulOp detected in block hook */
-    if (cpu->trap_ctx.in_emulop) {
-        /* Handle the EmulOp using MMIO trap mechanism */
-        uint32_t saved_pc = cpu->trap_ctx.saved_pc;
-
-        /* Read the opcode */
-        uint16_t opcode = 0;
-        if (uc_mem_read(cpu->uc, saved_pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
-            #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-            opcode = __builtin_bswap16(opcode);
-            #endif
-
-            /* Calculate trap address in unmapped region */
-            uint32_t emulop_num = opcode & 0xFF;
-            uint32_t trap_addr = TRAP_REGION_BASE + (emulop_num * 2);
-
-            /* Redirect PC to trap region */
-            uint64_t trap_addr_64 = trap_addr;
-            uc_reg_write(cpu->uc, UC_M68K_REG_PC, &trap_addr_64);
-
-            /* Test if we can read from trap region first */
-            if (exec_count <= 5) {
-                uint16_t test_read = 0;
-                uc_err read_err = uc_mem_read(cpu->uc, trap_addr, &test_read, 2);
-                fprintf(stderr, "[unicorn_execute_n #%d] Test read from 0x%08X: err=%d, val=0x%04X\n",
-                        exec_count, trap_addr, read_err, test_read);
-            }
-
-            /* Execute from trap region - will trigger UC_HOOK_MEM_FETCH_UNMAPPED */
-            if (exec_count <= 5) {
-                fprintf(stderr, "[unicorn_execute_n #%d] Executing trap at 0x%08X for opcode 0x%04X\n",
-                        exec_count, trap_addr, opcode);
-            }
-            err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
-            if (exec_count <= 5) {
-                fprintf(stderr, "[unicorn_execute_n #%d] Trap execution done, err=%d\n",
-                        exec_count, err);
-            }
-
-            /* Clear the EmulOp flag (trap handler can't modify this from within hook) */
-            cpu->trap_ctx.in_emulop = false;
-
-            /* Restore PC to after the EmulOp (trap handler can't modify PC from within hook) */
-            uint32_t next_pc = saved_pc + 2;  /* EmulOps are 2 bytes */
-            uc_reg_write(cpu->uc, UC_M68K_REG_PC, &next_pc);
-
-            /* Debug: Verify PC restoration */
-            if (exec_count <= 5) {
-                fprintf(stderr, "[unicorn_execute_n #%d] Restored PC after trap: 0x%08X -> 0x%08X\n",
-                        exec_count, saved_pc, next_pc);
-            }
-
-            /* Apply deferred SR update if needed (register writes don't persist in hooks) */
-            if (cpu->trap_ctx.has_deferred_sr_update) {
-                uint16_t new_sr = cpu->trap_ctx.deferred_sr_value;
-                uc_reg_write(cpu->uc, UC_M68K_REG_SR, &new_sr);
-
-                /* Debug: Verify SR update */
-                uint16_t sr_readback;
-                uc_reg_read(cpu->uc, UC_M68K_REG_SR, &sr_readback);
-                fprintf(stderr, "[Deferred SR] Applied: 0x%04X (readback=0x%04X)\n",
-                        new_sr, sr_readback);
-
-                cpu->trap_ctx.has_deferred_sr_update = false;
-            }
-
-            /* Trap handler executed, return to continue */
-            /* Note: trap handler clears cpu->trap_ctx.in_emulop */
-            /* UC_ERR_FETCH_UNMAPPED is expected when executing from trap region */
-            return (err == UC_ERR_OK || err == UC_ERR_INSN_INVALID || err == UC_ERR_FETCH_UNMAPPED);
+    /* Check what happened after boundary instruction */
+    if ((uint32_t)pc == 0x02000044) {
+        uint32_t a6_after, new_pc;
+        uc_reg_read(cpu->uc, UC_M68K_REG_A6, &a6_after);
+        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &new_pc);
+        fprintf(stderr, "[BOUNDARY] After execution: A6=0x%08X, PC advanced to 0x%08X, err=%d\n",
+                a6_after, new_pc, err);
+        if (new_pc == 0x0200004A) {
+            fprintf(stderr, "[BOUNDARY] SUCCESS: Instruction executed normally\n");
+        } else {
+            fprintf(stderr, "[BOUNDARY] PROBLEM: PC jumped to unexpected location!\n");
         }
+    }
+
+    /* NOTE: Post-execution EmulOp handling removed - now handled by MMIO transport */
+    /* The trap_ctx.in_emulop flag is no longer used with MMIO transport */
+    if (cpu->trap_ctx.in_emulop) {
+        /* This should not happen with MMIO transport - log warning */
+        fprintf(stderr, "WARNING: trap_ctx.in_emulop flag set but MMIO should handle EmulOps\n");
+        cpu->trap_ctx.in_emulop = false;
     }
 
     if (err != UC_ERR_OK) {
