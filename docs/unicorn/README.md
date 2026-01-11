@@ -2,7 +2,22 @@
 
 This directory contains comprehensive documentation for the Unicorn Engine integration project.
 
+## ⚠️ CRITICAL UPDATE: EmulOps Implementation
+
+**The MMIO transport approach has a fundamental flaw** - it requires 10 bytes instead of 2 bytes, breaking in-place ROM patching.
+
+**See [EMULOPS_FIXES.md](/home/mick/macemu-dual-cpu/macemu-next/EMULOPS_FIXES.md) for the complete analysis and solution.**
+
 ## Documents
+
+### [EMULOPS_FIXES.md](/home/mick/macemu-dual-cpu/macemu-next/EMULOPS_FIXES.md) 🔴 **READ THIS FIRST**
+
+**Critical document explaining EmulOps implementation problems and solutions**
+
+- History of failed attempts (UC_HOOK_INSN_INVALID, MMIO transport)
+- Why current MMIO approach breaks ROM patching (10 bytes vs 2 bytes)
+- Detailed plan for native instruction extension in Unicorn fork
+- Implementation guide with code examples
 
 ### [00_UNICORN_INTEGRATION_MASTER_PLAN.md](00_UNICORN_INTEGRATION_MASTER_PLAN.md)
 
@@ -161,5 +176,16 @@ Project is complete when:
 
 ---
 
-**Last Updated:** December 27, 2024
-**Status:** Planning complete, ready to begin implementation
+## Obsolete Documentation
+
+The `obsolete/` folder contains documentation for approaches that were tried but failed:
+
+- **MMIO_IMPLEMENTATION_PLAN.md** - MMIO transport approach (size mismatch problem)
+- **MMIO_TRAP_APPROACH.md** - MMIO trap approach (proposed but never implemented)
+
+These are preserved for historical reference.
+
+---
+
+**Last Updated:** January 2025
+**Status:** EmulOps implementation needs rework - see EMULOPS_FIXES.md
