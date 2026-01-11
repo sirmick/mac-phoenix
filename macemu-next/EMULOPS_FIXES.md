@@ -191,6 +191,66 @@ bool PatchROM(void) {
 
 ---
 
+## Alternative: Using A-Line Opcodes (RECOMMENDED)
+
+### Why Not 0x71xx?
+
+The 0x71xx opcode range has a fundamental problem:
+- **Conflicts with `mvzs` instruction** (0x7100-0x71FF in ColdFire)
+- Requires complex modification of existing instruction decoder
+- Risk of breaking valid ColdFire instructions
+
+### The A-Line Solution (0xAE00-0xAE3F)
+
+**A-Line instructions (0xA000-0xAFFF) are PERFECT for EmulOps:**
+
+1. **Always illegal**: Guaranteed to trap on ALL 68K CPUs
+2. **Reserved by Motorola**: Will never become valid instructions
+3. **Historical precedent**: Mac OS used A-line traps for system calls
+4. **4096 opcodes available**: We only need 64
+5. **Clean implementation**: No conflicts with existing instructions
+6. **Already supported**: Unicorn has A-line trap infrastructure
+
+### Opcode Allocation
+
+```
+0xA000-0xA9FF : Mac OS system traps (avoid these)
+0xAA00-0xADFF : Available
+0xAE00-0xAE3F : EmulOps (our allocation)
+0xAE40-0xAEFF : Reserved for future use
+0xAF00-0xAFFF : Available
+```
+
+### Implementation Advantages
+
+| Aspect | 0x71xx (Current) | 0xAE00-0xAE3F (Proposed) |
+|--------|------------------|--------------------------|
+| Conflicts with valid opcodes | YES (mvzs) | NO |
+| Implementation complexity | HIGH | LOW |
+| Unicorn modification needed | Complex | Simple |
+| Future-proof | NO | YES |
+| Mac OS compatibility | YES | YES |
+
+### Code Changes Required
+
+**ROM Patching:**
+```cpp
+// Old: Uses 0x71xx
+*wp++ = htons(M68K_EMUL_OP_DISK_OPEN);  // 0x7110
+
+// New: Uses 0xAExx
+*wp++ = htons(M68K_EMUL_OP_DISK_OPEN_ALINE);  // 0xAE10
+```
+
+**EmulOp Definitions:**
+```cpp
+// Add new A-line definitions alongside old ones
+#define M68K_EMUL_OP_DISK_OPEN       0x7110  // Legacy
+#define M68K_EMUL_OP_DISK_OPEN_ALINE 0xAE10  // New A-line version
+```
+
+---
+
 ## The Correct Solution: Native Instruction Extension
 
 ### Why This Is The Right Approach
@@ -262,21 +322,26 @@ DISAS_INSN(emulop)  // Handles 0x7100-0x713F
 
 **File**: `qemu/target/m68k/translate.c`
 
-1. **Find current registration** (around line 6169):
+1. **Find A-line trap handler** (search for "linea"):
    ```c
-   INSN(mvzs, 7100, f100, CF_ISA_B);  // Currently handles 0x7100-0x71FF
+   DISAS_INSN(linea)  // Existing A-line trap handler
+   {
+       gen_exception(s, s->base.pc_next, EXCP_LINEA);
+   }
    ```
 
-2. **Split registration**:
+2. **Add EmulOp registration BEFORE generic A-line**:
    ```c
-   // Add BEFORE mvzs registration
-   INSN(emulop, 7100, ffc0, M68000);   // 0x7100-0x713F (EmulOps)
-   INSN(mvzs,   7140, ffc0, CF_ISA_B); // 0x7140-0x717F
-   INSN(mvzs,   7180, ff80, CF_ISA_B); // 0x7180-0x71FF
+   // Add specific handler for our EmulOp range
+   INSN(emulop_aline, ae00, ffc0, M68000);  // 0xAE00-0xAE3F (64 EmulOps)
+
+   // Keep existing A-line for all other 0xAxxx
+   BASE(linea, a000, f000);  // 0xA000-0xAFFF (generic A-line)
    ```
 
-3. **Note**: The mask `ffc0` matches bits 15-12=7, 11-8=1, 7-6=00
-   - This captures exactly 0x7100-0x713F (64 opcodes)
+3. **Note**: The mask `ffc0` matches specific pattern:
+   - `ae00 & ffc0` = matches 0xAE00-0xAE3F exactly
+   - More specific than generic `linea`, so takes precedence
 
 ### Phase 3: Create DISAS_INSN Handler (Day 2-3)
 
@@ -285,13 +350,18 @@ DISAS_INSN(emulop)  // Handles 0x7100-0x713F
 Add around line 3200 (near other DISAS_INSN functions):
 
 ```c
-DISAS_INSN(emulop)
+DISAS_INSN(emulop_aline)
 {
     TCGContext *tcg_ctx = s->uc->tcg_ctx;
-    uint16_t opcode = insn;
+
+    /* Extract EmulOp number from A-line opcode */
+    uint16_t emulop_num = insn & 0x3F;  // 0xAE00-0xAE3F -> 0-63
+
+    /* Convert to legacy 0x71xx format for compatibility */
+    uint16_t legacy_opcode = 0x7100 | emulop_num;
 
     /* Save opcode for helper */
-    TCGv_i32 op = tcg_const_i32(tcg_ctx, opcode);
+    TCGv_i32 op = tcg_const_i32(tcg_ctx, legacy_opcode);
 
     /* Call EmulOp helper */
     gen_helper_emulop(tcg_ctx, tcg_ctx->cpu_env, op);
