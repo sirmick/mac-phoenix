@@ -8,6 +8,7 @@
 #include "unicorn_wrapper.h"
 #include "platform.h"
 #include "cpu_trace.h"
+#include <stdlib.h>  /* For strtoul */
 #include "timer_interrupt.h"
 #include <unicorn/unicorn.h>
 #include <unicorn/m68k.h>
@@ -96,9 +97,29 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
     /* Debug: detect when we're stuck in the problematic loop */
     static int loop_detect_count = 0;
     if (address >= 0x02009ab0 && address <= 0x02009ad0) {
-        if (++loop_detect_count == 100) {
+        loop_detect_count++;
+        if (loop_detect_count == 1) {
+            fprintf(stderr, "[Unicorn] First hit of loop at PC=0x%08lx, total instructions: %llu\n",
+                    address, (unsigned long long)cpu->block_stats.total_instructions);
+        } else if (loop_detect_count == 100) {
             fprintf(stderr, "[Unicorn] Stuck in loop at PC=0x%08lx (100 iterations detected)\n", address);
             fprintf(stderr, "[Unicorn] This loop appears to be waiting for something. ROM stuck after PATCH_BOOT_GLOBS.\n");
+        }
+    }
+
+    /* PC-based tracing: Enable CPU trace when hitting specific addresses */
+    /* Set CPU_TRACE_PC=0x2009ab0 to start tracing at that PC */
+    static bool pc_trace_enabled = false;
+    if (!pc_trace_enabled) {
+        const char *trace_pc_env = getenv("CPU_TRACE_PC");
+        if (trace_pc_env) {
+            uint32_t trace_pc = strtoul(trace_pc_env, NULL, 0);
+            if (address == trace_pc) {
+                fprintf(stderr, "[Unicorn] PC-based trace triggered at 0x%08lx\n", address);
+                pc_trace_enabled = true;
+                extern void cpu_trace_force_enable(void);
+                cpu_trace_force_enable();  /* Enable tracing from this point */
+            }
         }
     }
 

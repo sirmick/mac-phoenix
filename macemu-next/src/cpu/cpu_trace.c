@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 static CPUTraceState g_trace = {0};
 
@@ -50,6 +51,14 @@ void cpu_trace_init(void) {
 
 bool cpu_trace_is_enabled(void) {
 	return g_trace.enabled;
+}
+
+void cpu_trace_force_enable(void) {
+	g_trace.enabled = true;
+	/* Start tracing immediately, ignore count */
+	g_trace.start_count = 0;
+	g_trace.end_count = UINT64_MAX;  /* Trace everything from now on */
+	fprintf(stderr, "[CPU trace force-enabled from this point forward]\n");
 }
 
 bool cpu_trace_should_log(void) {

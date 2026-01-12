@@ -473,12 +473,20 @@ static int unicorn_backend_execute_one(void) {
 
 	/* CPU tracing (controlled by CPU_TRACE env var) */
 	if (cpu_trace_should_log()) {
+		// Safety check
+		if (!unicorn_cpu) {
+			fprintf(stderr, "[CPU TRACE] ERROR: unicorn_cpu is NULL!\n");
+			cpu_trace_increment();
+			return 0;
+		}
+
 		uint32_t pc = unicorn_get_pc(unicorn_cpu);
 
 		// Debug: Check for wrong PC
 		static int trace_count = 0;
 		if (++trace_count <= 5) {
-			fprintf(stderr, "[CPU TRACE #%d] About to trace PC=0x%08X\n", trace_count, pc);
+			fprintf(stderr, "[CPU TRACE #%d] About to trace PC=0x%08X, unicorn_cpu=%p\n",
+			        trace_count, pc, (void*)unicorn_cpu);
 		}
 
 		uint16_t opcode = 0;

@@ -32,6 +32,9 @@ void cpu_trace_init(void);
 /* Check if tracing is enabled (regardless of current instruction count) */
 bool cpu_trace_is_enabled(void);
 
+/* Force enable tracing from current point */
+void cpu_trace_force_enable(void);
+
 /* Check if current instruction should be traced */
 bool cpu_trace_should_log(void);
 
