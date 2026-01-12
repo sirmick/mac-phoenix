@@ -407,6 +407,8 @@ extern "C" uint32 TimerDateTime()
 	// Unix epoch is Jan 1, 1970, Mac epoch is Jan 1, 1904
 	// Difference is 66 years + 17 leap days = 2082844800 seconds
 	const uint32 MAC_EPOCH_OFFSET = 2082844800;
+
+
 	return now + MAC_EPOCH_OFFSET;
 }
 

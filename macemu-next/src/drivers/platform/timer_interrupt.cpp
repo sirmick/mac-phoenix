@@ -128,7 +128,7 @@ static void one_tick(void)
 		if (interrupt_count >= 4) debug_logged = true;
 	}
 
-	if (ROMVersion != ROM_VERSION_CLASSIC || mac_started) {
+	if (ROMVersion == ROM_VERSION_CLASSIC || mac_started) {
 		extern Platform g_platform;
 		if (g_platform.cpu_trigger_interrupt) {
 			int level = intlev();

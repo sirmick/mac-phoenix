@@ -80,6 +80,15 @@ void unicorn_defer_sr_update(void *unicorn_cpu, uint16_t new_sr) {
 static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
 
+    /* Poll timer every 100 instructions like UAE does */
+    static int instruction_counter = 0;
+    instruction_counter += size;
+    if (instruction_counter >= 100) {
+        instruction_counter = 0;
+        extern uint64_t poll_timer_interrupt(void);
+        poll_timer_interrupt();  /* May set g_pending_interrupt_level */
+    }
+
     /* Update block statistics */
     cpu->block_stats.total_blocks++;
     cpu->block_stats.total_instructions += size;
@@ -100,11 +109,12 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
         cpu->block_stats.block_size_histogram[100]++;
     }
 
+
     /* Check for pending interrupts */
     if (g_pending_interrupt_level > 0) {
-        uint16_t sr;
+        uint32_t sr = 0;  /* Use uint32_t for uc_reg_read */
         uc_reg_read(uc, UC_M68K_REG_SR, &sr);
-        int current_ipl = (sr >> 8) & 7;
+        int current_ipl = ((sr & 0xFFFF) >> 8) & 7;
 
         if (g_pending_interrupt_level > current_ipl) {
             /* Timer interrupt is autovectored level 1 */
@@ -602,6 +612,7 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
 
     uint32_t pc = unicorn_get_pc(cpu);
 
+
     /* Execute specified number of instructions */
     uc_err err = uc_emu_start(cpu->uc, pc, 0, 0, count);
 
@@ -612,9 +623,10 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
     }
 
     if (err != UC_ERR_OK) {
+        /* Check if this is from uc_emu_stop() - that returns UC_ERR_OK actually */
         snprintf(cpu->error, sizeof(cpu->error),
-                "Execution failed at PC=0x%08x: %s",
-                pc, uc_strerror(err));
+                "Execution failed at PC=0x%08x: %s (err=%d)",
+                pc, uc_strerror(err), err);
         return false;
     }
 
