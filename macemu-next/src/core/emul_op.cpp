@@ -316,7 +316,7 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 		case M68K_EMUL_OP_CLKNOMEM: {		// Clock/PRAM operations
 			bool is_read = (r->d[1] & 0x80) != 0;
 			static int clk_count = 0;
-			if (++clk_count <= 10 || clk_count == 100 || clk_count == 200) {
+			if (++clk_count <= 10 || clk_count == 100 || clk_count == 200 || clk_count >= 265) {
 				fprintf(stderr, "CLKNOMEM #%d: d1=0x%08x, is_read=%d, reg_type=0x%02x\n",
 				        clk_count, r->d[1], is_read, (r->d[1] & 0x78));
 			}

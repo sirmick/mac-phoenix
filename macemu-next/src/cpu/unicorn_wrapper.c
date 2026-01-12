@@ -93,6 +93,16 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
     cpu->block_stats.total_blocks++;
     cpu->block_stats.total_instructions += size;
 
+    /* Debug: detect when we're stuck in the problematic loop */
+    static int loop_detect_count = 0;
+    if (address >= 0x02009ab0 && address <= 0x02009ad0) {
+        if (++loop_detect_count == 100) {
+            fprintf(stderr, "[Unicorn] Stuck in loop at PC=0x%08lx (100 iterations detected)\n", address);
+            fprintf(stderr, "[Unicorn] This loop appears to be waiting for something. ROM stuck after PATCH_BOOT_GLOBS.\n");
+        }
+    }
+
+
     if (size < cpu->block_stats.min_block_size) {
         cpu->block_stats.min_block_size = size;
     }
