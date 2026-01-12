@@ -1,27 +1,8 @@
 /**
- * Unicorn Engine Wrapper Implementation
+ * Unicorn Engine Wrapper Implementation (Cleaned Version)
  *
- * ============================================================================
- * CRITICAL ENDIANNESS NOTES:
- * ============================================================================
- * UAE and Unicorn have different memory storage formats:
- *
- * UAE (68k emulator):
- *   - RAM: Stored in LITTLE-ENDIAN (x86 native) in RAMBaseHost
- *   - ROM: Stored in BIG-ENDIAN (as loaded from file) in ROMBaseHost
- *   - get_long/put_long: Byte-swap on-the-fly when accessing memory
- *
- * Unicorn (M68K mode):
- *   - RAM: Expected in BIG-ENDIAN (M68K native)
- *   - ROM: Expected in BIG-ENDIAN (M68K native)
- *   - No automatic byte-swapping
- *
- * When copying memory to Unicorn:
- *   - RAM: MUST byte-swap (LE -> BE) or Unicorn reads garbage
- *   - ROM: NO byte-swap (already BE) or instructions get corrupted
- *
- * See unicorn_map_ram() and unicorn_map_rom_writable() for implementation.
- * ============================================================================
+ * Provides M68K emulation using Unicorn engine with A-line EmulOp support.
+ * All obsolete MMIO transport code has been removed.
  */
 
 #include "unicorn_wrapper.h"
@@ -33,55 +14,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "mmio_transport.h"
 
-/* Forward declarations for EmulOp interface (C++ functions callable from C) */
+/* Forward declarations for EmulOp interface */
 struct M68kRegistersC {
     uint32_t d[8];  /* Data registers D0-D7 */
     uint32_t a[8];  /* Address registers A0-A7 */
     uint16_t sr;    /* Status register */
 };
-
 extern void EmulOp_C(uint16_t opcode, struct M68kRegistersC *r);
 
-/* Unicorn M68K interrupt API
- * We added uc_m68k_trigger_interrupt() to Unicorn's target/m68k/unicorn.c
- * to avoid needing to access internal structures or include QEMU headers.
- * This wraps QEMU's m68k_set_irq_level() which is used by hw/m68k/q800.c.
- */
+/* M68K interrupt trigger (from Unicorn's QEMU backend) */
 extern void uc_m68k_trigger_interrupt(uc_engine *uc, int level, uint8_t vector);
 
-
-/* MMIO Trap Region for JIT-compatible EmulOp handling */
-#define TRAP_REGION_BASE  0xFF000000UL
-#define TRAP_REGION_SIZE  0x00001000UL  /* 4KB = 2048 EmulOp slots */
-
-/* Interrupt handling via platform API
- * Set by unicorn_trigger_interrupt_internal() (called from platform API),
- * checked by hook_block()
- */
-static volatile int g_pending_interrupt_level = 0;  /* 0=none, 1-7=interrupt level */
-
-/* Trap context for MMIO approach */
-typedef struct {
-    uint32_t saved_pc;     /* Original PC where 0x71xx was */
-    bool in_emulop;        /* Currently handling EmulOp? */
-    bool in_trap;          /* Currently handling A-line/F-line trap? */
-    uint16_t trap_opcode;  /* Original trap opcode */
-
-    /* Deferred register updates */
-    bool has_deferred_sr_update;   /* SR needs to be updated after uc_emu_start() */
-    uint16_t deferred_sr_value;    /* New SR value to write */
-} TrapContext;
+/* Interrupt handling */
+static volatile int g_pending_interrupt_level = 0;
 
 /* Block statistics for timing analysis */
 typedef struct {
-    uint64_t total_blocks;         /* Total number of blocks executed */
-    uint64_t total_instructions;   /* Total instructions executed */
-    uint64_t block_size_histogram[101];  /* Histogram: [0-99] + [100+] */
-    uint32_t min_block_size;       /* Smallest block seen */
-    uint32_t max_block_size;       /* Largest block seen */
-    uint64_t sum_block_sizes;      /* Sum for average calculation */
+    uint64_t total_blocks;
+    uint64_t total_instructions;
+    uint64_t block_size_histogram[101];
+    uint32_t min_block_size;
+    uint32_t max_block_size;
+    uint64_t sum_block_sizes;
 } BlockStats;
 
 struct UnicornCPU {
@@ -89,309 +44,89 @@ struct UnicornCPU {
     UnicornArch arch;
     char error[256];
 
-    /* Hooks */
-    /* NOTE: Per-CPU emulop_handler and exception_handler removed - use g_platform API instead */
-
+    /* Memory hook callback */
     MemoryHookCallback memory_hook;
     void *memory_user_data;
     uc_hook mem_hook_handle;
 
-    /* NOTE: code_hook removed - UC_HOOK_CODE deprecated, using UC_HOOK_INSN_INVALID instead */
-    uc_hook block_hook;       // UC_HOOK_BLOCK for interrupts (efficient)
-    uc_hook insn_invalid_hook;  // UC_HOOK_INSN_INVALID for EmulOps (no per-instruction overhead)
-    uc_hook trap_hook;  // UC_HOOK_MEM_FETCH_UNMAPPED for MMIO trap region
-    uc_hook trace_hook; // UC_HOOK_MEM_READ for CPU tracing
-    uc_hook intr_hook;  // UC_HOOK_INTR for exception handling (RTE, STOP, etc.)
-    uc_hook mmio_emulop_hook;  // UC_HOOK_MEM_WRITE for MMIO EmulOp transport
-
-    /* MMIO trap context */
-    TrapContext trap_ctx;
+    /* Hooks */
+    uc_hook block_hook;        /* UC_HOOK_BLOCK for interrupts */
+    uc_hook insn_invalid_hook; /* UC_HOOK_INSN_INVALID for legacy EmulOps */
+    uc_hook intr_hook;         /* UC_HOOK_INTR for A-line EmulOps */
+    uc_hook trace_hook;        /* UC_HOOK_MEM_READ for CPU tracing */
 
     /* Block statistics */
     BlockStats block_stats;
+
+    /* Deferred SR update */
+    bool has_deferred_sr_update;
+    uint16_t deferred_sr_value;
 };
 
-/* Deferred SR update API
- * Called from EmulOp handler to defer SR updates until after uc_emu_start() returns.
- * Register writes from within hooks don't persist due to JIT caching.
- */
+/* Deferred SR update API */
 void unicorn_defer_sr_update(void *unicorn_cpu, uint16_t new_sr) {
     UnicornCPU *cpu = (UnicornCPU *)unicorn_cpu;
-    cpu->trap_ctx.has_deferred_sr_update = true;
-    cpu->trap_ctx.deferred_sr_value = new_sr;
-}
-
-/* Helper: Convert uc_err to string and store in cpu->error */
-static void set_error(UnicornCPU *cpu, uc_err err) {
-    if (err != UC_ERR_OK) {
-        snprintf(cpu->error, sizeof(cpu->error), "%s", uc_strerror(err));
+    if (cpu) {
+        cpu->has_deferred_sr_update = true;
+        cpu->deferred_sr_value = new_sr;
     }
 }
 
-/* MMIO Trap Handler - called when CPU fetches from unmapped trap region
- * This fires even in JIT mode, making it reliable for EmulOp handling
- */
-static void trap_mem_fetch_handler(uc_engine *uc, uc_mem_type type,
-                                   uint64_t address, int size,
-                                   int64_t value, void *user_data) {
-    UnicornCPU *cpu = (UnicornCPU *)user_data;
-
-    /* Debug: Log trap region access */
-    static int trap_access_count = 0;
-    if (++trap_access_count <= 10) {
-        fprintf(stderr, "[trap_mem_fetch] Access at 0x%08lx, in_emulop=%d, in_trap=%d\n",
-                address, cpu->trap_ctx.in_emulop, cpu->trap_ctx.in_trap);
-    }
-
-    /* Verify address is in trap region */
-    if (address < TRAP_REGION_BASE ||
-        address >= TRAP_REGION_BASE + TRAP_REGION_SIZE) {
-        fprintf(stderr, "ERROR: Unexpected unmapped fetch at 0x%08lx\n", address);
-        return;
-    }
-
-    if (!cpu->trap_ctx.in_emulop && !cpu->trap_ctx.in_trap) {
-        fprintf(stderr, "WARNING: Trap region access without INSN_INVALID at 0x%08lx\n", address);
-        return;
-    }
-
-    /* Handle EmulOp */
-    if (cpu->trap_ctx.in_emulop) {
-        /* Calculate EmulOp number from trap address */
-        uint32_t emulop_num = (address - TRAP_REGION_BASE) / 2;
-        uint16_t opcode = 0x7100 + emulop_num;
-
-        /* Debug: Track EmulOp 0x7103 */
-        static int emulop_7103_count = 0;
-        if (opcode == 0x7103) {
-            if (++emulop_7103_count <= 10) {
-                fprintf(stderr, "[MMIO trap] EmulOp 0x7103 #%d: saved_pc=0x%08X\n",
-                        emulop_7103_count, cpu->trap_ctx.saved_pc);
-                fflush(stderr);
-            }
-        }
-
-        /* Call platform EmulOp handler (same as UAE uses) */
-        if (g_platform.emulop_handler) {
-            bool pc_advanced = g_platform.emulop_handler(opcode, false);
-
-            /* Restore PC to instruction AFTER the 0x71xx */
-            uint32_t next_pc = cpu->trap_ctx.saved_pc + (pc_advanced ? 0 : 2);
-
-            /* More debug for 0x7103 */
-            if (opcode == 0x7103 && emulop_7103_count <= 10) {
-                uint16_t sr;
-                uc_reg_read(uc, UC_M68K_REG_SR, &sr);
-                fprintf(stderr, "[MMIO trap] After handler: SR=0x%04X, next_pc=0x%08X\n", sr, next_pc);
-                fflush(stderr);
-            }
-
-            uc_reg_write(uc, UC_M68K_REG_PC, &next_pc);
-
-            cpu->trap_ctx.in_emulop = false;
-
-            /* CRITICAL: Stop execution here!
-             * We're in a memory fetch hook called from within uc_emu_start().
-             * We've handled the EmulOp and set the PC to the next instruction.
-             * Now we need to stop execution so it doesn't continue in the trap region.
-             */
-            uc_emu_stop(uc);
-            return;
-        }
-    }
-
-    /* Handle A-line/F-line trap */
-    if (cpu->trap_ctx.in_trap) {
-        uint16_t opcode = cpu->trap_ctx.trap_opcode;
-        int vector = ((opcode & 0xF000) == 0xA000) ? 0xA : 0xB;
-
-        if (g_platform.trap_handler) {
-            g_platform.trap_handler(vector, opcode, false);
-            /* Handler manages PC, just clear trap flag */
-            cpu->trap_ctx.in_trap = false;
-            return;
-        }
-    }
-
-    fprintf(stderr, "ERROR: Trap handler not available for address 0x%08lx\n", address);
-}
-
-/* Invalid instruction hook for EmulOp/trap handling
- * NOTE: Requires m68k_stop_interrupt() patch in Unicorn (see external/unicorn/qemu/target/m68k/unicorn.c)
- */
 /**
- * Hook for basic block execution (UC_HOOK_BLOCK)
- * Called at the start of each basic block - much more efficient than per-instruction
- * Used for interrupt checking at block boundaries
+ * Hook for block execution (UC_HOOK_BLOCK)
+ * Called at the start of each translation block.
+ * Used for interrupt checking and block statistics.
  */
 static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
 
-    uint32_t pc = (uint32_t)address;
-
-    /* NOTE: EmulOp detection removed - now handled by MMIO transport */
-    /* MMIO addresses (0xFF000000-0xFF000FFF) always trap regardless of TB boundaries */
-
-    /* Count instructions in this block for statistics */
-    /* We estimate instruction count by decoding the block */
-    /* M68K instructions are variable length (2-10 bytes), so we need to decode */
-    uint32_t block_start = pc;
-    uint32_t block_end = pc + size;
-    uint32_t insn_count = 0;
-    uint32_t current_pc = block_start;
-
-    while (current_pc < block_end) {
-        uint16_t opcode = 0;
-        if (uc_mem_read(uc, current_pc, &opcode, 2) != UC_ERR_OK) {
-            break;  /* Can't read opcode, stop counting */
-        }
-        #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-        opcode = __builtin_bswap16(opcode);
-        #endif
-
-        insn_count++;
-
-        /* Simple instruction length estimation for M68K */
-        /* This is a rough approximation - actual decoder would be complex */
-        /* Most instructions are 2 or 4 bytes */
-        uint32_t insn_len = 2;  /* Base opcode word */
-
-        /* Check for immediate data or address extensions */
-        /* These patterns commonly have extension words */
-        if ((opcode & 0xF000) == 0x0000 ||  /* ORI, ANDI, SUBI, ADDI, etc. */
-            (opcode & 0xF000) == 0x2000 ||  /* MOVEA, MOVE.L */
-            (opcode & 0xF000) == 0x3000 ||  /* MOVE.W */
-            (opcode & 0xF000) == 0x4000 ||  /* LEA, PEA, etc. */
-            (opcode & 0xF1C0) == 0x41C0 ||  /* LEA */
-            (opcode & 0xF1C0) == 0x4180) {  /* CHK */
-            /* May have extension words - add 2 bytes as estimate */
-            insn_len += 2;
-        }
-
-        current_pc += insn_len;
-        if (current_pc > block_end) {
-            /* Don't count partial instructions */
-            break;
-        }
-    }
-
     /* Update block statistics */
     cpu->block_stats.total_blocks++;
-    cpu->block_stats.total_instructions += insn_count;
-    cpu->block_stats.sum_block_sizes += insn_count;
+    cpu->block_stats.total_instructions += size;
 
-    /* Update min/max */
-    if (cpu->block_stats.min_block_size == 0 || insn_count < cpu->block_stats.min_block_size) {
-        cpu->block_stats.min_block_size = insn_count;
+    if (size < cpu->block_stats.min_block_size) {
+        cpu->block_stats.min_block_size = size;
     }
-    if (insn_count > cpu->block_stats.max_block_size) {
-        cpu->block_stats.max_block_size = insn_count;
+    if (size > cpu->block_stats.max_block_size) {
+        cpu->block_stats.max_block_size = size;
     }
+
+    cpu->block_stats.sum_block_sizes += size;
 
     /* Update histogram */
-    if (insn_count < 100) {
-        cpu->block_stats.block_size_histogram[insn_count]++;
+    if (size <= 100) {
+        cpu->block_stats.block_size_histogram[size]++;
     } else {
-        cpu->block_stats.block_size_histogram[100]++;  /* 100+ bucket */
+        cpu->block_stats.block_size_histogram[100]++;
     }
 
-    /* Poll timer every 1000 instructions (matching UAE's emulated_ticks_quantum) */
-    static uint64_t total_instructions = 0;
-    static uint64_t poll_count = 0;
-    static uint64_t cumulative_instructions = 0;
-
-    total_instructions += insn_count;
-    cumulative_instructions += insn_count;
-
-    if (total_instructions >= 1000) {
-        total_instructions -= 1000;  /* Keep remainder for next check */
-        poll_count++;
-
-        /* Debug: Log milestone calls (disabled for now to reduce noise) */
-        // if (poll_count <= 10 || poll_count % 100 == 0) {
-        //     fprintf(stderr, "[cpu_do_check_ticks] Call #%llu, total instructions: %llu\n",
-        //             (unsigned long long)poll_count,
-        //             (unsigned long long)(poll_count * 1000));
-        //     fflush(stderr);
-        // }
-
-        poll_timer_interrupt();
-    }
-
-    /* Track if we need to clear a previous interrupt */
-    static bool clear_interrupt_next = false;
-
-    /* Clear interrupt from previous trigger (QEMU requires explicit clear) */
-    if (clear_interrupt_next) {
-        uc_m68k_trigger_interrupt(uc, 0, 0);  /* level=0 clears the interrupt */
-        clear_interrupt_next = false;
-    }
-
-    /* Check for pending interrupts (platform API) */
+    /* Check for pending interrupts */
     if (g_pending_interrupt_level > 0) {
-        int intr_level = g_pending_interrupt_level;
-        g_pending_interrupt_level = 0;  /* Clear after reading */
-
-        /* Get current SR to check interrupt mask */
-        uint32_t sr;
+        uint16_t sr;
         uc_reg_read(uc, UC_M68K_REG_SR, &sr);
-        int current_mask = (sr >> 8) & 7;
+        int current_ipl = (sr >> 8) & 7;
 
-        if (intr_level > current_mask) {
-            /* Use QEMU's native interrupt mechanism!
-             *
-             * Instead of manually building exception stack frames and modifying PC
-             * (which caused RTS/RTE failures due to instruction skipping), we now
-             * use QEMU's m68k_set_irq_level() API that Unicorn exposes.
-             *
-             * This approach matches how QEMU's Quadra 800 platform triggers interrupts:
-             * 1. m68k_set_irq_level() sets env->pending_level and env->pending_vector
-             * 2. Raises CPU_INTERRUPT_HARD flag
-             * 3. QEMU's TCG main loop (cpu_handle_interrupt()) checks this flag
-             *    BETWEEN translation blocks (not during!)
-             * 4. Calls m68k_cpu_exec_interrupt() which calls do_interrupt_m68k_hardirq()
-             * 5. Stack frame is built naturally by QEMU, PC updated to handler
-             *
-             * Benefits:
-             * - No manual PC modification → no instruction skipping
-             * - No manual stack building → correct RTS/RTE behavior
-             * - Interrupts processed between TBs → preserves JIT performance
-             * - Uses proven QEMU code path → reliable and maintainable
-             */
+        if (g_pending_interrupt_level > current_ipl) {
+            /* Timer interrupt is autovectored level 1 */
+            uint8_t vector = (g_pending_interrupt_level == 1) ? 0x19 :
+                           (0x18 + g_pending_interrupt_level);
 
-            /* Calculate autovector number (VIA timer uses autovector level 1-7) */
-            uint8_t vector = 24 + intr_level;
-
-            /* Call Unicorn's M68K interrupt API - this wraps QEMU's m68k_set_irq_level()
-             * which is the same call that QEMU's hw/m68k/q800.c makes to trigger interrupts!
-             */
-            uc_m68k_trigger_interrupt(uc, intr_level, vector);
-
-            /* Schedule clear for next block (QEMU needs explicit level=0 to clear) */
-            clear_interrupt_next = true;
-
-            /* Log for tracing (but don't log "taken" yet - QEMU will handle that) */
-            cpu_trace_log_interrupt_trigger(intr_level);
-
-            /* Return normally - QEMU's TCG will handle interrupt at next TB boundary.
-             * No uc_emu_stop(), no PC modification, no manual stack manipulation.
-             */
-            return;
+            uc_m68k_trigger_interrupt(uc, g_pending_interrupt_level, vector);
+            g_pending_interrupt_level = 0;
+            uc_emu_stop(uc);
         }
     }
 }
 
 /**
  * Hook for CPU exceptions (UC_HOOK_INTR)
- * Called when Unicorn raises an exception (RTE, STOP, etc.)
- * We need this to prevent UC_ERR_EXCEPTION on RTE instruction.
- * Also handles A-line exceptions for EmulOps (0xAE00-0xAE3F).
+ * Handles A-line exceptions for EmulOps (0xAE00-0xAE3F)
  */
 static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
 
     /* Check for A-line exception (interrupt #10) */
-    if (intno == 10) {  /* A-line exception */
+    if (intno == 10) {
         uint32_t pc;
         uint16_t opcode;
 
@@ -405,165 +140,72 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
             /* Convert A-line opcode to legacy EmulOp format */
             uint16_t legacy_opcode = 0x7100 | (opcode & 0x3F);
 
-            /* Mark that we're in an EmulOp */
-            cpu->trap_ctx.in_emulop = true;
-            cpu->trap_ctx.saved_pc = pc;
-
             /* Call the platform EmulOp handler */
             if (g_platform.emulop_handler) {
                 bool pc_advanced = g_platform.emulop_handler(legacy_opcode, false);
 
-                /* Always advance PC past the EmulOp for A-line opcodes */
-                /* (The handler return value indicates if WE should advance it) */
+                /* Advance PC past the EmulOp if handler didn't */
                 if (!pc_advanced) {
                     pc += 2;
                     uc_reg_write(uc, UC_M68K_REG_PC, &pc);
                 }
             }
-
-            /* Clear EmulOp flag */
-            cpu->trap_ctx.in_emulop = false;
         }
     }
-
     /* Other exceptions are just acknowledged */
 }
 
 /**
  * Hook for invalid instructions (UC_HOOK_INSN_INVALID)
- * Called when Unicorn encounters an illegal instruction
- * Used for EmulOps (0x71xx) and traps (0xAxxx, 0xFxxx)
- * Returns true to continue execution, false to stop
+ * Handles legacy 0x71xx EmulOps and A-line/F-line traps.
  */
 static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
-    UnicornCPU *cpu = (UnicornCPU *)user_data;
-
-    static int hook_count = 0;
-    if (++hook_count <= 10) {
-        fprintf(stderr, "[DEBUG] hook_insn_invalid called #%d\n", hook_count);
-        fflush(stderr);
-    }
-
-    /* Read PC (at illegal instruction) */
     uint32_t pc;
-    uc_reg_read(uc, UC_M68K_REG_PC, &pc);
-
-    /* Read opcode at PC */
     uint16_t opcode;
-    uc_mem_read(uc, pc, &opcode, sizeof(opcode));
-    #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    opcode = __builtin_bswap16(opcode);
-    #endif
 
-    /* Check if EmulOp (0x71xx for M68K) */
+    /* Get current PC and read opcode */
+    uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+    uc_mem_read(uc, pc, &opcode, sizeof(opcode));
+    opcode = (opcode >> 8) | (opcode << 8);  /* Swap for big-endian */
+
+    /* Check if EmulOp (0x71xx) */
     if ((opcode & 0xFF00) == 0x7100) {
         if (g_platform.emulop_handler) {
-            /* Call platform handler */
             bool pc_advanced = g_platform.emulop_handler(opcode, false);
-
-            /* NO REGISTER SYNC NEEDED HERE!
-             * The EmulOp handler (unicorn_platform_emulop_handler) already:
-             * 1. Read registers from Unicorn
-             * 2. Called EmulOp() which modified them
-             * 3. Wrote them back to Unicorn via g_platform.cpu_set_*
-             *
-             * Trying to sync here creates a circular dependency:
-             * - g_platform.cpu_get_* reads from Unicorn (what we just wrote)
-             * - Then writes back the same value to Unicorn
-             * This was preventing the SR change from taking effect!
-             */
-
-            /* Debug: Check SR after EmulOp 0x7103 */
-            if (opcode == 0x7103) {
-                uint16_t sr;
-                uc_reg_read(uc, UC_M68K_REG_SR, &sr);
-                fprintf(stderr, "[hook_insn_invalid] After EmulOp 0x7103: SR=0x%04X (should be 0x2000), pc_advanced=%d\n", sr, pc_advanced);
-                fflush(stderr);
-
-                /* CRITICAL: If this shows 20 million times, we found our issue! */
-                static int emulop_count = 0;
-                if (++emulop_count == 10) {
-                    fprintf(stderr, "[hook_insn_invalid] EmulOp 0x7103 executed 10 times - stopping to prevent infinite loop\n");
-                    fflush(stderr);
-                    exit(1);  /* Force exit to see what's happening */
-                }
-            }
 
             /* Advance PC if handler didn't */
             if (!pc_advanced) {
                 pc += 2;
+                uc_reg_write(uc, UC_M68K_REG_PC, &pc);
             }
-
-            /* CRITICAL: Invalidate cache and update PC to continue execution */
-            uc_ctl_remove_cache(uc, pc - 2, pc + 4);
-            uc_reg_write(uc, UC_M68K_REG_PC, &pc);
-
-            /* Return true to continue execution */
-            return true;
+            return true;  /* Continue execution */
         }
-        /* No platform handler - invalid EmulOp */
-        fprintf(stderr, "[UNICORN] Unhandled EmulOp 0x%04X at PC=0x%08X (no platform handler)\n", opcode, pc);
-        return false;
     }
 
-    /* Check for A-line trap (0xAxxx) */
+    /* Check for A-line (0xAxxx) or F-line (0xFxxx) traps */
     if ((opcode & 0xF000) == 0xA000) {
         if (g_platform.trap_handler) {
-            /* Platform trap handler */
-            g_platform.trap_handler(0xA, opcode, false);
-            /* Handler handles PC advancement - just continue */
-            return true;
+            g_platform.trap_handler(10, opcode, false);  /* 10 = A-line trap */
+            return true;  /* Continue execution */
         }
-        /* No platform handler - real A-line exception */
-        fprintf(stderr, "[UNICORN] Unhandled A-line trap 0x%04X at PC=0x%08X (no platform handler)\n", opcode, pc);
-        return false;
-    }
-
-    /* Check for F-line trap (0xFxxx) */
-    if ((opcode & 0xF000) == 0xF000) {
+    } else if ((opcode & 0xF000) == 0xF000) {
         if (g_platform.trap_handler) {
-            g_platform.trap_handler(0xF, opcode, false);
-            return true;
+            g_platform.trap_handler(11, opcode, false);  /* 11 = F-line trap */
+            return true;  /* Continue execution */
         }
-        /* No platform handler - real F-line exception */
-        fprintf(stderr, "[UNICORN] Unhandled F-line trap 0x%04X at PC=0x%08X (no platform handler)\n", opcode, pc);
-        return false;
     }
 
-    /* Real invalid instruction - stop execution */
-    fprintf(stderr, "[UNICORN] Invalid instruction 0x%04X at PC=0x%08X\n", opcode, pc);
-    return false;
+    return false;  /* Stop execution */
 }
 
-/* NOTE: Legacy hook_code() function removed (was lines 296-479)
- * UC_HOOK_INSN_INVALID (hook_insn_invalid) handles all EmulOps/traps without per-instruction
- * overhead. Platform API (g_platform) is checked automatically. No UC_HOOK_CODE needed.
+/**
+ * Memory trace hook for CPU tracing
  */
-
-/* Memory access hook */
-static void hook_memory(uc_engine *uc, uc_mem_type type,
-                       uint64_t address, int size, int64_t value,
-                       void *user_data)
-{
-    UnicornCPU *cpu = (UnicornCPU *)user_data;
-
-    if (cpu->memory_hook) {
-        UnicornMemType mem_type = (type == UC_MEM_READ || type == UC_MEM_READ_UNMAPPED) ?
-                                  UCPU_MEM_READ : UCPU_MEM_WRITE;
-        cpu->memory_hook(cpu, mem_type, address, (uint32_t)size,
-                        (uint64_t)value, cpu->memory_user_data);
-    }
-}
-
-/* Memory read trace hook for CPU_TRACE_MEMORY */
-static void hook_mem_trace(uc_engine *uc, uc_mem_type type,
+static bool hook_mem_trace(uc_engine *uc, uc_mem_type type,
                            uint64_t address, int size, int64_t value,
-                           void *user_data)
-{
-    /* Only trace reads */
-    if (type != UC_MEM_READ) return;
+                           void *user_data) {
+    if (type != UC_MEM_READ) return true;
 
-    /* Read the actual value from memory */
     uint32_t val = 0;
     uc_mem_read(uc, address, &val, size);
 
@@ -576,218 +218,66 @@ static void hook_mem_trace(uc_engine *uc, uc_mem_type type,
     }
 
     cpu_trace_log_mem_read((uint32_t)address, val, size);
+    return true;
 }
 
-/* MMIO handler for EmulOp transport */
-static void mmio_emulop_handler(uc_engine *uc, uc_mem_type type,
-                                uint64_t address, int size, int64_t value,
-                                void *user_data) {
-    UnicornCPU *cpu = (UnicornCPU *)user_data;
-
-    /* Only handle writes to the MMIO EmulOp region */
-    if (type != UC_MEM_WRITE) return;
-    if (!IS_MMIO_EMULOP(address)) return;
-
-    /* Convert MMIO address to EmulOp opcode */
-    uint16_t opcode = MMIO_TO_EMULOP(address);
-
-    /* Debug logging for first few triggers */
-    static int mmio_count = 0;
-    if (mmio_count++ < 20) {
-        fprintf(stderr, "[MMIO EmulOp] Triggered 0x%04x via write to 0x%08lx\n",
-                opcode, address);
-    }
-
-    /* Build M68kRegistersC from Unicorn state */
-    struct M68kRegistersC regs;
-    memset(&regs, 0, sizeof(regs));
-
-    /* Read data registers D0-D7 */
-    for (int i = 0; i < 8; i++) {
-        uc_reg_read(uc, UC_M68K_REG_D0 + i, &regs.d[i]);
-    }
-
-    /* Read address registers A0-A7 */
-    for (int i = 0; i < 8; i++) {
-        uc_reg_read(uc, UC_M68K_REG_A0 + i, &regs.a[i]);
-    }
-
-    /* Read status register */
-    uc_reg_read(uc, UC_M68K_REG_SR, &regs.sr);
-
-    /* Call the existing EmulOp handler - reuses ALL existing code! */
-    EmulOp_C(opcode, &regs);
-
-    /* Write back any register changes */
-    for (int i = 0; i < 8; i++) {
-        uc_reg_write(uc, UC_M68K_REG_D0 + i, &regs.d[i]);
-    }
-
-    for (int i = 0; i < 8; i++) {
-        uc_reg_write(uc, UC_M68K_REG_A0 + i, &regs.a[i]);
-    }
-
-    uc_reg_write(uc, UC_M68K_REG_SR, &regs.sr);
-}
-
-/* CPU lifecycle */
-UnicornCPU* unicorn_create(UnicornArch arch) {
-    return unicorn_create_with_model(arch, -1);  /* Use default CPU model */
-}
-
-UnicornCPU* unicorn_create_with_model(UnicornArch arch, int cpu_model) {
+/* Create Unicorn CPU with specified model */
+UnicornCPU *unicorn_create_with_model(UnicornArch arch, int cpu_model) {
     UnicornCPU *cpu = calloc(1, sizeof(UnicornCPU));
     if (!cpu) return NULL;
 
     cpu->arch = arch;
 
-    uc_arch uc_arch;
-    uc_mode uc_mode;
-
-    switch (arch) {
-        case UCPU_ARCH_M68K:
-            uc_arch = UC_ARCH_M68K;
-            uc_mode = UC_MODE_BIG_ENDIAN;
-            break;
-        case UCPU_ARCH_PPC:
-            uc_arch = UC_ARCH_PPC;
-            uc_mode = UC_MODE_PPC32 | UC_MODE_BIG_ENDIAN;
-            break;
-        case UCPU_ARCH_PPC64:
-            uc_arch = UC_ARCH_PPC;
-            uc_mode = UC_MODE_PPC64 | UC_MODE_BIG_ENDIAN;
-            break;
-        default:
-            free(cpu);
-            return NULL;
-    }
-
-    uc_err err = uc_open(uc_arch, uc_mode, &cpu->uc);
-    if (err != UC_ERR_OK) {
-        fprintf(stderr, "Failed to create Unicorn CPU: %s\n", uc_strerror(err));
-        free(cpu);
-        return NULL;
-    }
-
-    /* Set CPU model if specified */
-    if (cpu_model >= 0) {
-        err = uc_ctl_set_cpu_model(cpu->uc, cpu_model);
-        if (err != UC_ERR_OK) {
-            fprintf(stderr, "Failed to set Unicorn CPU model: %s\n", uc_strerror(err));
-            uc_close(cpu->uc);
-            free(cpu);
-            return NULL;
-        }
-    }
-
-    /* Register MMIO trap hook for JIT-compatible EmulOp/trap handling */
-    /* IMPORTANT: Don't map the trap region - leave it unmapped! */
-    fprintf(stderr, "[UNICORN] Registering MMIO trap hook for range 0x%08X-0x%08X\n",
-            TRAP_REGION_BASE, TRAP_REGION_BASE + TRAP_REGION_SIZE - 1);
-    err = uc_hook_add(cpu->uc, &cpu->trap_hook,
-                     UC_HOOK_MEM_FETCH_UNMAPPED,
-                     trap_mem_fetch_handler,
-                     cpu,  /* user_data */
-                     TRAP_REGION_BASE,
-                     TRAP_REGION_BASE + TRAP_REGION_SIZE - 1);
-    if (err != UC_ERR_OK) {
-        fprintf(stderr, "Failed to register MMIO trap hook: %s\n", uc_strerror(err));
-        uc_close(cpu->uc);
-        free(cpu);
-        return NULL;
-    }
-    fprintf(stderr, "[UNICORN] MMIO trap hook registered successfully\n");
-
-    /* Setup MMIO EmulOp transport region */
-    /* Map the MMIO region as read/write memory */
-    fprintf(stderr, "[UNICORN] Setting up MMIO EmulOp region at 0x%08lX size 0x%08lX\n",
-            MMIO_EMULOP_BASE, MMIO_EMULOP_SIZE);
-
-    /* Map the memory region for MMIO */
-    err = uc_mem_map(cpu->uc, MMIO_EMULOP_BASE, MMIO_EMULOP_SIZE, UC_PROT_READ | UC_PROT_WRITE);
-    if (err != UC_ERR_OK) {
-        fprintf(stderr, "Failed to map MMIO EmulOp region: %s\n", uc_strerror(err));
-        uc_close(cpu->uc);
-        free(cpu);
-        return NULL;
-    }
-
-    /* Register MMIO write hook for EmulOp transport */
-    err = uc_hook_add(cpu->uc, &cpu->mmio_emulop_hook,
-                     UC_HOOK_MEM_WRITE,
-                     mmio_emulop_handler,
-                     cpu,  /* user_data */
-                     MMIO_EMULOP_BASE,
-                     MMIO_EMULOP_BASE + MMIO_EMULOP_SIZE - 1);
-    if (err != UC_ERR_OK) {
-        fprintf(stderr, "Failed to register MMIO EmulOp hook: %s\n", uc_strerror(err));
-        uc_close(cpu->uc);
-        free(cpu);
-        return NULL;
-    }
-    fprintf(stderr, "[UNICORN] MMIO EmulOp hook registered successfully\n");
-
-    /* Initialize trap context */
-    cpu->trap_ctx.saved_pc = 0;
-    cpu->trap_ctx.in_emulop = false;
-    cpu->trap_ctx.in_trap = false;
-    cpu->trap_ctx.trap_opcode = 0;
-    cpu->trap_ctx.has_deferred_sr_update = false;
-    cpu->trap_ctx.deferred_sr_value = 0;
-
     /* Initialize block statistics */
-    memset(&cpu->block_stats, 0, sizeof(BlockStats));
+    cpu->block_stats.min_block_size = UINT32_MAX;
 
-    /* Install memory trace hook if CPU_TRACE_MEMORY is enabled */
-    if (cpu_trace_memory_enabled()) {
-        err = uc_hook_add(cpu->uc, &cpu->trace_hook,
-                         UC_HOOK_MEM_READ,
-                         hook_mem_trace,
-                         cpu,  /* user_data */
-                         1, 0);  /* All addresses */
-        if (err != UC_ERR_OK) {
-            fprintf(stderr, "Warning: Failed to register memory trace hook: %s\n", uc_strerror(err));
-            /* Not fatal - continue without memory tracing */
-        }
+    /* Create Unicorn engine */
+    uc_mode mode = (arch == UC_ARCH_M68K) ? UC_MODE_BIG_ENDIAN : UC_MODE_LITTLE_ENDIAN;
+    uc_err err = uc_open(UC_ARCH_M68K, mode, &cpu->uc);
+
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Failed to create Unicorn: %s", uc_strerror(err));
+        free(cpu);
+        return NULL;
     }
 
-    /* Register UC_HOOK_BLOCK for efficient interrupt checking */
-    fprintf(stderr, "[UNICORN] Registering UC_HOOK_BLOCK for interrupt handling\n");
+    /* Set CPU model */
+    uc_ctl_set_cpu_model(cpu->uc, cpu_model);
+
+    /* Register hooks */
+
+    /* Block hook for interrupts */
     err = uc_hook_add(cpu->uc, &cpu->block_hook,
                      UC_HOOK_BLOCK,
                      (void*)hook_block,
-                     cpu,  /* user_data */
-                     1, 0);  /* All addresses */
+                     cpu, 1, 0);
     if (err != UC_ERR_OK) {
-        fprintf(stderr, "Failed to register UC_HOOK_BLOCK: %s\n", uc_strerror(err));
+        fprintf(stderr, "Failed to register block hook: %s\n", uc_strerror(err));
         uc_close(cpu->uc);
         free(cpu);
         return NULL;
     }
 
-    /* Register UC_HOOK_INSN_INVALID for EmulOps/traps without per-instruction overhead */
-    fprintf(stderr, "[UNICORN] Registering UC_HOOK_INSN_INVALID for EmulOp/trap handling\n");
+    /* Invalid instruction hook for legacy EmulOps */
     err = uc_hook_add(cpu->uc, &cpu->insn_invalid_hook,
                      UC_HOOK_INSN_INVALID,
                      (void*)hook_insn_invalid,
-                     cpu,  /* user_data */
-                     1, 0);  /* All addresses */
+                     cpu, 1, 0);
     if (err != UC_ERR_OK) {
-        fprintf(stderr, "Failed to register UC_HOOK_INSN_INVALID: %s\n", uc_strerror(err));
+        fprintf(stderr, "Failed to register invalid instruction hook: %s\n", uc_strerror(err));
         uc_close(cpu->uc);
         free(cpu);
         return NULL;
     }
 
-    /* Register interrupt hook to catch RTE and prevent UC_ERR_EXCEPTION */
-    fprintf(stderr, "[UNICORN] Registering UC_HOOK_INTR for RTE/exception handling\n");
+    /* Interrupt hook for A-line EmulOps */
     err = uc_hook_add(cpu->uc, &cpu->intr_hook,
                      UC_HOOK_INTR,
                      (void*)hook_interrupt,
-                     cpu,  /* user_data */
-                     1, 0);  /* All addresses */
+                     cpu, 1, 0);
     if (err != UC_ERR_OK) {
-        fprintf(stderr, "Failed to register UC_HOOK_INTR: %s\n", uc_strerror(err));
+        fprintf(stderr, "Failed to register interrupt hook: %s\n", uc_strerror(err));
         uc_close(cpu->uc);
         free(cpu);
         return NULL;
@@ -802,646 +292,200 @@ void unicorn_destroy(UnicornCPU *cpu) {
     if (cpu->uc) {
         uc_close(cpu->uc);
     }
+
     free(cpu);
 }
 
-/* Memory mapping */
-bool unicorn_map_ram(UnicornCPU *cpu, uint64_t addr, void *host_ptr, uint64_t size) {
-    if (!cpu || !cpu->uc) return false;
-
-    /* First map the memory region */
-    uc_err err = uc_mem_map(cpu->uc, addr, size, UC_PROT_ALL);
-    if (err != UC_ERR_OK) {
-        set_error(cpu, err);
-        return false;
-    }
-
-    /* ============================================================================
-     * CRITICAL: Byte-swapping for RAM
-     * ============================================================================
-     * ENDIANNESS WARNING:
-     * - UAE stores RAM in LITTLE-ENDIAN format (x86 native byte order)
-     * - UAE's memory accessors (get_long/put_long) byte-swap on-the-fly
-     * - Unicorn (M68K mode) expects RAM in BIG-ENDIAN format (M68K native)
-     * - We MUST byte-swap RAM when copying from UAE's RAMBaseHost to Unicorn
-     * - Without this, Unicorn reads garbage values and diverges immediately
-     * ============================================================================
-     */
-    if (host_ptr) {
-        // Allocate temporary buffer for byte-swapped RAM
-        uint8_t *swapped_ram = (uint8_t *)malloc(size);
-        if (!swapped_ram) {
-            fprintf(stderr, "Failed to allocate RAM swap buffer\n");
-            return false;
-        }
-
-        // Byte-swap from little-endian to big-endian (swap 32-bit values)
-        const uint32_t *src32 = (const uint32_t *)host_ptr;
-        uint32_t *dst32 = (uint32_t *)swapped_ram;
-        for (uint64_t i = 0; i < size / 4; i++) {
-            uint32_t val = src32[i];
-            // Convert: 0xAABBCCDD (LE in memory) -> 0xDDCCBBAA (BE in memory)
-            dst32[i] = ((val & 0xFF) << 24) | ((val & 0xFF00) << 8) |
-                       ((val & 0xFF0000) >> 8) | ((val >> 24) & 0xFF);
-        }
-
-        err = uc_mem_write(cpu->uc, addr, swapped_ram, size);
-        free(swapped_ram);
-
-        if (err != UC_ERR_OK) {
-            set_error(cpu, err);
-            return false;
-        }
-    }
-    return true;
-}
-
-bool unicorn_map_rom(UnicornCPU *cpu, uint64_t addr, const void *host_ptr, uint64_t size) {
-    if (!cpu || !cpu->uc) return false;
-
-    /* ROM is read+exec, no write */
-    uc_err err = uc_mem_map(cpu->uc, addr, size, UC_PROT_READ | UC_PROT_EXEC);
-    if (err != UC_ERR_OK) {
-        set_error(cpu, err);
-        return false;
-    }
-
-    /* Write ROM data */
-    if (host_ptr) {
-        err = uc_mem_write(cpu->uc, addr, host_ptr, size);
-        if (err != UC_ERR_OK) {
-            set_error(cpu, err);
-            return false;
-        }
-    }
-    return true;
-}
-
-bool unicorn_map_rom_writable(UnicornCPU *cpu, uint64_t addr, const void *host_ptr, uint64_t size) {
-    if (!cpu || !cpu->uc) return false;
-
-    /* ROM mapped as writable for validation/debugging (BasiliskII patches ROM during boot) */
-    uc_err err = uc_mem_map(cpu->uc, addr, size, UC_PROT_ALL);
-    if (err != UC_ERR_OK) {
-        set_error(cpu, err);
-        return false;
-    }
-
-    /* ============================================================================
-     * CRITICAL: NO byte-swapping for ROM!
-     * ============================================================================
-     * ENDIANNESS WARNING:
-     * - ROM is kept in BIG-ENDIAN format (as loaded from ROM file)
-     * - ROM is NOT stored in little-endian like RAM
-     * - UAE's memory accessors still byte-swap when reading ROM, but the
-     *   underlying storage in ROMBaseHost is already big-endian
-     * - Unicorn (M68K mode) expects ROM in BIG-ENDIAN format
-     * - Therefore, copy ROM directly WITHOUT byte-swapping
-     * - DO NOT byte-swap ROM or instructions will be corrupted!
-     * ============================================================================
-     */
-    if (host_ptr) {
-        err = uc_mem_write(cpu->uc, addr, host_ptr, size);
-        if (err != UC_ERR_OK) {
-            set_error(cpu, err);
-            return false;
-        }
-    }
-    return true;
-}
-
-bool unicorn_unmap(UnicornCPU *cpu, uint64_t addr, uint64_t size) {
-    if (!cpu || !cpu->uc) return false;
-
-    uc_err err = uc_mem_unmap(cpu->uc, addr, size);
-    if (err != UC_ERR_OK) {
-        set_error(cpu, err);
-        return false;
-    }
-    return true;
-}
-
-/* Memory access */
-bool unicorn_mem_write(UnicornCPU *cpu, uint64_t addr, const void *data, size_t size) {
-    if (!cpu || !cpu->uc || !data) return false;
-
-    uc_err err = uc_mem_write(cpu->uc, addr, data, size);
-    if (err != UC_ERR_OK) {
-        set_error(cpu, err);
-        return false;
-    }
-    return true;
-}
-
-bool unicorn_mem_read(UnicornCPU *cpu, uint64_t addr, void *data, size_t size) {
-    if (!cpu || !cpu->uc || !data) return false;
-
-    uc_err err = uc_mem_read(cpu->uc, addr, data, size);
-    if (err != UC_ERR_OK) {
-        set_error(cpu, err);
-        return false;
-    }
-    return true;
+/* Error handling */
+const char *unicorn_get_error(UnicornCPU *cpu) {
+    return cpu ? cpu->error : "NULL CPU";
 }
 
 /* Execution */
-bool unicorn_execute_one(UnicornCPU *cpu) {
+bool unicorn_execute(UnicornCPU *cpu, uint64_t start, uint64_t until, uint64_t timeout, size_t count) {
     if (!cpu || !cpu->uc) return false;
 
-    uint64_t pc;
-    uc_reg_read(cpu->uc,
-                cpu->arch == UCPU_ARCH_M68K ? UC_M68K_REG_PC : UC_PPC_REG_PC,
-                &pc);
+    uc_err err = uc_emu_start(cpu->uc, start, until, timeout, count);
 
-    static int exec_count = 0;
-    exec_count++;
-
-    /* Simple debug: Print every millionth call */
-    if (exec_count % 1000000 == 0) {
-        FILE *fp = fopen("/tmp/unicorn_debug.log", "a");
-        if (fp) {
-            fprintf(fp, "[unicorn_execute_one] %d million calls, current PC=0x%08X\n",
-                    exec_count / 1000000, (uint32_t)pc);
-            fclose(fp);
-        }
-    }
-
-    /* CRITICAL: Check for EmulOps BEFORE executing!
-     * Some EmulOps like 0x7103 are VALID M68K instructions (MOVEQ #3,D0).
-     * We must intercept them before Unicorn executes them as regular instructions.
-     */
-    uc_err err;
-    uint16_t opcode = 0;
-    if (cpu->arch == UCPU_ARCH_M68K &&
-        uc_mem_read(cpu->uc, (uint32_t)pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
-        #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-        opcode = __builtin_bswap16(opcode);
-        #endif
-
-        /* Check if it's an EmulOp (0x7100-0x713F) */
-        if (opcode >= 0x7100 && opcode < 0x7140) {
-            /* Debug for 0x7103 */
-            if (opcode == 0x7103 && exec_count <= 10) {
-                fprintf(stderr, "[PRE-CHECK] Found EmulOp 0x7103 at PC=0x%08X, exec_count=%d\n",
-                        (uint32_t)pc, exec_count);
-                fflush(stderr);
-            }
-
-            /* Treat as illegal instruction - redirect to trap handler */
-            err = UC_ERR_INSN_INVALID;
-            goto handle_illegal;
-        }
-    }
-
-    /* Debug: Log when we're about to set A6 to boundary */
-    if ((uint32_t)pc == 0x02000044 && exec_count <= 10) {
-        uint32_t a6_before;
-        uc_reg_read(cpu->uc, UC_M68K_REG_A6, &a6_before);
-        fprintf(stderr, "[BOUNDARY DEBUG] About to execute MOVE.L #0x02000000, A6 at PC=0x%08X\n", (uint32_t)pc);
-        fprintf(stderr, "[BOUNDARY DEBUG] A6 before: 0x%08X\n", a6_before);
-        fflush(stderr);
-    }
-
-    err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
-
-    /* Debug: Check A6 after critical instruction */
-    if ((uint32_t)pc == 0x02000044 && exec_count <= 10) {
-        uint32_t a6_after, new_pc;
-        uc_reg_read(cpu->uc, UC_M68K_REG_A6, &a6_after);
-        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &new_pc);
-        fprintf(stderr, "[BOUNDARY DEBUG] After execution: A6=0x%08X, new PC=0x%08X, err=%d\n",
-                a6_after, new_pc, err);
-        if (err != UC_ERR_OK) {
-            fprintf(stderr, "[BOUNDARY DEBUG] Unicorn error: %s\n", uc_strerror(err));
-        }
-        fflush(stderr);
-    }
-
-    /* Debug: Log first 10 executions at PC 0x0200008C */
-    if ((uint32_t)pc == 0x0200008C && exec_count <= 10) {
-        fprintf(stderr, "[unicorn_execute_one #%d] PC=0x%08X, err=%d (UC_ERR_OK=%d, UC_ERR_INSN_INVALID=%d)\n",
-                exec_count, (uint32_t)pc, err, UC_ERR_OK, UC_ERR_INSN_INVALID);
-        fflush(stderr);
-    }
-
-handle_illegal:
-    if (err != UC_ERR_OK) {
-        /* Check for illegal instruction (EmulOps and traps) */
-        if (err == UC_ERR_INSN_INVALID && cpu->arch == UCPU_ARCH_M68K) {
-            /* Read opcode at PC */
-            uint16_t opcode;
-            if (uc_mem_read(cpu->uc, (uint32_t)pc, &opcode, sizeof(opcode)) == UC_ERR_OK) {
-                /* M68K is big-endian, swap if needed */
-                #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-                opcode = __builtin_bswap16(opcode);
-                #endif
-
-                static int illegal_count = 0;
-                illegal_count++;
-
-                /* Always show first 10 EmulOp 0x7103 */
-                if (opcode == 0x7103 && illegal_count <= 10) {
-                    fprintf(stderr, "[ILLEGAL #%d] EmulOp 0x7103 at PC=0x%08X\n",
-                           illegal_count, (uint32_t)pc);
-                    fflush(stderr);
-                } else if (illegal_count < 10 || illegal_count > 3685) {
-                    fprintf(stderr, "[ILLEGAL #%d] PC=0x%08X opcode=0x%04X\n",
-                           illegal_count, (uint32_t)pc, opcode);
-                }
-
-                /* MMIO Trap Approach: Redirect PC to unmapped region */
-
-                /* Handle EmulOp (0x7100-0x713E) via MMIO trap
-                 * NOTE: Only opcodes 0x7100-0x713E are valid EmulOps.
-                 * Opcodes 0x713F and beyond (e.g., 0x7103 = MOVEQ #3,D0) are VALID M68K instructions!
-                 * See emul_op.h: M68K_EMUL_OP_MAX is the highest EmulOp number (~0x3E).
-                 */
-                if (opcode >= 0x7100 && opcode < 0x7140) {
-                    /* Save original PC */
-                    cpu->trap_ctx.saved_pc = (uint32_t)pc;
-                    cpu->trap_ctx.in_emulop = true;
-
-                    /* Calculate trap address in unmapped region */
-                    uint32_t emulop_num = opcode & 0xFF;
-                    uint32_t trap_addr = TRAP_REGION_BASE + (emulop_num * 2);
-
-                    /* Redirect PC to trap region */
-                    uint64_t trap_addr_64 = trap_addr;
-                    uc_reg_write(cpu->uc, UC_M68K_REG_PC, &trap_addr_64);
-
-                    /* Resume execution - will trigger UC_HOOK_MEM_FETCH_UNMAPPED */
-                    err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
-
-                    /* Trap handler executed, check if successful */
-                    return (err == UC_ERR_OK || !cpu->trap_ctx.in_emulop);
-                }
-
-                /* Handle A-line trap (0xAxxx) via MMIO trap */
-                if ((opcode & 0xF000) == 0xA000) {
-                    cpu->trap_ctx.saved_pc = (uint32_t)pc;
-                    cpu->trap_ctx.in_trap = true;
-                    cpu->trap_ctx.trap_opcode = opcode;
-
-                    /* Use offset 0x800 in trap region for A-line traps */
-                    uint32_t trap_addr = TRAP_REGION_BASE + 0x800;
-                    uint64_t trap_addr_64 = trap_addr;
-                    uc_reg_write(cpu->uc, UC_M68K_REG_PC, &trap_addr_64);
-
-                    err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
-                    return (err == UC_ERR_OK || !cpu->trap_ctx.in_trap);
-                }
-
-                /* Handle F-line trap (0xFxxx) via MMIO trap */
-                if ((opcode & 0xF000) == 0xF000) {
-                    cpu->trap_ctx.saved_pc = (uint32_t)pc;
-                    cpu->trap_ctx.in_trap = true;
-                    cpu->trap_ctx.trap_opcode = opcode;
-
-                    /* Use offset 0x900 in trap region for F-line traps */
-                    uint32_t trap_addr = TRAP_REGION_BASE + 0x900;
-                    uint64_t trap_addr_64 = trap_addr;
-                    uc_reg_write(cpu->uc, UC_M68K_REG_PC, &trap_addr_64);
-
-                    err = uc_emu_start(cpu->uc, trap_addr, 0xFFFFFFFFFFFFFFFFULL, 0, 1);
-                    return (err == UC_ERR_OK || !cpu->trap_ctx.in_trap);
-                }
-            }
-        }
-
-        set_error(cpu, err);
-        return false;
-    }
-    return true;
-}
-
-bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
-    if (!cpu || !cpu->uc) return false;
-
-    uint64_t pc;
-    uc_reg_read(cpu->uc,
-                cpu->arch == UCPU_ARCH_M68K ? UC_M68K_REG_PC : UC_PPC_REG_PC,
-                &pc);
-
-    /* Debug first few executions */
-    static int exec_count = 0;
-    exec_count++;
-    if (exec_count <= 5) {
-        uint16_t opcode = 0;
-        uc_mem_read(cpu->uc, (uint32_t)pc, &opcode, sizeof(opcode));
-        #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-        opcode = __builtin_bswap16(opcode);
-        #endif
-        fprintf(stderr, "[unicorn_execute_n #%d] PC=0x%08X, opcode=0x%04X, count=%lu\n",
-                exec_count, (uint32_t)pc, opcode, count);
-    }
-
-    /* Special debug for boundary issue */
-    if ((uint32_t)pc == 0x02000044) {
-        uint32_t a6_before;
-        uc_reg_read(cpu->uc, UC_M68K_REG_A6, &a6_before);
-        fprintf(stderr, "[BOUNDARY] About to set A6 to 0x02000000 at PC=0x%08X\n", (uint32_t)pc);
-        fprintf(stderr, "[BOUNDARY] A6 before: 0x%08X\n", a6_before);
-    }
-
-    /* NOTE: EmulOp pre-execution check removed - now handled by MMIO transport */
-    /* MMIO writes to 0xFF000000-0xFF000FFF trigger EmulOps reliably in JIT mode */
-
-    uc_err err = uc_emu_start(cpu->uc, pc, 0xFFFFFFFFFFFFFFFFULL, 0, count);
-
-    /* Debug: Check PC after execution */
-    if (exec_count <= 5) {
-        uint64_t new_pc;
-        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &new_pc);
-        fprintf(stderr, "[unicorn_execute_n #%d] After uc_emu_start: PC=0x%08X, err=%d, in_emulop=%d\n",
-                exec_count, (uint32_t)new_pc, err, cpu->trap_ctx.in_emulop);
-    }
-
-    /* Check what happened after boundary instruction */
-    if ((uint32_t)pc == 0x02000044) {
-        uint32_t a6_after, new_pc;
-        uc_reg_read(cpu->uc, UC_M68K_REG_A6, &a6_after);
-        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &new_pc);
-        fprintf(stderr, "[BOUNDARY] After execution: A6=0x%08X, PC advanced to 0x%08X, err=%d\n",
-                a6_after, new_pc, err);
-        if (new_pc == 0x0200004A) {
-            fprintf(stderr, "[BOUNDARY] SUCCESS: Instruction executed normally\n");
-        } else {
-            fprintf(stderr, "[BOUNDARY] PROBLEM: PC jumped to unexpected location!\n");
-        }
-    }
-
-    /* NOTE: Post-execution EmulOp handling removed - now handled by MMIO transport */
-    /* The trap_ctx.in_emulop flag is no longer used with MMIO transport */
-    if (cpu->trap_ctx.in_emulop) {
-        /* This should not happen with MMIO transport - log warning */
-        fprintf(stderr, "WARNING: trap_ctx.in_emulop flag set but MMIO should handle EmulOps\n");
-        cpu->trap_ctx.in_emulop = false;
+    /* Apply deferred SR update if needed */
+    if (cpu->has_deferred_sr_update) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_SR, &cpu->deferred_sr_value);
+        cpu->has_deferred_sr_update = false;
     }
 
     if (err != UC_ERR_OK) {
-        set_error(cpu, err);
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Execution failed: %s", uc_strerror(err));
         return false;
-    }
-
-    /* Debug: Check PC before returning */
-    if (exec_count <= 5) {
-        uint64_t final_pc;
-        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &final_pc);
-        fprintf(stderr, "[unicorn_execute_n #%d] Returning, final PC=0x%08X\n",
-                exec_count, (uint32_t)final_pc);
     }
 
     return true;
 }
 
-bool unicorn_execute_until(UnicornCPU *cpu, uint64_t end_addr) {
+/* Memory operations */
+bool unicorn_map_memory(UnicornCPU *cpu, uint64_t address, size_t size, uint32_t perms) {
     if (!cpu || !cpu->uc) return false;
 
-    uint64_t pc;
-    uc_reg_read(cpu->uc,
-                cpu->arch == UCPU_ARCH_M68K ? UC_M68K_REG_PC : UC_PPC_REG_PC,
-                &pc);
-
-    uc_err err = uc_emu_start(cpu->uc, pc, end_addr, 0, 0);
+    uc_err err = uc_mem_map(cpu->uc, address, size, perms);
     if (err != UC_ERR_OK) {
-        set_error(cpu, err);
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Failed to map memory at 0x%llx: %s",
+                (unsigned long long)address, uc_strerror(err));
         return false;
     }
+
     return true;
 }
 
-void unicorn_stop(UnicornCPU *cpu) {
+bool unicorn_write_memory(UnicornCPU *cpu, uint64_t address, const void *data, size_t size) {
+    if (!cpu || !cpu->uc) return false;
+
+    uc_err err = uc_mem_write(cpu->uc, address, data, size);
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Failed to write memory at 0x%llx: %s",
+                (unsigned long long)address, uc_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+bool unicorn_read_memory(UnicornCPU *cpu, uint64_t address, void *data, size_t size) {
+    if (!cpu || !cpu->uc) return false;
+
+    uc_err err = uc_mem_read(cpu->uc, address, data, size);
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Failed to read memory at 0x%llx: %s",
+                (unsigned long long)address, uc_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+/* Register access for M68K */
+uint32_t unicorn_get_pc(UnicornCPU *cpu) {
+    uint32_t pc = 0;
     if (cpu && cpu->uc) {
-        uc_emu_stop(cpu->uc);
+        uc_reg_read(cpu->uc, UC_M68K_REG_PC, &pc);
+    }
+    return pc;
+}
+
+void unicorn_set_pc(UnicornCPU *cpu, uint32_t pc) {
+    if (cpu && cpu->uc) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_PC, &pc);
     }
 }
 
-/* Registers - M68K */
 uint32_t unicorn_get_dreg(UnicornCPU *cpu, int reg) {
-    if (!cpu || !cpu->uc || reg < 0 || reg > 7) return 0;
-    uint32_t value;
-    uc_reg_read(cpu->uc, UC_M68K_REG_D0 + reg, &value);
-    return value;
+    uint32_t val = 0;
+    if (cpu && cpu->uc && reg >= 0 && reg <= 7) {
+        uc_reg_read(cpu->uc, UC_M68K_REG_D0 + reg, &val);
+    }
+    return val;
+}
+
+void unicorn_set_dreg(UnicornCPU *cpu, int reg, uint32_t val) {
+    if (cpu && cpu->uc && reg >= 0 && reg <= 7) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_D0 + reg, &val);
+    }
 }
 
 uint32_t unicorn_get_areg(UnicornCPU *cpu, int reg) {
-    if (!cpu || !cpu->uc || reg < 0 || reg > 7) return 0;
-    uint32_t value;
-    uc_reg_read(cpu->uc, UC_M68K_REG_A0 + reg, &value);
-    return value;
+    uint32_t val = 0;
+    if (cpu && cpu->uc && reg >= 0 && reg <= 7) {
+        uc_reg_read(cpu->uc, UC_M68K_REG_A0 + reg, &val);
+    }
+    return val;
 }
 
-void unicorn_set_dreg(UnicornCPU *cpu, int reg, uint32_t value) {
-    if (!cpu || !cpu->uc || reg < 0 || reg > 7) return;
-    uc_reg_write(cpu->uc, UC_M68K_REG_D0 + reg, &value);
-}
-
-void unicorn_set_areg(UnicornCPU *cpu, int reg, uint32_t value) {
-    if (!cpu || !cpu->uc || reg < 0 || reg > 7) return;
-    uc_reg_write(cpu->uc, UC_M68K_REG_A0 + reg, &value);
-}
-
-uint32_t unicorn_get_pc(UnicornCPU *cpu) {
-    if (!cpu || !cpu->uc) return 0;
-    uint32_t value;
-    uc_reg_read(cpu->uc, UC_M68K_REG_PC, &value);
-    return value;
-}
-
-void unicorn_set_pc(UnicornCPU *cpu, uint32_t value) {
-    if (!cpu || !cpu->uc) return;
-    uc_reg_write(cpu->uc, UC_M68K_REG_PC, &value);
-}
-
-uint16_t unicorn_get_sr(UnicornCPU *cpu) {
-    if (!cpu || !cpu->uc) return 0;
-    uint32_t value;
-    uc_reg_read(cpu->uc, UC_M68K_REG_SR, &value);
-    return (uint16_t)value;
-}
-
-void unicorn_set_sr(UnicornCPU *cpu, uint16_t value) {
-    if (!cpu || !cpu->uc) return;
-    uint32_t v = value;
-    uc_reg_write(cpu->uc, UC_M68K_REG_SR, &v);
-}
-
-/* Registers - M68K control registers */
-uint32_t unicorn_get_cacr(UnicornCPU *cpu) {
-    if (!cpu || !cpu->uc) return 0;
-    uint32_t value;
-    uc_reg_read(cpu->uc, UC_M68K_REG_CR_CACR, &value);
-    return value;
-}
-
-void unicorn_set_cacr(UnicornCPU *cpu, uint32_t value) {
-    if (!cpu || !cpu->uc) return;
-    uc_reg_write(cpu->uc, UC_M68K_REG_CR_CACR, &value);
-}
-
-uint32_t unicorn_get_vbr(UnicornCPU *cpu) {
-    if (!cpu || !cpu->uc) return 0;
-    uint32_t value;
-    uc_reg_read(cpu->uc, UC_M68K_REG_CR_VBR, &value);
-    return value;
-}
-
-void unicorn_set_vbr(UnicornCPU *cpu, uint32_t value) {
-    if (!cpu || !cpu->uc) return;
-    uc_reg_write(cpu->uc, UC_M68K_REG_CR_VBR, &value);
-}
-
-/* Registers - PPC */
-uint32_t unicorn_get_gpr(UnicornCPU *cpu, int reg) {
-    if (!cpu || !cpu->uc || reg < 0 || reg > 31) return 0;
-    uint32_t value;
-    uc_reg_read(cpu->uc, UC_PPC_REG_0 + reg, &value);
-    return value;
-}
-
-void unicorn_set_gpr(UnicornCPU *cpu, int reg, uint32_t value) {
-    if (!cpu || !cpu->uc || reg < 0 || reg > 31) return;
-    uc_reg_write(cpu->uc, UC_PPC_REG_0 + reg, &value);
-}
-
-uint32_t unicorn_get_spr(UnicornCPU *cpu, int spr) {
-    /* TODO: Implement SPR access based on SPR number */
-    return 0;
-}
-
-void unicorn_set_spr(UnicornCPU *cpu, int spr, uint32_t value) {
-    /* TODO: Implement SPR access based on SPR number */
-}
-
-uint32_t unicorn_get_msr(UnicornCPU *cpu) {
-    if (!cpu || !cpu->uc) return 0;
-    uint32_t value;
-    uc_reg_read(cpu->uc, UC_PPC_REG_MSR, &value);
-    return value;
-}
-
-void unicorn_set_msr(UnicornCPU *cpu, uint32_t value) {
-    if (!cpu || !cpu->uc) return;
-    uc_reg_write(cpu->uc, UC_PPC_REG_MSR, &value);
-}
-
-/* Hooks */
-
-/* NOTE: Legacy per-CPU hook registration functions removed:
- * - unicorn_set_emulop_handler() - EmulOps handled by UC_HOOK_INSN_INVALID + g_platform.emulop_handler
- * - unicorn_set_exception_handler() - Exceptions handled by UC_HOOK_INSN_INVALID + g_platform.trap_handler
- *
- * All EmulOps and traps are now handled via platform API (g_platform) which is checked by
- * hook_insn_invalid() automatically. No per-CPU handlers or UC_HOOK_CODE registration needed.
- */
-
-void unicorn_set_memory_hook(UnicornCPU *cpu, MemoryHookCallback callback, void *user_data) {
-    if (!cpu || !cpu->uc) return;
-
-    cpu->memory_hook = callback;
-    cpu->memory_user_data = user_data;
-
-    if (callback) {
-        uc_hook_add(cpu->uc, &cpu->mem_hook_handle,
-                   UC_HOOK_MEM_READ | UC_HOOK_MEM_WRITE,
-                   (void *)hook_memory, cpu, 1, 0);
-    } else if (cpu->mem_hook_handle) {
-        uc_hook_del(cpu->uc, cpu->mem_hook_handle);
-        cpu->mem_hook_handle = 0;
+void unicorn_set_areg(UnicornCPU *cpu, int reg, uint32_t val) {
+    if (cpu && cpu->uc && reg >= 0 && reg <= 7) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_A0 + reg, &val);
     }
 }
 
-/* Internal access (for exception handler) */
-void* unicorn_get_uc(UnicornCPU *cpu) {
+uint16_t unicorn_get_sr(UnicornCPU *cpu) {
+    uint16_t sr = 0;
+    if (cpu && cpu->uc) {
+        uc_reg_read(cpu->uc, UC_M68K_REG_SR, &sr);
+    }
+    return sr;
+}
+
+void unicorn_set_sr(UnicornCPU *cpu, uint16_t sr) {
+    if (cpu && cpu->uc) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_SR, &sr);
+    }
+}
+
+/* Interrupt triggering */
+void unicorn_trigger_interrupt_internal(int level) {
+    g_pending_interrupt_level = level;
+}
+
+/* Get Unicorn engine handle */
+void *unicorn_get_uc(UnicornCPU *cpu) {
     return cpu ? cpu->uc : NULL;
 }
 
-/* Error handling */
-const char* unicorn_get_error(UnicornCPU *cpu) {
-    return cpu ? cpu->error : "Invalid CPU handle";
+/* Enable CPU tracing */
+void unicorn_enable_tracing(UnicornCPU *cpu, bool enable) {
+    if (!cpu || !cpu->uc) return;
+
+    if (enable && !cpu->trace_hook) {
+        uc_hook_add(cpu->uc, &cpu->trace_hook,
+                   UC_HOOK_MEM_READ,
+                   (void*)hook_mem_trace,
+                   NULL, 1, 0);
+    } else if (!enable && cpu->trace_hook) {
+        uc_hook_del(cpu->uc, cpu->trace_hook);
+        cpu->trace_hook = 0;
+    }
 }
 
-/* Block statistics */
+/* Print block statistics */
 void unicorn_print_block_stats(UnicornCPU *cpu) {
     if (!cpu) return;
 
     BlockStats *stats = &cpu->block_stats;
 
-    fprintf(stderr, "\n=== Unicorn Block Execution Statistics ===\n");
-    fprintf(stderr, "Total blocks executed:      %lu\n", stats->total_blocks);
-    fprintf(stderr, "Total instructions:         %lu\n", stats->total_instructions);
+    printf("\n=== Unicorn Block Execution Statistics ===\n");
+    printf("Total blocks executed:      %llu\n", (unsigned long long)stats->total_blocks);
+    printf("Total instructions:         %llu\n", (unsigned long long)stats->total_instructions);
 
     if (stats->total_blocks > 0) {
-        double avg = (double)stats->sum_block_sizes / (double)stats->total_blocks;
-        fprintf(stderr, "Average block size:         %.2f instructions\n", avg);
-        fprintf(stderr, "Min block size:             %u instructions\n", stats->min_block_size);
-        fprintf(stderr, "Max block size:             %u instructions\n", stats->max_block_size);
+        double avg = (double)stats->sum_block_sizes / stats->total_blocks;
+        printf("Average block size:         %.2f instructions\n", avg);
+        printf("Min block size:             %u instructions\n", stats->min_block_size);
+        printf("Max block size:             %u instructions\n", stats->max_block_size);
 
-        /* Calculate median */
-        uint64_t median_target = stats->total_blocks / 2;
+        /* Print distribution */
+        printf("\nBlock Size Distribution:\n");
+        printf("Size (insns) | Count        | Percentage | Cumulative\n");
+        printf("-------------|--------------|------------|-----------\n");
+
         uint64_t cumulative = 0;
-        uint32_t median = 0;
-        for (int i = 0; i <= 100; i++) {
-            cumulative += stats->block_size_histogram[i];
-            if (cumulative >= median_target) {
-                median = i;
-                break;
-            }
-        }
-        fprintf(stderr, "Median block size:          ~%u instructions\n", median);
-
-        fprintf(stderr, "\nBlock Size Distribution:\n");
-        fprintf(stderr, "Size (insns) | Count        | Percentage | Cumulative\n");
-        fprintf(stderr, "-------------|--------------|------------|------------\n");
-
-        cumulative = 0;
-        for (int i = 0; i <= 100; i++) {
+        for (int i = 1; i <= 100; i++) {
             if (stats->block_size_histogram[i] > 0) {
                 cumulative += stats->block_size_histogram[i];
-                double pct = 100.0 * stats->block_size_histogram[i] / stats->total_blocks;
-                double cum_pct = 100.0 * cumulative / stats->total_blocks;
+                double pct = (double)stats->block_size_histogram[i] * 100.0 / stats->total_blocks;
+                double cum_pct = (double)cumulative * 100.0 / stats->total_blocks;
 
-                if (i == 100) {
-                    fprintf(stderr, "100+         | %12lu | %9.2f%% | %9.2f%%\n",
-                            stats->block_size_histogram[i], pct, cum_pct);
+                if (i < 100) {
+                    printf("%-12d | %12llu | %9.2f%% | %9.2f%%\n",
+                          i, (unsigned long long)stats->block_size_histogram[i],
+                          pct, cum_pct);
                 } else {
-                    fprintf(stderr, "%-12d | %12lu | %9.2f%% | %9.2f%%\n",
-                            i, stats->block_size_histogram[i], pct, cum_pct);
+                    printf("100+         | %12llu | %9.2f%% | %9.2f%%\n",
+                          (unsigned long long)stats->block_size_histogram[i],
+                          pct, cum_pct);
                 }
             }
         }
-
-        /* Timing impact analysis */
-        fprintf(stderr, "\n=== Interrupt Timing Impact Analysis ===\n");
-        fprintf(stderr, "Since interrupts are checked at block boundaries:\n");
-        fprintf(stderr, "- Average interrupt latency: %.2f instructions\n", avg);
-        fprintf(stderr, "- Maximum interrupt latency: %u instructions\n", stats->max_block_size);
-        fprintf(stderr, "- Blocks with size > 10:     ");
-        uint64_t large_blocks = 0;
-        for (int i = 11; i <= 100; i++) {
-            large_blocks += stats->block_size_histogram[i];
-        }
-        fprintf(stderr, "%lu (%.2f%%)\n", large_blocks,
-                100.0 * large_blocks / stats->total_blocks);
     }
-
-    fprintf(stderr, "==========================================\n\n");
-}
-
-void unicorn_reset_block_stats(UnicornCPU *cpu) {
-    if (!cpu) return;
-    memset(&cpu->block_stats, 0, sizeof(BlockStats));
-}
-
-/**
- * Trigger interrupt via platform API
- * Sets g_pending_interrupt_level which will be checked by hook_block()
- */
-void unicorn_trigger_interrupt_internal(int level) {
-    if (level >= 1 && level <= 7) {
-        g_pending_interrupt_level = level;
-        cpu_trace_log_interrupt_trigger(level);
-    } else if (level == 0) {
-        g_pending_interrupt_level = 0;  /* Clear interrupt */
-    }
+    printf("==========================================\n");
 }

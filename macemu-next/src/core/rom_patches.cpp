@@ -39,7 +39,6 @@
 
 #include "rom_patches.h"
 #include "platform.h"
-#include "mmio_transport.h"
 
 #define DEBUG 0
 #include "debug.h"
@@ -57,9 +56,8 @@
 // Global platform pointer - set by PatchROM caller
 extern Platform g_platform;
 
-// Forward declaration for Unicorn-specific implementations
-extern bool PatchROM_Unicorn(void);
-extern bool PatchROM_ALine(void);
+// Forward declaration for unified implementation
+extern bool PatchROM_Unified(void);
 
 // Global variables
 uint32 UniversalInfo;		// ROM offset of UniversalInfo
@@ -1683,23 +1681,9 @@ static bool patch_rom_32(void)
 	return true;
 }
 
-// Original PatchROM implementation for UAE backend
+// Original PatchROM implementation for UAE backend (deprecated)
 static bool PatchROM_UAE(void)
 {
-	// Check for test ROM magic markers (skip patching for test ROMs)
-	uint32 test_magic = ReadMacInt32(ROMBaseMac + 0x10);
-	if (test_magic == 0x54524F4D ||  // "TROM" - Test ROM
-	    test_magic == 0x424F554E ||  // "BOUN" - Boundary test ROM
-	    test_magic == 0x41364254 ||  // "A6BT" - A6 Boundary test ROM
-	    test_magic == 0x45444745 ||  // "EDGE" - Edge case test suite
-	    test_magic == 0x41445645 ||  // "ADVE" - Advanced edge tests
-	    test_magic == 0x41365350 ||  // "A6SP" - A6 skip test
-	    test_magic == 0x454A4954 ||  // "EJIT" - EmulOp JIT test
-	    test_magic == 0x4D4D494F ||  // "MMIO" - Memory-mapped I/O test
-	    test_magic == 0x4D4D5452) {  // "MMTR" - MMIO Transport test
-		fprintf(stderr, "[PatchROM] Test ROM detected (magic: 0x%08x), skipping patches\n", test_magic);
-		return true;  // Skip patching for test ROMs
-	}
 
 	// Print some information about the ROM
 	if (PrintROMInfo)
@@ -1742,12 +1726,6 @@ static bool PatchROM_UAE(void)
 // Selects the appropriate PatchROM implementation based on CPU backend
 bool PatchROM(void)
 {
-	// Detect CPU backend and dispatch to appropriate implementation
-	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
-		fprintf(stderr, "[PatchROM] Detected Unicorn backend - using A-line EmulOps\n");
-		return PatchROM_ALine();  // Use the new A-line implementation
-	} else {
-		D(bug("[PatchROM] Using UAE backend - traditional EmulOps\n"));
-		return PatchROM_UAE();
-	}
+	// Use unified implementation for all backends
+	return PatchROM_Unified();
 }
