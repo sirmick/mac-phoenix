@@ -385,15 +385,48 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
  * Hook for CPU exceptions (UC_HOOK_INTR)
  * Called when Unicorn raises an exception (RTE, STOP, etc.)
  * We need this to prevent UC_ERR_EXCEPTION on RTE instruction.
+ * Also handles A-line exceptions for EmulOps (0xAE00-0xAE3F).
  */
 static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
-    /* Just acknowledged exception.
-     * EXCP_RTE (0x100) is now handled directly in Unicorn's cpu-exec.c
-     * before this hook is called, so batch execution works correctly.
-     */
-    (void)uc;
-    (void)intno;
-    (void)user_data;
+    UnicornCPU *cpu = (UnicornCPU *)user_data;
+
+    /* Check for A-line exception (interrupt #10) */
+    if (intno == 10) {  /* A-line exception */
+        uint32_t pc;
+        uint16_t opcode;
+
+        /* Get PC and read opcode */
+        uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+        uc_mem_read(uc, pc, &opcode, sizeof(opcode));
+        opcode = (opcode >> 8) | (opcode << 8);  /* Swap bytes for big-endian */
+
+        /* Check if it's in our EmulOp range (0xAE00-0xAE3F) */
+        if ((opcode & 0xFFC0) == 0xAE00) {
+            /* Convert A-line opcode to legacy EmulOp format */
+            uint16_t legacy_opcode = 0x7100 | (opcode & 0x3F);
+
+            /* Mark that we're in an EmulOp */
+            cpu->trap_ctx.in_emulop = true;
+            cpu->trap_ctx.saved_pc = pc;
+
+            /* Call the platform EmulOp handler */
+            if (g_platform.emulop_handler) {
+                bool pc_advanced = g_platform.emulop_handler(legacy_opcode, false);
+
+                /* Always advance PC past the EmulOp for A-line opcodes */
+                /* (The handler return value indicates if WE should advance it) */
+                if (!pc_advanced) {
+                    pc += 2;
+                    uc_reg_write(uc, UC_M68K_REG_PC, &pc);
+                }
+            }
+
+            /* Clear EmulOp flag */
+            cpu->trap_ctx.in_emulop = false;
+        }
+    }
+
+    /* Other exceptions are just acknowledged */
 }
 
 /**

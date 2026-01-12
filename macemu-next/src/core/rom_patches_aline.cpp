@@ -173,8 +173,8 @@ bool PatchROM_ALine(void)
 {
 	D(bug("PatchROM_ALine\n"));
 
-	// Make ROM writable
-	vm_protect(ROMBaseHost, ROMSize, VM_PAGE_READ | VM_PAGE_WRITE);
+	// ROM is already writable in emulation
+	// No need for vm_protect calls
 
 	uint16 *wp;
 	uint32 base;
@@ -279,8 +279,8 @@ bool PatchROM_ALine(void)
 	D(bug("Checking ROM checksum\n"));
 	CheckROMChecksum();
 
-	// Make ROM read-only again
-	vm_protect(ROMBaseHost, ROMSize, VM_PAGE_READ | VM_PAGE_EXECUTE);
+	// ROM protection is handled by the emulator
+	// No need for vm_protect calls
 
 	D(bug("ROM patching complete (A-Line)\n"));
 	return true;
