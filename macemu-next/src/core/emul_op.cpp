@@ -315,6 +315,11 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_CLKNOMEM: {		// Clock/PRAM operations
 			bool is_read = (r->d[1] & 0x80) != 0;
+			static int clk_count = 0;
+			if (++clk_count <= 10 || clk_count == 100 || clk_count == 200) {
+				fprintf(stderr, "CLKNOMEM #%d: d1=0x%08x, is_read=%d, reg_type=0x%02x\n",
+				        clk_count, r->d[1], is_read, (r->d[1] & 0x78));
+			}
 			if ((r->d[1] & 0x78) == 0x38) {
 				// XPRAM
 				uint8 reg = ((r->d[1] << 5) & 0xe0) | ((r->d[1] >> 10) & 0x1f);
@@ -373,6 +378,20 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 						case 3: b = t >> 24; break;
 					}
 					r->d[2] = b;
+					static uint32 last_t = 0;
+					static int same_count = 0;
+					if (t != last_t) {
+						if (same_count > 10) {
+							fprintf(stderr, "RTC: Time changed from 0x%08x to 0x%08x after %d reads\n", last_t, t, same_count);
+						}
+						last_t = t;
+						same_count = 0;
+					} else {
+						same_count++;
+						if (same_count == 100) {
+							fprintf(stderr, "RTC: Warning - time stuck at 0x%08x for 100 reads\n", t);
+						}
+					}
 				} else
 					D(bug("RTC %s op %d, d1 %08lx d2 %08lx\n", is_read ? "read" : "write", reg, r->d[1], r->d[2]));
 			}

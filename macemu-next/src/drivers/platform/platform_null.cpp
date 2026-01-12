@@ -8,6 +8,7 @@
 #include "sysdeps.h"
 #include "platform.h"
 #include <sys/time.h>
+#include <time.h>
 
 /*
  *  Platform-specific stubs
@@ -401,7 +402,12 @@ bool tick_inhibit = false;
 
 extern "C" uint32 TimerDateTime()
 {
-	return 0;  // Stub - return epoch
+	// Return Mac time (seconds since Jan 1, 1904)
+	time_t now = time(NULL);
+	// Unix epoch is Jan 1, 1970, Mac epoch is Jan 1, 1904
+	// Difference is 66 years + 17 leap days = 2082844800 seconds
+	const uint32 MAC_EPOCH_OFFSET = 2082844800;
+	return now + MAC_EPOCH_OFFSET;
 }
 
 extern "C" void Microseconds(uint32 &hi, uint32 &lo)

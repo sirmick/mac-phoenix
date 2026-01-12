@@ -195,6 +195,9 @@ static bool CheckROMChecksum(void)
 // ========================================
 bool PatchROM_Unified(void)
 {
+	fprintf(stderr, "[PatchROM_Unified] Starting - backend: %s\n",
+		g_platform.cpu_name ? g_platform.cpu_name : "unknown");
+
 	D(bug("PatchROM_Unified - backend: %s\n",
 		g_platform.cpu_name ? g_platform.cpu_name : "unknown"));
 
@@ -213,13 +216,20 @@ bool PatchROM_Unified(void)
 
 	// PATCH_BOOT_GLOBS EmulOp at ROM+0x10
 	D(bug("Patching boot globals\n"));
+	fprintf(stderr, "[PatchROM] Patching boot globals at ROM+0x10\n");
 	wp = (uint16 *)(ROMBaseHost + 0x10);
+	uint16 original = ntohs(*wp);
 	emit_emulop(&wp, M68K_EMUL_OP_PATCH_BOOT_GLOBS);
+	uint16 patched = ntohs(*(uint16 *)(ROMBaseHost + 0x10));
+	fprintf(stderr, "[PatchROM] Replaced 0x%04x with 0x%04x at ROM+0x10\n", original, patched);
 
 	// FIX_BOOTSTACK EmulOp at ROM+0x9c
 	D(bug("Patching boot stack\n"));
 	wp = (uint16 *)(ROMBaseHost + 0x9c);
+	uint16 original_stack = ntohs(*wp);
 	emit_emulop(&wp, M68K_EMUL_OP_FIX_BOOTSTACK);
+	uint16 patched_stack = ntohs(*(uint16 *)(ROMBaseHost + 0x9c));
+	fprintf(stderr, "[PatchROM] Replaced 0x%04x with 0x%04x at ROM+0x9c (FIX_BOOTSTACK)\n", original_stack, patched_stack);
 
 	// ========================================
 	// Step 2: Install drivers
@@ -261,8 +271,11 @@ bool PatchROM_Unified(void)
 	base = find_rom_data(0, ROMSize, init_resources_pattern, 4);
 	if (base) {
 		D(bug("Patching InitResources at %08x\n", base));
+		fprintf(stderr, "[PatchROM] Found InitResources at 0x%08x, patching...\n", base);
 		wp = (uint16 *)(ROMBaseHost + base + 6);  // Skip LINK instruction
 		emit_emulop(&wp, M68K_EMUL_OP_INSTALL_DRIVERS);
+	} else {
+		fprintf(stderr, "[PatchROM] WARNING: InitResources pattern not found\n");
 	}
 
 	// ========================================
@@ -274,9 +287,12 @@ bool PatchROM_Unified(void)
 	base = find_rom_data(0, ROMSize, memsize_pattern, 4);
 	if (base) {
 		D(bug("Patching memory size at %08x\n", base));
+		fprintf(stderr, "[PatchROM] Found memory size code at 0x%08x, patching...\n", base);
 		wp = (uint16 *)(ROMBaseHost + base);
 		emit_emulop(&wp, M68K_EMUL_OP_FIX_MEMSIZE);
 		*wp++ = htons(M68K_NOP);
+	} else {
+		fprintf(stderr, "[PatchROM] WARNING: Memory size pattern not found\n");
 	}
 
 	// ========================================
@@ -307,12 +323,19 @@ bool PatchROM_Unified(void)
 	// Step 6: Patch reset handler
 	// ========================================
 
-	// Insert reset EmulOp at reset vector
-	wp = (uint16 *)(ROMBaseHost + 0x4);  // Reset vector location
+	// The reset vector at 0x4 points to the reset handler
+	// We patch the actual code location, not the vector
 	uint32 reset_pc = ntohl(*(uint32 *)(ROMBaseHost + 0x4));
-	if (reset_pc > 0 && reset_pc < ROMSize) {
-		wp = (uint16 *)(ROMBaseHost + reset_pc);
+	fprintf(stderr, "[PatchROM] Reset vector points to 0x%08x\n", reset_pc);
+
+	// Convert Mac address to ROM offset
+	if (reset_pc >= ROMBaseMac && reset_pc < (ROMBaseMac + ROMSize)) {
+		uint32 reset_offset = reset_pc - ROMBaseMac;
+		fprintf(stderr, "[PatchROM] Patching reset handler at ROM offset 0x%08x\n", reset_offset);
+		wp = (uint16 *)(ROMBaseHost + reset_offset);
 		emit_emulop(&wp, M68K_EMUL_OP_RESET);
+	} else {
+		fprintf(stderr, "[PatchROM] WARNING: Reset PC 0x%08x is outside ROM\n", reset_pc);
 	}
 
 	// Check ROM checksum

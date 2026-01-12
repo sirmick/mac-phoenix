@@ -140,6 +140,9 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
             /* Convert A-line opcode to legacy EmulOp format */
             uint16_t legacy_opcode = 0x7100 | (opcode & 0x3F);
 
+            fprintf(stderr, "[Unicorn A-line] Intercepted opcode 0x%04x at PC=0x%08x, converting to EmulOp 0x%04x\n",
+                    opcode, pc, legacy_opcode);
+
             /* Call the platform EmulOp handler */
             if (g_platform.emulop_handler) {
                 bool pc_advanced = g_platform.emulop_handler(legacy_opcode, false);
@@ -232,7 +235,7 @@ UnicornCPU *unicorn_create_with_model(UnicornArch arch, int cpu_model) {
     cpu->block_stats.min_block_size = UINT32_MAX;
 
     /* Create Unicorn engine */
-    uc_mode mode = (arch == UC_ARCH_M68K) ? UC_MODE_BIG_ENDIAN : UC_MODE_LITTLE_ENDIAN;
+    uc_mode mode = (arch == UCPU_ARCH_M68K) ? UC_MODE_BIG_ENDIAN : UC_MODE_LITTLE_ENDIAN;
     uc_err err = uc_open(UC_ARCH_M68K, mode, &cpu->uc);
 
     if (err != UC_ERR_OK) {
@@ -409,16 +412,17 @@ void unicorn_set_areg(UnicornCPU *cpu, int reg, uint32_t val) {
 }
 
 uint16_t unicorn_get_sr(UnicornCPU *cpu) {
-    uint16_t sr = 0;
+    uint32_t sr = 0;  /* Use uint32_t for uc_reg_read */
     if (cpu && cpu->uc) {
         uc_reg_read(cpu->uc, UC_M68K_REG_SR, &sr);
     }
-    return sr;
+    return (uint16_t)sr;  /* Cast to uint16_t for return */
 }
 
 void unicorn_set_sr(UnicornCPU *cpu, uint16_t sr) {
     if (cpu && cpu->uc) {
-        uc_reg_write(cpu->uc, UC_M68K_REG_SR, &sr);
+        uint32_t sr32 = sr;  /* Convert to uint32_t for uc_reg_write */
+        uc_reg_write(cpu->uc, UC_M68K_REG_SR, &sr32);
     }
 }
 
@@ -488,4 +492,165 @@ void unicorn_print_block_stats(UnicornCPU *cpu) {
         }
     }
     printf("==========================================\n");
+}
+
+/* ========================================
+ * Additional wrapper functions
+ * ========================================*/
+
+/* Memory mapping with endianness handling */
+bool unicorn_map_ram(UnicornCPU *cpu, uint64_t addr, void *host_ptr, uint64_t size) {
+    if (!cpu || !cpu->uc) return false;
+
+    /* Map the memory region */
+    uc_err err = uc_mem_map_ptr(cpu->uc, addr, size, UC_PROT_ALL, host_ptr);
+
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Failed to map RAM at 0x%llx: %s",
+                (unsigned long long)addr, uc_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+bool unicorn_map_rom(UnicornCPU *cpu, uint64_t addr, const void *host_ptr, uint64_t size) {
+    if (!cpu || !cpu->uc) return false;
+
+    /* Map as read-only */
+    uc_err err = uc_mem_map_ptr(cpu->uc, addr, size, UC_PROT_READ | UC_PROT_EXEC, (void*)host_ptr);
+
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Failed to map ROM at 0x%llx: %s",
+                (unsigned long long)addr, uc_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+bool unicorn_map_rom_writable(UnicornCPU *cpu, uint64_t addr, const void *host_ptr, uint64_t size) {
+    if (!cpu || !cpu->uc) return false;
+
+    /* Map as read-write (for debugging/validation) */
+    uc_err err = uc_mem_map_ptr(cpu->uc, addr, size, UC_PROT_ALL, (void*)host_ptr);
+
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Failed to map ROM writable at 0x%llx: %s",
+                (unsigned long long)addr, uc_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+bool unicorn_unmap(UnicornCPU *cpu, uint64_t addr, uint64_t size) {
+    if (!cpu || !cpu->uc) return false;
+
+    uc_err err = uc_mem_unmap(cpu->uc, addr, size);
+
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Failed to unmap memory at 0x%llx: %s",
+                (unsigned long long)addr, uc_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+/* Extended memory operations */
+bool unicorn_mem_write(UnicornCPU *cpu, uint64_t addr, const void *data, size_t size) {
+    return unicorn_write_memory(cpu, addr, data, size);
+}
+
+bool unicorn_mem_read(UnicornCPU *cpu, uint64_t addr, void *data, size_t size) {
+    return unicorn_read_memory(cpu, addr, data, size);
+}
+
+/* Execute single instruction */
+bool unicorn_execute_one(UnicornCPU *cpu) {
+    if (!cpu || !cpu->uc) return false;
+
+    uint32_t pc = unicorn_get_pc(cpu);
+
+    /* Execute exactly one instruction */
+    uc_err err = uc_emu_start(cpu->uc, pc, 0, 0, 1);
+
+    /* Apply deferred SR update if needed */
+    if (cpu->has_deferred_sr_update) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_SR, &cpu->deferred_sr_value);
+        cpu->has_deferred_sr_update = false;
+    }
+
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Single step failed at PC=0x%08x: %s",
+                pc, uc_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+/* Execute N instructions */
+bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
+    if (!cpu || !cpu->uc) return false;
+
+    uint32_t pc = unicorn_get_pc(cpu);
+
+    /* Execute specified number of instructions */
+    uc_err err = uc_emu_start(cpu->uc, pc, 0, 0, count);
+
+    /* Apply deferred SR update if needed */
+    if (cpu->has_deferred_sr_update) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_SR, &cpu->deferred_sr_value);
+        cpu->has_deferred_sr_update = false;
+    }
+
+    if (err != UC_ERR_OK) {
+        snprintf(cpu->error, sizeof(cpu->error),
+                "Execution failed at PC=0x%08x: %s",
+                pc, uc_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+/* Control registers */
+uint32_t unicorn_get_vbr(UnicornCPU *cpu) {
+    uint32_t vbr = 0;
+    if (cpu && cpu->uc) {
+        uc_reg_read(cpu->uc, UC_M68K_REG_CR_VBR, &vbr);
+    }
+    return vbr;
+}
+
+void unicorn_set_vbr(UnicornCPU *cpu, uint32_t vbr) {
+    if (cpu && cpu->uc) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_CR_VBR, &vbr);
+    }
+}
+
+uint32_t unicorn_get_cacr(UnicornCPU *cpu) {
+    uint32_t cacr = 0;
+    if (cpu && cpu->uc) {
+        uc_reg_read(cpu->uc, UC_M68K_REG_CR_CACR, &cacr);
+    }
+    return cacr;
+}
+
+void unicorn_set_cacr(UnicornCPU *cpu, uint32_t cacr) {
+    if (cpu && cpu->uc) {
+        uc_reg_write(cpu->uc, UC_M68K_REG_CR_CACR, &cacr);
+    }
+}
+
+/* Default arch wrapper */
+UnicornCPU* unicorn_create(UnicornArch arch) {
+    return unicorn_create_with_model(arch, -1);  /* Use default CPU model */
 }
