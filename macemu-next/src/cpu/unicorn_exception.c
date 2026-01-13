@@ -113,17 +113,11 @@ void unicorn_simulate_exception(UnicornCPU *cpu, int vector_nr, uint16_t opcode)
     // 3. Build exception stack frame (68020+ format)
     // The Quadra 650 uses 68040, which is CPUType 4 in UAE
 
-    // CRITICAL FIX: For A-line and F-line exceptions, we need to advance PC
-    // past the illegal instruction (2 bytes) before saving it to the stack.
-    // This is what UAE does - it saves the PC of the NEXT instruction.
-    // Without this, RTE will return to the same illegal instruction,
-    // causing an infinite loop.
-    if (vector_nr == 10 || vector_nr == 11) {
-        pc += 2;  // Skip past the A-line/F-line instruction
-        if (exception_verbose) {
-            printf("  Advanced PC by 2 bytes for A/F-line trap (new PC=0x%08x)\n", pc);
-        }
-    }
+    // NOTE: We save the current PC (pointing to the illegal instruction).
+    // The exception handler will read from this address to examine the opcode.
+    // When the handler executes RTE, it should have already modified the
+    // return address on the stack if needed.
+    // DO NOT advance PC here - that would break handlers that read the opcode!
 
     // Push vector offset (word)
     a7 -= 2;
