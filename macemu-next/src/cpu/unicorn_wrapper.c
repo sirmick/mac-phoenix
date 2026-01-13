@@ -194,6 +194,23 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                     uc_reg_write(uc, UC_M68K_REG_PC, &pc);
                 }
             }
+        } else {
+            /* Other A-line traps (like A247) - need to handle as real exceptions */
+            fprintf(stderr, "[hook_interrupt] Non-EmulOp A-line trap 0x%04X at PC=0x%08X\n", opcode, pc);
+
+            /* Call the platform trap handler to simulate the exception */
+            if (g_platform.trap_handler) {
+                g_platform.trap_handler(10, opcode, false);  /* 10 = A-line trap */
+
+                /* The trap handler will have set up the exception stack frame
+                 * and changed PC to the exception handler address.
+                 * We don't need to do anything else here. */
+            } else {
+                /* No trap handler - just skip the instruction */
+                fprintf(stderr, "[hook_interrupt] No trap handler, skipping A-line 0x%04X\n", opcode);
+                pc += 2;
+                uc_reg_write(uc, UC_M68K_REG_PC, &pc);
+            }
         }
     }
     /* Other exceptions are just acknowledged */
@@ -229,13 +246,49 @@ static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
     /* Check for A-line (0xAxxx) or F-line (0xFxxx) traps */
     if ((opcode & 0xF000) == 0xA000) {
         if (g_platform.trap_handler) {
+            /* Store original PC for debugging */
+            uint32_t orig_pc = pc;
+
+            fprintf(stderr, "[A-line hook] Before trap_handler: PC=0x%08X, opcode=0x%04X\n", orig_pc, opcode);
+
             g_platform.trap_handler(10, opcode, false);  /* 10 = A-line trap */
-            return true;  /* Continue execution */
+
+            /* CRITICAL: After trap handler, we need to check if PC was changed.
+             * If it wasn't (which shouldn't happen), we advance it ourselves.
+             * The trap handler should have set PC to the exception handler address. */
+            uint32_t new_pc;
+            uc_reg_read(uc, UC_M68K_REG_PC, &new_pc);
+
+            fprintf(stderr, "[A-line hook] After trap_handler: PC=0x%08X\n", new_pc);
+
+            if (new_pc == orig_pc) {
+                /* This shouldn't happen - trap handler should have changed PC */
+                fprintf(stderr, "[WARN] A-line trap handler didn't change PC! Advancing manually.\n");
+                new_pc = orig_pc + 2;
+                uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);
+            }
+
+            return true;  /* Continue execution from new PC */
         }
     } else if ((opcode & 0xF000) == 0xF000) {
         if (g_platform.trap_handler) {
+            /* Store original PC for debugging */
+            uint32_t orig_pc = pc;
+
             g_platform.trap_handler(11, opcode, false);  /* 11 = F-line trap */
-            return true;  /* Continue execution */
+
+            /* CRITICAL: Check if PC was changed */
+            uint32_t new_pc;
+            uc_reg_read(uc, UC_M68K_REG_PC, &new_pc);
+
+            if (new_pc == orig_pc) {
+                /* This shouldn't happen - trap handler should have changed PC */
+                fprintf(stderr, "[WARN] F-line trap handler didn't change PC! Advancing manually.\n");
+                new_pc = orig_pc + 2;
+                uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);
+            }
+
+            return true;  /* Continue execution from new PC */
         }
     }
 

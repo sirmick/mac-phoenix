@@ -113,6 +113,18 @@ void unicorn_simulate_exception(UnicornCPU *cpu, int vector_nr, uint16_t opcode)
     // 3. Build exception stack frame (68020+ format)
     // The Quadra 650 uses 68040, which is CPUType 4 in UAE
 
+    // CRITICAL FIX: For A-line and F-line exceptions, we need to advance PC
+    // past the illegal instruction (2 bytes) before saving it to the stack.
+    // This is what UAE does - it saves the PC of the NEXT instruction.
+    // Without this, RTE will return to the same illegal instruction,
+    // causing an infinite loop.
+    if (vector_nr == 10 || vector_nr == 11) {
+        pc += 2;  // Skip past the A-line/F-line instruction
+        if (exception_verbose) {
+            printf("  Advanced PC by 2 bytes for A/F-line trap (new PC=0x%08x)\n", pc);
+        }
+    }
+
     // Push vector offset (word)
     a7 -= 2;
     write_word(cpu, a7, vector_nr * 4);
@@ -130,8 +142,22 @@ void unicorn_simulate_exception(UnicornCPU *cpu, int vector_nr, uint16_t opcode)
 
     // 4. Read exception handler address from vector table
     uc_engine *uc = unicorn_get_uc(cpu);
-    uint32_t vbr;
-    uc_reg_read(uc, UC_M68K_REG_CR_VBR, &vbr);
+    uint32_t vbr = 0;  // Initialize to 0
+
+    // CRITICAL: UC_M68K_REG_CR_VBR might not be properly defined or supported
+    // Let's try reading it, but default to 0 if it fails
+    uc_err err = uc_reg_read(uc, UC_M68K_REG_CR_VBR, &vbr);
+    if (err != UC_ERR_OK) {
+        fprintf(stderr, "[WARNING] Failed to read VBR: %s, defaulting to 0\n", uc_strerror(err));
+        vbr = 0;
+    }
+
+    // For 68000/68010, VBR is always 0. For 68020+, it can be set.
+    // But if we're getting garbage, let's just use 0 for now
+    if (vbr != 0 && (vbr < 0x1000 || vbr > 0x10000000)) {
+        fprintf(stderr, "[WARNING] VBR looks invalid (0x%08X), using 0 instead\n", vbr);
+        vbr = 0;
+    }
 
     fprintf(stderr, "[DEBUG] VBR=0x%08X, vector_nr=%d, vector_addr=0x%08X\n",
             vbr, vector_nr, vbr + (vector_nr * 4));
