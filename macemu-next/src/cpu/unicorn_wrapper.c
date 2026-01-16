@@ -24,6 +24,9 @@ struct M68kRegistersC {
 };
 extern void EmulOp_C(uint16_t opcode, struct M68kRegistersC *r);
 
+/* M68kRegisters is same as M68kRegistersC for our purposes */
+#define M68kRegisters M68kRegistersC
+
 /* M68K interrupt trigger (from Unicorn's QEMU backend) */
 extern void uc_m68k_trigger_interrupt(uc_engine *uc, int level, uint8_t vector);
 
@@ -195,16 +198,13 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                 }
             }
         } else {
-            /* Other A-line traps (like A247) - need to handle as real exceptions */
+            /* Other A-line traps (like A247) - these are Mac OS system calls */
+            /* These should be handled as regular A-line exceptions by the Mac OS ROM */
             fprintf(stderr, "[hook_interrupt] Non-EmulOp A-line trap 0x%04X at PC=0x%08X\n", opcode, pc);
 
-            /* Call the platform trap handler to simulate the exception */
+            /* Simulate A-line exception - the Mac OS ROM will handle the trap */
             if (g_platform.trap_handler) {
                 g_platform.trap_handler(10, opcode, false);  /* 10 = A-line trap */
-
-                /* The trap handler will have set up the exception stack frame
-                 * and changed PC to the exception handler address.
-                 * We don't need to do anything else here. */
             } else {
                 /* No trap handler - just skip the instruction */
                 fprintf(stderr, "[hook_interrupt] No trap handler, skipping A-line 0x%04X\n", opcode);
