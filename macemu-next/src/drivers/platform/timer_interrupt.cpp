@@ -13,6 +13,7 @@
 #include "timer_interrupt.h"
 #include "rom_patches.h"   // For ROMVersion, ROM_VERSION_CLASSIC
 #include "uae_wrapper.h"   // For intlev()
+#include <string.h>        // For strstr()
 #include "macos_util.h"    // For HasMacStarted()
 
 #include <sys/timerfd.h>
@@ -128,8 +129,13 @@ static void one_tick(void)
 		if (interrupt_count >= 4) debug_logged = true;
 	}
 
-	if (ROMVersion == ROM_VERSION_CLASSIC || mac_started) {
-		extern Platform g_platform;
+	// EXPERIMENTAL: For Unicorn, always deliver interrupts during boot
+	// to work around the WLSC chicken-and-egg problem
+	extern Platform g_platform;
+	bool is_unicorn = g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn") != NULL;
+
+	if (ROMVersion == ROM_VERSION_CLASSIC || mac_started ||
+	    (is_unicorn && interrupt_count < 300)) {  // First 5 seconds for Unicorn
 		if (g_platform.cpu_trigger_interrupt) {
 			int level = intlev();
 			if (level > 0) {

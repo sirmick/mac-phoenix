@@ -354,6 +354,12 @@ void uae_mem_write_word(uint32_t addr, uint16_t val) {
 }
 
 void uae_mem_write_long(uint32_t addr, uint32_t val) {
+    // Debug: Track writes to 0xcfc (WLSC marker)
+    if (addr == 0xcfc) {
+        fprintf(stderr, "[WLSC] UAE Writing 0x%08x to 0xcfc (PC=0x%08x)\n",
+                val, m68k_getpc());
+    }
+
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
     if (!m) return;  // Out-of-range access ignored
     do_put_mem_long(m, val);

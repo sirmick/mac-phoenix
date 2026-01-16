@@ -836,6 +836,12 @@ static uint8_t unicorn_mem_read_byte(uint32_t addr) {
 }
 
 static void unicorn_mem_write_long(uint32_t addr, uint32_t value) {
+	// Debug: Track writes to 0xcfc (WLSC marker)
+	if (addr == 0xcfc) {
+		fprintf(stderr, "[WLSC] Writing 0x%08x to 0xcfc (PC=0x%08x)\n",
+		        value, unicorn_cpu ? unicorn_get_pc(unicorn_cpu) : 0);
+	}
+
 	if (!unicorn_cpu) {
 		// Before Unicorn initialization: write to host memory directly
 		DirectWriteMacInt32(addr, value);
