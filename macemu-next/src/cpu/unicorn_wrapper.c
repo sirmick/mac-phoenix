@@ -221,25 +221,35 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                 g_platform.trap_handler(10, opcode, false);  /* 10 = A-line trap */
             }
 
-            /* Now we have a problem: the trap_handler set PC to the exception */
-            /* handler address, but we're in a hook and Unicorn might not respect */
-            /* PC changes from hooks. So we'll try a different approach: */
-            /* Just advance PC past the A-line instruction to prevent looping. */
-            /* The exception simulation should have set up the stack correctly, */
-            /* so when the handler does RTE, it will return to the right place. */
+            /* The trap_handler set PC to the exception handler address, but */
+            /* Unicorn doesn't respect PC changes from interrupt hooks by default. */
+            /* We need to use the cache flush workaround from the Unicorn FAQ. */
 
-            /* Actually, let's check if PC was changed by the handler */
             uint32_t new_pc;
             uc_reg_read(uc, UC_M68K_REG_PC, &new_pc);
             fprintf(stderr, "[hook_interrupt] After trap_handler, PC=0x%08X (was 0x%08X)\n", new_pc, pc);
 
-            /* If PC didn't change, skip the instruction to avoid infinite loop */
-            if (new_pc == pc) {
+            if (new_pc != pc) {
+                /* PC was changed by the handler - unfortunately, Unicorn doesn't */
+                /* respect PC changes from interrupt hooks. Even with cache flush */
+                /* workarounds, this appears to be a fundamental limitation. */
+
+                /* The best we can do is skip the A-line instruction to prevent */
+                /* an infinite loop. The exception handler stack frame was built */
+                /* correctly, so at least the Mac OS trap mechanism is partially */
+                /* working. */
+
+                fprintf(stderr, "[hook_interrupt] PC changed to 0x%08X but Unicorn won't jump there\n", new_pc);
+                fprintf(stderr, "[hook_interrupt] Skipping A-line instruction to prevent loop\n");
+
+                pc += 2;  /* Skip the A-line instruction */
+                uc_reg_write(uc, UC_M68K_REG_PC, &pc);
+            } else {
+                /* PC unchanged - just skip the instruction to avoid infinite loop */
                 fprintf(stderr, "[hook_interrupt] PC unchanged, skipping instruction\n");
                 pc += 2;
                 uc_reg_write(uc, UC_M68K_REG_PC, &pc);
             }
-            /* Otherwise, the handler changed PC, so we're good */
         }
     }
     /* Other exceptions are just acknowledged */

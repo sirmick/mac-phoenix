@@ -623,6 +623,13 @@ static void unicorn_backend_execute_fast(void) {
 			uint32_t pc = unicorn_get_pc(unicorn_cpu);
 			const char *err = unicorn_get_error(unicorn_cpu);
 
+			// Debug: Log all stops
+			static int stop_count = 0;
+			if (++stop_count <= 10) {
+				fprintf(stderr, "[unicorn_backend_execute] Stop #%d at PC=0x%08X, error: %s\n",
+				        stop_count, pc, err ? err : "NULL");
+			}
+
 			// If no error, it was probably uc_emu_stop() - continue execution
 			if (!err || strcmp(err, "OK") == 0) {
 				// This is normal - likely from uc_emu_stop() after exception handling
@@ -631,7 +638,7 @@ static void unicorn_backend_execute_fast(void) {
 			}
 
 			// Real error - stop execution
-			fprintf(stderr, "[unicorn_backend_execute] Stopped at PC=0x%08X after %d executions: %s\n",
+			fprintf(stderr, "[unicorn_backend_execute] ERROR: Stopped at PC=0x%08X after %d executions: %s\n",
 			        pc, exec_count, err);
 			break;
 		}
