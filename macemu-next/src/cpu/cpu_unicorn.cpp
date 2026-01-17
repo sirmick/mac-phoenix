@@ -619,10 +619,20 @@ static void unicorn_backend_execute_fast(void) {
 		// Execute one instruction at a time to ensure EmulOps are handled
 		// TODO: Fix block hook to properly detect EmulOps mid-batch
 		if (!unicorn_execute_n(unicorn_cpu, 1)) {
-			// Error or stop requested
+			// Check if this was a stop request (e.g., from uc_emu_stop) or an error
 			uint32_t pc = unicorn_get_pc(unicorn_cpu);
-			fprintf(stderr, "[unicorn_backend_execute] Stopped at PC=0x%08X after %d executions\n",
-			        pc, exec_count);
+			const char *err = unicorn_get_error(unicorn_cpu);
+
+			// If no error, it was probably uc_emu_stop() - continue execution
+			if (!err || strcmp(err, "OK") == 0) {
+				// This is normal - likely from uc_emu_stop() after exception handling
+				// Continue execution from the new PC
+				continue;
+			}
+
+			// Real error - stop execution
+			fprintf(stderr, "[unicorn_backend_execute] Stopped at PC=0x%08X after %d executions: %s\n",
+			        pc, exec_count, err);
 			break;
 		}
 		exec_count++;

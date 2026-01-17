@@ -198,19 +198,48 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                 }
             }
         } else {
-            /* Other A-line traps (like A247) - these are Mac OS system calls */
-            /* These should be handled as regular A-line exceptions by the Mac OS ROM */
+            /* Other A-line traps (like A05D) - these are Mac OS system calls */
+            /* IMPORTANT: Unicorn is raising a real exception here. We should NOT */
+            /* try to handle it - we should let Unicorn's built-in exception handling */
+            /* take care of jumping to the exception vector. */
+
+            /* However, Unicorn's M68K implementation might not fully implement */
+            /* exception handling. So we need to manually simulate it. */
+
             fprintf(stderr, "[hook_interrupt] Non-EmulOp A-line trap 0x%04X at PC=0x%08X\n", opcode, pc);
 
-            /* Simulate A-line exception - the Mac OS ROM will handle the trap */
+            /* The problem is that Unicorn has already decided this is an exception */
+            /* and called our hook. If we don't handle it, Unicorn will just continue */
+            /* at the same PC, causing an infinite loop. */
+
+            /* So we MUST handle it here, but we can't use uc_emu_stop() reliably. */
+            /* Instead, we'll simulate the exception AND advance PC past the A-line */
+            /* instruction so Unicorn doesn't hit it again. */
+
+            /* First, simulate the exception to build the stack frame */
             if (g_platform.trap_handler) {
                 g_platform.trap_handler(10, opcode, false);  /* 10 = A-line trap */
-            } else {
-                /* No trap handler - just skip the instruction */
-                fprintf(stderr, "[hook_interrupt] No trap handler, skipping A-line 0x%04X\n", opcode);
+            }
+
+            /* Now we have a problem: the trap_handler set PC to the exception */
+            /* handler address, but we're in a hook and Unicorn might not respect */
+            /* PC changes from hooks. So we'll try a different approach: */
+            /* Just advance PC past the A-line instruction to prevent looping. */
+            /* The exception simulation should have set up the stack correctly, */
+            /* so when the handler does RTE, it will return to the right place. */
+
+            /* Actually, let's check if PC was changed by the handler */
+            uint32_t new_pc;
+            uc_reg_read(uc, UC_M68K_REG_PC, &new_pc);
+            fprintf(stderr, "[hook_interrupt] After trap_handler, PC=0x%08X (was 0x%08X)\n", new_pc, pc);
+
+            /* If PC didn't change, skip the instruction to avoid infinite loop */
+            if (new_pc == pc) {
+                fprintf(stderr, "[hook_interrupt] PC unchanged, skipping instruction\n");
                 pc += 2;
                 uc_reg_write(uc, UC_M68K_REG_PC, &pc);
             }
+            /* Otherwise, the handler changed PC, so we're good */
         }
     }
     /* Other exceptions are just acknowledged */
