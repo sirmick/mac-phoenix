@@ -611,8 +611,16 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_SCSI_DISPATCH: {	// SCSIDispatch() replacement
+			// Debug: Log SCSI_DISPATCH details
+			fprintf(stderr, "[SCSI_DISPATCH] Entry - A7=0x%08x\n", r->a[7]);
+			fprintf(stderr, "[SCSI_DISPATCH] Registers: D0=0x%08x D1=0x%08x A0=0x%08x A1=0x%08x\n",
+			        r->d[0], r->d[1], r->a[0], r->a[1]);
+
 			uint32 ret = ReadMacInt32(r->a[7]);		// Get return address
 			uint16 sel = ReadMacInt16(r->a[7] + 4);	// Get selector
+
+			fprintf(stderr, "[SCSI_DISPATCH] Selector=%d, Return addr=0x%08x\n", sel, ret);
+
 			r->a[7] += 6;
 			int stack = 0;
 			switch (sel) {
@@ -670,6 +678,11 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			}
 			r->a[0] = ret;			// "rtd" emulation, a0 = return address, a1 = new stack pointer
 			r->a[1] = r->a[7] + stack;
+
+			fprintf(stderr, "[SCSI_DISPATCH] Exit - Stack adjusted by %d, returning to 0x%08x\n",
+			        stack, ret);
+			fprintf(stderr, "[SCSI_DISPATCH] Exit registers: A0=0x%08x A1=0x%08x A7=0x%08x\n",
+			        r->a[0], r->a[1], r->a[7]);
 			break;
 		}
 

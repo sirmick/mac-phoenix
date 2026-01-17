@@ -71,6 +71,9 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	// Build M68kRegisters structure from Unicorn state
 	struct M68kRegisters regs;
 	uint16_t old_sr = unicorn_get_sr(unicorn_cpu);
+	uint32_t old_a0 = unicorn_get_areg(unicorn_cpu, 0);
+	uint32_t old_a1 = unicorn_get_areg(unicorn_cpu, 1);
+
 	for (int i = 0; i < 8; i++) {
 		regs.d[i] = unicorn_get_dreg(unicorn_cpu, i);
 		regs.a[i] = unicorn_get_areg(unicorn_cpu, i);
@@ -97,6 +100,27 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 			fprintf(stderr, "[EmulOp 0x7103] Deferring SR update: 0x%04X -> 0x%04X\n",
 			        old_sr, regs.sr);
 		}
+	}
+
+	// Check for "rtd" emulation - SCSI_DISPATCH uses A0/A1 to return:
+	// A0 = return address, A1 = new stack pointer
+	// Only apply this to SCSI_DISPATCH (0x7128) to avoid false positives
+	if (opcode == 0x7128 && regs.a[0] != old_a0 && regs.a[1] != old_a1) {
+		// This is "rtd" emulation - need to jump to A0 and set SP from A1
+		// The ROM patch after SCSI_DISPATCH has:
+		//   move.l a1,a7  ; Set stack pointer
+		//   jmp (a0)      ; Jump to return address
+		// We emulate this directly here
+
+		fprintf(stderr, "[SCSI_DISPATCH] rtd emulation: PC -> 0x%08X, A7 -> 0x%08X\n",
+		        regs.a[0], regs.a[1]);
+
+		// Set new PC and stack pointer
+		unicorn_set_pc(unicorn_cpu, regs.a[0]);
+		unicorn_set_areg(unicorn_cpu, 7, regs.a[1]);
+
+		// Return true to indicate PC was already set (don't advance it)
+		return true;
 	}
 
 	// Debug: Verify A7 write for RESET EmulOp
