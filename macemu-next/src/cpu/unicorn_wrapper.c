@@ -189,6 +189,11 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                 if (!pc_advanced) {
                     pc += 2;
                     uc_reg_write(uc, UC_M68K_REG_PC, &pc);
+                    fprintf(stderr, "[hook_interrupt] Advanced PC to 0x%08x after EmulOp 0x%04x\n", pc, legacy_opcode);
+                } else {
+                    uint32_t new_pc;
+                    uc_reg_read(uc, UC_M68K_REG_PC, &new_pc);
+                    fprintf(stderr, "[hook_interrupt] Handler advanced PC to 0x%08x after EmulOp 0x%04x\n", new_pc, legacy_opcode);
                 }
             }
         } else {

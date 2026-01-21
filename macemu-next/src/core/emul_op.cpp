@@ -426,6 +426,8 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			        r->a[4], r->a[6], RAMBaseMac + RAMSize);
 			fprintf(stderr, "[PATCH_BOOT_GLOBS] Memory writes: MemTop at 0x%08X, MMU flags at 0x%08X/0x%08X\n",
 			        r->a[4] - 20, r->a[4] - 26, r->a[4] - 25);
+			fprintf(stderr, "[PATCH_BOOT_GLOBS] Return state: D0=%08X D1=%08X D2=%08X A0=%08X A1=%08X A2=%08X SR=%04X\n",
+			        r->d[0], r->d[1], r->d[2], r->a[0], r->a[1], r->a[2], (uint16_t)(r->sr & 0xFFFF));
 			break;
 
 		case M68K_EMUL_OP_FIX_BOOTSTACK:	// Set boot stack to 3/4 of RAM (7.5)
