@@ -65,6 +65,9 @@ struct UnicornCPU {
     /* Deferred SR update */
     bool has_deferred_sr_update;
     uint16_t deferred_sr_value;
+
+    /* PC-based tracing state */
+    bool pc_trace_enabled;
 };
 
 /* Deferred SR update API */
@@ -84,42 +87,26 @@ void unicorn_defer_sr_update(void *unicorn_cpu, uint16_t new_sr) {
 static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
 
-    /* Poll timer every 100 instructions like UAE does */
-    static int instruction_counter = 0;
-    instruction_counter += size;
-    if (instruction_counter >= 100) {
-        instruction_counter = 0;
-        extern uint64_t poll_timer_interrupt(void);
-        poll_timer_interrupt();  /* May set g_pending_interrupt_level */
-    }
-
     /* Update block statistics */
     cpu->block_stats.total_blocks++;
     cpu->block_stats.total_instructions += size;
 
-    /* Debug: detect when we're stuck in the problematic loop */
-    static int loop_detect_count = 0;
-    if (address >= 0x02009ab0 && address <= 0x02009ad0) {
-        loop_detect_count++;
-        if (loop_detect_count == 1) {
-            fprintf(stderr, "[Unicorn] First hit of loop at PC=0x%08lx, total instructions: %llu\n",
-                    address, (unsigned long long)cpu->block_stats.total_instructions);
-        } else if (loop_detect_count == 100) {
-            fprintf(stderr, "[Unicorn] Stuck in loop at PC=0x%08lx (100 iterations detected)\n", address);
-            fprintf(stderr, "[Unicorn] This loop appears to be waiting for something. ROM stuck after PATCH_BOOT_GLOBS.\n");
-        }
+    /* Poll timer every 100 instructions like UAE does
+     * Use total_instructions counter to ensure accurate 100-instruction intervals */
+    if (cpu->block_stats.total_instructions % 100 < (uint64_t)size) {
+        extern uint64_t poll_timer_interrupt(void);
+        poll_timer_interrupt();  /* May set g_pending_interrupt_level */
     }
 
     /* PC-based tracing: Enable CPU trace when hitting specific addresses */
     /* Set CPU_TRACE_PC=0x2009ab0 to start tracing at that PC */
-    static bool pc_trace_enabled = false;
-    if (!pc_trace_enabled) {
+    if (!cpu->pc_trace_enabled) {
         const char *trace_pc_env = getenv("CPU_TRACE_PC");
         if (trace_pc_env) {
             uint32_t trace_pc = strtoul(trace_pc_env, NULL, 0);
             if (address == trace_pc) {
                 fprintf(stderr, "[Unicorn] PC-based trace triggered at 0x%08lx\n", address);
-                pc_trace_enabled = true;
+                cpu->pc_trace_enabled = true;
                 extern void cpu_trace_force_enable(void);
                 cpu_trace_force_enable();  /* Enable tracing from this point */
             }
@@ -146,6 +133,13 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
 
     /* Check for pending interrupts */
     if (g_pending_interrupt_level > 0) {
+        /* CRITICAL: Apply any deferred SR update BEFORE checking interrupt mask
+         * This ensures we use the correct SR value (e.g., after RESET EmulOp) */
+        if (cpu->has_deferred_sr_update) {
+            uc_reg_write(uc, UC_M68K_REG_SR, &cpu->deferred_sr_value);
+            cpu->has_deferred_sr_update = false;
+        }
+
         uint32_t sr = 0;  /* Use uint32_t for uc_reg_read */
         uc_reg_read(uc, UC_M68K_REG_SR, &sr);
         int current_ipl = ((sr & 0xFFFF) >> 8) & 7;
@@ -214,7 +208,10 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
 
 /**
  * Hook for invalid instructions (UC_HOOK_INSN_INVALID)
- * Handles legacy 0x71xx EmulOps and A-line/F-line traps.
+ * Handles legacy 0x71xx EmulOps only.
+ *
+ * NOTE: A-line and F-line traps are now handled via UC_HOOK_INTR + cpu-exec.c,
+ * not here. This avoids duplicate handling and uses proper QEMU exception mechanism.
  */
 static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
     uint32_t pc;
@@ -225,7 +222,7 @@ static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
     uc_mem_read(uc, pc, &opcode, sizeof(opcode));
     opcode = (opcode >> 8) | (opcode << 8);  /* Swap for big-endian */
 
-    /* Check if EmulOp (0x71xx) */
+    /* Check if EmulOp (0x71xx) - legacy format */
     if ((opcode & 0xFF00) == 0x7100) {
         if (g_platform.emulop_handler) {
             bool pc_advanced = g_platform.emulop_handler(opcode, false);
@@ -239,56 +236,12 @@ static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
         }
     }
 
-    /* Check for A-line (0xAxxx) or F-line (0xFxxx) traps */
-    if ((opcode & 0xF000) == 0xA000) {
-        if (g_platform.trap_handler) {
-            /* Store original PC for debugging */
-            uint32_t orig_pc = pc;
+    /* For A-line (0xAxxx) and F-line (0xFxxx):
+     * These are handled by UC_HOOK_INTR (exception 10/11) + cpu-exec.c now.
+     * If we reach here with A/F-line, it means Unicorn detected it as invalid
+     * instruction rather than exception - just return false to stop. */
 
-            fprintf(stderr, "[A-line hook] Before trap_handler: PC=0x%08X, opcode=0x%04X\n", orig_pc, opcode);
-
-            g_platform.trap_handler(10, opcode, false);  /* 10 = A-line trap */
-
-            /* CRITICAL: After trap handler, we need to check if PC was changed.
-             * If it wasn't (which shouldn't happen), we advance it ourselves.
-             * The trap handler should have set PC to the exception handler address. */
-            uint32_t new_pc;
-            uc_reg_read(uc, UC_M68K_REG_PC, &new_pc);
-
-            fprintf(stderr, "[A-line hook] After trap_handler: PC=0x%08X\n", new_pc);
-
-            if (new_pc == orig_pc) {
-                /* This shouldn't happen - trap handler should have changed PC */
-                fprintf(stderr, "[WARN] A-line trap handler didn't change PC! Advancing manually.\n");
-                new_pc = orig_pc + 2;
-                uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);
-            }
-
-            return true;  /* Continue execution from new PC */
-        }
-    } else if ((opcode & 0xF000) == 0xF000) {
-        if (g_platform.trap_handler) {
-            /* Store original PC for debugging */
-            uint32_t orig_pc = pc;
-
-            g_platform.trap_handler(11, opcode, false);  /* 11 = F-line trap */
-
-            /* CRITICAL: Check if PC was changed */
-            uint32_t new_pc;
-            uc_reg_read(uc, UC_M68K_REG_PC, &new_pc);
-
-            if (new_pc == orig_pc) {
-                /* This shouldn't happen - trap handler should have changed PC */
-                fprintf(stderr, "[WARN] F-line trap handler didn't change PC! Advancing manually.\n");
-                new_pc = orig_pc + 2;
-                uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);
-            }
-
-            return true;  /* Continue execution from new PC */
-        }
-    }
-
-    return false;  /* Stop execution */
+    return false;  /* Stop execution - truly invalid instruction */
 }
 
 /**
