@@ -57,23 +57,28 @@ See **[JSON_CONFIG.md](JSON_CONFIG.md)** for configuration documentation.
 
 ## Documentation
 
-### Essential Reading
+### Essential Reading (Start Here!)
 - **[Architecture.md](Architecture.md)** - How the system fits together (Platform API, backends, memory)
 - **[ProjectGoals.md](ProjectGoals.md)** - Vision and end goals (Unicorn-first approach)
-- **[TodoStatus.md](TodoStatus.md)** - What's done ✅ and what's next ⏳
 - **[Commands.md](Commands.md)** - Build, test, debug, trace commands
-- **[JSON_CONFIG.md](JSON_CONFIG.md)** - Configuration system (NEW!)
+- **[JSON_CONFIG.md](JSON_CONFIG.md)** - Configuration system
+- **[TodoStatus.md](TodoStatus.md)** - What's done ✅ and what's next ⏳
+- **[STATUS_SUMMARY.md](STATUS_SUMMARY.md)** - Current project status
 
-### Deep Dive (Technical Details)
-- **[deepdive/](deepdive/)** - Detailed technical documentation on specific subsystems
-  - Interrupt timing analysis
-  - A-line/F-line trap handling
-  - Memory architecture
-  - UAE and Unicorn quirks
-  - Platform adapter implementation
+### Technical Deep Dives
+- **[deepdive/](deepdive/)** - Detailed technical documentation
+  - **[cpu/](deepdive/cpu/)** - CPU backend documentation
+    - **[UnicornQuirks.md](deepdive/cpu/UnicornQuirks.md)** - ⚠️ **CRITICAL** - PC change limitation
+    - **[ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)** - Trap handling status
+    - [UaeQuirks.md](deepdive/cpu/UaeQuirks.md), [CpuBackendApi.md](deepdive/cpu/CpuBackendApi.md), and more
+  - [MemoryArchitecture.md](deepdive/MemoryArchitecture.md) - Memory system
+  - [InterruptTimingAnalysis.md](deepdive/InterruptTimingAnalysis.md) - Timing analysis
+  - [PlatformAPIInterrupts.md](deepdive/PlatformAPIInterrupts.md) - Interrupt abstraction
 
-### Completed Work (Archive)
-- **[completed/](completed/)** - Historical documentation of completed fixes and implementations
+### Historical Documentation
+- **[completed/](completed/)** - Successfully completed implementations and fixes
+- **[archive/](archive/)** - Archived docs (obsolete, superseded, or historical)
+  - See [archive/README.md](archive/README.md) for details on what's archived and why
 
 ---
 
