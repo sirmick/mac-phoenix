@@ -1,8 +1,12 @@
 # Interrupt Implementation - COMPLETE ✅
 
+**Last Updated**: 2026-01-21
+
 ## Summary
 
-Interrupt support has been successfully implemented for both UAE and Unicorn backends using a hook-free architecture that maintains JIT performance.
+Interrupt support has been successfully implemented for both UAE and Unicorn backends using an efficient hook architecture that maintains JIT performance.
+
+**Note**: Some interrupt-related limitations discovered later (see "Known Limitations" below).
 
 ## Implementation Architecture
 
@@ -219,9 +223,35 @@ Expected: Unicorn should be competitive with UAE (within 2-3x), much faster than
 ✅ **Interrupt support is complete and functional**
 ✅ **Performance-optimized using UC_HOOK_BLOCK + UC_HOOK_INSN_INVALID**
 ✅ **Both UAE and Unicorn backends can process interrupts**
-✅ **EmulOps and traps working correctly**
+✅ **EmulOps (0x71xx) working correctly**
+✅ **A-line EmulOps (0xAE00-0xAE3F) working correctly**
 ✅ **Build successful, tests passing**
 
 The implementation follows the design document and achieves the goal of backend-agnostic interrupt handling without sacrificing JIT performance.
 
-Next step: Run extended trace comparisons to verify interrupt timing and investigate any new divergence points.
+## Known Limitations (Discovered Later)
+
+### Unicorn PC Change Limitation
+
+**Issue discovered**: January 2026 (commits `9464afa4`, `32a6926b`)
+
+Unicorn cannot change PC from `UC_HOOK_INTR` callbacks - this is a fundamental Unicorn limitation (GitHub issue #1027).
+
+**Impact on interrupts**:
+- ✅ Interrupt **detection** works (UC_HOOK_BLOCK polls timer)
+- ✅ Interrupt **triggering** works (sets pending flag)
+- ⚠️ **Cannot manually simulate interrupt exceptions** by changing PC from hooks
+- **Workaround**: Use Unicorn's native interrupt handling (`uc_m68k_trigger_interrupt`) OR execute interrupts on UAE and sync state
+
+**Impact on A-line/F-line traps** (also interrupt-based):
+- ❌ Mac OS A-line/F-line traps don't work on Unicorn standalone
+- ✅ A-line EmulOps (0xAE00-0xAE3F) work (don't require PC changes)
+- **Workaround**: Execute traps on UAE, sync state to Unicorn
+
+See [../deepdive/cpu/ALineAndFLineStatus.md](../deepdive/cpu/ALineAndFLineStatus.md) for complete analysis.
+
+### Timer Interrupt Timing
+
+Wall-clock vs instruction-count timing causes non-deterministic interrupt firing between UAE and Unicorn. This is **not a bug** - it's expected behavior.
+
+See [../deepdive/InterruptTimingAnalysis.md](../deepdive/InterruptTimingAnalysis.md) for analysis.

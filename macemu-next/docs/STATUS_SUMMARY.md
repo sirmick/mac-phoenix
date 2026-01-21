@@ -82,19 +82,31 @@
 
 ## Current Status by Phase
 
-### Phase 1: Core CPU Emulation ✅ COMPLETE
+### Phase 1: Core CPU Emulation ✅ MOSTLY COMPLETE
+
+**UAE Backend**: ✅ Fully functional
+- ✅ UAE interpreter backend (complete, all features working)
+- ✅ All traps, interrupts, EmulOps working perfectly
+
+**Unicorn Backend**: ⚠️ Mostly functional with limitations
 - ✅ Unicorn M68K backend with JIT (14.56M instructions/sec)
-- ✅ UAE interpreter backend (validation baseline)
-- ✅ DualCPU backend (lockstep validation)
-- ✅ Platform API abstraction
-- ✅ RTE instruction support with batch execution
-- ✅ Interrupt support
-- ✅ Native 68k trap execution
 - ✅ Memory system (direct addressing)
 - ✅ EmulOp support (0x71xx traps)
-- ✅ A-line/F-line trap handling
+- ✅ A-line EmulOps (0xAE00-0xAE3F) - BasiliskII-specific
+- ✅ RTE instruction support with batch execution
+- ✅ Interrupt detection and triggering
+- ⚠️ **A-line/F-line trap handling** - **LIMITED** (see note below)
 
-**Achievement**: 146M+ instructions executed without crashing
+**DualCPU Backend**: ✅ Functional with workarounds
+- ✅ Lockstep validation (with UAE-execute workaround for traps)
+- ✅ Platform API abstraction
+
+**⚠️ Known Limitation**: Unicorn cannot change PC from interrupt hooks (Unicorn GitHub issue #1027)
+- **Impact**: Mac OS A-line/F-line traps don't work on Unicorn standalone
+- **Workaround**: DualCPU mode executes traps on UAE, syncs state to Unicorn
+- **See**: [docs/deepdive/cpu/ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)
+
+**Achievement**: UAE executes indefinitely; Unicorn has limitations for full ROM boot
 
 ---
 

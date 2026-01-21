@@ -19,42 +19,73 @@ Detailed technical documentation on specific subsystems.
 
 ---
 
-## CPU Backend Details
+## CPU Backend Documentation
 
-### [CpuBackendApi.md](CpuBackendApi.md)
-CPU backend interface specification - how backends implement Platform API
+**All CPU-related docs have been moved to [cpu/](cpu/) subdirectory for better organization.**
 
-### [UaeQuirks.md](UaeQuirks.md)
+### Essential CPU Docs
+
+#### [cpu/UnicornQuirks.md](cpu/UnicornQuirks.md)
+**⚠️ CRITICAL - READ THIS FIRST**: Unicorn Engine quirks and limitations
+- **Cannot change PC from interrupt hooks** (fundamental limitation!)
+- Hook types (UC_HOOK_BLOCK, UC_HOOK_INSN_INVALID, UC_HOOK_INTR)
+- Register persistence requirements
+- Memory endianness handling
+
+#### [cpu/ALineAndFLineStatus.md](cpu/ALineAndFLineStatus.md)
+**Current Status**: A-line/F-line trap handling implementation and limitations
+- ❌ **BROKEN** due to Unicorn PC limitation
+- ✅ A-line EmulOps (0xAE00-0xAE3F) work
+- ⚠️ Workaround: Execute traps on UAE, sync to Unicorn
+
+#### [cpu/UaeQuirks.md](cpu/UaeQuirks.md)
 **Essential**: UAE CPU core quirks and gotchas
 - Byte-swapping (RAM little-endian, ROM big-endian)
 - `HAVE_GET_WORD_UNSWAPPED` flag
 - `mem_banks[]` memory access
 - `pc_p` pointer vs `m68k_getpc()` function
 
-### [UnicornQuirks.md](UnicornQuirks.md)
-**Essential**: Unicorn Engine quirks and API differences
-- Hook types (UC_HOOK_BLOCK, UC_HOOK_INSN_INVALID)
-- Register persistence (cache invalidation required)
-- Memory endianness (big-endian for M68K)
-- VBR register support (added by us)
+### CPU API and Architecture
 
-### [UnicornBugSrLazyFlags.md](UnicornBugSrLazyFlags.md)
-Unicorn bug with SR (Status Register) lazy flag evaluation
+#### [cpu/CpuBackendApi.md](cpu/CpuBackendApi.md)
+CPU backend interface specification - how backends implement Platform API
 
----
+#### [cpu/CpuModelConfiguration.md](cpu/CpuModelConfiguration.md)
+CPU model selection (68020 vs 68030 vs 68040)
 
-## Trap and Exception Handling
+#### [cpu/DualCpuValidationInitialization.md](cpu/DualCpuValidationInitialization.md)
+How dual-CPU validation mode initializes
 
-### [ALineAndFLineTrapHandling.md](ALineAndFLineTrapHandling.md)
+### Trap and Exception Handling
+
+#### [cpu/ALineAndFLineTrapHandling.md](cpu/ALineAndFLineTrapHandling.md)
 **Detailed Design**: How A-line (0xAxxx) and F-line (0xFxxx) traps work
 - M68K exception mechanism
 - Vector table reading
 - Handler execution
-- Register synchronization
+- **NOTE**: Implementation doesn't work on Unicorn due to PC limitation
 
-### [ALineAndFLineStatus.md](ALineAndFLineStatus.md)
-Implementation status of A-line/F-line trap handling
-- ✅ Now complete
+### Debugging and Analysis
+
+#### [cpu/CpuTraceDebugging.md](cpu/CpuTraceDebugging.md)
+CPU trace debugging techniques and tools
+
+#### [cpu/JIT_Block_Size_Analysis.md](cpu/JIT_Block_Size_Analysis.md)
+JIT translation block size analysis for performance tuning
+
+### Historical Bug Investigations
+
+#### [cpu/UnicornBugSrLazyFlags.md](cpu/UnicornBugSrLazyFlags.md)
+Unicorn bug with SR (Status Register) lazy flag evaluation
+
+#### [cpu/UnicornEarlyCrashInvestigation.md](cpu/UnicornEarlyCrashInvestigation.md)
+Investigation of early Unicorn crashes (now resolved)
+
+#### [cpu/UnicornRTEQemuResearch.md](cpu/UnicornRTEQemuResearch.md)
+Research into RTE instruction handling
+
+#### [cpu/UnicornBatchExecutionRTEBug.md](cpu/UnicornBatchExecutionRTEBug.md)
+RTE bug in batch execution mode
 
 ---
 

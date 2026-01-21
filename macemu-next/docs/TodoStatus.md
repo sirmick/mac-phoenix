@@ -54,16 +54,20 @@ Track what's done and what's next.
 - ✅ **CPU type selection fix** (68020 not 68030, commit 74fbd578)
 - ✅ **Hook architecture optimization** (UC_HOOK_BLOCK + UC_HOOK_INSN_INVALID)
 - ✅ EmulOp handling (0x71xx traps)
-- ✅ A-line/F-line trap handling (0xAxxx, 0xFxxx)
-- ✅ **Interrupt support** (UC_HOOK_BLOCK for efficiency, commit 1305d3b2)
-- ✅ **Native 68k trap execution** (no UAE dependency, commit d90208dc)
+- ✅ A-line EmulOps (0xAE00-0xAE3F) - BasiliskII-specific traps
+- ⚠️ **A-line/F-line trap handling (0xAxxx, 0xFxxx)** - **BROKEN** due to Unicorn PC limitation
+  - Unicorn cannot change PC from `UC_HOOK_INTR` callbacks (Unicorn issue #1027)
+  - Only A-line EmulOps (0xAE00-0xAE3F) work in standalone Unicorn
+  - Other A-line/F-line traps cause hangs
+  - See: [deepdive/cpu/ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)
+- ✅ **Interrupt detection** (UC_HOOK_BLOCK for efficiency, commit 1305d3b2)
 - ✅ **Legacy API removal** (~236 lines, commit ebd3d1b2)
 - ✅ **RTE (Return from Exception) fix** - Patched Unicorn cpu-exec.c (Jan 5, 2026)
   - Fixed UC_ERR_EXCEPTION crash when returning from interrupts
   - Fixed infinite loop bug preventing batch execution
-  - Unicorn now runs 146M+ instructions without crashing
+  - Unicorn now runs for extended periods
   - **Batch execution enabled**: Using count=10000 for 1.93x performance boost
-  - See: [UnicornBatchExecutionRTEBug.md](deepdive/UnicornBatchExecutionRTEBug.md)
+  - See: [deepdive/cpu/UnicornBatchExecutionRTEBug.md](deepdive/cpu/UnicornBatchExecutionRTEBug.md)
 
 ### DualCPU Backend
 - ✅ Lockstep execution (UAE + Unicorn)

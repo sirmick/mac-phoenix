@@ -332,7 +332,49 @@ void log_instruction(uint32_t pc) {
 
 This helps understand what instructions cause mismatches.
 
-## Limitations of Unicorn
+## Critical Limitations of Unicorn
+
+### ⚠️ CRITICAL: Cannot Change PC from Interrupt Hooks
+
+**This is the most important Unicorn limitation to understand.**
+
+**Problem**: Unicorn intentionally overwrites PC after `UC_HOOK_INTR` callbacks return.
+
+**Discovered**: January 2026 (commits `9464afa4`, `32a6926b`)
+**Unicorn Issue**: [GitHub #1027](https://github.com/unicorn-engine/unicorn/issues/1027)
+
+**Impact**:
+```c
+// This DOES NOT WORK:
+static uint32_t hook_interrupt(uc_engine *uc, uint32_t int_no, void *user_data) {
+    uint32_t new_pc = 0x1234;
+    uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);  // ❌ IGNORED!
+    return 0;
+}
+// After hook returns, Unicorn overwrites PC with exception_next_eip
+```
+
+**What We Tried**:
+1. ✗ `uc_ctl_remove_cache()` + `uc_reg_write()` - Unicorn FAQ suggestion, doesn't work
+2. ✗ `uc_emu_stop()` to break execution - causes other issues
+3. ✗ Skipping the instruction - prevents loop but doesn't execute handler
+
+**Root Cause** (from Unicorn source code):
+- After interrupt hooks run, Unicorn restores PC from internal state
+- The `exception_next_eip` value overwrites any PC changes
+- This is by design and affects all architectures
+
+**Consequences for macemu-next**:
+- ❌ Cannot simulate M68K exception jumps (A-line, F-line, interrupts)
+- ❌ Cannot implement Mac OS trap execution natively in Unicorn
+- ❌ ROM boot hangs when encountering non-EmulOp A-line traps
+- ✅ A-line EmulOps (0xAE00-0xAE3F) still work (don't need PC changes)
+
+**Workaround**: Execute A-line/F-line traps on UAE, sync state to Unicorn.
+
+See [ALineAndFLineStatus.md](ALineAndFLineStatus.md) for detailed analysis.
+
+---
 
 ### No EMUL_OP Support
 
@@ -342,7 +384,11 @@ Unicorn doesn't know about BasiliskII's EMUL_OP illegal instructions. When it hi
 Unicorn: ILLEGAL INSTRUCTION at 0x0200cafe
 ```
 
-**Solution:** We detect EMUL_OP opcodes and handle them specially in the dual-CPU wrapper.
+**Solution:** We detect EMUL_OP opcodes (0x71xx) using `UC_HOOK_INSN_INVALID` and handle them specially.
+
+**Status**: ✅ Works correctly in macemu-next.
+
+---
 
 ### No ROM Patching
 
@@ -352,9 +398,18 @@ Unicorn just executes raw ROM. UAE needs ROM patching for EMUL_OP insertion. We 
 2. Copy patched memory to Unicorn
 3. Execute both CPUs on patched ROM
 
+**Status**: ✅ Implemented correctly in macemu-next.
+
+---
+
 ### Limited Exception Support
 
-Unicorn's M68K exception handling may not match real hardware perfectly. For now, we focus on normal instruction execution.
+Unicorn's M68K exception handling may not match real hardware perfectly:
+- Exception priority differs from real 68K
+- Cannot modify exception behavior via hooks (see PC limitation above)
+- Stack frame format might differ slightly
+
+**Current approach**: Focus on normal instruction execution, use UAE for exception handling.
 
 ## See Also
 

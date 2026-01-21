@@ -99,10 +99,11 @@ See **[ProjectGoals.md](ProjectGoals.md)** for detailed vision.
 
 - ✅ Unicorn M68K backend working (68020 with JIT)
 - ✅ EmulOps (0x71xx) - Illegal instruction traps
-- ✅ A-line/F-line traps (0xAxxx, 0xFxxx)
-- ✅ Interrupt support (timer, ADB)
-- ✅ Native trap execution (no UAE dependency)
-- ✅ 514k instruction dual-CPU validation
+- ✅ A-line EmulOps (0xAE00-0xAE3F) - BasiliskII-specific traps
+- ⚠️ A-line/F-line traps (0xAxxx, 0xFxxx) - **Limited by Unicorn** (see below)
+- ✅ Interrupt support (timer, ADB) via UC_HOOK_BLOCK
+- ✅ UAE backend fully functional
+- ✅ Dual-CPU validation infrastructure
 - ✅ VBR register support
 - ✅ Efficient hook architecture (UC_HOOK_BLOCK, UC_HOOK_INSN_INVALID)
 
@@ -110,9 +111,25 @@ See **[TodoStatus.md](TodoStatus.md)** for complete checklist.
 
 ---
 
-## Current Focus
+## Current Limitations
 
-**Timer Interrupt Timing** - Understanding wall-clock vs instruction-count timing differences
+### ⚠️ Unicorn A-line/F-line Trap Limitation
+
+**CRITICAL**: Unicorn cannot change PC from interrupt hooks (Unicorn GitHub issue #1027).
+
+**Impact**:
+- ❌ Mac OS A-line traps (0xA000-0xAFFF) don't work on Unicorn standalone
+- ❌ F-line traps (0xF000-0xFFFF) don't work on Unicorn standalone
+- ✅ A-line EmulOps (0xAE00-0xAE3F) **DO work** (don't need PC changes)
+- ✅ UAE backend works perfectly for all traps
+
+**Workaround for DualCPU mode**: Execute traps on UAE, sync state to Unicorn
+
+See **[deepdive/cpu/ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)** for full details.
+
+### Timer Interrupt Timing
+
+Wall-clock vs instruction-count timing differences between UAE and Unicorn are expected and not a bug.
 
 See **[deepdive/InterruptTimingAnalysis.md](deepdive/InterruptTimingAnalysis.md)** for details.
 

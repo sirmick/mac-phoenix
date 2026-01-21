@@ -1,12 +1,24 @@
 # A-line/F-line Exception Handling for Unicorn Backend
 
-## Overview
+## ⚠️ IMPORTANT: THIS DESIGN DOES NOT WORK
+
+**This document describes a design that looked promising but was ultimately blocked by a fundamental Unicorn limitation.**
+
+**Problem discovered** (January 2026): Unicorn cannot change PC from interrupt hooks. This makes it impossible to implement exception handling as designed below.
+
+**Current status**: See [ALineAndFLineStatus.md](ALineAndFLineStatus.md) for actual implementation status and workarounds.
+
+**Why keep this doc?** It explains how M68K exception handling *should* work and documents what was attempted.
+
+---
+
+## Overview (ORIGINAL DESIGN - DOES NOT WORK)
 
 **Problem**: Unicorn CPU emulator throws `UC_ERR_EXCEPTION` when encountering A-line (0xAxxx) or F-line (0xFxxx) instructions, stopping execution. UAE handles these as Mac OS traps (exception vectors 10 and 11).
 
 **Goal**: Make Unicorn handle A-line/F-line the same way UAE does, without modifying UAE or Unicorn source code, using an elegant "patch-in" approach.
 
-**Current Status**: DualCPU validation runs successfully for 23,250 instructions then hits A-line trap 0xA247 (SetToolTrap) and fails.
+**Why it failed**: Unicorn overwrites PC after `UC_HOOK_INTR` callbacks return, making it impossible to jump to exception handlers.
 
 ## Background: How Mac OS Traps Work
 
