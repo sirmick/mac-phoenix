@@ -198,58 +198,15 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                 }
             }
         } else {
-            /* Other A-line traps (like A05D) - these are Mac OS system calls */
-            /* IMPORTANT: Unicorn is raising a real exception here. We should NOT */
-            /* try to handle it - we should let Unicorn's built-in exception handling */
-            /* take care of jumping to the exception vector. */
-
-            /* However, Unicorn's M68K implementation might not fully implement */
-            /* exception handling. So we need to manually simulate it. */
-
-            fprintf(stderr, "[hook_interrupt] Non-EmulOp A-line trap 0x%04X at PC=0x%08X\n", opcode, pc);
-
-            /* The problem is that Unicorn has already decided this is an exception */
-            /* and called our hook. If we don't handle it, Unicorn will just continue */
-            /* at the same PC, causing an infinite loop. */
-
-            /* So we MUST handle it here, but we can't use uc_emu_stop() reliably. */
-            /* Instead, we'll simulate the exception AND advance PC past the A-line */
-            /* instruction so Unicorn doesn't hit it again. */
-
-            /* First, simulate the exception to build the stack frame */
-            if (g_platform.trap_handler) {
-                g_platform.trap_handler(10, opcode, false);  /* 10 = A-line trap */
-            }
-
-            /* The trap_handler set PC to the exception handler address, but */
-            /* Unicorn doesn't respect PC changes from interrupt hooks by default. */
-            /* We need to use the cache flush workaround from the Unicorn FAQ. */
-
-            uint32_t new_pc;
-            uc_reg_read(uc, UC_M68K_REG_PC, &new_pc);
-            fprintf(stderr, "[hook_interrupt] After trap_handler, PC=0x%08X (was 0x%08X)\n", new_pc, pc);
-
-            if (new_pc != pc) {
-                /* PC was changed by the handler - unfortunately, Unicorn doesn't */
-                /* respect PC changes from interrupt hooks. Even with cache flush */
-                /* workarounds, this appears to be a fundamental limitation. */
-
-                /* The best we can do is skip the A-line instruction to prevent */
-                /* an infinite loop. The exception handler stack frame was built */
-                /* correctly, so at least the Mac OS trap mechanism is partially */
-                /* working. */
-
-                fprintf(stderr, "[hook_interrupt] PC changed to 0x%08X but Unicorn won't jump there\n", new_pc);
-                fprintf(stderr, "[hook_interrupt] Skipping A-line instruction to prevent loop\n");
-
-                pc += 2;  /* Skip the A-line instruction */
-                uc_reg_write(uc, UC_M68K_REG_PC, &pc);
-            } else {
-                /* PC unchanged - just skip the instruction to avoid infinite loop */
-                fprintf(stderr, "[hook_interrupt] PC unchanged, skipping instruction\n");
-                pc += 2;
-                uc_reg_write(uc, UC_M68K_REG_PC, &pc);
-            }
+            /* Other A-line traps (like A05D) - these are Mac OS system calls.
+             * With our fix in cpu-exec.c, QEMU's m68k_interrupt_all() will now
+             * properly handle these by reading the exception vector table and
+             * setting PC to the exception handler address.
+             *
+             * We just need to do nothing here and let the QEMU exception handling
+             * mechanism (that we enabled in cpu-exec.c) do its work.
+             */
+            fprintf(stderr, "[hook_interrupt] Non-EmulOp A-line trap 0x%04X at PC=0x%08X - delegating to QEMU exception handling\n", opcode, pc);
         }
     }
     /* Other exceptions are just acknowledged */
