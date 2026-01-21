@@ -130,6 +130,13 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 		        regs.a[7], a7_readback);
 	}
 
+	// Debug: Log PC after PATCH_BOOT_GLOBS to trace execution flow
+	if (opcode == 0x7107) {
+		uint32_t current_pc = unicorn_get_pc(unicorn_cpu);
+		fprintf(stderr, "[EmulOp 0x7107 (PATCH_BOOT_GLOBS)] Current PC=0x%08X, will return to PC=0x%08X\n",
+		        current_pc, current_pc + 2);
+	}
+
 	// Return false to indicate PC was not advanced (caller will advance it)
 	return false;
 }
