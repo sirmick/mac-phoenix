@@ -118,6 +118,13 @@ void unicorn_reset_block_stats(UnicornCPU *cpu);
 /* Interrupt triggering (for platform API) */
 void unicorn_trigger_interrupt_internal(int level);
 
+/* Pending interrupt level (for IRQ EmulOp to check if interrupt was blocked by SR) */
+extern volatile int g_pending_interrupt_level;
+
+/* Deferred register update API (for register writes within hooks) */
+void unicorn_defer_dreg_update(void *unicorn_cpu, int reg, uint32_t value);
+void unicorn_defer_areg_update(void *unicorn_cpu, int reg, uint32_t value);
+
 #ifdef __cplusplus
 }
 #endif

@@ -59,12 +59,14 @@ void unicorn_set_cpu_type(int cpu_type, int fpu_type) {
 	unicorn_backend_set_type(cpu_type, fpu_type);
 }
 
-// Forward declare the deferred SR update mechanism
+// Forward declare the deferred register update mechanisms
 extern "C" void unicorn_defer_sr_update(void *unicorn_cpu, uint16_t new_sr);
+extern "C" void unicorn_defer_dreg_update(void *unicorn_cpu, int reg, uint32_t value);
+extern "C" void unicorn_defer_areg_update(void *unicorn_cpu, int reg, uint32_t value);
 
 // Platform EmulOp handler for Unicorn-only mode
 // This is called from within Unicorn's hook context where register writes don't persist
-// We need to defer SR updates until after uc_emu_start() returns
+// We need to defer ALL register updates until after uc_emu_start() returns
 static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	(void)is_primary;  // Unicorn is always primary in standalone mode
 
@@ -73,24 +75,40 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	uint16_t old_sr = unicorn_get_sr(unicorn_cpu);
 	uint32_t old_a0 = unicorn_get_areg(unicorn_cpu, 0);
 	uint32_t old_a1 = unicorn_get_areg(unicorn_cpu, 1);
+	uint32_t old_dregs[8];
+	uint32_t old_aregs[8];
 
 	for (int i = 0; i < 8; i++) {
-		regs.d[i] = unicorn_get_dreg(unicorn_cpu, i);
-		regs.a[i] = unicorn_get_areg(unicorn_cpu, i);
+		old_dregs[i] = unicorn_get_dreg(unicorn_cpu, i);
+		old_aregs[i] = unicorn_get_areg(unicorn_cpu, i);
+		regs.d[i] = old_dregs[i];
+		regs.a[i] = old_aregs[i];
 	}
 	regs.sr = old_sr;
 
 	// Call EmulOp handler
 	EmulOp(opcode, &regs);
 
-	// Write data and address registers back (these seem to work)
-	for (int i = 0; i < 8; i++) {
-		g_platform.cpu_set_dreg(i, regs.d[i]);
-		g_platform.cpu_set_areg(i, regs.a[i]);
+	// Debug: Log D0 for IRQ EmulOp
+	if (opcode == 0x7129) {
+		static int irq_d0_log_count = 0;
+		if (++irq_d0_log_count <= 50) {
+			fprintf(stderr, "[EmulOp IRQ #%d] D0 before=0x%08x, after=0x%08x, changed=%d\n",
+			        irq_d0_log_count, old_dregs[0], regs.d[0], (regs.d[0] != old_dregs[0]));
+		}
 	}
 
-	// CRITICAL: SR writes don't persist when called from within hooks!
-	// We need to defer the SR update until after uc_emu_start() returns
+	// CRITICAL: Register writes don't persist when called from within hooks!
+	// We need to defer ALL register updates until after uc_emu_start() returns
+	for (int i = 0; i < 8; i++) {
+		if (regs.d[i] != old_dregs[i]) {
+			unicorn_defer_dreg_update(unicorn_cpu, i, regs.d[i]);
+		}
+		if (regs.a[i] != old_aregs[i]) {
+			unicorn_defer_areg_update(unicorn_cpu, i, regs.a[i]);
+		}
+	}
+
 	if (regs.sr != old_sr) {
 		// Defer SR update to be applied after uc_emu_start() returns
 		unicorn_defer_sr_update(unicorn_cpu, regs.sr);
@@ -627,9 +645,10 @@ static void unicorn_backend_execute_fast(void) {
 	// Use global running flag from webserver namespace (same as main.cpp)
 	int exec_count = 0;
 	while (webserver::g_running.load(std::memory_order_acquire)) {
-		// Execute one instruction at a time to ensure EmulOps are handled
-		// TODO: Fix block hook to properly detect EmulOps mid-batch
-		if (!unicorn_execute_n(unicorn_cpu, 1)) {
+		// Execute in batches for performance (EmulOps are handled via hook_interrupt)
+		// We no longer need single-step execution since we removed uc_emu_stop() from
+		// EmulOp handlers. The hook will be called automatically for A-line exceptions.
+		if (!unicorn_execute_n(unicorn_cpu, 1000)) {
 			// Check if this was a stop request (e.g., from uc_emu_stop) or an error
 			uint32_t pc = unicorn_get_pc(unicorn_cpu);
 			const char *err = unicorn_get_error(unicorn_cpu);

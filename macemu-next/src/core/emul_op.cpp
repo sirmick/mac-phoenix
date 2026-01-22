@@ -25,6 +25,7 @@
 #include "cpu_emulation.h"
 #include "uae_wrapper.h"  // For TriggerNMI()
 #include "platform.h"      // For g_platform
+#include "unicorn_wrapper.h"  // For g_pending_interrupt_level
 #include "main.h"
 #include "macos_util.h"
 #include "rom_patches.h"
@@ -316,9 +317,11 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 		case M68K_EMUL_OP_CLKNOMEM: {		// Clock/PRAM operations
 			bool is_read = (r->d[1] & 0x80) != 0;
 			static int clk_count = 0;
-			if (++clk_count <= 10 || clk_count == 100 || clk_count == 200 || clk_count >= 265) {
-				fprintf(stderr, "CLKNOMEM #%d: d1=0x%08x, is_read=%d, reg_type=0x%02x\n",
-				        clk_count, r->d[1], is_read, (r->d[1] & 0x78));
+			uint32_t d1_in = r->d[1];
+			uint32_t d2_in = r->d[2];
+			if (++clk_count <= 20 || clk_count == 100 || clk_count == 200 || clk_count >= 265) {
+				fprintf(stderr, "CLKNOMEM #%d: d1_in=0x%08x, d2_in=0x%08x, is_read=%d, reg_type=0x%02x\n",
+				        clk_count, d1_in, d2_in, is_read, (r->d[1] & 0x78));
 			}
 			if ((r->d[1] & 0x78) == 0x38) {
 				// XPRAM
@@ -397,6 +400,13 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			}
 			r->d[0] = 0;
 			r->d[1] = r->d[2];
+
+			if (clk_count <= 20 || clk_count == 100 || clk_count == 200 || clk_count >= 265) {
+				fprintf(stderr, "CLKNOMEM #%d: RETURNS d0=0x%08x, d1=0x%08x (was 0x%08x), d2=0x%08x (was 0x%08x), SR=0x%04x\n",
+				        clk_count, r->d[0], r->d[1], d1_in, r->d[2], d2_in, r->sr);
+				fprintf(stderr, "CLKNOMEM #%d: Full state: A0=0x%08x A1=0x%08x A5=0x%08x A7=0x%08x\n",
+				        clk_count, r->a[0], r->a[1], r->a[5], r->a[7]);
+			}
 			break;
 		}
 
@@ -696,6 +706,26 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			}
 			r->d[0] = 0;
 
+			// Check if Unicorn backend has a pending interrupt that was blocked by SR
+			// This happens when ROM sets IPL=7 to disable CPU interrupts, then polls IRQ EmulOp
+			extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
+			if (irq_emulop_count <= 10) {
+				fprintf(stderr, "[EmulOp IRQ #%d] g_pending_interrupt_level=%d, InterruptFlags=0x%x\n",
+				        irq_emulop_count, g_pending_interrupt_level, InterruptFlags);
+			}
+			if (g_pending_interrupt_level > 0) {
+				if (irq_emulop_count <= 10) {
+					fprintf(stderr, "[EmulOp IRQ #%d] Processing blocked CPU interrupt (level %d)\n",
+					        irq_emulop_count, g_pending_interrupt_level);
+				}
+				// Clear the pending interrupt since we're processing it now
+				g_pending_interrupt_level = 0;
+				// Treat this as if INTFLAG_60HZ was set
+				if (InterruptFlags == 0) {
+					SetInterruptFlag(INTFLAG_60HZ);
+				}
+			}
+
 			if (InterruptFlags & INTFLAG_60HZ) {
 				if (irq_emulop_count <= 10) {
 					fprintf(stderr, "[EmulOp IRQ #%d] Clearing INTFLAG_60HZ\n", irq_emulop_count);
@@ -705,8 +735,12 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 				// Increment Ticks variable
 				WriteMacInt32(0x16a, ReadMacInt32(0x16a) + 1);
 
-				if (HasMacStarted()) {
+				// IMPORTANT: Always set D0=1 when we process a 60Hz interrupt
+				// This tells the ROM that an interrupt was handled
+				// The ROM polling loop needs this to make progress
+				r->d[0] = 1;
 
+				if (HasMacStarted()) {
 					// Mac has started, execute all 60Hz interrupt functions
 #if !PRECISE_TIMING
 					TimerInterrupt();
@@ -719,8 +753,6 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 						r2.d[0] = 0;
 						Execute68kTrap(0xa072, &r2);
 					}
-
-					r->d[0] = 1;			// Flag: 68k interrupt routine executes VBLTasks etc.
 				}
 			}
 

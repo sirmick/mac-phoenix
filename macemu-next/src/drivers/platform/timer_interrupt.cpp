@@ -107,18 +107,14 @@ static void one_tick(void)
 		if (interrupt_count >= 4) debug_logged = true;
 	}
 
-	// EXPERIMENTAL: For Unicorn, always deliver interrupts during boot
-	// to work around the WLSC chicken-and-egg problem
-	extern Platform g_platform;
-	bool is_unicorn = g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn") != NULL;
-
-	if (ROMVersion == ROM_VERSION_CLASSIC || mac_started ||
-	    (is_unicorn && interrupt_count < 300)) {  // First 5 seconds for Unicorn
-		if (g_platform.cpu_trigger_interrupt) {
-			int level = intlev();
-			if (level > 0) {
-				g_platform.cpu_trigger_interrupt(level);
-			}
+	// Trigger CPU-level interrupt
+	// IMPORTANT: Must deliver interrupts BEFORE Mac starts to allow boot to progress
+	// The ROM needs timer interrupts to initialize and set up WLSC signature
+	// Once WLSC is set, HasMacStarted() returns true
+	if (g_platform.cpu_trigger_interrupt) {
+		int level = intlev();
+		if (level > 0) {
+			g_platform.cpu_trigger_interrupt(level);
 		}
 	}
 }
