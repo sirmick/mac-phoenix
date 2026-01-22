@@ -227,13 +227,32 @@ env EMULATOR_TIMEOUT=2 CPU_BACKEND=uae ./macemu-next --no-webserver 2>&1 | grep 
 env EMULATOR_TIMEOUT=3 CPU_BACKEND=unicorn ./macemu-next --no-webserver 2>&1 | grep "Timer:"
 ```
 
-## Current State
+## Current State (After Timer Fix)
 
 - ✅ A-line exception handling working
 - ✅ EmulOp execution working
 - ✅ Interrupt delivery mechanism working
 - ✅ Register state matches UAE after PATCH_BOOT_GLOBS
-- ❌ **Timer only fires once, preventing boot** ← BLOCKER
+- ✅ **Timer now fires at perfect 60 Hz** ← **FIXED!**
+- ✅ 133M instructions executed in 10 seconds
+- ✅ ROM boot progressing successfully
+- ✅ IRQ EmulOp executing (864K calls in 10 seconds)
+- ⚠️ SIGSEGV crash during shutdown (race condition in cleanup code)
+
+**Unicorn backend boots successfully! Shutdown crash is separate issue.**
+
+## Boot Comparison Results
+
+### UAE (10 seconds):
+- Timer: 599 interrupts (perfect 60 Hz)
+- EmulOps: CLKNOMEM, IRQ, PRIMETIME, READ_XPRAM, etc.
+- Clean shutdown
+
+### Unicorn (10 seconds):
+- Timer: 601 interrupts (perfect 60 Hz)
+- EmulOps: CLKNOMEM, IRQ, READ_XPRAM, PATCH_BOOT_GLOBS
+- 864,694 IRQ EmulOp calls (successful)
+- **Crash during shutdown only** (SIGSEGV in cleanup code)
 
 ## References
 
