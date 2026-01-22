@@ -4,9 +4,11 @@
 
 Successfully implemented **60 Hz timer** using `clock_gettime(CLOCK_MONOTONIC)` polling from CPU execution loops.
 
-**Status:** ✅ **WORKING** - Verified at 60.0 Hz (16.667ms intervals)
+**Status:** ✅ **WORKING** - Verified at 60.0 Hz (16.625ms intervals = 60.15 Hz)
 
-**Implementation:** Polling-based (replaced SIGALRM approach)
+**Implementation:** Polling-based (replaced failed timerfd approach)
+
+**Note**: Documentation originally described this approach, but code still used `timerfd` until January 2026 when `timerfd` was found to fire only once with Unicorn backend. Now properly implemented with `clock_gettime()` polling.
 
 ## Evolution of Timer Implementations
 
@@ -19,11 +21,14 @@ Successfully implemented **60 Hz timer** using `clock_gettime(CLOCK_MONOTONIC)` 
 - Async-signal-safe constraints in handler code
 - 126 lines of complex signal setup code
 
-### ❌ timerfd Approach (Considered but not implemented)
-**Why we didn't use it:**
-- Adds file descriptor overhead for simple timing needs
-- Requires Linux-specific APIs (not portable)
-- More complex than necessary for a simple periodic check
+### ❌ timerfd Approach (Tried and FAILED)
+**Why it didn't work:**
+- Mysterious interaction with Unicorn causes timer to fire only ONCE then stop
+- After first `read()` succeeds, all subsequent calls return EAGAIN forever
+- Timer remains armed (`timerfd_gettime()` shows correct interval), but never fires again
+- Works perfectly with UAE backend, fails with Unicorn backend
+- Root cause unknown - likely Unicorn/QEMU JIT blocking kernel timer delivery
+- Spent entire debugging session diagnosing this issue before switching to polling
 
 ### ✅ Polling Approach (Current Implementation)
 **Why this works best:**

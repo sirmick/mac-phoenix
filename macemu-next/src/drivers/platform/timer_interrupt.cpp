@@ -1,8 +1,8 @@
 /*
- *  timer_interrupt.cpp - 60Hz timer via timerfd
+ *  timer_interrupt.cpp - 60Hz timer via clock_gettime() polling
  *
  *  Based on BasiliskII's tick_func() (main_unix.cpp:1492-1515)
- *  Replaces pthread with Linux timerfd for kernel-managed timing.
+ *  Uses simple clock_gettime() polling instead of signals or timerfd.
  *
  *  Called from CPU backend execution loops (UAE and Unicorn).
  */
@@ -16,16 +16,14 @@
 #include <string.h>        // For strstr()
 #include "macos_util.h"    // For HasMacStarted()
 
-#include <sys/timerfd.h>
-#include <unistd.h>
-#include <errno.h>
+#include <time.h>
 #include <stdio.h>
 
 // Forward declaration (avoid including timer.h due to C linkage conflicts)
 extern "C" uint32 TimerDateTime(void);
 
 // Timer state
-static int timer_fd = -1;
+static uint64_t last_timer_ns = 0;
 static uint64_t interrupt_count = 0;
 static uint64_t tick_counter = 0;
 static bool timer_initialized = false;
@@ -35,39 +33,19 @@ extern "C" {
 /*
  *  Initialize timer system
  *
- *  Creates a 60.15Hz periodic timerfd (matches BasiliskII timing)
+ *  Uses clock_gettime() polling for reliable 60.15 Hz timing.
  *  This is the master heartbeat for the emulator.
  */
 void setup_timer_interrupt(void)
 {
-	// Create non-blocking timerfd
-	timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-	if (timer_fd < 0) {
-		perror("timerfd_create");
-		fprintf(stderr, "ERROR: Failed to create timer (timerfd not supported?)\n");
-		return;
-	}
-
-	// Set to 60.15 Hz periodic timer (16,625 microseconds = 16,625,000 nanoseconds)
-	// This matches BasiliskII's timing exactly (see main_unix.cpp:1502)
-	struct itimerspec spec;
-	spec.it_interval.tv_sec = 0;
-	spec.it_interval.tv_nsec = 16625000;  // 60.15 Hz
-	spec.it_value.tv_sec = 0;
-	spec.it_value.tv_nsec = 16625000;     // Initial expiration
-
-	if (timerfd_settime(timer_fd, 0, &spec, NULL) < 0) {
-		perror("timerfd_settime");
-		close(timer_fd);
-		timer_fd = -1;
-		return;
-	}
-
-	timer_initialized = true;
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	last_timer_ns = now.tv_sec * 1000000000ULL + now.tv_nsec;
 	interrupt_count = 0;
 	tick_counter = 0;
+	timer_initialized = true;
 
-	printf("Timer: Initialized 60.15 Hz timer (timerfd, fd=%d)\n", timer_fd);
+	printf("Timer: Initialized 60.15 Hz timer (clock_gettime polling)\n");
 }
 
 /*
@@ -148,7 +126,7 @@ static void one_tick(void)
 /*
  *  Poll timer - call from CPU execution loop
  *
- *  Returns number of timer expirations (usually 0 or 1, but can be >1 if system is lagging)
+ *  Returns number of timer expirations (usually 0 or 1)
  */
 uint64_t poll_timer_interrupt(void)
 {
@@ -158,39 +136,36 @@ uint64_t poll_timer_interrupt(void)
 		return 0;  // No interrupts during tracing
 	}
 
-	if (!timer_initialized || timer_fd < 0) {
+	if (!timer_initialized) {
 		return 0;
 	}
 
-	// Read from timerfd (non-blocking)
-	uint64_t expirations;
-	ssize_t ret = read(timer_fd, &expirations, sizeof(expirations));
+	// Check current time
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	uint64_t now_ns = now.tv_sec * 1000000000ULL + now.tv_nsec;
 
-	if (ret < 0) {
-		if (errno != EAGAIN) {
-			// Real error (not just "no data available")
-			perror("timerfd read");
-		}
-		return 0;  // No timer expiration yet
+	// Check if 16.625ms have passed (60.15 Hz)
+	uint64_t elapsed = now_ns - last_timer_ns;
+	if (elapsed < 16625000ULL) {
+		return 0;  // Not time yet
 	}
 
-	// Timer fired! Process each expiration
-	for (uint64_t i = 0; i < expirations; i++) {
-		one_tick();
-		interrupt_count++;
+	// Timer fired! Update last fire time
+	last_timer_ns = now_ns;
+
+	// Process one tick
+	one_tick();
+	interrupt_count++;
+
+	// Debug logging for first few timer firings
+	static int fire_count = 0;
+	if (++fire_count <= 10) {
+		fprintf(stderr, "[poll_timer_interrupt] Timer fired #%d, interrupt_count=%llu, elapsed_ns=%llu\n",
+		        fire_count, (unsigned long long)interrupt_count, (unsigned long long)elapsed);
 	}
 
-	// If expirations > 1, we're lagging (CPU can't keep up with real-time)
-	if (expirations > 1) {
-		static bool warned = false;
-		if (!warned) {
-			fprintf(stderr, "Timer: Warning - System lagging (%llu missed ticks)\n",
-			        (unsigned long long)(expirations - 1));
-			warned = true;  // Only warn once
-		}
-	}
-
-	return expirations;
+	return 1;  // One expiration
 }
 
 /*
@@ -200,11 +175,6 @@ void stop_timer_interrupt(void)
 {
 	if (!timer_initialized) {
 		return;
-	}
-
-	if (timer_fd >= 0) {
-		close(timer_fd);
-		timer_fd = -1;
 	}
 
 	timer_initialized = false;

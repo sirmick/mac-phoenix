@@ -95,7 +95,14 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
      * Use total_instructions counter to ensure accurate 100-instruction intervals */
     if (cpu->block_stats.total_instructions % 100 < (uint64_t)size) {
         extern uint64_t poll_timer_interrupt(void);
-        poll_timer_interrupt();  /* May set g_pending_interrupt_level */
+        static int poll_count = 0;
+        uint64_t expirations = poll_timer_interrupt();  /* May set g_pending_interrupt_level */
+        if (++poll_count <= 10 || expirations > 0) {
+            if (poll_count <= 10) {
+                fprintf(stderr, "[hook_block] poll_timer_interrupt() call #%d returned %llu expirations (total_instructions=%llu)\n",
+                        poll_count, (unsigned long long)expirations, (unsigned long long)cpu->block_stats.total_instructions);
+            }
+        }
     }
 
     /* PC-based tracing: Enable CPU trace when hitting specific addresses */
@@ -149,9 +156,21 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
             uint8_t vector = (g_pending_interrupt_level == 1) ? 0x19 :
                            (0x18 + g_pending_interrupt_level);
 
+            static int interrupt_delivery_count = 0;
+            if (++interrupt_delivery_count <= 5) {
+                fprintf(stderr, "[hook_block] Delivering interrupt level %d (vector 0x%02x), SR=0x%04x, current_ipl=%d\n",
+                        g_pending_interrupt_level, vector, (uint16_t)(sr & 0xFFFF), current_ipl);
+            }
+
             uc_m68k_trigger_interrupt(uc, g_pending_interrupt_level, vector);
             g_pending_interrupt_level = 0;
             uc_emu_stop(uc);
+        } else {
+            static int interrupt_blocked_count = 0;
+            if (++interrupt_blocked_count <= 5) {
+                fprintf(stderr, "[hook_block] Interrupt level %d BLOCKED by SR mask (SR=0x%04x, current_ipl=%d)\n",
+                        g_pending_interrupt_level, (uint16_t)(sr & 0xFFFF), current_ipl);
+            }
         }
     }
 }

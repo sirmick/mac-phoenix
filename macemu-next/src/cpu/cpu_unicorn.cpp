@@ -645,6 +645,9 @@ static void unicorn_backend_execute_fast(void) {
 			if (!err || strcmp(err, "OK") == 0) {
 				// This is normal - likely from uc_emu_stop() after exception handling
 				// Continue execution from the new PC
+				if (stop_count <= 10) {
+					fprintf(stderr, "[unicorn_backend_execute] Continuing execution from PC=0x%08X\n", pc);
+				}
 				continue;
 			}
 
