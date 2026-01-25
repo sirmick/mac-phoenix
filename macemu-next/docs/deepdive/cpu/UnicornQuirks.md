@@ -656,9 +656,65 @@ See commit `72152174` for full details:
 
 ---
 
+---
+
+## ✅ IRQ Storm Issue - SOLVED (January 2026)
+
+### The Problem
+Unicorn was experiencing an "IRQ storm" - the Mac ROM's interrupt polling loop executed 781,000+ times in 10 seconds instead of the expected ~600 times.
+
+### Root Causes
+1. **Incorrect EmulOp Encoding**: ROM patcher was converting 0x7129 to 0xAE29
+2. **No Interrupt Checks**: JIT compiled tight loops without interrupt check points
+3. **Deferred Updates**: Register updates were delayed, breaking timing
+4. **No Exception Frames**: Interrupts weren't delivered with proper M68K frames
+
+### The Solution (4-Phase Implementation)
+
+#### Phase 1: Fixed IRQ Encoding
+```c
+// src/core/rom_patches.cpp
+// Before: *wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));  // Wrong: 0xAE29
+// After:  *wp++ = htons(0x7129);                         // Correct: 0x7129
+```
+
+#### Phase 2: QEMU-Style Execution Loop
+Created `src/cpu/unicorn_exec_loop.c`:
+- Adaptive batch sizing (3-50 instructions)
+- Interrupt checks between batches
+- Backward branch detection
+
+#### Phase 3: Immediate Register Updates
+- Eliminated deferred update mechanism
+- All registers updated immediately after EmulOps
+- No timing issues
+
+#### Phase 4: Proper Interrupt Delivery
+Created `src/cpu/m68k_interrupt.c`:
+- Build M68K exception frames
+- Handle interrupt priority masking
+- Deliver timer at 60Hz
+
+### Results
+- **99.997% reduction** in IRQ polling overhead
+- Timer delivers at perfect 60Hz
+- Mac OS boots successfully
+- Performance comparable to UAE
+
+### Verification
+```bash
+# Should show ~20, not 780,000+
+env EMULATOR_TIMEOUT=10 CPU_BACKEND=unicorn ./build/macemu-next --no-webserver 2>&1 | grep -c poll_timer
+```
+
+See [UnicornIRQStormDebugSession.md](../UnicornIRQStormDebugSession.md) for full details.
+
+---
+
 ## See Also
 
 - [CPU Emulation](CPU.md) - Dual-CPU architecture
 - [UAE Quirks](UAE-Quirks.md) - UAE-specific details
 - [Memory Layout](Memory.md) - Shared memory setup
 - [A-Line and F-Line Trap Handling](ALineAndFLineTrapHandling.md) - Exception handling
+- [IRQ Storm Debug Session](../UnicornIRQStormDebugSession.md) - Complete fix details

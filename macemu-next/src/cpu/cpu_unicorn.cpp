@@ -592,7 +592,10 @@ static int unicorn_backend_execute_one(void) {
 	 * See: docs/deepdive/UnicornBatchExecutionRTEBug.md
 	 */
 	int count = cpu_trace_is_enabled() ? 1 : 1000;
-	if (!unicorn_execute_n(unicorn_cpu, count)) {
+
+	// Phase 2: Use QEMU-style execution loop with interrupt checking
+	int result = unicorn_execute_with_interrupts(unicorn_cpu, count);
+	if (result < 0) {
 		uint32_t pc = unicorn_get_pc(unicorn_cpu);
 		uint32_t a7 = unicorn_get_areg(unicorn_cpu, 7);
 		const char *err_str = unicorn_get_error(unicorn_cpu);
@@ -645,10 +648,10 @@ static void unicorn_backend_execute_fast(void) {
 	// Use global running flag from webserver namespace (same as main.cpp)
 	int exec_count = 0;
 	while (webserver::g_running.load(std::memory_order_acquire)) {
-		// Execute in batches for performance (EmulOps are handled via hook_interrupt)
-		// We no longer need single-step execution since we removed uc_emu_stop() from
-		// EmulOp handlers. The hook will be called automatically for A-line exceptions.
-		if (!unicorn_execute_n(unicorn_cpu, 1000)) {
+		// Phase 2: Use QEMU-style execution loop which handles interrupt checking
+		// This replaces the need for small batches since the loop checks interrupts properly
+		int result = unicorn_execute_with_interrupts(unicorn_cpu, 1000);
+		if (result < 0) {
 			// Check if this was a stop request (e.g., from uc_emu_stop) or an error
 			uint32_t pc = unicorn_get_pc(unicorn_cpu);
 			const char *err = unicorn_get_error(unicorn_cpu);

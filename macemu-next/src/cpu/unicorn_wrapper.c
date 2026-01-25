@@ -177,17 +177,23 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
     cpu->block_stats.total_blocks++;
     cpu->block_stats.total_instructions += size;
 
-    /* Poll timer every 100 instructions like UAE does
-     * Use total_instructions counter to ensure accurate 100-instruction intervals */
-    if (cpu->block_stats.total_instructions % 100 < (uint64_t)size) {
-        extern uint64_t poll_timer_interrupt(void);
-        static int poll_count = 0;
-        uint64_t expirations = poll_timer_interrupt();  /* May set g_pending_interrupt_level */
-        if (++poll_count <= 10 || expirations > 0) {
-            if (poll_count <= 10) {
-                fprintf(stderr, "[hook_block] poll_timer_interrupt() call #%d returned %llu expirations (total_instructions=%llu)\n",
-                        poll_count, (unsigned long long)expirations, (unsigned long long)cpu->block_stats.total_instructions);
-            }
+    /* Poll timer on EVERY basic block (like UAE polls after every instruction)
+     *
+     * This ensures InterruptFlags is updated frequently enough that the ROM's
+     * tight IRQ polling loop sees the flag immediately after the timer fires.
+     *
+     * UAE polls timer after every instruction via cpu_check_ticks(). Since we
+     * can't hook every instruction in Unicorn, we poll at every basic block instead.
+     * Combined with the 100us nanosleep in IRQ EmulOp, this should prevent IRQ storms
+     * while ensuring timer interrupts are seen by the ROM promptly.
+     */
+    extern uint64_t poll_timer_interrupt(void);
+    static int poll_count = 0;
+    uint64_t expirations = poll_timer_interrupt();  /* May set g_pending_interrupt_level */
+    if (++poll_count <= 10 || expirations > 0) {
+        if (poll_count <= 10) {
+            fprintf(stderr, "[hook_block] poll_timer_interrupt() call #%d returned %llu expirations (total_instructions=%llu)\n",
+                    poll_count, (unsigned long long)expirations, (unsigned long long)cpu->block_stats.total_instructions);
         }
     }
 
@@ -320,15 +326,17 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                     fprintf(stderr, "[hook_interrupt] Handler advanced PC to 0x%08x after EmulOp 0x%04x\n", new_pc, legacy_opcode);
                 }
 
-                /* CRITICAL: Apply deferred register updates IMMEDIATELY after EmulOp
-                 * The ROM code may be in a tight loop checking register values, so we
-                 * MUST apply updates before returning to execution, not after uc_emu_start() returns.
-                 * This fixes the infinite CLKNOMEM loop issue. */
+                /* Phase 3: Deferred updates are now handled immediately in unicorn_exec_loop.c
+                 * The new handle_emulop_immediate() function updates registers directly after
+                 * the EmulOp handler returns, eliminating the need for deferred updates.
+                 *
+                 * Keeping this commented for reference:
                 static int emulop_flush_count = 0;
                 bool flushed = apply_deferred_updates_and_flush(cpu, uc, "hook_interrupt");
                 if (flushed && ++emulop_flush_count <= 5) {
                     fprintf(stderr, "[hook_interrupt] Applied deferred updates after EmulOp 0x%04x\n", legacy_opcode);
                 }
+                 */
 
                 /* NOTE: We do NOT call uc_emu_stop() here!
                  *
@@ -877,4 +885,71 @@ void unicorn_set_cacr(UnicornCPU *cpu, uint32_t cacr) {
 /* Default arch wrapper */
 UnicornCPU* unicorn_create(UnicornArch arch) {
     return unicorn_create_with_model(arch, -1);  /* Use default CPU model */
+}
+
+/* Phase 2: Helper functions for QEMU-style execution loop */
+
+/* Poll for interrupts and deliver if needed */
+bool unicorn_poll_interrupts(UnicornCPU *cpu) {
+    if (!cpu || !cpu->uc) return false;
+
+    extern uint64_t poll_timer_interrupt(void);
+    extern volatile int g_pending_interrupt_level;
+
+    // Check timer interrupts
+    uint64_t expirations = poll_timer_interrupt();
+
+    // If we have pending interrupts, we need to handle them
+    if (g_pending_interrupt_level > 0) {
+        // Get current SR to check interrupt mask
+        uint32_t sr = 0;
+        uc_reg_read(cpu->uc, UC_M68K_REG_SR, &sr);
+        int current_ipl = (sr >> 8) & 7;
+
+        // Check if interrupt is not masked
+        if (g_pending_interrupt_level > current_ipl) {
+            // The interrupt hook will handle the actual delivery
+            // We just need to signal that an interrupt occurred
+            return true;
+        }
+    }
+
+    return expirations > 0;
+}
+
+/* Handle illegal instruction */
+bool unicorn_handle_illegal(UnicornCPU *cpu, uint32_t pc) {
+    if (!cpu || !cpu->uc) return false;
+
+    // Read the opcode
+    uint16_t opcode;
+    if (uc_mem_read(cpu->uc, pc, &opcode, 2) != UC_ERR_OK) {
+        return false;
+    }
+    opcode = __builtin_bswap16(opcode);
+
+    // Check if it's an EmulOp (0x71xx)
+    if ((opcode & 0xFF00) == 0x7100) {
+        // EmulOps should be handled by the interrupt hook
+        // If we get here, something went wrong
+        fprintf(stderr, "[unicorn_handle_illegal] Unhandled EmulOp 0x%04x at PC 0x%08x\n",
+                opcode, pc);
+
+        // Try to skip past it
+        pc += 2;
+        uc_reg_write(cpu->uc, UC_M68K_REG_PC, &pc);
+        return true;
+    }
+
+    // Check for A-line (0xAxxx) or F-line (0xFxxx) traps
+    if ((opcode & 0xF000) == 0xA000 || (opcode & 0xF000) == 0xF000) {
+        // These should be handled by exception handlers
+        // For now, skip past them
+        pc += 2;
+        uc_reg_write(cpu->uc, UC_M68K_REG_PC, &pc);
+        return true;
+    }
+
+    // Real illegal instruction - can't handle
+    return false;
 }

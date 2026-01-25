@@ -20,6 +20,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "sysdeps.h"
 #include "cpu_emulation.h"
@@ -27,6 +28,11 @@
 #include "platform.h"      // For g_platform
 #include "unicorn_wrapper.h"  // For g_pending_interrupt_level
 #include "main.h"
+
+// C linkage for timer interrupt polling (from timer_interrupt.cpp)
+extern "C" {
+	uint64_t poll_timer_interrupt(void);
+}
 #include "macos_util.h"
 #include "rom_patches.h"
 #include "rsrc_patches.h"
@@ -705,6 +711,11 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 				        irq_emulop_count, InterruptFlags);
 			}
 			r->d[0] = 0;
+
+			// Timer is polled in hook_block (unicorn_wrapper.c) which is called before each
+			// translation block. With small instruction batches (10 per uc_emu_start in
+			// cpu_unicorn.cpp), hook_block gets called frequently enough to poll the timer
+			// and set InterruptFlags properly.
 
 			// Check if Unicorn backend has a pending interrupt that was blocked by SR
 			// This happens when ROM sets IPL=7 to disable CPU interrupts, then polls IRQ EmulOp

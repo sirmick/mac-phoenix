@@ -1,0 +1,107 @@
+diff --git a/subprojects/unicorn/qemu/target/m68k/translate.c b/subprojects/unicorn/qemu/target/m68k/translate.c
+index 1234567..abcdefg 100644
+--- a/subprojects/unicorn/qemu/target/m68k/translate.c
++++ b/subprojects/unicorn/qemu/target/m68k/translate.c
+@@ -3161,6 +3161,7 @@ DISAS_INSN(branch)
+ {
+     TCGContext *tcg_ctx = s->uc->tcg_ctx;
+     int32_t offset;
+     uint32_t base;
+     int op;
++    bool is_backward_branch = false;
+
+     base = s->pc;
+     op = (insn >> 8) & 0xf;
+@@ -3174,6 +3175,28 @@ DISAS_INSN(branch)
+         offset = read_im32(env, s);
+     }
+
++    /* UNICORN INTERRUPT FIX: Force TB termination on backward branches
++     *
++     * Problem: The Mac ROM contains tight polling loops (e.g., IRQ polling)
++     * that get compiled into single Translation Blocks. These TBs execute
++     * millions of times internally without returning to the main execution
++     * loop, preventing interrupt checks from running.
++     *
++     * Solution: When we detect a backward branch (negative offset), we force
++     * the TB to terminate after the branch. This ensures that tight loops
++     * will check for interrupts on every iteration.
++     *
++     * This is similar to how real CPUs handle branch prediction misses -
++     * they flush the pipeline and re-fetch instructions.
++     */
++    if (offset < 0) {
++        is_backward_branch = true;
++        /* Debug: Log when we detect backward branches */
++        if (getenv("UNICORN_DEBUG_BACKWARD_BRANCH")) {
++            fprintf(stderr, "[M68K] Backward branch detected at PC=0x%x, offset=%d\n",
++                    base, offset);
++        }
++    }
++
+     if (op == 1) {
+         /* bsr */
+         gen_push(s, tcg_const_i32(tcg_ctx, s->pc));
+@@ -3182,12 +3205,26 @@ DISAS_INSN(branch)
+         /* Bcc */
+         TCGLabel *l1 = gen_new_label(tcg_ctx);
+         gen_jmpcc(s, ((insn >> 8) & 0xf) ^ 1, l1);
+-        gen_jmp_tb(s, 1, base + offset);
++        if (is_backward_branch) {
++            /* For backward conditional branches, don't use TB chaining */
++            update_cc_op(s);
++            tcg_gen_movi_i32(tcg_ctx, QREG_PC, base + offset);
++            s->base.is_jmp = DISAS_JUMP;
++        } else {
++            gen_jmp_tb(s, 1, base + offset);
++        }
+         gen_set_label(tcg_ctx, l1);
+         gen_jmp_tb(s, 0, s->pc);
+     } else {
+         /* Unconditional branch.  */
+         update_cc_op(s);
+-        gen_jmp_tb(s, 0, base + offset);
++        if (is_backward_branch) {
++            /* For backward unconditional branches, force TB exit */
++            tcg_gen_movi_i32(tcg_ctx, QREG_PC, base + offset);
++            s->base.is_jmp = DISAS_JUMP;
++        } else {
++            gen_jmp_tb(s, 0, base + offset);
++        }
+     }
+ }
+
+@@ -1576,11 +1613,18 @@ DISAS_INSN(dbcc)
+     TCGv tmp;
+     int16_t offset;
+     uint32_t base;
++    bool is_backward_branch = false;
+
+     reg = DREG(insn, 0);
+     base = s->pc;
+     offset = (int16_t)read_im16(env, s);
++
++    /* Check if this is a backward branch (typical for DBcc loops) */
++    if (offset < 0) {
++        is_backward_branch = true;
++    }
++
+     l1 = gen_new_label(tcg_ctx);
+     gen_jmpcc(s, (insn >> 8) & 0xf, l1);
+
+@@ -1588,7 +1632,14 @@ DISAS_INSN(dbcc)
+     tcg_gen_addi_i32(tcg_ctx, tmp, tmp, -1);
+     gen_partset_reg(tcg_ctx, OS_WORD, reg, tmp);
+     tcg_gen_brcondi_i32(tcg_ctx, TCG_COND_EQ, tmp, -1, l1);
+-    gen_jmp_tb(s, 1, base + offset);
++
++    if (is_backward_branch) {
++        /* Force TB exit for backward DBcc to allow interrupt checking */
++        tcg_gen_movi_i32(tcg_ctx, QREG_PC, base + offset);
++        s->base.is_jmp = DISAS_JUMP;
++    } else {
++        gen_jmp_tb(s, 1, base + offset);
++    }
+     gen_set_label(tcg_ctx, l1);
+     gen_jmp_tb(s, 0, s->pc);
+ }

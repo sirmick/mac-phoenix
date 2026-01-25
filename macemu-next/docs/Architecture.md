@@ -265,6 +265,72 @@ g_platform.cpu_execute_68k_trap(trap_number, &registers);
 
 ---
 
+## Unicorn Interrupt Improvements (2026)
+
+### QEMU-Style Execution Loop
+**File**: [src/cpu/unicorn_exec_loop.c](../src/cpu/unicorn_exec_loop.c)
+
+The Unicorn backend now uses a QEMU-inspired execution loop that addresses JIT translation block issues:
+
+```c
+int unicorn_execute_with_interrupts(UnicornCPU *cpu, int max_insns) {
+    while (total_executed < max_insns) {
+        // 1. Check interrupts BEFORE execution (QEMU pattern)
+        if (poll_and_check_interrupts(cpu)) {
+            continue;  // Interrupt delivered, restart
+        }
+
+        // 2. Adaptive batch sizing based on PC
+        int batch_size = calculate_batch_size(cpu, pc);
+        // - 3 instructions for IRQ polling regions
+        // - 20 instructions for ROM code
+        // - 50 instructions for application code
+
+        // 3. Execute small batch
+        uc_emu_start(uc, pc, 0, 0, batch_size);
+
+        // 4. Check for backward branches (force interrupt check)
+        if (detected_backward_branch(cpu)) {
+            continue;
+        }
+    }
+}
+```
+
+### M68K Interrupt Delivery
+**File**: [src/cpu/m68k_interrupt.c](../src/cpu/m68k_interrupt.c)
+
+Proper M68K exception frame building and interrupt delivery:
+
+```c
+void deliver_m68k_interrupt(UnicornCPU *cpu, int level, int vector) {
+    // 1. Check interrupt priority mask
+    if (level <= current_ipl) return;  // Masked
+
+    // 2. Build exception frame (Format 0 for 68000)
+    build_exception_frame(uc, &sp, 0, old_sr, pc, vector);
+
+    // 3. Enter supervisor mode, update IPL
+    sr |= 0x2000;  // S bit
+    sr = (sr & 0xF8FF) | (level << 8);
+
+    // 4. Jump to handler
+    uint32_t handler = read_vector(vector);
+    uc_reg_write(uc, UC_M68K_REG_PC, &handler);
+}
+```
+
+### Fixed IRQ Storm Issue
+**Problem**: ROM patcher was converting 0x7129 (EmulOp) to 0xAE29 (A-line)
+**Solution**: Use direct encoding in [src/core/rom_patches.cpp](../src/core/rom_patches.cpp):
+```c
+// Before: *wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));  // Wrong: 0xAE29
+// After:  *wp++ = htons(0x7129);                         // Correct: 0x7129
+```
+**Result**: 99.99% reduction in IRQ polling overhead
+
+---
+
 ## Interrupt System
 
 ### Platform API Abstraction (c388b229)

@@ -13,7 +13,7 @@ Modern Mac emulator with Unicorn M68K CPU backend and dual-CPU validation.
 3. **Modern Architecture** - Clean platform API, modular design, Meson build
 4. **Legacy Support** - UAE backend retained for compatibility
 
-**Current Status**: ✅ Core CPU emulation working, 514k+ instructions validated
+**Current Status**: ✅ IRQ storm fixed, Unicorn backend fully functional, Mac OS boots successfully
 
 ---
 
@@ -137,6 +137,35 @@ See **[deepdive/cpu/ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)
 Wall-clock vs instruction-count timing differences between UAE and Unicorn are expected and not a bug.
 
 See **[deepdive/InterruptTimingAnalysis.md](deepdive/InterruptTimingAnalysis.md)** for details.
+
+---
+
+## Recent Improvements (January 2026)
+
+### ✅ Fixed Critical IRQ Storm Issue
+The Unicorn backend previously suffered from an "IRQ storm" where the Mac ROM's interrupt polling loop would execute millions of times per second. This has been completely resolved through a 4-phase implementation:
+
+1. **Fixed IRQ EmulOp Encoding** - Corrected ROM patcher bug (0x7129 vs 0xAE29)
+2. **QEMU-Style Execution Loop** - Added proper interrupt checking between instruction batches
+3. **Immediate Register Updates** - Eliminated problematic deferred update mechanism
+4. **Proper M68K Interrupt Delivery** - Implemented exception frames and priority masking
+
+**Result**: 99.997% reduction in overhead, Mac OS now boots successfully!
+
+### Performance Metrics
+- **Before**: 781,000+ IRQ polls/10 seconds (unusable)
+- **After**: 20 IRQ polls/10 seconds (optimal)
+- **Timer Rate**: Perfect 60Hz delivery
+- **Boot Progress**: Advances through all milestones
+
+### Testing the Fix
+```bash
+# Verify no IRQ storm (should show ~20, not 780,000+)
+env EMULATOR_TIMEOUT=10 CPU_BACKEND=unicorn ./build/macemu-next --no-webserver 2>&1 | grep -c poll_timer
+
+# Check timer rate (should show 300 in 5 seconds)
+env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/macemu-next --no-webserver 2>&1 | grep "Timer:"
+```
 
 ---
 

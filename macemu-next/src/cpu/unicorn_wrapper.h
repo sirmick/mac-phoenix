@@ -118,6 +118,11 @@ void unicorn_reset_block_stats(UnicornCPU *cpu);
 /* Interrupt triggering (for platform API) */
 void unicorn_trigger_interrupt_internal(int level);
 
+/* Phase 2: QEMU-style execution loop */
+int unicorn_execute_with_interrupts(UnicornCPU *cpu, int max_total_insns);
+bool unicorn_poll_interrupts(UnicornCPU *cpu);
+bool unicorn_handle_illegal(UnicornCPU *cpu, uint32_t pc);
+
 /* Pending interrupt level (for IRQ EmulOp to check if interrupt was blocked by SR) */
 extern volatile int g_pending_interrupt_level;
 

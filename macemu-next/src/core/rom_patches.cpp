@@ -1040,7 +1040,8 @@ static bool patch_rom_classic(void)
 	wp = (uint16 *)(ROMBaseHost + 0x2be4);	// 60Hz handler (handles everything)
 	*wp++ = htons(M68K_NOP);
 	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));
+	// Phase 1 Fix: Use direct 0x7129 encoding for IRQ EmulOp (not A-line 0xAE29)
+	*wp++ = htons(0x7129);		// Direct IRQ EmulOp encoding
 	*wp++ = htons(0x4a80);		// tst.l	d0
 	*wp = htons(0x67f4);		// beq		0x402be2
 	return true;
@@ -1693,7 +1694,8 @@ static bool patch_rom_32(void)
 	wp = (uint16 *)(ROMBaseHost + 0xa296);	// 60Hz handler (handles everything)
 	*wp++ = htons(M68K_NOP);
 	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));
+	// Phase 1 Fix: Use direct 0x7129 encoding for IRQ EmulOp (not A-line 0xAE29)
+	*wp++ = htons(0x7129);		// Direct IRQ EmulOp encoding
 	*wp++ = htons(0x4a80);		// tst.l	d0
 	*wp = htons(0x67f4);		// beq		0x4080a294
 	return true;
