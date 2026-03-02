@@ -6,8 +6,16 @@ Detailed technical documentation on specific subsystems.
 
 ## Active Investigations
 
+### [JIT_SMC_Detection_Analysis.md](JIT_SMC_Detection_Analysis.md)
+**Critical**: Root cause analysis of Unicorn's broken self-modifying code detection
+- Unicorn gutted QEMU's entire dirty memory bitmap in `ram_addr.h`
+- `cpu_physical_memory_is_clean()` hardcoded to `return true`
+- `invalidate_and_set_dirty()` completely empty
+- Guest-to-guest writes partially work via `notdirty_write()` slow path
+- Five fix options analyzed, starting with "verify guest path works"
+
 ### [InterruptTimingAnalysis.md](InterruptTimingAnalysis.md)
-**Critical**: Explains why UAE and Unicorn diverge at instruction #29,518
+**Historical**: Explains why UAE and Unicorn diverge at instruction #29,518
 
 **Key Finding**: Timer interrupts fire at different instruction counts because:
 - Interrupts based on wall-clock time (not instruction count)

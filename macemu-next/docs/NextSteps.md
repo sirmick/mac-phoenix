@@ -38,14 +38,27 @@ What needs fixing, in priority order.
 
 **Why it exists**: Mac OS heap overwrites RAM containing EmulOp patch code. QEMU's JIT retains stale compiled translations for the old code. Executing stale TBs crashes at PC=0x00000002.
 
-**Proper fix**: Investigate QEMU's `TLB_NOTDIRTY` / `tb_invalidate_phys_page_range()` mechanism. This would let QEMU detect when a memory page containing compiled code is written to, and only invalidate the affected TBs. The Unicorn fork may have this mechanism disabled or broken.
+**Root Cause (RESEARCHED)**: Unicorn **gutted** QEMU's entire dirty memory bitmap. See [deepdive/JIT_SMC_Detection_Analysis.md](deepdive/JIT_SMC_Detection_Analysis.md) for full analysis. Key findings:
+- `cpu_physical_memory_is_clean()` hardcoded to `return true` in `ram_addr.h`
+- `cpu_physical_memory_set_dirty_flag()` is an empty no-op
+- `invalidate_and_set_dirty()` in `exec.c` has an empty body
+- `flatview_write_continue()` does raw `memcpy()` with no TB invalidation for API writes
+- `page_collection_lock()` in `translate-all.c` is `#if 0`'d out
 
-**Where to look**:
-- `subprojects/unicorn/qemu/exec.c` -- `tb_invalidate_phys_page_range()`
-- `subprojects/unicorn/qemu/softmmu/memory.c` -- `TLB_NOTDIRTY` flag
-- `subprojects/unicorn/qemu/accel/tcg/cputlb.c` -- TLB dirty tracking
+**What still works**: Guest M68K stores go through `store_helper()` → `notdirty_write()` → `tb_invalidate_phys_page_fast()`. Since `is_clean()` always returns true, ALL pages get `TLB_NOTDIRTY`, so guest writes to executable pages DO trigger per-page TB invalidation. This may already handle our Mac OS heap overwrite case.
 
-**Impact**: This is the single highest-impact performance optimization available. Going from "flush everything 60x/sec" to "invalidate only modified pages" could be a large speedup.
+**Recommended fix approach**:
+1. **First**: Test if removing `uc_ctl_flush_tb()` still works (the `notdirty_write()` path may already handle it)
+2. **If needed**: Use `uc_ctl_remove_cache(start, end)` for specific code ranges
+3. **Nuclear option**: Restore the full dirty bitmap in the Unicorn fork
+
+**Key files**:
+- `subprojects/unicorn/qemu/include/exec/ram_addr.h` -- stubbed dirty bitmap functions
+- `subprojects/unicorn/qemu/exec.c:1531` -- empty `invalidate_and_set_dirty()`
+- `subprojects/unicorn/qemu/accel/tcg/cputlb.c:1189` -- `notdirty_write()` (partially works)
+- `subprojects/unicorn/qemu/accel/tcg/translate-all.c:2019` -- `tb_invalidate_phys_page_fast()` (works)
+
+**Impact**: Highest-impact performance optimization. Removing the 60Hz full flush could dramatically improve JIT effectiveness.
 
 ---
 
