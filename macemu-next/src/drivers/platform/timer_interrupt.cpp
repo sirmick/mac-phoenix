@@ -45,7 +45,7 @@ void setup_timer_interrupt(void)
 	tick_counter = 0;
 	timer_initialized = true;
 
-	printf("Timer: Initialized 60.15 Hz timer (clock_gettime polling)\n");
+	fprintf(stderr, "Timer: Initialized 60.15 Hz timer (clock_gettime polling)\n");
 }
 
 /*
@@ -60,6 +60,47 @@ static void one_second(void)
 
 	SetInterruptFlag(INTFLAG_1HZ);
 	// Note: TriggerInterrupt() will be called from poll_timer_interrupt()
+
+	// Debug: Monitor low memory global at 0x0b78 (boot stall diagnostic)
+	static uint32 prev_0b78 = 0xDEADBEEF;
+	uint32 val_0b78 = ReadMacInt32(0x0b78);
+	extern Platform g_platform;
+	/* Watch 0x01FFF30C (resource chain sentinel) and resource globals */
+	uint32 val_1fff30c = ReadMacInt32(0x01FFF30C);
+	uint32 topmap = ReadMacInt32(0x0A50);
+	uint32 sysmap = ReadMacInt32(0x0A54);
+	uint32 syszone = ReadMacInt32(0x02A6);
+	/* Get current PC via platform API if available */
+	uint32 cur_pc = 0;
+	if (g_platform.cpu_get_pc) cur_pc = g_platform.cpu_get_pc();
+	fprintf(stderr, "[TIMER 1Hz] sec=%llu $0b78=0x%08x PC=0x%08x [1FFF30C]=0x%08x TopMap=0x%08x SysMap=0x%08x SysZone=0x%08x backend=%s\n",
+			(unsigned long long)interrupt_count / 60,
+			val_0b78, cur_pc, val_1fff30c, topmap, sysmap, syszone,
+			g_platform.cpu_name ? g_platform.cpu_name : "?");
+	if (val_0b78 != prev_0b78) {
+		fprintf(stderr, "[TIMER 1Hz] *** $0b78 CHANGED: 0x%08x -> 0x%08x ***\n",
+				prev_0b78, val_0b78);
+		prev_0b78 = val_0b78;
+		// Dump OS trap table entries that point to RAM (not ROM)
+		fprintf(stderr, "[TRAP-TABLE] OS trap table (RAM handlers only):\n");
+		for (int i = 0; i < 256; i++) {
+			uint32 handler = ReadMacInt32(0x0400 + i * 4);
+			if (handler > 0 && handler < 0x02000000) {
+				fprintf(stderr, "[TRAP-TABLE] OS trap A0%02x → 0x%08x\n", i, handler);
+			}
+		}
+		// Also dump Toolbox trap table base and first few RAM entries
+		uint32 toolbox_base = ReadMacInt32(0x0E7C);
+		fprintf(stderr, "[TRAP-TABLE] Toolbox table base: 0x%08x\n", toolbox_base);
+		if (toolbox_base > 0 && toolbox_base < 0x01800000) {
+			for (int i = 0; i < 1024; i++) {
+				uint32 handler = ReadMacInt32(toolbox_base + i * 4);
+				if (handler >= 0x0001cb00 && handler <= 0x0001cd00) {
+					fprintf(stderr, "[TRAP-TABLE] Toolbox trap A8%03x → 0x%08x\n", i, handler);
+				}
+			}
+		}
+	}
 }
 
 /*
@@ -96,16 +137,6 @@ static void one_tick(void)
 	//
 	// The ROM_VERSION_CLASSIC check allows Classic Mac ROMs (Plus, SE) to bypass
 	// this guard as they have different boot sequences.
-
-	// Debug: Check what HasMacStarted returns
-	static bool debug_logged = false;
-	bool mac_started = HasMacStarted();
-	if (!debug_logged && interrupt_count < 5) {
-		uint32_t cfc_value = ReadMacInt32(0xcfc);
-		fprintf(stderr, "[DEBUG Timer] tick=%llu ROM=0x%04x mac_started=%d cfc=0x%08x (expected 0x574C5343='WLSC')\n",
-		        (unsigned long long)interrupt_count, ROMVersion, mac_started, cfc_value);
-		if (interrupt_count >= 4) debug_logged = true;
-	}
 
 	// Trigger CPU-level interrupt
 	// IMPORTANT: Must deliver interrupts BEFORE Mac starts to allow boot to progress
@@ -147,19 +178,20 @@ uint64_t poll_timer_interrupt(void)
 		return 0;  // Not time yet
 	}
 
-	// Timer fired! Update last fire time
-	last_timer_ns = now_ns;
+	// Timer fired! Advance by one tick interval (NOT reset to now).
+	// This ensures missed ticks are caught up on subsequent polls.
+	// If we're severely behind, cap to prevent a burst of 100s of ticks.
+	last_timer_ns += 16625000ULL;
+
+	// If we've fallen more than 10 ticks behind, snap to now
+	// to prevent a burst of catch-up ticks that flood the system
+	if (now_ns - last_timer_ns > 10 * 16625000ULL) {
+		last_timer_ns = now_ns;
+	}
 
 	// Process one tick
 	one_tick();
 	interrupt_count++;
-
-	// Debug logging for first few timer firings
-	static int fire_count = 0;
-	if (++fire_count <= 10) {
-		fprintf(stderr, "[poll_timer_interrupt] Timer fired #%d, interrupt_count=%llu, elapsed_ns=%llu\n",
-		        fire_count, (unsigned long long)interrupt_count, (unsigned long long)elapsed);
-	}
 
 	return 1;  // One expiration
 }

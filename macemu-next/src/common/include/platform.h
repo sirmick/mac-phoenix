@@ -161,6 +161,10 @@ typedef struct {
     // This allows ROM patches to call Mac OS traps without depending on specific CPU backend
     void (*cpu_execute_68k_trap)(uint16_t trap, struct M68kRegisters *r);
 
+    // 68k Subroutine Execution (for timer callbacks, ADB handlers, etc.)
+    // Executes 68k code at given address, returns updated registers
+    void (*cpu_execute_68k)(uint32_t addr, struct M68kRegisters *r);
+
     /*
      *  Memory System API (backend-independent)
      *

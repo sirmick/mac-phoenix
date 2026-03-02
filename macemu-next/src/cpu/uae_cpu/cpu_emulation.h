@@ -98,7 +98,8 @@ extern "C" void Execute68kTrap(uint16 trap, M68kRegisters *r);	// Execute MacOS 
 // Interrupt functions (now declared in ../uae_wrapper.h - shared by all CPU backends)
 // TriggerInterrupt() and TriggerNMI() moved to uae_wrapper.cpp for backend-agnostic access
 
-// UAE-specific trap execution (for platform API registration)
+// UAE-specific execution (for platform API registration)
 extern "C" void uae_execute_68k_trap(uint16 trap, struct M68kRegisters *r);
+extern "C" void uae_execute_68k(uint32 addr, struct M68kRegisters *r);
 
 #endif

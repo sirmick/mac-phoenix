@@ -34,7 +34,18 @@
 #include "emul_op.h"
 #include "version.h"
 #include "slot_rom.h"
+#include "platform.h"
 
+// Convert EmulOp for Unicorn: 0x71xx → 0xAExx
+static inline uint16 slot_make_emulop(uint16 emulop)
+{
+	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
+		if ((emulop & 0xff00) == 0x7100) {
+			return 0xAE00 | (emulop & 0x3F);
+		}
+	}
+	return emulop;
+}
 
 // Temporary buffer for slot ROM
 static uint8 srom[4096];
@@ -291,15 +302,15 @@ bool InstallSlotROM(void)
 	Word(0x6c);							// Close offset
 	PString(".Display_Video_Apple_Basilisk");
 	Word(1);							// Driver version
-	Word(M68K_EMUL_OP_VIDEO_OPEN);		// Open()
+	Word(slot_make_emulop(M68K_EMUL_OP_VIDEO_OPEN));		// Open()
 	Word(0x4e75);
 	Word(0x70ff);						// Prime()
 	Word(0x600e);
-	Word(M68K_EMUL_OP_VIDEO_CONTROL);	// Control()
+	Word(slot_make_emulop(M68K_EMUL_OP_VIDEO_CONTROL));	// Control()
 	Word(0x0c68); Word(0x0001); Word(0x001a);
 	Word(0x6604);
 	Word(0x4e75);
-	Word(M68K_EMUL_OP_VIDEO_STATUS);	// Status()
+	Word(slot_make_emulop(M68K_EMUL_OP_VIDEO_STATUS));	// Status()
 	Word(0x3228); Word(0x0006);			// IOReturn
 	Word(0x0801); Word(0x0009);
 	Word(0x670c);
@@ -391,11 +402,11 @@ bool InstallSlotROM(void)
 	Word(0);
 	PString("1.1.1  ");
 	PString("Basilisk II Ethernet Network Driver");
-	Word(M68K_EMUL_OP_ETHER_OPEN);		// Open()
+	Word(slot_make_emulop(M68K_EMUL_OP_ETHER_OPEN));		// Open()
 	Word(0x4e75);
 	Word(0x70ef);						// Prime()/Status()
 	Word(0x600c);
-	Word(M68K_EMUL_OP_ETHER_CONTROL);	// Control()
+	Word(slot_make_emulop(M68K_EMUL_OP_ETHER_CONTROL));	// Control()
 	Word(0x0c68); Word(0x0001); Word(0x001a);
 	Word(0x6602);
 	Word(0x4e75);

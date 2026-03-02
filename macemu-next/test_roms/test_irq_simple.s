@@ -1,5 +1,5 @@
 /* Simplified IRQ EmulOp test ROM */
-/* Tests the 0x7129 encoding vs 0xAE29 */
+/* Tests the 0xAE29 A-line encoding */
 
     .text
 
@@ -25,7 +25,7 @@ start:
     move.l  #0, %d1         /* Counter */
 
 loop1:
-    .word   0x7129          /* IRQ EmulOp - correct */
+    .word   0xAE29          /* IRQ EmulOp - A-line format for Unicorn */
     tst.l   %d0
     bne.s   got_irq
 
@@ -43,12 +43,12 @@ got_irq:
     move.l  %d1, 0x1008            /* Save count */
 
 test2:
-    /* Test wrong A-line encoding */
+    /* Test A-line encoding again (should also work) */
     move.l  #0, %d0
     move.l  #0, %d1
 
 loop2:
-    .word   0xAE29          /* Wrong - A-line */
+    .word   0xAE29          /* A-line encoding (same as test1) */
     tst.l   %d0
     bne.s   got_aline
 

@@ -46,6 +46,7 @@
 #include "prefs.h"
 #include "ether.h"
 #include "ether_defs.h"
+#include "platform.h"
 
 #ifndef NO_STD_NAMESPACE
 using std::map;
@@ -62,6 +63,20 @@ using std::map;
 #else
 #define CLOSESOCKET close
 #endif
+
+
+// Convert EmulOp encoding for active CPU backend
+static inline uint16 make_emulop(uint16 emulop)
+{
+	extern Platform g_platform;
+	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
+		if ((emulop & 0xff00) == 0x7100) {
+			uint16 emulop_num = emulop & 0x3F;
+			return 0xAE00 | emulop_num;
+		}
+	}
+	return emulop;
+}
 
 
 // Global variables
@@ -247,11 +262,11 @@ int16 EtherOpen(uint32 pb, uint32 dce)
 	WriteMacInt16(ether_data + ed_ReadPacket + 4, 0x9041);	//  sub.w	d1,d0
 	WriteMacInt16(ether_data + ed_ReadPacket + 6, 0x4a43);	//  tst.w	d3
 	WriteMacInt16(ether_data + ed_ReadPacket + 8, 0x6702);	//  beq		1
-	WriteMacInt16(ether_data + ed_ReadPacket + 10, M68K_EMUL_OP_ETHER_READ_PACKET);
+	WriteMacInt16(ether_data + ed_ReadPacket + 10, make_emulop(M68K_EMUL_OP_ETHER_READ_PACKET));
 	WriteMacInt16(ether_data + ed_ReadPacket + 12, 0x3600);	//1 move.w	d0,d3
 	WriteMacInt16(ether_data + ed_ReadPacket + 14, 0x7000);	//  moveq	#0,d0
 	WriteMacInt16(ether_data + ed_ReadPacket + 16, 0x4e75);	//  rts
-	WriteMacInt16(ether_data + ed_ReadPacket + 18, M68K_EMUL_OP_ETHER_READ_PACKET);	//2
+	WriteMacInt16(ether_data + ed_ReadPacket + 18, make_emulop(M68K_EMUL_OP_ETHER_READ_PACKET));	//2
 	WriteMacInt16(ether_data + ed_ReadPacket + 20, 0x4a43);	//  tst.w	d3
 	WriteMacInt16(ether_data + ed_ReadPacket + 22, 0x4e75);	//  rts
 	return 0;

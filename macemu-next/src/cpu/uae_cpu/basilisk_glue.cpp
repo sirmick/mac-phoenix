@@ -265,7 +265,8 @@ void Execute68kTrap(uint16 trap, struct M68kRegisters *r)
  *  r->a[7] and r->sr are unused!
  */
 
-void Execute68k(uint32 addr, struct M68kRegisters *r)
+// UAE-specific 68k subroutine execution (for use by UAE backend via platform API)
+static void uae_execute_68k_internal(uint32 addr, struct M68kRegisters *r)
 {
 	int i;
 
@@ -303,4 +304,27 @@ void Execute68k(uint32 addr, struct M68kRegisters *r)
 	for (i=0; i<7; i++)
 		r->a[i] = m68k_areg(regs, i);
 	quit_program = false;
+}
+
+// Non-static wrapper for platform API registration
+void uae_execute_68k(uint32 addr, struct M68kRegisters *r)
+{
+	uae_execute_68k_internal(addr, r);
+}
+
+/*
+ *  Execute 68k subroutine (platform API version)
+ *  Uses platform abstraction to support multiple CPU backends
+ */
+void Execute68k(uint32 addr, struct M68kRegisters *r)
+{
+	// Use platform API if available
+	if (g_platform.cpu_execute_68k) {
+		g_platform.cpu_execute_68k(addr, r);
+		return;
+	}
+
+	// Fallback to UAE internal implementation
+	fprintf(stderr, "[WARNING] Execute68k: Platform API not available, using UAE fallback\n");
+	uae_execute_68k_internal(addr, r);
 }

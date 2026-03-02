@@ -275,21 +275,11 @@ extern uint32 InterruptFlags;
 
 void SetInterruptFlag(uint32 flag)
 {
-	static int call_count = 0;
-	if (++call_count <= 10) {
-		fprintf(stderr, "[SetInterruptFlag #%d] flag=0x%x, InterruptFlags was 0x%x, now 0x%x\n",
-		        call_count, flag, InterruptFlags, InterruptFlags | flag);
-	}
 	InterruptFlags |= flag;
 }
 
 void ClearInterruptFlag(uint32 flag)
 {
-	static int call_count = 0;
-	if (++call_count <= 20) {
-		fprintf(stderr, "[ClearInterruptFlag #%d] flag=0x%x, InterruptFlags was 0x%x, now 0x%x\n",
-		        call_count, flag, InterruptFlags, InterruptFlags & ~flag);
-	}
 	InterruptFlags &= ~flag;
 }
 
@@ -402,12 +392,35 @@ bool tick_inhibit = false;
 
 extern "C" uint32 TimerDateTime()
 {
-	// Return Mac time (seconds since Jan 1, 1904)
+	// UNICORN DEBUGGING: Make time deterministic during boot to avoid
+	// timing-dependent execution divergence between UAE and Unicorn.
+	// Unicorn runs ~20x slower due to A-line JIT exit penalty, causing
+	// different RTC values in CLKNOMEM operations, which leads to
+	// different code paths being taken.
+	static bool boot_phase = true;
+	static int call_count = 0;
+
+	if (boot_phase) {
+		call_count++;
+		// Use a fixed time during boot (Jan 1, 2024, 00:00:00)
+		// This is 120 years after Mac epoch (1904)
+		const uint32 FIXED_BOOT_TIME = 120UL * 365 * 24 * 60 * 60;
+
+		// After 1000 calls, switch to real time
+		// (Mac OS should be well into boot by then)
+		if (call_count > 1000) {
+			boot_phase = false;
+			fprintf(stderr, "[TimerDateTime] Switching from fixed to real time after %d calls\n", call_count);
+		}
+
+		return FIXED_BOOT_TIME;
+	}
+
+	// After boot, return real time
 	time_t now = time(NULL);
 	// Unix epoch is Jan 1, 1970, Mac epoch is Jan 1, 1904
 	// Difference is 66 years + 17 leap days = 2082844800 seconds
 	const uint32 MAC_EPOCH_OFFSET = 2082844800;
-
 
 	return now + MAC_EPOCH_OFFSET;
 }

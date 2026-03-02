@@ -29,6 +29,7 @@
 #include "audio.h"
 #include "audio_defs.h"
 #include "rsrc_patches.h"
+#include "platform.h"  // For g_platform (backend detection)
 
 #if ENABLE_MON
 #include "mon.h"
@@ -36,6 +37,22 @@
 
 #define DEBUG 0
 #include "debug.h"
+
+/*
+ *  Helper: emit EmulOp in correct format for CPU backend
+ *  UAE uses 0x71xx (illegal MOVEQ); Unicorn uses 0xAExx (A-line trap)
+ */
+static inline uint16 make_emulop(uint16 emulop)
+{
+	extern Platform g_platform;
+	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
+		if ((emulop & 0xff00) == 0x7100) {
+			uint16 emulop_num = emulop & 0x3F;
+			return 0xAE00 | emulop_num;
+		}
+	}
+	return emulop;
+}
 
 
 /*
@@ -70,7 +87,7 @@ static void patch_idle_time(uint8 *p, uint32 size, int n = 1)
 		base = find_rsrc_data(pbase, 0x80, dat2, sizeof(dat2));
 		if (base) {
 			uint16 *p16 = (uint16 *)(pbase + base);
-			*p16++ = htons(M68K_EMUL_OP_IDLE_TIME);
+			*p16++ = htons(make_emulop(M68K_EMUL_OP_IDLE_TIME));
 			*p16 = htons(M68K_NOP);
 			FlushCodeCache(pbase + base, 4);
 			D(bug("  patch %d applied\n", n));
@@ -97,7 +114,7 @@ void CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
 		base = find_rsrc_data(p, size, dat, sizeof(dat));
 		if (base) {
 			p16 = (uint16 *)(p + base + 6);
-			*p16 = htons(M68K_EMUL_OP_FIX_BOOTSTACK);
+			*p16 = htons(make_emulop(M68K_EMUL_OP_FIX_BOOTSTACK));
 			FlushCodeCache(p + base + 6, 2);
 			D(bug("  patch 1 applied\n"));
 		}
@@ -224,7 +241,7 @@ void CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
 		base = find_rsrc_data(p, size, dat, sizeof(dat));
 		if (base) {
 			p16 = (uint16 *)(p + base + 4);
-			*p16++ = htons(M68K_EMUL_OP_BLOCK_MOVE);
+			*p16++ = htons(make_emulop(M68K_EMUL_OP_BLOCK_MOVE));
 			*p16++ = htons(0x7000);
 			*p16 = htons(M68K_RTS);
 			FlushCodeCache(p + base + 4, 6);
@@ -269,7 +286,7 @@ void CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
 		base = find_rsrc_data(p, size, dat2, sizeof(dat2));
 		if (base) {
 			p16 = (uint16 *)(p + base);
-			*p16++ = htons(M68K_EMUL_OP_SCSI_DISPATCH);
+			*p16++ = htons(make_emulop(M68K_EMUL_OP_SCSI_DISPATCH));
 			*p16++ = htons(0x2e49);		// move.l	a1,a7
 			*p16 = htons(M68K_JMP_A0);
 			FlushCodeCache(p + base, 6);
@@ -295,7 +312,7 @@ void CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
 		*p16++ = htons(0x48e7); *p16++ = htons(0x8018);	// movem.l	d0/a3-a4,-(sp)
 		*p16++ = htons(0x266e); *p16++ = htons(0x000c);	// movea.l	12(a6),a3
 		*p16++ = htons(0x286e); *p16++ = htons(0x0008);	// movea.l	8(a6),a4
-		*p16++ = htons(M68K_EMUL_OP_AUDIO);
+		*p16++ = htons(make_emulop(M68K_EMUL_OP_AUDIO));
 		*p16++ = htons(0x2d40); *p16++ = htons(0x0010);	// move.l	d0,16(a6)
 		*p16++ = htons(0x4cdf); *p16++ = htons(0x1801);	// movem.l	(sp)+,d0/a3-a4
 		*p16++ = htons(0x4e5e);							// unlk		a6

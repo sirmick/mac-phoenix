@@ -12,9 +12,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// Forward declaration for UAE trap execution (implemented in basilisk_glue.cpp)
+// Forward declarations for UAE execution (implemented in basilisk_glue.cpp)
 struct M68kRegisters;
 extern void uae_execute_68k_trap(uint16_t trap, struct M68kRegisters *r);
+extern void uae_execute_68k(uint32_t addr, struct M68kRegisters *r);
 
 // UAE internals (minimal forward declarations)
 extern struct regstruct {
@@ -183,6 +184,9 @@ void cpu_uae_install(Platform *p) {
 
 	// Trap execution
 	p->cpu_execute_68k_trap = uae_execute_68k_trap;
+
+	// 68k subroutine execution
+	p->cpu_execute_68k = uae_execute_68k;
 
 	// EmulOp and trap handlers
 	// UAE handles these internally through m68k_emulop/m68k_do_trap

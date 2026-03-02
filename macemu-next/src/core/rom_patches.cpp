@@ -88,17 +88,45 @@ uint16 ROMVersion;
  */
 static inline uint16 make_emulop(uint16 emulop)
 {
-	// Check if we're using Unicorn backend
+	// For Unicorn: Must use A-line format because 0x71xx are valid MVS instructions!
+	// 0x71xx opcodes are Move with Sign extend (MVS) on 68040/68060
+	// So we NEED to convert to A-line (0xAExx) which are truly invalid
 	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
-		// Unicorn: Convert to A-line format (0xAE00-0xAE3F)
+		// Convert to A-line format for Unicorn
 		if ((emulop & 0xff00) == 0x7100) {
-			// It's a standard EmulOp (0x71xx), convert to A-line
 			uint16 emulop_num = emulop & 0x3F;
 			return 0xAE00 | emulop_num;
 		}
 	}
-	// UAE or unsupported EmulOp: return unchanged
+	// UAE: return unchanged (has special handlers for 0x71xx)
 	return emulop;
+}
+
+/*
+ *  Patch 0x71xx EmulOps to 0xAExx in a ROM region (for Unicorn backend)
+ *  Scans big-endian bytes for 0x71xx patterns that match EmulOp range and
+ *  converts them to A-line format (0xAExx) so QEMU treats them as exceptions.
+ *  Without this, QEMU executes 0x71xx as MOVEQ instructions (valid M68K).
+ */
+static void patch_emulops_for_unicorn(uint8 *base, uint32 length)
+{
+	// Only patch for Unicorn backend
+	if (!g_platform.cpu_name || !strstr(g_platform.cpu_name, "Unicorn"))
+		return;
+
+	int count = 0;
+	for (uint32 i = 0; i + 1 < length; i += 2) {
+		uint8 hi = base[i];
+		uint8 lo = base[i + 1];
+		// Check for 0x71xx where xx is in EmulOp range (0x00-0x3F)
+		if (hi == 0x71 && lo < 0x40) {
+			base[i] = 0xAE;  // Convert to A-line encoding
+			count++;
+		}
+	}
+	if (count > 0) {
+		fprintf(stderr, "[ROM] Patched %d EmulOps from 0x71xx to 0xAExx for Unicorn\n", count);
+	}
 }
 
 /*
@@ -963,6 +991,18 @@ static bool patch_rom_classic(void)
 	// Replace ADBOp()
 	memcpy(ROMBaseHost + 0x3880, adbop_patch, sizeof(adbop_patch));
 
+	// Patch EmulOps in driver code arrays for Unicorn backend
+	// These arrays use raw 0x71xx bytes which QEMU treats as valid MOVEQ instructions.
+	// Convert to 0xAExx (A-line) so they trigger EmulOp exceptions.
+	patch_emulops_for_unicorn(ROMBaseHost + sony_offset, sizeof(sony_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + sony_offset + 0x100, sizeof(disk_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + sony_offset + 0x200, sizeof(cdrom_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x100, sizeof(ain_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x200, sizeof(aout_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x300, sizeof(bin_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x400, sizeof(bout_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + 0x3880, sizeof(adbop_patch));
+
 	// Replace Time Manager
 	wp = (uint16 *)(ROMBaseHost + 0x1a95c);
 	*wp++ = htons(make_emulop(M68K_EMUL_OP_INSTIME));
@@ -1040,8 +1080,8 @@ static bool patch_rom_classic(void)
 	wp = (uint16 *)(ROMBaseHost + 0x2be4);	// 60Hz handler (handles everything)
 	*wp++ = htons(M68K_NOP);
 	*wp++ = htons(M68K_NOP);
-	// Phase 1 Fix: Use direct 0x7129 encoding for IRQ EmulOp (not A-line 0xAE29)
-	*wp++ = htons(0x7129);		// Direct IRQ EmulOp encoding
+	// Use make_emulop to get correct encoding (0x7129 for UAE, 0xAE29 for Unicorn)
+	*wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
 	*wp++ = htons(0x4a80);		// tst.l	d0
 	*wp = htons(0x67f4);		// beq		0x402be2
 	return true;
@@ -1281,6 +1321,14 @@ static bool patch_rom_32(void)
 	wp = (uint16 *)(ROMBaseHost + 0x9f4c);
 	*wp = htons(M68K_RTS);
 
+	// NOTE: The A-line dispatcher ANDI.W #$0100,D2 / BNE.S at ROM+0x99FA
+	// was previously patched to work around a JIT CC sync bug.
+	// The root cause was uc_reg_read(SR) in unicorn.c calling
+	// helper_flush_flags() which destructively set env->cc_op = CC_OP_FLAGS,
+	// corrupting lazy CC state across TB boundaries.
+	// Fixed properly in unicorn.c by removing the helper_flush_flags() call
+	// (cpu_m68k_get_sr already handles all cc_op types non-destructively).
+
 	// Fake CPU speed test (SetupTimeK)
 	// *** increased jl : MacsBug uses TimeDBRA for kbd repeat timing
 	wp = (uint16 *)(ROMBaseHost + 0x800);
@@ -1431,6 +1479,12 @@ static bool patch_rom_32(void)
 	}
 
 	// Don't open .Sound driver but install our own drivers
+	// Also NOP the JSR at ROM+0x1134 which calls a subroutine that opens
+	// the "netBOOT" driver based on $0DD3 bit 5. In Unicorn, $0DD3 can be
+	// non-zero causing an unwanted _Open that hangs in the Sony driver.
+	wp = (uint16 *)(ROMBaseHost + 0x1134);
+	*wp++ = htons(M68K_NOP);	// NOP out JSR (4EBA)
+	*wp++ = htons(M68K_NOP);	// NOP out displacement (011A)
 	wp = (uint16 *)(ROMBaseHost + 0x1142);
 	*wp = htons(make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
 
@@ -1607,7 +1661,20 @@ static bool patch_rom_32(void)
 	memcpy(ROMBaseHost + serd_offset + 0x400, bout_driver, sizeof(bout_driver));
 
 	// Replace ADBOp()
-	memcpy(ROMBaseHost + find_rom_trap(0xa07c), adbop_patch, sizeof(adbop_patch));
+	uint32 adbop_offset = find_rom_trap(0xa07c);
+	memcpy(ROMBaseHost + adbop_offset, adbop_patch, sizeof(adbop_patch));
+
+	// Patch EmulOps in driver code arrays for Unicorn backend
+	// These arrays use raw 0x71xx bytes which QEMU treats as valid MOVEQ instructions.
+	// Convert to 0xAExx (A-line) so they trigger EmulOp exceptions.
+	patch_emulops_for_unicorn(ROMBaseHost + sony_offset, sizeof(sony_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + sony_offset + 0x100, sizeof(disk_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + sony_offset + 0x200, sizeof(cdrom_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x100, sizeof(ain_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x200, sizeof(aout_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x300, sizeof(bin_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x400, sizeof(bout_driver));
+	patch_emulops_for_unicorn(ROMBaseHost + adbop_offset, sizeof(adbop_patch));
 
 	// Replace Time Manager (the Microseconds patch is activated in InstallDrivers())
 	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa058));
@@ -1694,8 +1761,8 @@ static bool patch_rom_32(void)
 	wp = (uint16 *)(ROMBaseHost + 0xa296);	// 60Hz handler (handles everything)
 	*wp++ = htons(M68K_NOP);
 	*wp++ = htons(M68K_NOP);
-	// Phase 1 Fix: Use direct 0x7129 encoding for IRQ EmulOp (not A-line 0xAE29)
-	*wp++ = htons(0x7129);		// Direct IRQ EmulOp encoding
+	// Use make_emulop to get correct encoding (0x7129 for UAE, 0xAE29 for Unicorn)
+	*wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
 	*wp++ = htons(0x4a80);		// tst.l	d0
 	*wp = htons(0x67f4);		// beq		0x4080a294
 	return true;
@@ -1746,6 +1813,14 @@ static bool PatchROM_UAE(void)
 // Selects the appropriate PatchROM implementation based on CPU backend
 bool PatchROM(void)
 {
+	// Check if this is a test ROM (very small size)
+	extern uint32_t ROMSize;  // Defined elsewhere
+	if (ROMSize <= 65536) {
+		// Test ROM - skip patching
+		fprintf(stderr, "[PatchROM] Detected test ROM (size %d), skipping patches\n", ROMSize);
+		return true;
+	}
+
 	// Use full UAE patcher - it will be modified to support Unicorn
 	return PatchROM_UAE();
 }

@@ -60,6 +60,7 @@
 #include "user_strings.h"
 #include "extfs.h"
 #include "extfs_defs.h"
+#include "platform.h"
 
 #ifdef WIN32
 # include "posix_emu.h"
@@ -67,6 +68,19 @@
 
 #define DEBUG 0
 #include "debug.h"
+
+// Convert EmulOp encoding for active CPU backend
+static inline uint16 make_emulop(uint16 emulop)
+{
+	extern Platform g_platform;
+	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
+		if ((emulop & 0xff00) == 0x7100) {
+			uint16 emulop_num = emulop & 0x3F;
+			return 0xAE00 | emulop_num;
+		}
+	}
+	return emulop;
+}
 
 
 // File system global data and 68k routines
@@ -519,12 +533,12 @@ void InstallExtFS(void)
 
 	// Set up 68k code fragments
 	int p = fs_data + fsCommProcStub;
-	WriteMacInt16(p, M68K_EMUL_OP_EXTFS_COMM); p += 2;
+	WriteMacInt16(p, make_emulop(M68K_EMUL_OP_EXTFS_COMM)); p += 2;
 	WriteMacInt16(p, M68K_RTD); p += 2;
 	WriteMacInt16(p, 10); p += 2;
 	if (p - fs_data != fsHFSProcStub)
 		goto fsdat_error;
-	WriteMacInt16(p, M68K_EMUL_OP_EXTFS_HFS); p += 2;
+	WriteMacInt16(p, make_emulop(M68K_EMUL_OP_EXTFS_HFS)); p += 2;
 	WriteMacInt16(p, M68K_RTD); p += 2;
 	WriteMacInt16(p, 16);
 	p = fs_data + fsAllocateVCB;

@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <string.h>  // For memset
 #include <atomic>
+#include <climits>  // For INT_MAX
 
 // Forward declare the webserver running flag from main.cpp
 namespace webserver {
@@ -46,6 +47,15 @@ static uint8_t *unicorn_dummy_buffer = NULL;  // Dummy region for UAE out-of-bou
 static uint8_t *unicorn_high_mem_buffer = NULL;  // High memory region (hardware registers, etc.)
 int unicorn_cpu_type = 2;   // Default to 68020 (extern for DualCPU)
 int unicorn_fpu_type = 0;   // Default to no FPU (extern for DualCPU)
+
+// ===== Hardware Register (MMIO) Emulation =====
+// Quadra 650 hardware registers at 0x50f00000-0x50f3ffff
+// Without emulation, reads return 0 (zeroed on-demand mapping), causing
+// the ROM to loop forever waiting for hardware responses (e.g., VIA1 RTC).
+#define MMIO_HW_BASE  0x50f00000
+#define MMIO_HW_SIZE  0x00040000  // 256 KB covers all Quadra 650 hardware
+
+static uint8_t mmio_via1_port_b = 0xFF;  // VIA1 Port B: bits 0=RTC enable, 1=clock, 2=data
 
 // CPU Configuration
 static void unicorn_backend_set_type(int cpu_type, int fpu_type) {
@@ -182,85 +192,214 @@ static bool unicorn_platform_trap_handler(int vector, uint16_t opcode, bool is_p
 }
 
 // Unmapped memory handlers - mimic UAE's dummy_bank behavior
-// UAE silently ignores all unmapped reads (returns 0) and writes (no-op)
-// To properly return 0, we need to map the memory region on-demand
+/*
+ * Unmapped memory handlers - UAE dummy_bank compatibility
+ *
+ * UAE's memory system uses dummy_bank for all unmapped addresses:
+ * - Reads return 0 (all sizes)
+ * - Writes are silently dropped (no-op)
+ *
+ * This is CRITICAL for correct Mac boot behavior. The ROM probes NuBus slots
+ * by writing a test pattern and reading it back. If the read returns the
+ * written value, the ROM thinks a NuBus card is present and tries to
+ * initialize it. With dummy_bank (reads=0, writes=dropped), the probe
+ * correctly detects "no hardware".
+ *
+ * We use uc_mmio_map to create dummy regions with MMIO callbacks that
+ * return 0 for reads and silently ignore writes. This perfectly matches
+ * UAE's dummy_bank behavior.
+ */
+
+// MMIO callback for dummy_bank reads - always returns 0
+static uint64_t dummy_bank_read(uc_engine *uc, uint64_t offset, unsigned size, void *user_data) {
+	(void)uc; (void)offset; (void)size; (void)user_data;
+	return 0;  // UAE dummy_bank: all reads return 0
+}
+
+// MMIO callback for dummy_bank writes - silently dropped
+static void dummy_bank_write(uc_engine *uc, uint64_t offset, unsigned size, uint64_t value, void *user_data) {
+	(void)uc; (void)offset; (void)size; (void)value; (void)user_data;
+	// UAE dummy_bank: all writes silently dropped
+}
+
+// On-demand unmapped handlers - fallback for any gaps not covered by pre-mapped dummy_bank.
+// Uses zeroed memory with UC_PROT_ALL (writes are stored). This is safe because the big
+// NuBus/slot regions are already pre-mapped with MMIO dummy_bank. Any remaining unmapped
+// accesses are to non-NuBus regions where storing writes is acceptable.
 static bool unicorn_unmapped_read_handler(uc_engine *uc, uc_mem_type type,
                                           uint64_t address, int size,
                                           int64_t value, void *user_data) {
-	(void)type;
-	(void)value;
-	(void)user_data;
+	(void)type; (void)value; (void)user_data;
 
-	fprintf(stderr, "[Unicorn] Unmapped read at 0x%08lX (size=%d) - mapping on-demand (UAE compat)\n",
-	        address, size);
-
-	// Map a 1MB region containing this address, aligned to 1MB boundary
-	// This matches UAE's behavior where the entire address space is backed by dummy_bank
-	const uint32_t map_size = 1024 * 1024;  // 1 MB
-	uint32_t map_base = (address / map_size) * map_size;  // Round down to 1MB boundary
-
-	// Allocate zeroed buffer
-	uint8_t *buffer = (uint8_t *)calloc(1, map_size);
-	if (!buffer) {
-		fprintf(stderr, "[Unicorn] Failed to allocate buffer for on-demand mapping at 0x%08X\n", map_base);
-		return false;
+	static int read_count = 0;
+	if (++read_count <= 10) {
+		fprintf(stderr, "[Unicorn] Unmapped read at 0x%08lX (size=%d) - mapping zeroed region\n",
+		        address, size);
 	}
 
-	// Map the region
+	const uint32_t map_size = 1024 * 1024;
+	uint32_t map_base = (address / map_size) * map_size;
+
+	uint8_t *buffer = (uint8_t *)calloc(1, map_size);
+	if (!buffer) return false;
+
 	uc_err err = uc_mem_map_ptr(uc, map_base, map_size, UC_PROT_ALL, buffer);
 	if (err != UC_ERR_OK) {
-		fprintf(stderr, "[Unicorn] Failed to map on-demand region at 0x%08X: %s\n",
-		        map_base, uc_strerror(err));
 		free(buffer);
 		return false;
 	}
 
-	fprintf(stderr, "[Unicorn] Mapped on-demand region: 0x%08X - 0x%08X (1 MB, zeroed)\n",
-	        map_base, map_base + map_size - 1);
-
-	// Note: We leak the buffer here, but that's acceptable since these are permanent mappings
-	// that last for the lifetime of the emulator
-
-	return true;  // Retry the read - it will now succeed
+	return true;
 }
 
 static bool unicorn_unmapped_write_handler(uc_engine *uc, uc_mem_type type,
                                            uint64_t address, int size,
                                            int64_t value, void *user_data) {
-	(void)type;
-	(void)value;
-	(void)user_data;
+	(void)type; (void)user_data;
 
-	fprintf(stderr, "[Unicorn] Unmapped write at 0x%08lX (size=%d, value=0x%lX) - mapping on-demand (UAE compat)\n",
-	        address, size, (unsigned long)value);
-
-	// Map a 1MB region containing this address, aligned to 1MB boundary
-	const uint32_t map_size = 1024 * 1024;  // 1 MB
-	uint32_t map_base = (address / map_size) * map_size;  // Round down to 1MB boundary
-
-	// Allocate zeroed buffer
-	uint8_t *buffer = (uint8_t *)calloc(1, map_size);
-	if (!buffer) {
-		fprintf(stderr, "[Unicorn] Failed to allocate buffer for on-demand mapping at 0x%08X\n", map_base);
-		return false;
+	static int write_count = 0;
+	if (++write_count <= 10) {
+		fprintf(stderr, "[Unicorn] Unmapped write at 0x%08lX (size=%d, value=0x%lX) - mapping zeroed region\n",
+		        address, size, (unsigned long)value);
 	}
 
-	// Map the region
+	const uint32_t map_size = 1024 * 1024;
+	uint32_t map_base = (address / map_size) * map_size;
+
+	uint8_t *buffer = (uint8_t *)calloc(1, map_size);
+	if (!buffer) return false;
+
 	uc_err err = uc_mem_map_ptr(uc, map_base, map_size, UC_PROT_ALL, buffer);
 	if (err != UC_ERR_OK) {
-		fprintf(stderr, "[Unicorn] Failed to map on-demand region at 0x%08X: %s\n",
-		        map_base, uc_strerror(err));
 		free(buffer);
 		return false;
 	}
 
-	fprintf(stderr, "[Unicorn] Mapped on-demand region: 0x%08X - 0x%08X (1 MB, zeroed)\n",
-	        map_base, map_base + map_size - 1);
+	return true;
+}
 
-	// Note: We leak the buffer here, but that's acceptable since these are permanent mappings
-	// that last for the lifetime of the emulator
+// ===== MMIO Callback Functions (for uc_mmio_map) =====
 
-	return true;  // Retry the write - it will now succeed
+// MMIO read callback - returns register values for hardware reads
+// Uses uc_cb_mmio_read_t signature: uint64_t(uc_engine*, uint64_t offset, unsigned size, void*)
+static uint64_t mmio_read_cb(uc_engine *uc, uint64_t offset, unsigned size, void *user_data) {
+	(void)uc; (void)user_data;
+
+	uint8_t val = 0x00;
+
+	// VIA1 (offset 0x0000 - 0x1fff, registers at 0x200-byte intervals)
+	if (offset < 0x2000) {
+		uint32_t reg = (uint32_t)(offset & 0x1E00);
+		switch (reg) {
+		case 0x0000: {  // vBufB - Port B (RTC interface)
+			// Return last written value with bit 2 (data) forced high.
+			// CLKNOMEM EmulOp handles actual XPRAM/RTC operations;
+			// the ROM's post-CLKNOMEM VIA1 polling just needs to see
+			// the data bit respond so it exits its verification loop.
+			val = mmio_via1_port_b | 0x04;
+			static int via1_portb_read_count = 0;
+			if (++via1_portb_read_count <= 20) {
+				fprintf(stderr, "[MMIO] VIA1 PortB read #%d: returning 0x%02x (stored=0x%02x)\n",
+				        via1_portb_read_count, val, mmio_via1_port_b);
+			}
+			break;
+		}
+		case 0x0200:  // vBufA - Port A
+			val = 0x7F;  // Bit 7 low = no ADB interrupt
+			break;
+		case 0x0400:  // vDirB - Port B direction
+			val = 0x87;  // Bits 0-2 output (RTC), bit 7 output
+			break;
+		case 0x0600:  // vDirA - Port A direction
+			val = 0x00;  // All inputs
+			break;
+		case 0x1A00:  // vIFR - Interrupt Flag Register
+			val = 0x00;  // No interrupts pending
+			break;
+		case 0x1C00:  // vIER - Interrupt Enable Register
+			val = 0x00;  // No interrupts enabled
+			break;
+		default:
+			val = 0x00;
+			break;
+		}
+	}
+	// VIA2 (offset 0x2000 - 0x3fff)
+	else if (offset < 0x4000) {
+		uint32_t reg = (uint32_t)((offset - 0x2000) & 0x1E00);
+		switch (reg) {
+		case 0x0000:  // vBufB
+			val = 0xFF;
+			break;
+		case 0x0200:  // vBufA - slot interrupts
+			val = 0xFF;  // No slot interrupts active (active low)
+			break;
+		case 0x1A00:  // vIFR
+			val = 0x00;
+			break;
+		case 0x1C00:  // vIER
+			val = 0x00;
+			break;
+		default:
+			val = 0x00;
+			break;
+		}
+		static int via2_read_count = 0;
+		if (++via2_read_count <= 20) {
+			fprintf(stderr, "[MMIO] VIA2 read: offset=0x%05lx reg=0x%04x val=0x%02x\n",
+			        (unsigned long)offset, reg, val);
+		}
+	}
+	// Other hardware (SCC, SCSI, ASC, video, etc.)
+	else {
+		val = 0x00;
+		static int other_read_count = 0;
+		if (++other_read_count <= 50) {
+			const char *name = "unknown";
+			if (offset >= 0x4000 && offset < 0x6000) name = "SCC";
+			else if (offset >= 0x10000 && offset < 0x12000) name = "SCSI";
+			else if (offset >= 0x14000 && offset < 0x16000) name = "ASC";
+			else if (offset >= 0x24000 && offset < 0x26000) name = "DAFB";
+			fprintf(stderr, "[MMIO] %s read: offset=0x%05lx (size=%u)\n",
+			        name, (unsigned long)offset, size);
+		}
+	}
+
+	return (uint64_t)val;
+}
+
+// MMIO write callback - tracks CPU writes to hardware registers
+// Uses uc_cb_mmio_write_t signature: void(uc_engine*, uint64_t offset, unsigned size, uint64_t value, void*)
+static void mmio_write_cb(uc_engine *uc, uint64_t offset, unsigned size, uint64_t value, void *user_data) {
+	(void)uc; (void)user_data;
+
+	uint8_t byte_val = (uint8_t)(value & 0xFF);
+
+	// VIA1 (offset 0x0000 - 0x1fff)
+	if (offset < 0x2000) {
+		uint32_t reg = (uint32_t)(offset & 0x1E00);
+		switch (reg) {
+		case 0x0000:  // vBufB - Port B (RTC interface)
+			mmio_via1_port_b = byte_val;
+			break;
+		default:
+			break;
+		}
+	}
+	// Log writes to other hardware regions
+	else {
+		static int write_count = 0;
+		if (++write_count <= 50) {
+			const char *name = "unknown";
+			if (offset >= 0x2000 && offset < 0x4000) name = "VIA2";
+			else if (offset >= 0x4000 && offset < 0x6000) name = "SCC";
+			else if (offset >= 0x10000 && offset < 0x12000) name = "SCSI";
+			else if (offset >= 0x14000 && offset < 0x16000) name = "ASC";
+			else if (offset >= 0x24000 && offset < 0x26000) name = "DAFB";
+			fprintf(stderr, "[MMIO] %s write: offset=0x%05lx = 0x%02x (size=%u)\n",
+			        name, (unsigned long)offset, byte_val, size);
+		}
+	}
 }
 
 // CPU Lifecycle
@@ -411,6 +550,61 @@ static bool unicorn_backend_init(void) {
 	fprintf(stderr, "[DEBUG] High memory region part 2 mapped: 0x%08X - 0x%08X (%u MB) - TRAP REGION 0xFF000000-0xFF000FFF LEFT UNMAPPED\n",
 		high_mem_base2, high_mem_base2 + high_mem_size2 - 1, high_mem_size2 / (1024*1024));
 
+	// Map hardware register region using uc_mmio_map for proper MMIO emulation
+	// uc_mmio_map provides read/write callbacks that are always invoked by the JIT,
+	// unlike UC_HOOK_MEM_READ which is bypassed for uc_mem_map_ptr regions.
+	{
+		uc_engine *mmio_uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
+		uc_err mmio_err = uc_mmio_map(mmio_uc, MMIO_HW_BASE, MMIO_HW_SIZE,
+		                              mmio_read_cb, NULL,
+		                              mmio_write_cb, NULL);
+		if (mmio_err != UC_ERR_OK) {
+			fprintf(stderr, "[MMIO] Warning: Failed to map MMIO region: %s\n", uc_strerror(mmio_err));
+		} else {
+			fprintf(stderr, "[MMIO] Hardware region mapped via uc_mmio_map: 0x%08X - 0x%08X (%u KB)\n",
+				MMIO_HW_BASE, MMIO_HW_BASE + MMIO_HW_SIZE - 1, MMIO_HW_SIZE / 1024);
+		}
+	}
+
+	// Pre-map NuBus/slot address space gaps with MMIO dummy_bank
+	// This is CRITICAL for boot: ROM probes for NuBus cards using write-then-read tests.
+	// UAE's dummy_bank silently drops writes and returns 0 for reads, so ROM sees no cards.
+	// Without this, Unicorn's on-demand handler maps with UC_PROT_ALL which STORES writes,
+	// causing ROM to detect phantom NuBus cards → phantom drivers → I/O stall.
+	{
+		uc_engine *gap_uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
+
+		// Gap 1: After post-ROM dummy region to before MMIO hardware
+		// 0x03100000 - 0x50EFFFFF
+		uint32_t gap1_base = dummy_region_base + dummy_region_size;  // 0x03100000
+		uint32_t gap1_size = MMIO_HW_BASE - gap1_base;              // 0x4DE00000
+		uc_err gap_err = uc_mmio_map(gap_uc, gap1_base, gap1_size,
+		                             dummy_bank_read, NULL,
+		                             dummy_bank_write, NULL);
+		if (gap_err != UC_ERR_OK) {
+			fprintf(stderr, "[MMIO] Warning: Failed to map NuBus gap 1 (0x%08X-0x%08X): %s\n",
+				gap1_base, gap1_base + gap1_size - 1, uc_strerror(gap_err));
+		} else {
+			fprintf(stderr, "[MMIO] NuBus gap 1 mapped as dummy_bank: 0x%08X - 0x%08X (%.0f MB)\n",
+				gap1_base, gap1_base + gap1_size - 1, gap1_size / (1024.0*1024.0));
+		}
+
+		// Gap 2: After MMIO hardware to before high memory region
+		// 0x50F40000 - 0xEFFFFFFF
+		uint32_t gap2_base = MMIO_HW_BASE + MMIO_HW_SIZE;           // 0x50F40000
+		uint32_t gap2_size = high_mem_base1 - gap2_base;             // 0x9F0C0000
+		gap_err = uc_mmio_map(gap_uc, gap2_base, gap2_size,
+		                      dummy_bank_read, NULL,
+		                      dummy_bank_write, NULL);
+		if (gap_err != UC_ERR_OK) {
+			fprintf(stderr, "[MMIO] Warning: Failed to map NuBus gap 2 (0x%08X-0x%08X): %s\n",
+				gap2_base, gap2_base + gap2_size - 1, uc_strerror(gap_err));
+		} else {
+			fprintf(stderr, "[MMIO] NuBus gap 2 mapped as dummy_bank: 0x%08X - 0x%08X (%.0f MB)\n",
+				gap2_base, gap2_base + gap2_size - 1, gap2_size / (1024.0*1024.0));
+		}
+	}
+
 	// Register unmapped memory hooks as fallback for any remaining unmapped regions
 	// This matches UAE's behavior where ALL unmapped memory returns 0 / ignores writes
 	uc_engine *uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
@@ -429,9 +623,9 @@ static bool unicorn_backend_init(void) {
 	                  NULL, 1, 0);
 	if (err != UC_ERR_OK) {
 		fprintf(stderr, "Warning: Failed to register unmapped write hook: %s\n", uc_strerror(err));
-		// Not fatal - high memory region should cover most cases
 	}
-	fprintf(stderr, "[DEBUG] Unmapped memory hooks registered - full UAE dummy_bank compatibility\n");
+
+	fprintf(stderr, "[DEBUG] Unmapped memory hooks registered - MMIO dummy_bank for UAE compatibility\n");
 
 	fprintf(stderr, "[DEBUG] unicorn_cpu instance at init: %p\n", (void*)unicorn_cpu);
 
@@ -591,7 +785,7 @@ static int unicorn_backend_execute_one(void) {
 	 * See: external/unicorn/qemu/accel/tcg/cpu-exec.c (TARGET_M68K section)
 	 * See: docs/deepdive/UnicornBatchExecutionRTEBug.md
 	 */
-	int count = cpu_trace_is_enabled() ? 1 : 1000;
+	int count = cpu_trace_is_enabled() ? 1 : INT_MAX;  // Let the inner loop handle all batching
 
 	// Phase 2: Use QEMU-style execution loop with interrupt checking
 	int result = unicorn_execute_with_interrupts(unicorn_cpu, count);
@@ -649,8 +843,8 @@ static void unicorn_backend_execute_fast(void) {
 	int exec_count = 0;
 	while (webserver::g_running.load(std::memory_order_acquire)) {
 		// Phase 2: Use QEMU-style execution loop which handles interrupt checking
-		// This replaces the need for small batches since the loop checks interrupts properly
-		int result = unicorn_execute_with_interrupts(unicorn_cpu, 1000);
+		// Execute a large batch - the inner loop will handle proper batching and interrupts
+		int result = unicorn_execute_with_interrupts(unicorn_cpu, 100000000);  // Very large, let inner loop control
 		if (result < 0) {
 			// Check if this was a stop request (e.g., from uc_emu_stop) or an error
 			uint32_t pc = unicorn_get_pc(unicorn_cpu);
@@ -767,48 +961,73 @@ static void unicorn_backend_trigger_interrupt(int level) {
 
 // 68k Trap Execution - Unicorn native implementation
 // This allows ROM patches to call Mac OS traps without depending on UAE CPU backend
+//
+// CRITICAL: Must save/restore ALL CPU registers to avoid corrupting main execution state.
+// The M68kRegisters struct from callers is often partially initialized (e.g., only d[0] set),
+// so we must NOT blindly write uninitialized fields into the CPU. Instead, we only write
+// registers from `r` that the caller might use, and we ALWAYS restore all state afterward.
+// This matches BasiliskII's UAE backend which saves/restores all registers around trap execution.
 static void unicorn_backend_execute_68k_trap(uint16_t trap, struct M68kRegisters *r) {
 	if (!unicorn_cpu) {
 		fprintf(stderr, "[ERROR] unicorn_backend_execute_68k_trap: Unicorn CPU not initialized\n");
 		return;
 	}
 
-	// Save current PC (we'll restore it after trap execution)
+	// Save ALL CPU state - we MUST restore everything after trap execution
+	// to avoid corrupting the main execution's register state.
 	uint32_t saved_pc = unicorn_get_pc(unicorn_cpu);
-	uint32_t saved_sr = unicorn_get_sr(unicorn_cpu);
+	uint16_t saved_sr = unicorn_get_sr(unicorn_cpu);
+	uint32_t saved_dregs[8], saved_aregs[8];
+	for (int i = 0; i < 8; i++) {
+		saved_dregs[i] = unicorn_get_dreg(unicorn_cpu, i);
+		saved_aregs[i] = unicorn_get_areg(unicorn_cpu, i);
+	}
 
-	// Set registers from input
+	// Write caller's register values to CPU for parameter passing.
+	// Some fields may be uninitialized (e.g., r2 in IRQ handler only sets d[0]),
+	// but that's OK because the trap handler saves/restores its own working registers,
+	// and we RESTORE all saved state after the trap returns.
 	for (int i = 0; i < 8; i++) {
 		unicorn_set_dreg(unicorn_cpu, i, r->d[i]);
 	}
 	for (int i = 0; i < 7; i++) {
 		unicorn_set_areg(unicorn_cpu, i, r->a[i]);
 	}
-	unicorn_set_sr(unicorn_cpu, r->sr);
+	// DON'T set A7 or SR from r - use saved state for stack pointer
 
-	// Push trap number and M68K_EXEC_RETURN (0x7100) on stack
-	// This mimics UAE's Execute68kTrap behavior
-	uint32_t sp = r->a[7];
+	static int exec68k_count = 0;
+	++exec68k_count;
+	if (exec68k_count <= 50) {
+		fprintf(stderr, "[Execute68kTrap] #%d trap=0x%04x A7=0x%08x PC=0x%08x SR=0x%04x\n",
+		        exec68k_count, trap, saved_aregs[7], saved_pc, saved_sr);
+	}
+
+	// Push trap number and M68K_EXEC_RETURN on stack
+	// For Unicorn: use 0xAE00 (A-line EmulOp) instead of 0x7100 (which is MOVEQ in QEMU)
+	uint32_t sp = saved_aregs[7];
+
 	sp -= 2;
-	g_platform.mem_write_word(sp, 0x7100);  // M68K_EXEC_RETURN (EmulOp that returns)
+	uint16_t sentinel = 0xAE00;  // M68K_EXEC_RETURN in Unicorn encoding
+	g_platform.mem_write_word(sp, sentinel);
 	sp -= 2;
-	g_platform.mem_write_word(sp, trap);    // Trap number
+	g_platform.mem_write_word(sp, trap);    // Trap number (A-line opcode)
 	unicorn_set_areg(unicorn_cpu, 7, sp);
 
-	// Set PC to stack (CPU will fetch trap number as opcode)
+	// Set PC to stack (CPU will fetch trap opcode and execute it)
 	unicorn_set_pc(unicorn_cpu, sp);
 
-	// Execute until we hit M68K_EXEC_RETURN (0x7100)
-	// We need to run the CPU in a loop, checking for 0x7100 EmulOp
+	// Execute until hook_interrupt sees EXEC_RETURN (0xAE00) and stops
+	extern volatile bool g_exec68k_return_flag;
+	g_exec68k_return_flag = false;
+
 	uc_engine *uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
 	bool returned = false;
-	int max_iterations = 100000;  // Safety limit
+	int max_iterations = 100000;
 	int iterations = 0;
 
 	while (!returned && iterations < max_iterations) {
-		// Execute one basic block
 		uint32_t pc = unicorn_get_pc(unicorn_cpu);
-		uc_err err = uc_emu_start(uc, pc, 0xFFFFFFFF, 0, 1);  // Execute 1 instruction
+		uc_err err = uc_emu_start(uc, pc, 0xFFFFFFFF, 0, 0);
 
 		if (err != UC_ERR_OK) {
 			fprintf(stderr, "[ERROR] Execute68kTrap failed at PC=0x%08X: %s\n",
@@ -816,20 +1035,9 @@ static void unicorn_backend_execute_68k_trap(uint16_t trap, struct M68kRegisters
 			break;
 		}
 
-		// Check if we hit M68K_EXEC_RETURN (0x7100)
-		uint32_t current_pc = unicorn_get_pc(unicorn_cpu);
-		uint16_t opcode = 0;
-		uc_mem_read(uc, current_pc, &opcode, 2);
-		#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-		opcode = __builtin_bswap16(opcode);
-		#endif
-
-		if (opcode == 0x7100) {  // M68K_EXEC_RETURN
+		if (g_exec68k_return_flag) {
 			returned = true;
-			// Clean up stack (remove trap number and return address)
-			sp = unicorn_get_areg(unicorn_cpu, 7);
-			sp += 4;  // Pop 2 words
-			unicorn_set_areg(unicorn_cpu, 7, sp);
+			g_exec68k_return_flag = false;
 		}
 
 		iterations++;
@@ -839,18 +1047,116 @@ static void unicorn_backend_execute_68k_trap(uint16_t trap, struct M68kRegisters
 		fprintf(stderr, "[ERROR] Execute68kTrap did not return after %d iterations\n", iterations);
 	}
 
-	// Get registers back from Unicorn
+	// Get registers back from Unicorn (results of the trap execution)
 	for (int i = 0; i < 8; i++) {
 		r->d[i] = unicorn_get_dreg(unicorn_cpu, i);
-	}
-	for (int i = 0; i < 7; i++) {
 		r->a[i] = unicorn_get_areg(unicorn_cpu, i);
 	}
 	r->sr = unicorn_get_sr(unicorn_cpu);
 
-	// Restore original PC and SR
-	unicorn_set_pc(unicorn_cpu, saved_pc);
+	// RESTORE ALL CPU state - this is the critical fix.
+	// Without this, partially-initialized M68kRegisters structs (like the one in
+	// the IRQ handler's DoVBLTask call) corrupt D0-D7/A0-A6 with stack garbage.
+	for (int i = 0; i < 8; i++) {
+		unicorn_set_dreg(unicorn_cpu, i, saved_dregs[i]);
+		unicorn_set_areg(unicorn_cpu, i, saved_aregs[i]);
+	}
 	unicorn_set_sr(unicorn_cpu, saved_sr);
+	unicorn_set_pc(unicorn_cpu, saved_pc);
+}
+
+// 68k Subroutine Execution - Unicorn native implementation
+// Similar to Execute68kTrap but executes code at a given address instead of a trap
+// Used by TimerInterrupt(), ADBInterrupt(), etc.
+//
+// CRITICAL: Must save/restore ALL CPU registers (same as Execute68kTrap).
+static void unicorn_backend_execute_68k(uint32_t addr, struct M68kRegisters *r) {
+	if (!unicorn_cpu) {
+		fprintf(stderr, "[ERROR] unicorn_backend_execute_68k: Unicorn CPU not initialized\n");
+		return;
+	}
+
+	// Save ALL CPU state
+	uint32_t saved_pc = unicorn_get_pc(unicorn_cpu);
+	uint16_t saved_sr = unicorn_get_sr(unicorn_cpu);
+	uint32_t saved_dregs[8], saved_aregs[8];
+	for (int i = 0; i < 8; i++) {
+		saved_dregs[i] = unicorn_get_dreg(unicorn_cpu, i);
+		saved_aregs[i] = unicorn_get_areg(unicorn_cpu, i);
+	}
+
+	// Push M68K_EXEC_RETURN sentinel on stack, then push a fake return address
+	// that points to the sentinel. When the subroutine does RTS, it pops
+	// the return address and jumps to the sentinel opcode.
+	uint32_t sp = saved_aregs[7];
+
+	static int exec68k_sub_count = 0;
+	bool do_log = (++exec68k_sub_count <= 20);
+	if (do_log) {
+		fprintf(stderr, "[Execute68k] #%d addr=0x%08x A7=0x%08x PC=0x%08x\n",
+		        exec68k_sub_count, addr, sp, saved_pc);
+	}
+
+	// Push sentinel (EXEC_RETURN EmulOp)
+	sp -= 2;
+	uint16_t sentinel = 0xAE00;  // M68K_EXEC_RETURN in Unicorn encoding
+	g_platform.mem_write_word(sp, sentinel);
+
+	// Push return address pointing to the sentinel we just wrote
+	sp -= 4;
+	g_platform.mem_write_long(sp, sp + 4);  // Return addr = address of sentinel
+
+	unicorn_set_areg(unicorn_cpu, 7, sp);
+
+	// Set PC to the subroutine address
+	unicorn_set_pc(unicorn_cpu, addr);
+
+	// Execute until hook_interrupt sees EXEC_RETURN (0xAE00) and stops
+	extern volatile bool g_exec68k_return_flag;
+	g_exec68k_return_flag = false;
+
+	uc_engine *uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
+	bool returned = false;
+	int max_iterations = 100000;
+	int iterations = 0;
+
+	while (!returned && iterations < max_iterations) {
+		uint32_t pc = unicorn_get_pc(unicorn_cpu);
+		uc_err err = uc_emu_start(uc, pc, 0xFFFFFFFF, 0, 0);
+
+		if (err != UC_ERR_OK) {
+			if (do_log) {
+				fprintf(stderr, "[Execute68k] uc_emu_start returned %d at PC=0x%08X\n", err, pc);
+			}
+		}
+
+		if (g_exec68k_return_flag) {
+			returned = true;
+			g_exec68k_return_flag = false;
+		}
+
+		iterations++;
+	}
+
+	if (!returned && do_log) {
+		fprintf(stderr, "[ERROR] Execute68k did not return after %d iterations (addr=0x%08x)\n",
+		        iterations, addr);
+	}
+
+	// Get registers back from Unicorn (results of the subroutine execution)
+	for (int i = 0; i < 8; i++) {
+		r->d[i] = unicorn_get_dreg(unicorn_cpu, i);
+		r->a[i] = unicorn_get_areg(unicorn_cpu, i);
+	}
+	r->sr = unicorn_get_sr(unicorn_cpu);
+
+	// RESTORE ALL CPU state
+	for (int i = 0; i < 8; i++) {
+		unicorn_set_dreg(unicorn_cpu, i, saved_dregs[i]);
+		unicorn_set_areg(unicorn_cpu, i, saved_aregs[i]);
+	}
+	unicorn_set_sr(unicorn_cpu, saved_sr);
+	unicorn_set_pc(unicorn_cpu, saved_pc);
 }
 
 // Memory access (Unicorn-specific: uses uc_mem_read/write, NOT host pointers)
@@ -1007,6 +1313,9 @@ void cpu_unicorn_install(Platform *p) {
 
 	// 68k Trap execution
 	p->cpu_execute_68k_trap = unicorn_backend_execute_68k_trap;
+
+	// 68k Subroutine execution (for timer callbacks, ADB handlers, etc.)
+	p->cpu_execute_68k = unicorn_backend_execute_68k;
 
 	// Memory system (Unicorn-specific: uses uc_mem_read/write to access Unicorn's internal memory)
 	// IMPORTANT: Do NOT use DirectReadMacInt* functions - they read from RAMBaseHost/ROMBaseHost
