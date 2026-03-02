@@ -99,15 +99,6 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	// Call EmulOp handler
 	EmulOp(opcode, &regs);
 
-	// Debug: Log D0 for IRQ EmulOp
-	if (opcode == 0x7129) {
-		static int irq_d0_log_count = 0;
-		if (++irq_d0_log_count <= 50) {
-			fprintf(stderr, "[EmulOp IRQ #%d] D0 before=0x%08x, after=0x%08x, changed=%d\n",
-			        irq_d0_log_count, old_dregs[0], regs.d[0], (regs.d[0] != old_dregs[0]));
-		}
-	}
-
 	// CRITICAL: Register writes don't persist when called from within hooks!
 	// We need to defer ALL register updates until after uc_emu_start() returns
 	for (int i = 0; i < 8; i++) {
@@ -120,14 +111,7 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	}
 
 	if (regs.sr != old_sr) {
-		// Defer SR update to be applied after uc_emu_start() returns
 		unicorn_defer_sr_update(unicorn_cpu, regs.sr);
-
-		// Debug: Track deferred SR update
-		if (opcode == 0x7103) {
-			fprintf(stderr, "[EmulOp 0x7103] Deferring SR update: 0x%04X -> 0x%04X\n",
-			        old_sr, regs.sr);
-		}
 	}
 
 	// Check for "rtd" emulation - SCSI_DISPATCH uses A0/A1 to return:
@@ -140,33 +124,12 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 		//   jmp (a0)      ; Jump to return address
 		// We emulate this directly here
 
-		fprintf(stderr, "[SCSI_DISPATCH] rtd emulation: PC -> 0x%08X, A7 -> 0x%08X\n",
-		        regs.a[0], regs.a[1]);
-
 		// Set new PC and stack pointer
 		unicorn_set_pc(unicorn_cpu, regs.a[0]);
 		unicorn_set_areg(unicorn_cpu, 7, regs.a[1]);
 
 		// Return true to indicate PC was already set (don't advance it)
 		return true;
-	}
-
-	// Debug: Verify A7 write for RESET EmulOp
-	if (opcode == 0x7103) {
-		uint32_t a7_readback = g_platform.cpu_get_areg(7);
-		fprintf(stderr, "[EmulOp 0x7103] Set A7=0x%08X (readback=0x%08X)\n",
-		        regs.a[7], a7_readback);
-	}
-
-	// Debug: Log PC and registers after PATCH_BOOT_GLOBS to trace execution flow
-	if (opcode == 0x7107) {
-		uint32_t current_pc = unicorn_get_pc(unicorn_cpu);
-		fprintf(stderr, "[EmulOp 0x7107 (PATCH_BOOT_GLOBS)] Current PC=0x%08X, will return to PC=0x%08X\n",
-		        current_pc, current_pc + 2);
-		fprintf(stderr, "[PATCH_BOOT_GLOBS] Return state: D0=%08X D1=%08X D2=%08X A0=%08X A1=%08X A2=%08X SR=%04X\n",
-		        unicorn_get_dreg(unicorn_cpu, 0), unicorn_get_dreg(unicorn_cpu, 1), unicorn_get_dreg(unicorn_cpu, 2),
-		        unicorn_get_areg(unicorn_cpu, 0), unicorn_get_areg(unicorn_cpu, 1), unicorn_get_areg(unicorn_cpu, 2),
-		        (uint16_t)(unicorn_get_sr(unicorn_cpu) & 0xFFFF));
 	}
 
 	// Return false to indicate PC was not advanced (caller will advance it)
@@ -178,14 +141,8 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 static bool unicorn_platform_trap_handler(int vector, uint16_t opcode, bool is_primary) {
 	(void)is_primary; // Unicorn is always primary in standalone mode
 
-	fprintf(stderr, "[DEBUG] Trap handler called: vector=%d, opcode=0x%04X, PC=0x%08X\n",
-	        vector, opcode, unicorn_get_pc(unicorn_cpu));
-
-	// Use Unicorn's exception simulation (defined in unicorn_exception.c)
 	extern void unicorn_simulate_exception(UnicornCPU *cpu, int vector_nr, uint16_t opcode);
 	unicorn_simulate_exception(unicorn_cpu, vector, opcode);
-
-	fprintf(stderr, "[DEBUG] After trap: new PC=0x%08X\n", unicorn_get_pc(unicorn_cpu));
 
 	// Return true to indicate we handled PC advancement
 	return true;
