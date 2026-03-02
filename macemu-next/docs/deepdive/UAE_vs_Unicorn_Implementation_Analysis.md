@@ -78,11 +78,11 @@ This document analyzes the differences, explains why certain things work in UAE 
 | **Performance** | 🐢 Interpreter | ⚡ JIT (~5-10x faster) | Unicorn's advantage |
 | **EmulOps (0x71xx)** | ✅ Native | ✅ Via UC_HOOK_INSN_INVALID | Both work |
 | **A-line EmulOps (0xAE00-0xAE3F)** | ✅ Native | ✅ Via UC_HOOK_INTR | Both work |
-| **Mac OS A-line Traps (0xA000+)** | ✅ Full Support | ❌ **BROKEN** | See PC limitation below |
-| **Mac OS F-line Traps (0xF000+)** | ✅ Full Support | ❌ **BROKEN** | See PC limitation below |
+| **Mac OS A-line Traps (0xA000+)** | ✅ Full Support | ✅ **WORKING** (deferred updates) | Fixed March 2026 |
+| **Mac OS F-line Traps (0xF000+)** | ✅ Full Support | ✅ **WORKING** (deferred updates) | Fixed March 2026 |
 | **Interrupts (Detection)** | ✅ SPCFLAGS | ✅ UC_HOOK_BLOCK polling | Both work |
-| **Interrupts (Execution)** | ✅ Native Exception() | ⚠️ uc_m68k_trigger_interrupt() | Unicorn uses QEMU native |
-| **Exception Simulation** | ✅ Full Control | ❌ **CANNOT CHANGE PC** | Fundamental limitation |
+| **Interrupts (Execution)** | ✅ Native Exception() | ✅ Manual M68K frames | Both work |
+| **Exception Simulation** | ✅ Full Control | ✅ Via deferred register updates | PC limitation overcome |
 | **RTE Instruction** | ✅ Works | ✅ Works (patched) | Fixed in cpu-exec.c |
 | **VBR Register** | ✅ Native | ✅ Added via custom API | Had to add UC_M68K_REG_CR_VBR |
 | **SR Lazy Flags** | ✅ Correct | ⚠️ Some bugs | Known Unicorn issue |
@@ -93,73 +93,34 @@ This document analyzes the differences, explains why certain things work in UAE 
 
 ---
 
-## Critical Limitation: Unicorn PC Change Issue
+## Unicorn PC Change Issue -- SOLVED (March 2026)
 
-### The Problem
+### The Original Problem (January 2026)
 
-**Unicorn cannot change PC from `UC_HOOK_INTR` callbacks** - this is the #1 limitation affecting A-line/F-line trap execution.
+Unicorn cannot change PC from `UC_HOOK_INTR` callbacks -- QEMU's `exception_next_eip` overwrites any PC changes after the hook returns. This was initially thought to be a fundamental blocker.
 
-**What should happen** (M68K exception mechanism):
-1. CPU encounters A-line instruction (e.g., `0xA247`)
-2. CPU raises exception 10 (A-line trap)
-3. CPU builds stack frame (PC, SR, vector offset)
-4. CPU reads handler address from VBR + (10 * 4)
-5. **CPU sets PC to handler address** ← THIS IS THE CRITICAL STEP
-6. CPU executes Mac OS trap handler
-7. Handler executes RTE to return
+### The Solution: Deferred Register Updates
 
-**What actually happens in Unicorn**:
-1. Unicorn encounters A-line instruction
-2. Unicorn calls `UC_HOOK_INTR` callback
-3. Our code builds stack frame ✅
-4. Our code reads handler address ✅
-5. **Our code sets PC via `uc_reg_write()`** ← STEP 5
-6. **Unicorn IGNORES the PC change** ❌ ← PROBLEM!
-7. Unicorn overwrites PC with `exception_next_eip`
-8. Execution continues from wrong address → **HANG**
+Instead of writing registers directly inside the hook, we **defer** all register updates and apply them at the next `hook_block()` boundary:
 
-### Why This Happens
+1. `hook_interrupt()` queues register changes (including PC) in deferred arrays
+2. `hook_interrupt()` returns without calling `uc_emu_stop()` or `uc_reg_write()`
+3. QEMU restores PC from `exception_next_eip` (harmless -- we'll overwrite it)
+4. At the next basic block boundary, `hook_block()` fires
+5. `apply_deferred_updates_and_flush()` applies all queued register writes
+6. PC is now set correctly, execution continues from the right address
 
-From Unicorn's source code (QEMU's cpu-exec.c):
-```c
-// After exception hooks run, QEMU restores PC:
-cpu->exception_index = -1;
-cpu->eip = env->exception_next_eip;  // ← OVERWRITES our PC change!
-```
+**Result**: All A-line/F-line traps work. Both UAE and Unicorn populate 87 OS trap table entries and reach identical boot state.
 
-This is **by design** in QEMU/Unicorn - the interrupt hook is meant for *observation*, not *control*.
-
-### What We Tried
+### Historical Attempts (That Failed)
 
 From commits `9464afa4` and `32a6926b`:
 
-1. ❌ **`uc_ctl_remove_cache()` + `uc_reg_write()`**
-   - Suggested in Unicorn FAQ
-   - Doesn't work - PC still overwritten
+1. ❌ `uc_ctl_remove_cache()` + `uc_reg_write()` inside hook
+2. ❌ `uc_emu_stop()` to break execution
+3. ❌ Skip instruction instead of jumping to handler
 
-2. ❌ **`uc_emu_stop()` to break execution**
-   - Stops emulation but causes other issues
-   - Can't resume cleanly
-
-3. ❌ **Skip instruction instead of jumping to handler**
-   - Prevents infinite loop
-   - But doesn't execute the trap handler (breaks Mac OS)
-
-4. ❌ **Read opcode before PC advances**
-   - Helps with opcode detection
-   - But still can't change PC to handler
-
-### Current Workaround
-
-**For DualCPU validation**:
-- Execute A-line/F-line traps on **UAE only**
-- Sync full register state + RAM to Unicorn
-- Continue with both CPUs in sync
-
-**For standalone Unicorn**:
-- Only A-line EmulOps (0xAE00-0xAE3F) work (don't need PC changes)
-- Other A-line/F-line traps cause hangs
-- **Cannot boot full Mac OS ROM without UAE**
+All failed because they tried to modify PC *inside* the hook. The deferred approach sidesteps the issue entirely.
 
 ---
 

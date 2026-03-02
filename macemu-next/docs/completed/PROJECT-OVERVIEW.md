@@ -45,64 +45,47 @@ A modern rewrite focusing on:
    - Catch emulation bugs immediately
    - Build confidence in new backends
 
-## Current Status (January 2026)
+## Current Status (March 2026)
 
 ### ✅ What Works
 
 1. **Build System**: Meson build compiles cleanly
 2. **UAE CPU**: Full 68K interpreter integrated
-3. **Unicorn CPU**: Full 68020 emulation with JIT
-4. **DualCPU**: Validates **514,000+ instructions** successfully (massive improvement!)
+3. **Unicorn CPU**: Full 68020 emulation with JIT -- **boot parity with UAE achieved**
+4. **DualCPU**: Validates **514,000+ instructions** successfully
 5. **ROM Loading**: Quadra 650 ROM loads and executes
-6. **EmulOp System**: 0x71xx traps call emulator functions
-7. **A-line/F-line Traps**: ✅ **COMPLETE** - Mac OS traps (0xAxxx, 0xFxxx) working
-8. **Interrupt Support**: ✅ **COMPLETE** - Timer interrupts processed by all backends
+6. **EmulOp System**: 0x71xx and 0xAExx traps call emulator functions
+7. **A-line/F-line Traps**: ✅ **WORKING** via deferred register updates
+8. **Interrupt Support**: ✅ **COMPLETE** - 60Hz timer with M68K exception frames
 9. **Native Trap Execution**: ✅ **COMPLETE** - Unicorn executes 68k traps natively
 10. **XPRAM**: Configuration storage working
-11. **Memory**: Direct addressing mode implemented
-12. **Boot Sequence**: ROM boots, executes successfully
+11. **Memory**: Direct addressing + full MMIO infrastructure
+12. **Boot Sequence**: Both backends boot identically, 87 OS trap entries, 16,879 EmulOps in 30s
+13. **JIT Cache Management**: TB invalidation workaround (60Hz flush)
+14. **MMIO Hardware Stubs**: VIA/SCC/SCSI/ASC/DAFB via uc_mmio_map()
+15. **WebRTC Integration**: 4-thread architecture with video/audio encoders
 
 ### 🚧 Currently Working On
 
-**Timer Interrupt Timing Analysis**
-- First divergence at instruction #29,518 due to timer interrupt
-- UAE (interpreted) vs Unicorn (JIT) execute at different speeds
-- Wall-clock timers fire at different instruction counts
-- Not a bug, but a characteristic of wall-clock-based timing
-- Investigation doc: [INTERRUPT_TIMING_ANALYSIS.md](INTERRUPT_TIMING_ANALYSIS.md)
+**SCSI Disk Emulation** (Phase 3)
+- Both backends stall at resource chain search (PC=0x0001c3d4)
+- ROM is looking for system resources from a SCSI boot disk
+- Chain sentinel [0x01FFF30C] = 0xFF00FF00 (empty chain)
+- Need SCSI disk with Mac OS System file to progress
 
-**Performance Gap Investigation**
-- Unicorn stops at ~200k instructions vs UAE 250k
-- Likely due to cumulative effects of interrupt timing divergence
-- Need functional testing approach (not just trace comparison)
+### 📋 Next Steps
 
-### 📋 Roadmap (Not Yet Started)
+1. **SCSI Disk Emulation** -- Required for further boot progress
+2. **VIA Timer Completion** -- Slot interrupts, counter timers
+3. **Video Framebuffer** -- Display initialization
+4. **ADB Hardware** -- Keyboard/mouse detection
 
-1. **Full Hardware Emulation**
-   - VIA (Versatile Interface Adapter)
-   - SCSI (disk access)
-   - Video (framebuffer, display)
-   - Audio, Serial, Ethernet
+### 📋 Future Roadmap
 
-2. **ROM Patching**
-   - Replace ROM code with EmulOps
-   - Optimize trap dispatch
-   - Enable Mac OS API emulation
-
-3. **User Interface**
-   - SDL-based window/input
-   - Preferences UI
-   - Debugger integration
-
-4. **Performance**
-   - JIT compilation (UAE JIT or LLVM)
-   - Optimize hot paths
-   - Profile and tune
-
-5. **SheepShaver Support**
-   - PowerPC CPU backend
-   - Mac OS 9 compatibility
-   - Modern Mac emulation
+1. **Boot to Desktop** -- Requires hardware emulation above
+2. **Application Support** -- HyperCard, games
+3. **Performance Optimization** -- JIT tuning, TB cache improvements
+4. **SheepShaver Support** -- PowerPC, Mac OS 9
 
 ## Architecture
 
@@ -556,5 +539,5 @@ Based on BasiliskII, which is GPL v2. All code is GPL v2 compatible.
 
 ---
 
-**Last Updated**: January 3, 2026
-**Status**: Active development - Timer interrupt timing analysis and functional testing
+**Last Updated**: March 1, 2026
+**Status**: Unicorn boot parity with UAE achieved. Next: SCSI disk emulation for further boot progress.

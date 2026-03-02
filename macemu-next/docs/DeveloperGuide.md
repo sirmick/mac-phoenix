@@ -45,25 +45,42 @@
    }
    ```
 
-2. **Interrupt Delivery** (`src/cpu/m68k_interrupt.c`)
-   - Build M68K exception frames
+2. **Hook Block** (`src/cpu/unicorn_wrapper.c:hook_block()`)
+   - Apply deferred register updates from previous EmulOp
+   - Poll timer every ~4096 blocks
+   - Flush JIT translation blocks (TB invalidation workaround)
+   - Check for pending interrupts
+
+3. **Hook Interrupt** (`src/cpu/unicorn_wrapper.c:hook_interrupt()`)
+   - Fires on A-line exception (0xAExx opcodes)
+   - Identifies EmulOp opcode, calls handler
+   - **Defers** all register updates (writes inside hooks don't persist in QEMU)
+   - Updates applied at next `hook_block()` call
+
+4. **Interrupt Delivery** (in `hook_block()`)
+   - Build M68K exception frames manually
    - Handle priority masking (IPL)
    - Deliver timer at 60Hz (Level 1, Vector 25)
-
-3. **EmulOp Handling** (immediate updates)
-   - Call platform handler
-   - Update ALL registers immediately
-   - No deferred updates
 
 ### Critical Files
 
 | File | Purpose | Key Functions |
 |------|---------|---------------|
-| `unicorn_exec_loop.c` | Main execution | `unicorn_execute_with_interrupts()` |
-| `m68k_interrupt.c` | Interrupt delivery | `deliver_m68k_interrupt()` |
+| `unicorn_wrapper.c` | Hooks, deferred updates, diagnostics | `hook_block()`, `hook_interrupt()`, `apply_deferred_updates_and_flush()` |
+| `unicorn_exec_loop.c` | Main execution loop | `unicorn_execute_with_interrupts()` |
+| `cpu_unicorn.cpp` | Backend interface, MMIO, memory map | Platform API, `uc_mmio_map()` callbacks |
 | `rom_patches.cpp` | ROM modifications | IRQ EmulOp encoding fix |
-| `cpu_unicorn.cpp` | Backend interface | Platform API implementation |
-| `unicorn_wrapper.c` | Unicorn API | Memory mapping, register access |
+| `timer_interrupt.cpp` | 60Hz timer | `poll_timer_interrupt()` |
+
+### Key Technical Concepts
+
+**Deferred Register Updates**: EmulOp handlers run inside `UC_HOOK_INTR` callbacks. QEMU overwrites PC after hook returns. Solution: queue all register writes and apply them at the next `hook_block()` boundary via `apply_deferred_updates_and_flush()`.
+
+**JIT TB Invalidation**: Mac OS heap can overwrite RAM containing EmulOp patch code. QEMU's JIT cache retains stale compiled translations. Workaround: `uc_ctl_flush_tb()` on every 60Hz timer tick. Proper fix: investigate QEMU's `TLB_NOTDIRTY` mechanism.
+
+**MMIO**: Hardware registers must use `uc_mmio_map()`, not `UC_HOOK_MEM_READ`. QEMU's JIT compiles direct memory loads for `uc_mem_map_ptr` regions, bypassing hooks.
+
+**SR uint32_t**: `uc_reg_write()` for SR reads 4 bytes. Passing `uint16_t*` causes garbage in upper bits.
 
 ## Common Development Tasks
 
@@ -266,10 +283,10 @@ grep -c interrupt logfile
 - Small batches prevent infinite loops
 - Adaptive sizing balances performance
 
-### Why Immediate Updates?
-- Deferred updates caused timing bugs
-- ROM code expects immediate visibility
-- Simpler, more predictable
+### Why Deferred Updates?
+- Register writes inside `UC_HOOK_INTR` don't persist (QEMU overwrites PC)
+- Deferred updates applied at `hook_block()` boundary work correctly
+- All A-line/F-line traps now functional with this approach
 
 ### Why M68K Exception Frames?
 - Required for proper RTE handling
@@ -288,8 +305,13 @@ grep -c interrupt logfile
 - Optimize register access
 - Cache translation blocks
 
+### Current Priority (March 2026)
+- SCSI disk emulation (required for further boot progress)
+- More complete VIA emulation
+- Video framebuffer initialization
+
 ### Long-term Goals
-- Full Mac OS boot
+- Full Mac OS boot to desktop
 - Network support
 - Sound emulation
 - Graphics acceleration
@@ -314,4 +336,4 @@ grep -c interrupt logfile
 
 ---
 
-*Last Updated: January 2026*
+*Last Updated: March 2026*

@@ -228,7 +228,47 @@ read(rom_fd, ROMBaseHost, ROMSize);
 close(rom_fd);
 ```
 
+## Unicorn Backend Memory Map (March 2026)
+
+The Unicorn backend maps a much larger address space than the basic RAM+ROM layout, covering the full 32-bit Quadra 650 memory map:
+
+```
+Region              Address Range           Size      Content
+─────────────────────────────────────────────────────────────
+RAM                 0x00000000-0x01FFFFFF    32MB      Host buffer (uc_mem_map_ptr)
+ROM                 0x02000000-0x020FFFFF    1MB       Writable for patching
+Dummy               0x02100000-0x030FFFFF    16MB      0xFF00FF00 fill pattern
+NuBus Gap 1         0x03100000-0x50EFFFFF    ~1.2GB    dummy_bank (returns 0)
+MMIO                0x50F00000-0x50F3FFFF    256KB     VIA/SCC/SCSI stubs (uc_mmio_map)
+NuBus Gap 2         0x50F40000-0xEFFFFFFF    ~2.5GB    dummy_bank (returns 0)
+High Mem            0xF0000000-0xFEFFFFFF    240MB     Zeroed
+Trap Gap            0xFF000000-0xFF000FFF    4KB       Unmapped (EmulOp detection)
+High Mem 2          0xFF001000-0xFFFFFFFF    ~16MB     Zeroed
+```
+
+### Key Design Decisions
+
+**Dummy region (0xFF00FF00)**: Filled with this pattern to mimic what real Quadra hardware returns for unpopulated NuBus slots. The ROM reads this during slot detection.
+
+**MMIO via `uc_mmio_map()`**: Hardware registers cannot use `uc_mem_map_ptr()` with `UC_HOOK_MEM_READ` because QEMU's JIT compiles direct memory loads that bypass hooks. `uc_mmio_map()` uses QEMU's proper MMIO callback mechanism.
+
+**Trap Gap**: A small unmapped region at 0xFF000000 used for EmulOp return detection during native 68K trap execution.
+
+**NuBus gaps**: Large unmapped address ranges filled with zeroed memory. The dummy_bank read callback returns 0 for all reads, simulating empty NuBus slots.
+
+### MMIO Stubs
+
+The MMIO region at 0x50F00000 contains stub callbacks for:
+- **VIA1** (0x50F00000): Versatile Interface Adapter -- timer, keyboard, sound
+- **VIA2** (0x50F02000): Second VIA -- slot interrupts, SCSI
+- **SCC** (0x50F04000): Serial Communications Controller
+- **SCSI** (0x50F10000): SCSI controller
+- **ASC** (0x50F14000): Apple Sound Chip
+- **DAFB** (0x50F20000): Display controller
+
+All stubs return minimal values to prevent ROM crashes during hardware probing.
+
 ## See Also
 
-- [UAE CPU Quirks](UAE-Quirks.md) - Byte-swapping details
-- [CPU Emulation](CPU.md) - How PC and PC_P work together
+- [cpu/UaeQuirks.md](cpu/UaeQuirks.md) - Byte-swapping details
+- [cpu/UnicornQuirks.md](cpu/UnicornQuirks.md) - Unicorn-specific memory quirks

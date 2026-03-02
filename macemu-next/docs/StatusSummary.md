@@ -1,218 +1,158 @@
 # macemu-next Status Summary
 
-**Date**: January 5, 2026
-**Last Checked**: By Claude Code during documentation audit
+**Date**: March 1, 2026
 
 ---
 
-## 🎉 Project Status: Phase 2 Complete!
+## MILESTONE: Unicorn Boot Parity with UAE
 
-**macemu-next** has successfully completed **Phase 2: WebRTC Integration** and is now ready for testing and validation.
-
----
-
-## Major Achievements (Last 48 Hours)
-
-### 1. ✅ RTE Batch Execution Bug - FIXED (Jan 5, 2026)
-
-**Problem**: Unicorn's RTE (Return from Exception) instruction caused infinite loops with batch execution, forcing slow single-step mode.
-
-**Solution**: Patched Unicorn's `cpu-exec.c` to handle `EXCP_RTE` before clearing `exception_index` (commit `da1383a7`)
-
-**Impact**:
-- **Before**: 7.56M instructions/sec (single-step)
-- **After**: 14.56M instructions/sec (batch execution, count=10000)
-- **Speedup**: 1.93x (93% performance improvement)
-- **Stability**: 146M+ instructions without crashing
-
-**Documentation**:
-- [UnicornBatchExecutionRTEBug.md](deepdive/UnicornBatchExecutionRTEBug.md) - Problem analysis (historical)
-- [UnicornRTEQemuResearch.md](deepdive/UnicornRTEQemuResearch.md) - Solution research
+**Both the Unicorn JIT backend and the UAE interpreter backend reach the identical boot state and stall at the same point.** The stall is NOT a Unicorn bug -- it is a shared emulator limitation (no SCSI boot disk).
 
 ---
 
-### 2. ✅ WebRTC Integration - COMPLETE (Jan 5, 2026)
-
-**Achievement**: Migrated from 2-process IPC architecture to streamlined 4-thread in-process model.
-
-**Architecture** (commit `eb850af5`):
-1. **CPU/Main Thread** - M68K execution + timer interrupts
-2. **Video Encoder Thread** - Reads from triple buffer, encodes video
-3. **Audio Encoder Thread** - Reads from ring buffer, encodes audio
-4. **WebRTC Server Thread** - HTTP API + WebRTC signaling
-
-**Key Components**:
-- ✅ Lock-free triple buffer for video (hot path, ~60 FPS)
-- ✅ Mutex-protected ring buffer for audio (~50 Hz)
-- ✅ Video encoders: H.264, VP9, WebP, PNG
-- ✅ Audio encoder: Opus
-- ✅ HTTP API server (in-process)
-- ✅ Build system with conditional compilation (`-Dwebrtc=true`)
-
-**Files Added**: 38 new files across:
-- `src/platform/` - VideoOutput, AudioOutput APIs
-- `src/webrtc/encoders/` - H.264, VP9, WebP, PNG, Opus encoders
-- `src/webrtc/http/` - HTTP server, API handlers, static files
-- `src/webrtc/` - Video/audio encoder threads, WebRTC server coordinator
-- `src/config/` - JSON configuration system
-
-**Libraries Integrated**: 6 codec/utility libraries
-- openh264 (H.264 encoding)
-- libvpx (VP9 encoding)
-- libwebp (WebP encoding)
-- opus (Opus audio encoding)
-- libyuv (YUV/RGB color conversion)
-- nlohmann/json (JSON configuration)
-
-**Build Status**: ✅ Successful with `-Dwebrtc=true`
-
----
-
-### 3. ✅ JSON Configuration System (Jan 4, 2026)
-
-**Achievement**: Modern JSON-based configuration with XDG directory support (commit `19d871c8`)
-
-**Features**:
-- Human-readable CPU names ("68040" vs "4")
-- XDG Base Directory spec compliance (~/.config/macemu-next/)
-- CLI options: `--config`, `--save-config`
-- Complete documentation: [JSON_CONFIG.md](JSON_CONFIG.md)
-
----
-
-## Current Status by Phase
-
-### Phase 1: Core CPU Emulation ✅ MOSTLY COMPLETE
-
-**UAE Backend**: ✅ Fully functional
-- ✅ UAE interpreter backend (complete, all features working)
-- ✅ All traps, interrupts, EmulOps working perfectly
-
-**Unicorn Backend**: ⚠️ Mostly functional with limitations
-- ✅ Unicorn M68K backend with JIT (14.56M instructions/sec)
-- ✅ Memory system (direct addressing)
-- ✅ EmulOp support (0x71xx traps)
-- ✅ A-line EmulOps (0xAE00-0xAE3F) - BasiliskII-specific
-- ✅ RTE instruction support with batch execution
-- ✅ Interrupt detection and triggering
-- ⚠️ **A-line/F-line trap handling** - **LIMITED** (see note below)
-
-**DualCPU Backend**: ✅ Functional with workarounds
-- ✅ Lockstep validation (with UAE-execute workaround for traps)
-- ✅ Platform API abstraction
-
-**⚠️ Known Limitation**: Unicorn cannot change PC from interrupt hooks (Unicorn GitHub issue #1027)
-- **Impact**: Mac OS A-line/F-line traps don't work on Unicorn standalone
-- **Workaround**: DualCPU mode executes traps on UAE, syncs state to Unicorn
-- **See**: [docs/deepdive/cpu/ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)
-
-**Achievement**: UAE executes indefinitely; Unicorn has limitations for full ROM boot
-
----
-
-### Phase 2: WebRTC Integration ✅ COMPLETE
-- ✅ 4-thread in-process architecture
-- ✅ Lock-free video triple buffer
-- ✅ Mutex-protected audio ring buffer
-- ✅ All encoders integrated (H.264, VP9, WebP, PNG, Opus)
-- ✅ HTTP API server
-- ✅ JSON configuration system
-- ✅ Build system updates
-- ✅ Conditional compilation support
-
-**Achievement**: Full WebRTC stack integrated and building
-
----
-
-### Phase 3: Testing & Validation ⏳ NEXT (Current Focus)
-
-**Pending Tasks**:
-1. ⏳ Copy browser client (HTML/JS/CSS from `web-streaming/client/`)
-2. ⏳ Test video encoding (verify frame flow)
-3. ⏳ Test audio encoding (verify sample flow)
-4. ⏳ Test HTTP API (verify server responds)
-5. ⏳ End-to-end test (browser → WebRTC → emulator streaming)
-
-**Goal**: Verify the integrated system works end-to-end
-
----
-
-### Phase 4: Boot to Desktop ⏳ FUTURE
-- ⏳ Hardware emulation (VIA, SCSI, Video)
-- ⏳ Boot Mac OS 7 to desktop
-- ⏳ Mouse cursor visible
-- ⏳ Basic responsiveness
-
----
-
-## Documentation Status
-
-### ✅ Fixed (This Audit)
-- [TodoStatus.md](TodoStatus.md) - Updated to reflect RTE fix and WebRTC completion
-- [UnicornBatchExecutionRTEBug.md](deepdive/UnicornBatchExecutionRTEBug.md) - Marked as historical/resolved
-
-### ✅ Up-to-Date
-- [ProjectGoals.md](ProjectGoals.md) - Vision and philosophy
-- [JSON_CONFIG.md](JSON_CONFIG.md) - Configuration system
-- [Architecture.md](Architecture.md) - Platform API design
-
-### ⏳ Needs Update
-- [README.md](../README.md) - Quick start (needs WebRTC instructions)
-- [Commands.md](Commands.md) - Build commands (needs WebRTC build steps)
-
----
-
-## Quick Start (With WebRTC)
-
-```bash
-# Build with WebRTC enabled
-cd macemu-next
-meson setup builddir -Dwebrtc=true
-ninja -C builddir
-
-# Run (without WebRTC yet - needs ROM)
-./builddir/macemu-next ~/quadra.rom
-```
-
----
-
-## Next Steps (Priority Order)
-
-1. **Copy browser client** - Migrate HTML/JS/CSS from `web-streaming/client/`
-2. **Functional tests** - Verify video/audio encoding works
-3. **End-to-end test** - Browser streams from emulator
-4. **Update README** - Add WebRTC build/run instructions
-5. **Phase 3** - Boot to desktop (hardware emulation)
-
----
-
-## Key Metrics
+## Current Boot State (Both Backends)
 
 | Metric | Value |
 |--------|-------|
-| **Performance** | 14.56M instructions/sec (1.93x vs single-step) |
-| **Stability** | 146M+ instructions without crash |
-| **Code Size** | 38 new files, ~8,000 lines (WebRTC integration) |
-| **Build Time** | ~10 seconds (incremental) |
-| **Thread Count** | 4 threads (CPU, Video, Audio, WebRTC) |
-| **Encoders** | 5 codecs (H.264, VP9, WebP, PNG, Opus) |
+| **Boot progress ($0b78)** | 0xfd89ffff (identical) |
+| **OS Trap Table** | 87 RAM handler entries (identical) |
+| **TopMapHndl ($A50)** | 0x00002074 (identical) |
+| **SysMapHndl ($A54)** | 0x00002074 (identical) |
+| **EmulOps in 30s** | 16,879 dispatched |
+| **SCSI dispatches** | 2,046 (searching for boot disk) |
+| **Stall point** | PC=0x0001c3d4 (resource chain search) |
+| **Chain sentinel** | [0x01FFF30C] = 0xFF00FF00 (both backends) |
+
+### Boot Sequence Timeline
+
+1. **RESET EmulOp** (0x7103/0xAE03) -- Sets up boot globals, registers
+2. **CLKNOMEM x336** (0x7104/0xAE04) -- XPRAM/RTC initialization
+3. **ROM initialization** -- Ticks-waiting loop at PC=0x020014ca (~4 seconds)
+4. **OS Trap Table setup** -- 87 entries installed (A001-A0FF range)
+5. **Resource Manager** -- Searches for boot resources, stalls on empty chain
+
+### Why Both Backends Stall
+
+The resource chain search at PC=0x0001c3d4 follows a linked list starting at A3=0x01FFF30C. The first entry points to 0xFF00FF00 (dummy fill pattern), immediately breaking the chain. The ROM is looking for system resources that would normally come from a SCSI boot disk.
 
 ---
 
-## Conclusion
+## Key Achievements (Since January 2026)
 
-**macemu-next is in excellent shape!**
+### 1. A-Line/F-Line Traps -- WORKING
 
-Phase 1 (CPU emulation) and Phase 2 (WebRTC integration) are complete. The project is ready for Phase 3 (testing & validation), followed by Phase 4 (boot to desktop).
+Previously documented as "BROKEN" due to Unicorn's PC limitation (GitHub issue #1027). **Now fully working** via the deferred register update mechanism:
 
-Major recent wins:
-- ✅ RTE bug fixed → 1.93x performance boost
-- ✅ WebRTC integrated → 4-thread architecture complete
-- ✅ Build successful → All dependencies resolved
+- EmulOp handlers run inside UC_HOOK_INTR callbacks
+- Register writes are deferred and applied at block boundaries via `apply_deferred_updates_and_flush()`
+- PC changes take effect correctly after hook returns
+- All 87 OS trap table entries populated (matching UAE exactly)
 
-**Ready for testing!**
+### 2. JIT Translation Block Invalidation -- SOLVED (workaround)
+
+**Root cause**: Mac OS heap overwrites RAM containing patch code. QEMU's JIT cache retains stale compiled translations. Executing stale code crashes at PC=0x00000002.
+
+**Workaround**: `uc_ctl_flush_tb()` on every 60Hz timer tick in `hook_block`.
+
+**Proper fix needed**: Investigate QEMU's `TLB_NOTDIRTY` / `tb_invalidate_phys_page_range()` mechanism.
+
+### 3. MMIO Infrastructure
+
+Hardware register emulation via `uc_mmio_map()` (not `UC_HOOK_MEM_READ`, which JIT bypasses for `uc_mem_map_ptr` regions):
+
+- VIA1/VIA2 stubs (0x50F00000-0x50F03FFF)
+- SCC/SCSI/ASC/DAFB stubs
+- NuBus gap regions (return 0)
+- Unmapped memory handler
+
+### 4. IRQ Storm Fix
+
+4-phase fix eliminating 99.997% of IRQ polling overhead:
+1. Fixed IRQ EmulOp encoding (0x7129 not 0xAE29)
+2. QEMU-style execution loop with adaptive batch sizing
+3. Deferred register update mechanism
+4. Proper M68K interrupt delivery with exception frames
+
+### 5. Performance Optimization
+
+- Hook-based timer: poll every 4096 blocks (not every block)
+- Cached environment variable lookups
+- Batch execution (count=1000)
+- 60Hz TB flush (workaround for self-modifying code)
 
 ---
 
-*Last updated: January 5, 2026*
-*Generated by: Claude Code during documentation audit*
+## EmulOp Dispatch Summary (30-second run)
+
+| EmulOp | Count | Description |
+|--------|-------|-------------|
+| BLOCK_MOVE | 4,361 | Memory block operations |
+| SCSI_DISPATCH | 2,046 | SCSI manager calls (searching for disk) |
+| IRQ | 1,797 | Interrupt handling |
+| DISK_PRIME | 1,358 | Disk read/write attempts |
+| CLKNOMEM | 574 | XPRAM/RTC access |
+| ADBOP | 417 | ADB keyboard/mouse |
+| CHECKLOAD | 283 | Resource loading checks |
+| Other | 6,043 | RESET, PATCH_BOOT_GLOBS, etc. |
+| **Total** | **16,879** | |
+
+---
+
+## Memory Map (Unicorn Backend)
+
+| Region | Address Range | Size | Content |
+|--------|--------------|------|---------|
+| RAM | 0x00000000-0x01FFFFFF | 32MB | Host buffer, shared with UAE |
+| ROM | 0x02000000-0x020FFFFF | 1MB | Writable (for patching) |
+| Dummy | 0x02100000-0x030FFFFF | 16MB | 0xFF00FF00 fill pattern |
+| NuBus Gap 1 | 0x03100000-0x50EFFFFF | ~1.2GB | dummy_bank (returns 0) |
+| MMIO | 0x50F00000-0x50F3FFFF | 256KB | VIA/SCC/SCSI stubs |
+| NuBus Gap 2 | 0x50F40000-0xEFFFFFFF | ~2.5GB | dummy_bank (returns 0) |
+| High Mem | 0xF0000000-0xFEFFFFFF | 240MB | Zeroed |
+| Trap Gap | 0xFF000000-0xFF000FFF | 4KB | Unmapped (EmulOp detection) |
+| High Mem 2 | 0xFF001000-0xFFFFFFFF | ~16MB | Zeroed |
+
+---
+
+## Architecture Summary
+
+### Three CPU Backends
+
+- **UAE**: Interpreter, fully functional, legacy baseline
+- **Unicorn**: JIT (QEMU-based), primary development focus, boot parity achieved
+- **DualCPU**: Runs both in lockstep for validation
+
+### Key Technical Details
+
+- **Deferred Register Updates**: EmulOp handlers run inside UC_HOOK_INTR. Register writes inside hooks don't persist in QEMU. Solution: defer updates, apply at block boundaries.
+- **SR requires uint32_t***: `uc_reg_write` for SR needs `uint32_t*` not `uint16_t*` (QEMU internal representation).
+- **MMIO via uc_mmio_map()**: `UC_HOOK_MEM_READ` does NOT work for `uc_mem_map_ptr` regions (JIT bypasses hooks). Must use `uc_mmio_map()` for hardware registers.
+- **EmulOp Encoding**: `make_emulop()` generates 0xAExx for Unicorn, 0x71xx for UAE.
+
+---
+
+## What's Needed to Boot Further
+
+The resource chain stall is a shared emulator issue. To progress:
+
+1. **SCSI disk emulation** -- System file provides resources the ROM is searching for
+2. **More complete VIA emulation** -- Interrupt sources, timers, slot interrupts
+3. **Video framebuffer** -- Display initialization
+4. **ADB hardware responses** -- Keyboard/mouse detection
+
+---
+
+## Phase Status
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Core CPU | **COMPLETE** | All backends working, 514k+ dual-CPU validated |
+| Phase 1.5: Boot Progress | **COMPLETE** | Unicorn boot parity with UAE achieved |
+| Phase 2: WebRTC | **COMPLETE** | 4-thread architecture, all encoders integrated |
+| Phase 3: Hardware Emulation | **NEXT** | SCSI, VIA, Video needed for further boot |
+| Phase 4: Boot to Desktop | FUTURE | Requires Phase 3 |
+| Phase 5: Application Support | FUTURE | |
+
+---
+
+*Last updated: March 1, 2026*

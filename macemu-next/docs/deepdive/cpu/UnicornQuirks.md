@@ -332,47 +332,60 @@ void log_instruction(uint32_t pc) {
 
 This helps understand what instructions cause mismatches.
 
-## Critical Limitations of Unicorn
+## Critical Unicorn Behaviors
 
-### ⚠️ CRITICAL: Cannot Change PC from Interrupt Hooks
+### PC Changes in Interrupt Hooks -- SOLVED via Deferred Updates
 
-**This is the most important Unicorn limitation to understand.**
-
-**Problem**: Unicorn intentionally overwrites PC after `UC_HOOK_INTR` callbacks return.
+**Background**: Unicorn intentionally overwrites PC after `UC_HOOK_INTR` callbacks return (GitHub issue #1027). Direct `uc_reg_write()` for PC inside hooks is ignored.
 
 **Discovered**: January 2026 (commits `9464afa4`, `32a6926b`)
-**Unicorn Issue**: [GitHub #1027](https://github.com/unicorn-engine/unicorn/issues/1027)
 
-**Impact**:
+**Solution (February 2026)**: Deferred register updates. Instead of writing registers inside the hook, queue them for application at the next `hook_block()` call:
+
 ```c
-// This DOES NOT WORK:
-static uint32_t hook_interrupt(uc_engine *uc, uint32_t int_no, void *user_data) {
-    uint32_t new_pc = 0x1234;
-    uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);  // ❌ IGNORED!
-    return 0;
+// In hook_interrupt() - DEFER the update:
+deferred_pc = new_pc;
+deferred_pc_valid = 1;
+// Don't call uc_reg_write() or uc_emu_stop() here!
+
+// In hook_block() - APPLY deferred updates:
+if (deferred_pc_valid) {
+    uc_reg_write(uc, UC_M68K_REG_PC, &deferred_pc);
+    deferred_pc_valid = 0;
 }
-// After hook returns, Unicorn overwrites PC with exception_next_eip
 ```
 
-**What We Tried**:
-1. ✗ `uc_ctl_remove_cache()` + `uc_reg_write()` - Unicorn FAQ suggestion, doesn't work
-2. ✗ `uc_emu_stop()` to break execution - causes other issues
-3. ✗ Skipping the instruction - prevents loop but doesn't execute handler
+**Result**: All A-line/F-line traps now work correctly. Both UAE and Unicorn populate 87 OS trap table entries and reach identical boot state.
 
-**Root Cause** (from Unicorn source code):
-- After interrupt hooks run, Unicorn restores PC from internal state
-- The `exception_next_eip` value overwrites any PC changes
-- This is by design and affects all architectures
+See [ALineAndFLineStatus.md](ALineAndFLineStatus.md) for full details.
 
-**Consequences for macemu-next**:
-- ❌ Cannot simulate M68K exception jumps (A-line, F-line, interrupts)
-- ❌ Cannot implement Mac OS trap execution natively in Unicorn
-- ❌ ROM boot hangs when encountering non-EmulOp A-line traps
-- ✅ A-line EmulOps (0xAE00-0xAE3F) still work (don't need PC changes)
+### SR Register Requires uint32_t
 
-**Workaround**: Execute A-line/F-line traps on UAE, sync state to Unicorn.
+`uc_reg_write()` for SR reads 4 bytes from the pointer, not 2. QEMU internally represents SR as a 32-bit value. Passing a `uint16_t*` causes garbage in the upper bits.
 
-See [ALineAndFLineStatus.md](ALineAndFLineStatus.md) for detailed analysis.
+```c
+// WRONG:
+uint16_t sr = 0x2700;
+uc_reg_write(uc, UC_M68K_REG_SR, &sr);  // Reads 4 bytes!
+
+// CORRECT:
+uint32_t sr32 = 0x2700;
+uc_reg_write(uc, UC_M68K_REG_SR, &sr32);
+```
+
+### MMIO Must Use uc_mmio_map(), Not Memory Read Hooks
+
+`UC_HOOK_MEM_READ` does NOT fire for `uc_mem_map_ptr()` regions because QEMU's JIT compiles direct memory loads that bypass hooks. Hardware registers must use `uc_mmio_map()` which provides proper IO callbacks through QEMU's MMIO infrastructure.
+
+```c
+// WRONG: JIT bypasses this hook for uc_mem_map_ptr regions
+uc_hook_add(uc, &hook, UC_HOOK_MEM_READ, read_callback, ...);
+
+// CORRECT: Proper MMIO callbacks
+uc_mmio_map(uc, 0x50F00000, 0x40000,
+            mmio_read_callback, NULL,
+            mmio_write_callback, NULL);
+```
 
 ---
 
@@ -618,21 +631,35 @@ We were mistakenly applying this advice to **register** updates, which don't nee
 
 ---
 
-### Current Boot Status
+### Current Boot Status (March 2026)
 
-**UAE (10 seconds):**
-- ✅ 798 CLKNOMEM EmulOps executed
+**Both backends (30 seconds) -- IDENTICAL STATE:**
+- ✅ 336 CLKNOMEM EmulOps (XPRAM/RTC initialization)
 - ✅ PATCH_BOOT_GLOBS reached
-- ⏱️ Boot sequence continues (WLSC not yet written)
+- ✅ 87 OS trap table entries populated
+- ✅ 16,879 total EmulOps dispatched (including 2,046 SCSI searches)
+- ✅ Boot progress $0b78 = 0xfd89ffff
+- ⏱️ Both stall at resource chain search (PC=0x0001c3d4) -- no SCSI boot disk
 
-**Unicorn (10 seconds):**
-- ✅ 437 CLKNOMEM EmulOps executed
-- ✅ PATCH_BOOT_GLOBS reached
-- ✅ Interrupts handled correctly
-- ✅ No crashes or infinite loops
-- ⏱️ Boot sequence continues (WLSC not yet written)
+**Unicorn has achieved full boot parity with UAE.** The stall is NOT a Unicorn bug -- it's a shared emulator limitation.
 
-Both backends are working correctly! Unicorn is slower because it's still calling `uc_emu_stop()` for interrupt delivery (which is correct), but the boot sequence is progressing properly.
+### JIT Translation Block Invalidation (SOLVED with workaround)
+
+**Problem**: Mac OS heap overwrites RAM containing EmulOp patch code. QEMU's JIT cache retains stale compiled translations pointing to the old code. When the JIT executes a stale TB, it crashes at PC=0x00000002.
+
+**Root cause**: QEMU's self-modifying code detection (`TLB_NOTDIRTY` mechanism) is not properly wired in the Unicorn fork.
+
+**Workaround**: Call `uc_ctl_flush_tb()` on every 60Hz timer tick in `hook_block`. This forces QEMU to recompile all translation blocks, ensuring stale code is never executed.
+
+**Proper fix needed**: Investigate QEMU's `TLB_NOTDIRTY` / `tb_invalidate_phys_page_range()` to enable fine-grained TB invalidation only for modified pages.
+
+```c
+// In hook_block() -- every ~4096 blocks, check timer
+if (should_check_timer) {
+    poll_timer_interrupt();
+    uc_ctl_flush_tb(uc);  // Workaround: flush all JIT cache
+}
+```
 
 ---
 

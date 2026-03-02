@@ -93,9 +93,12 @@ if (result == CPU_EXEC_EMULOP) {
 
 **Characteristics**:
 - QEMU-based JIT compiler
-- 10-50x faster than interpreter
-- Efficient hook architecture (UC_HOOK_BLOCK, UC_HOOK_INSN_INVALID)
+- Efficient hook architecture (UC_HOOK_BLOCK, UC_HOOK_INTR)
 - Self-contained (no UAE dependency for trap execution)
+- Deferred register updates for EmulOp correctness
+- MMIO via `uc_mmio_map()` for hardware registers
+
+**Status (March 2026)**: Boot parity with UAE achieved. Both backends reach identical state.
 
 **Role in Project**:
 - **END GOAL** - This is what we're building toward
@@ -104,23 +107,36 @@ if (result == CPU_EXEC_EMULOP) {
 
 **Hook Architecture** (Performance-Optimized):
 ```c
-// UC_HOOK_BLOCK - Interrupts checked at basic block boundaries
-// Called ~100k times/sec vs ~1M times/sec for per-instruction
+// UC_HOOK_BLOCK - Timer polling, interrupt delivery, deferred register application
+// Called at basic block boundaries (~100k times/sec)
 static void hook_block(...) {
-    if (PendingInterrupt) {
-        // Trigger M68K interrupt
+    // Apply any deferred register updates from previous EmulOp
+    apply_deferred_updates_and_flush(cpu, uc, "hook_block");
+
+    // Poll timer every ~4096 blocks
+    if (block_count % 4096 == 0) {
+        poll_timer_interrupt();
+        uc_ctl_flush_tb(uc);  // JIT cache invalidation workaround
     }
 }
 
-// UC_HOOK_INSN_INVALID - EmulOps/traps on illegal instructions only
-// Called only when CPU hits 0x71xx, 0xAxxx, 0xFxxx (~1k times/sec)
-static bool hook_insn_invalid(...) {
-    if (is_emulop) {
-        g_platform.emulop_handler(opcode);
-        return true;  // Continue execution
-    }
+// UC_HOOK_INTR - EmulOps and A-line/F-line traps
+// Called on exception #10 (A-line) for 0xAExx opcodes
+static void hook_interrupt(...) {
+    // Handle EmulOp, DEFER register updates (writes inside hooks don't persist)
+    deferred_dregs[0] = new_d0;
+    deferred_dregs_valid |= 1;
+    deferred_pc = new_pc;
+    deferred_pc_valid = 1;
+    // Updates applied at next hook_block() call
 }
 ```
+
+**Key Unicorn Quirks**:
+- Register writes inside `UC_HOOK_INTR` don't persist (QEMU overwrites PC)
+- SR requires `uint32_t*` not `uint16_t*` for `uc_reg_write()`
+- `UC_HOOK_MEM_READ` bypassed by JIT for `uc_mem_map_ptr` regions -- use `uc_mmio_map()`
+- JIT TB invalidation: Mac OS heap overwrites patches, need periodic `uc_ctl_flush_tb()`
 
 ### 3. DualCPU (Validation Tool)
 
@@ -156,7 +172,7 @@ while (running) {
 - Caught VBR bug, CPU type bug, interrupt timing issues
 - Not for end users, just for development
 
-**Achievement**: ✅ 514,000+ instructions validated with zero divergence
+**Achievement**: ✅ 514,000+ instructions validated with zero divergence. Both backends now reach identical boot state (March 2026).
 
 ---
 

@@ -4,23 +4,18 @@ Track what's done and what's next.
 
 ---
 
-## 🎉 RECENT VICTORY
+## MILESTONE: Unicorn Boot Parity with UAE (March 2026)
 
-### Unicorn Batch Execution Performance Bug - FIXED!
+**Both backends reach identical boot state and stall at the same point.**
 
-**Status**: ✅ RESOLVED (Jan 5, 2026)
-**Impact**: 1.93x performance improvement achieved
-**Solution**: Patched Unicorn's cpu-exec.c to handle EXCP_RTE before clearing exception_index
+The stall is NOT a Unicorn bug -- it is a shared emulator limitation (no SCSI boot disk).
 
-**Performance Results**:
-- Before fix: 7.56M instructions/sec (single-step execution)
-- After fix: 14.56M instructions/sec (batch execution with count=10000)
-- Speedup: 1.93x (93% improvement)
-
-**Documentation**:
-- [UnicornBatchExecutionRTEBug.md](deepdive/UnicornBatchExecutionRTEBug.md) - Problem analysis
-- [UnicornRTEQemuResearch.md](deepdive/UnicornRTEQemuResearch.md) - Solution research
-- Commit: `da1383a7` - "Fix Unicorn RTE bug and enable batch execution"
+**Key metrics (both backends, 30-second run)**:
+- 87 OS trap table entries (identical)
+- 16,879 EmulOps dispatched (including 2,046 SCSI searches)
+- Boot progress $0b78 = 0xfd89ffff
+- Both stall at resource chain search PC=0x0001c3d4
+- Chain sentinel [0x01FFF30C] = 0xFF00FF00 (no resources loaded)
 
 ---
 
@@ -55,11 +50,13 @@ Track what's done and what's next.
 - ✅ **Hook architecture optimization** (UC_HOOK_BLOCK + UC_HOOK_INSN_INVALID)
 - ✅ EmulOp handling (0x71xx traps)
 - ✅ A-line EmulOps (0xAE00-0xAE3F) - BasiliskII-specific traps
-- ⚠️ **A-line/F-line trap handling (0xAxxx, 0xFxxx)** - **BROKEN** due to Unicorn PC limitation
-  - Unicorn cannot change PC from `UC_HOOK_INTR` callbacks (Unicorn issue #1027)
-  - Only A-line EmulOps (0xAE00-0xAE3F) work in standalone Unicorn
-  - Other A-line/F-line traps cause hangs
+- ✅ **A-line/F-line trap handling (0xAxxx, 0xFxxx)** - **WORKING** via deferred register updates
+  - Previous Unicorn PC limitation (issue #1027) solved by deferring register writes
+  - All A-line traps work, 87 OS trap table entries populated (matching UAE)
   - See: [deepdive/cpu/ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)
+- ✅ **JIT TB invalidation** - 60Hz `uc_ctl_flush_tb()` workaround
+- ✅ **MMIO infrastructure** - `uc_mmio_map()` for hardware registers (VIA/SCC/SCSI/ASC/DAFB stubs)
+- ✅ **Boot parity with UAE** - identical state at all checkpoints (March 2026)
 - ✅ **Interrupt detection** (UC_HOOK_BLOCK for efficiency, commit 1305d3b2)
 - ✅ **Legacy API removal** (~236 lines, commit ebd3d1b2)
 - ✅ **RTE (Return from Exception) fix** - Patched Unicorn cpu-exec.c (Jan 5, 2026)
@@ -209,17 +206,25 @@ Track what's done and what's next.
 
 ---
 
-## Phase 3: Boot to Desktop ⏳ FUTURE (After WebRTC Integration)
+## Phase 3: Hardware Emulation 🎯 CURRENT FOCUS
 
-### Hardware Emulation (Basic)
-- ⏳ VIA timer chip basics
-- ⏳ SCSI stubs (enough for boot)
-- ⏳ Video framebuffer basics
+### What's Needed to Progress Past Resource Chain Stall
+- ⏳ **SCSI disk emulation** - System file provides resources the ROM needs
+- ⏳ **VIA timer completion** - Slot interrupts, counter timers
+- ⏳ **Video framebuffer** - Display initialization
+- ⏳ **ADB hardware** - Keyboard/mouse detection
+
+### What's Already Done
+- ✅ MMIO infrastructure (`uc_mmio_map()`)
+- ✅ VIA1/VIA2 stub callbacks
+- ✅ SCC/SCSI/ASC/DAFB stub callbacks
+- ✅ NuBus gap regions (return 0)
+- ✅ 60Hz timer interrupt delivery
 
 ### Boot Testing
+- ⏳ Boot Mac OS 7.0 past resource manager
 - ⏳ Boot Mac OS 7.0 to desktop
 - ⏳ Mouse cursor visible
-- ⏳ Basic responsiveness
 
 ---
 
@@ -316,17 +321,30 @@ Track what's done and what's next.
   - Fix: UC_HOOK_INSN_INVALID for EmulOps, UC_HOOK_BLOCK for interrupts
   - Impact: Expected 5-10x performance improvement
 
-### Active Investigations ⏳
+### Resolved (February-March 2026) ✅
+
+- ✅ **A-line/F-line traps** (deferred register updates, Feb 2026)
+  - Symptom: Unicorn ignored PC changes in UC_HOOK_INTR callbacks
+  - Fix: Defer all register writes, apply at next hook_block() boundary
+  - Impact: All A-line traps work, 87 OS trap table entries populated
+
+- ✅ **JIT TB invalidation** (60Hz flush workaround, Feb 2026)
+  - Symptom: Mac OS heap overwrites RAM patches; JIT executes stale code → crash at PC=0x2
+  - Fix: `uc_ctl_flush_tb()` on every 60Hz timer tick
+  - Impact: Boot progresses through all phases without JIT-related crashes
+  - Proper fix needed: QEMU `TLB_NOTDIRTY` mechanism
+
+- ✅ **IRQ storm** (4-phase fix, Jan-Feb 2026)
+  - Symptom: 781,000+ IRQ polls/10s instead of ~600
+  - Fix: Correct EmulOp encoding, QEMU-style loop, deferred updates, proper interrupt delivery
+  - Impact: 99.997% overhead reduction, proper 60Hz timer
+
+### Previously Resolved ✅
 - ✅ **Timer interrupt timing** (wall-clock vs instruction-count) - RESOLVED
-  - Status: Fully understood (see deepdive/InterruptTimingAnalysis.md and JIT_Block_Size_Analysis.md)
-  - Not a bug, but a design characteristic
-  - Decision: **Accept non-determinism** for 5-10x performance gain
+  - Not a bug, design characteristic. Accept non-determinism for performance.
 
 - ✅ **Unicorn execution length** (200k limit) - RESOLVED
-  - Status: No longer an issue - DualCPU validates indefinitely
-  - The "200k limit" was from pre-interrupt-support era (commit 1305d3b2)
-  - After native trap execution (commit d90208dc), execution is stable
-  - DualCPU now runs without divergence until timeout
+  - No longer an issue after native trap execution and deferred updates.
 
 ---
 
@@ -397,39 +415,35 @@ ebd3d1b2 - Remove legacy per-CPU hook API and UC_HOOK_CODE implementation
 3. ⏳ Application testing framework
 4. ⏳ Performance optimization
 
-### **Current Focus**: Phase 2 Complete - Testing & Client Integration
-**Major Achievement**:
-- ✅ **WebRTC Integration Complete** (commit eb850af5)
-  - 4-thread in-process architecture
-  - Lock-free triple buffer for video
-  - Mutex-protected ring buffer for audio
-  - All encoders integrated (H.264, VP9, WebP, PNG, Opus)
-  - Build successful with WebRTC enabled
+### **Current Focus**: Phase 3 - Hardware Emulation for Further Boot Progress
+
+**Major Achievement (March 2026)**:
+- ✅ **Unicorn Boot Parity with UAE**
+  - Both backends reach identical state
+  - 87 OS trap table entries, 16,879 EmulOps in 30s
+  - Both stall at same resource chain search (no SCSI boot disk)
 
 **Next Steps**:
-1. Copy browser client from web-streaming/client/
-2. Test video encoding (verify frames flow CPU → encoder → output)
-3. Test audio encoding (verify samples flow CPU → encoder → output)
-4. Test HTTP API (verify server responds)
-5. End-to-end test (browser connects and streams)
+1. SCSI disk emulation (System file provides needed resources)
+2. More complete VIA emulation (timers, slot interrupts)
+3. Video framebuffer initialization
+4. ADB hardware responses
 
 ---
 
-**Last Updated**: January 5, 2026
-**Current Phase**: Phase 2 Complete - Testing & Validation
+**Last Updated**: March 1, 2026
+**Current Phase**: Phase 3 - Hardware Emulation
 **Branch**: phoenix-mac-planning
-**Focus**: WebRTC integration complete, ready for browser client and functional testing
+**Focus**: SCSI disk emulation to progress past resource chain stall
 
 **Major Milestones**:
-- ✅ **RTE Batch Execution Fixed** (commit da1383a7)
-  - 1.93x performance improvement (14.56M instructions/sec)
-  - Unicorn patched to handle EXCP_RTE correctly
-  - 146M+ instructions without crashing
-- ✅ **JSON Configuration System** (commit 19d871c8)
-  - Human-readable CPU names, XDG support
-  - Complete documentation and testing
+- ✅ **Unicorn Boot Parity with UAE** (March 2026)
+  - Both backends: 87 trap entries, $0b78=0xfd89ffff, same stall point
+  - A-line/F-line traps working via deferred register updates
+  - JIT TB invalidation solved with 60Hz flush
 - ✅ **WebRTC Integration** (commit eb850af5)
   - 4-thread in-process architecture
-  - Lock-free video, mutex-protected audio
-  - All encoders integrated and building successfully
-  - 38 new files, 6 new libraries integrated
+  - All encoders integrated
+- ✅ **RTE Batch Execution Fixed** (commit da1383a7)
+  - 1.93x performance improvement
+- ✅ **JSON Configuration System** (commit 19d871c8)

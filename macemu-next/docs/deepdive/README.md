@@ -26,17 +26,18 @@ Detailed technical documentation on specific subsystems.
 ### Essential CPU Docs
 
 #### [cpu/UnicornQuirks.md](cpu/UnicornQuirks.md)
-**⚠️ CRITICAL - READ THIS FIRST**: Unicorn Engine quirks and limitations
-- **Cannot change PC from interrupt hooks** (fundamental limitation!)
-- Hook types (UC_HOOK_BLOCK, UC_HOOK_INSN_INVALID, UC_HOOK_INTR)
-- Register persistence requirements
-- Memory endianness handling
+**IMPORTANT - READ THIS FIRST**: Unicorn Engine quirks and solutions
+- PC changes in hooks: solved via deferred register updates
+- JIT TB invalidation: 60Hz flush workaround
+- MMIO: must use `uc_mmio_map()` (JIT bypasses `UC_HOOK_MEM_READ`)
+- SR requires `uint32_t*` for `uc_reg_write()`
+- Hook types (UC_HOOK_BLOCK, UC_HOOK_INTR)
 
 #### [cpu/ALineAndFLineStatus.md](cpu/ALineAndFLineStatus.md)
-**Current Status**: A-line/F-line trap handling implementation and limitations
-- ❌ **BROKEN** due to Unicorn PC limitation
-- ✅ A-line EmulOps (0xAE00-0xAE3F) work
-- ⚠️ Workaround: Execute traps on UAE, sync to Unicorn
+**Current Status**: A-line/F-line trap handling -- **WORKING** (March 2026)
+- ✅ All A-line traps working via deferred register updates
+- ✅ 87 OS trap table entries populated (matching UAE)
+- ✅ Previous Unicorn PC limitation overcome
 
 #### [cpu/UaeQuirks.md](cpu/UaeQuirks.md)
 **Essential**: UAE CPU core quirks and gotchas

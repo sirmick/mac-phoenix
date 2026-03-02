@@ -23,7 +23,7 @@ What we're building and why.
 - ✅ **Cross-platform**: Works on Linux, macOS, Windows
 - ✅ **Well-tested**: Used in security research, reverse engineering
 
-**Current State**: Unicorn backend executes 200k+ instructions with full trap/interrupt support
+**Current State**: Unicorn backend achieves full boot parity with UAE -- both stall at same point awaiting SCSI disk emulation
 
 **Target State**:
 - Boot Mac OS 7/8 to desktop
@@ -53,18 +53,20 @@ What we're building and why.
 
 **Purpose**: **Primary backend** for end users
 
-**Status**: Active development focus
+**Status**: Boot parity with UAE achieved (March 2026)
 
 **Roadmap**:
 - ✅ Basic execution (200k+ instructions)
-- ✅ EmulOps (0x71xx traps)
-- ✅ A-line/F-line traps
-- ✅ Interrupt support
+- ✅ EmulOps (0x71xx and 0xAExx traps)
+- ✅ A-line/F-line traps (via deferred register updates)
+- ✅ Interrupt support (60Hz timer, M68K exception frames)
 - ✅ Native trap execution
+- ✅ JIT TB invalidation workaround (60Hz flush)
+- ✅ MMIO infrastructure (uc_mmio_map for hardware registers)
+- ✅ Boot parity with UAE (87 trap entries, 16,879 EmulOps in 30s)
+- ⏳ SCSI disk emulation (required for further boot progress)
+- ⏳ Full hardware emulation (VIA, Video, ADB)
 - ⏳ Boot to desktop
-- ⏳ Full hardware emulation (VIA, SCSI, Video)
-- ⏳ Performance optimization
-- ⏳ JIT tuning
 
 **Long-term Vision**:
 - Eventually, most users will run Unicorn backend only
@@ -174,28 +176,51 @@ EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 ### Phase 1: Core CPU Emulation ✅ **COMPLETE**
 
 - ✅ Unicorn M68K backend running
-- ✅ EmulOp system working
-- ✅ A-line/F-line traps
-- ✅ Interrupt support
+- ✅ EmulOp system working (0x71xx and 0xAExx)
+- ✅ A-line/F-line traps (via deferred register updates)
+- ✅ Interrupt support (60Hz timer with M68K exception frames)
 - ✅ Native trap execution (no UAE dependency)
 - ✅ Dual-CPU validation (514k+ instructions)
-- ✅ Hook optimization (UC_HOOK_BLOCK)
+- ✅ Hook optimization (UC_HOOK_BLOCK + UC_HOOK_INTR)
+- ✅ JIT TB invalidation workaround (60Hz flush)
+- ✅ MMIO infrastructure (uc_mmio_map)
 
-**Outcome**: Unicorn executes 200k+ instructions successfully
+**Outcome**: Unicorn achieves full boot parity with UAE
 
-### Phase 2: Boot to Desktop 🎯 **CURRENT FOCUS**
+### Phase 1.5: Boot Progress ✅ **COMPLETE** (March 2026)
 
-**Goal**: Unicorn backend boots Mac OS 7 to desktop
+**Achievement**: Unicorn boot parity with UAE
 
-**Blockers**:
-- ⏳ Understand interrupt timing divergence
-- ⏳ Investigate why Unicorn stops at 200k (vs UAE 250k+)
-- ⏳ Possibly need more hardware emulation
+**What was done**:
+- ✅ Fixed IRQ storm (4-phase fix, 99.997% overhead reduction)
+- ✅ Solved JIT TB invalidation (60Hz flush workaround)
+- ✅ Implemented deferred register updates for EmulOp handlers
+- ✅ Built MMIO infrastructure with uc_mmio_map()
+- ✅ Both backends: 87 OS trap entries, 16,879 EmulOps in 30s, identical state
+
+**Current stall**: Both backends stuck in resource chain search at PC=0x0001c3d4. Chain sentinel at [0x01FFF30C] = 0xFF00FF00. ROM is searching for system resources from a SCSI boot disk that doesn't exist yet.
+
+### Phase 2: WebRTC Integration ✅ **COMPLETE**
+
+- ✅ 4-thread in-process architecture
+- ✅ All encoders integrated (H.264, VP9, WebP, PNG, Opus)
+- ✅ JSON configuration system
+
+### Phase 3: Hardware Emulation 🎯 **CURRENT FOCUS**
+
+**Goal**: Provide enough hardware to progress past the resource chain stall
 
 **Tasks**:
-- Functional testing (not just instruction traces)
-- Memory state comparison (UAE vs Unicorn at key points)
-- Hardware emulation basics (VIA timer, SCSI stubs)
+- ⏳ SCSI disk emulation (boot disk with System file)
+- ⏳ More complete VIA emulation (timers, slot interrupts)
+- ⏳ Video framebuffer initialization
+- ⏳ ADB hardware responses
+
+**Success Criteria**: Boot progresses past resource manager initialization
+
+### Phase 4: Boot to Desktop ⏳ **FUTURE**
+
+**Goal**: Unicorn backend boots Mac OS 7 to desktop
 
 **Success Criteria**: See Mac OS desktop, mouse cursor moves
 
@@ -237,8 +262,9 @@ EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 
 ### Short-Term (Q1 2026)
 - ✅ 500k+ instruction dual-CPU validation (ACHIEVED: 514k+)
-- ⏳ Boot Mac OS 7 to desktop with Unicorn
-- ⏳ Understand interrupt timing characteristics
+- ✅ Unicorn boot parity with UAE (ACHIEVED: March 2026)
+- ✅ Understand interrupt timing characteristics (RESOLVED: wall-clock timing, not a bug)
+- ⏳ Boot Mac OS 7 to desktop with Unicorn (requires SCSI emulation)
 
 ### Medium-Term (2026)
 - ⏳ Run HyperCard successfully
@@ -307,6 +333,8 @@ EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 
 **End Goal**: Fast, clean, validated Mac emulator using Unicorn M68K CPU
 
-**Current Status**: Core CPU emulation complete, working toward boot-to-desktop
+**Current Status**: Unicorn boot parity with UAE achieved, working toward SCSI disk emulation for further boot progress
 
 **Philosophy**: Reference BasiliskII, validate continuously, document everything
+
+**Note**: Unicorn has JIT exit overhead for A-line traps (EmulOp-heavy code like CLKNOMEM loops), but overall boot parity has been achieved. The current 60Hz TB flush workaround for JIT cache invalidation adds some overhead that can be optimized later.

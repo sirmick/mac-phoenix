@@ -13,7 +13,7 @@ Modern Mac emulator with Unicorn M68K CPU backend and dual-CPU validation.
 3. **Modern Architecture** - Clean platform API, modular design, Meson build
 4. **Legacy Support** - UAE backend retained for compatibility
 
-**Current Status**: ✅ IRQ storm fixed, Unicorn backend fully functional, Mac OS boots successfully
+**Current Status**: ✅ Unicorn boot parity with UAE achieved (March 2026) -- both backends stall at same point awaiting SCSI disk emulation
 
 ---
 
@@ -90,7 +90,7 @@ See **[JSON_CONFIG.md](JSON_CONFIG.md)** for configuration documentation.
 - Validated against proven UAE implementation
 - Modern build system and tooling
 
-**Current State**: Unicorn backend executes 200k+ instructions with proper trap/interrupt handling
+**Current State**: Unicorn boot parity with UAE (March 2026) -- both stall awaiting SCSI disk
 
 **UAE's Role**: Legacy compatibility and validation baseline (will be retained but Unicorn is the focus)
 
@@ -102,70 +102,54 @@ See **[ProjectGoals.md](ProjectGoals.md)** for detailed vision.
 
 ## Key Achievements
 
+- ✅ **Unicorn boot parity with UAE** (March 2026) -- both backends reach identical state
 - ✅ Unicorn M68K backend working (68020 with JIT)
-- ✅ EmulOps (0x71xx) - Illegal instruction traps
-- ✅ A-line EmulOps (0xAE00-0xAE3F) - BasiliskII-specific traps
-- ⚠️ A-line/F-line traps (0xAxxx, 0xFxxx) - **Limited by Unicorn** (see below)
-- ✅ Interrupt support (timer, ADB) via UC_HOOK_BLOCK
+- ✅ EmulOps (0x71xx and 0xAExx) -- Illegal instruction traps
+- ✅ A-line/F-line traps -- **WORKING** via deferred register updates
+- ✅ Interrupt support (60Hz timer with M68K exception frames)
+- ✅ JIT TB invalidation workaround (60Hz flush)
+- ✅ MMIO infrastructure (uc_mmio_map for hardware registers)
+- ✅ 87 OS trap table entries (identical between backends)
+- ✅ 16,879 EmulOps dispatched in 30s (including 2,046 SCSI searches)
 - ✅ UAE backend fully functional
-- ✅ Dual-CPU validation infrastructure
-- ✅ VBR register support
-- ✅ Efficient hook architecture (UC_HOOK_BLOCK, UC_HOOK_INSN_INVALID)
+- ✅ Dual-CPU validation infrastructure (514k+ instructions)
 
 See **[TodoStatus.md](TodoStatus.md)** for complete checklist.
 
 ---
 
-## Current Limitations
+## Current Limitation: No SCSI Boot Disk
 
-### ⚠️ Unicorn A-line/F-line Trap Limitation
+Both backends stall at the same point: a resource chain search at PC=0x0001c3d4. The ROM is looking for system resources from a SCSI boot disk. The chain sentinel at [0x01FFF30C] = 0xFF00FF00 in both backends -- the resource list is empty because there's no disk to load from.
 
-**CRITICAL**: Unicorn cannot change PC from interrupt hooks (Unicorn GitHub issue #1027).
-
-**Impact**:
-- ❌ Mac OS A-line traps (0xA000-0xAFFF) don't work on Unicorn standalone
-- ❌ F-line traps (0xF000-0xFFFF) don't work on Unicorn standalone
-- ✅ A-line EmulOps (0xAE00-0xAE3F) **DO work** (don't need PC changes)
-- ✅ UAE backend works perfectly for all traps
-
-**Workaround for DualCPU mode**: Execute traps on UAE, sync state to Unicorn
-
-See **[deepdive/cpu/ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)** for full details.
-
-### Timer Interrupt Timing
-
-Wall-clock vs instruction-count timing differences between UAE and Unicorn are expected and not a bug.
-
-See **[deepdive/InterruptTimingAnalysis.md](deepdive/InterruptTimingAnalysis.md)** for details.
+**To progress further**, the emulator needs:
+1. SCSI disk emulation (System file provides resources)
+2. More complete VIA emulation (timers, slot interrupts)
+3. Video framebuffer initialization
+4. ADB hardware responses
 
 ---
 
-## Recent Improvements (January 2026)
+## Recent Improvements (January-March 2026)
 
-### ✅ Fixed Critical IRQ Storm Issue
-The Unicorn backend previously suffered from an "IRQ storm" where the Mac ROM's interrupt polling loop would execute millions of times per second. This has been completely resolved through a 4-phase implementation:
+### ✅ Boot Parity Achieved (March 2026)
+Both Unicorn and UAE reach identical boot state:
+- 87 OS trap table entries
+- $0b78 boot progress = 0xfd89ffff
+- Same TopMapHndl, SysMapHndl values
+- Both stall at same resource chain search
 
-1. **Fixed IRQ EmulOp Encoding** - Corrected ROM patcher bug (0x7129 vs 0xAE29)
-2. **QEMU-Style Execution Loop** - Added proper interrupt checking between instruction batches
-3. **Immediate Register Updates** - Eliminated problematic deferred update mechanism
-4. **Proper M68K Interrupt Delivery** - Implemented exception frames and priority masking
+### ✅ JIT TB Invalidation Solved
+Mac OS heap overwrites RAM patch code. QEMU's JIT cache retains stale translations. Fixed with 60Hz `uc_ctl_flush_tb()` workaround.
 
-**Result**: 99.997% reduction in overhead, Mac OS now boots successfully!
+### ✅ A-Line/F-Line Traps Working
+Previously broken due to Unicorn's PC limitation. Solved via deferred register updates -- register writes are queued during hook callbacks and applied at block boundaries.
 
-### Performance Metrics
-- **Before**: 781,000+ IRQ polls/10 seconds (unusable)
-- **After**: 20 IRQ polls/10 seconds (optimal)
-- **Timer Rate**: Perfect 60Hz delivery
-- **Boot Progress**: Advances through all milestones
+### ✅ IRQ Storm Fixed (January 2026)
+4-phase fix: corrected EmulOp encoding, QEMU-style execution loop, deferred register updates, proper M68K interrupt delivery. 99.997% overhead reduction.
 
-### Testing the Fix
-```bash
-# Verify no IRQ storm (should show ~20, not 780,000+)
-env EMULATOR_TIMEOUT=10 CPU_BACKEND=unicorn ./build/macemu-next --no-webserver 2>&1 | grep -c poll_timer
-
-# Check timer rate (should show 300 in 5 seconds)
-env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/macemu-next --no-webserver 2>&1 | grep "Timer:"
-```
+### ✅ MMIO Infrastructure
+Hardware registers use `uc_mmio_map()` (required because JIT bypasses `UC_HOOK_MEM_READ` for `uc_mem_map_ptr` regions). VIA/SCC/SCSI/ASC/DAFB stubs implemented.
 
 ---
 
