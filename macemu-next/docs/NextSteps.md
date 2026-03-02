@@ -112,10 +112,11 @@ This exists to work around C vs C++ linkage conflicts.
 ## Order of Operations
 
 1. **Gut hook_block** -- biggest code quality win, may also improve performance
+   - **NOTE**: The STALE-TB detector must be preserved -- it's a production SMC safety net, not debug cruft
 2. **Clean debug logging** -- EmulOp handler and timer (quick wins)
 3. **Fix fake counter** -- trivial
 4. **Deduplicate M68kRegisters** -- trivial
-5. **Fix TB invalidation** -- biggest performance win, requires QEMU internals research
+5. ~~**Fix TB invalidation**~~ -- **DONE** (March 2026). Removed 60Hz `uc_ctl_flush_tb()`. QEMU's `notdirty_write()` path + STALE-TB detector handles SMC. See [deepdive/JIT_SMC_Detection_Analysis.md](deepdive/JIT_SMC_Detection_Analysis.md).
 6. **SCSI disk emulation** -- next feature work
 
-Items 1-4 are cleanup that could be done in one session. Item 5 is research-heavy. Item 6 is a new feature.
+Items 1-4 are cleanup that could be done in one session. Item 5 is done. Item 6 is a new feature.

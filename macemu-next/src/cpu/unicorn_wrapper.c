@@ -1230,12 +1230,12 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
         diag_timer_polls++;
         if (fired) {
             diag_timer_fires++;
-            /* WORKAROUND: Flush JIT TB cache on every timer tick (~60Hz).
-             * QEMU's self-modifying code detection doesn't properly invalidate
-             * TBs when the Mac OS system heap overwrites code in RAM.
-             * This ensures stale TBs are flushed at least every 16.6ms.
-             * TODO: Fix the root cause in QEMU's TB invalidation for mapped memory. */
-            uc_ctl_flush_tb(uc);
+            /* TB flush removed: QEMU's notdirty_write() path handles SMC.
+             * Guest M68K stores go through store_helper() -> notdirty_write() ->
+             * tb_invalidate_phys_page_fast(), which invalidates TBs for pages
+             * with UC_PROT_EXEC. Since RAM is mapped with UC_PROT_ALL, Mac OS
+             * heap overwrites of EmulOp patches are caught automatically.
+             * See docs/deepdive/JIT_SMC_Detection_Analysis.md for full analysis. */
         }
 
         if ((cpu->block_stats.total_blocks & 0x1FFFFF) == 0) {

@@ -234,13 +234,28 @@ Multiple GitHub issues document SMC detection problems:
 
 **Effort**: Low. Just testing.
 
-## Recommended Approach
+## Test Results: Option E Verified (March 2026)
 
-**Start with Option E** — test if the existing `notdirty_write()` path already handles our case. If Mac OS heap writes are all M68K stores to executable pages, `tb_invalidate_phys_page_fast()` should invalidate the affected TBs.
+**The 60Hz `uc_ctl_flush_tb()` has been removed.** Testing confirmed:
 
-If Option E fails, **combine C + D** — use `uc_ctl_remove_cache()` for known code ranges, with a fallback timer that only flushes pages that were written to.
+| Metric | With 60Hz flush | Without 60Hz flush |
+|---|---|---|
+| Full TB cache flushes | **1,804** (60Hz × 30s) | **0** |
+| STALE-TB targeted flushes | 18 | 18 |
+| Boot progress ($0b78) | `0xfd89ffff` | `0xfd89ffff` |
+| Final state (PC, TopMap, etc.) | Identical | Identical |
 
-Option A (restoring the full dirty bitmap) is the nuclear option — correct but high-risk. Save it for when the simpler approaches prove insufficient.
+The `notdirty_write()` path handles most SMC. A small number of stale TBs (18 in 30 seconds, all in the 0x0001ca-0x0001ce system heap range) are caught by the existing STALE-TB detector in `hook_block()`, which performs targeted `uc_ctl_flush_tb()` calls only when stale code is detected.
+
+**The STALE-TB detector is NOT debug cruft** — it's a production SMC safety net. It must be preserved when cleaning up `hook_block()`. The 18 targeted flushes replace 1,804 blanket flushes (100x reduction).
+
+### Why notdirty_write() misses some cases
+
+The 18 remaining stale TBs are likely caused by:
+1. Host-side writes via `put_long()` / `Mac2HostAddr()` in EmulOp handlers — these go through direct host pointers, completely bypassing QEMU's memory system
+2. Or edge cases in TLB repopulation where `TLB_NOTDIRTY` isn't set before a write occurs
+
+The STALE-TB detector catches these because it validates block contents at execution time, regardless of how the memory was modified.
 
 ## Key Files
 
