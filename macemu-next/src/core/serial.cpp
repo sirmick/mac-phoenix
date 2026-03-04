@@ -61,6 +61,8 @@ int16 SerialOpen(uint32 pb, uint32 dce, int port)
 
 		// Do nothing if port is already open
 		SERDPort *the_port = the_serd_port[port >> 1];
+		if (!the_port)
+			return openErr;
 		if (the_port->is_open)
 			return noErr;
 

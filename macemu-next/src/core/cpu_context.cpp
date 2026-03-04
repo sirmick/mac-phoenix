@@ -51,6 +51,7 @@ extern uint16 ROMVersion;
 extern uint8 *ScratchMem;
 
 static const int SCRATCH_MEM_SIZE = 0x10000;  // 64KB scratch memory for ROM HW base patching
+static const int FRAMEBUFFER_AREA_SIZE = 0x400000;  // 4MB reserved for frame buffer after ScratchMem
 
 #if DIRECT_ADDRESSING
 extern uintptr MEMBaseDiff;
@@ -166,14 +167,15 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     ram_size_ = config.ram_mb * 1024 * 1024;
     fprintf(stderr, "[CPUContext] Allocating RAM: %u MB\n", config.ram_mb);
 
-    // Allocate RAM + ROM (1MB) + ScratchMem (64KB)
-    // ScratchMem is placed after ROM in the same contiguous buffer
-    ram_.reset(new (std::nothrow) uint8_t[ram_size_ + 0x100000 + SCRATCH_MEM_SIZE]);
+    // Allocate RAM + ROM (1MB) + ScratchMem (64KB) + FrameBuffer area (4MB)
+    // Layout: [RAM 32MB][ROM 1MB][ScratchMem 64KB][FrameBuffer 4MB]
+    // Frame buffer MUST be outside RAM to avoid overlapping Mac heap data structures
+    ram_.reset(new (std::nothrow) uint8_t[ram_size_ + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE]);
     if (!ram_) {
         fprintf(stderr, "[CPUContext] ERROR: Failed to allocate RAM\n");
         return false;
     }
-    memset(ram_.get(), 0, ram_size_ + 0x100000 + SCRATCH_MEM_SIZE);
+    memset(ram_.get(), 0, ram_size_ + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE);
 
     // Allocate ROM (max 1MB for M68K)
     rom_.reset(new (std::nothrow) uint8_t[1024 * 1024]);

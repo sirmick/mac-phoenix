@@ -42,6 +42,7 @@
 #include "drivers/platform/timer_interrupt.h"
 #include "core/emulator_init.h"  // For deferred initialization
 #include "crash_handler_init.h"  // Crash handler with stack traces
+#include "sigsegv.h"  // SIGSEGV handler for skipping illegal memory accesses
 
 // WebRTC streaming
 #include "config/config_manager.h"
@@ -145,6 +146,25 @@ void DisableInterrupt(void)
 
 void EnableInterrupt(void)
 {
+}
+
+/*
+ *  SIGSEGV handler - skip illegal memory accesses (like BasiliskII ignoresegv)
+ */
+static sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip)
+{
+	const uintptr fault_address = (uintptr)sigsegv_get_fault_address(sip);
+
+#ifdef HAVE_SIGSEGV_SKIP_INSTRUCTION
+	// Ignore writes to ROM
+	if (ROMBaseHost && ((uintptr)fault_address - (uintptr)ROMBaseHost) < ROMSize)
+		return SIGSEGV_RETURN_SKIP_INSTRUCTION;
+
+	// Ignore all other faults (equivalent to BasiliskII ignoresegv=true)
+	return SIGSEGV_RETURN_SKIP_INSTRUCTION;
+#endif
+
+	return SIGSEGV_RETURN_FAILURE;
 }
 
 int main(int argc, char **argv)
@@ -252,6 +272,14 @@ int main(int argc, char **argv)
 		if (!g_cpu_ctx.init_m68k(emu_config)) {
 			fprintf(stderr, "Failed to initialize M68K CPU context\n");
 			return 1;
+		}
+
+		// Install SIGSEGV handler (replaces crash handler for SEGV)
+		// This allows the emulator to skip illegal memory accesses like BasiliskII
+		if (!sigsegv_install_handler(sigsegv_handler)) {
+			fprintf(stderr, "WARNING: Could not install SIGSEGV handler\n");
+		} else {
+			printf("[Init] SIGSEGV handler installed (ignoresegv mode)\n");
 		}
 
 		// Mark emulator as initialized (for deferred init check)

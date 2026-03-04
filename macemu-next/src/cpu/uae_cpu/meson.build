@@ -19,7 +19,9 @@ uae_common_args = [
   '-DREAL_ADDRESSING=0',
   '-DDIRECT_ADDRESSING=1',
   '-DUSE_JIT=0',
+  '-DUSE_JIT_FPU=0',
   '-DUSE_PREFETCH_BUFFER=0',
+  '-DFPU_IEEE',
   '-Wno-unused-variable',
   '-Wno-unused-parameter',
   '-Wno-unused-function',
@@ -54,6 +56,7 @@ uae_sources = [
   'memory.cpp',
   'basilisk_glue.cpp',
   'basilisk_stubs.cpp',  # Temporary stubs for missing BasiliskII functions
+  'fpu/fpu_ieee.cpp',    # IEEE FPU emulation (MC68881/68040)
   # NOTE: cpuemu_ff_aliases.cpp is NOT needed - real _ff functions come from cpuemu_ff library
 ]
 

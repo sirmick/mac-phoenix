@@ -73,22 +73,23 @@ bool video_webrtc_init(bool classic, config::MacemuConfig* config)
 	// Need to allocate BEFORE initializing to get correct address
 	the_buffer_size = width * height * 4;  // 32-bit = 4 bytes per pixel
 
-	// Get RAM info from globals
-	extern uint8 *RAMBaseHost;
-	extern uint32 RAMSize;
+	// Get memory layout info from globals
+	extern uint8 *ROMBaseHost;
+	extern uint32 ROMSize;
 
-	// Allocate framebuffer at end of Mac RAM minus buffer size
-	// IMPORTANT: Framebuffer MUST be in Mac RAM for Host2MacAddr to work!
-	if (the_buffer_size > RAMSize / 2) {
-		fprintf(stderr, "Video: Framebuffer too large (%u bytes) for RAM size (%u bytes)\n",
-		        the_buffer_size, RAMSize);
+	// Place framebuffer AFTER ScratchMem (outside RAM) to avoid overlapping Mac heap
+	// Memory layout: [RAM][ROM 1MB][ScratchMem 64KB][FrameBuffer]
+	// The 4MB framebuffer area is allocated in cpu_context.cpp
+	if (the_buffer_size > 0x400000) {
+		fprintf(stderr, "Video: Framebuffer too large (%u bytes) for reserved area (4MB)\n",
+		        the_buffer_size);
 		delete g_video_output;
 		g_video_output = nullptr;
 		return false;
 	}
 
-	// Place framebuffer at top of RAM
-	the_buffer = RAMBaseHost + RAMSize - the_buffer_size;
+	// Place framebuffer after ScratchMem
+	the_buffer = ROMBaseHost + ROMSize + 0x10000;  // After ScratchMem
 	memset(the_buffer, 0, the_buffer_size);
 
 	D(bug("Video: Framebuffer at host addr %p, Mac addr 0x%08x\n",

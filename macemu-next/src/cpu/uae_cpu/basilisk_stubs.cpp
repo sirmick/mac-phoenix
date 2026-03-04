@@ -48,27 +48,7 @@ void cpu_do_check_ticks(void) {
     emulated_ticks += emulated_ticks_quantum;
 }
 
-// FPU emulation stubs
-void fpu_init(bool hard_reset) {
-    // Stub - FPU not needed for initial testing
-    (void)hard_reset;
-}
-
-void fpu_exit(void) {
-    // Stub
-}
-
-void fpu_reset(void) {
-    // Stub
-}
-
-void fpu_dump_registers(void) {
-    // Stub
-}
-
-void fpu_dump_flags(void) {
-    // Stub
-}
+// FPU emulation provided by fpu/fpu_ieee.cpp
 
 // Idle/resume for interrupt handling - moved to uae_wrapper.cpp (shared interrupt infrastructure)
 
@@ -689,38 +669,4 @@ void REGPARAM2 op_eb9_0_nf(uae_u32 opcode) { printf("Unimplemented: op_eb9_0_nf 
 // readcpu.cpp needs these - stubs for now since we use pre-generated tables
 // Removed defs68k[] and n_defs68k stubs - now using generated cpudefs.cpp
 
-// FPU operation stubs (needed for _ff functions that reference FPU ops)
-void REGPARAM2 fpuop_arithmetic(uae_u32 opcode, uae_u32 extra) {
-    fprintf(stderr, "FPU arithmetic not implemented: opcode=0x%04x extra=0x%04x\n", opcode, extra);
-    abort();
-}
-
-void REGPARAM2 fpuop_scc(uae_u32 opcode, uae_u32 extra) {
-    fprintf(stderr, "FPU scc not implemented: opcode=0x%04x extra=0x%04x\n", opcode, extra);
-    abort();
-}
-
-void REGPARAM2 fpuop_dbcc(uae_u32 opcode, uae_u32 extra) {
-    fprintf(stderr, "FPU dbcc not implemented: opcode=0x%04x extra=0x%04x\n", opcode, extra);
-    abort();
-}
-
-void REGPARAM2 fpuop_trapcc(uae_u32 opcode, uae_u32 extra) {
-    fprintf(stderr, "FPU trapcc not implemented: opcode=0x%04x extra=0x%04x\n", opcode, extra);
-    abort();
-}
-
-void REGPARAM2 fpuop_bcc(uae_u32 opcode, uae_u32 extra, uae_u32 pc) {
-    fprintf(stderr, "FPU bcc not implemented: opcode=0x%04x extra=0x%04x pc=0x%08x\n", opcode, extra, pc);
-    abort();
-}
-
-void REGPARAM2 fpuop_save(uae_u32 opcode) {
-    fprintf(stderr, "FPU save not implemented: opcode=0x%04x\n", opcode);
-    abort();
-}
-
-void REGPARAM2 fpuop_restore(uae_u32 opcode) {
-    fprintf(stderr, "FPU restore not implemented: opcode=0x%04x\n", opcode);
-    abort();
-}
+// FPU operations now provided by fpu/fpu_ieee.cpp

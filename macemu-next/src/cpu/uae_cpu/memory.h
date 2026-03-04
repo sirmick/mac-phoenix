@@ -146,26 +146,17 @@ extern uint32_t ROMSize;
 #if REAL_ADDRESSING || DIRECT_ADDRESSING
 static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 {
-	// Bounds checking for DIRECT_ADDRESSING mode.
-	// Valid Mac address ranges (all contiguous in host memory via MEMBaseDiff):
-	//   RAM:        0x00000000 - RAMSize
-	//   ROM:        ROMBaseMac - (ROMBaseMac + ROMSize)
-	//   ScratchMem: ROMBaseMac + ROMSize - (ROMBaseMac + ROMSize + 0x10000)
-
 	if (addr < RAMSize) {
-		// RAM access - most common case, check first
 		return (uae_u8 *)MEMBaseDiff + addr;
 	}
-
-	// ROM + ScratchMem region (contiguous: ROM is 1MB, ScratchMem is 64KB after it)
-	if (addr >= ROMBaseMac && addr < ROMBaseMac + ROMSize + 0x10000) {
+	// ROM + ScratchMem + FrameBuffer region (contiguous after RAM)
+	// Layout: ROM(1MB) + ScratchMem(64KB) + FrameBuffer(4MB) = 5.06MB
+	if (addr >= ROMBaseMac && addr < ROMBaseMac + ROMSize + 0x10000 + 0x400000) {
 		return (uae_u8 *)MEMBaseDiff + addr;
 	}
-
-	// Out of range - return pointer to a static dummy byte (avoids NULL deref crashes)
-	// The original BasiliskII doesn't bounds-check in REAL_ADDRESSING mode
-	static uae_u8 dummy_byte = 0;
-	return &dummy_byte;
+	// OOB: return pointer into zero-filled page (reads=0, writes=drop)
+	static uae_u8 dummy_page[4096] = {0};
+	return dummy_page + (addr & 0xFFF);
 }
 static __inline__ uae_u32 do_get_virtual_address(uae_u8 *addr)
 {

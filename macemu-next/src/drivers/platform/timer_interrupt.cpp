@@ -234,6 +234,13 @@ uint64_t poll_timer_interrupt(void)
 		return 0;
 	}
 
+	// Match BasiliskII: suppress ticks during RESET initialization
+	// tick_inhibit is set true by RESET handler, cleared by PATCH_BOOT_GLOBS
+	extern bool tick_inhibit;
+	if (tick_inhibit) {
+		return 0;
+	}
+
 	// Check current time
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);

@@ -23,9 +23,11 @@
 #define DEBUG 0
 #include "debug.h"
 
-// External RAM pointers (defined in basilisk_glue.cpp)
+// External memory pointers (defined in basilisk_glue.cpp / cpu_context.cpp)
 extern uint8 *RAMBaseHost;
 extern uint32 RAMSize;
+extern uint8 *ROMBaseHost;
+extern uint32 ROMSize;
 
 // Framebuffer
 static uint8 *the_buffer = NULL;
@@ -148,12 +150,9 @@ bool video_screenshot_init(bool classic)
 
 	the_buffer_size = width * height;
 
-	if (the_buffer_size > RAMSize / 2) {
-		fprintf(stderr, "Screenshot: Framebuffer too large for RAM\n");
-		return false;
-	}
-
-	the_buffer = RAMBaseHost + RAMSize - the_buffer_size;
+	// Place framebuffer AFTER ScratchMem (outside RAM) to avoid overlapping Mac heap
+	// Memory layout: [RAM][ROM 1MB][ScratchMem 64KB][FrameBuffer]
+	the_buffer = ROMBaseHost + ROMSize + 0x10000;  // After ScratchMem
 	memset(the_buffer, 0, the_buffer_size);
 
 	vector<video_mode> modes;

@@ -13,9 +13,11 @@
 #define DEBUG 0
 #include "debug.h"
 
-// External RAM pointers (defined in basilisk_glue.cpp)
+// External memory pointers (defined in basilisk_glue.cpp / cpu_context.cpp)
 extern uint8 *RAMBaseHost;
 extern uint32 RAMSize;
+extern uint8 *ROMBaseHost;
+extern uint32 ROMSize;
 
 
 // Dummy framebuffer
@@ -48,18 +50,12 @@ bool video_null_init(bool classic)
 	const video_depth depth = VDEPTH_8BIT;
 	const uint32 resolution_id = 0x80;  // Standard resolution ID
 
-	// IMPORTANT: Framebuffer MUST be in Mac RAM for Host2MacAddr to work!
 	the_buffer_size = width * height;
 
-	// Check if framebuffer fits in RAM
-	if (the_buffer_size > RAMSize / 2) {
-		fprintf(stderr, "Video: Framebuffer too large (%u bytes) for RAM size (%u bytes)\n",
-		        the_buffer_size, RAMSize);
-		return false;
-	}
-
-	// Place framebuffer at top of RAM (same as video_webrtc)
-	the_buffer = RAMBaseHost + RAMSize - the_buffer_size;
+	// Place framebuffer AFTER ScratchMem (outside RAM) to avoid overlapping Mac heap
+	// Memory layout: [RAM][ROM 1MB][ScratchMem 64KB][FrameBuffer]
+	// This matches BasiliskII which also places the frame buffer outside RAM.
+	the_buffer = ROMBaseHost + ROMSize + 0x10000;  // After ScratchMem
 	memset(the_buffer, 0, the_buffer_size);
 
 	// Build list of supported video modes

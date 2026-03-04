@@ -27,6 +27,7 @@ core_sources = [
   'xpram.cpp',
   '../common/platform.cpp',  # Platform initialization
   '../common/crash_handler_init.cpp',  # Crash handler with stack traces
+  '../common/sigsegv.cpp',  # SIGSEGV handler for skipping illegal memory accesses
 ]
 
 core_inc = include_directories(
@@ -43,6 +44,7 @@ core_lib = static_library('core',
   core_sources,
   include_directories: core_inc,
   dependencies: [threads_dep],
+  cpp_args: ['-DHAVE_SIGINFO_T', '-DHAVE_SIGACTION', '-DHAVE_SIGSEGV_SKIP_INSTRUCTION', '-DHAVE_UNISTD_H'],
 )
 
 core_dep = declare_dependency(
