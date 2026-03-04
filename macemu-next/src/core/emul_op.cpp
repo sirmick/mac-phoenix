@@ -220,12 +220,9 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 		case M68K_EMUL_OP_CHECKLOAD: op_name = "CHECKLOAD"; break;
 	}
 
-	// Always log EmulOps for test ROMs (not just in debug builds)
 	if (op_name) {
-		fprintf(stderr, "[EmulOp] Executing 0x%04x (%s)\n", opcode, op_name);
 		D(bug("EmulOp %04x (%s)\n", opcode, op_name));
 	} else {
-		fprintf(stderr, "[EmulOp] Executing 0x%04x (unknown)\n", opcode);
 		D(bug("EmulOp %04x\n", opcode));
 	}
 	switch (opcode) {
@@ -828,6 +825,13 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 		case M68K_EMUL_OP_CHECKLOAD: {		// vCheckLoad() patch (resource loader)
 			uint32 type = r->d[1];
 			int16 id = ReadMacInt16(r->a[2]);
+			// Log resource type (4-char code) and ID
+			{
+				char t[5];
+				t[0] = (type >> 24) & 0xff; t[1] = (type >> 16) & 0xff;
+				t[2] = (type >> 8) & 0xff;  t[3] = type & 0xff; t[4] = 0;
+				fprintf(stderr, "[CHECKLOAD] type='%s' id=%d\n", t, id);
+			}
 			if (r->a[0] == 0)
 				break;
 			uint32 adr = ReadMacInt32(r->a[0]);

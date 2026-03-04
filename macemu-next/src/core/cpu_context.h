@@ -230,6 +230,7 @@ private:
     // Memory (RAII - auto-freed on destruction)
     std::unique_ptr<uint8_t[]> ram_;
     std::unique_ptr<uint8_t[]> rom_;
+    std::unique_ptr<uint8_t[]> scratch_mem_;
     uint32_t ram_size_;
     uint32_t rom_size_;
 

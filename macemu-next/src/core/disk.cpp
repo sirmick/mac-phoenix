@@ -280,7 +280,7 @@ static void mount_mountable_volumes(void)
 
 int16 DiskOpen(uint32 pb, uint32 dce)
 {
-	D(bug("DiskOpen\n"));
+	fprintf(stderr, "DiskOpen: %d drives\n", (int)drives.size());
 
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
@@ -294,15 +294,18 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 		info->to_be_mounted = false;
 
 		if (info->fh) {
+			fprintf(stderr, "  Drive %d: fh=%p\n", info->num, info->fh);
 
 			// Allocate drive status record
 			M68kRegisters r;
 			r.d[0] = SIZEOF_DrvSts;
 			Execute68kTrap(0xa71e, &r);		// NewPtrSysClear()
-			if (r.a[0] == 0)
+			fprintf(stderr, "  NewPtrSysClear(%d) -> 0x%08x\n", SIZEOF_DrvSts, r.a[0]);
+			if (r.a[0] == 0) {
+				fprintf(stderr, "  FAILED: NewPtrSysClear returned NULL, skipping drive\n");
 				continue;
+			}
 			info->status = r.a[0];
-			D(bug(" DrvSts at %08lx\n", info->status));
 
 			// Set up drive status
 			WriteMacInt16(info->status + dsQType, hard20);
@@ -316,19 +319,22 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 				disk_in_place = true;
 			}
 			if (disk_in_place) {
-				D(bug(" disk inserted\n"));
 				WriteMacInt8(info->status + dsWriteProt, info->read_only ? 0x80 : 0);
 				find_hfs_partition(*info);
 				if (info->start_byte == 0)
 					info->num_blocks = uint32(SysGetFileSize(info->fh) / 512);
 				info->to_be_mounted = true;
+				fprintf(stderr, "  Disk in place: %d blocks, start=%lld, fixed=%d\n",
+						info->num_blocks, (long long)info->start_byte,
+						SysIsFixedDisk(info->fh));
+			} else {
+				fprintf(stderr, "  No disk in place\n");
 			}
-			D(bug(" %d blocks\n", info->num_blocks));
 			WriteMacInt16(info->status + dsDriveSize, info->num_blocks & 0xffff);
 			WriteMacInt16(info->status + dsDriveS1, info->num_blocks >> 16);
 
 			// Add drive to drive queue
-			D(bug(" adding drive %d\n", info->num));
+			fprintf(stderr, "  AddDrive(%d, refNum=%d)\n", info->num, DiskRefNum);
 			r.d[0] = (info->num << 16) | (DiskRefNum & 0xffff);
 			r.a[0] = info->status + dsQLink;
 			Execute68kTrap(0xa04e, &r);	// AddDrive()

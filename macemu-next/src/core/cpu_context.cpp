@@ -48,6 +48,9 @@ extern int FPUType;
 extern bool CPUIs68060;
 extern bool TwentyFourBitAddressing;
 extern uint16 ROMVersion;
+extern uint8 *ScratchMem;
+
+static const int SCRATCH_MEM_SIZE = 0x10000;  // 64KB scratch memory for ROM HW base patching
 
 #if DIRECT_ADDRESSING
 extern uintptr MEMBaseDiff;
@@ -163,13 +166,14 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     ram_size_ = config.ram_mb * 1024 * 1024;
     fprintf(stderr, "[CPUContext] Allocating RAM: %u MB\n", config.ram_mb);
 
-    // Allocate RAM + extra space for ROM mapping
-    ram_.reset(new (std::nothrow) uint8_t[ram_size_ + 0x100000]);
+    // Allocate RAM + ROM (1MB) + ScratchMem (64KB)
+    // ScratchMem is placed after ROM in the same contiguous buffer
+    ram_.reset(new (std::nothrow) uint8_t[ram_size_ + 0x100000 + SCRATCH_MEM_SIZE]);
     if (!ram_) {
         fprintf(stderr, "[CPUContext] ERROR: Failed to allocate RAM\n");
         return false;
     }
-    memset(ram_.get(), 0, ram_size_);
+    memset(ram_.get(), 0, ram_size_ + 0x100000 + SCRATCH_MEM_SIZE);
 
     // Allocate ROM (max 1MB for M68K)
     rom_.reset(new (std::nothrow) uint8_t[1024 * 1024]);
@@ -202,6 +206,13 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     // Copy ROM to the ROM area
     memcpy(ROMBaseHost, rom_.get(), rom_size_);
     ROMSize = rom_size_;
+
+    // Allocate ScratchMem right after ROM in the contiguous buffer.
+    // do_get_real_address() accepts addresses up to ROMBaseMac + ROMSize + 0x10000.
+    // ScratchMem pointer is in the middle of the scratch block (original convention).
+    ScratchMem = ROMBaseHost + ROMSize + SCRATCH_MEM_SIZE / 2;
+    fprintf(stderr, "[CPUContext] ScratchMem at %p (Mac: 0x%08x)\n",
+            ScratchMem, Host2MacAddr(ScratchMem));
 
     // 4. Check ROM version
     if (!CheckROM()) {
@@ -252,6 +263,16 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     fprintf(stderr, "[CPUContext] 24-bit addressing: %s\n", twenty_four_bit_ ? "Yes" : "No");
 
     // 6. Apply config to prefs (MUST be done before init_mac_subsystems which calls DiskInit)
+    // Sync critical hardware settings from EmulatorConfig to legacy prefs system
+    PrefsReplaceInt32("ramsize", ram_size_);
+    PrefsReplaceInt32("modelid", 14);  // Quadra 650
+    PrefsReplaceInt32("cpu", cpu_type_);
+    PrefsReplaceBool("fpu", fpu_type_ != 0);
+    PrefsReplaceInt32("bootdrive", 0);
+    PrefsReplaceInt32("bootdriver", 0);
+    PrefsReplaceBool("nogui", true);
+    PrefsReplaceBool("ignoresegv", true);
+
     // Add disk images from config to prefs
     for (const auto& disk_path : config.disk_paths) {
         PrefsAddString("disk", disk_path.c_str());

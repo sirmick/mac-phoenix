@@ -36,16 +36,8 @@
 #include "slot_rom.h"
 #include "platform.h"
 
-// Convert EmulOp for Unicorn: 0x71xx → 0xAExx
-static inline uint16 slot_make_emulop(uint16 emulop)
-{
-	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
-		if ((emulop & 0xff00) == 0x7100) {
-			return 0xAE00 | (emulop & 0x3F);
-		}
-	}
-	return emulop;
-}
+// EmulOp encoding handled by platform_make_emulop() in platform.h
+#define slot_make_emulop(op) platform_make_emulop(op)
 
 // Temporary buffer for slot ROM
 static uint8 srom[4096];

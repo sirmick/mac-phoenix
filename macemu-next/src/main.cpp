@@ -48,6 +48,7 @@
 #include "config/emulator_config.h"  // Unified configuration
 #include "core/cpu_context.h"  // Phase 2: Self-contained CPU context
 #include "drivers/video/video_webrtc.h"
+#include "drivers/video/video_screenshot.h"
 #include "drivers/audio/audio_webrtc.h"
 #include "webserver/webserver_main.h"
 #include "webserver/api_handlers.h"
@@ -200,6 +201,12 @@ int main(int argc, char **argv)
 		g_platform.video_refresh = video_webrtc_refresh;
 		g_platform.audio_init = audio_webrtc_init;
 		g_platform.audio_exit = audio_webrtc_exit;
+	} else if (getenv("MACEMU_SCREENSHOTS")) {
+		// Headless mode with screenshot capture
+		printf("Installing screenshot video driver (MACEMU_SCREENSHOTS)...\n");
+		g_platform.video_init = video_screenshot_init;
+		g_platform.video_exit = video_screenshot_exit;
+		g_platform.video_refresh = video_screenshot_refresh;
 	} else {
 		// Headless mode: Keep null drivers (no threads)
 		printf("Using null video/audio drivers (headless mode)...\n");

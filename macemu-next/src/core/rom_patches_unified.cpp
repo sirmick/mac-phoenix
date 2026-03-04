@@ -41,23 +41,10 @@ static uint32 find_rom_data(uint32 start, uint32 end, const uint8 *data, uint32 
 // Platform-Agnostic EmulOp Emission
 // ========================================
 
-// Emit an EmulOp using the appropriate format for the current backend
+// Emit an EmulOp using the appropriate encoding for the current backend
 static inline void emit_emulop(uint16 **wp, uint16 emulop)
 {
-	uint16 opcode;
-
-	// Check backend and emit appropriate opcode format
-	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
-		// Unicorn: Use A-line format (0xAE00-0xAE3F)
-		// Extract EmulOp number from 0x71xx format
-		uint16 emulop_num = emulop & 0x3F;
-		opcode = 0xAE00 | emulop_num;
-	} else {
-		// UAE: Use traditional 0x71xx format
-		opcode = emulop;
-	}
-
-	**wp = htons(opcode);
+	**wp = htons(platform_make_emulop(emulop));
 	(*wp)++;
 }
 

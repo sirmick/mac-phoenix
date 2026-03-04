@@ -38,11 +38,7 @@ extern uint32 RAMSize;
 extern volatile bool QuitEmulator;
 
 /* M68k Registers structure (for EmulOp and Execute68k) */
-struct M68kRegisters {
-	uint32 d[8];
-	uint32 a[8];
-	uint16 sr;
-};
+#include "m68k_registers.h"
 
 /* Minimal functions */
 // TriggerInterrupt and TriggerNMI are implemented in basilisk_glue.cpp

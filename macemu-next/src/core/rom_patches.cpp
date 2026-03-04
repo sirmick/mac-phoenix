@@ -84,34 +84,14 @@ uint16 ROMVersion;
 
 
 /*
- *  Helper function to emit EmulOp in correct format for backend
- */
-static inline uint16 make_emulop(uint16 emulop)
-{
-	// For Unicorn: Must use A-line format because 0x71xx are valid MVS instructions!
-	// 0x71xx opcodes are Move with Sign extend (MVS) on 68040/68060
-	// So we NEED to convert to A-line (0xAExx) which are truly invalid
-	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
-		// Convert to A-line format for Unicorn
-		if ((emulop & 0xff00) == 0x7100) {
-			uint16 emulop_num = emulop & 0x3F;
-			return 0xAE00 | emulop_num;
-		}
-	}
-	// UAE: return unchanged (has special handlers for 0x71xx)
-	return emulop;
-}
-
-/*
- *  Patch 0x71xx EmulOps to 0xAExx in a ROM region (for Unicorn backend)
+ *  Patch 0x71xx EmulOps to 0xAExx in a ROM region (for A-line backends)
  *  Scans big-endian bytes for 0x71xx patterns that match EmulOp range and
  *  converts them to A-line format (0xAExx) so QEMU treats them as exceptions.
  *  Without this, QEMU executes 0x71xx as MOVEQ instructions (valid M68K).
  */
-static void patch_emulops_for_unicorn(uint8 *base, uint32 length)
+static void patch_emulops_for_aline(uint8 *base, uint32 length)
 {
-	// Only patch for Unicorn backend
-	if (!g_platform.cpu_name || !strstr(g_platform.cpu_name, "Unicorn"))
+	if (!g_platform.use_aline_emulops)
 		return;
 
 	int count = 0;
@@ -939,7 +919,7 @@ static bool patch_rom_classic(void)
 
 	// Patch ClkNoMem
 	wp = (uint16 *)(ROMBaseHost + 0xa2c0);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_CLKNOMEM));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_CLKNOMEM));
 	*wp = htons(0x4ed5);			// jmp	(a5)
 
 	// Skip main memory test (not that it wouldn't pass, but it's faster that way)
@@ -949,7 +929,7 @@ static bool patch_rom_classic(void)
 
 	// Don't open .Sound driver but install our own drivers
 	wp = (uint16 *)(ROMBaseHost + 0x36caa);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
 	*wp = htons(0x4e75); //rts
 
 #if 1
@@ -981,7 +961,7 @@ static bool patch_rom_classic(void)
 	serd_offset = 0x31bae;
 	D(bug("serd %08lx\n", serd_offset));
 	wp = (uint16 *)(ROMBaseHost + serd_offset + 12);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_SERD));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_SERD));
 	*wp = htons(M68K_RTS);
 	memcpy(ROMBaseHost + serd_offset + 0x100, ain_driver, sizeof(ain_driver));
 	memcpy(ROMBaseHost + serd_offset + 0x200, aout_driver, sizeof(aout_driver));
@@ -994,45 +974,45 @@ static bool patch_rom_classic(void)
 	// Patch EmulOps in driver code arrays for Unicorn backend
 	// These arrays use raw 0x71xx bytes which QEMU treats as valid MOVEQ instructions.
 	// Convert to 0xAExx (A-line) so they trigger EmulOp exceptions.
-	patch_emulops_for_unicorn(ROMBaseHost + sony_offset, sizeof(sony_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + sony_offset + 0x100, sizeof(disk_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + sony_offset + 0x200, sizeof(cdrom_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x100, sizeof(ain_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x200, sizeof(aout_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x300, sizeof(bin_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x400, sizeof(bout_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + 0x3880, sizeof(adbop_patch));
+	patch_emulops_for_aline(ROMBaseHost + sony_offset, sizeof(sony_driver));
+	patch_emulops_for_aline(ROMBaseHost + sony_offset + 0x100, sizeof(disk_driver));
+	patch_emulops_for_aline(ROMBaseHost + sony_offset + 0x200, sizeof(cdrom_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x100, sizeof(ain_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x200, sizeof(aout_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x300, sizeof(bin_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x400, sizeof(bout_driver));
+	patch_emulops_for_aline(ROMBaseHost + 0x3880, sizeof(adbop_patch));
 
 	// Replace Time Manager
 	wp = (uint16 *)(ROMBaseHost + 0x1a95c);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_INSTIME));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTIME));
 	*wp = htons(M68K_RTS);
 	wp = (uint16 *)(ROMBaseHost + 0x1a96a);
 	*wp++ = htons(0x40e7);		// move	sr,-(sp)
 	*wp++ = htons(0x007c);		// ori	#$0700,sr
 	*wp++ = htons(0x0700);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_RMVTIME));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_RMVTIME));
 	*wp++ = htons(0x46df);		// move	(sp)+,sr
 	*wp = htons(M68K_RTS);
 	wp = (uint16 *)(ROMBaseHost + 0x1a984);
 	*wp++ = htons(0x40e7);		// move	sr,-(sp)
 	*wp++ = htons(0x007c);		// ori	#$0700,sr
 	*wp++ = htons(0x0700);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_PRIMETIME));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PRIMETIME));
 	*wp++ = htons(0x46df);		// move	(sp)+,sr
 	*wp++ = htons(M68K_RTS);
 	microseconds_offset = (uint8 *)wp - ROMBaseHost;
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_MICROSECONDS));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_MICROSECONDS));
 	*wp++ = htons(M68K_RTS);
 
 	// Replace DebugUtil
 	debugutil_offset = (uint8 *)wp - ROMBaseHost;
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_DEBUGUTIL));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_DEBUGUTIL));
 	*wp = htons(M68K_RTS);
 
 	// Replace SCSIDispatch()
 	wp = (uint16 *)(ROMBaseHost + 0x1a206);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_SCSI_DISPATCH));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_SCSI_DISPATCH));
 	*wp++ = htons(0x2e49);		// move.l	a1,a7
 	*wp = htons(M68K_JMP_A0);
 
@@ -1047,14 +1027,14 @@ static bool patch_rom_classic(void)
 	*wp++ = htons(0x07f0);
 	*wp++ = htons(M68K_JSR_A0);
 	*wp++ = htons(0x221f);		// move.l	(sp)+,d1 (restore type)
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_CHECKLOAD));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_CHECKLOAD));
 	*wp = htons(M68K_RTS);
 
 	// Install PutScrap() patch for clipboard data exchange (the patch is activated by EMUL_OP_INSTALL_DRIVERS)
 	PutScrapPatch = ROMBaseMac + sony_offset + 0xc00;
 	base = ROMBaseMac + 0x12794;
 	wp = (uint16 *)(ROMBaseHost + sony_offset + 0xc00);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_PUT_SCRAP));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PUT_SCRAP));
 	*wp++ = htons(M68K_JMP);
 	*wp++ = htons(base >> 16);
 	*wp = htons(base & 0xffff);
@@ -1081,7 +1061,7 @@ static bool patch_rom_classic(void)
 	*wp++ = htons(M68K_NOP);
 	*wp++ = htons(M68K_NOP);
 	// Use make_emulop to get correct encoding (0x7129 for UAE, 0xAE29 for Unicorn)
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
 	*wp++ = htons(0x4a80);		// tst.l	d0
 	*wp = htons(0x67f4);		// beq		0x402be2
 	return true;
@@ -1148,7 +1128,7 @@ static bool patch_rom_32(void)
 
 	// Install special reset opcode and jump (skip hardware detection and tests)
 	wp = (uint16 *)(ROMBaseHost + 0x8c);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_RESET));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_RESET));
 	*wp++ = htons(M68K_JMP);
 	*wp++ = htons((ROMBaseMac + 0xba) >> 16);
 	*wp = htons((ROMBaseMac + 0xba) & 0xffff);
@@ -1239,7 +1219,7 @@ static bool patch_rom_32(void)
 	D(bug("read_xpram %08lx\n", base));
 	if (base) {			// ROM10
 		wp = (uint16 *)(ROMBaseHost + base);
-		*wp++ = htons(make_emulop(M68K_EMUL_OP_READ_XPRAM));
+		*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_READ_XPRAM));
 		*wp = htons(0x4ed6);		// jmp	(a6)
 	}
 	static const uint8 read_xpram2_dat[] = {0x26, 0x4e, 0x08, 0x92, 0x00, 0x02, 0xea, 0x59, 0x02, 0x01, 0x00, 0x07, 0x00, 0x01, 0x00, 0xb8};
@@ -1247,7 +1227,7 @@ static bool patch_rom_32(void)
 	D(bug("read_xpram2 %08lx\n", base));
 	if (base) {			// ROM11
 		wp = (uint16 *)(ROMBaseHost + base);
-		*wp++ = htons(make_emulop(M68K_EMUL_OP_READ_XPRAM));
+		*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_READ_XPRAM));
 		*wp = htons(0x4ed6);		// jmp	(a6)
 	}
 	if (ROMSize > 0x80000) {
@@ -1256,7 +1236,7 @@ static bool patch_rom_32(void)
 		D(bug("read_xpram3 %08lx\n", base));
 		if (base) {		// ROM15
 			wp = (uint16 *)(ROMBaseHost + base);
-			*wp++ = htons(make_emulop(M68K_EMUL_OP_READ_XPRAM2));
+			*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_READ_XPRAM2));
 			*wp = htons(M68K_RTS);
 		}
 	}
@@ -1270,12 +1250,12 @@ static bool patch_rom_32(void)
 	}
 	D(bug("clk_no_mem %08lx\n", base));
 	wp = (uint16 *)(ROMBaseHost + base);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_CLKNOMEM));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_CLKNOMEM));
 	*wp = htons(0x4ed5);			// jmp	(a5)
 
 	// Patch BootGlobs
 	wp = (uint16 *)(ROMBaseHost + 0x10e);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_PATCH_BOOT_GLOBS));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PATCH_BOOT_GLOBS));
 	*wp = htons(M68K_NOP);
 
 	// Don't init SCC
@@ -1466,7 +1446,7 @@ static bool patch_rom_32(void)
 	*wp++ = htons(0x0440);	// subi.w	#$400,d0
 	*wp++ = htons(0x0400);
 	*wp++ = htons(0x2040);	// move.l	d0,a0
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_FIX_MEMSIZE));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_FIX_MEMSIZE));
 	*wp++ = htons(M68K_RTS);
 
 	static const uint8 fix_memsize2_dat[] = {0x22, 0x30, 0x81, 0xe2, 0x0d, 0xdc, 0xff, 0xba, 0xd2, 0xb0, 0x81, 0xe2, 0x0d, 0xdc, 0xff, 0xec, 0x21, 0xc1, 0x1e, 0xf8};
@@ -1486,7 +1466,7 @@ static bool patch_rom_32(void)
 	*wp++ = htons(M68K_NOP);	// NOP out JSR (4EBA)
 	*wp++ = htons(M68K_NOP);	// NOP out displacement (011A)
 	wp = (uint16 *)(ROMBaseHost + 0x1142);
-	*wp = htons(make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
+	*wp = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
 
 	// Don't access SonyVars
 	wp = (uint16 *)(ROMBaseHost + 0x1144);
@@ -1589,7 +1569,7 @@ static bool patch_rom_32(void)
 		D(bug("block_move %08lx\n", base));
 		if (base) {		// ROM15/22/23/26/27/32
 			wp = (uint16 *)(ROMBaseHost + base + 4);
-			*wp++ = htons(make_emulop(M68K_EMUL_OP_BLOCK_MOVE));
+			*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_BLOCK_MOVE));
 			*wp++ = htons(0x7000);
 			*wp = htons(M68K_RTS);
 		}
@@ -1653,7 +1633,7 @@ static bool patch_rom_32(void)
 	serd_offset = find_rom_resource(FOURCC('S','E','R','D'), 0);
 	D(bug("serd %08lx\n", serd_offset));
 	wp = (uint16 *)(ROMBaseHost + serd_offset + 12);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_SERD));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_SERD));
 	*wp = htons(M68K_RTS);
 	memcpy(ROMBaseHost + serd_offset + 0x100, ain_driver, sizeof(ain_driver));
 	memcpy(ROMBaseHost + serd_offset + 0x200, aout_driver, sizeof(aout_driver));
@@ -1667,45 +1647,45 @@ static bool patch_rom_32(void)
 	// Patch EmulOps in driver code arrays for Unicorn backend
 	// These arrays use raw 0x71xx bytes which QEMU treats as valid MOVEQ instructions.
 	// Convert to 0xAExx (A-line) so they trigger EmulOp exceptions.
-	patch_emulops_for_unicorn(ROMBaseHost + sony_offset, sizeof(sony_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + sony_offset + 0x100, sizeof(disk_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + sony_offset + 0x200, sizeof(cdrom_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x100, sizeof(ain_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x200, sizeof(aout_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x300, sizeof(bin_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + serd_offset + 0x400, sizeof(bout_driver));
-	patch_emulops_for_unicorn(ROMBaseHost + adbop_offset, sizeof(adbop_patch));
+	patch_emulops_for_aline(ROMBaseHost + sony_offset, sizeof(sony_driver));
+	patch_emulops_for_aline(ROMBaseHost + sony_offset + 0x100, sizeof(disk_driver));
+	patch_emulops_for_aline(ROMBaseHost + sony_offset + 0x200, sizeof(cdrom_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x100, sizeof(ain_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x200, sizeof(aout_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x300, sizeof(bin_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x400, sizeof(bout_driver));
+	patch_emulops_for_aline(ROMBaseHost + adbop_offset, sizeof(adbop_patch));
 
 	// Replace Time Manager (the Microseconds patch is activated in InstallDrivers())
 	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa058));
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_INSTIME));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTIME));
 	*wp = htons(M68K_RTS);
 	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa059));
 	*wp++ = htons(0x40e7);		// move	sr,-(sp)
 	*wp++ = htons(0x007c);		// ori	#$0700,sr
 	*wp++ = htons(0x0700);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_RMVTIME));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_RMVTIME));
 	*wp++ = htons(0x46df);		// move	(sp)+,sr
 	*wp = htons(M68K_RTS);
 	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa05a));
 	*wp++ = htons(0x40e7);		// move	sr,-(sp)
 	*wp++ = htons(0x007c);		// ori	#$0700,sr
 	*wp++ = htons(0x0700);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_PRIMETIME));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PRIMETIME));
 	*wp++ = htons(0x46df);		// move	(sp)+,sr
 	*wp++ = htons(M68K_RTS);
 	microseconds_offset = (uint8 *)wp - ROMBaseHost;
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_MICROSECONDS));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_MICROSECONDS));
 	*wp++ = htons(M68K_RTS);
 
 	// Replace DebugUtil
 	debugutil_offset = (uint8 *)wp - ROMBaseHost;
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_DEBUGUTIL));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_DEBUGUTIL));
 	*wp = htons(M68K_RTS);
 
 	// Replace SCSIDispatch()
 	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa815));
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_SCSI_DISPATCH));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_SCSI_DISPATCH));
 	*wp++ = htons(0x2e49);		// move.l	a1,a7
 	*wp = htons(M68K_JMP_A0);
 
@@ -1720,18 +1700,18 @@ static bool patch_rom_32(void)
 	*wp++ = htons(0x07f0);
 	*wp++ = htons(M68K_JSR_A0);
 	*wp++ = htons(0x221f);		// move.l	(sp)+,d1 (restore type)
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_CHECKLOAD));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_CHECKLOAD));
 	*wp = htons(M68K_RTS);
 
 	// Patch PowerOff()
 	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa05b));	// PowerOff()
-	*wp = htons(make_emulop(M68K_EMUL_OP_SHUTDOWN));
+	*wp = htons(platform_make_emulop(M68K_EMUL_OP_SHUTDOWN));
 
 	// Install PutScrap() patch for clipboard data exchange (the patch is activated by EMUL_OP_INSTALL_DRIVERS)
 	PutScrapPatch = ROMBaseMac + sony_offset + 0xc00;
 	base = ROMBaseMac + find_rom_trap(0xa9fe);
 	wp = (uint16 *)(ROMBaseHost + sony_offset + 0xc00);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_PUT_SCRAP));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PUT_SCRAP));
 	*wp++ = htons(M68K_JMP);
 	*wp++ = htons(base >> 16);
 	*wp = htons(base & 0xffff);
@@ -1740,7 +1720,7 @@ static bool patch_rom_32(void)
 	GetScrapPatch = ROMBaseMac + sony_offset + 0xd00;
 	base = ROMBaseMac + find_rom_trap(0xa9fd);
 	wp = (uint16 *)(ROMBaseHost + sony_offset + 0xd00);
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_GET_SCRAP));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_GET_SCRAP));
 	*wp++ = htons(M68K_JMP);
 	*wp++ = htons(base >> 16);
 	*wp = htons(base & 0xffff);
@@ -1762,7 +1742,7 @@ static bool patch_rom_32(void)
 	*wp++ = htons(M68K_NOP);
 	*wp++ = htons(M68K_NOP);
 	// Use make_emulop to get correct encoding (0x7129 for UAE, 0xAE29 for Unicorn)
-	*wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
 	*wp++ = htons(0x4a80);		// tst.l	d0
 	*wp = htons(0x67f4);		// beq		0x4080a294
 	return true;

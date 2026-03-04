@@ -74,10 +74,6 @@ static void dualcpu_backend_reset(void) {
 	// The validation module handles initialization in unicorn_validation_init()
 }
 
-static void dualcpu_backend_destroy(void) {
-	unicorn_validation_shutdown();
-}
-
 // Execution - runs both CPUs and compares
 static int dualcpu_backend_execute_one(void) {
 	// Execute on both CPUs and validate
@@ -102,11 +98,7 @@ static void dualcpu_backend_execute_fast(void) {
 	// DualCPU doesn't support fast path (validation is per-instruction)
 }
 
-// State Query - delegates to UAE (accesses regs.stopped directly)
-static bool dualcpu_backend_is_stopped(void) {
-	return regs.stopped != 0;
-}
-
+// State Query - delegates to UAE
 static uint32_t dualcpu_backend_get_pc(void) {
 	return uae_get_pc();
 }
@@ -121,36 +113,6 @@ static uint32_t dualcpu_backend_get_dreg(int n) {
 
 static uint32_t dualcpu_backend_get_areg(int n) {
 	return uae_get_areg(n);
-}
-
-// State Modification - updates both CPUs
-static void dualcpu_backend_set_pc(uint32_t pc) {
-	uae_set_pc(pc);
-	// Unicorn will be synced via validation module
-}
-
-static void dualcpu_backend_set_sr(uint16_t sr) {
-	uae_set_sr(sr);
-	// Unicorn will be synced via validation module
-}
-
-static void dualcpu_backend_set_dreg(int n, uint32_t val) {
-	uae_set_dreg(n, val);
-	// Unicorn will be synced via validation module
-}
-
-static void dualcpu_backend_set_areg(int n, uint32_t val) {
-	uae_set_areg(n, val);
-	// Unicorn will be synced via validation module
-}
-
-// Memory Access - delegates to UAE
-static void dualcpu_backend_mem_read(uint32_t addr, void *data, uint32_t size) {
-	uae_mem_read(addr, data, size);
-}
-
-static void dualcpu_backend_mem_write(uint32_t addr, const void *data, uint32_t size) {
-	uae_mem_write(addr, data, size);
 }
 
 // Interrupts - delegates to UAE internals
@@ -175,6 +137,7 @@ static void dualcpu_backend_execute_68k_trap(uint16_t trap, struct M68kRegisters
  */
 void cpu_dualcpu_install(Platform *p) {
 	p->cpu_name = "DualCPU (UAE + Unicorn Validation)";
+	p->use_aline_emulops = false;  // DualCPU uses UAE as primary
 
 	// Configuration
 	p->cpu_set_type = dualcpu_backend_set_type;
@@ -182,28 +145,16 @@ void cpu_dualcpu_install(Platform *p) {
 	// Lifecycle
 	p->cpu_init = dualcpu_backend_init;
 	p->cpu_reset = dualcpu_backend_reset;
-	p->cpu_destroy = dualcpu_backend_destroy;
 
 	// Execution
 	p->cpu_execute_one = dualcpu_backend_execute_one;
 	p->cpu_execute_fast = NULL;  // No fast path for validation
 
 	// State query
-	p->cpu_is_stopped = dualcpu_backend_is_stopped;
 	p->cpu_get_pc = dualcpu_backend_get_pc;
 	p->cpu_get_sr = dualcpu_backend_get_sr;
 	p->cpu_get_dreg = dualcpu_backend_get_dreg;
 	p->cpu_get_areg = dualcpu_backend_get_areg;
-
-	// State modification
-	p->cpu_set_pc = dualcpu_backend_set_pc;
-	p->cpu_set_sr = dualcpu_backend_set_sr;
-	p->cpu_set_dreg = dualcpu_backend_set_dreg;
-	p->cpu_set_areg = dualcpu_backend_set_areg;
-
-	// Memory access
-	p->cpu_mem_read = dualcpu_backend_mem_read;
-	p->cpu_mem_write = dualcpu_backend_mem_write;
 
 	// Interrupts
 	p->cpu_trigger_interrupt = dualcpu_backend_trigger_interrupt;

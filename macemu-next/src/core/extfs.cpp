@@ -69,18 +69,8 @@
 #define DEBUG 0
 #include "debug.h"
 
-// Convert EmulOp encoding for active CPU backend
-static inline uint16 make_emulop(uint16 emulop)
-{
-	extern Platform g_platform;
-	if (g_platform.cpu_name && strstr(g_platform.cpu_name, "Unicorn")) {
-		if ((emulop & 0xff00) == 0x7100) {
-			uint16 emulop_num = emulop & 0x3F;
-			return 0xAE00 | emulop_num;
-		}
-	}
-	return emulop;
-}
+// EmulOp encoding handled by platform_make_emulop() in platform.h
+#define make_emulop(op) platform_make_emulop(op)
 
 
 // File system global data and 68k routines

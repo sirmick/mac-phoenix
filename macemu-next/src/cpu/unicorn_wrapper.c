@@ -21,16 +21,11 @@
 #include <stdio.h>
 #include <time.h>
 
-/* Forward declarations for EmulOp interface */
-struct M68kRegistersC {
-    uint32_t d[8];  /* Data registers D0-D7 */
-    uint32_t a[8];  /* Address registers A0-A7 */
-    uint16_t sr;    /* Status register */
-};
-extern void EmulOp_C(uint16_t opcode, struct M68kRegistersC *r);
+/* Shared M68K register structure (C-compatible) */
+#include "m68k_registers.h"
 
-/* M68kRegisters is same as M68kRegistersC for our purposes */
-#define M68kRegisters M68kRegistersC
+/* C bridge for calling C++ EmulOp from C code */
+extern void EmulOp_C(uint16_t opcode, M68kRegisters *r);
 
 /* M68K interrupt trigger (from Unicorn's QEMU backend) */
 extern void uc_m68k_trigger_interrupt(uc_engine *uc, int level, uint8_t vector);
@@ -538,18 +533,7 @@ const char *unicorn_get_error(UnicornCPU *cpu) {
 bool unicorn_execute(UnicornCPU *cpu, uint64_t start, uint64_t until, uint64_t timeout, size_t count) {
     if (!cpu || !cpu->uc) return false;
 
-    static int execute_count = 0;
-    if (++execute_count <= 5) {
-        fprintf(stderr, "[unicorn_execute #%d] start=0x%08lx, until=0x%08lx, timeout=%lu, count=%zu\n",
-                execute_count, start, until, timeout, count);
-    }
-
     uc_err err = uc_emu_start(cpu->uc, start, until, timeout, count);
-
-    if (execute_count <= 5) {
-        fprintf(stderr, "[unicorn_execute #%d] returned with err=%d (%s)\n",
-                execute_count, err, uc_strerror(err));
-    }
 
     /* Apply any deferred register updates and flush cache */
     apply_deferred_updates_and_flush(cpu, cpu->uc, "unicorn_execute");
@@ -677,10 +661,6 @@ void unicorn_set_sr(UnicornCPU *cpu, uint16_t sr) {
 /* Interrupt triggering */
 void unicorn_trigger_interrupt_internal(int level) {
     g_pending_interrupt_level = level;
-    static int trigger_count = 0;
-    if (++trigger_count <= 10) {
-        fprintf(stderr, "[unicorn_trigger_interrupt_internal] Setting g_pending_interrupt_level to %d\n", level);
-    }
 }
 
 /* Get Unicorn engine handle */
@@ -851,21 +831,8 @@ bool unicorn_execute_n(UnicornCPU *cpu, uint64_t count) {
 
     uint32_t pc = unicorn_get_pc(cpu);
 
-    static int execute_n_count = 0;
-    if (++execute_n_count <= 10) {
-        fprintf(stderr, "[unicorn_execute_n #%d] PC=0x%08x, count=%lu\n",
-                execute_n_count, pc, count);
-        fflush(stderr);
-    }
-
     /* Execute specified number of instructions */
     uc_err err = uc_emu_start(cpu->uc, pc, 0, 0, count);
-
-    if (execute_n_count <= 10) {
-        fprintf(stderr, "[unicorn_execute_n #%d] returned err=%d (%s)\n",
-                execute_n_count, err, uc_strerror(err));
-        fflush(stderr);
-    }
 
     /* Apply any deferred register updates and flush cache */
     apply_deferred_updates_and_flush(cpu, cpu->uc, "unicorn_execute_n");
@@ -913,36 +880,6 @@ void unicorn_set_cacr(UnicornCPU *cpu, uint32_t cacr) {
 /* Default arch wrapper */
 UnicornCPU* unicorn_create(UnicornArch arch) {
     return unicorn_create_with_model(arch, -1);  /* Use default CPU model */
-}
-
-/* Phase 2: Helper functions for QEMU-style execution loop */
-
-/* Poll for interrupts and deliver if needed */
-bool unicorn_poll_interrupts(UnicornCPU *cpu) {
-    if (!cpu || !cpu->uc) return false;
-
-    extern uint64_t poll_timer_interrupt(void);
-    extern volatile int g_pending_interrupt_level;
-
-    // Check timer interrupts
-    uint64_t expirations = poll_timer_interrupt();
-
-    // If we have pending interrupts, we need to handle them
-    if (g_pending_interrupt_level > 0) {
-        // Get current SR to check interrupt mask
-        uint32_t sr = 0;
-        uc_reg_read(cpu->uc, UC_M68K_REG_SR, &sr);
-        int current_ipl = (sr >> 8) & 7;
-
-        // Check if interrupt is not masked
-        if (g_pending_interrupt_level > current_ipl) {
-            // The interrupt hook will handle the actual delivery
-            // We just need to signal that an interrupt occurred
-            return true;
-        }
-    }
-
-    return expirations > 0;
 }
 
 /* Handle illegal instruction */

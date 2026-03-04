@@ -3,6 +3,7 @@
 # Video drivers
 video_driver_sources = [
   'video/video_null.cpp',
+  'video/video_screenshot.cpp',
   'video/video_webrtc.cpp',
   'video/video_adapter.cpp',
   'video/video_output.cpp',

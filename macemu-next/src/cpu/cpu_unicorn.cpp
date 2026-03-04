@@ -25,12 +25,8 @@ namespace webserver {
 	extern std::atomic<bool> g_running;
 }
 
-// M68kRegisters structure (from main.h, duplicated to avoid type conflicts)
-struct M68kRegisters {
-	uint32_t d[8];
-	uint32_t a[8];
-	uint16_t sr;
-};
+// M68k register structure (shared C/C++ definition)
+#include "m68k_registers.h"
 
 // Forward declarations (from macemu globals)
 extern uint32_t RAMBaseMac;  // RAM base in Mac address space
@@ -445,14 +441,11 @@ static bool unicorn_backend_init(void) {
 		dummy_region_base, dummy_region_base + dummy_region_size, dummy_region_size / (1024*1024));
 
 	// Map high memory region (0xF0000000-0xFFFFFFFF) for hardware registers
-	// BUT SKIP THE TRAP REGION (0xFF000000-0xFF000FFF) for MMIO trap handling
-	// This matches UAE's behavior where the entire 4GB address space is backed by dummy_bank
+	// Matches UAE's behavior where the entire 4GB address space is backed by dummy_bank
 	// Addresses like 0xFFFFFFFE/0xFFFFFFFC are common hardware register placeholders
-
-	// First part: 0xF0000000 - 0xFEFFFFFF (255 MB)
-	uint32_t high_mem_base1 = 0xF0000000;
-	uint32_t high_mem_size1 = 0x0F000000;  // 240 MB
-	unicorn_high_mem_buffer = (uint8_t *)malloc(high_mem_size1);
+	uint32_t high_mem_base = 0xF0000000;
+	uint32_t high_mem_size = 0x10000000;  // 256 MB
+	unicorn_high_mem_buffer = (uint8_t *)malloc(high_mem_size);
 	if (!unicorn_high_mem_buffer) {
 		fprintf(stderr, "Failed to allocate high memory region buffer\n");
 		free(unicorn_dummy_buffer);
@@ -461,10 +454,9 @@ static bool unicorn_backend_init(void) {
 		unicorn_cpu = NULL;
 		return false;
 	}
-	// Fill with zeros (UAE's dummy_bank returns 0 for reads)
-	memset(unicorn_high_mem_buffer, 0, high_mem_size1);
-	if (!unicorn_map_ram(unicorn_cpu, high_mem_base1, unicorn_high_mem_buffer, high_mem_size1)) {
-		fprintf(stderr, "Failed to map high memory region part 1 to Unicorn\n");
+	memset(unicorn_high_mem_buffer, 0, high_mem_size);
+	if (!unicorn_map_ram(unicorn_cpu, high_mem_base, unicorn_high_mem_buffer, high_mem_size)) {
+		fprintf(stderr, "Failed to map high memory region to Unicorn\n");
 		free(unicorn_high_mem_buffer);
 		unicorn_high_mem_buffer = NULL;
 		free(unicorn_dummy_buffer);
@@ -473,39 +465,8 @@ static bool unicorn_backend_init(void) {
 		unicorn_cpu = NULL;
 		return false;
 	}
-	fprintf(stderr, "[DEBUG] High memory region part 1 mapped: 0x%08X - 0x%08X (%u MB)\n",
-		high_mem_base1, high_mem_base1 + high_mem_size1 - 1, high_mem_size1 / (1024*1024));
-
-	// Skip trap region 0xFF000000-0xFF000FFF
-	// Second part: 0xFF001000 - 0xFFFFFFFF (15 MB + 1020 KB)
-	uint32_t high_mem_base2 = 0xFF001000;
-	uint32_t high_mem_size2 = 0x00FFF000;  // ~16 MB - 4KB
-	uint8_t *high_mem_buffer2 = (uint8_t *)malloc(high_mem_size2);
-	if (!high_mem_buffer2) {
-		fprintf(stderr, "Failed to allocate high memory region buffer 2\n");
-		free(unicorn_high_mem_buffer);
-		unicorn_high_mem_buffer = NULL;
-		free(unicorn_dummy_buffer);
-		unicorn_dummy_buffer = NULL;
-		unicorn_destroy(unicorn_cpu);
-		unicorn_cpu = NULL;
-		return false;
-	}
-	// Fill with zeros
-	memset(high_mem_buffer2, 0, high_mem_size2);
-	if (!unicorn_map_ram(unicorn_cpu, high_mem_base2, high_mem_buffer2, high_mem_size2)) {
-		fprintf(stderr, "Failed to map high memory region part 2 to Unicorn\n");
-		free(high_mem_buffer2);
-		free(unicorn_high_mem_buffer);
-		unicorn_high_mem_buffer = NULL;
-		free(unicorn_dummy_buffer);
-		unicorn_dummy_buffer = NULL;
-		unicorn_destroy(unicorn_cpu);
-		unicorn_cpu = NULL;
-		return false;
-	}
-	fprintf(stderr, "[DEBUG] High memory region part 2 mapped: 0x%08X - 0x%08X (%u MB) - TRAP REGION 0xFF000000-0xFF000FFF LEFT UNMAPPED\n",
-		high_mem_base2, high_mem_base2 + high_mem_size2 - 1, high_mem_size2 / (1024*1024));
+	fprintf(stderr, "[DEBUG] High memory region mapped: 0x%08X - 0x%08X (%u MB)\n",
+		high_mem_base, high_mem_base + high_mem_size - 1, high_mem_size / (1024*1024));
 
 	// Map hardware register region using uc_mmio_map for proper MMIO emulation
 	// uc_mmio_map provides read/write callbacks that are always invoked by the JIT,
@@ -549,7 +510,7 @@ static bool unicorn_backend_init(void) {
 		// Gap 2: After MMIO hardware to before high memory region
 		// 0x50F40000 - 0xEFFFFFFF
 		uint32_t gap2_base = MMIO_HW_BASE + MMIO_HW_SIZE;           // 0x50F40000
-		uint32_t gap2_size = high_mem_base1 - gap2_base;             // 0x9F0C0000
+		uint32_t gap2_size = high_mem_base - gap2_base;              // 0x9F0C0000
 		gap_err = uc_mmio_map(gap_uc, gap2_base, gap2_size,
 		                      dummy_bank_read, NULL,
 		                      dummy_bank_write, NULL);
@@ -643,37 +604,12 @@ static void unicorn_backend_reset(void) {
 	fprintf(stderr, "[Unicorn] Reset: VBR=0 (readback=0x%08X), CACR=0\n", vbr_readback);
 }
 
-static void unicorn_backend_destroy(void) {
-	if (unicorn_cpu) {
-		// Print block statistics before destroying
-		unicorn_print_block_stats(unicorn_cpu);
-
-		unicorn_destroy(unicorn_cpu);
-		unicorn_cpu = NULL;
-	}
-	if (unicorn_dummy_buffer) {
-		free(unicorn_dummy_buffer);
-		unicorn_dummy_buffer = NULL;
-	}
-	if (unicorn_high_mem_buffer) {
-		free(unicorn_high_mem_buffer);
-		unicorn_high_mem_buffer = NULL;
-	}
-}
-
 // Execution
 static int unicorn_backend_execute_one(void) {
 	if (!unicorn_cpu) {
 		return 3;  // CPU_EXEC_EXCEPTION
 	}
 
-	// Debug: Check PC at entry
-	static int exec_one_count = 0;
-	exec_one_count++;
-	if (exec_one_count <= 5) {
-		uint32_t pc_entry = unicorn_get_pc(unicorn_cpu);
-		fprintf(stderr, "[execute_one #%d] Entry PC=0x%08X\n", exec_one_count, pc_entry);
-	}
 
 	/* CPU tracing (controlled by CPU_TRACE env var) */
 	if (cpu_trace_should_log()) {
@@ -777,77 +713,29 @@ static int unicorn_backend_execute_one(void) {
 	}
 
 	cpu_trace_increment();
-
-	// Debug: Check PC at exit
-	if (exec_one_count <= 5) {
-		uint32_t pc_exit = unicorn_get_pc(unicorn_cpu);
-		fprintf(stderr, "[execute_one #%d] Exit PC=0x%08X\n", exec_one_count, pc_exit);
-	}
-
-	// Unicorn doesn't track STOP state separately
 	return 0;  // CPU_EXEC_OK
 }
 
 static void unicorn_backend_execute_fast(void) {
 	if (!unicorn_cpu) return;
 
-	// Fast execution path using JIT
-	// Execute until stopped (runs continuously)
-	// EmulOps are handled by checking at block boundaries via UC_HOOK_BLOCK
-	// This is much faster than checking every instruction
-
-	// Use global running flag from webserver namespace (same as main.cpp)
-	int exec_count = 0;
 	while (webserver::g_running.load(std::memory_order_acquire)) {
-		// Phase 2: Use QEMU-style execution loop which handles interrupt checking
-		// Execute a large batch - the inner loop will handle proper batching and interrupts
-		int result = unicorn_execute_with_interrupts(unicorn_cpu, 100000000);  // Very large, let inner loop control
+		int result = unicorn_execute_with_interrupts(unicorn_cpu, 100000000);
 		if (result < 0) {
-			// Check if this was a stop request (e.g., from uc_emu_stop) or an error
 			uint32_t pc = unicorn_get_pc(unicorn_cpu);
 			const char *err = unicorn_get_error(unicorn_cpu);
 
-			// Debug: Log all stops
-			static int stop_count = 0;
-			if (++stop_count <= 10) {
-				fprintf(stderr, "[unicorn_backend_execute] Stop #%d at PC=0x%08X, error: %s\n",
-				        stop_count, pc, err ? err : "NULL");
-			}
-
-			// If no error, it was probably uc_emu_stop() - continue execution
 			if (!err || strcmp(err, "OK") == 0) {
-				// This is normal - likely from uc_emu_stop() after exception handling
-				// Continue execution from the new PC
-				if (stop_count <= 10) {
-					fprintf(stderr, "[unicorn_backend_execute] Continuing execution from PC=0x%08X\n", pc);
-				}
-				continue;
+				continue;  // Normal uc_emu_stop() — restart
 			}
 
-			// Real error - stop execution
-			fprintf(stderr, "[unicorn_backend_execute] ERROR: Stopped at PC=0x%08X after %d executions: %s\n",
-			        pc, exec_count, err);
+			fprintf(stderr, "[Unicorn] Fatal error at PC=0x%08X: %s\n", pc, err);
 			break;
-		}
-		exec_count++;
-
-		// Debug: Check if we're stuck
-		if (exec_count > 0 && exec_count % 100 == 0) {
-			uint32_t pc = unicorn_get_pc(unicorn_cpu);
-			if (exec_count == 100) {
-				fprintf(stderr, "[unicorn_backend_execute] Still running: PC=0x%08X, %d instructions executed\n",
-				        pc, exec_count);
-			}
 		}
 	}
 }
 
 // State Query
-static bool unicorn_backend_is_stopped(void) {
-	// Unicorn doesn't track STOP state
-	return false;
-}
-
 static uint32_t unicorn_backend_get_pc(void) {
 	if (!unicorn_cpu) return 0;
 	return unicorn_get_pc(unicorn_cpu);
@@ -866,38 +754,6 @@ static uint32_t unicorn_backend_get_dreg(int n) {
 static uint32_t unicorn_backend_get_areg(int n) {
 	if (!unicorn_cpu) return 0;
 	return unicorn_get_areg(unicorn_cpu, n);
-}
-
-// State Modification
-static void unicorn_backend_set_pc(uint32_t pc) {
-	if (!unicorn_cpu) return;
-	unicorn_set_pc(unicorn_cpu, pc);
-}
-
-static void unicorn_backend_set_sr(uint16_t sr) {
-	if (!unicorn_cpu) return;
-	unicorn_set_sr(unicorn_cpu, sr);
-}
-
-static void unicorn_backend_set_dreg(int n, uint32_t val) {
-	if (!unicorn_cpu) return;
-	unicorn_set_dreg(unicorn_cpu, n, val);
-}
-
-static void unicorn_backend_set_areg(int n, uint32_t val) {
-	if (!unicorn_cpu) return;
-	unicorn_set_areg(unicorn_cpu, n, val);
-}
-
-// Memory Access
-static void unicorn_backend_mem_read(uint32_t addr, void *data, uint32_t size) {
-	if (!unicorn_cpu) return;
-	unicorn_mem_read(unicorn_cpu, addr, data, size);
-}
-
-static void unicorn_backend_mem_write(uint32_t addr, const void *data, uint32_t size) {
-	if (!unicorn_cpu) return;
-	unicorn_mem_write(unicorn_cpu, addr, data, size);
 }
 
 // Interrupts
@@ -1225,11 +1081,21 @@ static void unicorn_mem_write_byte(uint32_t addr, uint8_t value) {
 	}
 }
 
+// Flush Unicorn's JIT translation block cache
+// Called when code is patched at runtime (system patches, CheckLoad, etc.)
+// Without this, Unicorn continues executing stale TBs after code is modified.
+static void unicorn_backend_flush_code_cache(void) {
+	if (!unicorn_cpu) return;
+	uc_engine *uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
+	uc_ctl_flush_tb(uc);
+}
+
 /**
  * Install Unicorn CPU backend into platform
  */
 void cpu_unicorn_install(Platform *p) {
 	p->cpu_name = "Unicorn Engine";
+	p->use_aline_emulops = true;
 
 	// Configuration
 	p->cpu_set_type = unicorn_backend_set_type;
@@ -1237,7 +1103,6 @@ void cpu_unicorn_install(Platform *p) {
 	// Lifecycle
 	p->cpu_init = unicorn_backend_init;
 	p->cpu_reset = unicorn_backend_reset;
-	p->cpu_destroy = unicorn_backend_destroy;
 
 	// Execution
 	p->cpu_execute_one = unicorn_backend_execute_one;
@@ -1249,21 +1114,10 @@ void cpu_unicorn_install(Platform *p) {
 	}
 
 	// State query
-	p->cpu_is_stopped = unicorn_backend_is_stopped;
 	p->cpu_get_pc = unicorn_backend_get_pc;
 	p->cpu_get_sr = unicorn_backend_get_sr;
 	p->cpu_get_dreg = unicorn_backend_get_dreg;
 	p->cpu_get_areg = unicorn_backend_get_areg;
-
-	// State modification
-	p->cpu_set_pc = unicorn_backend_set_pc;
-	p->cpu_set_sr = unicorn_backend_set_sr;
-	p->cpu_set_dreg = unicorn_backend_set_dreg;
-	p->cpu_set_areg = unicorn_backend_set_areg;
-
-	// Memory access
-	p->cpu_mem_read = unicorn_backend_mem_read;
-	p->cpu_mem_write = unicorn_backend_mem_write;
 
 	// Interrupts
 	p->cpu_trigger_interrupt = unicorn_backend_trigger_interrupt;
@@ -1273,6 +1127,9 @@ void cpu_unicorn_install(Platform *p) {
 
 	// 68k Subroutine execution (for timer callbacks, ADB handlers, etc.)
 	p->cpu_execute_68k = unicorn_backend_execute_68k;
+
+	// Code cache flush (invalidate JIT TBs when code is patched at runtime)
+	p->flush_code_cache = unicorn_backend_flush_code_cache;
 
 	// Memory system (Unicorn-specific: uses uc_mem_read/write to access Unicorn's internal memory)
 	// IMPORTANT: Do NOT use DirectReadMacInt* functions - they read from RAMBaseHost/ROMBaseHost

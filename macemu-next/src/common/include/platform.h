@@ -112,22 +112,14 @@ typedef struct {
     bool (*sys_cd_read_toc)(void *fh, uint8_t *toc);
 
     /*
-     *  Memory (for tests to override)
-     */
-    uint8_t *ram;
-    uint8_t *rom;
-    uint32_t ram_size;
-    uint32_t rom_size;
-
-    /*
      *  CPU Emulation Backend
      */
     const char *cpu_name;  // Backend name: "UAE", "Unicorn", "DualCPU"
+    bool use_aline_emulops;  // true: EmulOps encoded as 0xAExx (Unicorn); false: 0x71xx (UAE)
 
     // Lifecycle
     bool (*cpu_init)(void);
     void (*cpu_reset)(void);
-    void (*cpu_destroy)(void);
 
     // Configuration (must be called before cpu_init)
     void (*cpu_set_type)(int cpu_type, int fpu_type);  // cpu_type: 2=68020, 3=68030, 4=68040
@@ -137,21 +129,10 @@ typedef struct {
     void (*cpu_execute_fast)(void);  // Optional: run until stopped (NULL if not supported)
 
     // State query
-    bool (*cpu_is_stopped)(void);
     uint32_t (*cpu_get_pc)(void);
     uint16_t (*cpu_get_sr)(void);
     uint32_t (*cpu_get_dreg)(int n);
     uint32_t (*cpu_get_areg)(int n);
-
-    // State modification
-    void (*cpu_set_pc)(uint32_t pc);
-    void (*cpu_set_sr)(uint16_t sr);
-    void (*cpu_set_dreg)(int n, uint32_t val);
-    void (*cpu_set_areg)(int n, uint32_t val);
-
-    // Memory access (for dual-CPU sync)
-    void (*cpu_mem_read)(uint32_t addr, void *data, uint32_t size);
-    void (*cpu_mem_write)(uint32_t addr, const void *data, uint32_t size);
 
     // Interrupts
     void (*cpu_trigger_interrupt)(int level);
@@ -164,6 +145,11 @@ typedef struct {
     // 68k Subroutine Execution (for timer callbacks, ADB handlers, etc.)
     // Executes 68k code at given address, returns updated registers
     void (*cpu_execute_68k)(uint32_t addr, struct M68kRegisters *r);
+
+    // Code cache flush (for JIT backends like Unicorn)
+    // Called when code is patched at runtime (system patches, CheckLoad, etc.)
+    // JIT backends must invalidate cached translations for the affected region.
+    void (*flush_code_cache)(void);
 
     /*
      *  Memory System API (backend-independent)
@@ -214,6 +200,17 @@ typedef struct {
  *  Global platform instance
  */
 extern Platform g_platform;
+
+/*
+ *  Convert EmulOp to correct encoding for active backend.
+ *  UAE uses 0x71xx (overloaded MOVEQ); Unicorn uses 0xAExx (A-line trap).
+ */
+static inline uint16_t platform_make_emulop(uint16_t emulop) {
+    if (g_platform.use_aline_emulops && (emulop & 0xFF00) == 0x7100) {
+        return 0xAE00 | (emulop & 0x3F);
+    }
+    return emulop;
+}
 
 /*
  *  Platform initialization
