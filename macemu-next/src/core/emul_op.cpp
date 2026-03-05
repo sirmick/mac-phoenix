@@ -245,34 +245,11 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 		}
 
-		case 0x7001:						// DebugStr - simple debug output
-			fprintf(stderr, "[DebugStr] D0=0x%08X A6=0x%08X\n",
-			        r->d[0], r->a[6]);
+		case 0x7001:						// DebugStr
+			D(bug("DebugStr D0=0x%08x A6=0x%08x\n", r->d[0], r->a[6]));
 			break;
 
 		case M68K_EMUL_OP_SHUTDOWN:			// Quit emulator
-			// Debug: Print register values for test ROMs
-			// Check both D0 and D5 for success markers (different test ROMs use different registers)
-			if (r->d[0] == 0xDEADBEEF || r->d[5] == 0xDEADBEEF || r->d[0] == 0xCAFEBABE) {
-				const char *marker_name = (r->d[0] == 0xDEADBEEF) ? "DEADBEEF" :
-				                         (r->d[0] == 0xCAFEBABE) ? "CAFEBABE" :
-				                         "DEADBEEF (D5)";
-				fprintf(stderr, "[TEST SUCCESS] D0=0x%08X D5=0x%08X - Success marker %s found!\n",
-				        r->d[0], r->d[5], marker_name);
-				fprintf(stderr, "[TEST] D7=0x%08X (test counter)\n", r->d[7]);
-			} else if ((r->d[0] & 0xFFFF0000) == 0xBAD00000) {
-				fprintf(stderr, "[TEST FAILURE] D0=0x%08X - Error marker detected!\n", r->d[0]);
-			}
-			// Always print register values for test debugging
-			fprintf(stderr, "[TEST] Register values at SHUTDOWN:\n");
-			fprintf(stderr, "  D0=0x%08X D1=0x%08X D2=0x%08X D3=0x%08X\n",
-			        r->d[0], r->d[1], r->d[2], r->d[3]);
-			fprintf(stderr, "  D4=0x%08X D5=0x%08X D6=0x%08X D7=0x%08X\n",
-			        r->d[4], r->d[5], r->d[6], r->d[7]);
-			fprintf(stderr, "  A0=0x%08X A1=0x%08X A2=0x%08X A3=0x%08X\n",
-			        r->a[0], r->a[1], r->a[2], r->a[3]);
-			fprintf(stderr, "  A4=0x%08X A5=0x%08X A6=0x%08X\n",
-			        r->a[4], r->a[5], r->a[6]);
 			QuitEmulator();
 			break;
 
@@ -319,13 +296,6 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_CLKNOMEM: {		// Clock/PRAM operations
 			bool is_read = (r->d[1] & 0x80) != 0;
-			static int clk_count = 0;
-			uint32_t d1_in = r->d[1];
-			uint32_t d2_in = r->d[2];
-			if (++clk_count <= 20 || clk_count == 100 || clk_count == 200 || clk_count >= 265) {
-				fprintf(stderr, "CLKNOMEM #%d: d1_in=0x%08x, d2_in=0x%08x, is_read=%d, reg_type=0x%02x\n",
-				        clk_count, d1_in, d2_in, is_read, (r->d[1] & 0x78));
-			}
 			if ((r->d[1] & 0x78) == 0x38) {
 				// XPRAM
 				uint8 reg = ((r->d[1] << 5) & 0xe0) | ((r->d[1] >> 10) & 0x1f);
@@ -384,32 +354,11 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 						case 3: b = t >> 24; break;
 					}
 					r->d[2] = b;
-					static uint32 last_t = 0;
-					static int same_count = 0;
-					if (t != last_t) {
-						if (same_count > 10) {
-							fprintf(stderr, "RTC: Time changed from 0x%08x to 0x%08x after %d reads\n", last_t, t, same_count);
-						}
-						last_t = t;
-						same_count = 0;
-					} else {
-						same_count++;
-						if (same_count == 100) {
-							fprintf(stderr, "RTC: Warning - time stuck at 0x%08x for 100 reads\n", t);
-						}
-					}
 				} else
 					D(bug("RTC %s op %d, d1 %08lx d2 %08lx\n", is_read ? "read" : "write", reg, r->d[1], r->d[2]));
 			}
 			r->d[0] = 0;
 			r->d[1] = r->d[2];
-
-			if (clk_count <= 20 || clk_count == 100 || clk_count == 200 || clk_count >= 265) {
-				fprintf(stderr, "CLKNOMEM #%d: RETURNS d0=0x%08x, d1=0x%08x (was 0x%08x), d2=0x%08x (was 0x%08x), SR=0x%04x\n",
-				        clk_count, r->d[0], r->d[1], d1_in, r->d[2], d2_in, r->sr);
-				fprintf(stderr, "CLKNOMEM #%d: Full state: A0=0x%08x A1=0x%08x A5=0x%08x A7=0x%08x\n",
-				        clk_count, r->a[0], r->a[1], r->a[5], r->a[7]);
-			}
 			break;
 		}
 
@@ -425,22 +374,10 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:	// Patch BootGlobs at startup
 			D(bug("Patch BootGlobs\n"));
-			// Debug: Log register values before changes
-			fprintf(stderr, "[PATCH_BOOT_GLOBS] BEFORE: A4=0x%08X, A6=0x%08X, RAMBaseMac=0x%08X, RAMSize=0x%08X\n",
-			        r->a[4], r->a[6], RAMBaseMac, RAMSize);
-
 			WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);			// MemTop
 			WriteMacInt8(r->a[4] - 26, 0);								// No MMU
 			WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) | 1);	// No MMU
 			r->a[6] = RAMBaseMac + RAMSize;
-
-			// Debug: Log register values after changes
-			fprintf(stderr, "[PATCH_BOOT_GLOBS] AFTER:  A4=0x%08X, A6=0x%08X (set to RAMBaseMac+RAMSize=0x%08X)\n",
-			        r->a[4], r->a[6], RAMBaseMac + RAMSize);
-			fprintf(stderr, "[PATCH_BOOT_GLOBS] Memory writes: MemTop at 0x%08X, MMU flags at 0x%08X/0x%08X\n",
-			        r->a[4] - 20, r->a[4] - 26, r->a[4] - 25);
-			fprintf(stderr, "[PATCH_BOOT_GLOBS] Return state: D0=%08X D1=%08X D2=%08X A0=%08X A1=%08X A2=%08X SR=%04X\n",
-			        r->d[0], r->d[1], r->d[2], r->a[0], r->a[1], r->a[2], (uint16_t)(r->sr & 0xFFFF));
 			break;
 
 		case M68K_EMUL_OP_FIX_BOOTSTACK:	// Set boot stack to 3/4 of RAM (7.5)
@@ -626,15 +563,8 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_SCSI_DISPATCH: {	// SCSIDispatch() replacement
-			// Debug: Log SCSI_DISPATCH details
-			fprintf(stderr, "[SCSI_DISPATCH] Entry - A7=0x%08x\n", r->a[7]);
-			fprintf(stderr, "[SCSI_DISPATCH] Registers: D0=0x%08x D1=0x%08x A0=0x%08x A1=0x%08x\n",
-			        r->d[0], r->d[1], r->a[0], r->a[1]);
-
 			uint32 ret = ReadMacInt32(r->a[7]);		// Get return address
 			uint16 sel = ReadMacInt16(r->a[7] + 4);	// Get selector
-
-			fprintf(stderr, "[SCSI_DISPATCH] Selector=%d, Return addr=0x%08x\n", sel, ret);
 
 			r->a[7] += 6;
 			int stack = 0;
@@ -693,51 +623,23 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			}
 			r->a[0] = ret;			// "rtd" emulation, a0 = return address, a1 = new stack pointer
 			r->a[1] = r->a[7] + stack;
-
-			fprintf(stderr, "[SCSI_DISPATCH] Exit - Stack adjusted by %d, returning to 0x%08x\n",
-			        stack, ret);
-			fprintf(stderr, "[SCSI_DISPATCH] Exit registers: A0=0x%08x A1=0x%08x A7=0x%08x\n",
-			        r->a[0], r->a[1], r->a[7]);
 			break;
 		}
 
 		case M68K_EMUL_OP_IRQ:			// Level 1 interrupt
-			static int irq_emulop_count = 0;
-			if (++irq_emulop_count <= 10) {
-				fprintf(stderr, "[EmulOp IRQ #%d] Called, InterruptFlags=0x%x\n",
-				        irq_emulop_count, InterruptFlags);
-			}
 			r->d[0] = 0;
-
-			// Timer is polled in hook_block (unicorn_wrapper.c) which is called before each
-			// translation block. With small instruction batches (10 per uc_emu_start in
-			// cpu_unicorn.cpp), hook_block gets called frequently enough to poll the timer
-			// and set InterruptFlags properly.
 
 			// Check if Unicorn backend has a pending interrupt that was blocked by SR
 			// This happens when ROM sets IPL=7 to disable CPU interrupts, then polls IRQ EmulOp
 			extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
-			if (irq_emulop_count <= 10) {
-				fprintf(stderr, "[EmulOp IRQ #%d] g_pending_interrupt_level=%d, InterruptFlags=0x%x\n",
-				        irq_emulop_count, g_pending_interrupt_level, InterruptFlags);
-			}
 			if (g_pending_interrupt_level > 0) {
-				if (irq_emulop_count <= 10) {
-					fprintf(stderr, "[EmulOp IRQ #%d] Processing blocked CPU interrupt (level %d)\n",
-					        irq_emulop_count, g_pending_interrupt_level);
-				}
-				// Clear the pending interrupt since we're processing it now
 				g_pending_interrupt_level = 0;
-				// Treat this as if INTFLAG_60HZ was set
 				if (InterruptFlags == 0) {
 					SetInterruptFlag(INTFLAG_60HZ);
 				}
 			}
 
 			if (InterruptFlags & INTFLAG_60HZ) {
-				if (irq_emulop_count <= 10) {
-					fprintf(stderr, "[EmulOp IRQ #%d] Clearing INTFLAG_60HZ\n", irq_emulop_count);
-				}
 				ClearInterruptFlag(INTFLAG_60HZ);
 
 				// Increment Ticks variable
@@ -825,13 +727,9 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 		case M68K_EMUL_OP_CHECKLOAD: {		// vCheckLoad() patch (resource loader)
 			uint32 type = r->d[1];
 			int16 id = ReadMacInt16(r->a[2]);
-			// Log resource type (4-char code) and ID
-			{
-				char t[5];
-				t[0] = (type >> 24) & 0xff; t[1] = (type >> 16) & 0xff;
-				t[2] = (type >> 8) & 0xff;  t[3] = type & 0xff; t[4] = 0;
-				fprintf(stderr, "[CHECKLOAD] type='%s' id=%d\n", t, id);
-			}
+			D(bug("CHECKLOAD type='%c%c%c%c' id=%d\n",
+				(type >> 24) & 0xff, (type >> 16) & 0xff,
+				(type >> 8) & 0xff, type & 0xff, id));
 			if (r->a[0] == 0)
 				break;
 			uint32 adr = ReadMacInt32(r->a[0]);

@@ -153,12 +153,14 @@ void unicorn_simulate_exception(UnicornCPU *cpu, int vector_nr, uint16_t opcode)
         vbr = 0;
     }
 
-    fprintf(stderr, "[DEBUG] VBR=0x%08X, vector_nr=%d, vector_addr=0x%08X\n",
-            vbr, vector_nr, vbr + (vector_nr * 4));
-
+    if (exception_verbose) {
+        fprintf(stderr, "[Exception] VBR=0x%08X, vector_nr=%d, vector_addr=0x%08X\n",
+                vbr, vector_nr, vbr + (vector_nr * 4));
+    }
     uint32_t handler_addr = read_long(cpu, vbr + (vector_nr * 4));
-
-    fprintf(stderr, "[DEBUG] Read handler_addr=0x%08X from vector table\n", handler_addr);
+    if (exception_verbose) {
+        fprintf(stderr, "[Exception] handler_addr=0x%08X, new_sp=0x%08X\n", handler_addr, a7);
+    }
 
     if (exception_verbose) {
         printf("  VBR=0x%08x, Handler=0x%08x, NewSP=0x%08x\n",

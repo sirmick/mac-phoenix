@@ -189,7 +189,7 @@ static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, con
  *   1. Block statistics
  *   2. Interrupt acknowledge (after delivery)
  *   3. Stale TB detection (SMC safety net)
- *   4. SCSI D5 workaround
+ *   4. SCSI timeout accelerator
  *   5. Timer polling (every 4096 blocks)
  *   6. Apply deferred register updates
  *   7. PC-based tracing trigger
@@ -215,7 +215,6 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
     if (g_interrupt_pending_ack) {
         g_interrupt_pending_ack = false;
         uc_m68k_trigger_interrupt(uc, 0, 0);
-
     }
 
     /* --- 3. Stale TB detector (SMC safety net) ---
@@ -237,14 +236,7 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
             if (seen[si].addr == (uint32_t)address) { found = si; break; }
         }
         if (found >= 0 && cur_bytes != seen[found].first_bytes) {
-            static int stale_warn_count = 0;
-            if (stale_warn_count++ < 20) {
-                fprintf(stderr, "[STALE-TB] Block 0x%08lx: mem=%08x was %08x at blk %llu (now %llu) -- flushing\n",
-                        (unsigned long)address, cur_bytes, seen[found].first_bytes,
-                        (unsigned long long)seen[found].first_block,
-                        (unsigned long long)cpu->block_stats.total_blocks);
-                uc_ctl_flush_tb(uc);
-            }
+            uc_ctl_flush_tb(uc);
             seen[found].first_bytes = cur_bytes;
             seen[found].first_block = cpu->block_stats.total_blocks;
         } else if (found < 0 && seen_count < 128) {
@@ -255,19 +247,41 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
         }
     }
 
-    /* --- 4. SCSI D5 workaround ---
-     * The SCSI probe at ROM 0x71F0 corrupts D5 from 240 (4 seconds) to 32766,
-     * causing a 545-second wait. Cap D5 to prevent this until we have proper
-     * SCSI emulation. Address 0x020014be is the timeout check: cmp.l (0x016A).w, D5 */
-    if (address == 0x020014be) {
-        static uint32_t original_d5 = 0;
-        uint32_t d5 = 0;
-        uc_reg_read(uc, UC_M68K_REG_D5, &d5);
-        if (original_d5 == 0 && d5 <= 1200)
-            original_d5 = d5;
-        if (d5 > 1200) {
-            d5 = original_d5 ? original_d5 : 240;
-            uc_reg_write(uc, UC_M68K_REG_D5, &d5);
+    /* --- 4. SCSI timeout accelerator ---
+     * ROM SCSI probe at 0x020014c0 busy-waits reading Mac Ticks ($016A):
+     *   0x14ca: cmpl $016A.w, D0   ; compare D0 with Ticks counter
+     *   0x14ce: bccs 0x14ca        ; loop until Ticks >= D0
+     * This burns millions of blocks. Skip the wait by advancing Ticks directly.
+     *
+     * Also cap D5 (outer loop counter) to prevent 545-second SCSI timeout. */
+    if (address == 0x020014be || address == 0x020014c0 || address == 0x020014ca) {
+        /* Cap D5 to prevent excessive SCSI timeout (240 = 4 seconds max) */
+        if (address == 0x020014be || address == 0x020014c0) {
+            uint32_t d5 = 0;
+            uc_reg_read(uc, UC_M68K_REG_D5, &d5);
+            if (d5 > 240) {
+                d5 = 240;
+                uc_reg_write(uc, UC_M68K_REG_D5, &d5);
+            }
+        }
+        /* Fast-forward Ticks to break busy-wait loop */
+        if (address == 0x020014ca) {
+            uint32_t d0 = 0;
+            uc_reg_read(uc, UC_M68K_REG_D0, &d0);
+            /* Read current Ticks from Mac low memory ($016A) */
+            extern uint8_t *RAMBaseHost;
+            if (RAMBaseHost) {
+                uint8_t *tp = RAMBaseHost + 0x016A;
+                uint32_t ticks = (tp[0]<<24)|(tp[1]<<16)|(tp[2]<<8)|tp[3];
+                if (ticks < d0) {
+                    /* Set Ticks = D0 to break the loop immediately */
+                    uint32_t new_ticks = d0;
+                    tp[0] = (new_ticks >> 24) & 0xFF;
+                    tp[1] = (new_ticks >> 16) & 0xFF;
+                    tp[2] = (new_ticks >> 8) & 0xFF;
+                    tp[3] = new_ticks & 0xFF;
+                }
+            }
         }
     }
 
@@ -277,25 +291,6 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
     extern uint64_t poll_timer_interrupt(void);
     if ((cpu->block_stats.total_blocks & 0xFFF) == 0) {
         poll_timer_interrupt();
-
-        /* Minimal boot progress tracking (every ~2M blocks) */
-        if ((cpu->block_stats.total_blocks & 0x1FFFFF) == 0) {
-            extern uint8_t *RAMBaseHost;
-            extern uint32_t RAMSize;
-            if (RAMBaseHost && RAMSize > 0x0b7c) {
-                static uint32_t prev_0b78 = 0xDEADBEEF;
-                uint8_t *p = RAMBaseHost + 0x0b78;
-                uint32_t val = (p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3];
-                if (val != prev_0b78) {
-                    uint32_t pc = 0;
-                    uc_reg_read(uc, UC_M68K_REG_PC, &pc);
-                    fprintf(stderr, "[DIAG] $0b78 CHANGED: 0x%08x -> 0x%08x at blocks=%lluM PC=0x%08x\n",
-                            prev_0b78, val,
-                            (unsigned long long)(cpu->block_stats.total_blocks >> 20), pc);
-                    prev_0b78 = val;
-                }
-            }
-        }
     }
 
     /* --- 6. Apply deferred register updates ---
@@ -384,7 +379,8 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                 apply_deferred_updates_and_flush(cpu, uc, "hook_interrupt");
             }
         }
-        /* Other A-line traps: let QEMU's exception mechanism handle them */
+        /* Other A-line traps: QEMU handles the exception natively
+         * (pushes stack frame, jumps to LINE-A vector handler) */
     }
 }
 

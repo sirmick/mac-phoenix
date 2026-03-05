@@ -39,8 +39,7 @@ extern void EmulOp(uint16_t opcode, struct M68kRegisters *r);
 extern int CPUType;          // CPU type from config (2=68020, 3=68030, 4=68040)
 
 static UnicornCPU *unicorn_cpu = NULL;
-static uint8_t *unicorn_dummy_buffer = NULL;  // Dummy region for UAE out-of-bounds compatibility
-static uint8_t *unicorn_high_mem_buffer = NULL;  // High memory region (hardware registers, etc.)
+// Dummy and high-memory regions now use uc_mmio_map (no host buffer needed)
 int unicorn_cpu_type = 2;   // Default to 68020 (extern for DualCPU)
 int unicorn_fpu_type = 0;   // Default to no FPU (extern for DualCPU)
 
@@ -182,13 +181,7 @@ static void dummy_bank_write(uc_engine *uc, uint64_t offset, unsigned size, uint
 static bool unicorn_unmapped_read_handler(uc_engine *uc, uc_mem_type type,
                                           uint64_t address, int size,
                                           int64_t value, void *user_data) {
-	(void)type; (void)value; (void)user_data;
-
-	static int read_count = 0;
-	if (++read_count <= 10) {
-		fprintf(stderr, "[Unicorn] Unmapped read at 0x%08lX (size=%d) - mapping zeroed region\n",
-		        address, size);
-	}
+	(void)type; (void)size; (void)value; (void)user_data;
 
 	const uint32_t map_size = 1024 * 1024;
 	uint32_t map_base = (address / map_size) * map_size;
@@ -208,13 +201,7 @@ static bool unicorn_unmapped_read_handler(uc_engine *uc, uc_mem_type type,
 static bool unicorn_unmapped_write_handler(uc_engine *uc, uc_mem_type type,
                                            uint64_t address, int size,
                                            int64_t value, void *user_data) {
-	(void)type; (void)user_data;
-
-	static int write_count = 0;
-	if (++write_count <= 10) {
-		fprintf(stderr, "[Unicorn] Unmapped write at 0x%08lX (size=%d, value=0x%lX) - mapping zeroed region\n",
-		        address, size, (unsigned long)value);
-	}
+	(void)type; (void)size; (void)value; (void)user_data;
 
 	const uint32_t map_size = 1024 * 1024;
 	uint32_t map_base = (address / map_size) * map_size;
@@ -236,7 +223,7 @@ static bool unicorn_unmapped_write_handler(uc_engine *uc, uc_mem_type type,
 // MMIO read callback - returns register values for hardware reads
 // Uses uc_cb_mmio_read_t signature: uint64_t(uc_engine*, uint64_t offset, unsigned size, void*)
 static uint64_t mmio_read_cb(uc_engine *uc, uint64_t offset, unsigned size, void *user_data) {
-	(void)uc; (void)user_data;
+	(void)uc; (void)size; (void)user_data;
 
 	uint8_t val = 0x00;
 
@@ -250,11 +237,6 @@ static uint64_t mmio_read_cb(uc_engine *uc, uint64_t offset, unsigned size, void
 			// the ROM's post-CLKNOMEM VIA1 polling just needs to see
 			// the data bit respond so it exits its verification loop.
 			val = mmio_via1_port_b | 0x04;
-			static int via1_portb_read_count = 0;
-			if (++via1_portb_read_count <= 20) {
-				fprintf(stderr, "[MMIO] VIA1 PortB read #%d: returning 0x%02x (stored=0x%02x)\n",
-				        via1_portb_read_count, val, mmio_via1_port_b);
-			}
 			break;
 		}
 		case 0x0200:  // vBufA - Port A
@@ -297,25 +279,10 @@ static uint64_t mmio_read_cb(uc_engine *uc, uint64_t offset, unsigned size, void
 			val = 0x00;
 			break;
 		}
-		static int via2_read_count = 0;
-		if (++via2_read_count <= 20) {
-			fprintf(stderr, "[MMIO] VIA2 read: offset=0x%05lx reg=0x%04x val=0x%02x\n",
-			        (unsigned long)offset, reg, val);
-		}
 	}
 	// Other hardware (SCC, SCSI, ASC, video, etc.)
 	else {
 		val = 0x00;
-		static int other_read_count = 0;
-		if (++other_read_count <= 50) {
-			const char *name = "unknown";
-			if (offset >= 0x4000 && offset < 0x6000) name = "SCC";
-			else if (offset >= 0x10000 && offset < 0x12000) name = "SCSI";
-			else if (offset >= 0x14000 && offset < 0x16000) name = "ASC";
-			else if (offset >= 0x24000 && offset < 0x26000) name = "DAFB";
-			fprintf(stderr, "[MMIO] %s read: offset=0x%05lx (size=%u)\n",
-			        name, (unsigned long)offset, size);
-		}
 	}
 
 	return (uint64_t)val;
@@ -324,7 +291,7 @@ static uint64_t mmio_read_cb(uc_engine *uc, uint64_t offset, unsigned size, void
 // MMIO write callback - tracks CPU writes to hardware registers
 // Uses uc_cb_mmio_write_t signature: void(uc_engine*, uint64_t offset, unsigned size, uint64_t value, void*)
 static void mmio_write_cb(uc_engine *uc, uint64_t offset, unsigned size, uint64_t value, void *user_data) {
-	(void)uc; (void)user_data;
+	(void)uc; (void)size; (void)value; (void)user_data;
 
 	uint8_t byte_val = (uint8_t)(value & 0xFF);
 
@@ -339,19 +306,9 @@ static void mmio_write_cb(uc_engine *uc, uint64_t offset, unsigned size, uint64_
 			break;
 		}
 	}
-	// Log writes to other hardware regions
+	// Other hardware regions - writes silently accepted
 	else {
-		static int write_count = 0;
-		if (++write_count <= 50) {
-			const char *name = "unknown";
-			if (offset >= 0x2000 && offset < 0x4000) name = "VIA2";
-			else if (offset >= 0x4000 && offset < 0x6000) name = "SCC";
-			else if (offset >= 0x10000 && offset < 0x12000) name = "SCSI";
-			else if (offset >= 0x14000 && offset < 0x16000) name = "ASC";
-			else if (offset >= 0x24000 && offset < 0x26000) name = "DAFB";
-			fprintf(stderr, "[MMIO] %s write: offset=0x%05lx = 0x%02x (size=%u)\n",
-			        name, (unsigned long)offset, byte_val, size);
-		}
+		// No action needed for VIA2/SCC/SCSI/ASC/DAFB writes
 	}
 }
 
@@ -390,8 +347,6 @@ static bool unicorn_backend_init(void) {
 	}
 
 	// Map RAM to Unicorn
-	fprintf(stderr, "[DEBUG] Mapping RAM to unicorn_cpu=%p: Mac=0x%08X Host=%p Size=0x%08X (%u MB)\n",
-		(void*)unicorn_cpu, RAMBaseMac, RAMBaseHost, RAMSize, RAMSize / (1024*1024));
 	if (!unicorn_map_ram(unicorn_cpu, RAMBaseMac, RAMBaseHost, RAMSize)) {
 		fprintf(stderr, "Failed to map RAM to Unicorn\n");
 		unicorn_destroy(unicorn_cpu);
@@ -400,8 +355,6 @@ static bool unicorn_backend_init(void) {
 	}
 
 	// Map ROM as writable (BasiliskII patches ROM during boot)
-	fprintf(stderr, "[DEBUG] Mapping ROM to unicorn_cpu=%p: Mac=0x%08X Host=%p Size=0x%08X (%u KB)\n",
-		(void*)unicorn_cpu, ROMBaseMac, ROMBaseHost, ROMSize, ROMSize / 1024);
 	if (!unicorn_map_rom_writable(unicorn_cpu, ROMBaseMac, ROMBaseHost, ROMSize)) {
 		fprintf(stderr, "Failed to map ROM to Unicorn\n");
 		unicorn_destroy(unicorn_cpu);
@@ -409,65 +362,73 @@ static bool unicorn_backend_init(void) {
 		return false;
 	}
 
-	// Map dummy region after ROM to handle UAE's out-of-bounds reads
-	// UAE has a bug where it reads past ROM end without bounds checking
-	// We need to provide the same memory layout that UAE sees for compatibility
-	uint32_t dummy_region_base = ROMBaseMac + ROMSize;
-	uint32_t dummy_region_size = 16 * 1024 * 1024;  // 16 MB
-	unicorn_dummy_buffer = (uint8_t *)malloc(dummy_region_size);
-	if (!unicorn_dummy_buffer) {
-		fprintf(stderr, "Failed to allocate dummy region buffer\n");
-		unicorn_destroy(unicorn_cpu);
-		unicorn_cpu = NULL;
-		return false;
+	// Map ScratchMem region (64KB after ROM) - used by ROM patches for fake hardware bases
+	// CRITICAL: This MUST be mapped separately from the dummy region below.
+	// ROM patches redirect hardware register accesses to ScratchMem addresses.
+	// Without this mapping, those accesses hit the dummy region (0xFF00FF00 pattern),
+	// causing ROM code to read garbage values and corrupt data structures (e.g., WDCB).
+	{
+		uint32_t scratch_base = ROMBaseMac + ROMSize;  // 0x02100000
+		uint32_t scratch_size = 0x10000;               // 64KB (SCRATCH_MEM_SIZE)
+		uint8_t *scratch_host = ROMBaseHost + ROMSize;  // Contiguous after ROM in host memory
+		memset(scratch_host, 0, scratch_size);  // Initialize to zeros (safe for hardware register reads)
+		if (!unicorn_map_ram(unicorn_cpu, scratch_base, scratch_host, scratch_size)) {
+			fprintf(stderr, "Failed to map ScratchMem to Unicorn\n");
+			unicorn_destroy(unicorn_cpu);
+			unicorn_cpu = NULL;
+			return false;
+		}
 	}
-	// Fill with 0xFF00FF00 pattern (same as UAE reads from uninitialized memory)
-	// Write in big-endian format for M68K
-	for (uint32_t i = 0; i < dummy_region_size; i += 4) {
-		unicorn_dummy_buffer[i + 0] = 0xFF;  // MSB
-		unicorn_dummy_buffer[i + 1] = 0x00;
-		unicorn_dummy_buffer[i + 2] = 0xFF;
-		unicorn_dummy_buffer[i + 3] = 0x00;  // LSB
-	}
-	if (!unicorn_map_ram(unicorn_cpu, dummy_region_base, unicorn_dummy_buffer, dummy_region_size)) {
-		fprintf(stderr, "Failed to map dummy region to Unicorn\n");
-		free(unicorn_dummy_buffer);
-		unicorn_dummy_buffer = NULL;
-		unicorn_destroy(unicorn_cpu);
-		unicorn_cpu = NULL;
-		return false;
-	}
-	fprintf(stderr, "[DEBUG] Dummy region mapped: 0x%08X - 0x%08X (%u MB) with 0xFF00FF00 pattern\n",
-		dummy_region_base, dummy_region_base + dummy_region_size, dummy_region_size / (1024*1024));
 
-	// Map high memory region (0xF0000000-0xFFFFFFFF) for hardware registers
-	// Matches UAE's behavior where the entire 4GB address space is backed by dummy_bank
-	// Addresses like 0xFFFFFFFE/0xFFFFFFFC are common hardware register placeholders
+	// Map frame buffer area (4MB after ScratchMem) — video drivers place framebuffer here
+	// Memory layout: [RAM 32MB][ROM 1MB][ScratchMem 64KB][FrameBuffer 4MB][Dummy ...]
+	{
+		uint32_t fb_base = ROMBaseMac + ROMSize + 0x10000;  // 0x02110000
+		uint32_t fb_size = 0x400000;  // 4MB (FRAMEBUFFER_AREA_SIZE)
+		uint8_t *fb_host = ROMBaseHost + ROMSize + 0x10000;  // Contiguous after ScratchMem
+		if (!unicorn_map_ram(unicorn_cpu, fb_base, fb_host, fb_size)) {
+			fprintf(stderr, "Failed to map frame buffer to Unicorn\n");
+			unicorn_destroy(unicorn_cpu);
+			unicorn_cpu = NULL;
+			return false;
+		}
+	}
+
+	// Map dummy region after FrameBuffer using MMIO callbacks (not uc_mem_map_ptr!)
+	// CRITICAL: Must use uc_mmio_map so reads ALWAYS return 0 and writes are silently dropped.
+	// With uc_mem_map_ptr (UC_PROT_ALL), ROM init code writes ff00ff00 to these addresses,
+	// and later reads get ff00ff00 back — cascading through the Memory Manager to corrupt
+	// the WDCB (Working Directory Control Block) and stall the file system.
+	// UAE's dummy_bank uses callbacks that always return 0, so we must match that behavior.
+	uint32_t dummy_region_base = ROMBaseMac + ROMSize + 0x10000 + 0x400000;  // 0x02510000
+	uint32_t dummy_region_size = 16 * 1024 * 1024 - 0x10000 - 0x400000;     // 16MB - 64KB - 4MB
+	{
+		uc_engine *dummy_uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
+		uc_err dummy_err = uc_mmio_map(dummy_uc, dummy_region_base, dummy_region_size,
+		                               dummy_bank_read, NULL,
+		                               dummy_bank_write, NULL);
+		if (dummy_err != UC_ERR_OK) {
+			fprintf(stderr, "Failed to map dummy region as MMIO: %s\n", uc_strerror(dummy_err));
+			unicorn_destroy(unicorn_cpu);
+			unicorn_cpu = NULL;
+			return false;
+		}
+	}
+	// Map high memory region using MMIO callbacks (same reasoning as dummy region)
 	uint32_t high_mem_base = 0xF0000000;
 	uint32_t high_mem_size = 0x10000000;  // 256 MB
-	unicorn_high_mem_buffer = (uint8_t *)malloc(high_mem_size);
-	if (!unicorn_high_mem_buffer) {
-		fprintf(stderr, "Failed to allocate high memory region buffer\n");
-		free(unicorn_dummy_buffer);
-		unicorn_dummy_buffer = NULL;
-		unicorn_destroy(unicorn_cpu);
-		unicorn_cpu = NULL;
-		return false;
+	{
+		uc_engine *high_uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
+		uc_err high_err = uc_mmio_map(high_uc, high_mem_base, high_mem_size,
+		                              dummy_bank_read, NULL,
+		                              dummy_bank_write, NULL);
+		if (high_err != UC_ERR_OK) {
+			fprintf(stderr, "Failed to map high memory region as MMIO: %s\n", uc_strerror(high_err));
+			unicorn_destroy(unicorn_cpu);
+			unicorn_cpu = NULL;
+			return false;
+		}
 	}
-	memset(unicorn_high_mem_buffer, 0, high_mem_size);
-	if (!unicorn_map_ram(unicorn_cpu, high_mem_base, unicorn_high_mem_buffer, high_mem_size)) {
-		fprintf(stderr, "Failed to map high memory region to Unicorn\n");
-		free(unicorn_high_mem_buffer);
-		unicorn_high_mem_buffer = NULL;
-		free(unicorn_dummy_buffer);
-		unicorn_dummy_buffer = NULL;
-		unicorn_destroy(unicorn_cpu);
-		unicorn_cpu = NULL;
-		return false;
-	}
-	fprintf(stderr, "[DEBUG] High memory region mapped: 0x%08X - 0x%08X (%u MB)\n",
-		high_mem_base, high_mem_base + high_mem_size - 1, high_mem_size / (1024*1024));
-
 	// Map hardware register region using uc_mmio_map for proper MMIO emulation
 	// uc_mmio_map provides read/write callbacks that are always invoked by the JIT,
 	// unlike UC_HOOK_MEM_READ which is bypassed for uc_mem_map_ptr regions.
@@ -477,10 +438,7 @@ static bool unicorn_backend_init(void) {
 		                              mmio_read_cb, NULL,
 		                              mmio_write_cb, NULL);
 		if (mmio_err != UC_ERR_OK) {
-			fprintf(stderr, "[MMIO] Warning: Failed to map MMIO region: %s\n", uc_strerror(mmio_err));
-		} else {
-			fprintf(stderr, "[MMIO] Hardware region mapped via uc_mmio_map: 0x%08X - 0x%08X (%u KB)\n",
-				MMIO_HW_BASE, MMIO_HW_BASE + MMIO_HW_SIZE - 1, MMIO_HW_SIZE / 1024);
+			fprintf(stderr, "[Unicorn] Failed to map MMIO region: %s\n", uc_strerror(mmio_err));
 		}
 	}
 
@@ -500,11 +458,7 @@ static bool unicorn_backend_init(void) {
 		                             dummy_bank_read, NULL,
 		                             dummy_bank_write, NULL);
 		if (gap_err != UC_ERR_OK) {
-			fprintf(stderr, "[MMIO] Warning: Failed to map NuBus gap 1 (0x%08X-0x%08X): %s\n",
-				gap1_base, gap1_base + gap1_size - 1, uc_strerror(gap_err));
-		} else {
-			fprintf(stderr, "[MMIO] NuBus gap 1 mapped as dummy_bank: 0x%08X - 0x%08X (%.0f MB)\n",
-				gap1_base, gap1_base + gap1_size - 1, gap1_size / (1024.0*1024.0));
+			fprintf(stderr, "[Unicorn] Failed to map NuBus gap 1: %s\n", uc_strerror(gap_err));
 		}
 
 		// Gap 2: After MMIO hardware to before high memory region
@@ -515,11 +469,7 @@ static bool unicorn_backend_init(void) {
 		                      dummy_bank_read, NULL,
 		                      dummy_bank_write, NULL);
 		if (gap_err != UC_ERR_OK) {
-			fprintf(stderr, "[MMIO] Warning: Failed to map NuBus gap 2 (0x%08X-0x%08X): %s\n",
-				gap2_base, gap2_base + gap2_size - 1, uc_strerror(gap_err));
-		} else {
-			fprintf(stderr, "[MMIO] NuBus gap 2 mapped as dummy_bank: 0x%08X - 0x%08X (%.0f MB)\n",
-				gap2_base, gap2_base + gap2_size - 1, gap2_size / (1024.0*1024.0));
+			fprintf(stderr, "[Unicorn] Failed to map NuBus gap 2: %s\n", uc_strerror(gap_err));
 		}
 	}
 
@@ -542,10 +492,6 @@ static bool unicorn_backend_init(void) {
 	if (err != UC_ERR_OK) {
 		fprintf(stderr, "Warning: Failed to register unmapped write hook: %s\n", uc_strerror(err));
 	}
-
-	fprintf(stderr, "[DEBUG] Unmapped memory hooks registered - MMIO dummy_bank for UAE compatibility\n");
-
-	fprintf(stderr, "[DEBUG] unicorn_cpu instance at init: %p\n", (void*)unicorn_cpu);
 
 	// Initialize CPU tracing from environment variable
 	cpu_trace_init();
@@ -621,13 +567,6 @@ static int unicorn_backend_execute_one(void) {
 		}
 
 		uint32_t pc = unicorn_get_pc(unicorn_cpu);
-
-		// Debug: Check for wrong PC
-		static int trace_count = 0;
-		if (++trace_count <= 5) {
-			fprintf(stderr, "[CPU TRACE #%d] About to trace PC=0x%08X, unicorn_cpu=%p\n",
-			        trace_count, pc, (void*)unicorn_cpu);
-		}
 
 		uint16_t opcode = 0;
 		uc_mem_read((uc_engine*)unicorn_get_uc(unicorn_cpu), pc, &opcode, sizeof(opcode));
@@ -808,13 +747,6 @@ static void unicorn_backend_execute_68k_trap(uint16_t trap, struct M68kRegisters
 	}
 	// DON'T set A7 or SR from r - use saved state for stack pointer
 
-	static int exec68k_count = 0;
-	++exec68k_count;
-	if (exec68k_count <= 50) {
-		fprintf(stderr, "[Execute68kTrap] #%d trap=0x%04x A7=0x%08x PC=0x%08x SR=0x%04x\n",
-		        exec68k_count, trap, saved_aregs[7], saved_pc, saved_sr);
-	}
-
 	// Push trap number and M68K_EXEC_RETURN on stack
 	// For Unicorn: use 0xAE00 (A-line EmulOp) instead of 0x7100 (which is MOVEQ in QEMU)
 	uint32_t sp = saved_aregs[7];
@@ -898,17 +830,20 @@ static void unicorn_backend_execute_68k(uint32_t addr, struct M68kRegisters *r) 
 		saved_aregs[i] = unicorn_get_areg(unicorn_cpu, i);
 	}
 
+	// Write caller's register values to CPU for parameter passing.
+	// TimerInterrupt sets A0=completion_addr, A1=TMTask_addr before calling.
+	for (int i = 0; i < 8; i++) {
+		unicorn_set_dreg(unicorn_cpu, i, r->d[i]);
+	}
+	for (int i = 0; i < 7; i++) {
+		unicorn_set_areg(unicorn_cpu, i, r->a[i]);
+	}
+	// DON'T set A7 or SR from r - use saved state for stack pointer
+
 	// Push M68K_EXEC_RETURN sentinel on stack, then push a fake return address
 	// that points to the sentinel. When the subroutine does RTS, it pops
 	// the return address and jumps to the sentinel opcode.
 	uint32_t sp = saved_aregs[7];
-
-	static int exec68k_sub_count = 0;
-	bool do_log = (++exec68k_sub_count <= 20);
-	if (do_log) {
-		fprintf(stderr, "[Execute68k] #%d addr=0x%08x A7=0x%08x PC=0x%08x\n",
-		        exec68k_sub_count, addr, sp, saved_pc);
-	}
 
 	// Push sentinel (EXEC_RETURN EmulOp)
 	sp -= 2;
@@ -938,9 +873,7 @@ static void unicorn_backend_execute_68k(uint32_t addr, struct M68kRegisters *r) 
 		uc_err err = uc_emu_start(uc, pc, 0xFFFFFFFF, 0, 0);
 
 		if (err != UC_ERR_OK) {
-			if (do_log) {
-				fprintf(stderr, "[Execute68k] uc_emu_start returned %d at PC=0x%08X\n", err, pc);
-			}
+			// Errors during Execute68k are often transient (uc_emu_stop)
 		}
 
 		if (g_exec68k_return_flag) {
@@ -951,8 +884,8 @@ static void unicorn_backend_execute_68k(uint32_t addr, struct M68kRegisters *r) 
 		iterations++;
 	}
 
-	if (!returned && do_log) {
-		fprintf(stderr, "[ERROR] Execute68k did not return after %d iterations (addr=0x%08x)\n",
+	if (!returned) {
+		fprintf(stderr, "[Unicorn] Execute68k did not return after %d iterations (addr=0x%08x)\n",
 		        iterations, addr);
 	}
 
@@ -1032,12 +965,6 @@ static uint8_t unicorn_mem_read_byte(uint32_t addr) {
 }
 
 static void unicorn_mem_write_long(uint32_t addr, uint32_t value) {
-	// Debug: Track writes to 0xcfc (WLSC marker)
-	if (addr == 0xcfc) {
-		fprintf(stderr, "[WLSC] Writing 0x%08x to 0xcfc (PC=0x%08x)\n",
-		        value, unicorn_cpu ? unicorn_get_pc(unicorn_cpu) : 0);
-	}
-
 	if (!unicorn_cpu) {
 		// Before Unicorn initialization: write to host memory directly
 		DirectWriteMacInt32(addr, value);

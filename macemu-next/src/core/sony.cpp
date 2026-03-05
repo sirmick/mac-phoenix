@@ -152,8 +152,9 @@ static drive_vec::iterator get_drive_info(int num)
 void SonyInit(void)
 {
 	// No drives specified in prefs? Then add defaults
-	if (PrefsFindString("floppy", 0) == NULL)
+	if (PrefsFindString("floppy", 0) == NULL) {
 		SysAddFloppyPrefs();
+	}
 
 	// Add drives specified in preferences
 	int index = 0;
@@ -259,8 +260,6 @@ static int16 set_dsk_err(int16 err)
 
 int16 SonyOpen(uint32 pb, uint32 dce)
 {
-	D(bug("SonyOpen\n"));
-
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
 	WriteMacInt16(dce + dCtlQHdr + qFlags, (ReadMacInt16(dce + dCtlQHdr + qFlags) & 0xff00) | 3);	// Version number, must be >=3 or System 8 will replace us

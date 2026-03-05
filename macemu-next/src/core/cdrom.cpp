@@ -316,7 +316,7 @@ static bool position2msf(const cdrom_drive_info &info, uint16 postype, uint32 po
 void CDROMInit(void)
 {
 	SysAddCDROMPrefs();
-	
+
 	// Add drives specified in preferences
 	int index = 0;
 	const char *str;
@@ -331,7 +331,6 @@ void CDROMInit(void)
 	    drives.push_back(cdrom_drive_info());
 	    drives.begin()->init_null = true;
 	}
-
 }
 
 void CDROMDrop(const char *path) {
@@ -503,8 +502,6 @@ uint16 InsertNewDriverUnit(uint32 handle) {
 
 int16 CDROMOpen(uint32 pb, uint32 dce)
 {
-	D(bug("CDROMOpen\n"));
-	
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
 	acc_run_called = false;

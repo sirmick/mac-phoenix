@@ -59,115 +59,6 @@ static void one_second(void)
 
 	SetInterruptFlag(INTFLAG_1HZ);
 	// Note: TriggerInterrupt() will be called from poll_timer_interrupt()
-
-	// Minimal 1Hz heartbeat with stall diagnostics
-	extern Platform g_platform;
-	uint32 val_0b78 = ReadMacInt32(0x0b78);
-	uint32 cur_pc = 0;
-	if (g_platform.cpu_get_pc) cur_pc = g_platform.cpu_get_pc();
-	fprintf(stderr, "[TIMER 1Hz] sec=%llu $0b78=0x%08x PC=0x%08x backend=%s\n",
-			(unsigned long long)interrupt_count / 60,
-			val_0b78, cur_pc,
-			g_platform.cpu_name ? g_platform.cpu_name : "?");
-
-	// One-time dump at sec=5: show instructions near stall PC and key low-memory globals
-	static bool dumped = false;
-	if (!dumped && interrupt_count / 60 >= 5) {
-		dumped = true;
-		fprintf(stderr, "[STALL DIAG] PC=0x%08x, dumping 16 words:\n  ", cur_pc);
-		for (int i = -4; i < 12; i++) {
-			uint16 w = ReadMacInt16(cur_pc + i * 2);
-			fprintf(stderr, "%s%04x ", (i == 0) ? ">>>" : "", w);
-		}
-		fprintf(stderr, "\n");
-		// Key low-memory globals
-		fprintf(stderr, "[STALL DIAG] MemTop=$0108=%08x BufPtr=$010C=%08x\n",
-				ReadMacInt32(0x0108), ReadMacInt32(0x010C));
-		fprintf(stderr, "[STALL DIAG] ScrnBase=$0824=%08x MainDev=$0DD0=%08x\n",
-				ReadMacInt32(0x0824), ReadMacInt32(0x0DD0));
-		fprintf(stderr, "[STALL DIAG] BootGlobs=$0DDC=%08x ROMBase=$02AE=%08x\n",
-				ReadMacInt32(0x0DDC), ReadMacInt32(0x02AE));
-		// Check HasMacStarted (WLSC at $0CFC) and ioResult at polling address
-		fprintf(stderr, "[STALL DIAG] WLSC=$0CFC=%08x HasMacStarted=%d\n",
-				ReadMacInt32(0x0CFC), ReadMacInt32(0x0CFC) == 0x574C5343);
-		// Dump pending I/O parameter block (FSQ tail)
-		uint32 fsq_tail = ReadMacInt32(0x0366);
-		if (fsq_tail != 0) {
-			fprintf(stderr, "[STALL DIAG] FSQ tail PB @%08x:\n", fsq_tail);
-			fprintf(stderr, "  qLink=%08x qType=%04x ioTrap=%04x ioCmdAddr=%08x\n",
-					ReadMacInt32(fsq_tail), ReadMacInt16(fsq_tail+4),
-					ReadMacInt16(fsq_tail+6), ReadMacInt32(fsq_tail+8));
-			fprintf(stderr, "  ioCompletion=%08x ioResult=%04x ioNamePtr=%08x\n",
-					ReadMacInt32(fsq_tail+0x0c), ReadMacInt16(fsq_tail+0x10),
-					ReadMacInt32(fsq_tail+0x12));
-			fprintf(stderr, "  ioVRefNum=%04x ioRefNum=%04x\n",
-					ReadMacInt16(fsq_tail+0x16), ReadMacInt16(fsq_tail+0x18));
-			// First 64 bytes hex dump
-			fprintf(stderr, "  hex: ");
-			for (int i = 0; i < 32; i++) {
-				fprintf(stderr, "%02x", ReadMacInt8(fsq_tail + i));
-				if (i % 4 == 3) fprintf(stderr, " ");
-			}
-			fprintf(stderr, "\n");
-		}
-		fprintf(stderr, "[STALL DIAG] Ticks=$016a=%08x\n", ReadMacInt32(0x016a));
-		fprintf(stderr, "[STALL DIAG] DrvQHdr: flags=%04x head=%08x tail=%08x\n",
-				ReadMacInt16(0x0308), ReadMacInt32(0x030A), ReadMacInt32(0x030E));
-		// FSQHdr at 0x0360: flags(2) + head(4) + tail(4)
-		fprintf(stderr, "[STALL DIAG] FSQHdr: flags=%04x head=%08x tail=%08x\n",
-				ReadMacInt16(0x0360), ReadMacInt32(0x0362), ReadMacInt32(0x0366));
-		// VCBQHdr at 0x0356: flags(2) + head(4) + tail(4)
-		fprintf(stderr, "[STALL DIAG] VCBQHdr: flags=%04x head=%08x tail=%08x\n",
-				ReadMacInt16(0x0356), ReadMacInt32(0x0358), ReadMacInt32(0x035c));
-		// Dump CPU registers to understand what resource is being searched
-		if (g_platform.cpu_get_dreg && g_platform.cpu_get_areg) {
-			fprintf(stderr, "[STALL DIAG] D0=%08x D1=%08x D2=%08x D3=%08x\n",
-					g_platform.cpu_get_dreg(0), g_platform.cpu_get_dreg(1),
-					g_platform.cpu_get_dreg(2), g_platform.cpu_get_dreg(3));
-			fprintf(stderr, "[STALL DIAG] D4=%08x D5=%08x D6=%08x D7=%08x\n",
-					g_platform.cpu_get_dreg(4), g_platform.cpu_get_dreg(5),
-					g_platform.cpu_get_dreg(6), g_platform.cpu_get_dreg(7));
-			fprintf(stderr, "[STALL DIAG] A0=%08x A1=%08x A2=%08x A3=%08x\n",
-					g_platform.cpu_get_areg(0), g_platform.cpu_get_areg(1),
-					g_platform.cpu_get_areg(2), g_platform.cpu_get_areg(3));
-			fprintf(stderr, "[STALL DIAG] A4=%08x A5=%08x A6=%08x A7=%08x\n",
-					g_platform.cpu_get_areg(4), g_platform.cpu_get_areg(5),
-					g_platform.cpu_get_areg(6), g_platform.cpu_get_areg(7));
-		}
-		// Dump memory at A4 (current linked list node) and follow chain
-		if (g_platform.cpu_get_areg) {
-			uint32 a4 = g_platform.cpu_get_areg(4);
-			fprintf(stderr, "[STALL DIAG] Memory chain from A4=0x%08x:\n", a4);
-			uint32 node = a4;
-			for (int step = 0; step < 8 && node != 0; step++) {
-				fprintf(stderr, "  [%d] @%08x: link=%08x +$15=%02x +$1c=%04x +$28=%04x\n",
-						step, node,
-						ReadMacInt32(node),        // linked list pointer
-						ReadMacInt8(node + 0x15),  // compared with D6
-						ReadMacInt16(node + 0x1c), // compared with A2
-						ReadMacInt16(node + 0x28));// compared with D3
-				node = ReadMacInt32(node);  // follow chain
-			}
-		}
-		// Check drive status record if head is non-zero
-		// DrvQHdr head points to dsQLink (offset +6 into DrvSts)
-		// So DrvSts base = head - 6
-		uint32 qElem = ReadMacInt32(0x030A);
-		while (qElem != 0) {
-			uint32 drvBase = qElem - 6;  // dsQLink is at offset 6
-			fprintf(stderr, "[STALL DIAG] Drive @%08x: dsDiskInPlace=%02x dsInstalled=%02x "
-					"dsWriteProt=%02x qType=%04x dQDrive=%04x dQRefNum=%04x dQFSID=%04x\n",
-					drvBase,
-					ReadMacInt8(drvBase + 3),   // dsDiskInPlace
-					ReadMacInt8(drvBase + 4),   // dsInstalled
-					ReadMacInt8(drvBase + 2),   // dsWriteProt
-					ReadMacInt16(drvBase + 10), // dsQType
-					ReadMacInt16(drvBase + 12), // dsQDrive (drive number)
-					ReadMacInt16(drvBase + 14), // dsQRefNum
-					ReadMacInt16(drvBase + 16));// dsQFSID
-			qElem = ReadMacInt32(qElem);  // Follow qLink to next
-		}
-	}
 }
 
 /*
@@ -192,18 +83,6 @@ static void one_tick(void)
 
 	// Set 60Hz interrupt flag
 	SetInterruptFlag(INTFLAG_60HZ);
-
-	// Trigger CPU-level interrupt via platform API
-	// IMPORTANT: Only trigger interrupts after Mac has booted!
-	// This matches BasiliskII's check (main_unix.cpp:1486)
-	//
-	// During early boot, Mac ROM initializes interrupt vectors and other critical
-	// state. Taking interrupts too early can cause crashes or divergence between
-	// different CPU backends. BasiliskII checks HasMacStarted() before triggering
-	// 60Hz interrupts.
-	//
-	// The ROM_VERSION_CLASSIC check allows Classic Mac ROMs (Plus, SE) to bypass
-	// this guard as they have different boot sequences.
 
 	// Trigger CPU-level interrupt
 	// IMPORTANT: Must deliver interrupts BEFORE Mac starts to allow boot to progress

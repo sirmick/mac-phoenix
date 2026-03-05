@@ -151,55 +151,28 @@ static void find_hfs_partition(disk_drive_info &info)
 
 void DiskInit(void)
 {
-	fprintf(stderr, "[DiskInit] Starting disk initialization\n");
-	fflush(stderr);
-
 	// No drives specified in prefs? Then add defaults
-	const char *first_disk = PrefsFindString("disk", 0);
-	fprintf(stderr, "[DiskInit] First disk from prefs: %s\n", first_disk ? first_disk : "NULL");
-	fflush(stderr);
-
-	if (first_disk == NULL) {
-		fprintf(stderr, "[DiskInit] No disks in prefs, calling SysAddDiskPrefs()\n");
-		fflush(stderr);
+	if (PrefsFindString("disk", 0) == NULL)
 		SysAddDiskPrefs();
-	}
 
 	// Add drives specified in preferences
 	int index = 0;
 	const char *str;
 	while ((str = PrefsFindString("disk", index++)) != NULL) {
-		fprintf(stderr, "[DiskInit] Processing disk %d: %s\n", index-1, str);
-		fflush(stderr);
-
 		bool read_only = false;
 		if (str[0] == '*') {
 			read_only = true;
 			str++;
 		}
 		D(bug(" trying to open disk: %s\n", str));
-		fprintf(stderr, "[DiskInit] Calling Sys_open(%s, %d)\n", str, read_only);
-		fflush(stderr);
-
 		void *fh = Sys_open(str, read_only);
-
-		fprintf(stderr, "[DiskInit] Sys_open returned: %p\n", fh);
-		fflush(stderr);
-
 		if (fh) {
 			D(bug(" disk opened successfully, fh=%p\n", fh));
 			drives.push_back(disk_drive_info(fh, SysIsReadOnly(fh)));
-			fprintf(stderr, "[DiskInit] SUCCESS: Disk added to drives list\n");
-			fflush(stderr);
 		} else {
 			D(bug(" ERROR: Sys_open returned NULL for %s\n", str));
-			fprintf(stderr, "[DiskInit] ERROR: Sys_open returned NULL for %s\n", str);
-			fflush(stderr);
 		}
 	}
-
-	fprintf(stderr, "[DiskInit] Disk initialization complete, %zu drives\n", drives.size());
-	fflush(stderr);
 }
 
 
@@ -280,7 +253,7 @@ static void mount_mountable_volumes(void)
 
 int16 DiskOpen(uint32 pb, uint32 dce)
 {
-	fprintf(stderr, "DiskOpen: %d drives\n", (int)drives.size());
+	D(bug("DiskOpen: %d drives\n", (int)drives.size()));
 
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
@@ -294,17 +267,13 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 		info->to_be_mounted = false;
 
 		if (info->fh) {
-			fprintf(stderr, "  Drive %d: fh=%p\n", info->num, info->fh);
 
 			// Allocate drive status record
 			M68kRegisters r;
 			r.d[0] = SIZEOF_DrvSts;
 			Execute68kTrap(0xa71e, &r);		// NewPtrSysClear()
-			fprintf(stderr, "  NewPtrSysClear(%d) -> 0x%08x\n", SIZEOF_DrvSts, r.a[0]);
-			if (r.a[0] == 0) {
-				fprintf(stderr, "  FAILED: NewPtrSysClear returned NULL, skipping drive\n");
+			if (r.a[0] == 0)
 				continue;
-			}
 			info->status = r.a[0];
 
 			// Set up drive status
@@ -324,17 +293,11 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 				if (info->start_byte == 0)
 					info->num_blocks = uint32(SysGetFileSize(info->fh) / 512);
 				info->to_be_mounted = true;
-				fprintf(stderr, "  Disk in place: %d blocks, start=%lld, fixed=%d\n",
-						info->num_blocks, (long long)info->start_byte,
-						SysIsFixedDisk(info->fh));
-			} else {
-				fprintf(stderr, "  No disk in place\n");
 			}
 			WriteMacInt16(info->status + dsDriveSize, info->num_blocks & 0xffff);
 			WriteMacInt16(info->status + dsDriveS1, info->num_blocks >> 16);
 
 			// Add drive to drive queue
-			fprintf(stderr, "  AddDrive(%d, refNum=%d)\n", info->num, DiskRefNum);
 			r.d[0] = (info->num << 16) | (DiskRefNum & 0xffff);
 			r.a[0] = info->status + dsQLink;
 			Execute68kTrap(0xa04e, &r);	// AddDrive()
@@ -577,8 +540,30 @@ int16 DiskStatus(uint32 pb, uint32 dce)
 
 void DiskInterrupt(void)
 {
-	if (!acc_run_called)
-		return;
-
+	// In BasiliskII, accRun (DiskControl(65)) gates this function.
+	// accRun fires when SystemTask() calls the Device Manager for dNeedTime
+	// drivers, which only happens once the event loop is running (i.e., the
+	// Finder has launched). This natural delay ensures diskEvents are posted
+	// AFTER an application exists to receive them.
+	//
+	// In Unicorn, accRun never fires because the ROM subroutine at 0x1250
+	// (which sets up dNeedTime) is NOPed to avoid a netBOOT hang.
+	// We replicate the timing by waiting until CurApName ($0910) is set,
+	// indicating an application (the Finder) has launched.
+	if (!acc_run_called) {
+		// Check CurApName ($0910) for "Finder" specifically.
+		// During INIT loading, CurApName is momentarily set to INIT names
+		// (caught by 60Hz interrupt but missed by 1Hz timer). We must wait
+		// for the actual Finder to be running before posting diskEvents.
+		uint8 name_len = ReadMacInt8(0x0910);
+		if (name_len != 6)
+			return;
+		// Compare "Finder"
+		if (ReadMacInt8(0x0911) != 'F' || ReadMacInt8(0x0912) != 'i' ||
+		    ReadMacInt8(0x0913) != 'n' || ReadMacInt8(0x0914) != 'd' ||
+		    ReadMacInt8(0x0915) != 'e' || ReadMacInt8(0x0916) != 'r')
+			return;
+		acc_run_called = true;
+	}
 	mount_mountable_volumes();
 }

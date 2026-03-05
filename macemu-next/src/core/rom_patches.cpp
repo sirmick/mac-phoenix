@@ -764,6 +764,36 @@ void InstallDrivers(uint32 pb)
 	r.d[0] = 0xa08d;
 	Execute68kTrap(0xa247, &r);		// SetOSTrapAddress()
 
+	// Install .Sony driver
+	// On Quadra ROMs, the ROM normally opens .Sony via a subroutine at ROM+0x1250
+	// (called from ROM+0x1134). That subroutine also opens .netBOOT which hangs in
+	// Unicorn when $0DD3 bit 5 is set. The JSR at ROM+0x1134 is NOPed to prevent
+	// the hang, so we must install .Sony explicitly here.
+	{
+		uint32 utab = ReadMacInt32(0x11c);
+		uint32 sony_slot = ~SonyRefNum * 4;
+		uint32 existing = ReadMacInt32(utab + sony_slot);
+		if (existing == 0) {
+			// .Sony not yet installed — install it
+			r.a[0] = ROMBaseMac + sony_offset;
+			r.d[0] = (uint32)SonyRefNum;
+			Execute68kTrap(0xa43d, &r);		// DrvrInstallRsrvMem()
+			r.a[0] = ReadMacInt32(ReadMacInt32(0x11c) + sony_slot);
+			Execute68kTrap(0xa029, &r);		// HLock()
+			uint32 sony_dce = ReadMacInt32(r.a[0]);
+			WriteMacInt32(sony_dce + dCtlDriver, ROMBaseMac + sony_offset);
+			WriteMacInt16(sony_dce + dCtlFlags, SonyDriverFlags);
+
+			// Open .Sony driver
+			WriteMacInt32(pb + ioNamePtr, ROMBaseMac + sony_offset + 0x12);
+			r.a[0] = pb;
+			Execute68kTrap(0xa000, &r);		// Open()
+			D(bug("InstallDrivers: installed .Sony (refnum %d)\n", SonyRefNum));
+		} else {
+			D(bug("InstallDrivers: .Sony already installed at slot %d\n", (int)(sony_slot / 4)));
+		}
+	}
+
 	// Install disk driver
 	r.a[0] = ROMBaseMac + sony_offset + 0x100;
 	r.d[0] = (uint32)DiskRefNum;
@@ -1459,12 +1489,13 @@ static bool patch_rom_32(void)
 	}
 
 	// Don't open .Sound driver but install our own drivers
-	// Also NOP the JSR at ROM+0x1134 which calls a subroutine that opens
-	// the "netBOOT" driver based on $0DD3 bit 5. In Unicorn, $0DD3 can be
-	// non-zero causing an unwanted _Open that hangs in the Sony driver.
-	wp = (uint16 *)(ROMBaseHost + 0x1134);
-	*wp++ = htons(M68K_NOP);	// NOP out JSR (4EBA)
-	*wp++ = htons(M68K_NOP);	// NOP out displacement (011A)
+	// The JSR at ROM+0x1134 calls subroutine at ROM+0x1250 which:
+	//   1) BSR.L 0x41E6 — opens .Sony conditionally (preserves this)
+	//   2) GetNamedResource/Open ".netBOOT" — hangs in Unicorn (kill this)
+	// Surgical fix: insert RTS at ROM+0x1256 (right after the BSR.L to 0x41E6)
+	// so the .Sony open runs but .netBOOT is skipped.
+	wp = (uint16 *)(ROMBaseHost + 0x1256);
+	*wp = htons(M68K_RTS);
 	wp = (uint16 *)(ROMBaseHost + 0x1142);
 	*wp = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
 
