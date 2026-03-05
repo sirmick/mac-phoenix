@@ -225,37 +225,13 @@ static void build_cpufunctbl (void)
 				: cpu_level == 1 ? op_smalltbl_3_ff
 				: op_smalltbl_4_ff);
 
-	fprintf(stderr, "DEBUG: cpu_level=%d, tbl=%p, op_smalltbl_1_ff=%p\n",
-	        cpu_level, (void*)tbl, (void*)op_smalltbl_1_ff);
-	fprintf(stderr, "DEBUG: tbl[0]: handler=%p specific=%d opcode=0x%x\n",
-	        (void*)tbl[0].handler, tbl[0].specific, tbl[0].opcode);
-	fprintf(stderr, "DEBUG: sizeof(struct cputbl)=%zu, sizeof(cpuop_func*)=%zu\n",
-	        sizeof(struct cputbl), sizeof(cpuop_func*));
-	// Print raw bytes
-	unsigned char *raw = (unsigned char*)&tbl[0];
-	fprintf(stderr, "DEBUG: tbl[0] raw bytes:");
-	for (int b = 0; b < 16; b++) {
-		fprintf(stderr, " %02x", raw[b]);
-	}
-	fprintf(stderr, "\n");
-
 	for (opcode = 0; opcode < 65536; opcode++)
 		cpufunctbl[cft_map (opcode)] = op_illg_1;
 
-	int filled_count = 0;
 	for (i = 0; tbl[i].handler != NULL; i++) {
-		if (! tbl[i].specific) {
-			unsigned int mapped_idx = cft_map(tbl[i].opcode);
-			cpufunctbl[mapped_idx] = tbl[i].handler;
-			// Debug first few interesting opcodes
-			if (tbl[i].opcode == 0x4efa || tbl[i].opcode == 0x2100) {
-				fprintf(stderr, "DEBUG: tbl[%d] opcode=0x%04x -> cpufunctbl[0x%04x] = %p\n",
-				        i, tbl[i].opcode, mapped_idx, (void*)tbl[i].handler);
-			}
-			filled_count++;
-		}
+		if (! tbl[i].specific)
+			cpufunctbl[cft_map(tbl[i].opcode)] = tbl[i].handler;
 	}
-	fprintf(stderr, "DEBUG: Filled %d opcodes from op_smalltbl\n", filled_count);
 	for (opcode = 0; opcode < 65536; opcode++) {
 		cpuop_func *f;
 

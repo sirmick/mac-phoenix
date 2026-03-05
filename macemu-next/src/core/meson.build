@@ -5,6 +5,7 @@ core_sources = [
   'cdrom.cpp',
   'cpu_context.cpp',  # Phase 2: Self-contained CPU context
   'disk.cpp',
+  'boot_progress.cpp',
   'emul_op.cpp',
   'emulator_init.cpp',  # Deferred initialization support
   'ether.cpp',
