@@ -1,3 +1,8 @@
+/* Needed for clock_gettime / CLOCK_MONOTONIC */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 /*
  * unicorn_exec_loop.c - Execution loop for Unicorn CPU backend
  *
@@ -9,6 +14,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <time.h>
 #include <unicorn/unicorn.h>
 #include <unicorn/m68k.h>
 
@@ -16,6 +22,13 @@ typedef struct UnicornCPU UnicornCPU;
 
 extern void* unicorn_get_uc(UnicornCPU *cpu);
 extern bool unicorn_handle_illegal(UnicornCPU *cpu, uint32_t pc);
+extern void unicorn_perf_add_emu_start(UnicornCPU *cpu, uint64_t ns);
+
+static inline uint64_t exec_now_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
 
 /*
  * Main execution loop.
@@ -48,7 +61,9 @@ int unicorn_execute_with_interrupts(UnicornCPU *cpu, int max_iterations) {
          * NOTE: timeout > 0 also causes regressions with M68K (breaks boot),
          * so we use timeout=0 as well.
          */
+        uint64_t t0 = exec_now_ns();
         uc_err err = uc_emu_start(uc, pc, 0xFFFFFFFF, 0, 0);
+        unicorn_perf_add_emu_start(cpu, exec_now_ns() - t0);
         iterations++;
 
         if (err == UC_ERR_INSN_INVALID) {

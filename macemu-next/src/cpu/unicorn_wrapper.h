@@ -89,6 +89,10 @@ const char* unicorn_get_error(UnicornCPU *cpu);
 /* Block statistics */
 void unicorn_print_block_stats(UnicornCPU *cpu);
 
+/* Performance counters */
+void unicorn_print_perf_counters(UnicornCPU *cpu);
+void unicorn_perf_add_emu_start(UnicornCPU *cpu, uint64_t ns);
+
 /* Interrupt triggering (for platform API) */
 void unicorn_trigger_interrupt_internal(int level);
 extern volatile int g_pending_interrupt_level;

@@ -45,6 +45,26 @@ volatile bool g_exec68k_return_flag = false;
 static bool g_interrupt_pending_ack = false;
 
 
+/* Performance counters */
+typedef struct {
+    uint64_t hook_block_ns;         /* Total time in hook_block() */
+    uint64_t hook_interrupt_ns;     /* Total time in hook_interrupt() (EmulOps) */
+    uint64_t interrupt_delivery_ns; /* Time in interrupt stop/start cycle */
+    uint64_t emu_start_ns;          /* Time inside uc_emu_start() */
+    uint64_t deferred_update_ns;    /* Time applying deferred register updates */
+    uint64_t timer_poll_ns;         /* Time in poll_timer_interrupt() */
+    uint64_t emulop_count;          /* Number of EmulOp dispatches */
+    uint64_t interrupt_count;       /* Number of interrupt deliveries */
+    uint64_t emu_start_count;       /* Number of uc_emu_start() calls */
+    uint64_t timer_poll_count;      /* Number of timer polls */
+} PerfCounters;
+
+static inline uint64_t perf_now_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+
 /* Block statistics for timing analysis */
 typedef struct {
     uint64_t total_blocks;
@@ -73,6 +93,9 @@ struct UnicornCPU {
 
     /* Block statistics */
     BlockStats block_stats;
+
+    /* Performance counters */
+    PerfCounters perf;
 
     /* Deferred SR update */
     bool has_deferred_sr_update;
@@ -197,6 +220,7 @@ static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, con
  */
 static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
+    uint64_t hook_start = perf_now_ns();
 
     /* --- 1. Block statistics --- */
     cpu->block_stats.total_blocks++;
@@ -290,13 +314,20 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
      * 4096 blocks * ~6 insns/block = ~25K instructions between polls. */
     extern uint64_t poll_timer_interrupt(void);
     if ((cpu->block_stats.total_blocks & 0xFFF) == 0) {
+        uint64_t t0 = perf_now_ns();
         poll_timer_interrupt();
+        cpu->perf.timer_poll_ns += perf_now_ns() - t0;
+        cpu->perf.timer_poll_count++;
     }
 
     /* --- 6. Apply deferred register updates ---
      * EmulOp handlers defer register changes that must be applied
      * before the next instruction executes. */
-    apply_deferred_updates_and_flush(cpu, uc, "hook_block");
+    {
+        uint64_t t0 = perf_now_ns();
+        apply_deferred_updates_and_flush(cpu, uc, "hook_block");
+        cpu->perf.deferred_update_ns += perf_now_ns() - t0;
+    }
 
     /* --- 7. PC-based tracing trigger --- */
     if (!cpu->pc_trace_enabled) {
@@ -324,6 +355,7 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
         int current_ipl = ((sr & 0xFFFF) >> 8) & 7;
 
         if (g_pending_interrupt_level > current_ipl) {
+            uint64_t t0 = perf_now_ns();
             uint8_t vector = (g_pending_interrupt_level == 1) ? 0x19 :
                            (0x18 + g_pending_interrupt_level);
 
@@ -331,8 +363,12 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
             g_pending_interrupt_level = 0;
             g_interrupt_pending_ack = true;
             uc_emu_stop(uc);
+            cpu->perf.interrupt_delivery_ns += perf_now_ns() - t0;
+            cpu->perf.interrupt_count++;
         }
     }
+
+    cpu->perf.hook_block_ns += perf_now_ns() - hook_start;
 }
 
 /**
@@ -341,6 +377,7 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
  */
 static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
+    uint64_t intr_start = perf_now_ns();
 
     /* A-line exception (interrupt #10) */
     if (intno == 10) {
@@ -382,6 +419,9 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
         /* Other A-line traps: QEMU handles the exception natively
          * (pushes stack frame, jumps to LINE-A vector handler) */
     }
+
+    cpu->perf.hook_interrupt_ns += perf_now_ns() - intr_start;
+    cpu->perf.emulop_count++;
 }
 
 /**
@@ -677,6 +717,59 @@ void unicorn_enable_tracing(UnicornCPU *cpu, bool enable) {
         uc_hook_del(cpu->uc, cpu->trace_hook);
         cpu->trace_hook = 0;
     }
+}
+
+/* Performance counter helpers */
+void unicorn_perf_add_emu_start(UnicornCPU *cpu, uint64_t ns) {
+    if (cpu) {
+        cpu->perf.emu_start_ns += ns;
+        cpu->perf.emu_start_count++;
+    }
+}
+
+/* Print performance counters */
+void unicorn_print_perf_counters(UnicornCPU *cpu) {
+    if (!cpu) return;
+    PerfCounters *p = &cpu->perf;
+
+    fprintf(stderr, "\n=== Unicorn Performance Counters ===\n");
+
+    double total_s = (double)p->emu_start_ns / 1e9;
+    fprintf(stderr, "Wall time in uc_emu_start():  %8.3f s  (%llu calls, %.1f us/call)\n",
+            total_s, (unsigned long long)p->emu_start_count,
+            p->emu_start_count ? (double)p->emu_start_ns / p->emu_start_count / 1e3 : 0);
+
+    fprintf(stderr, "  hook_block() total:        %8.3f s  (%.1f%% of emu_start)\n",
+            (double)p->hook_block_ns / 1e9,
+            p->emu_start_ns ? (double)p->hook_block_ns * 100.0 / p->emu_start_ns : 0);
+
+    fprintf(stderr, "    timer polling:           %8.3f s  (%llu polls, %.1f us/poll)\n",
+            (double)p->timer_poll_ns / 1e9,
+            (unsigned long long)p->timer_poll_count,
+            p->timer_poll_count ? (double)p->timer_poll_ns / p->timer_poll_count / 1e3 : 0);
+
+    fprintf(stderr, "    deferred updates:        %8.3f s\n",
+            (double)p->deferred_update_ns / 1e9);
+
+    fprintf(stderr, "    interrupt delivery:       %8.3f s  (%llu interrupts, %.1f us/int)\n",
+            (double)p->interrupt_delivery_ns / 1e9,
+            (unsigned long long)p->interrupt_count,
+            p->interrupt_count ? (double)p->interrupt_delivery_ns / p->interrupt_count / 1e3 : 0);
+
+    fprintf(stderr, "  hook_interrupt() total:    %8.3f s  (%llu EmulOps, %.1f us/op)\n",
+            (double)p->hook_interrupt_ns / 1e9,
+            (unsigned long long)p->emulop_count,
+            p->emulop_count ? (double)p->hook_interrupt_ns / p->emulop_count / 1e3 : 0);
+
+    /* Compute JIT execution time = emu_start - hook_block - hook_interrupt */
+    uint64_t jit_ns = p->emu_start_ns;
+    if (jit_ns > p->hook_block_ns) jit_ns -= p->hook_block_ns;
+    if (jit_ns > p->hook_interrupt_ns) jit_ns -= p->hook_interrupt_ns;
+    fprintf(stderr, "  JIT execution (estimated): %8.3f s  (%.1f%% of emu_start)\n",
+            (double)jit_ns / 1e9,
+            p->emu_start_ns ? (double)jit_ns * 100.0 / p->emu_start_ns : 0);
+
+    fprintf(stderr, "========================================\n\n");
 }
 
 /* Print block statistics */

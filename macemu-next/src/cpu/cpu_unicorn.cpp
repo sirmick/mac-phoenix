@@ -501,6 +501,7 @@ static bool unicorn_backend_init(void) {
 	if (!atexit_registered) {
 		atexit([]() {
 			if (unicorn_cpu) {
+				unicorn_print_perf_counters(unicorn_cpu);
 				unicorn_print_block_stats(unicorn_cpu);
 			}
 		});
