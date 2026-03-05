@@ -359,12 +359,6 @@ void uae_mem_write_word(uint32_t addr, uint16_t val) {
 }
 
 void uae_mem_write_long(uint32_t addr, uint32_t val) {
-    // Debug: Track writes to 0xcfc (WLSC marker)
-    if (addr == 0xcfc) {
-        fprintf(stderr, "[WLSC] UAE Writing 0x%08x to 0xcfc (PC=0x%08x)\n",
-                val, m68k_getpc());
-    }
-
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
     if (!m) return;  // Out-of-range access ignored
     do_put_mem_long(m, val);
@@ -454,12 +448,20 @@ extern "C" void uae_m68k_execute_fast(void) {
     m68k_setpc(pc);
     fill_prefetch_0();
 
-    MakeSR();  // Materialize lazy SR for debug output
-    fprintf(stderr, "[UAE Fast] PC=0x%08x SR=0x%04x A7=0x%08x pc_p=%p before m68k_execute()\n",
-            pc, (unsigned)regs.sr, m68k_areg(regs, 7), (void*)regs.pc_p);
-    fflush(stderr);
-    m68k_execute();  // Call the C++ version
-    fprintf(stderr, "[UAE Fast] Exited m68k_execute() loop\n");
-    fflush(stderr);
+    // Reset timer to avoid accumulated ticks from init→start delay (WebRTC mode)
+    // Without this, timer interrupts fire before the M68K vector table is set up,
+    // causing jumps to uninitialized vectors (garbage addresses).
+    setup_timer_interrupt();
+
+    // Clear stale state from init EmulOps
+    extern bool quit_program;
+    if (quit_program) {
+        quit_program = false;
+    }
+    if (regs.spcflags) {
+        regs.spcflags = 0;
+    }
+
+    m68k_execute();
 }
 
