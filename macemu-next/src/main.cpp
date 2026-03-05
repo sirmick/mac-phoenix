@@ -212,7 +212,6 @@ int main(int argc, char **argv)
 
 	// Install platform drivers (video/audio)
 	if (emu_config.enable_webrtc) {
-		// WebRTC mode: Install WebRTC drivers (will launch encoder threads)
 		printf("Installing WebRTC video/audio drivers...\n");
 		g_platform.video_init = [](bool classic) -> bool {
 			return video_webrtc_init(classic, webrtc::g_config);
@@ -221,16 +220,13 @@ int main(int argc, char **argv)
 		g_platform.video_refresh = video_webrtc_refresh;
 		g_platform.audio_init = audio_webrtc_init;
 		g_platform.audio_exit = audio_webrtc_exit;
-	} else if (getenv("MACEMU_SCREENSHOTS")) {
-		// Headless mode with screenshot capture
-		printf("Installing screenshot video driver (MACEMU_SCREENSHOTS)...\n");
+	} else if (emu_config.screenshots) {
+		printf("Installing screenshot video driver...\n");
 		g_platform.video_init = video_screenshot_init;
 		g_platform.video_exit = video_screenshot_exit;
 		g_platform.video_refresh = video_screenshot_refresh;
 	} else {
-		// Headless mode: Keep null drivers (no threads)
 		printf("Using null video/audio drivers (headless mode)...\n");
-		// null drivers already installed by platform_init()
 	}
 
 	// ========================================
@@ -298,19 +294,16 @@ int main(int argc, char **argv)
 			printf("[CPU] WebRTC mode - CPU will start when user clicks 'Start' in web UI\n");
 		}
 
-		// Optional auto-exit timer (set EMULATOR_TIMEOUT=2 for 2 seconds)
-		const char *timeout_env = getenv("EMULATOR_TIMEOUT");
-		if (timeout_env) {
-			int timeout_sec = atoi(timeout_env);
-			if (timeout_sec > 0) {
-				printf("Auto-exit timer set: %d seconds\n", timeout_sec);
-				std::thread timeout_thread([timeout_sec]() {
-					std::this_thread::sleep_for(std::chrono::seconds(timeout_sec));
-					fprintf(stderr, "\n[Timeout: %d seconds elapsed, exiting]\n", timeout_sec);
-					exit(0);
-				});
-				timeout_thread.detach();
-			}
+		// Auto-exit timer (--timeout or EMULATOR_TIMEOUT env var)
+		if (emu_config.timeout_seconds > 0) {
+			int timeout_sec = emu_config.timeout_seconds;
+			printf("Auto-exit timer set: %d seconds\n", timeout_sec);
+			std::thread timeout_thread([timeout_sec]() {
+				std::this_thread::sleep_for(std::chrono::seconds(timeout_sec));
+				fprintf(stderr, "\n[Timeout: %d seconds elapsed, exiting]\n", timeout_sec);
+				exit(0);
+			});
+			timeout_thread.detach();
 		}
 	} else {
 		// WebUI mode without ROM: Skip init, will be done via API
@@ -329,8 +322,8 @@ int main(int argc, char **argv)
 		api_context.debug_mode_switch = emu_config.debug_mode_switch;
 		api_context.debug_perf = emu_config.debug_perf;
 		api_context.prefs_path = default_config_path;
-		api_context.roms_path = webrtc_config.web.storage_dir + "/roms";
-		api_context.images_path = webrtc_config.web.storage_dir + "/images";
+		api_context.roms_path = emu_config.storage_dir + "/roms";
+		api_context.images_path = emu_config.storage_dir + "/images";
 		api_context.server_codec = &server_codec;
 		api_context.cpu_running = &cpu_state::g_running;  // CPU state control
 		api_context.cpu_mutex = &cpu_state::g_mutex;
@@ -345,10 +338,10 @@ int main(int argc, char **argv)
 
 		// Initialize WebRTC signaling server
 		printf("\n=== WebRTC Mode ===\n");
-		printf("Launching HTTP server on port %d...\n", webrtc_config.web.http_port);
+		printf("Launching HTTP server on port %d...\n", emu_config.http_port);
 
 		webrtc::WebRTCServer webrtc_server;
-		if (!webrtc_server.init(8090)) {  // WebSocket signaling on port 8090
+		if (!webrtc_server.init(emu_config.signaling_port)) {
 			fprintf(stderr, "Failed to start WebRTC signaling server\n");
 			return 1;
 		}
@@ -435,7 +428,7 @@ int main(int argc, char **argv)
 			printf("[CPU Thread] CPU execution thread exiting\n");
 		});
 
-		printf("Emulator ready. Open http://localhost:%d in your browser.\n", webrtc_config.web.http_port);
+		printf("Emulator ready. Open http://localhost:%d in your browser.\n", emu_config.http_port);
 		if (g_cpu_ctx.is_initialized()) {
 			printf("CPU loaded. Click 'Start' in the web UI to begin emulation.\n");
 		} else {

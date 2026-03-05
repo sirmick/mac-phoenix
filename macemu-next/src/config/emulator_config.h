@@ -4,9 +4,8 @@
  *  Single source of truth for emulator configuration, combining:
  *  - JSON config file
  *  - Command-line arguments (overrides)
+ *  - Environment variables (lowest priority overrides)
  *  - Sensible defaults
- *
- *  Replaces the old prefs system for core emulation settings.
  */
 
 #ifndef EMULATOR_CONFIG_H
@@ -18,17 +17,11 @@
 
 namespace config {
 
-/*
- * Architecture type (future: will support PPC)
- */
 enum class Architecture {
     M68K,
     PPC  // Not yet implemented
 };
 
-/*
- * M68K CPU type
- */
 enum class M68KCPUType {
     M68000 = 0,
     M68010 = 1,
@@ -37,9 +30,6 @@ enum class M68KCPUType {
     M68040 = 4
 };
 
-/*
- * CPU backend selection (M68K only)
- */
 enum class CPUBackend {
     UAE,      // Original interpreter
     Unicorn,  // QEMU-based JIT
@@ -49,76 +39,56 @@ enum class CPUBackend {
 /*
  * Unified emulator configuration
  *
- * This structure contains all settings needed to initialize and run
- * the emulator. It's the single source of truth, populated from:
- * 1. JSON config file
- * 2. Command-line arguments (which override JSON)
- * 3. Defaults (if not specified)
+ * Priority order (highest to lowest):
+ * 1. Command-line arguments
+ * 2. JSON config file
+ * 3. Environment variables
+ * 4. Defaults (below)
  */
 struct EmulatorConfig {
-    // ========================================
     // Architecture
-    // ========================================
     Architecture architecture = Architecture::M68K;
 
-    // ========================================
     // Memory
-    // ========================================
-    uint32_t ram_mb = 32;  // Default: 32 MB
+    uint32_t ram_mb = 32;
 
-    // ========================================
-    // CPU (M68K)
-    // ========================================
+    // CPU
     M68KCPUType cpu_type = M68KCPUType::M68040;
     bool fpu = true;
     CPUBackend cpu_backend = CPUBackend::UAE;
 
-    // ========================================
     // ROM
-    // ========================================
-    std::string rom_path;  // Full resolved path to ROM file
+    std::string rom_path;
 
-    // ========================================
     // Disks
-    // ========================================
-    std::vector<std::string> disk_paths;  // Full resolved paths
+    std::vector<std::string> disk_paths;
     std::vector<std::string> cdrom_paths;
 
-    // ========================================
     // Video
-    // ========================================
-    uint32_t screen_width = 1024;
-    uint32_t screen_height = 768;
+    uint32_t screen_width = 640;
+    uint32_t screen_height = 480;
+    bool screenshots = false;  // Dump /tmp/macemu_screen_*.ppm
 
-    // ========================================
     // Audio
-    // ========================================
     bool audio_enabled = true;
 
-    // ========================================
     // Platform Drivers
-    // ========================================
-    bool enable_webrtc = true;  // WebRTC video/audio drivers
+    bool enable_webrtc = true;
 
-    // ========================================
-    // WebRTC Settings (only if enable_webrtc = true)
-    // ========================================
-    int http_port = 8000;
+    // WebRTC/HTTP (only if enable_webrtc = true)
+    int http_port = 8080;
     int signaling_port = 8090;
-    std::string storage_dir;  // Base directory for ROM/disk scanning
+    std::string storage_dir;
 
-    // ========================================
+    // Timeout (0 = no timeout)
+    int timeout_seconds = 0;
+
     // Debug
-    // ========================================
     bool debug_connection = false;
     bool debug_mode_switch = false;
     bool debug_perf = false;
 
-    // ========================================
-    // Helper Methods
-    // ========================================
-
-    // Convert CPU backend enum to string
+    // Helpers
     const char* cpu_backend_string() const {
         switch (cpu_backend) {
             case CPUBackend::UAE: return "uae";
@@ -128,77 +98,49 @@ struct EmulatorConfig {
         return "uae";
     }
 
-    // Convert M68K CPU type to integer (for UAE)
     int cpu_type_int() const {
         return static_cast<int>(cpu_type);
     }
 
-    // Convert architecture to string
     const char* architecture_string() const {
         return (architecture == Architecture::M68K) ? "m68k" : "ppc";
     }
 };
 
 /*
- * Load emulator configuration from multiple sources
+ * Load emulator configuration from all sources.
  *
- * Priority order (highest to lowest):
- * 1. Command-line arguments
- * 2. JSON config file
- * 3. Defaults (in EmulatorConfig struct)
+ * Priority: CLI args > JSON config > env vars > defaults
  *
- * Args:
- *   config_path: Path to JSON config file (can be NULL for defaults)
- *   argc, argv: Command-line arguments (will be modified - consumed args set to NULL)
- *
- * Returns:
- *   Populated EmulatorConfig
- *
- * CLI argument format:
- *   --config <path>         Override config file path
- *   --arch m68k|ppc         Override architecture
- *   --ram <mb>              Override RAM size (in MB)
- *   --cpu <0-4>             Override CPU type (M68K only)
- *   --fpu / --no-fpu        Override FPU setting
- *   --backend uae|unicorn|dualcpu  Override CPU backend
- *   --disk <path>           Add disk image (can be specified multiple times)
+ * CLI arguments:
+ *   --config <path>         Config file path (default: ~/.config/macemu-next/config.json)
+ *   --rom <path>            ROM file path
+ *   --disk <path>           Disk image (repeatable)
+ *   --cdrom <path>          CD-ROM image (repeatable)
+ *   --ram <mb>              RAM size in MB
+ *   --cpu <0-4>             CPU type (68000-68040)
+ *   --fpu / --no-fpu        FPU emulation
+ *   --backend <name>        CPU backend: uae, unicorn, dualcpu
+ *   --screen <WxH>          Screen resolution (e.g. 640x480)
+ *   --port <n>              HTTP port
+ *   --timeout <sec>         Auto-exit after N seconds
+ *   --screenshots           Enable screenshot dumping
  *   --no-webserver          Disable WebRTC (headless mode)
- *   <rom-path>              ROM file path (positional argument)
+ *   --debug-connection      Debug WebRTC connections
+ *   --debug-mode-switch     Debug video mode switches
+ *   --debug-perf            Debug performance
+ *   <rom-path>              Positional: ROM file path
+ *
+ * Environment variables (lowest priority):
+ *   CPU_BACKEND             uae, unicorn, dualcpu
+ *   EMULATOR_TIMEOUT        Auto-exit timeout in seconds
+ *   MACEMU_SCREENSHOTS      Enable screenshot mode (any value)
  */
 EmulatorConfig load_emulator_config(const char* config_path,
                                       int& argc,
                                       char** argv);
 
-/*
- * Load from JSON config only (no CLI overrides)
- * Used internally by load_emulator_config()
- */
-EmulatorConfig load_from_json(const char* config_path);
-
-/*
- * Apply CLI argument overrides to config
- * Modifies argc/argv: consumed arguments are set to NULL
- * Returns: ROM path if found as positional argument, else NULL
- */
-const char* apply_cli_overrides(EmulatorConfig& config,
-                                  int& argc,
-                                  char** argv);
-
-/*
- * Resolve ROM path from config or CLI argument
- *
- * Logic:
- * - If rom_path is absolute (/... or ~/...), use as-is
- * - Otherwise, resolve relative to storage_dir/roms/
- *
- * Returns: Full resolved path
- */
-std::string resolve_rom_path(const std::string& rom_filename,
-                               const std::string& storage_dir);
-
-/*
- * Print configuration to stderr (for debugging)
- */
+// Print configuration summary to stderr
 void print_config(const EmulatorConfig& config);
 
 }  // namespace config

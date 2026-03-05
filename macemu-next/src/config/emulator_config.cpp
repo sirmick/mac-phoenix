@@ -3,10 +3,11 @@
  */
 
 #include "emulator_config.h"
-#include "config_manager.h"
+#include "json_utils.h"
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
+#include <fstream>
 #include <unistd.h>
 #include <sys/stat.h>
 
@@ -20,266 +21,273 @@ static bool file_exists(const char* path) {
 
 // Helper: Expand ~ to home directory
 static std::string expand_home(const std::string& path) {
-    if (path.empty() || path[0] != '~') {
-        return path;
-    }
+    if (path.empty() || path[0] != '~') return path;
     const char* home = getenv("HOME");
-    if (!home) {
-        return path;  // Can't expand
-    }
+    if (!home) return path;
     return std::string(home) + path.substr(1);
 }
 
-/*
- * Load from JSON config only (no CLI overrides)
- */
-EmulatorConfig load_from_json(const char* config_path) {
-    EmulatorConfig config;
-
-    // If no config path, return defaults
-    if (!config_path) {
-        fprintf(stderr, "[Config] No config file specified, using defaults\n");
-        return config;
-    }
-
-    // Check if config file exists
-    std::string expanded_path = expand_home(config_path);
-    if (!file_exists(expanded_path.c_str())) {
-        fprintf(stderr, "[Config] Config file not found: %s (using defaults)\n",
-                expanded_path.c_str());
-        return config;
-    }
-
-    // Load JSON config using existing config_manager
-    fprintf(stderr, "[Config] Loading config from: %s\n", expanded_path.c_str());
-    MacemuConfig json_config = config::load_config(expanded_path);
-
-    // Extract values from JSON config
-    // Architecture
-    if (json_config.web.emulator == "ppc") {
-        config.architecture = Architecture::PPC;
-    } else {
-        config.architecture = Architecture::M68K;
-    }
-
-    // Memory
-    config.ram_mb = json_config.common.ram;
-
-    // CPU (use m68k section for now)
-    config.cpu_type = static_cast<M68KCPUType>(json_config.m68k.cpu);
-    config.fpu = json_config.m68k.fpu;
-
-    // ROM (not resolved yet - just store filename)
-    config.rom_path = json_config.m68k.rom;
-
-    // Disks
-    config.disk_paths = json_config.m68k.disks;
-    config.cdrom_paths = json_config.m68k.cdroms;
-
-    // Video
-    // Parse "1024x768" format
-    size_t x_pos = json_config.common.screen.find('x');
-    if (x_pos != std::string::npos) {
-        config.screen_width = std::stoi(json_config.common.screen.substr(0, x_pos));
-        config.screen_height = std::stoi(json_config.common.screen.substr(x_pos + 1));
-    }
-
-    // Audio
-    config.audio_enabled = json_config.common.sound;
-
-    // WebRTC settings
-    config.http_port = json_config.web.http_port;
-    config.storage_dir = json_config.web.storage_dir;
-
-    // Backend (default to UAE, can be overridden by CLI)
-    config.cpu_backend = CPUBackend::UAE;
-
-    fprintf(stderr, "[Config] JSON config loaded successfully\n");
-    return config;
+// Helper: Parse "WIDTHxHEIGHT" string
+static bool parse_screen(const std::string& s, uint32_t& w, uint32_t& h) {
+    size_t x = s.find('x');
+    if (x == std::string::npos) return false;
+    w = std::stoi(s.substr(0, x));
+    h = std::stoi(s.substr(x + 1));
+    return w > 0 && h > 0;
 }
 
 /*
- * Apply CLI argument overrides to config
+ * Load from JSON config file
  */
-const char* apply_cli_overrides(EmulatorConfig& config,
-                                  int& argc,
-                                  char** argv) {
-    const char* rom_path = nullptr;
+static void load_from_json(EmulatorConfig& config, const char* path) {
+    if (!path) return;
 
-    // Parse arguments
-    for (int i = 1; i < argc; i++) {
-        if (!argv[i]) continue;  // Skip already-consumed args
+    std::string expanded = expand_home(path);
+    if (!file_exists(expanded.c_str())) {
+        fprintf(stderr, "[Config] No config file at %s, using defaults\n", expanded.c_str());
+        return;
+    }
 
-        // --config <path> (already processed by caller, just consume it)
-        if (strcmp(argv[i], "--config") == 0 && i+1 < argc) {
-            argv[i] = nullptr;
-            argv[i+1] = nullptr;
-            i++;
-            continue;
+    fprintf(stderr, "[Config] Loading: %s\n", expanded.c_str());
+
+    try {
+        auto j = json_utils::parse_file(expanded);
+
+        // CPU / Memory
+        if (j.contains("cpu")) {
+            auto& cpu = j["cpu"];
+            if (cpu.contains("type")) {
+                int t = json_utils::get_int(cpu, "type");
+                if (t >= 0 && t <= 4) config.cpu_type = static_cast<M68KCPUType>(t);
+            }
+            if (cpu.contains("fpu")) config.fpu = json_utils::get_bool(cpu, "fpu");
+            if (cpu.contains("backend")) {
+                std::string b = json_utils::get_string(cpu, "backend");
+                if (b == "unicorn") config.cpu_backend = CPUBackend::Unicorn;
+                else if (b == "dualcpu") config.cpu_backend = CPUBackend::DualCPU;
+                else config.cpu_backend = CPUBackend::UAE;
+            }
         }
 
-        // --arch m68k|ppc
-        if (strcmp(argv[i], "--arch") == 0 && i+1 < argc) {
-            if (strcmp(argv[i+1], "ppc") == 0) {
-                config.architecture = Architecture::PPC;
-            } else {
-                config.architecture = Architecture::M68K;
+        if (j.contains("ram")) config.ram_mb = json_utils::get_int(j, "ram");
+
+        // ROM
+        if (j.contains("rom")) config.rom_path = json_utils::get_string(j, "rom");
+
+        // Storage
+        if (j.contains("disks")) config.disk_paths = json_utils::get_string_array(j, "disks");
+        if (j.contains("cdroms")) config.cdrom_paths = json_utils::get_string_array(j, "cdroms");
+
+        // Video
+        if (j.contains("screen")) {
+            std::string s = json_utils::get_string(j, "screen");
+            uint32_t w, h;
+            if (parse_screen(s, w, h)) {
+                config.screen_width = w;
+                config.screen_height = h;
             }
-            argv[i] = nullptr;
-            argv[i+1] = nullptr;
-            i++;
-            continue;
+        }
+        if (j.contains("audio")) config.audio_enabled = json_utils::get_bool(j, "audio");
+
+        // Web
+        if (j.contains("web")) {
+            auto& web = j["web"];
+            if (web.contains("enabled")) config.enable_webrtc = json_utils::get_bool(web, "enabled");
+            if (web.contains("http_port")) config.http_port = json_utils::get_int(web, "http_port");
+            if (web.contains("signaling_port")) config.signaling_port = json_utils::get_int(web, "signaling_port");
+            if (web.contains("storage_dir")) config.storage_dir = json_utils::get_string(web, "storage_dir");
+        }
+
+        // Legacy format support: "common", "m68k", "web" sections
+        if (j.contains("common")) {
+            auto& common = j["common"];
+            if (common.contains("ram")) config.ram_mb = json_utils::get_int(common, "ram");
+            if (common.contains("screen")) {
+                std::string s = json_utils::get_string(common, "screen");
+                uint32_t w, h;
+                if (parse_screen(s, w, h)) {
+                    config.screen_width = w;
+                    config.screen_height = h;
+                }
+            }
+            if (common.contains("sound")) config.audio_enabled = json_utils::get_bool(common, "sound");
+        }
+        if (j.contains("m68k")) {
+            auto& m68k = j["m68k"];
+            if (m68k.contains("rom")) config.rom_path = json_utils::get_string(m68k, "rom");
+            if (m68k.contains("cpu")) {
+                int t = json_utils::get_int(m68k, "cpu");
+                if (t >= 0 && t <= 4) config.cpu_type = static_cast<M68KCPUType>(t);
+            }
+            if (m68k.contains("fpu")) config.fpu = json_utils::get_bool(m68k, "fpu");
+            if (m68k.contains("disks")) config.disk_paths = json_utils::get_string_array(m68k, "disks");
+            if (m68k.contains("cdroms")) config.cdrom_paths = json_utils::get_string_array(m68k, "cdroms");
+        }
+
+    } catch (const std::exception& e) {
+        fprintf(stderr, "[Config] JSON parse error: %s\n", e.what());
+    }
+}
+
+/*
+ * Apply CLI argument overrides
+ */
+static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char** argv) {
+    const char* rom_path = nullptr;
+    bool backend_set_by_cli = false;
+    bool timeout_set_by_cli = false;
+    bool screenshots_set_by_cli = false;
+
+    for (int i = 1; i < argc; i++) {
+        if (!argv[i]) continue;
+
+        // --config <path> (consumed, already processed)
+        if (strcmp(argv[i], "--config") == 0 && i+1 < argc) {
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --rom <path>
+        if (strcmp(argv[i], "--rom") == 0 && i+1 < argc) {
+            config.rom_path = argv[i+1];
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --disk <path> (repeatable)
+        if (strcmp(argv[i], "--disk") == 0 && i+1 < argc) {
+            config.disk_paths.push_back(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --cdrom <path> (repeatable)
+        if (strcmp(argv[i], "--cdrom") == 0 && i+1 < argc) {
+            config.cdrom_paths.push_back(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
         // --ram <mb>
         if (strcmp(argv[i], "--ram") == 0 && i+1 < argc) {
             config.ram_mb = static_cast<uint32_t>(atoi(argv[i+1]));
-            argv[i] = nullptr;
-            argv[i+1] = nullptr;
-            i++;
-            continue;
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
         // --cpu <0-4>
         if (strcmp(argv[i], "--cpu") == 0 && i+1 < argc) {
             int cpu = atoi(argv[i+1]);
-            if (cpu >= 0 && cpu <= 4) {
-                config.cpu_type = static_cast<M68KCPUType>(cpu);
-            }
-            argv[i] = nullptr;
-            argv[i+1] = nullptr;
-            i++;
-            continue;
+            if (cpu >= 0 && cpu <= 4) config.cpu_type = static_cast<M68KCPUType>(cpu);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
-        // --fpu
+        // --fpu / --no-fpu
         if (strcmp(argv[i], "--fpu") == 0) {
-            config.fpu = true;
-            argv[i] = nullptr;
-            continue;
+            config.fpu = true; argv[i] = nullptr; continue;
         }
-
-        // --no-fpu
         if (strcmp(argv[i], "--no-fpu") == 0) {
-            config.fpu = false;
-            argv[i] = nullptr;
-            continue;
+            config.fpu = false; argv[i] = nullptr; continue;
         }
 
-        // --backend uae|unicorn|dualcpu
+        // --backend <name>
         if (strcmp(argv[i], "--backend") == 0 && i+1 < argc) {
-            if (strcmp(argv[i+1], "unicorn") == 0) {
-                config.cpu_backend = CPUBackend::Unicorn;
-            } else if (strcmp(argv[i+1], "dualcpu") == 0) {
-                config.cpu_backend = CPUBackend::DualCPU;
-            } else {
-                config.cpu_backend = CPUBackend::UAE;
+            if (strcmp(argv[i+1], "unicorn") == 0) config.cpu_backend = CPUBackend::Unicorn;
+            else if (strcmp(argv[i+1], "dualcpu") == 0) config.cpu_backend = CPUBackend::DualCPU;
+            else config.cpu_backend = CPUBackend::UAE;
+            backend_set_by_cli = true;
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --screen <WxH>
+        if (strcmp(argv[i], "--screen") == 0 && i+1 < argc) {
+            uint32_t w, h;
+            if (parse_screen(argv[i+1], w, h)) {
+                config.screen_width = w;
+                config.screen_height = h;
             }
-            argv[i] = nullptr;
-            argv[i+1] = nullptr;
-            i++;
-            continue;
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --port <n>
+        if (strcmp(argv[i], "--port") == 0 && i+1 < argc) {
+            config.http_port = atoi(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --timeout <sec>
+        if (strcmp(argv[i], "--timeout") == 0 && i+1 < argc) {
+            config.timeout_seconds = atoi(argv[i+1]);
+            timeout_set_by_cli = true;
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --screenshots
+        if (strcmp(argv[i], "--screenshots") == 0) {
+            config.screenshots = true;
+            screenshots_set_by_cli = true;
+            argv[i] = nullptr; continue;
         }
 
         // --no-webserver
         if (strcmp(argv[i], "--no-webserver") == 0) {
             config.enable_webrtc = false;
-            argv[i] = nullptr;
-            continue;
+            argv[i] = nullptr; continue;
         }
 
-        // --debug-connection
+        // --arch m68k|ppc
+        if (strcmp(argv[i], "--arch") == 0 && i+1 < argc) {
+            if (strcmp(argv[i+1], "ppc") == 0) config.architecture = Architecture::PPC;
+            else config.architecture = Architecture::M68K;
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // Debug flags
         if (strcmp(argv[i], "--debug-connection") == 0) {
-            config.debug_connection = true;
-            argv[i] = nullptr;
-            continue;
+            config.debug_connection = true; argv[i] = nullptr; continue;
         }
-
-        // --debug-mode-switch
         if (strcmp(argv[i], "--debug-mode-switch") == 0) {
-            config.debug_mode_switch = true;
-            argv[i] = nullptr;
-            continue;
+            config.debug_mode_switch = true; argv[i] = nullptr; continue;
         }
-
-        // --debug-perf
         if (strcmp(argv[i], "--debug-perf") == 0) {
-            config.debug_perf = true;
-            argv[i] = nullptr;
-            continue;
+            config.debug_perf = true; argv[i] = nullptr; continue;
         }
 
-        // --disk <path> (can be specified multiple times)
-        if (strcmp(argv[i], "--disk") == 0 && i+1 < argc) {
-            // Add to disk_paths, will be resolved later
-            config.disk_paths.push_back(argv[i+1]);
-            argv[i] = nullptr;
-            argv[i+1] = nullptr;
-            i++;
-            continue;
-        }
-
-        // Positional argument: ROM path
+        // Positional: ROM path (last non-flag arg)
         if (argv[i][0] != '-') {
             rom_path = argv[i];
-            argv[i] = nullptr;
-            continue;
+            argv[i] = nullptr; continue;
         }
 
-        // Unknown argument - leave it (might be for old prefs system)
-        fprintf(stderr, "[Config] Warning: Unknown argument: %s\n", argv[i]);
+        fprintf(stderr, "[Config] Unknown argument: %s\n", argv[i]);
+    }
+
+    // Apply environment variables (lowest priority — only if not set by CLI/JSON)
+    if (!backend_set_by_cli) {
+        const char* env = getenv("CPU_BACKEND");
+        if (env) {
+            if (strcmp(env, "unicorn") == 0) config.cpu_backend = CPUBackend::Unicorn;
+            else if (strcmp(env, "dualcpu") == 0) config.cpu_backend = CPUBackend::DualCPU;
+            else config.cpu_backend = CPUBackend::UAE;
+        }
+    }
+
+    if (!timeout_set_by_cli && config.timeout_seconds == 0) {
+        const char* env = getenv("EMULATOR_TIMEOUT");
+        if (env) config.timeout_seconds = atoi(env);
+    }
+
+    if (!screenshots_set_by_cli && !config.screenshots) {
+        if (getenv("MACEMU_SCREENSHOTS")) config.screenshots = true;
     }
 
     return rom_path;
 }
 
 /*
- * Resolve ROM path from config or CLI argument
- */
-std::string resolve_rom_path(const std::string& rom_filename,
-                               const std::string& storage_dir) {
-    if (rom_filename.empty()) {
-        return "";
-    }
-
-    // Absolute path
-    if (rom_filename[0] == '/' || rom_filename[0] == '~') {
-        return expand_home(rom_filename);
-    }
-
-    // Relative path - resolve to storage_dir/roms/
-    return storage_dir + "/roms/" + rom_filename;
-}
-
-/*
- * Resolve disk image path from config or CLI argument
- */
-std::string resolve_disk_path(const std::string& disk_filename,
-                                const std::string& storage_dir) {
-    if (disk_filename.empty()) {
-        return "";
-    }
-
-    // Absolute path
-    if (disk_filename[0] == '/' || disk_filename[0] == '~') {
-        return expand_home(disk_filename);
-    }
-
-    // Relative path - resolve to storage_dir/images/
-    return storage_dir + "/images/" + disk_filename;
-}
-
-/*
- * Load emulator configuration from multiple sources
+ * Load emulator configuration from all sources
  */
 EmulatorConfig load_emulator_config(const char* config_path,
                                       int& argc,
                                       char** argv) {
-    fprintf(stderr, "[Config] ========================================\n");
-    fprintf(stderr, "[Config] Loading emulator configuration\n");
-    fprintf(stderr, "[Config] ========================================\n");
+    EmulatorConfig config;
 
-    // 1. Check for --config override in CLI args (before loading JSON)
+    // 1. Check for --config override before loading JSON
     const char* config_override = nullptr;
     for (int i = 1; i < argc; i++) {
         if (argv[i] && strcmp(argv[i], "--config") == 0 && i+1 < argc) {
@@ -287,100 +295,64 @@ EmulatorConfig load_emulator_config(const char* config_path,
             break;
         }
     }
+    const char* final_path = config_override ? config_override : config_path;
 
-    // Use CLI config path if provided, else use parameter
-    const char* final_config_path = config_override ? config_override : config_path;
+    // 2. Load JSON config (sets values above defaults)
+    load_from_json(config, final_path);
 
-    // 2. Load from JSON config
-    EmulatorConfig config = load_from_json(final_config_path);
+    // 3. Apply CLI overrides + env vars (highest priority)
+    const char* rom_from_cli = apply_cli_overrides(config, argc, argv);
 
-    // 3. Apply CLI overrides
-    const char* rom_path_from_cli = apply_cli_overrides(config, argc, argv);
-
-    // 4. Handle ROM path
-    if (rom_path_from_cli) {
-        // CLI ROM path overrides JSON config
-        fprintf(stderr, "[Config] ROM path from CLI: %s\n", rom_path_from_cli);
-        config.rom_path = rom_path_from_cli;
-    } else if (!config.rom_path.empty()) {
-        // Resolve ROM path from JSON config
-        std::string resolved = resolve_rom_path(config.rom_path, config.storage_dir);
-        fprintf(stderr, "[Config] ROM path from JSON: %s\n", resolved.c_str());
-        config.rom_path = resolved;
-    } else {
-        fprintf(stderr, "[Config] No ROM path specified (webserver mode)\n");
+    // 4. Resolve ROM path
+    if (rom_from_cli) {
+        config.rom_path = rom_from_cli;
     }
-
-    // 5. Resolve disk paths
-    // Disk paths from CLI (--disk) are kept as-is (absolute or relative to cwd)
-    // Disk paths from JSON config are resolved relative to storage_dir/images/
-    std::vector<std::string> resolved_disks;
-    for (const auto& disk : config.disk_paths) {
-        if (disk.empty()) {
-            continue;
-        }
-        // If path starts with '/' or '~', treat as absolute
-        if (disk[0] == '/' || disk[0] == '~') {
-            resolved_disks.push_back(expand_home(disk));
-        } else {
-            // Relative path - resolve to storage_dir/images/
-            resolved_disks.push_back(resolve_disk_path(disk, config.storage_dir));
+    if (!config.rom_path.empty()) {
+        config.rom_path = expand_home(config.rom_path);
+        // If relative and storage_dir is set, resolve against storage_dir/roms/
+        if (config.rom_path[0] != '/' && !config.storage_dir.empty()) {
+            config.rom_path = config.storage_dir + "/roms/" + config.rom_path;
         }
     }
-    config.disk_paths = resolved_disks;
 
-    // 6. Apply CPU_BACKEND environment variable if not set by CLI
-    const char* backend_env = getenv("CPU_BACKEND");
-    if (backend_env) {
-        if (strcmp(backend_env, "unicorn") == 0) {
-            config.cpu_backend = CPUBackend::Unicorn;
-        } else if (strcmp(backend_env, "dualcpu") == 0) {
-            config.cpu_backend = CPUBackend::DualCPU;
-        } else {
-            config.cpu_backend = CPUBackend::UAE;
+    // 5. Resolve disk/cdrom paths
+    auto resolve_paths = [&](std::vector<std::string>& paths) {
+        for (auto& p : paths) {
+            p = expand_home(p);
+            if (p[0] != '/' && !config.storage_dir.empty()) {
+                p = config.storage_dir + "/images/" + p;
+            }
         }
-        fprintf(stderr, "[Config] CPU backend from environment: %s\n",
-                config.cpu_backend_string());
-    }
-
-    fprintf(stderr, "[Config] Configuration loaded successfully\n");
-    fprintf(stderr, "[Config] ========================================\n");
+    };
+    resolve_paths(config.disk_paths);
+    resolve_paths(config.cdrom_paths);
 
     return config;
 }
 
 /*
- * Print configuration to stderr (for debugging)
+ * Print configuration summary
  */
 void print_config(const EmulatorConfig& config) {
-    fprintf(stderr, "\n[Config] ========================================\n");
-    fprintf(stderr, "[Config] Emulator Configuration\n");
-    fprintf(stderr, "[Config] ========================================\n");
-    fprintf(stderr, "[Config] Architecture:  %s\n", config.architecture_string());
-    fprintf(stderr, "[Config] RAM:           %u MB\n", config.ram_mb);
-    fprintf(stderr, "[Config] CPU Type:      680%02d\n",
-            (config.cpu_type == M68KCPUType::M68000) ? 0 :
-            (static_cast<int>(config.cpu_type) * 10 + 20));
-    fprintf(stderr, "[Config] FPU:           %s\n", config.fpu ? "Yes" : "No");
-    fprintf(stderr, "[Config] CPU Backend:   %s\n", config.cpu_backend_string());
-    fprintf(stderr, "[Config] ROM Path:      %s\n",
+    fprintf(stderr, "[Config] Architecture: %s\n", config.architecture_string());
+    fprintf(stderr, "[Config] RAM: %u MB\n", config.ram_mb);
+    fprintf(stderr, "[Config] CPU: 680%d0, FPU: %s, Backend: %s\n",
+            config.cpu_type_int(), config.fpu ? "yes" : "no",
+            config.cpu_backend_string());
+    fprintf(stderr, "[Config] ROM: %s\n",
             config.rom_path.empty() ? "(none)" : config.rom_path.c_str());
-    fprintf(stderr, "[Config] Screen:        %ux%u\n",
-            config.screen_width, config.screen_height);
-    fprintf(stderr, "[Config] Audio:         %s\n", config.audio_enabled ? "Yes" : "No");
-    fprintf(stderr, "[Config] WebRTC:        %s\n", config.enable_webrtc ? "Yes" : "No");
-    if (config.enable_webrtc) {
-        fprintf(stderr, "[Config] HTTP Port:     %d\n", config.http_port);
-        fprintf(stderr, "[Config] Signaling:     %d\n", config.signaling_port);
-        fprintf(stderr, "[Config] Storage Dir:   %s\n", config.storage_dir.c_str());
-    }
-    if (!config.disk_paths.empty()) {
-        fprintf(stderr, "[Config] Disks:\n");
-        for (const auto& disk : config.disk_paths) {
-            fprintf(stderr, "[Config]   - %s\n", disk.c_str());
-        }
-    }
-    fprintf(stderr, "[Config] ========================================\n\n");
+    fprintf(stderr, "[Config] Screen: %ux%u\n", config.screen_width, config.screen_height);
+    for (const auto& d : config.disk_paths)
+        fprintf(stderr, "[Config] Disk: %s\n", d.c_str());
+    if (config.enable_webrtc)
+        fprintf(stderr, "[Config] WebRTC: port %d, signaling %d\n",
+                config.http_port, config.signaling_port);
+    else
+        fprintf(stderr, "[Config] WebRTC: disabled\n");
+    if (config.timeout_seconds > 0)
+        fprintf(stderr, "[Config] Timeout: %d seconds\n", config.timeout_seconds);
+    if (config.screenshots)
+        fprintf(stderr, "[Config] Screenshots: enabled\n");
 }
 
 }  // namespace config
