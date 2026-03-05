@@ -193,9 +193,7 @@ void video_encoder_main(VideoOutput* video_output, config::MacemuConfig* config)
                                           frame->width * 4);  // stride
         } else {
             // ARGB format (bytes A,R,G,B - libyuv "BGRA", Mac native)
-            // Most encoders don't have encode_argb, so convert via BGRA path
-            // TODO: Add encode_argb to encoders for efficiency
-            encoded = encoder->encode_bgra(reinterpret_cast<const uint8_t*>(frame->pixels),
+            encoded = encoder->encode_argb(reinterpret_cast<const uint8_t*>(frame->pixels),
                                           frame->width, frame->height,
                                           frame->width * 4);
         }

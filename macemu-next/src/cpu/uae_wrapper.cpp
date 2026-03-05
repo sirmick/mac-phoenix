@@ -288,6 +288,11 @@ void uae_cpu_execute_one(void) {
 
     (*cpufunctbl[opcode])(opcode);
 
+    /* Check tick counter — drives cpu_do_check_ticks() → poll_timer_interrupt()
+     * which sets SPCFLAG_INT via TriggerInterrupt(). The interrupt will be
+     * delivered by the instruction handlers that check SPCFLAGS. */
+    cpu_check_ticks();
+
     cpu_trace_increment();
 }
 
@@ -444,7 +449,14 @@ extern void m68k_execute(void);  // Forward declare from newcpu.cpp
 
 // Wrapper with C linkage for the platform API
 extern "C" void uae_m68k_execute_fast(void) {
-    fprintf(stderr, "[UAE Fast] Entering m68k_execute() loop...\n");
+    // Re-initialize pc_p from current PC (may be stale if called from different thread)
+    uaecptr pc = m68k_getpc();
+    m68k_setpc(pc);
+    fill_prefetch_0();
+
+    MakeSR();  // Materialize lazy SR for debug output
+    fprintf(stderr, "[UAE Fast] PC=0x%08x SR=0x%04x A7=0x%08x pc_p=%p before m68k_execute()\n",
+            pc, (unsigned)regs.sr, m68k_areg(regs, 7), (void*)regs.pc_p);
     fflush(stderr);
     m68k_execute();  // Call the C++ version
     fprintf(stderr, "[UAE Fast] Exited m68k_execute() loop\n");

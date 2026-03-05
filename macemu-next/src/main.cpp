@@ -387,45 +387,36 @@ int main(int argc, char **argv)
 				}
 
 				// CPU is running - execute until stopped
-				printf("[CPU Thread] CPU started, executing...\n");
-
-				// Simple execution loop using CPUContext
 				Platform* platform = g_cpu_ctx.get_platform();
-				printf("[CPU Thread] CPU started, executing...\n");
 
-				// Add periodic alive check
-				uint64_t instruction_count = 0;
-				uint64_t last_log = 0;
+				// NOTE: Do NOT call cpu_reset() here — emulator_init() has already
+				// set up the CPU state (ROM patches, traps, hardware init via EmulOps).
+				// Resetting would wipe all that state and crash at ROM entry.
+				printf("[CPU Thread] CPU started, executing...\n");
 
 				if (platform->cpu_execute_fast) {
-					// Fast path (Unicorn, DualCPU)
-					while (cpu_state::g_running.load(std::memory_order_acquire) &&
-					       webserver::g_running.load(std::memory_order_acquire)) {
-						platform->cpu_execute_one();
-						instruction_count++;
-					}
-				} else {
-					// Slow path (UAE) - execute one instruction at a time
-					while (cpu_state::g_running.load(std::memory_order_acquire) &&
-					       webserver::g_running.load(std::memory_order_acquire)) {
-						platform->cpu_execute_one();
-						instruction_count++;
-
-						// Log every 10 million instructions to prove CPU is alive
-						if ((instruction_count - last_log) >= 10000000) {
-							fprintf(stderr, "[CPU Thread] Alive: %llu M instructions executed\n",
-							        (unsigned long long)(instruction_count / 1000000));
-							last_log = instruction_count;
+					// Use backend's fast execution loop (has proper SPCFLAG/interrupt handling)
+					// Watchdog thread sets quit_program when user clicks Stop
+					extern bool quit_program;
+					quit_program = false;
+					std::thread watchdog([&]() {
+						while (cpu_state::g_running.load(std::memory_order_acquire) &&
+						       webserver::g_running.load(std::memory_order_acquire)) {
+							std::this_thread::sleep_for(std::chrono::milliseconds(50));
 						}
+						quit_program = true;
+					});
+					platform->cpu_execute_fast();
+					watchdog.join();
+				} else {
+					// Slow path - execute one instruction at a time
+					while (cpu_state::g_running.load(std::memory_order_acquire) &&
+					       webserver::g_running.load(std::memory_order_acquire)) {
+						platform->cpu_execute_one();
 					}
 				}
 
-				if (!cpu_state::g_running.load(std::memory_order_acquire)) {
-					printf("[CPU Thread] CPU stopped by user after %llu instructions\n",
-					       (unsigned long long)instruction_count);
-				} else {
-					printf("[CPU Thread] CPU stopped (webserver shutdown)\n");
-				}
+				printf("[CPU Thread] CPU stopped\n");
 			}
 			printf("[CPU Thread] CPU execution thread exiting\n");
 		});
