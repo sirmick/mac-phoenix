@@ -13,3 +13,8 @@ tests/*.out
 
 # XPRAM (runtime state - should not be committed)
 BasiliskII_XPRAM
+
+# Node.js / Playwright
+node_modules/
+test-results/
+playwright-report/

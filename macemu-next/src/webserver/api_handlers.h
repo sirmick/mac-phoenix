@@ -16,6 +16,8 @@
 #include <condition_variable>
 #include <atomic>
 
+class VideoOutput;  // Forward declaration
+
 namespace http {
 
 /**
@@ -44,6 +46,9 @@ struct APIContext {
     // Codec state
     CodecType* server_codec;  // Pointer to g_server_codec
     std::function<void(CodecType)> notify_codec_change_fn;  // Notify clients of codec change
+
+    // Video output (for screenshot API)
+    VideoOutput* video_output = nullptr;
 
     // CPU state (in-process integration)
     std::atomic<bool>* cpu_running;  // Pointer to cpu_state::g_running
@@ -92,6 +97,7 @@ private:
     Response handle_emulator_reset(const Request& req);
     Response handle_log(const Request& req);
     Response handle_error(const Request& req);
+    Response handle_screenshot(const Request& req);
 
     APIContext* ctx_;
 };

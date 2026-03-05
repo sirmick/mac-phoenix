@@ -143,6 +143,20 @@ public:
     void get_stats(uint64_t* out_total_frames, uint64_t* out_dropped_frames);
 
     /**
+     * Snapshot current ready frame (non-destructive read for screenshot API)
+     *
+     * Reads from ready_index buffer without consuming it (no release_frame()).
+     * Safe for concurrent use — the triple buffer guarantees the ready buffer is stable.
+     *
+     * @param out_pixels Pre-allocated buffer (must be at least width*height*4 bytes)
+     * @param out_width Output frame width
+     * @param out_height Output frame height
+     * @param out_format Output pixel format
+     * @return true if a frame was available, false if no frame submitted yet
+     */
+    bool snapshot_frame(uint32_t* out_pixels, int* out_width, int* out_height, PixelFormat* out_format);
+
+    /**
      * Signal shutdown (wake up waiting encoder thread)
      */
     void shutdown();

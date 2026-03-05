@@ -198,6 +198,22 @@ void VideoOutput::release_frame() {
     last_read_sequence = buf->sequence;
 }
 
+bool VideoOutput::snapshot_frame(uint32_t* out_pixels, int* out_width, int* out_height, PixelFormat* out_format) {
+    int idx = ready_index.load(std::memory_order_acquire);
+    const FrameBuffer* buf = &buffers[idx];
+
+    // No frame submitted yet
+    if (buf->sequence == 0) {
+        return false;
+    }
+
+    *out_width = buf->width;
+    *out_height = buf->height;
+    *out_format = buf->format;
+    memcpy(out_pixels, buf->pixels, buf->width * buf->height * 4);
+    return true;
+}
+
 void VideoOutput::get_stats(uint64_t* out_total_frames, uint64_t* out_dropped_frames) {
     if (out_total_frames) {
         *out_total_frames = frame_count.load(std::memory_order_relaxed);

@@ -68,6 +68,7 @@ namespace webrtc {
 namespace video {
 	std::atomic<bool> g_running(true);
 	std::atomic<bool> g_request_keyframe(false);
+	extern class VideoOutput* g_video_output;  // Defined in video_webrtc.cpp
 }
 
 // Audio encoder globals
@@ -325,6 +326,7 @@ int main(int argc, char **argv)
 		api_context.roms_path = emu_config.storage_dir + "/roms";
 		api_context.images_path = emu_config.storage_dir + "/images";
 		api_context.server_codec = &server_codec;
+		api_context.video_output = video::g_video_output;  // Screenshot API
 		api_context.cpu_running = &cpu_state::g_running;  // CPU state control
 		api_context.cpu_mutex = &cpu_state::g_mutex;
 		api_context.cpu_cv = &cpu_state::g_cv;

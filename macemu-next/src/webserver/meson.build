@@ -13,6 +13,8 @@ webserver_inc = include_directories(
   '.',
   '../common/include',
   '../config',
+  '../drivers/video',
+  '../drivers/video/encoders',
   '../../external/json/include',
 )
 

@@ -11,6 +11,8 @@
 #include "../config/json_utils.h"
 #include "../common/include/sysdeps.h"  // For uint32 type
 #include "../core/emulator_init.h"  // For deferred initialization
+#include "../drivers/video/video_output.h"  // For snapshot_frame()
+#include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include <sstream>
 #include <iomanip>
 #include <cstdio>
@@ -83,6 +85,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/error" && req.method == "POST") {
         return handle_error(req);
+    }
+    if (req.path == "/api/screenshot" && req.method == "GET") {
+        return handle_screenshot(req);
     }
 
     // Unknown API endpoint
@@ -638,6 +643,70 @@ Response APIRouter::handle_config_save(const Request& req) {
             ctx_->prefs_path.c_str(), cfg.web.emulator.c_str(), cfg.web.codec.c_str());
 
     return Response::json("{\"success\": true}");
+}
+
+Response APIRouter::handle_screenshot(const Request& req) {
+    (void)req;
+
+    if (!ctx_->video_output) {
+        Response resp;
+        resp.set_status(503, "Service Unavailable");
+        resp.set_body("{\"error\": \"Video output not available\"}");
+        resp.set_content_type("application/json");
+        return resp;
+    }
+
+    // Allocate buffer for snapshot (max 1920x1080x4 = ~8MB)
+    int width = 0, height = 0;
+    PixelFormat format;
+    std::vector<uint32_t> pixels(1920 * 1080);
+
+    if (!ctx_->video_output->snapshot_frame(pixels.data(), &width, &height, &format)) {
+        Response resp;
+        resp.set_status(503, "Service Unavailable");
+        resp.set_body("{\"error\": \"No frame available yet\"}");
+        resp.set_content_type("application/json");
+        return resp;
+    }
+
+    // Convert to RGB (3 bytes/pixel) for PNG encoding
+    // Input is either ARGB (A,R,G,B) or BGRA (B,G,R,A)
+    std::vector<uint8_t> rgb(width * height * 3);
+    const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels.data());
+    for (int i = 0; i < width * height; i++) {
+        if (format == PIXFMT_ARGB) {
+            // Bytes: A, R, G, B
+            rgb[i * 3 + 0] = src[i * 4 + 1];  // R
+            rgb[i * 3 + 1] = src[i * 4 + 2];  // G
+            rgb[i * 3 + 2] = src[i * 4 + 3];  // B
+        } else {
+            // BGRA - Bytes: B, G, R, A
+            rgb[i * 3 + 0] = src[i * 4 + 2];  // R
+            rgb[i * 3 + 1] = src[i * 4 + 1];  // G
+            rgb[i * 3 + 2] = src[i * 4 + 0];  // B
+        }
+    }
+
+    // Encode to PNG using fpng
+    static bool fpng_inited = false;
+    if (!fpng_inited) {
+        fpng::fpng_init();
+        fpng_inited = true;
+    }
+    std::vector<uint8_t> png_data;
+    if (!fpng::fpng_encode_image_to_memory(rgb.data(), width, height, 3, png_data)) {
+        Response resp;
+        resp.set_status(500, "Internal Server Error");
+        resp.set_body("{\"error\": \"PNG encoding failed\"}");
+        resp.set_content_type("application/json");
+        return resp;
+    }
+
+    Response resp;
+    resp.set_status(200, "OK");
+    resp.set_content_type("image/png");
+    resp.set_body(std::string(reinterpret_cast<const char*>(png_data.data()), png_data.size()));
+    return resp;
 }
 
 } // namespace http

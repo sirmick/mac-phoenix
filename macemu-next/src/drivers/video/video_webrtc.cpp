@@ -27,9 +27,13 @@ namespace video {
 	extern std::atomic<bool> g_request_keyframe;
 }
 
-// WebRTC video state
-namespace {
+// VideoOutput accessible externally for screenshot API
+namespace video {
 	VideoOutput* g_video_output = nullptr;
+}
+
+// WebRTC video state (internal)
+namespace {
 	std::thread* g_encoder_thread = nullptr;
 	config::MacemuConfig* g_config = nullptr;
 
@@ -61,7 +65,7 @@ bool video_webrtc_init(bool classic, config::MacemuConfig* config)
 	g_config = config;
 
 	// Create VideoOutput triple buffer (1080p max)
-	g_video_output = new VideoOutput(1920, 1080);
+	video::g_video_output = new VideoOutput(1920, 1080);
 
 	// Create a dummy framebuffer for Mac (1024x768x32 ARGB)
 	const int width = 1024;
@@ -83,8 +87,8 @@ bool video_webrtc_init(bool classic, config::MacemuConfig* config)
 	if (the_buffer_size > 0x400000) {
 		fprintf(stderr, "Video: Framebuffer too large (%u bytes) for reserved area (4MB)\n",
 		        the_buffer_size);
-		delete g_video_output;
-		g_video_output = nullptr;
+		delete video::g_video_output;
+		video::g_video_output = nullptr;
 		return false;
 	}
 
@@ -114,9 +118,9 @@ bool video_webrtc_init(bool classic, config::MacemuConfig* config)
 	if (mac_fb_addr == 0) {
 		fprintf(stderr, "Video: FATAL - Host2MacAddr returned 0 for buffer at %p\n", the_buffer);
 		fprintf(stderr, "       RAMBaseHost=%p, RAMSize=0x%08x\n", RAMBaseHost, RAMSize);
-		delete g_video_output;
+		delete video::g_video_output;
 		delete monitor;
-		g_video_output = nullptr;
+		video::g_video_output = nullptr;
 		return false;
 	}
 	monitor->set_mac_frame_base(mac_fb_addr);
@@ -127,7 +131,7 @@ bool video_webrtc_init(bool classic, config::MacemuConfig* config)
 
 	// Launch video encoder thread
 	video::g_running.store(true, std::memory_order_release);
-	g_encoder_thread = new std::thread(video::video_encoder_main, g_video_output, g_config);
+	g_encoder_thread = new std::thread(video::video_encoder_main, video::g_video_output, g_config);
 
 	D(bug("Video: WebRTC driver initialized (1024x768x32, encoder thread started)\n"));
 	return true;
@@ -159,9 +163,9 @@ void video_webrtc_exit(void)
 	the_buffer = nullptr;
 
 	// Delete VideoOutput
-	if (g_video_output) {
-		delete g_video_output;
-		g_video_output = nullptr;
+	if (video::g_video_output) {
+		delete video::g_video_output;
+		video::g_video_output = nullptr;
 	}
 
 	D(bug("Video: WebRTC driver shutdown complete\n"));
@@ -178,10 +182,10 @@ void video_webrtc_refresh(void)
 	static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
 	static int refresh_count = 0;
 
-	if (!g_video_output || !the_buffer) {
+	if (!video::g_video_output || !the_buffer) {
 		if (debug_frames && refresh_count == 0) {
 			fprintf(stderr, "[VideoRefresh] ERROR: g_video_output=%p the_buffer=%p\n",
-			        (void*)g_video_output, (void*)the_buffer);
+			        (void*)video::g_video_output, (void*)the_buffer);
 		}
 		return;
 	}
@@ -209,5 +213,5 @@ void video_webrtc_refresh(void)
 	const uint32_t* pixels = reinterpret_cast<const uint32_t*>(the_buffer);
 
 	// Submit frame to encoder (non-blocking, lock-free)
-	g_video_output->submit_frame(pixels, width, height, PIXFMT_ARGB);
+	video::g_video_output->submit_frame(pixels, width, height, PIXFMT_ARGB);
 }
