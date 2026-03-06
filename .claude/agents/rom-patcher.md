@@ -29,7 +29,7 @@ Specialized agent for understanding and modifying ROM patches, emulator opcodes,
 ## Legacy Status
 This agent is for the **legacy code in `BasiliskII/` and `SheepShaver/` directories**.
 - 🔴 **Legacy**: `BasiliskII/` and `SheepShaver/` (master branch)
-- 🟢 **New**: `macemu-next/` (rewrite branch with Qemu)
+- 🟢 **New**: `mac-phoenix/` (rewrite branch with Qemu)
 
 ## Instructions
 When working on ROM patches:

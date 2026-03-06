@@ -1,0 +1,33 @@
+{
+  "_comment": "mac-phoenix configuration file",
+  "_comment2": "Copy to ~/.config/mac-phoenix/config.json and customize",
+  "_comment3": "All fields are optional — defaults are shown below",
+  "_comment4": "CLI arguments override these values (run with --help for details)",
+
+  "cpu": {
+    "type": 4,
+    "fpu": true,
+    "backend": "uae"
+  },
+
+  "ram": 32,
+
+  "rom": "/path/to/your/quadra650.rom",
+
+  "disks": [
+    "/path/to/your/harddisk.img"
+  ],
+
+  "cdroms": [],
+
+  "screen": "640x480",
+
+  "audio": true,
+
+  "web": {
+    "enabled": true,
+    "http_port": 8080,
+    "signaling_port": 8090,
+    "storage_dir": ""
+  }
+}

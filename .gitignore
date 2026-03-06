@@ -1,16 +1,19 @@
-# Unicorn will be added as submodule in Week 1 (but not docs!)
-/unicorn/
-
-# QEMU is abandoned in favor of Unicorn
-/qemu/
-/qemu-cpu/
-
-# Build artifacts
-build/
+# Build
+build*/
 *.o
 *.a
 *.so
 *.dylib
+
+# Debug and validation logs
+*.log
+*.diff
+
+# Runtime state
+BasiliskII_XPRAM
+.basilisk_ii_xpram
+BasiliskII_Prefs
+basilisk_ii.prefs
 
 # IDE
 .vscode/
@@ -18,8 +21,11 @@ build/
 *.swp
 *.swo
 
-# Runtime
-.basilisk_ii_xpram
-BasiliskII_Prefs
-BasiliskII_XPRAM
-basilisk_ii.prefs
+# Node.js / Playwright
+node_modules/
+test-results/
+playwright-report/
+
+# Python
+__pycache__/
+*.pyc

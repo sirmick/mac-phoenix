@@ -1,12 +1,9 @@
-[submodule "web-streaming/libdatachannel"]
-	path = web-streaming/libdatachannel
+[submodule "subprojects/libdatachannel"]
+	path = subprojects/libdatachannel
 	url = https://github.com/paullouisageneau/libdatachannel.git
-[submodule "macemu-next/subprojects/libdatachannel"]
-	path = macemu-next/subprojects/libdatachannel
-	url = https://github.com/paullouisageneau/libdatachannel.git
-[submodule "macemu-next/subprojects/unicorn"]
-	path = macemu-next/subprojects/unicorn
+[submodule "subprojects/unicorn"]
+	path = subprojects/unicorn
 	url = https://github.com/unicorn-engine/unicorn.git
-[submodule "macemu-next/subprojects/nlohmann_json"]
-	path = macemu-next/subprojects/nlohmann_json
+[submodule "subprojects/nlohmann_json"]
+	path = subprojects/nlohmann_json
 	url = https://github.com/nlohmann/json.git

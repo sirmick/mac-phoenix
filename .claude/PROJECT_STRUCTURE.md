@@ -14,7 +14,7 @@ This repository contains **two versions** of the macemu emulator:
 - **Architecture**: Monolithic, mature codebase (~20+ years of development)
 
 ### 🟢 New Code (Rewrite Branch - In Development)
-**Location**: `macemu-next/` directory (separate branch)
+**Location**: `mac-phoenix/` directory (separate branch)
 
 - **Status**: Major rewrite in progress, not production-ready
 - **CPU Emulation**: **Qemu** (replacing UAE and KPX)
@@ -54,7 +54,7 @@ macemu/
 │   ├── client/          # Browser client (JS/HTML)
 │   └── libdatachannel/  # WebRTC library (submodule)
 │
-├── macemu-next/         # 🟢 New rewrite (separate branch)
+├── mac-phoenix/         # 🟢 New rewrite (separate branch)
 │   └── [Qemu-based emulator - in development]
 │
 ├── cxmon/               # Debugger/monitor tool
@@ -81,7 +81,7 @@ macemu/
 - **performance-optimizer** - Profiling and optimization
 - **crash-debugger** - Debugging tools
 
-### New-Only Agents (macemu-next)
+### New-Only Agents (mac-phoenix)
 - *To be created when new codebase is ready*
 - Will focus on Qemu integration
 - Modern architecture patterns
@@ -95,9 +95,9 @@ macemu/
 4. Follow existing autotools build system
 5. Expect UAE/KPX CPU cores
 
-### ✅ For New Code (macemu-next)
+### ✅ For New Code (mac-phoenix)
 1. Check you're on the rewrite branch
-2. Work in `macemu-next/` directory
+2. Work in `mac-phoenix/` directory
 3. Use Qemu-focused agents (when available)
 4. Target macOS/Windows/Linux only
 5. Expect Qemu CPU emulation
@@ -111,7 +111,7 @@ macemu/
 ## Branch Strategy
 
 - **master**: Legacy code (BasiliskII/SheepShaver) - stable
-- **rewrite**: New code (macemu-next) - in development
+- **rewrite**: New code (mac-phoenix) - in development
 - **web-streaming**: Shared across branches
 
 ## Migration Path

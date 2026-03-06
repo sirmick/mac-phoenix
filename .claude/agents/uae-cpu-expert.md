@@ -64,7 +64,7 @@ The JIT is **x86/x86-64 only** and provides ~10x speedup:
 ## Legacy Status
 This is **legacy code in the `BasiliskII/` directory**.
 - 🔴 **Legacy**: `BasiliskII/src/uae_cpu/` (master branch)
-- 🟢 **New**: `macemu-next/` will use **Qemu instead of UAE**
+- 🟢 **New**: `mac-phoenix/` will use **Qemu instead of UAE**
 
 ## Instructions
 When working on UAE CPU:

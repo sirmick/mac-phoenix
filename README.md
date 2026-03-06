@@ -1,111 +1,100 @@
-#### BasiliskII
-```
-macOS     x86_64 JIT / arm64 non-JIT
-Linux x86 x86_64 JIT / arm64 non-JIT
-MinGW x86        JIT
-```
-#### SheepShaver
-```
-macOS     x86_64 JIT / arm64 non-JIT
-Linux x86 x86_64 JIT / arm64 non-JIT
-MinGW x86        JIT
-```
-### How To Build
-These builds need to be installed SDL2.0.14+ framework/library.
+# MacPhoenix
 
-https://www.libsdl.org
-#### BasiliskII
-##### macOS
-preparation:
+A classic Macintosh emulator that runs in your browser. Boot Mac OS 7.5.5 on an emulated Quadra 650 and interact with it over WebRTC — no native GUI needed.
 
-Download gmp-6.2.1.tar.xz from https://gmplib.org.
-```
-$ cd ~/Downloads
-$ tar xf gmp-6.2.1.tar.xz
-$ cd gmp-6.2.1
-$ ./configure --disable-shared
-$ make
-$ make check
-$ sudo make install
-```
-Download mpfr-4.2.0.tar.xz from https://www.mpfr.org.
-```
-$ cd ~/Downloads
-$ tar xf mpfr-4.2.0.tar.xz
-$ cd mpfr-4.2.0
-$ ./configure --disable-shared
-$ make
-$ make check
-$ sudo make install
-```
-On an Intel Mac, the libraries should be cross-built.  
-Change the `configure` command for both GMP and MPFR as follows, and ignore the `make check` command:
-```
-$ CFLAGS="-arch arm64" CXXFLAGS="$CFLAGS" ./configure -host=aarch64-apple-darwin --disable-shared 
-```
-(from https://github.com/kanjitalk755/macemu/pull/96)
+![License](https://img.shields.io/badge/license-GPL--2.0-blue)
 
-about changing Deployment Target:  
-If you build with an older version of Xcode, you can change Deployment Target to the minimum it supports or 10.7, whichever is greater.
+## What is this?
 
-build:
-```
-$ cd macemu/BasiliskII/src/MacOSX
-$ xcodebuild build -project BasiliskII.xcodeproj -configuration Release
-```
-or same as Linux
+MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github.com/kanjitalk755/macemu) emulator family. It replaces the SDL desktop UI with a web-based streaming interface: the emulator runs as a headless server and streams video to your browser via WebRTC, with keyboard and mouse input sent back over a data channel.
 
-##### Linux
-preparation (arm64 only): Install GMP and MPFR.
-```
-$ cd macemu/BasiliskII/src/Unix
-$ ./autogen.sh
-$ make
-```
-##### MinGW32/MSYS2
-preparation:
-```
-$ pacman -S base-devel mingw-w64-i686-toolchain autoconf automake mingw-w64-i686-SDL2
-```
-note: MinGW32 dropped GTK2 package.
-See msys2/MINGW-packages#24490
+### Key features
 
-build (from a mingw32.exe prompt):
-```
-$ cd macemu/BasiliskII/src/Windows
-$ ../Unix/autogen.sh
-$ make
-```
-#### SheepShaver
-##### macOS
-about changing Deployment Target: see BasiliskII
-```
-$ cd macemu/SheepShaver/src/MacOSX
-$ xcodebuild build -project SheepShaver_Xcode8.xcodeproj -configuration Release
-```
-or same as Linux
+- **Two CPU backends** — a fast UAE interpreter (~5s boot) and a QEMU-based Unicorn JIT, plus a lockstep dual-CPU mode for validation
+- **Browser UI** — connect from any device with a web browser, no plugins or installs
+- **WebRTC streaming** — low-latency video with H.264, VP9, AV1, PNG, or WebP encoding
+- **REST API** — boot status, screenshots, config, and control via HTTP endpoints
+- **Headless mode** — run without any UI for testing and automation
 
-##### Linux
-```
-$ cd macemu/SheepShaver/src/Unix
-$ ./autogen.sh
-$ make
-```
-For Raspberry Pi:
-https://github.com/vaccinemedia/macemu
+## Quick start
 
-##### MinGW32/MSYS2
-preparation: same as BasiliskII  
-  
-build (from a mingw32.exe prompt):
-```
-$ cd macemu/SheepShaver
-$ make links
-$ cd src/Windows
-$ ../Unix/autogen.sh
-$ make
-```
-### Recommended key bindings for gnome
-https://github.com/kanjitalk755/macemu/blob/master/SheepShaver/doc/Linux/gnome_keybindings.txt
+### Requirements
 
-(from https://github.com/kanjitalk755/macemu/issues/59)
+- Linux (x86_64)
+- Meson + Ninja
+- A Quadra 650 ROM file (1MB)
+- GCC/Clang with C++17 support
+
+### Build & run
+
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/sirmick/mac-phoenix.git
+cd mac-phoenix
+
+# Build
+meson setup build
+ninja -C build
+
+# Run
+./build/mac-phoenix /path/to/quadra.rom
+```
+
+Then open **http://localhost:8080** in your browser.
+
+### Headless mode
+
+```bash
+EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /path/to/quadra.rom
+```
+
+## CPU backends
+
+| Backend | Engine | Boot time | Use case |
+|---------|--------|-----------|----------|
+| `uae` (default) | Hand-tuned 68K interpreter | ~5s | General use |
+| `unicorn` | QEMU TCG JIT | ~48s | Validation, future optimization |
+| `dualcpu` | Both in lockstep | Very slow | Debugging CPU divergences |
+
+Select with `--backend uae|unicorn|dualcpu` or the `CPU_BACKEND` env var.
+
+## API
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/status` | Boot phase, timing, and state |
+| `GET /api/screenshot` | PNG of the current screen |
+| `GET /api/mouse` | Mac cursor position |
+| `GET /api/config` | Current configuration |
+| `POST /api/emulator/start` | Start emulation |
+| `POST /api/emulator/stop` | Stop emulation |
+| `POST /api/codec` | Switch video codec |
+
+## Testing
+
+```bash
+# Fast suite (~12s) — API + UAE boot + mouse
+meson test -C build api_endpoints boot_uae mouse_position
+
+# Full suite (~60s) — includes Unicorn boot
+meson test -C build
+
+# Playwright E2E browser tests
+npx playwright test
+```
+
+## Architecture
+
+MacPhoenix uses a **Platform API** abstraction: all CPU backends implement the same function pointer table, so core emulation code (ROM patching, interrupt handling, ADB, video) is backend-agnostic.
+
+Video uses a **lock-free triple buffer** — the CPU writes frames, the encoder reads them, and the screenshot API reads them, all without locks.
+
+See [CLAUDE.md](CLAUDE.md) for the full developer reference.
+
+## Heritage
+
+MacPhoenix descends from the BasiliskII/SheepShaver emulator family originally created by Christian Bauer. The original source is preserved in [`legacy/`](legacy/) for reference.
+
+## License
+
+GPL-2.0 — see [LICENSE](LICENSE).
