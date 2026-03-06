@@ -22,12 +22,34 @@ MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github
 
 ## Quick start
 
+### Ubuntu/Debian setup
+
+```bash
+# Build tools
+sudo apt install build-essential meson ninja-build cmake pkg-config git
+
+# Required
+sudo apt install libssl-dev nlohmann-json3-dev
+
+# Video encoders (optional — enables H.264, VP9, WebP)
+sudo apt install libopenh264-dev libvpx-dev libwebp-dev libyuv-dev
+
+# Audio encoder (optional — enables Opus audio)
+sudo apt install libopus-dev
+
+# HTTP server (optional — falls back to bundled header)
+sudo apt install libcpp-httplib-dev
+
+# Playwright E2E tests (optional)
+sudo npx playwright install-deps
+```
+
+The only hard requirements are OpenSSL and a C++17 compiler. Video/audio codec packages are optional — without them, the emulator still works using PNG frame streaming.
+
 ### Requirements
 
 - Linux (x86_64)
-- Meson + Ninja
 - A Quadra 650 ROM file (1MB)
-- GCC/Clang with C++17 support
 
 ### Build & run
 
@@ -36,7 +58,7 @@ MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github
 git clone --recursive https://github.com/sirmick/mac-phoenix.git
 cd mac-phoenix
 
-# Build
+# Build (Unicorn engine compiles from source on first build)
 meson setup build
 ninja -C build
 
