@@ -1,329 +1,445 @@
 # Appliance Layer Design
 
-Abstracting Mac OS 7.5.5 behind a programmatic API so the emulator behaves like an appliance — launch apps, take screenshots, read system state, control input — without users needing to understand the Mac desktop.
+Turn MacPhoenix into a programmable appliance: boot Mac OS, launch apps, control input, read state, run tests — all without touching the desktop. Support both CLI scripting and web UI.
 
 ---
 
-## What Already Works
+## Goals
 
-| Capability | Mechanism | Endpoint / Function |
-|---|---|---|
-| Detect current app | `CurApName` at `0x0910` (Pascal string) | `GET /api/status` → `boot_phase` |
-| Mouse position (read) | Low-memory globals `0x828`/`0x82a` | `GET /api/mouse` → `{x, y}` |
-| Mouse position (set) | `ADBMouseMoved(x, y)` absolute mode | WebRTC data channel only |
-| Keyboard input | `ADBKeyDown(code)` / `ADBKeyUp(code)` | WebRTC data channel only |
-| Screenshot | Triple-buffer snapshot → fpng | `GET /api/screenshot` → PNG |
-| Boot phase tracking | `boot_progress.cpp` milestone detection | `GET /api/status` |
-| Shutdown (hard) | `QuitEmulator()` or `M68K_EMUL_OP_SHUTDOWN` | Process exit |
-| Start/stop CPU | Atomic flag + condition variable | `POST /api/emulator/start\|stop` |
+1. **Command interface** — control a running emulator via CLI or web UI through a single command dispatcher
+2. **Cross-compile Mac apps** — build 68k Mac binaries on the Linux host with Retro68
+3. **File injection** — get compiled binaries into the running Mac filesystem
+4. **Automated testing** — boot → bypass dialogs → launch test app → assert results → exit
+5. **Appliance mode** — hide Mac OS, run a custom app full-screen as if the emulator IS the app
 
 ---
 
-## Tier 1: HTTP API for Existing Functions
+## Architecture
 
-These need only new API endpoints — the underlying C functions already exist in `adb.cpp`.
-
-### POST /api/mouse
-
-Set absolute cursor position.
-
-```json
-{"x": 100, "y": 200}
+```
+┌─────────────────────────────────────────────────────────┐
+│                    mac-phoenix process                   │
+│                                                         │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │              Command Dispatcher                    │  │
+│  │  thread-safe queue, drained by 60Hz IRQ handler   │  │
+│  │  execute: immediate (memory read) or deferred     │  │
+│  │           (trap call on next IRQ tick)             │  │
+│  └──────────▲─────────────────────▲──────────────────┘  │
+│             │                     │                      │
+│  ┌──────────┴──────────┐  ┌──────┴───────────────────┐  │
+│  │ Unix Socket Server  │  │ HTTP API (:8080)          │  │
+│  │ /tmp/mac-phoenix.sock│  │ /api/* endpoints         │  │
+│  │ line protocol        │  │ JSON request/response    │  │
+│  └──────────▲──────────┘  └──────────▲───────────────┘  │
+└─────────────┼────────────────────────┼───────────────────┘
+              │                        │
+   ┌──────────┴──────────┐  ┌─────────┴─────────┐
+   │  mac-phoenix-ctl    │  │  Web UI / curl     │
+   │  $ ctl click 100 200│  │  browser / scripts │
+   └─────────────────────┘  └───────────────────┘
 ```
 
-Calls `ADBMouseMoved(x, y)` with `relative_mouse = false`.
+**One dispatcher, two frontends.** The Unix socket speaks a terse line protocol for CLI use. The HTTP endpoints accept JSON for web UI and curl. Both enqueue into the same command queue.
 
-### POST /api/click
+---
 
-Move cursor and click.
+## Command Interface
 
-```json
-{"x": 100, "y": 200, "button": 0, "double": false}
+### Unix Socket Line Protocol
+
+Connect: `socat - UNIX:/tmp/mac-phoenix.sock` or use `mac-phoenix-ctl` wrapper.
+
+```
+command [args...]     → JSON or plain text response
+                      → OK on success, ERR: message on failure
 ```
 
-Sequence: `ADBMouseMoved(x, y)` → `ADBMouseDown(button)` → short delay → `ADBMouseUp(button)`. For double-click, repeat. Button 0 = left, 1 = middle, 2 = right.
+### Commands
 
-### POST /api/key
+#### Input
 
-Press or release a key.
+| Command | Example | Description |
+|---------|---------|-------------|
+| `click X Y [double]` | `click 100 200` | Move cursor and click |
+| `mouse X Y` | `mouse 300 150` | Set cursor position (no click) |
+| `key KEYCODE down\|up` | `key 0x0C down` | Press/release by ADB keycode |
+| `type TEXT` | `type Hello World` | Type ASCII string (auto keycode conversion) |
+| `keycombo MOD... KEY` | `keycombo cmd q` | Keyboard shortcut |
 
-```json
-{"keycode": 12, "down": true}
+#### Introspection
+
+| Command | Example | Response |
+|---------|---------|----------|
+| `app` | `app` | `Finder` (current app name) |
+| `windows` | `windows` | JSON array of window titles, rects, visibility |
+| `menus` | `menus` | JSON array of menu bar contents |
+| `status` | `status` | `{"boot_phase":"desktop","ticks":184021}` |
+| `memory ADDR [LEN]` | `memory 0x0910 32` | Hex dump |
+
+#### Control
+
+| Command | Example | Description |
+|---------|---------|-------------|
+| `launch PATH` | `launch "Macintosh HD:myapp"` | Launch app via _Launch trap |
+| `quit` | `quit` | Quit current app (Cmd+Q or _ExitToShell) |
+| `shutdown` | `shutdown` | Graceful shutdown via _Shutdown trap |
+| `screenshot [PATH]` | `screenshot /tmp/shot.png` | Save PNG (or return base64) |
+| `inject HOST_PATH MAC_PATH` | `inject ./myapp.bin "Macintosh HD:myapp"` | Copy file into Mac filesystem |
+| `wait CONDITION [TIMEOUT]` | `wait app=Finder 30` | Block until condition met |
+
+#### Wait Conditions
+
+`wait` is the key primitive for test automation:
+
+```
+wait boot=desktop 60        # wait for Finder desktop (up to 60s)
+wait app=SimpleText 10      # wait for app to become current
+wait window="Untitled" 5    # wait for window with title to appear
+wait idle 5                 # wait for Mac to be idle (tick count advancing, no disk activity)
 ```
 
-Calls `ADBKeyDown(code)` or `ADBKeyUp(code)`. Mac ADB keycodes (0x00–0x7F).
+Returns `OK` on condition met, `ERR: timeout` on expiry.
 
-### POST /api/type
+### mac-phoenix-ctl CLI
 
-Type a string by converting ASCII to ADB keycode sequences.
+Thin wrapper that connects to the socket, sends `argv` as the command, prints the response, and exits:
 
-```json
-{"text": "Hello World"}
+```bash
+$ mac-phoenix-ctl click 100 200
+OK
+$ mac-phoenix-ctl app
+Finder
+$ mac-phoenix-ctl screenshot /tmp/shot.png
+OK /tmp/shot.png
 ```
 
-Converts each character to its ADB keycode + shift state, queues press/release pairs with inter-key delay. Needs a lookup table (ASCII → ADB keycode + modifiers).
+Implemented as ~50 lines of C (or even a shell function wrapping socat).
 
-### POST /api/keycombo
+### HTTP Endpoints (for web UI)
 
-Send a keyboard shortcut.
+Same commands, JSON interface. Web UI calls these via `fetch()`.
 
-```json
-{"modifiers": ["cmd"], "key": "q"}
+| Endpoint | Method | Body | Maps to |
+|----------|--------|------|---------|
+| `/api/click` | POST | `{"x":100,"y":200,"double":false}` | `click 100 200` |
+| `/api/mouse` | POST | `{"x":100,"y":200}` | `mouse 100 200` |
+| `/api/key` | POST | `{"keycode":12,"down":true}` | `key 0x0C down` |
+| `/api/type` | POST | `{"text":"Hello"}` | `type Hello` |
+| `/api/keycombo` | POST | `{"modifiers":["cmd"],"key":"q"}` | `keycombo cmd q` |
+| `/api/app` | GET | — | `app` |
+| `/api/windows` | GET | — | `windows` |
+| `/api/menus` | GET | — | `menus` |
+| `/api/launch` | POST | `{"path":"Macintosh HD:SimpleText"}` | `launch ...` |
+| `/api/inject` | POST | multipart file upload + mac_path | `inject ...` |
+| `/api/wait` | POST | `{"condition":"app=Finder","timeout":30}` | `wait ...` |
+
+---
+
+## Cross-Compiling Mac Apps
+
+### Toolchain: Retro68
+
+Retro68 is a GCC-based cross-compiler for classic Mac OS 68k. Runs on Linux, produces MacBinary files.
+
+```bash
+# One-time setup
+git clone https://github.com/autc04/Retro68.git
+cd Retro68 && mkdir build && cd build
+../build-toolchain.sh --target-m68k
+
+# Compile a Mac app
+m68k-apple-macos-gcc -o myapp myapp.c -lRetroConsole
 ```
 
-Hold modifier(s), press key, release all. Common combos: Cmd+Q (quit), Cmd+O (open), Cmd+W (close window), Cmd+Shift+3 (screenshot to disk).
+### Test App Structure
 
-### GET /api/app
+Test apps are small Mac programs that exercise a specific subsystem, report results, then quit. They follow a common pattern:
 
-Return current application info.
+```c
+// tests/mac-apps/test_tcpip.c
+#include <MacTCP.h>
+#include <Devices.h>
 
-```json
-{
-  "name": "Finder",
-  "refnum": 2,
-  "a5": "0x01F8A000",
-  "stack_base": "0x01FA0000"
+// Result convention: write status to a known memory address
+// or to a file at a known path, then quit
+#define RESULT_ADDR 0x02100000  // ScratchMem — host can read this
+
+int main() {
+    short refNum;
+    OSErr err;
+
+    // Open MacTCP driver
+    err = OpenDriver("\p.IPP", &refNum);
+
+    // Write result code to scratch memory
+    *(int32_t*)RESULT_ADDR = (int32_t)err;
+
+    // Quit back to Finder
+    ExitToShell();
+    return 0;
 }
 ```
 
-Reads low-memory globals:
+**Result reporting options** (simplest to most complex):
 
-| Address | Name | Type | Description |
-|---|---|---|---|
-| `0x0910` | CurApName | Str31 | Current app name (Pascal string) |
-| `0x0900` | CurApRefNum | int16 | Resource file ref number |
-| `0x0904` | CurrentA5 | uint32 | App's A5 world pointer |
-| `0x0908` | CurStackBase | uint32 | App's stack base |
-| `0x02AA` | ApplZone | uint32 | App's heap zone pointer |
+1. **ScratchMem convention** — write result to `0x02100000` (ScratchMem, 64KB, not used by Mac OS). Host reads it via `memory 0x02100000 4`. Zero dependencies, works for simple pass/fail.
+
+2. **File on disk** — write results to `Macintosh HD:test_results.txt`. Host reads via extfs shared folder or `inject`/extract commands. Good for structured output.
+
+3. **Serial port** — write to the emulated serial port, host captures. Needs serial emulation wired up.
+
+4. **Custom EmulOp** — add a trap opcode that the test app calls to signal results directly to the host. Most reliable, ~10 lines of host code.
+
+### Recommended: Custom EmulOp for Test Reporting
+
+Add a dedicated trap (e.g., `M68K_EMUL_OP_TEST_RESULT`) that test apps call to report results:
+
+```c
+// Mac-side (test app):
+// A-line trap 0xAEF0 (or whatever is next available)
+// D0 = result code, A0 = pointer to message string
+asm("move.l %0, %%d0" : : "g"(result_code));
+asm("move.l %0, %%a0" : : "g"(message));
+asm(".short 0xAEF0");  // trigger EmulOp
+
+// Host-side (emul_op.cpp):
+case M68K_EMUL_OP_TEST_RESULT:
+    test_result_code = m68k_dreg(regs, 0);
+    test_result_msg = ReadMacString(m68k_areg(regs, 0));
+    test_complete.store(true);
+    break;
+```
+
+This way the host knows the instant a test finishes, with no polling.
 
 ---
 
-## Tier 2: System State Introspection
+## File Injection
 
-Reading Mac OS data structures from host memory. No traps needed — just `ReadMacInt*()` on known addresses.
+Getting compiled binaries into the Mac filesystem:
 
-### GET /api/windows
+### Option A: extfs Shared Folder (already in codebase)
 
-Walk the `WindowList` linked list and return all windows.
+`src/core/extfs.cpp` implements a virtual Mac volume backed by a host directory. BasiliskII used this as "Unix" or "Host" volume.
 
-```json
-[
-  {"title": "Macintosh HD", "rect": {"top": 40, "left": 10, "bottom": 300, "right": 400}, "visible": true, "hilited": true},
-  {"title": "Untitled", "rect": {"top": 60, "left": 50, "bottom": 200, "right": 350}, "visible": true, "hilited": false}
-]
+```bash
+# Configure a shared directory
+mac-phoenix --extfs /home/mick/mac-shared /home/mick/quadra.rom
+
+# Drop files in from host side — they appear as a Mac volume
+cp myapp.bin /home/mick/mac-shared/
+# Mac sees: "Host:myapp"
 ```
 
-**WindowList** starts at `0x09D6` (pointer to first WindowRecord). Each WindowRecord:
+**Status**: extfs.cpp is in the build but may need wiring up to the current config system and testing. This is the lowest-friction option — no disk image manipulation, no restarts.
 
-| Offset | Field | Type | Notes |
-|---|---|---|---|
-| +0 | portRect | Rect (8 bytes) at GrafPort+8 | Window bounds (top, left, bottom, right) |
-| +0x6C | windowKind | int16 | Negative = desk accessory, positive = app window |
-| +0x6E | visible | Boolean | Window is visible |
-| +0x6F | hilited | Boolean | Window is active/frontmost |
-| +0x88 | titleHandle | StringHandle | Dereference twice: handle → pointer → Pascal string |
-| +0x90 | nextWindow | WindowPeek | Pointer to next window in list (0 = end) |
+### Option B: hfsutils (offline disk image manipulation)
 
-For Color windows (CGrafPort), bit 14 of `rowBytes` at GrafPort+4 is set, and offsets shift by 48 bytes (CGrafPort is 156 bytes vs GrafPort's 108).
-
-### GET /api/menus
-
-Read the menu bar structure.
-
-| Address | Name | Description |
-|---|---|---|
-| `0x0A1C` | MenuList | Handle to array of menu handles |
-| `0x0A20` | MBarEnable | Bitmask of enabled menus |
-| `0x0A26` | TheMenu | ID of currently highlighted menu |
-| `0x0BAA` | MBarHeight | Menu bar height in pixels |
-
-Each MenuHandle dereferences to a MenuInfo record containing the menu title (Pascal string) and item list.
-
-### GET /api/memory
-
-Raw memory read for debugging and introspection.
-
-```
-GET /api/memory?addr=0x0910&len=32
+```bash
+hmount /path/to/disk.img
+hcopy myapp.bin ":myapp"
+humount
+# Requires emulator restart or disk re-mount
 ```
 
-Returns hex dump or JSON array of bytes. Uses `ReadMacInt8()` in a loop.
+Works but requires a restart cycle. Fine for initial disk image preparation, not for iterative development.
 
-### POST /api/memory
+### Option C: inject command (runtime, via command dispatcher)
 
-Raw memory write.
-
-```json
-{"addr": "0x0910", "bytes": [6, 70, 105, 110, 100, 101, 114]}
-```
-
-Uses `WriteMacInt8()`. Dangerous — no validation. Useful for patching globals.
+The `inject` command would write file data into the Mac filesystem at runtime, using extfs or by constructing HFS catalog entries. Extfs is far simpler.
 
 ---
 
-## Tier 3: Mac OS Trap Calls
+## Automated Test Pipeline
 
-Calling Mac OS Toolbox/OS traps from the host. Requires `Execute68kTrap()` which can only run inside an EmulOp handler — specifically the 60Hz IRQ (`M68K_EMUL_OP_IRQ`).
+### Test Flow
 
-### Architecture: Command Queue
+```bash
+#!/bin/bash
+# tests/integration/test_tcpip.sh
 
+# 1. Compile test app
+m68k-apple-macos-gcc -o tests/mac-apps/build/test_tcpip \
+    tests/mac-apps/test_tcpip.c
+
+# 2. Stage binary in shared folder
+cp tests/mac-apps/build/test_tcpip /home/mick/mac-shared/
+
+# 3. Boot emulator headless with clean PRAM (suppresses dirty disk dialog)
+./build/mac-phoenix --no-webserver --zappram --extfs /home/mick/mac-shared \
+    --timeout 60 /home/mick/quadra.rom &
+EMU_PID=$!
+
+# 4. Wait for desktop
+mac-phoenix-ctl wait boot=desktop 30
+
+# 5. Launch test app
+mac-phoenix-ctl launch "Host:test_tcpip"
+
+# 6. Wait for test to complete (custom EmulOp sets flag)
+mac-phoenix-ctl wait test-complete 15
+
+# 7. Read result
+RESULT=$(mac-phoenix-ctl memory 0x02100000 4)
+kill $EMU_PID
+
+# 8. Assert
+if [ "$RESULT" = "00000000" ]; then
+    echo "PASS: MacTCP opened successfully"
+    exit 0
+else
+    echo "FAIL: MacTCP returned error $RESULT"
+    exit 1
+fi
 ```
-HTTP API → enqueue command (host-side struct)
-          ↓
-60Hz IRQ → dequeue, call Execute68kTrap()
-          ↓
-          write result to response struct
-          ↓
-HTTP API → return result (poll or block)
+
+### Meson Integration
+
+```meson
+# Test apps (cross-compiled separately, checked into build or built by script)
+test('tcpip',
+  find_program('tests/integration/test_tcpip.sh'),
+  timeout: 60,
+  suite: 'integration',
+)
 ```
 
-The IRQ handler already fires every ~16ms. Adding a command queue check is a few lines of code.
+### What to Test
 
-### Launch Application
+| Test | Exercises | Pass condition |
+|------|-----------|----------------|
+| `test_tcpip` | Open MacTCP driver | `OpenDriver` returns noErr |
+| `test_file_io` | Create/write/read/delete file | All File Manager calls succeed |
+| `test_memory` | Allocate/use/free heap memory | NewPtr/DisposePtr work correctly |
+| `test_resource` | Open/read resource fork | GetResource returns valid handle |
+| `test_quickdraw` | Draw to offscreen GWorld | No crash, known pixel values |
+| `test_sound` | Open Sound Manager | SndNewChannel succeeds |
+| `test_scsi` | SCSI Manager inquiry | Returns device info |
 
-Build a `LaunchParamBlockRec` in Mac memory, call `_Launch` (trap `A9F2`).
+---
+
+## Appliance Mode
+
+Hide Mac OS entirely. The emulator boots, launches a specific app, and presents only that app's UI.
+
+### CLI
+
+```bash
+./build/mac-phoenix --appliance "Macintosh HD:MyApp" /home/mick/quadra.rom
+```
+
+### What --appliance Does
+
+1. **Boot with zapped PRAM** — suppress shutdown dialog automatically
+2. **Wait for desktop** — detect Finder via boot phase tracking
+3. **Launch the target app** — via _Launch trap through command dispatcher
+4. **Auto-quit on app exit** — if CurApName changes back to "Finder", shut down emulator
+
+The Mac desktop, menu bar, and system chrome all remain as-is — the app is a real Mac app running in a real Mac environment. The "appliance" part is just the automation: boot, launch, and lifecycle management.
+
+### Appliance Config
 
 ```json
-POST /api/launch
-{"path": "Macintosh HD:Applications:SimpleText"}
-```
-
-Steps:
-1. Allocate Mac heap memory for FSSpec + LaunchParamBlockRec
-2. Populate FSSpec with volume ref, directory ID, filename
-3. Set `launchBlockID` = `0x4C43` ('LC'), control flags
-4. Call `Execute68kTrap(0xA9F2, &regs)` from IRQ handler
-5. Free allocated memory
-
-**Requires**: Resolving the file path to an FSSpec. Could use `_FSMakeFSSpec` (trap `A9F1`) first, or pre-compute volume/directory IDs.
-
-### Graceful Shutdown
-
-```json
-POST /api/shutdown
-{"mode": "shutdown"}  // or "restart"
-```
-
-Call `_Shutdown` trap (`A895`) with D0 = 1 (power off) or D0 = 2 (restart). This runs the full shutdown sequence: notifies drivers, unmounts volumes, runs the shutdown queue at `0x0BBC`.
-
-### Quit Current App
-
-```json
-POST /api/quit
-```
-
-Two approaches:
-- **Simple**: Synthesize Cmd+Q via `ADBKeyDown(0x37)` + `ADBKeyDown(0x0C)` (works for most apps)
-- **Direct**: Call `_ExitToShell` (trap `A9F4`) from IRQ handler (kills current app immediately, returns to Finder)
-
-### Send Apple Event
-
-The most powerful but most complex mechanism. System 7.5.5 fully supports Apple Events.
-
-```json
-POST /api/appleevent
 {
-  "target": "FNDR",
-  "class": "aevt",
-  "id": "odoc",
-  "params": {"----": "Macintosh HD:ReadMe"}
+  "appliance": {
+    "app": "Macintosh HD:MyApp",
+    "auto_quit": true
+  }
 }
 ```
-
-Implementation: Build a small 68k code stub in Mac memory that calls `AECreateAppleEvent()` → `AEPutParamDesc()` → `AESend()`. Execute it via `Execute68k()`.
-
-Useful events:
-- `aevt/odoc` — Open document (Finder opens file with correct app)
-- `aevt/quit` — Quit application (polite, allows save dialog)
-- `FNDR/shut` — Finder shutdown
-- `FNDR/rest` — Finder restart
-
----
-
-## Key Low-Memory Globals Reference
-
-### Application State
-
-| Address | Name | Size | Description |
-|---|---|---|---|
-| `0x0910` | CurApName | 32 | Current app name (Pascal string, len + 31 chars) |
-| `0x0900` | CurApRefNum | 2 | Current app resource file ref number |
-| `0x0902` | LaunchFlag | 1 | Launch state flag |
-| `0x0904` | CurrentA5 | 4 | Current app's A5 world pointer |
-| `0x0908` | CurStackBase | 4 | Current app's stack base |
-| `0x02AA` | ApplZone | 4 | Pointer to current app's heap zone |
-| `0x0130` | ApplLimit | 4 | App heap limit |
-| `0x0AEC` | AppParmHandle | 4 | Finder info handle (files to open/print) |
-
-### Mouse / Cursor
-
-| Address | Name | Size | Description |
-|---|---|---|---|
-| `0x0828` | MTemp.v | 2 | Raw mouse Y |
-| `0x082A` | MTemp.h | 2 | Raw mouse X |
-| `0x082C` | RawMouse.v | 2 | Unprocessed mouse Y |
-| `0x082E` | RawMouse.h | 2 | Unprocessed mouse X |
-| `0x0830` | Mouse.v | 2 | Processed mouse Y (what apps see) |
-| `0x0832` | Mouse.h | 2 | Processed mouse X |
-| `0x0172` | MBState | 1 | Mouse button state (bit 7: 0=down, 1=up) |
-| `0x08CE` | CrsrNew | 1 | Trigger for cursor redraw |
-| `0x08CF` | CrsrCouple | 1 | Cursor coupling flag |
-| `0x08D0` | CrsrState | 2 | Cursor hide count (0=visible, <0=hidden) |
-
-### Windows / Menus
-
-| Address | Name | Size | Description |
-|---|---|---|---|
-| `0x09D6` | WindowList | 4 | Pointer to first WindowRecord |
-| `0x0A1C` | MenuList | 4 | Handle to menu list |
-| `0x0A20` | MBarEnable | 4 | Bitmask of enabled menus |
-| `0x0A26` | TheMenu | 2 | Currently highlighted menu ID |
-| `0x0BAA` | MBarHeight | 2 | Menu bar height in pixels |
-| `0x09EE` | GrayRgn | 4 | Desktop region handle |
-
-### System State
-
-| Address | Name | Size | Description |
-|---|---|---|---|
-| `0x012F` | CPUFlag | 1 | CPU type (0=68000, 1=010, 2=020, 3=030, 4=040) |
-| `0x016A` | Ticks | 4 | Tick count (incremented 60x/sec) |
-| `0x020C` | Time | 4 | Seconds since midnight Jan 1, 1904 |
-| `0x0CFC` | WarmStart | 4 | `0x574C5343` ('WLSC') when Mac OS is initialized |
-| `0x014A` | EventQueue | 4 | Pointer to OS event queue header |
-| `0x0BBC` | ShutDwnQHdr | 4 | Shutdown queue header |
-
-### Traps Used by Appliance Layer
-
-| Trap | Number | Purpose |
-|---|---|---|
-| `_Launch` | `A9F2` | Launch application from FSSpec |
-| `_ExitToShell` | `A9F4` | Terminate current app, return to Finder |
-| `_Shutdown` | `A895` | System shutdown (D0: 1=off, 2=restart) |
-| `_PostEvent` | `A02F` | Post event to OS event queue |
-| `_FSMakeFSSpec` | `A9F1` | Build FSSpec from path components |
-| `_GetFrontProcess` | `A831` | Get frontmost process serial number |
-| `_AESend` | `A816` | Send Apple Event |
 
 ---
 
 ## Implementation Order
 
-1. **Tier 1 HTTP endpoints** — mouse, click, key, type, keycombo, app info. Pure wiring to existing ADB functions. Immediately scriptable via curl.
+### Phase 1: Command Dispatcher + CLI
 
-2. **Tier 2 introspection** — windows, menus, memory peek/poke. Read-only memory walking. Enables building a "what's on screen" API.
+1. Command dispatcher (thread-safe queue + 60Hz drain)
+2. Unix socket server thread (~150 lines)
+3. Wire existing functions: `click`, `mouse`, `key`, `type`, `keycombo`, `status`, `screenshot`
+4. `mac-phoenix-ctl` CLI wrapper (~50 lines)
+5. HTTP endpoints that delegate to same dispatcher
 
-3. **Command queue in IRQ handler** — the plumbing for Tier 3. Check a host-side queue on each 60Hz tick, dispatch to `Execute68kTrap()`.
+### Phase 2: Introspection
 
-4. **Tier 3 trap calls** — launch app, graceful shutdown, quit app. Requires constructing Mac data structures in guest memory.
+6. `app` — read CurApName from low-memory global
+7. `windows` — walk WindowList linked list
+8. `menus` — read MenuList structure
+9. `memory` — peek/poke via ReadMacInt/WriteMacInt
+10. `wait` — polling loop with condition parser
 
-5. **Apple Events** — the endgame. Full scriptability: open documents, quit apps, shutdown, any inter-app communication System 7.5.5 supports.
+### Phase 3: File Injection + Cross-Compilation
+
+11. Wire up extfs to current config system (--extfs flag)
+12. Test extfs actually works with current memory layout
+13. Set up Retro68 toolchain, build first test app
+14. `inject` command (copy file into extfs directory)
+
+### Phase 4: Trap Calls
+
+15. `Execute68kTrap()` integration in IRQ handler (command queue drain)
+16. `launch` — build FSSpec + LaunchParamBlockRec, call _Launch
+17. `quit` — _ExitToShell trap
+18. `shutdown` — _Shutdown trap
+19. Test result EmulOp (M68K_EMUL_OP_TEST_RESULT)
+
+### Phase 5: Appliance Mode
+
+20. `--appliance` flag: auto-boot + auto-launch + auto-quit
+21. Integration test suite using the full pipeline
+
+---
+
+## Existing Infrastructure
+
+| What | Status | Location |
+|------|--------|----------|
+| ADB mouse/keyboard functions | Working | `src/core/adb.cpp` |
+| 60Hz IRQ handler | Working | `src/core/emul_op.cpp` (M68K_EMUL_OP_IRQ) |
+| Boot phase detection | Working | `src/core/boot_progress.cpp` |
+| Zap PRAM (suppress dirty dialog) | Working | `--zappram` flag, `emulator_init.cpp` |
+| extfs virtual volume | In build, needs testing | `src/core/extfs.cpp` |
+| HTTP API server | Working | `src/webserver/api_handlers.cpp` |
+| Screenshot/framebuffer | Working | `GET /api/screenshot` |
+| Execute68k | Exists in legacy code | Needs verification in current codebase |
+| ScratchMem (64KB @ 0x02100000) | Allocated | `src/core/cpu_context.cpp` |
+
+---
+
+## Key Low-Memory Globals
+
+### Application State
+
+| Address | Name | Size | Description |
+|---------|------|------|-------------|
+| `0x0910` | CurApName | 32 | Current app name (Pascal string) |
+| `0x0900` | CurApRefNum | 2 | Current app resource file ref number |
+| `0x0904` | CurrentA5 | 4 | App's A5 world pointer |
+| `0x0908` | CurStackBase | 4 | App's stack base |
+
+### Windows / Menus
+
+| Address | Name | Size | Description |
+|---------|------|------|-------------|
+| `0x09D6` | WindowList | 4 | Pointer to first WindowRecord |
+| `0x0A1C` | MenuList | 4 | Handle to menu list |
+| `0x0BAA` | MBarHeight | 2 | Menu bar height (set to 0 to hide) |
+
+### System
+
+| Address | Name | Size | Description |
+|---------|------|------|-------------|
+| `0x016A` | Ticks | 4 | Tick count (60x/sec) |
+| `0x020C` | Time | 4 | Seconds since 1904-01-01 |
+| `0x0CFC` | WarmStart | 4 | `0x574C5343` when Mac OS initialized |
 
 ---
 
 ## Constraints
 
-- **`Execute68kTrap()` only works inside EmulOp handlers** — specifically the 60Hz IRQ. All Mac OS calls must go through the command queue.
-- **Mac memory allocation** — constructing FSSpecs, LaunchParamBlockRecs, AEDescs requires allocating memory in the Mac heap. Can use `_NewPtr` trap or reserve a scratch area.
-- **Timing** — commands execute on the next 60Hz tick (~16ms latency). Good enough for automation, not for real-time control.
-- **Window struct offsets differ** between classic GrafPort (108 bytes) and Color CGrafPort (156 bytes). Must check bit 14 of `rowBytes` to detect which.
-- **Pascal strings** — all Mac OS strings are length-prefixed (first byte = length, no null terminator).
+- **`Execute68kTrap()` only works inside EmulOp handlers** — all Mac OS calls go through the command queue, executed on the 60Hz IRQ tick (~16ms latency)
+- **Pascal strings** — all Mac OS strings are length-prefixed (first byte = length)
+- **Color vs classic GrafPort** — check bit 14 of `rowBytes` to determine WindowRecord layout
+- **extfs resource forks** — Retro68 outputs MacBinary which includes resource fork; extfs stores resource forks as `._filename` AppleDouble files on the host
+- **Test app linking** — Retro68 apps need proper startup code to call InitGraf/InitFonts/etc. or use RetroConsole for minimal apps
