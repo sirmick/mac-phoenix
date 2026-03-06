@@ -5,7 +5,7 @@ import * as fs from 'fs';
 
 const HTTP_PORT = parseInt(process.env.MACEMU_HTTP_PORT || '18094');
 const SIG_PORT = HTTP_PORT + 1;
-const ROM_PATH = process.env.MACEMU_ROM_PATH || '/home/mick/quadra.rom';
+const ROM_PATH = process.env.MACEMU_ROM || '/home/mick/quadra.rom';
 const BUILD_DIR = path.resolve(__dirname, '../../build');
 const BINARY = path.join(BUILD_DIR, 'macemu-next');
 
