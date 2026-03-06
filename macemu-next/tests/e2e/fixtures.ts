@@ -60,11 +60,12 @@ export const test = base.extend<{}, EmulatorFixture>({
 export { expect } from '@playwright/test';
 
 // Helper to spawn the emulator as a child process for tests that need it
-export async function spawnEmulator(): Promise<ChildProcess> {
+export async function spawnEmulator(opts?: { timeoutSeconds?: number }): Promise<ChildProcess> {
   if (!fs.existsSync(BINARY)) {
     throw new Error(`Binary not found: ${BINARY}. Run 'ninja -C build' first.`);
   }
 
+  const timeout = opts?.timeoutSeconds ?? 60;
   const args = ['--port', String(HTTP_PORT), '--signaling-port', String(SIG_PORT)];
   if (fs.existsSync(ROM_PATH)) {
     args.push(ROM_PATH);
@@ -74,7 +75,7 @@ export async function spawnEmulator(): Promise<ChildProcess> {
     env: {
       ...process.env,
       CPU_BACKEND: 'uae',
-      EMULATOR_TIMEOUT: '60',
+      EMULATOR_TIMEOUT: String(timeout),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

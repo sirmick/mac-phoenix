@@ -729,11 +729,18 @@ Response APIRouter::handle_mouse(const Request& req) {
         return resp;
     }
 
-    int mouse_x = 0, mouse_y = 0;
-    boot_progress_get_mouse(&mouse_x, &mouse_y);
+    MacCursorState cs;
+    boot_progress_get_cursor_state(&cs);
 
     std::ostringstream json;
-    json << "{\"x\": " << mouse_x << ", \"y\": " << mouse_y << "}";
+    json << "{"
+         << "\"x\": " << cs.cursor_x << ", \"y\": " << cs.cursor_y
+         << ", \"raw_x\": " << cs.raw_x << ", \"raw_y\": " << cs.raw_y
+         << ", \"mtemp_x\": " << cs.mtemp_x << ", \"mtemp_y\": " << cs.mtemp_y
+         << ", \"crsr_new\": " << cs.crsr_new
+         << ", \"crsr_couple\": " << cs.crsr_couple
+         << ", \"crsr_busy\": " << cs.crsr_busy
+         << "}";
     return Response::json(json.str());
 }
 

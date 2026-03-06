@@ -316,7 +316,24 @@ double boot_progress_elapsed(void)
 
 void boot_progress_get_mouse(int *x, int *y)
 {
-	/* Mac low-memory globals: RawMouse Y at 0x828, X at 0x82a */
+	/* Mac low-memory globals: MTemp Y at 0x828, X at 0x82a (what ADB wrote) */
 	*y = (int16_t)ReadMacInt16(0x828);
 	*x = (int16_t)ReadMacInt16(0x82a);
+}
+
+void boot_progress_get_cursor_state(MacCursorState *state)
+{
+	/* MTemp: written by ADB interrupt handler */
+	state->mtemp_y = (int16_t)ReadMacInt16(0x828);
+	state->mtemp_x = (int16_t)ReadMacInt16(0x82a);
+	/* RawMouse: written by ADB interrupt handler */
+	state->raw_y = (int16_t)ReadMacInt16(0x82c);
+	state->raw_x = (int16_t)ReadMacInt16(0x82e);
+	/* Mouse: written by Mac OS Cursor Manager (proof of processing) */
+	state->cursor_y = (int16_t)ReadMacInt16(0x830);
+	state->cursor_x = (int16_t)ReadMacInt16(0x832);
+	/* Cursor Manager flags */
+	state->crsr_busy = ReadMacInt8(0x8cd);
+	state->crsr_new = ReadMacInt8(0x8ce);
+	state->crsr_couple = ReadMacInt8(0x8cf);
 }

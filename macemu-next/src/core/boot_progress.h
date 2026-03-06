@@ -34,6 +34,18 @@ double boot_progress_elapsed(void);
 /* Query Mac mouse position from low-memory globals (for /api/mouse) */
 void boot_progress_get_mouse(int *x, int *y);
 
+/* Query detailed Mac cursor state from low-memory globals */
+typedef struct {
+    int mtemp_x, mtemp_y;       /* 0x82A/0x828: MTemp - what ADB wrote */
+    int raw_x, raw_y;           /* 0x82E/0x82C: RawMouse - ADB raw position */
+    int cursor_x, cursor_y;     /* 0x832/0x830: Mouse - Cursor Manager output */
+    int crsr_new;               /* 0x8CE: cursor position changed flag */
+    int crsr_couple;            /* 0x8CF: cursor coupled to mouse flag */
+    int crsr_busy;              /* 0x8CD: cursor manager busy flag */
+} MacCursorState;
+
+void boot_progress_get_cursor_state(MacCursorState *state);
+
 #ifdef __cplusplus
 }
 #endif
