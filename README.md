@@ -4,7 +4,9 @@ A classic Macintosh emulator that runs in your browser. Boot Mac OS 7.5.5 on an 
 
 ![License](https://img.shields.io/badge/license-GPL--2.0-blue)
 
-![Mac OS 7.5.5 running in MacPhoenix](docs/images/mac-desktop.png)
+![Mac OS 7.5.5 running in MacPhoenix — browser UI](docs/images/browser-desktop.png)
+
+![Emulator Settings](docs/images/browser-config.png)
 
 ## What is this?
 
