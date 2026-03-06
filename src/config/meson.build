@@ -1,9 +1,7 @@
 # JSON Configuration System
 
 config_sources = [
-  'config_manager.cpp',
   'json_utils.cpp',
-  'prefs_manager.cpp',
   'emulator_config.cpp',
 ]
 
@@ -11,7 +9,7 @@ config_inc = include_directories(
   '.',
   '../common/include',
   '../../external/json/include',  # nlohmann/json
-  '../drivers/video/encoders',           # For codec.h (used by prefs_manager)
+  '../drivers/video/encoders',           # For codec.h
   '../drivers/audio/encoders',  # For audio_config.h
 )
 

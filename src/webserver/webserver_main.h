@@ -7,7 +7,7 @@
 #ifndef WEBSERVER_MAIN_H
 #define WEBSERVER_MAIN_H
 
-#include "../config/config_manager.h"
+#include "../config/emulator_config.h"
 #include "api_handlers.h"
 
 namespace webserver {
@@ -21,7 +21,7 @@ namespace webserver {
  * @param config Configuration (for http_port and client_dir)
  * @param api_context API context (for API handlers)
  */
-void http_server_main(const config::MacemuConfig* config,
+void http_server_main(const config::EmulatorConfig* config,
                       http::APIContext* api_context);
 
 } // namespace webserver

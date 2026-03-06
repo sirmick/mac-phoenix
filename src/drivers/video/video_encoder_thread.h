@@ -6,7 +6,7 @@
 #define VIDEO_ENCODER_THREAD_H
 
 #include "video_output.h"
-#include "../../config/config_manager.h"
+#include "../../config/emulator_config.h"
 
 namespace video {
 
@@ -19,7 +19,7 @@ namespace video {
  * @param video_output Triple buffer to read frames from
  * @param config Configuration (for codec selection)
  */
-void video_encoder_main(VideoOutput* video_output, config::MacemuConfig* config);
+void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* config);
 
 } // namespace video
 

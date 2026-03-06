@@ -52,11 +52,15 @@ static double elapsed_sec(void)
 	       (now.tv_nsec - boot_start_time.tv_nsec) / 1e9;
 }
 
+void set_log_level(int level)
+{
+	log_level = level;
+}
+
 int boot_log_level(void)
 {
 	if (log_level == -1) {
-		const char *env = getenv("MACEMU_LOG_LEVEL");
-		log_level = env ? atoi(env) : 0;
+		log_level = 0;
 	}
 	return log_level;
 }

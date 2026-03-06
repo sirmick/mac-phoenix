@@ -49,8 +49,7 @@ Selected via `--backend` flag or `CPU_BACKEND` env var (default: `uae`):
 src/
   main.cpp                          — Entry point, thread orchestration
   config/
-    emulator_config.cpp             — CLI args, JSON config, env vars
-    config_manager.cpp              — Legacy MacemuConfig (being replaced)
+    emulator_config.cpp             — Unified config: CLI args, JSON, env vars, save/load
   core/
     boot_progress.cpp               — Boot milestone tracking (phases, CHECKLOAD counting)
     rom_patches.cpp                 — ROM patching, EmulOp insertion
@@ -123,6 +122,10 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --screen WxH          Display resolution (default: 640x480)
   --config path         JSON config file
   --screenshots         Dump PPM screenshots to /tmp
+  --log-level N         Log level 0-3 (or use MACEMU_LOG_LEVEL env)
+  --debug-connection    Debug WebRTC connections
+  --debug-mode-switch   Debug video mode switches
+  --debug-perf          Debug performance
 ```
 
 ## Environment Variables
@@ -140,7 +143,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
 - **Platform API**: All backends implement the same `g_platform` function pointer table. Core code never calls backend-specific functions directly.
 - **Memory layout**: RAM(32MB @ 0x0) + ROM(1MB @ 0x02000000) + ScratchMem(64KB @ 0x02100000) + FrameBuffer(4MB @ 0x02110000). Framebuffer is outside RAM to avoid corrupting Mac data structures.
 - **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
-- **Two config systems**: `EmulatorConfig` (new, CLI-aware) and `MacemuConfig` (legacy, JSON-only). Being unified — CLI flags propagate via main.cpp.
+- **Single config system**: `EmulatorConfig` — handles CLI args, JSON file, env vars. Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
 
 ## ROM

@@ -8,6 +8,7 @@
 #define STATIC_FILES_H
 
 #include "http_server.h"
+#include "../config/emulator_config.h"
 #include <string>
 
 namespace http {
@@ -19,10 +20,9 @@ namespace http {
  */
 class StaticFileHandler {
 public:
-    explicit StaticFileHandler(const std::string& root_dir, const std::string& config_path = "");
+    explicit StaticFileHandler(const std::string& root_dir, const config::EmulatorConfig* config = nullptr);
 
     // Try to serve a static file for the given path
-    // Returns empty response if file not found (check with is_valid())
     Response serve(const std::string& path);
 
     // Check if path is handled by static file handler
@@ -34,7 +34,7 @@ private:
     std::string inject_config_template(const std::string& html) const;
 
     std::string root_dir_;
-    std::string config_path_;
+    const config::EmulatorConfig* config_;
 };
 
 } // namespace http

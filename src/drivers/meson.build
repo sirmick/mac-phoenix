@@ -53,6 +53,7 @@ driver_inc = include_directories(
   '../platform',
   '../config',
   '../webserver',
+  '../../external/json/include',
 )
 
 driver_lib = static_library('drivers',

@@ -45,9 +45,9 @@
 #include "sigsegv.h"  // SIGSEGV handler for skipping illegal memory accesses
 
 // WebRTC streaming
-#include "config/config_manager.h"
 #include "config/emulator_config.h"  // Unified configuration
 #include "core/cpu_context.h"  // Phase 2: Self-contained CPU context
+#include "core/boot_progress.h"  // For set_log_level
 #include "drivers/video/video_webrtc.h"
 #include "drivers/video/video_screenshot.h"
 #include "drivers/audio/audio_webrtc.h"
@@ -60,7 +60,6 @@
 namespace webrtc {
 	std::atomic<bool> g_running(true);
 	std::atomic<bool> g_request_keyframe(false);
-	config::MacemuConfig* g_config = nullptr;  // Global config for driver initialization
 	WebRTCServer* g_server = nullptr;  // Global WebRTC server for encoder threads to send frames
 }
 
@@ -184,40 +183,35 @@ int main(int argc, char **argv)
 	// ========================================
 	// Load Unified Configuration
 	// ========================================
-	// This replaces the old prefs system with a clean, single source of truth.
-	// Priority: CLI args > JSON config > Defaults
 	const char* home = getenv("HOME");
 	std::string default_config_path = std::string(home) + "/.config/mac-phoenix/config.json";
 
-	config::EmulatorConfig emu_config = config::load_emulator_config(
+	static config::EmulatorConfig emu_config = config::load_emulator_config(
 		default_config_path.c_str(), argc, argv);
 
 	// Print configuration for debugging
 	config::print_config(emu_config);
 
-	// Set RAM size from config (replaces hardcoded 32MB)
-	RAMSize = emu_config.ram_mb * 1024 * 1024;
+	// Set global debug/log state from config
+	g_debug_mode_switch = emu_config.debug_mode_switch;
+	set_log_level(emu_config.log_level);
 
-	// Store old JSON config for legacy code (will be removed later)
-	static config::MacemuConfig webrtc_config;
-	webrtc_config = config::load_config(default_config_path);
-	// Propagate CLI overrides from EmulatorConfig → MacemuConfig
-	webrtc_config.web.http_port = emu_config.http_port;
-	webrtc::g_config = &webrtc_config;
+	// Set RAM size from config
+	RAMSize = emu_config.ram_mb * 1024 * 1024;
 
 	// Initialize prefs system with values from config (for legacy code)
 	int dummy_argc = 0;
 	char** dummy_argv = nullptr;
-	PrefsInit(NULL, dummy_argc, dummy_argv);  // Don't process CLI args (already done)
+	PrefsInit(NULL, dummy_argc, dummy_argv);
 	PrefsAddInt32("ramsize", RAMSize);
 	PrefsAddInt32("cpu", emu_config.cpu_type_int());
-	PrefsAddBool("fpu", emu_config.fpu);
+	PrefsAddBool("fpu", emu_config.fpu());
 
 	// Install platform drivers (video/audio)
-	if (emu_config.enable_webrtc) {
+	if (emu_config.enable_webserver) {
 		printf("Installing WebRTC video/audio drivers...\n");
 		g_platform.video_init = [](bool classic) -> bool {
-			return video_webrtc_init(classic, webrtc::g_config);
+			return video_webrtc_init(classic, &emu_config);
 		};
 		g_platform.video_exit = video_webrtc_exit;
 		g_platform.video_refresh = video_webrtc_refresh;
@@ -235,13 +229,9 @@ int main(int argc, char **argv)
 	// ========================================
 	// Initialize CPU Context (Phase 2)
 	// ========================================
-	// This replaces 230 lines of manual initialization with a single function call!
-
-	// Check if we have a ROM to load
 	const char *rom_path = emu_config.rom_path.empty() ? nullptr : emu_config.rom_path.c_str();
 
 	if (rom_path) {
-		// CLI mode or WebUI with ROM: Initialize immediately
 		printf("\n=== Initializing CPU Context ===\n");
 
 		// Copy null drivers from g_platform into CPUContext's platform
@@ -263,41 +253,37 @@ int main(int argc, char **argv)
 		}
 
 		// IMPORTANT: Copy platform to global BEFORE init_m68k()
-		// because ROM patching and CPU init trigger EmulOps that use g_platform
 		g_platform = *platform;
 
-		// Initialize M68K - does everything: allocate memory, load ROM,
-		// check ROM, init subsystems, patch ROM, init CPU, set up timer
+		// Initialize M68K
 		if (!g_cpu_ctx.init_m68k(emu_config)) {
 			fprintf(stderr, "Failed to initialize M68K CPU context\n");
 			return 1;
 		}
 
-		// Install SIGSEGV handler (replaces crash handler for SEGV)
-		// This allows the emulator to skip illegal memory accesses like BasiliskII
+		// Install SIGSEGV handler
 		if (!sigsegv_install_handler(sigsegv_handler)) {
 			fprintf(stderr, "WARNING: Could not install SIGSEGV handler\n");
 		} else {
 			printf("[Init] SIGSEGV handler installed (ignoresegv mode)\n");
 		}
 
-		// Mark emulator as initialized (for deferred init check)
+		// Mark emulator as initialized
 		g_emulator_initialized = true;
 
-		// Auto-start CPU only in headless mode (WebRTC disabled)
-		// In WebRTC mode, user must click "Start" in the web UI
-		if (!emu_config.enable_webrtc) {
+		// Auto-start CPU only in headless mode
+		if (!emu_config.enable_webserver) {
 			printf("[CPU] Auto-starting CPU (headless mode)\n");
 			{
 				std::lock_guard<std::mutex> lock(cpu_state::g_mutex);
 				cpu_state::g_running.store(true);
 			}
-			cpu_state::g_cv.notify_one();  // Wake up CPU thread
+			cpu_state::g_cv.notify_one();
 		} else {
 			printf("[CPU] WebRTC mode - CPU will start when user clicks 'Start' in web UI\n");
 		}
 
-		// Auto-exit timer (--timeout or EMULATOR_TIMEOUT env var)
+		// Auto-exit timer
 		if (emu_config.timeout_seconds > 0) {
 			int timeout_sec = emu_config.timeout_seconds;
 			printf("Auto-exit timer set: %d seconds\n", timeout_sec);
@@ -309,7 +295,6 @@ int main(int argc, char **argv)
 			timeout_thread.detach();
 		}
 	} else {
-		// WebUI mode without ROM: Skip init, will be done via API
 		printf("\nNo ROM file specified. Starting in webserver mode.\n");
 		printf("You can configure the ROM path in the web UI.\n");
 	}
@@ -317,27 +302,18 @@ int main(int argc, char **argv)
 	// ============================================================
 	// HTTP Server (WebRTC Mode Only)
 	// ============================================================
-	if (emu_config.enable_webrtc) {
+	if (emu_config.enable_webserver) {
 		// Set up API context for HTTP handlers
 		CodecType server_codec = CodecType::PNG;  // Default
 		http::APIContext api_context;
-		api_context.debug_connection = emu_config.debug_connection;
-		api_context.debug_mode_switch = emu_config.debug_mode_switch;
-		api_context.debug_perf = emu_config.debug_perf;
-		api_context.prefs_path = default_config_path;
-		api_context.roms_path = emu_config.storage_dir + "/roms";
-		api_context.images_path = emu_config.storage_dir + "/images";
+		api_context.config = &emu_config;
 		api_context.server_codec = &server_codec;
-		api_context.video_output = video::g_video_output;  // Screenshot API
-		api_context.cpu_running = &cpu_state::g_running;  // CPU state control
+		api_context.video_output = video::g_video_output;
+		api_context.cpu_running = &cpu_state::g_running;
 		api_context.cpu_mutex = &cpu_state::g_mutex;
 		api_context.cpu_cv = &cpu_state::g_cv;
-		printf("Storage paths:\n");
-		printf("  ROMs:   %s\n", api_context.roms_path.c_str());
-		printf("  Images: %s\n", api_context.images_path.c_str());
 		api_context.notify_codec_change_fn = [](CodecType codec) {
 			fprintf(stderr, "[API] Codec changed to: %d\n", static_cast<int>(codec));
-			// TODO: Notify video encoder to change codec
 		};
 
 		// Initialize WebRTC signaling server
@@ -355,20 +331,18 @@ int main(int argc, char **argv)
 
 		// Launch HTTP server thread
 		std::thread http_server_thread(webserver::http_server_main,
-		                                &webrtc_config, &api_context);
+		                                &emu_config, &api_context);
 
 		// Launch WebRTC signaling server thread
 		std::thread webrtc_server_thread(webrtc::webrtc_server_main,
 		                                  &webrtc_server, &webrtc_signaling::g_running);
 
-		// Launch CPU execution thread (always, even if no ROM loaded yet)
+		// Launch CPU execution thread
 		printf("Launching CPU execution thread (CPU starts in stopped state)...\n");
 		std::thread cpu_thread([]() {
 			printf("[CPU Thread] Waiting for start signal...\n");
 
-			// Wait for CPU to be started via API
 			while (webserver::g_running.load(std::memory_order_acquire)) {
-				// Wait for CPU to be started (no busy polling)
 				{
 					std::unique_lock<std::mutex> lock(cpu_state::g_mutex);
 					cpu_state::g_cv.wait(lock, []() {
@@ -376,29 +350,20 @@ int main(int argc, char **argv)
 					});
 				}
 
-				// Check if we should exit
 				if (!webserver::g_running.load(std::memory_order_acquire)) {
 					break;
 				}
 
-				// Check if emulator is initialized
 				if (!g_cpu_ctx.is_initialized()) {
 					printf("[CPU Thread] CPU start requested but emulator not initialized yet\n");
-					cpu_state::g_running.store(false);  // Reset flag
-					continue;  // Go back to waiting
+					cpu_state::g_running.store(false);
+					continue;
 				}
 
-				// CPU is running - execute until stopped
 				Platform* platform = g_cpu_ctx.get_platform();
-
-				// NOTE: Do NOT call cpu_reset() here — emulator_init() has already
-				// set up the CPU state (ROM patches, traps, hardware init via EmulOps).
-				// Resetting would wipe all that state and crash at ROM entry.
 				printf("[CPU Thread] CPU started, executing...\n");
 
 				if (platform->cpu_execute_fast) {
-					// Use backend's fast execution loop (has proper SPCFLAG/interrupt handling)
-					// Watchdog thread sets quit_program when user clicks Stop
 					extern bool quit_program;
 					quit_program = false;
 					std::thread watchdog([&]() {
@@ -411,7 +376,6 @@ int main(int argc, char **argv)
 					platform->cpu_execute_fast();
 					watchdog.join();
 				} else {
-					// Slow path - execute one instruction at a time
 					while (cpu_state::g_running.load(std::memory_order_acquire) &&
 					       webserver::g_running.load(std::memory_order_acquire)) {
 						platform->cpu_execute_one();
@@ -431,7 +395,7 @@ int main(int argc, char **argv)
 		}
 		printf("Press Ctrl+C to exit.\n\n");
 
-		// Wait for threads to complete (run until shutdown signal)
+		// Wait for threads to complete
 		http_server_thread.join();
 		webrtc_server_thread.join();
 		if (cpu_thread.joinable()) {
@@ -444,14 +408,11 @@ int main(int argc, char **argv)
 			printf("Starting CPU execution...\n");
 			printf("Press Ctrl+C to exit.\n\n");
 
-			// Run CPU execution loop using CPUContext
 			Platform* platform = g_cpu_ctx.get_platform();
 			if (platform->cpu_execute_fast) {
-				// Fast path (Unicorn, DualCPU, UAE)
 				fprintf(stderr, "[CPU] Using FAST execution path (cpu_execute_fast)\n");
 				platform->cpu_execute_fast();
 			} else {
-				// Slow path - execute one instruction at a time
 				fprintf(stderr, "[CPU] Using SLOW execution path (cpu_execute_one loop)\n");
 				while (webserver::g_running.load(std::memory_order_acquire)) {
 					platform->cpu_execute_one();
@@ -462,7 +423,6 @@ int main(int argc, char **argv)
 			printf("No ROM loaded.\n");
 			printf("Press Ctrl+C to exit.\n\n");
 
-			// Wait for shutdown signal
 			while (webserver::g_running.load(std::memory_order_acquire)) {
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			}
@@ -472,7 +432,6 @@ int main(int argc, char **argv)
 	printf("\n=== Shutting Down ===\n");
 	stop_timer_interrupt();
 
-	// Should never reach here
 	ExitAll();
 	return 0;
 }

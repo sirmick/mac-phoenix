@@ -12,7 +12,7 @@
 
 #include "video_encoder_thread.h"
 #include "video_output.h"
-#include "../../config/config_manager.h"
+#include "../../config/emulator_config.h"
 #include "../../webrtc/webrtc_server.h"
 #include "encoders/h264_encoder.h"
 #include "encoders/vp9_encoder.h"
@@ -94,17 +94,17 @@ static void send_encoded_frame(const EncodedFrame& frame) {
  * @param video_output Triple buffer to read frames from
  * @param config Configuration (for codec selection)
  */
-void video_encoder_main(VideoOutput* video_output, config::MacemuConfig* config) {
+void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* config) {
     fprintf(stderr, "[VideoEncoder] Thread starting\n");
 
     // Debug flags
     static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
-    static bool debug_perf = (getenv("MACEMU_DEBUG_PERF") != nullptr);
+    static bool debug_perf = config ? config->debug_perf : (getenv("MACEMU_DEBUG_PERF") != nullptr);
 
     // Initialize encoder with codec from config
     CodecType current_codec = CodecType::PNG;  // Default
     if (config) {
-        std::string codec_str = config->web.codec;
+        const std::string& codec_str = config->codec;
         if (codec_str == "h264") current_codec = CodecType::H264;
         else if (codec_str == "vp9") current_codec = CodecType::VP9;
         else if (codec_str == "webp") current_codec = CodecType::WEBP;
@@ -125,7 +125,7 @@ void video_encoder_main(VideoOutput* video_output, config::MacemuConfig* config)
         // In production, config changes trigger an event instead of polling
         CodecType new_codec = current_codec;
         if (config) {
-            std::string codec_str = config->web.codec;
+            const std::string& codec_str = config->codec;
             if (codec_str == "h264") new_codec = CodecType::H264;
             else if (codec_str == "vp9") new_codec = CodecType::VP9;
             else if (codec_str == "webp") new_codec = CodecType::WEBP;

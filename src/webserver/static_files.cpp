@@ -5,15 +5,14 @@
  */
 
 #include "static_files.h"
-#include "../../config/config_manager.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <sstream>
 
 namespace http {
 
-StaticFileHandler::StaticFileHandler(const std::string& root_dir, const std::string& config_path)
-    : root_dir_(root_dir), config_path_(config_path)
+StaticFileHandler::StaticFileHandler(const std::string& root_dir, const config::EmulatorConfig* config)
+    : root_dir_(root_dir), config_(config)
 {}
 
 bool StaticFileHandler::handles(const std::string& path) const {
@@ -47,8 +46,6 @@ Response StaticFileHandler::serve(const std::string& path) {
     // Template injection for index.html: embed config JSON to eliminate race conditions
     if (path == "/" || path == "/index.html") {
         content = inject_config_template(content);
-        fprintf(stderr, "[HTTP] After injection, content size=%zu, has placeholder=%d\n",
-                content.size(), content.find("{{CONFIG_JSON}}") != std::string::npos ? 1 : 0);
     }
 
     // Build response
@@ -63,12 +60,10 @@ Response StaticFileHandler::serve(const std::string& path) {
     }
 
     resp.set_body(content);
-    fprintf(stderr, "[HTTP] Serving %s with body size=%zu\n", path.c_str(), content.size());
     return resp;
 }
 
 std::string StaticFileHandler::map_path_to_file(const std::string& path) const {
-    // Map URL paths to disk files
     if (path == "/" || path == "/index.html") {
         return root_dir_ + "/index.html";
     } else if (path == "/client.js") {
@@ -82,7 +77,7 @@ std::string StaticFileHandler::map_path_to_file(const std::string& path) const {
     } else if (path == "/PowerPC.svg") {
         return root_dir_ + "/PowerPC.svg";
     }
-    return "";  // Not found
+    return "";
 }
 
 std::string StaticFileHandler::get_content_type(const std::string& path) const {
@@ -99,50 +94,34 @@ std::string StaticFileHandler::get_content_type(const std::string& path) const {
 }
 
 std::string StaticFileHandler::inject_config_template(const std::string& html) const {
-    // Load config from disk (use provided config path, fallback to relative path)
-    std::string cfg_path = config_path_.empty() ? "macemu-config.json" : config_path_;
-    config::MacemuConfig cfg = config::load_config(cfg_path);
+    if (!config_) return html;
 
-    // Build JSON (same structure as /api/config endpoint)
+    // Build JSON from EmulatorConfig (client expects these keys)
     nlohmann::json j;
-    j["version"] = cfg.version;
+    j["codec"] = config_->codec;
+    j["mousemode"] = config_->mousemode;
+    j["screen"] = config_->screen_string();
+    j["debug_connection"] = config_->debug_connection;
+    j["debug_mode_switch"] = config_->debug_mode_switch;
+    j["debug_perf"] = config_->debug_perf;
 
-    // Web config (what the client actually needs)
-    j["webcodec"] = cfg.web.codec;           // Client expects "webcodec" key
-    j["mousemode"] = cfg.web.mousemode;
-    j["resolution"] = cfg.common.screen;
+    // Client compat keys
+    j["webcodec"] = config_->codec;
+    j["resolution"] = config_->screen_string();
 
-    // Debug flags (client expects these at top level)
-    j["debug_connection"] = false;  // TODO: read from actual debug config if exists
-    j["debug_mode_switch"] = false;
-    j["debug_perf"] = false;
-
-    // Full config structure (for backwards compatibility with existing client code)
-    j["web"]["emulator"] = cfg.web.emulator;
-    j["web"]["codec"] = cfg.web.codec;
-    j["web"]["mousemode"] = cfg.web.mousemode;
-
-    j["common"]["ram"] = cfg.common.ram;
-    j["common"]["screen"] = cfg.common.screen;
-    j["common"]["sound"] = cfg.common.sound;
-    j["common"]["extfs"] = cfg.common.extfs;
-
-    // Serialize to JSON string with pretty printing
-    std::string config_json = j.dump(2);  // 2-space indent
+    std::string config_json = j.dump(2);
 
     // Replace {{CONFIG_JSON}} placeholder
     std::string result = html;
     const std::string placeholder = "{{CONFIG_JSON}}";
     size_t pos = result.find(placeholder);
 
-    fprintf(stderr, "[HTTP] inject_config_template: html size=%zu, looking for placeholder...\n", html.size());
-
     if (pos != std::string::npos) {
         result.replace(pos, placeholder.length(), config_json);
-        fprintf(stderr, "[HTTP] Injected config into index.html at pos %zu (webcodec=%s, mousemode=%s, result size=%zu)\n",
-                pos, cfg.web.codec.c_str(), cfg.web.mousemode.c_str(), result.size());
+        fprintf(stderr, "[HTTP] Injected config into index.html (codec=%s, mousemode=%s)\n",
+                config_->codec.c_str(), config_->mousemode.c_str());
     } else {
-        fprintf(stderr, "[HTTP] Warning: {{CONFIG_JSON}} placeholder not found in index.html (size=%zu)\n", html.size());
+        fprintf(stderr, "[HTTP] Warning: {{CONFIG_JSON}} placeholder not found in index.html\n");
     }
 
     return result;

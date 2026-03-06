@@ -124,15 +124,17 @@ async function fetchConfig() {
         Object.assign(debugConfig, config);
         logger.info('[Browser] Fetched config from API (fallback)', config);
 
-        // Store UI config from server
-        if (config.webcodec) serverUIConfig.webcodec = config.webcodec;
+        // Store UI config from server (supports both old and new JSON format)
+        const webcodec = config.webcodec || config.codec;
+        const resolution = config.resolution || config.screen;
+        if (webcodec) serverUIConfig.webcodec = webcodec;
         if (config.mousemode) serverUIConfig.mousemode = config.mousemode;
-        if (config.resolution) serverUIConfig.resolution = config.resolution;
+        if (resolution) serverUIConfig.resolution = resolution;
 
         // Set UI dropdowns to match server config (only needed when using fetch)
         const codecSelect = document.getElementById('codec-select');
-        if (codecSelect && config.webcodec) {
-            codecSelect.value = config.webcodec;
+        if (codecSelect && webcodec) {
+            codecSelect.value = webcodec;
         }
 
         const mouseSelect = document.getElementById('mouse-mode-select');
@@ -142,8 +144,8 @@ async function fetchConfig() {
 
         // Set initial resolution display (only needed when using fetch)
         const headerResEl = document.getElementById('header-resolution');
-        if (headerResEl && config.resolution) {
-            headerResEl.textContent = config.resolution;
+        if (headerResEl && resolution) {
+            headerResEl.textContent = resolution;
         }
 
         logger.info('[Browser] UI config loaded from fetch', serverUIConfig);

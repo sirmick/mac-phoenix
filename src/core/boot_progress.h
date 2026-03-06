@@ -23,8 +23,11 @@ extern "C" {
 /* Call from EmulOp() to track boot progress and log at appropriate verbosity */
 void boot_progress_update(uint16_t opcode, void *regs);
 
-/* Get current log level (cached from env var) */
+/* Get current log level (cached from env var or set via set_log_level) */
 int boot_log_level(void);
+
+/* Set log level from config (call at startup) */
+void set_log_level(int level);
 
 /* Query boot state (for /api/status) */
 const char* boot_progress_phase(void);

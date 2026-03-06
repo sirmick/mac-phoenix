@@ -8,7 +8,7 @@
 #define API_HANDLERS_H
 
 #include "http_server.h"
-#include "../config/config_manager.h"
+#include "../config/emulator_config.h"
 #include "../drivers/video/encoders/codec.h"  // For CodecType
 #include <string>
 #include <functional>
@@ -22,26 +22,10 @@ namespace http {
 
 /**
  * API Context - provides access to server state for API handlers
- *
- * This is a temporary bridge pattern to avoid global variables.
- * TODO: In Phase 7, convert to proper dependency injection
  */
 struct APIContext {
-    // Configuration
-    bool debug_connection;
-    bool debug_mode_switch;
-    bool debug_perf;
-    std::string prefs_path;
-    std::string roms_path;
-    std::string images_path;
-
-    // TODO: In-process integration - remove IPC fields, add direct Platform API access
-    // Emulator state (legacy IPC fields - to be removed)
-    // bool emulator_connected;
-    // int emulator_pid;
-    // int started_emulator_pid;
-    // MacEmuIPCBuffer* ipc_shm;  // Shared memory for video and audio IPC
-    // std::atomic<bool>* user_stopped_emulator;  // Flag: user explicitly stopped via web UI
+    // Unified configuration (live, mutable)
+    config::EmulatorConfig* config = nullptr;
 
     // Codec state
     CodecType* server_codec;  // Pointer to g_server_codec
@@ -54,13 +38,6 @@ struct APIContext {
     std::atomic<bool>* cpu_running;  // Pointer to cpu_state::g_running
     std::mutex* cpu_mutex;  // Pointer to cpu_state::g_mutex
     std::condition_variable* cpu_cv;  // Pointer to cpu_state::g_cv
-
-    // Command callbacks (legacy IPC - to be replaced with direct Platform API calls)
-    // std::function<void(uint8_t)> send_command_fn;
-    // std::function<bool()> start_emulator_fn;
-    // std::function<void()> stop_emulator_fn;
-    // std::function<void()> disconnect_emulator_fn;
-    // std::function<void(bool)> request_restart_fn;
 };
 
 /**
@@ -76,21 +53,14 @@ public:
     Response handle(const Request& req, bool* handled);
 
 private:
-    // New unified config endpoints
-    Response handle_config_get(const Request& req);     // GET /api/config - return macemu-config.json
-    Response handle_config_save(const Request& req);    // POST /api/config - save macemu-config.json
+    // Config endpoints
+    Response handle_config_get(const Request& req);     // GET /api/config
+    Response handle_config_save(const Request& req);    // POST /api/config
 
-    // Legacy endpoints (deprecated, kept for compatibility)
-    Response handle_config(const Request& req);         // Old config endpoint
-    Response handle_config_post(const Request& req);    // Old config POST
     Response handle_storage(const Request& req);
-    Response handle_prefs_get(const Request& req);      // Deprecated
-    Response handle_prefs_post(const Request& req);     // Deprecated
-
     Response handle_restart(const Request& req);
     Response handle_status(const Request& req);
     Response handle_codec_post(const Request& req);
-    Response handle_emulator_change(const Request& req);
     Response handle_emulator_start(const Request& req);
     Response handle_emulator_stop(const Request& req);
     Response handle_emulator_restart(const Request& req);

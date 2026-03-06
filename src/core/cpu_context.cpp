@@ -237,7 +237,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
             cpu_type_ = config.cpu_type_int();
             if (cpu_type_ < 2) cpu_type_ = 2;
             if (cpu_type_ > 4) cpu_type_ = 4;
-            fpu_type_ = config.fpu ? 1 : 0;
+            fpu_type_ = config.fpu() ? 1 : 0;
             if (cpu_type_ == 4) fpu_type_ = 1;  // 68040 always with FPU
             twenty_four_bit_ = true;
             break;
@@ -245,7 +245,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
             cpu_type_ = config.cpu_type_int();
             if (cpu_type_ < 2) cpu_type_ = 2;
             if (cpu_type_ > 4) cpu_type_ = 4;
-            fpu_type_ = config.fpu ? 1 : 0;
+            fpu_type_ = config.fpu() ? 1 : 0;
             if (cpu_type_ == 4) fpu_type_ = 1;  // 68040 always with FPU
             twenty_four_bit_ = false;
             break;

@@ -14,7 +14,7 @@
 #include "platform.h"
 #include "video_output.h"
 #include "video_encoder_thread.h"
-#include "../../config/config_manager.h"
+#include "../../config/emulator_config.h"
 #include <thread>
 #include <atomic>
 
@@ -35,7 +35,7 @@ namespace video {
 // WebRTC video state (internal)
 namespace {
 	std::thread* g_encoder_thread = nullptr;
-	config::MacemuConfig* g_config = nullptr;
+	config::EmulatorConfig* g_config = nullptr;
 
 	// Dummy framebuffer for Mac
 	uint8_t* the_buffer = nullptr;
@@ -57,7 +57,7 @@ public:
 /*
  *  Initialization
  */
-bool video_webrtc_init(bool classic, config::MacemuConfig* config)
+bool video_webrtc_init(bool classic, config::EmulatorConfig* config)
 {
 	D(bug("Video: WebRTC driver initializing\n"));
 
