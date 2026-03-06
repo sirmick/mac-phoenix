@@ -5,22 +5,29 @@
 
 ## Summary
 
-Unicorn (QEMU TCG JIT) is **~2x slower** than UAE (hand-tuned interpreter) for M68K emulation after optimization work in March 2026. The gap was ~10x before optimizations (auto-ack interrupts, goto_tb backward branches, lean hook_block). Profiling shows the remaining bottleneck is JIT execution quality, not hook overhead or interrupt handling.
+Unicorn (QEMU TCG JIT) is **~10x slower** than UAE (hand-tuned interpreter) for M68K emulation. After March 2026 optimizations (auto-ack interrupts, goto_tb backward branches, lean hook_block), hook overhead was reduced to 5.3% of total execution time. The remaining 94.7% is pure JIT execution — the bottleneck is QEMU's TCG code quality for M68K, not our infrastructure.
 
-| Metric | UAE | Unicorn |
-|--------|-----|---------|
-| Boot to Finder | ~20s | ~45s |
-| CHECKLOADs in 30s | 4402+ | 2513+ |
+### Boot Milestone Timing (March 2026)
 
-### Pre-Optimization Numbers (January 2026)
+| Milestone | UAE | Unicorn | Ratio |
+|-----------|-----|---------|-------|
+| WLSC (warm start) | 4.05s | 0.87s | **0.2x** (Unicorn faster) |
+| Boot blocks (#40) | 4.05s | 1.35s | **0.3x** (Unicorn faster) |
+| Extensions (#375) | 4.14s | 12.87s | **3.1x** slower |
+| 1000 resources | 4.31s | 33.03s | **7.7x** slower |
+| Finder launched | 4.41s | 46.01s | **10.4x** slower |
+| 2000 resources | 4.48s | 52.90s | **11.8x** slower |
 
-The data below was captured **before** the March 2026 optimizations and represents the ~10x gap:
+Note: Unicorn is **faster** during early ROM init (tight loops where JIT wins). The gap widens as Mac OS loads extensions (diverse code paths, small blocks, frequent traps).
 
-| Metric | UAE | Unicorn (pre-opt) |
-|--------|-----|---------|
-| Boot to Finder | ~6s | ~62s |
-| Instructions/sec (estimated) | ~40M | ~3.9M |
-| CHECKLOADs in 30s | 4402 (done in 6s) | ~1800 |
+### Memory Usage
+
+| Backend | RSS at t=1s | RSS at t=58s | Growth |
+|---------|-------------|--------------|--------|
+| UAE | 51,108 kB | 51,108 kB | 0 kB (constant) |
+| Unicorn | 54,360 kB | 57,184 kB | +2,824 kB (~47 kB/sec) |
+
+Unicorn's memory growth is from QEMU's TB cache — new code paths are JIT-compiled but never freed.
 
 ## Profiling Results (30-second Unicorn boot)
 
@@ -142,7 +149,7 @@ These are deep modifications to `target/m68k/translate.c` and `tcg/` — weeks o
 
 ## March 2026 Optimizations
 
-Three key optimizations reduced the gap from ~10x to ~2x:
+Three key optimizations reduced hook overhead from ~10% to ~5.3%:
 
 1. **Auto-ack interrupts** — Modified QEMU's `m68k_cpu_exec_interrupt()` to auto-acknowledge interrupts, eliminating the stop/start cycle that broke JIT block chaining on every interrupt.
 
@@ -152,6 +159,6 @@ Three key optimizations reduced the gap from ~10x to ~2x:
 
 ## Conclusion
 
-After optimization, Unicorn is the **primary backend** for end users, with ~2x overhead vs UAE. The remaining gap is structural — inherent to QEMU's TCG JIT architecture when applied to M68K's small basic blocks and complex condition code semantics. Our hook and interrupt infrastructure adds minimal overhead; the JIT execution quality is the limiting factor.
+After optimization, hook overhead is minimal (5.3%). The ~10x gap is structural — inherent to QEMU's TCG JIT architecture when applied to M68K's small basic blocks and complex condition code semantics. The JIT execution quality is the sole limiting factor.
 
-Both backends boot to Mac OS 7.5.5 Finder desktop. Unicorn is the focus for future development.
+Both backends boot to Mac OS 7.5.5 Finder desktop. UAE is faster for end users; Unicorn's value is as an independent M68K implementation for validation and as a path toward future JIT improvements.

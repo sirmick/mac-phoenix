@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 
 #include "sysdeps.h"
 #include "cpu_emulation.h"
@@ -39,6 +40,17 @@ static bool seen_boot_resource = false;
 static bool seen_init_resource = false;
 static bool seen_finder = false;
 static char last_app_name[64] = {0};
+static struct timespec boot_start_time = {0, 0};
+
+static double elapsed_sec(void)
+{
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	if (boot_start_time.tv_sec == 0 && boot_start_time.tv_nsec == 0)
+		boot_start_time = now;
+	return (now.tv_sec - boot_start_time.tv_sec) +
+	       (now.tv_nsec - boot_start_time.tv_nsec) / 1e9;
+}
 
 int boot_log_level(void)
 {
@@ -90,7 +102,7 @@ static const char *phase_name(BootPhase p)
 
 static void milestone(const char *msg)
 {
-	fprintf(stderr, "[Boot] %s\n", msg);
+	fprintf(stderr, "[Boot +%6.2fs] %s\n", elapsed_sec(), msg);
 }
 
 static void milestonef(const char *fmt, ...)
@@ -100,7 +112,7 @@ static void milestonef(const char *fmt, ...)
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
-	fprintf(stderr, "[Boot] %s\n", buf);
+	fprintf(stderr, "[Boot +%6.2fs] %s\n", elapsed_sec(), buf);
 }
 
 static void set_phase(BootPhase p)

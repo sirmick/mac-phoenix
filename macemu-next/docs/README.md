@@ -130,7 +130,7 @@ Key fixes: framebuffer placement outside RAM (avoids WDCB overlap), RTR instruct
 added to QEMU m68k translator, FPU emulation, SIGSEGV handler.
 
 ### ✅ Unicorn Performance (March 2026)
-Reduced Unicorn overhead from ~10x to ~2x slower than UAE:
+Reduced Unicorn hook overhead from ~10x to ~5% of execution time (JIT itself is the bottleneck, ~10x slower):
 - Auto-ack interrupts in QEMU's `m68k_cpu_exec_interrupt()`
 - `goto_tb` enabled for backward branches (loop chaining)
 - Stripped hook_block of per-block perf timing, block stats, stale TB detector

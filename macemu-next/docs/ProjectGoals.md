@@ -22,11 +22,11 @@ What we're building and why.
 - **Clean API**: Simple C API, easy to integrate
 - **Cross-platform**: Works on Linux, macOS, Windows
 
-**Current State**: Both backends boot Mac OS 7.5.5 to Finder desktop (March 2026). Unicorn is ~2x slower than UAE due to structural JIT overhead (M68K condition codes, memory-indirect registers).
+**Current State**: Both backends boot Mac OS 7.5.5 to Finder desktop (March 2026). Unicorn is ~10x slower than UAE — 94.7% of time is JIT execution, hooks add only 5.3%. The gap is structural (QEMU TCG M68K condition codes, memory-indirect registers, small basic blocks).
 
 **Target State**:
 - Run Mac applications (HyperCard, games, productivity software)
-- Performance optimization (currently ~2x slower than UAE interpreter)
+- Performance optimization (currently ~10x slower than UAE interpreter)
 - Clean, maintainable codebase
 
 ### Secondary: Modern Architecture
@@ -203,7 +203,7 @@ EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 
 ### Phase 3: Performance & Polish 🎯 **CURRENT**
 
-- ✅ Unicorn perf: auto-ack interrupts, goto_tb, lean hook_block (~2x slower, down from ~10x)
+- ✅ Unicorn perf: auto-ack interrupts, goto_tb, lean hook_block (hooks 5.3%, JIT ~10x slower)
 - ✅ Web UI mouse/keyboard input working
 - ⏳ Application support (HyperCard, classic games)
 - ⏳ Stability improvements (long-running sessions)
@@ -228,7 +228,7 @@ EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 - ✅ 500k+ instruction dual-CPU validation (514k+)
 - ✅ Boot to Finder with both backends
 - ✅ WebRTC streaming with input
-- ✅ Unicorn performance within 2x of UAE
+- ✅ Unicorn hook overhead minimized (5.3% of execution time)
 
 ### Medium-Term (2026)
 - ⏳ Run HyperCard successfully
@@ -296,6 +296,6 @@ EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 
 **End Goal**: Fast, clean, validated Mac emulator using Unicorn M68K CPU
 
-**Current Status**: Both backends boot to Mac OS 7.5.5 Finder desktop. Unicorn ~2x slower than UAE. Web UI streaming with input working.
+**Current Status**: Both backends boot to Mac OS 7.5.5 Finder desktop. Unicorn ~10x slower than UAE (JIT bottleneck). Web UI streaming with input working.
 
 **Philosophy**: Reference BasiliskII, validate continuously, document everything

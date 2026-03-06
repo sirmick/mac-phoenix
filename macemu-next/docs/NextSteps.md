@@ -56,4 +56,4 @@ Created `m68k_registers.h` with a single C/C++ compatible definition using `uint
 
 ## Summary
 
-Items 1-5 completed in March 2026. The Unicorn backend is clean, boots to Finder, and has ~2x performance gap vs UAE. Both backends are production-ready for basic use. Next work is application support and stability.
+Items 1-5 completed in March 2026. The Unicorn backend is clean and boots to Finder, but is ~10x slower than UAE (94.7% JIT execution, hooks add only 5.3%). Next work is application support and stability.

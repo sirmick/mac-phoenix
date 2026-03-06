@@ -12,7 +12,7 @@ Track what's done and what's next.
 |--------|-----|---------|
 | Boot to Finder | ~20s | ~45s |
 | CHECKLOADs | 2200+ | 2513+ |
-| Performance | Baseline | ~2x slower |
+| Performance | Baseline | ~10x slower |
 
 ---
 
@@ -201,7 +201,7 @@ Track what's done and what's next.
 ## Phase 3: Performance & Polish 🎯 CURRENT FOCUS
 
 ### Completed
-- ✅ **Unicorn performance optimizations** (~2x slower, down from ~10x)
+- ✅ **Unicorn performance optimizations** (hooks reduced to 5.3% overhead; JIT itself ~10x slower)
   - Auto-ack interrupts in QEMU's `m68k_cpu_exec_interrupt()`
   - `goto_tb` enabled for backward branches
   - Lean `hook_block()` (stripped perf timing, block stats, stale TB detector)
@@ -387,7 +387,7 @@ ebd3d1b2 - Remove legacy per-CPU hook API and UC_HOOK_CODE implementation
 - ✅ **Both Backends Boot to Finder** (March 2026)
   - UAE: ~20s to Finder, Unicorn: ~45s to Finder
   - Framebuffer fix, RTR instruction, FPU emulation
-- ✅ **Unicorn Performance** (~2x slower, down from ~10x)
+- ✅ **Unicorn Performance** (hooks 5.3% overhead; JIT ~10x slower than UAE)
   - Auto-ack interrupts, goto_tb, lean hook_block
 - ✅ **Web UI Input** (March 2026)
   - Mouse/keyboard via WebRTC data channel

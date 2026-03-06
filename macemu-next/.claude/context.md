@@ -26,7 +26,7 @@
 ### Both Backends Boot to Mac OS 7.5.5 Finder Desktop
 
 - **UAE backend**: Boots to Finder, 2200+ CHECKLOADs
-- **Unicorn backend**: Boots to Finder, 2513+ CHECKLOADs (slower, ~2x UAE speed)
+- **Unicorn backend**: Boots to Finder, 2513+ CHECKLOADs (~10x slower than UAE)
 
 ### Phase 1: Core CPU Emulation - COMPLETE
 - Unicorn M68K backend (68040 with JIT)
@@ -49,8 +49,9 @@
 
 ### Phase 3: Performance & Polish - CURRENT
 - Unicorn performance optimizations (auto-ack interrupts, goto_tb, lean hook_block)
-- Unicorn is ~2x slower than UAE (down from ~10x after optimizations)
-- Remaining gap is structural (QEMU M68K condition codes, memory-indirect registers)
+- Unicorn is ~10x slower than UAE to reach Finder (46s vs 4.4s); hooks add only 5.3% overhead
+- Bottleneck is QEMU TCG JIT code quality for M68K (condition codes, memory-indirect registers)
+- Unicorn leaks ~47 kB/sec memory (QEMU TB cache growth); UAE is constant
 
 ---
 

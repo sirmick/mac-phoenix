@@ -12,7 +12,7 @@
 |--------|-----|---------|
 | **Boot to Finder** | ~20s | ~45s |
 | **CHECKLOADs** | 2200+ | 2513+ |
-| **Performance** | Baseline | ~2x slower |
+| **Performance** | Baseline | ~10x slower |
 
 ### Web UI
 - WebRTC video streaming (H.264/VP9) working
@@ -29,7 +29,7 @@
 - FPU emulation, SIGSEGV handler, serial null check
 
 ### Unicorn Performance (March 2026)
-Reduced overhead from ~10x to ~2x slower than UAE:
+Reduced hook overhead to ~5% of execution time (JIT itself is ~10x slower):
 - Auto-ack interrupts in QEMU's `m68k_cpu_exec_interrupt()`
 - `goto_tb` enabled for backward branches (loop chaining)
 - Lean `hook_block()` — stripped per-block timing, stats, stale TB detector
@@ -94,7 +94,7 @@ Reduced overhead from ~10x to ~2x slower than UAE:
 | Phase 1: Core CPU | **COMPLETE** | All backends working, 514k+ dual-CPU validated |
 | Phase 1.5: Boot Parity | **COMPLETE** | Both backends boot to Finder desktop |
 | Phase 2: WebRTC | **COMPLETE** | 4-thread architecture, all encoders, input pipeline |
-| Phase 3: Performance & Polish | **CURRENT** | Unicorn ~2x slower (down from ~10x), input working |
+| Phase 3: Performance & Polish | **CURRENT** | Unicorn ~10x slower (94.7% JIT, 5.3% hooks), input working |
 | Phase 4: Application Support | FUTURE | HyperCard, classic games |
 | Phase 5: SheepShaver | FAR FUTURE | Mac OS 9, PowerPC |
 

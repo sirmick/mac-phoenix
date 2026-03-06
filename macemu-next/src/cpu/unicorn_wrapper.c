@@ -1,3 +1,7 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 /**
  * Unicorn Engine Wrapper Implementation (Cleaned Version)
  *
@@ -15,6 +19,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
+
+static inline uint64_t perf_now_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
 
 /* Shared M68K register structure (C-compatible) */
 #include "m68k_registers.h"
@@ -46,6 +57,11 @@ typedef struct {
     uint64_t emulop_count;          /* Number of EmulOp dispatches */
     uint64_t interrupt_count;       /* Number of interrupt deliveries */
     uint64_t emu_start_count;       /* Number of uc_emu_start() calls */
+    uint64_t hook_block_ns;         /* Time inside hook_block() */
+    uint64_t hook_block_count;      /* Number of hook_block calls */
+    uint64_t hook_interrupt_ns;     /* Time inside hook_interrupt() */
+    uint64_t deferred_update_count; /* How many times deferred updates applied */
+    uint64_t flush_code_cache_count;/* FlushCodeCache calls */
 } PerfCounters;
 
 /* Block counter (used for timer polling interval) */
@@ -192,6 +208,7 @@ static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, con
  */
 static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
+    uint64_t t0 = perf_now_ns();
     cpu->block_stats.total_blocks++;
 
     /* --- 1. Interrupt acknowledge --- */
@@ -237,7 +254,8 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
     }
 
     /* --- 4. Apply deferred register updates --- */
-    apply_deferred_updates_and_flush(cpu, uc, "hook_block");
+    if (apply_deferred_updates_and_flush(cpu, uc, "hook_block"))
+        cpu->perf.deferred_update_count++;
 
     /* --- 5. Pending interrupt delivery --- */
     if (g_pending_interrupt_level > 0) {
@@ -256,6 +274,9 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
             cpu->perf.interrupt_count++;
         }
     }
+
+    cpu->perf.hook_block_ns += perf_now_ns() - t0;
+    cpu->perf.hook_block_count++;
 }
 
 /**
@@ -264,6 +285,7 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
  */
 static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
+    uint64_t t0 = perf_now_ns();
 
     /* A-line exception (interrupt #10) */
     if (intno == 10) {
@@ -302,6 +324,7 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
     }
 
     cpu->perf.emulop_count++;
+    cpu->perf.hook_interrupt_ns += perf_now_ns() - t0;
 }
 
 /**
@@ -612,15 +635,39 @@ void unicorn_print_perf_counters(UnicornCPU *cpu) {
     fprintf(stderr, "\n=== Unicorn Performance Counters ===\n");
 
     double total_s = (double)p->emu_start_ns / 1e9;
+    double hook_block_s = (double)p->hook_block_ns / 1e9;
+    double hook_intr_s = (double)p->hook_interrupt_ns / 1e9;
+    double jit_s = total_s - hook_block_s - hook_intr_s;
+
     fprintf(stderr, "Wall time in uc_emu_start():  %8.3f s  (%llu calls, %.1f us/call)\n",
             total_s, (unsigned long long)p->emu_start_count,
             p->emu_start_count ? (double)p->emu_start_ns / p->emu_start_count / 1e3 : 0);
 
+    fprintf(stderr, "  hook_block() total:        %8.3f s  (%4.1f%%)  (%llu calls, %.1f us/call)\n",
+            hook_block_s, total_s > 0 ? 100.0 * hook_block_s / total_s : 0,
+            (unsigned long long)p->hook_block_count,
+            p->hook_block_count ? (double)p->hook_block_ns / p->hook_block_count / 1e3 : 0);
+
+    fprintf(stderr, "  hook_interrupt() total:    %8.3f s  (%4.1f%%)  (%llu EmulOps, %.1f us/op)\n",
+            hook_intr_s, total_s > 0 ? 100.0 * hook_intr_s / total_s : 0,
+            (unsigned long long)p->emulop_count,
+            p->emulop_count ? (double)p->hook_interrupt_ns / p->emulop_count / 1e3 : 0);
+
+    fprintf(stderr, "  JIT execution (estimated): %8.3f s  (%4.1f%%)\n",
+            jit_s, total_s > 0 ? 100.0 * jit_s / total_s : 0);
+
     fprintf(stderr, "  Interrupts delivered:       %llu\n",
             (unsigned long long)p->interrupt_count);
 
-    fprintf(stderr, "  EmulOps dispatched:         %llu\n",
-            (unsigned long long)p->emulop_count);
+    fprintf(stderr, "  Deferred reg updates:       %llu\n",
+            (unsigned long long)p->deferred_update_count);
+
+    fprintf(stderr, "  TB cache flushes:           %llu\n",
+            (unsigned long long)p->flush_code_cache_count);
+
+    fprintf(stderr, "  uc_emu_start() restarts:    %llu (%.1f/sec)\n",
+            (unsigned long long)p->emu_start_count,
+            total_s > 0 ? (double)p->emu_start_count / total_s : 0);
 
     fprintf(stderr, "========================================\n\n");
 }
