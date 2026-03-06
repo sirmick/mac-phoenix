@@ -120,3 +120,39 @@ Exports `PatchROM_Unified()` (333 lines). Declared `extern` in `rom_patches.cpp`
 ## Verified Live
 
 `json_config.cpp` — initially suspected dead but IS called from `prefs.cpp` (`FindConfigFile`, `LoadConfigJSON`, `SaveConfigJSON`). The legacy prefs bridge still uses it. All other files in `src/core/` are live.
+
+---
+
+# Config Folder Audit
+
+Audit of `src/config/`.
+
+## Dead Files (deleted)
+
+### 1. `config_manager.cpp` + `config_manager.h` — DEAD CODE
+Not in `meson.build`. Defines `load_config()`, `save_config()`, `generate_basilisk_prefs()`, `generate_sheepshaver_prefs()` — none called anywhere. Superseded by `EmulatorConfig`.
+
+### 2. `prefs_manager.cpp` + `prefs_manager.h` — DEAD CODE
+Not in `meson.build`. Legacy prefs file I/O — superseded by `EmulatorConfig`.
+
+## Live
+- `emulator_config.cpp/.h` — unified config system
+- `json_utils.cpp/.h` — JSON helpers used by emulator_config and api_handlers
+
+---
+
+# Drivers Folder Audit
+
+All files in `src/drivers/` are compiled and actively used via the platform adapter pattern. No dead files found.
+
+---
+
+# Webserver Folder Audit
+
+All files compiled and active. Three API endpoints (`/api/restart`, `/api/emulator/restart`, `/api/emulator/reset`) are routed but return "not implemented yet" — stub endpoints, not dead code.
+
+---
+
+# WebRTC Folder Audit
+
+All files compiled and active. No dead code found.
