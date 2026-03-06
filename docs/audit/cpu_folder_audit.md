@@ -60,3 +60,42 @@ Fragile if the real struct in `newcpu.h` changes — these copies silently diver
 | `uae_cpu/cpuopti.c` | Not compiled | Keep (UAE code) |
 | `uae_cpu/build68k.c`, `gencpu.c` | Code generators | Keep (UAE code) |
 | `uae_cpu/build68k`, `gencpu` (binaries) | Generated | Keep (UAE code) |
+
+---
+
+# Common Folder Audit
+
+Audit of `src/common/` — dead files, unused headers.
+
+**Policy**: Minimize changes to legacy BasiliskII code (sigsegv.cpp platform ifdefs, etc.).
+
+## Dead Files (deleted)
+
+### 1. Legacy duplicate `.cpp` files — NOT IN BUILD
+Five `.cpp` files in `src/common/` are duplicates of files that live in `src/core/` and are compiled from there. The `src/common/` copies are not in any `meson.build`.
+
+| Dead file | Active copy |
+|-----------|-------------|
+| `common/user_strings.cpp` | `core/user_strings.cpp` |
+| `common/macos_util.cpp` | `core/macos_util.cpp` |
+| `common/prefs.cpp` | `core/prefs.cpp` |
+| `common/prefs_items.cpp` | `core/prefs_items.cpp` |
+| `common/rom_patches.cpp` | `core/rom_patches.cpp` |
+
+### 2. Dead headers — never included
+
+| Header | Why dead |
+|--------|----------|
+| `include/pict.h` | Never included, `ConvertRGBAToPICT` never referenced |
+| `include/platform_memory.h` | Never included, superseded by `memory_access.h` |
+| `include/color_scheme.h` | GTK/D-Bus only, GTK disabled, never included |
+
+## Kept (live or needed)
+
+| File | Status |
+|------|--------|
+| `crash_handler_init.cpp` | LIVE — compiled from `core/meson.build` |
+| `platform.cpp` | LIVE — compiled from `core/meson.build` |
+| `sigsegv.cpp` | LIVE — has dead platform ifdefs (HP-UX, Solaris, AIX, etc.) but left alone (legacy code) |
+| `include/prefs_editor.h` | Included by `null_drivers.cpp` (stub) — keep |
+| All other `include/*.h` | LIVE — actively included |
