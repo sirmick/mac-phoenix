@@ -7,15 +7,92 @@
 
 #include "webrtc_server.h"
 #include "../config/json_utils.h"
+#include "../webserver/keyboard_map.h"
 #include <nlohmann/json.hpp>
 #include <cstdio>
 #include <chrono>
 #include <thread>
 #include <cstring>
 
+// ADB input functions (from adb.cpp)
+extern void ADBMouseMoved(int x, int y);
+extern void ADBMouseDown(int button);
+extern void ADBMouseUp(int button);
+extern void ADBSetRelMouseMode(bool relative);
+extern void ADBKeyDown(int code);
+extern void ADBKeyUp(int code);
+
 // External globals from main.cpp
 namespace video {
     extern std::atomic<bool> g_request_keyframe;
+}
+
+/**
+ * Process binary input message from browser data channel.
+ * Protocol: [type:uint8] [payload...]
+ *   1 = mouse move relative: dx:int16LE, dy:int16LE, ts:float64LE (13 bytes)
+ *   2 = mouse button: button:uint8, down:uint8, ts:float64LE (11 bytes)
+ *   3 = key: keycode:uint16LE, down:uint8, ts:float64LE (12 bytes)
+ *   5 = mouse move absolute: x:uint16LE, y:uint16LE, ts:float64LE (13 bytes)
+ *   6 = mouse mode change: mode:uint8 (2 bytes, 0=absolute, 1=relative)
+ */
+static void process_input_message(const std::byte* data, size_t size) {
+    if (size < 2) return;
+
+    uint8_t type = static_cast<uint8_t>(data[0]);
+
+    switch (type) {
+        case 1: { // Mouse move (relative)
+            if (size < 5) return;
+            int16_t dx, dy;
+            std::memcpy(&dx, data + 1, 2);
+            std::memcpy(&dy, data + 3, 2);
+            ADBMouseMoved(dx, dy);
+            break;
+        }
+        case 2: { // Mouse button
+            if (size < 3) return;
+            uint8_t button = static_cast<uint8_t>(data[1]);
+            uint8_t down = static_cast<uint8_t>(data[2]);
+            if (down)
+                ADBMouseDown(button);
+            else
+                ADBMouseUp(button);
+            break;
+        }
+        case 3: { // Key
+            if (size < 4) return;
+            uint16_t browser_keycode;
+            std::memcpy(&browser_keycode, data + 1, 2);
+            uint8_t down = static_cast<uint8_t>(data[3]);
+            int mac_keycode = keyboard_map::browser_to_mac_keycode(browser_keycode);
+            if (mac_keycode >= 0) {
+                if (down)
+                    ADBKeyDown(mac_keycode);
+                else
+                    ADBKeyUp(mac_keycode);
+            }
+            break;
+        }
+        case 5: { // Mouse move (absolute)
+            if (size < 5) return;
+            uint16_t x, y;
+            std::memcpy(&x, data + 1, 2);
+            std::memcpy(&y, data + 3, 2);
+            ADBMouseMoved(x, y);
+            break;
+        }
+        case 6: { // Mouse mode change
+            if (size < 2) return;
+            uint8_t mode = static_cast<uint8_t>(data[1]);
+            ADBSetRelMouseMode(mode == 1);
+            fprintf(stderr, "[WebRTC] Mouse mode changed to %s\n",
+                    mode == 1 ? "relative" : "absolute");
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 namespace webrtc {
@@ -456,6 +533,14 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     peer->data_channel->onOpen([peer_id]() {
         fprintf(stderr, "[WebRTC] Data channel opened for peer %s\n", peer_id.c_str());
+    });
+
+    peer->data_channel->onMessage([peer_id](auto data) {
+        if (std::holds_alternative<rtc::binary>(data)) {
+            const auto& bin = std::get<rtc::binary>(data);
+            process_input_message(bin.data(), bin.size());
+        }
+        // Ignore text messages (legacy JSON commands)
     });
 
     // NOTE: Don't set peer->ready here! It's set in video_track->onOpen() callback
