@@ -4,6 +4,8 @@ A classic Macintosh emulator that runs in your browser. Boot Mac OS 7.5.5 on an 
 
 ![License](https://img.shields.io/badge/license-GPL--2.0-blue)
 
+![Mac OS 7.5.5 running in MacPhoenix](docs/images/mac-desktop.png)
+
 ## What is this?
 
 MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github.com/kanjitalk755/macemu) emulator family. It replaces the SDL desktop UI with a web-based streaming interface: the emulator runs as a headless server and streams video to your browser via WebRTC, with keyboard and mouse input sent back over a data channel.
