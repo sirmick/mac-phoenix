@@ -17,18 +17,16 @@ What we're building and why.
 **What**: Mac emulator that uses Unicorn Engine as its CPU
 
 **Why Unicorn**:
-- ✅ **Fast**: JIT compilation (10-50x faster than interpreter)
-- ✅ **Maintained**: Active upstream project (QEMU-based)
-- ✅ **Clean API**: Simple C API, easy to integrate
-- ✅ **Cross-platform**: Works on Linux, macOS, Windows
-- ✅ **Well-tested**: Used in security research, reverse engineering
+- **JIT compilation**: QEMU-based TCG backend compiles M68K to host native code
+- **Maintained**: Active upstream project
+- **Clean API**: Simple C API, easy to integrate
+- **Cross-platform**: Works on Linux, macOS, Windows
 
-**Current State**: Unicorn backend achieves full boot parity with UAE -- both stall at same point awaiting SCSI disk emulation
+**Current State**: Both backends boot Mac OS 7.5.5 to Finder desktop (March 2026). Unicorn is ~2x slower than UAE due to structural JIT overhead (M68K condition codes, memory-indirect registers).
 
 **Target State**:
-- Boot Mac OS 7/8 to desktop
 - Run Mac applications (HyperCard, games, productivity software)
-- Competitive performance with UAE JIT
+- Performance optimization (currently ~2x slower than UAE interpreter)
 - Clean, maintainable codebase
 
 ### Secondary: Modern Architecture
@@ -53,20 +51,16 @@ What we're building and why.
 
 **Purpose**: **Primary backend** for end users
 
-**Status**: Boot parity with UAE achieved (March 2026)
+**Status**: Boots Mac OS 7.5.5 to Finder desktop (March 2026)
 
-**Roadmap**:
-- ✅ Basic execution (200k+ instructions)
-- ✅ EmulOps (0x71xx and 0xAExx traps)
+**Completed**:
+- ✅ EmulOps (0xAExx for Unicorn, 0x71xx for UAE)
 - ✅ A-line/F-line traps (via deferred register updates)
-- ✅ Interrupt support (60Hz timer, M68K exception frames)
-- ✅ Native trap execution
-- ✅ JIT TB invalidation workaround (60Hz flush)
-- ✅ MMIO infrastructure (uc_mmio_map for hardware registers)
-- ✅ Boot parity with UAE (87 trap entries, 16,879 EmulOps in 30s)
-- ⏳ SCSI disk emulation (required for further boot progress)
-- ⏳ Full hardware emulation (VIA, Video, ADB)
-- ⏳ Boot to desktop
+- ✅ Interrupt support (QEMU native delivery with auto-ack)
+- ✅ Native trap execution, JIT TB invalidation
+- ✅ MMIO infrastructure (VIA/SCC/SCSI/ASC/DAFB stubs)
+- ✅ Boot to Finder desktop
+- ✅ Performance: auto-ack, goto_tb backward branches, lean hook_block
 
 **Long-term Vision**:
 - Eventually, most users will run Unicorn backend only
@@ -205,76 +199,45 @@ EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 - ✅ 4-thread in-process architecture
 - ✅ All encoders integrated (H.264, VP9, WebP, PNG, Opus)
 - ✅ JSON configuration system
+- ✅ Mouse/keyboard input via WebRTC data channel
 
-### Phase 3: Hardware Emulation 🎯 **CURRENT FOCUS**
+### Phase 3: Performance & Polish 🎯 **CURRENT**
 
-**Goal**: Provide enough hardware to progress past the resource chain stall
+- ✅ Unicorn perf: auto-ack interrupts, goto_tb, lean hook_block (~2x slower, down from ~10x)
+- ✅ Web UI mouse/keyboard input working
+- ⏳ Application support (HyperCard, classic games)
+- ⏳ Stability improvements (long-running sessions)
 
-**Tasks**:
-- ⏳ SCSI disk emulation (boot disk with System file)
-- ⏳ More complete VIA emulation (timers, slot interrupts)
-- ⏳ Video framebuffer initialization
-- ⏳ ADB hardware responses
-
-**Success Criteria**: Boot progresses past resource manager initialization
-
-### Phase 4: Boot to Desktop ⏳ **FUTURE**
-
-**Goal**: Unicorn backend boots Mac OS 7 to desktop
-
-**Success Criteria**: See Mac OS desktop, mouse cursor moves
-
-### Phase 3: Application Support ⏳ **FUTURE**
+### Phase 4: Application Support ⏳ **FUTURE**
 
 **Goal**: Run Mac applications successfully
 
-**Examples**:
-- HyperCard stacks
-- Classic games (Marathon, SimCity 2000)
-- Productivity software (PageMaker, MacWrite)
+**Examples**: HyperCard stacks, classic games, productivity software
 
-**Requirements**:
-- Full hardware emulation (SCSI, video, sound, serial)
-- ROM patching complete
-- Stable execution (hours, not minutes)
-
-### Phase 4: Performance & Polish ⏳ **FUTURE**
-
-**Goal**: Competitive performance with UAE JIT
-
-**Tasks**:
-- Profile Unicorn backend
-- Optimize hot paths
-- JIT tuning
-- Reduce hook overhead further
-
-**Target**: 80-90% of native speed (currently unknown)
+**Requirements**: Full hardware emulation, stable execution (hours)
 
 ### Phase 5: SheepShaver Support ⏳ **FAR FUTURE**
 
 **Goal**: Mac OS 9, PowerPC support
 
-**Note**: Very far out, focus is 68K first
-
 ---
 
 ## Success Metrics
 
-### Short-Term (Q1 2026)
-- ✅ 500k+ instruction dual-CPU validation (ACHIEVED: 514k+)
-- ✅ Unicorn boot parity with UAE (ACHIEVED: March 2026)
-- ✅ Understand interrupt timing characteristics (RESOLVED: wall-clock timing, not a bug)
-- ⏳ Boot Mac OS 7 to desktop with Unicorn (requires SCSI emulation)
+### Q1 2026 - ACHIEVED
+- ✅ 500k+ instruction dual-CPU validation (514k+)
+- ✅ Boot to Finder with both backends
+- ✅ WebRTC streaming with input
+- ✅ Unicorn performance within 2x of UAE
 
 ### Medium-Term (2026)
 - ⏳ Run HyperCard successfully
-- ⏳ Play one classic game (e.g., Dark Castle)
+- ⏳ Play one classic game
 - ⏳ Stable 30+ minute sessions
 
-### Long-Term (Future)
-- ⏳ Full hardware emulation
+### Long-Term
 - ⏳ Mac OS 8 support
-- ⏳ Performance competitive with UAE JIT
+- ⏳ Performance parity with UAE
 
 ---
 
@@ -333,8 +296,6 @@ EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 
 **End Goal**: Fast, clean, validated Mac emulator using Unicorn M68K CPU
 
-**Current Status**: Unicorn boot parity with UAE achieved, working toward SCSI disk emulation for further boot progress
+**Current Status**: Both backends boot to Mac OS 7.5.5 Finder desktop. Unicorn ~2x slower than UAE. Web UI streaming with input working.
 
 **Philosophy**: Reference BasiliskII, validate continuously, document everything
-
-**Note**: Unicorn has JIT exit overhead for A-line traps (EmulOp-heavy code like CLKNOMEM loops), but overall boot parity has been achieved. The current 60Hz TB flush workaround for JIT cache invalidation adds some overhead that can be optimized later.

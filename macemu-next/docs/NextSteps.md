@@ -43,16 +43,17 @@ Created `m68k_registers.h` with a single C/C++ compatible definition using `uint
 
 ---
 
-## 6. SCSI Disk Emulation (Next Feature Work)
+## 6. Application Support (Next Feature Work)
 
-**Problem**: Both backends stall at resource chain search (PC=0x0001c3d4). The ROM is looking for system resources from a SCSI boot disk that doesn't exist.
+**Status**: Both backends boot to Mac OS 7.5.5 Finder desktop. Next goal is running Mac applications.
 
-**What's needed**: Enough SCSI emulation to present a disk image containing a Mac OS System file. The ROM needs to find resources in the resource chain to continue booting.
-
-**This is the next feature milestone** -- everything above is cleanup of existing code.
+**What's needed**:
+- Test HyperCard stacks
+- Test classic games
+- Stability for 30+ minute sessions
 
 ---
 
 ## Summary
 
-Items 1-5 completed in March 2026. The Unicorn backend is now clean and production-ready. Next work is SCSI disk emulation to progress boot further.
+Items 1-5 completed in March 2026. The Unicorn backend is clean, boots to Finder, and has ~2x performance gap vs UAE. Both backends are production-ready for basic use. Next work is application support and stability.

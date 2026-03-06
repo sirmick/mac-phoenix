@@ -4,18 +4,15 @@ Track what's done and what's next.
 
 ---
 
-## MILESTONE: Unicorn Boot Parity with UAE (March 2026)
+## MILESTONE: Both Backends Boot to Mac OS 7.5.5 Finder Desktop (March 2026)
 
-**Both backends reach identical boot state and stall at the same point.**
+**Both the Unicorn JIT backend and the UAE interpreter backend boot Mac OS 7.5.5 to the Finder desktop.**
 
-The stall is NOT a Unicorn bug -- it is a shared emulator limitation (no SCSI boot disk).
-
-**Key metrics (both backends, 30-second run)**:
-- 87 OS trap table entries (identical)
-- 16,879 EmulOps dispatched (including 2,046 SCSI searches)
-- Boot progress $0b78 = 0xfd89ffff
-- Both stall at resource chain search PC=0x0001c3d4
-- Chain sentinel [0x01FFF30C] = 0xFF00FF00 (no resources loaded)
+| Metric | UAE | Unicorn |
+|--------|-----|---------|
+| Boot to Finder | ~20s | ~45s |
+| CHECKLOADs | 2200+ | 2513+ |
+| Performance | Baseline | ~2x slower |
 
 ---
 
@@ -193,55 +190,34 @@ The stall is NOT a Unicorn bug -- it is a shared emulator limitation (no SCSI bo
 - ✅ Conditional compilation via -Dwebrtc=true/false
 - ✅ **Verified**: Build successful with WebRTC enabled
 
-### Client Migration ⏳ PENDING
-- ⏳ Copy browser client (HTML/JS/CSS)
-- ⏳ Test end-to-end (browser → WebRTC → emulator)
-- ⏳ Update client for new architecture
-
-### Testing & Validation ⏳ NEXT
-- ⏳ Functional test: Video encoding works
-- ⏳ Functional test: Audio encoding works
-- ⏳ Functional test: HTTP API responds
-- ⏳ End-to-end: Browser can connect and view emulator
+### Client & Testing ✅ COMPLETE (March 2026)
+- ✅ Browser client (HTML/JS/CSS) with WebRTC connection
+- ✅ Mouse/keyboard input via data channel binary protocol
+- ✅ End-to-end: Browser connects, views emulator, sends input
+- ✅ Playwright e2e tests (mouse, keyboard, data channel)
 
 ---
 
-## Phase 3: Hardware Emulation 🎯 CURRENT FOCUS
+## Phase 3: Performance & Polish 🎯 CURRENT FOCUS
 
-### What's Needed to Progress Past Resource Chain Stall
-- ⏳ **SCSI disk emulation** - System file provides resources the ROM needs
-- ⏳ **VIA timer completion** - Slot interrupts, counter timers
-- ⏳ **Video framebuffer** - Display initialization
-- ⏳ **ADB hardware** - Keyboard/mouse detection
+### Completed
+- ✅ **Unicorn performance optimizations** (~2x slower, down from ~10x)
+  - Auto-ack interrupts in QEMU's `m68k_cpu_exec_interrupt()`
+  - `goto_tb` enabled for backward branches
+  - Lean `hook_block()` (stripped perf timing, block stats, stale TB detector)
+- ✅ **Web UI mouse/keyboard input** via WebRTC data channel
+- ✅ **Playwright e2e tests** for input pipeline (6 tests)
+- ✅ **Framebuffer fix** (placed at 0x02110000, outside RAM)
+- ✅ **RTR instruction** added to Unicorn's QEMU m68k translator
+- ✅ **FPU emulation**, SIGSEGV handler, serial null check
 
-### What's Already Done
-- ✅ MMIO infrastructure (`uc_mmio_map()`)
-- ✅ VIA1/VIA2 stub callbacks
-- ✅ SCC/SCSI/ASC/DAFB stub callbacks
-- ✅ NuBus gap regions (return 0)
-- ✅ 60Hz timer interrupt delivery
-
-### Boot Testing
-- ⏳ Boot Mac OS 7.0 past resource manager
-- ⏳ Boot Mac OS 7.0 to desktop
-- ⏳ Mouse cursor visible
+### In Progress
+- ⏳ Application support (HyperCard, classic games)
+- ⏳ Stability improvements (long-running sessions)
 
 ---
 
-## Phase 4: Application Support ⏳ FUTURE
-
-### Full Hardware Emulation
-- ⏳ VIA (Versatile Interface Adapter) complete
-- ⏳ SCSI (disk access) functional
-- ⏳ Video (framebuffer, display modes)
-- ⏳ Audio (sound output)
-- ⏳ Serial (modem, printer ports)
-- ⏳ Ethernet (networking)
-
-### ROM Patching
-- ⏳ Identify all ROM patches needed
-- ⏳ Implement trap optimization
-- ⏳ Mac OS API emulation completeness
+## Phase 4: Application Support ⏳ NEXT
 
 ### Application Testing
 - ⏳ HyperCard stacks run
@@ -360,10 +336,12 @@ The stall is NOT a Unicorn bug -- it is a shared emulator limitation (no SCSI bo
 - ✅ deepdive/ folder - Detailed technical docs
   - ✅ PlatformAPIInterrupts.md - Interrupt abstraction design & implementation
 
-### Needed ⏳
-- ⏳ Testing guide (functional testing approach)
-- ⏳ Contributing guide (code style, PR process)
-- ⏳ Troubleshooting guide (common issues, solutions)
+### Completed ⏳→✅
+- ✅ TroubleshootingGuide.md - Common issues and solutions
+- ✅ DeveloperGuide.md - Architecture, debugging, patterns
+- ✅ ThreadingArchitecture.md - 4-thread model
+- ✅ WebRtcIntegrationStatus.md - WebRTC pipeline details
+- ✅ UnicornPerformanceAnalysis.md - JIT vs interpreter analysis
 
 ---
 
@@ -388,62 +366,32 @@ ebd3d1b2 - Remove legacy per-CPU hook API and UC_HOOK_CODE implementation
 
 ## Next Actions
 
-### Immediate (This Week) ✅ COMPLETE
-1. ✅ WebRTC integration planning - DONE (Complete plan created)
-2. ✅ Threading architecture design - DONE (4-thread model implemented)
-3. ✅ File migration mapping - DONE (180 files mapped)
-4. ✅ Phase 2 implementation - DONE (All core components integrated)
+### Current Focus: Phase 3 - Performance & Polish
+- ⏳ Application support (HyperCard, classic games)
+- ⏳ Stability improvements (long-running sessions)
+- ⏳ Further Unicorn performance optimization
 
-### Short-Term (Next 2 Weeks) ✅ COMPLETE
-1. ✅ Implement video_output.cpp (triple buffer) - DONE
-2. ✅ Implement audio_output.cpp (ring buffer) - DONE
-3. ✅ Copy WebRTC encoders - DONE (H.264, VP9, WebP, PNG, Opus)
-4. ✅ Create webrtc_server.cpp - DONE
-5. ✅ Create unified main.cpp - DONE (573 lines, 4-thread architecture)
-
-### Medium-Term (Next 2 Weeks) - CURRENT FOCUS
-1. ✅ Complete WebRTC integration - DONE (commit eb850af5)
-2. ✅ Migrate JSON config system - DONE (commit 19d871c8)
-3. ⏳ **Copy browser client** (HTML/JS/CSS from web-streaming/)
-4. ⏳ **Test end-to-end** (browser → WebRTC → emulator)
-5. ⏳ Verify all encoders work (H.264, VP9, WebP, PNG, Opus)
-6. ⏳ Document new architecture
-
-### Long-Term (Next Quarter)
-1. ⏳ Boot to desktop (Phase 3)
-2. ⏳ Full hardware emulation (VIA, SCSI basics)
-3. ⏳ Application testing framework
-4. ⏳ Performance optimization
-
-### **Current Focus**: Phase 3 - Hardware Emulation for Further Boot Progress
-
-**Major Achievement (March 2026)**:
-- ✅ **Unicorn Boot Parity with UAE**
-  - Both backends reach identical state
-  - 87 OS trap table entries, 16,879 EmulOps in 30s
-  - Both stall at same resource chain search (no SCSI boot disk)
-
-**Next Steps**:
-1. SCSI disk emulation (System file provides needed resources)
-2. More complete VIA emulation (timers, slot interrupts)
-3. Video framebuffer initialization
-4. ADB hardware responses
+### Long-Term
+- ⏳ Mac OS 8 support
+- ⏳ Performance parity with UAE
+- ⏳ SheepShaver / PowerPC support
 
 ---
 
-**Last Updated**: March 1, 2026
-**Current Phase**: Phase 3 - Hardware Emulation
+**Last Updated**: March 5, 2026
+**Current Phase**: Phase 3 - Performance & Polish
 **Branch**: phoenix-mac-planning
-**Focus**: SCSI disk emulation to progress past resource chain stall
+**Status**: Both backends boot to Mac OS 7.5.5 Finder desktop
 
 **Major Milestones**:
-- ✅ **Unicorn Boot Parity with UAE** (March 2026)
-  - Both backends: 87 trap entries, $0b78=0xfd89ffff, same stall point
-  - A-line/F-line traps working via deferred register updates
-  - JIT TB invalidation solved with 60Hz flush
-- ✅ **WebRTC Integration** (commit eb850af5)
-  - 4-thread in-process architecture
-  - All encoders integrated
-- ✅ **RTE Batch Execution Fixed** (commit da1383a7)
-  - 1.93x performance improvement
-- ✅ **JSON Configuration System** (commit 19d871c8)
+- ✅ **Both Backends Boot to Finder** (March 2026)
+  - UAE: ~20s to Finder, Unicorn: ~45s to Finder
+  - Framebuffer fix, RTR instruction, FPU emulation
+- ✅ **Unicorn Performance** (~2x slower, down from ~10x)
+  - Auto-ack interrupts, goto_tb, lean hook_block
+- ✅ **Web UI Input** (March 2026)
+  - Mouse/keyboard via WebRTC data channel
+  - Playwright e2e tests
+- ✅ **WebRTC Integration** (January 2026)
+  - 4-thread in-process architecture, all encoders
+- ✅ **JSON Configuration System**

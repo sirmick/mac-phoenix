@@ -13,7 +13,7 @@ Modern Mac emulator with Unicorn M68K CPU backend and dual-CPU validation.
 3. **Modern Architecture** - Clean platform API, modular design, Meson build
 4. **Legacy Support** - UAE backend retained for compatibility
 
-**Current Status**: ✅ Unicorn boot parity with UAE achieved (March 2026) -- both backends stall at same point awaiting SCSI disk emulation
+**Current Status**: ✅ Both backends boot Mac OS 7.5.5 to Finder desktop (March 2026)
 
 ---
 
@@ -51,7 +51,7 @@ CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
 ```
 
 See **[Commands.md](Commands.md)** for complete build and testing guide.
-See **[JSON_CONFIG.md](JSON_CONFIG.md)** for configuration documentation.
+See **[JsonConfig.md](JsonConfig.md)** for configuration documentation.
 
 ---
 
@@ -61,9 +61,9 @@ See **[JSON_CONFIG.md](JSON_CONFIG.md)** for configuration documentation.
 - **[Architecture.md](Architecture.md)** - How the system fits together (Platform API, backends, memory)
 - **[ProjectGoals.md](ProjectGoals.md)** - Vision and end goals (Unicorn-first approach)
 - **[Commands.md](Commands.md)** - Build, test, debug, trace commands
-- **[JSON_CONFIG.md](JSON_CONFIG.md)** - Configuration system
+- **[JsonConfig.md](JsonConfig.md)** - Configuration system
 - **[TodoStatus.md](TodoStatus.md)** - What's done ✅ and what's next ⏳
-- **[STATUS_SUMMARY.md](STATUS_SUMMARY.md)** - Current project status
+- **[StatusSummary.md](StatusSummary.md)** - Current project status
 
 ### Technical Deep Dives
 - **[deepdive/](deepdive/)** - Detailed technical documentation
@@ -90,7 +90,7 @@ See **[JSON_CONFIG.md](JSON_CONFIG.md)** for configuration documentation.
 - Validated against proven UAE implementation
 - Modern build system and tooling
 
-**Current State**: Unicorn boot parity with UAE (March 2026) -- both stall awaiting SCSI disk
+**Current State**: Both backends boot Mac OS 7.5.5 to Finder desktop (March 2026)
 
 **UAE's Role**: Legacy compatibility and validation baseline (will be retained but Unicorn is the focus)
 
@@ -102,54 +102,51 @@ See **[ProjectGoals.md](ProjectGoals.md)** for detailed vision.
 
 ## Key Achievements
 
-- ✅ **Unicorn boot parity with UAE** (March 2026) -- both backends reach identical state
-- ✅ Unicorn M68K backend working (68020 with JIT)
-- ✅ EmulOps (0x71xx and 0xAExx) -- Illegal instruction traps
-- ✅ A-line/F-line traps -- **WORKING** via deferred register updates
-- ✅ Interrupt support (60Hz timer with M68K exception frames)
-- ✅ JIT TB invalidation workaround (60Hz flush)
-- ✅ MMIO infrastructure (uc_mmio_map for hardware registers)
-- ✅ 87 OS trap table entries (identical between backends)
-- ✅ 16,879 EmulOps dispatched in 30s (including 2,046 SCSI searches)
-- ✅ UAE backend fully functional
-- ✅ Dual-CPU validation infrastructure (514k+ instructions)
+- ✅ **Both backends boot to Mac OS 7.5.5 Finder** (March 2026)
+- ✅ Unicorn M68K backend with JIT (68040 mode)
+- ✅ EmulOps (0xAExx for Unicorn, 0x71xx for UAE)
+- ✅ A-line/F-line traps via deferred register updates
+- ✅ Interrupt support (60Hz timer, QEMU native interrupt delivery)
+- ✅ JIT TB invalidation via `uc_ctl_flush_tb()` in FlushCodeCache
+- ✅ MMIO infrastructure (VIA/SCC/SCSI/ASC/DAFB stubs)
+- ✅ WebRTC streaming (H.264, VP9, Opus audio)
+- ✅ Mouse/keyboard input via WebRTC data channel
+- ✅ JSON configuration system
+- ✅ Unicorn performance optimizations (auto-ack, goto_tb, lean hook_block)
+- ✅ Playwright e2e test framework
 
 See **[TodoStatus.md](TodoStatus.md)** for complete checklist.
 
 ---
 
-## Current Limitation: No SCSI Boot Disk
-
-Both backends stall at the same point: a resource chain search at PC=0x0001c3d4. The ROM is looking for system resources from a SCSI boot disk. The chain sentinel at [0x01FFF30C] = 0xFF00FF00 in both backends -- the resource list is empty because there's no disk to load from.
-
-**To progress further**, the emulator needs:
-1. SCSI disk emulation (System file provides resources)
-2. More complete VIA emulation (timers, slot interrupts)
-3. Video framebuffer initialization
-4. ADB hardware responses
-
----
-
 ## Recent Improvements (January-March 2026)
 
-### ✅ Boot Parity Achieved (March 2026)
-Both Unicorn and UAE reach identical boot state:
-- 87 OS trap table entries
-- $0b78 boot progress = 0xfd89ffff
-- Same TopMapHndl, SysMapHndl values
-- Both stall at same resource chain search
+### ✅ Boot to Finder (March 2026)
+Both UAE and Unicorn backends boot Mac OS 7.5.5 to Finder desktop:
+- UAE: 2200+ CHECKLOADs, reaches Finder in ~20s
+- Unicorn: 2513+ CHECKLOADs, reaches Finder in ~45s
 
-### ✅ JIT TB Invalidation Solved
-Mac OS heap overwrites RAM patch code. QEMU's JIT cache retains stale translations. Fixed with 60Hz `uc_ctl_flush_tb()` workaround.
+Key fixes: framebuffer placement outside RAM (avoids WDCB overlap), RTR instruction
+added to QEMU m68k translator, FPU emulation, SIGSEGV handler.
 
-### ✅ A-Line/F-Line Traps Working
-Previously broken due to Unicorn's PC limitation. Solved via deferred register updates -- register writes are queued during hook callbacks and applied at block boundaries.
+### ✅ Unicorn Performance (March 2026)
+Reduced Unicorn overhead from ~10x to ~2x slower than UAE:
+- Auto-ack interrupts in QEMU's `m68k_cpu_exec_interrupt()`
+- `goto_tb` enabled for backward branches (loop chaining)
+- Stripped hook_block of per-block perf timing, block stats, stale TB detector
+
+### ✅ Web UI Input (March 2026)
+Mouse and keyboard input wired through WebRTC data channel:
+- Binary protocol: relative/absolute mouse, buttons, keyboard
+- Data channel -> `process_input_message()` -> ADB functions
+- Playwright e2e tests verify full-stack input pipeline
+
+### ✅ WebRTC Integration (January 2026)
+4-thread in-process architecture with all encoders integrated.
 
 ### ✅ IRQ Storm Fixed (January 2026)
-4-phase fix: corrected EmulOp encoding, QEMU-style execution loop, deferred register updates, proper M68K interrupt delivery. 99.997% overhead reduction.
-
-### ✅ MMIO Infrastructure
-Hardware registers use `uc_mmio_map()` (required because JIT bypasses `UC_HOOK_MEM_READ` for `uc_mem_map_ptr` regions). VIA/SCC/SCSI/ASC/DAFB stubs implemented.
+4-phase fix: EmulOp encoding, QEMU-style execution loop, deferred register updates,
+proper M68K interrupt delivery.
 
 ---
 
@@ -159,13 +156,22 @@ Hardware registers use `uc_mmio_map()` (required because JIT bypasses `UC_HOOK_M
 macemu-next/
 ├── src/
 │   ├── common/include/    # Shared headers (sysdeps.h, platform.h)
-│   ├── core/              # Core Mac managers (emul_op.cpp, xpram.cpp)
+│   ├── core/              # Core Mac managers (emul_op.cpp, adb.cpp, rom_patches.cpp)
 │   ├── cpu/               # CPU backends
 │   │   ├── uae_cpu/       # UAE M68K interpreter (legacy)
 │   │   ├── cpu_unicorn.cpp     # Unicorn backend (primary)
-│   │   ├── cpu_dualcpu.cpp     # Validation backend
-│   │   └── unicorn_wrapper.c   # Unicorn API wrapper
-│   └── tests/             # Unit and boot tests
+│   │   ├── unicorn_wrapper.c   # Unicorn hooks and interrupt delivery
+│   │   ├── unicorn_exec_loop.c # uc_emu_start loop
+│   │   └── cpu_dualcpu.cpp     # Validation backend
+│   ├── drivers/           # Video, audio, platform drivers
+│   ├── webrtc/            # WebRTC server (signaling + input)
+│   ├── webserver/         # HTTP server, API handlers
+│   └── config/            # JSON config system
+├── client/                # Browser client (HTML, JS, CSS)
+├── tests/
+│   ├── boot/              # Boot tests
+│   └── e2e/               # Playwright e2e tests
+├── subprojects/           # Unicorn, libdatachannel, nlohmann_json
 ├── docs/                  # Documentation (you are here!)
 └── meson.build            # Build configuration
 ```

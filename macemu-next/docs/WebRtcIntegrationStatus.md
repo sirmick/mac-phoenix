@@ -1,13 +1,13 @@
 # WebRTC Integration Status - macemu-next
 
-**Last Updated:** January 6, 2026
+**Last Updated:** March 5, 2026
 **Branch:** `phoenix-mac-planning`
 
 ## Overview
 
 macemu-next uses an **in-process WebRTC architecture** - unlike the split-process IPC design of web-streaming, all components (CPU emulation, video/audio encoding, WebRTC signaling, HTTP server) run in a single process. This eliminates IPC overhead and simplifies deployment.
 
-## Current Status: ✅ **WebRTC Streaming WORKING**
+## Current Status: ✅ **WebRTC Streaming + Input WORKING**
 
 ### Completed Features
 
@@ -67,26 +67,30 @@ macemu-next uses an **in-process WebRTC architecture** - unlike the split-proces
 # OR configure in web UI, then restart with ROM path
 ```
 
-#### ⚠️ No Actual Mac Video/Audio Yet
-**Status:** WebRTC pipeline works, but no Mac is running
+#### ✅ Mouse/Keyboard Input (March 2026)
+**Status:** Full input pipeline working
+
+**How it works:**
+- Browser sends binary messages via WebRTC data channel
+- Binary protocol: Type byte + payload (relative mouse, absolute mouse, mouse buttons, keyboard, mouse mode change)
+- `process_input_message()` in `webrtc_server.cpp` decodes and dispatches to ADB functions
+- `keyboard_map::browser_to_mac_keycode()` converts JS keycodes to Mac ADB scancodes
+- Playwright e2e tests verify full pipeline (`tests/e2e/mouse-input.spec.ts`)
+
+#### ✅ Mac Video/Audio Working (March 2026)
+**Status:** Both backends boot to Finder — video streams to browser, audio pipeline ready
 
 **What works:**
-- WebRTC connection establishes
-- Tracks open successfully
-- Encoder threads are ready to encode
-- RTP packets would be sent if there was data
-
-**What's missing:**
-- ROM must be loaded for CPU to initialize
-- Once ROM loads and Mac boots, video/audio will flow automatically
-- Current audio stats show "underruns" because no Mac audio is being generated
+- Mac boots to Finder desktop with live video streaming
+- WebRTC connection with video track (H.264 or VP9)
+- Audio encoding pipeline ready (Opus)
+- Mouse/keyboard input flows from browser to Mac OS
 
 #### 🔜 To Be Implemented
 1. **Deferred CPU initialization** - Load ROM and init CPU when web UI says "Start"
 2. **PPC platform support** - Currently only m68k (Basilisk II) architecture
-3. **Mouse/keyboard input** - Capturing browser input and sending to Mac
-4. **Dynamic resolution** - Changing Mac screen resolution without restart
-5. **Codec selection** - Runtime switching between H.264/VP9/AV1/PNG
+3. **Dynamic resolution** - Changing Mac screen resolution without restart
+4. **Runtime codec selection** - Switch between H.264/VP9/AV1/PNG without restart
 
 ## Architecture
 
@@ -369,10 +373,6 @@ macemu-next/
 
 ### Key Breakthrough
 **Commit `44723671`** was the showstopper fix - the browser's SDP answer wasn't being processed because we tried to look up the peer by `peerId` (which the client doesn't send in answers). Changed to look up by WebSocket mapping instead, allowing `setRemoteDescription()` to be called, which enabled ICE to complete.
-
-## Next Session Plan
-
-See [NEXT_SESSION_PLAN.md](./NEXT_SESSION_PLAN.md) for detailed implementation plan for deferred CPU initialization.
 
 ## Dependencies
 

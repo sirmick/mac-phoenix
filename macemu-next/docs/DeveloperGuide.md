@@ -48,8 +48,7 @@
 2. **Hook Block** (`src/cpu/unicorn_wrapper.c:hook_block()`)
    - Apply deferred register updates from previous EmulOp
    - Poll timer every ~4096 blocks
-   - Flush JIT translation blocks (TB invalidation workaround)
-   - Check for pending interrupts
+   - Deliver pending interrupts via `uc_m68k_trigger_interrupt()` (QEMU native delivery)
 
 3. **Hook Interrupt** (`src/cpu/unicorn_wrapper.c:hook_interrupt()`)
    - Fires on A-line exception (0xAExx opcodes)
@@ -57,10 +56,11 @@
    - **Defers** all register updates (writes inside hooks don't persist in QEMU)
    - Updates applied at next `hook_block()` call
 
-4. **Interrupt Delivery** (in `hook_block()`)
-   - Build M68K exception frames manually
-   - Handle priority masking (IPL)
-   - Deliver timer at 60Hz (Level 1, Vector 25)
+4. **Interrupt Delivery** (QEMU native, auto-ack)
+   - `g_pending_interrupt_level` set by timer/device code
+   - `hook_block()` calls `uc_m68k_trigger_interrupt()` to set QEMU's pending interrupt
+   - QEMU's `m68k_cpu_exec_interrupt()` builds exception frame and delivers interrupt
+   - Auto-acknowledge in `m68k_cpu_exec_interrupt()` (no separate ack hook needed)
 
 ### Critical Files
 
@@ -146,18 +146,18 @@ void deliver_custom_interrupt(UnicornCPU *cpu, int level) {
 
 ### Current Optimizations
 
-1. **Adaptive Batch Sizing**
-   - 3 instructions for hot loops
-   - 20 for ROM code
-   - 50 for application code
+1. **QEMU Native Interrupt Delivery**
+   - Auto-acknowledge in `m68k_cpu_exec_interrupt()` (no stop/start cycle)
+   - `goto_tb` enabled for backward branches (loop chaining without breaking for hooks)
 
 2. **Minimal Hooks**
-   - Only UC_HOOK_BLOCK (not per-instruction)
-   - UC_HOOK_INSN_INVALID for EmulOps
+   - Only UC_HOOK_BLOCK (not per-instruction) + UC_HOOK_INTR for EmulOps
+   - Lean `hook_block()` — stripped of per-block perf timing, block stats, stale TB detector
+   - Timer polling only every 4096 blocks
 
-3. **Immediate Updates**
-   - No deferred register queues
-   - Direct memory access
+3. **JIT TB Invalidation**
+   - `FlushCodeCache()` → `uc_ctl_flush_tb()` (proper invalidation)
+   - Called when Mac OS modifies code in RAM
 
 ### Profiling
 
@@ -306,21 +306,21 @@ grep -c interrupt logfile
 - Cache translation blocks
 
 ### Current Priority (March 2026)
-- SCSI disk emulation (required for further boot progress)
-- More complete VIA emulation
-- Video framebuffer initialization
+- Application support (HyperCard, classic games)
+- Stability improvements (long-running sessions)
+- Further Unicorn performance optimization
 
 ### Long-term Goals
-- Full Mac OS boot to desktop
+- Mac OS 8 support
+- Performance parity with UAE
 - Network support
 - Sound emulation
-- Graphics acceleration
 
 ## Resources
 
 ### Documentation
 - [Architecture.md](Architecture.md) - System design
-- [TROUBLESHOOTING_GUIDE.md](TROUBLESHOOTING_GUIDE.md) - Debug help
+- [TroubleshootingGuide.md](TroubleshootingGuide.md) - Debug help
 - [deepdive/](deepdive/) - Technical deep dives
 
 ### External References
@@ -329,7 +329,7 @@ grep -c interrupt logfile
 - [Inside Macintosh](https://developer.apple.com/library/archive/documentation/mac/pdf/)
 
 ### Key Concepts
-- **EmulOp**: Emulator operation (0x71xx opcodes)
+- **EmulOp**: Emulator operation (0xAExx for Unicorn, 0x71xx for UAE)
 - **IPL**: Interrupt Priority Level (0-7)
 - **VBR**: Vector Base Register (interrupt vectors)
 - **TB**: Translation Block (JIT compiled code)

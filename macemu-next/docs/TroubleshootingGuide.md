@@ -233,7 +233,7 @@ grep "TB executed" logfile | wc -l
 
 ### Documentation
 - Architecture: docs/Architecture.md
-- Implementation: docs/PHASED_IMPLEMENTATION_PLAN.md
+- Developer Guide: docs/DeveloperGuide.md
 - IRQ Storm Analysis: docs/deepdive/UnicornIRQStormDebugSession.md
 
 ### Key Files for Debugging
@@ -274,4 +274,4 @@ timeout 10 ./build/macemu-next --no-webserver 2>&1 | grep -c poll_timer
 
 ---
 
-*Last Updated: January 2026 - After IRQ Storm Fix Implementation*
+*Last Updated: March 2026 - Both backends boot to Mac OS 7.5.5 Finder desktop*

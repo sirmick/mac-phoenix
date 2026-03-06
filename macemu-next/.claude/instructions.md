@@ -457,7 +457,7 @@ Before debugging:
 - `docs/Architecture.md` - System overview
 - `docs/ProjectGoals.md` - Vision and roles
 - `docs/TodoStatus.md` - Current state
-- `docs/deepdive/InterruptTimingAnalysis.md` - Current blocker
+- `docs/deepdive/InterruptTimingAnalysis.md` - Interrupt timing analysis (historical)
 
 **Validation**:
 - `src/cpu/cpu_dualcpu.cpp` - Dual-CPU validation
@@ -469,8 +469,8 @@ Before debugging:
 
 ### Timer Interrupts
 - Non-deterministic (wall-clock, not instruction-count)
-- UAE and Unicorn diverge at instruction #29,518
-- **This is expected** - not a bug to fix
+- UAE and Unicorn diverge at different instruction counts due to wall-clock timing
+- **This is expected** - not a bug to fix (both backends boot successfully)
 - See docs/deepdive/InterruptTimingAnalysis.md
 
 ### Endianness

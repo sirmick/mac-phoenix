@@ -5,9 +5,18 @@
 
 ## Summary
 
-Unicorn (QEMU TCG JIT) is **~10x slower** than UAE (hand-tuned interpreter) for M68K emulation. Profiling shows the bottleneck is JIT execution quality, not hook overhead or interrupt handling.
+Unicorn (QEMU TCG JIT) is **~2x slower** than UAE (hand-tuned interpreter) for M68K emulation after optimization work in March 2026. The gap was ~10x before optimizations (auto-ack interrupts, goto_tb backward branches, lean hook_block). Profiling shows the remaining bottleneck is JIT execution quality, not hook overhead or interrupt handling.
 
 | Metric | UAE | Unicorn |
+|--------|-----|---------|
+| Boot to Finder | ~20s | ~45s |
+| CHECKLOADs in 30s | 4402+ | 2513+ |
+
+### Pre-Optimization Numbers (January 2026)
+
+The data below was captured **before** the March 2026 optimizations and represents the ~10x gap:
+
+| Metric | UAE | Unicorn (pre-opt) |
 |--------|-----|---------|
 | Boot to Finder | ~6s | ~62s |
 | Instructions/sec (estimated) | ~40M | ~3.9M |
@@ -131,8 +140,18 @@ These are deep modifications to `target/m68k/translate.c` and `tcg/` — weeks o
 ### Alternative second backend
 - **Musashi**: Popular M68K interpreter (used by MAME). Clean C code, well-tested. Would slot behind our Platform API as a drop-in Unicorn replacement.
 
+## March 2026 Optimizations
+
+Three key optimizations reduced the gap from ~10x to ~2x:
+
+1. **Auto-ack interrupts** — Modified QEMU's `m68k_cpu_exec_interrupt()` to auto-acknowledge interrupts, eliminating the stop/start cycle that broke JIT block chaining on every interrupt.
+
+2. **`goto_tb` for backward branches** — Enabled QEMU's `goto_tb` optimization for backward branches, allowing hot loops to chain without exiting the JIT for hook_block checks.
+
+3. **Lean `hook_block()`** — Stripped per-block performance timing, block statistics histogram, and stale TB detector from hook_block, reducing per-block overhead to just timer polling (every 4096 blocks) and deferred register updates.
+
 ## Conclusion
 
-Unicorn's value in this project is as an **independent M68K implementation for correctness validation**, not as a performance backend. The profiling confirms that the 10x speed gap is structural — inherent to QEMU's TCG JIT architecture when applied to M68K's small basic blocks and complex condition code semantics. Our hook and interrupt infrastructure adds only 8% overhead; 92% of execution time is in the JIT itself.
+After optimization, Unicorn is the **primary backend** for end users, with ~2x overhead vs UAE. The remaining gap is structural — inherent to QEMU's TCG JIT architecture when applied to M68K's small basic blocks and complex condition code semantics. Our hook and interrupt infrastructure adds minimal overhead; the JIT execution quality is the limiting factor.
 
-UAE is the production backend. Unicorn is the correctness oracle.
+Both backends boot to Mac OS 7.5.5 Finder desktop. Unicorn is the focus for future development.

@@ -49,6 +49,7 @@
 │  Thread 4: WEB SERVER 🌍 (Event-driven)                       │
 │  ├─ HTTP server (serve client HTML/JS/CSS)                     │
 │  ├─ WebRTC peer connection management                          │
+│  ├─ Data channel input (mouse/keyboard → ADB)                 │
 │  ├─ ICE/STUN/TURN handling                                     │
 │  ├─ Signaling (websocket)                                      │
 │  ├─ Config API (GET/POST /config)                              │

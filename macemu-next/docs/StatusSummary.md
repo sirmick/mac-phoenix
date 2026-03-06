@@ -1,100 +1,56 @@
 # macemu-next Status Summary
 
-**Date**: March 1, 2026
+**Date**: March 5, 2026
 
 ---
 
-## MILESTONE: Unicorn Boot Parity with UAE
+## MILESTONE: Both Backends Boot to Mac OS 7.5.5 Finder Desktop
 
-**Both the Unicorn JIT backend and the UAE interpreter backend reach the identical boot state and stall at the same point.** The stall is NOT a Unicorn bug -- it is a shared emulator limitation (no SCSI boot disk).
+**Both the Unicorn JIT backend and the UAE interpreter backend boot Mac OS 7.5.5 to the Finder desktop.**
 
----
+| Metric | UAE | Unicorn |
+|--------|-----|---------|
+| **Boot to Finder** | ~20s | ~45s |
+| **CHECKLOADs** | 2200+ | 2513+ |
+| **Performance** | Baseline | ~2x slower |
 
-## Current Boot State (Both Backends)
-
-| Metric | Value |
-|--------|-------|
-| **Boot progress ($0b78)** | 0xfd89ffff (identical) |
-| **OS Trap Table** | 87 RAM handler entries (identical) |
-| **TopMapHndl ($A50)** | 0x00002074 (identical) |
-| **SysMapHndl ($A54)** | 0x00002074 (identical) |
-| **EmulOps in 30s** | 16,879 dispatched |
-| **SCSI dispatches** | 2,046 (searching for boot disk) |
-| **Stall point** | PC=0x0001c3d4 (resource chain search) |
-| **Chain sentinel** | [0x01FFF30C] = 0xFF00FF00 (both backends) |
-
-### Boot Sequence Timeline
-
-1. **RESET EmulOp** (0x7103/0xAE03) -- Sets up boot globals, registers
-2. **CLKNOMEM x336** (0x7104/0xAE04) -- XPRAM/RTC initialization
-3. **ROM initialization** -- Ticks-waiting loop at PC=0x020014ca (~4 seconds)
-4. **OS Trap Table setup** -- 87 entries installed (A001-A0FF range)
-5. **Resource Manager** -- Searches for boot resources, stalls on empty chain
-
-### Why Both Backends Stall
-
-The resource chain search at PC=0x0001c3d4 follows a linked list starting at A3=0x01FFF30C. The first entry points to 0xFF00FF00 (dummy fill pattern), immediately breaking the chain. The ROM is looking for system resources that would normally come from a SCSI boot disk.
+### Web UI
+- WebRTC video streaming (H.264/VP9) working
+- Mouse/keyboard input via data channel working
+- Playwright e2e tests for input pipeline
 
 ---
 
-## Key Achievements (Since January 2026)
+## Key Achievements
 
-### 1. A-Line/F-Line Traps -- WORKING
+### Boot to Finder (March 2026)
+- Framebuffer fix: placed at 0x02110000 outside RAM (avoids WDCB overlap)
+- RTR instruction added to Unicorn's QEMU m68k translator
+- FPU emulation, SIGSEGV handler, serial null check
 
-Previously documented as "BROKEN" due to Unicorn's PC limitation (GitHub issue #1027). **Now fully working** via the deferred register update mechanism:
+### Unicorn Performance (March 2026)
+Reduced overhead from ~10x to ~2x slower than UAE:
+- Auto-ack interrupts in QEMU's `m68k_cpu_exec_interrupt()`
+- `goto_tb` enabled for backward branches (loop chaining)
+- Lean `hook_block()` — stripped per-block timing, stats, stale TB detector
 
-- EmulOp handlers run inside UC_HOOK_INTR callbacks
-- Register writes are deferred and applied at block boundaries via `apply_deferred_updates_and_flush()`
-- PC changes take effect correctly after hook returns
-- All 87 OS trap table entries populated (matching UAE exactly)
+### Web UI Input (March 2026)
+- Mouse/keyboard input via WebRTC data channel binary protocol
+- `process_input_message()` → ADB functions
+- Browser keycode → Mac ADB scancode conversion
+- Playwright e2e test suite (6 tests)
 
-### 2. JIT Translation Block Invalidation -- SOLVED (workaround)
+### WebRTC Integration (January 2026)
+- 4-thread in-process architecture
+- All encoders: H.264, VP9, WebP, PNG, Opus audio
+- JSON configuration system
 
-**Root cause**: Mac OS heap overwrites RAM containing patch code. QEMU's JIT cache retains stale compiled translations. Executing stale code crashes at PC=0x00000002.
-
-**Workaround**: `uc_ctl_flush_tb()` on every 60Hz timer tick in `hook_block`.
-
-**Proper fix needed**: Investigate QEMU's `TLB_NOTDIRTY` / `tb_invalidate_phys_page_range()` mechanism.
-
-### 3. MMIO Infrastructure
-
-Hardware register emulation via `uc_mmio_map()` (not `UC_HOOK_MEM_READ`, which JIT bypasses for `uc_mem_map_ptr` regions):
-
-- VIA1/VIA2 stubs (0x50F00000-0x50F03FFF)
-- SCC/SCSI/ASC/DAFB stubs
-- NuBus gap regions (return 0)
-- Unmapped memory handler
-
-### 4. IRQ Storm Fix
-
-4-phase fix eliminating 99.997% of IRQ polling overhead:
-1. Fixed IRQ EmulOp encoding (0x7129 not 0xAE29)
-2. QEMU-style execution loop with adaptive batch sizing
-3. Deferred register update mechanism
-4. Proper M68K interrupt delivery with exception frames
-
-### 5. Performance Optimization
-
-- Hook-based timer: poll every 4096 blocks (not every block)
-- Cached environment variable lookups
-- Batch execution (count=1000)
-- 60Hz TB flush (workaround for self-modifying code)
-
----
-
-## EmulOp Dispatch Summary (30-second run)
-
-| EmulOp | Count | Description |
-|--------|-------|-------------|
-| BLOCK_MOVE | 4,361 | Memory block operations |
-| SCSI_DISPATCH | 2,046 | SCSI manager calls (searching for disk) |
-| IRQ | 1,797 | Interrupt handling |
-| DISK_PRIME | 1,358 | Disk read/write attempts |
-| CLKNOMEM | 574 | XPRAM/RTC access |
-| ADBOP | 417 | ADB keyboard/mouse |
-| CHECKLOAD | 283 | Resource loading checks |
-| Other | 6,043 | RESET, PATCH_BOOT_GLOBS, etc. |
-| **Total** | **16,879** | |
+### Earlier Achievements
+- A-line/F-line traps via deferred register updates
+- JIT TB invalidation via `FlushCodeCache()` → `uc_ctl_flush_tb()`
+- MMIO infrastructure (`uc_mmio_map()` for VIA/SCC/SCSI/ASC/DAFB stubs)
+- IRQ storm fix (4-phase, 99.997% overhead reduction)
+- 514k+ instruction dual-CPU validation
 
 ---
 
@@ -131,28 +87,23 @@ Hardware register emulation via `uc_mmio_map()` (not `UC_HOOK_MEM_READ`, which J
 
 ---
 
-## What's Needed to Boot Further
-
-The resource chain stall is a shared emulator issue. To progress:
-
-1. **SCSI disk emulation** -- System file provides resources the ROM is searching for
-2. **More complete VIA emulation** -- Interrupt sources, timers, slot interrupts
-3. **Video framebuffer** -- Display initialization
-4. **ADB hardware responses** -- Keyboard/mouse detection
-
----
-
 ## Phase Status
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 1: Core CPU | **COMPLETE** | All backends working, 514k+ dual-CPU validated |
-| Phase 1.5: Boot Progress | **COMPLETE** | Unicorn boot parity with UAE achieved |
-| Phase 2: WebRTC | **COMPLETE** | 4-thread architecture, all encoders integrated |
-| Phase 3: Hardware Emulation | **NEXT** | SCSI, VIA, Video needed for further boot |
-| Phase 4: Boot to Desktop | FUTURE | Requires Phase 3 |
-| Phase 5: Application Support | FUTURE | |
+| Phase 1.5: Boot Parity | **COMPLETE** | Both backends boot to Finder desktop |
+| Phase 2: WebRTC | **COMPLETE** | 4-thread architecture, all encoders, input pipeline |
+| Phase 3: Performance & Polish | **CURRENT** | Unicorn ~2x slower (down from ~10x), input working |
+| Phase 4: Application Support | FUTURE | HyperCard, classic games |
+| Phase 5: SheepShaver | FAR FUTURE | Mac OS 9, PowerPC |
+
+## What's Next
+
+- Application support (HyperCard, classic games)
+- Stability improvements (long-running sessions)
+- Further Unicorn performance optimization
 
 ---
 
-*Last updated: March 1, 2026*
+*Last updated: March 5, 2026*
