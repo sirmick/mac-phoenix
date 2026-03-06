@@ -7,7 +7,6 @@ cpu_sources = [
   'uae_wrapper.cpp',          # UAE CPU wrapper
   'unicorn_wrapper.c',        # Unicorn wrapper
   'unicorn_exec_loop.c',      # Phase 2: QEMU-style execution loop for Unicorn
-  'm68k_interrupt.c',         # Phase 4: QEMU-style M68K interrupt delivery
   'unicorn_exception.c',      # Exception simulation for Unicorn
   'unicorn_validation.cpp',   # Validation module (used by dualcpu)
   'emulop_c_wrapper.cpp',     # C wrapper for EmulOp function
