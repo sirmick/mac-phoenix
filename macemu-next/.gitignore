@@ -1,20 +1,20 @@
-# Debug and validation logs
-*.log
-cpu_validation.log
-scripts/cpu_validation.log
-
-# Build artifacts (if not using build/ subdirectory)
+# Build
+build*/
 *.o
 *.a
 
-# Test outputs
-tests/*.log
-tests/*.out
+# Debug and validation logs
+*.log
+*.diff
 
-# XPRAM (runtime state - should not be committed)
+# Runtime state
 BasiliskII_XPRAM
 
 # Node.js / Playwright
 node_modules/
 test-results/
 playwright-report/
+
+# Python
+__pycache__/
+*.pyc
