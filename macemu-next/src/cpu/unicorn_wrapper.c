@@ -5,21 +5,16 @@
  * All obsolete MMIO transport code has been removed.
  */
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include "unicorn_wrapper.h"
 #include "platform.h"
 #include "cpu_trace.h"
-#include <stdlib.h>  /* For strtoul */
+#include <stdlib.h>
 #include "timer_interrupt.h"
 #include <unicorn/unicorn.h>
 #include <unicorn/m68k.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <time.h>
 
 /* Shared M68K register structure (C-compatible) */
 #include "m68k_registers.h"
@@ -47,32 +42,15 @@ static bool g_interrupt_pending_ack = false;
 
 /* Performance counters */
 typedef struct {
-    uint64_t hook_block_ns;         /* Total time in hook_block() */
-    uint64_t hook_interrupt_ns;     /* Total time in hook_interrupt() (EmulOps) */
-    uint64_t interrupt_delivery_ns; /* Time in interrupt stop/start cycle */
     uint64_t emu_start_ns;          /* Time inside uc_emu_start() */
-    uint64_t deferred_update_ns;    /* Time applying deferred register updates */
-    uint64_t timer_poll_ns;         /* Time in poll_timer_interrupt() */
     uint64_t emulop_count;          /* Number of EmulOp dispatches */
     uint64_t interrupt_count;       /* Number of interrupt deliveries */
     uint64_t emu_start_count;       /* Number of uc_emu_start() calls */
-    uint64_t timer_poll_count;      /* Number of timer polls */
 } PerfCounters;
 
-static inline uint64_t perf_now_ns(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-}
-
-/* Block statistics for timing analysis */
+/* Block counter (used for timer polling interval) */
 typedef struct {
     uint64_t total_blocks;
-    uint64_t total_instructions;
-    uint64_t block_size_histogram[101];
-    uint32_t min_block_size;
-    uint32_t max_block_size;
-    uint64_t sum_block_sizes;
 } BlockStats;
 
 struct UnicornCPU {
@@ -106,9 +84,6 @@ struct UnicornCPU {
     uint32_t deferred_dreg_value[8];
     bool has_deferred_areg_update[8];
     uint32_t deferred_areg_value[8];
-
-    /* PC-based tracing state */
-    bool pc_trace_enabled;
 };
 
 /* Deferred SR update API */
@@ -207,79 +182,28 @@ static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, con
  * Hook for block execution (UC_HOOK_BLOCK)
  * Called at the start of each translation block.
  *
- * This is the hottest path in the emulator. Keep it lean.
- * Essential responsibilities:
- *   1. Block statistics
- *   2. Interrupt acknowledge (after delivery)
- *   3. Stale TB detection (SMC safety net)
- *   4. SCSI timeout accelerator
- *   5. Timer polling (every 4096 blocks)
- *   6. Apply deferred register updates
- *   7. PC-based tracing trigger
- *   8. Pending interrupt delivery
+ * This is the hottest path in the emulator — minimize work per call.
+ * Responsibilities:
+ *   1. Interrupt acknowledge (after delivery, redundant with auto-ack but harmless)
+ *   2. SCSI timeout accelerator
+ *   3. Timer polling (every 4096 blocks)
+ *   4. Apply deferred register updates
+ *   5. Pending interrupt delivery
  */
 static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
-    uint64_t hook_start = perf_now_ns();
-
-    /* --- 1. Block statistics --- */
     cpu->block_stats.total_blocks++;
-    cpu->block_stats.total_instructions += size;
-    if (size < cpu->block_stats.min_block_size) cpu->block_stats.min_block_size = size;
-    if (size > cpu->block_stats.max_block_size) cpu->block_stats.max_block_size = size;
-    cpu->block_stats.sum_block_sizes += size;
-    if (size <= 100) cpu->block_stats.block_size_histogram[size]++;
-    else cpu->block_stats.block_size_histogram[100]++;
 
-    /* --- 2. Interrupt acknowledge --- */
-    /* After uc_m68k_trigger_interrupt() + uc_emu_stop(), QEMU delivers the
-     * interrupt on the next uc_emu_start(). The first hook_block after that
-     * is in the handler with IPL raised. Clear QEMU's pending_level to
-     * prevent re-delivery after RTE (mimics hardware interrupt ack). */
+    /* --- 1. Interrupt acknowledge --- */
     if (g_interrupt_pending_ack) {
         g_interrupt_pending_ack = false;
         uc_m68k_trigger_interrupt(uc, 0, 0);
     }
 
-    /* --- 3. Stale TB detector (SMC safety net) ---
-     * For blocks in the critical patch area (0x0001C000-0x0001D000),
-     * verify memory matches what was first seen when the TB was compiled.
-     * If memory changed, the JIT has a stale TB — flush and re-translate.
-     * This catches the ~18 edge cases that notdirty_write() misses.
-     * See docs/deepdive/JIT_SMC_Detection_Analysis.md */
-    if (address >= 0x0001C000 && address < 0x0001D000 &&
-        cpu->block_stats.total_blocks > 100000000ULL) {
-        static struct { uint32_t addr; uint32_t first_bytes; uint64_t first_block; } seen[128];
-        static int seen_count = 0;
-        uint8_t mem[4] = {0};
-        uc_mem_read(uc, address, mem, 4);
-        uint32_t cur_bytes = (mem[0]<<24)|(mem[1]<<16)|(mem[2]<<8)|mem[3];
-
-        int found = -1;
-        for (int si = 0; si < seen_count; si++) {
-            if (seen[si].addr == (uint32_t)address) { found = si; break; }
-        }
-        if (found >= 0 && cur_bytes != seen[found].first_bytes) {
-            uc_ctl_flush_tb(uc);
-            seen[found].first_bytes = cur_bytes;
-            seen[found].first_block = cpu->block_stats.total_blocks;
-        } else if (found < 0 && seen_count < 128) {
-            seen[seen_count].addr = (uint32_t)address;
-            seen[seen_count].first_bytes = cur_bytes;
-            seen[seen_count].first_block = cpu->block_stats.total_blocks;
-            seen_count++;
-        }
-    }
-
-    /* --- 4. SCSI timeout accelerator ---
-     * ROM SCSI probe at 0x020014c0 busy-waits reading Mac Ticks ($016A):
-     *   0x14ca: cmpl $016A.w, D0   ; compare D0 with Ticks counter
-     *   0x14ce: bccs 0x14ca        ; loop until Ticks >= D0
-     * This burns millions of blocks. Skip the wait by advancing Ticks directly.
-     *
-     * Also cap D5 (outer loop counter) to prevent 545-second SCSI timeout. */
+    /* --- 2. SCSI timeout accelerator ---
+     * ROM SCSI probe busy-waits reading Mac Ticks ($016A).
+     * Cap D5 and fast-forward Ticks to skip the wait. */
     if (address == 0x020014be || address == 0x020014c0 || address == 0x020014ca) {
-        /* Cap D5 to prevent excessive SCSI timeout (240 = 4 seconds max) */
         if (address == 0x020014be || address == 0x020014c0) {
             uint32_t d5 = 0;
             uc_reg_read(uc, UC_M68K_REG_D5, &d5);
@@ -288,17 +212,14 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
                 uc_reg_write(uc, UC_M68K_REG_D5, &d5);
             }
         }
-        /* Fast-forward Ticks to break busy-wait loop */
         if (address == 0x020014ca) {
             uint32_t d0 = 0;
             uc_reg_read(uc, UC_M68K_REG_D0, &d0);
-            /* Read current Ticks from Mac low memory ($016A) */
             extern uint8_t *RAMBaseHost;
             if (RAMBaseHost) {
                 uint8_t *tp = RAMBaseHost + 0x016A;
                 uint32_t ticks = (tp[0]<<24)|(tp[1]<<16)|(tp[2]<<8)|tp[3];
                 if (ticks < d0) {
-                    /* Set Ticks = D0 to break the loop immediately */
                     uint32_t new_ticks = d0;
                     tp[0] = (new_ticks >> 24) & 0xFF;
                     tp[1] = (new_ticks >> 16) & 0xFF;
@@ -309,53 +230,22 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
         }
     }
 
-    /* --- 5. Timer polling (every 4096 blocks) ---
-     * At ~60Hz timer rate, polling ~500-2500x/second is plenty.
-     * 4096 blocks * ~6 insns/block = ~25K instructions between polls. */
+    /* --- 3. Timer polling (every 4096 blocks) --- */
     extern uint64_t poll_timer_interrupt(void);
     if ((cpu->block_stats.total_blocks & 0xFFF) == 0) {
-        uint64_t t0 = perf_now_ns();
         poll_timer_interrupt();
-        cpu->perf.timer_poll_ns += perf_now_ns() - t0;
-        cpu->perf.timer_poll_count++;
     }
 
-    /* --- 6. Apply deferred register updates ---
-     * EmulOp handlers defer register changes that must be applied
-     * before the next instruction executes. */
-    {
-        uint64_t t0 = perf_now_ns();
-        apply_deferred_updates_and_flush(cpu, uc, "hook_block");
-        cpu->perf.deferred_update_ns += perf_now_ns() - t0;
-    }
+    /* --- 4. Apply deferred register updates --- */
+    apply_deferred_updates_and_flush(cpu, uc, "hook_block");
 
-    /* --- 7. PC-based tracing trigger --- */
-    if (!cpu->pc_trace_enabled) {
-        static const char *trace_pc_env = NULL;
-        static bool env_checked = false;
-        if (!env_checked) {
-            trace_pc_env = getenv("CPU_TRACE_PC");
-            env_checked = true;
-        }
-        if (trace_pc_env) {
-            uint32_t trace_pc = strtoul(trace_pc_env, NULL, 0);
-            if (address == trace_pc) {
-                fprintf(stderr, "[Unicorn] PC-based trace triggered at 0x%08lx\n", address);
-                cpu->pc_trace_enabled = true;
-                extern void cpu_trace_force_enable(void);
-                cpu_trace_force_enable();
-            }
-        }
-    }
-
-    /* --- 8. Pending interrupt delivery --- */
+    /* --- 5. Pending interrupt delivery --- */
     if (g_pending_interrupt_level > 0) {
         uint32_t sr = 0;
         uc_reg_read(uc, UC_M68K_REG_SR, &sr);
         int current_ipl = ((sr & 0xFFFF) >> 8) & 7;
 
         if (g_pending_interrupt_level > current_ipl) {
-            uint64_t t0 = perf_now_ns();
             uint8_t vector = (g_pending_interrupt_level == 1) ? 0x19 :
                            (0x18 + g_pending_interrupt_level);
 
@@ -363,12 +253,9 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
             g_pending_interrupt_level = 0;
             g_interrupt_pending_ack = true;
             uc_emu_stop(uc);
-            cpu->perf.interrupt_delivery_ns += perf_now_ns() - t0;
             cpu->perf.interrupt_count++;
         }
     }
-
-    cpu->perf.hook_block_ns += perf_now_ns() - hook_start;
 }
 
 /**
@@ -377,7 +264,6 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *use
  */
 static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
-    uint64_t intr_start = perf_now_ns();
 
     /* A-line exception (interrupt #10) */
     if (intno == 10) {
@@ -410,17 +296,11 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                     uc_reg_write(uc, UC_M68K_REG_PC, &pc);
                 }
 
-                /* Apply deferred updates IMMEDIATELY after EmulOp.
-                 * If the next instruction causes an exception (like an A-trap),
-                 * deferred updates would never be applied by hook_block. */
                 apply_deferred_updates_and_flush(cpu, uc, "hook_interrupt");
             }
         }
-        /* Other A-line traps: QEMU handles the exception natively
-         * (pushes stack frame, jumps to LINE-A vector handler) */
     }
 
-    cpu->perf.hook_interrupt_ns += perf_now_ns() - intr_start;
     cpu->perf.emulop_count++;
 }
 
@@ -491,9 +371,6 @@ UnicornCPU *unicorn_create_with_model(UnicornArch arch, int cpu_model) {
     if (!cpu) return NULL;
 
     cpu->arch = arch;
-
-    /* Initialize block statistics */
-    cpu->block_stats.min_block_size = UINT32_MAX;
 
     /* Create Unicorn engine */
     uc_mode mode = (arch == UCPU_ARCH_M68K) ? UC_MODE_BIG_ENDIAN : UC_MODE_LITTLE_ENDIAN;
@@ -739,35 +616,11 @@ void unicorn_print_perf_counters(UnicornCPU *cpu) {
             total_s, (unsigned long long)p->emu_start_count,
             p->emu_start_count ? (double)p->emu_start_ns / p->emu_start_count / 1e3 : 0);
 
-    fprintf(stderr, "  hook_block() total:        %8.3f s  (%.1f%% of emu_start)\n",
-            (double)p->hook_block_ns / 1e9,
-            p->emu_start_ns ? (double)p->hook_block_ns * 100.0 / p->emu_start_ns : 0);
+    fprintf(stderr, "  Interrupts delivered:       %llu\n",
+            (unsigned long long)p->interrupt_count);
 
-    fprintf(stderr, "    timer polling:           %8.3f s  (%llu polls, %.1f us/poll)\n",
-            (double)p->timer_poll_ns / 1e9,
-            (unsigned long long)p->timer_poll_count,
-            p->timer_poll_count ? (double)p->timer_poll_ns / p->timer_poll_count / 1e3 : 0);
-
-    fprintf(stderr, "    deferred updates:        %8.3f s\n",
-            (double)p->deferred_update_ns / 1e9);
-
-    fprintf(stderr, "    interrupt delivery:       %8.3f s  (%llu interrupts, %.1f us/int)\n",
-            (double)p->interrupt_delivery_ns / 1e9,
-            (unsigned long long)p->interrupt_count,
-            p->interrupt_count ? (double)p->interrupt_delivery_ns / p->interrupt_count / 1e3 : 0);
-
-    fprintf(stderr, "  hook_interrupt() total:    %8.3f s  (%llu EmulOps, %.1f us/op)\n",
-            (double)p->hook_interrupt_ns / 1e9,
-            (unsigned long long)p->emulop_count,
-            p->emulop_count ? (double)p->hook_interrupt_ns / p->emulop_count / 1e3 : 0);
-
-    /* Compute JIT execution time = emu_start - hook_block - hook_interrupt */
-    uint64_t jit_ns = p->emu_start_ns;
-    if (jit_ns > p->hook_block_ns) jit_ns -= p->hook_block_ns;
-    if (jit_ns > p->hook_interrupt_ns) jit_ns -= p->hook_interrupt_ns;
-    fprintf(stderr, "  JIT execution (estimated): %8.3f s  (%.1f%% of emu_start)\n",
-            (double)jit_ns / 1e9,
-            p->emu_start_ns ? (double)jit_ns * 100.0 / p->emu_start_ns : 0);
+    fprintf(stderr, "  EmulOps dispatched:         %llu\n",
+            (unsigned long long)p->emulop_count);
 
     fprintf(stderr, "========================================\n\n");
 }
@@ -775,44 +628,8 @@ void unicorn_print_perf_counters(UnicornCPU *cpu) {
 /* Print block statistics */
 void unicorn_print_block_stats(UnicornCPU *cpu) {
     if (!cpu) return;
-
-    BlockStats *stats = &cpu->block_stats;
-
-    printf("\n=== Unicorn Block Execution Statistics ===\n");
-    printf("Total blocks executed:      %llu\n", (unsigned long long)stats->total_blocks);
-    printf("Total instructions:         %llu\n", (unsigned long long)stats->total_instructions);
-
-    if (stats->total_blocks > 0) {
-        double avg = (double)stats->sum_block_sizes / stats->total_blocks;
-        printf("Average block size:         %.2f instructions\n", avg);
-        printf("Min block size:             %u instructions\n", stats->min_block_size);
-        printf("Max block size:             %u instructions\n", stats->max_block_size);
-
-        /* Print distribution */
-        printf("\nBlock Size Distribution:\n");
-        printf("Size (insns) | Count        | Percentage | Cumulative\n");
-        printf("-------------|--------------|------------|-----------\n");
-
-        uint64_t cumulative = 0;
-        for (int i = 1; i <= 100; i++) {
-            if (stats->block_size_histogram[i] > 0) {
-                cumulative += stats->block_size_histogram[i];
-                double pct = (double)stats->block_size_histogram[i] * 100.0 / stats->total_blocks;
-                double cum_pct = (double)cumulative * 100.0 / stats->total_blocks;
-
-                if (i < 100) {
-                    printf("%-12d | %12llu | %9.2f%% | %9.2f%%\n",
-                          i, (unsigned long long)stats->block_size_histogram[i],
-                          pct, cum_pct);
-                } else {
-                    printf("100+         | %12llu | %9.2f%% | %9.2f%%\n",
-                          (unsigned long long)stats->block_size_histogram[i],
-                          pct, cum_pct);
-                }
-            }
-        }
-    }
-    printf("==========================================\n");
+    fprintf(stderr, "Total blocks executed: %llu\n",
+            (unsigned long long)cpu->block_stats.total_blocks);
 }
 
 /* ========================================
