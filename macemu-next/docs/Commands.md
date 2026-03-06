@@ -1,472 +1,200 @@
 # Commands Reference
 
-Build, test, debug, and trace commands for macemu-next.
+Build, test, run, and debug commands for macemu-next.
+
+See also: [CLAUDE.md](../CLAUDE.md) for project overview and architecture.
 
 ---
 
-## Build Commands
-
-### Basic Build
+## Build
 
 ```bash
-cd macemu-next
-meson setup build
-meson compile -C build
-```
+# Standard build
+ninja -C build
 
-This builds all three backends (UAE, Unicorn, DualCPU).
+# Clean build
+rm -rf build && meson setup build && ninja -C build
 
-### Clean Build
+# Debug build
+meson setup build --buildtype=debug && ninja -C build
 
-```bash
-rm -rf build
-meson setup build
-meson compile -C build
-```
+# Release build
+meson setup build --buildtype=release && ninja -C build
 
-### Backend-Specific Build
+# Reconfigure (after changing meson.build or meson_options.txt)
+meson setup build --reconfigure
 
-```bash
-# Build with specific backend as default
-meson setup build -Dcpu_backend=unicorn  # or uae, dualcpu
-meson compile -C build
-```
-
-### Debug Build
-
-```bash
-meson setup build --buildtype=debug
-meson compile -C build
-```
-
-### Release Build
-
-```bash
-meson setup build --buildtype=release
-meson compile -C build
+# Rebuild Unicorn subproject (after modifying QEMU sources)
+cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
 ```
 
 ---
 
-## Configuration Commands
-
-### Generate Default Config
+## Run
 
 ```bash
-./build/macemu-next --save-config
-# Creates ~/.config/macemu-next/config.json
+# Default (UAE backend, web UI on port 8080)
+./build/macemu-next /home/mick/quadra.rom
+
+# Headless with timeout
+EMULATOR_TIMEOUT=10 ./build/macemu-next --no-webserver /home/mick/quadra.rom
+
+# Specific backend
+./build/macemu-next --backend unicorn /home/mick/quadra.rom
+
+# Custom ports
+./build/macemu-next --port 9000 --signaling-port 9001 /home/mick/quadra.rom
+
+# Custom screen resolution
+./build/macemu-next --screen 1024x768 /home/mick/quadra.rom
+
+# Custom config file
+./build/macemu-next --config myconfig.json /home/mick/quadra.rom
+
+# Screenshot mode (dumps PPM to /tmp)
+./build/macemu-next --screenshots --no-webserver /home/mick/quadra.rom
 ```
-
-### Use Custom Config
-
-```bash
-./build/macemu-next --config myconfig.json ~/quadra.rom
-```
-
-### Edit Config
-
-```bash
-# User config
-nano ~/.config/macemu-next/config.json
-
-# Or copy example
-cp config.example.json ~/.config/macemu-next/config.json
-```
-
-See **[JSON_CONFIG.md](JSON_CONFIG.md)** for complete configuration documentation.
 
 ---
 
-## Run Commands
-
-### Basic Execution
+## Test
 
 ```bash
-# Unicorn backend (primary)
-CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom
+# Fast tests (API + UAE boot + mouse, ~12s)
+meson test -C build api_endpoints boot_uae mouse_position
 
-# UAE backend (legacy)
-CPU_BACKEND=uae ./build/macemu-next ~/quadra.rom
+# All tests (includes slow Unicorn boot, ~60s)
+meson test -C build
 
-# DualCPU validation
-CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
+# Verbose output
+meson test -C build -v
 
-# With custom config
-CPU_BACKEND=unicorn ./build/macemu-next --config myconfig.json ~/quadra.rom
+# Playwright E2E tests (requires running emulator on port 18094)
+npx playwright test
+npx playwright test --headed    # watch in browser
+npx playwright test --ui        # interactive UI
 ```
 
-### With Timeout
+---
 
-```bash
-# Auto-exit after N seconds (useful for testing)
-EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom
+## CLI Flags
+
+```
+./build/macemu-next [options] [rom-path]
+  --port N              HTTP server port (default: 8080)
+  --signaling-port N    WebRTC signaling port (default: 8090)
+  --backend uae|unicorn Backend override (or use CPU_BACKEND env)
+  --timeout N           Auto-exit after N seconds
+  --no-webserver        Headless mode (no HTTP/WebRTC)
+  --screen WxH          Display resolution (default: 640x480)
+  --config path         JSON config file
+  --screenshots         Dump PPM screenshots to /tmp
+  --save-config         Write default config to ~/.config/macemu-next/config.json
 ```
 
 ---
 
 ## Environment Variables
 
-### Backend Selection
+### Core
 
 | Variable | Values | Purpose |
 |----------|--------|---------|
-| `CPU_BACKEND` | uae, unicorn, dualcpu | Select CPU backend |
-
-**Examples**:
-```bash
-CPU_BACKEND=uae      # Use UAE interpreter
-CPU_BACKEND=unicorn  # Use Unicorn JIT (default/recommended)
-CPU_BACKEND=dualcpu  # Run both in lockstep for validation
-```
-
-### Debugging & Tracing
-
-| Variable | Values | Purpose |
-|----------|--------|---------|
+| `CPU_BACKEND` | `uae`, `unicorn`, `dualcpu` | Select CPU backend (default: uae) |
 | `EMULATOR_TIMEOUT` | seconds | Auto-exit after N seconds |
-| `CPU_TRACE` | N or N-M | Trace N instructions or range |
-| `CPU_TRACE_MEMORY` | 0 or 1 | Include memory accesses in trace |
-| `CPU_TRACE_QUIET` | 0 or 1 | Suppress normal output, trace only |
-| `EMULOP_VERBOSE` | 0 or 1 | Log EmulOp calls |
+| `MACEMU_LOG_LEVEL` | 0-3 | 0=milestones, 1=important, 2=all ops, 3=+registers |
+| `MACEMU_SCREENSHOTS` | any | Enable PPM screenshot dumps to /tmp |
+| `MACEMU_ROM` | path | Default ROM path for tests |
 
-**Examples**:
-```bash
-# Trace first 100 instructions
-CPU_TRACE=0-100 CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom
+### Tracing & Debugging
 
-# Trace with memory accesses
-CPU_TRACE=0-1000 CPU_TRACE_MEMORY=1 CPU_BACKEND=uae ./build/macemu-next ~/quadra.rom
-
-# Trace specific range (quiet mode)
-CPU_TRACE=29500-29600 CPU_TRACE_QUIET=1 CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom
-
-# Verbose EmulOp logging
-EMULOP_VERBOSE=1 CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom
-```
+| Variable | Values | Purpose |
+|----------|--------|---------|
+| `CPU_TRACE` | `N` or `N-M` | Trace first N instructions or range N to M |
+| `CPU_TRACE_MEMORY` | `1` | Include memory accesses in trace output |
+| `CPU_TRACE_QUIET` | `1` | Suppress normal output, trace only |
+| `EMULOP_VERBOSE` | `1` | Log EmulOp calls |
 
 ### DualCPU Validation
 
 | Variable | Values | Purpose |
 |----------|--------|---------|
 | `DUALCPU_TRACE_DEPTH` | N | History depth for divergence analysis |
-| `DUALCPU_MASTER` | uae or unicorn | Which CPU is "correct" on divergence |
+| `DUALCPU_MASTER` | `uae` or `unicorn` | Which CPU is authoritative on divergence (default: uae) |
 
-**Examples**:
+---
+
+## Debug Workflows
+
+### Quick Test
+
 ```bash
-# DualCPU with 10-instruction history on divergence
-DUALCPU_TRACE_DEPTH=10 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
+# Build and test (5 second boot)
+ninja -C build && EMULATOR_TIMEOUT=5 ./build/macemu-next --no-webserver /home/mick/quadra.rom
+```
 
-# Trust Unicorn as master (unusual)
-DUALCPU_MASTER=unicorn CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
+### Trace Comparison (UAE vs Unicorn)
+
+```bash
+# Generate traces
+EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 ./build/macemu-next --backend uae \
+    --no-webserver /home/mick/quadra.rom > uae.log 2>&1
+
+EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 ./build/macemu-next --backend unicorn \
+    --no-webserver /home/mick/quadra.rom > unicorn.log 2>&1
+
+# Compare
+diff uae.log unicorn.log | head -50
+```
+
+### DualCPU Validation
+
+```bash
+EMULATOR_TIMEOUT=30 DUALCPU_TRACE_DEPTH=20 \
+    ./build/macemu-next --backend dualcpu --no-webserver /home/mick/quadra.rom
+```
+
+### GDB
+
+```bash
+gdb --args ./build/macemu-next --no-webserver /home/mick/quadra.rom
+```
+
+### Perf Profiling
+
+```bash
+sudo sysctl kernel.perf_event_paranoid=-1
+perf record -g -F 997 ./build/macemu-next --backend unicorn --no-webserver /home/mick/quadra.rom
+perf report
 ```
 
 ---
 
-## Trace Comparison
-
-### Generate Traces
+## Configuration
 
 ```bash
-# Generate UAE trace
-EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 CPU_BACKEND=uae \
-    ./build/macemu-next ~/quadra.rom > uae_250k.log 2>&1
+# Generate default config
+./build/macemu-next --save-config
 
-# Generate Unicorn trace
-EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 CPU_BACKEND=unicorn \
-    ./build/macemu-next ~/quadra.rom > unicorn_250k.log 2>&1
+# Edit config
+nano ~/.config/macemu-next/config.json
+
+# Or copy example
+cp config.example.json ~/.config/macemu-next/config.json
 ```
 
-### Compare Traces (Manual)
-
-```bash
-# Find first difference
-diff uae_250k.log unicorn_250k.log | head -50
-
-# Count divergences
-diff uae_250k.log unicorn_250k.log | grep '^<' | wc -l
-```
-
-### Compare Traces (Script)
-
-```bash
-# Using provided script (if exists)
-./scripts/compare_traces.sh uae_250k.log unicorn_250k.log
-
-# Using trace analyzer (if exists)
-python3 scripts/trace_analyzer.py --sequential uae_250k.log unicorn_250k.log
-```
-
-### Run Traces Script (Wrapper)
-
-```bash
-# Simplified trace comparison (if run_traces.sh exists)
-./scripts/run_traces.sh 250000  # Generate and compare 250k instruction traces
-```
-
----
-
-## Testing Commands
-
-### Boot Test
-
-```bash
-# Simple boot test
-./build/tests/boot/test_boot ~/quadra.rom
-
-# With specific backend
-CPU_BACKEND=unicorn ./build/tests/boot/test_boot ~/quadra.rom
-```
-
-### Unit Tests
-
-```bash
-# Run all Meson tests
-meson test -C build
-
-# Run specific test
-meson test -C build test_unicorn_m68k
-```
-
-### Validation Test
-
-```bash
-# Run DualCPU for extended validation
-EMULATOR_TIMEOUT=30 DUALCPU_TRACE_DEPTH=20 CPU_BACKEND=dualcpu \
-    ./build/macemu-next ~/quadra.rom
-```
-
-Expected: Should validate 500k+ instructions before timeout
-
----
-
-## Debug Commands
-
-### Run with GDB
-
-```bash
-# Basic GDB
-gdb --args ./build/macemu-next ~/quadra.rom
-
-# With environment variables
-gdb --args env CPU_BACKEND=unicorn EMULATOR_TIMEOUT=5 \
-    ./build/macemu-next ~/quadra.rom
-
-# GDB commands:
-(gdb) run
-(gdb) break unicorn_backend_execute_one
-(gdb) continue
-(gdb) print cpu->uc
-(gdb) backtrace
-```
-
-### Trace Specific Instruction Range
-
-```bash
-# Find where Unicorn diverges from UAE
-# 1. Run both with same range
-EMULATOR_TIMEOUT=5 CPU_TRACE=29000-30000 CPU_BACKEND=uae \
-    ./build/macemu-next ~/quadra.rom > uae_range.log
-
-EMULATOR_TIMEOUT=5 CPU_TRACE=29000-30000 CPU_BACKEND=unicorn \
-    ./build/macemu-next ~/quadra.rom > unicorn_range.log
-
-# 2. Compare
-diff uae_range.log unicorn_range.log | head -100
-```
-
-### Memory Dump
-
-```bash
-# If memory dump functionality exists
-# Add memory inspection at specific PC values
-CPU_TRACE=29500-29600 CPU_TRACE_MEMORY=1 CPU_BACKEND=unicorn \
-    ./build/macemu-next ~/quadra.rom
-```
-
----
-
-## Common Workflows
-
-### Workflow 1: Test a Change
-
-```bash
-# 1. Build
-meson compile -C build
-
-# 2. Quick test (5 seconds)
-EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom
-
-# 3. Validation test (30 seconds)
-EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
-
-# 4. If validation passes, change is likely correct
-```
-
-### Workflow 2: Investigate Divergence
-
-```bash
-# 1. Run DualCPU to find divergence point
-EMULATOR_TIMEOUT=10 DUALCPU_TRACE_DEPTH=20 CPU_BACKEND=dualcpu \
-    ./build/macemu-next ~/quadra.rom 2>&1 | tee divergence.log
-
-# 2. Extract divergence instruction number (e.g., 29518)
-grep "DIVERGENCE" divergence.log
-
-# 3. Generate detailed traces around divergence
-CPU_TRACE=29500-29600 CPU_TRACE_MEMORY=1 CPU_BACKEND=uae \
-    ./build/macemu-next ~/quadra.rom > uae_detail.log
-
-CPU_TRACE=29500-29600 CPU_TRACE_MEMORY=1 CPU_BACKEND=unicorn \
-    ./build/macemu-next ~/quadra.rom > unicorn_detail.log
-
-# 4. Analyze difference
-diff uae_detail.log unicorn_detail.log
-```
-
-### Workflow 3: Performance Testing
-
-```bash
-# 1. Build release version
-meson setup build-release --buildtype=release
-meson compile -C build-release
-
-# 2. Run timed tests
-time EMULATOR_TIMEOUT=60 CPU_BACKEND=uae \
-    ./build-release/macemu-next ~/quadra.rom
-
-time EMULATOR_TIMEOUT=60 CPU_BACKEND=unicorn \
-    ./build-release/macemu-next ~/quadra.rom
-
-# 3. Compare execution times
-```
-
-### Workflow 4: Trace Comparison
-
-```bash
-# 1. Generate traces (same timeout, different backends)
-EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 CPU_BACKEND=uae \
-    ./build/macemu-next ~/quadra.rom > uae.log 2>&1
-
-EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 CPU_BACKEND=unicorn \
-    ./build/macemu-next ~/quadra.rom > unicorn.log 2>&1
-
-# 2. Find first divergence
-./scripts/compare_traces.sh uae.log unicorn.log
-
-# 3. Analyze divergence in detail (from step 2 output)
-```
-
----
-
-## Script Reference
-
-### compare_traces.sh (if exists)
-
-```bash
-./scripts/compare_traces.sh <uae_log> <unicorn_log>
-```
-
-Finds first divergence between UAE and Unicorn traces.
-
-### trace_analyzer.py (if exists)
-
-```bash
-# Sequential comparison (find exact divergence point)
-python3 scripts/trace_analyzer.py --sequential uae.log unicorn.log
-
-# Statistical analysis
-python3 scripts/trace_analyzer.py --stats uae.log unicorn.log
-```
-
-### run_traces.sh (if exists)
-
-```bash
-# Generate and compare N instruction traces
-./scripts/run_traces.sh 250000
-
-# Custom timeout
-EMULATOR_TIMEOUT=5 ./scripts/run_traces.sh 100000
-```
+See [JsonConfig.md](JsonConfig.md) for config file format.
 
 ---
 
 ## Troubleshooting
 
-### Build Issues
+**ROM not found**: Use absolute path — `~` expansion can fail in some contexts.
 
-**Problem**: Meson setup fails
+**Port already in use**: Use `--port` and `--signaling-port` to pick different ports.
+
+**Unicorn build issues**: Rebuild the subproject:
 ```bash
-# Check Meson version
-meson --version  # Should be 0.55+
-
-# Check dependencies
-pkg-config --libs glib-2.0
+cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
+ninja -C build
 ```
-
-**Problem**: Unicorn not found
-```bash
-# Update submodules
-git submodule update --init --recursive
-
-# Build Unicorn manually
-cd external/unicorn
-mkdir build && cd build
-cmake .. && make
-```
-
-### Runtime Issues
-
-**Problem**: "ROM file not found"
-```bash
-# Check ROM path
-ls -lh ~/quadra.rom
-
-# Try absolute path
-./build/macemu-next /home/user/quadra.rom
-```
-
-**Problem**: Segmentation fault
-```bash
-# Run with GDB
-gdb --args ./build/macemu-next ~/quadra.rom
-(gdb) run
-(gdb) backtrace  # When it crashes
-```
-
-**Problem**: DualCPU divergence immediately
-```bash
-# Check if both backends built correctly
-meson compile -C build
-
-# Enable verbose output
-EMULOP_VERBOSE=1 DUALCPU_TRACE_DEPTH=5 CPU_BACKEND=dualcpu \
-    ./build/macemu-next ~/quadra.rom
-```
-
----
-
-## Quick Reference
-
-```bash
-# Standard test run
-EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom
-
-# Validation run
-EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/macemu-next ~/quadra.rom
-
-# Trace comparison
-EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 CPU_BACKEND=uae ./build/macemu-next ~/quadra.rom > uae.log
-EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom > uni.log
-diff uae.log uni.log | head -50
-
-# Debug specific range
-CPU_TRACE=29500-29600 CPU_TRACE_MEMORY=1 CPU_BACKEND=unicorn ./build/macemu-next ~/quadra.rom
-
-# Performance test
-time EMULATOR_TIMEOUT=60 CPU_BACKEND=unicorn ./build-release/macemu-next ~/quadra.rom
-```
-
----
-
-**Last Updated**: January 3, 2026
-**See Also**: [Architecture.md](Architecture.md), [TodoStatus.md](TodoStatus.md)
