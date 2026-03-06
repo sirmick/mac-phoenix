@@ -73,6 +73,7 @@ Select with `--backend uae|unicorn|dualcpu` or the `CPU_BACKEND` env var.
 | `POST /api/emulator/start` | Start emulation |
 | `POST /api/emulator/stop` | Stop emulation |
 | `POST /api/codec` | Switch video codec |
+| `POST /api/keypress` | Send a key event (`{"key": "return"}`) |
 
 ## Testing
 

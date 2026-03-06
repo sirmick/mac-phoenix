@@ -219,9 +219,9 @@ bool init_mac_subsystems(void)
 {
     fprintf(stderr, "[Init] Initializing Mac subsystems...\n");
 
-    // Load XPRAM (skip file load in cleanboot mode to avoid shutdown dialog)
-    if (PrefsFindBool("cleanboot")) {
-        fprintf(stderr, "[Init] Clean boot: using fresh XPRAM\n");
+    // Load XPRAM (zap PRAM: skip file load, use fresh defaults)
+    if (PrefsFindBool("zappram")) {
+        fprintf(stderr, "[Init] Zap PRAM: using fresh XPRAM (suppresses improper shutdown dialog)\n");
         memset(XPRAM, 0, XPRAM_SIZE);
     } else {
         XPRAMInit(NULL);

@@ -99,6 +99,7 @@ private:
     Response handle_error(const Request& req);
     Response handle_screenshot(const Request& req);
     Response handle_mouse(const Request& req);
+    Response handle_keypress(const Request& req);
 
     APIContext* ctx_;
 };

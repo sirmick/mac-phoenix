@@ -24,6 +24,10 @@
 // Globals from main.cpp for checking emulator state
 extern uint32 ROMSize;  // 0 if no ROM loaded
 
+// ADB functions (from adb.cpp)
+extern void ADBKeyDown(int code);
+extern void ADBKeyUp(int code);
+
 namespace http {
 
 APIRouter::APIRouter(APIContext* context)
@@ -92,6 +96,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/mouse" && req.method == "GET") {
         return handle_mouse(req);
+    }
+    if (req.path == "/api/keypress" && req.method == "POST") {
+        return handle_keypress(req);
     }
 
     // Unknown API endpoint
@@ -742,6 +749,66 @@ Response APIRouter::handle_mouse(const Request& req) {
          << ", \"crsr_busy\": " << cs.crsr_busy
          << "}";
     return Response::json(json.str());
+}
+
+// POST /api/keypress - send a key event to the emulator
+// Body: {"key": <mac_keycode>} or {"key": "return"} for named keys
+Response APIRouter::handle_keypress(const Request& req) {
+    // ADB functions declared at global scope
+
+
+    // Named key map (Mac ADB keycodes)
+    int keycode = -1;
+
+    // Try to parse JSON body
+    auto body = req.body;
+    // Simple JSON parsing for {"key": value}
+    auto key_pos = body.find("\"key\"");
+    if (key_pos == std::string::npos) {
+        Response resp;
+        resp.set_status(400);
+        resp.set_body("{\"error\": \"missing 'key' field\"}");
+        resp.add_header("Content-Type", "application/json");
+        return resp;
+    }
+
+    auto colon_pos = body.find(':', key_pos);
+    if (colon_pos == std::string::npos) {
+        Response r1; r1.set_status(400); r1.set_body("{\"error\": \"malformed JSON\"}"); r1.add_header("Content-Type", "application/json"); return r1;
+    }
+
+    // Check if value is a string or number
+    auto val_start = body.find_first_not_of(" \t\n", colon_pos + 1);
+    if (val_start != std::string::npos && body[val_start] == '"') {
+        // String value - named key
+        auto val_end = body.find('"', val_start + 1);
+        std::string name = body.substr(val_start + 1, val_end - val_start - 1);
+        if (name == "return" || name == "enter") keycode = 0x24;
+        else if (name == "escape" || name == "esc") keycode = 0x35;
+        else if (name == "space") keycode = 0x31;
+        else if (name == "tab") keycode = 0x30;
+        else if (name == "delete" || name == "backspace") keycode = 0x33;
+        else if (name == "up") keycode = 0x3e;
+        else if (name == "down") keycode = 0x3d;
+        else if (name == "left") keycode = 0x3b;
+        else if (name == "right") keycode = 0x3c;
+        else {
+            Response r2; r2.set_status(400); r2.set_body("{\"error\": \"unknown key name: " + name + "\"}"); r2.add_header("Content-Type", "application/json"); return r2;
+        }
+    } else {
+        // Numeric value - raw keycode
+        keycode = std::stoi(body.substr(val_start));
+    }
+
+    if (keycode < 0 || keycode > 127) {
+        Response r3; r3.set_status(400); r3.set_body("{\"error\": \"invalid keycode\"}"); r3.add_header("Content-Type", "application/json"); return r3;
+    }
+
+    ::ADBKeyDown(keycode);
+    usleep(50000);  // 50ms press
+    ::ADBKeyUp(keycode);
+
+    return Response::json("{\"success\": true, \"keycode\": " + std::to_string(keycode) + "}");
 }
 
 } // namespace http
