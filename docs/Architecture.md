@@ -72,7 +72,7 @@ if (result == CPU_EXEC_EMULOP) {
 
 **Purpose**: Proven, stable baseline for validation
 
-**Implementation**: [src/cpu/cpu_uae.cpp](../src/cpu/cpu_uae.cpp)
+**Implementation**: [src/cpu/cpu_uae.c](../src/cpu/cpu_uae.c)
 
 **Characteristics**:
 - Original BasiliskII CPU core (C++ interpreter)
@@ -81,9 +81,8 @@ if (result == CPU_EXEC_EMULOP) {
 - Direct memory access via `mem_banks[]`
 
 **Role in Project**:
-- Legacy compatibility
+- Default backend for end users (~5s boot)
 - Validation baseline for Unicorn
-- Will be retained but not primary focus
 
 ### 2. Unicorn (Primary, JIT)
 
@@ -116,7 +115,6 @@ static void hook_block(...) {
     // Poll timer every ~4096 blocks
     if (block_count % 4096 == 0) {
         poll_timer_interrupt();
-        uc_ctl_flush_tb(uc);  // JIT cache invalidation workaround
     }
 }
 
@@ -136,13 +134,13 @@ static void hook_interrupt(...) {
 - Register writes inside `UC_HOOK_INTR` don't persist (QEMU overwrites PC)
 - SR requires `uint32_t*` not `uint16_t*` for `uc_reg_write()`
 - `UC_HOOK_MEM_READ` bypassed by JIT for `uc_mem_map_ptr` regions -- use `uc_mmio_map()`
-- JIT TB invalidation: Mac OS heap overwrites patches, need periodic `uc_ctl_flush_tb()`
+- JIT TB invalidation: QEMU's `notdirty_write()` handles most SMC; STALE-TB detector catches the rest
 
 ### 3. DualCPU (Validation Tool)
 
 **Purpose**: Run UAE and Unicorn in lockstep to catch bugs
 
-**Implementation**: [src/cpu/cpu_dualcpu.cpp](../src/cpu/cpu_dualcpu.cpp)
+**Implementation**: [src/cpu/cpu_dualcpu.c](../src/cpu/cpu_dualcpu.c)
 
 **Algorithm**:
 ```c
@@ -353,7 +351,7 @@ void deliver_m68k_interrupt(UnicornCPU *cpu, int level, int vector) {
 
 **Interrupts are triggered through the Platform API**, eliminating backend-specific global state.
 
-**Timer/Device Code** ([src/platform/timer_interrupt.cpp](../src/platform/timer_interrupt.cpp)):
+**Timer/Device Code** ([src/drivers/platform/timer_interrupt.cpp](../src/drivers/platform/timer_interrupt.cpp)):
 ```c
 extern Platform g_platform;
 int level = intlev();  // Get interrupt level from Mac hardware state
@@ -372,7 +370,7 @@ typedef struct Platform {
 
 ### Backend Implementations
 
-**UAE Backend** ([src/cpu/cpu_uae.c](../src/cpu/cpu_uae.c)):
+**UAE Backend** ([src/cpu/uae_wrapper.cpp](../src/cpu/uae_wrapper.cpp)):
 ```c
 static void uae_backend_trigger_interrupt(int level) {
     // Set UAE's native interrupt flag
@@ -544,9 +542,9 @@ src/common/
 ### Backend Implementations
 ```
 src/cpu/
-├── cpu_uae.cpp         # UAE backend (fills g_platform)
+├── cpu_uae.c           # UAE backend (fills g_platform)
 ├── cpu_unicorn.cpp     # Unicorn backend (fills g_platform)
-├── cpu_dualcpu.cpp     # DualCPU backend (fills g_platform)
+├── cpu_dualcpu.c       # DualCPU backend (fills g_platform)
 │
 ├── uae_cpu/            # UAE internals (newcpu.cpp, memory.cpp, etc.)
 ├── uae_wrapper.cpp     # UAE wrapper + shared interrupt code

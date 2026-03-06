@@ -55,9 +55,9 @@ src/
     rom_patches.cpp                 — ROM patching, EmulOp insertion
     emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, etc.)
     adb.cpp                         — ADB mouse/keyboard emulation
-  cpu/
     cpu_context.cpp                 — Memory allocation, backend init
-    cpu_uae.cpp                     — UAE backend (Platform API bridge)
+  cpu/
+    cpu_uae.c                       — UAE backend (Platform API bridge)
     cpu_unicorn.cpp                 — Unicorn backend (MMIO hooks, memory mapping)
     unicorn_wrapper.c               — Unicorn engine wrapper (hooks, perf counters)
     uae_cpu/                        — UAE interpreter source (newcpu.cpp, cpuemu.cpp)
@@ -114,9 +114,14 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
 
 ```
 ./build/mac-phoenix [options] [rom-path]
+  --rom path            ROM file path (alternative to positional arg)
+  --disk path           Disk image path (repeatable)
+  --cdrom path          CDROM image path (repeatable)
+  --ram MB              RAM size in megabytes
   --port N              HTTP server port (default: 8080)
   --signaling-port N    WebRTC signaling port (default: 8090)
   --backend uae|unicorn Backend override (or use CPU_BACKEND env)
+  --arch m68k|ppc       CPU architecture
   --timeout N           Auto-exit after N seconds
   --no-webserver        Headless mode (no HTTP/WebRTC)
   --screen WxH          Display resolution (default: 640x480)

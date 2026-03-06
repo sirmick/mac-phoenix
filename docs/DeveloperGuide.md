@@ -18,8 +18,8 @@
                         ↓
 ┌─────────────────────────────────────────────────┐
 │           CPU Backend (pluggable)               │
-│  • UAE (reference)                              │
-│  • Unicorn (optimized) ← PRIMARY                │
+│  • UAE (default, fast interpreter)               │
+│  • Unicorn (QEMU JIT, validation)               │
 │  • DualCPU (validation)                         │
 └─────────────────────────────────────────────────┘
 ```
@@ -76,7 +76,7 @@
 
 **Deferred Register Updates**: EmulOp handlers run inside `UC_HOOK_INTR` callbacks. QEMU overwrites PC after hook returns. Solution: queue all register writes and apply them at the next `hook_block()` boundary via `apply_deferred_updates_and_flush()`.
 
-**JIT TB Invalidation**: Mac OS heap can overwrite RAM containing EmulOp patch code. QEMU's JIT cache retains stale compiled translations. Workaround: `uc_ctl_flush_tb()` on every 60Hz timer tick. Proper fix: investigate QEMU's `TLB_NOTDIRTY` mechanism.
+**JIT TB Invalidation**: Mac OS heap can overwrite RAM containing EmulOp patch code. QEMU's JIT cache retains stale compiled translations. QEMU's `notdirty_write()` path handles most self-modifying code. A STALE-TB detector catches the remaining edge cases.
 
 **MMIO**: Hardware registers must use `uc_mmio_map()`, not `UC_HOOK_MEM_READ`. QEMU's JIT compiles direct memory loads for `uc_mem_map_ptr` regions, bypassing hooks.
 
@@ -152,25 +152,20 @@ void deliver_custom_interrupt(UnicornCPU *cpu, int level) {
 
 2. **Minimal Hooks**
    - Only UC_HOOK_BLOCK (not per-instruction) + UC_HOOK_INTR for EmulOps
-   - Lean `hook_block()` — stripped of per-block perf timing, block stats, stale TB detector
+   - Lean `hook_block()` — essential logic only (block stats, interrupt delivery, timer polling, deferred updates)
    - Timer polling only every 4096 blocks
 
 3. **JIT TB Invalidation**
-   - `FlushCodeCache()` → `uc_ctl_flush_tb()` (proper invalidation)
-   - Called when Mac OS modifies code in RAM
+   - QEMU's `notdirty_write()` handles most self-modifying code
+   - STALE-TB detector catches remaining edge cases (~18 blocks)
 
 ### Profiling
 
 ```bash
 # CPU profiling
-perf record -g ./build/mac-phoenix
+sudo sysctl kernel.perf_event_paranoid=-1
+perf record -g -F 997 ./build/mac-phoenix --backend unicorn --no-webserver /home/mick/quadra.rom
 perf report
-
-# Instruction counting
-CPU_STATS=1 ./build/mac-phoenix
-
-# JIT efficiency
-BLOCK_STATS=1 ./build/mac-phoenix
 ```
 
 ### Optimization Opportunities
@@ -189,33 +184,19 @@ BLOCK_STATS=1 ./build/mac-phoenix
 
 ## Testing
 
-### Unit Tests
+### Test Suite
 ```bash
 # Run all tests
 meson test -C build
 
-# Run specific test
-./build/tests/boot/test_boot
-```
+# Fast tests only (API + UAE boot + mouse, ~12s)
+meson test -C build api_endpoints boot_uae mouse_position
 
-### Integration Tests
-```bash
-# Compare backends
-./scripts/compare_boot.sh
+# Verbose output
+meson test -C build -v
 
-# Validate against UAE
-CPU_BACKEND=dualcpu ./build/mac-phoenix
-```
-
-### Regression Tests
-```bash
-# IRQ storm test (MUST pass)
-timeout 10 ./build/mac-phoenix 2>&1 | grep -c poll_timer
-# Expected: <100
-
-# Timer test (MUST pass)
-timeout 5 ./build/mac-phoenix 2>&1 | grep "300 interrupts"
-# Expected: found
+# Validate against UAE using dual-CPU mode
+CPU_BACKEND=dualcpu ./build/mac-phoenix --no-webserver /home/mick/quadra.rom
 ```
 
 ## Contributing
@@ -269,11 +250,8 @@ info registers
 
 ### Performance Issues
 ```bash
-# Check batch sizes
-CPU_VERBOSE=1 ./build/mac-phoenix 2>&1 | grep batch
-
 # Check interrupt rate
-grep -c interrupt logfile
+MACEMU_LOG_LEVEL=2 EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /home/mick/quadra.rom 2>&1 | grep -c interrupt
 ```
 
 ## Architecture Decisions

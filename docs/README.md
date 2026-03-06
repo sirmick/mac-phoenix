@@ -28,14 +28,11 @@ meson compile -C build
 
 ### Configure
 ```bash
-# Generate default config
-./build/mac-phoenix --save-config
-
 # Edit config file
 nano ~/.config/mac-phoenix/config.json
 ```
 
-### Run with Unicorn (primary backend)
+### Run with Unicorn backend
 ```bash
 CPU_BACKEND=unicorn ./build/mac-phoenix ~/quadra.rom
 ```
@@ -107,7 +104,7 @@ See **[ProjectGoals.md](ProjectGoals.md)** for detailed vision.
 - ✅ EmulOps (0xAExx for Unicorn, 0x71xx for UAE)
 - ✅ A-line/F-line traps via deferred register updates
 - ✅ Interrupt support (60Hz timer, QEMU native interrupt delivery)
-- ✅ JIT TB invalidation via `uc_ctl_flush_tb()` in FlushCodeCache
+- ✅ JIT TB invalidation via QEMU `notdirty_write()` + STALE-TB detector
 - ✅ MMIO infrastructure (VIA/SCC/SCSI/ASC/DAFB stubs)
 - ✅ WebRTC streaming (H.264, VP9, Opus audio)
 - ✅ Mouse/keyboard input via WebRTC data channel
@@ -123,8 +120,8 @@ See **[TodoStatus.md](TodoStatus.md)** for complete checklist.
 
 ### ✅ Boot to Finder (March 2026)
 Both UAE and Unicorn backends boot Mac OS 7.5.5 to Finder desktop:
-- UAE: 2200+ CHECKLOADs, reaches Finder in ~20s
-- Unicorn: 2513+ CHECKLOADs, reaches Finder in ~45s
+- UAE: 2200+ CHECKLOADs, reaches Finder in ~5s
+- Unicorn: 2513+ CHECKLOADs, reaches Finder in ~48s
 
 Key fixes: framebuffer placement outside RAM (avoids WDCB overlap), RTR instruction
 added to QEMU m68k translator, FPU emulation, SIGSEGV handler.
@@ -162,7 +159,7 @@ mac-phoenix/
 │   │   ├── cpu_unicorn.cpp     # Unicorn backend (primary)
 │   │   ├── unicorn_wrapper.c   # Unicorn hooks and interrupt delivery
 │   │   ├── unicorn_exec_loop.c # uc_emu_start loop
-│   │   └── cpu_dualcpu.cpp     # Validation backend
+│   │   └── cpu_dualcpu.c       # Validation backend
 │   ├── drivers/           # Video, audio, platform drivers
 │   ├── webrtc/            # WebRTC server (signaling + input)
 │   ├── webserver/         # HTTP server, API handlers

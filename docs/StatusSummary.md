@@ -10,7 +10,7 @@
 
 | Metric | UAE | Unicorn |
 |--------|-----|---------|
-| **Boot to Finder** | ~20s | ~45s |
+| **Boot to Finder** | ~5s | ~48s |
 | **CHECKLOADs** | 2200+ | 2513+ |
 | **Performance** | Baseline | ~10x slower |
 
@@ -47,7 +47,7 @@ Reduced hook overhead to ~5% of execution time (JIT itself is ~10x slower):
 
 ### Earlier Achievements
 - A-line/F-line traps via deferred register updates
-- JIT TB invalidation via `FlushCodeCache()` → `uc_ctl_flush_tb()`
+- JIT TB invalidation via QEMU `notdirty_write()` + STALE-TB detector
 - MMIO infrastructure (`uc_mmio_map()` for VIA/SCC/SCSI/ASC/DAFB stubs)
 - IRQ storm fix (4-phase, 99.997% overhead reduction)
 - 514k+ instruction dual-CPU validation

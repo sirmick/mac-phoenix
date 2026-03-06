@@ -10,7 +10,7 @@ Track what's done and what's next.
 
 | Metric | UAE | Unicorn |
 |--------|-----|---------|
-| Boot to Finder | ~20s | ~45s |
+| Boot to Finder | ~5s | ~48s |
 | CHECKLOADs | 2200+ | 2513+ |
 | Performance | Baseline | ~10x slower |
 
@@ -385,7 +385,7 @@ ebd3d1b2 - Remove legacy per-CPU hook API and UC_HOOK_CODE implementation
 
 **Major Milestones**:
 - ✅ **Both Backends Boot to Finder** (March 2026)
-  - UAE: ~20s to Finder, Unicorn: ~45s to Finder
+  - UAE: ~5s to Finder, Unicorn: ~48s to Finder
   - Framebuffer fix, RTR instruction, FPU emulation
 - ✅ **Unicorn Performance** (hooks 5.3% overhead; JIT ~10x slower than UAE)
   - Auto-ack interrupts, goto_tb, lean hook_block

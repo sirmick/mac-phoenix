@@ -81,15 +81,23 @@ npx playwright test --ui        # interactive UI
 
 ```
 ./build/mac-phoenix [options] [rom-path]
+  --rom path            ROM file path (alternative to positional arg)
+  --disk path           Disk image path (repeatable)
+  --cdrom path          CDROM image path (repeatable)
+  --ram MB              RAM size in megabytes
   --port N              HTTP server port (default: 8080)
   --signaling-port N    WebRTC signaling port (default: 8090)
   --backend uae|unicorn Backend override (or use CPU_BACKEND env)
+  --arch m68k|ppc       CPU architecture
   --timeout N           Auto-exit after N seconds
   --no-webserver        Headless mode (no HTTP/WebRTC)
   --screen WxH          Display resolution (default: 640x480)
   --config path         JSON config file
   --screenshots         Dump PPM screenshots to /tmp
-  --save-config         Write default config to ~/.config/mac-phoenix/config.json
+  --log-level N         Log level 0-3 (or use MACEMU_LOG_LEVEL env)
+  --debug-connection    Debug WebRTC connections
+  --debug-mode-switch   Debug video mode switches
+  --debug-perf          Debug performance
 ```
 
 ---
@@ -173,9 +181,6 @@ perf report
 ## Configuration
 
 ```bash
-# Generate default config
-./build/mac-phoenix --save-config
-
 # Edit config
 nano ~/.config/mac-phoenix/config.json
 

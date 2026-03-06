@@ -94,6 +94,7 @@ Select with `--backend uae|unicorn|dualcpu` or the `CPU_BACKEND` env var.
 | `GET /api/config` | Current configuration |
 | `POST /api/emulator/start` | Start emulation |
 | `POST /api/emulator/stop` | Stop emulation |
+| `GET /api/storage` | Available ROMs and disk images |
 | `POST /api/codec` | Switch video codec |
 | `POST /api/keypress` | Send a key event (`{"key": "return"}`) |
 
