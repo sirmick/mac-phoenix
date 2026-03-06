@@ -665,6 +665,20 @@ void unicorn_print_perf_counters(UnicornCPU *cpu) {
     fprintf(stderr, "  TB cache flushes:           %llu\n",
             (unsigned long long)p->flush_code_cache_count);
 
+    /* TB find hit/miss stats from QEMU cpu-exec.c */
+    extern uint64_t g_tb_find_count;
+    extern uint64_t g_tb_miss_count;
+    extern uint64_t g_tb_buffer_flush_count;
+    if (g_tb_find_count > 0) {
+        fprintf(stderr, "  tb_find() calls:            %llu\n",
+                (unsigned long long)g_tb_find_count);
+        fprintf(stderr, "    tb_gen_code (compile):     %llu (%.1f%%)\n",
+                (unsigned long long)g_tb_miss_count,
+                100.0 * g_tb_miss_count / g_tb_find_count);
+        fprintf(stderr, "  Code buffer full flushes:   %llu\n",
+                (unsigned long long)g_tb_buffer_flush_count);
+    }
+
     fprintf(stderr, "  uc_emu_start() restarts:    %llu (%.1f/sec)\n",
             (unsigned long long)p->emu_start_count,
             total_s > 0 ? (double)p->emu_start_count / total_s : 0);

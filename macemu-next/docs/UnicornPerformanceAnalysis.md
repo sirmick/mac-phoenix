@@ -5,7 +5,7 @@
 
 ## Summary
 
-Unicorn (QEMU TCG JIT) is **~10x slower** than UAE (hand-tuned interpreter) for M68K emulation. After March 2026 optimizations (auto-ack interrupts, goto_tb backward branches, lean hook_block), hook overhead was reduced to 5.3% of total execution time. The remaining 94.7% is pure JIT execution — the bottleneck is QEMU's TCG code quality for M68K, not our infrastructure.
+Unicorn (QEMU TCG JIT) is **~10x slower** than UAE (hand-tuned interpreter) for M68K emulation. Linux `perf` profiling revealed the **dominant bottleneck is first-time TB (Translation Block) compilation** — 77% of CPU time is spent in QEMU's TCG compiler generating native code for ~1.4M unique guest code addresses encountered during Mac OS boot. Hook overhead is minimal at ~5%.
 
 ### Boot Milestone Timing (March 2026)
 
@@ -27,85 +27,103 @@ Note: Unicorn is **faster** during early ROM init (tight loops where JIT wins). 
 | UAE | 51,108 kB | 51,108 kB | 0 kB (constant) |
 | Unicorn | 54,360 kB | 57,184 kB | +2,824 kB (~47 kB/sec) |
 
-Unicorn's memory growth is from QEMU's TB cache — new code paths are JIT-compiled but never freed.
+Unicorn's memory growth is from QEMU's TB cache — new code paths are JIT-compiled but never freed. Growth stabilizes after ~60s as all code paths are covered.
 
-## Profiling Results (30-second Unicorn boot)
+## Linux perf Profiling (30-second boot)
 
-Instrumented with `clock_gettime(CLOCK_MONOTONIC)` around all major code paths:
+### Top Functions by Self Time (perf record -g -F 997)
+
+| Function | Self % | Category |
+|----------|--------|----------|
+| tcg_optimize_m68k | 5.5% | TCG compiler |
+| liveness_pass_1 | 5.0% | TCG compiler |
+| la_reset_pref | 3.4% | TCG compiler |
+| tcg_out_opc | 3.1% | TCG compiler |
+| la_cross_call | 2.7% | TCG compiler |
+| tcg_reg_alloc_op | 2.4% | TCG compiler |
+| tcg_gen_code_m68k | 2.2% | TCG compiler |
+| store_helper | 2.1% | Memory access |
+| tcg_reg_alloc_call | 1.6% | TCG compiler |
+| la_func_end | 1.5% | TCG compiler |
+| address_space_translate | 1.3% | Memory access |
+| m68k_tr_translate_insn | 0.6% | M68K decoder |
+
+### Aggregated by Category
+
+| Category | % of CPU time |
+|----------|---------------|
+| **TB Compilation (TCG compiler)** | **~45%** |
+| **TB Translation (M68K decoder)** | **~18%** |
+| **Memory access (TLB + softmmu)** | **~8%** |
+| **JIT-generated code execution** | **~2%** |
+| Hook overhead (hook_block + hook_interrupt) | ~5% |
+| Other (TB lookup, dispatch) | ~5% |
+
+**Key finding:** 77% of time (inclusive) is under `tb_gen_code_m68k` — QEMU is spending most of its time **compiling** translation blocks, not executing them.
+
+### TB Compilation Statistics (60-second boot)
+
+```
+tb_find() calls:            3,334,233
+  tb_gen_code (compile):    2,799,002 (83.9%)
+  cache hit:                  535,231 (16.1%)
+Code buffer full flushes:   0
+```
+
+Mac OS 7.5.5 boot touches **~2.8M unique code addresses** that each need first-time JIT compilation. This is not cache thrashing — the code gen buffer never fills, and no flushes occur. The OS genuinely executes code from millions of distinct addresses (ROM routines, system heap, INITs, extensions, Finder).
+
+### Why Compilation Dominates
+
+Each TB compilation involves:
+1. **M68K decode** → TCG IR (intermediate representation)
+2. **TCG optimization** → constant folding, dead code elimination
+3. **Liveness analysis** → register allocation prep
+4. **Register allocation** → assign host registers to TCG temps
+5. **Code generation** → emit x86 machine code
+
+At ~17us per compilation and 2.8M blocks, that's ~48 seconds of compilation in a 60-second run. UAE's interpreter skips all of this — it just dispatches through a 64K function pointer table.
+
+## Instrumented Performance Counters (60-second boot)
 
 ```
 === Unicorn Performance Counters ===
-Wall time in uc_emu_start():    30.000 s  (3233 calls, 9279.2 us/call)
-  hook_block() total:           1.327 s  (4.4% of emu_start)
-    timer polling:              0.002 s  (3299 polls, 0.8 us/poll)
-    deferred updates:           0.484 s
-    interrupt delivery:          0.001 s  (1622 interrupts, 0.6 us/int)
-  hook_interrupt() total:       1.083 s  (60061 EmulOps, 18.0 us/op)
-  JIT execution (estimated):   27.589 s  (92.0% of emu_start)
+Wall time in uc_emu_start():    60.0 s  (6958 calls, 8621.6 us/call)
+  hook_block() total:           1.1 s  ( 1.9%)  (32.5M calls, 0.03 us/call)
+  hook_interrupt() total:       1.9 s  ( 3.2%)  (160K EmulOps, 11.9 us/op)
+  JIT execution (estimated):   57.0 s  (95.0%)
+  TB cache flushes:             0
+  tb_find() calls:              3.3M
+    tb_gen_code (compile):      2.8M (83.9%)
+  Code buffer full flushes:     0
+  uc_emu_start() restarts:      6958 (116.0/sec)
+Total blocks executed:          32.5M
 ```
 
-| Component | Time | % of total |
-|-----------|------|------------|
-| JIT execution (QEMU TCG) | 27.6s | 92.0% |
-| hook_block() overhead | 1.3s | 4.4% |
-| hook_interrupt() / EmulOps | 1.1s | 3.6% |
-| Interrupt delivery (stop/start) | 0.001s | 0.003% |
-| Timer polling | 0.002s | 0.006% |
-
-### Block Execution Statistics
-
-```
-Total blocks executed:      13,513,447
-Total instructions:         118,090,390
-Average block size:         8.74 instructions
-uc_emu_start() calls:       3,233 (one restart per ~4181 blocks)
-```
-
-Block size distribution — 57% of blocks are 6 instructions or fewer:
-
-| Size (insns) | % | Cumulative |
-|-------------|---|------------|
-| 2 | 7.2% | 7.2% |
-| 4 | 19.2% | 26.4% |
-| 6 | 30.5% | 56.9% |
-| 8 | 15.9% | 72.8% |
-| 10 | 9.2% | 82.0% |
+Note: "JIT execution (estimated)" = total time minus hook time. This 95% includes both TB compilation (~77%) and actual JIT code execution (~18%).
 
 ## Why the JIT Loses to an Interpreter
 
-### 1. Condition code overhead
+### 1. Compilation cost dominates
 
-M68K updates XNZVC flags on almost every instruction. x86 also has flags but they don't map 1:1 — M68K's X (extend) flag has no x86 equivalent. QEMU can't use native x86 flags directly.
+The biggest factor is not JIT code quality — it's the cost of JIT compilation itself. Mac OS boot exercises ~2.8M unique code paths. Each compilation takes ~17us through QEMU's multi-pass TCG pipeline. UAE's interpreter has zero compilation cost.
 
-Instead, QEMU stores the operands and operation type (`cc_op`) and lazily computes flags when needed. But at every branch, it must materialize flags to evaluate the condition. A `beq` becomes: compute NZ from stored operands → test → branch — 5-10 x86 instructions for what should be 1.
+### 2. Condition code overhead
+
+M68K updates XNZVC flags on almost every instruction. QEMU stores operands and operation type (`cc_op`) and lazily computes flags when needed. But at every branch, it must materialize flags to evaluate the condition. A `beq` becomes 5-10 x86 instructions for what should be 1.
 
 UAE's interpreter handles this with GCC's optimized flag macros that the C compiler can often fold into native test/branch sequences.
 
-### 2. Memory-indirect register file
+### 3. Memory-indirect register file
 
-QEMU stores all M68K registers in a `CPUState` struct in memory. Every register read/write is a load/store to that struct. Each translation block (TB) starts by loading registers from memory and ends by storing them back. With blocks averaging 8.7 instructions, that's significant load/store overhead per useful instruction.
+QEMU stores all M68K registers in a `CPUState` struct in memory. Every register read/write is a load/store. Each TB starts by loading registers and ends by storing them back. With blocks averaging ~8.7 instructions, that's significant overhead per useful instruction.
 
-UAE keeps `regs` in a C struct too, but the C compiler can optimize the inner loop to keep hot values in x86 registers. QEMU's TCG can't do that across translation block boundaries.
+### 4. Small basic blocks
 
-### 3. No cross-block optimization
-
-Each TB is compiled independently. QEMU doesn't do trace compilation or block chaining optimization across branches. A hot inner loop like:
-
-```asm
-.loop:  move.l  (A0)+, D0
-        add.l   D0, D1
-        dbra    D2, .loop
-```
-
-Gets translated as separate TBs. Each iteration: exit TB → lookup next TB → enter TB. UAE's interpreter just runs a tight C dispatch loop — no per-block entry/exit overhead.
-
-### 4. TB lookup overhead
-
-After each TB finishes, QEMU looks up the next TB by guest PC in a hash table. With 450K blocks/sec, that's 450K hash lookups/sec. UAE's `cpufunctbl[opcode]` dispatch is a single array index — one instruction.
+M68K code has small basic blocks (57% are 6 instructions or fewer). Each TB has fixed entry/exit overhead for register save/restore, flag sync, and TB chaining. Small blocks means this overhead is a large fraction of total work.
 
 ### 5. M68K is a second-class citizen in QEMU
 
-ARM and x86 guests receive the most optimization attention. M68K's `translate.c` is relatively straightforward — it doesn't exploit TCG's optimization passes as aggressively. FPU emulation goes through softfloat (pure C library calls from JIT'd code) rather than mapping to x86 SSE/AVX.
+ARM and x86 guests receive the most optimization attention. M68K's `translate.c` is relatively straightforward — it doesn't exploit TCG's optimization passes as aggressively.
 
 ## Why UAE's Interpreter Wins
 
@@ -119,46 +137,51 @@ for (;;) {
 }
 ```
 
+- **Zero compilation cost** — every instruction executes immediately
 - The C compiler (gcc -O2) optimizes each opcode handler aggressively
 - `regs` struct is hot in L1 cache (accessed every instruction)
 - Opcode dispatch is one indexed function pointer call
 - No per-block translation overhead, no TB entry/exit, no hash lookups
 - Condition codes computed inline with gcc-optimized flag macros
 
-For a JIT to beat this, its output must be significantly better than what gcc produces for the interpreter. For M68K's small blocks and pervasive condition codes, it isn't. JIT wins on architectures with large basic blocks and simple flag semantics (e.g., ARM on x86). M68K is the worst case for a simple JIT.
+## Optimizations Attempted
 
-## Unicorn Has No Interpreter Mode
+### Applied (in production)
 
-Unicorn is purely JIT — built on QEMU's TCG, which always translates guest to host code. There is no interpreter fallback. QEMU has `--tcg-interpreter` (TCI) that interprets TCG IR, but it's even slower and Unicorn doesn't expose it.
+1. **Auto-ack interrupts** — Modified QEMU's `m68k_cpu_exec_interrupt()` to auto-acknowledge, eliminating stop/start cycle on every interrupt.
 
-## What Would Help (Theoretical)
+2. **`goto_tb` for backward branches** — Enabled QEMU's `goto_tb` for backward branches, allowing hot loops to chain without exiting for hook_block checks.
 
-### Within QEMU/Unicorn (deep modifications)
-- **Lazy flag optimization**: Tighter `cc_op` implementation, avoid materializing flags when the next instruction overwrites them
-- **Block chaining**: Link TBs directly so hot paths skip the hash lookup
-- **Register pinning**: Keep D0-D2 and A0-A1 in x86 registers across TBs
+3. **Lean `hook_block()`** — Stripped per-block timing, statistics, and stale TB detector. Reduced per-block overhead to timer polling (every 4096 blocks) and deferred register updates.
 
-These are deep modifications to `target/m68k/translate.c` and `tcg/` — weeks of work for uncertain gains.
+### Tested and Reverted (no measurable impact)
 
-### Reduce hook overhead (easy, ~4% gain)
-- Only call `hook_block()` every N blocks for timer polling
-- Batch deferred register updates
+4. **TB_JMP_CACHE_BITS 12 to 16** — Increased direct-mapped TB lookup cache from 4096 to 65536 entries. Finder at 46.82s vs 46.01s baseline — no improvement. TB cache hit rate was already adequate; the bottleneck is compilation, not lookup.
 
-### Alternative second backend
-- **Musashi**: Popular M68K interpreter (used by MAME). Clean C code, well-tested. Would slot behind our Platform API as a drop-in Unicorn replacement.
+5. **`lookup_and_goto_ptr` for cross-page jumps** — Replaced `exit_tb(NULL, 0)` with `lookup_and_goto_ptr` in `gen_jmp_tb`'s cross-page else branch. Finder at 46.40s vs 46.01s baseline — no improvement. Cross-page dispatch overhead is negligible compared to compilation cost.
 
-## March 2026 Optimizations
+### Tested and Reverted (no impact, carries risk)
 
-Three key optimizations reduced hook overhead from ~10% to ~5.3%:
+6. **Disable self-modifying code detection** — Disabled `tb_invalidate_phys_page_fast` in QEMU's `notdirty_write()`. This prevents TB invalidation when guest writes to pages containing translated code. **Result:** No measurable improvement — TB miss rate identical (85.1%) with or without. The miss rate is from first-time compilation of new code, not from invalidation of existing TBs. **Risk:** Would break any program that modifies code at runtime (unlikely for classic Mac apps, but not impossible for copy-protection schemes, self-patching code, or JIT compilers running inside the emulated Mac).
 
-1. **Auto-ack interrupts** — Modified QEMU's `m68k_cpu_exec_interrupt()` to auto-acknowledge interrupts, eliminating the stop/start cycle that broke JIT block chaining on every interrupt.
+### Not Attempted (deep QEMU modifications)
 
-2. **`goto_tb` for backward branches** — Enabled QEMU's `goto_tb` optimization for backward branches, allowing hot loops to chain without exiting the JIT for hook_block checks.
+7. **Selective CC flag materialization** — Instead of `gen_flush_flags()` computing all 5 flags (XNZVC) before every branch, only compute the flags the branch condition tests. Would require rewriting condition code handling in `target/m68k/translate.c`. Estimated weeks of work. Would improve JIT code quality but not compilation speed.
 
-3. **Lean `hook_block()`** — Stripped per-block performance timing, block statistics histogram, and stale TB detector from hook_block, reducing per-block overhead to just timer polling (every 4096 blocks) and deferred register updates.
+8. **Register pinning** — Keep D0-D2, A0-A1 in host x86 registers across TB boundaries. Requires changes to TCG register allocator. Would reduce memory-indirect overhead.
+
+9. **Faster TCG compiler** — The TCG optimization/liveness/register-allocation pipeline is the core bottleneck. Making it faster would directly help. But this is deep QEMU infrastructure used by all architectures.
+
+10. **TB compilation caching** — Serialize compiled TBs to disk and reload on subsequent boots. Would eliminate recompilation cost for repeated boots. Novel approach, not implemented in upstream QEMU.
 
 ## Conclusion
 
-After optimization, hook overhead is minimal (5.3%). The ~10x gap is structural — inherent to QEMU's TCG JIT architecture when applied to M68K's small basic blocks and complex condition code semantics. The JIT execution quality is the sole limiting factor.
+After optimization, hook overhead is minimal (5%). The ~10x gap has two components:
 
-Both backends boot to Mac OS 7.5.5 Finder desktop. UAE is faster for end users; Unicorn's value is as an independent M68K implementation for validation and as a path toward future JIT improvements.
+1. **TB compilation cost (~77% of time)**: 2.8M unique code blocks need first-time JIT compilation. Each takes ~17us through QEMU's multi-pass pipeline. This is a one-time cost per code path, but Mac OS boot exercises enormous code diversity.
+
+2. **JIT code quality (~18% of time)**: The generated x86 code is less efficient than UAE's gcc-optimized interpreter handlers, due to condition code overhead, memory-indirect registers, and small basic blocks.
+
+Both backends boot to Mac OS 7.5.5 Finder desktop. UAE is faster for end users; Unicorn's value is as an independent M68K implementation for validation and as a path toward future improvements.
+
+The most impactful future optimization would be TB compilation caching (persist compiled blocks across runs), which would eliminate the dominant 77% compilation overhead on subsequent boots.
