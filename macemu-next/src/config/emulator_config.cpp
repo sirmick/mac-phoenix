@@ -210,6 +210,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
+        // --signaling-port <n>
+        if (strcmp(argv[i], "--signaling-port") == 0 && i+1 < argc) {
+            config.signaling_port = atoi(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
         // --timeout <sec>
         if (strcmp(argv[i], "--timeout") == 0 && i+1 < argc) {
             config.timeout_seconds = atoi(argv[i+1]);

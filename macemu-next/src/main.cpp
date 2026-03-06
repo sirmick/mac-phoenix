@@ -201,6 +201,8 @@ int main(int argc, char **argv)
 	// Store old JSON config for legacy code (will be removed later)
 	static config::MacemuConfig webrtc_config;
 	webrtc_config = config::load_config(default_config_path);
+	// Propagate CLI overrides from EmulatorConfig → MacemuConfig
+	webrtc_config.web.http_port = emu_config.http_port;
 	webrtc::g_config = &webrtc_config;
 
 	// Initialize prefs system with values from config (for legacy code)

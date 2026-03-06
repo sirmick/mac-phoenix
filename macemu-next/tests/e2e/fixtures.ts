@@ -3,7 +3,8 @@ import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const HTTP_PORT = parseInt(process.env.MACEMU_HTTP_PORT || '8080');
+const HTTP_PORT = parseInt(process.env.MACEMU_HTTP_PORT || '18094');
+const SIG_PORT = HTTP_PORT + 1;
 const ROM_PATH = process.env.MACEMU_ROM_PATH || '/home/mick/quadra.rom';
 const BUILD_DIR = path.resolve(__dirname, '../../build');
 const BINARY = path.join(BUILD_DIR, 'macemu-next');
@@ -20,6 +21,23 @@ async function waitForServer(port: number, timeoutMs = 10_000): Promise<void> {
     await new Promise(r => setTimeout(r, 200));
   }
   throw new Error(`Server did not start within ${timeoutMs}ms`);
+}
+
+async function waitForBootPhase(port: number, phase: string, timeoutMs = 30_000): Promise<string> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const resp = await fetch(`http://localhost:${port}/api/status`);
+      if (resp.ok) {
+        const body = await resp.json();
+        if (body.boot_phase === phase) return body.boot_phase;
+      }
+    } catch {
+      // Not ready yet
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error(`Boot did not reach phase '${phase}' within ${timeoutMs}ms`);
 }
 
 type EmulatorFixture = {
@@ -47,21 +65,20 @@ export async function spawnEmulator(): Promise<ChildProcess> {
     throw new Error(`Binary not found: ${BINARY}. Run 'ninja -C build' first.`);
   }
 
-  const args = [ROM_PATH];
-  if (!fs.existsSync(ROM_PATH)) {
-    // No ROM - start in webserver-only mode (no ROM arg)
-    args.length = 0;
+  const args = ['--port', String(HTTP_PORT), '--signaling-port', String(SIG_PORT)];
+  if (fs.existsSync(ROM_PATH)) {
+    args.push(ROM_PATH);
   }
 
   const proc = spawn(BINARY, args, {
     env: {
       ...process.env,
-      MACEMU_HTTP_PORT: String(HTTP_PORT),
+      CPU_BACKEND: 'uae',
+      EMULATOR_TIMEOUT: '60',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  // Log stderr for debugging
   proc.stderr?.on('data', (data) => {
     if (process.env.DEBUG_EMULATOR) {
       process.stderr.write(`[emu] ${data}`);
@@ -80,9 +97,10 @@ export function killEmulator(proc: ChildProcess): Promise<void> {
     }
     proc.on('exit', () => resolve());
     proc.kill('SIGTERM');
-    // Force kill after 5s
     setTimeout(() => {
       if (!proc.killed) proc.kill('SIGKILL');
     }, 5000);
   });
 }
+
+export { waitForBootPhase };

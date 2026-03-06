@@ -298,3 +298,25 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 			break;
 	}
 }
+
+const char* boot_progress_phase(void)
+{
+	return phase_name(current_phase);
+}
+
+unsigned int boot_progress_checkloads(void)
+{
+	return checkload_count;
+}
+
+double boot_progress_elapsed(void)
+{
+	return elapsed_sec();
+}
+
+void boot_progress_get_mouse(int *x, int *y)
+{
+	/* Mac low-memory globals: RawMouse Y at 0x828, X at 0x82a */
+	*y = (int16_t)ReadMacInt16(0x828);
+	*x = (int16_t)ReadMacInt16(0x82a);
+}

@@ -12,6 +12,7 @@
 #include "../common/include/sysdeps.h"  // For uint32 type
 #include "../core/emulator_init.h"  // For deferred initialization
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
+#include "../core/boot_progress.h"  // For boot phase query
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include <sstream>
 #include <iomanip>
@@ -88,6 +89,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/screenshot" && req.method == "GET") {
         return handle_screenshot(req);
+    }
+    if (req.path == "/api/mouse" && req.method == "GET") {
+        return handle_mouse(req);
     }
 
     // Unknown API endpoint
@@ -250,10 +254,14 @@ Response APIRouter::handle_status(const Request& req) {
     bool cpu_running = ctx_->cpu_running ? ctx_->cpu_running->load(std::memory_order_acquire) : false;
 
     std::ostringstream json;
+    json << std::fixed << std::setprecision(2);
     json << "{";
     json << "\"emulator_connected\": true";
     json << ", \"emulator_running\": " << (cpu_running ? "true" : "false");
     json << ", \"cpu_state\": \"" << (cpu_running ? "running" : "stopped") << "\"";
+    json << ", \"boot_phase\": \"" << boot_progress_phase() << "\"";
+    json << ", \"checkload_count\": " << boot_progress_checkloads();
+    json << ", \"boot_elapsed\": " << boot_progress_elapsed();
     json << "}";
     return Response::json(json.str());
 }
@@ -707,6 +715,26 @@ Response APIRouter::handle_screenshot(const Request& req) {
     resp.set_content_type("image/png");
     resp.set_body(std::string(reinterpret_cast<const char*>(png_data.data()), png_data.size()));
     return resp;
+}
+
+Response APIRouter::handle_mouse(const Request& req) {
+    (void)req;
+
+    bool cpu_running = ctx_->cpu_running ? ctx_->cpu_running->load(std::memory_order_acquire) : false;
+    if (!cpu_running) {
+        Response resp;
+        resp.set_status(503, "Service Unavailable");
+        resp.set_body("{\"error\": \"Emulator not running\"}");
+        resp.set_content_type("application/json");
+        return resp;
+    }
+
+    int mouse_x = 0, mouse_y = 0;
+    boot_progress_get_mouse(&mouse_x, &mouse_y);
+
+    std::ostringstream json;
+    json << "{\"x\": " << mouse_x << ", \"y\": " << mouse_y << "}";
+    return Response::json(json.str());
 }
 
 } // namespace http

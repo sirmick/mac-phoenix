@@ -28,3 +28,9 @@ option('ipc_only',
   value: true,
   description: 'Use IPC drivers only (no in-process devices)'
 )
+
+option('test_rom',
+  type: 'string',
+  value: '/home/mick/quadra.rom',
+  description: 'Path to ROM file for boot tests (tests skip if not found)'
+)

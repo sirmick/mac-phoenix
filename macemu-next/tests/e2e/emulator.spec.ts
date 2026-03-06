@@ -17,9 +17,7 @@ test.describe('Emulator Controls', () => {
   test('stop button triggers POST /api/emulator/stop', async ({ page, emulatorPort }) => {
     await page.goto(`http://localhost:${emulatorPort}/`);
 
-    // Start first
     await page.locator('#start-btn').click();
-    // Small delay for state to update
     await page.waitForTimeout(500);
 
     const [request] = await Promise.all([
@@ -32,7 +30,15 @@ test.describe('Emulator Controls', () => {
     expect(request.method()).toBe('POST');
   });
 
-  test('status endpoint reflects running state after start', async ({ page, request, emulatorPort, hasRom }) => {
+  test('status endpoint has boot_phase field', async ({ request, emulatorPort }) => {
+    const resp = await request.get(`http://localhost:${emulatorPort}/api/status`);
+    const body = await resp.json();
+    expect(body).toHaveProperty('boot_phase');
+    expect(body).toHaveProperty('checkload_count');
+    expect(body).toHaveProperty('boot_elapsed');
+  });
+
+  test('status reflects running state after start', async ({ page, request, emulatorPort, hasRom }) => {
     test.skip(!hasRom, 'ROM required to start emulator');
 
     await page.goto(`http://localhost:${emulatorPort}/`);

@@ -26,6 +26,14 @@ void boot_progress_update(uint16_t opcode, void *regs);
 /* Get current log level (cached from env var) */
 int boot_log_level(void);
 
+/* Query boot state (for /api/status) */
+const char* boot_progress_phase(void);
+unsigned int boot_progress_checkloads(void);
+double boot_progress_elapsed(void);
+
+/* Query Mac mouse position from low-memory globals (for /api/mouse) */
+void boot_progress_get_mouse(int *x, int *y);
+
 #ifdef __cplusplus
 }
 #endif
