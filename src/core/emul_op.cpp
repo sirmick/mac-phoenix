@@ -50,6 +50,7 @@ extern "C" {
 #include "ether.h"
 #include "extfs.h"
 #include "emul_op.h"
+#include "prefs.h"
 
 #ifdef ENABLE_MON
 #include "mon.h"

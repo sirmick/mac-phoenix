@@ -88,6 +88,7 @@ prefs_desc common_prefs_items[] = {
 	{"delay", TYPE_INT32, false,	"additional delay [uS] every 64k instructions"},
 	{"init_grab", TYPE_BOOLEAN, false,	"initially grabbing mouse"},
 	{"xpram", TYPE_STRING, false, "path of xpram file"},
+	{"cleanboot", TYPE_BOOLEAN, false, "suppress improper shutdown dialog"},
 	{NULL, TYPE_END, false, NULL} // End of list
 };
 
@@ -134,4 +135,5 @@ void AddPrefsDefaults(void)
 	PrefsAddBool("swap_opt_cmd", true);
 #endif
 	PrefsAddBool("ignoresegv", true);
+	PrefsAddBool("cleanboot", true);
 }

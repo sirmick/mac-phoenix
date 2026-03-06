@@ -381,6 +381,9 @@ bool LoadConfigJSON(const char *path) {
 		if (sys.contains("ignoresegv") && sys["ignoresegv"].is_boolean()) {
 			PrefsReplaceBool("ignoresegv", sys["ignoresegv"]);
 		}
+		if (sys.contains("cleanboot") && sys["cleanboot"].is_boolean()) {
+			PrefsReplaceBool("cleanboot", sys["cleanboot"]);
+		}
 		if (sys.contains("delay") && sys["delay"].is_number()) {
 			PrefsReplaceInt32("delay", sys["delay"]);
 		}
@@ -543,6 +546,7 @@ bool SaveConfigJSON(const char *path) {
 	// System section
 	config["system"]["nocdrom"] = PrefsFindBool("nocdrom");
 	config["system"]["ignoresegv"] = PrefsFindBool("ignoresegv");
+	config["system"]["cleanboot"] = PrefsFindBool("cleanboot");
 	config["system"]["delay"] = PrefsFindInt32("delay");
 	config["system"]["yearofs"] = PrefsFindInt32("yearofs");
 	config["system"]["dayofs"] = PrefsFindInt32("dayofs");
