@@ -56,9 +56,6 @@
 // Global platform pointer - set by PatchROM caller
 extern Platform g_platform;
 
-// Forward declaration for unified implementation
-extern bool PatchROM_Unified(void);
-
 // Global variables
 uint32 UniversalInfo;		// ROM offset of UniversalInfo
 uint32 PutScrapPatch = 0;	// Mac address of PutScrap() patch

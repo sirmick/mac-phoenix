@@ -16,7 +16,6 @@ core_sources = [
   'prefs.cpp',
   'prefs_items.cpp',
   'rom_patches.cpp',
-  'rom_patches_unified.cpp',
   'rsrc_patches.cpp',
   'scsi.cpp',
   'serial.cpp',

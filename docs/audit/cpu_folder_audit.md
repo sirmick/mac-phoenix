@@ -99,3 +99,24 @@ Five `.cpp` files in `src/common/` are duplicates of files that live in `src/cor
 | `sigsegv.cpp` | LIVE — has dead platform ifdefs (HP-UX, Solaris, AIX, etc.) but left alone (legacy code) |
 | `include/prefs_editor.h` | Included by `null_drivers.cpp` (stub) — keep |
 | All other `include/*.h` | LIVE — actively included |
+
+---
+
+# Core Folder Audit
+
+Audit of `src/core/` — dead files, unused code.
+
+## Dead Files (deleted)
+
+### 1. `rom_patches_unified.cpp` — DEAD CODE
+Exports `PatchROM_Unified()` (333 lines). Declared `extern` in `rom_patches.cpp` but **never called**. Comment in rom_patches.cpp says "Use full UAE patcher" — this was an abandoned unification attempt. The `extern` declaration was also removed.
+
+## Minor Dead Code (kept)
+
+| Item | File | Notes |
+|------|------|-------|
+| `PrefsPrintUsage()` | `prefs.cpp:234` | Declared in `prefs.h`, defined, never called. Single function — not worth a separate cleanup. |
+
+## Verified Live
+
+`json_config.cpp` — initially suspected dead but IS called from `prefs.cpp` (`FindConfigFile`, `LoadConfigJSON`, `SaveConfigJSON`). The legacy prefs bridge still uses it. All other files in `src/core/` are live.
