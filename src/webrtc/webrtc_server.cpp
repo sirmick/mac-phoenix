@@ -508,15 +508,24 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
         auto rtpConfig = std::make_shared<rtc::RtpPacketizationConfig>(
             ssrc, "video-stream", 96, rtc::RtpPacketizer::VideoClockRate
         );
+        // Add RTCP SR (Sender Report) for timestamp synchronization
+        auto videoSrReporter = std::make_shared<rtc::RtcpSrReporter>(rtpConfig);
+        // Add RTCP NACK responder for packet loss recovery
+        auto videoNackResponder = std::make_shared<rtc::RtcpNackResponder>();
+
         if (codec == CodecType::H264) {
             auto packetizer = std::make_shared<rtc::H264RtpPacketizer>(
                 rtc::H264RtpPacketizer::Separator::LongStartSequence,
                 rtpConfig
             );
+            packetizer->addToChain(videoSrReporter);
+            packetizer->addToChain(videoNackResponder);
             peer->video_track->setMediaHandler(packetizer);
         } else {
             // VP9: Use custom packetizer with RFC 7741 payload descriptor
             auto packetizer = std::make_shared<VP9RtpPacketizer>(rtpConfig);
+            packetizer->addToChain(videoSrReporter);
+            packetizer->addToChain(videoNackResponder);
             peer->video_track->setMediaHandler(packetizer);
         }
 

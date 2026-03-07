@@ -890,6 +890,7 @@ class BasiliskWebRTC {
         // Codec/decoder management
         this.codecType = null;  // Will be set by server
         this.decoder = null;
+        this.isReconnecting = false;  // Suppress auto-reconnect during deliberate reconnect
 
         // Mouse mode ('absolute' or 'relative')
         this.mouseMode = 'relative';  // Default to relative (matches UI and emulator)
@@ -960,6 +961,7 @@ class BasiliskWebRTC {
 
     // Initialize decoder based on codec type
     initDecoder() {
+        logger.info('initDecoder called', { codecType: this.codecType });
         if (!this.codecType) {
             logger.warn('Cannot initialize decoder - codec not yet set by server');
             return false;
@@ -996,8 +998,15 @@ class BasiliskWebRTC {
             };
         }
 
-        // Show/hide appropriate element
-        if (this.video) this.video.style.display = usesVideoElement ? 'block' : 'none';
+        // Show/hide appropriate element and set initial size
+        if (this.video) {
+            this.video.style.display = usesVideoElement ? 'block' : 'none';
+            if (usesVideoElement) {
+                // Set initial size so video element isn't a tiny black box before metadata loads
+                this.video.width = this.currentScreenWidth || 640;
+                this.video.height = this.currentScreenHeight || 480;
+            }
+        }
         if (this.canvas) this.canvas.style.display = !usesVideoElement ? 'block' : 'none';
 
         return this.decoder.init();
@@ -1140,6 +1149,8 @@ class BasiliskWebRTC {
 
             case 'reconnect':
                 // Server is requesting reconnection (e.g., codec change)
+                // Set flag immediately to suppress auto-reconnect from PC state changes
+                this.isReconnecting = true;
                 logger.info('Server requested reconnection', { reason: msg.reason, codec: msg.codec });
                 if (msg.reason === 'codec_change' && msg.codec) {
                     // Update codec type
@@ -1359,6 +1370,20 @@ class BasiliskWebRTC {
         // Handle video track
         else if (event.track.kind === 'video') {
             this.videoTrack = event.track;
+            logger.info('VIDEO TRACK received', {
+                id: event.track.id,
+                label: event.track.label,
+                enabled: event.track.enabled,
+                muted: event.track.muted,
+                readyState: event.track.readyState,
+                hasStreams: !!(event.streams && event.streams.length),
+                streamCount: event.streams ? event.streams.length : 0,
+                codecType: this.codecType,
+                videoElement: this.video ? 'exists' : 'null',
+                videoDisplay: this.video ? this.video.style.display : 'n/a',
+                videoW: this.video ? this.video.width : 'n/a',
+                videoH: this.video ? this.video.height : 'n/a'
+            });
 
             // Track state monitoring
             event.track.onmute = () => {
@@ -1379,17 +1404,16 @@ class BasiliskWebRTC {
             this.updateWebRTCState('track-muted', event.track.muted ? 'Yes' : 'No');
 
             if (event.streams && event.streams[0]) {
-                if (debugConfig.debug_connection) {
-                    logger.info('Attaching stream to video element', {
-                        streamId: event.streams[0].id,
-                        trackCount: event.streams[0].getTracks().length
-                    });
-                }
+                logger.info('VIDEO: Attaching stream to video element', {
+                    streamId: event.streams[0].id,
+                    trackCount: event.streams[0].getTracks().length,
+                    trackKinds: event.streams[0].getTracks().map(t => t.kind).join(',')
+                });
                 this.video.srcObject = event.streams[0];
 
                 // Log all video element events for debugging
-                this.video.onloadstart = () => logger.debug('Video: loadstart');
-                this.video.onprogress = () => logger.debug('Video: progress');
+                this.video.onloadstart = () => logger.info('Video: loadstart');
+                this.video.onprogress = () => logger.info('Video: progress');
                 this.video.onsuspend = () => logger.debug('Video: suspend');
                 this.video.onemptied = () => logger.debug('Video: emptied');
                 this.video.oncanplay = () => logger.info('Video: canplay');
@@ -1449,7 +1473,9 @@ class BasiliskWebRTC {
 
                 // Log video element state periodically
                 setTimeout(() => {
-                    logger.debug('Video element state after 2s', {
+                    const receivers = this.pc ? this.pc.getReceivers() : [];
+                    const videoReceiver = receivers.find(r => r.track && r.track.kind === 'video');
+                    logger.info('VIDEO STATE after 2s', {
                         readyState: this.video.readyState,
                         networkState: this.video.networkState,
                         paused: this.video.paused,
@@ -1457,12 +1483,29 @@ class BasiliskWebRTC {
                         videoWidth: this.video.videoWidth,
                         videoHeight: this.video.videoHeight,
                         currentTime: this.video.currentTime,
-                        srcObject: this.video.srcObject ? 'set' : 'null'
+                        srcObject: this.video.srcObject ? 'set' : 'null',
+                        display: this.video.style.display,
+                        muted: this.video.muted,
+                        autoplay: this.video.autoplay,
+                        error: this.video.error ? `${this.video.error.code}: ${this.video.error.message}` : 'none',
+                        receiverTrack: videoReceiver ? videoReceiver.track.readyState : 'no receiver',
+                        receiverMuted: videoReceiver ? videoReceiver.track.muted : 'n/a'
                     });
                 }, 2000);
+                setTimeout(() => {
+                    logger.info('VIDEO STATE after 5s', {
+                        readyState: this.video.readyState,
+                        videoWidth: this.video.videoWidth,
+                        videoHeight: this.video.videoHeight,
+                        currentTime: this.video.currentTime,
+                        paused: this.video.paused,
+                        error: this.video.error ? `${this.video.error.code}: ${this.video.error.message}` : 'none'
+                    });
+                }, 5000);
 
                 // Start frame detection
                 this.startFrameDetection();
+
             } else {
                 logger.warn('No stream in track event, creating MediaStream manually');
                 const stream = new MediaStream([event.track]);
@@ -1600,6 +1643,12 @@ class BasiliskWebRTC {
                 displayContainer.classList.add('disconnected');
             }
 
+            // Don't auto-reconnect if we're already in a deliberate reconnect (e.g., codec change)
+            if (this.isReconnecting) {
+                logger.info(`Connection ${state}, but reconnect already in progress — skipping`);
+                return;
+            }
+
             // If WebSocket is still open, just reconnect the PeerConnection
             // Otherwise do a full reconnect
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -1614,6 +1663,9 @@ class BasiliskWebRTC {
 
     // Reconnect just the PeerConnection without closing WebSocket
     reconnectPeerConnection() {
+        // Suppress auto-reconnect from connection state changes during deliberate reconnect
+        this.isReconnecting = true;
+
         // Clean up old PeerConnection
         if (this.pc) {
             this.pc.close();
@@ -1641,6 +1693,9 @@ class BasiliskWebRTC {
         logger.info('Sending new connect request', { codec: codecName });
         this.ws.send(JSON.stringify({ type: 'connect', codec: codecName }));
         this.updateStatus('Reconnecting...', 'connecting');
+
+        // Allow auto-reconnect again after a brief delay (let new PC establish)
+        setTimeout(() => { this.isReconnecting = false; }, 2000);
     }
 
     onSignalingStateChange() {
@@ -3172,43 +3227,28 @@ async function loadCurrentConfig() {
         const res = await fetch(getApiUrl('config'));
         const cfg = await res.json();
 
-        // Store server paths
-        if (cfg._paths) {
-            serverPaths.romsPath = cfg._paths.roms;
-            serverPaths.imagesPath = cfg._paths.images;
-        }
-
-        // Convert JSON config to currentConfig format
-        const emuType = cfg.web?.emulator || 'm68k';
-        const isM68k = (emuType === 'm68k');
-        const emuCfg = isM68k ? cfg.m68k : cfg.ppc;
+        // Flat format from server
+        const isM68k = (cfg.architecture || 'm68k') === 'm68k';
 
         currentConfig = {
             emulator: isM68k ? 'basilisk' : 'sheepshaver',
-            rom: emuCfg?.rom || '',
-            ram: cfg.common?.ram || 64,
-            screen: cfg.common?.screen || '1024x768',
-            sound: cfg.common?.sound ?? true,
-            cpu: emuCfg?.cpu || 4,
-            model: emuCfg?.modelid || 14,
-            fpu: emuCfg?.fpu ?? true,
-            jit: emuCfg?.jit ?? true,
-            jit68k: emuCfg?.jit68k ?? false,
-            disks: emuCfg?.disks || [],
-            cdroms: emuCfg?.cdroms || [],
-            idlewait: emuCfg?.idlewait ?? true,
-            ignoresegv: emuCfg?.ignoresegv ?? true,
-            ignoreillegal: emuCfg?.ignoreillegal ?? false,
-            swap_opt_cmd: emuCfg?.swap_opt_cmd ?? true,
-            keyboardtype: emuCfg?.keyboardtype || 5
+            rom: cfg.rom || '',
+            ram: cfg.ram_mb || 32,
+            screen: cfg.screen || '640x480',
+            sound: cfg.audio ?? true,
+            cpu: isM68k ? (cfg.m68k?.cpu_type || 4) : (cfg.ppc?.cpu_type || 4),
+            model: isM68k ? (cfg.m68k?.modelid || 14) : (cfg.ppc?.modelid || 14),
+            fpu: isM68k ? (cfg.m68k?.fpu ?? true) : (cfg.ppc?.fpu ?? true),
+            jit: isM68k ? (cfg.m68k?.jit ?? true) : (cfg.ppc?.jit ?? true),
+            jit68k: cfg.ppc?.jit68k ?? false,
+            disks: cfg.disks || [],
+            cdroms: cfg.cdroms || [],
+            idlewait: isM68k ? (cfg.m68k?.idlewait ?? true) : (cfg.ppc?.idlewait ?? true),
+            ignoresegv: isM68k ? (cfg.m68k?.ignoresegv ?? true) : (cfg.ppc?.ignoresegv ?? true),
+            ignoreillegal: cfg.ppc?.ignoreillegal ?? false,
+            swap_opt_cmd: cfg.m68k?.swap_opt_cmd ?? true,
+            keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5)
         };
-
-        console.log('📂 LOADED CONFIG from JSON:', {
-            emulator: currentConfig.emulator,
-            cpu: currentConfig.cpu,
-            jit: currentConfig.jit,
-            ram: currentConfig.ram
-        });
 
         updateConfigUI();
     } catch (e) {
@@ -3312,56 +3352,36 @@ async function saveConfig() {
         currentConfig.ignoreillegal = document.getElementById('cfg-ignoreillegal')?.checked ?? true;
     }
 
-    // Build unified JSON config
+    // Build flat JSON config
     const isM68k = (currentConfig.emulator === 'basilisk');
-    const jsonConfig = {
-        version: 1,
-        web: {
-            emulator: isM68k ? 'm68k' : 'ppc',
-            codec: document.getElementById('codec-select')?.value || 'h264',
-            mousemode: document.getElementById('mouse-mode-select')?.value || 'relative'
-        },
-        common: {
-            ram: currentConfig.ram,
-            screen: currentConfig.screen,
-            sound: currentConfig.sound,
-            extfs: './storage'
-        },
-        m68k: {
-            rom: isM68k ? currentConfig.rom : '',
-            modelid: currentConfig.model,
-            cpu: currentConfig.cpu,
-            fpu: currentConfig.fpu,
-            jit: currentConfig.jit,
-            disks: isM68k ? currentConfig.disks : [],
-            cdroms: isM68k ? currentConfig.cdroms : [],
-            idlewait: currentConfig.idlewait,
-            ignoresegv: currentConfig.ignoresegv,
-            swap_opt_cmd: currentConfig.swap_opt_cmd ?? true,
-            keyboardtype: currentConfig.keyboardtype || 5
-        },
-        ppc: {
-            rom: isM68k ? '' : currentConfig.rom,
-            modelid: currentConfig.model,
-            cpu: currentConfig.cpu,
-            fpu: currentConfig.fpu,
-            jit: currentConfig.jit,
-            jit68k: currentConfig.jit68k ?? false,
-            disks: isM68k ? [] : currentConfig.disks,
-            cdroms: isM68k ? [] : currentConfig.cdroms,
-            idlewait: currentConfig.idlewait,
-            ignoresegv: currentConfig.ignoresegv,
-            ignoreillegal: currentConfig.ignoreillegal ?? false,
-            keyboardtype: currentConfig.keyboardtype || 5
-        }
-    };
-
-    console.log('💾 SAVING JSON CONFIG:', {
-        emulator: jsonConfig.web.emulator,
-        cpu: currentConfig.cpu,
+    const archConfig = {
+        cpu_type: currentConfig.cpu,
+        modelid: currentConfig.model,
+        fpu: currentConfig.fpu,
         jit: currentConfig.jit,
-        ram: currentConfig.ram
-    });
+        idlewait: currentConfig.idlewait,
+        ignoresegv: currentConfig.ignoresegv,
+        swap_opt_cmd: currentConfig.swap_opt_cmd ?? true,
+        keyboardtype: currentConfig.keyboardtype || 5
+    };
+    if (!isM68k) {
+        archConfig.jit68k = currentConfig.jit68k ?? false;
+        archConfig.ignoreillegal = currentConfig.ignoreillegal ?? false;
+    }
+
+    const jsonConfig = {
+        architecture: isM68k ? 'm68k' : 'ppc',
+        rom: currentConfig.rom,
+        disks: currentConfig.disks,
+        cdroms: currentConfig.cdroms || [],
+        ram_mb: currentConfig.ram,
+        screen: currentConfig.screen,
+        audio: currentConfig.sound,
+        codec: document.getElementById('codec-select')?.value || 'png',
+        mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
+        m68k: isM68k ? archConfig : undefined,
+        ppc: isM68k ? undefined : archConfig
+    };
 
     try {
         const res = await fetch(getApiUrl('config'), {
