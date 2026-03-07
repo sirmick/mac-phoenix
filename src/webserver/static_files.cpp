@@ -52,12 +52,10 @@ Response StaticFileHandler::serve(const std::string& path) {
     Response resp;
     resp.set_content_type(get_content_type(path));
 
-    // Don't cache index.html since it contains dynamic config
-    if (path == "/" || path == "/index.html") {
-        resp.add_header("Cache-Control", "no-cache, no-store, must-revalidate");
-        resp.add_header("Pragma", "no-cache");
-        resp.add_header("Expires", "0");
-    }
+    // Don't cache — files change during development and index.html has dynamic config
+    resp.add_header("Cache-Control", "no-cache, no-store, must-revalidate");
+    resp.add_header("Pragma", "no-cache");
+    resp.add_header("Expires", "0");
 
     resp.set_body(content);
     return resp;

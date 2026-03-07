@@ -16,6 +16,8 @@
 #include <iomanip>
 #include <cstdio>
 #include <fstream>
+#include <chrono>
+#include <thread>
 #include <pwd.h>
 #include <unistd.h>
 
@@ -228,13 +230,36 @@ Response APIRouter::handle_emulator_stop(const Request& req) {
 
 Response APIRouter::handle_emulator_restart(const Request& req) {
     (void)req;
-    return Response::json("{\"success\": false, \"message\": \"Not implemented yet (in-process integration pending)\"}");
+
+    if (!ctx_->cpu_running || !ctx_->cpu_cv) {
+        return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
+    }
+
+    fprintf(stderr, "[API] Restart requested via web UI\n");
+
+    // Stop CPU
+    {
+        std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
+        ctx_->cpu_running->store(false, std::memory_order_release);
+    }
+
+    // Wait for CPU to actually stop (watchdog sets quit_program within 50ms)
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Start CPU again
+    {
+        std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
+        ctx_->cpu_running->store(true, std::memory_order_release);
+    }
+    ctx_->cpu_cv->notify_one();
+
+    fprintf(stderr, "[API] CPU restarted via web UI\n");
+    return Response::json("{\"success\": true, \"message\": \"CPU restarted\"}");
 }
 
 Response APIRouter::handle_emulator_reset(const Request& req) {
-    (void)req;
-    fprintf(stderr, "API: Reset requested via web UI (not implemented yet)\n");
-    return Response::json("{\"success\": false, \"message\": \"Not implemented yet (in-process integration pending)\"}");
+    // Reset = same as restart for now
+    return handle_emulator_restart(req);
 }
 
 Response APIRouter::handle_log(const Request& req) {

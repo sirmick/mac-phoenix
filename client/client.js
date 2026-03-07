@@ -3603,8 +3603,8 @@ function setupEventListeners() {
     const configBtn = document.getElementById('config-btn');
     if (configBtn) configBtn.addEventListener('click', openConfig);
 
-    const startBtn = document.getElementById('start-btn');
-    if (startBtn) startBtn.addEventListener('click', startEmulator);
+    // start-btn onclick is managed dynamically in updateStatus (Start vs Reset)
+    // Do NOT add addEventListener here — it would conflict with onclick assignment
 
     const stopBtn = document.getElementById('stop-btn');
     if (stopBtn) stopBtn.addEventListener('click', stopEmulator);
