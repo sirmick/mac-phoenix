@@ -369,14 +369,14 @@ int main(int argc, char **argv)
 				printf("[CPU Thread] CPU started, executing...\n");
 
 				if (platform->cpu_execute_fast) {
-					extern bool quit_program;
-					quit_program = false;
-					std::thread watchdog([&]() {
+					std::thread watchdog([platform]() {
 						while (cpu_state::g_running.load(std::memory_order_acquire) &&
 						       webserver::g_running.load(std::memory_order_acquire)) {
 							std::this_thread::sleep_for(std::chrono::milliseconds(50));
 						}
-						quit_program = true;
+						if (platform->cpu_request_stop) {
+							platform->cpu_request_stop();
+						}
 					});
 					platform->cpu_execute_fast();
 					watchdog.join();

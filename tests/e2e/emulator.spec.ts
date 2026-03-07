@@ -1,17 +1,23 @@
 import { test, expect } from './fixtures';
 
 test.describe('Emulator Controls', () => {
-  test('start button triggers POST /api/emulator/start', async ({ page, emulatorPort }) => {
+  test('start button triggers POST /api/emulator/start', async ({ page, request, emulatorPort }) => {
+    // Ensure emulator is stopped so button says "Start" (not "Reset")
+    await request.post(`http://localhost:${emulatorPort}/api/emulator/stop`);
+
     await page.goto(`http://localhost:${emulatorPort}/`);
 
-    const [request] = await Promise.all([
+    // Wait for button to say "Start" (set by status polling)
+    await expect(page.locator('#start-btn')).toHaveText('Start', { timeout: 5000 });
+
+    const [startReq] = await Promise.all([
       page.waitForRequest(req =>
         req.url().includes('/api/emulator/start') && req.method() === 'POST'
       ),
       page.locator('#start-btn').click(),
     ]);
 
-    expect(request.method()).toBe('POST');
+    expect(startReq.method()).toBe('POST');
   });
 
   test('stop button triggers POST /api/emulator/stop', async ({ page, emulatorPort }) => {
@@ -38,13 +44,15 @@ test.describe('Emulator Controls', () => {
     expect(body).toHaveProperty('boot_elapsed');
   });
 
-  test('status reflects running state after start', async ({ page, request, emulatorPort, hasRom }) => {
+  test('status reflects running state after start', async ({ request, emulatorPort, hasRom }) => {
     test.skip(!hasRom, 'ROM required to start emulator');
 
-    await page.goto(`http://localhost:${emulatorPort}/`);
-    await page.locator('#start-btn').click();
-    await page.waitForTimeout(1000);
+    // Start via API
+    const startResp = await request.post(`http://localhost:${emulatorPort}/api/emulator/start`);
+    const startBody = await startResp.json();
+    expect(startBody.success).toBe(true);
 
+    // Check immediately — start is synchronous, status should reflect it
     const resp = await request.get(`http://localhost:${emulatorPort}/api/status`);
     const body = await resp.json();
     expect(body.emulator_running).toBe(true);

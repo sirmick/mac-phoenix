@@ -39,6 +39,7 @@ extern void EmulOp(uint16_t opcode, struct M68kRegisters *r);
 extern int CPUType;          // CPU type from config (2=68020, 3=68030, 4=68040)
 
 static UnicornCPU *unicorn_cpu = NULL;
+static std::atomic<bool> unicorn_stop_requested(false);
 // Dummy and high-memory regions now use uc_mmio_map (no host buffer needed)
 int unicorn_cpu_type = 2;   // Default to 68020 (extern for DualCPU)
 int unicorn_fpu_type = 0;   // Default to no FPU (extern for DualCPU)
@@ -659,7 +660,10 @@ static int unicorn_backend_execute_one(void) {
 static void unicorn_backend_execute_fast(void) {
 	if (!unicorn_cpu) return;
 
-	while (webserver::g_running.load(std::memory_order_acquire)) {
+	unicorn_stop_requested.store(false, std::memory_order_release);
+
+	while (webserver::g_running.load(std::memory_order_acquire) &&
+	       !unicorn_stop_requested.load(std::memory_order_acquire)) {
 		int result = unicorn_execute_with_interrupts(unicorn_cpu, 100000000);
 		if (result < 0) {
 			uint32_t pc = unicorn_get_pc(unicorn_cpu);
@@ -672,6 +676,14 @@ static void unicorn_backend_execute_fast(void) {
 			fprintf(stderr, "[Unicorn] Fatal error at PC=0x%08X: %s\n", pc, err);
 			break;
 		}
+	}
+}
+
+static void unicorn_backend_request_stop(void) {
+	unicorn_stop_requested.store(true, std::memory_order_release);
+	if (unicorn_cpu) {
+		uc_engine *uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
+		if (uc) uc_emu_stop(uc);
 	}
 }
 
@@ -1040,6 +1052,9 @@ void cpu_unicorn_install(Platform *p) {
 	} else {
 		p->cpu_execute_fast = unicorn_backend_execute_fast;  // JIT fast path
 	}
+
+	// Stop
+	p->cpu_request_stop = unicorn_backend_request_stop;
 
 	// State query
 	p->cpu_get_pc = unicorn_backend_get_pc;

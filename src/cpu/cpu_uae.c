@@ -72,6 +72,10 @@ static void uae_backend_execute_fast(void) {
 	uae_m68k_execute_fast();
 }
 
+static void uae_backend_request_stop(void) {
+	uae_cpu_request_break();
+}
+
 // State Query
 static uint32_t uae_backend_get_pc(void) {
 	return uae_get_pc();
@@ -133,6 +137,9 @@ void cpu_uae_install(Platform *p) {
 	p->cpu_get_sr = uae_backend_get_sr;
 	p->cpu_get_dreg = uae_backend_get_dreg;
 	p->cpu_get_areg = uae_backend_get_areg;
+
+	// Stop
+	p->cpu_request_stop = uae_backend_request_stop;
 
 	// Interrupts
 	p->cpu_trigger_interrupt = uae_backend_trigger_interrupt;

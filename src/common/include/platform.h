@@ -127,6 +127,7 @@ typedef struct {
     // Execution - returns: 0=ok, 1=stopped, 2=breakpoint, 3=exception, 4=emulop, 5=divergence
     int (*cpu_execute_one)(void);
     void (*cpu_execute_fast)(void);  // Optional: run until stopped (NULL if not supported)
+    void (*cpu_request_stop)(void);  // Signal CPU to break out of execute_fast (thread-safe)
 
     // State query
     uint32_t (*cpu_get_pc)(void);

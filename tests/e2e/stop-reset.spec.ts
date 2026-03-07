@@ -52,6 +52,31 @@ test.describe('Stop and Reset', () => {
     expect(body.emulator_running).toBe(false);
   });
 
+  test('stop actually halts CPU execution', async ({ request, emulatorPort, hasRom }) => {
+    test.skip(!hasRom, 'ROM required');
+
+    // Start and let it run
+    await request.post(`http://localhost:${emulatorPort}/api/emulator/start`);
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Stop
+    await request.post(`http://localhost:${emulatorPort}/api/emulator/stop`);
+    await new Promise(r => setTimeout(r, 500));
+
+    // Record checkload_count
+    let resp = await request.get(`http://localhost:${emulatorPort}/api/status`);
+    let body = await resp.json();
+    const countAfterStop = body.checkload_count;
+
+    // Wait and check again — count must not increase
+    await new Promise(r => setTimeout(r, 2000));
+    resp = await request.get(`http://localhost:${emulatorPort}/api/status`);
+    body = await resp.json();
+
+    expect(body.emulator_running).toBe(false);
+    expect(body.checkload_count).toBe(countAfterStop);
+  });
+
   test('restart API works directly', async ({ request, emulatorPort, hasRom }) => {
     test.skip(!hasRom, 'ROM required');
 

@@ -465,3 +465,9 @@ extern "C" void uae_m68k_execute_fast(void) {
     m68k_execute();
 }
 
+extern "C" void uae_cpu_request_break(void) {
+    extern bool quit_program;
+    quit_program = true;
+    SPCFLAGS_SET(SPCFLAG_BRK);
+}
+
