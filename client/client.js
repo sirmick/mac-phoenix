@@ -2666,7 +2666,7 @@ function getApiUrl(endpoint) {
 // Can be overridden via:
 //   - URL param: ?ws=wss://example.com/path
 //   - <meta name="ws-url" content="wss://example.com/path">
-// Default: ws://hostname:8090 (signaling server port)
+// Default: uses signaling_port from server config (fetched before init)
 function getWebSocketUrl() {
     // Check URL parameter first
     const urlParams = new URLSearchParams(window.location.search);
@@ -2677,10 +2677,13 @@ function getWebSocketUrl() {
     const wsMeta = document.querySelector('meta[name="ws-url"]');
     if (wsMeta?.content) return wsMeta.content;
 
-    // Default: use port 8090 for signaling (separate from HTTP server on 8000)
+    // Use signaling_port from server config, fall back to HTTP port + 1
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const hostname = window.location.hostname;
-    return `${protocol}//${hostname}:8090/`;
+    const signalingPort = debugConfig.signaling_port
+        || (parseInt(window.location.port, 10) + 1)
+        || 8090;
+    return `${protocol}//${hostname}:${signalingPort}/`;
 }
 
 function initClient() {
