@@ -96,6 +96,7 @@ legacy/                             — Original BasiliskII/SheepShaver source (
 |----------|--------|-------------|
 | `/api/status` | GET | `{emulator_running, boot_phase, checkload_count, boot_elapsed}` |
 | `/api/mouse` | GET | `{x, y}` — Mac cursor position (503 if not running) |
+| `/api/mouse` | POST | Move cursor: `{"x":N,"y":N}` absolute, `{"dx":N,"dy":N}` relative |
 | `/api/screenshot` | GET | PNG image of current framebuffer (503 if no frames) |
 | `/api/config` | GET/POST | Unified JSON config |
 | `/api/emulator/start` | POST | Start CPU execution |

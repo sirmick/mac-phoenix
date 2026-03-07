@@ -37,8 +37,7 @@
 #define DEBUG 1
 #include "debug.h"
 
-// Forward declarations for external variables
-// These will eventually be removed when we fully migrate to CPUContext
+// Forward declarations for external variables (used pervasively by legacy code)
 extern uint8_t *RAMBaseHost;
 extern uint8_t *ROMBaseHost;
 extern uint32_t RAMSize;
@@ -185,7 +184,9 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     }
 
     // 2. Set up global pointers (for legacy code compatibility)
-    // TODO: Remove these when all code uses CPUContext
+    // These globals are referenced by ~250 sites across 24 files (UAE interpreter,
+    // ROM patches, memory accessors, video drivers, etc.) — refactoring them out
+    // would require rewriting the entire memory access layer.
     RAMBaseHost = ram_.get();
     ROMBaseHost = ram_.get() + ram_size_;  // ROM after RAM
     RAMSize = ram_size_;

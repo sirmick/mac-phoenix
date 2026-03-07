@@ -3311,8 +3311,8 @@ async function saveConfig() {
         version: 1,
         web: {
             emulator: isM68k ? 'm68k' : 'ppc',
-            codec: 'h264',  // TODO: read from UI
-            mousemode: 'relative'  // TODO: read from UI
+            codec: document.getElementById('codec-select')?.value || 'h264',
+            mousemode: document.getElementById('mouse-mode-select')?.value || 'relative'
         },
         common: {
             ram: currentConfig.ram,

@@ -8,6 +8,7 @@
 #include "webrtc_server.h"
 #include "../config/json_utils.h"
 #include "../webserver/keyboard_map.h"
+#include "../core/boot_progress.h"
 #include <nlohmann/json.hpp>
 #include <cstdio>
 #include <chrono>
@@ -606,10 +607,14 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
             // Total: 65 bytes
             if (peer->data_channel && peer->data_channel->isOpen()) {
                 uint8_t metadata[65] = {0};
-                // Cursor position (dummy for now - TODO: get real cursor from Mac)
-                metadata[0] = 0; metadata[1] = 0;  // cursor_x
-                metadata[2] = 0; metadata[3] = 0;  // cursor_y
-                metadata[4] = 0;  // cursor_visible
+                // Read real cursor position from Mac low-memory globals
+                int mx = 0, my = 0;
+                boot_progress_get_mouse(&mx, &my);
+                uint16_t cx = static_cast<uint16_t>(mx);
+                uint16_t cy = static_cast<uint16_t>(my);
+                std::memcpy(metadata + 0, &cx, 2);  // cursor_x (little-endian)
+                std::memcpy(metadata + 2, &cy, 2);  // cursor_y (little-endian)
+                metadata[4] = (mx != 0 || my != 0) ? 1 : 0;  // cursor_visible
                 // Rest is timestamps (zeros for now)
                 peer->data_channel->send(reinterpret_cast<const std::byte*>(metadata), sizeof(metadata));
             }
@@ -657,10 +662,31 @@ void WebRTCServer::send_audio_frame(const uint8_t* data, size_t size) {
 }
 
 void WebRTCServer::notify_codec_change(CodecType new_codec) {
-    fprintf(stderr, "[WebRTC] Codec change requested: %d\n", (int)new_codec);
-    // TODO: Send reconnect message to all peers via WebSocket
-    // For now, just close all peer connections (browser will reconnect)
+    const char* codec_name = (new_codec == CodecType::H264) ? "h264" :
+                             (new_codec == CodecType::AV1) ? "av1" :
+                             (new_codec == CodecType::VP9) ? "vp9" :
+                             (new_codec == CodecType::WEBP) ? "webp" : "png";
+    fprintf(stderr, "[WebRTC] Codec change requested: %s\n", codec_name);
+
     std::lock_guard<std::mutex> lock(peers_mutex_);
+
+    // Send reconnect message to all peers via WebSocket so they know to reconnect
+    nlohmann::json msg;
+    msg["type"] = "reconnect";
+    msg["codec"] = codec_name;
+    std::string msg_str = msg.dump();
+
+    for (const auto& [ws_ptr, ws_shared] : ws_connections_) {
+        if (ws_shared) {
+            try {
+                ws_shared->send(msg_str);
+            } catch (const std::exception& e) {
+                fprintf(stderr, "[WebRTC] Error sending reconnect to peer: %s\n", e.what());
+            }
+        }
+    }
+
+    // Close all peer connections (browser will reconnect with new codec)
     for (const auto& [peer_id, peer] : peers_) {
         if (peer->pc) {
             peer->pc->close();

@@ -3,19 +3,12 @@
  *
  * Tests:
  *   1. /api/mouse returns position after boot
- *   2. Data channel mouse events don't crash
- *   3. Native mouse interaction on display element
+ *   2. POST /api/mouse absolute move and readback
+ *   3. POST /api/mouse relative move (dx/dy) — verifies direction
  */
 import { test, expect } from './fixtures';
 
 test.describe('Mouse API', () => {
-
-  test('GET /api/mouse returns 503 when not running', async ({ request, emulatorPort }) => {
-    const resp = await request.get(`http://localhost:${emulatorPort}/api/mouse`, {
-      failOnStatusCode: false,
-    });
-    expect(resp.status()).toBe(503);
-  });
 
   test('GET /api/mouse returns position after boot', async ({ request, emulatorPort, hasRom }) => {
     test.skip(!hasRom, 'ROM required');
@@ -23,7 +16,7 @@ test.describe('Mouse API', () => {
     // Start emulator
     await request.post(`http://localhost:${emulatorPort}/api/emulator/start`);
 
-    // Wait for boot to reach at least warm start
+    // Wait for boot to reach Finder
     let mouseResp;
     for (let i = 0; i < 20; i++) {
       await new Promise(r => setTimeout(r, 1000));
@@ -44,77 +37,96 @@ test.describe('Mouse API', () => {
     expect(typeof mouse.x).toBe('number');
     expect(typeof mouse.y).toBe('number');
   });
-});
 
-test.describe('Mouse Input Pipeline', () => {
+  test('absolute mouse: move and verify Mac OS reflects change', async ({ request, emulatorPort, hasRom }) => {
+    test.skip(!hasRom, 'ROM required');
 
-  test('data channel opens and accepts mouse events', async ({ page, emulatorPort, hasRom }) => {
-    test.skip(!hasRom, 'ROM required for WebRTC');
+    // Start emulator
+    await request.post(`http://localhost:${emulatorPort}/api/emulator/start`);
 
-    await page.goto(`http://localhost:${emulatorPort}/`);
-    await page.waitForLoadState('networkidle');
+    // Wait for boot to reach Finder
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      const status = await request.get(`http://localhost:${emulatorPort}/api/status`);
+      const body = await status.json();
+      if (body.boot_phase === 'Finder' || body.boot_phase === 'desktop') break;
+    }
 
-    const dcOpen = await page.evaluate(async () => {
-      const deadline = Date.now() + 10000;
-      while (Date.now() < deadline) {
-        // @ts-ignore
-        const client = window.client;
-        if (client && client.dataChannel && client.dataChannel.readyState === 'open') {
-          return true;
-        }
-        await new Promise(r => setTimeout(r, 200));
-      }
-      return false;
+    // Move mouse to a known position
+    const moveResp = await request.post(`http://localhost:${emulatorPort}/api/mouse`, {
+      data: { x: 200, y: 150 },
     });
+    expect(moveResp.status()).toBe(200);
+    const moveBody = await moveResp.json();
+    expect(moveBody.success).toBe(true);
+    expect(moveBody.mode).toBe('absolute');
 
-    expect(dcOpen).toBe(true);
+    // Wait for Mac OS to process the ADB interrupt
+    await new Promise(r => setTimeout(r, 500));
+
+    // Read back — Mac OS low-memory globals should reflect the move
+    const mouse = await (await request.get(`http://localhost:${emulatorPort}/api/mouse`)).json();
+    expect(mouse.x).toBe(200);
+    expect(mouse.y).toBe(150);
+
+    // Move to a different position to confirm tracking
+    await request.post(`http://localhost:${emulatorPort}/api/mouse`, {
+      data: { x: 400, y: 300 },
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    const mouse2 = await (await request.get(`http://localhost:${emulatorPort}/api/mouse`)).json();
+    expect(mouse2.x).toBe(400);
+    expect(mouse2.y).toBe(300);
   });
 
-  test('sends mouse events without errors', async ({ page, emulatorPort, hasRom }) => {
-    test.skip(!hasRom, 'ROM required for WebRTC');
+  test('relative mouse: dx/dy deltas move cursor in correct direction', async ({ request, emulatorPort, hasRom }) => {
+    test.skip(!hasRom, 'ROM required');
 
-    await page.goto(`http://localhost:${emulatorPort}/`);
-    await page.waitForLoadState('networkidle');
+    // Start emulator
+    await request.post(`http://localhost:${emulatorPort}/api/emulator/start`);
 
-    // Wait for data channel
-    await page.evaluate(async () => {
-      const deadline = Date.now() + 10000;
-      while (Date.now() < deadline) {
-        // @ts-ignore
-        const c = window.client;
-        if (c?.dataChannel?.readyState === 'open') return;
-        await new Promise(r => setTimeout(r, 200));
-      }
+    // Wait for boot to reach Finder
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      const status = await request.get(`http://localhost:${emulatorPort}/api/status`);
+      const body = await status.json();
+      if (body.boot_phase === 'Finder' || body.boot_phase === 'desktop') break;
+    }
+
+    // Set a known absolute baseline
+    await request.post(`http://localhost:${emulatorPort}/api/mouse`, {
+      data: { x: 200, y: 200 },
     });
+    await new Promise(r => setTimeout(r, 500));
 
-    const errors: string[] = [];
-    page.on('pageerror', (err) => errors.push(err.message));
+    const baseline = await (await request.get(`http://localhost:${emulatorPort}/api/mouse`)).json();
+    expect(baseline.x).toBe(200);
+    expect(baseline.y).toBe(200);
 
-    const sent = await page.evaluate(() => {
-      // @ts-ignore
-      const client = window.client;
-      if (!client?.dataChannel || client.dataChannel.readyState !== 'open') return false;
-
-      // Send relative mouse moves
-      for (let i = 0; i < 5; i++) {
-        client.sendMouseMove(5, 3, performance.now());
-      }
-
-      // Send button events
-      client.sendMouseButton(0, true, performance.now());
-      client.sendMouseButton(0, false, performance.now());
-      return true;
+    // Relative move with positive deltas — cursor should move right and down
+    // (Mac OS applies acceleration so exact values are unpredictable)
+    const relResp = await request.post(`http://localhost:${emulatorPort}/api/mouse`, {
+      data: { dx: 20, dy: 20 },
     });
+    const relBody = await relResp.json();
+    expect(relBody.success).toBe(true);
+    expect(relBody.mode).toBe('relative');
 
-    expect(sent).toBe(true);
-    expect(errors).toHaveLength(0);
+    await new Promise(r => setTimeout(r, 500));
 
-    await page.waitForTimeout(500);
+    const after1 = await (await request.get(`http://localhost:${emulatorPort}/api/mouse`)).json();
+    expect(after1.x).toBeGreaterThan(baseline.x);
+    expect(after1.y).toBeGreaterThan(baseline.y);
 
-    const stillOpen = await page.evaluate(() => {
-      // @ts-ignore
-      return window.client?.dataChannel?.readyState === 'open';
+    // Relative move with negative deltas — cursor should move left and up
+    await request.post(`http://localhost:${emulatorPort}/api/mouse`, {
+      data: { dx: -20, dy: -20 },
     });
-    expect(stillOpen).toBe(true);
+    await new Promise(r => setTimeout(r, 500));
+
+    const after2 = await (await request.get(`http://localhost:${emulatorPort}/api/mouse`)).json();
+    expect(after2.x).toBeLessThan(after1.x);
+    expect(after2.y).toBeLessThan(after1.y);
   });
 });

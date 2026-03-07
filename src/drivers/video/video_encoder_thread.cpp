@@ -144,7 +144,10 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             // Request keyframe for new peers
             g_request_keyframe.store(true, std::memory_order_release);
 
-            // TODO: Notify WebRTC thread to disconnect existing peers
+            // Notify WebRTC to disconnect peers so they reconnect with new codec
+            if (webrtc::g_server) {
+                webrtc::g_server->notify_codec_change(new_codec);
+            }
         }
 
         // Wait for new frame (blocks until frame available or timeout)

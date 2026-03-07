@@ -25,6 +25,8 @@ extern uint32 ROMSize;  // 0 if no ROM loaded
 // ADB functions (from adb.cpp)
 extern void ADBKeyDown(int code);
 extern void ADBKeyUp(int code);
+extern void ADBMouseMoved(int x, int y);
+extern void ADBSetRelMouseMode(bool relative);
 
 namespace http {
 
@@ -84,6 +86,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/mouse" && req.method == "GET") {
         return handle_mouse(req);
+    }
+    if (req.path == "/api/mouse" && req.method == "POST") {
+        return handle_mouse_move(req);
     }
     if (req.path == "/api/keypress" && req.method == "POST") {
         return handle_keypress(req);
@@ -474,6 +479,58 @@ Response APIRouter::handle_mouse(const Request& req) {
          << ", \"crsr_busy\": " << cs.crsr_busy
          << "}";
     return Response::json(json.str());
+}
+
+// POST /api/mouse - move the mouse
+// Absolute: {"x": 100, "y": 200}
+// Relative: {"dx": 10, "dy": -5}
+Response APIRouter::handle_mouse_move(const Request& req) {
+    auto body = req.body;
+
+    // Check if this is a relative move (has "dx" field)
+    bool relative = body.find("\"dx\"") != std::string::npos;
+
+    if (relative) {
+        auto dx_pos = body.find("\"dx\"");
+        auto dx_colon = body.find(':', dx_pos);
+        auto dx_start = body.find_first_not_of(" \t\n", dx_colon + 1);
+        int dx = std::stoi(body.substr(dx_start));
+
+        auto dy_pos = body.find("\"dy\"");
+        if (dy_pos == std::string::npos) {
+            Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'dy' field\"}"); r.add_header("Content-Type", "application/json"); return r;
+        }
+        auto dy_colon = body.find(':', dy_pos);
+        auto dy_start = body.find_first_not_of(" \t\n", dy_colon + 1);
+        int dy = std::stoi(body.substr(dy_start));
+
+        ADBSetRelMouseMode(true);
+        ADBMouseMoved(dx, dy);
+
+        return Response::json("{\"success\": true, \"dx\": " + std::to_string(dx) + ", \"dy\": " + std::to_string(dy) + ", \"mode\": \"relative\"}");
+    }
+
+    // Absolute move
+    auto x_pos = body.find("\"x\"");
+    if (x_pos == std::string::npos) {
+        Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'x' (or 'dx' for relative)\"}"); r.add_header("Content-Type", "application/json"); return r;
+    }
+    auto x_colon = body.find(':', x_pos);
+    auto x_start = body.find_first_not_of(" \t\n", x_colon + 1);
+    int x = std::stoi(body.substr(x_start));
+
+    auto y_pos = body.find("\"y\"");
+    if (y_pos == std::string::npos) {
+        Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'y' field\"}"); r.add_header("Content-Type", "application/json"); return r;
+    }
+    auto y_colon = body.find(':', y_pos);
+    auto y_start = body.find_first_not_of(" \t\n", y_colon + 1);
+    int y = std::stoi(body.substr(y_start));
+
+    ADBSetRelMouseMode(false);
+    ADBMouseMoved(x, y);
+
+    return Response::json("{\"success\": true, \"x\": " + std::to_string(x) + ", \"y\": " + std::to_string(y) + ", \"mode\": \"absolute\"}");
 }
 
 // POST /api/keypress - send a key event to the emulator
