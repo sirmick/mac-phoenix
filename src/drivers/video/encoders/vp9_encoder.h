@@ -24,6 +24,7 @@ public:
     EncodedFrame encode_i420(const uint8_t* y, const uint8_t* u, const uint8_t* v,
                              int width, int height, int y_stride, int uv_stride) override;
     EncodedFrame encode_bgra(const uint8_t* bgra, int width, int height, int stride) override;
+    EncodedFrame encode_argb(const uint8_t* argb, int width, int height, int stride) override;
     void request_keyframe() override { force_keyframe_ = true; }
 
 private:

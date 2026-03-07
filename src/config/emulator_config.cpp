@@ -503,6 +503,26 @@ EmulatorConfig load_emulator_config(const char* config_path,
     resolve_paths(config.disk_paths);
     resolve_paths(config.cdrom_paths);
 
+    // 7. Resolve client_dir relative to binary location if it's a relative path
+    if (!config.client_dir.empty() && config.client_dir[0] != '/') {
+        char exe_path[4096];
+        ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+        if (len > 0) {
+            exe_path[len] = '\0';
+            // Find last '/' to get directory
+            char* last_slash = strrchr(exe_path, '/');
+            if (last_slash) {
+                *last_slash = '\0';  // exe_path is now the directory
+                std::string resolved = std::string(exe_path) + "/../" + config.client_dir;
+                // Check if resolved path exists, fall back to CWD-relative if not
+                struct stat st;
+                if (stat(resolved.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+                    config.client_dir = resolved;
+                }
+            }
+        }
+    }
+
     return config;
 }
 

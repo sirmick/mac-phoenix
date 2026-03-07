@@ -317,8 +317,6 @@ Response APIRouter::handle_codec_post(const Request& req) {
     CodecType new_codec;
     if (codec_str == "h264" || codec_str == "H264") {
         new_codec = CodecType::H264;
-    } else if (codec_str == "av1" || codec_str == "AV1") {
-        new_codec = CodecType::AV1;
     } else if (codec_str == "vp9" || codec_str == "VP9") {
         new_codec = CodecType::VP9;
     } else if (codec_str == "png" || codec_str == "PNG") {
@@ -326,7 +324,7 @@ Response APIRouter::handle_codec_post(const Request& req) {
     } else if (codec_str == "webp" || codec_str == "WEBP" || codec_str == "WebP") {
         new_codec = CodecType::WEBP;
     } else {
-        return Response::json("{\"error\": \"Invalid codec. Use h264, av1, vp9, png, or webp\"}");
+        return Response::json("{\"error\": \"Invalid codec. Use h264, vp9, png, or webp\"}");
     }
 
     // Update codec

@@ -29,6 +29,65 @@ namespace video {
 }
 
 /**
+ * VP9 RTP Packetizer (RFC 7741)
+ *
+ * Fragments VP9 frames into MTU-sized RTP packets with a 1-byte VP9 payload
+ * descriptor. This is needed because libdatachannel doesn't ship a VP9
+ * packetizer, and the base RtpPacketizer sends frames as single packets
+ * (which exceeds MTU for keyframes).
+ *
+ * Payload descriptor byte:  I|P|L|F|B|E|V|Z
+ *   B (bit 3) = Start of frame
+ *   E (bit 2) = End of frame
+ */
+class VP9RtpPacketizer : public rtc::RtpPacketizer {
+public:
+    VP9RtpPacketizer(std::shared_ptr<rtc::RtpPacketizationConfig> rtpConfig,
+                     size_t maxFragmentSize = DefaultMaxFragmentSize)
+        : RtpPacketizer(std::move(rtpConfig)), maxFragmentSize_(maxFragmentSize) {}
+
+private:
+    std::vector<rtc::binary> fragment(rtc::binary data) override {
+        std::vector<rtc::binary> fragments;
+
+        if (data.size() + 1 <= maxFragmentSize_) {
+            // Single packet: B=1, E=1
+            rtc::binary frag(1 + data.size());
+            frag[0] = std::byte{0x0C};  // B=1, E=1
+            std::copy(data.begin(), data.end(), frag.begin() + 1);
+            fragments.push_back(std::move(frag));
+        } else {
+            // Multi-packet fragmentation
+            size_t payloadMax = maxFragmentSize_ - 1;  // 1 byte for descriptor
+            size_t offset = 0;
+            bool first = true;
+
+            while (offset < data.size()) {
+                size_t chunkSize = std::min(payloadMax, data.size() - offset);
+                bool last = (offset + chunkSize >= data.size());
+
+                rtc::binary frag(1 + chunkSize);
+                uint8_t descriptor = 0;
+                if (first) descriptor |= 0x08;  // B=1
+                if (last) descriptor |= 0x04;   // E=1
+                frag[0] = static_cast<std::byte>(descriptor);
+                std::copy(data.begin() + offset,
+                          data.begin() + offset + chunkSize,
+                          frag.begin() + 1);
+
+                fragments.push_back(std::move(frag));
+                offset += chunkSize;
+                first = false;
+            }
+        }
+
+        return fragments;
+    }
+
+    size_t maxFragmentSize_;
+};
+
+/**
  * Process binary input message from browser data channel.
  * Protocol: [type:uint8] [payload...]
  *   1 = mouse move relative: dx:int16LE, dy:int16LE, ts:float64LE (13 bytes)
@@ -195,7 +254,6 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
             // Map codec string to CodecType
             CodecType codec = CodecType::H264;
             if (codec_str == "vp9") codec = CodecType::VP9;
-            else if (codec_str == "av1") codec = CodecType::AV1;
             else if (codec_str == "png") codec = CodecType::PNG;
             else if (codec_str == "webp") codec = CodecType::WEBP;
 
@@ -277,7 +335,6 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
             // Map codec string to CodecType
             CodecType codec = CodecType::H264;
             if (codec_str == "vp9") codec = CodecType::VP9;
-            else if (codec_str == "av1") codec = CodecType::AV1;
             else if (codec_str == "png") codec = CodecType::PNG;
             else if (codec_str == "webp") codec = CodecType::WEBP;
 
@@ -432,53 +489,45 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     fprintf(stderr, "[WebRTC] About to add tracks for peer %s\n", peer_id.c_str());
 
-    // Add video track (H.264, VP9, or AV1) with proper RTP packetizer
-    if (codec == CodecType::H264 || codec == CodecType::VP9 || codec == CodecType::AV1) {
+    // Add video track (H.264 and VP9 use RTP; PNG/WEBP use DataChannel)
+    if (codec == CodecType::H264 || codec == CodecType::VP9) {
         auto video = rtc::Description::Video("video-stream", rtc::Description::Direction::SendOnly);
 
         if (codec == CodecType::H264) {
             fprintf(stderr, "[WebRTC] Creating H.264 video track\n");
             video.addH264Codec(96, "profile-level-id=42e01f;packetization-mode=1;level-asymmetry-allowed=1");
-            video.addSSRC(ssrc, "video-stream", "stream1", "video-stream");
-            fprintf(stderr, "[WebRTC] Calling addTrack for video\n");
-            peer->video_track = peer->pc->addTrack(video);
-            fprintf(stderr, "[WebRTC] addTrack returned, setting media handler\n");
+        } else {
+            fprintf(stderr, "[WebRTC] Creating VP9 video track\n");
+            video.addVP9Codec(96);
+        }
 
-            // Set up H.264 RTP packetizer
-            auto rtpConfig = std::make_shared<rtc::RtpPacketizationConfig>(
-                ssrc, "video-stream", 96, rtc::H264RtpPacketizer::ClockRate
-            );
+        video.addSSRC(ssrc, "video-stream", "stream1", "video-stream");
+        peer->video_track = peer->pc->addTrack(video);
+
+        // Set up RTP packetizer
+        auto rtpConfig = std::make_shared<rtc::RtpPacketizationConfig>(
+            ssrc, "video-stream", 96, rtc::RtpPacketizer::VideoClockRate
+        );
+        if (codec == CodecType::H264) {
             auto packetizer = std::make_shared<rtc::H264RtpPacketizer>(
                 rtc::H264RtpPacketizer::Separator::LongStartSequence,
                 rtpConfig
             );
             peer->video_track->setMediaHandler(packetizer);
-            fprintf(stderr, "[WebRTC] Media handler set for video\n");
-
-        } else if (codec == CodecType::VP9) {
-            video.addVP9Codec(97);
-            video.addSSRC(ssrc, "video-stream", "stream1", "video-stream");
-            peer->video_track = peer->pc->addTrack(video);
-            // VP9 packetizer would go here (if needed)
-
-        } else if (codec == CodecType::AV1) {
-            video.addAV1Codec(98);
-            video.addSSRC(ssrc, "video-stream", "stream1", "video-stream");
-            peer->video_track = peer->pc->addTrack(video);
-            // AV1 packetizer would go here (if needed)
+        } else {
+            // VP9: Use custom packetizer with RFC 7741 payload descriptor
+            auto packetizer = std::make_shared<VP9RtpPacketizer>(rtpConfig);
+            peer->video_track->setMediaHandler(packetizer);
         }
 
         // CRITICAL: Only set ready=true when track is actually open!
-        // This matches web-streaming behavior (server.cpp:1445-1452)
         peer->video_track->onOpen([this, peer_id]() {
             fprintf(stderr, "[WebRTC] Video track OPEN for %s - ready to send frames!\n", peer_id.c_str());
 
-            // Find peer and set ready flag
             std::lock_guard<std::mutex> lock(peers_mutex_);
             auto it = peers_.find(peer_id);
             if (it != peers_.end()) {
                 it->second->ready = true;
-                // Request keyframe so new peer gets a complete picture
                 video::g_request_keyframe.store(true, std::memory_order_release);
             }
         });
@@ -491,8 +540,10 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
             fprintf(stderr, "[WebRTC] Video track ERROR for %s: %s\n", peer_id.c_str(), error.c_str());
         });
 
-        fprintf(stderr, "[WebRTC] Added video track with RTP packetizer (codec: %d)\n", (int)codec);
+        fprintf(stderr, "[WebRTC] Added video track with RTP packetizer (codec: %s)\n",
+                codec == CodecType::H264 ? "H.264" : "VP9");
     }
+    // PNG/WEBP use DataChannel for video (ready flag set in DC onOpen below)
 
     // Add audio track (Opus) with proper RTP packetizer
     fprintf(stderr, "[WebRTC] Creating Opus audio track\n");
@@ -505,7 +556,7 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     // Set up Opus RTP packetizer (following web-streaming pattern)
     auto rtpConfigAudio = std::make_shared<rtc::RtpPacketizationConfig>(
-        ssrc + 1, "audio-stream", 111, rtc::OpusRtpPacketizer::defaultClockRate
+        ssrc + 1, "audio-stream", 111, rtc::OpusRtpPacketizer::DefaultClockRate
     );
     auto opusPacketizer = std::make_shared<rtc::OpusRtpPacketizer>(rtpConfigAudio);
 
@@ -528,12 +579,31 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     fprintf(stderr, "[WebRTC] Added audio track with Opus RTP packetizer\n");
 
-    // Add data channel (for PNG/WebP or metadata)
-    peer->data_channel = peer->pc->createDataChannel("metadata");
-    fprintf(stderr, "[WebRTC] Created data channel\n");
+    // Add data channel (for PNG/WebP frames or H.264/VP9 metadata)
+    rtc::DataChannelInit dc_init;
+    if (codec == CodecType::PNG || codec == CodecType::WEBP) {
+        // Unreliable mode for still-image codecs: drop stale frames instead of retransmitting
+        dc_init.reliability.unordered = true;
+        dc_init.reliability.maxRetransmits = 0;
+    }
+    peer->data_channel = peer->pc->createDataChannel("metadata", dc_init);
+    fprintf(stderr, "[WebRTC] Created data channel%s\n",
+            (codec == CodecType::PNG || codec == CodecType::WEBP) ? " (unreliable)" : "");
 
-    peer->data_channel->onOpen([peer_id]() {
-        fprintf(stderr, "[WebRTC] Data channel opened for peer %s\n", peer_id.c_str());
+    auto dc_ptr = peer->data_channel;
+    peer->data_channel->onOpen([this, peer_id, codec, dc_ptr]() {
+        fprintf(stderr, "[WebRTC] Data channel opened for peer %s (maxMessageSize=%zu)\n",
+                peer_id.c_str(), dc_ptr->maxMessageSize());
+        // For PNG/WEBP (no video track), mark peer ready when DataChannel opens
+        if (codec == CodecType::PNG || codec == CodecType::WEBP) {
+            std::lock_guard<std::mutex> lock(peers_mutex_);
+            auto it = peers_.find(peer_id);
+            if (it != peers_.end()) {
+                it->second->ready = true;
+                video::g_request_keyframe.store(true, std::memory_order_release);
+                fprintf(stderr, "[WebRTC] DataChannel peer %s marked ready (codec: %d)\n", peer_id.c_str(), (int)codec);
+            }
+        }
     });
 
     peer->data_channel->onMessage([peer_id](auto data) {
@@ -552,7 +622,8 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     return peer;
 }
 
-void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_keyframe) {
+void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_keyframe,
+                                    int width, int height) {
     static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
     static int send_count = 0;
 
@@ -571,56 +642,81 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
     int skipped_no_track = 0;
     int skipped_not_open = 0;
 
+    // Build metadata for data channel
+    // Format: [cursor_x:2][cursor_y:2][cursor_visible:1][ping_seq:4][timestamps:56]
+    // Total: 65 bytes
+    uint8_t metadata[65] = {0};
+    int mx = 0, my = 0;
+    boot_progress_get_mouse(&mx, &my);
+    uint16_t cx = static_cast<uint16_t>(mx);
+    uint16_t cy = static_cast<uint16_t>(my);
+    std::memcpy(metadata + 0, &cx, 2);
+    std::memcpy(metadata + 2, &cy, 2);
+    metadata[4] = (mx != 0 || my != 0) ? 1 : 0;
+
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration<double>(now - start_time_);
+    rtc::FrameInfo frameInfo(elapsed);
+
     for (const auto& [peer_id, peer] : peers_) {
         if (!peer->ready) {
             skipped_not_ready++;
             continue;
         }
 
-        if (!peer->video_track) {
-            skipped_no_track++;
-            continue;
-        }
-
-        // Check if track is open before sending
-        if (!peer->video_track->isOpen()) {
-            skipped_not_open++;
-            continue;
-        }
-
         try {
-            // Send frame with timestamp (CRITICAL for H.264 RTP)
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration<double>(now - start_time_);
-            rtc::FrameInfo frameInfo(elapsed);
+            if (peer->codec == CodecType::PNG || peer->codec == CodecType::WEBP) {
+                // PNG/WEBP: send frame via datachannel with 113-byte metadata header
+                if (peer->data_channel && peer->data_channel->isOpen()) {
+                    // Build header: [t1:8][x:4][y:4][w:4][h:4][fw:4][fh:4][t4:8][cursor:5][ping:68]
+                    std::vector<uint8_t> frame_with_header(113 + size);
+                    // Leave t1 (0-7) as zero
+                    uint32_t zero = 0;
+                    std::memcpy(frame_with_header.data() + 8, &zero, 4);   // dirty rect x = 0
+                    std::memcpy(frame_with_header.data() + 12, &zero, 4);  // dirty rect y = 0
+                    uint32_t fw = static_cast<uint32_t>(width);
+                    uint32_t fh = static_cast<uint32_t>(height);
+                    std::memcpy(frame_with_header.data() + 16, &fw, 4);    // dirty rect width
+                    std::memcpy(frame_with_header.data() + 20, &fh, 4);    // dirty rect height
+                    std::memcpy(frame_with_header.data() + 24, &fw, 4);    // frame width
+                    std::memcpy(frame_with_header.data() + 28, &fh, 4);    // frame height
+                    // t4 (offsets 32-39) left as zero
+                    // Cursor (offsets 40-44)
+                    std::memcpy(frame_with_header.data() + 40, &cx, 2);
+                    std::memcpy(frame_with_header.data() + 42, &cy, 2);
+                    frame_with_header[44] = metadata[4];  // cursor_visible
+                    // Ping data (offsets 45-112) left as zero
+                    // Copy frame data after header
+                    std::memcpy(frame_with_header.data() + 113, data, size);
 
-            // Use sendFrame() with FrameInfo for proper RTP timestamps
-            // This is required for H.264/VP9/AV1 - without it, browser won't decode!
-            peer->video_track->sendFrame(
-                reinterpret_cast<const std::byte*>(data),
-                size,
-                frameInfo
-            );
+                    // Send full frame as single message (matching legacy)
+                    peer->data_channel->send(
+                        reinterpret_cast<const std::byte*>(frame_with_header.data()),
+                        frame_with_header.size());
+                    sent_to++;
+                } else {
+                    skipped_not_open++;
+                }
+            } else {
+                // H.264/VP9: send via RTP video track
+                if (!peer->video_track || !peer->video_track->isOpen()) {
+                    skipped_not_open++;
+                    continue;
+                }
 
-            // Send metadata via data channel (REQUIRED for web-streaming client)
-            // Format: [cursor_x:2][cursor_y:2][cursor_visible:1][ping_seq:4][timestamps:56]
-            // Total: 65 bytes
-            if (peer->data_channel && peer->data_channel->isOpen()) {
-                uint8_t metadata[65] = {0};
-                // Read real cursor position from Mac low-memory globals
-                int mx = 0, my = 0;
-                boot_progress_get_mouse(&mx, &my);
-                uint16_t cx = static_cast<uint16_t>(mx);
-                uint16_t cy = static_cast<uint16_t>(my);
-                std::memcpy(metadata + 0, &cx, 2);  // cursor_x (little-endian)
-                std::memcpy(metadata + 2, &cy, 2);  // cursor_y (little-endian)
-                metadata[4] = (mx != 0 || my != 0) ? 1 : 0;  // cursor_visible
-                // Rest is timestamps (zeros for now)
-                peer->data_channel->send(reinterpret_cast<const std::byte*>(metadata), sizeof(metadata));
+                peer->video_track->sendFrame(
+                    reinterpret_cast<const std::byte*>(data),
+                    size,
+                    frameInfo
+                );
+
+                // Send metadata via data channel
+                if (peer->data_channel && peer->data_channel->isOpen()) {
+                    peer->data_channel->send(reinterpret_cast<const std::byte*>(metadata), sizeof(metadata));
+                }
+
+                sent_to++;
             }
-
-            sent_to++;
-
         } catch (const std::exception& e) {
             fprintf(stderr, "[WebRTC] Error sending video frame: %s\n", e.what());
         }
@@ -673,6 +769,7 @@ void WebRTCServer::notify_codec_change(CodecType new_codec) {
     // Send reconnect message to all peers via WebSocket so they know to reconnect
     nlohmann::json msg;
     msg["type"] = "reconnect";
+    msg["reason"] = "codec_change";
     msg["codec"] = codec_name;
     std::string msg_str = msg.dump();
 

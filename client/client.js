@@ -837,7 +837,7 @@ function createDecoder(codecType, element) {
         case CodecType.AV1:
             return new AV1Decoder(element);
         case CodecType.VP9:
-            return new VP9Decoder(element);
+            return new VP9Decoder(element);  // VP9 uses canvas (DataChannel + WebCodecs)
         case CodecType.PNG:
         case CodecType.WEBP:
             // Both PNG and WebP use the same decoder (both are images over DataChannel)
@@ -943,6 +943,7 @@ class BasiliskWebRTC {
         // Frame detection for black screen debugging
         this.firstFrameReceived = false;
         this.frameCheckInterval = null;
+
     }
 
     // Set codec type before connecting
@@ -968,9 +969,8 @@ class BasiliskWebRTC {
             this.decoder.cleanup();
         }
 
-        // H.264, AV1, and VP9 use video element; PNG uses canvas
+        // H.264 and VP9 use video element (RTP); PNG/WEBP use canvas (DataChannel)
         const usesVideoElement = (this.codecType === CodecType.H264 ||
-                                   this.codecType === CodecType.AV1 ||
                                    this.codecType === CodecType.VP9);
         const element = usesVideoElement ? this.video : this.canvas;
         if (!element) {
@@ -983,7 +983,7 @@ class BasiliskWebRTC {
             return false;
         }
 
-        // Set up frame callback for still-image decoders (PNG/WebP) to update screen dimensions
+        // Set up frame callback for DataChannel decoders (PNG/WebP) to update screen dimensions
         if (this.codecType === CodecType.PNG || this.codecType === CodecType.WEBP) {
             this.decoder.onFrame = (frameCount, metadata) => {
                 // Update screen dimensions for absolute mouse mode
@@ -1050,10 +1050,12 @@ class BasiliskWebRTC {
         this.updateStatus('Signaling connected', 'connecting');
         this.updateWebRTCState('ws', 'Open');
 
-        // Request connection (server will tell us which codec to use)
-        logger.debug('Sending connect request');
+        // Request connection with configured codec
+        const codec = this.codecType || serverUIConfig.webcodec || 'h264';
+        logger.debug('Sending connect request', { codec });
         this.ws.send(JSON.stringify({
-            type: 'connect'
+            type: 'connect',
+            codec: codec
         }));
     }
 
@@ -1623,6 +1625,7 @@ class BasiliskWebRTC {
 
         // Reset state
         this.connected = false;
+        this.firstFrameReceived = false;
         connectionSteps.reset();
         connectionSteps.setDone('ws');  // WebSocket still connected
 
@@ -1633,9 +1636,10 @@ class BasiliskWebRTC {
             return;
         }
 
-        // Send new connect request on existing WebSocket
-        logger.info('Sending new connect request');
-        this.ws.send(JSON.stringify({ type: 'connect' }));
+        // Send new connect request on existing WebSocket (include codec so server uses it)
+        const codecName = this.codecType || 'h264';
+        logger.info('Sending new connect request', { codec: codecName });
+        this.ws.send(JSON.stringify({ type: 'connect', codec: codecName }));
         this.updateStatus('Reconnecting...', 'connecting');
     }
 
@@ -1688,8 +1692,8 @@ class BasiliskWebRTC {
                     return;
                 }
 
-                // Binary data - this is a video frame for PNG codec
-                const usesVideoTrack = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1);
+                // Binary data - this is a video frame for DataChannel codecs (PNG/WEBP)
+                const usesVideoTrack = (this.codecType === CodecType.H264 || this.codecType === CodecType.VP9);
                 if (this.decoder && !usesVideoTrack) {
                     this.decoder.handleData(event.data);
 
@@ -1738,8 +1742,8 @@ class BasiliskWebRTC {
     }
 
     setupInputHandlers() {
-        // Use the appropriate display element (video for H.264/AV1, canvas for PNG)
-        const usesVideoElement = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1);
+        // Use the appropriate display element (video for H.264/VP9, canvas for PNG/WEBP)
+        const usesVideoElement = (this.codecType === CodecType.H264 || this.codecType === CodecType.VP9);
         const displayElement = usesVideoElement ? this.video : this.canvas;
         if (!displayElement) return;
 

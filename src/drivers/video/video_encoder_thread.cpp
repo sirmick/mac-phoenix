@@ -74,7 +74,9 @@ static void send_encoded_frame(const EncodedFrame& frame) {
         webrtc::g_server->send_video_frame(
             frame.data.data(),
             frame.data.size(),
-            frame.is_keyframe
+            frame.is_keyframe,
+            frame.width,
+            frame.height
         );
 
         if (debug_frames && (frame_count % 60 == 0 || frame.is_keyframe)) {

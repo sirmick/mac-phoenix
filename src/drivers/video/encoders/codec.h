@@ -3,7 +3,6 @@
  *
  * Allows switching between different encoding strategies:
  * - H.264 via OpenH264 (WebRTC video track)
- * - AV1 via SVT-AV1 (WebRTC video track, best for dithered content)
  * - PNG for dithered content (DataChannel binary, supports dirty rects)
  */
 
@@ -15,7 +14,7 @@
 
 enum class CodecType {
     H264,       // WebRTC video track with H.264
-    AV1,        // WebRTC video track with AV1 (best for dithered content)
+    AV1,        // Reserved (no encoder implementation)
     VP9,        // WebRTC video track with VP9 (great for UI/screen content)
     PNG,        // PNG over DataChannel (good for dithered, supports dirty rects)
     WEBP        // WebP over DataChannel (faster encoding than PNG, supports dirty rects)

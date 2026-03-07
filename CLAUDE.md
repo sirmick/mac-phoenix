@@ -102,7 +102,7 @@ legacy/                             — Original BasiliskII/SheepShaver source (
 | `/api/emulator/start` | POST | Start CPU execution |
 | `/api/emulator/stop` | POST | Stop CPU execution |
 | `/api/storage` | GET | Available ROMs and disk images |
-| `/api/codec` | POST | Change video codec (h264/vp9/av1/png/webp) |
+| `/api/codec` | POST | Change video codec (h264/vp9/png/webp) |
 | `/api/keypress` | POST | Send key event: `{"key": "return"}` or `{"key": 36}` |
 
 ## Boot Phases

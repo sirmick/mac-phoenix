@@ -304,7 +304,12 @@ int main(int argc, char **argv)
 	// ============================================================
 	if (emu_config.enable_webserver) {
 		// Set up API context for HTTP handlers
-		CodecType server_codec = CodecType::PNG;  // Default
+		// Initialize server_codec from config
+		CodecType server_codec = CodecType::PNG;
+		if (emu_config.codec == "h264") server_codec = CodecType::H264;
+		// AV1 not implemented — no encoder exists
+		else if (emu_config.codec == "vp9") server_codec = CodecType::VP9;
+		else if (emu_config.codec == "webp") server_codec = CodecType::WEBP;
 		http::APIContext api_context;
 		api_context.config = &emu_config;
 		api_context.server_codec = &server_codec;

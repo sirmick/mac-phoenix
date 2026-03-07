@@ -73,7 +73,8 @@ public:
      * Send encoded video frame to all connected peers
      * (Frame type depends on codec - H.264, VP9, AV1, PNG, WebP)
      */
-    void send_video_frame(const uint8_t* data, size_t size, bool is_keyframe);
+    void send_video_frame(const uint8_t* data, size_t size, bool is_keyframe,
+                          int width = 0, int height = 0);
 
     /**
      * Send encoded audio frame to all connected peers (Opus)

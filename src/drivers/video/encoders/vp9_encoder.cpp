@@ -226,3 +226,28 @@ EncodedFrame VP9Encoder::encode_bgra(const uint8_t* bgra, int width, int height,
 
     return encode_i420(y, u, v, width, height, width, width / 2);
 }
+
+EncodedFrame VP9Encoder::encode_argb(const uint8_t* argb, int width, int height, int stride) {
+    // ARGB = bytes A,R,G,B = libyuv "BGRA" (Mac native 32-bit)
+    size_t y_size = width * height;
+    size_t uv_size = (width / 2) * (height / 2);
+    size_t total_size = y_size + 2 * uv_size;
+
+    if (i420_buffer_.size() < total_size) {
+        i420_buffer_.resize(total_size);
+    }
+
+    uint8_t* y = i420_buffer_.data();
+    uint8_t* u = y + y_size;
+    uint8_t* v = u + uv_size;
+
+    libyuv::BGRAToI420(
+        argb, stride,
+        y, width,
+        u, width / 2,
+        v, width / 2,
+        width, height
+    );
+
+    return encode_i420(y, u, v, width, height, width, width / 2);
+}
