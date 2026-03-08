@@ -70,6 +70,9 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["rom"] = rom_path;
     j["disks"] = disk_paths;
     j["cdroms"] = cdrom_paths;
+    j["floppies"] = floppy_paths;
+    j["extfs"] = extfs;
+    j["bootdrive"] = bootdrive;
     j["bootdriver"] = bootdriver;
     j["codec"] = codec;
     j["mousemode"] = mousemode;
@@ -78,6 +81,14 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["client_dir"] = client_dir;
     j["storage_dir"] = storage_dir;
     j["log_level"] = log_level;
+    j["nocdrom"] = nocdrom;
+    j["nosound"] = nosound;
+    j["zappram"] = zappram;
+    j["frameskip"] = frameskip;
+    j["yearofs"] = yearofs;
+    j["dayofs"] = dayofs;
+    j["udptunnel"] = udptunnel;
+    j["udpport"] = udpport;
     j["debug_connection"] = debug_connection;
     j["debug_mode_switch"] = debug_mode_switch;
     j["debug_perf"] = debug_perf;
@@ -88,6 +99,12 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["m68k"]["jit"] = m68k.jit;
     j["m68k"]["idlewait"] = m68k.idlewait;
     j["m68k"]["ignoresegv"] = m68k.ignoresegv;
+    j["m68k"]["jitfpu"] = m68k.jitfpu;
+    j["m68k"]["jitdebug"] = m68k.jitdebug;
+    j["m68k"]["jitcachesize"] = m68k.jitcachesize;
+    j["m68k"]["jitlazyflush"] = m68k.jitlazyflush;
+    j["m68k"]["jitinline"] = m68k.jitinline;
+    j["m68k"]["jitblacklist"] = m68k.jitblacklist;
     j["m68k"]["swap_opt_cmd"] = m68k.swap_opt_cmd;
     j["m68k"]["keyboardtype"] = m68k.keyboardtype;
 
@@ -132,6 +149,9 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("rom")) rom_path = json_utils::get_string(j, "rom");
     if (j.contains("disks")) disk_paths = json_utils::get_string_array(j, "disks");
     if (j.contains("cdroms")) cdrom_paths = json_utils::get_string_array(j, "cdroms");
+    if (j.contains("floppies")) floppy_paths = json_utils::get_string_array(j, "floppies");
+    if (j.contains("extfs")) extfs = json_utils::get_string(j, "extfs");
+    if (j.contains("bootdrive")) bootdrive = json_utils::get_int(j, "bootdrive");
     if (j.contains("bootdriver")) bootdriver = json_utils::get_int(j, "bootdriver");
     if (j.contains("codec")) codec = json_utils::get_string(j, "codec");
     if (j.contains("mousemode")) mousemode = json_utils::get_string(j, "mousemode");
@@ -140,6 +160,14 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("client_dir")) client_dir = json_utils::get_string(j, "client_dir");
     if (j.contains("storage_dir")) storage_dir = json_utils::get_string(j, "storage_dir");
     if (j.contains("log_level")) log_level = json_utils::get_int(j, "log_level");
+    if (j.contains("nocdrom")) nocdrom = json_utils::get_bool(j, "nocdrom");
+    if (j.contains("nosound")) nosound = json_utils::get_bool(j, "nosound");
+    if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
+    if (j.contains("frameskip")) frameskip = json_utils::get_int(j, "frameskip");
+    if (j.contains("yearofs")) yearofs = json_utils::get_int(j, "yearofs");
+    if (j.contains("dayofs")) dayofs = json_utils::get_int(j, "dayofs");
+    if (j.contains("udptunnel")) udptunnel = json_utils::get_bool(j, "udptunnel");
+    if (j.contains("udpport")) udpport = json_utils::get_int(j, "udpport");
     if (j.contains("debug_connection")) debug_connection = json_utils::get_bool(j, "debug_connection");
     if (j.contains("debug_mode_switch")) debug_mode_switch = json_utils::get_bool(j, "debug_mode_switch");
     if (j.contains("debug_perf")) debug_perf = json_utils::get_bool(j, "debug_perf");
@@ -153,6 +181,12 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         if (m.contains("jit")) m68k.jit = json_utils::get_bool(m, "jit");
         if (m.contains("idlewait")) m68k.idlewait = json_utils::get_bool(m, "idlewait");
         if (m.contains("ignoresegv")) m68k.ignoresegv = json_utils::get_bool(m, "ignoresegv");
+        if (m.contains("jitfpu")) m68k.jitfpu = json_utils::get_bool(m, "jitfpu");
+        if (m.contains("jitdebug")) m68k.jitdebug = json_utils::get_bool(m, "jitdebug");
+        if (m.contains("jitcachesize")) m68k.jitcachesize = json_utils::get_int(m, "jitcachesize");
+        if (m.contains("jitlazyflush")) m68k.jitlazyflush = json_utils::get_bool(m, "jitlazyflush");
+        if (m.contains("jitinline")) m68k.jitinline = json_utils::get_bool(m, "jitinline");
+        if (m.contains("jitblacklist")) m68k.jitblacklist = json_utils::get_string(m, "jitblacklist");
         if (m.contains("swap_opt_cmd")) m68k.swap_opt_cmd = json_utils::get_bool(m, "swap_opt_cmd");
         if (m.contains("keyboardtype")) m68k.keyboardtype = json_utils::get_int(m, "keyboardtype");
     }
@@ -489,6 +523,7 @@ EmulatorConfig load_emulator_config(const char* config_path,
     };
     resolve_paths(config.disk_paths);
     resolve_paths(config.cdrom_paths);
+    resolve_paths(config.floppy_paths);
 
     // 8. Resolve client_dir relative to binary location if it's a relative path
     if (!config.client_dir.empty() && config.client_dir[0] != '/') {

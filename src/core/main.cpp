@@ -36,8 +36,8 @@
 #include "adb.h"
 #include "rom_patches.h"
 #include "user_strings.h"
-#include "prefs.h"
 #include "main.h"
+#include "emulator_config.h"
 
 #define DEBUG 0
 #include "debug.h"
@@ -71,6 +71,7 @@ bool InitAll(const char *vmdir)
 
 #if EMULATED_68K
 	// Set CPU and FPU type (UAE emulation)
+	auto& cfg = config::EmulatorConfig::instance();
 	switch (ROMVersion) {
 		case ROM_VERSION_64K:
 		case ROM_VERSION_PLUS:
@@ -80,18 +81,18 @@ bool InitAll(const char *vmdir)
 			TwentyFourBitAddressing = true;
 			break;
 		case ROM_VERSION_II:
-			CPUType = PrefsFindInt32("cpu");
+			CPUType = cfg.m68k.cpu_type;
 			if (CPUType < 2) CPUType = 2;
 			if (CPUType > 4) CPUType = 4;
-			FPUType = PrefsFindBool("fpu") ? 1 : 0;
+			FPUType = cfg.m68k.fpu ? 1 : 0;
 			if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
 			TwentyFourBitAddressing = true;
 			break;
 		case ROM_VERSION_32:
-			CPUType = PrefsFindInt32("cpu");
+			CPUType = cfg.m68k.cpu_type;
 			if (CPUType < 2) CPUType = 2;
 			if (CPUType > 4) CPUType = 4;
-			FPUType = PrefsFindBool("fpu") ? 1 : 0;
+			FPUType = cfg.m68k.fpu ? 1 : 0;
 			if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
 			TwentyFourBitAddressing = false;
 			break;
@@ -133,10 +134,10 @@ bool InitAll(const char *vmdir)
 	}
 
 	// Set boot volume
-	int16 i16 = PrefsFindInt32("bootdrive");
+	int16 i16 = cfg.bootdrive;
 	XPRAM[0x78] = i16 >> 8;
 	XPRAM[0x79] = i16 & 0xff;
-	i16 = PrefsFindInt32("bootdriver");
+	i16 = cfg.bootdriver;
 	XPRAM[0x7a] = i16 >> 8;
 	XPRAM[0x7b] = i16 & 0xff;
 

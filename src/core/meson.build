@@ -10,11 +10,8 @@ core_sources = [
   'emulator_init.cpp',  # Deferred initialization support
   'ether.cpp',
   'extfs.cpp',
-  'json_config.cpp',
   'macos_util.cpp',
   'main.cpp',
-  'prefs.cpp',
-  'prefs_items.cpp',
   'rom_patches.cpp',
   'rsrc_patches.cpp',
   'scsi.cpp',
@@ -37,13 +34,12 @@ core_inc = include_directories(
   '../cpu',
   '../cpu/uae_cpu',
   '../drivers/platform',  # For timer_interrupt.h
-  '../../external/json/include',  # nlohmann/json
 )
 
 core_lib = static_library('core',
   core_sources,
   include_directories: core_inc,
-  dependencies: [threads_dep],
+  dependencies: [threads_dep, nlohmann_json_dep],
   cpp_args: ['-DHAVE_SIGINFO_T', '-DHAVE_SIGACTION', '-DHAVE_SIGSEGV_SKIP_INSTRUCTION', '-DHAVE_UNISTD_H'],
 )
 

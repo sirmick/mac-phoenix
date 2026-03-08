@@ -24,7 +24,6 @@ cpu_lib = static_library('cpu',
   include_directories: [
     include_directories('.'),
     include_directories('../common/include'),
-    include_directories('../platform'),
     include_directories('../drivers/platform'),
   ]
 )

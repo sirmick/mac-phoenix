@@ -39,8 +39,8 @@ using std::vector;
 #include "main.h"
 #include "macos_util.h"
 #include "sys.h"
-#include "prefs.h"
 #include "disk.h"
+#include "emulator_config.h"
 
 #define DEBUG 1
 #include "debug.h"
@@ -151,27 +151,17 @@ static void find_hfs_partition(disk_drive_info &info)
 
 void DiskInit(void)
 {
-	// No drives specified in prefs? Then add defaults
-	if (PrefsFindString("disk", 0) == NULL)
-		SysAddDiskPrefs();
-
-	// Add drives specified in preferences
-	int index = 0;
-	const char *str;
-	while ((str = PrefsFindString("disk", index++)) != NULL) {
+	auto& cfg = config::EmulatorConfig::instance();
+	for (const auto& path : cfg.disk_paths) {
+		const char *str = path.c_str();
 		bool read_only = false;
 		if (str[0] == '*') {
 			read_only = true;
 			str++;
 		}
-		D(bug(" trying to open disk: %s\n", str));
 		void *fh = Sys_open(str, read_only);
-		if (fh) {
-			D(bug(" disk opened successfully, fh=%p\n", fh));
+		if (fh)
 			drives.push_back(disk_drive_info(fh, SysIsReadOnly(fh)));
-		} else {
-			D(bug(" ERROR: Sys_open returned NULL for %s\n", str));
-		}
 	}
 }
 

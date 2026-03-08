@@ -56,8 +56,8 @@
 #include "emul_op.h"
 #include "main.h"
 #include "disk.h"
-#include "prefs.h"
 #include "user_strings.h"
+#include "emulator_config.h"
 #include "extfs.h"
 #include "extfs_defs.h"
 #include "platform.h"
@@ -440,7 +440,7 @@ void ExtFSInit(void)
 
 	// Find path for root
 	*RootPath = 0;
-	const char *path = PrefsFindString("extfs");
+	const char *path = config::EmulatorConfig::instance().extfs.empty() ? NULL : config::EmulatorConfig::instance().extfs.c_str();
 	if (path != NULL) {
 		strncpy(RootPath, path, MAX_PATH_LENGTH - 1);
 		RootPath[MAX_PATH_LENGTH - 1] = 0;

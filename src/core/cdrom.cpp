@@ -42,8 +42,8 @@ using std::vector;
 #include "main.h"
 #include "macos_util.h"
 #include "sys.h"
-#include "prefs.h"
 #include "cdrom.h"
+#include "emulator_config.h"
 
 #define DEBUG 1
 #include "debug.h"
@@ -315,13 +315,9 @@ static bool position2msf(const cdrom_drive_info &info, uint16 postype, uint32 po
 
 void CDROMInit(void)
 {
-	SysAddCDROMPrefs();
-
-	// Add drives specified in preferences
-	int index = 0;
-	const char *str;
-	while ((str = PrefsFindString("cdrom", index++)) != NULL) {
-		void *fh = Sys_open(str, true, true);
+	auto& cfg = config::EmulatorConfig::instance();
+	for (const auto& path : cfg.cdrom_paths) {
+		void *fh = Sys_open(path.c_str(), true, true);
 		if (fh)
 			drives.push_back(cdrom_drive_info(fh));
 	}

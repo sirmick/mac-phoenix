@@ -22,7 +22,6 @@
 #include "readcpu.h"
 #include "memory.h"
 #include "main.h"
-#include "prefs.h"
 #include "video.h"
 #include "xpram.h"
 #include "timer.h"
@@ -186,8 +185,12 @@ int main(int argc, char **argv)
 	const char* home = getenv("HOME");
 	std::string default_config_path = std::string(home) + "/.config/mac-phoenix/config.json";
 
-	static config::EmulatorConfig emu_config = config::load_emulator_config(
-		default_config_path.c_str(), argc, argv);
+	config::EmulatorConfig& emu_config = config::EmulatorConfig::instance();
+	{
+		config::EmulatorConfig loaded = config::load_emulator_config(
+			default_config_path.c_str(), argc, argv);
+		emu_config = std::move(loaded);
+	}
 
 	// Print configuration for debugging
 	config::print_config(emu_config);
@@ -199,19 +202,11 @@ int main(int argc, char **argv)
 	// Set RAM size from config
 	RAMSize = emu_config.ram_mb * 1024 * 1024;
 
-	// Initialize prefs system with values from config (for legacy code)
-	int dummy_argc = 0;
-	char** dummy_argv = nullptr;
-	PrefsInit(NULL, dummy_argc, dummy_argv);
-	PrefsAddInt32("ramsize", RAMSize);
-	PrefsAddInt32("cpu", emu_config.cpu_type_int());
-	PrefsAddBool("fpu", emu_config.fpu());
-
 	// Install platform drivers (video/audio)
 	if (emu_config.enable_webserver) {
 		printf("Installing WebRTC video/audio drivers...\n");
 		g_platform.video_init = [](bool classic) -> bool {
-			return video_webrtc_init(classic, &emu_config);
+			return video_webrtc_init(classic, &config::EmulatorConfig::instance());
 		};
 		g_platform.video_exit = video_webrtc_exit;
 		g_platform.video_refresh = video_webrtc_refresh;
@@ -258,29 +253,34 @@ int main(int argc, char **argv)
 		// Initialize M68K
 		if (!g_cpu_ctx.init_m68k(emu_config)) {
 			fprintf(stderr, "Failed to initialize M68K CPU context\n");
-			return 1;
-		}
-
-		// Install SIGSEGV handler
-		if (!sigsegv_install_handler(sigsegv_handler)) {
-			fprintf(stderr, "WARNING: Could not install SIGSEGV handler\n");
-		} else {
-			printf("[Init] SIGSEGV handler installed (ignoresegv mode)\n");
-		}
-
-		// Mark emulator as initialized
-		g_emulator_initialized = true;
-
-		// Auto-start CPU only in headless mode
-		if (!emu_config.enable_webserver) {
-			printf("[CPU] Auto-starting CPU (headless mode)\n");
-			{
-				std::lock_guard<std::mutex> lock(cpu_state::g_mutex);
-				cpu_state::g_running.store(true);
+			if (!emu_config.enable_webserver) {
+				return 1;
 			}
-			cpu_state::g_cv.notify_one();
+			// With webserver, fall through — user can fix config in the UI
+			fprintf(stderr, "Starting webserver anyway — fix ROM path in the web UI.\n");
+			emu_config.rom_path.clear();
 		} else {
-			printf("[CPU] WebRTC mode - CPU will start when user clicks 'Start' in web UI\n");
+			// Install SIGSEGV handler
+			if (!sigsegv_install_handler(sigsegv_handler)) {
+				fprintf(stderr, "WARNING: Could not install SIGSEGV handler\n");
+			} else {
+				printf("[Init] SIGSEGV handler installed (ignoresegv mode)\n");
+			}
+
+			// Mark emulator as initialized
+			g_emulator_initialized = true;
+
+			// Auto-start CPU only in headless mode
+			if (!emu_config.enable_webserver) {
+				printf("[CPU] Auto-starting CPU (headless mode)\n");
+				{
+					std::lock_guard<std::mutex> lock(cpu_state::g_mutex);
+					cpu_state::g_running.store(true);
+				}
+				cpu_state::g_cv.notify_one();
+			} else {
+				printf("[CPU] WebRTC mode - CPU will start when user clicks 'Start' in web UI\n");
+			}
 		}
 
 		// Auto-exit timer
@@ -317,10 +317,6 @@ int main(int argc, char **argv)
 		api_context.cpu_running = &cpu_state::g_running;
 		api_context.cpu_mutex = &cpu_state::g_mutex;
 		api_context.cpu_cv = &cpu_state::g_cv;
-		api_context.notify_codec_change_fn = [](CodecType codec) {
-			fprintf(stderr, "[API] Codec changed to: %d\n", static_cast<int>(codec));
-		};
-
 		// Initialize WebRTC signaling server
 		printf("\n=== WebRTC Mode ===\n");
 		printf("Launching HTTP server on port %d...\n", emu_config.http_port);
@@ -333,6 +329,12 @@ int main(int argc, char **argv)
 
 		// Set global pointer so encoder threads can send frames
 		webrtc::g_server = &webrtc_server;
+
+		// Wire up codec change notification to WebRTC server
+		api_context.notify_codec_change_fn = [&webrtc_server](CodecType codec) {
+			fprintf(stderr, "[API] Codec changed to: %d, notifying WebRTC peers\n", static_cast<int>(codec));
+			webrtc_server.notify_codec_change(codec);
+		};
 
 		// Launch HTTP server thread
 		std::thread http_server_thread(webserver::http_server_main,

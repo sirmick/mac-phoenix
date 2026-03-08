@@ -5,7 +5,6 @@
 #include "cpu_context.h"
 #include "emulator_init.h"
 #include "main.h"
-#include "prefs.h"
 #include "rom_patches.h"
 #include "cpu_emulation.h"
 #include "newcpu.h"
@@ -265,30 +264,15 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     fprintf(stderr, "[CPUContext] FPU: %s\n", fpu_type_ ? "Yes" : "No");
     fprintf(stderr, "[CPUContext] 24-bit addressing: %s\n", twenty_four_bit_ ? "Yes" : "No");
 
-    // 6. Apply config to prefs (MUST be done before init_mac_subsystems which calls DiskInit)
-    // Sync critical hardware settings from EmulatorConfig to legacy prefs system
-    PrefsReplaceInt32("ramsize", ram_size_);
-    PrefsReplaceInt32("modelid", 14);  // Quadra 650
-    PrefsReplaceInt32("cpu", cpu_type_);
-    PrefsReplaceBool("fpu", fpu_type_ != 0);
-    PrefsReplaceInt32("bootdrive", 0);
-    PrefsReplaceInt32("bootdriver", config.bootdriver);
+    // 6. Log storage config
     if (config.bootdriver != 0) {
         fprintf(stderr, "[CPUContext] Boot driver override: %d\n", config.bootdriver);
     }
-    PrefsReplaceBool("nogui", true);
-    PrefsReplaceBool("ignoresegv", true);
-
-    // Add disk images from config to prefs
     for (const auto& disk_path : config.disk_paths) {
-        PrefsAddString("disk", disk_path.c_str());
-        fprintf(stderr, "[CPUContext] Added disk to prefs: %s\n", disk_path.c_str());
+        fprintf(stderr, "[CPUContext] Disk: %s\n", disk_path.c_str());
     }
-
-    // Add CDROM images from config to prefs
     for (const auto& cdrom_path : config.cdrom_paths) {
-        PrefsAddString("cdrom", cdrom_path.c_str());
-        fprintf(stderr, "[CPUContext] Added CDROM to prefs: %s\n", cdrom_path.c_str());
+        fprintf(stderr, "[CPUContext] CDROM: %s\n", cdrom_path.c_str());
     }
 
     // 7. Initialize Mac subsystems (XPRAM, drivers, etc.)

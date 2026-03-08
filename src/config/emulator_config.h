@@ -34,6 +34,12 @@ struct M68KConfig {
     bool fpu = true;
     int modelid = 14;
     bool jit = true;
+    bool jitfpu = true;
+    bool jitdebug = false;
+    int jitcachesize = 8192;
+    bool jitlazyflush = true;
+    bool jitinline = true;
+    std::string jitblacklist;
     bool idlewait = true;
     bool ignoresegv = true;
     bool swap_opt_cmd = true;
@@ -62,6 +68,12 @@ struct PPCConfig {
  * 4. Defaults (below)
  */
 struct EmulatorConfig {
+    // Singleton access
+    static EmulatorConfig& instance() {
+        static EmulatorConfig s_instance;
+        return s_instance;
+    }
+
     // Architecture & CPU
     Architecture architecture = Architecture::M68K;
     CPUBackend cpu_backend = CPUBackend::UAE;
@@ -73,6 +85,8 @@ struct EmulatorConfig {
     std::string rom_path;
     std::vector<std::string> disk_paths;
     std::vector<std::string> cdrom_paths;
+    std::vector<std::string> floppy_paths;
+    std::string extfs;
 
     // Video
     uint32_t screen_width = 640;
@@ -83,6 +97,7 @@ struct EmulatorConfig {
     bool audio_enabled = true;
 
     // Boot
+    int bootdrive = 0;
     int bootdriver = 0;  // 0=any, -62=CDROM
 
     // Streaming
@@ -95,6 +110,16 @@ struct EmulatorConfig {
     int signaling_port = 8090;
     std::string client_dir = "./client";
     std::string storage_dir = "~/storage";
+
+    // System
+    bool nocdrom = false;
+    bool nosound = false;
+    bool zappram = true;
+    int frameskip = 6;
+    int yearofs = 0;
+    int dayofs = 0;
+    bool udptunnel = false;
+    int udpport = 6066;
 
     // Timeout (0 = no timeout)
     int timeout_seconds = 0;

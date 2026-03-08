@@ -22,7 +22,6 @@
 #include <string>
 
 #include "clip.h"
-#include "prefs.h"
 #include "prefs_editor.h"
 #include "user_strings.h"
 #include "xpram.h"
@@ -65,52 +64,6 @@ void PutScrap(uint32 type, void *scrap, int32 length)
 			D(bug(" clipping TEXT\n"));
 			break;
 	}
-}
-
-
-// ============================================================
-// PREFERENCES (prefs_dummy.cpp)
-// ============================================================
-
-// Platform-specific preferences items
-prefs_desc platform_prefs_items[] = {
-	{NULL, TYPE_END, false}	// End of list
-};
-
-// Prefs file name and path
-#if defined(__APPLE__) && defined(__MACH__)
-const char PREFS_FILE_NAME[] = "/tmp/BasiliskII/BasiliskII_Prefs";
-#else
-const char PREFS_FILE_NAME[] = "BasiliskII_Prefs";
-#endif
-
-std::string UserPrefsPath;
-
-void LoadPrefs(const char * vmdir)
-{
-	// Read preferences from settings file
-	FILE *f = fopen(PREFS_FILE_NAME, "r");
-	if (f != NULL) {
-		// Prefs file found, load settings
-		LoadPrefsFromStream(f);
-		fclose(f);
-	} else {
-		// No prefs file, save defaults
-		SavePrefs();
-	}
-}
-
-void SavePrefs(void)
-{
-	FILE *f;
-	if ((f = fopen(PREFS_FILE_NAME, "w")) != NULL) {
-		SavePrefsToStream(f);
-		fclose(f);
-	}
-}
-
-void AddPlatformPrefsDefaults(void)
-{
 }
 
 

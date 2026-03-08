@@ -176,9 +176,15 @@ Response APIRouter::handle_emulator_start(const Request& req) {
         );
     }
 
+    // Resolve relative ROM path against storage_dir/roms/
+    std::string storage_dir = ctx_->config->storage_dir;
+    if (!rom_filename.empty() && rom_filename[0] != '/' && !storage_dir.empty()) {
+        rom_filename = storage_dir + "/roms/" + rom_filename;
+        ctx_->config->rom_path = rom_filename;
+    }
+
     // Initialize emulator with ROM
     std::string emulator_type = ctx_->config->architecture_string();
-    std::string storage_dir = ctx_->config->storage_dir;
 
     fprintf(stderr, "[API] Initializing emulator: %s with ROM: %s\n",
             emulator_type.c_str(), rom_filename.c_str());
@@ -382,7 +388,9 @@ Response APIRouter::handle_config_get(const Request& req) {
         return Response::json("{\"error\": \"No config available\"}");
     }
 
-    return Response::json(ctx_->config->to_json().dump(2));
+    std::string json_str = ctx_->config->to_json().dump(2);
+    fprintf(stderr, "[API] GET /api/config → %zu bytes\n", json_str.size());
+    return Response::json(json_str);
 }
 
 Response APIRouter::handle_config_save(const Request& req) {
@@ -394,11 +402,14 @@ Response APIRouter::handle_config_save(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"No config available\"}");
     }
 
+    fprintf(stderr, "[API] POST /api/config ← %zu bytes: %s\n",
+            req.body.size(), req.body.c_str());
+
     nlohmann::json j;
     try {
         j = json_utils::parse(req.body);
     } catch (const std::exception& e) {
-        fprintf(stderr, "ERROR: Failed to parse config JSON: %s\n", e.what());
+        fprintf(stderr, "[API] Config parse error: %s\n", e.what());
         return Response::json("{\"success\": false, \"error\": \"Invalid JSON\"}");
     }
 
@@ -410,8 +421,8 @@ Response APIRouter::handle_config_save(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"Failed to save config file\"}");
     }
 
-    fprintf(stderr, "[API] Config saved (codec=%s, mousemode=%s)\n",
-            ctx_->config->codec.c_str(), ctx_->config->mousemode.c_str());
+    std::string saved_json = ctx_->config->to_json().dump(2);
+    fprintf(stderr, "[API] Config saved → %s:\n%s\n", ctx_->config->config_path.c_str(), saved_json.c_str());
 
     return Response::json("{\"success\": true}");
 }

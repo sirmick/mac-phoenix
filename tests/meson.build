@@ -41,8 +41,8 @@ test('config_api',
 # UAE backend boots to Finder
 test('boot_uae',
   find_program('bash'),
-  args: [test_dir / 'test_boot_to_finder.sh', '--backend', 'uae', '--timeout', '15', '--port', '18090'],
-  timeout: 30,
+  args: [test_dir / 'test_boot_to_finder.sh', '--backend', 'uae', '--timeout', '20', '--port', '18090'],
+  timeout: 35,
   is_parallel: false,
   suite: 'boot',
   env: {

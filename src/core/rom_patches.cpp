@@ -31,7 +31,7 @@
 #include "cdrom.h"
 #include "video.h"
 #include "extfs.h"
-#include "prefs.h"
+#include "emulator_config.h"
 
 #if ENABLE_MON
 #include "mon.h"
@@ -807,7 +807,7 @@ void InstallDrivers(uint32 pb)
 	Execute68kTrap(0xa000, &r);		// Open()
 
 	// Install CD-ROM driver unless nocdrom option given
-	if (!PrefsFindBool("nocdrom")) {
+	if (!config::EmulatorConfig::instance().nocdrom) {
 
 		// Install CD-ROM driver
 		r.a[0] = ROMBaseMac + sony_offset + 0x200;
@@ -1115,7 +1115,7 @@ static bool patch_rom_32(void)
 
 	// Set model ID from preferences
 	bp = ROMBaseHost + UniversalInfo + 18;		// productKind
-	*bp = PrefsFindInt32("modelid");
+	*bp = config::EmulatorConfig::instance().m68k.modelid;
 
 #if !ROM_IS_WRITE_PROTECTED
 #if defined(USE_SCRATCHMEM_SUBTERFUGE)

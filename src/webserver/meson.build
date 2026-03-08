@@ -15,12 +15,12 @@ webserver_inc = include_directories(
   '../config',
   '../drivers/video',
   '../drivers/video/encoders',
-  '../../external/json/include',
 )
 
 webserver_lib = static_library('webserver',
   webserver_sources,
   include_directories: webserver_inc,
+  dependencies: [nlohmann_json_dep],
 )
 
 webserver_dep = declare_dependency(

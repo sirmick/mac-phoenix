@@ -53,8 +53,8 @@
 
 #include "main.h"
 #include "macos_util.h"
-#include "prefs.h"
 #include "user_strings.h"
+#include "emulator_config.h"
 // #include "sys.h"  // Commented out - conflicts with our static implementations
 
 // Media type constants from sys.h
@@ -207,8 +207,14 @@ static void sys_remove_mac_file_handle(mac_file_handle *fh)
 void SysMediaArrived(const char *path, int type)
 {
 	// Replace the "cdrom" entry (we are polling, it's unique)
-	if (type == MEDIA_CD && !PrefsFindBool("nocdrom"))
-		PrefsReplaceString("cdrom", path);
+	if (type == MEDIA_CD && !config::EmulatorConfig::instance().nocdrom) {
+		// Hot-plug CD: add to config paths
+		auto& paths = config::EmulatorConfig::instance().cdrom_paths;
+		if (paths.empty())
+			paths.push_back(path);
+		else
+			paths[0] = path;
+	}
 
 	// Wait for media to be available for reading
 	if (open_mac_file_handles) {
@@ -289,39 +295,7 @@ void SysMountFirstFloppy(void)
 
 static void SysAddFloppyPrefs(void)
 {
-#if defined(__linux__)
-	DIR *fd_dir = opendir("/dev/floppy");
-	if (fd_dir) {
-		struct dirent *floppy_dev;
-		while ((floppy_dev = readdir(fd_dir)) != NULL) {
-			if (strstr(floppy_dev->d_name, "u1440") != NULL) {
-				char fd_dev[20];
-				sprintf(fd_dev, "/dev/floppy/%s", floppy_dev->d_name);
-				PrefsAddString("floppy", fd_dev);
-			}
-		}
-		closedir(fd_dir);
-	} else {
-		PrefsAddString("floppy", "/dev/fd0");
-		PrefsAddString("floppy", "/dev/fd1");
-	}
-#elif defined(__NetBSD__)
-	PrefsAddString("floppy", "/dev/fd0a");
-	PrefsAddString("floppy", "/dev/fd1a");
-#elif defined(__APPLE__) && defined(__MACH__)
-  #if defined(AQUA) || defined(HAVE_FRAMEWORK_COREFOUNDATION)
-	extern	void DarwinAddFloppyPrefs(void);
-
-	DarwinAddFloppyPrefs();
-  #else
-	// Until I can convince the other guys that my Darwin code is useful,
-	// we just add something safe (a non-existant device):
-	PrefsAddString("floppy", "/dev/null");
-  #endif
-#else
-	PrefsAddString("floppy", "/dev/fd0");
-	PrefsAddString("floppy", "/dev/fd1");
-#endif
+	// No-op: floppy paths come from EmulatorConfig
 }
 
 
@@ -335,28 +309,7 @@ static void SysAddFloppyPrefs(void)
 
 static void SysAddDiskPrefs(void)
 {
-#ifdef __linux__
-	FILE *f = fopen("/etc/fstab", "r");
-	if (f) {
-		char line[256];
-		while(fgets(line, 255, f)) {
-			// Read line
-			int len = strlen(line);
-			if (len == 0 || line[0] == '#')
-				continue;
-			line[len-1] = 0;
-
-			// Parse line
-			char *dev = NULL, *mnt_point = NULL, *fstype = NULL;
-			if (sscanf(line, "%as %as %as", &dev, &mnt_point, &fstype) == 3) {
-				if (strcmp(fstype, "hfs") == 0)
-					PrefsAddString("disk", dev);
-			}
-			free(dev); free(mnt_point); free(fstype);
-		}
-		fclose(f);
-	}
-#endif
+	// No-op: disk paths come from EmulatorConfig
 }
 
 
@@ -367,39 +320,7 @@ static void SysAddDiskPrefs(void)
 
 static void SysAddCDROMPrefs(void)
 {
-	// Don't scan for drives if nocdrom option given
-	if (PrefsFindBool("nocdrom"))
-		return;
-
-#if defined(__linux__)
-	if (access("/dev/.devfsd", F_OK) < 0)
-		PrefsAddString("cdrom", "/dev/cdrom");
-	else {
-		DIR *cd_dir = opendir("/dev/cdroms");
-		if (cd_dir) {
-			struct dirent *cdrom_dev;
-			while ((cdrom_dev = readdir(cd_dir)) != NULL) {
-				if (strcmp(cdrom_dev->d_name, ".") != 0 && strcmp(cdrom_dev->d_name, "..") != 0) {
-					char cd_dev[20];
-					sprintf(cd_dev, "/dev/cdroms/%s", cdrom_dev->d_name);
-					PrefsAddString("cdrom", cd_dev);
-				}
-			}
-			closedir(cd_dir);
-		}
-	}
-#elif defined __FreeBSD__
-	if (access("/cdrom", F_OK) == 0)
-		PrefsAddString("cdrom", "/cdrom");
-#elif defined __MACOSX__
-	// There is no predefined path for CD-ROMs on MacOS X. Rather, we
-	// define a single fake CD-ROM entry for the emulated MacOS.
-	// XXX this means we handle only CD-ROM drive at a time, wherever
-	// the disk is, the latest one is used.
-	PrefsAddString("cdrom", "/dev/poll/cdrom");
-#elif defined(__FreeBSD__) || defined(__NetBSD__)
-	PrefsAddString("cdrom", "/dev/cd0c");
-#endif
+	// No-op: CDROM paths come from EmulatorConfig
 }
 
 
@@ -409,32 +330,7 @@ static void SysAddCDROMPrefs(void)
 
 static void SysAddSerialPrefs(void)
 {
-#if defined(__linux__)
-	if (access("/dev/.devfsd", F_OK) < 0) {
-		PrefsAddString("seriala", "/dev/ttyS0");
-		PrefsAddString("serialb", "/dev/ttyS1");
-	} else {
-		PrefsAddString("seriala", "/dev/tts/0");
-		PrefsAddString("serialb", "/dev/tts/1");
-	}
-#elif defined(__FreeBSD__)
-	PrefsAddString("seriala", "/dev/cuau0");
-	PrefsAddString("serialb", "/dev/cuau1");
-#elif defined(__NetBSD__)
-	PrefsAddString("seriala", "/dev/tty00");
-	PrefsAddString("serialb", "/dev/tty01");
-#elif defined(__APPLE__) && defined(__MACH__)
-  #if defined(AQUA) || defined(HAVE_FRAMEWORK_COREFOUNDATION)
-	extern	void DarwinAddSerialPrefs(void);
-
-	DarwinAddSerialPrefs();
-  #else
-	// Until I can convince the other guys that my Darwin code is useful,
-	// we just add something safe (non-existant devices):
-	PrefsAddString("seriala", "/dev/null");
-	PrefsAddString("serialb", "/dev/null");
-  #endif
-#endif
+	// No-op: serial config comes from EmulatorConfig
 }
 
 
@@ -578,10 +474,9 @@ static void *Sys_open(const char *name, bool read_only, bool is_cdrom)
 	// There is no set filename in /dev which is the cdrom,
 	// so we have to see if it is any of the devices that we found earlier
 	{
-		int index = 0;
-		const char *str;
-		while ((str = PrefsFindString("cdrom", index++)) != NULL) {
-			if (is_polled_media || strcmp(str, name) == 0) {
+		auto& cfg = config::EmulatorConfig::instance();
+		for (const auto& cdpath : cfg.cdrom_paths) {
+			if (is_polled_media || cdpath == name) {
 				is_cdrom = true;
 				read_only = true;
 				break;

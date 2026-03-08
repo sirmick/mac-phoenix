@@ -125,14 +125,6 @@ print('OK' if d.get('bootdriver')==0 else f'got {d.get(\"bootdriver\")}')
 " 2>/dev/null)
 check "Config file on disk has bootdriver=0" "$R"
 
-# Test 7: CDROM in log output
-R=$(grep -c "Added CDROM to prefs" /tmp/test_config_$$.log 2>/dev/null)
-if [[ "$R" -ge 1 ]]; then
-    check "CDROM added to prefs at startup" "OK"
-else
-    check "CDROM added to prefs at startup" "not found in log"
-fi
-
 echo ""
 echo "Results: $PASSED passed, $FAILED failed"
 [[ $FAILED -eq 0 ]]

@@ -42,8 +42,8 @@ using std::vector;
 #include "macos_util.h"
 #include "rom_patches.h"
 #include "sys.h"
-#include "prefs.h"
 #include "sony.h"
+#include "emulator_config.h"
 
 #define DEBUG 0
 #include "debug.h"
@@ -151,15 +151,9 @@ static drive_vec::iterator get_drive_info(int num)
 
 void SonyInit(void)
 {
-	// No drives specified in prefs? Then add defaults
-	if (PrefsFindString("floppy", 0) == NULL) {
-		SysAddFloppyPrefs();
-	}
-
-	// Add drives specified in preferences
-	int index = 0;
-	const char *str;
-	while ((str = PrefsFindString("floppy", index++)) != NULL) {
+	auto& cfg = config::EmulatorConfig::instance();
+	for (const auto& path : cfg.floppy_paths) {
+		const char *str = path.c_str();
 		bool read_only = false;
 		if (str[0] == '*') {
 			read_only = true;

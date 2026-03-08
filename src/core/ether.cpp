@@ -43,8 +43,8 @@
 #include "main.h"
 #include "macos_util.h"
 #include "emul_op.h"
-#include "prefs.h"
 #include "ether.h"
+#include "emulator_config.h"
 #include "ether_defs.h"
 #include "platform.h"
 
@@ -95,9 +95,10 @@ void EtherInit(void)
 
 #if SUPPORTS_UDP_TUNNEL
 	// UDP tunnelling requested?
-	if (PrefsFindBool("udptunnel")) {
+	auto& cfg = config::EmulatorConfig::instance();
+	if (cfg.udptunnel) {
 		udp_tunnel = true;
-		udp_port = PrefsFindInt32("udpport");
+		udp_port = cfg.udpport;
 
 		// Open UDP socket
 		udp_socket = socket(PF_INET, SOCK_DGRAM, 0);

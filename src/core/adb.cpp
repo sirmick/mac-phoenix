@@ -31,8 +31,8 @@
 #include "uae_wrapper.h"  // For TriggerInterrupt()
 #include "emul_op.h"
 #include "main.h"
-#include "prefs.h"
 #include "video.h"
+#include "emulator_config.h"
 #include "adb.h"
 
 #ifdef POWERPC_ROM
@@ -81,7 +81,7 @@ static B2_mutex *mouse_lock;
 void ADBInit(void)
 {
 	mouse_lock = B2_create_mutex();
-	m_keyboard_type = (uint8)PrefsFindInt32("keyboardtype");
+	m_keyboard_type = (uint8)config::EmulatorConfig::instance().m68k.keyboardtype;
 	key_reg_3[1] = m_keyboard_type;
 }
 

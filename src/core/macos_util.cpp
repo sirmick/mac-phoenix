@@ -26,7 +26,7 @@
 #include "disk.h"
 #include "cdrom.h"
 #include "macos_util.h"
-#include "prefs.h"
+#include "emulator_config.h"
 #include <algorithm>
 
 #define DEBUG 0
@@ -144,7 +144,7 @@ uint32 TimeToMacTime(time_t t)
 	const int TM_EPOCH_YEAR = 1900;
 	const int MAC_EPOCH_YEAR = 1904;
 	// Clip year and day offsets to prevent dates earlier than 1-Jan-1904
-	local->tm_year = std::max(MAC_EPOCH_YEAR - TM_EPOCH_YEAR, local->tm_year + PrefsFindInt32("yearofs"));
+	local->tm_year = std::max(MAC_EPOCH_YEAR - TM_EPOCH_YEAR, local->tm_year + config::EmulatorConfig::instance().yearofs);
 	int a4 = ((local->tm_year + TM_EPOCH_YEAR) >> 2) - !(local->tm_year & 3);
 	int b4 = (MAC_EPOCH_YEAR >> 2) - !(MAC_EPOCH_YEAR & 3);
 	int a100 = a4 / 25 - (a4 % 25 < 0);
@@ -153,7 +153,7 @@ uint32 TimeToMacTime(time_t t)
 	int b400 = b100 >> 2;
 	int intervening_leap_days = (a4 - b4) - (a100 - b100) + (a400 - b400);
 	uint32 days = local->tm_yday + 365 * (local->tm_year - 4) + intervening_leap_days;
-	int32 dayofs = -PrefsFindInt32("dayofs");
+	int32 dayofs = -config::EmulatorConfig::instance().dayofs;
 	if(dayofs > 0 && dayofs > days)
 		dayofs = days;
 	return local->tm_sec + 60 * (local->tm_min + 60 * (local->tm_hour + 24 * (days - dayofs)));
@@ -204,8 +204,8 @@ time_t MacTimeToTime(uint32 t)
 	out += (time_t) t;
 
 	// Apply offset prefs
-	int32 yearofs = PrefsFindInt32("yearofs");
-	int32 dayofs = PrefsFindInt32("dayofs");
+	int32 yearofs = config::EmulatorConfig::instance().yearofs;
+	int32 dayofs = config::EmulatorConfig::instance().dayofs;
 	if (dayofs != 0 || yearofs != 0) {
 #ifdef WIN32
 		struct tm *out_tm = localtime(&out);

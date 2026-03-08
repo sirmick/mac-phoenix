@@ -22,8 +22,8 @@
 #include "newcpu.h"
 #include "memory.h"
 #include "main.h"
-#include "prefs.h"
 #include "video.h"
+#include "emulator_config.h"
 #include "xpram.h"
 #include "timer.h"
 #include "sony.h"
@@ -142,22 +142,26 @@ bool init_cpu_subsystem(const char* cpu_backend)
             FPUType = 0;
             TwentyFourBitAddressing = true;
             break;
-        case ROM_VERSION_II:
-            CPUType = PrefsFindInt32("cpu");
+        case ROM_VERSION_II: {
+            auto& ecfg = config::EmulatorConfig::instance();
+            CPUType = ecfg.m68k.cpu_type;
             if (CPUType < 2) CPUType = 2;
             if (CPUType > 4) CPUType = 4;
-            FPUType = PrefsFindBool("fpu") ? 1 : 0;
+            FPUType = ecfg.m68k.fpu ? 1 : 0;
             if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
             TwentyFourBitAddressing = true;
             break;
-        case ROM_VERSION_32:
-            CPUType = PrefsFindInt32("cpu");
+        }
+        case ROM_VERSION_32: {
+            auto& ecfg = config::EmulatorConfig::instance();
+            CPUType = ecfg.m68k.cpu_type;
             if (CPUType < 2) CPUType = 2;
             if (CPUType > 4) CPUType = 4;
-            FPUType = PrefsFindBool("fpu") ? 1 : 0;
+            FPUType = ecfg.m68k.fpu ? 1 : 0;
             if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
             TwentyFourBitAddressing = false;
             break;
+        }
     }
     CPUIs68060 = false;
 
@@ -220,7 +224,8 @@ bool init_mac_subsystems(void)
     fprintf(stderr, "[Init] Initializing Mac subsystems...\n");
 
     // Load XPRAM (zap PRAM: skip file load, use fresh defaults)
-    if (PrefsFindBool("zappram")) {
+    auto& cfg = config::EmulatorConfig::instance();
+    if (cfg.zappram) {
         fprintf(stderr, "[Init] Zap PRAM: using fresh XPRAM (suppresses improper shutdown dialog)\n");
         memset(XPRAM, 0, XPRAM_SIZE);
     } else {
@@ -259,10 +264,10 @@ bool init_mac_subsystems(void)
     }
 
     // Set boot volume
-    int16 i16 = PrefsFindInt32("bootdrive");
+    int16 i16 = cfg.bootdrive;
     XPRAM[0x78] = i16 >> 8;
     XPRAM[0x79] = i16 & 0xff;
-    i16 = PrefsFindInt32("bootdriver");
+    i16 = cfg.bootdriver;
     XPRAM[0x7a] = i16 >> 8;
     XPRAM[0x7b] = i16 & 0xff;
 

@@ -24,8 +24,8 @@
 #include "cpu_emulation.h"
 #include "macos_util.h"
 #include "main.h"
-#include "prefs.h"
 #include "emul_op.h"
+#include "emulator_config.h"
 #include "audio.h"
 #include "audio_defs.h"
 #include "rsrc_patches.h"
@@ -63,7 +63,7 @@ static uint32 find_rsrc_data(const uint8 *rsrc, uint32 max, const uint8 *search,
 
 static void patch_idle_time(uint8 *p, uint32 size, int n = 1)
 {
-	if (!PrefsFindBool("idlewait"))
+	if (!config::EmulatorConfig::instance().m68k.idlewait)
 		return;
 
 	static const uint8 dat[] = {0x70, 0x03, 0xa0, 0x9f};
