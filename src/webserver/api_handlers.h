@@ -17,6 +17,8 @@
 #include <atomic>
 
 class VideoOutput;  // Forward declaration
+class CpuProcess;   // Forward declaration
+struct SharedState;  // Forward declaration
 
 namespace http {
 
@@ -28,16 +30,20 @@ struct APIContext {
     config::EmulatorConfig* config = nullptr;
 
     // Codec state
-    CodecType* server_codec;  // Pointer to g_server_codec
-    std::function<void(CodecType)> notify_codec_change_fn;  // Notify clients of codec change
+    CodecType* server_codec = nullptr;
+    std::function<void(CodecType)> notify_codec_change_fn;
 
     // Video output (for screenshot API)
     VideoOutput* video_output = nullptr;
 
-    // CPU state (in-process integration)
-    std::atomic<bool>* cpu_running;  // Pointer to cpu_state::g_running
-    std::mutex* cpu_mutex;  // Pointer to cpu_state::g_mutex
-    std::condition_variable* cpu_cv;  // Pointer to cpu_state::g_cv
+    // Fork-based CPU process (webserver mode)
+    CpuProcess* cpu_process = nullptr;
+    SharedState* shared_state = nullptr;
+
+    // Legacy in-process CPU state (kept for headless compatibility)
+    std::atomic<bool>* cpu_running = nullptr;
+    std::mutex* cpu_mutex = nullptr;
+    std::condition_variable* cpu_cv = nullptr;
 };
 
 /**

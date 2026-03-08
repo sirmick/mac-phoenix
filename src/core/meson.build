@@ -4,6 +4,7 @@ core_sources = [
   'audio.cpp',
   'cdrom.cpp',
   'cpu_context.cpp',  # Phase 2: Self-contained CPU context
+  'cpu_process.cpp',  # Fork-based CPU process management
   'disk.cpp',
   'boot_progress.cpp',
   'emul_op.cpp',

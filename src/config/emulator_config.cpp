@@ -147,9 +147,27 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     }
     if (j.contains("audio")) audio_enabled = json_utils::get_bool(j, "audio");
     if (j.contains("rom")) rom_path = json_utils::get_string(j, "rom");
-    if (j.contains("disks")) disk_paths = json_utils::get_string_array(j, "disks");
-    if (j.contains("cdroms")) cdrom_paths = json_utils::get_string_array(j, "cdroms");
-    if (j.contains("floppies")) floppy_paths = json_utils::get_string_array(j, "floppies");
+    if (j.contains("disks")) {
+        disk_paths = json_utils::get_string_array(j, "disks");
+        for (auto& p : disk_paths) {
+            if (!p.empty() && p[0] != '/' && !storage_dir.empty())
+                p = storage_dir + "/images/" + p;
+        }
+    }
+    if (j.contains("cdroms")) {
+        cdrom_paths = json_utils::get_string_array(j, "cdroms");
+        for (auto& p : cdrom_paths) {
+            if (!p.empty() && p[0] != '/' && !storage_dir.empty())
+                p = storage_dir + "/images/" + p;
+        }
+    }
+    if (j.contains("floppies")) {
+        floppy_paths = json_utils::get_string_array(j, "floppies");
+        for (auto& p : floppy_paths) {
+            if (!p.empty() && p[0] != '/' && !storage_dir.empty())
+                p = storage_dir + "/images/" + p;
+        }
+    }
     if (j.contains("extfs")) extfs = json_utils::get_string(j, "extfs");
     if (j.contains("bootdrive")) bootdrive = json_utils::get_int(j, "bootdrive");
     if (j.contains("bootdriver")) bootdriver = json_utils::get_int(j, "bootdriver");

@@ -23,6 +23,10 @@ extern void ADBSetRelMouseMode(bool relative);
 extern void ADBKeyDown(int code);
 extern void ADBKeyUp(int code);
 
+// Shared state for fork mode (set in main.cpp)
+#include "../core/shared_state.h"
+extern SharedState* g_shared_state;
+
 // External globals from main.cpp
 namespace video {
     extern std::atomic<bool> g_request_keyframe;
@@ -101,6 +105,54 @@ static void process_input_message(const std::byte* data, size_t size) {
 
     uint8_t type = static_cast<uint8_t>(data[0]);
 
+    // Fork mode: write to shared memory input queue
+    if (g_shared_state) {
+        switch (type) {
+            case 1: { // Mouse move (relative)
+                if (size < 5) return;
+                int16_t dx, dy;
+                std::memcpy(&dx, data + 1, 2);
+                std::memcpy(&dy, data + 3, 2);
+                shared_input_push(g_shared_state, SHM_INPUT_MOUSE_REL, 0, dx, dy, 0);
+                break;
+            }
+            case 2: { // Mouse button
+                if (size < 3) return;
+                uint8_t button = static_cast<uint8_t>(data[1]);
+                uint8_t down = static_cast<uint8_t>(data[2]);
+                shared_input_push(g_shared_state, SHM_INPUT_MOUSE_BUTTON, down, 0, 0, button);
+                break;
+            }
+            case 3: { // Key
+                if (size < 4) return;
+                uint16_t browser_keycode;
+                std::memcpy(&browser_keycode, data + 1, 2);
+                uint8_t down = static_cast<uint8_t>(data[3]);
+                int mac_keycode = keyboard_map::browser_to_mac_keycode(browser_keycode);
+                if (mac_keycode >= 0) {
+                    shared_input_push(g_shared_state, SHM_INPUT_KEY, down, 0, 0, (uint8_t)mac_keycode);
+                }
+                break;
+            }
+            case 5: { // Mouse move (absolute)
+                if (size < 5) return;
+                uint16_t x, y;
+                std::memcpy(&x, data + 1, 2);
+                std::memcpy(&y, data + 3, 2);
+                shared_input_push(g_shared_state, SHM_INPUT_MOUSE_ABS, 0, (int16_t)x, (int16_t)y, 0);
+                break;
+            }
+            case 6: { // Mouse mode change
+                if (size < 2) return;
+                uint8_t mode = static_cast<uint8_t>(data[1]);
+                shared_input_push(g_shared_state, SHM_INPUT_MOUSE_MODE, mode, 0, 0, 0);
+                break;
+            }
+        }
+        return;
+    }
+
+    // In-process mode (headless): call ADB directly
     switch (type) {
         case 1: { // Mouse move (relative)
             if (size < 5) return;
@@ -656,7 +708,14 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
     // Total: 65 bytes
     uint8_t metadata[65] = {0};
     int mx = 0, my = 0;
-    boot_progress_get_mouse(&mx, &my);
+    if (g_shared_state) {
+        // Fork mode: read cursor from shared memory (child writes at 60Hz)
+        mx = g_shared_state->cursor_x.load(std::memory_order_relaxed);
+        my = g_shared_state->cursor_y.load(std::memory_order_relaxed);
+    } else {
+        // Legacy mode: read directly from Mac low-memory globals
+        boot_progress_get_mouse(&mx, &my);
+    }
     uint16_t cx = static_cast<uint16_t>(mx);
     uint16_t cy = static_cast<uint16_t>(my);
     std::memcpy(metadata + 0, &cx, 2);

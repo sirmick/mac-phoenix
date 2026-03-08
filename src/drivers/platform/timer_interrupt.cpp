@@ -18,6 +18,9 @@
 #include <time.h>
 #include <stdio.h>
 
+// Shared input polling for fork mode (defined in cpu_process.cpp)
+extern "C" void ADBPollSharedInput(void);
+
 // Forward declaration (avoid including timer.h due to C linkage conflicts)
 extern "C" uint32 TimerDateTime(void);
 
@@ -73,6 +76,9 @@ static void one_tick(void)
 		tick_counter = 0;
 		one_second();
 	}
+
+	// Poll shared input queue (fork mode: parent writes, child reads at 60Hz)
+	ADBPollSharedInput();
 
 	// Trigger video refresh (60Hz frame capture)
 	// This must happen BEFORE triggering CPU interrupts to ensure smooth video

@@ -2,6 +2,10 @@ import { test, expect } from './fixtures';
 
 test.describe('Screenshot API', () => {
   test('returns 503 before emulator starts', async ({ request, emulatorPort }) => {
+    // Ensure emulator is stopped so no frames are available
+    await request.post(`http://localhost:${emulatorPort}/api/emulator/stop`);
+    await new Promise(r => setTimeout(r, 500));
+
     const resp = await request.get(`http://localhost:${emulatorPort}/api/screenshot`, {
       failOnStatusCode: false,
     });

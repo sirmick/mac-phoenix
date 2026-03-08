@@ -9,6 +9,8 @@
 #include "../config/json_utils.h"
 #include "../common/include/sysdeps.h"  // For uint32 type
 #include "../core/emulator_init.h"  // For deferred initialization
+#include "../core/cpu_process.h"  // For fork-based CPU process
+#include "../core/shared_state.h"  // For shared memory struct
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
 #include "../core/boot_progress.h"  // For boot phase query
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
@@ -20,6 +22,7 @@
 #include <thread>
 #include <pwd.h>
 #include <unistd.h>
+#include <time.h>
 
 // Globals from main.cpp for checking emulator state
 extern uint32 ROMSize;  // 0 if no ROM loaded
@@ -121,18 +124,48 @@ Response APIRouter::handle_restart(const Request& req) {
 Response APIRouter::handle_status(const Request& req) {
     (void)req;
 
-    // Get CPU running state
-    bool cpu_running = ctx_->cpu_running ? ctx_->cpu_running->load(std::memory_order_acquire) : false;
-
     std::ostringstream json;
     json << std::fixed << std::setprecision(2);
     json << "{";
     json << "\"emulator_connected\": true";
-    json << ", \"emulator_running\": " << (cpu_running ? "true" : "false");
-    json << ", \"cpu_state\": \"" << (cpu_running ? "running" : "stopped") << "\"";
-    json << ", \"boot_phase\": \"" << boot_progress_phase() << "\"";
-    json << ", \"checkload_count\": " << boot_progress_checkloads();
-    json << ", \"boot_elapsed\": " << boot_progress_elapsed();
+
+    if (ctx_->shared_state) {
+        // Fork mode: read from shared memory
+        SharedState* shm = ctx_->shared_state;
+        int32_t state = shm->child_state.load(std::memory_order_acquire);
+        bool running = (state == SHM_STATE_STARTING || state == SHM_STATE_RUNNING);
+        const char* state_str = "stopped";
+        if (state == SHM_STATE_STARTING) state_str = "starting";
+        else if (state == SHM_STATE_RUNNING) state_str = "running";
+        else if (state == SHM_STATE_ERROR) state_str = "error";
+
+        double elapsed = 0.0;
+        int64_t start_us = shm->boot_start_us.load(std::memory_order_acquire);
+        if (start_us > 0) {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            int64_t now_us = now.tv_sec * 1000000LL + now.tv_nsec / 1000;
+            elapsed = (now_us - start_us) / 1e6;
+        }
+
+        json << ", \"emulator_running\": " << (running ? "true" : "false");
+        json << ", \"cpu_state\": \"" << state_str << "\"";
+        json << ", \"boot_phase\": \"" << shm->boot_phase_name << "\"";
+        json << ", \"checkload_count\": " << shm->checkload_count.load(std::memory_order_acquire);
+        json << ", \"boot_elapsed\": " << elapsed;
+        if (state == SHM_STATE_ERROR && shm->error_msg[0]) {
+            json << ", \"error\": \"" << shm->error_msg << "\"";
+        }
+    } else {
+        // Legacy in-process mode
+        bool cpu_running = ctx_->cpu_running ? ctx_->cpu_running->load(std::memory_order_acquire) : false;
+        json << ", \"emulator_running\": " << (cpu_running ? "true" : "false");
+        json << ", \"cpu_state\": \"" << (cpu_running ? "running" : "stopped") << "\"";
+        json << ", \"boot_phase\": \"" << boot_progress_phase() << "\"";
+        json << ", \"checkload_count\": " << boot_progress_checkloads();
+        json << ", \"boot_elapsed\": " << boot_progress_elapsed();
+    }
+
     json << "}";
     return Response::json(json.str());
 }
@@ -140,131 +173,98 @@ Response APIRouter::handle_status(const Request& req) {
 Response APIRouter::handle_emulator_start(const Request& req) {
     (void)req;
 
-    // Check if already initialized
-    if (g_emulator_initialized) {
-        fprintf(stderr, "[API] Emulator already initialized - resuming CPU\n");
+    // Fork mode: use CpuProcess
+    if (ctx_->cpu_process) {
+        if (ctx_->cpu_process->is_running()) {
+            return Response::json("{\"success\": false, \"error\": \"Already running\"}");
+        }
 
+        if (!ctx_->config || ctx_->config->rom_path.empty()) {
+            return Response::json(
+                "{\"success\": false, "
+                "\"error\": \"No ROM configured\", "
+                "\"message\": \"Please configure a ROM path in the settings\"}");
+        }
+
+        fprintf(stderr, "[API] Starting CPU process (fork mode)\n");
+        if (!ctx_->cpu_process->start()) {
+            std::string err = "Failed to start CPU process";
+            if (ctx_->shared_state && ctx_->shared_state->error_msg[0]) {
+                err = ctx_->shared_state->error_msg;
+            }
+            return Response::json("{\"success\": false, \"error\": \"" + err + "\"}");
+        }
+
+        return Response::json("{\"success\": true, \"message\": \"CPU process started\"}");
+    }
+
+    // Legacy in-process mode
+    if (g_emulator_initialized) {
         if (!ctx_->cpu_running || !ctx_->cpu_cv) {
             return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
         }
-
-        // Resume CPU execution
         {
             std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
             ctx_->cpu_running->store(true, std::memory_order_release);
         }
         ctx_->cpu_cv->notify_one();
-        fprintf(stderr, "[API] CPU resumed via web UI\n");
-
         return Response::json("{\"success\": true, \"message\": \"CPU resumed\"}");
     }
 
-    // Not initialized - need to load ROM and initialize emulator
-    fprintf(stderr, "[API] Emulator not initialized - loading ROM and initializing...\n");
-
-    if (!ctx_->config) {
-        return Response::json("{\"success\": false, \"error\": \"No config available\"}");
-    }
-
-    std::string rom_filename = ctx_->config->rom_path;
-    if (rom_filename.empty()) {
-        fprintf(stderr, "[API] ERROR: No ROM configured in config file\n");
-        return Response::json(
-            "{\"success\": false, "
-            "\"error\": \"No ROM configured\", "
-            "\"message\": \"Please configure a ROM path in the settings\"}"
-        );
-    }
-
-    // Resolve relative ROM path against storage_dir/roms/
-    std::string storage_dir = ctx_->config->storage_dir;
-    if (!rom_filename.empty() && rom_filename[0] != '/' && !storage_dir.empty()) {
-        rom_filename = storage_dir + "/roms/" + rom_filename;
-        ctx_->config->rom_path = rom_filename;
-    }
-
-    // Initialize emulator with ROM
-    std::string emulator_type = ctx_->config->architecture_string();
-
-    fprintf(stderr, "[API] Initializing emulator: %s with ROM: %s\n",
-            emulator_type.c_str(), rom_filename.c_str());
-
-    if (!init_emulator_from_config(emulator_type.c_str(),
-                                    storage_dir.c_str(),
-                                    rom_filename.c_str())) {
-        fprintf(stderr, "[API] ERROR: Failed to initialize emulator\n");
-        return Response::json(
-            "{\"success\": false, "
-            "\"error\": \"Failed to load ROM and initialize CPU\", "
-            "\"message\": \"Check that the ROM file exists and is valid\"}"
-        );
-    }
-
-    fprintf(stderr, "[API] Emulator initialized successfully\n");
-
-    // Start CPU execution
-    if (!ctx_->cpu_running || !ctx_->cpu_cv) {
-        return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
-        ctx_->cpu_running->store(true, std::memory_order_release);
-    }
-    ctx_->cpu_cv->notify_one();
-    fprintf(stderr, "[API] CPU started via web UI\n");
-
-    return Response::json("{\"success\": true, \"message\": \"Emulator initialized and CPU started\"}");
+    return Response::json("{\"success\": false, \"error\": \"Not initialized\"}");
 }
 
 Response APIRouter::handle_emulator_stop(const Request& req) {
     (void)req;
 
-    if (!ctx_->cpu_running) {
-        return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
+    // Fork mode
+    if (ctx_->cpu_process) {
+        fprintf(stderr, "[API] Stopping CPU process (fork mode)\n");
+        ctx_->cpu_process->stop();
+        return Response::json("{\"success\": true, \"message\": \"CPU process stopped\"}");
     }
 
-    // Stop CPU execution
-    {
-        std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
-        ctx_->cpu_running->store(false, std::memory_order_release);
+    // Legacy in-process mode
+    if (ctx_->cpu_running) {
+        {
+            std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
+            ctx_->cpu_running->store(false, std::memory_order_release);
+        }
+        return Response::json("{\"success\": true, \"message\": \"CPU stopped\"}");
     }
-    fprintf(stderr, "[API] CPU stopped via web UI\n");
 
-    return Response::json("{\"success\": true, \"message\": \"CPU stopped\"}");
+    return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
 }
 
 Response APIRouter::handle_emulator_restart(const Request& req) {
     (void)req;
 
-    if (!ctx_->cpu_running || !ctx_->cpu_cv) {
-        return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
+    // Fork mode: stop + start (clean state)
+    if (ctx_->cpu_process) {
+        fprintf(stderr, "[API] Restarting CPU process (fork mode)\n");
+        ctx_->cpu_process->reset();
+        return Response::json("{\"success\": true, \"message\": \"CPU process restarted\"}");
     }
 
-    fprintf(stderr, "[API] Restart requested via web UI\n");
-
-    // Stop CPU
-    {
-        std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
-        ctx_->cpu_running->store(false, std::memory_order_release);
+    // Legacy in-process mode
+    if (ctx_->cpu_running && ctx_->cpu_cv) {
+        {
+            std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
+            ctx_->cpu_running->store(false, std::memory_order_release);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        {
+            std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
+            ctx_->cpu_running->store(true, std::memory_order_release);
+        }
+        ctx_->cpu_cv->notify_one();
+        return Response::json("{\"success\": true, \"message\": \"CPU restarted\"}");
     }
 
-    // Wait for CPU to actually stop (watchdog sets quit_program within 50ms)
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-    // Start CPU again
-    {
-        std::lock_guard<std::mutex> lock(*ctx_->cpu_mutex);
-        ctx_->cpu_running->store(true, std::memory_order_release);
-    }
-    ctx_->cpu_cv->notify_one();
-
-    fprintf(stderr, "[API] CPU restarted via web UI\n");
-    return Response::json("{\"success\": true, \"message\": \"CPU restarted\"}");
+    return Response::json("{\"success\": false, \"error\": \"CPU state not available\"}");
 }
 
 Response APIRouter::handle_emulator_reset(const Request& req) {
-    // Reset = same as restart for now
     return handle_emulator_restart(req);
 }
 
@@ -438,6 +438,18 @@ Response APIRouter::handle_screenshot(const Request& req) {
         return resp;
     }
 
+    // In fork mode, return 503 if CPU is not running (no live frames)
+    if (ctx_->shared_state) {
+        int32_t state = ctx_->shared_state->child_state.load(std::memory_order_acquire);
+        if (state != SHM_STATE_STARTING && state != SHM_STATE_RUNNING) {
+            Response resp;
+            resp.set_status(503, "Service Unavailable");
+            resp.set_body("{\"error\": \"Emulator not running\"}");
+            resp.set_content_type("application/json");
+            return resp;
+        }
+    }
+
     // Allocate buffer for snapshot (max 1920x1080x4 = ~8MB)
     int width = 0, height = 0;
     PixelFormat format;
@@ -491,8 +503,15 @@ Response APIRouter::handle_screenshot(const Request& req) {
 Response APIRouter::handle_mouse(const Request& req) {
     (void)req;
 
-    bool cpu_running = ctx_->cpu_running ? ctx_->cpu_running->load(std::memory_order_acquire) : false;
-    if (!cpu_running) {
+    // Check if CPU is running
+    bool running = false;
+    if (ctx_->shared_state) {
+        running = ctx_->shared_state->child_state.load(std::memory_order_acquire) == SHM_STATE_RUNNING;
+    } else if (ctx_->cpu_running) {
+        running = ctx_->cpu_running->load(std::memory_order_acquire);
+    }
+
+    if (!running) {
         Response resp;
         resp.set_status(503, "Service Unavailable");
         resp.set_body("{\"error\": \"Emulator not running\"}");
@@ -500,18 +519,36 @@ Response APIRouter::handle_mouse(const Request& req) {
         return resp;
     }
 
-    MacCursorState cs;
-    boot_progress_get_cursor_state(&cs);
-
     std::ostringstream json;
-    json << "{"
-         << "\"x\": " << cs.cursor_x << ", \"y\": " << cs.cursor_y
-         << ", \"raw_x\": " << cs.raw_x << ", \"raw_y\": " << cs.raw_y
-         << ", \"mtemp_x\": " << cs.mtemp_x << ", \"mtemp_y\": " << cs.mtemp_y
-         << ", \"crsr_new\": " << cs.crsr_new
-         << ", \"crsr_couple\": " << cs.crsr_couple
-         << ", \"crsr_busy\": " << cs.crsr_busy
-         << "}";
+
+    if (ctx_->shared_state) {
+        // Fork mode: read cursor state from shared memory
+        SharedState* shm = ctx_->shared_state;
+        json << "{"
+             << "\"x\": " << shm->cursor_x.load(std::memory_order_acquire)
+             << ", \"y\": " << shm->cursor_y.load(std::memory_order_acquire)
+             << ", \"raw_x\": " << shm->raw_x.load(std::memory_order_acquire)
+             << ", \"raw_y\": " << shm->raw_y.load(std::memory_order_acquire)
+             << ", \"mtemp_x\": " << shm->mtemp_x.load(std::memory_order_acquire)
+             << ", \"mtemp_y\": " << shm->mtemp_y.load(std::memory_order_acquire)
+             << ", \"crsr_new\": " << shm->crsr_new.load(std::memory_order_acquire)
+             << ", \"crsr_couple\": " << shm->crsr_couple.load(std::memory_order_acquire)
+             << ", \"crsr_busy\": " << shm->crsr_busy.load(std::memory_order_acquire)
+             << "}";
+    } else {
+        // In-process mode: read from Mac low-memory globals
+        MacCursorState cs;
+        boot_progress_get_cursor_state(&cs);
+        json << "{"
+             << "\"x\": " << cs.cursor_x << ", \"y\": " << cs.cursor_y
+             << ", \"raw_x\": " << cs.raw_x << ", \"raw_y\": " << cs.raw_y
+             << ", \"mtemp_x\": " << cs.mtemp_x << ", \"mtemp_y\": " << cs.mtemp_y
+             << ", \"crsr_new\": " << cs.crsr_new
+             << ", \"crsr_couple\": " << cs.crsr_couple
+             << ", \"crsr_busy\": " << cs.crsr_busy
+             << "}";
+    }
+
     return Response::json(json.str());
 }
 
@@ -538,8 +575,13 @@ Response APIRouter::handle_mouse_move(const Request& req) {
         auto dy_start = body.find_first_not_of(" \t\n", dy_colon + 1);
         int dy = std::stoi(body.substr(dy_start));
 
-        ADBSetRelMouseMode(true);
-        ADBMouseMoved(dx, dy);
+        if (ctx_->shared_state) {
+            shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_MODE, 1, 0, 0, 0);
+            shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_REL, 0, (int16_t)dx, (int16_t)dy, 0);
+        } else {
+            ADBSetRelMouseMode(true);
+            ADBMouseMoved(dx, dy);
+        }
 
         return Response::json("{\"success\": true, \"dx\": " + std::to_string(dx) + ", \"dy\": " + std::to_string(dy) + ", \"mode\": \"relative\"}");
     }
@@ -561,8 +603,13 @@ Response APIRouter::handle_mouse_move(const Request& req) {
     auto y_start = body.find_first_not_of(" \t\n", y_colon + 1);
     int y = std::stoi(body.substr(y_start));
 
-    ADBSetRelMouseMode(false);
-    ADBMouseMoved(x, y);
+    if (ctx_->shared_state) {
+        shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_MODE, 0, 0, 0, 0);
+        shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_ABS, 0, (int16_t)x, (int16_t)y, 0);
+    } else {
+        ADBSetRelMouseMode(false);
+        ADBMouseMoved(x, y);
+    }
 
     return Response::json("{\"success\": true, \"x\": " + std::to_string(x) + ", \"y\": " + std::to_string(y) + ", \"mode\": \"absolute\"}");
 }
@@ -610,9 +657,15 @@ Response APIRouter::handle_keypress(const Request& req) {
         Response r3; r3.set_status(400); r3.set_body("{\"error\": \"invalid keycode\"}"); r3.add_header("Content-Type", "application/json"); return r3;
     }
 
-    ::ADBKeyDown(keycode);
-    usleep(50000);  // 50ms press
-    ::ADBKeyUp(keycode);
+    if (ctx_->shared_state) {
+        shared_input_push(ctx_->shared_state, SHM_INPUT_KEY, 1, 0, 0, (uint8_t)keycode);
+        usleep(50000);  // 50ms press
+        shared_input_push(ctx_->shared_state, SHM_INPUT_KEY, 0, 0, 0, (uint8_t)keycode);
+    } else {
+        ::ADBKeyDown(keycode);
+        usleep(50000);  // 50ms press
+        ::ADBKeyUp(keycode);
+    }
 
     return Response::json("{\"success\": true, \"keycode\": " + std::to_string(keycode) + "}");
 }

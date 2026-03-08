@@ -18,6 +18,7 @@
 #include "m68k_registers.h"
 #include "emul_op.h"
 #include "boot_progress.h"
+#include "shared_state.h"
 
 /* Boot phases */
 enum BootPhase {
@@ -34,6 +35,12 @@ enum BootPhase {
 
 static BootPhase current_phase = PHASE_PRE_RESET;
 static int log_level = -1;  /* -1 = uninitialized */
+static SharedState* g_boot_shm = nullptr;  /* Shared memory for fork mode */
+
+void boot_progress_set_shared_state(SharedState* shm)
+{
+	g_boot_shm = shm;
+}
 static uint32_t checkload_count = 0;
 static uint32_t last_milestone_checkload = 0;
 static bool seen_boot_resource = false;
@@ -123,6 +130,18 @@ static void set_phase(BootPhase p)
 {
 	if (p > current_phase) {
 		current_phase = p;
+		/* Write to shared memory for fork mode */
+		if (g_boot_shm) {
+			strncpy(g_boot_shm->boot_phase_name, phase_name(p),
+			        sizeof(g_boot_shm->boot_phase_name) - 1);
+			if (g_boot_shm->boot_start_us.load(std::memory_order_relaxed) == 0) {
+				struct timespec now;
+				clock_gettime(CLOCK_MONOTONIC, &now);
+				g_boot_shm->boot_start_us.store(
+					now.tv_sec * 1000000LL + now.tv_nsec / 1000,
+					std::memory_order_release);
+			}
+		}
 	}
 }
 
@@ -217,6 +236,9 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 
 		case M68K_EMUL_OP_CHECKLOAD: {
 			checkload_count++;
+			if (g_boot_shm) {
+				g_boot_shm->checkload_count.store(checkload_count, std::memory_order_relaxed);
+			}
 
 			/* Decode resource type */
 			char type[5];

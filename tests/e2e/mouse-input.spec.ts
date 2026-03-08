@@ -13,7 +13,9 @@ test.describe('Mouse API', () => {
   test('GET /api/mouse returns position after boot', async ({ request, emulatorPort, hasRom }) => {
     test.skip(!hasRom, 'ROM required');
 
-    // Start emulator
+    // Ensure clean start (stop first in case prior test left it stuck)
+    await request.post(`http://localhost:${emulatorPort}/api/emulator/stop`);
+    await new Promise(r => setTimeout(r, 500));
     await request.post(`http://localhost:${emulatorPort}/api/emulator/start`);
 
     // Wait for boot to reach Finder

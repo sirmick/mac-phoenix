@@ -16,9 +16,14 @@
 
 #include <stdint.h>
 
+struct SharedState;  // Forward declaration
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Set shared memory pointer for fork mode (child writes status here) */
+void boot_progress_set_shared_state(struct SharedState* shm);
 
 /* Call from EmulOp() to track boot progress and log at appropriate verbosity */
 void boot_progress_update(uint16_t opcode, void *regs);
