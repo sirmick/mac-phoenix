@@ -319,7 +319,7 @@ void audio_encoder_main(JsonConfig* config, AudioOutput* audio_output) {
 ```cpp
 void web_server_main(JsonConfig* config) {
     // 1. Set up HTTP server
-    HttpServer http_server(8080);
+    HttpServer http_server(8000);
 
     // Register HTTP routes
     http_server.get("/", [](Request& req, Response& res) {

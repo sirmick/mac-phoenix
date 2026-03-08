@@ -1,33 +1,42 @@
 {
-  "_comment": "mac-phoenix configuration file",
-  "_comment2": "Copy to ~/.config/mac-phoenix/config.json and customize",
-  "_comment3": "All fields are optional — defaults are shown below",
-  "_comment4": "CLI arguments override these values (run with --help for details)",
+  "architecture": "m68k",
+  "cpu_backend": "uae",
 
-  "cpu": {
-    "type": 4,
-    "fpu": true,
-    "backend": "uae"
-  },
-
-  "ram": 32,
-
-  "rom": "/path/to/your/quadra650.rom",
-
-  "disks": [
-    "/path/to/your/harddisk.img"
-  ],
-
+  "rom": "",
+  "disks": [],
   "cdroms": [],
 
+  "ram_mb": 32,
   "screen": "640x480",
-
   "audio": true,
 
-  "web": {
-    "enabled": true,
-    "http_port": 8080,
-    "signaling_port": 8090,
-    "storage_dir": ""
+  "codec": "png",
+  "mousemode": "absolute",
+
+  "http_port": 8000,
+  "signaling_port": 8090,
+  "storage_dir": "~/storage",
+
+  "m68k": {
+    "cpu_type": 4,
+    "fpu": true,
+    "modelid": 14,
+    "jit": true,
+    "idlewait": true,
+    "ignoresegv": true,
+    "swap_opt_cmd": true,
+    "keyboardtype": 5
+  },
+
+  "ppc": {
+    "cpu_type": 4,
+    "fpu": true,
+    "modelid": 14,
+    "jit": true,
+    "jit68k": false,
+    "idlewait": true,
+    "ignoresegv": true,
+    "ignoreillegal": false,
+    "keyboardtype": 5
   }
 }

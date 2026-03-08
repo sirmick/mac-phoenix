@@ -66,7 +66,7 @@ ninja -C build
 ./build/mac-phoenix /path/to/quadra.rom
 ```
 
-Then open **http://localhost:8080** in your browser.
+Then open **http://localhost:8000** in your browser.
 
 ### Headless mode
 
@@ -83,6 +83,20 @@ EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /path/to/quadra.rom
 | `dualcpu` | Both in lockstep | Very slow | Debugging CPU divergences |
 
 Select with `--backend uae|unicorn|dualcpu` or the `CPU_BACKEND` env var.
+
+## Configuration
+
+Settings are stored in `~/.config/mac-phoenix/config.json` (created automatically from the web UI). All fields are optional — a minimal config just needs a ROM and disk:
+
+```json
+{
+  "rom": "quadra650.rom",
+  "disks": ["system.img"],
+  "storage_dir": "~/storage"
+}
+```
+
+Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for disks). CLI flags override config file values. See [docs/JsonConfig.md](docs/JsonConfig.md) for the full schema.
 
 ## API
 

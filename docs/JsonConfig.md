@@ -1,418 +1,191 @@
-# JSON Configuration System
+# Configuration
 
-mac-phoenix uses JSON for configuration files with human-readable values.
+mac-phoenix uses a single flat JSON config file. All fields are optional — defaults are used for anything not specified. CLI arguments override config file values.
 
----
+## Config File Location
 
-## Quick Start
+| Priority | Location |
+|----------|----------|
+| 1 (highest) | `--config /path/to/config.json` |
+| 2 | `~/.config/mac-phoenix/config.json` |
+| 3 (lowest) | Defaults |
 
-### Generate Default Config
+The config file is created automatically when you save settings from the web UI.
 
-```bash
-./mac-phoenix --save-config
-```
+## Priority Order
 
-This creates `~/.config/mac-phoenix/config.json` with defaults.
+Settings are resolved in this order (highest wins):
 
-### Use Custom Config
+1. **Command-line arguments** (`--port 9000`)
+2. **JSON config file** (`config.json`)
+3. **Environment variables** (`CPU_BACKEND=unicorn`)
+4. **Defaults**
 
-```bash
-./mac-phoenix --config /path/to/config.json ~/quadra.rom
-```
-
----
-
-## Configuration File Locations
-
-mac-phoenix searches for configuration files in this priority order:
-
-1. **CLI Override**: `--config /path/to/config.json` (highest priority)
-2. **User Config**: `~/.config/mac-phoenix/config.json` (XDG_CONFIG_HOME)
-3. **Current Directory**: `./mac-phoenix.json`
-
-If no config file is found, default values are used.
-
----
-
-## Configuration Format
-
-### Example Configuration
-
-```json
-{
-  "version": "1.0",
-  "emulator": {
-    "cpu": "68040",
-    "fpu": true,
-    "ramsize": 33554432,
-    "modelid": 5
-  },
-  "boot": {
-    "bootdrive": 0,
-    "bootdriver": 0
-  },
-  "storage": {
-    "rom": "/path/to/quadra650.rom",
-    "disks": [
-      "/path/to/harddisk.img"
-    ],
-    "floppies": [],
-    "cdroms": [],
-    "scsi": {
-      "0": null,
-      "1": null,
-      "2": null,
-      "3": null,
-      "4": null,
-      "5": null,
-      "6": null
-    },
-    "extfs": null
-  },
-  "video": {
-    "displaycolordepth": 0,
-    "screen": null,
-    "frameskip": 6,
-    "scale_nearest": false,
-    "scale_integer": false
-  },
-  "audio": {
-    "nosound": false,
-    "sound_buffer": 0
-  },
-  "input": {
-    "keyboardtype": 5,
-    "keycodes": false,
-    "keycodefile": null,
-    "mousewheelmode": 0,
-    "mousewheellines": 0,
-    "hotkey": 0,
-    "swap_opt_cmd": true,
-    "init_grab": false
-  },
-  "network": {
-    "ether": null,
-    "etherconfig": null,
-    "udptunnel": false,
-    "udpport": 6066,
-    "redir": [],
-    "host_domain": []
-  },
-  "serial": {
-    "seriala": null,
-    "serialb": null
-  },
-  "jit": {
-    "enabled": false,
-    "fpu": false,
-    "debug": false,
-    "cachesize": 0,
-    "lazyflush": false,
-    "inline": false,
-    "blacklist": null
-  },
-  "ui": {
-    "nogui": false,
-    "noclipconversion": false,
-    "title": null,
-    "gammaramp": null
-  },
-  "system": {
-    "nocdrom": false,
-    "ignoresegv": true,
-    "delay": 0,
-    "yearofs": 0,
-    "dayofs": 0,
-    "mag_rate": null,
-    "name_encoding": 0,
-    "xpram": null
-  }
-}
-```
-
----
-
-## Configuration Options
-
-### Emulator Section
-
-| Option | Type | Values | Description |
-|--------|------|--------|-------------|
-| `cpu` | string | `"68000"`, `"68010"`, `"68020"`, `"68030"`, `"68040"` | CPU type to emulate |
-| `fpu` | boolean | `true`, `false` | Enable FPU emulation (auto-enabled for 68040) |
-| `ramsize` | number | 1048576 - 1073741824 | RAM size in bytes (1MB - 1GB) |
-| `modelid` | number | 0-20 | Mac model ID (Gestalt Model ID minus 6) |
-
-**Common RAM sizes:**
-- 8MB: `8388608`
-- 16MB: `16777216`
-- 32MB: `33554432`
-- 64MB: `67108864`
-- 128MB: `134217728`
-
-### Boot Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `bootdrive` | number | Boot drive number (default: 0) |
-| `bootdriver` | number | Boot driver number (default: 0) |
-
-### Storage Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `rom` | string | Path to ROM file |
-| `disks` | array | Paths to disk image files |
-| `floppies` | array | Paths to floppy image files |
-| `cdroms` | array | Paths to CD-ROM image files |
-| `scsi.0` - `scsi.6` | string | SCSI device mappings |
-| `extfs` | string | Root path for ExtFS (host filesystem access) |
-
-**Example:**
-```json
-"storage": {
-  "rom": "/home/user/roms/quadra650.rom",
-  "disks": [
-    "/home/user/images/system.img",
-    "/home/user/images/data.img"
-  ],
-  "cdroms": [
-    "/home/user/iso/macos753.iso"
-  ]
-}
-```
-
-### Video Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `displaycolordepth` | number | Display color depth (0=auto) |
-| `screen` | string | Video mode string |
-| `frameskip` | number | Frames to skip (default: 6) |
-| `scale_nearest` | boolean | Use nearest-neighbor scaling |
-| `scale_integer` | boolean | Use integer scaling |
-
-### Audio Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `nosound` | boolean | Disable sound output |
-| `sound_buffer` | number | Sound buffer size (0=default) |
-
-### Input Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `keyboardtype` | number | Hardware keyboard type (default: 5) |
-| `keycodes` | boolean | Use keycodes vs keysyms |
-| `keycodefile` | string | Path to keycode translation file |
-| `mousewheelmode` | number | Mouse wheel mode (0=page up/down, 1=cursor) |
-| `mousewheellines` | number | Lines to scroll in mode 1 |
-| `hotkey` | number | Hotkey modifier |
-| `swap_opt_cmd` | boolean | Swap Option and Command keys |
-| `init_grab` | boolean | Initially grab mouse |
-
-### Network Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `ether` | string | Ethernet device name |
-| `etherconfig` | string | Network config script path |
-| `udptunnel` | boolean | Tunnel packets over UDP |
-| `udpport` | number | UDP port for tunneling (default: 6066) |
-| `redir` | array | Port forwarding rules (for slirp) |
-| `host_domain` | array | Domains to handle on host (slirp only) |
-
-### Serial Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `seriala` | string | Serial port A device |
-| `serialb` | string | Serial port B device |
-
-### JIT Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `enabled` | boolean | Enable JIT compiler (UAE backend only) |
-| `fpu` | boolean | Enable JIT FPU compilation |
-| `debug` | boolean | Enable JIT debugger |
-| `cachesize` | number | Translation cache size in KB |
-| `lazyflush` | boolean | Lazy invalidation of cache |
-| `inline` | boolean | Inline constant jumps |
-| `blacklist` | string | Blacklist opcodes from translation |
-
-### UI Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `nogui` | boolean | Disable GUI |
-| `noclipconversion` | boolean | Don't convert clipboard contents |
-| `title` | string | Window title |
-| `gammaramp` | string | Gamma ramp setting ("on", "off", "fullscreen") |
-
-### System Section
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `nocdrom` | boolean | Don't install CD-ROM driver |
-| `ignoresegv` | boolean | Ignore illegal memory accesses |
-| `delay` | number | Additional delay in µs every 64k instructions |
-| `yearofs` | number | Year offset for date/time |
-| `dayofs` | number | Day offset for date/time |
-| `mag_rate` | string | Magnification rate |
-| `name_encoding` | number | File name encoding |
-| `xpram` | string | Path to XPRAM file |
-
----
-
-## Command-Line Options
-
-### Configuration Management
-
-```bash
-# Use specific config file
---config <file>
-
-# Save current settings to user config
---save-config
-```
-
-### Override Individual Settings
-
-You can still override individual settings via command-line:
-
-```bash
-./mac-phoenix --config myconfig.json --cpu 4 --ramsize 67108864 ~/quadra.rom
-```
-
-Command-line options override config file settings.
-
----
-
-## Migration from Old Format
-
-The old `BasiliskII_Prefs` text format is **no longer supported**.
-
-To migrate:
-
-1. Run mac-phoenix once with `--save-config`
-2. Edit the generated JSON file at `~/.config/mac-phoenix/config.json`
-3. Set your ROM path and other preferences
-4. Remove old `BasiliskII_Prefs` file
-
----
-
-## Tips
-
-### Per-ROM Configurations
-
-Create different config files for different ROMs:
-
-```bash
-# Create configs
-./mac-phoenix --config quadra.json --save-config
-./mac-phoenix --config macii.json --save-config
-
-# Use them
-./mac-phoenix --config quadra.json ~/roms/quadra650.rom
-./mac-phoenix --config macii.json ~/roms/macii.rom
-```
-
-### Minimal Config
+## Minimal Config
 
 You only need to specify values that differ from defaults:
 
 ```json
 {
-  "version": "1.0",
-  "emulator": {
-    "cpu": "68040",
-    "ramsize": 67108864
-  },
-  "storage": {
-    "rom": "/home/user/quadra.rom",
-    "disks": ["/home/user/system.img"]
+  "rom": "quadra650.rom",
+  "disks": ["system.img"],
+  "storage_dir": "~/storage"
+}
+```
+
+## Full Schema
+
+### Top-Level Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `architecture` | string | `"m68k"` | CPU architecture (`"m68k"` or `"ppc"`) |
+| `cpu_backend` | string | `"uae"` | CPU backend (`"uae"`, `"unicorn"`, `"dualcpu"`) |
+| `ram_mb` | int | `32` | RAM size in megabytes |
+| `rom` | string | `""` | ROM file path (absolute, or relative to `storage_dir/roms/`) |
+| `disks` | array | `[]` | Disk image paths (absolute, or relative to `storage_dir/images/`) |
+| `cdroms` | array | `[]` | CD-ROM image paths (absolute, or relative to `storage_dir/images/`) |
+| `floppies` | array | `[]` | Floppy image paths (absolute, or relative to `storage_dir/images/`) |
+| `extfs` | string | `""` | Host filesystem directory to share with the emulator |
+| `screen` | string | `"640x480"` | Display resolution (`"WxH"`) |
+| `audio` | bool | `true` | Enable audio |
+| `bootdrive` | int | `0` | Boot drive number |
+| `bootdriver` | int | `0` | Boot driver (`0` = any disk, `-62` = CD-ROM) |
+| `codec` | string | `"png"` | Video codec (`"png"`, `"h264"`, `"vp9"`, `"webp"`) |
+| `mousemode` | string | `"absolute"` | Mouse mode (`"absolute"` or `"relative"`) |
+| `http_port` | int | `8000` | HTTP server port |
+| `signaling_port` | int | `8090` | WebRTC signaling port |
+| `storage_dir` | string | `"~/storage"` | Root directory for ROMs and disk images |
+| `nocdrom` | bool | `false` | Don't install CD-ROM driver |
+| `nosound` | bool | `false` | Disable sound |
+| `zappram` | bool | `true` | Clear PRAM on startup |
+| `frameskip` | int | `6` | Frames to skip between refreshes |
+| `yearofs` | int | `0` | Year offset for Mac clock |
+| `dayofs` | int | `0` | Day offset for Mac clock |
+| `udptunnel` | bool | `false` | Tunnel network packets over UDP |
+| `udpport` | int | `6066` | UDP port for network tunneling |
+| `log_level` | int | `0` | Log verbosity (0=milestones, 1=important, 2=all, 3=+registers) |
+| `debug_connection` | bool | `false` | Log WebRTC connection details |
+| `debug_mode_switch` | bool | `false` | Log video mode switches |
+| `debug_perf` | bool | `false` | Log performance stats |
+
+### M68K Sub-Object (`m68k`)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `cpu_type` | int | `4` | CPU type (0=68000, 1=68010, 2=68020, 3=68030, 4=68040) |
+| `fpu` | bool | `true` | Enable FPU emulation |
+| `modelid` | int | `14` | Mac model ID (Gestalt Model ID minus 6) |
+| `jit` | bool | `true` | Enable JIT compiler (UAE backend only) |
+| `jitfpu` | bool | `true` | JIT-compile FPU instructions |
+| `jitdebug` | bool | `false` | Enable JIT debugger |
+| `jitcachesize` | int | `8192` | JIT translation cache size in KB |
+| `jitlazyflush` | bool | `true` | Lazy invalidation of JIT cache |
+| `jitinline` | bool | `true` | Inline constant jumps in JIT |
+| `jitblacklist` | string | `""` | Opcodes to exclude from JIT |
+| `idlewait` | bool | `true` | Sleep when Mac OS is idle |
+| `ignoresegv` | bool | `true` | Skip illegal memory accesses |
+| `swap_opt_cmd` | bool | `true` | Swap Option and Command keys |
+| `keyboardtype` | int | `5` | Mac keyboard type |
+
+### PPC Sub-Object (`ppc`)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `cpu_type` | int | `4` | PPC CPU type |
+| `fpu` | bool | `true` | Enable FPU |
+| `modelid` | int | `14` | Mac model ID |
+| `jit` | bool | `true` | Enable JIT compiler |
+| `jit68k` | bool | `false` | JIT-compile 68K code in PPC mode |
+| `idlewait` | bool | `true` | Sleep when idle |
+| `ignoresegv` | bool | `true` | Skip illegal memory accesses |
+| `ignoreillegal` | bool | `false` | Skip illegal instructions |
+| `keyboardtype` | int | `5` | Mac keyboard type |
+
+## Path Resolution
+
+Relative paths in `rom`, `disks`, `cdroms`, and `floppies` are resolved against `storage_dir`:
+
+| Field | Resolved to |
+|-------|-------------|
+| `rom` | `storage_dir/roms/<path>` |
+| `disks` | `storage_dir/images/<path>` |
+| `cdroms` | `storage_dir/images/<path>` |
+| `floppies` | `storage_dir/images/<path>` |
+
+Absolute paths (starting with `/`) are used as-is. The `~` prefix is expanded to `$HOME`.
+
+## Storage Directory Layout
+
+```
+storage_dir/
+  roms/           — ROM files (.rom), scanned recursively
+  images/         — Disk and CD-ROM images (.img, .dsk, .iso, etc.)
+```
+
+The web UI's file picker scans these directories via `GET /api/storage`.
+
+## Example Config
+
+```json
+{
+  "architecture": "m68k",
+  "cpu_backend": "uae",
+  "rom": "1MB ROMs/Quadra 950.ROM",
+  "disks": ["system-7.6.img"],
+  "cdroms": [],
+  "ram_mb": 64,
+  "screen": "800x600",
+  "audio": true,
+  "bootdriver": 0,
+  "codec": "vp9",
+  "mousemode": "relative",
+  "http_port": 8000,
+  "signaling_port": 8090,
+  "storage_dir": "/home/user/storage",
+  "m68k": {
+    "cpu_type": 4,
+    "fpu": true,
+    "modelid": 14,
+    "jit": true,
+    "idlewait": true,
+    "ignoresegv": true,
+    "swap_opt_cmd": true,
+    "keyboardtype": 5
   }
 }
 ```
 
-Missing options will use default values.
+## Web UI Integration
 
----
+The config is read and written via the HTTP API:
 
-## Troubleshooting
+- **`GET /api/config`** — returns the full config as JSON
+- **`POST /api/config`** — accepts a partial JSON object, merges it into the live config, and saves to disk
 
-### Config File Not Found
+The web UI settings dialog uses these endpoints. Changes take effect on next boot (some settings like codec and mousemode take effect immediately).
 
-```
-No config file found, using defaults
-To create a config file, run with --save-config
-```
+## CLI Flags
 
-**Solution**: Run `./mac-phoenix --save-config` to create default config.
-
-### JSON Parse Error
-
-```
-ERROR: Failed to parse JSON config: ...
-```
-
-**Solution**: Check JSON syntax. Use a validator like `jq`:
+CLI flags override config file values. See `--help` or [Commands.md](Commands.md) for the full list.
 
 ```bash
-jq . ~/.config/mac-phoenix/config.json
+# Override ROM and port from CLI
+./build/mac-phoenix --port 9000 --ram 64 /path/to/quadra.rom
+
+# Use a specific config file
+./build/mac-phoenix --config /path/to/config.json
+
+# Ignore config file entirely
+./build/mac-phoenix --config /dev/null --disk system.img quadra.rom
 ```
 
-### Invalid CPU Type
+## Environment Variables
 
-```
-WARNING: Unknown CPU type 'xyz', defaulting to 68030
-```
-
-**Solution**: Use valid CPU names: `"68000"`, `"68010"`, `"68020"`, `"68030"`, `"68040"`
-
----
-
-## Examples
-
-### Gaming Configuration (68040, lots of RAM)
-
-```json
-{
-  "version": "1.0",
-  "emulator": {
-    "cpu": "68040",
-    "fpu": true,
-    "ramsize": 134217728
-  },
-  "storage": {
-    "rom": "/home/user/quadra650.rom",
-    "disks": ["/home/user/games.img"]
-  },
-  "audio": {
-    "nosound": false
-  }
-}
-```
-
-### Compatibility Mode (68020, minimal RAM)
-
-```json
-{
-  "version": "1.0",
-  "emulator": {
-    "cpu": "68020",
-    "fpu": false,
-    "ramsize": 8388608
-  },
-  "storage": {
-    "rom": "/home/user/macii.rom",
-    "disks": ["/home/user/system7.img"]
-  }
-}
-```
-
----
-
-**Last Updated**: January 4, 2026
+| Variable | Description |
+|----------|-------------|
+| `CPU_BACKEND` | Override CPU backend (`uae`, `unicorn`, `dualcpu`) |
+| `EMULATOR_TIMEOUT` | Auto-exit after N seconds |
+| `MACEMU_LOG_LEVEL` | Log verbosity (0-3) |
+| `MACEMU_SCREENSHOTS` | Dump PPM screenshots to /tmp |
+| `MACEMU_ROM` | Default ROM path (used by tests) |

@@ -335,23 +335,23 @@ void main() {
 EOF
 
 # 2. Push source file into the running emulator
-curl -X POST http://localhost:8080/api/files \
+curl -X POST http://localhost:8000/api/files \
   -d '{"path": "HD:Dev:test.c", "content": "'"$(cat test.c)"'"}'
 
 # 3. Compile inside the emulator using MPW
-curl -X POST http://localhost:8080/api/exec \
+curl -X POST http://localhost:8000/api/exec \
   -d '{"command": "SC -o HD:Dev:test.c.o HD:Dev:test.c"}'
 
 # 4. Link
-curl -X POST http://localhost:8080/api/exec \
+curl -X POST http://localhost:8000/api/exec \
   -d '{"command": "Link -o HD:Dev:TestApp HD:Dev:test.c.o {Libraries}Interface.o -t APPL -c ?????"}'
 
 # 5. Check result
-curl http://localhost:8080/api/exec/2
+curl http://localhost:8000/api/exec/2
 # {"status": "complete", "exit_code": 0, "output": ""}
 
 # 6. Run the app (optional — via Finder or direct launch)
-curl -X POST http://localhost:8080/api/exec \
+curl -X POST http://localhost:8000/api/exec \
   -d '{"command": "TestApp"}'
 ```
 

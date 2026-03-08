@@ -28,7 +28,7 @@ Turn MacPhoenix into a programmable appliance: boot Mac OS, launch apps, control
 │  └──────────▲─────────────────────▲──────────────────┘  │
 │             │                     │                      │
 │  ┌──────────┴──────────┐  ┌──────┴───────────────────┐  │
-│  │ Unix Socket Server  │  │ HTTP API (:8080)          │  │
+│  │ Unix Socket Server  │  │ HTTP API (:8000)          │  │
 │  │ /tmp/mac-phoenix.sock│  │ /api/* endpoints         │  │
 │  │ line protocol        │  │ JSON request/response    │  │
 │  └──────────▲──────────┘  └──────────▲───────────────┘  │

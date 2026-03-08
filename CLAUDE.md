@@ -119,7 +119,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --disk path           Disk image path (repeatable)
   --cdrom path          CDROM image path (repeatable)
   --ram MB              RAM size in megabytes
-  --port N              HTTP server port (default: 8080)
+  --port N              HTTP server port (default: 8000)
   --signaling-port N    WebRTC signaling port (default: 8090)
   --backend uae|unicorn Backend override (or use CPU_BACKEND env)
   --arch m68k|ppc       CPU architecture

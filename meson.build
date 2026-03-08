@@ -137,7 +137,7 @@ macemu_next_inc = [
   include_directories('src/cpu'),
   include_directories('src/cpu/uae_cpu'),
   include_directories('src/drivers'),
-  include_directories('src/platform'),
+  include_directories('src/drivers/platform'),
 ]
 macemu_next_cpp_args = []
 
