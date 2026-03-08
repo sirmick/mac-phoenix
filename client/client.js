@@ -3256,9 +3256,17 @@ async function loadCurrentConfig() {
         // Flat format from server
         const isM68k = (cfg.architecture || 'm68k') === 'm68k';
 
+        // Strip storage_dir prefix from paths to get relative names matching storage scan
+        // Only strip if the path is absolute (starts with /), otherwise it's already relative
+        const stripPrefix = (p, dir) => {
+            if (!p || p[0] !== '/') return p;
+            const idx = p.indexOf(dir);
+            return idx >= 0 ? p.substring(idx + dir.length) : p;
+        };
+
         currentConfig = {
             emulator: isM68k ? 'basilisk' : 'sheepshaver',
-            rom: cfg.rom || '',
+            rom: cfg.rom ? stripPrefix(cfg.rom, '/roms/') : '',
             ram: cfg.ram_mb || 32,
             screen: cfg.screen || '640x480',
             sound: cfg.audio ?? true,
@@ -3268,8 +3276,8 @@ async function loadCurrentConfig() {
             jit: isM68k ? (cfg.m68k?.jit ?? true) : (cfg.ppc?.jit ?? true),
             jit68k: cfg.ppc?.jit68k ?? false,
             bootdriver: cfg.bootdriver || 0,
-            disks: cfg.disks || [],
-            cdroms: cfg.cdroms || [],
+            disks: (cfg.disks || []).map(p => stripPrefix(p, '/images/')),
+            cdroms: (cfg.cdroms || []).map(p => stripPrefix(p, '/images/')),
             idlewait: isM68k ? (cfg.m68k?.idlewait ?? true) : (cfg.ppc?.idlewait ?? true),
             ignoresegv: isM68k ? (cfg.m68k?.ignoresegv ?? true) : (cfg.ppc?.ignoresegv ?? true),
             ignoreillegal: cfg.ppc?.ignoreillegal ?? false,
