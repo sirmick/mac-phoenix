@@ -862,6 +862,16 @@ function parseCodecString(codecStr) {
     }
 }
 
+// Update the active codec indicator in the header
+function updateCodecIndicator(codecType) {
+    const el = document.getElementById('codec-active');
+    if (el) {
+        const label = getCodecLabel(codecType);
+        const isRTP = (codecType === CodecType.H264 || codecType === CodecType.VP9);
+        el.textContent = `[${label}${isRTP ? '/RTP' : '/DC'}]`;
+    }
+}
+
 // Helper: Get display label for codec
 function getCodecLabel(codecType) {
     switch (codecType) {
@@ -1122,9 +1132,9 @@ class BasiliskWebRTC {
                     const codecSelect = document.getElementById('codec-select');
                     if (codecSelect) {
                         codecSelect.value = msg.codec;
-                        // Enable selector now that we're connected
                         codecSelect.disabled = false;
                     }
+                    updateCodecIndicator(this.codecType);
 
                 }
                 if (debugConfig.debug_connection) {
@@ -1153,9 +1163,9 @@ class BasiliskWebRTC {
                 this.isReconnecting = true;
                 logger.info('Server requested reconnection', { reason: msg.reason, codec: msg.codec });
                 if (msg.reason === 'codec_change' && msg.codec) {
-                    // Update codec type
                     this.codecType = parseCodecString(msg.codec);
                     this.stats.codec = msg.codec;
+                    updateCodecIndicator(this.codecType);
                 }
                 // Reconnect the PeerConnection with new codec
                 this.reconnectPeerConnection();
@@ -1441,9 +1451,12 @@ class BasiliskWebRTC {
 
                     this.updateWebRTCState('video-size', `${this.video.videoWidth} x ${this.video.videoHeight}`);
 
-                    // Update screen dimensions for absolute mouse mode
+                    // Update screen dimensions and video element size
                     this.currentScreenWidth = this.video.videoWidth;
                     this.currentScreenHeight = this.video.videoHeight;
+                    this.video.width = this.video.videoWidth;
+                    this.video.height = this.video.videoHeight;
+                    this.cachedMouseRect = null;
                 };
 
                 this.video.onloadeddata = () => {

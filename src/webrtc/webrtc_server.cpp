@@ -733,8 +733,8 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
 
     send_count++;
     if (debug_frames && (send_count % 60 == 0 || is_keyframe || sent_to == 0)) {
-        fprintf(stderr, "[WebRTC] Frame #%d: sent=%d skipped(notready=%d nottrack=%d notopen=%d) kf=%d size=%zu\n",
-                send_count, sent_to, skipped_not_ready, skipped_no_track, skipped_not_open, is_keyframe, size);
+        fprintf(stderr, "[WebRTC] Frame #%d: sent=%d skipped(notready=%d notopen=%d) kf=%d size=%zu\n",
+                send_count, sent_to, skipped_not_ready, skipped_not_open, is_keyframe, size);
     }
 }
 
