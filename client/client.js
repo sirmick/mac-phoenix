@@ -2970,12 +2970,10 @@ async function openConfig() {
     if (modal) {
         modal.classList.add('open');
         storageCache = null; // Clear cache to refresh
-        // Load current config first so ROM/disk/cdrom selections are correct
+        // Load current config, then populate lists (parallel), then apply selections
         await loadCurrentConfig();
-        // Then load the ROM, disk, and cdrom lists (can run in parallel)
-        loadRomList();
-        loadDiskList();
-        loadCdromList();
+        await Promise.all([loadRomList(), loadDiskList(), loadCdromList()]);
+        updateConfigUI();
     }
 }
 

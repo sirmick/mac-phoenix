@@ -282,6 +282,12 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
         fprintf(stderr, "[CPUContext] Added disk to prefs: %s\n", disk_path.c_str());
     }
 
+    // Add CDROM images from config to prefs
+    for (const auto& cdrom_path : config.cdrom_paths) {
+        PrefsAddString("cdrom", cdrom_path.c_str());
+        fprintf(stderr, "[CPUContext] Added CDROM to prefs: %s\n", cdrom_path.c_str());
+    }
+
     // 7. Initialize Mac subsystems (XPRAM, drivers, etc.)
     if (!init_mac_subsystems()) {
         fprintf(stderr, "[CPUContext] ERROR: Failed to initialize Mac subsystems\n");
