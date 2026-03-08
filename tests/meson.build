@@ -23,6 +23,18 @@ test('api_endpoints',
   },
 )
 
+# Config API test - verifies config round-trip, CDROM, bootdriver
+test('config_api',
+  find_program('bash'),
+  args: [test_dir / 'test_config_api.sh', '18092'],
+  timeout: 30,
+  is_parallel: false,
+  suite: 'api',
+  env: {
+    'MACEMU_ROM': test_rom,
+  },
+)
+
 # --- Boot tests (require ROM, longer timeout) ---
 # These run sequentially to avoid port conflicts
 

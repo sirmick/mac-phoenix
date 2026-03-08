@@ -82,16 +82,19 @@ struct EmulatorConfig {
     // Audio
     bool audio_enabled = true;
 
+    // Boot
+    int bootdriver = 0;  // 0=any, -62=CDROM
+
     // Streaming
     std::string codec = "png";
     std::string mousemode = "absolute";
 
     // Web/Network
     bool enable_webserver = true;
-    int http_port = 8080;
+    int http_port = 8000;
     int signaling_port = 8090;
     std::string client_dir = "./client";
-    std::string storage_dir;
+    std::string storage_dir = "~/storage";
 
     // Timeout (0 = no timeout)
     int timeout_seconds = 0;

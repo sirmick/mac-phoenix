@@ -1903,19 +1903,25 @@ class BasiliskWebRTC {
         displayElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
         // Keyboard - binary protocol for minimal latency
-        document.addEventListener('keydown', (e) => {
+        // Remove previous listeners to avoid duplicates on reconnect
+        if (this._keydownHandler) document.removeEventListener('keydown', this._keydownHandler);
+        if (this._keyupHandler) document.removeEventListener('keyup', this._keyupHandler);
+
+        this._keydownHandler = (e) => {
             if (!this.connected) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             e.preventDefault();
             this.sendKey(e.keyCode, true, performance.now());
-        });
-
-        document.addEventListener('keyup', (e) => {
+        };
+        this._keyupHandler = (e) => {
             if (!this.connected) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             e.preventDefault();
             this.sendKey(e.keyCode, false, performance.now());
-        });
+        };
+
+        document.addEventListener('keydown', this._keydownHandler);
+        document.addEventListener('keyup', this._keyupHandler);
 
         if (debugConfig.debug_connection) {
             logger.info('Input handlers registered, element:', displayElement.tagName, 'mouseMode:', this.mouseMode);
@@ -2965,15 +2971,24 @@ async function loadStorage() {
     }
 }
 
+function setConfigControlsEnabled(enabled) {
+    const modal = document.getElementById('config-modal');
+    if (!modal) return;
+    modal.querySelectorAll('select, input, button.success').forEach(el => {
+        el.disabled = !enabled;
+    });
+}
+
 async function openConfig() {
     const modal = document.getElementById('config-modal');
     if (modal) {
         modal.classList.add('open');
         storageCache = null; // Clear cache to refresh
-        // Load current config, then populate lists (parallel), then apply selections
-        await loadCurrentConfig();
-        await Promise.all([loadRomList(), loadDiskList(), loadCdromList()]);
+        setConfigControlsEnabled(false);
+        // Load config and storage lists in parallel, then apply selections
+        await Promise.all([loadCurrentConfig(), loadRomList(), loadDiskList(), loadCdromList()]);
         updateConfigUI();
+        setConfigControlsEnabled(true);
     }
 }
 
@@ -3252,6 +3267,7 @@ async function loadCurrentConfig() {
             fpu: isM68k ? (cfg.m68k?.fpu ?? true) : (cfg.ppc?.fpu ?? true),
             jit: isM68k ? (cfg.m68k?.jit ?? true) : (cfg.ppc?.jit ?? true),
             jit68k: cfg.ppc?.jit68k ?? false,
+            bootdriver: cfg.bootdriver || 0,
             disks: cfg.disks || [],
             cdroms: cfg.cdroms || [],
             idlewait: isM68k ? (cfg.m68k?.idlewait ?? true) : (cfg.ppc?.idlewait ?? true),
@@ -3260,8 +3276,6 @@ async function loadCurrentConfig() {
             swap_opt_cmd: cfg.m68k?.swap_opt_cmd ?? true,
             keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5)
         };
-
-        updateConfigUI();
     } catch (e) {
         logger.warn('Failed to load current config', { error: e.message });
     }
@@ -3280,6 +3294,9 @@ function updateConfigUI() {
     if (ramEl) ramEl.value = currentConfig.ram;
     if (screenEl) screenEl.value = currentConfig.screen;
     if (soundEl) soundEl.checked = currentConfig.sound;
+
+    const bootdriverEl = document.getElementById('cfg-bootdriver');
+    if (bootdriverEl) bootdriverEl.value = currentConfig.bootdriver || 0;
 
     // Basilisk II specific
     const cpuEl = document.getElementById('cfg-cpu');
@@ -3342,6 +3359,7 @@ async function saveConfig() {
     currentConfig.ram = parseInt(document.getElementById('cfg-ram')?.value || 32);
     currentConfig.screen = document.getElementById('cfg-screen')?.value || '800x600';
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
+    currentConfig.bootdriver = parseInt(document.getElementById('cfg-bootdriver')?.value || 0);
 
     // Gather emulator-specific values
     if (currentConfig.emulator === 'basilisk') {
@@ -3385,6 +3403,7 @@ async function saveConfig() {
         rom: currentConfig.rom,
         disks: currentConfig.disks,
         cdroms: currentConfig.cdroms || [],
+        bootdriver: currentConfig.bootdriver || 0,
         ram_mb: currentConfig.ram,
         screen: currentConfig.screen,
         audio: currentConfig.sound,

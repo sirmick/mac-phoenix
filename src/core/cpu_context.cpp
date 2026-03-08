@@ -272,7 +272,10 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     PrefsReplaceInt32("cpu", cpu_type_);
     PrefsReplaceBool("fpu", fpu_type_ != 0);
     PrefsReplaceInt32("bootdrive", 0);
-    PrefsReplaceInt32("bootdriver", 0);
+    PrefsReplaceInt32("bootdriver", config.bootdriver);
+    if (config.bootdriver != 0) {
+        fprintf(stderr, "[CPUContext] Boot driver override: %d\n", config.bootdriver);
+    }
     PrefsReplaceBool("nogui", true);
     PrefsReplaceBool("ignoresegv", true);
 

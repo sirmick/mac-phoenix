@@ -70,6 +70,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["rom"] = rom_path;
     j["disks"] = disk_paths;
     j["cdroms"] = cdrom_paths;
+    j["bootdriver"] = bootdriver;
     j["codec"] = codec;
     j["mousemode"] = mousemode;
     j["http_port"] = http_port;
@@ -81,7 +82,6 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["debug_mode_switch"] = debug_mode_switch;
     j["debug_perf"] = debug_perf;
 
-    // M68K sub-struct
     j["m68k"]["cpu_type"] = m68k.cpu_type;
     j["m68k"]["fpu"] = m68k.fpu;
     j["m68k"]["modelid"] = m68k.modelid;
@@ -91,7 +91,6 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["m68k"]["swap_opt_cmd"] = m68k.swap_opt_cmd;
     j["m68k"]["keyboardtype"] = m68k.keyboardtype;
 
-    // PPC sub-struct
     j["ppc"]["cpu_type"] = ppc.cpu_type;
     j["ppc"]["fpu"] = ppc.fpu;
     j["ppc"]["modelid"] = ppc.modelid;
@@ -133,6 +132,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("rom")) rom_path = json_utils::get_string(j, "rom");
     if (j.contains("disks")) disk_paths = json_utils::get_string_array(j, "disks");
     if (j.contains("cdroms")) cdrom_paths = json_utils::get_string_array(j, "cdroms");
+    if (j.contains("bootdriver")) bootdriver = json_utils::get_int(j, "bootdriver");
     if (j.contains("codec")) codec = json_utils::get_string(j, "codec");
     if (j.contains("mousemode")) mousemode = json_utils::get_string(j, "mousemode");
     if (j.contains("http_port")) http_port = json_utils::get_int(j, "http_port");
@@ -219,62 +219,6 @@ static void load_from_json(EmulatorConfig& config, const char* path) {
         auto j = json_utils::parse_file(expanded);
         config.merge_json(j);
 
-        // Legacy format support: "common", "m68k", "web" nested sections
-        // This lets old config files still load (one-time migration)
-        if (j.contains("common")) {
-            auto& common = j["common"];
-            if (common.contains("ram")) config.ram_mb = json_utils::get_int(common, "ram");
-            if (common.contains("screen")) {
-                std::string s = json_utils::get_string(common, "screen");
-                uint32_t w, h;
-                if (parse_screen(s, w, h)) {
-                    config.screen_width = w;
-                    config.screen_height = h;
-                }
-            }
-            if (common.contains("sound")) config.audio_enabled = json_utils::get_bool(common, "sound");
-        }
-        if (j.contains("web")) {
-            auto& web = j["web"];
-            if (web.contains("codec")) config.codec = json_utils::get_string(web, "codec");
-            if (web.contains("mousemode")) config.mousemode = json_utils::get_string(web, "mousemode");
-            if (web.contains("http_port")) config.http_port = json_utils::get_int(web, "http_port");
-            if (web.contains("client_dir")) config.client_dir = json_utils::get_string(web, "client_dir");
-            if (web.contains("storage_dir")) config.storage_dir = json_utils::get_string(web, "storage_dir");
-        }
-        // Legacy "m68k" with "rom" and "disks" at top level of m68k section
-        if (j.contains("m68k")) {
-            auto& m = j["m68k"];
-            if (m.contains("rom") && m["rom"].is_string() && !m["rom"].get<std::string>().empty()) {
-                config.rom_path = json_utils::get_string(m, "rom");
-            }
-            if (m.contains("disks")) config.disk_paths = json_utils::get_string_array(m, "disks");
-            if (m.contains("cdroms")) config.cdrom_paths = json_utils::get_string_array(m, "cdroms");
-            // Legacy "cpu" field maps to m68k.cpu_type
-            if (m.contains("cpu") && !m.contains("cpu_type")) {
-                config.m68k.cpu_type = json_utils::get_int(m, "cpu");
-            }
-        }
-        // Legacy "cpu" section with "backend"
-        if (j.contains("cpu")) {
-            auto& cpu = j["cpu"];
-            if (cpu.contains("type")) {
-                int t = json_utils::get_int(cpu, "type");
-                if (t >= 0 && t <= 4) config.m68k.cpu_type = t;
-            }
-            if (cpu.contains("fpu")) config.m68k.fpu = json_utils::get_bool(cpu, "fpu");
-            if (cpu.contains("backend")) {
-                std::string b = json_utils::get_string(cpu, "backend");
-                if (b == "unicorn") config.cpu_backend = CPUBackend::Unicorn;
-                else if (b == "dualcpu") config.cpu_backend = CPUBackend::DualCPU;
-                else config.cpu_backend = CPUBackend::UAE;
-            }
-        }
-        // Legacy "ram" at root level
-        if (j.contains("ram") && !j.contains("ram_mb")) {
-            config.ram_mb = json_utils::get_int(j, "ram");
-        }
-
     } catch (const std::exception& e) {
         fprintf(stderr, "[Config] JSON parse error: %s\n", e.what());
     }
@@ -310,6 +254,38 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
 
     for (int i = 1; i < argc; i++) {
         if (!argv[i]) continue;
+
+        // --help / -h
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            printf("Usage: %s [options] [rom-path]\n\n", argv[0]);
+            printf("Options:\n");
+            printf("  --rom PATH            ROM file path (alternative to positional arg)\n");
+            printf("  --disk PATH           Disk image path (repeatable)\n");
+            printf("  --cdrom PATH          CDROM image path (repeatable)\n");
+            printf("  --ram MB              RAM size in megabytes (default: 32)\n");
+            printf("  --backend NAME        CPU backend: uae, unicorn, dualcpu (default: uae)\n");
+            printf("  --arch ARCH           CPU architecture: m68k, ppc (default: m68k)\n");
+            printf("  --screen WxH          Display resolution (default: 640x480)\n");
+            printf("  --port N              HTTP server port (default: 8000)\n");
+            printf("  --signaling-port N    WebRTC signaling port (default: 8090)\n");
+            printf("  --storage-dir PATH    Storage directory for ROMs/images (default: ~/storage)\n");
+            printf("  --timeout N           Auto-exit after N seconds\n");
+            printf("  --no-webserver        Headless mode (no HTTP/WebRTC)\n");
+            printf("  --screenshots         Dump PPM screenshots to /tmp\n");
+            printf("  --config PATH         JSON config file\n");
+            printf("  --log-level N         Log level 0-3\n");
+            printf("  --debug-connection    Debug WebRTC connections\n");
+            printf("  --debug-mode-switch   Debug video mode switches\n");
+            printf("  --debug-perf          Debug performance\n");
+            printf("  -h, --help            Show this help message\n");
+            printf("\nEnvironment variables:\n");
+            printf("  CPU_BACKEND           CPU backend override\n");
+            printf("  EMULATOR_TIMEOUT      Auto-exit after N seconds\n");
+            printf("  MACEMU_LOG_LEVEL      Log level 0-3\n");
+            printf("  MACEMU_SCREENSHOTS    Enable screenshot dumping\n");
+            printf("  MACEMU_ROM            Default ROM path\n");
+            exit(0);
+        }
 
         // --config <path> (consumed, already processed)
         if (strcmp(argv[i], "--config") == 0 && i+1 < argc) {
@@ -368,6 +344,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --signaling-port <n>
         if (strcmp(argv[i], "--signaling-port") == 0 && i+1 < argc) {
             config.signaling_port = atoi(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --storage-dir <path>
+        if (strcmp(argv[i], "--storage-dir") == 0 && i+1 < argc) {
+            config.storage_dir = argv[i+1];
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
@@ -479,7 +461,12 @@ EmulatorConfig load_emulator_config(const char* config_path,
     // 4. Apply CLI overrides + env vars (highest priority)
     const char* rom_from_cli = apply_cli_overrides(config, argc, argv, env);
 
-    // 5. Resolve ROM path
+    // 5. Expand ~ in storage_dir (must happen before ROM/disk resolution)
+    if (!config.storage_dir.empty()) {
+        config.storage_dir = expand_home(config.storage_dir);
+    }
+
+    // 6. Resolve ROM path
     if (rom_from_cli) {
         config.rom_path = rom_from_cli;
     }
@@ -491,7 +478,7 @@ EmulatorConfig load_emulator_config(const char* config_path,
         }
     }
 
-    // 6. Resolve disk/cdrom paths
+    // 7. Resolve disk/cdrom paths
     auto resolve_paths = [&](std::vector<std::string>& paths) {
         for (auto& p : paths) {
             p = expand_home(p);
@@ -503,7 +490,7 @@ EmulatorConfig load_emulator_config(const char* config_path,
     resolve_paths(config.disk_paths);
     resolve_paths(config.cdrom_paths);
 
-    // 7. Resolve client_dir relative to binary location if it's a relative path
+    // 8. Resolve client_dir relative to binary location if it's a relative path
     if (!config.client_dir.empty() && config.client_dir[0] != '/') {
         char exe_path[4096];
         ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
