@@ -62,15 +62,34 @@ static void ensure_parent_dir(const std::string& path) {
 nlohmann::json EmulatorConfig::to_json() const {
     nlohmann::json j;
 
+    // Strip storage_dir prefix to save portable relative paths
+    auto strip_roms = [&](const std::string& p) -> std::string {
+        std::string prefix = storage_dir + "/roms/";
+        if (!storage_dir.empty() && p.substr(0, prefix.size()) == prefix)
+            return p.substr(prefix.size());
+        return p;
+    };
+    auto strip_images = [&](const std::vector<std::string>& paths) -> std::vector<std::string> {
+        std::string prefix = storage_dir + "/images/";
+        std::vector<std::string> out;
+        for (auto& p : paths) {
+            if (!storage_dir.empty() && p.substr(0, prefix.size()) == prefix)
+                out.push_back(p.substr(prefix.size()));
+            else
+                out.push_back(p);
+        }
+        return out;
+    };
+
     j["architecture"] = architecture_string();
     j["cpu_backend"] = cpu_backend_string();
     j["ram_mb"] = ram_mb;
     j["screen"] = screen_string();
     j["audio"] = audio_enabled;
-    j["rom"] = rom_path;
-    j["disks"] = disk_paths;
-    j["cdroms"] = cdrom_paths;
-    j["floppies"] = floppy_paths;
+    j["rom"] = strip_roms(rom_path);
+    j["disks"] = strip_images(disk_paths);
+    j["cdroms"] = strip_images(cdrom_paths);
+    j["floppies"] = strip_images(floppy_paths);
     j["extfs"] = extfs;
     j["bootdrive"] = bootdrive;
     j["bootdriver"] = bootdriver;
@@ -146,7 +165,11 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         }
     }
     if (j.contains("audio")) audio_enabled = json_utils::get_bool(j, "audio");
-    if (j.contains("rom")) rom_path = json_utils::get_string(j, "rom");
+    if (j.contains("rom")) {
+        rom_path = json_utils::get_string(j, "rom");
+        if (!rom_path.empty() && rom_path[0] != '/' && !storage_dir.empty())
+            rom_path = storage_dir + "/roms/" + rom_path;
+    }
     if (j.contains("disks")) {
         disk_paths = json_utils::get_string_array(j, "disks");
         for (auto& p : disk_paths) {
@@ -514,9 +537,11 @@ EmulatorConfig load_emulator_config(const char* config_path,
     const char* rom_from_cli = apply_cli_overrides(config, argc, argv, env);
 
     // 5. Expand ~ in storage_dir (must happen before ROM/disk resolution)
-    if (!config.storage_dir.empty()) {
-        config.storage_dir = expand_home(config.storage_dir);
+    if (config.storage_dir.empty()) {
+        config.storage_dir = "~/storage";
+        fprintf(stderr, "[Config] storage_dir not set, defaulting to ~/storage\n");
     }
+    config.storage_dir = expand_home(config.storage_dir);
 
     // 6. Resolve ROM path
     if (rom_from_cli) {
