@@ -73,7 +73,7 @@ Track what's done and what's next.
 ### Platform API
 - ✅ Platform struct with function pointers
 - ✅ Backend-independent core code
-- ✅ Runtime backend selection (CPU_BACKEND env var)
+- ✅ Runtime backend selection (`--backend` CLI flag)
 - ✅ Trap handlers (emulop_handler, trap_handler)
 - ✅ **68k trap execution API** (cpu_execute_68k_trap)
 - ✅ **Interrupt abstraction** (cpu_trigger_interrupt, commit c388b229)

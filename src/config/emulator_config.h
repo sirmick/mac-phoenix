@@ -132,6 +132,7 @@ struct EmulatorConfig {
 
     // Internal (not serialized to JSON)
     std::string config_path;       // where to save back
+    nlohmann::json file_config_;   // tracks what's persisted on disk (UI changes only)
 
     // Arch sub-structs
     M68KConfig m68k;
@@ -139,7 +140,8 @@ struct EmulatorConfig {
 
     // Serialization
     nlohmann::json to_json() const;
-    void merge_json(const nlohmann::json& j);
+    void merge_json(const nlohmann::json& j);      // file/startup → runtime only
+    void merge_ui_json(const nlohmann::json& j);   // UI changes → runtime + file_config_
     bool save() const;
 
     // Helpers
@@ -172,7 +174,7 @@ struct EmulatorConfig {
 /*
  * Load emulator configuration from all sources.
  *
- * Priority: CLI args > JSON config > env vars > defaults
+ * Priority: CLI args > JSON config > defaults
  */
 EmulatorConfig load_emulator_config(const char* config_path,
                                       int& argc,

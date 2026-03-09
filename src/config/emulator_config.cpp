@@ -248,7 +248,33 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
 }
 
 /*
- * Save config to JSON file
+ * Merge JSON into both runtime config AND file_config_ (for UI/API changes).
+ * Only values merged here will be persisted on save().
+ */
+void EmulatorConfig::merge_ui_json(const nlohmann::json& j) {
+    // Update runtime config
+    merge_json(j);
+
+    // Update file-level config (what gets saved to disk)
+    for (auto& [key, value] : j.items()) {
+        if (key == "m68k" || key == "ppc") {
+            // Merge sub-objects field by field
+            if (!file_config_.contains(key)) {
+                file_config_[key] = nlohmann::json::object();
+            }
+            for (auto& [sub_key, sub_value] : value.items()) {
+                file_config_[key][sub_key] = sub_value;
+            }
+        } else {
+            file_config_[key] = value;
+        }
+    }
+}
+
+/*
+ * Save config to JSON file.
+ * Writes file_config_ (UI/file changes only), NOT the full runtime config.
+ * CLI-only overrides are never persisted.
  */
 bool EmulatorConfig::save() const {
     if (config_path.empty()) {
@@ -265,7 +291,7 @@ bool EmulatorConfig::save() const {
             return false;
         }
 
-        file << to_json().dump(2);
+        file << file_config_.dump(2);
         file.close();
         fprintf(stderr, "[Config] Saved to %s\n", config_path.c_str());
         return true;
@@ -292,6 +318,7 @@ static void load_from_json(EmulatorConfig& config, const char* path) {
 
     try {
         auto j = json_utils::parse_file(expanded);
+        config.file_config_ = j;  // preserve file contents for save()
         config.merge_json(j);
 
     } catch (const std::exception& e) {
@@ -299,33 +326,11 @@ static void load_from_json(EmulatorConfig& config, const char* path) {
     }
 }
 
-// Environment variable snapshot (read once at startup)
-struct EnvVars {
-    const char* cpu_backend;
-    const char* timeout;
-    const char* screenshots;
-    const char* log_level;
-};
-
-static EnvVars read_env_vars() {
-    return {
-        getenv("CPU_BACKEND"),
-        getenv("EMULATOR_TIMEOUT"),
-        getenv("MACEMU_SCREENSHOTS"),
-        getenv("MACEMU_LOG_LEVEL"),
-    };
-}
-
 /*
  * Apply CLI argument overrides
  */
-static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char** argv,
-                                       const EnvVars& env) {
+static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char** argv) {
     const char* rom_path = nullptr;
-    bool backend_set_by_cli = false;
-    bool timeout_set_by_cli = false;
-    bool screenshots_set_by_cli = false;
-    bool log_level_set_by_cli = false;
 
     for (int i = 1; i < argc; i++) {
         if (!argv[i]) continue;
@@ -353,12 +358,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-mode-switch   Debug video mode switches\n");
             printf("  --debug-perf          Debug performance\n");
             printf("  -h, --help            Show this help message\n");
-            printf("\nEnvironment variables:\n");
-            printf("  CPU_BACKEND           CPU backend override\n");
-            printf("  EMULATOR_TIMEOUT      Auto-exit after N seconds\n");
-            printf("  MACEMU_LOG_LEVEL      Log level 0-3\n");
-            printf("  MACEMU_SCREENSHOTS    Enable screenshot dumping\n");
-            printf("  MACEMU_ROM            Default ROM path\n");
             exit(0);
         }
 
@@ -396,7 +395,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             if (strcmp(argv[i+1], "unicorn") == 0) config.cpu_backend = CPUBackend::Unicorn;
             else if (strcmp(argv[i+1], "dualcpu") == 0) config.cpu_backend = CPUBackend::DualCPU;
             else config.cpu_backend = CPUBackend::UAE;
-            backend_set_by_cli = true;
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
@@ -431,14 +429,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --timeout <sec>
         if (strcmp(argv[i], "--timeout") == 0 && i+1 < argc) {
             config.timeout_seconds = atoi(argv[i+1]);
-            timeout_set_by_cli = true;
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
         // --screenshots
         if (strcmp(argv[i], "--screenshots") == 0) {
             config.screenshots = true;
-            screenshots_set_by_cli = true;
             argv[i] = nullptr; continue;
         }
 
@@ -458,7 +454,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --log-level <n>
         if (strcmp(argv[i], "--log-level") == 0 && i+1 < argc) {
             config.log_level = atoi(argv[i+1]);
-            log_level_set_by_cli = true;
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
@@ -482,25 +477,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         fprintf(stderr, "[Config] Unknown argument: %s\n", argv[i]);
     }
 
-    // Apply environment variables (lowest priority — only if not set by CLI)
-    if (!backend_set_by_cli && env.cpu_backend) {
-        if (strcmp(env.cpu_backend, "unicorn") == 0) config.cpu_backend = CPUBackend::Unicorn;
-        else if (strcmp(env.cpu_backend, "dualcpu") == 0) config.cpu_backend = CPUBackend::DualCPU;
-        else config.cpu_backend = CPUBackend::UAE;
-    }
-
-    if (!timeout_set_by_cli && config.timeout_seconds == 0 && env.timeout) {
-        config.timeout_seconds = atoi(env.timeout);
-    }
-
-    if (!screenshots_set_by_cli && !config.screenshots && env.screenshots) {
-        config.screenshots = true;
-    }
-
-    if (!log_level_set_by_cli && config.log_level == 0 && env.log_level) {
-        config.log_level = atoi(env.log_level);
-    }
-
     return rom_path;
 }
 
@@ -522,10 +498,7 @@ EmulatorConfig load_emulator_config(const char* config_path,
     }
     const char* final_path = config_override ? config_override : config_path;
 
-    // 2. Read env vars upfront (single snapshot)
-    EnvVars env = read_env_vars();
-
-    // 3. Load JSON config (sets values above defaults)
+    // 2. Load JSON config (sets values above defaults)
     load_from_json(config, final_path);
 
     // Store config path for save()
@@ -533,8 +506,8 @@ EmulatorConfig load_emulator_config(const char* config_path,
         config.config_path = expand_home(final_path);
     }
 
-    // 4. Apply CLI overrides + env vars (highest priority)
-    const char* rom_from_cli = apply_cli_overrides(config, argc, argv, env);
+    // 3. Apply CLI overrides (highest priority)
+    const char* rom_from_cli = apply_cli_overrides(config, argc, argv);
 
     // 5. Expand ~ in storage_dir (must happen before ROM/disk resolution)
     if (config.storage_dir.empty()) {

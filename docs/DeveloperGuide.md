@@ -196,7 +196,7 @@ meson test -C build api_endpoints boot_uae mouse_position
 meson test -C build -v
 
 # Validate against UAE using dual-CPU mode
-CPU_BACKEND=dualcpu ./build/mac-phoenix --no-webserver /home/mick/quadra.rom
+./build/mac-phoenix --backend dualcpu --no-webserver /home/mick/quadra.rom
 ```
 
 ## Contributing
@@ -251,7 +251,7 @@ info registers
 ### Performance Issues
 ```bash
 # Check interrupt rate
-MACEMU_LOG_LEVEL=2 EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /home/mick/quadra.rom 2>&1 | grep -c interrupt
+./build/mac-phoenix --log-level 2 --timeout 10 --no-webserver /home/mick/quadra.rom 2>&1 | grep -c interrupt
 ```
 
 ## Architecture Decisions

@@ -491,10 +491,10 @@ After extensive analysis, a comprehensive 4-phase solution was successfully impl
 ### Verification
 ```bash
 # Confirm no IRQ storm (should show ~20, not 780,000+)
-env EMULATOR_TIMEOUT=10 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep -c poll_timer
+./build/mac-phoenix --backend unicorn --timeout 10 --no-webserver 2>&1 | grep -c poll_timer
 
 # Verify timer rate (300 in 5 seconds = 60Hz)
-env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep "Timer:"
+./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | grep "Timer:"
 ```
 
 ### Key Insights That Led to Solution

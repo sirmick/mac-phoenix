@@ -50,7 +50,7 @@ extern Platform g_platform;
 
 **Benefits:**
 1. **Backend Independence** - Core code never calls UAE or Unicorn directly
-2. **Runtime Selection** - Choose backend via `CPU_BACKEND` environment variable
+2. **Runtime Selection** - Choose backend via `--backend` CLI flag
 3. **Easy Testing** - Can mock out backends for unit tests
 4. **Future Expansion** - Add new backends (QEMU? Custom JIT?) without touching core
 
@@ -458,8 +458,8 @@ See [TIMER_IMPLEMENTATION_FINAL.md](TIMER_IMPLEMENTATION_FINAL.md) for timer det
 ### Startup Sequence
 
 ```c
-// 1. main.cpp parses CPU_BACKEND environment variable
-const char *backend = getenv("CPU_BACKEND");  // "uae", "unicorn", "dualcpu"
+// 1. main.cpp parses --backend CLI flag (default: "uae")
+const char *backend = config.backend;  // "uae", "unicorn", "dualcpu"
 
 // 2. Initialize appropriate backend
 if (strcmp(backend, "unicorn") == 0) {
@@ -567,7 +567,7 @@ src/core/
 
 1. **Platform API is the abstraction boundary** - Everything goes through it
 2. **Unicorn is the primary goal** - UAE is legacy, DualCPU is validation
-3. **Backends are swappable at runtime** - via `CPU_BACKEND` env var
+3. **Backends are swappable at runtime** - via `--backend` CLI flag
 4. **Hook optimization is critical** - UC_HOOK_BLOCK + UC_HOOK_INSN_INVALID for performance
 5. **Native trap execution** - Unicorn is self-contained, no UAE dependency
 

@@ -413,10 +413,10 @@ env->pc = handler;
 ninja -C build
 
 # Test UAE backend
-EMULATOR_TIMEOUT=5 CPU_BACKEND=uae ./build/mac-phoenix ~/quadra.rom
+./build/mac-phoenix --backend uae --timeout 5 ~/quadra.rom
 
 # Test Unicorn backend
-EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/mac-phoenix ~/quadra.rom
+./build/mac-phoenix --backend unicorn --timeout 5 ~/quadra.rom
 ```
 
 ### Results

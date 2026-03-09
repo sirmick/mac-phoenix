@@ -71,7 +71,7 @@ Then open **http://localhost:8000** in your browser.
 ### Headless mode
 
 ```bash
-EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /path/to/quadra.rom
+./build/mac-phoenix --timeout 10 --no-webserver /path/to/quadra.rom
 ```
 
 ## CPU backends
@@ -82,7 +82,7 @@ EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /path/to/quadra.rom
 | `unicorn` | QEMU TCG JIT | ~48s | Validation, future optimization |
 | `dualcpu` | Both in lockstep | Very slow | Debugging CPU divergences |
 
-Select with `--backend uae|unicorn|dualcpu` or the `CPU_BACKEND` env var.
+Select with `--backend uae|unicorn|dualcpu`.
 
 ## Configuration
 

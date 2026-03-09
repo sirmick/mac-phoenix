@@ -430,7 +430,7 @@ Expected behavior:
 Run existing Quadra boot test with DualCPU:
 
 ```bash
-CPU_BACKEND=dualcpu ./build/mac-phoenix ~/quadra.rom
+./build/mac-phoenix --backend dualcpu ~/quadra.rom
 ```
 
 Expected behavior:

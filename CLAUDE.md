@@ -12,7 +12,7 @@ ninja -C build
 ./build/mac-phoenix /home/mick/quadra.rom
 
 # Run (headless, timed)
-EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /home/mick/quadra.rom
+./build/mac-phoenix --timeout 10 --no-webserver /home/mick/quadra.rom
 
 # Test (fast — API + UAE boot + mouse + command bridge, ~15s)
 meson test -C build api_endpoints boot_uae mouse_position command_bridge
@@ -35,7 +35,7 @@ npx playwright test
 
 ## CPU Backends
 
-Selected via `--backend` flag or `CPU_BACKEND` env var (default: `uae`):
+Selected via `--backend` flag (default: `uae`):
 
 | Backend | What | Speed | Use for |
 |---------|------|-------|---------|
@@ -130,14 +130,14 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --ram MB              RAM size in megabytes
   --port N              HTTP server port (default: 8000)
   --signaling-port N    WebRTC signaling port (default: 8090)
-  --backend uae|unicorn Backend override (or use CPU_BACKEND env)
+  --backend uae|unicorn Backend selection (default: uae)
   --arch m68k|ppc       CPU architecture
   --timeout N           Auto-exit after N seconds
   --no-webserver        Headless mode (no HTTP/WebRTC)
   --screen WxH          Display resolution (default: 640x480)
   --config path         JSON config file
   --screenshots         Dump PPM screenshots to /tmp
-  --log-level N         Log level 0-3 (or use MACEMU_LOG_LEVEL env)
+  --log-level N         Log level 0-3
   --debug-connection    Debug WebRTC connections
   --debug-mode-switch   Debug video mode switches
   --debug-perf          Debug performance
@@ -145,20 +145,18 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
 
 ## Environment Variables
 
-| Var | Description |
-|-----|-------------|
-| `CPU_BACKEND` | `uae`, `unicorn`, or `dualcpu` |
-| `EMULATOR_TIMEOUT` | Auto-exit after N seconds |
-| `MACEMU_LOG_LEVEL` | 0=milestones, 1=important ops, 2=all ops, 3=+registers |
-| `MACEMU_SCREENSHOTS` | Dump PPM screenshots to /tmp |
-| `MACEMU_ROM` | Default ROM path for tests |
+The emulator binary does not read environment variables. Use CLI flags instead.
+
+| Var | Scope | Description |
+|-----|-------|-------------|
+| `MACEMU_ROM` | Test scripts only | Default ROM path (not read by the binary) |
 
 ## Key Architectural Decisions
 
 - **Platform API**: All backends implement the same `g_platform` function pointer table. Core code never calls backend-specific functions directly.
 - **Memory layout**: RAM(32MB @ 0x0) + ROM(1MB @ 0x02000000) + ScratchMem(64KB @ 0x02100000) + FrameBuffer(4MB @ 0x02110000). Framebuffer is outside RAM to avoid corrupting Mac data structures.
 - **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
-- **Single config system**: `EmulatorConfig` — handles CLI args, JSON file, env vars. Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
+- **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
 - **Command bridge**: Two-layer dispatch — read commands peek Mac memory from IRQ, action commands use jGNEFilter to execute in app context. Fork mode uses SPSC ring buffers in SharedState. See `docs/CommandBridge.md`.
 

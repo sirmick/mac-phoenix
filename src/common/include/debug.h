@@ -112,7 +112,7 @@ extern void kprintf(const char *, ...);
 /*
  * D(x) macro behavior:
  *   DEBUG 0:  Always silent (compile-time elimination, use for hot paths)
- *   DEBUG 1:  Runtime-gated by MACEMU_LOG_LEVEL >= 2 environment variable
+ *   DEBUG 1:  Runtime-gated by --log-level >= 2
  *   DEBUG 2+: Always enabled (unconditional, for temporary debugging)
  *
  * This allows driver debug output to be controlled at runtime without

@@ -4,7 +4,7 @@
  *  Tracks boot progress by monitoring EmulOps and Mac low-memory globals.
  *  Emits concise milestone messages instead of per-EmulOp spam.
  *
- *  Log levels (MACEMU_LOG_LEVEL env var):
+ *  Log levels (--log-level flag):
  *    0 = milestones only (default)
  *    1 = milestones + important EmulOps (RESET, INSTALL_DRIVERS, etc.)
  *    2 = all EmulOps with names

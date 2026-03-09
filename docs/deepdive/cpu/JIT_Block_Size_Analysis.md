@@ -35,7 +35,7 @@ Added block statistics tracking to `unicorn_wrapper.c`:
 ### Test Configuration
 
 ```bash
-EMULATOR_TIMEOUT=2 CPU_BACKEND=unicorn ./build/mac-phoenix ~/quadra.rom
+./build/mac-phoenix --backend unicorn --timeout 2 ~/quadra.rom
 ```
 
 - **Duration**: 2 seconds

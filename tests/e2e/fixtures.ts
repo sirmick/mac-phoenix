@@ -45,9 +45,16 @@ type EmulatorFixture = {
   hasRom: boolean;
 };
 
-// Shared emulator process across tests in the same worker
+// Shared emulator process across tests in the same worker.
+// Auto-spawns the emulator so tests don't need an external process.
+let sharedEmulatorProc: ChildProcess | null = null;
+
 export const test = base.extend<{}, EmulatorFixture>({
   emulatorPort: [async ({}, use) => {
+    // Spawn emulator once per worker if not already running
+    if (!sharedEmulatorProc) {
+      sharedEmulatorProc = await spawnEmulator({ timeoutSeconds: 300 });
+    }
     await use(HTTP_PORT);
   }, { scope: 'worker' }],
 
@@ -59,24 +66,25 @@ export const test = base.extend<{}, EmulatorFixture>({
 // Re-export expect
 export { expect } from '@playwright/test';
 
-// Helper to spawn the emulator as a child process for tests that need it
+// Helper to spawn the emulator as a child process
 export async function spawnEmulator(opts?: { timeoutSeconds?: number }): Promise<ChildProcess> {
   if (!fs.existsSync(BINARY)) {
     throw new Error(`Binary not found: ${BINARY}. Run 'ninja -C build' first.`);
   }
 
   const timeout = opts?.timeoutSeconds ?? 60;
-  const args = ['--port', String(HTTP_PORT), '--signaling-port', String(SIG_PORT)];
+  const args = [
+    '--backend', 'uae',
+    '--timeout', String(timeout),
+    '--port', String(HTTP_PORT),
+    '--signaling-port', String(SIG_PORT),
+  ];
   if (fs.existsSync(ROM_PATH)) {
     args.push(ROM_PATH);
   }
 
   const proc = spawn(BINARY, args, {
-    env: {
-      ...process.env,
-      CPU_BACKEND: 'uae',
-      EMULATOR_TIMEOUT: String(timeout),
-    },
+    env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 

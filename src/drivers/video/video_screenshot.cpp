@@ -4,7 +4,7 @@
  *  Simple video driver that captures PPM screenshots to /tmp/ for debugging.
  *  640x480x8 framebuffer (same as null driver) with periodic screenshot capture.
  *
- *  Enable with: MACEMU_SCREENSHOTS=1
+ *  Enable with: --screenshots
  *  Output: /tmp/macemu_screen_NNN.ppm (every 5 seconds)
  *
  *  For 8-bit mode, applies the Mac CLUT (color lookup table) to produce

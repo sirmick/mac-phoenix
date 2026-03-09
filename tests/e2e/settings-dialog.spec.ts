@@ -1,16 +1,6 @@
-import { test, expect, spawnEmulator, killEmulator } from './fixtures';
-import { ChildProcess } from 'child_process';
-
-let emu: ChildProcess;
+import { test, expect } from './fixtures';
 
 test.describe('Settings Dialog', () => {
-  test.beforeAll(async () => {
-    emu = await spawnEmulator({ timeoutSeconds: 30 });
-  });
-
-  test.afterAll(async () => {
-    if (emu) await killEmulator(emu);
-  });
 
   test('controls are disabled during load, then enabled', async ({ page, emulatorPort }) => {
     await page.goto(`http://localhost:${emulatorPort}/`);

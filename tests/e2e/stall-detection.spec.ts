@@ -7,8 +7,7 @@
  *
  * Detects stalls by measuring latency between mouse input and position update.
  */
-import { test, expect, spawnEmulator, killEmulator } from './fixtures';
-import { ChildProcess } from 'child_process';
+import { test, expect, waitForBootPhase } from './fixtures';
 
 const HTTP_PORT = parseInt(process.env.MACEMU_HTTP_PORT || '18094');
 const SIG_PORT = HTTP_PORT + 1;
@@ -19,34 +18,15 @@ const PAGE_URL = `http://localhost:${HTTP_PORT}/?ws=ws://localhost:${SIG_PORT}/`
 // The 60Hz interrupt fires every ~16.6ms, so 500ms is very generous.
 const STALL_THRESHOLD_MS = 500;
 
-// How long to wait for boot (Finder desktop)
-const BOOT_TIMEOUT_MS = 30_000;
-
-let emulator: ChildProcess;
-
 test.describe('Stall Detection', () => {
   test.beforeAll(async () => {
-    emulator = await spawnEmulator();
-    // Start CPU
+    // Emulator is auto-spawned by the fixture; just start CPU and wait for boot
     await fetch(`${API}/api/emulator/start`, { method: 'POST' });
-    // Wait for Finder or desktop phase
-    const start = Date.now();
-    while (Date.now() - start < BOOT_TIMEOUT_MS) {
-      try {
-        const resp = await fetch(`${API}/api/status`);
-        if (resp.ok) {
-          const body = await resp.json();
-          if (body.boot_phase === 'Finder' || body.boot_phase === 'desktop') break;
-        }
-      } catch {}
-      await new Promise(r => setTimeout(r, 500));
-    }
+    await waitForBootPhase(HTTP_PORT, 'Finder', 30_000).catch(() =>
+      waitForBootPhase(HTTP_PORT, 'desktop', 5_000)
+    );
     // Let Finder settle
     await new Promise(r => setTimeout(r, 2000));
-  });
-
-  test.afterAll(async () => {
-    if (emulator) await killEmulator(emulator);
   });
 
   interface CursorState {
@@ -457,50 +437,14 @@ test.describe('Soak Test', () => {
   const SOAK_POLL_INTERVAL_MS = 100; // How often to send mouse + check position
   const SOAK_STALL_THRESHOLD_MS = 500;
 
-  let soakEmulator: ChildProcess;
-
   test.beforeAll(async () => {
-    // Delete stale XPRAM to avoid "not cleanly shut down" dialog
-    const fs = await import('fs');
-    const path = await import('path');
-    const xpramPath = path.resolve(__dirname, '../../BasiliskII_XPRAM');
-    try { fs.unlinkSync(xpramPath); } catch {}
-
-    soakEmulator = await spawnEmulator({ timeoutSeconds: SOAK_DURATION_S + 30 });
+    // Emulator is auto-spawned by the fixture; just start CPU and wait for boot
     await fetch(`${API}/api/emulator/start`, { method: 'POST' });
-
-    // Wait for Finder, with dialog dismissal fallback
-    const bootStart = Date.now();
-    let booted = false;
-    while (Date.now() - bootStart < 45_000) {
-      try {
-        const resp = await fetch(`${API}/api/status`);
-        if (resp.ok) {
-          const body = await resp.json();
-          if (body.boot_phase === 'Finder' || body.boot_phase === 'desktop') {
-            booted = true;
-            break;
-          }
-        }
-      } catch {}
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    if (!booted) {
-      // Might be stuck on dialog — try clicking OK button
-      // The "not cleanly shut down" dialog OK button is roughly at center screen
-      console.log('  Boot timeout — attempting to dismiss dialog via mouse click');
-      // Use the API directly since we may not have a page yet
-      // Send absolute mouse to likely OK button position and click
-      // (This is a best-effort — if there's no dialog, the click is harmless)
-    }
-
+    await waitForBootPhase(HTTP_PORT, 'Finder', 45_000).catch(() =>
+      waitForBootPhase(HTTP_PORT, 'desktop', 5_000)
+    );
     // Let Finder settle
     await new Promise(r => setTimeout(r, 3000));
-  });
-
-  test.afterAll(async () => {
-    if (soakEmulator) await killEmulator(soakEmulator);
   });
 
   test(`soak: ${SOAK_DURATION_S}s sustained mouse movement`, async ({ page }) => {

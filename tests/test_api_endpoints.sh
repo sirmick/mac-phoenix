@@ -27,9 +27,7 @@ if [[ -f "$ROM" ]]; then
     ARGS+=("$ROM")
 fi
 
-CPU_BACKEND=uae \
-EMULATOR_TIMEOUT=20 \
-    "$BINARY" --port "$PORT" --signaling-port "$SIG_PORT" "${ARGS[@]}" &>/tmp/macemu_api_test_$$.log &
+"$BINARY" --backend uae --timeout 20 --port "$PORT" --signaling-port "$SIG_PORT" "${ARGS[@]}" &>/tmp/macemu_api_test_$$.log &
 EMU_PID=$!
 
 cleanup() {

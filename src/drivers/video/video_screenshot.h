@@ -1,7 +1,7 @@
 /*
  *  video_screenshot.h - Screenshot video driver
  *
- *  Enable with MACEMU_SCREENSHOTS=1 environment variable.
+ *  Enable with --screenshots CLI flag.
  */
 
 #ifndef VIDEO_SCREENSHOT_H

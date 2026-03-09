@@ -118,15 +118,15 @@ check_results() {
 # Test with UAE backend
 echo "Testing with UAE backend..."
 echo "----------------------------"
-EMULATOR_TIMEOUT=$TIMEOUT CPU_BACKEND=uae EMULOP_VERBOSE=1 \
-    ./build/mac-phoenix --rom "$ROM_PATH" --no-webserver > uae_test.log 2>&1 || true
+EMULOP_VERBOSE=1 \
+    ./build/mac-phoenix --backend uae --timeout $TIMEOUT --rom "$ROM_PATH" --no-webserver > uae_test.log 2>&1 || true
 check_results "uae_test.log" "UAE"
 
 # Test with Unicorn backend
 echo "Testing with Unicorn backend..."
 echo "--------------------------------"
-EMULATOR_TIMEOUT=$TIMEOUT CPU_BACKEND=unicorn EMULOP_VERBOSE=1 \
-    ./build/mac-phoenix --rom "$ROM_PATH" --no-webserver > unicorn_test.log 2>&1 || true
+EMULOP_VERBOSE=1 \
+    ./build/mac-phoenix --backend unicorn --timeout $TIMEOUT --rom "$ROM_PATH" --no-webserver > unicorn_test.log 2>&1 || true
 check_results "unicorn_test.log" "Unicorn"
 
 # Compare backends

@@ -124,10 +124,10 @@ src/cpu/
 
 ```bash
 # Run Unicorn for 30s and check trap table count
-EMULATOR_TIMEOUT=30 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver /home/mick/quadra.rom 2>&1 | grep "TRAP TABLE"
+./build/mac-phoenix --backend unicorn --timeout 30 --no-webserver /home/mick/quadra.rom 2>&1 | grep "TRAP TABLE"
 
 # Compare with UAE
-EMULATOR_TIMEOUT=30 CPU_BACKEND=uae ./build/mac-phoenix --no-webserver /home/mick/quadra.rom 2>&1 | grep "TRAP TABLE"
+./build/mac-phoenix --backend uae --timeout 30 --no-webserver /home/mick/quadra.rom 2>&1 | grep "TRAP TABLE"
 
 # Both should show 87 RAM entries
 ```

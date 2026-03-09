@@ -18,8 +18,9 @@ Settings are resolved in this order (highest wins):
 
 1. **Command-line arguments** (`--port 9000`)
 2. **JSON config file** (`config.json`)
-3. **Environment variables** (`CPU_BACKEND=unicorn`)
-4. **Defaults**
+3. **Defaults**
+
+CLI arguments affect the runtime config only — they are never saved to the config file. When the web UI saves settings, only UI-modified values are persisted, merged into the existing config file.
 
 ## Minimal Config
 
@@ -182,10 +183,8 @@ CLI flags override config file values. See `--help` or [Commands.md](Commands.md
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `CPU_BACKEND` | Override CPU backend (`uae`, `unicorn`, `dualcpu`) |
-| `EMULATOR_TIMEOUT` | Auto-exit after N seconds |
-| `MACEMU_LOG_LEVEL` | Log verbosity (0-3) |
-| `MACEMU_SCREENSHOTS` | Dump PPM screenshots to /tmp |
-| `MACEMU_ROM` | Default ROM path (used by tests) |
+The emulator binary does not read environment variables for configuration — use CLI flags instead (e.g. `--backend`, `--timeout`, `--log-level`, `--screenshots`).
+
+| Variable | Scope | Description |
+|----------|-------|-------------|
+| `MACEMU_ROM` | Test scripts only | Default ROM path (not read by the binary) |

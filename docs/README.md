@@ -34,12 +34,12 @@ nano ~/.config/mac-phoenix/config.json
 
 ### Run with Unicorn backend
 ```bash
-CPU_BACKEND=unicorn ./build/mac-phoenix ~/quadra.rom
+./build/mac-phoenix --backend unicorn ~/quadra.rom
 ```
 
 ### Run with dual-CPU validation
 ```bash
-CPU_BACKEND=dualcpu ./build/mac-phoenix ~/quadra.rom
+./build/mac-phoenix --backend dualcpu ~/quadra.rom
 ```
 
 ### Run with custom config

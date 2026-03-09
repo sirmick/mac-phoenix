@@ -37,7 +37,7 @@ cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
 ./build/mac-phoenix /home/mick/quadra.rom
 
 # Headless with timeout
-EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /home/mick/quadra.rom
+./build/mac-phoenix --timeout 10 --no-webserver /home/mick/quadra.rom
 
 # Specific backend
 ./build/mac-phoenix --backend unicorn /home/mick/quadra.rom
@@ -87,14 +87,14 @@ npx playwright test --ui        # interactive UI
   --ram MB              RAM size in megabytes
   --port N              HTTP server port (default: 8000)
   --signaling-port N    WebRTC signaling port (default: 8090)
-  --backend uae|unicorn Backend override (or use CPU_BACKEND env)
+  --backend uae|unicorn Backend selection (default: uae)
   --arch m68k|ppc       CPU architecture
   --timeout N           Auto-exit after N seconds
   --no-webserver        Headless mode (no HTTP/WebRTC)
   --screen WxH          Display resolution (default: 640x480)
   --config path         JSON config file
   --screenshots         Dump PPM screenshots to /tmp
-  --log-level N         Log level 0-3 (or use MACEMU_LOG_LEVEL env)
+  --log-level N         Log level 0-3
   --debug-connection    Debug WebRTC connections
   --debug-mode-switch   Debug video mode switches
   --debug-perf          Debug performance
@@ -104,15 +104,11 @@ npx playwright test --ui        # interactive UI
 
 ## Environment Variables
 
-### Core
+The emulator binary does not read environment variables for configuration — use CLI flags instead (e.g. `--backend`, `--timeout`, `--log-level`, `--screenshots`).
 
-| Variable | Values | Purpose |
-|----------|--------|---------|
-| `CPU_BACKEND` | `uae`, `unicorn`, `dualcpu` | Select CPU backend (default: uae) |
-| `EMULATOR_TIMEOUT` | seconds | Auto-exit after N seconds |
-| `MACEMU_LOG_LEVEL` | 0-3 | 0=milestones, 1=important, 2=all ops, 3=+registers |
-| `MACEMU_SCREENSHOTS` | any | Enable PPM screenshot dumps to /tmp |
-| `MACEMU_ROM` | path | Default ROM path for tests |
+| Variable | Scope | Purpose |
+|----------|-------|---------|
+| `MACEMU_ROM` | Test scripts only | Default ROM path (not read by the binary) |
 
 ### Tracing & Debugging
 
@@ -138,17 +134,17 @@ npx playwright test --ui        # interactive UI
 
 ```bash
 # Build and test (5 second boot)
-ninja -C build && EMULATOR_TIMEOUT=5 ./build/mac-phoenix --no-webserver /home/mick/quadra.rom
+ninja -C build && ./build/mac-phoenix --timeout 5 --no-webserver /home/mick/quadra.rom
 ```
 
 ### Trace Comparison (UAE vs Unicorn)
 
 ```bash
 # Generate traces
-EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 ./build/mac-phoenix --backend uae \
+CPU_TRACE=0-250000 ./build/mac-phoenix --backend uae --timeout 2 \
     --no-webserver /home/mick/quadra.rom > uae.log 2>&1
 
-EMULATOR_TIMEOUT=2 CPU_TRACE=0-250000 ./build/mac-phoenix --backend unicorn \
+CPU_TRACE=0-250000 ./build/mac-phoenix --backend unicorn --timeout 2 \
     --no-webserver /home/mick/quadra.rom > unicorn.log 2>&1
 
 # Compare
@@ -158,8 +154,8 @@ diff uae.log unicorn.log | head -50
 ### DualCPU Validation
 
 ```bash
-EMULATOR_TIMEOUT=30 DUALCPU_TRACE_DEPTH=20 \
-    ./build/mac-phoenix --backend dualcpu --no-webserver /home/mick/quadra.rom
+DUALCPU_TRACE_DEPTH=20 \
+    ./build/mac-phoenix --backend dualcpu --timeout 30 --no-webserver /home/mick/quadra.rom
 ```
 
 ### GDB

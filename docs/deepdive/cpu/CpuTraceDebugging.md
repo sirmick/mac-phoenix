@@ -97,12 +97,12 @@ For more control, run each CPU separately:
 
 ```bash
 # UAE trace
-CPU_TRACE=3680-3700 CPU_TRACE_QUIET=1 CPU_BACKEND=uae \
-  ./build/mac-phoenix ~/quadra.rom 2>&1 | grep '^\[' > uae_trace.txt
+CPU_TRACE=3680-3700 CPU_TRACE_QUIET=1 \
+  ./build/mac-phoenix --backend uae ~/quadra.rom 2>&1 | grep '^\[' > uae_trace.txt
 
 # Unicorn trace
-CPU_TRACE=3680-3700 CPU_TRACE_QUIET=1 CPU_BACKEND=unicorn \
-  ./build/mac-phoenix ~/quadra.rom 2>&1 | grep '^\[' > unicorn_trace.txt
+CPU_TRACE=3680-3700 CPU_TRACE_QUIET=1 \
+  ./build/mac-phoenix --backend unicorn ~/quadra.rom 2>&1 | grep '^\[' > unicorn_trace.txt
 
 # Compare
 diff -u uae_trace.txt unicorn_trace.txt
@@ -124,16 +124,6 @@ diff -u uae_trace.txt unicorn_trace.txt
 **Format**: `1` or unset
 **Example**: `CPU_TRACE_MEMORY=1`
 **Description**: Log all memory reads with addresses and values
-
-### CPU_BACKEND
-**Format**: `uae`, `unicorn`, or `dualcpu`
-**Example**: `CPU_BACKEND=uae`
-**Description**: Select which CPU implementation to use
-
-### EMULATOR_TIMEOUT
-**Format**: seconds
-**Example**: `EMULATOR_TIMEOUT=5`
-**Description**: Auto-exit after N seconds (prevents infinite loops)
 
 ## Implementation Details
 
@@ -205,7 +195,7 @@ This shows that instruction #3689 (opcode 0x262E = MOVE.L (A6),D3) read the valu
 ### Traces are different lengths
 - One CPU likely crashed or hit an infinite loop
 - Check the last instruction in the shorter trace
-- Use `EMULATOR_TIMEOUT` to prevent hangs
+- Use `--timeout` to prevent hangs
 
 ## Next Steps
 

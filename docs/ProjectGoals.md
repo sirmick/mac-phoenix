@@ -138,7 +138,7 @@ What we're building and why.
 **Example**:
 ```bash
 # After implementing interrupt support:
-EMULATOR_TIMEOUT=30 CPU_BACKEND=dualcpu ./build/mac-phoenix ~/quadra.rom
+./build/mac-phoenix --backend dualcpu --timeout 30 ~/quadra.rom
 
 # If it validates 500k+ instructions → probably correct
 # If it diverges at 1k instructions → definitely a bug

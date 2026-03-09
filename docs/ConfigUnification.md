@@ -18,4 +18,8 @@ The dual config system (legacy `PrefsFindXXX` linked-list prefs + new `EmulatorC
 
 All 30+ source files now use `config::EmulatorConfig::instance()` directly. One config format, one codepath, no sync issues.
 
+### Config Separation (March 2026)
+
+CLI args and file-based config are kept separate. `EmulatorConfig` tracks a `file_config_` JSON object representing what's on disk. CLI args override at runtime but are never persisted. The web UI uses `merge_ui_json()` which updates both the runtime config and `file_config_`, so only UI-modified values are saved. Environment variables are no longer supported — use CLI flags instead.
+
 See [JsonConfig.md](JsonConfig.md) for the current config schema and usage.

@@ -429,10 +429,10 @@ Response APIRouter::handle_config_save(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"Invalid JSON\"}");
     }
 
-    // Merge updates into live config
-    ctx_->config->merge_json(j);
+    // Merge updates into live config AND file-level config
+    ctx_->config->merge_ui_json(j);
 
-    // Save to disk
+    // Save to disk (writes file_config_ only, not CLI overrides)
     if (!ctx_->config->save()) {
         return Response::json("{\"success\": false, \"error\": \"Failed to save config file\"}");
     }

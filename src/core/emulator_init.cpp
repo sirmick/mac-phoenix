@@ -376,11 +376,8 @@ bool init_emulator_from_config(const char* emulator_type,
         return false;
     }
 
-    // Get CPU backend from environment variable
-    const char *cpu_backend = getenv("CPU_BACKEND");
-    if (!cpu_backend) {
-        cpu_backend = "uae";  // Default
-    }
+    // Get CPU backend from config
+    const char *cpu_backend = config::EmulatorConfig::instance().cpu_backend_string();
 
     // Initialize CPU subsystem (includes PatchROM and cpu_init)
     if (!init_cpu_subsystem(cpu_backend)) {

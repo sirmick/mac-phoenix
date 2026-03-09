@@ -5,7 +5,7 @@
 ### 1. Check for IRQ Storm
 ```bash
 # Should show ~20, NOT 780,000+
-env EMULATOR_TIMEOUT=10 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep -c poll_timer
+./build/mac-phoenix --backend unicorn --timeout 10 --no-webserver 2>&1 | grep -c poll_timer
 ```
 
 **Expected**: ~20 polls
@@ -14,7 +14,7 @@ env EMULATOR_TIMEOUT=10 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2
 ### 2. Verify Timer Rate
 ```bash
 # Should show 300 interrupts in 5 seconds (60Hz)
-env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep "Timer:"
+./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | grep "Timer:"
 ```
 
 **Expected**: "Timer: Stopped after 300 interrupts (5 seconds)"
@@ -23,10 +23,10 @@ env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>
 ### 3. Compare Backends
 ```bash
 # UAE (reference implementation)
-env EMULATOR_TIMEOUT=5 CPU_BACKEND=uae ./build/mac-phoenix --no-webserver 2>&1 | tail -20
+./build/mac-phoenix --backend uae --timeout 5 --no-webserver 2>&1 | tail -20
 
 # Unicorn (optimized implementation)
-env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | tail -20
+./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | tail -20
 ```
 
 Both should show similar progress.
@@ -65,10 +65,10 @@ Both should show similar progress.
 **Debug Steps**:
 ```bash
 # Enable CPU trace
-env CPU_TRACE=0-100 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | head -100
+CPU_TRACE=0-100 ./build/mac-phoenix --backend unicorn --no-webserver 2>&1 | head -100
 
 # Check for illegal instructions
-env CPU_VERBOSE=1 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep "illegal\|invalid"
+CPU_VERBOSE=1 ./build/mac-phoenix --backend unicorn --no-webserver 2>&1 | grep "illegal\|invalid"
 ```
 
 ### Issue: Performance Degradation
@@ -142,10 +142,10 @@ ls -la ~/quadra.rom
 ### Basic Functionality Test
 ```bash
 # 1. Minimal test - should not crash
-env EMULATOR_TIMEOUT=1 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver
+./build/mac-phoenix --backend unicorn --timeout 1 --no-webserver
 
 # 2. Check boot progress
-env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep "EmulOp"
+./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | grep "EmulOp"
 
 # 3. Full comparison test
 ./scripts/compare_boot.sh
@@ -154,15 +154,15 @@ env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>
 ### Regression Tests
 ```bash
 # Test IRQ storm fix
-env EMULATOR_TIMEOUT=10 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep -c "EmulOp 0x7129"
+./build/mac-phoenix --backend unicorn --timeout 10 --no-webserver 2>&1 | grep -c "EmulOp 0x7129"
 # MUST be < 100
 
 # Test timer delivery
-env EMULATOR_TIMEOUT=5 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep "Timer:" | grep "300"
+./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | grep "Timer:" | grep "300"
 # MUST show 300 interrupts
 
 # Test EmulOp execution
-env EMULATOR_TIMEOUT=2 CPU_BACKEND=unicorn EMULOP_VERBOSE=1 ./build/mac-phoenix --no-webserver 2>&1 | grep "CLKNOMEM"
+EMULOP_VERBOSE=1 ./build/mac-phoenix --backend unicorn --timeout 2 --no-webserver 2>&1 | grep "CLKNOMEM"
 # MUST show CLKNOMEM calls
 ```
 
@@ -176,10 +176,8 @@ ninja -C build
 
 # Run under GDB
 gdb ./build/mac-phoenix
-(gdb) set environment EMULATOR_TIMEOUT=10
-(gdb) set environment CPU_BACKEND=unicorn
 (gdb) break unicorn_execute_with_interrupts
-(gdb) run --no-webserver
+(gdb) run --backend unicorn --timeout 10 --no-webserver
 ```
 
 ### Key Breakpoints
@@ -260,7 +258,7 @@ grep "TB executed" logfile | wc -l
 ./build/mac-phoenix --no-webserver
 
 # Run with UAE (reference)
-CPU_BACKEND=uae ./build/mac-phoenix --no-webserver
+./build/mac-phoenix --backend uae --no-webserver
 
 # Debug mode
 CPU_VERBOSE=1 EMULOP_VERBOSE=1 ./build/mac-phoenix --no-webserver

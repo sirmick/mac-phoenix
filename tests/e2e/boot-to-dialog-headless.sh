@@ -75,8 +75,8 @@ echo ""
 echo "--- Pass 1: Boot to Finder (dirty shutdown) ---"
 rm -f /tmp/macemu_screen_*.ppm
 
-CPU_BACKEND="$BACKEND" MACEMU_SCREENSHOTS=1 EMULATOR_TIMEOUT=$BOOT_TIMEOUT \
-    "$BINARY" --no-webserver "$ROM" > "$RESULT_DIR/pass1.log" 2>&1 &
+"$BINARY" --backend "$BACKEND" --screenshots --timeout "$BOOT_TIMEOUT" \
+    --no-webserver "$ROM" > "$RESULT_DIR/pass1.log" 2>&1 &
 EMUPID=$!
 echo "  PID: $EMUPID"
 
@@ -101,8 +101,8 @@ echo ""
 echo "--- Pass 2: Reboot (expect 'not shut down cleanly' dialog) ---"
 rm -f /tmp/macemu_screen_*.ppm
 
-CPU_BACKEND="$BACKEND" MACEMU_SCREENSHOTS=1 EMULATOR_TIMEOUT=$DIALOG_TIMEOUT \
-    "$BINARY" --no-webserver "$ROM" > "$RESULT_DIR/pass2.log" 2>&1 &
+"$BINARY" --backend "$BACKEND" --screenshots --timeout "$DIALOG_TIMEOUT" \
+    --no-webserver "$ROM" > "$RESULT_DIR/pass2.log" 2>&1 &
 EMUPID=$!
 echo "  PID: $EMUPID"
 

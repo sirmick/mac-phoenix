@@ -111,7 +111,7 @@ message('  libyuv: ' + libyuv_dep.found().to_string())
 
 # Build info
 message('Build configuration:')
-message('  All CPU backends compiled (runtime selection via CPU_BACKEND env var)')
+message('  All CPU backends compiled (runtime selection via --backend flag)')
 message('  Build BasiliskII: ' + build_basilisk.to_string())
 message('  Build SheepShaver: ' + build_sheepshaver.to_string())
 

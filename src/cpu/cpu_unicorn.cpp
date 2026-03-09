@@ -608,7 +608,7 @@ static int unicorn_backend_execute_one(void) {
 	 *
 	 * We use a smaller batch size (1000) to match UAE's tick checking frequency.
 	 * This ensures the timeout mechanism works correctly and the emulator can
-	 * exit cleanly when EMULATOR_TIMEOUT is set.
+	 * exit cleanly when --timeout is set.
 	 *
 	 * UAE checks every 1000 instructions via cpu_do_check_ticks(), so we match
 	 * that behavior here for consistency across backends.

@@ -731,7 +731,7 @@ Created `src/cpu/m68k_interrupt.c`:
 ### Verification
 ```bash
 # Should show ~20, not 780,000+
-env EMULATOR_TIMEOUT=10 CPU_BACKEND=unicorn ./build/mac-phoenix --no-webserver 2>&1 | grep -c poll_timer
+./build/mac-phoenix --backend unicorn --timeout 10 --no-webserver 2>&1 | grep -c poll_timer
 ```
 
 See [UnicornIRQStormDebugSession.md](../UnicornIRQStormDebugSession.md) for full details.

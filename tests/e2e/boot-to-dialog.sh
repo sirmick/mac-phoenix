@@ -36,7 +36,7 @@ wait_for_server() {
 }
 
 start_emulator() {
-    CPU_BACKEND="$BACKEND" "$BINARY" "$ROM" &>/tmp/macemu_${BACKEND}.log &
+    "$BINARY" --backend "$BACKEND" "$ROM" &>/tmp/macemu_${BACKEND}.log &
     EMUPID=$!
     echo "$EMUPID"
 }
