@@ -114,7 +114,7 @@ struct EmulatorConfig {
     // System
     bool nocdrom = false;
     bool nosound = false;
-    bool zappram = true;
+    bool zappram = false;
     int frameskip = 6;
     int yearofs = 0;
     int dayofs = 0;

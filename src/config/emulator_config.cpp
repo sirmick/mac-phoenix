@@ -352,6 +352,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --timeout N           Auto-exit after N seconds\n");
             printf("  --no-webserver        Headless mode (no HTTP/WebRTC)\n");
             printf("  --screenshots         Dump PPM screenshots to /tmp\n");
+            printf("  --zap-pram            Clear PRAM on startup (fresh boot)\n");
             printf("  --config PATH         JSON config file\n");
             printf("  --log-level N         Log level 0-3\n");
             printf("  --debug-connection    Debug WebRTC connections\n");
@@ -435,6 +436,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --screenshots
         if (strcmp(argv[i], "--screenshots") == 0) {
             config.screenshots = true;
+            argv[i] = nullptr; continue;
+        }
+
+        // --zap-pram
+        if (strcmp(argv[i], "--zap-pram") == 0) {
+            config.zappram = true;
             argv[i] = nullptr; continue;
         }
 

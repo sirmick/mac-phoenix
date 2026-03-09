@@ -59,7 +59,7 @@ You only need to specify values that differ from defaults:
 | `storage_dir` | string | `"~/storage"` | Root directory for ROMs and disk images |
 | `nocdrom` | bool | `false` | Don't install CD-ROM driver |
 | `nosound` | bool | `false` | Disable sound |
-| `zappram` | bool | `true` | Clear PRAM on startup |
+| `zappram` | bool | `false` | Clear PRAM on startup |
 | `frameskip` | int | `6` | Frames to skip between refreshes |
 | `yearofs` | int | `0` | Year offset for Mac clock |
 | `dayofs` | int | `0` | Day offset for Mac clock |

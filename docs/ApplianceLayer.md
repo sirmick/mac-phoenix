@@ -267,7 +267,7 @@ m68k-apple-macos-gcc -o tests/mac-apps/build/test_tcpip \
 cp tests/mac-apps/build/test_tcpip /home/mick/mac-shared/
 
 # 3. Boot emulator headless with clean PRAM (suppresses dirty disk dialog)
-./build/mac-phoenix --no-webserver --zappram --extfs /home/mick/mac-shared \
+./build/mac-phoenix --no-webserver --zap-pram --extfs /home/mick/mac-shared \
     --timeout 60 /home/mick/quadra.rom &
 EMU_PID=$!
 
@@ -398,7 +398,7 @@ The Mac desktop, menu bar, and system chrome all remain as-is — the app is a r
 | ADB mouse/keyboard functions | Working | `src/core/adb.cpp` |
 | 60Hz IRQ handler | Working | `src/core/emul_op.cpp` (M68K_EMUL_OP_IRQ) |
 | Boot phase detection | Working | `src/core/boot_progress.cpp` |
-| Zap PRAM (suppress dirty dialog) | Working | `--zappram` flag, `emulator_init.cpp` |
+| Zap PRAM (suppress dirty dialog) | Working | `--zap-pram` flag, `emulator_init.cpp` |
 | extfs virtual volume | In build, needs testing | `src/core/extfs.cpp` |
 | HTTP API server | Working | `src/webserver/api_handlers.cpp` |
 | Screenshot/framebuffer | Working | `GET /api/screenshot` |

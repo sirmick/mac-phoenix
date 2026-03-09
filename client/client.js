@@ -3282,7 +3282,8 @@ async function loadCurrentConfig() {
             ignoresegv: isM68k ? (cfg.m68k?.ignoresegv ?? true) : (cfg.ppc?.ignoresegv ?? true),
             ignoreillegal: cfg.ppc?.ignoreillegal ?? false,
             swap_opt_cmd: cfg.m68k?.swap_opt_cmd ?? true,
-            keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5)
+            keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5),
+            zappram: cfg.zappram ?? false
         };
     } catch (e) {
         logger.warn('Failed to load current config', { error: e.message });
@@ -3296,12 +3297,14 @@ function updateConfigUI() {
     const ramEl = document.getElementById('cfg-ram');
     const screenEl = document.getElementById('cfg-screen');
     const soundEl = document.getElementById('cfg-sound');
+    const zappramEl = document.getElementById('cfg-zappram');
 
     if (emulatorEl) emulatorEl.value = currentConfig.emulator || 'basilisk';
     if (romEl) romEl.value = currentConfig.rom;
     if (ramEl) ramEl.value = currentConfig.ram;
     if (screenEl) screenEl.value = currentConfig.screen;
     if (soundEl) soundEl.checked = currentConfig.sound;
+    if (zappramEl) zappramEl.checked = currentConfig.zappram;
 
     const bootdriverEl = document.getElementById('cfg-bootdriver');
     if (bootdriverEl) bootdriverEl.value = currentConfig.bootdriver || 0;
@@ -3367,6 +3370,7 @@ async function saveConfig() {
     currentConfig.ram = parseInt(document.getElementById('cfg-ram')?.value || 32);
     currentConfig.screen = document.getElementById('cfg-screen')?.value || '800x600';
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
+    currentConfig.zappram = document.getElementById('cfg-zappram')?.checked ?? false;
     currentConfig.bootdriver = parseInt(document.getElementById('cfg-bootdriver')?.value || 0);
 
     // Gather emulator-specific values
@@ -3415,6 +3419,7 @@ async function saveConfig() {
         ram_mb: currentConfig.ram,
         screen: currentConfig.screen,
         audio: currentConfig.sound,
+        zappram: currentConfig.zappram,
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         m68k: isM68k ? archConfig : undefined,

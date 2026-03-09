@@ -132,7 +132,3 @@ void SaveXPRAM(void)
 	}
 }
 
-void ZapPRAM(void)
-{
-	remove(XPRAM_FILE_NAME);
-}

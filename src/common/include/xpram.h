@@ -35,6 +35,5 @@ extern void XPRAMExit(void);
 // System specific and internal functions/data
 extern void LoadXPRAM(const char *vmdir);
 extern void SaveXPRAM(void);
-extern void ZapPRAM(void);
 
 #endif
