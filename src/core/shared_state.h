@@ -68,6 +68,7 @@ struct SharedState {
     std::atomic<uint32_t> checkload_count;
     std::atomic<int64_t>  boot_start_us;        // CLOCK_MONOTONIC microseconds
     char                  boot_phase_name[32];  // "pre-reset", "Finder", etc.
+    char                  cur_app_name[32];     // CurApName (0x0910), child writes at 60Hz
 
     // Cursor state (child writes at 60Hz, parent reads for /api/mouse)
     std::atomic<int16_t> cursor_x, cursor_y;
@@ -76,6 +77,47 @@ struct SharedState {
     std::atomic<int32_t> crsr_new, crsr_couple, crsr_busy;
 
     char error_msg[256];
+
+    // ── Command Queue (parent -> child -> parent) ──
+    // Parent submits commands, child executes on next 60Hz tick and writes results.
+    // SPSC ring buffer: parent writes cmd_queue, child reads cmd_queue and writes result_queue.
+
+    static constexpr int CMD_QUEUE_SIZE = 16;
+    static constexpr int CMD_ARG_SIZE = 256;
+    static constexpr int CMD_DATA_SIZE = 4096;
+
+    // Command types (plain ints for shared memory compatibility)
+    static constexpr int32_t CMD_GET_APP_NAME    = 1;
+    static constexpr int32_t CMD_GET_WINDOW_LIST = 2;
+    static constexpr int32_t CMD_GET_TICKS       = 3;
+    static constexpr int32_t CMD_READ_MEMORY     = 4;
+    static constexpr int32_t CMD_LAUNCH_APP      = 5;
+    static constexpr int32_t CMD_QUIT_APP         = 6;
+
+    struct ShmCommand {
+        uint32_t id;
+        int32_t  type;           // CMD_* constant
+        char     arg[CMD_ARG_SIZE];  // path for LAUNCH_APP, etc.
+        uint32_t addr;           // for READ_MEMORY
+        uint32_t len;            // for READ_MEMORY
+    };
+
+    struct ShmResult {
+        uint32_t id;
+        int32_t  done;           // 1 = complete
+        int16_t  err;            // Mac OS error code (0 = noErr)
+        char     data[CMD_DATA_SIZE]; // JSON or text result
+    };
+
+    ShmCommand  cmd_queue[CMD_QUEUE_SIZE];
+    std::atomic<int32_t> cmd_write_pos;    // parent increments
+    std::atomic<int32_t> cmd_read_pos;     // child increments
+
+    ShmResult   result_queue[CMD_QUEUE_SIZE];
+    std::atomic<int32_t> result_write_pos; // child increments
+    std::atomic<int32_t> result_read_pos;  // parent increments
+
+    std::atomic<uint32_t> cmd_next_id;     // parent increments for unique IDs
 
     // ── Config Snapshot ──
     char    config_json[16384];
@@ -98,6 +140,11 @@ struct SharedState {
         mtemp_x.store(0); mtemp_y.store(0);
         crsr_new.store(0); crsr_couple.store(0); crsr_busy.store(0);
         strncpy(boot_phase_name, "pre-reset", sizeof(boot_phase_name));
+        cmd_write_pos.store(0, std::memory_order_relaxed);
+        cmd_read_pos.store(0, std::memory_order_relaxed);
+        result_write_pos.store(0, std::memory_order_relaxed);
+        result_read_pos.store(0, std::memory_order_relaxed);
+        cmd_next_id.store(1, std::memory_order_relaxed);
     }
 
     // Reset for new child start (keep config, clear runtime state)
@@ -116,11 +163,16 @@ struct SharedState {
         checkload_count.store(0, std::memory_order_relaxed);
         boot_start_us.store(0, std::memory_order_relaxed);
         strncpy(boot_phase_name, "pre-reset", sizeof(boot_phase_name));
+        memset(cur_app_name, 0, sizeof(cur_app_name));
         cursor_x.store(0); cursor_y.store(0);
         raw_x.store(0); raw_y.store(0);
         mtemp_x.store(0); mtemp_y.store(0);
         crsr_new.store(0); crsr_couple.store(0); crsr_busy.store(0);
         memset(error_msg, 0, sizeof(error_msg));
+        cmd_write_pos.store(0, std::memory_order_relaxed);
+        cmd_read_pos.store(0, std::memory_order_relaxed);
+        result_write_pos.store(0, std::memory_order_relaxed);
+        result_read_pos.store(0, std::memory_order_relaxed);
     }
 };
 
@@ -138,6 +190,52 @@ inline SharedState* create_shared_state() {
 
 inline void destroy_shared_state(SharedState* shm) {
     if (shm) munmap(shm, sizeof(SharedState));
+}
+
+// ── Command queue helpers (parent side) ──
+
+// Submit a command to the child. Returns command ID for matching results.
+inline uint32_t shared_cmd_submit(SharedState* shm, int32_t type,
+                                   const char* arg = nullptr,
+                                   uint32_t addr = 0, uint32_t len = 0) {
+    uint32_t id = shm->cmd_next_id.fetch_add(1, std::memory_order_relaxed);
+    int32_t pos = shm->cmd_write_pos.load(std::memory_order_relaxed);
+    auto& cmd = shm->cmd_queue[pos & (SharedState::CMD_QUEUE_SIZE - 1)];
+    cmd.id = id;
+    cmd.type = type;
+    cmd.addr = addr;
+    cmd.len = len;
+    if (arg) {
+        strncpy(cmd.arg, arg, SharedState::CMD_ARG_SIZE - 1);
+        cmd.arg[SharedState::CMD_ARG_SIZE - 1] = '\0';
+    } else {
+        cmd.arg[0] = '\0';
+    }
+    shm->cmd_write_pos.store(pos + 1, std::memory_order_release);
+    return id;
+}
+
+// Poll for a result with the given ID. Returns true if found.
+// Consumes all results up to and including the matching one.
+inline bool shared_cmd_poll(SharedState* shm, uint32_t id,
+                             int16_t* err, char* data, int data_size) {
+    int32_t read_pos = shm->result_read_pos.load(std::memory_order_relaxed);
+    int32_t write_pos = shm->result_write_pos.load(std::memory_order_acquire);
+
+    while (read_pos != write_pos) {
+        auto& res = shm->result_queue[read_pos & (SharedState::CMD_QUEUE_SIZE - 1)];
+        if (res.id == id && res.done) {
+            if (err) *err = res.err;
+            if (data && data_size > 0) {
+                strncpy(data, res.data, data_size - 1);
+                data[data_size - 1] = '\0';
+            }
+            shm->result_read_pos.store(read_pos + 1, std::memory_order_release);
+            return true;
+        }
+        read_pos++;
+    }
+    return false;
 }
 
 // ── Input helpers (parent side) ──

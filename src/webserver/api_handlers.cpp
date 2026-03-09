@@ -13,6 +13,7 @@
 #include "../core/shared_state.h"  // For shared memory struct
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
 #include "../core/boot_progress.h"  // For boot phase query
+#include "../core/command_bridge.h"  // For command bridge
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include <sstream>
 #include <iomanip>
@@ -97,6 +98,21 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/keypress" && req.method == "POST") {
         return handle_keypress(req);
+    }
+    if (req.path == "/api/app" && req.method == "GET") {
+        return handle_app(req);
+    }
+    if (req.path == "/api/windows" && req.method == "GET") {
+        return handle_windows(req);
+    }
+    if (req.path == "/api/launch" && req.method == "POST") {
+        return handle_launch(req);
+    }
+    if (req.path == "/api/quit" && req.method == "POST") {
+        return handle_quit(req);
+    }
+    if (req.path == "/api/wait" && req.method == "POST") {
+        return handle_wait(req);
     }
 
     // Unknown API endpoint
@@ -668,6 +684,217 @@ Response APIRouter::handle_keypress(const Request& req) {
     }
 
     return Response::json("{\"success\": true, \"keycode\": " + std::to_string(keycode) + "}");
+}
+
+// ── Command Bridge Endpoints ──
+
+Response APIRouter::handle_app(const Request& req) {
+    (void)req;
+
+    if (ctx_->shared_state) {
+        SharedState* shm = ctx_->shared_state;
+        int32_t state = shm->child_state.load(std::memory_order_acquire);
+        if (state != SHM_STATE_RUNNING) {
+            return Response::json("{\"app\": \"\", \"error\": \"emulator not running\"}");
+        }
+        // Read passive field written by child at 60Hz
+        std::string app(shm->cur_app_name);
+        return Response::json("{\"app\": \"" + app + "\"}");
+    }
+
+    auto result = CommandBridge::execute_read(CmdType::GET_APP_NAME);
+    return Response::json("{\"app\": \"" + result.data + "\"}");
+}
+
+Response APIRouter::handle_windows(const Request& req) {
+    (void)req;
+
+    if (ctx_->shared_state) {
+        SharedState* shm = ctx_->shared_state;
+        int32_t state = shm->child_state.load(std::memory_order_acquire);
+        if (state != SHM_STATE_RUNNING) {
+            return Response::json("{\"windows\": [], \"error\": \"emulator not running\"}");
+        }
+        uint32_t id = shared_cmd_submit(shm, SharedState::CMD_GET_WINDOW_LIST);
+        char data[SharedState::CMD_DATA_SIZE];
+        int16_t err = 0;
+        // Poll for result (child processes on next 60Hz tick, ~16ms max wait)
+        for (int i = 0; i < 50; i++) {
+            if (shared_cmd_poll(shm, id, &err, data, sizeof(data))) {
+                return Response::json("{\"windows\": " + std::string(data) + "}");
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return Response::json("{\"windows\": [], \"error\": \"timeout\"}");
+    }
+
+    auto result = CommandBridge::execute_read(CmdType::GET_WINDOW_LIST);
+    return Response::json("{\"windows\": " + result.data + "}");
+}
+
+Response APIRouter::handle_launch(const Request& req) {
+    auto& body = req.body;
+
+    // Parse {"path": "Macintosh HD:SomeApp"}
+    auto path_pos = body.find("\"path\"");
+    if (path_pos == std::string::npos) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"missing 'path' field\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+    auto quote1 = body.find('"', body.find(':', path_pos) + 1);
+    auto quote2 = body.find('"', quote1 + 1);
+    if (quote1 == std::string::npos || quote2 == std::string::npos) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"malformed 'path' value\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+    std::string path = body.substr(quote1 + 1, quote2 - quote1 - 1);
+
+    if (ctx_->shared_state) {
+        SharedState* shm = ctx_->shared_state;
+        int32_t state = shm->child_state.load(std::memory_order_acquire);
+        if (state != SHM_STATE_RUNNING) {
+            return Response::json("{\"success\": false, \"error\": \"emulator not running\"}");
+        }
+        uint32_t id = shared_cmd_submit(shm, SharedState::CMD_LAUNCH_APP, path.c_str());
+        char data[SharedState::CMD_DATA_SIZE];
+        int16_t err = 0;
+        for (int i = 0; i < 200; i++) {  // 10s timeout
+            if (shared_cmd_poll(shm, id, &err, data, sizeof(data))) {
+                std::ostringstream json;
+                json << "{\"success\": " << (err == 0 ? "true" : "false")
+                     << ", \"error_code\": " << err
+                     << ", \"message\": \"" << data << "\"}";
+                return Response::json(json.str());
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        return Response::json("{\"success\": false, \"error\": \"timeout waiting for launch\"}");
+    }
+
+    Command cmd;
+    cmd.type = CmdType::LAUNCH_APP;
+    cmd.arg = path;
+    uint32_t id = g_command_bridge.submit(cmd);
+
+    CommandResult result;
+    if (g_command_bridge.wait_result(id, result, 10000)) {
+        std::ostringstream json;
+        json << "{\"success\": " << (result.err == 0 ? "true" : "false")
+             << ", \"error_code\": " << result.err
+             << ", \"message\": \"" << result.data << "\"}";
+        return Response::json(json.str());
+    }
+
+    return Response::json("{\"success\": false, \"error\": \"timeout waiting for launch\"}");
+}
+
+Response APIRouter::handle_quit(const Request& req) {
+    (void)req;
+
+    if (ctx_->shared_state) {
+        SharedState* shm = ctx_->shared_state;
+        int32_t state = shm->child_state.load(std::memory_order_acquire);
+        if (state != SHM_STATE_RUNNING) {
+            return Response::json("{\"success\": false, \"error\": \"emulator not running\"}");
+        }
+        uint32_t id = shared_cmd_submit(shm, SharedState::CMD_QUIT_APP);
+        char data[SharedState::CMD_DATA_SIZE];
+        int16_t err = 0;
+        for (int i = 0; i < 100; i++) {  // 5s timeout
+            if (shared_cmd_poll(shm, id, &err, data, sizeof(data))) {
+                return Response::json("{\"success\": true}");
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        return Response::json("{\"success\": false, \"error\": \"timeout\"}");
+    }
+
+    Command cmd;
+    cmd.type = CmdType::QUIT_APP;
+    uint32_t id = g_command_bridge.submit(cmd);
+
+    CommandResult result;
+    if (g_command_bridge.wait_result(id, result, 5000)) {
+        return Response::json("{\"success\": true}");
+    }
+
+    return Response::json("{\"success\": false, \"error\": \"timeout\"}");
+}
+
+Response APIRouter::handle_wait(const Request& req) {
+    auto& body = req.body;
+
+    // Parse {"condition": "app=Finder", "timeout": 30}
+    // Supported conditions: "app=Name", "boot=phase"
+    auto cond_pos = body.find("\"condition\"");
+    if (cond_pos == std::string::npos) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"missing 'condition' field\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+    auto cq1 = body.find('"', body.find(':', cond_pos) + 1);
+    auto cq2 = body.find('"', cq1 + 1);
+    std::string condition = body.substr(cq1 + 1, cq2 - cq1 - 1);
+
+    // Parse timeout (default 30s)
+    int timeout_s = 30;
+    auto timeout_pos = body.find("\"timeout\"");
+    if (timeout_pos != std::string::npos) {
+        auto tc = body.find(':', timeout_pos);
+        auto ts = body.find_first_of("0123456789", tc + 1);
+        if (ts != std::string::npos) timeout_s = std::stoi(body.substr(ts));
+    }
+
+    // Parse condition type
+    auto eq_pos = condition.find('=');
+    if (eq_pos == std::string::npos) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"condition must be 'app=Name' or 'boot=phase'\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+    std::string cond_type = condition.substr(0, eq_pos);
+    std::string cond_value = condition.substr(eq_pos + 1);
+
+    // Poll loop
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeout_s);
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (cond_type == "app") {
+            std::string app;
+            if (ctx_->shared_state) {
+                app = ctx_->shared_state->cur_app_name;
+            } else {
+                auto result = CommandBridge::execute_read(CmdType::GET_APP_NAME);
+                app = result.data;
+            }
+            if (app == cond_value) {
+                return Response::json("{\"ok\": true, \"app\": \"" + app + "\"}");
+            }
+        } else if (cond_type == "boot") {
+            std::string phase;
+            if (ctx_->shared_state) {
+                phase = ctx_->shared_state->boot_phase_name;
+            } else {
+                phase = boot_progress_phase();
+            }
+            if (phase == cond_value) {
+                return Response::json("{\"ok\": true, \"boot_phase\": \"" + phase + "\"}");
+            }
+        } else {
+            Response r; r.set_status(400);
+            r.set_body("{\"error\": \"unknown condition type: " + cond_type + "\"}");
+            r.set_content_type("application/json");
+            return r;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    return Response::json("{\"ok\": false, \"error\": \"timeout\"}");
 }
 
 } // namespace http

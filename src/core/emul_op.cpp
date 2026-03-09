@@ -556,6 +556,12 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 				if (HasMacStarted())
 					TriggerNMI();
 			}
+
+			// Drain command bridge queue (launch app, quit, etc.)
+			if (HasMacStarted()) {
+				extern void command_bridge_drain_from_irq(M68kRegisters *r);
+				command_bridge_drain_from_irq(r);
+			}
 			break;
 
 		case M68K_EMUL_OP_PUT_SCRAP: {		// PutScrap() patch
@@ -620,6 +626,14 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 				idle_wait();
 			r->a[0] = ReadMacInt32(0x2b6);
 			break;
+
+		case M68K_EMUL_OP_CMD_DISPATCH: {
+			// Command bridge dispatch — called from jGNEFilter in app context.
+			// Unlike IRQ context, Toolbox calls (_Launch, _ExitToShell) are safe here.
+			extern void command_bridge_dispatch(M68kRegisters *r);
+			command_bridge_dispatch(r);
+			break;
+		}
 
 		case M68K_EMUL_OP_SUSPEND: {
 			printf("*** Suspend\n");

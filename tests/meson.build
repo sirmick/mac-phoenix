@@ -62,6 +62,18 @@ test('boot_unicorn',
   },
 )
 
+# Command bridge API endpoints
+test('command_bridge',
+  find_program('bash'),
+  args: [test_dir / 'test_command_bridge.sh'],
+  timeout: 30,
+  is_parallel: false,
+  suite: 'boot',
+  env: {
+    'MACEMU_ROM': test_rom,
+  },
+)
+
 # Mouse position API works after boot
 test('mouse_position',
   find_program('bash'),

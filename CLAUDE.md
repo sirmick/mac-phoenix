@@ -14,8 +14,8 @@ ninja -C build
 # Run (headless, timed)
 EMULATOR_TIMEOUT=10 ./build/mac-phoenix --no-webserver /home/mick/quadra.rom
 
-# Test (fast — API + UAE boot + mouse, ~12s)
-meson test -C build api_endpoints boot_uae mouse_position
+# Test (fast — API + UAE boot + mouse + command bridge, ~15s)
+meson test -C build api_endpoints boot_uae mouse_position command_bridge
 
 # Test (all — includes slow Unicorn boot, ~60s)
 meson test -C build
@@ -53,7 +53,10 @@ src/
   core/
     boot_progress.cpp               — Boot milestone tracking (phases, CHECKLOAD counting)
     rom_patches.cpp                 — ROM patching, EmulOp insertion
-    emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, etc.)
+    emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, CMD_DISPATCH)
+    command_bridge.cpp              — Command bridge: reads, mailbox, jGNEFilter, SHM drain
+    command_bridge.h                — Command/Result structs, CommandBridge class
+    shared_state.h                  — SharedState (SHM queues, passive fields, fork IPC)
     adb.cpp                         — ADB mouse/keyboard emulation
     cpu_context.cpp                 — Memory allocation, backend init
   cpu/
@@ -83,6 +86,7 @@ tests/
   test_api_endpoints.sh             — API smoke tests (10 checks)
   test_boot_to_finder.sh            — Boot-to-Finder test (parameterized by backend)
   test_mouse_position.sh            — Mouse position API test
+  test_command_bridge.sh            — Command bridge integration tests (7 checks)
   e2e/                              — Playwright browser tests
 
 client/                             — Browser UI (vanilla JS)
@@ -104,6 +108,11 @@ legacy/                             — Original BasiliskII/SheepShaver source (
 | `/api/storage` | GET | Available ROMs and disk images |
 | `/api/codec` | POST | Change video codec (h264/vp9/png/webp) |
 | `/api/keypress` | POST | Send key event: `{"key": "return"}` or `{"key": 36}` |
+| `/api/app` | GET | Current app name (passive SHM field) |
+| `/api/windows` | GET | Window list (SHM command queue) |
+| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` |
+| `/api/launch` | POST | Launch app: `{"path": "HD:App"}` (WIP) |
+| `/api/quit` | POST | Quit current app (WIP) |
 
 ## Boot Phases
 
@@ -151,6 +160,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
 - **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
 - **Single config system**: `EmulatorConfig` — handles CLI args, JSON file, env vars. Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
+- **Command bridge**: Two-layer dispatch — read commands peek Mac memory from IRQ, action commands use jGNEFilter to execute in app context. Fork mode uses SPSC ring buffers in SharedState. See `docs/CommandBridge.md`.
 
 ## ROM
 

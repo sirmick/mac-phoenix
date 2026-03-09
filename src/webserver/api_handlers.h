@@ -78,6 +78,13 @@ private:
     Response handle_mouse_move(const Request& req);
     Response handle_keypress(const Request& req);
 
+    // Command bridge endpoints
+    Response handle_app(const Request& req);
+    Response handle_windows(const Request& req);
+    Response handle_launch(const Request& req);
+    Response handle_quit(const Request& req);
+    Response handle_wait(const Request& req);
+
     APIContext* ctx_;
 };
 

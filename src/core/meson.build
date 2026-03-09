@@ -7,6 +7,7 @@ core_sources = [
   'cpu_process.cpp',  # Fork-based CPU process management
   'disk.cpp',
   'boot_progress.cpp',
+  'command_bridge.cpp',
   'emul_op.cpp',
   'emulator_init.cpp',  # Deferred initialization support
   'ether.cpp',
