@@ -114,16 +114,23 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 
 ## Testing
 
-```bash
-# Fast suite (~12s) — API + UAE boot + mouse
-meson test -C build api_endpoints boot_uae mouse_position
+Two test suites: **meson integration tests** (shell scripts that test the emulator via curl) and **Playwright E2E tests** (browser-based, full UI + WebRTC pipeline).
 
-# Full suite (~60s) — includes Unicorn boot
+```bash
+# Meson — fast suite (~15s): API, boot, mouse, command bridge
+meson test -C build api_endpoints boot_uae mouse_position command_bridge
+
+# Meson — full suite (~60s, includes slow Unicorn boot)
 meson test -C build
 
-# Playwright E2E browser tests
+# Playwright E2E (~2 min): UI controls, WebRTC latency, config, soak test
 npx playwright test
+
+# Run everything
+meson test -C build && npx playwright test
 ```
+
+See [docs/Testing.md](docs/Testing.md) for the full test inventory, configuration, and details on the stall detection soak test.
 
 ## Architecture
 

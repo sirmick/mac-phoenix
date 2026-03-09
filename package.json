@@ -5,7 +5,8 @@
   "scripts": {
     "test": "npx playwright test",
     "test:headed": "npx playwright test --headed",
-    "test:ui": "npx playwright test --ui"
+    "test:ui": "npx playwright test --ui",
+    "screenshot": "npx tsx tests/e2e/take-screenshot.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2"
