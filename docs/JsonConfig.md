@@ -60,6 +60,7 @@ You only need to specify values that differ from defaults:
 | `nocdrom` | bool | `false` | Don't install CD-ROM driver |
 | `nosound` | bool | `false` | Disable sound |
 | `zappram` | bool | `false` | Clear PRAM on startup |
+| `dismiss_shutdown_dialog` | bool | `false` | Auto-dismiss "improper shutdown" dialog on boot |
 | `frameskip` | int | `6` | Frames to skip between refreshes |
 | `yearofs` | int | `0` | Year offset for Mac clock |
 | `dayofs` | int | `0` | Day offset for Mac clock |

@@ -19,6 +19,8 @@
 #include "emul_op.h"
 #include "boot_progress.h"
 #include "shared_state.h"
+#include "adb.h"
+#include "../config/emulator_config.h"
 
 /* Boot phases */
 enum BootPhase {
@@ -48,6 +50,8 @@ static bool seen_init_resource = false;
 static bool seen_finder = false;
 static char last_app_name[64] = {0};
 static struct timespec boot_start_time = {0, 0};
+static uint32_t irq_count = 0;
+static bool shutdown_dialog_dismissed = false;
 
 static double elapsed_sec(void)
 {
@@ -191,6 +195,66 @@ static bool is_important_emulop(uint16_t opcode)
 	}
 }
 
+/*
+ * WindowRecord layout (Inside Macintosh: Macintosh Toolbox Essentials):
+ *   +0..+107: GrafPort (108 bytes)
+ *     +16: portRect (Rect: top, left, bottom, right)
+ *   +108: windowKind (int16) — 2 = dialogKind
+ *   +110: visible (Boolean)
+ *   +134: titleHandle (handle -> Pascal string)
+ *   +144: nextWindow (WindowPeek)
+ */
+
+/* Read a window's title into buf. Returns length, 0 if none. */
+static int read_window_title(uint32_t wp, char *buf, int bufsize)
+{
+	buf[0] = '\0';
+	uint32_t title_handle = ReadMacInt32(wp + 134);
+	if (!title_handle) return 0;
+	uint32_t title_ptr = ReadMacInt32(title_handle);
+	if (!title_ptr || title_ptr >= 0x02000000) return 0;
+	uint8_t tlen = ReadMacInt8(title_ptr);
+	if (tlen == 0 || tlen >= bufsize) return 0;
+	for (int i = 0; i < tlen; i++)
+		buf[i] = (char)ReadMacInt8(title_ptr + 1 + i);
+	buf[tlen] = '\0';
+	return tlen;
+}
+
+/*
+ * Check for the "improper shutdown" dialog and dismiss it with Return.
+ *
+ * Detection criteria (all must match):
+ *   - Boot phase is exactly FINDER_LAUNCH (not before, not after)
+ *   - Front window has windowKind == 2 (dialogKind)
+ *   - Window title is "Please Don't Get this Often" (Mac OS internal name)
+ *   - Not already dismissed (latched)
+ */
+static void check_shutdown_dialog(void)
+{
+	if (shutdown_dialog_dismissed) return;
+	if (!RAMBaseHost || RAMSize == 0) return;
+
+	uint32_t wp = ReadMacInt32(0x09D6);  /* WindowList — front window first */
+	if (!wp || wp >= 0x02000000) return;
+
+	int16_t wKind = (int16_t)ReadMacInt16(wp + 108);
+	if (wKind != 2) return;  /* not a dialog */
+
+	bool visible = ReadMacInt8(wp + 110) != 0;
+	if (!visible) return;
+
+	char title[64];
+	read_window_title(wp, title, sizeof(title));
+	if (strcmp(title, "Please Don't Get this Often") != 0) return;
+
+	/* Match! Dismiss with Return keypress. */
+	shutdown_dialog_dismissed = true;
+	milestonef("Improper shutdown dialog detected -- auto-dismissing");
+	ADBKeyDown(0x24);  /* Return */
+	ADBKeyUp(0x24);
+}
+
 void boot_progress_update(uint16_t opcode, void *regs_ptr)
 {
 	int level = boot_log_level();
@@ -303,6 +367,7 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 		}
 
 		case M68K_EMUL_OP_IRQ:
+			irq_count++;
 			/* Check for Finder on each IRQ (60Hz) once we're past extensions */
 			if (!seen_finder && current_phase >= PHASE_EXTENSIONS) {
 				char app_name[64];
@@ -312,6 +377,12 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 					milestonef("Finder launched -- desktop ready");
 					set_phase(PHASE_FINDER_LAUNCH);
 				}
+			}
+			/* Check for improper shutdown dialog during Finder launch phase only */
+			if (!shutdown_dialog_dismissed && current_phase == PHASE_FINDER_LAUNCH
+			    && irq_count % 30 == 0  /* ~2Hz check rate */
+			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
+				check_shutdown_dialog();
 			}
 			break;
 

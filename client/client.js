@@ -3283,7 +3283,8 @@ async function loadCurrentConfig() {
             ignoreillegal: cfg.ppc?.ignoreillegal ?? false,
             swap_opt_cmd: cfg.m68k?.swap_opt_cmd ?? true,
             keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5),
-            zappram: cfg.zappram ?? false
+            zappram: cfg.zappram ?? false,
+            dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? false
         };
     } catch (e) {
         logger.warn('Failed to load current config', { error: e.message });
@@ -3298,6 +3299,7 @@ function updateConfigUI() {
     const screenEl = document.getElementById('cfg-screen');
     const soundEl = document.getElementById('cfg-sound');
     const zappramEl = document.getElementById('cfg-zappram');
+    const dismissDialogEl = document.getElementById('cfg-dismiss-shutdown-dialog');
 
     if (emulatorEl) emulatorEl.value = currentConfig.emulator || 'basilisk';
     if (romEl) romEl.value = currentConfig.rom;
@@ -3305,6 +3307,7 @@ function updateConfigUI() {
     if (screenEl) screenEl.value = currentConfig.screen;
     if (soundEl) soundEl.checked = currentConfig.sound;
     if (zappramEl) zappramEl.checked = currentConfig.zappram;
+    if (dismissDialogEl) dismissDialogEl.checked = currentConfig.dismiss_shutdown_dialog;
 
     const bootdriverEl = document.getElementById('cfg-bootdriver');
     if (bootdriverEl) bootdriverEl.value = currentConfig.bootdriver || 0;
@@ -3371,6 +3374,7 @@ async function saveConfig() {
     currentConfig.screen = document.getElementById('cfg-screen')?.value || '800x600';
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
     currentConfig.zappram = document.getElementById('cfg-zappram')?.checked ?? false;
+    currentConfig.dismiss_shutdown_dialog = document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? false;
     currentConfig.bootdriver = parseInt(document.getElementById('cfg-bootdriver')?.value || 0);
 
     // Gather emulator-specific values
@@ -3420,6 +3424,7 @@ async function saveConfig() {
         screen: currentConfig.screen,
         audio: currentConfig.sound,
         zappram: currentConfig.zappram,
+        dismiss_shutdown_dialog: currentConfig.dismiss_shutdown_dialog,
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         m68k: isM68k ? archConfig : undefined,

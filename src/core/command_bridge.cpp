@@ -367,7 +367,7 @@ CommandResult CommandBridge::execute_read(CmdType type, uint32_t addr, uint32_t 
             first = false;
 
             std::string title;
-            uint32_t title_handle = ReadMacInt32(wp + 136);
+            uint32_t title_handle = ReadMacInt32(wp + 134);
             if (title_handle) {
                 uint32_t title_ptr = ReadMacInt32(title_handle);
                 if (title_ptr && title_ptr < 0x02000000) {
@@ -382,11 +382,11 @@ CommandResult CommandBridge::execute_read(CmdType type, uint32_t addr, uint32_t 
                 }
             }
 
-            int16_t top = (int16_t)ReadMacInt16(wp + 8);
-            int16_t left = (int16_t)ReadMacInt16(wp + 10);
-            int16_t bottom = (int16_t)ReadMacInt16(wp + 12);
-            int16_t right = (int16_t)ReadMacInt16(wp + 14);
-            bool visible = ReadMacInt8(wp + 150) != 0;
+            int16_t top = (int16_t)ReadMacInt16(wp + 16);
+            int16_t left = (int16_t)ReadMacInt16(wp + 18);
+            int16_t bottom = (int16_t)ReadMacInt16(wp + 20);
+            int16_t right = (int16_t)ReadMacInt16(wp + 22);
+            bool visible = ReadMacInt8(wp + 110) != 0;
 
             json += "{\"title\":\"" + title + "\""
                  +  ",\"rect\":[" + std::to_string(left) + ","

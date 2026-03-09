@@ -103,6 +103,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["nocdrom"] = nocdrom;
     j["nosound"] = nosound;
     j["zappram"] = zappram;
+    j["dismiss_shutdown_dialog"] = dismiss_shutdown_dialog;
     j["frameskip"] = frameskip;
     j["yearofs"] = yearofs;
     j["dayofs"] = dayofs;
@@ -204,6 +205,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("nocdrom")) nocdrom = json_utils::get_bool(j, "nocdrom");
     if (j.contains("nosound")) nosound = json_utils::get_bool(j, "nosound");
     if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
+    if (j.contains("dismiss_shutdown_dialog")) dismiss_shutdown_dialog = json_utils::get_bool(j, "dismiss_shutdown_dialog");
     if (j.contains("frameskip")) frameskip = json_utils::get_int(j, "frameskip");
     if (j.contains("yearofs")) yearofs = json_utils::get_int(j, "yearofs");
     if (j.contains("dayofs")) dayofs = json_utils::get_int(j, "dayofs");
@@ -353,6 +355,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --no-webserver        Headless mode (no HTTP/WebRTC)\n");
             printf("  --screenshots         Dump PPM screenshots to /tmp\n");
             printf("  --zap-pram            Clear PRAM on startup (fresh boot)\n");
+            printf("  --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot\n");
             printf("  --config PATH         JSON config file\n");
             printf("  --log-level N         Log level 0-3\n");
             printf("  --debug-connection    Debug WebRTC connections\n");
@@ -442,6 +445,16 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --zap-pram
         if (strcmp(argv[i], "--zap-pram") == 0) {
             config.zappram = true;
+            argv[i] = nullptr; continue;
+        }
+
+        // --dismiss-shutdown-dialog / --no-dismiss-shutdown-dialog
+        if (strcmp(argv[i], "--dismiss-shutdown-dialog") == 0) {
+            config.dismiss_shutdown_dialog = true;
+            argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--no-dismiss-shutdown-dialog") == 0) {
+            config.dismiss_shutdown_dialog = false;
             argv[i] = nullptr; continue;
         }
 

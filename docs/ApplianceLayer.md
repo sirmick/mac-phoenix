@@ -266,8 +266,8 @@ m68k-apple-macos-gcc -o tests/mac-apps/build/test_tcpip \
 # 2. Stage binary in shared folder
 cp tests/mac-apps/build/test_tcpip /home/mick/mac-shared/
 
-# 3. Boot emulator headless with clean PRAM (suppresses dirty disk dialog)
-./build/mac-phoenix --no-webserver --zap-pram --extfs /home/mick/mac-shared \
+# 3. Boot emulator headless, auto-dismiss shutdown dialog
+./build/mac-phoenix --no-webserver --dismiss-shutdown-dialog --extfs /home/mick/mac-shared \
     --timeout 60 /home/mick/quadra.rom &
 EMU_PID=$!
 
@@ -331,7 +331,7 @@ Hide Mac OS entirely. The emulator boots, launches a specific app, and presents 
 
 ### What --appliance Does
 
-1. **Boot with zapped PRAM** — suppress shutdown dialog automatically
+1. **Auto-dismiss shutdown dialog** — detected and dismissed via ADB keypress (enable with `--dismiss-shutdown-dialog`)
 2. **Wait for desktop** — detect Finder via boot phase tracking
 3. **Launch the target app** — via _Launch trap through command dispatcher
 4. **Auto-quit on app exit** — if CurApName changes back to "Finder", shut down emulator
@@ -398,7 +398,8 @@ The Mac desktop, menu bar, and system chrome all remain as-is — the app is a r
 | ADB mouse/keyboard functions | Working | `src/core/adb.cpp` |
 | 60Hz IRQ handler | Working | `src/core/emul_op.cpp` (M68K_EMUL_OP_IRQ) |
 | Boot phase detection | Working | `src/core/boot_progress.cpp` |
-| Zap PRAM (suppress dirty dialog) | Working | `--zap-pram` flag, `emulator_init.cpp` |
+| Zap PRAM (fresh boot) | Working | `--zap-pram` flag, `emulator_init.cpp` |
+| Auto-dismiss shutdown dialog | Working | `boot_progress.cpp`, `--dismiss-shutdown-dialog` to enable |
 | extfs virtual volume | In build, needs testing | `src/core/extfs.cpp` |
 | HTTP API server | Working | `src/webserver/api_handlers.cpp` |
 | Screenshot/framebuffer | Working | `GET /api/screenshot` |

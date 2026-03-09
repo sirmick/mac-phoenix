@@ -137,6 +137,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --screen WxH          Display resolution (default: 640x480)
   --config path         JSON config file
   --screenshots         Dump PPM screenshots to /tmp
+  --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot
   --log-level N         Log level 0-3
   --debug-connection    Debug WebRTC connections
   --debug-mode-switch   Debug video mode switches
