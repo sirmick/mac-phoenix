@@ -86,7 +86,7 @@ struct EmulatorConfig {
     std::vector<std::string> disk_paths;
     std::vector<std::string> cdrom_paths;
     std::vector<std::string> floppy_paths;
-    std::string extfs;
+    std::vector<std::string> extfs_paths;
 
     // Video
     uint32_t screen_width = 640;

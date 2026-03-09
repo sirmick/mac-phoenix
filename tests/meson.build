@@ -35,6 +35,18 @@ test('config_api',
   },
 )
 
+# ExtFS config test - verifies extfs config round-trip, CLI flags, backward compat
+test('extfs',
+  find_program('bash'),
+  args: [test_dir / 'test_extfs.sh', '18098'],
+  timeout: 60,
+  is_parallel: false,
+  suite: 'api',
+  env: {
+    'MACEMU_ROM': test_rom,
+  },
+)
+
 # --- Boot tests (require ROM, longer timeout) ---
 # These run sequentially to avoid port conflicts
 

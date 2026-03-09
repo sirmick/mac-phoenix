@@ -1398,6 +1398,294 @@ static void SysCDGetVolume(void *arg, uint8 &left, uint8 &right)
 	}
 }
 /*
+ *  ExtFS Unix implementation
+ *  Ported from BasiliskII (C) 1997-2008 Christian Bauer
+ */
+
+#include <utime.h>
+#include "extfs.h"
+#include "extfs_defs.h"
+#include "cpu_emulation.h"
+
+// Default Finder flags
+const uint16 DEFAULT_FINDER_FLAGS = kHasBeenInited;
+
+void extfs_init(void) {}
+void extfs_exit(void) {}
+
+void add_path_component(char *path, const char *component)
+{
+	int l = strlen(path);
+	if (l < MAX_PATH_LENGTH-1 && path[l-1] != '/') {
+		path[l] = '/';
+		path[l+1] = 0;
+	}
+	strncat(path, component, MAX_PATH_LENGTH-1);
+}
+
+/*
+ *  Finder info and resource forks are kept in helper files
+ *
+ *  Finder info:  /path/.finf/file
+ *  Resource fork: /path/.rsrc/file
+ *
+ *  The .finf files store FInfo/DInfo + FXInfo/DXInfo (16+16 bytes)
+ */
+
+static void make_helper_path(const char *src, char *dest, const char *add, bool only_dir = false)
+{
+	dest[0] = 0;
+	const char *last_part = strrchr(src, '/');
+	if (last_part)
+		last_part++;
+	else
+		last_part = src;
+	strncpy(dest, src, last_part-src);
+	dest[last_part-src] = 0;
+	strncat(dest, add, MAX_PATH_LENGTH-1);
+	if (!only_dir)
+		strncat(dest, last_part, MAX_PATH_LENGTH-1);
+}
+
+static int create_helper_dir(const char *path, const char *add)
+{
+	char helper_dir[MAX_PATH_LENGTH];
+	make_helper_path(path, helper_dir, add, true);
+	if (helper_dir[strlen(helper_dir) - 1] == '/')
+		helper_dir[strlen(helper_dir) - 1] = 0;
+	return mkdir(helper_dir, 0777);
+}
+
+static int open_helper(const char *path, const char *add, int flag)
+{
+	char helper_path[MAX_PATH_LENGTH];
+	make_helper_path(path, helper_path, add);
+	if ((flag & O_ACCMODE) == O_RDWR || (flag & O_ACCMODE) == O_WRONLY)
+		flag |= O_CREAT;
+	int fd = open(helper_path, flag, 0666);
+	if (fd < 0) {
+		if (errno == ENOENT && (flag & O_CREAT)) {
+			int ret = create_helper_dir(path, add);
+			if (ret < 0)
+				return ret;
+			fd = open(helper_path, flag, 0666);
+		}
+	}
+	return fd;
+}
+
+static int open_finf(const char *path, int flag)
+{
+	return open_helper(path, ".finf/", flag);
+}
+
+static int open_rsrc(const char *path, int flag)
+{
+	return open_helper(path, ".rsrc/", flag);
+}
+
+// Extension → Mac type/creator mapping
+struct ext2type {
+	const char *ext;
+	uint32 type;
+	uint32 creator;
+};
+
+static const ext2type e2t_translation[] = {
+	{".Z", FOURCC('Z','I','V','M'), FOURCC('L','Z','I','V')},
+	{".gz", FOURCC('G','z','i','p'), FOURCC('G','z','i','p')},
+	{".hqx", FOURCC('T','E','X','T'), FOURCC('S','I','T','x')},
+	{".bin", FOURCC('T','E','X','T'), FOURCC('S','I','T','x')},
+	{".pdf", FOURCC('P','D','F',' '), FOURCC('C','A','R','O')},
+	{".ps", FOURCC('T','E','X','T'), FOURCC('t','t','x','t')},
+	{".sit", FOURCC('S','I','T','!'), FOURCC('S','I','T','x')},
+	{".tar", FOURCC('T','A','R','F'), FOURCC('T','A','R',' ')},
+	{".uu", FOURCC('T','E','X','T'), FOURCC('S','I','T','x')},
+	{".uue", FOURCC('T','E','X','T'), FOURCC('S','I','T','x')},
+	{".zip", FOURCC('Z','I','P',' '), FOURCC('Z','I','P',' ')},
+	{".8svx", FOURCC('8','S','V','X'), FOURCC('S','N','D','M')},
+	{".aifc", FOURCC('A','I','F','C'), FOURCC('T','V','O','D')},
+	{".aiff", FOURCC('A','I','F','F'), FOURCC('T','V','O','D')},
+	{".au", FOURCC('U','L','A','W'), FOURCC('T','V','O','D')},
+	{".mid", FOURCC('M','I','D','I'), FOURCC('T','V','O','D')},
+	{".midi", FOURCC('M','I','D','I'), FOURCC('T','V','O','D')},
+	{".mp2", FOURCC('M','P','G',' '), FOURCC('T','V','O','D')},
+	{".mp3", FOURCC('M','P','G',' '), FOURCC('T','V','O','D')},
+	{".wav", FOURCC('W','A','V','E'), FOURCC('T','V','O','D')},
+	{".bmp", FOURCC('B','M','P','f'), FOURCC('o','g','l','e')},
+	{".gif", FOURCC('G','I','F','f'), FOURCC('o','g','l','e')},
+	{".lbm", FOURCC('I','L','B','M'), FOURCC('G','K','O','N')},
+	{".ilbm", FOURCC('I','L','B','M'), FOURCC('G','K','O','N')},
+	{".jpg", FOURCC('J','P','E','G'), FOURCC('o','g','l','e')},
+	{".jpeg", FOURCC('J','P','E','G'), FOURCC('o','g','l','e')},
+	{".pict", FOURCC('P','I','C','T'), FOURCC('o','g','l','e')},
+	{".png", FOURCC('P','N','G','f'), FOURCC('o','g','l','e')},
+	{".sgi", FOURCC('.','S','G','I'), FOURCC('o','g','l','e')},
+	{".tga", FOURCC('T','P','I','C'), FOURCC('o','g','l','e')},
+	{".tif", FOURCC('T','I','F','F'), FOURCC('o','g','l','e')},
+	{".tiff", FOURCC('T','I','F','F'), FOURCC('o','g','l','e')},
+	{".htm", FOURCC('T','E','X','T'), FOURCC('M','O','S','S')},
+	{".html", FOURCC('T','E','X','T'), FOURCC('M','O','S','S')},
+	{".txt", FOURCC('T','E','X','T'), FOURCC('t','t','x','t')},
+	{".rtf", FOURCC('T','E','X','T'), FOURCC('M','S','W','D')},
+	{".c", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".C", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".cc", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".cpp", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".cxx", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".h", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".hh", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".hpp", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".hxx", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".s", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".S", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".i", FOURCC('T','E','X','T'), FOURCC('R','*','c','h')},
+	{".mpg", FOURCC('M','P','E','G'), FOURCC('T','V','O','D')},
+	{".mpeg", FOURCC('M','P','E','G'), FOURCC('T','V','O','D')},
+	{".mov", FOURCC('M','o','o','V'), FOURCC('T','V','O','D')},
+	{".fli", FOURCC('F','L','I',' '), FOURCC('T','V','O','D')},
+	{".avi", FOURCC('V','f','W',' '), FOURCC('T','V','O','D')},
+	{".qxd", FOURCC('X','D','O','C'), FOURCC('X','P','R','3')},
+	{".hfv", FOURCC('D','D','i','m'), FOURCC('d','d','s','k')},
+	{".dsk", FOURCC('D','D','i','m'), FOURCC('d','d','s','k')},
+	{".img", FOURCC('r','o','h','d'), FOURCC('d','d','s','k')},
+	{NULL, 0, 0}
+};
+
+void get_finfo(const char *path, uint32 finfo, uint32 fxinfo, bool is_dir)
+{
+	Mac_memset(finfo, 0, SIZEOF_FInfo);
+	if (fxinfo)
+		Mac_memset(fxinfo, 0, SIZEOF_FXInfo);
+	WriteMacInt16(finfo + fdFlags, DEFAULT_FINDER_FLAGS);
+	WriteMacInt32(finfo + fdLocation, (uint32)-1);
+
+	int fd = open_finf(path, O_RDONLY);
+	if (fd >= 0) {
+		ssize_t actual = read(fd, Mac2HostAddr(finfo), SIZEOF_FInfo);
+		if (fxinfo)
+			actual += read(fd, Mac2HostAddr(fxinfo), SIZEOF_FXInfo);
+		close(fd);
+		if (actual >= SIZEOF_FInfo)
+			return;
+	}
+
+	if (!is_dir) {
+		int path_len = strlen(path);
+		for (int i=0; e2t_translation[i].ext; i++) {
+			int ext_len = strlen(e2t_translation[i].ext);
+			if (path_len < ext_len)
+				continue;
+			if (!strcmp(path + path_len - ext_len, e2t_translation[i].ext)) {
+				WriteMacInt32(finfo + fdType, e2t_translation[i].type);
+				WriteMacInt32(finfo + fdCreator, e2t_translation[i].creator);
+				break;
+			}
+		}
+	}
+}
+
+void set_finfo(const char *path, uint32 finfo, uint32 fxinfo, bool is_dir)
+{
+	struct utimbuf times;
+	times.actime = MacTimeToTime(ReadMacInt32(finfo - ioFlFndrInfo + ioFlCrDat));
+	times.modtime = MacTimeToTime(ReadMacInt32(finfo - ioFlFndrInfo + ioFlMdDat));
+
+	if (utime(path, &times) < 0) {
+		D(bug("utime failed on %s\n", path));
+	}
+
+	int fd = open_finf(path, O_RDWR);
+	if (fd < 0)
+		return;
+	write(fd, Mac2HostAddr(finfo), SIZEOF_FInfo);
+	if (fxinfo)
+		write(fd, Mac2HostAddr(fxinfo), SIZEOF_FXInfo);
+	close(fd);
+}
+
+uint32 get_rfork_size(const char *path)
+{
+	int fd = open_rsrc(path, O_RDONLY);
+	if (fd < 0)
+		return 0;
+	off_t size = lseek(fd, 0, SEEK_END);
+	close(fd);
+	return size < 0 ? 0 : size;
+}
+
+int open_rfork(const char *path, int flag)
+{
+	return open_rsrc(path, flag);
+}
+
+void close_rfork(const char *path, int fd)
+{
+	(void)path;
+	close(fd);
+}
+
+ssize_t extfs_read(int fd, void *buffer, size_t length)
+{
+	return read(fd, buffer, length);
+}
+
+ssize_t extfs_write(int fd, void *buffer, size_t length)
+{
+	return write(fd, buffer, length);
+}
+
+bool extfs_remove(const char *path)
+{
+	char helper_path[MAX_PATH_LENGTH];
+	make_helper_path(path, helper_path, ".finf/", false);
+	remove(helper_path);
+	make_helper_path(path, helper_path, ".rsrc/", false);
+	remove(helper_path);
+
+	if (remove(path) < 0) {
+		if (errno == EISDIR || errno == ENOTEMPTY) {
+			helper_path[0] = 0;
+			strncpy(helper_path, path, MAX_PATH_LENGTH-1);
+			add_path_component(helper_path, ".finf");
+			rmdir(helper_path);
+			helper_path[0] = 0;
+			strncpy(helper_path, path, MAX_PATH_LENGTH-1);
+			add_path_component(helper_path, ".rsrc");
+			rmdir(helper_path);
+			return rmdir(path) == 0;
+		} else
+			return false;
+	}
+	return true;
+}
+
+bool extfs_rename(const char *old_path, const char *new_path)
+{
+	char old_helper_path[MAX_PATH_LENGTH], new_helper_path[MAX_PATH_LENGTH];
+	make_helper_path(old_path, old_helper_path, ".finf/", false);
+	make_helper_path(new_path, new_helper_path, ".finf/", false);
+	create_helper_dir(new_path, ".finf/");
+	rename(old_helper_path, new_helper_path);
+	make_helper_path(old_path, old_helper_path, ".rsrc/", false);
+	make_helper_path(new_path, new_helper_path, ".rsrc/", false);
+	create_helper_dir(new_path, ".rsrc/");
+	rename(old_helper_path, new_helper_path);
+	return rename(old_path, new_path) == 0;
+}
+
+const char *host_encoding_to_macroman(const char *filename)
+{
+	return filename;
+}
+
+const char *macroman_to_host_encoding(const char *filename)
+{
+	return filename;
+}
+
+
+/*
  *  Platform adapter wrappers
  *  These functions provide the platform_unix_* interface expected by the platform layer
  */

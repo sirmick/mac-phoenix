@@ -14,8 +14,8 @@ ninja -C build
 # Run (headless, timed)
 ./build/mac-phoenix --timeout 10 --no-webserver /home/mick/quadra.rom
 
-# Test (fast — API + UAE boot + mouse + command bridge, ~15s)
-meson test -C build api_endpoints boot_uae mouse_position command_bridge
+# Test (fast — API + UAE boot + mouse + command bridge + extfs, ~20s)
+meson test -C build api_endpoints boot_uae mouse_position command_bridge extfs
 
 # Test (all — includes slow Unicorn boot, ~60s)
 meson test -C build
@@ -67,6 +67,7 @@ src/
   drivers/
     video/video_output.h            — Lock-free triple buffer for frames
     video/video_webrtc.cpp          — WebRTC video driver
+    platform/platform_unix.cpp      — Unix platform: disk I/O + ExtFS filesystem driver
     platform/timer_interrupt.cpp    — 60Hz timer via clock_gettime
   webserver/
     api_handlers.cpp                — All /api/ endpoints
@@ -87,6 +88,7 @@ tests/
   test_boot_to_finder.sh            — Boot-to-Finder test (parameterized by backend)
   test_mouse_position.sh            — Mouse position API test
   test_command_bridge.sh            — Command bridge integration tests (7 checks)
+  test_extfs.sh                     — ExtFS config, CLI, backward compat tests (8 checks)
   e2e/                              — Playwright browser tests
 
 client/                             — Browser UI (vanilla JS)
@@ -127,6 +129,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --rom path            ROM file path (alternative to positional arg)
   --disk path           Disk image path (repeatable)
   --cdrom path          CDROM image path (repeatable)
+  --extfs path          Shared folder path (repeatable)
   --ram MB              RAM size in megabytes
   --port N              HTTP server port (default: 8000)
   --signaling-port N    WebRTC signaling port (default: 8090)

@@ -90,7 +90,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["disks"] = strip_images(disk_paths);
     j["cdroms"] = strip_images(cdrom_paths);
     j["floppies"] = strip_images(floppy_paths);
-    j["extfs"] = extfs;
+    j["extfs"] = extfs_paths;
     j["bootdrive"] = bootdrive;
     j["bootdriver"] = bootdriver;
     j["codec"] = codec;
@@ -192,7 +192,15 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
                 p = storage_dir + "/images/" + p;
         }
     }
-    if (j.contains("extfs")) extfs = json_utils::get_string(j, "extfs");
+    if (j.contains("extfs")) {
+        if (j["extfs"].is_array()) {
+            extfs_paths = json_utils::get_string_array(j, "extfs");
+        } else if (j["extfs"].is_string()) {
+            // Backward compat: single string → array
+            std::string s = json_utils::get_string(j, "extfs");
+            if (!s.empty()) extfs_paths = {s};
+        }
+    }
     if (j.contains("bootdrive")) bootdrive = json_utils::get_int(j, "bootdrive");
     if (j.contains("bootdriver")) bootdriver = json_utils::get_int(j, "bootdriver");
     if (j.contains("codec")) codec = json_utils::get_string(j, "codec");
@@ -344,6 +352,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --rom PATH            ROM file path (alternative to positional arg)\n");
             printf("  --disk PATH           Disk image path (repeatable)\n");
             printf("  --cdrom PATH          CDROM image path (repeatable)\n");
+            printf("  --extfs PATH          Shared folder path (repeatable)\n");
             printf("  --ram MB              RAM size in megabytes (default: 32)\n");
             printf("  --backend NAME        CPU backend: uae, unicorn, dualcpu (default: uae)\n");
             printf("  --arch ARCH           CPU architecture: m68k, ppc (default: m68k)\n");
@@ -385,6 +394,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --cdrom <path> (repeatable)
         if (strcmp(argv[i], "--cdrom") == 0 && i+1 < argc) {
             config.cdrom_paths.push_back(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --extfs <path> (repeatable)
+        if (strcmp(argv[i], "--extfs") == 0 && i+1 < argc) {
+            config.extfs_paths.push_back(argv[i+1]);
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 

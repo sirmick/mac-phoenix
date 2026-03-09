@@ -438,10 +438,11 @@ void ExtFSInit(void)
 	strncpy(p->guest_name, host_encoding_to_macroman(p->name), 32);
 	p->guest_name[31] = 0;
 
-	// Find path for root
+	// Find path for root (use first extfs_paths entry)
 	*RootPath = 0;
-	const char *path = config::EmulatorConfig::instance().extfs.empty() ? NULL : config::EmulatorConfig::instance().extfs.c_str();
-	if (path != NULL) {
+	auto& extfs_paths = config::EmulatorConfig::instance().extfs_paths;
+	const char *path = extfs_paths.empty() ? NULL : extfs_paths[0].c_str();
+	if (path != NULL && path[0] != '\0') {
 		strncpy(RootPath, path, MAX_PATH_LENGTH - 1);
 		RootPath[MAX_PATH_LENGTH - 1] = 0;
 		if (stat(RootPath, &root_stat))

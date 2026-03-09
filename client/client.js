@@ -2986,7 +2986,7 @@ async function openConfig() {
         storageCache = null; // Clear cache to refresh
         setConfigControlsEnabled(false);
         // Load config and storage lists in parallel, then apply selections
-        await Promise.all([loadCurrentConfig(), loadRomList(), loadDiskList(), loadCdromList()]);
+        await Promise.all([loadCurrentConfig(), loadRomList(), loadDiskList(), loadCdromList(), loadExtfsList()]);
         updateConfigUI();
         setConfigControlsEnabled(true);
     }
@@ -3174,6 +3174,48 @@ function updateCdromSelection() {
     currentConfig.cdroms = Array.from(checkboxes).map(cb => cb.value);
 }
 
+async function loadExtfsList() {
+    renderExtfsList();
+    const addBtn = document.getElementById('extfs-add-btn');
+    const input = document.getElementById('extfs-path-input');
+    if (addBtn && input) {
+        addBtn.onclick = () => {
+            const path = input.value.trim();
+            if (path) {
+                if (!currentConfig.extfs) currentConfig.extfs = [];
+                if (!currentConfig.extfs.includes(path)) {
+                    currentConfig.extfs.push(path);
+                    renderExtfsList();
+                }
+                input.value = '';
+            }
+        };
+        input.onkeydown = (e) => { if (e.key === 'Enter') addBtn.click(); };
+    }
+}
+
+function renderExtfsList() {
+    const container = document.getElementById('extfs-list');
+    if (!container) return;
+    const paths = currentConfig.extfs || [];
+    if (paths.length === 0) {
+        container.innerHTML = '<div class="empty-state">No shared folders configured</div>';
+        return;
+    }
+    container.innerHTML = paths.map((p, idx) => `
+        <div class="checkbox-group" style="display:flex;align-items:center;gap:4px">
+            <span style="flex:1;font-size:12px">${p}</span>
+            <button type="button" style="font-size:10px;padding:1px 6px" onclick="removeExtfsPath(${idx})">Remove</button>
+        </div>`).join('');
+}
+
+function removeExtfsPath(idx) {
+    if (currentConfig.extfs) {
+        currentConfig.extfs.splice(idx, 1);
+        renderExtfsList();
+    }
+}
+
 // Helper to show/hide emulator-specific settings panels (no side effects)
 function updateEmulatorPanelVisibility() {
     const emulatorType = document.getElementById('cfg-emulator')?.value;
@@ -3278,6 +3320,7 @@ async function loadCurrentConfig() {
             bootdriver: cfg.bootdriver || 0,
             disks: (cfg.disks || []).map(p => stripPrefix(p, '/images/')),
             cdroms: (cfg.cdroms || []).map(p => stripPrefix(p, '/images/')),
+            extfs: cfg.extfs || [],
             idlewait: isM68k ? (cfg.m68k?.idlewait ?? true) : (cfg.ppc?.idlewait ?? true),
             ignoresegv: isM68k ? (cfg.m68k?.ignoresegv ?? true) : (cfg.ppc?.ignoresegv ?? true),
             ignoreillegal: cfg.ppc?.ignoreillegal ?? false,
@@ -3355,6 +3398,9 @@ function updateConfigUI() {
         cb.checked = currentConfig.cdroms.includes(cb.value);
     });
 
+    // Update shared folders list
+    renderExtfsList();
+
     // Update header title with model name
     updateHeaderTitle();
 }
@@ -3419,6 +3465,7 @@ async function saveConfig() {
         rom: currentConfig.rom,
         disks: currentConfig.disks,
         cdroms: currentConfig.cdroms || [],
+        extfs: currentConfig.extfs || [],
         bootdriver: currentConfig.bootdriver || 0,
         ram_mb: currentConfig.ram,
         screen: currentConfig.screen,
