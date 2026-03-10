@@ -159,40 +159,6 @@
                             <div class="value" id="stat-rtt">-- ms</div>
                         </div>
                     </div>
-                    <!-- Ping Breakdown Section -->
-                    <div id="ping-breakdown-section">
-                        <h4 style="margin-top: 15px; margin-bottom: 10px; color: #888;">Ping Latency Breakdown (8-stage)</h4>
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <div class="label">Total RTT</div>
-                                <div class="value" id="stat-ping-total">-- ms</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="label">Network</div>
-                                <div class="value" id="stat-ping-network">-- ms</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="label">IPC</div>
-                                <div class="value" id="stat-ping-ipc">-- ms</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="label">Emulator</div>
-                                <div class="value" id="stat-ping-emulator">-- ms</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="label">Wake</div>
-                                <div class="value" id="stat-ping-wake">-- ms</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="label">Encode</div>
-                                <div class="value" id="stat-ping-encode">-- ms</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="label">Send Prep</div>
-                                <div class="value" id="stat-ping-send">-- ms</div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
                 <div class="debug-pane" id="webrtc-pane">
                     <div class="webrtc-section">
@@ -290,7 +256,8 @@
                 <button class="modal-close" id="modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- Left column: system -->
+                <div class="modal-columns">
+                <!-- Column 1: system + storage -->
                 <div class="form-group">
                     <label>Emulator Type</label>
                     <select id="cfg-emulator">
@@ -300,7 +267,6 @@
                     <small class="help-text">Requires restart to change emulator</small>
                 </div>
 
-                <!-- Right column: ROM -->
                 <div class="form-group">
                     <label>ROM File</label>
                     <select id="cfg-rom">
@@ -308,7 +274,6 @@
                     </select>
                 </div>
 
-                <!-- Left column: RAM -->
                 <div class="form-group">
                     <label>RAM Size</label>
                     <select id="cfg-ram">
@@ -322,7 +287,12 @@
                     </select>
                 </div>
 
-                <!-- Right column: Screen -->
+                <div class="form-group">
+                    <label>Disk Images</label>
+                    <div id="disk-list" class="disk-checkbox-list"><div class="empty-state">Loading...</div></div>
+                </div>
+
+                <!-- Column 2: display + media -->
                 <div class="form-group">
                     <label>Screen Resolution</label>
                     <select id="cfg-screen">
@@ -334,7 +304,6 @@
                     </select>
                 </div>
 
-                <!-- Left column: Boot From -->
                 <div class="form-group">
                     <label>Boot From</label>
                     <select id="cfg-bootdriver">
@@ -343,7 +312,11 @@
                     </select>
                 </div>
 
-                <!-- Right column: Shared Folders -->
+                <div class="form-group">
+                    <label>CD-ROM Images</label>
+                    <div id="cdrom-list" class="disk-checkbox-list"><div class="empty-state">Loading...</div></div>
+                </div>
+
                 <div class="form-group">
                     <label>Shared Folders</label>
                     <div id="extfs-list" class="disk-checkbox-list">
@@ -354,18 +327,7 @@
                         <button id="extfs-add-btn" type="button" style="font-size:12px;padding:2px 8px">Add</button>
                     </div>
                 </div>
-
-                <!-- Disk Images: full width -->
-                <div class="form-group" style="grid-column: 1 / -1;">
-                    <label>Disk Images</label>
-                    <div id="disk-list" class="disk-checkbox-list"><div class="empty-state">Loading...</div></div>
-                </div>
-
-                <!-- CD-ROM Images: full width -->
-                <div class="form-group" style="grid-column: 1 / -1;">
-                    <label>CD-ROM Images</label>
-                    <div id="cdrom-list" class="disk-checkbox-list"><div class="empty-state">Loading...</div></div>
-                </div>
+                </div><!-- end modal-columns -->
 
                 <div class="advanced-toggle" id="advanced-toggle">
                     <span class="arrow">&#9654;</span>

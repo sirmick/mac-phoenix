@@ -400,8 +400,8 @@ main {
     flex: 1;
     padding: 10px;
     font-family: 'Monaco', 'Menlo', monospace;
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: 9.5px;
+    line-height: 1.4;
     overflow-y: auto;
     background: #0d0d0d;
 }
@@ -419,7 +419,7 @@ main {
 
 /* Stats Pane */
 #stats-pane {
-    padding: 15px;
+    padding: 10px;
 }
 
 .stats-grid {
@@ -430,20 +430,20 @@ main {
 
 .stat-card {
     background: #252525;
-    padding: 12px;
+    padding: 8px 10px;
     border-radius: 6px;
 }
 
 .stat-card .label {
-    font-size: 0.75em;
+    font-size: 0.7em;
     color: #888;
     text-transform: uppercase;
 }
 
 .stat-card .value {
-    font-size: 1.4em;
+    font-size: 1.1em;
     font-weight: 500;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .stat-card .value.good { color: #4caf50; }
@@ -452,8 +452,8 @@ main {
 
 /* WebRTC Pane */
 #webrtc-pane {
-    padding: 15px;
-    font-size: 0.85em;
+    padding: 10px;
+    font-size: 0.75em;
 }
 
 .webrtc-section {
@@ -619,19 +619,29 @@ body.fullscreen #display {
 
 .modal-body {
     padding: 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 24px;
 }
 
 .modal-body .form-group {
     margin-bottom: 14px;
 }
 
-.modal-body .advanced-toggle,
-.modal-body .advanced-content,
-.modal-body .note-banner {
-    grid-column: 1 / -1;
+.modal-columns {
+    columns: 2;
+    column-gap: 24px;
+}
+
+.modal-columns > .form-group {
+    break-inside: avoid;
+}
+
+.modal-body .advanced-content.open {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 24px;
+}
+
+.modal-body .advanced-content .form-row {
+    display: contents;
 }
 
 .modal-footer {

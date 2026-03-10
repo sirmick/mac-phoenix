@@ -381,11 +381,11 @@ static bool unicorn_backend_init(void) {
 		}
 	}
 
-	// Map frame buffer area (4MB after ScratchMem) — video drivers place framebuffer here
-	// Memory layout: [RAM 32MB][ROM 1MB][ScratchMem 64KB][FrameBuffer 4MB][Dummy ...]
+	// Map frame buffer area (8MB after ScratchMem) — video drivers place framebuffer here
+	// Memory layout: [RAM 32MB][ROM 1MB][ScratchMem 64KB][FrameBuffer 8MB][Dummy ...]
 	{
 		uint32_t fb_base = ROMBaseMac + ROMSize + 0x10000;  // 0x02110000
-		uint32_t fb_size = 0x400000;  // 4MB (FRAMEBUFFER_AREA_SIZE)
+		uint32_t fb_size = 0x800000;  // 8MB (FRAMEBUFFER_AREA_SIZE)
 		uint8_t *fb_host = ROMBaseHost + ROMSize + 0x10000;  // Contiguous after ScratchMem
 		if (!unicorn_map_ram(unicorn_cpu, fb_base, fb_host, fb_size)) {
 			fprintf(stderr, "Failed to map frame buffer to Unicorn\n");
@@ -401,8 +401,8 @@ static bool unicorn_backend_init(void) {
 	// and later reads get ff00ff00 back — cascading through the Memory Manager to corrupt
 	// the WDCB (Working Directory Control Block) and stall the file system.
 	// UAE's dummy_bank uses callbacks that always return 0, so we must match that behavior.
-	uint32_t dummy_region_base = ROMBaseMac + ROMSize + 0x10000 + 0x400000;  // 0x02510000
-	uint32_t dummy_region_size = 16 * 1024 * 1024 - 0x10000 - 0x400000;     // 16MB - 64KB - 4MB
+	uint32_t dummy_region_base = ROMBaseMac + ROMSize + 0x10000 + 0x800000;  // 0x02910000
+	uint32_t dummy_region_size = 16 * 1024 * 1024 - 0x10000 - 0x800000;     // 16MB - 64KB - 8MB
 	{
 		uc_engine *dummy_uc = (uc_engine *)unicorn_get_uc(unicorn_cpu);
 		uc_err dummy_err = uc_mmio_map(dummy_uc, dummy_region_base, dummy_region_size,

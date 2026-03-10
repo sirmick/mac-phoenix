@@ -49,7 +49,7 @@ extern uint16 ROMVersion;
 extern uint8 *ScratchMem;
 
 static const int SCRATCH_MEM_SIZE = 0x10000;  // 64KB scratch memory for ROM HW base patching
-static const int FRAMEBUFFER_AREA_SIZE = 0x400000;  // 4MB reserved for frame buffer after ScratchMem
+static const int FRAMEBUFFER_AREA_SIZE = 0x800000;  // 8MB reserved for frame buffer after ScratchMem (supports up to 1920x1080x32)
 
 #if DIRECT_ADDRESSING
 extern uintptr MEMBaseDiff;

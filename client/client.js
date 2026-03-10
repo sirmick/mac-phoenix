@@ -13,7 +13,6 @@ const CONSTANTS = {
 
     // Timing & Intervals (milliseconds)
     MS_PER_SECOND: 1000,
-    PING_INTERVAL_MS: 1000,
     STATS_UPDATE_INTERVAL_MS: 1000,
     LATENCY_LOG_INTERVAL_MS: 3000,
     DETAILED_STATS_INTERVAL_MS: 3000,
@@ -25,16 +24,12 @@ const CONSTANTS = {
     MAX_RECONNECT_ATTEMPTS: 10,
     BASE_RECONNECT_DELAY_MS: 1000,
     MAX_RECONNECT_DELAY_MS: 30000,
-    MAX_RTT_THRESHOLD_MS: 30000,
     MAX_DECODE_LATENCY_MS: 1000,
 
-    // Ping & RTT
-    PING_SAMPLES_BEFORE_RESET: 10,
-
     // Frame Protocol Sizes (bytes)
-    PNG_HEADER_SIZE: 113,
-    MIN_PNG_SIZE_WITH_HEADER: 121,
-    H264_METADATA_SIZE: 65,
+    PNG_HEADER_SIZE: 45,
+    MIN_PNG_SIZE_WITH_HEADER: 53,
+    H264_METADATA_SIZE: 5,
 
     // Audio Capture
     AUDIO_CAPTURE_DURATION_SEC: 10,
@@ -46,7 +41,6 @@ const CONSTANTS = {
     CURSOR_ARROW_HEIGHT: 20,
 
     // Conversion factors
-    MICROSECONDS_TO_MS: 1000.0,
     BITS_PER_BYTE: 8,
     BITS_TO_KILOBITS: 1000,
 };
@@ -55,7 +49,7 @@ const CONSTANTS = {
 const debugConfig = {
     debug_connection: false,   // WebRTC/ICE/signaling logs
     debug_mode_switch: false,  // Mode/resolution/color depth changes
-    debug_perf: false          // Performance stats, ping logs
+    debug_perf: false          // Performance stats
 };
 
 // Store UI config from server
@@ -427,7 +421,32 @@ class WebRTCVideoDecoder extends VideoDecoder {
         if (this.videoElement) {
             this.videoElement.srcObject = null;
         }
+        this.lastDecodeTime = 0;
+        this.lastDecodeFrames = 0;
+        this.avgDecodeLatency = 0;
+        this.avgRtt = 0;
     }
+
+    // Called by updateStats() with values from RTCStats
+    updateRtpLatency(totalDecodeTime, framesDecoded, rttSeconds) {
+        // Average decode time per frame (totalDecodeTime is cumulative seconds)
+        if (framesDecoded > this.lastDecodeFrames) {
+            const deltaTime = totalDecodeTime - this.lastDecodeTime;
+            const deltaFrames = framesDecoded - this.lastDecodeFrames;
+            if (deltaFrames > 0 && deltaTime >= 0) {
+                this.avgDecodeLatency = (deltaTime / deltaFrames) * 1000; // ms
+            }
+        }
+        this.lastDecodeTime = totalDecodeTime;
+        this.lastDecodeFrames = framesDecoded;
+
+        if (rttSeconds > 0) {
+            this.avgRtt = rttSeconds * 1000; // ms
+        }
+    }
+
+    getAverageLatency() { return this.avgDecodeLatency || 0; }
+    getAverageRtt() { return this.avgRtt || 0; }
 
     // Frames come through the WebRTC video track, not handleData()
     // The track is set up by the WebRTC connection directly
@@ -486,16 +505,6 @@ class PNGDecoder extends VideoDecoder {
         // Track frame receive times to measure frame intervals
         this.lastFrameReceiveTime = 0;
 
-        // Ping/pong for RTT measurement
-        this.pingSequence = 0;
-        this.lastReceivedPingSeq = null;  // Track last ping echo we processed
-        this.rttTotal = 0;
-        this.rttSamples = 0;
-        this.lastRttLog = 0;
-        this.lastAverageRtt = 0;  // Last calculated average for stats panel
-
-        // Ping timer
-        this.pingTimer = null;
     }
 
     get type() { return CodecType.PNG; }
@@ -516,27 +525,7 @@ class PNGDecoder extends VideoDecoder {
     }
 
     cleanup() {
-        this.stopPingTimer();
         this.ctx = null;
-    }
-
-    // Start ping timer (call when DataChannel is ready)
-    startPingTimer(dataChannel) {
-        this.stopPingTimer();
-        this.dataChannel = dataChannel;
-
-        // Send ping for RTT measurement
-        this.pingTimer = setInterval(() => {
-            this.sendPing(this.dataChannel);
-        }, CONSTANTS.PING_INTERVAL_MS);
-    }
-
-    stopPingTimer() {
-        if (this.pingTimer) {
-            clearInterval(this.pingTimer);
-            this.pingTimer = null;
-        }
-        this.dataChannel = null;
     }
 
     // Get average video latency in ms
@@ -544,19 +533,10 @@ class PNGDecoder extends VideoDecoder {
         return this.lastAverageLatency;
     }
 
-    getAverageRtt() {
-        return this.lastAverageRtt;
-    }
-
-    // Get latest ping breakdown (for detailed stats panel)
-    getLatestPing() {
-        return this.latestPing;
-    }
-
     // Handle PNG data from DataChannel
     // Frame format: [8-byte t1_frame_ready] [4-byte x] [4-byte y] [4-byte width] [4-byte height]
     //               [4-byte frame_width] [4-byte frame_height] [8-byte t4_send_time]
-    //               [44-byte ping data] [8-byte cursor data] [PNG data]
+    //               [5-byte cursor data] [PNG data]
     async handleData(data) {
         if (!this.ctx) return;
 
@@ -596,79 +576,12 @@ class PNGDecoder extends VideoDecoder {
             cursorY = view.getUint16(42, true);
             cursorVisible = view.getUint8(44);
 
-            // Update cursor state - DON'T render it in absolute mode, just track for debugging
+            // Update cursor state
             this.currentCursorX = cursorX;
             this.currentCursorY = cursorY;
             this.cursorVisible = (cursorVisible !== 0);
-            // In absolute mode, we use the browser's native cursor, not the overlay
-            // The overlay cursor is only for debugging/visualization
 
-            // Read ping echo with full roundtrip timestamps
-            const pingSeq = view.getUint32(45, true);
-
-            // Browser send time (performance.now() milliseconds)
-            lo = view.getUint32(49, true);
-            hi = view.getUint32(53, true);
-            const ping_browser_send_ms = lo + hi * 0x100000000;
-
-            // Server receive time (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(57, true);
-            hi = view.getUint32(61, true);
-            const ping_server_recv_us = lo + hi * 0x100000000;
-
-            // Emulator receive time (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(65, true);
-            hi = view.getUint32(69, true);
-            const ping_emulator_recv_us = lo + hi * 0x100000000;
-
-            // Frame ready time (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(73, true);
-            hi = view.getUint32(77, true);
-            const ping_frame_ready_us = lo + hi * 0x100000000;
-
-            // Server read from SHM (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(81, true);
-            hi = view.getUint32(85, true);
-            const ping_server_read_us = lo + hi * 0x100000000;
-
-            // Encoding finished (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(89, true);
-            hi = view.getUint32(93, true);
-            const ping_encode_done_us = lo + hi * 0x100000000;
-
-            // Server sending (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(97, true);
-            hi = view.getUint32(101, true);
-            const ping_server_send_us = lo + hi * 0x100000000;
-
-            // Calculate all latencies if this frame echoes our ping
-            // Handle ping echo if present in this frame
-            if (pingSeq > 0) {
-                // Check for skipped pings
-                if (this.lastReceivedPingSeq > 0 && pingSeq > this.lastReceivedPingSeq + 1) {
-                    const skipped = pingSeq - this.lastReceivedPingSeq - 1;
-                    logger.warn(`[Ping] WARNING: Skipped ${skipped} ping(s) - jumped from #${this.lastReceivedPingSeq} to #${pingSeq}`);
-                }
-
-                // Only process if this is a NEW ping (not a duplicate from multi-frame echo)
-                if (pingSeq !== this.lastReceivedPingSeq) {
-                    if (debugConfig.debug_perf) {
-                        logger.info(`[Ping] New echo #${pingSeq} (browser_send=${ping_browser_send_ms.toFixed(1)}ms)`);
-                    }
-                    this.lastReceivedPingSeq = pingSeq;
-
-                    // Process ping echo with all 8 timestamps
-                    const ping_browser_recv_ms = performance.now();
-                    this.handlePingEcho(pingSeq, ping_browser_send_ms, ping_server_recv_us,
-                                       ping_emulator_recv_us, ping_frame_ready_us,
-                                       ping_server_read_us, ping_encode_done_us,
-                                       ping_server_send_us, ping_browser_recv_ms);
-                }
-                // Else: duplicate echo (expected due to 5-frame echo), silently ignore
-            }
-            // Note: Pings are sent every 1 second and echoed in 5 consecutive frames
-
-            // PNG data starts after header (40 base + 5 cursor + 68 ping with 7 timestamps)
+            // PNG data starts after header (40 base + 5 cursor)
             pngData = data.slice(CONSTANTS.PNG_HEADER_SIZE);
         }
 
@@ -738,95 +651,6 @@ class PNGDecoder extends VideoDecoder {
         }
     }
 
-    handlePingEcho(sequence, browser_send_ms, server_recv_us, emulator_recv_us,
-                   frame_ready_us, server_read_us, encode_done_us, server_send_us, browser_recv_ms) {
-        // Calculate latencies at each hop
-        // Note: browser_send/recv use browser clock (performance.now())
-        //       server/emulator timestamps use CLOCK_REALTIME (microseconds)
-
-        // Total RTT (browser clock only - accurate!)
-        const total_rtt_ms = browser_recv_ms - browser_send_ms;
-
-        // Server-side latencies (same clock - accurate!) - now with complete breakdown
-        const ipc_latency_us = emulator_recv_us - server_recv_us;     // t2→t3: Server → Emulator IPC
-        const emulator_proc_us = frame_ready_us - emulator_recv_us;   // t3→t4: Emulator processing → frame ready
-        const wake_latency_us = server_read_us - frame_ready_us;      // t4→t5: Frame ready → server wakes up
-        const encode_us = encode_done_us - server_read_us;            // t5→t6: Encoding time
-        const send_prep_us = server_send_us - encode_done_us;         // t6→t7: Packetizing/send prep
-
-        // Convert microseconds to milliseconds
-        const ipc_latency_ms = ipc_latency_us / CONSTANTS.MICROSECONDS_TO_MS;
-        const emulator_proc_ms = emulator_proc_us / CONSTANTS.MICROSECONDS_TO_MS;
-        const wake_latency_ms = wake_latency_us / CONSTANTS.MICROSECONDS_TO_MS;
-        const encode_ms = encode_us / CONSTANTS.MICROSECONDS_TO_MS;
-        const send_prep_ms = send_prep_us / CONSTANTS.MICROSECONDS_TO_MS;
-
-        // Network latency (estimated as remainder after subtracting known server-side latencies)
-        const server_side_total_ms = ipc_latency_ms + emulator_proc_ms + wake_latency_ms + encode_ms + send_prep_ms;
-        const network_ms = total_rtt_ms - server_side_total_ms;
-
-        // Get current time for logging and stats
-        const now = performance.now();
-
-        // Track total RTT for averaging (only if reasonable values)
-        // Permissive: accept RTT up to threshold (handles slow connections, breakpoints, etc.)
-        if (total_rtt_ms > 0 && total_rtt_ms < CONSTANTS.MAX_RTT_THRESHOLD_MS) {
-            this.rttTotal += total_rtt_ms;
-            this.rttSamples++;
-        } else if (total_rtt_ms >= CONSTANTS.MAX_RTT_THRESHOLD_MS) {
-            // Log unusually high RTT but don't include in average
-            logger.warn(`[Ping] Unusually high RTT: ${total_rtt_ms.toFixed(1)}ms (not included in average)`);
-        }
-
-        // Store latest ping breakdown for stats panel (complete 8-stage breakdown)
-        this.latestPing = {
-            sequence: sequence,
-            total_rtt_ms: total_rtt_ms,
-            network_ms: network_ms,
-            ipc_ms: ipc_latency_ms,
-            emulator_ms: emulator_proc_ms,
-            wake_ms: wake_latency_ms,
-            encode_ms: encode_ms,
-            send_prep_ms: send_prep_ms,
-            timestamp: now
-        };
-
-        // Log RTT for EVERY ping (not just every 3 seconds)
-        // This helps detect skipped pings and shows real-time latency
-        const avgRtt = this.rttSamples > 0 ? this.rttTotal / this.rttSamples : total_rtt_ms;
-        if (debugConfig.debug_perf) {
-            const rttLog = `Ping #${sequence} RTT ${total_rtt_ms.toFixed(1)}ms: ` +
-                          `net=${network_ms.toFixed(1)}ms ipc=${ipc_latency_ms.toFixed(1)}ms ` +
-                          `emu=${emulator_proc_ms.toFixed(1)}ms wake=${wake_latency_ms.toFixed(1)}ms ` +
-                          `enc=${encode_ms.toFixed(1)}ms send=${send_prep_ms.toFixed(1)}ms | ` +
-                          `avg=${avgRtt.toFixed(1)}ms (${this.rttSamples})`;
-            logger.info(rttLog);
-        }
-
-        // Reset averaging periodically to keep running average current
-        if (this.rttSamples >= CONSTANTS.PING_SAMPLES_BEFORE_RESET) {
-            this.lastAverageRtt = this.rttTotal / this.rttSamples;  // Save for stats panel
-            this.rttTotal = 0;
-            this.rttSamples = 0;
-        }
-
-        this.lastRttLog = now;
-    }
-
-    sendPing(dataChannel) {
-        if (!dataChannel || dataChannel.readyState !== 'open') return;
-
-        this.pingSequence++;
-        const timestamp = performance.now();
-
-        // Binary ping protocol: [type=4:1] [sequence:uint32] [timestamp:float64]
-        const buffer = new ArrayBuffer(1 + 4 + 8);
-        const view = new DataView(buffer);
-        view.setUint8(0, 4);  // type: ping
-        view.setUint32(1, this.pingSequence, true);  // little-endian
-        view.setFloat64(5, timestamp, true);
-        dataChannel.send(buffer);
-    }
 }
 
 // Factory to create the right decoder based on codec type
@@ -879,6 +703,7 @@ function getCodecLabel(codecType) {
         case CodecType.AV1: return 'AV1';
         case CodecType.VP9: return 'VP9';
         case CodecType.PNG: return 'PNG';
+        case CodecType.WEBP: return 'WEBP';
         default: return 'Unknown';
     }
 }
@@ -1745,10 +1570,6 @@ class BasiliskWebRTC {
             // Send initial mouse mode to emulator
             this.sendMouseModeChange(this.mouseMode);
 
-            // Start ping timer for PNG decoder
-            if (this.decoder && this.decoder.startPingTimer) {
-                this.decoder.startPingTimer(this.dataChannel);
-            }
         };
 
         this.dataChannel.onclose = () => {
@@ -1764,8 +1585,8 @@ class BasiliskWebRTC {
         // Handle incoming messages (frames for PNG, or other messages)
         this.dataChannel.onmessage = (event) => {
             if (event.data instanceof ArrayBuffer) {
-                // Check if this is a frame metadata message for H.264/AV1
-                // Format: [cursor_x:2][cursor_y:2][cursor_visible:1][ping_seq:4][t1:8][t2:8][t3:8][t4:8][t5:8][t6:8][t7:8]
+                // Check if this is a frame metadata message for H.264/VP9
+                // Format: [cursor_x:2][cursor_y:2][cursor_visible:1]
                 if (event.data.byteLength === CONSTANTS.H264_METADATA_SIZE) {
                     const view = new DataView(event.data);
                     this.handleFrameMetadata(view);
@@ -2045,71 +1866,16 @@ class BasiliskWebRTC {
         };
     }
 
-    // Handle frame metadata for H.264/AV1 (sent via data channel)
-    // Format: [cursor_x:2][cursor_y:2][cursor_visible:1][ping_seq:4][t1:8][t2:8][t3:8][t4:8][t5:8][t6:8][t7:8]
+    // Handle frame metadata for H.264/VP9 (sent via data channel)
+    // Format: [cursor_x:2][cursor_y:2][cursor_visible:1]
     handleFrameMetadata(view) {
-        // Read cursor position
         const cursorX = view.getUint16(0, true);
         const cursorY = view.getUint16(2, true);
         const cursorVisible = view.getUint8(4);
 
-        // Update cursor state - DON'T render it in absolute mode
         this.currentCursorX = cursorX;
         this.currentCursorY = cursorY;
         this.cursorVisible = (cursorVisible !== 0);
-        // In absolute mode, we use the browser's native cursor, not the overlay
-
-        // Read ping echo data
-        const pingSeq = view.getUint32(5, true);
-        if (pingSeq > 0) {
-            // Read all 7 ping timestamps (8 bytes each, little-endian)
-            let lo, hi;
-
-            // t1: Browser send time (performance.now() milliseconds)
-            lo = view.getUint32(9, true);
-            hi = view.getUint32(13, true);
-            const t1_browser_ms = lo + hi * 0x100000000;
-
-            // t2: Server receive time (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(17, true);
-            hi = view.getUint32(21, true);
-            const t2_server_us = lo + hi * 0x100000000;
-
-            // t3: Emulator receive time (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(25, true);
-            hi = view.getUint32(29, true);
-            const t3_emulator_us = lo + hi * 0x100000000;
-
-            // t4: Frame ready time (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(33, true);
-            hi = view.getUint32(37, true);
-            const t4_frame_us = lo + hi * 0x100000000;
-
-            // t5: Server read from SHM (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(41, true);
-            hi = view.getUint32(45, true);
-            const t5_server_read_us = lo + hi * 0x100000000;
-
-            // t6: Encoding finished (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(49, true);
-            hi = view.getUint32(53, true);
-            const t6_encode_done_us = lo + hi * 0x100000000;
-
-            // t7: Server sending (CLOCK_REALTIME microseconds)
-            lo = view.getUint32(57, true);
-            hi = view.getUint32(61, true);
-            const t7_server_send_us = lo + hi * 0x100000000;
-
-            // t8: Browser receive time (performance.now())
-            const t8_browser_recv_ms = performance.now();
-
-            // Process ping echo via decoder (which has the handlePingEcho method and ping stats)
-            if (this.decoder && this.decoder.handlePingEcho) {
-                this.decoder.handlePingEcho(pingSeq, t1_browser_ms, t2_server_us,
-                                           t3_emulator_us, t4_frame_us, t5_server_read_us,
-                                           t6_encode_done_us, t7_server_send_us, t8_browser_recv_ms);
-            }
-        }
     }
 
     // Handle cursor update message from server (type 7) - DEPRECATED, keeping for compatibility
@@ -2130,7 +1896,7 @@ class BasiliskWebRTC {
         if (!this.cursorCtx || !this.cursorOverlay) return;
 
         // Get display element dimensions for scaling
-        const usesVideoElement = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1);
+        const usesVideoElement = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1 || this.codecType === CodecType.VP9);
         const displayElement = usesVideoElement ? this.video : this.canvas;
         if (!displayElement) return;
 
@@ -2305,8 +2071,14 @@ class BasiliskWebRTC {
 
         try {
             const stats = await this.pc.getStats();
+            let candidateRtt = 0;
 
             stats.forEach(report => {
+                // Extract RTT from candidate-pair stats
+                if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                    candidateRtt = report.currentRoundTripTime || 0;
+                }
+
                 if (report.type === 'inbound-rtp' && report.kind === 'video') {
                     const bytesReceived = report.bytesReceived || 0;
                     const framesDecoded = report.framesDecoded || 0;
@@ -2331,6 +2103,11 @@ class BasiliskWebRTC {
                     this.stats.framesReceived = framesReceived;
                     this.stats.keyFramesDecoded = keyFramesDecoded;
                     this.stats.jitter = Math.round(jitter * 1000);
+
+                    // Feed decode latency and RTT to the decoder for stats display
+                    if (this.decoder && this.decoder.updateRtpLatency) {
+                        this.decoder.updateRtpLatency(totalDecodeTime, framesDecoded, candidateRtt);
+                    }
 
                     // Log detailed stats every 3 seconds
                     if (!this.lastDetailedStatsTime || (now - this.lastDetailedStatsTime) > 3000) {
@@ -2369,7 +2146,7 @@ class BasiliskWebRTC {
 
         // Get resolution from appropriate element
         let width = 0, height = 0;
-        const usesVideoElement = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1);
+        const usesVideoElement = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1 || this.codecType === CodecType.VP9);
         if (usesVideoElement && this.video) {
             width = this.video.videoWidth;
             height = this.video.videoHeight;
@@ -2419,8 +2196,8 @@ class BasiliskWebRTC {
         }
         if (statFrames) statFrames.textContent = this.stats.framesDecoded.toLocaleString();
 
-        // Packets Lost and Jitter only apply to RTP (H.264/AV1)
-        const usesRTP = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1);
+        // Packets Lost and Jitter only apply to RTP (H.264/AV1/VP9)
+        const usesRTP = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1 || this.codecType === CodecType.VP9);
         if (statLost) {
             if (usesRTP) {
                 statLost.textContent = this.stats.packetsLost;
@@ -2438,11 +2215,6 @@ class BasiliskWebRTC {
             }
         }
 
-        // Show/hide ping breakdown section based on codec (only for PNG)
-        const pingBreakdownSection = document.getElementById('ping-breakdown-section');
-        if (pingBreakdownSection) {
-            pingBreakdownSection.style.display = usesRTP ? 'none' : 'block';
-        }
     }
 
     // UI helpers
@@ -3661,55 +3433,20 @@ async function pollEmulatorStatus() {
             }
         }
 
-        // Update video latency stat (from PNGDecoder)
+        // Update video latency stat
         const videoLatencyEl = document.getElementById('stat-video-latency');
-        if (videoLatencyEl && client && client.decoder) {
-            const decoder = client.decoder;
-            if (decoder.getAverageLatency) {
-                const avgLatency = decoder.getAverageLatency();
-                if (avgLatency > 0) {
-                    videoLatencyEl.textContent = avgLatency.toFixed(1) + ' ms';
-                } else {
-                    videoLatencyEl.textContent = '-- ms';
-                }
-            }
+        if (videoLatencyEl) {
+            const avgLatency = client?.decoder?.getAverageLatency?.() || 0;
+            videoLatencyEl.textContent = avgLatency > 0 ? avgLatency.toFixed(1) + ' ms' : '-- ms';
         }
 
-        // Update RTT stat (from PNGDecoder)
+        // Update RTT stat
         const rttEl = document.getElementById('stat-rtt');
-        if (rttEl && client && client.decoder) {
-            const decoder = client.decoder;
-            if (decoder.getAverageRtt) {
-                const avgRtt = decoder.getAverageRtt();
-                if (avgRtt > 0) {
-                    rttEl.textContent = avgRtt.toFixed(1) + ' ms';
-                } else {
-                    rttEl.textContent = '-- ms';
-                }
-            }
+        if (rttEl) {
+            const avgRtt = client?.decoder?.getAverageRtt?.() || 0;
+            rttEl.textContent = avgRtt > 0 ? avgRtt.toFixed(1) + ' ms' : '-- ms';
         }
 
-        // Update ping breakdown stats (from latest ping response)
-        if (client && client.decoder && client.decoder.getLatestPing) {
-            const ping = client.decoder.getLatestPing();
-            if (ping) {
-                const totalEl = document.getElementById('stat-ping-total');
-                const networkEl = document.getElementById('stat-ping-network');
-                const ipcEl = document.getElementById('stat-ping-ipc');
-                const emulatorEl = document.getElementById('stat-ping-emulator');
-                const wakeEl = document.getElementById('stat-ping-wake');
-                const encodeEl = document.getElementById('stat-ping-encode');
-                const sendEl = document.getElementById('stat-ping-send');
-
-                if (totalEl) totalEl.textContent = ping.total_rtt_ms.toFixed(1) + ' ms';
-                if (networkEl) networkEl.textContent = ping.network_ms.toFixed(1) + ' ms';
-                if (ipcEl) ipcEl.textContent = ping.ipc_ms.toFixed(1) + ' ms';
-                if (emulatorEl) emulatorEl.textContent = ping.emulator_ms.toFixed(1) + ' ms';
-                if (wakeEl) wakeEl.textContent = ping.wake_ms.toFixed(1) + ' ms';
-                if (encodeEl) encodeEl.textContent = ping.encode_ms.toFixed(1) + ' ms';
-                if (sendEl) sendEl.textContent = ping.send_prep_ms.toFixed(1) + ' ms';
-            }
-        }
     } catch (e) {
         // Silently fail status polling
     }

@@ -42,16 +42,29 @@ namespace {
 	uint32_t the_buffer_size = 0;
 }
 
-// Dummy monitor descriptor (similar to video_null)
+// WebRTC monitor descriptor — supports runtime resolution switching
 class webrtc_monitor_desc : public monitor_desc {
 public:
 	webrtc_monitor_desc(const vector<video_mode> &available_modes, video_depth default_depth, uint32 default_id)
 		: monitor_desc(available_modes, default_depth, default_id) {}
 	~webrtc_monitor_desc() {}
 
-	void switch_to_current_mode(void) { /* Streaming - no mode switch needed */ }
-	void set_palette(uint8 *pal, int num) { /* Streaming - palette changes handled in refresh */ }
-	void set_gamma(uint8 *gamma, int num) { /* Streaming - gamma ignored */ }
+	void switch_to_current_mode(void) {
+		const video_mode &mode = get_current_mode();
+		uint32_t new_size = mode.x * mode.y * 4;
+
+		// Clear framebuffer for new resolution
+		if (the_buffer && new_size <= 0x800000) {
+			memset(the_buffer, 0, new_size);
+			the_buffer_size = new_size;
+			fprintf(stderr, "[Video] Mode switch to %dx%dx32\n", mode.x, mode.y);
+
+			// Request keyframe so encoder picks up the new resolution cleanly
+			video::g_request_keyframe.store(true, std::memory_order_release);
+		}
+	}
+	void set_palette(uint8 *pal, int num) { (void)pal; (void)num; }
+	void set_gamma(uint8 *gamma, int num) { (void)gamma; (void)num; }
 };
 
 /*
@@ -67,51 +80,61 @@ bool video_webrtc_init(bool classic, config::EmulatorConfig* config)
 	// Create VideoOutput triple buffer (1080p max)
 	video::g_video_output = new VideoOutput(1920, 1080);
 
-	// Create a dummy framebuffer for Mac (1024x768x32 ARGB)
-	const int width = 1024;
-	const int height = 768;
-	const video_depth depth = VDEPTH_32BIT;
-	const uint32 resolution_id = 0x80;
+	// Supported resolutions (resolution_id follows legacy BasiliskII convention)
+	struct { int w, h; uint32 res_id; } supported_modes[] = {
+		{  640,  480, 0x81 },
+		{  800,  600, 0x82 },
+		{ 1024,  768, 0x83 },
+		{ 1280, 1024, 0x85 },
+		{ 1600, 1200, 0x86 },
+		{ 1920, 1080, 0x87 },
+	};
 
-	// Allocate framebuffer from Mac RAM (at the end of RAM)
-	// Need to allocate BEFORE initializing to get correct address
-	the_buffer_size = width * height * 4;  // 32-bit = 4 bytes per pixel
+	// Default resolution from config
+	const int default_width = config ? config->screen_width : 1024;
+	const int default_height = config ? config->screen_height : 768;
+	const video_depth depth = VDEPTH_32BIT;
+
+	// Allocate framebuffer at max supported size (8MB area in cpu_context.cpp)
+	// All modes share the same buffer — only the used portion changes
+	the_buffer_size = 0x800000;  // 8MB max
 
 	// Get memory layout info from globals
 	extern uint8 *ROMBaseHost;
 	extern uint32 ROMSize;
 
 	// Place framebuffer AFTER ScratchMem (outside RAM) to avoid overlapping Mac heap
-	// Memory layout: [RAM][ROM 1MB][ScratchMem 64KB][FrameBuffer]
-	// The 4MB framebuffer area is allocated in cpu_context.cpp
-	if (the_buffer_size > 0x400000) {
-		fprintf(stderr, "Video: Framebuffer too large (%u bytes) for reserved area (4MB)\n",
-		        the_buffer_size);
-		delete video::g_video_output;
-		video::g_video_output = nullptr;
-		return false;
-	}
-
-	// Place framebuffer after ScratchMem
+	// Memory layout: [RAM][ROM 1MB][ScratchMem 64KB][FrameBuffer 8MB]
 	the_buffer = ROMBaseHost + ROMSize + 0x10000;  // After ScratchMem
 	memset(the_buffer, 0, the_buffer_size);
 
 	D(bug("Video: Framebuffer at host addr %p, Mac addr 0x%08x\n",
 	      the_buffer, Host2MacAddr(the_buffer)));
 
-	// Build list of supported video modes
+	// Build list of supported video modes (32-bit only)
 	vector<video_mode> modes;
-	video_mode mode;
-	mode.x = width;
-	mode.y = height;
-	mode.resolution_id = resolution_id;
-	mode.depth = depth;
-	mode.bytes_per_row = width * 4;  // 32-bit depth = 4 bytes per pixel
-	mode.user_data = 0;
-	modes.push_back(mode);
+	uint32 default_res_id = 0x83;  // Default to 1024x768 if config resolution not in list
 
-	// Create monitor descriptor
-	webrtc_monitor_desc *monitor = new webrtc_monitor_desc(modes, depth, resolution_id);
+	for (const auto& sm : supported_modes) {
+		// Only include modes that fit in framebuffer area
+		if ((uint32_t)sm.w * sm.h * 4 > 0x800000) continue;
+
+		video_mode mode;
+		mode.x = sm.w;
+		mode.y = sm.h;
+		mode.resolution_id = sm.res_id;
+		mode.depth = depth;
+		mode.bytes_per_row = sm.w * 4;
+		mode.user_data = 0;
+		modes.push_back(mode);
+
+		if (sm.w == default_width && sm.h == default_height) {
+			default_res_id = sm.res_id;
+		}
+	}
+
+	// Create monitor descriptor with default set to config resolution
+	webrtc_monitor_desc *monitor = new webrtc_monitor_desc(modes, depth, default_res_id);
 
 	// Set Mac frame buffer address (now it's in Mac RAM!)
 	uint32 mac_fb_addr = Host2MacAddr(the_buffer);
@@ -133,7 +156,8 @@ bool video_webrtc_init(bool classic, config::EmulatorConfig* config)
 	video::g_running.store(true, std::memory_order_release);
 	g_encoder_thread = new std::thread(video::video_encoder_main, video::g_video_output, g_config);
 
-	D(bug("Video: WebRTC driver initialized (1024x768x32, encoder thread started)\n"));
+	D(bug("Video: WebRTC driver initialized (%dx%dx32, %zu modes, encoder thread started)\n",
+	      default_width, default_height, modes.size()));
 	return true;
 }
 
@@ -197,16 +221,17 @@ void video_webrtc_refresh(void)
 		// Sample a few pixels to see what's in the framebuffer
 		const uint32_t* pixels = reinterpret_cast<const uint32_t*>(the_buffer);
 		uint32_t p0 = pixels[0];          // Top-left corner
-		uint32_t p1 = pixels[1023];       // Top-right corner
-		uint32_t p2 = pixels[512 + 384 * 1024]; // Center
+		int w = VideoMonitors.empty() ? 1024 : VideoMonitors[0]->get_current_mode().x;
+		int h = VideoMonitors.empty() ? 768 : VideoMonitors[0]->get_current_mode().y;
+		uint32_t p1 = pixels[w - 1];       // Top-right corner
+		uint32_t p2 = pixels[w/2 + (h/2) * w]; // Center
 		fprintf(stderr, "[VideoRefresh] Frame %d: pixels[0]=0x%08x [1023]=0x%08x [center]=0x%08x\n",
 		        refresh_count, p0, p1, p2);
 	}
 
-	// Get current video mode dimensions
-	// Note: For now we're hardcoded to 1024x768x32
-	const int width = 1024;
-	const int height = 768;
+	// Get current video mode dimensions from monitor descriptor
+	const int width = VideoMonitors.empty() ? 1024 : VideoMonitors[0]->get_current_mode().x;
+	const int height = VideoMonitors.empty() ? 768 : VideoMonitors[0]->get_current_mode().y;
 
 	// Mac framebuffer is already in ARGB format (32-bit)
 	// VideoOutput wants ARGB or BGRA - let's submit as ARGB since that's what Mac uses

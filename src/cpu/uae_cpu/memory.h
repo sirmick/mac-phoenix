@@ -150,8 +150,8 @@ static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 		return (uae_u8 *)MEMBaseDiff + addr;
 	}
 	// ROM + ScratchMem + FrameBuffer region (contiguous after RAM)
-	// Layout: ROM(1MB) + ScratchMem(64KB) + FrameBuffer(4MB) = 5.06MB
-	if (addr >= ROMBaseMac && addr < ROMBaseMac + ROMSize + 0x10000 + 0x400000) {
+	// Layout: ROM(1MB) + ScratchMem(64KB) + FrameBuffer(8MB) = 9.06MB
+	if (addr >= ROMBaseMac && addr < ROMBaseMac + ROMSize + 0x10000 + 0x800000) {
 		return (uae_u8 *)MEMBaseDiff + addr;
 	}
 	// OOB: return pointer into zero-filled page (reads=0, writes=drop)

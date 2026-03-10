@@ -31,19 +31,6 @@ struct EncodedFrame {
     uint16_t cursor_x = 0;
     uint16_t cursor_y = 0;
     uint8_t cursor_visible = 0;
-
-    // Ping/pong latency measurement (sent with every frame for all codecs)
-    // Complete round-trip timestamps:
-    // DOWN: Browser → Server → Emulator → Frame ready
-    // UP: Frame read → Encode → Send → Browser receive
-    uint32_t ping_sequence = 0;      // Sequence number (0 = no ping data)
-    uint64_t t1_browser_ms = 0;      // Browser send time (performance.now())
-    uint64_t t2_server_us = 0;       // Server receive time (CLOCK_REALTIME microseconds)
-    uint64_t t3_emulator_us = 0;     // Emulator receive time (CLOCK_REALTIME microseconds)
-    uint64_t t4_frame_us = 0;        // Frame ready in SHM (CLOCK_REALTIME microseconds)
-    uint64_t t5_server_read_us = 0;  // Server woke & read frame (CLOCK_REALTIME microseconds)
-    uint64_t t6_encode_done_us = 0;  // Encoding finished (CLOCK_REALTIME microseconds)
-    uint64_t t7_server_send_us = 0;  // Server sending frame (CLOCK_REALTIME microseconds)
 };
 
 class VideoCodec {

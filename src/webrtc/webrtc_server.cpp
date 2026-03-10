@@ -707,9 +707,9 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
     int skipped_not_open = 0;
 
     // Build metadata for data channel
-    // Format: [cursor_x:2][cursor_y:2][cursor_visible:1][ping_seq:4][timestamps:56]
-    // Total: 65 bytes
-    uint8_t metadata[65] = {0};
+    // Format: [cursor_x:2][cursor_y:2][cursor_visible:1]
+    // Total: 5 bytes
+    uint8_t metadata[5] = {0};
     int mx = 0, my = 0;
     if (g_shared_state) {
         // Fork mode: read cursor from shared memory (child writes at 60Hz)
@@ -737,10 +737,10 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
 
         try {
             if (peer->codec == CodecType::PNG || peer->codec == CodecType::WEBP) {
-                // PNG/WEBP: send frame via datachannel with 113-byte metadata header
+                // PNG/WEBP: send frame via datachannel with 45-byte metadata header
                 if (peer->data_channel && peer->data_channel->isOpen()) {
-                    // Build header: [t1:8][x:4][y:4][w:4][h:4][fw:4][fh:4][t4:8][cursor:5][ping:68]
-                    std::vector<uint8_t> frame_with_header(113 + size);
+                    // Build header: [t1:8][x:4][y:4][w:4][h:4][fw:4][fh:4][t4:8][cursor:5]
+                    std::vector<uint8_t> frame_with_header(45 + size);
                     // Leave t1 (0-7) as zero
                     uint32_t zero = 0;
                     std::memcpy(frame_with_header.data() + 8, &zero, 4);   // dirty rect x = 0
@@ -756,9 +756,8 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
                     std::memcpy(frame_with_header.data() + 40, &cx, 2);
                     std::memcpy(frame_with_header.data() + 42, &cy, 2);
                     frame_with_header[44] = metadata[4];  // cursor_visible
-                    // Ping data (offsets 45-112) left as zero
                     // Copy frame data after header
-                    std::memcpy(frame_with_header.data() + 113, data, size);
+                    std::memcpy(frame_with_header.data() + 45, data, size);
 
                     // Send full frame as single message (matching legacy)
                     peer->data_channel->send(

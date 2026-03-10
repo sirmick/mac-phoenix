@@ -62,14 +62,24 @@ extern void ADBKeyUp(int code);
 
 static SharedState* g_child_shm = nullptr;
 static uint8_t* shm_the_buffer = nullptr;
+static int shm_video_width = 1024;
+static int shm_video_height = 768;
 
-// Simple monitor descriptor for the child (no encoder, no mode switching)
+// SHM monitor descriptor — supports runtime resolution switching via Mac Monitors control panel
 class shm_monitor_desc : public monitor_desc {
 public:
     shm_monitor_desc(const vector<video_mode> &modes, video_depth depth, uint32 id)
         : monitor_desc(modes, depth, id) {}
     ~shm_monitor_desc() {}
-    void switch_to_current_mode(void) {}
+    void switch_to_current_mode(void) {
+        const video_mode &mode = get_current_mode();
+        shm_video_width = mode.x;
+        shm_video_height = mode.y;
+        if (shm_the_buffer) {
+            memset(shm_the_buffer, 0, mode.x * mode.y * 4);
+        }
+        fprintf(stderr, "[SHM Video] Mode switch to %dx%dx32\n", mode.x, mode.y);
+    }
     void set_palette(uint8 *pal, int num) { (void)pal; (void)num; }
     void set_gamma(uint8 *gamma, int num) { (void)gamma; (void)num; }
 };
@@ -78,32 +88,52 @@ static bool video_shm_init(bool classic)
 {
     (void)classic;
 
-    const int width = 1024;
-    const int height = 768;
-    const uint32_t buffer_size = width * height * 4;
+    // Supported resolutions (resolution_id follows legacy BasiliskII convention)
+    struct { int w, h; uint32 res_id; } supported_modes[] = {
+        {  640,  480, 0x81 },
+        {  800,  600, 0x82 },
+        { 1024,  768, 0x83 },
+        { 1280, 1024, 0x85 },
+        { 1600, 1200, 0x86 },
+        { 1920, 1080, 0x87 },
+    };
 
-    if (buffer_size > 0x400000) {
-        fprintf(stderr, "[SHM Video] Framebuffer too large\n");
-        return false;
+    // Default resolution from config
+    config::EmulatorConfig& cfg = config::EmulatorConfig::instance();
+    const int default_width = cfg.screen_width;
+    const int default_height = cfg.screen_height;
+
+    // Store initial dimensions for refresh function
+    shm_video_width = default_width;
+    shm_video_height = default_height;
+
+    // Place framebuffer after ScratchMem (8MB area, same layout as video_webrtc)
+    shm_the_buffer = ROMBaseHost + ROMSize + 0x10000;
+    memset(shm_the_buffer, 0, 0x800000);
+
+    // Build video modes (32-bit only)
+    vector<video_mode> modes;
+    uint32 default_res_id = 0x83;
+
+    for (const auto& sm : supported_modes) {
+        if ((uint32_t)sm.w * sm.h * 4 > 0x800000) continue;
+
+        video_mode mode;
+        mode.x = sm.w;
+        mode.y = sm.h;
+        mode.resolution_id = sm.res_id;
+        mode.depth = VDEPTH_32BIT;
+        mode.bytes_per_row = sm.w * 4;
+        mode.user_data = 0;
+        modes.push_back(mode);
+
+        if (sm.w == default_width && sm.h == default_height) {
+            default_res_id = sm.res_id;
+        }
     }
 
-    // Place framebuffer after ScratchMem (same layout as video_webrtc)
-    shm_the_buffer = ROMBaseHost + ROMSize + 0x10000;
-    memset(shm_the_buffer, 0, buffer_size);
-
-    // Build video mode
-    vector<video_mode> modes;
-    video_mode mode;
-    mode.x = width;
-    mode.y = height;
-    mode.resolution_id = 0x80;
-    mode.depth = VDEPTH_32BIT;
-    mode.bytes_per_row = width * 4;
-    mode.user_data = 0;
-    modes.push_back(mode);
-
     // Create monitor descriptor
-    shm_monitor_desc *monitor = new shm_monitor_desc(modes, VDEPTH_32BIT, 0x80);
+    shm_monitor_desc *monitor = new shm_monitor_desc(modes, VDEPTH_32BIT, default_res_id);
 
     // Set Mac frame buffer address
     uint32 mac_fb_addr = Host2MacAddr(shm_the_buffer);
@@ -115,8 +145,8 @@ static bool video_shm_init(bool classic)
     monitor->set_mac_frame_base(mac_fb_addr);
     VideoMonitors.push_back(monitor);
 
-    fprintf(stderr, "[SHM Video] Initialized %dx%dx32, fb at Mac 0x%08x\n",
-            width, height, mac_fb_addr);
+    fprintf(stderr, "[SHM Video] Initialized %dx%dx32 (%zu modes), fb at Mac 0x%08x\n",
+            default_width, default_height, modes.size(), mac_fb_addr);
     return true;
 }
 
@@ -130,8 +160,8 @@ static void video_shm_refresh(void)
 {
     if (!g_child_shm || !shm_the_buffer) return;
 
-    const int width = 1024;
-    const int height = 768;
+    const int width = shm_video_width;
+    const int height = shm_video_height;
     const size_t frame_bytes = width * height * 4;
 
     // Triple buffer protocol: write to write_index, publish via ready_index
