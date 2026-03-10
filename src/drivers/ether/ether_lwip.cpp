@@ -218,5 +218,5 @@ void ether_lwip_register(void)
 	g_platform.ether_stop_udp_thread = ether_lwip_stop_udp_thread;
 	g_platform.ether_interrupt = lwip_deliver_frames;
 
-	fprintf(stderr, "[Network] SLiRP (lwIP) driver registered\n");
+	fprintf(stderr, "[Network] lwIP NAT driver registered\n");
 }
