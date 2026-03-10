@@ -1159,14 +1159,19 @@ class BasiliskWebRTC {
 
             case 'reconnect':
                 // Server is requesting reconnection (e.g., codec change)
-                // Set flag immediately to suppress auto-reconnect from PC state changes
-                this.isReconnecting = true;
                 logger.info('Server requested reconnection', { reason: msg.reason, codec: msg.codec });
                 if (msg.reason === 'codec_change' && msg.codec) {
                     this.codecType = parseCodecString(msg.codec);
                     this.stats.codec = msg.codec;
                     updateCodecIndicator(this.codecType);
                 }
+                // If auto-reconnect already fired (PC close arrived before this message),
+                // skip duplicate reconnect to avoid nulling the in-flight PC
+                if (this.isReconnecting) {
+                    logger.info('Reconnect already in progress, skipping duplicate');
+                    break;
+                }
+                this.isReconnecting = true;
                 // Reconnect the PeerConnection with new codec
                 this.reconnectPeerConnection();
                 break;
@@ -1246,6 +1251,7 @@ class BasiliskWebRTC {
             }
 
             const checkState = () => {
+                if (!this.pc) { resolve(); return; }
                 if (this.pc.iceGatheringState === 'complete') {
                     this.pc.removeEventListener('icegatheringstatechange', checkState);
                     logger.info('ICE gathering complete, sending answer');
@@ -1662,11 +1668,17 @@ class BasiliskWebRTC {
                 return;
             }
 
-            // If WebSocket is still open, just reconnect the PeerConnection
-            // Otherwise do a full reconnect
+            // If WebSocket is still open, delay briefly to let any pending "reconnect"
+            // message arrive first (server sends reconnect before closing peer)
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                logger.info(`Connection ${state}, reconnecting PeerConnection via existing WebSocket`);
-                this.reconnectPeerConnection();
+                setTimeout(() => {
+                    if (this.isReconnecting) {
+                        logger.info(`Connection ${state}, reconnect message arrived — skipping auto-reconnect`);
+                        return;
+                    }
+                    logger.info(`Connection ${state}, reconnecting PeerConnection via existing WebSocket`);
+                    this.reconnectPeerConnection();
+                }, 100);
             } else {
                 logger.info(`Connection ${state}, WebSocket also closed, full reconnect needed`);
                 this.scheduleReconnect();
@@ -2258,7 +2270,7 @@ class BasiliskWebRTC {
         const elapsed = (now - this.lastStatsTime) / CONSTANTS.MS_PER_SECOND;
 
         // For PNG codec, calculate stats from our own tracking
-        const usesVideoTrack = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1);
+        const usesVideoTrack = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1 || this.codecType === CodecType.VP9);
         if (!usesVideoTrack) {
             if (elapsed > 0) {
                 const framesDelta = this.pngStats.framesReceived - this.lastPngFrameCount;

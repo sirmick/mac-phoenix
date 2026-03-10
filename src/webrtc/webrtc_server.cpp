@@ -536,8 +536,11 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
         fprintf(stderr, "[WebRTC] Peer %s gathering state: %s\n", peer_id.c_str(), state_str);
     });
 
-    // SSRC for RTP streams (static for now, could be per-peer)
-    static uint32_t ssrc = 42;  // Arbitrary but consistent
+    // SSRC for RTP streams — increment per peer to avoid browser RTP state confusion
+    // when switching between codecs (e.g., H264 → VP9) on the same SSRC
+    static uint32_t ssrc_counter = 42;
+    uint32_t ssrc = ssrc_counter;
+    ssrc_counter += 2;  // +2 because audio uses ssrc+1
 
     fprintf(stderr, "[WebRTC] About to add tracks for peer %s\n", peer_id.c_str());
 
@@ -770,6 +773,16 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
                 if (!peer->video_track || !peer->video_track->isOpen()) {
                     skipped_not_open++;
                     continue;
+                }
+
+                // Don't send P-frames before first keyframe (VP9 decoders may not recover)
+                if (peer->needs_keyframe && !is_keyframe) {
+                    video::g_request_keyframe.store(true, std::memory_order_release);
+                    skipped_not_ready++;
+                    continue;
+                }
+                if (is_keyframe) {
+                    peer->needs_keyframe = false;
                 }
 
                 peer->video_track->sendFrame(

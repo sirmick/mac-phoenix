@@ -33,6 +33,7 @@ struct PeerConnection {
     std::string id;
     CodecType codec = CodecType::H264;
     bool ready = false;
+    bool needs_keyframe = true;     // Don't send P-frames until first keyframe delivered
     bool needs_first_frame = true;  // Still-image codecs need full first frame
 };
 

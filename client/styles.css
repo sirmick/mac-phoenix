@@ -17,12 +17,13 @@ body {
 /* Header */
 header {
     background: #2d2d2d;
-    padding: 6px 12px;
+    padding: 4px 10px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #444;
     flex-shrink: 0;
+    font-size: 0.8em;
 }
 
 .logo {
@@ -32,7 +33,7 @@ header {
 }
 
 .logo h1 {
-    font-size: 1.1em;
+    font-size: 1em;
     font-weight: 500;
 }
 
@@ -577,7 +578,7 @@ body.fullscreen #display {
 .modal {
     background: #252525;
     border-radius: 12px;
-    max-width: 600px;
+    max-width: 900px;
     width: 100%;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
@@ -618,6 +619,19 @@ body.fullscreen #display {
 
 .modal-body {
     padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 24px;
+}
+
+.modal-body .form-group {
+    margin-bottom: 14px;
+}
+
+.modal-body .advanced-toggle,
+.modal-body .advanced-content,
+.modal-body .note-banner {
+    grid-column: 1 / -1;
 }
 
 .modal-footer {
@@ -647,12 +661,12 @@ body.fullscreen #display {
 .form-group input[type="number"],
 .form-group input[type="text"] {
     width: 100%;
-    padding: 10px;
+    padding: 7px 10px;
     background: #1a1a1a;
     border: 1px solid #444;
     border-radius: 5px;
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .form-group select:focus,
