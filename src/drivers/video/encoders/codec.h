@@ -27,6 +27,16 @@ struct EncodedFrame {
     int width = 0;
     int height = 0;
 
+    // Dirty rectangle (for PNG/WebP DataChannel frames)
+    // When dirty_width < frame_width or dirty_height < frame_height,
+    // the encoded data contains only the dirty sub-rectangle.
+    int dirty_x = 0;
+    int dirty_y = 0;
+    int dirty_width = 0;    // 0 = no changes (skip frame)
+    int dirty_height = 0;
+    int frame_width = 0;    // Full frame dimensions (for client compositing)
+    int frame_height = 0;
+
     // Cursor position metadata (sent with every frame for all codecs)
     uint16_t cursor_x = 0;
     uint16_t cursor_y = 0;

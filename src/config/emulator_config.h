@@ -29,6 +29,12 @@ enum class CPUBackend {
     DualCPU   // Validation mode (UAE + Unicorn)
 };
 
+enum class NetworkMode {
+    None,     // No networking (null driver)
+    LwIP,     // Userland NAT via lwIP
+    Raw       // AF_PACKET bridged to host NIC
+};
+
 struct M68KConfig {
     int cpu_type = 4;        // 68000-68040
     bool fpu = true;
@@ -122,6 +128,10 @@ struct EmulatorConfig {
     bool udptunnel = false;
     int udpport = 6066;
 
+    // Networking
+    NetworkMode network = NetworkMode::None;
+    std::string network_if;  // Interface name for raw mode (e.g. "eth0")
+
     // Timeout (0 = no timeout)
     int timeout_seconds = 0;
 
@@ -169,6 +179,14 @@ struct EmulatorConfig {
 
     const char* architecture_string() const {
         return (architecture == Architecture::M68K) ? "m68k" : "ppc";
+    }
+
+    const char* network_string() const {
+        switch (network) {
+            case NetworkMode::LwIP: return "lwip";
+            case NetworkMode::Raw: return "raw";
+            default: return "none";
+        }
     }
 };
 

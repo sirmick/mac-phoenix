@@ -47,6 +47,8 @@
 
 // WebRTC streaming
 #include "config/emulator_config.h"
+#include "drivers/ether/ether_lwip.h"
+#include "drivers/ether/ether_raw.h"
 #include "core/cpu_context.h"
 #include "core/cpu_process.h"
 #include "core/shared_state.h"
@@ -208,6 +210,13 @@ int main(int argc, char **argv)
 	}
 
 	config::print_config(emu_config);
+
+	// Select network driver based on config
+	if (emu_config.network == config::NetworkMode::LwIP) {
+		ether_lwip_register();
+	} else if (emu_config.network == config::NetworkMode::Raw) {
+		ether_raw_register(emu_config.network_if.c_str());
+	}
 
 	// Set global debug/log state from config
 	g_debug_mode_switch = emu_config.debug_mode_switch;

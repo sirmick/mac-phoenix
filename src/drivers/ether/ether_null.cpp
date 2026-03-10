@@ -61,3 +61,8 @@ void ether_null_stop_udp_thread(void)
 {
 	// No-op
 }
+
+void ether_null_interrupt(void)
+{
+	// No-op
+}

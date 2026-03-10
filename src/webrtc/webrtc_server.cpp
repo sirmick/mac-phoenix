@@ -687,7 +687,10 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 }
 
 void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_keyframe,
-                                    int width, int height) {
+                                    int width, int height,
+                                    int dirty_x, int dirty_y,
+                                    int dirty_width, int dirty_height,
+                                    int frame_width, int frame_height) {
     static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
     static int send_count = 0;
 
@@ -742,13 +745,16 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
                     // Build header: [t1:8][x:4][y:4][w:4][h:4][fw:4][fh:4][t4:8][cursor:5]
                     std::vector<uint8_t> frame_with_header(45 + size);
                     // Leave t1 (0-7) as zero
-                    uint32_t zero = 0;
-                    std::memcpy(frame_with_header.data() + 8, &zero, 4);   // dirty rect x = 0
-                    std::memcpy(frame_with_header.data() + 12, &zero, 4);  // dirty rect y = 0
-                    uint32_t fw = static_cast<uint32_t>(width);
-                    uint32_t fh = static_cast<uint32_t>(height);
-                    std::memcpy(frame_with_header.data() + 16, &fw, 4);    // dirty rect width
-                    std::memcpy(frame_with_header.data() + 20, &fh, 4);    // dirty rect height
+                    uint32_t dx = static_cast<uint32_t>(dirty_x);
+                    uint32_t dy = static_cast<uint32_t>(dirty_y);
+                    uint32_t dw = static_cast<uint32_t>(dirty_width > 0 ? dirty_width : width);
+                    uint32_t dh = static_cast<uint32_t>(dirty_height > 0 ? dirty_height : height);
+                    uint32_t fw = static_cast<uint32_t>(frame_width > 0 ? frame_width : width);
+                    uint32_t fh = static_cast<uint32_t>(frame_height > 0 ? frame_height : height);
+                    std::memcpy(frame_with_header.data() + 8, &dx, 4);     // dirty rect x
+                    std::memcpy(frame_with_header.data() + 12, &dy, 4);    // dirty rect y
+                    std::memcpy(frame_with_header.data() + 16, &dw, 4);    // dirty rect width
+                    std::memcpy(frame_with_header.data() + 20, &dh, 4);    // dirty rect height
                     std::memcpy(frame_with_header.data() + 24, &fw, 4);    // frame width
                     std::memcpy(frame_with_header.data() + 28, &fh, 4);    // frame height
                     // t4 (offsets 32-39) left as zero
@@ -759,7 +765,23 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
                     // Copy frame data after header
                     std::memcpy(frame_with_header.data() + 45, data, size);
 
-                    // Send full frame as single message (matching legacy)
+                    // Check message size before sending
+                    size_t max_msg = peer->data_channel->maxMessageSize();
+                    if (max_msg > 0 && frame_with_header.size() > max_msg) {
+                        static int dc_size_warn_count = 0;
+                        if (dc_size_warn_count < 5) {
+                            fprintf(stderr, "[WebRTC] Frame too large for DataChannel: %zu bytes > %zu limit (%dx%d %s). "
+                                    "Consider using H.264 or VP9 codec for high resolutions.\n",
+                                    frame_with_header.size(), max_msg, width, height,
+                                    peer->codec == CodecType::PNG ? "PNG" : "WebP");
+                            dc_size_warn_count++;
+                            if (dc_size_warn_count == 5)
+                                fprintf(stderr, "[WebRTC] (suppressing further DataChannel size warnings)\n");
+                        }
+                        continue;  // Skip this frame
+                    }
+
+                    // Send full frame as single message
                     peer->data_channel->send(
                         reinterpret_cast<const std::byte*>(frame_with_header.data()),
                         frame_with_header.size());

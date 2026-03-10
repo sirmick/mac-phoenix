@@ -118,6 +118,9 @@ static bool video_shm_init(bool classic)
     for (const auto& sm : supported_modes) {
         if ((uint32_t)sm.w * sm.h * 4 > 0x800000) continue;
 
+        // --screen limits maximum resolution (prevents Mac from mode-switching up)
+        if (sm.w > default_width || sm.h > default_height) continue;
+
         video_mode mode;
         mode.x = sm.w;
         mode.y = sm.h;

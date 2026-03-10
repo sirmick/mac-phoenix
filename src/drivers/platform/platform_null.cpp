@@ -365,9 +365,10 @@ extern "C" void Microseconds(uint32 &hi, uint32 &lo)
 	lo = usec & 0xFFFFFFFF;
 }
 
-// Ethernet stub
+// Ethernet interrupt — dispatch through platform driver
 void EtherInterrupt()
 {
+	g_platform.ether_interrupt();
 }
 
 // Audio stubs

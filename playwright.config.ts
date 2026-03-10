@@ -7,12 +7,15 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: `http://localhost:${process.env.MACEMU_HTTP_PORT || 18094}`,
-    headless: true,
+    headless: false,
+    video: undefined,
   },
   projects: [
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: {
+        browserName: 'chromium',
+      },
     },
   ],
 });

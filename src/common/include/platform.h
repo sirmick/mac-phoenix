@@ -74,6 +74,7 @@ typedef struct {
     int16_t (*ether_write)(uint32_t wds);
     bool (*ether_start_udp_thread)(int socket_fd);
     void (*ether_stop_udp_thread)(void);
+    void (*ether_interrupt)(void);
 
     /*
      *  Host Platform - File/Disk System
@@ -259,6 +260,7 @@ extern int16_t ether_null_detach_ph(uint16_t type);
 extern int16_t ether_null_write(uint32_t wds);
 extern bool ether_null_start_udp_thread(int socket_fd);
 extern void ether_null_stop_udp_thread(void);
+extern void ether_null_interrupt(void);
 
 // Platform/Sys null driver
 extern void platform_null_mount_volume(const char *path);

@@ -90,10 +90,11 @@ bool video_webrtc_init(bool classic, config::EmulatorConfig* config)
 		{ 1920, 1080, 0x87 },
 	};
 
-	// Default resolution from config
+	// Default resolution from config — also used as max mode limit
 	const int default_width = config ? config->screen_width : 1024;
 	const int default_height = config ? config->screen_height : 768;
 	const video_depth depth = VDEPTH_32BIT;
+	fprintf(stderr, "[Video] Max resolution from config: %dx%d\n", default_width, default_height);
 
 	// Allocate framebuffer at max supported size (8MB area in cpu_context.cpp)
 	// All modes share the same buffer — only the used portion changes
@@ -118,6 +119,9 @@ bool video_webrtc_init(bool classic, config::EmulatorConfig* config)
 	for (const auto& sm : supported_modes) {
 		// Only include modes that fit in framebuffer area
 		if ((uint32_t)sm.w * sm.h * 4 > 0x800000) continue;
+
+		// --screen limits maximum resolution (prevents Mac from mode-switching up)
+		if (sm.w > (int)default_width || sm.h > (int)default_height) continue;
 
 		video_mode mode;
 		mode.x = sm.w;

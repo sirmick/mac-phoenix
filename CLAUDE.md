@@ -138,6 +138,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --timeout N           Auto-exit after N seconds
   --no-webserver        Headless mode (no HTTP/WebRTC)
   --screen WxH          Display resolution (default: 640x480)
+  --network MODE        Network: none, lwip, raw:<interface> (default: none)
   --config path         JSON config file
   --screenshots         Dump PPM screenshots to /tmp
   --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot

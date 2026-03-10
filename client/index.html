@@ -448,6 +448,20 @@
                             <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss improper shutdown dialog</label>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cfg-network">Network</label>
+                            <select id="cfg-network">
+                                <option value="none">None</option>
+                                <option value="lwip">lwIP (NAT)</option>
+                                <option value="raw">Raw (bridged)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="cfg-network-if-group" style="display:none">
+                            <label for="cfg-network-if">Interface</label>
+                            <input type="text" id="cfg-network-if" placeholder="eth0">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="note-banner">

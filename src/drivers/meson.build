@@ -29,6 +29,8 @@ other_driver_sources = [
   'serial/serial_adapter.cpp',
   'ether/ether_null.cpp',
   'ether/ether_adapter.cpp',
+  'ether/ether_lwip.cpp',
+  'ether/ether_raw.cpp',
   'platform/platform_adapter.cpp',
   'platform/platform_null.cpp',
   'platform/platform_unix.cpp',

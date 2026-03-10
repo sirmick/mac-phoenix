@@ -3111,7 +3111,9 @@ async function loadCurrentConfig() {
             swap_opt_cmd: cfg.m68k?.swap_opt_cmd ?? true,
             keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5),
             zappram: cfg.zappram ?? false,
-            dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? false
+            dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? false,
+            network: cfg.network || 'none',
+            network_if: cfg.network_if || ''
         };
     } catch (e) {
         logger.warn('Failed to load current config', { error: e.message });
@@ -3135,6 +3137,18 @@ function updateConfigUI() {
     if (soundEl) soundEl.checked = currentConfig.sound;
     if (zappramEl) zappramEl.checked = currentConfig.zappram;
     if (dismissDialogEl) dismissDialogEl.checked = currentConfig.dismiss_shutdown_dialog;
+
+    const networkEl = document.getElementById('cfg-network');
+    const networkIfEl = document.getElementById('cfg-network-if');
+    const networkIfGroup = document.getElementById('cfg-network-if-group');
+    if (networkEl) {
+        networkEl.value = currentConfig.network || 'none';
+        networkEl.addEventListener('change', () => {
+            if (networkIfGroup) networkIfGroup.style.display = networkEl.value === 'raw' ? '' : 'none';
+        });
+    }
+    if (networkIfEl) networkIfEl.value = currentConfig.network_if || '';
+    if (networkIfGroup) networkIfGroup.style.display = (currentConfig.network === 'raw') ? '' : 'none';
 
     const bootdriverEl = document.getElementById('cfg-bootdriver');
     if (bootdriverEl) bootdriverEl.value = currentConfig.bootdriver || 0;
@@ -3256,6 +3270,8 @@ async function saveConfig() {
         audio: currentConfig.sound,
         zappram: currentConfig.zappram,
         dismiss_shutdown_dialog: currentConfig.dismiss_shutdown_dialog,
+        network: document.getElementById('cfg-network')?.value || 'none',
+        network_if: document.getElementById('cfg-network-if')?.value || '',
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         m68k: isM68k ? archConfig : undefined,

@@ -51,9 +51,12 @@ let sharedEmulatorProc: ChildProcess | null = null;
 
 export const test = base.extend<{}, EmulatorFixture>({
   emulatorPort: [async ({}, use) => {
-    // Spawn emulator once per worker if not already running
-    if (!sharedEmulatorProc) {
-      sharedEmulatorProc = await spawnEmulator({ timeoutSeconds: 300 });
+    // Spawn emulator once per worker, respawn if it crashed
+    if (!sharedEmulatorProc || sharedEmulatorProc.exitCode !== null) {
+      if (sharedEmulatorProc) {
+        console.log('[fixture] Emulator process died, respawning...');
+      }
+      sharedEmulatorProc = await spawnEmulator({ timeoutSeconds: 600 });
     }
     await use(HTTP_PORT);
   }, { scope: 'worker' }],
@@ -67,18 +70,26 @@ export const test = base.extend<{}, EmulatorFixture>({
 export { expect } from '@playwright/test';
 
 // Helper to spawn the emulator as a child process
-export async function spawnEmulator(opts?: { timeoutSeconds?: number }): Promise<ChildProcess> {
+export async function spawnEmulator(opts?: { timeoutSeconds?: number; extraArgs?: string[] }): Promise<ChildProcess> {
   if (!fs.existsSync(BINARY)) {
     throw new Error(`Binary not found: ${BINARY}. Run 'ninja -C build' first.`);
   }
 
   const timeout = opts?.timeoutSeconds ?? 60;
   const args = [
+    '--config', '/dev/null',    // Ignore saved config — use explicit args only
     '--backend', 'uae',
     '--timeout', String(timeout),
     '--port', String(HTTP_PORT),
     '--signaling-port', String(SIG_PORT),
+    '--screen', '640x480',
+    '--ram', '128',
+    '--dismiss-shutdown-dialog',
+    '--disk', '/home/mick/storage/images/macos-7.5.5.img',
   ];
+  if (opts?.extraArgs) {
+    args.push(...opts.extraArgs);
+  }
   if (fs.existsSync(ROM_PATH)) {
     args.push(ROM_PATH);
   }

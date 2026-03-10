@@ -52,6 +52,7 @@ void platform_init(void)
 	g_platform.ether_write = ether_null_write;
 	g_platform.ether_start_udp_thread = ether_null_start_udp_thread;
 	g_platform.ether_stop_udp_thread = ether_null_stop_udp_thread;
+	g_platform.ether_interrupt = ether_null_interrupt;
 
 	// Platform/Sys functions - Unix driver (real file I/O)
 	g_platform.mount_volume = platform_unix_mount_volume;

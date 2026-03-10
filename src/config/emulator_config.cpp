@@ -109,6 +109,8 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["dayofs"] = dayofs;
     j["udptunnel"] = udptunnel;
     j["udpport"] = udpport;
+    j["network"] = network_string();
+    if (!network_if.empty()) j["network_if"] = network_if;
     j["debug_connection"] = debug_connection;
     j["debug_mode_switch"] = debug_mode_switch;
     j["debug_perf"] = debug_perf;
@@ -219,6 +221,13 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("dayofs")) dayofs = json_utils::get_int(j, "dayofs");
     if (j.contains("udptunnel")) udptunnel = json_utils::get_bool(j, "udptunnel");
     if (j.contains("udpport")) udpport = json_utils::get_int(j, "udpport");
+    if (j.contains("network")) {
+        std::string n = json_utils::get_string(j, "network");
+        if (n == "lwip") network = NetworkMode::LwIP;
+        else if (n == "raw") network = NetworkMode::Raw;
+        else network = NetworkMode::None;
+    }
+    if (j.contains("network_if")) network_if = json_utils::get_string(j, "network_if");
     if (j.contains("debug_connection")) debug_connection = json_utils::get_bool(j, "debug_connection");
     if (j.contains("debug_mode_switch")) debug_mode_switch = json_utils::get_bool(j, "debug_mode_switch");
     if (j.contains("debug_perf")) debug_perf = json_utils::get_bool(j, "debug_perf");
@@ -365,6 +374,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --screenshots         Dump PPM screenshots to /tmp\n");
             printf("  --zap-pram            Clear PRAM on startup (fresh boot)\n");
             printf("  --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot\n");
+            printf("  --network MODE        Network: none, lwip, raw:<interface> (default: none)\n");
             printf("  --config PATH         JSON config file\n");
             printf("  --log-level N         Log level 0-3\n");
             printf("  --debug-connection    Debug WebRTC connections\n");
@@ -483,6 +493,21 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         if (strcmp(argv[i], "--arch") == 0 && i+1 < argc) {
             if (strcmp(argv[i+1], "ppc") == 0) config.architecture = Architecture::PPC;
             else config.architecture = Architecture::M68K;
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --network <mode>[:<interface>]
+        if (strcmp(argv[i], "--network") == 0 && i+1 < argc) {
+            const char* arg = argv[i+1];
+            // Parse "raw:eth0" format
+            const char* colon = strchr(arg, ':');
+            std::string mode_str = colon ? std::string(arg, colon) : std::string(arg);
+            if (mode_str == "lwip") config.network = NetworkMode::LwIP;
+            else if (mode_str == "raw") {
+                config.network = NetworkMode::Raw;
+                if (colon) config.network_if = colon + 1;
+            }
+            else config.network = NetworkMode::None;
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
@@ -612,6 +637,11 @@ void print_config(const EmulatorConfig& config) {
             config.rom_path.empty() ? "(none)" : config.rom_path.c_str());
     fprintf(stderr, "[Config] Screen: %ux%u\n", config.screen_width, config.screen_height);
     fprintf(stderr, "[Config] Codec: %s, Mouse: %s\n", config.codec.c_str(), config.mousemode.c_str());
+    if (config.network != NetworkMode::None) {
+        fprintf(stderr, "[Config] Network: %s%s%s\n", config.network_string(),
+                config.network_if.empty() ? "" : ":",
+                config.network_if.empty() ? "" : config.network_if.c_str());
+    }
     for (const auto& d : config.disk_paths)
         fprintf(stderr, "[Config] Disk: %s\n", d.c_str());
     if (config.enable_webserver)
