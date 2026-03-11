@@ -19,6 +19,27 @@ audio_driver_sources = [
   'audio/audio_encoder_thread.cpp',
 ]
 
+# lwIP (unity build to avoid subproject sandbox issues)
+lwip_inc = include_directories(
+  '../../subprojects/lwip/src/include',
+  'ether',  # lwipopts.h lives here
+)
+
+lwip_lib = static_library('lwip',
+  'ether/lwip_build.c',
+  'ether/sys_arch.c',
+  include_directories: [
+    lwip_inc,
+    include_directories('../../subprojects/lwip/src'),
+  ],
+  c_args: ['-w'],
+)
+
+lwip_dep = declare_dependency(
+  link_with: lwip_lib,
+  include_directories: lwip_inc,
+)
+
 # Other drivers
 other_driver_sources = [
   'disk/disk_null.cpp',
@@ -31,6 +52,7 @@ other_driver_sources = [
   'ether/ether_adapter.cpp',
   'ether/ether_lwip.cpp',
   'ether/ether_raw.cpp',
+  'ether/lwip_nat.cpp',
   'platform/platform_adapter.cpp',
   'platform/platform_null.cpp',
   'platform/platform_unix.cpp',
@@ -55,12 +77,13 @@ driver_inc = include_directories(
   'platform',
   '../config',
   '../webserver',
+  'ether',
 )
 
 driver_lib = static_library('drivers',
   driver_sources,
   include_directories: driver_inc,
-  dependencies: [libdatachannel_dep, nlohmann_json_dep],
+  dependencies: [libdatachannel_dep, nlohmann_json_dep, lwip_dep],
 )
 
 driver_dep = declare_dependency(

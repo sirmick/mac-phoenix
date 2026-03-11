@@ -7,3 +7,6 @@
 [submodule "subprojects/nlohmann_json"]
 	path = subprojects/nlohmann_json
 	url = https://github.com/nlohmann/json.git
+[submodule "subprojects/lwip"]
+	path = subprojects/lwip
+	url = https://git.savannah.nongnu.org/git/lwip.git
