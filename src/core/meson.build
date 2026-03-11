@@ -42,7 +42,8 @@ core_lib = static_library('core',
   core_sources,
   include_directories: core_inc,
   dependencies: [threads_dep, nlohmann_json_dep],
-  cpp_args: ['-DHAVE_SIGINFO_T', '-DHAVE_SIGACTION', '-DHAVE_SIGSEGV_SKIP_INSTRUCTION', '-DHAVE_UNISTD_H'],
+  cpp_args: ['-DHAVE_SIGINFO_T', '-DHAVE_SIGACTION', '-DHAVE_SIGSEGV_SKIP_INSTRUCTION', '-DHAVE_UNISTD_H',
+             '-Wno-sign-compare'],  # sigsegv.cpp legacy code
 )
 
 core_dep = declare_dependency(

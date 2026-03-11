@@ -73,7 +73,7 @@ void AudioReset(void)
 
 static int32 AudioGetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 {
-	D(bug(" AudioGetInfo %c%c%c%c, infoPtr %08lx, source ID %08lx\n", selector >> 24, (selector >> 16) & 0xff, (selector >> 8) & 0xff, selector & 0xff, infoPtr, sourceID));
+	D(bug(" AudioGetInfo %c%c%c%c, infoPtr %08x, source ID %08x\n", selector >> 24, (selector >> 16) & 0xff, (selector >> 8) & 0xff, selector & 0xff, infoPtr, sourceID));
 	M68kRegisters r;
 
 	switch (selector) {
@@ -175,7 +175,7 @@ static int32 AudioGetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 			r.a[1] = sourceID;
 			r.a[2] = AudioStatus.mixer;
 			Execute68k(audio_data + adatGetInfo, &r);
-			D(bug("  delegated to Apple Mixer, returns %08lx\n", r.d[0]));
+			D(bug("  delegated to Apple Mixer, returns %08x\n", r.d[0]));
 			return r.d[0];
 	}
 	return noErr;
@@ -188,12 +188,12 @@ static int32 AudioGetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 
 static int32 AudioSetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 {
-	D(bug(" AudioSetInfo %c%c%c%c, infoPtr %08lx, source ID %08lx\n", selector >> 24, (selector >> 16) & 0xff, (selector >> 8) & 0xff, selector & 0xff, infoPtr, sourceID));
+	D(bug(" AudioSetInfo %c%c%c%c, infoPtr %08x, source ID %08x\n", selector >> 24, (selector >> 16) & 0xff, (selector >> 8) & 0xff, selector & 0xff, infoPtr, sourceID));
 	M68kRegisters r;
 
 	switch (selector) {
 		case siSampleSize:
-			D(bug("  set sample size %08lx\n", infoPtr));
+			D(bug("  set sample size %08x\n", infoPtr));
 			if (AudioStatus.num_sources)
 				return siDeviceBusyErr;
 			if (infoPtr == AudioStatus.sample_size)
@@ -208,7 +208,7 @@ static int32 AudioSetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 			return siInvalidSampleSize;
 
 		case siSampleRate:
-			D(bug("  set sample rate %08lx\n", infoPtr));
+			D(bug("  set sample rate %08x\n", infoPtr));
 			if (AudioStatus.num_sources)
 				return siDeviceBusyErr;
 			if (infoPtr == AudioStatus.sample_rate)
@@ -223,7 +223,7 @@ static int32 AudioSetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 			return siInvalidSampleRate;
 
 		case siNumberChannels:
-			D(bug("  set number of channels %08lx\n", infoPtr));
+			D(bug("  set number of channels %08x\n", infoPtr));
 			if (AudioStatus.num_sources)
 				return siDeviceBusyErr;
 			if (infoPtr == AudioStatus.channels)
@@ -242,7 +242,7 @@ static int32 AudioSetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 			break;
 
 		case siSpeakerVolume:
-			D(bug("  set speaker volume %08lx\n", infoPtr));
+			D(bug("  set speaker volume %08x\n", infoPtr));
 			audio_set_speaker_volume(infoPtr);
 			break;
 
@@ -251,7 +251,7 @@ static int32 AudioSetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 			break;
 
 		case siHardwareVolume:
-			D(bug("  set hardware volume %08lx\n", infoPtr));
+			D(bug("  set hardware volume %08x\n", infoPtr));
 			audio_set_main_volume(infoPtr);
 			break;
 
@@ -263,7 +263,7 @@ static int32 AudioSetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 			r.a[1] = sourceID;
 			r.a[2] = AudioStatus.mixer;
 			Execute68k(audio_data + adatSetInfo, &r);
-			D(bug("  delegated to Apple Mixer, returns %08lx\n", r.d[0]));
+			D(bug("  delegated to Apple Mixer, returns %08x\n", r.d[0]));
 			return r.d[0];
 	}
 	return noErr;
@@ -276,7 +276,8 @@ static int32 AudioSetInfo(uint32 infoPtr, uint32 selector, uint32 sourceID)
 
 int32 AudioDispatch(uint32 params, uint32 globals)
 {
-	D(bug("AudioDispatch params %08lx (size %d), what %d\n", params, ReadMacInt8(params + cp_paramSize), (int16)ReadMacInt16(params + cp_what)));
+	(void)globals;
+	D(bug("AudioDispatch params %08x (size %d), what %d\n", params, ReadMacInt8(params + cp_paramSize), (int16)ReadMacInt16(params + cp_what)));
 	M68kRegisters r;
 	uint32 p = params + cp_params;
 	int16 selector = (int16)ReadMacInt16(params + cp_what);
@@ -295,7 +296,7 @@ int32 AudioDispatch(uint32 params, uint32 globals)
 				if (r.a[0] == 0)
 					return memFullErr;
 				audio_data = r.a[0];
-				D(bug(" global data at %08lx\n", audio_data));
+				D(bug(" global data at %08x\n", audio_data));
 
 				// Put in 68k routines
 				int p = audio_data + adatDelegateCall;
@@ -411,7 +412,7 @@ adat_error:	printf("FATAL: audio component data block initialization error\n");
 						// Close Apple Mixer
 						r.a[0] = AudioStatus.mixer;
 						Execute68k(audio_data + adatCloseMixer, &r);
-						D(bug(" CloseMixer() returns %08lx, mixer %08lx\n", r.d[0], AudioStatus.mixer));
+						D(bug(" CloseMixer() returns %08x, mixer %08x\n", r.d[0], AudioStatus.mixer));
 						AudioStatus.mixer = 0;
 					}
 					r.a[0] = audio_data;
@@ -471,11 +472,11 @@ adat_error:	printf("FATAL: audio component data block initialization error\n");
 			r.a[1] = audio_data + adatData;
 			Execute68k(audio_data + adatOpenMixer, &r);
 			AudioStatus.mixer = ReadMacInt32(audio_data + adatMixer);
-			D(bug(" OpenMixer() returns %08lx, mixer %08lx\n", r.d[0], AudioStatus.mixer));
+			D(bug(" OpenMixer() returns %08x, mixer %08x\n", r.d[0], AudioStatus.mixer));
 			return r.d[0];
 
 		case kSoundComponentGetSourceSelect:
-			D(bug(" GetSource source %08lx\n", ReadMacInt32(p)));
+			D(bug(" GetSource source %08x\n", ReadMacInt32(p)));
 			WriteMacInt32(ReadMacInt32(p), AudioStatus.mixer);
 			return noErr;
 
@@ -503,7 +504,7 @@ adat_error:	printf("FATAL: audio component data block initialization error\n");
 			r.a[0] = ReadMacInt32(p);
 			r.a[1] = AudioStatus.mixer;
 			Execute68k(audio_data + adatStartSource, &r);
-			D(bug(" returns %08lx\n", r.d[0]));
+			D(bug(" returns %08x\n", r.d[0]));
 			return noErr;
 
 		case kSoundComponentStopSourceSelect:
@@ -517,17 +518,17 @@ delegate:	// Delegate call to Apple Mixer
 			r.a[0] = AudioStatus.mixer;
 			r.a[1] = params;
 			Execute68k(audio_data + adatDelegateCall, &r);
-			D(bug(" returns %08lx\n", r.d[0]));
+			D(bug(" returns %08x\n", r.d[0]));
 			return r.d[0];
 
 		case kSoundComponentPlaySourceBufferSelect:
-			D(bug(" PlaySourceBuffer flags %08lx\n", ReadMacInt32(p)));
+			D(bug(" PlaySourceBuffer flags %08x\n", ReadMacInt32(p)));
 			r.d[0] = ReadMacInt32(p);
 			r.a[0] = ReadMacInt32(p + 4);
 			r.a[1] = ReadMacInt32(p + 8);
 			r.a[2] = AudioStatus.mixer;
 			Execute68k(audio_data + adatPlaySourceBuffer, &r);
-			D(bug(" returns %08lx\n", r.d[0]));
+			D(bug(" returns %08x\n", r.d[0]));
 			return r.d[0];
 
 		default:
@@ -545,6 +546,7 @@ delegate:	// Delegate call to Apple Mixer
 
 int16 SoundInOpen(uint32 pb, uint32 dce)
 {
+	(void)pb; (void)dce;
 	D(bug("SoundInOpen\n"));
 	return noErr;
 }
@@ -556,6 +558,7 @@ int16 SoundInOpen(uint32 pb, uint32 dce)
 
 int16 SoundInPrime(uint32 pb, uint32 dce)
 {
+	(void)pb; (void)dce;
 	D(bug("SoundInPrime\n"));
 	//!!
 	
@@ -581,6 +584,7 @@ int16 SoundInPrime(uint32 pb, uint32 dce)
 
 int16 SoundInControl(uint32 pb, uint32 dce)
 {
+	(void)dce;
 	uint16 code = ReadMacInt16(pb + csCode);
 	D(bug("SoundInControl %d\n", code));
 
@@ -637,6 +641,7 @@ int16 SoundInControl(uint32 pb, uint32 dce)
 
 int16 SoundInStatus(uint32 pb, uint32 dce) // A0 points to Device Manager parameter block (pb) and A1 to device control entry (dce)
 {
+	(void)dce;
 	uint16 code = ReadMacInt16(pb + csCode);
 	D(bug("SoundInStatus %d\n", code));
 	if (code != 2)
@@ -828,6 +833,7 @@ int16 SoundInStatus(uint32 pb, uint32 dce) // A0 points to Device Manager parame
 
 int16 SoundInClose(uint32 pb, uint32 dce)
 {
+	(void)pb; (void)dce;
 	D(bug("SoundInClose\n"));
 	return noErr;
 }

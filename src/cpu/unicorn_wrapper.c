@@ -138,7 +138,7 @@ void unicorn_defer_areg_update(void *unicorn_cpu, int reg, uint32_t value) {
  *
  * Returns: true if any updates were applied (and cache was flushed)
  */
-static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, const char *caller) {
+static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, const char *caller __attribute__((unused))) {
     if (!cpu || !uc) return false;
 
     bool any_updates = false;
@@ -206,7 +206,7 @@ static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, con
  *   4. Apply deferred register updates
  *   5. Pending interrupt delivery
  */
-static void hook_block(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
+static void hook_block(uc_engine *uc, uint64_t address, uint32_t size __attribute__((unused)), void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
     uint64_t t0 = perf_now_ns();
     cpu->block_stats.total_blocks++;
@@ -334,7 +334,7 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
  * NOTE: A-line and F-line traps are now handled via UC_HOOK_INTR + cpu-exec.c,
  * not here. This avoids duplicate handling and uses proper QEMU exception mechanism.
  */
-static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
+static bool hook_insn_invalid(uc_engine *uc, void *user_data __attribute__((unused))) {
     uint32_t pc;
     uint16_t opcode;
 
@@ -369,8 +369,8 @@ static bool hook_insn_invalid(uc_engine *uc, void *user_data) {
  * Memory trace hook for CPU tracing
  */
 static bool hook_mem_trace(uc_engine *uc, uc_mem_type type,
-                           uint64_t address, int size, int64_t value,
-                           void *user_data) {
+                           uint64_t address, int size, int64_t value __attribute__((unused)),
+                           void *user_data __attribute__((unused))) {
     if (type != UC_MEM_READ) return true;
 
     uint32_t val = 0;

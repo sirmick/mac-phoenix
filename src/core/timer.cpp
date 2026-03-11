@@ -127,6 +127,9 @@ inline static TMDesc *find_desc(uint32 tm)
 
 static void enqueue_tm(uint32 tm)
 {
+#if !TM_QUEUE
+	(void)tm;
+#endif
 #if TM_QUEUE
 	uint32 tm_var = ReadMacInt32(0xb30);
 	WriteMacInt32(tm + qLink, ReadMacInt32(tm_var));
@@ -141,6 +144,9 @@ static void enqueue_tm(uint32 tm)
 
 static void dequeue_tm(uint32 tm)
 {
+#if !TM_QUEUE
+	(void)tm;
+#endif
 #if TM_QUEUE
 	uint32 p = ReadMacInt32(0xb30);
 	while (p) {
@@ -337,7 +343,7 @@ void TimerReset(void)
 
 int16 InsTime(uint32 tm, uint16 trap)
 {
-	D(bug("InsTime %08lx, trap %04x\n", tm, trap));
+	D(bug("InsTime %08x, trap %04x\n", tm, trap));
 	WriteMacInt16(tm + qType, (ReadMacInt16(tm + qType) & 0x1fff) | ((trap << 4) & 0x6000));
 	if (find_desc(tm))
 		printf("WARNING: InsTime(%08x): Task re-inserted\n", tm);
@@ -357,7 +363,7 @@ int16 InsTime(uint32 tm, uint16 trap)
 
 int16 RmvTime(uint32 tm)
 {
-	D(bug("RmvTime %08lx\n", tm));
+	D(bug("RmvTime %08x\n", tm));
 
 	// Find descriptor
 	TMDesc *desc = find_desc(tm);
@@ -624,7 +630,7 @@ void TimerInterrupt(void)
 			// Call timer function
 			uint32 addr = ReadMacInt32(tm + tmAddr);
 			if (addr) {
-				D(bug("Calling TimeTask %08lx, addr %08lx\n", tm, addr));
+				D(bug("Calling TimeTask %08x, addr %08x\n", tm, addr));
 				M68kRegisters r;
 				r.a[0] = addr;
 				r.a[1] = tm;

@@ -15,9 +15,10 @@
 #ifndef VIDEO_OUTPUT_H
 #define VIDEO_OUTPUT_H
 
-#include <stdint.h>
+#include <cstdint>
 #include <atomic>
 #include <cstring>
+#include <vector>
 
 // Maximum supported resolution (1080p)
 #define VIDEO_MAX_WIDTH  1920
@@ -36,7 +37,8 @@ enum PixelFormat {
  * Single frame buffer with metadata
  */
 struct FrameBuffer {
-    uint32_t* pixels;       // Pixel data (BGRA or ARGB format)
+    std::vector<uint32_t> pixel_storage;  // Pixel data storage (BGRA or ARGB format)
+    uint32_t* pixels = nullptr;           // Pointer into pixel_storage (for API compat)
     int width;              // Actual frame width (≤ VIDEO_MAX_WIDTH)
     int height;             // Actual frame height (≤ VIDEO_MAX_HEIGHT)
     PixelFormat format;     // Pixel format

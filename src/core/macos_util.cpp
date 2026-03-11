@@ -94,6 +94,7 @@ void MountVolume(void *fh)
 
 void FileDiskLayout(loff_t size, uint8 *data, loff_t &start_byte, loff_t &real_size)
 {
+	(void)data;
 	if (size == 419284 || size == 838484) {
 		// 400K/800K DiskCopy image, 84 byte header
 		start_byte = 84;
@@ -154,7 +155,7 @@ uint32 TimeToMacTime(time_t t)
 	int intervening_leap_days = (a4 - b4) - (a100 - b100) + (a400 - b400);
 	uint32 days = local->tm_yday + 365 * (local->tm_year - 4) + intervening_leap_days;
 	int32 dayofs = -config::EmulatorConfig::instance().dayofs;
-	if(dayofs > 0 && dayofs > days)
+	if(dayofs > 0 && (uint32)dayofs > days)
 		dayofs = days;
 	return local->tm_sec + 60 * (local->tm_min + 60 * (local->tm_hour + 24 * (days - dayofs)));
 }

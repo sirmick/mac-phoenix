@@ -70,7 +70,7 @@ public:
 /*
  *  Initialization
  */
-bool video_webrtc_init(bool classic, config::EmulatorConfig* config)
+bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 {
 	D(bug("Video: WebRTC driver initializing\n"));
 

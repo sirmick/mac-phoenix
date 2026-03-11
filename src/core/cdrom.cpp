@@ -213,7 +213,7 @@ static void find_hfs_partition(cdrom_drive_info &info)
 			info.start_byte = (loff_t)((map[8] << 24) | (map[9] << 16) | (map[10] << 8) | map[11]) << 9;
 #if DEBUG
 			uint32 num_blocks = (map[12] << 24) | (map[13] << 16) | (map[14] << 8) | map[15];
-			D(bug(" HFS partition found at %d, %d blocks\n", info.start_byte, num_blocks));
+			D(bug(" HFS partition found at %ld, %d blocks\n", info.start_byte, num_blocks));
 #endif
 			break;
 		}
@@ -498,6 +498,7 @@ uint16 InsertNewDriverUnit(uint32 handle) {
 
 int16 CDROMOpen(uint32 pb, uint32 dce)
 {
+	(void)pb;
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
 	acc_run_called = false;
@@ -525,7 +526,7 @@ int16 CDROMOpen(uint32 pb, uint32 dce)
 			if (r.a[0] == 0)
 				continue;
 			info->status = r.a[0];
-			D(bug(" DrvSts at %08lx\n", info->status));
+			D(bug(" DrvSts at %08x\n", info->status));
 			
 			// Set up drive status
 			WriteMacInt8(info->status + dsWriteProt, 0x80);
@@ -949,7 +950,7 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 		}
 			
 		case 104:		// AudioPlay
-			D(bug(" AudioPlay postype %d, pos %08lx, hold %d\n", ReadMacInt16(pb + csParam), ReadMacInt32(pb + csParam + 2), ReadMacInt16(pb + csParam + 6)));
+			D(bug(" AudioPlay postype %d, pos %08x, hold %d\n", ReadMacInt16(pb + csParam), ReadMacInt32(pb + csParam + 2), ReadMacInt16(pb + csParam + 6)));
 			if (ReadMacInt8(info->status + dsDiskInPlace) == 0)
 				return offLinErr;
 			
@@ -988,7 +989,7 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 			return noErr;
 			
 		case 106:		// AudioStop
-			D(bug(" AudioStop postype %d, pos %08lx\n", ReadMacInt16(pb + csParam), ReadMacInt32(pb + csParam + 2)));
+			D(bug(" AudioStop postype %d, pos %08x\n", ReadMacInt16(pb + csParam), ReadMacInt32(pb + csParam + 2)));
 			if (ReadMacInt8(info->status + dsDiskInPlace) == 0)
 				return offLinErr;
 			
@@ -1134,6 +1135,7 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 
 int16 CDROMStatus(uint32 pb, uint32 dce)
 {
+	(void)dce;
 	drive_vec::iterator info = get_drive_info(ReadMacInt16(pb + ioVRefNum), ReadMacInt16(pb + ioRefNum));
 	uint16 code = ReadMacInt16(pb + csCode);
 	D(bug("CDROMStatus %d\n", code));

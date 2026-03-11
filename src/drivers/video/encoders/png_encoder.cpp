@@ -212,7 +212,7 @@ EncodedFrame PNGEncoder::encode_argb(const uint8_t* argb, int width, int height,
     return result;
 }
 
-EncodedFrame PNGEncoder::encode_bgra_rect(const uint8_t* bgra, int frame_width, int frame_height, int stride,
+EncodedFrame PNGEncoder::encode_bgra_rect(const uint8_t* bgra, int /*frame_width*/, int /*frame_height*/, int stride,
                                            int rect_x, int rect_y, int rect_width, int rect_height) {
     EncodedFrame result;
     result.codec = CodecType::PNG;

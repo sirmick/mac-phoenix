@@ -17,7 +17,7 @@
 #include <atomic>
 
 class VideoOutput;  // Forward declaration
-class CpuProcess;   // Forward declaration
+class CPUProcess;   // Forward declaration
 struct SharedState;  // Forward declaration
 
 namespace http {
@@ -37,7 +37,7 @@ struct APIContext {
     VideoOutput* video_output = nullptr;
 
     // Fork-based CPU process (webserver mode)
-    CpuProcess* cpu_process = nullptr;
+    CPUProcess* cpu_process = nullptr;
     SharedState* shared_state = nullptr;
 
     // Legacy in-process CPU state (kept for headless compatibility)

@@ -17,10 +17,10 @@
 
 class VideoOutput;  // Forward declaration
 
-class CpuProcess {
+class CPUProcess {
 public:
-    CpuProcess(SharedState* shm, config::EmulatorConfig* config);
-    ~CpuProcess();
+    CPUProcess(SharedState* shm, config::EmulatorConfig* config);
+    ~CPUProcess();
 
     // Lifecycle
     bool start();   // Serialize config, fork child. Returns true on success.
@@ -52,8 +52,8 @@ private:
     static void child_main(SharedState* shm);
 
     // Non-copyable
-    CpuProcess(const CpuProcess&) = delete;
-    CpuProcess& operator=(const CpuProcess&) = delete;
+    CPUProcess(const CPUProcess&) = delete;
+    CPUProcess& operator=(const CPUProcess&) = delete;
 };
 
 #endif // CPU_PROCESS_H

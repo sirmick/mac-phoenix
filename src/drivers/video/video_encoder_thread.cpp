@@ -240,7 +240,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
 
     // Debug flags
     static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
-    static bool debug_perf = config ? config->debug_perf : (getenv("MACEMU_DEBUG_PERF") != nullptr);
+    [[maybe_unused]] static bool debug_perf = config ? config->debug_perf : (getenv("MACEMU_DEBUG_PERF") != nullptr);
 
     // Initialize encoder with codec from config
     CodecType current_codec = CodecType::PNG;  // Default
@@ -439,7 +439,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             uint64_t total_dropped = g_frames_dropped.load(std::memory_order_relaxed);
 
             if (is_dc_codec && (dirty_rect_frames > 0 || skipped_frames > 0)) {
-                float saved_pct = total_full_bytes > 0 ?
+                [[maybe_unused]] float saved_pct = total_full_bytes > 0 ?
                     100.0f * (1.0f - (float)total_dirty_bytes / (float)total_full_bytes) : 0;
                 fprintf(stderr, "[VideoEncoder] Stats: %.1f FPS | dirty: rects=%d full=%d skip=%d | encode: %ld ms\n",
                         fps, dirty_rect_frames, full_frames, skipped_frames, last_encode_ms);

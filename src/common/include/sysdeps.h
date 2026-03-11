@@ -97,6 +97,7 @@
 #define USE_PREFETCH_BUFFER 0
 
 /* Mac ROM is write protected when banked memory is used */
+#undef ROM_IS_WRITE_PROTECTED
 #if REAL_ADDRESSING || DIRECT_ADDRESSING
 # define ROM_IS_WRITE_PROTECTED 0
 # define USE_SCRATCHMEM_SUBTERFUGE 1
@@ -120,6 +121,7 @@
 #define SUPPORTS_UDP_TUNNEL 1
 
 /* Use the CPU emulator to check for periodic tasks? */
+#undef USE_PTHREADS_SERVICES
 #ifdef HAVE_PTHREADS
 #define USE_PTHREADS_SERVICES
 #endif
@@ -346,14 +348,17 @@ static inline int spin_trylock(spinlock_t *lock)
 #else
 static inline void spin_lock(spinlock_t *lock)
 {
+	(void)lock;
 }
 
 static inline void spin_unlock(spinlock_t *lock)
 {
+	(void)lock;
 }
 
 static inline int spin_trylock(spinlock_t *lock)
 {
+	(void)lock;
 	return 1;
 }
 #endif

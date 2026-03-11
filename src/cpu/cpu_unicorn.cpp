@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <string.h>  // For memset
 #include <atomic>
+#include <mutex>    // For std::once_flag
 #include <climits>  // For INT_MAX
 
 // Forward declare the webserver running flag from main.cpp
@@ -498,16 +499,15 @@ static bool unicorn_backend_init(void) {
 	cpu_trace_init();
 
 	// Register atexit handler to print block statistics on exit
-	static bool atexit_registered = false;
-	if (!atexit_registered) {
+	static std::once_flag atexit_once;
+	std::call_once(atexit_once, []() {
 		atexit([]() {
 			if (unicorn_cpu) {
 				unicorn_print_perf_counters(unicorn_cpu);
 				unicorn_print_block_stats(unicorn_cpu);
 			}
 		});
-		atexit_registered = true;
-	}
+	});
 
 	// Register EmulOp handler via platform API
 	// EmulOps are handled by UC_HOOK_INSN_INVALID which checks g_platform handlers

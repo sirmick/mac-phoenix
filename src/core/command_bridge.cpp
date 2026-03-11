@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <cstring>
 #include <chrono>
+#include <atomic>
 #include <algorithm>
 
 // Global instance (used for in-process mode, kept for compatibility)
@@ -52,7 +53,7 @@ static const int16_t MB_CMD_QUIT   = 2;
 static const uint32_t LM_JGNEFILTER = 0x29A;
 
 // Whether the jGNEFilter has been installed
-static bool g_filter_installed = false;
+static std::atomic<bool> g_filter_installed{false};
 
 // ============================================================================
 // jGNEFilter installation
@@ -77,7 +78,7 @@ static bool g_filter_installed = false;
  *   0x18: 0000 0000       oldFilter: DC.L 0
  */
 static void install_jgne_filter() {
-    if (g_filter_installed) return;
+    if (g_filter_installed.load(std::memory_order_acquire)) return;
     if (!RAMBaseHost || RAMSize == 0) return;
 
     uint16_t emulop = platform_make_emulop(M68K_EMUL_OP_CMD_DISPATCH);
@@ -104,7 +105,7 @@ static void install_jgne_filter() {
     WriteMacInt8(MB_CMD_FLAG, 0);
     WriteMacInt8(MB_RESULT_FLAG, 0);
 
-    g_filter_installed = true;
+    g_filter_installed.store(true, std::memory_order_release);
     fprintf(stderr, "[CommandBridge] jGNEFilter installed at 0x%08X (old=0x%08X, emulop=0x%04X)\n",
             FILTER_CODE, old_filter, emulop);
 }
@@ -118,11 +119,11 @@ static void install_jgne_filter() {
  * Called from the jGNEFilter during GetNextEvent/WaitNextEvent,
  * so we're in full application context — Toolbox calls are safe.
  */
-void command_bridge_dispatch(M68kRegisters* r) {
+void command_bridge_dispatch(M68kRegisters* /*r*/) {
     uint8_t cmd_flag = ReadMacInt8(MB_CMD_FLAG);
     if (!cmd_flag) return;
 
-    int16_t cmd_type = (int16_t)ReadMacInt16(MB_CMD_TYPE);
+    int16_t cmd_type = static_cast<int16_t>(ReadMacInt16(MB_CMD_TYPE));
 
     // Clear command flag immediately to prevent re-entry
     WriteMacInt8(MB_CMD_FLAG, 0);
@@ -143,7 +144,7 @@ void command_bridge_dispatch(M68kRegisters* r) {
         uint8_t namelen = ReadMacInt8(MB_CMD_ARG);
         char name[256];
         for (int i = 0; i < namelen && i < 255; i++)
-            name[i] = (char)ReadMacInt8(MB_CMD_ARG + 1 + i);
+            name[i] = static_cast<char>(ReadMacInt8(MB_CMD_ARG + 1 + i));
         name[namelen] = '\0';
         fprintf(stderr, "[CommandBridge] INIT launching: %s\n", name);
 
@@ -174,7 +175,7 @@ void command_bridge_dispatch(M68kRegisters* r) {
         fs_regs.d[0] = 0x001B;  // FSMakeFSSpec selector
         Execute68kTrap(0xA260, &fs_regs);  // _HFSDispatch
 
-        int16_t fs_err = (int16_t)ReadMacInt16(pb_addr + 16);  // ioResult
+        int16_t fs_err = static_cast<int16_t>(ReadMacInt16(pb_addr + 16));  // ioResult
         if (fs_err != 0 && fs_err != -43) {
             // -43 = fnfErr is OK (FSMakeFSSpec can return it for valid paths)
             fprintf(stderr, "[CommandBridge] FSMakeFSSpec failed: %d\n", fs_err);
@@ -189,7 +190,7 @@ void command_bridge_dispatch(M68kRegisters* r) {
         //   +48 ioDirID   -> fsspec.parID
         //   +18 ioNamePtr -> name is already the Pascal string
         // But we need to build a proper FSSpec struct at fsspec_addr
-        int16_t vRefNum = (int16_t)ReadMacInt16(pb_addr + 22);
+        int16_t vRefNum = static_cast<int16_t>(ReadMacInt16(pb_addr + 22));
         uint32_t parID = ReadMacInt32(pb_addr + 48);
 
         // Build FSSpec: vRefNum(2) + parID(4) + name(64)
@@ -209,7 +210,7 @@ void command_bridge_dispatch(M68kRegisters* r) {
         if (leaf_len > 63) leaf_len = 63;
         WriteMacInt8(fsspec_addr + 6, leaf_len);
         for (int i = 0; i < leaf_len; i++)
-            WriteMacInt8(fsspec_addr + 7 + i, (uint8_t)name[leaf_start + i]);
+            WriteMacInt8(fsspec_addr + 7 + i, static_cast<uint8_t>(name[leaf_start + i]));
 
         fprintf(stderr, "[CommandBridge] FSSpec: vRefNum=%d, parID=%u, name='%.*s'\n",
                 vRefNum, parID, leaf_len, name + leaf_start);
@@ -344,7 +345,7 @@ CommandResult CommandBridge::execute_read(CmdType type, uint32_t addr, uint32_t 
         if (namelen > 31) namelen = 31;
         char name[32];
         for (int i = 0; i < namelen; i++)
-            name[i] = (char)ReadMacInt8(0x0911 + i);
+            name[i] = static_cast<char>(ReadMacInt8(0x0911 + i));
         name[namelen] = '\0';
         result.data = name;
         break;
@@ -372,9 +373,9 @@ CommandResult CommandBridge::execute_read(CmdType type, uint32_t addr, uint32_t 
                 uint32_t title_ptr = ReadMacInt32(title_handle);
                 if (title_ptr && title_ptr < 0x02000000) {
                     uint8_t tlen = ReadMacInt8(title_ptr);
-                    if (tlen > 0 && tlen < 256) {
+                    if (tlen > 0) {
                         for (int i = 0; i < tlen; i++) {
-                            char c = (char)ReadMacInt8(title_ptr + 1 + i);
+                            char c = static_cast<char>(ReadMacInt8(title_ptr + 1 + i));
                             if (c == '"' || c == '\\') json += "\\";
                             title += c;
                         }
@@ -382,10 +383,10 @@ CommandResult CommandBridge::execute_read(CmdType type, uint32_t addr, uint32_t 
                 }
             }
 
-            int16_t top = (int16_t)ReadMacInt16(wp + 16);
-            int16_t left = (int16_t)ReadMacInt16(wp + 18);
-            int16_t bottom = (int16_t)ReadMacInt16(wp + 20);
-            int16_t right = (int16_t)ReadMacInt16(wp + 22);
+            int16_t top = static_cast<int16_t>(ReadMacInt16(wp + 16));
+            int16_t left = static_cast<int16_t>(ReadMacInt16(wp + 18));
+            int16_t bottom = static_cast<int16_t>(ReadMacInt16(wp + 20));
+            int16_t right = static_cast<int16_t>(ReadMacInt16(wp + 22));
             bool visible = ReadMacInt8(wp + 110) != 0;
 
             json += "{\"title\":\"" + title + "\""
@@ -428,7 +429,7 @@ CommandResult CommandBridge::execute_read(CmdType type, uint32_t addr, uint32_t 
 // Command execution — read commands direct, action commands via mailbox
 // ============================================================================
 
-void CommandBridge::execute_one_public(const Command& cmd, M68kRegisters* r, CommandResult& result) {
+void CommandBridge::execute_one_public(const Command& cmd, M68kRegisters* /*r*/, CommandResult& result) {
     switch (cmd.type) {
 
     case CmdType::GET_APP_NAME:
@@ -441,13 +442,13 @@ void CommandBridge::execute_one_public(const Command& cmd, M68kRegisters* r, Com
 
     case CmdType::LAUNCH_APP: {
         const std::string& path = cmd.arg;
-        uint8_t plen = (uint8_t)std::min((int)path.size(), 255);
+        auto plen = static_cast<uint8_t>(std::min<size_t>(path.size(), 255));
 
         // Validate file exists using _GetFileInfo (trap 0xA00C)
         uint32_t name_addr = SCRATCH_BASE;
         WriteMacInt8(name_addr, plen);
         for (int i = 0; i < plen; i++)
-            WriteMacInt8(name_addr + 1 + i, (uint8_t)path[i]);
+            WriteMacInt8(name_addr + 1 + i, static_cast<uint8_t>(path[i]));
 
         uint32_t pb_addr = SCRATCH_BASE + 512;
         for (int i = 0; i < 80; i++)
@@ -461,7 +462,7 @@ void CommandBridge::execute_one_public(const Command& cmd, M68kRegisters* r, Com
         check_regs.a[0] = pb_addr;
         Execute68kTrap(0xA00C, &check_regs);
 
-        int16_t file_err = (int16_t)ReadMacInt16(pb_addr + 16);
+        int16_t file_err = static_cast<int16_t>(ReadMacInt16(pb_addr + 16));
         if (file_err != 0) {
             result.err = file_err;
             char buf[128];
@@ -479,7 +480,7 @@ void CommandBridge::execute_one_public(const Command& cmd, M68kRegisters* r, Com
         WriteMacInt16(MB_CMD_TYPE, MB_CMD_LAUNCH);
         WriteMacInt8(MB_CMD_ARG, plen);
         for (int i = 0; i < plen; i++)
-            WriteMacInt8(MB_CMD_ARG + 1 + i, (uint8_t)path[i]);
+            WriteMacInt8(MB_CMD_ARG + 1 + i, static_cast<uint8_t>(path[i]));
         WriteMacInt8(MB_CMD_FLAG, 1);  // signal to jGNEFilter
 
         result.err = 0;
@@ -563,7 +564,7 @@ static void update_shm_passive(SharedState* shm) {
     if (namelen > 31) namelen = 31;
     char name[32];
     for (int i = 0; i < namelen; i++)
-        name[i] = (char)ReadMacInt8(0x0911 + i);
+        name[i] = static_cast<char>(ReadMacInt8(0x0911 + i));
     name[namelen] = '\0';
     memcpy(shm->cur_app_name, name, 32);
 }
@@ -574,7 +575,7 @@ static void update_shm_passive(SharedState* shm) {
 
 void command_bridge_drain_from_irq(M68kRegisters* r) {
     // Install jGNEFilter once (first IRQ after Mac has started)
-    if (!g_filter_installed) {
+    if (!g_filter_installed.load(std::memory_order_acquire)) {
         install_jgne_filter();
     }
 

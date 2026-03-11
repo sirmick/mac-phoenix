@@ -254,6 +254,7 @@ static int16 set_dsk_err(int16 err)
 
 int16 SonyOpen(uint32 pb, uint32 dce)
 {
+	(void)pb;
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
 	WriteMacInt16(dce + dCtlQHdr + qFlags, (ReadMacInt16(dce + dCtlQHdr + qFlags) & 0xff00) | 3);	// Version number, must be >=3 or System 8 will replace us
@@ -480,6 +481,7 @@ int16 SonyControl(uint32 pb, uint32 dce)
 
 int16 SonyStatus(uint32 pb, uint32 dce)
 {
+	(void)dce;
 	uint16 code = ReadMacInt16(pb + csCode);
 	D(bug("SonyStatus %d\n", code));
 

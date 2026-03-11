@@ -191,6 +191,7 @@ vector<video_mode>::const_iterator monitor_desc::find_mode(uint16 apple_mode, ui
 
 video_depth monitor_desc::max_depth_of_resolution(uint32 id) const
 {
+	(void)id;
 	video_depth m = VDEPTH_1BIT;
 	vector<video_mode>::const_iterator i, end = modes.end();
 	for (i = modes.begin(); i != end; ++i) {
@@ -432,18 +433,18 @@ void monitor_desc::switch_mode(vector<video_mode>::const_iterator it, uint32 par
 		WriteMacInt32(0x824, mac_frame_base);		// ScrnBase
 		WriteMacInt32(0x898, mac_frame_base);		// CrsrBase
 		uint32 gdev = ReadMacInt32(0x8a4);			// MainDevice
-		D(bug("MainDevice handle at %08lx\n", gdev));
+		D(bug("MainDevice handle at %08x\n", gdev));
 		if (gdev != 0 && gdev != 0xffffffff) {
 			gdev = ReadMacInt32(gdev);
-			D(bug("          pointer at %08lx\n", gdev));
+			D(bug("          pointer at %08x\n", gdev));
 			uint32 pmap = ReadMacInt32(gdev + 0x16);	// gdPMap
-			D(bug("    PixMap handle at %08lx\n", pmap));
+			D(bug("    PixMap handle at %08x\n", pmap));
 			pmap = ReadMacInt32(pmap);
-			D(bug("          pointer at %08lx\n", pmap));
+			D(bug("          pointer at %08x\n", pmap));
 			WriteMacInt32(pmap, mac_frame_base);		// baseAddr
 		}
 		gdev = ReadMacInt32(0xcc8);			// TheGDevice
-		D(bug("TheGDevice handle at %08lx\n", gdev));
+		D(bug("TheGDevice handle at %08x\n", gdev));
 	}
 }
 
@@ -486,6 +487,7 @@ int16 monitor_desc::driver_open(void)
 
 int16 VideoDriverOpen(uint32 pb, uint32 dce)
 {
+	(void)pb;
 	uint8 slot_id = ReadMacInt8(dce + dCtlSlotId);
 	D(bug("VideoDriverOpen slot %02x\n", slot_id));
 

@@ -33,8 +33,8 @@ public:
 
 	// Implement pure virtual functions
 	void switch_to_current_mode(void) { /* Dummy - nothing to switch */ }
-	void set_palette(uint8 *pal, int num) { /* Dummy - ignore palette */ }
-	void set_gamma(uint8 *gamma, int num) { /* Dummy - ignore gamma */ }
+	void set_palette(uint8 * /*pal*/, int /*num*/) { /* Dummy - ignore palette */ }
+	void set_gamma(uint8 * /*gamma*/, int /*num*/) { /* Dummy - ignore gamma */ }
 };
 
 
@@ -42,7 +42,7 @@ public:
  *  Initialization
  */
 
-bool video_null_init(bool classic)
+bool video_null_init(bool /*classic*/)
 {
 	// Create a dummy 640x480x8 framebuffer
 	const int width = 640;

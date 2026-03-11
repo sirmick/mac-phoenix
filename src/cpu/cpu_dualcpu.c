@@ -94,7 +94,7 @@ static int dualcpu_backend_execute_one(void) {
 	return 0;  // CPU_EXEC_OK
 }
 
-static void dualcpu_backend_execute_fast(void) {
+__attribute__((unused)) static void dualcpu_backend_execute_fast(void) {
 	// DualCPU doesn't support fast path (validation is per-instruction)
 }
 

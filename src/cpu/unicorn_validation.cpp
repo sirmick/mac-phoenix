@@ -78,7 +78,7 @@ static struct {
 
     // Separate memory for Unicorn
     uint8_t *unicorn_ram;        // Private RAM copy for Unicorn
-} validation_state = {0};
+} validation_state = {};
 /* Initialize validation */
 bool unicorn_validation_init(void) {
     if (validation_state.initialized) {
@@ -546,7 +546,7 @@ static const char* format_sr_flags(uint16_t sr) {
 }
 
 /* Helper: Dump trace ringbuffer on divergence */
-static void trace_dump_on_divergence(uint32_t divergence_pc, uint16_t divergence_opcode) {
+static void trace_dump_on_divergence(uint32_t /*divergence_pc*/, uint16_t /*divergence_opcode*/) {
     if (!validation_state.trace_buffer) return;
 
     fprintf(stderr, "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");

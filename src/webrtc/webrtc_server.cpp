@@ -587,9 +587,8 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     // SSRC for RTP streams — increment per peer to avoid browser RTP state confusion
     // when switching between codecs (e.g., H264 → VP9) on the same SSRC
-    static uint32_t ssrc_counter = 42;
-    uint32_t ssrc = ssrc_counter;
-    ssrc_counter += 2;  // +2 because audio uses ssrc+1
+    static std::atomic<uint32_t> ssrc_counter{42};
+    uint32_t ssrc = ssrc_counter.fetch_add(2, std::memory_order_relaxed);  // +2 because audio uses ssrc+1
 
     fprintf(stderr, "[WebRTC] About to add tracks for peer %s\n", peer_id.c_str());
 
@@ -756,7 +755,7 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
 
     int sent_to = 0;
     int skipped_not_ready = 0;
-    int skipped_no_track = 0;
+    [[maybe_unused]] int skipped_no_track = 0;
     int skipped_not_open = 0;
 
     // Build metadata for data channel
@@ -954,7 +953,7 @@ void WebRTCServer::notify_codec_change(CodecType new_codec) {
 // WebRTC Server Thread Main
 //
 
-void webrtc_server_main(WebRTCServer* server, std::atomic<bool>* running) {
+void webrtc_server_main(WebRTCServer* /*server*/, std::atomic<bool>* running) {
     fprintf(stderr, "[WebRTC] Server thread starting\n");
 
     // Server is already initialized by main thread before launching this thread

@@ -137,7 +137,7 @@ static void find_hfs_partition(disk_drive_info &info)
 		if (strcmp((char *)(map + 48), "Apple_HFS") == 0) {
 			info.start_byte = (loff_t)((map[8] << 24) | (map[9] << 16) | (map[10] << 8) | map[11]) << 9;
 			info.num_blocks = (map[12] << 24) | (map[13] << 16) | (map[14] << 8) | map[15];
-			D(bug(" HFS partition found at %d, %d blocks\n", info.start_byte, info.num_blocks));
+			D(bug(" HFS partition found at %ld, %d blocks\n", info.start_byte, info.num_blocks));
 			break;
 		}
 	}
@@ -243,6 +243,7 @@ static void mount_mountable_volumes(void)
 
 int16 DiskOpen(uint32 pb, uint32 dce)
 {
+	(void)pb;
 	D(bug("DiskOpen: %d drives\n", (int)drives.size()));
 
 	// Set up DCE
@@ -434,6 +435,7 @@ int16 DiskControl(uint32 pb, uint32 dce)
 
 int16 DiskStatus(uint32 pb, uint32 dce)
 {
+	(void)dce;
 	drive_vec::iterator info = get_drive_info(ReadMacInt16(pb + ioVRefNum));
 	uint16 code = ReadMacInt16(pb + csCode);
 	D(bug("DiskStatus %d\n", code));

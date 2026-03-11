@@ -265,7 +265,7 @@ extern void boot_progress_set_shared_state(SharedState* shm);
 // Child main function (runs after fork in child process)
 // ========================================================================
 
-void CpuProcess::child_main(SharedState* shm)
+void CPUProcess::child_main(SharedState* shm)
 {
     fprintf(stderr, "[Child] CPU process started (pid %d)\n", getpid());
 
@@ -356,31 +356,31 @@ void CpuProcess::child_main(SharedState* shm)
 }
 
 // ========================================================================
-// CpuProcess implementation (parent side)
+// CPUProcess implementation (parent side)
 // ========================================================================
 
-CpuProcess::CpuProcess(SharedState* shm, config::EmulatorConfig* config)
+CPUProcess::CPUProcess(SharedState* shm, config::EmulatorConfig* config)
     : shm_(shm), config_(config)
 {
 }
 
-CpuProcess::~CpuProcess()
+CPUProcess::~CPUProcess()
 {
     stop_relay();
     stop();
 }
 
-bool CpuProcess::start()
+bool CPUProcess::start()
 {
     if (child_pid_ > 0) {
-        fprintf(stderr, "[CpuProcess] Already running (pid %d)\n", child_pid_);
+        fprintf(stderr, "[CPUProcess] Already running (pid %d)\n", child_pid_);
         return false;
     }
 
     // Serialize config to shared memory
     std::string json_str = config_->to_json().dump();
     if ((int)json_str.size() >= (int)sizeof(shm_->config_json)) {
-        fprintf(stderr, "[CpuProcess] Config JSON too large (%zu bytes)\n", json_str.size());
+        fprintf(stderr, "[CPUProcess] Config JSON too large (%zu bytes)\n", json_str.size());
         return false;
     }
     memcpy(shm_->config_json, json_str.c_str(), json_str.size());
@@ -392,7 +392,7 @@ bool CpuProcess::start()
     // Fork
     pid_t pid = fork();
     if (pid < 0) {
-        perror("[CpuProcess] fork failed");
+        perror("[CPUProcess] fork failed");
         shm_->child_state.store(SHM_STATE_ERROR, std::memory_order_release);
         snprintf(shm_->error_msg, sizeof(shm_->error_msg), "fork() failed: %s", strerror(errno));
         return false;
@@ -406,7 +406,7 @@ bool CpuProcess::start()
 
     // ── Parent process ──
     child_pid_ = pid;
-    fprintf(stderr, "[CpuProcess] Forked child process (pid %d)\n", child_pid_);
+    fprintf(stderr, "[CPUProcess] Forked child process (pid %d)\n", child_pid_);
 
     // Start monitor thread (waits for child to exit)
     if (monitor_thread_.joinable()) {
@@ -420,7 +420,7 @@ bool CpuProcess::start()
                 int sig = WTERMSIG(status);
                 if (sig != SIGKILL) {
                     // Unexpected signal (crash)
-                    fprintf(stderr, "[CpuProcess] Child killed by signal %d\n", sig);
+                    fprintf(stderr, "[CPUProcess] Child killed by signal %d\n", sig);
                     shm_->child_state.store(SHM_STATE_ERROR, std::memory_order_release);
                     snprintf(shm_->error_msg, sizeof(shm_->error_msg),
                              "CPU process crashed (signal %d)", sig);
@@ -431,7 +431,7 @@ bool CpuProcess::start()
             } else if (WIFEXITED(status)) {
                 int code = WEXITSTATUS(status);
                 if (code != 0) {
-                    fprintf(stderr, "[CpuProcess] Child exited with code %d\n", code);
+                    fprintf(stderr, "[CPUProcess] Child exited with code %d\n", code);
                     if (shm_->child_state.load() != SHM_STATE_ERROR) {
                         shm_->child_state.store(SHM_STATE_ERROR, std::memory_order_release);
                     }
@@ -449,13 +449,13 @@ bool CpuProcess::start()
     return true;
 }
 
-bool CpuProcess::stop()
+bool CPUProcess::stop()
 {
     if (child_pid_ <= 0) {
         return true;  // Already stopped
     }
 
-    fprintf(stderr, "[CpuProcess] Stopping child process (pid %d)\n", child_pid_);
+    fprintf(stderr, "[CPUProcess] Stopping child process (pid %d)\n", child_pid_);
 
     // Kill child
     kill(child_pid_, SIGKILL);
@@ -469,36 +469,36 @@ bool CpuProcess::stop()
     stop_relay();
 
     child_pid_ = -1;
-    fprintf(stderr, "[CpuProcess] Child stopped\n");
+    fprintf(stderr, "[CPUProcess] Child stopped\n");
     return true;
 }
 
-bool CpuProcess::reset()
+bool CPUProcess::reset()
 {
     stop();
     return start();
 }
 
-bool CpuProcess::is_running() const
+bool CPUProcess::is_running() const
 {
     return child_pid_ > 0 &&
            shm_->child_state.load(std::memory_order_acquire) == SHM_STATE_RUNNING;
 }
 
-void CpuProcess::set_video_output(VideoOutput* vo)
+void CPUProcess::set_video_output(VideoOutput* vo)
 {
     video_output_ = vo;
 }
 
-void CpuProcess::start_relay()
+void CPUProcess::start_relay()
 {
     if (!video_output_ || relay_running_.load()) return;
 
     relay_running_.store(true, std::memory_order_release);
-    relay_thread_ = std::thread(&CpuProcess::video_relay_main, this);
+    relay_thread_ = std::thread(&CPUProcess::video_relay_main, this);
 }
 
-void CpuProcess::stop_relay()
+void CPUProcess::stop_relay()
 {
     relay_running_.store(false, std::memory_order_release);
     if (relay_thread_.joinable()) {
@@ -506,7 +506,7 @@ void CpuProcess::stop_relay()
     }
 }
 
-void CpuProcess::video_relay_main()
+void CPUProcess::video_relay_main()
 {
     fprintf(stderr, "[VideoRelay] Started\n");
     uint64_t last_seq = 0;

@@ -17,8 +17,9 @@ extern "C" {
 #include "uae_cpu/newcpu.h"
 #include "uae_cpu/memory.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
+#include <mutex>
 
 /* Global UAE registers */
 extern struct regstruct regs;
@@ -239,11 +240,8 @@ extern "C" {
 
 void uae_cpu_execute_one(void) {
     /* Initialize trace on first call (from shared cpu_trace infrastructure) */
-    static bool trace_initialized = false;
-    if (!trace_initialized) {
-        cpu_trace_init();
-        trace_initialized = true;
-    }
+    static std::once_flag trace_once;
+    std::call_once(trace_once, cpu_trace_init);
 
     /* Poll timer every 100 instructions */
     static int poll_counter = 0;

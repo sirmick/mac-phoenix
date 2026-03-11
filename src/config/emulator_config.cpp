@@ -31,8 +31,12 @@ static std::string expand_home(const std::string& path) {
 static bool parse_screen(const std::string& s, uint32_t& w, uint32_t& h) {
     size_t x = s.find('x');
     if (x == std::string::npos) return false;
-    w = std::stoi(s.substr(0, x));
-    h = std::stoi(s.substr(x + 1));
+    try {
+        w = static_cast<uint32_t>(std::stoi(s.substr(0, x)));
+        h = static_cast<uint32_t>(std::stoi(s.substr(x + 1)));
+    } catch (const std::exception&) {
+        return false;
+    }
     return w > 0 && h > 0;
 }
 

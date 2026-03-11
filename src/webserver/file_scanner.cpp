@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cerrno>
-#include <openssl/md5.h>
+#include <openssl/evp.h>
 #include <sstream>
 #include <iomanip>
 
@@ -43,28 +43,31 @@ static uint32_t read_rom_checksum(const std::string& path) {
            ((uint32_t)buf[2] << 8) | (uint32_t)buf[3];
 }
 
-// Helper: Calculate MD5 hash of entire file
+// Helper: Calculate MD5 hash of entire file (using EVP API, OpenSSL 3.0+)
 static std::string calculate_md5(const std::string& path) {
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) return "";
 
-    MD5_CTX md5_ctx;
-    MD5_Init(&md5_ctx);
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) { fclose(f); return ""; }
+    EVP_DigestInit_ex(ctx, EVP_md5(), nullptr);
 
     unsigned char buffer[4096];
     size_t bytes_read;
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), f)) > 0) {
-        MD5_Update(&md5_ctx, buffer, bytes_read);
+        EVP_DigestUpdate(ctx, buffer, bytes_read);
     }
 
-    unsigned char digest[MD5_DIGEST_LENGTH];
-    MD5_Final(digest, &md5_ctx);
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int digest_len = 0;
+    EVP_DigestFinal_ex(ctx, digest, &digest_len);
+    EVP_MD_CTX_free(ctx);
     fclose(f);
 
     // Convert to hex string
     std::ostringstream hex;
-    for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
-        hex << std::hex << std::setw(2) << std::setfill('0') << (int)digest[i];
+    for (unsigned int i = 0; i < digest_len; i++) {
+        hex << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(digest[i]);
     }
 
     return hex.str();

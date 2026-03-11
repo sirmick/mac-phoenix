@@ -340,6 +340,7 @@ static void SysAddSerialPrefs(void)
 
 static bool cdrom_open_1(mac_file_handle *fh)
 {
+	(void)fh;
 #if defined __MACOSX__
 	// In OS X, the device name is OK for sending ioctls to,
 	// but not for reading raw CDROM data from.
@@ -424,7 +425,7 @@ static bool is_drive_mounted(const char *dev_name, char *mount_name)
 			if (strncmp(line, dev_name, strlen(dev_name)) == 0) {
 				mount_name[0] = 0;
 				char *dummy;
-				sscanf(line, "%as %s", &dummy, mount_name);
+				sscanf(line, "%ms %s", &dummy, mount_name);
 				free(dummy);
 				fclose(f);
 				return true;
@@ -579,7 +580,7 @@ static void *Sys_open(const char *name, bool read_only, bool is_cdrom)
 			size = lseek(fd, 0, SEEK_END);
 			uint8 data[256];
 			lseek(fd, 0, SEEK_SET);
-			read(fd, data, 256);
+			if (read(fd, data, 256) < 0) { /* ignore */ }
 			FileDiskLayout(size, data, fh->start_byte, fh->file_size);
 		} else {
 			struct stat st;
@@ -1290,7 +1291,7 @@ static bool SysCDResume(void *arg)
  *  Stop CD audio
  */
 
-static bool SysCDStop(void *arg, uint8 lead_out_m, uint8 lead_out_s, uint8 lead_out_f)
+static bool SysCDStop(void *arg, uint8 /*lead_out_m*/, uint8 /*lead_out_s*/, uint8 /*lead_out_f*/)
 {
 	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
@@ -1324,12 +1325,14 @@ static bool SysCDScan(void *arg, uint8 start_m, uint8 start_s, uint8 start_f, bo
 	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
-	
+
 #if defined(BINCUE)
 	if (fh->is_bincue)
 		return CDScan_bincue(fh->bincue_fd,start_m,start_s,start_f,reverse);
+#else
+	(void)start_m; (void)start_s; (void)start_f; (void)reverse;
 #endif
-	
+
 	// Not supported outside bincue
 	return false;
 }
@@ -1585,7 +1588,7 @@ void get_finfo(const char *path, uint32 finfo, uint32 fxinfo, bool is_dir)
 	}
 }
 
-void set_finfo(const char *path, uint32 finfo, uint32 fxinfo, bool is_dir)
+void set_finfo(const char *path, uint32 finfo, uint32 fxinfo, bool /*is_dir*/)
 {
 	struct utimbuf times;
 	times.actime = MacTimeToTime(ReadMacInt32(finfo - ioFlFndrInfo + ioFlCrDat));
@@ -1598,9 +1601,9 @@ void set_finfo(const char *path, uint32 finfo, uint32 fxinfo, bool is_dir)
 	int fd = open_finf(path, O_RDWR);
 	if (fd < 0)
 		return;
-	write(fd, Mac2HostAddr(finfo), SIZEOF_FInfo);
+	if (write(fd, Mac2HostAddr(finfo), SIZEOF_FInfo) < 0) { /* ignore */ }
 	if (fxinfo)
-		write(fd, Mac2HostAddr(fxinfo), SIZEOF_FXInfo);
+		if (write(fd, Mac2HostAddr(fxinfo), SIZEOF_FXInfo) < 0) { /* ignore */ }
 	close(fd);
 }
 

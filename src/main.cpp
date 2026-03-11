@@ -16,6 +16,7 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <memory>
 #include <csignal>
 
 #include "sysdeps.h"
@@ -106,7 +107,7 @@ namespace cpu_state {
 SharedState* g_shared_state = nullptr;
 
 // Global CPU process pointer for SIGTERM cleanup
-static CpuProcess* g_cpu_process = nullptr;
+static CPUProcess* g_cpu_process = nullptr;
 
 static void sigterm_handler(int sig)
 {
@@ -172,15 +173,15 @@ void EnableInterrupt(void) {}
  */
 static sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip)
 {
-	const uintptr fault_address = (uintptr)sigsegv_get_fault_address(sip);
-
 #ifdef HAVE_SIGSEGV_SKIP_INSTRUCTION
-	if (ROMBaseHost && ((uintptr)fault_address - (uintptr)ROMBaseHost) < ROMSize)
+	const uintptr fault_address = reinterpret_cast<uintptr>(sigsegv_get_fault_address(sip));
+	if (ROMBaseHost && (fault_address - (uintptr)ROMBaseHost) < ROMSize)
 		return SIGSEGV_RETURN_SKIP_INSTRUCTION;
 	return SIGSEGV_RETURN_SKIP_INSTRUCTION;
-#endif
-
+#else
+	(void)sip;
 	return SIGSEGV_RETURN_FAILURE;
+#endif
 }
 
 int main(int argc, char **argv)
@@ -194,13 +195,15 @@ int main(int argc, char **argv)
 	platform_init();
 
 	// Initialize random number generator
-	srand(time(NULL));
+	srand(time(nullptr));
 
 	// ========================================
 	// Load Unified Configuration
 	// ========================================
 	const char* home = getenv("HOME");
-	std::string default_config_path = std::string(home) + "/.config/mac-phoenix/config.json";
+	std::string default_config_path = home
+		? std::string(home) + "/.config/mac-phoenix/config.json"
+		: "/tmp/mac-phoenix/config.json";
 
 	config::EmulatorConfig& emu_config = config::EmulatorConfig::instance();
 	{
@@ -251,10 +254,11 @@ int main(int argc, char **argv)
 		printf("Shared memory created (%zu bytes)\n", sizeof(SharedState));
 
 		// Create VideoOutput for parent-side encoder
-		video::g_video_output = new VideoOutput(1920, 1080);
+		auto video_output_owner = std::make_unique<VideoOutput>(1920, 1080);
+		video::g_video_output = video_output_owner.get();
 
 		// Create CPU process manager
-		CpuProcess cpu_proc(shm, &emu_config);
+		CPUProcess cpu_proc(shm, &emu_config);
 		cpu_proc.set_video_output(video::g_video_output);
 		g_cpu_process = &cpu_proc;
 
@@ -320,7 +324,7 @@ int main(int argc, char **argv)
 		video::g_video_output->shutdown();
 		encoder_thread.join();
 
-		delete video::g_video_output;
+		video_output_owner.reset();
 		video::g_video_output = nullptr;
 		destroy_shared_state(shm);
 		g_shared_state = nullptr;

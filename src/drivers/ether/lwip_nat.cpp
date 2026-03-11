@@ -416,7 +416,6 @@ static err_t tcp_nat_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
 	if (err != ERR_OK || !newpcb) return ERR_ABRT;
 
 	// Look up original destination from NAT table
-	uint16_t local_port = newpcb->local_port;
 	NatEntry *entry = nat_find(IP_PROTO_TCP, newpcb->remote_port);
 	if (!entry) {
 		fprintf(stderr, "[lwIP NAT] TCP accept but no NAT entry for port %u\n",
@@ -439,7 +438,7 @@ static err_t tcp_nat_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
 
 // ---- UDP recv callback for NAT ----
 
-static void udp_nat_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
+static void udp_nat_recv(void *arg, struct udp_pcb * /*pcb*/, struct pbuf *p,
                          const ip_addr_t *addr, u16_t port)
 {
 	(void)arg;
@@ -690,7 +689,7 @@ static int handle_dhcp(struct pbuf *p, uint16_t ip_hdr_len)
 
 // ---- IP4 input hook ----
 
-int lwip_nat_ip4_input(struct pbuf *p, struct netif *inp)
+int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 {
 	if (p->len < 20) return 0;
 
@@ -813,9 +812,12 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif *inp)
 			pbuf_take_at(p, zero, 2, ip_hdr_len + 16);  // TCP checksum at offset 16
 
 			uint16_t tcp_len = p->tot_len - ip_hdr_len;
+			ip_addr_t src_copy, dest_copy;
+			src_copy.addr = iphdr->src.addr;
+			dest_copy.addr = iphdr->dest.addr;
 			uint16_t chk = ip_chksum_pseudo(p, IP_PROTO_TCP, tcp_len,
-			                                 (ip_addr_t *)&iphdr->src,
-			                                 (ip_addr_t *)&iphdr->dest);
+			                                 &src_copy,
+			                                 &dest_copy);
 			// Write checksum back — but ip_chksum_pseudo already accounts for
 			// the pseudo-header, and we need the checksum at offset 16 in the TCP header
 			pbuf_take_at(p, &chk, 2, ip_hdr_len + 16);

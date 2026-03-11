@@ -16,7 +16,7 @@
 #include <stdlib.h>
 
 // Helper: Read 16-bit big-endian word from memory
-static uint16_t read_word(UnicornCPU *cpu, uint32_t addr) {
+__attribute__((unused)) static uint16_t read_word(UnicornCPU *cpu, uint32_t addr) {
     uint16_t value;
     unicorn_mem_read(cpu, addr, &value, 2);
     #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__

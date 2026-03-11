@@ -752,7 +752,8 @@ fsdat_error:
 
 int16 ExtFSComm(uint16 message, uint32 paramBlock, uint32 globalsPtr)
 {
-	D(bug("ExtFSComm(%d, %08lx, %08lx)\n", message, paramBlock, globalsPtr));
+	(void)globalsPtr;
+	D(bug("ExtFSComm(%d, %08x, %08x)\n", message, paramBlock, globalsPtr));
 
 	switch (message) {
 		case ffsNopMessage:
@@ -1015,7 +1016,7 @@ static uint32 find_fcb(int16 refNum)
 	r.a[0] = fs_data + fsReturn;
 	Execute68k(fs_data + fsResolveFCB, &r);
 	uint32 fcb = ReadMacInt32(fs_data + fsReturn);
-	D(bug("  UTResolveFCB() returned %d, fcb %08lx\n", r.d[0], fcb));
+	D(bug("  UTResolveFCB() returned %d, fcb %08x\n", r.d[0], fcb));
 	if (r.d[0] & 0xffff)
 		return 0;
 	else
@@ -1030,7 +1031,7 @@ static uint32 find_fcb(int16 refNum)
 // Check if volume belongs to our FS
 static int16 fs_mount_vol(uint32 pb)
 {
-	D(bug(" fs_mount_vol(%08lx), vRefNum %d\n", pb, ReadMacInt16(pb + ioVRefNum)));
+	D(bug(" fs_mount_vol(%08x), vRefNum %d\n", pb, ReadMacInt16(pb + ioVRefNum)));
 	if ((int16)ReadMacInt16(pb + ioVRefNum) == drive_number)
 		return noErr;
 	else
@@ -1040,7 +1041,7 @@ static int16 fs_mount_vol(uint32 pb)
 // Mount volume
 static int16 fs_volume_mount(uint32 pb)
 {
-	D(bug(" fs_volume_mount(%08lx)\n", pb));
+	D(bug(" fs_volume_mount(%08x)\n", pb));
 	M68kRegisters r;
 
 	// Create new VCB
@@ -1052,7 +1053,7 @@ static int16 fs_volume_mount(uint32 pb)
 	uint16 sysVCBLength = ReadMacInt16(fs_data + fsReturn);
 #endif
 	uint32 vcb = ReadMacInt32(fs_data + fsReturn + 2);
-	D(bug("  UTAllocateVCB() returned %d, vcb %08lx, size %d\n", r.d[0], vcb, sysVCBLength));
+	D(bug("  UTAllocateVCB() returned %d, vcb %08x, size %d\n", r.d[0], vcb, sysVCBLength));
 	if (r.d[0] & 0xffff)
 		return (int16)r.d[0];
 
@@ -1104,7 +1105,7 @@ static int16 fs_volume_mount(uint32 pb)
 // Unmount volume
 static int16 fs_unmount_vol(uint32 vcb)
 {
-	D(bug(" fs_unmount_vol(%08lx), vRefNum %d\n", vcb, ReadMacInt16(vcb + vcbVRefNum)));
+	D(bug(" fs_unmount_vol(%08x), vRefNum %d\n", vcb, ReadMacInt16(vcb + vcbVRefNum)));
 	M68kRegisters r;
 
 	// Remove and free VCB
@@ -1118,7 +1119,7 @@ static int16 fs_unmount_vol(uint32 vcb)
 // Get information about a volume (HVolumeParam)
 static int16 fs_get_vol_info(uint32 pb, bool hfs)
 {
-//	D(bug(" fs_get_vol_info(%08lx)\n", pb));
+//	D(bug(" fs_get_vol_info(%08x)\n", pb));
 
 	// Fill in struct
 	if (ReadMacInt32(pb + ioNamePtr))
@@ -1158,7 +1159,8 @@ static int16 fs_get_vol_info(uint32 pb, bool hfs)
 // Change volume information (HVolumeParam)
 static int16 fs_set_vol_info(uint32 pb)
 {
-	D(bug(" fs_set_vol_info(%08lx)\n", pb));
+	(void)pb;
+	D(bug(" fs_set_vol_info(%08x)\n", pb));
 
 	//!! times
 	return noErr;
@@ -1167,7 +1169,7 @@ static int16 fs_set_vol_info(uint32 pb)
 // Get volume parameter block
 static int16 fs_get_vol_parms(uint32 pb)
 {
-//	D(bug(" fs_get_vol_parms(%08lx)\n", pb));
+//	D(bug(" fs_get_vol_parms(%08x)\n", pb));
 
 	// Return parameter block
 	uint32 actual = ReadMacInt32(pb + ioReqCount);
@@ -1187,7 +1189,7 @@ static int16 fs_get_vol_parms(uint32 pb)
 // Get default volume (WDParam)
 static int16 fs_get_vol(uint32 pb)
 {
-	D(bug(" fs_get_vol(%08lx)\n", pb));
+	D(bug(" fs_get_vol(%08x)\n", pb));
 	M68kRegisters r;
 
 	// Getting default volume
@@ -1201,7 +1203,7 @@ static int16 fs_get_vol(uint32 pb)
 // Set default volume (WDParam)
 static int16 fs_set_vol(uint32 pb, bool hfs, uint32 vcb)
 {
-	D(bug(" fs_set_vol(%08lx), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt32(pb + ioWDDirID)));
+	D(bug(" fs_set_vol(%08x), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt32(pb + ioWDDirID)));
 	M68kRegisters r;
 
 	// Determine parameters
@@ -1257,7 +1259,7 @@ static int16 fs_set_vol(uint32 pb, bool hfs, uint32 vcb)
 // Query file attributes (HFileParam)
 static int16 fs_get_file_info(uint32 pb, bool hfs, uint32 dirID)
 {
-	D(bug(" fs_get_file_info(%08lx), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), dirID));
+	D(bug(" fs_get_file_info(%08x), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), dirID));
 
 	FSItem *fs_item;
 	int16 dir_index = ReadMacInt16(pb + ioFDirIndex);
@@ -1348,7 +1350,7 @@ read_next_de:
 // Set file attributes (HFileParam)
 static int16 fs_set_file_info(uint32 pb, bool hfs, uint32 dirID)
 {
-	D(bug(" fs_set_file_info(%08lx), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), dirID));
+	D(bug(" fs_set_file_info(%08x), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), dirID));
 
 	// Find FSItem for given file/dir
 	FSItem *fs_item;
@@ -1373,7 +1375,7 @@ static int16 fs_set_file_info(uint32 pb, bool hfs, uint32 dirID)
 // Query file/directory attributes
 static int16 fs_get_cat_info(uint32 pb)
 {
-	D(bug(" fs_get_cat_info(%08lx), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), ReadMacInt32(pb + ioDirID)));
+	D(bug(" fs_get_cat_info(%08x), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), ReadMacInt32(pb + ioDirID)));
 
 	FSItem *fs_item;
 	int16 dir_index = ReadMacInt16(pb + ioFDirIndex);
@@ -1501,7 +1503,7 @@ read_next_de:
 // Set file/directory attributes
 static int16 fs_set_cat_info(uint32 pb)
 {
-	D(bug(" fs_set_cat_info(%08lx), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), ReadMacInt32(pb + ioDirID)));
+	D(bug(" fs_set_cat_info(%08x), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), ReadMacInt32(pb + ioDirID)));
 
 	// Find FSItem for given file/dir
 	FSItem *fs_item;
@@ -1524,7 +1526,7 @@ static int16 fs_set_cat_info(uint32 pb)
 // Open file
 static int16 fs_open(uint32 pb, uint32 dirID, uint32 vcb, bool resource_fork)
 {
-	D(bug(" fs_open(%08lx), %s, vRefNum %d, name %.31s, dirID %d, perm %d\n", pb, resource_fork ? "rsrc" : "data", ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID, ReadMacInt8(pb + ioPermssn)));
+	D(bug(" fs_open(%08x), %s, vRefNum %d, name %.31s, dirID %d, perm %d\n", pb, resource_fork ? "rsrc" : "data", ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID, ReadMacInt8(pb + ioPermssn)));
 	M68kRegisters r;
 
 	// Find FSItem for given file
@@ -1588,7 +1590,7 @@ static int16 fs_open(uint32 pb, uint32 dirID, uint32 vcb, bool resource_fork)
 	r.a[1] = fs_data + fsReturn;
 	Execute68k(fs_data + fsAllocateFCB, &r);
 	uint32 fcb = ReadMacInt32(fs_data + fsReturn);
-	D(bug("  UTAllocateFCB() returned %d, fRefNum %d, fcb %08lx\n", r.d[0], ReadMacInt16(pb + ioRefNum), fcb));
+	D(bug("  UTAllocateFCB() returned %d, fRefNum %d, fcb %08x\n", r.d[0], ReadMacInt16(pb + ioRefNum), fcb));
 	if (r.d[0] & 0xffff) {
 		close(fd);
 		return (int16)r.d[0];
@@ -1616,7 +1618,7 @@ static int16 fs_open(uint32 pb, uint32 dirID, uint32 vcb, bool resource_fork)
 // Close file
 static int16 fs_close(uint32 pb)
 {
-	D(bug(" fs_close(%08lx), refNum %d\n", pb, ReadMacInt16(pb + ioRefNum)));
+	D(bug(" fs_close(%08x), refNum %d\n", pb, ReadMacInt16(pb + ioRefNum)));
 	M68kRegisters r;
 
 	// Find FCB and fd for file
@@ -1649,7 +1651,7 @@ static int16 fs_close(uint32 pb)
 // Query information about FCB (FCBPBRec)
 static int16 fs_get_fcb_info(uint32 pb, uint32 vcb)
 {
-	D(bug(" fs_get_fcb_info(%08lx), vRefNum %d, refNum %d, idx %d\n", pb, ReadMacInt16(pb + ioVRefNum), ReadMacInt16(pb + ioRefNum), ReadMacInt16(pb + ioFCBIndx)));
+	D(bug(" fs_get_fcb_info(%08x), vRefNum %d, refNum %d, idx %d\n", pb, ReadMacInt16(pb + ioVRefNum), ReadMacInt16(pb + ioRefNum), ReadMacInt16(pb + ioFCBIndx)));
 	M68kRegisters r;
 
 	uint32 fcb = 0;
@@ -1695,7 +1697,7 @@ static int16 fs_get_fcb_info(uint32 pb, uint32 vcb)
 // Obtain logical size of an open file
 static int16 fs_get_eof(uint32 pb)
 {
-	D(bug(" fs_get_eof(%08lx), refNum %d\n", pb, ReadMacInt16(pb + ioRefNum)));
+	D(bug(" fs_get_eof(%08x), refNum %d\n", pb, ReadMacInt16(pb + ioRefNum)));
 	M68kRegisters r;
 
 	// Find FCB and fd for file
@@ -1733,7 +1735,7 @@ static int16 fs_get_eof(uint32 pb)
 // Truncate file
 static int16 fs_set_eof(uint32 pb)
 {
-	D(bug(" fs_set_eof(%08lx), refNum %d, size %d\n", pb, ReadMacInt16(pb + ioRefNum), ReadMacInt32(pb + ioMisc)));
+	D(bug(" fs_set_eof(%08x), refNum %d, size %d\n", pb, ReadMacInt16(pb + ioRefNum), ReadMacInt32(pb + ioMisc)));
 	M68kRegisters r;
 
 	// Find FCB and fd for file
@@ -1768,7 +1770,7 @@ static int16 fs_set_eof(uint32 pb)
 // Query current file position
 static int16 fs_get_fpos(uint32 pb)
 {
-	D(bug(" fs_get_fpos(%08lx), refNum %d\n", pb, ReadMacInt16(pb + ioRefNum)));
+	D(bug(" fs_get_fpos(%08x), refNum %d\n", pb, ReadMacInt16(pb + ioRefNum)));
 
 	WriteMacInt32(pb + ioReqCount, 0);
 	WriteMacInt32(pb + ioActCount, 0);
@@ -1799,7 +1801,7 @@ static int16 fs_get_fpos(uint32 pb)
 // Set current file position
 static int16 fs_set_fpos(uint32 pb)
 {
-	D(bug(" fs_set_fpos(%08lx), refNum %d, posMode %d, offset %d\n", pb, ReadMacInt16(pb + ioRefNum), ReadMacInt16(pb + ioPosMode), ReadMacInt32(pb + ioPosOffset)));
+	D(bug(" fs_set_fpos(%08x), refNum %d, posMode %d, offset %d\n", pb, ReadMacInt16(pb + ioRefNum), ReadMacInt16(pb + ioPosMode), ReadMacInt32(pb + ioPosOffset)));
 
 	// Find FCB and fd for file
 	uint32 fcb = find_fcb(ReadMacInt16(pb + ioRefNum));
@@ -1842,7 +1844,7 @@ static int16 fs_set_fpos(uint32 pb)
 // Read from file
 static int16 fs_read(uint32 pb)
 {
-	D(bug(" fs_read(%08lx), refNum %d, buffer %p, count %d, posMode %d, posOffset %d\n", pb, ReadMacInt16(pb + ioRefNum), ReadMacInt32(pb + ioBuffer), ReadMacInt32(pb + ioReqCount), ReadMacInt16(pb + ioPosMode), ReadMacInt32(pb + ioPosOffset)));
+	D(bug(" fs_read(%08x), refNum %d, buffer %p, count %d, posMode %d, posOffset %d\n", pb, ReadMacInt16(pb + ioRefNum), ReadMacInt32(pb + ioBuffer), ReadMacInt32(pb + ioReqCount), ReadMacInt16(pb + ioPosMode), ReadMacInt32(pb + ioPosOffset)));
 
 	// Check parameters
 	if ((int32)ReadMacInt32(pb + ioReqCount) < 0)
@@ -1888,7 +1890,7 @@ static int16 fs_read(uint32 pb)
 	WriteMacInt32(fcb + fcbCrPs, pos);
 	WriteMacInt32(pb + ioPosOffset, pos);
 	if (actual != (ssize_t)ReadMacInt32(pb + ioReqCount))
-		return actual < 0 ? read_err : eofErr;
+		return actual < 0 ? read_err : (int16)eofErr;
 	else
 		return noErr;
 }
@@ -1896,7 +1898,7 @@ static int16 fs_read(uint32 pb)
 // Write to file
 static int16 fs_write(uint32 pb)
 {
-	D(bug(" fs_write(%08lx), refNum %d, buffer %p, count %d, posMode %d, posOffset %d\n", pb, ReadMacInt16(pb + ioRefNum), ReadMacInt32(pb + ioBuffer), ReadMacInt32(pb + ioReqCount), ReadMacInt16(pb + ioPosMode), ReadMacInt32(pb + ioPosOffset)));
+	D(bug(" fs_write(%08x), refNum %d, buffer %p, count %d, posMode %d, posOffset %d\n", pb, ReadMacInt16(pb + ioRefNum), ReadMacInt32(pb + ioBuffer), ReadMacInt32(pb + ioReqCount), ReadMacInt16(pb + ioPosMode), ReadMacInt32(pb + ioPosOffset)));
 
 	// Check parameters
 	if ((int32)ReadMacInt32(pb + ioReqCount) < 0)
@@ -1950,7 +1952,7 @@ static int16 fs_write(uint32 pb)
 // Create file
 static int16 fs_create(uint32 pb, uint32 dirID)
 {
-	D(bug(" fs_create(%08lx), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID));
+	D(bug(" fs_create(%08x), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID));
 
 	// Find FSItem for given file
 	FSItem *fs_item;
@@ -1975,7 +1977,7 @@ static int16 fs_create(uint32 pb, uint32 dirID)
 // Create directory
 static int16 fs_dir_create(uint32 pb)
 {
-	D(bug(" fs_dir_create(%08lx), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt32(pb + ioDirID)));
+	D(bug(" fs_dir_create(%08x), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt32(pb + ioDirID)));
 
 	// Find FSItem for given directory
 	FSItem *fs_item;
@@ -1999,7 +2001,7 @@ static int16 fs_dir_create(uint32 pb)
 // Delete file/directory
 static int16 fs_delete(uint32 pb, uint32 dirID)
 {
-	D(bug(" fs_delete(%08lx), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID));
+	D(bug(" fs_delete(%08x), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID));
 
 	// Find FSItem for given file/dir
 	FSItem *fs_item;
@@ -2017,7 +2019,7 @@ static int16 fs_delete(uint32 pb, uint32 dirID)
 // Rename file/directory
 static int16 fs_rename(uint32 pb, uint32 dirID)
 {
-	D(bug(" fs_rename(%08lx), vRefNum %d, name %.31s, dirID %d, new name %.31s\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID, Mac2HostAddr(ReadMacInt32(pb + ioMisc) + 1)));
+	D(bug(" fs_rename(%08x), vRefNum %d, name %.31s, dirID %d, new name %.31s\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID, Mac2HostAddr(ReadMacInt32(pb + ioMisc) + 1)));
 
 	// Find path of given file/dir
 	FSItem *fs_item;
@@ -2058,7 +2060,7 @@ static int16 fs_rename(uint32 pb, uint32 dirID)
 // Move file/directory (CMovePBRec)
 static int16 fs_cat_move(uint32 pb)
 {
-	D(bug(" fs_cat_move(%08lx), vRefNum %d, name %.31s, dirID %d, new name %.31s, new dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt32(pb + ioDirID), Mac2HostAddr(ReadMacInt32(pb + ioNewName) + 1), ReadMacInt32(pb + ioNewDirID)));
+	D(bug(" fs_cat_move(%08x), vRefNum %d, name %.31s, dirID %d, new name %.31s, new dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt32(pb + ioDirID), Mac2HostAddr(ReadMacInt32(pb + ioNewName) + 1), ReadMacInt32(pb + ioNewDirID)));
 
 	// Find path of given file/dir
 	FSItem *fs_item;
@@ -2105,7 +2107,7 @@ static int16 fs_cat_move(uint32 pb)
 // Open working directory (WDParam)
 static int16 fs_open_wd(uint32 pb)
 {
-	D(bug(" fs_open_wd(%08lx), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt32(pb + ioWDDirID)));
+	D(bug(" fs_open_wd(%08x), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt32(pb + ioWDDirID)));
 	M68kRegisters r;
 
 	// Allocate WDCB
@@ -2119,7 +2121,7 @@ static int16 fs_open_wd(uint32 pb)
 // Close working directory (WDParam)
 static int16 fs_close_wd(uint32 pb)
 {
-	D(bug(" fs_close_wd(%08lx), vRefNum %d\n", pb, ReadMacInt16(pb + ioVRefNum)));
+	D(bug(" fs_close_wd(%08x), vRefNum %d\n", pb, ReadMacInt16(pb + ioVRefNum)));
 	M68kRegisters r;
 
 	// Release WDCB
@@ -2133,7 +2135,7 @@ static int16 fs_close_wd(uint32 pb)
 // Query information about working directory (WDParam)
 static int16 fs_get_wd_info(uint32 pb, uint32 vcb)
 {
-	D(bug(" fs_get_wd_info(%08lx), vRefNum %d, idx %d, procID %d\n", pb, ReadMacInt16(pb + ioVRefNum), ReadMacInt16(pb + ioWDIndex), ReadMacInt32(pb + ioWDProcID)));
+	D(bug(" fs_get_wd_info(%08x), vRefNum %d, idx %d, procID %d\n", pb, ReadMacInt16(pb + ioVRefNum), ReadMacInt16(pb + ioWDIndex), ReadMacInt32(pb + ioWDProcID)));
 	M68kRegisters r;
 
 	// Querying volume?
@@ -2170,6 +2172,7 @@ static int16 fs_get_wd_info(uint32 pb, uint32 vcb)
 // Main dispatch routine
 int16 ExtFSHFS(uint32 vcb, uint16 selectCode, uint32 paramBlock, uint32 globalsPtr, int16 fsid)
 {
+	(void)globalsPtr; (void)fsid;
 	uint16 trapWord = selectCode & 0xf0ff;
 	bool hfs = (selectCode & kHFSMask) != 0;
 	switch (trapWord) {
@@ -2288,7 +2291,7 @@ int16 ExtFSHFS(uint32 vcb, uint16 selectCode, uint32 paramBlock, uint32 globalsP
 			return noErr;
 
 		default:
-			D(bug("ExtFSHFS(%08lx, %04x, %08lx, %08lx, %d)\n", vcb, selectCode, paramBlock, globalsPtr, fsid));
+			D(bug("ExtFSHFS(%08x, %04x, %08x, %08x, %d)\n", vcb, selectCode, paramBlock, globalsPtr, fsid));
 			return paramErr;
 	}
 }

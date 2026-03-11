@@ -123,7 +123,7 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     return resp;
 }
 
-Response APIRouter::handle_storage(const Request& req) {
+Response APIRouter::handle_storage(const Request& /*req*/) {
     std::string storage_dir = ctx_->config ? ctx_->config->storage_dir : "";
     std::string roms_path = storage_dir + "/roms";
     std::string images_path = storage_dir + "/images";
@@ -189,7 +189,7 @@ Response APIRouter::handle_status(const Request& req) {
 Response APIRouter::handle_emulator_start(const Request& req) {
     (void)req;
 
-    // Fork mode: use CpuProcess
+    // Fork mode: use CPUProcess
     if (ctx_->cpu_process) {
         if (ctx_->cpu_process->is_running()) {
             return Response::json("{\"success\": false, \"error\": \"Already running\"}");
@@ -383,7 +383,7 @@ Response APIRouter::handle_codec_post(const Request& req) {
         ctx_->config->codec = codec_str;
     }
 
-    fprintf(stderr, "Config: Codec changed from %d to %d via API\n", (int)old_codec, (int)new_codec);
+    fprintf(stderr, "Config: Codec changed from %d to %d via API\n", static_cast<int>(old_codec), static_cast<int>(new_codec));
 
     // Notify all clients
     if (new_codec != old_codec) {
@@ -495,11 +495,8 @@ Response APIRouter::handle_screenshot(const Request& req) {
     }
 
     // Encode to PNG using fpng
-    static bool fpng_inited = false;
-    if (!fpng_inited) {
-        fpng::fpng_init();
-        fpng_inited = true;
-    }
+    static bool fpng_inited = []() { fpng::fpng_init(); return true; }();
+    (void)fpng_inited;
     std::vector<uint8_t> png_data;
     if (!fpng::fpng_encode_image_to_memory(rgb.data(), width, height, 3, png_data)) {
         Response resp;
@@ -572,28 +569,27 @@ Response APIRouter::handle_mouse(const Request& req) {
 // Absolute: {"x": 100, "y": 200}
 // Relative: {"dx": 10, "dy": -5}
 Response APIRouter::handle_mouse_move(const Request& req) {
-    auto body = req.body;
+    nlohmann::json j;
+    try {
+        j = json_utils::parse(req.body);
+    } catch (const std::exception& e) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"invalid JSON\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
 
     // Check if this is a relative move (has "dx" field)
-    bool relative = body.find("\"dx\"") != std::string::npos;
-
-    if (relative) {
-        auto dx_pos = body.find("\"dx\"");
-        auto dx_colon = body.find(':', dx_pos);
-        auto dx_start = body.find_first_not_of(" \t\n", dx_colon + 1);
-        int dx = std::stoi(body.substr(dx_start));
-
-        auto dy_pos = body.find("\"dy\"");
-        if (dy_pos == std::string::npos) {
-            Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'dy' field\"}"); r.add_header("Content-Type", "application/json"); return r;
+    if (j.contains("dx")) {
+        int dx = json_utils::get_int(j, "dx");
+        if (!j.contains("dy")) {
+            Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'dy' field\"}"); r.set_content_type("application/json"); return r;
         }
-        auto dy_colon = body.find(':', dy_pos);
-        auto dy_start = body.find_first_not_of(" \t\n", dy_colon + 1);
-        int dy = std::stoi(body.substr(dy_start));
+        int dy = json_utils::get_int(j, "dy");
 
         if (ctx_->shared_state) {
             shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_MODE, 1, 0, 0, 0);
-            shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_REL, 0, (int16_t)dx, (int16_t)dy, 0);
+            shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_REL, 0, static_cast<int16_t>(dx), static_cast<int16_t>(dy), 0);
         } else {
             ADBSetRelMouseMode(true);
             ADBMouseMoved(dx, dy);
@@ -603,25 +599,18 @@ Response APIRouter::handle_mouse_move(const Request& req) {
     }
 
     // Absolute move
-    auto x_pos = body.find("\"x\"");
-    if (x_pos == std::string::npos) {
-        Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'x' (or 'dx' for relative)\"}"); r.add_header("Content-Type", "application/json"); return r;
+    if (!j.contains("x")) {
+        Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'x' (or 'dx' for relative)\"}"); r.set_content_type("application/json"); return r;
     }
-    auto x_colon = body.find(':', x_pos);
-    auto x_start = body.find_first_not_of(" \t\n", x_colon + 1);
-    int x = std::stoi(body.substr(x_start));
-
-    auto y_pos = body.find("\"y\"");
-    if (y_pos == std::string::npos) {
-        Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'y' field\"}"); r.add_header("Content-Type", "application/json"); return r;
+    int x = json_utils::get_int(j, "x");
+    if (!j.contains("y")) {
+        Response r; r.set_status(400); r.set_body("{\"error\": \"missing 'y' field\"}"); r.set_content_type("application/json"); return r;
     }
-    auto y_colon = body.find(':', y_pos);
-    auto y_start = body.find_first_not_of(" \t\n", y_colon + 1);
-    int y = std::stoi(body.substr(y_start));
+    int y = json_utils::get_int(j, "y");
 
     if (ctx_->shared_state) {
         shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_MODE, 0, 0, 0, 0);
-        shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_ABS, 0, (int16_t)x, (int16_t)y, 0);
+        shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_ABS, 0, static_cast<int16_t>(x), static_cast<int16_t>(y), 0);
     } else {
         ADBSetRelMouseMode(false);
         ADBMouseMoved(x, y);
@@ -634,25 +623,25 @@ Response APIRouter::handle_mouse_move(const Request& req) {
 Response APIRouter::handle_keypress(const Request& req) {
     int keycode = -1;
 
-    auto body = req.body;
-    auto key_pos = body.find("\"key\"");
-    if (key_pos == std::string::npos) {
-        Response resp;
-        resp.set_status(400);
-        resp.set_body("{\"error\": \"missing 'key' field\"}");
-        resp.add_header("Content-Type", "application/json");
+    nlohmann::json j;
+    try {
+        j = json_utils::parse(req.body);
+    } catch (const std::exception&) {
+        Response resp; resp.set_status(400);
+        resp.set_body("{\"error\": \"invalid JSON\"}");
+        resp.set_content_type("application/json");
         return resp;
     }
 
-    auto colon_pos = body.find(':', key_pos);
-    if (colon_pos == std::string::npos) {
-        Response r1; r1.set_status(400); r1.set_body("{\"error\": \"malformed JSON\"}"); r1.add_header("Content-Type", "application/json"); return r1;
+    if (!j.contains("key")) {
+        Response resp; resp.set_status(400);
+        resp.set_body("{\"error\": \"missing 'key' field\"}");
+        resp.set_content_type("application/json");
+        return resp;
     }
 
-    auto val_start = body.find_first_not_of(" \t\n", colon_pos + 1);
-    if (val_start != std::string::npos && body[val_start] == '"') {
-        auto val_end = body.find('"', val_start + 1);
-        std::string name = body.substr(val_start + 1, val_end - val_start - 1);
+    if (j["key"].is_string()) {
+        std::string name = j["key"].get<std::string>();
         if (name == "return" || name == "enter") keycode = 0x24;
         else if (name == "escape" || name == "esc") keycode = 0x35;
         else if (name == "space") keycode = 0x31;
@@ -663,10 +652,15 @@ Response APIRouter::handle_keypress(const Request& req) {
         else if (name == "left") keycode = 0x3b;
         else if (name == "right") keycode = 0x3c;
         else {
-            Response r2; r2.set_status(400); r2.set_body("{\"error\": \"unknown key name: " + name + "\"}"); r2.add_header("Content-Type", "application/json"); return r2;
+            Response r2; r2.set_status(400); r2.set_body("{\"error\": \"unknown key name: " + name + "\"}"); r2.set_content_type("application/json"); return r2;
         }
+    } else if (j["key"].is_number()) {
+        keycode = j["key"].get<int>();
     } else {
-        keycode = std::stoi(body.substr(val_start));
+        Response resp; resp.set_status(400);
+        resp.set_body("{\"error\": \"'key' must be a string or number\"}");
+        resp.set_content_type("application/json");
+        return resp;
     }
 
     if (keycode < 0 || keycode > 127) {
@@ -674,9 +668,9 @@ Response APIRouter::handle_keypress(const Request& req) {
     }
 
     if (ctx_->shared_state) {
-        shared_input_push(ctx_->shared_state, SHM_INPUT_KEY, 1, 0, 0, (uint8_t)keycode);
+        shared_input_push(ctx_->shared_state, SHM_INPUT_KEY, 1, 0, 0, static_cast<uint8_t>(keycode));
         usleep(50000);  // 50ms press
-        shared_input_push(ctx_->shared_state, SHM_INPUT_KEY, 0, 0, 0, (uint8_t)keycode);
+        shared_input_push(ctx_->shared_state, SHM_INPUT_KEY, 0, 0, 0, static_cast<uint8_t>(keycode));
     } else {
         ::ADBKeyDown(keycode);
         usleep(50000);  // 50ms press
@@ -733,25 +727,23 @@ Response APIRouter::handle_windows(const Request& req) {
 }
 
 Response APIRouter::handle_launch(const Request& req) {
-    auto& body = req.body;
+    nlohmann::json j;
+    try {
+        j = json_utils::parse(req.body);
+    } catch (const std::exception&) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"invalid JSON\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
 
-    // Parse {"path": "Macintosh HD:SomeApp"}
-    auto path_pos = body.find("\"path\"");
-    if (path_pos == std::string::npos) {
+    if (!j.contains("path") || !j["path"].is_string()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"missing 'path' field\"}");
         r.set_content_type("application/json");
         return r;
     }
-    auto quote1 = body.find('"', body.find(':', path_pos) + 1);
-    auto quote2 = body.find('"', quote1 + 1);
-    if (quote1 == std::string::npos || quote2 == std::string::npos) {
-        Response r; r.set_status(400);
-        r.set_body("{\"error\": \"malformed 'path' value\"}");
-        r.set_content_type("application/json");
-        return r;
-    }
-    std::string path = body.substr(quote1 + 1, quote2 - quote1 - 1);
+    std::string path = j["path"].get<std::string>();
 
     if (ctx_->shared_state) {
         SharedState* shm = ctx_->shared_state;
@@ -826,28 +818,28 @@ Response APIRouter::handle_quit(const Request& req) {
 }
 
 Response APIRouter::handle_wait(const Request& req) {
-    auto& body = req.body;
+    nlohmann::json j;
+    try {
+        j = json_utils::parse(req.body);
+    } catch (const std::exception&) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"invalid JSON\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
 
-    // Parse {"condition": "app=Finder", "timeout": 30}
-    // Supported conditions: "app=Name", "boot=phase"
-    auto cond_pos = body.find("\"condition\"");
-    if (cond_pos == std::string::npos) {
+    if (!j.contains("condition") || !j["condition"].is_string()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"missing 'condition' field\"}");
         r.set_content_type("application/json");
         return r;
     }
-    auto cq1 = body.find('"', body.find(':', cond_pos) + 1);
-    auto cq2 = body.find('"', cq1 + 1);
-    std::string condition = body.substr(cq1 + 1, cq2 - cq1 - 1);
+    std::string condition = j["condition"].get<std::string>();
 
     // Parse timeout (default 30s)
     int timeout_s = 30;
-    auto timeout_pos = body.find("\"timeout\"");
-    if (timeout_pos != std::string::npos) {
-        auto tc = body.find(':', timeout_pos);
-        auto ts = body.find_first_of("0123456789", tc + 1);
-        if (ts != std::string::npos) timeout_s = std::stoi(body.substr(ts));
+    if (j.contains("timeout") && j["timeout"].is_number()) {
+        timeout_s = j["timeout"].get<int>();
     }
 
     // Parse condition type

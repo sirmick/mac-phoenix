@@ -6,16 +6,16 @@
 
 #include "include/crash_handler.h"
 #include "include/crash_handler_init.h"
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
 #include <ucontext.h>
-#include <string.h>
+#include <cstring>
 
 // Crash signal handler
 static void crash_signal_handler(int sig, siginfo_t *info, void *context)
 {
-	ucontext_t *uctx = (ucontext_t *)context;
+	auto *uctx = static_cast<ucontext_t *>(context);
 
 	// Print crash header
 	print_crash_header(sig, info, "mac-phoenix");
@@ -55,11 +55,11 @@ extern "C" void install_crash_handlers(void)
 	sigemptyset(&sa.sa_mask);
 
 	// Install handlers for various crash signals
-	sigaction(SIGSEGV, &sa, NULL);  // Segmentation fault
-	sigaction(SIGBUS, &sa, NULL);   // Bus error
-	sigaction(SIGABRT, &sa, NULL);  // Abort
-	sigaction(SIGILL, &sa, NULL);   // Illegal instruction
-	sigaction(SIGFPE, &sa, NULL);   // Floating point exception
+	sigaction(SIGSEGV, &sa, nullptr);  // Segmentation fault
+	sigaction(SIGBUS, &sa, nullptr);   // Bus error
+	sigaction(SIGABRT, &sa, nullptr);  // Abort
+	sigaction(SIGILL, &sa, nullptr);   // Illegal instruction
+	sigaction(SIGFPE, &sa, nullptr);   // Floating point exception
 
 	fprintf(stderr, "[CrashHandler] Installed signal handlers (SIGSEGV, SIGBUS, SIGABRT, SIGILL, SIGFPE)\n");
 }

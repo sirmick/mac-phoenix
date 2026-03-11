@@ -54,7 +54,6 @@ static inline void print_backtrace(const char *prefix)
 			exe_buf[sizeof(exe_buf) - 1] = '\0';
 
 			char *paren = strchr(exe_buf, '(');
-			char *bracket = strchr(exe_buf, '[');
 
 			if (paren) {
 				*paren = '\0';  // Null-terminate at '(' to get exe path
@@ -67,7 +66,7 @@ static inline void print_backtrace(const char *prefix)
 				// Try method 1: Use offset from backtrace_symbols
 				if (plus && close_paren) {
 					*close_paren = '\0';
-					char cmd[512];
+					char cmd[1024];
 					snprintf(cmd, sizeof(cmd), "addr2line -e %s -f -C -i %s 2>/dev/null",
 					         exe_buf, plus + 1);
 
@@ -96,7 +95,7 @@ static inline void print_backtrace(const char *prefix)
 				}
 
 				// Method 2: Try using raw address (fallback)
-				char cmd2[512];
+				char cmd2[1024];
 				snprintf(cmd2, sizeof(cmd2), "addr2line -e %s -f -C -i %p 2>/dev/null",
 				         exe_buf, array[i]);
 

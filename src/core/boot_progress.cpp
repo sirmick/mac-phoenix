@@ -5,11 +5,12 @@
  *  Reads Mac low-memory globals to detect state transitions.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <time.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cstdarg>
+#include <ctime>
+#include <atomic>
 
 #include "sysdeps.h"
 #include "cpu_emulation.h"
@@ -35,45 +36,44 @@ enum BootPhase {
 	PHASE_DESKTOP,         /* Finder idle (repeated STR loads) */
 };
 
-static BootPhase current_phase = PHASE_PRE_RESET;
-static int log_level = -1;  /* -1 = uninitialized */
+static BootPhase g_current_phase = PHASE_PRE_RESET;
+static int g_log_level = -1;  /* -1 = uninitialized */
 static SharedState* g_boot_shm = nullptr;  /* Shared memory for fork mode */
 
 void boot_progress_set_shared_state(SharedState* shm)
 {
 	g_boot_shm = shm;
 }
-static uint32_t checkload_count = 0;
-static uint32_t last_milestone_checkload = 0;
-static bool seen_boot_resource = false;
-static bool seen_init_resource = false;
-static bool seen_finder = false;
-static char last_app_name[64] = {0};
-static struct timespec boot_start_time = {0, 0};
-static uint32_t irq_count = 0;
-static bool shutdown_dialog_dismissed = false;
+static uint32_t g_checkload_count = 0;
+static bool g_seen_boot_resource = false;
+static bool g_seen_init_resource = false;
+static bool g_seen_finder = false;
+static char g_last_app_name[64] = {0};
+static struct timespec g_boot_start_time = {0, 0};
+static uint32_t g_irq_count = 0;
+static bool g_shutdown_dialog_dismissed = false;
 
 static double elapsed_sec(void)
 {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
-	if (boot_start_time.tv_sec == 0 && boot_start_time.tv_nsec == 0)
-		boot_start_time = now;
-	return (now.tv_sec - boot_start_time.tv_sec) +
-	       (now.tv_nsec - boot_start_time.tv_nsec) / 1e9;
+	if (g_boot_start_time.tv_sec == 0 && g_boot_start_time.tv_nsec == 0)
+		g_boot_start_time = now;
+	return (now.tv_sec - g_boot_start_time.tv_sec) +
+	       (now.tv_nsec - g_boot_start_time.tv_nsec) / 1e9;
 }
 
 void set_log_level(int level)
 {
-	log_level = level;
+	g_log_level = level;
 }
 
 int boot_log_level(void)
 {
-	if (log_level == -1) {
-		log_level = 0;
+	if (g_log_level == -1) {
+		g_log_level = 0;
 	}
-	return log_level;
+	return g_log_level;
 }
 
 /* Read CurApName ($0910) - Pascal string */
@@ -85,7 +85,7 @@ static void read_cur_app_name(char *out, int maxlen)
 		return;
 	}
 	for (int i = 0; i < len; i++)
-		out[i] = (char)ReadMacInt8(0x0911 + i);
+		out[i] = static_cast<char>(ReadMacInt8(0x0911 + i));
 	out[len] = '\0';
 }
 
@@ -132,12 +132,12 @@ static void milestonef(const char *fmt, ...)
 
 static void set_phase(BootPhase p)
 {
-	if (p > current_phase) {
-		current_phase = p;
+	if (p > g_current_phase) {
+		g_current_phase = p;
 		/* Write to shared memory for fork mode */
 		if (g_boot_shm) {
-			strncpy(g_boot_shm->boot_phase_name, phase_name(p),
-			        sizeof(g_boot_shm->boot_phase_name) - 1);
+			snprintf(g_boot_shm->boot_phase_name, sizeof(g_boot_shm->boot_phase_name),
+			         "%s", phase_name(p));
 			if (g_boot_shm->boot_start_us.load(std::memory_order_relaxed) == 0) {
 				struct timespec now;
 				clock_gettime(CLOCK_MONOTONIC, &now);
@@ -216,7 +216,7 @@ static int read_window_title(uint32_t wp, char *buf, int bufsize)
 	uint8_t tlen = ReadMacInt8(title_ptr);
 	if (tlen == 0 || tlen >= bufsize) return 0;
 	for (int i = 0; i < tlen; i++)
-		buf[i] = (char)ReadMacInt8(title_ptr + 1 + i);
+		buf[i] = static_cast<char>(ReadMacInt8(title_ptr + 1 + i));
 	buf[tlen] = '\0';
 	return tlen;
 }
@@ -232,13 +232,13 @@ static int read_window_title(uint32_t wp, char *buf, int bufsize)
  */
 static void check_shutdown_dialog(void)
 {
-	if (shutdown_dialog_dismissed) return;
+	if (g_shutdown_dialog_dismissed) return;
 	if (!RAMBaseHost || RAMSize == 0) return;
 
 	uint32_t wp = ReadMacInt32(0x09D6);  /* WindowList — front window first */
 	if (!wp || wp >= 0x02000000) return;
 
-	int16_t wKind = (int16_t)ReadMacInt16(wp + 108);
+	int16_t wKind = static_cast<int16_t>(ReadMacInt16(wp + 108));
 	if (wKind != 2) return;  /* not a dialog */
 
 	bool visible = ReadMacInt8(wp + 110) != 0;
@@ -249,7 +249,7 @@ static void check_shutdown_dialog(void)
 	if (strcmp(title, "Please Don't Get this Often") != 0) return;
 
 	/* Match! Dismiss with Return keypress. */
-	shutdown_dialog_dismissed = true;
+	g_shutdown_dialog_dismissed = true;
 	milestonef("Improper shutdown dialog detected -- auto-dismissing");
 	ADBKeyDown(0x24);  /* Return */
 	ADBKeyUp(0x24);
@@ -258,7 +258,7 @@ static void check_shutdown_dialog(void)
 void boot_progress_update(uint16_t opcode, void *regs_ptr)
 {
 	int level = boot_log_level();
-	M68kRegisters *r = (M68kRegisters *)regs_ptr;
+	auto *r = static_cast<M68kRegisters *>(regs_ptr);
 
 	/* Level 2+: log all EmulOps with names */
 	if (level >= 2) {
@@ -278,109 +278,109 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 	/* Track boot milestones (always, regardless of level) */
 	switch (opcode) {
 		case M68K_EMUL_OP_RESET:
-			if (current_phase < PHASE_ROM_INIT) {
+			if (g_current_phase < PHASE_ROM_INIT) {
 				milestone("ROM init started (RESET)");
 				set_phase(PHASE_ROM_INIT);
 			}
 			break;
 
 		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:
-			if (current_phase < PHASE_BOOT_GLOBS) {
+			if (g_current_phase < PHASE_BOOT_GLOBS) {
 				milestone("Boot globals patched");
 				set_phase(PHASE_BOOT_GLOBS);
 			}
 			break;
 
 		case M68K_EMUL_OP_INSTALL_DRIVERS:
-			if (current_phase < PHASE_DRIVERS) {
+			if (g_current_phase < PHASE_DRIVERS) {
 				milestone("Installing drivers");
 				set_phase(PHASE_DRIVERS);
 			}
 			break;
 
 		case M68K_EMUL_OP_CHECKLOAD: {
-			checkload_count++;
+			g_checkload_count++;
 			if (g_boot_shm) {
-				g_boot_shm->checkload_count.store(checkload_count, std::memory_order_relaxed);
+				g_boot_shm->checkload_count.store(g_checkload_count, std::memory_order_relaxed);
 			}
 
 			/* Decode resource type */
 			char type[5];
 			decode_resource_type(r->d[1], type);
-			int16_t id = (int16_t)ReadMacInt16(r->a[2]);
+			int16_t id = static_cast<int16_t>(ReadMacInt16(r->a[2]));
 
 			/* Level 2+: log every CHECKLOAD */
 			if (level >= 2) {
 				fprintf(stderr, "    CHECKLOAD #%u type='%s' id=%d\n",
-				        checkload_count, type, id);
+				        g_checkload_count, type, id);
 			}
 
 			/* Detect WLSC warm start (if not already detected) */
-			if (current_phase < PHASE_WARM_START && HasMacStarted()) {
-				milestonef("Mac warm start complete (WLSC) after %u resources", checkload_count);
+			if (g_current_phase < PHASE_WARM_START && HasMacStarted()) {
+				milestonef("Mac warm start complete (WLSC) after %u resources", g_checkload_count);
 				set_phase(PHASE_WARM_START);
 			}
 
 			/* Detect boot blocks */
-			if (!seen_boot_resource && memcmp(type, "boot", 4) == 0) {
-				seen_boot_resource = true;
-				milestonef("Loading boot blocks (resource #%u)", checkload_count);
+			if (!g_seen_boot_resource && memcmp(type, "boot", 4) == 0) {
+				g_seen_boot_resource = true;
+				milestonef("Loading boot blocks (resource #%u)", g_checkload_count);
 				set_phase(PHASE_BOOT_BLOCKS);
 			}
 
 			/* Detect first INIT (extension loading phase) */
-			if (!seen_init_resource && memcmp(type, "INIT", 4) == 0) {
-				seen_init_resource = true;
-				milestonef("Loading extensions (first INIT at resource #%u)", checkload_count);
+			if (!g_seen_init_resource && memcmp(type, "INIT", 4) == 0) {
+				g_seen_init_resource = true;
+				milestonef("Loading extensions (first INIT at resource #%u)", g_checkload_count);
 				set_phase(PHASE_EXTENSIONS);
 			}
 
 			/* Check CurApName periodically for app launch detection */
-			if (checkload_count % 50 == 0 || (checkload_count > 500 && checkload_count % 10 == 0)) {
+			if (g_checkload_count % 50 == 0 || (g_checkload_count > 500 && g_checkload_count % 10 == 0)) {
 				char app_name[64];
 				read_cur_app_name(app_name, sizeof(app_name));
-				if (app_name[0] && strcmp(app_name, last_app_name) != 0) {
-					strncpy(last_app_name, app_name, sizeof(last_app_name) - 1);
+				if (app_name[0] && strcmp(app_name, g_last_app_name) != 0) {
+					snprintf(g_last_app_name, sizeof(g_last_app_name), "%s", app_name);
 					if (strcmp(app_name, "Finder") == 0) {
-						if (!seen_finder) {
-							seen_finder = true;
-							milestonef("Finder launched (resource #%u) -- desktop ready", checkload_count);
+						if (!g_seen_finder) {
+							g_seen_finder = true;
+							milestonef("Finder launched (resource #%u) -- desktop ready", g_checkload_count);
 							set_phase(PHASE_FINDER_LAUNCH);
 						}
 					} else if (level >= 1) {
-						milestonef("App launched: '%s' (resource #%u)", app_name, checkload_count);
+						milestonef("App launched: '%s' (resource #%u)", app_name, g_checkload_count);
 					}
 				}
 			}
 
 			/* Log level 1: periodic progress every 500 resources */
-			if (level >= 1 && checkload_count % 500 == 0) {
-				milestonef("Resource #%u loaded (phase: %s)", checkload_count, phase_name(current_phase));
+			if (level >= 1 && g_checkload_count % 500 == 0) {
+				milestonef("Resource #%u loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
 			}
 
 			/* Log level 0: periodic progress every 1000 resources */
-			if (level == 0 && checkload_count % 1000 == 0) {
-				milestonef("%u resources loaded (phase: %s)", checkload_count, phase_name(current_phase));
+			if (level == 0 && g_checkload_count % 1000 == 0) {
+				milestonef("%u resources loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
 			}
 
 			break;
 		}
 
 		case M68K_EMUL_OP_IRQ:
-			irq_count++;
+			g_irq_count++;
 			/* Check for Finder on each IRQ (60Hz) once we're past extensions */
-			if (!seen_finder && current_phase >= PHASE_EXTENSIONS) {
+			if (!g_seen_finder && g_current_phase >= PHASE_EXTENSIONS) {
 				char app_name[64];
 				read_cur_app_name(app_name, sizeof(app_name));
 				if (strcmp(app_name, "Finder") == 0) {
-					seen_finder = true;
+					g_seen_finder = true;
 					milestonef("Finder launched -- desktop ready");
 					set_phase(PHASE_FINDER_LAUNCH);
 				}
 			}
 			/* Check for improper shutdown dialog during Finder launch phase only */
-			if (!shutdown_dialog_dismissed && current_phase == PHASE_FINDER_LAUNCH
-			    && irq_count % 30 == 0  /* ~2Hz check rate */
+			if (!g_shutdown_dialog_dismissed && g_current_phase == PHASE_FINDER_LAUNCH
+			    && g_irq_count % 30 == 0  /* ~2Hz check rate */
 			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
 				check_shutdown_dialog();
 			}
@@ -398,12 +398,12 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 
 const char* boot_progress_phase(void)
 {
-	return phase_name(current_phase);
+	return phase_name(g_current_phase);
 }
 
 unsigned int boot_progress_checkloads(void)
 {
-	return checkload_count;
+	return g_checkload_count;
 }
 
 double boot_progress_elapsed(void)
@@ -414,21 +414,21 @@ double boot_progress_elapsed(void)
 void boot_progress_get_mouse(int *x, int *y)
 {
 	/* Mac low-memory globals: MTemp Y at 0x828, X at 0x82a (what ADB wrote) */
-	*y = (int16_t)ReadMacInt16(0x828);
-	*x = (int16_t)ReadMacInt16(0x82a);
+	*y = static_cast<int16_t>(ReadMacInt16(0x828));
+	*x = static_cast<int16_t>(ReadMacInt16(0x82a));
 }
 
 void boot_progress_get_cursor_state(MacCursorState *state)
 {
 	/* MTemp: written by ADB interrupt handler */
-	state->mtemp_y = (int16_t)ReadMacInt16(0x828);
-	state->mtemp_x = (int16_t)ReadMacInt16(0x82a);
+	state->mtemp_y = static_cast<int16_t>(ReadMacInt16(0x828));
+	state->mtemp_x = static_cast<int16_t>(ReadMacInt16(0x82a));
 	/* RawMouse: written by ADB interrupt handler */
-	state->raw_y = (int16_t)ReadMacInt16(0x82c);
-	state->raw_x = (int16_t)ReadMacInt16(0x82e);
+	state->raw_y = static_cast<int16_t>(ReadMacInt16(0x82c));
+	state->raw_x = static_cast<int16_t>(ReadMacInt16(0x82e));
 	/* Mouse: written by Mac OS Cursor Manager (proof of processing) */
-	state->cursor_y = (int16_t)ReadMacInt16(0x830);
-	state->cursor_x = (int16_t)ReadMacInt16(0x832);
+	state->cursor_y = static_cast<int16_t>(ReadMacInt16(0x830));
+	state->cursor_x = static_cast<int16_t>(ReadMacInt16(0x832));
 	/* Cursor Manager flags */
 	state->crsr_busy = ReadMacInt8(0x8cd);
 	state->crsr_new = ReadMacInt8(0x8ce);

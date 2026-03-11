@@ -50,7 +50,8 @@ SERDPort *the_serd_port[2];
 
 int16 SerialOpen(uint32 pb, uint32 dce, int port)
 {
-	D(bug("SerialOpen port %d, pb %08lx, dce %08lx\n", port, pb, dce));
+	(void)pb; (void)dce;
+	D(bug("SerialOpen port %d, pb %08x, dce %08x\n", port, pb, dce));
 
 	if (port == 0 || port == 2) {
 
@@ -86,7 +87,7 @@ int16 SerialOpen(uint32 pb, uint32 dce, int port)
 		}
 		uint32 input_dt = the_port->input_dt = r.a[0];
 		uint32 output_dt = the_port->output_dt = r.a[0] + SIZEOF_serdt;
-		D(bug(" input_dt %08lx, output_dt %08lx\n", input_dt, output_dt));
+		D(bug(" input_dt %08x, output_dt %08x\n", input_dt, output_dt));
 
 		WriteMacInt16(input_dt + qType, dtQType);
 		WriteMacInt32(input_dt + dtAddr, input_dt + serdtCode);
@@ -118,7 +119,7 @@ int16 SerialOpen(uint32 pb, uint32 dce, int port)
 
 int16 SerialPrime(uint32 pb, uint32 dce, int port)
 {
-	D(bug("SerialPrime port %d, pb %08lx, dce %08lx\n", port, pb, dce));
+	D(bug("SerialPrime port %d, pb %08x, dce %08x\n", port, pb, dce));
 
 	// Error if port is not open
 	SERDPort *the_port = the_serd_port[port >> 1];
@@ -148,7 +149,7 @@ int16 SerialPrime(uint32 pb, uint32 dce, int port)
 int16 SerialControl(uint32 pb, uint32 dce, int port)
 {
 	uint16 code = ReadMacInt16(pb + csCode);
-	D(bug("SerialControl %d, port %d, pb %08lx, dce %08lx\n", code, port, pb, dce));
+	D(bug("SerialControl %d, port %d, pb %08x, dce %08x\n", code, port, pb, dce));
 
 	// Error if port is not open
 	SERDPort *the_port = the_serd_port[port >> 1];
@@ -172,7 +173,7 @@ int16 SerialControl(uint32 pb, uint32 dce, int port)
 int16 SerialStatus(uint32 pb, uint32 dce, int port)
 {
 	uint16 code = ReadMacInt16(pb + csCode);
-	D(bug("SerialStatus %d, port %d, pb %08lx, dce %08lx\n", code, port, pb, dce));
+	D(bug("SerialStatus %d, port %d, pb %08x, dce %08x\n", code, port, pb, dce));
 
 	// Error if port is not open
 	SERDPort *the_port = the_serd_port[port >> 1];
@@ -202,7 +203,8 @@ int16 SerialStatus(uint32 pb, uint32 dce, int port)
 
 int16 SerialClose(uint32 pb, uint32 dce, int port)
 {
-	D(bug("SerialClose port %d, pb %08lx, dce %08lx\n", port, pb, dce));
+	(void)pb; (void)dce;
+	D(bug("SerialClose port %d, pb %08x, dce %08x\n", port, pb, dce));
 
 	if (port == 0 || port == 2) {
 

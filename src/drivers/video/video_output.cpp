@@ -3,7 +3,6 @@
  */
 
 #include "video_output.h"
-#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <chrono>
@@ -27,15 +26,11 @@ VideoOutput::~VideoOutput() {
 }
 
 void VideoOutput::allocate_buffers() {
-    size_t buffer_size = max_width * max_height * 4;  // 4 bytes per pixel (BGRA/ARGB)
+    size_t num_pixels = static_cast<size_t>(max_width) * max_height;
 
     for (int i = 0; i < VIDEO_NUM_BUFFERS; i++) {
-        buffers[i].pixels = (uint32_t*)malloc(buffer_size);
-        if (!buffers[i].pixels) {
-            // Fatal: Out of memory
-            fprintf(stderr, "[VideoOutput] Failed to allocate buffer %d (%zu bytes)\n", i, buffer_size);
-            abort();
-        }
+        buffers[i].pixel_storage.resize(num_pixels, 0);
+        buffers[i].pixels = buffers[i].pixel_storage.data();
 
         // Initialize metadata
         buffers[i].width = 0;
@@ -50,18 +45,13 @@ void VideoOutput::allocate_buffers() {
         buffers[i].cursor_x = 0;
         buffers[i].cursor_y = 0;
         buffers[i].cursor_visible = 0;
-
-        // Clear buffer to black
-        memset(buffers[i].pixels, 0, buffer_size);
     }
 }
 
 void VideoOutput::free_buffers() {
     for (int i = 0; i < VIDEO_NUM_BUFFERS; i++) {
-        if (buffers[i].pixels) {
-            free(buffers[i].pixels);
-            buffers[i].pixels = nullptr;
-        }
+        buffers[i].pixel_storage.clear();
+        buffers[i].pixels = nullptr;
     }
 }
 

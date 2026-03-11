@@ -115,7 +115,7 @@ static int16 exec_tib(uint32 tib)
 		switch (cmd) {
 			case scInc:
 				WriteMacInt32(tib - 8, ptr + len);
-				// fall through to scNoInc
+				/* fall through */
 			case scNoInc:
 				if ((sg_index > 0) && (Mac2HostAddr(ptr) == sg_ptr[sg_index-1] + sg_len[sg_index-1])) {
 					sg_len[sg_index-1] += len;				// Merge to previous entry
@@ -278,7 +278,7 @@ int16 SCSICmd(int cmd_length, uint8 *cmd)
 
 int16 SCSIRead(uint32 tib)
 {
-	D(bug("SCSIRead TIB %08lx\n", tib));
+	D(bug("SCSIRead TIB %08x\n", tib));
 	if (phase != PH_TRANSFER)
 		return scPhaseErr;
 
@@ -294,7 +294,7 @@ int16 SCSIRead(uint32 tib)
 
 int16 SCSIWrite(uint32 tib)
 {
-	D(bug("SCSIWrite TIB %08lx\n", tib));
+	D(bug("SCSIWrite TIB %08x\n", tib));
 	if (phase != PH_TRANSFER)
 		return scPhaseErr;
 
@@ -309,7 +309,7 @@ int16 SCSIWrite(uint32 tib)
 
 int16 SCSIComplete(uint32 timeout, uint32 message, uint32 stat)
 {
-	D(bug("SCSIComplete wait %d, msg %08lx, stat %08lx\n", timeout, message, stat));
+	D(bug("SCSIComplete wait %d, msg %08x, stat %08x\n", timeout, message, stat));
 	WriteMacInt16(message, 0);
 	if (phase != PH_TRANSFER)
 		return scPhaseErr;

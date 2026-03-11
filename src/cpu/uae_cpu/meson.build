@@ -30,6 +30,8 @@ uae_common_args = [
   '-Wno-parentheses',
   '-Wno-format',
   '-Wno-narrowing',
+  '-Wno-unused-label',
+  '-Wno-shift-negative-value',
 ]
 
 # Compile cpuemu.cpp WITHOUT -DNOFLAGS to get op_xxx_ff functions

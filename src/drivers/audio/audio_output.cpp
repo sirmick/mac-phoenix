@@ -3,14 +3,13 @@
  */
 
 #include "audio_output.h"
-#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <chrono>
 #include <algorithm>
 
 AudioOutput::AudioOutput(int sample_rate, int channels, int buffer_size)
-    : ring_buffer(nullptr)
+    : ring_buffer(buffer_size, 0)
     , capacity(buffer_size)
     , write_pos(0)
     , read_pos(0)
@@ -21,24 +20,9 @@ AudioOutput::AudioOutput(int sample_rate, int channels, int buffer_size)
     , underruns(0)
     , shutdown_requested(false)
 {
-    // Allocate ring buffer
-    ring_buffer = (int16_t*)malloc(capacity * sizeof(int16_t));
-    if (!ring_buffer) {
-        fprintf(stderr, "[AudioOutput] Failed to allocate ring buffer (%d samples = %zu bytes)\n",
-                capacity, capacity * sizeof(int16_t));
-        abort();
-    }
-
-    // Clear buffer to silence
-    memset(ring_buffer, 0, capacity * sizeof(int16_t));
 }
 
-AudioOutput::~AudioOutput() {
-    if (ring_buffer) {
-        free(ring_buffer);
-        ring_buffer = nullptr;
-    }
-}
+AudioOutput::~AudioOutput() = default;
 
 int AudioOutput::submit_samples(const int16_t* samples, int count, int sample_rate, int channels) {
     if (count <= 0 || !samples) {
@@ -66,12 +50,12 @@ int AudioOutput::submit_samples(const int16_t* samples, int count, int sample_ra
 
     // Write samples to ring buffer (may wrap around)
     int first_chunk = std::min(samples_to_write, capacity - write_pos);
-    memcpy(&ring_buffer[write_pos], samples, first_chunk * sizeof(int16_t));
+    memcpy(&ring_buffer.data()[write_pos], samples, first_chunk * sizeof(int16_t));
 
     if (first_chunk < samples_to_write) {
         // Wrapped around - write remainder at beginning
         int second_chunk = samples_to_write - first_chunk;
-        memcpy(&ring_buffer[0], &samples[first_chunk], second_chunk * sizeof(int16_t));
+        memcpy(&ring_buffer.data()[0], &samples[first_chunk], second_chunk * sizeof(int16_t));
     }
 
     // Update write position
@@ -124,12 +108,12 @@ int AudioOutput::read_samples(int16_t* out, int max_samples, int timeout_ms) {
 
     // Read samples from ring buffer (may wrap around)
     int first_chunk = std::min(samples_to_read, capacity - read_pos);
-    memcpy(out, &ring_buffer[read_pos], first_chunk * sizeof(int16_t));
+    memcpy(out, &ring_buffer.data()[read_pos], first_chunk * sizeof(int16_t));
 
     if (first_chunk < samples_to_read) {
         // Wrapped around - read remainder from beginning
         int second_chunk = samples_to_read - first_chunk;
-        memcpy(&out[first_chunk], &ring_buffer[0], second_chunk * sizeof(int16_t));
+        memcpy(&out[first_chunk], &ring_buffer.data()[0], second_chunk * sizeof(int16_t));
     }
 
     // Update read position
@@ -172,7 +156,7 @@ void AudioOutput::clear() {
     read_pos = 0;
 
     // Clear buffer to silence
-    memset(ring_buffer, 0, capacity * sizeof(int16_t));
+    std::fill(ring_buffer.begin(), ring_buffer.end(), 0);
 }
 
 void AudioOutput::shutdown() {

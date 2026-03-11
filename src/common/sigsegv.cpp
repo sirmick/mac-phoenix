@@ -2568,7 +2568,7 @@ static bool aarch64_skip_instruction(unsigned long *regs) {
 	return true;
 }
 #endif
-#ifdef __linux__
+#if defined(__linux__) && defined(__aarch64__)
 static bool aarch64_skip_instruction(unsigned long *regs) {
 	unsigned long long *r = (unsigned long long *)regs;
 	if (!r[32]) return false;
@@ -2937,6 +2937,7 @@ catch_mach_exception_raise_state_identity(mach_port_t exception_port,
 // Handle bad memory accesses with signal handler
 static void sigsegv_handler(SIGSEGV_FAULT_HANDLER_ARGLIST)
 {
+	(void)sig;  // may be unused depending on platform config
 	// Call handler and reinstall the global handler, if required
 	if (handle_badaccess(SIGSEGV_FAULT_HANDLER_ARGS)) {
 #if (defined(HAVE_SIGACTION) ? defined(SIGACTION_NEED_REINSTALL) : defined(SIGNAL_NEED_REINSTALL))

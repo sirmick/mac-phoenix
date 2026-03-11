@@ -15,7 +15,8 @@
 #ifndef AUDIO_OUTPUT_H
 #define AUDIO_OUTPUT_H
 
-#include <stdint.h>
+#include <cstdint>
+#include <vector>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
@@ -122,7 +123,7 @@ public:
 
 private:
     // Ring buffer
-    int16_t* ring_buffer;       // Circular buffer (allocated in constructor)
+    std::vector<int16_t> ring_buffer;  // Circular buffer
     int capacity;               // Total samples (sample_rate * channels)
     int write_pos;              // Where producer writes (0 to capacity-1)
     int read_pos;               // Where consumer reads (0 to capacity-1)

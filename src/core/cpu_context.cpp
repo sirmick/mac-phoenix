@@ -352,7 +352,7 @@ bool CPUContext::init_mac_subsystems() {
 // PPC Initialization (STUB)
 // ========================================
 
-bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
+bool CPUContext::init_ppc(const config::EmulatorConfig& /*config*/) {
     fprintf(stderr, "[CPUContext] ERROR: PPC emulation not yet implemented\n");
     return false;
 }

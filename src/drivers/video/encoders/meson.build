@@ -14,9 +14,9 @@ video_encoder_inc = include_directories(
 )
 
 # Special compiler flags for fpng (requires SSE4.1 and PCLMUL)
-fpng_args = []
+fpng_args = ['-Wno-type-limits']
 if host_machine.cpu_family() == 'x86_64' or host_machine.cpu_family() == 'x86'
-  fpng_args = ['-msse4.1', '-mpclmul']
+  fpng_args += ['-msse4.1', '-mpclmul']
 endif
 
 video_encoder_lib = static_library('video_encoders',

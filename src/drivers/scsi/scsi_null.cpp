@@ -26,7 +26,7 @@ void scsi_null_exit(void)
 /*
  *  Set SCSI command
  */
-void scsi_null_set_cmd(int cmd_length, uint8_t *cmd)
+void scsi_null_set_cmd(int /*cmd_length*/, uint8_t * /*cmd*/)
 {
 	// No-op
 }
@@ -34,7 +34,7 @@ void scsi_null_set_cmd(int cmd_length, uint8_t *cmd)
 /*
  *  Check for presence of SCSI target
  */
-bool scsi_null_is_target_present(int id)
+bool scsi_null_is_target_present(int /*id*/)
 {
 	return false;  // No targets present
 }
@@ -42,7 +42,7 @@ bool scsi_null_is_target_present(int id)
 /*
  *  Set SCSI target
  */
-bool scsi_null_set_target(int id, int lun)
+bool scsi_null_set_target(int /*id*/, int /*lun*/)
 {
 	return false;  // Target not found
 }
@@ -50,8 +50,8 @@ bool scsi_null_set_target(int id, int lun)
 /*
  *  Send SCSI command
  */
-bool scsi_null_send_cmd(size_t data_length, bool reading, int sg_index,
-                        uint8_t **sg_ptr, uint32_t *sg_len, uint16_t *stat, uint32_t timeout)
+bool scsi_null_send_cmd(size_t /*data_length*/, bool /*reading*/, int /*sg_index*/,
+                        uint8_t ** /*sg_ptr*/, uint32_t * /*sg_len*/, uint16_t * /*stat*/, uint32_t /*timeout*/)
 {
 	return false;  // Command failed
 }

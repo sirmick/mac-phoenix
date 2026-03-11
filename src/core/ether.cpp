@@ -270,6 +270,7 @@ int16 EtherOpen(uint32 pb, uint32 dce)
 
 int16 EtherControl(uint32 pb, uint32 dce)
 {
+	(void)dce;
 	uint16 code = ReadMacInt16(pb + csCode);
 	D(bug("[Ether] EtherControl code=%d pb=%08x\n", code, pb));
 	switch (code) {
@@ -434,6 +435,7 @@ void ether_unregister_protocol(uint16 type)
 
 void ether_udp_read(uint32 packet, int length, struct sockaddr_in *from)
 {
+	(void)from;
 	D(bug("[Ether] ether_udp_read: packet=%08x length=%d\n", packet, length));
 
 	// Drop packets sent by us

@@ -45,6 +45,7 @@ void ClipExit(void)
 
 void GetScrap(void **handle, uint32 type, int32 offset)
 {
+	(void)handle; (void)type; (void)offset;
 	D(bug("GetScrap handle %p, type %08x, offset %d\n", handle, type, offset));
 }
 
@@ -55,6 +56,7 @@ void ZeroScrap()
 
 void PutScrap(uint32 type, void *scrap, int32 length)
 {
+	(void)scrap;
 	D(bug("PutScrap type %08lx, data %08lx, length %ld\n", type, scrap, length));
 	if (length <= 0)
 		return;
@@ -114,11 +116,11 @@ const char *GetString(int num)
 // XPRAM file name and path
 const char XPRAM_FILE_NAME[] = "BasiliskII_XPRAM";
 
-void LoadXPRAM(const char *vmdir)
+void LoadXPRAM(const char * /*vmdir*/)
 {
 	FILE *f = fopen(XPRAM_FILE_NAME, "rb");
 	if (f != NULL) {
-		fread(XPRAM, 256, 1, f);
+		if (fread(XPRAM, 256, 1, f) != 1) { /* ignore read error */ }
 		fclose(f);
 	}
 }
