@@ -107,7 +107,7 @@ struct EmulatorConfig {
     int bootdriver = 0;  // 0=any, -62=CDROM
 
     // Streaming
-    std::string codec = "png";
+    std::string codec = "vp9";
     std::string mousemode = "absolute";
 
     // Web/Network

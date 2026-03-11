@@ -54,8 +54,8 @@ const debugConfig = {
 
 // Store UI config from server
 let serverUIConfig = {
-    webcodec: 'h264',
-    mousemode: 'relative',
+    webcodec: 'vp9',
+    mousemode: 'absolute',
     resolution: '800x600'
 };
 
