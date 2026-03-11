@@ -45,6 +45,8 @@ extern int16 ether_write(uint32 wds);
 extern bool ether_start_udp_thread(int socket_fd);
 extern void ether_stop_udp_thread(void);
 extern void ether_udp_read(uint32 packet, int length, struct sockaddr_in *from);
+extern void ether_register_protocol(uint16 type, uint32 handler);
+extern void ether_unregister_protocol(uint16 type);
 
 extern uint8 ether_addr[6];	// Ethernet address (set by ether_init())
 

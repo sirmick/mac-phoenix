@@ -226,7 +226,7 @@ static inline bool is_ethernet_broadcast(uint8 *p)
 
 int16 EtherOpen(uint32 pb, uint32 dce)
 {
-	D(bug("EtherOpen\n"));
+	D(bug("[Ether] EtherOpen pb=%08x dce=%08x\n", pb, dce));
 
 	// Allocate driver data
 	M68kRegisters r;
@@ -271,7 +271,7 @@ int16 EtherOpen(uint32 pb, uint32 dce)
 int16 EtherControl(uint32 pb, uint32 dce)
 {
 	uint16 code = ReadMacInt16(pb + csCode);
-	D(bug("EtherControl %d\n", code));
+	D(bug("[Ether] EtherControl code=%d pb=%08x\n", code, pb));
 	switch (code) {
 		case 1:					// KillIO
 			return -1;
@@ -412,6 +412,21 @@ void EtherReadPacket(uint32 &src, uint32 &dest, uint32 &len, uint32 &remaining)
 }
 
 
+/*
+ *  Register/unregister protocol handler in udp_protocols map
+ *  Used by lwIP driver to store handlers for ether_udp_read delivery
+ */
+
+void ether_register_protocol(uint16 type, uint32 handler)
+{
+	udp_protocols[type] = handler;
+}
+
+void ether_unregister_protocol(uint16 type)
+{
+	udp_protocols.erase(type);
+}
+
 #if SUPPORTS_UDP_TUNNEL
 /*
  *  Read packet from UDP socket
@@ -419,6 +434,8 @@ void EtherReadPacket(uint32 &src, uint32 &dest, uint32 &len, uint32 &remaining)
 
 void ether_udp_read(uint32 packet, int length, struct sockaddr_in *from)
 {
+	D(bug("[Ether] ether_udp_read: packet=%08x length=%d\n", packet, length));
+
 	// Drop packets sent by us
 	if (memcmp(Mac2HostAddr(packet) + 6, ether_addr, 6) == 0)
 		return;
@@ -436,6 +453,8 @@ void ether_udp_read(uint32 packet, int length, struct sockaddr_in *from)
 
 	// Look for protocol
 	uint16 search_type = (type <= 1500 ? 0 : type);
+	D(bug("[Ether] ether_udp_read: type=%04x search_type=%04x, %zu protocols registered\n",
+		type, search_type, udp_protocols.size()));
 	if (udp_protocols.find(search_type) == udp_protocols.end())
 		return;
 	uint32 handler = udp_protocols[search_type];

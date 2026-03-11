@@ -502,22 +502,218 @@ static void udp_nat_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
 	sendto(proxy->host_fd, buf, len, 0, (struct sockaddr *)&sa, sizeof(sa));
 }
 
+// ---- DHCP server ----
+// Minimal DHCP server: responds to DISCOVER with OFFER, REQUEST with ACK
+// Assigns 10.0.2.15 with gateway 10.0.2.1, DNS 10.0.2.3, subnet 255.255.255.0
+
+// Mac's ethernet address (must match ether_lwip.cpp)
+static const uint8_t s_mac_client_addr[6] = {0x02, 0x50, 0x48, 0x58, 0x00, 0x01};
+static const uint8_t s_gw_mac_addr[6] = {0x02, 0x50, 0x48, 0x58, 0x00, 0x02};
+
+// DHCP message types
+#define DHCP_DISCOVER 1
+#define DHCP_OFFER    2
+#define DHCP_REQUEST  3
+#define DHCP_ACK      5
+
+// Returns 1 if this was a DHCP packet we handled, 0 otherwise
+static int handle_dhcp(struct pbuf *p, uint16_t ip_hdr_len)
+{
+	// Need at least IP + UDP(8) + BOOTP(236) + magic cookie(4)
+	if (p->tot_len < ip_hdr_len + 8 + 236 + 4)
+		return 0;
+
+	uint8_t pkt[1500];
+	uint16_t pkt_len = pbuf_copy_partial(p, pkt, sizeof(pkt), 0);
+
+	// Check UDP ports: src=68 (client), dst=67 (server)
+	uint16_t src_port = (pkt[ip_hdr_len] << 8) | pkt[ip_hdr_len + 1];
+	uint16_t dst_port = (pkt[ip_hdr_len + 2] << 8) | pkt[ip_hdr_len + 3];
+	if (src_port != 68 || dst_port != 67)
+		return 0;
+
+	uint16_t bootp_off = ip_hdr_len + 8;  // UDP header is 8 bytes
+
+	// Check BOOTP magic cookie at offset 236
+	if (pkt_len < bootp_off + 240)
+		return 0;
+	if (pkt[bootp_off + 236] != 99 || pkt[bootp_off + 237] != 130 ||
+	    pkt[bootp_off + 238] != 83 || pkt[bootp_off + 239] != 99)
+		return 0;
+
+	// Find DHCP message type (option 53)
+	uint8_t msg_type = 0;
+	uint16_t opt_off = bootp_off + 240;
+	while (opt_off + 2 <= pkt_len) {
+		uint8_t opt = pkt[opt_off];
+		if (opt == 0xFF) break;  // End
+		if (opt == 0) { opt_off++; continue; }  // Pad
+		uint8_t opt_len = pkt[opt_off + 1];
+		if (opt == 53 && opt_len >= 1)
+			msg_type = pkt[opt_off + 2];
+		opt_off += 2 + opt_len;
+	}
+
+	if (msg_type != DHCP_DISCOVER && msg_type != DHCP_REQUEST)
+		return 0;
+
+	uint8_t reply_type = (msg_type == DHCP_DISCOVER) ? DHCP_OFFER : DHCP_ACK;
+	fprintf(stderr, "[lwIP DHCP] %s -> sending %s\n",
+		msg_type == DHCP_DISCOVER ? "DISCOVER" : "REQUEST",
+		reply_type == DHCP_OFFER ? "OFFER" : "ACK");
+
+	// Extract client's transaction ID (xid) from BOOTP header
+	uint32_t xid;
+	memcpy(&xid, &pkt[bootp_off + 4], 4);
+
+	// Extract client's MAC from BOOTP chaddr field
+	uint8_t client_mac[6];
+	memcpy(client_mac, &pkt[bootp_off + 28], 6);
+
+	// Build DHCP reply
+	// Ethernet(14) + IP(20) + UDP(8) + BOOTP(236) + options
+	uint8_t reply[600];
+	memset(reply, 0, sizeof(reply));
+	uint16_t roff = 0;
+
+	// Ethernet header
+	memcpy(&reply[0], client_mac, 6);        // dst MAC
+	memcpy(&reply[6], s_gw_mac_addr, 6);     // src MAC
+	reply[12] = 0x08; reply[13] = 0x00;      // ethertype IP
+	roff = 14;
+
+	// IP header (filled in later for checksum)
+	uint16_t ip_off = roff;
+	roff += 20;
+
+	// UDP header (filled in later for length)
+	uint16_t udp_off = roff;
+	roff += 8;
+
+	// BOOTP reply
+	uint16_t bootp_start = roff;
+	reply[roff++] = 2;    // op: BOOTREPLY
+	reply[roff++] = 1;    // htype: ethernet
+	reply[roff++] = 6;    // hlen: 6
+	reply[roff++] = 0;    // hops
+	memcpy(&reply[roff], &xid, 4); roff += 4;  // xid
+	roff += 2;  // secs = 0
+	roff += 2;  // flags = 0
+
+	roff += 4;  // ciaddr = 0
+	// yiaddr: 10.0.2.15
+	reply[roff++] = 10; reply[roff++] = 0; reply[roff++] = 2; reply[roff++] = 15;
+	// siaddr: 10.0.2.1 (server)
+	reply[roff++] = 10; reply[roff++] = 0; reply[roff++] = 2; reply[roff++] = 1;
+	roff += 4;  // giaddr = 0
+
+	// chaddr (client MAC + padding to 16 bytes)
+	memcpy(&reply[roff], client_mac, 6); roff += 16;
+	roff += 64;  // sname
+	roff += 128; // file
+
+	// DHCP magic cookie
+	reply[roff++] = 99; reply[roff++] = 130; reply[roff++] = 83; reply[roff++] = 99;
+
+	// Option 53: DHCP message type
+	reply[roff++] = 53; reply[roff++] = 1; reply[roff++] = reply_type;
+
+	// Option 54: Server identifier (10.0.2.1)
+	reply[roff++] = 54; reply[roff++] = 4;
+	reply[roff++] = 10; reply[roff++] = 0; reply[roff++] = 2; reply[roff++] = 1;
+
+	// Option 51: Lease time (86400 seconds = 1 day)
+	reply[roff++] = 51; reply[roff++] = 4;
+	reply[roff++] = 0; reply[roff++] = 1; reply[roff++] = 0x51; reply[roff++] = 0x80;
+
+	// Option 1: Subnet mask
+	reply[roff++] = 1; reply[roff++] = 4;
+	reply[roff++] = 255; reply[roff++] = 255; reply[roff++] = 255; reply[roff++] = 0;
+
+	// Option 3: Router (gateway)
+	reply[roff++] = 3; reply[roff++] = 4;
+	reply[roff++] = 10; reply[roff++] = 0; reply[roff++] = 2; reply[roff++] = 1;
+
+	// Option 6: DNS server
+	reply[roff++] = 6; reply[roff++] = 4;
+	reply[roff++] = 10; reply[roff++] = 0; reply[roff++] = 2; reply[roff++] = 3;
+
+	// End option
+	reply[roff++] = 0xFF;
+
+	// Pad to minimum BOOTP size (236 + 64 options minimum)
+	while (roff < bootp_start + 300) reply[roff++] = 0;
+
+	// Fill in UDP header
+	uint16_t udp_len = roff - udp_off;
+	reply[udp_off] = 0; reply[udp_off + 1] = 67;      // src port 67
+	reply[udp_off + 2] = 0; reply[udp_off + 3] = 68;  // dst port 68
+	reply[udp_off + 4] = udp_len >> 8; reply[udp_off + 5] = udp_len & 0xFF;
+	reply[udp_off + 6] = 0; reply[udp_off + 7] = 0;   // checksum (0 = disabled)
+
+	// Fill in IP header
+	uint16_t ip_total_len = roff - ip_off;
+	reply[ip_off] = 0x45;  // version 4, IHL 5
+	reply[ip_off + 1] = 0; // DSCP/ECN
+	reply[ip_off + 2] = ip_total_len >> 8; reply[ip_off + 3] = ip_total_len & 0xFF;
+	reply[ip_off + 4] = 0; reply[ip_off + 5] = 0;  // identification
+	reply[ip_off + 6] = 0; reply[ip_off + 7] = 0;  // flags/fragment
+	reply[ip_off + 8] = 64;  // TTL
+	reply[ip_off + 9] = 17;  // protocol: UDP
+	reply[ip_off + 10] = 0; reply[ip_off + 11] = 0; // checksum (computed below)
+	// src: 10.0.2.1
+	reply[ip_off + 12] = 10; reply[ip_off + 13] = 0; reply[ip_off + 14] = 2; reply[ip_off + 15] = 1;
+	// dst: 255.255.255.255 (broadcast)
+	reply[ip_off + 16] = 255; reply[ip_off + 17] = 255; reply[ip_off + 18] = 255; reply[ip_off + 19] = 255;
+
+	// Compute IP checksum
+	uint32_t cksum = 0;
+	for (int i = 0; i < 20; i += 2)
+		cksum += (reply[ip_off + i] << 8) | reply[ip_off + i + 1];
+	while (cksum >> 16)
+		cksum = (cksum & 0xFFFF) + (cksum >> 16);
+	uint16_t ip_cksum = ~cksum;
+	reply[ip_off + 10] = ip_cksum >> 8;
+	reply[ip_off + 11] = ip_cksum & 0xFF;
+
+	// Send directly to the Mac via the netif's linkoutput
+	struct pbuf *rp = pbuf_alloc(PBUF_RAW, roff, PBUF_RAM);
+	if (rp) {
+		memcpy(rp->payload, reply, roff);
+		s_netif->linkoutput(s_netif, rp);
+		pbuf_free(rp);
+	}
+
+	pbuf_free(p);
+	return 1;  // Consumed
+}
+
 // ---- IP4 input hook ----
 
 int lwip_nat_ip4_input(struct pbuf *p, struct netif *inp)
 {
-	if (p->len < 20) return 0;  // Too short for IP header
+	if (p->len < 20) return 0;
 
 	// Parse IP header
 	struct ip_hdr *iphdr = (struct ip_hdr *)p->payload;
 	ip_addr_t dst_ip;
 	dst_ip.addr = iphdr->dest.addr;
 
+	uint8_t proto = IPH_PROTO(iphdr);
+
 	// If destined for the gateway, let lwIP handle it normally
 	if (ip_addr_cmp(&dst_ip, &s_gw_ip))
 		return 0;
 
-	uint8_t proto = IPH_PROTO(iphdr);
+	// If broadcast, check for DHCP first, then let lwIP handle the rest
+	if (dst_ip.addr == 0xFFFFFFFF || (dst_ip.addr & 0xFF000000) == 0xFF000000) {
+		if (proto == IP_PROTO_UDP) {
+			uint16_t ip_hdr_len = IPH_HL(iphdr) * 4;
+			if (handle_dhcp(p, ip_hdr_len))
+				return 1;
+		}
+		return 0;
+	}
 	uint16_t ip_hdr_len = IPH_HL(iphdr) * 4;
 
 	if (proto == IP_PROTO_ICMP) {

@@ -137,19 +137,23 @@ static err_t mac_netif_init(struct netif *netif)
 
 static void lwip_net_thread()
 {
-	fprintf(stderr, "[lwIP] Network thread started\n");
+	D(bug("[lwIP] Network thread started\n"));
 	while (s_running) {
-		// 1. Drain TX queue: feed Mac frames into lwIP
+		// 1. Drain TX queue: copy frames out under lock, then feed to lwIP unlocked
+		//    (lwIP callbacks like linkoutput may re-enter lwip_enqueue_rx which needs the mutex)
+		std::vector<PendingFrame> tx_batch;
 		{
 			std::lock_guard<std::mutex> lock(s_mutex);
 			while (!s_tx_queue.empty()) {
-				auto& frame = s_tx_queue.front();
-				struct pbuf *p = pbuf_alloc(PBUF_RAW, frame.data.size(), PBUF_RAM);
-				if (p) {
-					memcpy(p->payload, frame.data.data(), frame.data.size());
-					s_mac_netif.input(p, &s_mac_netif);
-				}
+				tx_batch.push_back(std::move(s_tx_queue.front()));
 				s_tx_queue.pop();
+			}
+		}
+		for (auto& frame : tx_batch) {
+			struct pbuf *p = pbuf_alloc(PBUF_RAW, frame.data.size(), PBUF_RAM);
+			if (p) {
+				memcpy(p->payload, frame.data.data(), frame.data.size());
+				s_mac_netif.input(p, &s_mac_netif);
 			}
 		}
 
@@ -162,7 +166,7 @@ static void lwip_net_thread()
 		// 4. Short sleep to avoid busy-spinning when idle
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
-	fprintf(stderr, "[lwIP] Network thread stopped\n");
+	D(bug("[lwIP] Network thread stopped\n"));
 }
 
 // ---- Platform driver interface ----
@@ -268,15 +272,14 @@ static int16_t ether_lwip_del_multicast(uint32_t pb)
 static int16_t ether_lwip_attach_ph(uint16_t type, uint32_t handler)
 {
 	D(bug("[lwIP] AttachPH type=%04x handler=%08x\n", type, handler));
-	(void)type;
-	(void)handler;
+	ether_register_protocol(type, handler);
 	return 0;
 }
 
 static int16_t ether_lwip_detach_ph(uint16_t type)
 {
 	D(bug("[lwIP] DetachPH type=%04x\n", type));
-	(void)type;
+	ether_unregister_protocol(type);
 	return 0;
 }
 
@@ -286,9 +289,6 @@ static int16_t ether_lwip_write(uint32_t wds)
 	uint8_t packet[1514];
 	int len = ether_wds_to_buffer(wds, packet);
 	if (len < 14) return eLenErr;
-
-	D(bug("[lwIP] TX %d bytes, type=%04x\n", len,
-		(packet[12] << 8) | packet[13]));
 
 	// Enqueue for processing on the network thread (no lwIP calls here)
 	{
