@@ -489,6 +489,7 @@ SOURCE_FILES = [
     ("Disk Copy/Disk_Copy_(v6.3.3).sit", handle_stuffit, "Disk Copy"),
     ("StuffIt Expander/Stuffit_Expander_5.5.dsk", handle_dsk, "StuffIt Expander"),
     ("MacTCP_Ping_2.0.2.sea.bin", handle_stuffit, "MacTCP Ping"),
+    ("OTTool_1.2.1.sit", handle_stuffit, "OTTool"),
 ]
 
 
