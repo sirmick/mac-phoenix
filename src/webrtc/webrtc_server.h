@@ -30,6 +30,7 @@ struct PeerConnection {
     std::shared_ptr<rtc::Track> video_track;
     std::shared_ptr<rtc::Track> audio_track;
     std::shared_ptr<rtc::DataChannel> data_channel;
+    std::shared_ptr<rtc::RtpPacketizer> vp9_packetizer;  // For prepareFrame() on VP9
     std::string id;
     CodecType codec = CodecType::H264;
     bool ready = false;

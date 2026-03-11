@@ -33,16 +33,18 @@ namespace video {
 }
 
 /**
- * VP9 RTP Packetizer (RFC 7741)
+ * VP9 RTP Packetizer (RFC 9628)
  *
- * Fragments VP9 frames into MTU-sized RTP packets with a 1-byte VP9 payload
- * descriptor. This is needed because libdatachannel doesn't ship a VP9
- * packetizer, and the base RtpPacketizer sends frames as single packets
- * (which exceeds MTU for keyframes).
+ * Fragments VP9 frames into MTU-sized RTP packets with VP9 payload descriptors.
+ * Includes picture ID for frame tracking and scalability structure (SS) on
+ * keyframes for resolution info — required by Chrome's VP9 depacketizer.
  *
  * Payload descriptor byte:  I|P|L|F|B|E|V|Z
+ *   I (bit 7) = Picture ID present
+ *   P (bit 6) = Inter-picture predicted (0 for keyframes)
  *   B (bit 3) = Start of frame
  *   E (bit 2) = End of frame
+ *   V (bit 1) = Scalability structure present (keyframe first packet only)
  */
 class VP9RtpPacketizer : public rtc::RtpPacketizer {
 public:
@@ -50,45 +52,92 @@ public:
                      size_t maxFragmentSize = DefaultMaxFragmentSize)
         : RtpPacketizer(std::move(rtpConfig)), maxFragmentSize_(maxFragmentSize) {}
 
+    /// Call before sendFrame() to set metadata for the next frame
+    void prepareFrame(bool is_keyframe, uint16_t width, uint16_t height) {
+        is_keyframe_ = is_keyframe;
+        width_ = width;
+        height_ = height;
+    }
+
 private:
     std::vector<rtc::binary> fragment(rtc::binary data) override {
         std::vector<rtc::binary> fragments;
 
-        if (data.size() + 1 <= maxFragmentSize_) {
-            // Single packet: B=1, E=1
-            rtc::binary frag(1 + data.size());
-            frag[0] = std::byte{0x0C};  // B=1, E=1
-            std::copy(data.begin(), data.end(), frag.begin() + 1);
-            fragments.push_back(std::move(frag));
-        } else {
-            // Multi-packet fragmentation
-            size_t payloadMax = maxFragmentSize_ - 1;  // 1 byte for descriptor
-            size_t offset = 0;
-            bool first = true;
+        // Always use 15-bit PID for consistency (avoids 7→15 bit transition issues)
+        uint16_t pid = picture_id_;
+        picture_id_ = (picture_id_ + 1) & 0x7FFF;
+        int pid_bytes = 2;
 
-            while (offset < data.size()) {
-                size_t chunkSize = std::min(payloadMax, data.size() - offset);
-                bool last = (offset + chunkSize >= data.size());
+        // Build scalability structure for keyframe first packet:
+        // [N_S(3)|Y(1)|G(1)|RES(3)] [WIDTH_HI] [WIDTH_LO] [HEIGHT_HI] [HEIGHT_LO]
+        std::vector<uint8_t> ss_data;
+        if (is_keyframe_) {
+            ss_data.push_back(0x10);  // N_S=0 (1 layer), Y=1 (resolution), G=0
+            ss_data.push_back(static_cast<uint8_t>(width_ >> 8));
+            ss_data.push_back(static_cast<uint8_t>(width_ & 0xFF));
+            ss_data.push_back(static_cast<uint8_t>(height_ >> 8));
+            ss_data.push_back(static_cast<uint8_t>(height_ & 0xFF));
+        }
 
-                rtc::binary frag(1 + chunkSize);
-                uint8_t descriptor = 0;
-                if (first) descriptor |= 0x08;  // B=1
-                if (last) descriptor |= 0x04;   // E=1
-                frag[0] = static_cast<std::byte>(descriptor);
-                std::copy(data.begin() + offset,
-                          data.begin() + offset + chunkSize,
-                          frag.begin() + 1);
+        // Base descriptor: I=1 always, P=1 for inter frames
+        uint8_t base_desc = 0x80;  // I=1
+        if (!is_keyframe_) base_desc |= 0x40;  // P=1
 
-                fragments.push_back(std::move(frag));
-                offset += chunkSize;
-                first = false;
+        // Header size for first packet (with SS) vs subsequent packets
+        int first_header_size = 1 + pid_bytes + (int)ss_data.size();  // desc + PID + SS
+        int other_header_size = 1 + pid_bytes;  // desc + PID
+
+        size_t first_payload_max = maxFragmentSize_ - first_header_size;
+        size_t other_payload_max = maxFragmentSize_ - other_header_size;
+
+        size_t offset = 0;
+        bool first = true;
+
+        while (offset < data.size()) {
+            size_t payload_max = first ? first_payload_max : other_payload_max;
+            size_t chunkSize = std::min(payload_max, data.size() - offset);
+            bool last = (offset + chunkSize >= data.size());
+            int header_size = first ? first_header_size : other_header_size;
+
+            rtc::binary frag(header_size + chunkSize);
+            int pos = 0;
+
+            // Byte 0: descriptor
+            uint8_t descriptor = base_desc;
+            if (first) descriptor |= 0x08;  // B=1
+            if (last) descriptor |= 0x04;   // E=1
+            if (first && is_keyframe_) descriptor |= 0x02;  // V=1
+            frag[pos++] = static_cast<std::byte>(descriptor);
+
+            // Picture ID (I=1, always 15-bit / M=1)
+            frag[pos++] = static_cast<std::byte>(0x80 | ((pid >> 8) & 0x7F));  // M=1, PID[14:8]
+            frag[pos++] = static_cast<std::byte>(pid & 0xFF);                   // PID[7:0]
+
+            // Scalability structure (V=1, first packet of keyframe only)
+            if (first && is_keyframe_) {
+                for (uint8_t b : ss_data) {
+                    frag[pos++] = static_cast<std::byte>(b);
+                }
             }
+
+            // VP9 payload data
+            std::copy(data.begin() + offset,
+                      data.begin() + offset + chunkSize,
+                      frag.begin() + pos);
+
+            fragments.push_back(std::move(frag));
+            offset += chunkSize;
+            first = false;
         }
 
         return fragments;
     }
 
     size_t maxFragmentSize_;
+    uint16_t picture_id_ = 0;
+    bool is_keyframe_ = false;
+    uint16_t width_ = 0;
+    uint16_t height_ = 0;
 };
 
 /**
@@ -577,11 +626,12 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
             packetizer->addToChain(videoNackResponder);
             peer->video_track->setMediaHandler(packetizer);
         } else {
-            // VP9: Use custom packetizer with RFC 7741 payload descriptor
+            // VP9: Use custom packetizer with RFC 9628 payload descriptor
             auto packetizer = std::make_shared<VP9RtpPacketizer>(rtpConfig);
             packetizer->addToChain(videoSrReporter);
             packetizer->addToChain(videoNackResponder);
             peer->video_track->setMediaHandler(packetizer);
+            peer->vp9_packetizer = packetizer;  // Store for prepareFrame() calls
         }
 
         // CRITICAL: Only set ready=true when track is actually open!
@@ -804,6 +854,13 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
                 }
                 if (is_keyframe) {
                     peer->needs_keyframe = false;
+                }
+
+                // VP9: set keyframe/resolution metadata before sending
+                if (peer->vp9_packetizer) {
+                    static_cast<VP9RtpPacketizer*>(peer->vp9_packetizer.get())
+                        ->prepareFrame(is_keyframe,
+                            static_cast<uint16_t>(width), static_cast<uint16_t>(height));
                 }
 
                 peer->video_track->sendFrame(

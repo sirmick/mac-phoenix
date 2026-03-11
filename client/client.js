@@ -1075,9 +1075,12 @@ class BasiliskWebRTC {
                 return;
             }
 
+            let timer = null;
+
             const checkState = () => {
-                if (!this.pc) { resolve(); return; }
+                if (!this.pc) { clearTimeout(timer); resolve(); return; }
                 if (this.pc.iceGatheringState === 'complete') {
+                    clearTimeout(timer);
                     this.pc.removeEventListener('icegatheringstatechange', checkState);
                     logger.info('ICE gathering complete, sending answer');
                     resolve();
@@ -1086,14 +1089,15 @@ class BasiliskWebRTC {
 
             this.pc.addEventListener('icegatheringstatechange', checkState);
 
-            // Timeout after 5 seconds - send what we have
-            setTimeout(() => {
+            // Timeout after 1 second - with no STUN servers, gathering should
+            // complete almost instantly. This is just a safety fallback.
+            timer = setTimeout(() => {
                 this.pc.removeEventListener('icegatheringstatechange', checkState);
                 if (debugConfig.debug_connection) {
                     logger.warn('ICE gathering timeout, sending answer with available candidates');
                 }
                 resolve();
-            }, 5000);
+            }, 1000);
         });
     }
 
@@ -1102,11 +1106,11 @@ class BasiliskWebRTC {
             logger.info('Creating RTCPeerConnection');
         }
 
+        // No STUN servers needed for localhost/LAN — server also has STUN disabled.
+        // With no STUN, ICE gathering completes instantly (host candidates only),
+        // avoiding a 5-second timeout waiting for server-reflexive candidates.
         const config = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
+            iceServers: []
         };
 
         this.pc = new RTCPeerConnection(config);

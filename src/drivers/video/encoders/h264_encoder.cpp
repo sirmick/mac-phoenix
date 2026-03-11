@@ -10,7 +10,12 @@
 extern bool g_debug_mode_switch;
 
 bool H264Encoder::init(int width, int height, int fps) {
-    return init_internal(width, height, fps, 2000);
+    // Scale bitrate with resolution: 2 Mbps for 640x480, up to 6 Mbps for 1280x1024+
+    int pixels = width * height;
+    int bitrate_kbps = 2000 + (pixels - 640 * 480) * 4000 / (1280 * 1024 - 640 * 480);
+    if (bitrate_kbps < 2000) bitrate_kbps = 2000;
+    if (bitrate_kbps > 8000) bitrate_kbps = 8000;
+    return init_internal(width, height, fps, bitrate_kbps);
 }
 
 bool H264Encoder::init_internal(int width, int height, int fps, int bitrate_kbps) {
@@ -30,7 +35,8 @@ bool H264Encoder::init_internal(int width, int height, int fps, int bitrate_kbps
     param.iPicWidth = width;
     param.iPicHeight = height;
     param.iTargetBitrate = bitrate_kbps * 1000;
-    param.iRCMode = RC_OFF_MODE;  // Disable rate control - use fixed QP
+    param.iMaxBitrate = bitrate_kbps * 2000;  // Allow 2x burst for keyframes
+    param.iRCMode = RC_BITRATE_MODE;  // Rate control caps IDR frame size
     param.bEnableFrameSkip = false;  // Don't skip frames
     param.bEnableDenoise = false;
     param.iSpatialLayerNum = 1;
@@ -50,7 +56,12 @@ bool H264Encoder::init_internal(int width, int height, int fps, int bitrate_kbps
     param.sSpatialLayers[0].fFrameRate = static_cast<float>(fps);
     param.sSpatialLayers[0].iSpatialBitrate = bitrate_kbps * 1000;
     param.sSpatialLayers[0].iMaxSpatialBitrate = bitrate_kbps * 1500;
-    param.sSpatialLayers[0].sSliceArgument.uiSliceMode = SM_SINGLE_SLICE;
+    // Multi-slice mode: split frames into slices of ~100KB each.
+    // This is critical for high resolutions where IDR frames can exceed 700KB,
+    // causing Chrome's RTP jitter buffer to fail on the massive packet burst.
+    // Each slice is an independent NAL unit that Chrome can decode separately.
+    param.sSpatialLayers[0].sSliceArgument.uiSliceMode = SM_SIZELIMITED_SLICE;
+    param.sSpatialLayers[0].sSliceArgument.uiSliceSizeConstraint = 100 * 1024;  // 100KB per slice
 
     // Set H.264 level based on resolution (fixes "bitstream larger than level" warning)
     // Level 5.1 supports up to 4K and 40Mbps - plenty of headroom for large dithered frames
@@ -62,11 +73,11 @@ bool H264Encoder::init_internal(int width, int height, int fps, int bitrate_kbps
         return false;
     }
 
-    // Set fixed QP for all frame types (RC_OFF_MODE requires this)
-    // QP 48 = very aggressive compression, will produce much smaller frames
+    // Let rate control manage QP automatically.
+    // Set wide QP range so RC can adapt to content (dithered B/W = high QP needed).
     SEncParamExt currentParam;
     encoder_->GetOption(ENCODER_OPTION_SVC_ENCODE_PARAM_EXT, &currentParam);
-    currentParam.iMinQp = 48;
+    currentParam.iMinQp = 20;
     currentParam.iMaxQp = 51;
     encoder_->SetOption(ENCODER_OPTION_SVC_ENCODE_PARAM_EXT, &currentParam);
 
