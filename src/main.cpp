@@ -223,6 +223,8 @@ int main(int argc, char **argv)
 
 	// Set global debug/log state from config
 	g_debug_mode_switch = emu_config.debug_mode_switch;
+	extern bool g_debug_network;
+	g_debug_network = emu_config.debug_network;
 	set_log_level(emu_config.log_level);
 	RAMSize = emu_config.ram_mb * 1024 * 1024;
 

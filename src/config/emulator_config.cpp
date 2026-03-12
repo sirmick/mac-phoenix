@@ -118,6 +118,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["debug_connection"] = debug_connection;
     j["debug_mode_switch"] = debug_mode_switch;
     j["debug_perf"] = debug_perf;
+    j["debug_network"] = debug_network;
 
     j["m68k"]["cpu_type"] = m68k.cpu_type;
     j["m68k"]["fpu"] = m68k.fpu;
@@ -235,6 +236,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("debug_connection")) debug_connection = json_utils::get_bool(j, "debug_connection");
     if (j.contains("debug_mode_switch")) debug_mode_switch = json_utils::get_bool(j, "debug_mode_switch");
     if (j.contains("debug_perf")) debug_perf = json_utils::get_bool(j, "debug_perf");
+    if (j.contains("debug_network")) debug_network = json_utils::get_bool(j, "debug_network");
 
     // M68K sub-struct
     if (j.contains("m68k")) {
@@ -384,6 +386,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-connection    Debug WebRTC connections\n");
             printf("  --debug-mode-switch   Debug video mode switches\n");
             printf("  --debug-perf          Debug performance\n");
+            printf("  --debug-network       Debug network (lwIP NAT/DNS/ICMP/TCP/UDP)\n");
             printf("  -h, --help            Show this help message\n");
             exit(0);
         }
@@ -530,6 +533,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--debug-perf") == 0) {
             config.debug_perf = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--debug-network") == 0) {
+            config.debug_network = true; argv[i] = nullptr; continue;
         }
 
         // Positional: ROM path (last non-flag arg)

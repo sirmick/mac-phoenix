@@ -140,6 +140,7 @@ struct EmulatorConfig {
     bool debug_connection = false;
     bool debug_mode_switch = false;
     bool debug_perf = false;
+    bool debug_network = false;
 
     // Internal (not serialized to JSON)
     std::string config_path;       // where to save back

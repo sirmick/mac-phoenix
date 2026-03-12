@@ -34,8 +34,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <linux/errqueue.h>
+#include <netinet/ip.h>
 #include <fstream>
 #include <string>
+
+bool g_debug_network = false;
 
 // Gateway IP (lwIP's own address)
 static ip_addr_t s_gw_ip;
@@ -44,8 +48,8 @@ static struct netif *s_netif = nullptr;
 // Host's real DNS server (read from /etc/resolv.conf)
 static uint32_t s_host_dns_ip = 0;  // network byte order
 
-// Virtual DNS address the Mac uses
-#define NAT_DNS_IP  "10.0.2.3"
+// Virtual DNS address the Mac uses (must be the gateway so ARP resolves)
+#define NAT_DNS_IP  "10.0.2.1"
 
 // ---- DNS resolver lookup ----
 
@@ -80,6 +84,68 @@ static void set_nonblocking(int fd)
 	int flags = fcntl(fd, F_GETFL, 0);
 	if (flags >= 0)
 		fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
+
+// ---- ICMP Time Exceeded generator (for traceroute) ----
+
+// Send ICMP Time Exceeded (type 11, code 0) back to Mac
+// Payload: original IP header + first 8 bytes of original data (per RFC 792)
+static void send_icmp_time_exceeded(struct pbuf *orig_p, const ip_addr_t *src_ip)
+{
+	// Extract original IP header + 8 bytes of payload
+	uint8_t orig_data[28 + 8];  // max IP header (60) + 8, but we use 20+8 typically
+	uint16_t ip_hdr_len = 20;  // assume standard header
+	if (orig_p->len >= 1) {
+		uint8_t ihl;
+		pbuf_copy_partial(orig_p, &ihl, 1, 0);
+		ip_hdr_len = (ihl & 0x0F) * 4;
+	}
+	uint16_t copy_len = ip_hdr_len + 8;
+	if (copy_len > sizeof(orig_data)) copy_len = sizeof(orig_data);
+	if (copy_len > orig_p->tot_len) copy_len = orig_p->tot_len;
+	pbuf_copy_partial(orig_p, orig_data, copy_len, 0);
+
+	// Build ICMP Time Exceeded message: type(1) + code(1) + checksum(2) + unused(4) + data
+	uint16_t icmp_len = 8 + copy_len;
+	uint8_t icmp_msg[8 + 60 + 8];
+	memset(icmp_msg, 0, sizeof(icmp_msg));
+	icmp_msg[0] = 11;   // Type: Time Exceeded
+	icmp_msg[1] = 0;    // Code: TTL exceeded in transit
+	// checksum at [2..3], computed below
+	// unused at [4..7] = 0
+	memcpy(&icmp_msg[8], orig_data, copy_len);
+
+	// Compute ICMP checksum
+	uint32_t cksum = 0;
+	for (uint16_t i = 0; i < icmp_len; i += 2) {
+		uint16_t word = (icmp_msg[i] << 8);
+		if (i + 1 < icmp_len) word |= icmp_msg[i + 1];
+		cksum += word;
+	}
+	while (cksum >> 16)
+		cksum = (cksum & 0xFFFF) + (cksum >> 16);
+	uint16_t icmp_cksum = ~(uint16_t)cksum;
+	icmp_msg[2] = (icmp_cksum >> 8) & 0xFF;
+	icmp_msg[3] = icmp_cksum & 0xFF;
+
+	// Send via raw PCB from the gateway IP
+	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, icmp_len, PBUF_RAM);
+	if (!p) return;
+	memcpy(p->payload, icmp_msg, icmp_len);
+
+	struct raw_pcb *tmp = raw_new(IP_PROTO_ICMP);
+	if (tmp) {
+		raw_bind(tmp, &s_gw_ip);  // Source = gateway (10.0.2.1)
+		raw_sendto(tmp, p, src_ip);  // Dest = Mac
+		raw_remove(tmp);
+	}
+	pbuf_free(p);
+
+	if (g_debug_network) {
+		char src_str[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &src_ip->addr, src_str, sizeof(src_str));
+		fprintf(stderr, "[lwIP NAT] ICMP Time Exceeded -> %s (TTL expired at gateway)\n", src_str);
+	}
 }
 
 // ---- TCP Proxy ----
@@ -172,14 +238,17 @@ static err_t tcp_proxy_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_
 	}
 
 	// Forward to host socket
-	uint8_t buf[4096];
-	uint16_t copied = pbuf_copy_partial(p, buf, p->tot_len, 0);
-	tcp_recved(pcb, p->tot_len);
+	uint16_t total = p->tot_len;
+	uint8_t buf[65535];
+	uint16_t copied = pbuf_copy_partial(p, buf, total, 0);
+	tcp_recved(pcb, total);
 	pbuf_free(p);
 
 	if (!proxy->host_connected) {
-		// Buffer until connect completes
-		proxy->pending_to_host.insert(proxy->pending_to_host.end(), buf, buf + copied);
+		// Buffer until connect completes (cap at 256KB to prevent runaway)
+		if (proxy->pending_to_host.size() < 256 * 1024) {
+			proxy->pending_to_host.insert(proxy->pending_to_host.end(), buf, buf + copied);
+		}
 		return ERR_OK;
 	}
 
@@ -251,9 +320,11 @@ static TcpProxy *tcp_proxy_create(struct tcp_pcb *pcb, const ip_addr_t *dst_ip, 
 	tcp_err(pcb, tcp_proxy_err);
 	tcp_sent(pcb, tcp_proxy_sent);
 
-	char dst_str[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &dst_ip->addr, dst_str, sizeof(dst_str));
-	fprintf(stderr, "[lwIP NAT] TCP proxy %s:%u\n", dst_str, dst_port);
+	if (g_debug_network) {
+		char dst_str[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &dst_ip->addr, dst_str, sizeof(dst_str));
+		fprintf(stderr, "[lwIP NAT] TCP connect -> %s:%u (fd=%d)\n", dst_str, dst_port, fd);
+	}
 
 	return proxy;
 }
@@ -266,6 +337,7 @@ struct UdpProxy {
 	uint16_t mac_src_port;
 	ip_addr_t orig_dst_ip;
 	uint16_t orig_dst_port;
+	uint8_t ttl;                // IP TTL from last packet (for traceroute)
 	uint32_t last_activity;     // sys_now() timestamp
 	UdpProxy *next;
 };
@@ -308,6 +380,11 @@ static void udp_proxy_host_to_mac(UdpProxy *proxy)
 	ssize_t n = recvfrom(proxy->host_fd, buf, sizeof(buf), 0,
 	                     (struct sockaddr *)&from, &fromlen);
 	if (n <= 0) return;
+	if (g_debug_network) {
+		bool is_dns = (proxy->orig_dst_port == 53);
+		fprintf(stderr, "[lwIP NAT] UDP %sreply: %zd bytes -> Mac port %u\n",
+			is_dns ? "DNS " : "", n, proxy->mac_src_port);
+	}
 
 	// Create pbuf and send back through lwIP to Mac
 	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, n, PBUF_RAM);
@@ -315,8 +392,178 @@ static void udp_proxy_host_to_mac(UdpProxy *proxy)
 	memcpy(p->payload, buf, n);
 
 	// Reply comes from the original destination IP/port
-	udp_sendto(s_udp_catchall, p, &proxy->mac_src_ip, proxy->mac_src_port);
+	// Create a temporary PCB bound to the correct source port so the Mac
+	// sees the reply from the right address
+	struct udp_pcb *reply_pcb = udp_new();
+	if (reply_pcb) {
+		udp_bind(reply_pcb, &proxy->orig_dst_ip, proxy->orig_dst_port);
+		udp_sendto(reply_pcb, p, &proxy->mac_src_ip, proxy->mac_src_port);
+		udp_remove(reply_pcb);
+	}
 	pbuf_free(p);
+}
+
+// Check for ICMP errors (Time Exceeded, Unreachable) on UDP proxy sockets
+// Used for traceroute: intermediate routers send ICMP errors when TTL expires
+static void check_udp_icmp_errors(UdpProxy *proxy)
+{
+	char cbuf[512];
+	struct iovec iov;
+	uint8_t data[1];
+	iov.iov_base = data;
+	iov.iov_len = sizeof(data);
+
+	struct msghdr msg;
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	msg.msg_control = cbuf;
+	msg.msg_controllen = sizeof(cbuf);
+
+	ssize_t n = recvmsg(proxy->host_fd, &msg, MSG_ERRQUEUE | MSG_DONTWAIT);
+	if (n < 0) return;
+
+	// Parse control messages for the ICMP error
+	for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+		if (cmsg->cmsg_level != SOL_IP || cmsg->cmsg_type != IP_RECVERR)
+			continue;
+
+		struct sock_extended_err *ee = (struct sock_extended_err *)CMSG_DATA(cmsg);
+		if (ee->ee_origin != SO_EE_ORIGIN_ICMP)
+			continue;
+
+		// ee_type=11 (Time Exceeded), ee_type=3 (Dest Unreachable)
+		struct sockaddr_in *from = (struct sockaddr_in *)SO_EE_OFFENDER(ee);
+
+		if (g_debug_network) {
+			char from_str[INET_ADDRSTRLEN];
+			inet_ntop(AF_INET, &from->sin_addr, from_str, sizeof(from_str));
+			fprintf(stderr, "[lwIP NAT] ICMP error from %s: type=%u code=%u\n",
+				from_str, ee->ee_type, ee->ee_code);
+		}
+
+		if (ee->ee_type == 11) {
+			// Time Exceeded — traceroute hop response
+			// Build ICMP Time Exceeded with the offending router as source
+			// We need to fabricate the original IP+UDP header that triggered it
+
+			// Build a fake original IP header for the ICMP payload
+			uint8_t orig_ip[28];  // IP(20) + UDP first 8 bytes
+			memset(orig_ip, 0, sizeof(orig_ip));
+			orig_ip[0] = 0x45;  // IPv4, IHL=5
+			orig_ip[1] = 0;
+			// total length = 20 + 8 (we only include 8 bytes of UDP)
+			orig_ip[2] = 0; orig_ip[3] = 28;
+			orig_ip[8] = 1;  // TTL (was 1 when it expired)
+			orig_ip[9] = IP_PROTO_UDP;
+			// src = Mac IP
+			memcpy(&orig_ip[12], &proxy->mac_src_ip.addr, 4);
+			// dst = original destination
+			memcpy(&orig_ip[16], &proxy->orig_dst_ip.addr, 4);
+			// UDP: src port, dst port
+			orig_ip[20] = (proxy->mac_src_port >> 8) & 0xFF;
+			orig_ip[21] = proxy->mac_src_port & 0xFF;
+			orig_ip[22] = (proxy->orig_dst_port >> 8) & 0xFF;
+			orig_ip[23] = proxy->orig_dst_port & 0xFF;
+
+			// Build ICMP Time Exceeded: type(1) + code(1) + cksum(2) + unused(4) + data(28)
+			uint16_t icmp_len = 8 + 28;
+			uint8_t icmp_msg[36];
+			memset(icmp_msg, 0, sizeof(icmp_msg));
+			icmp_msg[0] = 11;  // Time Exceeded
+			icmp_msg[1] = 0;   // TTL expired
+			memcpy(&icmp_msg[8], orig_ip, 28);
+
+			// Checksum
+			uint32_t cksum = 0;
+			for (uint16_t i = 0; i < icmp_len; i += 2) {
+				uint16_t word = (icmp_msg[i] << 8);
+				if (i + 1 < icmp_len) word |= icmp_msg[i + 1];
+				cksum += word;
+			}
+			while (cksum >> 16)
+				cksum = (cksum & 0xFFFF) + (cksum >> 16);
+			uint16_t icmp_cksum = ~(uint16_t)cksum;
+			icmp_msg[2] = (icmp_cksum >> 8) & 0xFF;
+			icmp_msg[3] = icmp_cksum & 0xFF;
+
+			// Send from the intermediate router's IP to the Mac
+			struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, icmp_len, PBUF_RAM);
+			if (p) {
+				memcpy(p->payload, icmp_msg, icmp_len);
+				ip_addr_t router_ip;
+				router_ip.addr = from->sin_addr.s_addr;
+				struct raw_pcb *tmp = raw_new(IP_PROTO_ICMP);
+				if (tmp) {
+					raw_bind(tmp, &router_ip);
+					raw_sendto(tmp, p, &proxy->mac_src_ip);
+					raw_remove(tmp);
+				}
+				pbuf_free(p);
+			}
+
+			if (g_debug_network) {
+				char from_str[INET_ADDRSTRLEN];
+				inet_ntop(AF_INET, &from->sin_addr, from_str, sizeof(from_str));
+				fprintf(stderr, "[lwIP NAT] Traceroute hop: %s (TTL exceeded) -> Mac\n", from_str);
+			}
+		} else if (ee->ee_type == 3) {
+			// Destination Unreachable — forward to Mac
+			uint8_t icmp_msg[36];
+			memset(icmp_msg, 0, sizeof(icmp_msg));
+			icmp_msg[0] = 3;           // Dest Unreachable
+			icmp_msg[1] = ee->ee_code; // Port unreachable, etc.
+
+			// Include original IP+UDP header
+			uint8_t orig_ip[28];
+			memset(orig_ip, 0, sizeof(orig_ip));
+			orig_ip[0] = 0x45;
+			orig_ip[2] = 0; orig_ip[3] = 28;
+			orig_ip[8] = proxy->ttl;
+			orig_ip[9] = IP_PROTO_UDP;
+			memcpy(&orig_ip[12], &proxy->mac_src_ip.addr, 4);
+			memcpy(&orig_ip[16], &proxy->orig_dst_ip.addr, 4);
+			orig_ip[20] = (proxy->mac_src_port >> 8) & 0xFF;
+			orig_ip[21] = proxy->mac_src_port & 0xFF;
+			orig_ip[22] = (proxy->orig_dst_port >> 8) & 0xFF;
+			orig_ip[23] = proxy->orig_dst_port & 0xFF;
+			memcpy(&icmp_msg[8], orig_ip, 28);
+
+			uint16_t icmp_len = 36;
+			uint32_t cksum = 0;
+			for (uint16_t i = 0; i < icmp_len; i += 2) {
+				uint16_t word = (icmp_msg[i] << 8);
+				if (i + 1 < icmp_len) word |= icmp_msg[i + 1];
+				cksum += word;
+			}
+			while (cksum >> 16)
+				cksum = (cksum & 0xFFFF) + (cksum >> 16);
+			uint16_t icmp_cksum = ~(uint16_t)cksum;
+			icmp_msg[2] = (icmp_cksum >> 8) & 0xFF;
+			icmp_msg[3] = icmp_cksum & 0xFF;
+
+			struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, icmp_len, PBUF_RAM);
+			if (p) {
+				memcpy(p->payload, icmp_msg, icmp_len);
+				ip_addr_t router_ip;
+				router_ip.addr = from->sin_addr.s_addr;
+				struct raw_pcb *tmp = raw_new(IP_PROTO_ICMP);
+				if (tmp) {
+					raw_bind(tmp, &router_ip);
+					raw_sendto(tmp, p, &proxy->mac_src_ip);
+					raw_remove(tmp);
+				}
+				pbuf_free(p);
+			}
+
+			if (g_debug_network) {
+				char from_str[INET_ADDRSTRLEN];
+				inet_ntop(AF_INET, &from->sin_addr, from_str, sizeof(from_str));
+				fprintf(stderr, "[lwIP NAT] ICMP Unreachable from %s code=%u -> Mac\n",
+					from_str, ee->ee_code);
+			}
+		}
+	}
 }
 
 // ---- ICMP Proxy ----
@@ -338,17 +585,44 @@ static void icmp_proxy_host_to_mac(IcmpProxy *proxy)
 	ssize_t n = recv(proxy->host_fd, buf, sizeof(buf), 0);
 	if (n < 8) return;  // Need at least ICMP header
 
-	// Linux SOCK_DGRAM/IPPROTO_ICMP returns just the ICMP payload (no IP header)
-	// Build an IP + ICMP packet and inject into lwIP as a response to Mac
+	// Linux SOCK_DGRAM/IPPROTO_ICMP returns the ICMP payload with the kernel's
+	// own id substituted. Restore the original ICMP id so the Mac matches it.
+	buf[4] = (proxy->id >> 8) & 0xFF;
+	buf[5] = proxy->id & 0xFF;
+
+	// Recompute ICMP checksum (covers entire ICMP message)
+	buf[2] = 0;
+	buf[3] = 0;
+	uint32_t cksum = 0;
+	for (ssize_t i = 0; i < n; i += 2) {
+		uint16_t word = (buf[i] << 8);
+		if (i + 1 < n) word |= buf[i + 1];
+		cksum += word;
+	}
+	while (cksum >> 16)
+		cksum = (cksum & 0xFFFF) + (cksum >> 16);
+	uint16_t icmp_cksum = ~(uint16_t)cksum;
+	buf[2] = (icmp_cksum >> 8) & 0xFF;
+	buf[3] = icmp_cksum & 0xFF;
+
+	if (g_debug_network) {
+		char dst_str[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &proxy->orig_dst_ip.addr, dst_str, sizeof(dst_str));
+		uint16_t seq = (buf[6] << 8) | buf[7];
+		fprintf(stderr, "[lwIP NAT] ICMP echo reply <- %s id=%u seq=%u (%zd bytes)\n",
+			dst_str, proxy->id, seq, n);
+	}
+
+	// Build pbuf and send via raw IP back to Mac
+	// Source must be the original ping destination (e.g. 8.8.8.8)
 	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, n, PBUF_RAM);
 	if (!p) return;
 	memcpy(p->payload, buf, n);
 
-	// Send ICMP reply back to Mac via raw IP
-	// Use the gateway's raw output path
 	struct raw_pcb *tmp = raw_new(IP_PROTO_ICMP);
 	if (tmp) {
-		raw_sendto(tmp, p, &proxy->mac_src_ip);
+		raw_bind(tmp, &proxy->orig_dst_ip);  // Source = original target
+		raw_sendto(tmp, p, &proxy->mac_src_ip);  // Dest = Mac
 		raw_remove(tmp);
 	}
 	pbuf_free(p);
@@ -363,6 +637,7 @@ struct NatEntry {
 	ip_addr_t orig_dst_ip;
 	uint16_t orig_dst_port;
 	ip_addr_t orig_src_ip;
+	uint8_t ttl;            // Original IP TTL (for traceroute)
 	NatEntry *next;
 };
 
@@ -379,7 +654,7 @@ static NatEntry *nat_find(uint8_t proto, uint16_t src_port)
 
 static NatEntry *nat_add(uint8_t proto, uint16_t src_port,
                          const ip_addr_t *dst_ip, uint16_t dst_port,
-                         const ip_addr_t *src_ip)
+                         const ip_addr_t *src_ip, uint8_t ip_ttl = 64)
 {
 	NatEntry *e = new NatEntry();
 	e->proto = proto;
@@ -387,6 +662,7 @@ static NatEntry *nat_add(uint8_t proto, uint16_t src_port,
 	e->orig_dst_ip = *dst_ip;
 	e->orig_dst_port = dst_port;
 	e->orig_src_ip = *src_ip;
+	e->ttl = ip_ttl;
 	e->next = s_nat_table;
 	s_nat_table = e;
 	return e;
@@ -453,7 +729,8 @@ static void udp_nat_recv(void *arg, struct udp_pcb * /*pcb*/, struct pbuf *p,
 		dst_ip = entry->orig_dst_ip;
 		dst_port = entry->orig_dst_port;
 	} else {
-		// No NAT entry — this shouldn't happen, drop it
+		if (g_debug_network)
+			fprintf(stderr, "[lwIP NAT] UDP dropped: no NAT entry for port %u\n", port);
 		pbuf_free(p);
 		return;
 	}
@@ -472,6 +749,9 @@ static void udp_nat_recv(void *arg, struct udp_pcb * /*pcb*/, struct pbuf *p,
 	}
 	sa.sin_port = htons(dst_port);
 
+	// Look up TTL from NAT entry (for traceroute)
+	uint8_t ip_ttl = entry->ttl;
+
 	// Find or create proxy
 	UdpProxy *proxy = udp_proxy_find(port, &dst_ip, dst_port);
 	if (!proxy) {
@@ -482,23 +762,44 @@ static void udp_nat_recv(void *arg, struct udp_pcb * /*pcb*/, struct pbuf *p,
 		}
 		set_nonblocking(fd);
 
+		// Enable ICMP error reporting (for traceroute TTL exceeded)
+		int val = 1;
+		setsockopt(fd, SOL_IP, IP_RECVERR, &val, sizeof(val));
+
 		proxy = new UdpProxy();
 		proxy->host_fd = fd;
 		proxy->mac_src_ip = *addr;
 		proxy->mac_src_port = port;
 		proxy->orig_dst_ip = dst_ip;
 		proxy->orig_dst_port = dst_port;
+		proxy->ttl = ip_ttl;
 		proxy->last_activity = 0;
 		proxy->next = s_udp_proxies;
 		s_udp_proxies = proxy;
 	}
+
+	// Set TTL on outgoing packet (decremented by 1 for the gateway hop)
+	int send_ttl = (ip_ttl > 1) ? (ip_ttl - 1) : 1;
+	setsockopt(proxy->host_fd, IPPROTO_IP, IP_TTL, &send_ttl, sizeof(send_ttl));
+	proxy->ttl = ip_ttl;
 
 	// Copy pbuf to linear buffer and send to host
 	uint8_t buf[2048];
 	uint16_t len = pbuf_copy_partial(p, buf, p->tot_len, 0);
 	pbuf_free(p);
 
-	sendto(proxy->host_fd, buf, len, 0, (struct sockaddr *)&sa, sizeof(sa));
+	ssize_t sent = sendto(proxy->host_fd, buf, len, 0, (struct sockaddr *)&sa, sizeof(sa));
+	if (g_debug_network) {
+		char sa_str[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &sa.sin_addr, sa_str, sizeof(sa_str));
+		bool is_dns = (ntohs(sa.sin_port) == 53);
+		fprintf(stderr, "[lwIP NAT] UDP %s-> %s:%u (%u bytes)%s\n",
+			is_dns ? "DNS " : "",
+			sa_str, ntohs(sa.sin_port), len,
+			sent < 0 ? " FAILED" : "");
+		if (sent < 0)
+			fprintf(stderr, "[lwIP NAT] sendto error: %s\n", strerror(errno));
+	}
 }
 
 // ---- DHCP server ----
@@ -633,9 +934,9 @@ static int handle_dhcp(struct pbuf *p, uint16_t ip_hdr_len)
 	reply[roff++] = 3; reply[roff++] = 4;
 	reply[roff++] = 10; reply[roff++] = 0; reply[roff++] = 2; reply[roff++] = 1;
 
-	// Option 6: DNS server
+	// Option 6: DNS server (use gateway IP so ARP resolves)
 	reply[roff++] = 6; reply[roff++] = 4;
-	reply[roff++] = 10; reply[roff++] = 0; reply[roff++] = 2; reply[roff++] = 3;
+	reply[roff++] = 10; reply[roff++] = 0; reply[roff++] = 2; reply[roff++] = 1;
 
 	// End option
 	reply[roff++] = 0xFF;
@@ -700,9 +1001,85 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 
 	uint8_t proto = IPH_PROTO(iphdr);
 
+	if (g_debug_network) {
+		char src_str[INET_ADDRSTRLEN], dst_str[INET_ADDRSTRLEN];
+		const char *proto_name = (proto == IP_PROTO_TCP) ? "TCP" :
+		                         (proto == IP_PROTO_UDP) ? "UDP" :
+		                         (proto == IP_PROTO_ICMP) ? "ICMP" : "???";
+		inet_ntop(AF_INET, &iphdr->src.addr, src_str, sizeof(src_str));
+		inet_ntop(AF_INET, &iphdr->dest.addr, dst_str, sizeof(dst_str));
+		fprintf(stderr, "[lwIP NAT] %s %s -> %s (%u bytes)\n",
+			proto_name, src_str, dst_str, p->tot_len);
+	}
+
 	// If destined for the gateway, let lwIP handle it normally
-	if (ip_addr_cmp(&dst_ip, &s_gw_ip))
+	// EXCEPT: intercept DNS (UDP port 53) and proxy to host DNS
+	if (ip_addr_cmp(&dst_ip, &s_gw_ip)) {
+		if (proto == IP_PROTO_UDP) {
+			uint16_t ip_hdr_len = IPH_HL(iphdr) * 4;
+			if (p->tot_len >= ip_hdr_len + 8) {
+				uint8_t udp_hdr_buf[8];
+				pbuf_copy_partial(p, udp_hdr_buf, 8, ip_hdr_len);
+				uint16_t src_port = (udp_hdr_buf[0] << 8) | udp_hdr_buf[1];
+				uint16_t dst_port = (udp_hdr_buf[2] << 8) | udp_hdr_buf[3];
+				if (dst_port == 53) {
+					// DNS query to gateway — proxy directly to host DNS
+					uint8_t buf[2048];
+					uint16_t payload_len = p->tot_len - ip_hdr_len - 8;
+					pbuf_copy_partial(p, buf, payload_len, ip_hdr_len + 8);
+
+					if (g_debug_network)
+						fprintf(stderr, "[lwIP NAT] DNS query intercepted (%u bytes, src_port=%u)\n",
+							payload_len, src_port);
+
+					// Forward to host DNS
+					struct sockaddr_in sa;
+					memset(&sa, 0, sizeof(sa));
+					sa.sin_family = AF_INET;
+					sa.sin_addr.s_addr = s_host_dns_ip;
+					sa.sin_port = htons(53);
+
+					// Find or create UDP proxy for this DNS exchange
+					ip_addr_t src_ip;
+					src_ip.addr = iphdr->src.addr;
+					UdpProxy *proxy = udp_proxy_find(src_port, &dst_ip, dst_port);
+					if (!proxy) {
+						int fd = socket(AF_INET, SOCK_DGRAM, 0);
+						if (fd < 0) {
+							pbuf_free(p);
+							return 1;
+						}
+						set_nonblocking(fd);
+						proxy = new UdpProxy();
+						proxy->host_fd = fd;
+						proxy->mac_src_ip = src_ip;
+						proxy->mac_src_port = src_port;
+						proxy->orig_dst_ip = dst_ip;
+						proxy->orig_dst_port = dst_port;
+						proxy->last_activity = sys_now();
+						proxy->next = s_udp_proxies;
+						s_udp_proxies = proxy;
+					}
+					proxy->last_activity = sys_now();
+
+					ssize_t sent = sendto(proxy->host_fd, buf, payload_len, 0,
+						(struct sockaddr *)&sa, sizeof(sa));
+					if (g_debug_network) {
+						char dns_str[INET_ADDRSTRLEN];
+						inet_ntop(AF_INET, &s_host_dns_ip, dns_str, sizeof(dns_str));
+						fprintf(stderr, "[lwIP NAT] DNS forwarded to %s (%zd bytes)%s\n",
+							dns_str, sent, sent < 0 ? " FAILED" : "");
+						if (sent < 0)
+							fprintf(stderr, "[lwIP NAT] DNS sendto error: %s\n", strerror(errno));
+					}
+
+					pbuf_free(p);
+					return 1;  // Consumed
+				}
+			}
+		}
 		return 0;
+	}
 
 	// If broadcast, check for DHCP first, then let lwIP handle the rest
 	if (dst_ip.addr == 0xFFFFFFFF || (dst_ip.addr & 0xFF000000) == 0xFF000000) {
@@ -714,6 +1091,16 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 		return 0;
 	}
 	uint16_t ip_hdr_len = IPH_HL(iphdr) * 4;
+
+	// TTL check for traceroute: if TTL <= 1, send Time Exceeded
+	uint8_t ttl = IPH_TTL(iphdr);
+	if (ttl <= 1) {
+		ip_addr_t src_ip;
+		src_ip.addr = iphdr->src.addr;
+		send_icmp_time_exceeded(p, &src_ip);
+		pbuf_free(p);
+		return 1;
+	}
 
 	if (proto == IP_PROTO_ICMP) {
 		// Handle ICMP directly: proxy ping through host socket
@@ -771,8 +1158,15 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 		sa.sin_family = AF_INET;
 		sa.sin_addr.s_addr = dst_ip.addr;
 
-		sendto(proxy->host_fd, icmp_buf, icmp_len, 0,
+		ssize_t sent = sendto(proxy->host_fd, icmp_buf, icmp_len, 0,
 		       (struct sockaddr *)&sa, sizeof(sa));
+		if (g_debug_network) {
+			char dst_str[INET_ADDRSTRLEN];
+			inet_ntop(AF_INET, &dst_ip.addr, dst_str, sizeof(dst_str));
+			fprintf(stderr, "[lwIP NAT] ICMP echo request -> %s id=%u seq=%u (%u bytes)%s\n",
+				dst_str, icmp_id, (icmp_buf[6] << 8) | icmp_buf[7], icmp_len,
+				sent < 0 ? " FAILED" : "");
+		}
 
 		pbuf_free(p);
 		return 1;  // Consumed
@@ -804,23 +1198,42 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 		IPH_CHKSUM_SET(iphdr, inet_chksum(iphdr, ip_hdr_len));
 
 		// TCP checksum includes pseudo-header with dest IP — recalculate
-		// We need to recalculate the full TCP checksum
-		struct pbuf *tcp_p = pbuf_skip(p, ip_hdr_len, NULL);
-		if (tcp_p) {
+		{
 			// Zero out existing TCP checksum
 			uint8_t zero[2] = {0, 0};
 			pbuf_take_at(p, zero, 2, ip_hdr_len + 16);  // TCP checksum at offset 16
 
+			// Compute checksum over TCP data using a pbuf that starts at TCP header
 			uint16_t tcp_len = p->tot_len - ip_hdr_len;
+			uint8_t tcp_data[65535];
+			pbuf_copy_partial(p, tcp_data, tcp_len, ip_hdr_len);
+
+			// Pseudo-header checksum
 			ip_addr_t src_copy, dest_copy;
 			src_copy.addr = iphdr->src.addr;
 			dest_copy.addr = iphdr->dest.addr;
-			uint16_t chk = ip_chksum_pseudo(p, IP_PROTO_TCP, tcp_len,
-			                                 &src_copy,
-			                                 &dest_copy);
-			// Write checksum back — but ip_chksum_pseudo already accounts for
-			// the pseudo-header, and we need the checksum at offset 16 in the TCP header
-			pbuf_take_at(p, &chk, 2, ip_hdr_len + 16);
+			uint32_t acc = 0;
+			acc += (src_copy.addr >> 16) & 0xFFFF;
+			acc += src_copy.addr & 0xFFFF;
+			acc += (dest_copy.addr >> 16) & 0xFFFF;
+			acc += dest_copy.addr & 0xFFFF;
+			acc += htons(IP_PROTO_TCP);
+			acc += htons(tcp_len);
+
+			// Add TCP data
+			for (uint16_t i = 0; i < tcp_len; i += 2) {
+				uint16_t word = (tcp_data[i] << 8);
+				if (i + 1 < tcp_len) word |= tcp_data[i + 1];
+				acc += word;
+			}
+			while (acc >> 16)
+				acc = (acc & 0xFFFF) + (acc >> 16);
+			uint16_t chk = ~(uint16_t)acc;
+			if (chk == 0) chk = 0xFFFF;
+
+			// Write back in network byte order
+			uint8_t chk_bytes[2] = {(uint8_t)(chk >> 8), (uint8_t)(chk & 0xFF)};
+			pbuf_take_at(p, chk_bytes, 2, ip_hdr_len + 16);
 		}
 
 		return 0;  // Let lwIP handle the rewritten packet
@@ -838,10 +1251,12 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 		ip_addr_t src_ip;
 		src_ip.addr = iphdr->src.addr;
 
-		// Save NAT mapping
+		// Save NAT mapping (include TTL for traceroute)
 		NatEntry *entry = nat_find(IP_PROTO_UDP, src_port);
 		if (!entry) {
-			nat_add(IP_PROTO_UDP, src_port, &dst_ip, dst_port, &src_ip);
+			nat_add(IP_PROTO_UDP, src_port, &dst_ip, dst_port, &src_ip, ttl);
+		} else {
+			entry->ttl = ttl;  // Update TTL for each packet (traceroute increments)
 		}
 
 		// Rewrite destination IP to gateway
@@ -970,7 +1385,7 @@ void lwip_nat_poll(void)
 
 	for (UdpProxy *p = s_udp_proxies; p; p = p->next) {
 		if (p->host_fd < 0) continue;
-		struct pollfd pfd = {p->host_fd, POLLIN, 0};
+		struct pollfd pfd = {p->host_fd, POLLIN | POLLERR, 0};
 		fds.push_back(pfd);
 		owners.push_back(p);
 		types.push_back(1);
@@ -1001,11 +1416,17 @@ void lwip_nat_poll(void)
 				getsockopt(proxy->host_fd, SOL_SOCKET, SO_ERROR, &err, &len);
 				if (err == 0) {
 					proxy->host_connected = true;
-					// Flush pending data
+					// Flush pending data (handle partial sends)
 					if (!proxy->pending_to_host.empty()) {
-						send(proxy->host_fd, proxy->pending_to_host.data(),
+						ssize_t sent = send(proxy->host_fd, proxy->pending_to_host.data(),
 						     proxy->pending_to_host.size(), MSG_NOSIGNAL);
-						proxy->pending_to_host.clear();
+						if (sent > 0 && (size_t)sent < proxy->pending_to_host.size()) {
+							proxy->pending_to_host.erase(
+								proxy->pending_to_host.begin(),
+								proxy->pending_to_host.begin() + sent);
+						} else {
+							proxy->pending_to_host.clear();
+						}
 					}
 				} else {
 					proxy->closing = true;
@@ -1021,6 +1442,9 @@ void lwip_nat_poll(void)
 			UdpProxy *proxy = (UdpProxy *)owners[i];
 			if (fds[i].revents & POLLIN) {
 				udp_proxy_host_to_mac(proxy);
+			}
+			if (fds[i].revents & POLLERR) {
+				check_udp_icmp_errors(proxy);
 			}
 		} else if (types[i] == 2) {
 			IcmpProxy *proxy = (IcmpProxy *)owners[i];

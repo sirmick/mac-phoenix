@@ -44,6 +44,8 @@
 #include <vector>
 #include <cstdlib>
 
+#include "lwip_nat.h"  // g_debug_network
+
 #define DEBUG 0
 #include "debug.h"
 
@@ -150,6 +152,13 @@ static void lwip_net_thread()
 			}
 		}
 		for (auto& frame : tx_batch) {
+			if (g_debug_network && frame.data.size() >= 14) {
+				uint16_t ethertype = (frame.data[12] << 8) | frame.data[13];
+				const char *type_name = (ethertype == 0x0800) ? "IPv4" :
+				                        (ethertype == 0x0806) ? "ARP" : "???";
+				fprintf(stderr, "[lwIP] Mac TX: %s (%zu bytes)\n",
+					type_name, frame.data.size());
+			}
 			struct pbuf *p = pbuf_alloc(PBUF_RAW, frame.data.size(), PBUF_RAM);
 			if (p) {
 				memcpy(p->payload, frame.data.data(), frame.data.size());
@@ -212,14 +221,15 @@ static bool ether_lwip_init(void)
 	s_running = true;
 	s_net_thread = std::thread(lwip_net_thread);
 
-	fprintf(stderr, "[lwIP] lwIP networking ready\n");
+	fprintf(stderr, "[lwIP] lwIP networking ready (debug=%s)\n",
+		g_debug_network ? "on" : "off");
 	fprintf(stderr, "[lwIP]   Gateway:  10.0.2.1  (MAC %02x:%02x:%02x:%02x:%02x:%02x)\n",
 		s_gw_mac_addr[0], s_gw_mac_addr[1], s_gw_mac_addr[2],
 		s_gw_mac_addr[3], s_gw_mac_addr[4], s_gw_mac_addr[5]);
 	fprintf(stderr, "[lwIP]   Mac guest: 10.0.2.15 (MAC %02x:%02x:%02x:%02x:%02x:%02x)\n",
 		s_mac_addr[0], s_mac_addr[1], s_mac_addr[2],
 		s_mac_addr[3], s_mac_addr[4], s_mac_addr[5]);
-	fprintf(stderr, "[lwIP]   DNS:       10.0.2.3 (proxied to host resolver)\n");
+	fprintf(stderr, "[lwIP]   DNS:       10.0.2.1 (gateway, proxied to host resolver)\n");
 
 	return true;
 }

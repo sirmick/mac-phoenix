@@ -291,6 +291,12 @@ void CPUProcess::child_main(SharedState* shm)
         _exit(1);
     }
 
+    // Apply debug flags from config
+    extern bool g_debug_mode_switch;
+    g_debug_mode_switch = cfg.debug_mode_switch;
+    extern bool g_debug_network;
+    g_debug_network = cfg.debug_network;
+
     // Set boot progress to write to shared memory
     boot_progress_set_shared_state(shm);
 

@@ -13,6 +13,9 @@
 struct pbuf;
 struct netif;
 
+// Enable verbose network debug logging (set from --debug-network)
+extern bool g_debug_network;
+
 // Initialize NAT proxy (call after lwip_init)
 void lwip_nat_init(struct netif *netif);
 
