@@ -9,12 +9,14 @@ core_sources = [
   'boot_progress.cpp',
   'command_bridge.cpp',
   'emul_op.cpp',
+  'emul_op_ppc.cpp',  # PPC SHEEP opcode dispatch
   'emulator_init.cpp',  # Deferred initialization support
   'ether.cpp',
   'extfs.cpp',
   'macos_util.cpp',
   'main.cpp',
   'rom_patches.cpp',
+  'rom_patches_ppc.cpp',
   'rsrc_patches.cpp',
   'scsi.cpp',
   'serial.cpp',

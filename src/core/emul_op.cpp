@@ -264,9 +264,58 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_INSTALL_DRIVERS: {// Patch to install our own drivers during startup
-			// Install drivers
-			D(bug("InstallDrivers\n"));
+			// Debug: dump unit table BEFORE install
+			{
+				uint32_t utab = ReadMacInt32(0x011C);
+				uint32_t ucount = ReadMacInt16(0x01D2);
+				fprintf(stderr, "[EmulOp] INSTALL_DRIVERS: UTable=%08X cnt=%d (before)\n", utab, ucount);
+			}
 			InstallDrivers(r->a[0]);
+			// Debug: check exception vectors and drive bitmap
+			{
+				uint32_t aline_vec = ReadMacInt32(0x28);
+				uint16_t drive_bitmap = ReadMacInt16(0x0B0E);
+				fprintf(stderr, "[EmulOp] A-line vec ($28)=%08X, drive bitmap ($0B0E)=%04X\n",
+					aline_vec, drive_bitmap);
+			}
+			// Debug: dump unit table and drive queue AFTER install
+			{
+				uint32_t utab = ReadMacInt32(0x011C);
+				uint32_t ucount = ReadMacInt16(0x01D2);
+				fprintf(stderr, "[EmulOp] INSTALL_DRIVERS: UTable=%08X cnt=%d (after)\n", utab, ucount);
+				// Dump drive queue
+				uint32_t dqHead = ReadMacInt32(0x030A);
+				uint32_t dqTail = ReadMacInt32(0x030E);
+				fprintf(stderr, "[EmulOp] DriveQueue: head=%08X tail=%08X\n", dqHead, dqTail);
+				uint32_t dq = dqHead;
+				int dqcount = 0;
+				while (dq && dqcount < 20) {
+					uint32_t qLink = ReadMacInt32(dq);
+					uint16_t qType = ReadMacInt16(dq + 4);
+					uint16_t dQDrive = ReadMacInt16(dq + 6);
+					int16_t dQRefNum = (int16_t)ReadMacInt16(dq + 8);
+					uint16_t dQFSID = ReadMacInt16(dq + 10);
+					fprintf(stderr, "  DQ[%d]: addr=%08X link=%08X type=%d drive=%d refnum=%d fsid=%d\n",
+						dqcount, dq, qLink, qType, dQDrive, dQRefNum, dQFSID);
+					dq = qLink;
+					dqcount++;
+				}
+				for (int i = 0; i < (int)ucount && i < 64; i++) {
+					uint32_t entry = ReadMacInt32(utab + i * 4);
+					if (entry) {
+						uint32_t dce = ReadMacInt32(entry);
+						uint32_t dctlDriver = dce ? ReadMacInt32(dce) : 0;
+						uint16_t flags = dce ? ReadMacInt16(dce + 4) : 0;
+						uint16_t delay = dce ? ReadMacInt16(dce + 6) : 0;
+						int16_t dctlRefNum = dce ? (int16_t)ReadMacInt16(dce + 24) : 0;
+						// Also check the driver header for version
+						uint16_t drvFlags = dctlDriver ? ReadMacInt16(dctlDriver) : 0;
+						uint16_t drvDelay = dctlDriver ? ReadMacInt16(dctlDriver + 2) : 0;
+						fprintf(stderr, "  Unit %d: dce=%08X drv=%08X flags=%04X dce[6]=%04X refnum=%d drvH=%04X,%04X\n",
+							i, dce, dctlDriver, flags, delay, dctlRefNum, drvFlags, drvDelay);
+					}
+				}
+			}
 
 			// Install PutScrap() patch
 			M68kRegisters r;
@@ -292,6 +341,8 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 				WriteMacInt8(asc_regs + 0x800, 0x0f);	// Set ASC version number
 				WriteMacInt32(0xcc0, asc_regs);			// Set ASCBase
 			}
+
+			// (IIci RAM stubs removed — $B69A JSR patched in ROM instead)
 			break;
 		}
 
@@ -301,6 +352,7 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_SONY_OPEN:		// Floppy driver functions
+			fprintf(stderr, "[EmulOp] SONY_OPEN\n");
 			r->d[0] = SonyOpen(r->a[0], r->a[1]);
 			break;
 
@@ -317,10 +369,12 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_DISK_OPEN:		// Disk driver functions
+			fprintf(stderr, "[EmulOp] DISK_OPEN\n");
 			r->d[0] = DiskOpen(r->a[0], r->a[1]);
 			break;
 
 		case M68K_EMUL_OP_DISK_PRIME:
+			fprintf(stderr, "[EmulOp] DISK_PRIME\n");
 			r->d[0] = DiskPrime(r->a[0], r->a[1]);
 			break;
 
@@ -476,7 +530,14 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 		}
 
-		case M68K_EMUL_OP_IRQ:			// Level 1 interrupt
+		case M68K_EMUL_OP_IRQ: {		// Level 1 interrupt
+			static int irq_trace_count = 0;
+			if (irq_trace_count < 10) {
+				uint32 return_pc = r->a[7] ? ReadMacInt32(r->a[7] + 2) : 0;  // return address on stack
+				fprintf(stderr, "  [IRQ] #%d return_pc=0x%08x sr_on_stack=0x%04x a7=0x%08x\n",
+					irq_trace_count, return_pc, r->a[7] ? ReadMacInt16(r->a[7]) : 0, r->a[7]);
+				irq_trace_count++;
+			}
 			r->d[0] = 0;
 
 			// Check if Unicorn backend has a pending interrupt that was blocked by SR
@@ -563,6 +624,7 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 				command_bridge_drain_from_irq(r);
 			}
 			break;
+		}
 
 		case M68K_EMUL_OP_PUT_SCRAP: {		// PutScrap() patch
 			void *scrap = Mac2HostAddr(ReadMacInt32(r->a[7] + 4));

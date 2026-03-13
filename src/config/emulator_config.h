@@ -20,13 +20,14 @@ namespace config {
 
 enum class Architecture {
     M68K,
-    PPC  // Not yet implemented
+    PPC
 };
 
 enum class CPUBackend {
-    UAE,      // Original interpreter
-    Unicorn,  // QEMU-based JIT
-    DualCPU   // Validation mode (UAE + Unicorn)
+    UAE,      // M68K only: Original interpreter
+    Unicorn,  // M68K: Unicorn m68k; PPC: Unicorn PPC (QEMU JIT)
+    KPX,      // PPC only: Kheperix interpreter/JIT
+    DualCPU   // M68K: UAE+Unicorn; PPC: KPX+Unicorn (validation)
 };
 
 enum class NetworkMode {
@@ -36,9 +37,10 @@ enum class NetworkMode {
 };
 
 struct M68KConfig {
-    int cpu_type = 4;        // 68000-68040
+    int cpu_type = 4;        // 0=68000, 2=68020, 3=68030, 4=68040
     bool fpu = true;
-    int modelid = 14;
+    int modelid = 14;        // productKind in UniversalInfo (model_id = modelid + 6)
+    std::string model;       // Named preset: "iici", "quadra650", etc.
     bool jit = true;
     bool jitfpu = true;
     bool jitdebug = false;
@@ -165,17 +167,20 @@ struct EmulatorConfig {
         switch (cpu_backend) {
             case CPUBackend::UAE: return "uae";
             case CPUBackend::Unicorn: return "unicorn";
+            case CPUBackend::KPX: return "kpx";
             case CPUBackend::DualCPU: return "dualcpu";
         }
         return "uae";
     }
 
+    bool is_ppc() const { return architecture == Architecture::PPC; }
+
     int cpu_type_int() const {
-        return m68k.cpu_type;
+        return is_ppc() ? ppc.cpu_type : m68k.cpu_type;
     }
 
     bool fpu() const {
-        return m68k.fpu;
+        return is_ppc() ? ppc.fpu : m68k.fpu;
     }
 
     const char* architecture_string() const {

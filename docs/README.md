@@ -17,19 +17,89 @@ Modern Mac emulator with Unicorn M68K CPU backend and dual-CPU validation.
 
 ---
 
-## Quick Start
+## Build Environment (Ubuntu 24.04)
 
-### Build
+Three tiers of dependencies depending on what you need to do.
+
+### 1. Build and Run the Emulator
+
+Core build tools and codec/media libraries:
+
+```bash
+# Build toolchain
+sudo apt install build-essential cmake meson ninja-build pkg-config python3
+
+# Codec and media libraries (video encoding, color conversion, HTTP, crypto)
+sudo apt install libvpx-dev libopenh264-dev libopus-dev libwebp-dev libyuv-dev \
+                 libcpp-httplib-dev libssl-dev nlohmann-json3-dev
+```
+
+Then build:
+
 ```bash
 cd mac-phoenix
 meson setup build
-meson compile -C build
+ninja -C build
 ```
 
-### Configure
+Run:
+
 ```bash
-# Edit config file
-nano ~/.config/mac-phoenix/config.json
+./build/mac-phoenix ~/quadra.rom
+```
+
+### 2. Run E2E Tests (Playwright)
+
+Playwright browser tests need Node.js and a virtual framebuffer (for headless environments).
+
+**Node.js** — install via NodeSource, not the Ubuntu `nodejs` package (which is too old):
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install nodejs
+```
+
+**Xvfb** — virtual framebuffer for running browsers without a display:
+
+```bash
+sudo apt install xvfb
+```
+
+**Playwright browsers** — Chromium is the default test target:
+
+```bash
+cd mac-phoenix
+npm install
+npx playwright install --with-deps chromium
+```
+
+Run tests (emulator must be running):
+
+```bash
+xvfb-run npx playwright test
+```
+
+### 3. Disk Image Provisioning
+
+Creating and populating HFS disk images from Linux requires HFS tools and archive utilities:
+
+```bash
+# HFS filesystem tools (format, mount, copy files with resource fork support)
+sudo apt install hfsprogs hfsutils
+
+# Archive tools (extracting StuffIt, BinHex, and other classic Mac archives)
+sudo apt install unar unrar
+```
+
+See **[Provisioning.md](Provisioning.md)** for usage details.
+
+---
+
+## Quick Start
+
+### Run with default (UAE) backend
+```bash
+./build/mac-phoenix ~/quadra.rom
 ```
 
 ### Run with Unicorn backend
@@ -42,9 +112,9 @@ nano ~/.config/mac-phoenix/config.json
 ./build/mac-phoenix --backend dualcpu ~/quadra.rom
 ```
 
-### Run with custom config
+### Configure
 ```bash
-./build/mac-phoenix --config myconfig.json ~/quadra.rom
+nano ~/.config/mac-phoenix/config.json
 ```
 
 See **[Commands.md](Commands.md)** for complete build and testing guide.

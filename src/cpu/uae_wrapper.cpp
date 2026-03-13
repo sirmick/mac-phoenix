@@ -253,6 +253,24 @@ void uae_cpu_execute_one(void) {
     /* Execute one instruction */
     uae_u32 opcode = GET_OPCODE;
 
+    // Debug: detect disk driver Prime entry
+    {
+        static int prime_trace = 0;
+        uae_u32 pc = m68k_getpc();
+        // Check for _Read trap ($A002) dispatch - trace $99B0 area
+        if (prime_trace < 5 && pc >= 0x0806C4F0 && pc <= 0x0806C500) {
+            fprintf(stderr, "[UAE] Hit disk driver area: PC=%08X opcode=%04X\n",
+                pc, opcode);
+            prime_trace++;
+        }
+        // Also trace A-line dispatcher calls
+        static int aline_trace = 0;
+        if (aline_trace < 5 && opcode == 0xA002) {
+            fprintf(stderr, "[UAE] _Read trap at PC=%08X\n", pc);
+            aline_trace++;
+        }
+    }
+
     // Optional trace output (enabled via CPU_TRACE env var)
     if (cpu_trace_should_log()) {
         uae_u32 pc_before = m68k_getpc();

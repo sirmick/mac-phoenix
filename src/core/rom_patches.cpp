@@ -781,10 +781,11 @@ void InstallDrivers(uint32 pb)
 			WriteMacInt32(sony_dce + dCtlDriver, ROMBaseMac + sony_offset);
 			WriteMacInt16(sony_dce + dCtlFlags, SonyDriverFlags);
 
-			// Open .Sony driver
-			WriteMacInt32(pb + ioNamePtr, ROMBaseMac + sony_offset + 0x12);
-			r.a[0] = pb;
-			Execute68kTrap(0xa000, &r);		// Open()
+			// Open .Sony driver (call directly — trap dispatch unreliable on IIci)
+			fprintf(stderr, "[InstallDrivers] Calling SonyOpen directly\n");
+			SonyOpen(pb, sony_dce);
+			// Set dOpened bit — bypassing _Open trap
+			WriteMacInt16(sony_dce + dCtlFlags, ReadMacInt16(sony_dce + dCtlFlags) | 0x0020);
 			D(bug("InstallDrivers: installed .Sony (refnum %d)\n", SonyRefNum));
 		} else {
 			D(bug("InstallDrivers: .Sony already installed at slot %d\n", (int)(sony_slot / 4)));
@@ -792,19 +793,36 @@ void InstallDrivers(uint32 pb)
 	}
 
 	// Install disk driver
+	fprintf(stderr, "[InstallDrivers] Installing .Disk (refnum %d, slot %d)\n",
+		DiskRefNum, (int)(~DiskRefNum));
 	r.a[0] = ROMBaseMac + sony_offset + 0x100;
 	r.d[0] = (uint32)DiskRefNum;
 	Execute68kTrap(0xa43d, &r);		// DrvrInstallRsrvMem()
-	r.a[0] = ReadMacInt32(ReadMacInt32(0x11c) + ~DiskRefNum * 4);	// Get driver handle from Unit Table
+	fprintf(stderr, "[InstallDrivers] DrvrInstallRsrvMem result: D0=%08X\n", r.d[0]);
+	uint32 disk_handle = ReadMacInt32(ReadMacInt32(0x11c) + ~DiskRefNum * 4);
+	fprintf(stderr, "[InstallDrivers] .Disk handle=%08X\n", disk_handle);
+	r.a[0] = disk_handle;
 	Execute68kTrap(0xa029, &r);		// HLock()
 	uint32 dce = ReadMacInt32(r.a[0]);
+	fprintf(stderr, "[InstallDrivers] .Disk DCE=%08X\n", dce);
 	WriteMacInt32(dce + dCtlDriver, ROMBaseMac + sony_offset + 0x100);
 	WriteMacInt16(dce + dCtlFlags, DiskDriverFlags);
 
-	// Open disk driver
-	WriteMacInt32(pb + ioNamePtr, ROMBaseMac + sony_offset + 0x112);
-	r.a[0] = pb;
-	Execute68kTrap(0xa000, &r);		// Open()
+	// Open disk driver — call DiskOpen directly since trap dispatch may not work on IIci
+	{
+		uint32 disk_drv_addr = ROMBaseMac + sony_offset + 0x100;
+		uint32 disk_open_off = ReadMacInt16(disk_drv_addr + 8);
+		uint32 disk_open_addr = disk_drv_addr + disk_open_off;
+		fprintf(stderr, "[InstallDrivers] .Disk driver at %08X, Open at +%04X = %08X\n",
+			disk_drv_addr, disk_open_off, disk_open_addr);
+		fprintf(stderr, "[InstallDrivers] Calling DiskOpen directly\n");
+	}
+	r.d[0] = DiskOpen(pb, dce);
+	// Set dOpened bit — bypassing _Open trap means the Device Manager
+	// didn't set this flag, causing _Read to return notOpenErr (-28)
+	WriteMacInt16(dce + dCtlFlags, ReadMacInt16(dce + dCtlFlags) | 0x0020);
+	fprintf(stderr, "[InstallDrivers] .Disk DiskOpen result: D0=%08X flags=%04X\n",
+		r.d[0], ReadMacInt16(dce + dCtlFlags));
 
 	// Install CD-ROM driver unless nocdrom option given
 	if (!config::EmulatorConfig::instance().nocdrom) {
@@ -819,10 +837,10 @@ void InstallDrivers(uint32 pb)
 		WriteMacInt32(dce + dCtlDriver, ROMBaseMac + sony_offset + 0x200);
 		WriteMacInt16(dce + dCtlFlags, CDROMDriverFlags);
 
-		// Open CD-ROM driver
-		WriteMacInt32(pb + ioNamePtr, ROMBaseMac + sony_offset + 0x212);
-		r.a[0] = pb;
-		Execute68kTrap(0xa000, &r);		// Open()
+		// Open CD-ROM driver (call directly — trap dispatch unreliable on IIci)
+		CDROMOpen(pb, dce);
+		// Set dOpened bit
+		WriteMacInt16(dce + dCtlFlags, ReadMacInt16(dce + dCtlFlags) | 0x0020);
 	}
 }
 
@@ -1269,11 +1287,25 @@ static bool patch_rom_32(void)
 	}
 
 	// Patch ClkNoMem
-	base = find_rom_trap(0xa053);
-	wp = (uint16 *)(ROMBaseHost + base);
-	if (ntohs(*wp) == 0x4ed5) {	// ROM23/26/27/32
-		static const uint8 clk_no_mem_dat[] = {0x40, 0xc2, 0x00, 0x7c, 0x07, 0x00, 0x48, 0x42};
-		if ((base = find_rom_data(0xb0000, 0xb8000, clk_no_mem_dat, sizeof(clk_no_mem_dat))) == 0) return false;
+	// Strategy depends on ROM size:
+	// - 1MB ROMs (Quadra): trap $A053 → jmp (a5) stub, real routine at $B0000+
+	// - 512KB ROMs (IIci):  find_rom_trap unreliable, use pattern search instead
+	if (ROMSize > 0x80000) {
+		base = find_rom_trap(0xa053);
+		wp = (uint16 *)(ROMBaseHost + base);
+		if (ntohs(*wp) == 0x4ed5) {	// ROM23/26/27/32: jmp (a5) stub
+			static const uint8 clk_no_mem_dat[] = {0x40, 0xc2, 0x00, 0x7c, 0x07, 0x00, 0x48, 0x42};
+			if ((base = find_rom_data(0xb0000, 0xb8000, clk_no_mem_dat, sizeof(clk_no_mem_dat))) == 0) return false;
+		}
+	} else {
+		// ROM10/11 (IIci): ClkNoMem starts with move.l a6,a5; bclr #2,(a2)
+		static const uint8 clk_no_mem_11_dat[] = {0x2a, 0x4e, 0x08, 0x92, 0x00, 0x02, 0x72, 0x35, 0x74, 0x55};
+		base = find_rom_data(0x40000, 0x50000, clk_no_mem_11_dat, sizeof(clk_no_mem_11_dat));
+		if (!base) {
+			// ROM10 fallback: try trap table
+			base = find_rom_trap(0xa053);
+		}
+		if (!base) return false;
 	}
 	D(bug("clk_no_mem %08lx\n", base));
 	wp = (uint16 *)(ROMBaseHost + base);
@@ -1292,9 +1324,11 @@ static bool patch_rom_32(void)
 	wp = (uint16 *)(ROMBaseHost + base);
 	*wp = htons(M68K_RTS);
 
-	// Don't access 0x50f1a101
+	// Don't access 0x50f1a101 (Quadra-specific I/O register).
+	// Only present in 1MB ROMs (ROM32/Quadra). IIci ROMs have different
+	// code at this offset — the pattern check prevents incorrect patching.
 	wp = (uint16 *)(ROMBaseHost + 0x4232);
-	if (ntohs(wp[1]) == 0x50f1 && ntohs(wp[2]) == 0xa101) {	// ROM32
+	if (ntohs(wp[1]) == 0x50f1 && ntohs(wp[2]) == 0xa101) {
 		*wp++ = htons(M68K_NOP);
 		*wp++ = htons(M68K_NOP);
 		*wp++ = htons(M68K_NOP);
@@ -1485,16 +1519,29 @@ static bool patch_rom_32(void)
 		*wp = htons(M68K_NOP);
 	}
 
-	// Don't open .Sound driver but install our own drivers
-	// The JSR at ROM+0x1134 calls subroutine at ROM+0x1250 which:
-	//   1) BSR.L 0x41E6 — opens .Sony conditionally (preserves this)
-	//   2) GetNamedResource/Open ".netBOOT" — hangs in Unicorn (kill this)
-	// Surgical fix: insert RTS at ROM+0x1256 (right after the BSR.L to 0x41E6)
-	// so the .Sony open runs but .netBOOT is skipped.
-	wp = (uint16 *)(ROMBaseHost + 0x1256);
-	*wp = htons(M68K_RTS);
+	// Install our drivers in place of .Sound Open at ROM+0x1142.
+	// Works on all ROM_VERSION_32 ROMs (IIci, Quadra, etc.) because
+	// this offset is an A-trap Open() call in all known versions.
 	wp = (uint16 *)(ROMBaseHost + 0x1142);
 	*wp = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
+
+	// Quadra ROMs (1MB): ROM+0x1134 JSR's to a subroutine at 0x1250 that
+	// opens .Sony then .netBOOT. Insert RTS after .Sony to skip .netBOOT
+	// (which hangs in Unicorn when $0DD3 bit 5 is set).
+	if (ROMSize > 0x80000) {
+		wp = (uint16 *)(ROMBaseHost + 0x1256);
+		*wp = htons(M68K_RTS);
+	}
+
+	// IIci/512KB ROMs: ROM+0x1138 is an A000 (_Open) for .Sony, but the ROM
+	// pre-installs .Sony in the Unit Table during early boot pointing to the
+	// original driver code (not our patched DRVR resource). This Open hangs
+	// because the original driver polls hardware we don't emulate.
+	// NOP it out — INSTALL_DRIVERS at 0x1142 installs our custom Sony driver.
+	if (ROMSize <= 0x80000) {
+		wp = (uint16 *)(ROMBaseHost + 0x1138);
+		*wp = htons(M68K_NOP);
+	}
 
 	// Don't access SonyVars
 	wp = (uint16 *)(ROMBaseHost + 0x1144);
@@ -1504,6 +1551,111 @@ static bool patch_rom_32(void)
 	*wp++ = htons(M68K_NOP);
 	wp += 2;
 	*wp = htons(M68K_NOP);
+
+	// IIci/512KB ROMs: Skip ADB bus scan in InitADB.
+	// The IIci uses the Egret ADB chip. The scan loop ($A8E0+) polls
+	// Egret hardware we don't emulate, causing an infinite loop.
+	// Data structures are initialized by $A8AE-$A8DC; the scan/poll
+	// at $A8E0-$A8F6 isn't needed since our ADBOp EmulOp provides
+	// virtual keyboard/mouse without real bus scanning.
+	if (ROMSize <= 0x80000) {
+		wp = (uint16 *)(ROMBaseHost + 0xa8e0);
+		*wp = htons(M68K_RTS);		// skip bsr $a8f8 + poll loop + post-scan
+
+		// IIci/512KB ROMs: Skip ASC sound chip initialization at ROM+$7052.
+		// This function initializes the Apple Sound Chip (ASC) by filling
+		// buffers and pulsing VIA registers. 5 entry points converge at
+		// $706E. ASC doesn't exist in the emulator. Patch $706E to return
+		// immediately via JMP (A6) (A6-based calling convention).
+		wp = (uint16 *)(ROMBaseHost + 0x706e);
+		*wp = htons(0x4ed6);		// JMP (A6) — skip ASC init
+
+		// IIci/512KB ROMs: Skip Egret manager init.
+		// The boot dispatch framework calls $280E for each phase, which
+		// eventually reaches $42922 (Egret hardware init). Patch $42922
+		// to return success immediately.
+		wp = (uint16 *)(ROMBaseHost + 0x42922);
+		*wp++ = htons(0x7000);		// MOVEQ #0,D0
+		*wp = htons(M68K_RTS);		// RTS
+
+		// IIci/512KB ROMs: Patch illegal instruction exception handler.
+		// Vector setup at $25F0 maps Vec4 (Illegal Instruction, $10) to
+		// $020026F4 (BSR.S in dispatch jump table). When dispatch RTEs
+		// to garbage RAM ($4568 = memory test pattern), the illegal insn
+		// re-enters the dispatch, creating an infinite loop.
+		//
+		// Fix: Write skip handler at $26E2 (zero padding) and redirect
+		// $26F4 (the illegal instruction vector target) to branch there.
+		// Handler advances exception frame PC by 2 and RTEs past it.
+		wp = (uint16 *)(ROMBaseHost + 0x26E2);
+		*wp++ = htons(0x54AF);		// ADDQ.L #2,d(SP)
+		*wp++ = htons(0x0002);		// displacement 2 (PC at SP+2 in frame)
+		*wp = htons(0x4E73);		// RTE
+		// Redirect ALL dispatch jump table entries ($26F0-$270A) to the
+		// skip handler at $26E2. The dispatch framework is only used during
+		// early boot and is no longer needed after INSTALL_DRIVERS.
+		// Any exception from garbage RAM entering the dispatch would leak
+		// stack space. Skip handler: ADDQ.L #2,2(SP) + RTE.
+		// Exception: $2708 (auto-vectors) gets the IRQ handler instead.
+		for (uint32_t addr = 0x26F0; addr <= 0x270A; addr += 2) {
+			if (addr == 0x2708) continue;  // IRQ handler patched separately below
+			wp = (uint16 *)(ROMBaseHost + addr);
+			int16_t disp = (int16_t)(0x26E2 - (addr + 2));  // BRA.S target calc
+			*wp = htons(0x6000 | (disp & 0xFF));  // BRA.S $26E2
+		}
+
+		// IIci/512KB ROMs: Install IRQ handler at $26E8 (free padding).
+		// The IIci dispatch framework at $26A0 can't handle timer
+		// interrupts properly — it's designed for boot phases only.
+		// Install a minimal EmulOp IRQ handler and redirect the
+		// auto-vector entry at $2708 to use it directly.
+		wp = (uint16 *)(ROMBaseHost + 0x26E8);
+		*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ));	// IRQ EmulOp
+		*wp++ = htons(0x4A80);		// TST.L D0
+		*wp = htons(0x4E73);		// RTE
+		// Redirect $2708 (auto-vectors 25-30) to our handler.
+		// Original: BSR.S $26A0 (dispatch). New: BRA.S $26E8 (IRQ).
+		// Disp = $26E8 - $270A = -$22 = 0xDE (signed byte)
+		wp = (uint16 *)(ROMBaseHost + 0x2708);
+		*wp = htons(0x60DE);		// BRA.S $26E8
+
+		// IIci/512KB ROMs: Skip code resource execution at $B69A.
+		// This JSR calls offset $1000 within a resource handle (A2).
+		// During early boot, the resource data may be garbage or the
+		// handle may point to uninitialized heap. NOP the JSR to avoid
+		// jumping into garbage RAM. The BRA.S at $B69E will skip to the
+		// function exit (MOVEM.L + RTS) with D0=0.
+		wp = (uint16 *)(ROMBaseHost + 0xb69a);
+		*wp++ = htons(M68K_NOP);	// was JSR $1000(A2)
+		*wp = htons(M68K_NOP);		// was displacement $1000
+
+		// IIci/512KB ROMs: Fix infinite loop in SANE FP shift routine.
+		// At ROM+$2EDCA, a shift loop uses D0 as the decrement count:
+		//   MOVEQ #$20,D1; SUB.W D0,D1; BLE.S exit; LSL; BRA.S loop
+		// When D0=0 (uninitialized), D1 never decreases → infinite loop.
+		// Change BLE.S to BRA.S so the loop exits after one iteration.
+		wp = (uint16 *)(ROMBaseHost + 0x2edcc);
+		*wp = htons(0x6058);		// BRA.S $2EE26 (was BLE.S $2EE26)
+
+		// IIci/512KB ROMs: Fix timer wait loops that poll Ticks ($016A).
+		// With IPL=7 (interrupts disabled), Ticks never increments
+		// because the 60Hz handler can't fire. NOP the backward branches.
+		wp = (uint16 *)(ROMBaseHost + 0x14ce);
+		*wp = htons(M68K_NOP);		// was BCC.S $14CA (timer wait)
+		wp = (uint16 *)(ROMBaseHost + 0x766a);
+		*wp = htons(M68K_NOP);		// was BHI.S $7650 (timer wait)
+		wp = (uint16 *)(ROMBaseHost + 0xc09c);
+		*wp = htons(M68K_NOP);		// was BGT.S $C098 (timer wait)
+		wp = (uint16 *)(ROMBaseHost + 0x193ec);
+		*wp = htons(M68K_NOP);		// was BHI.S $193E8 (timer wait)
+
+		// IIci/512KB ROMs: Skip SCSI bus scan at $71F0.
+		// BTST #7,$0B22; BNE.S $71FC — if SCSI enabled, scan all IDs.
+		// Without SCSI hardware, the scan loops forever through timeouts.
+		// NOP the BNE so it always returns D0=0 (no devices).
+		wp = (uint16 *)(ROMBaseHost + 0x71f6);
+		*wp = htons(M68K_NOP);		// was BNE.S $71FC (enter SCSI scan)
+	}
 
 	// Don't write to VIA in InitADB
 	wp = (uint16 *)(ROMBaseHost + 0xa8a8);
@@ -1640,6 +1792,7 @@ static bool patch_rom_32(void)
 
 	// Replace .Sony driver
 	sony_offset = find_rom_resource(FOURCC('D','R','V','R'), 4);
+	fprintf(stderr, "[PatchROM] sony_offset=%08x (Mac addr: %08x)\n", sony_offset, ROMBaseMac + sony_offset);
 	D(bug("sony %08lx\n", sony_offset));
 	memcpy(ROMBaseHost + sony_offset, sony_driver, sizeof(sony_driver));
 
@@ -1759,20 +1912,42 @@ static bool patch_rom_32(void)
 		printf("WARNING: This ROM seems to require an FPU\n");
 
 	// Patch VIA interrupt handler
-	wp = (uint16 *)(ROMBaseHost + 0x9bc4);	// Level 1 handler
-	*wp++ = htons(0x7002);		// moveq	#2,d0 (always 60Hz interrupt)
-	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
+	if (ROMSize > 0x80000) {
+		// Quadra/1MB ROMs: Level 1 handler at $9bc4
+		wp = (uint16 *)(ROMBaseHost + 0x9bc4);
+		*wp++ = htons(0x7002);		// moveq	#2,d0 (always 60Hz interrupt)
+		*wp++ = htons(M68K_NOP);
+		*wp++ = htons(M68K_NOP);
+		*wp++ = htons(M68K_NOP);
+		*wp = htons(M68K_NOP);
 
-	wp = (uint16 *)(ROMBaseHost + 0xa296);	// 60Hz handler (handles everything)
-	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(M68K_NOP);
-	// Use make_emulop to get correct encoding (0x7129 for UAE, 0xAE29 for Unicorn)
-	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
-	*wp++ = htons(0x4a80);		// tst.l	d0
-	*wp = htons(0x67f4);		// beq		0x4080a294
+		wp = (uint16 *)(ROMBaseHost + 0xa296);	// 60Hz handler (handles everything)
+		*wp++ = htons(M68K_NOP);
+		*wp++ = htons(M68K_NOP);
+		*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
+		*wp++ = htons(0x4a80);		// tst.l	d0
+		*wp = htons(0x67f4);		// beq		0x4080a294
+	} else {
+		// IIci/512KB ROMs: The Level 1 handler at $9B64 uses LEA $9BC0(PC),A3
+		// to get the VIA handler address, then calls JSR (A3). The original
+		// handler at $9BC0 reads VIA hardware registers to determine the
+		// interrupt source. Since hardware bases point to scratch memory,
+		// the VIA read finds no interrupt and the timer flag is never
+		// cleared, causing an infinite re-trigger loop.
+		// Patch $9BC0 to claim "60Hz interrupt" (D0=2) and call the IRQ
+		// EmulOp which properly clears the timer flag.
+		wp = (uint16 *)(ROMBaseHost + 0x9bc0);
+		*wp++ = htons(0x7002);		// moveq	#2,d0 (always 60Hz)
+		*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ));	// IRQ EmulOp
+		*wp = htons(M68K_RTS);		// return to caller at $9B70
+
+		// The Level 1 handler at $9B6C checks $0CB2 (cursor coupling flag).
+		// If non-zero, it takes a cursor-busy path that calls through $0DBC
+		// (JVBLTask pointer) — which is uninitialized during early boot,
+		// causing a jump to garbage. NOP the BNE to force the direct path.
+		wp = (uint16 *)(ROMBaseHost + 0x9b6c);
+		*wp = htons(M68K_NOP);		// was BNE.S $9B8A (cursor-busy path)
+	}
 	return true;
 }
 

@@ -116,6 +116,7 @@ message('  Build BasiliskII: ' + build_basilisk.to_string())
 message('  Build SheepShaver: ' + build_sheepshaver.to_string())
 
 # Subdirectories
+subdir('src/cpu/kpx')  # KPX PPC interpreter (must be before src/cpu)
 subdir('src/cpu')
 subdir('src/core')
 subdir('src/drivers')

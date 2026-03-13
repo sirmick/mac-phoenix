@@ -351,25 +351,49 @@ int main(int argc, char **argv)
 			Platform* platform = g_cpu_ctx.get_platform();
 			*platform = g_platform;
 
-			// Install CPU backend
-			switch (emu_config.cpu_backend) {
-				case config::CPUBackend::Unicorn:
-					cpu_unicorn_install(platform);
-					break;
-				case config::CPUBackend::DualCPU:
-					cpu_dualcpu_install(platform);
-					break;
-				case config::CPUBackend::UAE:
-				default:
-					cpu_uae_install(platform);
-					break;
+			// Install CPU backend (architecture-aware)
+			if (emu_config.is_ppc()) {
+				switch (emu_config.cpu_backend) {
+					case config::CPUBackend::KPX:
+						cpu_ppc_kpx_install(platform);
+						break;
+					case config::CPUBackend::Unicorn:
+						cpu_ppc_unicorn_install(platform);
+						break;
+					case config::CPUBackend::DualCPU:
+						cpu_ppc_dualcpu_install(platform);
+						break;
+					default:
+						fprintf(stderr, "ERROR: UAE backend not available for PPC. Use --backend kpx or unicorn.\n");
+						return 1;
+				}
+			} else {
+				switch (emu_config.cpu_backend) {
+					case config::CPUBackend::Unicorn:
+						cpu_unicorn_install(platform);
+						break;
+					case config::CPUBackend::DualCPU:
+						cpu_dualcpu_install(platform);
+						break;
+					case config::CPUBackend::UAE:
+					default:
+						cpu_uae_install(platform);
+						break;
+				}
 			}
 
 			g_platform = *platform;
 
-			// Initialize M68K
-			if (!g_cpu_ctx.init_m68k(emu_config)) {
-				fprintf(stderr, "Failed to initialize M68K CPU context\n");
+			// Initialize CPU context
+			bool init_ok;
+			if (emu_config.is_ppc()) {
+				init_ok = g_cpu_ctx.init_ppc(emu_config);
+			} else {
+				init_ok = g_cpu_ctx.init_m68k(emu_config);
+			}
+			if (!init_ok) {
+				fprintf(stderr, "Failed to initialize %s CPU context\n",
+				        emu_config.architecture_string());
 				return 1;
 			}
 

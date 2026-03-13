@@ -6,6 +6,8 @@
 #include "emulator_init.h"
 #include "main.h"
 #include "rom_patches.h"
+#include "rom_patches_ppc.h"
+#include "ppc_constants.h"
 #include "cpu_emulation.h"
 #include "newcpu.h"
 #include "memory.h"
@@ -117,10 +119,13 @@ bool CPUContext::load_rom(const char* rom_path) {
     fprintf(stderr, "[CPUContext] ROM size: %ld bytes (%ld KB)\n",
             (long)size, (long)size / 1024);
 
-    // Validate ROM size
-    if (size != 64*1024 && size != 128*1024 && size != 256*1024 &&
-        size != 512*1024 && size != 1024*1024) {
-        fprintf(stderr, "[CPUContext] ERROR: Invalid ROM size (must be 64/128/256/512/1024 KB)\n");
+    // Validate ROM size (M68K: 64K-1MB, PPC: up to 4MB)
+    bool valid_size = (size == 64*1024 || size == 128*1024 || size == 256*1024 ||
+                       size == 512*1024 || size == 1024*1024 ||
+                       size == 3*1024*1024 || size == 4*1024*1024);
+    if (!valid_size) {
+        fprintf(stderr, "[CPUContext] ERROR: Invalid ROM size %ld (must be 64/128/256/512/1024/3072/4096 KB)\n",
+                (long)size / 1024);
         close(rom_fd);
         return false;
     }
@@ -245,6 +250,9 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
             cpu_type_ = config.cpu_type_int();
             if (cpu_type_ < 2) cpu_type_ = 2;
             if (cpu_type_ > 4) cpu_type_ = 4;
+            // 512KB ROMs (IIci etc.) have 68030 — cap at 3 to avoid
+            // 68040 RTE frame format mismatches in ROM boot code
+            if (ROMSize <= 0x80000 && cpu_type_ > 3) cpu_type_ = 3;
             fpu_type_ = config.fpu() ? 1 : 0;
             if (cpu_type_ == 4) fpu_type_ = 1;  // 68040 always with FPU
             twenty_four_bit_ = false;
@@ -259,8 +267,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 #endif
 
     fprintf(stderr, "[CPUContext] ROM Version: 0x%08x\n", ROMVersion);
-    fprintf(stderr, "[CPUContext] CPU Type: 680%02d\n",
-            (cpu_type_ == 0) ? 0 : (cpu_type_ * 10 + 20));
+    fprintf(stderr, "[CPUContext] CPU Type: 680%d0\n", cpu_type_);
     fprintf(stderr, "[CPUContext] FPU: %s\n", fpu_type_ ? "Yes" : "No");
     fprintf(stderr, "[CPUContext] 24-bit addressing: %s\n", twenty_four_bit_ ? "Yes" : "No");
 
@@ -349,12 +356,182 @@ bool CPUContext::init_mac_subsystems() {
 }
 
 // ========================================
-// PPC Initialization (STUB)
+// PPC Initialization
 // ========================================
 
-bool CPUContext::init_ppc(const config::EmulatorConfig& /*config*/) {
-    fprintf(stderr, "[CPUContext] ERROR: PPC emulation not yet implemented\n");
-    return false;
+// PPC memory mapping (defined in cpu_ppc_unicorn.cpp)
+extern bool ppc_unicorn_map_memory(void);
+
+// PPC ROM constants now in ppc_constants.h
+
+bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    fprintf(stderr, "[CPUContext] ========================================\n");
+    fprintf(stderr, "[CPUContext] Initializing PPC CPU context\n");
+    fprintf(stderr, "[CPUContext] ========================================\n");
+
+    if (state_ != CPUState::UNINITIALIZED) {
+        fprintf(stderr, "[CPUContext] Already initialized, shutting down first\n");
+        shutdown();
+    }
+
+    architecture_ = config::Architecture::PPC;
+
+    // 1. Allocate memory
+    // PPC layout: RAM from 0x0, ROM at 0x400000 (inside RAM space)
+    // Allocate enough for RAM + ScratchMem + FrameBuffer
+    ram_size_ = config.ram_mb * 1024 * 1024;
+    fprintf(stderr, "[CPUContext] Allocating RAM: %u MB\n", config.ram_mb);
+
+    // Total allocation: RAM + ScratchMem + FrameBuffer
+    // ROM lives at 0x400000 within the RAM buffer (PPC Macs map ROM into address space)
+    size_t total_size = ram_size_ + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
+    ram_.reset(new (std::nothrow) uint8_t[total_size]);
+    if (!ram_) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to allocate RAM\n");
+        return false;
+    }
+    memset(ram_.get(), 0, total_size);
+
+    // Allocate ROM read buffer (max 4MB for PPC)
+    rom_.reset(new (std::nothrow) uint8_t[4 * 1024 * 1024]);
+    if (!rom_) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to allocate ROM buffer\n");
+        return false;
+    }
+
+    // 2. Set up global pointers
+    RAMBaseHost = ram_.get();
+    RAMSize = ram_size_;
+
+    // PPC: ROM is inside RAM at offset 0x400000
+    // ROMBaseHost points to the ROM data within the RAM buffer
+    ROMBaseHost = ram_.get() + PPC_ROM_BASE;
+
+#if DIRECT_ADDRESSING
+    MEMBaseDiff = (uintptr)RAMBaseHost;
+    RAMBaseMac = 0;
+    ROMBaseMac = PPC_ROM_BASE;
+#endif
+
+    fprintf(stderr, "[CPUContext] RAM at %p (Mac: 0x%08x), %u MB\n",
+            RAMBaseHost, RAMBaseMac, config.ram_mb);
+    fprintf(stderr, "[CPUContext] ROM area at %p (Mac: 0x%08x)\n",
+            ROMBaseHost, ROMBaseMac);
+
+    // 3. Load ROM
+    if (!load_rom(config.rom_path.c_str())) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to load ROM\n");
+        return false;
+    }
+
+    // PPC ROM validation: Gossamer ROMs are typically 4MB
+    if (rom_size_ != 4 * 1024 * 1024 && rom_size_ != 3 * 1024 * 1024) {
+        fprintf(stderr, "[CPUContext] WARNING: PPC ROM is %u bytes (expected 3-4MB for Gossamer)\n",
+                rom_size_);
+    }
+
+    // Copy ROM into RAM at 0x400000
+    memcpy(ROMBaseHost, rom_.get(), rom_size_);
+    ROMSize = rom_size_;
+
+    fprintf(stderr, "[CPUContext] ROM loaded at Mac 0x%08x (%u KB)\n",
+            PPC_ROM_BASE, rom_size_ / 1024);
+
+    // ScratchMem after RAM (for compatibility with drivers)
+    ScratchMem = ram_.get() + ram_size_ + SCRATCH_MEM_SIZE / 2;
+
+    // 4. CPU type (PPC 750 = G3)
+    cpu_type_ = 4;  // Not m68k, but keep for compatibility
+    fpu_type_ = 1;  // PPC always has FPU
+    twenty_four_bit_ = false;
+
+    CPUType = cpu_type_;
+    FPUType = fpu_type_;
+    TwentyFourBitAddressing = false;
+
+    fprintf(stderr, "[CPUContext] CPU: PowerPC 750 (G3)\n");
+
+    // 5. Log storage config
+    for (const auto& disk_path : config.disk_paths) {
+        fprintf(stderr, "[CPUContext] Disk: %s\n", disk_path.c_str());
+    }
+    for (const auto& cdrom_path : config.cdrom_paths) {
+        fprintf(stderr, "[CPUContext] CDROM: %s\n", cdrom_path.c_str());
+    }
+
+    // 6. Initialize Mac subsystems (XPRAM, drivers, etc.)
+    if (!init_mac_subsystems()) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to initialize Mac subsystems\n");
+        return false;
+    }
+
+    // 7. Initialize XLM globals and patch ROM
+    fprintf(stderr, "[CPUContext] Initializing PPC XLM globals...\n");
+    InitXLM();
+
+    fprintf(stderr, "[CPUContext] Patching PPC ROM...\n");
+    if (!PatchROM_PPC()) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to patch PPC ROM\n");
+        return false;
+    }
+
+    // 8. Initialize CPU backend
+    fprintf(stderr, "[CPUContext] CPU Backend: %s\n",
+            platform_.cpu_name ? platform_.cpu_name : "Unknown");
+
+    if (platform_.cpu_set_type) {
+        platform_.cpu_set_type(cpu_type_, fpu_type_);
+    }
+
+    if (!platform_.cpu_init()) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to initialize CPU backend\n");
+        return false;
+    }
+
+    // 9. Map memory into CPU engine (Unicorn needs explicit mapping)
+    if (config.cpu_backend == config::CPUBackend::Unicorn ||
+        config.cpu_backend == config::CPUBackend::DualCPU) {
+        if (!ppc_unicorn_map_memory()) {
+            fprintf(stderr, "[CPUContext] ERROR: Failed to map PPC memory\n");
+            return false;
+        }
+    }
+
+    // 10. Reset CPU
+    platform_.cpu_reset();
+    fprintf(stderr, "[CPUContext] CPU reset, PC=0x%08x\n", platform_.cpu_get_pc());
+
+    // 11. Set PC to ROM entry point (nanokernel reset vector at ROM + 0x310000)
+    uint32_t rom_entry = PPC_ROM_BASE + 0x310000;
+    if (platform_.cpu_ppc_set_pc) {
+        platform_.cpu_ppc_set_pc(rom_entry);
+        fprintf(stderr, "[CPUContext] PPC entry point set to 0x%08x\n", rom_entry);
+    }
+
+    // Set initial PPC registers for nanokernel entry
+    // Based on SheepShaver's sheepshaver_glue.cpp and ppc_asm.S:
+    //   r3 = ROM base + 0x30d000 (nanokernel info block)
+    //   r4 = KernelData + 0x1000 (emulator data area)
+    if (platform_.cpu_ppc_set_gpr) {
+        platform_.cpu_ppc_set_gpr(3, PPC_ROM_BASE + 0x30d000);
+        platform_.cpu_ppc_set_gpr(4, KERNEL_DATA_BASE + 0x1000);
+        fprintf(stderr, "[CPUContext] PPC initial registers: r3=0x%08x r4=0x%08x\n",
+                (uint32_t)(PPC_ROM_BASE + 0x30d000), (uint32_t)(KERNEL_DATA_BASE + 0x1000));
+    }
+
+    // 11. Set up timer interrupt
+    fprintf(stderr, "[CPUContext] Setting up timer interrupt...\n");
+    setup_timer_interrupt();
+
+    set_state(CPUState::READY);
+
+    fprintf(stderr, "[CPUContext] ========================================\n");
+    fprintf(stderr, "[CPUContext] PPC initialization complete\n");
+    fprintf(stderr, "[CPUContext] ========================================\n");
+
+    return true;
 }
 
 // ========================================

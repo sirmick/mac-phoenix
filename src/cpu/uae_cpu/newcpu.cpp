@@ -1255,6 +1255,8 @@ void m68k_emulop_return(void)
 
 void m68k_emulop(uae_u32 opcode)
 {
+	fprintf(stderr, "[m68k_emulop] opcode=%04X PC=%08X\n",
+		(unsigned)opcode, m68k_getpc() - 2);
 	/* Check if platform handler is registered (g_platform declared in platform.h) */
 	if (g_platform.emulop_handler) {
 		/* Platform handler takes over - pass is_primary=true for UAE */
@@ -1307,10 +1309,19 @@ void REGPARAM2 op_illg (uae_u32 opcode)
 		return;
 	}
 
-	write_log ("Illegal instruction: %04x at %08x\n", opcode, pc);
-#if USE_JIT && JIT_DEBUG
-	compiler_dumpstate();
-#endif
+	static int illg_trace = 0;
+	if (illg_trace < 5) {
+		write_log("Illegal instruction: %04x at %08x\n", opcode, pc);
+		write_log("  d0=%08x d1=%08x a0=%08x a1=%08x a5=%08x a7=%08x\n",
+			m68k_dreg(regs,0), m68k_dreg(regs,1),
+			m68k_areg(regs,0), m68k_areg(regs,1),
+			m68k_areg(regs,5), m68k_areg(regs,7));
+		// Dump stack (return addresses)
+		uaecptr sp = m68k_areg(regs,7);
+		write_log("  stack: %08x %08x %08x %08x\n",
+			get_long(sp), get_long(sp+4), get_long(sp+8), get_long(sp+12));
+		illg_trace++;
+	}
 
 	Exception (4,0);
 	return;
@@ -1431,6 +1442,8 @@ int m68k_do_specialties (void)
 // Platform API uses uae_cpu_execute_one() directly instead
 void m68k_do_execute (void)
 {
+	static int pc_trace_counter = 0;
+	static int pc_trace_interval = 0;
 	for (;;) {
 		// Normal execution path
 		uae_u32 opcode = GET_OPCODE;
@@ -1438,6 +1451,116 @@ void m68k_do_execute (void)
 #if FLIGHT_RECORDER
 		m68k_record_step(m68k_getpc());
 #endif
+		// Temporary debug traces for IIci boot
+		{
+			static uint64_t insn_count = 0;
+			static bool drivers_installed = false;
+			static uint32_t stack_hwm = 0;
+			static int dispatch_count = 0;
+			static int aline_trace = 0;
+			uae_u32 pc = m68k_getpc();
+			uint32_t rom_off = pc - ROMBaseMac;
+			// Trace A-line traps and boot loop flow
+			if (drivers_installed && aline_trace < 10 && (opcode & 0xF000) == 0xA000) {
+				fprintf(stderr, "  [ALINE] PC=%08X opcode=%04X rom+%04X\n",
+					pc, opcode, rom_off);
+				aline_trace++;
+			}
+			// Trace key boot loop points
+			static int boot_trace = 0;
+			if (drivers_installed && boot_trace < 30) {
+				if (rom_off == 0x1616) {
+					// Dump PB fields before _Read
+					uint32_t a0 = m68k_areg(regs, 0);
+					int16_t ioRefNum = (int16_t)ReadMacInt16(a0 + 0x18);
+					int16_t ioVRefNum = (int16_t)ReadMacInt16(a0 + 0x16);
+					uint32_t ioBuf = ReadMacInt32(a0 + 0x20);
+					int32_t ioReqCnt = (int32_t)ReadMacInt32(a0 + 0x24);
+					fprintf(stderr, "  [BOOT] _Read at rom+1616: A0=%08X ioRefNum=%d ioVRefNum=%d buf=%08X cnt=%d\n",
+						a0, ioRefNum, ioVRefNum, ioBuf, ioReqCnt);
+					boot_trace++;
+				}
+				if (rom_off == 0x1618) {
+					fprintf(stderr, "  [BOOT] _Read result: D0=%08X (%d)\n",
+						m68k_dreg(regs, 0), (int16_t)m68k_dreg(regs, 0));
+					boot_trace++;
+				}
+			}
+			if (rom_off == 0x1142)
+				drivers_installed = true;
+			if (drivers_installed) {
+				insn_count++;
+				// Log every entry to the dispatch framework ($26A0)
+				if (rom_off == 0x26A0 && dispatch_count < 50) {
+					// BSR.S pushes 4-byte return addr, then exception frame below
+					uint32_t sp = m68k_areg(regs, 7);
+					uint32_t bsr_ret = ReadMacInt32(sp);      // BSR.S return address
+					uint16_t exc_sr = ReadMacInt16(sp + 4);   // exception frame SR
+					uint32_t exc_pc = ReadMacInt32(sp + 6);   // exception frame PC
+					uint16_t exc_vec = ReadMacInt16(sp + 10);  // format/vector word
+					fprintf(stderr, "  [DISPATCH #%d] insn=%llu A7=%08X bsr_ret=%08X exc_sr=%04X exc_pc=%08X vec=%04X\n",
+						dispatch_count, (unsigned long long)insn_count, sp,
+						bsr_ret, (unsigned)exc_sr, exc_pc, (unsigned)exc_vec);
+					dispatch_count++;
+				}
+				// Log stack high-water mark changes (every 512 bytes)
+				uint32_t sp = m68k_areg(regs, 7);
+				if (stack_hwm == 0) stack_hwm = sp;
+				if (sp < stack_hwm - 512) {
+					stack_hwm = sp;
+					fprintf(stderr, "  [STACK] insn=%llu A7=%08X PC=%08X (rom+%04X)\n",
+						(unsigned long long)insn_count, sp, pc, rom_off);
+				}
+				// Ring buffer to capture last 32 instructions before garbage entry
+				{
+					struct PcEntry { uae_u32 pc; uae_u32 sp; uint16_t opcode; };
+					static PcEntry ring[32];
+					static int ring_idx = 0;
+					static bool dumped = false;
+					ring[ring_idx & 31] = {pc, sp, (uint16_t)opcode};
+					ring_idx++;
+					// Detect first entry into garbage RAM
+					if (!dumped && pc >= 0x4400 && pc < 0x4800) {
+						fprintf(stderr, "  [TRACE] Last 32 instructions before garbage RAM entry:\n");
+						for (int i = 0; i < 32; i++) {
+							int idx = (ring_idx - 32 + i) & 31;
+							uint32_t roff = ring[idx].pc - ROMBaseMac;
+							bool in_rom = (roff < 0x80000);
+							fprintf(stderr, "    [%02d] PC=%08X %s op=%04X A7=%08X\n",
+								i, ring[idx].pc, in_rom ? "ROM" : "RAM",
+								ring[idx].opcode, ring[idx].sp);
+						}
+						dumped = true;
+					}
+				}
+				// PC histogram: count hits per 256-byte ROM page
+				{
+					static uint32_t hist[2048] = {};  // 512KB / 256 = 2048 pages
+					static bool hist_dumped = false;
+					if (rom_off < 0x80000) {
+						hist[rom_off >> 8]++;
+					}
+					if (insn_count == 50000000 && !hist_dumped) {
+						hist_dumped = true;
+						fprintf(stderr, "  [HISTOGRAM] Top ROM pages after 50M insns:\n");
+						// Find top 20 pages
+						for (int t = 0; t < 20; t++) {
+							uint32_t max_val = 0;
+							int max_idx = -1;
+							for (int i = 0; i < 2048; i++) {
+								if (hist[i] > max_val) { max_val = hist[i]; max_idx = i; }
+							}
+							if (max_idx >= 0 && max_val > 0) {
+								fprintf(stderr, "    ROM+$%05X-$%05X: %u hits\n",
+									max_idx << 8, ((max_idx+1) << 8) - 1, max_val);
+								hist[max_idx] = 0;
+							}
+						}
+					}
+				}
+			}
+		}
+
 		(*cpufunctbl[opcode])(opcode);
 
 		cpu_check_ticks();

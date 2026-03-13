@@ -10,6 +10,8 @@ cpu_sources = [
   'unicorn_exception.c',      # Exception simulation for Unicorn
   'unicorn_validation.cpp',   # Validation module (used by dualcpu)
   'emulop_c_wrapper.cpp',     # C wrapper for EmulOp function
+  'cpu_ppc_unicorn.cpp',      # PPC Unicorn backend (QEMU TCG JIT)
+  'cpu_ppc_stubs.c',          # PPC backend stubs: KPX, DualCPU (not yet implemented)
 ]
 
 # Build UAE CPU (always)
@@ -24,6 +26,7 @@ cpu_lib = static_library('cpu',
   include_directories: [
     include_directories('.'),
     include_directories('../common/include'),
+    include_directories('../core'),  # For emul_op_ppc.h
     include_directories('../drivers/platform'),
   ]
 )

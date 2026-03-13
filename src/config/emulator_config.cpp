@@ -13,6 +13,54 @@
 
 namespace config {
 
+/*
+ * Named model presets.
+ *
+ * These set cpu_type, modelid (productKind in UniversalInfo), FPU, RAM,
+ * and screen defaults. Explicit CLI flags override any preset value.
+ *
+ * modelid is the raw productKind byte written to UniversalInfo+18.
+ * The Mac OS computes model_id = productKind + 6.
+ */
+struct ModelPreset {
+    const char* name;
+    int cpu_type;       // 0=68000, 2=68020, 3=68030, 4=68040
+    int modelid;        // productKind (model_id - 6)
+    bool fpu;
+    uint32_t ram_mb;
+    uint32_t screen_w;
+    uint32_t screen_h;
+};
+
+static const ModelPreset model_presets[] = {
+    // name        cpu  modelid  fpu   ram   w     h
+    {"iici",        3,   5,      false, 8,   640,  480},   // Mac IIci, 68030, System 6 compatible
+    {"iisi",        3,   12,     false, 8,   640,  480},   // Mac IIsi, 68030
+    {"quadra650",   4,   30,     true,  32,  640,  480},   // Quadra 650, 68040
+    {"quadra800",   4,   29,     true,  32,  640,  480},   // Quadra 800, 68040
+    {"quadra900",   4,   14,     true,  32,  640,  480},   // Quadra 900, 68040
+};
+
+static const ModelPreset* find_model_preset(const std::string& name) {
+    for (const auto& p : model_presets) {
+        if (name == p.name) return &p;
+    }
+    return nullptr;
+}
+
+static void apply_model_preset(EmulatorConfig& config, const ModelPreset& preset) {
+    config.m68k.cpu_type = preset.cpu_type;
+    config.m68k.modelid = preset.modelid;
+    config.m68k.fpu = preset.fpu;
+    config.m68k.model = preset.name;
+    config.ram_mb = preset.ram_mb;
+    config.screen_width = preset.screen_w;
+    config.screen_height = preset.screen_h;
+    fprintf(stderr, "[Config] Model preset '%s': 680%d0, modelid=%d, %uMB RAM, %ux%u\n",
+            preset.name, preset.cpu_type,
+            preset.modelid, preset.ram_mb, preset.screen_w, preset.screen_h);
+}
+
 // Helper: Check if file exists
 static bool file_exists(const char* path) {
     struct stat st;
@@ -123,6 +171,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["m68k"]["cpu_type"] = m68k.cpu_type;
     j["m68k"]["fpu"] = m68k.fpu;
     j["m68k"]["modelid"] = m68k.modelid;
+    if (!m68k.model.empty()) j["m68k"]["model"] = m68k.model;
     j["m68k"]["jit"] = m68k.jit;
     j["m68k"]["idlewait"] = m68k.idlewait;
     j["m68k"]["ignoresegv"] = m68k.ignoresegv;
@@ -160,6 +209,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("cpu_backend")) {
         std::string b = json_utils::get_string(j, "cpu_backend");
         if (b == "unicorn") cpu_backend = CPUBackend::Unicorn;
+        else if (b == "kpx") cpu_backend = CPUBackend::KPX;
         else if (b == "dualcpu") cpu_backend = CPUBackend::DualCPU;
         else cpu_backend = CPUBackend::UAE;
     }
@@ -241,6 +291,11 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     // M68K sub-struct
     if (j.contains("m68k")) {
         auto& m = j["m68k"];
+        if (m.contains("model")) {
+            std::string model_name = json_utils::get_string(m, "model");
+            const ModelPreset* preset = find_model_preset(model_name);
+            if (preset) apply_model_preset(*this, *preset);
+        }
         if (m.contains("cpu_type")) m68k.cpu_type = json_utils::get_int(m, "cpu_type");
         if (m.contains("fpu")) m68k.fpu = json_utils::get_bool(m, "fpu");
         if (m.contains("modelid")) m68k.modelid = json_utils::get_int(m, "modelid");
@@ -369,7 +424,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --cdrom PATH          CDROM image path (repeatable)\n");
             printf("  --extfs PATH          Shared folder path (repeatable)\n");
             printf("  --ram MB              RAM size in megabytes (default: 32)\n");
-            printf("  --backend NAME        CPU backend: uae, unicorn, dualcpu (default: uae)\n");
+            printf("  --backend NAME        CPU backend: uae, unicorn, kpx, dualcpu (default: uae)\n");
+            printf("  --model NAME          Mac model preset: iici, quadra650, etc.\n");
             printf("  --arch ARCH           CPU architecture: m68k, ppc (default: m68k)\n");
             printf("  --screen WxH          Display resolution (default: 640x480)\n");
             printf("  --port N              HTTP server port (default: 8000)\n");
@@ -429,6 +485,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --backend <name>
         if (strcmp(argv[i], "--backend") == 0 && i+1 < argc) {
             if (strcmp(argv[i+1], "unicorn") == 0) config.cpu_backend = CPUBackend::Unicorn;
+            else if (strcmp(argv[i+1], "kpx") == 0) config.cpu_backend = CPUBackend::KPX;
             else if (strcmp(argv[i+1], "dualcpu") == 0) config.cpu_backend = CPUBackend::DualCPU;
             else config.cpu_backend = CPUBackend::UAE;
             argv[i] = nullptr; argv[++i] = nullptr; continue;
@@ -494,6 +551,19 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         if (strcmp(argv[i], "--no-webserver") == 0) {
             config.enable_webserver = false;
             argv[i] = nullptr; continue;
+        }
+
+        // --model <name> (named preset: iici, quadra650, etc.)
+        if (strcmp(argv[i], "--model") == 0 && i+1 < argc) {
+            const ModelPreset* preset = find_model_preset(argv[i+1]);
+            if (preset) {
+                apply_model_preset(config, *preset);
+            } else {
+                fprintf(stderr, "[Config] Unknown model '%s'. Available:", argv[i+1]);
+                for (const auto& p : model_presets) fprintf(stderr, " %s", p.name);
+                fprintf(stderr, "\n");
+            }
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
         // --arch m68k|ppc
@@ -639,10 +709,18 @@ EmulatorConfig load_emulator_config(const char* config_path,
  */
 void print_config(const EmulatorConfig& config) {
     fprintf(stderr, "[Config] Architecture: %s\n", config.architecture_string());
+    if (!config.m68k.model.empty())
+        fprintf(stderr, "[Config] Model: %s\n", config.m68k.model.c_str());
     fprintf(stderr, "[Config] RAM: %u MB\n", config.ram_mb);
-    fprintf(stderr, "[Config] CPU: 680%d0, FPU: %s, Backend: %s\n",
-            config.m68k.cpu_type, config.m68k.fpu ? "yes" : "no",
-            config.cpu_backend_string());
+    if (config.is_ppc()) {
+        fprintf(stderr, "[Config] CPU: PPC G3 (750), FPU: %s, Backend: %s\n",
+                config.ppc.fpu ? "yes" : "no",
+                config.cpu_backend_string());
+    } else {
+        fprintf(stderr, "[Config] CPU: 680%d0, FPU: %s, Backend: %s\n",
+                config.m68k.cpu_type, config.m68k.fpu ? "yes" : "no",
+                config.cpu_backend_string());
+    }
     fprintf(stderr, "[Config] ROM: %s\n",
             config.rom_path.empty() ? "(none)" : config.rom_path.c_str());
     fprintf(stderr, "[Config] Screen: %ux%u\n", config.screen_width, config.screen_height);

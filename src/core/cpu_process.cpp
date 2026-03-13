@@ -43,9 +43,14 @@ extern CPUContext g_cpu_ctx;  // defined in main.cpp (static but we use extern f
 
 // CPU backend install functions
 extern "C" {
+// M68K backends
 void cpu_uae_install(Platform* platform);
 void cpu_unicorn_install(Platform* platform);
 void cpu_dualcpu_install(Platform* platform);
+// PPC backends
+void cpu_ppc_unicorn_install(Platform* platform);
+void cpu_ppc_kpx_install(Platform* platform);
+void cpu_ppc_dualcpu_install(Platform* platform);
 }
 
 // Forward declarations for ADB shared input polling
@@ -313,17 +318,37 @@ void CPUProcess::child_main(SharedState* shm)
     Platform* platform = g_cpu_ctx.get_platform();
     *platform = g_platform;
 
-    switch (cfg.cpu_backend) {
-        case config::CPUBackend::Unicorn:
-            cpu_unicorn_install(platform);
-            break;
-        case config::CPUBackend::DualCPU:
-            cpu_dualcpu_install(platform);
-            break;
-        case config::CPUBackend::UAE:
-        default:
-            cpu_uae_install(platform);
-            break;
+    // Install CPU backend (architecture-aware)
+    if (cfg.is_ppc()) {
+        switch (cfg.cpu_backend) {
+            case config::CPUBackend::KPX:
+                cpu_ppc_kpx_install(platform);
+                break;
+            case config::CPUBackend::Unicorn:
+                cpu_ppc_unicorn_install(platform);
+                break;
+            case config::CPUBackend::DualCPU:
+                cpu_ppc_dualcpu_install(platform);
+                break;
+            default:
+                snprintf(shm->error_msg, sizeof(shm->error_msg),
+                         "UAE backend not available for PPC");
+                shm->child_state.store(SHM_STATE_ERROR, std::memory_order_release);
+                _exit(1);
+        }
+    } else {
+        switch (cfg.cpu_backend) {
+            case config::CPUBackend::Unicorn:
+                cpu_unicorn_install(platform);
+                break;
+            case config::CPUBackend::DualCPU:
+                cpu_dualcpu_install(platform);
+                break;
+            case config::CPUBackend::UAE:
+            default:
+                cpu_uae_install(platform);
+                break;
+        }
     }
 
     // Copy platform to global
@@ -333,11 +358,17 @@ void CPUProcess::child_main(SharedState* shm)
     RAMSize = cfg.ram_mb * 1024 * 1024;
 
     // Initialize CPU (loads ROM, patches ROM, inits Mac subsystems)
-    if (!g_cpu_ctx.init_m68k(cfg)) {
+    bool init_ok;
+    if (cfg.is_ppc()) {
+        init_ok = g_cpu_ctx.init_ppc(cfg);
+    } else {
+        init_ok = g_cpu_ctx.init_m68k(cfg);
+    }
+    if (!init_ok) {
         snprintf(shm->error_msg, sizeof(shm->error_msg),
-                 "Failed to initialize CPU");
+                 "Failed to initialize %s CPU", cfg.architecture_string());
         shm->child_state.store(SHM_STATE_ERROR, std::memory_order_release);
-        fprintf(stderr, "[Child] init_m68k failed\n");
+        fprintf(stderr, "[Child] init_%s failed\n", cfg.architecture_string());
         _exit(1);
     }
 

@@ -196,6 +196,40 @@ typedef struct {
     // Trap handler (A-line and F-line exceptions)
     // Returns true if PC was advanced, false if caller should advance
     bool (*trap_handler)(int vector, uint16_t opcode, bool is_primary);
+
+    /*
+     *  PPC CPU Emulation Backend
+     *
+     *  PPC backends use SHEEP opcodes (0x18xxxxxx) instead of M68K EmulOps.
+     *  PPC register accessors are separate from M68K because register models differ.
+     *  These pointers are NULL when running in M68K mode.
+     */
+
+    // PPC register access (set by PPC backends)
+    uint32_t (*cpu_ppc_get_gpr)(int n);
+    void (*cpu_ppc_set_gpr)(int n, uint32_t val);
+    uint32_t (*cpu_ppc_get_pc)(void);
+    void (*cpu_ppc_set_pc)(uint32_t val);
+    uint32_t (*cpu_ppc_get_lr)(void);
+    void (*cpu_ppc_set_lr)(uint32_t val);
+    uint32_t (*cpu_ppc_get_ctr)(void);
+    void (*cpu_ppc_set_ctr)(uint32_t val);
+    uint32_t (*cpu_ppc_get_cr)(void);
+    void (*cpu_ppc_set_cr)(uint32_t val);
+    uint32_t (*cpu_ppc_get_msr)(void);
+    void (*cpu_ppc_set_msr)(uint32_t val);
+    uint32_t (*cpu_ppc_get_xer)(void);
+    void (*cpu_ppc_set_xer)(uint32_t val);
+
+    // PPC execution
+    void (*cpu_ppc_execute)(void);       // Run PPC until stopped
+    void (*cpu_ppc_stop)(void);          // Signal PPC to stop (thread-safe)
+    void (*cpu_ppc_interrupt)(uint32_t); // Deliver interrupt to PPC
+
+    // PPC SHEEP opcode handler
+    // Called when PPC encounters a SHEEP opcode (0x18xxxxxx)
+    // Returns true if handler executed, false if unrecognized
+    bool (*ppc_sheep_handler)(uint32_t opcode);
 } Platform;
 
 /*
@@ -325,9 +359,16 @@ extern bool platform_unix_sys_cd_read_toc(void *fh, uint8_t *toc);
 /*
  *  CPU Backend Installation Functions
  */
+
+// M68K backends
 extern void cpu_uae_install(Platform *p);
 extern void cpu_unicorn_install(Platform *p);
 extern void cpu_dualcpu_install(Platform *p);
+
+// PPC backends
+extern void cpu_ppc_unicorn_install(Platform *p);
+extern void cpu_ppc_kpx_install(Platform *p);
+extern void cpu_ppc_dualcpu_install(Platform *p);
 
 #ifdef __cplusplus
 }

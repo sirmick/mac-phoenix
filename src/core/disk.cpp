@@ -244,7 +244,7 @@ static void mount_mountable_volumes(void)
 int16 DiskOpen(uint32 pb, uint32 dce)
 {
 	(void)pb;
-	D(bug("DiskOpen: %d drives\n", (int)drives.size()));
+	fprintf(stderr, "[DiskOpen] %d drives\n", (int)drives.size());
 
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
@@ -291,6 +291,8 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 			// Add drive to drive queue
 			r.d[0] = (info->num << 16) | (DiskRefNum & 0xffff);
 			r.a[0] = info->status + dsQLink;
+			fprintf(stderr, "[DiskOpen] AddDrive: drive=%d refnum=%d status=%08X blocks=%d\n",
+				info->num, DiskRefNum, info->status, info->num_blocks);
 			Execute68kTrap(0xa04e, &r);	// AddDrive()
 		}
 	}

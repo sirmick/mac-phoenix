@@ -90,4 +90,24 @@ void platform_init(void)
 
 	// Code cache flush (NULL by default - set by JIT backends like Unicorn)
 	g_platform.flush_code_cache = nullptr;
+
+	// PPC backend (NULL by default - set by PPC cpu_ppc_*_install)
+	g_platform.cpu_ppc_get_gpr = nullptr;
+	g_platform.cpu_ppc_set_gpr = nullptr;
+	g_platform.cpu_ppc_get_pc = nullptr;
+	g_platform.cpu_ppc_set_pc = nullptr;
+	g_platform.cpu_ppc_get_lr = nullptr;
+	g_platform.cpu_ppc_set_lr = nullptr;
+	g_platform.cpu_ppc_get_ctr = nullptr;
+	g_platform.cpu_ppc_set_ctr = nullptr;
+	g_platform.cpu_ppc_get_cr = nullptr;
+	g_platform.cpu_ppc_set_cr = nullptr;
+	g_platform.cpu_ppc_get_msr = nullptr;
+	g_platform.cpu_ppc_set_msr = nullptr;
+	g_platform.cpu_ppc_get_xer = nullptr;
+	g_platform.cpu_ppc_set_xer = nullptr;
+	g_platform.cpu_ppc_execute = nullptr;
+	g_platform.cpu_ppc_stop = nullptr;
+	g_platform.cpu_ppc_interrupt = nullptr;
+	g_platform.ppc_sheep_handler = nullptr;
 }

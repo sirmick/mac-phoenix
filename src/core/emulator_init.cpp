@@ -233,7 +233,7 @@ bool init_mac_subsystems(void)
     }
 
     // Load XPRAM default values if signature not found
-    extern uint8 XPRAM[256];
+    extern uint8 XPRAM[];
     if (XPRAM[0x0c] != 0x4e || XPRAM[0x0d] != 0x75
      || XPRAM[0x0e] != 0x4d || XPRAM[0x0f] != 0x63) {
         D(bug("Loading XPRAM default values\n"));

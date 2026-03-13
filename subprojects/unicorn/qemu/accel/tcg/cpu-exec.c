@@ -30,7 +30,8 @@
 #include "uc_priv.h"
 
 /* Global CHECKLOAD counter - set by macemu-next, read here */
-volatile int g_cpu_exec_checkload_count = 0;
+/* weak: compiled once per arch target; only one definition wins at link time */
+__attribute__((weak)) volatile int g_cpu_exec_checkload_count = 0;
 
 /* -icount align implementation. */
 
@@ -248,9 +249,10 @@ static inline void tb_add_jump(TranslationBlock *tb, int n,
 }
 
 /* TB lookup/compile counters — accessed from unicorn_wrapper.c */
-uint64_t g_tb_find_count = 0;
-uint64_t g_tb_miss_count = 0;
-uint64_t g_tb_buffer_flush_count = 0;
+/* weak: compiled once per arch target; only one definition wins at link time */
+__attribute__((weak)) uint64_t g_tb_find_count = 0;
+__attribute__((weak)) uint64_t g_tb_miss_count = 0;
+__attribute__((weak)) uint64_t g_tb_buffer_flush_count = 0;
 
 static inline TranslationBlock *tb_find(CPUState *cpu,
                                         TranslationBlock *last_tb,
