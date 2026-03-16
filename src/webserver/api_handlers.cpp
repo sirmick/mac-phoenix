@@ -869,12 +869,15 @@ Response APIRouter::handle_wait(const Request& req) {
             }
         } else if (cond_type == "boot") {
             std::string phase;
+            bool reached;
             if (ctx_->shared_state) {
                 phase = ctx_->shared_state->boot_phase_name;
+                reached = boot_progress_phase_reached_by_name(phase.c_str(), cond_value.c_str());
             } else {
                 phase = boot_progress_phase();
+                reached = boot_progress_phase_reached(cond_value.c_str());
             }
-            if (phase == cond_value) {
+            if (reached) {
                 return Response::json("{\"ok\": true, \"boot_phase\": \"" + phase + "\"}");
             }
         } else {
