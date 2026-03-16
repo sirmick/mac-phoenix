@@ -56,7 +56,8 @@ double boot_progress_elapsed(void);
  * Unknown phase names always return false. */
 int boot_progress_phase_reached(const char *phase_name);
 
-/* Compare two phase name strings: returns true if current_phase >= target_phase. */
+/* Compare two phase name strings: returns true if current_phase >= target_phase.
+ * For use in fork mode where the parent reads phase names from shared memory. */
 int boot_progress_phase_reached_by_name(const char *current_phase, const char *target_phase);
 
 /* Query Mac mouse position from low-memory globals (for /api/mouse) */
