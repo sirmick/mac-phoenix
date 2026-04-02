@@ -1,0 +1,24 @@
+# Autoconf/Automake generated files
+configure
+aclocal.m4
+autom4te.cache/
+config.guess
+config.sub
+config.h.in
+config.h
+config.log
+config.status
+install-sh
+INSTALL
+
+# Backup files
+*~
+*.old
+
+# Build artifacts (Makefile is generated from Makefile.in by configure)
+Makefile
+
+# Runtime/storage
+storage/
+basilisk_ii.prefs
+BasiliskII
