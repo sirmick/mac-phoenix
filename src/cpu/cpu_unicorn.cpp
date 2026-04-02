@@ -1084,9 +1084,13 @@ void cpu_unicorn_install(Platform *p) {
 	p->mem_write_word = unicorn_mem_write_word;
 	p->mem_write_long = unicorn_mem_write_long;
 
-	// Address translation: Unicorn doesn't support direct host pointer access
-	// Mac2HostAddr/Host2MacAddr are only valid for UAE's memory space
-	// For Unicorn, these should NOT be used - all access must go through uc_mem_read/write
-	p->mem_mac_to_host = NULL;  // Not supported for Unicorn
-	p->mem_host_to_mac = NULL;  // Not supported for Unicorn
+	// Address translation: Unicorn uses uc_mem_map_ptr() which shares the host
+	// buffer directly, so Mac↔host pointer arithmetic is valid (same layout as UAE).
+	// Needed by video init, EmulOp handlers, ROM patches, etc.
+	p->mem_mac_to_host = [](uint32_t addr) -> uint8_t* {
+		return RAMBaseHost + addr;
+	};
+	p->mem_host_to_mac = [](uint8_t *ptr) -> uint32_t {
+		return (uint32_t)((uintptr_t)ptr - (uintptr_t)RAMBaseHost);
+	};
 }
