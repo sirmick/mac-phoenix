@@ -52,7 +52,7 @@ legacy's older GCC, producing different machine code for the block dispatch loop
 
 The **IPC video driver** is the correct comparison target for mac-phoenix, not SDL:
 
-- `legacy/SheepShaver-clean/src/IPC/video_ipc_sheep.cpp` — **correct reference**
+- `legacy/SheepShaver/src/IPC/video_ipc_sheep.cpp` — **correct reference**
 - Both use: `DIS_SCREEN`, `APPLE_CUSTOM`, `video_can_change_cursor()=true`
 - Both allocate framebuffer via `vm_acquire` with `Host2MacAddr`
 - Both have single 32-bit mode, no multi-depth
@@ -123,7 +123,7 @@ src/cpu/kpx/
 
 ## Verified Identical to Legacy
 
-All of these have been audited file-by-file against `legacy/SheepShaver-clean`:
+All of these have been audited file-by-file against `legacy/SheepShaver`:
 
 - EmulOp handlers (all 40+) — same selectors, same logic
 - NativeOp enum values (all 38) — same numbering

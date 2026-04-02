@@ -8,13 +8,13 @@
 
 | File | Use for | NOT for |
 |------|---------|---------|
-| `legacy/SheepShaver-clean/src/IPC/video_ipc_sheep.cpp` | Video init, display_type, cursor | — |
-| `legacy/SheepShaver-clean/src/SDL/video_sdl2.cpp` | — | Wrong display_type, wrong cursor |
-| `legacy/SheepShaver-clean/src/kpx_cpu/sheepshaver_glue.cpp` | CPU bridge, HandleInterrupt | — |
-| `legacy/SheepShaver-clean/src/Unix/main_unix.cpp` | Tick thread, init sequence | — |
-| `legacy/SheepShaver-clean/src/video.cpp` | VideoDoDriverIO, Control, Status | — |
-| `legacy/SheepShaver-clean/src/emul_op.cpp` | EmulOp dispatch | — |
-| `legacy/SheepShaver-clean/src/gfxaccel.cpp` | NQD acceleration | — |
+| `legacy/SheepShaver/src/IPC/video_ipc_sheep.cpp` | Video init, display_type, cursor | — |
+| `legacy/SheepShaver/src/SDL/video_sdl2.cpp` | — | Wrong display_type, wrong cursor |
+| `legacy/SheepShaver/src/kpx_cpu/sheepshaver_glue.cpp` | CPU bridge, HandleInterrupt | — |
+| `legacy/SheepShaver/src/Unix/main_unix.cpp` | Tick thread, init sequence | — |
+| `legacy/SheepShaver/src/video.cpp` | VideoDoDriverIO, Control, Status | — |
+| `legacy/SheepShaver/src/emul_op.cpp` | EmulOp dispatch | — |
+| `legacy/SheepShaver/src/gfxaccel.cpp` | NQD acceleration | — |
 
 ---
 

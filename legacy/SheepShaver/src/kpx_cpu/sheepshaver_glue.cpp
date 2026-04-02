@@ -1,4 +1,3 @@
-#include <sys/mman.h>
 /*
  *  sheepshaver_glue.cpp - Glue Kheperix CPU to SheepShaver CPU engine interface
  *
@@ -852,8 +851,6 @@ void init_emul_ppc(void)
 	ppc_cpu->set_register(powerpc_registers::GPR(3), any_register((uint32)ROMBase + 0x30d000));
 	ppc_cpu->set_register(powerpc_registers::GPR(4), any_register(KernelDataAddr + 0x1000));
 	WriteMacInt32(XLM_RUN_MODE, MODE_68K);
-	fprintf(stderr, "[TRACE] CPU: GPR3=0x%08x GPR4=0x%08x MODE=%d\n",
-		ROMBase + 0x30d000, KernelDataAddr + 0x1000, ReadMacInt32(XLM_RUN_MODE));
 
 #if ENABLE_MON
 	// Install "regs" command in cxmon
@@ -934,27 +931,9 @@ void init_emul_op_trampolines(basic_dyngen & dg)
 
 void emul_ppc(uint32 entry)
 {
-	fprintf(stderr, "[TRACE] execute: entry=0x%08x\n", entry);
-	// Dump /proc/self/maps before execute
-	{
-		FILE *maps = fopen("/proc/self/maps", "r");
-		if (maps) {
-			char line[256];
-			fprintf(stderr, "[TRACE] /proc/self/maps before execute:\n");
-			while (fgets(line, sizeof(line), maps)) {
-				uintptr_t start;
-				if (sscanf(line, "%lx", &start) == 1 && start < 0x70100000)
-					fprintf(stderr, "[TRACE]   %s", line);
-			}
-			fclose(maps);
-		}
-	}
-	// BISECT: match mac-phoenix — unmap DR regions before nanokernel boot
-	munmap((void *)0x68070000, 0x10000);
-	munmap((void *)0x69000000, 0x80000);
-
-	// BISECT: match mac-phoenix — enable flight recorder
+#if 0
 	ppc_cpu->start_log();
+#endif
 	// start emulation loop and enable code translation or caching
 	ppc_cpu->execute(entry);
 }
@@ -991,56 +970,8 @@ void HandleInterrupt(powerpc_registers *r)
 	interrupt_count++;
 #endif
 
-	static int hi_count = 0;
-	uint32 mode = ReadMacInt32(XLM_RUN_MODE);
-	++hi_count;
-
-	// KernelData dump at first HandleInterrupt
-	if (hi_count == 1) {
-		fprintf(stderr, "[TRACE] HI#1: mode=%d\n", mode);
-		fprintf(stderr, "[TRACE] HI#1: KD+0x004=%08x KD+0x5b4=%08x KD+0x654=%08x KD+0x658=%08x\n",
-			ReadMacInt32(KERNEL_DATA_BASE+0x004), ReadMacInt32(KERNEL_DATA_BASE+0x5b4),
-			ReadMacInt32(KERNEL_DATA_BASE+0x654), ReadMacInt32(KERNEL_DATA_BASE+0x658));
-		fprintf(stderr, "[TRACE] HI#1: KD+0x65c=%08x KD+0x660=%08x KD+0x674=%08x KD+0x67c=%08x\n",
-			ReadMacInt32(KERNEL_DATA_BASE+0x65c), ReadMacInt32(KERNEL_DATA_BASE+0x660),
-			ReadMacInt32(KERNEL_DATA_BASE+0x674), ReadMacInt32(KERNEL_DATA_BASE+0x67c));
-		fprintf(stderr, "[TRACE] HI#1: KD+0x684=%08x KD+0x6a4=%08x KD+0x920=%08x KD+0x924=%08x\n",
-			ReadMacInt32(KERNEL_DATA_BASE+0x684), ReadMacInt32(KERNEL_DATA_BASE+0x6a4),
-			ReadMacInt32(KERNEL_DATA_BASE+0x920), ReadMacInt32(KERNEL_DATA_BASE+0x924));
-	}
-
-	// PPC boot feedback loop pass/fail indicator
-	{
-		static uint64 first_usec = 0;
-		static uint64 last_usec = 0;
-		static int hi_per_sec = 0;
-		static int hi_mode1 = 0;
-		static int peak_mode1 = 0;
-		static bool verdict_printed = false;
-		hi_per_sec++;
-		if (mode == 1) hi_mode1++;
-		uint64 now = GetTicks_usec();
-		if (first_usec == 0) first_usec = now;
-		if (last_usec == 0) last_usec = now;
-		if (now - last_usec >= 1000000) {
-			if (hi_mode1 > peak_mode1) peak_mode1 = hi_mode1;
-			fprintf(stderr, "[TRACE] HI-RATE: %d HI/s (%d mode=1, peak=%d)\n",
-					hi_per_sec, hi_mode1, peak_mode1);
-			hi_per_sec = 0;
-			hi_mode1 = 0;
-			last_usec = now;
-			if (!verdict_printed && (now - first_usec >= 5000000)) {
-				if (peak_mode1 >= 20)
-					fprintf(stderr, "[PPC-BOOT] PASS: feedback loop engaged (peak %d mode=1/s)\n", peak_mode1);
-				else
-					fprintf(stderr, "[PPC-BOOT] FAIL: feedback loop stalled after 5s (peak %d mode=1/s)\n", peak_mode1);
-				verdict_printed = true;
-			}
-		}
-	}
-
 	// Interrupt action depends on current run mode
-	switch (mode) {
+	switch (ReadMacInt32(XLM_RUN_MODE)) {
 	case MODE_68K:
 		// 68k emulator active, trigger 68k interrupt level 1
 		WriteMacInt16(ReadMacInt32(KERNEL_DATA_BASE + 0x67c), 1);
