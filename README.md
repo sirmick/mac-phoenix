@@ -26,7 +26,7 @@ MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github
 
 ```bash
 # Build tools
-sudo apt install build-essential meson ninja-build cmake pkg-config git
+sudo apt install build-essential cmake pkg-config git
 
 # Required
 sudo apt install libssl-dev nlohmann-json3-dev
@@ -44,7 +44,7 @@ sudo apt install libcpp-httplib-dev
 sudo npx playwright install-deps
 ```
 
-The only hard requirements are OpenSSL and a C++17 compiler. Video/audio codec packages are optional — without them, the emulator still works using PNG frame streaming.
+The only hard requirements are OpenSSL and a C++17 compiler. Video/audio codec packages are optional — the build auto-detects installed codecs and enables them automatically. Without any codec packages, the emulator still works using PNG frame streaming. To explicitly disable a codec even when the library is present, pass `-DENABLE_H264=OFF`, `-DENABLE_VP9=OFF`, `-DENABLE_WEBP=OFF`, or `-DENABLE_OPUS=OFF` to the cmake configure step. The cmake configure summary shows which codecs were detected.
 
 ### Requirements
 
@@ -59,8 +59,8 @@ git clone --recursive https://github.com/sirmick/mac-phoenix.git
 cd mac-phoenix
 
 # Build (Unicorn engine compiles from source on first build)
-meson setup build
-ninja -C build
+cmake -B build
+cmake --build build -j$(nproc)
 
 # Run
 ./build/mac-phoenix /path/to/quadra.rom
@@ -114,20 +114,20 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 
 ## Testing
 
-Two test suites: **meson integration tests** (shell scripts that test the emulator via curl) and **Playwright E2E tests** (browser-based, full UI + WebRTC pipeline).
+Two test suites: **CTest integration tests** (shell scripts that test the emulator via curl) and **Playwright E2E tests** (browser-based, full UI + WebRTC pipeline).
 
 ```bash
-# Meson — fast suite (~15s): API, boot, mouse, command bridge
-meson test -C build api_endpoints boot_uae mouse_position command_bridge
+# CTest — fast suite (~15s): API, boot, mouse, command bridge
+ctest --test-dir build -R "api_endpoints|boot_uae|mouse_position|command_bridge"
 
-# Meson — full suite (~60s, includes slow Unicorn boot)
-meson test -C build
+# CTest — full suite (~60s, includes slow Unicorn boot)
+ctest --test-dir build
 
 # Playwright E2E (~2 min): UI controls, WebRTC latency, config, soak test
 npx playwright test
 
 # Run everything
-meson test -C build && npx playwright test
+ctest --test-dir build && npx playwright test
 ```
 
 See [docs/Testing.md](docs/Testing.md) for the full test inventory, configuration, and details on the stall detection soak test.

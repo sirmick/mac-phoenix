@@ -57,7 +57,7 @@ What we're building and why.
 ### Key Design Principles
 
 1. **Platform API Abstraction** — All backends implement the same `g_platform` function pointer table
-2. **Meson Build System** — Fast, cross-platform builds
+2. **CMake Build System** — Standard, cross-platform builds
 3. **Modular Drivers** — Adapter pattern with null defaults, runtime selection
 4. **Web-First UI** — WebRTC streaming, HTTP API, browser client
 5. **Continuous Validation** — DualCPU mode for M68K correctness

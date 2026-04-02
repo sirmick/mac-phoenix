@@ -15,6 +15,7 @@
 #include "../core/boot_progress.h"  // For boot phase query
 #include "../core/command_bridge.h"  // For command bridge
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
+#include "../drivers/video/encoders/codec.h"  // For codec_available()
 #include <sstream>
 #include <iomanip>
 #include <cstdio>
@@ -70,6 +71,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/codec" && req.method == "POST") {
         return handle_codec_post(req);
+    }
+    if (req.path == "/api/codecs" && req.method == "GET") {
+        return handle_codecs_get(req);
     }
     if (req.path == "/api/emulator/start" && req.method == "POST") {
         return handle_emulator_start(req);
@@ -385,6 +389,22 @@ Response APIRouter::handle_codec_post(const Request& req) {
     }
 
     return Response::json("{\"ok\": true}");
+}
+
+Response APIRouter::handle_codecs_get(const Request& /*req*/) {
+    std::string json = "{\"codecs\":[";
+    json += "{\"id\":\"png\",\"name\":\"PNG\",\"available\":true}";
+    json += ",{\"id\":\"h264\",\"name\":\"H.264\",\"available\":";
+    json += codec_available(CodecType::H264) ? "true" : "false";
+    json += "}";
+    json += ",{\"id\":\"vp9\",\"name\":\"VP9\",\"available\":";
+    json += codec_available(CodecType::VP9) ? "true" : "false";
+    json += "}";
+    json += ",{\"id\":\"webp\",\"name\":\"WebP\",\"available\":";
+    json += codec_available(CodecType::WEBP) ? "true" : "false";
+    json += "}";
+    json += "]}";
+    return Response::json(json);
 }
 
 // ============================================================================

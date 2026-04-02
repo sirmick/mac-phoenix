@@ -123,7 +123,7 @@ async function main() {
   const binary = path.join(buildDir, 'mac-phoenix');
 
   if (!fs.existsSync(binary)) {
-    console.error(`Binary not found: ${binary}. Run 'ninja -C build' first.`);
+    console.error(`Binary not found: ${binary}. Run 'cmake --build build' first.`);
     process.exit(1);
   }
   if (!fs.existsSync(opts.rom)) {

@@ -7,9 +7,12 @@
 #define VP9_ENCODER_H
 
 #include "codec.h"
+#include <vector>
+
+#ifdef HAVE_VPX
+
 #include <vpx/vpx_encoder.h>
 #include <vpx/vp8cx.h>
-#include <vector>
 
 class VP9Encoder : public VideoCodec {
 public:
@@ -41,5 +44,22 @@ private:
     // I420 conversion buffer
     std::vector<uint8_t> i420_buffer_;
 };
+
+#else // !HAVE_VPX
+
+class VP9Encoder : public VideoCodec {
+public:
+    CodecType type() const override { return CodecType::VP9; }
+    const char* name() const override { return "VP9 (unavailable)"; }
+    bool init(int, int, int = 30) override { return false; }
+    void cleanup() override {}
+    EncodedFrame encode_i420(const uint8_t*, const uint8_t*, const uint8_t*,
+                             int w, int h, int, int) override { return EncodedFrame{.codec=CodecType::VP9,.width=w,.height=h}; }
+    EncodedFrame encode_bgra(const uint8_t*, int w, int h, int) override { return EncodedFrame{.codec=CodecType::VP9,.width=w,.height=h}; }
+    EncodedFrame encode_argb(const uint8_t*, int w, int h, int) override { return EncodedFrame{.codec=CodecType::VP9,.width=w,.height=h}; }
+    void request_keyframe() override {}
+};
+
+#endif // HAVE_VPX
 
 #endif // VP9_ENCODER_H

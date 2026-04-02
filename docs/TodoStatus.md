@@ -19,7 +19,7 @@ Track what's done and what's next.
 ## Phase 1: Core CPU Emulation ✅ COMPLETE
 
 ### Build System ✅
-- ✅ Meson build, UAE compilation, Unicorn submodule, backend selection
+- ✅ CMake build, UAE compilation, Unicorn submodule, backend selection
 
 ### Memory System ✅
 - ✅ Direct addressing, ROM loading, RAM allocation, endianness handling

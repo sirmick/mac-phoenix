@@ -3812,6 +3812,52 @@ async function resetEmulator() {
     await restartEmulator();
 }
 
+// Fetch available codecs from server and populate the dropdown
+async function populateAvailableCodecs() {
+    const select = document.getElementById('codec-select');
+    if (!select) return;
+
+    try {
+        const response = await fetch(getApiUrl('codecs'));
+        const data = await response.json();
+        if (!data.codecs) return;
+
+        // Remember current selection
+        const currentValue = select.value;
+
+        // Remove all options except httpstream
+        const httpstreamOpt = select.querySelector('option[value="httpstream"]');
+        select.innerHTML = '';
+
+        // Add available codecs
+        for (const codec of data.codecs) {
+            if (codec.available) {
+                const opt = document.createElement('option');
+                opt.value = codec.id;
+                opt.textContent = codec.name;
+                select.appendChild(opt);
+            }
+        }
+
+        // Re-add httpstream option
+        if (httpstreamOpt) {
+            select.appendChild(httpstreamOpt);
+        } else {
+            const opt = document.createElement('option');
+            opt.value = 'httpstream';
+            opt.textContent = 'HTTP Stream';
+            select.appendChild(opt);
+        }
+
+        // Restore selection if still available, otherwise default to first
+        if (select.querySelector(`option[value="${currentValue}"]`)) {
+            select.value = currentValue;
+        }
+    } catch (e) {
+        logger.warn('[Browser] Failed to fetch available codecs', { error: e.message });
+    }
+}
+
 // Codec management
 async function changeCodec() {
     const select = document.getElementById('codec-select');
@@ -3998,6 +4044,9 @@ setInterval(pollEmulatorStatus, CONSTANTS.STATUS_POLL_INTERVAL_MS);
 
 // Setup event listeners for UI elements
 function setupEventListeners() {
+    // Populate codec dropdown based on server-compiled codecs
+    populateAvailableCodecs();
+
     // Header controls
     const codecSelect = document.getElementById('codec-select');
     if (codecSelect) codecSelect.addEventListener('change', changeCodec);

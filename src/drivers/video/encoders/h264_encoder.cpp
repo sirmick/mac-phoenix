@@ -3,6 +3,9 @@
  */
 
 #include "h264_encoder.h"
+
+#ifdef HAVE_OPENH264
+
 #include <cstdio>
 #include <libyuv.h>
 
@@ -276,3 +279,5 @@ EncodedFrame H264Encoder::encode_argb(const uint8_t* argb, int width, int height
 
     return encode_i420(y, u, v, width, height, width, width / 2);
 }
+
+#endif // HAVE_OPENH264

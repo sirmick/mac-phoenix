@@ -294,15 +294,15 @@ else
 fi
 ```
 
-### Meson Integration
+### CMake Integration
 
-```meson
+```cmake
 # Test apps (cross-compiled separately, checked into build or built by script)
-test('tcpip',
-  find_program('tests/integration/test_tcpip.sh'),
-  timeout: 60,
-  suite: 'integration',
+add_test(
+  NAME tcpip
+  COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_tcpip.sh
 )
+set_tests_properties(tcpip PROPERTIES TIMEOUT 60 LABELS "integration")
 ```
 
 ### What to Test

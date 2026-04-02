@@ -65,6 +65,7 @@ private:
     Response handle_restart(const Request& req);
     Response handle_status(const Request& req);
     Response handle_codec_post(const Request& req);
+    Response handle_codecs_get(const Request& req);
     Response handle_emulator_start(const Request& req);
     Response handle_emulator_stop(const Request& req);
     Response handle_emulator_restart(const Request& req);

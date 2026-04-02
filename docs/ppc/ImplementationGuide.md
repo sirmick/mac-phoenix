@@ -86,7 +86,7 @@ These are already committed in the scaffolding. Keep them as-is from legacy. Req
 - `ppc-execute.cpp`: No changes needed. Do NOT add debug tracing to hot paths.
 - `vm.hpp`: Ensure DIRECT_ADDRESSING mode uses VMBaseDiff
 - `spcflags.hpp`: Must support `trigger_interrupt()` from timer thread (atomic flag)
-- `meson.build`: Build as static library, link to mac-phoenix
+- `CMakeLists.txt`: Build as static library, link to mac-phoenix
 
 **Do NOT add to KPX files:**
 - Per-instruction PC tracing

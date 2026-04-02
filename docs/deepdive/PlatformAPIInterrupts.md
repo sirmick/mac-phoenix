@@ -410,7 +410,7 @@ env->pc = handler;
 
 ```bash
 # Build
-ninja -C build
+cmake --build build -j$(nproc)
 
 # Test UAE backend
 ./build/mac-phoenix --backend uae --timeout 5 ~/quadra.rom

@@ -35,8 +35,8 @@ done
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 
 if [[ ! -x "$BINARY" ]]; then
-    echo "SKIP: Binary not found: $BINARY (run 'ninja -C build' first)"
-    exit 77  # meson skip code
+    echo "SKIP: Binary not found: $BINARY (run 'cmake --build build' first)"
+    exit 77  # ctest skip code
 fi
 
 if [[ ! -f "$ROM" ]]; then

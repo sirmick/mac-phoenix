@@ -72,7 +72,7 @@ export { expect } from '@playwright/test';
 // Helper to spawn the emulator as a child process
 export async function spawnEmulator(opts?: { timeoutSeconds?: number; extraArgs?: string[] }): Promise<ChildProcess> {
   if (!fs.existsSync(BINARY)) {
-    throw new Error(`Binary not found: ${BINARY}. Run 'ninja -C build' first.`);
+    throw new Error(`Binary not found: ${BINARY}. Run 'cmake --build build' first.`);
   }
 
   const timeout = opts?.timeoutSeconds ?? 60;

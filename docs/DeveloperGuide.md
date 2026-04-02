@@ -136,16 +136,16 @@ grep "EmulOp" logfile | sort | uniq -c
 
 ```bash
 # All tests
-meson test -C build
+ctest --test-dir build
 
 # Fast tests (~20s)
-meson test -C build api_endpoints boot_uae mouse_position command_bridge extfs
+ctest --test-dir build -R "api_endpoints|boot_uae|mouse_position|command_bridge|extfs"
 
 # PPC boot test
-meson test -C build boot_ppc_interp
+ctest --test-dir build -R boot_ppc_interp
 
 # Verbose
-meson test -C build -v
+ctest --test-dir build -V
 
 # Dual-CPU validation
 ./build/mac-phoenix --backend dualcpu --no-webserver ~/quadra.rom

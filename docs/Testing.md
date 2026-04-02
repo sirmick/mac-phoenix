@@ -1,42 +1,42 @@
 # Testing
 
-MacPhoenix has two test suites: **meson integration tests** (shell scripts that exercise the emulator binary via curl) and **Playwright E2E tests** (browser-based tests that verify the full UI and WebRTC pipeline).
+MacPhoenix has two test suites: **CTest integration tests** (shell scripts that exercise the emulator binary via curl) and **Playwright E2E tests** (browser-based tests that verify the full UI and WebRTC pipeline).
 
-Both require a built binary (`ninja -C build`) and a Quadra 650 ROM.
+Both require a built binary (`cmake --build build -j$(nproc)`) and a Quadra 650 ROM.
 
 ## Quick Reference
 
 ```bash
-# Meson integration tests — fast suite (~15s)
-meson test -C build api_endpoints boot_uae mouse_position command_bridge
+# CTest integration tests — fast suite (~15s)
+ctest --test-dir build -R "api_endpoints|boot_uae|mouse_position|command_bridge"
 
-# Meson integration tests — full suite including Unicorn (~60s)
-meson test -C build
+# CTest integration tests — full suite including Unicorn (~60s)
+ctest --test-dir build
 
 # Playwright E2E tests (~2 min)
 npx playwright test
 
 # Both suites
-meson test -C build && npx playwright test
+ctest --test-dir build && npx playwright test
 ```
 
-## Meson Integration Tests
+## CTest Integration Tests
 
 These are shell scripts in `tests/` that start the emulator, hit HTTP API endpoints with curl, and check responses. They run without a browser.
 
 ```bash
 # Run all
-meson test -C build
+ctest --test-dir build
 
 # Run specific test
-meson test -C build boot_uae
+ctest --test-dir build -R boot_uae
 
 # Verbose output
-meson test -C build -v
+ctest --test-dir build -V
 
-# Run by suite
-meson test -C build --suite api    # API-only tests
-meson test -C build --suite boot   # Tests that require booting
+# Run by label
+ctest --test-dir build -L api    # API-only tests
+ctest --test-dir build -L boot   # Tests that require booting
 ```
 
 ### Test List
@@ -52,11 +52,11 @@ meson test -C build --suite boot   # Tests that require booting
 
 ### Configuration
 
-Tests use these defaults (override with environment variables or meson options):
+Tests use these defaults (override with environment variables or CMake options):
 
 | Setting | Default | Override |
 |---------|---------|----------|
-| ROM path | `/home/mick/quadra.rom` | `MACEMU_ROM` env var or `meson configure -Dtest_rom=/path build` |
+| ROM path | `/home/mick/quadra.rom` | `MACEMU_ROM` env var or `cmake -B build -DTEST_ROM=/path` |
 | Disk image | `/home/mick/storage/images/7.6.img` | `MACEMU_DISK` env var |
 
 Tests use dedicated ports (18090-18093) to avoid conflicts with a running emulator.

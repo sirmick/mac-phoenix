@@ -43,6 +43,23 @@ struct EncodedFrame {
     uint8_t cursor_visible = 0;
 };
 
+// Query which codecs were compiled in
+inline bool codec_available(CodecType type) {
+    switch (type) {
+        case CodecType::PNG: return true;  // always available
+#ifdef HAVE_OPENH264
+        case CodecType::H264: return true;
+#endif
+#ifdef HAVE_VPX
+        case CodecType::VP9: return true;
+#endif
+#ifdef HAVE_LIBWEBP
+        case CodecType::WEBP: return true;
+#endif
+        default: return false;
+    }
+}
+
 class VideoCodec {
 public:
     virtual ~VideoCodec() = default;

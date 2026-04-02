@@ -120,9 +120,7 @@ BLOCK_STATS=1
 ### Clean Rebuild
 ```bash
 cd /home/mick/macemu-dual-cpu/mac-phoenix
-rm -rf build
-meson setup build
-ninja -C build
+rm -rf build && cmake -B build && cmake --build build -j$(nproc)
 ```
 
 ### Verify Installation
@@ -171,8 +169,7 @@ EMULOP_VERBOSE=1 ./build/mac-phoenix --backend unicorn --timeout 2 --no-webserve
 ### GDB Debugging
 ```bash
 # Build with debug symbols
-meson setup build -Dbuildtype=debug
-ninja -C build
+cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j$(nproc)
 
 # Run under GDB
 gdb ./build/mac-phoenix

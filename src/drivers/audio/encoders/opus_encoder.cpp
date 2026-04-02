@@ -3,6 +3,9 @@
  */
 
 #include "opus_encoder.h"
+
+#ifdef HAVE_OPUS
+
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -106,4 +109,4 @@ std::vector<uint8_t> OpusAudioEncoder::encode(const int16_t* pcm, int frame_size
     return output;
 }
 
-
+#endif // HAVE_OPUS

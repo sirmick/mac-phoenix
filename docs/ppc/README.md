@@ -76,7 +76,7 @@ src/cpu/kpx/
   compat/                  — Header shims bridging KPX includes to mac-phoenix
   src/                     — KPX interpreter engine (upstream kanjitalk755)
   dyngen_precompiled/      — JIT bytecode (upstream, x86_64)
-  meson.build              — Build config (-fno-weak, -DSHEEPSHAVER=1)
+  CMakeLists.txt           — Build config (-fno-weak, -DSHEEPSHAVER=1)
 ```
 
 ## Target

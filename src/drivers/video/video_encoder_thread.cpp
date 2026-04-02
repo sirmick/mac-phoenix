@@ -41,21 +41,28 @@ static std::atomic<uint64_t> g_frames_encoded(0);
 static std::atomic<uint64_t> g_frames_dropped(0);
 
 /**
- * Create encoder based on codec type
+ * Create encoder based on codec type.
+ * Falls back to PNG if the requested codec was not compiled in.
  */
 static std::unique_ptr<VideoCodec> create_video_encoder(CodecType codec) {
     switch (codec) {
+#ifdef HAVE_OPENH264
         case CodecType::H264:
             fprintf(stderr, "[VideoEncoder] Creating H.264 encoder\n");
             return std::make_unique<H264Encoder>();
+#endif
 
+#ifdef HAVE_VPX
         case CodecType::VP9:
             fprintf(stderr, "[VideoEncoder] Creating VP9 encoder\n");
             return std::make_unique<VP9Encoder>();
+#endif
 
+#ifdef HAVE_LIBWEBP
         case CodecType::WEBP:
             fprintf(stderr, "[VideoEncoder] Creating WebP encoder\n");
             return std::make_unique<WebPEncoder>();
+#endif
 
         case CodecType::PNG:
         default:
@@ -177,17 +184,21 @@ static int encode_and_send_strips(VideoCodec* encoder, const uint32_t* pixels,
 
             EncodedFrame strip;
             auto* png_enc = dynamic_cast<PNGEncoder*>(encoder);
+#ifdef HAVE_LIBWEBP
             auto* webp_enc = dynamic_cast<WebPEncoder*>(encoder);
+#endif
 
             if (format == PIXFMT_BGRA) {
                 if (png_enc)
                     strip = png_enc->encode_bgra_rect(
                         reinterpret_cast<const uint8_t*>(pixels), frame_w, frame_h, frame_w * 4,
                         rect_x, sy, rect_w, sh);
+#ifdef HAVE_LIBWEBP
                 else if (webp_enc)
                     strip = webp_enc->encode_bgra_rect(
                         reinterpret_cast<const uint8_t*>(pixels), frame_w, frame_h, frame_w * 4,
                         rect_x, sy, rect_w, sh);
+#endif
             } else {
                 // ARGB: extract strip and convert to BGRA
                 std::vector<uint8_t> strip_bgra(rect_w * sh * 4);

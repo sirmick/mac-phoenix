@@ -10,19 +10,19 @@ See also: [CLAUDE.md](../CLAUDE.md) for project overview and architecture.
 
 ```bash
 # Standard build
-ninja -C build
+cmake --build build -j$(nproc)
 
 # Clean build
-rm -rf build && meson setup build && ninja -C build
+rm -rf build && cmake -B build && cmake --build build -j$(nproc)
 
 # Debug build
-meson setup build --buildtype=debug && ninja -C build
+cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j$(nproc)
 
 # Release build
-meson setup build --buildtype=release && ninja -C build
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j$(nproc)
 
-# Reconfigure (after changing meson.build or meson_options.txt)
-meson setup build --reconfigure
+# Reconfigure (after changing CMakeLists.txt options)
+cmake -B build
 
 # Rebuild Unicorn subproject (after modifying QEMU sources)
 cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
@@ -61,13 +61,13 @@ cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
 
 ```bash
 # Fast tests (API + UAE boot + mouse, ~12s)
-meson test -C build api_endpoints boot_uae mouse_position
+ctest --test-dir build -R "api_endpoints|boot_uae|mouse_position"
 
 # All tests (includes slow Unicorn boot, ~60s)
-meson test -C build
+ctest --test-dir build
 
 # Verbose output
-meson test -C build -v
+ctest --test-dir build -V
 
 # Playwright E2E tests (requires running emulator on port 18094)
 npx playwright test
@@ -134,7 +134,7 @@ The emulator binary does not read environment variables for configuration — us
 
 ```bash
 # Build and test (5 second boot)
-ninja -C build && ./build/mac-phoenix --timeout 5 --no-webserver /home/mick/quadra.rom
+cmake --build build -j$(nproc) && ./build/mac-phoenix --timeout 5 --no-webserver /home/mick/quadra.rom
 ```
 
 ### Trace Comparison (UAE vs Unicorn)
@@ -197,5 +197,5 @@ See [JsonConfig.md](JsonConfig.md) for config file format.
 **Unicorn build issues**: Rebuild the subproject:
 ```bash
 cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
-ninja -C build
+cmake --build build -j$(nproc)
 ```

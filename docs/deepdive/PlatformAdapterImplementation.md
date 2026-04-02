@@ -20,7 +20,7 @@ All driver subsystems use the adapter pattern: core code calls adapter functions
 
 - **`src/common/include/platform.h`** — `Platform` struct with 100+ function pointers covering all subsystems plus CPU backends
 - **`src/common/platform.cpp`** — `platform_init()` wires all pointers to null drivers at startup
-- **`src/drivers/meson.build`** — All adapters, null drivers, and real drivers compiled
+- **`src/drivers/CMakeLists.txt`** — All adapters, null drivers, and real drivers compiled
 
 ## CPU Backend Support
 

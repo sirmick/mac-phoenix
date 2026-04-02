@@ -11,7 +11,7 @@ Modern Mac emulator with multiple CPU backends and web-based streaming UI.
 1. **M68K Emulation** — UAE interpreter (default, fast, JIT), Unicorn QEMU backend, DualCPU validation
 2. **PowerPC Emulation** — KPX (Kheperix) interpreter from SheepShaver, boots Mac OS 9
 3. **Web-Based UI** — WebRTC streaming with mouse/keyboard input, HTTP API
-4. **Modern Architecture** — Clean platform API, modular drivers, Meson build
+4. **Modern Architecture** — Clean platform API, modular drivers, CMake build
 
 **Current Status** (April 2026):
 - ✅ M68K: Mac OS 7.5.5 boots to Finder (UAE ~5s, Unicorn ~48s)
@@ -25,8 +25,8 @@ Modern Mac emulator with multiple CPU backends and web-based streaming UI.
 
 ### Build
 ```bash
-meson setup build
-ninja -C build
+cmake -B build
+cmake --build build -j$(nproc)
 ```
 
 ### Run
@@ -99,7 +99,7 @@ mac-phoenix/
 ├── tests/                 # Shell + Playwright tests
 ├── subprojects/           # Unicorn, libdatachannel, nlohmann_json
 ├── docs/                  # Documentation (you are here!)
-└── meson.build
+└── CMakeLists.txt
 ```
 
 ---
