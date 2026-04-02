@@ -157,23 +157,26 @@ static void process_input_message(const std::byte* data, size_t size) {
 
     // PPC subprocess mode: send via IPC socket
     if (g_ipc_client && g_ipc_client->is_connected()) {
+        // Track button state so move events carry correct button mask
+        static uint8_t ipc_buttons = 0;
+
         switch (type) {
             case 1: { // Mouse move (relative)
                 if (size < 5) return;
                 int16_t dx, dy;
                 std::memcpy(&dx, data + 1, 2);
                 std::memcpy(&dy, data + 3, 2);
-                g_ipc_client->send_mouse(dx, dy, 0, false);
+                g_ipc_client->send_mouse(dx, dy, ipc_buttons, false);
                 break;
             }
             case 2: { // Mouse button
                 if (size < 3) return;
                 uint8_t button = static_cast<uint8_t>(data[1]);
                 uint8_t down = static_cast<uint8_t>(data[2]);
-                // Translate button to IPC mouse button flags
-                uint8_t buttons = 0;
-                if (down) buttons = (button == 0) ? IPC_MOUSE_LEFT : IPC_MOUSE_RIGHT;
-                g_ipc_client->send_mouse(0, 0, buttons, false);
+                uint8_t mask = (button == 0) ? IPC_MOUSE_LEFT : IPC_MOUSE_RIGHT;
+                if (down) ipc_buttons |= mask;
+                else      ipc_buttons &= ~mask;
+                g_ipc_client->send_mouse(0, 0, ipc_buttons, false);
                 break;
             }
             case 3: { // Key
@@ -192,7 +195,7 @@ static void process_input_message(const std::byte* data, size_t size) {
                 uint16_t x, y;
                 std::memcpy(&x, data + 1, 2);
                 std::memcpy(&y, data + 3, 2);
-                g_ipc_client->send_mouse(x, y, 0, true);
+                g_ipc_client->send_mouse(x, y, ipc_buttons, true);
                 break;
             }
         }
@@ -761,11 +764,14 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
     // Total: 5 bytes
     uint8_t metadata[5] = {0};
     int mx = 0, my = 0;
-    if (g_ipc_client && g_ipc_client->is_connected() && g_ipc_client->shm()) {
-        // Subprocess mode: read cursor from IPC SHM
-        const IPCBuffer* buf = g_ipc_client->shm();
-        mx = IPC_ATOMIC_LOAD(buf->shm_cursor_x);
-        my = IPC_ATOMIC_LOAD(buf->shm_cursor_y);
+    if (g_ipc_client) {
+        // Subprocess mode: read cursor from IPC SHM (if still connected)
+        if (g_ipc_client->is_connected() && g_ipc_client->shm()) {
+            const IPCBuffer* buf = g_ipc_client->shm();
+            mx = IPC_ATOMIC_LOAD(buf->shm_cursor_x);
+            my = IPC_ATOMIC_LOAD(buf->shm_cursor_y);
+        }
+        // else: subprocess disconnected, use zeros
     } else {
         // In-process mode: read directly from Mac low-memory globals
         boot_progress_get_mouse(&mx, &my);

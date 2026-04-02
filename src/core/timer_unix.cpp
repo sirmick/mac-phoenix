@@ -380,8 +380,8 @@ void idle_wait(void)
 {
 	// Poll-based timer runs on the same thread as the CPU, so blocking
 	// indefinitely here deadlocks: the timer can never fire to call
-	// idle_resume(). Use a timed wait (~one 60Hz tick) instead.
-	Delay_usec(16000);
+	// idle_resume(). Return immediately and let the CPU loop poll the timer.
+	// This burns CPU but keeps video refresh and input responsive.
 }
 
 

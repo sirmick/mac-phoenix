@@ -2969,16 +2969,13 @@ function initClient() {
 
     client = new BasiliskWebRTC(video, canvas);
 
-    // Check if user previously fell back to HTTP stream (remembered preference)
-    try {
-        if (localStorage.getItem('macemu_prefer_httpstream') === '1') {
-            logger.info('Previous session fell back to HTTP stream, using it directly');
-            client.codecType = CodecType.HTTP_STREAM;
-        }
-    } catch(e) {}
-
-    // Note: Codec is determined by server (from prefs file webcodec setting)
-    // Client will receive codec in "connected" message and initialize decoder then
+    // Use server config codec as initial codec (overrides stale localStorage)
+    const configCodec = serverUIConfig.webcodec;
+    if (configCodec === 'httpstream') {
+        client.codecType = CodecType.HTTP_STREAM;
+    } else if (configCodec) {
+        client.codecType = parseCodecString(configCodec);
+    }
 
     // Start stats collection
     statsInterval = setInterval(() => {

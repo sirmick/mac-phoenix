@@ -818,15 +818,19 @@ Response APIRouter::handle_mouse_move(const Request& req) {
         return r;
     }
 
+    // Track button state so move events carry correct button mask over IPC
+    static uint8_t api_buttons = 0;
+
     // Mouse button event: {"button": 0, "down": true}
     if (j.contains("button") && j.contains("down")) {
         int button = json_utils::get_int(j, "button");
         bool down = j["down"].get<bool>();
 
         if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
-            uint8_t btn_mask = down ? (1 << button) : 0;
-            // For IPC, send button state with last known position
-            ctx_->subprocess->ipc_client()->send_mouse(0, 0, btn_mask, false);
+            uint8_t mask = (1 << button);
+            if (down) api_buttons |= mask;
+            else      api_buttons &= ~mask;
+            ctx_->subprocess->ipc_client()->send_mouse(0, 0, api_buttons, false);
         } else {
             if (down) ADBMouseDown(button);
             else ADBMouseUp(button);
@@ -845,7 +849,7 @@ Response APIRouter::handle_mouse_move(const Request& req) {
         int dy = json_utils::get_int(j, "dy");
 
         if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
-            ctx_->subprocess->ipc_client()->send_mouse(dx, dy, 0, false);
+            ctx_->subprocess->ipc_client()->send_mouse(dx, dy, api_buttons, false);
         } else {
             ADBSetRelMouseMode(true);
             ADBMouseMoved(dx, dy);
@@ -865,7 +869,7 @@ Response APIRouter::handle_mouse_move(const Request& req) {
     int y = json_utils::get_int(j, "y");
 
     if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
-        ctx_->subprocess->ipc_client()->send_mouse(x, y, 0, true);
+        ctx_->subprocess->ipc_client()->send_mouse(x, y, api_buttons, true);
     } else {
         ADBSetRelMouseMode(false);
         ADBMouseMoved(x, y);
