@@ -336,139 +336,93 @@
                     <span>Advanced Settings</span>
                 </div>
                 <div class="advanced-content" id="advanced-settings">
-                    <!-- Basilisk II specific settings -->
-                    <div id="basilisk-settings">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>CPU Type</label>
-                                <select id="cfg-cpu">
-                                    <option value="2">68020</option>
-                                    <option value="3">68030</option>
-                                    <option value="4" selected>68040</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Mac Model</label>
-                                <select id="cfg-model">
-                                    <option value="5">Mac IIci (68030, System 6)</option>
-                                    <option value="14" selected>Quadra (68040, Mac OS 8)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-fpu" checked>
-                                    <label for="cfg-fpu">Enable FPU (68881)</label>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-jit" checked>
-                                    <label for="cfg-jit">Enable JIT Compiler</label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-idlewait-b2" checked>
-                                    <label for="cfg-idlewait-b2">Don't Use CPU When Idle</label>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-ignoresegv" checked>
-                                    <label for="cfg-ignoresegv">Ignore Illegal Memory Access</label>
-                                </div>
-                            </div>
+                    <div class="form-group">
+                        <label>CPU Backend</label>
+                        <select id="cfg-backend">
+                            <option value="uae">UAE (Interpreter)</option>
+                            <option value="unicorn">Unicorn (QEMU JIT)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" data-arch="m68k">
+                        <label>CPU Type</label>
+                        <select id="cfg-cpu">
+                            <option value="2">68020</option>
+                            <option value="3">68030</option>
+                            <option value="4" selected>68040</option>
+                        </select>
+                    </div>
+                    <div class="form-group" data-arch="m68k">
+                        <label>Mac Model</label>
+                        <select id="cfg-model">
+                            <option value="5">Mac IIci (68030, System 6)</option>
+                            <option value="14" selected>Quadra (68040, Mac OS 8)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-fpu" checked>
+                            <label for="cfg-fpu">Enable FPU</label>
                         </div>
                     </div>
-
-                    <!-- SheepShaver specific settings -->
-                    <div id="sheepshaver-settings" style="display: none;">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-fpu-ss" checked>
-                                    <label for="cfg-fpu-ss">Enable FPU</label>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-jit-ss" checked>
-                                    <label for="cfg-jit-ss">Enable PPC JIT Compiler</label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-jit68k" checked>
-                                    <label for="cfg-jit68k">Enable 68k JIT (DR Emulator)</label>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-idlewait" checked>
-                                    <label for="cfg-idlewait">Don't Use CPU When Idle</label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-ignoresegv-ss" checked>
-                                    <label for="cfg-ignoresegv-ss">Ignore SIGSEGV</label>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="cfg-ignoreillegal" checked>
-                                    <label for="cfg-ignoreillegal">Ignore Illegal Instructions</label>
-                                </div>
-                            </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-jit" checked>
+                            <label for="cfg-jit" id="cfg-jit-label">Enable JIT Compiler</label>
                         </div>
                     </div>
-
-                    <!-- Common settings -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="cfg-sound" checked>
-                                <label for="cfg-sound">Enable Sound</label>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="cfg-zappram">
-                                <label for="cfg-zappram">Zap PRAM on startup</label>
-                            </div>
+                    <div class="form-group" data-arch="ppc">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-jit68k" checked>
+                            <label for="cfg-jit68k">Enable 68k JIT (DR Emulator)</label>
                         </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
-                                <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss shutdown dialog</label>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-network">Network</label>
-                            <select id="cfg-network">
-                                <option value="none">None</option>
-                                <option value="lwip">lwIP (NAT)</option>
-                                <option value="raw">Raw (bridged)</option>
-                            </select>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-idlewait" checked>
+                            <label for="cfg-idlewait">Don't Use CPU When Idle</label>
                         </div>
                     </div>
-                    <div class="form-row" id="cfg-network-if-row" style="display:none">
-                        <div class="form-group">
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-ignoresegv" checked>
+                            <label for="cfg-ignoresegv" id="cfg-ignoresegv-label">Ignore Illegal Memory Access</label>
                         </div>
-                        <div class="form-group" id="cfg-network-if-group">
-                            <label for="cfg-network-if">Interface</label>
-                            <input type="text" id="cfg-network-if" placeholder="eth0">
+                    </div>
+                    <div class="form-group" data-arch="ppc">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-ignoreillegal" checked>
+                            <label for="cfg-ignoreillegal">Ignore Illegal Instructions</label>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-sound" checked>
+                            <label for="cfg-sound">Enable Sound</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-zappram">
+                            <label for="cfg-zappram">Zap PRAM on startup</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
+                            <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss shutdown dialog</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-network">Network</label>
+                        <select id="cfg-network">
+                            <option value="none">None</option>
+                            <option value="lwip">lwIP (NAT)</option>
+                            <option value="raw">Raw (bridged)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="cfg-network-if-group" style="display:none">
+                        <label for="cfg-network-if">Interface</label>
+                        <input type="text" id="cfg-network-if" placeholder="eth0">
                     </div>
                 </div>
 

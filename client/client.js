@@ -3422,16 +3422,35 @@ function updateEmulatorPanelVisibility() {
     if (!emulatorType) return;
 
     const isPPC = emulatorType === 'ppc';
-    const basiliskSettings = document.getElementById('basilisk-settings');
-    const sheepshaverSettings = document.getElementById('sheepshaver-settings');
+    const currentArch = isPPC ? 'ppc' : 'm68k';
 
-    if (isPPC) {
-        if (basiliskSettings) basiliskSettings.style.display = 'none';
-        if (sheepshaverSettings) sheepshaverSettings.style.display = 'block';
-    } else {
-        if (basiliskSettings) basiliskSettings.style.display = 'block';
-        if (sheepshaverSettings) sheepshaverSettings.style.display = 'none';
+    // Show/hide arch-specific form groups
+    document.querySelectorAll('#advanced-settings [data-arch]').forEach(el => {
+        el.style.display = el.dataset.arch === currentArch ? '' : 'none';
+    });
+
+    // Populate backend dropdown with arch-appropriate options
+    const backendEl = document.getElementById('cfg-backend');
+    if (backendEl) {
+        const prev = backendEl.value;
+        if (isPPC) {
+            backendEl.innerHTML = '<option value="kpx">KPX</option>';
+        } else {
+            backendEl.innerHTML =
+                '<option value="uae">UAE (Interpreter)</option>' +
+                '<option value="unicorn">Unicorn (QEMU JIT)</option>';
+        }
+        if ([...backendEl.options].some(o => o.value === prev)) {
+            backendEl.value = prev;
+        }
     }
+
+    // Update dynamic labels
+    const jitLabel = document.getElementById('cfg-jit-label');
+    if (jitLabel) jitLabel.textContent = isPPC ? 'Enable PPC JIT' : 'Enable JIT Compiler';
+
+    const segvLabel = document.getElementById('cfg-ignoresegv-label');
+    if (segvLabel) segvLabel.textContent = isPPC ? 'Ignore SIGSEGV' : 'Ignore Illegal Memory Access';
 
     // Update processor logo based on emulator type
     const processorLogo = document.getElementById('processor-logo');
@@ -3457,9 +3476,9 @@ async function onEmulatorChange() {
 
     // Set mode defaults
     const defaults = {
-        ppc:    { ram: 128, screen: '1024x768', cpu: 4, model: 14 },
-        quadra: { ram: 32,  screen: '1024x768', cpu: 4, model: 14 },
-        iici:   { ram: 8,   screen: '640x480',  cpu: 3, model: 5 }
+        ppc:    { ram: 128, screen: '1024x768', cpu: 4, model: 14, backend: 'kpx' },
+        quadra: { ram: 32,  screen: '1024x768', cpu: 4, model: 14, backend: 'uae' },
+        iici:   { ram: 8,   screen: '640x480',  cpu: 3, model: 5,  backend: 'uae' }
     };
     const d = defaults[emulatorType] || defaults.quadra;
 
@@ -3467,6 +3486,7 @@ async function onEmulatorChange() {
     currentConfig.screen = d.screen;
     currentConfig.cpu = d.cpu;
     currentConfig.model = d.model;
+    currentConfig.backend = d.backend;
 
     const ramEl = document.getElementById('cfg-ram');
     if (ramEl) ramEl.value = d.ram;
@@ -3476,6 +3496,8 @@ async function onEmulatorChange() {
     if (cpuEl) cpuEl.value = d.cpu;
     const modelEl = document.getElementById('cfg-model');
     if (modelEl) modelEl.value = d.model;
+    const backendEl = document.getElementById('cfg-backend');
+    if (backendEl) backendEl.value = d.backend;
 
     // Reload ROM list to show only compatible ROMs
     await loadRomList();
@@ -3559,6 +3581,7 @@ async function loadCurrentConfig() {
             ignoreillegal: cfg.ppc?.ignoreillegal ?? false,
             swap_opt_cmd: cfg.m68k?.swap_opt_cmd ?? true,
             keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5),
+            backend: cfg.cpu_backend || (isM68k ? 'uae' : 'kpx'),
             zappram: cfg.zappram ?? false,
             dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? false,
             network: cfg.network || 'none',
@@ -3589,51 +3612,46 @@ function updateConfigUI() {
 
     const networkEl = document.getElementById('cfg-network');
     const networkIfEl = document.getElementById('cfg-network-if');
-    const networkIfRow = document.getElementById('cfg-network-if-row');
+    const networkIfGroup = document.getElementById('cfg-network-if-group');
     if (networkEl) {
         networkEl.value = currentConfig.network || 'none';
         networkEl.addEventListener('change', () => {
-            if (networkIfRow) networkIfRow.style.display = networkEl.value === 'raw' ? '' : 'none';
+            if (networkIfGroup) networkIfGroup.style.display = networkEl.value === 'raw' ? '' : 'none';
         });
     }
     if (networkIfEl) networkIfEl.value = currentConfig.network_if || '';
-    if (networkIfRow) networkIfRow.style.display = (currentConfig.network === 'raw') ? '' : 'none';
+    if (networkIfGroup) networkIfGroup.style.display = (currentConfig.network === 'raw') ? '' : 'none';
 
     const bootdriverEl = document.getElementById('cfg-bootdriver');
     if (bootdriverEl) bootdriverEl.value = currentConfig.bootdriver || 0;
 
-    // Basilisk II specific
+    // Show/hide arch-specific settings and populate backend options
+    updateEmulatorPanelVisibility();
+
+    // Backend
+    const backendEl = document.getElementById('cfg-backend');
+    if (backendEl) backendEl.value = currentConfig.backend || 'uae';
+
+    // Arch-specific (m68k only, hidden in PPC mode)
     const cpuEl = document.getElementById('cfg-cpu');
     const modelEl = document.getElementById('cfg-model');
-    const fpuEl = document.getElementById('cfg-fpu');
-    const jitEl = document.getElementById('cfg-jit');
-    const idlewaitB2El = document.getElementById('cfg-idlewait-b2');
-    const ignoresegvEl = document.getElementById('cfg-ignoresegv');
-
     if (cpuEl) cpuEl.value = currentConfig.cpu;
     if (modelEl) modelEl.value = currentConfig.model;
-    if (fpuEl) fpuEl.checked = currentConfig.fpu;
-    if (jitEl) jitEl.checked = currentConfig.jit;
-    if (idlewaitB2El) idlewaitB2El.checked = currentConfig.idlewait ?? true;
-    if (ignoresegvEl) ignoresegvEl.checked = currentConfig.ignoresegv ?? true;
 
-    // SheepShaver specific
-    const fpuSSEl = document.getElementById('cfg-fpu-ss');
-    const jitSSEl = document.getElementById('cfg-jit-ss');
+    // Common (unified IDs)
+    const fpuEl = document.getElementById('cfg-fpu');
+    const jitEl = document.getElementById('cfg-jit');
     const jit68kEl = document.getElementById('cfg-jit68k');
     const idlewaitEl = document.getElementById('cfg-idlewait');
-    const ignoresegvSSEl = document.getElementById('cfg-ignoresegv-ss');
+    const ignoresegvEl = document.getElementById('cfg-ignoresegv');
     const ignoreillegalEl = document.getElementById('cfg-ignoreillegal');
 
-    if (fpuSSEl) fpuSSEl.checked = currentConfig.fpu ?? true;
-    if (jitSSEl) jitSSEl.checked = currentConfig.jit ?? true;
+    if (fpuEl) fpuEl.checked = currentConfig.fpu ?? true;
+    if (jitEl) jitEl.checked = currentConfig.jit ?? true;
     if (jit68kEl) jit68kEl.checked = currentConfig.jit68k ?? true;
     if (idlewaitEl) idlewaitEl.checked = currentConfig.idlewait ?? true;
-    if (ignoresegvSSEl) ignoresegvSSEl.checked = currentConfig.ignoresegv ?? true;
+    if (ignoresegvEl) ignoresegvEl.checked = currentConfig.ignoresegv ?? true;
     if (ignoreillegalEl) ignoreillegalEl.checked = currentConfig.ignoreillegal ?? true;
-
-    // Show/hide appropriate settings (without triggering reload)
-    updateEmulatorPanelVisibility();
 
     // Update disk checkboxes
     document.querySelectorAll('#disk-list input[type="checkbox"]').forEach(cb => {
@@ -3671,22 +3689,18 @@ async function saveConfig() {
     currentConfig.bootdriver = parseInt(document.getElementById('cfg-bootdriver')?.value || 0);
 
     // Gather emulator-specific values
+    currentConfig.backend = document.getElementById('cfg-backend')?.value || (isM68kMode(currentConfig.emulator) ? 'uae' : 'kpx');
+    currentConfig.fpu = document.getElementById('cfg-fpu')?.checked ?? true;
+    currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? true;
+    currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
+    currentConfig.ignoresegv = document.getElementById('cfg-ignoresegv')?.checked ?? true;
     if (isM68kMode(currentConfig.emulator)) {
         currentConfig.cpu = parseInt(document.getElementById('cfg-cpu')?.value || 4);
         currentConfig.model = parseInt(document.getElementById('cfg-model')?.value || 14);
-        currentConfig.fpu = document.getElementById('cfg-fpu')?.checked ?? true;
-        currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? true;
-        currentConfig.idlewait = document.getElementById('cfg-idlewait-b2')?.checked ?? true;
-        currentConfig.ignoresegv = document.getElementById('cfg-ignoresegv')?.checked ?? true;
     } else {
-        // SheepShaver
         currentConfig.cpu = 4;
         currentConfig.model = 14;
-        currentConfig.fpu = document.getElementById('cfg-fpu-ss')?.checked ?? true;
-        currentConfig.jit = document.getElementById('cfg-jit-ss')?.checked ?? true;
         currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
-        currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
-        currentConfig.ignoresegv = document.getElementById('cfg-ignoresegv-ss')?.checked ?? true;
         currentConfig.ignoreillegal = document.getElementById('cfg-ignoreillegal')?.checked ?? true;
     }
 
@@ -3709,6 +3723,7 @@ async function saveConfig() {
 
     const jsonConfig = {
         architecture: isM68k ? 'm68k' : 'ppc',
+        cpu_backend: currentConfig.backend,
         rom: currentConfig.rom,
         disks: currentConfig.disks,
         cdroms: currentConfig.cdroms || [],
