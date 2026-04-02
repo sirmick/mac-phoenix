@@ -167,4 +167,4 @@ The emulator binary does not read environment variables. Use CLI flags instead.
 
 ## ROM
 
-Tests expect a Quadra 650 ROM at `/home/mick/quadra.rom`. Override with `MACEMU_ROM` env var or `meson configure -Dtest_rom=/path/to/rom build`.
+Tests expect a Quadra 650 ROM at `~/roms/quadra.rom` and disk image at `~/storage/images/7.6.img`. Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `meson configure -Dtest_rom=/path/to/rom build`. ROMs and disk images are not distributed.

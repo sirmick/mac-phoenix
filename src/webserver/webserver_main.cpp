@@ -45,7 +45,10 @@ void http_server_main(const config::EmulatorConfig* config,
 
     // Request handler lambda - routes to API or static files
     auto request_handler = [&](const http::Request& req) -> http::Response {
-        fprintf(stderr, "[HTTP] %s %s\n", req.method.c_str(), req.path.c_str());
+        // Log non-polling requests only (skip high-frequency GET /api/status, /api/frame)
+        if (req.method != "GET" || (req.path != "/api/status" && req.path != "/api/frame")) {
+            fprintf(stderr, "[HTTP] %s %s\n", req.method.c_str(), req.path.c_str());
+        }
 
         // Try API routes first
         bool handled = false;

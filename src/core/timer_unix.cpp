@@ -379,11 +379,18 @@ static int idle_sem_ok = -1;
 void idle_wait(void)
 {
 #ifdef IDLE_USES_COND_WAIT
-	// Block until idle_resume() signals from the tick thread (60Hz) or
-	// TriggerInterrupt() from ADB/IPC events. This is the legacy
-	// SheepShaver pattern — requires a separate tick thread (kpx backend).
+	// Wait for idle_resume() signal or 16ms timeout (one 60Hz tick).
+	// - kpx backend: tick thread calls idle_resume(), wakes immediately
+	// - UAE/Unicorn: poll-based timer on CPU thread, timeout prevents deadlock
 	pthread_mutex_lock(&idle_lock);
-	pthread_cond_wait(&idle_cond, &idle_lock);
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_nsec += 16000000;  // 16ms
+	if (ts.tv_nsec >= 1000000000) {
+		ts.tv_sec++;
+		ts.tv_nsec -= 1000000000;
+	}
+	pthread_cond_timedwait(&idle_cond, &idle_lock, &ts);
 	pthread_mutex_unlock(&idle_lock);
 #else
 #ifdef IDLE_USES_SEMAPHORE

@@ -974,11 +974,19 @@ Response APIRouter::handle_app(const Request& req) {
 
 Response APIRouter::handle_windows(const Request& req) {
     (void)req;
+    if (ctx_->subprocess) {
+        // Window list requires reading Mac RAM — not available over IPC yet
+        return Response::json("{\"windows\": [], \"error\": \"not available in subprocess mode\"}");
+    }
     auto result = CommandBridge::execute_read(CmdType::GET_WINDOW_LIST);
     return Response::json("{\"windows\": " + result.data + "}");
 }
 
 Response APIRouter::handle_launch(const Request& req) {
+    if (ctx_->subprocess) {
+        return Response::json("{\"success\": false, \"error\": \"not available in subprocess mode\"}");
+    }
+
     nlohmann::json j;
     try {
         j = json_utils::parse(req.body);
@@ -1016,6 +1024,10 @@ Response APIRouter::handle_launch(const Request& req) {
 
 Response APIRouter::handle_quit(const Request& req) {
     (void)req;
+
+    if (ctx_->subprocess) {
+        return Response::json("{\"success\": false, \"error\": \"not available in subprocess mode\"}");
+    }
 
     Command cmd;
     cmd.type = CmdType::QUIT_APP;

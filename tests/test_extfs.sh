@@ -16,7 +16,7 @@ set -euo pipefail
 
 PORT="${1:-18098}"
 SIG_PORT="$((PORT + 1))"
-ROM="${MACEMU_ROM:-/home/mick/quadra.rom}"
+ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 TMPCONFIG=$(mktemp)
 TMPDIR_EXTFS=$(mktemp -d)

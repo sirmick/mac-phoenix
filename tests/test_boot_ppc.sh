@@ -20,7 +20,7 @@ PORT=18095
 SIG_PORT=18096
 WEBSERVER=false
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
-ROM="${MACEMU_PPC_ROM:-$HOME/g3.rom}"
+ROM="${MACEMU_PPC_ROM:-$HOME/storage/roms/g3.rom}"
 CDROM="${MACEMU_PPC_CDROM:-$HOME/storage/images/MacOS_90.iso}"
 MIN_CHECKLOADS=200
 

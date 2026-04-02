@@ -18,6 +18,10 @@
 #include <time.h>
 #include <stdio.h>
 
+// IPC SHM export (cursor + app name) for subprocess mode
+extern "C" void boot_progress_export_cursor_to_ipc(void);
+extern "C" void boot_progress_export_app_to_ipc(void);
+
 // Input polling stub — no-op in subprocess mode (input arrives via control socket).
 extern "C" __attribute__((weak)) void ADBPollSharedInput(void) {}
 
@@ -86,6 +90,10 @@ static void one_tick(void)
 	if (g_platform.video_refresh) {
 		g_platform.video_refresh();
 	}
+
+	// Export cursor and app name to IPC SHM (for parent's web API)
+	boot_progress_export_cursor_to_ipc();
+	boot_progress_export_app_to_ipc();
 
 	// Set 60Hz interrupt flag
 	SetInterruptFlag(INTFLAG_60HZ);

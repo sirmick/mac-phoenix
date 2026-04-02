@@ -6,7 +6,7 @@
  *   npx tsx tests/e2e/take-screenshot.ts [options]
  *
  * Options:
- *   --rom <path>        ROM file (default: /home/mick/quadra.rom or MACEMU_ROM)
+ *   --rom <path>        ROM file (default: $HOME/roms/quadra.rom or MACEMU_ROM)
  *   --disk <path>       Hard drive image (repeatable)
  *   --cdrom <path>      CD-ROM image (repeatable)
  *   --wait <seconds>    Time to wait after boot before screenshot (default: 15)
@@ -31,7 +31,7 @@ function parseArgs(): {
 } {
   const args = process.argv.slice(2);
   const result = {
-    rom: process.env.MACEMU_ROM || '/home/mick/quadra.rom',
+    rom: process.env.MACEMU_ROM || `${process.env.HOME}/roms/quadra.rom`,
     disks: [] as string[],
     cdroms: [] as string[],
     wait: 15,
@@ -68,7 +68,7 @@ function parseArgs(): {
         console.log(`Usage: npx tsx tests/e2e/take-screenshot.ts [options]
 
 Options:
-  --rom <path>        ROM file (default: MACEMU_ROM or /home/mick/quadra.rom)
+  --rom <path>        ROM file (default: MACEMU_ROM or $HOME/roms/quadra.rom)
   --disk <path>       Hard drive image (repeatable)
   --cdrom <path>      CD-ROM image (repeatable)
   --wait <seconds>    Time to wait after boot before screenshot (default: 15)

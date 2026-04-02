@@ -8,8 +8,8 @@ set -euo pipefail
 
 BACKEND="uae"
 TIMEOUT=15
-ROM="${MACEMU_ROM:-/home/mick/quadra.rom}"
-DISK="${MACEMU_DISK:-/home/mick/storage/images/7.6.img}"
+ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
 PORT=18092
 SIG_PORT=18093
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
@@ -36,6 +36,7 @@ trap cleanup EXIT
 
 # Start emulator
 "$BINARY" --backend "$BACKEND" --timeout "$TIMEOUT" \
+    --config /dev/null --dismiss-shutdown-dialog \
     --port "$PORT" --signaling-port "$SIG_PORT" --disk "$DISK" "$ROM" &>/dev/null &
 EMU_PID=$!
 

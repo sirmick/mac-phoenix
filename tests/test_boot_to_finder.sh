@@ -12,8 +12,8 @@ set -euo pipefail
 
 BACKEND="uae"
 TIMEOUT=30
-ROM="${MACEMU_ROM:-/home/mick/quadra.rom}"
-DISK="${MACEMU_DISK:-/home/mick/storage/images/7.6.img}"
+ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
 PORT=18090        # Use non-default port to avoid conflicts
 SIG_PORT=18091    # WebRTC signaling port
 BINARY="$(dirname "$0")/../build/mac-phoenix"
@@ -48,7 +48,8 @@ echo "Port: $PORT"
 
 # Start emulator in background
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 5))" \
-    --config /dev/null --port "$PORT" --signaling-port "$SIG_PORT" \
+    --config /dev/null --dismiss-shutdown-dialog \
+    --port "$PORT" --signaling-port "$SIG_PORT" \
     --disk "$DISK" "$ROM" &>/tmp/macemu_test_$$.log &
 EMU_PID=$!
 
