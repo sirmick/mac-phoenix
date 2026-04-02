@@ -10,8 +10,8 @@
 #   --webserver:        boots with HTTP server, polls /api/status for boot phases
 #
 # Requires:
-#   - PPC ROM (4MB G3): set MACEMU_PPC_ROM or uses ~/g3.rom
-#   - Mac OS 9 ISO:     set MACEMU_PPC_CDROM or uses ~/storage/images/MacOS_90.iso
+#   - PPC ROM (4MB G3): set MACEMU_PPC_ROM or uses ~/storage/roms/g3.rom
+#   - Disk image:       set MACEMU_DISK or uses ~/storage/images/7.6.img
 #
 set -euo pipefail
 
@@ -21,7 +21,7 @@ SIG_PORT=18096
 WEBSERVER=false
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 ROM="${MACEMU_PPC_ROM:-$HOME/storage/roms/g3.rom}"
-CDROM="${MACEMU_PPC_CDROM:-$HOME/storage/images/MacOS_90.iso}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
 MIN_CHECKLOADS=200
 
 # Parse args
@@ -48,22 +48,22 @@ if [[ ! -f "$ROM" ]]; then
     exit 77
 fi
 
-if [[ ! -f "$CDROM" ]]; then
-    echo "SKIP: Mac OS 9 ISO not found: $CDROM (set MACEMU_PPC_CDROM)"
+if [[ ! -f "$DISK" ]]; then
+    echo "SKIP: Disk image not found: $DISK (set MACEMU_DISK)"
     exit 77
 fi
 
 echo "=== PPC Boot Test: KPX backend, timeout=${TIMEOUT}s, webserver=$WEBSERVER ==="
 echo "ROM: $ROM"
-echo "CDROM: $CDROM"
+echo "DISK: $DISK"
 
 # Create temp config with ISO as cdrom
 TMPCONFIG=$(mktemp /tmp/macemu_ppc_config_XXXXXX.json)
 cat > "$TMPCONFIG" << EOJSON
 {
   "rom": "$ROM",
-  "disks": [],
-  "cdroms": ["$CDROM"],
+  "disks": ["$DISK"],
+  "cdroms": [],
   "ram": 128,
   "architecture": "ppc"
 }

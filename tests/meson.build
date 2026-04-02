@@ -88,7 +88,7 @@ test('command_bridge',
   },
 )
 
-# PPC KPX backend boots Mac OS 9 from CD and loads resources (headless)
+# PPC KPX backend boots from disk and loads resources (headless)
 test('boot_ppc',
   find_program('bash'),
   args: [test_dir / 'test_boot_ppc.sh', '--timeout', '45', '--port', '18095'],
@@ -97,7 +97,6 @@ test('boot_ppc',
   suite: 'boot',
   env: {
     'MACEMU_PPC_ROM': test_ppc_rom,
-    'MACEMU_PPC_CDROM': test_ppc_cdrom,
   },
 )
 
@@ -110,7 +109,6 @@ test('boot_ppc_api',
   suite: 'boot',
   env: {
     'MACEMU_PPC_ROM': test_ppc_rom,
-    'MACEMU_PPC_CDROM': test_ppc_cdrom,
   },
 )
 
