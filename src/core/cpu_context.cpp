@@ -415,7 +415,6 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     if (ram_size_ < 16 * 1024 * 1024) ram_size_ = 16 * 1024 * 1024;
     const uint32_t ppc_rom_size = 0x400000;  // 4MB PPC ROM
     const uint32_t ROM_AREA_SIZE = 0x500000; // 5MB ROM area
-    const uint32_t ROM_ALIGNMENT = 0x100000; // 1MB alignment
     const uint32_t SIG_STACK_SIZE = 0x10000; // 64KB signal stack
 
     // Allocate RAM at address 0, with extra padding above for nanokernel probing.

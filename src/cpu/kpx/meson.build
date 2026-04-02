@@ -70,7 +70,6 @@ kpx_cpp_args = [
   '-DHAVE_CONFIG_H',
   '-DHAVE_FCNTL_H',
   '-w',  # Suppress warnings in legacy code
-  '-fno-weak',  # Disable weak symbols — forces all linkage to be strong and unambiguous
   '-DPPC_DETERMINISTIC_REPLAY=1',  # Disable JIT, use interpreter with replay interrupts
 ]
 

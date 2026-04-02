@@ -163,7 +163,8 @@ const FrameBuffer* VideoOutput::wait_for_frame(int timeout_ms) {
             if (ret > 0) {
                 // Drain eventfd (may have accumulated multiple writes)
                 uint64_t val;
-                (void)read(frame_eventfd, &val, sizeof(val));
+                ssize_t ignored = read(frame_eventfd, &val, sizeof(val));
+                (void)ignored;
             }
 
             // Check for frame regardless of poll result
@@ -259,7 +260,8 @@ void VideoOutput::notify_frame() {
 #ifdef __linux__
     if (frame_eventfd >= 0) {
         uint64_t val = 1;
-        (void)write(frame_eventfd, &val, sizeof(val));
+        ssize_t ignored = write(frame_eventfd, &val, sizeof(val));
+        (void)ignored;
     }
 #endif
 }

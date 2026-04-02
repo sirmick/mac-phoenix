@@ -18,14 +18,13 @@ cpp = meson.get_compiler('cpp')
 
 # Unicorn dependency (always required - all CPUs compiled)
 # Built from submodule with patches applied
-unicorn_inc = include_directories('subprojects/unicorn/include')
 unicorn_lib = cc.find_library('unicorn',
   dirs: [meson.current_source_dir() / 'subprojects/unicorn/build'],
   static: true,
   required: true
 )
 unicorn_dep = declare_dependency(
-  include_directories: unicorn_inc,
+  compile_args: ['-isystem', meson.project_source_root() / 'subprojects/unicorn/include'],
   dependencies: [unicorn_lib]
 )
 

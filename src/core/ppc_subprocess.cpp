@@ -318,7 +318,8 @@ void PPCSubprocess::video_relay_main()
             if (n > 0) {
                 // Drain eventfd
                 uint64_t val;
-                (void)read(eventfd, &val, sizeof(val));
+                ssize_t ignored = read(eventfd, &val, sizeof(val));
+                (void)ignored;
             }
         } else {
             // Fallback: poll at ~1ms

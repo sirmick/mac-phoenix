@@ -173,7 +173,8 @@ static inline void ipc_frame_complete(IPCBuffer* buf, uint64_t ts_us) {
 
     if (buf->frame_ready_eventfd >= 0) {
         uint64_t val = 1;
-        (void)write(buf->frame_ready_eventfd, &val, sizeof(val));
+        ssize_t ignored = write(buf->frame_ready_eventfd, &val, sizeof(val));
+        (void)ignored;
     }
 }
 
