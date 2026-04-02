@@ -231,7 +231,7 @@ const int POPALLSPACE_SIZE = 1024; /* That should be enough space */
 static uae_u8* popallspace=NULL;
 
 void* pushall_call_handler=NULL;
-static void* popall_do_nothing=NULL;
+void* popall_do_nothing=NULL;  // non-static: SIGSEGV handler uses for JIT null-jump recovery
 static void* popall_exec_nostats=NULL;
 static void* popall_execute_normal=NULL;
 static void* popall_cache_miss=NULL;
@@ -595,8 +595,22 @@ class LazyBlockAllocator
 	};
 	Pool * mPools;
 	T * mChunks;
+#if defined(__x86_64__)
+	// Pre-allocated arenas in low memory for JIT 32-bit addressing
+	enum { kArenaSize = 4 * 1024 * 1024 };  // 4MB per arena
+	struct Arena {
+		char * base;
+		size_t used;
+		Arena * next;
+	};
+	Arena * mArenas;
+#endif
 public:
-	LazyBlockAllocator() : mPools(0), mChunks(0) { }
+	LazyBlockAllocator() : mPools(0), mChunks(0)
+#if defined(__x86_64__)
+		, mArenas(0)
+#endif
+	{ }
 	~LazyBlockAllocator();
 	T * acquire();
 	void release(T * const);
@@ -609,17 +623,53 @@ LazyBlockAllocator<T>::~LazyBlockAllocator()
 	while (currentPool) {
 		Pool * deadPool = currentPool;
 		currentPool = currentPool->next;
+#if !defined(__x86_64__)
 		free(deadPool);
+#endif
 	}
+#if defined(__x86_64__)
+	Arena * a = mArenas;
+	while (a) {
+		Arena * next = a->next;
+		vm_release(a->base, kArenaSize);
+		delete a;
+		a = next;
+	}
+#endif
 }
 
 template< class T >
 T * LazyBlockAllocator<T>::acquire()
 {
 	if (!mChunks) {
-		// There is no chunk left, allocate a new pool and link the
-		// chunks into the free list
-		Pool * newPool = (Pool *)malloc(sizeof(Pool));
+		Pool * newPool;
+#if defined(__x86_64__)
+		// On x86_64, JIT uses 32-bit absolute addresses for blockinfo fields.
+		// These sign-extend above 0x80000000, so allocate from arenas in
+		// the low 2GB (MAP_32BIT). Arenas auto-extend as needed.
+		Arena * cur = mArenas;
+		if (!cur || cur->used + sizeof(Pool) > kArenaSize) {
+			char * base = (char *)vm_acquire(kArenaSize, VM_MAP_PRIVATE | VM_MAP_32BIT);
+			if (base != (char *)VM_MAP_FAILED) {
+				Arena * a = new Arena();
+				a->base = base;
+				a->used = 0;
+				a->next = mArenas;
+				mArenas = a;
+				cur = a;
+			} else {
+				cur = 0;
+			}
+		}
+		if (cur) {
+			newPool = (Pool *)(cur->base + cur->used);
+			cur->used += sizeof(Pool);
+		} else {
+			newPool = (Pool *)malloc(sizeof(Pool));  // last resort
+		}
+#else
+		newPool = (Pool *)malloc(sizeof(Pool));
+#endif
 		for (T * chunk = &newPool->chunk[0]; chunk < &newPool->chunk[kPoolSize]; chunk++) {
 			chunk->next = mChunks;
 			mChunks = chunk;

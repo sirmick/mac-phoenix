@@ -22,6 +22,9 @@ target_include_directories(cpu PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../drivers/platform
 )
 
+# Match uae_cpu JIT flags so wrappers can use #if USE_JIT
+target_compile_definitions(cpu PRIVATE USE_JIT=1)
+
 # Don't link uae_all/kpx here - let top-level CMakeLists handle link order
 # with --start-group to resolve circular deps with core
 target_link_libraries(cpu PRIVATE unicorn)

@@ -306,10 +306,8 @@ static void *vm_acquire_internal(size_t size, int options)
 	if (!reserved_buf)
 		reserved_buf = (char *)addr + size;
 #else
-	fprintf(stderr, "[VMALLOC] mmap hint=%p size=%zu flags=0x%x\n", next_address, size, the_map_flags);
 	if ((addr = mmap((caddr_t)next_address, size, VM_PAGE_DEFAULT, the_map_flags, fd, 0)) == (void *)MAP_FAILED)
 		return VM_MAP_FAILED;
-	fprintf(stderr, "[VMALLOC] → %p\n", addr);
 #endif
 #if USE_JIT
 	// Sanity checks for 64-bit platforms

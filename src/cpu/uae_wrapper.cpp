@@ -444,7 +444,13 @@ extern "C" void uae_m68k_execute_fast(void) {
         regs.spcflags = 0;
     }
 
-    m68k_execute();
+#if USE_JIT
+    extern bool UseJIT;
+    if (UseJIT)
+        m68k_compile_execute();
+    else
+#endif
+        m68k_execute();
 }
 
 extern "C" void uae_cpu_request_break(void) {

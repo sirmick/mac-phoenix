@@ -430,7 +430,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-mode-switch   Debug video mode switches\n");
             printf("  --debug-perf          Debug performance\n");
             printf("  --debug-network       Debug network (lwIP NAT/DNS/ICMP/TCP/UDP)\n");
-            printf("  --jit                 Enable M68K JIT compiler (default: on)\n");
+            printf("  --jit                 Enable M68K JIT compiler (experimental)\n");
             printf("  --no-jit              Disable M68K JIT (interpreter only)\n");
             printf("  --ppc-jit             Enable PPC JIT compiler (default: off)\n");
             printf("  --no-ppc-jit          Disable PPC JIT (interpreter only)\n");

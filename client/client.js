@@ -3447,7 +3447,7 @@ function updateEmulatorPanelVisibility() {
 
     // Update dynamic labels
     const jitLabel = document.getElementById('cfg-jit-label');
-    if (jitLabel) jitLabel.textContent = isPPC ? 'Enable PPC JIT' : 'Enable JIT Compiler';
+    if (jitLabel) jitLabel.textContent = isPPC ? 'Enable PPC JIT' : 'Enable JIT Compiler (experimental)';
 
     const segvLabel = document.getElementById('cfg-ignoresegv-label');
     if (segvLabel) segvLabel.textContent = isPPC ? 'Ignore SIGSEGV' : 'Ignore Illegal Memory Access';

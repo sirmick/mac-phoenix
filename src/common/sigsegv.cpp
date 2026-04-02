@@ -2712,14 +2712,23 @@ static bool handle_badaccess(SIGSEGV_FAULT_HANDLER_ARGLIST_1)
 #endif
 		if (SIGSEGV_SKIP_INSTRUCTION(SIGSEGV_REGISTER_FILE)) {
 #ifdef HAVE_MACH_EXCEPTIONS
-			// Unlike UNIX signals where the thread state
-			// is modified off of the stack, in Mach we
-			// need to actually call thread_set_state to
-			// have the register values updated.
 			mach_set_thread_state(SIP);
 #endif
 			return true;
 		}
+#if USE_JIT && defined(__x86_64__) && defined(SIGSEGV_CONTEXT_REGS)
+		{
+			// JIT null-jump recovery: if RIP is 0, redirect to
+			// popall_do_nothing which safely returns to the JIT loop.
+			extern void* popall_do_nothing;
+			auto *gregs = SIGSEGV_CONTEXT_REGS;
+			if (gregs[REG_RIP] == 0 && popall_do_nothing) {
+				gregs[REG_RIP] = (greg_t)popall_do_nothing;
+				fprintf(stderr, "[SIGSEGV] JIT null-jump recovered → popall_do_nothing\n");
+				return true;
+			}
+		}
+#endif
 		break;
 #endif
 	case SIGSEGV_RETURN_FAILURE:
