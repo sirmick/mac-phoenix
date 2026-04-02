@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Populate an HFS disk image with Mac installer files.
+"""Populate an HFS disk image with 68k Mac installer files.
 
-Target apps: MPW, ResEdit, Disk Copy, StuffIt Expander, MacTCP Ping.
+Target apps (all 68k): MPW, ResEdit, Disk Copy, StuffIt Expander, MacTCP Ping.
 
 Strategy:
   - StuffIt Expander: extract from .dsk (HFS image) directly — this is the
@@ -490,6 +490,7 @@ SOURCE_FILES = [
     ("StuffIt Expander/Stuffit_Expander_5.5.dsk", handle_dsk, "StuffIt Expander"),
     ("MacTCP_Ping_2.0.2.sea.bin", handle_stuffit, "MacTCP Ping"),
     ("OTTool_1.2.1.sit", handle_stuffit, "OTTool"),
+    ("Speedometer_3.23.sit", handle_stuffit, "Speedometer"),
 ]
 
 

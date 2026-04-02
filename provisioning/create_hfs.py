@@ -28,7 +28,7 @@ def main():
         "-s", "--size", default="120M", help="Image size, e.g. 120M, 1G (default: 120M)"
     )
     parser.add_argument(
-        "-n", "--name", default="Installers", help='Volume name (default: "Installers")'
+        "-n", "--name", default="68k Installers", help='Volume name (default: "68k Installers")'
     )
     args = parser.parse_args()
 
