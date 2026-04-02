@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <fstream>
 #include <unistd.h>
+#include <climits>
 #include <sys/stat.h>
 
 namespace config {
@@ -58,6 +59,30 @@ static void ensure_parent_dir(const std::string& path) {
         }
         mkdir(dir.c_str(), 0755);
     }
+}
+
+// Remove duplicate paths from a vector, preserving order.
+// Compares by resolved absolute path (after realpath) to catch
+// "/home/user/storage/images/foo.img" == "foo.img" expanded.
+static void dedup_paths(std::vector<std::string>& paths) {
+    std::vector<std::string> seen;
+    std::vector<std::string> result;
+    for (auto& p : paths) {
+        // Resolve to canonical path for comparison (fall back to original)
+        char resolved[PATH_MAX];
+        const char* canonical = realpath(p.c_str(), resolved);
+        std::string key = canonical ? std::string(canonical) : p;
+        bool dup = false;
+        for (auto& s : seen) {
+            if (s == key) { dup = true; break; }
+        }
+        if (!dup) {
+            seen.push_back(key);
+            result.push_back(p);
+        }
+    }
+    if (result.size() != paths.size())
+        paths = std::move(result);
 }
 
 /*
@@ -282,6 +307,12 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         if (p.contains("ignoreillegal")) ppc.ignoreillegal = json_utils::get_bool(p, "ignoreillegal");
         if (p.contains("keyboardtype")) ppc.keyboardtype = json_utils::get_int(p, "keyboardtype");
     }
+
+    // Deduplicate path arrays (catches config file + CLI + API duplicates)
+    dedup_paths(disk_paths);
+    dedup_paths(cdrom_paths);
+    dedup_paths(floppy_paths);
+    dedup_paths(extfs_paths);
 }
 
 /*
@@ -646,6 +677,12 @@ EmulatorConfig load_emulator_config(const char* config_path,
     resolve_paths(config.disk_paths);
     resolve_paths(config.cdrom_paths);
     resolve_paths(config.floppy_paths);
+
+    // 7b. Deduplicate (config file + CLI may specify same path)
+    dedup_paths(config.disk_paths);
+    dedup_paths(config.cdrom_paths);
+    dedup_paths(config.floppy_paths);
+    dedup_paths(config.extfs_paths);
 
     // 8. Resolve client_dir relative to binary location if it's a relative path
     if (!config.client_dir.empty() && config.client_dir[0] != '/') {

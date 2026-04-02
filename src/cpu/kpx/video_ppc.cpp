@@ -57,7 +57,7 @@ static inline void ADBMouseMoved(int, int) {}
 
 // Video callbacks — copied from legacy IPC video driver
 namespace ppc {
-bool video_can_change_cursor(void) { return true; }  // Matches legacy IPC driver
+bool video_can_change_cursor(void) { return false; }  // Force software cursor — drawn into framebuffer, visible in WebRTC
 
 void video_set_cursor(void)
 {

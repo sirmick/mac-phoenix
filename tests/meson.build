@@ -8,6 +8,8 @@
 # Find test scripts
 test_dir = meson.current_source_dir()
 test_rom = get_option('test_rom')
+test_ppc_rom = get_option('test_ppc_rom')
+test_ppc_cdrom = get_option('test_ppc_cdrom')
 
 # --- Fast tests (no ROM / no boot required) ---
 
@@ -86,13 +88,30 @@ test('command_bridge',
   },
 )
 
-# PPC KPX backend boots Mac OS 9 from CD and loads resources
+# PPC KPX backend boots Mac OS 9 from CD and loads resources (headless)
 test('boot_ppc',
   find_program('bash'),
   args: [test_dir / 'test_boot_ppc.sh', '--timeout', '45', '--port', '18095'],
   timeout: 60,
   is_parallel: false,
   suite: 'boot',
+  env: {
+    'MACEMU_PPC_ROM': test_ppc_rom,
+    'MACEMU_PPC_CDROM': test_ppc_cdrom,
+  },
+)
+
+# PPC boot with webserver — validates boot phase tracking via /api/status
+test('boot_ppc_api',
+  find_program('bash'),
+  args: [test_dir / 'test_boot_ppc.sh', '--timeout', '45', '--port', '18095', '--webserver'],
+  timeout: 60,
+  is_parallel: false,
+  suite: 'boot',
+  env: {
+    'MACEMU_PPC_ROM': test_ppc_rom,
+    'MACEMU_PPC_CDROM': test_ppc_cdrom,
+  },
 )
 
 # Mouse position API works after boot

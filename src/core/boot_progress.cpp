@@ -588,3 +588,40 @@ void boot_progress_get_cursor_state(MacCursorState *state)
 	state->crsr_new = ReadMacInt8(0x8ce);
 	state->crsr_couple = ReadMacInt8(0x8cf);
 }
+
+/*
+ * Export cursor state from Mac low-memory globals to IPC SHM buffer.
+ * Called at 60Hz from PPC tick thread so the parent process can serve
+ * GET /api/mouse with up-to-date cursor positions.
+ */
+void boot_progress_export_cursor_to_ipc(void)
+{
+	if (!g_ipc_buf) return;
+	/* Mouse: Cursor Manager output (what the user sees) */
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_cursor_x, static_cast<uint32_t>(static_cast<uint16_t>(ReadMacInt16(0x832))));
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_cursor_y, static_cast<uint32_t>(static_cast<uint16_t>(ReadMacInt16(0x830))));
+	/* RawMouse */
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_raw_x, static_cast<uint32_t>(static_cast<uint16_t>(ReadMacInt16(0x82e))));
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_raw_y, static_cast<uint32_t>(static_cast<uint16_t>(ReadMacInt16(0x82c))));
+	/* MTemp */
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_mtemp_x, static_cast<uint32_t>(static_cast<uint16_t>(ReadMacInt16(0x82a))));
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_mtemp_y, static_cast<uint32_t>(static_cast<uint16_t>(ReadMacInt16(0x828))));
+	/* Cursor Manager flags */
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_crsr_new, static_cast<uint32_t>(ReadMacInt8(0x8ce)));
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_crsr_couple, static_cast<uint32_t>(ReadMacInt8(0x8cf)));
+	IPC_ATOMIC_STORE(g_ipc_buf->shm_crsr_busy, static_cast<uint32_t>(ReadMacInt8(0x8cd)));
+}
+
+/*
+ * Export current app name from Mac low-memory to IPC SHM buffer.
+ * Called at 60Hz from PPC tick thread for parent's GET /api/app.
+ */
+void boot_progress_export_app_to_ipc(void)
+{
+	if (!g_ipc_buf) return;
+	char app_name[32];
+	read_cur_app_name(app_name, sizeof(app_name));
+	if (app_name[0] && strcmp(app_name, g_ipc_buf->cur_app_name) != 0) {
+		snprintf(g_ipc_buf->cur_app_name, sizeof(g_ipc_buf->cur_app_name), "%s", app_name);
+	}
+}

@@ -74,9 +74,10 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 	{
 		enum BootEvent event = (enum BootEvent)-1;
 		switch (selector) {
+			case OP_FIX_MEMTOP:      event = BOOT_EVENT_PATCH_BOOT_GLOBS; break;
 			case OP_RESET:           event = BOOT_EVENT_RESET; break;
 			case OP_INSTALL_DRIVERS: event = BOOT_EVENT_INSTALL_DRIVERS; break;
-			case OP_CHECKLOAD:       event = BOOT_EVENT_CHECKLOAD; break;
+			// OP_CHECKLOAD reported inside handler (after type is popped from stack)
 			case OP_IRQ:             event = BOOT_EVENT_IRQ; break;
 			case OP_IDLE_TIME:       event = BOOT_EVENT_IDLE_TIME; break;
 			case OP_IDLE_TIME_2:     event = BOOT_EVENT_IDLE_TIME; break;
@@ -328,14 +329,10 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 			break;
 
 		case OP_IRQ: {			// Level 1 interrupt
-			static int irq_count = 0;
-			irq_count++;
 			WriteMacInt16(ReadMacInt32(KernelDataAddr + 0x67c), 0);	// Clear interrupt
 			r->d[0] = 0;
 			bool started = HasMacStarted();
 			uint32 iflags = InterruptFlags;
-			if (irq_count <= 5 || irq_count % 300 == 0)
-				fprintf(stderr, "[OP_IRQ] #%d started=%d iflags=%08x\n", irq_count, started, iflags);
 			if (started) {
 				if (iflags & INTFLAG_VIA) {
 					ClearInterruptFlag(INTFLAG_VIA);
@@ -364,9 +361,6 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 				}
 				if (InterruptFlags & INTFLAG_TIMER) {
 					ClearInterruptFlag(INTFLAG_TIMER);
-					static int timer_irq_count = 0;
-					if (++timer_irq_count <= 5 || timer_irq_count % 100 == 0)
-						fprintf(stderr, "[TIMER-IRQ] #%d firing TimerInterrupt\n", timer_irq_count);
 					TimerInterrupt();
 				}
 				if (InterruptFlags & INTFLAG_AUDIO) {
@@ -495,6 +489,8 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 		case OP_CHECKLOAD: {		// vCheckLoad() patch
 			uint32 type = ReadMacInt32(r->a[7]);
 			r->a[7] += 4;
+			r->d[1] = type;  // boot_progress_report reads d[1] for resource type detection
+			boot_progress_report(BOOT_EVENT_CHECKLOAD, r);
 			int16 id = ReadMacInt16(r->a[2]);
 			if (r->a[0] == 0)
 				break;

@@ -62,6 +62,11 @@ int boot_progress_phase_reached_by_name(const char *current_phase, const char *t
 /* Query Mac mouse position from low-memory globals (for /api/mouse) */
 void boot_progress_get_mouse(int *x, int *y);
 
+/* Export cursor state and app name from Mac low-memory globals to IPC SHM buffer.
+ * Called from PPC tick thread at 60Hz so the parent process can read cursor/app state. */
+void boot_progress_export_cursor_to_ipc(void);
+void boot_progress_export_app_to_ipc(void);
+
 /* Query detailed Mac cursor state from low-memory globals */
 typedef struct {
     int mtemp_x, mtemp_y;       /* 0x82A/0x828: MTemp - what ADB wrote */

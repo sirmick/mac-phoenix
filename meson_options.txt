@@ -34,3 +34,15 @@ option('test_rom',
   value: '/home/mick/quadra.rom',
   description: 'Path to ROM file for boot tests (tests skip if not found)'
 )
+
+option('test_ppc_rom',
+  type: 'string',
+  value: '',
+  description: 'Path to PPC ROM for boot tests (tests skip if empty or not found)'
+)
+
+option('test_ppc_cdrom',
+  type: 'string',
+  value: '',
+  description: 'Path to Mac OS 9 ISO for PPC boot tests (tests skip if empty or not found)'
+)
