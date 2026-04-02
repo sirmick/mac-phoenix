@@ -378,10 +378,30 @@ static int idle_sem_ok = -1;
 
 void idle_wait(void)
 {
-	// Poll-based timer runs on the same thread as the CPU, so blocking
-	// indefinitely here deadlocks: the timer can never fire to call
-	// idle_resume(). Return immediately and let the CPU loop poll the timer.
-	// This burns CPU but keeps video refresh and input responsive.
+#ifdef IDLE_USES_COND_WAIT
+	// Block until idle_resume() signals from the tick thread (60Hz) or
+	// TriggerInterrupt() from ADB/IPC events. This is the legacy
+	// SheepShaver pattern — requires a separate tick thread (kpx backend).
+	pthread_mutex_lock(&idle_lock);
+	pthread_cond_wait(&idle_cond, &idle_lock);
+	pthread_mutex_unlock(&idle_lock);
+#else
+#ifdef IDLE_USES_SEMAPHORE
+	LOCK_IDLE;
+	if (idle_sem_ok < 0)
+		idle_sem_ok = (sem_init(&idle_sem, 0, 0) == 0);
+	if (idle_sem_ok > 0) {
+		idle_sem_ok++;
+		UNLOCK_IDLE;
+		sem_wait(&idle_sem);
+		return;
+	}
+	UNLOCK_IDLE;
+#endif
+
+	// Fallback: sleep 10 ms
+	Delay_usec(10000);
+#endif
 }
 
 
