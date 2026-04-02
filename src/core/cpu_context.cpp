@@ -171,12 +171,28 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     // Allocate RAM + ROM (1MB) + ScratchMem (64KB) + FrameBuffer area (4MB)
     // Layout: [RAM 32MB][ROM 1MB][ScratchMem 64KB][FrameBuffer 4MB]
     // Frame buffer MUST be outside RAM to avoid overlapping Mac heap data structures
-    ram_.reset(new (std::nothrow) uint8_t[ram_size_ + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE]);
-    if (!ram_) {
-        fprintf(stderr, "[CPUContext] ERROR: Failed to allocate RAM\n");
-        return false;
+    size_t total_alloc = ram_size_ + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
+
+    // JIT requires MEMBaseDiff to fit in a 32-bit x86 displacement, so allocate
+    // in the low 32-bit address space. Fall back to heap if MAP_32BIT fails.
+    mmap_ram_ = (uint8_t*)mmap(nullptr, total_alloc,
+        PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT,
+        -1, 0);
+    if (mmap_ram_ != MAP_FAILED) {
+        mmap_ram_size_ = total_alloc;
+        memset(mmap_ram_, 0, total_alloc);
+        fprintf(stderr, "[CPUContext] RAM mmap'd at %p (low 32-bit, JIT OK)\n", mmap_ram_);
+    } else {
+        mmap_ram_ = nullptr;
+        fprintf(stderr, "[CPUContext] WARNING: MAP_32BIT mmap failed, falling back to heap (JIT disabled)\n");
+        ram_.reset(new (std::nothrow) uint8_t[total_alloc]);
+        if (!ram_) {
+            fprintf(stderr, "[CPUContext] ERROR: Failed to allocate RAM\n");
+            return false;
+        }
+        memset(ram_.get(), 0, total_alloc);
     }
-    memset(ram_.get(), 0, ram_size_ + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE);
 
     // Allocate ROM (max 1MB for M68K)
     rom_.reset(new (std::nothrow) uint8_t[1024 * 1024]);
@@ -189,8 +205,9 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     // These globals are referenced by ~250 sites across 24 files (UAE interpreter,
     // ROM patches, memory accessors, video drivers, etc.) — refactoring them out
     // would require rewriting the entire memory access layer.
-    RAMBaseHost = ram_.get();
-    ROMBaseHost = ram_.get() + ram_size_;  // ROM after RAM
+    uint8_t* ram_base = mmap_ram_ ? mmap_ram_ : ram_.get();
+    RAMBaseHost = ram_base;
+    ROMBaseHost = ram_base + ram_size_;  // ROM after RAM
     RAMSize = ram_size_;
 
     // Compute Mac addresses from known memory layout (no platform function needed)
@@ -298,8 +315,9 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
         cpu_uae_install(&platform_);
     }
 
-    fprintf(stderr, "[CPUContext] CPU Backend: %s\n",
-            platform_.cpu_name ? platform_.cpu_name : "Unknown");
+    fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n",
+            platform_.cpu_name ? platform_.cpu_name : "Unknown",
+            config.m68k.jit ? "on" : "off");
 
     // 9. Configure CPU type
     if (platform_.cpu_set_type) {
@@ -690,6 +708,11 @@ void CPUContext::shutdown() {
     // Individual subsystem cleanup would go here if needed
 
     // Clear state
+    if (mmap_ram_) {
+        munmap(mmap_ram_, mmap_ram_size_);
+        mmap_ram_ = nullptr;
+        mmap_ram_size_ = 0;
+    }
     ram_.reset();
     rom_.reset();
     ram_size_ = 0;

@@ -12,13 +12,15 @@
 uae_inc = include_directories('.')
 common_inc = include_directories('../../common/include')
 timer_inc = include_directories('../../drivers/platform')  # For timer_interrupt.h
+compiler_inc = include_directories('compiler')  # For comptbl.h
+kpx_compat_inc = include_directories('../kpx/compat')  # For vm_alloc.h
 
 # Common compiler args for UAE CPU
 uae_common_args = [
   '-DCPU_EMU_SIZE=0',
   '-DREAL_ADDRESSING=0',
   '-DDIRECT_ADDRESSING=1',
-  '-DUSE_JIT=0',
+  '-DUSE_JIT=1',
   '-DUSE_JIT_FPU=0',
   '-DUSE_PREFETCH_BUFFER=0',
   '-DFPU_IEEE',
@@ -37,15 +39,45 @@ uae_common_args = [
 # Compile cpuemu.cpp WITHOUT -DNOFLAGS to get op_xxx_ff functions
 cpuemu_ff_obj = static_library('cpuemu_ff',
   'cpuemu_ff.cpp',
-  include_directories: [uae_inc, common_inc, include_directories('../..')],
+  include_directories: [uae_inc, common_inc, compiler_inc, include_directories('../..')],
   cpp_args: uae_common_args,  # No -DNOFLAGS
 )
 
 # Compile cpustbl.cpp WITHOUT -DNOFLAGS to get op_smalltbl_X_ff tables
 cpustbl_ff_obj = static_library('cpustbl_ff',
   'cpustbl.cpp',
-  include_directories: [uae_inc, common_inc, include_directories('../..')],
+  include_directories: [uae_inc, common_inc, compiler_inc, include_directories('../..')],
   cpp_args: uae_common_args,  # No -DNOFLAGS
+)
+
+# vm_alloc: virtual memory allocation (needed by JIT for translation cache)
+vm_alloc_lib = static_library('vm_alloc',
+  '../kpx/compat/vm_alloc.cpp',
+  include_directories: [kpx_compat_inc],
+  cpp_args: [
+    '-DHAVE_MMAP_VM=1',
+    '-DHAVE_MMAP_ANONYMOUS=1',
+    '-DHAVE_UNISTD_H=1',
+    '-DHAVE_SYS_MMAN_H=1',
+    '-DHAVE_FCNTL_H=1',
+    '-Wno-unused-parameter',
+  ],
+)
+
+# JIT compiler sources (x86/x86_64 dynamic recompiler)
+# compemu_support.cpp #includes codegen_x86.cpp directly
+jit_args = uae_common_args + [
+  '-fpermissive',         # Legacy C++ enum conversions
+  '-Wno-missing-field-initializers',
+]
+
+jit_lib = static_library('uae_jit',
+  'compiler/compemu_support.cpp',
+  'compiler/compemu_fpp.cpp',
+  'compiler/compemu.cpp',
+  'compiler/compstbl.cpp',
+  include_directories: [uae_inc, common_inc, compiler_inc, kpx_compat_inc, include_directories('../..')],
+  cpp_args: jit_args,
 )
 
 # Regular UAE sources compiled WITH -DNOFLAGS
@@ -64,13 +96,13 @@ uae_sources = [
 
 uae_lib = static_library('uae_cpu',
   uae_sources,
-  include_directories: [uae_inc, common_inc, timer_inc, include_directories('../..')],
+  include_directories: [uae_inc, common_inc, compiler_inc, kpx_compat_inc, timer_inc, include_directories('../..')],
   cpp_args: uae_common_args + ['-DNOFLAGS'],  # Add -DNOFLAGS
 )
 
-# Dependency that includes _nf library and _ff object libraries
+# Dependency that includes _nf library, _ff objects, and JIT compiler
 uae_dep = declare_dependency(
-  link_with: [uae_lib],
+  link_with: [uae_lib, jit_lib, vm_alloc_lib],
   link_whole: [cpuemu_ff_obj, cpustbl_ff_obj],  # Force inclusion of _ff objects
   include_directories: uae_inc
 )

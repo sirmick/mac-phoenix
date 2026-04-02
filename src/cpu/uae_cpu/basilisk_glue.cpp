@@ -30,6 +30,7 @@
 #include "readcpu.h"
 #include "newcpu.h"
 #include "compiler/compemu.h"
+#include "vm_alloc.h"
 #include "platform.h"  // For platform API (cpu_execute_68k_trap)
 
 
@@ -98,9 +99,11 @@ bool Init680x0(void)
 
 	init_m68k();
 #if USE_JIT
+	vm_init();
 	UseJIT = compiler_use_jit();
 	if (UseJIT)
 	    compiler_init();
+	fprintf(stderr, "[UAE] JIT compiler: %s\n", UseJIT ? "enabled" : "disabled");
 #endif
 	return true;
 }

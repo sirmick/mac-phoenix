@@ -17,6 +17,7 @@ DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
 PORT=18090        # Use non-default port to avoid conflicts
 SIG_PORT=18091    # WebRTC signaling port
 BINARY="$(dirname "$0")/../build/mac-phoenix"
+EXTRA_FLAGS=()
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -25,6 +26,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --rom) ROM="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
+        --jit|--no-jit) EXTRA_FLAGS+=("$1"); shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -50,7 +52,7 @@ echo "Port: $PORT"
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 5))" \
     --config /dev/null --dismiss-shutdown-dialog \
     --port "$PORT" --signaling-port "$SIG_PORT" \
-    --disk "$DISK" "$ROM" &>/tmp/macemu_test_$$.log &
+    --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/macemu_test_$$.log &
 EMU_PID=$!
 
 cleanup() {

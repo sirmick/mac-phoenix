@@ -23,6 +23,7 @@ BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 ROM="${MACEMU_PPC_ROM:-$HOME/storage/roms/g3.rom}"
 DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
 MIN_CHECKLOADS=200
+EXTRA_FLAGS=()
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -30,6 +31,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --webserver) WEBSERVER=true; shift ;;
+        --ppc-jit|--no-ppc-jit) EXTRA_FLAGS+=("$1"); shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -85,7 +87,7 @@ if [[ "$WEBSERVER" == "true" ]]; then
     "$BINARY" --config "$TMPCONFIG" --backend kpx --arch ppc \
         --timeout "$((TIMEOUT + 5))" \
         --port "$PORT" --signaling-port "$SIG_PORT" \
-        &>"$LOG" &
+        "${EXTRA_FLAGS[@]}" &>"$LOG" &
     EMU_PID=$!
     trap cleanup EXIT
 
@@ -150,7 +152,7 @@ else
 
     "$BINARY" --config "$TMPCONFIG" --backend kpx --arch ppc \
         --timeout "$TIMEOUT" --no-webserver \
-        2>&1 | tee "$LOG" &
+        "${EXTRA_FLAGS[@]}" 2>&1 | tee "$LOG" &
     EMU_PID=$!
     trap cleanup EXIT
 

@@ -42,8 +42,8 @@
 #define X86_ASSEMBLY 1
 #endif
 
-/* No JIT */
-#define USE_JIT 0
+/* JIT compiler (x86/x86_64 only, runtime-selectable via config.m68k.jit) */
+#define USE_JIT 1
 
 /* No prefetch buffer */
 #define USE_PREFETCH_BUFFER 0

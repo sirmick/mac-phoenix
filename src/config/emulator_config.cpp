@@ -430,7 +430,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-mode-switch   Debug video mode switches\n");
             printf("  --debug-perf          Debug performance\n");
             printf("  --debug-network       Debug network (lwIP NAT/DNS/ICMP/TCP/UDP)\n");
-            printf("  --ppc-jit             Enable PPC JIT compiler (default: on)\n");
+            printf("  --jit                 Enable M68K JIT compiler (default: on)\n");
+            printf("  --no-jit              Disable M68K JIT (interpreter only)\n");
+            printf("  --ppc-jit             Enable PPC JIT compiler (default: off)\n");
             printf("  --no-ppc-jit          Disable PPC JIT (interpreter only)\n");
             printf("  -h, --help            Show this help message\n");
             exit(0);
@@ -593,6 +595,16 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--debug-network") == 0) {
             config.debug_network = true; argv[i] = nullptr; continue;
+        }
+
+        // --jit / --no-jit (M68K JIT compiler)
+        if (strcmp(argv[i], "--jit") == 0) {
+            config.m68k.jit = true;
+            argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--no-jit") == 0) {
+            config.m68k.jit = false;
+            argv[i] = nullptr; continue;
         }
 
         // --ppc-jit / --no-ppc-jit (PPC JIT compiler)
