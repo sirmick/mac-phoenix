@@ -274,6 +274,5 @@ The STALE-TB detector catches these because it validates block contents at execu
 
 ## See Also
 
-- [NextSteps.md](../NextSteps.md) — Item 2: Fix TB Invalidation Properly
 - [cpu/UnicornQuirks.md](cpu/UnicornQuirks.md) — JIT TB invalidation section
 - Unicorn Issues: #1148, #820, #1561, #1344, #437

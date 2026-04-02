@@ -8,7 +8,7 @@
 
 This document describes the platform API abstraction for interrupt handling, which replaced the old shared global state (`PendingInterrupt`) with backend-specific implementations that leverage each CPU's native interrupt mechanisms.
 
-**Note on Timer**: The examples below reference the timer implementation. The current timer uses a **polling-based approach** (not SIGALRM). See [TIMER_IMPLEMENTATION_FINAL.md](../TIMER_IMPLEMENTATION_FINAL.md) for details. The platform API abstraction remains the same regardless of timer implementation.
+**Note on Timer**: The current timer uses a **polling-based approach** via `clock_gettime(CLOCK_MONOTONIC)` at 60Hz. See `src/drivers/platform/timer_interrupt.cpp`. The platform API abstraction remains the same regardless of timer implementation.
 
 ## Problem Statement
 

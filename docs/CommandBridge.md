@@ -89,15 +89,17 @@ The webserver runs in the parent process; the CPU runs in a forked child. They c
 
 | Endpoint | Method | Description | Status |
 |----------|--------|-------------|--------|
-| `/api/app` | GET | Current app name (passive field) | ✓ Working |
-| `/api/windows` | GET | Window list (command queue) | ✓ Working |
-| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` | ✓ Working |
-| `/api/launch` | POST | Launch app: `{"path": "HD:SimpleText"}` | ⚠ WIP |
-| `/api/quit` | POST | Quit current app | ⚠ WIP |
+| `/api/app` | GET | Current app name (passive field) | ✅ Working |
+| `/api/windows` | GET | Window list (command queue) | ✅ Working |
+| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` | ✅ Working |
+| `/api/launch` | POST | Launch app: `{"path": "HD:SimpleText"}` | ✅ Working |
+| `/api/quit` | POST | Quit current app | ✅ Working |
+| `/api/keypress` | POST | Send key event: `{"key": "return"}` | ✅ Working |
+| `/api/mouse` | POST | Move cursor: `{"x":N,"y":N}` | ✅ Working |
 
-### Launch status
+### Launch implementation
 
-File validation works (`_GetFileInfo` in IRQ context). The jGNEFilter and EmulOp dispatch work. The remaining issue is the `_Launch` trap calling convention — the old-style A0-pointer form bombs on System 7. Needs the extended `LaunchParamBlockRec` with FSSpec, or a cross-compiled 68k helper routine.
+Uses extended `LaunchParamBlockRec` with FSSpec and `launchContinue` flag. File validation via `_GetFileInfo` runs in IRQ context; the actual `_Launch` (0xA9F2) executes in app context via jGNEFilter mailbox handoff.
 
 ## Files
 
@@ -109,11 +111,10 @@ File validation works (`_GetFileInfo` in IRQ context). The jGNEFilter and EmulOp
 | `src/common/include/emul_op.h` | M68K_EMUL_OP_CMD_DISPATCH (0x7139) |
 | `src/core/shared_state.h` | ShmCommand/ShmResult queues, cur_app_name, helpers |
 | `src/webserver/api_handlers.cpp` | HTTP endpoint handlers |
-| `tests/test_command_bridge.sh` | Integration tests (7 checks) |
+| `tests/test_command_bridge.sh` | Integration tests |
 
-## Next Steps
+## Future Work
 
-1. **Fix _Launch**: Use extended LaunchParamBlockRec with FSSpec and `launchContinue` flag, or cross-compile a 68k helper with Retro68
-2. **Apple Events**: Send `kAEOpenDocuments` to Finder instead of calling _Launch directly — the proper System 7 way
-3. **More commands**: Send keystrokes, click at coordinates, menu selection
-4. **Unix socket**: Terse line protocol for shell scripting (`echo "app" | socat - UNIX:/tmp/mac-phoenix.sock`)
+1. **Apple Events**: Send `kAEOpenDocuments` to Finder instead of calling _Launch directly — the proper System 7 way
+2. **Menu selection**: Menu-aware event routing
+3. **Unix socket**: Terse line protocol for shell scripting (`echo "app" | socat - UNIX:/tmp/mac-phoenix.sock`)

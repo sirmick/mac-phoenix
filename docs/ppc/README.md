@@ -3,14 +3,14 @@
 Adding PowerPC Mac emulation to mac-phoenix using the **KPX (Kheperix)** interpreter,
 targeting OldWorld 4MB ROMs (Gossamer / Beige G3).
 
-## Current Status (Session 12, April 2026)
+## Current Status (April 2026)
 
 **PPC boots Mac OS 9 to Finder in interpreter mode.** JIT mode is blocked by a
 GCC code-generation difference (see below).
 
 With interpreter, mac-phoenix matches legacy SheepShaver: 1462 CHECKLOADs, 490 MIPS,
-NQD acceleration, ExtFS, and full Finder desktop. Session 12 stripped all debug
-divergence — PPC subsystems are now character-for-character identical to legacy.
+NQD acceleration, ExtFS, and full Finder desktop. PPC subsystems are now
+character-for-character identical to legacy.
 
 ### What Works
 
@@ -36,17 +36,17 @@ without returning for spcflags checking. HandleInterrupt never fires, causing
 (same MD5), but the surrounding C++ infrastructure is compiled with GCC 13 vs
 legacy's older GCC, producing different machine code for the block dispatch loop.
 
-See [Session 11 Findings](session11_findings.md) for full JIT analysis.
+## Documents
 
-### Session Fixes (cumulative)
-
-- **Session 12**: Stripped all debug logging divergence from legacy — EmulOp handlers, HandleInterrupt diagnostics, tick thread bloat, timer logging
-- **Session 11**: Config mismatch fixes (CL=458→1462), idle_wait no-op for PPC, PatchAfterStartup for Mac OS 9.0.4 pattern, DiskInterrupt reverted to legacy
-- **Session 10**: Microseconds() virtual clock, atomic interrupt flags, IPC video driver parity, forced PatchAfterStartup from NTRB_17_PATCH4
-- **Session 9**: NQD real implementations, idle_resume real, virtual clock, JIT wiring, debug cleanup
-- **Session 8**: PatchAfterStartup weak-symbol fix, all 14 weak symbols eliminated, `-fno-weak`
-- **Session 5**: RAM 32→64MB, XPRAM file, Ethernet blob
-- **Session 4**: Flight recorder counter fix, ADBInterrupt weak symbol
+| Document | Contents | Status |
+|----------|----------|--------|
+| [Architecture](Architecture.md) | Platform API, config, CPU backends | Current |
+| [Implementation Guide](ImplementationGuide.md) | Phased porting plan | Reference |
+| [ROM Patching](RomPatching.md) | Nanokernel patches, EmulOp mechanism | Current |
+| [Memory Layout](MemoryLayout.md) | PPC Mac memory map, kernel data, XLM | Current |
+| [Execution Model](ExecutionModel.md) | Boot sequence, mode switching, interrupts | Current |
+| [Legacy Comparison](LegacyComparison.md) | Full code diff with legacy IPC/SDL | Reference |
+| [Unicorn PPC](UnicornPpc.md) | Unicorn engine PPC API (unimplemented) | Reference |
 
 ## Reference Code
 
@@ -56,26 +56,6 @@ The **IPC video driver** is the correct comparison target for mac-phoenix, not S
 - Both use: `DIS_SCREEN`, `APPLE_CUSTOM`, `video_can_change_cursor()=true`
 - Both allocate framebuffer via `vm_acquire` with `Host2MacAddr`
 - Both have single 32-bit mode, no multi-depth
-
-## Documents
-
-| Document | Contents | Status |
-|----------|----------|--------|
-| [Architecture](architecture.md) | Platform API, config, CPU backends | Current |
-| [Implementation Guide](implementation_guide.md) | Phased porting plan | Reference |
-| [ROM Patching](rom_patching.md) | Nanokernel patches, EmulOp mechanism | Current |
-| [Memory Layout](memory_layout.md) | PPC Mac memory map, kernel data, XLM | Current |
-| [Execution Model](execution_model.md) | Boot sequence, mode switching, interrupts | Current |
-| [Legacy Comparison](legacy_comparison.md) | Full code diff with legacy IPC/SDL | Current (session 10) |
-| [Session 12 Findings](session12_findings.md) | Full PPC audit, debug stripping | Current |
-| [Session 11 Findings](session11_findings.md) | Config fixes, JIT blocker analysis | Current |
-| [Session 8 Findings](session8_findings.md) | Weak symbols, NQD gap | Superseded |
-| [Session 6 Findings](session6_findings.md) | PPC_CHECK_INTERRUPTS (disproven) | Superseded |
-| [Investigation Status](investigation_status.md) | KD+0x1720 (ruled out) | Superseded |
-| [Unicorn PPC](unicorn_ppc.md) | Unicorn engine PPC API (unimplemented) | Reference |
-
-**Superseded docs** are kept for history but their findings have been corrected
-or ruled out by later sessions.
 
 ## KPX File Map
 
@@ -134,7 +114,6 @@ src/cpu/kpx/
 
 - **Virtual clock**: `timer_current_time()` uses `ppc_insn_counter * 4ns` when
   PPC is active. `Microseconds()` also uses virtual clock with epoch offset.
-  Both match legacy's instruction-counter-based timing.
 
 - **Atomic interrupts**: `SetInterruptFlag`/`ClearInterruptFlag` use
   `__sync_fetch_and_or`/`__sync_fetch_and_and` matching legacy's `atomic_or`/`atomic_and`.

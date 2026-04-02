@@ -389,25 +389,38 @@ mpw Link -o TestApp test.c.o ...
 
 This gives fast iteration for compilation, with MacPhoenix used only for testing and running the resulting applications.
 
-## Implementation Plan
+## Implementation Status
 
-### Phase 1: Template Disks
-- [ ] Create provisioning script (`tools/provision-disk.sh`)
-- [ ] Build System 7.5.5 template with hfsutils
-- [ ] Document sourcing Mac OS installers and MPW
+### Phase 1: Template Disks — PARTIAL
+- [x] Python scripts for HFS/HFS+ image creation (`provisioning/create_hfs.py`, `create_hfs_plus.py`)
+- [x] Disk population script (`provisioning/populate_installers.py`) with MacBinary handling
+- [ ] Provisioning wrapper script (`tools/provision-disk.sh`)
+- [ ] Pre-built OS template images
 
-### Phase 2: EmulOp Bridge
-- [ ] Add `COMMAND_BRIDGE` EmulOp to `emul_op.cpp`
-- [ ] Add `/api/exec` and `/api/files` endpoints
-- [ ] Host-side command queue and result storage
+### Phase 2: EmulOp Bridge — DONE (different design)
+The actual implementation uses a simpler mailbox + jGNEFilter design instead of the 0x7180 sub-operation protocol described above:
+- [x] EmulOp `M68K_EMUL_OP_CMD_DISPATCH` (0x7139) in `emul_op.cpp`
+- [x] Command bridge with mailbox in ScratchMem (`command_bridge.cpp`)
+- [x] jGNEFilter for app-context dispatch
+- [x] `/api/launch`, `/api/quit`, `/api/app`, `/api/windows`, `/api/wait` endpoints
+- [ ] `/api/exec` (shell commands) — not implemented
+- [ ] `/api/files` (file I/O) — not implemented
 
-### Phase 3: Bridge INIT
+### Phase 3: Bridge INIT — NOT STARTED
+The current design is host-driven (API → EmulOp), not guest-polled. A guest agent is not needed for the implemented commands.
 - [ ] Build bridge INIT with Retro68
 - [ ] Timer-based polling of EmulOp
 - [ ] MPW Shell integration for command execution
-- [ ] Include INIT in provisioned template disks
 
-### Phase 4: Developer Experience
+### Phase 4: Developer Experience — NOT STARTED
 - [ ] CLI tool wrapping the API (`tools/mac-exec.sh`)
 - [ ] Makefile integration (edit on Linux, compile inside Mac)
 - [ ] Error output parsing (MPW errors -> host-readable format)
+
+### ExtFS (File Sharing) — DONE
+The primary file injection mechanism today is ExtFS shared folders:
+- [x] ExtFS driver (`src/core/extfs.cpp`) — full Mac filesystem I/O
+- [x] CLI flag `--extfs PATH` (repeatable)
+- [x] Config system integration with JSON persistence
+- [x] Resource fork support via AppleDouble (`._filename`)
+- [x] Test suite (`tests/test_extfs.sh`, 8 checks)

@@ -4,172 +4,71 @@ Detailed technical documentation on specific subsystems.
 
 ---
 
-## Active Investigations
-
-### [JIT_SMC_Detection_Analysis.md](JIT_SMC_Detection_Analysis.md)
-**Critical**: Root cause analysis of Unicorn's broken self-modifying code detection
-- Unicorn gutted QEMU's entire dirty memory bitmap in `ram_addr.h`
-- `cpu_physical_memory_is_clean()` hardcoded to `return true`
-- `invalidate_and_set_dirty()` completely empty
-- Guest-to-guest writes partially work via `notdirty_write()` slow path
-- Five fix options analyzed, starting with "verify guest path works"
-
-### [InterruptTimingAnalysis.md](InterruptTimingAnalysis.md)
-**Historical**: Explains why UAE and Unicorn diverge at instruction #29,518
-
-**Key Finding**: Timer interrupts fire at different instruction counts because:
-- Interrupts based on wall-clock time (not instruction count)
-- UAE (interpreter) runs slower → interrupt fires earlier
-- Unicorn (JIT) runs faster → interrupt fires later
-- **Not a bug** - characteristic of wall-clock-based timing
-
-**Recommendation**: Accept non-determinism, use functional testing instead of exact trace matching
-
----
-
 ## CPU Backend Documentation
 
-**All CPU-related docs have been moved to [cpu/](cpu/) subdirectory for better organization.**
+All CPU-related docs are in [cpu/](cpu/).
 
 ### Essential CPU Docs
 
-#### [cpu/UnicornQuirks.md](cpu/UnicornQuirks.md)
-**IMPORTANT - READ THIS FIRST**: Unicorn Engine quirks and solutions
-- PC changes in hooks: solved via deferred register updates
-- JIT TB invalidation: 60Hz flush workaround
-- MMIO: must use `uc_mmio_map()` (JIT bypasses `UC_HOOK_MEM_READ`)
-- SR requires `uint32_t*` for `uc_reg_write()`
-- Hook types (UC_HOOK_BLOCK, UC_HOOK_INTR)
-
-#### [cpu/ALineAndFLineStatus.md](cpu/ALineAndFLineStatus.md)
-**Current Status**: A-line/F-line trap handling -- **WORKING** (March 2026)
-- ✅ All A-line traps working via deferred register updates
-- ✅ 87 OS trap table entries populated (matching UAE)
-- ✅ Previous Unicorn PC limitation overcome
-
-#### [cpu/UaeQuirks.md](cpu/UaeQuirks.md)
-**Essential**: UAE CPU core quirks and gotchas
-- Byte-swapping (RAM little-endian, ROM big-endian)
-- `HAVE_GET_WORD_UNSWAPPED` flag
-- `mem_banks[]` memory access
-- `pc_p` pointer vs `m68k_getpc()` function
-
-### CPU API and Architecture
-
-#### [cpu/CpuBackendApi.md](cpu/CpuBackendApi.md)
-CPU backend interface specification - how backends implement Platform API
-
-#### [cpu/CpuModelConfiguration.md](cpu/CpuModelConfiguration.md)
-CPU model selection (68020 vs 68030 vs 68040)
-
-#### [cpu/DualCpuValidationInitialization.md](cpu/DualCpuValidationInitialization.md)
-How dual-CPU validation mode initializes
-
-### Trap and Exception Handling
-
-#### [cpu/ALineAndFLineTrapHandling.md](cpu/ALineAndFLineTrapHandling.md)
-**Detailed Design**: How A-line (0xAxxx) and F-line (0xFxxx) traps work
-- M68K exception mechanism
-- Vector table reading
-- Handler execution
-- **NOTE**: Implementation doesn't work on Unicorn due to PC limitation
-
-### Debugging and Analysis
-
-#### [cpu/CpuTraceDebugging.md](cpu/CpuTraceDebugging.md)
-CPU trace debugging techniques and tools
-
-#### [cpu/JIT_Block_Size_Analysis.md](cpu/JIT_Block_Size_Analysis.md)
-JIT translation block size analysis for performance tuning
-
-### Historical Bug Investigations
-
-#### [cpu/UnicornBugSrLazyFlags.md](cpu/UnicornBugSrLazyFlags.md)
-Unicorn bug with SR (Status Register) lazy flag evaluation
-
-#### [cpu/UnicornEarlyCrashInvestigation.md](cpu/UnicornEarlyCrashInvestigation.md)
-Investigation of early Unicorn crashes (now resolved)
-
-#### [cpu/UnicornRTEQemuResearch.md](cpu/UnicornRTEQemuResearch.md)
-Research into RTE instruction handling
-
-#### [cpu/UnicornBatchExecutionRTEBug.md](cpu/UnicornBatchExecutionRTEBug.md)
-RTE bug in batch execution mode
+- **[cpu/UnicornQuirks.md](cpu/UnicornQuirks.md)** — Unicorn Engine quirks: PC changes in hooks, deferred updates, MMIO, SR uint32_t
+- **[cpu/ALineAndFLineStatus.md](cpu/ALineAndFLineStatus.md)** — A-line/F-line trap handling status (WORKING via deferred updates)
+- **[cpu/UaeQuirks.md](cpu/UaeQuirks.md)** — UAE CPU core quirks: byte-swapping, mem_banks, pc_p vs m68k_getpc()
+- **[cpu/CpuBackendApi.md](cpu/CpuBackendApi.md)** — Unified CPU backend API (implemented via Platform struct)
+- **[cpu/CpuModelConfiguration.md](cpu/CpuModelConfiguration.md)** — CPU model selection (68020 vs 68040)
+- **[cpu/CpuTraceDebugging.md](cpu/CpuTraceDebugging.md)** — Trace debugging tools
+- **[cpu/JitBlockSizeAnalysis.md](cpu/JitBlockSizeAnalysis.md)** — JIT translation block size analysis
 
 ---
 
-## Memory System
+## Analysis & Investigations
+
+### [JitSmcDetectionAnalysis.md](JitSmcDetectionAnalysis.md)
+Root cause analysis of Unicorn's broken self-modifying code detection. Guest-to-guest path works via `notdirty_write()`. STALE-TB detector catches remaining edge cases.
+
+### [InterruptTimingAnalysis.md](InterruptTimingAnalysis.md)
+Why UAE and Unicorn diverge at instruction #29,518. Timer interrupts fire at different instruction counts due to wall-clock timing. Not a bug — accept non-determinism.
+
+### [UaeVsUnicornImplementationAnalysis.md](UaeVsUnicornImplementationAnalysis.md)
+Comprehensive comparison of UAE vs Unicorn backends: feature matrix, PC change issue, A-line/F-line status.
+
+---
+
+## Architecture
 
 ### [MemoryArchitecture.md](MemoryArchitecture.md)
-**Essential**: Direct addressing mode, memory layout
-- How Mac addresses map to host memory
-- ROM at 0x40800000, RAM at 0x00000000
-- `MEMBaseDiff` calculation
-- Why byte-swapping is needed
-
----
-
-## Platform and Configuration
-
-### [PlatformArchitectureOld.md](PlatformArchitectureOld.md)
-Old platform architecture doc (superseded by [../Architecture.md](../Architecture.md))
+Direct addressing mode, memory layout (RAM at 0x0, ROM at 0x02000000), Unicorn extended map.
 
 ### [PlatformAdapterImplementation.md](PlatformAdapterImplementation.md)
-Detailed platform adapter implementation notes
+Platform adapter pattern: all drivers use `g_platform` function pointers with null defaults. **All adapters complete.**
 
-### [CpuModelConfiguration.md](CpuModelConfiguration.md)
-CPU model selection (68020 vs 68030 vs 68040)
-
----
-
-## ROM and Patching
+### [PlatformAPIInterrupts.md](PlatformAPIInterrupts.md)
+Interrupt abstraction via platform API. Replaces global PendingInterrupt with backend-specific implementations.
 
 ### [RomPatchingRequired.md](RomPatchingRequired.md)
-What ROM patches are needed and why
-
-### [FullMontyPlan.md](FullMontyPlan.md)
-Original "full monty" implementation plan
-
----
-
-## Historical Investigations
-
-### [QemuExtractionAnalysis.md](QemuExtractionAnalysis.md)
-Analysis of extracting QEMU M68K code for potential use
-
-### [CpuTraceDebugging.md](CpuTraceDebugging.md)
-CPU trace debugging techniques and tools
-
-### [DualCpuValidationInitialization.md](DualCpuValidationInitialization.md)
-How dual-CPU validation mode initializes
-
-### [UnicornEarlyCrashInvestigation.md](UnicornEarlyCrashInvestigation.md)
-Investigation of early Unicorn crashes (now resolved)
+Why ROM patching is needed for dual-CPU testing.
 
 ---
 
 ## Recommended Reading Order
 
 ### For Understanding Current System
-1. [../Architecture.md](../Architecture.md) - Start here (high-level overview)
-2. [MemoryArchitecture.md](MemoryArchitecture.md) - How memory works
-3. [UaeQuirks.md](UaeQuirks.md) - UAE backend specifics
-4. [UnicornQuirks.md](UnicornQuirks.md) - Unicorn backend specifics
-5. [InterruptTimingAnalysis.md](InterruptTimingAnalysis.md) - Current investigation
+1. [../Architecture.md](../Architecture.md) — High-level overview
+2. [MemoryArchitecture.md](MemoryArchitecture.md) — How memory works
+3. [cpu/UaeQuirks.md](cpu/UaeQuirks.md) — UAE specifics
+4. [cpu/UnicornQuirks.md](cpu/UnicornQuirks.md) — Unicorn specifics
 
 ### For Implementing New Features
-1. [CpuBackendApi.md](CpuBackendApi.md) - Backend interface
-2. [ALineAndFLineTrapHandling.md](ALineAndFLineTrapHandling.md) - Trap mechanism
-3. [PlatformAdapterImplementation.md](PlatformAdapterImplementation.md) - Platform code
+1. [cpu/CpuBackendApi.md](cpu/CpuBackendApi.md) — Backend interface
+2. [PlatformAdapterImplementation.md](PlatformAdapterImplementation.md) — Platform code
 
 ### For Debugging
-1. [CpuTraceDebugging.md](CpuTraceDebugging.md) - Trace analysis
-2. [InterruptTimingAnalysis.md](InterruptTimingAnalysis.md) - Timing issues
-3. [UnicornEarlyCrashInvestigation.md](UnicornEarlyCrashInvestigation.md) - Historical crashes
+1. [cpu/CpuTraceDebugging.md](cpu/CpuTraceDebugging.md) — Trace analysis
+2. [InterruptTimingAnalysis.md](InterruptTimingAnalysis.md) — Timing issues
 
 ---
 
-**Note**: Most docs here are detailed, technical deep-dives. For quick reference, see top-level docs:
-- [../README.md](../README.md) - Quick start
-- [../Architecture.md](../Architecture.md) - System overview
-- [../Commands.md](../Commands.md) - Build and test commands
+**Note**: For quick reference, see top-level docs:
+- [../README.md](../README.md) — Quick start
+- [../Architecture.md](../Architecture.md) — System overview
+- [../Commands.md](../Commands.md) — Build and test commands
+- [../ppc/](../ppc/) — PPC-specific documentation

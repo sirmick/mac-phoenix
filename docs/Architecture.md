@@ -449,7 +449,7 @@ Unicorn uses **manual M68K exception stack frame building** rather than QEMU's `
    - Jump to interrupt handler
 5. **RTE instruction** restores PC and SR from stack, returns from interrupt
 
-See [TIMER_IMPLEMENTATION_FINAL.md](TIMER_IMPLEMENTATION_FINAL.md) for timer details.
+Timer uses polling-based `clock_gettime(CLOCK_MONOTONIC)` at 60Hz. See `src/drivers/platform/timer_interrupt.cpp`.
 
 ---
 

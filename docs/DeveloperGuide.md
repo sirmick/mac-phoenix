@@ -1,4 +1,4 @@
-# mac-phoenix Developer Guide
+# Developer Guide
 
 ## Architecture Overview
 
@@ -6,7 +6,7 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                Mac Application                   │
+│               Mac Application                    │
 └─────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────┐
@@ -18,9 +18,10 @@
                         ↓
 ┌─────────────────────────────────────────────────┐
 │           CPU Backend (pluggable)               │
-│  • UAE (default, fast interpreter)               │
-│  • Unicorn (QEMU JIT, validation)               │
-│  • DualCPU (validation)                         │
+│  • UAE      (M68K default, fast + JIT)          │
+│  • Unicorn  (M68K QEMU JIT, validation)         │
+│  • DualCPU  (M68K lockstep validation)          │
+│  • KPX      (PPC interpreter + dyngen JIT)      │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -28,59 +29,73 @@
 
 1. **Backend Independence**: All CPU operations go through Platform API
 2. **Clean Separation**: No direct dependencies between backends
-3. **Validation First**: DualCPU mode catches bugs early
+3. **Validation First**: DualCPU mode catches M68K bugs early
 4. **Performance Second**: Optimize after correctness
 
-## Understanding the Unicorn Backend
+## CPU Backends
 
-### Execution Flow
+### UAE (M68K)
 
-1. **QEMU-Style Loop** (`src/cpu/unicorn_exec_loop.c`)
-   ```c
-   while (running) {
-       check_interrupts();      // Before execution
-       batch_size = adaptive();  // 3-50 instructions
-       uc_emu_start(batch);      // Execute batch
-       check_branches();         // Force interrupt check on loops
-   }
-   ```
+Default M68K backend. Hand-tuned interpreter with optional JIT compiler.
 
-2. **Hook Block** (`src/cpu/unicorn_wrapper.c:hook_block()`)
-   - Apply deferred register updates from previous EmulOp
-   - Poll timer every ~4096 blocks
-   - Deliver pending interrupts via `uc_m68k_trigger_interrupt()` (QEMU native delivery)
+- **Flags**: `--backend uae` (default), `--jit`/`--no-jit`
+- **Boot time**: ~5s to Finder
+- **Files**: `src/cpu/cpu_uae.c`, `src/cpu/uae_cpu/`
 
-3. **Hook Interrupt** (`src/cpu/unicorn_wrapper.c:hook_interrupt()`)
-   - Fires on A-line exception (0xAExx opcodes)
-   - Identifies EmulOp opcode, calls handler
-   - **Defers** all register updates (writes inside hooks don't persist in QEMU)
-   - Updates applied at next `hook_block()` call
+### Unicorn (M68K)
 
-4. **Interrupt Delivery** (QEMU native, auto-ack)
-   - `g_pending_interrupt_level` set by timer/device code
-   - `hook_block()` calls `uc_m68k_trigger_interrupt()` to set QEMU's pending interrupt
-   - QEMU's `m68k_cpu_exec_interrupt()` builds exception frame and delivers interrupt
-   - Auto-acknowledge in `m68k_cpu_exec_interrupt()` (no separate ack hook needed)
+QEMU-based JIT via Unicorn Engine. ~10x slower than UAE due to QEMU TCG M68K overhead.
 
-### Critical Files
+**Execution Flow**:
+1. `hook_block()` — Apply deferred register updates, poll timer, deliver interrupts
+2. `hook_interrupt()` — Handle A-line/F-line traps via EmulOp dispatch
+3. All register writes deferred (QEMU overwrites PC after hook return)
 
-| File | Purpose | Key Functions |
-|------|---------|---------------|
-| `unicorn_wrapper.c` | Hooks, deferred updates, diagnostics | `hook_block()`, `hook_interrupt()`, `apply_deferred_updates_and_flush()` |
-| `unicorn_exec_loop.c` | Main execution loop | `unicorn_execute_with_interrupts()` |
-| `cpu_unicorn.cpp` | Backend interface, MMIO, memory map | Platform API, `uc_mmio_map()` callbacks |
-| `rom_patches.cpp` | ROM modifications | IRQ EmulOp encoding fix |
-| `timer_interrupt.cpp` | 60Hz timer | `poll_timer_interrupt()` |
+**Key Files**:
 
-### Key Technical Concepts
+| File | Purpose |
+|------|---------|
+| `unicorn_wrapper.c` | Hooks, deferred updates, diagnostics |
+| `unicorn_exec_loop.c` | Main execution loop |
+| `cpu_unicorn.cpp` | Backend interface, MMIO, memory map |
+| `timer_interrupt.cpp` | 60Hz timer via `clock_gettime` |
 
-**Deferred Register Updates**: EmulOp handlers run inside `UC_HOOK_INTR` callbacks. QEMU overwrites PC after hook returns. Solution: queue all register writes and apply them at the next `hook_block()` boundary via `apply_deferred_updates_and_flush()`.
+**Key Concepts**:
+- **Deferred Register Updates**: EmulOp handlers queue register writes, applied at next `hook_block()`
+- **MMIO**: Must use `uc_mmio_map()` — JIT compiles direct loads for `uc_mem_map_ptr` regions
+- **JIT TB Invalidation**: QEMU's `notdirty_write()` + STALE-TB detector
 
-**JIT TB Invalidation**: Mac OS heap can overwrite RAM containing EmulOp patch code. QEMU's JIT cache retains stale compiled translations. QEMU's `notdirty_write()` path handles most self-modifying code. A STALE-TB detector catches the remaining edge cases.
+### KPX (PPC)
 
-**MMIO**: Hardware registers must use `uc_mmio_map()`, not `UC_HOOK_MEM_READ`. QEMU's JIT compiles direct memory loads for `uc_mem_map_ptr` regions, bypassing hooks.
+Kheperix interpreter from SheepShaver, targeting Gossamer (Beige G3) ROMs.
 
-**SR uint32_t**: `uc_reg_write()` for SR reads 4 bytes. Passing `uint16_t*` causes garbage in upper bits.
+- **Flags**: `--arch ppc`, `--ppc-jit`/`--no-ppc-jit`
+- **Boot time**: ~45s to Finder (interpreter)
+- **OS**: Mac OS 9.0.4 (tested), 8.1-9.2.2 (expected)
+- **Files**: `src/cpu/kpx/`
+
+**Execution Model**: Mixed-mode — PPC nanokernel runs Mac OS 68K emulator (DR Emulator) which handles 68K code. PPC native code runs directly. Mode switches via EmulOps and NativeOps.
+
+**Key Files**:
+
+| File | Purpose |
+|------|---------|
+| `cpu_ppc_kpx.cpp` | sheepshaver_cpu, HandleInterrupt, Platform API |
+| `emul_op_ppc.cpp` | EmulOp dispatch (40+ operations) |
+| `rom_patches_ppc.cpp` | ROM patching (4 phases) |
+| `video_ppc.cpp` | Video driver (VideoDoDriverIO) |
+| `gfxaccel_ppc.cpp` | NQD acceleration hooks |
+
+**JIT Status**: Dyngen JIT compiled and available via `--ppc-jit`. Blocked by GCC 13 codegen difference in block dispatch loop — interpreter is the working default.
+
+See `docs/ppc/` for comprehensive PPC documentation.
+
+### DualCPU (M68K Validation)
+
+Runs UAE + Unicorn in lockstep, compares registers after each instruction. Returns `CPU_EXEC_DIVERGENCE` on mismatch.
+
+- **Flag**: `--backend dualcpu`
+- Not for end users — ~2x slower
 
 ## Common Development Tasks
 
@@ -105,98 +120,43 @@
 
 ### Debugging CPU Execution
 
-1. **Enable tracing**:
-   ```bash
-   CPU_TRACE=0-1000 ./build/mac-phoenix
-   ```
-
-2. **Add breakpoints** in GDB:
-   ```gdb
-   break unicorn_execute_with_interrupts
-   break handle_emulop_immediate
-   ```
-
-3. **Check specific issues**:
-   ```bash
-   # IRQ storm check
-   grep -c "poll_timer" logfile
-
-   # EmulOp frequency
-   grep "EmulOp" logfile | sort | uniq -c
-   ```
-
-### Modifying Interrupt Handling
-
-The interrupt system has several layers:
-
-1. **Timer Source** → `poll_timer_interrupt()`
-2. **Execution Loop** → `poll_and_check_interrupts()`
-3. **Delivery** → `deliver_m68k_interrupt()`
-4. **Exception Frame** → `build_exception_frame()`
-
-To add a new interrupt source:
-```c
-// In m68k_interrupt.c
-void deliver_custom_interrupt(UnicornCPU *cpu, int level) {
-    deliver_m68k_interrupt(cpu, level, 24 + level);  // Autovector
-}
-```
-
-## Performance Optimization
-
-### Current Optimizations
-
-1. **QEMU Native Interrupt Delivery**
-   - Auto-acknowledge in `m68k_cpu_exec_interrupt()` (no stop/start cycle)
-   - `goto_tb` enabled for backward branches (loop chaining without breaking for hooks)
-
-2. **Minimal Hooks**
-   - Only UC_HOOK_BLOCK (not per-instruction) + UC_HOOK_INTR for EmulOps
-   - Lean `hook_block()` — essential logic only (block stats, interrupt delivery, timer polling, deferred updates)
-   - Timer polling only every 4096 blocks
-
-3. **JIT TB Invalidation**
-   - QEMU's `notdirty_write()` handles most self-modifying code
-   - STALE-TB detector catches remaining edge cases (~18 blocks)
-
-### Profiling
-
 ```bash
-# CPU profiling
-sudo sysctl kernel.perf_event_paranoid=-1
-perf record -g -F 997 ./build/mac-phoenix --backend unicorn --no-webserver /home/mick/quadra.rom
-perf report
+# Enable tracing
+CPU_TRACE=0-1000 ./build/mac-phoenix
+
+# GDB breakpoints
+break unicorn_execute_with_interrupts
+break handle_emulop_immediate
+
+# EmulOp frequency
+grep "EmulOp" logfile | sort | uniq -c
 ```
-
-### Optimization Opportunities
-
-1. **Translation Block Caching**
-   - Currently rebuilds on every interrupt
-   - Could cache and reuse
-
-2. **Batch Size Tuning**
-   - Profile actual instruction patterns
-   - Adjust thresholds
-
-3. **Hook Reduction**
-   - Combine multiple checks
-   - Use conditional hooks
 
 ## Testing
 
-### Test Suite
 ```bash
-# Run all tests
+# All tests
 meson test -C build
 
-# Fast tests only (API + UAE boot + mouse, ~12s)
-meson test -C build api_endpoints boot_uae mouse_position
+# Fast tests (~20s)
+meson test -C build api_endpoints boot_uae mouse_position command_bridge extfs
 
-# Verbose output
+# PPC boot test
+meson test -C build boot_ppc_interp
+
+# Verbose
 meson test -C build -v
 
-# Validate against UAE using dual-CPU mode
-./build/mac-phoenix --backend dualcpu --no-webserver /home/mick/quadra.rom
+# Dual-CPU validation
+./build/mac-phoenix --backend dualcpu --no-webserver ~/quadra.rom
+```
+
+## Profiling
+
+```bash
+sudo sysctl kernel.perf_event_paranoid=-1
+perf record -g -F 997 ./build/mac-phoenix --backend unicorn --no-webserver ~/quadra.rom
+perf report
 ```
 
 ## Contributing
@@ -211,98 +171,23 @@ meson test -C build -v
 component: Brief description
 
 Detailed explanation of what changed and why.
-Reference issue numbers if applicable.
-
-Fixes #123
 ```
 
 ### Testing Requirements
-1. No IRQ storm (test included)
-2. Timer at 60Hz (test included)
-3. Boots to same point as UAE
-4. No memory leaks (valgrind clean)
-
-## Troubleshooting Development Issues
-
-### Build Failures
-```bash
-# Clean rebuild
-rm -rf build
-meson setup build
-ninja -C build
-
-# Check dependencies
-pkg-config --libs unicorn
-```
-
-### Runtime Crashes
-```bash
-# Run under GDB
-gdb ./build/mac-phoenix
-run --no-webserver
-
-# Check backtrace
-bt full
-
-# Check registers
-info registers
-```
-
-### Performance Issues
-```bash
-# Check interrupt rate
-./build/mac-phoenix --log-level 2 --timeout 10 --no-webserver /home/mick/quadra.rom 2>&1 | grep -c interrupt
-```
-
-## Architecture Decisions
-
-### Why QEMU-Style Loop?
-- Unicorn's JIT needs interrupt check points
-- Small batches prevent infinite loops
-- Adaptive sizing balances performance
-
-### Why Deferred Updates?
-- Register writes inside `UC_HOOK_INTR` don't persist (QEMU overwrites PC)
-- Deferred updates applied at `hook_block()` boundary work correctly
-- All A-line/F-line traps now functional with this approach
-
-### Why M68K Exception Frames?
-- Required for proper RTE handling
-- Mac OS expects specific format
-- Matches real hardware behavior
-
-## Future Work
-
-### Phase 5: TB Break Detection (Optional)
-- Detect patterns requiring TB termination
-- Optimize backward branch handling
-- Reduce unnecessary breaks
-
-### Phase 6: Optimization (Optional)
-- Profile hot paths
-- Optimize register access
-- Cache translation blocks
-
-### Current Priority (March 2026)
-- Application support (HyperCard, classic games)
-- Stability improvements (long-running sessions)
-- Further Unicorn performance optimization
-
-### Long-term Goals
-- Mac OS 8 support
-- Performance parity with UAE
-- Network support
-- Sound emulation
+1. Boot tests pass for affected backends
+2. No regressions in existing tests
+3. New features need test coverage
 
 ## Resources
 
 ### Documentation
-- [Architecture.md](Architecture.md) - System design
-- [TroubleshootingGuide.md](TroubleshootingGuide.md) - Debug help
-- [deepdive/](deepdive/) - Technical deep dives
+- [Architecture.md](Architecture.md) — System design
+- [TroubleshootingGuide.md](TroubleshootingGuide.md) — Debug help
+- [deepdive/](deepdive/) — Technical deep dives
+- [ppc/](ppc/) — PPC-specific documentation
 
 ### External References
-- [Unicorn Engine Docs](https://www.unicorn-engine.org/docs/)
+- [Unicorn Engine](https://www.unicorn-engine.org/docs/)
 - [QEMU M68K](https://github.com/qemu/qemu/tree/master/target/m68k)
 - [Inside Macintosh](https://developer.apple.com/library/archive/documentation/mac/pdf/)
 
@@ -311,7 +196,10 @@ info registers
 - **IPL**: Interrupt Priority Level (0-7)
 - **VBR**: Vector Base Register (interrupt vectors)
 - **TB**: Translation Block (JIT compiled code)
+- **KPX**: Kheperix PPC interpreter/JIT engine
+- **NativeOp**: PPC native operation thunk (38 operations)
+- **DR Emulator**: Macintosh 68K emulator running under PPC nanokernel
 
 ---
 
-*Last Updated: March 2026*
+*Last Updated: April 2026*

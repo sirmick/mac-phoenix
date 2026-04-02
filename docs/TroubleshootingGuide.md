@@ -232,7 +232,7 @@ grep "TB executed" logfile | wc -l
 ### Documentation
 - Architecture: docs/Architecture.md
 - Developer Guide: docs/DeveloperGuide.md
-- IRQ Storm Analysis: docs/deepdive/UnicornIRQStormDebugSession.md
+- Unicorn Quirks: docs/deepdive/cpu/UnicornQuirks.md
 
 ### Key Files for Debugging
 1. `src/core/rom_patches.cpp` - ROM patching (IRQ fix)

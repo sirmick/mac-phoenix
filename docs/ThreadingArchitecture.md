@@ -1,13 +1,12 @@
-# Threading Architecture - Complete System Design
+# Threading Architecture
 
-**Date**: January 3, 2026
 **Project**: mac-phoenix with integrated WebRTC streaming
 
 ---
 
 ## Executive Summary
 
-**Architecture**: Single process with 4 threads (optimized for multi-core)
+**Architecture**: Parent process with 3-4 threads + CPU subprocess (IPC via shared memory + Unix socket)
 
 **Design Principles**:
 - Lock-free where possible (atomic operations, triple buffers)
@@ -727,28 +726,33 @@ Total latency:     ~40-90ms (acceptable for interactive use)
 
 ---
 
+## Implementation Notes
+
+### Subprocess Model
+
+The actual implementation uses a **subprocess model** for CPU isolation:
+
+- **Parent process**: HTTP server, WebRTC signaling, video encoder, video relay threads
+- **Child process**: CPU execution (M68K or PPC) via `--ipc --arch` flags
+- **IPC**: Shared memory (`/tmp/mac-phoenix-<pid>`) + Unix socket
+- **Video relay**: `epoll` on `eventfd` for frame wake-ups, copies to `VideoOutput` triple buffer
+
+### Audio Status
+
+Audio encoding infrastructure exists (`audio_encoder_thread.cpp`, `audio_output.h`) but the audio encoder thread is **not launched** — Mac OS sound output is currently a no-op (`audio_null.cpp`).
+
+### Dirty Rectangle Optimization
+
+Video encoder compares current frame against previous. For PNG/WebP codecs, computes bounding box and sends strips if under 200KB threshold instead of full frame.
+
 ## Future Optimizations
 
 ### Possible Improvements
 
-**Video encoder threading**:
-- Could use separate threads for different codecs
-- H.264 hardware encoding (GPU) - offload from CPU
-- Multiple encoder threads for tiling (parallel encoding)
-
-**Audio resampling**:
-- If Mac audio rate ≠ 48kHz, need resampling thread
-- Could be done in audio encoder thread (simpler)
-
-**Disk I/O**:
-- Currently synchronous (blocks CPU thread)
-- Could add async I/O thread for disk reads/writes
-- Use io_uring on Linux (modern async I/O)
-
-**Multiple clients**:
-- Currently single WebRTC peer
-- Could add multiple encoder threads (one per client)
-- Each client gets own encoder thread
+- **GPU encoding** (H.264 hardware) — currently all software (FFmpeg-based)
+- **Async I/O** (io_uring) — disk I/O is synchronous in child process
+- **Multiple WebRTC clients** — currently single peer
+- **Audio encoder activation** — wire up when sound emulation is implemented
 
 ---
 

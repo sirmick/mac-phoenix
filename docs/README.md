@@ -1,19 +1,23 @@
 # mac-phoenix
 
-Modern Mac emulator with Unicorn M68K CPU backend and dual-CPU validation.
+Modern Mac emulator with multiple CPU backends and web-based streaming UI.
 
 ---
 
 ## What Is This?
 
-**mac-phoenix** is a clean-room rewrite of the BasiliskII Mac emulator, focused on:
+**mac-phoenix** emulates classic Macintosh computers, supporting both M68K (68020) and PowerPC architectures:
 
-1. **Unicorn M68K CPU** - Fast JIT-compiled 68020 emulation (primary goal)
-2. **Dual-CPU Validation** - Run UAE and Unicorn in parallel to catch emulation bugs
-3. **Modern Architecture** - Clean platform API, modular design, Meson build
-4. **Legacy Support** - UAE backend retained for compatibility
+1. **M68K Emulation** — UAE interpreter (default, fast, JIT), Unicorn QEMU backend, DualCPU validation
+2. **PowerPC Emulation** — KPX (Kheperix) interpreter from SheepShaver, boots Mac OS 9
+3. **Web-Based UI** — WebRTC streaming with mouse/keyboard input, HTTP API
+4. **Modern Architecture** — Clean platform API, modular drivers, Meson build
 
-**Current Status**: ✅ Both backends boot Mac OS 7.5.5 to Finder desktop (March 2026)
+**Current Status** (April 2026):
+- ✅ M68K: Mac OS 7.5.5 boots to Finder (UAE ~5s, Unicorn ~48s)
+- ✅ PPC: Mac OS 9 boots to Finder (KPX interpreter ~45s)
+- ✅ M68K JIT compiler (`--jit` flag)
+- ✅ Command bridge API (app launch/quit, window list, boot polling)
 
 ---
 
@@ -21,30 +25,17 @@ Modern Mac emulator with Unicorn M68K CPU backend and dual-CPU validation.
 
 ### Build
 ```bash
-cd mac-phoenix
 meson setup build
-meson compile -C build
+ninja -C build
 ```
 
-### Configure
+### Run
 ```bash
-# Edit config file
-nano ~/.config/mac-phoenix/config.json
-```
+# M68K (default)
+./build/mac-phoenix ~/quadra.rom
 
-### Run with Unicorn backend
-```bash
-./build/mac-phoenix --backend unicorn ~/quadra.rom
-```
-
-### Run with dual-CPU validation
-```bash
-./build/mac-phoenix --backend dualcpu ~/quadra.rom
-```
-
-### Run with custom config
-```bash
-./build/mac-phoenix --config myconfig.json ~/quadra.rom
+# PPC
+./build/mac-phoenix --arch ppc --rom ~/g3.rom --disk ~/mac9.hfv --ram 64
 ```
 
 See **[Commands.md](Commands.md)** for complete build and testing guide.
@@ -54,96 +45,37 @@ See **[JsonConfig.md](JsonConfig.md)** for configuration documentation.
 
 ## Documentation
 
-### Essential Reading (Start Here!)
-- **[Architecture.md](Architecture.md)** - How the system fits together (Platform API, backends, memory)
-- **[ProjectGoals.md](ProjectGoals.md)** - Vision and end goals (Unicorn-first approach)
-- **[Commands.md](Commands.md)** - Build, test, debug, trace commands
-- **[JsonConfig.md](JsonConfig.md)** - Configuration system
-- **[TodoStatus.md](TodoStatus.md)** - What's done ✅ and what's next ⏳
-- **[StatusSummary.md](StatusSummary.md)** - Current project status
+### Essential
+- **[Architecture.md](Architecture.md)** — Platform API, backends, memory layout
+- **[ProjectGoals.md](ProjectGoals.md)** — Vision, roadmap, current status
+- **[Commands.md](Commands.md)** — Build, test, debug commands
+- **[JsonConfig.md](JsonConfig.md)** — Configuration system
+- **[TodoStatus.md](TodoStatus.md)** — What's done ✅ and what's next ⏳
+- **[DeveloperGuide.md](DeveloperGuide.md)** — Backend details, debugging, contributing
+
+### Command & Control
+- **[CommandBridge.md](CommandBridge.md)** — jGNEFilter, mailbox, HTTP API for controlling Mac OS
+- **[ApplianceLayer.md](ApplianceLayer.md)** — Programmable appliance design (partially implemented)
+
+### PowerPC
+- **[ppc/](ppc/)** — PPC emulation documentation
+  - **[ppc/README.md](ppc/README.md)** — Status, boot commands, file map
+  - **[ppc/Architecture.md](ppc/Architecture.md)** — Platform API integration
+  - **[ppc/ExecutionModel.md](ppc/ExecutionModel.md)** — Boot sequence, mode switching
+  - **[ppc/MemoryLayout.md](ppc/MemoryLayout.md)** — PPC memory map, kernel data
 
 ### Technical Deep Dives
-- **[deepdive/](deepdive/)** - Detailed technical documentation
-  - **[cpu/](deepdive/cpu/)** - CPU backend documentation
-    - **[UnicornQuirks.md](deepdive/cpu/UnicornQuirks.md)** - ⚠️ **CRITICAL** - PC change limitation
-    - **[ALineAndFLineStatus.md](deepdive/cpu/ALineAndFLineStatus.md)** - Trap handling status
-    - [UaeQuirks.md](deepdive/cpu/UaeQuirks.md), [CpuBackendApi.md](deepdive/cpu/CpuBackendApi.md), and more
-  - [MemoryArchitecture.md](deepdive/MemoryArchitecture.md) - Memory system
-  - [InterruptTimingAnalysis.md](deepdive/InterruptTimingAnalysis.md) - Timing analysis
-  - [PlatformAPIInterrupts.md](deepdive/PlatformAPIInterrupts.md) - Interrupt abstraction
+- **[deepdive/](deepdive/)** — Detailed technical documentation
+  - **[cpu/](deepdive/cpu/)** — CPU backend details, quirks, analysis
+  - **[MemoryArchitecture.md](deepdive/MemoryArchitecture.md)** — Memory system
+  - **[PlatformAPIInterrupts.md](deepdive/PlatformAPIInterrupts.md)** — Interrupt abstraction
 
-### Historical Documentation
-- **[completed/](completed/)** - Successfully completed implementations and fixes
-- **[archive/](archive/)** - Archived docs (obsolete, superseded, or historical)
-  - See [archive/README.md](archive/README.md) for details on what's archived and why
-
----
-
-## Project Vision
-
-**End Goal**: Unicorn-based Mac emulator with:
-- Fast JIT execution
-- Clean, maintainable codebase
-- Validated against proven UAE implementation
-- Modern build system and tooling
-
-**Current State**: Both backends boot Mac OS 7.5.5 to Finder desktop (March 2026)
-
-**UAE's Role**: Legacy compatibility and validation baseline (will be retained but Unicorn is the focus)
-
-**Dual-CPU's Role**: Validation tool to ensure Unicorn matches UAE behavior
-
-See **[ProjectGoals.md](ProjectGoals.md)** for detailed vision.
-
----
-
-## Key Achievements
-
-- ✅ **Both backends boot to Mac OS 7.5.5 Finder** (March 2026)
-- ✅ Unicorn M68K backend with JIT (68040 mode)
-- ✅ EmulOps (0xAExx for Unicorn, 0x71xx for UAE)
-- ✅ A-line/F-line traps via deferred register updates
-- ✅ Interrupt support (60Hz timer, QEMU native interrupt delivery)
-- ✅ JIT TB invalidation via QEMU `notdirty_write()` + STALE-TB detector
-- ✅ MMIO infrastructure (VIA/SCC/SCSI/ASC/DAFB stubs)
-- ✅ WebRTC streaming (H.264, VP9, Opus audio)
-- ✅ Mouse/keyboard input via WebRTC data channel
-- ✅ JSON configuration system
-- ✅ Unicorn performance optimizations (auto-ack, goto_tb, lean hook_block)
-- ✅ Playwright e2e test framework
-
-See **[TodoStatus.md](TodoStatus.md)** for complete checklist.
-
----
-
-## Recent Improvements (January-March 2026)
-
-### ✅ Boot to Finder (March 2026)
-Both UAE and Unicorn backends boot Mac OS 7.5.5 to Finder desktop:
-- UAE: 2200+ CHECKLOADs, reaches Finder in ~5s
-- Unicorn: 2513+ CHECKLOADs, reaches Finder in ~48s
-
-Key fixes: framebuffer placement outside RAM (avoids WDCB overlap), RTR instruction
-added to QEMU m68k translator, FPU emulation, SIGSEGV handler.
-
-### ✅ Unicorn Performance (March 2026)
-Reduced Unicorn hook overhead from ~10x to ~5% of execution time (JIT itself is the bottleneck, ~10x slower):
-- Auto-ack interrupts in QEMU's `m68k_cpu_exec_interrupt()`
-- `goto_tb` enabled for backward branches (loop chaining)
-- Stripped hook_block of per-block perf timing, block stats, stale TB detector
-
-### ✅ Web UI Input (March 2026)
-Mouse and keyboard input wired through WebRTC data channel:
-- Binary protocol: relative/absolute mouse, buttons, keyboard
-- Data channel -> `process_input_message()` -> ADB functions
-- Playwright e2e tests verify full-stack input pipeline
-
-### ✅ WebRTC Integration (January 2026)
-4-thread in-process architecture with all encoders integrated.
-
-### ✅ IRQ Storm Fixed (January 2026)
-4-phase fix: EmulOp encoding, QEMU-style execution loop, deferred register updates,
-proper M68K interrupt delivery.
+### Other
+- **[ThreadingArchitecture.md](ThreadingArchitecture.md)** — Thread model, IPC, video/audio
+- **[ConfigUnification.md](ConfigUnification.md)** — Config system design
+- **[Provisioning.md](Provisioning.md)** — Disk image creation, ExtFS, MPW
+- **[Testing.md](Testing.md)** — Test framework documentation
+- **[TroubleshootingGuide.md](TroubleshootingGuide.md)** — Debug help
 
 ---
 
@@ -152,32 +84,29 @@ proper M68K interrupt delivery.
 ```
 mac-phoenix/
 ├── src/
-│   ├── common/include/    # Shared headers (sysdeps.h, platform.h)
-│   ├── core/              # Core Mac managers (emul_op.cpp, adb.cpp, rom_patches.cpp)
+│   ├── common/include/    # Shared headers (platform.h, emul_op.h)
+│   ├── core/              # Core Mac managers (emul_op, adb, rom_patches, command_bridge)
 │   ├── cpu/               # CPU backends
-│   │   ├── uae_cpu/       # UAE M68K interpreter (legacy)
-│   │   ├── cpu_unicorn.cpp     # Unicorn backend (primary)
-│   │   ├── unicorn_wrapper.c   # Unicorn hooks and interrupt delivery
-│   │   ├── unicorn_exec_loop.c # uc_emu_start loop
-│   │   └── cpu_dualcpu.c       # Validation backend
-│   ├── drivers/           # Video, audio, platform drivers
+│   │   ├── uae_cpu/       # UAE M68K interpreter + JIT
+│   │   ├── cpu_unicorn.cpp     # Unicorn M68K backend
+│   │   ├── cpu_dualcpu.c       # DualCPU validation backend
+│   │   └── kpx/                # KPX PPC interpreter + dyngen JIT
+│   ├── drivers/           # Video, audio, platform, network drivers
 │   ├── webrtc/            # WebRTC server (signaling + input)
 │   ├── webserver/         # HTTP server, API handlers
 │   └── config/            # JSON config system
 ├── client/                # Browser client (HTML, JS, CSS)
-├── tests/
-│   ├── boot/              # Boot tests
-│   └── e2e/               # Playwright e2e tests
+├── tests/                 # Shell + Playwright tests
 ├── subprojects/           # Unicorn, libdatachannel, nlohmann_json
 ├── docs/                  # Documentation (you are here!)
-└── meson.build            # Build configuration
+└── meson.build
 ```
 
 ---
 
 ## License
 
-GPL v2 (based on BasiliskII)
+GPL v2 (based on BasiliskII / SheepShaver)
 
 ## References
 

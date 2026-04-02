@@ -351,43 +351,45 @@ The Mac desktop, menu bar, and system chrome all remain as-is — the app is a r
 
 ---
 
-## Implementation Order
+## Implementation Status
 
-### Phase 1: Command Dispatcher + CLI
+### Phase 1: Command Dispatcher ✅ COMPLETE
 
-1. Command dispatcher (thread-safe queue + 60Hz drain)
-2. Unix socket server thread (~150 lines)
-3. Wire existing functions: `click`, `mouse`, `key`, `type`, `keycombo`, `status`, `screenshot`
-4. `mac-phoenix-ctl` CLI wrapper (~50 lines)
-5. HTTP endpoints that delegate to same dispatcher
+- ✅ Command dispatcher (thread-safe queue + 60Hz drain) — `command_bridge.cpp`
+- ✅ HTTP endpoints that delegate to dispatcher — `api_handlers.cpp`
+- ✅ Wire existing functions: `mouse`, `keypress`, `status`, `screenshot`
+- ⏳ Unix socket server thread (~150 lines) — not implemented
+- ⏳ `mac-phoenix-ctl` CLI wrapper — not implemented
 
-### Phase 2: Introspection
+### Phase 2: Introspection ✅ COMPLETE
 
-6. `app` — read CurApName from low-memory global
-7. `windows` — walk WindowList linked list
-8. `menus` — read MenuList structure
-9. `memory` — peek/poke via ReadMacInt/WriteMacInt
-10. `wait` — polling loop with condition parser
+- ✅ `app` — reads CurApName from low-memory global 0x0910
+- ✅ `windows` — walks WindowList linked list at 0x09D6
+- ✅ `memory` — hex dump of arbitrary Mac address
+- ✅ `wait` — polling loop with condition parser (`boot=Finder`, `app=Name`)
+- ✅ `ticks` — reads Ticks counter at 0x016A
+- ⏳ `menus` — not implemented
 
-### Phase 3: File Injection + Cross-Compilation
+### Phase 3: File Injection + Cross-Compilation — PARTIAL
 
-11. Wire up extfs to current config system (--extfs flag)
-12. Test extfs actually works with current memory layout
-13. Set up Retro68 toolchain, build first test app
-14. `inject` command (copy file into extfs directory)
+- ✅ ExtFS wired to config system (`--extfs` flag, repeatable)
+- ✅ ExtFS working with current memory layout — tested, 8 checks pass
+- ⏳ Retro68 toolchain — not set up
+- ⏳ `inject` command (copy file into extfs directory) — not implemented
 
-### Phase 4: Trap Calls
+### Phase 4: Trap Calls ✅ COMPLETE
 
-15. `Execute68kTrap()` integration in IRQ handler (command queue drain)
-16. `launch` — build FSSpec + LaunchParamBlockRec, call _Launch
-17. `quit` — _ExitToShell trap
-18. `shutdown` — _Shutdown trap
-19. Test result EmulOp (M68K_EMUL_OP_TEST_RESULT)
+- ✅ `Execute68kTrap()` integration in IRQ handler (command queue drain)
+- ✅ jGNEFilter: 28-byte 68k program in ScratchMem for app-context dispatch
+- ✅ `launch` — FSSpec + LaunchParamBlockRec + _Launch (0xA9F2)
+- ✅ `quit` — _ExitToShell (0xA9F4)
+- ⏳ `shutdown` — _Shutdown trap — not implemented
+- ⏳ Test result EmulOp (M68K_EMUL_OP_TEST_RESULT) — not implemented
 
-### Phase 5: Appliance Mode
+### Phase 5: Appliance Mode ⏳ NOT STARTED
 
-20. `--appliance` flag: auto-boot + auto-launch + auto-quit
-21. Integration test suite using the full pipeline
+- ⏳ `--appliance` flag: auto-boot + auto-launch + auto-quit
+- ⏳ Integration test suite using the full pipeline
 
 ---
 
