@@ -193,11 +193,10 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     ROMBaseHost = ram_.get() + ram_size_;  // ROM after RAM
     RAMSize = ram_size_;
 
-#if DIRECT_ADDRESSING
+    // Compute Mac addresses from known memory layout (no platform function needed)
     MEMBaseDiff = (uintptr)RAMBaseHost;
     RAMBaseMac = 0;
-    ROMBaseMac = Host2MacAddr(ROMBaseHost);
-#endif
+    ROMBaseMac = (uint32)(ROMBaseHost - RAMBaseHost);
 
     fprintf(stderr, "[CPUContext] RAM at %p (Mac: 0x%08x)\n", RAMBaseHost, RAMBaseMac);
     fprintf(stderr, "[CPUContext] ROM at %p (Mac: 0x%08x)\n", ROMBaseHost, ROMBaseMac);
@@ -217,7 +216,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     // ScratchMem pointer is in the middle of the scratch block (original convention).
     ScratchMem = ROMBaseHost + ROMSize + SCRATCH_MEM_SIZE / 2;
     fprintf(stderr, "[CPUContext] ScratchMem at %p (Mac: 0x%08x)\n",
-            ScratchMem, Host2MacAddr(ScratchMem));
+            ScratchMem, (uint32)(ScratchMem - RAMBaseHost));
 
     // 4. Check ROM version
     if (!CheckROM()) {
