@@ -23,7 +23,8 @@ bool StaticFileHandler::handles(const std::string& path) const {
            path == "/styles.css" ||
            path == "/Apple.svg" ||
            path == "/Motorola.svg" ||
-           path == "/PowerPC.svg";
+           path == "/PowerPC.svg" ||
+           path == "/rom_database.json";
 }
 
 Response StaticFileHandler::serve(const std::string& path) {
@@ -74,6 +75,8 @@ std::string StaticFileHandler::map_path_to_file(const std::string& path) const {
         return root_dir_ + "/Motorola.svg";
     } else if (path == "/PowerPC.svg") {
         return root_dir_ + "/PowerPC.svg";
+    } else if (path == "/rom_database.json") {
+        return root_dir_ + "/rom_database.json";
     }
     return "";
 }
@@ -87,6 +90,8 @@ std::string StaticFileHandler::get_content_type(const std::string& path) const {
         return "text/css";
     } else if (path.find(".svg") != std::string::npos) {
         return "image/svg+xml";
+    } else if (path.find(".json") != std::string::npos) {
+        return "application/json";
     }
     return "text/plain";
 }

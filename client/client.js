@@ -340,11 +340,12 @@ const connectionSteps = new ConnectionSteps();
  */
 
 const CodecType = {
-    H264: 'h264',   // WebRTC video track with H.264
-    AV1: 'av1',     // WebRTC video track with AV1
-    VP9: 'vp9',     // WebRTC video track with VP9
-    PNG: 'png',     // PNG over DataChannel
-    WEBP: 'webp'    // WebP over DataChannel (faster encoding than PNG)
+    H264: 'h264',           // WebRTC video track with H.264
+    AV1: 'av1',             // WebRTC video track with AV1
+    VP9: 'vp9',             // WebRTC video track with VP9
+    PNG: 'png',             // PNG over DataChannel
+    WEBP: 'webp',           // WebP over DataChannel (faster encoding than PNG)
+    HTTP_STREAM: 'httpstream' // PNG over plain HTTP chunked (proxy-friendly, no WebRTC)
 };
 
 // Base class for video decoders
@@ -653,6 +654,244 @@ class PNGDecoder extends VideoDecoder {
 
 }
 
+/**
+ * Render a frame with metadata header onto a canvas context.
+ * Shared by PNGDecoder (DataChannel) and HTTPStreamDecoder (fetch streaming).
+ *
+ * @param {ArrayBuffer} data - Frame data: [45-byte header][PNG image data]
+ *   (or raw PNG without header if data is small)
+ * @param {CanvasRenderingContext2D} ctx - Canvas 2D context to draw on
+ * @param {HTMLCanvasElement} canvas - Canvas element (for resizing)
+ * @param {object} state - Mutable state object for latency tracking:
+ *   { decodeLatencyTotal, latencySamples, lastLatencyLog, lastAverageLatency, frameCount, lastFrameTime }
+ * @param {function|null} onFrame - Callback: onFrame(frameCount, metadata)
+ * @returns {Promise<void>}
+ */
+async function renderFrameToCanvas(data, ctx, canvas, state, onFrame) {
+    if (!ctx) {
+        logger.error('renderFrameToCanvas: ctx is null');
+        return;
+    }
+
+    if (state.frameCount < 3) {
+        logger.info('renderFrameToCanvas called', {
+            dataSize: data ? data.byteLength : 0,
+            canvasW: canvas.width,
+            canvasH: canvas.height,
+            frameCount: state.frameCount
+        });
+    }
+
+    const t5_receive = Date.now();
+    let pngData = data;
+    let t1_frame_ready = 0;
+    let rectX = 0, rectY = 0, rectWidth = 0, rectHeight = 0;
+    let frameWidth = 0, frameHeight = 0;
+    let cursorX = 0, cursorY = 0, cursorVisible = 0;
+
+    // Parse metadata header if present
+    if (data instanceof ArrayBuffer && data.byteLength > CONSTANTS.MIN_PNG_SIZE_WITH_HEADER) {
+        const view = new DataView(data);
+
+        let lo = view.getUint32(0, true);
+        let hi = view.getUint32(4, true);
+        t1_frame_ready = lo + hi * 0x100000000;
+
+        rectX = view.getUint32(8, true);
+        rectY = view.getUint32(12, true);
+        rectWidth = view.getUint32(16, true);
+        rectHeight = view.getUint32(20, true);
+
+        frameWidth = view.getUint32(24, true);
+        frameHeight = view.getUint32(28, true);
+
+        lo = view.getUint32(32, true);
+        hi = view.getUint32(36, true);
+        // t4_send = lo + hi * 0x100000000;
+
+        cursorX = view.getUint16(40, true);
+        cursorY = view.getUint16(42, true);
+        cursorVisible = view.getUint8(44);
+
+        pngData = data.slice(CONSTANTS.PNG_HEADER_SIZE);
+    }
+
+    const blob = pngData instanceof Blob ? pngData : new Blob([pngData], { type: 'image/png' });
+
+    try {
+        const bitmap = await createImageBitmap(blob);
+        const t6_draw = performance.now();
+
+        const t5_receive_perf = performance.now() - (Date.now() - t5_receive);
+        const decodeLatency = t6_draw - t5_receive_perf;
+
+        if (decodeLatency >= 0 && decodeLatency < CONSTANTS.MAX_DECODE_LATENCY_MS) {
+            state.decodeLatencyTotal += decodeLatency;
+            state.latencySamples++;
+        }
+
+        if (frameWidth > 0 && frameHeight > 0) {
+            if (canvas.width !== frameWidth || canvas.height !== frameHeight) {
+                canvas.width = frameWidth;
+                canvas.height = frameHeight;
+            }
+        }
+
+        ctx.drawImage(bitmap, rectX, rectY);
+        state.frameCount++;
+        state.lastFrameTime = performance.now();
+
+        if (onFrame) {
+            onFrame(state.frameCount, { cursorX, cursorY, cursorVisible, frameWidth, frameHeight });
+        }
+
+        const now = performance.now();
+        if (now - state.lastLatencyLog > CONSTANTS.LATENCY_LOG_INTERVAL_MS && state.latencySamples > 0) {
+            const avgDecode = state.decodeLatencyTotal / state.latencySamples;
+            state.lastAverageLatency = avgDecode;
+            if (debugConfig.debug_perf) {
+                logger.info(`Decode latency: ${avgDecode.toFixed(1)}ms (${state.latencySamples} samples)`);
+            }
+            state.decodeLatencyTotal = 0;
+            state.latencySamples = 0;
+            state.lastLatencyLog = now;
+        }
+    } catch (e) {
+        logger.error('Failed to decode frame', { error: e.message });
+    }
+}
+
+/**
+ * HTTP Stream Decoder — proxy-friendly video over plain HTTP chunked transfer.
+ *
+ * Uses fetch() + ReadableStream to receive length-prefixed frames from
+ * GET /api/stream, then renders dirty rects onto a canvas.
+ * No WebRTC or WebSocket required.
+ *
+ * Wire format per frame:
+ *   [4-byte total_length (LE uint32)] [45-byte header] [PNG image data]
+ */
+class HTTPStreamDecoder extends VideoDecoder {
+    constructor(canvasElement) {
+        super(canvasElement);
+        this.canvas = canvasElement;
+        this.ctx = null;
+        this.abortController = null;
+        this.buffer = new Uint8Array(0);
+
+        // Latency tracking state (shared with renderFrameToCanvas)
+        this.state = {
+            decodeLatencyTotal: 0,
+            latencySamples: 0,
+            lastLatencyLog: 0,
+            lastAverageLatency: 0,
+            frameCount: 0,
+            lastFrameTime: 0
+        };
+
+        // Stats for the stats display
+        this.bytesReceived = 0;
+        this.reconnectDelay = 1000;
+    }
+
+    get type() { return CodecType.HTTP_STREAM; }
+    get name() { return 'HTTP Stream'; }
+
+    init() {
+        this.ctx = this.canvas.getContext('2d');
+        if (!this.ctx) {
+            logger.error('HTTPStreamDecoder: Failed to get canvas 2D context');
+            return false;
+        }
+        this.abortController = new AbortController();
+        this.startStreaming();
+        logger.info('HTTPStreamDecoder initialized');
+        return true;
+    }
+
+    cleanup() {
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
+        this.ctx = null;
+        this.buffer = new Uint8Array(0);
+    }
+
+    getAverageLatency() { return this.state.lastAverageLatency; }
+
+    getStats() {
+        return {
+            frameCount: this.state.frameCount,
+            fps: this.calculateFps()
+        };
+    }
+
+    async startStreaming() {
+        const baseUrl = getApiUrl('frame');
+        logger.info('HTTPStreamDecoder: starting long-poll loop', { url: baseUrl });
+
+        let errorCount = 0;
+        let sid = null;  // Session ID for dirty rect tracking
+
+        while (this.abortController && !this.abortController.signal.aborted) {
+            try {
+                const url = sid ? `${baseUrl}?sid=${sid}` : baseUrl;
+                const response = await fetch(url, {
+                    signal: this.abortController.signal
+                });
+
+                // Capture session ID from server
+                const newSid = response.headers.get('X-Frame-Sid');
+                if (newSid) sid = newSid;
+
+                if (response.status === 204) {
+                    // No new frame — wait and retry
+                    await new Promise(r => setTimeout(r, 33));
+                    continue;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.arrayBuffer();
+                this.bytesReceived += data.byteLength;
+                errorCount = 0;
+
+                this.state.frameCount++;
+                if (this.state.frameCount <= 3 || this.state.frameCount % 100 === 0) {
+                    logger.info(`HTTPStreamDecoder: frame #${this.state.frameCount}`, {
+                        size: data.byteLength,
+                        seq: response.headers.get('X-Frame-Seq'),
+                        sid
+                    });
+                }
+
+                await renderFrameToCanvas(
+                    data,
+                    this.ctx,
+                    this.canvas,
+                    this.state,
+                    this.onFrame
+                );
+
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                errorCount++;
+                const delay = Math.min(1000 * Math.pow(2, errorCount - 1), 10000);
+                if (errorCount <= 3) {
+                    logger.warn('HTTPStreamDecoder: fetch error', { error: e.message, retry: delay });
+                }
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
+
+        logger.info('HTTPStreamDecoder: poll loop ended');
+    }
+}
+
+
 // Factory to create the right decoder based on codec type
 function createDecoder(codecType, element) {
     switch (codecType) {
@@ -661,11 +900,12 @@ function createDecoder(codecType, element) {
         case CodecType.AV1:
             return new AV1Decoder(element);
         case CodecType.VP9:
-            return new VP9Decoder(element);  // VP9 uses canvas (DataChannel + WebCodecs)
+            return new VP9Decoder(element);
         case CodecType.PNG:
         case CodecType.WEBP:
-            // Both PNG and WebP use the same decoder (both are images over DataChannel)
             return new PNGDecoder(element);
+        case CodecType.HTTP_STREAM:
+            return new HTTPStreamDecoder(element);
         default:
             logger.error('Unknown codec type', { codecType });
             return null;
@@ -680,6 +920,7 @@ function parseCodecString(codecStr) {
         case 'vp9': return CodecType.VP9;
         case 'png': return CodecType.PNG;
         case 'webp': return CodecType.WEBP;
+        case 'httpstream': return CodecType.HTTP_STREAM;
         default:
             logger.warn('Unknown codec string, defaulting to PNG', { codec: codecStr });
             return CodecType.PNG;
@@ -691,8 +932,9 @@ function updateCodecIndicator(codecType) {
     const el = document.getElementById('codec-active');
     if (el) {
         const label = getCodecLabel(codecType);
-        const isRTP = (codecType === CodecType.H264 || codecType === CodecType.VP9);
-        el.textContent = `[${label}${isRTP ? '/RTP' : '/DC'}]`;
+        const transport = codecType === CodecType.HTTP_STREAM ? '/HTTP' :
+            (codecType === CodecType.H264 || codecType === CodecType.VP9) ? '/RTP' : '/DC';
+        el.textContent = `[${label}${transport}]`;
     }
 }
 
@@ -704,6 +946,7 @@ function getCodecLabel(codecType) {
         case CodecType.VP9: return 'VP9';
         case CodecType.PNG: return 'PNG';
         case CodecType.WEBP: return 'WEBP';
+        case CodecType.HTTP_STREAM: return 'HTTP';
         default: return 'Unknown';
     }
 }
@@ -780,6 +1023,10 @@ class BasiliskWebRTC {
         this.firstFrameReceived = false;
         this.frameCheckInterval = null;
 
+        // WebRTC → HTTP stream auto-fallback
+        this.webrtcFallbackTimer = null;
+        this.httpStreamFallbackSec = 5;  // Seconds before falling back
+
     }
 
     // Set codec type before connecting
@@ -806,7 +1053,7 @@ class BasiliskWebRTC {
             this.decoder.cleanup();
         }
 
-        // H.264 and VP9 use video element (RTP); PNG/WEBP use canvas (DataChannel)
+        // H.264 and VP9 use video element (RTP); everything else uses canvas
         const usesVideoElement = (this.codecType === CodecType.H264 ||
                                    this.codecType === CodecType.VP9);
         const element = usesVideoElement ? this.video : this.canvas;
@@ -820,15 +1067,28 @@ class BasiliskWebRTC {
             return false;
         }
 
-        // Set up frame callback for DataChannel decoders (PNG/WebP) to update screen dimensions
-        if (this.codecType === CodecType.PNG || this.codecType === CodecType.WEBP) {
+        // Set up frame callback for canvas-based decoders to update screen dimensions
+        const usesCanvas = (this.codecType === CodecType.PNG || this.codecType === CodecType.WEBP ||
+                            this.codecType === CodecType.HTTP_STREAM);
+        if (usesCanvas) {
             this.decoder.onFrame = (frameCount, metadata) => {
-                // Update screen dimensions for absolute mouse mode
                 if (metadata && metadata.frameWidth && metadata.frameHeight) {
                     this.currentScreenWidth = metadata.frameWidth;
                     this.currentScreenHeight = metadata.frameHeight;
-                    // Invalidate mouse cache when resolution changes
                     this.cachedMouseRect = null;
+                }
+
+                // For HTTP stream: mark as connected on first frame
+                if (this.codecType === CodecType.HTTP_STREAM && !this.firstFrameReceived) {
+                    this.firstFrameReceived = true;
+                    this.connected = true;
+                    this.updateStatus('Connected', 'connected');
+                    this.hideOverlay();
+                    this.updateConnectionUI(true);
+                    const displayContainer = document.getElementById('display-container');
+                    if (displayContainer) displayContainer.classList.remove('disconnected');
+                    connectionSteps.setDone('frames');
+                    logger.info('HTTP stream: first frame received');
                 }
             };
         }
@@ -837,7 +1097,6 @@ class BasiliskWebRTC {
         if (this.video) {
             this.video.style.display = usesVideoElement ? 'block' : 'none';
             if (usesVideoElement) {
-                // Set initial size so video element isn't a tiny black box before metadata loads
                 this.video.width = this.currentScreenWidth || 640;
                 this.video.height = this.currentScreenHeight || 480;
             }
@@ -853,7 +1112,67 @@ class BasiliskWebRTC {
         this._connect();
     }
 
+    // Start HTTP stream mode (no WebRTC, no WebSocket)
+    _connectHTTPStream() {
+        this.cleanup();
+        connectionSteps.reset();
+
+        this.codecType = CodecType.HTTP_STREAM;
+        this.stats.codec = 'httpstream';
+        updateCodecIndicator(this.codecType);
+
+        const codecSelect = document.getElementById('codec-select');
+        if (codecSelect) {
+            codecSelect.value = 'httpstream';
+            codecSelect.disabled = false;
+        }
+
+        this.updateStatus('Connecting...', 'connecting');
+        connectionSteps.setActive('frames');
+        this.updateOverlayStatus('Connecting via HTTP stream...');
+
+        if (!this.initDecoder()) {
+            logger.error('Failed to initialize HTTP stream decoder');
+            this.updateStatus('Decoder init failed', 'error');
+            return;
+        }
+
+        // Set up input handlers for HTTP mode (POST-based)
+        this.setupInputHandlers();
+
+        logger.info('HTTP stream mode active (no WebRTC)', {
+            decoderType: this.decoder ? this.decoder.constructor.name : 'null',
+            canvasDisplay: this.canvas ? this.canvas.style.display : 'no-canvas',
+            videoDisplay: this.video ? this.video.style.display : 'no-video'
+        });
+    }
+
+    // Fall back from WebRTC to HTTP stream (auto-detected or manual)
+    fallbackToHTTPStream() {
+        // Cancel any pending fallback timer
+        if (this.webrtcFallbackTimer) {
+            clearTimeout(this.webrtcFallbackTimer);
+            this.webrtcFallbackTimer = null;
+        }
+
+        // Tear down WebRTC
+        this.cleanup();
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+
+        // Switch to HTTP stream
+        this._connectHTTPStream();
+    }
+
     _connect() {
+        // HTTP stream mode: skip WebRTC entirely
+        if (this.codecType === CodecType.HTTP_STREAM) {
+            this._connectHTTPStream();
+            return;
+        }
+
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             logger.warn('Already connected');
             return;
@@ -877,11 +1196,24 @@ class BasiliskWebRTC {
             this.ws.onmessage = (e) => this.onWsMessage(e);
             this.ws.onclose = (e) => this.onWsClose(e);
             this.ws.onerror = (e) => this.onWsError(e);
+
+            // Auto-fallback: if no frame arrives within N seconds, switch to HTTP stream.
+            // Skip if user previously fell back (remembered in localStorage).
+            this.webrtcFallbackTimer = setTimeout(() => {
+                if (!this.firstFrameReceived && !this.connected) {
+                    logger.warn(`WebRTC: no frames after ${this.httpStreamFallbackSec}s, falling back to HTTP stream`);
+                    try { localStorage.setItem('macemu_prefer_httpstream', '1'); } catch(e) {}
+                    this.fallbackToHTTPStream();
+                }
+            }, this.httpStreamFallbackSec * 1000);
+
         } catch (e) {
             logger.error('WebSocket creation failed', { error: e.message });
             this.updateStatus('Connection failed', 'error');
             connectionSteps.setError('ws');
-            this.scheduleReconnect();
+            // WebSocket failed entirely — try HTTP stream directly
+            logger.info('WebSocket unavailable, trying HTTP stream');
+            this.fallbackToHTTPStream();
         }
     }
 
@@ -1423,6 +1755,14 @@ class BasiliskWebRTC {
         this.hideOverlay();
         this.updateConnectionUI(true);
 
+        // Cancel HTTP stream fallback timer — WebRTC succeeded
+        if (this.webrtcFallbackTimer) {
+            clearTimeout(this.webrtcFallbackTimer);
+            this.webrtcFallbackTimer = null;
+        }
+        // Clear any saved fallback preference since WebRTC works now
+        try { localStorage.removeItem('macemu_prefer_httpstream'); } catch(e) {}
+
         // Remove disconnected visual state
         const displayContainer = document.getElementById('display-container');
         if (displayContainer) {
@@ -1616,6 +1956,13 @@ class BasiliskWebRTC {
                             logger.info('First frame received via DataChannel');
                         }
 
+                        // Cancel HTTP stream fallback timer — DataChannel works
+                        if (this.webrtcFallbackTimer) {
+                            clearTimeout(this.webrtcFallbackTimer);
+                            this.webrtcFallbackTimer = null;
+                        }
+                        try { localStorage.removeItem('macemu_prefer_httpstream'); } catch(e) {}
+
                         // For PNG codec, mark as connected and hide overlay
                         this.connected = true;
                         this.updateStatus('Connected', 'connected');
@@ -1773,47 +2120,92 @@ class BasiliskWebRTC {
     // Mouse move (absolute): type=5, x:uint16, y:uint16, timestamp:float64
 
     sendMouseMove(dx, dy, timestamp) {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') return;
-        const buffer = new ArrayBuffer(1 + 2 + 2 + 8);
-        const view = new DataView(buffer);
-        view.setUint8(0, 1);  // type: mouse move (relative)
-        view.setInt16(1, dx, true);  // little-endian
-        view.setInt16(3, dy, true);
-        view.setFloat64(5, timestamp, true);
-        this.dataChannel.send(buffer);
+        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+            const buffer = new ArrayBuffer(1 + 2 + 2 + 8);
+            const view = new DataView(buffer);
+            view.setUint8(0, 1);
+            view.setInt16(1, dx, true);
+            view.setInt16(3, dy, true);
+            view.setFloat64(5, timestamp, true);
+            this.dataChannel.send(buffer);
+        } else if (this.codecType === CodecType.HTTP_STREAM) {
+            this._httpPostThrottled('mouse', { dx, dy });
+        }
     }
 
     sendMouseAbsolute(x, y, timestamp) {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') return;
-        const buffer = new ArrayBuffer(1 + 2 + 2 + 8);
-        const view = new DataView(buffer);
-        view.setUint8(0, 5);  // type: mouse move (absolute)
-        view.setUint16(1, x, true);  // absolute X coordinate
-        view.setUint16(3, y, true);  // absolute Y coordinate
-        view.setFloat64(5, timestamp, true);
-        this.dataChannel.send(buffer);
+        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+            const buffer = new ArrayBuffer(1 + 2 + 2 + 8);
+            const view = new DataView(buffer);
+            view.setUint8(0, 5);
+            view.setUint16(1, x, true);
+            view.setUint16(3, y, true);
+            view.setFloat64(5, timestamp, true);
+            this.dataChannel.send(buffer);
+        } else if (this.codecType === CodecType.HTTP_STREAM) {
+            this._httpPostThrottled('mouse', { x, y });
+        }
     }
 
     sendMouseButton(button, down, timestamp) {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') return;
-        const buffer = new ArrayBuffer(1 + 1 + 1 + 8);
-        const view = new DataView(buffer);
-        view.setUint8(0, 2);  // type: mouse button
-        view.setUint8(1, button);
-        view.setUint8(2, down ? 1 : 0);
-        view.setFloat64(3, timestamp, true);
-        this.dataChannel.send(buffer);
+        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+            const buffer = new ArrayBuffer(1 + 1 + 1 + 8);
+            const view = new DataView(buffer);
+            view.setUint8(0, 2);
+            view.setUint8(1, button);
+            view.setUint8(2, down ? 1 : 0);
+            view.setFloat64(3, timestamp, true);
+            this.dataChannel.send(buffer);
+        } else if (this.codecType === CodecType.HTTP_STREAM) {
+            // Mouse button events are not throttled — send immediately
+            fetch(getApiUrl('mouse'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ button, down })
+            }).catch(() => {});
+        }
     }
 
     sendKey(keycode, down, timestamp) {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') return;
-        const buffer = new ArrayBuffer(1 + 2 + 1 + 8);
-        const view = new DataView(buffer);
-        view.setUint8(0, 3);  // type: key
-        view.setUint16(1, keycode, true);
-        view.setUint8(3, down ? 1 : 0);
-        view.setFloat64(4, timestamp, true);
-        this.dataChannel.send(buffer);
+        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+            const buffer = new ArrayBuffer(1 + 2 + 1 + 8);
+            const view = new DataView(buffer);
+            view.setUint8(0, 3);
+            view.setUint16(1, keycode, true);
+            view.setUint8(3, down ? 1 : 0);
+            view.setFloat64(4, timestamp, true);
+            this.dataChannel.send(buffer);
+        } else if (this.codecType === CodecType.HTTP_STREAM) {
+            fetch(getApiUrl('keypress'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: keycode, down })
+            }).catch(() => {});
+        }
+    }
+
+    // Throttled HTTP POST for mouse moves (avoid flooding the server)
+    // Sends at most one request per 16ms (~60Hz)
+    _httpPostThrottled(endpoint, data) {
+        if (!this._httpPostPending) {
+            this._httpPostPending = {};
+        }
+        this._httpPostPending[endpoint] = data;
+
+        if (!this._httpPostTimer) {
+            this._httpPostTimer = setTimeout(() => {
+                this._httpPostTimer = null;
+                const pending = this._httpPostPending;
+                this._httpPostPending = {};
+                for (const [ep, body] of Object.entries(pending)) {
+                    fetch(getApiUrl(ep), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    }).catch(() => {});
+                }
+            }, 16);
+        }
     }
 
     // Send raw text message (legacy text protocol - fallback)
@@ -1982,6 +2374,10 @@ class BasiliskWebRTC {
     }
 
     cleanup() {
+        if (this.webrtcFallbackTimer) {
+            clearTimeout(this.webrtcFallbackTimer);
+            this.webrtcFallbackTimer = null;
+        }
         if (this.frameCheckInterval) {
             clearInterval(this.frameCheckInterval);
             this.frameCheckInterval = null;
@@ -2039,9 +2435,16 @@ class BasiliskWebRTC {
         const now = performance.now();
         const elapsed = (now - this.lastStatsTime) / CONSTANTS.MS_PER_SECOND;
 
-        // For PNG codec, calculate stats from our own tracking
+        // For non-RTP codecs (PNG, WebP, HTTP Stream), calculate stats from our own tracking
         const usesVideoTrack = (this.codecType === CodecType.H264 || this.codecType === CodecType.AV1 || this.codecType === CodecType.VP9);
         if (!usesVideoTrack) {
+            // For HTTP stream, pull stats from the decoder
+            if (this.codecType === CodecType.HTTP_STREAM && this.decoder) {
+                this.pngStats.framesReceived = this.decoder.state.frameCount;
+                this.pngStats.bytesReceived = this.decoder.bytesReceived;
+                this.pngStats.avgFrameSize = this.pngStats.framesReceived > 0 ?
+                    this.pngStats.bytesReceived / this.pngStats.framesReceived : 0;
+            }
             if (elapsed > 0) {
                 const framesDelta = this.pngStats.framesReceived - this.lastPngFrameCount;
                 const bytesDelta = this.pngStats.bytesReceived - this.lastPngBytesReceived;
@@ -2474,7 +2877,7 @@ const App = {
     client: null,
     statsInterval: null,
     currentConfig: {
-        emulator: 'basilisk',  // Default, will be overwritten by loadCurrentConfig()
+        emulator: 'quadra',  // Default, will be overwritten by loadCurrentConfig()
         rom: '',
         disks: [],
         ram: 32,
@@ -2564,6 +2967,14 @@ function initClient() {
     }
 
     client = new BasiliskWebRTC(video, canvas);
+
+    // Check if user previously fell back to HTTP stream (remembered preference)
+    try {
+        if (localStorage.getItem('macemu_prefer_httpstream') === '1') {
+            logger.info('Previous session fell back to HTTP stream, using it directly');
+            client.codecType = CodecType.HTTP_STREAM;
+        }
+    } catch(e) {}
 
     // Note: Codec is determined by server (from prefs file webcodec setting)
     // Client will receive codec in "connected" message and initialize decoder then
@@ -2673,29 +3084,22 @@ async function changeMouseMode() {
     }
 }
 
-// Known ROM database with checksums and recommendations
-const ROM_DATABASE = {
-    // ========================================
-    // 68k ROMs (BasiliskII)
-    // ========================================
+// Known ROM database — loaded from rom_database.json
+let ROM_DATABASE = {};
 
-    // ⭐ RECOMMENDED 68k ROMs
-    '420dbff3': { name: 'Quadra 700', model: 22, recommended: true, arch: 'm68k' },
-    '3dc27823': { name: 'Quadra 900', model: 14, recommended: true, arch: 'm68k' },
-    '368cadfe': { name: 'Mac IIci', model: 11, recommended: true, arch: 'm68k' },
-
-    // ========================================
-    // PPC ROMs (SheepShaver)
-    // ========================================
-
-    // ⭐ RECOMMENDED PPC ROMs
-    '960e4be9': { name: 'Power Mac 9600', model: 14, recommended: true, arch: 'ppc' },
-    'be65e1c4f04a3f2881d6e8de47d66454': { name: 'Mac OS ROM 1.6', model: 14, recommended: true, arch: 'ppc' },
-    'bf9f186ba2dcaaa0bc2b9762a4bf0c4a': { name: 'Mac OS 9.0.4 installed on iMac (2000)', model: 14, recommended: true, arch: 'ppc' },
-
-    // Other PPC ROMs
-    '4c4f5744': { name: 'PowerBook G3', model: 14, recommended: false, arch: 'ppc' },
-};
+// Load ROM database from external JSON file
+async function loadRomDatabase() {
+    try {
+        const resp = await fetch('rom_database.json');
+        if (resp.ok) {
+            ROM_DATABASE = await resp.json();
+        } else {
+            logger.warn('Failed to load ROM database', { status: resp.status });
+        }
+    } catch (e) {
+        logger.warn('Error loading ROM database', { error: e.message });
+    }
+}
 
 function getRomInfo(checksum, md5) {
     // Try MD5 first (newer, more accurate)
@@ -2707,6 +3111,15 @@ function getRomInfo(checksum, md5) {
         return ROM_DATABASE[checksum];
     }
     return null;
+}
+
+// Mode helpers: map emulator mode to architecture
+function modeToArch(mode) {
+    return mode === 'ppc' ? 'ppc' : 'm68k';
+}
+
+function isM68kMode(mode) {
+    return mode === 'quadra' || mode === 'iici';
 }
 
 // Update header title with current model name
@@ -2808,8 +3221,8 @@ async function loadRomList() {
         }
 
         if (data.roms && data.roms.length > 0) {
-            // Determine current emulator architecture
-            const currentArch = (currentConfig.emulator === 'sheepshaver') ? 'ppc' : 'm68k';
+            const currentMode = currentConfig.emulator || 'quadra';
+            const currentArch = modeToArch(currentMode);
 
             // Filter and categorize ROMs
             const recommendedRoms = [];
@@ -2833,7 +3246,8 @@ async function loadRomList() {
                     seenKnownMD5.add(hash);
                 }
 
-                if (info?.recommended && info.arch === currentArch) {
+                // Recommended if the ROM's mode matches the current emulator mode
+                if (info?.recommended && info.mode === currentMode) {
                     recommendedRoms.push(rom);
                 } else {
                     otherRoms.push(rom);
@@ -2875,8 +3289,8 @@ async function loadRomList() {
 
             select.innerHTML = html;
 
-            // Auto-select first recommended ROM if none selected
-            if (!currentConfig.rom && recommendedRoms.length > 0) {
+            // Auto-select first recommended ROM for this mode
+            if (recommendedRoms.length > 0) {
                 currentConfig.rom = recommendedRoms[0].name;
                 select.value = recommendedRoms[0].name;
             } else if (!currentConfig.rom && otherRoms.length > 0) {
@@ -3009,10 +3423,11 @@ function updateEmulatorPanelVisibility() {
     const emulatorType = document.getElementById('cfg-emulator')?.value;
     if (!emulatorType) return;
 
+    const isPPC = emulatorType === 'ppc';
     const basiliskSettings = document.getElementById('basilisk-settings');
     const sheepshaverSettings = document.getElementById('sheepshaver-settings');
 
-    if (emulatorType === 'sheepshaver') {
+    if (isPPC) {
         if (basiliskSettings) basiliskSettings.style.display = 'none';
         if (sheepshaverSettings) sheepshaverSettings.style.display = 'block';
     } else {
@@ -3023,8 +3438,8 @@ function updateEmulatorPanelVisibility() {
     // Update processor logo based on emulator type
     const processorLogo = document.getElementById('processor-logo');
     if (processorLogo) {
-        processorLogo.src = emulatorType === 'sheepshaver' ? 'PowerPC.svg' : 'Motorola.svg';
-        processorLogo.alt = emulatorType === 'sheepshaver' ? 'PowerPC' : 'Motorola';
+        processorLogo.src = isPPC ? 'PowerPC.svg' : 'Motorola.svg';
+        processorLogo.alt = isPPC ? 'PowerPC' : 'Motorola';
     }
 
     // Update title with current model name
@@ -3041,6 +3456,28 @@ async function onEmulatorChange() {
 
     // Update current config emulator type
     currentConfig.emulator = emulatorType;
+
+    // Set mode defaults
+    const defaults = {
+        ppc:    { ram: 128, screen: '1024x768', cpu: 4, model: 14 },
+        quadra: { ram: 32,  screen: '1024x768', cpu: 4, model: 14 },
+        iici:   { ram: 8,   screen: '640x480',  cpu: 3, model: 5 }
+    };
+    const d = defaults[emulatorType] || defaults.quadra;
+
+    currentConfig.ram = d.ram;
+    currentConfig.screen = d.screen;
+    currentConfig.cpu = d.cpu;
+    currentConfig.model = d.model;
+
+    const ramEl = document.getElementById('cfg-ram');
+    if (ramEl) ramEl.value = d.ram;
+    const screenEl = document.getElementById('cfg-screen');
+    if (screenEl) screenEl.value = d.screen;
+    const cpuEl = document.getElementById('cfg-cpu');
+    if (cpuEl) cpuEl.value = d.cpu;
+    const modelEl = document.getElementById('cfg-model');
+    if (modelEl) modelEl.value = d.model;
 
     // Reload ROM list to show only compatible ROMs
     await loadRomList();
@@ -3086,6 +3523,16 @@ async function loadCurrentConfig() {
         // Flat format from server
         const isM68k = (cfg.architecture || 'm68k') === 'm68k';
 
+        // Determine emulator mode from architecture + model ID
+        let emulatorMode;
+        if (!isM68k) {
+            emulatorMode = 'ppc';
+        } else if ((cfg.m68k?.modelid || 14) === 11) {
+            emulatorMode = 'iici';
+        } else {
+            emulatorMode = 'quadra';
+        }
+
         // Strip storage_dir prefix from paths to get relative names matching storage scan
         // Only strip if the path is absolute (starts with /), otherwise it's already relative
         const stripPrefix = (p, dir) => {
@@ -3095,7 +3542,7 @@ async function loadCurrentConfig() {
         };
 
         currentConfig = {
-            emulator: isM68k ? 'basilisk' : 'sheepshaver',
+            emulator: emulatorMode,
             rom: cfg.rom ? stripPrefix(cfg.rom, '/roms/') : '',
             ram: cfg.ram_mb || 32,
             screen: cfg.screen || '640x480',
@@ -3134,7 +3581,7 @@ function updateConfigUI() {
     const zappramEl = document.getElementById('cfg-zappram');
     const dismissDialogEl = document.getElementById('cfg-dismiss-shutdown-dialog');
 
-    if (emulatorEl) emulatorEl.value = currentConfig.emulator || 'basilisk';
+    if (emulatorEl) emulatorEl.value = currentConfig.emulator || 'quadra';
     if (romEl) romEl.value = currentConfig.rom;
     if (ramEl) ramEl.value = currentConfig.ram;
     if (screenEl) screenEl.value = currentConfig.screen;
@@ -3144,15 +3591,15 @@ function updateConfigUI() {
 
     const networkEl = document.getElementById('cfg-network');
     const networkIfEl = document.getElementById('cfg-network-if');
-    const networkIfGroup = document.getElementById('cfg-network-if-group');
+    const networkIfRow = document.getElementById('cfg-network-if-row');
     if (networkEl) {
         networkEl.value = currentConfig.network || 'none';
         networkEl.addEventListener('change', () => {
-            if (networkIfGroup) networkIfGroup.style.display = networkEl.value === 'raw' ? '' : 'none';
+            if (networkIfRow) networkIfRow.style.display = networkEl.value === 'raw' ? '' : 'none';
         });
     }
     if (networkIfEl) networkIfEl.value = currentConfig.network_if || '';
-    if (networkIfGroup) networkIfGroup.style.display = (currentConfig.network === 'raw') ? '' : 'none';
+    if (networkIfRow) networkIfRow.style.display = (currentConfig.network === 'raw') ? '' : 'none';
 
     const bootdriverEl = document.getElementById('cfg-bootdriver');
     if (bootdriverEl) bootdriverEl.value = currentConfig.bootdriver || 0;
@@ -3209,7 +3656,7 @@ function updateConfigUI() {
 
 async function saveConfig() {
     // Gather common values
-    currentConfig.emulator = document.getElementById('cfg-emulator')?.value || 'basilisk';
+    currentConfig.emulator = document.getElementById('cfg-emulator')?.value || 'quadra';
 
     // Only update ROM if dropdown has a value (preserve existing if dropdown not populated)
     const romDropdown = document.getElementById('cfg-rom');
@@ -3226,7 +3673,7 @@ async function saveConfig() {
     currentConfig.bootdriver = parseInt(document.getElementById('cfg-bootdriver')?.value || 0);
 
     // Gather emulator-specific values
-    if (currentConfig.emulator === 'basilisk') {
+    if (isM68kMode(currentConfig.emulator)) {
         currentConfig.cpu = parseInt(document.getElementById('cfg-cpu')?.value || 4);
         currentConfig.model = parseInt(document.getElementById('cfg-model')?.value || 14);
         currentConfig.fpu = document.getElementById('cfg-fpu')?.checked ?? true;
@@ -3246,7 +3693,7 @@ async function saveConfig() {
     }
 
     // Build flat JSON config
-    const isM68k = (currentConfig.emulator === 'basilisk');
+    const isM68k = isM68kMode(currentConfig.emulator);
     const archConfig = {
         cpu_type: currentConfig.cpu,
         modelid: currentConfig.model,
@@ -3355,11 +3802,30 @@ async function resetEmulator() {
 // Codec management
 async function changeCodec() {
     const select = document.getElementById('codec-select');
-    if (!select) return;
+    if (!select || !client) return;
 
     const newCodec = select.value;
     logger.info('Changing codec', { codec: newCodec });
 
+    // Switching to HTTP stream — client-side only, no server codec change needed
+    if (newCodec === 'httpstream') {
+        try { localStorage.setItem('macemu_prefer_httpstream', '1'); } catch(e) {}
+        client.fallbackToHTTPStream();
+        return;
+    }
+
+    // Switching away from HTTP stream — clear preference and reconnect via WebRTC
+    if (client.codecType === CodecType.HTTP_STREAM) {
+        try { localStorage.removeItem('macemu_prefer_httpstream'); } catch(e) {}
+        client.codecType = parseCodecString(newCodec);
+        client.cleanup();
+        if (client.ws) { client.ws.close(); client.ws = null; }
+        const wsUrl = getWebSocketUrl();
+        client.connect(wsUrl);
+        return;
+    }
+
+    // Normal WebRTC codec change — tell server
     try {
         const res = await fetch(getApiUrl('codec'), {
             method: 'POST',
@@ -3534,6 +4000,7 @@ function setupEventListeners() {
 
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', async () => {
+    await loadRomDatabase();  // Load ROM database from JSON
     await fetchConfig();  // Load debug config from server
     await loadCurrentConfig();  // Load emulator config from JSON
     updateEmulatorPanelVisibility();  // Update header logo/title based on loaded config

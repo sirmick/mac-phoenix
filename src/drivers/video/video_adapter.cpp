@@ -14,7 +14,7 @@ bool VideoInit(bool classic)
 	return g_platform.video_init(classic);
 }
 
-void VideoExit(void)
+__attribute__((weak)) void VideoExit(void)
 {
 	g_platform.video_exit();
 }

@@ -4,6 +4,10 @@
 
 #ifndef MAIN_H
 #define MAIN_H
+#ifdef _COMMON_MAIN_H
+#error "uae_cpu/main.h conflicts with common/include/main.h"
+#endif
+#define _UAE_MAIN_H
 
 /* CPU types */
 #define CPU_68000 0
@@ -22,9 +26,9 @@
 extern int CPUType;
 extern int FPUType;
 
-/* Interrupt flags - defined in uae_wrapper.cpp */
-// NOTE: Using uint32_t to match uae_wrapper.h declaration
-extern volatile uint32_t InterruptFlags;
+// InterruptFlags, SetInterruptFlag, ClearInterruptFlag, TriggerInterrupt
+// are declared in platform.h (backend-agnostic, C linkage)
+#include "platform.h"
 
 #define INTFLAG_60HZ 1
 
@@ -35,14 +39,9 @@ extern uint8 *RAMBaseHost;
 extern uint32 RAMSize;
 
 /* Quit flag */
-extern volatile bool QuitEmulator;
+extern volatile bool quit_emulator_flag;
 
 /* M68k Registers structure (for EmulOp and Execute68k) */
 #include "m68k_registers.h"
-
-/* Minimal functions */
-// TriggerInterrupt and TriggerNMI are implemented in basilisk_glue.cpp
-static inline void SetInterruptFlag(uint32 flag) { (void)flag; }
-static inline void ClearInterruptFlag(uint32 flag) { (void)flag; }
 
 #endif /* MAIN_H */

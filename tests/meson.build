@@ -86,6 +86,15 @@ test('command_bridge',
   },
 )
 
+# PPC KPX backend boots Mac OS 9 from CD and loads resources
+test('boot_ppc',
+  find_program('bash'),
+  args: [test_dir / 'test_boot_ppc.sh', '--timeout', '45', '--port', '18095'],
+  timeout: 60,
+  is_parallel: false,
+  suite: 'boot',
+)
+
 # Mouse position API works after boot
 test('mouse_position',
   find_program('bash'),

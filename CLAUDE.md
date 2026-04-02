@@ -56,7 +56,7 @@ src/
     emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, CMD_DISPATCH)
     command_bridge.cpp              — Command bridge: reads, mailbox, jGNEFilter, SHM drain
     command_bridge.h                — Command/Result structs, CommandBridge class
-    shared_state.h                  — SharedState (SHM queues, passive fields, fork IPC)
+    ppc_subprocess.h                — PPC subprocess management (IPC via SHM+socket)
     adb.cpp                         — ADB mouse/keyboard emulation
     cpu_context.cpp                 — Memory allocation, backend init
   cpu/
@@ -163,7 +163,7 @@ The emulator binary does not read environment variables. Use CLI flags instead.
 - **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
 - **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
-- **Command bridge**: Two-layer dispatch — read commands peek Mac memory from IRQ, action commands use jGNEFilter to execute in app context. Fork mode uses SPSC ring buffers in SharedState. See `docs/CommandBridge.md`.
+- **Command bridge**: Two-layer dispatch — read commands peek Mac memory from IRQ, action commands use jGNEFilter to execute in app context. See `docs/CommandBridge.md`.
 
 ## ROM
 

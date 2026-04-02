@@ -6,6 +6,7 @@
 #include "emulator_init.h"
 #include "main.h"
 #include "rom_patches.h"
+using namespace m68k;
 #include "cpu_emulation.h"
 #include "newcpu.h"
 #include "memory.h"
@@ -30,6 +31,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include <thread>
 #include <chrono>
 
@@ -349,12 +352,317 @@ bool CPUContext::init_mac_subsystems() {
 }
 
 // ========================================
-// PPC Initialization (STUB)
+// PPC Initialization
 // ========================================
 
-bool CPUContext::init_ppc(const config::EmulatorConfig& /*config*/) {
-    fprintf(stderr, "[CPUContext] ERROR: PPC emulation not yet implemented\n");
-    return false;
+// Externs from KPX bridge (cpu_ppc_kpx.cpp) — ppc:: namespace
+extern "C" void cpu_ppc_kpx_install(Platform *p);
+namespace ppc {
+    extern uint32_t RAMBase, RAMSize, ROMBase, KernelDataAddr;
+    extern uint8_t *RAMBaseHost, *ROMBaseHost;
+}
+// Note: do NOT add using directives here — RAMBaseHost/ROMBaseHost/RAMSize
+// are also declared as globals (basilisk_glue.cpp) for m68k. Use ppc:: prefix
+// in init_ppc() to access the PPC versions.
+extern "C" bool kpx_sheep_mem_init(void);
+extern "C" void kpx_set_signal_stack(uintptr_t addr);
+extern uint32_t PVR;
+extern uint32_t TimebaseSpeed;
+
+// PPC memory constants (from SheepShaver cpu_emulation.h)
+static const uint32_t KERNEL_DATA_BASE = 0x68ffe000;
+
+// PPC RAM/ROM pointers: ppc:: namespace, declared above with using directives.
+
+bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
+    using ppc::RAMBase; using ppc::RAMSize; using ppc::ROMBase;
+    using ppc::RAMBaseHost; using ppc::ROMBaseHost; using ppc::KernelDataAddr;
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    fprintf(stderr, "[CPUContext] ========================================\n");
+    fprintf(stderr, "[CPUContext] Initializing PPC CPU context\n");
+    fprintf(stderr, "[CPUContext] ========================================\n");
+
+    if (state_ != CPUState::UNINITIALIZED) {
+        fprintf(stderr, "[CPUContext] Already initialized, shutting down first\n");
+        shutdown();
+    }
+
+    architecture_ = config::Architecture::PPC;
+
+    // 1. Allocate memory using REAL_ADDRESSING (SheepShaver approach)
+    // Mac address == host address, VMBaseDiff = 0.
+    // RAM+ROM allocated contiguously, mapped at whatever address the OS gives us.
+    // Requires vm.mmap_min_addr=0 for low memory access.
+    ram_size_ = config.ram_mb * 1024 * 1024;
+    if (ram_size_ < 16 * 1024 * 1024) ram_size_ = 16 * 1024 * 1024;
+    const uint32_t ppc_rom_size = 0x400000;  // 4MB PPC ROM
+    const uint32_t ROM_AREA_SIZE = 0x500000; // 5MB ROM area
+    const uint32_t ROM_ALIGNMENT = 0x100000; // 1MB alignment
+    const uint32_t SIG_STACK_SIZE = 0x10000; // 64KB signal stack
+
+    // Allocate RAM at address 0, with extra padding above for nanokernel probing.
+    // The Gossamer ROM nanokernel at ROM+0x310000 probes memory above RAMSize during
+    // init to detect physical memory topology and build page tables. Legacy SheepShaver
+    // allocates RAM+ROM+align+sig as one contiguous block, leaving ~6MB accessible above
+    // RAM. Without this padding, reads above RAM cause SIGSEGV → silently skipped →
+    // nanokernel skips page table setup and initializes KD incorrectly (KD+0x65c wrong
+    // offset, KD+0x660 corrupted flags, KD+0x920 page table empty).
+    // See docs/ppc/nanokernel_init_divergence.md for full diagnosis.
+    const size_t NK_PROBE_PAD = 8 * 1024 * 1024;  // 8MB for nanokernel probing
+    RAMBaseHost = (uint8_t *)mmap((void *)0, ram_size_ + NK_PROBE_PAD,
+                                  PROT_READ | PROT_WRITE,
+                                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    if (RAMBaseHost == MAP_FAILED) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to map RAM at address 0\n");
+        fprintf(stderr, "[CPUContext] (Run: sudo sysctl vm.mmap_min_addr=0)\n");
+        return false;
+    }
+
+    // REAL_ADDRESSING: Mac address = host address (VMBaseDiff = 0)
+    RAMBase = (uint32_t)(uintptr_t)RAMBaseHost;
+    RAMSize = ram_size_;
+
+    // Map ROM separately at a high address (matching SheepShaver layout)
+    // SheepShaver puts ROM at ~0x50000000, NOT contiguous with RAM.
+    // This ensures all ROM-relative nanokernel addresses match SheepShaver's.
+    const uint32_t ROM_BASE_ADDR = 0x50000000;
+    void *rom_area = mmap((void *)ROM_BASE_ADDR, ROM_AREA_SIZE + SIG_STACK_SIZE,
+                          PROT_READ | PROT_WRITE | PROT_EXEC,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    if (rom_area == MAP_FAILED) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to map ROM at 0x%08x\n", ROM_BASE_ADDR);
+        return false;
+    }
+    ROMBase = ROM_BASE_ADDR;
+    ROMBaseHost = (uint8_t *)(uintptr_t)ROMBase;
+
+    // Set signal stack at end of ROM area (matching legacy: sig_stack = ROMEnd)
+    kpx_set_signal_stack(ROM_BASE_ADDR + ROM_AREA_SIZE);
+
+    fprintf(stderr, "[CPUContext] REAL_ADDRESSING mode (VMBaseDiff=0)\n");
+    fprintf(stderr, "[TRACE] RAM: base=0x%08x size=0x%08x host=%p\n", RAMBase, RAMSize, RAMBaseHost);
+    fprintf(stderr, "[TRACE] ROM: base=0x%08x size=0x%08x host=%p contiguous=0\n", ROMBase, ROM_AREA_SIZE, ROMBaseHost);
+
+    // Low Memory (0x0000..0x3000) is covered by RAM at address 0
+    // Map Kernel Data at both 0x68ffe000 and 0x5fffe000 using shared memory
+    // so writes to either address are visible from both (SheepShaver kernel_data_init)
+    {
+        int kd_size = 0x2000;
+        int kd_shm = shmget(IPC_PRIVATE, kd_size, IPC_CREAT | 0600);
+        if (kd_shm != -1) {
+            void *kd1 = shmat(kd_shm, (void *)KERNEL_DATA_BASE, 0);
+            void *kd2 = shmat(kd_shm, (void *)0x5fffe000, 0);
+            shmctl(kd_shm, IPC_RMID, NULL);
+            if (kd1 == (void *)KERNEL_DATA_BASE && kd2 == (void *)0x5fffe000) {
+                fprintf(stderr, "[CPUContext] KernelData shared at 0x68ffe000 and 0x5fffe000\n");
+            } else {
+                fprintf(stderr, "[CPUContext] WARNING: KernelData shmat failed, using separate maps\n");
+                if (kd1 != (void *)-1) shmdt(kd1);
+                if (kd2 != (void *)-1) shmdt(kd2);
+                mmap((void *)KERNEL_DATA_BASE, kd_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+                mmap((void *)0x5fffe000, kd_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+            }
+        } else {
+            fprintf(stderr, "[CPUContext] WARNING: shmget failed, using mmap for KernelData\n");
+            mmap((void *)KERNEL_DATA_BASE, kd_size, PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+            mmap((void *)0x5fffe000, kd_size, PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        }
+    }
+
+    // NOTE: DR emulator (0x68070000) and DR cache (0x69000000) are mapped LATER,
+    // after nanokernel init. Mapping them here changes what the nanokernel reads
+    // during its init phase, causing KD+0x65c and KD+0x660 to get wrong values.
+    // Legacy SheepShaver doesn't map these regions at all — the nanokernel's
+    // SIGSEGV handler silently skips reads from unmapped addresses.
+
+
+    // Allocate ROM loading buffer
+    rom_.reset(new (std::nothrow) uint8_t[ppc_rom_size]);
+    if (!rom_) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to allocate ROM buffer\n");
+        return false;
+    }
+
+    // 3. Load ROM (plain 4MB or CHRP compressed NewWorld ROMs)
+    if (!config.rom_path.empty()) {
+        fprintf(stderr, "[CPUContext] Loading ROM from: %s\n", config.rom_path.c_str());
+
+        int rom_fd = open(config.rom_path.c_str(), O_RDONLY);
+        if (rom_fd < 0) {
+            fprintf(stderr, "[CPUContext] ERROR: Failed to open ROM file: %s\n",
+                    config.rom_path.c_str());
+            return false;
+        }
+
+        off_t size = lseek(rom_fd, 0, SEEK_END);
+        lseek(rom_fd, 0, SEEK_SET);
+
+        fprintf(stderr, "[CPUContext] ROM size: %ld bytes (%ld KB)\n",
+                (long)size, (long)size / 1024);
+
+        if (size <= 0 || size > (off_t)ppc_rom_size) {
+            fprintf(stderr, "[CPUContext] ERROR: ROM file too large or empty (got %ld bytes, max %u)\n",
+                    (long)size, ppc_rom_size);
+            close(rom_fd);
+            return false;
+        }
+
+        // Read ROM into temp buffer (may be smaller than 4MB for CHRP compressed ROMs)
+        ssize_t bytes_read = read(rom_fd, rom_.get(), size);
+        close(rom_fd);
+
+        if (bytes_read != size) {
+            fprintf(stderr, "[CPUContext] ERROR: Failed to read ROM\n");
+            return false;
+        }
+
+        rom_size_ = ppc_rom_size;
+        ROMSize = rom_size_;  // Set global for PatchROM()
+
+        // DecodeROM handles both plain 4MB ROMs and CHRP compressed (NewWorld) ROMs.
+        // It decompresses into ROMBaseHost (already allocated in the ROM memory region).
+        extern bool DecodeROM(uint8 *data, uint32 size);
+        if (!DecodeROM(rom_.get(), (uint32)bytes_read)) {
+            if (bytes_read != (ssize_t)ppc_rom_size) {
+                fprintf(stderr, "[CPUContext] ERROR: ROM decoding failed (not a valid 4MB or CHRP ROM)\n");
+            } else {
+                fprintf(stderr, "[CPUContext] ERROR: ROM file appears corrupt\n");
+            }
+            return false;
+        }
+        fprintf(stderr, "[CPUContext] ROM loaded and decoded successfully\n");
+    } else {
+        fprintf(stderr, "[CPUContext] ERROR: No ROM path specified\n");
+        return false;
+    }
+
+    // 4. Set up KernelData area (mapped above at 0x68ffe000)
+    KernelDataAddr = KERNEL_DATA_BASE;
+    fprintf(stderr, "[CPUContext] KernelData at 0x%08x\n", KernelDataAddr);
+
+    // DR Emulator and DR Cache are mapped AFTER InitAll_PPC (step 7c below).
+    // They MUST NOT exist during nanokernel init — legacy SheepShaver doesn't
+    // map them, and the nanokernel's init code probes 0x68070000/0x69000000.
+    // If these regions are mapped, the nanokernel reads zeros instead of
+    // faulting, causing KD+0x65c and KD+0x660 to get wrong values.
+
+    // 5b. Initialize VM subsystem (open /dev/zero) BEFORE SheepMem.
+    //     Legacy calls vm_init() from main() before SheepMem::Init().
+    //     This ensures the decode cache and JIT allocate at the same addresses.
+    {
+        extern int vm_init(void);
+        vm_init();
+    }
+
+    // 5c. Initialize SheepMem (shared memory for Mac/host communication)
+    //     Must be done before InitAll() because ThunksInit() uses SheepMem::Reserve()
+    {
+        // SheepMem::Init is declared in thunks.h (KPX compat), implemented in ppc_memory.cpp
+        // Can't include thunks.h here (wrong memory model), so use extern C++ linkage
+        if (!kpx_sheep_mem_init()) {
+            fprintf(stderr, "[CPUContext] ERROR: SheepMem::Init failed\n");
+            return false;
+        }
+    }
+
+    // 6. Install KPX backend (function pointers only — CPU instance created
+    //    later in kpx_cpu_init, which only runs in the child subprocess)
+    cpu_ppc_kpx_install(&platform_);
+    platform_.ppc_jit = config.ppc.jit;
+    fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n", platform_.cpu_name, config.ppc.jit ? "on" : "off");
+
+    // 6b. Sync g_platform NOW so core code (disk.cpp, cdrom.cpp, extfs.cpp etc.)
+    //     can use g_platform.mem_read_long / cpu_execute_68k_trap during InitAll_PPC.
+    //     Without this, core code falls through to uninitialized UAE banking fallbacks.
+    {
+        extern Platform g_platform;
+        g_platform = platform_;
+    }
+
+    // 7. Call SheepShaver's InitAll() — patches ROM, sets up KernelData,
+    //    initializes XLM globals, sets up thunks, initializes drivers.
+    //    This is the exact sequence from SheepShaver main.cpp.
+    {
+        extern bool InitAll_PPC(const char *vmdir);
+        fprintf(stderr, "[TRACE] InitAll: enter\n");
+        if (!InitAll_PPC(nullptr)) {
+            fprintf(stderr, "[CPUContext] ERROR: InitAll failed\n");
+            return false;
+        }
+        fprintf(stderr, "[TRACE] InitAll: exit\n");
+    }
+
+    // 7b. Flush code cache after ROM patching (SheepShaver main_unix.cpp:1155)
+    // The JIT may have cached unpatched ROM code — flush it so patches take effect.
+    {
+        extern void FlushCodeCache(uintptr start, uintptr end);
+        FlushCodeCache(ROMBase, ROMBase + ROM_AREA_SIZE);
+        fprintf(stderr, "[CPUContext] ROM code cache flushed\n");
+    }
+
+    // 7c. NOW map DR Emulator and DR Cache (after nanokernel init completed).
+    // These must not exist during InitAll_PPC → PatchROM → nanokernel init.
+    {
+        const uintptr_t DR_EMUL_BASE = 0x68070000;
+        const uint32_t  DR_EMUL_SIZE = 0x10000;
+        const uintptr_t DR_CACH_BASE = 0x69000000;
+        const uint32_t  DR_CACH_SIZE = 0x80000;
+
+        void *dr_emu = mmap((void *)DR_EMUL_BASE, DR_EMUL_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
+                            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        void *dr_cache = mmap((void *)DR_CACH_BASE, DR_CACH_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
+                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        if (dr_emu == MAP_FAILED || dr_cache == MAP_FAILED) {
+            fprintf(stderr, "[CPUContext] WARNING: Failed to map DR regions (emu=%p, cache=%p)\n",
+                    dr_emu, dr_cache);
+        } else {
+            fprintf(stderr, "[CPUContext] DR Emulator at %p (64KB), DR Cache at %p (512KB)\n",
+                    dr_emu, dr_cache);
+        }
+    }
+
+    // 7d. Write-protect ROM (SheepShaver main_unix.cpp:1157)
+    // Legacy protects ROM_AREA_SIZE (5MB). We match this.
+    // Writes to 0x50400000+ after init are silently dropped by SIGSEGV handler.
+    {
+        uint32_t protect_size = ROM_AREA_SIZE;  // 5MB, matching legacy
+        if (mprotect(ROMBaseHost, protect_size, PROT_READ | PROT_EXEC) < 0) {
+            fprintf(stderr, "[CPUContext] WARNING: Could not write-protect ROM\n");
+        } else {
+            fprintf(stderr, "[CPUContext] ROM write-protected (%d KB, opcode table area at +0x%x remains writable)\n",
+                    protect_size / 1024, protect_size);
+        }
+    }
+
+    // 8. Initialize PPC CPU state (GPR3, GPR4, MODE_68K)
+    // Equivalent to SheepShaver's init_emul_ppc()
+    if (platform_.cpu_init) {
+        platform_.cpu_init();
+    }
+
+    // 9. Re-sync g_platform after cpu_init (may have updated function pointers)
+    {
+        extern Platform g_platform;
+        g_platform = platform_;
+    }
+
+    // 10. Timer interrupt: PPC uses its own tick thread in cpu_ppc_kpx.cpp,
+    //     so we skip setup_timer_interrupt() (polling timer unused by KPX).
+    //     M68K backends use setup_timer_interrupt() from their own init paths.
+
+    // Mark as ready
+    set_state(CPUState::READY);
+
+    fprintf(stderr, "[CPUContext] ========================================\n");
+    fprintf(stderr, "[CPUContext] PPC initialization complete\n");
+    fprintf(stderr, "[CPUContext] ========================================\n");
+
+    return true;
 }
 
 // ========================================

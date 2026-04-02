@@ -36,7 +36,7 @@ extern uint32_t RAMSize;     // RAM size
 extern uint32_t ROMBaseMac;  // ROM base in Mac address space
 extern uint8_t *ROMBaseHost; // ROM base in host address space
 extern uint32_t ROMSize;     // ROM size
-extern void EmulOp(uint16_t opcode, struct M68kRegisters *r);
+namespace m68k { extern void EmulOp(uint16_t opcode, struct M68kRegisters *r); }
 extern int CPUType;          // CPU type from config (2=68020, 3=68030, 4=68040)
 
 static UnicornCPU *unicorn_cpu = NULL;
@@ -94,7 +94,7 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	regs.sr = old_sr;
 
 	// Call EmulOp handler
-	EmulOp(opcode, &regs);
+	m68k::EmulOp(opcode, &regs);
 
 	// CRITICAL: Register writes don't persist when called from within hooks!
 	// We need to defer ALL register updates until after uc_emu_start() returns
@@ -511,7 +511,7 @@ static bool unicorn_backend_init(void) {
 
 	// Register EmulOp handler via platform API
 	// EmulOps are handled by UC_HOOK_INSN_INVALID which checks g_platform handlers
-	g_platform.emulop_handler = unicorn_platform_emulop_handler;
+	g_platform.m68k_emulop_handler = unicorn_platform_emulop_handler;
 
 	// Register trap handler for A-line/F-line traps
 	// Traps are handled by UC_HOOK_INSN_INVALID which checks g_platform handlers

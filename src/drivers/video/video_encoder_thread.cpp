@@ -340,14 +340,28 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
         if (is_dc_codec && have_prev_frame && !keyframe_requested
             && (int)prev_frame.size() == w * h) {
 
+            // Use emulator-provided dirty rect if available, else compute
             int dx, dy, dw, dh;
-            bool changed = compute_dirty_rect(pixels, prev_frame.data(), w, h, dx, dy, dw, dh);
+            bool changed;
+            if (frame->dirty_width > 0 && frame->dirty_height > 0
+                && (frame->dirty_width != (uint32_t)w || frame->dirty_height != (uint32_t)h)) {
+                // Emulator provided a sub-frame dirty rect — use it directly
+                dx = frame->dirty_x;
+                dy = frame->dirty_y;
+                dw = frame->dirty_width;
+                dh = frame->dirty_height;
+                changed = true;
+            } else if (frame->dirty_width == 0 && frame->dirty_height == 0) {
+                // Emulator says nothing changed
+                changed = false;
+            } else {
+                // Full-frame dirty or no emulator hint — compare pixels
+                changed = compute_dirty_rect(pixels, prev_frame.data(), w, h, dx, dy, dw, dh);
+            }
 
             if (!changed) {
                 // No changes — skip this frame entirely
                 skipped_frames++;
-                // Save current frame as prev (in case of accumulated drift)
-                memcpy(prev_frame.data(), pixels, w * h * 4);
                 video_output->release_frame();
                 continue;
             }
@@ -365,7 +379,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             last_encode_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 encode_end - encode_start).count();
 
-            // Save current frame for next comparison
+            // Save current frame for next comparison (fallback path needs it)
             memcpy(prev_frame.data(), pixels, w * h * 4);
             video_output->release_frame();
 

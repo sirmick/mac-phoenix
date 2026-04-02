@@ -194,15 +194,22 @@ void Server::run() {
         int client_fd = accept(server_fd_, (struct sockaddr*)&client_addr, &client_len);
         if (client_fd < 0) continue;
 
-        handle_client(client_fd);
-        close(client_fd);
+        // handle_client returns true if fd was handed off to a stream handler
+        // (caller must NOT close it in that case)
+        if (!handle_client(client_fd)) {
+            close(client_fd);
+        }
     }
 }
 
-void Server::handle_client(int client_fd) {
+void Server::register_stream_route(const std::string& path, StreamHandler handler) {
+    stream_routes_[path] = std::move(handler);
+}
+
+bool Server::handle_client(int client_fd) {
     char buffer[8192];
     ssize_t n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    if (n <= 0) return;
+    if (n <= 0) return false;
     buffer[n] = '\0';
 
     Request req;
@@ -213,13 +220,45 @@ void Server::handle_client(int client_fd) {
         resp.set_body("Bad Request");
         std::string response_str = resp.build();
         send(client_fd, response_str.c_str(), response_str.size(), 0);
-        return;
+        return false;
     }
 
-    // Call handler
+    // Check stream routes first (GET only)
+    if (req.method == "GET") {
+        auto it = stream_routes_.find(req.path);
+        if (it != stream_routes_.end()) {
+            // Send HTTP headers for chunked streaming.
+            // Content-Type: text/event-stream tricks proxies into not buffering.
+            // X-Accel-Buffering: no is an nginx-specific directive for the same.
+            // The client uses fetch() not EventSource, so the MIME type is irrelevant.
+            std::string headers =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/event-stream\r\n"
+                "Transfer-Encoding: chunked\r\n"
+                "Cache-Control: no-cache, no-store\r\n"
+                "Access-Control-Allow-Origin: *\r\n"
+                "X-Accel-Buffering: no\r\n"
+                "Connection: keep-alive\r\n"
+                "\r\n";
+            send(client_fd, headers.c_str(), headers.size(), 0);
+
+            // Hand off fd to stream handler on a detached thread.
+            // The handler owns the fd and must close it.
+            auto handler = it->second;
+            std::thread([handler, req, client_fd]() {
+                handler(req, client_fd);
+            }).detach();
+
+            // Return true — fd handed off, caller must not close it
+            return true;
+        }
+    }
+
+    // Call normal handler
     Response resp = handler_(req);
     std::string response_str = resp.build();
     send(client_fd, response_str.c_str(), response_str.size(), 0);
+    return false;
 }
 
 bool Server::parse_request(const char* buffer, size_t length, Request& req) {
@@ -237,9 +276,10 @@ bool Server::parse_request(const char* buffer, size_t length, Request& req) {
 
     req.path = request.substr(path_start, path_end - path_start);
 
-    // Strip query string from path
+    // Strip query string from path, preserve in req.query
     size_t query_pos = req.path.find('?');
     if (query_pos != std::string::npos) {
+        req.query = req.path.substr(query_pos + 1);
         req.path = req.path.substr(0, query_pos);
     }
 

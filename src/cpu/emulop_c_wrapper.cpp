@@ -14,7 +14,7 @@
 extern "C" {
 
 void EmulOp_C(uint16_t opcode, M68kRegisters *r) {
-    EmulOp(opcode, r);
+    m68k::EmulOp(opcode, r);
 }
 
 } /* extern "C" */

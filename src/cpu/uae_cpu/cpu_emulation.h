@@ -18,8 +18,8 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef CPU_EMULATION_H
-#define CPU_EMULATION_H
+#ifndef UAE_CPU_EMULATION_H
+#define UAE_CPU_EMULATION_H
 
 #include <string.h>
 

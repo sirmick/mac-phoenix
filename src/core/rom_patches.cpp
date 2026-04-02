@@ -43,6 +43,8 @@
 #define DEBUG 0
 #include "debug.h"
 
+using namespace m68k;
+
 // ========================================
 // EmulOp Backend Selection
 // ========================================
@@ -746,7 +748,7 @@ static const uint8 adbop_patch[] = {	// Call ADBOp() completion procedure
  *  Install .Sony, disk and CD-ROM drivers
  */
 
-void InstallDrivers(uint32 pb)
+void m68k::InstallDrivers(uint32 pb)
 {
 	D(bug("InstallDrivers, pb %08x\n", pb));
 	M68kRegisters r;
@@ -831,7 +833,7 @@ void InstallDrivers(uint32 pb)
  *  Install serial drivers
  */
 
-void InstallSERD(void)
+void m68k::InstallSERD(void)
 {
 	D(bug("InstallSERD\n"));
 
@@ -884,10 +886,17 @@ void InstallSERD(void)
  *  Install patches after MacOS startup
  */
 
-void PatchAfterStartup(void)
+void m68k::PatchAfterStartup(void)
 {
+	// Dispatch through Platform API — PPC backend installs its own handler
+	// (VideoInstallAccel + ExtFS). M68K falls through to default.
+	if (g_platform.patch_after_startup) {
+		g_platform.patch_after_startup();
+		return;
+	}
+
 #if SUPPORTS_EXTFS
-	// Install external file system
+	// m68k default: just install ExtFS
 	InstallExtFS();
 #endif
 }
@@ -897,7 +906,7 @@ void PatchAfterStartup(void)
  *  Check ROM version, returns false if ROM version is not supported
  */
 
-bool CheckROM(void)
+bool m68k::CheckROM(void)
 {
 	// Read version
 	ROMVersion = ntohs(*(uint16 *)(ROMBaseHost + 8));
@@ -1819,13 +1828,12 @@ static bool PatchROM_UAE(void)
 // Main PatchROM Dispatcher
 // ========================================
 // Selects the appropriate PatchROM implementation based on CPU backend
-bool PatchROM(void)
+bool m68k::PatchROM(void)
 {
 	// Check if this is a test ROM (very small size)
-	extern uint32_t ROMSize;  // Defined elsewhere
-	if (ROMSize <= 65536) {
+	if (::ROMSize <= 65536) {
 		// Test ROM - skip patching
-		fprintf(stderr, "[PatchROM] Detected test ROM (size %d), skipping patches\n", ROMSize);
+		fprintf(stderr, "[PatchROM] Detected test ROM (size %d), skipping patches\n", ::ROMSize);
 		return true;
 	}
 

@@ -4,6 +4,10 @@
 
 #ifndef CONFIG_H
 #define CONFIG_H
+#ifdef _COMMON_CONFIG_H
+#error "uae_cpu/config.h conflicts with common/include/config.h"
+#endif
+#define _UAE_CONFIG_H
 
 /* System features */
 #define HAVE_UNISTD_H 1

@@ -95,18 +95,13 @@ static uint32_t uae_backend_get_areg(int n) {
 
 // Interrupts
 static void uae_backend_trigger_interrupt(int level) {
-	/* Set interrupt flag - UAE's do_specialties() will check this
-	 * and call Interrupt(level) which handles everything natively:
-	 * - Builds M68K exception stack frame (SR, PC, Format/Vector for 68020+)
-	 * - Sets supervisor mode
-	 * - Updates interrupt mask
-	 * - Reads vector table
-	 * - Jumps to interrupt handler
-	 * RTE is handled natively by UAE interpreter
-	 */
-	if (level > 0 && level <= 7) {
-		SPCFLAGS_SET(SPCFLAG_INT);
-	}
+	/* Set interrupt flags - UAE's do_specialties() checks both SPCFLAG_INT
+	 * and SPCFLAG_DOINT, plus the PendingInterrupt bool. Set all of them
+	 * to ensure the interrupt is delivered regardless of which path fires. */
+	(void)level;
+	extern volatile bool PendingInterrupt;
+	PendingInterrupt = true;
+	SPCFLAGS_SET(SPCFLAG_INT | SPCFLAG_DOINT);
 }
 
 /**
@@ -153,7 +148,7 @@ void cpu_uae_install(Platform *p) {
 	// EmulOp and trap handlers
 	// UAE handles these internally through m68k_emulop/m68k_do_trap
 	// Setting these to NULL means UAE will use its built-in handlers
-	p->emulop_handler = NULL;
+	p->m68k_emulop_handler = NULL;
 	p->trap_handler = NULL;
 
 	// Memory system (for ROM patching and initialization)

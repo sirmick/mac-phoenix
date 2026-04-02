@@ -20,6 +20,10 @@
 
 #ifndef MACOS_UTIL_H
 #define MACOS_UTIL_H
+#ifdef _KPX_MACOS_UTIL_H
+#error "common/include/macos_util.h conflicts with KPX compat/macos_util.h — both included in same TU"
+#endif
+#define _COMMON_MACOS_UTIL_H
 
 #include "cpu_emulation.h"
 

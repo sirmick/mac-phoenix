@@ -8,6 +8,7 @@
 #include "webrtc_server.h"
 #include "../config/json_utils.h"
 #include "../webserver/keyboard_map.h"
+#include "../ipc/ipc_protocol.h"
 #include "../core/boot_progress.h"
 #include <nlohmann/json.hpp>
 #include <cstdio>
@@ -23,9 +24,9 @@ extern void ADBSetRelMouseMode(bool relative);
 extern void ADBKeyDown(int code);
 extern void ADBKeyUp(int code);
 
-// Shared state for fork mode (set in main.cpp)
-#include "../core/shared_state.h"
-extern SharedState* g_shared_state;
+// IPC client for subprocess mode (set in main.cpp)
+#include "../ipc/ipc_client.h"
+extern IPCClient* g_ipc_client;
 
 // External globals from main.cpp
 namespace video {
@@ -154,22 +155,25 @@ static void process_input_message(const std::byte* data, size_t size) {
 
     uint8_t type = static_cast<uint8_t>(data[0]);
 
-    // Fork mode: write to shared memory input queue
-    if (g_shared_state) {
+    // PPC subprocess mode: send via IPC socket
+    if (g_ipc_client && g_ipc_client->is_connected()) {
         switch (type) {
             case 1: { // Mouse move (relative)
                 if (size < 5) return;
                 int16_t dx, dy;
                 std::memcpy(&dx, data + 1, 2);
                 std::memcpy(&dy, data + 3, 2);
-                shared_input_push(g_shared_state, SHM_INPUT_MOUSE_REL, 0, dx, dy, 0);
+                g_ipc_client->send_mouse(dx, dy, 0, false);
                 break;
             }
             case 2: { // Mouse button
                 if (size < 3) return;
                 uint8_t button = static_cast<uint8_t>(data[1]);
                 uint8_t down = static_cast<uint8_t>(data[2]);
-                shared_input_push(g_shared_state, SHM_INPUT_MOUSE_BUTTON, down, 0, 0, button);
+                // Translate button to IPC mouse button flags
+                uint8_t buttons = 0;
+                if (down) buttons = (button == 0) ? IPC_MOUSE_LEFT : IPC_MOUSE_RIGHT;
+                g_ipc_client->send_mouse(0, 0, buttons, false);
                 break;
             }
             case 3: { // Key
@@ -179,7 +183,7 @@ static void process_input_message(const std::byte* data, size_t size) {
                 uint8_t down = static_cast<uint8_t>(data[3]);
                 int mac_keycode = keyboard_map::browser_to_mac_keycode(browser_keycode);
                 if (mac_keycode >= 0) {
-                    shared_input_push(g_shared_state, SHM_INPUT_KEY, down, 0, 0, (uint8_t)mac_keycode);
+                    g_ipc_client->send_key(mac_keycode, down != 0);
                 }
                 break;
             }
@@ -188,13 +192,7 @@ static void process_input_message(const std::byte* data, size_t size) {
                 uint16_t x, y;
                 std::memcpy(&x, data + 1, 2);
                 std::memcpy(&y, data + 3, 2);
-                shared_input_push(g_shared_state, SHM_INPUT_MOUSE_ABS, 0, (int16_t)x, (int16_t)y, 0);
-                break;
-            }
-            case 6: { // Mouse mode change
-                if (size < 2) return;
-                uint8_t mode = static_cast<uint8_t>(data[1]);
-                shared_input_push(g_shared_state, SHM_INPUT_MOUSE_MODE, mode, 0, 0, 0);
+                g_ipc_client->send_mouse(x, y, 0, true);
                 break;
             }
         }
@@ -763,12 +761,13 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
     // Total: 5 bytes
     uint8_t metadata[5] = {0};
     int mx = 0, my = 0;
-    if (g_shared_state) {
-        // Fork mode: read cursor from shared memory (child writes at 60Hz)
-        mx = g_shared_state->cursor_x.load(std::memory_order_relaxed);
-        my = g_shared_state->cursor_y.load(std::memory_order_relaxed);
+    if (g_ipc_client && g_ipc_client->is_connected() && g_ipc_client->shm()) {
+        // Subprocess mode: read cursor from IPC SHM
+        const IPCBuffer* buf = g_ipc_client->shm();
+        mx = IPC_ATOMIC_LOAD(buf->shm_cursor_x);
+        my = IPC_ATOMIC_LOAD(buf->shm_cursor_y);
     } else {
-        // Legacy mode: read directly from Mac low-memory globals
+        // In-process mode: read directly from Mac low-memory globals
         boot_progress_get_mouse(&mx, &my);
     }
     uint16_t cx = static_cast<uint16_t>(mx);

@@ -20,6 +20,10 @@
 
 #ifndef VIDEO_H
 #define VIDEO_H
+#ifdef _KPX_VIDEO_H
+#error "common/include/video.h conflicts with KPX compat/video.h — both included in same TU"
+#endif
+#define _COMMON_VIDEO_H
 
 #include <vector>
 

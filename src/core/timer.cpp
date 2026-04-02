@@ -287,6 +287,7 @@ void TimerInit(void)
 #endif
 #ifdef PRECISE_TIMING_POSIX
 	timer_thread_active = timer_thread_init();
+	D(bug("PRECISE_TIMING_POSIX: timer_thread_active=%d\n", timer_thread_active));
 #endif
 #endif
 }

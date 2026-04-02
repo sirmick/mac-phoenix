@@ -114,6 +114,7 @@
 #include "sigsegv.h"
 #include "sigregs.h"
 #include "rpc.h"
+#include "platform.h"
 
 #define DEBUG 0
 #include "debug.h"
@@ -195,7 +196,7 @@ void *TOC = NULL;		// Pointer to Thread Local Storage (r2)
 void *R13 = NULL;		// Pointer to .sdata section (r13 under Linux)
 #endif
 uint32 RAMBase;			// Base address of Mac RAM
-uint32 RAMSize;			// Size of Mac RAM
+extern uint32 RAMSize;		// Defined in UAE basilisk_glue.cpp
 uint32 ROMBase;			// Base address of Mac ROM
 uint32 KernelDataAddr;	// Address of Kernel Data
 uint32 BootGlobsAddr;	// Address of BootGlobs structure at top of Mac RAM
@@ -204,8 +205,8 @@ uint32 PVR;				// Theoretical PVR
 int64 CPUClockSpeed;	// Processor clock speed (Hz)
 int64 BusClockSpeed;	// Bus clock speed (Hz)
 int64 TimebaseSpeed;	// Timebase clock speed (Hz)
-uint8 *RAMBaseHost;		// Base address of Mac RAM (host address space)
-uint8 *ROMBaseHost;		// Base address of Mac ROM (host address space)
+extern uint8 *RAMBaseHost;	// Defined in UAE basilisk_glue.cpp
+extern uint8 *ROMBaseHost;	// Defined in UAE basilisk_glue.cpp
 uint32 ROMEnd;
 
 #if defined(__APPLE__) && defined(__x86_64__) || defined(MEM_BULK)
@@ -1102,6 +1103,7 @@ int main(int argc, char **argv)
 #endif
 	ram_area_mapped = true;
 	D(bug("RAM area at %p (%08x)\n", RAMBaseHost, RAMBase));
+	fprintf(stderr, "[TRACE] RAM: base=0x%08x size=0x%08x host=%p\n", RAMBase, RAMSize, RAMBaseHost);
 
 	if (RAMBase > KernelDataAddr) {
 		ErrorAlert(GetString(STR_RAM_AREA_TOO_HIGH_ERR));
@@ -1128,6 +1130,7 @@ int main(int argc, char **argv)
 #endif
 	rom_area_mapped = true;
 	D(bug("ROM area at %p (%08x)\n", ROMBaseHost, ROMBase));
+	fprintf(stderr, "[TRACE] ROM: base=0x%08x size=0x%08x host=%p contiguous=%d\n", ROMBase, ROM_AREA_SIZE, ROMBaseHost, ram_rom_areas_contiguous);
 
 	if (RAMBase > ROMBase) {
 		ErrorAlert(GetString(STR_RAM_HIGHER_THAN_ROM_ERR));
@@ -1141,13 +1144,20 @@ int main(int argc, char **argv)
 		goto quit;
 	}
 	
+	fprintf(stderr, "[TRACE] SheepMem: zero=0x%08x pagesize=%d\n", SheepMem::ZeroPage(), SheepMem::PageSize());
+
 	// Load Mac ROM
 	if (!load_mac_rom())
 		goto quit;
 
+	// Initialize Platform API (matches mac-phoenix)
+	platform_init();
+
 	// Initialize everything
+	fprintf(stderr, "[TRACE] InitAll: enter\n");
 	if (!InitAll(vmdir))
 		goto quit;
+	fprintf(stderr, "[TRACE] InitAll: exit\n");
 	D(bug("Initialization complete\n"));
 
 	// Clear caches (as we loaded and patched code) and write protect ROM
@@ -1155,6 +1165,7 @@ int main(int argc, char **argv)
 	flush_icache_range(ROMBase, ROMBase + ROM_AREA_SIZE);
 #endif
 	vm_protect(ROMBaseHost, ROM_AREA_SIZE, VM_PAGE_READ | VM_PAGE_EXECUTE);
+	fprintf(stderr, "[TRACE] ROM write-protected\n");
 
 	// Start 60Hz thread
 	tick_thread_cancel = false;

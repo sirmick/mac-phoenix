@@ -14,7 +14,6 @@
  */
 
 #include "command_bridge.h"
-#include "shared_state.h"
 #include "../common/include/sysdeps.h"
 #include "../common/include/cpu_emulation.h"
 #include "../common/include/m68k_registers.h"
@@ -28,9 +27,6 @@
 
 // Global instance (used for in-process mode, kept for compatibility)
 CommandBridge g_command_bridge;
-
-// Child-side shared state pointer (set in cpu_process.cpp)
-extern SharedState* g_child_shared_state;
 
 // ScratchMem layout
 static const uint32_t SCRATCH_BASE    = 0x02100000;
@@ -504,72 +500,6 @@ void CommandBridge::execute_one_public(const Command& cmd, M68kRegisters* /*r*/,
 }
 
 // ============================================================================
-// SHM queue drain (child side, called from 60Hz IRQ)
-// ============================================================================
-
-static CmdType shm_type_to_cmd(int32_t type) {
-    switch (type) {
-    case SharedState::CMD_GET_APP_NAME:    return CmdType::GET_APP_NAME;
-    case SharedState::CMD_GET_WINDOW_LIST: return CmdType::GET_WINDOW_LIST;
-    case SharedState::CMD_GET_TICKS:       return CmdType::GET_TICKS;
-    case SharedState::CMD_READ_MEMORY:     return CmdType::READ_MEMORY;
-    case SharedState::CMD_LAUNCH_APP:      return CmdType::LAUNCH_APP;
-    case SharedState::CMD_QUIT_APP:        return CmdType::QUIT_APP;
-    default:                               return CmdType::GET_APP_NAME;
-    }
-}
-
-static void drain_shm_commands(SharedState* shm, M68kRegisters* r) {
-    int32_t read_pos = shm->cmd_read_pos.load(std::memory_order_relaxed);
-    int32_t write_pos = shm->cmd_write_pos.load(std::memory_order_acquire);
-
-    while (read_pos != write_pos) {
-        auto& cmd = shm->cmd_queue[read_pos & (SharedState::CMD_QUEUE_SIZE - 1)];
-
-        Command internal_cmd;
-        internal_cmd.id = cmd.id;
-        internal_cmd.type = shm_type_to_cmd(cmd.type);
-        internal_cmd.arg = cmd.arg;
-        internal_cmd.addr = cmd.addr;
-        internal_cmd.len = cmd.len;
-
-        // Advance read_pos BEFORE executing — Execute68kTrap may re-enter IRQ
-        read_pos++;
-        shm->cmd_read_pos.store(read_pos, std::memory_order_release);
-
-        CommandResult result;
-        result.id = internal_cmd.id;
-        result.done = true;
-        g_command_bridge.execute_one_public(internal_cmd, r, result);
-
-        // Write result to shared memory
-        int32_t res_pos = shm->result_write_pos.load(std::memory_order_relaxed);
-        auto& res = shm->result_queue[res_pos & (SharedState::CMD_QUEUE_SIZE - 1)];
-        res.id = result.id;
-        res.done = 1;
-        res.err = result.err;
-        strncpy(res.data, result.data.c_str(), SharedState::CMD_DATA_SIZE - 1);
-        res.data[SharedState::CMD_DATA_SIZE - 1] = '\0';
-        shm->result_write_pos.store(res_pos + 1, std::memory_order_release);
-
-        // Re-read write_pos in case new commands were queued during execution
-        write_pos = shm->cmd_write_pos.load(std::memory_order_acquire);
-    }
-}
-
-static void update_shm_passive(SharedState* shm) {
-    if (!RAMBaseHost || RAMSize == 0) return;
-
-    uint8_t namelen = ReadMacInt8(0x0910);
-    if (namelen > 31) namelen = 31;
-    char name[32];
-    for (int i = 0; i < namelen; i++)
-        name[i] = static_cast<char>(ReadMacInt8(0x0911 + i));
-    name[namelen] = '\0';
-    memcpy(shm->cur_app_name, name, 32);
-}
-
-// ============================================================================
 // Entry point from emul_op.cpp IRQ handler
 // ============================================================================
 
@@ -579,13 +509,6 @@ void command_bridge_drain_from_irq(M68kRegisters* r) {
         install_jgne_filter();
     }
 
-    // Drain shared memory command queue (fork mode)
-    SharedState* shm = g_child_shared_state;
-    if (shm) {
-        drain_shm_commands(shm, r);
-        update_shm_passive(shm);
-    }
-
-    // Drain in-process queue (legacy)
+    // Drain in-process command queue
     g_command_bridge.drain(r);
 }

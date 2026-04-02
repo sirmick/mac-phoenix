@@ -81,20 +81,11 @@ void uae_cpu_request_break(void);     /* Signal CPU to break out of execution lo
 /* Disassembly */
 void uae_disasm(uint32_t addr, uint32_t *next_pc, int count);  /* Disassemble instructions */
 
-/* Interrupt handling functions (shared by all CPU backends) */
-void idle_resume(void);                    /* Resume from idle state (called by TriggerInterrupt) */
-void TriggerInterrupt(void);               /* Trigger M68K interrupt (call from timers/devices) */
-void TriggerNMI(void);                     /* Trigger Non-Maskable Interrupt */
-int intlev(void);                          /* Get current interrupt level */
-
 #ifdef __cplusplus
 }
 #endif
 
-/* Interrupt flags - declared in main.h, defined in uae_wrapper.cpp */
-/* NOTE: Do not redeclare here to avoid linkage conflicts */
-/* InterruptFlags is in main.h */
-/* PendingInterrupt is defined in uae_wrapper.cpp with C++ linkage */
-extern volatile bool PendingInterrupt;     /* Set when interrupt should be processed */
+/* PendingInterrupt is UAE-internal (used by do_specialties in newcpu.cpp) */
+extern volatile bool PendingInterrupt;
 
 #endif /* UAE_WRAPPER_H */

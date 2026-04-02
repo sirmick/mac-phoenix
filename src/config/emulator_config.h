@@ -26,7 +26,8 @@ enum class Architecture {
 enum class CPUBackend {
     UAE,      // Original interpreter
     Unicorn,  // QEMU-based JIT
-    DualCPU   // Validation mode (UAE + Unicorn)
+    DualCPU,  // Validation mode (UAE + Unicorn)
+    KPX       // Kheperix PPC interpreter
 };
 
 enum class NetworkMode {
@@ -56,7 +57,7 @@ struct PPCConfig {
     int cpu_type = 4;
     bool fpu = true;
     int modelid = 14;
-    bool jit = true;
+    bool jit = false;
     bool jit68k = true;
     bool idlewait = true;
     bool ignoresegv = true;
@@ -85,7 +86,7 @@ struct EmulatorConfig {
     CPUBackend cpu_backend = CPUBackend::UAE;
 
     // Memory
-    uint32_t ram_mb = 32;
+    uint32_t ram_mb = 64;
 
     // ROM & disks
     std::string rom_path;
@@ -132,6 +133,9 @@ struct EmulatorConfig {
     NetworkMode network = NetworkMode::None;
     std::string network_if;  // Interface name for raw mode (e.g. "eth0")
 
+    // IPC child mode (--ipc flag, used for PPC subprocess)
+    bool ipc_mode = false;
+
     // Timeout (0 = no timeout)
     int timeout_seconds = 0;
 
@@ -166,6 +170,7 @@ struct EmulatorConfig {
             case CPUBackend::UAE: return "uae";
             case CPUBackend::Unicorn: return "unicorn";
             case CPUBackend::DualCPU: return "dualcpu";
+            case CPUBackend::KPX: return "kpx";
         }
         return "uae";
     }

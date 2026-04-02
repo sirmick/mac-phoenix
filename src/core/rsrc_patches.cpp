@@ -41,6 +41,10 @@
 /* EmulOp encoding handled by platform_make_emulop() in platform.h */
 #define make_emulop(op) platform_make_emulop(op)
 
+#if defined(USE_SCRATCHMEM_SUBTERFUGE)
+extern uint8 *ScratchMem;
+#endif
+
 
 /*
  *  Search resource for byte string, return offset (or 0)
@@ -88,7 +92,7 @@ static void patch_idle_time(uint8 *p, uint32 size, int n = 1)
  *  Resource patches via vCheckLoad
  */
 
-void CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
+void m68k::CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
 {
 	uint16 *p16;
 	uint32 base;
@@ -116,7 +120,6 @@ void CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
 
 #if defined(USE_SCRATCHMEM_SUBTERFUGE)
 			// Set 0x0000 to scratch memory area
-			extern uint8 *ScratchMem;
 			const uint32 ScratchMemBase = Host2MacAddr(ScratchMem);
 			*p16++ = htons(0x207c);			// move.l	#ScratchMem,a0
 			*p16++ = htons(ScratchMemBase >> 16);
@@ -141,7 +144,6 @@ void CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
 
 #if defined(USE_SCRATCHMEM_SUBTERFUGE)
 			// Set 0x0000 to scratch memory area
-			extern uint8 *ScratchMem;
 			const uint32 ScratchMemBase = Host2MacAddr(ScratchMem);
 			*p16++ = htons(0x207c);			// move.l	#ScratchMem,a0
 			*p16++ = htons(ScratchMemBase >> 16);

@@ -16,17 +16,30 @@
 
 #include <stdint.h>
 
-struct SharedState;  // Forward declaration
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Set shared memory pointer for fork mode (child writes status here) */
-void boot_progress_set_shared_state(struct SharedState* shm);
+/* Set IPC buffer for subprocess mode (child writes boot progress here) */
+void boot_progress_set_ipc_buffer(void* buf);
 
-/* Call from EmulOp() to track boot progress and log at appropriate verbosity */
+/* Call from EmulOp() to track boot progress and log at appropriate verbosity.
+ * opcode is architecture-specific (M68K_EMUL_OP_* for m68k, OP_* for PPC). */
 void boot_progress_update(uint16_t opcode, void *regs);
+
+/* Platform-level boot events — architecture-independent.
+ * Both m68k and PPC map their arch-specific opcodes to these. */
+enum BootEvent {
+    BOOT_EVENT_RESET,
+    BOOT_EVENT_PATCH_BOOT_GLOBS,
+    BOOT_EVENT_INSTALL_DRIVERS,
+    BOOT_EVENT_CHECKLOAD,
+    BOOT_EVENT_IRQ,
+    BOOT_EVENT_IDLE_TIME,
+};
+
+/* Call from any CPU backend to report a boot event */
+void boot_progress_report(enum BootEvent event, void *regs);
 
 /* Get current log level (cached from env var or set via set_log_level) */
 int boot_log_level(void);
@@ -38,6 +51,13 @@ void set_log_level(int level);
 const char* boot_progress_phase(void);
 unsigned int boot_progress_checkloads(void);
 double boot_progress_elapsed(void);
+
+/* Returns true if the current phase is >= the named phase (e.g. "Finder", "desktop").
+ * Unknown phase names always return false. */
+int boot_progress_phase_reached(const char *phase_name);
+
+/* Compare two phase name strings: returns true if current_phase >= target_phase. */
+int boot_progress_phase_reached_by_name(const char *current_phase, const char *target_phase);
 
 /* Query Mac mouse position from low-memory globals (for /api/mouse) */
 void boot_progress_get_mouse(int *x, int *y);

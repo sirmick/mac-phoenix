@@ -35,6 +35,7 @@ extern "C" {
 }
 #include "macos_util.h"
 #include "rom_patches.h"
+using namespace m68k;
 #include "rsrc_patches.h"
 #include "xpram.h"
 #include "adb.h"
@@ -61,6 +62,9 @@ extern "C" {
 #include "boot_progress.h"
 
 extern bool tick_inhibit;
+extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
+extern void command_bridge_drain_from_irq(M68kRegisters *r);
+extern void command_bridge_dispatch(M68kRegisters *r);
 
 void PlayStartupSound();
 
@@ -69,7 +73,7 @@ void PlayStartupSound();
  *  Execute EMUL_OP opcode (called by 68k emulator or Illegal Instruction trap handler)
  */
 
-void EmulOp(uint16 opcode, M68kRegisters *r)
+void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 {
 	/* Boot progress tracking and verbosity-controlled logging */
 	boot_progress_update(opcode, r);
@@ -481,7 +485,6 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 
 			// Check if Unicorn backend has a pending interrupt that was blocked by SR
 			// This happens when ROM sets IPL=7 to disable CPU interrupts, then polls IRQ EmulOp
-			extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
 			if (g_pending_interrupt_level > 0) {
 				g_pending_interrupt_level = 0;
 				if (InterruptFlags == 0) {
@@ -559,7 +562,6 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 
 			// Drain command bridge queue (launch app, quit, etc.)
 			if (HasMacStarted()) {
-				extern void command_bridge_drain_from_irq(M68kRegisters *r);
 				command_bridge_drain_from_irq(r);
 			}
 			break;
@@ -630,7 +632,6 @@ void EmulOp(uint16 opcode, M68kRegisters *r)
 		case M68K_EMUL_OP_CMD_DISPATCH: {
 			// Command bridge dispatch — called from jGNEFilter in app context.
 			// Unlike IRQ context, Toolbox calls (_Launch, _ExitToShell) are safe here.
-			extern void command_bridge_dispatch(M68kRegisters *r);
 			command_bridge_dispatch(r);
 			break;
 		}

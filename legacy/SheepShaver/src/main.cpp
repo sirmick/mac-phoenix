@@ -1,3 +1,28 @@
+// TEXT SEGMENT INFLATOR — test if binary size kills the feedback loop.
+// Adds ~5MB to text segment to match KPX's 5.5MB text pressure on icache/iTLB.
+__attribute__((noinline)) int text_pad_func(int x) {
+    switch (x) {
+    #define C(n) case n: return x * (n+3) + (n*7+13);
+    #define C10(n) C(n) C(n+1) C(n+2) C(n+3) C(n+4) C(n+5) C(n+6) C(n+7) C(n+8) C(n+9)
+    #define C100(n) C10(n) C10(n+10) C10(n+20) C10(n+30) C10(n+40) C10(n+50) C10(n+60) C10(n+70) C10(n+80) C10(n+90)
+    #define C1K(n) C100(n) C100(n+100) C100(n+200) C100(n+300) C100(n+400) C100(n+500) C100(n+600) C100(n+700) C100(n+800) C100(n+900)
+    C1K(0) C1K(1000) C1K(2000) C1K(3000) C1K(4000) C1K(5000) C1K(6000) C1K(7000)
+    C1K(8000) C1K(9000) C1K(10000) C1K(11000) C1K(12000) C1K(13000) C1K(14000) C1K(15000)
+    C1K(16000) C1K(17000) C1K(18000) C1K(19000) C1K(20000) C1K(21000) C1K(22000) C1K(23000)
+    C1K(24000) C1K(25000) C1K(26000) C1K(27000) C1K(28000) C1K(29000) C1K(30000) C1K(31000)
+    C1K(32000) C1K(33000) C1K(34000) C1K(35000) C1K(36000) C1K(37000) C1K(38000) C1K(39000)
+    C1K(40000) C1K(41000) C1K(42000) C1K(43000) C1K(44000) C1K(45000) C1K(46000) C1K(47000)
+    C1K(48000) C1K(49000) C1K(50000) C1K(51000) C1K(52000) C1K(53000) C1K(54000) C1K(55000)
+    C1K(56000) C1K(57000) C1K(58000) C1K(59000) C1K(60000) C1K(61000) C1K(62000) C1K(63000)
+    #undef C
+    #undef C10
+    #undef C100
+    #undef C1K
+    default: return x + 1;
+    }
+}
+volatile int text_pad_anchor = 0;
+
 /*
  *  main.cpp - ROM patches
  *

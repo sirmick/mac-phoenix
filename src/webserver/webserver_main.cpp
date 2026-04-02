@@ -9,6 +9,7 @@
 #include "http_server.h"
 #include "static_files.h"
 #include "api_handlers.h"
+#include "http_stream.h"
 #include <cstdio>
 #include <memory>
 #include <atomic>
@@ -61,6 +62,12 @@ void http_server_main(const config::EmulatorConfig* config,
         // 404 Not Found
         return http::Response::not_found();
     };
+
+    // Register stream route (before start, since start runs the accept loop)
+    server.register_stream_route("/api/stream",
+        [api_context](const http::Request& req, int fd) {
+            http::handle_stream(req, fd, api_context);
+        });
 
     // Start HTTP server
     if (!server.start(port, request_handler)) {

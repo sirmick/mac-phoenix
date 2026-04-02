@@ -378,8 +378,7 @@ static bool unified_emulop_handler(uint16_t opcode, bool is_uae_calling) {
         regs.sr = uae_get_sr();
 
         // Call EmulOp
-        extern void EmulOp(uint16 opcode, struct M68kRegisters *r);
-        EmulOp(opcode, &regs);
+        m68k::EmulOp(opcode, &regs);
 
         // Write registers back to UAE
         for (int i = 0; i < 8; i++) {
@@ -415,8 +414,7 @@ static bool unified_emulop_handler(uint16_t opcode, bool is_uae_calling) {
         regs.sr = unicorn_get_sr(validation_state.unicorn);
 
         // Call EmulOp handler
-        extern void EmulOp(uint16 opcode, struct M68kRegisters *r);
-        EmulOp(opcode, &regs);
+        m68k::EmulOp(opcode, &regs);
 
         // Write registers back to Unicorn
         for (int i = 0; i < 8; i++) {

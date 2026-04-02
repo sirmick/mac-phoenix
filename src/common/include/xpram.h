@@ -21,11 +21,8 @@
 #ifndef XPRAM_H
 #define XPRAM_H
 
-#if POWERPC_ROM
+// Always allocate 8192 bytes (PPC needs 8KB, m68k only uses first 256)
 const int XPRAM_SIZE = 8192;
-#else
-const int XPRAM_SIZE = 256;
-#endif
 
 extern uint8 XPRAM[XPRAM_SIZE];
 

@@ -20,6 +20,12 @@
 #include <cstring>
 #include <vector>
 
+#ifdef __linux__
+#include <sys/eventfd.h>
+#include <unistd.h>
+#include <poll.h>
+#endif
+
 // Maximum supported resolution (1080p)
 #define VIDEO_MAX_WIDTH  1920
 #define VIDEO_MAX_HEIGHT 1080
@@ -159,6 +165,24 @@ public:
     bool snapshot_frame(uint32_t* out_pixels, int* out_width, int* out_height, PixelFormat* out_format);
 
     /**
+     * Extended snapshot: also returns sequence number and cursor info.
+     * Used by HTTP stream handler for change detection and cursor overlay.
+     *
+     * @param out_pixels Pre-allocated buffer (must be at least max_width*max_height*4 bytes)
+     * @param out_width Output frame width
+     * @param out_height Output frame height
+     * @param out_format Output pixel format
+     * @param out_sequence Output frame sequence number (monotonic)
+     * @param out_cursor_x Output cursor X position
+     * @param out_cursor_y Output cursor Y position
+     * @param out_cursor_visible Output cursor visibility flag
+     * @return true if a frame was available, false if no frame submitted yet
+     */
+    bool snapshot_frame_ex(uint32_t* out_pixels, int* out_width, int* out_height, PixelFormat* out_format,
+                           uint64_t* out_sequence, uint16_t* out_cursor_x, uint16_t* out_cursor_y,
+                           uint8_t* out_cursor_visible);
+
+    /**
      * Signal shutdown (wake up waiting encoder thread)
      */
     void shutdown();
@@ -185,11 +209,18 @@ private:
     int max_width;
     int max_height;
 
+#ifdef __linux__
+    int frame_eventfd = -1;  // eventfd for frame-ready notification
+#endif
+
     // Helper: Allocate pixel buffers
     void allocate_buffers();
 
     // Helper: Free pixel buffers
     void free_buffers();
+
+    // Signal that a new frame is ready
+    void notify_frame();
 };
 
 #endif // VIDEO_OUTPUT_H

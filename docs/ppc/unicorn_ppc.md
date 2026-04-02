@@ -8,7 +8,7 @@ PPC source code is **complete** in the Unicorn subproject but **not currently bu
 
 ```bash
 cd subprojects/unicorn/build
-cmake .. -DUNICORN_ARCH="m68k;ppc"
+cmake .. -DUNICORN_ARCH="m68 could status?k;ppc"
 cmake --build . -j$(nproc)
 ```
 

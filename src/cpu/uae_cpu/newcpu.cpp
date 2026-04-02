@@ -1255,15 +1255,15 @@ void m68k_emulop_return(void)
 
 void m68k_emulop(uae_u32 opcode)
 {
-	/* Check if platform handler is registered (g_platform declared in platform.h) */
-	if (g_platform.emulop_handler) {
-		/* Platform handler takes over - pass is_primary=true for UAE */
-		/* UAE always advances PC in caller, so we ignore the return value */
-		g_platform.emulop_handler((uint16_t)opcode, true);
+	/* Platform handler overrides UAE built-in EmulOp dispatch.
+	 * NULL is valid for UAE backend (uses built-in EmulOp below).
+	 * Non-UAE backends (Unicorn, DualCPU) MUST set this. */
+	if (g_platform.m68k_emulop_handler) {
+		g_platform.m68k_emulop_handler((uint16_t)opcode, true);
 		return;
 	}
 
-	/* Normal EmulOp handling (standalone mode) */
+	/* UAE built-in EmulOp handling (only valid when UAE is the active backend) */
 	struct M68kRegisters r;
 	int i;
 
@@ -1273,7 +1273,7 @@ void m68k_emulop(uae_u32 opcode)
 	}
 	MakeSR();
 	r.sr = regs.sr;
-	EmulOp(opcode, &r);
+	m68k::EmulOp(opcode, &r);
 	for (i=0; i<8; i++) {
 		m68k_dreg(regs, i) = r.d[i];
 		m68k_areg(regs, i) = r.a[i];

@@ -117,6 +117,7 @@ typedef struct {
      */
     const char *cpu_name;  // Backend name: "UAE", "Unicorn", "DualCPU"
     bool use_aline_emulops;  // true: EmulOps encoded as 0xAExx (Unicorn); false: 0x71xx (UAE)
+    bool ppc_jit;            // true: enable PPC dyngen JIT; false: interpreter only
 
     // Lifecycle
     bool (*cpu_init)(void);
@@ -154,6 +155,24 @@ typedef struct {
     void (*flush_code_cache)(void);
 
     /*
+     *  PPC CPU Backend (NULL when M68K backend is active)
+     *
+     *  These are additional function pointers for PPC-specific state access.
+     *  The generic cpu_execute_fast, cpu_request_stop, cpu_trigger_interrupt,
+     *  cpu_get_pc, and mem_* pointers are shared with M68K backends.
+     */
+    uint32_t (*cpu_get_gpr)(int n);       // Get PPC general purpose register
+    void (*cpu_set_gpr)(int n, uint32_t val);  // Set PPC general purpose register
+    uint32_t (*cpu_get_cr)(void);         // Get PPC condition register
+    uint32_t (*cpu_get_lr)(void);         // Get PPC link register
+    uint32_t (*cpu_get_ctr)(void);        // Get PPC count register
+    void (*cpu_execute_ppc)(uint32_t entry);  // Execute PPC code at entry point
+
+    // Post-startup patching (called from disk driver accRun after system init).
+    // M68K: just calls InstallExtFS. PPC: also calls VideoInstallAccel (NQD hooks).
+    void (*patch_after_startup)(void);
+
+    /*
      *  Memory System API (backend-independent)
      *
      *  These functions provide memory access for initialization and ROM patching.
@@ -189,13 +208,20 @@ typedef struct {
      *    false = Handler skipped execution (caller should advance PC)
      */
 
-    // EmulOp handler (0x71xx illegal instructions used for emulator functions)
+    // m68k EmulOp handler (0x71xx illegal instructions used for emulator functions)
     // Returns true if PC was advanced, false if caller should advance
-    bool (*emulop_handler)(uint16_t opcode, bool is_primary);
+    bool (*m68k_emulop_handler)(uint16_t opcode, bool is_primary);
+
+    // PPC EmulOp handler (POWERPC_EMUL_OP dispatch from KPX interpreter)
+    void (*ppc_emulop_handler)(void *r68k_regs, uint32_t pc, int selector);
 
     // Trap handler (A-line and F-line exceptions)
     // Returns true if PC was advanced, false if caller should advance
     bool (*trap_handler)(int vector, uint16_t opcode, bool is_primary);
+
+    // PPC cursor update (CursorDeviceDispatch via Execute68k + SheepMem)
+    // Set by KPX backend. NULL on m68k.  Args: mouse_base, x, y.
+    void (*ppc_cursor_move)(uint32_t mouse_base, int x, int y);
 } Platform;
 
 /*
@@ -219,6 +245,27 @@ static inline uint16_t platform_make_emulop(uint16_t emulop) {
  *  Sets all function pointers to null drivers (safe defaults)
  */
 void platform_init(void);
+
+/*
+ *  Backend-agnostic interrupt functions.
+ *  TriggerInterrupt routes through g_platform.cpu_trigger_interrupt.
+ *  InterruptFlags, SetInterruptFlag, ClearInterruptFlag are shared
+ *  across all backends.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern volatile uint32_t InterruptFlags;
+void SetInterruptFlag(uint32_t flag);
+void ClearInterruptFlag(uint32_t flag);
+void TriggerInterrupt(void);
+void TriggerNMI(void);
+int intlev(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 /*
  *  Null driver function declarations
@@ -328,6 +375,7 @@ extern bool platform_unix_sys_cd_read_toc(void *fh, uint8_t *toc);
 extern void cpu_uae_install(Platform *p);
 extern void cpu_unicorn_install(Platform *p);
 extern void cpu_dualcpu_install(Platform *p);
+extern void cpu_ppc_kpx_install(Platform *p);
 
 #ifdef __cplusplus
 }

@@ -93,11 +93,24 @@ MODE_68K (0)
 
 ## Interrupt Handling (KPX)
 
-### Timer Thread
+### Timer Thread (tick_thread_func)
 
-A separate thread fires at ~60Hz. It sets `InterruptFlags |= INTFLAG_60HZ` and calls
-`ppc_cpu->trigger_interrupt()`, which sets the KPX SPCFLAG_CPU_TRIGGER_INTERRUPT
-atomic flag.
+A separate thread fires at ~60Hz (16625µs period). Each tick:
+1. `ADBMouseMoved(320, 240)` — once at boot for mouse device presence
+2. 1Hz: `WriteMacInt32(0x20c, time + Mac epoch)` — update Mac clock
+3. `SetInterruptFlag(INTFLAG_VIA)` — atomic OR on InterruptFlags
+4. `TriggerInterrupt()` → `ppc_cpu->trigger_interrupt()` → sets SPCFLAG_CPU_TRIGGER_INTERRUPT
+5. `g_platform.video_refresh()` — capture frame for WebRTC/screenshot
+
+### PRECISE_TIMING Timer Thread (timer_func)
+
+A second thread handles PrimeTime tasks with virtual-clock precision:
+1. `clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &wakeup_time)` — returns
+   immediately since wakeup_time (virtual ns) << CLOCK_REALTIME
+2. `timer_current_time()` → checks virtual clock (ppc_insn_counter * 4ns)
+3. If virtual time >= wakeup_time: fire timer, set INTFLAG_TIMER, TriggerInterrupt
+4. If not: busy-wait (loop back to step 1)
+5. When no timer pending: wakeup_time = MAX → sleeps until resumed by signal
 
 ### KPX spcflags Check
 
@@ -152,6 +165,56 @@ legacy `sheepshaver_glue.cpp::execute_68k()`:
 8. Restore PPC context
 
 **Do NOT modify this function.** Legacy SheepShaver's version is ~20 lines and works.
+
+## Boot Progress and the SystemTask Gap (Session 10)
+
+### What Loads Successfully
+
+The boot sequence progresses through these phases:
+
+1. **ROM init** (0.00s): OP_RESET, nanokernel setup
+2. **Warm start** (0.32s): WLSC flag set after 51 resources
+3. **Driver install** (0.33s): .Sony, .Disk, .AppleCD, serial
+4. **Extension loading** (0.33-1.0s): 1462 OP_CHECKLOAD resources
+5. **Font loading** (1.0-1.5s): FOND, sfnt, NFNT resources
+6. **ntrb patches**: Native toolbox resources including ntrb 17
+7. **PatchNativeResourceManager**: Fires correctly from ntrb 17 detection
+8. **NQD acceleration**: Installed (69 calls) via forced PatchAfterStartup
+9. **Post-extension resources**: MBDF, clut, snd, itlb (2313 total)
+
+### Where It Stalls
+
+After loading all resources, the 68k code enters an endless loop:
+- DISK_PRIME (2896 reads, all succeed, positions advance)
+- Then PRIMETIME repeating (timer task rescheduling)
+- MODE_NATIVE drops to 0 and never recovers
+- `app=''` (CurApName empty — Finder never launches)
+
+### Why: SystemTask Never Called
+
+In Mac OS 9, `SystemTask()` is the periodic driver action dispatcher. It scans
+drivers with the `dNeedTime` flag (bit 0x2000 in dCtlFlags) and calls their
+`Control(65)` handler (accRun). The Sony driver's accRun triggers:
+- `mount_mountable_volumes()` — mounts pending disks
+- `PatchAfterStartup()` — installs NQD + ExtFS (we force this as workaround)
+
+`SystemTask()` is called by the Mac OS event loop (`WaitNextEvent`/`GetNextEvent`)
+and also explicitly during certain boot phases. In legacy SheepShaver, it fires
+within the first second (NQD=53 in NOP-RATE #1). In mac-phoenix, it never fires.
+
+The 68k code that should call SystemTask is stuck in a loop — likely waiting for
+a condition that depends on interrupt delivery timing. Different interrupt
+interleaving in mac-phoenix vs legacy causes the 68k code to take a different
+branch at a critical point, entering an infinite loop instead of proceeding to
+SystemTask.
+
+### Key Evidence
+
+EmulOp comparison (non-IRQ):
+- First 600 ops: match with only 3 trivial differences
+- Legacy total: 9127 → ends with OP_IDLE_TIME_2 (Finder)
+- Mac-phoenix total: 5260 → ends with DISK_PRIME + PRIMETIME loop
+- Divergence is gradual: same ops, different interleaving with IRQs
 No context fixups, no extra register saves, no KernelData manipulation needed.
 
 ## execute_macos_code (Host → PPC via TVECT)

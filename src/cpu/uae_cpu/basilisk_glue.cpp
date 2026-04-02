@@ -246,15 +246,15 @@ void uae_execute_68k_trap(uint16 trap, struct M68kRegisters *r)
 
 void Execute68kTrap(uint16 trap, struct M68kRegisters *r)
 {
-	// Use platform API if available
-	if (g_platform.cpu_execute_68k_trap) {
-		g_platform.cpu_execute_68k_trap(trap, r);
-		return;
+	if (__builtin_expect(!g_platform.cpu_execute_68k_trap, 0)) {
+		fprintf(stderr, "FATAL: g_platform.cpu_execute_68k_trap not initialized (trap=0x%04x)\n"
+		                "Platform backend must be installed before Execute68kTrap.\n", trap);
+		abort();
 	}
-
-	// Fallback to UAE internal implementation (should not happen after UAE backend is installed)
-	fprintf(stderr, "[WARNING] Execute68kTrap: Platform API not available, using UAE fallback\n");
-	uae_execute_68k_trap_internal(trap, r);
+	static int e68k_trap_count = 0;
+	if (++e68k_trap_count <= 30)
+		fprintf(stderr, "[E68K] Execute68kTrap(0x%04x) #%d\n", trap, e68k_trap_count);
+	g_platform.cpu_execute_68k_trap(trap, r);
 }
 
 
@@ -317,13 +317,10 @@ void uae_execute_68k(uint32 addr, struct M68kRegisters *r)
  */
 void Execute68k(uint32 addr, struct M68kRegisters *r)
 {
-	// Use platform API if available
-	if (g_platform.cpu_execute_68k) {
-		g_platform.cpu_execute_68k(addr, r);
-		return;
+	if (__builtin_expect(!g_platform.cpu_execute_68k, 0)) {
+		fprintf(stderr, "FATAL: g_platform.cpu_execute_68k not initialized (addr=0x%08x)\n"
+		                "Platform backend must be installed before Execute68k.\n", addr);
+		abort();
 	}
-
-	// Fallback to UAE internal implementation
-	fprintf(stderr, "[WARNING] Execute68k: Platform API not available, using UAE fallback\n");
-	uae_execute_68k_internal(addr, r);
+	g_platform.cpu_execute_68k(addr, r);
 }

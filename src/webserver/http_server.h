@@ -12,6 +12,7 @@
 #include <thread>
 #include <atomic>
 #include <functional>
+#include <unordered_map>
 
 namespace http {
 
@@ -21,6 +22,7 @@ namespace http {
 struct Request {
     std::string method;      // GET, POST, etc.
     std::string path;        // URL path without query string
+    std::string query;       // Query string (after ?)
     std::string body;        // Request body content
 };
 
@@ -63,11 +65,20 @@ public:
     // Request handler callback: receives request, returns response
     using RequestHandler = std::function<Response(const Request&)>;
 
+    // Stream handler callback: takes over the client socket for long-lived streaming.
+    // The handler runs on a detached thread, owns the fd, and must close it when done.
+    using StreamHandler = std::function<void(const Request& req, int client_fd)>;
+
     Server();
     ~Server();
 
     // Start server on specified port
     bool start(int port, RequestHandler handler);
+
+    // Register a stream route that takes over the client socket.
+    // When a GET request matches this path, HTTP headers are sent and the
+    // StreamHandler is called on a new thread with ownership of the fd.
+    void register_stream_route(const std::string& path, StreamHandler handler);
 
     // Stop server and wait for thread to join
     void stop();
@@ -77,7 +88,7 @@ public:
 
 private:
     void run();
-    void handle_client(int client_fd);
+    bool handle_client(int client_fd);  // returns true if fd was handed off (don't close)
     bool parse_request(const char* buffer, size_t length, Request& req);
 
     int port_;
@@ -85,6 +96,9 @@ private:
     std::atomic<bool> running_;
     std::thread thread_;
     RequestHandler handler_;
+
+    // Stream routes: path -> handler
+    std::unordered_map<std::string, StreamHandler> stream_routes_;
 };
 
 } // namespace http

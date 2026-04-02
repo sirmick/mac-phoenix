@@ -1,0 +1,410 @@
+/*
+ *  main.cpp - ROM patches
+ *
+ *  SheepShaver (C) 1997-2008 Christian Bauer and Marc Hellwig
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+
+#include "sysdeps.h"
+
+#include "main.h"
+#include "version.h"
+#include "prefs.h"
+#include "prefs_editor.h"
+#include "kpx_cpu_emulation.h"
+#include "emul_op.h"
+#include "xlowmem.h"
+#include "xpram.h"
+#include "timer.h"
+#include "adb.h"
+#include "sony.h"
+#include "disk.h"
+#include "cdrom.h"
+#include "scsi.h"
+#include "video.h"
+#include "audio.h"
+#include "ether.h"
+#include "serial.h"
+#include "clip.h"
+#include "extfs.h"
+#include "sys.h"
+#include "macos_util.h"
+#include "rom_patches.h"
+#include "user_strings.h"
+#include "vm_alloc.h"
+#include "sigsegv.h"
+#include "thunks.h"
+
+#define DEBUG 0
+#include "debug.h"
+
+using namespace ppc;
+
+#ifdef ENABLE_MON
+#include "mon.h"
+
+static uint32 sheepshaver_read_byte(uintptr adr)
+{
+	return ReadMacInt8(adr);
+}
+
+static void sheepshaver_write_byte(uintptr adr, uint32 b)
+{
+	WriteMacInt8(adr, b);
+}
+#endif
+
+
+/*
+ *  Initialize everything, returns false on error
+ */
+
+bool InitAll_PPC(const char *vmdir)
+{
+	fprintf(stderr, "[InitAll] Starting PPC initialization\n");
+	// Load NVRAM
+	XPRAMInit(vmdir);
+
+	// Load XPRAM default values if signature not found
+	if (XPRAM[0x130c] != 0x4e || XPRAM[0x130d] != 0x75
+	 || XPRAM[0x130e] != 0x4d || XPRAM[0x130f] != 0x63) {
+		D(bug("Loading XPRAM default values\n"));
+		memset(XPRAM + 0x1300, 0, 0x100);
+		XPRAM[0x130c] = 0x4e;	// "NuMc" signature
+		XPRAM[0x130d] = 0x75;
+		XPRAM[0x130e] = 0x4d;
+		XPRAM[0x130f] = 0x63;
+		XPRAM[0x1301] = 0x80;	// InternalWaitFlags = DynWait (don't wait for SCSI devices upon bootup)
+		XPRAM[0x1310] = 0xa8;	// Standard PRAM values
+		XPRAM[0x1311] = 0x00;
+		XPRAM[0x1312] = 0x00;
+		XPRAM[0x1313] = 0x22;
+		XPRAM[0x1314] = 0xcc;
+		XPRAM[0x1315] = 0x0a;
+		XPRAM[0x1316] = 0xcc;
+		XPRAM[0x1317] = 0x0a;
+		XPRAM[0x131c] = 0x00;
+		XPRAM[0x131d] = 0x02;
+		XPRAM[0x131e] = 0x63;
+		XPRAM[0x131f] = 0x00;
+		XPRAM[0x1308] = 0x13;
+		XPRAM[0x1309] = 0x88;
+		XPRAM[0x130a] = 0x00;
+		XPRAM[0x130b] = 0xcc;
+		XPRAM[0x1376] = 0x00;	// OSDefault = MacOS
+		XPRAM[0x1377] = 0x01;
+		XPRAM[0x138a] = 0x25;	// Use PPC memory manager ("Modern Memory Manager")
+	}
+
+	// Set boot volume
+	int16 i16 = PrefsFindInt32("bootdrive");
+	XPRAM[0x1378] = i16 >> 8;
+	XPRAM[0x1379] = i16 & 0xff;
+	i16 = PrefsFindInt32("bootdriver");
+	XPRAM[0x137a] = i16 >> 8;
+	XPRAM[0x137b] = i16 & 0xff;
+
+	// Create BootGlobs at top of Mac memory
+	memset(RAMBaseHost + RAMSize - 4096, 0, 4096);
+	BootGlobsAddr = RAMBase + RAMSize - 0x1c;
+	WriteMacInt32(BootGlobsAddr - 5 * 4, RAMBase + RAMSize);	// MemTop
+	WriteMacInt32(BootGlobsAddr + 0 * 4, RAMBase);				// First RAM bank
+	WriteMacInt32(BootGlobsAddr + 1 * 4, RAMSize);
+	WriteMacInt32(BootGlobsAddr + 2 * 4, (uint32)-1);			// End of bank table
+
+	// Init thunks
+	fprintf(stderr, "[InitAll] ThunksInit...\n");
+	if (!ThunksInit())
+		return false;
+	fprintf(stderr, "[InitAll] ThunksInit OK\n");
+
+	// Init drivers
+	SonyInit();
+	DiskInit();
+	CDROMInit();
+	SCSIInit();
+
+	// Init external file system
+	ExtFSInit();
+
+	// Init ADB
+	ADBInit();
+
+	// Init audio
+	AudioInit();
+
+	// Init network
+	EtherInit();
+
+	// Init serial ports
+	SerialInit();
+
+	// Init Time Manager
+	TimerInit();
+
+	// Init clipboard
+	ClipInit();
+
+	// Init video
+	fprintf(stderr, "[InitAll] VideoInit...\n");
+	if (!VideoInit())
+		return false;
+	fprintf(stderr, "[InitAll] VideoInit OK\n");
+
+	// Install ROM patches
+	fprintf(stderr, "[InitAll] PatchROM_PPC...\n");
+	if (!PatchROM_PPC()) {
+		fprintf(stderr, "ERROR: PatchROM failed (unsupported ROM type)\n");
+		return false;
+	}
+
+	// Dump patched nanokernel ROM for comparison with legacy
+	{
+		fprintf(stderr, "[ROM-CRC] Nanokernel ROM+0x310000 CRC after patches:\n");
+		uint32 crc = 0;
+		for (uint32 i = 0; i < 0x5000; i += 4)
+			crc ^= ReadMacInt32(ROMBase + 0x310000 + i);
+		fprintf(stderr, "[ROM-CRC]   ROM+310000..315000: %08x\n", crc);
+		crc = 0;
+		for (uint32 i = 0; i < 0x10000; i += 4)
+			crc ^= ReadMacInt32(ROMBase + 0x300000 + i);
+		fprintf(stderr, "[ROM-CRC]   ROM+300000..310000: %08x\n", crc);
+		// Also dump the boot structure
+		crc = 0;
+		for (uint32 i = 0; i < 0x1000; i += 4)
+			crc ^= ReadMacInt32(ROMBase + 0x30d000 + i);
+		fprintf(stderr, "[ROM-CRC]   Boot struct 30d000: %08x\n", crc);
+		// Dump specific boot struct fields
+		for (int off = 0x9c; off <= 0xb0; off += 4)
+			fprintf(stderr, "[ROM-CRC]   BS+%03x=%08x\n", off, ReadMacInt32(ROMBase + 0x30d000 + off));
+		fprintf(stderr, "[ROM-CRC]   BS+360=%08x BS+fd8=%08x\n",
+			ReadMacInt32(ROMBase + 0x30d360), ReadMacInt32(ROMBase + 0x30dfd8));
+	}
+
+	// Initialize Kernel Data
+	Mac_memset(KERNEL_DATA_BASE, 0, sizeof(KernelData));
+	if (ROMType == ROMTYPE_NEWWORLD) {
+		uint32 of_dev_tree = SheepMem::Reserve(4 * sizeof(uint32));
+		Mac_memset(of_dev_tree, 0, 4 * sizeof(uint32));
+		uint32 vector_lookup_tbl = SheepMem::Reserve(128);
+		uint32 vector_mask_tbl = SheepMem::Reserve(64);
+		Mac_memset(KERNEL_DATA_BASE + 0xb80, 0x3d, 0x80);
+		Mac_memset(vector_lookup_tbl, 0, 128);
+		Mac_memset(vector_mask_tbl, 0, 64);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xb80, ROMBase);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xb84, of_dev_tree);			// OF device tree base
+		WriteMacInt32(KERNEL_DATA_BASE + 0xb90, vector_lookup_tbl);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xb94, vector_mask_tbl);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xb98, ROMBase);				// OpenPIC base
+		WriteMacInt32(KERNEL_DATA_BASE + 0xbb0, 0);						// ADB base
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc20, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc24, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc30, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc34, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc38, 0x00010020);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc3c, 0x00200001);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc40, 0x00010000);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc50, RAMBase);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc54, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf60, PVR);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf64, CPUClockSpeed);			// clock-frequency
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf68, BusClockSpeed);			// bus-frequency
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf6c, TimebaseSpeed);			// timebase-frequency
+	} else if (ROMType == ROMTYPE_GOSSAMER) {
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc80, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc84, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc90, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc94, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc98, 0x00010020);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc9c, 0x00200001);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xca0, 0x00010000);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xcb0, RAMBase);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xcb4, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf60, PVR);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf64, CPUClockSpeed);			// clock-frequency
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf68, BusClockSpeed);			// bus-frequency
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf6c, TimebaseSpeed);			// timebase-frequency
+	} else {
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc80, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc84, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc90, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc94, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc98, 0x00010020);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xc9c, 0x00200001);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xca0, 0x00010000);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xcb0, RAMBase);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xcb4, RAMSize);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf80, PVR);
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf84, CPUClockSpeed);			// clock-frequency
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf88, BusClockSpeed);			// bus-frequency
+		WriteMacInt32(KERNEL_DATA_BASE + 0xf8c, TimebaseSpeed);			// timebase-frequency
+	}
+
+	// Initialize extra low memory
+	D(bug("Initializing Low Memory...\n"));
+	Mac_memset(0, 0, 0x3000);
+	fprintf(stderr, "[INIT] After Mac_memset(0,0,0x3000): [0x28]=%08x\n", ReadMacInt32(0x28));
+
+	// Dump ROM code around the Mixed Mode install block (0x504d1200-0x504d1280)
+	// This is where [0x28] gets set to 0x50012af0 — check if it also sets KD+0x1720
+	{
+		fprintf(stderr, "[INIT] ROM at Mixed Mode install (0x504d1200-0x504d1280):\n");
+		uint32 base = ROMBase + 0x4d1200;
+		for (int i = 0; i < 32; i++) {
+			uint32 insn = ReadMacInt32(base + i * 4);
+			fprintf(stderr, "  %08x: %08x\n", base + i * 4, insn);
+		}
+	}
+	WriteMacInt32(XLM_SIGNATURE, FOURCC('B','a','a','h'));			// Signature to detect SheepShaver
+	WriteMacInt32(XLM_KERNEL_DATA, KernelDataAddr);					// For trap replacement routines
+	WriteMacInt32(XLM_PVR, PVR);									// Theoretical PVR
+	WriteMacInt32(XLM_BUS_CLOCK, BusClockSpeed);					// For DriverServicesLib patch
+	WriteMacInt16(XLM_EXEC_RETURN_OPCODE, M68K_EXEC_RETURN);		// For Execute68k() (RTS from the executed 68k code will jump here and end 68k mode)
+	WriteMacInt32(XLM_ZERO_PAGE, SheepMem::ZeroPage());				// Pointer to read-only page with all bits set to 0
+#if !EMULATED_PPC
+#ifdef SYSTEM_CLOBBERS_R2
+	WriteMacInt32(XLM_TOC, (uint32)TOC);							// TOC pointer of emulator
+#endif
+#ifdef SYSTEM_CLOBBERS_R13
+	WriteMacInt32(XLM_R13, (uint32)R13);							// TLS register
+#endif
+#endif
+
+	WriteMacInt32(XLM_ETHER_AO_GET_HWADDR, NativeFunction(NATIVE_ETHER_AO_GET_HWADDR));	// Low level ethernet driver functions
+	WriteMacInt32(XLM_ETHER_AO_ADD_MULTI, NativeFunction(NATIVE_ETHER_AO_ADD_MULTI));
+	WriteMacInt32(XLM_ETHER_AO_DEL_MULTI, NativeFunction(NATIVE_ETHER_AO_DEL_MULTI));
+	WriteMacInt32(XLM_ETHER_AO_SEND_PACKET, NativeFunction(NATIVE_ETHER_AO_SEND_PACKET));
+
+	WriteMacInt32(XLM_ETHER_INIT, NativeFunction(NATIVE_ETHER_INIT));	// DLPI ethernet driver functions
+	WriteMacInt32(XLM_ETHER_TERM, NativeFunction(NATIVE_ETHER_TERM));
+	WriteMacInt32(XLM_ETHER_OPEN, NativeFunction(NATIVE_ETHER_OPEN));
+	WriteMacInt32(XLM_ETHER_CLOSE, NativeFunction(NATIVE_ETHER_CLOSE));
+	WriteMacInt32(XLM_ETHER_WPUT, NativeFunction(NATIVE_ETHER_WPUT));
+	WriteMacInt32(XLM_ETHER_RSRV, NativeFunction(NATIVE_ETHER_RSRV));
+	WriteMacInt32(XLM_VIDEO_DOIO, NativeFunction(NATIVE_VIDEO_DO_DRIVER_IO));
+	fprintf(stderr, "[INIT] XLM_VIDEO_DOIO=0x%08x (NativeFunc=%08x)\n",
+		ReadMacInt32(XLM_VIDEO_DOIO), NativeFunction(NATIVE_VIDEO_DO_DRIVER_IO));
+	// Dump GoMixedModeTrap fall-through path (0x50469738+)
+	{
+		uint32 addr = ROMBase + 0x469738;
+		fprintf(stderr, "[INIT] GoMixedModeTrap fall-through path:\n");
+		for (int i = 0; i < 32; i++) {
+			uint32 a = addr + i * 4;
+			uint32 op = ReadMacInt32(a);
+			int primary = op >> 26;
+			int rs = (op >> 21) & 31;
+			int ra = (op >> 16) & 31;
+			uint16 d = op & 0xFFFF;
+			const char *mark = (a == ROMBase + 0x46d808) ? " <<<STORE" : "";
+			if (primary == 36)
+				fprintf(stderr, "  %08x: %08x  stw r%d, 0x%04x(r%d)%s\n", a, op, rs, d, ra, mark);
+			else if (primary == 32)
+				fprintf(stderr, "  %08x: %08x  lwz r%d, 0x%04x(r%d)%s\n", a, op, rs, d, ra, mark);
+			else
+				fprintf(stderr, "  %08x: %08x  (primary=%d)%s\n", a, op, primary, mark);
+		}
+	}
+	// Dump GoMixedModeTrap handler (64 instructions)
+	uint32 gmmtAddr = ROMBase + 0x469720;
+	fprintf(stderr, "[INIT] GoMixedModeTrap handler at 0x%08x (64 instructions):\n", gmmtAddr);
+	for (int i = 0; i < 64; i += 4)
+		fprintf(stderr, "  +%03x: %08x %08x %08x %08x\n",
+			i*4, ReadMacInt32(gmmtAddr+i*4), ReadMacInt32(gmmtAddr+i*4+4),
+			ReadMacInt32(gmmtAddr+i*4+8), ReadMacInt32(gmmtAddr+i*4+12));
+	D(bug("Low Memory initialized\n"));
+
+#if ENABLE_MON
+	// Initialize mon
+	mon_init();
+	mon_read_byte = sheepshaver_read_byte;
+	mon_write_byte = sheepshaver_write_byte;
+#endif
+
+	return true;
+}
+
+void CDROMOpenDone_PPC() {
+	// At this point, any initial CD-ROM drives have been added to the drive queue.
+	if (ROMType == ROMTYPE_NEWWORLD) {
+		// The PRAM boot device setting has no apparent effect,
+		// but we can achieve a boot with the specified device by reordering the drive queue ourselves.
+		int bootdriver = PrefsFindInt32("bootdriver");
+		if (bootdriver) {
+			MoveDrivesFromDriverToFront(bootdriver);
+		}
+	}
+}
+
+/*
+ *  Deinitialize everything
+ */
+
+void ExitAll_PPC(void)
+{
+#if ENABLE_MON
+	// Deinitialize mon
+	mon_exit();
+#endif
+
+	// Save NVRAM
+	XPRAMExit();
+
+	// Exit clipboard
+	ClipExit();
+
+	// Exit Time Manager
+	TimerExit();
+
+	// Exit serial
+	SerialExit();
+
+	// Exit network
+	EtherExit();
+
+	// Exit audio
+	AudioExit();
+
+	// Exit ADB
+	ADBExit();
+
+	// Exit video
+	VideoExit();
+
+	// Exit external file system
+	ExtFSExit();
+
+	// Exit drivers
+	SCSIExit();
+	CDROMExit();
+	DiskExit();
+	SonyExit();
+
+	// Delete thunks
+	ThunksExit();
+}
+
+
+/*
+ *  Patch things after system startup (gets called by disk driver accRun routine)
+ */
+
+void ppc::PatchAfterStartup_PPC(void)
+{
+	fprintf(stderr, "[PPC] PatchAfterStartup_PPC: installing NQD accel + ExtFS\n");
+	ExecuteNative(NATIVE_VIDEO_INSTALL_ACCEL);
+	InstallExtFS();
+}
+// Called via g_platform.patch_after_startup (set in cpu_ppc_kpx_install).

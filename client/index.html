@@ -49,6 +49,7 @@
                     <option value="h264" {{SELECTED_H264}}>H.264</option>
 
                     <option value="vp9" {{SELECTED_VP9}}>VP9</option>
+                    <option value="httpstream">HTTP Stream</option>
                 </select>
                 <span id="codec-active" style="margin-left:4px;font-size:0.85em;color:#0f0;" title="Active codec being decoded"></span>
             </div>
@@ -259,10 +260,11 @@
                 <div class="modal-columns">
                 <!-- Column 1: system + storage -->
                 <div class="form-group">
-                    <label>Emulator Type</label>
+                    <label>Emulator Mode</label>
                     <select id="cfg-emulator">
-                        <option value="basilisk">68k (Mac OS 7.x)</option>
-                        <option value="sheepshaver">PPC (Mac OS 8/9)</option>
+                        <option value="quadra">Quadra (68040, System 7 - Mac OS 8.1)</option>
+                        <option value="iici">Mac IIci (68030, System 6.0.8)</option>
+                        <option value="ppc">PowerPC (PPC, System 7.1.2 - Mac OS 9.0.4)</option>
                     </select>
                     <small class="help-text">Requires restart to change emulator</small>
                 </div>
@@ -348,8 +350,8 @@
                             <div class="form-group">
                                 <label>Mac Model</label>
                                 <select id="cfg-model">
-                                    <option value="5">Mac II</option>
-                                    <option value="14" selected>Quadra 900</option>
+                                    <option value="5">Mac IIci (68030, System 6)</option>
+                                    <option value="14" selected>Quadra (68040, Mac OS 8)</option>
                                 </select>
                             </div>
                         </div>
@@ -430,25 +432,27 @@
                     </div>
 
                     <!-- Common settings -->
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-sound" checked>
-                            <label for="cfg-sound">Enable Sound</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="cfg-sound" checked>
+                                <label for="cfg-sound">Enable Sound</label>
+                            </div>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-zappram">
-                            <label for="cfg-zappram">Zap PRAM on startup</label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
-                            <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss improper shutdown dialog</label>
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="cfg-zappram">
+                                <label for="cfg-zappram">Zap PRAM on startup</label>
+                            </div>
                         </div>
                     </div>
                     <div class="form-row">
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
+                                <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss shutdown dialog</label>
+                            </div>
+                        </div>
                         <div class="form-group">
                             <label for="cfg-network">Network</label>
                             <select id="cfg-network">
@@ -457,7 +461,11 @@
                                 <option value="raw">Raw (bridged)</option>
                             </select>
                         </div>
-                        <div class="form-group" id="cfg-network-if-group" style="display:none">
+                    </div>
+                    <div class="form-row" id="cfg-network-if-row" style="display:none">
+                        <div class="form-group">
+                        </div>
+                        <div class="form-group" id="cfg-network-if-group">
                             <label for="cfg-network-if">Interface</label>
                             <input type="text" id="cfg-network-if" placeholder="eth0">
                         </div>

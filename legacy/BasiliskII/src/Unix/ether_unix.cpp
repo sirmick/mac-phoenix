@@ -176,8 +176,10 @@ static int16 ether_do_add_multicast(uint8 *addr);
 static int16 ether_do_del_multicast(uint8 *addr);
 static int16 ether_do_write(uint32 arg);
 static void ether_do_interrupt(void);
+#ifdef HAVE_SLIRP
 static void slirp_add_redirs();
 static int slirp_add_redir(const char *redir_str);
+#endif
 
 #ifdef ENABLE_MACOSX_ETHERHELPER
 static int get_mac_address(const char* dev, unsigned char *addr);
@@ -1173,6 +1175,7 @@ static int get_str_sep(char *buf, int buf_size, const char **pp, int sep)
 	return 0;
 }
 
+#ifdef HAVE_SLIRP
 // Set up port forwarding for slirp
 static void slirp_add_redirs()
 {
@@ -1243,6 +1246,7 @@ static int slirp_add_redir(const char *redir_str)
 	WarningAlert(str);
 	return -1;
 }
+#endif // HAVE_SLIRP
 
 #ifdef ENABLE_MACOSX_ETHERHELPER
 static int get_mac_address(const char* dev, unsigned char *addr)

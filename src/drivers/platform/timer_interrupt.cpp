@@ -18,8 +18,8 @@
 #include <time.h>
 #include <stdio.h>
 
-// Shared input polling for fork mode (defined in cpu_process.cpp)
-extern "C" void ADBPollSharedInput(void);
+// Input polling stub — no-op in subprocess mode (input arrives via control socket).
+extern "C" __attribute__((weak)) void ADBPollSharedInput(void) {}
 
 // Forward declaration (avoid including timer.h due to C linkage conflicts)
 extern "C" uint32 TimerDateTime(void);
@@ -77,7 +77,7 @@ static void one_tick(void)
 		one_second();
 	}
 
-	// Poll shared input queue (fork mode: parent writes, child reads at 60Hz)
+	// Poll shared input queue (no-op in subprocess mode)
 	ADBPollSharedInput();
 
 	// Trigger video refresh (60Hz frame capture)
@@ -94,7 +94,11 @@ static void one_tick(void)
 	// IMPORTANT: Must deliver interrupts BEFORE Mac starts to allow boot to progress
 	// The ROM needs timer interrupts to initialize and set up WLSC signature
 	// Once WLSC is set, HasMacStarted() returns true
-	if (g_platform.cpu_trigger_interrupt) {
+	if (__builtin_expect(!g_platform.cpu_trigger_interrupt, 0)) {
+		fprintf(stderr, "FATAL: g_platform.cpu_trigger_interrupt not initialized\n");
+		abort();
+	}
+	{
 		int level = intlev();
 		if (level > 0) {
 			g_platform.cpu_trigger_interrupt(level);

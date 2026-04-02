@@ -7,11 +7,20 @@
 
 #ifndef CONFIG_H
 #define CONFIG_H
+#ifdef _UAE_CONFIG_H
+#error "common/include/config.h conflicts with uae_cpu/config.h"
+#endif
+#define _COMMON_CONFIG_H
 
 /* Platform detection */
 #if defined(__linux__)
 #define HAVE_PTHREADS 1
 #define HAVE_POSIX_MEMALIGN 1
+#define HAVE_CLOCK_GETTIME 1
+#define HAVE_CLOCK_NANOSLEEP 1
+#define HAVE_PTHREAD_COND_INIT 1
+#define HAVE_PTHREAD_CANCEL 1
+#define HAVE_SEM_INIT 1
 #endif
 
 /* UAE CPU emulation */

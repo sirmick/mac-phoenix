@@ -2967,7 +2967,7 @@ static bool sigsegv_do_install_handler(int sig)
 	memset(&sigsegv_sa, 0, sizeof(struct sigaction));
 	sigemptyset(&sigsegv_sa.sa_mask);
 	sigsegv_sa.sa_sigaction = sigsegv_handler;
-	sigsegv_sa.sa_flags = SA_SIGINFO;
+	sigsegv_sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
 	return (sigaction(sig, &sigsegv_sa, 0) == 0);
 #else
 	return (signal(sig, (signal_handler)sigsegv_handler) != SIG_ERR);

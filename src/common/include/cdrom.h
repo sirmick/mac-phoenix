@@ -20,6 +20,10 @@
 
 #ifndef CDROM_H
 #define CDROM_H
+#ifdef _KPX_CDROM_H
+#error "common/include/cdrom.h conflicts with KPX compat/cdrom.h — both included in same TU"
+#endif
+#define _COMMON_CDROM_H
 
 const int CDROMRefNum = -62;			// RefNum of driver
 const uint16 CDROMDriverFlags = 0x6d04;	// Driver flags

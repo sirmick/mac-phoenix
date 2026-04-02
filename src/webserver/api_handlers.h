@@ -16,9 +16,8 @@
 #include <condition_variable>
 #include <atomic>
 
-class VideoOutput;  // Forward declaration
-class CPUProcess;   // Forward declaration
-struct SharedState;  // Forward declaration
+class VideoOutput;     // Forward declaration
+class PPCSubprocess;   // Forward declaration
 
 namespace http {
 
@@ -36,9 +35,8 @@ struct APIContext {
     // Video output (for screenshot API)
     VideoOutput* video_output = nullptr;
 
-    // Fork-based CPU process (webserver mode)
-    CPUProcess* cpu_process = nullptr;
-    SharedState* shared_state = nullptr;
+    // Subprocess (both m68k and PPC webserver mode)
+    PPCSubprocess* subprocess = nullptr;
 
     // Legacy in-process CPU state (kept for headless compatibility)
     std::atomic<bool>* cpu_running = nullptr;
@@ -74,6 +72,7 @@ private:
     Response handle_log(const Request& req);
     Response handle_error(const Request& req);
     Response handle_screenshot(const Request& req);
+    Response handle_frame(const Request& req);  // Single frame for long-poll streaming
     Response handle_mouse(const Request& req);
     Response handle_mouse_move(const Request& req);
     Response handle_keypress(const Request& req);

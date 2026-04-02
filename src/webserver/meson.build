@@ -2,6 +2,7 @@
 
 webserver_sources = [
   'http_server.cpp',
+  'http_stream.cpp',
   'api_handlers.cpp',
   'static_files.cpp',
   'file_scanner.cpp',

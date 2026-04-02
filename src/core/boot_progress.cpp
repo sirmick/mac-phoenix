@@ -19,7 +19,7 @@
 #include "m68k_registers.h"
 #include "emul_op.h"
 #include "boot_progress.h"
-#include "shared_state.h"
+#include "ipc_protocol.h"
 #include "adb.h"
 #include "../config/emulator_config.h"
 
@@ -33,16 +33,16 @@ enum BootPhase {
 	PHASE_BOOT_BLOCKS,     /* 'boot' resource loaded */
 	PHASE_EXTENSIONS,      /* First INIT resource loaded */
 	PHASE_FINDER_LAUNCH,   /* CurApName = "Finder" */
-	PHASE_DESKTOP,         /* Finder idle (repeated STR loads) */
+	PHASE_DESKTOP,         /* Finder event loop idle (IDLE_TIME EmulOp) */
 };
 
 static BootPhase g_current_phase = PHASE_PRE_RESET;
 static int g_log_level = -1;  /* -1 = uninitialized */
-static SharedState* g_boot_shm = nullptr;  /* Shared memory for fork mode */
+static IPCBuffer* g_ipc_buf = nullptr;     /* IPC buffer for subprocess mode */
 
-void boot_progress_set_shared_state(SharedState* shm)
+void boot_progress_set_ipc_buffer(void* buf)
 {
-	g_boot_shm = shm;
+	g_ipc_buf = static_cast<IPCBuffer*>(buf);
 }
 static uint32_t g_checkload_count = 0;
 static bool g_seen_boot_resource = false;
@@ -50,7 +50,6 @@ static bool g_seen_init_resource = false;
 static bool g_seen_finder = false;
 static char g_last_app_name[64] = {0};
 static struct timespec g_boot_start_time = {0, 0};
-static uint32_t g_irq_count = 0;
 static bool g_shutdown_dialog_dismissed = false;
 
 static double elapsed_sec(void)
@@ -134,16 +133,15 @@ static void set_phase(BootPhase p)
 {
 	if (p > g_current_phase) {
 		g_current_phase = p;
-		/* Write to shared memory for fork mode */
-		if (g_boot_shm) {
-			snprintf(g_boot_shm->boot_phase_name, sizeof(g_boot_shm->boot_phase_name),
+		/* Write to IPC buffer for subprocess mode */
+		if (g_ipc_buf) {
+			snprintf(g_ipc_buf->boot_phase, sizeof(g_ipc_buf->boot_phase),
 			         "%s", phase_name(p));
-			if (g_boot_shm->boot_start_us.load(std::memory_order_relaxed) == 0) {
+			if (IPC_ATOMIC_LOAD(g_ipc_buf->boot_start_us) == 0) {
 				struct timespec now;
 				clock_gettime(CLOCK_MONOTONIC, &now);
-				g_boot_shm->boot_start_us.store(
-					now.tv_sec * 1000000LL + now.tv_nsec / 1000,
-					std::memory_order_release);
+				IPC_ATOMIC_STORE(g_ipc_buf->boot_start_us,
+					now.tv_sec * 1000000LL + now.tv_nsec / 1000);
 			}
 		}
 	}
@@ -225,7 +223,7 @@ static int read_window_title(uint32_t wp, char *buf, int bufsize)
  * Check for the "improper shutdown" dialog and dismiss it with Return.
  *
  * Detection criteria (all must match):
- *   - Boot phase is exactly FINDER_LAUNCH (not before, not after)
+ *   - Boot phase is at least FINDER_LAUNCH
  *   - Front window has windowKind == 2 (dialogKind)
  *   - Window title is "Please Don't Get this Often" (Mac OS internal name)
  *   - Not already dismissed (latched)
@@ -233,25 +231,34 @@ static int read_window_title(uint32_t wp, char *buf, int bufsize)
 static void check_shutdown_dialog(void)
 {
 	if (g_shutdown_dialog_dismissed) return;
-	if (!RAMBaseHost || RAMSize == 0) return;
 
 	uint32_t wp = ReadMacInt32(0x09D6);  /* WindowList — front window first */
-	if (!wp || wp >= 0x02000000) return;
+	if (!wp || wp >= RAMSize) return;  /* sanity: must be within RAM */
 
 	int16_t wKind = static_cast<int16_t>(ReadMacInt16(wp + 108));
-	if (wKind != 2) return;  /* not a dialog */
-
 	bool visible = ReadMacInt8(wp + 110) != 0;
+
+	if (wKind != 2) return;  /* not a dialog */
 	if (!visible) return;
 
 	char title[64];
 	read_window_title(wp, title, sizeof(title));
-	if (strcmp(title, "Please Don't Get this Often") != 0) return;
 
-	/* Match! Dismiss with Return keypress. */
+	/* Accept known shutdown/Disk First Aid dialog titles.
+	 * Mac OS 7.x uses "Please Don't Get this Often".
+	 * Mac OS 9.x Disk First Aid uses an empty or different title. */
+	/* Accept any visible dialog during boot */
+	fprintf(stderr, "[DIALOG] Visible dialog found: wKind=%d title='%s' — dismissing\n", wKind, title);
+
+	/* Dismiss via Return key press — works for most Mac OS modal dialogs.
+	 * The mouse click approach is fragile (wrong coordinates for different
+	 * dialog types/resolutions). Return hits the default button. */
 	g_shutdown_dialog_dismissed = true;
-	milestonef("Improper shutdown dialog detected -- auto-dismissing");
-	ADBKeyDown(0x24);  /* Return */
+	milestonef("Improper shutdown dialog detected -- auto-dismissing (title='%s')", title);
+
+	extern void ADBKeyDown(int key_code);
+	extern void ADBKeyUp(int key_code);
+	ADBKeyDown(0x24);  /* Return key = Mac keycode 0x24 = 36 */
 	ADBKeyUp(0x24);
 }
 
@@ -300,8 +307,8 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 
 		case M68K_EMUL_OP_CHECKLOAD: {
 			g_checkload_count++;
-			if (g_boot_shm) {
-				g_boot_shm->checkload_count.store(g_checkload_count, std::memory_order_relaxed);
+			if (g_ipc_buf) {
+				IPC_ATOMIC_STORE(g_ipc_buf->checkload_count, g_checkload_count);
 			}
 
 			/* Decode resource type */
@@ -335,24 +342,6 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 				set_phase(PHASE_EXTENSIONS);
 			}
 
-			/* Check CurApName periodically for app launch detection */
-			if (g_checkload_count % 50 == 0 || (g_checkload_count > 500 && g_checkload_count % 10 == 0)) {
-				char app_name[64];
-				read_cur_app_name(app_name, sizeof(app_name));
-				if (app_name[0] && strcmp(app_name, g_last_app_name) != 0) {
-					snprintf(g_last_app_name, sizeof(g_last_app_name), "%s", app_name);
-					if (strcmp(app_name, "Finder") == 0) {
-						if (!g_seen_finder) {
-							g_seen_finder = true;
-							milestonef("Finder launched (resource #%u) -- desktop ready", g_checkload_count);
-							set_phase(PHASE_FINDER_LAUNCH);
-						}
-					} else if (level >= 1) {
-						milestonef("App launched: '%s' (resource #%u)", app_name, g_checkload_count);
-					}
-				}
-			}
-
 			/* Log level 1: periodic progress every 500 resources */
 			if (level >= 1 && g_checkload_count % 500 == 0) {
 				milestonef("Resource #%u loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
@@ -367,20 +356,37 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 		}
 
 		case M68K_EMUL_OP_IRQ:
-			g_irq_count++;
-			/* Check for Finder on each IRQ (60Hz) once we're past extensions */
-			if (!g_seen_finder && g_current_phase >= PHASE_EXTENSIONS) {
+			/* Detect Finder launch — sole place for CurApName checking */
+			if (!g_seen_finder && g_current_phase >= PHASE_BOOT_BLOCKS) {
 				char app_name[64];
 				read_cur_app_name(app_name, sizeof(app_name));
+				if (app_name[0] && strcmp(app_name, g_last_app_name) != 0) {
+					snprintf(g_last_app_name, sizeof(g_last_app_name), "%s", app_name);
+					if (level >= 1)
+						milestonef("App launched: '%s'", app_name);
+				}
 				if (strcmp(app_name, "Finder") == 0) {
 					g_seen_finder = true;
-					milestonef("Finder launched -- desktop ready");
+					milestonef("Finder launched");
 					set_phase(PHASE_FINDER_LAUNCH);
 				}
 			}
-			/* Check for improper shutdown dialog during Finder launch phase only */
-			if (!g_shutdown_dialog_dismissed && g_current_phase == PHASE_FINDER_LAUNCH
-			    && g_irq_count % 30 == 0  /* ~2Hz check rate */
+			/* Check for improper shutdown dialog during boot (appears before Finder) */
+			if (!g_shutdown_dialog_dismissed && g_current_phase >= PHASE_WARM_START
+			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
+				check_shutdown_dialog();
+			}
+			break;
+
+		case M68K_EMUL_OP_IDLE_TIME:
+			/* IDLE_TIME fires when the app event loop is idle (no events pending).
+			 * First IDLE_TIME after Finder launch = desktop is fully drawn and responsive. */
+			if (g_seen_finder && g_current_phase < PHASE_DESKTOP) {
+				milestonef("Desktop ready (Finder idle)");
+				set_phase(PHASE_DESKTOP);
+			}
+			/* Check for improper shutdown dialog once desktop is up */
+			if (!g_shutdown_dialog_dismissed && g_current_phase >= PHASE_FINDER_LAUNCH
 			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
 				check_shutdown_dialog();
 			}
@@ -396,9 +402,157 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 	}
 }
 
+/*
+ *  Platform-level boot event handler (architecture-independent).
+ *  Maps BootEvent enums to the same state machine as boot_progress_update.
+ */
+void boot_progress_report(enum BootEvent event, void *regs_ptr)
+{
+	M68kRegisters *r = (M68kRegisters *)regs_ptr;
+
+	switch (event) {
+		case BOOT_EVENT_RESET:
+			if (g_current_phase < PHASE_ROM_INIT) {
+				milestone("ROM init started (RESET)");
+				set_phase(PHASE_ROM_INIT);
+			}
+			break;
+
+		case BOOT_EVENT_PATCH_BOOT_GLOBS:
+			if (g_current_phase < PHASE_BOOT_GLOBS) {
+				milestone("Boot globals patched");
+				set_phase(PHASE_BOOT_GLOBS);
+			}
+			break;
+
+		case BOOT_EVENT_INSTALL_DRIVERS: {
+			/* On m68k: fires before WLSC. On PPC: fires after WLSC.
+			 * Always log the milestone, advance phase if not already past it. */
+			static bool seen_install_drivers = false;
+			if (!seen_install_drivers) {
+				seen_install_drivers = true;
+				milestone("Installing drivers");
+				if (g_current_phase < PHASE_DRIVERS)
+					set_phase(PHASE_DRIVERS);
+			}
+			break;
+		}
+
+		case BOOT_EVENT_CHECKLOAD: {
+			g_checkload_count++;
+			if (g_ipc_buf) {
+				IPC_ATOMIC_STORE(g_ipc_buf->checkload_count, g_checkload_count);
+			}
+
+			int level = boot_log_level();
+
+			/* Detect WLSC warm start */
+			if (g_current_phase < PHASE_WARM_START && HasMacStarted()) {
+				milestonef("Mac warm start complete (WLSC) after %u resources", g_checkload_count);
+				set_phase(PHASE_WARM_START);
+			}
+
+			/* Detect boot blocks */
+			if (r && !g_seen_boot_resource) {
+				char type[5];
+				decode_resource_type(r->d[1], type);
+				if (memcmp(type, "boot", 4) == 0) {
+					g_seen_boot_resource = true;
+					milestonef("Loading boot blocks (resource #%u)", g_checkload_count);
+					set_phase(PHASE_BOOT_BLOCKS);
+				}
+				if (!g_seen_init_resource && memcmp(type, "INIT", 4) == 0) {
+					g_seen_init_resource = true;
+					milestonef("Loading extensions (first INIT at resource #%u)", g_checkload_count);
+					set_phase(PHASE_EXTENSIONS);
+				}
+			}
+
+			/* Periodic progress */
+			if (level >= 1 && g_checkload_count % 500 == 0) {
+				milestonef("Resource #%u loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
+			}
+			if (level == 0 && g_checkload_count % 1000 == 0) {
+				milestonef("%u resources loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
+			}
+			break;
+		}
+
+		case BOOT_EVENT_IRQ: {
+			/* Detect Finder launch via CurApName */
+			if (!g_seen_finder && g_current_phase >= PHASE_BOOT_BLOCKS) {
+				char app_name[64];
+				read_cur_app_name(app_name, sizeof(app_name));
+				if (app_name[0] && strcmp(app_name, g_last_app_name) != 0) {
+					snprintf(g_last_app_name, sizeof(g_last_app_name), "%s", app_name);
+					if (boot_log_level() >= 1)
+						milestonef("App launched: '%s'", app_name);
+				}
+				if (strcmp(app_name, "Finder") == 0) {
+					g_seen_finder = true;
+					milestonef("Finder launched");
+					set_phase(PHASE_FINDER_LAUNCH);
+				}
+			}
+			/* Check for improper shutdown dialog during boot (appears before Finder) */
+			if (!g_shutdown_dialog_dismissed && g_current_phase >= PHASE_WARM_START
+			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
+				check_shutdown_dialog();
+			}
+			break;
+		}
+
+		case BOOT_EVENT_IDLE_TIME:
+			if (g_seen_finder && g_current_phase < PHASE_DESKTOP) {
+				milestonef("Desktop ready (Finder idle)");
+				set_phase(PHASE_DESKTOP);
+			}
+			if (!g_shutdown_dialog_dismissed && g_current_phase >= PHASE_FINDER_LAUNCH
+			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
+				check_shutdown_dialog();
+			}
+			break;
+	}
+}
+
 const char* boot_progress_phase(void)
 {
 	return phase_name(g_current_phase);
+}
+
+static int phase_ordinal(const char *name)
+{
+	static const struct { const char *name; int ordinal; } phases[] = {
+		{"pre-reset",   PHASE_PRE_RESET},
+		{"ROM init",    PHASE_ROM_INIT},
+		{"boot globs",  PHASE_BOOT_GLOBS},
+		{"drivers",     PHASE_DRIVERS},
+		{"warm start",  PHASE_WARM_START},
+		{"boot blocks", PHASE_BOOT_BLOCKS},
+		{"extensions",  PHASE_EXTENSIONS},
+		{"Finder",      PHASE_FINDER_LAUNCH},
+		{"desktop",     PHASE_DESKTOP},
+	};
+	for (const auto &p : phases) {
+		if (strcmp(p.name, name) == 0)
+			return p.ordinal;
+	}
+	return -1;
+}
+
+int boot_progress_phase_reached(const char *name)
+{
+	int target = phase_ordinal(name);
+	if (target < 0) return 0;
+	return static_cast<int>(g_current_phase) >= target;
+}
+
+int boot_progress_phase_reached_by_name(const char *current_phase, const char *target_phase)
+{
+	int cur = phase_ordinal(current_phase);
+	int tgt = phase_ordinal(target_phase);
+	if (cur < 0 || tgt < 0) return 0;
+	return cur >= tgt;
 }
 
 unsigned int boot_progress_checkloads(void)
