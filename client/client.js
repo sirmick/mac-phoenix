@@ -3856,6 +3856,37 @@ async function changeCodec() {
     }
 }
 
+// Debug: cycle through all codecs to test switching (call from console: testCodecCycle())
+async function testCodecCycle() {
+    const codecs = ['png', 'h264', 'vp9', 'webp', 'png'];
+    const delay = 4000;
+
+    for (const codec of codecs) {
+        console.log(`[codec-test] Switching to ${codec}...`);
+        try {
+            const res = await fetch(getApiUrl('codec'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codec })
+            });
+            const data = await res.json();
+            console.log(`[codec-test] ${codec}: ${JSON.stringify(data)}`);
+        } catch (e) {
+            console.error(`[codec-test] ${codec} failed: ${e.message}`);
+        }
+        console.log(`[codec-test] Waiting ${delay/1000}s on ${codec}...`);
+        await new Promise(r => setTimeout(r, delay));
+
+        // Check video element state
+        const video = document.querySelector('video');
+        if (video) {
+            console.log(`[codec-test] ${codec}: videoWidth=${video.videoWidth} videoHeight=${video.videoHeight}`);
+        }
+    }
+    console.log('[codec-test] Cycle complete');
+}
+window.testCodecCycle = testCodecCycle;
+
 // Emulator selection
 // Emulator status polling
 async function pollEmulatorStatus() {
