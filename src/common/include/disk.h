@@ -20,6 +20,10 @@
 
 #ifndef DISK_H
 #define DISK_H
+#ifdef _KPX_DISK_H
+#error "common/include/disk.h conflicts with KPX compat/disk.h — both included in same TU"
+#endif
+#define _COMMON_DISK_H
 
 const int DiskRefNum = -63;				// RefNum of driver
 const uint16 DiskDriverFlags = 0x6f04;	// Driver flags

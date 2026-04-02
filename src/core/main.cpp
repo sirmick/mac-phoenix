@@ -35,6 +35,7 @@
 #include "clip.h"
 #include "adb.h"
 #include "rom_patches.h"
+using namespace m68k;
 #include "user_strings.h"
 #include "main.h"
 #include "emulator_config.h"

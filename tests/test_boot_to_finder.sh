@@ -12,11 +12,12 @@ set -euo pipefail
 
 BACKEND="uae"
 TIMEOUT=30
-ROM="${MACEMU_ROM:-/home/mick/quadra.rom}"
-DISK="${MACEMU_DISK:-/home/mick/storage/images/7.6.img}"
+ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
 PORT=18090        # Use non-default port to avoid conflicts
 SIG_PORT=18091    # WebRTC signaling port
 BINARY="$(dirname "$0")/../build/mac-phoenix"
+EXTRA_FLAGS=()
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -25,6 +26,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --rom) ROM="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
+        --jit|--no-jit) EXTRA_FLAGS+=("$1"); shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -33,8 +35,8 @@ done
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 
 if [[ ! -x "$BINARY" ]]; then
-    echo "SKIP: Binary not found: $BINARY (run 'ninja -C build' first)"
-    exit 77  # meson skip code
+    echo "SKIP: Binary not found: $BINARY (run 'cmake --build build' first)"
+    exit 77  # ctest skip code
 fi
 
 if [[ ! -f "$ROM" ]]; then
@@ -48,8 +50,9 @@ echo "Port: $PORT"
 
 # Start emulator in background
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 5))" \
-    --config /dev/null --port "$PORT" --signaling-port "$SIG_PORT" \
-    --disk "$DISK" "$ROM" &>/tmp/macemu_test_$$.log &
+    --config /dev/null --dismiss-shutdown-dialog \
+    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/macemu_test_$$.log &
 EMU_PID=$!
 
 cleanup() {

@@ -18,14 +18,13 @@ cpp = meson.get_compiler('cpp')
 
 # Unicorn dependency (always required - all CPUs compiled)
 # Built from submodule with patches applied
-unicorn_inc = include_directories('subprojects/unicorn/include')
 unicorn_lib = cc.find_library('unicorn',
   dirs: [meson.current_source_dir() / 'subprojects/unicorn/build'],
   static: true,
   required: true
 )
 unicorn_dep = declare_dependency(
-  include_directories: unicorn_inc,
+  compile_args: ['-isystem', meson.project_source_root() / 'subprojects/unicorn/include'],
   dependencies: [unicorn_lib]
 )
 
@@ -120,6 +119,9 @@ subdir('src/cpu')
 subdir('src/core')
 subdir('src/drivers')
 
+# IPC subsystem (PPC subprocess mode)
+subdir('src/ipc')
+
 # WebRTC streaming (always enabled)
 subdir('src/config')
 subdir('src/webserver')
@@ -129,7 +131,7 @@ subdir('src/drivers/audio/encoders')
 
 # Main executable
 macemu_next_sources = ['src/main.cpp']
-macemu_next_link_with = [core_lib, driver_lib, cpu_lib]
+macemu_next_link_with = [core_lib, driver_lib, cpu_lib, ipc_lib]
 macemu_next_deps = [unicorn_dep, threads_dep, m_dep]
 macemu_next_inc = [
   include_directories('src/common/include'),
@@ -139,7 +141,7 @@ macemu_next_inc = [
   include_directories('src/drivers'),
   include_directories('src/drivers/platform'),
 ]
-macemu_next_cpp_args = []
+macemu_next_cpp_args = ['-DHAVE_SIGSEGV_SKIP_INSTRUCTION', '-DHAVE_SIGINFO_T']
 
 # Add WebRTC support (always enabled)
 macemu_next_link_with += [config_lib, webserver_lib, webrtc_lib, video_encoder_lib, audio_encoder_lib]
@@ -171,14 +173,24 @@ macemu_next_inc += [
   include_directories('src/webrtc'),
   include_directories('src/drivers/video'),
   include_directories('src/drivers/audio'),
+  include_directories('src/ipc'),
 ]
+
+# Linker script for PPC mode: places binary at 0x78048000 so the process
+# address space covers nanokernel interrupt stack regions (~0x7ff0xxxx).
+# Matches SheepShaver's layout for REAL_ADDRESSING compatibility.
+ppc_link_args = ['-Wl,--warn-common']
+if host_machine.system() == 'linux' and host_machine.cpu_family() == 'x86_64'
+  ppc_link_args += ['-Wl,-T,' + meson.project_source_root() / 'ldscripts/linux-x86_64.ld']
+endif
 
 mac_phoenix = executable('mac-phoenix',
   macemu_next_sources,
   link_with: macemu_next_link_with,
   dependencies: macemu_next_deps,
   include_directories: macemu_next_inc,
-  cpp_args: macemu_next_cpp_args
+  cpp_args: macemu_next_cpp_args,
+  link_args: ppc_link_args
 )
 
 # Tests

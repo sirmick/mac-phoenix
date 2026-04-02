@@ -167,6 +167,6 @@ void cpu_dualcpu_install(Platform *p) {
 	// Returns true if PC was advanced, false if caller should advance
 	extern bool unicorn_validation_unified_emulop(uint16_t opcode, bool is_primary);
 	extern bool unicorn_validation_unified_trap(int vector, uint16_t opcode, bool is_primary);
-	p->emulop_handler = unicorn_validation_unified_emulop;
+	p->m68k_emulop_handler = unicorn_validation_unified_emulop;
 	p->trap_handler = unicorn_validation_unified_trap;
 }

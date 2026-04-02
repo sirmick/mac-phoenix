@@ -20,6 +20,10 @@
 
 #ifndef ROM_PATCHES_H
 #define ROM_PATCHES_H
+#ifdef _KPX_ROM_PATCHES_H
+#error "common/include/rom_patches.h conflicts with KPX compat/rom_patches.h — both included in same TU"
+#endif
+#define _COMMON_ROM_PATCHES_H
 
 // ROM version number, set by CheckROM()
 enum {
@@ -30,27 +34,21 @@ enum {
 	ROM_VERSION_32 = 0x067c			// 32-bit clean Mac II ROMs (512KB/1MB)
 };
 
+// Shared globals (used by both m68k and PPC)
 extern uint16 ROMVersion;
-
-// ROM offset of breakpoint, used by PatchROM()
 extern uint32 ROMBreakpoint;
-
-// ROM offset of UniversalInfo, set by PatchROM()
 extern uint32 UniversalInfo;
-
-// Mac address of PutScrap() patch
 extern uint32 PutScrapPatch;
-
-// Mac address of GetScrap() patch
 extern uint32 GetScrapPatch;
-
-// Flag: print ROM information in PatchROM()
 extern bool PrintROMInfo;
 
-extern bool CheckROM(void);
-extern bool PatchROM(void);
-extern void InstallDrivers(uint32 pb);
-extern void InstallSERD(void);
-extern void PatchAfterStartup(void);
+// m68k-specific ROM patch functions
+namespace m68k {
+	extern bool CheckROM(void);
+	extern bool PatchROM(void);
+	extern void InstallDrivers(uint32 pb);
+	extern void InstallSERD(void);
+	extern void PatchAfterStartup(void);
+}
 
 #endif

@@ -5,6 +5,9 @@
  */
 
 #include "webp_encoder.h"
+
+#ifdef HAVE_LIBWEBP
+
 #include <webp/encode.h>
 #include <cstring>
 #include <cstdio>
@@ -275,3 +278,5 @@ EncodedFrame WebPEncoder::encode_bgra_rect(const uint8_t* bgra, int /*frame_widt
 
     return result;
 }
+
+#endif // HAVE_LIBWEBP

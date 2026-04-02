@@ -734,14 +734,10 @@ Created `src/cpu/m68k_interrupt.c`:
 ./build/mac-phoenix --backend unicorn --timeout 10 --no-webserver 2>&1 | grep -c poll_timer
 ```
 
-See [UnicornIRQStormDebugSession.md](../UnicornIRQStormDebugSession.md) for full details.
-
 ---
 
 ## See Also
 
-- [CPU Emulation](CPU.md) - Dual-CPU architecture
-- [UAE Quirks](UAE-Quirks.md) - UAE-specific details
-- [Memory Layout](Memory.md) - Shared memory setup
-- [A-Line and F-Line Trap Handling](ALineAndFLineTrapHandling.md) - Exception handling
-- [IRQ Storm Debug Session](../UnicornIRQStormDebugSession.md) - Complete fix details
+- [UAE Quirks](UaeQuirks.md) - UAE-specific details
+- [A-Line and F-Line Status](ALineAndFLineStatus.md) - Trap handling status
+- [CPU Backend API](CpuBackendApi.md) - Unified backend interface

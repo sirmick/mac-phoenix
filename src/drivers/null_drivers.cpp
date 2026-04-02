@@ -120,7 +120,7 @@ void LoadXPRAM(const char * /*vmdir*/)
 {
 	FILE *f = fopen(XPRAM_FILE_NAME, "rb");
 	if (f != NULL) {
-		if (fread(XPRAM, 256, 1, f) != 1) { /* ignore read error */ }
+		if (fread(XPRAM, XPRAM_SIZE, 1, f) != 1) { /* ignore read error, partial read is OK */ }
 		fclose(f);
 	}
 }

@@ -10,6 +10,7 @@ build*/
 *.diff
 
 # Runtime state
+config.json
 BasiliskII_XPRAM
 .basilisk_ii_xpram
 BasiliskII_Prefs
@@ -29,3 +30,4 @@ playwright-report/
 # Python
 __pycache__/
 *.pyc
+*.iso

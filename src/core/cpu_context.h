@@ -234,6 +234,10 @@ private:
     uint32_t ram_size_;
     uint32_t rom_size_;
 
+    // JIT: mmap'd RAM in low 32-bit address space (MEMBaseDiff must fit in x86 disp32)
+    uint8_t* mmap_ram_ = nullptr;
+    size_t mmap_ram_size_ = 0;
+
     // Platform interface (CPU backend + drivers)
     Platform platform_;
 

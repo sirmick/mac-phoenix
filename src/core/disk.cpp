@@ -532,30 +532,8 @@ int16 DiskStatus(uint32 pb, uint32 dce)
 
 void DiskInterrupt(void)
 {
-	// In BasiliskII, accRun (DiskControl(65)) gates this function.
-	// accRun fires when SystemTask() calls the Device Manager for dNeedTime
-	// drivers, which only happens once the event loop is running (i.e., the
-	// Finder has launched). This natural delay ensures diskEvents are posted
-	// AFTER an application exists to receive them.
-	//
-	// In Unicorn, accRun never fires because the ROM subroutine at 0x1250
-	// (which sets up dNeedTime) is NOPed to avoid a netBOOT hang.
-	// We replicate the timing by waiting until CurApName ($0910) is set,
-	// indicating an application (the Finder) has launched.
-	if (!acc_run_called) {
-		// Check CurApName ($0910) for "Finder" specifically.
-		// During INIT loading, CurApName is momentarily set to INIT names
-		// (caught by 60Hz interrupt but missed by 1Hz timer). We must wait
-		// for the actual Finder to be running before posting diskEvents.
-		uint8 name_len = ReadMacInt8(0x0910);
-		if (name_len != 6)
-			return;
-		// Compare "Finder"
-		if (ReadMacInt8(0x0911) != 'F' || ReadMacInt8(0x0912) != 'i' ||
-		    ReadMacInt8(0x0913) != 'n' || ReadMacInt8(0x0914) != 'd' ||
-		    ReadMacInt8(0x0915) != 'e' || ReadMacInt8(0x0916) != 'r')
-			return;
-		acc_run_called = true;
-	}
+	if (!acc_run_called)
+		return;
+
 	mount_mountable_volumes();
 }

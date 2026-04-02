@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <fstream>
 #include <unistd.h>
+#include <climits>
 #include <sys/stat.h>
 
 namespace config {
@@ -58,6 +59,30 @@ static void ensure_parent_dir(const std::string& path) {
         }
         mkdir(dir.c_str(), 0755);
     }
+}
+
+// Remove duplicate paths from a vector, preserving order.
+// Compares by resolved absolute path (after realpath) to catch
+// "/home/user/storage/images/foo.img" == "foo.img" expanded.
+static void dedup_paths(std::vector<std::string>& paths) {
+    std::vector<std::string> seen;
+    std::vector<std::string> result;
+    for (auto& p : paths) {
+        // Resolve to canonical path for comparison (fall back to original)
+        char resolved[PATH_MAX];
+        const char* canonical = realpath(p.c_str(), resolved);
+        std::string key = canonical ? std::string(canonical) : p;
+        bool dup = false;
+        for (auto& s : seen) {
+            if (s == key) { dup = true; break; }
+        }
+        if (!dup) {
+            seen.push_back(key);
+            result.push_back(p);
+        }
+    }
+    if (result.size() != paths.size())
+        paths = std::move(result);
 }
 
 /*
@@ -154,14 +179,26 @@ nlohmann::json EmulatorConfig::to_json() const {
 void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("architecture")) {
         std::string a = json_utils::get_string(j, "architecture");
-        if (a == "ppc") architecture = Architecture::PPC;
-        else architecture = Architecture::M68K;
+        if (a == "ppc") {
+            architecture = Architecture::PPC;
+            // Auto-select KPX backend for PPC
+            if (cpu_backend != CPUBackend::KPX) {
+                cpu_backend = CPUBackend::KPX;
+            }
+        } else {
+            architecture = Architecture::M68K;
+        }
     }
     if (j.contains("cpu_backend")) {
         std::string b = json_utils::get_string(j, "cpu_backend");
         if (b == "unicorn") cpu_backend = CPUBackend::Unicorn;
         else if (b == "dualcpu") cpu_backend = CPUBackend::DualCPU;
+        else if (b == "kpx") cpu_backend = CPUBackend::KPX;
         else cpu_backend = CPUBackend::UAE;
+    }
+    // PPC always uses KPX regardless of saved cpu_backend
+    if (architecture == Architecture::PPC) {
+        cpu_backend = CPUBackend::KPX;
     }
     if (j.contains("ram_mb")) ram_mb = json_utils::get_int(j, "ram_mb");
     if (j.contains("screen")) {
@@ -270,6 +307,12 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         if (p.contains("ignoreillegal")) ppc.ignoreillegal = json_utils::get_bool(p, "ignoreillegal");
         if (p.contains("keyboardtype")) ppc.keyboardtype = json_utils::get_int(p, "keyboardtype");
     }
+
+    // Deduplicate path arrays (catches config file + CLI + API duplicates)
+    dedup_paths(disk_paths);
+    dedup_paths(cdrom_paths);
+    dedup_paths(floppy_paths);
+    dedup_paths(extfs_paths);
 }
 
 /*
@@ -369,7 +412,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --cdrom PATH          CDROM image path (repeatable)\n");
             printf("  --extfs PATH          Shared folder path (repeatable)\n");
             printf("  --ram MB              RAM size in megabytes (default: 32)\n");
-            printf("  --backend NAME        CPU backend: uae, unicorn, dualcpu (default: uae)\n");
+            printf("  --backend NAME        CPU backend: uae, unicorn, dualcpu, kpx (default: uae, auto for ppc)\n");
             printf("  --arch ARCH           CPU architecture: m68k, ppc (default: m68k)\n");
             printf("  --screen WxH          Display resolution (default: 640x480)\n");
             printf("  --port N              HTTP server port (default: 8000)\n");
@@ -387,6 +430,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-mode-switch   Debug video mode switches\n");
             printf("  --debug-perf          Debug performance\n");
             printf("  --debug-network       Debug network (lwIP NAT/DNS/ICMP/TCP/UDP)\n");
+            printf("  --jit                 Enable M68K JIT compiler (experimental)\n");
+            printf("  --no-jit              Disable M68K JIT (interpreter only)\n");
+            printf("  --ppc-jit             Enable PPC JIT compiler (default: off)\n");
+            printf("  --no-ppc-jit          Disable PPC JIT (interpreter only)\n");
             printf("  -h, --help            Show this help message\n");
             exit(0);
         }
@@ -430,6 +477,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         if (strcmp(argv[i], "--backend") == 0 && i+1 < argc) {
             if (strcmp(argv[i+1], "unicorn") == 0) config.cpu_backend = CPUBackend::Unicorn;
             else if (strcmp(argv[i+1], "dualcpu") == 0) config.cpu_backend = CPUBackend::DualCPU;
+            else if (strcmp(argv[i+1], "kpx") == 0) config.cpu_backend = CPUBackend::KPX;
             else config.cpu_backend = CPUBackend::UAE;
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
@@ -496,10 +544,21 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; continue;
         }
 
+        // --ipc (IPC child mode for PPC subprocess)
+        if (strcmp(argv[i], "--ipc") == 0) {
+            config.ipc_mode = true;
+            config.enable_webserver = false;  // IPC child doesn't run webserver
+            argv[i] = nullptr; continue;
+        }
+
         // --arch m68k|ppc
         if (strcmp(argv[i], "--arch") == 0 && i+1 < argc) {
-            if (strcmp(argv[i+1], "ppc") == 0) config.architecture = Architecture::PPC;
-            else config.architecture = Architecture::M68K;
+            if (strcmp(argv[i+1], "ppc") == 0) {
+                config.architecture = Architecture::PPC;
+                config.cpu_backend = CPUBackend::KPX;  // Auto-select KPX for PPC
+            } else {
+                config.architecture = Architecture::M68K;
+            }
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
@@ -536,6 +595,26 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--debug-network") == 0) {
             config.debug_network = true; argv[i] = nullptr; continue;
+        }
+
+        // --jit / --no-jit (M68K JIT compiler)
+        if (strcmp(argv[i], "--jit") == 0) {
+            config.m68k.jit = true;
+            argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--no-jit") == 0) {
+            config.m68k.jit = false;
+            argv[i] = nullptr; continue;
+        }
+
+        // --ppc-jit / --no-ppc-jit (PPC JIT compiler)
+        if (strcmp(argv[i], "--ppc-jit") == 0) {
+            config.ppc.jit = true;
+            argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--no-ppc-jit") == 0) {
+            config.ppc.jit = false;
+            argv[i] = nullptr; continue;
         }
 
         // Positional: ROM path (last non-flag arg)
@@ -611,6 +690,12 @@ EmulatorConfig load_emulator_config(const char* config_path,
     resolve_paths(config.cdrom_paths);
     resolve_paths(config.floppy_paths);
 
+    // 7b. Deduplicate (config file + CLI may specify same path)
+    dedup_paths(config.disk_paths);
+    dedup_paths(config.cdrom_paths);
+    dedup_paths(config.floppy_paths);
+    dedup_paths(config.extfs_paths);
+
     // 8. Resolve client_dir relative to binary location if it's a relative path
     if (!config.client_dir.empty() && config.client_dir[0] != '/') {
         char exe_path[4096];
@@ -640,9 +725,13 @@ EmulatorConfig load_emulator_config(const char* config_path,
 void print_config(const EmulatorConfig& config) {
     fprintf(stderr, "[Config] Architecture: %s\n", config.architecture_string());
     fprintf(stderr, "[Config] RAM: %u MB\n", config.ram_mb);
-    fprintf(stderr, "[Config] CPU: 680%d0, FPU: %s, Backend: %s\n",
-            config.m68k.cpu_type, config.m68k.fpu ? "yes" : "no",
-            config.cpu_backend_string());
+    if (config.architecture == Architecture::PPC) {
+        fprintf(stderr, "[Config] CPU: PowerPC, Backend: %s\n", config.cpu_backend_string());
+    } else {
+        fprintf(stderr, "[Config] CPU: 680%d0, FPU: %s, Backend: %s\n",
+                config.m68k.cpu_type, config.m68k.fpu ? "yes" : "no",
+                config.cpu_backend_string());
+    }
     fprintf(stderr, "[Config] ROM: %s\n",
             config.rom_path.empty() ? "(none)" : config.rom_path.c_str());
     fprintf(stderr, "[Config] Screen: %ux%u\n", config.screen_width, config.screen_height);
@@ -654,6 +743,8 @@ void print_config(const EmulatorConfig& config) {
     }
     for (const auto& d : config.disk_paths)
         fprintf(stderr, "[Config] Disk: %s\n", d.c_str());
+    for (const auto& c : config.cdrom_paths)
+        fprintf(stderr, "[Config] CDROM: %s\n", c.c_str());
     if (config.enable_webserver)
         fprintf(stderr, "[Config] WebRTC: port %d, signaling %d\n",
                 config.http_port, config.signaling_port);

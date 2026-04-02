@@ -19,25 +19,19 @@ audio_driver_sources = [
   'audio/audio_encoder_thread.cpp',
 ]
 
-# lwIP (unity build to avoid subproject sandbox issues)
-lwip_inc = include_directories(
-  '../../subprojects/lwip/src/include',
-  'ether',  # lwipopts.h lives here
-)
+# lwIP (unity build)
+lwip_src_root = meson.project_source_root() / 'subprojects/lwip/src'
+lwip_inc_args = ['-I' + lwip_src_root / 'include', '-I' + meson.current_source_dir() / 'ether']
 
 lwip_lib = static_library('lwip',
   'ether/lwip_build.c',
   'ether/sys_arch.c',
-  include_directories: [
-    lwip_inc,
-    include_directories('../../subprojects/lwip/src'),
-  ],
-  c_args: ['-w'],
+  c_args: ['-w'] + lwip_inc_args + ['-I' + lwip_src_root],
 )
 
 lwip_dep = declare_dependency(
   link_with: lwip_lib,
-  include_directories: lwip_inc,
+  compile_args: lwip_inc_args,
 )
 
 # Other drivers

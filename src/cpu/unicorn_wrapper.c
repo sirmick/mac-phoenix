@@ -310,8 +310,12 @@ static void hook_interrupt(uc_engine *uc, uint32_t intno, void *user_data) {
                 return;
             }
 
-            if (g_platform.emulop_handler) {
-                bool pc_advanced = g_platform.emulop_handler(legacy_opcode, false);
+            if (!g_platform.m68k_emulop_handler) {
+                fprintf(stderr, "FATAL: g_platform.m68k_emulop_handler not set (A-line opcode=0x%04x)\n", legacy_opcode);
+                abort();
+            }
+            {
+                bool pc_advanced = g_platform.m68k_emulop_handler(legacy_opcode, false);
 
                 if (!pc_advanced) {
                     pc += 2;
@@ -345,16 +349,18 @@ static bool hook_insn_invalid(uc_engine *uc, void *user_data __attribute__((unus
 
     /* Check if EmulOp (0x71xx) - legacy format */
     if ((opcode & 0xFF00) == 0x7100) {
-        if (g_platform.emulop_handler) {
-            bool pc_advanced = g_platform.emulop_handler(opcode, false);
-
-            /* Advance PC if handler didn't */
-            if (!pc_advanced) {
-                pc += 2;
-                uc_reg_write(uc, UC_M68K_REG_PC, &pc);
-            }
-            return true;  /* Continue execution */
+        if (!g_platform.m68k_emulop_handler) {
+            fprintf(stderr, "FATAL: g_platform.m68k_emulop_handler not set (0x71xx opcode=0x%04x)\n", opcode);
+            abort();
         }
+        bool pc_advanced = g_platform.m68k_emulop_handler(opcode, false);
+
+        /* Advance PC if handler didn't */
+        if (!pc_advanced) {
+            pc += 2;
+            uc_reg_write(uc, UC_M68K_REG_PC, &pc);
+        }
+        return true;  /* Continue execution */
     }
 
     /* For A-line (0xAxxx) and F-line (0xFxxx):

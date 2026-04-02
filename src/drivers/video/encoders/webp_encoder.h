@@ -10,6 +10,8 @@
 #include "codec.h"
 #include <vector>
 
+#ifdef HAVE_LIBWEBP
+
 class WebPEncoder : public VideoCodec {
 public:
     WebPEncoder() = default;
@@ -58,5 +60,21 @@ private:
     int frame_count_ = 0;
     int64_t total_size_ = 0;
 };
+
+#else // !HAVE_LIBWEBP
+
+class WebPEncoder : public VideoCodec {
+public:
+    CodecType type() const override { return CodecType::WEBP; }
+    const char* name() const override { return "WebP (unavailable)"; }
+    bool init(int, int, int = 30) override { return false; }
+    void cleanup() override {}
+    EncodedFrame encode_i420(const uint8_t*, const uint8_t*, const uint8_t*,
+                             int w, int h, int, int) override { return EncodedFrame{.codec=CodecType::WEBP,.width=w,.height=h}; }
+    EncodedFrame encode_bgra(const uint8_t*, int w, int h, int) override { return EncodedFrame{.codec=CodecType::WEBP,.width=w,.height=h}; }
+    void request_keyframe() override {}
+};
+
+#endif // HAVE_LIBWEBP
 
 #endif // WEBP_ENCODER_H

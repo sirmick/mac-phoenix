@@ -36,7 +36,7 @@ extern uint32_t RAMSize;     // RAM size
 extern uint32_t ROMBaseMac;  // ROM base in Mac address space
 extern uint8_t *ROMBaseHost; // ROM base in host address space
 extern uint32_t ROMSize;     // ROM size
-extern void EmulOp(uint16_t opcode, struct M68kRegisters *r);
+namespace m68k { extern void EmulOp(uint16_t opcode, struct M68kRegisters *r); }
 extern int CPUType;          // CPU type from config (2=68020, 3=68030, 4=68040)
 
 static UnicornCPU *unicorn_cpu = NULL;
@@ -94,7 +94,7 @@ static bool unicorn_platform_emulop_handler(uint16_t opcode, bool is_primary) {
 	regs.sr = old_sr;
 
 	// Call EmulOp handler
-	EmulOp(opcode, &regs);
+	m68k::EmulOp(opcode, &regs);
 
 	// CRITICAL: Register writes don't persist when called from within hooks!
 	// We need to defer ALL register updates until after uc_emu_start() returns
@@ -511,7 +511,7 @@ static bool unicorn_backend_init(void) {
 
 	// Register EmulOp handler via platform API
 	// EmulOps are handled by UC_HOOK_INSN_INVALID which checks g_platform handlers
-	g_platform.emulop_handler = unicorn_platform_emulop_handler;
+	g_platform.m68k_emulop_handler = unicorn_platform_emulop_handler;
 
 	// Register trap handler for A-line/F-line traps
 	// Traps are handled by UC_HOOK_INSN_INVALID which checks g_platform handlers
@@ -1084,9 +1084,13 @@ void cpu_unicorn_install(Platform *p) {
 	p->mem_write_word = unicorn_mem_write_word;
 	p->mem_write_long = unicorn_mem_write_long;
 
-	// Address translation: Unicorn doesn't support direct host pointer access
-	// Mac2HostAddr/Host2MacAddr are only valid for UAE's memory space
-	// For Unicorn, these should NOT be used - all access must go through uc_mem_read/write
-	p->mem_mac_to_host = NULL;  // Not supported for Unicorn
-	p->mem_host_to_mac = NULL;  // Not supported for Unicorn
+	// Address translation: Unicorn uses uc_mem_map_ptr() which shares the host
+	// buffer directly, so Mac↔host pointer arithmetic is valid (same layout as UAE).
+	// Needed by video init, EmulOp handlers, ROM patches, etc.
+	p->mem_mac_to_host = [](uint32_t addr) -> uint8_t* {
+		return RAMBaseHost + addr;
+	};
+	p->mem_host_to_mac = [](uint8_t *ptr) -> uint32_t {
+		return (uint32_t)((uintptr_t)ptr - (uintptr_t)RAMBaseHost);
+	};
 }

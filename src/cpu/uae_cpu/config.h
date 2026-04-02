@@ -4,6 +4,10 @@
 
 #ifndef CONFIG_H
 #define CONFIG_H
+#ifdef _COMMON_CONFIG_H
+#error "uae_cpu/config.h conflicts with common/include/config.h"
+#endif
+#define _UAE_CONFIG_H
 
 /* System features */
 #define HAVE_UNISTD_H 1
@@ -38,8 +42,8 @@
 #define X86_ASSEMBLY 1
 #endif
 
-/* No JIT */
-#define USE_JIT 0
+/* JIT compiler (x86/x86_64 only, runtime-selectable via config.m68k.jit) */
+#define USE_JIT 1
 
 /* No prefetch buffer */
 #define USE_PREFETCH_BUFFER 0

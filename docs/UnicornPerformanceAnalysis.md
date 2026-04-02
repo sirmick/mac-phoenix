@@ -82,7 +82,7 @@ Unicorn's memory growth is from QEMU's TB cache — new code paths are JIT-compi
 
 ### Notable: notdirty_write permanent slow path
 
-Because Unicorn stubs `cpu_physical_memory_set_dirty_flag()` as a no-op (see [JIT_SMC_Detection_Analysis.md](deepdive/JIT_SMC_Detection_Analysis.md)), pages **never transition out of TLB_NOTDIRTY**. Every RAM write goes through the `store_helper` → `notdirty_write` slow path forever. Restoring `set_dirty_flag()` would let non-code pages use the fast write path after first write, reducing the 1.6% `store_helper` overhead.
+Because Unicorn stubs `cpu_physical_memory_set_dirty_flag()` as a no-op (see [JitSmcDetectionAnalysis.md](deepdive/JitSmcDetectionAnalysis.md)), pages **never transition out of TLB_NOTDIRTY**. Every RAM write goes through the `store_helper` → `notdirty_write` slow path forever. Restoring `set_dirty_flag()` would let non-code pages use the fast write path after first write, reducing the 1.6% `store_helper` overhead.
 
 ### TB Compilation Statistics (60-second boot)
 

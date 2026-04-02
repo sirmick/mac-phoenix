@@ -20,7 +20,13 @@
 
 #ifndef RSRC_PATCHES_H
 #define RSRC_PATCHES_H
+#ifdef _KPX_RSRC_PATCHES_H
+#error "common/include/rsrc_patches.h conflicts with KPX compat/rsrc_patches.h — both included in same TU"
+#endif
+#define _COMMON_RSRC_PATCHES_H
 
+namespace m68k {
 extern void CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size);
+}
 
 #endif

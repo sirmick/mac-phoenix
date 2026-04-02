@@ -35,10 +35,6 @@
 #include "emulator_config.h"
 #include "adb.h"
 
-#ifdef POWERPC_ROM
-#include "thunks.h"
-#endif
-
 #define DEBUG 1
 #include "debug.h"
 
@@ -83,6 +79,8 @@ void ADBInit(void)
 	mouse_lock = B2_create_mutex();
 	m_keyboard_type = (uint8)config::EmulatorConfig::instance().m68k.keyboardtype;
 	key_reg_3[1] = m_keyboard_type;
+	// Seed rand() for deterministic ADB enumeration (matching legacy)
+	srand(1);
 }
 
 
@@ -398,27 +396,17 @@ void ADBInterrupt(void)
 
 		// Update mouse position (absolute)
 		if (mx != old_mouse_x || my != old_mouse_y) {
-#ifdef POWERPC_ROM
-			static const uint8 proc_template[] = {
-				0x2f, 0x08,		// move.l a0,-(sp)
-				0x2f, 0x00,		// move.l d0,-(sp)
-				0x2f, 0x01,		// move.l d1,-(sp)
-				0x70, 0x01,		// moveq #1,d0 (MoveTo)
-				0xaa, 0xdb,		// CursorDeviceDispatch
-				M68K_RTS >> 8, M68K_RTS & 0xff
-			};
-			BUILD_SHEEPSHAVER_PROCEDURE(proc);
-			r.a[0] = ReadMacInt32(mouse_base + 4);
-			r.d[0] = mx;
-			r.d[1] = my;
-			Execute68k(proc, &r);
-#else
-			WriteMacInt16(0x82a, mx);
-			WriteMacInt16(0x828, my);
-			WriteMacInt16(0x82e, mx);
-			WriteMacInt16(0x82c, my);
-			WriteMacInt8(0x8ce, ReadMacInt8(0x8cf));	// CrsrCouple -> CrsrNew
-#endif
+			if (g_platform.ppc_cursor_move) {
+				// PPC: CursorDeviceDispatch via Execute68k (matches legacy SheepShaver)
+				g_platform.ppc_cursor_move(mouse_base, mx, my);
+			} else {
+				// m68k: Direct low-memory cursor update
+				WriteMacInt16(0x82a, mx);
+				WriteMacInt16(0x828, my);
+				WriteMacInt16(0x82e, mx);
+				WriteMacInt16(0x82c, my);
+				WriteMacInt8(0x8ce, ReadMacInt8(0x8cf));	// CrsrCouple -> CrsrNew
+			}
 			old_mouse_x = mx;
 			old_mouse_y = my;
 		}

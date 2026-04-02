@@ -34,8 +34,8 @@ volatile uint32 InterruptFlags = 0;
 /* Pending interrupt flag (shared by all CPU backends) */
 volatile bool PendingInterrupt = false;
 
-/* Quit flag */
-volatile bool QuitEmulator = false;
+/* Quit flag — renamed from QuitEmulator to avoid collision with QuitEmulator() function */
+volatile bool quit_emulator_flag = false;
 
 /* Memory pointers are defined in basilisk_glue.cpp */
 extern uint32 RAMBaseMac;
@@ -382,36 +382,20 @@ void uae_disasm(uint32_t addr, uint32_t *next_pc, int count) {
 
 /* Interrupt handling (shared by all CPU backends) */
 
+// idle_resume: real implementation in timer_unix.cpp
+extern void idle_resume(void);
+
 extern "C" {
 
 /**
- * Resume from idle state
- * Called when an interrupt occurs to wake up the CPU if it was halted
- * Stub implementation - can be extended if we implement CPU idle states
- */
-void idle_resume(void) {
-    // Stub - resume from idle if CPU is halted
-}
-
-/**
- * Trigger M68K interrupt level 1
- * Called by timers, ADB, and other devices to signal interrupts
- * Backend-agnostic - sets PendingInterrupt flag that all backends check
+ * Trigger interrupt — routes through Platform API to active backend.
+ * Called by timers, ADB, and other devices to signal interrupts.
  */
 void TriggerInterrupt(void) {
-    idle_resume();  /* Resume from idle if CPU is halted */
-    PendingInterrupt = true;  /* Signal interrupt to CPU backend */
-
-    // NOTE: This function is used by ALL backends (UAE, Unicorn, DualCPU)
-    // even though it's in uae_wrapper.cpp!
-    //
-    // For UAE: Set SPCFLAG_DOINT to trigger m68k_do_specialties() call.
-    // Without this, m68k_do_execute() never enters m68k_do_specialties()
-    // and PendingInterrupt never gets checked.
-    //
-    // For Unicorn: This SPCFLAG is ignored (Unicorn doesn't use UAE flags).
-    // Unicorn handles interrupts via platform.cpu_trigger_interrupt() callback.
-    SPCFLAGS_SET(SPCFLAG_DOINT);
+    idle_resume();
+    if (g_platform.cpu_trigger_interrupt) {
+        g_platform.cpu_trigger_interrupt(1);
+    }
 }
 
 /**
@@ -460,7 +444,13 @@ extern "C" void uae_m68k_execute_fast(void) {
         regs.spcflags = 0;
     }
 
-    m68k_execute();
+#if USE_JIT
+    extern bool UseJIT;
+    if (UseJIT)
+        m68k_compile_execute();
+    else
+#endif
+        m68k_execute();
 }
 
 extern "C" void uae_cpu_request_break(void) {

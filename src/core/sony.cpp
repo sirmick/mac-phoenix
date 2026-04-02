@@ -41,6 +41,7 @@ using std::vector;
 #include "main.h"
 #include "macos_util.h"
 #include "rom_patches.h"
+using namespace m68k;
 #include "sys.h"
 #include "sony.h"
 #include "emulator_config.h"
@@ -255,6 +256,8 @@ static int16 set_dsk_err(int16 err)
 int16 SonyOpen(uint32 pb, uint32 dce)
 {
 	(void)pb;
+	fprintf(stderr, "[SONY] SonyOpen: dce=%08x, %zu drives, utab=%08x\n",
+		dce, drives.size(), ReadMacInt32(0x11c));
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
 	WriteMacInt16(dce + dCtlQHdr + qFlags, (ReadMacInt16(dce + dCtlQHdr + qFlags) & 0xff00) | 3);	// Version number, must be >=3 or System 8 will replace us
@@ -313,6 +316,7 @@ int16 SonyOpen(uint32 pb, uint32 dce)
 			Execute68kTrap(0xa04e, &r);	// AddDrive()
 		}
 	}
+
 	return noErr;
 }
 

@@ -10,7 +10,7 @@ set -uo pipefail
 PORT=18092
 SIG_PORT=18093
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
-ROM="${MACEMU_ROM:-/home/mick/quadra.rom}"
+ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 PASS=0
 FAIL=0
 

@@ -20,6 +20,10 @@
 
 #ifndef SONY_H
 #define SONY_H
+#ifdef _KPX_SONY_H
+#error "common/include/sony.h conflicts with KPX compat/sony.h — both included in same TU"
+#endif
+#define _COMMON_SONY_H
 
 const int SonyRefNum = -5;				// RefNum of driver
 const uint16 SonyDriverFlags = 0x6f00;	// Driver flags

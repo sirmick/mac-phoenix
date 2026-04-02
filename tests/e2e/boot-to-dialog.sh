@@ -10,7 +10,7 @@ BACKEND="${1:-uae}"
 PORT=8000
 BUILD_DIR="$(dirname "$0")/../../build"
 BINARY="$BUILD_DIR/mac-phoenix"
-ROM="/home/mick/quadra.rom"
+ROM="$HOME/roms/quadra.rom"
 SCREENSHOT_DIR="/tmp/macemu_boot_test_${BACKEND}"
 
 mkdir -p "$SCREENSHOT_DIR"

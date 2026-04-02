@@ -85,9 +85,18 @@ void platform_init(void)
 	g_platform.sys_cd_read_toc = platform_unix_sys_cd_read_toc;
 
 	// EmulOp/Trap handlers (NULL by default - set by CPU backend or main)
-	g_platform.emulop_handler = nullptr;
+	g_platform.m68k_emulop_handler = nullptr;
+	g_platform.ppc_emulop_handler = nullptr;
 	g_platform.trap_handler = nullptr;
 
 	// Code cache flush (NULL by default - set by JIT backends like Unicorn)
 	g_platform.flush_code_cache = nullptr;
+
+	// PPC CPU backend (NULL by default - set by KPX backend)
+	g_platform.cpu_get_gpr = nullptr;
+	g_platform.cpu_set_gpr = nullptr;
+	g_platform.cpu_get_cr = nullptr;
+	g_platform.cpu_get_lr = nullptr;
+	g_platform.cpu_get_ctr = nullptr;
+	g_platform.cpu_execute_ppc = nullptr;
 }

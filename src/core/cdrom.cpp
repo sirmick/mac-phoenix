@@ -316,8 +316,11 @@ static bool position2msf(const cdrom_drive_info &info, uint16 postype, uint32 po
 void CDROMInit(void)
 {
 	auto& cfg = config::EmulatorConfig::instance();
+	fprintf(stderr, "[CDROM] CDROMInit: %zu paths\n", cfg.cdrom_paths.size());
 	for (const auto& path : cfg.cdrom_paths) {
+		fprintf(stderr, "[CDROM] Opening: %s\n", path.c_str());
 		void *fh = Sys_open(path.c_str(), true, true);
+		fprintf(stderr, "[CDROM]   result: %s\n", fh ? "OK" : "FAILED");
 		if (fh)
 			drives.push_back(cdrom_drive_info(fh));
 	}
@@ -534,13 +537,20 @@ int16 CDROMOpen(uint32 pb, uint32 dce)
 			WriteMacInt8(info->status + dsSides, 1);
 			
 			// Disk in drive?
-			if (SysIsDiskInserted(info->fh)) {
-				D(bug("CDROMOpen doing SysPreventRemoval cdrom drive num %d\n", info->num));
-				SysPreventRemoval(info->fh);
-				WriteMacInt8(info->status + dsDiskInPlace, 1);
-				read_toc(*info);
-				find_hfs_partition(*info);
-				info->to_be_mounted = true;
+			{
+				bool inserted = SysIsDiskInserted(info->fh);
+				fprintf(stderr, "[CDROM] Drive %d: SysIsDiskInserted=%d fh=%p\n",
+					info->num, inserted, info->fh);
+				if (inserted) {
+					fprintf(stderr, "[CDROM] Drive %d: mounting (SysPreventRemoval)\n", info->num);
+					SysPreventRemoval(info->fh);
+					WriteMacInt8(info->status + dsDiskInPlace, 1);
+					read_toc(*info);
+					find_hfs_partition(*info);
+					fprintf(stderr, "[CDROM] Drive %d: start=%lld to_be_mounted=%d\n",
+						info->num, (long long)info->start_byte, 1);
+					info->to_be_mounted = true;
+				}
 			}
 
 			if (info == drives.begin()) {

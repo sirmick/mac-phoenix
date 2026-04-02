@@ -20,6 +20,10 @@
 
 #ifndef EMUL_OP_H
 #define EMUL_OP_H
+#ifdef _KPX_EMUL_OP_H
+#error "common/include/emul_op.h conflicts with KPX compat/emul_op.h — both included in same TU"
+#endif
+#define _COMMON_EMUL_OP_H
 
 // 68k opcodes
 const uint16 M68K_ILLEGAL = 0x4afc;
@@ -96,6 +100,8 @@ enum {
 };
 
 // Functions
+namespace m68k {
 extern void EmulOp(uint16 opcode, struct M68kRegisters *r);	// Execute EMUL_OP opcode (called by 68k emulator or Line-F trap handler)
+}
 
 #endif

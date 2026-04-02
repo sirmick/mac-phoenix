@@ -5,8 +5,11 @@ Classic Mac emulator with web-based UI. Boots Mac OS 7.5.5 to Finder on a Quadra
 ## Quick Reference
 
 ```bash
+# Configure (first time, or after changing CMakeLists.txt)
+cmake -B build
+
 # Build
-ninja -C build
+cmake --build build -j$(nproc)
 
 # Run (with web UI)
 ./build/mac-phoenix /home/mick/quadra.rom
@@ -14,20 +17,21 @@ ninja -C build
 # Run (headless, timed)
 ./build/mac-phoenix --timeout 10 --no-webserver /home/mick/quadra.rom
 
-# Test (fast — API + UAE boot + mouse + command bridge + extfs, ~20s)
-meson test -C build api_endpoints boot_uae mouse_position command_bridge extfs
-
-# Test (all — includes slow Unicorn boot, ~60s)
-meson test -C build
+# Test (all)
+ctest --test-dir build
 
 # Test (verbose)
-meson test -C build -v
+ctest --test-dir build -V
 
-# Rebuild Unicorn subproject (after modifying QEMU sources)
-cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
+# Test (by label: api or boot)
+ctest --test-dir build -L api
+ctest --test-dir build -L boot
 
-# Reconfigure meson (after changing meson.build or meson_options.txt)
-meson setup build --reconfigure
+# Test (specific)
+ctest --test-dir build -R api_endpoints
+
+# Configure with test ROM path
+cmake -B build -DTEST_ROM=/path/to/quadra.rom
 
 # Playwright E2E tests (requires running emulator)
 npx playwright test
@@ -56,7 +60,7 @@ src/
     emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, CMD_DISPATCH)
     command_bridge.cpp              — Command bridge: reads, mailbox, jGNEFilter, SHM drain
     command_bridge.h                — Command/Result structs, CommandBridge class
-    shared_state.h                  — SharedState (SHM queues, passive fields, fork IPC)
+    ppc_subprocess.h                — PPC subprocess management (IPC via SHM+socket)
     adb.cpp                         — ADB mouse/keyboard emulation
     cpu_context.cpp                 — Memory allocation, backend init
   cpu/
@@ -109,6 +113,7 @@ legacy/                             — Original BasiliskII/SheepShaver source (
 | `/api/emulator/stop` | POST | Stop CPU execution |
 | `/api/storage` | GET | Available ROMs and disk images |
 | `/api/codec` | POST | Change video codec (h264/vp9/png/webp) |
+| `/api/codecs` | GET | Available codecs: `{codecs: [{id, name, available}]}` |
 | `/api/keypress` | POST | Send key event: `{"key": "return"}` or `{"key": 36}` |
 | `/api/app` | GET | Current app name (passive SHM field) |
 | `/api/windows` | GET | Window list (SHM command queue) |
@@ -163,8 +168,30 @@ The emulator binary does not read environment variables. Use CLI flags instead.
 - **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
 - **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
-- **Command bridge**: Two-layer dispatch — read commands peek Mac memory from IRQ, action commands use jGNEFilter to execute in app context. Fork mode uses SPSC ring buffers in SharedState. See `docs/CommandBridge.md`.
+- **Command bridge**: Two-layer dispatch — read commands peek Mac memory from IRQ, action commands use jGNEFilter to execute in app context. See `docs/CommandBridge.md`.
 
 ## ROM
 
-Tests expect a Quadra 650 ROM at `/home/mick/quadra.rom`. Override with `MACEMU_ROM` env var or `meson configure -Dtest_rom=/path/to/rom build`.
+Tests expect a Quadra 650 ROM at `~/roms/quadra.rom` and disk image at `~/storage/images/7.6.img`. Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `cmake -B build -DTEST_ROM=/path/to/rom`. ROMs and disk images are not distributed.
+
+## Optional Codec Dependencies
+
+Video/audio codecs are auto-detected at configure time. If a library is missing, the codec is disabled and won't appear in the UI.
+
+| Library | Package (Ubuntu) | Package (macOS) | Codec |
+|---------|-----------------|-----------------|-------|
+| OpenH264 | `libopenh264-dev` | `brew install openh264` | H.264 |
+| libvpx | `libvpx-dev` | `brew install libvpx` | VP9 |
+| libwebp | `libwebp-dev` | `brew install webp` | WebP |
+| Opus | `libopus-dev` | `brew install opus` | Audio |
+| libyuv | `libyuv-dev` | `brew install libyuv` | Color conversion |
+
+PNG encoding (fpng) has no external dependencies and is always available.
+
+## Required Dependencies
+
+| Library | Package (Ubuntu) | Package (macOS) | Purpose |
+|---------|-----------------|-----------------|---------|
+| CMake | `cmake` | Xcode CLI Tools or `brew install cmake` | Build system |
+| OpenSSL | `libssl-dev` | `brew install openssl` | MD5, WebRTC |
+| pkg-config | `pkg-config` | `brew install pkg-config` | Dependency detection |

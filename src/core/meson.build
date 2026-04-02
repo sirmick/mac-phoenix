@@ -4,7 +4,7 @@ core_sources = [
   'audio.cpp',
   'cdrom.cpp',
   'cpu_context.cpp',  # Phase 2: Self-contained CPU context
-  'cpu_process.cpp',  # Fork-based CPU process management
+  'ppc_subprocess.cpp',  # Subprocess management (IPC mode, both m68k and PPC)
   'disk.cpp',
   'boot_progress.cpp',
   'command_bridge.cpp',
@@ -21,6 +21,7 @@ core_sources = [
   'slot_rom.cpp',
   'sony.cpp',
   'timer.cpp',
+  'timer_unix.cpp',
   'user_strings.cpp',
   'video.cpp',
   'xpram.cpp',
@@ -36,6 +37,7 @@ core_inc = include_directories(
   '../cpu',
   '../cpu/uae_cpu',
   '../drivers/platform',  # For timer_interrupt.h
+  '../ipc',  # For ipc_protocol.h, ipc_client.h
 )
 
 core_lib = static_library('core',
@@ -43,7 +45,8 @@ core_lib = static_library('core',
   include_directories: core_inc,
   dependencies: [threads_dep, nlohmann_json_dep],
   cpp_args: ['-DHAVE_SIGINFO_T', '-DHAVE_SIGACTION', '-DHAVE_SIGSEGV_SKIP_INSTRUCTION', '-DHAVE_UNISTD_H',
-             '-Wno-sign-compare'],  # sigsegv.cpp legacy code
+             '-Wno-sign-compare',   # sigsegv.cpp legacy code
+             '-O2'],                # PPC interpreter hot path calls into core functions
 )
 
 core_dep = declare_dependency(

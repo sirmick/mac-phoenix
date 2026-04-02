@@ -6,8 +6,11 @@
 #define H264_ENCODER_H
 
 #include "codec.h"
-#include <wels/codec_api.h>
 #include <vector>
+
+#ifdef HAVE_OPENH264
+
+#include <wels/codec_api.h>
 
 class H264Encoder : public VideoCodec {
 public:
@@ -46,5 +49,22 @@ private:
     // I420 buffer for ARGB/BGRA conversion
     std::vector<uint8_t> i420_buffer_;
 };
+
+#else // !HAVE_OPENH264
+
+// Stub: H264 not available
+class H264Encoder : public VideoCodec {
+public:
+    CodecType type() const override { return CodecType::H264; }
+    const char* name() const override { return "H.264 (unavailable)"; }
+    bool init(int, int, int = 30) override { return false; }
+    void cleanup() override {}
+    EncodedFrame encode_i420(const uint8_t*, const uint8_t*, const uint8_t*,
+                             int w, int h, int, int) override { return EncodedFrame{.codec=CodecType::H264,.width=w,.height=h}; }
+    EncodedFrame encode_bgra(const uint8_t*, int w, int h, int) override { return EncodedFrame{.codec=CodecType::H264,.width=w,.height=h}; }
+    void request_keyframe() override {}
+};
+
+#endif // HAVE_OPENH264
 
 #endif // H264_ENCODER_H

@@ -4,6 +4,9 @@
  */
 
 #include "vp9_encoder.h"
+
+#ifdef HAVE_VPX
+
 #include <cstdio>
 #include <cstring>
 #include <libyuv.h>
@@ -251,3 +254,5 @@ EncodedFrame VP9Encoder::encode_argb(const uint8_t* argb, int width, int height,
 
     return encode_i420(y, u, v, width, height, width, width / 2);
 }
+
+#endif // HAVE_VPX

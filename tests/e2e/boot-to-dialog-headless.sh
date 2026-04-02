@@ -10,7 +10,7 @@ set -euo pipefail
 BACKEND="${1:-uae}"
 BUILD_DIR="$(cd "$(dirname "$0")/../../build" && pwd)"
 BINARY="$BUILD_DIR/mac-phoenix"
-ROM="/home/mick/quadra.rom"
+ROM="$HOME/roms/quadra.rom"
 RESULT_DIR="/tmp/macemu_boot_test_${BACKEND}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-120}"   # seconds to wait for boot
 DIALOG_TIMEOUT="${DIALOG_TIMEOUT:-60}"  # seconds to wait for dialog on 2nd boot

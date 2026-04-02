@@ -191,173 +191,111 @@ extern Platform g_platform;
 }
 #endif
 
+/*
+ * Memory access functions — all dispatch through Platform API.
+ *
+ * NO FALLBACK PATHS. If g_platform.mem_* is not set, these abort immediately.
+ * The platform backend (UAE, Unicorn, KPX) MUST be installed before any
+ * memory access. This catches initialization ordering bugs at the point of
+ * failure instead of silently using the wrong backend's memory model.
+ */
+
+#ifdef __cplusplus
+#define PLATFORM_FATAL(func, addr) do { \
+    fprintf(stderr, "FATAL: g_platform.%s not initialized (addr=0x%08x)\n" \
+                    "Platform backend must be installed before memory access.\n", \
+                    func, (unsigned)(addr)); \
+    abort(); \
+} while(0)
+#define PLATFORM_FATAL_PTR(func) do { \
+    fprintf(stderr, "FATAL: g_platform.%s not initialized\n" \
+                    "Platform backend must be installed before memory access.\n", func); \
+    abort(); \
+} while(0)
+#else
+/* C-compatible versions (no default args) */
+#include <stdio.h>
+#include <stdlib.h>
+#define PLATFORM_FATAL(func, addr) do { \
+    fprintf(stderr, "FATAL: g_platform.%s not initialized (addr=0x%08x)\n" \
+                    "Platform backend must be installed before memory access.\n", \
+                    func, (unsigned)(addr)); \
+    abort(); \
+} while(0)
+#define PLATFORM_FATAL_PTR(func) do { \
+    fprintf(stderr, "FATAL: g_platform.%s not initialized\n" \
+                    "Platform backend must be installed before memory access.\n", func); \
+    abort(); \
+} while(0)
+#endif
+
 static __inline__ uae_u32 get_long(uaecptr addr)
 {
-    uae_u32 value;
-
-    // Use platform API if available (backend-independent memory access)
-    if (g_platform.mem_read_long) {
-        value = g_platform.mem_read_long(addr);
-    } else {
-        // Fallback to direct UAE memory banking (during early init)
-        uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
-        value = do_get_mem_long(m);
-    }
-
-    if (cpu_trace_memory_enabled()) {
+    if (__builtin_expect(!g_platform.mem_read_long, 0))
+        PLATFORM_FATAL("mem_read_long", addr);
+    uae_u32 value = g_platform.mem_read_long(addr);
+#if REAL_ADDRESSING || DIRECT_ADDRESSING
+    if (cpu_trace_memory_enabled())
         cpu_trace_log_mem_read(addr, value, 4);
-    }
+#endif
     return value;
 }
 static __inline__ uae_u32 get_word(uaecptr addr)
 {
-    uae_u32 value;
-
-    // Use platform API if available (backend-independent memory access)
-    if (g_platform.mem_read_word) {
-        value = g_platform.mem_read_word(addr);
-    } else {
-        // Fallback to direct UAE memory banking (during early init)
-        uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
-        value = do_get_mem_word(m);
-    }
-
-    if (cpu_trace_memory_enabled()) {
+    if (__builtin_expect(!g_platform.mem_read_word, 0))
+        PLATFORM_FATAL("mem_read_word", addr);
+    uae_u32 value = g_platform.mem_read_word(addr);
+#if REAL_ADDRESSING || DIRECT_ADDRESSING
+    if (cpu_trace_memory_enabled())
         cpu_trace_log_mem_read(addr, value, 2);
-    }
+#endif
     return value;
 }
 static __inline__ uae_u32 get_byte(uaecptr addr)
 {
-    uae_u32 value;
-
-    // Use platform API if available (backend-independent memory access)
-    if (g_platform.mem_read_byte) {
-        value = g_platform.mem_read_byte(addr);
-    } else {
-        // Fallback to direct UAE memory banking (during early init)
-        uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
-        value = do_get_mem_byte(m);
-    }
-
-    if (cpu_trace_memory_enabled()) {
+    if (__builtin_expect(!g_platform.mem_read_byte, 0))
+        PLATFORM_FATAL("mem_read_byte", addr);
+    uae_u32 value = g_platform.mem_read_byte(addr);
+#if REAL_ADDRESSING || DIRECT_ADDRESSING
+    if (cpu_trace_memory_enabled())
         cpu_trace_log_mem_read(addr, value, 1);
-    }
+#endif
     return value;
 }
 static __inline__ void put_long(uaecptr addr, uae_u32 l)
 {
-    // Use platform API if available (backend-independent memory access)
-    if (g_platform.mem_write_long) {
-        g_platform.mem_write_long(addr, l);
-    } else {
-        // Fallback to direct UAE memory banking (during early init)
-        uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
-        do_put_mem_long(m, l);
-    }
+    if (__builtin_expect(!g_platform.mem_write_long, 0))
+        PLATFORM_FATAL("mem_write_long", addr);
+    g_platform.mem_write_long(addr, l);
 }
 static __inline__ void put_word(uaecptr addr, uae_u32 w)
 {
-    // Use platform API if available (backend-independent memory access)
-    if (g_platform.mem_write_word) {
-        g_platform.mem_write_word(addr, w);
-    } else {
-        // Fallback to direct UAE memory banking (during early init)
-        uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
-        do_put_mem_word(m, w);
-    }
+    if (__builtin_expect(!g_platform.mem_write_word, 0))
+        PLATFORM_FATAL("mem_write_word", addr);
+    g_platform.mem_write_word(addr, w);
 }
 static __inline__ void put_byte(uaecptr addr, uae_u32 b)
 {
-    // Use platform API if available (backend-independent memory access)
-    if (g_platform.mem_write_byte) {
-        g_platform.mem_write_byte(addr, b);
-    } else {
-        // Fallback to direct UAE memory banking (during early init)
-        uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
-        do_put_mem_byte(m, b);
-    }
+    if (__builtin_expect(!g_platform.mem_write_byte, 0))
+        PLATFORM_FATAL("mem_write_byte", addr);
+    g_platform.mem_write_byte(addr, b);
 }
 static __inline__ uae_u8 *get_real_address(uaecptr addr)
 {
-	// Use platform API if available (backend-independent memory access)
-	if (g_platform.mem_mac_to_host) {
-		return g_platform.mem_mac_to_host(addr);
-	} else {
-		// Fallback to direct UAE address translation (during early init)
-		return do_get_real_address(addr);
-	}
+    if (__builtin_expect(!g_platform.mem_mac_to_host, 0))
+        PLATFORM_FATAL("mem_mac_to_host", addr);
+    return g_platform.mem_mac_to_host(addr);
 }
 static __inline__ uae_u32 get_virtual_address(uae_u8 *addr)
 {
-	// Use platform API if available (backend-independent memory access)
-	if (g_platform.mem_host_to_mac) {
-		return g_platform.mem_host_to_mac(addr);
-	} else {
-		// Fallback to direct UAE address translation (during early init)
-		return do_get_virtual_address(addr);
-	}
+    if (__builtin_expect(!g_platform.mem_host_to_mac, 0))
+        PLATFORM_FATAL_PTR("mem_host_to_mac");
+    return g_platform.mem_host_to_mac(addr);
 }
-#else
-static __inline__ uae_u32 get_long(uaecptr addr)
-{
-    // Use platform API if available (backend-independent memory access)
-    if (g_platform.mem_read_long) {
-        return g_platform.mem_read_long(addr);
-    } else {
-        return longget_1(addr);
-    }
-}
-static __inline__ uae_u32 get_word(uaecptr addr)
-{
-    if (g_platform.mem_read_word) {
-        return g_platform.mem_read_word(addr);
-    } else {
-        return wordget_1(addr);
-    }
-}
-static __inline__ uae_u32 get_byte(uaecptr addr)
-{
-    if (g_platform.mem_read_byte) {
-        return g_platform.mem_read_byte(addr);
-    } else {
-        return byteget_1(addr);
-    }
-}
-static __inline__ void put_long(uaecptr addr, uae_u32 l)
-{
-    if (g_platform.mem_write_long) {
-        g_platform.mem_write_long(addr, l);
-    } else {
-        longput_1(addr, l);
-    }
-}
-static __inline__ void put_word(uaecptr addr, uae_u32 w)
-{
-    if (g_platform.mem_write_word) {
-        g_platform.mem_write_word(addr, w);
-    } else {
-        wordput_1(addr, w);
-    }
-}
-static __inline__ void put_byte(uaecptr addr, uae_u32 b)
-{
-    if (g_platform.mem_write_byte) {
-        g_platform.mem_write_byte(addr, b);
-    } else {
-        byteput_1(addr, b);
-    }
-}
-static __inline__ uae_u8 *get_real_address(uaecptr addr)
-{
-    if (g_platform.mem_mac_to_host) {
-        return g_platform.mem_mac_to_host(addr);
-    } else {
-        return get_mem_bank(addr).xlateaddr(addr);
-    }
-}
-/* gb-- deliberately not implemented since it shall not be used... */
-extern uae_u32 get_virtual_address(uae_u8 *addr);
+
+#if !REAL_ADDRESSING && !DIRECT_ADDRESSING
+/* Banking mode still needs do_get_real_address for UAE's own mem implementation */
+#endif
 #endif /* DIRECT_ADDRESSING || REAL_ADDRESSING */
 
 #endif /* MEMORY_H */

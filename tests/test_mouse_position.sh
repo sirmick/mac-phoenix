@@ -12,8 +12,8 @@ set -euo pipefail
 
 BACKEND="uae"
 TIMEOUT=30
-ROM="${MACEMU_ROM:-/home/mick/quadra.rom}"
-DISK="${MACEMU_DISK:-/home/mick/storage/images/7.6.img}"
+ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
 PORT=18090
 SIG_PORT=18091
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
@@ -42,7 +42,8 @@ echo "=== Mouse Position Test: $BACKEND backend ==="
 
 # Start emulator
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
-    --config /dev/null --port "$PORT" --signaling-port "$SIG_PORT" \
+    --config /dev/null --dismiss-shutdown-dialog \
+    --port "$PORT" --signaling-port "$SIG_PORT" \
     --disk "$DISK" "$ROM" &>/tmp/macemu_mouse_test_$$.log &
 EMU_PID=$!
 

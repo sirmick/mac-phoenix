@@ -20,6 +20,10 @@
 
 #ifndef MAIN_H
 #define MAIN_H
+#ifdef _UAE_MAIN_H
+#error "common/include/main.h conflicts with uae_cpu/main.h"
+#endif
+#define _COMMON_MAIN_H
 
 // CPU type (0 = 68000, 1 = 68010, 2 = 68020, 3 = 68030, 4 = 68040/060)
 extern int CPUType;
@@ -66,9 +70,8 @@ enum {
 	INTFLAG_NMI = 128	// NMI
 };
 
-extern volatile uint32 InterruptFlags;									// Currently pending interrupts
-extern void SetInterruptFlag(uint32 flag);						// Set/clear interrupt flags
-extern void ClearInterruptFlag(uint32 flag);
+// InterruptFlags, SetInterruptFlag, ClearInterruptFlag, TriggerInterrupt
+// are declared in platform.h (backend-agnostic, C linkage)
 
 // vde switch variable
 extern char* vde_sock;

@@ -176,14 +176,14 @@ static sem_t suspend_ack_sem;
 static sigset_t suspend_handler_mask;
 
 // Signal handler for suspended thread
-static void sigsuspend_handler(int sig)
+static void sigsuspend_handler(int /*sig*/)
 {
 	sem_post(&suspend_ack_sem);
 	sigsuspend(&suspend_handler_mask);
 }
 
 // Signal handler for resumed thread
-static void sigresume_handler(int sig)
+static void sigresume_handler(int /*sig*/)
 {
 	/* simply trigger a signal to stop clock_nanosleep() */
 }
@@ -287,6 +287,7 @@ void TimerInit(void)
 #endif
 #ifdef PRECISE_TIMING_POSIX
 	timer_thread_active = timer_thread_init();
+	D(bug("PRECISE_TIMING_POSIX: timer_thread_active=%d\n", timer_thread_active));
 #endif
 #endif
 }
@@ -585,7 +586,7 @@ static void *timer_func(void *arg)
 #endif
 
 #ifdef PRECISE_TIMING_POSIX
-static void *timer_func(void *arg)
+static void *timer_func(void * /*arg*/)
 {
 	while (!timer_thread_cancel) {
 		// Wait until time specified by wakeup_time

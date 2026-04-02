@@ -640,10 +640,6 @@ body.fullscreen #display {
     gap: 0 24px;
 }
 
-.modal-body .advanced-content .form-row {
-    display: contents;
-}
-
 .modal-footer {
     padding: 20px;
     border-top: 1px solid #333;

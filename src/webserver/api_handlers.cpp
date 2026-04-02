@@ -9,12 +9,13 @@
 #include "../config/json_utils.h"
 #include "../common/include/sysdeps.h"  // For uint32 type
 #include "../core/emulator_init.h"  // For deferred initialization
-#include "../core/cpu_process.h"  // For fork-based CPU process
-#include "../core/shared_state.h"  // For shared memory struct
+#include "../core/ppc_subprocess.h"  // For subprocess
+#include "../ipc/ipc_protocol.h"  // For IPC buffer
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
 #include "../core/boot_progress.h"  // For boot phase query
 #include "../core/command_bridge.h"  // For command bridge
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
+#include "../drivers/video/encoders/codec.h"  // For codec_available()
 #include <sstream>
 #include <iomanip>
 #include <cstdio>
@@ -32,6 +33,8 @@ extern uint32 ROMSize;  // 0 if no ROM loaded
 extern void ADBKeyDown(int code);
 extern void ADBKeyUp(int code);
 extern void ADBMouseMoved(int x, int y);
+extern void ADBMouseDown(int button);
+extern void ADBMouseUp(int button);
 extern void ADBSetRelMouseMode(bool relative);
 
 namespace http {
@@ -68,6 +71,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/codec" && req.method == "POST") {
         return handle_codec_post(req);
+    }
+    if (req.path == "/api/codecs" && req.method == "GET") {
+        return handle_codecs_get(req);
     }
     if (req.path == "/api/emulator/start" && req.method == "POST") {
         return handle_emulator_start(req);
@@ -114,6 +120,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     if (req.path == "/api/wait" && req.method == "POST") {
         return handle_wait(req);
     }
+    if (req.path == "/api/frame" && req.method == "GET") {
+        return handle_frame(req);
+    }
 
     // Unknown API endpoint
     Response resp;
@@ -145,32 +154,31 @@ Response APIRouter::handle_status(const Request& req) {
     json << "{";
     json << "\"emulator_connected\": true";
 
-    if (ctx_->shared_state) {
-        // Fork mode: read from shared memory
-        SharedState* shm = ctx_->shared_state;
-        int32_t state = shm->child_state.load(std::memory_order_acquire);
-        bool running = (state == SHM_STATE_STARTING || state == SHM_STATE_RUNNING);
-        const char* state_str = "stopped";
-        if (state == SHM_STATE_STARTING) state_str = "starting";
-        else if (state == SHM_STATE_RUNNING) state_str = "running";
-        else if (state == SHM_STATE_ERROR) state_str = "error";
-
-        double elapsed = 0.0;
-        int64_t start_us = shm->boot_start_us.load(std::memory_order_acquire);
-        if (start_us > 0) {
-            struct timespec now;
-            clock_gettime(CLOCK_MONOTONIC, &now);
-            int64_t now_us = now.tv_sec * 1000000LL + now.tv_nsec / 1000;
-            elapsed = (now_us - start_us) / 1e6;
-        }
+    if (ctx_->subprocess) {
+        // Subprocess mode: read from IPC SHM
+        bool running = ctx_->subprocess->is_running();
+        const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
 
         json << ", \"emulator_running\": " << (running ? "true" : "false");
-        json << ", \"cpu_state\": \"" << state_str << "\"";
-        json << ", \"boot_phase\": \"" << shm->boot_phase_name << "\"";
-        json << ", \"checkload_count\": " << shm->checkload_count.load(std::memory_order_acquire);
-        json << ", \"boot_elapsed\": " << elapsed;
-        if (state == SHM_STATE_ERROR && shm->error_msg[0]) {
-            json << ", \"error\": \"" << shm->error_msg << "\"";
+        json << ", \"cpu_state\": \"" << (running ? "running" : "stopped") << "\"";
+
+        if (buf) {
+            json << ", \"boot_phase\": \"" << buf->boot_phase << "\"";
+            json << ", \"checkload_count\": " << IPC_ATOMIC_LOAD(buf->checkload_count);
+
+            double elapsed = 0.0;
+            uint64_t start_us = IPC_ATOMIC_LOAD(buf->boot_start_us);
+            if (start_us > 0) {
+                struct timespec now;
+                clock_gettime(CLOCK_MONOTONIC, &now);
+                uint64_t now_us = now.tv_sec * 1000000ULL + now.tv_nsec / 1000;
+                elapsed = (now_us - start_us) / 1e6;
+            }
+            json << ", \"boot_elapsed\": " << elapsed;
+        } else {
+            json << ", \"boot_phase\": \"pre-reset\"";
+            json << ", \"checkload_count\": 0";
+            json << ", \"boot_elapsed\": 0.0";
         }
     } else {
         // Legacy in-process mode
@@ -189,29 +197,21 @@ Response APIRouter::handle_status(const Request& req) {
 Response APIRouter::handle_emulator_start(const Request& req) {
     (void)req;
 
-    // Fork mode: use CPUProcess
-    if (ctx_->cpu_process) {
-        if (ctx_->cpu_process->is_running()) {
+    if (ctx_->subprocess) {
+        if (ctx_->subprocess->is_running()) {
             return Response::json("{\"success\": false, \"error\": \"Already running\"}");
         }
-
         if (!ctx_->config || ctx_->config->rom_path.empty()) {
             return Response::json(
                 "{\"success\": false, "
                 "\"error\": \"No ROM configured\", "
                 "\"message\": \"Please configure a ROM path in the settings\"}");
         }
-
-        fprintf(stderr, "[API] Starting CPU process (fork mode)\n");
-        if (!ctx_->cpu_process->start()) {
-            std::string err = "Failed to start CPU process";
-            if (ctx_->shared_state && ctx_->shared_state->error_msg[0]) {
-                err = ctx_->shared_state->error_msg;
-            }
-            return Response::json("{\"success\": false, \"error\": \"" + err + "\"}");
+        fprintf(stderr, "[API] Starting subprocess\n");
+        if (!ctx_->subprocess->start()) {
+            return Response::json("{\"success\": false, \"error\": \"Failed to start subprocess\"}");
         }
-
-        return Response::json("{\"success\": true, \"message\": \"CPU process started\"}");
+        return Response::json("{\"success\": true, \"message\": \"Subprocess started\"}");
     }
 
     // Legacy in-process mode
@@ -233,11 +233,10 @@ Response APIRouter::handle_emulator_start(const Request& req) {
 Response APIRouter::handle_emulator_stop(const Request& req) {
     (void)req;
 
-    // Fork mode
-    if (ctx_->cpu_process) {
-        fprintf(stderr, "[API] Stopping CPU process (fork mode)\n");
-        ctx_->cpu_process->stop();
-        return Response::json("{\"success\": true, \"message\": \"CPU process stopped\"}");
+    if (ctx_->subprocess) {
+        fprintf(stderr, "[API] Stopping subprocess\n");
+        ctx_->subprocess->stop();
+        return Response::json("{\"success\": true, \"message\": \"Subprocess stopped\"}");
     }
 
     // Legacy in-process mode
@@ -255,11 +254,10 @@ Response APIRouter::handle_emulator_stop(const Request& req) {
 Response APIRouter::handle_emulator_restart(const Request& req) {
     (void)req;
 
-    // Fork mode: stop + start (clean state)
-    if (ctx_->cpu_process) {
-        fprintf(stderr, "[API] Restarting CPU process (fork mode)\n");
-        ctx_->cpu_process->reset();
-        return Response::json("{\"success\": true, \"message\": \"CPU process restarted\"}");
+    if (ctx_->subprocess) {
+        fprintf(stderr, "[API] Restarting subprocess\n");
+        ctx_->subprocess->reset();
+        return Response::json("{\"success\": true, \"message\": \"Subprocess restarted\"}");
     }
 
     // Legacy in-process mode
@@ -393,6 +391,22 @@ Response APIRouter::handle_codec_post(const Request& req) {
     return Response::json("{\"ok\": true}");
 }
 
+Response APIRouter::handle_codecs_get(const Request& /*req*/) {
+    std::string json = "{\"codecs\":[";
+    json += "{\"id\":\"png\",\"name\":\"PNG\",\"available\":true}";
+    json += ",{\"id\":\"h264\",\"name\":\"H.264\",\"available\":";
+    json += codec_available(CodecType::H264) ? "true" : "false";
+    json += "}";
+    json += ",{\"id\":\"vp9\",\"name\":\"VP9\",\"available\":";
+    json += codec_available(CodecType::VP9) ? "true" : "false";
+    json += "}";
+    json += ",{\"id\":\"webp\",\"name\":\"WebP\",\"available\":";
+    json += codec_available(CodecType::WEBP) ? "true" : "false";
+    json += "}";
+    json += "]}";
+    return Response::json(json);
+}
+
 // ============================================================================
 // Config API (new flat JSON format)
 // ============================================================================
@@ -454,10 +468,9 @@ Response APIRouter::handle_screenshot(const Request& req) {
         return resp;
     }
 
-    // In fork mode, return 503 if CPU is not running (no live frames)
-    if (ctx_->shared_state) {
-        int32_t state = ctx_->shared_state->child_state.load(std::memory_order_acquire);
-        if (state != SHM_STATE_STARTING && state != SHM_STATE_RUNNING) {
+    // Return 503 if CPU is not running (no live frames)
+    if (ctx_->subprocess) {
+        if (!ctx_->subprocess->is_running()) {
             Response resp;
             resp.set_status(503, "Service Unavailable");
             resp.set_body("{\"error\": \"Emulator not running\"}");
@@ -513,13 +526,258 @@ Response APIRouter::handle_screenshot(const Request& req) {
     return resp;
 }
 
+/**
+ * GET /api/frame — Single-frame endpoint for long-poll HTTP streaming.
+ *
+ * Returns one PNG frame with the same 45-byte metadata header used by
+ * the DataChannel path. Client polls in a loop. Works through any proxy.
+ *
+ * Query params (in req.query):
+ *   sid=X  — Session ID for dirty rect tracking. Omit on first request;
+ *            server returns a new sid in X-Frame-Sid header.
+ *
+ * Response: application/octet-stream
+ *   [45-byte header][PNG image data]
+ *
+ * Headers: X-Frame-Seq (sequence number), X-Frame-Sid (session ID)
+ * Returns 204 if no new frame since last request for this session.
+ */
+
+// Per-client session state for dirty rect tracking
+struct FrameSession {
+    std::vector<uint32_t> prev_frame;
+    uint64_t last_sequence = 0;
+    std::chrono::steady_clock::time_point last_access;
+};
+
+// Helper to parse a query param from the query string
+static std::string get_query_param(const std::string& query, const std::string& key) {
+    std::string search = key + "=";
+    size_t pos = query.find(search);
+    if (pos == std::string::npos) return "";
+    size_t start = pos + search.size();
+    size_t end = query.find('&', start);
+    if (end == std::string::npos) end = query.size();
+    return query.substr(start, end - start);
+}
+
+// Dirty rect computation (same algorithm as video_encoder_thread / http_stream)
+static bool frame_compute_dirty_rect(const uint32_t* curr, const uint32_t* prev,
+                                      int width, int height,
+                                      int& out_x, int& out_y, int& out_w, int& out_h) {
+    int min_x = width, max_x = 0;
+    int min_y = height, max_y = 0;
+    bool found = false;
+
+    for (int y = 0; y < height; y++) {
+        const uint32_t* curr_row = curr + y * width;
+        const uint32_t* prev_row = prev + y * width;
+        for (int x = 0; x < width; x++) {
+            if (curr_row[x] != prev_row[x]) {
+                if (!found) { found = true; min_y = y; }
+                max_y = y;
+                if (x < min_x) min_x = x;
+                if (x > max_x) max_x = x;
+            }
+        }
+    }
+    if (!found) return false;
+
+    out_x = (min_x > 1) ? min_x - 1 : 0;
+    out_y = (min_y > 1) ? min_y - 1 : 0;
+    out_w = (max_x < width - 2) ? (max_x - out_x + 2) : (width - out_x);
+    out_h = (max_y < height - 2) ? (max_y - out_y + 2) : (height - out_y);
+
+    // If dirty rect > 75% of screen, use full frame
+    if (out_w * out_h > (width * height * 3 / 4)) {
+        out_x = 0; out_y = 0; out_w = width; out_h = height;
+    }
+    return true;
+}
+
+Response APIRouter::handle_frame(const Request& req) {
+    if (!ctx_->video_output) {
+        Response resp;
+        resp.set_status(503, "Service Unavailable");
+        resp.set_body("{\"error\": \"Video output not available\"}");
+        resp.set_content_type("application/json");
+        return resp;
+    }
+
+    // Session management (static — HTTP server is single-threaded)
+    static std::unordered_map<std::string, FrameSession> sessions;
+    static uint64_t next_sid = 1;
+    static auto last_cleanup = std::chrono::steady_clock::now();
+
+    // Expire stale sessions every 30 seconds (idle > 10s)
+    auto now_steady = std::chrono::steady_clock::now();
+    if (std::chrono::duration_cast<std::chrono::seconds>(now_steady - last_cleanup).count() >= 30) {
+        for (auto it = sessions.begin(); it != sessions.end(); ) {
+            if (std::chrono::duration_cast<std::chrono::seconds>(now_steady - it->second.last_access).count() > 10) {
+                it = sessions.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        last_cleanup = now_steady;
+    }
+
+    // Look up or create session
+    std::string sid_str = get_query_param(req.query, "sid");
+    FrameSession* session = nullptr;
+    if (!sid_str.empty()) {
+        auto it = sessions.find(sid_str);
+        if (it != sessions.end()) {
+            session = &it->second;
+        }
+    }
+    if (!session) {
+        sid_str = std::to_string(next_sid++);
+        session = &sessions[sid_str];
+    }
+    session->last_access = now_steady;
+
+    // Snapshot current frame
+    static thread_local std::vector<uint32_t> pixels(1920 * 1080);
+    int width = 0, height = 0;
+    PixelFormat format;
+    uint64_t sequence = 0;
+    uint16_t cursor_x = 0, cursor_y = 0;
+    uint8_t cursor_visible = 0;
+
+    bool got = ctx_->video_output->snapshot_frame_ex(
+        pixels.data(), &width, &height, &format,
+        &sequence, &cursor_x, &cursor_y, &cursor_visible);
+
+    if (!got) {
+        Response resp;
+        resp.set_status(204, "No Content");
+        resp.add_header("X-Frame-Sid", sid_str);
+        return resp;
+    }
+
+    // Skip if same sequence as last request from this session
+    if (sequence == session->last_sequence) {
+        Response resp;
+        resp.set_status(204, "No Content");
+        resp.add_header("X-Frame-Sid", sid_str);
+        return resp;
+    }
+    session->last_sequence = sequence;
+
+    // Compute dirty rect against this session's previous frame
+    int dx = 0, dy = 0, dw = width, dh = height;
+    bool have_prev = !session->prev_frame.empty() && (int)session->prev_frame.size() == width * height;
+
+    if (have_prev) {
+        bool changed = frame_compute_dirty_rect(
+            pixels.data(), session->prev_frame.data(), width, height,
+            dx, dy, dw, dh);
+        if (!changed) {
+            // Identical frame
+            Response resp;
+            resp.set_status(204, "No Content");
+            resp.add_header("X-Frame-Sid", sid_str);
+            return resp;
+        }
+    }
+
+    // Save current frame as prev for next request
+    if ((int)session->prev_frame.size() != width * height) {
+        session->prev_frame.resize(width * height);
+    }
+    memcpy(session->prev_frame.data(), pixels.data(), width * height * 4);
+
+    // Encode dirty rect as PNG
+    static bool fpng_inited2 = []() { fpng::fpng_init(); return true; }();
+    (void)fpng_inited2;
+
+    // Extract dirty rect and convert to RGB
+    std::vector<uint8_t> rgb(dw * dh * 3);
+    const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels.data());
+    for (int ry = 0; ry < dh; ry++) {
+        for (int rx = 0; rx < dw; rx++) {
+            int si = (dy + ry) * width + (dx + rx);
+            int di = ry * dw + rx;
+            if (format == PIXFMT_ARGB) {
+                rgb[di * 3 + 0] = src[si * 4 + 1];
+                rgb[di * 3 + 1] = src[si * 4 + 2];
+                rgb[di * 3 + 2] = src[si * 4 + 3];
+            } else {
+                rgb[di * 3 + 0] = src[si * 4 + 2];
+                rgb[di * 3 + 1] = src[si * 4 + 1];
+                rgb[di * 3 + 2] = src[si * 4 + 0];
+            }
+        }
+    }
+
+    std::vector<uint8_t> png_data;
+    if (!fpng::fpng_encode_image_to_memory(rgb.data(), dw, dh, 3, png_data)) {
+        Response resp;
+        resp.set_status(500, "Internal Server Error");
+        resp.set_body("{\"error\": \"PNG encoding failed\"}");
+        resp.set_content_type("application/json");
+        return resp;
+    }
+
+    // Build response: [45-byte header][PNG data]
+    const int HEADER_SIZE = 45;
+    std::string body;
+    body.resize(HEADER_SIZE + png_data.size());
+    uint8_t* p = reinterpret_cast<uint8_t*>(&body[0]);
+
+    auto now_ms = []() -> uint64_t {
+        auto now = std::chrono::system_clock::now();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            now.time_since_epoch()).count();
+    };
+    uint64_t t = now_ms();
+
+    auto write_le32 = [](uint8_t* buf, uint32_t val) {
+        buf[0] = val & 0xFF; buf[1] = (val >> 8) & 0xFF;
+        buf[2] = (val >> 16) & 0xFF; buf[3] = (val >> 24) & 0xFF;
+    };
+    auto write_le64 = [&write_le32](uint8_t* buf, uint64_t val) {
+        write_le32(buf, (uint32_t)val);
+        write_le32(buf + 4, (uint32_t)(val >> 32));
+    };
+    auto write_le16 = [](uint8_t* buf, uint16_t val) {
+        buf[0] = val & 0xFF; buf[1] = (val >> 8) & 0xFF;
+    };
+
+    write_le64(p + 0, t);                     // t1_frame_ready
+    write_le32(p + 8, (uint32_t)dx);          // dirty_x
+    write_le32(p + 12, (uint32_t)dy);         // dirty_y
+    write_le32(p + 16, (uint32_t)dw);         // dirty_width
+    write_le32(p + 20, (uint32_t)dh);         // dirty_height
+    write_le32(p + 24, (uint32_t)width);      // frame_width
+    write_le32(p + 28, (uint32_t)height);     // frame_height
+    write_le64(p + 32, t);                    // t4_send_time
+    write_le16(p + 40, cursor_x);             // cursor_x
+    write_le16(p + 42, cursor_y);             // cursor_y
+    p[44] = cursor_visible;                   // cursor_visible
+
+    memcpy(p + HEADER_SIZE, png_data.data(), png_data.size());
+
+    Response resp;
+    resp.set_status(200, "OK");
+    resp.set_content_type("application/octet-stream");
+    resp.add_header("X-Frame-Seq", std::to_string(sequence));
+    resp.add_header("X-Frame-Sid", sid_str);
+    resp.add_header("Access-Control-Allow-Origin", "*");
+    resp.add_header("Access-Control-Expose-Headers", "X-Frame-Seq, X-Frame-Sid");
+    resp.set_body(body);
+    return resp;
+}
+
+
 Response APIRouter::handle_mouse(const Request& req) {
     (void)req;
 
     // Check if CPU is running
     bool running = false;
-    if (ctx_->shared_state) {
-        running = ctx_->shared_state->child_state.load(std::memory_order_acquire) == SHM_STATE_RUNNING;
+    if (ctx_->subprocess) {
+        running = ctx_->subprocess->is_running();
     } else if (ctx_->cpu_running) {
         running = ctx_->cpu_running->load(std::memory_order_acquire);
     }
@@ -534,20 +792,23 @@ Response APIRouter::handle_mouse(const Request& req) {
 
     std::ostringstream json;
 
-    if (ctx_->shared_state) {
-        // Fork mode: read cursor state from shared memory
-        SharedState* shm = ctx_->shared_state;
-        json << "{"
-             << "\"x\": " << shm->cursor_x.load(std::memory_order_acquire)
-             << ", \"y\": " << shm->cursor_y.load(std::memory_order_acquire)
-             << ", \"raw_x\": " << shm->raw_x.load(std::memory_order_acquire)
-             << ", \"raw_y\": " << shm->raw_y.load(std::memory_order_acquire)
-             << ", \"mtemp_x\": " << shm->mtemp_x.load(std::memory_order_acquire)
-             << ", \"mtemp_y\": " << shm->mtemp_y.load(std::memory_order_acquire)
-             << ", \"crsr_new\": " << shm->crsr_new.load(std::memory_order_acquire)
-             << ", \"crsr_couple\": " << shm->crsr_couple.load(std::memory_order_acquire)
-             << ", \"crsr_busy\": " << shm->crsr_busy.load(std::memory_order_acquire)
-             << "}";
+    if (ctx_->subprocess) {
+        const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
+        if (buf) {
+            json << "{"
+                 << "\"x\": " << IPC_ATOMIC_LOAD(buf->shm_cursor_x)
+                 << ", \"y\": " << IPC_ATOMIC_LOAD(buf->shm_cursor_y)
+                 << ", \"raw_x\": " << IPC_ATOMIC_LOAD(buf->shm_raw_x)
+                 << ", \"raw_y\": " << IPC_ATOMIC_LOAD(buf->shm_raw_y)
+                 << ", \"mtemp_x\": " << IPC_ATOMIC_LOAD(buf->shm_mtemp_x)
+                 << ", \"mtemp_y\": " << IPC_ATOMIC_LOAD(buf->shm_mtemp_y)
+                 << ", \"crsr_new\": " << IPC_ATOMIC_LOAD(buf->shm_crsr_new)
+                 << ", \"crsr_couple\": " << IPC_ATOMIC_LOAD(buf->shm_crsr_couple)
+                 << ", \"crsr_busy\": " << IPC_ATOMIC_LOAD(buf->shm_crsr_busy)
+                 << "}";
+        } else {
+            json << "{\"x\": 0, \"y\": 0}";
+        }
     } else {
         // In-process mode: read from Mac low-memory globals
         MacCursorState cs;
@@ -566,8 +827,6 @@ Response APIRouter::handle_mouse(const Request& req) {
 }
 
 // POST /api/mouse - move the mouse
-// Absolute: {"x": 100, "y": 200}
-// Relative: {"dx": 10, "dy": -5}
 Response APIRouter::handle_mouse_move(const Request& req) {
     nlohmann::json j;
     try {
@@ -579,6 +838,28 @@ Response APIRouter::handle_mouse_move(const Request& req) {
         return r;
     }
 
+    // Track button state so move events carry correct button mask over IPC
+    static uint8_t api_buttons = 0;
+
+    // Mouse button event: {"button": 0, "down": true}
+    if (j.contains("button") && j.contains("down")) {
+        int button = json_utils::get_int(j, "button");
+        bool down = j["down"].get<bool>();
+
+        if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
+            uint8_t mask = (1 << button);
+            if (down) api_buttons |= mask;
+            else      api_buttons &= ~mask;
+            ctx_->subprocess->ipc_client()->send_mouse(0, 0, api_buttons, false);
+        } else {
+            if (down) ADBMouseDown(button);
+            else ADBMouseUp(button);
+        }
+
+        return Response::json("{\"success\": true, \"button\": " + std::to_string(button) +
+                             ", \"down\": " + (down ? "true" : "false") + "}");
+    }
+
     // Check if this is a relative move (has "dx" field)
     if (j.contains("dx")) {
         int dx = json_utils::get_int(j, "dx");
@@ -587,9 +868,8 @@ Response APIRouter::handle_mouse_move(const Request& req) {
         }
         int dy = json_utils::get_int(j, "dy");
 
-        if (ctx_->shared_state) {
-            shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_MODE, 1, 0, 0, 0);
-            shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_REL, 0, static_cast<int16_t>(dx), static_cast<int16_t>(dy), 0);
+        if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
+            ctx_->subprocess->ipc_client()->send_mouse(dx, dy, api_buttons, false);
         } else {
             ADBSetRelMouseMode(true);
             ADBMouseMoved(dx, dy);
@@ -608,9 +888,8 @@ Response APIRouter::handle_mouse_move(const Request& req) {
     }
     int y = json_utils::get_int(j, "y");
 
-    if (ctx_->shared_state) {
-        shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_MODE, 0, 0, 0, 0);
-        shared_input_push(ctx_->shared_state, SHM_INPUT_MOUSE_ABS, 0, static_cast<int16_t>(x), static_cast<int16_t>(y), 0);
+    if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
+        ctx_->subprocess->ipc_client()->send_mouse(x, y, api_buttons, true);
     } else {
         ADBSetRelMouseMode(false);
         ADBMouseMoved(x, y);
@@ -667,10 +946,25 @@ Response APIRouter::handle_keypress(const Request& req) {
         Response r3; r3.set_status(400); r3.set_body("{\"error\": \"invalid keycode\"}"); r3.add_header("Content-Type", "application/json"); return r3;
     }
 
-    if (ctx_->shared_state) {
-        shared_input_push(ctx_->shared_state, SHM_INPUT_KEY, 1, 0, 0, static_cast<uint8_t>(keycode));
+    // If "down" field is present, send a discrete key down or key up event.
+    // Otherwise, send a complete keypress (down + 50ms + up) for backward compatibility.
+    if (j.contains("down")) {
+        bool down = j["down"].get<bool>();
+        if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
+            ctx_->subprocess->ipc_client()->send_key(keycode, down);
+        } else {
+            if (down) ::ADBKeyDown(keycode);
+            else ::ADBKeyUp(keycode);
+        }
+        return Response::json("{\"success\": true, \"keycode\": " + std::to_string(keycode) +
+                             ", \"down\": " + (down ? "true" : "false") + "}");
+    }
+
+    // Legacy: full keypress (down + delay + up)
+    if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
+        ctx_->subprocess->ipc_client()->send_key(keycode, true);
         usleep(50000);  // 50ms press
-        shared_input_push(ctx_->shared_state, SHM_INPUT_KEY, 0, 0, 0, static_cast<uint8_t>(keycode));
+        ctx_->subprocess->ipc_client()->send_key(keycode, false);
     } else {
         ::ADBKeyDown(keycode);
         usleep(50000);  // 50ms press
@@ -685,14 +979,12 @@ Response APIRouter::handle_keypress(const Request& req) {
 Response APIRouter::handle_app(const Request& req) {
     (void)req;
 
-    if (ctx_->shared_state) {
-        SharedState* shm = ctx_->shared_state;
-        int32_t state = shm->child_state.load(std::memory_order_acquire);
-        if (state != SHM_STATE_RUNNING) {
+    if (ctx_->subprocess) {
+        if (!ctx_->subprocess->is_running()) {
             return Response::json("{\"app\": \"\", \"error\": \"emulator not running\"}");
         }
-        // Read passive field written by child at 60Hz
-        std::string app(shm->cur_app_name);
+        const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
+        std::string app = buf ? buf->cur_app_name : "";
         return Response::json("{\"app\": \"" + app + "\"}");
     }
 
@@ -702,31 +994,19 @@ Response APIRouter::handle_app(const Request& req) {
 
 Response APIRouter::handle_windows(const Request& req) {
     (void)req;
-
-    if (ctx_->shared_state) {
-        SharedState* shm = ctx_->shared_state;
-        int32_t state = shm->child_state.load(std::memory_order_acquire);
-        if (state != SHM_STATE_RUNNING) {
-            return Response::json("{\"windows\": [], \"error\": \"emulator not running\"}");
-        }
-        uint32_t id = shared_cmd_submit(shm, SharedState::CMD_GET_WINDOW_LIST);
-        char data[SharedState::CMD_DATA_SIZE];
-        int16_t err = 0;
-        // Poll for result (child processes on next 60Hz tick, ~16ms max wait)
-        for (int i = 0; i < 50; i++) {
-            if (shared_cmd_poll(shm, id, &err, data, sizeof(data))) {
-                return Response::json("{\"windows\": " + std::string(data) + "}");
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-        return Response::json("{\"windows\": [], \"error\": \"timeout\"}");
+    if (ctx_->subprocess) {
+        // Window list requires reading Mac RAM — not available over IPC yet
+        return Response::json("{\"windows\": [], \"error\": \"not available in subprocess mode\"}");
     }
-
     auto result = CommandBridge::execute_read(CmdType::GET_WINDOW_LIST);
     return Response::json("{\"windows\": " + result.data + "}");
 }
 
 Response APIRouter::handle_launch(const Request& req) {
+    if (ctx_->subprocess) {
+        return Response::json("{\"success\": false, \"error\": \"not available in subprocess mode\"}");
+    }
+
     nlohmann::json j;
     try {
         j = json_utils::parse(req.body);
@@ -744,28 +1024,6 @@ Response APIRouter::handle_launch(const Request& req) {
         return r;
     }
     std::string path = j["path"].get<std::string>();
-
-    if (ctx_->shared_state) {
-        SharedState* shm = ctx_->shared_state;
-        int32_t state = shm->child_state.load(std::memory_order_acquire);
-        if (state != SHM_STATE_RUNNING) {
-            return Response::json("{\"success\": false, \"error\": \"emulator not running\"}");
-        }
-        uint32_t id = shared_cmd_submit(shm, SharedState::CMD_LAUNCH_APP, path.c_str());
-        char data[SharedState::CMD_DATA_SIZE];
-        int16_t err = 0;
-        for (int i = 0; i < 200; i++) {  // 10s timeout
-            if (shared_cmd_poll(shm, id, &err, data, sizeof(data))) {
-                std::ostringstream json;
-                json << "{\"success\": " << (err == 0 ? "true" : "false")
-                     << ", \"error_code\": " << err
-                     << ", \"message\": \"" << data << "\"}";
-                return Response::json(json.str());
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-        return Response::json("{\"success\": false, \"error\": \"timeout waiting for launch\"}");
-    }
 
     Command cmd;
     cmd.type = CmdType::LAUNCH_APP;
@@ -787,22 +1045,8 @@ Response APIRouter::handle_launch(const Request& req) {
 Response APIRouter::handle_quit(const Request& req) {
     (void)req;
 
-    if (ctx_->shared_state) {
-        SharedState* shm = ctx_->shared_state;
-        int32_t state = shm->child_state.load(std::memory_order_acquire);
-        if (state != SHM_STATE_RUNNING) {
-            return Response::json("{\"success\": false, \"error\": \"emulator not running\"}");
-        }
-        uint32_t id = shared_cmd_submit(shm, SharedState::CMD_QUIT_APP);
-        char data[SharedState::CMD_DATA_SIZE];
-        int16_t err = 0;
-        for (int i = 0; i < 100; i++) {  // 5s timeout
-            if (shared_cmd_poll(shm, id, &err, data, sizeof(data))) {
-                return Response::json("{\"success\": true}");
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-        return Response::json("{\"success\": false, \"error\": \"timeout\"}");
+    if (ctx_->subprocess) {
+        return Response::json("{\"success\": false, \"error\": \"not available in subprocess mode\"}");
     }
 
     Command cmd;
@@ -858,8 +1102,9 @@ Response APIRouter::handle_wait(const Request& req) {
     while (std::chrono::steady_clock::now() < deadline) {
         if (cond_type == "app") {
             std::string app;
-            if (ctx_->shared_state) {
-                app = ctx_->shared_state->cur_app_name;
+            if (ctx_->subprocess) {
+                const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
+                app = buf ? buf->cur_app_name : "";
             } else {
                 auto result = CommandBridge::execute_read(CmdType::GET_APP_NAME);
                 app = result.data;
@@ -870,8 +1115,9 @@ Response APIRouter::handle_wait(const Request& req) {
         } else if (cond_type == "boot") {
             std::string phase;
             bool reached;
-            if (ctx_->shared_state) {
-                phase = ctx_->shared_state->boot_phase_name;
+            if (ctx_->subprocess) {
+                const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
+                phase = buf ? buf->boot_phase : "pre-reset";
                 reached = boot_progress_phase_reached_by_name(phase.c_str(), cond_value.c_str());
             } else {
                 phase = boot_progress_phase();

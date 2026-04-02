@@ -15,17 +15,21 @@ cpu_sources = [
 # Build UAE CPU (always)
 subdir('uae_cpu')
 
+# Build KPX PPC interpreter + bridge
+subdir('kpx')
+
 cpu_deps = [unicorn_dep, uae_dep]
 
-# Build CPU library
+# Build CPU library (links with KPX)
 cpu_lib = static_library('cpu',
   cpu_sources,
   dependencies: cpu_deps,
+  link_with: [kpx_interp_lib, kpx_dyngen_lib],
   include_directories: [
     include_directories('.'),
     include_directories('../common/include'),
     include_directories('../drivers/platform'),
-  ]
+  ],
 )
 
 cpu_dep = declare_dependency(

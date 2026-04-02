@@ -20,6 +20,10 @@
 
 #ifndef DEBUG_H
 #define DEBUG_H
+#ifdef _KPX_DEBUG_H
+#error "common/include/debug.h conflicts with KPX compat/debug.h — both included in same TU"
+#endif
+#define _COMMON_DEBUG_H
 
 #if defined(WIN32) && !defined(__CYGWIN__)
 

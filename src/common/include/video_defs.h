@@ -20,6 +20,10 @@
 
 #ifndef VIDEO_DEFS_H
 #define VIDEO_DEFS_H
+#ifdef _KPX_VIDEO_DEFS_H
+#error "common/include/video_defs.h conflicts with KPX compat/video_defs.h — both included in same TU"
+#endif
+#define _COMMON_VIDEO_DEFS_H
 
 // Video driver control codes
 enum {

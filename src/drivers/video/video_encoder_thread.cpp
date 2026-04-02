@@ -41,21 +41,28 @@ static std::atomic<uint64_t> g_frames_encoded(0);
 static std::atomic<uint64_t> g_frames_dropped(0);
 
 /**
- * Create encoder based on codec type
+ * Create encoder based on codec type.
+ * Falls back to PNG if the requested codec was not compiled in.
  */
 static std::unique_ptr<VideoCodec> create_video_encoder(CodecType codec) {
     switch (codec) {
+#ifdef HAVE_OPENH264
         case CodecType::H264:
             fprintf(stderr, "[VideoEncoder] Creating H.264 encoder\n");
             return std::make_unique<H264Encoder>();
+#endif
 
+#ifdef HAVE_VPX
         case CodecType::VP9:
             fprintf(stderr, "[VideoEncoder] Creating VP9 encoder\n");
             return std::make_unique<VP9Encoder>();
+#endif
 
+#ifdef HAVE_LIBWEBP
         case CodecType::WEBP:
             fprintf(stderr, "[VideoEncoder] Creating WebP encoder\n");
             return std::make_unique<WebPEncoder>();
+#endif
 
         case CodecType::PNG:
         default:
@@ -177,17 +184,21 @@ static int encode_and_send_strips(VideoCodec* encoder, const uint32_t* pixels,
 
             EncodedFrame strip;
             auto* png_enc = dynamic_cast<PNGEncoder*>(encoder);
+#ifdef HAVE_LIBWEBP
             auto* webp_enc = dynamic_cast<WebPEncoder*>(encoder);
+#endif
 
             if (format == PIXFMT_BGRA) {
                 if (png_enc)
                     strip = png_enc->encode_bgra_rect(
                         reinterpret_cast<const uint8_t*>(pixels), frame_w, frame_h, frame_w * 4,
                         rect_x, sy, rect_w, sh);
+#ifdef HAVE_LIBWEBP
                 else if (webp_enc)
                     strip = webp_enc->encode_bgra_rect(
                         reinterpret_cast<const uint8_t*>(pixels), frame_w, frame_h, frame_w * 4,
                         rect_x, sy, rect_w, sh);
+#endif
             } else {
                 // ARGB: extract strip and convert to BGRA
                 std::vector<uint8_t> strip_bgra(rect_w * sh * 4);
@@ -340,14 +351,28 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
         if (is_dc_codec && have_prev_frame && !keyframe_requested
             && (int)prev_frame.size() == w * h) {
 
+            // Use emulator-provided dirty rect if available, else compute
             int dx, dy, dw, dh;
-            bool changed = compute_dirty_rect(pixels, prev_frame.data(), w, h, dx, dy, dw, dh);
+            bool changed;
+            if (frame->dirty_width > 0 && frame->dirty_height > 0
+                && (frame->dirty_width != (uint32_t)w || frame->dirty_height != (uint32_t)h)) {
+                // Emulator provided a sub-frame dirty rect — use it directly
+                dx = frame->dirty_x;
+                dy = frame->dirty_y;
+                dw = frame->dirty_width;
+                dh = frame->dirty_height;
+                changed = true;
+            } else if (frame->dirty_width == 0 && frame->dirty_height == 0) {
+                // Emulator says nothing changed
+                changed = false;
+            } else {
+                // Full-frame dirty or no emulator hint — compare pixels
+                changed = compute_dirty_rect(pixels, prev_frame.data(), w, h, dx, dy, dw, dh);
+            }
 
             if (!changed) {
                 // No changes — skip this frame entirely
                 skipped_frames++;
-                // Save current frame as prev (in case of accumulated drift)
-                memcpy(prev_frame.data(), pixels, w * h * 4);
                 video_output->release_frame();
                 continue;
             }
@@ -365,7 +390,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             last_encode_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 encode_end - encode_start).count();
 
-            // Save current frame for next comparison
+            // Save current frame for next comparison (fallback path needs it)
             memcpy(prev_frame.data(), pixels, w * h * 4);
             video_output->release_frame();
 

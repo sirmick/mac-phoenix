@@ -193,53 +193,7 @@ bool platform_null_sys_cd_read_toc(void *fh, uint8 *toc)
 	return false;
 }
 
-/*
- *  Timer implementations (actual working implementations)
- */
-void timer_current_time(struct timeval &tv)
-{
-	gettimeofday(&tv, NULL);
-}
-
-void timer_add_time(struct timeval &res, struct timeval a, struct timeval b)
-{
-	res.tv_sec = a.tv_sec + b.tv_sec;
-	res.tv_usec = a.tv_usec + b.tv_usec;
-	if (res.tv_usec >= 1000000) {
-		res.tv_sec++;
-		res.tv_usec -= 1000000;
-	}
-}
-
-void timer_sub_time(struct timeval &res, struct timeval a, struct timeval b)
-{
-	res.tv_sec = a.tv_sec - b.tv_sec;
-	res.tv_usec = a.tv_usec - b.tv_usec;
-	if (res.tv_usec < 0) {
-		res.tv_sec--;
-		res.tv_usec += 1000000;
-	}
-}
-
-int32 timer_host2mac_time(struct timeval tv)
-{
-	return tv.tv_sec * 1000000 + tv.tv_usec;
-}
-
-void timer_mac2host_time(struct timeval &tv, int32 mac_time)
-{
-	tv.tv_sec = mac_time / 1000000;
-	tv.tv_usec = mac_time % 1000000;
-}
-
-int timer_cmp_time(struct timeval a, struct timeval b)
-{
-	if (a.tv_sec < b.tv_sec) return -1;
-	if (a.tv_sec > b.tv_sec) return 1;
-	if (a.tv_usec < b.tv_usec) return -1;
-	if (a.tv_usec > b.tv_usec) return 1;
-	return 0;
-}
+// Timer functions provided by timer_unix.cpp
 
 /*
  *  Mutex stubs (not used in minimal test)
@@ -269,18 +223,17 @@ void B2_unlock_mutex(B2_mutex *m)
 }
 
 /*
- *  Interrupt stubs
+ *  Interrupt flag operations — must be atomic (tick thread + CPU thread race)
+ *  Legacy SheepShaver uses atomic_or/atomic_and for these.
  */
-extern uint32 InterruptFlags;
-
-void SetInterruptFlag(uint32 flag)
+extern "C" void SetInterruptFlag(uint32 flag)
 {
-	InterruptFlags |= flag;
+	__sync_fetch_and_or((volatile int *)&InterruptFlags, flag);
 }
 
-void ClearInterruptFlag(uint32 flag)
+extern "C" void ClearInterruptFlag(uint32 flag)
 {
-	InterruptFlags &= ~flag;
+	__sync_fetch_and_and((volatile int *)&InterruptFlags, ~flag);
 }
 
 /*
@@ -321,49 +274,7 @@ void VideoInterrupt()
 // Timer stubs
 bool tick_inhibit = false;
 
-extern "C" uint32 TimerDateTime()
-{
-	// UNICORN DEBUGGING: Make time deterministic during boot to avoid
-	// timing-dependent execution divergence between UAE and Unicorn.
-	// Unicorn runs ~20x slower due to A-line JIT exit penalty, causing
-	// different RTC values in CLKNOMEM operations, which leads to
-	// different code paths being taken.
-	static bool boot_phase = true;
-	static int call_count = 0;
-
-	if (boot_phase) {
-		call_count++;
-		// Use a fixed time during boot (Jan 1, 2024, 00:00:00)
-		// This is 120 years after Mac epoch (1904)
-		const uint32 FIXED_BOOT_TIME = 120UL * 365 * 24 * 60 * 60;
-
-		// After 1000 calls, switch to real time
-		// (Mac OS should be well into boot by then)
-		if (call_count > 1000) {
-			boot_phase = false;
-			fprintf(stderr, "[TimerDateTime] Switching from fixed to real time after %d calls\n", call_count);
-		}
-
-		return FIXED_BOOT_TIME;
-	}
-
-	// After boot, return real time
-	time_t now = time(NULL);
-	// Unix epoch is Jan 1, 1970, Mac epoch is Jan 1, 1904
-	// Difference is 66 years + 17 leap days = 2082844800 seconds
-	const uint32 MAC_EPOCH_OFFSET = 2082844800;
-
-	return now + MAC_EPOCH_OFFSET;
-}
-
-extern "C" void Microseconds(uint32 &hi, uint32 &lo)
-{
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	uint64_t usec = (uint64_t)tv.tv_sec * 1000000 + tv.tv_usec;
-	hi = usec >> 32;
-	lo = usec & 0xFFFFFFFF;
-}
+// TimerDateTime and Microseconds provided by timer_unix.cpp
 
 // Ethernet interrupt — dispatch through platform driver
 void EtherInterrupt()
@@ -439,7 +350,5 @@ void audio_enter_stream()
 {
 }
 
-// Idle handling
-void idle_wait()
-{
-}
+// idle_wait and idle_resume provided by timer_unix.cpp
+

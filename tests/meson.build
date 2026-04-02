@@ -8,6 +8,8 @@
 # Find test scripts
 test_dir = meson.current_source_dir()
 test_rom = get_option('test_rom')
+test_ppc_rom = get_option('test_ppc_rom')
+test_ppc_cdrom = get_option('test_ppc_cdrom')
 
 # --- Fast tests (no ROM / no boot required) ---
 
@@ -50,10 +52,10 @@ test('extfs',
 # --- Boot tests (require ROM, longer timeout) ---
 # These run sequentially to avoid port conflicts
 
-# UAE backend boots to Finder
-test('boot_uae',
+# UAE interpreter (no JIT)
+test('boot_uae_interp',
   find_program('bash'),
-  args: [test_dir / 'test_boot_to_finder.sh', '--backend', 'uae', '--timeout', '20', '--port', '18090'],
+  args: [test_dir / 'test_boot_to_finder.sh', '--backend', 'uae', '--no-jit', '--timeout', '20', '--port', '18090'],
   timeout: 35,
   is_parallel: false,
   suite: 'boot',
@@ -62,7 +64,19 @@ test('boot_uae',
   },
 )
 
-# Unicorn backend boots to Finder (slow - JIT compilation)
+# UAE with JIT compiler
+test('boot_uae_jit',
+  find_program('bash'),
+  args: [test_dir / 'test_boot_to_finder.sh', '--backend', 'uae', '--jit', '--timeout', '20', '--port', '18090'],
+  timeout: 35,
+  is_parallel: false,
+  suite: 'boot',
+  env: {
+    'MACEMU_ROM': test_rom,
+  },
+)
+
+# Unicorn backend boots to Finder (slow - QEMU TCG JIT)
 test('boot_unicorn',
   find_program('bash'),
   args: [test_dir / 'test_boot_to_finder.sh', '--backend', 'unicorn', '--timeout', '120', '--port', '18090'],
@@ -83,6 +97,42 @@ test('command_bridge',
   suite: 'boot',
   env: {
     'MACEMU_ROM': test_rom,
+  },
+)
+
+# PPC KPX interpreter (no PPC JIT)
+test('boot_ppc_interp',
+  find_program('bash'),
+  args: [test_dir / 'test_boot_ppc.sh', '--no-ppc-jit', '--timeout', '45', '--port', '18095'],
+  timeout: 60,
+  is_parallel: false,
+  suite: 'boot',
+  env: {
+    'MACEMU_PPC_ROM': test_ppc_rom,
+  },
+)
+
+# PPC KPX with dyngen JIT
+test('boot_ppc_jit',
+  find_program('bash'),
+  args: [test_dir / 'test_boot_ppc.sh', '--ppc-jit', '--timeout', '45', '--port', '18095'],
+  timeout: 60,
+  is_parallel: false,
+  suite: 'boot',
+  env: {
+    'MACEMU_PPC_ROM': test_ppc_rom,
+  },
+)
+
+# PPC boot with webserver — validates boot phase tracking via /api/status
+test('boot_ppc_api',
+  find_program('bash'),
+  args: [test_dir / 'test_boot_ppc.sh', '--timeout', '45', '--port', '18095', '--webserver'],
+  timeout: 60,
+  is_parallel: false,
+  suite: 'boot',
+  env: {
+    'MACEMU_PPC_ROM': test_ppc_rom,
   },
 )
 
