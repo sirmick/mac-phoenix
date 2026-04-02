@@ -1281,9 +1281,10 @@ class BasiliskWebRTC {
                         }
                         this.codecType = serverCodec;
                         this.stats.codec = msg.codec;
-                        // Reinitialize decoder for server's codec
-                        this.initDecoder();
                     }
+                    // Always init decoder on connect — ensures display elements
+                    // are toggled correctly (e.g., httpstream→h264 transition)
+                    this.initDecoder();
 
                     // Update codec selector UI
                     const codecSelect = document.getElementById('codec-select');
@@ -3814,12 +3815,23 @@ async function changeCodec() {
         return;
     }
 
-    // Switching away from HTTP stream — clear preference and reconnect via WebRTC
+    // Switching away from HTTP stream — tell server to switch encoder, then reconnect via WebRTC
     if (client.codecType === CodecType.HTTP_STREAM) {
         try { localStorage.removeItem('macemu_prefer_httpstream'); } catch(e) {}
-        client.codecType = parseCodecString(newCodec);
         client.cleanup();
         if (client.ws) { client.ws.close(); client.ws = null; }
+        // Update server-side encoder (same as normal WebRTC codec change)
+        try {
+            await fetch(getApiUrl('codec'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codec: newCodec })
+            });
+        } catch (e) {
+            logger.error('Failed to set server codec', { error: e.message });
+        }
+        // Connect via WebRTC — server encoder now matches the requested codec
+        client.codecType = parseCodecString(newCodec);
         const wsUrl = getWebSocketUrl();
         client.connect(wsUrl);
         return;
