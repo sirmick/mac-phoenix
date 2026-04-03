@@ -5159,7 +5159,7 @@ bool compiler_use_jit(void)
 {
 	// Check for the "jit" prefs item
 	auto& jcfg = config::EmulatorConfig::instance().m68k;
-	if (!jcfg.jit)
+	if (!jcfg.jitexperimental)
 		return false;
 
 	// Don't use JIT if translation cache size is less then MIN_CACHE_SIZE KB

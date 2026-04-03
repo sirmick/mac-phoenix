@@ -685,6 +685,7 @@ static void nat_remove(uint8_t proto, uint16_t src_port)
 // ---- TCP listener for NAT'd connections ----
 
 static struct tcp_pcb *s_tcp_listen_pcb = nullptr;
+static uint16_t s_tcp_listen_port = 0;  // Actual port assigned to listen PCB
 
 static err_t tcp_nat_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
 {
@@ -1190,8 +1191,16 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 			nat_add(IP_PROTO_TCP, src_port, &dst_ip, dst_port, &src_ip);
 		}
 
-		// Rewrite destination IP to gateway so lwIP accepts the packet
+		// Rewrite destination to gateway IP + listen port so lwIP's
+		// TCP stack matches the packet to our listen PCB
 		iphdr->dest.addr = s_gw_ip.addr;
+		{
+			uint8_t port_bytes[2] = {
+				(uint8_t)(s_tcp_listen_port >> 8),
+				(uint8_t)(s_tcp_listen_port & 0xFF)
+			};
+			pbuf_take_at(p, port_bytes, 2, ip_hdr_len + 2);  // TCP dst port
+		}
 
 		// Recalculate IP checksum
 		IPH_CHKSUM_SET(iphdr, 0);
@@ -1199,28 +1208,25 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 
 		// TCP checksum includes pseudo-header with dest IP — recalculate
 		{
-			// Zero out existing TCP checksum
 			uint8_t zero[2] = {0, 0};
-			pbuf_take_at(p, zero, 2, ip_hdr_len + 16);  // TCP checksum at offset 16
+			pbuf_take_at(p, zero, 2, ip_hdr_len + 16);
 
-			// Compute checksum over TCP data using a pbuf that starts at TCP header
 			uint16_t tcp_len = p->tot_len - ip_hdr_len;
 			uint8_t tcp_data[65535];
 			pbuf_copy_partial(p, tcp_data, tcp_len, ip_hdr_len);
 
-			// Pseudo-header checksum
-			ip_addr_t src_copy, dest_copy;
-			src_copy.addr = iphdr->src.addr;
-			dest_copy.addr = iphdr->dest.addr;
-			uint32_t acc = 0;
-			acc += (src_copy.addr >> 16) & 0xFFFF;
-			acc += src_copy.addr & 0xFFFF;
-			acc += (dest_copy.addr >> 16) & 0xFFFF;
-			acc += dest_copy.addr & 0xFFFF;
-			acc += htons(IP_PROTO_TCP);
-			acc += htons(tcp_len);
+			// Build pseudo-header as raw bytes (avoids endianness issues)
+			uint8_t pseudo[12];
+			memcpy(pseudo, &iphdr->src.addr, 4);   // network byte order
+			memcpy(pseudo + 4, &iphdr->dest.addr, 4);
+			pseudo[8] = 0;
+			pseudo[9] = IP_PROTO_TCP;
+			pseudo[10] = (tcp_len >> 8) & 0xFF;
+			pseudo[11] = tcp_len & 0xFF;
 
-			// Add TCP data
+			uint32_t acc = 0;
+			for (int i = 0; i < 12; i += 2)
+				acc += (pseudo[i] << 8) | pseudo[i + 1];
 			for (uint16_t i = 0; i < tcp_len; i += 2) {
 				uint16_t word = (tcp_data[i] << 8);
 				if (i + 1 < tcp_len) word |= tcp_data[i + 1];
@@ -1231,7 +1237,6 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 			uint16_t chk = ~(uint16_t)acc;
 			if (chk == 0) chk = 0xFFFF;
 
-			// Write back in network byte order
 			uint8_t chk_bytes[2] = {(uint8_t)(chk >> 8), (uint8_t)(chk & 0xFF)};
 			pbuf_take_at(p, chk_bytes, 2, ip_hdr_len + 16);
 		}
@@ -1276,6 +1281,86 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 	return 0;
 }
 
+// ---- Outgoing frame rewrite (gateway -> Mac) ----
+
+void lwip_nat_rewrite_outgoing(uint8_t *buf, uint16_t len)
+{
+	// Only process IPv4 TCP frames
+	if (len < 14) return;
+	uint16_t ethertype = (buf[12] << 8) | buf[13];
+	if (ethertype != 0x0800) return;
+
+	if (len < 14 + 20) return;
+	uint8_t *ip = buf + 14;
+	uint8_t ip_hdr_len = (ip[0] & 0x0F) * 4;
+	uint8_t proto = ip[9];
+	if (proto != IP_PROTO_TCP) return;
+
+	if (len < (uint16_t)(14 + ip_hdr_len + 4)) return;
+	uint8_t *tcp = ip + ip_hdr_len;
+	uint16_t src_port = (tcp[0] << 8) | tcp[1];
+	uint16_t dst_port = (tcp[2] << 8) | tcp[3];
+
+	// Check if source port is our listen port — if so, this is a NAT'd response
+	if (src_port != s_tcp_listen_port) return;
+
+	// Look up the NAT entry by the Mac's source port (which is the dst_port here)
+	NatEntry *entry = nat_find(IP_PROTO_TCP, dst_port);
+	if (!entry) return;
+
+	if (g_debug_network) {
+		char orig_dst[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &entry->orig_dst_ip.addr, orig_dst, sizeof(orig_dst));
+		fprintf(stderr, "[lwIP NAT] Rewrite outgoing TCP: src %s:%u -> %s:%u\n",
+			"10.0.2.1", src_port, orig_dst, entry->orig_dst_port);
+	}
+
+	// Rewrite source IP to original destination IP
+	memcpy(&ip[12], &entry->orig_dst_ip.addr, 4);
+
+	// Rewrite source port to original destination port
+	tcp[0] = (entry->orig_dst_port >> 8) & 0xFF;
+	tcp[1] = entry->orig_dst_port & 0xFF;
+
+	// Recalculate IP checksum
+	ip[10] = 0; ip[11] = 0;
+	uint32_t cksum = 0;
+	for (int i = 0; i < ip_hdr_len; i += 2)
+		cksum += (ip[i] << 8) | ip[i + 1];
+	while (cksum >> 16)
+		cksum = (cksum & 0xFFFF) + (cksum >> 16);
+	uint16_t ip_cksum = ~(uint16_t)cksum;
+	ip[10] = (ip_cksum >> 8) & 0xFF;
+	ip[11] = ip_cksum & 0xFF;
+
+	// Recalculate TCP checksum
+	uint16_t tcp_len = len - 14 - ip_hdr_len;
+	tcp[16] = 0; tcp[17] = 0;  // Zero checksum field
+
+	uint32_t src_ip_n, dst_ip_n;
+	memcpy(&src_ip_n, &ip[12], 4);
+	memcpy(&dst_ip_n, &ip[16], 4);
+	uint32_t acc = 0;
+	acc += (ntohl(src_ip_n) >> 16) & 0xFFFF;
+	acc += ntohl(src_ip_n) & 0xFFFF;
+	acc += (ntohl(dst_ip_n) >> 16) & 0xFFFF;
+	acc += ntohl(dst_ip_n) & 0xFFFF;
+	acc += IP_PROTO_TCP;
+	acc += tcp_len;
+
+	for (uint16_t i = 0; i < tcp_len; i += 2) {
+		uint16_t word = (tcp[i] << 8);
+		if (i + 1 < tcp_len) word |= tcp[i + 1];
+		acc += word;
+	}
+	while (acc >> 16)
+		acc = (acc & 0xFFFF) + (acc >> 16);
+	uint16_t tcp_cksum = ~(uint16_t)acc;
+	if (tcp_cksum == 0) tcp_cksum = 0xFFFF;
+	tcp[16] = (tcp_cksum >> 8) & 0xFF;
+	tcp[17] = tcp_cksum & 0xFF;
+}
+
 // ---- Init / Shutdown ----
 
 void lwip_nat_init(struct netif *netif)
@@ -1292,9 +1377,10 @@ void lwip_nat_init(struct netif *netif)
 	// Set up TCP listener on gateway IP (catches NAT'd connections)
 	s_tcp_listen_pcb = tcp_new();
 	if (s_tcp_listen_pcb) {
-		tcp_bind(s_tcp_listen_pcb, &s_gw_ip, 0);  // port 0 = any port
+		tcp_bind(s_tcp_listen_pcb, &s_gw_ip, 0);  // port 0 = assign ephemeral
 		s_tcp_listen_pcb = tcp_listen(s_tcp_listen_pcb);
 		if (s_tcp_listen_pcb) {
+			s_tcp_listen_port = s_tcp_listen_pcb->local_port;
 			tcp_accept(s_tcp_listen_pcb, tcp_nat_accept);
 		}
 	}

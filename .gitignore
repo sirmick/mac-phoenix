@@ -31,3 +31,6 @@ playwright-report/
 __pycache__/
 *.pyc
 *.iso
+
+# Rust
+net-bridge/target/

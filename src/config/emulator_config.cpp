@@ -148,7 +148,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["m68k"]["cpu_type"] = m68k.cpu_type;
     j["m68k"]["fpu"] = m68k.fpu;
     j["m68k"]["modelid"] = m68k.modelid;
-    j["m68k"]["jit"] = m68k.jit;
+    j["m68k"]["jitexperimental"] = m68k.jitexperimental;
     j["m68k"]["idlewait"] = m68k.idlewait;
     j["m68k"]["ignoresegv"] = m68k.ignoresegv;
     j["m68k"]["jitfpu"] = m68k.jitfpu;
@@ -265,8 +265,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("udpport")) udpport = json_utils::get_int(j, "udpport");
     if (j.contains("network")) {
         std::string n = json_utils::get_string(j, "network");
-        if (n == "lwip") network = NetworkMode::LwIP;
-        else if (n == "raw") network = NetworkMode::Raw;
+        if (n == "socket") network = NetworkMode::Socket;
         else network = NetworkMode::None;
     }
     if (j.contains("network_if")) network_if = json_utils::get_string(j, "network_if");
@@ -281,7 +280,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         if (m.contains("cpu_type")) m68k.cpu_type = json_utils::get_int(m, "cpu_type");
         if (m.contains("fpu")) m68k.fpu = json_utils::get_bool(m, "fpu");
         if (m.contains("modelid")) m68k.modelid = json_utils::get_int(m, "modelid");
-        if (m.contains("jit")) m68k.jit = json_utils::get_bool(m, "jit");
+        if (m.contains("jitexperimental")) m68k.jitexperimental = json_utils::get_bool(m, "jitexperimental");
         if (m.contains("idlewait")) m68k.idlewait = json_utils::get_bool(m, "idlewait");
         if (m.contains("ignoresegv")) m68k.ignoresegv = json_utils::get_bool(m, "ignoresegv");
         if (m.contains("jitfpu")) m68k.jitfpu = json_utils::get_bool(m, "jitfpu");
@@ -430,8 +429,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-mode-switch   Debug video mode switches\n");
             printf("  --debug-perf          Debug performance\n");
             printf("  --debug-network       Debug network (lwIP NAT/DNS/ICMP/TCP/UDP)\n");
-            printf("  --jit                 Enable M68K JIT compiler (experimental)\n");
-            printf("  --no-jit              Disable M68K JIT (interpreter only)\n");
+            printf("  --jitexperimental     Enable M68K JIT compiler (experimental)\n");
+            printf("  --no-jitexperimental  Disable M68K JIT (interpreter only)\n");
             printf("  --ppc-jit             Enable PPC JIT compiler (default: off)\n");
             printf("  --no-ppc-jit          Disable PPC JIT (interpreter only)\n");
             printf("  -h, --help            Show this help message\n");
@@ -568,10 +567,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             // Parse "raw:eth0" format
             const char* colon = strchr(arg, ':');
             std::string mode_str = colon ? std::string(arg, colon) : std::string(arg);
-            if (mode_str == "lwip") config.network = NetworkMode::LwIP;
-            else if (mode_str == "raw") {
-                config.network = NetworkMode::Raw;
-                if (colon) config.network_if = colon + 1;
+            if (mode_str == "socket") {
+                config.network = NetworkMode::Socket;
+                if (colon) config.network_if = colon + 1;  // socket path
             }
             else config.network = NetworkMode::None;
             argv[i] = nullptr; argv[++i] = nullptr; continue;
@@ -597,13 +595,13 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             config.debug_network = true; argv[i] = nullptr; continue;
         }
 
-        // --jit / --no-jit (M68K JIT compiler)
-        if (strcmp(argv[i], "--jit") == 0) {
-            config.m68k.jit = true;
+        // --jitexperimental / --no-jitexperimental (M68K JIT compiler)
+        if (strcmp(argv[i], "--jitexperimental") == 0) {
+            config.m68k.jitexperimental = true;
             argv[i] = nullptr; continue;
         }
-        if (strcmp(argv[i], "--no-jit") == 0) {
-            config.m68k.jit = false;
+        if (strcmp(argv[i], "--no-jitexperimental") == 0) {
+            config.m68k.jitexperimental = false;
             argv[i] = nullptr; continue;
         }
 

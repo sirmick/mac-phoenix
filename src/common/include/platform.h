@@ -222,6 +222,11 @@ typedef struct {
     // PPC cursor update (CursorDeviceDispatch via Execute68k + SheepMem)
     // Set by KPX backend. NULL on m68k.  Args: mouse_base, x, y.
     void (*ppc_cursor_move)(uint32_t mouse_base, int x, int y);
+
+    // EmulOp encoding override (set by KPX backend).
+    // Converts common M68K_EMUL_OP_* values (0x71xx) to backend-specific encoding.
+    // NULL = use default logic (passthrough or A-line conversion).
+    uint16_t (*make_emulop)(uint16_t common_emulop);
 } Platform;
 
 /*
@@ -234,6 +239,8 @@ extern Platform g_platform;
  *  UAE uses 0x71xx (overloaded MOVEQ); Unicorn uses 0xAExx (A-line trap).
  */
 static inline uint16_t platform_make_emulop(uint16_t emulop) {
+    if (g_platform.make_emulop)
+        return g_platform.make_emulop(emulop);
     if (g_platform.use_aline_emulops && (emulop & 0xFF00) == 0x7100) {
         return 0xAE00 | (emulop & 0x3F);
     }

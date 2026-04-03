@@ -114,6 +114,9 @@ static err_t mac_netif_linkoutput(struct netif *netif, struct pbuf *p)
 	uint16_t len = pbuf_copy_partial(p, buf, sizeof(buf), 0);
 	if (len < 14) return ERR_BUF;
 
+	// Rewrite NAT'd TCP frames: restore original source IP/port
+	lwip_nat_rewrite_outgoing(buf, len);
+
 	D(bug("[lwIP] netif TX %u bytes to Mac, type=%04x\n", len,
 		(buf[12] << 8) | buf[13]));
 

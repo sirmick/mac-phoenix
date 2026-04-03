@@ -88,6 +88,16 @@ std::vector<std::string> PPCSubprocess::build_child_args()
         args.push_back("--dismiss-shutdown-dialog");
     }
 
+    // Network
+    if (config_->network != config::NetworkMode::None) {
+        args.push_back("--network");
+        std::string net_arg = config_->network_string();
+        if (!config_->network_if.empty()) {
+            net_arg += ":" + config_->network_if;
+        }
+        args.push_back(net_arg);
+    }
+
     // PPC-specific options
     args.push_back(config_->ppc.jit ? "--ppc-jit" : "--no-ppc-jit");
 

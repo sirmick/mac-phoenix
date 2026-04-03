@@ -486,11 +486,14 @@ def handle_macbinary_disk_image(bin_path, image_path, folder_name):
 SOURCE_FILES = [
     ("MPW/MPW-PR.img_.bin", handle_macbinary_disk_image, "MPW"),
     ("ResEdit/ResEdit3.0.sit", handle_stuffit, "ResEdit"),
-    ("Disk Copy/Disk_Copy_(v6.3.3).sit", handle_stuffit, "Disk Copy"),
+    ("Disk-Copy-633-smi.sit", handle_stuffit, "Disk Copy"),
     ("StuffIt Expander/Stuffit_Expander_5.5.dsk", handle_dsk, "StuffIt Expander"),
     ("MacTCP_Ping_2.0.2.sea.bin", handle_stuffit, "MacTCP Ping"),
     ("OTTool_1.2.1.sit", handle_stuffit, "OTTool"),
     ("Speedometer_3.23.sit", handle_stuffit, "Speedometer"),
+    ("NCSA_Telnet_2.7b5.sit", handle_stuffit, "NCSA Telnet"),
+    ("MR-Browser-68K-v0.39.sit", handle_stuffit, "MR Browser"),
+    ("Hotline_1.2.3_(68K_+_PPC).sit", handle_stuffit, "Hotline"),
 ]
 
 

@@ -94,8 +94,7 @@ static void reserve_mac_address_space_early()
 
 // WebRTC streaming
 #include "config/emulator_config.h"
-#include "drivers/ether/ether_lwip.h"
-#include "drivers/ether/ether_raw.h"
+#include "drivers/ether/ether_socket.h"
 #include "core/cpu_context.h"
 #include "core/ppc_subprocess.h"
 #include "core/boot_progress.h"
@@ -391,16 +390,16 @@ int main(int argc, char **argv)
 	config::print_config(emu_config);
 
 	// Select network driver based on config
-	if (emu_config.network == config::NetworkMode::LwIP) {
-		ether_lwip_register();
-	} else if (emu_config.network == config::NetworkMode::Raw) {
-		ether_raw_register(emu_config.network_if.c_str());
+	if (emu_config.network == config::NetworkMode::Socket) {
+		const char *path = emu_config.network_if.empty()
+			? "/tmp/mac-ether.sock"
+			: emu_config.network_if.c_str();
+		ether_socket_register(path);
 	}
 
 	// Set global debug/log state from config
 	g_debug_mode_switch = emu_config.debug_mode_switch;
-	extern bool g_debug_network;
-	g_debug_network = emu_config.debug_network;
+	// g_debug_network was in lwip_nat.cpp, now unused (Rust bridge has its own logging)
 	set_log_level(emu_config.log_level);
 	RAMSize = emu_config.ram_mb * 1024 * 1024;
 

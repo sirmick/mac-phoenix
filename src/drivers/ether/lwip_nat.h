@@ -33,4 +33,9 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif *inp);
 // Poll host sockets for incoming data (call from network thread loop)
 void lwip_nat_poll(void);
 
+// Rewrite outgoing TCP frames: restore original source IP/port for NAT'd connections.
+// Called from linkoutput before the frame reaches the Mac.
+// Modifies the frame in-place. buf must be at least len bytes.
+void lwip_nat_rewrite_outgoing(uint8_t *buf, uint16_t len);
+
 #endif /* LWIP_NAT_H */

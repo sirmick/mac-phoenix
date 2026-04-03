@@ -317,7 +317,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n",
             platform_.cpu_name ? platform_.cpu_name : "Unknown",
-            config.m68k.jit ? "on" : "off");
+            config.m68k.jitexperimental ? "on" : "off");
 
     // 9. Configure CPU type
     if (platform_.cpu_set_type) {

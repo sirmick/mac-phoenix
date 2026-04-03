@@ -32,15 +32,14 @@ enum class CPUBackend {
 
 enum class NetworkMode {
     None,     // No networking (null driver)
-    LwIP,     // Userland NAT via lwIP
-    Raw       // AF_PACKET bridged to host NIC
+    Socket    // Unix socket to net-bridge (smoltcp NAT + HTTPS proxy)
 };
 
 struct M68KConfig {
     int cpu_type = 4;        // 68000-68040
     bool fpu = true;
     int modelid = 14;
-    bool jit = true;
+    bool jitexperimental = false;
     bool jitfpu = true;
     bool jitdebug = false;
     int jitcachesize = 8192;
@@ -189,8 +188,7 @@ struct EmulatorConfig {
 
     const char* network_string() const {
         switch (network) {
-            case NetworkMode::LwIP: return "lwip";
-            case NetworkMode::Raw: return "raw";
+            case NetworkMode::Socket: return "socket";
             default: return "none";
         }
     }

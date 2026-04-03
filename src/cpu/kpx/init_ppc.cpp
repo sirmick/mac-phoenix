@@ -403,6 +403,9 @@ void ExitAll_PPC(void)
 
 void ppc::PatchAfterStartup_PPC(void)
 {
+	static bool done = false;
+	if (done) return;
+	done = true;
 	fprintf(stderr, "[PPC] PatchAfterStartup_PPC: installing NQD accel + ExtFS\n");
 	ExecuteNative(NATIVE_VIDEO_INSTALL_ACCEL);
 	InstallExtFS();

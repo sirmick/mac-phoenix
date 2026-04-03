@@ -1488,6 +1488,54 @@ static void kpx_ppc_emulop_handler(void *r68k_regs, uint32_t pc, int selector)
     ppc::EmulOp(static_cast<M68kRegisters *>(r68k_regs), pc, selector);
 }
 
+// Convert common M68K_EMUL_OP_* values (0x71xx from common/include/emul_op.h)
+// to KPX encoding (M68K_EMUL_BREAK + OP_*, 0xFExx).
+// Common 0x71xx opcodes are valid m68k (moveq #xx, d0) — the DR emulator
+// executes them silently instead of trapping to the emulop handler.
+static uint16_t kpx_make_emulop(uint16_t op)
+{
+    // Common encoding: 0x7100 + enum offset
+    // Map to KPX encoding: M68K_EMUL_BREAK + OP_*
+    switch (op) {
+    case 0x7108: return M68K_EMUL_OP_FIX_BOOTSTACK;
+    case 0x7109: return M68K_EMUL_OP_FIX_MEMSIZE;
+    case 0x710A: return M68K_EMUL_OP_INSTALL_DRIVERS;
+    case 0x710C: return M68K_EMUL_OP_SONY_OPEN;
+    case 0x710D: return M68K_EMUL_OP_SONY_PRIME;
+    case 0x710E: return M68K_EMUL_OP_SONY_CONTROL;
+    case 0x710F: return M68K_EMUL_OP_SONY_STATUS;
+    case 0x7110: return M68K_EMUL_OP_DISK_OPEN;
+    case 0x7111: return M68K_EMUL_OP_DISK_PRIME;
+    case 0x7112: return M68K_EMUL_OP_DISK_CONTROL;
+    case 0x7113: return M68K_EMUL_OP_DISK_STATUS;
+    case 0x7114: return M68K_EMUL_OP_CDROM_OPEN;
+    case 0x7115: return M68K_EMUL_OP_CDROM_PRIME;
+    case 0x7116: return M68K_EMUL_OP_CDROM_CONTROL;
+    case 0x7117: return M68K_EMUL_OP_CDROM_STATUS;
+    case 0x7123: return M68K_EMUL_OP_ADBOP;
+    case 0x7124: return M68K_EMUL_OP_INSTIME;
+    case 0x7125: return M68K_EMUL_OP_RMVTIME;
+    case 0x7126: return M68K_EMUL_OP_PRIMETIME;
+    case 0x7127: return M68K_EMUL_OP_MICROSECONDS;
+    case 0x7128: return M68K_EMUL_OP_SCSI_DISPATCH;
+    case 0x7129: return M68K_EMUL_OP_IRQ;
+    case 0x712A: return M68K_EMUL_OP_PUT_SCRAP;
+    case 0x712B: return M68K_EMUL_OP_GET_SCRAP;
+    case 0x712C: return M68K_EMUL_OP_CHECKLOAD;
+    case 0x712E: return M68K_EMUL_OP_EXTFS_COMM;
+    case 0x712F: return M68K_EMUL_OP_EXTFS_HFS;
+    case 0x7131: return M68K_EMUL_OP_SOUNDIN_OPEN;
+    case 0x7132: return M68K_EMUL_OP_SOUNDIN_PRIME;
+    case 0x7133: return M68K_EMUL_OP_SOUNDIN_CONTROL;
+    case 0x7134: return M68K_EMUL_OP_SOUNDIN_STATUS;
+    case 0x7135: return M68K_EMUL_OP_SOUNDIN_CLOSE;
+    case 0x7137: return M68K_EMUL_OP_IDLE_TIME;
+    default:
+        fprintf(stderr, "[KPX] WARNING: unmapped common emulop 0x%04x\n", op);
+        return op;
+    }
+}
+
 // ============================================================================
 // cpu_ppc_kpx_install - Wire KPX into Platform API
 // ============================================================================
@@ -1547,6 +1595,12 @@ extern "C" void cpu_ppc_kpx_install(Platform *p)
     p->cpu_get_lr = kpx_cpu_get_lr;
     p->cpu_get_ctr = kpx_cpu_get_ctr;
     p->cpu_execute_ppc = kpx_cpu_execute_ppc;
+
+    // EmulOp encoding: convert common 0x71xx values to KPX 0xFExx encoding
+    // Core code (extfs.cpp, rsrc_patches.cpp) uses common/include/emul_op.h values,
+    // but the PPC DR emulator needs 0xFExx (M68K_EMUL_BREAK+OP_*) to trap properly.
+    // Without this, 0x71xx is executed as 'moveq #xx, d0' — a valid m68k no-op.
+    p->make_emulop = kpx_make_emulop;
 
     // EmulOp/trap handlers
     p->m68k_emulop_handler = nullptr;  // PPC doesn't use m68k EmulOp traps
