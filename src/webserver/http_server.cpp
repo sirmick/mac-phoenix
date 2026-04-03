@@ -207,14 +207,39 @@ void Server::register_stream_route(const std::string& path, StreamHandler handle
 }
 
 bool Server::handle_client(int client_fd) {
-    char buffer[8192];
-    ssize_t n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    if (n <= 0) return false;
-    buffer[n] = '\0';
+    std::string request;
+    request.reserve(8192);
+    char buffer[4096];
+
+    // Read until we have complete headers
+    size_t header_end = std::string::npos;
+    while (header_end == std::string::npos) {
+        ssize_t n = recv(client_fd, buffer, sizeof(buffer), 0);
+        if (n <= 0) return false;
+        request.append(buffer, n);
+        header_end = request.find("\r\n\r\n");
+    }
+
+    // Check Content-Length and read remaining body if needed
+    size_t content_length = 0;
+    size_t cl_pos = request.find("Content-Length: ");
+    if (cl_pos == std::string::npos)
+        cl_pos = request.find("content-length: ");
+    if (cl_pos != std::string::npos) {
+        content_length = std::stoul(request.substr(cl_pos + 16));
+    }
+
+    size_t body_start = header_end + 4;
+    size_t body_received = request.size() - body_start;
+    while (body_received < content_length) {
+        ssize_t n = recv(client_fd, buffer, sizeof(buffer), 0);
+        if (n <= 0) break;
+        request.append(buffer, n);
+        body_received += n;
+    }
 
     Request req;
-    if (!parse_request(buffer, n, req)) {
-        // Bad request
+    if (!parse_request(request.c_str(), request.size(), req)) {
         Response resp;
         resp.set_status(400, "Bad Request");
         resp.set_body("Bad Request");
