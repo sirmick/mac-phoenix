@@ -256,6 +256,9 @@
                 <h2>Emulator Settings</h2>
                 <button class="modal-close" id="modal-close-btn">&times;</button>
             </div>
+            <div class="config-tabs" id="config-tabs">
+                <div class="config-tab active" data-preset="__current__">Current</div>
+            </div>
             <div class="modal-body">
                 <div class="modal-columns">
                 <!-- Column 1: system + storage -->
@@ -427,6 +430,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn" id="cancel-config-btn">Cancel</button>
+                <button class="btn" id="save-preset-btn">Save As Preset</button>
                 <button class="btn success" id="save-config-btn">Save</button>
             </div>
         </div>

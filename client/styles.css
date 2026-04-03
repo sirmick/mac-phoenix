@@ -617,6 +617,52 @@ body.fullscreen #display {
     background: none;
 }
 
+/* Config preset tabs */
+.config-tabs {
+    display: flex;
+    background: #1e1e1e;
+    border-bottom: 1px solid #333;
+    padding: 0 12px;
+    overflow-x: auto;
+    flex-shrink: 0;
+    gap: 2px;
+}
+
+.config-tab {
+    padding: 8px 14px;
+    font-size: 0.8em;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    color: #888;
+    white-space: nowrap;
+    position: relative;
+}
+
+.config-tab:hover {
+    color: #fff;
+}
+
+.config-tab.active {
+    color: #007AFF;
+    border-bottom-color: #007AFF;
+}
+
+.config-tab .preset-delete {
+    display: none;
+    margin-left: 6px;
+    color: #666;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.config-tab:hover .preset-delete {
+    display: inline;
+}
+
+.config-tab .preset-delete:hover {
+    color: #f44;
+}
+
 .modal-body {
     padding: 20px;
 }

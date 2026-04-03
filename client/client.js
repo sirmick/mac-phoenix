@@ -2882,6 +2882,7 @@ class BasiliskWebRTC {
 const App = {
     client: null,
     statsInterval: null,
+    savedPresets: {},  // name → config snapshot (persisted in JSON "configs" block)
     currentConfig: {
         emulator: 'quadra',  // Default, will be overwritten by loadCurrentConfig()
         rom: '',
@@ -3188,6 +3189,206 @@ function setConfigControlsEnabled(enabled) {
     });
 }
 
+// ============================================================================
+// Config Presets
+// ============================================================================
+
+function renderPresetTabs() {
+    const container = document.getElementById('config-tabs');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const currentTab = document.createElement('div');
+    currentTab.className = 'config-tab active';
+    currentTab.dataset.preset = '__current__';
+    currentTab.textContent = 'Current';
+    currentTab.addEventListener('click', async () => {
+        await loadCurrentConfig();
+        await Promise.all([loadRomList(), loadDiskList(), loadCdromList(), loadExtfsList()]);
+        updateConfigUI();
+        document.querySelectorAll('#config-tabs .config-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.preset === '__current__');
+        });
+    });
+    container.appendChild(currentTab);
+
+    for (const name of Object.keys(App.savedPresets)) {
+        const tab = document.createElement('div');
+        tab.className = 'config-tab';
+        tab.dataset.preset = name;
+        tab.textContent = name;
+
+        const del = document.createElement('span');
+        del.className = 'preset-delete';
+        del.textContent = '\u00d7';
+        del.title = 'Delete preset';
+        del.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deletePreset(name);
+        });
+        tab.appendChild(del);
+
+        tab.addEventListener('click', () => loadPreset(name));
+        container.appendChild(tab);
+    }
+}
+
+function loadPreset(name) {
+    const preset = App.savedPresets[name];
+    if (!preset) return;
+
+    // Convert server-format JSON to client currentConfig format (same as loadCurrentConfig)
+    const isM68k = (preset.architecture || 'm68k') === 'm68k';
+    let emulatorMode;
+    if (!isM68k) {
+        emulatorMode = 'ppc';
+    } else if ((preset.m68k?.modelid || 14) === 11) {
+        emulatorMode = 'iici';
+    } else {
+        emulatorMode = 'quadra';
+    }
+
+    const stripPrefix = (p, dir) => {
+        if (!p || p[0] !== '/') return p;
+        const idx = p.indexOf(dir);
+        return idx >= 0 ? p.substring(idx + dir.length) : p;
+    };
+
+    currentConfig = {
+        emulator: emulatorMode,
+        rom: preset.rom ? stripPrefix(preset.rom, '/roms/') : '',
+        ram: preset.ram_mb || 32,
+        screen: preset.screen || '640x480',
+        sound: preset.audio ?? true,
+        cpu: isM68k ? (preset.m68k?.cpu_type || 4) : (preset.ppc?.cpu_type || 4),
+        model: isM68k ? (preset.m68k?.modelid || 14) : (preset.ppc?.modelid || 14),
+        fpu: isM68k ? (preset.m68k?.fpu ?? true) : (preset.ppc?.fpu ?? true),
+        jit: isM68k ? (preset.m68k?.jit ?? true) : (preset.ppc?.jit ?? true),
+        jit68k: preset.ppc?.jit68k ?? false,
+        bootdriver: preset.bootdriver || 0,
+        disks: (preset.disks || []).map(p => stripPrefix(p, '/images/')),
+        cdroms: (preset.cdroms || []).map(p => stripPrefix(p, '/images/')),
+        extfs: preset.extfs || [],
+        idlewait: isM68k ? (preset.m68k?.idlewait ?? true) : (preset.ppc?.idlewait ?? true),
+        ignoresegv: isM68k ? (preset.m68k?.ignoresegv ?? true) : (preset.ppc?.ignoresegv ?? true),
+        ignoreillegal: preset.ppc?.ignoreillegal ?? false,
+        swap_opt_cmd: preset.m68k?.swap_opt_cmd ?? true,
+        keyboardtype: isM68k ? (preset.m68k?.keyboardtype || 5) : (preset.ppc?.keyboardtype || 5),
+        backend: preset.cpu_backend || (isM68k ? 'uae' : 'kpx'),
+        zappram: preset.zappram ?? false,
+        dismiss_shutdown_dialog: preset.dismiss_shutdown_dialog ?? false,
+        network: preset.network || 'none',
+        network_if: preset.network_if || ''
+    };
+
+    // Re-render storage lists for the new architecture, then update UI
+    Promise.all([loadRomList(), loadDiskList(), loadCdromList(), loadExtfsList()]).then(() => {
+        updateConfigUI();
+    });
+
+    // Update tab highlight
+    document.querySelectorAll('#config-tabs .config-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.preset === name);
+    });
+}
+
+function buildConfigJson() {
+    // Build the server-format JSON from current form values (shared with saveConfig)
+    const emulator = document.getElementById('cfg-emulator')?.value || 'quadra';
+    const isM68k = isM68kMode(emulator);
+
+    const archConfig = {
+        cpu_type: parseInt(document.getElementById('cfg-cpu')?.value || 4),
+        modelid: parseInt(document.getElementById('cfg-model')?.value || 14),
+        fpu: document.getElementById('cfg-fpu')?.checked ?? true,
+        jit: document.getElementById('cfg-jit')?.checked ?? true,
+        idlewait: document.getElementById('cfg-idlewait')?.checked ?? true,
+        ignoresegv: document.getElementById('cfg-ignoresegv')?.checked ?? true,
+        swap_opt_cmd: currentConfig.swap_opt_cmd ?? true,
+        keyboardtype: currentConfig.keyboardtype || 5
+    };
+    if (!isM68k) {
+        archConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? false;
+        archConfig.ignoreillegal = document.getElementById('cfg-ignoreillegal')?.checked ?? false;
+    }
+
+    const romDropdown = document.getElementById('cfg-rom');
+    const rom = (romDropdown && romDropdown.value) ? romDropdown.value : currentConfig.rom;
+
+    return {
+        architecture: isM68k ? 'm68k' : 'ppc',
+        cpu_backend: document.getElementById('cfg-backend')?.value || (isM68k ? 'uae' : 'kpx'),
+        rom: rom,
+        disks: currentConfig.disks,
+        cdroms: currentConfig.cdroms || [],
+        extfs: currentConfig.extfs || [],
+        bootdriver: parseInt(document.getElementById('cfg-bootdriver')?.value || 0),
+        ram_mb: parseInt(document.getElementById('cfg-ram')?.value || 32),
+        screen: document.getElementById('cfg-screen')?.value || '800x600',
+        audio: document.getElementById('cfg-sound')?.checked ?? true,
+        zappram: document.getElementById('cfg-zappram')?.checked ?? false,
+        dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? false,
+        network: document.getElementById('cfg-network')?.value || 'none',
+        network_if: document.getElementById('cfg-network-if')?.value || '',
+        codec: document.getElementById('codec-select')?.value || 'png',
+        mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
+        m68k: isM68k ? archConfig : undefined,
+        ppc: isM68k ? undefined : archConfig
+    };
+}
+
+async function savePreset() {
+    const name = prompt('Preset name:');
+    if (!name || !name.trim()) return;
+
+    const presetConfig = buildConfigJson();
+    App.savedPresets[name.trim()] = presetConfig;
+
+    // Persist by saving config with updated presets
+    const jsonConfig = buildConfigJson();
+    jsonConfig.configs = App.savedPresets;
+
+    try {
+        const res = await fetch(getApiUrl('config'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jsonConfig)
+        });
+        const data = await res.json();
+        if (data.success) {
+            renderPresetTabs();
+        } else {
+            logger.error('Failed to save preset', { message: data.error });
+        }
+    } catch (e) {
+        logger.error('Failed to save preset', { error: e.message });
+    }
+}
+
+async function deletePreset(name) {
+    if (!confirm(`Delete preset "${name}"?`)) return;
+
+    delete App.savedPresets[name];
+
+    // Persist by saving config with updated presets
+    const jsonConfig = buildConfigJson();
+    jsonConfig.configs = App.savedPresets;
+
+    try {
+        const res = await fetch(getApiUrl('config'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jsonConfig)
+        });
+        const data = await res.json();
+        if (data.success) {
+            renderPresetTabs();
+        }
+    } catch (e) {
+        logger.error('Failed to delete preset', { error: e.message });
+    }
+}
+
 async function openConfig() {
     const modal = document.getElementById('config-modal');
     if (modal) {
@@ -3196,6 +3397,7 @@ async function openConfig() {
         setConfigControlsEnabled(false);
         // Load config and storage lists in parallel, then apply selections
         await Promise.all([loadCurrentConfig(), loadRomList(), loadDiskList(), loadCdromList(), loadExtfsList()]);
+        renderPresetTabs();
         updateConfigUI();
         setConfigControlsEnabled(true);
     }
@@ -3597,6 +3799,9 @@ async function loadCurrentConfig() {
             network: cfg.network || 'none',
             network_if: cfg.network_if || ''
         };
+
+        // Load saved presets
+        App.savedPresets = cfg.configs || {};
     } catch (e) {
         logger.warn('Failed to load current config', { error: e.message });
     }
@@ -3681,24 +3886,18 @@ function updateConfigUI() {
 }
 
 async function saveConfig() {
-    // Gather common values
+    // Sync currentConfig from form before building JSON
     currentConfig.emulator = document.getElementById('cfg-emulator')?.value || 'quadra';
-
-    // Only update ROM if dropdown has a value (preserve existing if dropdown not populated)
     const romDropdown = document.getElementById('cfg-rom');
     if (romDropdown && romDropdown.value) {
         currentConfig.rom = romDropdown.value;
     }
-    // If dropdown is empty/null, keep currentConfig.rom as-is (from loadCurrentConfig)
-
     currentConfig.ram = parseInt(document.getElementById('cfg-ram')?.value || 32);
     currentConfig.screen = document.getElementById('cfg-screen')?.value || '800x600';
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
     currentConfig.zappram = document.getElementById('cfg-zappram')?.checked ?? false;
     currentConfig.dismiss_shutdown_dialog = document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? false;
     currentConfig.bootdriver = parseInt(document.getElementById('cfg-bootdriver')?.value || 0);
-
-    // Gather emulator-specific values
     currentConfig.backend = document.getElementById('cfg-backend')?.value || (isM68kMode(currentConfig.emulator) ? 'uae' : 'kpx');
     currentConfig.fpu = document.getElementById('cfg-fpu')?.checked ?? true;
     currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? true;
@@ -3714,43 +3913,12 @@ async function saveConfig() {
         currentConfig.ignoreillegal = document.getElementById('cfg-ignoreillegal')?.checked ?? true;
     }
 
-    // Build flat JSON config
-    const isM68k = isM68kMode(currentConfig.emulator);
-    const archConfig = {
-        cpu_type: currentConfig.cpu,
-        modelid: currentConfig.model,
-        fpu: currentConfig.fpu,
-        jit: currentConfig.jit,
-        idlewait: currentConfig.idlewait,
-        ignoresegv: currentConfig.ignoresegv,
-        swap_opt_cmd: currentConfig.swap_opt_cmd ?? true,
-        keyboardtype: currentConfig.keyboardtype || 5
-    };
-    if (!isM68k) {
-        archConfig.jit68k = currentConfig.jit68k ?? false;
-        archConfig.ignoreillegal = currentConfig.ignoreillegal ?? false;
-    }
+    const jsonConfig = buildConfigJson();
 
-    const jsonConfig = {
-        architecture: isM68k ? 'm68k' : 'ppc',
-        cpu_backend: currentConfig.backend,
-        rom: currentConfig.rom,
-        disks: currentConfig.disks,
-        cdroms: currentConfig.cdroms || [],
-        extfs: currentConfig.extfs || [],
-        bootdriver: currentConfig.bootdriver || 0,
-        ram_mb: currentConfig.ram,
-        screen: currentConfig.screen,
-        audio: currentConfig.sound,
-        zappram: currentConfig.zappram,
-        dismiss_shutdown_dialog: currentConfig.dismiss_shutdown_dialog,
-        network: document.getElementById('cfg-network')?.value || 'none',
-        network_if: document.getElementById('cfg-network-if')?.value || '',
-        codec: document.getElementById('codec-select')?.value || 'png',
-        mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
-        m68k: isM68k ? archConfig : undefined,
-        ppc: isM68k ? undefined : archConfig
-    };
+    // Include saved presets
+    if (Object.keys(App.savedPresets).length > 0) {
+        jsonConfig.configs = App.savedPresets;
+    }
 
     try {
         const res = await fetch(getApiUrl('config'), {
@@ -3761,9 +3929,8 @@ async function saveConfig() {
         const data = await res.json();
 
         if (data.success) {
-            console.log('✅ CONFIG SAVED to macemu-config.json');
+            console.log('CONFIG SAVED to macemu-config.json');
             closeConfig();
-            // Don't auto-restart - user can restart manually if needed
         } else {
             logger.error('Failed to save config', { message: data.error });
         }
@@ -4100,6 +4267,9 @@ function setupEventListeners() {
 
     const saveConfigBtn = document.getElementById('save-config-btn');
     if (saveConfigBtn) saveConfigBtn.addEventListener('click', saveConfig);
+
+    const savePresetBtn = document.getElementById('save-preset-btn');
+    if (savePresetBtn) savePresetBtn.addEventListener('click', savePreset);
 
     const cfgEmulator = document.getElementById('cfg-emulator');
     if (cfgEmulator) cfgEmulator.addEventListener('change', onEmulatorChange);

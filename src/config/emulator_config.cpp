@@ -170,6 +170,11 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["ppc"]["ignoreillegal"] = ppc.ignoreillegal;
     j["ppc"]["keyboardtype"] = ppc.keyboardtype;
 
+    // Preserve saved configs from file_config_ (UI-managed, not runtime)
+    if (file_config_.contains("configs") && file_config_["configs"].is_object()) {
+        j["configs"] = file_config_["configs"];
+    }
+
     return j;
 }
 
