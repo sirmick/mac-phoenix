@@ -1,12 +1,10 @@
 # MacPhoenix
 
-A classic Macintosh emulator that runs in your browser. Boot Mac OS 7.5.5 on an emulated Quadra 650 and interact with it over WebRTC — no native GUI needed.
+A classic Macintosh emulator that runs in your browser. Boot Mac OS 7 through 9 and interact with it over WebRTC — no native GUI needed.
 
 ![License](https://img.shields.io/badge/license-GPL--2.0-blue)
 
 ![Mac OS 7.5.5 running in MacPhoenix — browser UI](docs/images/browser-desktop.png)
-
-![Emulator Settings](docs/images/browser-config.png)
 
 ## What is this?
 
@@ -14,79 +12,80 @@ MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github
 
 ### Key features
 
-- **Two CPU backends** — a fast UAE interpreter (~5s boot) and a QEMU-based Unicorn JIT, plus a lockstep dual-CPU mode for validation
-- **Browser UI** — connect from any device with a web browser, no plugins or installs
-- **WebRTC streaming** — low-latency video with H.264, VP9, AV1, PNG, or WebP encoding
+- **68K and PowerPC** — emulates a Quadra 650 (68040) or Power Mac G3 (PPC 603e)
+- **Browser UI** — connect from any device, no plugins or installs
+- **WebRTC streaming** — low-latency video with H.264, VP9, PNG, or WebP encoding
 - **REST API** — boot status, screenshots, config, and control via HTTP endpoints
 - **Headless mode** — run without any UI for testing and automation
 
 ## Quick start
 
-### Ubuntu/Debian setup
+### 1. Install dependencies (Ubuntu/Debian)
 
 ```bash
-# Build tools
-sudo apt install build-essential cmake pkg-config git
-
 # Required
-sudo apt install libssl-dev nlohmann-json3-dev
+sudo apt install build-essential cmake pkg-config git libssl-dev nlohmann-json3-dev
 
-# Video encoders (optional — enables H.264, VP9, WebP)
-sudo apt install libopenh264-dev libvpx-dev libwebp-dev libyuv-dev
-
-# Audio encoder (optional — enables Opus audio)
-sudo apt install libopus-dev
-
-# HTTP server (optional — falls back to bundled header)
-sudo apt install libcpp-httplib-dev
-
-# Playwright E2E tests (optional)
-sudo npx playwright install-deps
+# Optional — video/audio codecs (PNG streaming works without these)
+sudo apt install libopenh264-dev libvpx-dev libwebp-dev libyuv-dev libopus-dev
 ```
 
-The only hard requirements are OpenSSL and a C++17 compiler. Video/audio codec packages are optional — the build auto-detects installed codecs and enables them automatically. Without any codec packages, the emulator still works using PNG frame streaming. To explicitly disable a codec even when the library is present, pass `-DENABLE_H264=OFF`, `-DENABLE_VP9=OFF`, `-DENABLE_WEBP=OFF`, or `-DENABLE_OPUS=OFF` to the cmake configure step. The cmake configure summary shows which codecs were detected.
-
-### Requirements
-
-- Linux (x86_64)
-- A Quadra 650 ROM file (1MB)
-
-### Build & run
+### 2. Build
 
 ```bash
-# Clone with submodules
 git clone --recursive https://github.com/sirmick/mac-phoenix.git
 cd mac-phoenix
-
-# Build (Unicorn engine compiles from source on first build)
 cmake -B build
 cmake --build build -j$(nproc)
+```
 
-# Run
+### 3. Run
+
+```bash
 ./build/mac-phoenix /path/to/quadra.rom
 ```
 
-Then open **http://localhost:8000** in your browser.
+Open **http://localhost:8000** in your browser. That's it — you'll see the Mac desktop in a few seconds.
 
-### Headless mode
+### What you need
+
+- Linux (x86_64)
+- A compatible ROM file (not included):
+
+| ROM | Architecture | Mac OS | What you get |
+|-----|-------------|--------|-------------|
+| Quadra 650 (1 MB) | 68K | 7.1–7.6 | Classic Mac, boots in ~5s |
+| Power Mac G3 (4 MB) | PPC | 8.1–9.2 | Late-era classic Mac |
+
+A disk image is optional — the emulator boots to the ROM's built-in system if no disk is provided.
+
+## Architectures
+
+MacPhoenix supports two CPU architectures, selected with `--arch`:
 
 ```bash
-./build/mac-phoenix --timeout 10 --no-webserver /path/to/quadra.rom
+# 68K (default) — Quadra 650 emulation
+./build/mac-phoenix /path/to/quadra.rom
+
+# PowerPC — Power Mac G3 emulation
+./build/mac-phoenix --arch ppc /path/to/g3.rom --disk /path/to/macos9.img
 ```
 
-## CPU backends
+### 68K CPU backends
+
+The 68K architecture has multiple CPU backends, selected with `--backend`:
 
 | Backend | Engine | Boot time | Use case |
 |---------|--------|-----------|----------|
-| `uae` (default) | Hand-tuned 68K interpreter | ~5s | General use |
-| `unicorn` | QEMU TCG JIT | ~48s | Validation, future optimization |
+| `uae` (default) | Hand-tuned interpreter | ~5s | General use |
+| `unicorn` | QEMU TCG JIT | ~48s | Validation |
 | `dualcpu` | Both in lockstep | Very slow | Debugging CPU divergences |
 
-Select with `--backend uae|unicorn|dualcpu`.
+The PPC architecture uses the SheepShaver interpreter.
 
 ## Configuration
 
-Settings are stored in `~/.config/mac-phoenix/config.json` (created automatically from the web UI). All fields are optional — a minimal config just needs a ROM and disk:
+Settings are managed through the browser UI and stored in `~/.config/mac-phoenix/config.json`. A minimal config just needs a ROM and disk:
 
 ```json
 {
@@ -98,45 +97,60 @@ Settings are stored in `~/.config/mac-phoenix/config.json` (created automaticall
 
 Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for disks). CLI flags override config file values. See [docs/JsonConfig.md](docs/JsonConfig.md) for the full schema.
 
+## CLI reference
+
+```
+./build/mac-phoenix [options] [rom-path]
+  --rom PATH            ROM file (alternative to positional arg)
+  --disk PATH           Disk image (repeatable)
+  --cdrom PATH          CD-ROM image (repeatable)
+  --extfs PATH          Shared folder (repeatable)
+  --arch m68k|ppc       CPU architecture (default: m68k)
+  --backend uae|unicorn Backend selection (68K only, default: uae)
+  --ram MB              RAM size in megabytes
+  --screen WxH          Display resolution (default: 640x480)
+  --port N              HTTP server port (default: 8000)
+  --timeout N           Auto-exit after N seconds
+  --no-webserver        Headless mode (no HTTP/WebRTC)
+  --config PATH         JSON config file
+```
+
 ## API
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/status` | Boot phase, timing, and state |
-| `GET /api/screenshot` | PNG of the current screen |
-| `GET /api/mouse` | Mac cursor position |
-| `GET /api/config` | Current configuration |
-| `POST /api/emulator/start` | Start emulation |
-| `POST /api/emulator/stop` | Stop emulation |
-| `GET /api/storage` | Available ROMs and disk images |
-| `POST /api/codec` | Switch video codec |
-| `POST /api/keypress` | Send a key event (`{"key": "return"}`) |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/status` | GET | Boot phase, timing, and state |
+| `/api/screenshot` | GET | PNG of the current screen |
+| `/api/mouse` | GET/POST | Cursor position (GET) or move (POST) |
+| `/api/keypress` | POST | Send a key event (`{"key": "return"}`) |
+| `/api/config` | GET/POST | Read or update configuration |
+| `/api/emulator/start` | POST | Start emulation |
+| `/api/emulator/stop` | POST | Stop emulation |
+| `/api/storage` | GET | Available ROMs and disk images |
+| `/api/codec` | POST | Switch video codec |
+| `/api/codecs` | GET | Available codecs and status |
+| `/api/app` | GET | Current foreground application |
+| `/api/windows` | GET | Window list |
+| `/api/wait` | POST | Poll for a condition (`boot=Finder`, `app=Name`) |
 
 ## Testing
 
-Two test suites: **CTest integration tests** (shell scripts that test the emulator via curl) and **Playwright E2E tests** (browser-based, full UI + WebRTC pipeline).
-
 ```bash
-# CTest — fast suite (~15s): API, boot, mouse, command bridge
-ctest --test-dir build -R "api_endpoints|boot_uae|mouse_position|command_bridge"
+# Fast suite — API, boot, mouse, command bridge (~15s)
+ctest --test-dir build -L api
 
-# CTest — full suite (~60s, includes slow Unicorn boot)
+# Full suite — includes slow Unicorn boot (~60s)
 ctest --test-dir build
 
-# Playwright E2E (~2 min): UI controls, WebRTC latency, config, soak test
+# Playwright E2E — browser UI + WebRTC (~2 min)
 npx playwright test
-
-# Run everything
-ctest --test-dir build && npx playwright test
 ```
 
-See [docs/Testing.md](docs/Testing.md) for the full test inventory, configuration, and details on the stall detection soak test.
+See [docs/Testing.md](docs/Testing.md) for details.
 
 ## Architecture
 
-MacPhoenix uses a **Platform API** abstraction: all CPU backends implement the same function pointer table, so core emulation code (ROM patching, interrupt handling, ADB, video) is backend-agnostic.
-
-Video uses a **lock-free triple buffer** — the CPU writes frames, the encoder reads them, and the screenshot API reads them, all without locks.
+MacPhoenix uses a **Platform API** abstraction: all CPU backends implement the same function pointer table, so core code (ROM patching, interrupts, ADB, video) is backend-agnostic. Video uses a **lock-free triple buffer** — the CPU writes frames, the encoder reads them, and the screenshot API reads them, all without locks.
 
 See [CLAUDE.md](CLAUDE.md) for the full developer reference.
 
