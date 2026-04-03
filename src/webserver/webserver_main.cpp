@@ -10,6 +10,7 @@
 #include "static_files.h"
 #include "api_handlers.h"
 #include "http_stream.h"
+#include "../drivers/video/encoders/codec.h"
 #include <cstdio>
 #include <memory>
 #include <atomic>
@@ -26,6 +27,10 @@ void http_server_main(const config::EmulatorConfig* config,
                       http::APIContext* api_context)
 {
     fprintf(stderr, "[WebServer] Starting HTTP server thread...\n");
+    fprintf(stderr, "[WebServer] Codecs: PNG=yes H264=%s VP9=%s WebP=%s\n",
+            codec_available(CodecType::H264) ? "yes" : "no",
+            codec_available(CodecType::VP9)  ? "yes" : "no",
+            codec_available(CodecType::WEBP) ? "yes" : "no");
 
     // Extract config values
     int port = config->http_port;

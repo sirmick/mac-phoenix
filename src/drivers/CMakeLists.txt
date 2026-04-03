@@ -1,21 +1,5 @@
 # Platform drivers
 
-# --- lwIP (unity build) ---
-set(LWIP_SRC_ROOT ${CMAKE_SOURCE_DIR}/subprojects/lwip/src)
-
-add_library(lwip STATIC
-  ether/lwip_build.c
-  ether/sys_arch.c
-)
-target_include_directories(lwip PUBLIC
-  ${LWIP_SRC_ROOT}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/ether
-)
-target_include_directories(lwip PRIVATE
-  ${LWIP_SRC_ROOT}
-)
-target_compile_options(lwip PRIVATE -w)
-
 # --- Drivers ---
 add_library(drivers STATIC
   # Video
@@ -40,9 +24,7 @@ add_library(drivers STATIC
   # Ethernet
   ether/ether_null.cpp
   ether/ether_adapter.cpp
-  ether/ether_lwip.cpp
-  ether/ether_raw.cpp
-  ether/lwip_nat.cpp
+  ether/ether_socket.cpp
   # Platform
   platform/platform_adapter.cpp
   platform/platform_null.cpp
@@ -69,5 +51,5 @@ target_include_directories(drivers PUBLIC
 target_link_libraries(drivers PRIVATE
   datachannel-static
   nlohmann_json::nlohmann_json
-  lwip
+  codec_flags
 )

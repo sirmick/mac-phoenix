@@ -15,4 +15,5 @@ target_compile_definitions(webrtc_lib PRIVATE WEBRTC_ENABLED)
 target_link_libraries(webrtc_lib PRIVATE
   datachannel-static
   nlohmann_json::nlohmann_json
+  codec_flags
 )

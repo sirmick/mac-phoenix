@@ -16,6 +16,7 @@
 #include "../core/command_bridge.h"  // For command bridge
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
+#include "keyboard_map.h"
 #include <sstream>
 #include <iomanip>
 #include <cstdio>
@@ -934,7 +935,17 @@ Response APIRouter::handle_keypress(const Request& req) {
             Response r2; r2.set_status(400); r2.set_body("{\"error\": \"unknown key name: " + name + "\"}"); r2.set_content_type("application/json"); return r2;
         }
     } else if (j["key"].is_number()) {
-        keycode = j["key"].get<int>();
+        int raw = j["key"].get<int>();
+        if (j.contains("down")) {
+            // Web client sends browser keycodes — convert to Mac ADB
+            keycode = keyboard_map::browser_to_mac_keycode(raw);
+            if (keycode < 0) {
+                return Response::json("{\"success\": false, \"error\": \"unmapped browser keycode\"}");
+            }
+        } else {
+            // Legacy API: caller provides Mac ADB keycodes directly
+            keycode = raw;
+        }
     } else {
         Response resp; resp.set_status(400);
         resp.set_body("{\"error\": \"'key' must be a string or number\"}");

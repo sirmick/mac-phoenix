@@ -18,4 +18,4 @@ target_include_directories(webserver PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../drivers/video/encoders
 )
 
-target_link_libraries(webserver PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(webserver PRIVATE nlohmann_json::nlohmann_json codec_flags)

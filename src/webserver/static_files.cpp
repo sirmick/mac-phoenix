@@ -5,6 +5,7 @@
  */
 
 #include "static_files.h"
+#include "../drivers/video/encoders/codec.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <sstream>
@@ -113,6 +114,14 @@ std::string StaticFileHandler::inject_config_template(const std::string& html) c
     j["webcodec"] = config_->codec;
     j["resolution"] = config_->screen_string();
 
+    // Codec availability (so client doesn't need a separate /api/codecs fetch)
+    nlohmann::json codecs = nlohmann::json::array();
+    codecs.push_back({{"id", "png"},  {"name", "PNG"},  {"available", true}});
+    codecs.push_back({{"id", "h264"}, {"name", "H.264"}, {"available", codec_available(CodecType::H264)}});
+    codecs.push_back({{"id", "vp9"},  {"name", "VP9"},  {"available", codec_available(CodecType::VP9)}});
+    codecs.push_back({{"id", "webp"}, {"name", "WebP"}, {"available", codec_available(CodecType::WEBP)}});
+    j["codecs"] = codecs;
+
     std::string config_json = j.dump(2);
 
     // Replace {{CONFIG_JSON}} placeholder
@@ -127,6 +136,22 @@ std::string StaticFileHandler::inject_config_template(const std::string& html) c
     } else {
         fprintf(stderr, "[HTTP] Warning: {{CONFIG_JSON}} placeholder not found in index.html\n");
     }
+
+    // Replace {{SELECTED_*}} placeholders for codec and mouse dropdowns
+    auto replace_all = [&result](const std::string& from, const std::string& to) {
+        size_t p = 0;
+        while ((p = result.find(from, p)) != std::string::npos) {
+            result.replace(p, from.length(), to);
+            p += to.length();
+        }
+    };
+
+    replace_all("{{SELECTED_PNG}}",  config_->codec == "png"  ? "selected" : "");
+    replace_all("{{SELECTED_H264}}", (config_->codec == "h264" && codec_available(CodecType::H264)) ? "selected" : "");
+    replace_all("{{SELECTED_VP9}}",  (config_->codec == "vp9"  && codec_available(CodecType::VP9))  ? "selected" : "");
+    replace_all("{{SELECTED_WEBP}}", (config_->codec == "webp" && codec_available(CodecType::WEBP)) ? "selected" : "");
+    replace_all("{{SELECTED_RELATIVE}}", config_->mousemode == "relative" ? "selected" : "");
+    replace_all("{{SELECTED_ABSOLUTE}}", config_->mousemode == "absolute" ? "selected" : "");
 
     return result;
 }

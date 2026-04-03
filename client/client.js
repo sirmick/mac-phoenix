@@ -105,6 +105,11 @@ async function fetchConfig() {
 
         logger.info('[Browser] Using embedded config (no fetch needed)', serverUIConfig);
 
+        // Apply codec availability from embedded config (removes unavailable codecs from dropdown)
+        if (embeddedConfig.codecs) {
+            applyCodecAvailability(embeddedConfig.codecs);
+        }
+
         // Note: UI elements (select dropdowns, resolution) are already correct
         // because server pre-rendered them with selected attributes
         return;
@@ -2977,6 +2982,11 @@ function initClient() {
         client.codecType = parseCodecString(configCodec);
     }
 
+    // Apply saved mouse mode from config
+    if (serverUIConfig.mousemode) {
+        client.mouseMode = serverUIConfig.mousemode;
+    }
+
     // Start stats collection
     statsInterval = setInterval(() => {
         if (client) client.updateStats();
@@ -3812,6 +3822,35 @@ async function resetEmulator() {
     await restartEmulator();
 }
 
+// Apply codec availability to the dropdown (removes unavailable codecs)
+function applyCodecAvailability(codecs) {
+    const select = document.getElementById('codec-select');
+    if (!select || !codecs) return;
+
+    const currentValue = select.value;
+    select.innerHTML = '';
+
+    for (const codec of codecs) {
+        if (codec.available) {
+            const opt = document.createElement('option');
+            opt.value = codec.id;
+            opt.textContent = codec.name;
+            select.appendChild(opt);
+        }
+    }
+
+    // Always include HTTP Stream option
+    const opt = document.createElement('option');
+    opt.value = 'httpstream';
+    opt.textContent = 'HTTP Stream';
+    select.appendChild(opt);
+
+    // Restore selection if still available, otherwise default to first
+    if (select.querySelector(`option[value="${currentValue}"]`)) {
+        select.value = currentValue;
+    }
+}
+
 // Fetch available codecs from server and populate the dropdown
 async function populateAvailableCodecs() {
     const select = document.getElementById('codec-select');
@@ -3820,38 +3859,8 @@ async function populateAvailableCodecs() {
     try {
         const response = await fetch(getApiUrl('codecs'));
         const data = await response.json();
-        if (!data.codecs) return;
-
-        // Remember current selection
-        const currentValue = select.value;
-
-        // Remove all options except httpstream
-        const httpstreamOpt = select.querySelector('option[value="httpstream"]');
-        select.innerHTML = '';
-
-        // Add available codecs
-        for (const codec of data.codecs) {
-            if (codec.available) {
-                const opt = document.createElement('option');
-                opt.value = codec.id;
-                opt.textContent = codec.name;
-                select.appendChild(opt);
-            }
-        }
-
-        // Re-add httpstream option
-        if (httpstreamOpt) {
-            select.appendChild(httpstreamOpt);
-        } else {
-            const opt = document.createElement('option');
-            opt.value = 'httpstream';
-            opt.textContent = 'HTTP Stream';
-            select.appendChild(opt);
-        }
-
-        // Restore selection if still available, otherwise default to first
-        if (select.querySelector(`option[value="${currentValue}"]`)) {
-            select.value = currentValue;
+        if (data.codecs) {
+            applyCodecAvailability(data.codecs);
         }
     } catch (e) {
         logger.warn('[Browser] Failed to fetch available codecs', { error: e.message });
