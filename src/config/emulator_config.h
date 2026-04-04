@@ -121,7 +121,7 @@ struct EmulatorConfig {
     bool nocdrom = false;
     bool nosound = false;
     bool zappram = false;
-    bool dismiss_shutdown_dialog = false;
+    bool dismiss_shutdown_dialog = true;
     int frameskip = 6;
     int yearofs = 0;
     int dayofs = 0;

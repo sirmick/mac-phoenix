@@ -119,3 +119,15 @@ set_tests_properties(mouse_position PROPERTIES
   LABELS "boot"
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
+
+# --- Guest test suite (requires Retro68-built MacTestSuite binary) ---
+
+add_test(
+  NAME guest_suite
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --timeout 60 --port 18094
+)
+set_tests_properties(guest_suite PROPERTIES
+  TIMEOUT 90
+  LABELS "guest"
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)

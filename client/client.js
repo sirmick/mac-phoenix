@@ -3276,7 +3276,7 @@ function loadPreset(name) {
         keyboardtype: isM68k ? (preset.m68k?.keyboardtype || 5) : (preset.ppc?.keyboardtype || 5),
         backend: preset.cpu_backend || (isM68k ? 'uae' : 'kpx'),
         zappram: preset.zappram ?? false,
-        dismiss_shutdown_dialog: preset.dismiss_shutdown_dialog ?? false,
+        dismiss_shutdown_dialog: preset.dismiss_shutdown_dialog ?? true,
         network: preset.network || 'none',
         network_if: preset.network_if || ''
     };
@@ -3327,7 +3327,7 @@ function buildConfigJson() {
         screen: document.getElementById('cfg-screen')?.value || '800x600',
         audio: document.getElementById('cfg-sound')?.checked ?? true,
         zappram: document.getElementById('cfg-zappram')?.checked ?? false,
-        dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? false,
+        dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true,
         network: document.getElementById('cfg-network')?.value || 'none',
         network_if: document.getElementById('cfg-network-if')?.value || '',
         codec: document.getElementById('codec-select')?.value || 'png',
@@ -3795,7 +3795,7 @@ async function loadCurrentConfig() {
             keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5),
             backend: cfg.cpu_backend || (isM68k ? 'uae' : 'kpx'),
             zappram: cfg.zappram ?? false,
-            dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? false,
+            dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
             network: cfg.network || 'none',
             network_if: cfg.network_if || ''
         };
@@ -3896,7 +3896,7 @@ async function saveConfig() {
     currentConfig.screen = document.getElementById('cfg-screen')?.value || '800x600';
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
     currentConfig.zappram = document.getElementById('cfg-zappram')?.checked ?? false;
-    currentConfig.dismiss_shutdown_dialog = document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? false;
+    currentConfig.dismiss_shutdown_dialog = document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true;
     currentConfig.bootdriver = parseInt(document.getElementById('cfg-bootdriver')?.value || 0);
     currentConfig.backend = document.getElementById('cfg-backend')?.value || (isM68kMode(currentConfig.emulator) ? 'uae' : 'kpx');
     currentConfig.fpu = document.getElementById('cfg-fpu')?.checked ?? true;
