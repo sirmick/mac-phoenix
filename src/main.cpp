@@ -480,9 +480,11 @@ int main(int argc, char **argv)
 				video_ipc_exit();
 				return 1;
 			}
-			// Copy KPX CPU hooks back, then restore IPC video hooks
+			// Copy KPX CPU hooks back, then restore IPC video/audio hooks
 			g_platform = *platform;
 			g_platform.video_refresh = video_ipc_refresh;
+			g_platform.audio_init = []() { audio_direct_init(); };
+			g_platform.audio_exit = []() { audio_direct_exit(); };
 
 			// screen_base is 0 here — VideoInit runs during Mac boot.
 			// Set the framebuffer pointer from VideoInit instead.

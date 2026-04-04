@@ -17,6 +17,13 @@
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
 #include "keyboard_map.h"
+
+// Forward-declare WebRTC peer reset (avoids pulling in rtc/rtc.hpp)
+namespace webrtc {
+    class WebRTCServer;
+    extern WebRTCServer* g_server;
+    void reset_webrtc_peers();  // Defined in webrtc_server.cpp
+}
 #include <sstream>
 #include <iomanip>
 #include <cstdio>
@@ -212,6 +219,8 @@ Response APIRouter::handle_emulator_start(const Request& req) {
         if (!ctx_->subprocess->start()) {
             return Response::json("{\"success\": false, \"error\": \"Failed to start subprocess\"}");
         }
+        // Reset WebRTC peer state so all peers request fresh keyframes
+        webrtc::reset_webrtc_peers();
         return Response::json("{\"success\": true, \"message\": \"Subprocess started\"}");
     }
 
@@ -258,6 +267,8 @@ Response APIRouter::handle_emulator_restart(const Request& req) {
     if (ctx_->subprocess) {
         fprintf(stderr, "[API] Restarting subprocess\n");
         ctx_->subprocess->reset();
+        // Reset WebRTC peer state so all peers request fresh keyframes
+        webrtc::reset_webrtc_peers();
         return Response::json("{\"success\": true, \"message\": \"Subprocess restarted\"}");
     }
 

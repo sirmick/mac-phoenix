@@ -87,6 +87,11 @@ public:
     void send_audio_frame(const uint8_t* data, size_t size);
 
     /**
+     * Reset peer state after emulator restart (forces keyframe delivery)
+     */
+    void reset_peer_state();
+
+    /**
      * Request codec change (notifies all peers to reconnect)
      */
     void notify_codec_change(CodecType new_codec);

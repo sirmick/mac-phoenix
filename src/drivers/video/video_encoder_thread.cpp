@@ -265,10 +265,11 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
     static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
     [[maybe_unused]] static bool debug_perf = config ? config->debug_perf : (getenv("MACEMU_DEBUG_PERF") != nullptr);
 
-    // IPC direct-read state
+    // IPC direct-read state (reset on each subprocess restart)
     uint64_t ipc_last_frame_count = 0;
     int ipc_eventfd = -1;
     bool ipc_logged = false;
+    bool ipc_was_connected = false;  // Track IPC transitions for reset
 
     // Initialize encoder with codec from config
     CodecType current_codec = CodecType::PNG;  // Default
@@ -333,6 +334,18 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
         // Check if IPC SHM is available (subprocess may have started)
         IPCBuffer* ipc_shm = ipc_shm_ptr ? ipc_shm_ptr->load(std::memory_order_acquire) : nullptr;
         if (ipc_shm) {
+            // Detect subprocess restart: SHM went away and came back
+            if (!ipc_was_connected) {
+                fprintf(stderr, "[VideoEncoder] IPC (re)connected — resetting encoder state\n");
+                ipc_last_frame_count = 0;
+                ipc_eventfd = -1;
+                ipc_logged = false;
+                have_prev_frame = false;
+                encoder_initialized = false;
+                ipc_was_connected = true;
+                g_request_keyframe.store(true, std::memory_order_release);
+            }
+
             // Pick up parent's eventfd on first IPC connection
             if (ipc_eventfd < 0 && ipc_eventfd_ptr) {
                 ipc_eventfd = ipc_eventfd_ptr->load(std::memory_order_acquire);
@@ -377,6 +390,9 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             // Update VideoOutput for screenshot API (this is the only remaining copy)
             video_output->submit_frame(pixels, w, h, format);
         } else {
+            // IPC disconnected — mark so we detect reconnection
+            ipc_was_connected = false;
+
             // In-process: read from VideoOutput triple buffer
             const FrameBuffer* frame = video_output->wait_for_frame(16);  // 16ms timeout
 

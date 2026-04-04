@@ -918,6 +918,21 @@ void WebRTCServer::send_audio_frame(const uint8_t* data, size_t size) {
     }
 }
 
+void reset_webrtc_peers() {
+    if (g_server) {
+        g_server->reset_peer_state();
+    }
+}
+
+void WebRTCServer::reset_peer_state() {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    for (const auto& [peer_id, peer] : peers_) {
+        peer->needs_keyframe = true;
+        peer->needs_first_frame = true;
+    }
+    fprintf(stderr, "[WebRTC] Reset peer state for %zu peers (will request keyframe)\n", peers_.size());
+}
+
 void WebRTCServer::notify_codec_change(CodecType new_codec) {
     const char* codec_name = (new_codec == CodecType::H264) ? "h264" :
                              (new_codec == CodecType::AV1) ? "av1" :
