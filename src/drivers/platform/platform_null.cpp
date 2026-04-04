@@ -282,73 +282,7 @@ void EtherInterrupt()
 	g_platform.ether_interrupt();
 }
 
-// Audio stubs
-void AudioInterrupt()
-{
-}
-
-bool audio_get_speaker_mute()
-{
-	return false;
-}
-
-void audio_set_speaker_mute(bool mute)
-{
-	(void)mute;
-}
-
-uint32 audio_get_speaker_volume()
-{
-	return 0x100;
-}
-
-void audio_set_speaker_volume(uint32 vol)
-{
-	(void)vol;
-}
-
-void audio_exit_stream()
-{
-}
-
-bool audio_get_main_mute()
-{
-	return false;
-}
-
-uint32 audio_get_main_volume()
-{
-	return 0x100;
-}
-
-void audio_set_sample_size(int size)
-{
-	(void)size;
-}
-
-void audio_set_sample_rate(int rate)
-{
-	(void)rate;
-}
-
-void audio_set_channels(int channels)
-{
-	(void)channels;
-}
-
-void audio_set_main_mute(bool mute)
-{
-	(void)mute;
-}
-
-void audio_set_main_volume(uint32 vol)
-{
-	(void)vol;
-}
-
-void audio_enter_stream()
-{
-}
+// Audio functions now in audio_direct.cpp
 
 // idle_wait and idle_resume provided by timer_unix.cpp
 

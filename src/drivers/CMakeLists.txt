@@ -12,6 +12,8 @@ add_library(drivers STATIC
   # Audio
   audio/audio_null.cpp
   audio/audio_webrtc.cpp
+  audio/audio_direct.cpp
+  audio/audio_ipc_reader.cpp
   audio/audio_adapter.cpp
   audio/audio_output.cpp
   audio/audio_encoder_thread.cpp
@@ -45,6 +47,7 @@ target_include_directories(drivers PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/../config
   ${CMAKE_CURRENT_SOURCE_DIR}/../webserver
+  ${CMAKE_CURRENT_SOURCE_DIR}/../ipc
   ${CMAKE_CURRENT_SOURCE_DIR}/ether
 )
 

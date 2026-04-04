@@ -31,6 +31,10 @@ public:
     bool send_key(int mac_keycode, bool down);
     bool send_mouse(int x, int y, uint8_t buttons, bool absolute);
     bool send_command(uint8_t command);
+    bool send_audio_request(uint32_t requested_samples);
+
+    // Socket access (for audio thread)
+    int control_socket() const { return control_socket_; }
 
 private:
     bool connect_shm(pid_t pid);

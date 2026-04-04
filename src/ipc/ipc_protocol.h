@@ -78,6 +78,13 @@ extern "C" {
 #define IPC_CMD_STOP        2
 #define IPC_CMD_RESET       3
 
+#define IPC_INPUT_AUDIO_REQUEST 4
+
+/* ── Audio constants ────────────────────────────────────────────── */
+
+#define IPC_AUDIO_FRAME_RING_SIZE  4      /* 4 frames = 80ms buffer */
+#define IPC_AUDIO_MAX_FRAME_BYTES  3840   /* 48kHz * 2ch * 2bytes * 20ms */
+
 typedef struct {
     uint8_t type;           /* IPC_INPUT_* */
     uint8_t flags;
@@ -104,12 +111,28 @@ typedef struct {
     uint8_t _reserved[3];
 } IPCCommandInput;          /* 8 bytes */
 
+typedef struct {
+    IPCInputHeader hdr;     /* type = IPC_INPUT_AUDIO_REQUEST */
+    uint32_t requested_samples;
+} IPCAudioRequestInput;     /* 8 bytes */
+
 typedef union {
     IPCInputHeader hdr;
     IPCKeyInput key;
     IPCMouseInput mouse;
     IPCCommandInput cmd;
+    IPCAudioRequestInput audio_request;
 } IPCInput;
+
+/* ── Audio frame (child writes to SHM ring buffer) ──────────────── */
+
+typedef struct {
+    uint32_t sample_rate;       /* 11025/22050/44100/48000 */
+    uint32_t channels;          /* 1=mono, 2=stereo */
+    uint32_t samples;           /* actual sample count per channel */
+    uint32_t format;            /* 1=PCM_S16 */
+    uint8_t  data[IPC_AUDIO_MAX_FRAME_BYTES];  /* raw S16MSB (big-endian) */
+} IPCAudioFrame;
 
 /* ── Shared memory buffer ────────────────────────────────────────
  *
@@ -119,7 +142,7 @@ typedef union {
  *
  * Total size: ~24.9 MB (dominated by 3 × 1920×1080×4 frame buffers).
  */
-typedef struct {
+typedef struct IPCBuffer {
     /* Header (validated by parent on connect) */
     uint32_t magic;
     uint32_t version;
@@ -155,6 +178,11 @@ typedef struct {
     IPC_ATOMIC_UINT32 shm_raw_x,    shm_raw_y;
     IPC_ATOMIC_UINT32 shm_mtemp_x,  shm_mtemp_y;
     IPC_ATOMIC_UINT32 shm_crsr_new,  shm_crsr_couple, shm_crsr_busy;
+
+    /* ── Audio ring buffer (child writes, parent reads) ──────────── */
+    IPC_ATOMIC_UINT32 audio_write_idx;   /* child increments after writing frame */
+    IPC_ATOMIC_UINT32 audio_read_idx;    /* parent increments after reading frame */
+    IPCAudioFrame audio_frames[IPC_AUDIO_FRAME_RING_SIZE];
 
     /* Frame buffers — packed pixels, width×height×4 bytes per frame.
      * Allocated for max resolution; only width×height bytes are valid. */

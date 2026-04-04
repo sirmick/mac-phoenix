@@ -6,6 +6,7 @@
  */
 
 #include "webrtc_server.h"
+#include "../drivers/audio/encoders/audio_config.h"
 #include "../config/json_utils.h"
 #include "../webserver/keyboard_map.h"
 #include "../ipc/ipc_protocol.h"
@@ -662,7 +663,7 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     // Add audio track (Opus) with proper RTP packetizer
     fprintf(stderr, "[WebRTC] Creating Opus audio track\n");
     auto audio = rtc::Description::Audio("audio-stream", rtc::Description::Direction::SendOnly);
-    audio.addOpusCodec(111);
+    audio.addOpusCodec(OPUS_PAYLOAD_TYPE, WEBRTC_OPUS_PROFILE);
     audio.addSSRC(ssrc + 1, "audio-stream", "stream1", "audio-stream");
     fprintf(stderr, "[WebRTC] Calling addTrack for audio\n");
     peer->audio_track = peer->pc->addTrack(audio);
@@ -670,7 +671,7 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     // Set up Opus RTP packetizer (following web-streaming pattern)
     auto rtpConfigAudio = std::make_shared<rtc::RtpPacketizationConfig>(
-        ssrc + 1, "audio-stream", 111, rtc::OpusRtpPacketizer::DefaultClockRate
+        ssrc + 1, "audio-stream", OPUS_PAYLOAD_TYPE, rtc::OpusRtpPacketizer::DefaultClockRate
     );
     auto opusPacketizer = std::make_shared<rtc::OpusRtpPacketizer>(rtpConfigAudio);
 
@@ -895,25 +896,22 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
 void WebRTCServer::send_audio_frame(const uint8_t* data, size_t size) {
     if (!initialized_ || peer_count_ == 0 || !data || size == 0) return;
 
+    // Frame-based timing (like legacy): count frames, not wall clock
+    static uint64_t audio_frame_count = 0;
+    auto elapsed = std::chrono::duration<double>(audio_frame_count * 0.020); // 20ms per frame
+    rtc::FrameInfo frameInfo(elapsed);
+    audio_frame_count++;
+
     std::lock_guard<std::mutex> lock(peers_mutex_);
     for (const auto& [peer_id, peer] : peers_) {
         if (!peer->ready || !peer->audio_track) continue;
-
-        // Check if track is open before sending
         if (!peer->audio_track->isOpen()) continue;
 
         try {
-            // Send frame with timestamp
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration<double>(now - start_time_);
-            rtc::FrameInfo frameInfo(elapsed);
-
-            // Create byte vector from raw pointer
-            std::vector<std::byte> frame_data(size);
-            std::memcpy(frame_data.data(), data, size);
-
-            peer->audio_track->send(frame_data);
-
+            peer->audio_track->sendFrame(
+                reinterpret_cast<const std::byte*>(data),
+                size,
+                frameInfo);
         } catch (const std::exception& e) {
             fprintf(stderr, "[WebRTC] Error sending audio frame: %s\n", e.what());
         }

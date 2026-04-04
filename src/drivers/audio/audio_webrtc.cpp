@@ -19,9 +19,15 @@ namespace audio {
 }
 
 // WebRTC audio state
-namespace {
-	AudioOutput* g_audio_output = nullptr;
-	std::thread* g_encoder_thread = nullptr;
+static AudioOutput* g_audio_output = nullptr;
+static std::thread* g_encoder_thread = nullptr;
+
+/*
+ *  Get the AudioOutput ring buffer (used by audio_direct.cpp)
+ */
+AudioOutput* audio_direct_get_output(void)
+{
+	return g_audio_output;
 }
 
 /*

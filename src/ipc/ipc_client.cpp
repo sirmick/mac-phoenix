@@ -218,3 +218,15 @@ bool IPCClient::send_command(uint8_t command)
 
     return send(control_socket_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
 }
+
+bool IPCClient::send_audio_request(uint32_t requested_samples)
+{
+    if (control_socket_ < 0) return false;
+
+    IPCAudioRequestInput msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.hdr.type = IPC_INPUT_AUDIO_REQUEST;
+    msg.requested_samples = requested_samples;
+
+    return send(control_socket_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
+}

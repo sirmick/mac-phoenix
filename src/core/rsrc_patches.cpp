@@ -287,14 +287,13 @@ void m68k::CheckLoad(uint32 type, int16 id, uint8 *p, uint32 size)
 		patch_idle_time(p, size, 3);
 
 	} else if (type == FOURCC('t','h','n','g') && id == -16563) {
-		D(bug(" thng -16563 found\n"));
+		fprintf(stderr, "[Audio] thng -16563 found, setting component flags 0x%08x\n", audio_component_flags);
 
 		// Set audio component flags (7.5, 7.6, 7.6.1, 8.0)
 		*(uint32 *)(p + componentFlags) = htonl(audio_component_flags);
-		D(bug("  patch 1 applied\n"));
 
 	} else if (type == FOURCC('s','i','f','t') && id == -16563) {
-		D(bug(" sift -16563 found\n"));
+		fprintf(stderr, "[Audio] sift -16563 found, installing audio component EmulOp\n");
 
 		// Replace audio component (7.5, 7.6, 7.6.1, 8.0)
 		p16 = (uint16 *)p;
