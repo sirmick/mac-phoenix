@@ -34,3 +34,6 @@ __pycache__/
 
 # Rust
 net-bridge/target/
+build_output.txt
+build_stdout.txt
+build_warnings.txt

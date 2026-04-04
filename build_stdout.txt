@@ -1,1 +1,0 @@
-ninja: Entering directory `build'

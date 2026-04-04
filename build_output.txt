@@ -1,2 +1,0 @@
-ninja: Entering directory `build'
-ninja: error: '/home/mick/mac-phoenix-ppc/build/subprojects/libdatachannel/libdatachannel_static.a', needed by 'mac-phoenix', missing and no known rule to make it
