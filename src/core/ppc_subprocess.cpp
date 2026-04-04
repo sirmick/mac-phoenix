@@ -2,13 +2,12 @@
  * ppc_subprocess.cpp - PPC subprocess management for webserver mode
  *
  * Parent execs `mac-phoenix --ipc` as a child subprocess, connects
- * via SHM + Unix socket, and relays video frames to VideoOutput.
- *
- * Based on src/core/cpu_process.cpp (same interface, different transport).
+ * via SHM + Unix socket. Video frames are read directly from IPC SHM
+ * by the encoder thread (zero-copy — no relay thread needed).
  */
 
 #include "ppc_subprocess.h"
-#include "../drivers/video/video_output.h"
+#include "../ipc/ipc_protocol.h"
 
 #include <cstdio>
 #include <cstring>
@@ -17,7 +16,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <sys/epoll.h>
 
 PPCSubprocess::PPCSubprocess(config::EmulatorConfig* config)
     : config_(config)
@@ -26,7 +24,6 @@ PPCSubprocess::PPCSubprocess(config::EmulatorConfig* config)
 
 PPCSubprocess::~PPCSubprocess()
 {
-    stop_relay();
     stop();
 }
 
@@ -198,8 +195,8 @@ bool PPCSubprocess::start()
         }
     });
 
-    // Start video relay
-    start_relay();
+    // Publish IPC SHM to encoder thread (zero-copy video)
+    publish_ipc_shm();
 
     return true;
 }
@@ -217,10 +214,12 @@ bool PPCSubprocess::stop()
 
     fprintf(stderr, "[PPCSubprocess] Stopping child (pid %d)\n", pid);
 
-    // Stop relay first
-    stop_relay();
+    // Clear IPC SHM so encoder stops reading, then wait for it to
+    // drain (encoder polls at 16ms, so 50ms is plenty)
+    clear_ipc_shm();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-    // Disconnect IPC
+    // Disconnect IPC (unmaps SHM — safe now that encoder has stopped reading)
     ipc_client_.disconnect();
 
     // Send SIGTERM, then SIGKILL after grace period
@@ -277,92 +276,30 @@ bool PPCSubprocess::is_running() const
     return buf && buf->state == IPC_STATE_RUNNING;
 }
 
-void PPCSubprocess::set_video_output(VideoOutput* vo)
+void PPCSubprocess::set_ipc_shm_atoms(std::atomic<IPCBuffer*>* shm, std::atomic<int>* eventfd)
 {
-    video_output_ = vo;
+    ipc_shm_atom_ = shm;
+    ipc_eventfd_atom_ = eventfd;
 }
 
-void PPCSubprocess::start_relay()
+void PPCSubprocess::publish_ipc_shm()
 {
-    if (!video_output_ || relay_running_.load()) return;
-
-    relay_running_.store(true, std::memory_order_release);
-    relay_thread_ = std::thread(&PPCSubprocess::video_relay_main, this);
+    if (ipc_shm_atom_) {
+        ipc_shm_atom_->store(ipc_client_.shm(), std::memory_order_release);
+    }
+    if (ipc_eventfd_atom_) {
+        ipc_eventfd_atom_->store(ipc_client_.frame_eventfd(), std::memory_order_release);
+    }
+    fprintf(stderr, "[PPCSubprocess] Published IPC SHM to encoder (shm=%p, eventfd=%d)\n",
+            (void*)ipc_client_.shm(), ipc_client_.frame_eventfd());
 }
 
-void PPCSubprocess::stop_relay()
+void PPCSubprocess::clear_ipc_shm()
 {
-    relay_running_.store(false, std::memory_order_release);
-    if (relay_thread_.joinable()) {
-        relay_thread_.join();
+    if (ipc_shm_atom_) {
+        ipc_shm_atom_->store(nullptr, std::memory_order_release);
     }
-}
-
-void PPCSubprocess::video_relay_main()
-{
-    fprintf(stderr, "[PPCSubprocess] Video relay started\n");
-
-    int eventfd = ipc_client_.frame_eventfd();
-    bool use_epoll = (eventfd >= 0);
-
-    int epoll_fd = -1;
-    if (use_epoll) {
-        epoll_fd = epoll_create1(0);
-        if (epoll_fd >= 0) {
-            struct epoll_event ev;
-            ev.events = EPOLLIN;
-            ev.data.fd = eventfd;
-            epoll_ctl(epoll_fd, EPOLL_CTL_ADD, eventfd, &ev);
-        } else {
-            use_epoll = false;
-        }
+    if (ipc_eventfd_atom_) {
+        ipc_eventfd_atom_->store(-1, std::memory_order_release);
     }
-
-    uint64_t last_frame_count = 0;
-
-    while (relay_running_.load(std::memory_order_acquire)) {
-        if (use_epoll) {
-            // Wait for eventfd signal (frame ready)
-            struct epoll_event events[1];
-            int n = epoll_wait(epoll_fd, events, 1, 16);  // 16ms timeout (~60fps)
-            if (n > 0) {
-                // Drain eventfd
-                uint64_t val;
-                ssize_t ignored = read(eventfd, &val, sizeof(val));
-                (void)ignored;
-            }
-        } else {
-            // Fallback: poll at ~1ms
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-
-        IPCBuffer* buf = ipc_client_.shm();
-        if (!buf) continue;
-
-        // Check for new frame (atomic reads for cross-process safety)
-        uint64_t frame_count = IPC_ATOMIC_LOAD(buf->frame_count);
-        if (frame_count <= last_frame_count) continue;
-        last_frame_count = frame_count;
-
-        uint32_t idx = IPC_ATOMIC_LOAD(buf->ready_index);
-        if (idx >= IPC_NUM_BUFFERS) continue;
-
-        const uint8_t* pixels = buf->frames[idx];
-        int width = buf->width;
-        int height = buf->height;
-
-        if (width <= 0 || height <= 0) continue;
-
-        // Child stores packed pixels (no stride padding) — direct submit
-        video_output_->submit_frame(
-            reinterpret_cast<const uint32_t*>(pixels),
-            width, height,
-            static_cast<PixelFormat>(buf->pixel_format));
-    }
-
-    if (epoll_fd >= 0) {
-        close(epoll_fd);
-    }
-
-    fprintf(stderr, "[PPCSubprocess] Video relay stopped\n");
 }

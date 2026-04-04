@@ -34,7 +34,7 @@
 #include "audio_defs.h"
 #include "thunks.h"
 
-#define DEBUG 1
+#define DEBUG 0
 #include "debug.h"
 
 using namespace ppc;
@@ -667,7 +667,7 @@ void check_load_invoc(uint32 type, int16 id, uint32 h)
 		return;
 	uint32 size = ReadMacInt32(p - 2 * 4) & 0xffffff;
 
-	fprintf(stderr, "[CHECKLOAD] type='%c%c%c%c' id=%d size=%u\n", (type>>24)&0xff, (type>>16)&0xff, (type>>8)&0xff, type&0xff, id, size);
+	D(bug("[CHECKLOAD] type='%c%c%c%c' id=%d size=%u\n", (type>>24)&0xff, (type>>16)&0xff, (type>>8)&0xff, type&0xff, id, size));
 	CheckLoad(type, id, (uint16 *)Mac2HostAddr(p), size);
 }
 

@@ -927,62 +927,14 @@ void HandleInterrupt(powerpc_registers *r)
 
     // Do nothing if interrupts are disabled
     if (int32(ReadMacInt32(XLM_IRQ_NEST)) > 0) {
-        if (++hi_skip_count <= 5)
-            fprintf(stderr, "[HI] skip: IRQ_NEST=%d\n", (int)ReadMacInt32(XLM_IRQ_NEST));
+        hi_skip_count++;
         return;
     }
 
     uint32 mode = ReadMacInt32(XLM_RUN_MODE);
     if (mode == MODE_NATIVE) hi_mode1_count++;
 
-    if (hi_count <= 10 || (hi_count % 100 == 0))
-        fprintf(stderr, "[HI] #%d mode=%d\n", hi_count, (int)mode);
-
-    // After initial boot (hi_count > 300), sample 68k PC when stuck in mode=0
-    // gpr[24] = 68k PC, gpr[25] = SR MSB, gpr[31] = emulator data pointer
-    static int stall_sample = 0;
-    if (hi_count > 300 && mode == MODE_68K) {
-        if (stall_sample < 20 || (stall_sample % 500 == 0)) {
-            uint32 m68k_pc = r->gpr[24];
-            uint32 ppc_pc = kpx_cpu_get_pc();
-            uint32 r25 = r->gpr[25];
-            fprintf(stderr, "[HI-STALL] #%d 68k_pc=%08x ppc_pc=%08x r25=%08x\n",
-                    stall_sample, m68k_pc, ppc_pc, r25);
-            // Dump 68k code around the stall address (first sample only)
-            if (stall_sample == 0) {
-                // Dump 64 words of 68k code around stall (128 bytes before, 64 after)
-                uint32 dump_base = (m68k_pc & ~1) - 64;
-                fprintf(stderr, "[HI-STALL] 68k code dump from %08x (>>> = PC):\n", dump_base);
-                for (int row = 0; row < 12; row++) {
-                    uint32 row_addr = dump_base + row * 16;
-                    fprintf(stderr, "  %08x:", row_addr);
-                    for (int col = 0; col < 8; col++) {
-                        uint32 addr = row_addr + col * 2;
-                        bool is_pc = (addr == (m68k_pc & ~1));
-                        if (addr < RAMSize || (addr >= ROMBase && addr < ROMBase + 0x500000))
-                            fprintf(stderr, "%s%04x", is_pc ? ">>>" : " ", ReadMacInt16(addr));
-                        else
-                            fprintf(stderr, " ????");
-                    }
-                    fprintf(stderr, "\n");
-                }
-                // 68k d0-d7 = PPC r8-r15, 68k a0-a6 = PPC r16-r22, a7/sp = r1
-                fprintf(stderr, "[HI-STALL] 68k d0-d3: %08x %08x %08x %08x  a0-a3: %08x %08x %08x %08x\n",
-                        r->gpr[8], r->gpr[9], r->gpr[10], r->gpr[11],
-                        r->gpr[16], r->gpr[17], r->gpr[18], r->gpr[19]);
-                fprintf(stderr, "[HI-STALL] 68k a4-a6: %08x %08x %08x  a7/sp=%08x  r24(pc)=%08x r25(sr)=%08x\n",
-                        r->gpr[20], r->gpr[21], r->gpr[22], r->gpr[1],
-                        r->gpr[24], r->gpr[25]);
-                // Read the spin-wait target: word at (a0)
-                uint32 a0_val = r->gpr[16];
-                if (a0_val < RAMSize || (a0_val >= ROMBase && a0_val < ROMBase + 0x500000))
-                    fprintf(stderr, "[HI-STALL] *(a0) = *(0x%08x) = %04x\n", a0_val, ReadMacInt16(a0_val));
-                else
-                    fprintf(stderr, "[HI-STALL] a0=0x%08x (out of range)\n", a0_val);
-            }
-        }
-        stall_sample++;
-    }
+    (void)mode;
 
     // 5-second rate reporting
     static int hi_window_count = 0;

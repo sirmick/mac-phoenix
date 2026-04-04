@@ -104,6 +104,8 @@ static void reserve_mac_address_space_early()
 #include "drivers/video/video_output.h"
 #include "drivers/video/video_encoder_thread.h"
 #include "drivers/audio/audio_webrtc.h"
+#include "drivers/audio/audio_direct.h"
+#include "drivers/audio/audio_ipc_reader.h"
 #include "webserver/webserver_main.h"
 #include "webserver/api_handlers.h"
 #include "webrtc/webrtc_server.h"
@@ -121,6 +123,8 @@ namespace video {
 	std::atomic<bool> g_running(true);
 	std::atomic<bool> g_request_keyframe(false);
 	extern VideoOutput* g_video_output;  // defined in video_webrtc.cpp
+	std::atomic<IPCBuffer*> g_ipc_shm{nullptr};  // Set when subprocess connects; encoder reads directly
+	std::atomic<int> g_ipc_eventfd{-1};          // Parent's copy of the frame-ready eventfd
 }
 
 // Audio encoder globals
@@ -453,8 +457,13 @@ int main(int argc, char **argv)
 
 		// Install platform drivers
 		g_platform.video_exit = []() {};
-		g_platform.audio_init = []() {};
-		g_platform.audio_exit = []() {};
+		audio_direct_set_ipc_buffer(ipc_buf);
+		g_platform.audio_init = []() {
+			audio_direct_init();
+		};
+		g_platform.audio_exit = []() {
+			audio_direct_exit();
+		};
 
 		Platform* platform = g_cpu_ctx.get_platform();
 		*platform = g_platform;
@@ -560,7 +569,7 @@ int main(int argc, char **argv)
 
 		// Create subprocess manager (works for both m68k and PPC)
 		auto subprocess_owner = std::make_unique<PPCSubprocess>(&emu_config);
-		subprocess_owner->set_video_output(video::g_video_output);
+		subprocess_owner->set_ipc_shm_atoms(&video::g_ipc_shm, &video::g_ipc_eventfd);
 		g_subprocess = subprocess_owner.get();
 		g_ipc_client = subprocess_owner->ipc_client();
 
@@ -606,10 +615,23 @@ int main(int argc, char **argv)
 		std::thread webrtc_server_thread(webrtc::webrtc_server_main,
 		                                  &webrtc_server, &webrtc_signaling::g_running);
 
-		// Launch video encoder thread
+		// Launch video encoder thread (passes atomic IPC SHM pointer for zero-copy reads)
 		video::g_running.store(true, std::memory_order_release);
 		std::thread encoder_thread(video::video_encoder_main,
-		                            video::g_video_output, &emu_config);
+		                            video::g_video_output, &emu_config,
+		                            &video::g_ipc_shm, &video::g_ipc_eventfd);
+
+		// Launch audio pipeline (parent side)
+		// audio_webrtc_init creates AudioOutput ring buffer + Opus encoder thread
+		// audio_ipc_reader reads from child's IPC SHM → byte-swaps → feeds AudioOutput
+		audio_webrtc_init();
+		if (g_ipc_client) {
+			extern AudioOutput* audio_direct_get_output(void);
+			AudioOutput* audio_out = audio_direct_get_output();
+			if (audio_out) {
+				audio_ipc_reader_start(g_ipc_client, audio_out);
+			}
+		}
 
 		printf("Emulator ready. Open http://localhost:%d in your browser.\n", emu_config.http_port);
 		printf("Click 'Start' in the web UI to begin emulation.\n");
@@ -621,6 +643,9 @@ int main(int argc, char **argv)
 
 		// Shutdown
 		if (subprocess_owner) subprocess_owner->stop();
+		audio_ipc_reader_stop();
+		audio::g_running.store(false, std::memory_order_release);
+		audio_webrtc_exit();
 		video::g_running.store(false, std::memory_order_release);
 		video::g_video_output->shutdown();
 		encoder_thread.join();

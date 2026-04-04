@@ -2,7 +2,8 @@
  * ppc_subprocess.h - PPC subprocess management for webserver mode
  *
  * PPC subprocess management. Parent execs `mac-phoenix --ipc` as a
- * child process, connects via SHM+socket, relays video to VideoOutput.
+ * child process, connects via SHM+socket. Video frames are read
+ * directly from IPC SHM by the encoder thread (zero-copy).
  */
 
 #ifndef PPC_SUBPROCESS_H
@@ -14,7 +15,7 @@
 #include <atomic>
 #include <sys/types.h>
 
-class VideoOutput;
+struct IPCBuffer;
 
 class PPCSubprocess {
 public:
@@ -33,26 +34,24 @@ public:
     IPCClient* ipc_client() { return &ipc_client_; }
     const IPCClient* ipc_client() const { return &ipc_client_; }
 
-    // Video relay
-    void set_video_output(VideoOutput* vo);
+    // Zero-copy video: encoder reads directly from IPC SHM
+    void set_ipc_shm_atoms(std::atomic<IPCBuffer*>* shm, std::atomic<int>* eventfd);
 
 private:
     config::EmulatorConfig* config_;
     pid_t child_pid_ = -1;
-    VideoOutput* video_output_ = nullptr;
 
     IPCClient ipc_client_;
 
-    // Video relay thread (epoll on eventfd)
-    std::thread relay_thread_;
-    std::atomic<bool> relay_running_{false};
+    // Atomic pointers set by encoder thread for zero-copy IPC reads
+    std::atomic<IPCBuffer*>* ipc_shm_atom_ = nullptr;
+    std::atomic<int>* ipc_eventfd_atom_ = nullptr;
 
     // Monitor thread (waitpid)
     std::thread monitor_thread_;
 
-    void video_relay_main();
-    void start_relay();
-    void stop_relay();
+    void publish_ipc_shm();
+    void clear_ipc_shm();
 
     // Build argv for child process
     std::vector<std::string> build_child_args();

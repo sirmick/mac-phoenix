@@ -1399,7 +1399,8 @@ static void video_ppc_init_webrtc_impl(config::EmulatorConfig *config)
 		// Only start encoder thread if we created the VideoOutput
 		// (webserver mode has its own encoder thread from main.cpp)
 		video::g_running.store(true, std::memory_order_release);
-		g_encoder_thread = new std::thread(video::video_encoder_main, video::g_video_output, config);
+		g_encoder_thread = new std::thread(video::video_encoder_main, video::g_video_output, config,
+		                                   (std::atomic<IPCBuffer*>*)nullptr, (std::atomic<int>*)nullptr);
 		fprintf(stderr, "[PPC-Video] WebRTC encoder thread started\n");
 	} else {
 		fprintf(stderr, "[PPC-Video] Using existing VideoOutput (webserver mode)\n");

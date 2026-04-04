@@ -29,6 +29,9 @@ extern void ADBSetRelMouseMode(bool relative);
 extern void ADBKeyDown(int code);
 extern void ADBKeyUp(int code);
 
+// Audio request handler (defined in audio_direct.cpp)
+extern void audio_request_data(uint32_t requested_samples);
+
 // Global state
 static int g_listen_socket = -1;
 static int g_control_socket = -1;
@@ -128,14 +131,18 @@ static void process_binary_input(const uint8_t* data, size_t len)
             const IPCMouseInput* mouse = (const IPCMouseInput*)data;
 
             bool absolute = (mouse->hdr.flags & IPC_MOUSE_ABSOLUTE) != 0;
+            bool has_motion = (mouse->x != 0 || mouse->y != 0) || absolute;
 
-            if (absolute) {
-                ADBSetRelMouseMode(false);
-                ADBMouseMoved(static_cast<uint16_t>(mouse->x),
-                              static_cast<uint16_t>(mouse->y));
-            } else {
-                ADBSetRelMouseMode(true);
-                if (mouse->x != 0 || mouse->y != 0) {
+            // Only change mouse mode when there's actual motion.
+            // Button-only events (dx=dy=0, relative) must not toggle the mode,
+            // because ADBSetRelMouseMode resets mouse_x/y to 0 on change.
+            if (has_motion) {
+                if (absolute) {
+                    ADBSetRelMouseMode(false);
+                    ADBMouseMoved(static_cast<uint16_t>(mouse->x),
+                                  static_cast<uint16_t>(mouse->y));
+                } else {
+                    ADBSetRelMouseMode(true);
                     ADBMouseMoved(mouse->x, mouse->y);
                 }
             }
@@ -175,6 +182,12 @@ static void process_binary_input(const uint8_t* data, size_t len)
             }
             break;
         }
+        case IPC_INPUT_AUDIO_REQUEST: {
+            if (len < sizeof(IPCAudioRequestInput)) return;
+            const IPCAudioRequestInput* req = (const IPCAudioRequestInput*)data;
+            audio_request_data(req->requested_samples);
+            break;
+        }
         default:
             fprintf(stderr, "IPC: Unknown input type %d\n", hdr->type);
             break;
@@ -207,7 +220,7 @@ static void control_socket_thread()
     struct epoll_event events[2];
 
     while (g_control_running.load(std::memory_order_acquire)) {
-        int n = epoll_wait(epoll_fd, events, 2, 100);
+        int n = epoll_wait(epoll_fd, events, 2, 1);  // 1ms for responsive input
         if (n < 0) {
             if (errno == EINTR) continue;
             fprintf(stderr, "IPC: epoll_wait error: %s\n", strerror(errno));
@@ -279,6 +292,7 @@ static void control_socket_thread()
                             case IPC_INPUT_KEY:     msg_size = sizeof(IPCKeyInput); break;
                             case IPC_INPUT_MOUSE:   msg_size = sizeof(IPCMouseInput); break;
                             case IPC_INPUT_COMMAND: msg_size = sizeof(IPCCommandInput); break;
+                            case IPC_INPUT_AUDIO_REQUEST: msg_size = sizeof(IPCAudioRequestInput); break;
                             default: msg_size = sizeof(IPCInputHeader); break;
                         }
                         if (offset + msg_size > (size_t)nr) break;

@@ -35,7 +35,7 @@ extern "C" void ss_jit_watch_bcctr(uint32 dummy);
 
 #include <stdio.h>
 
-#define DEBUG 1
+#define DEBUG 0
 #include "debug.h"
 
 #if ENABLE_MON
@@ -1606,21 +1606,8 @@ powerpc_cpu::compile_block(uint32 entry_point)
 	if (disasm)
 		disasm_translation(entry_point, dpc - entry_point + 4, bi->entry_point, bi->size);
 
-	{
-		static int block_dump_count = 0;
-		if (++block_dump_count <= 3 || entry_point == 0x504d57f0) {
-			fprintf(stderr, "[JITDUMP] Block #%d: PPC 0x%08x-%08x → x86 %p (%d bytes)\n",
-				block_dump_count, entry_point, dpc, bi->entry_point, bi->size);
-			int max_dump = (entry_point == 0x504d57f0) ? 2048 : 128;
-			int dump_len = bi->size < max_dump ? bi->size : max_dump;
-			fprintf(stderr, "[JITDUMP] x86 code:");
-			for (int i = 0; i < dump_len; i++) {
-				if (i % 16 == 0) fprintf(stderr, "\n  %04x:", i);
-				fprintf(stderr, " %02x", bi->entry_point[i]);
-			}
-			fprintf(stderr, "\n");
-		}
-	}
+	D(bug("[JITDUMP] Block #%d: PPC 0x%08x-%08x → x86 %p (%d bytes)\n",
+		0, entry_point, dpc, bi->entry_point, bi->size));
 
 	dg.gen_end();
 	my_block_cache.add_to_cl_list(bi);

@@ -158,7 +158,8 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 
 	// Launch video encoder thread
 	video::g_running.store(true, std::memory_order_release);
-	g_encoder_thread = new std::thread(video::video_encoder_main, video::g_video_output, g_config);
+	g_encoder_thread = new std::thread(video::video_encoder_main, video::g_video_output, g_config,
+	                                   (std::atomic<IPCBuffer*>*)nullptr, (std::atomic<int>*)nullptr);
 
 	D(bug("Video: WebRTC driver initialized (%dx%dx32, %zu modes, encoder thread started)\n",
 	      default_width, default_height, modes.size()));

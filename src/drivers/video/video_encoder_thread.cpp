@@ -4,12 +4,16 @@
  * Reads frames from VideoOutput triple buffer and encodes to H.264/VP9/WebP/PNG.
  * Handles codec changes dynamically by reinitializing encoder.
  *
+ * When an IPCBuffer* is provided (subprocess mode), reads frames directly from
+ * IPC shared memory — zero-copy, eliminating the relay thread's memcpy.
+ * VideoOutput is still used for screenshot API (snapshot_frame).
+ *
  * For PNG/WebP (DataChannel codecs): computes dirty rectangles by comparing
  * current frame against previous frame, encodes only the changed region.
  * This reduces frame size from ~280KB to typically 5-50KB for static UI.
  *
  * Thread Safety:
- * - Reads from VideoOutput (lock-free triple buffer)
+ * - Reads from VideoOutput or IPC SHM (lock-free triple buffer)
  * - Sends encoded frames to WebRTC (thread-safe queue)
  * - Checks config for codec changes (atomic read)
  */
@@ -17,6 +21,7 @@
 #include "video_encoder_thread.h"
 #include "video_output.h"
 #include "../../config/emulator_config.h"
+#include "../../ipc/ipc_protocol.h"
 #include "../../webrtc/webrtc_server.h"
 #include "encoders/h264_encoder.h"
 #include "encoders/vp9_encoder.h"
@@ -29,6 +34,12 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <thread>
+#include <libyuv.h>
+#ifdef __linux__
+#include <poll.h>
+#include <unistd.h>
+#endif
 
 namespace video {
 
@@ -200,17 +211,13 @@ static int encode_and_send_strips(VideoCodec* encoder, const uint32_t* pixels,
                         rect_x, sy, rect_w, sh);
 #endif
             } else {
-                // ARGB: extract strip and convert to BGRA
+                // ARGB (bytes A,R,G,B = libyuv "BGRA") → BGRA (bytes B,G,R,A = libyuv "ARGB")
+                // Use libyuv for SIMD-accelerated conversion instead of byte-at-a-time loop
                 std::vector<uint8_t> strip_bgra(rect_w * sh * 4);
                 for (int ry = 0; ry < sh; ry++) {
                     const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels) + (sy + ry) * frame_w * 4 + rect_x * 4;
                     uint8_t* dst = strip_bgra.data() + ry * rect_w * 4;
-                    for (int rx = 0; rx < rect_w; rx++) {
-                        dst[rx * 4 + 0] = src[rx * 4 + 3]; // B
-                        dst[rx * 4 + 1] = src[rx * 4 + 2]; // G
-                        dst[rx * 4 + 2] = src[rx * 4 + 1]; // R
-                        dst[rx * 4 + 3] = src[rx * 4 + 0]; // A
-                    }
+                    libyuv::BGRAToARGB(src, rect_w * 4, dst, rect_w * 4, rect_w, 1);
                 }
                 strip = encoder->encode_bgra(strip_bgra.data(), rect_w, sh, rect_w * 4);
             }
@@ -243,15 +250,25 @@ static int encode_and_send_strips(VideoCodec* encoder, const uint32_t* pixels,
 /**
  * Video Encoder Thread Main Loop
  *
- * @param video_output Triple buffer to read frames from
+ * @param video_output Triple buffer for screenshots (always needed)
  * @param config Configuration (for codec selection)
+ * @param ipc_shm Optional IPC shared memory — when set, read frames directly
+ *                from SHM (zero-copy) instead of going through VideoOutput.
  */
-void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* config) {
-    fprintf(stderr, "[VideoEncoder] Thread starting\n");
+void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* config,
+                        std::atomic<IPCBuffer*>* ipc_shm_ptr,
+                        std::atomic<int>* ipc_eventfd_ptr) {
+    fprintf(stderr, "[VideoEncoder] Thread starting%s\n",
+            ipc_shm_ptr ? " (IPC zero-copy capable)" : "");
 
     // Debug flags
     static bool debug_frames = (getenv("MACEMU_DEBUG_FRAMES") != nullptr);
     [[maybe_unused]] static bool debug_perf = config ? config->debug_perf : (getenv("MACEMU_DEBUG_PERF") != nullptr);
+
+    // IPC direct-read state
+    uint64_t ipc_last_frame_count = 0;
+    int ipc_eventfd = -1;
+    bool ipc_logged = false;
 
     // Initialize encoder with codec from config
     CodecType current_codec = CodecType::PNG;  // Default
@@ -307,30 +324,88 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             g_request_keyframe.store(true, std::memory_order_release);
         }
 
-        // Wait for new frame (blocks until frame available or timeout)
-        const FrameBuffer* frame = video_output->wait_for_frame(100);  // 100ms timeout
+        // ── Frame acquisition: IPC zero-copy or VideoOutput ─────────
+        const uint32_t* pixels = nullptr;
+        int w = 0, h = 0;
+        PixelFormat format = PIXFMT_ARGB;
+        bool from_ipc = false;
 
-        if (!frame) {
-            if (debug_frames && frames_since_stats == 0) {
-                fprintf(stderr, "[VideoEncoder] No frame available (timeout)\n");
+        // Check if IPC SHM is available (subprocess may have started)
+        IPCBuffer* ipc_shm = ipc_shm_ptr ? ipc_shm_ptr->load(std::memory_order_acquire) : nullptr;
+        if (ipc_shm) {
+            // Pick up parent's eventfd on first IPC connection
+            if (ipc_eventfd < 0 && ipc_eventfd_ptr) {
+                ipc_eventfd = ipc_eventfd_ptr->load(std::memory_order_acquire);
+                if (ipc_eventfd >= 0 && !ipc_logged) {
+                    fprintf(stderr, "[VideoEncoder] IPC zero-copy active, eventfd=%d\n", ipc_eventfd);
+                    ipc_logged = true;
+                }
             }
-            continue;
+
+            // IPC zero-copy: wait on eventfd, then read directly from SHM
+#ifdef __linux__
+            if (ipc_eventfd >= 0) {
+                struct pollfd pfd = { ipc_eventfd, POLLIN, 0 };
+                int ret = poll(&pfd, 1, 16);  // 16ms = ~60fps
+                if (ret > 0) {
+                    uint64_t val;
+                    ssize_t ignored = read(ipc_eventfd, &val, sizeof(val));
+                    (void)ignored;
+                }
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+#else
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#endif
+
+            uint64_t fc = IPC_ATOMIC_LOAD(ipc_shm->frame_count);
+            if (fc <= ipc_last_frame_count) continue;
+            ipc_last_frame_count = fc;
+
+            uint32_t idx = IPC_ATOMIC_LOAD(ipc_shm->ready_index);
+            if (idx >= IPC_NUM_BUFFERS) continue;
+
+            w = ipc_shm->width;
+            h = ipc_shm->height;
+            if (w <= 0 || h <= 0) continue;
+
+            pixels = reinterpret_cast<const uint32_t*>(ipc_shm->frames[idx]);
+            format = static_cast<PixelFormat>(ipc_shm->pixel_format);
+            from_ipc = true;
+
+            // Update VideoOutput for screenshot API (this is the only remaining copy)
+            video_output->submit_frame(pixels, w, h, format);
+        } else {
+            // In-process: read from VideoOutput triple buffer
+            const FrameBuffer* frame = video_output->wait_for_frame(16);  // 16ms timeout
+
+            if (!frame) {
+                if (debug_frames && frames_since_stats == 0) {
+                    fprintf(stderr, "[VideoEncoder] No frame available (timeout)\n");
+                }
+                continue;
+            }
+
+            w = frame->width;
+            h = frame->height;
+            pixels = frame->pixels;
+            format = frame->format;
         }
 
         if (debug_frames) {
-            fprintf(stderr, "[VideoEncoder] Received frame %dx%d format=%d\n",
-                    frame->width, frame->height, (int)frame->format);
+            fprintf(stderr, "[VideoEncoder] Received frame %dx%d format=%d%s\n",
+                    w, h, (int)format, from_ipc ? " (IPC)" : "");
         }
 
         // Initialize encoder on first frame (need width/height)
         if (!encoder_initialized) {
-            if (encoder->init(frame->width, frame->height, 60)) {
-                fprintf(stderr, "[VideoEncoder] Initialized %dx%d @ 60 FPS\n",
-                        frame->width, frame->height);
+            if (encoder->init(w, h, 60)) {
+                fprintf(stderr, "[VideoEncoder] Initialized %dx%d @ 60 FPS\n", w, h);
                 encoder_initialized = true;
             } else {
                 fprintf(stderr, "[VideoEncoder] ERROR: Failed to initialize encoder\n");
-                video_output->release_frame();
+                if (!from_ipc) video_output->release_frame();
                 continue;
             }
         }
@@ -342,38 +417,20 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             fprintf(stderr, "[VideoEncoder] Keyframe requested\n");
         }
 
-        const int w = frame->width;
-        const int h = frame->height;
-        const uint32_t* pixels = frame->pixels;
         const bool is_dc_codec = (current_codec == CodecType::PNG || current_codec == CodecType::WEBP);
 
         // ── Dirty rect path (PNG/WebP only) ───────────────────────────
         if (is_dc_codec && have_prev_frame && !keyframe_requested
             && (int)prev_frame.size() == w * h) {
 
-            // Use emulator-provided dirty rect if available, else compute
+            // IPC mode has no dirty rect hints — always compute
             int dx, dy, dw, dh;
-            bool changed;
-            if (frame->dirty_width > 0 && frame->dirty_height > 0
-                && (frame->dirty_width != (uint32_t)w || frame->dirty_height != (uint32_t)h)) {
-                // Emulator provided a sub-frame dirty rect — use it directly
-                dx = frame->dirty_x;
-                dy = frame->dirty_y;
-                dw = frame->dirty_width;
-                dh = frame->dirty_height;
-                changed = true;
-            } else if (frame->dirty_width == 0 && frame->dirty_height == 0) {
-                // Emulator says nothing changed
-                changed = false;
-            } else {
-                // Full-frame dirty or no emulator hint — compare pixels
-                changed = compute_dirty_rect(pixels, prev_frame.data(), w, h, dx, dy, dw, dh);
-            }
+            bool changed = compute_dirty_rect(pixels, prev_frame.data(), w, h, dx, dy, dw, dh);
 
             if (!changed) {
                 // No changes — skip this frame entirely
                 skipped_frames++;
-                video_output->release_frame();
+                if (!from_ipc) video_output->release_frame();
                 continue;
             }
 
@@ -382,7 +439,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
 
             // Encode rect (may split into strips if too large for DataChannel)
             int sent = encode_and_send_strips(encoder.get(), pixels, w, h,
-                                               frame->format, dx, dy, dw, dh);
+                                               format, dx, dy, dw, dh);
             frames_since_stats += sent;
             dirty_rect_frames++;
 
@@ -392,14 +449,14 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
 
             // Save current frame for next comparison (fallback path needs it)
             memcpy(prev_frame.data(), pixels, w * h * 4);
-            video_output->release_frame();
+            if (!from_ipc) video_output->release_frame();
 
         } else if (is_dc_codec) {
             // ── First/keyframe DC frame: send as strips to fit within DC size limit ──
             auto encode_start = std::chrono::steady_clock::now();
 
             int sent = encode_and_send_strips(encoder.get(), pixels, w, h,
-                                               frame->format, 0, 0, w, h);
+                                               format, 0, 0, w, h);
             fprintf(stderr, "[VideoEncoder] DC full frame: sent %d strips (%dx%d, keyframe=%d)\n",
                     sent, w, h, keyframe_requested ? 1 : 0);
             frames_since_stats += sent;
@@ -416,7 +473,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             last_encode_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 encode_end - encode_start).count();
 
-            video_output->release_frame();
+            if (!from_ipc) video_output->release_frame();
 
         } else {
             // ── Full frame path (H264/VP9) ──────────────────────────────
@@ -424,7 +481,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             auto encode_start = std::chrono::steady_clock::now();
             EncodedFrame encoded;
 
-            if (frame->format == PIXFMT_BGRA) {
+            if (format == PIXFMT_BGRA) {
                 encoded = encoder->encode_bgra(reinterpret_cast<const uint8_t*>(pixels),
                                               w, h, w * 4);
             } else {
@@ -436,7 +493,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             last_encode_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 encode_end - encode_start).count();
 
-            video_output->release_frame();
+            if (!from_ipc) video_output->release_frame();
 
             if (encoded.data.size() > 0) {
                 send_encoded_frame(encoded);

@@ -1,10 +1,11 @@
 /*
- *  timer_interrupt.cpp - 60Hz timer via clock_gettime() polling
+ *  timer_interrupt.cpp - 60Hz tick thread
  *
- *  Based on BasiliskII's tick_func() (main_unix.cpp:1492-1515)
- *  Uses simple clock_gettime() polling instead of signals or timerfd.
+ *  Dedicated thread fires one_tick() at 60.15 Hz, matching legacy BasiliskII's
+ *  tick_func() pthread and the PPC tick_thread_func() in cpu_ppc_kpx.cpp.
  *
- *  Called from CPU backend execution loops (UAE and Unicorn).
+ *  Video refresh runs from this thread (not the CPU thread), so the
+ *  framebuffer memcpy doesn't stall CPU execution.
  */
 
 #include "sysdeps.h"
@@ -17,6 +18,8 @@
 
 #include <time.h>
 #include <stdio.h>
+#include <thread>
+#include <atomic>
 
 // IPC SHM export (cursor + app name) for subprocess mode
 extern "C" void boot_progress_export_cursor_to_ipc(void);
@@ -28,64 +31,38 @@ extern "C" __attribute__((weak)) void ADBPollSharedInput(void) {}
 // Forward declaration (avoid including timer.h due to C linkage conflicts)
 extern "C" uint32 TimerDateTime(void);
 
-// Timer state
-static uint64_t last_timer_ns = 0;
+// Tick thread state
+static std::atomic<bool> tick_thread_running{false};
+static std::thread tick_thread;
 static uint64_t interrupt_count = 0;
-static uint64_t tick_counter = 0;
-static bool timer_initialized = false;
 
-extern "C" {
-
-/*
- *  Initialize timer system
- *
- *  Uses clock_gettime() polling for reliable 60.15 Hz timing.
- *  This is the master heartbeat for the emulator.
- */
-void setup_timer_interrupt(void)
-{
+// Get current time in microseconds (matches PPC GetTicks_usec pattern)
+static uint64_t get_ticks_usec() {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
-	last_timer_ns = now.tv_sec * 1000000000ULL + now.tv_nsec;
-	interrupt_count = 0;
-	tick_counter = 0;
-	timer_initialized = true;
-
-	fprintf(stderr, "Timer: Initialized 60.15 Hz timer (clock_gettime polling)\n");
+	return (uint64_t)now.tv_sec * 1000000ULL + now.tv_nsec / 1000;
 }
 
 /*
- *  one_second() - Called every 60 ticks (~1 second)
- *
- *  Matches BasiliskII main_unix.cpp:1450-1465
- */
-static void one_second(void)
-{
-	// Pseudo Mac 1Hz interrupt, update local time
-	WriteMacInt32(0x20c, TimerDateTime());
-
-	SetInterruptFlag(INTFLAG_1HZ);
-	// Note: TriggerInterrupt() will be called from poll_timer_interrupt()
-}
-
-/*
- *  one_tick() - Called every 16.625ms (60.15 Hz)
- *
- *  Matches BasiliskII main_unix.cpp:1467-1490
+ *  one_tick() - Called every 16.625ms (60.15 Hz) from tick thread
  */
 static void one_tick(void)
 {
+	static uint64_t tick_counter = 0;
+
 	// Every 60 ticks = ~1 second
 	if (++tick_counter >= 60) {
 		tick_counter = 0;
-		one_second();
+		// Pseudo Mac 1Hz interrupt, update local time
+		WriteMacInt32(0x20c, TimerDateTime());
+		SetInterruptFlag(INTFLAG_1HZ);
 	}
 
 	// Poll shared input queue (no-op in subprocess mode)
 	ADBPollSharedInput();
 
 	// Trigger video refresh (60Hz frame capture)
-	// This must happen BEFORE triggering CPU interrupts to ensure smooth video
+	// Runs on tick thread, not CPU thread — doesn't stall emulation
 	extern Platform g_platform;
 	if (g_platform.video_refresh) {
 		g_platform.video_refresh();
@@ -99,84 +76,79 @@ static void one_tick(void)
 	SetInterruptFlag(INTFLAG_60HZ);
 
 	// Trigger CPU-level interrupt
-	// IMPORTANT: Must deliver interrupts BEFORE Mac starts to allow boot to progress
-	// The ROM needs timer interrupts to initialize and set up WLSC signature
-	// Once WLSC is set, HasMacStarted() returns true
-	if (__builtin_expect(!g_platform.cpu_trigger_interrupt, 0)) {
-		fprintf(stderr, "FATAL: g_platform.cpu_trigger_interrupt not initialized\n");
-		abort();
-	}
-	{
+	if (g_platform.cpu_trigger_interrupt) {
 		int level = intlev();
 		if (level > 0) {
 			g_platform.cpu_trigger_interrupt(level);
 		}
 	}
+
+	interrupt_count++;
 }
 
 /*
- *  Poll timer - call from CPU execution loop
+ *  Tick thread — matches PPC tick_thread_func() and legacy BasiliskII tick_func()
  *
- *  Returns number of timer expirations (usually 0 or 1)
+ *  Runs independently from CPU thread at 60.15 Hz using nanosleep.
+ */
+static void tick_thread_func()
+{
+	uint64_t next = get_ticks_usec();
+	extern bool tick_inhibit;
+
+	while (tick_thread_running.load(std::memory_order_relaxed)) {
+		int period = 16625;  // 60.15 Hz in microseconds
+		next += period;
+		int64_t delay = next - get_ticks_usec();
+		if (delay > 0) {
+			struct timespec ts = {0, (long)(delay * 1000)};
+			nanosleep(&ts, nullptr);
+		} else if (delay < -period) {
+			next = get_ticks_usec();  // Resynchronize if too late
+		}
+		if (tick_inhibit) continue;
+
+		one_tick();
+	}
+}
+
+extern "C" {
+
+/*
+ *  Start tick thread
+ */
+void setup_timer_interrupt(void)
+{
+	if (tick_thread_running.load()) return;
+
+	interrupt_count = 0;
+	tick_thread_running.store(true, std::memory_order_release);
+	tick_thread = std::thread(tick_thread_func);
+
+	fprintf(stderr, "Timer: Started 60.15 Hz tick thread\n");
+}
+
+/*
+ *  Poll timer — no-op, kept for backward compatibility.
+ *  The tick thread handles everything now.
  */
 uint64_t poll_timer_interrupt(void)
 {
-	// Suppress timer interrupts during CPU tracing for deterministic execution
-	static bool tracing_mode = (getenv("CPU_TRACE") != NULL);
-	if (tracing_mode) {
-		return 0;  // No interrupts during tracing
-	}
-
-	if (!timer_initialized) {
-		return 0;
-	}
-
-	// Match BasiliskII: suppress ticks during RESET initialization
-	// tick_inhibit is set true by RESET handler, cleared by PATCH_BOOT_GLOBS
-	extern bool tick_inhibit;
-	if (tick_inhibit) {
-		return 0;
-	}
-
-	// Check current time
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	uint64_t now_ns = now.tv_sec * 1000000000ULL + now.tv_nsec;
-
-	// Check if 16.625ms have passed (60.15 Hz)
-	uint64_t elapsed = now_ns - last_timer_ns;
-	if (elapsed < 16625000ULL) {
-		return 0;  // Not time yet
-	}
-
-	// Timer fired! Advance by one tick interval (NOT reset to now).
-	// This ensures missed ticks are caught up on subsequent polls.
-	// If we're severely behind, cap to prevent a burst of 100s of ticks.
-	last_timer_ns += 16625000ULL;
-
-	// If we've fallen more than 10 ticks behind, snap to now
-	// to prevent a burst of catch-up ticks that flood the system
-	if (now_ns - last_timer_ns > 10 * 16625000ULL) {
-		last_timer_ns = now_ns;
-	}
-
-	// Process one tick
-	one_tick();
-	interrupt_count++;
-
-	return 1;  // One expiration
+	return 0;
 }
 
 /*
- *  Stop timer
+ *  Stop tick thread
  */
 void stop_timer_interrupt(void)
 {
-	if (!timer_initialized) {
-		return;
+	if (!tick_thread_running.load()) return;
+
+	tick_thread_running.store(false, std::memory_order_release);
+	if (tick_thread.joinable()) {
+		tick_thread.join();
 	}
 
-	timer_initialized = false;
 	printf("Timer: Stopped after %llu interrupts (%llu seconds)\n",
 	       (unsigned long long)interrupt_count,
 	       (unsigned long long)interrupt_count / 60);
