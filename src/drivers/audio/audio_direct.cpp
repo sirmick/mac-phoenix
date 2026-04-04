@@ -21,6 +21,7 @@
 #include "audio.h"
 #include "audio_defs.h"
 #include "ipc_protocol.h"
+#include "encoders/audio_config.h"
 #include "platform.h"
 
 #include <cinttypes>
@@ -77,7 +78,7 @@ void audio_direct_set_ipc_buffer(IPCBuffer* buf)
 void audio_direct_init(void)
 {
 	// Init audio status and feature flags (from legacy audio_ipc.cpp)
-	AudioStatus.sample_rate = 44100 << 16;  // Mac 16.16 fixed point
+	AudioStatus.sample_rate = AUDIO_SAMPLE_RATE << 16;  // 48kHz — must match Opus encoder
 	AudioStatus.sample_size = 16;
 	AudioStatus.channels = 2;
 	AudioStatus.mixer = 0;
