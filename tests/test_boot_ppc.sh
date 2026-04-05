@@ -11,7 +11,7 @@
 #
 # Requires:
 #   - PPC ROM (4MB G3): set MACEMU_PPC_ROM or uses ~/storage/roms/g3.rom
-#   - Disk image:       set MACEMU_DISK or uses ~/storage/images/7.6.img
+#   - Disk image:       set MACEMU_DISK or uses ~/storage/images/macos-9.0.4.img
 #
 set -euo pipefail
 
@@ -21,7 +21,7 @@ SIG_PORT=18096
 WEBSERVER=false
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 ROM="${MACEMU_PPC_ROM:-$HOME/storage/roms/g3.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/macos-9.0.4.img}"
 MIN_CHECKLOADS=200
 EXTRA_FLAGS=()
 

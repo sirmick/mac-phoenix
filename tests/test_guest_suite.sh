@@ -17,7 +17,7 @@ set -euo pipefail
 
 TIMEOUT=60
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 PORT=18094
 SIG_PORT=18095
 BACKEND="uae"

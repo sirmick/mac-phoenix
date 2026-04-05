@@ -13,7 +13,7 @@ set -euo pipefail
 BACKEND="uae"
 TIMEOUT=30
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/7.6.img}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 PORT=18090
 SIG_PORT=18091
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
