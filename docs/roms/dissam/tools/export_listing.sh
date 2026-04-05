@@ -83,7 +83,6 @@ process_rom() {
         -cspec default \
         -scriptPath "$SCRIPT_DIR" \
         -postScript load_rom.py "$machine" \
-        -postScript xref_patches.py "$machine" \
         -postScript export_listing.py "$out_lst" \
         -deleteProject
 

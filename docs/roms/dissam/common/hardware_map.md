@@ -131,9 +131,11 @@ is the full byte address — VIA registers are at `$EFE1FE` +
 peculiarities of the Mac I/O bus.)
 
 **Critical for emulation**: writes to `$1200` (vT2CH) disable timer 2
-interrupts on real hardware. If our emulator silently ignores those
-writes, timer 2 can still fire — see the `tick_inhibit` fix for SE in
-`docs/roms/dissam/se/boot_flow.md` §3.
+interrupts on real hardware. An emulator that silently ignores these
+writes will see Timer 2 fire during `SETUPTIMEK`'s calibration loop
+(see `se/boot_flow.md` §3 and `macii/boot_flow.md` §3) — the VIA
+model either needs to honor T2 counter writes or the emulator's
+timer source must observe the CPU's current interrupt mask.
 
 ---
 
@@ -166,11 +168,12 @@ Serial controller, two channels (A=modem, B=printer). Mapped with a
 | Write | `$50F06000` | `$BFFFF9` |
 
 Channel A and B are interleaved at different byte offsets within each
-base. SE's SCC at `$9FFFF8` is critical for several boot polling loops
-that MacPhoenix hasn't handled yet — see SE `$22F4` and `$22FC`.
-
-Reading `Read Register 0` (status) bit 0 = Rx Character Available.
-This is the bit polled by the SE stuck-loop at `$22FC`.
+base. The SE ROM polls SCC Read Register 0 (status) bit 0 (Rx
+Character Available) during some serial init paths; an emulator
+SCC model that returns zero for RR0 will stall those loops, so
+patch_rom_classic contains a BRA.S at the corresponding site to
+skip the probe. The `$067C` family goes through `init_scc_dat`
+(signature scan) in `patch_rom_32` for the same reason.
 
 ---
 
@@ -220,29 +223,31 @@ touch is `BOOTBEEP`, which we NOP on all four ROMs (see §2 of each
 
 ## Patching strategy by access type
 
-When you see a hardware access in a boot trace, categorize it:
+When you see a hardware access in a boot trace, categorize it against
+the rules in [`PATCHING_APPROACH.md`](../PATCHING_APPROACH.md):
 
-| Access pattern | Right fix |
-|----------------|-----------|
-| `tst.b (N,A0)` / `btst` on VIA/SCC status bit | SIGSEGV skip or dummy bank returning the bit you want |
-| `move.b #imm,(N,A0)` to VIA timer counter | NOP the writes (they'd-disable interrupts) and use `tick_inhibit` |
-| Polling loop (`LAB: btst...; bne.b LAB`) | Patch to BRA over the loop |
-| Init routine (entire BSR target is probing HW) | NOP the BSR at the caller |
-| ROM-resident driver `_Open` | EmulOp hook |
-| NuBus slot decl-ROM read | NOP the slot manager init |
+| Access pattern | Preferred fix |
+|---|---|
+| `tst.b (N,A0)` / `btst` on VIA/SCC status bit | Fake a plausible return from the hardware bank (`ScratchMem` subterfuge) |
+| `move.b #imm,(N,A0)` to a VIA timer/enable | Hardware bank honors writes; downstream code reads back whatever the ROM wrote |
+| Polling loop on a hardware status bit | Either model the bit or signature-scan the loop and BRA past it |
+| Init routine that touches real MMIO | Do not NOP the routine — redirect its hardware base via `UniversalInfo.decoderInfoPtr` so it reads/writes scratch |
+| ROM-resident driver `_Open` | Replace the DRVR resource body via `find_rom_resource(FOURCC('D','R','V','R'), id)` |
+| NuBus slot decl-ROM read | Patch `UniversalInfo.nuBusInfoPtr` to mark all slots empty; the ROM's own slot manager returns cleanly |
 
 ---
 
 ## Cross-reference: where patches live
 
-`src/core/rom_patches.cpp` functions and their target hardware:
+`src/core/rom_patches.cpp` has two patch functions:
 
-| Function | ROM | Patches at MMIO range |
-|----------|-----|-----------------------|
-| `patch_rom_classic` | SE | `$EFE1xx` (VIA1), `$9FFFF8` (SCC), `$5FFxxx` (SCSI) |
-| `patch_rom_ii` | Mac II / IIx / IIcx / SE-30 | `$50F00xxx` (VIA1), `$50F02xxx` (VIA2), `$50F16xxx` (IWM/SWIM) |
-| `patch_rom_32` | IIci | `$50F00xxx..$50F26xxx`, `$50F24xxx` (RBV) |
-| `patch_rom_iici` | IIci | MMU init trampoline, Slot Manager skip, INITIOPMGR |
+| Function | ROMVersion | Covers | Primary strategy |
+|---|---|---|---|
+| `patch_rom_classic` | `$0276` | Mac Plus, SE, Classic, 128/512 | Fixed-offset surgery (these 24-bit ROMs predate `UniversalInfo`) |
+| `patch_rom_32` | `$067C` | Mac II rev B, IIci, IIsi, IIvx, LC III/475, Quadra, Performa 475/630… | Signature scans for `UniversalInfo` and dozens of internal routines, with a small set of load-bearing fixed offsets for the reset-vector zone |
+
+Version `$0178` ROMs (Mac II original, IIx, IIcx, SE/30) are **not
+currently covered** — see [`PATCHING_APPROACH.md`](../PATCHING_APPROACH.md) §"The $0178 gap".
 
 ---
 
