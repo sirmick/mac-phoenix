@@ -63,6 +63,13 @@ int movem_next[256];
 
 cpuop_func *cpufunctbl[65536];
 
+// Address register mask. Applied in do_get_real_address() and bankindex()
+// so that 24-bit-mode ROMs (68000/020/030 running System ≤6) can use the
+// high byte of A-registers as flag bits (handle $80/$C0 bits) without the
+// access going OOB. Set to 0x00FFFFFF for 24-bit addressing, 0xFFFFFFFF
+// for 32-bit. Updated in Init680x0() from the TwentyFourBitAddressing flag.
+uae_u32 address_reg_mask = 0xFFFFFFFF;
+
 #if FLIGHT_RECORDER
 struct rec_step {
 	uae_u32 pc;

@@ -69,6 +69,10 @@ struct cputbl {
 
 extern cpuop_func *cpufunctbl[65536] ASM_SYM("cpufunctbl");
 
+/* Address register mask: 0x00FFFFFF in 24-bit mode, 0xFFFFFFFF in 32-bit.
+ * See newcpu.cpp for details. Set by Init680x0() from TwentyFourBitAddressing. */
+extern uae_u32 address_reg_mask;
+
 #if USE_JIT
 typedef void compop_func (uae_u32) REGPARAM;
 
