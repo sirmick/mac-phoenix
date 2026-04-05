@@ -1,0 +1,5 @@
+# MAME is a large external dependency. Build artifacts and source live
+# here but are never committed — bootstrap.sh rebuilds them on demand.
+bin/
+src/
+log/
