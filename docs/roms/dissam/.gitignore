@@ -1,0 +1,13 @@
+# Build artifacts — regenerated from ROMs via tools/export_listing.sh
+**/rom.lst
+**/rom.c
+
+# Ghidra projects (large, binary, machine-specific)
+ghidra/
+*.gpr
+*.rep/
+*.lock
+*.lock~
+
+# Vendored upstream repos — fetched by tools/bootstrap.sh
+tools/vendor/
