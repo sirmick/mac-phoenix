@@ -53,6 +53,7 @@ static char g_last_app_name[64] = {0};
 static struct timespec g_boot_start_time = {0, 0};
 static int g_dialogs_dismissed = 0;
 static double g_last_dialog_dismiss_time = 0.0;
+static double g_desktop_ready_time = 0.0;
 #define MAX_DIALOG_DISMISSALS 5       /* safety limit per boot */
 #define DIALOG_DISMISS_COOLDOWN 2.0   /* seconds between dismissals */
 
@@ -295,6 +296,29 @@ static void maybe_fire_auto_launch(void)
 	const std::string& path = config::EmulatorConfig::instance().auto_launch_app;
 	if (path.empty()) return;
 
+	/* Don't dispatch until Finder is *really* idle.
+	 *
+	 * PHASE_DESKTOP fires at the first Finder IDLE_TIME (~0.3s after boot),
+	 * but Mac OS then throws up the improper-shutdown / disk-check dialog
+	 * around +1.5-2s. Dispatching _Launch in that window wedges the Process
+	 * Manager (we've seen it trigger an illegal instruction loop).
+	 *
+	 * Two-part gate:
+	 *   1. At least DESKTOP_SETTLE_SEC must have elapsed since PHASE_DESKTOP
+	 *      was reached. This lets any boot-time dialogs appear and be
+	 *      auto-dismissed before we poke the Process Manager.
+	 *   2. If any dialog *was* dismissed, require DIALOG_QUIET_SEC of silence
+	 *      since the last dismissal.
+	 */
+	static const double DESKTOP_SETTLE_SEC = 4.0;
+	static const double DIALOG_QUIET_SEC = 3.0;
+
+	double now = elapsed_sec();
+	if (g_desktop_ready_time == 0.0) return;  /* shouldn't happen — caller gates on PHASE_DESKTOP */
+	if (now - g_desktop_ready_time < DESKTOP_SETTLE_SEC) return;
+	if (g_last_dialog_dismiss_time > 0.0 &&
+	    now - g_last_dialog_dismiss_time < DIALOG_QUIET_SEC) return;
+
 	/* If a previous attempt is pending, check whether it finished */
 	if (g_pending_auto_launch_id != 0) {
 		CommandResult tmp;
@@ -314,7 +338,6 @@ static void maybe_fire_auto_launch(void)
 	}
 
 	/* Cooldown between attempts */
-	double now = elapsed_sec();
 	if (now - g_last_auto_launch_attempt < AUTO_LAUNCH_COOLDOWN) return;
 
 	if (g_auto_launch_attempts >= AUTO_LAUNCH_MAX_ATTEMPTS) {
@@ -459,6 +482,7 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 			if (g_seen_finder && g_current_phase < PHASE_DESKTOP) {
 				milestonef("Desktop ready (Finder idle)");
 				set_phase(PHASE_DESKTOP);
+				g_desktop_ready_time = elapsed_sec();
 			}
 			/* Check for improper shutdown dialog once desktop is up */
 			if (g_dialogs_dismissed < MAX_DIALOG_DISMISSALS && g_current_phase >= PHASE_FINDER_LAUNCH
@@ -584,6 +608,7 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 			if (g_seen_finder && g_current_phase < PHASE_DESKTOP) {
 				milestonef("Desktop ready (Finder idle)");
 				set_phase(PHASE_DESKTOP);
+				g_desktop_ready_time = elapsed_sec();
 			}
 			if (g_dialogs_dismissed < MAX_DIALOG_DISMISSALS && g_current_phase >= PHASE_FINDER_LAUNCH
 			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
