@@ -59,6 +59,11 @@ bool UseJIT = false;
 
 // From newcpu.cpp
 extern bool quit_program;
+extern uae_u32 address_reg_mask;
+
+// From src/common/include/main.h (uae_cpu/main.h is a minimal stub that
+// doesn't redeclare this global, so pull it in explicitly).
+extern bool TwentyFourBitAddressing;
 
 
 /*
@@ -96,6 +101,15 @@ bool Init680x0(void)
 	}
 	memory_init();
 #endif
+
+	// Configure address register masking. In 24-bit addressing mode (System ≤6
+	// on 68000/020/030) the high byte of an A-register is used by the Memory
+	// Manager as flag bits (handle locked/purgeable/resource tags), and the
+	// CPU ignores them during memory access. Mask them off here so that
+	// do_get_real_address() and bank lookups hit the correct physical address.
+	// For 32-bit clean ROMs (Quadra et al.) the mask stays 0xFFFFFFFF — a
+	// zero-cost no-op.
+	address_reg_mask = TwentyFourBitAddressing ? 0x00FFFFFFu : 0xFFFFFFFFu;
 
 	init_m68k();
 #if USE_JIT

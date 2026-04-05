@@ -37,6 +37,13 @@
 #ifndef UAE_MEMORY_H
 #define UAE_MEMORY_H
 
+/* Address register mask, defined in newcpu.cpp. 0x00FFFFFF in 24-bit
+ * addressing mode (68000/020/030 running System ≤6), 0xFFFFFFFF in 32-bit
+ * mode. Applied by bankindex() and do_get_real_address() below. Set by
+ * Init680x0() from TwentyFourBitAddressing. Declared here at file scope
+ * so it is visible in both the banking-mode and DIRECT_ADDRESSING branches. */
+extern uae_u32 address_reg_mask;
+
 #if !DIRECT_ADDRESSING && !REAL_ADDRESSING
 
 /* Enabling this adds one additional native memory reference per 68k memory
@@ -83,7 +90,10 @@ extern addrbank frame_bank;	// Frame buffer
 
 extern uae_u8 *REGPARAM2 default_xlate(uaecptr addr) REGPARAM;
 
-#define bankindex(addr) (((uaecptr)(addr)) >> 16)
+/* 24-bit mode support: mask address before bank lookup so addresses
+ * carrying high-byte flag bits (Mac handle $80/$C0 tags) land in the
+ * correct bank. No-op when address_reg_mask = 0xFFFFFFFF (32-bit mode). */
+#define bankindex(addr) (((((uaecptr)(addr)) & address_reg_mask)) >> 16)
 
 #ifdef SAVE_MEMORY_BANKS
 extern addrbank *mem_banks[65536];
@@ -146,6 +156,10 @@ extern uint32_t ROMSize;
 #if REAL_ADDRESSING || DIRECT_ADDRESSING
 static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 {
+	// 24-bit mode: strip flag bits from the address register. No-op when
+	// address_reg_mask = 0xFFFFFFFF (32-bit mode). See newcpu.cpp.
+	addr &= address_reg_mask;
+
 	if (addr < RAMSize) {
 		return (uae_u8 *)MEMBaseDiff + addr;
 	}
