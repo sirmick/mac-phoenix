@@ -11,7 +11,7 @@
 #
 # Requires:
 #   - PPC ROM (4MB G3): set MACEMU_PPC_ROM or uses ~/storage/roms/g3.rom
-#   - Disk image:       set MACEMU_DISK or uses ~/storage/images/macos-9.0.4.img
+#   - Disk image:       set MACEMU_DISK or uses ~/storage/images/macos-7.5.5.img
 #
 set -euo pipefail
 
@@ -21,7 +21,7 @@ SIG_PORT=18096
 WEBSERVER=false
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 ROM="${MACEMU_PPC_ROM:-$HOME/storage/roms/g3.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/macos-9.0.4.img}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 MIN_CHECKLOADS=200
 EXTRA_FLAGS=()
 
@@ -159,27 +159,25 @@ else
     # Wait for emulator to finish (headless mode with --timeout)
     wait "$EMU_PID" 2>/dev/null || true
 
-    # Count milestones
-    CHECKLOADS=$(grep -c "CHECKLOAD" "$LOG" 2>/dev/null || echo "0")
-    DRIVERS=$(grep -c "Installing drivers" "$LOG" 2>/dev/null || echo "0")
-    VIDEO=$(grep -c "Framebuffer at" "$LOG" 2>/dev/null || echo "0")
-    MBDF=$(grep -c "type='MBDF'" "$LOG" 2>/dev/null || echo "0")
-    FOND=$(grep -c "type='FOND'" "$LOG" 2>/dev/null || echo "0")
+    # Count milestones (PPC boot emits [Boot +Xs] phase markers, not m68k CHECKLOADs)
+    DRIVERS=$(grep -cE "Installing drivers" "$LOG" 2>/dev/null | head -1)
+    FINDER=$(grep -cE "Finder launched" "$LOG" 2>/dev/null | head -1)
+    DESKTOP=$(grep -cE "Desktop ready" "$LOG" 2>/dev/null | head -1)
+    : "${DRIVERS:=0}" "${FINDER:=0}" "${DESKTOP:=0}"
 
     echo ""
-    echo "Boot milestones: checkloads=$CHECKLOADS drivers=$DRIVERS video=$VIDEO mbdf=$MBDF fond=$FOND"
+    echo "Boot milestones: drivers=$DRIVERS finder=$FINDER desktop=$DESKTOP"
 
-    # PPC boot must load resources (200+ CHECKLOADs) and reach MBDF (menu bar)
-    if [[ $CHECKLOADS -ge $MIN_CHECKLOADS && $MBDF -ge 1 ]]; then
-        echo "PASS: PPC boot loaded $CHECKLOADS resources with MBDF (Finder phase)"
+    if [[ "$DESKTOP" -ge 1 ]]; then
+        echo "PASS: PPC boot reached Desktop (Finder idle)"
         rm -f "$LOG"
         exit 0
-    elif [[ $CHECKLOADS -ge $MIN_CHECKLOADS ]]; then
-        echo "PASS: PPC boot loaded $CHECKLOADS resources (pre-Finder)"
+    elif [[ "$FINDER" -ge 1 ]]; then
+        echo "PASS: PPC boot reached Finder"
         rm -f "$LOG"
         exit 0
     else
-        echo "FAIL: Only $CHECKLOADS CHECKLOADs (expected $MIN_CHECKLOADS+)"
+        echo "FAIL: PPC boot did not reach Finder"
         echo "--- last 20 lines ---"
         tail -20 "$LOG"
         exit 1
