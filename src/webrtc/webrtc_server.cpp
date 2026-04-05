@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 #include <cstdio>
 #include <chrono>
+#include <shared_mutex>
 #include <thread>
 #include <cstring>
 
@@ -766,7 +767,10 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
     uint8_t metadata[5] = {0};
     int mx = 0, my = 0;
     if (g_ipc_client) {
-        // Subprocess mode: read cursor from IPC SHM (if still connected)
+        // Subprocess mode: read cursor from IPC SHM (if still connected).
+        // Shared lock prevents a concurrent stop()/restart from munmapping
+        // the page underneath us.
+        std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
         if (g_ipc_client->is_connected() && g_ipc_client->shm()) {
             const IPCBuffer* buf = g_ipc_client->shm();
             mx = IPC_ATOMIC_LOAD(buf->shm_cursor_x);

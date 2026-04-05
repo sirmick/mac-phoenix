@@ -10,7 +10,17 @@
 
 #include "ipc_protocol.h"
 #include <string>
+#include <shared_mutex>
 #include <sys/types.h>
+
+// Global reader-writer lock protecting the parent-side lifetime of any
+// IPC SHM mapping. Parent-side threads that dereference IPCBuffer* (api
+// handlers, video encoder, audio reader, webrtc metadata, etc.) MUST hold
+// a shared lock for the full duration of each dereference. IPCClient::
+// disconnect() takes an exclusive lock before munmap so no reader can
+// observe an unmapped page. Readers should hold the lock briefly — on
+// the order of one frame at most — to avoid stalling stop()/restart().
+extern std::shared_mutex g_ipc_shm_mutex;
 
 class IPCClient {
 public:

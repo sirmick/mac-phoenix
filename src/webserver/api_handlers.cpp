@@ -10,6 +10,7 @@
 #include "../common/include/sysdeps.h"  // For uint32 type
 #include "../core/emulator_init.h"  // For deferred initialization
 #include "../core/ppc_subprocess.h"  // For subprocess
+#include "../ipc/ipc_client.h"    // For g_ipc_shm_mutex
 #include "../ipc/ipc_protocol.h"  // For IPC buffer
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
 #include "../core/boot_progress.h"  // For boot phase query
@@ -29,6 +30,7 @@ namespace webrtc {
 #include <cstdio>
 #include <fstream>
 #include <chrono>
+#include <shared_mutex>
 #include <thread>
 #include <pwd.h>
 #include <unistd.h>
@@ -163,7 +165,9 @@ Response APIRouter::handle_status(const Request& req) {
     json << "\"emulator_connected\": true";
 
     if (ctx_->subprocess) {
-        // Subprocess mode: read from IPC SHM
+        // Subprocess mode: read from IPC SHM (shared lock prevents a
+        // concurrent stop()/restart from munmapping the page underneath us)
+        std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
         bool running = ctx_->subprocess->is_running();
         const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
 
@@ -805,6 +809,7 @@ Response APIRouter::handle_mouse(const Request& req) {
     std::ostringstream json;
 
     if (ctx_->subprocess) {
+        std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
         const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
         if (buf) {
             json << "{"
@@ -1005,6 +1010,7 @@ Response APIRouter::handle_app(const Request& req) {
         if (!ctx_->subprocess->is_running()) {
             return Response::json("{\"app\": \"\", \"error\": \"emulator not running\"}");
         }
+        std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
         const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
         std::string app = buf ? buf->cur_app_name : "";
         return Response::json("{\"app\": \"" + app + "\"}");
@@ -1125,6 +1131,7 @@ Response APIRouter::handle_wait(const Request& req) {
         if (cond_type == "app") {
             std::string app;
             if (ctx_->subprocess) {
+                std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
                 const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
                 app = buf ? buf->cur_app_name : "";
             } else {
@@ -1138,6 +1145,7 @@ Response APIRouter::handle_wait(const Request& req) {
             std::string phase;
             bool reached;
             if (ctx_->subprocess) {
+                std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
                 const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
                 phase = buf ? buf->boot_phase : "pre-reset";
                 reached = boot_progress_phase_reached_by_name(phase.c_str(), cond_value.c_str());

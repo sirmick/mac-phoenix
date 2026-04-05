@@ -21,6 +21,7 @@
 #include "video_encoder_thread.h"
 #include "video_output.h"
 #include "../../config/emulator_config.h"
+#include "../../ipc/ipc_client.h"   // For g_ipc_shm_mutex
 #include "../../ipc/ipc_protocol.h"
 #include "../../webrtc/webrtc_server.h"
 #include "encoders/h264_encoder.h"
@@ -34,6 +35,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <shared_mutex>
 #include <thread>
 #include <libyuv.h>
 #ifdef __linux__
@@ -331,7 +333,11 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
         PixelFormat format = PIXFMT_ARGB;
         bool from_ipc = false;
 
-        // Check if IPC SHM is available (subprocess may have started)
+        // Check if IPC SHM is available (subprocess may have started).
+        // Hold a shared lock for the entire SHM access window so that a
+        // concurrent stop()/restart cannot munmap the page while we are
+        // dereferencing it. Lock is released before the fallback path.
+        std::shared_lock<std::shared_mutex> ipc_lock(g_ipc_shm_mutex);
         IPCBuffer* ipc_shm = ipc_shm_ptr ? ipc_shm_ptr->load(std::memory_order_acquire) : nullptr;
         if (ipc_shm) {
             // Detect subprocess restart: SHM went away and came back
@@ -392,6 +398,10 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
         } else {
             // IPC disconnected — mark so we detect reconnection
             ipc_was_connected = false;
+            // No SHM to protect on the fallback path; release the lock so
+            // we don't needlessly block stop()/restart while we wait on
+            // VideoOutput.
+            ipc_lock.unlock();
 
             // In-process: read from VideoOutput triple buffer
             const FrameBuffer* frame = video_output->wait_for_frame(16);  // 16ms timeout

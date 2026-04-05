@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: `http://localhost:${process.env.MACEMU_HTTP_PORT || 18094}`,
-    headless: false,
+    headless: true,
     video: undefined,
   },
   projects: [

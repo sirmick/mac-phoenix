@@ -9,12 +9,16 @@
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
+#include <mutex>
+#include <shared_mutex>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
+
+std::shared_mutex g_ipc_shm_mutex;
 
 IPCClient::IPCClient() = default;
 
@@ -173,6 +177,11 @@ bool IPCClient::connect(pid_t pid)
 
 void IPCClient::disconnect()
 {
+    // Exclusive lock serializes munmap against all parent-side SHM readers
+    // (api handlers, encoder, audio reader, webrtc). Readers hold a shared
+    // lock for the duration of their dereference, so this will block until
+    // in-flight reads finish — then no thread can observe an unmapped page.
+    std::unique_lock<std::shared_mutex> shm_guard(g_ipc_shm_mutex);
     disconnect_socket();
     disconnect_shm();
     pid_ = -1;

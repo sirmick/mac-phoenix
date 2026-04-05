@@ -12,12 +12,14 @@
  */
 
 #include "audio_ipc_reader.h"
+#include "ipc_client.h"   // For g_ipc_shm_mutex
 #include "ipc_protocol.h"
 #include "encoders/audio_config.h"
 
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>
+#include <shared_mutex>
 #include <thread>
 #include <atomic>
 #include <chrono>
@@ -37,17 +39,22 @@ static void audio_ipc_reader_loop(IPCClient* client, AudioOutput* output)
     while (g_reader_running.load(std::memory_order_relaxed)) {
         auto frame_start = std::chrono::steady_clock::now();
 
-        IPCBuffer* shm = client->shm();
-        if (!shm || !client->is_connected()) {
-            std::this_thread::sleep_for(frame_duration);
-            continue;
-        }
-
-        // PULL: Request audio from child
+        // PULL: Request audio from child. send_audio_request() only uses
+        // the control socket, not SHM, so no lock needed here.
         client->send_audio_request(AUDIO_FRAME_SIZE);
 
         // Give child time to respond (trigger interrupt, execute 68k, write frame)
         std::this_thread::sleep_for(std::chrono::milliseconds(8));
+
+        // Hold shared lock for the entire SHM access window — a concurrent
+        // stop()/restart would otherwise munmap the page under our feet.
+        std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
+        IPCBuffer* shm = client->shm();
+        if (!shm || !client->is_connected()) {
+            shm_lock.unlock();
+            std::this_thread::sleep_for(frame_duration);
+            continue;
+        }
 
         // Read from SHM ring buffer
         uint32_t read_idx = IPC_ATOMIC_LOAD(shm->audio_read_idx);

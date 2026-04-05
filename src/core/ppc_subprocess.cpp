@@ -219,12 +219,13 @@ bool PPCSubprocess::stop()
 
     fprintf(stderr, "[PPCSubprocess] Stopping child (pid %d)\n", pid);
 
-    // Clear IPC SHM so encoder stops reading, then wait for it to
-    // drain (encoder polls at 16ms, so 50ms is plenty)
+    // Clear the atomic first so readers that see it go straight to the
+    // nullptr fallback path without racing for the lock. Existing readers
+    // holding the shared lock will finish their in-flight dereference;
+    // disconnect() below takes the exclusive lock, waits for them to
+    // drain, then munmaps. After this, no thread can observe an unmapped
+    // page. (Replaces the old 50ms "hope the encoder noticed" sleep.)
     clear_ipc_shm();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-    // Disconnect IPC (unmaps SHM — safe now that encoder has stopped reading)
     ipc_client_.disconnect();
 
     // Send SIGTERM, then SIGKILL after grace period

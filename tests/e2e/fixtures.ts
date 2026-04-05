@@ -56,7 +56,7 @@ export const test = base.extend<{}, EmulatorFixture>({
       if (sharedEmulatorProc) {
         console.log('[fixture] Emulator process died, respawning...');
       }
-      sharedEmulatorProc = await spawnEmulator({ timeoutSeconds: 600 });
+      sharedEmulatorProc = await spawnEmulator({ timeoutSeconds: 1800 });
     }
     await use(HTTP_PORT);
   }, { scope: 'worker' }],
@@ -85,7 +85,7 @@ export async function spawnEmulator(opts?: { timeoutSeconds?: number; extraArgs?
     '--screen', '640x480',
     '--ram', '128',
     '--dismiss-shutdown-dialog',
-    '--disk', `${process.env.HOME}/storage/images/7.6.img`,
+    '--disk', process.env.MACEMU_DISK || `${process.env.HOME}/storage/images/macos-7.5.5.img`,
   ];
   if (opts?.extraArgs) {
     args.push(...opts.extraArgs);
