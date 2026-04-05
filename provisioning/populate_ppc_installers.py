@@ -20,19 +20,12 @@ from populate_68k_installers import (
     run_text,
 )
 
-# Files to process: (relative_path, handler, hfs_folder_name)
+# The HFS installer image is intentionally minimal: just enough to bootstrap
+# everything else inside the Mac. Once StuffIt Expander and Disk Copy are
+# installed, the rest of ~/storage/installers/ is reachable via --extfs.
 SOURCE_FILES = [
-    ("Classilla9.3.4b.sit", handle_stuffit, "Classilla"),
-    ("MR-Browser-PPC-v0.39.sit", handle_stuffit, "MR Browser"),
-    ("Hotline-Client-1-9-2.sit", handle_stuffit, "Hotline"),
-    ("Hotline_1.2.3_(68K_+_PPC).sit", handle_stuffit, "Hotline 1.2.3"),
-    ("adaptec-Toast-Deluxe-4.2.sit", handle_stuffit, "Toast"),
-    ("Toast_501_502_Install.img_.sit", handle_stuffit, "Toast 5"),
-    ("Serial-MReader-v0.03-2021.sit", handle_stuffit, "Serial MReader"),
-    ("Disk-Copy-633-smi.sit", handle_stuffit, "Disk Copy"),
-    ("StuffIt Expander/Stuffit_Expander_5.5.dsk", handle_dsk, "StuffIt Expander"),
-    ("OTTool_1.2.1.sit", handle_stuffit, "OTTool"),
-    ("Speedometer_3.23.sit", handle_stuffit, "Speedometer"),
+    ("Bootstrap/StuffIt Expander/Stuffit_Expander_5.5.dsk", handle_dsk, "StuffIt Expander"),
+    ("Bootstrap/Disk-Copy-633-smi.sit", handle_stuffit, "Disk Copy"),
 ]
 
 

@@ -4,6 +4,7 @@
  * Tests: volume info, create/write/read/delete on boot volume.
  */
 #include <Files.h>
+#include <Script.h>
 #include <string.h>
 
 #include "test_report.h"

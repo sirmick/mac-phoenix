@@ -32,6 +32,22 @@ __pycache__/
 *.pyc
 *.iso
 
+# Apple Universal Interfaces (licensed, not redistributable)
+Universal Interfaces/
+.finf/
+.rsrc/
+
+# Retro68 guest test build outputs
+tests/guest/MacTestSuite
+tests/guest/MacTestSuite.bin
+tests/guest/MacTestSuite.APPL
+tests/guest/MacTestSuite.dsk
+tests/guest/MacTestSuite.code.bin
+tests/guest/MacTestSuite.code.bin.gdb
+tests/guest/MacTestSuite.gdb
+tests/guest/MacTestSuite.ad
+tests/guest/%MacTestSuite.ad
+
 # Rust
 net-bridge/target/
 build_output.txt

@@ -8,6 +8,8 @@
 #define TEST_REPORT_H
 
 #include <Files.h>
+#include <Script.h>
+#include <stdio.h>
 #include <string.h>
 
 #define MAX_RESULTS 64

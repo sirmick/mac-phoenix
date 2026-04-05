@@ -5,6 +5,7 @@
  * All operations target the "Host" ExtFS volume.
  */
 #include <Files.h>
+#include <Script.h>
 #include <string.h>
 
 #include "test_report.h"

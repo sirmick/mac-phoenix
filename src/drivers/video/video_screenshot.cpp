@@ -41,6 +41,9 @@ static int refresh_counter = 0;
 // 300 = every 5 seconds
 #define SCREENSHOT_INTERVAL 300
 
+// Ring buffer: keep only the last N screenshots on disk
+#define SCREENSHOT_KEEP 20
+
 // Monitor descriptor with palette capture
 class screenshot_monitor_desc : public monitor_desc {
 public:
@@ -80,7 +83,8 @@ static void save_screenshot(void)
 	uint32 fb_mac_addr = monitor->get_mac_frame_base();
 
 	char filename[256];
-	snprintf(filename, sizeof(filename), "/tmp/macemu_screen_%03d.ppm", screenshot_counter);
+	snprintf(filename, sizeof(filename), "/tmp/macemu_screen_%03d.ppm",
+	         screenshot_counter % SCREENSHOT_KEEP);
 
 	FILE *f = fopen(filename, "wb");
 	if (!f) {

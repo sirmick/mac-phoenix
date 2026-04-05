@@ -112,6 +112,7 @@ struct EmulatorConfig {
 
     // Web/Network
     bool enable_webserver = true;
+    bool headless_http = false;  // serve HTTP API in headless mode (no WebRTC/video/audio)
     int http_port = 8000;
     int signaling_port = 8090;
     std::string client_dir = "./client";
@@ -122,6 +123,7 @@ struct EmulatorConfig {
     bool nosound = false;
     bool zappram = false;
     bool dismiss_shutdown_dialog = true;
+    std::string auto_launch_app;  // Mac path launched after desktop reached
     int frameskip = 6;
     int yearofs = 0;
     int dayofs = 0;

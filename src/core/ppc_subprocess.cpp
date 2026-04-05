@@ -85,6 +85,11 @@ std::vector<std::string> PPCSubprocess::build_child_args()
         args.push_back("--dismiss-shutdown-dialog");
     }
 
+    if (!config_->auto_launch_app.empty()) {
+        args.push_back("--auto-launch");
+        args.push_back(config_->auto_launch_app);
+    }
+
     // Network
     if (config_->network != config::NetworkMode::None) {
         args.push_back("--network");

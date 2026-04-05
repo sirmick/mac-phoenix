@@ -21,6 +21,8 @@
 #include "../common/include/emul_op.h"
 #include <cstdio>
 #include <cstring>
+#include <unistd.h>
+#include <cstring>
 #include <chrono>
 #include <atomic>
 #include <algorithm>
@@ -142,92 +144,188 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
         for (int i = 0; i < namelen && i < 255; i++)
             name[i] = static_cast<char>(ReadMacInt8(MB_CMD_ARG + 1 + i));
         name[namelen] = '\0';
-        fprintf(stderr, "[CommandBridge] INIT launching: %s\n", name);
+        fprintf(stderr, "[CommandBridge] INIT launching: %s (NEW CODE PATH)\n", name);
+        fflush(stderr);
 
-        // --- Step 1: FSMakeFSSpec ---
-        // FSMakeFSSpec(vRefNum, dirID, fileName, &fsspec)
-        // Trap: _HFSDispatch (0xA260) with D0 selector = 0x001B
-        // Param block at ScratchMem + 0xC00:
-        //   +18 ioNamePtr: pointer to Pascal string
-        //   +22 ioVRefNum: 0 (resolve from path)
-        //   +48 ioDirID: 0
-        // FSSpec output at ScratchMem + 0xD00:
-        //   +0 vRefNum (int16)
-        //   +2 parID (uint32)
-        //   +6 name (Str63 = Pascal string)
+        // --- Step 1: Resolve path via PBGetCatInfo + PBHGetVInfo ---
+        // Strategy: split "Volume:File" path manually. Use PBHGetVInfo to iterate
+        // volumes and find the one with the matching name — this gives us the
+        // correct vRefNum. Then call PBGetCatInfo on "File" with that vRefNum
+        // to get parID.
+        //
+        // CInfoPBRec layout (same as HParamBlockRec for volume queries):
+        //   +16 ioResult (int16)
+        //   +18 ioNamePtr (void*)
+        //   +22 ioVRefNum (int16)
+        //   +28 ioVolIndex (int16) for PBHGetVInfo
+        //   +100 ioFlParID (uint32) for PBGetCatInfo
         uint32_t pb_addr = SCRATCH_BASE + 0xC00;
         uint32_t fsspec_addr = SCRATCH_BASE + 0xD00;
+        uint32_t vol_name_addr = SCRATCH_BASE + 0xE80;  // scratch for volume name lookup
 
-        // Zero param block (108 bytes)
-        for (int i = 0; i < 108; i++)
-            WriteMacInt8(pb_addr + i, 0);
-        WriteMacInt32(pb_addr + 18, MB_CMD_ARG);   // ioNamePtr
-        WriteMacInt16(pb_addr + 22, 0);             // ioVRefNum
-        WriteMacInt32(pb_addr + 48, 0);             // ioDirID
-
-        M68kRegisters fs_regs;
-        memset(&fs_regs, 0, sizeof(fs_regs));
-        fs_regs.a[0] = pb_addr;
-        fs_regs.d[0] = 0x001B;  // FSMakeFSSpec selector
-        Execute68kTrap(0xA260, &fs_regs);  // _HFSDispatch
-
-        int16_t fs_err = static_cast<int16_t>(ReadMacInt16(pb_addr + 16));  // ioResult
-        if (fs_err != 0 && fs_err != -43) {
-            // -43 = fnfErr is OK (FSMakeFSSpec can return it for valid paths)
-            fprintf(stderr, "[CommandBridge] FSMakeFSSpec failed: %d\n", fs_err);
-            WriteMacInt16(MB_RESULT_ERR, fs_err);
-            WriteMacInt8(MB_RESULT_FLAG, 1);
-            break;
+        // Split path at first ':'
+        int colon_pos = -1;
+        for (int i = 0; i < namelen; i++) {
+            if (name[i] == ':') { colon_pos = i; break; }
         }
+        fprintf(stderr, "[CommandBridge] parsing path: namelen=%d colon_pos=%d\n",
+                (int)namelen, colon_pos);
+        fflush(stderr);
 
-        // Copy FSSpec from param block output
-        // PBMakeFSSpec stores the FSSpec fields in the param block:
-        //   +22 ioVRefNum -> fsspec.vRefNum
-        //   +48 ioDirID   -> fsspec.parID
-        //   +18 ioNamePtr -> name is already the Pascal string
-        // But we need to build a proper FSSpec struct at fsspec_addr
-        int16_t vRefNum = static_cast<int16_t>(ReadMacInt16(pb_addr + 22));
-        uint32_t parID = ReadMacInt32(pb_addr + 48);
-
-        // Build FSSpec: vRefNum(2) + parID(4) + name(64)
-        WriteMacInt16(fsspec_addr + 0, vRefNum);
-        WriteMacInt32(fsspec_addr + 2, parID);
-        // Copy the filename part (last component) from the path
-        // After FSMakeFSSpec, ioNamePtr points to the resolved name
-        // We need to extract just the filename from the full path
-        // The param block's ioNamePtr still points to our full path,
-        // but ioDirID and ioVRefNum are resolved.
-        // Copy the leaf name: find last ':' in the path
+        int16_t vRefNum = 0;
+        uint32_t parID = 2;  // HFS root dir ID
         int leaf_start = 0;
-        for (int i = namelen - 1; i >= 0; i--) {
-            if (name[i] == ':') { leaf_start = i + 1; break; }
+
+        if (colon_pos >= 0) {
+            // Path has "Volume:..." — find the volume
+            char volname[64];
+            int vnlen = colon_pos;
+            if (vnlen > 63) vnlen = 63;
+            for (int i = 0; i < vnlen; i++) volname[i] = name[i];
+            volname[vnlen] = '\0';
+
+            // Iterate volumes via PBHGetVInfo(ioVolIndex=1,2,...)
+            bool found = false;
+            for (int16_t idx = 1; idx < 16 && !found; idx++) {
+                for (int i = 0; i < 108; i++) WriteMacInt8(pb_addr + i, 0);
+                // Write a Pascal string buffer for the returned name
+                WriteMacInt8(vol_name_addr, 0);  // length 0 initially
+                WriteMacInt32(pb_addr + 18, vol_name_addr);  // ioNamePtr
+                WriteMacInt16(pb_addr + 22, 0);               // ioVRefNum
+                WriteMacInt16(pb_addr + 28, idx);             // ioVolIndex
+
+                M68kRegisters vi_regs;
+                memset(&vi_regs, 0, sizeof(vi_regs));
+                vi_regs.a[0] = pb_addr;
+                Execute68kTrap(0xA207, &vi_regs);  // _HGetVInfo
+
+                int16_t vi_err = static_cast<int16_t>(ReadMacInt16(pb_addr + 16));
+                if (vi_err != 0) {
+                    fprintf(stderr, "[CommandBridge] PBHGetVInfo idx=%d err=%d\n", idx, vi_err);
+                    break;
+                }
+
+                uint8_t rvnlen = ReadMacInt8(vol_name_addr);
+                char rvn[64];
+                for (int i = 0; i < rvnlen && i < 63; i++)
+                    rvn[i] = static_cast<char>(ReadMacInt8(vol_name_addr + 1 + i));
+                rvn[rvnlen] = '\0';
+                int16_t this_vref = static_cast<int16_t>(ReadMacInt16(pb_addr + 22));
+                fprintf(stderr, "[CommandBridge] Vol idx=%d vRefNum=%d name='%s'\n",
+                        idx, this_vref, rvn);
+
+                if (rvnlen == vnlen && memcmp(rvn, volname, vnlen) == 0) {
+                    vRefNum = this_vref;
+                    found = true;
+                }
+            }
+
+            if (!found) {
+                fprintf(stderr, "[CommandBridge] Volume '%s' not found\n", volname);
+                WriteMacInt16(MB_RESULT_ERR, -35);  // nsvErr
+                WriteMacInt8(MB_RESULT_FLAG, 1);
+                break;
+            }
+            leaf_start = colon_pos + 1;
         }
+
+        // For a file at volume root, parID=2 is the HFS root dir.
+        // (We could call PBGetCatInfo to confirm, but it was unreliable here.)
         uint8_t leaf_len = namelen - leaf_start;
         if (leaf_len > 63) leaf_len = 63;
+        parID = 2;
+
+        // Build FSSpec: vRefNum(2) + parID(4) + name(64)
+        // leaf_len/leaf_start were set above during leaf name construction.
+        WriteMacInt16(fsspec_addr + 0, vRefNum);
+        WriteMacInt32(fsspec_addr + 2, parID);
         WriteMacInt8(fsspec_addr + 6, leaf_len);
         for (int i = 0; i < leaf_len; i++)
             WriteMacInt8(fsspec_addr + 7 + i, static_cast<uint8_t>(name[leaf_start + i]));
 
         fprintf(stderr, "[CommandBridge] FSSpec: vRefNum=%d, parID=%u, name='%.*s'\n",
                 vRefNum, parID, leaf_len, name + leaf_start);
+        fflush(stderr);
+        { const char *msg = "[raw] point-A after FSSpec print\n"; (void)!write(2, msg, strlen(msg)); fsync(2); }
+
+        // --- Sanity check: can we actually open this file via FSSpec? ---
+        // PBHOpenDFSync via _HOpenDF (0xA200) with ioNamePtr=leaf and ioVRefNum=vRefNum
+        {
+            uint32_t open_pb = SCRATCH_BASE + 0xF00;
+            uint32_t leaf_pstr = SCRATCH_BASE + 0xFA0;
+            // Write leaf as Pascal string
+            WriteMacInt8(leaf_pstr, leaf_len);
+            for (int i = 0; i < leaf_len; i++)
+                WriteMacInt8(leaf_pstr + 1 + i, static_cast<uint8_t>(name[leaf_start + i]));
+
+            for (int i = 0; i < 80; i++) WriteMacInt8(open_pb + i, 0);
+            WriteMacInt32(open_pb + 18, leaf_pstr);       // ioNamePtr
+            WriteMacInt16(open_pb + 22, vRefNum);          // ioVRefNum
+            WriteMacInt8(open_pb + 27, 0x01);              // ioPermssn = fsRdPerm
+
+            M68kRegisters open_regs;
+            memset(&open_regs, 0, sizeof(open_regs));
+            open_regs.a[0] = open_pb;
+            Execute68kTrap(0xA200, &open_regs);  // _HOpen / _PBHOpen (data fork)
+            int16_t open_err = static_cast<int16_t>(ReadMacInt16(open_pb + 16));
+            int16_t open_refnum = static_cast<int16_t>(ReadMacInt16(open_pb + 24));
+            fprintf(stderr, "[CommandBridge] PBHOpen DF: err=%d refNum=%d\n",
+                    open_err, open_refnum);
+            fflush(stderr);
+            if (open_err == 0) {
+                // Close it again
+                for (int i = 0; i < 80; i++) WriteMacInt8(open_pb + i, 0);
+                WriteMacInt16(open_pb + 24, open_refnum);
+                M68kRegisters close_regs;
+                memset(&close_regs, 0, sizeof(close_regs));
+                close_regs.a[0] = open_pb;
+                Execute68kTrap(0xA001, &close_regs);  // _Close
+            }
+
+            // Also try _HOpenRF (0xA20A) for resource fork
+            for (int i = 0; i < 80; i++) WriteMacInt8(open_pb + i, 0);
+            WriteMacInt32(open_pb + 18, leaf_pstr);
+            WriteMacInt16(open_pb + 22, vRefNum);
+            WriteMacInt8(open_pb + 27, 0x01);
+            M68kRegisters rf_regs;
+            memset(&rf_regs, 0, sizeof(rf_regs));
+            rf_regs.a[0] = open_pb;
+            Execute68kTrap(0xA20A, &rf_regs);  // _HOpenRF
+            int16_t rf_err = static_cast<int16_t>(ReadMacInt16(open_pb + 16));
+            int16_t rf_refnum = static_cast<int16_t>(ReadMacInt16(open_pb + 24));
+            fprintf(stderr, "[CommandBridge] PBHOpen RF: err=%d refNum=%d\n",
+                    rf_err, rf_refnum);
+            fflush(stderr);
+            if (rf_err == 0) {
+                for (int i = 0; i < 80; i++) WriteMacInt8(open_pb + i, 0);
+                WriteMacInt16(open_pb + 24, rf_refnum);
+                M68kRegisters close_regs;
+                memset(&close_regs, 0, sizeof(close_regs));
+                close_regs.a[0] = open_pb;
+                Execute68kTrap(0xA001, &close_regs);
+            }
+        }
 
         // --- Step 2: Build extended LaunchParamBlockRec ---
         // At ScratchMem + 0xE00:
-        //   +0  reserved1       (uint32) = 0
-        //   +4  reserved2       (uint16) = 0
-        //   +6  launchBlockID   (uint16) = 'LC' = 0x4C43 (extendedBlock)
-        //   +8  launchEPBLength (uint32) = 6 (extendedBlockLen)
-        //   +12 launchFileFlags (uint16) = 0
-        //   +14 launchControlFlags (uint16) = 0xC000 (launchContinue | launchNoFileFlags)
-        //   +16 launchAppSpec   (uint32) = pointer to FSSpec
+        // LaunchParamBlockRec (Inside Macintosh: Processes):
+        //   +0  reserved1          (LongInt) = 0
+        //   +4  reserved2          (Word)    = 0
+        //   +6  launchBlockID      (Word)    = 'LC' = 0x4C43 (extendedBlock)
+        //   +8  launchEPBLength    (LongInt) = 6 (extendedBlockLen)
+        //   +12 launchFileFlags    (Word)    = 0
+        //   +14 launchControlFlags (LongInt) = 0x4000 (launchContinue)
+        //   +18 launchAppSpec      (Ptr)     = pointer to FSSpec
+        //   +22 launchAppParameters (LongInt) = 0
         uint32_t lpb_addr = SCRATCH_BASE + 0xE00;
         for (int i = 0; i < 32; i++)
             WriteMacInt8(lpb_addr + i, 0);
-        WriteMacInt16(lpb_addr + 6, 0x4C43);       // launchBlockID = extendedBlock
-        WriteMacInt32(lpb_addr + 8, 6);             // launchEPBLength
-        WriteMacInt16(lpb_addr + 12, 0);            // launchFileFlags
-        WriteMacInt16(lpb_addr + 14, 0xC000);       // launchContinue | launchNoFileFlags
-        WriteMacInt32(lpb_addr + 16, fsspec_addr);  // launchAppSpec
+        WriteMacInt16(lpb_addr + 6, 0x4C43);         // launchBlockID = extendedBlock ('LC')
+        WriteMacInt32(lpb_addr + 8, 6);               // launchEPBLength
+        WriteMacInt16(lpb_addr + 12, 0);              // launchFileFlags
+        WriteMacInt32(lpb_addr + 14, 0x4000);         // launchControlFlags = launchContinue
+        WriteMacInt32(lpb_addr + 18, fsspec_addr);    // launchAppSpec
+        WriteMacInt32(lpb_addr + 22, 0);              // launchAppParameters
 
         // --- Step 3: Call _Launch with extended param block ---
         // For the extended form, the param block pointer goes on the stack
@@ -244,6 +342,7 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
         // Extended _Launch with launchContinue should return
         int16_t launch_err = (int16_t)(launch_regs.d[0] & 0xFFFF);
         fprintf(stderr, "[CommandBridge] _Launch returned: d0=%d\n", launch_err);
+        { const char *m = "[raw] MB_CMD_LAUNCH END\n"; (void)!write(2, m, strlen(m)); fsync(2); }
         if (launch_err != 0) {
             WriteMacInt16(MB_RESULT_ERR, launch_err);
         }

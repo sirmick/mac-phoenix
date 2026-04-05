@@ -726,6 +726,21 @@ int main(int argc, char **argv)
 			g_emulator_initialized = true;
 
 			printf("\n=== CPU Execution Mode (Headless) ===\n");
+
+			// Optional: start HTTP API server in headless mode.
+			// Enabled when a port is explicitly requested alongside --no-webserver.
+			// In this mode, command bridge runs in the same process so launch/quit work.
+			std::thread headless_http_thread;
+			std::unique_ptr<http::APIContext> headless_api_context;
+			if (emu_config.http_port > 0 && emu_config.headless_http) {
+				printf("Starting HTTP API server on port %d (headless mode)...\n", emu_config.http_port);
+				headless_api_context = std::make_unique<http::APIContext>();
+				headless_api_context->config = &emu_config;
+				headless_api_context->subprocess = nullptr;  // in-process command bridge
+				headless_http_thread = std::thread(webserver::http_server_main,
+				                                    &emu_config, headless_api_context.get());
+			}
+
 			printf("Starting CPU execution...\n");
 			printf("Press Ctrl+C to exit.\n\n");
 
@@ -735,6 +750,10 @@ int main(int argc, char **argv)
 				while (true) {
 					platform->cpu_execute_one();
 				}
+			}
+
+			if (headless_http_thread.joinable()) {
+				headless_http_thread.detach();  // CPU exited, HTTP thread will be reaped
 			}
 		} else {
 			printf("\nNo ROM file specified.\n");

@@ -21,6 +21,7 @@
 #include "boot_progress.h"
 #include "ipc_protocol.h"
 #include "adb.h"
+#include "command_bridge.h"
 #include "../config/emulator_config.h"
 
 /* Boot phases */
@@ -54,6 +55,13 @@ static int g_dialogs_dismissed = 0;
 static double g_last_dialog_dismiss_time = 0.0;
 #define MAX_DIALOG_DISMISSALS 5       /* safety limit per boot */
 #define DIALOG_DISMISS_COOLDOWN 2.0   /* seconds between dismissals */
+
+static bool g_auto_launch_done = false;
+static double g_last_auto_launch_attempt = 0.0;
+static uint32_t g_pending_auto_launch_id = 0;
+static int g_auto_launch_attempts = 0;
+#define AUTO_LAUNCH_COOLDOWN 1.0   /* seconds between retries */
+#define AUTO_LAUNCH_MAX_ATTEMPTS 20
 
 static double elapsed_sec(void)
 {
@@ -270,6 +278,65 @@ static void check_shutdown_dialog(void)
 	ADBKeyUp(0x24);
 }
 
+/*
+ *  Fire configured auto-launch after desktop is ready.
+ *  Queues a LAUNCH_APP command on the in-process command bridge.
+ *  The jGNEFilter picks it up on the next GetNextEvent and executes
+ *  _Launch (0xA9F2) in Finder's application context.
+ *
+ *  ExtFS volumes may not be mounted immediately at desktop time, so if the
+ *  first attempt fails with a validation error (e.g. nsvErr -35), this
+ *  function retries on subsequent IDLE_TIME ticks until the command bridge
+ *  reports success or we hit the attempt limit.
+ */
+static void maybe_fire_auto_launch(void)
+{
+	if (g_auto_launch_done) return;
+	const std::string& path = config::EmulatorConfig::instance().auto_launch_app;
+	if (path.empty()) return;
+
+	/* If a previous attempt is pending, check whether it finished */
+	if (g_pending_auto_launch_id != 0) {
+		CommandResult tmp;
+		if (g_command_bridge.wait_result(g_pending_auto_launch_id, tmp, 0)) {
+			if (tmp.err == 0) {
+				milestonef("Auto-launch: LAUNCH_APP '%s' accepted", path.c_str());
+				g_auto_launch_done = true;
+				return;
+			}
+			milestonef("Auto-launch: attempt %d failed (err=%d), will retry",
+			           g_auto_launch_attempts, tmp.err);
+			g_pending_auto_launch_id = 0;
+		} else {
+			/* Still pending — don't submit again */
+			return;
+		}
+	}
+
+	/* Cooldown between attempts */
+	double now = elapsed_sec();
+	if (now - g_last_auto_launch_attempt < AUTO_LAUNCH_COOLDOWN) return;
+
+	if (g_auto_launch_attempts >= AUTO_LAUNCH_MAX_ATTEMPTS) {
+		if (!g_auto_launch_done) {
+			milestonef("Auto-launch: giving up on '%s' after %d attempts",
+			           path.c_str(), g_auto_launch_attempts);
+			g_auto_launch_done = true;
+		}
+		return;
+	}
+
+	g_auto_launch_attempts++;
+	g_last_auto_launch_attempt = now;
+	milestonef("Auto-launch: submitting LAUNCH_APP '%s' (attempt %d)",
+	           path.c_str(), g_auto_launch_attempts);
+
+	Command cmd;
+	cmd.type = CmdType::LAUNCH_APP;
+	cmd.arg = path;
+	g_pending_auto_launch_id = g_command_bridge.submit(cmd);
+}
+
 void boot_progress_update(uint16_t opcode, void *regs_ptr)
 {
 	int level = boot_log_level();
@@ -398,6 +465,9 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
 				check_shutdown_dialog();
 			}
+			if (g_current_phase >= PHASE_DESKTOP) {
+				maybe_fire_auto_launch();
+			}
 			break;
 
 		default:
@@ -518,6 +588,9 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 			if (g_dialogs_dismissed < MAX_DIALOG_DISMISSALS && g_current_phase >= PHASE_FINDER_LAUNCH
 			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
 				check_shutdown_dialog();
+			}
+			if (g_current_phase >= PHASE_DESKTOP) {
+				maybe_fire_auto_launch();
 			}
 			break;
 	}

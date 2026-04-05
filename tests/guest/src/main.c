@@ -9,7 +9,7 @@
  *   m68k-apple-macos-gcc -o MacTestSuite main.c test_extfs.c test_audio.c \
  *       test_serial.c test_network.c test_disk.c
  */
-#include <QuickDraw.h>
+#include <Quickdraw.h>
 #include <Fonts.h>
 #include <Windows.h>
 #include <Menus.h>
@@ -24,6 +24,7 @@ extern void test_extfs(void);
 extern void test_audio(void);
 extern void test_serial(void);
 extern void test_network(void);
+extern void test_opentransport(void);
 extern void test_disk(void);
 
 int main(void)
@@ -46,6 +47,7 @@ int main(void)
     test_audio();
     test_serial();
     test_network();
+    test_opentransport();
 
     /* Write summary and close */
     report_finish();

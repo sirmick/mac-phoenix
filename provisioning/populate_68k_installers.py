@@ -452,6 +452,31 @@ def handle_dsk(dsk_path, image_path, folder_name):
         return True
 
 
+def handle_raw_file(src_path, image_path, folder_name):
+    """Copy a raw file (e.g. a .toast CD image) onto the HFS image.
+
+    No MacBinary wrapping, no fork handling — used for files that are pure
+    data (disk images) that the user will mount inside the emulator.
+    """
+    print(f"  Raw file: {os.path.basename(src_path)}")
+
+    if not hmount_image(image_path):
+        return False
+
+    hmkdir(f":{folder_name}")
+    basename = os.path.basename(src_path)
+    hfs_dest = f":{folder_name}:{basename}"
+    success = hcopy_raw_in(src_path, hfs_dest)
+    if success:
+        size_mb = os.path.getsize(src_path) / (1024 * 1024)
+        print(f"    + {basename} ({size_mb:.1f}MB)")
+    else:
+        print(f"    FAILED: {basename}")
+
+    humount_image()
+    return success
+
+
 def handle_macbinary_disk_image(bin_path, image_path, folder_name):
     """Handle a MacBinary-wrapped disk image (like MPW-PR.img_.bin).
 
@@ -482,18 +507,14 @@ def handle_macbinary_disk_image(bin_path, image_path, folder_name):
     return success
 
 
-# Files to process: (relative_path, handler, hfs_folder_name)
+# The HFS installer image is intentionally minimal: just enough to bootstrap
+# everything else inside the Mac. Once StuffIt Expander and Disk Copy are
+# installed, the rest of ~/storage/installers/ is reachable via --extfs.
 SOURCE_FILES = [
-    ("MPW/MPW-PR.img_.bin", handle_macbinary_disk_image, "MPW"),
-    ("ResEdit/ResEdit3.0.sit", handle_stuffit, "ResEdit"),
-    ("Disk-Copy-633-smi.sit", handle_stuffit, "Disk Copy"),
-    ("StuffIt Expander/Stuffit_Expander_5.5.dsk", handle_dsk, "StuffIt Expander"),
-    ("MacTCP_Ping_2.0.2.sea.bin", handle_stuffit, "MacTCP Ping"),
-    ("OTTool_1.2.1.sit", handle_stuffit, "OTTool"),
-    ("Speedometer_3.23.sit", handle_stuffit, "Speedometer"),
-    ("NCSA_Telnet_2.7b5.sit", handle_stuffit, "NCSA Telnet"),
-    ("MR-Browser-68K-v0.39.sit", handle_stuffit, "MR Browser"),
-    ("Hotline_1.2.3_(68K_+_PPC).sit", handle_stuffit, "Hotline"),
+    ("Bootstrap/StuffIt Expander/Stuffit_Expander_5.5.dsk", handle_dsk, "StuffIt Expander"),
+    ("Bootstrap/Disk-Copy-633-smi.sit", handle_stuffit, "Disk Copy"),
+    ("Bootstrap/ResEdit/ResEdit3.0.sit", handle_stuffit, "ResEdit"),
+    ("Bootstrap/MPW/MPW-PR.img_.bin", handle_macbinary_disk_image, "MPW"),
 ]
 
 

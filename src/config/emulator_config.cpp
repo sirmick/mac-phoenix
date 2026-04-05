@@ -537,6 +537,15 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             config.dismiss_shutdown_dialog = true;
             argv[i] = nullptr; continue;
         }
+
+        // --auto-launch <mac-path>
+        if (strcmp(argv[i], "--auto-launch") == 0 && i + 1 < argc) {
+            config.auto_launch_app = argv[i + 1];
+            argv[i] = nullptr;
+            argv[i + 1] = nullptr;
+            i++;
+            continue;
+        }
         if (strcmp(argv[i], "--no-dismiss-shutdown-dialog") == 0) {
             config.dismiss_shutdown_dialog = false;
             argv[i] = nullptr; continue;
@@ -545,6 +554,14 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --no-webserver
         if (strcmp(argv[i], "--no-webserver") == 0) {
             config.enable_webserver = false;
+            argv[i] = nullptr; continue;
+        }
+
+        // --headless-http: run HTTP API in headless mode (no WebRTC/video/audio)
+        // Useful for testing where launch/quit must route through in-process command bridge
+        if (strcmp(argv[i], "--headless-http") == 0) {
+            config.enable_webserver = false;
+            config.headless_http = true;
             argv[i] = nullptr; continue;
         }
 
