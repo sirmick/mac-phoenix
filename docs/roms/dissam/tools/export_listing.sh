@@ -25,6 +25,17 @@ if [ ! -x "$GHIDRA_HEADLESS" ]; then
     exit 1
 fi
 
+# Ensure Java is available (Ghidra snap bundles its own JDK)
+if ! command -v java &>/dev/null; then
+    GHIDRA_JAVA="/snap/ghidra/current/usr/lib/jvm/java-21-openjdk-amd64/bin"
+    if [ -d "$GHIDRA_JAVA" ]; then
+        export PATH="$GHIDRA_JAVA:$PATH"
+    else
+        echo "error: java not found in PATH and no Ghidra-bundled JDK at $GHIDRA_JAVA" >&2
+        exit 1
+    fi
+fi
+
 mkdir -p "$PROJECT_ROOT"
 
 # machine | rom-file-relative-to-ROM_ROOT | base-hex | processor-spec

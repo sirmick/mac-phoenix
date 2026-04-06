@@ -61,7 +61,7 @@ cleanup() {
         wait "$EMU_PID" 2>/dev/null || true
     fi
 }
-trap cleanup EXIT
+trap cleanup EXIT SIGTERM SIGINT
 
 # Wait for HTTP server to be ready
 echo -n "Waiting for server..."

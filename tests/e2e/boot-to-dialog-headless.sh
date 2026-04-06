@@ -56,12 +56,12 @@ wait_for_checkloads() {
         local now=$(date +%s)
         local elapsed=$((now - start))
         if [ "$elapsed" -ge "$timeout" ]; then
-            local count=$(grep -c "CHECKLOAD" "$logfile" 2>/dev/null || echo "0")
+            local count=$(grep -c "CHECKLOAD" "$logfile" 2>/dev/null || true)
             echo "  Timeout after ${timeout}s ($count CHECKLOADs)"
             return 1
         fi
 
-        local count=$(grep -c "CHECKLOAD" "$logfile" 2>/dev/null || echo "0")
+        local count=$(grep -c "CHECKLOAD" "$logfile" 2>/dev/null || true)
         if [ "$count" -ge "$target" ]; then
             echo "  Reached $count CHECKLOADs in ${elapsed}s"
             return 0
@@ -124,12 +124,12 @@ wait "$EMUPID" 2>/dev/null || true
 echo ""
 echo "=== Results ==="
 echo "Pass 1 (boot to Finder):"
-echo "  CHECKLOADs: $(grep -c 'CHECKLOAD' "$RESULT_DIR/pass1.log" 2>/dev/null || echo 0)"
+echo "  CHECKLOADs: $(grep -c 'CHECKLOAD' "$RESULT_DIR/pass1.log" 2>/dev/null || true)"
 echo "  Screenshots: $(ls "$RESULT_DIR/pass1/"*.png 2>/dev/null | wc -l)"
 echo "  Log: $RESULT_DIR/pass1.log"
 echo ""
 echo "Pass 2 (dirty boot - dialog):"
-echo "  CHECKLOADs: $(grep -c 'CHECKLOAD' "$RESULT_DIR/pass2.log" 2>/dev/null || echo 0)"
+echo "  CHECKLOADs: $(grep -c 'CHECKLOAD' "$RESULT_DIR/pass2.log" 2>/dev/null || true)"
 echo "  Screenshots: $(ls "$RESULT_DIR/pass2/"*.png 2>/dev/null | wc -l)"
 echo "  Log: $RESULT_DIR/pass2.log"
 echo ""

@@ -89,7 +89,7 @@ if [[ "$WEBSERVER" == "true" ]]; then
         --port "$PORT" --signaling-port "$SIG_PORT" \
         "${EXTRA_FLAGS[@]}" &>"$LOG" &
     EMU_PID=$!
-    trap cleanup EXIT
+    trap cleanup EXIT SIGTERM SIGINT
 
     # Wait for HTTP server to be ready
     echo -n "Waiting for server..."
@@ -154,7 +154,7 @@ else
         --timeout "$TIMEOUT" --no-webserver \
         "${EXTRA_FLAGS[@]}" 2>&1 | tee "$LOG" &
     EMU_PID=$!
-    trap cleanup EXIT
+    trap cleanup EXIT SIGTERM SIGINT
 
     # Wait for emulator to finish (headless mode with --timeout)
     wait "$EMU_PID" 2>/dev/null || true

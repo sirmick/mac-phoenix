@@ -378,6 +378,14 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 #endif
 
+            // Re-check: SHM may have been unmapped during the wait
+            ipc_shm = ipc_shm_ptr->load(std::memory_order_acquire);
+            if (!ipc_shm) {
+                ipc_was_connected = false;
+                ipc_eventfd = -1;
+                continue;
+            }
+
             uint64_t fc = IPC_ATOMIC_LOAD(ipc_shm->frame_count);
             if (fc <= ipc_last_frame_count) continue;
             ipc_last_frame_count = fc;

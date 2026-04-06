@@ -1,7 +1,8 @@
 #!/bin/bash
 # Test runner for simple IRQ EmulOp test ROM
 
-ROM_PATH="test_roms/test_irq_simple.rom"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROM_PATH="$SCRIPT_DIR/test_irq_simple.rom"
 TIMEOUT=2
 BUILD_DIR="build"
 
@@ -42,8 +43,8 @@ check_results() {
     fi
 
     # Count EmulOp calls
-    local irq_count=$(grep -c "EmulOp 0x7129" "$log_file" 2>/dev/null || echo 0)
-    local aline_count=$(grep -c "opcode 0xae29\|A-line.*ae29" "$log_file" 2>/dev/null || echo 0)
+    local irq_count=$(grep -c "EmulOp 0x7129" "$log_file" 2>/dev/null || true)
+    local aline_count=$(grep -c "opcode 0xae29\|A-line.*ae29" "$log_file" 2>/dev/null || true)
 
     echo ""
     echo "IRQ EmulOp (0x7129) calls: $irq_count"
@@ -73,15 +74,15 @@ echo ""
 # Test with UAE backend
 echo "Testing with UAE backend..."
 echo "----------------------------"
-EMULATOR_TIMEOUT=$TIMEOUT CPU_BACKEND=uae EMULOP_VERBOSE=1 \
-    $BUILD_DIR/mac-phoenix --rom "$ROM_PATH" --no-webserver > test_roms/uae_simple_test.log 2>&1 || true
+EMULOP_VERBOSE=1 \
+    $BUILD_DIR/mac-phoenix --config /dev/null --backend uae --timeout "$TIMEOUT" --rom "$ROM_PATH" --no-webserver > test_roms/uae_simple_test.log 2>&1 || true
 check_results "test_roms/uae_simple_test.log" "UAE"
 
 # Test with Unicorn backend
 echo "Testing with Unicorn backend..."
 echo "--------------------------------"
-EMULATOR_TIMEOUT=$TIMEOUT CPU_BACKEND=unicorn EMULOP_VERBOSE=1 \
-    $BUILD_DIR/mac-phoenix --rom "$ROM_PATH" --no-webserver > test_roms/unicorn_simple_test.log 2>&1 || true
+EMULOP_VERBOSE=1 \
+    $BUILD_DIR/mac-phoenix --config /dev/null --backend unicorn --timeout "$TIMEOUT" --rom "$ROM_PATH" --no-webserver > test_roms/unicorn_simple_test.log 2>&1 || true
 check_results "test_roms/unicorn_simple_test.log" "Unicorn"
 
 # Compare backends
@@ -89,8 +90,8 @@ echo "========================================"
 echo "Comparison Summary"
 echo "========================================"
 
-uae_irq=$(grep -c "EmulOp 0x7129" test_roms/uae_simple_test.log 2>/dev/null || echo 0)
-unicorn_irq=$(grep -c "EmulOp 0x7129" test_roms/unicorn_simple_test.log 2>/dev/null || echo 0)
+uae_irq=$(grep -c "EmulOp 0x7129" test_roms/uae_simple_test.log 2>/dev/null || true)
+unicorn_irq=$(grep -c "EmulOp 0x7129" test_roms/unicorn_simple_test.log 2>/dev/null || true)
 
 echo ""
 echo "IRQ EmulOp frequency:"

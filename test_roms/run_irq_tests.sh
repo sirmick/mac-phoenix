@@ -1,7 +1,8 @@
 #!/bin/bash
 # Runner script for IRQ EmulOp tests
 
-ROM_PATH="test_roms/test_irq_emulop.rom"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROM_PATH="$SCRIPT_DIR/test_irq_emulop.rom"
 TIMEOUT=2
 
 echo "========================================"
@@ -53,8 +54,8 @@ check_results() {
     fi
 
     # Count IRQ EmulOp calls
-    local irq_count=$(grep -c "EmulOp 0x7129" "$log_file" 2>/dev/null || echo 0)
-    local aline_count=$(grep -c "opcode 0xae29" "$log_file" 2>/dev/null || echo 0)
+    local irq_count=$(grep -c "EmulOp 0x7129" "$log_file" 2>/dev/null || true)
+    local aline_count=$(grep -c "opcode 0xae29" "$log_file" 2>/dev/null || true)
 
     echo ""
     echo "IRQ EmulOp calls: $irq_count"
@@ -70,16 +71,16 @@ check_results() {
 # Test with UAE backend
 echo "Testing with UAE backend..."
 echo "----------------------------"
-EMULATOR_TIMEOUT=$TIMEOUT CPU_BACKEND=uae EMULOP_VERBOSE=1 \
-    ./build/mac-phoenix --rom "$ROM_PATH" --no-webserver > uae_test.log 2>&1 || true
-check_results "uae_test.log" "UAE"
+EMULOP_VERBOSE=1 \
+    "$SCRIPT_DIR/../build/mac-phoenix" --config /dev/null --backend uae --timeout "$TIMEOUT" --rom "$ROM_PATH" --no-webserver > "$SCRIPT_DIR/uae_test.log" 2>&1 || true
+check_results "$SCRIPT_DIR/uae_test.log" "UAE"
 
 # Test with Unicorn backend
 echo "Testing with Unicorn backend..."
 echo "--------------------------------"
-EMULATOR_TIMEOUT=$TIMEOUT CPU_BACKEND=unicorn EMULOP_VERBOSE=1 \
-    ./build/mac-phoenix --rom "$ROM_PATH" --no-webserver > unicorn_test.log 2>&1 || true
-check_results "unicorn_test.log" "Unicorn"
+EMULOP_VERBOSE=1 \
+    "$SCRIPT_DIR/../build/mac-phoenix" --config /dev/null --backend unicorn --timeout "$TIMEOUT" --rom "$ROM_PATH" --no-webserver > "$SCRIPT_DIR/unicorn_test.log" 2>&1 || true
+check_results "$SCRIPT_DIR/unicorn_test.log" "Unicorn"
 
 # Compare backends
 echo "========================================"
@@ -88,13 +89,13 @@ echo "========================================"
 echo ""
 
 echo "IRQ EmulOp frequency:"
-echo "  UAE:     $(grep -c "EmulOp 0x7129" uae_test.log 2>/dev/null || echo 0) calls"
-echo "  Unicorn: $(grep -c "EmulOp 0x7129" unicorn_test.log 2>/dev/null || echo 0) calls"
+echo "  UAE:     $(grep -c "EmulOp 0x7129" "$SCRIPT_DIR/uae_test.log" 2>/dev/null || true) calls"
+echo "  Unicorn: $(grep -c "EmulOp 0x7129" "$SCRIPT_DIR/unicorn_test.log" 2>/dev/null || true) calls"
 
 echo ""
 echo "Test logs saved:"
-echo "  UAE:     uae_test.log"
-echo "  Unicorn: unicorn_test.log"
+echo "  UAE:     $SCRIPT_DIR/uae_test.log"
+echo "  Unicorn: $SCRIPT_DIR/unicorn_test.log"
 echo ""
 echo "Memory dumps at key addresses:"
 echo "  0x1000: Start marker (should be 'STAR')"

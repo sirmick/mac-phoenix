@@ -42,31 +42,34 @@ set_tests_properties(extfs PROPERTIES
 
 add_test(
   NAME boot_uae_interp
-  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --no-jit --timeout 20 --port 18090
+  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --no-jit --timeout 20 --port 18080
 )
 set_tests_properties(boot_uae_interp PROPERTIES
   TIMEOUT 35
   LABELS "boot"
+  SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
 add_test(
   NAME boot_uae_jit
-  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --jit --timeout 20 --port 18090
+  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --jit --timeout 20 --port 18082
 )
 set_tests_properties(boot_uae_jit PROPERTIES
   TIMEOUT 35
   LABELS "boot"
+  SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
 add_test(
   NAME boot_unicorn
-  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend unicorn --timeout 120 --port 18090
+  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend unicorn --timeout 120 --port 18084
 )
 set_tests_properties(boot_unicorn PROPERTIES
   TIMEOUT 180
   LABELS "boot"
+  SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
@@ -82,7 +85,7 @@ set_tests_properties(command_bridge PROPERTIES
 
 add_test(
   NAME boot_ppc_interp
-  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --no-ppc-jit --timeout 45 --port 18095
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --no-ppc-jit --timeout 45 --port 18086
 )
 set_tests_properties(boot_ppc_interp PROPERTIES
   TIMEOUT 60
@@ -92,7 +95,7 @@ set_tests_properties(boot_ppc_interp PROPERTIES
 
 add_test(
   NAME boot_ppc_jit
-  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --ppc-jit --timeout 45 --port 18095
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --ppc-jit --timeout 45 --port 18088
 )
 set_tests_properties(boot_ppc_jit PROPERTIES
   TIMEOUT 60
@@ -102,7 +105,7 @@ set_tests_properties(boot_ppc_jit PROPERTIES
 
 add_test(
   NAME boot_ppc_api
-  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --timeout 45 --port 18095 --webserver
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --timeout 45 --port 18090 --webserver
 )
 set_tests_properties(boot_ppc_api PROPERTIES
   TIMEOUT 60
@@ -112,7 +115,7 @@ set_tests_properties(boot_ppc_api PROPERTIES
 
 add_test(
   NAME mouse_position
-  COMMAND bash ${TEST_DIR}/test_mouse_position.sh --backend uae --timeout 15 --port 18090
+  COMMAND bash ${TEST_DIR}/test_mouse_position.sh --backend uae --timeout 15 --port 18096
 )
 set_tests_properties(mouse_position PROPERTIES
   TIMEOUT 30
@@ -129,5 +132,6 @@ add_test(
 set_tests_properties(guest_suite PROPERTIES
   TIMEOUT 90
   LABELS "guest"
+  SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )

@@ -81,7 +81,7 @@ cleanup() {
     fi
     rm -rf "$EXTFS_DIR"
 }
-trap cleanup EXIT
+trap cleanup EXIT SIGTERM SIGINT
 
 echo "=== Guest Test Suite ==="
 [[ -n "$OS_VERSION" ]] && echo "OS: $OS_VERSION"
