@@ -761,6 +761,12 @@ void MakeFromSR (void)
 void Exception(int nr, uaecptr oldpc)
 {
 	uae_u32 currpc = m68k_getpc ();
+	if (nr >= 2 && nr <= 11 && nr != 10) {
+		static int exc_count = 0;
+		if (++exc_count <= 50)
+			fprintf(stderr, "[68K] Exception %d at PC=%08x A7=%08x\n",
+				nr, currpc, m68k_areg(regs, 7));
+	}
 	MakeSR();
 	if (!regs.s) {
 		regs.usp = m68k_areg(regs, 7);

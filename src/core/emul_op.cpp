@@ -277,6 +277,19 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_INSTALL_DRIVERS: {// Patch to install our own drivers during startup
 			D(bug("InstallDrivers\n"));
+
+			// For 24-bit ROMs: fix TimeDBRA if SETUPTIMEK failed.
+			// SETUPTIMEK reads VIA Timer 2 which we don't emulate;
+			// the SIGSEGV handler silently skips the VIA accesses,
+			// leaving TimeDBRA=0.  Any Delay()/Microseconds() call
+			// with TimeDBRA=0 would hang or divide-by-zero.
+			if (ROMVersion == ROM_VERSION_CLASSIC && ReadMacInt16(0xd00) == 0) {
+				WriteMacInt16(0xd00, 10000);  // TimeDBRA
+				WriteMacInt16(0xd02, 10000);  // TimeSCCDBRA
+				WriteMacInt16(0xd04, 10000);  // TimeSCSIDBRA
+				WriteMacInt16(0xd06, 10000);  // TimeRAMDBRA
+			}
+
 			InstallDrivers(r->a[0]);
 
 			// Install PutScrap() patch

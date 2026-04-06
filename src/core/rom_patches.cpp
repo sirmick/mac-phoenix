@@ -969,6 +969,12 @@ static bool patch_rom_classic(void)
 	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
 	*wp = htons(0x4e75); //rts
 
+	// Note: INITCRSRMGR at $40076E creates the unit table ($776-$778)
+	// and then opens .Sony ($78E) and .Sound ($798). Our INSTALL_DRIVERS
+	// EmulOp at $36CAA fires from .Sound's _Open, so it runs AFTER the
+	// unit table is created. Drivers are installed into the fresh table.
+	// Do NOT patch $776/$778 — the unit table creation must happen first.
+
 #if 1
 	// Don't look for SCSI devices
 	wp = (uint16 *)(ROMBaseHost + 0xd5a);
