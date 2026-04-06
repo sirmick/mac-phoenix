@@ -164,14 +164,43 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 
     architecture_ = config::Architecture::M68K;
 
-    // 1. Allocate memory with RAII (unique_ptr auto-frees)
-    ram_size_ = config.ram_mb * 1024 * 1024;
-    fprintf(stderr, "[CPUContext] Allocating RAM: %u MB\n", config.ram_mb);
+    // 1. Load ROM to temp buffer first — we need to peek the version
+    //    before deciding on memory layout (24-bit ROMs need ROM at $400000).
+    rom_.reset(new (std::nothrow) uint8_t[1024 * 1024]);
+    if (!rom_) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to allocate ROM buffer\n");
+        return false;
+    }
+    if (!load_rom(config.rom_path.c_str())) {
+        fprintf(stderr, "[CPUContext] ERROR: Failed to load ROM\n");
+        return false;
+    }
 
-    // Allocate RAM + ROM (1MB) + ScratchMem (64KB) + FrameBuffer area (4MB)
-    // Layout: [RAM 32MB][ROM 1MB][ScratchMem 64KB][FrameBuffer 4MB]
-    // Frame buffer MUST be outside RAM to avoid overlapping Mac heap data structures
-    size_t total_alloc = ram_size_ + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
+    // Peek ROM version from temp buffer to determine memory layout
+    uint16_t rom_version_peek = ntohs(*(uint16_t *)(rom_.get() + 8));
+
+    // 2. Determine memory layout based on ROM version
+    ram_size_ = config.ram_mb * 1024 * 1024;
+    uint32_t rom_offset;  // offset of ROM within the mmap block
+
+    if (rom_version_peek == ROM_VERSION_CLASSIC || rom_version_peek == ROM_VERSION_II) {
+        // 24-bit ROMs: ROM lives at Mac $400000 (right after max 4MB RAM).
+        // Clamp RAM to 4MB — SE/Plus/Classic hardware limit.
+        if (ram_size_ > 0x00400000) {
+            fprintf(stderr, "[CPUContext] Clamping RAM to 4 MB for 24-bit ROM\n");
+            ram_size_ = 0x00400000;
+        }
+        rom_offset = 0x00400000;
+    } else {
+        // 32-bit ROMs: ROM immediately follows RAM
+        rom_offset = ram_size_;
+    }
+
+    fprintf(stderr, "[CPUContext] Allocating RAM: %u MB\n", ram_size_ / (1024 * 1024));
+
+    // Allocate contiguous block: [RAM...][ROM 1MB][ScratchMem 64KB][FrameBuffer 4MB]
+    // For 24-bit ROMs, rom_offset may exceed ram_size_ (gap is unmapped Mac space).
+    size_t total_alloc = rom_offset + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
 
     // JIT requires MEMBaseDiff to fit in a 32-bit x86 displacement, so allocate
     // in the low 32-bit address space. Fall back to heap if MAP_32BIT fails.
@@ -194,37 +223,21 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
         memset(ram_.get(), 0, total_alloc);
     }
 
-    // Allocate ROM (max 1MB for M68K)
-    rom_.reset(new (std::nothrow) uint8_t[1024 * 1024]);
-    if (!rom_) {
-        fprintf(stderr, "[CPUContext] ERROR: Failed to allocate ROM\n");
-        return false;
-    }
-
-    // 2. Set up global pointers (for legacy code compatibility)
-    // These globals are referenced by ~250 sites across 24 files (UAE interpreter,
-    // ROM patches, memory accessors, video drivers, etc.) — refactoring them out
-    // would require rewriting the entire memory access layer.
+    // 3. Set up global pointers (for legacy code compatibility)
     uint8_t* ram_base = mmap_ram_ ? mmap_ram_ : ram_.get();
     RAMBaseHost = ram_base;
-    ROMBaseHost = ram_base + ram_size_;  // ROM after RAM
+    ROMBaseHost = ram_base + rom_offset;
     RAMSize = ram_size_;
 
-    // Compute Mac addresses from known memory layout (no platform function needed)
     MEMBaseDiff = (uintptr)RAMBaseHost;
     RAMBaseMac = 0;
-    ROMBaseMac = (uint32)(ROMBaseHost - RAMBaseHost);
+    ROMBaseMac = rom_offset;
 
-    fprintf(stderr, "[CPUContext] RAM at %p (Mac: 0x%08x)\n", RAMBaseHost, RAMBaseMac);
+    fprintf(stderr, "[CPUContext] RAM at %p (Mac: 0x%08x, %u MB)\n",
+            RAMBaseHost, RAMBaseMac, ram_size_ / (1024 * 1024));
     fprintf(stderr, "[CPUContext] ROM at %p (Mac: 0x%08x)\n", ROMBaseHost, ROMBaseMac);
 
-    // 3. Load ROM
-    if (!load_rom(config.rom_path.c_str())) {
-        fprintf(stderr, "[CPUContext] ERROR: Failed to load ROM\n");
-        return false;
-    }
-
-    // Copy ROM to the ROM area
+    // Copy ROM from temp buffer to final location
     memcpy(ROMBaseHost, rom_.get(), rom_size_);
     ROMSize = rom_size_;
 

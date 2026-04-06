@@ -911,11 +911,11 @@ bool m68k::CheckROM(void)
 	// Read version
 	ROMVersion = ntohs(*(uint16 *)(ROMBaseHost + 8));
 
-#if REAL_ADDRESSING || DIRECT_ADDRESSING
-	// Real and direct addressing modes require a 32-bit clean ROM
+#if REAL_ADDRESSING
+	// Real addressing requires a 32-bit clean ROM (no address masking layer)
 	return ROMVersion == ROM_VERSION_32;
 #else
-	// Virtual addressing mode works with 32-bit clean Mac II ROMs and Classic ROMs
+	// Direct and virtual addressing support Classic ROMs via 24-bit address masking
 	return (ROMVersion == ROM_VERSION_CLASSIC) || (ROMVersion == ROM_VERSION_32);
 #endif
 }
@@ -958,10 +958,11 @@ static bool patch_rom_classic(void)
 	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_CLKNOMEM));
 	*wp = htons(0x4ed5);			// jmp	(a5)
 
-	// Skip main memory test (not that it wouldn't pass, but it's faster that way)
-	wp = (uint16 *)(ROMBaseHost + 0x11e);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
+	// Let RAMTEST run — walking-ones memory test works on our mmap'd
+	// RAM and correctly determines the 4 MB size.  (Original BasiliskII
+	// NOP'd this to save time, but the SE ROM needs the result for
+	// COMPBOOTSTACK to compute a correct system zone size.)
+	// No patch at $11E — leave the original JSR RAMTEST intact.
 
 	// Don't open .Sound driver but install our own drivers
 	wp = (uint16 *)(ROMBaseHost + 0x36caa);

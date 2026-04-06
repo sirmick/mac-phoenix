@@ -23,6 +23,7 @@
 import sys
 import os
 from ghidra.program.model.symbol import SourceType
+from ghidra.program.model.listing import Instruction
 from ghidra.app.cmd.disassemble import DisassembleCommand
 from ghidra.app.plugin.core.analysis import AutoAnalysisManager
 from ghidra.program.model.address import AddressSet
@@ -172,6 +173,67 @@ try:
     print("  brute-force disassembled ROM range")
 except Exception as e:
     print("warn: brute disassemble: %s" % e)
+
+# ---------------------------------------------------------------------------
+# 4b. Handle A-line traps ($Axxx opcodes)
+# ---------------------------------------------------------------------------
+# Ghidra's 68000 SLEIGH spec treats A-line opcodes as illegal instructions
+# and stops disassembly.  On the Mac, these are Toolbox/OS trap calls that
+# fall through to the next instruction.  We fix this by:
+#   1. Scanning for 2-byte undefined regions whose value is $A000-$AFFF
+#   2. Labeling them with the trap name
+#   3. Forcing disassembly to resume at addr+2 (fall-through)
+# This lets Ghidra's auto-analyzer follow control flow past A-traps.
+
+try:
+    # Import trap names from companion module (works in both Jython and CPython)
+    import imp
+    _traps_path = os.path.join(script_dir, "mac_traps.py")
+    _traps_mod  = imp.load_source("mac_traps", _traps_path)
+    _trap_name  = _traps_mod.trap_mnemonic
+
+    _listing = currentProgram.getListing()
+    atrap_count = 0
+    addr = rom_start
+    while addr is not None and addr.compareTo(rom_end) < 0:
+        cu = _listing.getCodeUnitAt(addr)
+        if cu is None:
+            addr = addr.add(2)
+            continue
+
+        # Only process undefined/data units that are 2 bytes
+        if isinstance(cu, Instruction):
+            addr = cu.getAddress().add(cu.getLength())
+            continue
+
+        length = cu.getLength()
+        if length == 2:
+            try:
+                w = (getByte(addr) & 0xFF) << 8 | (getByte(addr.add(1)) & 0xFF)
+                if 0xA000 <= w <= 0xAFFF:
+                    name = _trap_name(w)
+                    if name:
+                        try:
+                            createLabel(addr, name, True, SourceType.USER_DEFINED)
+                        except Exception:
+                            pass  # label may already exist
+                        setEOLComment(addr, "A-Trap $%04X %s" % (w, name))
+                    # Force disassembly to continue past the A-trap
+                    next_addr = addr.add(2)
+                    try:
+                        resume = DisassembleCommand(next_addr, None, True)
+                        resume.applyTo(currentProgram, monitor)
+                    except Exception:
+                        pass
+                    atrap_count += 1
+            except Exception:
+                pass
+
+        addr = addr.add(length if length > 0 else 2)
+
+    print("  labeled %d A-line traps" % atrap_count)
+except Exception as e:
+    print("warn: A-line trap pass: %s" % e)
 
 # ---------------------------------------------------------------------------
 # 5. Create ResetEntry function

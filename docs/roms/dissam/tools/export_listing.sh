@@ -97,15 +97,19 @@ process_rom() {
         -postScript export_listing.py "$out_lst" \
         -deleteProject
 
-    rm -f "$staged"
-
+    # Post-process: replace 2-byte DATA with A-line trap mnemonics
+    # (must run before rm of staged ROM)
     if [ -f "$out_lst" ]; then
+        python3 "$SCRIPT_DIR/patch_atraps.py" "$rom_file" "$out_lst" "$base" 2>&1 \
+            || echo "  WARN: patch_atraps.py failed" >&2
         local lines
         lines=$(wc -l < "$out_lst")
         echo "  -> $out_lst ($lines lines)"
     else
         echo "  WARN: $out_lst was not produced" >&2
     fi
+
+    rm -f "$staged"
 }
 
 if [ $# -gt 0 ]; then

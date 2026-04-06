@@ -459,6 +459,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
+        // --floppy <path> (repeatable)
+        if (strcmp(argv[i], "--floppy") == 0 && i+1 < argc) {
+            config.floppy_paths.push_back(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
         // --cdrom <path> (repeatable)
         if (strcmp(argv[i], "--cdrom") == 0 && i+1 < argc) {
             config.cdrom_paths.push_back(argv[i+1]);

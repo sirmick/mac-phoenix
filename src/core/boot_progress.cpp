@@ -454,14 +454,20 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 		}
 
 		case M68K_EMUL_OP_IRQ:
-			/* Detect Finder launch — sole place for CurApName checking */
-			if (!g_seen_finder && g_current_phase >= PHASE_BOOT_BLOCKS) {
+			/* Advance to WARM_START from IRQ if HasMacStarted() — System 6
+			 * may not fire enough CHECKLOAD events for the CHECKLOAD path
+			 * to detect WLSC. */
+			if (g_current_phase < PHASE_WARM_START && HasMacStarted()) {
+				milestonef("Mac warm start complete (WLSC) after %u resources", g_checkload_count);
+				set_phase(PHASE_WARM_START);
+			}
+			/* Detect Finder launch via CurApName */
+			if (!g_seen_finder && g_current_phase >= PHASE_WARM_START) {
 				char app_name[64];
 				read_cur_app_name(app_name, sizeof(app_name));
 				if (app_name[0] && strcmp(app_name, g_last_app_name) != 0) {
 					snprintf(g_last_app_name, sizeof(g_last_app_name), "%s", app_name);
-					if (level >= 1)
-						milestonef("App launched: '%s'", app_name);
+					milestonef("App launched: '%s'", app_name);
 				}
 				if (strcmp(app_name, "Finder") == 0) {
 					g_seen_finder = true;
@@ -582,7 +588,7 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 
 		case BOOT_EVENT_IRQ: {
 			/* Detect Finder launch via CurApName */
-			if (!g_seen_finder && g_current_phase >= PHASE_BOOT_BLOCKS) {
+			if (!g_seen_finder && g_current_phase >= PHASE_WARM_START) {
 				char app_name[64];
 				read_cur_app_name(app_name, sizeof(app_name));
 				if (app_name[0] && strcmp(app_name, g_last_app_name) != 0) {

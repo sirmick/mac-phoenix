@@ -244,7 +244,7 @@ static void mount_mountable_volumes(void)
 int16 DiskOpen(uint32 pb, uint32 dce)
 {
 	(void)pb;
-	D(bug("DiskOpen: %d drives\n", (int)drives.size()));
+	D(bug("DiskOpen: dce=%08x, %zu drives\n", dce, drives.size()));
 
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
@@ -292,6 +292,9 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 			r.d[0] = (info->num << 16) | (DiskRefNum & 0xffff);
 			r.a[0] = info->status + dsQLink;
 			Execute68kTrap(0xa04e, &r);	// AddDrive()
+			D(bug("Drive %d added: blocks=%u, inPlace=%d\n",
+				info->num, info->num_blocks,
+				ReadMacInt8(info->status + dsDiskInPlace)));
 		}
 	}
 	return noErr;
@@ -342,7 +345,9 @@ int16 DiskPrime(uint32 pb, uint32 dce)
 
 	// Update ParamBlock and DCE
 	WriteMacInt32(pb + ioActCount, actual);
-	WriteMacInt32(dce + dCtlPosition, ReadMacInt32(dce + dCtlPosition) + actual);
+	uint32 old_pos = ReadMacInt32(dce + dCtlPosition);
+	WriteMacInt32(dce + dCtlPosition, old_pos + actual);
+
 	return noErr;
 }
 

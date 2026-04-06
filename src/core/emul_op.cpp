@@ -228,10 +228,18 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:	// Patch BootGlobs at startup
 			D(bug("Patch BootGlobs\n"));
-			WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);			// MemTop
-			WriteMacInt8(r->a[4] - 26, 0);								// No MMU
-			WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) | 1);	// No MMU
-			r->a[6] = RAMBaseMac + RAMSize;
+			if (ROMVersion == ROM_VERSION_CLASSIC) {
+				// Classic ROM: set A6 = top of RAM and MemTop directly.
+				// No MMU on 68000.
+				r->a[6] = RAMBaseMac + RAMSize;
+				WriteMacInt32(0x108, RAMBaseMac + RAMSize);	// MemTop
+			} else {
+				// 32-bit ROM: A4 points to BootGlobs, patch MMU flags
+				WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);	// MemTop
+				WriteMacInt8(r->a[4] - 26, 0);						// No MMU
+				WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) | 1);
+				r->a[6] = RAMBaseMac + RAMSize;
+			}
 			break;
 
 		case M68K_EMUL_OP_FIX_BOOTSTACK:	// Set boot stack to 3/4 of RAM (7.5)
@@ -268,7 +276,6 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_INSTALL_DRIVERS: {// Patch to install our own drivers during startup
-			// Install drivers
 			D(bug("InstallDrivers\n"));
 			InstallDrivers(r->a[0]);
 

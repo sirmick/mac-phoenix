@@ -18,10 +18,44 @@
 # @runtime Jython
 
 import sys
+import os
 import io
 from ghidra.program.model.listing import (
     Instruction, Data, CodeUnitFormat, CodeUnitFormatOptions
 )
+
+# A-line trap name lookup (inline for Jython compatibility)
+try:
+    import imp
+    _script_dir = os.path.dirname(os.path.abspath(sourceFile.getAbsolutePath()))
+    _traps_mod  = imp.load_source("mac_traps", os.path.join(_script_dir, "mac_traps.py"))
+    _trap_mnemonic = _traps_mod.trap_mnemonic
+except Exception:
+    # Fallback: minimal inline table if mac_traps.py import fails
+    _TRAPS = {
+        0xA000:"_Open",0xA001:"_Close",0xA002:"_Read",0xA003:"_Write",
+        0xA004:"_Control",0xA005:"_Status",0xA00F:"_MountVol",
+        0xA019:"_InitZone",0xA01E:"_NewPtr",0xA022:"_NewHandle",
+        0xA029:"_HLock",0xA02A:"_HUnlock",0xA02D:"_SetApplLimit",
+        0xA02E:"_BlockMove",0xA02F:"_PostEvent",0xA036:"_MoreMasters",
+        0xA04E:"_AddDrive",0xA058:"_InsTime",0xA059:"_RmvTime",
+        0xA05A:"_PrimeTime",0xA063:"_MaxApplZone",0xA064:"_MoveHHi",
+        0xA072:"_DoVBLTask",0xA07C:"_ADBOp",0xA11E:"_NewPtr",
+        0xA122:"_NewHandle",0xA247:"_SetOSTrapAddress",
+        0xA346:"_GetOSTrapAddress",0xA43D:"_DrvrInstallRsrvMem",
+        0xA647:"_SetToolTrapAddress",0xA71E:"_NewPtrSysClear",
+        0xA746:"_GetToolTrapAddress",
+        0xA815:"_SCSIDispatch",0xA86E:"_InitGraf",0xA8FE:"_InitFonts",
+        0xA912:"_InitWindows",0xA930:"_InitMenus",0xA970:"_GetNextEvent",
+        0xA97B:"_InitDialogs",0xA995:"_InitResources",
+        0xA997:"_OpenResFile",0xA99C:"_CountResources",
+        0xA9A0:"_GetResource",0xA9C9:"_SysError",0xA9CC:"_TEInit",
+        0xA9F2:"_Launch",0xA9F4:"_ExitToShell",
+    }
+    def _trap_mnemonic(w):
+        if 0xA000 <= w <= 0xAFFF:
+            return _TRAPS.get(w, "$%04X" % w)
+        return None
 
 args = getScriptArgs()
 if len(args) < 1:
@@ -203,9 +237,25 @@ for cu in code_units:
             for l in post.split("\n"):
                 out.write("    ; %s\n" % l)
     else:
+        # Check for A-line traps: 2-byte Data units with opcode $A000-$AFFF.
+        # Ghidra doesn't decode these as instructions (they're Mac-specific
+        # A-line exceptions), but they're critical for understanding ROM flow.
+        length = cu.getLength()
+        if length == 2:
+            try:
+                w = (getByte(addr) & 0xFF) << 8 | (getByte(addr.add(1)) & 0xFF)
+                if 0xA000 <= w <= 0xAFFF:
+                    flush_data_run()
+                    line = "%s  %s" % (addr, _trap_mnemonic(w))
+                    if eol:
+                        line += "   ; %s" % eol
+                    out.write(line + "\n")
+                    continue
+            except Exception:
+                pass
+
         # Data: either has a meaningful label/comment (already emitted above
         # during break_run), or we start/extend a data run to collapse.
-        length = cu.getLength()
         if eol or post:
             # One-off comment on a data unit: emit it with the data repr
             line = "%s  %s" % (addr, cu_fmt.getRepresentationString(cu))
