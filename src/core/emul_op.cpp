@@ -237,6 +237,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 				uint32 utab = Host2MacAddr(ScratchMem + 0x100);
 				memset(ScratchMem + 0x100, 0, r->d[0]);
 				r->a[0] = utab;
+				r->d[0] = 0;  // noErr (NewPtrSysClear return)
 			} else {
 				// 32-bit ROM: A4 points to BootGlobs, patch MMU flags
 				WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);	// MemTop
@@ -253,9 +254,9 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_FIX_MEMSIZE: {	// Set correct logical and physical memory size
 			D(bug("Fix MemSize\n"));
-			uint32 diff = ReadMacInt32(0x1ef8) - ReadMacInt32(0x1ef4);	// Difference between logical and physical size
-			WriteMacInt32(0x1ef8, RAMSize);			// Physical RAM size
-			WriteMacInt32(0x1ef4, RAMSize - diff);	// Logical RAM size
+			uint32 diff = ReadMacInt32(0x1ef8) - ReadMacInt32(0x1ef4);
+			WriteMacInt32(0x1ef8, RAMSize);
+			WriteMacInt32(0x1ef4, RAMSize - diff);
 			break;
 		}
 

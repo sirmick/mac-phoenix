@@ -983,6 +983,8 @@ static bool patch_rom_classic(void)
 	wp = (uint16 *)(ROMBaseHost + 0x776);
 	*wp = htons(platform_make_emulop(M68K_EMUL_OP_PATCH_BOOT_GLOBS));
 
+
+
 #if 1
 	// Don't look for SCSI devices
 	wp = (uint16 *)(ROMBaseHost + 0xd5a);
