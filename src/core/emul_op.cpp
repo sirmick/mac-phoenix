@@ -543,6 +543,29 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 #if !PRECISE_TIMING
 					TimerInterrupt();
 #endif
+					// Classic ROM: expand 1-bit mono framebuffer to 32-bit ARGB
+					// in the_buffer so the video pipeline sees standard pixels.
+					if (ROMVersion == ROM_VERSION_CLASSIC) {
+						uint8 *fb = ::ROMBaseHost + ::ROMSize + 0x10000; // the_buffer
+						uint32 sb = ReadMacInt32(0x824); // ScrnBase
+						if (sb > 0x1000 && sb < RAMSize) {
+							const uint8 *mono = Mac2HostAddr(sb);
+							uint32 *dst = (uint32 *)fb;
+							for (int y = 0; y < 342; y++) {
+								const uint8 *row = mono + y * 64;
+								for (int x = 0; x < 64; x++) {
+									uint8 byte = row[x];
+									for (int bit = 7; bit >= 0; bit--)
+										// Mac ARGB big-endian: black=FF000000, white=FFFFFFFF
+								// Store in big-endian for the Mac-native pipeline
+								*dst++ = (byte & (1 << bit))
+									? htonl(0xFF000000)   // black (bit set)
+									: htonl(0xFFFFFFFF);  // white (bit clear)
+								}
+							}
+						}
+					}
+
 					VideoInterrupt();
 
 					// Call DoVBLTask(0)

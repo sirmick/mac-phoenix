@@ -310,8 +310,14 @@ static bool video_ipc_m68k_init(bool classic)
     const int default_width = cfg.screen_width;
     const int default_height = cfg.screen_height;
 
-    g_ipc_m68k_width = default_width;
-    g_ipc_m68k_height = default_height;
+    // Classic ROM (SE): fixed 512x342 monochrome display
+    if (ROMVersion == ROM_VERSION_CLASSIC) {
+        g_ipc_m68k_width = 512;
+        g_ipc_m68k_height = 342;
+    } else {
+        g_ipc_m68k_width = default_width;
+        g_ipc_m68k_height = default_height;
+    }
 
     // Place framebuffer after ScratchMem (same layout as video_webrtc)
     g_ipc_m68k_fb = ROMBaseHost + ROMSize + 0x10000;
@@ -319,6 +325,7 @@ static bool video_ipc_m68k_init(bool classic)
 
     // Tell IPC driver where the framebuffer is
     video_ipc_set_framebuffer(g_ipc_m68k_fb);
+    video_ipc_set_resolution(g_ipc_m68k_width, g_ipc_m68k_height);
 
     // Build video modes (32-bit only)
     vector<video_mode> modes;
