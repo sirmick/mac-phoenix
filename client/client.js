@@ -3128,7 +3128,7 @@ function modeToArch(mode) {
 }
 
 function isM68kMode(mode) {
-    return mode === 'quadra' || mode === 'iici';
+    return mode === 'quadra' || mode === 'se';
 }
 
 // Update header title with current model name
@@ -3242,8 +3242,8 @@ function loadPreset(name) {
     let emulatorMode;
     if (!isM68k) {
         emulatorMode = 'ppc';
-    } else if ((preset.m68k?.modelid || 14) === 11) {
-        emulatorMode = 'iici';
+    } else if ((preset.m68k?.modelid || 14) === 5) {
+        emulatorMode = 'se';
     } else {
         emulatorMode = 'quadra';
     }
@@ -3675,6 +3675,32 @@ function updateEmulatorPanelVisibility() {
     updateHeaderTitle();
 }
 
+// Apply mode-specific constraints (e.g., SE has fixed screen, limited RAM)
+function applyModeConstraints(mode) {
+    const ramEl = document.getElementById('cfg-ram');
+    const screenEl = document.getElementById('cfg-screen');
+
+    if (mode === 'se') {
+        // SE: fixed 512x342 BW screen, max 4MB RAM
+        if (screenEl) {
+            screenEl.value = '512x342';
+            screenEl.disabled = true;
+        }
+        if (ramEl) {
+            [...ramEl.options].forEach(opt => {
+                opt.disabled = parseInt(opt.value) > 4;
+            });
+            if (parseInt(ramEl.value) > 4) ramEl.value = 4;
+        }
+    } else {
+        // Other modes: restore full access
+        if (screenEl) screenEl.disabled = false;
+        if (ramEl) {
+            [...ramEl.options].forEach(opt => { opt.disabled = false; });
+        }
+    }
+}
+
 // Called when user changes emulator dropdown
 async function onEmulatorChange() {
     const emulatorType = document.getElementById('cfg-emulator')?.value;
@@ -3690,7 +3716,7 @@ async function onEmulatorChange() {
     const defaults = {
         ppc:    { ram: 128, screen: '1024x768', cpu: 4, model: 14, backend: 'kpx' },
         quadra: { ram: 32,  screen: '1024x768', cpu: 4, model: 14, backend: 'uae' },
-        iici:   { ram: 8,   screen: '640x480',  cpu: 3, model: 5,  backend: 'uae' }
+        se:     { ram: 4,   screen: '512x342',  cpu: 0, model: 5,  backend: 'uae' }
     };
     const d = defaults[emulatorType] || defaults.quadra;
 
@@ -3710,6 +3736,9 @@ async function onEmulatorChange() {
     if (modelEl) modelEl.value = d.model;
     const backendEl = document.getElementById('cfg-backend');
     if (backendEl) backendEl.value = d.backend;
+
+    // Apply SE-specific constraints
+    applyModeConstraints(emulatorType);
 
     // Reload ROM list to show only compatible ROMs
     await loadRomList();
@@ -3759,8 +3788,8 @@ async function loadCurrentConfig() {
         let emulatorMode;
         if (!isM68k) {
             emulatorMode = 'ppc';
-        } else if ((cfg.m68k?.modelid || 14) === 11) {
-            emulatorMode = 'iici';
+        } else if ((cfg.m68k?.modelid || 14) === 5) {
+            emulatorMode = 'se';
         } else {
             emulatorMode = 'quadra';
         }
@@ -3880,6 +3909,9 @@ function updateConfigUI() {
 
     // Update shared folders list
     renderExtfsList();
+
+    // Apply mode constraints (e.g., SE fixed screen)
+    applyModeConstraints(currentConfig.emulator);
 
     // Update header title with model name
     updateHeaderTitle();

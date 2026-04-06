@@ -261,7 +261,7 @@
                     <label>Emulator Mode</label>
                     <select id="cfg-emulator">
                         <option value="quadra">Quadra (68040, System 7 - Mac OS 8.1)</option>
-                        <option value="iici">Mac IIci (68030, System 6.0.8)</option>
+                        <option value="se">Mac SE (68000, System 6)</option>
                         <option value="ppc">PowerPC (PPC, System 7.1.2 - Mac OS 9.0.4)</option>
                     </select>
                     <small class="help-text">Requires restart to change emulator</small>
@@ -277,6 +277,9 @@
                 <div class="form-group">
                     <label>RAM Size</label>
                     <select id="cfg-ram">
+                        <option value="1">1 MB</option>
+                        <option value="2">2 MB</option>
+                        <option value="4">4 MB</option>
                         <option value="8">8 MB</option>
                         <option value="16">16 MB</option>
                         <option value="32" selected>32 MB</option>
@@ -296,6 +299,7 @@
                 <div class="form-group">
                     <label>Screen Resolution</label>
                     <select id="cfg-screen">
+                        <option value="512x342">512 x 342 (Mac SE)</option>
                         <option value="640x480">640 x 480</option>
                         <option value="800x600" selected>800 x 600</option>
                         <option value="1024x768">1024 x 768</option>
@@ -352,7 +356,7 @@
                     <div class="form-group" data-arch="m68k">
                         <label>Mac Model</label>
                         <select id="cfg-model">
-                            <option value="5">Mac IIci (68030, System 6)</option>
+                            <option value="5">Mac SE (68000, System 6)</option>
                             <option value="14" selected>Quadra (68040, Mac OS 8)</option>
                         </select>
                     </div>
