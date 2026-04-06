@@ -227,13 +227,16 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			r->d[0] = XPRAM[r->d[0] & 0xff];
 			break;
 
-		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:	// Patch BootGlobs at startup
+		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:	// Patch BootGlobs / unit table alloc
 			D(bug("Patch BootGlobs\n"));
 			if (ROMVersion == ROM_VERSION_CLASSIC) {
-				// Classic ROM: set A6 = top of RAM and MemTop directly.
-				// No MMU on 68000.
-				r->a[6] = RAMBaseMac + RAMSize;
-				WriteMacInt32(0x108, RAMBaseMac + RAMSize);	// MemTop
+				// Classic ROM: called from $776 (INITCRSRMGR) replacing
+				// _NewPtrSysClear.  Return A0 = unit table in ScratchMem
+				// (immune to zone management that destroys zone allocs).
+				// D0 = requested size (256 bytes, set by ROM at $774).
+				uint32 utab = Host2MacAddr(ScratchMem + 0x100);
+				memset(ScratchMem + 0x100, 0, r->d[0]);
+				r->a[0] = utab;
 			} else {
 				// 32-bit ROM: A4 points to BootGlobs, patch MMU flags
 				WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);	// MemTop
