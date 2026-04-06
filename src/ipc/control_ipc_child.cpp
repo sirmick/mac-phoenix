@@ -171,11 +171,11 @@ static void process_binary_input(const uint8_t* data, size_t len)
             switch (cmd->command) {
                 case IPC_CMD_STOP:
                     fprintf(stderr, "IPC: Stop command received\n");
-                    _exit(0);
+                    exit(0);
                     break;
                 case IPC_CMD_RESET:
                     fprintf(stderr, "IPC: Reset command received\n");
-                    _exit(75);  // Special exit code for restart
+                    exit(75);  // Special exit code for restart
                     break;
                 default:
                     break;
@@ -338,6 +338,15 @@ void control_ipc_exit(void)
         g_control_thread.join();
     }
     destroy_control_socket();
+}
+
+// Signal-safe: only unlinks the socket path (no malloc, no thread join).
+// Safe to call from a signal handler.
+void control_ipc_unlink(void)
+{
+    if (!g_socket_path.empty()) {
+        unlink(g_socket_path.c_str());
+    }
 }
 
 } // extern "C"

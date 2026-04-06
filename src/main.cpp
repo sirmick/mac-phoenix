@@ -13,6 +13,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 #include <thread>
 #include <chrono>
 #include <atomic>
@@ -183,6 +186,8 @@ IPCBuffer* video_ipc_get_buffer(void);
 bool control_ipc_init(IPCBuffer* shm);
 void control_ipc_start(void);
 void control_ipc_exit(void);
+void video_ipc_unlink(void);
+void control_ipc_unlink(void);
 }
 
 // CPU backend install functions
@@ -418,11 +423,16 @@ int main(int argc, char **argv)
 	// Auto-exit timer
 	if (emu_config.timeout_seconds > 0) {
 		int timeout_sec = emu_config.timeout_seconds;
+		bool ipc_mode = emu_config.ipc_mode;
 		printf("Auto-exit timer set: %d seconds\n", timeout_sec);
-		std::thread timeout_thread([timeout_sec]() {
+		std::thread timeout_thread([timeout_sec, ipc_mode]() {
 			std::this_thread::sleep_for(std::chrono::seconds(timeout_sec));
 			fprintf(stderr, "\n[Timeout: %d seconds elapsed, exiting]\n", timeout_sec);
-			_exit(0);
+			if (ipc_mode) {
+				exit(0);  // Run atexit handlers to clean up SHM/sockets
+			} else {
+				_exit(0);
+			}
 		});
 		timeout_thread.detach();
 	}
@@ -433,6 +443,29 @@ int main(int argc, char **argv)
 	if (emu_config.ipc_mode) {
 		bool is_ppc = (emu_config.architecture == config::Architecture::PPC);
 		printf("\n=== IPC Child Mode (%s) ===\n", is_ppc ? "PPC" : "m68k");
+
+		// Ask kernel to send us SIGTERM when parent dies (orphan prevention)
+#ifdef __linux__
+		prctl(PR_SET_PDEATHSIG, SIGTERM);
+		// Check if parent already died between fork() and prctl()
+		if (getppid() == 1) {
+			fprintf(stderr, "IPC: Parent already dead, exiting\n");
+			_exit(0);
+		}
+#endif
+		// Handle SIGTERM/SIGINT: unlink SHM+socket (signal-safe) then _exit.
+		// We can't call exit() from a signal handler (deadlock risk if the
+		// signal arrives on the control thread which exit() tries to join).
+		signal(SIGTERM, [](int) {
+			video_ipc_unlink();
+			control_ipc_unlink();
+			_exit(0);
+		});
+		signal(SIGINT, [](int) {
+			video_ipc_unlink();
+			control_ipc_unlink();
+			_exit(0);
+		});
 
 		const char *rom_path = emu_config.rom_path.empty() ? nullptr : emu_config.rom_path.c_str();
 		if (!rom_path) {
@@ -445,6 +478,13 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Failed to initialize IPC video\n");
 			return 1;
 		}
+
+		// Register cleanup so SHM and sockets are unlinked on any exit path
+		// (_exit from IPC command handler, timeout thread, or signal)
+		atexit([]() {
+			control_ipc_exit();
+			video_ipc_exit();
+		});
 
 		IPCBuffer* ipc_buf = video_ipc_get_buffer();
 		if (!ipc_buf) {

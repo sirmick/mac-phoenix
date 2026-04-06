@@ -126,6 +126,15 @@ void video_ipc_exit(void)
     fprintf(stderr, "IPC: Video driver shut down\n");
 }
 
+// Signal-safe: only unlinks the SHM name (no munmap, no malloc).
+// Safe to call from a signal handler.
+void video_ipc_unlink(void)
+{
+    if (!g_shm_name.empty()) {
+        shm_unlink(g_shm_name.c_str());
+    }
+}
+
 void video_ipc_set_framebuffer(const uint8_t* fb)
 {
     g_framebuffer_ptr = fb;
