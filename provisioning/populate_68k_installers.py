@@ -16,6 +16,7 @@ Strategy:
 import argparse
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -273,7 +274,10 @@ def handle_stuffit(sit_path, image_path, folder_name):
         print(f"  WARNING: lsar failed for {sit_path}", file=sys.stderr)
         return False
 
-    archive_info = json.loads(result.stdout)
+    # lsar -json can emit control characters in filenames (e.g. \r in Mac
+    # filenames like "Icon\r") which break json.loads — strip them.
+    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', result.stdout)
+    archive_info = json.loads(clean_json)
     entries = archive_info.get("lsarContents", [])
 
     # Build metadata index: filename -> {type, creator, create_date, modify_date}
@@ -515,6 +519,7 @@ SOURCE_FILES = [
     ("Bootstrap/Disk-Copy-633-smi.sit", handle_stuffit, "Disk Copy"),
     ("Bootstrap/ResEdit/ResEdit3.0.sit", handle_stuffit, "ResEdit"),
     ("Bootstrap/MPW/MPW-PR.img_.bin", handle_macbinary_disk_image, "MPW"),
+    ("Dev Tools/MacsBug_for_68000_family.sit", handle_stuffit, "MacsBug"),
 ]
 
 

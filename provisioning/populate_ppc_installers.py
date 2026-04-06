@@ -26,6 +26,7 @@ from populate_68k_installers import (
 SOURCE_FILES = [
     ("Bootstrap/StuffIt Expander/Stuffit_Expander_5.5.dsk", handle_dsk, "StuffIt Expander"),
     ("Bootstrap/Disk-Copy-633-smi.sit", handle_stuffit, "Disk Copy"),
+    ("Dev Tools/macsbug663.hqx", handle_stuffit, "MacsBug"),
 ]
 
 
