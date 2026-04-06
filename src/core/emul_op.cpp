@@ -63,6 +63,7 @@ using namespace m68k;
 
 extern bool tick_inhibit;
 extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
+extern uint8 *ScratchMem;  // Platform scratch memory (safe target for hardware base redirect)
 extern void command_bridge_drain_from_irq(M68kRegisters *r);
 extern void command_bridge_dispatch(M68kRegisters *r);
 
@@ -277,6 +278,20 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_INSTALL_DRIVERS: {// Patch to install our own drivers during startup
 			D(bug("InstallDrivers\n"));
+
+			// For 24-bit ROMs (SE/Classic): redirect hardware base globals
+			// to ScratchMem so that ROM code reading VIA/SCC/IWM/SCSI
+			// registers hits safe zero-filled memory instead of
+			// triggering SIGSEGV on unmapped I/O addresses.
+			if (ROMVersion == ROM_VERSION_CLASSIC) {
+				uint32 sm = Host2MacAddr(ScratchMem);
+				WriteMacInt32(0x1d4, sm);  // VIA1 base
+				WriteMacInt32(0x1d8, sm);  // SCC read base
+				WriteMacInt32(0x1dc, sm);  // SCC write base
+				WriteMacInt32(0x1e0, sm);  // IWM base
+				WriteMacInt32(0xc00, sm);  // SCSI base
+				WriteMacInt32(0xc04, sm);  // SCSI DMA base
+			}
 
 			// For 24-bit ROMs: fix TimeDBRA if SETUPTIMEK failed.
 			// SETUPTIMEK reads VIA Timer 2 which we don't emulate;

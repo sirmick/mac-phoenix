@@ -794,10 +794,14 @@ void m68k::InstallDrivers(uint32 pb)
 	}
 
 	// Install disk driver
+	// SE ROM's FINDSTARTUPDEVICE only recognizes drivers with refnum
+	// -5 (.Sony), -2, or in range -40..-33 (SCSI).  Use -33 for
+	// Classic ROMs so the drive is found during boot device scan.
+	int diskRef = (ROMVersion == ROM_VERSION_CLASSIC) ? -33 : DiskRefNum;
 	r.a[0] = ROMBaseMac + sony_offset + 0x100;
-	r.d[0] = (uint32)DiskRefNum;
+	r.d[0] = (uint32)diskRef;
 	Execute68kTrap(0xa43d, &r);		// DrvrInstallRsrvMem()
-	r.a[0] = ReadMacInt32(ReadMacInt32(0x11c) + ~DiskRefNum * 4);	// Get driver handle from Unit Table
+	r.a[0] = ReadMacInt32(ReadMacInt32(0x11c) + ~diskRef * 4);	// Get driver handle from Unit Table
 	Execute68kTrap(0xa029, &r);		// HLock()
 	uint32 dce = ReadMacInt32(r.a[0]);
 	WriteMacInt32(dce + dCtlDriver, ROMBaseMac + sony_offset + 0x100);
