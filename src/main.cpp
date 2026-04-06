@@ -298,6 +298,7 @@ static bool video_ipc_m68k_init(bool classic)
     (void)classic;
 
     struct { int w, h; uint32 res_id; } supported_modes[] = {
+        {  512,  342, 0x80 },  // Mac SE (1-bit mono)
         {  640,  480, 0x81 },
         {  800,  600, 0x82 },
         { 1024,  768, 0x83 },
