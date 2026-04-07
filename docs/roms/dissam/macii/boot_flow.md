@@ -13,12 +13,11 @@ post-overlay (`$40800000 + offset`). Companion listing:
 > means "same code"; hardware differences are dispatched at runtime
 > via `WHICHCPU` / `WHICHBOARD` tests.
 
-Patching strategy: version `$0178` is the gap in the current
-`src/core/rom_patches.cpp` coverage. Neither `patch_rom_classic` (for
-`$0276`) nor `patch_rom_32` (for `$067C`) handles it. See
-[`PATCHING_APPROACH.md`](../PATCHING_APPROACH.md) §"What's missing
-today" for the recommended path: port Basilisk II's signature-driven
-`patch_rom_ii` rather than hand-crafting per-address patches.
+Patching strategy: version `$0178` will use fixed-offset patches
+like `patch_rom_classic` ($0276), not the signature-driven approach
+from `patch_rom_32` ($067C). Both $0276 and $0178 lack UniversalInfo,
+so the approach is the same: fixed-offset patches in the reset-vector
+zone plus trap/resource-based lookups for everything else.
 
 ---
 
@@ -41,43 +40,40 @@ manager layer.
 ## 2. STARTINIT1 (`$4080009A`)
 
 ```
-STARTINIT1:
-  bsr     INITVIA           ; VIA1: $50F00000 base
-  bsr     INITSCC           ; Z8530 at $50F04000 (R) / $50F06000 (W)
-  bsr     INITIWM           ; IWM at $50F16000 (Mac II has IWM; IIx has SWIM)
-  bsr     INITSCSI          ; NCR 5380 at $50F10000
-  bsr     WHICHCPU          ; probe 68020 (or 68030 on IIx/IIcx/SE30)
-  movea.l A6,A1             ; A1 = MemTop estimate
-  movea.l A6,A0
-  suba.w  #$300,A0
-  jsr     RAMTEST           ; walking-ones RAM sizing
-  movea.l #$50F18000,A3     ; IWM rev-check probe base
-  bsr     REV8CHK           ; Rev-8 IWM / ASC hardware detection
-  bne     LAB_408000CC
-  movea.l #$50F14000,A3     ; ASC base (Apple Sound Chip)
-LAB_408000CC:
-  move.l  D7,-(SP)
-  moveq   #$28,D0
-  bsr     BOOTBEEP
+STARTINIT1 ($4080009A):
+  $009A: bsr  FUN_408006F2   ; INITVIA — VIA1 at $50F00000
+  $009E: bsr  FUN_408007B4   ; INITSCC — Z8530 at $50F04000 (R) / $50F06000 (W)
+  $00A2: bsr  FUN_408006AA   ; INITIWM — IWM at $50F16000 (Mac II); SWIM on IIx
+  $00A6: bsr  FUN_4080066C   ; INITSCSI — NCR 5380 at $50F10000
+  $00AA: bsr  FUN_40800532   ; WHICHCPU — probe 68020 (II) / 68030 (IIx/SE30)
+  $00AE: movea.l A6,A1       ; A1 = MemTop estimate
+  $00B0: movea.l A6,A0
+  $00B2: suba.w  #$300,A0
+  $00B6: jsr  RAMTEST        ; walking-ones RAM sizing
+  $00BA: movea.l #$50F18000,A3  ; IWM rev-check probe base
+  $00C0: bsr  REV8CHK        ; Rev-8 IWM / ASC hardware detection
+  $00C4: bne  LAB_408000CC
+  $00C8: movea.l #$50F14000,A3  ; ASC base (Apple Sound Chip)
+  $00CC: move.l  D7,-(SP)
+  $00CE: moveq   #$28,D0
+  $00D0: bsr  BOOTBEEP       ; startup chime
   ...
-  cmpi.l  #'WLSC',(DAT_CFC)  ; warm-start magic
-  beq     LAB_408000F2
-  jsr     RAMTEST
-LAB_408000F2:
-  movea.l A1,SP             ; install boot stack
-  lea     ($100),A0
-  lea     ($1E00),A1
-  bsr     FILLWITHONES      ; clear low-mem globals
-  move.b  D7,(CPUFlag)
-  move.l  A6,(MemTop)
-  lea     (6,PC),A6
-  jmp     SYSERRINIT        ; install error stub table
-  bsr     SETUPTIMEK        ; VIA T2 calibration — see §3
-  bsr     VIATIMERENABLES
-  jsr     MMU_INIT          ; much simpler than IIci's INITMMU
-  movem.l ($F80080),D0/A0   ; check warm-restart via ROM-relative pattern
+  $00E0: cmpi.l  #'WLSC',($CFC).w  ; warm-start magic
+  $00E8: beq  LAB_408000F2
+  $00EA: jsr  RAMTEST        ; RAMTEST #2 — full walk if cold boot
+  $00F2: movea.l A1,SP       ; install boot stack
+  $00F4: lea  ($100),A0
+  $00F8: lea  ($1E00),A1
+  $00FC: bsr  FILLWITHONES   ; clear low-mem globals $100..$1DFF
+  $0100: move.b  D7,(CPUFlag)   ; $12F = CPU type from WHICHCPU
+  $0104: move.l  A6,(MemTop)    ; $108 = RAMTEST result
+  $0108: lea  (6,PC),A6
+  $010C: jmp  SYSERRINIT     ; install error stub table
+  $0110: bsr  SETUPTIMEK     ; VIA T2 calibration — see §3
+  $0114: bsr  VIATIMERENABLES
+  $0118: jsr  MMU_INIT       ; simpler than IIci's INITMMU
   ...
-  bsr     INITHIMEMGLOBALS
+  $013E: bsr  INITHIMEMGLOBALS
   ; fall through to BOOTRETRY
 ```
 
@@ -97,89 +93,144 @@ write, drop interrupt mask, count DBF iterations.
 ## 4. BOOTRETRY (`$40800142`) — restartable OS init
 
 ```
-BOOTRETRY:
-  move    #$2700,SR          ; mask interrupts
-  moveq   #1,D0
-  movea.l (DAT_DBC),A0       ; indirect init pointer
-  jsr     (A0)               ; dispatches to a ROM-resident init vector
-  movea.l #$50F02000,A0      ; VIA2 base
-  move.b  #$02,($1C00,A0)    ; VIA2 IER — enable slot interrupts
-  bsr     INITGLOBALVARS
-  bsr     INITXVECTTABLES    ; exception vectors
-  bsr     INITDISPATCHER     ; trap dispatcher install — critical
-  moveq   #0,D0              ; post-decompression state
-  bsr     GETPRAM            ; read PRAM via VIA
-  bsr     INITMEMMGR         ; create SysZone
-  bsr     SETUPSYSAPPZONE
-  bsr     INITSWITCHERTABLE
-  bsr     INITRSRCMGR        ; Resource Manager — scans ROM DRVR/CODE
-  bsr     INITTIMERMGR
-  bsr     INITADBVARS        ; ADB Manager globals
-  bsr     INITSLOTS          ; NuBus slot $9..$E scan
-  move    #$2000,SR          ; drop to level 2
-  jsr     INITADB            ; scan ADB bus
-  bsr     INITVIDGLOBALS
+BOOTRETRY ($40800142):
+  $0142: move    #$2700,SR          ; mask interrupts
+  $0146: moveq   #1,D0
+  $0148: movea.l (DAT_DBC),A0       ; indirect init pointer
+  $014C: jsr     (A0)               ; dispatches to ROM-resident init vector
+  $014E: movea.l #$50F02000,A0      ; VIA2 base
+  $0154: move.b  #$02,($1C00,A0)    ; VIA2 IER — enable slot interrupts
+  $015A: bsr     FUN_40800300       ; INITGLOBALVARS
+  $015E: bsr     FUN_408004B6       ; INITCPUVARS
+  $0162: bsr     FUN_40800D0A       ; INITXVECTTABLES — exception vectors
+  $0166: jsr     thunk_FUN_4083F7B4 ; INITDISPATCHER — trap dispatcher install
+  $016C: nop
+  $016E: bsr     FUN_40800E04       ; GETPRAM — read PRAM via VIA
+  $0172: bsr     FUN_4080023E       ; INITMEMMGR — _InitZone at $40800242
+  $0176: bsr     FUN_40800464       ; SETUPSYSAPPZONE
+  $017A: bsr     FUN_40800E22       ; INITRSRCMGR — _InitResources at $40800E2C
+  $017E: bsr     FUN_40800E80       ; INITTIMERMGR — _NewPtrSysClear at $40800E82
+  $0182: bsr     FUN_408002CA       ; INITADBVARS — _NewPtrSysClear at $408002CE
+  $0186: bsr     FUN_40800E32       ; INITSLOTS — NuBus $9..$E scan
+  $018A: move    #$2000,SR          ; drop to level 2
+  $018E: jsr     FUN_40806D80       ; INITIOMGR — driver install (see §7)
+  $0192: bsr     FUN_408007E6       ; INITCRSRMGR
   ...
-  cmpi.l  #'WLSC',(DAT_CFC)
-  beq     LAB_408001AE
-  jsr     RAMTEST
-LAB_408001AE:
-  bsr     COMPBOOTSTACK
+  $01B8: _SetApplLimit               ; application heap limit
   ...
-  jsr     INITQUEUE          ; I/O queue
-  jsr     INITSCSIMGR        ; SCSI Manager
-  bsr     INITIOMGR          ; .Sony/.Sound/.AIn/.AOut unit table install
-  bsr     INITCRSRMGR
+  $01DA: _SetApplBase                ; application base address
   ...
-  movea.l #$50F02000,A0
-  move.b  #$82,($1C00,A0)    ; VIA2 IER final state
-  bsr     DRAWBEEPSCREEN     ; blank screen via slot manager / video card
-  move.l  #'WLSC',(DAT_CFC)
-  bra     BOOTME
+  $01F4: movea.l #$50F02000,A0
+  $01FA: move.b  #$82,($1C00,A0)    ; VIA2 IER final state
+  $0200: bsr     DRAWBEEPSCREEN     ; blank screen via slot manager
+  $0204: move.l  #'WLSC',($CFC).w  ; warm-start flag
+  $020C: bra     BOOTME             ; → $40800E96
 ```
+
+**A-line traps called during BOOTRETRY init sequence:**
+
+| Address | Trap | Called from |
+|---------|------|------------|
+| `$40800242` | `_InitZone` | INITMEMMGR — creates SysZone |
+| `$408001B8` | `_SetApplLimit` | after INITCRSRMGR |
+| `$408001DA` | `_SetApplBase` | zone expansion ($4000 offset) |
+| `$40800E2C` | `_InitResources` | INITRSRCMGR — ROM resources |
+| `$40800E82` | `_NewPtrSysClear` | INITTIMERMGR ($12 bytes) |
+| `$408002CE` | `_NewPtrSysClear` | INITADBVARS ($172 bytes) |
 
 Key milestones inside BOOTRETRY:
 
-- **`INITDISPATCHER`** — after this returns, A-line traps route to
-  the real ROM dispatcher. This is the earliest point any Toolbox
-  call can be issued.
-- **`INITSLOTS`** — walks NuBus slots `$9..$E` reading declaration
-  ROMs. Requires real Nubus cards (or a patched `nuBusInfoPtr` that
-  marks all slots empty, as in the `patch_rom_32` approach).
-- **`INITIOMGR`** — walks ROM `DRVR` resources and calls `_Open` on
-  each. This is the hook point where a host disk driver can be
-  installed via an EmulOp at `.Sony _Open` or similar.
-- **`DRAWBEEPSCREEN`** — issues slot manager traps (`_SVersion`,
-  `_OpenSlot`, `_GetSlotBlock`) to locate video memory on a NuBus
-  video card and clear it. This is where the boot chime + gray screen
-  appear on real hardware.
+- **`INITDISPATCHER`** (`$0166`) — after this returns, A-line traps
+  route to the real ROM dispatcher. Earliest point any Toolbox call
+  can be issued.
+- **`INITMEMMGR`** (`$0172`) — calls `_InitZone` to create SysZone.
+  Zone starts small; expanded later by `_SetApplBase` at `$01DA`.
+- **`INITSLOTS`** (`$0186`) — walks NuBus slots `$9..$E` reading
+  declaration ROMs. Must be NOP'd or short-circuited in the emulator
+  (no real NuBus cards).
+- **`INITIOMGR`** (`$018E`) — at `$40806D80`, installs the I/O
+  dispatcher and opens ROM DRVR resources. This is the hook point
+  for host disk driver installation via EmulOp.
+- **`DRAWBEEPSCREEN`** (`$0200`) — issues slot manager traps to
+  locate video memory on a NuBus card and clear it.
 
 ---
 
-## 5. Hardware base addresses (Mac II)
+## 5. BOOTME (`$40800E96`) — boot device and startup
+
+```
+BOOTME ($40800E96):
+  $0E96: bsr  FUN_4080151C       ; FINDSTARTUPDEVICE — find boot device
+  $0E9A: movea.l ($2A6).w,A0     ; ApplZone
+  $0E9E: move.l A0,($118).w      ; store in ApplBase
+  $0EA2: move.l A0,($2AA).w      ; BufPtr
+  $0EA6: move.l (A0),($114).w
+  ...
+  $0ED8: _MountVol               ; mount boot volume
+  $0EDA: bne  LAB_408011AE       ; error → retry
+  ...
+  $0F00: _BlockMove              ; copy boot block to low mem
+  $0F08: _InitResources          ; open System file resources
+  $0F0A: tst.w (SP)+
+  $0F0C: bpl  LAB_40800F1C       ; success → continue boot
+  $0F0E: ...
+  $0F16: _UnmountVol             ; error → unmount, retry
+  $0F18: jmp  LAB_408011AE
+  ; --- success path ---
+  $0F1C: ...
+  $0F30: _InitFonts              ; font manager
+  $0F38: _OpenResFile            ; open boot resource fork
+  ...
+  $0F7E: _DrawPicture            ; boot screen (welcome / happy Mac)
+  $0F84: _CloseResFile
+  ; ... execute startup document, launch Finder
+```
+
+**A-line traps called during BOOTME:**
+
+| Address | Trap | Purpose |
+|---------|------|---------|
+| `$40800ED8` | `_MountVol` | mount boot volume (reads MDB) |
+| `$40800F00` | `_BlockMove` | copy boot block to low memory |
+| `$40800F08` | `_InitResources` | open System file on boot volume |
+| `$40800F16` | `_UnmountVol` | error path: unmount and retry |
+| `$40800F30` | `_InitFonts` | font manager init |
+| `$40800F38` | `_OpenResFile` | open boot resource fork |
+| `$40800F4E` | `_HLock` | lock resource handle |
+| `$40800F7E` | `_DrawPicture` | draw welcome screen |
+| `$40800F84` | `_CloseResFile` | close resource file |
+
+FINDSTARTUPDEVICE at `$4080151C` walks the drive queue, checks each
+drive's status/driver, reads boot blocks, and validates the "LK"
+signature. Same structure as the SE version — rejects drives whose
+refnum is outside the accepted range.
+
+---
+
+## 7. Hardware base addresses (Mac II)
 
 Unlike IIci (which has a `SETUPHWBASES` routine that reads a
 decoder-info table), Mac II bakes hardware base addresses directly
 into the early init code:
 
-- VIA1  = `$50F00000` (baked into `INITVIA`)
-- VIA2  = `$50F02000` (seen at `$014E`, `$01F4`)
-- SCC R = `$50F04000`
-- SCC W = `$50F06000`
-- IWM   = `$50F16000`
-- IWM rev-check probe = `$50F18000` at `$BA`
-- SCSI  = `$50F10000`
-- ASC   = `$50F14000` (set after rev-8 check)
+| Register | Address | Init function |
+|----------|---------|---------------|
+| VIA1 | `$50F00000` | `INITVIA` at `$408006F2` |
+| VIA2 | `$50F02000` | BOOTRETRY at `$014E`, `$01F4` |
+| SCC Read | `$50F04000` | `INITSCC` at `$408007B4` |
+| SCC Write | `$50F06000` | `INITSCC` |
+| IWM | `$50F16000` | `INITIWM` at `$408006AA` |
+| IWM rev-check | `$50F18000` | STARTINIT1 at `$00BA` |
+| SCSI | `$50F10000` | `INITSCSI` at `$4080066C` |
+| ASC | `$50F14000` | STARTINIT1 at `$00C8` (after rev-8 check) |
 
-The direct-baked nature means a future `patch_rom_ii` either needs
-to find and NOP the bases where they're loaded (there are only about
-half a dozen sites), **or** scan for the LMG table that `INITVIA`
-populates from these bases and redirect it — whichever mirrors
-Basilisk II upstream more closely.
+The direct-baked nature means `patch_rom_ii` needs to redirect these
+low-memory globals (`$01D4`-`$0C04`) to ScratchMem via an EmulOp,
+same approach as the SE patcher's hardware base redirect.
 
 ---
 
-## 6. NuBus slot manager — `INITSLOTS` (`$40800186`)
+## 8. NuBus slot manager — `INITSLOTS` (`$40800186`)
 
 Mac II has slots `$9..$E` (slots `$0..$8` are reserved). `INITSLOTS`
 walks them looking for cards with declaration ROMs at each slot's
@@ -196,22 +247,31 @@ Basilisk II upstream).
 
 ---
 
-## 7. Driver install — `INITIOMGR` (`$408001C8`)
+## 9. Driver install — `INITIOMGR` (`$40806D80`)
 
-Same shape as SE's `INITIOMGR`. Walks the ROM's `DRVR` resource list,
-for each:
-1. Allocate a Unit Table entry
-2. Call the driver's `DRVROpen` routine
-3. Populate the DCE (Device Control Entry) at `$0134`
+Lives at `$40806D80` (offset `$6D80`). Installs the I/O dispatcher
+and opens ROM DRVR resources (.Sony, .Sound, .AIn, .AOut, .ATalk).
 
-This is where `.Sony` (floppy), `.Sound`, `.AIn`, `.AOut` (ADB),
-and `.ATalk` (AppleTalk) get their unit table entries. For emulator
-purposes this is the hook point for providing a host-backed `.Sony`
-/ `.Disk` driver via an `INSTALL_DRIVERS` EmulOp.
+```
+INITIOMGR ($40806D80):
+  $6D80: clr.b  ($21E).w          ; clear flag
+  $6D84: bsr    FUN_4080795A      ; setup
+  $6D8C: movea.l ($CF8).w,A3      ; driver queue head
+  $6D90: lea    ($272,PC),A0      ; dispatcher address
+  $6D94: move.l A0,($21A).w      ; install dispatcher
+  ...
+  $6DCC: bset.b #5,($15D,A3)     ; enable dispatcher
+  $6DD2: bsr    FUN_40806DEA      ; init dispatcher tables
+  $6DE0: jsr    FUN_408077F4      ; scan ROM DRVRs, _Open each
+  $6DE4: jsr    FUN_40807834      ; finalize driver queue
+```
+
+This is the hook point for providing a host-backed `.Sony` / `.Disk`
+driver via an `INSTALL_DRIVERS` EmulOp at `.Sony _Open` or similar.
 
 ---
 
-## 8. Mac IIx / IIcx / SE-30 divergence
+## 10. Mac IIx / IIcx / SE-30 divergence
 
 The shared `$0178` ROM image (`$97221136`) is loaded by the Mac IIx,
 IIcx, II FDHD, and SE/30. Differences from the stock Mac II ROM
@@ -236,7 +296,7 @@ shared code, not machine-specific branches.
 
 ---
 
-## 9. See also
+## 11. See also
 
 - `docs/roms/dissam/macii/rom.lst` — build artifact, the annotated listing
 - `docs/roms/dissam/maciix/rom.lst` — the shared Mac IIx/IIcx/SE30 ROM
