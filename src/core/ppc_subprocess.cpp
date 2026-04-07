@@ -40,6 +40,8 @@ std::vector<std::string> PPCSubprocess::build_child_args()
 
     std::vector<std::string> args;
     args.push_back(exe_path);
+    args.push_back("--config");
+    args.push_back("/dev/null");
     args.push_back("--ipc");
     args.push_back("--arch");
     args.push_back(config_->architecture == config::Architecture::PPC ? "ppc" : "m68k");

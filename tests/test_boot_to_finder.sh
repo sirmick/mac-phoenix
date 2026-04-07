@@ -26,7 +26,8 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --rom) ROM="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
-        --jit|--no-jit) EXTRA_FLAGS+=("$1"); shift ;;
+        --jit) EXTRA_FLAGS+=("--jitexperimental"); shift ;;
+        --no-jit) EXTRA_FLAGS+=("--no-jitexperimental"); shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
