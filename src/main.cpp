@@ -291,8 +291,9 @@ public:
         if (g_ipc_m68k_fb) {
             memset(g_ipc_m68k_fb, 0, mode.x * mode.y * 4);
         }
-        // Update IPC framebuffer pointer (resolution changed)
+        // Update IPC framebuffer pointer and resolution
         video_ipc_set_framebuffer(g_ipc_m68k_fb);
+        video_ipc_set_resolution(g_ipc_m68k_width, g_ipc_m68k_height);
         fprintf(stderr, "[IPC Video] Mode switch to %dx%dx32\n", mode.x, mode.y);
     }
     void set_palette(uint8 *pal, int num) { (void)pal; (void)num; }

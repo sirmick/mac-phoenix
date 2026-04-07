@@ -285,6 +285,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
 
     auto encoder = create_video_encoder(current_codec);
     bool encoder_initialized = false;
+    int enc_w = 0, enc_h = 0;
 
     // Previous frame buffer for dirty rect computation (PNG/WebP only)
     std::vector<uint32_t> prev_frame;
@@ -432,11 +433,22 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
                     w, h, (int)format, from_ipc ? " (IPC)" : "");
         }
 
+        // Detect resolution change — reinitialize encoder
+        if (encoder_initialized && (w != enc_w || h != enc_h)) {
+            fprintf(stderr, "[VideoEncoder] Resolution changed %dx%d -> %dx%d, reinitializing\n",
+                    enc_w, enc_h, w, h);
+            encoder_initialized = false;
+            have_prev_frame = false;
+            g_request_keyframe.store(true, std::memory_order_release);
+        }
+
         // Initialize encoder on first frame (need width/height)
         if (!encoder_initialized) {
             if (encoder->init(w, h, 60)) {
                 fprintf(stderr, "[VideoEncoder] Initialized %dx%d @ 60 FPS\n", w, h);
                 encoder_initialized = true;
+                enc_w = w;
+                enc_h = h;
             } else {
                 fprintf(stderr, "[VideoEncoder] ERROR: Failed to initialize encoder\n");
                 if (!from_ipc) video_output->release_frame();

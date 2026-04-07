@@ -1250,6 +1250,7 @@ int16 ppc::video_mode_change(VidLocals *csSave, uint32 ParamPtr)
 
 			frame_width = VModes[i].viXsize;
 			frame_height = VModes[i].viYsize;
+			video_ipc_set_resolution(frame_width, frame_height);
 
 			D(bug("  -> mode %d: %dx%d base=0x%08x\n", i, frame_width, frame_height, screen_base));
 			return noErr;
