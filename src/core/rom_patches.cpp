@@ -1145,20 +1145,31 @@ static bool patch_rom_ii(void)
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
 
-	// The thunk at $83F876 does "jmp thunk_FUN_40802A14" which goes
-	// to $96 (jmp FUN_40802A14 = ADB/sound init that hangs).
-	// NOP $96 so the thunk returns and falls through to $9A.
-	wp = (uint16 *)(ROMBaseHost + 0x96);
-	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
+	// Replace $96-$AF (26 bytes) with: VBR=0, A6=RAMSize, D7=CPU,
+	// A1=stack, JMP $F2. FUN_40802A14 (via thunk at $96) would set
+	// VBR=$802808 and probe hardware — we set VBR=0 for RAM vectors.
+	{
+		uint32 ram = RAMSize;
+		uint32 stack = (ram > 0x40000) ? 0x40000 : ram;
 
-	// Patch FILLWITHONES to only fill $100-$3FF (exception vectors).
-	// The original fills $100-$1E00 with $FFFFFFFF, which includes
-	// the OS trap table ($400) and Toolbox trap table ($E00). These
-	// tables must be zero so INITDISPATCHER can populate them without
-	// any early trap call hitting a $FFFFFFFF entry.
-	// Original at $FC: lea ($1E00).w,A1 → change end to $400
+		wp = (uint16 *)(ROMBaseHost + 0x96);
+		*wp++ = htons(0x7000);			// moveq #0,D0           (2)
+		*wp++ = htons(0x4e7b);			// movec D0,VBR          (4)
+		*wp++ = htons(0x0801);
+		*wp++ = htons(0x2c7c);			// movea.l #RAMSize,A6   (6)
+		*wp++ = htons(ram >> 16);
+		*wp++ = htons(ram & 0xffff);
+		*wp++ = htons(0x7e02);			// moveq #2,D7 (68020)   (2)
+		*wp++ = htons(0x227c);			// movea.l #stack,A1     (6)
+		*wp++ = htons(stack >> 16);
+		*wp++ = htons(stack & 0xffff);
+		*wp++ = htons(M68K_JMP);		// jmp ROMBase+$F2       (6)
+		*wp++ = htons((ROMBaseMac + 0xf2) >> 16);
+		*wp = htons((ROMBaseMac + 0xf2) & 0xffff);
+	}
+
+	// Truncate FILLWITHONES to $100-$3FF (exception vectors only).
+	// The trap tables at $400 and $E00 must stay zero for INITDISPATCHER.
 	wp = (uint16 *)(ROMBaseHost + 0xfc);
 	*wp++ = htons(0x43f8);			// lea ($400).w,A1
 	*wp = htons(0x0400);
@@ -1168,24 +1179,6 @@ static bool patch_rom_ii(void)
 	*wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0x3f7c4);
 	*wp = htons(M68K_NOP);
-
-	// STARTINIT1 at $9A: skip hardware init, set up state, JMP $F2
-	{
-		uint32 ram = RAMSize;
-		uint32 stack = (ram > 0x40000) ? 0x40000 : ram;
-
-		wp = (uint16 *)(ROMBaseHost + 0x9a);
-		*wp++ = htons(0x2c7c);			// movea.l #RAMSize,A6
-		*wp++ = htons(ram >> 16);
-		*wp++ = htons(ram & 0xffff);
-		*wp++ = htons(0x7e02);			// moveq #2,D7 (68020)
-		*wp++ = htons(0x227c);			// movea.l #stack,A1
-		*wp++ = htons(stack >> 16);
-		*wp++ = htons(stack & 0xffff);
-		*wp++ = htons(M68K_JMP);		// jmp ROMBase+$F2
-		*wp++ = htons((ROMBaseMac + 0xf2) >> 16);
-		*wp = htons((ROMBaseMac + 0xf2) & 0xffff);
-	}
 
 	// After JMP to $F2: FILLWITHONES, CPUFlag, MemTop, then
 	// SYSERRINIT at $112 (installs exception vectors — must run).
