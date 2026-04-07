@@ -153,11 +153,13 @@ UC_CPU_M68K_CFV4E      = 6,  // ColdFire (default if not specified)
 - `src/cpu/dualcpu.c` - Dual-CPU harness
 - `src/cpu/uae_cpu/newcpu.cpp` - UAE CPU level selection in `build_cpufunctbl()`
 
-## Future Work
+## Current State
 
-For production use with BasiliskII/SheepShaver, CPU model should be:
-1. Read from prefs file (`cpu 4` = 68040)
-2. Passed to both CPU wrappers during initialization
-3. Validated to ensure both CPUs match
+CPU model is now determined by **machine profiles** (`src/config/machine_profile.cpp`), auto-detected from the ROM version at startup:
+- Mac SE ROM (0x0276) → 68000
+- Mac II ROM (0x0178) → 68020
+- Quadra 650 ROM (0x067c) → 68040
 
-Currently hardcoded to 68040 for dual-CPU boot testing.
+The `cpu_type` and `model_id` config fields have been removed — the machine profile is the single source of truth.
+
+For dual-CPU validation, the Unicorn CPU model must match the machine profile's CPU type. The dual-CPU harness currently hardcodes 68040 for Quadra testing and would need updating to support other profiles.

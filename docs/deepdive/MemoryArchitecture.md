@@ -178,7 +178,25 @@ Early Macs used 24-bit addressing (only 16 MB address space). BasiliskII support
 #define Mac2HostAddr(addr) ((uint8_t *)MEMBaseDiff + ((addr) & 0xffffff))
 ```
 
-For Quadra ROMs (68040), we use 32-bit addressing (flag = false).
+Which addressing mode is used depends on the machine profile:
+- **Mac SE** (68000): 24-bit addressing, ROM at 0x400000 (4 MB), max 4 MB RAM
+- **Mac II** (68020): 24-bit addressing, ROM at 0x800000 (8 MB), max 8 MB RAM
+- **Quadra 650** (68040): 32-bit addressing, ROM at RAMSize (typically 0x02000000)
+
+Machine profiles are auto-detected from the ROM version in `src/config/machine_profile.cpp`.
+
+## ScratchMem and Framebuffer
+
+Beyond RAM and ROM, two additional memory regions are allocated at fixed offsets above the ROM:
+
+```
+ScratchMem      0x02100000    64 KB     Emulator scratch area (unit tables, command bridge mailbox)
+FrameBuffer     0x02110000    4 MB      Video framebuffer (outside RAM to avoid corrupting Mac data)
+```
+
+**ScratchMem** is used for data structures that must survive Mac OS zone management (e.g., the SE unit table allocation). The command bridge mailbox also lives here.
+
+**FrameBuffer** is placed outside the Mac RAM region so the CPU writing pixel data cannot corrupt Mac OS heap or stack structures. The triple-buffer video pipeline reads from this region lock-free.
 
 ## Practical Example
 
@@ -230,7 +248,7 @@ close(rom_fd);
 
 ## Unicorn Backend Memory Map (March 2026)
 
-The Unicorn backend maps a much larger address space than the basic RAM+ROM layout, covering the full 32-bit Quadra 650 memory map:
+The Unicorn backend maps a much larger address space than the basic RAM+ROM layout, covering the full 32-bit address space. The layout below is for the **Quadra 650** profile (32 MB RAM, 32-bit addressing). Other machine profiles will have different RAM sizes and ROM placements, but the overall structure is similar:
 
 ```
 Region              Address Range           Size      Content

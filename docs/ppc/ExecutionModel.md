@@ -166,11 +166,9 @@ legacy `sheepshaver_glue.cpp::execute_68k()`:
 
 **Do NOT modify this function.** Legacy SheepShaver's version is ~20 lines and works.
 
-## Boot Progress and the SystemTask Gap (Session 10)
+## Boot Sequence Summary
 
-### What Loads Successfully
-
-The boot sequence progresses through these phases:
+The full boot progresses through these phases:
 
 1. **ROM init** (0.00s): OP_RESET, nanokernel setup
 2. **Warm start** (0.32s): WLSC flag set after 51 resources
@@ -178,44 +176,9 @@ The boot sequence progresses through these phases:
 4. **Extension loading** (0.33-1.0s): 1462 OP_CHECKLOAD resources
 5. **Font loading** (1.0-1.5s): FOND, sfnt, NFNT resources
 6. **ntrb patches**: Native toolbox resources including ntrb 17
-7. **PatchNativeResourceManager**: Fires correctly from ntrb 17 detection
-8. **NQD acceleration**: Installed (69 calls) via forced PatchAfterStartup
-9. **Post-extension resources**: MBDF, clut, snd, itlb (2313 total)
-
-### Where It Stalls
-
-After loading all resources, the 68k code enters an endless loop:
-- DISK_PRIME (2896 reads, all succeed, positions advance)
-- Then PRIMETIME repeating (timer task rescheduling)
-- MODE_NATIVE drops to 0 and never recovers
-- `app=''` (CurApName empty — Finder never launches)
-
-### Why: SystemTask Never Called
-
-In Mac OS 9, `SystemTask()` is the periodic driver action dispatcher. It scans
-drivers with the `dNeedTime` flag (bit 0x2000 in dCtlFlags) and calls their
-`Control(65)` handler (accRun). The Sony driver's accRun triggers:
-- `mount_mountable_volumes()` — mounts pending disks
-- `PatchAfterStartup()` — installs NQD + ExtFS (we force this as workaround)
-
-`SystemTask()` is called by the Mac OS event loop (`WaitNextEvent`/`GetNextEvent`)
-and also explicitly during certain boot phases. In legacy SheepShaver, it fires
-within the first second (NQD=53 in NOP-RATE #1). In mac-phoenix, it never fires.
-
-The 68k code that should call SystemTask is stuck in a loop — likely waiting for
-a condition that depends on interrupt delivery timing. Different interrupt
-interleaving in mac-phoenix vs legacy causes the 68k code to take a different
-branch at a critical point, entering an infinite loop instead of proceeding to
-SystemTask.
-
-### Key Evidence
-
-EmulOp comparison (non-IRQ):
-- First 600 ops: match with only 3 trivial differences
-- Legacy total: 9127 → ends with OP_IDLE_TIME_2 (Finder)
-- Mac-phoenix total: 5260 → ends with DISK_PRIME + PRIMETIME loop
-- Divergence is gradual: same ops, different interleaving with IRQs
-No context fixups, no extra register saves, no KernelData manipulation needed.
+7. **NQD acceleration**: Installed via forced PatchAfterStartup
+8. **Post-extension resources**: MBDF, clut, snd, itlb (2313 total)
+9. **Finder launch**: Desktop appears (~45s interpreter)
 
 ## execute_macos_code (Host → PPC via TVECT)
 

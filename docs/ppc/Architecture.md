@@ -12,7 +12,7 @@ EmulatorConfig
   ├── M68KConfig { cpu_type, fpu, modelid, jit, ... }
   ├── PPCConfig  { cpu_type, fpu, modelid, jit, jit68k, ... }
   ├── --arch m68k|ppc CLI flag
-  └── --backend uae|unicorn|kpx CLI flag
+  └── --backend uae|unicorn CLI flag (M68K only; PPC always uses KPX)
 ```
 
 `is_ppc()` dispatches architecture-specific accessors (`cpu_type_int()`, `fpu()`, etc.).
@@ -103,6 +103,10 @@ The one area where PPC differs significantly from M68K is the video driver:
 - **PPC**: Full Mac OS driver model. The system calls `VideoDoDriverIO()` through
   `NATIVE_VIDEO_DO_DRIVER_IO`. The driver resolves TVECTs from VideoServicesLib,
   handles kInitialize/kOpen/kClose/kControl/kStatus, and registers VBL interrupts.
+
+PPC supports multiple video resolutions (640×480 through 1600×1200) via a VModes
+table, capped by the `--screen` parameter. The framebuffer is dynamically sized for
+the largest available mode.
 
 The existing `video.cpp` handles framebuffer management and is architecture-neutral.
 The PPC video driver adds the Mac OS driver protocol on top.

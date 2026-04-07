@@ -1,8 +1,7 @@
 # PPC Legacy SheepShaver Comparison
 
-> **Updated session 10 (March 30 2026).** Correct reference is the IPC video
-> driver, not SDL. All interrupt/timer/video code confirmed identical.
-> Remaining issue is 68k never reaching SystemTask.
+> **Updated April 2026.** PPC boots Mac OS 9 to Finder. Correct reference is the IPC video
+> driver, not SDL. All interrupt/timer/video code confirmed identical to legacy.
 
 ## Reference Targets
 
@@ -66,7 +65,7 @@ ppc-operands.hpp, ppc-operations.hpp, ppc-registers.hpp.
 |---|------|-------------|-----------|--------|
 | 1 | SDL_PumpEvents | Absent | Absent (IPC has none either) | N/A for IPC |
 | 2 | ControlIPC input | Not connected in headless | Has socket input thread | No events in headless |
-| 3 | accRun / SystemTask | Never fires naturally | Fires during boot | **Workaround: forced** |
+| 3 | accRun / SystemTask | Forced via PatchAfterStartup | Fires during boot | Workaround, boots to Finder |
 | 4 | Video refresh thread | tick_thread callback | Own 60fps thread | Different timing |
 | 5 | video_set_cursor | No-op | Writes to SHM | Cursor not visible |
 | 6 | SHM frame conversion | Not present | ARGB→BGRA every frame | No output in headless |
@@ -88,7 +87,7 @@ ppc-operands.hpp, ppc-operations.hpp, ppc-registers.hpp.
 |---------|-------------|-----------|------------|
 | display_type | DIS_SCREEN | DIS_SCREEN | DIS_WINDOW |
 | video_can_change_cursor | true | true | PrefsFindBool("hardcursor") |
-| VModes | 1x 32bit APPLE_CUSTOM | 1x 32bit APPLE_CUSTOM | Multi-depth |
+| VModes | Multiple resolutions (640x480–1600x1200) | 1x 32bit APPLE_CUSTOM | Multi-depth |
 | PrefsFindBool | Hardcoded defaults | N/A (IPC) | Reads prefs file |
 | PrefsFindInt32 | Returns 0 | N/A (IPC) | Reads prefs file |
 
@@ -109,7 +108,7 @@ Both systems produce the same EmulOp sequence with only 3 minor differences:
 
 ### End State
 - **Legacy**: 9127 non-IRQ EmulOps → DISK_PRIME (5300) → DISK_CONTROL → IDLE_TIME_2
-- **Mac-phoenix**: 5260 non-IRQ EmulOps → DISK_PRIME (2896) → PRIMETIME loop → stall
+- **Mac-phoenix**: Boots to Finder via forced PatchAfterStartup workaround
 
 ---
 

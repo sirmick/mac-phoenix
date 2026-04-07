@@ -132,9 +132,9 @@ while (...) {
 
 1. **Refactor test_boot_dualcpu.cpp**:
    - Include all BasiliskII headers (like test_boot.cpp)
-   - Call `PrefsInit()`, set RAM size, CPU type
-   - Call `InitAll()` for complete UAE setup
-   - Create Unicorn separately
+   - Call `PrefsInit()`, set RAM size
+   - Call `InitAll()` for complete UAE setup (machine profile is auto-detected from ROM version via `set_machine_profile()` in `src/config/machine_profile.cpp`)
+   - Create Unicorn separately, matching the CPU model from the active machine profile
    - Map UAE's memory to Unicorn
 
 2. **Sync Memory**:

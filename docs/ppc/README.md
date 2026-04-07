@@ -55,7 +55,7 @@ The **IPC video driver** is the correct comparison target for mac-phoenix, not S
 - `legacy/SheepShaver/src/IPC/video_ipc_sheep.cpp` — **correct reference**
 - Both use: `DIS_SCREEN`, `APPLE_CUSTOM`, `video_can_change_cursor()=true`
 - Both allocate framebuffer via `vm_acquire` with `Host2MacAddr`
-- Both have single 32-bit mode, no multi-depth
+- mac-phoenix supports multiple resolutions (640×480 through 1600×1200) via VModes table, capped by `--screen`
 
 ## KPX File Map
 
@@ -90,11 +90,11 @@ src/cpu/kpx/
 ## Boot Command
 
 ```bash
-# Interpreter (default, matches legacy)
+# Interpreter (default)
 ./build/mac-phoenix --arch ppc --rom /path/to/g3.rom --disk /path/to/mac9.hfv \
-  --no-ppc-jit --ram 64 --screen 640x480
+  --ram 64 --screen 640x480
 
-# With JIT (experimental)
+# With JIT (experimental — blocked by GCC codegen issue)
 ./build/mac-phoenix --arch ppc --rom /path/to/g3.rom --disk /path/to/mac9.hfv \
   --ppc-jit --ram 64 --screen 640x480
 ```

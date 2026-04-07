@@ -14,7 +14,7 @@ All CPU-related docs are in [cpu/](cpu/).
 - **[cpu/ALineAndFLineStatus.md](cpu/ALineAndFLineStatus.md)** — A-line/F-line trap handling status (WORKING via deferred updates)
 - **[cpu/UaeQuirks.md](cpu/UaeQuirks.md)** — UAE CPU core quirks: byte-swapping, mem_banks, pc_p vs m68k_getpc()
 - **[cpu/CpuBackendApi.md](cpu/CpuBackendApi.md)** — Unified CPU backend API (implemented via Platform struct)
-- **[cpu/CpuModelConfiguration.md](cpu/CpuModelConfiguration.md)** — CPU model selection (68020 vs 68040)
+- **[cpu/CpuModelConfiguration.md](cpu/CpuModelConfiguration.md)** — CPU model matching for dual-CPU validation (now driven by machine profiles)
 - **[cpu/CpuTraceDebugging.md](cpu/CpuTraceDebugging.md)** — Trace debugging tools
 - **[cpu/JitBlockSizeAnalysis.md](cpu/JitBlockSizeAnalysis.md)** — JIT translation block size analysis
 
@@ -29,7 +29,7 @@ Root cause analysis of Unicorn's broken self-modifying code detection. Guest-to-
 Why UAE and Unicorn diverge at instruction #29,518. Timer interrupts fire at different instruction counts due to wall-clock timing. Not a bug — accept non-determinism.
 
 ### [UaeVsUnicornImplementationAnalysis.md](UaeVsUnicornImplementationAnalysis.md)
-Comprehensive comparison of UAE vs Unicorn backends: feature matrix, PC change issue, A-line/F-line status.
+Comprehensive comparison of UAE vs Unicorn backends: feature matrix, deferred register updates solution, full boot parity.
 
 ---
 
