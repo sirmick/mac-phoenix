@@ -179,6 +179,11 @@ typedef struct IPCBuffer {
     IPC_ATOMIC_UINT32 shm_mtemp_x,  shm_mtemp_y;
     IPC_ATOMIC_UINT32 shm_crsr_new,  shm_crsr_couple, shm_crsr_busy;
 
+    /* Mac OS state snapshot (child writes, parent reads for /api/status).
+     * Pre-serialized JSON with windows, ticks, menu_bar.
+     * Updated every ~500ms from the 60Hz tick thread. */
+    char mac_state_json[2048];
+
     /* ── Audio ring buffer (child writes, parent reads) ──────────── */
     IPC_ATOMIC_UINT32 audio_write_idx;   /* child increments after writing frame */
     IPC_ATOMIC_UINT32 audio_read_idx;    /* parent increments after reading frame */

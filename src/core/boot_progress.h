@@ -67,6 +67,10 @@ void boot_progress_get_mouse(int *x, int *y);
  * Called from PPC tick thread at 60Hz so the parent process can read cursor/app state. */
 void boot_progress_export_cursor_to_ipc(void);
 void boot_progress_export_app_to_ipc(void);
+void boot_progress_export_mac_state(void);
+
+/* Get cached Mac state JSON for in-process mode (used by /api/status) */
+const char* boot_progress_get_mac_state(void);
 
 /* Query detailed Mac cursor state from low-memory globals */
 typedef struct {

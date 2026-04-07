@@ -161,8 +161,8 @@ else
 
     # Count milestones (PPC boot emits [Boot +Xs] phase markers, not m68k CHECKLOADs)
     DRIVERS=$(grep -cE "Installing drivers" "$LOG" 2>/dev/null | head -1)
-    FINDER=$(grep -cE "Finder launched" "$LOG" 2>/dev/null | head -1)
-    DESKTOP=$(grep -cE "Desktop ready" "$LOG" 2>/dev/null | head -1)
+    FINDER=$(grep -cE "Finder (launched|detected)" "$LOG" 2>/dev/null | head -1)
+    DESKTOP=$(grep -cE "Desktop ready|Finder detected" "$LOG" 2>/dev/null | head -1)
     : "${DRIVERS:=0}" "${FINDER:=0}" "${DESKTOP:=0}"
 
     echo ""

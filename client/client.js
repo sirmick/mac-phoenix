@@ -1108,6 +1108,12 @@ class BasiliskWebRTC {
         }
         if (this.canvas) this.canvas.style.display = !usesVideoElement ? 'block' : 'none';
 
+        // Clear canvas to avoid stale pixels from previous session on reconnect
+        if (!usesVideoElement && this.canvas) {
+            const ctx = this.canvas.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+
         return this.decoder.init();
     }
 
@@ -4191,6 +4197,12 @@ async function pollEmulatorStatus() {
         if (rttEl) {
             const avgRtt = client?.decoder?.getAverageRtt?.() || 0;
             rttEl.textContent = avgRtt > 0 ? avgRtt.toFixed(1) + ' ms' : '-- ms';
+        }
+
+        // Update Mac state tab
+        const macStateEl = document.getElementById('mac-state');
+        if (macStateEl) {
+            macStateEl.textContent = JSON.stringify(data, null, 2);
         }
 
     } catch (e) {

@@ -53,6 +53,9 @@ static char g_last_app_name[64] = {0};
 static struct timespec g_boot_start_time = {0, 0};
 static int g_dialogs_dismissed = 0;
 static double g_desktop_ready_time = 0.0;
+#define MAX_DIALOG_DISMISSALS 3       /* OS 9 disk check dialog is async — cap prevents spam */
+#define DIALOG_DISMISS_COOLDOWN 1.0   /* min seconds between dismissals */
+static double g_last_dialog_dismiss_time = 0.0;
 
 
 /*
@@ -62,7 +65,8 @@ static double g_desktop_ready_time = 0.0;
  *   ""  — Mac OS 9.0.4 (PPC): untitled StopAlert for improper shutdown
  */
 static const char *const BOOT_DIALOG_WHITELIST[] = {
-	"",  /* untitled alerts (Mac OS 9.x shutdown, disk check) */
+	"",                            /* untitled alerts (Mac OS 9.x shutdown, disk check) */
+	"Please Don't Get this Often", /* Mac OS 7.5.x improper shutdown */
 	NULL
 };
 
@@ -268,6 +272,10 @@ static void check_shutdown_dialog(void)
 	if (!config::EmulatorConfig::instance().dismiss_shutdown_dialog) return;
 	if (g_current_phase < PHASE_WARM_START) return;
 	if (g_current_phase >= PHASE_DESKTOP) return;
+	if (g_dialogs_dismissed >= MAX_DIALOG_DISMISSALS) return;
+
+	double now = elapsed_sec();
+	if (now - g_last_dialog_dismiss_time < DIALOG_DISMISS_COOLDOWN) return;
 
 	uint32_t wp = ReadMacInt32(0x09D6);  /* WindowList — front window first */
 	if (!wp || wp >= RAMSize) return;
@@ -290,6 +298,7 @@ static void check_shutdown_dialog(void)
 	if (!matched) return;
 
 	g_dialogs_dismissed++;
+	g_last_dialog_dismiss_time = now;
 	milestonef("Boot dialog auto-dismissed (title='%s', #%d)", title, g_dialogs_dismissed);
 
 	ADBKeyDown(0x24);  /* Return key = Mac keycode 0x24 = 36 */
@@ -452,16 +461,6 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 				set_phase(PHASE_EXTENSIONS);
 			}
 
-			/* System 6 fallback: IDLE_TIME never fires, so if Finder is
-			 * running and CHECKLOADs are still coming, Finder is already
-			 * in its idle loop — promote to PHASE_DESKTOP directly. */
-			if (g_seen_finder && g_current_phase < PHASE_DESKTOP) {
-				milestonef("Desktop ready (Finder + CHECKLOAD fallback, resource #%u)",
-				           g_checkload_count);
-				set_phase(PHASE_DESKTOP);
-				g_desktop_ready_time = elapsed_sec();
-			}
-
 			/* Log level 1: periodic progress every 500 resources */
 			if (level >= 1 && g_checkload_count % 500 == 0) {
 				milestonef("Resource #%u loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
@@ -483,31 +482,10 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 				milestonef("Mac warm start complete (WLSC) after %u resources", g_checkload_count);
 				set_phase(PHASE_WARM_START);
 			}
-			/* Detect Finder launch via CurApName */
-			if (!g_seen_finder && g_current_phase >= PHASE_WARM_START) {
-				char app_name[64];
-				read_cur_app_name(app_name, sizeof(app_name));
-				if (app_name[0] && strcmp(app_name, g_last_app_name) != 0) {
-					snprintf(g_last_app_name, sizeof(g_last_app_name), "%s", app_name);
-					milestonef("App launched: '%s'", app_name);
-				}
-				if (strcmp(app_name, "Finder") == 0) {
-					g_seen_finder = true;
-					milestonef("Finder launched");
-					set_phase(PHASE_FINDER_LAUNCH);
-				}
-			}
 			check_shutdown_dialog();
 			break;
 
 		case M68K_EMUL_OP_IDLE_TIME:
-			/* IDLE_TIME fires when the app event loop is idle (no events pending).
-			 * First IDLE_TIME after Finder launch = desktop is fully drawn and responsive. */
-			if (g_seen_finder && g_current_phase < PHASE_DESKTOP) {
-				milestonef("Desktop ready (Finder idle)");
-				set_phase(PHASE_DESKTOP);
-				g_desktop_ready_time = elapsed_sec();
-			}
 			check_shutdown_dialog();
 			if (g_current_phase >= PHASE_DESKTOP) {
 				maybe_fire_auto_launch();
@@ -600,32 +578,11 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 			break;
 		}
 
-		case BOOT_EVENT_IRQ: {
-			/* Detect Finder launch via CurApName */
-			if (!g_seen_finder && g_current_phase >= PHASE_WARM_START) {
-				char app_name[64];
-				read_cur_app_name(app_name, sizeof(app_name));
-				if (app_name[0] && strcmp(app_name, g_last_app_name) != 0) {
-					snprintf(g_last_app_name, sizeof(g_last_app_name), "%s", app_name);
-					if (boot_log_level() >= 1)
-						milestonef("App launched: '%s'", app_name);
-				}
-				if (strcmp(app_name, "Finder") == 0) {
-					g_seen_finder = true;
-					milestonef("Finder launched");
-					set_phase(PHASE_FINDER_LAUNCH);
-				}
-			}
+		case BOOT_EVENT_IRQ:
 			check_shutdown_dialog();
 			break;
-		}
 
 		case BOOT_EVENT_IDLE_TIME:
-			if (g_seen_finder && g_current_phase < PHASE_DESKTOP) {
-				milestonef("Desktop ready (Finder idle)");
-				set_phase(PHASE_DESKTOP);
-				g_desktop_ready_time = elapsed_sec();
-			}
 			check_shutdown_dialog();
 			if (g_current_phase >= PHASE_DESKTOP) {
 				maybe_fire_auto_launch();
@@ -743,4 +700,121 @@ void boot_progress_export_app_to_ipc(void)
 	if (app_name[0] && strcmp(app_name, g_ipc_buf->cur_app_name) != 0) {
 		snprintf(g_ipc_buf->cur_app_name, sizeof(g_ipc_buf->cur_app_name), "%s", app_name);
 	}
+}
+
+/*
+ * Serialize Mac OS state (windows, globals) into a JSON string.
+ * Writes into buf (max bufsize bytes). Used by both IPC export and
+ * in-process /api/status handler.
+ */
+static void serialize_mac_state(char *buf, int bufsize)
+{
+	int pos = 0;
+
+	/* App name */
+	char app_name[32];
+	read_cur_app_name(app_name, sizeof(app_name));
+
+	/* Globals */
+	uint32_t ticks = ReadMacInt32(0x016A);
+	bool menu_bar = ReadMacInt32(0x0A1C) != 0;
+
+	pos += snprintf(buf + pos, bufsize - pos,
+		"{\"app\":\"%s\",\"ticks\":%u,\"menu_bar\":%s,\"windows\":[",
+		app_name, ticks, menu_bar ? "true" : "false");
+
+	/* Walk WindowList — also detect Finder via characteristic windows */
+	uint32_t wp = ReadMacInt32(0x09D6);
+	int count = 0;
+	bool found_finder = false;
+	while (wp && wp < RAMSize && count < 20 && pos < bufsize - 100) {
+		if (count > 0) buf[pos++] = ',';
+
+		/* Read title */
+		char title[64] = "";
+		uint32_t th = ReadMacInt32(wp + 134);
+		if (th) {
+			uint32_t tp = ReadMacInt32(th);
+			if (tp && tp < 0x02000000) {
+				uint8_t tlen = ReadMacInt8(tp);
+				if (tlen > 0 && tlen < sizeof(title)) {
+					for (int i = 0; i < tlen; i++)
+						title[i] = static_cast<char>(ReadMacInt8(tp + 1 + i));
+					title[tlen] = '\0';
+				}
+			}
+		}
+
+		int16_t kind = static_cast<int16_t>(ReadMacInt16(wp + 108));
+		bool visible = ReadMacInt8(wp + 110) != 0;
+		int16_t top = static_cast<int16_t>(ReadMacInt16(wp + 16));
+		int16_t left = static_cast<int16_t>(ReadMacInt16(wp + 18));
+		int16_t bottom = static_cast<int16_t>(ReadMacInt16(wp + 20));
+		int16_t right = static_cast<int16_t>(ReadMacInt16(wp + 22));
+
+		/* Detect Finder's characteristic windows:
+		 *   "Desktop" kind 20 — Mac OS 7.x–9.x
+		 *   "Clipboard" kind 17 — System 6 */
+		if ((strcmp(title, "Desktop") == 0 && kind == 20) ||
+		    (strcmp(title, "Clipboard") == 0 && kind == 17)) {
+			found_finder = true;
+		}
+
+		/* Escape quotes in title */
+		char escaped[128];
+		int ei = 0;
+		for (int i = 0; title[i] && ei < (int)sizeof(escaped) - 2; i++) {
+			if (title[i] == '"' || title[i] == '\\')
+				escaped[ei++] = '\\';
+			escaped[ei++] = title[i];
+		}
+		escaped[ei] = '\0';
+
+		pos += snprintf(buf + pos, bufsize - pos,
+			"{\"title\":\"%s\",\"kind\":%d,\"visible\":%s,\"rect\":[%d,%d,%d,%d]}",
+			escaped, kind, visible ? "true" : "false",
+			left, top, right, bottom);
+
+		wp = ReadMacInt32(wp + 144);
+		count++;
+	}
+
+	pos += snprintf(buf + pos, bufsize - pos, "]}");
+
+	/* Advance to Finder/desktop phase if characteristic window found.
+	 * This replaces the old CurApName + IDLE_TIME detection — seeing these
+	 * windows means Finder is already interactive. */
+	if (found_finder && !g_seen_finder) {
+		g_seen_finder = true;
+		milestonef("Finder detected (window heuristic)");
+		set_phase(PHASE_FINDER_LAUNCH);
+		set_phase(PHASE_DESKTOP);
+		g_desktop_ready_time = elapsed_sec();
+	}
+}
+
+/* In-process cached state for /api/status */
+static char g_mac_state_cache[2048] = "{}";
+static int g_mac_state_tick = 0;
+
+/*
+ * Export Mac OS state to IPC buffer or in-process cache.
+ * Called at 60Hz; only rebuilds every 30 ticks (~500ms).
+ */
+void boot_progress_export_mac_state(void)
+{
+	if (++g_mac_state_tick < 30) return;
+	g_mac_state_tick = 0;
+
+	if (g_ipc_buf) {
+		serialize_mac_state(g_ipc_buf->mac_state_json,
+		                    sizeof(g_ipc_buf->mac_state_json));
+	} else {
+		serialize_mac_state(g_mac_state_cache, sizeof(g_mac_state_cache));
+	}
+}
+
+const char* boot_progress_get_mac_state(void)
+{
+	return g_mac_state_cache;
 }

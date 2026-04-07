@@ -43,6 +43,7 @@
 extern "C" unsigned int boot_progress_checkloads(void);
 extern "C" void boot_progress_export_cursor_to_ipc(void);
 extern "C" void boot_progress_export_app_to_ipc(void);
+extern "C" void boot_progress_export_mac_state(void);
 
 
 #define DEBUG 0
@@ -1157,9 +1158,10 @@ static void tick_thread_func() {
         if (g_platform.video_refresh)
             g_platform.video_refresh();
 
-        // Export cursor state and app name to IPC SHM for parent's web API
+        // Export cursor, app name, and Mac state to IPC SHM for parent's web API
         boot_progress_export_cursor_to_ipc();
         boot_progress_export_app_to_ipc();
+        boot_progress_export_mac_state();
     }
 }
 

@@ -187,6 +187,11 @@ Response APIRouter::handle_status(const Request& req) {
                 elapsed = (now_us - start_us) / 1e6;
             }
             json << ", \"boot_elapsed\": " << elapsed;
+
+            // Mac OS state (pre-serialized JSON from child process)
+            if (buf->mac_state_json[0] == '{') {
+                json << ", \"mac\": " << buf->mac_state_json;
+            }
         } else {
             json << ", \"boot_phase\": \"pre-reset\"";
             json << ", \"checkload_count\": 0";
@@ -200,6 +205,12 @@ Response APIRouter::handle_status(const Request& req) {
         json << ", \"boot_phase\": \"" << boot_progress_phase() << "\"";
         json << ", \"checkload_count\": " << boot_progress_checkloads();
         json << ", \"boot_elapsed\": " << boot_progress_elapsed();
+
+        // Mac OS state (cached in-process)
+        const char* mac_state = boot_progress_get_mac_state();
+        if (mac_state && mac_state[0] == '{') {
+            json << ", \"mac\": " << mac_state;
+        }
     }
 
     json << "}";
