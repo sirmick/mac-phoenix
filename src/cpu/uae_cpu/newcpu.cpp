@@ -1467,6 +1467,40 @@ void m68k_do_execute (void)
 		// Normal execution path
 		uae_u32 opcode = GET_OPCODE;
 
+		// Debug: PC watchpoint + periodic sample for Mac II boot
+		{
+			static uint64_t exec_count = 0;
+			++exec_count;
+			uaecptr pc = m68k_getpc();
+			// Watchpoint: log the last 5 ROM-space PCs before jumping to $3Fxxx
+			{
+				static uaecptr last_pcs[8];
+				static int lpi = 0;
+				if (pc >= 0x800000) {
+					last_pcs[lpi++ & 7] = pc;
+				}
+				if (pc >= 0x3f000 && pc < 0x40000) {
+					static int hit = 0;
+					if (++hit <= 2) {
+						fprintf(stderr, "[CRASH] Entered \$3Fxxx at insn=%llu PC=%08x SR=%04x A7=%08x\n",
+							(unsigned long long)exec_count, pc,
+							(unsigned)regs.sr, m68k_areg(regs, 7));
+						fprintf(stderr, "  Last ROM PCs:");
+						for (int j = 0; j < 8; j++)
+							fprintf(stderr, " %08x", last_pcs[(lpi + j) & 7]);
+						fprintf(stderr, "\n");
+					}
+				}
+			}
+			if (exec_count <= 20 || exec_count == 100 || exec_count == 1000 ||
+			    exec_count == 5000 || exec_count == 10000 ||
+			    (exec_count % 2000000 == 0 && exec_count <= 20000000)) {
+				fprintf(stderr, "[TRACE] insn=%llu PC=%08x op=%04x SR=%04x A7=%08x\n",
+					(unsigned long long)exec_count, pc, opcode,
+					(unsigned)regs.sr, m68k_areg(regs, 7));
+			}
+		}
+
 #if FLIGHT_RECORDER
 		m68k_record_step(m68k_getpc());
 #endif
@@ -1489,6 +1523,16 @@ void m68k_execute (void)
 		if (quit_program)
 			break;
 		m68k_do_execute();
+		// Debug: periodic PC sample
+		{
+			static uint64_t exec_count = 0;
+			if (++exec_count == 1 || exec_count == 100 || exec_count == 10000 ||
+			    exec_count == 100000 || exec_count == 1000000 || exec_count == 10000000) {
+				fprintf(stderr, "[TRACE] exec_count=%llu PC=%08x SR=%04x A7=%08x\n",
+					(unsigned long long)exec_count, m68k_getpc(),
+					(unsigned)regs.sr, m68k_areg(regs, 7));
+			}
+		}
 	}
 #if USE_JIT
 	--m68k_execute_depth;

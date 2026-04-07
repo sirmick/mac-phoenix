@@ -1127,35 +1127,53 @@ static bool patch_rom_ii(void)
 	uint16 *wp;
 	uint32 base;
 
-	// === Skip STARTINIT1 hardware init ===
-	// Mac II I/O addresses ($50F0xxxx) map to RAM in 24-bit mode,
-	// causing hardware init routines to hang.  Replace the reset
-	// entry thunk at $90 (jmp thunk_FUN_4083f856) with inline code
-	// that sets up basic state and jumps to the memory init at $F2.
+	// === Let reset thunk run, skip only hardware init ===
+	// The reset flow is: $2A → $90 (thunk) → $83F856 (CPU setup:
+	// SR=$2700, CACR flush, disable PMMU) → $96 (SYSERRINIT thunk)
+	// → $9A (STARTINIT1: hardware init).
 	//
-	// The reset flow is: $2A → $90 → $83F856 → ... → $9A (STARTINIT1).
-	// We intercept at $90 (10 bytes available: $90-$99).
-	// Then patch $9A onwards with the rest of the setup.
+	// Let the thunk run for proper CPU/VBR/CACR setup. NOP only:
+	// 1. The pmove at $3F872 (PMMU TC clear — 68020 has no PMMU)
+	// 2. The hardware init BSR calls in STARTINIT1 ($9A-$A8)
+	//
+	// The thunk returns to $96 (jmp SYSERRINIT thunk), which installs
+	// exception vectors. Then $9A is STARTINIT1 — we skip its hardware
+	// init and jump to FILLWITHONES at $F2.
+
+	// NOP pmove.l at $3F872 (PMMU TC clear, 4 bytes — no PMMU on 68020)
+	wp = (uint16 *)(ROMBaseHost + 0x3f872);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// The thunk at $83F876 does "jmp thunk_FUN_40802A14" which goes
+	// to $96 (jmp FUN_40802A14 = ADB/sound init that hangs).
+	// NOP $96 so the thunk returns and falls through to $9A.
+	wp = (uint16 *)(ROMBaseHost + 0x96);
+	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Patch FILLWITHONES to only fill $100-$3FF (exception vectors).
+	// The original fills $100-$1E00 with $FFFFFFFF, which includes
+	// the OS trap table ($400) and Toolbox trap table ($E00). These
+	// tables must be zero so INITDISPATCHER can populate them without
+	// any early trap call hitting a $FFFFFFFF entry.
+	// Original at $FC: lea ($1E00).w,A1 → change end to $400
+	wp = (uint16 *)(ROMBaseHost + 0xfc);
+	*wp++ = htons(0x43f8);			// lea ($400).w,A1
+	*wp = htons(0x0400);
+
+	// NOP the $A198 + _SwapMMUMode calls inside INITDISPATCHER
+	wp = (uint16 *)(ROMBaseHost + 0x3f7c0);
+	*wp = htons(M68K_NOP);
+	wp = (uint16 *)(ROMBaseHost + 0x3f7c4);
+	*wp = htons(M68K_NOP);
+
+	// STARTINIT1 at $9A: skip hardware init, set up state, JMP $F2
 	{
 		uint32 ram = RAMSize;
 		uint32 stack = (ram > 0x40000) ? 0x40000 : ram;
 
-		// At $90: was "jmp thunk_FUN_4083f856" (6 bytes)
-		// Replace with: move #$2700,SR (4 bytes) + NOP (2 bytes)
-		wp = (uint16 *)(ROMBaseHost + 0x90);
-		*wp++ = htons(0x46fc);			// move #$2700,SR
-		*wp++ = htons(0x2700);
-		*wp = htons(M68K_NOP);
-		// Falls through to $96 (jmp FUN_40802A14 = SYSERRINIT thunk, 6 bytes)
-		// NOP that too
-		wp = (uint16 *)(ROMBaseHost + 0x96);
-		*wp++ = htons(M68K_NOP);
-		*wp++ = htons(M68K_NOP);
-		*wp = htons(M68K_NOP);
-
-		// At $9A: set A6, D7, A1 for FILLWITHONES, JMP to $F2.
-		// FILLWITHONES clears low-mem $100..$1E00 and sets exception vectors.
-		// Then SYSERRINIT at $112 is NOP'd (it calls ADB/sound init).
 		wp = (uint16 *)(ROMBaseHost + 0x9a);
 		*wp++ = htons(0x2c7c);			// movea.l #RAMSize,A6
 		*wp++ = htons(ram >> 16);
@@ -1169,7 +1187,9 @@ static bool patch_rom_ii(void)
 		*wp = htons((ROMBaseMac + 0xf2) & 0xffff);
 	}
 
-	// After JMP to $F2: FILLWITHONES runs, CPUFlag and MemTop set.
+	// After JMP to $F2: FILLWITHONES, CPUFlag, MemTop, then
+	// SYSERRINIT at $112 (installs exception vectors — must run).
+
 	// Patch SwapMMUMode (FUN_40803B18) to always take the 24-bit path.
 	// FILLWITHONES fills $100-$1E00 with $FFFFFFFF, so ($CB1) = $FF.
 	// SwapMMUMode checks cmpi.b #1,($CB1) — $FF != 1 → branches to
@@ -1220,25 +1240,29 @@ static bool patch_rom_ii(void)
 	wp = (uint16 *)(ROMBaseHost + 0x14e);
 	for (int i = 0; i < 5; i++) *wp++ = htons(M68K_NOP);
 
-	// NOP VIA2 IER write at $01F4 (same pattern, 10 bytes)
+	// INSTALL_DRIVERS hook at $01F4 (was: VIA2 IER + DRAWBEEPSCREEN).
+	// 16 bytes available ($01F4-$0203). Runs AFTER PATCH_BOOT_GLOBS
+	// at $01C8/$DAC so the unit table is ready. Allocate 256 bytes
+	// on stack as an I/O param block for InstallDrivers().
 	wp = (uint16 *)(ROMBaseHost + 0x1f4);
-	for (int i = 0; i < 5; i++) *wp++ = htons(M68K_NOP);
+	*wp++ = htons(0x4fef);			// lea (-$100,SP),SP  (4 bytes)
+	*wp++ = htons(0xff00);
+	*wp++ = htons(0x204f);			// movea.l SP,A0      (2 bytes)
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS)); // (2 bytes)
+	*wp++ = htons(0x4fef);			// lea ($100,SP),SP   (4 bytes)
+	*wp++ = htons(0x0100);
+	*wp++ = htons(M68K_NOP);		// pad                (2 bytes)
+	*wp = htons(M68K_NOP);			// pad                (2 bytes)
+	// Falls through to $0204: move.l #'WLSC',($CFC) → bra BOOTME
 
 	// Skip NuBus slot scan — no real NuBus cards (bsr at $186)
 	wp = (uint16 *)(ROMBaseHost + 0x186);
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
 
-	// Skip ADB init (jsr at $1A0, 6 bytes) — ADB polling loop hangs
-	// without real ADB hardware. Our ADBOp() replacement handles ADB.
+	// Skip ADB init (jsr at $1A0, 6 bytes) — ADB polling hangs
 	wp = (uint16 *)(ROMBaseHost + 0x1a0);
 	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
-
-	// Skip DRAWBEEPSCREEN (bsr at $200, 4 bytes) — uses NuBus slot
-	// manager to find video card. Without real NuBus, will fail.
-	wp = (uint16 *)(ROMBaseHost + 0x200);
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
 
@@ -1258,11 +1282,11 @@ static bool patch_rom_ii(void)
 	wp = (uint16 *)(ROMBaseHost + 0xdac);
 	*wp = htons(platform_make_emulop(M68K_EMUL_OP_PATCH_BOOT_GLOBS));
 
-	// Hook .Sound driver _Open to install our own drivers.
-	// .Sound DRVR at $2F010, Open handler at $2F02A.
-	wp = (uint16 *)(ROMBaseHost + 0x2f02a);
-	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
-	*wp = htons(M68K_RTS);
+	// Skip ADB init at $1A0 (6 bytes) — ADB polling hangs
+	wp = (uint16 *)(ROMBaseHost + 0x1a0);
+	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
 
 	fprintf(stderr, "[patch_rom_ii] All patches applied successfully\n");
 

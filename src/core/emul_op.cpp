@@ -519,8 +519,21 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 		}
 
-		case M68K_EMUL_OP_IRQ:			// Level 1 interrupt
+		case M68K_EMUL_OP_IRQ: {		// Level 1 interrupt
 			r->d[0] = 0;
+
+			// Debug: periodic PC sample for Mac II boot debugging
+			{
+				static int irq_sample_count = 0;
+				if (++irq_sample_count <= 10) {
+					// Read the return PC from the exception stack frame
+					// to see where the CPU was when the interrupt fired
+					uint32 sp = r->a[7];
+					uint32 ret_pc = ReadMacInt32(sp + 2); // PC is at SP+2 in exception frame
+					fprintf(stderr, "[IRQ#%d] return PC=%08x SR=%04x\n",
+						irq_sample_count, ret_pc, (uint16)r->sr);
+				}
+			}
 
 			// Check if Unicorn backend has a pending interrupt that was blocked by SR
 			// This happens when ROM sets IPL=7 to disable CPU interrupts, then polls IRQ EmulOp
@@ -645,6 +658,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 				command_bridge_drain_from_irq(r);
 			}
 			break;
+		}
 
 		case M68K_EMUL_OP_PUT_SCRAP: {		// PutScrap() patch
 			void *scrap = Mac2HostAddr(ReadMacInt32(r->a[7] + 4));
