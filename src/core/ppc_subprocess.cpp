@@ -150,8 +150,8 @@ bool PPCSubprocess::start()
 
     // Poll for SHM to appear (child creates it during init)
     bool connected = false;
-    for (int attempt = 0; attempt < 100; attempt++) {  // 10 seconds
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    for (int attempt = 0; attempt < 400; attempt++) {  // 10 seconds
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
 
         // Check if child is still alive
         int status;
