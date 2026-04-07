@@ -48,24 +48,30 @@ Classic Mac applications have two forks: data fork and resource fork. Most trans
 - **Disk images** (`.dsk`, `.img`) — mount directly in the emulator as a second drive.
 - **StuffIt** (`.sit`) — extract with `unar` on Linux, but resource fork handling varies.
 
-### Provisioning Script (Planned)
+### Provisioning Scripts
+
+Python scripts in `provisioning/` automate disk image creation and population:
 
 ```bash
-# Goal: one command to build a provisioned disk
-./tools/provision-disk.sh \
-    --template system-7.5.5 \
-    --size 200M \
-    --add-mpw \
-    --add-app MyApp.bin \
-    --output my-disk.img
+# Create a blank 120 MB HFS disk image
+python3 provisioning/create_hfs.py -o disk.img -s 120M -n "Macintosh HD"
+
+# Create an HFS+ disk image (for Mac OS 8.1+)
+python3 provisioning/create_hfs_plus.py -o disk.img -s 200M -n "Macintosh HD"
+
+# Populate with 68K installer software (MPW, ResEdit, StuffIt, etc.)
+python3 provisioning/populate_68k_installers.py -i disk.img -s ~/storage/installers
+
+# Populate with PPC installer software
+python3 provisioning/populate_ppc_installers.py -i disk.img -s ~/storage/installers
 ```
 
-This would:
-1. Copy the template image
-2. Resize if needed
-3. Copy applications via `hcopy -m`
-4. Copy source files via `hcopy -r` (text files don't need resource forks)
-5. Install the command bridge INIT if `--add-mpw` is specified
+The populate scripts copy installer archives onto the HFS image. Pre-packaged software includes:
+- **MPW** (Macintosh Programmer's Workshop)
+- **ResEdit** (resource editor)
+- **Disk Copy**, **StuffIt Expander** (archive tools)
+- **System Switcher**, **System Picker** (boot management)
+- **MacsBug** (low-level debugger)
 
 ## MPW (Macintosh Programmer's Workshop)
 
@@ -391,10 +397,12 @@ This gives fast iteration for compilation, with MacPhoenix used only for testing
 
 ## Implementation Status
 
-### Phase 1: Template Disks — PARTIAL
-- [x] Python scripts for HFS/HFS+ image creation (`provisioning/create_hfs.py`, `create_hfs_plus.py`)
-- [x] Disk population script (`provisioning/populate_installers.py`) with MacBinary handling
-- [ ] Provisioning wrapper script (`tools/provision-disk.sh`)
+### Phase 1: Disk Creation & Population — DONE
+- [x] HFS image creation (`provisioning/create_hfs.py`)
+- [x] HFS+ image creation (`provisioning/create_hfs_plus.py`)
+- [x] 68K installer population (`provisioning/populate_68k_installers.py`)
+- [x] PPC installer population (`provisioning/populate_ppc_installers.py`)
+- [x] Pre-packaged: MPW, ResEdit, Disk Copy, StuffIt, System Switcher, System Picker, MacsBug
 - [ ] Pre-built OS template images
 
 ### Phase 2: EmulOp Bridge — DONE (different design)

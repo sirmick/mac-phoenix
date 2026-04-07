@@ -6,16 +6,19 @@ Modern Mac emulator with multiple CPU backends and web-based streaming UI.
 
 ## What Is This?
 
-**mac-phoenix** emulates classic Macintosh computers, supporting both M68K (68020) and PowerPC architectures:
+**mac-phoenix** emulates classic Macintosh computers across multiple machine profiles:
 
-1. **M68K Emulation** — UAE interpreter (default, fast, JIT), Unicorn QEMU backend, DualCPU validation
-2. **PowerPC Emulation** — KPX (Kheperix) interpreter from SheepShaver, boots Mac OS 9
-3. **Web-Based UI** — WebRTC streaming with mouse/keyboard input, HTTP API
-4. **Modern Architecture** — Clean platform API, modular drivers, CMake build
+1. **Multiple Machines** — Mac SE (68000), Quadra 650 (68040), Power Mac G3 (PPC), auto-detected from ROM
+2. **M68K Backends** — UAE interpreter (default, fast, JIT), Unicorn QEMU backend, DualCPU validation
+3. **PowerPC** — KPX (Kheperix) interpreter from SheepShaver, boots Mac OS 9
+4. **Web-Based UI** — WebRTC streaming with mouse/keyboard input, HTTP API
+5. **Modern Architecture** — Clean platform API, modular drivers, CMake build
 
 **Current Status** (April 2026):
-- ✅ M68K: Mac OS 7.5.5 boots to Finder (UAE ~5s, Unicorn ~48s)
-- ✅ PPC: Mac OS 9 boots to Finder (KPX interpreter ~45s)
+- ✅ Mac SE: System 6 boots to Finder (512×342 monochrome)
+- ✅ Quadra 650: Mac OS 7.5.5 boots to Finder (UAE ~5s, Unicorn ~48s)
+- ✅ Power Mac G3: Mac OS 9 boots to Finder (KPX interpreter ~45s)
+- ✅ Machine profiles auto-detected from ROM version
 - ✅ M68K JIT compiler (`--jit` flag)
 - ✅ Command bridge API (app launch/quit, window list, boot polling)
 
@@ -31,10 +34,13 @@ cmake --build build -j$(nproc)
 
 ### Run
 ```bash
-# M68K (default)
+# Quadra 650 (default)
 ./build/mac-phoenix ~/quadra.rom
 
-# PPC
+# Mac SE
+./build/mac-phoenix ~/mac-se.rom --disk ~/system6.img
+
+# Power Mac G3
 ./build/mac-phoenix --arch ppc --rom ~/g3.rom --disk ~/mac9.hfv --ram 64
 ```
 
@@ -73,7 +79,7 @@ See **[JsonConfig.md](JsonConfig.md)** for configuration documentation.
 ### Other
 - **[ThreadingArchitecture.md](ThreadingArchitecture.md)** — Thread model, IPC, video/audio
 - **[ConfigUnification.md](ConfigUnification.md)** — Config system design
-- **[Provisioning.md](Provisioning.md)** — Disk image creation, ExtFS, MPW
+- **[Provisioning.md](Provisioning.md)** — Disk image creation, provisioning scripts, ExtFS, MPW
 - **[Testing.md](Testing.md)** — Test framework documentation
 - **[TroubleshootingGuide.md](TroubleshootingGuide.md)** — Debug help
 
@@ -94,9 +100,10 @@ mac-phoenix/
 │   ├── drivers/           # Video, audio, platform, network drivers
 │   ├── webrtc/            # WebRTC server (signaling + input)
 │   ├── webserver/         # HTTP server, API handlers
-│   └── config/            # JSON config system
+│   └── config/            # JSON config, machine profiles
 ├── client/                # Browser client (HTML, JS, CSS)
 ├── tests/                 # Shell + Playwright tests
+├── provisioning/          # Disk image creation & population scripts
 ├── subprojects/           # Unicorn, libdatachannel, nlohmann_json
 ├── docs/                  # Documentation (you are here!)
 └── CMakeLists.txt

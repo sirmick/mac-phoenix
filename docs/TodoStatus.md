@@ -13,6 +13,8 @@ Track what's done and what's next.
 | PPC boots to Finder | April 2026 | KPX interpreter, Mac OS 9, Gossamer ROM |
 | M68K JIT compiler | April 2026 | UAE JIT enabled via `--jit` flag |
 | Command bridge | April 2026 | App launch/quit, window list, boot polling |
+| Machine profiles | April 2026 | Auto-detect SE, Quadra, PPC from ROM version |
+| Mac SE boots to Finder | April 2026 | System 6, 68000, 512×342 monochrome |
 
 ---
 
@@ -62,6 +64,9 @@ Track what's done and what's next.
 - ✅ FPU emulation, SIGSEGV handler, serial null check
 - ✅ Command bridge: app launch/quit, window list, boot polling, keypress
 - ✅ ExtFS shared folders (`--extfs` flag, config, tests)
+- ✅ Machine profile abstraction: SE, Quadra, PPC auto-detected from ROM
+- ✅ Mac SE support: 68000, 512×342 monochrome, 24-bit addressing, System 6 to Finder
+- ✅ Provisioning scripts: HFS/HFS+ creation, 68K/PPC installer population
 
 ---
 
@@ -108,6 +113,7 @@ Track what's done and what's next.
 | `boot_ppc_interp` | KPX | Boot to Finder (interpreter) | 120s |
 | `boot_ppc_jit` | KPX | Boot to Finder (JIT) | 120s |
 | `boot_ppc_api` | KPX | Boot + API phase tracking | 120s |
+| `boot_se` | UAE | Mac SE boot to Finder (System 6) | 30s |
 | `mouse_position` | UAE | Mouse position API | 15s |
 | `command_bridge` | UAE | App/windows/launch/wait | 30s |
 | `extfs` | UAE | ExtFS config + CLI tests | 15s |
@@ -115,6 +121,6 @@ Track what's done and what's next.
 
 ---
 
-**Last Updated**: April 2, 2026
+**Last Updated**: April 7, 2026
 **Current Phase**: Phase 5 — Application Support
-**Status**: M68K and PPC both boot to Finder desktop
+**Status**: Mac SE, Quadra 650, and Power Mac G3 all boot to Finder desktop

@@ -12,8 +12,10 @@ What we're building and why.
 
 ## Current Status (April 2026)
 
-- **M68K**: Mac OS 7.5.5 boots to Finder with UAE (~5s) and Unicorn (~48s) backends
-- **PPC**: Mac OS 9 boots to Finder with KPX interpreter (~45s)
+- **Mac SE**: System 6 boots to Finder — 68000, 512×342 monochrome, 24-bit addressing
+- **Quadra 650**: Mac OS 7.5.5 boots to Finder with UAE (~5s) and Unicorn (~48s) backends
+- **Power Mac G3**: Mac OS 9 boots to Finder with KPX interpreter (~45s)
+- **Machine Profiles**: Auto-detected from ROM version — SE, Quadra, and PPC each configure CPU, RAM limits, display, and addressing mode
 - **Web UI**: WebRTC streaming with mouse/keyboard input, all codecs working
 - **JIT**: UAE M68K JIT enabled (`--jit`/`--no-jit`); PPC dyngen JIT available but blocked by GCC codegen issue
 - **Command Bridge**: App launch/quit, window list, boot phase polling all working via HTTP API
@@ -65,7 +67,7 @@ What we're building and why.
 ### Not Goals
 
 - Cycle-accurate emulation (pragmatic over perfect)
-- Support every Mac model (Quadra 650 for M68K, Gossamer G3 for PPC)
+- Support every Mac model (focused set: SE, Quadra 650, Power Mac G3 — more may follow)
 - Replace BasiliskII for all users (research + preservation project)
 
 ---
@@ -91,6 +93,8 @@ What we're building and why.
 - Boot tests, API tests, Playwright e2e tests
 - Command bridge (app launch/quit, window list, boot polling)
 - ExtFS shared folders
+- Machine profile abstraction (auto-detect SE, Quadra, PPC from ROM)
+- Mac SE support: 68000, 512×342 monochrome, 24-bit addressing, System 6
 
 ### Phase 4: PowerPC Support ✅ COMPLETE
 
@@ -117,8 +121,10 @@ What we're building and why.
 ## Success Metrics
 
 ### Achieved (Q1-Q2 2026)
-- ✅ Both M68K backends boot to Finder
-- ✅ PPC boots Mac OS 9 to Finder
+- ✅ Mac SE boots System 6 to Finder
+- ✅ Quadra 650 boots Mac OS 7.5.5 to Finder (both UAE and Unicorn backends)
+- ✅ Power Mac G3 boots Mac OS 9 to Finder
+- ✅ Machine profiles auto-detected from ROM
 - ✅ WebRTC streaming with input
 - ✅ M68K JIT compiler
 - ✅ Command bridge API

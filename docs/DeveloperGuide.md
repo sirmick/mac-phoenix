@@ -32,6 +32,18 @@
 3. **Validation First**: DualCPU mode catches M68K bugs early
 4. **Performance Second**: Optimize after correctness
 
+## Machine Profiles
+
+Machine profiles configure hardware parameters based on the ROM. Each profile sets the CPU type, RAM limits, display dimensions, addressing mode, and more. Profiles are auto-detected at startup via `set_machine_profile()` in `src/config/machine_profile.cpp`.
+
+| Profile | ROM Version | CPU | RAM | Display | Addressing |
+|---------|-------------|-----|-----|---------|------------|
+| `se` | 0x0276 | 68000 | 4 MB max | 512×342 mono | 24-bit |
+| `quadra` | 0x067c | 68040 | Unlimited | 640×480 color | 32-bit |
+| PPC | (4 MB ROM) | PPC 603e | Configurable | Up to 1600×1200 | 32-bit |
+
+To add a new machine profile, define a `MachineProfile` struct in `machine_profile.cpp` and add a ROM version check in `set_machine_profile()`.
+
 ## CPU Backends
 
 ### UAE (M68K)

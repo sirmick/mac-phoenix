@@ -1,10 +1,12 @@
 # MacPhoenix
 
-A classic Macintosh emulator that runs in your browser. Boot Mac OS 7 through 9 and interact with it over WebRTC — no native GUI needed.
+A classic Macintosh emulator that runs in your browser. Boot System 6 through Mac OS 9 and interact with it over WebRTC — no native GUI needed.
 
 ![License](https://img.shields.io/badge/license-GPL--2.0-blue)
 
 ![Mac OS 7.5.5 running in MacPhoenix — browser UI](docs/images/browser-desktop.png)
+
+![System 6 on a Mac SE — 1-bit monochrome](docs/images/se_system6_desktop.png)
 
 ## What is this?
 
@@ -12,10 +14,10 @@ MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github
 
 ### Key features
 
-- **68K and PowerPC** — emulates a Quadra 650 (68040) or Power Mac G3 (PPC 603e)
+- **Multiple Macs** — Mac SE, Quadra 650, and Power Mac G3, with more on the way
 - **Browser UI** — connect from any device, no plugins or installs
 - **WebRTC streaming** — low-latency video with H.264, VP9, PNG, or WebP encoding
-- **REST API** — boot status, screenshots, config, and control via HTTP endpoints
+- **REST API** — boot status, screenshots, config, app launching, and control via HTTP endpoints
 - **Headless mode** — run without any UI for testing and automation
 
 ## Quick start
@@ -50,22 +52,42 @@ Open **http://localhost:8000** in your browser. That's it — you'll see the Mac
 ### What you need
 
 - Linux (x86_64)
-- A compatible ROM file (not included):
+- A compatible ROM file (not included)
 
-| ROM | Architecture | Mac OS | What you get |
-|-----|-------------|--------|-------------|
-| Quadra 650 (1 MB) | 68K | 7.1–7.6 | Classic Mac, boots in ~5s |
-| Power Mac G3 (4 MB) | PPC | 8.1–9.2 | Late-era classic Mac |
+You choose a machine profile, then supply a matching ROM:
 
-A disk image is optional — the emulator boots to the ROM's built-in system if no disk is provided.
+| Machine | CPU | Mac OS | Display | ROM needed |
+|---------|-----|--------|---------|------------|
+| Mac SE | 68000 | System 6 | 512×342 mono | Mac SE (256 KB) |
+| Quadra 650 | 68040 | 7.1–7.6 | 640×480 color | Quadra 650 (1 MB) |
+| Power Mac G3 | PPC 603e | 8.1–9.2 | Up to 1600×1200 | Power Mac G3 (4 MB) |
+
+The machine profile is auto-detected from the ROM at startup. A disk image is optional — the emulator boots to the ROM's built-in system if no disk is provided.
+
+![Emulator settings — select machine type, ROM, disk, and resolution](docs/images/browser-config.png)
+
+### Disk images
+
+Python scripts in [`provisioning/`](provisioning/) create and populate HFS/HFS+ disk images from Linux:
+
+```bash
+# Create a blank 120 MB HFS disk image
+python3 provisioning/create_hfs.py --size 120M --name "Macintosh HD" disk.img
+
+# Populate with 68K installer software
+python3 provisioning/populate_68k_installers.py disk.img
+```
+
+See [docs/Provisioning.md](docs/Provisioning.md) for the full guide.
 
 ## Architectures
 
 MacPhoenix supports two CPU architectures, selected with `--arch`:
 
 ```bash
-# 68K (default) — Quadra 650 emulation
+# 68K (default) — machine type auto-detected from ROM
 ./build/mac-phoenix /path/to/quadra.rom
+./build/mac-phoenix /path/to/mac-se.rom --disk /path/to/system6.img
 
 # PowerPC — Power Mac G3 emulation
 ./build/mac-phoenix --arch ppc /path/to/g3.rom --disk /path/to/macos9.img
@@ -81,7 +103,7 @@ The 68K architecture has multiple CPU backends, selected with `--backend`:
 | `unicorn` | QEMU TCG JIT | ~48s | Validation |
 | `dualcpu` | Both in lockstep | Very slow | Debugging CPU divergences |
 
-The PPC architecture uses the SheepShaver interpreter.
+The PPC architecture uses the Kheperix (KPX) interpreter.
 
 ## Configuration
 
@@ -112,7 +134,9 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
   --port N              HTTP server port (default: 8000)
   --timeout N           Auto-exit after N seconds
   --no-webserver        Headless mode (no HTTP/WebRTC)
+  --network MODE        Network: none, socket (default: none)
   --config PATH         JSON config file
+  --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot
 ```
 
 ## API
@@ -132,6 +156,8 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 | `/api/app` | GET | Current foreground application |
 | `/api/windows` | GET | Window list |
 | `/api/wait` | POST | Poll for a condition (`boot=Finder`, `app=Name`) |
+| `/api/launch` | POST | Launch an app (`{"path": "HD:App"}`) |
+| `/api/quit` | POST | Quit current application |
 
 ## Testing
 
