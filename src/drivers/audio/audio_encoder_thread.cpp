@@ -108,7 +108,7 @@ void audio_encoder_main(AudioOutput* audio_output) {
         auto stats_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
             now - last_stats_time).count();
 
-        if (stats_elapsed >= 3) {
+        if (stats_elapsed >= 60) {
             double pkts_per_sec = packets_since_stats / (double)stats_elapsed;
             uint64_t total_packets = g_audio_packets_sent.load(std::memory_order_relaxed);
             uint64_t total_underruns = g_audio_underruns.load(std::memory_order_relaxed);

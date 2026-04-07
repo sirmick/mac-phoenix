@@ -131,8 +131,8 @@ static void audio_ipc_reader_loop(IPCClient* client, AudioOutput* output)
             IPC_ATOMIC_STORE(shm->audio_read_idx, next_read);
             frames_consumed++;
 
-            // Stats every ~2 seconds
-            if (frames_consumed % 100 == 0) {
+            // Stats every ~60 seconds
+            if (frames_consumed % 3000 == 0) {
                 fprintf(stderr, "[AudioIPCReader] %" PRIu64 " frames, %" PRIu64 " underruns, "
                         "%u Hz %u ch\n",
                         frames_consumed, frames_underrun,

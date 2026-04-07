@@ -823,6 +823,11 @@ class HTTPStreamDecoder extends VideoDecoder {
         this.buffer = new Uint8Array(0);
     }
 
+    // Reset session ID so server sends a full frame (used on emulator restart)
+    resetSession() {
+        this._resetSid = true;
+    }
+
     getAverageLatency() { return this.state.lastAverageLatency; }
 
     getStats() {
@@ -841,6 +846,12 @@ class HTTPStreamDecoder extends VideoDecoder {
 
         while (this.abortController && !this.abortController.signal.aborted) {
             try {
+                // Reset session on emulator restart (forces full frame)
+                if (this._resetSid) {
+                    sid = null;
+                    this._resetSid = false;
+                    logger.info('HTTPStreamDecoder: session reset (new emulator launch)');
+                }
                 const url = sid ? `${baseUrl}?sid=${sid}` : baseUrl;
                 const response = await fetch(url, {
                     signal: this.abortController.signal
@@ -3260,7 +3271,7 @@ function loadPreset(name) {
         screen: preset.screen || '640x480',
         sound: preset.audio ?? true,
         fpu: isM68k ? (preset.m68k?.fpu ?? true) : (preset.ppc?.fpu ?? true),
-        jit: isM68k ? (preset.m68k?.jit ?? true) : (preset.ppc?.jit ?? true),
+        jit: isM68k ? (preset.m68k?.jitexperimental ?? false) : (preset.ppc?.jit ?? true),
         jit68k: preset.ppc?.jit68k ?? false,
         bootdriver: preset.bootdriver || 0,
         disks: (preset.disks || []).map(p => stripPrefix(p, '/images/')),
@@ -3294,14 +3305,19 @@ function buildConfigJson() {
     const emulator = document.getElementById('cfg-emulator')?.value || 'quadra';
     const isM68k = isM68kMode(emulator);
 
+    const jitChecked = document.getElementById('cfg-jit')?.checked ?? true;
     const archConfig = {
         fpu: document.getElementById('cfg-fpu')?.checked ?? true,
-        jit: document.getElementById('cfg-jit')?.checked ?? true,
         idlewait: document.getElementById('cfg-idlewait')?.checked ?? true,
         ignoresegv: document.getElementById('cfg-ignoresegv')?.checked ?? true,
         swap_opt_cmd: currentConfig.swap_opt_cmd ?? true,
         keyboardtype: currentConfig.keyboardtype || 5
     };
+    if (isM68k) {
+        archConfig.jitexperimental = jitChecked;
+    } else {
+        archConfig.jit = jitChecked;
+    }
     if (!isM68k) {
         archConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? false;
         archConfig.ignoreillegal = document.getElementById('cfg-ignoreillegal')?.checked ?? false;
@@ -3779,7 +3795,7 @@ async function loadCurrentConfig() {
             screen: cfg.screen || '640x480',
             sound: cfg.audio ?? true,
             fpu: isM68k ? (cfg.m68k?.fpu ?? true) : (cfg.ppc?.fpu ?? true),
-            jit: isM68k ? (cfg.m68k?.jit ?? true) : (cfg.ppc?.jit ?? true),
+            jit: isM68k ? (cfg.m68k?.jitexperimental ?? false) : (cfg.ppc?.jit ?? true),
             jit68k: cfg.ppc?.jit68k ?? false,
             bootdriver: cfg.bootdriver || 0,
             disks: (cfg.disks || []).map(p => stripPrefix(p, '/images/')),
@@ -3934,6 +3950,13 @@ async function saveConfig() {
 
 async function startEmulator() {
     logger.info('Starting emulator...');
+
+    // Reset httpstream session so we get a full frame (not a stale dirty rect)
+    if (client && client.decoder && client.decoder.resetSession) {
+        client.decoder.resetSession();
+        logger.info('Reset httpstream session for clean restart');
+    }
+
     try {
         const res = await fetch(getApiUrl('emulator/start'), { method: 'POST' });
         const data = await res.json();
@@ -3963,6 +3986,12 @@ async function stopEmulator() {
 
 async function restartEmulator() {
     logger.info('Restarting emulator...');
+
+    // Reset httpstream session so we get a full frame
+    if (client && client.decoder && client.decoder.resetSession) {
+        client.decoder.resetSession();
+    }
+
     try {
         const res = await fetch(getApiUrl('emulator/restart'), { method: 'POST' });
         const data = await res.json();

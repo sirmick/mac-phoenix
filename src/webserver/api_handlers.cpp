@@ -19,6 +19,12 @@
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
 #include "keyboard_map.h"
 
+// Clear all frame sessions on emulator stop/start (forces full frames on reconnect)
+static bool g_frame_sessions_dirty = false;
+static void invalidate_frame_sessions() {
+    g_frame_sessions_dirty = true;
+}
+
 // Forward-declare WebRTC peer reset (avoids pulling in rtc/rtc.hpp)
 namespace webrtc {
     class WebRTCServer;
@@ -236,6 +242,7 @@ Response APIRouter::handle_emulator_start(const Request& req) {
         }
         // Reset WebRTC peer state so all peers request fresh keyframes
         webrtc::reset_webrtc_peers();
+        invalidate_frame_sessions();
         return Response::json("{\"success\": true, \"message\": \"Subprocess started\"}");
     }
 
@@ -261,6 +268,7 @@ Response APIRouter::handle_emulator_stop(const Request& req) {
     if (ctx_->subprocess) {
         fprintf(stderr, "[API] Stopping subprocess\n");
         ctx_->subprocess->stop();
+        invalidate_frame_sessions();
         return Response::json("{\"success\": true, \"message\": \"Subprocess stopped\"}");
     }
 
@@ -635,6 +643,12 @@ Response APIRouter::handle_frame(const Request& req) {
     static std::unordered_map<std::string, FrameSession> sessions;
     static uint64_t next_sid = 1;
     static auto last_cleanup = std::chrono::steady_clock::now();
+
+    // Clear all sessions on emulator stop/start (forces full frame on reconnect)
+    if (g_frame_sessions_dirty) {
+        sessions.clear();
+        g_frame_sessions_dirty = false;
+    }
 
     // Expire stale sessions every 30 seconds (idle > 10s)
     auto now_steady = std::chrono::steady_clock::now();
