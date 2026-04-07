@@ -520,6 +520,7 @@ SOURCE_FILES = [
     ("Bootstrap/ResEdit/ResEdit3.0.sit", handle_stuffit, "ResEdit"),
     ("Bootstrap/MPW/MPW-PR.img_.bin", handle_macbinary_disk_image, "MPW"),
     ("Dev Tools/MacsBug_for_68000_family.sit", handle_stuffit, "MacsBug"),
+    ("Utilities/System_Picker.sit", handle_stuffit, "System Picker"),
 ]
 
 
