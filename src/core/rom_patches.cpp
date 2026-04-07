@@ -1170,14 +1170,15 @@ static bool patch_rom_ii(void)
 	}
 
 	// After JMP to $F2: FILLWITHONES runs, CPUFlag and MemTop set.
-	// SYSERRINIT at $112 runs and installs exception vectors (needed).
-	// But the PMMU setup code at $3B32 uses pmove instructions which
-	// cause F-line exceptions on 68020 without PMMU. NOP the PMMU block.
-	// $3B32: pmove.l ...,TC (6 bytes)
-	// $3B38: pmove.d (A0),CRP (4 bytes)
-	// $3B3C: pmove.l (8,A0),TC (6 bytes)
-	wp = (uint16 *)(ROMBaseHost + 0x3b32);
-	for (int i = 0; i < 8; i++) *wp++ = htons(M68K_NOP);  // 16 bytes = $3B32-$3B41
+	// Patch SwapMMUMode (FUN_40803B18) to always take the 24-bit path.
+	// FILLWITHONES fills $100-$1E00 with $FFFFFFFF, so ($CB1) = $FF.
+	// SwapMMUMode checks cmpi.b #1,($CB1) — $FF != 1 → branches to
+	// PMMU path → pmove instructions → F-line exception (no PMMU on 68020).
+	// NOP the two branch instructions to always use the VIA2/24-bit path.
+	wp = (uint16 *)(ROMBaseHost + 0x3b24);  // bne.b $3B2E → NOP
+	*wp = htons(M68K_NOP);
+	wp = (uint16 *)(ROMBaseHost + 0x3b62);  // bne.b $3B6E → NOP (alt entry)
+	*wp = htons(M68K_NOP);
 
 	// Skip SETUPTIMEK (bsr.w at $118)
 	wp = (uint16 *)(ROMBaseHost + 0x118);
