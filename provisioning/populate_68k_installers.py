@@ -521,6 +521,7 @@ SOURCE_FILES = [
     ("Bootstrap/MPW/MPW-PR.img_.bin", handle_macbinary_disk_image, "MPW"),
     ("Dev Tools/MacsBug_for_68000_family.sit", handle_stuffit, "MacsBug"),
     ("Utilities/System_Picker.sit", handle_stuffit, "System Picker"),
+    ("Utilities/SystemSwitcher-1.1.sit", handle_stuffit, "System Switcher"),
 ]
 
 

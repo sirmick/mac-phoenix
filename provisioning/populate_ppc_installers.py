@@ -28,6 +28,7 @@ SOURCE_FILES = [
     ("Bootstrap/Disk-Copy-633-smi.sit", handle_stuffit, "Disk Copy"),
     ("Dev Tools/macsbug663.hqx", handle_stuffit, "MacsBug"),
     ("Utilities/System_Picker.sit", handle_stuffit, "System Picker"),
+    ("Utilities/SystemSwitcher-1.1.sit", handle_stuffit, "System Switcher"),
 ]
 
 
