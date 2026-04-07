@@ -571,6 +571,22 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 					VideoInterrupt();
 
+					// Classic ROM: post disk insertion events until the
+					// volume is mounted.  The boot block polling loop at
+					// $401176 waits for diskEvent via GetNextEvent. The
+					// normal DiskInterrupt (1Hz) requires acc_run_called
+					// which the SE boot path never sets.  Post events
+					// at 60Hz from here until VCBQHead is non-zero.
+					if (ROMVersion == ROM_VERSION_CLASSIC) {
+						if (ReadMacInt32(0x358) == 0) {  // VCBQHdr.qHead
+							// Post diskEvent for drive 1
+							M68kRegisters dr;
+							dr.d[0] = 1;     // drive number
+							dr.a[0] = 7;     // diskEvent
+							Execute68kTrap(0xa02f, &dr);  // _PostEvent
+						}
+					}
+
 					// Call DoVBLTask(0)
 					if (ROMVersion == ROM_VERSION_32) {
 						M68kRegisters r2;

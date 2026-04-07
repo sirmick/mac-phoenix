@@ -244,7 +244,11 @@ static void mount_mountable_volumes(void)
 int16 DiskOpen(uint32 pb, uint32 dce)
 {
 	(void)pb;
-	D(bug("DiskOpen: dce=%08x, %zu drives\n", dce, drives.size()));
+	fprintf(stderr, "[DISK] DiskOpen: %zu drives, DrvQHead=$%08x, UTable=$%08x "
+		"_Open=$%08x _AddDrive=$%08x\n",
+		drives.size(), ReadMacInt32(0x30a), ReadMacInt32(0x11c),
+		ReadMacInt32(0x400),      // OS trap 0 (_Open)
+		ReadMacInt32(0x400+78*4)); // OS trap 78 (_AddDrive)
 
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
@@ -289,7 +293,11 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 			WriteMacInt16(info->status + dsDriveS1, info->num_blocks >> 16);
 
 			// Add drive to drive queue
-			r.d[0] = (info->num << 16) | (DiskRefNum & 0xffff);
+			// SE ROM's FINDSTARTUPDEVICE only accepts refnums -5, -2, or -40..-33.
+			// Use -33 for Classic ROMs (matching InstallDrivers' override).
+			extern uint32 ROMVersion;
+			int drvRef = (ROMVersion == 0x0276) ? -33 : DiskRefNum;
+			r.d[0] = (info->num << 16) | (drvRef & 0xffff);
 			r.a[0] = info->status + dsQLink;
 			Execute68kTrap(0xa04e, &r);	// AddDrive()
 			D(bug("Drive %d added: blocks=%u, inPlace=%d\n",
@@ -347,6 +355,12 @@ int16 DiskPrime(uint32 pb, uint32 dce)
 	WriteMacInt32(pb + ioActCount, actual);
 	uint32 old_pos = ReadMacInt32(dce + dCtlPosition);
 	WriteMacInt32(dce + dCtlPosition, old_pos + actual);
+
+	{
+		static int pc = 0;
+		if (++pc <= 20)
+			fprintf(stderr, "[DISK] Prime#%d pos=%u len=%zu\n", pc, (uint32)position, length);
+	}
 
 	return noErr;
 }

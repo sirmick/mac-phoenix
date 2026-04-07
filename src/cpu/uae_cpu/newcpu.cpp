@@ -767,6 +767,25 @@ void Exception(int nr, uaecptr oldpc)
 			fprintf(stderr, "[68K] Exception %d at PC=%08x A7=%08x\n",
 				nr, currpc, m68k_areg(regs, 7));
 	}
+	// Log _SysError and unimplemented trap dispatches
+	if (nr == 10) {
+		uint16 trap = get_word(currpc);
+		if (trap == 0xA9C9) {  // _SysError
+			fprintf(stderr, "[SysError] _SysError at PC=$%08X D0=%d\n",
+				currpc, (int)(int16)m68k_dreg(regs, 0));
+		}
+		// SE trap table: <$A800 → OS at $400, >=$A800 → Toolbox at $E00
+		bool is_tb = (trap >= 0xA800);
+		uint32 table = is_tb ? 0x0E00 : 0x0400;
+		uint16 idx = trap & 0x01FF;
+		uint32 handler = get_long(table + idx * 4);
+		if (handler == 0x400768) {
+			static int unimp = 0;
+			if (++unimp <= 10)
+				fprintf(stderr, "[UNIMP] $%04X at PC=$%08X (%s[%d])\n",
+					trap, currpc, is_tb ? "TB" : "OS", idx);
+		}
+	}
 	MakeSR();
 	if (!regs.s) {
 		regs.usp = m68k_areg(regs, 7);
