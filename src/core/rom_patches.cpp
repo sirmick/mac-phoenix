@@ -1145,79 +1145,57 @@ static bool patch_rom_ii(void)
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
 
-	// Replace $96-$AF (26 bytes) with: VBR=0, A6=RAMSize, D7=CPU,
-	// A1=stack, JMP $F2. FUN_40802A14 (via thunk at $96) would set
-	// VBR=$802808 and probe hardware — we set VBR=0 for RAM vectors.
-	{
-		uint32 ram = RAMSize;
-		uint32 stack = (ram > 0x40000) ? 0x40000 : ram;
+	// === Replace FUN_40802A14 with PATCH_BOOT_GLOBS EmulOp ===
+	// FUN_40802A14 sets VBR, SP, D7 flags, $DBC, $CB1, and probes all
+	// hardware (VIA, SCC, IWM, SCSI). Skipping it causes BOOTRETRY to
+	// take wrong branches. The EmulOp handler sets the same globals
+	// that MAME shows at BOOTRETRY entry (from /tmp/mame_lowmem_bootretry2.bin).
+	wp = (uint16 *)(ROMBaseHost + 0x96);
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PATCH_BOOT_GLOBS));
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+	// Falls through to STARTINIT1 at $9C (we NOP hardware calls below)
 
-		wp = (uint16 *)(ROMBaseHost + 0x96);
-		*wp++ = htons(0x7000);			// moveq #0,D0           (2)
-		*wp++ = htons(0x4e7b);			// movec D0,VBR          (4)
-		*wp++ = htons(0x0801);
-		*wp++ = htons(0x2c7c);			// movea.l #RAMSize,A6   (6)
-		*wp++ = htons(ram >> 16);
-		*wp++ = htons(ram & 0xffff);
-		*wp++ = htons(0x7e02);			// moveq #2,D7 (68020)   (2)
-		*wp++ = htons(0x227c);			// movea.l #stack,A1     (6)
-		*wp++ = htons(stack >> 16);
-		*wp++ = htons(stack & 0xffff);
-		*wp++ = htons(M68K_JMP);		// jmp ROMBase+$F2       (6)
-		*wp++ = htons((ROMBaseMac + 0xf2) >> 16);
-		*wp = htons((ROMBaseMac + 0xf2) & 0xffff);
+	// NOP STARTINIT1 hardware init BSR calls
+	for (uint32 ofs : {0x9au, 0x9eu, 0xa2u, 0xa6u}) {  // VIA,SCC,IWM,SCSI
+		wp = (uint16 *)(ROMBaseHost + ofs);
+		*wp++ = htons(M68K_NOP);
+		*wp = htons(M68K_NOP);
 	}
+	// WHICHCPU at $AA — leave it (CPU probe, safe)
+	// RAMTEST at $B6 — leave it (memory test, works on mmap'd RAM)
+	// NOP REV8CHK ($C0) and BOOTBEEP ($D0)
+	wp = (uint16 *)(ROMBaseHost + 0xc0);
+	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
+	wp = (uint16 *)(ROMBaseHost + 0xd0);
+	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 
-	// Truncate FILLWITHONES to $100-$3FF (exception vectors only).
-	// The trap tables at $400 and $E00 must stay zero for INITDISPATCHER.
-	wp = (uint16 *)(ROMBaseHost + 0xfc);
-	*wp++ = htons(0x43f8);			// lea ($400).w,A1
-	*wp = htons(0x0400);
+	// After FILLWITHONES: SYSERRINIT at $112 installs exception vectors.
 
-	// NOP the $A198 + _SwapMMUMode calls inside INITDISPATCHER
-	wp = (uint16 *)(ROMBaseHost + 0x3f7c0);
-	*wp = htons(M68K_NOP);
-	wp = (uint16 *)(ROMBaseHost + 0x3f7c4);
-	*wp = htons(M68K_NOP);
-
-	// After JMP to $F2: FILLWITHONES, CPUFlag, MemTop, then
-	// SYSERRINIT at $112 (installs exception vectors — must run).
-
-	// Patch SwapMMUMode (FUN_40803B18) to always take the 24-bit path.
-	// FILLWITHONES fills $100-$1E00 with $FFFFFFFF, so ($CB1) = $FF.
-	// SwapMMUMode checks cmpi.b #1,($CB1) — $FF != 1 → branches to
-	// PMMU path → pmove instructions → F-line exception (no PMMU on 68020).
-	// NOP the two branch instructions to always use the VIA2/24-bit path.
-	wp = (uint16 *)(ROMBaseHost + 0x3b24);  // bne.b $3B2E → NOP
-	*wp = htons(M68K_NOP);
-	wp = (uint16 *)(ROMBaseHost + 0x3b62);  // bne.b $3B6E → NOP (alt entry)
-	*wp = htons(M68K_NOP);
-
-	// Skip SETUPTIMEK (bsr.w at $118)
+	// At $118 (was SETUPTIMEK): write ($DBC) and ($CB1).
+	// Must be AFTER FILLWITHONES ($100) which fills $100-$1E00 with $FF.
+	// move.l #ROMBase+$3A8A,($DBC).w  (8 bytes: 23FC xxxx xxxx 0DBC)
 	wp = (uint16 *)(ROMBaseHost + 0x118);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
-
-	// Skip VIATIMERENABLES (bsr.w at $11C)
-	wp = (uint16 *)(ROMBaseHost + 0x11c);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
-
-	// Skip MMU_INIT (jsr at $120, 6 bytes)
+	*wp++ = htons(0x23fc);
+	*wp++ = htons((ROMBaseMac + 0x3a8a) >> 16);
+	*wp++ = htons((ROMBaseMac + 0x3a8a) & 0xffff);
+	*wp = htons(0x0dbc);
+	// move.b #1,($CB1).w  (6 bytes: 13FC 0001 0CB1)  — at $120 (was MMU_INIT)
 	wp = (uint16 *)(ROMBaseHost + 0x120);
-	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
-
-	// Skip warm-restart probe at $124 (movem from $F80080, 6 bytes)
+	*wp++ = htons(0x13fc);
+	*wp++ = htons(0x0001);
+	*wp = htons(0x0cb1);
+	wp = (uint16 *)(ROMBaseHost + 0x120);
+	*wp++ = htons(M68K_NOP); *wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0x124);
-	*wp++ = htons(M68K_NOP);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
-
-	// Skip INITHIMEMGLOBALS at $13E (bsr, 4 bytes)
+	*wp++ = htons(M68K_NOP); *wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0x13e);
-	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
+
+	// Patch SwapMMUMode to always take the 24-bit VIA2 path
+	wp = (uint16 *)(ROMBaseHost + 0x3b24);
+	*wp = htons(M68K_NOP);
+	wp = (uint16 *)(ROMBaseHost + 0x3b62);
 	*wp = htons(M68K_NOP);
 
 	// === Fixed-offset patches: BOOTRETRY ===

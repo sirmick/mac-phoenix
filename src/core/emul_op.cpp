@@ -230,11 +230,21 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:	// Patch BootGlobs / unit table alloc
 			D(bug("Patch BootGlobs\n"));
-			if (machine_profile().twenty_four_bit) {
-				// Classic ROM: called from $776 (INITCRSRMGR) replacing
-				// _NewPtrSysClear.  Return A0 = unit table in ScratchMem
-				// (immune to zone management that destroys zone allocs).
-				// D0 = requested size (256 bytes, set by ROM at $774).
+			if (ROMVersion == ROM_VERSION_II && r->d[0] == 0) {
+				// Mac II ROM: called from $96 (replacing FUN_40802A14).
+				// Set registers that FUN_40802A14 would set. Low-mem
+				// globals ($DBC, $CB1) are set in ROM patches at $118
+				// (AFTER FILLWITHONES overwrites $100-$1E00).
+				r->a[6] = RAMSize;                    // MemTop
+				r->a[7] = 0x40000;                    // boot stack (256KB)
+				r->d[7] = 0x00020000;                 // CPU flags (68020)
+				fprintf(stderr, "[Boot +%6.2fs] Mac II boot globals set (A6=%08x SP=%08x)\n",
+					0.0, (uint32)r->a[6], (uint32)r->a[7]);
+			} else if (machine_profile().twenty_four_bit) {
+				// Classic/Mac II ROM: called from $776/$DAC (INITCRSRMGR)
+				// replacing _NewPtrSysClear. Return A0 = unit table in
+				// ScratchMem (immune to zone management).
+				// D0 = requested size (set by ROM before the trap).
 				uint32 utab = Host2MacAddr(ScratchMem + 0x100);
 				memset(ScratchMem + 0x100, 0, r->d[0]);
 				r->a[0] = utab;
