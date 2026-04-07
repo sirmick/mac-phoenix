@@ -1145,46 +1145,49 @@ static bool patch_rom_ii(void)
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
 
-	// === Replace FUN_40802A14 with PATCH_BOOT_GLOBS EmulOp ===
-	// FUN_40802A14 sets VBR, SP, D7 flags, $DBC, $CB1, and probes all
-	// hardware (VIA, SCC, IWM, SCSI). Skipping it causes BOOTRETRY to
-	// take wrong branches. The EmulOp handler sets the same globals
-	// that MAME shows at BOOTRETRY entry (from /tmp/mame_lowmem_bootretry2.bin).
-	wp = (uint16 *)(ROMBaseHost + 0x96);
-	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PATCH_BOOT_GLOBS));
+	// === Let FUN_40802A14 run — it sets VBR, D7, $DBC, $CB1 ===
+	// The thunk at $96 jumps to FUN_40802A14 which probes all hardware.
+	// Leave $96 intact (original jmp). The function reads VIA at
+	// $50F0xxxx which maps to RAM in 24-bit mode — reads return 0,
+	// causing "hardware not responsive" paths. The error exit at
+	// $2C64 jumps to FUN_40805E5A (BOOTBEEP/ADB init) which hangs.
+	// Patch $2C64: skip BOOTBEEP in error exit (jmp to $2E96)
+	wp = (uint16 *)(ROMBaseHost + 0x2c64);
+	*wp++ = htons(M68K_JMP);
+	*wp++ = htons((ROMBaseMac + 0x2e96) >> 16);
+	*wp = htons((ROMBaseMac + 0x2e96) & 0xffff);
+
+	// FUN_40802E96 is the common continuation for FUN_40802A14.
+	// It calls BOOTBEEP at $2EBE and ADB init at $2ED8.
+	// Skip BOOTBEEP ($2EBE: jmp PC-relative, 4 bytes → 2 NOPs)
+	wp = (uint16 *)(ROMBaseHost + 0x2ebe);
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
-	// Falls through to STARTINIT1 at $9C (we NOP hardware calls below)
+	// Skip ENTIRE ADB scan section ($2ECE-$3295).
+	// Replace $2ECE (move #$2500,SR) with a JMP past the ADB code
+	// to the continuation at $3296+ (sets D5=$8000, continues init).
+	// $2ECE is where ADB init starts; $3296 is LAB_40803296 which
+	// is the first instruction after the ADB scan loops.
+	// After $3296: the code checks D7 flags and continues to
+	// STARTINIT1 at $9A (our NOP'd hardware BSRs).
+	// Skip ADB scan: JMP from $2ECE to STARTINIT1 at $9A.
+	// $2EC2-$2ECC sets VBR (movec A0,VBR). $2ECE starts ADB init
+	// which hangs without real ADB hardware. Skip it and go straight
+	// to STARTINIT1 (which has NOP'd hardware BSRs).
+	wp = (uint16 *)(ROMBaseHost + 0x2ece);
+	*wp++ = htons(M68K_JMP);
+	*wp++ = htons((ROMBaseMac + 0x9a) >> 16);
+	*wp = htons((ROMBaseMac + 0x9a) & 0xffff);
 
-	// NOP STARTINIT1 hardware init BSR calls
-	for (uint32 ofs : {0x9au, 0x9eu, 0xa2u, 0xa6u}) {  // VIA,SCC,IWM,SCSI
+	// NOP STARTINIT1 hardware init BSR calls ($9A-$D0)
+	for (uint32 ofs : {0x9au, 0x9eu, 0xa2u, 0xa6u, 0xc0u, 0xd0u}) {
 		wp = (uint16 *)(ROMBaseHost + ofs);
 		*wp++ = htons(M68K_NOP);
 		*wp = htons(M68K_NOP);
 	}
-	// WHICHCPU at $AA — leave it (CPU probe, safe)
-	// RAMTEST at $B6 — leave it (memory test, works on mmap'd RAM)
-	// NOP REV8CHK ($C0) and BOOTBEEP ($D0)
-	wp = (uint16 *)(ROMBaseHost + 0xc0);
-	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
-	wp = (uint16 *)(ROMBaseHost + 0xd0);
-	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 
-	// After FILLWITHONES: SYSERRINIT at $112 installs exception vectors.
-
-	// At $118 (was SETUPTIMEK): write ($DBC) and ($CB1).
-	// Must be AFTER FILLWITHONES ($100) which fills $100-$1E00 with $FF.
-	// move.l #ROMBase+$3A8A,($DBC).w  (8 bytes: 23FC xxxx xxxx 0DBC)
-	wp = (uint16 *)(ROMBaseHost + 0x118);
-	*wp++ = htons(0x23fc);
-	*wp++ = htons((ROMBaseMac + 0x3a8a) >> 16);
-	*wp++ = htons((ROMBaseMac + 0x3a8a) & 0xffff);
-	*wp = htons(0x0dbc);
-	// move.b #1,($CB1).w  (6 bytes: 13FC 0001 0CB1)  — at $120 (was MMU_INIT)
-	wp = (uint16 *)(ROMBaseHost + 0x120);
-	*wp++ = htons(0x13fc);
-	*wp++ = htons(0x0001);
-	*wp = htons(0x0cb1);
+	// NOP SETUPTIMEK ($118), VIATIMERENABLES ($11C), MMU_INIT ($120),
+	// warm-restart probe ($124), INITHIMEMGLOBALS ($13E)
 	wp = (uint16 *)(ROMBaseHost + 0x120);
 	*wp++ = htons(M68K_NOP); *wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0x124);
