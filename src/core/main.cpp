@@ -39,6 +39,7 @@ using namespace m68k;
 #include "user_strings.h"
 #include "main.h"
 #include "emulator_config.h"
+#include "machine_profile.h"
 
 #define DEBUG 0
 #include "debug.h"
@@ -72,31 +73,12 @@ bool InitAll(const char *vmdir)
 
 #if EMULATED_68K
 	// Set CPU and FPU type (UAE emulation)
-	auto& cfg = config::EmulatorConfig::instance();
-	switch (ROMVersion) {
-		case ROM_VERSION_64K:
-		case ROM_VERSION_PLUS:
-		case ROM_VERSION_CLASSIC:
-			CPUType = 0;
-			FPUType = 0;
-			TwentyFourBitAddressing = true;
-			break;
-		case ROM_VERSION_II:
-			CPUType = cfg.m68k.cpu_type;
-			if (CPUType < 2) CPUType = 2;
-			if (CPUType > 4) CPUType = 4;
-			FPUType = cfg.m68k.fpu ? 1 : 0;
-			if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
-			TwentyFourBitAddressing = true;
-			break;
-		case ROM_VERSION_32:
-			CPUType = cfg.m68k.cpu_type;
-			if (CPUType < 2) CPUType = 2;
-			if (CPUType > 4) CPUType = 4;
-			FPUType = cfg.m68k.fpu ? 1 : 0;
-			if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
-			TwentyFourBitAddressing = false;
-			break;
+	// Set CPU and FPU type from machine profile (determined by ROM)
+	{
+		const MachineProfile& prof = machine_profile();
+		CPUType = prof.cpu_type;
+		FPUType = prof.fpu ? 1 : 0;
+		TwentyFourBitAddressing = prof.twenty_four_bit;
 	}
 	CPUIs68060 = false;
 #endif
@@ -135,6 +117,7 @@ bool InitAll(const char *vmdir)
 	}
 
 	// Set boot volume
+	auto& cfg = config::EmulatorConfig::instance();
 	int16 i16 = cfg.bootdrive;
 	XPRAM[0x78] = i16 >> 8;
 	XPRAM[0x79] = i16 & 0xff;

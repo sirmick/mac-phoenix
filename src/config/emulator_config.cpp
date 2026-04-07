@@ -111,6 +111,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     };
 
     j["architecture"] = architecture_string();
+    j["emulator"] = emulator;
     j["cpu_backend"] = cpu_backend_string();
     j["ram_mb"] = ram_mb;
     j["screen"] = screen_string();
@@ -145,9 +146,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["debug_perf"] = debug_perf;
     j["debug_network"] = debug_network;
 
-    j["m68k"]["cpu_type"] = m68k.cpu_type;
     j["m68k"]["fpu"] = m68k.fpu;
-    j["m68k"]["modelid"] = m68k.modelid;
     j["m68k"]["jitexperimental"] = m68k.jitexperimental;
     j["m68k"]["idlewait"] = m68k.idlewait;
     j["m68k"]["ignoresegv"] = m68k.ignoresegv;
@@ -160,9 +159,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["m68k"]["swap_opt_cmd"] = m68k.swap_opt_cmd;
     j["m68k"]["keyboardtype"] = m68k.keyboardtype;
 
-    j["ppc"]["cpu_type"] = ppc.cpu_type;
     j["ppc"]["fpu"] = ppc.fpu;
-    j["ppc"]["modelid"] = ppc.modelid;
     j["ppc"]["jit"] = ppc.jit;
     j["ppc"]["jit68k"] = ppc.jit68k;
     j["ppc"]["idlewait"] = ppc.idlewait;
@@ -182,6 +179,7 @@ nlohmann::json EmulatorConfig::to_json() const {
  * Merge JSON into config (partial updates OK)
  */
 void EmulatorConfig::merge_json(const nlohmann::json& j) {
+    if (j.contains("emulator")) emulator = json_utils::get_string(j, "emulator");
     if (j.contains("architecture")) {
         std::string a = json_utils::get_string(j, "architecture");
         if (a == "ppc") {
@@ -282,9 +280,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     // M68K sub-struct
     if (j.contains("m68k")) {
         auto& m = j["m68k"];
-        if (m.contains("cpu_type")) m68k.cpu_type = json_utils::get_int(m, "cpu_type");
         if (m.contains("fpu")) m68k.fpu = json_utils::get_bool(m, "fpu");
-        if (m.contains("modelid")) m68k.modelid = json_utils::get_int(m, "modelid");
         if (m.contains("jitexperimental")) m68k.jitexperimental = json_utils::get_bool(m, "jitexperimental");
         if (m.contains("idlewait")) m68k.idlewait = json_utils::get_bool(m, "idlewait");
         if (m.contains("ignoresegv")) m68k.ignoresegv = json_utils::get_bool(m, "ignoresegv");
@@ -301,9 +297,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     // PPC sub-struct
     if (j.contains("ppc")) {
         auto& p = j["ppc"];
-        if (p.contains("cpu_type")) ppc.cpu_type = json_utils::get_int(p, "cpu_type");
         if (p.contains("fpu")) ppc.fpu = json_utils::get_bool(p, "fpu");
-        if (p.contains("modelid")) ppc.modelid = json_utils::get_int(p, "modelid");
         if (p.contains("jit")) ppc.jit = json_utils::get_bool(p, "jit");
         if (p.contains("jit68k")) ppc.jit68k = json_utils::get_bool(p, "jit68k");
         if (p.contains("idlewait")) ppc.idlewait = json_utils::get_bool(p, "idlewait");
@@ -754,8 +748,8 @@ void print_config(const EmulatorConfig& config) {
     if (config.architecture == Architecture::PPC) {
         fprintf(stderr, "[Config] CPU: PowerPC, Backend: %s\n", config.cpu_backend_string());
     } else {
-        fprintf(stderr, "[Config] CPU: 680%d0, FPU: %s, Backend: %s\n",
-                config.m68k.cpu_type, config.m68k.fpu ? "yes" : "no",
+        fprintf(stderr, "[Config] FPU: %s, Backend: %s\n",
+                config.m68k.fpu ? "yes" : "no",
                 config.cpu_backend_string());
     }
     fprintf(stderr, "[Config] ROM: %s\n",

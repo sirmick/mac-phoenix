@@ -40,7 +40,7 @@ cat > "$TMPCONFIG" << EOF
   "cdroms": ["System-7-Version-7.5.iso"],
   "bootdriver": 0,
   "storage_dir": "/home/mick/storage",
-  "m68k": {"cpu_type": 4, "fpu": true, "modelid": 14}
+  "m68k": {"fpu": true}
 }
 EOF
 

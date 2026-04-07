@@ -70,7 +70,7 @@ cat > "$TMPCONFIG" << EOF
   "disks": [],
   "extfs": [],
   "storage_dir": "/home/mick/storage",
-  "m68k": {"cpu_type": 4, "fpu": true, "modelid": 14}
+  "m68k": {"fpu": true}
 }
 EOF
 
@@ -135,7 +135,7 @@ cat > "$TMPCONFIG" << EOF
   "rom": "",
   "disks": [],
   "extfs": [],
-  "m68k": {"cpu_type": 4, "fpu": true, "modelid": 14}
+  "m68k": {"fpu": true}
 }
 EOF
 
@@ -197,7 +197,7 @@ cat > "$TMPCONFIG" << EOF
   "rom": "",
   "disks": [],
   "extfs": "$TMPDIR_EXTFS",
-  "m68k": {"cpu_type": 4, "fpu": true, "modelid": 14}
+  "m68k": {"fpu": true}
 }
 EOF
 
@@ -236,7 +236,7 @@ cat > "$TMPCONFIG" << EOF
   "rom": "",
   "disks": [],
   "extfs": ["$TMPDIR_EXTFS"],
-  "m68k": {"cpu_type": 4, "fpu": true, "modelid": 14}
+  "m68k": {"fpu": true}
 }
 EOF
 

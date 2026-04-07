@@ -1138,9 +1138,9 @@ static bool patch_rom_32(void)
 	for (int i=1; i<16; i++)
 		bp[i] = 0x08;
 
-	// Set model ID from preferences
+	// Set model ID from machine profile
 	bp = ROMBaseHost + UniversalInfo + 18;		// productKind
-	*bp = config::EmulatorConfig::instance().m68k.modelid;
+	*bp = machine_profile().model_id;
 
 #if !ROM_IS_WRITE_PROTECTED
 #if defined(USE_SCRATCHMEM_SUBTERFUGE)

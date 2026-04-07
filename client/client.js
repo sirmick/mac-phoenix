@@ -3239,14 +3239,7 @@ function loadPreset(name) {
 
     // Convert server-format JSON to client currentConfig format (same as loadCurrentConfig)
     const isM68k = (preset.architecture || 'm68k') === 'm68k';
-    let emulatorMode;
-    if (!isM68k) {
-        emulatorMode = 'ppc';
-    } else if ((preset.m68k?.modelid || 14) === 5) {
-        emulatorMode = 'se';
-    } else {
-        emulatorMode = 'quadra';
-    }
+    const emulatorMode = preset.emulator || (isM68k ? 'quadra' : 'ppc');
 
     const stripPrefix = (p, dir) => {
         if (!p || p[0] !== '/') return p;
@@ -3260,8 +3253,6 @@ function loadPreset(name) {
         ram: preset.ram_mb || 32,
         screen: preset.screen || '640x480',
         sound: preset.audio ?? true,
-        cpu: isM68k ? (preset.m68k?.cpu_type || 4) : (preset.ppc?.cpu_type || 4),
-        model: isM68k ? (preset.m68k?.modelid || 14) : (preset.ppc?.modelid || 14),
         fpu: isM68k ? (preset.m68k?.fpu ?? true) : (preset.ppc?.fpu ?? true),
         jit: isM68k ? (preset.m68k?.jit ?? true) : (preset.ppc?.jit ?? true),
         jit68k: preset.ppc?.jit68k ?? false,
@@ -3298,8 +3289,6 @@ function buildConfigJson() {
     const isM68k = isM68kMode(emulator);
 
     const archConfig = {
-        cpu_type: parseInt(document.getElementById('cfg-cpu')?.value || 4),
-        modelid: parseInt(document.getElementById('cfg-model')?.value || 14),
         fpu: document.getElementById('cfg-fpu')?.checked ?? true,
         jit: document.getElementById('cfg-jit')?.checked ?? true,
         idlewait: document.getElementById('cfg-idlewait')?.checked ?? true,
@@ -3316,6 +3305,7 @@ function buildConfigJson() {
     const rom = (romDropdown && romDropdown.value) ? romDropdown.value : currentConfig.rom;
 
     return {
+        emulator: emulator,
         architecture: isM68k ? 'm68k' : 'ppc',
         cpu_backend: document.getElementById('cfg-backend')?.value || (isM68k ? 'uae' : 'kpx'),
         rom: rom,
@@ -3679,7 +3669,6 @@ function updateEmulatorPanelVisibility() {
 function applyModeConstraints(mode) {
     const ramEl = document.getElementById('cfg-ram');
     const screenEl = document.getElementById('cfg-screen');
-
     if (mode === 'se') {
         // SE: fixed 512x342 BW screen, max 4MB RAM
         if (screenEl) {
@@ -3714,26 +3703,20 @@ async function onEmulatorChange() {
 
     // Set mode defaults
     const defaults = {
-        ppc:    { ram: 128, screen: '1024x768', cpu: 4, model: 14, backend: 'kpx' },
-        quadra: { ram: 32,  screen: '1024x768', cpu: 4, model: 14, backend: 'uae' },
-        se:     { ram: 4,   screen: '512x342',  cpu: 0, model: 5,  backend: 'uae' }
+        ppc:    { ram: 128, screen: '1024x768', backend: 'kpx' },
+        quadra: { ram: 32,  screen: '1024x768', backend: 'uae' },
+        se:     { ram: 4,   screen: '512x342',  backend: 'uae' }
     };
     const d = defaults[emulatorType] || defaults.quadra;
 
     currentConfig.ram = d.ram;
     currentConfig.screen = d.screen;
-    currentConfig.cpu = d.cpu;
-    currentConfig.model = d.model;
     currentConfig.backend = d.backend;
 
     const ramEl = document.getElementById('cfg-ram');
     if (ramEl) ramEl.value = d.ram;
     const screenEl = document.getElementById('cfg-screen');
     if (screenEl) screenEl.value = d.screen;
-    const cpuEl = document.getElementById('cfg-cpu');
-    if (cpuEl) cpuEl.value = d.cpu;
-    const modelEl = document.getElementById('cfg-model');
-    if (modelEl) modelEl.value = d.model;
     const backendEl = document.getElementById('cfg-backend');
     if (backendEl) backendEl.value = d.backend;
 
@@ -3745,7 +3728,6 @@ async function onEmulatorChange() {
 
     console.log('🔄 SWITCHED EMULATOR:', {
         emulator: emulatorType,
-        cpu: currentConfig.cpu,
         jit: currentConfig.jit
     });
 }
@@ -3761,17 +3743,6 @@ function onRomChange() {
     // Look up ROM info and auto-set model if known
     const info = getRomInfo(rom.checksum, rom.md5);
 
-    // ONLY set modelid for 68k ROMs (BasiliskII)
-    // PPC/SheepShaver always uses model 14 (hardcoded, no user selection)
-    if (info?.model && info.arch === 'm68k') {
-        const modelSelect = document.getElementById('cfg-model');
-        if (modelSelect) {
-            modelSelect.value = info.model;
-            currentConfig.model = info.model;
-            console.log(`Auto-set model ID to ${info.model} for ${info.name}`);
-        }
-    }
-
     // Update header title to show model name
     updateHeaderTitle();
 }
@@ -3784,15 +3755,8 @@ async function loadCurrentConfig() {
         // Flat format from server
         const isM68k = (cfg.architecture || 'm68k') === 'm68k';
 
-        // Determine emulator mode from architecture + model ID
-        let emulatorMode;
-        if (!isM68k) {
-            emulatorMode = 'ppc';
-        } else if ((cfg.m68k?.modelid || 14) === 5) {
-            emulatorMode = 'se';
-        } else {
-            emulatorMode = 'quadra';
-        }
+        // Determine emulator mode
+        let emulatorMode = cfg.emulator || (isM68k ? 'quadra' : 'ppc');
 
         // Strip storage_dir prefix from paths to get relative names matching storage scan
         // Only strip if the path is absolute (starts with /), otherwise it's already relative
@@ -3808,8 +3772,6 @@ async function loadCurrentConfig() {
             ram: cfg.ram_mb || 32,
             screen: cfg.screen || '640x480',
             sound: cfg.audio ?? true,
-            cpu: isM68k ? (cfg.m68k?.cpu_type || 4) : (cfg.ppc?.cpu_type || 4),
-            model: isM68k ? (cfg.m68k?.modelid || 14) : (cfg.ppc?.modelid || 14),
             fpu: isM68k ? (cfg.m68k?.fpu ?? true) : (cfg.ppc?.fpu ?? true),
             jit: isM68k ? (cfg.m68k?.jit ?? true) : (cfg.ppc?.jit ?? true),
             jit68k: cfg.ppc?.jit68k ?? false,
@@ -3876,12 +3838,6 @@ function updateConfigUI() {
     const backendEl = document.getElementById('cfg-backend');
     if (backendEl) backendEl.value = currentConfig.backend || 'uae';
 
-    // Arch-specific (m68k only, hidden in PPC mode)
-    const cpuEl = document.getElementById('cfg-cpu');
-    const modelEl = document.getElementById('cfg-model');
-    if (cpuEl) cpuEl.value = currentConfig.cpu;
-    if (modelEl) modelEl.value = currentConfig.model;
-
     // Common (unified IDs)
     const fpuEl = document.getElementById('cfg-fpu');
     const jitEl = document.getElementById('cfg-jit');
@@ -3935,12 +3891,7 @@ async function saveConfig() {
     currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? true;
     currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
     currentConfig.ignoresegv = document.getElementById('cfg-ignoresegv')?.checked ?? true;
-    if (isM68kMode(currentConfig.emulator)) {
-        currentConfig.cpu = parseInt(document.getElementById('cfg-cpu')?.value || 4);
-        currentConfig.model = parseInt(document.getElementById('cfg-model')?.value || 14);
-    } else {
-        currentConfig.cpu = 4;
-        currentConfig.model = 14;
+    if (!isM68kMode(currentConfig.emulator)) {
         currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
         currentConfig.ignoreillegal = document.getElementById('cfg-ignoreillegal')?.checked ?? true;
     }

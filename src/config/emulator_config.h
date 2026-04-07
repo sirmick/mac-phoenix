@@ -36,9 +36,7 @@ enum class NetworkMode {
 };
 
 struct M68KConfig {
-    int cpu_type = 4;        // 68000-68040
     bool fpu = true;
-    int modelid = 14;
     bool jitexperimental = false;
     bool jitfpu = true;
     bool jitdebug = false;
@@ -53,9 +51,7 @@ struct M68KConfig {
 };
 
 struct PPCConfig {
-    int cpu_type = 4;
     bool fpu = true;
-    int modelid = 14;
     bool jit = false;
     bool jit68k = true;
     bool idlewait = true;
@@ -83,6 +79,7 @@ struct EmulatorConfig {
     // Architecture & CPU
     Architecture architecture = Architecture::M68K;
     CPUBackend cpu_backend = CPUBackend::UAE;
+    std::string emulator = "quadra";   // "se", "quadra", or "ppc"
 
     // Memory
     uint32_t ram_mb = 64;
@@ -174,10 +171,6 @@ struct EmulatorConfig {
             case CPUBackend::KPX: return "kpx";
         }
         return "uae";
-    }
-
-    int cpu_type_int() const {
-        return m68k.cpu_type;
     }
 
     bool fpu() const {

@@ -24,6 +24,7 @@
 #include "main.h"
 #include "video.h"
 #include "emulator_config.h"
+#include "machine_profile.h"
 #include "xpram.h"
 #include "timer.h"
 #include "sony.h"
@@ -134,35 +135,12 @@ bool init_cpu_subsystem(const char* cpu_backend)
     }
 
 #if EMULATED_68K
-    // Set CPU and FPU type based on ROM version
-    switch (ROMVersion) {
-        case ROM_VERSION_64K:
-        case ROM_VERSION_PLUS:
-        case ROM_VERSION_CLASSIC:
-            CPUType = 0;
-            FPUType = 0;
-            TwentyFourBitAddressing = true;
-            break;
-        case ROM_VERSION_II: {
-            auto& ecfg = config::EmulatorConfig::instance();
-            CPUType = ecfg.m68k.cpu_type;
-            if (CPUType < 2) CPUType = 2;
-            if (CPUType > 4) CPUType = 4;
-            FPUType = ecfg.m68k.fpu ? 1 : 0;
-            if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
-            TwentyFourBitAddressing = true;
-            break;
-        }
-        case ROM_VERSION_32: {
-            auto& ecfg = config::EmulatorConfig::instance();
-            CPUType = ecfg.m68k.cpu_type;
-            if (CPUType < 2) CPUType = 2;
-            if (CPUType > 4) CPUType = 4;
-            FPUType = ecfg.m68k.fpu ? 1 : 0;
-            if (CPUType == 4) FPUType = 1;	// 68040 always with FPU
-            TwentyFourBitAddressing = false;
-            break;
-        }
+    // Set CPU and FPU type from machine profile (determined by ROM)
+    {
+        const MachineProfile& prof = machine_profile();
+        CPUType = prof.cpu_type;
+        FPUType = prof.fpu ? 1 : 0;
+        TwentyFourBitAddressing = prof.twenty_four_bit;
     }
     CPUIs68060 = false;
 
