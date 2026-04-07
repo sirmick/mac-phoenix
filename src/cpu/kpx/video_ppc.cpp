@@ -1250,6 +1250,7 @@ int16 ppc::video_mode_change(VidLocals *csSave, uint32 ParamPtr)
 
 			frame_width = VModes[i].viXsize;
 			frame_height = VModes[i].viYsize;
+			frame_bytes_per_row = VModes[i].viRowBytes;
 			video_ipc_set_resolution(frame_width, frame_height);
 
 			D(bug("  -> mode %d: %dx%d base=0x%08x\n", i, frame_width, frame_height, screen_base));
@@ -1273,14 +1274,58 @@ bool ppc::VideoInit(void)
 	private_data = NULL;
 	video_activated = true;
 
-	frame_width = 640;
-	frame_height = 480;
-	frame_bytes_per_row = frame_width * 4;  // 32-bit ARGB
+	// Supported resolutions (32-bit only), capped by --screen config
+	struct { int w, h; uint32 id; } supported_modes[] = {
+		{  640,  480, APPLE_W_640x480 },
+		{  800,  600, APPLE_W_800x600 },
+		{ 1024,  768, APPLE_1024x768  },
+		{ 1280, 1024, APPLE_1280x1024 },
+		{ 1600, 1200, APPLE_1600x1200 },
+	};
 
-	// Allocate Mac framebuffer via vm_acquire — same as legacy IPC driver.
-	// Legacy uses vm_acquire (sequential allocator from MAP_BASE=0x10000000).
-	// Do NOT use MAP_FIXED at 0x50590000 — that was a mac-phoenix invention.
-	the_buffer_size = frame_bytes_per_row * frame_height;
+	config::EmulatorConfig& cfg = config::EmulatorConfig::instance();
+	int max_width = cfg.screen_width;
+	int max_height = cfg.screen_height;
+
+	// Build VModes table — all modes that fit within the configured max
+	int n = 0;
+	int default_mode = 0;
+	for (const auto& sm : supported_modes) {
+		if (sm.w > max_width || sm.h > max_height) continue;
+		VModes[n].viType = DIS_SCREEN;
+		VModes[n].viRowBytes = sm.w * 4;
+		VModes[n].viXsize = sm.w;
+		VModes[n].viYsize = sm.h;
+		VModes[n].viAppleMode = APPLE_32_BIT;
+		VModes[n].viAppleID = sm.id;
+		if (sm.w == max_width && sm.h == max_height)
+			default_mode = n;
+		n++;
+	}
+	if (n == 0) {
+		// Fallback: at least one mode (640x480)
+		VModes[0].viType = DIS_SCREEN;
+		VModes[0].viRowBytes = 640 * 4;
+		VModes[0].viXsize = 640;
+		VModes[0].viYsize = 480;
+		VModes[0].viAppleMode = APPLE_32_BIT;
+		VModes[0].viAppleID = APPLE_W_640x480;
+		n = 1;
+	}
+	VModes[n].viType = DIS_INVALID;  // End of list
+
+	// Default to configured resolution, or last (largest) mode
+	cur_mode = default_mode;
+	save_conf_id = VModes[cur_mode].viAppleID;
+	save_conf_mode = VModes[cur_mode].viAppleMode;
+	frame_width = VModes[cur_mode].viXsize;
+	frame_height = VModes[cur_mode].viYsize;
+	frame_bytes_per_row = frame_width * 4;
+
+	// Allocate framebuffer large enough for the biggest mode
+	int largest_w = VModes[n - 1].viXsize;
+	int largest_h = VModes[n - 1].viYsize;
+	the_buffer_size = largest_w * largest_h * 4;
 	the_buffer = (uint8_t *)vm_acquire(the_buffer_size);
 	if (the_buffer == (uint8_t *)VM_MAP_FAILED) {
 		fprintf(stderr, "[PPC-Video] ERROR: Failed to allocate framebuffer (%u bytes)\n", the_buffer_size);
@@ -1288,24 +1333,12 @@ bool ppc::VideoInit(void)
 	}
 	memset(the_buffer, 0, the_buffer_size);
 
-	// Set global video state — exactly as legacy IPC driver
+	// Set global video state
 	screen_base = Host2MacAddr(the_buffer);
+	display_type = DIS_SCREEN;
 
-	// Single 32-bit mode, APPLE_CUSTOM ID — matching legacy IPC driver exactly.
-	// Legacy does NOT create multi-depth modes. One mode, 32-bit, done.
-	VModes[0].viType = DIS_SCREEN;  // Matches legacy IPC driver
-	VModes[0].viRowBytes = frame_bytes_per_row;
-	VModes[0].viXsize = frame_width;
-	VModes[0].viYsize = frame_height;
-	VModes[0].viAppleMode = APPLE_32_BIT;
-	VModes[0].viAppleID = APPLE_CUSTOM;
-	VModes[1].viType = DIS_INVALID;  // End of list
-
-	cur_mode = 0;
-	display_type = DIS_SCREEN;  // Matches legacy IPC driver
-
-	fprintf(stderr, "[PPC-Video] Framebuffer at Mac 0x%08x host %p (%dx%d, 32-bit, %d bpr)\n",
-	        screen_base, the_buffer, frame_width, frame_height, frame_bytes_per_row);
+	fprintf(stderr, "[PPC-Video] Framebuffer at Mac 0x%08x host %p (%dx%d, 32-bit, %d bpr), %d modes\n",
+	        screen_base, the_buffer, frame_width, frame_height, frame_bytes_per_row, n);
 
 	// Set IPC framebuffer pointer and actual resolution
 	video_ipc_set_framebuffer(the_buffer);
