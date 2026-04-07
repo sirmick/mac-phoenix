@@ -52,10 +52,19 @@ static bool g_seen_finder = false;
 static char g_last_app_name[64] = {0};
 static struct timespec g_boot_start_time = {0, 0};
 static int g_dialogs_dismissed = 0;
-static double g_last_dialog_dismiss_time = 0.0;
 static double g_desktop_ready_time = 0.0;
-#define MAX_DIALOG_DISMISSALS 5       /* safety limit per boot */
-#define DIALOG_DISMISS_COOLDOWN 2.0   /* seconds between dismissals */
+
+
+/*
+ * Known boot-time dialog titles to auto-dismiss.
+ * Add new entries as they are discovered on different OS versions.
+ * Verified titles:
+ *   ""  — Mac OS 9.0.4 (PPC): untitled StopAlert for improper shutdown
+ */
+static const char *const BOOT_DIALOG_WHITELIST[] = {
+	"",  /* untitled alerts (Mac OS 9.x shutdown, disk check) */
+	NULL
+};
 
 static bool g_auto_launch_done = false;
 static double g_last_auto_launch_attempt = 0.0;
@@ -232,48 +241,56 @@ static int read_window_title(uint32_t wp, char *buf, int bufsize)
 }
 
 /*
- * Check for the "improper shutdown" dialog and dismiss it with Return.
+ * Auto-dismiss known boot-time dialogs.
  *
- * Detection criteria (all must match):
- *   - Front window has windowKind == 2 (dialogKind)
- *   - Window is visible
- *   - Haven't exceeded dismissal limit (safety)
- *   - Cooldown elapsed since last dismissal (avoid rapid-fire)
+ * Two-layer protection against dismissing user dialogs:
  *
- * Handles multiple dialogs across OS versions:
- *   - Mac OS 7.x: "improper shutdown" dialog
- *   - Mac OS 8.x: "improper shutdown", rebuild desktop
- *   - Mac OS 9.x: Disk First Aid, extensions conflict, etc.
+ *   1. Whitelist: only dialogs whose window title matches
+ *      BOOT_DIALOG_WHITELIST are dismissed. Application dialogs (save,
+ *      print, alerts) have titles that aren't in the whitelist.
+ *
+ *   2. Phase gate: only active between PHASE_WARM_START and PHASE_DESKTOP.
+ *      Desktop detection varies by OS version:
+ *        - Mac OS 7–9: IDLE_TIME EmulOp fires when Finder's event loop
+ *          goes idle → sets PHASE_DESKTOP.
+ *        - System 6: IDLE_TIME is never patched, but once CurApName is
+ *          "Finder" the next CHECKLOAD promotes to PHASE_DESKTOP (Finder's
+ *          idle loop is already running by that point).
+ *
+ * Dismissal sends a Return keypress (ADB 0x24) which hits the default
+ * button on standard Mac OS modal dialogs.
+ *
+ * Enable with --dismiss-shutdown-dialog or dismiss_shutdown_dialog in JSON.
+ * Add new dialog titles to BOOT_DIALOG_WHITELIST as they are discovered.
  */
 static void check_shutdown_dialog(void)
 {
-	if (g_dialogs_dismissed >= MAX_DIALOG_DISMISSALS) return;
-
-	/* Cooldown: don't dismiss the same dialog twice in quick succession */
-	double now = elapsed_sec();
-	if (now - g_last_dialog_dismiss_time < DIALOG_DISMISS_COOLDOWN) return;
+	if (!config::EmulatorConfig::instance().dismiss_shutdown_dialog) return;
+	if (g_current_phase < PHASE_WARM_START) return;
+	if (g_current_phase >= PHASE_DESKTOP) return;
 
 	uint32_t wp = ReadMacInt32(0x09D6);  /* WindowList — front window first */
-	if (!wp || wp >= RAMSize) return;  /* sanity: must be within RAM */
+	if (!wp || wp >= RAMSize) return;
 
 	int16_t wKind = static_cast<int16_t>(ReadMacInt16(wp + 108));
-	bool visible = ReadMacInt8(wp + 110) != 0;
-
 	if (wKind != 2) return;  /* not a dialog */
-	if (!visible) return;
+	if (!ReadMacInt8(wp + 110)) return;  /* not visible */
 
 	char title[64];
 	read_window_title(wp, title, sizeof(title));
 
-	fprintf(stderr, "[DIALOG] Visible dialog found: wKind=%d title='%s' — dismissing (#%d)\n",
-	        wKind, title, g_dialogs_dismissed + 1);
+	/* Only dismiss if the title is in our whitelist */
+	bool matched = false;
+	for (int i = 0; BOOT_DIALOG_WHITELIST[i] != NULL; i++) {
+		if (strcmp(title, BOOT_DIALOG_WHITELIST[i]) == 0) {
+			matched = true;
+			break;
+		}
+	}
+	if (!matched) return;
 
-	/* Dismiss via Return key press — works for most Mac OS modal dialogs.
-	 * The mouse click approach is fragile (wrong coordinates for different
-	 * dialog types/resolutions). Return hits the default button. */
 	g_dialogs_dismissed++;
-	g_last_dialog_dismiss_time = now;
-	milestonef("Dialog auto-dismissed (title='%s', #%d)", title, g_dialogs_dismissed);
+	milestonef("Boot dialog auto-dismissed (title='%s', #%d)", title, g_dialogs_dismissed);
 
 	ADBKeyDown(0x24);  /* Return key = Mac keycode 0x24 = 36 */
 	ADBKeyUp(0x24);
@@ -307,17 +324,12 @@ static void maybe_fire_auto_launch(void)
 	 *   1. At least DESKTOP_SETTLE_SEC must have elapsed since PHASE_DESKTOP
 	 *      was reached. This lets any boot-time dialogs appear and be
 	 *      auto-dismissed before we poke the Process Manager.
-	 *   2. If any dialog *was* dismissed, require DIALOG_QUIET_SEC of silence
-	 *      since the last dismissal.
 	 */
 	static const double DESKTOP_SETTLE_SEC = 4.0;
-	static const double DIALOG_QUIET_SEC = 3.0;
 
 	double now = elapsed_sec();
 	if (g_desktop_ready_time == 0.0) return;  /* shouldn't happen — caller gates on PHASE_DESKTOP */
 	if (now - g_desktop_ready_time < DESKTOP_SETTLE_SEC) return;
-	if (g_last_dialog_dismiss_time > 0.0 &&
-	    now - g_last_dialog_dismiss_time < DIALOG_QUIET_SEC) return;
 
 	/* If a previous attempt is pending, check whether it finished */
 	if (g_pending_auto_launch_id != 0) {
@@ -440,6 +452,16 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 				set_phase(PHASE_EXTENSIONS);
 			}
 
+			/* System 6 fallback: IDLE_TIME never fires, so if Finder is
+			 * running and CHECKLOADs are still coming, Finder is already
+			 * in its idle loop — promote to PHASE_DESKTOP directly. */
+			if (g_seen_finder && g_current_phase < PHASE_DESKTOP) {
+				milestonef("Desktop ready (Finder + CHECKLOAD fallback, resource #%u)",
+				           g_checkload_count);
+				set_phase(PHASE_DESKTOP);
+				g_desktop_ready_time = elapsed_sec();
+			}
+
 			/* Log level 1: periodic progress every 500 resources */
 			if (level >= 1 && g_checkload_count % 500 == 0) {
 				milestonef("Resource #%u loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
@@ -475,11 +497,7 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 					set_phase(PHASE_FINDER_LAUNCH);
 				}
 			}
-			/* Check for improper shutdown dialog during boot (appears before Finder) */
-			if (g_dialogs_dismissed < MAX_DIALOG_DISMISSALS && g_current_phase >= PHASE_WARM_START
-			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
-				check_shutdown_dialog();
-			}
+			check_shutdown_dialog();
 			break;
 
 		case M68K_EMUL_OP_IDLE_TIME:
@@ -490,11 +508,7 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 				set_phase(PHASE_DESKTOP);
 				g_desktop_ready_time = elapsed_sec();
 			}
-			/* Check for improper shutdown dialog once desktop is up */
-			if (g_dialogs_dismissed < MAX_DIALOG_DISMISSALS && g_current_phase >= PHASE_FINDER_LAUNCH
-			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
-				check_shutdown_dialog();
-			}
+			check_shutdown_dialog();
 			if (g_current_phase >= PHASE_DESKTOP) {
 				maybe_fire_auto_launch();
 			}
@@ -602,11 +616,7 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 					set_phase(PHASE_FINDER_LAUNCH);
 				}
 			}
-			/* Check for improper shutdown dialog during boot (appears before Finder) */
-			if (g_dialogs_dismissed < MAX_DIALOG_DISMISSALS && g_current_phase >= PHASE_WARM_START
-			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
-				check_shutdown_dialog();
-			}
+			check_shutdown_dialog();
 			break;
 		}
 
@@ -616,10 +626,7 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 				set_phase(PHASE_DESKTOP);
 				g_desktop_ready_time = elapsed_sec();
 			}
-			if (g_dialogs_dismissed < MAX_DIALOG_DISMISSALS && g_current_phase >= PHASE_FINDER_LAUNCH
-			    && config::EmulatorConfig::instance().dismiss_shutdown_dialog) {
-				check_shutdown_dialog();
-			}
+			check_shutdown_dialog();
 			if (g_current_phase >= PHASE_DESKTOP) {
 				maybe_fire_auto_launch();
 			}
