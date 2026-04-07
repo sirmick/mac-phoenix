@@ -28,6 +28,7 @@
 #include "slot_rom.h"
 #include "sony.h"
 #include "disk.h"
+#include "machine_profile.h"
 #include "cdrom.h"
 #include "video.h"
 #include "extfs.h"
@@ -795,9 +796,9 @@ void m68k::InstallDrivers(uint32 pb)
 
 	// Install disk driver
 	// SE ROM's FINDSTARTUPDEVICE only recognizes drivers with refnum
-	// -5 (.Sony), -2, or in range -40..-33 (SCSI).  Use -33 for
-	// Classic ROMs so the drive is found during boot device scan.
-	int diskRef = (ROMVersion == ROM_VERSION_CLASSIC) ? -33 : DiskRefNum;
+	// -5 (.Sony), -2, or in range -40..-33 (SCSI).  Use profile's
+	// disk_refnum so the drive is found during boot device scan.
+	int diskRef = machine_profile().disk_refnum;
 	r.a[0] = ROMBaseMac + sony_offset + 0x100;
 	r.d[0] = (uint32)diskRef;
 	Execute68kTrap(0xa43d, &r);		// DrvrInstallRsrvMem()

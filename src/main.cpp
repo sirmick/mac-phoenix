@@ -41,6 +41,7 @@
 #include "adb.h"
 #include "audio.h"
 #include "rom_patches.h"
+#include "machine_profile.h"
 #include "user_strings.h"
 #include "platform.h"
 #include "extfs.h"
@@ -316,10 +317,10 @@ static bool video_ipc_m68k_init(bool classic)
     const int default_width = cfg.screen_width;
     const int default_height = cfg.screen_height;
 
-    // Classic ROM (SE): fixed 512x342 monochrome display
-    if (ROMVersion == ROM_VERSION_CLASSIC) {
-        g_ipc_m68k_width = 512;
-        g_ipc_m68k_height = 342;
+    // Use machine profile for screen dimensions (e.g. SE: fixed 512x342 mono)
+    if (machine_profile().mono_framebuffer) {
+        g_ipc_m68k_width = machine_profile().screen_width;
+        g_ipc_m68k_height = machine_profile().screen_height;
     } else {
         g_ipc_m68k_width = default_width;
         g_ipc_m68k_height = default_height;

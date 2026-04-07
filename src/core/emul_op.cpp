@@ -28,6 +28,7 @@
 #include "platform.h"      // For g_platform
 #include "unicorn_wrapper.h"  // For g_pending_interrupt_level
 #include "main.h"
+#include "machine_profile.h"
 
 // C linkage for timer interrupt polling (from timer_interrupt.cpp)
 extern "C" {
@@ -229,7 +230,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:	// Patch BootGlobs / unit table alloc
 			D(bug("Patch BootGlobs\n"));
-			if (ROMVersion == ROM_VERSION_CLASSIC) {
+			if (machine_profile().twenty_four_bit) {
 				// Classic ROM: called from $776 (INITCRSRMGR) replacing
 				// _NewPtrSysClear.  Return A0 = unit table in ScratchMem
 				// (immune to zone management that destroys zone allocs).
@@ -286,7 +287,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			// to ScratchMem so that ROM code reading VIA/SCC/IWM/SCSI
 			// registers hits safe zero-filled memory instead of
 			// triggering SIGSEGV on unmapped I/O addresses.
-			if (ROMVersion == ROM_VERSION_CLASSIC) {
+			if (machine_profile().twenty_four_bit) {
 				uint32 sm = Host2MacAddr(ScratchMem);
 				WriteMacInt32(0x1d4, sm);  // VIA1 base
 				WriteMacInt32(0x1d8, sm);  // SCC read base
@@ -301,7 +302,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			// the SIGSEGV handler silently skips the VIA accesses,
 			// leaving TimeDBRA=0.  Any Delay()/Microseconds() call
 			// with TimeDBRA=0 would hang or divide-by-zero.
-			if (ROMVersion == ROM_VERSION_CLASSIC && ReadMacInt16(0xd00) == 0) {
+			if (machine_profile().twenty_four_bit && ReadMacInt16(0xd00) == 0) {
 				WriteMacInt16(0xd00, 10000);  // TimeDBRA
 				WriteMacInt16(0xd02, 10000);  // TimeSCCDBRA
 				WriteMacInt16(0xd04, 10000);  // TimeSCSIDBRA
@@ -546,17 +547,19 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 #if !PRECISE_TIMING
 					TimerInterrupt();
 #endif
-					// Classic ROM: expand 1-bit mono framebuffer to 32-bit ARGB
+					// Mono framebuffer: expand 1-bit mono to 32-bit ARGB
 					// in the_buffer so the video pipeline sees standard pixels.
-					if (ROMVersion == ROM_VERSION_CLASSIC) {
+					if (machine_profile().mono_framebuffer) {
 						uint8 *fb = ::ROMBaseHost + ::ROMSize + 0x10000; // the_buffer
 						uint32 sb = ReadMacInt32(0x824); // ScrnBase
 						if (sb > 0x1000 && sb < RAMSize) {
 							const uint8 *mono = Mac2HostAddr(sb);
 							uint32 *dst = (uint32 *)fb;
-							for (int y = 0; y < 342; y++) {
-								const uint8 *row = mono + y * 64;
-								for (int x = 0; x < 64; x++) {
+							const int h = machine_profile().screen_height;
+							const int rb = machine_profile().screen_row_bytes;
+							for (int y = 0; y < h; y++) {
+								const uint8 *row = mono + y * rb;
+								for (int x = 0; x < rb; x++) {
 									uint8 byte = row[x];
 									for (int bit = 7; bit >= 0; bit--)
 										// Mac ARGB big-endian: black=FF000000, white=FFFFFFFF
@@ -571,13 +574,13 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 					VideoInterrupt();
 
-					// Classic ROM: post disk insertion events until the
+					// 24-bit ROM: post disk insertion events until the
 					// volume is mounted.  The boot block polling loop at
 					// $401176 waits for diskEvent via GetNextEvent. The
 					// normal DiskInterrupt (1Hz) requires acc_run_called
 					// which the SE boot path never sets.  Post events
 					// at 60Hz from here until VCBQHead is non-zero.
-					if (ROMVersion == ROM_VERSION_CLASSIC) {
+					if (machine_profile().twenty_four_bit) {
 						if (ReadMacInt32(0x358) == 0) {  // VCBQHdr.qHead
 							// Post diskEvent for drive 1
 							M68kRegisters dr;

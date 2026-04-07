@@ -41,6 +41,7 @@ using std::vector;
 #include "sys.h"
 #include "disk.h"
 #include "emulator_config.h"
+#include "machine_profile.h"
 
 #define DEBUG 1
 #include "debug.h"
@@ -294,9 +295,8 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 
 			// Add drive to drive queue
 			// SE ROM's FINDSTARTUPDEVICE only accepts refnums -5, -2, or -40..-33.
-			// Use -33 for Classic ROMs (matching InstallDrivers' override).
-			extern uint32 ROMVersion;
-			int drvRef = (ROMVersion == 0x0276) ? -33 : DiskRefNum;
+			// Use profile's disk_refnum (matching InstallDrivers' override).
+			int drvRef = machine_profile().disk_refnum;
 			r.d[0] = (info->num << 16) | (drvRef & 0xffff);
 			r.a[0] = info->status + dsQLink;
 			Execute68kTrap(0xa04e, &r);	// AddDrive()

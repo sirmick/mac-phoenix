@@ -3,6 +3,7 @@
 add_library(config STATIC
   json_utils.cpp
   emulator_config.cpp
+  machine_profile.cpp
 )
 
 target_include_directories(config PUBLIC

@@ -40,6 +40,17 @@ set_tests_properties(extfs PROPERTIES
 
 # --- Boot tests (require ROM, longer timeout) ---
 
+set(TEST_SE_ROM "" CACHE STRING "Path to Mac SE ROM for boot tests")
+
+add_test(NAME boot_se
+    COMMAND ${CMAKE_SOURCE_DIR}/tests/test_boot_se.sh --timeout 30
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(boot_se PROPERTIES
+    TIMEOUT 45
+    LABELS "boot"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_SE_ROM=${TEST_SE_ROM}")
+
 add_test(
   NAME boot_uae_interp
   COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --no-jit --timeout 20 --port 18080

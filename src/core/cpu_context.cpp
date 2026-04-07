@@ -6,6 +6,7 @@
 #include "emulator_init.h"
 #include "main.h"
 #include "rom_patches.h"
+#include "machine_profile.h"
 using namespace m68k;
 #include "cpu_emulation.h"
 #include "newcpu.h"
@@ -179,18 +180,23 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     // Peek ROM version from temp buffer to determine memory layout
     uint16_t rom_version_peek = ntohs(*(uint16_t *)(rom_.get() + 8));
 
+    // Select machine profile EARLY, before any code uses it
+    set_machine_profile(rom_version_peek);
+    const MachineProfile& profile = machine_profile();
+
     // 2. Determine memory layout based on ROM version
     ram_size_ = config.ram_mb * 1024 * 1024;
     uint32_t rom_offset;  // offset of ROM within the mmap block
 
-    if (rom_version_peek == ROM_VERSION_CLASSIC || rom_version_peek == ROM_VERSION_II) {
-        // 24-bit ROMs: ROM lives at Mac $400000 (right after max 4MB RAM).
-        // Clamp RAM to 4MB — SE/Plus/Classic hardware limit.
-        if (ram_size_ > 0x00400000) {
-            fprintf(stderr, "[CPUContext] Clamping RAM to 4 MB for 24-bit ROM\n");
-            ram_size_ = 0x00400000;
+    if (profile.rom_base_mac != 0) {
+        // Fixed ROM base (e.g. 24-bit ROMs: ROM at $400000).
+        // Clamp RAM if the profile has a max_ram limit.
+        if (profile.max_ram != 0 && ram_size_ > profile.max_ram) {
+            fprintf(stderr, "[CPUContext] Clamping RAM to %u MB for %s profile\n",
+                    profile.max_ram / (1024 * 1024), profile.name);
+            ram_size_ = profile.max_ram;
         }
-        rom_offset = 0x00400000;
+        rom_offset = profile.rom_base_mac;
     } else {
         // 32-bit ROMs: ROM immediately follows RAM
         rom_offset = ram_size_;
@@ -255,32 +261,13 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
         return false;
     }
 
-    // 5. Determine CPU type from ROM version
+    // 5. Determine CPU type from machine profile
 #if EMULATED_68K
-    switch (ROMVersion) {
-        case ROM_VERSION_64K:
-        case ROM_VERSION_PLUS:
-        case ROM_VERSION_CLASSIC:
-            cpu_type_ = 0;  // 68000
-            fpu_type_ = 0;
-            twenty_four_bit_ = true;
-            break;
-        case ROM_VERSION_II:
-            cpu_type_ = config.cpu_type_int();
-            if (cpu_type_ < 2) cpu_type_ = 2;
-            if (cpu_type_ > 4) cpu_type_ = 4;
-            fpu_type_ = config.fpu() ? 1 : 0;
-            if (cpu_type_ == 4) fpu_type_ = 1;  // 68040 always with FPU
-            twenty_four_bit_ = true;
-            break;
-        case ROM_VERSION_32:
-            cpu_type_ = config.cpu_type_int();
-            if (cpu_type_ < 2) cpu_type_ = 2;
-            if (cpu_type_ > 4) cpu_type_ = 4;
-            fpu_type_ = config.fpu() ? 1 : 0;
-            if (cpu_type_ == 4) fpu_type_ = 1;  // 68040 always with FPU
-            twenty_four_bit_ = false;
-            break;
+    {
+        const MachineProfile& prof = machine_profile();
+        cpu_type_ = prof.cpu_type;
+        fpu_type_ = prof.fpu ? 1 : 0;
+        twenty_four_bit_ = prof.twenty_four_bit;
     }
     CPUIs68060 = false;
 
