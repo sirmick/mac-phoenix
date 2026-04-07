@@ -25,15 +25,19 @@ zone plus trap/resource-based lookups for everything else.
 
 | Offset | Content | Purpose |
 |---|---|---|
-| `$0000` | `97 85 1D B6` | Apple checksum |
+| `$0000` | `97 85 1D B6` | Apple checksum (also initial SSP) |
 | `$0004` | `40 80 00 2A` | Initial PC |
 | `$0008` | `01 78`       | ROM version word |
-| `$002A` | trampoline → `$8A` | Reset entry |
+| `$002A` | `jmp thunk` → `$90` | Reset entry (jumps to thunk at $90) |
+| `$0090` | `jmp thunk_FUN_4083F856` | Thunk to reset code in high ROM |
+| `$0096` | `jmp FUN_40802A14` | SYSERRINIT thunk (not used at reset) |
+| `$009A` | `bsr INITVIA` | STARTINIT1 entry |
 
-The reset vector chain lands at **`STARTINIT1`** (`$4080009A`), which
-is much shorter than IIci's because Mac II has no MMU init, no Slot
-Manager init in the early chain (deferred to BOOTRETRY), and no IOP
-manager layer.
+The reset flow is: `$002A` → `$0090` (thunk) → `$83F856`
+(high-ROM init: sets SR=$2700, configures VBR/CACR) → falls through
+to **`STARTINIT1`** at `$009A`.  This is shorter than IIci's because
+Mac II has no UniversalInfo, no IOP manager, and defers NuBus/Slot
+Manager init to BOOTRETRY.
 
 ---
 

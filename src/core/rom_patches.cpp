@@ -920,8 +920,8 @@ bool m68k::CheckROM(void)
 	// Real addressing requires a 32-bit clean ROM (no address masking layer)
 	return ROMVersion == ROM_VERSION_32;
 #else
-	// Direct and virtual addressing support Classic ROMs via 24-bit address masking
-	return (ROMVersion == ROM_VERSION_CLASSIC) || (ROMVersion == ROM_VERSION_32);
+	// Direct and virtual addressing support Classic and Mac II ROMs via 24-bit address masking
+	return (ROMVersion == ROM_VERSION_CLASSIC) || (ROMVersion == ROM_VERSION_II) || (ROMVersion == ROM_VERSION_32);
 #endif
 }
 
@@ -1116,6 +1116,312 @@ static bool patch_rom_classic(void)
 	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
 	*wp++ = htons(0x4a80);		// tst.l	d0
 	*wp = htons(0x67f4);		// beq		0x402be2
+	return true;
+}
+
+// ROM patches for Mac II/IIx/IIcx/SE30 ROMs (version $0178)
+// Hybrid approach: fixed-offset patches for STARTINIT1/BOOTRETRY
+// (no UniversalInfo), portable lookups for drivers and traps.
+static bool patch_rom_ii(void)
+{
+	uint16 *wp;
+	uint32 base;
+
+	// === Skip STARTINIT1 hardware init ===
+	// Mac II I/O addresses ($50F0xxxx) map to RAM in 24-bit mode,
+	// causing hardware init routines to hang.  Replace the reset
+	// entry thunk at $90 (jmp thunk_FUN_4083f856) with inline code
+	// that sets up basic state and jumps to the memory init at $F2.
+	//
+	// The reset flow is: $2A → $90 → $83F856 → ... → $9A (STARTINIT1).
+	// We intercept at $90 (10 bytes available: $90-$99).
+	// Then patch $9A onwards with the rest of the setup.
+	{
+		uint32 ram = RAMSize;
+		uint32 stack = (ram > 0x40000) ? 0x40000 : ram;
+
+		// At $90: was "jmp thunk_FUN_4083f856" (6 bytes)
+		// Replace with: move #$2700,SR (4 bytes) + NOP (2 bytes)
+		wp = (uint16 *)(ROMBaseHost + 0x90);
+		*wp++ = htons(0x46fc);			// move #$2700,SR
+		*wp++ = htons(0x2700);
+		*wp = htons(M68K_NOP);
+		// Falls through to $96 (jmp FUN_40802A14 = SYSERRINIT thunk, 6 bytes)
+		// NOP that too
+		wp = (uint16 *)(ROMBaseHost + 0x96);
+		*wp++ = htons(M68K_NOP);
+		*wp++ = htons(M68K_NOP);
+		*wp = htons(M68K_NOP);
+
+		// At $9A: set A6, D7, A1 for FILLWITHONES, JMP to $F2.
+		// FILLWITHONES clears low-mem $100..$1E00 and sets exception vectors.
+		// Then SYSERRINIT at $112 is NOP'd (it calls ADB/sound init).
+		wp = (uint16 *)(ROMBaseHost + 0x9a);
+		*wp++ = htons(0x2c7c);			// movea.l #RAMSize,A6
+		*wp++ = htons(ram >> 16);
+		*wp++ = htons(ram & 0xffff);
+		*wp++ = htons(0x7e02);			// moveq #2,D7 (68020)
+		*wp++ = htons(0x227c);			// movea.l #stack,A1
+		*wp++ = htons(stack >> 16);
+		*wp++ = htons(stack & 0xffff);
+		*wp++ = htons(M68K_JMP);		// jmp ROMBase+$F2
+		*wp++ = htons((ROMBaseMac + 0xf2) >> 16);
+		*wp = htons((ROMBaseMac + 0xf2) & 0xffff);
+	}
+
+	// After JMP to $F2: FILLWITHONES runs, CPUFlag and MemTop set.
+	// SYSERRINIT at $112 runs and installs exception vectors (needed).
+	// But the PMMU setup code at $3B32 uses pmove instructions which
+	// cause F-line exceptions on 68020 without PMMU. NOP the PMMU block.
+	// $3B32: pmove.l ...,TC (6 bytes)
+	// $3B38: pmove.d (A0),CRP (4 bytes)
+	// $3B3C: pmove.l (8,A0),TC (6 bytes)
+	wp = (uint16 *)(ROMBaseHost + 0x3b32);
+	for (int i = 0; i < 8; i++) *wp++ = htons(M68K_NOP);  // 16 bytes = $3B32-$3B41
+
+	// Skip SETUPTIMEK (bsr.w at $118)
+	wp = (uint16 *)(ROMBaseHost + 0x118);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Skip VIATIMERENABLES (bsr.w at $11C)
+	wp = (uint16 *)(ROMBaseHost + 0x11c);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Skip MMU_INIT (jsr at $120, 6 bytes)
+	wp = (uint16 *)(ROMBaseHost + 0x120);
+	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Skip warm-restart probe at $124 (movem from $F80080, 6 bytes)
+	wp = (uint16 *)(ROMBaseHost + 0x124);
+	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Skip INITHIMEMGLOBALS at $13E (bsr, 4 bytes)
+	wp = (uint16 *)(ROMBaseHost + 0x13e);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// === Fixed-offset patches: BOOTRETRY ===
+
+	// NOP indirect jsr at $148 (reads ($DBC) which is uninitialized)
+	wp = (uint16 *)(ROMBaseHost + 0x146);
+	*wp++ = htons(M68K_NOP);  // moveq #1,D0
+	*wp++ = htons(M68K_NOP);  // movea.l ($DBC),A0
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);    // jsr (A0)
+
+	// NOP VIA2 IER write at $014E (movea.l #$50F02000 + move.b → 10 bytes)
+	wp = (uint16 *)(ROMBaseHost + 0x14e);
+	for (int i = 0; i < 5; i++) *wp++ = htons(M68K_NOP);
+
+	// NOP VIA2 IER write at $01F4 (same pattern, 10 bytes)
+	wp = (uint16 *)(ROMBaseHost + 0x1f4);
+	for (int i = 0; i < 5; i++) *wp++ = htons(M68K_NOP);
+
+	// Skip NuBus slot scan — no real NuBus cards (bsr at $186)
+	wp = (uint16 *)(ROMBaseHost + 0x186);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Skip ADB init (jsr at $1A0, 6 bytes) — ADB polling loop hangs
+	// without real ADB hardware. Our ADBOp() replacement handles ADB.
+	wp = (uint16 *)(ROMBaseHost + 0x1a0);
+	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Skip DRAWBEEPSCREEN (bsr at $200, 4 bytes) — uses NuBus slot
+	// manager to find video card. Without real NuBus, will fail.
+	wp = (uint16 *)(ROMBaseHost + 0x200);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Skip IOP dispatcher polling loop in INITIOMGR ($6DD8-$6DDE).
+	// The loop waits for bit 5 at (0x15D,A3) to clear — requires
+	// a real IOP (I/O Processor) which we don't emulate.
+	// NOP the bset that sets the bit, and NOP the polling loop.
+	wp = (uint16 *)(ROMBaseHost + 0x6dcc);  // bset.b #5,(0x15D,A3) → NOP
+	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Allocate unit table in ScratchMem instead of zone.
+	// _NewPtrSysClear at $DAC (INITCRSRMGR) → PATCH_BOOT_GLOBS.
+	// Zone management (_SetApplBase) can destroy zone-allocated blocks;
+	// ScratchMem is outside the zone and immune.
+	wp = (uint16 *)(ROMBaseHost + 0xdac);
+	*wp = htons(platform_make_emulop(M68K_EMUL_OP_PATCH_BOOT_GLOBS));
+
+	// Hook .Sound driver _Open to install our own drivers.
+	// .Sound DRVR at $2F010, Open handler at $2F02A.
+	wp = (uint16 *)(ROMBaseHost + 0x2f02a);
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
+	*wp = htons(M68K_RTS);
+
+	fprintf(stderr, "[patch_rom_ii] All patches applied successfully\n");
+
+	// === Portable trap-based patches ===
+
+	// Patch ClkNoMem (clock/PRAM without Memory Manager)
+	base = find_rom_trap(0xa053);
+	fprintf(stderr, "[patch_rom_ii] ClkNoMem=%08x\n", base);
+	if (base) {
+		wp = (uint16 *)(ROMBaseHost + base);
+		*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_CLKNOMEM));
+		*wp = htons(0x4ed5);		// jmp	(a5)
+	}
+
+	// === Fixed-offset resource patches ===
+	// 256KB ROMs ($0178) use a resource map format that find_rom_resource
+	// cannot parse (pointers exceed ROM size).  Use verified fixed offsets.
+
+	// Replace .Sony driver (DRVR header at $2D72C, name ".Sony" at +18)
+	sony_offset = 0x2d72c;
+	memcpy(ROMBaseHost + sony_offset, sony_driver, sizeof(sony_driver));
+
+	// Install .Disk and .AppleCD drivers
+	memcpy(ROMBaseHost + sony_offset + 0x100, disk_driver, sizeof(disk_driver));
+	memcpy(ROMBaseHost + sony_offset + 0x200, cdrom_driver, sizeof(cdrom_driver));
+
+	// Copy icons to ROM
+	SonyDiskIconAddr = ROMBaseMac + sony_offset + 0x400;
+	memcpy(ROMBaseHost + sony_offset + 0x400, SonyDiskIcon, sizeof(SonyDiskIcon));
+	SonyDriveIconAddr = ROMBaseMac + sony_offset + 0x600;
+	memcpy(ROMBaseHost + sony_offset + 0x600, SonyDriveIcon, sizeof(SonyDriveIcon));
+	DiskIconAddr = ROMBaseMac + sony_offset + 0x800;
+	memcpy(ROMBaseHost + sony_offset + 0x800, DiskIcon, sizeof(DiskIcon));
+	CDROMIconAddr = ROMBaseMac + sony_offset + 0xa00;
+	memcpy(ROMBaseHost + sony_offset + 0xa00, CDROMIcon, sizeof(CDROMIcon));
+
+	// Install SERD patch and serial drivers (SERD data at $2AB5C)
+	serd_offset = 0x2ab5c;
+	wp = (uint16 *)(ROMBaseHost + serd_offset + 12);
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_SERD));
+	*wp = htons(M68K_RTS);
+	memcpy(ROMBaseHost + serd_offset + 0x100, ain_driver, sizeof(ain_driver));
+	memcpy(ROMBaseHost + serd_offset + 0x200, aout_driver, sizeof(aout_driver));
+	memcpy(ROMBaseHost + serd_offset + 0x300, bin_driver, sizeof(bin_driver));
+	memcpy(ROMBaseHost + serd_offset + 0x400, bout_driver, sizeof(bout_driver));
+
+	// Replace ADBOp()
+	uint32 adbop_offset = find_rom_trap(0xa07c);
+	if (adbop_offset)
+		memcpy(ROMBaseHost + adbop_offset, adbop_patch, sizeof(adbop_patch));
+
+	// Patch EmulOps in driver code arrays for Unicorn backend
+	patch_emulops_for_aline(ROMBaseHost + sony_offset, sizeof(sony_driver));
+	patch_emulops_for_aline(ROMBaseHost + sony_offset + 0x100, sizeof(disk_driver));
+	patch_emulops_for_aline(ROMBaseHost + sony_offset + 0x200, sizeof(cdrom_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x100, sizeof(ain_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x200, sizeof(aout_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x300, sizeof(bin_driver));
+	patch_emulops_for_aline(ROMBaseHost + serd_offset + 0x400, sizeof(bout_driver));
+	if (adbop_offset)
+		patch_emulops_for_aline(ROMBaseHost + adbop_offset, sizeof(adbop_patch));
+
+	// Replace Time Manager
+	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa058));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTIME));
+	*wp = htons(M68K_RTS);
+	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa059));
+	*wp++ = htons(0x40e7);		// move	sr,-(sp)
+	*wp++ = htons(0x007c);		// ori	#$0700,sr
+	*wp++ = htons(0x0700);
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_RMVTIME));
+	*wp++ = htons(0x46df);		// move	(sp)+,sr
+	*wp = htons(M68K_RTS);
+	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa05a));
+	*wp++ = htons(0x40e7);		// move	sr,-(sp)
+	*wp++ = htons(0x007c);		// ori	#$0700,sr
+	*wp++ = htons(0x0700);
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PRIMETIME));
+	*wp++ = htons(0x46df);		// move	(sp)+,sr
+	*wp++ = htons(M68K_RTS);
+	microseconds_offset = (uint8 *)wp - ROMBaseHost;
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_MICROSECONDS));
+	*wp++ = htons(M68K_RTS);
+
+	// Replace DebugUtil
+	debugutil_offset = (uint8 *)wp - ROMBaseHost;
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_DEBUGUTIL));
+	*wp = htons(M68K_RTS);
+
+	// Replace SCSIDispatch()
+	wp = (uint16 *)(ROMBaseHost + find_rom_trap(0xa815));
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_SCSI_DISPATCH));
+	*wp++ = htons(0x2e49);		// move.l	a1,a7
+	*wp = htons(M68K_JMP_A0);
+
+	// Modify vCheckLoad() so we can patch resources
+	// vCheckLoad dispatch at $13078: move.l $07f0,a0; jmp (a0)
+	wp = (uint16 *)(ROMBaseHost + 0x13078);
+	*wp++ = htons(M68K_JMP);
+	*wp++ = htons((ROMBaseMac + sony_offset + 0x300) >> 16);
+	*wp = htons((ROMBaseMac + sony_offset + 0x300) & 0xffff);
+	wp = (uint16 *)(ROMBaseHost + sony_offset + 0x300);
+	*wp++ = htons(0x2f03);		// move.l	d3,-(sp) (save type)
+	*wp++ = htons(0x2078);		// move.l	$07f0,a0
+	*wp++ = htons(0x07f0);
+	*wp++ = htons(M68K_JSR_A0);
+	*wp++ = htons(0x221f);		// move.l	(sp)+,d1 (restore type)
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_CHECKLOAD));
+	*wp = htons(M68K_RTS);
+
+	// Patch PowerOff()
+	base = find_rom_trap(0xa05b);
+	if (base) {
+		wp = (uint16 *)(ROMBaseHost + base);
+		*wp = htons(platform_make_emulop(M68K_EMUL_OP_SHUTDOWN));
+	}
+
+	// Install PutScrap() patch for clipboard exchange
+	PutScrapPatch = ROMBaseMac + sony_offset + 0xc00;
+	base = ROMBaseMac + find_rom_trap(0xa9fe);
+	wp = (uint16 *)(ROMBaseHost + sony_offset + 0xc00);
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_PUT_SCRAP));
+	*wp++ = htons(M68K_JMP);
+	*wp++ = htons(base >> 16);
+	*wp = htons(base & 0xffff);
+
+	// Install GetScrap() patch for clipboard exchange
+	GetScrapPatch = ROMBaseMac + sony_offset + 0xd00;
+	base = ROMBaseMac + find_rom_trap(0xa9fd);
+	wp = (uint16 *)(ROMBaseHost + sony_offset + 0xd00);
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_GET_SCRAP));
+	*wp++ = htons(M68K_JMP);
+	*wp++ = htons(base >> 16);
+	*wp = htons(base & 0xffff);
+
+	// FPU check: $0178 ROM doesn't require FPU (68020/030 + optional 68881/882)
+	// Skip the PACK 4 resource check used by $067c ROMs.
+
+	// Patch VIA interrupt handler.
+	// Mac II Level 1 handler at $608E uses a table-driven VIA1 dispatch
+	// (30 bytes: lea table, read IFR, bit-walk, jsr handler).
+	// Replace with a simple IRQ EmulOp poll loop.
+	wp = (uint16 *)(ROMBaseHost + 0x608e);
+	*wp++ = htons(M68K_NOP);		// $608E: was lea ($18E),A0
+	*wp++ = htons(M68K_NOP);		// $6090
+	*wp++ = htons(M68K_NOP);		// $6092: was movea.l ($1D4),A1
+	*wp++ = htons(M68K_NOP);		// $6094
+	*wp++ = htons(M68K_NOP);		// $6096: was move.b VIA IFR
+	*wp++ = htons(M68K_NOP);		// $6098
+	*wp++ = htons(M68K_NOP);		// $609A: was and.b VIA IER
+	*wp++ = htons(M68K_NOP);		// $609C
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ)); // $609E: IRQ handler
+	*wp++ = htons(0x4a80);			// $60A0: tst.l d0
+	*wp++ = htons(0x67ea);			// $60A2: beq.b $608E (loop if no work)
+	*wp++ = htons(M68K_NOP);		// $60A4: was lsr/bcc
+	*wp++ = htons(M68K_NOP);		// $60A6
+	*wp++ = htons(M68K_NOP);		// $60A8: was movea.l (A0),A0
+	*wp = htons(M68K_NOP);			// $60AA: was jsr (A0)
+	// Falls through to $60AC: normal post-interrupt return (deferred tasks + RTE)
+
 	return true;
 }
 
@@ -1813,6 +2119,10 @@ static bool PatchROM_UAE(void)
 	switch (ROMVersion) {
 		case ROM_VERSION_CLASSIC:
 			if (!patch_rom_classic())
+				return false;
+			break;
+		case ROM_VERSION_II:
+			if (!patch_rom_ii())
 				return false;
 			break;
 		case ROM_VERSION_32:

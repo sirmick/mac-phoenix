@@ -17,6 +17,22 @@ static const MachineProfile profile_se = {
     64              // screen_row_bytes
 };
 
+static const MachineProfile profile_macii = {
+    "macii",
+    0x0178,         // rom_version
+    0x800000,       // rom_base_mac (8MB, 24-bit: $40800000 masked)
+    0x800000,       // max_ram (8MB limit in 24-bit mode)
+    2,              // cpu_type = 68020
+    false,          // fpu (optional)
+    true,           // twenty_four_bit
+    6,              // model_id (Mac II)
+    -33,            // disk_refnum (FINDSTARTUPDEVICE range)
+    640,            // screen_width
+    480,            // screen_height
+    false,          // mono_framebuffer (color!)
+    0               // screen_row_bytes (computed by video driver)
+};
+
 static const MachineProfile profile_quadra = {
     "quadra",
     0x067c,         // rom_version
@@ -39,6 +55,8 @@ void set_machine_profile(uint16_t rom_version)
 {
     if (rom_version == 0x0276) {
         g_profile = &profile_se;
+    } else if (rom_version == 0x0178) {
+        g_profile = &profile_macii;
     } else {
         g_profile = &profile_quadra;
     }
