@@ -238,7 +238,7 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
         }
 
         int16_t  vRefNum    = 0;
-        uint32_t parID      = 2;  // HFS root dir ID
+        uint32_t parID      = 0;  // 0 = resolve colon-separated path from volume root
         int      leaf_start = 0;
 
         if (colon_pos >= 0) {
@@ -263,6 +263,13 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
                 if (ReadMacInt16(pb_addr + 16) != 0) break;
 
                 uint8_t rvnlen = ReadMacInt8(vol_name_addr);
+                {
+                    char vn[64] = {};
+                    for (int i = 0; i < rvnlen && i < 63; i++)
+                        vn[i] = ReadMacInt8(vol_name_addr + 1 + i);
+                    fprintf(stderr, "[CommandBridge] Vol[%d] = '%s' (vRefNum=%d)\n",
+                            idx, vn, (int16_t)ReadMacInt16(pb_addr + 22));
+                }
                 if (rvnlen == (uint8_t)vnlen) {
                     bool match = true;
                     for (int i = 0; i < vnlen; i++) {
@@ -288,15 +295,86 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
             leaf_start = colon_pos + 1;
         }
 
-        uint8_t leaf_len = namelen - leaf_start;
-        if (leaf_len > 63) leaf_len = 63;
+        // Resolve colon-separated path directory-by-directory using _PBHGetCatInfo.
+        // Split "MPW-PR:MPW:MPW Shell" into components and walk each one.
+        uint32_t cur_dirID = 2;  // start at root (fsRtDirID)
+        int path_pos = leaf_start;
+        char component[64];
 
-        // Build FSSpec: vRefNum(2) + parID(4) + name[64]
-        WriteMacInt16(fsspec_addr + 0, vRefNum);
-        WriteMacInt32(fsspec_addr + 2, parID);
-        WriteMacInt8(fsspec_addr + 6, leaf_len);
-        for (int i = 0; i < leaf_len; i++)
-            WriteMacInt8(fsspec_addr + 7 + i, static_cast<uint8_t>(name[leaf_start + i]));
+        while (path_pos < namelen) {
+            // Extract next path component (up to colon or end)
+            int comp_len = 0;
+            while (path_pos + comp_len < namelen && name[path_pos + comp_len] != ':' && comp_len < 63)
+                comp_len++;
+
+            for (int i = 0; i < comp_len; i++) component[i] = name[path_pos + i];
+            component[comp_len] = '\0';
+
+            bool is_last = (path_pos + comp_len >= namelen || name[path_pos + comp_len] != ':');
+
+            if (is_last) {
+                // Last component = the filename. Build FSSpec directly.
+                WriteMacInt16(fsspec_addr + 0, vRefNum);
+                WriteMacInt32(fsspec_addr + 2, cur_dirID);
+                WriteMacInt8(fsspec_addr + 6, comp_len);
+                for (int i = 0; i < comp_len; i++)
+                    WriteMacInt8(fsspec_addr + 7 + i, static_cast<uint8_t>(component[i]));
+                break;
+            }
+
+            // Intermediate component = directory. Resolve via _PBHGetCatInfo.
+            uint32_t path_str_addr = SCRATCH_BASE + 0xE80;
+            WriteMacInt8(path_str_addr, comp_len);
+            for (int i = 0; i < comp_len; i++)
+                WriteMacInt8(path_str_addr + 1 + i, static_cast<uint8_t>(component[i]));
+
+            for (int i = 0; i < 108; i++) WriteMacInt8(pb_addr + i, 0);
+            WriteMacInt32(pb_addr + 18, path_str_addr);  // ioNamePtr
+            WriteMacInt16(pb_addr + 22, vRefNum);         // ioVRefNum
+            WriteMacInt16(pb_addr + 28, 0);               // ioFDirIndex = 0
+            WriteMacInt32(pb_addr + 48, cur_dirID);       // ioDirID
+
+            M68kRegisters ci_regs;
+            memset(&ci_regs, 0, sizeof(ci_regs));
+            ci_regs.a[0] = pb_addr;
+            ci_regs.d[0] = 9;                 // selector for PBGetCatInfo
+            Execute68kTrap(0xA260, &ci_regs);  // _HFSDispatch(PBGetCatInfo)
+
+            int16_t ci_err = static_cast<int16_t>(ReadMacInt16(pb_addr + 16));
+            if (ci_err != 0) {
+                fprintf(stderr, "[CommandBridge] Dir '%s' not found (err=%d, dirID=%u)\n",
+                        component, ci_err, cur_dirID);
+                WriteMacInt16(MB_RESULT_ERR, ci_err);
+                WriteMacInt8(MB_RESULT_FLAG, 1);
+                break;  // break out of while loop
+            }
+
+            // For directories: ioFlAttrib bit 4 is set, ioDrDirID at +48
+            uint8_t attrib = ReadMacInt8(pb_addr + 30);
+            int16_t ci_result = static_cast<int16_t>(ReadMacInt16(pb_addr + 16));
+            fprintf(stderr, "[CommandBridge] CatInfo: result=%d attrib=0x%02X dirID_48=%u parID_100=%u\n",
+                    ci_result, attrib, ReadMacInt32(pb_addr + 48), ReadMacInt32(pb_addr + 100));
+            if (attrib & 0x10) {
+                // It's a directory — ioDrDirID at +48 has the dir's own ID
+                cur_dirID = ReadMacInt32(pb_addr + 48);
+            } else {
+                // It's a file in an intermediate position — error
+                fprintf(stderr, "[CommandBridge] '%s' is a file, not a directory\n", component);
+                WriteMacInt16(MB_RESULT_ERR, -120);  // dirNFErr
+                WriteMacInt8(MB_RESULT_FLAG, 1);
+                break;
+            }
+            fprintf(stderr, "[CommandBridge] Dir '%s' -> dirID=%u (attrib=0x%02X)\n",
+                    component, cur_dirID, attrib);
+
+            path_pos += comp_len + 1;  // skip component + colon
+        }
+
+        // Check if path resolution failed (result already written)
+        if (ReadMacInt8(MB_RESULT_FLAG)) break;
+
+        fprintf(stderr, "[CommandBridge] FSSpec: vRefNum=%d parID=%u name='%s'\n",
+                vRefNum, cur_dirID, component);
 
         // --- Step 2: Build extended LaunchParamBlockRec ---
         // Layout from Inside Macintosh: Processes, Ch.2:
