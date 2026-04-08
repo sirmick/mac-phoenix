@@ -300,7 +300,39 @@ shared code, not machine-specific branches.
 
 ---
 
-## 11. See also
+## 11. Emulator patches (`patch_rom_ii`)
+
+The emulator's `patch_rom_ii()` in `src/core/rom_patches.cpp` applies
+fixed-offset patches to bypass hardware that isn't emulated. Key patches:
+
+**Reset + FUN_40802A14** (hardware probe at `$2A14`):
+- NOP pmove at `$3F872` (no PMMU on 68020)
+- NOP all `movec VBR` writes (`$2A20,$2BD2,$2C30,$2D08,$2ECA`) — keep
+  VBR=0 so SYSERRINIT handlers at `$08-$FC` dispatch A-line traps
+- NOP sub-function calls (`$2B14,$2B36,$2B4E,$2B62,$2B76`) that probe
+  I/O at `$50F0xxxx` (maps to RAM zeros in 24-bit mode)
+- Skip BOOTBEEP (`$2EBE`, `$2C64`) and ADB scan (`$2ECE` → JMP `$9A`)
+
+**STARTINIT1** (`$9A`):
+- NOP VIA/SCC/IWM/SCSI BSR calls (`$9A,$9E,$A2,$A6`)
+- Fix A6=RAMSize at `$AE` (FUN_40802A14 sets A6 to old SP, not MemTop)
+- Clear `$CB1`/`$CB2` at `$118` after FILLWITHONES (MMU mode flags)
+
+**BOOTRETRY** (`$142`):
+- NOP INITSLOTS (`$186`), ADB init (`$1A0`), VIA2 writes (`$146-$14E`)
+- NOP IOP polling in INITIOMGR (`$6DCC`)
+- INSTALL_DRIVERS EmulOp hooked at .Sound `_Open` (`$2F02A`)
+- PATCH_BOOT_GLOBS EmulOp at `$DAC` (unit table → ScratchMem)
+- SwapMMUMode always 24-bit path (`$3B24,$3B62`)
+- _SetTrapAddress skip 32-bit thunk (`$4F54`)
+
+**Drivers**: .Sony replaced at `$2D72C`, serial _Open NOP'd, SERD
+patched at `$2AB5C+12`, all via fixed offsets (find_rom_resource
+doesn't work on 256KB ROMs). Trap-based patches use find_rom_trap.
+
+---
+
+## 12. See also
 
 - `docs/roms/dissam/macii/rom.lst` — build artifact, the annotated listing
 - `docs/roms/dissam/maciix/rom.lst` — the shared Mac IIx/IIcx/SE30 ROM
