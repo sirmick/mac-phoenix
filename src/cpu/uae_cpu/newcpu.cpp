@@ -778,16 +778,14 @@ void Exception(int nr, uaecptr oldpc)
 		uint32 table = is_tb ? 0x0E00 : 0x0400;
 		uint16 idx = trap & 0x01FF;
 		uint32 handler = get_long(table + idx * 4);
-		// Log first 5 A-line traps with trap table state
+		// Log first 5 A-line traps with VBR and vector state
 		{
 			static int aline_count = 0;
 			if (++aline_count <= 5) {
 				uint32 vec28 = get_long(0x28);
-				uint32 os_a198 = get_long(0x400 + 0x198*4);  // OS table
-				uint32 tb_a198 = get_long(0xe00 + 0x198*4);  // Toolbox table
-				uint32 rom2ae = get_long(0x2ae);
-				fprintf(stderr, "[A-LINE #%d] $%04X PC=$%08X handler=$%08X vec28=$%08X OS[$198]=$%08X TB[$198]=$%08X ROMBase($2AE)=$%08X\n",
-					aline_count, trap, currpc, handler, vec28, os_a198, tb_a198, rom2ae);
+				uint32 vbr_vec = get_long(regs.vbr + 40);
+				fprintf(stderr, "[A-LINE #%d] $%04X PC=$%08X handler=$%08X VBR=$%08X vec@VBR+40=$%08X vec@$28=$%08X\n",
+					aline_count, trap, currpc, handler, regs.vbr, vbr_vec, vec28);
 			}
 		}
 		if (handler == 0x400768) {

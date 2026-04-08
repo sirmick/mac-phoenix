@@ -1170,10 +1170,18 @@ static bool patch_rom_ii(void)
 	// is the first instruction after the ADB scan loops.
 	// After $3296: the code checks D7 flags and continues to
 	// STARTINIT1 at $9A (our NOP'd hardware BSRs).
+	// NOP ALL VBR writes in FUN_40802A14 except $2BA2 (which sets VBR=0).
+	// The probe handlers at VBR=$8028xx retry exceptions via RTE, which
+	// causes infinite loops when A-line traps fire during BOOTRETRY.
+	// We need VBR=0 so SYSERRINIT's handlers dispatch traps correctly.
+	// movec reg,VBR = 4 bytes (4E7B xxxx) → 2 NOPs each
+	for (uint32 ofs : {0x2a20u, 0x2bd2u, 0x2c30u, 0x2d08u, 0x2ecau}) {
+		wp = (uint16 *)(ROMBaseHost + ofs);
+		*wp++ = htons(M68K_NOP);
+		*wp = htons(M68K_NOP);
+	}
+
 	// Skip ADB scan: JMP from $2ECE to STARTINIT1 at $9A.
-	// $2EC2-$2ECC sets VBR (movec A0,VBR). $2ECE starts ADB init
-	// which hangs without real ADB hardware. Skip it and go straight
-	// to STARTINIT1 (which has NOP'd hardware BSRs).
 	wp = (uint16 *)(ROMBaseHost + 0x2ece);
 	*wp++ = htons(M68K_JMP);
 	*wp++ = htons((ROMBaseMac + 0x9a) >> 16);
