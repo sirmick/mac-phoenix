@@ -207,14 +207,14 @@ static __inline__ uaecptr m68k_getpc (void)
 
 static __inline__ void m68k_setpc (uaecptr newpc)
 {
-	// Debug: detect PC set to zero-filled memory (past ROM+scratch)
+	// Debug: detect when boot reaches $204 (WLSC write) or $E96 (BOOTME)
 	{
 		uaecptr masked = newpc & 0x00FFFFFF;
-		if (masked > 0x850000 && masked < 0xFFF000) {
-			static int wild_pc = 0;
-			if (++wild_pc <= 3)
-				fprintf(stderr, "[WILD-PC] setpc(%08x) masked=%08x from prev=%08x\n",
-					newpc, masked, m68k_getpc());
+		if (masked == 0x800204 || masked == 0x800e96) {
+			static int milestone = 0;
+			if (++milestone <= 5)
+				fprintf(stderr, "[MILESTONE] PC=%08x (%s)\n", newpc,
+					masked == 0x800204 ? "WLSC" : "BOOTME");
 		}
 	}
 #if ENABLE_MON

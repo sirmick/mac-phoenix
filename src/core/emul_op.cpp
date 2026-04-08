@@ -293,6 +293,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_INSTALL_DRIVERS: {// Patch to install our own drivers during startup
+			fprintf(stderr, "[EMULOP] INSTALL_DRIVERS fired\n");
 			D(bug("InstallDrivers\n"));
 
 			// For 24-bit ROMs (SE/Classic): redirect hardware base globals
