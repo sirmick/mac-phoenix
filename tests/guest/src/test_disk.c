@@ -56,6 +56,7 @@ void test_disk(void)
     }
     count = sizeof(writeBuf) - 1;
     err = FSWrite(refNum, &count, writeBuf);
+    FlushVol(NULL, spec.vRefNum);
     FSClose(refNum);
     if (err != noErr) {
         report_fail("disk_write", err);

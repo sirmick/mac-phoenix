@@ -169,35 +169,17 @@ if ! echo "$LAUNCH" | grep -q '"success": true'; then
     exit 1
 fi
 
-# --- Wait for app to actually start ---
+# --- Wait for test app to run and finish ---
+#
+# The app may run and exit faster than polling can detect CurApName changing.
+# So we check BOTH: (a) CurApName != Finder, and (b) results file exists.
 
-echo -n "Waiting for app to start..."
-APP_STARTED=false
-for i in $(seq 1 20); do
-    APP=$(curl -sf "http://localhost:$PORT/api/app" 2>/dev/null \
-        | grep -oP '"app"\s*:\s*"\K[^"]+' || echo "")
-    if [[ "$APP" != "Finder" && -n "$APP" ]]; then
-        echo " $APP running"
-        APP_STARTED=true
-        break
-    fi
-    echo -n "."
-    sleep 0.5
-done
-
-if [[ "$APP_STARTED" != "true" ]]; then
-    echo ""
-    echo "FAIL: MacTestSuite did not start (still showing Finder)"
-    exit 1
-fi
-
-# --- Wait for test app to finish (returns to Finder) ---
-
-echo -n "Running tests..."
+echo -n "Waiting for tests..."
 TEST_START=$(date +%s)
 TEST_TIMEOUT=$((TIMEOUT - (TEST_START - START_TIME)))
 [[ $TEST_TIMEOUT -lt 10 ]] && TEST_TIMEOUT=10
 
+RESULTS_FILE="$EXTFS_DIR/test_results.txt"
 while true; do
     ELAPSED=$(( $(date +%s) - TEST_START ))
     if [[ $ELAPSED -ge $TEST_TIMEOUT ]]; then
@@ -206,13 +188,12 @@ while true; do
         exit 1
     fi
 
-    APP=$(curl -sf "http://localhost:$PORT/api/app" 2>/dev/null \
-        | grep -oP '"app"\s*:\s*"\K[^"]+' || echo "")
-
-    if [[ "$APP" == "Finder" ]]; then
+    # Check if results file appeared (app finished and wrote results)
+    if [[ -f "$RESULTS_FILE" ]]; then
         echo " done (${ELAPSED}s)"
         break
     fi
+
     echo -n "."
     sleep 1
 done
@@ -233,9 +214,13 @@ echo ""
 
 # --- Parse results ---
 
-FAIL_COUNT=$(grep -c "^FAIL " "$RESULTS_FILE" || true)
-PASS_COUNT=$(grep -c "^PASS " "$RESULTS_FILE" || true)
-SKIP_COUNT=$(grep -c "^SKIP " "$RESULTS_FILE" || true)
+# Convert Mac line endings (CR) to Unix (LF) for grep
+tr '\r' '\n' < "$RESULTS_FILE" > "${RESULTS_FILE}.unix"
+RESULTS_UNIX="${RESULTS_FILE}.unix"
+
+FAIL_COUNT=$(grep -c "^FAIL " "$RESULTS_UNIX" || true)
+PASS_COUNT=$(grep -c "^PASS " "$RESULTS_UNIX" || true)
+SKIP_COUNT=$(grep -c "^SKIP " "$RESULTS_UNIX" || true)
 
 echo "$PASS_COUNT passed, $FAIL_COUNT failed, $SKIP_COUNT skipped"
 

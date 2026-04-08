@@ -45,6 +45,7 @@ void test_extfs(void)
     }
     count = TEST_DATA_LEN;
     err = FSWrite(refNum, &count, TEST_DATA);
+    FlushVol(NULL, spec.vRefNum);
     FSClose(refNum);
     if (err != noErr || count != TEST_DATA_LEN) {
         report_fail("extfs_write", err);

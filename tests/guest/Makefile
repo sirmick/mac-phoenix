@@ -17,6 +17,7 @@ CFLAGS = -O2 -Isrc
 SRCDIR = src
 
 SRCS = $(SRCDIR)/main.c \
+       $(SRCDIR)/test_report.c \
        $(SRCDIR)/test_extfs.c \
        $(SRCDIR)/test_audio.c \
        $(SRCDIR)/test_serial.c \

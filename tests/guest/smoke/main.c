@@ -1,41 +1,50 @@
 /*
- * SmokeTest - Minimal guest app for MacPhoenix
- *
- * Iteration 1: Just call ExitToShell to prove launch + return works.
- * Iteration 2: Add Toolbox init.
- * Iteration 3: Add file I/O (write results to Host:test_results.txt).
+ * SmokeTest - Uses the same test functions as MacTestSuite
+ * but with incremental expansion to find what hangs.
  */
 #include <Quickdraw.h>
+#include <Fonts.h>
+#include <Windows.h>
+#include <Menus.h>
+#include <TextEdit.h>
+#include <Dialogs.h>
+#include <Memory.h>
 #include <Files.h>
 #include <Processes.h>
 #include <Script.h>
 #include <string.h>
+#include <stdio.h>
+
+#include "../src/test_report.h"
+
+/* Same test functions as MacTestSuite */
+extern void test_disk(void);
+extern void test_extfs(void);
+extern void test_audio(void);
+extern void test_serial(void);
+extern void test_network(void);
+extern void test_opentransport(void);
 
 int main(void)
 {
-    FSSpec spec;
-    short refNum;
-    OSErr err;
-    long count;
-    const char *msg = "PASS smoke_test\r";
-
-    /* Minimal Toolbox init */
     InitGraf(&qd.thePort);
+    InitFonts();
+    InitWindows();
+    InitMenus();
+    TEInit();
+    InitDialogs(NULL);
+    MaxApplZone();
 
-    /* Write result to Host:test_results.txt */
-    err = FSMakeFSSpec(0, 0, "\pHost:test_results.txt", &spec);
-    if (err == fnfErr)
-        FSpCreate(&spec, 'ttxt', 'TEXT', smSystemScript);
+    report_init();
 
-    err = FSpOpenDF(&spec, fsRdWrPerm, &refNum);
-    if (err == noErr) {
-        SetEOF(refNum, 0);
-        count = strlen(msg);
-        FSWrite(refNum, &count, msg);
-        FSClose(refNum);
-        FlushVol(NULL, 0);
-    }
+    test_disk();
+    test_extfs();
+    test_audio();
+    test_serial();
+    test_network();
+    test_opentransport();
 
+    report_finish();
     ExitToShell();
     return 0;
 }

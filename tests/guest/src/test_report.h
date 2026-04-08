@@ -3,6 +3,9 @@
  *
  * Writes PASS/FAIL/SKIP lines to a results file on the ExtFS "Host" volume.
  * Host-side runner reads the file directly from the shared folder.
+ *
+ * Variables are defined in test_report.c (NOT static — shared across
+ * all compilation units).
  */
 #ifndef TEST_REPORT_H
 #define TEST_REPORT_H
@@ -15,32 +18,28 @@
 #define MAX_RESULTS 64
 #define RESULT_LINE_MAX 128
 
-static short gResultRefNum = 0;
-static int gPassCount = 0;
-static int gFailCount = 0;
-static int gSkipCount = 0;
+extern short gResultRefNum;
+extern int gPassCount;
+extern int gFailCount;
+extern int gSkipCount;
 
-static void report_init(void)
+static inline void report_init(void)
 {
     FSSpec spec;
     OSErr err;
 
-    /* Create/overwrite results file on Host (ExtFS) volume */
     err = FSMakeFSSpec(0, 0, "\pHost:test_results.txt", &spec);
     if (err == fnfErr) {
         FSpCreate(&spec, 'ttxt', 'TEXT', smSystemScript);
     } else if (err != noErr) {
-        /* Fall back to boot volume */
         FSMakeFSSpec(0, 0, "\ptest_results.txt", &spec);
         FSpCreate(&spec, 'ttxt', 'TEXT', smSystemScript);
     }
     FSpOpenDF(&spec, fsRdWrPerm, &gResultRefNum);
-
-    /* Truncate */
     SetEOF(gResultRefNum, 0);
 }
 
-static void report_write_line(const char *status, const char *name, const char *detail)
+static inline void report_write_line(const char *status, const char *name, const char *detail)
 {
     char line[RESULT_LINE_MAX];
     long count;
@@ -55,13 +54,13 @@ static void report_write_line(const char *status, const char *name, const char *
     }
 }
 
-static void report_pass(const char *name)
+static inline void report_pass(const char *name)
 {
     report_write_line("PASS", name, NULL);
     gPassCount++;
 }
 
-static void report_fail(const char *name, OSErr err)
+static inline void report_fail(const char *name, OSErr err)
 {
     char detail[32];
     snprintf(detail, sizeof(detail), "err=%d", (int)err);
@@ -69,13 +68,13 @@ static void report_fail(const char *name, OSErr err)
     gFailCount++;
 }
 
-static void report_skip(const char *name, const char *reason)
+static inline void report_skip(const char *name, const char *reason)
 {
     report_write_line("SKIP", name, reason);
     gSkipCount++;
 }
 
-static void report_finish(void)
+static inline void report_finish(void)
 {
     char summary[RESULT_LINE_MAX];
     long count;
