@@ -1334,6 +1334,22 @@ static bool patch_rom_ii(void)
 	wp = (uint16 *)(ROMBaseHost + 0x14e);
 	for (int i = 0; i < 5; i++) *wp++ = htons(M68K_NOP);
 
+	// NOP ALL serial driver _Open handlers that access SCC hardware.
+	// SCC at $50F04000 maps to $0F04000 in 24-bit mode — outside our
+	// allocation → SIGSEGV. Replace _Open with RTS for all 4 DRVRs.
+	for (uint32 ofs : {0x2abf2u, 0x2abfau, 0x2ac56u, 0x2ac84u}) {
+		wp = (uint16 *)(ROMBaseHost + ofs);
+		*wp = htons(M68K_RTS);
+	}
+
+	// Hook .Sound _Open at $2F02A to trigger INSTALL_DRIVERS during
+	// INITIOMGR. This fires BEFORE serial drivers are opened, so our
+	// emulated drivers are installed before the ROM tries to open the
+	// real SCC-based serial drivers (which cause SIGSEGV on I/O access).
+	wp = (uint16 *)(ROMBaseHost + 0x2f02a);
+	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
+	*wp = htons(M68K_RTS);
+
 	// INSTALL_DRIVERS hook at $01F4 (was: VIA2 IER + DRAWBEEPSCREEN).
 	// 16 bytes available ($01F4-$0203). Runs AFTER PATCH_BOOT_GLOBS
 	// at $01C8/$DAC so the unit table is ready. Allocate 256 bytes
