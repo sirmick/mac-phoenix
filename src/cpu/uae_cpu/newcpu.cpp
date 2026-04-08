@@ -763,10 +763,11 @@ void Exception(int nr, uaecptr oldpc)
 	uae_u32 currpc = m68k_getpc ();
 	if (nr >= 2 && nr <= 11 && nr != 10) {
 		static int exc_count = 0;
-		if (++exc_count <= 5) {
+		if (++exc_count <= 3) {
 			uint32 sp = m68k_areg(regs, 7);
-			fprintf(stderr, "[68K] Exception %d at PC=%08x A7=%08x stack=%08x %08x %08x\n",
-				nr, currpc, sp, get_long(sp), get_long(sp+4), get_long(sp+8));
+			fprintf(stderr, "[68K] Exc%d PC=%08x A7=%08x A1=%08x D0=%08x stack=%08x %08x\n",
+				nr, currpc, sp, m68k_areg(regs, 1), m68k_dreg(regs, 0),
+				get_long(sp), get_long(sp+4));
 		}
 	}
 	// Log A-line trap dispatches
@@ -780,12 +781,12 @@ void Exception(int nr, uaecptr oldpc)
 		uint32 table = is_tb ? 0x0E00 : 0x0400;
 		uint16 idx = trap & 0x01FF;
 		uint32 handler = get_long(table + idx * 4);
-		// Log A-line traps (skip the FlushEvents/HLock/HUnlock loop)
+		// Log ALL A-line traps around #185-195
 		{
 			static int aline_count = 0;
 			++aline_count;
-			if (aline_count <= 12 || (aline_count % 100 == 0 && aline_count <= 1000) ||
-			    (trap != 0xA126 && trap != 0xA069 && trap != 0xA06A && aline_count <= 500)) {
+			if (aline_count <= 12 || (aline_count >= 185 && aline_count <= 195) ||
+			    (aline_count % 100 == 0 && aline_count <= 1000)) {
 				uint32 vec28 = get_long(0x28);
 				uint32 vbr_vec = get_long(regs.vbr + 40);
 				fprintf(stderr, "[A-LINE #%d] $%04X PC=$%08X handler=$%08X VBR=$%08X vec@VBR+40=$%08X vec@$28=$%08X\n",

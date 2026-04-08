@@ -1284,10 +1284,16 @@ static bool patch_rom_ii(void)
 	// HYPOTHESIS: The UAE interpreter might not be using VBR for vector
 	// reads. Let me check.
 
-	// NOP SETUPTIMEK ($118), VIATIMERENABLES ($11C), MMU_INIT ($120),
-	// warm-restart probe ($124), INITHIMEMGLOBALS ($13E)
+	// Replace SETUPTIMEK ($118) with: clr.w ($CB1).w — clears both
+	// $CB1 (MMU mode flag = 0 = 24-bit) and $CB2 (SwapMMUMode state).
+	// This runs AFTER FILLWITHONES fills $CB1/$CB2 with $FF.
+	// Without this, SwapMMUMode modifies registers and the dispatch
+	// thunk at $83F66A reads garbled addresses.
+	// clr.w ($CB1).w = 4 bytes: 4279 0CB1
 	wp = (uint16 *)(ROMBaseHost + 0x118);
-	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
+	*wp++ = htons(0x4279);			// clr.w ($CB1).w
+	*wp = htons(0x0cb1);
+	// Replace VIATIMERENABLES ($11C) with NOP
 	wp = (uint16 *)(ROMBaseHost + 0x11c);
 	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0x120);
@@ -1297,13 +1303,8 @@ static bool patch_rom_ii(void)
 	wp = (uint16 *)(ROMBaseHost + 0x13e);
 	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 
-	// NOP the $A198 and _SwapMMUMode calls inside INITDISPATCHER.
-	// $A198 dispatches through the wrong trap table (OS instead of
-	// Toolbox) because the A-line handler at ($28) is set by
-	// INITXVECTTABLES to a dispatch function that doesn't handle
-	// Toolbox traps correctly at this early stage.
-	wp = (uint16 *)(ROMBaseHost + 0x3f7c0);  // $A198
-	*wp = htons(M68K_NOP);
+	// NOP _SwapMMUMode inside INITDISPATCHER (not needed in 24-bit mode).
+	// Leave $A198 intact — it sets up the dispatch mechanism.
 	wp = (uint16 *)(ROMBaseHost + 0x3f7c4);  // _SwapMMUMode
 	*wp = htons(M68K_NOP);
 
