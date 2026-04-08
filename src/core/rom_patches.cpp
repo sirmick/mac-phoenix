@@ -1179,21 +1179,72 @@ static bool patch_rom_ii(void)
 	*wp++ = htons((ROMBaseMac + 0x9a) >> 16);
 	*wp = htons((ROMBaseMac + 0x9a) & 0xffff);
 
+	// NOP sub-function calls inside FUN_40802A14 that do hardware
+	// probing ($50F0xxxx reads from RAM zeros → loops/wrong branches).
+	// ROM checksum at $2AB0 is left intact (finite loop, completes).
+	// $2B14: jmp thunk (6 bytes → 3 NOPs)
+	wp = (uint16 *)(ROMBaseHost + 0x2b14);
+	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+	// $2B36, $2B4E, $2B62, $2B76: jmp PC-relative (4 bytes → 2 NOPs each)
+	for (uint32 ofs : {0x2b36u, 0x2b4eu, 0x2b62u, 0x2b76u}) {
+		wp = (uint16 *)(ROMBaseHost + ofs);
+		*wp++ = htons(M68K_NOP);
+		*wp = htons(M68K_NOP);
+	}
+
 	// NOP STARTINIT1 hardware init BSR calls ($9A-$D0)
 	for (uint32 ofs : {0x9au, 0x9eu, 0xa2u, 0xa6u, 0xc0u, 0xd0u}) {
 		wp = (uint16 *)(ROMBaseHost + ofs);
 		*wp++ = htons(M68K_NOP);
 		*wp = htons(M68K_NOP);
 	}
+	// Fix A6 = RAMSize (MemTop) and A1 = min(RAMSize, 256KB) (stack).
+	// FUN_40802A14 sets A6 = old SP ($2000), not RAMSize.
+	// $AE-$B5: 8 bytes available. Write:
+	//   movea.l #RAMSize,A6  (6 bytes)
+	//   movea.l A6,A1        (2 bytes) — A1 gets RAMSize
+	// Then $D8: movea.l #$40000,A1 clamps to 256KB (original code).
+	// Actually, original $D8 does: cmpa.l A1,A6; bcc $DC; movea.l A6,A1
+	// That clamps A1 = min(A6, A1). We set A6=RAMSize, A1=RAMSize.
+	// But at $D8: A1 is compared with $40000 (loaded at $D0... no, $D0
+	// is NOP'd BOOTBEEP). The code at $D6 does:
+	//   movea.l SP,A0; movea.l #$40000,A1; cmpa.l A1,A6; bcc $DC
+	// Wait, let me just set A1 = $40000 directly here.
+	{
+		uint32 stack = (RAMSize > 0x40000) ? 0x40000 : RAMSize;
+		wp = (uint16 *)(ROMBaseHost + 0xae);
+		*wp++ = htons(0x2c7c);		// movea.l #RAMSize,A6
+		*wp++ = htons(RAMSize >> 16);
+		*wp++ = htons(RAMSize & 0xffff);
+		*wp = htons(0x2246);		// movea.l A6,A1 (overwritten at $D8)
+	}
+
+	// NOP trap $A03F (_InitUtil) at $478 — called from INITDISPATCHER
+	// before the trap table is populated. Loops in exception handler.
+	wp = (uint16 *)(ROMBaseHost + 0x478);
+	*wp = htons(M68K_NOP);
 
 	// NOP SETUPTIMEK ($118), VIATIMERENABLES ($11C), MMU_INIT ($120),
 	// warm-restart probe ($124), INITHIMEMGLOBALS ($13E)
+	wp = (uint16 *)(ROMBaseHost + 0x118);
+	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
+	wp = (uint16 *)(ROMBaseHost + 0x11c);
+	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0x120);
 	*wp++ = htons(M68K_NOP); *wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0x124);
 	*wp++ = htons(M68K_NOP); *wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0x13e);
 	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
+
+	// INITDISPATCHER at $83F7B4 calls $A198 and _SwapMMUMode.
+	// With SYSERRINIT-installed A-line handler at ($28), these traps
+	// dispatch correctly even when the trap table has $FFFFFFFF entries
+	// (the SYSERRINIT handler treats unimplemented traps gracefully,
+	// unlike the FUN_40802A14 probe handler which retries via RTE).
+	// Leave $A198 and _SwapMMUMode calls intact.
 
 	// Patch SwapMMUMode to always take the 24-bit VIA2 path
 	wp = (uint16 *)(ROMBaseHost + 0x3b24);
