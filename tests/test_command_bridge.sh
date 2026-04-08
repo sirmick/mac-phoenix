@@ -36,7 +36,7 @@ trap cleanup EXIT
 
 # Start emulator
 "$BINARY" --backend "$BACKEND" --timeout "$TIMEOUT" \
-    --config /dev/null --dismiss-shutdown-dialog \
+    --config /dev/null --dismiss-shutdown-dialog --headless-http \
     --port "$PORT" --signaling-port "$SIG_PORT" --disk "$DISK" "$ROM" &>/dev/null &
 EMU_PID=$!
 

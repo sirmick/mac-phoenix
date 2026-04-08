@@ -1,0 +1,9 @@
+# Retro68 build intermediates (MacTestSuite.bin is checked in)
+*.code.bin
+*.APPL
+*.dsk
+*.elf
+*.elf.gdb
+*.gdb
+*.ad
+%*.ad

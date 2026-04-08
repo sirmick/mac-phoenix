@@ -58,16 +58,27 @@ if [[ ! -f "$DISK" ]]; then
     exit 77
 fi
 
+GUEST_MACBIN="$GUEST_DIR/MacTestSuite.bin"
 GUEST_BINARY="$GUEST_DIR/MacTestSuite"
-if [[ ! -f "$GUEST_BINARY" ]]; then
-    echo "SKIP: Guest binary not found: $GUEST_BINARY (build with Retro68 first)"
+MACBIN_SCRIPT="$GUEST_DIR/macbin_to_extfs.py"
+
+if [[ ! -f "$GUEST_MACBIN" && ! -f "$GUEST_BINARY" ]]; then
+    echo "SKIP: Guest binary not found (build with Retro68 first)"
+    echo "  Expected: $GUEST_MACBIN"
     exit 77
 fi
 
 # --- Setup ExtFS shared folder ---
 
 EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
-cp "$GUEST_BINARY" "$EXTFS_DIR/MacTestSuite"
+
+if [[ -f "$GUEST_MACBIN" ]]; then
+    # MacBinary format — split into data fork + .rsrc/ + .finf/ for ExtFS
+    python3 "$MACBIN_SCRIPT" "$GUEST_MACBIN" "$EXTFS_DIR" MacTestSuite
+else
+    echo "WARNING: Using raw binary without resource fork (launch may fail)"
+    cp "$GUEST_BINARY" "$EXTFS_DIR/MacTestSuite"
+fi
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
@@ -93,7 +104,7 @@ echo "Port: $PORT"
 # --- Boot emulator ---
 
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
-    --config /dev/null --dismiss-shutdown-dialog \
+    --config /dev/null --dismiss-shutdown-dialog --headless-http \
     --port "$PORT" --signaling-port "$SIG_PORT" \
     --disk "$DISK" --extfs "$EXTFS_DIR" \
     "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/mactest_guest_$$.log &
@@ -155,6 +166,28 @@ LAUNCH=$(curl -sf --max-time 10 -X POST "http://localhost:$PORT/api/launch" \
 if ! echo "$LAUNCH" | grep -q '"success": true'; then
     echo "FAIL: Could not launch MacTestSuite"
     echo "  Response: $LAUNCH"
+    exit 1
+fi
+
+# --- Wait for app to actually start ---
+
+echo -n "Waiting for app to start..."
+APP_STARTED=false
+for i in $(seq 1 20); do
+    APP=$(curl -sf "http://localhost:$PORT/api/app" 2>/dev/null \
+        | grep -oP '"app"\s*:\s*"\K[^"]+' || echo "")
+    if [[ "$APP" != "Finder" && -n "$APP" ]]; then
+        echo " $APP running"
+        APP_STARTED=true
+        break
+    fi
+    echo -n "."
+    sleep 0.5
+done
+
+if [[ "$APP_STARTED" != "true" ]]; then
+    echo ""
+    echo "FAIL: MacTestSuite did not start (still showing Finder)"
     exit 1
 fi
 

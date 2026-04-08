@@ -95,7 +95,8 @@ enum {
 	M68K_EMUL_OP_DEBUGUTIL,
 	M68K_EMUL_OP_IDLE_TIME,
 	M68K_EMUL_OP_SUSPEND,
-	M68K_EMUL_OP_CMD_DISPATCH,		// 0x7139: Command bridge dispatch (from jGNEFilter)
+	M68K_EMUL_OP_CMD_DISPATCH,		// 0x7139: Command bridge dispatch (from jGNEFilter, legacy)
+	M68K_EMUL_OP_INIT_BRIDGE,		// 0x713A: INIT bridge (guest INIT ↔ host command queue)
 	M68K_EMUL_OP_MAX				// highest number
 };
 

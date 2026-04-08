@@ -15,56 +15,78 @@ Read commands peek Mac memory directly from the 60Hz IRQ handler. No Toolbox cal
 - **GET_TICKS** — reads Ticks counter at 0x016A
 - **READ_MEMORY** — hex dump of arbitrary Mac address
 
-### 2. Action Commands (application context via jGNEFilter)
+### 2. Action Commands (application context)
 
-Action commands (_Launch, _ExitToShell) require full Toolbox context — they can't run from an interrupt handler. These use a two-phase handoff:
+Action commands (LaunchApplication, ExitToShell) require full Toolbox context — they can't run from an interrupt handler. These use a guest INIT that communicates with the host via EmulOp.
+
+**EmulOp Protocol** (`M68K_EMUL_OP_INIT_BRIDGE`, opcode 0x713A):
+
+| Sub-op (D0) | Direction | Description |
+|-------------|-----------|-------------|
+| 0 (CHECK) | Host→Guest | Guest polls: any command pending? Host writes cmd_type→D0, path→buffer at A0 |
+| 0x80 (RESULT) | Guest→Host | Guest reports completion: D1 = Mac OS error code |
+| 0xFF | Guest→Host | INIT loaded signal (startup handshake) |
 
 ```
-Parent (webserver)                 Child (CPU)
-    │                                  │
-    ├─ POST /api/launch ──►            │
-    │   write to SHM cmd queue         │
-    │                                  │
-    │                           60Hz IRQ:
-    │                             validate file (_GetFileInfo)
-    │                             write path to ScratchMem mailbox
-    │                             set cmd_flag = 1
-    │                             write result to SHM result queue
-    │                                  │
-    │                           App event loop (GetNextEvent):
-    │                             jGNEFilter checks mailbox
-    │                             cmd_flag set → EmulOp 0x7139
-    │                             → command_bridge_dispatch()
-    │                             → _Launch in app context (safe!)
-    │                                  │
-    │   ◄── read result from SHM       │
-    ├─ return JSON response            │
+Host API                           Guest INIT
+────────                           ──────────
+POST /api/launch
+  → submit_to_init(LAUNCH, path)
+  → wait_init_result(10s)
+                                   jGNEFilter fires (GetNextEvent)
+                                   EmulOp CHECK → host delivers command
+                                   FSMakeFSSpec + LaunchApplication
+                                   EmulOp RESULT → host receives err
+  ← return JSON
 ```
 
-## jGNEFilter (the "INIT")
+### Status: WIP
 
-A 28-byte 68k program injected into ScratchMem at boot. Not a real INIT — no disk file, no resource fork. The host writes machine code directly into memory and hooks `jGNEFilter` (low memory global 0x29A).
+**What works:**
+- Read commands (app name, window list, ticks) — fully working
+- EmulOp infrastructure — host↔guest communication channel ready
+- MacTestSuite guest binary — built with Retro68, deploys via macbin_to_extfs.py
 
-`jGNEFilter` is called every time any Mac app calls `GetNextEvent` or `WaitNextEvent` — this is application context, where all Toolbox calls are safe.
+**What doesn't work yet:**
+- App launching — the `_Launch` trap doesn't actually start apps (see Known Issues)
 
-The filter code:
+## Known Issues & Complexity
 
-```asm
-MOVEA.L  #0x02100800, A0   ; mailbox address
-TST.B    (A0)               ; cmd_flag set?
-BEQ.S    chain              ; no → skip (5 cycles overhead)
-DC.W     0x7139             ; EmulOp CMD_DISPATCH (host handles it)
-chain:
-MOVEA.L  oldFilter(PC), A0  ; chain to previous filter
-TST.L    A0
-BEQ.S    done
-JMP      (A0)
-done:
-RTS
-oldFilter: DC.L 0           ; saved previous filter pointer
-```
+### ScratchMem address is runtime-dependent
 
-Installed by `install_jgne_filter()` on the first IRQ tick after boot.
+The ScratchMem Mac address depends on RAM size:
+- 32MB RAM: ScratchMem at 0x02108000
+- 64MB RAM: ScratchMem at 0x04108000
+
+Any code that writes to ScratchMem must compute addresses at runtime via `Host2MacAddr(ScratchMem)`, not use hardcoded constants. This was a root cause of early launch failures.
+
+### jGNEFilter gets overwritten during boot
+
+The jGNEFilter low-memory global (0x29A) is written by multiple system extensions during boot. Installing a filter during the "extensions" boot phase doesn't work — later extensions overwrite it. The filter must be installed AFTER boot stabilizes (after Finder starts).
+
+### _Launch returns noErr but doesn't start apps
+
+Both approaches were tried:
+
+1. **Host-side _Launch** (inline A-line trap 0xA9F2 in hand-coded 68k in ScratchMem): Returns noErr but the Process Manager never switches to the new app. Possibly because:
+   - Trap dispatch doesn't work correctly for code in ScratchMem
+   - The 68k context (A5 world, trap dispatch table) isn't set up correctly for injected code
+   - With `launchContinue`, `_Launch` queues the app but the Process Manager needs a proper `WaitNextEvent` yield to switch — which may not happen from injected code
+
+2. **Guest-side LaunchApplication** (Retro68 INIT with jGNEFilter): The INIT loads and communicates via EmulOp, but:
+   - Retro68 flat binary relocation doesn't fix absolute symbol references in inline asm
+   - GCC function prologues corrupt the register-based jGNEFilter calling convention
+   - Need a pure asm thunk for the filter entry, with PC-relative-only addressing
+   - jGNEFilter overwrite issue (see above) adds timing complexity
+
+### Retro68 flat binary constraints
+
+When building code resources (`--mac-flat`) with Retro68:
+- `RETRO68_RELOCATE()` fixes up absolute references generated by C code
+- Inline asm absolute references (`move.l symbol, %a0`) are **NOT** relocated — causes Address Error (Exception 11)
+- Must use PC-relative addressing (`lea symbol(%pc), %a0`) or pass values through C variables
+- C symbol names have **no leading underscore** on m68k-apple-macos target
+- Functions used as callbacks need asm thunks to avoid GCC prologue corruption
 
 ## Shared Memory Transport (Fork Mode)
 
@@ -78,43 +100,37 @@ The webserver runs in the parent process; the CPU runs in a forked child. They c
 - `result_queue[16]` — child writes results
 - Atomic read/write positions for lock-free operation
 
-**ScratchMem mailbox** (for action commands):
-- `0x02100800 + 0x00`: cmd_flag (uint8)
-- `0x02100800 + 0x01`: result_flag (uint8)
-- `0x02100800 + 0x02`: cmd_type (int16)
-- `0x02100800 + 0x04`: result_err (int16)
-- `0x02100800 + 0x06`: cmd_arg (Pascal string, 256 bytes)
-
 ## API Endpoints
 
 | Endpoint | Method | Description | Status |
 |----------|--------|-------------|--------|
-| `/api/app` | GET | Current app name (passive field) | ✅ Working |
-| `/api/windows` | GET | Window list (command queue) | ✅ Working |
-| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` | ✅ Working |
-| `/api/launch` | POST | Launch app: `{"path": "HD:SimpleText"}` | ✅ Working |
-| `/api/quit` | POST | Quit current app | ✅ Working |
-| `/api/keypress` | POST | Send key event: `{"key": "return"}` | ✅ Working |
-| `/api/mouse` | POST | Move cursor: `{"x":N,"y":N}` | ✅ Working |
-
-### Launch implementation
-
-Uses extended `LaunchParamBlockRec` with FSSpec and `launchContinue` flag. File validation via `_GetFileInfo` runs in IRQ context; the actual `_Launch` (0xA9F2) executes in app context via jGNEFilter mailbox handoff.
+| `/api/app` | GET | Current app name (passive field) | Working |
+| `/api/windows` | GET | Window list (command queue) | Working |
+| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` | Working |
+| `/api/launch` | POST | Launch app: `{"path": "HD:SimpleText"}` | WIP |
+| `/api/quit` | POST | Quit current app | WIP |
+| `/api/keypress` | POST | Send key event: `{"key": "return"}` | Working |
+| `/api/mouse` | POST | Move cursor: `{"x":N,"y":N}` | Working |
 
 ## Files
 
 | File | Role |
 |------|------|
-| `src/core/command_bridge.h` | Command/Result structs, CommandBridge class, CmdType enum |
-| `src/core/command_bridge.cpp` | All bridge logic: reads, mailbox, jGNEFilter install, SHM drain |
-| `src/core/emul_op.cpp` | EmulOp handlers: IRQ drain + CMD_DISPATCH |
-| `src/common/include/emul_op.h` | M68K_EMUL_OP_CMD_DISPATCH (0x7139) |
-| `src/core/shared_state.h` | ShmCommand/ShmResult queues, cur_app_name, helpers |
+| `src/core/command_bridge.h` | Command/Result structs, CommandBridge class, INIT bridge API |
+| `src/core/command_bridge.cpp` | Read commands, legacy jGNEFilter, INIT bridge submit/wait |
+| `src/core/emul_op.cpp` | EmulOp handlers: IRQ drain, CMD_DISPATCH, INIT_BRIDGE |
+| `src/common/include/emul_op.h` | M68K_EMUL_OP_CMD_DISPATCH (0x7139), M68K_EMUL_OP_INIT_BRIDGE (0x713A) |
 | `src/webserver/api_handlers.cpp` | HTTP endpoint handlers |
+| `tests/guest/init/` | BridgeINIT source (Retro68) — WIP |
+| `tests/guest/MacTestSuite.bin` | Guest test suite binary (Retro68) |
+| `tests/guest/macbin_to_extfs.py` | MacBinary → ExtFS layout converter |
 | `tests/test_command_bridge.sh` | Integration tests |
+| `tests/test_guest_suite.sh` | Guest test suite runner |
 
-## Future Work
+## Possible Approaches (not yet tried)
 
-1. **Apple Events**: Send `kAEOpenDocuments` to Finder instead of calling _Launch directly — the proper System 7 way
-2. **Menu selection**: Menu-aware event routing
-3. **Unix socket**: Terse line protocol for shell scripting (`echo "app" | socat - UNIX:/tmp/mac-phoenix.sock`)
+1. **Patch _GetNextEvent trap** instead of jGNEFilter — use GetTrapAddress/SetTrapAddress to hook the trap. More reliable than low-memory globals, standard INIT technique.
+2. **Apple Events** — send `kAEOpenDocuments` to Finder. The proper System 7 way but requires Apple Event handling infrastructure.
+3. **Finder scripting** — use OSA/AppleScript to tell Finder to open an app. High-level but depends on scripting extensions.
+4. **Double-click simulation** — find the app's icon in Finder, send mouse clicks. Fragile but works without any guest code.
+5. **Direct Execute68kTrap** — call `_Launch` via `Execute68kTrap()` from the C++ EmulOp handler (not from injected 68k). This bypasses the 68k context issues but might deadlock the Process Manager if called from GetNextEvent context.

@@ -1093,12 +1093,21 @@ Response APIRouter::handle_launch(const Request& req) {
     }
     std::string path = j["path"].get<std::string>();
 
-    // Submit to INIT bridge — the guest INIT picks this up via EmulOp
-    command_bridge_submit_to_init(1, path);  // 1 = LAUNCH
+    // Submit via legacy command queue → IRQ drain → dispatch → Execute68kTrap
+    Command cmd;
+    cmd.type = CmdType::LAUNCH_APP;
+    cmd.arg = path;
+    uint32_t id = g_command_bridge.submit(cmd);
 
-    // Wait for the INIT to execute LaunchApplication and report back
+    CommandResult result;
+    if (!g_command_bridge.wait_result(id, result, 10000)) {
+        return Response::json("{\"success\": false, \"error\": \"timeout waiting for dispatch\"}");
+    }
+
+    // The dispatch now calls Execute68kTrap(_Launch) directly and writes
+    // the result to MB_RESULT_ERR before returning. Poll for it.
     int16_t mac_err = 0;
-    if (command_bridge_wait_init_result(mac_err, 10000)) {
+    if (command_bridge_poll_launch_result(mac_err, 5000)) {
         if (mac_err != 0) {
             std::ostringstream json;
             json << "{\"success\": false, \"error_code\": " << mac_err
@@ -1108,7 +1117,7 @@ Response APIRouter::handle_launch(const Request& req) {
         return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
     }
 
-    return Response::json("{\"success\": false, \"error\": \"timeout waiting for INIT (is BridgeINIT installed?)\"}");
+    return Response::json("{\"success\": false, \"error\": \"timeout polling launch result\"}");
 }
 
 Response APIRouter::handle_quit(const Request& req) {
@@ -1118,14 +1127,16 @@ Response APIRouter::handle_quit(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"not available in subprocess mode\"}");
     }
 
-    command_bridge_submit_to_init(2, "");  // 2 = QUIT
+    Command cmd;
+    cmd.type = CmdType::QUIT_APP;
+    uint32_t id = g_command_bridge.submit(cmd);
 
-    int16_t mac_err = 0;
-    if (command_bridge_wait_init_result(mac_err, 5000)) {
+    CommandResult result;
+    if (g_command_bridge.wait_result(id, result, 5000)) {
         return Response::json("{\"success\": true}");
     }
 
-    return Response::json("{\"success\": false, \"error\": \"timeout waiting for INIT\"}");
+    return Response::json("{\"success\": false, \"error\": \"timeout\"}");
 }
 
 Response APIRouter::handle_wait(const Request& req) {

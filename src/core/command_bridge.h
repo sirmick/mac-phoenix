@@ -81,4 +81,14 @@ private:
 // Global instance
 extern CommandBridge g_command_bridge;
 
+// Poll for the result of a launch dispatch via the legacy mailbox.
+// Called from the API handler thread after submitting a LAUNCH command.
+bool command_bridge_poll_launch_result(int16_t& err, int timeout_ms = 5000);
+
+// INIT bridge: submit a command for the guest INIT to pick up via EmulOp.
+void command_bridge_submit_to_init(int16_t cmd_type, const std::string& path);
+
+// INIT bridge: wait for the guest INIT to report a command result.
+bool command_bridge_wait_init_result(int16_t& err, int timeout_ms = 10000);
+
 #endif // COMMAND_BRIDGE_H

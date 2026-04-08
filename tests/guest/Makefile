@@ -48,9 +48,7 @@ $(BIN): $(CODE_BIN)
 		--cc $(DSK) --cc $(APPL)
 
 install: $(BIN)
-	mkdir -p $(EXTFS)
-	cp $(APPL) $(EXTFS)/$(TARGET)
-	@echo "Installed $(APPL) -> $(EXTFS)/$(TARGET)"
+	python3 macbin_to_extfs.py $(BIN) $(EXTFS) $(TARGET)
 
 clean:
 	rm -f $(TARGET) $(TARGET).gdb $(CODE_BIN) $(BIN) $(APPL) $(DSK) \

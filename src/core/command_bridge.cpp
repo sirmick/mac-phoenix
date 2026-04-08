@@ -318,34 +318,31 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
         for (int i = 0; i < LPB_SIZE; i++)
             WriteMacInt8(lpb_addr + i, 0);
         WriteMacInt16(lpb_addr + 6, 0x4C43);              // launchBlockID = 'LC'
-        WriteMacInt32(lpb_addr + 8, 34);                   // launchEPBLength (46 - 12)
-        WriteMacInt16(lpb_addr + 12, 0);                   // launchFileFlags
-        WriteMacInt32(lpb_addr + 14, 0x4000 | 0x0800);     // launchContinue | launchNoFileFlags
-        WriteMacInt32(lpb_addr + 18, fsspec_addr);         // launchAppSpec
-        // +22..+29 launchProcessSN (zeroed)
-        // +30..+41 sizes (zeroed → use app SIZE resource defaults)
-        WriteMacInt32(lpb_addr + 42, 0);                   // launchAppParameters = none
+        WriteMacInt32(lpb_addr + 8, 32);                   // launchEPBLength (44 - 12)
+        WriteMacInt16(lpb_addr + 12, 0);                   // launchFileFlags (Integer)
+        WriteMacInt16(lpb_addr + 14, 0x4000 | 0x0800);    // launchControlFlags (LaunchFlags = uint16!)
+        WriteMacInt32(lpb_addr + 16, fsspec_addr);         // launchAppSpec (FSSpecPtr at +16)
+        // +20..+27 launchProcessSN (8 bytes, zeroed)
+        // +28..+39 sizes (zeroed → use app SIZE resource defaults)
+        WriteMacInt32(lpb_addr + 40, 0);                   // launchAppParameters = none
 
-        // --- Step 3: Hand off to filter for inline _Launch (no reentry) ---
+        // --- Step 3: Call _Launch via Execute68kTrap ---
         //
-        // Calling Execute68kTrap(_Launch) from here would deadlock: Process
-        // Manager needs Finder to yield via WaitNextEvent to schedule the new
-        // app, but Finder would be blocked inside our EmulOp → Execute68kTrap
-        // call. So instead of calling _Launch ourselves, we leave a note for
-        // the filter: set MB_LAUNCH_LPB and MB_LAUNCH_READY. When this EmulOp
-        // handler returns, the filter (still running in real Finder app
-        // context from GetNextEvent) sees the ready flag and executes _Launch
-        // inline as a normal 68k instruction. No reentry, no deadlock.
-        //
-        // The host polls CurApName (via IRQ-safe GET_APP_NAME read command)
-        // to observe when MacTestSuite starts and exits back to Finder.
-        WriteMacInt32(MB_LAUNCH_LPB, lpb_addr);
-        WriteMacInt8(MB_LAUNCH_READY, 1);
-        fprintf(stderr, "[CommandBridge] LPB at 0x%08X, FSSpec at 0x%08X, vRefNum=%d — handed to filter\n",
-                lpb_addr, fsspec_addr, vRefNum);
+        // With launchContinue, _Launch queues the app and returns immediately.
+        // No deadlock — same mechanism as _HGetVInfo above.
+        {
+            M68kRegisters launch_regs;
+            memset(&launch_regs, 0, sizeof(launch_regs));
+            launch_regs.a[0] = lpb_addr;
+            Execute68kTrap(0xA9F2, &launch_regs);  // _Launch
 
-        WriteMacInt16(MB_RESULT_ERR, 0);
-        WriteMacInt8(MB_RESULT_FLAG, 1);
+            int16_t launch_err = static_cast<int16_t>(launch_regs.d[0]);
+            fprintf(stderr, "[CommandBridge] _Launch returned err=%d (LPB=0x%08X, FSSpec=0x%08X, vRefNum=%d)\n",
+                    launch_err, lpb_addr, fsspec_addr, vRefNum);
+
+            WriteMacInt16(MB_RESULT_ERR, launch_err);
+            WriteMacInt8(MB_RESULT_FLAG, 1);
+        }
         break;
     }
 
