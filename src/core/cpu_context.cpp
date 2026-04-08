@@ -206,7 +206,12 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 
     // Allocate contiguous block: [RAM...][ROM 1MB][ScratchMem 64KB][FrameBuffer 4MB]
     // For 24-bit ROMs, rom_offset may exceed ram_size_ (gap is unmapped Mac space).
+    // For Mac II (24-bit), hardcoded I/O addresses at $50F0xxxx map to $0F0xxxx
+    // in the 24-bit space. Allocate the full 16MB (24-bit range) so these
+    // accesses land in mapped memory instead of causing SIGSEGV.
     size_t total_alloc = rom_offset + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
+    if (profile.twenty_four_bit && total_alloc < 0x1000000)
+        total_alloc = 0x1000000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
 
     // JIT requires MEMBaseDiff to fit in a 32-bit x86 displacement, so allocate
     // in the low 32-bit address space. Fall back to heap if MAP_32BIT fails.

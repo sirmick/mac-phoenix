@@ -1392,14 +1392,16 @@ static bool patch_rom_ii(void)
 		wp = (uint16 *)(ROMBaseHost + ofs);
 		*wp = htons(M68K_NOP);
 	}
-	// NOP cursor manager ($DD0) and _GetResource SERD ($DE8) inside
-	// FUN_40800D9E. These access hardware or load resources that
-	// cause SIGSEGV on ASC/SCC access.
-	wp = (uint16 *)(ROMBaseHost + 0xdd0);
-	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
-	// NOP everything from $DD4 to end of FUN_40800D9E at $DF4 (rts)
-	// This includes _GetResource('SERD'), serial driver init, etc.
-	for (uint32 ofs = 0xdd4; ofs < 0xdf4; ofs += 2) {
+	// NOP _Open calls at $DC4 (.Sony) and $DCE (.Sound) inside
+	// FUN_40800D9E. These drivers are already opened by INITIOMGR
+	// at $18E. The redundant _Open triggers INSTALL_DRIVERS again
+	// which corrupts the heap → wild pointer SIGSEGV.
+	wp = (uint16 *)(ROMBaseHost + 0xdc4);
+	*wp = htons(M68K_NOP);
+	wp = (uint16 *)(ROMBaseHost + 0xdce);
+	*wp = htons(M68K_NOP);
+	// NOP cursor manager ($DD0) and SERD resource loading ($DD4-$DF4)
+	for (uint32 ofs = 0xdd0; ofs < 0xdf4; ofs += 2) {
 		wp = (uint16 *)(ROMBaseHost + ofs);
 		*wp = htons(M68K_NOP);
 	}
