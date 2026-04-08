@@ -168,6 +168,13 @@ static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 	if (addr >= ROMBaseMac && addr < ROMBaseMac + ROMSize + 0x10000 + 0x800000) {
 		return (uae_u8 *)MEMBaseDiff + addr;
 	}
+	// For 24-bit mode: addresses between RAM end and 16MB ($FFFFFF)
+	// are I/O space. Return pointer to zero-filled memory within
+	// our extended allocation (if present).
+	extern bool TwentyFourBitAddressing;
+	if (TwentyFourBitAddressing && addr < 0x1000000) {
+		return (uae_u8 *)MEMBaseDiff + addr;
+	}
 	// OOB: return pointer into zero-filled page (reads=0, writes=drop)
 	static uae_u8 dummy_page[4096] = {0};
 	return dummy_page + (addr & 0xFFF);
