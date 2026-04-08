@@ -1346,6 +1346,21 @@ static void kpx_cpu_trigger_interrupt(int level)
         ppc_cpu->trigger_interrupt();
 }
 
+// Invoke debugger via Command+Power ADB keystroke.
+// On PPC Macs, the ADB driver recognizes Command+Power as the
+// Programmer's Key and jumps to the debugger (MacsBug) entry point.
+extern void ADBKeyDown(int code);
+extern void ADBKeyUp(int code);
+static void kpx_invoke_debug(void)
+{
+    idle_resume();
+    ADBKeyDown(0x37);   // Command key down
+    ADBKeyDown(0x7f);   // Power key down
+    usleep(50000);
+    ADBKeyUp(0x7f);     // Power key up
+    ADBKeyUp(0x37);     // Command key up
+}
+
 static void kpx_cpu_execute_68k_trap(uint16_t trap, struct M68kRegisters *r)
 {
     // Direct implementation — must NOT call Execute68kTrap() which dispatches
@@ -1521,6 +1536,7 @@ extern "C" void cpu_ppc_kpx_install(Platform *p)
 
     // Interrupts
     p->cpu_trigger_interrupt = kpx_cpu_trigger_interrupt;
+    p->invoke_debug = kpx_invoke_debug;
 
     // 68k execution (from PPC context)
     p->cpu_execute_68k_trap = kpx_cpu_execute_68k_trap;

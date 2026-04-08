@@ -77,6 +77,7 @@ private:
     Response handle_mouse(const Request& req);
     Response handle_mouse_move(const Request& req);
     Response handle_keypress(const Request& req);
+    Response handle_invoke_debug(const Request& req);
 
     // Command bridge endpoints
     Response handle_app(const Request& req);

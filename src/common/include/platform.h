@@ -140,6 +140,11 @@ typedef struct {
     // Interrupts
     void (*cpu_trigger_interrupt)(int level);
 
+    // Invoke debugger (Programmer's Key)
+    // 68k: NMI (level 7 interrupt → vector 31)
+    // PPC: Command+Power ADB keystroke
+    void (*invoke_debug)(void);
+
     // 68k Trap Execution (for ROM patches and drivers)
     // Executes a 68k trap with given register state, returns updated registers
     // This allows ROM patches to call Mac OS traps without depending on specific CPU backend
@@ -267,7 +272,7 @@ extern volatile uint32_t InterruptFlags;
 void SetInterruptFlag(uint32_t flag);
 void ClearInterruptFlag(uint32_t flag);
 void TriggerInterrupt(void);
-void TriggerNMI(void);
+void InvokeDebugger(void);   // Calls g_platform.invoke_debug
 int intlev(void);
 
 #ifdef __cplusplus

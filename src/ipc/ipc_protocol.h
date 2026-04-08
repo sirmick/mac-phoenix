@@ -77,6 +77,7 @@ extern "C" {
 
 #define IPC_CMD_STOP        2
 #define IPC_CMD_RESET       3
+#define IPC_CMD_INVOKE_DEBUG 4
 
 #define IPC_INPUT_AUDIO_REQUEST 4
 

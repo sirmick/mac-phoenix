@@ -28,6 +28,7 @@ extern void ADBMouseUp(int button);
 extern void ADBSetRelMouseMode(bool relative);
 extern void ADBKeyDown(int code);
 extern void ADBKeyUp(int code);
+extern "C" void InvokeDebugger(void);
 
 // Audio request handler (defined in audio_direct.cpp)
 extern void audio_request_data(uint32_t requested_samples);
@@ -176,6 +177,10 @@ static void process_binary_input(const uint8_t* data, size_t len)
                 case IPC_CMD_RESET:
                     fprintf(stderr, "IPC: Reset command received\n");
                     exit(75);  // Special exit code for restart
+                    break;
+                case IPC_CMD_INVOKE_DEBUG:
+                    fprintf(stderr, "IPC: Invoke debugger command received\n");
+                    InvokeDebugger();
                     break;
                 default:
                     break;

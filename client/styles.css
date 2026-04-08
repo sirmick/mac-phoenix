@@ -555,6 +555,14 @@ body.fullscreen #display {
     background: #d32f2f;
 }
 
+.btn.warning {
+    background: #e65100;
+}
+
+.btn.warning:hover {
+    background: #f57c00;
+}
+
 /* Modal */
 .modal-overlay {
     display: none;

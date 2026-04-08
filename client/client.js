@@ -4007,6 +4007,21 @@ async function resetEmulator() {
     await restartEmulator();
 }
 
+async function invokeDebugger() {
+    logger.info('Invoking debugger (Programmer\'s Key)...');
+    try {
+        const res = await fetch(getApiUrl('invoke-debug'), { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            logger.info('Debugger invoked');
+        } else {
+            logger.error('Invoke debugger failed', { error: data.error });
+        }
+    } catch (e) {
+        logger.error('Invoke debugger request failed', { error: e.message });
+    }
+}
+
 // Apply codec availability to the dropdown (removes unavailable codecs)
 function applyCodecAvailability(codecs) {
     const select = document.getElementById('codec-select');
@@ -4263,6 +4278,9 @@ function setupEventListeners() {
 
     const stopBtn = document.getElementById('stop-btn');
     if (stopBtn) stopBtn.addEventListener('click', stopEmulator);
+
+    const invokeDebugBtn = document.getElementById('invoke-debug-btn');
+    if (invokeDebugBtn) invokeDebugBtn.addEventListener('click', invokeDebugger);
 
     const debugToggle = document.getElementById('debug-toggle');
     if (debugToggle) debugToggle.addEventListener('click', toggleDebugPanel);

@@ -1419,7 +1419,7 @@ int m68k_do_specialties (void)
 		if (SPCFLAGS_TEST( SPCFLAG_INT | SPCFLAG_DOINT )){
 			SPCFLAGS_CLEAR( SPCFLAG_INT | SPCFLAG_DOINT );
 			int intr = intlev ();
-			if (intr != -1 && intr > regs.intmask) {
+			if (intr != -1 && (intr > regs.intmask || intr == 7)) {
 				Interrupt (intr);
 				regs.stopped = 0;
 				SPCFLAGS_CLEAR( SPCFLAG_STOP );
@@ -1432,7 +1432,7 @@ int m68k_do_specialties (void)
 	if (SPCFLAGS_TEST( SPCFLAG_DOINT )) {
 		SPCFLAGS_CLEAR( SPCFLAG_DOINT );
 		int intr = intlev ();
-		if (intr != -1 && intr > regs.intmask) {
+		if (intr != -1 && (intr > regs.intmask || intr == 7)) {
 			Interrupt (intr);
 			regs.stopped = 0;
 		}

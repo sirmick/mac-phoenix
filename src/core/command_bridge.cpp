@@ -18,32 +18,68 @@
 #include "../common/include/cpu_emulation.h"
 #include "../common/include/m68k_registers.h"
 #include "../common/include/platform.h"
+#include "boot_progress.h"
 #include "../common/include/emul_op.h"
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
 #include <cstring>
 #include <chrono>
+#include <thread>
 #include <atomic>
 #include <algorithm>
 
 // Global instance (used for in-process mode, kept for compatibility)
 CommandBridge g_command_bridge;
 
-// ScratchMem layout
-static const uint32_t SCRATCH_BASE    = 0x02100000;
-static const uint32_t FILTER_CODE     = SCRATCH_BASE + 0x400;  // jGNEFilter (50 bytes)
-static const uint32_t MAILBOX         = SCRATCH_BASE + 0x800;  // command mailbox
+extern uint8 *ScratchMem;  // Platform scratch memory pointer (set during CPU init)
 
-// Mailbox offsets
-static const uint32_t MB_CMD_FLAG     = MAILBOX + 0;    // uint8: 1 = command pending
-static const uint32_t MB_RESULT_FLAG  = MAILBOX + 1;    // uint8: 1 = result ready
-static const uint32_t MB_CMD_TYPE     = MAILBOX + 2;    // int16: 1=LAUNCH, 2=QUIT
-static const uint32_t MB_LAUNCH_READY = MAILBOX + 0x80; // uint8: 1 = LPB prepared, filter should _Launch inline
-static const uint32_t MB_LAUNCH_LPB   = MAILBOX + 0x84; // uint32: LaunchParamBlockRec pointer
-static const uint32_t MB_RESULT_ERR   = MAILBOX + 4;    // int16: Mac OS error code
-static const uint32_t MB_CMD_ARG      = MAILBOX + 6;    // Pascal string (256 bytes)
-static const uint32_t MB_RESULT_DATA  = MAILBOX + 0x106; // result text (256 bytes)
+// ScratchMem layout — addresses computed at runtime from ScratchMem pointer.
+// ScratchMem points to the MIDDLE of a 64KB block (original convention).
+// We use offsets from the base (ScratchMem - 0x8000) to place our data
+// in the upper half where it won't conflict with ROM patches.
+static uint32_t SCRATCH_BASE;     // Mac address of ScratchMem base
+static uint32_t FILTER_CODE;      // jGNEFilter code (66 bytes)
+static uint32_t MAILBOX;          // command mailbox
+
+// Mailbox field offsets (relative to MAILBOX, set in init_addresses)
+static uint32_t MB_CMD_FLAG;      // uint8: 1 = command pending
+static uint32_t MB_RESULT_FLAG;   // uint8: 1 = result ready
+static uint32_t MB_CMD_TYPE;      // int16: 1=LAUNCH, 2=QUIT
+static uint32_t MB_LAUNCH_READY;  // uint8: 1 = LPB prepared, 2 = launch error
+static uint32_t MB_LAUNCH_LPB;    // uint32: LaunchParamBlockRec pointer
+static uint32_t MB_RESULT_ERR;    // int16: Mac OS error code
+static uint32_t MB_CMD_ARG;       // Pascal string (256 bytes)
+static uint32_t MB_RESULT_DATA;   // result text (256 bytes)
+
+static bool g_addresses_initialized = false;
+
+static void init_addresses() {
+    if (g_addresses_initialized) return;
+    if (!ScratchMem || !RAMBaseHost) return;
+
+    // ScratchMem points to the middle of a 64KB block.
+    // Compute Mac address of the base.
+    SCRATCH_BASE = Host2MacAddr(ScratchMem);
+    // ScratchMem itself is at base + 0x8000 (middle), but we use offsets
+    // from the Mac address of ScratchMem directly since that's what the
+    // log shows and what ReadMacInt/WriteMacInt expect.
+    // Place our structures in the upper range to avoid ROM patch conflicts.
+    FILTER_CODE     = SCRATCH_BASE + 0x400;
+    MAILBOX         = SCRATCH_BASE + 0x800;
+    MB_CMD_FLAG     = MAILBOX + 0;
+    MB_RESULT_FLAG  = MAILBOX + 1;
+    MB_CMD_TYPE     = MAILBOX + 2;
+    MB_RESULT_ERR   = MAILBOX + 4;
+    MB_CMD_ARG      = MAILBOX + 6;
+    MB_LAUNCH_READY = MAILBOX + 0x80;
+    MB_LAUNCH_LPB   = MAILBOX + 0x84;
+    MB_RESULT_DATA  = MAILBOX + 0x106;
+
+    g_addresses_initialized = true;
+    fprintf(stderr, "[CommandBridge] Addresses: SCRATCH_BASE=0x%08X FILTER=0x%08X MAILBOX=0x%08X\n",
+            SCRATCH_BASE, FILTER_CODE, MAILBOX);
+}
 
 // Mailbox command types
 static const int16_t MB_CMD_LAUNCH = 1;
@@ -71,28 +107,38 @@ static std::atomic<bool> g_filter_installed{false};
  *      instruction in the filter's own context — no Execute68kTrap
  *      reentry, no Process Manager deadlock.
  *
- * 68k code at FILTER_CODE (50 bytes):
+ * After _Launch returns (with launchContinue it always does), the filter
+ * saves D0 (error code) to MB_RESULT_ERR so the host can detect failures.
+ * D0=0 means success; the Process Manager will switch to the new app on
+ * the next WaitNextEvent cycle.
  *
- *   0x00: 207C 0210 0800  MOVEA.L  #MAILBOX, A0
+ * 68k code at FILTER_CODE (60 bytes):
+ *
+ *   0x00: 207C xxxx xxxx  MOVEA.L  #MAILBOX, A0
  *   0x06: 4A10            TST.B    (A0)           ; MB_CMD_FLAG?
  *   0x08: 6702            BEQ.S    +2 → 0x0C
  *   0x0A: 71xx            EmulOp   CMD_DISPATCH
- *   0x0C: 207C 0210 0800  MOVEA.L  #MAILBOX, A0   ; reload (EmulOp may clobber)
+ *   0x0C: 207C xxxx xxxx  MOVEA.L  #MAILBOX, A0   ; reload (EmulOp may clobber)
  *   0x12: 4A28 0080       TST.B    0x80(A0)       ; MB_LAUNCH_READY?
- *   0x16: 670A            BEQ.S    +10 → 0x22
+ *   0x16: 6714            BEQ.S    +20 → 0x2C
  *   0x18: 4228 0080       CLR.B    0x80(A0)       ; clear ready flag
  *   0x1C: 2068 0084       MOVEA.L  0x84(A0), A0   ; A0 = LPB ptr (MB_LAUNCH_LPB)
- *   0x20: A9F2            _Launch                 ; INLINE launch — no reentry!
- *   0x22: 207A 000A       MOVEA.L  oldFilter(PC), A0
- *   0x26: 4A88            TST.L    A0
- *   0x28: 6702            BEQ.S    +2 → 0x2C
- *   0x2A: 4ED0            JMP      (A0)
- *   0x2C: 4E75            RTS
- *   0x2E: 0000 0000       oldFilter: DC.L 0
+ *   0x20: A9F2            _Launch                 ; INLINE launch — returns with launchContinue
+ *   --- _Launch returned (D0.W = 0 on success, <0 on error) ---
+ *   0x22: 207C xxxx xxxx  MOVEA.L  #MAILBOX, A0   ; reload A0
+ *   0x28: 3140 0004       MOVE.W   D0, 0x04(A0)   ; MB_RESULT_ERR = D0
+ *   --- chain to old filter ---
+ *   0x2C: 207A 000A       MOVEA.L  oldFilter(PC), A0
+ *   0x30: 4A88            TST.L    A0
+ *   0x32: 6702            BEQ.S    +2 → 0x36
+ *   0x34: 4ED0            JMP      (A0)
+ *   0x36: 4E75            RTS
+ *   0x38: 0000 0000       oldFilter: DC.L 0
  */
 static void install_jgne_filter() {
     if (g_filter_installed.load(std::memory_order_acquire)) return;
     if (!RAMBaseHost || RAMSize == 0) return;
+    init_addresses();
 
     uint16_t emulop = platform_make_emulop(M68K_EMUL_OP_CMD_DISPATCH);
 
@@ -106,21 +152,27 @@ static void install_jgne_filter() {
     WriteMacInt32(p + 0x0E, MAILBOX);      //   #MAILBOX
     WriteMacInt16(p + 0x12, 0x4A28);      // TST.B d(A0)
     WriteMacInt16(p + 0x14, 0x0080);      //   d=0x80 (MB_LAUNCH_READY)
-    WriteMacInt16(p + 0x16, 0x670A);      // BEQ.S +10 → chain
+    WriteMacInt16(p + 0x16, 0x6714);      // BEQ.S +20 → chain at 0x2C
     WriteMacInt16(p + 0x18, 0x4228);      // CLR.B d(A0)
     WriteMacInt16(p + 0x1A, 0x0080);      //   d=0x80
     WriteMacInt16(p + 0x1C, 0x2068);      // MOVEA.L d(A0), A0
     WriteMacInt16(p + 0x1E, 0x0084);      //   d=0x84 (MB_LAUNCH_LPB)
-    WriteMacInt16(p + 0x20, 0xA9F2);      // _Launch                 — INLINE, app ctx
-    WriteMacInt16(p + 0x22, 0x207A);      // MOVEA.L d(PC), A0
-    WriteMacInt16(p + 0x24, 0x000A);      //   d → oldFilter at 0x2E
-    WriteMacInt16(p + 0x26, 0x4A88);      // TST.L A0
-    WriteMacInt16(p + 0x28, 0x6702);      // BEQ.S +2
-    WriteMacInt16(p + 0x2A, 0x4ED0);      // JMP (A0)
-    WriteMacInt16(p + 0x2C, 0x4E75);      // RTS
+    WriteMacInt16(p + 0x20, 0xA9F2);      // _Launch                 — returns with launchContinue
+    // --- _Launch returned: D0 = 0 (success) or error code ---
+    WriteMacInt16(p + 0x22, 0x207C);      // MOVEA.L #imm, A0        — reload
+    WriteMacInt32(p + 0x24, MAILBOX);      //   #MAILBOX
+    WriteMacInt16(p + 0x28, 0x3140);      // MOVE.W D0, d(A0)
+    WriteMacInt16(p + 0x2A, 0x0004);      //   d=0x04 (MB_RESULT_ERR)
+    // --- chain to old filter ---
+    WriteMacInt16(p + 0x2C, 0x207A);      // MOVEA.L d(PC), A0
+    WriteMacInt16(p + 0x2E, 0x000A);      //   d → oldFilter at 0x38
+    WriteMacInt16(p + 0x30, 0x4A88);      // TST.L A0
+    WriteMacInt16(p + 0x32, 0x6702);      // BEQ.S +2
+    WriteMacInt16(p + 0x34, 0x4ED0);      // JMP (A0)
+    WriteMacInt16(p + 0x36, 0x4E75);      // RTS
     // Save old filter and install ours
     uint32_t old_filter = ReadMacInt32(LM_JGNEFILTER);
-    WriteMacInt32(p + 0x2E, old_filter);  // oldFilter storage
+    WriteMacInt32(p + 0x38, old_filter);  // oldFilter storage
     WriteMacInt32(LM_JGNEFILTER, FILTER_CODE);
 
     // Clear mailbox
@@ -148,6 +200,7 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
     if (!cmd_flag) return;
 
     int16_t cmd_type = static_cast<int16_t>(ReadMacInt16(MB_CMD_TYPE));
+    fprintf(stderr, "[CommandBridge] dispatch: cmd_type=%d\n", cmd_type);
 
     // Clear command flag immediately to prevent re-entry
     WriteMacInt8(MB_CMD_FLAG, 0);
@@ -170,6 +223,7 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
         for (int i = 0; i < namelen && i < 255; i++)
             name[i] = static_cast<char>(ReadMacInt8(MB_CMD_ARG + 1 + i));
         name[namelen] = '\0';
+        fprintf(stderr, "[CommandBridge] LAUNCH path='%s' len=%d\n", name, namelen);
 
         // --- Step 1: Resolve "Volume:..." path to (vRefNum, leaf) ---
         // Walks mounted volumes with _HGetVInfo (HParamBlockRec):
@@ -225,10 +279,12 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
             }
 
             if (!found) {
+                fprintf(stderr, "[CommandBridge] Volume '%s' not found (nsvErr)\n", volname);
                 WriteMacInt16(MB_RESULT_ERR, -35);  // nsvErr
                 WriteMacInt8(MB_RESULT_FLAG, 1);
                 break;
             }
+            fprintf(stderr, "[CommandBridge] Volume '%s' -> vRefNum=%d\n", volname, vRefNum);
             leaf_start = colon_pos + 1;
         }
 
@@ -285,6 +341,8 @@ void command_bridge_dispatch(M68kRegisters* /*r*/) {
         // to observe when MacTestSuite starts and exits back to Finder.
         WriteMacInt32(MB_LAUNCH_LPB, lpb_addr);
         WriteMacInt8(MB_LAUNCH_READY, 1);
+        fprintf(stderr, "[CommandBridge] LPB at 0x%08X, FSSpec at 0x%08X, vRefNum=%d — handed to filter\n",
+                lpb_addr, fsspec_addr, vRefNum);
 
         WriteMacInt16(MB_RESULT_ERR, 0);
         WriteMacInt8(MB_RESULT_FLAG, 1);
@@ -517,13 +575,209 @@ void CommandBridge::execute_one_public(const Command& cmd, M68kRegisters* /*r*/,
 }
 
 // ============================================================================
+// Launch result polling — called from API handler thread
+// ============================================================================
+
+bool command_bridge_poll_launch_result(int16_t& err, int timeout_ms) {
+    if (!RAMBaseHost || RAMSize == 0 || !g_addresses_initialized) {
+        err = -1;
+        return false;
+    }
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (std::chrono::steady_clock::now() < deadline) {
+        uint8_t result_flag = ReadMacInt8(MB_RESULT_FLAG);
+        uint8_t launch_ready = ReadMacInt8(MB_LAUNCH_READY);
+
+        if (result_flag) {
+            // Dispatch completed (volume lookup, FSSpec build, etc.)
+            err = static_cast<int16_t>(ReadMacInt16(MB_RESULT_ERR));
+            fprintf(stderr, "[CommandBridge] poll: result_flag=%d launch_ready=%d err=%d\n",
+                    result_flag, launch_ready, err);
+            if (err != 0) return true;  // dispatch-level error (e.g. nsvErr)
+
+            if (launch_ready == 0) {
+                // Filter already consumed the launch and ran _Launch.
+                // With launchContinue, _Launch returns and the filter writes
+                // D0 (error code) to MB_RESULT_ERR. Give it a moment, then
+                // re-read in case the filter wrote a non-zero error.
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                err = static_cast<int16_t>(ReadMacInt16(MB_RESULT_ERR));
+                fprintf(stderr, "[CommandBridge] poll: after 200ms, err=%d\n", err);
+                return true;
+            }
+
+            // launch_ready == 1 — filter hasn't picked it up yet, keep polling
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return false;  // timeout
+}
+
+// ============================================================================
+// INIT bridge — guest INIT communicates via EmulOp (no mailbox addresses)
+// ============================================================================
+
+// INIT filter address — set when INIT calls EmulOp 0xFE, installed later by IRQ
+static uint32_t g_init_filter_addr = 0;
+static bool g_init_filter_installed = false;
+
+// Pending action command for the INIT to pick up
+static std::mutex g_init_mutex;
+static std::condition_variable g_init_cv;
+static bool g_init_cmd_pending = false;
+static std::string g_init_cmd_path;
+static int16_t g_init_cmd_type = 0;
+
+// Result from the INIT
+static bool g_init_result_ready = false;
+static int16_t g_init_result_err = 0;
+
+/*
+ * Called from M68K_EMUL_OP_INIT_BRIDGE handler (app context, from guest INIT).
+ *
+ * D0=0 (CHECK): Guest polls for a pending command.
+ *   If pending: copy path to buffer at A0, set D0=cmd_type, D1=path_length
+ *   If nothing: set D0=0
+ *
+ * D0=0x80 (RESULT): Guest reports command completion.
+ *   D1 = Mac OS error code (0 = noErr)
+ */
+void command_bridge_init_bridge(M68kRegisters* r) {
+    uint32_t sub_op = r->d[0];
+
+    if (sub_op == 0xFF) {
+        fprintf(stderr, "[InitBridge] INIT loaded! Bridge ready.\n");
+        return;
+    }
+    if (sub_op == 0xFD) {
+        static int heartbeat = 0;
+        if (++heartbeat <= 3)
+            fprintf(stderr, "[InitBridge] Filter heartbeat #%d — filter is running!\n", heartbeat);
+        return;
+    }
+
+    if (sub_op == 0xFE) {
+        // INIT reports its filter address — we'll install it after boot stabilizes
+        g_init_filter_addr = r->d[1];
+        fprintf(stderr, "[InitBridge] INIT filter at 0x%08X — will install after boot\n",
+                g_init_filter_addr);
+        return;
+    }
+
+    if (sub_op == 0) {
+        // CHECK: is there a pending command?
+        static int check_count = 0;
+        if (++check_count <= 3)
+            fprintf(stderr, "[InitBridge] CHECK #%d (filter is alive)\n", check_count);
+
+        std::lock_guard<std::mutex> lock(g_init_mutex);
+        if (!g_init_cmd_pending) {
+            r->d[0] = 0;  // nothing pending
+            return;
+        }
+
+        // Copy path to guest buffer at A0
+        uint32_t buf_addr = r->a[0];
+        auto path = g_init_cmd_path;
+        auto plen = static_cast<uint8_t>(std::min<size_t>(path.size(), 255));
+        WriteMacInt8(buf_addr, plen);  // Pascal string: length byte
+        for (int i = 0; i < plen; i++)
+            WriteMacInt8(buf_addr + 1 + i, static_cast<uint8_t>(path[i]));
+
+        r->d[0] = g_init_cmd_type;   // 1=LAUNCH, 2=QUIT
+        r->d[1] = plen;
+
+        g_init_cmd_pending = false;
+        fprintf(stderr, "[InitBridge] CHECK: delivering cmd=%d path='%s'\n",
+                g_init_cmd_type, path.c_str());
+
+    } else if (sub_op == 0x80) {
+        // RESULT: INIT completed the command
+        int16_t err = static_cast<int16_t>(r->d[1]);
+        fprintf(stderr, "[InitBridge] RESULT: err=%d\n", err);
+
+        std::lock_guard<std::mutex> lock(g_init_mutex);
+        g_init_result_err = err;
+        g_init_result_ready = true;
+        g_init_cv.notify_all();
+    }
+}
+
+/*
+ * Submit an action command for the INIT to pick up.
+ * Called from the API handler after submit() drains through IRQ.
+ */
+void command_bridge_submit_to_init(int16_t cmd_type, const std::string& path) {
+    std::lock_guard<std::mutex> lock(g_init_mutex);
+    g_init_cmd_type = cmd_type;
+    g_init_cmd_path = path;
+    g_init_cmd_pending = true;
+    g_init_result_ready = false;
+    g_init_result_err = 0;
+}
+
+/*
+ * Wait for the INIT to report a result.
+ * Called from the API handler thread.
+ */
+bool command_bridge_wait_init_result(int16_t& err, int timeout_ms) {
+    std::unique_lock<std::mutex> lock(g_init_mutex);
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+
+    while (!g_init_result_ready) {
+        if (g_init_cv.wait_until(lock, deadline) == std::cv_status::timeout) {
+            return false;
+        }
+    }
+
+    err = g_init_result_err;
+    g_init_result_ready = false;
+    return true;
+}
+
+// ============================================================================
 // Entry point from emul_op.cpp IRQ handler
 // ============================================================================
 
 void command_bridge_drain_from_irq(M68kRegisters* r) {
-    // Install jGNEFilter once (first IRQ after Mac has started)
+    // Install legacy jGNEFilter once (first IRQ after Mac has started).
+    // This is a fallback — the BridgeINIT's filter takes over after boot.
     if (!g_filter_installed.load(std::memory_order_acquire)) {
         install_jgne_filter();
+    }
+
+    // Deferred install: if the BridgeINIT registered its filter address,
+    // install it at 0x29A after Finder has started (boot_phase >= Finder).
+    // This ensures all extensions have loaded and the jGNEFilter chain
+    // has stabilized.
+    if (g_init_filter_addr != 0 && !g_init_filter_installed
+        && boot_progress_phase_reached("Finder")) {
+        // Save current filter as the INIT's chain target
+        uint32_t current_filter = ReadMacInt32(0x29A);
+        // Write the INIT's old_filter_storage (immediately after filter_entry code)
+        // The asm block's old_filter_storage is at a known offset from filter_entry.
+        // Rather than computing the offset, write it to the Mac address the INIT uses.
+        // Actually, the INIT reads old_filter_storage via PC-relative lea, so we
+        // need to find and write it. For now, just patch 0x29A and let the INIT
+        // chain via its saved value (which is whatever was at 0x29A when it loaded).
+        //
+        // Simpler: write the INIT's filter addr to 0x29A. The INIT saved the old
+        // filter at boot (which might be wrong now). So also update old_filter_storage.
+        WriteMacInt32(0x29A, g_init_filter_addr);
+
+        // The INIT's old_filter_storage follows filter_entry in memory.
+        // From the disassembly: old_filter_storage is at filter_entry + 0x1E
+        // (the .long after the rts). Let's compute: the asm block is ~30 bytes.
+        // Actually, from the objdump: old_filter_storage is at offset +0x1E from
+        // filter_entry (filter_entry is 0x1C bytes of code + 2 byte align = 0x1E).
+        // Write current_filter there so the INIT chains correctly.
+        WriteMacInt32(g_init_filter_addr + 0x1E, current_filter);
+
+        g_init_filter_installed = true;
+        fprintf(stderr, "[InitBridge] Filter installed at 0x29A: 0x%08X (old=0x%08X)\n",
+                g_init_filter_addr, current_filter);
     }
 
     // Drain in-process command queue

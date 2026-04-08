@@ -102,6 +102,17 @@ static void uae_backend_trigger_interrupt(int level) {
 	extern volatile bool PendingInterrupt;
 	PendingInterrupt = true;
 	SPCFLAGS_SET(SPCFLAG_INT | SPCFLAG_DOINT);
+	/* For NMI (level 7), also break out of STOP state */
+	if (level == 7) {
+		SPCFLAGS_CLEAR(SPCFLAG_STOP);
+	}
+}
+
+// Invoke debugger via NMI (68k level 7 interrupt, non-maskable)
+static void uae_invoke_debug(void) {
+	extern void SetInterruptFlag(uint32_t flag);
+	SetInterruptFlag(128);  // INTFLAG_NMI
+	uae_backend_trigger_interrupt(7);
 }
 
 /**
@@ -138,6 +149,7 @@ void cpu_uae_install(Platform *p) {
 
 	// Interrupts
 	p->cpu_trigger_interrupt = uae_backend_trigger_interrupt;
+	p->invoke_debug = uae_invoke_debug;
 
 	// Trap execution
 	p->cpu_execute_68k_trap = uae_execute_68k_trap;

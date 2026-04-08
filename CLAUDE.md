@@ -115,6 +115,7 @@ legacy/                             — Original BasiliskII/SheepShaver source (
 | `/api/codec` | POST | Change video codec (h264/vp9/png/webp) |
 | `/api/codecs` | GET | Available codecs: `{codecs: [{id, name, available}]}` |
 | `/api/keypress` | POST | Send key event: `{"key": "return"}` or `{"key": 36}` |
+| `/api/invoke-debug` | POST | Invoke debugger (Programmer's Key: NMI on 68k, Cmd+Power on PPC) |
 | `/api/app` | GET | Current app name (passive SHM field) |
 | `/api/windows` | GET | Window list (SHM command queue) |
 | `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` |

@@ -24,7 +24,7 @@
 
 #include "sysdeps.h"
 #include "cpu_emulation.h"
-#include "uae_wrapper.h"  // For TriggerNMI()
+#include "uae_wrapper.h"  // For InvokeDebugger()
 #include "platform.h"      // For g_platform
 #include "unicorn_wrapper.h"  // For g_pending_interrupt_level
 #include "main.h"
@@ -67,6 +67,7 @@ extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
 extern uint8 *ScratchMem;  // Platform scratch memory (safe target for hardware base redirect)
 extern void command_bridge_drain_from_irq(M68kRegisters *r);
 extern void command_bridge_dispatch(M68kRegisters *r);
+extern void command_bridge_init_bridge(M68kRegisters *r);
 
 void PlayStartupSound();
 
@@ -650,7 +651,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			if (InterruptFlags & INTFLAG_NMI) {
 				ClearInterruptFlag(INTFLAG_NMI);
 				if (HasMacStarted())
-					TriggerNMI();
+					InvokeDebugger();
 			}
 
 			// Drain command bridge queue (launch app, quit, etc.)
@@ -724,9 +725,17 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_CMD_DISPATCH: {
-			// Command bridge dispatch — called from jGNEFilter in app context.
-			// Unlike IRQ context, Toolbox calls (_Launch, _ExitToShell) are safe here.
+			// Command bridge dispatch — called from jGNEFilter in app context (legacy).
 			command_bridge_dispatch(r);
+			break;
+		}
+
+		case M68K_EMUL_OP_INIT_BRIDGE: {
+			// INIT bridge — called from guest INIT's jGNEFilter in app context.
+			static int bridge_call_count = 0;
+			if (++bridge_call_count <= 5)
+				fprintf(stderr, "[EmulOp] INIT_BRIDGE call #%d D0=0x%lx\n", bridge_call_count, (unsigned long)r->d[0]);
+			command_bridge_init_bridge(r);
 			break;
 		}
 

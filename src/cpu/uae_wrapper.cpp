@@ -30,6 +30,9 @@ int FPUType = FPU_68881;
 
 /* Interrupt flags */
 volatile uint32 InterruptFlags = 0;
+#ifndef INTFLAG_NMI
+#define INTFLAG_NMI 128
+#endif
 
 /* Pending interrupt flag (shared by all CPU backends) */
 volatile bool PendingInterrupt = false;
@@ -399,18 +402,25 @@ void TriggerInterrupt(void) {
 }
 
 /**
- * Trigger Non-Maskable Interrupt
- * Not currently implemented
+ * Invoke debugger — dispatches through Platform API.
+ * 68k: NMI (level 7 interrupt → vector 31 → MacsBug)
+ * PPC: Command+Power ADB keystroke
  */
-void TriggerNMI(void) {
-    // TODO: Implement NMI handling
+void InvokeDebugger(void) {
+    if (g_platform.invoke_debug) {
+        g_platform.invoke_debug();
+    }
 }
 
 /**
- * Get current interrupt level from InterruptFlags
- * Returns 1 if any interrupt is pending, 0 otherwise
+ * Get current interrupt level from InterruptFlags.
+ * NMI (level 7) takes priority; otherwise returns 1 for any pending interrupt.
  */
 int intlev(void) {
+    if (InterruptFlags & INTFLAG_NMI) {
+        ClearInterruptFlag(INTFLAG_NMI);
+        return 7;
+    }
     return InterruptFlags ? 1 : 0;
 }
 

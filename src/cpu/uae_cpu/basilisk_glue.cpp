@@ -197,7 +197,7 @@ void Start680x0_until_stopped(void)
 
 /*
  *  Interrupt handling
- *  NOTE: TriggerInterrupt(), TriggerNMI(), and intlev() are now in uae_wrapper.cpp
+ *  NOTE: TriggerInterrupt(), InvokeDebugger(), and intlev() are now in uae_wrapper.cpp
  *        They are shared by all CPU backends (UAE, Unicorn, DualCPU)
  */
 

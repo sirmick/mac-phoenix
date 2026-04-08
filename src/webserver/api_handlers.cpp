@@ -52,6 +52,7 @@ extern void ADBMouseMoved(int x, int y);
 extern void ADBMouseDown(int button);
 extern void ADBMouseUp(int button);
 extern void ADBSetRelMouseMode(bool relative);
+extern "C" void InvokeDebugger(void);
 
 namespace http {
 
@@ -120,6 +121,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/keypress" && req.method == "POST") {
         return handle_keypress(req);
+    }
+    if (req.path == "/api/invoke-debug" && req.method == "POST") {
+        return handle_invoke_debug(req);
     }
     if (req.path == "/api/app" && req.method == "GET") {
         return handle_app(req);
@@ -1026,6 +1030,17 @@ Response APIRouter::handle_keypress(const Request& req) {
     return Response::json("{\"success\": true, \"keycode\": " + std::to_string(keycode) + "}");
 }
 
+// POST /api/invoke-debug - invoke debugger (Programmer's Key)
+Response APIRouter::handle_invoke_debug(const Request& req) {
+    (void)req;
+    if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
+        ctx_->subprocess->ipc_client()->send_command(IPC_CMD_INVOKE_DEBUG);
+    } else {
+        ::InvokeDebugger();
+    }
+    return Response::json("{\"success\": true, \"message\": \"debugger invoked\"}");
+}
+
 // ── Command Bridge Endpoints ──
 
 Response APIRouter::handle_app(const Request& req) {
@@ -1078,21 +1093,22 @@ Response APIRouter::handle_launch(const Request& req) {
     }
     std::string path = j["path"].get<std::string>();
 
-    Command cmd;
-    cmd.type = CmdType::LAUNCH_APP;
-    cmd.arg = path;
-    uint32_t id = g_command_bridge.submit(cmd);
+    // Submit to INIT bridge — the guest INIT picks this up via EmulOp
+    command_bridge_submit_to_init(1, path);  // 1 = LAUNCH
 
-    CommandResult result;
-    if (g_command_bridge.wait_result(id, result, 10000)) {
-        std::ostringstream json;
-        json << "{\"success\": " << (result.err == 0 ? "true" : "false")
-             << ", \"error_code\": " << result.err
-             << ", \"message\": \"" << result.data << "\"}";
-        return Response::json(json.str());
+    // Wait for the INIT to execute LaunchApplication and report back
+    int16_t mac_err = 0;
+    if (command_bridge_wait_init_result(mac_err, 10000)) {
+        if (mac_err != 0) {
+            std::ostringstream json;
+            json << "{\"success\": false, \"error_code\": " << mac_err
+                 << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
+            return Response::json(json.str());
+        }
+        return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
     }
 
-    return Response::json("{\"success\": false, \"error\": \"timeout waiting for launch\"}");
+    return Response::json("{\"success\": false, \"error\": \"timeout waiting for INIT (is BridgeINIT installed?)\"}");
 }
 
 Response APIRouter::handle_quit(const Request& req) {
@@ -1102,16 +1118,14 @@ Response APIRouter::handle_quit(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"not available in subprocess mode\"}");
     }
 
-    Command cmd;
-    cmd.type = CmdType::QUIT_APP;
-    uint32_t id = g_command_bridge.submit(cmd);
+    command_bridge_submit_to_init(2, "");  // 2 = QUIT
 
-    CommandResult result;
-    if (g_command_bridge.wait_result(id, result, 5000)) {
+    int16_t mac_err = 0;
+    if (command_bridge_wait_init_result(mac_err, 5000)) {
         return Response::json("{\"success\": true}");
     }
 
-    return Response::json("{\"success\": false, \"error\": \"timeout\"}");
+    return Response::json("{\"success\": false, \"error\": \"timeout waiting for INIT\"}");
 }
 
 Response APIRouter::handle_wait(const Request& req) {

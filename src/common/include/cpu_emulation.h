@@ -97,6 +97,6 @@ extern "C" void Execute68k(uint32 addr, M68kRegisters *r);		// Execute 68k code 
 extern "C" void Execute68kTrap(uint16 trap, M68kRegisters *r);	// Execute MacOS 68k trap from EMUL_OP routine
 
 // Interrupt functions (now declared in uae_wrapper.h - shared by all CPU backends)
-// TriggerInterrupt() and TriggerNMI() moved to uae_wrapper.cpp for backend-agnostic access
+// TriggerInterrupt() and InvokeDebugger() moved to uae_wrapper.cpp for backend-agnostic access
 
 #endif
