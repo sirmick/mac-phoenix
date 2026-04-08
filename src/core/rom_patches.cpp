@@ -1312,7 +1312,14 @@ static bool patch_rom_ii(void)
 		// move.l #ScratchMem,($1E0).w — IWM base (8 bytes)
 		*wp++ = htons(0x23fc); *wp++ = htons(sm >> 16);
 		*wp++ = htons(sm & 0xffff); *wp++ = htons(0x01e0);
-		// Total: 4+8+8+8+8 = 36 bytes ($118-$13B). Remaining: NOP $13E.
+		// move.l #ScratchMem+$100,($11C).w — pre-set UTableBase (8 bytes)
+		// INSTALL_DRIVERS at .Sound _Open fires BEFORE PATCH_BOOT_GLOBS
+		// at $DAC. Without this, ($11C) = $FFFFFFFF and InstallDrivers
+		// reads a bad unit table pointer.
+		uint32 utab = sm + 0x100;   // same offset as PATCH_BOOT_GLOBS
+		*wp++ = htons(0x23fc); *wp++ = htons(utab >> 16);
+		*wp++ = htons(utab & 0xffff); *wp++ = htons(0x011c);
+		// Total: 4+8+8+8+8+8 = 44 bytes ($118-$143). Overlaps $13E.
 	}
 	wp = (uint16 *)(ROMBaseHost + 0x13e);
 	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
