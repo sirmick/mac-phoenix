@@ -235,10 +235,21 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 				// Classic/Mac II ROM: called from $776/$DAC (INITCRSRMGR)
 				// replacing _NewPtrSysClear. Return A0 = unit table in
 				// ScratchMem (immune to zone management).
-				// D0 = requested size (set by ROM before the trap).
 				uint32 utab = Host2MacAddr(ScratchMem + 0x100);
 				memset(ScratchMem + 0x100, 0, r->d[0]);
 				r->a[0] = utab;
+
+				// Mac II: also call InstallDrivers here. This fires AFTER
+				// the drive queue clear at $1BE, so drives stay in the queue.
+				// The .Sound _Open hook at $2F02A handles the first call
+				// (during INITIOMGR), but AddDrive's results get cleared.
+				// This second call re-adds drives to the clean queue.
+				if (ROMVersion == ROM_VERSION_II) {
+					// Allocate a param block on the stack for InstallDrivers
+					uint32 sp = r->a[7] - 256;
+					Mac_memset(sp, 0, 256);
+					InstallDrivers(sp);
+				}
 			} else {
 				// 32-bit ROM: A4 points to BootGlobs, patch MMU flags
 				WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);	// MemTop

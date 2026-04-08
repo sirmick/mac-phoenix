@@ -1312,14 +1312,8 @@ static bool patch_rom_ii(void)
 		// move.l #ScratchMem,($1E0).w — IWM base (8 bytes)
 		*wp++ = htons(0x23fc); *wp++ = htons(sm >> 16);
 		*wp++ = htons(sm & 0xffff); *wp++ = htons(0x01e0);
-		// move.l #ScratchMem+$100,($11C).w — pre-set UTableBase (8 bytes)
-		// INSTALL_DRIVERS at .Sound _Open fires BEFORE PATCH_BOOT_GLOBS
-		// at $DAC. Without this, ($11C) = $FFFFFFFF and InstallDrivers
-		// reads a bad unit table pointer.
-		uint32 utab = sm + 0x100;   // same offset as PATCH_BOOT_GLOBS
-		*wp++ = htons(0x23fc); *wp++ = htons(utab >> 16);
-		*wp++ = htons(utab & 0xffff); *wp++ = htons(0x011c);
-		// Total: 4+8+8+8+8+8 = 44 bytes ($118-$143). Overlaps $13E.
+		// Total: 4+8+8+8+8 = 36 bytes ($118-$13B). Fits before $13E.
+		// UTableBase ($11C) is handled by PATCH_BOOT_GLOBS at $DAC.
 	}
 	wp = (uint16 *)(ROMBaseHost + 0x13e);
 	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
@@ -1356,10 +1350,10 @@ static bool patch_rom_ii(void)
 		*wp = htons(M68K_RTS);
 	}
 
-	// Hook .Sound _Open at $2F02A to trigger INSTALL_DRIVERS during
-	// INITIOMGR. This fires BEFORE serial drivers are opened, so our
-	// emulated drivers are installed before the ROM tries to open the
-	// real SCC-based serial drivers (which cause SIGSEGV on I/O access).
+	// Hook .Sound _Open to prevent SCC access during INITIOMGR.
+	// INSTALL_DRIVERS fires here AND at $1F4 (after queue clear at $1BE).
+	// The first call installs trap patches. The second re-adds drives
+	// to the freshly-cleared queue.
 	wp = (uint16 *)(ROMBaseHost + 0x2f02a);
 	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
 	*wp = htons(M68K_RTS);
@@ -1390,12 +1384,13 @@ static bool patch_rom_ii(void)
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
 
-	// Skip FUN_40800BB8 at $1CC (bsr, 4 bytes) — video globals setup
-	// reads from $C20/$C22 which are $FFFFFFFF from FILLWITHONES.
-	// Passes A1=$FFFFFFFF to the dispatch thunk → garbled table read.
-	wp = (uint16 *)(ROMBaseHost + 0x1cc);
-	*wp++ = htons(M68K_NOP);
-	*wp = htons(M68K_NOP);
+	// NOP $1CC-$1F3 (video globals, zone setup, _SetApplBase).
+	// Some code in this range crashes on bad globals. The essential
+	// work (_SetApplBase) is done by INSTALL_DRIVERS at $1F4.
+	for (uint32 ofs = 0x1cc; ofs < 0x1f4; ofs += 2) {
+		wp = (uint16 *)(ROMBaseHost + ofs);
+		*wp = htons(M68K_NOP);
+	}
 
 	// Skip IOP dispatcher polling loop in INITIOMGR ($6DD8-$6DDE).
 	// The loop waits for bit 5 at (0x15D,A3) to clear — requires
