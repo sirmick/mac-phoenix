@@ -210,8 +210,14 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     // in the 24-bit space. Allocate the full 16MB (24-bit range) so these
     // accesses land in mapped memory instead of causing SIGSEGV.
     size_t total_alloc = rom_offset + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
-    if (profile.twenty_four_bit && total_alloc < 0x1000000)
-        total_alloc = 0x1000000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
+    // For 24-bit ROMs: ensure allocation covers the full 24-bit address
+    // space (16MB) so hardcoded I/O at $50F0xxxx → $0F0xxxx lands in
+    // mapped memory. The ROM/scratch/framebuffer sit above 16MB.
+    if (profile.twenty_four_bit) {
+        size_t min_alloc = 0x1000000 + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
+        if (total_alloc < min_alloc)
+            total_alloc = min_alloc;
+    }
 
     // JIT requires MEMBaseDiff to fit in a 32-bit x86 displacement, so allocate
     // in the low 32-bit address space. Fall back to heap if MAP_32BIT fails.
@@ -222,7 +228,8 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     if (mmap_ram_ != MAP_FAILED) {
         mmap_ram_size_ = total_alloc;
         memset(mmap_ram_, 0, total_alloc);
-        fprintf(stderr, "[CPUContext] RAM mmap'd at %p (low 32-bit, JIT OK)\n", mmap_ram_);
+        fprintf(stderr, "[CPUContext] RAM mmap'd at %p size=0x%zx (%zu MB) (low 32-bit, JIT OK)\n",
+                mmap_ram_, total_alloc, total_alloc / (1024*1024));
     } else {
         mmap_ram_ = nullptr;
         fprintf(stderr, "[CPUContext] WARNING: MAP_32BIT mmap failed, falling back to heap (JIT disabled)\n");
