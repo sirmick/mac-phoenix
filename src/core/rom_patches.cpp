@@ -1291,22 +1291,29 @@ static bool patch_rom_ii(void)
 	// HYPOTHESIS: The UAE interpreter might not be using VBR for vector
 	// reads. Let me check.
 
-	// Replace SETUPTIMEK ($118) with: clr.w ($CB1).w — clears both
-	// $CB1 (MMU mode flag = 0 = 24-bit) and $CB2 (SwapMMUMode state).
-	// This runs AFTER FILLWITHONES fills $CB1/$CB2 with $FF.
-	// Without this, SwapMMUMode modifies registers and the dispatch
-	// thunk at $83F66A reads garbled addresses.
-	// clr.w ($CB1).w = 4 bytes: 4279 0CB1
-	wp = (uint16 *)(ROMBaseHost + 0x118);
-	*wp++ = htons(0x4279);			// clr.w ($CB1).w
-	*wp = htons(0x0cb1);
-	// Replace VIATIMERENABLES ($11C) with NOP
-	wp = (uint16 *)(ROMBaseHost + 0x11c);
-	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
-	wp = (uint16 *)(ROMBaseHost + 0x120);
-	*wp++ = htons(M68K_NOP); *wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
-	wp = (uint16 *)(ROMBaseHost + 0x124);
-	*wp++ = htons(M68K_NOP); *wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
+	// Use $118-$13F (40 bytes) for post-FILLWITHONES initialization.
+	// FILLWITHONES fills $100-$1E00 with $FFFFFFFF, overwriting low-mem
+	// globals. Write critical values here before BOOTRETRY runs.
+	{
+		extern uint8 *ScratchMem;
+		uint32 sm = Host2MacAddr(ScratchMem);
+		wp = (uint16 *)(ROMBaseHost + 0x118);
+		// clr.w ($CB1).w — MMU mode flags (4 bytes)
+		*wp++ = htons(0x4279); *wp++ = htons(0x0cb1);
+		// move.l #ScratchMem,($1D4).w — VIA1 base (8 bytes)
+		*wp++ = htons(0x23fc); *wp++ = htons(sm >> 16);
+		*wp++ = htons(sm & 0xffff); *wp++ = htons(0x01d4);
+		// move.l #ScratchMem,($1D8).w — SCC read base (8 bytes)
+		*wp++ = htons(0x23fc); *wp++ = htons(sm >> 16);
+		*wp++ = htons(sm & 0xffff); *wp++ = htons(0x01d8);
+		// move.l #ScratchMem,($1DC).w — SCC write base (8 bytes)
+		*wp++ = htons(0x23fc); *wp++ = htons(sm >> 16);
+		*wp++ = htons(sm & 0xffff); *wp++ = htons(0x01dc);
+		// move.l #ScratchMem,($1E0).w — IWM base (8 bytes)
+		*wp++ = htons(0x23fc); *wp++ = htons(sm >> 16);
+		*wp++ = htons(sm & 0xffff); *wp++ = htons(0x01e0);
+		// Total: 4+8+8+8+8 = 36 bytes ($118-$13B). Remaining: NOP $13E.
+	}
 	wp = (uint16 *)(ROMBaseHost + 0x13e);
 	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 
