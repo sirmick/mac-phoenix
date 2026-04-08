@@ -1400,8 +1400,12 @@ static bool patch_rom_ii(void)
 	*wp = htons(M68K_NOP);
 	wp = (uint16 *)(ROMBaseHost + 0xdce);
 	*wp = htons(M68K_NOP);
-	// NOP cursor manager ($DD0) and SERD resource loading ($DD4-$DF4)
-	for (uint32 ofs = 0xdd0; ofs < 0xdf4; ofs += 2) {
+	// NOP cursor manager ($DD0) but keep SP restore at $DD4
+	wp = (uint16 *)(ROMBaseHost + 0xdd0);
+	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
+	// $DD4: adda.w #$32,SP — KEEP (restores stack from $DB2)
+	// NOP SERD resource loading ($DD8-$DF4)
+	for (uint32 ofs = 0xdd8; ofs < 0xdf4; ofs += 2) {
 		wp = (uint16 *)(ROMBaseHost + ofs);
 		*wp = htons(M68K_NOP);
 	}

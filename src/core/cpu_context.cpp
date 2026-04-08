@@ -210,11 +210,13 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     // in the 24-bit space. Allocate the full 16MB (24-bit range) so these
     // accesses land in mapped memory instead of causing SIGSEGV.
     size_t total_alloc = rom_offset + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
-    // For 24-bit ROMs: ensure allocation covers the full 24-bit address
-    // space (16MB) so hardcoded I/O at $50F0xxxx → $0F0xxxx lands in
-    // mapped memory. The ROM/scratch/framebuffer sit above 16MB.
-    if (profile.twenty_four_bit) {
-        size_t min_alloc = 0x1000000 + 0x100000 + SCRATCH_MEM_SIZE + FRAMEBUFFER_AREA_SIZE;
+    // For 24-bit Mac II: ensure total allocation covers 32MB.
+    // The 68020 uses 32-bit addresses internally even in 24-bit mode.
+    // Some code paths (instruction fetch via pc_p increment) can
+    // generate host pointers up to MEMBaseDiff + 24MB. A 32MB
+    // allocation prevents SIGSEGV at the boundary.
+    if (profile.twenty_four_bit && profile.rom_base_mac >= 0x800000) {
+        size_t min_alloc = 0x2000000;  // 32MB
         if (total_alloc < min_alloc)
             total_alloc = min_alloc;
     }

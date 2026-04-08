@@ -156,9 +156,17 @@ extern uint32_t ROMSize;
 #if REAL_ADDRESSING || DIRECT_ADDRESSING
 static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 {
+	uaecptr orig_addr = addr;
 	// 24-bit mode: strip flag bits from the address register. No-op when
 	// address_reg_mask = 0xFFFFFFFF (32-bit mode). See newcpu.cpp.
 	addr &= address_reg_mask;
+	// Debug: detect unmasked access
+	if (orig_addr != addr && orig_addr > 0x1000000) {
+		static int dbg = 0;
+		if (++dbg <= 3)
+			fprintf(stderr, "[MEM] masked %08x → %08x (mask=%08x)\n",
+				orig_addr, addr, address_reg_mask);
+	}
 
 	if (addr < RAMSize) {
 		return (uae_u8 *)MEMBaseDiff + addr;
