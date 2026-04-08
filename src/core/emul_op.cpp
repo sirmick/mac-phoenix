@@ -307,6 +307,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 				WriteMacInt32(0x1e0, sm);  // IWM base
 				WriteMacInt32(0xc00, sm);  // SCSI base
 				WriteMacInt32(0xc04, sm);  // SCSI DMA base
+				WriteMacInt32(0xcc0, sm);  // ASC base (Apple Sound Chip)
 			}
 
 			// For 24-bit ROMs: fix TimeDBRA if SETUPTIMEK failed.

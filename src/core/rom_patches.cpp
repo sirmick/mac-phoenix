@@ -1384,10 +1384,22 @@ static bool patch_rom_ii(void)
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
 
-	// NOP $1CC-$1F3 (video globals, zone setup, _SetApplBase).
-	// Some code in this range crashes on bad globals. The essential
-	// work (_SetApplBase) is done by INSTALL_DRIVERS at $1F4.
+	// NOP $1CC-$1F3: video globals, _SetApplBase, zone pointers.
+	// FUN_40800D9E at $1C8 handles the essential work (opens .Sony/
+	// .Sound, installs SERD). The remaining code accesses VIA2 and
+	// sets globals that crash without proper hardware init.
 	for (uint32 ofs = 0x1cc; ofs < 0x1f4; ofs += 2) {
+		wp = (uint16 *)(ROMBaseHost + ofs);
+		*wp = htons(M68K_NOP);
+	}
+	// NOP cursor manager ($DD0) and _GetResource SERD ($DE8) inside
+	// FUN_40800D9E. These access hardware or load resources that
+	// cause SIGSEGV on ASC/SCC access.
+	wp = (uint16 *)(ROMBaseHost + 0xdd0);
+	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
+	// NOP everything from $DD4 to end of FUN_40800D9E at $DF4 (rts)
+	// This includes _GetResource('SERD'), serial driver init, etc.
+	for (uint32 ofs = 0xdd4; ofs < 0xdf4; ofs += 2) {
 		wp = (uint16 *)(ROMBaseHost + ofs);
 		*wp = htons(M68K_NOP);
 	}
