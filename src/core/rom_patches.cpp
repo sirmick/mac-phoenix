@@ -1226,6 +1226,56 @@ static bool patch_rom_ii(void)
 	wp = (uint16 *)(ROMBaseHost + 0x478);
 	*wp = htons(M68K_NOP);
 
+	// Fix A-line vector: INITXVECTTABLES sets ($28) to $8064BA (a
+	// dispatch function that uses the wrong trap table for Toolbox
+	// traps). Overwrite it with the SYSERRINIT A-line handler which
+	// properly dispatches both OS and Toolbox traps. On MAME, ($28)
+	// = $4080210A at this point (the SYSERRINIT BSR stub for vector 10).
+	// But $80210A calls _SysError — not a trap dispatcher either.
+	// The correct dispatch handler is $8064BA but its trap table
+	// lookup is wrong. Actually, let's just write $8064BA to ($28)
+	// AFTER INITXVECTTABLES runs (it's already correct by then).
+	// The REAL issue: ($28) = $8064BA is installed by INITXVECTTABLES
+	// at $D92, which is the correct trap dispatcher. But it dispatches
+	// $A198 to the OS table instead of the Toolbox table.
+	// WAIT — the handler at $4080DFB8 (_InitZone) is a VALID handler.
+	// The dispatch WORKS for _InitZone ($A019, OS trap) → $4080DFB8.
+	// But the exception at ($28) = $8064BA dispatches to $802954
+	// (probe handler) instead of $8064BA. That means ($28) is NOT
+	// being read correctly!
+	//
+	// Let me just force ($28) = 0 so the exception handler reads from
+	// SYSERRINIT's vector, or write the known-good dispatch address.
+	// At $118 (after FILLWITHONES, after SYSERRINIT writes $08-$FC):
+	// move.l #$408064BA,($28).w — wait, SYSERRINIT already writes to
+	// ($28). The value $8064BA comes from INITXVECTTABLES at $D92
+	// which runs in BOOTRETRY at $162 (AFTER $118). So writing at
+	// $118 would be overwritten by INITXVECTTABLES.
+	//
+	// The root cause: the A-line exception dispatches to $802954
+	// (the PROBE exception handler) NOT to $8064BA (the trap dispatcher).
+	// This means the VBR still points to the probe handler table, not
+	// RAM. VBR was set to 0 at $2BA2, but maybe it's being reset.
+	//
+	// CHECK: is VBR actually 0 when the trap fires?
+	// Actually the answer is simpler: the UAE Exception() function
+	// reads the vector from VBR + nr*4. With VBR=0, vector 10 is at
+	// address $28. The probe handlers copied to $0-$FF at $2B8A set
+	// ($28) = $40802950 (the probe handler). SYSERRINIT at $112
+	// overwrites ($28) with $80210A (BSR stub). Then INITXVECTTABLES
+	// at $D92 (in BOOTRETRY $162) overwrites ($28) with $8064BA
+	// (the real trap dispatcher).
+	//
+	// But the crash happens at $242 (_InitZone) which is in INITMEMMGR
+	// at $172, AFTER INITXVECTTABLES at $162. So ($28) = $8064BA at
+	// that point. The A-line exception reads ($28) = $8064BA and
+	// jumps to $8064BA. BUT THE TRACE SHOWS THE CPU AT $802954!
+	// That means the CPU is NOT jumping to $8064BA. Something is wrong
+	// with the exception vector read.
+	//
+	// HYPOTHESIS: The UAE interpreter might not be using VBR for vector
+	// reads. Let me check.
+
 	// NOP SETUPTIMEK ($118), VIATIMERENABLES ($11C), MMU_INIT ($120),
 	// warm-restart probe ($124), INITHIMEMGLOBALS ($13E)
 	wp = (uint16 *)(ROMBaseHost + 0x118);
@@ -1239,12 +1289,15 @@ static bool patch_rom_ii(void)
 	wp = (uint16 *)(ROMBaseHost + 0x13e);
 	*wp++ = htons(M68K_NOP); *wp = htons(M68K_NOP);
 
-	// INITDISPATCHER at $83F7B4 calls $A198 and _SwapMMUMode.
-	// With SYSERRINIT-installed A-line handler at ($28), these traps
-	// dispatch correctly even when the trap table has $FFFFFFFF entries
-	// (the SYSERRINIT handler treats unimplemented traps gracefully,
-	// unlike the FUN_40802A14 probe handler which retries via RTE).
-	// Leave $A198 and _SwapMMUMode calls intact.
+	// NOP the $A198 and _SwapMMUMode calls inside INITDISPATCHER.
+	// $A198 dispatches through the wrong trap table (OS instead of
+	// Toolbox) because the A-line handler at ($28) is set by
+	// INITXVECTTABLES to a dispatch function that doesn't handle
+	// Toolbox traps correctly at this early stage.
+	wp = (uint16 *)(ROMBaseHost + 0x3f7c0);  // $A198
+	*wp = htons(M68K_NOP);
+	wp = (uint16 *)(ROMBaseHost + 0x3f7c4);  // _SwapMMUMode
+	*wp = htons(M68K_NOP);
 
 	// Patch SwapMMUMode to always take the 24-bit VIA2 path
 	wp = (uint16 *)(ROMBaseHost + 0x3b24);

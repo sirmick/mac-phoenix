@@ -767,18 +767,29 @@ void Exception(int nr, uaecptr oldpc)
 			fprintf(stderr, "[68K] Exception %d at PC=%08x A7=%08x\n",
 				nr, currpc, m68k_areg(regs, 7));
 	}
-	// Log _SysError and unimplemented trap dispatches
+	// Log A-line trap dispatches
 	if (nr == 10) {
 		uint16 trap = get_word(currpc);
 		if (trap == 0xA9C9) {  // _SysError
 			fprintf(stderr, "[SysError] _SysError at PC=$%08X D0=%d\n",
 				currpc, (int)(int16)m68k_dreg(regs, 0));
 		}
-		// SE trap table: <$A800 → OS at $400, >=$A800 → Toolbox at $E00
 		bool is_tb = (trap >= 0xA800);
 		uint32 table = is_tb ? 0x0E00 : 0x0400;
 		uint16 idx = trap & 0x01FF;
 		uint32 handler = get_long(table + idx * 4);
+		// Log first 5 A-line traps with trap table state
+		{
+			static int aline_count = 0;
+			if (++aline_count <= 5) {
+				uint32 vec28 = get_long(0x28);
+				uint32 os_a198 = get_long(0x400 + 0x198*4);  // OS table
+				uint32 tb_a198 = get_long(0xe00 + 0x198*4);  // Toolbox table
+				uint32 rom2ae = get_long(0x2ae);
+				fprintf(stderr, "[A-LINE #%d] $%04X PC=$%08X handler=$%08X vec28=$%08X OS[$198]=$%08X TB[$198]=$%08X ROMBase($2AE)=$%08X\n",
+					aline_count, trap, currpc, handler, vec28, os_a198, tb_a198, rom2ae);
+			}
+		}
 		if (handler == 0x400768) {
 			static int unimp = 0;
 			if (++unimp <= 10)
