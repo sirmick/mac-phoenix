@@ -781,12 +781,11 @@ void Exception(int nr, uaecptr oldpc)
 		uint32 table = is_tb ? 0x0E00 : 0x0400;
 		uint16 idx = trap & 0x01FF;
 		uint32 handler = get_long(table + idx * 4);
-		// Log ALL A-line traps around #185-195
+		// Log key A-line traps
 		{
 			static int aline_count = 0;
 			++aline_count;
-			if (aline_count <= 12 || (aline_count >= 185 && aline_count <= 195) ||
-			    (aline_count % 100 == 0 && aline_count <= 1000)) {
+			if (aline_count <= 5 || (aline_count >= 185 && aline_count <= 195)) {
 				uint32 vec28 = get_long(0x28);
 				uint32 vbr_vec = get_long(regs.vbr + 40);
 				fprintf(stderr, "[A-LINE #%d] $%04X PC=$%08X handler=$%08X VBR=$%08X vec@VBR+40=$%08X vec@$28=$%08X\n",
@@ -1486,34 +1485,22 @@ void m68k_do_execute (void)
 			static uint64_t exec_count = 0;
 			++exec_count;
 			uaecptr pc = m68k_getpc();
-			// Watchpoint: log the last 5 ROM-space PCs before jumping to $3Fxxx
-			{
-				static uaecptr last_pcs[8];
-				static int lpi = 0;
-				if (pc >= 0x800000) {
-					last_pcs[lpi++ & 7] = pc;
-				}
-				if (pc >= 0x3f000 && pc < 0x40000) {
-					static int hit = 0;
-					if (++hit <= 2) {
-						fprintf(stderr, "[CRASH] Entered \$3Fxxx at insn=%llu PC=%08x SR=%04x A7=%08x\n",
-							(unsigned long long)exec_count, pc,
-							(unsigned)regs.sr, m68k_areg(regs, 7));
-						fprintf(stderr, "  Last ROM PCs:");
-						for (int j = 0; j < 8; j++)
-							fprintf(stderr, " %08x", last_pcs[(lpi + j) & 7]);
-						fprintf(stderr, "\n");
-					}
-				}
+			// Watchpoint: FUN_4083F658 entry and jsr A1 at $83F66E
+			if (pc == 0x83f658) {
+				static int th = 0;
+				if (++th <= 3)
+					fprintf(stderr, "[THUNK#%d] A1=%08x D0=%08x ($DB8)=%08x ($A06)=%08x\n",
+						th, m68k_areg(regs, 1), m68k_dreg(regs, 0),
+						get_long(0xdb8), get_long(0xa06));
 			}
-			if (exec_count <= 20 || exec_count == 100 || exec_count == 1000 ||
-			    exec_count == 5000 || exec_count == 10000 ||
-			    (exec_count % 2000000 == 0 && exec_count <= 20000000)) {
-				fprintf(stderr, "[TRACE] insn=%llu PC=%08x op=%04x SR=%04x A7=%08x\n",
-					(unsigned long long)exec_count, pc, opcode,
-					(unsigned)regs.sr, m68k_areg(regs, 7));
+			if (pc == 0x83f66e) {
+				static int jh = 0;
+				if (++jh <= 5)
+					fprintf(stderr, "[JSR#%d] A1=%08x D0=%08x A0=%08x\n",
+						jh, m68k_areg(regs, 1), m68k_dreg(regs, 0),
+						m68k_areg(regs, 0));
 			}
-		}
+			}
 
 #if FLIGHT_RECORDER
 		m68k_record_step(m68k_getpc());

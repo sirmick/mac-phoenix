@@ -1229,10 +1229,17 @@ static bool patch_rom_ii(void)
 		*wp = htons(0x2246);		// movea.l A6,A1 (overwritten at $D8)
 	}
 
-	// NOP trap $A03F (_InitUtil) at $478 — called from INITDISPATCHER
-	// before the trap table is populated. Loops in exception handler.
-	wp = (uint16 *)(ROMBaseHost + 0x478);
-	*wp = htons(M68K_NOP);
+	// Let _InitUtil ($A03F) at $478 run — it initializes ($DB8)
+	// which is the secondary dispatch table pointer needed by
+	// FUN_4083F658 (the 32-bit dispatch thunk).
+
+	// Patch _SetTrapAddress handler at $4F54: the handler reads a
+	// dispatch table at ($DB8) which is $FFFFFFFF (never initialized
+	// in our boot). The tst.l at $4F50 reads from $FFFFFFFF+offset
+	// = exception vector area → non-zero → calls 32-bit dispatch
+	// thunk which crashes. Force the beq to bra (always skip).
+	wp = (uint16 *)(ROMBaseHost + 0x4f54);
+	*wp = htons(0x6070);			// bra.b $4FC6 (was: beq.b $4FC6)
 
 	// Fix A-line vector: INITXVECTTABLES sets ($28) to $8064BA (a
 	// dispatch function that uses the wrong trap table for Toolbox
@@ -1350,6 +1357,13 @@ static bool patch_rom_ii(void)
 	// Skip ADB init (jsr at $1A0, 6 bytes) — ADB polling hangs
 	wp = (uint16 *)(ROMBaseHost + 0x1a0);
 	*wp++ = htons(M68K_NOP);
+	*wp++ = htons(M68K_NOP);
+	*wp = htons(M68K_NOP);
+
+	// Skip FUN_40800BB8 at $1CC (bsr, 4 bytes) — video globals setup
+	// reads from $C20/$C22 which are $FFFFFFFF from FILLWITHONES.
+	// Passes A1=$FFFFFFFF to the dispatch thunk → garbled table read.
+	wp = (uint16 *)(ROMBaseHost + 0x1cc);
 	*wp++ = htons(M68K_NOP);
 	*wp = htons(M68K_NOP);
 
