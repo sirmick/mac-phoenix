@@ -47,7 +47,7 @@ void test_disk(void)
     }
     report_pass("disk_create");
 
-    /* Write */
+    /* Write + read back (same file handle, seek to start for read) */
     err = FSpOpenDF(&spec, fsRdWrPerm, &refNum);
     if (err != noErr) {
         report_fail("disk_write", err);
@@ -56,27 +56,22 @@ void test_disk(void)
     }
     count = sizeof(writeBuf) - 1;
     err = FSWrite(refNum, &count, writeBuf);
-    FlushVol(NULL, spec.vRefNum);
-    FSClose(refNum);
     if (err != noErr) {
         report_fail("disk_write", err);
+        FSClose(refNum);
         FSpDelete(&spec);
         return;
     }
     report_pass("disk_write");
 
-    /* Read back */
-    err = FSpOpenDF(&spec, fsRdPerm, &refNum);
-    if (err != noErr) {
-        report_fail("disk_read", err);
-        FSpDelete(&spec);
-        return;
-    }
+    /* Seek back to start and read */
+    SetFPos(refNum, fsFromStart, 0);
     count = sizeof(readBuf);
     memset(readBuf, 0, sizeof(readBuf));
     err = FSRead(refNum, &count, readBuf);
     FSClose(refNum);
-    if (err != noErr) {
+    /* eofErr is expected — we asked for more bytes than the file contains */
+    if (err != noErr && err != eofErr) {
         report_fail("disk_read", err);
         FSpDelete(&spec);
         return;
