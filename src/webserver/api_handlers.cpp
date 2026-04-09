@@ -1095,8 +1095,7 @@ Response APIRouter::handle_launch(const Request& req) {
 
     // Bridge path: write command file, INIT reads it and executes
     auto& cfg = config::EmulatorConfig::instance();
-    static bool bridge_init_alive = false;  // set true when INIT first responds
-    if (cfg.bridge_enabled && !cfg.bridge_dir.empty() && bridge_init_alive) {
+    if (cfg.bridge_enabled && !cfg.bridge_dir.empty()) {
         // Write command file to bridge dir (ExtFS picks it up)
         std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
         std::string res_path = cfg.bridge_dir + "/_bridge_result";
@@ -1112,8 +1111,7 @@ Response APIRouter::handle_launch(const Request& req) {
         fclose(f);
 
         // Poll for result file (INIT writes it after executing).
-        // Very short timeout (1s) — fall through to legacy path if INIT doesn't respond.
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 50; i++) {  // 5 seconds
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             FILE* rf = fopen(res_path.c_str(), "r");
             if (rf) {
@@ -1132,12 +1130,12 @@ Response APIRouter::handle_launch(const Request& req) {
                 return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
             }
         }
-        // Bridge INIT didn't respond — clean up and fall through to legacy path
+        // Bridge INIT didn't respond
         ::remove(cmd_path.c_str());
-        fprintf(stderr, "[API] Bridge INIT timeout, falling back to legacy launch\n");
+        return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge INIT\"}");
     }
 
-    // Legacy path: Execute68kTrap via command queue
+    // Legacy path (when --bridge is not set): Execute68kTrap via command queue
     Command cmd;
     cmd.type = CmdType::LAUNCH_APP;
     cmd.arg = path;
