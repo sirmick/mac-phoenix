@@ -57,6 +57,34 @@ static void check_bridge(void)
     long count;
     char cmd[256];
 
+    /* Write heartbeat every ~2 seconds (120 ticks).
+     * Uses _bridge_heartbeat file. Only writes if no command is pending
+     * (so we don't interfere with the command/result flow). */
+    {
+        static unsigned long last_hb_ticks = 0;
+        unsigned long now = *(unsigned long *)0x016A;  /* Ticks (low memory) */
+        if (now - last_hb_ticks > 120) {
+            last_hb_ticks = now;
+            /* Try to open heartbeat file — if host pre-created it, write to it */
+            FSSpec hb_spec;
+            err = FSMakeFSSpec(0, 0, "\pHost:_bridge_heartbeat", &hb_spec);
+            if (err == noErr) {
+                short hb_ref;
+                if (FSpOpenDF(&hb_spec, fsWrPerm, &hb_ref) == noErr) {
+                    static int hb_count = 0;
+                    char hb_buf[16];
+                    long hb_len;
+                    hb_count++;
+                    hb_len = snprintf(hb_buf, sizeof(hb_buf), "%d\r", hb_count);
+                    SetEOF(hb_ref, 0);
+                    FSWrite(hb_ref, &hb_len, hb_buf);
+                    FSClose(hb_ref);
+                    FlushVol(NULL, 0);
+                }
+            }
+        }
+    }
+
     /* Check if command file exists */
     err = FSMakeFSSpec(0, 0, "\pHost:_bridge_cmd", &cmd_spec);
     if (err != noErr)
