@@ -66,8 +66,6 @@ extern bool tick_inhibit;
 extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
 extern uint8 *ScratchMem;  // Platform scratch memory (safe target for hardware base redirect)
 extern void command_bridge_drain_from_irq(M68kRegisters *r);
-extern void command_bridge_dispatch(M68kRegisters *r);
-extern void command_bridge_init_bridge(M68kRegisters *r);
 
 void PlayStartupSound();
 
@@ -737,20 +735,10 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			r->a[0] = ReadMacInt32(0x2b6);
 			break;
 
-		case M68K_EMUL_OP_CMD_DISPATCH: {
-			// Command bridge dispatch — called from jGNEFilter in app context (legacy).
-			command_bridge_dispatch(r);
+		case M68K_EMUL_OP_CMD_DISPATCH:
+		case M68K_EMUL_OP_INIT_BRIDGE:
+			// Legacy EmulOp handlers — no longer used (bridge INIT uses file I/O)
 			break;
-		}
-
-		case M68K_EMUL_OP_INIT_BRIDGE: {
-			// INIT bridge — called from guest INIT's jGNEFilter in app context.
-			static int bridge_call_count = 0;
-			if (++bridge_call_count <= 5)
-				fprintf(stderr, "[EmulOp] INIT_BRIDGE call #%d D0=0x%lx\n", bridge_call_count, (unsigned long)r->d[0]);
-			command_bridge_init_bridge(r);
-			break;
-		}
 
 		case M68K_EMUL_OP_SUSPEND: {
 			printf("*** Suspend\n");

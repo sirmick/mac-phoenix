@@ -340,25 +340,35 @@ static void maybe_fire_auto_launch(void)
 	if (g_desktop_ready_time == 0.0) return;  /* shouldn't happen — caller gates on PHASE_DESKTOP */
 	if (now - g_desktop_ready_time < DESKTOP_SETTLE_SEC) return;
 
-	/* If a previous attempt is pending, check whether it finished */
+	/* Write bridge command file if bridge is enabled */
+	const auto& cfg = config::EmulatorConfig::instance();
+	if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+		g_auto_launch_done = true;
+		return;
+	}
+
+	/* Check for result from previous attempt */
+	std::string res_path = cfg.bridge_dir + "/_bridge_result";
 	if (g_pending_auto_launch_id != 0) {
-		CommandResult tmp;
-		if (g_command_bridge.wait_result(g_pending_auto_launch_id, tmp, 0)) {
-			if (tmp.err == 0) {
-				milestonef("Auto-launch: LAUNCH_APP '%s' accepted", path.c_str());
+		FILE* rf = fopen(res_path.c_str(), "r");
+		if (rf) {
+			char buf[32] = {};
+			fgets(buf, sizeof(buf), rf);
+			fclose(rf);
+			remove(res_path.c_str());
+			int err = atoi(buf);
+			if (err == 0) {
+				milestonef("Auto-launch: '%s' succeeded", path.c_str());
 				g_auto_launch_done = true;
 				return;
 			}
-			milestonef("Auto-launch: attempt %d failed (err=%d), will retry",
-			           g_auto_launch_attempts, tmp.err);
+			milestonef("Auto-launch: attempt %d failed (err=%d)", g_auto_launch_attempts, err);
 			g_pending_auto_launch_id = 0;
 		} else {
-			/* Still pending — don't submit again */
-			return;
+			return;  /* still pending */
 		}
 	}
 
-	/* Cooldown between attempts */
 	if (now - g_last_auto_launch_attempt < AUTO_LAUNCH_COOLDOWN) return;
 
 	if (g_auto_launch_attempts >= AUTO_LAUNCH_MAX_ATTEMPTS) {
@@ -372,13 +382,16 @@ static void maybe_fire_auto_launch(void)
 
 	g_auto_launch_attempts++;
 	g_last_auto_launch_attempt = now;
-	milestonef("Auto-launch: submitting LAUNCH_APP '%s' (attempt %d)",
+	milestonef("Auto-launch: writing bridge cmd '%s' (attempt %d)",
 	           path.c_str(), g_auto_launch_attempts);
 
-	Command cmd;
-	cmd.type = CmdType::LAUNCH_APP;
-	cmd.arg = path;
-	g_pending_auto_launch_id = g_command_bridge.submit(cmd);
+	std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
+	FILE* f = fopen(cmd_path.c_str(), "w");
+	if (f) {
+		fprintf(f, "LAUNCH %s", path.c_str());
+		fclose(f);
+		g_pending_auto_launch_id = 1;  /* flag as pending */
+	}
 }
 
 void boot_progress_update(uint16_t opcode, void *regs_ptr)

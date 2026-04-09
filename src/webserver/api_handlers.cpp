@@ -1056,7 +1056,7 @@ Response APIRouter::handle_app(const Request& req) {
         return Response::json("{\"app\": \"" + app + "\"}");
     }
 
-    auto result = CommandBridge::execute_read(CmdType::GET_APP_NAME);
+    auto result = command_bridge_read(CmdType::GET_APP_NAME);
     return Response::json("{\"app\": \"" + result.data + "\"}");
 }
 
@@ -1066,7 +1066,7 @@ Response APIRouter::handle_windows(const Request& req) {
         // Window list requires reading Mac RAM — not available over IPC yet
         return Response::json("{\"windows\": [], \"error\": \"not available in subprocess mode\"}");
     }
-    auto result = CommandBridge::execute_read(CmdType::GET_WINDOW_LIST);
+    auto result = command_bridge_read(CmdType::GET_WINDOW_LIST);
     return Response::json("{\"windows\": " + result.data + "}");
 }
 
@@ -1093,89 +1093,77 @@ Response APIRouter::handle_launch(const Request& req) {
     }
     std::string path = j["path"].get<std::string>();
 
-    // Bridge path: write command file, INIT reads it and executes
+    // Write command file to bridge dir — the BridgeINIT reads it via ExtFS
     auto& cfg = config::EmulatorConfig::instance();
-    if (cfg.bridge_enabled && !cfg.bridge_dir.empty()) {
-        // Write command file to bridge dir (ExtFS picks it up)
-        std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
-        std::string res_path = cfg.bridge_dir + "/_bridge_result";
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+        return Response::json("{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
+    }
 
-        // Clean up any stale result
-        ::remove(res_path.c_str());
+    std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
+    std::string res_path = cfg.bridge_dir + "/_bridge_result";
 
-        // Write command
-        FILE* f = fopen(cmd_path.c_str(), "w");
-        if (!f)
-            return Response::json("{\"success\": false, \"error\": \"failed to write bridge command\"}");
-        fprintf(f, "LAUNCH %s", path.c_str());
-        fclose(f);
+    ::remove(res_path.c_str());
 
-        // Poll for result file (INIT writes it after executing).
-        for (int i = 0; i < 50; i++) {  // 5 seconds
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            FILE* rf = fopen(res_path.c_str(), "r");
-            if (rf) {
-                char buf[32] = {};
-                fgets(buf, sizeof(buf), rf);
-                fclose(rf);
-                ::remove(res_path.c_str());
+    FILE* f = fopen(cmd_path.c_str(), "w");
+    if (!f)
+        return Response::json("{\"success\": false, \"error\": \"failed to write bridge command\"}");
+    fprintf(f, "LAUNCH %s", path.c_str());
+    fclose(f);
 
-                int mac_err = atoi(buf);
-                if (mac_err != 0) {
-                    std::ostringstream json;
-                    json << "{\"success\": false, \"error_code\": " << mac_err
-                         << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
-                    return Response::json(json.str());
-                }
-                return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
+    // Poll for result file
+    for (int i = 0; i < 50; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        FILE* rf = fopen(res_path.c_str(), "r");
+        if (rf) {
+            char buf[32] = {};
+            fgets(buf, sizeof(buf), rf);
+            fclose(rf);
+            ::remove(res_path.c_str());
+
+            int mac_err = atoi(buf);
+            if (mac_err != 0) {
+                std::ostringstream json;
+                json << "{\"success\": false, \"error_code\": " << mac_err
+                     << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
+                return Response::json(json.str());
             }
+            return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
         }
-        // Bridge INIT didn't respond
-        ::remove(cmd_path.c_str());
-        return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge INIT\"}");
     }
 
-    // Legacy path (when --bridge is not set): Execute68kTrap via command queue
-    Command cmd;
-    cmd.type = CmdType::LAUNCH_APP;
-    cmd.arg = path;
-    uint32_t id = g_command_bridge.submit(cmd);
-
-    CommandResult result;
-    if (!g_command_bridge.wait_result(id, result, 3000)) {
-        return Response::json("{\"success\": false, \"error\": \"timeout waiting for dispatch\"}");
-    }
-
-    int16_t mac_err = 0;
-    if (command_bridge_poll_launch_result(mac_err, 5000)) {
-        if (mac_err != 0) {
-            std::ostringstream json;
-            json << "{\"success\": false, \"error_code\": " << mac_err
-                 << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
-            return Response::json(json.str());
-        }
-        return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
-    }
-
-    return Response::json("{\"success\": false, \"error\": \"timeout polling launch result\"}");
+    ::remove(cmd_path.c_str());
+    return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge INIT\"}");
 }
 
 Response APIRouter::handle_quit(const Request& req) {
     (void)req;
 
-    if (ctx_->subprocess) {
-        return Response::json("{\"success\": false, \"error\": \"not available in subprocess mode\"}");
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+        return Response::json("{\"success\": false, \"error\": \"bridge not enabled\"}");
     }
 
-    Command cmd;
-    cmd.type = CmdType::QUIT_APP;
-    uint32_t id = g_command_bridge.submit(cmd);
+    std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
+    std::string res_path = cfg.bridge_dir + "/_bridge_result";
+    ::remove(res_path.c_str());
 
-    CommandResult result;
-    if (g_command_bridge.wait_result(id, result, 5000)) {
-        return Response::json("{\"success\": true}");
+    FILE* f = fopen(cmd_path.c_str(), "w");
+    if (!f)
+        return Response::json("{\"success\": false, \"error\": \"failed to write bridge command\"}");
+    fprintf(f, "QUIT");
+    fclose(f);
+
+    for (int i = 0; i < 30; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        FILE* rf = fopen(res_path.c_str(), "r");
+        if (rf) {
+            fclose(rf);
+            ::remove(res_path.c_str());
+            return Response::json("{\"success\": true}");
+        }
     }
 
+    ::remove(cmd_path.c_str());
     return Response::json("{\"success\": false, \"error\": \"timeout\"}");
 }
 
@@ -1225,7 +1213,7 @@ Response APIRouter::handle_wait(const Request& req) {
                 const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
                 app = buf ? buf->cur_app_name : "";
             } else {
-                auto result = CommandBridge::execute_read(CmdType::GET_APP_NAME);
+                auto result = command_bridge_read(CmdType::GET_APP_NAME);
                 app = result.data;
             }
             if (app == cond_value) {
