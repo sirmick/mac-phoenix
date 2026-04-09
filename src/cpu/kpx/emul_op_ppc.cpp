@@ -56,6 +56,9 @@ using namespace ppc;
 
 extern bool tick_inhibit;
 
+// Bridge INIT injection (shared with m68k path)
+extern void command_bridge_drain_from_irq_ppc(M68kRegisters *r);
+
 void PlayStartupSound();
 
 // TVector of MakeExecutable
@@ -371,6 +374,9 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 					ClearInterruptFlag(INTFLAG_ADB);
 					ADBInterrupt();
 				}
+
+				// Bridge INIT injection + drain (same as m68k path)
+				command_bridge_drain_from_irq_ppc(r);
 			} else
 				r->d[0] = 1;
 			break;

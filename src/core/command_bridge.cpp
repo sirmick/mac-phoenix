@@ -879,7 +879,12 @@ bool command_bridge_wait_init_result(int16_t& err, int timeout_ms) {
 // Entry point from emul_op.cpp IRQ handler
 // ============================================================================
 
-void command_bridge_drain_from_irq(M68kRegisters* r) {
+static void drain_from_irq_impl(M68kRegisters* r);
+
+void command_bridge_drain_from_irq(M68kRegisters* r) { drain_from_irq_impl(r); }
+void command_bridge_drain_from_irq_ppc(M68kRegisters* r) { drain_from_irq_impl(r); }
+
+static void drain_from_irq_impl(M68kRegisters* r) {
     // Check bridge config — read from the global emulator config
     static bool bridge_checked = false;
     static bool bridge_enabled = false;
