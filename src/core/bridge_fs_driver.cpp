@@ -106,6 +106,8 @@ int16_t BridgeFSComm(uint16_t message, uint32_t paramBlock, uint32_t globals) {
 static int16_t bridge_open(uint32_t pb, uint32_t vcb) {
     uint32_t name_ptr = ReadMacInt32(pb + ioNamePtr);
     std::string name = read_pstring(name_ptr);
+    fprintf(stderr, "[BridgeFS] OPEN: '%s' vRefNum=%d perm=%d\n",
+            name.c_str(), (int16_t)ReadMacInt16(pb + ioVRefNum), ReadMacInt8(pb + ioPermssn));
     if (name.empty()) return -43; // fnfErr
 
     uint8_t perm = ReadMacInt8(pb + ioPermssn);
@@ -422,8 +424,10 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
     (void)globals; (void)fsid;
     static int call_count = 0;
     call_count++;
-    if (call_count <= 30)
-        fprintf(stderr, "[BridgeFS] HFS dispatch: sel=0x%04X pb=0x%08X\n", selectCode, paramBlock);
+    // Log non-GetCatInfo, non-GetVolInfo selectors (these are the interesting ones)
+    if (selectCode != 0x0009 && selectCode != 0xA007 && selectCode != 0x0030
+        && selectCode != 0xA207 && call_count <= 50)
+        fprintf(stderr, "[BridgeFS] HFS sel=0x%04X pb=0x%08X\n", selectCode, paramBlock);
 
     switch (selectCode) {
         case 0xA000: // kFSMOpen
@@ -499,10 +503,8 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
             return 0;
         }
 
-        // kFSMMakeFSSpec (0x001B): NOT handled — the FSM builds the FSSpec
-        // internally using kFSMGetCatInfo (0x0009). ExtFS doesn't handle
-        // this selector either. Fall through to default (paramErr).
-        // The FSM sees paramErr and uses GetCatInfo instead.
+        case 0x001B: // kFSMMakeFSSpec — delegate to GetCatInfo
+            return bridge_get_file_info(paramBlock);
 
         case 0x0030: { // kFSMGetVolParms
             uint32_t actual = ReadMacInt32(paramBlock + ioReqCount);
