@@ -424,10 +424,11 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
     (void)globals; (void)fsid;
     static int call_count = 0;
     call_count++;
-    // Log non-GetCatInfo, non-GetVolInfo selectors (these are the interesting ones)
-    if (selectCode != 0x0009 && selectCode != 0xA007 && selectCode != 0x0030
-        && selectCode != 0xA207 && call_count <= 50)
-        fprintf(stderr, "[BridgeFS] HFS sel=0x%04X pb=0x%08X\n", selectCode, paramBlock);
+    // Check if the VCB's FSID matches ours — the FSM might be routing to us for wrong volumes
+    int16_t vcb_fsid = (vcb != 0) ? static_cast<int16_t>(ReadMacInt16(vcb + vcbFSID)) : -1;
+    if (vcb_fsid != BRIDGE_FSID && call_count <= 5)
+        fprintf(stderr, "[BridgeFS] WARNING: wrong FSID 0x%04X (expected 0x%04X) sel=0x%04X\n",
+                vcb_fsid, BRIDGE_FSID, selectCode);
 
     switch (selectCode) {
         case 0xA000: // kFSMOpen
@@ -503,8 +504,38 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
             return 0;
         }
 
-        case 0x001B: // kFSMMakeFSSpec — delegate to GetCatInfo
-            return bridge_get_file_info(paramBlock);
+        case 0x001B: { // kFSMMakeFSSpec — build FSSpec at ioMisc
+            uint32_t name_ptr = ReadMacInt32(paramBlock + ioNamePtr);
+            std::string name = read_pstring(name_ptr);
+            uint32_t spec_out = ReadMacInt32(paramBlock + ioMisc);
+            int16_t our_vref = static_cast<int16_t>(ReadMacInt16(vcb + vcbVRefNum));
+            fprintf(stderr, "[BridgeFS] MakeFSSpec: name='%s' pb.vRefNum=%d vcb.vRefNum=%d ioMisc=0x%08X\n",
+                    name.c_str(), (int16_t)ReadMacInt16(paramBlock + ioVRefNum), our_vref, spec_out);
+
+            // Strip volume prefix
+            size_t colon = name.find(':');
+            if (colon != std::string::npos)
+                name = name.substr(colon + 1);
+
+            if (name.empty()) return -37; // bdNamErr
+
+            // Write FSSpec to output buffer at ioMisc
+            uint32_t spec_addr = ReadMacInt32(paramBlock + ioMisc);
+            if (spec_addr) {
+                // Use our VCB's vRefNum (from the vcb parameter passed to dispatch)
+                int16_t vol = static_cast<int16_t>(ReadMacInt16(vcb + vcbVRefNum));
+                WriteMacInt16(spec_addr + 0, vol);     // vRefNum
+                WriteMacInt32(spec_addr + 2, 2);       // parID (root dir)
+                // Write name as Pascal string
+                uint8_t nlen = name.size() > 63 ? 63 : name.size();
+                WriteMacInt8(spec_addr + 6, nlen);
+                for (int i = 0; i < nlen; i++)
+                    WriteMacInt8(spec_addr + 7 + i, name[i]);
+            }
+
+            bool exists = g_bridge_fs && g_bridge_fs->exists(name);
+            return exists ? 0 : -43; // noErr or fnfErr
+        }
 
         case 0x0030: { // kFSMGetVolParms
             uint32_t actual = ReadMacInt32(paramBlock + ioReqCount);
