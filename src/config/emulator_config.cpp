@@ -654,8 +654,14 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
     }
 
     // --bridge: auto-create a temp ExtFS mount for bridge file I/O
-    // (disabled for now — ExtFS bridge dir interferes with boot timing)
-    // if (config.bridge_enabled) { ... }
+    if (config.bridge_enabled) {
+        char bridge_dir[] = "/tmp/macemu-bridge-XXXXXX";
+        if (mkdtemp(bridge_dir)) {
+            config.bridge_dir = bridge_dir;
+            config.extfs_paths.push_back(bridge_dir);
+            fprintf(stderr, "[Config] Bridge ExtFS: %s\n", bridge_dir);
+        }
+    }
 
     return rom_path;
 }

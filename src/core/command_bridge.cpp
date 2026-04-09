@@ -120,16 +120,21 @@ static void inject_bridge_init() {
     if (!RAMBaseHost || RAMSize == 0) return;
     init_addresses();
 
-    uint32_t init_addr = SCRATCH_BASE + 0x1000;
-
-    // Check if the INIT fits in ScratchMem (64KB total, we start at +0x1000)
-    if (BridgeINIT_flt_len > 0xF000) {
-        fprintf(stderr, "[Bridge] INIT too large (%u bytes, max %u) — compile with -Os\n",
-                BridgeINIT_flt_len, 0xF000);
+    // Allocate memory in the Mac System heap via _NewPtrSys.
+    // This is safe — the INIT's RETRO68_RELOCATE patches addresses within
+    // its own allocation, not in ScratchMem (which has the mailbox/filter).
+    M68kRegisters alloc_regs;
+    memset(&alloc_regs, 0, sizeof(alloc_regs));
+    alloc_regs.d[0] = BridgeINIT_flt_len;
+    Execute68kTrap(0xA51E, &alloc_regs);  // _NewPtrSys
+    uint32_t init_addr = alloc_regs.a[0];
+    if (init_addr == 0) {
+        fprintf(stderr, "[Bridge] _NewPtrSys(%u) failed — cannot inject INIT\n",
+                BridgeINIT_flt_len);
         return;
     }
 
-    // Copy INIT code to Mac memory
+    // Copy INIT code to the allocated block
     uint8_t *dest = Mac2HostAddr(init_addr);
     memcpy(dest, BridgeINIT_flt, BridgeINIT_flt_len);
 
@@ -885,13 +890,12 @@ void command_bridge_drain_from_irq(M68kRegisters* r) {
     }
 
     if (!g_filter_installed.load(std::memory_order_acquire)) {
-        if (bridge_enabled) {
-            // Inject the compiled BridgeINIT — installs a file-driven jGNEFilter
-            // DISABLED: injection breaks boot timing, needs debugging
-            // inject_bridge_init();
-        }
-        // Also install legacy jGNEFilter (for read commands via CMD_DISPATCH)
+        // Install legacy jGNEFilter first (for read commands via CMD_DISPATCH)
         install_jgne_filter();
+        if (bridge_enabled) {
+            // Inject BridgeINIT — its _start() saves the legacy filter as chain target
+            inject_bridge_init();
+        }
     }
 
     // Deferred reinstall: after Finder starts, other extensions may have

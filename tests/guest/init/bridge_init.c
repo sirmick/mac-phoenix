@@ -144,8 +144,11 @@ void _start(void)
 
     RETRO68_RELOCATE();
 
-    /* Check System version — require System 7+ for FSMakeFSSpec */
-    if (Gestalt(gestaltSystemVersion, &sysVersion) != noErr || sysVersion < 0x0700)
+    /* Check System version — require System 7+ for FSMakeFSSpec.
+     * Use low memory SysVersion (0x015A) directly since Gestalt may not
+     * be available at early boot when injected by the host. */
+    sysVersion = *(long *)0x015A;
+    if (sysVersion != 0 && sysVersion < 0x0700)
         return;
 
     /* Save old filter — will be restored/chained by bridge_filter */
