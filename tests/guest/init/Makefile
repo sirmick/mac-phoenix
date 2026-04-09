@@ -13,9 +13,8 @@ REZ = Rez
 TOOLCHAIN = $(shell dirname $(shell which m68k-apple-macos-gcc))/..
 RINCLUDES = $(TOOLCHAIN)/m68k-apple-macos/RIncludes
 
-CFLAGS = -O2 -fomit-frame-pointer
-LDFLAGS = -Wl,--mac-flat
-
+CFLAGS = -Os -fomit-frame-pointer -ffunction-sections -fdata-sections
+LDFLAGS = -Wl,--mac-flat -Wl,--gc-sections
 SRCS = bridge_init.c bridge_launch.c
 TARGET = BridgeINIT
 FLT = $(TARGET).flt

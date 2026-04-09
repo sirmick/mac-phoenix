@@ -653,6 +653,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         fprintf(stderr, "[Config] Unknown argument: %s\n", argv[i]);
     }
 
+    // --bridge: auto-create a temp ExtFS mount for bridge file I/O
+    // (disabled for now — ExtFS bridge dir interferes with boot timing)
+    // if (config.bridge_enabled) { ... }
+
     return rom_path;
 }
 

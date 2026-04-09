@@ -1093,19 +1093,61 @@ Response APIRouter::handle_launch(const Request& req) {
     }
     std::string path = j["path"].get<std::string>();
 
-    // Submit via legacy command queue → IRQ drain → dispatch → Execute68kTrap
+    // Bridge path: write command file, INIT reads it and executes
+    auto& cfg = config::EmulatorConfig::instance();
+    static bool bridge_init_alive = false;  // set true when INIT first responds
+    if (cfg.bridge_enabled && !cfg.bridge_dir.empty() && bridge_init_alive) {
+        // Write command file to bridge dir (ExtFS picks it up)
+        std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
+        std::string res_path = cfg.bridge_dir + "/_bridge_result";
+
+        // Clean up any stale result
+        ::remove(res_path.c_str());
+
+        // Write command
+        FILE* f = fopen(cmd_path.c_str(), "w");
+        if (!f)
+            return Response::json("{\"success\": false, \"error\": \"failed to write bridge command\"}");
+        fprintf(f, "LAUNCH %s", path.c_str());
+        fclose(f);
+
+        // Poll for result file (INIT writes it after executing).
+        // Very short timeout (1s) — fall through to legacy path if INIT doesn't respond.
+        for (int i = 0; i < 10; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            FILE* rf = fopen(res_path.c_str(), "r");
+            if (rf) {
+                char buf[32] = {};
+                fgets(buf, sizeof(buf), rf);
+                fclose(rf);
+                ::remove(res_path.c_str());
+
+                int mac_err = atoi(buf);
+                if (mac_err != 0) {
+                    std::ostringstream json;
+                    json << "{\"success\": false, \"error_code\": " << mac_err
+                         << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
+                    return Response::json(json.str());
+                }
+                return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
+            }
+        }
+        // Bridge INIT didn't respond — clean up and fall through to legacy path
+        ::remove(cmd_path.c_str());
+        fprintf(stderr, "[API] Bridge INIT timeout, falling back to legacy launch\n");
+    }
+
+    // Legacy path: Execute68kTrap via command queue
     Command cmd;
     cmd.type = CmdType::LAUNCH_APP;
     cmd.arg = path;
     uint32_t id = g_command_bridge.submit(cmd);
 
     CommandResult result;
-    if (!g_command_bridge.wait_result(id, result, 10000)) {
+    if (!g_command_bridge.wait_result(id, result, 3000)) {
         return Response::json("{\"success\": false, \"error\": \"timeout waiting for dispatch\"}");
     }
 
-    // The dispatch now calls Execute68kTrap(_Launch) directly and writes
-    // the result to MB_RESULT_ERR before returning. Poll for it.
     int16_t mac_err = 0;
     if (command_bridge_poll_launch_result(mac_err, 5000)) {
         if (mac_err != 0) {

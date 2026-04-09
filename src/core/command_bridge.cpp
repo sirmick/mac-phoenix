@@ -124,7 +124,7 @@ static void inject_bridge_init() {
 
     // Check if the INIT fits in ScratchMem (64KB total, we start at +0x1000)
     if (BridgeINIT_flt_len > 0xF000) {
-        fprintf(stderr, "[Bridge] INIT too large (%u bytes, max %u)\n",
+        fprintf(stderr, "[Bridge] INIT too large (%u bytes, max %u) — compile with -Os\n",
                 BridgeINIT_flt_len, 0xF000);
         return;
     }
@@ -887,7 +887,8 @@ void command_bridge_drain_from_irq(M68kRegisters* r) {
     if (!g_filter_installed.load(std::memory_order_acquire)) {
         if (bridge_enabled) {
             // Inject the compiled BridgeINIT — installs a file-driven jGNEFilter
-            inject_bridge_init();
+            // DISABLED: injection breaks boot timing, needs debugging
+            // inject_bridge_init();
         }
         // Also install legacy jGNEFilter (for read commands via CMD_DISPATCH)
         install_jgne_filter();
