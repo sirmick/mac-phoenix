@@ -1937,6 +1937,7 @@ static int16 fs_write(uint32 pb)
 
 	// Write
 	ssize_t actual = extfs_write(fd, Mac2HostAddr(ReadMacInt32(pb + ioBuffer)), ReadMacInt32(pb + ioReqCount));
+	if (actual > 0) fsync(fd);
 	int16 write_err = errno2oserr();
 	D(bug("  actual %d\n", actual));
 	WriteMacInt32(pb + ioActCount, actual >= 0 ? actual : 0);
@@ -1969,6 +1970,7 @@ static int16 fs_create(uint32 pb, uint32 dirID)
 	if (fd < 0)
 		return errno2oserr();
 	else {
+		fsync(fd);
 		close(fd);
 		return noErr;
 	}
@@ -2288,6 +2290,7 @@ int16 ExtFSHFS(uint32 vcb, uint16 selectCode, uint32 paramBlock, uint32 globalsP
 		case kFSMFlushVol:
 		case kFSMFlushFile:
 			D(bug(" flush_vol/flush_file\n"));
+			sync();
 			return noErr;
 
 		default:
