@@ -60,8 +60,12 @@ static void inject_bridge_init() {
     if (RAMSize == 0) return;
 
     // Initialize BridgeFS in-memory store (used by ExtFS intercept)
-    if (!g_bridge_fs)
+    if (!g_bridge_fs) {
         g_bridge_fs = new BridgeFS();
+        auto& cfg = config::EmulatorConfig::instance();
+        if (!cfg.bridge_dir.empty())
+            g_bridge_fs->set_bridge_dir(cfg.bridge_dir);
+    }
 
     // Allocate in Mac System heap
     M68kRegisters alloc_regs;

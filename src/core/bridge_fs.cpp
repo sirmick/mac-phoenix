@@ -3,6 +3,8 @@
  */
 #include "bridge_fs.h"
 #include <cstring>
+#include <cstdio>
+#include <unistd.h>
 #include <algorithm>
 
 BridgeFS* g_bridge_fs = nullptr;
@@ -134,8 +136,17 @@ bool BridgeFS::get_file(const std::string& name, std::string& out) {
 void BridgeFS::put_file(const std::string& name, const std::string& data) {
     std::lock_guard<std::mutex> lock(mutex_);
     files_[name].data.assign(data.begin(), data.end());
-    fprintf(stderr, "[BridgeFS] put_file('%s', %zu bytes) -> store now has %zu files (this=%p, g_bridge_fs=%p)\n",
-            name.c_str(), data.size(), files_.size(), this, g_bridge_fs);
+
+    // Also write to the bridge dir on disk so ExtFS can find it via FSMakeFSSpec
+    if (!bridge_dir_.empty()) {
+        std::string path = bridge_dir_ + "/" + name;
+        FILE* f = fopen(path.c_str(), "w");
+        if (f) {
+            fwrite(data.data(), 1, data.size(), f);
+            fclose(f);
+            sync();
+        }
+    }
 }
 
 bool BridgeFS::has_file(const std::string& name) {

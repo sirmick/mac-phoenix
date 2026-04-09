@@ -41,6 +41,9 @@ public:
     // List files (for directory enumeration)
     std::vector<std::string> list_files();
 
+    // Set the bridge directory (for syncing files to disk)
+    void set_bridge_dir(const std::string& dir) { bridge_dir_ = dir; }
+
 private:
     struct FileData {
         std::vector<uint8_t> data;
@@ -55,7 +58,8 @@ private:
     std::mutex mutex_;
     std::map<std::string, FileData> files_;
     std::map<int, OpenFile> open_files_;
-    int next_fd_ = 1000;  // start high to avoid collision with real fds
+    int next_fd_ = 1000;
+    std::string bridge_dir_;  // host directory for disk sync
 };
 
 // Global instance (created when --bridge is set)
