@@ -56,7 +56,7 @@ static bool g_bridge_filter_reinstalled = false;
  */
 static void inject_bridge_init() {
     if (g_bridge_init_injected) return;
-    if (!RAMBaseHost || RAMSize == 0) return;
+    if (RAMSize == 0) return;
 
     // Allocate in Mac System heap
     M68kRegisters alloc_regs;
@@ -95,7 +95,7 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr, uint32_t len) {
     CommandResult result;
     result.done = true;
 
-    if (!RAMBaseHost || RAMSize == 0) {
+    if (RAMSize == 0) {
         result.err = -1;
         return result;
     }
@@ -207,8 +207,16 @@ static void drain_from_irq_impl(M68kRegisters* r) {
 
     // After Finder starts, other extensions may have overwritten 0x29A.
     // Reinstall the bridge INIT's filter.
-    if (g_bridge_filter_addr != 0 && !g_bridge_filter_reinstalled
-        && boot_progress_phase_reached("Finder")) {
+    // Gate on CurApName containing "Finder" — works on both m68k and PPC
+    // (boot_progress_phase_reached doesn't detect Finder on PPC)
+    bool finder_running = false;
+    if (RAMSize > 0) {
+        uint8_t namelen = ReadMacInt8(0x0910);
+        if (namelen == 6) {
+            finder_running = (ReadMacInt8(0x0911) == 'F' && ReadMacInt8(0x0912) == 'i');
+        }
+    }
+    if (g_bridge_filter_addr != 0 && !g_bridge_filter_reinstalled && finder_running) {
         uint32_t current = ReadMacInt32(LM_JGNEFILTER);
         if (current != g_bridge_filter_addr) {
             WriteMacInt32(LM_JGNEFILTER, g_bridge_filter_addr);
