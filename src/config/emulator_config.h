@@ -110,6 +110,7 @@ struct EmulatorConfig {
     // Web/Network
     bool enable_webserver = true;
     bool headless_http = false;  // serve HTTP API in headless mode (no WebRTC/video/audio)
+    bool bridge_enabled = false; // enable automation bridge (INIT injection + file-based commands)
     int http_port = 8000;
     int signaling_port = 8090;
     std::string client_dir = "./client";

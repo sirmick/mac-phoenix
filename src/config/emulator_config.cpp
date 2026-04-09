@@ -562,6 +562,13 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         if (strcmp(argv[i], "--headless-http") == 0) {
             config.enable_webserver = false;
             config.headless_http = true;
+            config.bridge_enabled = true;  // headless-http implies bridge
+            argv[i] = nullptr; continue;
+        }
+
+        // --bridge: enable automation bridge (INIT injection + file-based commands)
+        if (strcmp(argv[i], "--bridge") == 0) {
+            config.bridge_enabled = true;
             argv[i] = nullptr; continue;
         }
 
