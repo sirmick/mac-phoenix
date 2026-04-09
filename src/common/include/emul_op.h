@@ -95,8 +95,10 @@ enum {
 	M68K_EMUL_OP_DEBUGUTIL,
 	M68K_EMUL_OP_IDLE_TIME,
 	M68K_EMUL_OP_SUSPEND,
-	M68K_EMUL_OP_CMD_DISPATCH,		// 0x7139: Command bridge dispatch (from jGNEFilter, legacy)
-	M68K_EMUL_OP_INIT_BRIDGE,		// 0x713A: INIT bridge (guest INIT ↔ host command queue)
+	M68K_EMUL_OP_CMD_DISPATCH,		// 0x7139: Legacy (unused)
+	M68K_EMUL_OP_INIT_BRIDGE,		// 0x713A: Legacy (unused)
+	M68K_EMUL_OP_BRIDGE_COMM,		// 0x713B: BridgeFS communications proc
+	M68K_EMUL_OP_BRIDGE_HFS,		// 0x713C: BridgeFS HFS dispatch
 	M68K_EMUL_OP_MAX				// highest number
 };
 

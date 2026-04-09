@@ -7,9 +7,9 @@
  * and System 7+.
  *
  * Protocol:
- *   Host writes "Host:_bridge_cmd" with command text (e.g. "LAUNCH path")
+ *   Host writes "Bridge:_bridge_cmd" with command text (e.g. "LAUNCH path")
  *   INIT reads the file, deletes it, executes the command
- *   INIT writes "Host:_bridge_result" with the error code
+ *   INIT writes "Bridge:_bridge_result" with the error code
  *   Host polls for _bridge_result, reads it, deletes it
  *
  * Built with Retro68. Embedded in the emulator binary at compile time.
@@ -67,7 +67,7 @@ static void check_bridge(void)
             last_hb_ticks = now;
             /* Try to open heartbeat file — if host pre-created it, write to it */
             FSSpec hb_spec;
-            err = FSMakeFSSpec(0, 0, "\pHost:_bridge_heartbeat", &hb_spec);
+            err = FSMakeFSSpec(0, 0, "\pBridge:_bridge_heartbeat", &hb_spec);
             if (err == noErr) {
                 short hb_ref;
                 if (FSpOpenDF(&hb_spec, fsWrPerm, &hb_ref) == noErr) {
@@ -86,7 +86,7 @@ static void check_bridge(void)
     }
 
     /* Check if command file exists */
-    err = FSMakeFSSpec(0, 0, "\pHost:_bridge_cmd", &cmd_spec);
+    err = FSMakeFSSpec(0, 0, "\pBridge:_bridge_cmd", &cmd_spec);
     if (err != noErr)
         return;  /* no command pending */
 
@@ -131,7 +131,7 @@ static void check_bridge(void)
             char res_str[16];
             long rlen;
             short rref;
-            FSMakeFSSpec(0, 0, "\pHost:_bridge_result", &res_spec);
+            FSMakeFSSpec(0, 0, "\pBridge:_bridge_result", &res_spec);
             FSpDelete(&res_spec);
             FSpCreate(&res_spec, 'ttxt', 'TEXT', smSystemScript);
             FSpOpenDF(&res_spec, fsWrPerm, &rref);
@@ -151,7 +151,7 @@ static void check_bridge(void)
         long rlen;
         short rref;
 
-        FSMakeFSSpec(0, 0, "\pHost:_bridge_result", &res_spec);
+        FSMakeFSSpec(0, 0, "\pBridge:_bridge_result", &res_spec);
         FSpDelete(&res_spec);
         FSpCreate(&res_spec, 'ttxt', 'TEXT', smSystemScript);
         if (FSpOpenDF(&res_spec, fsWrPerm, &rref) == noErr) {

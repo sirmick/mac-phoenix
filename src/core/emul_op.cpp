@@ -66,6 +66,7 @@ extern bool tick_inhibit;
 extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
 extern uint8 *ScratchMem;  // Platform scratch memory (safe target for hardware base redirect)
 extern void command_bridge_drain_from_irq(M68kRegisters *r);
+#include "bridge_fs_driver.h"
 
 void PlayStartupSound();
 
@@ -737,8 +738,27 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_CMD_DISPATCH:
 		case M68K_EMUL_OP_INIT_BRIDGE:
-			// Legacy EmulOp handlers — no longer used (bridge INIT uses file I/O)
 			break;
+
+		case M68K_EMUL_OP_BRIDGE_COMM: {
+			WriteMacInt16(r->a[7] + 14,
+				::BridgeFSComm(
+					ReadMacInt16(r->a[7] + 12),
+					ReadMacInt32(r->a[7] + 8),
+					ReadMacInt32(r->a[7] + 4)));
+			break;
+		}
+
+		case M68K_EMUL_OP_BRIDGE_HFS: {
+			WriteMacInt16(r->a[7] + 20,
+				::BridgeFSHFS(
+					ReadMacInt32(r->a[7] + 16),
+					ReadMacInt16(r->a[7] + 14),
+					ReadMacInt32(r->a[7] + 10),
+					ReadMacInt32(r->a[7] + 6),
+					ReadMacInt16(r->a[7] + 4)));
+			break;
+		}
 
 		case M68K_EMUL_OP_SUSPEND: {
 			printf("*** Suspend\n");

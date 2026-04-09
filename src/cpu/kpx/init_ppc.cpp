@@ -40,6 +40,7 @@
 #include "serial.h"
 #include "clip.h"
 #include "extfs.h"
+#include "../../core/bridge_fs_driver.h"
 #include "sys.h"
 #include "macos_util.h"
 #include "rom_patches.h"
@@ -409,5 +410,6 @@ void ppc::PatchAfterStartup_PPC(void)
 	fprintf(stderr, "[PPC] PatchAfterStartup_PPC: installing NQD accel + ExtFS\n");
 	ExecuteNative(NATIVE_VIDEO_INSTALL_ACCEL);
 	InstallExtFS();
+	::InstallBridgeFS();
 }
 // Called via g_platform.patch_after_startup (set in cpu_ppc_kpx_install).

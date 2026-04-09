@@ -9,6 +9,8 @@ add_library(core STATIC
   disk.cpp
   boot_progress.cpp
   command_bridge.cpp
+  bridge_fs.cpp
+  bridge_fs_driver.cpp
   emul_op.cpp
   emulator_init.cpp
   ether.cpp
