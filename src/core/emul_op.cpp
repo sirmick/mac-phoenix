@@ -750,6 +750,12 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 		}
 
 		case M68K_EMUL_OP_BRIDGE_HFS: {
+			{
+				static int bhfs_count = 0;
+				if (++bhfs_count <= 3)
+					fprintf(stderr, "[EmulOp] BRIDGE_HFS call #%d sel=0x%04X\n",
+						bhfs_count, ReadMacInt16(r->a[7] + 14));
+			}
 			WriteMacInt16(r->a[7] + 20,
 				::BridgeFSHFS(
 					ReadMacInt32(r->a[7] + 16),

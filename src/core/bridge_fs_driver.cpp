@@ -56,21 +56,7 @@ enum {
     SIZEOF_bfsdat   = 802
 };
 
-// FSD offsets — use suffixed names to avoid conflicts with extfs_defs.h
-enum {
-    bfsdLength = 0,
-    bfsdVersion = 2,
-    bfsFileSystemFSID = 4,
-    bfsFileSystemName = 6,
-    bfsFileSystemCommProc = 116,
-    bfsdHFSCI = 132,
-    bfsCompInterfProc = 0,
-    bfsCompInterfMask = 4,
-    bfsStackTop = 8,
-    bfsStackSize = 12,
-    bfsIdSector = 16,
-    SIZEOF_BFSDRec = 196
-};
+// FSD offsets — reuse from extfs_defs.h (already included)
 
 static uint32_t bfs_data = 0;   // Mac address of our data block
 static int16_t  drive_number = 0;
@@ -94,6 +80,9 @@ static std::string read_pstring(uint32_t addr) {
 
 int16_t BridgeFSComm(uint16_t message, uint32_t paramBlock, uint32_t globals) {
     (void)globals;
+    static int comm_count = 0;
+    if (++comm_count <= 5)
+        fprintf(stderr, "[BridgeFS] Comm: msg=%d pb=0x%08X\n", message, paramBlock);
     switch (message) {
         case 0:  // ffsNopMessage
         case 1:  // ffsLoadMessage
@@ -386,6 +375,9 @@ static int16_t bridge_set_fpos(uint32_t pb) {
 int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
                      uint32_t globals, int16_t fsid) {
     (void)globals; (void)fsid;
+    static int call_count = 0;
+    if (++call_count <= 20)
+        fprintf(stderr, "[BridgeFS] HFS dispatch: sel=0x%04X pb=0x%08X\n", selectCode, paramBlock);
 
     switch (selectCode) {
         case 0xA000: return bridge_open(paramBlock, vcb);     // kFSMOpen
@@ -406,21 +398,74 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
         case 0xA014: // kFSMFlushFile
             return 0;
 
-        // Volume mount — handled by FSM framework
+        // Volume mount — allocate VCB, init, add to queue (same as ExtFS)
         case 0x0041: {
-            // fs_volume_mount — set up VCB fields
-            WriteMacInt16(vcb + 78, BRIDGE_FSID); // vcbFSID at offset 78
-            Host2Mac_memcpy(vcb + vcbVN, BRIDGE_VOLUME_NAME, 28);
+            M68kRegisters r;
 
-            // Fake volume metrics
-            WriteMacInt16(vcb + 40, 0xFFFF); // vcbNmAlBlks
-            WriteMacInt32(vcb + 44, 0x4000); // vcbAlBlkSiz
-            WriteMacInt32(vcb + 48, 0x4000); // vcbClpSiz
-            WriteMacInt16(vcb + 56, 0xFFFF); // vcbFreeBks
+            // Allocate VCB
+            memset(&r, 0, sizeof(r));
+            r.a[0] = bfs_data + bfsReturn;
+            r.a[1] = bfs_data + bfsReturn + 2;
+            Execute68k(bfs_data + bfsAllocateVCB, &r);
+            if (r.d[0] & 0xffff) return static_cast<int16_t>(r.d[0]);
+            uint32_t new_vcb = ReadMacInt32(bfs_data + bfsReturn + 2);
+
+            // Init VCB
+            WriteMacInt16(new_vcb + vcbSigWord, 0x4244);
+            WriteMacInt32(new_vcb + vcbCrDate, 0);
+            WriteMacInt32(new_vcb + vcbLsMod, 0);
+            WriteMacInt16(new_vcb + vcbNmFls, 0);
+            WriteMacInt16(new_vcb + vcbNmRtDirs, 0);
+            WriteMacInt16(new_vcb + vcbNmAlBlks, 0xFFFF);
+            WriteMacInt32(new_vcb + vcbAlBlkSiz, 0x4000);
+            WriteMacInt32(new_vcb + vcbClpSiz, 0x4000);
+            WriteMacInt16(new_vcb + vcbFreeBks, 0xFFFF);
+            for (int i = 0; i < 28; i++)
+                WriteMacInt8(new_vcb + vcbVN + i, BRIDGE_VOLUME_NAME[i]);
+            WriteMacInt16(new_vcb + vcbFSID, BRIDGE_FSID);
+
+            // Add VCB to queue
+            memset(&r, 0, sizeof(r));
+            r.d[0] = drive_number;
+            r.a[0] = bfs_data + bfsReturn;
+            r.a[1] = new_vcb;
+            Execute68k(bfs_data + bfsAddNewVCB, &r);
+            if (r.d[0] & 0xffff) return static_cast<int16_t>(r.d[0]);
+            int16_t vRefNum = static_cast<int16_t>(ReadMacInt32(bfs_data + bfsReturn));
+
+            // Post disk insert event
+            memset(&r, 0, sizeof(r));
+            r.d[0] = drive_number;
+            r.a[0] = 7;  // diskEvent
+            Execute68kTrap(0xa02f, &r);  // PostEvent()
+
+            WriteMacInt16(paramBlock + ioVRefNum, vRefNum);
+            fprintf(stderr, "[BridgeFS] Volume mounted: vRefNum=%d, vcb=0x%08X\n", vRefNum, new_vcb);
             return 0;
         }
 
+        case 0x001B: { // kFSMGetVolParms
+            uint32_t actual = ReadMacInt32(paramBlock + ioReqCount);
+            if (actual > 20) actual = 20;  // SIZEOF_GetVolParmsInfoBuffer
+            WriteMacInt32(paramBlock + ioActCount, actual);
+            uint32_t buf = ReadMacInt32(paramBlock + ioBuffer);
+            if (actual > 0) WriteMacInt16(buf + 0, 2);     // vMVersion = 2
+            if (actual > 2) WriteMacInt32(buf + 2,
+                kNoMiniFndr | kNoVNEdit | kNoLclSync | kTrshOffLine | kNoSwitchTo | kNoBootBlks | kNoSysDir | kHasExtFSVol);
+            if (actual > 6) WriteMacInt32(buf + 6, 0);      // vMLocalHand
+            if (actual > 10) WriteMacInt32(buf + 10, 0);     // vMServerAdr
+            return 0;
+        }
+
+        case 0xA407: // kFSMHGetVInfo (hierarchical GetVInfo)
+            return bridge_get_vol_info(paramBlock, vcb);
+
+        case 0xA00E: // kFSMGetFCBInfo
+            return -50;
+
         default:
+            if (call_count <= 20)
+                fprintf(stderr, "[BridgeFS] UNHANDLED sel=0x%04X\n", selectCode);
             return -50; // paramErr — unsupported operation
     }
 }
@@ -563,15 +608,15 @@ extern "C" void InstallBridgeFS(void) {
     Execute68kTrap(0xa04e, &r);  // AddDrive()
 
     // Init FSDRec
-    WriteMacInt16(bfs_data + bfsFSD + bfsdLength, SIZEOF_BFSDRec);
-    WriteMacInt16(bfs_data + bfsFSD + bfsdVersion, 1);
-    WriteMacInt16(bfs_data + bfsFSD + bfsFileSystemFSID, BRIDGE_FSID);
-    Host2Mac_memcpy(bfs_data + bfsFSD + bfsFileSystemName, BRIDGE_FS_NAME, 32);
-    WriteMacInt32(bfs_data + bfsFSD + bfsFileSystemCommProc, bfs_data + bfsCommProcStub);
-    WriteMacInt32(bfs_data + bfsFSD + bfsdHFSCI + bfsCompInterfProc, bfs_data + bfsHFSProcStub);
-    WriteMacInt32(bfs_data + bfsFSD + bfsdHFSCI + bfsStackTop, fs_stack + STACK_SIZE);
-    WriteMacInt32(bfs_data + bfsFSD + bfsdHFSCI + bfsStackSize, STACK_SIZE);
-    WriteMacInt32(bfs_data + bfsFSD + bfsdHFSCI + bfsIdSector, (uint32_t)-1);
+    WriteMacInt16(bfs_data + bfsFSD + fsdLength, SIZEOF_FSDRec);
+    WriteMacInt16(bfs_data + bfsFSD + fsdVersion, 1);
+    WriteMacInt16(bfs_data + bfsFSD + fileSystemFSID, BRIDGE_FSID);
+    Host2Mac_memcpy(bfs_data + bfsFSD + fileSystemName, BRIDGE_FS_NAME, 32);
+    WriteMacInt32(bfs_data + bfsFSD + fileSystemCommProc, bfs_data + bfsCommProcStub);
+    WriteMacInt32(bfs_data + bfsFSD + fsdHFSCI + compInterfProc, bfs_data + bfsHFSProcStub);
+    WriteMacInt32(bfs_data + bfsFSD + fsdHFSCI + stackTop, fs_stack + STACK_SIZE);
+    WriteMacInt32(bfs_data + bfsFSD + fsdHFSCI + stackSize, STACK_SIZE);
+    WriteMacInt32(bfs_data + bfsFSD + fsdHFSCI + idSector, (uint32_t)-1);
 
     // InstallFS
     memset(&r, 0, sizeof(r));
@@ -581,26 +626,64 @@ extern "C" void InstallBridgeFS(void) {
     fprintf(stderr, "[BridgeFS] InstallFS() returned %d\n", (int16_t)(r.d[0] & 0xffff));
 
     // Enable HFS component
-    uint32_t mask = ReadMacInt32(bfs_data + bfsFSD + bfsdHFSCI + bfsCompInterfMask);
-    WriteMacInt32(bfs_data + bfsFSD + bfsdHFSCI + bfsCompInterfMask,
-                  mask | 0x80000000 | 0x40000000 | 0x20000000);
+    uint32_t mask = ReadMacInt32(bfs_data + bfsFSD + fsdHFSCI + compInterfMask);
+    WriteMacInt32(bfs_data + bfsFSD + fsdHFSCI + compInterfMask,
+                  mask | fsmComponentEnableMask | hfsCIResourceLoadedMask | hfsCIDoesHFSMask);
     memset(&r, 0, sizeof(r));
     r.a[0] = bfs_data + bfsFSD;
-    r.d[3] = SIZEOF_BFSDRec;
+    r.d[3] = SIZEOF_FSDRec;
     r.d[4] = BRIDGE_FSID;
     r.d[0] = 5;  // SetFSInfo
     Execute68kTrap(0xa0ac, &r);
     fprintf(stderr, "[BridgeFS] SetFSInfo() returned %d\n", (int16_t)(r.d[0] & 0xffff));
 
-    // Mount volume
-    WriteMacInt32(bfs_data + bfsPB + ioBuffer, bfs_data + bfsVMI);
-    WriteMacInt16(bfs_data + bfsVMI, 12);  // vmiLength = sizeof(VolumeMountInfoHeader)
-    WriteMacInt32(bfs_data + bfsVMI + 4, BRIDGE_MEDIA_TYPE);  // vmiMedia
-    memset(&r, 0, sizeof(r));
-    r.a[0] = bfs_data + bfsPB;
-    r.d[0] = 0x41;  // PBVolumeMount
-    Execute68kTrap(0xa260, &r);  // HFSDispatch()
-    fprintf(stderr, "[BridgeFS] PBVolumeMount() returned %d\n", (int16_t)(r.d[0] & 0xffff));
+    // Mount volume directly — allocate VCB and add to queue
+    // (PBVolumeMount doesn't call our HFS dispatch for some reason,
+    //  so we do the mount ourselves, same as ExtFS's fs_volume_mount)
+    {
+        // Allocate VCB
+        memset(&r, 0, sizeof(r));
+        r.a[0] = bfs_data + bfsReturn;
+        r.a[1] = bfs_data + bfsReturn + 2;
+        Execute68k(bfs_data + bfsAllocateVCB, &r);
+        if (r.d[0] & 0xffff) {
+            fprintf(stderr, "[BridgeFS] UTAllocateVCB failed: %d\n", (int16_t)(r.d[0] & 0xffff));
+            return;
+        }
+        uint32_t vcb = ReadMacInt32(bfs_data + bfsReturn + 2);
+
+        // Init VCB
+        WriteMacInt16(vcb + vcbSigWord, 0x4244);
+        WriteMacInt16(vcb + vcbNmFls, 0);
+        WriteMacInt16(vcb + vcbNmRtDirs, 0);
+        WriteMacInt16(vcb + vcbNmAlBlks, 0xFFFF);
+        WriteMacInt32(vcb + vcbAlBlkSiz, 0x4000);
+        WriteMacInt32(vcb + vcbClpSiz, 0x4000);
+        WriteMacInt16(vcb + vcbFreeBks, 0xFFFF);
+        for (int i = 0; i < 28; i++)
+            WriteMacInt8(vcb + vcbVN + i, BRIDGE_VOLUME_NAME[i]);
+        WriteMacInt16(vcb + vcbFSID, BRIDGE_FSID);
+
+        // Add VCB to queue
+        memset(&r, 0, sizeof(r));
+        r.d[0] = drive_number;
+        r.a[0] = bfs_data + bfsReturn;
+        r.a[1] = vcb;
+        Execute68k(bfs_data + bfsAddNewVCB, &r);
+        if (r.d[0] & 0xffff) {
+            fprintf(stderr, "[BridgeFS] UTAddNewVCB failed: %d\n", (int16_t)(r.d[0] & 0xffff));
+            return;
+        }
+        int16_t vRefNum = static_cast<int16_t>(ReadMacInt32(bfs_data + bfsReturn));
+
+        // Post disk insert event
+        memset(&r, 0, sizeof(r));
+        r.d[0] = drive_number;
+        r.a[0] = 7;  // diskEvent
+        Execute68kTrap(0xa02f, &r);  // PostEvent()
+
+        fprintf(stderr, "[BridgeFS] Volume mounted: vRefNum=%d, vcb=0x%08X\n", vRefNum, vcb);
+    }
 
     fprintf(stderr, "[BridgeFS] Installed: drive=%d, fsid=0x%04X\n", drive_number, BRIDGE_FSID);
 }
