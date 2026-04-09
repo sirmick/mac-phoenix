@@ -1071,10 +1071,6 @@ Response APIRouter::handle_windows(const Request& req) {
 }
 
 Response APIRouter::handle_launch(const Request& req) {
-    if (ctx_->subprocess) {
-        return Response::json("{\"success\": false, \"error\": \"not available in subprocess mode\"}");
-    }
-
     nlohmann::json j;
     try {
         j = json_utils::parse(req.body);
