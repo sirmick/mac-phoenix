@@ -134,6 +134,8 @@ bool BridgeFS::get_file(const std::string& name, std::string& out) {
 void BridgeFS::put_file(const std::string& name, const std::string& data) {
     std::lock_guard<std::mutex> lock(mutex_);
     files_[name].data.assign(data.begin(), data.end());
+    fprintf(stderr, "[BridgeFS] put_file('%s', %zu bytes) -> store now has %zu files (this=%p, g_bridge_fs=%p)\n",
+            name.c_str(), data.size(), files_.size(), this, g_bridge_fs);
 }
 
 bool BridgeFS::has_file(const std::string& name) {

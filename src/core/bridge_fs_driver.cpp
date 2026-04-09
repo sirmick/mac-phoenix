@@ -267,28 +267,56 @@ static int16_t bridge_delete(uint32_t pb) {
 static int16_t bridge_get_file_info(uint32_t pb) {
     uint32_t name_ptr = ReadMacInt32(pb + ioNamePtr);
     std::string name = read_pstring(name_ptr);
-    if (name.empty()) return -43;
 
+    // Strip volume prefix
+    size_t colon = name.find(':');
+    if (colon != std::string::npos)
+        name = name.substr(colon + 1);
+
+    if (name.empty()) return -43;
     if (!g_bridge_fs || !g_bridge_fs->exists(name)) return -43;
 
-    // Fill in minimal file info
     std::string data;
     g_bridge_fs->get_file(name, data);
 
-    // ioFlFndrInfo at pb+32 (FInfo: 16 bytes)
+    // Write filename back to ioNamePtr (FSMakeFSSpec expects this)
+    if (name_ptr) {
+        WriteMacInt8(name_ptr, name.size());
+        for (size_t i = 0; i < name.size() && i < 63; i++)
+            WriteMacInt8(name_ptr + 1 + i, name[i]);
+    }
+
+    // File attributes
+    WriteMacInt8(pb + 30, 0);   // ioFlAttrib (not locked, not directory)
+    WriteMacInt8(pb + 31, 0);   // ioACUser
+    WriteMacInt16(pb + ioRefNum, 0);  // ioFRefNum
+
+    // FInfo at pb+32 (16 bytes)
     WriteMacInt32(pb + 32, 0x54455854); // fdType = 'TEXT'
     WriteMacInt32(pb + 36, 0x74747874); // fdCreator = 'ttxt'
     WriteMacInt16(pb + 40, 0);          // fdFlags
     WriteMacInt32(pb + 42, 0);          // fdLocation
     WriteMacInt16(pb + 46, 0);          // fdFldr
 
-    // Logical/physical size
-    WriteMacInt32(pb + 54, (uint32_t)data.size()); // ioFlLgLen (data fork logical)
+    // ioDirID — set to root dir (2) for flat filesystem
+    WriteMacInt32(pb + 48, 2);  // ioDirID / ioFlStBlk
+
+    // Data fork size
+    WriteMacInt32(pb + 54, (uint32_t)data.size()); // ioFlLgLen
     WriteMacInt32(pb + 58, (uint32_t)((data.size() | 0x1FF) + 1)); // ioFlPyLen
-    WriteMacInt32(pb + 64, 0); // ioFlRLgLen (resource fork = 0)
+
+    // Resource fork = empty
+    WriteMacInt32(pb + 62, 0); // ioFlRStBlk
+    WriteMacInt32(pb + 64, 0); // ioFlRLgLen
     WriteMacInt32(pb + 68, 0); // ioFlRPyLen
 
-    WriteMacInt8(pb + 30, 0);  // ioFlAttrib (not locked, not directory)
+    // Dates
+    WriteMacInt32(pb + 72, 0); // ioFlCrDat
+    WriteMacInt32(pb + 76, 0); // ioFlMdDat
+
+    // ioFlParID (parent dir ID) — root
+    WriteMacInt32(pb + 100, 2); // ioFlParID
+
     return 0;
 }
 
@@ -376,7 +404,8 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
                      uint32_t globals, int16_t fsid) {
     (void)globals; (void)fsid;
     static int call_count = 0;
-    if (++call_count <= 20)
+    call_count++;
+    if (selectCode != 0x001B)  // Don't spam MakeFSSpec
         fprintf(stderr, "[BridgeFS] HFS dispatch: sel=0x%04X pb=0x%08X\n", selectCode, paramBlock);
 
     switch (selectCode) {
@@ -386,9 +415,11 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
         case 0xA003: return bridge_write(paramBlock);          // kFSMWrite
         case 0xA008: return bridge_create(paramBlock);         // kFSMCreate
         case 0xA009: return bridge_delete(paramBlock);         // kFSMDelete
-        case 0xA00C: return bridge_get_file_info(paramBlock);  // kFSMGetFileInfo
-        case 0xA00D: return 0;                                 // kFSMSetFileInfo (no-op)
-        case 0xA007: return bridge_get_vol_info(paramBlock, vcb); // kFSMGetVolInfo
+        case 0x0009: // kFSMGetCatInfo (used by FSMakeFSSpec internally)
+        case 0xA00C: // kFSMGetFileInfo
+        case 0xA017: // kFSMHGetFileInfo
+            return bridge_get_file_info(paramBlock);
+        // kFSMGetVolInfo handled below with kFSMHGetVInfo
         case 0xA010: return bridge_get_eof(paramBlock);        // kFSMGetEOF
         case 0xA011: return bridge_set_eof(paramBlock);        // kFSMSetEOF
         case 0xA044: return bridge_set_fpos(paramBlock);       // kFSMSetFPos
@@ -444,20 +475,52 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
             return 0;
         }
 
-        case 0x001B: { // kFSMGetVolParms
+        case 0x001B: { // kFSMMakeFSSpec
+            // Parse the filename from ioNamePtr and build an FSSpec
+            uint32_t name_ptr = ReadMacInt32(paramBlock + ioNamePtr);
+            std::string name = read_pstring(name_ptr);
+            if (call_count <= 20)
+                fprintf(stderr, "[BridgeFS] MakeFSSpec: '%s'\n", name.c_str());
+
+            // Strip volume prefix if present (e.g., "Bridge:_bridge_cmd" → "_bridge_cmd")
+            size_t colon = name.find(':');
+            if (colon != std::string::npos)
+                name = name.substr(colon + 1);
+
+            // Check if file exists in BridgeFS
+            if (!g_bridge_fs) return -43; // fnfErr
+            bool exists = g_bridge_fs->exists(name);
+            if (exists)
+                fprintf(stderr, "[BridgeFS] MakeFSSpec: FOUND '%s'!\n", name.c_str());
+
+            // Write FSSpec to ioMisc (pointer to FSSpec output buffer)
+            // For MakeFSSpec, the output FSSpec goes to a separate param:
+            // Actually, the result FSSpec is built from the pb fields.
+            // Set ioVRefNum to our vRefNum, and ioNamePtr stays as is.
+            // The File Manager builds the FSSpec from these.
+
+            // For a foreign FS, MakeFSSpec just needs to validate the path.
+            // Return noErr if valid (file exists or parent dir exists).
+            // Return fnfErr if file doesn't exist (but path is valid for creation).
+            if (exists) return 0;
+            return -43; // fnfErr — file doesn't exist
+        }
+
+        case 0x0030: { // kFSMGetVolParms
             uint32_t actual = ReadMacInt32(paramBlock + ioReqCount);
-            if (actual > 20) actual = 20;  // SIZEOF_GetVolParmsInfoBuffer
+            if (actual > 20) actual = 20;
             WriteMacInt32(paramBlock + ioActCount, actual);
             uint32_t buf = ReadMacInt32(paramBlock + ioBuffer);
-            if (actual > 0) WriteMacInt16(buf + 0, 2);     // vMVersion = 2
+            if (actual > 0) WriteMacInt16(buf + 0, 2);
             if (actual > 2) WriteMacInt32(buf + 2,
                 kNoMiniFndr | kNoVNEdit | kNoLclSync | kTrshOffLine | kNoSwitchTo | kNoBootBlks | kNoSysDir | kHasExtFSVol);
-            if (actual > 6) WriteMacInt32(buf + 6, 0);      // vMLocalHand
-            if (actual > 10) WriteMacInt32(buf + 10, 0);     // vMServerAdr
+            if (actual > 6) WriteMacInt32(buf + 6, 0);
+            if (actual > 10) WriteMacInt32(buf + 10, 0);
             return 0;
         }
 
-        case 0xA407: // kFSMHGetVInfo (hierarchical GetVInfo)
+        case 0xA007: // kFSMGetVolInfo
+        case 0xA407: // kFSMHGetVInfo
             return bridge_get_vol_info(paramBlock, vcb);
 
         case 0xA00E: // kFSMGetFCBInfo
