@@ -32,7 +32,6 @@
 #include "cdrom.h"
 #include "video.h"
 #include "extfs.h"
-#include "bridge_fs_driver.h"
 #include "emulator_config.h"
 
 #if ENABLE_MON
@@ -905,8 +904,7 @@ void m68k::PatchAfterStartup(void)
 	// m68k default: just install ExtFS
 	InstallExtFS();
 #endif
-	// Install Bridge filesystem (in-memory, for automation)
-	::InstallBridgeFS();
+	// BridgeFS hooks into ExtFS — no separate installation needed
 }
 
 

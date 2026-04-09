@@ -1103,7 +1103,7 @@ Response APIRouter::handle_launch(const Request& req) {
     ::g_bridge_fs->remove_file("_bridge_result");
     ::g_bridge_fs->put_file("_bridge_cmd", "LAUNCH " + path);
 
-    for (int i = 0; i < 50; i++) {
+    for (int i = 0; i < 100; i++) {  // 10 seconds
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         std::string result;
         if (::g_bridge_fs->get_file("_bridge_result", result)) {

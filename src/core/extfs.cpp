@@ -68,6 +68,11 @@
 
 #define DEBUG 0
 #include "debug.h"
+#include "bridge_fs.h"
+
+static bool is_bridge_file(const char *name) {
+	return name && strncmp(name, "_bridge_", 8) == 0;
+}
 
 // EmulOp encoding handled by platform_make_emulop() in platform.h
 #define make_emulop(op) platform_make_emulop(op)
@@ -1377,6 +1382,33 @@ static int16 fs_get_cat_info(uint32 pb)
 {
 	D(bug(" fs_get_cat_info(%08x), vRefNum %d, name %.31s, idx %d, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), ReadMacInt16(pb + ioFDirIndex), ReadMacInt32(pb + ioDirID)));
 
+	// BridgeFS intercept: check for _bridge_* files in the in-memory store
+	if (g_bridge_fs && ReadMacInt16(pb + ioFDirIndex) == 0) {
+		uint32 name_ptr = ReadMacInt32(pb + ioNamePtr);
+		if (name_ptr) {
+			uint8 nlen = ReadMacInt8(name_ptr);
+			char name[64] = {};
+			for (int i = 0; i < nlen && i < 63; i++)
+				name[i] = ReadMacInt8(name_ptr + 1 + i);
+			if (is_bridge_file(name) && g_bridge_fs->exists(name)) {
+				std::string data;
+				g_bridge_fs->get_file(name, data);
+				WriteMacInt16(pb + ioRefNum, 0);
+				WriteMacInt8(pb + 30, 0);   // ioFlAttrib
+				WriteMacInt8(pb + 31, 0);   // ioACUser
+				WriteMacInt32(pb + 32, 0x54455854); // fdType = 'TEXT'
+				WriteMacInt32(pb + 36, 0x74747874); // fdCreator = 'ttxt'
+				WriteMacInt32(pb + 48, 100); // ioDirID = fake CNID
+				WriteMacInt32(pb + 54, (uint32)data.size()); // ioFlLgLen
+				WriteMacInt32(pb + 58, (uint32)((data.size() | 0x1FF) + 1)); // ioFlPyLen
+				WriteMacInt32(pb + 64, 0); // ioFlRLgLen
+				WriteMacInt32(pb + 68, 0); // ioFlRPyLen
+				WriteMacInt32(pb + 100, ROOT_ID); // ioFlParID
+				return noErr;
+			}
+		}
+	}
+
 	FSItem *fs_item;
 	int16 dir_index = ReadMacInt16(pb + ioFDirIndex);
 	if (dir_index < 0) {			// Query directory specified by ioDirID
@@ -1529,6 +1561,43 @@ static int16 fs_open(uint32 pb, uint32 dirID, uint32 vcb, bool resource_fork)
 	D(bug(" fs_open(%08x), %s, vRefNum %d, name %.31s, dirID %d, perm %d\n", pb, resource_fork ? "rsrc" : "data", ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID, ReadMacInt8(pb + ioPermssn)));
 	M68kRegisters r;
 
+	// BridgeFS intercept: route _bridge_* files to in-memory store
+	if (g_bridge_fs && !resource_fork) {
+		uint32 name_ptr = ReadMacInt32(pb + ioNamePtr);
+		if (name_ptr) {
+			uint8 nlen = ReadMacInt8(name_ptr);
+			char name[64] = {};
+			for (int i = 0; i < nlen && i < 63; i++)
+				name[i] = ReadMacInt8(name_ptr + 1 + i);
+			if (is_bridge_file(name)) {
+				bool writable = (ReadMacInt8(pb + ioPermssn) != fsRdPerm);
+				int bfd = g_bridge_fs->open(name, writable);
+				if (bfd < 0) return fnfErr;
+
+				// Allocate FCB
+				r.a[0] = fs_data + fsReturn;
+				r.a[1] = fs_data + fsReturn + 2;
+				Execute68k(fs_data + fsAllocateFCB, &r);
+				if (r.d[0] & 0xffff) { g_bridge_fs->close(bfd); return (int16)r.d[0]; }
+
+				uint32 fcb = ReadMacInt32(fs_data + fsReturn + 2);
+				int64_t eof = g_bridge_fs->get_eof(bfd);
+
+				// Mark with a special "file number" — use negative fd to distinguish from Unix fds
+				WriteMacInt32(fcb + fcbFlNm, 0xBF000000 | (bfd & 0xFFFF));
+				WriteMacInt8(fcb + fcbFlags, resource_fork ? fcbResourceMask : 0);
+				WriteMacInt32(fcb + fcbEOF, (uint32)eof);
+				WriteMacInt32(fcb + fcbPLen, (uint32)((eof | (AL_BLK_SIZE - 1)) + 1));
+				WriteMacInt32(fcb + fcbCrPs, 0);
+				WriteMacInt32(fcb + fcbVPtr, vcb);
+				WriteMacInt32(fcb + fcbClmpSize, CLUMP_SIZE);
+
+				WriteMacInt16(pb + ioRefNum, ReadMacInt16(fs_data + fsReturn));
+				return noErr;
+			}
+		}
+	}
+
 	// Find FSItem for given file
 	FSItem *fs_item;
 	int16 result = get_item_and_path(pb, dirID, fs_item);
@@ -1627,6 +1696,17 @@ static int16 fs_close(uint32 pb)
 		return rfNumErr;
 	if (ReadMacInt32(fcb + fcbFlNm) == 0)
 		return fnOpnErr;
+
+	// BridgeFS close intercept
+	uint32 flnm_c = ReadMacInt32(fcb + fcbFlNm);
+	if (g_bridge_fs && (flnm_c & 0xFF000000) == 0xBF000000) {
+		int bfd = flnm_c & 0xFFFF;
+		g_bridge_fs->close(bfd);
+		r.d[0] = ReadMacInt16(pb + ioRefNum);
+		Execute68k(fs_data + fsReleaseFCB, &r);
+		return (int16)r.d[0];
+	}
+
 	int fd = ReadMacInt32(fcb + fcbCatPos);
 
 	// Close file
@@ -1856,6 +1936,28 @@ static int16 fs_read(uint32 pb)
 		return rfNumErr;
 	if (ReadMacInt32(fcb + fcbFlNm) == 0)
 		return fnOpnErr;
+
+	// BridgeFS intercept: check for bridge file marker in fcbFlNm
+	uint32 flnm = ReadMacInt32(fcb + fcbFlNm);
+	if (g_bridge_fs && (flnm & 0xFF000000) == 0xBF000000) {
+		int bfd = flnm & 0xFFFF;
+		uint16 posMode = ReadMacInt16(pb + ioPosMode) & 3;
+		int32 posOff = (int32)ReadMacInt32(pb + ioPosOffset);
+		switch (posMode) {
+			case fsFromStart: g_bridge_fs->seek(bfd, posOff, 0); break;
+			case fsFromLEOF:  g_bridge_fs->seek(bfd, posOff, 2); break;
+			case fsFromMark:  g_bridge_fs->seek(bfd, posOff, 1); break;
+		}
+		uint32 reqCount = ReadMacInt32(pb + ioReqCount);
+		ssize_t actual = g_bridge_fs->read(bfd, Mac2HostAddr(ReadMacInt32(pb + ioBuffer)), reqCount);
+		WriteMacInt32(pb + ioActCount, actual > 0 ? actual : 0);
+		int64_t pos = g_bridge_fs->seek(bfd, 0, 1);
+		WriteMacInt32(fcb + fcbCrPs, (uint32)pos);
+		WriteMacInt32(pb + ioPosOffset, (uint32)pos);
+		if (actual == 0 && reqCount > 0) return eofErr;
+		return noErr;
+	}
+
 	int fd = ReadMacInt32(fcb + fcbCatPos);
 	if (fd < 0) {
 		if (ReadMacInt8(fcb + fcbFlags) & fcbResourceMask) {	// "pseudo" resource fork
@@ -1910,6 +2012,30 @@ static int16 fs_write(uint32 pb)
 		return rfNumErr;
 	if (ReadMacInt32(fcb + fcbFlNm) == 0)
 		return fnOpnErr;
+
+	// BridgeFS write intercept
+	uint32 flnm_w = ReadMacInt32(fcb + fcbFlNm);
+	if (g_bridge_fs && (flnm_w & 0xFF000000) == 0xBF000000) {
+		int bfd = flnm_w & 0xFFFF;
+		uint16 posMode = ReadMacInt16(pb + ioPosMode) & 3;
+		int32 posOff = (int32)ReadMacInt32(pb + ioPosOffset);
+		switch (posMode) {
+			case fsFromStart: g_bridge_fs->seek(bfd, posOff, 0); break;
+			case fsFromLEOF:  g_bridge_fs->seek(bfd, posOff, 2); break;
+			case fsFromMark:  g_bridge_fs->seek(bfd, posOff, 1); break;
+		}
+		uint32 reqCount = ReadMacInt32(pb + ioReqCount);
+		ssize_t actual = g_bridge_fs->write(bfd, Mac2HostAddr(ReadMacInt32(pb + ioBuffer)), reqCount);
+		WriteMacInt32(pb + ioActCount, actual > 0 ? actual : 0);
+		int64_t pos = g_bridge_fs->seek(bfd, 0, 1);
+		int64_t eof = g_bridge_fs->get_eof(bfd);
+		WriteMacInt32(fcb + fcbCrPs, (uint32)pos);
+		WriteMacInt32(fcb + fcbEOF, (uint32)eof);
+		WriteMacInt32(fcb + fcbPLen, (uint32)((eof | (AL_BLK_SIZE - 1)) + 1));
+		WriteMacInt32(pb + ioPosOffset, (uint32)pos);
+		return noErr;
+	}
+
 	int fd = ReadMacInt32(fcb + fcbCatPos);
 	if (fd < 0) {
 		if (ReadMacInt8(fcb + fcbFlags) & fcbResourceMask) {	// "pseudo" resource fork
@@ -1954,6 +2080,22 @@ static int16 fs_write(uint32 pb)
 static int16 fs_create(uint32 pb, uint32 dirID)
 {
 	D(bug(" fs_create(%08x), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID));
+
+	// BridgeFS create intercept
+	if (g_bridge_fs) {
+		uint32 name_ptr = ReadMacInt32(pb + ioNamePtr);
+		if (name_ptr) {
+			uint8 nlen = ReadMacInt8(name_ptr);
+			char name[64] = {};
+			for (int i = 0; i < nlen && i < 63; i++)
+				name[i] = ReadMacInt8(name_ptr + 1 + i);
+			if (is_bridge_file(name)) {
+				if (g_bridge_fs->exists(name)) return dupFNErr;
+				g_bridge_fs->create(name);
+				return noErr;
+			}
+		}
+	}
 
 	// Find FSItem for given file
 	FSItem *fs_item;
@@ -2004,6 +2146,22 @@ static int16 fs_dir_create(uint32 pb)
 static int16 fs_delete(uint32 pb, uint32 dirID)
 {
 	D(bug(" fs_delete(%08x), vRefNum %d, name %.31s, dirID %d\n", pb, ReadMacInt16(pb + ioVRefNum), Mac2HostAddr(ReadMacInt32(pb + ioNamePtr) + 1), dirID));
+
+	// BridgeFS delete intercept
+	if (g_bridge_fs) {
+		uint32 name_ptr = ReadMacInt32(pb + ioNamePtr);
+		if (name_ptr) {
+			uint8 nlen = ReadMacInt8(name_ptr);
+			char name[64] = {};
+			for (int i = 0; i < nlen && i < 63; i++)
+				name[i] = ReadMacInt8(name_ptr + 1 + i);
+			if (is_bridge_file(name)) {
+				if (!g_bridge_fs->exists(name)) return fnfErr;
+				g_bridge_fs->remove(name);
+				return noErr;
+			}
+		}
+	}
 
 	// Find FSItem for given file/dir
 	FSItem *fs_item;

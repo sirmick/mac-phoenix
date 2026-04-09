@@ -22,6 +22,7 @@
 #include "../common/include/m68k_registers.h"
 #include "../common/include/platform.h"
 #include "boot_progress.h"
+#include "bridge_fs.h"
 #include "../config/emulator_config.h"
 #include <cstdio>
 #include <cstring>
@@ -57,6 +58,10 @@ static bool g_bridge_filter_reinstalled = false;
 static void inject_bridge_init() {
     if (g_bridge_init_injected) return;
     if (RAMSize == 0) return;
+
+    // Initialize BridgeFS in-memory store (used by ExtFS intercept)
+    if (!g_bridge_fs)
+        g_bridge_fs = new BridgeFS();
 
     // Allocate in Mac System heap
     M68kRegisters alloc_regs;
