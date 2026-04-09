@@ -273,7 +273,19 @@ static int16_t bridge_get_file_info(uint32_t pb) {
     if (colon != std::string::npos)
         name = name.substr(colon + 1);
 
-    if (name.empty()) return -43;
+    // Handle root directory queries (name empty, or name is the volume name)
+    if (name.empty() || name == "Bridge") {
+        // Return root directory info
+        if (name_ptr && name.empty())
+            ; // leave name empty
+        WriteMacInt8(pb + 30, 0x10);   // ioFlAttrib: faIsDir
+        WriteMacInt8(pb + 31, 0);
+        WriteMacInt32(pb + 48, 2);     // ioDirID = root (2)
+        WriteMacInt32(pb + 100, 1);    // ioFlParID = root parent (1)
+        WriteMacInt16(pb + 52, 0);     // ioDrNmFls = 0 items
+        return 0;
+    }
+
     if (!g_bridge_fs || !g_bridge_fs->exists(name)) return -43;
 
     std::string data;
@@ -298,8 +310,13 @@ static int16_t bridge_get_file_info(uint32_t pb) {
     WriteMacInt32(pb + 42, 0);          // fdLocation
     WriteMacInt16(pb + 46, 0);          // fdFldr
 
-    // ioDirID — set to root dir (2) for flat filesystem
-    WriteMacInt32(pb + 48, 2);  // ioDirID / ioFlStBlk
+    // ioDirID — unique CNID for this file (must not be 2 = root dir)
+    // Use a hash of the filename as a stable CNID
+    uint32_t cnid = 100;
+    for (size_t i = 0; i < name.size(); i++)
+        cnid = cnid * 31 + name[i];
+    if (cnid < 10) cnid += 100;
+    WriteMacInt32(pb + 48, cnid);  // ioDirID = file's CNID
 
     // Data fork size
     WriteMacInt32(pb + 54, (uint32_t)data.size()); // ioFlLgLen
@@ -405,11 +422,13 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
     (void)globals; (void)fsid;
     static int call_count = 0;
     call_count++;
-    if (selectCode != 0x001B)  // Don't spam MakeFSSpec
+    if (call_count <= 30)
         fprintf(stderr, "[BridgeFS] HFS dispatch: sel=0x%04X pb=0x%08X\n", selectCode, paramBlock);
 
     switch (selectCode) {
-        case 0xA000: return bridge_open(paramBlock, vcb);     // kFSMOpen
+        case 0xA000: // kFSMOpen
+        case 0x001A: // kFSMOpenDF
+            return bridge_open(paramBlock, vcb);
         case 0xA001: return bridge_close(paramBlock);          // kFSMClose
         case 0xA002: return bridge_read(paramBlock);           // kFSMRead
         case 0xA003: return bridge_write(paramBlock);          // kFSMWrite
@@ -417,8 +436,13 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
         case 0xA009: return bridge_delete(paramBlock);         // kFSMDelete
         case 0x0009: // kFSMGetCatInfo (used by FSMakeFSSpec internally)
         case 0xA00C: // kFSMGetFileInfo
-        case 0xA017: // kFSMHGetFileInfo
-            return bridge_get_file_info(paramBlock);
+        case 0xA017: { // kFSMHGetFileInfo
+            int16_t r = bridge_get_file_info(paramBlock);
+            fprintf(stderr, "[BridgeFS] GetCatInfo: vRefNum=%d name='%s' result=%d\n",
+                    (int16_t)ReadMacInt16(paramBlock + ioVRefNum),
+                    read_pstring(ReadMacInt32(paramBlock + ioNamePtr)).c_str(), r);
+            return r;
+        }
         // kFSMGetVolInfo handled below with kFSMHGetVInfo
         case 0xA010: return bridge_get_eof(paramBlock);        // kFSMGetEOF
         case 0xA011: return bridge_set_eof(paramBlock);        // kFSMSetEOF
@@ -475,36 +499,10 @@ int16_t BridgeFSHFS(uint32_t vcb, uint16_t selectCode, uint32_t paramBlock,
             return 0;
         }
 
-        case 0x001B: { // kFSMMakeFSSpec
-            // Parse the filename from ioNamePtr and build an FSSpec
-            uint32_t name_ptr = ReadMacInt32(paramBlock + ioNamePtr);
-            std::string name = read_pstring(name_ptr);
-            if (call_count <= 20)
-                fprintf(stderr, "[BridgeFS] MakeFSSpec: '%s'\n", name.c_str());
-
-            // Strip volume prefix if present (e.g., "Bridge:_bridge_cmd" → "_bridge_cmd")
-            size_t colon = name.find(':');
-            if (colon != std::string::npos)
-                name = name.substr(colon + 1);
-
-            // Check if file exists in BridgeFS
-            if (!g_bridge_fs) return -43; // fnfErr
-            bool exists = g_bridge_fs->exists(name);
-            if (exists)
-                fprintf(stderr, "[BridgeFS] MakeFSSpec: FOUND '%s'!\n", name.c_str());
-
-            // Write FSSpec to ioMisc (pointer to FSSpec output buffer)
-            // For MakeFSSpec, the output FSSpec goes to a separate param:
-            // Actually, the result FSSpec is built from the pb fields.
-            // Set ioVRefNum to our vRefNum, and ioNamePtr stays as is.
-            // The File Manager builds the FSSpec from these.
-
-            // For a foreign FS, MakeFSSpec just needs to validate the path.
-            // Return noErr if valid (file exists or parent dir exists).
-            // Return fnfErr if file doesn't exist (but path is valid for creation).
-            if (exists) return 0;
-            return -43; // fnfErr — file doesn't exist
-        }
+        // kFSMMakeFSSpec (0x001B): NOT handled — the FSM builds the FSSpec
+        // internally using kFSMGetCatInfo (0x0009). ExtFS doesn't handle
+        // this selector either. Fall through to default (paramErr).
+        // The FSM sees paramErr and uses GetCatInfo instead.
 
         case 0x0030: { // kFSMGetVolParms
             uint32_t actual = ReadMacInt32(paramBlock + ioReqCount);
