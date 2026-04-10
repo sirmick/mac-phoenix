@@ -108,7 +108,7 @@ test('boot_ppc_interp',
   is_parallel: false,
   suite: 'boot',
   env: {
-    'MACEMU_PPC_ROM': test_ppc_rom,
+    'MACEMU_ROM': test_ppc_rom,
   },
 )
 
@@ -120,7 +120,7 @@ test('boot_ppc_jit',
   is_parallel: false,
   suite: 'boot',
   env: {
-    'MACEMU_PPC_ROM': test_ppc_rom,
+    'MACEMU_ROM': test_ppc_rom,
   },
 )
 
@@ -132,7 +132,7 @@ test('boot_ppc_api',
   is_parallel: false,
   suite: 'boot',
   env: {
-    'MACEMU_PPC_ROM': test_ppc_rom,
+    'MACEMU_ROM': test_ppc_rom,
   },
 )
 

@@ -86,7 +86,7 @@ set_tests_properties(boot_unicorn PROPERTIES
 
 add_test(
   NAME command_bridge
-  COMMAND bash ${TEST_DIR}/test_command_bridge.sh
+  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --port 18106
 )
 set_tests_properties(command_bridge PROPERTIES
   TIMEOUT 30
@@ -101,7 +101,7 @@ add_test(
 set_tests_properties(boot_ppc_interp PROPERTIES
   TIMEOUT 60
   LABELS "boot"
-  ENVIRONMENT "MACEMU_PPC_ROM=${TEST_PPC_ROM}"
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
 add_test(
@@ -111,7 +111,7 @@ add_test(
 set_tests_properties(boot_ppc_jit PROPERTIES
   TIMEOUT 60
   LABELS "boot"
-  ENVIRONMENT "MACEMU_PPC_ROM=${TEST_PPC_ROM}"
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
 add_test(
@@ -121,7 +121,7 @@ add_test(
 set_tests_properties(boot_ppc_api PROPERTIES
   TIMEOUT 60
   LABELS "boot"
-  ENVIRONMENT "MACEMU_PPC_ROM=${TEST_PPC_ROM}"
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
 add_test(

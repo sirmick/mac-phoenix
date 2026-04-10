@@ -16,8 +16,6 @@
 set -euo pipefail
 
 TIMEOUT=60
-ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 PORT=18094
 SIG_PORT=18095
 BACKEND="uae"
@@ -26,6 +24,7 @@ BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 GUEST_DIR="$(cd "$(dirname "$0")" && pwd)/guest"
 EXTFS_DIR=""
 OS_VERSION=""
+ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 
 # Parse args
@@ -34,7 +33,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --disk) DISK="$2"; shift 2 ;;
-        --rom) ROM="$2"; shift 2 ;;
+        --rom) ROM_OVERRIDE="$2"; shift 2 ;;
         --backend) BACKEND="$2"; shift 2 ;;
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
@@ -45,6 +44,16 @@ done
 
 [[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
+
+# Select ROM and disk based on architecture (--rom flag overrides)
+if [[ -n "$ROM_OVERRIDE" ]]; then
+    ROM="$ROM_OVERRIDE"
+elif [[ "$ARCH" == "ppc" ]]; then
+    ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
+else
+    ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
+fi
+DISK="${DISK:-${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}}"
 
 # --- Preflight checks ---
 

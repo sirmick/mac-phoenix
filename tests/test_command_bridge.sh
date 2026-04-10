@@ -9,10 +9,8 @@ set -euo pipefail
 BACKEND="uae"
 ARCH=""
 TIMEOUT=15
-ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
-PORT=18092
-SIG_PORT=18093
+PORT=18106
+SIG_PORT=18107
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 
 # Parse args
@@ -25,6 +23,14 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+
+# Select ROM and disk based on architecture
+if [[ "$ARCH" == "ppc" ]]; then
+    ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
+else
+    ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
+fi
+DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 
 if [[ ! -x "$BINARY" ]]; then
     echo "SKIP: Binary not found: $BINARY"

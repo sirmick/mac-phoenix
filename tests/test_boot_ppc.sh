@@ -10,7 +10,7 @@
 #   --webserver:        boots with HTTP server, polls /api/status for boot phases
 #
 # Requires:
-#   - PPC ROM (4MB G3): set MACEMU_PPC_ROM or uses ~/storage/roms/g3.rom
+#   - PPC ROM (4MB G3): set MACEMU_ROM or uses ~/storage/roms/g3.rom
 #   - Disk image:       set MACEMU_DISK or uses ~/storage/images/macos-7.5.5.img
 #
 set -euo pipefail
@@ -20,7 +20,7 @@ PORT=18095
 SIG_PORT=18096
 WEBSERVER=false
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
-ROM="${MACEMU_PPC_ROM:-$HOME/storage/roms/g3.rom}"
+ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
 DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 MIN_CHECKLOADS=200
 EXTRA_FLAGS=()
@@ -46,7 +46,7 @@ if [[ -L "$ROM" ]]; then
     ROM="$(readlink -f "$ROM")"
 fi
 if [[ ! -f "$ROM" ]]; then
-    echo "SKIP: PPC ROM not found: $ROM (set MACEMU_PPC_ROM)"
+    echo "SKIP: PPC ROM not found: $ROM (set MACEMU_ROM)"
     exit 77
 fi
 
