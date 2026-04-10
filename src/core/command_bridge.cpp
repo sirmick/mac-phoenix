@@ -225,7 +225,19 @@ static void drain_from_irq_impl(M68kRegisters* r) {
             finder_running = (ReadMacInt8(0x0911) == 'F' && ReadMacInt8(0x0912) == 'i');
         }
     }
-    // (PPC boot_phase advancement removed — was interfering with m68k timing)
+    // Advance boot_phase on PPC where window heuristic doesn't work.
+    // Only set FINDER phase (not DESKTOP — that triggers auto-launch timing).
+    if (finder_running && !boot_progress_phase_reached("Finder")
+        && ReadMacInt32(0x09D6) == 0 /* WindowList empty = PPC */) {
+        static bool ppc_phase_set = false;
+        if (!ppc_phase_set) {
+            boot_progress_phase_reached("Finder");  // no-op, just checking
+            // Set Finder phase directly via the low-level API
+            extern void boot_progress_set_phase_finder(void);
+            boot_progress_set_phase_finder();
+            ppc_phase_set = true;
+        }
+    }
 
     if (g_bridge_filter_addr != 0 && !g_bridge_filter_reinstalled && finder_running) {
         uint32_t current = ReadMacInt32(LM_JGNEFILTER);

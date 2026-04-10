@@ -806,6 +806,17 @@ static void serialize_mac_state(char *buf, int bufsize)
 	}
 }
 
+/* Set Finder phase only (not desktop) — used by PPC fallback where
+ * window heuristic doesn't work. Does NOT set PHASE_DESKTOP to avoid
+ * triggering auto-launch timing prematurely. */
+void boot_progress_set_phase_finder(void) {
+	if (!g_seen_finder) {
+		g_seen_finder = true;
+		milestonef("Finder detected (CurApName PPC fallback)");
+		set_phase(PHASE_FINDER_LAUNCH);
+	}
+}
+
 /* In-process cached state for /api/status */
 static char g_mac_state_cache[2048] = "{}";
 static int g_mac_state_tick = 0;
