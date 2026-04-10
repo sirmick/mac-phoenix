@@ -133,7 +133,7 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr, uint32_t len) {
         bool first = true;
         int limit = 50;
 
-        while (wp && wp < 0x02000000 && limit-- > 0) {
+        while (wp && wp < RAMSize && limit-- > 0) {
             if (!first) json += ",";
             first = false;
 
@@ -141,7 +141,7 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr, uint32_t len) {
             uint32_t title_handle = ReadMacInt32(wp + 134);
             if (title_handle) {
                 uint32_t title_ptr = ReadMacInt32(title_handle);
-                if (title_ptr && title_ptr < 0x02000000) {
+                if (title_ptr && title_ptr < RAMSize) {
                     uint8_t tlen = ReadMacInt8(title_ptr);
                     for (int i = 0; i < tlen; i++) {
                         char c = static_cast<char>(ReadMacInt8(title_ptr + 1 + i));
@@ -225,6 +225,8 @@ static void drain_from_irq_impl(M68kRegisters* r) {
             finder_running = (ReadMacInt8(0x0911) == 'F' && ReadMacInt8(0x0912) == 'i');
         }
     }
+    // (PPC boot_phase advancement removed — was interfering with m68k timing)
+
     if (g_bridge_filter_addr != 0 && !g_bridge_filter_reinstalled && finder_running) {
         uint32_t current = ReadMacInt32(LM_JGNEFILTER);
         if (current != g_bridge_filter_addr) {

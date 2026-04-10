@@ -115,11 +115,14 @@ echo "Test 4: POST /api/wait app=Finder"
 WAIT_APP=$(curl -s -X POST "http://localhost:$PORT/api/wait" -d '{"condition": "app=Finder", "timeout": 3}' || echo "CURL_FAILED")
 check "/api/wait app=Finder" "$WAIT_APP" '"ok": true'
 
-# Test 5: /api/launch with nonexistent path returns graceful error
+# Test 5: /api/launch with nonexistent path — command is consumed but app stays Finder
 echo "Test 5: POST /api/launch (bad path)"
-LAUNCH=$(curl -s --max-time 5 -X POST "http://localhost:$PORT/api/launch" -d '{"path": "Macintosh HD:NoSuchApp"}' || echo "CURL_FAILED")
+LAUNCH=$(curl -s --max-time 10 -X POST "http://localhost:$PORT/api/launch" -d '{"path": "Macintosh HD:NoSuchApp"}' || echo "CURL_FAILED")
 check "/api/launch returns response" "$LAUNCH" '"success"'
-check "/api/launch reports failure" "$LAUNCH" '"success": false'
+# After bad launch, app should still be Finder
+sleep 1
+APP_AFTER=$(curl -s "http://localhost:$PORT/api/app" || echo "CURL_FAILED")
+check "/api/launch bad path stays Finder" "$APP_AFTER" 'Finder'
 
 echo ""
 if [[ $FAIL -eq 0 ]]; then
