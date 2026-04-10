@@ -21,6 +21,7 @@ DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 PORT=18094
 SIG_PORT=18095
 BACKEND="uae"
+ARCH=""
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 GUEST_DIR="$(cd "$(dirname "$0")" && pwd)/guest"
 EXTFS_DIR=""
@@ -35,11 +36,15 @@ while [[ $# -gt 0 ]]; do
         --disk) DISK="$2"; shift 2 ;;
         --rom) ROM="$2"; shift 2 ;;
         --backend) BACKEND="$2"; shift 2 ;;
+        --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) EXTRA_FLAGS+=(--network "$2"); shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+
+[[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
+[[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 
 # --- Preflight checks ---
 

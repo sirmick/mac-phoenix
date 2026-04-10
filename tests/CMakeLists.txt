@@ -146,3 +146,38 @@ set_tests_properties(guest_suite PROPERTIES
   SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
+
+# --- PPC variants of API/boot tests ---
+
+add_test(
+  NAME command_bridge_ppc
+  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend kpx --arch ppc --timeout 20 --port 18100
+)
+set_tests_properties(command_bridge_ppc PROPERTIES
+  TIMEOUT 35
+  LABELS "boot"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
+add_test(
+  NAME mouse_position_ppc
+  COMMAND bash ${TEST_DIR}/test_mouse_position.sh --backend kpx --arch ppc --timeout 20 --port 18102
+)
+set_tests_properties(mouse_position_ppc PROPERTIES
+  TIMEOUT 35
+  LABELS "boot"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
+add_test(
+  NAME guest_suite_ppc
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --arch ppc --timeout 60 --port 18104
+)
+set_tests_properties(guest_suite_ppc PROPERTIES
+  TIMEOUT 90
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)

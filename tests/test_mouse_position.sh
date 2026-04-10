@@ -11,6 +11,7 @@
 set -euo pipefail
 
 BACKEND="uae"
+ARCH=""
 TIMEOUT=30
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
@@ -21,6 +22,7 @@ BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --backend) BACKEND="$2"; shift 2 ;;
+        --arch) ARCH="$2"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --rom) ROM="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
@@ -41,10 +43,13 @@ fi
 echo "=== Mouse Position Test: $BACKEND backend ==="
 
 # Start emulator
+EXTRA_FLAGS=()
+[[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
+[[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog \
     --port "$PORT" --signaling-port "$SIG_PORT" \
-    --disk "$DISK" "$ROM" &>/tmp/macemu_mouse_test_$$.log &
+    --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/macemu_mouse_test_$$.log &
 EMU_PID=$!
 
 cleanup() {

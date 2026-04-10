@@ -7,12 +7,24 @@
 set -euo pipefail
 
 BACKEND="uae"
+ARCH=""
 TIMEOUT=15
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 PORT=18092
 SIG_PORT=18093
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --backend) BACKEND="$2"; shift 2 ;;
+        --arch) ARCH="$2"; shift 2 ;;
+        --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
+        --timeout) TIMEOUT="$2"; shift 2 ;;
+        *) echo "Unknown arg: $1"; exit 1 ;;
+    esac
+done
 
 if [[ ! -x "$BINARY" ]]; then
     echo "SKIP: Binary not found: $BINARY"
@@ -26,6 +38,10 @@ fi
 
 echo "=== Command Bridge Test: $BACKEND backend ==="
 
+EXTRA_FLAGS=()
+[[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
+[[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
+
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]]; then
         kill "$EMU_PID" 2>/dev/null || true
@@ -34,14 +50,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Start emulator
+# Start emulator (headless-http works for both m68k and PPC)
 "$BINARY" --backend "$BACKEND" --timeout "$TIMEOUT" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
-    --port "$PORT" --signaling-port "$SIG_PORT" --disk "$DISK" "$ROM" &>/dev/null &
+    --port "$PORT" --signaling-port "$SIG_PORT" --disk "$DISK" \
+    "${EXTRA_FLAGS[@]}" "$ROM" &>/dev/null &
 EMU_PID=$!
 
 # Wait for HTTP server
-for i in $(seq 1 5); do
+for i in $(seq 1 10); do
     if curl -sf "http://localhost:$PORT/api/status" >/dev/null 2>&1; then break; fi
     sleep 1
 done
@@ -49,12 +66,14 @@ done
 # Start the CPU
 curl -sf -X POST "http://localhost:$PORT/api/emulator/start" >/dev/null
 
-# Wait for boot
+# Wait for boot (check both boot_phase and CurApName for PPC compat)
 echo -n "Waiting for boot..."
 for i in $(seq 1 "$TIMEOUT"); do
-    PHASE=$(curl -sf "http://localhost:$PORT/api/status" | grep -o '"boot_phase": "[^"]*"' | sed 's/.*: "//;s/"//')
-    if [[ "$PHASE" == "desktop" || "$PHASE" == "Finder" ]]; then
-        echo " $PHASE reached"
+    STATUS=$(curl -sf "http://localhost:$PORT/api/status" 2>/dev/null || echo "")
+    PHASE=$(echo "$STATUS" | grep -oP '"boot_phase"\s*:\s*"\K[^"]+' || echo "")
+    APP=$(echo "$STATUS" | grep -oP '"app"\s*:\s*"\K[^"]+' || echo "")
+    if [[ "$PHASE" == "desktop" || "$PHASE" == "Finder" || "$APP" == "Finder" ]]; then
+        echo " ${PHASE:-$APP} reached"
         break
     fi
     echo -n "."
