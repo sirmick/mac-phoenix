@@ -15,6 +15,7 @@
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
 #include "../core/boot_progress.h"  // For boot phase query
 #include "../core/command_bridge.h"  // For command bridge
+#include "../core/bridge_fs.h"       // For BridgeFS in-memory store
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
 #include "keyboard_map.h"
@@ -1095,30 +1096,23 @@ Response APIRouter::handle_launch(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
     }
 
-    std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
-    std::string res_path = cfg.bridge_dir + "/_bridge_result";
+    // Write command to BridgeFS in-memory store — ExtFS intercepts route
+    // _bridge_* files to this store, bypassing host filesystem entirely.
+    if (!::g_bridge_fs)
+        return Response::json("{\"success\": false, \"error\": \"bridge FS not initialized\"}");
 
-    ::remove(res_path.c_str());
+    ::g_bridge_fs->remove_file("_bridge_result");
+    ::g_bridge_fs->put_file("_bridge_cmd", "LAUNCH " + path);
 
-    FILE* f = fopen(cmd_path.c_str(), "w");
-    if (!f)
-        return Response::json("{\"success\": false, \"error\": \"failed to write bridge command\"}");
-    fprintf(f, "LAUNCH %s", path.c_str());
-    fclose(f);
-    sync();  // ensure file is visible to ExtFS's readdir()
-
-    // Poll for result file OR command file deletion
+    // Poll for result file OR command file deletion (both in BridgeFS)
     for (int i = 0; i < 100; i++) {  // 10 seconds
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         // Check for result file (has error code — preferred)
-        FILE* rf = fopen(res_path.c_str(), "r");
-        if (rf) {
-            char buf[32] = {};
-            fgets(buf, sizeof(buf), rf);
-            fclose(rf);
-            ::remove(res_path.c_str());
-            int mac_err = atoi(buf);
+        std::string result;
+        if (::g_bridge_fs->get_file("_bridge_result", result)) {
+            ::g_bridge_fs->remove_file("_bridge_result");
+            int mac_err = std::atoi(result.c_str());
             if (mac_err != 0) {
                 std::ostringstream json;
                 json << "{\"success\": false, \"error_code\": " << mac_err
@@ -1128,13 +1122,13 @@ Response APIRouter::handle_launch(const Request& req) {
             return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
         }
 
-        // Fallback: command file was deleted (INIT consumed it)
-        if (access(cmd_path.c_str(), F_OK) != 0) {
+        // Fallback: command file was consumed by INIT
+        if (!::g_bridge_fs->has_file("_bridge_cmd")) {
             return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
         }
     }
 
-    ::remove(cmd_path.c_str());
+    ::g_bridge_fs->remove_file("_bridge_cmd");
     return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge INIT\"}");
 }
 
@@ -1142,31 +1136,27 @@ Response APIRouter::handle_quit(const Request& req) {
     (void)req;
 
     auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+    if (!cfg.bridge_enabled) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled\"}");
     }
+    if (!::g_bridge_fs)
+        return Response::json("{\"success\": false, \"error\": \"bridge FS not initialized\"}");
 
-    std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
-    std::string res_path = cfg.bridge_dir + "/_bridge_result";
-    ::remove(res_path.c_str());
-
-    FILE* f = fopen(cmd_path.c_str(), "w");
-    if (!f)
-        return Response::json("{\"success\": false, \"error\": \"failed to write bridge command\"}");
-    fprintf(f, "QUIT");
-    fclose(f);
+    ::g_bridge_fs->remove_file("_bridge_result");
+    ::g_bridge_fs->put_file("_bridge_cmd", "QUIT");
 
     for (int i = 0; i < 30; i++) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        FILE* rf = fopen(res_path.c_str(), "r");
-        if (rf) {
-            fclose(rf);
-            ::remove(res_path.c_str());
+        if (::g_bridge_fs->has_file("_bridge_result")) {
+            ::g_bridge_fs->remove_file("_bridge_result");
+            return Response::json("{\"success\": true}");
+        }
+        if (!::g_bridge_fs->has_file("_bridge_cmd")) {
             return Response::json("{\"success\": true}");
         }
     }
 
-    ::remove(cmd_path.c_str());
+    ::g_bridge_fs->remove_file("_bridge_cmd");
     return Response::json("{\"success\": false, \"error\": \"timeout\"}");
 }
 
