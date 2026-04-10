@@ -174,7 +174,7 @@ sleep 2
 # --- Launch guest test app ---
 
 echo "Launching MacTestSuite..."
-LAUNCH=$(curl -sf --max-time 10 -X POST "http://localhost:$PORT/api/launch" \
+LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/launch" \
     -d '{"path":"Host:MacTestSuite"}' || echo '{"success":false}')
 
 if ! echo "$LAUNCH" | grep -q '"success": true'; then

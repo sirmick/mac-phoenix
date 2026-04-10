@@ -1105,17 +1105,19 @@ Response APIRouter::handle_launch(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"failed to write bridge command\"}");
     fprintf(f, "LAUNCH %s", path.c_str());
     fclose(f);
+    sync();  // ensure file is visible to ExtFS's readdir()
 
-    // Poll for result file
-    for (int i = 0; i < 50; i++) {
+    // Poll for result file OR command file deletion
+    for (int i = 0; i < 100; i++) {  // 10 seconds
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        // Check for result file (has error code — preferred)
         FILE* rf = fopen(res_path.c_str(), "r");
         if (rf) {
             char buf[32] = {};
             fgets(buf, sizeof(buf), rf);
             fclose(rf);
             ::remove(res_path.c_str());
-
             int mac_err = atoi(buf);
             if (mac_err != 0) {
                 std::ostringstream json;
@@ -1123,6 +1125,11 @@ Response APIRouter::handle_launch(const Request& req) {
                      << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
                 return Response::json(json.str());
             }
+            return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
+        }
+
+        // Fallback: command file was deleted (INIT consumed it)
+        if (access(cmd_path.c_str(), F_OK) != 0) {
             return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
         }
     }
