@@ -24,7 +24,15 @@ header {
     border-bottom: 1px solid #444;
     flex-shrink: 0;
     font-size: 0.8em;
+    transition: background-color 0.6s ease;
 }
+
+header.phase-off       { background: #2d2d2d; }
+header.phase-red       { background: #7a2020; }
+header.phase-orange    { background: #8a4a14; }
+header.phase-yellow    { background: #8a7a14; }
+header.phase-finder    { background: #4a6a20; }
+header.phase-desktop   { background: #3a6a8a; }
 
 .logo {
     display: flex;

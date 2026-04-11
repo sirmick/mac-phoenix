@@ -3173,6 +3173,29 @@ function updateHeaderTitle() {
     }
 }
 
+const PHASE_COLOR_CLASS = {
+    'pre-reset':   'phase-red',
+    'ROM init':    'phase-red',
+    'boot globs':  'phase-orange',
+    'drivers':     'phase-orange',
+    'warm start':  'phase-orange',
+    'boot blocks': 'phase-yellow',
+    'extensions':  'phase-yellow',
+    'Finder':      'phase-finder',
+    'desktop':     'phase-desktop',
+};
+
+let _lastHeaderPhaseClass = null;
+function updateHeaderPhaseColor(phase) {
+    const header = document.querySelector('header');
+    if (!header) return;
+    const cls = phase == null ? 'phase-off' : (PHASE_COLOR_CLASS[phase] || 'phase-off');
+    if (cls === _lastHeaderPhaseClass) return;
+    _lastHeaderPhaseClass = cls;
+    header.classList.remove('phase-off', 'phase-red', 'phase-orange', 'phase-yellow', 'phase-finder', 'phase-desktop');
+    header.classList.add(cls);
+}
+
 // Handle fullscreen changes
 document.addEventListener('fullscreenchange', () => {
     document.body.classList.toggle('fullscreen', !!document.fullscreenElement);
@@ -4226,6 +4249,8 @@ async function pollEmulatorStatus() {
         if (dotRunning) {
             dotRunning.className = 'dot ' + (data.emulator_running ? 'green' : 'red');
         }
+
+        updateHeaderPhaseColor(data.emulator_running ? data.boot_phase : null);
         if (dotConnected) {
             dotConnected.className = 'dot ' + (data.emulator_connected ? 'green' : 'red');
         }
