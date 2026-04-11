@@ -77,6 +77,17 @@ std::vector<std::string> PPCSubprocess::build_child_args()
     args.push_back("--ram");
     args.push_back(std::to_string(config_->ram_mb));
 
+    // Forward Boot From selection (disk reorder already lives in disk_paths;
+    // bootdriver carries the -62 CD override). Only forward if non-default.
+    if (config_->bootdriver != 0) {
+        args.push_back("--bootdriver");
+        args.push_back(std::to_string(config_->bootdriver));
+    }
+    if (config_->bootdrive != 0) {
+        args.push_back("--bootdrive");
+        args.push_back(std::to_string(config_->bootdrive));
+    }
+
     args.push_back("--screen");
     args.push_back(config_->screen_string());
 

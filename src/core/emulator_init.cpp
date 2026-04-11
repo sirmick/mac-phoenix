@@ -242,13 +242,22 @@ bool init_mac_subsystems(void)
         XPRAM[0x77] = 0x01;
     }
 
-    // Set boot volume
-    int16 i16 = cfg.bootdrive;
-    XPRAM[0x78] = i16 >> 8;
-    XPRAM[0x79] = i16 & 0xff;
-    i16 = cfg.bootdriver;
-    XPRAM[0x7a] = i16 >> 8;
-    XPRAM[0x7b] = i16 & 0xff;
+    // Set boot volume. If the caller hasn't pinned a driver (e.g. -62 for
+    // CD-ROM), point XPRAM at drive 1 served by the machine's disk driver so
+    // the ROM boots the first entry in disk_paths — DiskOpen assigns drive
+    // numbers sequentially, so reordering disk_paths is the UI's lever.
+    int16 boot_drive = cfg.bootdrive;
+    int16 boot_driver = cfg.bootdriver;
+    if (boot_driver == 0 && !cfg.disk_paths.empty()) {
+        boot_driver = machine_profile().disk_refnum;
+        if (boot_drive == 0) boot_drive = 1;
+    }
+    XPRAM[0x78] = boot_drive >> 8;
+    XPRAM[0x79] = boot_drive & 0xff;
+    XPRAM[0x7a] = boot_driver >> 8;
+    XPRAM[0x7b] = boot_driver & 0xff;
+    fprintf(stderr, "[EmulatorInit] XPRAM boot: drive=%d driver=%d\n",
+            boot_drive, boot_driver);
 
     // Init drivers
     SonyInit();

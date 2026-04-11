@@ -3326,15 +3326,32 @@ function buildConfigJson() {
     const romDropdown = document.getElementById('cfg-rom');
     const rom = (romDropdown && romDropdown.value) ? romDropdown.value : currentConfig.rom;
 
+    // Resolve "Boot From": a "disk:NAME" selection moves that disk to the front
+    // of the list (the Mac ROM boots the first drive), everything else is a
+    // numeric bootdriver value passed through as-is.
+    const bootRaw = document.getElementById('cfg-bootdriver')?.value || '0';
+    let disksOut = (currentConfig.disks || []).slice();
+    let bootdriver = 0;
+    if (bootRaw.startsWith('disk:')) {
+        const pick = bootRaw.slice(5);
+        const idx = disksOut.indexOf(pick);
+        if (idx > 0) {
+            disksOut.splice(idx, 1);
+            disksOut.unshift(pick);
+        }
+    } else {
+        bootdriver = parseInt(bootRaw, 10) || 0;
+    }
+
     return {
         emulator: emulator,
         architecture: isM68k ? 'm68k' : 'ppc',
         cpu_backend: document.getElementById('cfg-backend')?.value || (isM68k ? 'uae' : 'kpx'),
         rom: rom,
-        disks: currentConfig.disks,
+        disks: disksOut,
         cdroms: currentConfig.cdroms || [],
         extfs: currentConfig.extfs || [],
-        bootdriver: parseInt(document.getElementById('cfg-bootdriver')?.value || 0),
+        bootdriver: bootdriver,
         ram_mb: parseInt(document.getElementById('cfg-ram')?.value || 32),
         screen: document.getElementById('cfg-screen')?.value || '800x600',
         audio: document.getElementById('cfg-sound')?.checked ?? true,
@@ -3552,6 +3569,7 @@ async function loadDiskList() {
         } else {
             container.innerHTML = '<div class="empty-state">No disk images found in storage/images/</div>';
         }
+        refreshBootFromOptions();
     } catch (e) {
         container.innerHTML = '<div class="empty-state">Failed to load disks</div>';
         logger.error('Failed to load disk list', { error: e.message });
@@ -3561,6 +3579,29 @@ async function loadDiskList() {
 function updateDiskSelection() {
     const checkboxes = document.querySelectorAll('#disk-list input[type="checkbox"]:checked');
     currentConfig.disks = Array.from(checkboxes).map(cb => cb.value);
+    refreshBootFromOptions();
+}
+
+// Rebuild the "Boot From" dropdown from the currently-enabled disks.
+// Selecting a disk reorders disk_paths so it becomes the first drive
+// (how the Mac ROM picks a boot volume); CD-ROM sets bootdriver=-62.
+function refreshBootFromOptions() {
+    const sel = document.getElementById('cfg-bootdriver');
+    if (!sel) return;
+    const prev = sel.value;
+
+    sel.innerHTML = '';
+    for (const d of currentConfig.disks || []) {
+        const label = d.split('/').pop();
+        sel.add(new Option(`Disk: ${label}`, `disk:${d}`));
+    }
+    sel.add(new Option('CD-ROM', '-62'));
+
+    if (Array.from(sel.options).some(o => o.value === prev)) {
+        sel.value = prev;
+    } else if (sel.options.length > 0) {
+        sel.selectedIndex = 0;
+    }
 }
 
 async function loadCdromList() {
@@ -3850,8 +3891,16 @@ function updateConfigUI() {
     if (networkIfEl) networkIfEl.value = currentConfig.network_if || '';
     if (networkIfGroup) networkIfGroup.style.display = (currentConfig.network === 'raw') ? '' : 'none';
 
+    refreshBootFromOptions();
     const bootdriverEl = document.getElementById('cfg-bootdriver');
-    if (bootdriverEl) bootdriverEl.value = currentConfig.bootdriver || 0;
+    if (bootdriverEl) {
+        if (currentConfig.bootdriver === -62) {
+            bootdriverEl.value = '-62';
+        } else if ((currentConfig.disks || []).length > 0) {
+            // bootdriver=0 means "first disk" — reflect that by selecting it explicitly
+            bootdriverEl.value = `disk:${currentConfig.disks[0]}`;
+        }
+    }
 
     // Show/hide arch-specific settings and populate backend options
     updateEmulatorPanelVisibility();
@@ -3907,7 +3956,8 @@ async function saveConfig() {
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
     currentConfig.zappram = document.getElementById('cfg-zappram')?.checked ?? false;
     currentConfig.dismiss_shutdown_dialog = document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true;
-    currentConfig.bootdriver = parseInt(document.getElementById('cfg-bootdriver')?.value || 0);
+    // bootdriver is resolved inside buildConfigJson (a "disk:NAME" selection
+    // reorders disks instead of setting a numeric bootdriver), so skip it here.
     currentConfig.backend = document.getElementById('cfg-backend')?.value || (isM68kMode(currentConfig.emulator) ? 'uae' : 'kpx');
     currentConfig.fpu = document.getElementById('cfg-fpu')?.checked ?? true;
     currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? true;
@@ -3919,6 +3969,14 @@ async function saveConfig() {
     }
 
     const jsonConfig = buildConfigJson();
+
+    // Keep the nested preset for this emulator in sync with the top-level
+    // config we're about to save. Otherwise a "Boot From" reorder (which
+    // lives in disks[]) gets clobbered next time loadPreset() runs.
+    if (jsonConfig.emulator && App.savedPresets[jsonConfig.emulator]) {
+        const { configs: _, ...flat } = jsonConfig;
+        App.savedPresets[jsonConfig.emulator] = flat;
+    }
 
     // Include saved presets
     if (Object.keys(App.savedPresets).length > 0) {

@@ -300,9 +300,10 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 			r.d[0] = (info->num << 16) | (drvRef & 0xffff);
 			r.a[0] = info->status + dsQLink;
 			Execute68kTrap(0xa04e, &r);	// AddDrive()
-			D(bug("Drive %d added: blocks=%u, inPlace=%d\n",
-				info->num, info->num_blocks,
-				ReadMacInt8(info->status + dsDiskInPlace)));
+			fprintf(stderr, "[DISK] Drive #%d added: refnum=%d blocks=%u inPlace=%d start_byte=%ld\n",
+				info->num, drvRef, info->num_blocks,
+				ReadMacInt8(info->status + dsDiskInPlace),
+				(long)info->start_byte);
 		}
 	}
 	return noErr;
@@ -358,8 +359,10 @@ int16 DiskPrime(uint32 pb, uint32 dce)
 
 	{
 		static int pc = 0;
-		if (++pc <= 20)
-			fprintf(stderr, "[DISK] Prime#%d pos=%u len=%zu\n", pc, (uint32)position, length);
+		if (++pc <= 40)
+			fprintf(stderr, "[DISK] Prime#%d drv=%d pos=%u len=%zu trap=%c\n",
+				pc, ReadMacInt16(pb + ioVRefNum), (uint32)position, length,
+				((ReadMacInt16(pb + ioTrap) & 0xff) == aRdCmd) ? 'R' : 'W');
 	}
 
 	return noErr;

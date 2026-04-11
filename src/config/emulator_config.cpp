@@ -477,6 +477,18 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
+        // --bootdriver <refnum> (e.g. -62 for CD-ROM, 0 for default disk)
+        if (strcmp(argv[i], "--bootdriver") == 0 && i+1 < argc) {
+            config.bootdriver = atoi(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --bootdrive <drive_num>
+        if (strcmp(argv[i], "--bootdrive") == 0 && i+1 < argc) {
+            config.bootdrive = atoi(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
         // --backend <name>
         if (strcmp(argv[i], "--backend") == 0 && i+1 < argc) {
             if (strcmp(argv[i+1], "unicorn") == 0) config.cpu_backend = CPUBackend::Unicorn;
