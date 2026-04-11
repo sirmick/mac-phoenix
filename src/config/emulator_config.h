@@ -118,7 +118,6 @@ struct EmulatorConfig {
     std::string storage_dir = "~/storage";
 
     // System
-    bool nocdrom = false;
     bool nosound = false;
     bool zappram = false;
     bool dismiss_shutdown_dialog = true;

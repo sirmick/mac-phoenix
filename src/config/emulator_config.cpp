@@ -130,7 +130,6 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["client_dir"] = client_dir;
     j["storage_dir"] = storage_dir;
     j["log_level"] = log_level;
-    j["nocdrom"] = nocdrom;
     j["nosound"] = nosound;
     j["zappram"] = zappram;
     j["dismiss_shutdown_dialog"] = dismiss_shutdown_dialog;
@@ -257,7 +256,6 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("client_dir")) client_dir = json_utils::get_string(j, "client_dir");
     if (j.contains("storage_dir")) storage_dir = json_utils::get_string(j, "storage_dir");
     if (j.contains("log_level")) log_level = json_utils::get_int(j, "log_level");
-    if (j.contains("nocdrom")) nocdrom = json_utils::get_bool(j, "nocdrom");
     if (j.contains("nosound")) nosound = json_utils::get_bool(j, "nosound");
     if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
     if (j.contains("dismiss_shutdown_dialog")) dismiss_shutdown_dialog = json_utils::get_bool(j, "dismiss_shutdown_dialog");

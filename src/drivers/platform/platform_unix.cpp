@@ -207,7 +207,7 @@ static void sys_remove_mac_file_handle(mac_file_handle *fh)
 void SysMediaArrived(const char *path, int type)
 {
 	// Replace the "cdrom" entry (we are polling, it's unique)
-	if (type == MEDIA_CD && !config::EmulatorConfig::instance().nocdrom) {
+	if (type == MEDIA_CD) {
 		// Hot-plug CD: add to config paths
 		auto& paths = config::EmulatorConfig::instance().cdrom_paths;
 		if (paths.empty())

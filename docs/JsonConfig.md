@@ -57,7 +57,6 @@ You only need to specify values that differ from defaults:
 | `http_port` | int | `8000` | HTTP server port |
 | `signaling_port` | int | `8090` | WebRTC signaling port |
 | `storage_dir` | string | `"~/storage"` | Root directory for ROMs and disk images |
-| `nocdrom` | bool | `false` | Don't install CD-ROM driver |
 | `nosound` | bool | `false` | Disable sound |
 | `zappram` | bool | `false` | Clear PRAM on startup |
 | `dismiss_shutdown_dialog` | bool | `false` | Auto-dismiss "improper shutdown" dialog on boot |

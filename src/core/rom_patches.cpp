@@ -813,8 +813,11 @@ void m68k::InstallDrivers(uint32 pb)
 	r.a[0] = pb;
 	Execute68kTrap(0xa000, &r);		// Open()
 
-	// Install CD-ROM driver unless nocdrom option given
-	if (!config::EmulatorConfig::instance().nocdrom) {
+	// Install CD-ROM driver only when a CD image is configured. On the
+	// Quadra ROM, installing .AppleCD with no media defeats the HD boot
+	// path (FINDSTARTUPDEVICE hangs on the empty CD unit), so skip the
+	// install entirely when there's nothing to mount.
+	if (!config::EmulatorConfig::instance().cdrom_paths.empty()) {
 
 		// Install CD-ROM driver
 		r.a[0] = ROMBaseMac + sony_offset + 0x200;
