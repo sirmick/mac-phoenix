@@ -709,6 +709,16 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			r->d[0] = AudioDispatch(r->a[3], r->a[4]);
 			break;
 
+		case M68K_EMUL_OP_SOUNDMGR_SYSBEEP: {
+			// Classic Sound Manager _SysBeep(duration: Integer) Pascal trap.
+			// Stack on entry: [ret_addr (4)] [duration (2)]. We only read
+			// duration here — the trap-table patch emits RTD #$0002 after
+			// this EmulOp, which pops the return addr and the arg.
+			uint16 duration = ReadMacInt16(r->a[7] + 4);
+			SoundMgr_SysBeep(duration);
+			break;
+		}
+
 #if SUPPORTS_EXTFS
 		case M68K_EMUL_OP_EXTFS_COMM:		// External file system routines
 			WriteMacInt16(r->a[7] + 14, ExtFSComm(ReadMacInt16(r->a[7] + 12), ReadMacInt32(r->a[7] + 8), ReadMacInt32(r->a[7] + 4)));

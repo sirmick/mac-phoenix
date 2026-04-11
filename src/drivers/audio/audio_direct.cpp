@@ -32,6 +32,8 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <vector>
+#include <cmath>
 
 #define DEBUG 0
 #include "debug.h"
@@ -56,6 +58,13 @@ static bool audio_request_pending = false;
 // Counters
 static uint64_t audio_frames_sent = 0;
 static uint64_t last_log_frame = 0;
+
+// Classic Sound Manager beep queue (used by Mac SE / System 6 / pre-ASC 68k Macs).
+// PCM samples are synthesized on the Mac CPU thread inside SoundMgr_SysBeep() and
+// drained by the audio thread, 20ms per IPC frame. Format: S16MSB stereo at 48kHz
+// (matches the rest of the audio pipeline so Opus encodes without resampling).
+static std::mutex beep_queue_mutex;
+static std::vector<int16_t> beep_queue;  // interleaved stereo, big-endian wire format
 
 // Forward declaration
 static void audio_thread_func();
@@ -189,6 +198,65 @@ void AudioInterrupt(void)
 		audio_irq_done = true;
 	}
 	audio_irq_done_cv.notify_one();
+}
+
+
+/*
+ *  SoundMgr_SysBeep - Classic Sound Manager _SysBeep hook
+ *
+ *  Called from the EmulOp dispatcher when the SE / System 6 ROM's _SysBeep
+ *  trap fires. The real ROM would program VIA T1 to oscillate PB7 into the
+ *  speaker; instead we synthesize a 750 Hz square wave at the pipeline's
+ *  native 48 kHz / 16-bit / stereo format and push it into the beep queue.
+ *  The audio thread drains the queue 20ms at a time into the IPC ring.
+ *
+ *  duration_ticks is the Pascal arg from _SysBeep(duration: Integer).
+ *  Classic Mac OS treats 0 as "default" (~30 ticks ≈ 500 ms). We cap the
+ *  queue at 1 s so a runaway caller can't balloon memory.
+ */
+void SoundMgr_SysBeep(uint16 duration_ticks)
+{
+	const uint32_t sample_rate = AUDIO_SAMPLE_RATE;  // 48000
+	const uint32_t channels = AUDIO_CHANNELS;        // 2
+	const uint32_t beep_hz = 750;
+	const int16_t amplitude = 0x2000;  // ~25% to avoid clipping after resample
+
+	uint32_t ticks = duration_ticks ? duration_ticks : 30;  // default ~500 ms
+	if (ticks > 60) ticks = 60;                              // clamp to 1 s
+
+	uint32_t total_samples = (sample_rate * ticks) / 60;
+	uint32_t half_period = sample_rate / (beep_hz * 2);
+	if (half_period == 0) half_period = 1;
+
+	std::vector<int16_t> buf;
+	buf.reserve(total_samples * channels);
+
+	// Square wave with a short linear fade in/out (~4 ms each side) to avoid
+	// a click at the start/stop of the beep.
+	uint32_t fade = sample_rate / 250;  // 4 ms
+	if (fade * 2 > total_samples) fade = total_samples / 2;
+
+	for (uint32_t i = 0; i < total_samples; i++) {
+		int16_t sample = ((i / half_period) & 1) ? amplitude : -amplitude;
+		int32_t scaled = sample;
+		if (i < fade) scaled = scaled * (int32_t)i / (int32_t)fade;
+		else if (i >= total_samples - fade) scaled = scaled * (int32_t)(total_samples - i) / (int32_t)fade;
+		int16_t s16 = (int16_t)scaled;
+		// Write as big-endian (S16MSB, matches the rest of the pipeline).
+		uint8_t hi = (s16 >> 8) & 0xff;
+		uint8_t lo = s16 & 0xff;
+		int16_t be;
+		uint8_t* p = (uint8_t*)&be;
+		p[0] = hi; p[1] = lo;
+		for (uint32_t c = 0; c < channels; c++) buf.push_back(be);
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(beep_queue_mutex);
+		beep_queue.insert(beep_queue.end(), buf.begin(), buf.end());
+	}
+	fprintf(stderr, "[AudioDirect] SysBeep queued: %u ticks, %u samples\n",
+	        duration_ticks, total_samples);
 }
 
 
@@ -346,18 +414,42 @@ send_silence:
 				}
 			}
 		} else {
-			// No sources — send silence
+			// No audio component sources. If the classic Sound Manager hook
+			// (SoundMgr_SysBeep) has queued PCM, drain one 20 ms frame out of
+			// the queue; otherwise emit silence.
 			uint32_t write_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_write_idx);
 			uint32_t read_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_read_idx);
 			uint32_t next_write = (write_idx + 1) % IPC_AUDIO_FRAME_RING_SIZE;
 
 			if (next_write != read_idx) {
 				IPCAudioFrame* frame = &g_ipc_shm->audio_frames[write_idx];
-				frame->sample_rate = 44100;
-				frame->channels = 2;
-				frame->samples = 882;
+				uint32_t frame_samples = (AUDIO_SAMPLE_RATE * 20) / 1000;  // 960
+				uint32_t frame_values = frame_samples * AUDIO_CHANNELS;
+				size_t data_len = frame_values * sizeof(int16_t);
+
+				frame->sample_rate = AUDIO_SAMPLE_RATE;
+				frame->channels = AUDIO_CHANNELS;
+				frame->samples = frame_samples;
 				frame->format = 1;
-				memset(frame->data, 0, frame->samples * 2 * frame->channels);
+
+				bool had_beep = false;
+				{
+					std::lock_guard<std::mutex> lock(beep_queue_mutex);
+					if (!beep_queue.empty()) {
+						had_beep = true;
+						size_t take = beep_queue.size() < frame_values ? beep_queue.size() : frame_values;
+						memcpy(frame->data, beep_queue.data(), take * sizeof(int16_t));
+						if (take < frame_values) {
+							memset(frame->data + take * sizeof(int16_t), 0,
+							       data_len - take * sizeof(int16_t));
+						}
+						beep_queue.erase(beep_queue.begin(), beep_queue.begin() + take);
+					}
+				}
+				if (!had_beep) {
+					memset(frame->data, 0, data_len);
+				}
+
 				IPC_ATOMIC_STORE(g_ipc_shm->audio_write_idx, next_write);
 			}
 		}

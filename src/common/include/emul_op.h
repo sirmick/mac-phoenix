@@ -99,6 +99,7 @@ enum {
 	M68K_EMUL_OP_INIT_BRIDGE,		// 0x713A: Legacy (unused)
 	M68K_EMUL_OP_BRIDGE_COMM,		// 0x713B: BridgeFS communications proc
 	M68K_EMUL_OP_BRIDGE_HFS,		// 0x713C: BridgeFS HFS dispatch
+	M68K_EMUL_OP_SOUNDMGR_SYSBEEP,	// 0x713D: Classic Sound Manager _SysBeep hook
 	M68K_EMUL_OP_MAX				// highest number
 };
 

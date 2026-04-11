@@ -44,6 +44,9 @@ extern void AudioReset(void);
 
 extern void AudioInterrupt(void);
 
+// Classic Sound Manager hooks (used by SE / System 6 / 68k Macs without ASC)
+extern void SoundMgr_SysBeep(uint16 duration_ticks);
+
 extern void audio_enter_stream(void);
 extern void audio_exit_stream(void);
 

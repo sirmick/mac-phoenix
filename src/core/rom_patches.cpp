@@ -975,6 +975,31 @@ static bool patch_rom_classic(void)
 	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_INSTALL_DRIVERS));
 	*wp = htons(0x4e75); //rts
 
+	// Stub .Sound Control/Status. The .Sound DRVR header lives at ROM+0x36c90
+	// (name ".Sound" at +0x12, Open at +0x1a). The original Control routine
+	// at +0xbc drives the SE's speaker via VIA PB7 PWM and fails on our
+	// emulated VIA; the Sound Control Panel then shows a "device error"
+	// when the user adjusts the volume. Place a minimal noErr stub in the
+	// unused bytes between the hijacked Open (4 bytes) and Close at +0x34,
+	// and point dCtl/dStatus in the DRVR header at it.
+	//
+	// Stub at ROM+0x36cae (DRVR-relative offset 0x1e), 8 bytes:
+	//   7000           moveq.l  #0, D0          ; noErr
+	//   3140 0010      move.w   D0, 0x10(A0)    ; ioResult = 0 (sync cleanup)
+	//   4E75           rts
+	wp = (uint16 *)(ROMBaseHost + 0x36cae);
+	*wp++ = htons(0x7000);  // moveq #0,d0
+	*wp++ = htons(0x3140);  // move.w d0,0x10(a0)
+	*wp++ = htons(0x0010);
+	*wp   = htons(M68K_RTS);
+
+	// Rewrite dCtl (offset 0x0c in header) and dStatus (offset 0x0e) to
+	// point at the stub.
+	wp = (uint16 *)(ROMBaseHost + 0x36c9c);  // dCtl
+	*wp = htons(0x001e);
+	wp = (uint16 *)(ROMBaseHost + 0x36c9e);  // dStatus
+	*wp = htons(0x001e);
+
 	// INITCRSRMGR at $40076E allocates the unit table via _NewPtrSysClear
 	// at $776, then opens .Sony ($78E) and .Sound ($798).  Replace the
 	// _NewPtrSysClear with PATCH_BOOT_GLOBS to allocate the unit table
@@ -1117,6 +1142,24 @@ static bool patch_rom_classic(void)
 	*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_IRQ));		// IRQ EmulOp
 	*wp++ = htons(0x4a80);		// tst.l	d0
 	*wp = htons(0x67f4);		// beq		0x402be2
+
+	// Hook _SysBeep (Toolbox trap $A9C8). The original handler drives the
+	// SE's speaker via VIA PB7 PWM, which we don't emulate. Replace the
+	// handler entry with our EmulOp + RTD #$0002 — the EmulOp synthesizes
+	// a square-wave beep into the audio pipeline, and RTD #2 pops the
+	// return address and the Pascal `duration: Integer` arg.
+	{
+		uint32 sysbeep_ofs = find_rom_trap(0xa9c8);
+		fprintf(stderr, "[patch_rom_classic] _SysBeep trap handler at ROM+%08x\n",
+		        sysbeep_ofs);
+		if (sysbeep_ofs) {
+			wp = (uint16 *)(ROMBaseHost + sysbeep_ofs);
+			*wp++ = htons(platform_make_emulop(M68K_EMUL_OP_SOUNDMGR_SYSBEEP));
+			*wp++ = htons(M68K_RTD);
+			*wp   = htons(0x0002);
+		}
+	}
+
 	return true;
 }
 
