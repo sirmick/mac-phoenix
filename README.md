@@ -26,10 +26,10 @@ MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github
 
 ```bash
 # Required
-sudo apt install build-essential cmake pkg-config git libssl-dev nlohmann-json3-dev
+sudo apt install build-essential cmake pkg-config git libssl-dev nlohmann-json3-dev libyuv-dev
 
 # Optional — video/audio codecs (PNG streaming works without these)
-sudo apt install libopenh264-dev libvpx-dev libwebp-dev libyuv-dev libopus-dev
+sudo apt install libopenh264-dev libvpx-dev libwebp-dev libopus-dev
 ```
 
 ### 2. Build

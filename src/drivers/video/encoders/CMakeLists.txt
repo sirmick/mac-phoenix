@@ -26,9 +26,7 @@ endif()
 if(WEBP_FOUND)
   target_link_libraries(video_encoders PRIVATE PkgConfig::WEBP)
 endif()
-if(LIBYUV_FOUND)
-  target_link_libraries(video_encoders PRIVATE libyuv::libyuv)
-endif()
+target_link_libraries(video_encoders PRIVATE libyuv::libyuv)
 
 # fpng needs SSE4.1 + PCLMUL on x86
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i[3-6]86")

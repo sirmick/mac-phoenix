@@ -55,4 +55,5 @@ target_link_libraries(drivers PRIVATE
   datachannel-static
   nlohmann_json::nlohmann_json
   codec_flags
+  libyuv::libyuv
 )
