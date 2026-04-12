@@ -42,6 +42,10 @@ namespace webrtc {
 #include <pwd.h>
 #include <unistd.h>
 #include <time.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <vector>
 
 // Globals from main.cpp for checking emulator state
 extern uint32 ROMSize;  // 0 if no ROM loaded
@@ -80,6 +84,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/storage" && req.method == "GET") {
         return handle_storage(req);
+    }
+    if (req.path == "/api/storage/create-image" && req.method == "POST") {
+        return handle_create_image(req);
     }
     if (req.path == "/api/restart" && req.method == "POST") {
         return handle_restart(req);
@@ -159,6 +166,118 @@ Response APIRouter::handle_storage(const Request& /*req*/) {
     std::string images_path = storage_dir + "/images";
     std::string json_body = storage::get_storage_json(roms_path, images_path);
     return Response::json(json_body);
+}
+
+static bool run_fork_exec(const std::vector<std::string>& args, std::string& err_out) {
+    pid_t pid = fork();
+    if (pid < 0) { err_out = "fork failed"; return false; }
+    if (pid == 0) {
+        std::vector<char*> argv;
+        for (const auto& s : args) argv.push_back(const_cast<char*>(s.c_str()));
+        argv.push_back(nullptr);
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) { dup2(devnull, STDOUT_FILENO); dup2(devnull, STDERR_FILENO); close(devnull); }
+        execvp(argv[0], argv.data());
+        _exit(127);
+    }
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) { err_out = "waitpid failed"; return false; }
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return true;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 127) {
+        err_out = args[0] + " not found (install hfsutils/hfsprogs)";
+    } else {
+        err_out = args[0] + " failed";
+    }
+    return false;
+}
+
+Response APIRouter::handle_create_image(const Request& req) {
+    auto bad = [](int code, const std::string& msg) {
+        Response r;
+        r.set_status(code);
+        r.set_body("{\"error\":\"" + storage::json_escape(msg) + "\"}");
+        r.set_content_type("application/json");
+        return r;
+    };
+
+    if (!ctx_->config || ctx_->config->storage_dir.empty()) {
+        return bad(500, "storage_dir not configured");
+    }
+
+    auto j = json_utils::parse(req.body);
+    std::string format = json_utils::get_string(j, "format");
+    std::string filename = json_utils::get_string(j, "filename");
+    std::string volume_name = json_utils::get_string(j, "volume_name");
+    int size_mb = json_utils::get_int(j, "size_mb", 120);
+
+    if (format != "hfs" && format != "hfs+") {
+        return bad(400, "format must be 'hfs' or 'hfs+'");
+    }
+    if (filename.empty()) {
+        return bad(400, "filename required");
+    }
+    if (filename.find('/') != std::string::npos ||
+        filename.find("..") != std::string::npos ||
+        filename[0] == '.') {
+        return bad(400, "invalid filename");
+    }
+    if (filename.size() < 4 || filename.substr(filename.size() - 4) != ".img") {
+        filename += ".img";
+    }
+    int min_mb = (format == "hfs+") ? 4 : 1;
+    if (size_mb < min_mb || size_mb > 8192) {
+        return bad(400, "size_mb out of range");
+    }
+    if (volume_name.empty()) {
+        volume_name = (format == "hfs+") ? "Macintosh HD" : "Untitled";
+    }
+    for (char c : volume_name) {
+        if ((unsigned char)c < 0x20 || c == ':') {
+            return bad(400, "invalid volume name");
+        }
+    }
+    if (format == "hfs" && volume_name.size() > 27) {
+        return bad(400, "HFS volume name must be 27 chars or fewer");
+    }
+
+    std::string images_dir = ctx_->config->storage_dir + "/images";
+    mkdir(images_dir.c_str(), 0755);
+    std::string out_path = images_dir + "/" + filename;
+
+    struct stat st;
+    if (stat(out_path.c_str(), &st) == 0) {
+        return bad(409, "file already exists");
+    }
+
+    int fd = open(out_path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0644);
+    if (fd < 0) {
+        return bad(500, "failed to create image file");
+    }
+    off_t size_bytes = (off_t)size_mb * 1024 * 1024;
+    if (ftruncate(fd, size_bytes) != 0) {
+        close(fd);
+        unlink(out_path.c_str());
+        return bad(500, "ftruncate failed");
+    }
+    close(fd);
+
+    std::string err;
+    bool ok;
+    if (format == "hfs") {
+        ok = run_fork_exec({"hformat", "-l", volume_name, out_path}, err);
+    } else {
+        ok = run_fork_exec({"mkfs.hfsplus", "-v", volume_name, out_path}, err);
+    }
+    if (!ok) {
+        unlink(out_path.c_str());
+        return bad(500, err);
+    }
+
+    std::ostringstream body;
+    body << "{\"ok\":true,\"filename\":\"" << storage::json_escape(filename)
+         << "\",\"size_mb\":" << size_mb
+         << ",\"format\":\"" << format << "\"}";
+    return Response::json(body.str());
 }
 
 Response APIRouter::handle_restart(const Request& req) {

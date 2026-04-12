@@ -3451,6 +3451,7 @@ async function openConfig() {
         await Promise.all([loadCurrentConfig(), loadRomList(), loadDiskList(), loadCdromList(), loadExtfsList()]);
         renderPresetTabs();
         updateConfigUI();
+        initCreateImageDialog();
         setConfigControlsEnabled(true);
     }
 }
@@ -3599,6 +3600,81 @@ async function loadDiskList() {
     }
 }
 
+function initCreateImageDialog() {
+    const openBtn = document.getElementById('create-image-btn');
+    const modal = document.getElementById('create-image-modal');
+    if (!openBtn || !modal || openBtn.dataset.wired === '1') return;
+    openBtn.dataset.wired = '1';
+
+    const closeBtn = document.getElementById('create-image-close');
+    const cancelBtn = document.getElementById('ci-cancel');
+    const createBtn = document.getElementById('ci-create');
+    const formatSel = document.getElementById('ci-format');
+    const fnameIn = document.getElementById('ci-filename');
+    const volIn = document.getElementById('ci-volume');
+    const sizeIn = document.getElementById('ci-size');
+    const errEl = document.getElementById('ci-error');
+    const statusEl = document.getElementById('create-image-status');
+
+    const open = () => {
+        errEl.style.display = 'none';
+        errEl.textContent = '';
+        fnameIn.value = '';
+        volIn.value = '';
+        sizeIn.value = '120';
+        formatSel.value = 'hfs';
+        modal.classList.add('open');
+        setTimeout(() => fnameIn.focus(), 50);
+    };
+    const close = () => modal.classList.remove('open');
+
+    openBtn.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    createBtn.addEventListener('click', async () => {
+        errEl.style.display = 'none';
+        const payload = {
+            format: formatSel.value,
+            filename: fnameIn.value.trim(),
+            volume_name: volIn.value.trim(),
+            size_mb: parseInt(sizeIn.value, 10) || 0,
+        };
+        if (!payload.filename) {
+            errEl.textContent = 'Filename is required.';
+            errEl.style.display = 'block';
+            return;
+        }
+        createBtn.disabled = true;
+        statusEl.textContent = 'Creating…';
+        try {
+            const resp = await fetch('/api/storage/create-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.ok) {
+                errEl.textContent = data.error || `Failed (HTTP ${resp.status})`;
+                errEl.style.display = 'block';
+                statusEl.textContent = '';
+                return;
+            }
+            statusEl.textContent = `Created ${data.filename}`;
+            close();
+            await loadDiskList();
+            await loadCdromList();
+        } catch (e) {
+            errEl.textContent = e.message || 'Request failed';
+            errEl.style.display = 'block';
+            statusEl.textContent = '';
+        } finally {
+            createBtn.disabled = false;
+        }
+    });
+}
+
 function updateDiskSelection() {
     const checkboxes = document.querySelectorAll('#disk-list input[type="checkbox"]:checked');
     currentConfig.disks = Array.from(checkboxes).map(cb => cb.value);
@@ -3693,7 +3769,7 @@ function renderExtfsList() {
     container.innerHTML = paths.map((p, idx) => `
         <div class="checkbox-group" style="display:flex;align-items:center;gap:4px">
             <span style="flex:1;font-size:12px">${p}</span>
-            <button type="button" style="font-size:10px;padding:1px 6px" onclick="removeExtfsPath(${idx})">Remove</button>
+            <button type="button" class="btn" onclick="removeExtfsPath(${idx})">Remove</button>
         </div>`).join('');
 }
 

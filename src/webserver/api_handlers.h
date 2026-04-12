@@ -62,6 +62,7 @@ private:
     Response handle_config_save(const Request& req);    // POST /api/config
 
     Response handle_storage(const Request& req);
+    Response handle_create_image(const Request& req);  // POST /api/storage/create-image
     Response handle_restart(const Request& req);
     Response handle_status(const Request& req);
     Response handle_codec_post(const Request& req);
