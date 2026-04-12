@@ -761,44 +761,6 @@ void MakeFromSR (void)
 void Exception(int nr, uaecptr oldpc)
 {
 	uae_u32 currpc = m68k_getpc ();
-	if (nr >= 2 && nr <= 11 && nr != 10) {
-		static int exc_count = 0;
-		if (++exc_count <= 3) {
-			uint32 sp = m68k_areg(regs, 7);
-			fprintf(stderr, "[68K] Exc%d PC=%08x A7=%08x A1=%08x D0=%08x stack=%08x %08x\n",
-				nr, currpc, sp, m68k_areg(regs, 1), m68k_dreg(regs, 0),
-				get_long(sp), get_long(sp+4));
-		}
-	}
-	// Log A-line trap dispatches
-	if (nr == 10) {
-		uint16 trap = get_word(currpc);
-		if (trap == 0xA9C9) {  // _SysError
-			fprintf(stderr, "[SysError] _SysError at PC=$%08X D0=%d\n",
-				currpc, (int)(int16)m68k_dreg(regs, 0));
-		}
-		bool is_tb = (trap >= 0xA800);
-		uint32 table = is_tb ? 0x0E00 : 0x0400;
-		uint16 idx = trap & 0x01FF;
-		uint32 handler = get_long(table + idx * 4);
-		// Log key A-line traps
-		{
-			static int aline_count = 0;
-			++aline_count;
-			if (aline_count <= 5 || (aline_count >= 185 && aline_count <= 195)) {
-				uint32 vec28 = get_long(0x28);
-				uint32 vbr_vec = get_long(regs.vbr + 40);
-				fprintf(stderr, "[A-LINE #%d] $%04X PC=$%08X handler=$%08X VBR=$%08X vec@VBR+40=$%08X vec@$28=$%08X\n",
-					aline_count, trap, currpc, handler, regs.vbr, vbr_vec, vec28);
-			}
-		}
-		if (handler == 0x400768) {
-			static int unimp = 0;
-			if (++unimp <= 10)
-				fprintf(stderr, "[UNIMP] $%04X at PC=$%08X (%s[%d])\n",
-					trap, currpc, is_tb ? "TB" : "OS", idx);
-		}
-	}
 	MakeSR();
 	if (!regs.s) {
 		regs.usp = m68k_areg(regs, 7);
@@ -1480,28 +1442,6 @@ void m68k_do_execute (void)
 		// Normal execution path
 		uae_u32 opcode = GET_OPCODE;
 
-		// Debug: PC watchpoint + periodic sample for Mac II boot
-		{
-			static uint64_t exec_count = 0;
-			++exec_count;
-			uaecptr pc = m68k_getpc();
-			// Watchpoint: FUN_4083F658 entry and jsr A1 at $83F66E
-			if (pc == 0x83f658) {
-				static int th = 0;
-				if (++th <= 3)
-					fprintf(stderr, "[THUNK#%d] A1=%08x D0=%08x ($DB8)=%08x ($A06)=%08x\n",
-						th, m68k_areg(regs, 1), m68k_dreg(regs, 0),
-						get_long(0xdb8), get_long(0xa06));
-			}
-			if (pc == 0x83f66e) {
-				static int jh = 0;
-				if (++jh <= 5)
-					fprintf(stderr, "[JSR#%d] A1=%08x D0=%08x A0=%08x\n",
-						jh, m68k_areg(regs, 1), m68k_dreg(regs, 0),
-						m68k_areg(regs, 0));
-			}
-			}
-
 #if FLIGHT_RECORDER
 		m68k_record_step(m68k_getpc());
 #endif
@@ -1524,16 +1464,6 @@ void m68k_execute (void)
 		if (quit_program)
 			break;
 		m68k_do_execute();
-		// Debug: periodic PC sample
-		{
-			static uint64_t exec_count = 0;
-			if (++exec_count == 1 || exec_count == 100 || exec_count == 10000 ||
-			    exec_count == 100000 || exec_count == 1000000 || exec_count == 10000000) {
-				fprintf(stderr, "[TRACE] exec_count=%llu PC=%08x SR=%04x A7=%08x\n",
-					(unsigned long long)exec_count, m68k_getpc(),
-					(unsigned)regs.sr, m68k_areg(regs, 7));
-			}
-		}
 	}
 #if USE_JIT
 	--m68k_execute_depth;

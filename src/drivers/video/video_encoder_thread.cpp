@@ -334,11 +334,14 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
         PixelFormat format = PIXFMT_ARGB;
         bool from_ipc = false;
 
-        // Check if IPC SHM is available (subprocess may have started).
-        // Hold a shared lock for the entire SHM access window so that a
-        // concurrent stop()/restart cannot munmap the page while we are
-        // dereferencing it. Lock is released before the fallback path.
-        std::shared_lock<std::shared_mutex> ipc_lock(g_ipc_shm_mutex);
+        // Deferred shared lock — only engaged for IPC path, persists
+        // through encoding so disconnect() can't munmap the SHM page
+        // while we're reading pixel data from it.
+        std::shared_lock<std::shared_mutex> ipc_lock(g_ipc_shm_mutex, std::defer_lock);
+
+        // Phase 1: Check IPC availability and wait for frame (NO LOCK).
+        // The atomic pointer check is lock-free. Poll/sleep happens
+        // outside the shared lock so disconnect() isn't blocked for 16ms.
         IPCBuffer* ipc_shm = ipc_shm_ptr ? ipc_shm_ptr->load(std::memory_order_acquire) : nullptr;
         if (ipc_shm) {
             // Detect subprocess restart: SHM went away and came back
@@ -362,7 +365,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
                 }
             }
 
-            // IPC zero-copy: wait on eventfd, then read directly from SHM
+            // Wait for frame notification (no lock held — disconnect() can proceed)
 #ifdef __linux__
             if (ipc_eventfd >= 0) {
                 struct pollfd pfd = { ipc_eventfd, POLLIN, 0 };
@@ -379,7 +382,10 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 #endif
 
-            // Re-check: SHM may have been unmapped during the wait
+            // Phase 2: Acquire shared lock and read frame from SHM.
+            // The lock prevents disconnect() from munmapping the page
+            // while we dereference it. Held through encoding below.
+            ipc_lock.lock();
             ipc_shm = ipc_shm_ptr->load(std::memory_order_acquire);
             if (!ipc_shm) {
                 ipc_was_connected = false;
@@ -407,10 +413,6 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
         } else {
             // IPC disconnected — mark so we detect reconnection
             ipc_was_connected = false;
-            // No SHM to protect on the fallback path; release the lock so
-            // we don't needlessly block stop()/restart while we wait on
-            // VideoOutput.
-            ipc_lock.unlock();
 
             // In-process: read from VideoOutput triple buffer
             const FrameBuffer* frame = video_output->wait_for_frame(16);  // 16ms timeout

@@ -813,27 +813,20 @@ void m68k::InstallDrivers(uint32 pb)
 	r.a[0] = pb;
 	Execute68kTrap(0xa000, &r);		// Open()
 
-	// Install CD-ROM driver only when a CD image is configured. On the
-	// Quadra ROM, installing .AppleCD with no media defeats the HD boot
-	// path (FINDSTARTUPDEVICE hangs on the empty CD unit), so skip the
-	// install entirely when there's nothing to mount.
-	if (!config::EmulatorConfig::instance().cdrom_paths.empty()) {
+	// Install CD-ROM driver unconditionally.
+	r.a[0] = ROMBaseMac + sony_offset + 0x200;
+	r.d[0] = (uint32)CDROMRefNum;
+	Execute68kTrap(0xa43d, &r);		// DrvrInstallRsrvMem()
+	r.a[0] = ReadMacInt32(ReadMacInt32(0x11c) + ~CDROMRefNum * 4);	// Get driver handle from Unit Table
+	Execute68kTrap(0xa029, &r);		// HLock()
+	dce = ReadMacInt32(r.a[0]);
+	WriteMacInt32(dce + dCtlDriver, ROMBaseMac + sony_offset + 0x200);
+	WriteMacInt16(dce + dCtlFlags, CDROMDriverFlags);
 
-		// Install CD-ROM driver
-		r.a[0] = ROMBaseMac + sony_offset + 0x200;
-		r.d[0] = (uint32)CDROMRefNum;
-		Execute68kTrap(0xa43d, &r);		// DrvrInstallRsrvMem()
-		r.a[0] = ReadMacInt32(ReadMacInt32(0x11c) + ~CDROMRefNum * 4);	// Get driver handle from Unit Table
-		Execute68kTrap(0xa029, &r);		// HLock()
-		dce = ReadMacInt32(r.a[0]);
-		WriteMacInt32(dce + dCtlDriver, ROMBaseMac + sony_offset + 0x200);
-		WriteMacInt16(dce + dCtlFlags, CDROMDriverFlags);
-
-		// Open CD-ROM driver
-		WriteMacInt32(pb + ioNamePtr, ROMBaseMac + sony_offset + 0x212);
-		r.a[0] = pb;
-		Execute68kTrap(0xa000, &r);		// Open()
-	}
+	// Open CD-ROM driver
+	WriteMacInt32(pb + ioNamePtr, ROMBaseMac + sony_offset + 0x212);
+	r.a[0] = pb;
+	Execute68kTrap(0xa000, &r);		// Open()
 }
 
 

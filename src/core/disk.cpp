@@ -245,11 +245,6 @@ static void mount_mountable_volumes(void)
 int16 DiskOpen(uint32 pb, uint32 dce)
 {
 	(void)pb;
-	fprintf(stderr, "[DISK] DiskOpen: %zu drives, DrvQHead=$%08x, UTable=$%08x "
-		"_Open=$%08x _AddDrive=$%08x\n",
-		drives.size(), ReadMacInt32(0x30a), ReadMacInt32(0x11c),
-		ReadMacInt32(0x400),      // OS trap 0 (_Open)
-		ReadMacInt32(0x400+78*4)); // OS trap 78 (_AddDrive)
 
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
@@ -300,10 +295,6 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 			r.d[0] = (info->num << 16) | (drvRef & 0xffff);
 			r.a[0] = info->status + dsQLink;
 			Execute68kTrap(0xa04e, &r);	// AddDrive()
-			fprintf(stderr, "[DISK] Drive #%d added: refnum=%d blocks=%u inPlace=%d start_byte=%ld\n",
-				info->num, drvRef, info->num_blocks,
-				ReadMacInt8(info->status + dsDiskInPlace),
-				(long)info->start_byte);
 		}
 	}
 	return noErr;
@@ -356,14 +347,6 @@ int16 DiskPrime(uint32 pb, uint32 dce)
 	WriteMacInt32(pb + ioActCount, actual);
 	uint32 old_pos = ReadMacInt32(dce + dCtlPosition);
 	WriteMacInt32(dce + dCtlPosition, old_pos + actual);
-
-	{
-		static int pc = 0;
-		if (++pc <= 40)
-			fprintf(stderr, "[DISK] Prime#%d drv=%d pos=%u len=%zu trap=%c\n",
-				pc, ReadMacInt16(pb + ioVRefNum), (uint32)position, length,
-				((ReadMacInt16(pb + ioTrap) & 0xff) == aRdCmd) ? 'R' : 'W');
-	}
 
 	return noErr;
 }

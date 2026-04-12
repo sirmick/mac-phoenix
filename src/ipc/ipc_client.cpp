@@ -25,11 +25,6 @@ IPCClient::IPCClient() = default;
 IPCClient::~IPCClient()
 {
     disconnect();
-    // Clean up any zombie SHM
-    if (zombie_shm_ && zombie_shm_ != MAP_FAILED) {
-        munmap(zombie_shm_, sizeof(IPCBuffer));
-        zombie_shm_ = nullptr;
-    }
 }
 
 bool IPCClient::connect_shm(pid_t pid)
@@ -71,15 +66,11 @@ bool IPCClient::connect_shm(pid_t pid)
 
 void IPCClient::disconnect_shm()
 {
-    // Don't munmap immediately — keep it as a zombie so encoder threads
-    // reading stale pointers hit valid (stale) memory instead of SIGSEGV.
-    // The child's SHM object is unlinked, but mmap keeps the pages alive.
+    // Safe to munmap immediately: disconnect() holds the exclusive lock on
+    // g_ipc_shm_mutex, so all shared-lock readers have drained and no new
+    // readers can start until the lock is released.
     if (shm_ && shm_ != MAP_FAILED) {
-        // Clean up any previous zombie first
-        if (zombie_shm_ && zombie_shm_ != MAP_FAILED) {
-            munmap(zombie_shm_, sizeof(IPCBuffer));
-        }
-        zombie_shm_ = shm_;
+        munmap(shm_, sizeof(IPCBuffer));
         shm_ = nullptr;
     }
     if (shm_fd_ >= 0) {
@@ -171,14 +162,6 @@ bool IPCClient::connect(pid_t pid)
 {
     if (connected_) {
         disconnect();
-    }
-
-    // Clean up zombie SHM from previous disconnect — safe now because
-    // the encoder will have seen the nullptr atom by the time start()
-    // calls connect() (subprocess stop() already cleared it + slept).
-    if (zombie_shm_ && zombie_shm_ != MAP_FAILED) {
-        munmap(zombie_shm_, sizeof(IPCBuffer));
-        zombie_shm_ = nullptr;
     }
 
     if (!connect_shm(pid)) {

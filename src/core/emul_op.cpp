@@ -291,7 +291,6 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_INSTALL_DRIVERS: {// Patch to install our own drivers during startup
-			fprintf(stderr, "[EMULOP] INSTALL_DRIVERS fired\n");
 			D(bug("InstallDrivers\n"));
 
 			// For 24-bit ROMs (SE/Classic): redirect hardware base globals
@@ -534,19 +533,6 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 		case M68K_EMUL_OP_IRQ: {		// Level 1 interrupt
 			r->d[0] = 0;
 
-			// Debug: periodic PC sample for Mac II boot debugging
-			{
-				static int irq_sample_count = 0;
-				if (++irq_sample_count <= 10) {
-					// Read the return PC from the exception stack frame
-					// to see where the CPU was when the interrupt fired
-					uint32 sp = r->a[7];
-					uint32 ret_pc = ReadMacInt32(sp + 2); // PC is at SP+2 in exception frame
-					fprintf(stderr, "[IRQ#%d] return PC=%08x SR=%04x\n",
-						irq_sample_count, ret_pc, (uint16)r->sr);
-				}
-			}
-
 			// Check if Unicorn backend has a pending interrupt that was blocked by SR
 			// This happens when ROM sets IPL=7 to disable CPU interrupts, then polls IRQ EmulOp
 			if (g_pending_interrupt_level > 0) {
@@ -599,20 +585,21 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 					VideoInterrupt();
 
-					// 24-bit ROM: post disk insertion events until the
-					// volume is mounted.  The boot block polling loop at
-					// $401176 waits for diskEvent via GetNextEvent. The
-					// normal DiskInterrupt (1Hz) requires acc_run_called
-					// which the SE boot path never sets.  Post events
-					// at 60Hz from here until VCBQHead is non-zero.
-					if (machine_profile().twenty_four_bit) {
-						if (ReadMacInt32(0x358) == 0) {  // VCBQHdr.qHead
-							// Post diskEvent for drive 1
-							M68kRegisters dr;
-							dr.d[0] = 1;     // drive number
-							dr.a[0] = 7;     // diskEvent
-							Execute68kTrap(0xa02f, &dr);  // _PostEvent
-						}
+					// Post disk insertion events until a volume is mounted.
+					// The boot ROM polls for diskEvent via GetNextEvent and
+					// mounts the volume on diskEvent. The normal path for
+					// posting diskEvent is DiskControl case 65 (accRun) ->
+					// mount_mountable_volumes, dispatched by SystemTask.
+					// But SystemTask only runs once user/boot-block code
+					// is executing; the Quadra ROM's pre-boot loop sits in
+					// ROM code and never runs SystemTask until after boot
+					// blocks are loaded. Post events at 60Hz from here
+					// until VCBQHead is non-zero to break the deadlock.
+					if (ReadMacInt32(0x358) == 0) {  // VCBQHdr.qHead
+						M68kRegisters dr;
+						dr.d[0] = 1;     // drive number
+						dr.a[0] = 7;     // diskEvent
+						Execute68kTrap(0xa02f, &dr);  // _PostEvent
 					}
 
 					// Call DoVBLTask(0)

@@ -268,9 +268,6 @@ void Execute68kTrap(uint16 trap, struct M68kRegisters *r)
 		                "Platform backend must be installed before Execute68kTrap.\n", trap);
 		abort();
 	}
-	static int e68k_trap_count = 0;
-	if (++e68k_trap_count <= 30)
-		fprintf(stderr, "[E68K] Execute68kTrap(0x%04x) #%d\n", trap, e68k_trap_count);
 	g_platform.cpu_execute_68k_trap(trap, r);
 }
 

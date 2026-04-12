@@ -234,6 +234,7 @@ void WarningAlert(const char *text)
 void QuitEmulator(void)
 {
 	printf("QuitEmulator() called\n");
+	stop_timer_interrupt();
 	ExitAll();
 	exit(1);
 }
@@ -803,7 +804,8 @@ int main(int argc, char **argv)
 			}
 
 			if (headless_http_thread.joinable()) {
-				headless_http_thread.detach();  // CPU exited, HTTP thread will be reaped
+				webserver::g_running.store(false, std::memory_order_release);
+				headless_http_thread.join();
 			}
 		} else {
 			printf("\nNo ROM file specified.\n");

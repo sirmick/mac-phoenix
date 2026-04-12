@@ -60,11 +60,6 @@ private:
     int control_socket_ = -1;
     int frame_eventfd_ = -1;
 
-    // Zombie SHM: kept mapped after disconnect so encoder threads
-    // don't SIGSEGV on stale pointers. Cleaned up on next connect()
-    // or destructor.
-    IPCBuffer* zombie_shm_ = nullptr;
-
     std::string shm_name_;
     std::string socket_path_;
 

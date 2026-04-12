@@ -256,8 +256,6 @@ static int16 set_dsk_err(int16 err)
 int16 SonyOpen(uint32 pb, uint32 dce)
 {
 	(void)pb;
-	fprintf(stderr, "[SONY] SonyOpen: dce=%08x, %zu drives, utab=%08x\n",
-		dce, drives.size(), ReadMacInt32(0x11c));
 	// Set up DCE
 	WriteMacInt32(dce + dCtlPosition, 0);
 	WriteMacInt16(dce + dCtlQHdr + qFlags, (ReadMacInt16(dce + dCtlQHdr + qFlags) & 0xff00) | 3);	// Version number, must be >=3 or System 8 will replace us

@@ -326,9 +326,12 @@ void CDROMInit(void)
 	}
 
 	if (drives.empty()) {
-	    // create a placeholder drive for images
-	    drives.push_back(cdrom_drive_info());
-	    drives.begin()->init_null = true;
+		// Create a placeholder drive so the .AppleCD driver has something
+		// to attach to. Legacy BasiliskII does the same — without it, the
+		// Quadra ROM's boot scan hangs post-WLSC because SystemTask never
+		// dispatches accRun to any driver.
+		drives.push_back(cdrom_drive_info());
+		drives.begin()->init_null = true;
 	}
 }
 
@@ -588,7 +591,7 @@ int16 CDROMOpen(uint32 pb, uint32 dce)
 int16 CDROMPrime(uint32 pb, uint32 dce)
 {
 	WriteMacInt32(pb + ioActCount, 0);
-	
+
 	// Drive valid and disk inserted?
 	drive_vec::iterator info = get_drive_info(ReadMacInt16(pb + ioVRefNum), ReadMacInt16(pb + ioRefNum));
 	if (info == drives.end())
