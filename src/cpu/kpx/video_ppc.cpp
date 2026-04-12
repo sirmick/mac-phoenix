@@ -500,12 +500,6 @@ static int16 VideoControl(uint32 pb, VidLocals *csSave)
 			return noErr;
 
 		case cscSetHardwareCursor: {
-			{
-				static int shc_count = 0;
-				if (++shc_count <= 5)
-					fprintf(stderr, "[SHC] #%d cursorHW=%d param=%08x\n", shc_count, csSave->cursorHardware, param);
-			}
-
 			if (!csSave->cursorHardware)
 				return controlErr;
 
@@ -515,20 +509,14 @@ static int16 VideoControl(uint32 pb, VidLocals *csSave)
 			// Image
 			uint32 cursor = ReadMacInt32(param);	// Pointer to CursorImage
 			uint32 pmhandle = ReadMacInt32(cursor + ciCursorPixMap);
-			if (pmhandle == 0 || ReadMacInt32(pmhandle) == 0) {
-				static int shc_log = 0;
-				if (++shc_log <= 3) fprintf(stderr, "[SHC] pmhandle=%08x → controlErr\n", pmhandle);
+			if (pmhandle == 0 || ReadMacInt32(pmhandle) == 0)
 				return controlErr;
-			}
 			uint32 pixmap = ReadMacInt32(pmhandle);
 
 			// XXX: only certain image formats are handled properly at the moment
 			uint16 rowBytes = ReadMacInt16(pixmap + 4) & 0x7FFF;
-			if (rowBytes != 2) {
-				static int shc_log2 = 0;
-				if (++shc_log2 <= 3) fprintf(stderr, "[SHC] rowBytes=%d (not 2) → controlErr\n", rowBytes);
+			if (rowBytes != 2)
 				return controlErr;
-			}
 
 			// Mask
 			uint32 bmhandle = ReadMacInt32(cursor + ciCursorBitMask);
@@ -1071,19 +1059,6 @@ static int16 VideoClose(uint32 pb, VidLocals *csSave)
 
 int16 ppc::VideoDoDriverIO(uint32 spaceID, uint32 commandID, uint32 commandContents, uint32 commandCode, uint32 commandKind)
 {
-	{
-		static int vdio_count = 0;
-		if (++vdio_count <= 30) {
-			const char *codenames[] = {"Open","Close","Read","Write","Control","Status","KillIO","Init","Finalize","Replace","Superseded"};
-			const char *cn = (commandCode < 11) ? codenames[commandCode] : "?";
-			fprintf(stderr, "[VDIO] #%d %s(code=%d) kind=%d", vdio_count, cn, commandCode, commandKind);
-			if (commandCode == 4 || commandCode == 5) { // Control/Status
-				uint16 csCode = ReadMacInt16(commandContents + 0x1a); // csCode offset in ParamBlock
-				fprintf(stderr, " csCode=%d", csCode);
-			}
-			fprintf(stderr, "\n");
-		}
-	}
 	int16 err = noErr;
 
 	switch (commandCode) {
@@ -1186,11 +1161,6 @@ int16 ppc::VideoDoDriverIO(uint32 spaceID, uint32 commandID, uint32 commandConte
 			break;
 	}
 
-	{
-		static int vdio_ret = 0;
-		if (++vdio_ret <= 30 || err != 0)
-			fprintf(stderr, "[VDIO] → err=%d (kind=%d)\n", err, commandKind);
-	}
 	if (commandKind == kImmediateIOCommandKind)
 		return err;
 	else

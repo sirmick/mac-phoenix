@@ -283,8 +283,6 @@ bool WebRTCServer::init(int signaling_port) {
 
         // Handle new client connections
         ws_server_->onClient([this](std::shared_ptr<rtc::WebSocket> ws) {
-            fprintf(stderr, "[WebRTC] New WebSocket connection\n");
-
             // Store WebSocket shared_ptr
             {
                 std::lock_guard<std::mutex> lock(peers_mutex_);
@@ -292,7 +290,6 @@ bool WebRTCServer::init(int signaling_port) {
             }
 
             ws->onOpen([ws]() {
-                fprintf(stderr, "[WebRTC] WebSocket opened\n");
                 std::string welcome = "{\"type\":\"welcome\",\"peerId\":\"server\"}";
                 ws->send(welcome);
             });
@@ -308,11 +305,9 @@ bool WebRTCServer::init(int signaling_port) {
             });
 
             ws->onClosed([this, ws]() {
-                fprintf(stderr, "[WebRTC] WebSocket closed\n");
                 std::lock_guard<std::mutex> lock(peers_mutex_);
                 auto it = ws_to_peer_id_.find(ws.get());
                 if (it != ws_to_peer_id_.end()) {
-                    fprintf(stderr, "[WebRTC] Removing peer: %s\n", it->second.c_str());
                     peers_.erase(it->second);
                     ws_to_peer_id_.erase(it);
                     peer_count_--;
@@ -348,8 +343,6 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
         auto j = nlohmann::json::parse(message);
         std::string type = json_utils::get_string(j, "type");
 
-        fprintf(stderr, "[WebRTC] Signaling message: %s\n", type.c_str());
-
         if (type == "connect") {
             // Client is requesting connection - server creates offer
             std::string peer_id = json_utils::get_string(j, "peerId", "client-" + std::to_string(peer_count_.load()));
@@ -360,9 +353,6 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
             if (codec_str == "vp9") codec = CodecType::VP9;
             else if (codec_str == "png") codec = CodecType::PNG;
             else if (codec_str == "webp") codec = CodecType::WEBP;
-
-            fprintf(stderr, "[WebRTC] Client connect request - creating peer connection for %s (codec: %s)\n",
-                    peer_id.c_str(), codec_str.c_str());
 
             // Store WebSocket mapping FIRST (create_peer_connection needs it)
             {
@@ -403,7 +393,6 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
                 auto it = ws_connections_.find(ws);
                 if (it != ws_connections_.end() && it->second) {
                     it->second->send(ack.dump());
-                    fprintf(stderr, "[WebRTC] Sent 'connected' ack to peer %s\n", peer_id.c_str());
                 }
             }
 
@@ -421,10 +410,7 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
                 std::string peer_id = ws_it->second;
                 auto peer_it = peers_.find(peer_id);
                 if (peer_it != peers_.end()) {
-                    fprintf(stderr, "[WebRTC] Received answer from %s (sdp length=%zu)\n",
-                            peer_id.c_str(), sdp.size());
                     peer_it->second->pc->setRemoteDescription(rtc::Description(sdp, "answer"));
-                    fprintf(stderr, "[WebRTC] Remote description set for %s\n", peer_id.c_str());
                 }
             } else {
                 fprintf(stderr, "[WebRTC] ERROR: Received answer but no peer found for WebSocket\n");
@@ -441,9 +427,6 @@ void WebRTCServer::process_signaling(rtc::WebSocket* ws, const std::string& mess
             if (codec_str == "vp9") codec = CodecType::VP9;
             else if (codec_str == "png") codec = CodecType::PNG;
             else if (codec_str == "webp") codec = CodecType::WEBP;
-
-            fprintf(stderr, "[WebRTC] Creating peer connection for %s (codec: %s)\n",
-                    peer_id.c_str(), codec_str.c_str());
 
             // Create peer connection
             auto peer = create_peer_connection(peer_id, codec);
@@ -519,7 +502,6 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     // Send local description (offer or answer) to browser
     peer->pc->onLocalDescription([ws, ws_connections, peers_mutex, peer_id](rtc::Description desc) {
-        fprintf(stderr, "[WebRTC] !!! onLocalDescription FIRED for %s !!!\n", peer_id.c_str());
         nlohmann::json msg;
         msg["type"] = desc.typeString();  // "offer" or "answer"
         msg["sdp"] = std::string(desc);
@@ -528,8 +510,6 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
         auto ws_it = ws_connections->find(ws);
         if (ws_it != ws_connections->end() && ws_it->second) {
             ws_it->second->send(msg.dump());
-            fprintf(stderr, "[WebRTC] Sent %s to %s (sdp length=%zu)\n",
-                    desc.typeString().c_str(), peer_id.c_str(), std::string(desc).size());
         } else {
             fprintf(stderr, "[WebRTC] ERROR: WebSocket not found when sending %s\n", desc.typeString().c_str());
         }
@@ -546,66 +526,33 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
         auto ws_it = ws_connections->find(ws);
         if (ws_it != ws_connections->end() && ws_it->second) {
             ws_it->second->send(candidate.dump());
-            fprintf(stderr, "[WebRTC] Sent ICE candidate to %s (mid=%s)\n",
-                    peer_id.c_str(), cand.mid().c_str());
         }
     });
 
     peer->pc->onStateChange([peer_id](rtc::PeerConnection::State state) {
-        const char* state_str = "unknown";
-        switch (state) {
-            case rtc::PeerConnection::State::New: state_str = "New"; break;
-            case rtc::PeerConnection::State::Connecting: state_str = "Connecting"; break;
-            case rtc::PeerConnection::State::Connected: state_str = "Connected"; break;
-            case rtc::PeerConnection::State::Disconnected: state_str = "Disconnected"; break;
-            case rtc::PeerConnection::State::Failed: state_str = "Failed"; break;
-            case rtc::PeerConnection::State::Closed: state_str = "Closed"; break;
-        }
-        fprintf(stderr, "[WebRTC] Peer %s state: %s\n", peer_id.c_str(), state_str);
+        if (state == rtc::PeerConnection::State::Connected)
+            fprintf(stderr, "[WebRTC] Peer %s connected\n", peer_id.c_str());
+        else if (state == rtc::PeerConnection::State::Failed)
+            fprintf(stderr, "[WebRTC] Peer %s connection failed\n", peer_id.c_str());
     });
 
-    peer->pc->onIceStateChange([peer_id](rtc::PeerConnection::IceState state) {
-        const char* state_str = "unknown";
-        switch (state) {
-            case rtc::PeerConnection::IceState::New: state_str = "New"; break;
-            case rtc::PeerConnection::IceState::Checking: state_str = "Checking"; break;
-            case rtc::PeerConnection::IceState::Connected: state_str = "Connected"; break;
-            case rtc::PeerConnection::IceState::Completed: state_str = "Completed"; break;
-            case rtc::PeerConnection::IceState::Disconnected: state_str = "Disconnected"; break;
-            case rtc::PeerConnection::IceState::Failed: state_str = "Failed"; break;
-            case rtc::PeerConnection::IceState::Closed: state_str = "Closed"; break;
-        }
-        fprintf(stderr, "[WebRTC] Peer %s ICE state: %s\n", peer_id.c_str(), state_str);
-    });
-
-    peer->pc->onGatheringStateChange([peer_id](rtc::PeerConnection::GatheringState state) {
-        const char* state_str = "unknown";
-        switch (state) {
-            case rtc::PeerConnection::GatheringState::New: state_str = "New"; break;
-            case rtc::PeerConnection::GatheringState::InProgress: state_str = "InProgress"; break;
-            case rtc::PeerConnection::GatheringState::Complete: state_str = "Complete"; break;
-        }
-        fprintf(stderr, "[WebRTC] Peer %s gathering state: %s\n", peer_id.c_str(), state_str);
-    });
+    peer->pc->onIceStateChange([](rtc::PeerConnection::IceState) {});
+    peer->pc->onGatheringStateChange([](rtc::PeerConnection::GatheringState) {});
 
     // SSRC for RTP streams — increment per peer to avoid browser RTP state confusion
     // when switching between codecs (e.g., H264 → VP9) on the same SSRC
     static std::atomic<uint32_t> ssrc_counter{42};
     uint32_t ssrc = ssrc_counter.fetch_add(2, std::memory_order_relaxed);  // +2 because audio uses ssrc+1
 
-    fprintf(stderr, "[WebRTC] About to add tracks for peer %s\n", peer_id.c_str());
 
     // Add video track (H.264 and VP9 use RTP; PNG/WEBP use DataChannel)
     if (codec == CodecType::H264 || codec == CodecType::VP9) {
         auto video = rtc::Description::Video("video-stream", rtc::Description::Direction::SendOnly);
 
-        if (codec == CodecType::H264) {
-            fprintf(stderr, "[WebRTC] Creating H.264 video track\n");
+        if (codec == CodecType::H264)
             video.addH264Codec(96, "profile-level-id=42e01f;packetization-mode=1;level-asymmetry-allowed=1");
-        } else {
-            fprintf(stderr, "[WebRTC] Creating VP9 video track\n");
+        else
             video.addVP9Codec(96);
-        }
 
         video.addSSRC(ssrc, "video-stream", "stream1", "video-stream");
         peer->video_track = peer->pc->addTrack(video);
@@ -638,8 +585,6 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
         // CRITICAL: Only set ready=true when track is actually open!
         peer->video_track->onOpen([this, peer_id]() {
-            fprintf(stderr, "[WebRTC] Video track OPEN for %s - ready to send frames!\n", peer_id.c_str());
-
             std::lock_guard<std::mutex> lock(peers_mutex_);
             auto it = peers_.find(peer_id);
             if (it != peers_.end()) {
@@ -648,27 +593,19 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
             }
         });
 
-        peer->video_track->onClosed([peer_id]() {
-            fprintf(stderr, "[WebRTC] Video track CLOSED for %s\n", peer_id.c_str());
-        });
+        peer->video_track->onClosed([](){ });
 
         peer->video_track->onError([peer_id](std::string error) {
             fprintf(stderr, "[WebRTC] Video track ERROR for %s: %s\n", peer_id.c_str(), error.c_str());
         });
-
-        fprintf(stderr, "[WebRTC] Added video track with RTP packetizer (codec: %s)\n",
-                codec == CodecType::H264 ? "H.264" : "VP9");
     }
     // PNG/WEBP use DataChannel for video (ready flag set in DC onOpen below)
 
     // Add audio track (Opus) with proper RTP packetizer
-    fprintf(stderr, "[WebRTC] Creating Opus audio track\n");
     auto audio = rtc::Description::Audio("audio-stream", rtc::Description::Direction::SendOnly);
     audio.addOpusCodec(OPUS_PAYLOAD_TYPE, WEBRTC_OPUS_PROFILE);
     audio.addSSRC(ssrc + 1, "audio-stream", "stream1", "audio-stream");
-    fprintf(stderr, "[WebRTC] Calling addTrack for audio\n");
     peer->audio_track = peer->pc->addTrack(audio);
-    fprintf(stderr, "[WebRTC] addTrack returned for audio, setting media handler\n");
 
     // Set up Opus RTP packetizer (following web-streaming pattern)
     auto rtpConfigAudio = std::make_shared<rtc::RtpPacketizationConfig>(
@@ -687,13 +624,8 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     opusPacketizer->addToChain(nackResponder);
 
     peer->audio_track->setMediaHandler(opusPacketizer);
-    fprintf(stderr, "[WebRTC] Media handler set for audio\n");
 
-    peer->audio_track->onOpen([peer_id]() {
-        fprintf(stderr, "[WebRTC] Audio track opened for %s\n", peer_id.c_str());
-    });
-
-    fprintf(stderr, "[WebRTC] Added audio track with Opus RTP packetizer\n");
+    peer->audio_track->onOpen([]() {});
 
     // Add data channel (for PNG/WebP frames or H.264/VP9 metadata)
     rtc::DataChannelInit dc_init;
@@ -703,13 +635,8 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
         dc_init.reliability.maxRetransmits = 0;
     }
     peer->data_channel = peer->pc->createDataChannel("metadata", dc_init);
-    fprintf(stderr, "[WebRTC] Created data channel%s\n",
-            (codec == CodecType::PNG || codec == CodecType::WEBP) ? " (unreliable)" : "");
 
-    auto dc_ptr = peer->data_channel;
-    peer->data_channel->onOpen([this, peer_id, codec, dc_ptr]() {
-        fprintf(stderr, "[WebRTC] Data channel opened for peer %s (maxMessageSize=%zu)\n",
-                peer_id.c_str(), dc_ptr->maxMessageSize());
+    peer->data_channel->onOpen([this, peer_id, codec]() {
         // For PNG/WEBP (no video track), mark peer ready when DataChannel opens
         if (codec == CodecType::PNG || codec == CodecType::WEBP) {
             std::lock_guard<std::mutex> lock(peers_mutex_);
@@ -717,7 +644,6 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
             if (it != peers_.end()) {
                 it->second->ready = true;
                 video::g_request_keyframe.store(true, std::memory_order_release);
-                fprintf(stderr, "[WebRTC] DataChannel peer %s marked ready (codec: %d)\n", peer_id.c_str(), (int)codec);
             }
         }
     });
@@ -734,7 +660,6 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
     // This ensures we only send frames after the track is actually open
     peer->ready = false;  // Will be set to true in onOpen callback
 
-    fprintf(stderr, "[WebRTC] Sent 'connected' ack to peer %s\n", peer_id.c_str());
     return peer;
 }
 

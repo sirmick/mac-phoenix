@@ -447,15 +447,13 @@ Response APIRouter::handle_log(const Request& req) {
     std::string msg = json_utils::get_string(j, "message");
     std::string data = json_utils::get_string(j, "data");
 
+    // Only forward error/warn from browser; suppress info-level chatter
     const char* prefix = "[Browser]";
     if (level == "error") {
         fprintf(stderr, "\033[31m%s ERROR: %s%s%s\033[0m\n", prefix, msg.c_str(),
                 data.empty() ? "" : " | ", data.c_str());
     } else if (level == "warn") {
         fprintf(stderr, "\033[33m%s WARN: %s%s%s\033[0m\n", prefix, msg.c_str(),
-                data.empty() ? "" : " | ", data.c_str());
-    } else {
-        fprintf(stderr, "%s %s: %s%s%s\n", prefix, level.c_str(), msg.c_str(),
                 data.empty() ? "" : " | ", data.c_str());
     }
 

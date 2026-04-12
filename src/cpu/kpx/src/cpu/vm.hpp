@@ -288,11 +288,6 @@ static inline void vm_write_memory_4_reversed(vm_addr_t addr, uint32 value)
 }
 static inline void *vm_memset(vm_addr_t addr, int c, size_t n)
 {
-	// WATCHPOINT: catch memset that covers KD+0x5b4
-	if (__builtin_expect(addr <= 0x68ffe5b4 && (addr + n) > 0x68ffe5b4, 0)) {
-		fprintf(stderr, "[WATCHPOINT] vm_memset covers KD+0x5b4: addr=%08x c=%d n=%zu\n",
-			(uint32)addr, c, n);
-	}
 	uint8 * const m = (uint8 *)vm_do_get_real_address(addr);
 	return memset(m, c, n);
 }

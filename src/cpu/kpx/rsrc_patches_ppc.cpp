@@ -120,15 +120,10 @@ void ppc::CheckLoad(uint32 type, int16 id, uint16 *p, uint32 size)
 
 	// Don't modify resources in ROM
 	if ((uintptr)p >= (uintptr)ROMBaseHost && (uintptr)p <= (uintptr)(ROMBaseHost + ROM_SIZE)) {
-		if (type == FOURCC('b','o','o','t') || type == FOURCC('g','n','l','d') || type == FOURCC('p','t','c','h'))
-			fprintf(stderr, "[RSRC] SKIP %c%c%c%c id=%d — ptr %p in ROM [%p..%p]\n",
-				type>>24, (type>>16)&0xff, (type>>8)&0xff, type&0xff, id,
-				p, (void*)ROMBaseHost, (void*)(ROMBaseHost + ROM_SIZE));
 		return;
 	}
 
 	if (type == FOURCC('b','o','o','t') && id == 3) {
-		fprintf(stderr, "[RSRC] boot 3 found, size=%u, ptr=%p\n", size, p);
 		size >>= 1;
 		while (size--) {
 			if (PM(0,0x51c9) && PM(2,0x2e49)) {
@@ -936,13 +931,8 @@ void PatchNativeResourceManager(void)
 
 	// Patch native GetResource()
 	uint32 upp = ReadMacInt32(0x1480);
-	fprintf(stderr, "[PNRM] upp=0x%08x ROMBase=0x%08x masked=0x%08x\n",
-		upp, (uint32)ROMBase, upp & 0xffc00000);
-	if ((upp & 0xffc00000) == ROMBase) {
-		fprintf(stderr, "[PNRM] BAIL — UPP still in ROM, resource manager not loaded to RAM yet\n");
+	if ((upp & 0xffc00000) == ROMBase)
 		return;
-	}
-	fprintf(stderr, "[PNRM] PATCHING — resource manager is in RAM\n");
 	uint32 tvec = ReadMacInt32(upp + 5 * 4);
 	D(bug(" GetResource() entry %08x, TOC %08x\n", ReadMacInt32(tvec), ReadMacInt32(tvec + 4)));
 	WriteMacInt32(XLM_RES_LIB_TOC, ReadMacInt32(tvec + 4));
@@ -1061,13 +1051,4 @@ void PatchNativeResourceManager(void)
 #endif
 #endif
 
-	fprintf(stderr, "[PNRM] XLM values after patching:\n");
-	fprintf(stderr, "  XLM_RES_LIB_TOC(0x2834)  = 0x%08x\n", ReadMacInt32(XLM_RES_LIB_TOC));
-	fprintf(stderr, "  XLM_GET_RESOURCE(0x2838)  = 0x%08x\n", ReadMacInt32(XLM_GET_RESOURCE));
-	fprintf(stderr, "  XLM_GET_1_RESOURCE(0x283c)= 0x%08x\n", ReadMacInt32(XLM_GET_1_RESOURCE));
-	fprintf(stderr, "  XLM_GET_IND_RESOURCE(0x2840)= 0x%08x\n", ReadMacInt32(XLM_GET_IND_RESOURCE));
-	fprintf(stderr, "  XLM_GET_1_IND(0x2844)    = 0x%08x\n", ReadMacInt32(XLM_GET_1_IND_RESOURCE));
-	fprintf(stderr, "  XLM_R_GET(0x2848)        = 0x%08x\n", ReadMacInt32(XLM_R_GET_RESOURCE));
-	fprintf(stderr, "  XLM_GET_NAMED(0x2858)    = 0x%08x\n", ReadMacInt32(XLM_GET_NAMED_RESOURCE));
-	fprintf(stderr, "  XLM_GET_1_NAMED(0x285c)  = 0x%08x\n", ReadMacInt32(XLM_GET_1_NAMED_RESOURCE));
 }

@@ -368,10 +368,8 @@ int16 RmvTime(uint32 tm)
 
 	// Find descriptor
 	TMDesc *desc = find_desc(tm);
-	if (!desc) {
-		printf("WARNING: RmvTime(%08x): Descriptor not found\n", tm);
+	if (!desc)
 		return 0;
-	}
 
 	// Task active?
 #if PRECISE_TIMING_BEOS

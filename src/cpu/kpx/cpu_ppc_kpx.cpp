@@ -561,36 +561,6 @@ void sheepshaver_cpu::call_execute_native_op(powerpc_cpu *cpu, uint32 selector)
 
 void sheepshaver_cpu::execute_native_op(uint32 selector)
 {
-    // Track native op rates per second
-    {
-        static int nop_counts[40] = {0};
-        static uint64 last_dump = 0;
-        static int dump_count = 0;
-        if (selector < 40) nop_counts[selector]++;
-        uint64 now = GetTicks_usec();
-        if (last_dump == 0) last_dump = now;
-        if (now - last_dump >= 5000000) {  // Every 5s
-            ++dump_count;
-            if (dump_count <= 40 || dump_count % 10 == 0) {
-                fprintf(stderr, "[NOP-RATE] #%d: VBL=%d DIO=%d RES=%d CL=%d NCL=%d MKX=%d NQD=%d\n",
-                    dump_count,
-                    nop_counts[NATIVE_VIDEO_VBL],
-                    nop_counts[NATIVE_VIDEO_DO_DRIVER_IO],
-                    nop_counts[NATIVE_GET_RESOURCE] + nop_counts[NATIVE_GET_1_RESOURCE] +
-                    nop_counts[NATIVE_GET_IND_RESOURCE] + nop_counts[NATIVE_GET_1_IND_RESOURCE] +
-                    nop_counts[NATIVE_R_GET_RESOURCE] + nop_counts[NATIVE_GET_NAMED_RESOURCE] +
-                    nop_counts[NATIVE_GET_1_NAMED_RESOURCE],
-                    nop_counts[NATIVE_CHECK_LOAD_INVOC],
-                    nop_counts[NATIVE_NAMED_CHECK_LOAD_INVOC],
-                    nop_counts[NATIVE_MAKE_EXECUTABLE],
-                    nop_counts[NATIVE_NQD_SYNC_HOOK] + nop_counts[NATIVE_NQD_BITBLT_HOOK] +
-                    nop_counts[NATIVE_NQD_FILLRECT_HOOK] + nop_counts[NATIVE_NQD_BITBLT] +
-                    nop_counts[NATIVE_NQD_INVRECT] + nop_counts[NATIVE_NQD_FILLRECT]);
-            }
-            memset(nop_counts, 0, sizeof(nop_counts));
-            last_dump = now;
-        }
-    }
     switch (selector) {
     case NATIVE_PATCH_NAME_REGISTRY:
         DoPatchNameRegistry();
@@ -919,38 +889,11 @@ static uint32_t kpx_cpu_get_pc(void);  // forward decl for stall logging
 
 void HandleInterrupt(powerpc_registers *r)
 {
-    static int hi_count = 0;
-    static int hi_mode1_count = 0;  // mode=1 (MODE_NATIVE) in last 5s window
-    static int hi_skip_count = 0;
-    static uint64 hi_last_report = 0;
-    static int hi_peak_mode1 = 0;
-    hi_count++;
-
     // Do nothing if interrupts are disabled
-    if (int32(ReadMacInt32(XLM_IRQ_NEST)) > 0) {
-        hi_skip_count++;
+    if (int32(ReadMacInt32(XLM_IRQ_NEST)) > 0)
         return;
-    }
 
     uint32 mode = ReadMacInt32(XLM_RUN_MODE);
-    if (mode == MODE_NATIVE) hi_mode1_count++;
-
-    (void)mode;
-
-    // 5-second rate reporting
-    static int hi_window_count = 0;
-    hi_window_count++;
-    uint64 now = GetTicks_usec();
-    if (hi_last_report == 0) hi_last_report = now;
-    if (now - hi_last_report >= 5000000) {
-        int rate = hi_window_count * 1000000ULL / (now - hi_last_report);
-        if (hi_mode1_count > hi_peak_mode1) hi_peak_mode1 = hi_mode1_count;
-        fprintf(stderr, "[TRACE] HI-RATE: %d HI/s (%d mode=1, peak=%d)\n",
-                rate, hi_mode1_count, hi_peak_mode1);
-        hi_mode1_count = 0;
-        hi_window_count = 0;
-        hi_last_report = now;
-    }
 
     // Interrupt action depends on current run mode
     switch (mode) {

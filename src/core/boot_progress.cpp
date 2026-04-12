@@ -479,9 +479,12 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 				milestonef("Resource #%u loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
 			}
 
-			/* Log level 0: periodic progress every 1000 resources */
-			if (level == 0 && g_checkload_count % 1000 == 0) {
-				milestonef("%u resources loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
+			/* Log level 0: periodic progress every 1000 resources (10000 during desktop) */
+			{
+				unsigned interval = (g_current_phase >= PHASE_FINDER_LAUNCH) ? 10000 : 1000;
+				if (level == 0 && g_checkload_count % interval == 0) {
+					milestonef("%u resources loaded (phase: %s)", g_checkload_count, phase_name(g_current_phase));
+				}
 			}
 
 			break;

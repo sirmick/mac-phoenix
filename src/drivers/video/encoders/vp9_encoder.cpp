@@ -150,7 +150,6 @@ EncodedFrame VP9Encoder::encode_i420(const uint8_t* y, const uint8_t* u, const u
     if (force_keyframe_) {
         flags |= VPX_EFLAG_FORCE_KF;
         force_keyframe_ = false;
-        fprintf(stderr, "VP9: Forcing keyframe\n");
     }
 
     // Duration of frame in timebase units (for 30 fps = 1 frame)
@@ -175,27 +174,6 @@ EncodedFrame VP9Encoder::encode_i420(const uint8_t* y, const uint8_t* u, const u
             const uint8_t* data = static_cast<const uint8_t*>(pkt->data.frame.buf);
             result.data.assign(data, data + pkt->data.frame.sz);
             result.is_keyframe = (pkt->data.frame.flags & VPX_FRAME_IS_KEY) != 0;
-
-            // Log frame info
-            static int keyframe_count = 0;
-            static int p_frame_count = 0;
-            static int64_t p_size_total = 0;
-
-            if (result.is_keyframe) {
-                keyframe_count++;
-                fprintf(stderr, "VP9: Keyframe %llu, size=%zu bytes (%.1f KB)\n",
-                        (unsigned long long)frame_count_, result.data.size(), result.data.size() / 1024.0f);
-            } else {
-                p_frame_count++;
-                p_size_total += result.data.size();
-            }
-
-            // Log stats every 90 frames
-            if (frame_count_ % 90 == 0) {
-                int avg_p = p_frame_count > 0 ? (int)(p_size_total / p_frame_count) : 0;
-                fprintf(stderr, "VP9: Frame stats - total=%llu keyframes=%d P=%d avg_p=%d bytes (%.1f KB)\n",
-                        (unsigned long long)frame_count_, keyframe_count, p_frame_count, avg_p, avg_p / 1024.0f);
-            }
 
             break;  // Only process first packet
         }

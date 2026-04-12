@@ -171,29 +171,6 @@ bool InitAll_PPC(const char *vmdir)
 		return false;
 	}
 
-	// Dump patched nanokernel ROM for comparison with legacy
-	{
-		fprintf(stderr, "[ROM-CRC] Nanokernel ROM+0x310000 CRC after patches:\n");
-		uint32 crc = 0;
-		for (uint32 i = 0; i < 0x5000; i += 4)
-			crc ^= ReadMacInt32(ROMBase + 0x310000 + i);
-		fprintf(stderr, "[ROM-CRC]   ROM+310000..315000: %08x\n", crc);
-		crc = 0;
-		for (uint32 i = 0; i < 0x10000; i += 4)
-			crc ^= ReadMacInt32(ROMBase + 0x300000 + i);
-		fprintf(stderr, "[ROM-CRC]   ROM+300000..310000: %08x\n", crc);
-		// Also dump the boot structure
-		crc = 0;
-		for (uint32 i = 0; i < 0x1000; i += 4)
-			crc ^= ReadMacInt32(ROMBase + 0x30d000 + i);
-		fprintf(stderr, "[ROM-CRC]   Boot struct 30d000: %08x\n", crc);
-		// Dump specific boot struct fields
-		for (int off = 0x9c; off <= 0xb0; off += 4)
-			fprintf(stderr, "[ROM-CRC]   BS+%03x=%08x\n", off, ReadMacInt32(ROMBase + 0x30d000 + off));
-		fprintf(stderr, "[ROM-CRC]   BS+360=%08x BS+fd8=%08x\n",
-			ReadMacInt32(ROMBase + 0x30d360), ReadMacInt32(ROMBase + 0x30dfd8));
-	}
-
 	// Initialize Kernel Data
 	Mac_memset(KERNEL_DATA_BASE, 0, sizeof(KernelData));
 	if (ROMType == ROMTYPE_NEWWORLD) {
@@ -256,18 +233,6 @@ bool InitAll_PPC(const char *vmdir)
 	// Initialize extra low memory
 	D(bug("Initializing Low Memory...\n"));
 	Mac_memset(0, 0, 0x3000);
-	fprintf(stderr, "[INIT] After Mac_memset(0,0,0x3000): [0x28]=%08x\n", ReadMacInt32(0x28));
-
-	// Dump ROM code around the Mixed Mode install block (0x504d1200-0x504d1280)
-	// This is where [0x28] gets set to 0x50012af0 — check if it also sets KD+0x1720
-	{
-		fprintf(stderr, "[INIT] ROM at Mixed Mode install (0x504d1200-0x504d1280):\n");
-		uint32 base = ROMBase + 0x4d1200;
-		for (int i = 0; i < 32; i++) {
-			uint32 insn = ReadMacInt32(base + i * 4);
-			fprintf(stderr, "  %08x: %08x\n", base + i * 4, insn);
-		}
-	}
 	WriteMacInt32(XLM_SIGNATURE, FOURCC('B','a','a','h'));			// Signature to detect SheepShaver
 	WriteMacInt32(XLM_KERNEL_DATA, KernelDataAddr);					// For trap replacement routines
 	WriteMacInt32(XLM_PVR, PVR);									// Theoretical PVR
@@ -295,35 +260,6 @@ bool InitAll_PPC(const char *vmdir)
 	WriteMacInt32(XLM_ETHER_WPUT, NativeFunction(NATIVE_ETHER_WPUT));
 	WriteMacInt32(XLM_ETHER_RSRV, NativeFunction(NATIVE_ETHER_RSRV));
 	WriteMacInt32(XLM_VIDEO_DOIO, NativeFunction(NATIVE_VIDEO_DO_DRIVER_IO));
-	fprintf(stderr, "[INIT] XLM_VIDEO_DOIO=0x%08x (NativeFunc=%08x)\n",
-		ReadMacInt32(XLM_VIDEO_DOIO), NativeFunction(NATIVE_VIDEO_DO_DRIVER_IO));
-	// Dump GoMixedModeTrap fall-through path (0x50469738+)
-	{
-		uint32 addr = ROMBase + 0x469738;
-		fprintf(stderr, "[INIT] GoMixedModeTrap fall-through path:\n");
-		for (int i = 0; i < 32; i++) {
-			uint32 a = addr + i * 4;
-			uint32 op = ReadMacInt32(a);
-			int primary = op >> 26;
-			int rs = (op >> 21) & 31;
-			int ra = (op >> 16) & 31;
-			uint16 d = op & 0xFFFF;
-			const char *mark = (a == ROMBase + 0x46d808) ? " <<<STORE" : "";
-			if (primary == 36)
-				fprintf(stderr, "  %08x: %08x  stw r%d, 0x%04x(r%d)%s\n", a, op, rs, d, ra, mark);
-			else if (primary == 32)
-				fprintf(stderr, "  %08x: %08x  lwz r%d, 0x%04x(r%d)%s\n", a, op, rs, d, ra, mark);
-			else
-				fprintf(stderr, "  %08x: %08x  (primary=%d)%s\n", a, op, primary, mark);
-		}
-	}
-	// Dump GoMixedModeTrap handler (64 instructions)
-	uint32 gmmtAddr = ROMBase + 0x469720;
-	fprintf(stderr, "[INIT] GoMixedModeTrap handler at 0x%08x (64 instructions):\n", gmmtAddr);
-	for (int i = 0; i < 64; i += 4)
-		fprintf(stderr, "  +%03x: %08x %08x %08x %08x\n",
-			i*4, ReadMacInt32(gmmtAddr+i*4), ReadMacInt32(gmmtAddr+i*4+4),
-			ReadMacInt32(gmmtAddr+i*4+8), ReadMacInt32(gmmtAddr+i*4+12));
 	D(bug("Low Memory initialized\n"));
 
 #if ENABLE_MON

@@ -124,7 +124,6 @@ EncodedFrame H264Encoder::encode_i420(const uint8_t* y, const uint8_t* u, const 
 
     // Force keyframe if requested
     if (force_keyframe_) {
-        fprintf(stderr, "H264: Forcing IDR frame\n");
         encoder_->ForceIntraFrame(true);
         force_keyframe_ = false;
     }
@@ -147,59 +146,12 @@ EncodedFrame H264Encoder::encode_i420(const uint8_t* y, const uint8_t* u, const 
         return result;
     }
 
-    // Calculate total frame size
-    static int frame_count = 0;
-    static int idr_count = 0;
-    static int p_count = 0;
-    static int skip_count = 0;
-    bool is_idr = (info.eFrameType == videoFrameTypeIDR);
-    int total_size = 0;
-    for (int layer = 0; layer < info.iLayerNum; layer++) {
-        for (int nal = 0; nal < info.sLayerInfo[layer].iNalCount; nal++) {
-            total_size += info.sLayerInfo[layer].pNalLengthInByte[nal];
-        }
-    }
-    frame_count++;
-
-    // Track frame types and P frame sizes for averaging
-    static int64_t p_size_total = 0;
-    static int p_size_count = 0;
-
-    if (is_idr) {
-        idr_count++;
-        fprintf(stderr, "H264: IDR frame %d, size=%d bytes (%.1f KB)\n",
-                frame_count, total_size, total_size / 1024.0f);
-    } else if (info.eFrameType == videoFrameTypeP) {
-        p_count++;
-        p_size_total += total_size;
-        p_size_count++;
-
-        // Warn about oversized P-frames (>100KB is unusually large for H.264)
-        // This typically happens with high-resolution dithered content where inter-frame
-        // prediction fails catastrophically. Consider using PNG codec instead.
-        if (total_size > 100 * 1024) {
-            fprintf(stderr, "H264: WARNING - P-frame overflow detected! size=%d bytes (%.1f KB)\n",
-                    total_size, total_size / 1024.0f);
-            fprintf(stderr, "H264: This is common with dithered graphics where every pixel changes.\n");
-            fprintf(stderr, "H264: Consider using 'webcodec png' in prefs for dithered content.\n");
-        }
-    } else if (info.eFrameType == videoFrameTypeSkip) {
-        skip_count++;
-    }
-
-    // Log frame type stats every 90 frames (3 seconds at 30fps)
-    if (frame_count % 90 == 0) {
-        int avg_p_size = p_size_count > 0 ? (int)(p_size_total / p_size_count) : 0;
-        fprintf(stderr, "H264: Frame stats - total=%d IDR=%d P=%d skip=%d avg_p=%d bytes\n",
-                frame_count, idr_count, p_count, skip_count, avg_p_size);
-    }
-
     if (info.eFrameType == videoFrameTypeSkip) {
         return result;
     }
 
     // Set keyframe flag
-    result.is_keyframe = is_idr;
+    result.is_keyframe = (info.eFrameType == videoFrameTypeIDR);
 
     // Collect all NAL units with start codes
     for (int layer = 0; layer < info.iLayerNum; layer++) {

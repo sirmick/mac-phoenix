@@ -92,8 +92,7 @@ static void reserve_mac_address_space_early()
 		}
 	}
 	g_mac_guard_count = count;
-	fprintf(stderr, "[constructor] Reserved %d guard pages (0x08-0x10, 0x115-0x70, gaps)\n",
-	        count);
+	(void)count;
 }
 
 // WebRTC streaming
@@ -379,9 +378,7 @@ int main(int argc, char **argv)
 	printf("=== mac-phoenix ===\n\n");
 
 	// Mac address space guards: constructor(101) already reserved 0x08000000-0x70000000
-	// in 4MB chunks before any threads existed. Log the result.
-	fprintf(stderr, "[main] Constructor reserved %d x 4MB guard pages before main()\n",
-	        g_mac_guard_count);
+	// in 4MB chunks before any threads existed.
 
 	// Install crash handlers
 	install_crash_handlers();

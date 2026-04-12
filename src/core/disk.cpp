@@ -525,7 +525,6 @@ int16 DiskStatus(uint32 pb, uint32 dce)
 			return statusErr;
 
 		default:
-			printf("WARNING: Unknown DiskStatus(%d)\n", code);
 			return statusErr;
 	}
 }

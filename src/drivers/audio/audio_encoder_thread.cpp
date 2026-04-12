@@ -109,14 +109,6 @@ void audio_encoder_main(AudioOutput* audio_output) {
             now - last_stats_time).count();
 
         if (stats_elapsed >= 60) {
-            double pkts_per_sec = packets_since_stats / (double)stats_elapsed;
-            uint64_t total_packets = g_audio_packets_sent.load(std::memory_order_relaxed);
-            uint64_t total_underruns = g_audio_underruns.load(std::memory_order_relaxed);
-
-            fprintf(stderr, "[AudioEncoder] Stats: %.1f pkt/s, %llu packets, %llu underruns\n",
-                    pkts_per_sec, (unsigned long long)total_packets,
-                    (unsigned long long)total_underruns);
-
             last_stats_time = now;
             packets_since_stats = 0;
         }

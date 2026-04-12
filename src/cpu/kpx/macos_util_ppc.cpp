@@ -267,40 +267,19 @@ uint32 FindLibSymbol(const char *lib_str, const char *sym_str)
 void InitCallUniversalProc()
 {
 	cu_tvect = FindLibSymbol("\014InterfaceLib", "\021CallUniversalProc");
-	fprintf(stderr, "[CFM] CallUniversalProc TVECT = 0x%08x\n", cu_tvect);
-	if (cu_tvect == 0) {
-		fprintf(stderr, "FATAL: Can't find CallUniversalProc()\n");
-		return;
-	}
+	if (cu_tvect == 0) { fprintf(stderr, "FATAL: Can't find CallUniversalProc()\n"); return; }
 
 	gsl_tvect = FindLibSymbol("\014InterfaceLib", "\020GetSharedLibrary");
-	fprintf(stderr, "[CFM] GetSharedLibrary TVECT = 0x%08x\n", gsl_tvect);
-	if (gsl_tvect == 0) {
-		fprintf(stderr, "FATAL: Can't find GetSharedLibrary()\n");
-		return;
-	}
+	if (gsl_tvect == 0) { fprintf(stderr, "FATAL: Can't find GetSharedLibrary()\n"); return; }
 
 	fs_tvect = FindLibSymbol("\014InterfaceLib", "\012FindSymbol");
-	fprintf(stderr, "[CFM] FindSymbol TVECT = 0x%08x\n", fs_tvect);
-	if (fs_tvect == 0) {
-		fprintf(stderr, "FATAL: Can't find FindSymbol()\n");
-		return;
-	}
+	if (fs_tvect == 0) { fprintf(stderr, "FATAL: Can't find FindSymbol()\n"); return; }
 
 	nps_tvect = FindLibSymbol("\014InterfaceLib", "\011NewPtrSys");
-	fprintf(stderr, "[CFM] NewPtrSys TVECT = 0x%08x\n", nps_tvect);
-	if (nps_tvect == 0) {
-		fprintf(stderr, "FATAL: Can't find NewPtrSys()\n");
-		return;
-	}
+	if (nps_tvect == 0) { fprintf(stderr, "FATAL: Can't find NewPtrSys()\n"); return; }
 
 	d_tvect = FindLibSymbol("\014InterfaceLib", "\012DisposePtr");
-	fprintf(stderr, "[CFM] DisposePtr TVECT = 0x%08x\n", d_tvect);
-	if (d_tvect == 0) {
-		fprintf(stderr, "FATAL: Can't find DisposePtr()\n");
-		return;
-	}
-	fprintf(stderr, "[CFM] InitCallUniversalProc: all symbols found OK\n");
+	if (d_tvect == 0) { fprintf(stderr, "FATAL: Can't find DisposePtr()\n"); return; }
 }
 
 

@@ -546,13 +546,6 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             if (encoded.data.size() > 0) {
                 send_encoded_frame(encoded);
                 frames_since_stats++;
-
-                static int encoded_count = 0;
-                encoded_count++;
-                if (encoded_count <= 10) {
-                    fprintf(stderr, "[VideoEncoder] Encoded frame #%d: %zu bytes, keyframe=%d, took %ld ms\n",
-                            encoded_count, encoded.data.size(), encoded.is_keyframe, last_encode_ms);
-                }
             } else {
                 fprintf(stderr, "[VideoEncoder] WARNING: Encoding produced empty frame\n");
             }
@@ -564,20 +557,6 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             now - last_stats_time).count();
 
         if (stats_elapsed >= 3) {
-            double fps = frames_since_stats / (double)stats_elapsed;
-            uint64_t total_encoded = g_frames_encoded.load(std::memory_order_relaxed);
-            uint64_t total_dropped = g_frames_dropped.load(std::memory_order_relaxed);
-
-            if (is_dc_codec && (dirty_rect_frames > 0 || skipped_frames > 0)) {
-                [[maybe_unused]] float saved_pct = total_full_bytes > 0 ?
-                    100.0f * (1.0f - (float)total_dirty_bytes / (float)total_full_bytes) : 0;
-                fprintf(stderr, "[VideoEncoder] Stats: %.1f FPS | dirty: rects=%d full=%d skip=%d | encode: %ld ms\n",
-                        fps, dirty_rect_frames, full_frames, skipped_frames, last_encode_ms);
-            } else {
-                fprintf(stderr, "[VideoEncoder] Stats: %.1f FPS, %llu encoded, %llu dropped, encode: %ld ms\n",
-                        fps, (unsigned long long)total_encoded, (unsigned long long)total_dropped, last_encode_ms);
-            }
-
             last_stats_time = now;
             frames_since_stats = 0;
             dirty_rect_frames = 0;

@@ -50,8 +50,9 @@ void http_server_main(const config::EmulatorConfig* config,
 
     // Request handler lambda - routes to API or static files
     auto request_handler = [&](const http::Request& req) -> http::Response {
-        // Log non-polling requests only (skip high-frequency GET /api/status, /api/frame)
-        if (req.method != "GET" || (req.path != "/api/status" && req.path != "/api/frame")) {
+        // Log non-polling, non-spammy requests only
+        if (req.path != "/api/status" && req.path != "/api/frame" &&
+            req.path != "/api/log" && req.path != "/api/mouse") {
             fprintf(stderr, "[HTTP] %s %s\n", req.method.c_str(), req.path.c_str());
         }
 
