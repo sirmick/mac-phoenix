@@ -130,6 +130,11 @@ bool PPCSubprocess::start()
         return false;
     }
 
+    // Clear stale SHM/eventfd from any previous session so the encoder
+    // thread sees nullptr and resets its reconnect state (ipc_was_connected,
+    // ipc_last_frame_count) before we publish the new child's SHM.
+    clear_ipc_shm();
+
     auto args = build_child_args();
     if (args.empty()) {
         return false;
@@ -213,6 +218,11 @@ bool PPCSubprocess::start()
                     fprintf(stderr, "[PPCSubprocess] Child exited with code %d\n", code);
                 }
             }
+            // Clear atomic SHM/eventfd so the encoder thread stops
+            // dereferencing the dead child's SHM and falls back to
+            // the VideoOutput path. This also resets ipc_was_connected
+            // so the next start() triggers proper reconnect detection.
+            clear_ipc_shm();
             child_pid_ = -1;
         }
     });
