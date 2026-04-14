@@ -53,7 +53,7 @@ static char g_last_app_name[64] = {0};
 static struct timespec g_boot_start_time = {0, 0};
 static int g_dialogs_dismissed = 0;
 static double g_desktop_ready_time = 0.0;
-#define MAX_DIALOG_DISMISSALS 3       /* OS 9 disk check dialog is async — cap prevents spam */
+static double g_finder_ready_time = 0.0;
 #define DIALOG_DISMISS_COOLDOWN 1.0   /* min seconds between dismissals */
 static double g_last_dialog_dismiss_time = 0.0;
 
@@ -228,20 +228,101 @@ static bool is_important_emulop(uint16_t opcode)
  *   +144: nextWindow (WindowPeek)
  */
 
+/*
+ * Validate a Mac-space pointer lies within RAM and leaves room for `size`
+ * bytes. Rejects low I/O (< 0x400), ROM (>= 0x02000000), and oversize reads.
+ */
+static inline bool mac_ptr_valid(uint32_t ptr, uint32_t size)
+{
+	if (ptr < 0x400) return false;
+	if (ptr >= RAMSize) return false;
+	if (size > RAMSize - ptr) return false;
+	return true;
+}
+
+/*
+ * Safely read a Pascal string from Mac RAM into a C buffer.
+ * Returns length copied (0 if invalid / empty). Always zero-terminates.
+ * Clamps to min(31, bufsize-1) — Pascal strings can't exceed 255 but Mac
+ * window/menu titles are capped at 31 per Inside Macintosh.
+ */
+static int safe_read_pstring(uint32_t ptr, char *buf, int bufsize)
+{
+	if (bufsize < 1) return 0;
+	buf[0] = '\0';
+	if (!mac_ptr_valid(ptr, 1)) return 0;
+	uint8_t tlen = ReadMacInt8(ptr);
+	if (tlen == 0) return 0;
+	int cap = bufsize - 1;
+	if (cap > 31) cap = 31;
+	if (tlen > cap) tlen = cap;
+	if (!mac_ptr_valid(ptr, 1 + tlen)) return 0;
+	for (int i = 0; i < tlen; i++)
+		buf[i] = static_cast<char>(ReadMacInt8(ptr + 1 + i));
+	buf[tlen] = '\0';
+	return tlen;
+}
+
 /* Read a window's title into buf. Returns length, 0 if none. */
 static int read_window_title(uint32_t wp, char *buf, int bufsize)
 {
-	buf[0] = '\0';
+	if (bufsize > 0) buf[0] = '\0';
+	if (!mac_ptr_valid(wp, 138)) return 0;
 	uint32_t title_handle = ReadMacInt32(wp + 134);
-	if (!title_handle) return 0;
+	if (!mac_ptr_valid(title_handle, 4)) return 0;
 	uint32_t title_ptr = ReadMacInt32(title_handle);
-	if (!title_ptr || title_ptr >= 0x02000000) return 0;
-	uint8_t tlen = ReadMacInt8(title_ptr);
-	if (tlen == 0 || tlen >= bufsize) return 0;
-	for (int i = 0; i < tlen; i++)
-		buf[i] = static_cast<char>(ReadMacInt8(title_ptr + 1 + i));
-	buf[tlen] = '\0';
-	return tlen;
+	return safe_read_pstring(title_ptr, buf, bufsize);
+}
+
+/*
+ * Snapshot of the front window's dialog-relevant fields. Taking a snapshot
+ * once per call reduces re-reads during a traversal (the CPU thread can
+ * mutate the WindowRecord between reads). Returns false if the front
+ * window is missing/invalid.
+ */
+struct FrontWindowInfo {
+	uint32_t wp;
+	int16_t kind;
+	bool visible;
+	char title[64];
+};
+
+static bool snapshot_front_window(FrontWindowInfo *out)
+{
+	out->wp = 0;
+	out->kind = 0;
+	out->visible = false;
+	out->title[0] = '\0';
+	uint32_t wp = ReadMacInt32(0x09D6);  /* WindowList — front window first */
+	if (!mac_ptr_valid(wp, 138)) return false;
+	out->wp = wp;
+	out->kind = static_cast<int16_t>(ReadMacInt16(wp + 108));
+	out->visible = ReadMacInt8(wp + 110) != 0;
+	read_window_title(wp, out->title, sizeof(out->title));
+	return true;
+}
+
+/* True if a visible modal dialog (windowKind == 2, dialogKind) is front-most. */
+static bool front_is_modal_dialog(void)
+{
+	FrontWindowInfo info;
+	if (!snapshot_front_window(&info)) return false;
+	return info.kind == 2 && info.visible;
+}
+
+/*
+ * Promote PHASE_FINDER_LAUNCH → PHASE_DESKTOP when Finder's event loop is
+ * idle and no modal dialog is on screen. Used by IDLE_TIME handlers on both
+ * m68k and PPC paths — replaces the silent promotion that previously only
+ * happened inside serialize_mac_state (window heuristic, 500 ms cadence).
+ */
+static void try_promote_to_desktop(void)
+{
+	if (g_current_phase != PHASE_FINDER_LAUNCH) return;
+	if (front_is_modal_dialog()) return;
+	g_desktop_ready_time = elapsed_sec();
+	set_phase(PHASE_DESKTOP);
+	milestone("Desktop ready (Finder idle, no modal)");
 }
 
 /*
@@ -271,26 +352,27 @@ static void check_shutdown_dialog(void)
 {
 	if (!config::EmulatorConfig::instance().dismiss_shutdown_dialog) return;
 	if (g_current_phase < PHASE_WARM_START) return;
-	if (g_current_phase >= PHASE_DESKTOP) return;
-	if (g_dialogs_dismissed >= MAX_DIALOG_DISMISSALS) return;
+
+	/* Phase gate: active from warm start through a short settle after desktop
+	 * is reached. The old hard cap (MAX_DIALOG_DISMISSALS=3) + 1s cooldown +
+	 * 4s settle could leave a dialog un-dismissed; rely on cooldown + phase
+	 * gate instead. A dialog that appears well after desktop is considered
+	 * user-facing and must not be dismissed. */
+	if (g_current_phase >= PHASE_DESKTOP) {
+		if (g_desktop_ready_time > 0.0 &&
+		    elapsed_sec() - g_desktop_ready_time > 3.0) return;
+	}
 
 	double now = elapsed_sec();
 	if (now - g_last_dialog_dismiss_time < DIALOG_DISMISS_COOLDOWN) return;
 
-	uint32_t wp = ReadMacInt32(0x09D6);  /* WindowList — front window first */
-	if (!wp || wp >= RAMSize) return;
+	FrontWindowInfo info;
+	if (!snapshot_front_window(&info)) return;
+	if (info.kind != 2 || !info.visible) return;
 
-	int16_t wKind = static_cast<int16_t>(ReadMacInt16(wp + 108));
-	if (wKind != 2) return;  /* not a dialog */
-	if (!ReadMacInt8(wp + 110)) return;  /* not visible */
-
-	char title[64];
-	read_window_title(wp, title, sizeof(title));
-
-	/* Only dismiss if the title is in our whitelist */
 	bool matched = false;
 	for (int i = 0; BOOT_DIALOG_WHITELIST[i] != NULL; i++) {
-		if (strcmp(title, BOOT_DIALOG_WHITELIST[i]) == 0) {
+		if (strcmp(info.title, BOOT_DIALOG_WHITELIST[i]) == 0) {
 			matched = true;
 			break;
 		}
@@ -299,7 +381,7 @@ static void check_shutdown_dialog(void)
 
 	g_dialogs_dismissed++;
 	g_last_dialog_dismiss_time = now;
-	milestonef("Boot dialog auto-dismissed (title='%s', #%d)", title, g_dialogs_dismissed);
+	milestonef("Boot dialog auto-dismissed (title='%s', #%d)", info.title, g_dialogs_dismissed);
 
 	ADBKeyDown(0x24);  /* Return key = Mac keycode 0x24 = 36 */
 	ADBKeyUp(0x24);
@@ -322,23 +404,21 @@ static void maybe_fire_auto_launch(void)
 	const std::string& path = config::EmulatorConfig::instance().auto_launch_app;
 	if (path.empty()) return;
 
-	/* Don't dispatch until Finder is *really* idle.
-	 *
-	 * PHASE_DESKTOP fires at the first Finder IDLE_TIME (~0.3s after boot),
-	 * but Mac OS then throws up the improper-shutdown / disk-check dialog
-	 * around +1.5-2s. Dispatching _Launch in that window wedges the Process
-	 * Manager (we've seen it trigger an illegal instruction loop).
-	 *
-	 * Two-part gate:
-	 *   1. At least DESKTOP_SETTLE_SEC must have elapsed since PHASE_DESKTOP
-	 *      was reached. This lets any boot-time dialogs appear and be
-	 *      auto-dismissed before we poke the Process Manager.
+	/* Don't dispatch until Finder is *really* idle. Three gates replace the
+	 * old fixed 4s DESKTOP_SETTLE_SEC, closing the "4th dialog at +3.5s"
+	 * race:
+	 *   1. PHASE_DESKTOP held for >= 2s (brief settle after idle).
+	 *   2. No modal dialog currently front-most.
+	 *   3. No dismiss fired in the last 1s (lets a just-sent Return key be
+	 *      processed before we poke the Process Manager).
 	 */
-	static const double DESKTOP_SETTLE_SEC = 4.0;
+	static const double DESKTOP_SETTLE_SEC = 2.0;
 
 	double now = elapsed_sec();
 	if (g_desktop_ready_time == 0.0) return;  /* shouldn't happen — caller gates on PHASE_DESKTOP */
 	if (now - g_desktop_ready_time < DESKTOP_SETTLE_SEC) return;
+	if (front_is_modal_dialog()) return;
+	if (now - g_last_dialog_dismiss_time < 1.0) return;
 
 	/* Write bridge command file if bridge is enabled */
 	const auto& cfg = config::EmulatorConfig::instance();
@@ -503,6 +583,7 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 
 		case M68K_EMUL_OP_IDLE_TIME:
 			check_shutdown_dialog();
+			try_promote_to_desktop();
 			if (g_current_phase >= PHASE_DESKTOP) {
 				maybe_fire_auto_launch();
 			}
@@ -600,6 +681,7 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 
 		case BOOT_EVENT_IDLE_TIME:
 			check_shutdown_dialog();
+			try_promote_to_desktop();
 			if (g_current_phase >= PHASE_DESKTOP) {
 				maybe_fire_auto_launch();
 			}
@@ -748,18 +830,7 @@ static void serialize_mac_state(char *buf, int bufsize)
 
 		/* Read title */
 		char title[64] = "";
-		uint32_t th = ReadMacInt32(wp + 134);
-		if (th) {
-			uint32_t tp = ReadMacInt32(th);
-			if (tp && tp < 0x02000000) {
-				uint8_t tlen = ReadMacInt8(tp);
-				if (tlen > 0 && tlen < sizeof(title)) {
-					for (int i = 0; i < tlen; i++)
-						title[i] = static_cast<char>(ReadMacInt8(tp + 1 + i));
-					title[tlen] = '\0';
-				}
-			}
-		}
+		read_window_title(wp, title, sizeof(title));
 
 		int16_t kind = static_cast<int16_t>(ReadMacInt16(wp + 108));
 		bool visible = ReadMacInt8(wp + 110) != 0;
@@ -797,15 +868,22 @@ static void serialize_mac_state(char *buf, int bufsize)
 
 	pos += snprintf(buf + pos, bufsize - pos, "]}");
 
-	/* Advance to Finder/desktop phase if characteristic window found.
-	 * This replaces the old CurApName + IDLE_TIME detection — seeing these
-	 * windows means Finder is already interactive. */
+	/* Advance phase when the characteristic Finder windows appear.
+	 *
+	 *   - First sighting → PHASE_FINDER_LAUNCH (logged).
+	 *   - Subsequent sightings with no front modal → PHASE_DESKTOP (logged).
+	 *
+	 * Desktop promotion is the same rule as try_promote_to_desktop(), kept
+	 * here as a fallback when IDLE_TIME doesn't fire (e.g. System 6, ROMs
+	 * without IDLE_TIME hooks). Either path will advance — never silently. */
 	if (found_finder && !g_seen_finder) {
 		g_seen_finder = true;
-		milestonef("Finder detected (window heuristic)");
+		g_finder_ready_time = elapsed_sec();
+		milestone("Finder detected (window heuristic)");
 		set_phase(PHASE_FINDER_LAUNCH);
-		set_phase(PHASE_DESKTOP);
-		g_desktop_ready_time = elapsed_sec();
+	}
+	if (g_current_phase == PHASE_FINDER_LAUNCH && found_finder) {
+		try_promote_to_desktop();
 	}
 }
 
@@ -815,7 +893,8 @@ static void serialize_mac_state(char *buf, int bufsize)
 void boot_progress_set_phase_finder(void) {
 	if (!g_seen_finder) {
 		g_seen_finder = true;
-		milestonef("Finder detected (CurApName PPC fallback)");
+		g_finder_ready_time = elapsed_sec();
+		milestone("Finder detected (CurApName PPC fallback)");
 		set_phase(PHASE_FINDER_LAUNCH);
 	}
 }
