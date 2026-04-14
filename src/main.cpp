@@ -721,6 +721,13 @@ int main(int argc, char **argv)
 				g_platform.video_refresh = video_screenshot_refresh;
 			}
 
+			// Install audio driver — Sound Manager needs audio_component_flags
+			// and AudioStatus set up before the component is registered at boot.
+			// In headless mode there's no IPC/WebRTC, but the audio thread
+			// handles this gracefully (skips frames when g_ipc_shm is null).
+			g_platform.audio_init = []() { audio_direct_init(); };
+			g_platform.audio_exit = []() { audio_direct_exit(); };
+
 			// Copy platform into CPUContext
 			Platform* platform = g_cpu_ctx.get_platform();
 			*platform = g_platform;

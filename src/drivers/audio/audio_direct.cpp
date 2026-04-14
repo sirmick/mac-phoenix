@@ -287,11 +287,19 @@ void audio_request_data(uint32_t requested_samples)
 
 static void audio_thread_func()
 {
-	fprintf(stderr, "[AudioDirect] Audio thread started (PULL model)\n");
+	const bool headless = (g_ipc_shm == nullptr);
+
+	fprintf(stderr, "[AudioDirect] Audio thread started (%s)\n",
+	        headless ? "headless — self-paced drain" : "PULL model");
 
 	while (audio_thread_running) {
-		// Wait for request from parent
-		{
+		if (headless) {
+			// Self-pace at 50 Hz (20 ms per frame) to drain the Apple Mixer.
+			// Without this, queued bufferCmds are never consumed and the
+			// Sound Manager pipeline stalls.
+			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		} else {
+			// Wait for request from parent (IPC_INPUT_AUDIO_REQUEST)
 			std::unique_lock<std::mutex> lock(audio_request_mutex);
 			audio_request_cv.wait(lock, []{
 				return audio_request_pending || !audio_thread_running;
@@ -299,8 +307,6 @@ static void audio_thread_func()
 			if (!audio_thread_running) break;
 			audio_request_pending = false;
 		}
-
-		if (!g_ipc_shm) continue;
 
 		if (AudioStatus.num_sources > 0) {
 			uint32_t sample_rate = AudioStatus.sample_rate >> 16;
@@ -311,19 +317,17 @@ static void audio_thread_func()
 			TriggerInterrupt();
 
 			// Wait for AudioInterrupt() to complete
+			bool got_irq;
 			{
 				std::unique_lock<std::mutex> lock(audio_irq_mutex);
 				auto timeout = std::chrono::milliseconds(10);
 				audio_irq_done_cv.wait_for(lock, timeout, []{ return audio_irq_done; });
-				if (!audio_irq_done) {
-					// Timeout - send silence
-					goto send_silence;
-				}
+				got_irq = audio_irq_done;
 				audio_irq_done = false;
 			}
 
 			// Read audio data from Mac memory and write to IPC SHM
-			if (audio_data) {
+			if (got_irq && audio_data && g_ipc_shm) {
 				uint32 apple_stream_info = ReadMacInt32(audio_data + adatStreamInfo);
 
 				if (apple_stream_info) {
@@ -392,28 +396,27 @@ static void audio_thread_func()
 				}
 			}
 
-send_silence:
-			// No data from Mac — send silence frame
-			{
+			// No data from Mac (or no IPC) — send silence frame if IPC available
+			if (g_ipc_shm) {
 				uint32_t write_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_write_idx);
 				uint32_t read_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_read_idx);
 				uint32_t next_write = (write_idx + 1) % IPC_AUDIO_FRAME_RING_SIZE;
 
 				if (next_write != read_idx) {
 					IPCAudioFrame* frame = &g_ipc_shm->audio_frames[write_idx];
-					uint32_t sample_rate = AudioStatus.sample_rate >> 16;
-					if (sample_rate == 0) sample_rate = 44100;
+					uint32_t sr = AudioStatus.sample_rate >> 16;
+					if (sr == 0) sr = 44100;
 
-					frame->sample_rate = sample_rate;
+					frame->sample_rate = sr;
 					frame->channels = AudioStatus.channels;
-					frame->samples = (sample_rate * 20) / 1000;
+					frame->samples = (sr * 20) / 1000;
 					frame->format = 1;
 					memset(frame->data, 0, frame->samples * 2 * frame->channels);
 
 					IPC_ATOMIC_STORE(g_ipc_shm->audio_write_idx, next_write);
 				}
 			}
-		} else {
+		} else if (g_ipc_shm) {
 			// No audio component sources. If the classic Sound Manager hook
 			// (SoundMgr_SysBeep) has queued PCM, drain one 20 ms frame out of
 			// the queue; otherwise emit silence.

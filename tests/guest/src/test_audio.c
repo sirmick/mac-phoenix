@@ -1,11 +1,13 @@
 /*
  * test_audio.c - Sound Manager tests
  *
- * Tests: open channel, play a short buffer, close channel.
- * Verifies the Sound Manager driver is functional.
+ * Tests: open channel, play a short buffer, verify playback completes,
+ * close channel.  Verifies the Sound Manager driver is functional and
+ * that the audio pipeline actually drains queued buffers.
  */
 #include <Sound.h>
 #include <Memory.h>
+#include <Timer.h>
 #include <string.h>
 
 #include "test_report.h"
@@ -13,6 +15,16 @@
 /* 1kHz square wave, 22kHz sample rate, 256 samples (~12ms) */
 #define SAMPLE_RATE rate22khz
 #define NUM_SAMPLES 256
+
+/* Callback flag — set by callBackCmd when the buffer finishes playing */
+static volatile long gCallbackFired = 0;
+
+static pascal void sound_callback(SndChannelPtr chan, SndCommand *cmd)
+{
+    (void)chan;
+    (void)cmd;
+    gCallbackFired = 1;
+}
 
 void test_audio(void)
 {
@@ -23,8 +35,9 @@ void test_audio(void)
     unsigned char *samples;
     int i;
 
-    /* Allocate channel */
-    err = SndNewChannel(&chan, sampledSynth, initMono, NULL);
+    /* Allocate channel with callback */
+    err = SndNewChannel(&chan, sampledSynth, initMono,
+                        NewSndCallBackUPP(sound_callback));
     if (err != noErr) {
         report_skip("audio_open_channel", "Sound Manager not available");
         return;
@@ -58,15 +71,36 @@ void test_audio(void)
     err = SndDoCommand(chan, &cmd, false);
     if (err != noErr) {
         report_fail("audio_play_buffer", err);
-    } else {
-        report_pass("audio_play_buffer");
+        DisposePtr((Ptr)samples);
+        SndDisposeChannel(chan, true);
+        return;
     }
+    report_pass("audio_play_buffer");
 
-    /* Quiet flush */
-    cmd.cmd = quietCmd;
+    /* Queue a callBackCmd — fires after the buffer finishes playing.
+     * If the audio pipeline is actually draining buffers, this callback
+     * will fire within a few hundred ms. If the pipeline is a stub that
+     * never calls AudioInterrupt, the callback never fires. */
+    gCallbackFired = 0;
+    cmd.cmd = callBackCmd;
     cmd.param1 = 0;
     cmd.param2 = 0;
-    SndDoCommand(chan, &cmd, false);
+    err = SndDoCommand(chan, &cmd, false);
+    if (err != noErr) {
+        report_fail("audio_drain_callback", err);
+    } else {
+        /* Wait up to 2 seconds for the callback to fire */
+        unsigned long deadline = *(unsigned long *)0x016A + 120;  /* Ticks + 2s */
+        while (!gCallbackFired && *(unsigned long *)0x016A < deadline) {
+            /* spin — jGNEFilter and interrupts still run */
+        }
+
+        if (gCallbackFired) {
+            report_pass("audio_drain_callback");
+        } else {
+            report_fail("audio_drain_callback", -1);
+        }
+    }
 
     SndDisposeChannel(chan, true);
     DisposePtr((Ptr)samples);
