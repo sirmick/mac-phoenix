@@ -60,7 +60,7 @@ src/
     emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, CMD_DISPATCH)
     command_bridge.cpp              — Command bridge: reads, mailbox, jGNEFilter, SHM drain
     command_bridge.h                — Command/Result structs, CommandBridge class
-    ppc_subprocess.h                — PPC subprocess management (IPC via SHM+socket)
+    emulator_subprocess.h           — Subprocess management for m68k and PPC (IPC via SHM+socket)
     adb.cpp                         — ADB mouse/keyboard emulation
     cpu_context.cpp                 — Memory allocation, backend init
   cpu/

@@ -4,7 +4,7 @@ core_sources = [
   'audio.cpp',
   'cdrom.cpp',
   'cpu_context.cpp',  # Phase 2: Self-contained CPU context
-  'ppc_subprocess.cpp',  # Subprocess management (IPC mode, both m68k and PPC)
+  'emulator_subprocess.cpp',  # Subprocess management (IPC mode, both m68k and PPC)
   'disk.cpp',
   'boot_progress.cpp',
   'command_bridge.cpp',

@@ -99,7 +99,7 @@ static void reserve_mac_address_space_early()
 #include "config/emulator_config.h"
 #include "drivers/ether/ether_socket.h"
 #include "core/cpu_context.h"
-#include "core/ppc_subprocess.h"
+#include "core/emulator_subprocess.h"
 #include "core/boot_progress.h"
 #include "ipc/ipc_protocol.h"
 #include "drivers/video/video_webrtc.h"
@@ -156,7 +156,7 @@ namespace cpu_state {
 }
 
 // Global subprocess pointer for SIGTERM cleanup
-static PPCSubprocess* g_subprocess = nullptr;
+static EmulatorSubprocess* g_subprocess = nullptr;
 
 // Global IPC client pointer (for webrtc_server.cpp input forwarding)
 IPCClient* g_ipc_client = nullptr;
@@ -618,7 +618,7 @@ int main(int argc, char **argv)
 		video::g_video_output = video_output_owner.get();
 
 		// Create subprocess manager (works for both m68k and PPC)
-		auto subprocess_owner = std::make_unique<PPCSubprocess>(&emu_config);
+		auto subprocess_owner = std::make_unique<EmulatorSubprocess>(&emu_config);
 		subprocess_owner->set_ipc_shm_atoms(&video::g_ipc_shm, &video::g_ipc_eventfd);
 		g_subprocess = subprocess_owner.get();
 		g_ipc_client = subprocess_owner->ipc_client();

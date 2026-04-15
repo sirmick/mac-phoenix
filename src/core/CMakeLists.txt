@@ -5,7 +5,7 @@ add_library(core STATIC
   audio.cpp
   cdrom.cpp
   cpu_context.cpp
-  ppc_subprocess.cpp
+  emulator_subprocess.cpp
   disk.cpp
   boot_progress.cpp
   command_bridge.cpp

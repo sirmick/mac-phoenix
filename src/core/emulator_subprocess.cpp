@@ -1,12 +1,12 @@
 /*
- * ppc_subprocess.cpp - PPC subprocess management for webserver mode
+ * emulator_subprocess.cpp - Emulator subprocess management for webserver mode
  *
  * Parent execs `mac-phoenix --ipc` as a child subprocess, connects
  * via SHM + Unix socket. Video frames are read directly from IPC SHM
  * by the encoder thread (zero-copy — no relay thread needed).
  */
 
-#include "ppc_subprocess.h"
+#include "emulator_subprocess.h"
 #include "../ipc/ipc_protocol.h"
 
 #include <cstdio>
@@ -17,23 +17,23 @@
 #include <signal.h>
 #include <sys/wait.h>
 
-PPCSubprocess::PPCSubprocess(config::EmulatorConfig* config)
+EmulatorSubprocess::EmulatorSubprocess(config::EmulatorConfig* config)
     : config_(config)
 {
 }
 
-PPCSubprocess::~PPCSubprocess()
+EmulatorSubprocess::~EmulatorSubprocess()
 {
     stop();
 }
 
-std::vector<std::string> PPCSubprocess::build_child_args()
+std::vector<std::string> EmulatorSubprocess::build_child_args()
 {
     // Get path to our own binary
     char exe_path[4096];
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     if (len <= 0) {
-        fprintf(stderr, "[PPCSubprocess] Failed to read /proc/self/exe\n");
+        fprintf(stderr, "[EmulatorSubprocess] Failed to read /proc/self/exe\n");
         return {};
     }
     exe_path[len] = '\0';
@@ -123,10 +123,10 @@ std::vector<std::string> PPCSubprocess::build_child_args()
     return args;
 }
 
-bool PPCSubprocess::start()
+bool EmulatorSubprocess::start()
 {
     if (child_pid_ > 0) {
-        fprintf(stderr, "[PPCSubprocess] Already running (pid %d)\n", child_pid_);
+        fprintf(stderr, "[EmulatorSubprocess] Already running (pid %d)\n", child_pid_);
         return false;
     }
 
@@ -140,13 +140,13 @@ bool PPCSubprocess::start()
         return false;
     }
 
-    fprintf(stderr, "[PPCSubprocess] Launching:");
+    fprintf(stderr, "[EmulatorSubprocess] Launching:");
     for (const auto& a : args) fprintf(stderr, " %s", a.c_str());
     fprintf(stderr, "\n");
 
     pid_t pid = fork();
     if (pid < 0) {
-        perror("[PPCSubprocess] fork failed");
+        perror("[EmulatorSubprocess] fork failed");
         return false;
     }
 
@@ -160,13 +160,13 @@ bool PPCSubprocess::start()
 
         execv(argv[0], argv.data());
         // If exec fails
-        perror("[PPCSubprocess] execv failed");
+        perror("[EmulatorSubprocess] execv failed");
         _exit(1);
     }
 
     // Parent
     child_pid_ = pid;
-    fprintf(stderr, "[PPCSubprocess] Child started (pid %d)\n", child_pid_);
+    fprintf(stderr, "[EmulatorSubprocess] Child started (pid %d)\n", child_pid_);
 
     // Poll for SHM to appear (child creates it during init)
     bool connected = false;
@@ -177,7 +177,7 @@ bool PPCSubprocess::start()
         int status;
         pid_t result = waitpid(child_pid_, &status, WNOHANG);
         if (result > 0) {
-            fprintf(stderr, "[PPCSubprocess] Child exited before connection (status %d)\n",
+            fprintf(stderr, "[EmulatorSubprocess] Child exited before connection (status %d)\n",
                     WIFEXITED(status) ? WEXITSTATUS(status) : -1);
             child_pid_ = -1;
             return false;
@@ -190,14 +190,14 @@ bool PPCSubprocess::start()
     }
 
     if (!connected) {
-        fprintf(stderr, "[PPCSubprocess] Failed to connect to child after 10s\n");
+        fprintf(stderr, "[EmulatorSubprocess] Failed to connect to child after 10s\n");
         kill(child_pid_, SIGKILL);
         waitpid(child_pid_, nullptr, 0);
         child_pid_ = -1;
         return false;
     }
 
-    fprintf(stderr, "[PPCSubprocess] Connected to child IPC\n");
+    fprintf(stderr, "[EmulatorSubprocess] Connected to child IPC\n");
 
     // Start monitor thread
     if (monitor_thread_.joinable()) {
@@ -210,12 +210,12 @@ bool PPCSubprocess::start()
             if (WIFSIGNALED(status)) {
                 int sig = WTERMSIG(status);
                 if (sig != SIGKILL && sig != SIGTERM) {
-                    fprintf(stderr, "[PPCSubprocess] Child killed by signal %d\n", sig);
+                    fprintf(stderr, "[EmulatorSubprocess] Child killed by signal %d\n", sig);
                 }
             } else if (WIFEXITED(status)) {
                 int code = WEXITSTATUS(status);
                 if (code != 0) {
-                    fprintf(stderr, "[PPCSubprocess] Child exited with code %d\n", code);
+                    fprintf(stderr, "[EmulatorSubprocess] Child exited with code %d\n", code);
                 }
             }
             // Clear atomic SHM/eventfd so the encoder thread stops
@@ -233,7 +233,7 @@ bool PPCSubprocess::start()
     return true;
 }
 
-bool PPCSubprocess::stop()
+bool EmulatorSubprocess::stop()
 {
     pid_t pid = child_pid_;
     if (pid <= 0) {
@@ -244,7 +244,7 @@ bool PPCSubprocess::stop()
         return true;
     }
 
-    fprintf(stderr, "[PPCSubprocess] Stopping child (pid %d)\n", pid);
+    fprintf(stderr, "[EmulatorSubprocess] Stopping child (pid %d)\n", pid);
 
     // Clear the atomic first so readers that see it go straight to the
     // nullptr fallback path without racing for the lock. Existing readers
@@ -267,7 +267,7 @@ bool PPCSubprocess::stop()
             if (monitor_thread_.joinable()) {
                 monitor_thread_.join();
             }
-            fprintf(stderr, "[PPCSubprocess] Child stopped gracefully\n");
+            fprintf(stderr, "[EmulatorSubprocess] Child stopped gracefully\n");
             return true;
         }
         if (result < 0) {
@@ -276,7 +276,7 @@ bool PPCSubprocess::stop()
             if (monitor_thread_.joinable()) {
                 monitor_thread_.join();
             }
-            fprintf(stderr, "[PPCSubprocess] Child already exited\n");
+            fprintf(stderr, "[EmulatorSubprocess] Child already exited\n");
             return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -291,17 +291,17 @@ bool PPCSubprocess::stop()
         monitor_thread_.join();
     }
 
-    fprintf(stderr, "[PPCSubprocess] Child killed\n");
+    fprintf(stderr, "[EmulatorSubprocess] Child killed\n");
     return true;
 }
 
-bool PPCSubprocess::reset()
+bool EmulatorSubprocess::reset()
 {
     stop();
     return start();
 }
 
-bool PPCSubprocess::is_running() const
+bool EmulatorSubprocess::is_running() const
 {
     if (child_pid_ <= 0) return false;
     if (!ipc_client_.is_connected()) return false;
@@ -309,13 +309,13 @@ bool PPCSubprocess::is_running() const
     return buf && buf->state == IPC_STATE_RUNNING;
 }
 
-void PPCSubprocess::set_ipc_shm_atoms(std::atomic<IPCBuffer*>* shm, std::atomic<int>* eventfd)
+void EmulatorSubprocess::set_ipc_shm_atoms(std::atomic<IPCBuffer*>* shm, std::atomic<int>* eventfd)
 {
     ipc_shm_atom_ = shm;
     ipc_eventfd_atom_ = eventfd;
 }
 
-void PPCSubprocess::publish_ipc_shm()
+void EmulatorSubprocess::publish_ipc_shm()
 {
     if (ipc_shm_atom_) {
         ipc_shm_atom_->store(ipc_client_.shm(), std::memory_order_release);
@@ -323,11 +323,11 @@ void PPCSubprocess::publish_ipc_shm()
     if (ipc_eventfd_atom_) {
         ipc_eventfd_atom_->store(ipc_client_.frame_eventfd(), std::memory_order_release);
     }
-    fprintf(stderr, "[PPCSubprocess] Published IPC SHM to encoder (shm=%p, eventfd=%d)\n",
+    fprintf(stderr, "[EmulatorSubprocess] Published IPC SHM to encoder (shm=%p, eventfd=%d)\n",
             (void*)ipc_client_.shm(), ipc_client_.frame_eventfd());
 }
 
-void PPCSubprocess::clear_ipc_shm()
+void EmulatorSubprocess::clear_ipc_shm()
 {
     if (ipc_shm_atom_) {
         ipc_shm_atom_->store(nullptr, std::memory_order_release);

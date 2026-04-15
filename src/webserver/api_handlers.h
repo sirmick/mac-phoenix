@@ -17,7 +17,7 @@
 #include <atomic>
 
 class VideoOutput;     // Forward declaration
-class PPCSubprocess;   // Forward declaration
+class EmulatorSubprocess;   // Forward declaration
 
 namespace http {
 
@@ -36,7 +36,7 @@ struct APIContext {
     VideoOutput* video_output = nullptr;
 
     // Subprocess (both m68k and PPC webserver mode)
-    PPCSubprocess* subprocess = nullptr;
+    EmulatorSubprocess* subprocess = nullptr;
 
     // Legacy in-process CPU state (kept for headless compatibility)
     std::atomic<bool>* cpu_running = nullptr;

@@ -9,7 +9,7 @@
 #include "../config/json_utils.h"
 #include "../common/include/sysdeps.h"  // For uint32 type
 #include "../core/emulator_init.h"  // For deferred initialization
-#include "../core/ppc_subprocess.h"  // For subprocess
+#include "../core/emulator_subprocess.h"  // For subprocess
 #include "../ipc/ipc_client.h"    // For g_ipc_shm_mutex
 #include "../ipc/ipc_protocol.h"  // For IPC buffer
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
@@ -1207,7 +1207,7 @@ Response APIRouter::handle_launch(const Request& req) {
     }
     std::string path = j["path"].get<std::string>();
 
-    // Write command file to bridge dir — the BridgeINIT reads it via ExtFS
+    // Write command file to bridge dir — the guest agent reads it via ExtFS
     auto& cfg = config::EmulatorConfig::instance();
     if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");

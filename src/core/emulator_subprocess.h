@@ -1,13 +1,13 @@
 /*
- * ppc_subprocess.h - PPC subprocess management for webserver mode
+ * emulator_subprocess.h - Emulator subprocess management for webserver mode
  *
- * PPC subprocess management. Parent execs `mac-phoenix --ipc` as a
+ * Subprocess management (m68k and PPC). Parent execs `mac-phoenix --ipc` as a
  * child process, connects via SHM+socket. Video frames are read
  * directly from IPC SHM by the encoder thread (zero-copy).
  */
 
-#ifndef PPC_SUBPROCESS_H
-#define PPC_SUBPROCESS_H
+#ifndef EMULATOR_SUBPROCESS_H
+#define EMULATOR_SUBPROCESS_H
 
 #include "../config/emulator_config.h"
 #include "../ipc/ipc_client.h"
@@ -17,10 +17,10 @@
 
 struct IPCBuffer;
 
-class PPCSubprocess {
+class EmulatorSubprocess {
 public:
-    explicit PPCSubprocess(config::EmulatorConfig* config);
-    ~PPCSubprocess();
+    explicit EmulatorSubprocess(config::EmulatorConfig* config);
+    ~EmulatorSubprocess();
 
     // Lifecycle
     bool start();
@@ -56,8 +56,8 @@ private:
     // Build argv for child process
     std::vector<std::string> build_child_args();
 
-    PPCSubprocess(const PPCSubprocess&) = delete;
-    PPCSubprocess& operator=(const PPCSubprocess&) = delete;
+    EmulatorSubprocess(const EmulatorSubprocess&) = delete;
+    EmulatorSubprocess& operator=(const EmulatorSubprocess&) = delete;
 };
 
-#endif // PPC_SUBPROCESS_H
+#endif // EMULATOR_SUBPROCESS_H
