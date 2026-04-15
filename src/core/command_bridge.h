@@ -4,9 +4,9 @@
  * Read commands (app name, window list) peek Mac memory directly from
  * the 60Hz IRQ — no Toolbox calls needed.
  *
- * Action commands (launch, quit) are handled by the BridgeINIT, a Retro68
- * INIT embedded in the emulator binary. It communicates via file I/O on
- * the ExtFS volume — no EmulOps, no hand-coded 68k.
+ * Action commands (launch, quit) are handled by a guest-side agent app
+ * installed in System Folder:Startup Items. It communicates via file I/O
+ * on the ExtFS volume — no EmulOps, no hand-coded 68k.
  */
 
 #ifndef COMMAND_BRIDGE_H
@@ -33,7 +33,9 @@ struct CommandResult {
 // Execute a read command immediately (safe from any thread when Mac memory is accessible)
 CommandResult command_bridge_read(CmdType type, uint32_t addr = 0, uint32_t len = 0);
 
-// Called from the 60Hz IRQ handler — injects BridgeINIT at boot, reinstalls filter
+// Called from the 60Hz IRQ handler — advances PPC boot phase to Finder.
+// The guest-side bridge agent is launched by Finder from Startup Items;
+// the emulator does not inject anything.
 void command_bridge_drain_from_irq(M68kRegisters* r);
 void command_bridge_drain_from_irq_ppc(M68kRegisters* r);
 

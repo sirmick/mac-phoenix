@@ -18,7 +18,7 @@ void test_network(void)
     /* Try to open MacTCP driver */
     err = OpenDriver("\p.IPP", &refNum);
     if (err != noErr) {
-        report_skip("network_open_mactcp", "MacTCP not available");
+        report_fail("network_open_mactcp", err);
         return;
     }
     report_pass("network_open_mactcp");

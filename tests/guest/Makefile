@@ -1,20 +1,39 @@
-# Standalone Makefile for building guest test suite with Retro68
+# Build the guest-side test suite with Retro68.
 #
-# Requires Retro68 toolchain on PATH:
-#   export PATH="$HOME/Retro68/build/toolchain/bin:$PATH"
+# Produces two binaries:
+#   MacTestSuite.bin       - 68k build (APPL/MxTs)
+#   MacTestSuitePPC.bin    - PPC PEF build (APPL/MxTs), links OpenTransport
+#
+# Toolchain search order (first hit wins):
+#   1. $RETRO68_BIN if set
+#   2. <project>/toolchain/retro68/bin
+#   3. $HOME/Retro68/build/toolchain/bin (legacy)
 #
 # Usage:
-#   make                    # build MacTestSuite.bin (MacBinary + .APPL + .dsk)
-#   make install EXTFS=...  # copy to ExtFS shared folder
+#   make                    # builds both 68k and PPC
+#   make m68k               # 68k only
+#   make ppc                # PPC only
+#   make install EXTFS=...  # copy binaries into a shared folder
 #   make clean
 
-CC = m68k-apple-macos-gcc
-REZ = Rez
-TOOLCHAIN = $(shell dirname $(shell which m68k-apple-macos-gcc))/..
-RINCLUDES = $(TOOLCHAIN)/m68k-apple-macos/RIncludes
+PROJECT_ROOT := $(shell cd ../.. && pwd)
+ifneq ($(RETRO68_BIN),)
+TOOLCHAIN_BIN := $(RETRO68_BIN)
+else ifneq ($(wildcard $(PROJECT_ROOT)/toolchain/retro68/bin/m68k-apple-macos-gcc),)
+TOOLCHAIN_BIN := $(PROJECT_ROOT)/toolchain/retro68/bin
+else
+TOOLCHAIN_BIN := $(HOME)/Retro68/build/toolchain/bin
+endif
 
-CFLAGS = -O2 -Isrc
-SRCDIR = src
+M68K_CC   := $(TOOLCHAIN_BIN)/m68k-apple-macos-gcc
+PPC_CC    := $(TOOLCHAIN_BIN)/powerpc-apple-macos-gcc
+REZ       := $(TOOLCHAIN_BIN)/Rez
+TOOLCHAIN_ROOT := $(TOOLCHAIN_BIN)/..
+M68K_RINC := $(TOOLCHAIN_ROOT)/m68k-apple-macos/RIncludes
+PPC_RINC  := $(TOOLCHAIN_ROOT)/powerpc-apple-macos/RIncludes
+
+CFLAGS  = -O2 -Isrc
+SRCDIR  = src
 
 SRCS = $(SRCDIR)/main.c \
        $(SRCDIR)/test_report.c \
@@ -25,35 +44,59 @@ SRCS = $(SRCDIR)/main.c \
        $(SRCDIR)/test_opentransport.c \
        $(SRCDIR)/test_disk.c
 
-TARGET = MacTestSuite
-CODE_BIN = $(TARGET).code.bin
-BIN = $(TARGET).bin
-APPL = $(TARGET).APPL
-DSK = $(TARGET).dsk
+TARGET68K    = MacTestSuite
+TARGETPPC    = MacTestSuitePPC
 
 EXTFS ?= /tmp/mac-shared
 
-all: $(BIN)
+.PHONY: all m68k ppc install clean
+all: m68k ppc
 
-# Link step produces the .code.bin (Elf2Mac output from the linker)
-$(CODE_BIN): $(SRCS) $(SRCDIR)/test_report.h
-	$(CC) $(CFLAGS) -o $(CODE_BIN) $(SRCS)
+# ---- 68k ----
+m68k: $(TARGET68K).bin
 
-# Rez wraps .code.bin into a proper Mac application (.bin, .APPL, .dsk)
-$(BIN): $(CODE_BIN)
-	$(REZ) $(RINCLUDES)/Retro68APPL.r \
-		-I$(RINCLUDES) \
-		--copy $(CODE_BIN) \
-		-o $(BIN) \
+$(TARGET68K).code.bin: $(SRCS) $(SRCDIR)/test_report.h
+	$(M68K_CC) $(CFLAGS) -o $@ $(SRCS)
+
+$(TARGET68K).bin: $(TARGET68K).code.bin
+	$(REZ) $(M68K_RINC)/Retro68APPL.r \
+		-I$(M68K_RINC) \
+		--copy $< \
+		-o $@ \
 		-t APPL -c MxTs \
-		--cc $(DSK) --cc $(APPL)
+		--cc $(TARGET68K).dsk --cc $(TARGET68K).APPL
 
-install: $(BIN)
-	python3 macbin_to_extfs.py $(BIN) $(EXTFS) $(TARGET)
+# ---- PPC ----
+# Retro68's PPC path links against CFM shared libraries automatically via
+# libOpenTransportLib.a / libOpenTptInternetLib.a stub imports.
+ppc: $(TARGETPPC).bin
+
+$(TARGETPPC).xcoff: $(SRCS) $(SRCDIR)/test_report.h
+	$(PPC_CC) $(CFLAGS) -o $@ $(SRCS) \
+		-lOpenTransportLib -lOpenTransportAppPPC \
+		-lOpenTptInternetLib -lOpenTptInetPPC
+
+$(TARGETPPC).pef: $(TARGETPPC).xcoff
+	$(TOOLCHAIN_BIN)/MakePEF $< -o $@
+
+$(TARGETPPC).bin: $(TARGETPPC).pef
+	$(REZ) $(PPC_RINC)/RetroPPCAPPL.r \
+		-I$(PPC_RINC) \
+		-DCFRAG_NAME='"$(TARGETPPC)"' \
+		-o $@ \
+		-t APPL -c MxTs \
+		--data $< \
+		--cc $(TARGETPPC).dsk --cc $(TARGETPPC).APPL
+
+install: all
+	python3 macbin_to_extfs.py $(TARGET68K).bin $(EXTFS) $(TARGET68K)
+	python3 macbin_to_extfs.py $(TARGETPPC).bin $(EXTFS) $(TARGETPPC)
 
 clean:
-	rm -f $(TARGET) $(TARGET).gdb $(CODE_BIN) $(BIN) $(APPL) $(DSK) \
-	      $(TARGET).ad %$(TARGET).ad \
-	      $(TARGET).elf $(TARGET).elf.gdb
-
-.PHONY: all install clean
+	rm -f $(TARGET68K) $(TARGET68K).gdb $(TARGET68K).code.bin \
+	      $(TARGET68K).bin $(TARGET68K).APPL $(TARGET68K).dsk \
+	      $(TARGET68K).ad %$(TARGET68K).ad \
+	      $(TARGET68K).elf $(TARGET68K).elf.gdb \
+	      $(TARGETPPC) $(TARGETPPC).gdb $(TARGETPPC).xcoff \
+	      $(TARGETPPC).pef $(TARGETPPC).bin $(TARGETPPC).APPL \
+	      $(TARGETPPC).dsk $(TARGETPPC).ad %$(TARGETPPC).ad

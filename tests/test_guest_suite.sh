@@ -26,6 +26,7 @@ EXTFS_DIR=""
 OS_VERSION=""
 ROM_OVERRIDE=""
 EXTRA_FLAGS=()
+DISMISS=1
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -38,6 +39,7 @@ while [[ $# -gt 0 ]]; do
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) EXTRA_FLAGS+=(--network "$2"); shift 2 ;;
+        --no-dismiss) DISMISS=0; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -45,13 +47,15 @@ done
 [[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 
-# PPC /api/launch currently hangs inside PrimeTime → timer_thread_suspend.
-# PPC boot itself works (see boot_ppc_* tests); only guest-app launch is broken.
-# Skip here until the PPC launch path is fixed.
-if [[ "$ARCH" == "ppc" ]]; then
-    echo "SKIP: guest_suite on PPC — /api/launch hangs in PrimeTime (pre-existing)"
-    exit 77
+# Default network for PPC OT tests: socket bridge (auto-launches net-bridge).
+# Caller can override with --network <mode>.
+if [[ "$ARCH" == "ppc" ]] && [[ ! " ${EXTRA_FLAGS[*]} " =~ " --network " ]]; then
+    EXTRA_FLAGS+=(--network "socket:/tmp/mactest-net-$$.sock")
 fi
+
+# net-bridge binary is found relative to CWD; run from project root.
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # Select ROM and disk based on architecture (--rom flag overrides)
 if [[ -n "$ROM_OVERRIDE" ]]; then
@@ -61,7 +65,13 @@ elif [[ "$ARCH" == "ppc" ]]; then
 else
     ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 fi
-DISK="${DISK:-${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}}"
+if [[ -z "${DISK:-}" ]]; then
+    if [[ "$ARCH" == "ppc" ]]; then
+        DISK="${MACEMU_DISK:-$HOME/storage/images/macos-9.0.4.img}"
+    else
+        DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
+    fi
+fi
 
 # --- Preflight checks ---
 
@@ -80,13 +90,17 @@ if [[ ! -f "$DISK" ]]; then
     exit 77
 fi
 
-GUEST_MACBIN="$GUEST_DIR/MacTestSuite.bin"
-GUEST_BINARY="$GUEST_DIR/MacTestSuite"
+# Pick 68k vs PPC test binary based on arch
+if [[ "$ARCH" == "ppc" ]]; then
+    GUEST_MACBIN="$GUEST_DIR/MacTestSuitePPC.bin"
+else
+    GUEST_MACBIN="$GUEST_DIR/MacTestSuite.bin"
+fi
 MACBIN_SCRIPT="$GUEST_DIR/macbin_to_extfs.py"
 
-if [[ ! -f "$GUEST_MACBIN" && ! -f "$GUEST_BINARY" ]]; then
-    echo "SKIP: Guest binary not found (build with Retro68 first)"
-    echo "  Expected: $GUEST_MACBIN"
+if [[ ! -f "$GUEST_MACBIN" ]]; then
+    echo "SKIP: Guest binary not found: $GUEST_MACBIN"
+    echo "  Build it first: make -C tests/guest"
     exit 77
 fi
 
@@ -94,13 +108,9 @@ fi
 
 EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
 
-if [[ -f "$GUEST_MACBIN" ]]; then
-    # MacBinary format — split into data fork + .rsrc/ + .finf/ for ExtFS
-    python3 "$MACBIN_SCRIPT" "$GUEST_MACBIN" "$EXTFS_DIR" MacTestSuite
-else
-    echo "WARNING: Using raw binary without resource fork (launch may fail)"
-    cp "$GUEST_BINARY" "$EXTFS_DIR/MacTestSuite"
-fi
+# Always install as "MacTestSuite" on the host volume (the bridge cmd and
+# tests expect that name); the PPC binary is the same APPL, just PEF.
+python3 "$MACBIN_SCRIPT" "$GUEST_MACBIN" "$EXTFS_DIR" MacTestSuite
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
@@ -125,8 +135,15 @@ echo "Port: $PORT"
 
 # --- Boot emulator ---
 
+DISMISS_FLAG=()
+if [[ $DISMISS -eq 1 ]]; then
+    DISMISS_FLAG=(--dismiss-shutdown-dialog)
+else
+    DISMISS_FLAG=(--no-dismiss-shutdown-dialog)
+fi
+
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
-    --config /dev/null --dismiss-shutdown-dialog --headless-http \
+    --config /dev/null "${DISMISS_FLAG[@]}" --headless-http \
     --port "$PORT" --signaling-port "$SIG_PORT" \
     --disk "$DISK" --extfs "$EXTFS_DIR" \
     "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/mactest_guest_$$.log &

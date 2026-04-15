@@ -19,7 +19,7 @@ void test_serial(void)
     /* Open modem port output */
     err = OpenDriver("\p.AOut", &outRef);
     if (err != noErr) {
-        report_skip("serial_open_out", "driver not available");
+        report_fail("serial_open_out", err);
         return;
     }
     report_pass("serial_open_out");

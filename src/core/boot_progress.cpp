@@ -868,6 +868,14 @@ static void serialize_mac_state(char *buf, int bufsize)
 
 	pos += snprintf(buf + pos, bufsize - pos, "]}");
 
+	/* BridgeAgent (Startup Items app) running implies Finder reached
+	 * desktop — that's the only way Startup Items launch. Treat its
+	 * presence as equivalent to seeing the Desktop window, even though
+	 * BridgeAgent is frontmost and Finder's desktop window isn't. */
+	if (!found_finder && strcmp(app_name, "BridgeAgent") == 0) {
+		found_finder = true;
+	}
+
 	/* Advance phase when the characteristic Finder windows appear.
 	 *
 	 *   - First sighting → PHASE_FINDER_LAUNCH (logged).

@@ -30,16 +30,16 @@
 
 void test_opentransport(void)
 {
-    report_skip("opentransport", "requires PPC build");
+    report_fail("opentransport", -1);  /* OT not linked on 68k build */
 }
 
-#else
+#else  /* PPC */
 
 #include <OpenTransport.h>
 #include <OpenTransportProviders.h>
 
 /* Test targets — host-side must provide these */
-#define ECHO_HOST "10.0.2.2"       /* common NAT gateway address */
+#define ECHO_HOST "10.0.2.1"       /* MacPhoenix net-bridge gateway */
 #define ECHO_UDP_PORT 7            /* echo protocol */
 #define TCP_TEST_PORT 7
 #define DNS_TEST_HOST "example.com"
@@ -104,7 +104,7 @@ void test_opentransport(void)
         char rbuf[64];
         OTFlags flags;
 
-        OTInitInetAddress(&addr, ECHO_UDP_PORT, 0x0A000202);  /* 10.0.2.2 */
+        OTInitInetAddress(&addr, ECHO_UDP_PORT, 0x0A000201);  /* 10.0.2.1 */
 
         memset(&udata, 0, sizeof(udata));
         udata.addr.buf = (UInt8 *)&addr;
@@ -159,7 +159,7 @@ void test_opentransport(void)
 
             err = OTBind(tep, NULL, NULL);
             if (err == noErr) {
-                OTInitInetAddress(&raddr, TCP_TEST_PORT, 0x0A000202);
+                OTInitInetAddress(&raddr, TCP_TEST_PORT, 0x0A000201);
 
                 memset(&sndCall, 0, sizeof(sndCall));
                 sndCall.addr.buf = (UInt8 *)&raddr;

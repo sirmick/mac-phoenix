@@ -121,7 +121,6 @@ The webserver runs in the parent process; the CPU runs in a forked child. They c
 | `src/core/emul_op.cpp` | EmulOp handlers: IRQ drain, CMD_DISPATCH, INIT_BRIDGE |
 | `src/common/include/emul_op.h` | M68K_EMUL_OP_CMD_DISPATCH (0x7139), M68K_EMUL_OP_INIT_BRIDGE (0x713A) |
 | `src/webserver/api_handlers.cpp` | HTTP endpoint handlers |
-| `tests/guest/init/` | BridgeINIT source (Retro68) — WIP |
 | `tests/guest/MacTestSuite.bin` | Guest test suite binary (Retro68) |
 | `tests/guest/macbin_to_extfs.py` | MacBinary → ExtFS layout converter |
 | `tests/test_command_bridge.sh` | Integration tests |

@@ -1786,23 +1786,14 @@ static int16 fs_get_eof(uint32 pb)
 	if (ReadMacInt32(fcb + fcbFlNm) == 0)
 		return fnOpnErr;
 
-	// BridgeFS read intercept
+	// BridgeFS EOF intercept
 	{
 		uint32 flnm = ReadMacInt32(fcb + fcbFlNm);
 		if (g_bridge_fs && (flnm & 0xFF000000) == 0xBF000000) {
 			int bfd = flnm & 0xFFFF;
-			uint16 posMode = ReadMacInt16(pb + ioPosMode) & 3;
-			int32 posOff = (int32)ReadMacInt32(pb + ioPosOffset);
-			if (posMode == fsFromStart) g_bridge_fs->seek(bfd, posOff, 0);
-			else if (posMode == fsFromLEOF) g_bridge_fs->seek(bfd, posOff, 2);
-			else if (posMode == fsFromMark) g_bridge_fs->seek(bfd, posOff, 1);
-			uint32 reqCount = ReadMacInt32(pb + ioReqCount);
-			ssize_t actual = g_bridge_fs->read(bfd, Mac2HostAddr(ReadMacInt32(pb + ioBuffer)), reqCount);
-			WriteMacInt32(pb + ioActCount, actual > 0 ? actual : 0);
-			int64_t pos = g_bridge_fs->seek(bfd, 0, 1);
-			WriteMacInt32(fcb + fcbCrPs, (uint32)pos);
-			WriteMacInt32(pb + ioPosOffset, (uint32)pos);
-			return (actual == 0 && reqCount > 0) ? (int16)eofErr : noErr;
+			int64_t eof = g_bridge_fs->get_eof(bfd);
+			WriteMacInt32(pb + ioMisc, (uint32)eof);
+			return noErr;
 		}
 	}
 
@@ -1956,6 +1947,27 @@ static int16 fs_read(uint32 pb)
 		return rfNumErr;
 	if (ReadMacInt32(fcb + fcbFlNm) == 0)
 		return fnOpnErr;
+
+	// BridgeFS read intercept
+	{
+		uint32 flnm = ReadMacInt32(fcb + fcbFlNm);
+		if (g_bridge_fs && (flnm & 0xFF000000) == 0xBF000000) {
+			int bfd = flnm & 0xFFFF;
+			uint16 posMode = ReadMacInt16(pb + ioPosMode) & 3;
+			int32 posOff = (int32)ReadMacInt32(pb + ioPosOffset);
+			if (posMode == fsFromStart) g_bridge_fs->seek(bfd, posOff, 0);
+			else if (posMode == fsFromLEOF) g_bridge_fs->seek(bfd, posOff, 2);
+			else if (posMode == fsFromMark) g_bridge_fs->seek(bfd, posOff, 1);
+			uint32 reqCount = ReadMacInt32(pb + ioReqCount);
+			ssize_t actual = g_bridge_fs->read(bfd, Mac2HostAddr(ReadMacInt32(pb + ioBuffer)), reqCount);
+			WriteMacInt32(pb + ioActCount, actual > 0 ? actual : 0);
+			int64_t pos = g_bridge_fs->seek(bfd, 0, 1);
+			WriteMacInt32(fcb + fcbCrPs, (uint32)pos);
+			WriteMacInt32(pb + ioPosOffset, (uint32)pos);
+			return (actual == 0 && reqCount > 0) ? (int16)eofErr : noErr;
+		}
+	}
+
 	int fd = ReadMacInt32(fcb + fcbCatPos);
 	if (fd < 0) {
 		if (ReadMacInt8(fcb + fcbFlags) & fcbResourceMask) {	// "pseudo" resource fork

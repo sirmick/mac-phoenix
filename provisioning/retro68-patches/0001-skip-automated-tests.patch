@@ -1,0 +1,22 @@
+Subject: Skip AutomatedTests subdir in target builds
+
+AutomatedTests/PCRel32.c has a missing #include <stdint.h> that trips
+modern GCC, and the tests aren't needed for our downstream use of the
+toolchain. Gate the subdir on a cmake option (default OFF) so it's
+opt-in rather than a hard build failure.
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -65,7 +65,10 @@
+
+ add_subdirectory(LaunchAPPL)
+
+-add_subdirectory(AutomatedTests)
++option(RETRO68_AUTOMATED_TESTS "Build Retro68 AutomatedTests" OFF)
++if(RETRO68_AUTOMATED_TESTS)
++    add_subdirectory(AutomatedTests)
++endif()
+ else()
+
+ set(RETRO68_ROOT ${CMAKE_INSTALL_PREFIX})
