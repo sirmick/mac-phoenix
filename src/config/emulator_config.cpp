@@ -133,6 +133,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["nosound"] = nosound;
     j["zappram"] = zappram;
     j["dismiss_shutdown_dialog"] = dismiss_shutdown_dialog;
+    j["bridge_enabled"] = bridge_enabled;
     j["frameskip"] = frameskip;
     j["yearofs"] = yearofs;
     j["dayofs"] = dayofs;
@@ -259,6 +260,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("nosound")) nosound = json_utils::get_bool(j, "nosound");
     if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
     if (j.contains("dismiss_shutdown_dialog")) dismiss_shutdown_dialog = json_utils::get_bool(j, "dismiss_shutdown_dialog");
+    if (j.contains("bridge_enabled")) bridge_enabled = json_utils::get_bool(j, "bridge_enabled");
     if (j.contains("frameskip")) frameskip = json_utils::get_int(j, "frameskip");
     if (j.contains("yearofs")) yearofs = json_utils::get_int(j, "yearofs");
     if (j.contains("dayofs")) dayofs = json_utils::get_int(j, "dayofs");

@@ -572,6 +572,54 @@ body.fullscreen #display {
     background: #f57c00;
 }
 
+/* Split button with dropdown menu */
+.split-btn {
+    position: relative;
+    display: inline-flex;
+}
+
+.split-btn .btn {
+    border-radius: 4px 0 0 4px;
+}
+
+.split-btn .btn.split-arrow {
+    border-radius: 0 4px 4px 0;
+    padding: 4px 6px;
+    margin-left: 1px;
+    font-size: 0.7em;
+}
+
+.split-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 2px;
+    background: #3d3d3d;
+    border: 1px solid #555;
+    border-radius: 4px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    min-width: 140px;
+    overflow: hidden;
+}
+
+.split-btn.open .split-menu {
+    display: block;
+}
+
+.split-menu-item {
+    padding: 6px 12px;
+    color: #fff;
+    font-size: 0.85em;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.split-menu-item:hover {
+    background: #4d4d4d;
+}
+
 /* Modal */
 .modal-overlay {
     display: none;

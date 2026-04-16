@@ -97,6 +97,7 @@ static void reserve_mac_address_space_early()
 
 // WebRTC streaming
 #include "config/emulator_config.h"
+#include "core/command_bridge.h"
 #include "drivers/ether/ether_socket.h"
 #include "core/cpu_context.h"
 #include "core/emulator_subprocess.h"
@@ -406,6 +407,8 @@ int main(int argc, char **argv)
 
 	config::print_config(emu_config);
 
+	command_bridge_init();
+
 	// Select network driver based on config
 	if (emu_config.network == config::NetworkMode::Socket) {
 		const char *path = emu_config.network_if.empty()
@@ -657,6 +660,17 @@ int main(int argc, char **argv)
 			webrtc_server.notify_codec_change(codec);
 		};
 
+		// Bridge watchdog — once Finder is reached (read from child's IPC SHM),
+		// warn if BridgeAgent never writes its heartbeat.
+		{
+			auto* ipc = subprocess_owner->ipc_client();
+			command_bridge_start_watchdog([ipc]() {
+				const IPCBuffer* buf = ipc ? ipc->shm() : nullptr;
+				if (!buf) return false;
+				return boot_progress_phase_reached_by_name(buf->boot_phase, "Finder") != 0;
+			});
+		}
+
 		// Launch HTTP server thread
 		std::thread http_server_thread(webserver::http_server_main,
 		                                &emu_config, &api_context);
@@ -798,6 +812,12 @@ int main(int argc, char **argv)
 
 			printf("Starting CPU execution...\n");
 			printf("Press Ctrl+C to exit.\n\n");
+
+			// Bridge watchdog — same role as in webserver mode, but reads
+			// boot phase from in-process boot_progress (no IPC SHM).
+			command_bridge_start_watchdog([]() {
+				return boot_progress_phase_reached("Finder") != 0;
+			});
 
 			if (platform->cpu_execute_fast) {
 				platform->cpu_execute_fast();

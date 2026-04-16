@@ -15,7 +15,8 @@
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
 #include "../core/boot_progress.h"  // For boot phase query
 #include "../core/command_bridge.h"  // For command bridge
-#include "../core/bridge_fs.h"       // For BridgeFS in-memory store
+#include <sys/stat.h>
+#include <unistd.h>
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
 #include "keyboard_map.h"
@@ -90,6 +91,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/restart" && req.method == "POST") {
         return handle_restart(req);
+    }
+    if (req.path == "/api/shutdown" && req.method == "POST") {
+        return handle_shutdown(req);
     }
     if (req.path == "/api/status" && req.method == "GET") {
         return handle_status(req);
@@ -280,10 +284,93 @@ Response APIRouter::handle_create_image(const Request& req) {
     return Response::json(body.str());
 }
 
+// Disk-backed bridge file helpers. Files live in cfg.bridge_dir, which is
+// the same directory the guest sees as the "Host:" ExtFS volume — so the
+// agent reads/writes via standard File Manager calls and the host reads
+// via plain POSIX. This is what makes the bridge work across the parent /
+// IPC-child process split.
+static bool bridge_read_file(const std::string& dir, const char* name, std::string& out) {
+    std::string path = dir + "/" + name;
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    char buf[4096];
+    size_t n;
+    out.clear();
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) out.append(buf, n);
+    fclose(f);
+    return true;
+}
+
+static void bridge_write_file(const std::string& dir, const char* name, const std::string& data) {
+    std::string path = dir + "/" + name;
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) return;
+    fwrite(data.data(), 1, data.size(), f);
+    fclose(f);
+}
+
+static void bridge_remove_file(const std::string& dir, const char* name) {
+    std::string path = dir + "/" + name;
+    unlink(path.c_str());
+}
+
+static bool bridge_has_file(const std::string& dir, const char* name) {
+    std::string path = dir + "/" + name;
+    struct stat st;
+    return stat(path.c_str(), &st) == 0;
+}
+
+// Send a command to the guest BridgeAgent and poll for a result.
+// Shared by handle_shutdown / handle_restart / handle_quit-style endpoints
+// that go through the guest-OS bridge rather than manipulating the subprocess.
+static Response bridge_command(const char* cmd, int poll_iterations) {
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled) {
+        return Response::json("{\"success\": false, \"error\": \"bridge not enabled\"}");
+    }
+    if (cfg.bridge_dir.empty()) {
+        return Response::json("{\"success\": false, \"error\": \"bridge_dir not set\"}");
+    }
+
+    bridge_remove_file(cfg.bridge_dir, "_bridge_result");
+    bridge_write_file(cfg.bridge_dir, "_bridge_cmd", cmd);
+
+    for (int i = 0; i < poll_iterations; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::string result;
+        if (bridge_read_file(cfg.bridge_dir, "_bridge_result", result)) {
+            bridge_remove_file(cfg.bridge_dir, "_bridge_result");
+            int mac_err = std::atoi(result.c_str());
+            if (mac_err != 0) {
+                std::ostringstream json;
+                json << "{\"success\": false, \"error_code\": " << mac_err
+                     << ", \"message\": \"bridge command failed (Mac OS error "
+                     << mac_err << ")\"}";
+                return Response::json(json.str());
+            }
+            return Response::json("{\"success\": true, \"error_code\": 0}");
+        }
+        if (!bridge_has_file(cfg.bridge_dir, "_bridge_cmd")) {
+            return Response::json("{\"success\": true, \"error_code\": 0}");
+        }
+    }
+    bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
+    return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge agent\"}");
+}
+
 Response APIRouter::handle_restart(const Request& req) {
     (void)req;
-    fprintf(stderr, "Server: Restart requested via API (not implemented yet)\n");
-    return Response::json("{\"success\": false, \"message\": \"Not implemented yet\"}");
+    // Graceful OS restart — the guest agent sends kAERestart to Finder,
+    // which quits apps and invokes the Shutdown Manager. The emulator
+    // subprocess itself keeps running; the guest OS reboots inside it.
+    return bridge_command("RESTART", 30);
+}
+
+Response APIRouter::handle_shutdown(const Request& req) {
+    (void)req;
+    // Graceful OS shutdown — the guest agent sends kAEShutDown to Finder.
+    // Same path as Special → Shut Down in the Finder menu.
+    return bridge_command("SHUTDOWN", 30);
 }
 
 Response APIRouter::handle_status(const Request& req) {
@@ -1213,24 +1300,17 @@ Response APIRouter::handle_launch(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
     }
 
-    // Write command to BridgeFS in-memory store — ExtFS intercepts route
-    // _bridge_* files to this store, bypassing host filesystem entirely.
-    if (!::g_bridge_fs)
-        return Response::json("{\"success\": false, \"error\": \"bridge FS not initialized\"}");
-
     bool open_doc = j.contains("open") && j["open"].is_boolean() && j["open"].get<bool>();
 
-    ::g_bridge_fs->remove_file("_bridge_result");
-    ::g_bridge_fs->put_file("_bridge_cmd", (open_doc ? "OPEN " : "LAUNCH ") + path);
+    bridge_remove_file(cfg.bridge_dir, "_bridge_result");
+    bridge_write_file(cfg.bridge_dir, "_bridge_cmd", (open_doc ? "OPEN " : "LAUNCH ") + path);
 
-    // Poll for result file OR command file deletion (both in BridgeFS)
     for (int i = 0; i < 100; i++) {  // 10 seconds
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        // Check for result file (has error code — preferred)
         std::string result;
-        if (::g_bridge_fs->get_file("_bridge_result", result)) {
-            ::g_bridge_fs->remove_file("_bridge_result");
+        if (bridge_read_file(cfg.bridge_dir, "_bridge_result", result)) {
+            bridge_remove_file(cfg.bridge_dir, "_bridge_result");
             int mac_err = std::atoi(result.c_str());
             if (mac_err != 0) {
                 std::ostringstream json;
@@ -1241,42 +1321,18 @@ Response APIRouter::handle_launch(const Request& req) {
             return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
         }
 
-        // Fallback: command file was consumed by INIT
-        if (!::g_bridge_fs->has_file("_bridge_cmd")) {
+        if (!bridge_has_file(cfg.bridge_dir, "_bridge_cmd")) {
             return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
         }
     }
 
-    ::g_bridge_fs->remove_file("_bridge_cmd");
-    return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge INIT\"}");
+    bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
+    return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge agent\"}");
 }
 
 Response APIRouter::handle_quit(const Request& req) {
     (void)req;
-
-    auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_enabled) {
-        return Response::json("{\"success\": false, \"error\": \"bridge not enabled\"}");
-    }
-    if (!::g_bridge_fs)
-        return Response::json("{\"success\": false, \"error\": \"bridge FS not initialized\"}");
-
-    ::g_bridge_fs->remove_file("_bridge_result");
-    ::g_bridge_fs->put_file("_bridge_cmd", "QUIT");
-
-    for (int i = 0; i < 30; i++) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        if (::g_bridge_fs->has_file("_bridge_result")) {
-            ::g_bridge_fs->remove_file("_bridge_result");
-            return Response::json("{\"success\": true}");
-        }
-        if (!::g_bridge_fs->has_file("_bridge_cmd")) {
-            return Response::json("{\"success\": true}");
-        }
-    }
-
-    ::g_bridge_fs->remove_file("_bridge_cmd");
-    return Response::json("{\"success\": false, \"error\": \"timeout\"}");
+    return bridge_command("QUIT", 30);
 }
 
 Response APIRouter::handle_wait(const Request& req) {

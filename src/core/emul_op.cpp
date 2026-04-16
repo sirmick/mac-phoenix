@@ -738,7 +738,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_BRIDGE_COMM:
 		case M68K_EMUL_OP_BRIDGE_HFS:
-			break;  // Unused — BridgeFS hooks into ExtFS instead
+			break;  // Unused — bridge files flow through normal ExtFS disk path
 
 		case M68K_EMUL_OP_SUSPEND: {
 			printf("*** Suspend\n");

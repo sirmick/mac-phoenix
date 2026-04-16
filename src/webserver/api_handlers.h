@@ -63,7 +63,8 @@ private:
 
     Response handle_storage(const Request& req);
     Response handle_create_image(const Request& req);  // POST /api/storage/create-image
-    Response handle_restart(const Request& req);
+    Response handle_restart(const Request& req);   // POST /api/restart — graceful OS restart via bridge
+    Response handle_shutdown(const Request& req);  // POST /api/shutdown — graceful OS shutdown via bridge
     Response handle_status(const Request& req);
     Response handle_codec_post(const Request& req);
     Response handle_codecs_get(const Request& req);

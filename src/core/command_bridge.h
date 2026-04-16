@@ -33,6 +33,19 @@ struct CommandResult {
 // Execute a read command immediately (safe from any thread when Mac memory is accessible)
 CommandResult command_bridge_read(CmdType type, uint32_t addr = 0, uint32_t len = 0);
 
+// Initialize host-side bridge state. Call once at startup, after
+// EmulatorConfig has been finalized. Logs the bridge directory.
+// No-op when bridge is disabled. Idempotent.
+void command_bridge_init();
+
+// Spawn a detached watchdog thread that waits until `finder_reached()`
+// returns true, then waits grace_seconds for the BridgeAgent to write
+// `bridge_heartbeat` into bridge_dir. Logs a warning if the agent never
+// checks in. No-op when bridge is disabled or bridge_dir is empty.
+#include <functional>
+void command_bridge_start_watchdog(std::function<bool()> finder_reached,
+                                   int grace_seconds = 15);
+
 // Called from the 60Hz IRQ handler — advances PPC boot phase to Finder.
 // The guest-side bridge agent is launched by Finder from Startup Items;
 // the emulator does not inject anything.

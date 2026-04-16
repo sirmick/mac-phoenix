@@ -31,6 +31,7 @@
 #include <Devices.h>
 #include <Resources.h>
 #include <ToolUtils.h>
+#include <ShutDown.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -278,45 +279,56 @@ static OSErr do_quit_front(void)
     return err;
 }
 
-/* Send kAEShutDown ('shut') or kAERestart ('rest') to Finder. Finder quits
- * open apps first, then invokes the Shutdown Manager — same path as
- * Special → Shut Down / Restart in the menu. */
+/* Quit every running app (skipping ourselves) by sending kAEQuitApplication.
+ * Used as a best-effort "ask apps to clean up" pass before the Shutdown
+ * Manager kills everything. Returns once we've sent — no waiting; apps
+ * that ignore the AE just get terminated when ShutDwnPower/Start runs. */
+static void quit_all_other_apps(void)
+{
+    ProcessSerialNumber self;
+    GetCurrentProcess(&self);
+
+    ProcessSerialNumber iter = {0, kNoProcess};
+    while (GetNextProcess(&iter) == noErr) {
+        if (iter.highLongOfPSN == self.highLongOfPSN &&
+            iter.lowLongOfPSN  == self.lowLongOfPSN) continue;
+
+        AEAddressDesc target;
+        if (AECreateDesc(typeProcessSerialNumber, &iter,
+                         sizeof(iter), &target) != noErr) continue;
+        AppleEvent evt;
+        if (AECreateAppleEvent(kCoreEventClass, kAEQuitApplication,
+                               &target, kAutoGenerateReturnID,
+                               kAnyTransactionID, &evt) == noErr) {
+            AESend(&evt, NULL, kAENoReply | kAEAlwaysInteract,
+                   kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
+            AEDisposeDesc(&evt);
+        }
+        AEDisposeDesc(&target);
+    }
+}
+
+/* SHUTDOWN/RESTART: bypass Finder entirely. kAEShutDown / kAERestart are
+ * events the Finder *sends*, not receives — there's no AppleEvent path to
+ * trigger system shutdown. Call the Shutdown Manager directly, after a
+ * best-effort pass to quit other apps so they can flush state. The
+ * Shutdown Manager itself runs registered shutdown procs and closes
+ * drivers; the emulator should observe the shutdown via its usual hooks. */
 static OSErr do_system_event(AEEventID eventID)
 {
-    ProcessSerialNumber finderPSN = {0, kNoProcess};
-    ProcessSerialNumber iter = {0, kNoProcess};
-    ProcessInfoRec info;
-    Str31 nameBuf;
-    FSSpec procSpec;
-    while (GetNextProcess(&iter) == noErr) {
-        info.processInfoLength = sizeof(info);
-        info.processName = nameBuf;
-        info.processAppSpec = &procSpec;
-        if (GetProcessInformation(&iter, &info) == noErr) {
-            if (info.processSignature == 'MACS') {
-                finderPSN = iter;
-                break;
-            }
-        }
-    }
-    if (finderPSN.lowLongOfPSN == kNoProcess) return procNotFound;
+    quit_all_other_apps();
 
-    AEAddressDesc target;
-    OSErr err = AECreateDesc(typeProcessSerialNumber, &finderPSN,
-                             sizeof(finderPSN), &target);
-    if (err != noErr) return err;
+    /* Brief yield so quit AEs get a chance to run. */
+    unsigned long ticks;
+    Delay(60, &ticks);  /* ~1s */
 
-    AppleEvent evt;
-    err = AECreateAppleEvent(kCoreEventClass, eventID,
-                             &target, kAutoGenerateReturnID,
-                             kAnyTransactionID, &evt);
-    AEDisposeDesc(&target);
-    if (err != noErr) return err;
+    if (eventID == kAERestart)        ShutDwnStart();
+    else if (eventID == kAEShutDown)  ShutDwnPower();
+    else                              return paramErr;
 
-    err = AESend(&evt, NULL, kAENoReply | kAEAlwaysInteract,
-                 kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
-    AEDisposeDesc(&evt);
-    return err;
+    /* ShutDwnStart/Power don't return on success. If we're still here,
+     * something blocked the shutdown — surface as a generic error. */
+    return -1;
 }
 
 static void write_result(OSErr result)
@@ -359,8 +371,20 @@ static void write_heartbeat(void)
     if (FSMakeFSSpec(0, 0, "\pHost:bridge_heartbeat", &hb) == fnfErr)
         FSpCreate(&hb, 'ttxt', 'TEXT', smSystemScript);
     if (FSpOpenDF(&hb, fsWrPerm, &ref) == noErr) {
-        char buf[16];
-        long len = snprintf(buf, sizeof(buf), "%d\r", gHeartbeat);
+        /* JSON payload so the host can tail this file for live status. */
+        char last_cmd[96] = {0};
+        int clen = gLastCmd[0];
+        if (clen > 80) clen = 80;
+        memcpy(last_cmd, gLastCmd + 1, clen);
+        /* Minimal JSON-escape: drop backslashes and quotes from last_cmd. */
+        for (int i = 0; i < clen; i++)
+            if (last_cmd[i] == '"' || last_cmd[i] == '\\') last_cmd[i] = '_';
+
+        char buf[256];
+        long len = snprintf(buf, sizeof(buf),
+            "{\"heartbeat\":%d,\"commands\":%d,"
+            "\"last_result\":%d,\"last_cmd\":\"%s\"}\r",
+            gHeartbeat, gCmdCount, (int)gLastResult, last_cmd);
         SetEOF(ref, 0);
         FSWrite(ref, &len, buf);
         FSClose(ref);

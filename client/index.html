@@ -57,7 +57,25 @@
             </div>
             <button class="btn" id="config-btn">Settings</button>
             <button class="btn success" id="start-btn">Start</button>
-            <button class="btn danger" id="stop-btn">Stop</button>
+
+            <div class="split-btn">
+                <button class="btn danger" id="stop-btn" title="Hard power off (kill emulator process)">Power Off</button>
+                <button class="btn danger split-arrow" id="stop-menu-btn" aria-label="Stop options" aria-haspopup="true" aria-expanded="false">▾</button>
+                <div class="split-menu" id="stop-menu" role="menu">
+                    <div class="split-menu-item" role="menuitem" data-action="poweroff" title="Kill the emulator process immediately">Power Off</div>
+                    <div class="split-menu-item" role="menuitem" data-action="shutdown" title="Ask the guest OS to shut down (quits apps first)">Shut Down…</div>
+                </div>
+            </div>
+
+            <div class="split-btn">
+                <button class="btn warning" id="reset-btn" title="Hard reset (restart emulator process)">Reset</button>
+                <button class="btn warning split-arrow" id="reset-menu-btn" aria-label="Reset options" aria-haspopup="true" aria-expanded="false">▾</button>
+                <div class="split-menu" id="reset-menu" role="menu">
+                    <div class="split-menu-item" role="menuitem" data-action="reset" title="Restart the emulator process">Reset</div>
+                    <div class="split-menu-item" role="menuitem" data-action="restart" title="Ask the guest OS to restart (quits apps first)">Restart…</div>
+                </div>
+            </div>
+
             <button class="btn warning" id="invoke-debug-btn" title="Programmer's Key — invoke debugger">Debug</button>
             <button class="btn" id="debug-toggle">Logs</button>
             <button class="btn" id="fullscreen-btn">Fullscreen</button>
@@ -405,6 +423,12 @@
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
                             <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss shutdown dialog</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-bridge-enabled">
+                            <label for="cfg-bridge-enabled">Enable automation bridge (BridgeAgent + ExtFS)</label>
                         </div>
                     </div>
                     <div class="form-group">

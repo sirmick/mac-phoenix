@@ -3308,6 +3308,7 @@ function loadPreset(name) {
         backend: preset.cpu_backend || (isM68k ? 'uae' : 'kpx'),
         zappram: preset.zappram ?? false,
         dismiss_shutdown_dialog: preset.dismiss_shutdown_dialog ?? true,
+        bridge_enabled: preset.bridge_enabled ?? false,
         network: preset.network || 'none',
         network_if: preset.network_if || ''
     };
@@ -3380,6 +3381,7 @@ function buildConfigJson() {
         audio: document.getElementById('cfg-sound')?.checked ?? true,
         zappram: document.getElementById('cfg-zappram')?.checked ?? false,
         dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true,
+        bridge_enabled: document.getElementById('cfg-bridge-enabled')?.checked ?? false,
         network: document.getElementById('cfg-network')?.value || 'none',
         network_if: document.getElementById('cfg-network-if')?.value || '',
         codec: document.getElementById('codec-select')?.value || 'png',
@@ -3649,7 +3651,7 @@ function initCreateImageDialog() {
         createBtn.disabled = true;
         statusEl.textContent = 'Creating…';
         try {
-            const resp = await fetch('/api/storage/create-image', {
+            const resp = await fetch(getApiUrl('storage/create-image'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -3949,6 +3951,7 @@ async function loadCurrentConfig() {
             backend: cfg.cpu_backend || (isM68k ? 'uae' : 'kpx'),
             zappram: cfg.zappram ?? false,
             dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
+            bridge_enabled: cfg.bridge_enabled ?? false,
             network: cfg.network || 'none',
             network_if: cfg.network_if || ''
         };
@@ -3969,6 +3972,7 @@ function updateConfigUI() {
     const soundEl = document.getElementById('cfg-sound');
     const zappramEl = document.getElementById('cfg-zappram');
     const dismissDialogEl = document.getElementById('cfg-dismiss-shutdown-dialog');
+    const bridgeEnabledEl = document.getElementById('cfg-bridge-enabled');
 
     if (emulatorEl) emulatorEl.value = currentConfig.emulator || 'quadra';
     if (romEl) romEl.value = currentConfig.rom;
@@ -3977,6 +3981,7 @@ function updateConfigUI() {
     if (soundEl) soundEl.checked = currentConfig.sound;
     if (zappramEl) zappramEl.checked = currentConfig.zappram;
     if (dismissDialogEl) dismissDialogEl.checked = currentConfig.dismiss_shutdown_dialog;
+    if (bridgeEnabledEl) bridgeEnabledEl.checked = currentConfig.bridge_enabled;
 
     const networkEl = document.getElementById('cfg-network');
     const networkIfEl = document.getElementById('cfg-network-if');
@@ -4055,6 +4060,7 @@ async function saveConfig() {
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
     currentConfig.zappram = document.getElementById('cfg-zappram')?.checked ?? false;
     currentConfig.dismiss_shutdown_dialog = document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true;
+    currentConfig.bridge_enabled = document.getElementById('cfg-bridge-enabled')?.checked ?? false;
     // bootdriver is resolved inside buildConfigJson (a "disk:NAME" selection
     // reorders disks instead of setting a numeric bootdriver), so skip it here.
     currentConfig.backend = document.getElementById('cfg-backend')?.value || (isM68kMode(currentConfig.emulator) ? 'uae' : 'kpx');
@@ -4155,6 +4161,87 @@ async function restartEmulator() {
         logger.info('Restart emulator', { message: data.message });
     } catch (e) {
         logger.error('Failed to restart emulator', { error: e.message });
+    }
+}
+
+// Wire a split-button dropdown: clicking the arrow toggles the menu;
+// clicking a menu item runs the mapped handler and closes the menu.
+// Clicking outside or pressing Escape also closes it.
+function setupSplitButton(arrowBtnId, menuId, actions) {
+    const arrow = document.getElementById(arrowBtnId);
+    const menu = document.getElementById(menuId);
+    if (!arrow || !menu) return;
+    const wrapper = arrow.closest('.split-btn');
+    if (!wrapper) return;
+
+    const close = () => {
+        wrapper.classList.remove('open');
+        arrow.setAttribute('aria-expanded', 'false');
+    };
+    const open = () => {
+        document.querySelectorAll('.split-btn.open').forEach(el => {
+            if (el !== wrapper) el.classList.remove('open');
+        });
+        wrapper.classList.add('open');
+        arrow.setAttribute('aria-expanded', 'true');
+    };
+
+    arrow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        wrapper.classList.contains('open') ? close() : open();
+    });
+
+    menu.querySelectorAll('.split-menu-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const action = item.getAttribute('data-action');
+            close();
+            const fn = actions[action];
+            if (fn) fn();
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!wrapper.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+    });
+}
+
+// Graceful guest-OS shutdown via the BridgeAgent. Sends kAEShutDown to
+// Finder; the emulator process keeps running while the guest OS powers down.
+async function shutdownGuest() {
+    logger.info('Shutting down guest OS...');
+    try {
+        const res = await fetch(getApiUrl('shutdown'), { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            logger.info('Guest shutdown requested');
+        } else {
+            logger.error('Guest shutdown failed', { error: data.error || data.message });
+        }
+    } catch (e) {
+        logger.error('Shutdown request failed', { error: e.message });
+    }
+}
+
+// Graceful guest-OS restart via the BridgeAgent. Sends kAERestart to Finder.
+async function restartGuest() {
+    logger.info('Restarting guest OS...');
+    if (client && client.decoder && client.decoder.resetSession) {
+        client.decoder.resetSession();
+    }
+    try {
+        const res = await fetch(getApiUrl('restart'), { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            logger.info('Guest restart requested');
+        } else {
+            logger.error('Guest restart failed', { error: data.error || data.message });
+        }
+    } catch (e) {
+        logger.error('Restart request failed', { error: e.message });
     }
 }
 
@@ -4437,6 +4524,18 @@ function setupEventListeners() {
 
     const stopBtn = document.getElementById('stop-btn');
     if (stopBtn) stopBtn.addEventListener('click', stopEmulator);
+
+    const resetBtn = document.getElementById('reset-btn');
+    if (resetBtn) resetBtn.addEventListener('click', restartEmulator);
+
+    setupSplitButton('stop-menu-btn', 'stop-menu', {
+        poweroff: stopEmulator,
+        shutdown: shutdownGuest,
+    });
+    setupSplitButton('reset-menu-btn', 'reset-menu', {
+        reset: restartEmulator,
+        restart: restartGuest,
+    });
 
     const invokeDebugBtn = document.getElementById('invoke-debug-btn');
     if (invokeDebugBtn) invokeDebugBtn.addEventListener('click', invokeDebugger);

@@ -19,10 +19,12 @@
 #include "../common/include/m68k_registers.h"
 #include "../common/include/platform.h"
 #include "boot_progress.h"
-#include "bridge_fs.h"
 #include "../config/emulator_config.h"
+#include <sys/stat.h>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 
 // ============================================================================
 // Read commands — peek Mac memory, no Toolbox calls needed
@@ -122,31 +124,70 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr, uint32_t len) {
 }
 
 // ============================================================================
+// One-shot init — called from main.cpp after EmulatorConfig is finalized.
+// Logs the bridge directory so it's visible in startup output. The actual
+// bridge files (_bridge_cmd, _bridge_result, bridge_heartbeat) live on disk
+// in cfg.bridge_dir and are read/written by both parent and IPC child.
+// ============================================================================
+
+void command_bridge_init() {
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled) return;
+    fprintf(stderr, "[Bridge] Enabled (dir=%s)\n",
+            cfg.bridge_dir.empty() ? "<none>" : cfg.bridge_dir.c_str());
+}
+
+void command_bridge_start_watchdog(std::function<bool()> finder_reached, int grace_seconds) {
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty() || !finder_reached) return;
+
+    std::string heartbeat_path = cfg.bridge_dir + "/bridge_heartbeat";
+    std::thread([finder_reached = std::move(finder_reached), heartbeat_path, grace_seconds]() {
+        // Wait up to ~5 minutes for Finder
+        for (int i = 0; i < 300; i++) {
+            if (finder_reached()) break;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        if (!finder_reached()) return;  // never booted; nothing to warn about
+
+        std::this_thread::sleep_for(std::chrono::seconds(grace_seconds));
+
+        struct stat st;
+        if (stat(heartbeat_path.c_str(), &st) != 0) {
+            fprintf(stderr,
+                "[Bridge] WARNING: bridge enabled but no heartbeat at %s "
+                "after %ds past Finder. Is BridgeAgent installed in "
+                ":System Folder:Startup Items: of the boot disk?\n",
+                heartbeat_path.c_str(), grace_seconds);
+            return;
+        }
+        time_t age = time(nullptr) - st.st_mtime;
+        if (age > grace_seconds) {
+            fprintf(stderr,
+                "[Bridge] WARNING: heartbeat at %s is stale (%lds old). "
+                "BridgeAgent may have crashed or quit.\n",
+                heartbeat_path.c_str(), (long)age);
+        } else {
+            fprintf(stderr, "[Bridge] BridgeAgent heartbeat detected (%lds old)\n",
+                    (long)age);
+        }
+    }).detach();
+}
+
+// ============================================================================
 // IRQ entry point — called from 60Hz timer (m68k and PPC)
 //
 // Advances the boot_phase to "Finder" on PPC (where the WindowList heuristic
-// doesn't work). BridgeFS init happens lazily the first time it's used.
-// No guest-code injection — the bridge agent lives in System Folder:Startup
-// Items and is launched by Finder.
+// doesn't work). No guest-code injection — the bridge agent lives in
+// System Folder:Startup Items and is launched by Finder.
 // ============================================================================
-
-static void ensure_bridge_fs() {
-    if (!config::EmulatorConfig::instance().bridge_enabled) return;
-    if (g_bridge_fs) return;
-    g_bridge_fs = new BridgeFS();
-    auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_dir.empty())
-        g_bridge_fs->set_bridge_dir(cfg.bridge_dir);
-}
 
 void command_bridge_drain_from_irq(M68kRegisters* r) {
     (void)r;
-    ensure_bridge_fs();
 }
 
 void command_bridge_drain_from_irq_ppc(M68kRegisters* r) {
     (void)r;
-    ensure_bridge_fs();
     if (RAMSize == 0) return;
 
     // PPC has no WindowList population in our boot path, so the usual

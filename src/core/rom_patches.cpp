@@ -900,7 +900,6 @@ void m68k::PatchAfterStartup(void)
 	// m68k default: just install ExtFS
 	InstallExtFS();
 #endif
-	// BridgeFS hooks into ExtFS — no separate installation needed
 }
 
 
