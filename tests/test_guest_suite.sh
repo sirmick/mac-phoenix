@@ -27,6 +27,7 @@ OS_VERSION=""
 ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 DISMISS=1
+USE_PERL=0
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -40,6 +41,7 @@ while [[ $# -gt 0 ]]; do
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) EXTRA_FLAGS+=(--network "$2"); shift 2 ;;
         --no-dismiss) DISMISS=0; shift ;;
+        --perl) USE_PERL=1; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -90,27 +92,38 @@ if [[ ! -f "$DISK" ]]; then
     exit 77
 fi
 
-# Pick 68k vs PPC test binary based on arch
-if [[ "$ARCH" == "ppc" ]]; then
-    GUEST_MACBIN="$GUEST_DIR/MacTestSuitePPC.bin"
-else
-    GUEST_MACBIN="$GUEST_DIR/MacTestSuite.bin"
-fi
-MACBIN_SCRIPT="$GUEST_DIR/macbin_to_extfs.py"
-
-if [[ ! -f "$GUEST_MACBIN" ]]; then
-    echo "SKIP: Guest binary not found: $GUEST_MACBIN"
-    echo "  Build it first: make -C tests/guest"
-    exit 77
-fi
-
 # --- Setup ExtFS shared folder ---
 
 EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
 
-# Always install as "MacTestSuite" on the host volume (the bridge cmd and
-# tests expect that name); the PPC binary is the same APPL, just PEF.
-python3 "$MACBIN_SCRIPT" "$GUEST_MACBIN" "$EXTFS_DIR" MacTestSuite
+PERL_SCRIPT="$GUEST_DIR/MacTestSuite.pl"
+PERL_INSTALL="$GUEST_DIR/install_perl_test.py"
+
+if [[ $USE_PERL -eq 1 ]]; then
+    # Perl mode: install .pl script with TEXT/McPL type/creator
+    if [[ ! -f "$PERL_SCRIPT" ]]; then
+        echo "SKIP: Perl test script not found: $PERL_SCRIPT"
+        exit 77
+    fi
+    python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "MacTestSuite.pl"
+    LAUNCH_TARGET="Host:MacTestSuite.pl"
+else
+    # Native mode: install compiled MacBinary test app
+    if [[ "$ARCH" == "ppc" ]]; then
+        GUEST_MACBIN="$GUEST_DIR/MacTestSuitePPC.bin"
+    else
+        GUEST_MACBIN="$GUEST_DIR/MacTestSuite.bin"
+    fi
+    MACBIN_SCRIPT="$GUEST_DIR/macbin_to_extfs.py"
+
+    if [[ ! -f "$GUEST_MACBIN" ]]; then
+        echo "SKIP: Guest binary not found: $GUEST_MACBIN"
+        echo "  Build it first: make -C tests/guest"
+        exit 77
+    fi
+    python3 "$MACBIN_SCRIPT" "$GUEST_MACBIN" "$EXTFS_DIR" MacTestSuite
+    LAUNCH_TARGET="Host:MacTestSuite"
+fi
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
@@ -199,8 +212,13 @@ sleep 2
 # --- Launch guest test app ---
 
 echo "Launching MacTestSuite..."
+if [[ $USE_PERL -eq 1 ]]; then
+    LAUNCH_JSON="{\"path\":\"$LAUNCH_TARGET\", \"open\": true}"
+else
+    LAUNCH_JSON="{\"path\":\"$LAUNCH_TARGET\"}"
+fi
 LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/launch" \
-    -d '{"path":"Host:MacTestSuite"}' || echo '{"success":false}')
+    -d "$LAUNCH_JSON" || echo '{"success":false}')
 
 if ! echo "$LAUNCH" | grep -q '"success": true'; then
     echo "FAIL: Could not launch MacTestSuite"

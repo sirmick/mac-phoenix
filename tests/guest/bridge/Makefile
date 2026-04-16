@@ -22,8 +22,8 @@ all: $(BIN)
 $(CODE_BIN): bridge_agent.c
 	$(CC) $(CFLAGS) -o $(CODE_BIN) bridge_agent.c
 
-$(BIN): $(CODE_BIN)
-	$(REZ) $(RINCLUDES)/Retro68APPL.r \
+$(BIN): $(CODE_BIN) bridge_agent.r
+	$(REZ) $(RINCLUDES)/Retro68APPL.r bridge_agent.r \
 		-I$(RINCLUDES) \
 		--copy $(CODE_BIN) \
 		-o $(BIN) \

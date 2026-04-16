@@ -27,6 +27,7 @@
 #include <OSUtils.h>
 #include <Script.h>
 #include <AppleEvents.h>
+#include <Aliases.h>
 #include <Devices.h>
 #include <Resources.h>
 #include <ToolUtils.h>
@@ -91,6 +92,8 @@ static void open_status_window(void)
 
 /* ---------- Bridge command handlers ---------- */
 
+static void bridge_step(const char *tag);
+
 static OSErr do_launch(const unsigned char *path)
 {
     FSSpec spec;
@@ -105,6 +108,226 @@ static OSErr do_launch(const unsigned char *path)
     pb.launchControlFlags = launchContinue | launchNoFileFlags;
     pb.launchAppSpec      = &spec;
     return LaunchApplication(&pb);
+}
+
+static OSErr do_open_document(const unsigned char *path)
+{
+    bridge_step("OPEN:enter");
+    /* Resolve the document file */
+    FSSpec docSpec;
+    OSErr err = FSMakeFSSpec(0, 0, path, &docSpec);
+    if (err != noErr) { bridge_step("OPEN:doc-not-found"); return err; }
+
+    /* Get the document's creator code */
+    FInfo fndrInfo;
+    err = FSpGetFInfo(&docSpec, &fndrInfo);
+    if (err != noErr) return err;
+
+    /* Find the application for this creator via Desktop Manager.
+     * Walk all mounted volumes until we find a match. */
+    FSSpec appSpec;
+    Boolean found = false;
+    short vIndex;
+    for (vIndex = 1; !found; vIndex++) {
+        HParamBlockRec vpb;
+        Str255 vname;
+        memset(&vpb, 0, sizeof(vpb));
+        vpb.volumeParam.ioNamePtr = vname;
+        vpb.volumeParam.ioVRefNum = 0;
+        vpb.volumeParam.ioVolIndex = vIndex;
+        err = PBHGetVInfoSync(&vpb);
+        if (err != noErr) break;  /* no more volumes */
+
+        DTPBRec dt;
+        memset(&dt, 0, sizeof(dt));
+        dt.ioVRefNum = vpb.volumeParam.ioVRefNum;
+        err = PBDTGetPath(&dt);
+        if (err != noErr) continue;
+
+        Str255 appName;
+        dt.ioNamePtr   = appName;
+        dt.ioFileCreator = fndrInfo.fdCreator;
+        dt.ioIndex     = 0;
+        err = PBDTGetAPPLSync(&dt);
+        if (err == noErr) {
+            err = FSMakeFSSpec(vpb.volumeParam.ioVRefNum,
+                               dt.ioAPPLParID, appName, &appSpec);
+            if (err == noErr) found = true;
+        }
+    }
+
+    if (!found) { bridge_step("OPEN:appl-not-found"); return fnfErr; }
+    bridge_step("OPEN:appl-found");
+
+    /* Build an 'odoc' high-level event as AppParameters for LaunchApplication.
+     * This is equivalent to Finder double-clicking the document. */
+    AEDesc fileDesc;
+    AEDescList fileList;
+    AppleEvent odocEvent;
+    AEDesc targetSelf;
+    ProcessSerialNumber selfPSN = {0, kCurrentProcess};
+
+    err = AECreateDesc(typeProcessSerialNumber, &selfPSN,
+                       sizeof(selfPSN), &targetSelf);
+    if (err != noErr) return err;
+
+    err = AECreateAppleEvent(kCoreEventClass, kAEOpenDocuments,
+                             &targetSelf, kAutoGenerateReturnID,
+                             kAnyTransactionID, &odocEvent);
+    AEDisposeDesc(&targetSelf);
+    if (err != noErr) return err;
+
+    AliasHandle alias;
+    err = NewAlias(NULL, &docSpec, &alias);
+    if (err != noErr) { AEDisposeDesc(&odocEvent); return err; }
+
+    err = AECreateList(NULL, 0, false, &fileList);
+    if (err == noErr) {
+        HLock((Handle)alias);
+        AEPutPtr(&fileList, 0, typeAlias, *alias,
+                 GetHandleSize((Handle)alias));
+        HUnlock((Handle)alias);
+        AEPutParamDesc(&odocEvent, keyDirectObject, &fileList);
+        AEDisposeDesc(&fileList);
+    }
+    DisposeHandle((Handle)alias);
+
+    AEDisposeDesc(&odocEvent);
+
+    /* Launch the app, then send it an 'odoc' AE once it's running. */
+    {
+        LaunchParamBlockRec lpb;
+        memset(&lpb, 0, sizeof(lpb));
+        lpb.launchBlockID      = extendedBlock;
+        lpb.launchEPBLength    = extendedBlockLen;
+        lpb.launchFileFlags    = 0;
+        lpb.launchControlFlags = launchContinue | launchNoFileFlags;
+        lpb.launchAppSpec      = &appSpec;
+        bridge_step("OPEN:pre-launch");
+        err = LaunchApplication(&lpb);
+        if (err != noErr) { bridge_step("OPEN:launch-failed"); return err; }
+        bridge_step("OPEN:launched");
+
+        /* Yield via Delay() instead of a WaitNextEvent loop. When MacPerl
+         * becomes frontmost, BridgeAgent's nested WaitNextEvent loop does
+         * not get scheduled reliably; Delay() is a Process Manager call
+         * that always yields for the requested duration.
+         *
+         * ~3s is enough for MacPerl to process the auto-generated 'oapp'
+         * AE and register its 'misc'/'dosc' handler. The dosc we send
+         * afterward sits in the AE queue and MacPerl processes it on the
+         * next trip through its event loop. */
+        {
+            unsigned long finalTicks;
+            Delay(180, &finalTicks);
+            bridge_step("OPEN:after-delay");
+
+            /* Query Process Manager for the actual PSN of the launched app.
+             * The PSN returned in launchProcessSN is reportedly unreliable,
+             * and passing an app signature is rejected with noSessionErr
+             * on 7.5. Walk the process list for the matching creator. */
+            ProcessSerialNumber appPSN = {0, kNoProcess};
+            ProcessInfoRec info;
+            Str31 nameBuf;
+            FSSpec procSpec;
+            ProcessSerialNumber iter = {0, kNoProcess};
+            while (GetNextProcess(&iter) == noErr) {
+                info.processInfoLength = sizeof(info);
+                info.processName = nameBuf;
+                info.processAppSpec = &procSpec;
+                if (GetProcessInformation(&iter, &info) == noErr) {
+                    if (info.processSignature == fndrInfo.fdCreator) {
+                        appPSN = iter;
+                        break;
+                    }
+                }
+            }
+            if (appPSN.lowLongOfPSN == kNoProcess) {
+                bridge_step("OPEN:psn-not-found");
+                return fnfErr;
+            }
+            {
+                char buf[48];
+                snprintf(buf, sizeof(buf), "OPEN:psn hi=%lx lo=%lx",
+                         (unsigned long)appPSN.highLongOfPSN,
+                         (unsigned long)appPSN.lowLongOfPSN);
+                bridge_step(buf);
+            }
+
+            AEAddressDesc target;
+            err = AECreateDesc(typeProcessSerialNumber, &appPSN,
+                               sizeof(appPSN), &target);
+            if (err != noErr) { bridge_step("OPEN:addr-create-failed"); return noErr; }
+
+            AppleEvent evt, reply;
+            err = AECreateAppleEvent('misc', 'dosc',
+                                     &target, kAutoGenerateReturnID,
+                                     kAnyTransactionID, &evt);
+            AEDisposeDesc(&target);
+            if (err != noErr) return noErr;
+
+            /* Direct parameter: a one-line Perl bootstrap that runs the
+             * actual script. MacPerl's 'dosc' handler executes typeChar
+             * parameters as inline Perl. We construct the path string
+             * from the FSSpec (volume:dirID:filename → Mac-style path).
+             *
+             * For files at the volume root, "VolumeName:filename" works.
+             * docSpec gives us volume vRefNum and a Pascal filename. */
+            {
+                Str255 volName;
+                HParamBlockRec vpb;
+                memset(&vpb, 0, sizeof(vpb));
+                vpb.volumeParam.ioNamePtr = volName;
+                vpb.volumeParam.ioVRefNum = docSpec.vRefNum;
+                vpb.volumeParam.ioVolIndex = 0;
+                if (PBHGetVInfoSync(&vpb) == noErr) {
+                    /* MacPerl's dosc handler expects keyDirectObject as a
+                     * plain typeChar string of Perl source. We send a tiny
+                     * stub that reads the real script file and evals it.
+                     *
+                     * Critical: MacPerl opens text files in Mac mode, so
+                     * the slurped content has \r line terminators. MacPerl's
+                     * own eval silently fails to parse sub definitions from
+                     * \r-terminated source (eval returns undef with empty
+                     * $@ — no error, just no subs defined). We convert
+                     * \r -> \n before eval so the parser sees LF newlines. */
+                    char src[512];
+                    int plen = volName[0];
+                    int dnlen = docSpec.name[0];
+                    snprintf(src, sizeof(src),
+                             "open(R,\"<%.*s:%.*s\")||die;"
+                             "local $/;$c=<R>;close R;"
+                             "$c=~tr/\\r/\\n/;"
+                             "eval $c;die $@ if $@;\r",
+                             plen, (char *)volName + 1,
+                             dnlen, (char *)docSpec.name + 1);
+                    AEPutParamPtr(&evt, keyDirectObject, typeChar,
+                                  src, (long)strlen(src));
+                    (void)vpb; (void)docSpec;
+                }
+            }
+
+            /* Flags match MPDrop.c (MacPerl's own droplet sender).
+             * kAEAlwaysInteract is required: without it AppleEvent
+             * Manager refuses to deliver to apps that haven't yet
+             * called AESetInteractionAllowed, which DoScript needs.
+             * kAENoReply because DoScript runs the script async via
+             * AESuspendTheCurrentEvent — kAEWaitReply would block. */
+            bridge_step("OPEN:pre-aesend");
+            err = AESend(&evt, NULL,
+                         kAENoReply | kAEAlwaysInteract,
+                         kAENormalPriority,
+                         kAEDefaultTimeout, NULL, NULL);
+            {
+                char buf[32];
+                snprintf(buf, sizeof(buf), "OPEN:post-aesend err=%d", (int)err);
+                bridge_step(buf);
+            }
+            AEDisposeDesc(&evt);
+            return err;
+        }
+        return noErr;
+    }
 }
 
 static OSErr do_quit_front(void)
@@ -167,16 +390,33 @@ static void write_heartbeat(void)
 
     FSSpec hb;
     short ref;
-    if (FSMakeFSSpec(0, 0, "\pHost:_bridge_heartbeat", &hb) != noErr) return;
-    if (FSpOpenDF(&hb, fsWrPerm, &ref) != noErr) return;
-    char buf[16];
-    long len = snprintf(buf, sizeof(buf), "%d\r", gHeartbeat);
+    if (FSMakeFSSpec(0, 0, "\pHost:bridge_heartbeat", &hb) == fnfErr)
+        FSpCreate(&hb, 'ttxt', 'TEXT', smSystemScript);
+    if (FSpOpenDF(&hb, fsWrPerm, &ref) == noErr) {
+        char buf[16];
+        long len = snprintf(buf, sizeof(buf), "%d\r", gHeartbeat);
+        SetEOF(ref, 0);
+        FSWrite(ref, &len, buf);
+        FSClose(ref);
+        FlushVol(NULL, 0);
+    }
+    draw_status();
+}
+
+/* Debug breadcrumb: leaves a single-step trail file on Host: so we can
+ * see which point in do_open_document we reached if the agent hangs. */
+static void bridge_step(const char *tag)
+{
+    FSSpec sp;
+    short ref;
+    if (FSMakeFSSpec(0, 0, "\pHost:bridge_step", &sp) == fnfErr)
+        FSpCreate(&sp, 'ttxt', 'TEXT', smSystemScript);
+    if (FSpOpenDF(&sp, fsWrPerm, &ref) != noErr) return;
+    long len = (long)strlen(tag);
     SetEOF(ref, 0);
-    FSWrite(ref, &len, buf);
+    FSWrite(ref, &len, tag);
     FSClose(ref);
     FlushVol(NULL, 0);
-
-    draw_status();
 }
 
 static void poll_bridge(void)
@@ -221,6 +461,16 @@ static void poll_bridge(void)
         path[0] = (unsigned char)len;
         memcpy(path + 1, cmd + 7, len);
         result = do_launch(path);
+    } else if (strncmp(cmd, "OPEN ", 5) == 0) {
+        int len = (int)strlen(cmd + 5);
+        while (len > 0 && (cmd[5+len-1] == '\n' || cmd[5+len-1] == '\r'
+                        || cmd[5+len-1] == ' '))
+            len--;
+        if (len > 255) len = 255;
+        unsigned char path[256];
+        path[0] = (unsigned char)len;
+        memcpy(path + 1, cmd + 5, len);
+        result = do_open_document(path);
     } else if (strncmp(cmd, "QUIT", 4) == 0) {
         result = do_quit_front();
     }

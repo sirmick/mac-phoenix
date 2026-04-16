@@ -1218,8 +1218,10 @@ Response APIRouter::handle_launch(const Request& req) {
     if (!::g_bridge_fs)
         return Response::json("{\"success\": false, \"error\": \"bridge FS not initialized\"}");
 
+    bool open_doc = j.contains("open") && j["open"].is_boolean() && j["open"].get<bool>();
+
     ::g_bridge_fs->remove_file("_bridge_result");
-    ::g_bridge_fs->put_file("_bridge_cmd", "LAUNCH " + path);
+    ::g_bridge_fs->put_file("_bridge_cmd", (open_doc ? "OPEN " : "LAUNCH ") + path);
 
     // Poll for result file OR command file deletion (both in BridgeFS)
     for (int i = 0; i < 100; i++) {  // 10 seconds
