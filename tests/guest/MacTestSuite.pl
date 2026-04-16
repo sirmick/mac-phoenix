@@ -127,24 +127,21 @@ sub test_audio {
     }
 }
 
-# --- Network tests (IO::Socket over MacTCP/OT) ---
+# --- Network tests (built-in socket ops + Socket.pm) ---
+#
+# MacPerl 5.004 doesn't ship IO::Socket::INET, but the interpreter has
+# socket()/connect()/send()/recv() baked in via GUSI, and Socket.pm is
+# bundled. We use those directly. Timeouts via 4-arg select() — alarm()
+# is unreliable on classic Mac OS.
 
 sub test_network {
-    # Dump @INC once for diagnostics — helps fix module path
-    if (open(DIAG, ">Host:perl_inc.txt")) {
-        print DIAG "Perl version: $]\r";
-        print DIAG "\@INC:\r";
-        for my $p (@INC) { print DIAG "  $p\r"; }
-        close(DIAG);
-    }
-
-    my $have_socket = eval { require IO::Socket::INET; 1 };
-    if (!$have_socket) {
+    my $have = eval { require Socket; Socket->import(); 1 };
+    if (!$have) {
         my $e = $@; $e =~ s/[\r\n]+/ /g;
-        report_fail('net_io_socket', "err=$e");
+        report_fail('net_socket_pm', "err=$e");
         return;
     }
-    report_pass('net_io_socket');
+    report_pass('net_socket_pm');
 
     # DNS
     my $packed = gethostbyname('example.com');
@@ -155,46 +152,49 @@ sub test_network {
         report_fail('dns_resolve', 'gethostbyname failed');
     }
 
-    # UDP to gateway
-    my $udp = IO::Socket::INET->new(
-        Proto    => 'udp',
-        PeerAddr => '10.0.2.1',
-        PeerPort => 7,
-    );
-    if ($udp) {
-        report_pass('udp_socket');
-        $udp->send('ping');
-        report_pass('udp_send');
+    my $gw = inet_aton('10.0.2.1');
+    unless ($gw) { report_fail('inet_aton_gw'); return; }
 
-        my $buf = '';
-        eval {
-            local $SIG{ALRM} = sub { die "timeout\n" };
-            alarm(3);
-            $udp->recv($buf, 64);
-            alarm(0);
-        };
-        if (length($buf) > 0) {
-            report_pass('udp_echo');
+    # UDP to gateway echo. Pass proto=0 (kernel default for SOCK_DGRAM):
+    # getprotobyname() requires a configured proto database, which classic
+    # Mac OS doesn't provide unless OpenTransport TCP/IP is set up.
+    if (socket(UDP, PF_INET, SOCK_DGRAM, 0)) {
+        report_pass('udp_socket');
+        my $to = sockaddr_in(7, $gw);
+        if (send(UDP, 'ping', 0, $to)) {
+            report_pass('udp_send');
+            # Wait up to 3s for reply via select()
+            my $rin = ''; vec($rin, fileno(UDP), 1) = 1;
+            my $n = select(my $rout = $rin, undef, undef, 3);
+            if ($n && vec($rout, fileno(UDP), 1)) {
+                my $from = recv(UDP, my $buf, 64, 0);
+                if (defined($from) && length($buf) > 0) {
+                    report_pass('udp_echo');
+                } else {
+                    report_skip('udp_echo', "recv err=$!");
+                }
+            } else {
+                report_skip('udp_echo', 'no response');
+            }
         } else {
-            report_skip('udp_echo', 'no response');
+            report_fail('udp_send', "err=$!");
         }
-        close($udp);
+        close(UDP);
     } else {
         report_fail('udp_socket', "err=$!");
     }
 
-    # TCP connect to gateway
-    my $tcp = IO::Socket::INET->new(
-        Proto    => 'tcp',
-        PeerAddr => '10.0.2.1',
-        PeerPort => 7,
-        Timeout  => 5,
-    );
-    if ($tcp) {
-        report_pass('tcp_connect');
-        close($tcp);
+    # TCP connect to gateway echo
+    if (socket(TCP, PF_INET, SOCK_STREAM, 0)) {
+        my $to = sockaddr_in(7, $gw);
+        if (connect(TCP, $to)) {
+            report_pass('tcp_connect');
+        } else {
+            report_skip('tcp_connect', "err=$!");
+        }
+        close(TCP);
     } else {
-        report_skip('tcp_connect', "err=$!");
+        report_fail('tcp_socket', "err=$!");
     }
 }
 

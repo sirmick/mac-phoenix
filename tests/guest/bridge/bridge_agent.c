@@ -92,8 +92,6 @@ static void open_status_window(void)
 
 /* ---------- Bridge command handlers ---------- */
 
-static void bridge_step(const char *tag);
-
 static OSErr do_launch(const unsigned char *path)
 {
     FSSpec spec;
@@ -110,224 +108,151 @@ static OSErr do_launch(const unsigned char *path)
     return LaunchApplication(&pb);
 }
 
-static OSErr do_open_document(const unsigned char *path)
+/* Locate the application that owns a given creator code by walking the
+ * Desktop Manager database of every mounted volume. Returns noErr and
+ * fills appSpec, or fnfErr if no app is registered for the creator. */
+static OSErr find_app_for_creator(OSType creator, FSSpec *appSpec)
 {
-    bridge_step("OPEN:enter");
-    /* Resolve the document file */
-    FSSpec docSpec;
-    OSErr err = FSMakeFSSpec(0, 0, path, &docSpec);
-    if (err != noErr) { bridge_step("OPEN:doc-not-found"); return err; }
-
-    /* Get the document's creator code */
-    FInfo fndrInfo;
-    err = FSpGetFInfo(&docSpec, &fndrInfo);
-    if (err != noErr) return err;
-
-    /* Find the application for this creator via Desktop Manager.
-     * Walk all mounted volumes until we find a match. */
-    FSSpec appSpec;
-    Boolean found = false;
     short vIndex;
-    for (vIndex = 1; !found; vIndex++) {
+    for (vIndex = 1; ; vIndex++) {
         HParamBlockRec vpb;
         Str255 vname;
         memset(&vpb, 0, sizeof(vpb));
         vpb.volumeParam.ioNamePtr = vname;
-        vpb.volumeParam.ioVRefNum = 0;
         vpb.volumeParam.ioVolIndex = vIndex;
-        err = PBHGetVInfoSync(&vpb);
-        if (err != noErr) break;  /* no more volumes */
+        if (PBHGetVInfoSync(&vpb) != noErr) return fnfErr;
 
         DTPBRec dt;
         memset(&dt, 0, sizeof(dt));
         dt.ioVRefNum = vpb.volumeParam.ioVRefNum;
-        err = PBDTGetPath(&dt);
-        if (err != noErr) continue;
+        if (PBDTGetPath(&dt) != noErr) continue;
 
         Str255 appName;
-        dt.ioNamePtr   = appName;
-        dt.ioFileCreator = fndrInfo.fdCreator;
-        dt.ioIndex     = 0;
-        err = PBDTGetAPPLSync(&dt);
-        if (err == noErr) {
-            err = FSMakeFSSpec(vpb.volumeParam.ioVRefNum,
-                               dt.ioAPPLParID, appName, &appSpec);
-            if (err == noErr) found = true;
+        dt.ioNamePtr     = appName;
+        dt.ioFileCreator = creator;
+        dt.ioIndex       = 0;
+        if (PBDTGetAPPLSync(&dt) == noErr &&
+            FSMakeFSSpec(vpb.volumeParam.ioVRefNum, dt.ioAPPLParID,
+                         appName, appSpec) == noErr) {
+            return noErr;
         }
     }
+}
 
-    if (!found) { bridge_step("OPEN:appl-not-found"); return fnfErr; }
-    bridge_step("OPEN:appl-found");
-
-    /* Build an 'odoc' high-level event as AppParameters for LaunchApplication.
-     * This is equivalent to Finder double-clicking the document. */
-    AEDesc fileDesc;
-    AEDescList fileList;
-    AppleEvent odocEvent;
-    AEDesc targetSelf;
-    ProcessSerialNumber selfPSN = {0, kCurrentProcess};
-
-    err = AECreateDesc(typeProcessSerialNumber, &selfPSN,
-                       sizeof(selfPSN), &targetSelf);
-    if (err != noErr) return err;
-
-    err = AECreateAppleEvent(kCoreEventClass, kAEOpenDocuments,
-                             &targetSelf, kAutoGenerateReturnID,
-                             kAnyTransactionID, &odocEvent);
-    AEDisposeDesc(&targetSelf);
-    if (err != noErr) return err;
-
-    AliasHandle alias;
-    err = NewAlias(NULL, &docSpec, &alias);
-    if (err != noErr) { AEDisposeDesc(&odocEvent); return err; }
-
-    err = AECreateList(NULL, 0, false, &fileList);
-    if (err == noErr) {
-        HLock((Handle)alias);
-        AEPutPtr(&fileList, 0, typeAlias, *alias,
-                 GetHandleSize((Handle)alias));
-        HUnlock((Handle)alias);
-        AEPutParamDesc(&odocEvent, keyDirectObject, &fileList);
-        AEDisposeDesc(&fileList);
-    }
-    DisposeHandle((Handle)alias);
-
-    AEDisposeDesc(&odocEvent);
-
-    /* Launch the app, then send it an 'odoc' AE once it's running. */
-    {
-        LaunchParamBlockRec lpb;
-        memset(&lpb, 0, sizeof(lpb));
-        lpb.launchBlockID      = extendedBlock;
-        lpb.launchEPBLength    = extendedBlockLen;
-        lpb.launchFileFlags    = 0;
-        lpb.launchControlFlags = launchContinue | launchNoFileFlags;
-        lpb.launchAppSpec      = &appSpec;
-        bridge_step("OPEN:pre-launch");
-        err = LaunchApplication(&lpb);
-        if (err != noErr) { bridge_step("OPEN:launch-failed"); return err; }
-        bridge_step("OPEN:launched");
-
-        /* Yield via Delay() instead of a WaitNextEvent loop. When MacPerl
-         * becomes frontmost, BridgeAgent's nested WaitNextEvent loop does
-         * not get scheduled reliably; Delay() is a Process Manager call
-         * that always yields for the requested duration.
-         *
-         * ~3s is enough for MacPerl to process the auto-generated 'oapp'
-         * AE and register its 'misc'/'dosc' handler. The dosc we send
-         * afterward sits in the AE queue and MacPerl processes it on the
-         * next trip through its event loop. */
-        {
-            unsigned long finalTicks;
-            Delay(180, &finalTicks);
-            bridge_step("OPEN:after-delay");
-
-            /* Query Process Manager for the actual PSN of the launched app.
-             * The PSN returned in launchProcessSN is reportedly unreliable,
-             * and passing an app signature is rejected with noSessionErr
-             * on 7.5. Walk the process list for the matching creator. */
-            ProcessSerialNumber appPSN = {0, kNoProcess};
-            ProcessInfoRec info;
-            Str31 nameBuf;
-            FSSpec procSpec;
-            ProcessSerialNumber iter = {0, kNoProcess};
-            while (GetNextProcess(&iter) == noErr) {
-                info.processInfoLength = sizeof(info);
-                info.processName = nameBuf;
-                info.processAppSpec = &procSpec;
-                if (GetProcessInformation(&iter, &info) == noErr) {
-                    if (info.processSignature == fndrInfo.fdCreator) {
-                        appPSN = iter;
-                        break;
-                    }
-                }
-            }
-            if (appPSN.lowLongOfPSN == kNoProcess) {
-                bridge_step("OPEN:psn-not-found");
-                return fnfErr;
-            }
-            {
-                char buf[48];
-                snprintf(buf, sizeof(buf), "OPEN:psn hi=%lx lo=%lx",
-                         (unsigned long)appPSN.highLongOfPSN,
-                         (unsigned long)appPSN.lowLongOfPSN);
-                bridge_step(buf);
-            }
-
-            AEAddressDesc target;
-            err = AECreateDesc(typeProcessSerialNumber, &appPSN,
-                               sizeof(appPSN), &target);
-            if (err != noErr) { bridge_step("OPEN:addr-create-failed"); return noErr; }
-
-            AppleEvent evt, reply;
-            err = AECreateAppleEvent('misc', 'dosc',
-                                     &target, kAutoGenerateReturnID,
-                                     kAnyTransactionID, &evt);
-            AEDisposeDesc(&target);
-            if (err != noErr) return noErr;
-
-            /* Direct parameter: a one-line Perl bootstrap that runs the
-             * actual script. MacPerl's 'dosc' handler executes typeChar
-             * parameters as inline Perl. We construct the path string
-             * from the FSSpec (volume:dirID:filename → Mac-style path).
-             *
-             * For files at the volume root, "VolumeName:filename" works.
-             * docSpec gives us volume vRefNum and a Pascal filename. */
-            {
-                Str255 volName;
-                HParamBlockRec vpb;
-                memset(&vpb, 0, sizeof(vpb));
-                vpb.volumeParam.ioNamePtr = volName;
-                vpb.volumeParam.ioVRefNum = docSpec.vRefNum;
-                vpb.volumeParam.ioVolIndex = 0;
-                if (PBHGetVInfoSync(&vpb) == noErr) {
-                    /* MacPerl's dosc handler expects keyDirectObject as a
-                     * plain typeChar string of Perl source. We send a tiny
-                     * stub that reads the real script file and evals it.
-                     *
-                     * Critical: MacPerl opens text files in Mac mode, so
-                     * the slurped content has \r line terminators. MacPerl's
-                     * own eval silently fails to parse sub definitions from
-                     * \r-terminated source (eval returns undef with empty
-                     * $@ — no error, just no subs defined). We convert
-                     * \r -> \n before eval so the parser sees LF newlines. */
-                    char src[512];
-                    int plen = volName[0];
-                    int dnlen = docSpec.name[0];
-                    snprintf(src, sizeof(src),
-                             "open(R,\"<%.*s:%.*s\")||die;"
-                             "local $/;$c=<R>;close R;"
-                             "$c=~tr/\\r/\\n/;"
-                             "eval $c;die $@ if $@;\r",
-                             plen, (char *)volName + 1,
-                             dnlen, (char *)docSpec.name + 1);
-                    AEPutParamPtr(&evt, keyDirectObject, typeChar,
-                                  src, (long)strlen(src));
-                    (void)vpb; (void)docSpec;
-                }
-            }
-
-            /* Flags match MPDrop.c (MacPerl's own droplet sender).
-             * kAEAlwaysInteract is required: without it AppleEvent
-             * Manager refuses to deliver to apps that haven't yet
-             * called AESetInteractionAllowed, which DoScript needs.
-             * kAENoReply because DoScript runs the script async via
-             * AESuspendTheCurrentEvent — kAEWaitReply would block. */
-            bridge_step("OPEN:pre-aesend");
-            err = AESend(&evt, NULL,
-                         kAENoReply | kAEAlwaysInteract,
-                         kAENormalPriority,
-                         kAEDefaultTimeout, NULL, NULL);
-            {
-                char buf[32];
-                snprintf(buf, sizeof(buf), "OPEN:post-aesend err=%d", (int)err);
-                bridge_step(buf);
-            }
-            AEDisposeDesc(&evt);
-            return err;
+/* Look up the Process Manager PSN for a process by creator signature.
+ * Used after LaunchApplication because the PSN field returned in the
+ * LaunchParamBlock is reportedly unreliable, and AECreateDesc with a
+ * signature target gets noSessionErr on 7.5. */
+static OSErr psn_for_creator(OSType creator, ProcessSerialNumber *outPSN)
+{
+    ProcessSerialNumber iter = {0, kNoProcess};
+    Str31 nameBuf;
+    FSSpec spec;
+    while (GetNextProcess(&iter) == noErr) {
+        ProcessInfoRec info;
+        info.processInfoLength = sizeof(info);
+        info.processName       = nameBuf;
+        info.processAppSpec    = &spec;
+        if (GetProcessInformation(&iter, &info) == noErr &&
+            info.processSignature == creator) {
+            *outPSN = iter;
+            return noErr;
         }
-        return noErr;
     }
+    return procNotFound;
+}
+
+static OSErr do_open_document(const unsigned char *path)
+{
+    FSSpec docSpec;
+    OSErr err = FSMakeFSSpec(0, 0, path, &docSpec);
+    if (err != noErr) return err;
+
+    FInfo fndrInfo;
+    err = FSpGetFInfo(&docSpec, &fndrInfo);
+    if (err != noErr) return err;
+
+    FSSpec appSpec;
+    err = find_app_for_creator(fndrInfo.fdCreator, &appSpec);
+    if (err != noErr) return err;
+
+    /* Launch the app with no AppParameters. We send the script via a
+     * follow-up 'misc'/'dosc' AppleEvent rather than packaging it as
+     * an 'odoc' alias on launch, because MacPerl handles dosc as the
+     * canonical "execute Perl source" entry point. */
+    LaunchParamBlockRec lpb;
+    memset(&lpb, 0, sizeof(lpb));
+    lpb.launchBlockID      = extendedBlock;
+    lpb.launchEPBLength    = extendedBlockLen;
+    lpb.launchControlFlags = launchContinue | launchNoFileFlags;
+    lpb.launchAppSpec      = &appSpec;
+    err = LaunchApplication(&lpb);
+    if (err != noErr) return err;
+
+    /* Yield via Delay() rather than a nested WaitNextEvent loop.
+     * Once MacPerl is frontmost, BridgeAgent's WNE doesn't always get
+     * scheduled; Delay() is a Process Manager call that always yields.
+     * ~3s gives MacPerl time to process its auto-generated 'oapp' AE
+     * and register the 'misc'/'dosc' handler. */
+    unsigned long finalTicks;
+    Delay(180, &finalTicks);
+
+    ProcessSerialNumber appPSN;
+    if (psn_for_creator(fndrInfo.fdCreator, &appPSN) != noErr) return fnfErr;
+
+    AEAddressDesc target;
+    err = AECreateDesc(typeProcessSerialNumber, &appPSN,
+                       sizeof(appPSN), &target);
+    if (err != noErr) return err;
+
+    AppleEvent evt;
+    err = AECreateAppleEvent('misc', 'dosc',
+                             &target, kAutoGenerateReturnID,
+                             kAnyTransactionID, &evt);
+    AEDisposeDesc(&target);
+    if (err != noErr) return err;
+
+    /* Direct parameter is a tiny Perl stub that reads the real script
+     * and evals it. We can't just inline the script body — MacPerl
+     * truncates large dosc payloads. */
+    Str255 volName;
+    HParamBlockRec vpb;
+    memset(&vpb, 0, sizeof(vpb));
+    vpb.volumeParam.ioNamePtr = volName;
+    vpb.volumeParam.ioVRefNum = docSpec.vRefNum;
+    if (PBHGetVInfoSync(&vpb) != noErr) {
+        AEDisposeDesc(&evt);
+        return ioErr;
+    }
+
+    /* MacPerl opens text files in Mac mode so the slurped content has
+     * \r line terminators, and MacPerl's eval silently fails to install
+     * sub definitions from \r-terminated source (eval returns undef
+     * with empty $@ — no error, just no subs defined). The tr/// fixes
+     * that by converting to \n before eval. */
+    char src[512];
+    int plen = volName[0];
+    int dnlen = docSpec.name[0];
+    snprintf(src, sizeof(src),
+             "open(R,\"<%.*s:%.*s\")||die;"
+             "local $/;$c=<R>;close R;"
+             "$c=~tr/\\r/\\n/;"
+             "eval $c;die $@ if $@;\r",
+             plen, (char *)volName + 1,
+             dnlen, (char *)docSpec.name + 1);
+    AEPutParamPtr(&evt, keyDirectObject, typeChar,
+                  src, (long)strlen(src));
+
+    /* Flags match MPDrop.c (MacPerl's own droplet sender).
+     * kAEAlwaysInteract: AE Manager otherwise refuses to deliver to
+     * apps that haven't called AESetInteractionAllowed.
+     * kAENoReply: DoScript runs async via AESuspendTheCurrentEvent. */
+    err = AESend(&evt, NULL,
+                 kAENoReply | kAEAlwaysInteract,
+                 kAENormalPriority,
+                 kAEDefaultTimeout, NULL, NULL);
+    AEDisposeDesc(&evt);
+    return err;
 }
 
 static OSErr do_quit_front(void)
@@ -349,6 +274,47 @@ static OSErr do_quit_front(void)
 
     err = AESend(&evt, &reply, kAENoReply, kAENormalPriority,
                  kNoTimeOut, NULL, NULL);
+    AEDisposeDesc(&evt);
+    return err;
+}
+
+/* Send kAEShutDown ('shut') or kAERestart ('rest') to Finder. Finder quits
+ * open apps first, then invokes the Shutdown Manager — same path as
+ * Special → Shut Down / Restart in the menu. */
+static OSErr do_system_event(AEEventID eventID)
+{
+    ProcessSerialNumber finderPSN = {0, kNoProcess};
+    ProcessSerialNumber iter = {0, kNoProcess};
+    ProcessInfoRec info;
+    Str31 nameBuf;
+    FSSpec procSpec;
+    while (GetNextProcess(&iter) == noErr) {
+        info.processInfoLength = sizeof(info);
+        info.processName = nameBuf;
+        info.processAppSpec = &procSpec;
+        if (GetProcessInformation(&iter, &info) == noErr) {
+            if (info.processSignature == 'MACS') {
+                finderPSN = iter;
+                break;
+            }
+        }
+    }
+    if (finderPSN.lowLongOfPSN == kNoProcess) return procNotFound;
+
+    AEAddressDesc target;
+    OSErr err = AECreateDesc(typeProcessSerialNumber, &finderPSN,
+                             sizeof(finderPSN), &target);
+    if (err != noErr) return err;
+
+    AppleEvent evt;
+    err = AECreateAppleEvent(kCoreEventClass, eventID,
+                             &target, kAutoGenerateReturnID,
+                             kAnyTransactionID, &evt);
+    AEDisposeDesc(&target);
+    if (err != noErr) return err;
+
+    err = AESend(&evt, NULL, kAENoReply | kAEAlwaysInteract,
+                 kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
     AEDisposeDesc(&evt);
     return err;
 }
@@ -471,6 +437,10 @@ static void poll_bridge(void)
         path[0] = (unsigned char)len;
         memcpy(path + 1, cmd + 5, len);
         result = do_open_document(path);
+    } else if (strncmp(cmd, "SHUTDOWN", 8) == 0) {
+        result = do_system_event(kAEShutDown);
+    } else if (strncmp(cmd, "RESTART", 7) == 0) {
+        result = do_system_event(kAERestart);
     } else if (strncmp(cmd, "QUIT", 4) == 0) {
         result = do_quit_front();
     }

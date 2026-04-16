@@ -2,15 +2,18 @@
 #
 # test_guest_suite.sh - Run the guest-side Mac test suite
 #
-# Boots the emulator, launches MacTestSuite via ExtFS, waits for it to
-# finish, then reads results from the shared folder.
+# Boots the emulator, dispatches MacTestSuite.pl to MacPerl via the
+# BridgeAgent (Startup Items app), waits for it to finish, then reads
+# results from the shared folder.
 #
 # Usage:
 #   tests/test_guest_suite.sh [--timeout 60] [--port 18094] [--disk path]
-#                             [--os-version 7.5.5|7.6|8.x|9.x]
+#                             [--rom path] [--os-version 7.5.5|7.6]
+#                             [--network MODE]
 #
 # Prerequisites:
-#   - MacTestSuite binary in tests/guest/ (built with Retro68)
+#   - Disk image with MacPerl installed and BridgeAgent in Startup Items
+#     (provisioning/install_bridge_agent.sh)
 #   - ROM and disk image available
 #
 set -euo pipefail
@@ -27,7 +30,6 @@ OS_VERSION=""
 ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 DISMISS=1
-USE_PERL=0
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -41,7 +43,6 @@ while [[ $# -gt 0 ]]; do
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) EXTRA_FLAGS+=(--network "$2"); shift 2 ;;
         --no-dismiss) DISMISS=0; shift ;;
-        --perl) USE_PERL=1; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -49,17 +50,11 @@ done
 [[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 
-# Default network for PPC OT tests: socket bridge (auto-launches net-bridge).
-# Caller can override with --network <mode>.
-if [[ "$ARCH" == "ppc" ]] && [[ ! " ${EXTRA_FLAGS[*]} " =~ " --network " ]]; then
-    EXTRA_FLAGS+=(--network "socket:/tmp/mactest-net-$$.sock")
-fi
-
-# net-bridge binary is found relative to CWD; run from project root.
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# Select ROM and disk based on architecture (--rom flag overrides)
+# ROM and disk default by architecture (MacPerl runs on both 68k and PPC;
+# our 68k BridgeAgent runs under PPC's built-in 68k emulator).
 if [[ -n "$ROM_OVERRIDE" ]]; then
     ROM="$ROM_OVERRIDE"
 elif [[ "$ARCH" == "ppc" ]]; then
@@ -92,45 +87,24 @@ if [[ ! -f "$DISK" ]]; then
     exit 77
 fi
 
-# --- Setup ExtFS shared folder ---
-
-EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
-
 PERL_SCRIPT="$GUEST_DIR/MacTestSuite.pl"
 PERL_INSTALL="$GUEST_DIR/install_perl_test.py"
 
-if [[ $USE_PERL -eq 1 ]]; then
-    # Perl mode: install .pl script with TEXT/McPL type/creator
-    if [[ ! -f "$PERL_SCRIPT" ]]; then
-        echo "SKIP: Perl test script not found: $PERL_SCRIPT"
-        exit 77
-    fi
-    python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "MacTestSuite.pl"
-    LAUNCH_TARGET="Host:MacTestSuite.pl"
-else
-    # Native mode: install compiled MacBinary test app
-    if [[ "$ARCH" == "ppc" ]]; then
-        GUEST_MACBIN="$GUEST_DIR/MacTestSuitePPC.bin"
-    else
-        GUEST_MACBIN="$GUEST_DIR/MacTestSuite.bin"
-    fi
-    MACBIN_SCRIPT="$GUEST_DIR/macbin_to_extfs.py"
-
-    if [[ ! -f "$GUEST_MACBIN" ]]; then
-        echo "SKIP: Guest binary not found: $GUEST_MACBIN"
-        echo "  Build it first: make -C tests/guest"
-        exit 77
-    fi
-    python3 "$MACBIN_SCRIPT" "$GUEST_MACBIN" "$EXTFS_DIR" MacTestSuite
-    LAUNCH_TARGET="Host:MacTestSuite"
+if [[ ! -f "$PERL_SCRIPT" ]]; then
+    echo "SKIP: Perl test script not found: $PERL_SCRIPT"
+    exit 77
 fi
+
+# --- Setup ExtFS shared folder ---
+
+EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
+python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "MacTestSuite.pl"
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
         kill "$EMU_PID" 2>/dev/null || true
         wait "$EMU_PID" 2>/dev/null || true
     fi
-    # Preserve results on failure
     if [[ -f "$EXTFS_DIR/test_results.txt" && ${EXIT_CODE:-1} -ne 0 ]]; then
         echo "--- guest results ---"
         cat "$EXTFS_DIR/test_results.txt"
@@ -178,7 +152,6 @@ for i in $(seq 1 20); do
     sleep 0.5
 done
 
-# Start CPU
 curl -sf -X POST "http://localhost:$PORT/api/emulator/start" >/dev/null
 
 # --- Wait for boot to desktop ---
@@ -206,30 +179,21 @@ while true; do
     sleep 1
 done
 
-# Extra settle time for Finder to fully initialize
-sleep 2
+sleep 2  # Finder settle
 
-# --- Launch guest test app ---
+# --- Dispatch test script via bridge ---
 
-echo "Launching MacTestSuite..."
-if [[ $USE_PERL -eq 1 ]]; then
-    LAUNCH_JSON="{\"path\":\"$LAUNCH_TARGET\", \"open\": true}"
-else
-    LAUNCH_JSON="{\"path\":\"$LAUNCH_TARGET\"}"
-fi
+echo "Launching MacTestSuite.pl..."
 LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/launch" \
-    -d "$LAUNCH_JSON" || echo '{"success":false}')
+    -d '{"path":"Host:MacTestSuite.pl","open":true}' || echo '{"success":false}')
 
 if ! echo "$LAUNCH" | grep -q '"success": true'; then
-    echo "FAIL: Could not launch MacTestSuite"
+    echo "FAIL: Could not launch MacTestSuite.pl"
     echo "  Response: $LAUNCH"
     exit 1
 fi
 
 # --- Wait for test app to run and finish ---
-#
-# The app may run and exit faster than polling can detect CurApName changing.
-# So we check BOTH: (a) CurApName != Finder, and (b) results file exists.
 
 echo -n "Waiting for tests..."
 TEST_START=$(date +%s)
@@ -245,8 +209,7 @@ while true; do
         exit 1
     fi
 
-    # Check if results file appeared (app finished and wrote results)
-    if [[ -f "$RESULTS_FILE" ]]; then
+    if [[ -f "$RESULTS_FILE" ]] && grep -q '\-\-\-' "$RESULTS_FILE" 2>/dev/null; then
         echo " done (${ELAPSED}s)"
         break
     fi
@@ -255,23 +218,13 @@ while true; do
     sleep 1
 done
 
-# --- Collect results ---
-
-RESULTS_FILE="$EXTFS_DIR/test_results.txt"
-if [[ ! -f "$RESULTS_FILE" ]]; then
-    echo "FAIL: No results file found at $RESULTS_FILE"
-    echo "  (Test app may have crashed before writing results)"
-    exit 1
-fi
+# --- Collect & parse results ---
 
 echo ""
 echo "--- Results ---"
 cat "$RESULTS_FILE"
 echo ""
 
-# --- Parse results ---
-
-# Convert Mac line endings (CR) to Unix (LF) for grep
 tr '\r' '\n' < "$RESULTS_FILE" > "${RESULTS_FILE}.unix"
 RESULTS_UNIX="${RESULTS_FILE}.unix"
 

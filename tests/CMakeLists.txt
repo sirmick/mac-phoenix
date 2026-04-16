@@ -181,3 +181,4 @@ set_tests_properties(guest_suite_ppc PROPERTIES
   SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
+

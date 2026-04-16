@@ -1,10 +1,10 @@
 # Command Bridge
 
-Host-side command dispatcher for controlling the running Mac OS. Provides API endpoints for querying app state, window lists, and executing actions like launching apps.
+Host-side command dispatcher for controlling the running Mac OS. Provides API endpoints for querying app state, window lists, and executing actions like launching apps and running scripts.
 
 ## Architecture
 
-The command bridge has two layers:
+The bridge has two layers: passive read commands satisfied entirely from the host, and active commands relayed to a guest-side helper app.
 
 ### 1. Read Commands (IRQ context)
 
@@ -15,78 +15,34 @@ Read commands peek Mac memory directly from the 60Hz IRQ handler. No Toolbox cal
 - **GET_TICKS** — reads Ticks counter at 0x016A
 - **READ_MEMORY** — hex dump of arbitrary Mac address
 
-### 2. Action Commands (application context)
+### 2. Action Commands (BridgeAgent)
 
-Action commands (LaunchApplication, ExitToShell) require full Toolbox context — they can't run from an interrupt handler. These use a guest INIT that communicates with the host via EmulOp.
+Action commands (`/api/launch`) are dispatched via **BridgeAgent**, a tiny m68k Mac application installed in `:System Folder:Startup Items:` on each test disk image. Finder auto-launches BridgeAgent at desktop time. The same 68k binary runs natively on System 7.x and under Mac OS 9's built-in 68k emulator on PPC.
 
-**EmulOp Protocol** (`M68K_EMUL_OP_INIT_BRIDGE`, opcode 0x713A):
-
-| Sub-op (D0) | Direction | Description |
-|-------------|-----------|-------------|
-| 0 (CHECK) | Host→Guest | Guest polls: any command pending? Host writes cmd_type→D0, path→buffer at A0 |
-| 0x80 (RESULT) | Guest→Host | Guest reports completion: D1 = Mac OS error code |
-| 0xFF | Guest→Host | INIT loaded signal (startup handshake) |
+BridgeAgent runs an event loop that polls a magic file in the host-shared ExtFS volume, reads a JSON-ish command, and dispatches an AppleEvent (`'aevt'`/`'odoc'` to a creator code, or `'misc'`/`'dosc'` to MacPerl with a Perl source payload). The host never has to construct a 68k context — the guest does the launch under its own Process Manager.
 
 ```
-Host API                           Guest INIT
-────────                           ──────────
+Host API                           BridgeAgent (guest app)
+────────                           ───────────────────────
 POST /api/launch
-  → submit_to_init(LAUNCH, path)
-  → wait_init_result(10s)
-                                   jGNEFilter fires (GetNextEvent)
-                                   EmulOp CHECK → host delivers command
-                                   FSMakeFSSpec + LaunchApplication
-                                   EmulOp RESULT → host receives err
+  → write _bridge_cmd to ExtFS
+  → poll _bridge_resp
+                                   WaitNextEvent loop reads _bridge_cmd
+                                   Resolve creator (Desktop DB walk)
+                                   Send AppleEvent to MacPerl/Finder
+                                   Write _bridge_resp
   ← return JSON
 ```
 
-### Status: WIP
+### Transport — magic filenames in ExtFS
 
-**What works:**
-- Read commands (app name, window list, ticks) — fully working
-- EmulOp infrastructure — host↔guest communication channel ready
-- MacTestSuite guest binary — built with Retro68, deploys via macbin_to_extfs.py
+`src/core/extfs.cpp` intercepts a small set of filenames in the shared volume and routes I/O to in-memory buffers instead of the host directory:
 
-**What doesn't work yet:**
-- App launching — the `_Launch` trap doesn't actually start apps (see Known Issues)
+- `_bridge_cmd` — host writes, guest reads
+- `_bridge_resp` — guest writes, host reads
+- `_bridge_heartbeat` — guest pings, host watches for liveness
 
-## Known Issues & Complexity
-
-### ScratchMem address is runtime-dependent
-
-The ScratchMem Mac address depends on RAM size:
-- 32MB RAM: ScratchMem at 0x02108000
-- 64MB RAM: ScratchMem at 0x04108000
-
-Any code that writes to ScratchMem must compute addresses at runtime via `Host2MacAddr(ScratchMem)`, not use hardcoded constants. This was a root cause of early launch failures.
-
-### jGNEFilter gets overwritten during boot
-
-The jGNEFilter low-memory global (0x29A) is written by multiple system extensions during boot. Installing a filter during the "extensions" boot phase doesn't work — later extensions overwrite it. The filter must be installed AFTER boot stabilizes (after Finder starts).
-
-### _Launch returns noErr but doesn't start apps
-
-Both approaches were tried:
-
-1. **Host-side _Launch** (inline A-line trap 0xA9F2 in hand-coded 68k in ScratchMem): Returns noErr but the Process Manager never switches to the new app. Possibly because:
-   - Trap dispatch doesn't work correctly for code in ScratchMem
-   - The 68k context (A5 world, trap dispatch table) isn't set up correctly for injected code
-   - With `launchContinue`, `_Launch` queues the app but the Process Manager needs a proper `WaitNextEvent` yield to switch — which may not happen from injected code
-
-2. **Guest-side LaunchApplication** (Retro68 INIT with jGNEFilter): The INIT loads and communicates via EmulOp, but:
-   - Retro68 flat binary relocation doesn't fix absolute symbol references in inline asm
-   - GCC function prologues corrupt the register-based jGNEFilter calling convention
-   - Need a pure asm thunk for the filter entry, with PC-relative-only addressing
-   - jGNEFilter overwrite issue (see above) adds timing complexity
-
-### Retro68 flat binary constraints
-
-When building code resources (`--mac-flat`) with Retro68:
-- `RETRO68_RELOCATE()` fixes up absolute references generated by C code
-- Inline asm absolute references (`move.l symbol, %a0`) are **NOT** relocated — causes Address Error (Exception 11)
-- Must use PC-relative addressing (`lea symbol(%pc), %a0`) or pass values through C variables
-- C symbol names have **no leading underscore** on m68k-apple-macos target
-- Functions used as callbacks need asm thunks to avoid GCC prologue corruption
+Real files land on the host filesystem normally; only this `_bridge_*` namespace is intercepted.
 
 ## Shared Memory Transport (Fork Mode)
 
@@ -102,34 +58,36 @@ The webserver runs in the parent process; the CPU runs in a forked child. They c
 
 ## API Endpoints
 
-| Endpoint | Method | Description | Status |
-|----------|--------|-------------|--------|
-| `/api/app` | GET | Current app name (passive field) | Working |
-| `/api/windows` | GET | Window list (command queue) | Working |
-| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` | Working |
-| `/api/launch` | POST | Launch app: `{"path": "HD:SimpleText"}` | WIP |
-| `/api/quit` | POST | Quit current app | WIP |
-| `/api/keypress` | POST | Send key event: `{"key": "return"}` | Working |
-| `/api/mouse` | POST | Move cursor: `{"x":N,"y":N}` | Working |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/app` | GET | Current app name (passive field) |
+| `/api/windows` | GET | Window list (command queue) |
+| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` |
+| `/api/launch` | POST | Launch app or open document: `{"path":"Host:foo.pl","open":true}` |
+| `/api/keypress` | POST | Send key event: `{"key": "return"}` |
+| `/api/mouse` | POST | Move cursor: `{"x":N,"y":N}` |
 
 ## Files
 
 | File | Role |
 |------|------|
-| `src/core/command_bridge.h` | Command/Result structs, CommandBridge class, INIT bridge API |
-| `src/core/command_bridge.cpp` | Read commands, legacy jGNEFilter, INIT bridge submit/wait |
-| `src/core/emul_op.cpp` | EmulOp handlers: IRQ drain, CMD_DISPATCH, INIT_BRIDGE |
-| `src/common/include/emul_op.h` | M68K_EMUL_OP_CMD_DISPATCH (0x7139), M68K_EMUL_OP_INIT_BRIDGE (0x713A) |
+| `src/core/command_bridge.h` | Command/Result structs, CommandBridge class |
+| `src/core/command_bridge.cpp` | Read commands, SHM queue plumbing |
+| `src/core/extfs.cpp` | `_bridge_*` filename interception |
 | `src/webserver/api_handlers.cpp` | HTTP endpoint handlers |
-| `tests/guest/MacTestSuite.bin` | Guest test suite binary (Retro68) |
-| `tests/guest/macbin_to_extfs.py` | MacBinary → ExtFS layout converter |
-| `tests/test_command_bridge.sh` | Integration tests |
-| `tests/test_guest_suite.sh` | Guest test suite runner |
+| `tests/guest/bridge/bridge_agent.c` | BridgeAgent source (Retro68, m68k) |
+| `tests/guest/bridge/BridgeAgent.bin` | Pre-built MacBinary (committed) |
+| `provisioning/install_bridge_agent.sh` | hfsutils install into Startup Items |
+| `tests/guest/MacTestSuite.pl` | MacPerl test script (runs on m68k & PPC) |
+| `tests/guest/install_perl_test.py` | Lay out `.pl` + `.finf` for ExtFS |
+| `tests/test_guest_suite.sh` | Boot → dispatch script → collect results |
 
-## Possible Approaches (not yet tried)
+## Running the Guest Suite
 
-1. **Patch _GetNextEvent trap** instead of jGNEFilter — use GetTrapAddress/SetTrapAddress to hook the trap. More reliable than low-memory globals, standard INIT technique.
-2. **Apple Events** — send `kAEOpenDocuments` to Finder. The proper System 7 way but requires Apple Event handling infrastructure.
-3. **Finder scripting** — use OSA/AppleScript to tell Finder to open an app. High-level but depends on scripting extensions.
-4. **Double-click simulation** — find the app's icon in Finder, send mouse clicks. Fragile but works without any guest code.
-5. **Direct Execute68kTrap** — call `_Launch` via `Execute68kTrap()` from the C++ EmulOp handler (not from injected 68k). This bypasses the 68k context issues but might deadlock the Process Manager if called from GetNextEvent context.
+```bash
+ctest --test-dir build -L guest             # m68k + PPC
+ctest --test-dir build -R guest_suite       # m68k only
+ctest --test-dir build -R guest_suite_ppc   # PPC (kpx + Mac OS 9)
+```
+
+Both invoke `tests/test_guest_suite.sh`, which boots the emulator with `--extfs` pointing at a temp dir containing `MacTestSuite.pl`, waits for desktop, posts to `/api/launch` with `Host:MacTestSuite.pl`, and reads `test_results.txt` back from the same shared dir.

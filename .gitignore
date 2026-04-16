@@ -38,16 +38,11 @@ Universal Interfaces/
 .finf/
 .rsrc/
 
-# Retro68 guest test build outputs
-tests/guest/MacTestSuite
-tests/guest/MacTestSuite.bin
-tests/guest/MacTestSuite.APPL
-tests/guest/MacTestSuite.dsk
-tests/guest/MacTestSuite.code.bin
-tests/guest/MacTestSuite.code.bin.gdb
-tests/guest/MacTestSuite.gdb
-tests/guest/MacTestSuite.ad
-tests/guest/%MacTestSuite.ad
+# Retro68 BridgeAgent build artifacts (BridgeAgent.bin is checked in)
+tests/guest/bridge/BridgeAgent.APPL
+tests/guest/bridge/BridgeAgent.dsk
+tests/guest/bridge/BridgeAgent.code.bin
+tests/guest/bridge/BridgeAgent.code.bin.gdb
 
 # Rust
 net-bridge/target/
