@@ -4433,6 +4433,36 @@ async function pollEmulatorStatus() {
             }
         }
 
+        // Default the primary Stop/Reset buttons to graceful actions only while
+        // the emulator is running AND the BridgeAgent has been seen recently;
+        // otherwise fall back to hard Power Off / Reset. Split-menu items
+        // remain available either way.
+        const useGraceful = data.emulator_running && data.bridge_agent_connected;
+        const stopBtnP = document.getElementById('stop-btn');
+        const resetBtnP = document.getElementById('reset-btn');
+        if (stopBtnP) {
+            if (useGraceful) {
+                stopBtnP.textContent = 'Shut Down…';
+                stopBtnP.title = 'Ask the guest OS to shut down (quits apps first)';
+                stopBtnP.onclick = shutdownGuest;
+            } else {
+                stopBtnP.textContent = 'Power Off';
+                stopBtnP.title = 'Hard power off (kill emulator process)';
+                stopBtnP.onclick = stopEmulator;
+            }
+        }
+        if (resetBtnP) {
+            if (useGraceful) {
+                resetBtnP.textContent = 'Restart…';
+                resetBtnP.title = 'Ask the guest OS to restart (quits apps first)';
+                resetBtnP.onclick = restartGuest;
+            } else {
+                resetBtnP.textContent = 'Reset';
+                resetBtnP.title = 'Hard reset (restart emulator process)';
+                resetBtnP.onclick = restartEmulator;
+            }
+        }
+
         // Update emulator status in header status bar
         const emuIcon = document.getElementById('emulator-icon');
         const displayContainer = document.getElementById('display-container');
@@ -4522,11 +4552,13 @@ function setupEventListeners() {
     const startBtn = document.getElementById('start-btn');
     if (startBtn) startBtn.onclick = startEmulator;
 
+    // Primary stop/reset handlers are (re)assigned by pollEmulatorStatus based on
+    // whether the BridgeAgent is connected — graceful when it is, hard when it isn't.
     const stopBtn = document.getElementById('stop-btn');
-    if (stopBtn) stopBtn.addEventListener('click', stopEmulator);
+    if (stopBtn) stopBtn.onclick = stopEmulator;
 
     const resetBtn = document.getElementById('reset-btn');
-    if (resetBtn) resetBtn.addEventListener('click', restartEmulator);
+    if (resetBtn) resetBtn.onclick = restartEmulator;
 
     setupSplitButton('stop-menu-btn', 'stop-menu', {
         poweroff: stopEmulator,

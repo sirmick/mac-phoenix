@@ -320,6 +320,20 @@ static bool bridge_has_file(const std::string& dir, const char* name) {
     return stat(path.c_str(), &st) == 0;
 }
 
+// True iff the bridge is enabled, Finder has launched, and the BridgeAgent
+// dropped a heartbeat in the last ~10 seconds. Drives the UI's choice between
+// graceful (Shut Down / Restart) and hard (Power Off / Reset) default actions.
+static bool bridge_agent_is_connected(bool finder_reached) {
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) return false;
+    if (!finder_reached) return false;
+    std::string path = cfg.bridge_dir + "/bridge_heartbeat";
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0) return false;
+    time_t now = time(nullptr);
+    return (now - st.st_mtime) <= 10;
+}
+
 // Send a command to the guest BridgeAgent and poll for a result.
 // Shared by handle_shutdown / handle_restart / handle_quit-style endpoints
 // that go through the guest-OS bridge rather than manipulating the subprocess.
@@ -381,6 +395,8 @@ Response APIRouter::handle_status(const Request& req) {
     json << "{";
     json << "\"emulator_connected\": true";
 
+    bool finder_reached = false;
+
     if (ctx_->subprocess) {
         // Subprocess mode: read from IPC SHM (shared lock prevents a
         // concurrent stop()/restart from munmapping the page underneath us)
@@ -405,6 +421,8 @@ Response APIRouter::handle_status(const Request& req) {
             }
             json << ", \"boot_elapsed\": " << elapsed;
 
+            finder_reached = boot_progress_phase_reached_by_name(buf->boot_phase, "Finder");
+
             // Mac OS state (pre-serialized JSON from child process)
             if (buf->mac_state_json[0] == '{') {
                 json << ", \"mac\": " << buf->mac_state_json;
@@ -423,12 +441,17 @@ Response APIRouter::handle_status(const Request& req) {
         json << ", \"checkload_count\": " << boot_progress_checkloads();
         json << ", \"boot_elapsed\": " << boot_progress_elapsed();
 
+        finder_reached = boot_progress_phase_reached("Finder");
+
         // Mac OS state (cached in-process)
         const char* mac_state = boot_progress_get_mac_state();
         if (mac_state && mac_state[0] == '{') {
             json << ", \"mac\": " << mac_state;
         }
     }
+
+    json << ", \"bridge_agent_connected\": "
+         << (bridge_agent_is_connected(finder_reached) ? "true" : "false");
 
     json << "}";
     return Response::json(json.str());
