@@ -37,6 +37,7 @@ ctest --test-dir build -V
 # Run by label
 ctest --test-dir build -L api    # API-only tests
 ctest --test-dir build -L boot   # Tests that require booting
+ctest --test-dir build -L guest  # Tests that require the BridgeAgent installed
 ```
 
 ### Test List
@@ -48,7 +49,9 @@ ctest --test-dir build -L boot   # Tests that require booting
 | `boot_uae` | `test_boot_to_finder.sh` | boot | ~8s | UAE backend boots Mac OS to Finder, tracking boot phases |
 | `boot_unicorn` | `test_boot_to_finder.sh` | boot | ~50s | Unicorn backend boots to Finder (slow — JIT compilation) |
 | `mouse_position` | `test_mouse_position.sh` | boot | ~10s | Absolute and relative mouse movement via POST /api/mouse, verifies Mac OS reflects changes (8 checks) |
-| `command_bridge` | `test_command_bridge.sh` | boot | ~10s | /api/app, /api/windows, /api/wait, /api/launch endpoints (7 checks) |
+| `command_bridge` | `test_command_bridge.sh` | boot | ~10s | `/api/app`, `/api/windows`, `/api/wait` (read commands), `/api/launch` (BridgeAgent dispatch) — 7 checks |
+| `guest_suite` | `test_guest_suite.sh` | guest | ~30s | Boots, dispatches `MacTestSuite.pl` to MacPerl via `/api/launch`, reads results back from ExtFS (m68k) |
+| `guest_suite_ppc` | `test_guest_suite.sh` | guest | ~60s | Same, on Mac OS 9 / PPC via the 68k emulator |
 
 ### Configuration
 
@@ -60,6 +63,19 @@ Tests use these defaults (override with environment variables or CMake options):
 | Disk image | `/home/mick/storage/images/7.6.img` | `MACEMU_DISK` env var |
 
 Tests use dedicated ports (18090-18093) to avoid conflicts with a running emulator.
+
+### Guest Tests (BridgeAgent + MacPerl)
+
+`guest_suite` and `guest_suite_ppc` (label: `guest`) require the test disk image to have **BridgeAgent** installed in `:System Folder:Startup Items:` so Finder auto-launches it at desktop time. The agent is what receives `/api/launch` requests, locates MacPerl by creator code, and dispatches the Perl script via a `'misc'`/`'dosc'` AppleEvent.
+
+```bash
+# (Re)install the BridgeAgent into the test disk images
+provisioning/install_bridge_agent.sh
+```
+
+The script writes `tests/guest/bridge/BridgeAgent.bin` (which is committed to the repo) into the disk images via `hcopy`. Rebuild the agent with `make -C tests/guest/bridge` if you change `bridge_agent.c`; the Makefile expects the Retro68 toolchain at `~/Retro68`.
+
+The test harness boots the emulator with `--bridge --extfs <tmp>` (the temp dir doubles as the bridge transport and the `Host:` volume the script reads/writes), waits for the agent to drop `bridge_heartbeat`, posts to `/api/launch`, and reads `test_results.txt` back from the same dir.
 
 ## Playwright E2E Tests
 

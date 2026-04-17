@@ -58,8 +58,8 @@ src/
     boot_progress.cpp               — Boot milestone tracking (phases, CHECKLOAD counting)
     rom_patches.cpp                 — ROM patching, EmulOp insertion
     emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, CMD_DISPATCH)
-    command_bridge.cpp              — Command bridge: reads, mailbox, jGNEFilter, SHM drain
-    command_bridge.h                — Command/Result structs, CommandBridge class
+    command_bridge.cpp              — Read commands (peek Mac mem from IRQ); init + heartbeat watchdog
+    command_bridge.h                — CmdType enum, CommandResult, init/watchdog signatures
     emulator_subprocess.h           — Subprocess management for m68k and PPC (IPC via SHM+socket)
     adb.cpp                         — ADB mouse/keyboard emulation
     cpu_context.cpp                 — Memory allocation, backend init
@@ -92,6 +92,10 @@ tests/
   test_boot_to_finder.sh            — Boot-to-Finder test (parameterized by backend)
   test_mouse_position.sh            — Mouse position API test
   test_command_bridge.sh            — Command bridge integration tests (7 checks)
+  test_guest_suite.sh               — Boot → dispatch MacTestSuite.pl via /api/launch → read results
+  guest/bridge/bridge_agent.c       — BridgeAgent source (Retro68 m68k); polls bridge files in Host: ExtFS
+  guest/bridge/BridgeAgent.bin      — Pre-built MacBinary (committed)
+  guest/MacTestSuite.pl             — MacPerl script run inside the guest by the agent
   test_extfs.sh                     — ExtFS config, CLI, backward compat tests (8 checks)
   e2e/                              — Playwright browser tests
 
@@ -116,11 +120,13 @@ legacy/                             — Original BasiliskII/SheepShaver source (
 | `/api/codecs` | GET | Available codecs: `{codecs: [{id, name, available}]}` |
 | `/api/keypress` | POST | Send key event: `{"key": "return"}` or `{"key": 36}` |
 | `/api/invoke-debug` | POST | Invoke debugger (Programmer's Key: NMI on 68k, Cmd+Power on PPC) |
-| `/api/app` | GET | Current app name (passive SHM field) |
-| `/api/windows` | GET | Window list (SHM command queue) |
+| `/api/app` | GET | Current app name (read command — peek `CurApName`) |
+| `/api/windows` | GET | Window list (read command — walk `WindowList`) |
 | `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` |
-| `/api/launch` | POST | Launch app: `{"path": "HD:App"}` (WIP) |
-| `/api/quit` | POST | Quit current app (WIP) |
+| `/api/launch` | POST | Launch app or open document via BridgeAgent: `{"path":"HD:App","open":bool?}` |
+| `/api/quit` | POST | Quit front app via BridgeAgent (`kAEQuitApplication`) |
+| `/api/shutdown` | POST | Graceful guest OS shutdown via BridgeAgent (`ShutDwnPower`) |
+| `/api/restart` | POST | Graceful guest OS restart via BridgeAgent (`ShutDwnStart`) |
 
 ## Boot Phases
 
@@ -145,6 +151,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --no-webserver        Headless mode (no HTTP/WebRTC)
   --screen WxH          Display resolution (default: 640x480)
   --network MODE        Network: none, lwip, raw:<iface>, socket[:<path>] (default: none)
+  --bridge              Enable automation bridge (BridgeAgent + auto ExtFS mount)
   --config path         JSON config file
   --screenshots         Dump PPM screenshots to /tmp
   --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot
@@ -169,7 +176,7 @@ The emulator binary does not read environment variables. Use CLI flags instead.
 - **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
 - **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
-- **Command bridge**: Two-layer dispatch — read commands peek Mac memory from IRQ, action commands use jGNEFilter to execute in app context. See `docs/CommandBridge.md`.
+- **Command bridge**: Two layers. **Read commands** (`/api/app`, `/api/windows`) peek Mac memory directly from the IRQ — no guest cooperation. **Action commands** (`/api/launch`, `/api/shutdown`, `/api/restart`, `/api/quit`) write a request file into `bridge_dir`, which a guest-side `BridgeAgent` app (installed in `:System Folder:Startup Items:`) polls and executes via Process Manager / Shutdown Manager / AppleEvents. Files in `bridge_dir` cross the parent/IPC-child process split for free since both processes see the same disk path. Enable with `--bridge` or `bridge_enabled: true`. See `docs/CommandBridge.md`.
 
 ## ROM
 
