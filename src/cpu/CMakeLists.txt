@@ -6,6 +6,7 @@ add_subdirectory(kpx)
 add_library(cpu STATIC
   cpu_uae.c
   cpu_unicorn.cpp
+  cpu_unicorn_ppc.cpp
   cpu_dualcpu.c
   cpu_trace.c
   uae_wrapper.cpp

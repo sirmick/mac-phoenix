@@ -78,8 +78,8 @@ endif()
 
 # --- Subprojects ---
 
-# Unicorn (m68k CPU engine)
-set(UNICORN_ARCH "m68k" CACHE STRING "" FORCE)
+# Unicorn (m68k + ppc CPU engines)
+set(UNICORN_ARCH "m68k;ppc" CACHE STRING "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(UNICORN_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(UNICORN_INSTALL OFF CACHE BOOL "" FORCE)

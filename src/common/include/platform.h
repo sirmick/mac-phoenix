@@ -388,6 +388,7 @@ extern void cpu_uae_install(Platform *p);
 extern void cpu_unicorn_install(Platform *p);
 extern void cpu_dualcpu_install(Platform *p);
 extern void cpu_ppc_kpx_install(Platform *p);
+extern void cpu_unicorn_ppc_install(Platform *p);
 
 #ifdef __cplusplus
 }

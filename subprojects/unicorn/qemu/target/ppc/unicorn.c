@@ -22,10 +22,8 @@ typedef uint32_t ppcreg_t;
 static inline int uc_ppc_store_msr(CPUPPCState *env, target_ulong value,
                                    int alter_hv)
 {
-    // int excp;
-    // CPUState *cs = env_cpu(env);
+    CPUState *cs = env_cpu(env);
 
-    // excp = 0;
     value &= env->msr_mask;
 
     /* Neither mtmsr nor guest state can alter HV */
@@ -35,11 +33,11 @@ static inline int uc_ppc_store_msr(CPUPPCState *env, target_ulong value,
     }
     if (((value >> MSR_IR) & 1) != msr_ir ||
         ((value >> MSR_DR) & 1) != msr_dr) {
-        // cpu_interrupt_exittb(cs);
+        cpu_interrupt_exittb(cs);
     }
     if ((env->mmu_model & POWERPC_MMU_BOOKE) &&
         ((value >> MSR_GS) & 1) != msr_gs) {
-        // cpu_interrupt_exittb(cs);
+        cpu_interrupt_exittb(cs);
     }
     if (unlikely((env->flags & POWERPC_FLAG_TGPR) &&
                  ((value ^ env->msr) & (1 << MSR_TGPR)))) {

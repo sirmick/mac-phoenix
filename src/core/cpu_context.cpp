@@ -605,9 +605,13 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
         }
     }
 
-    // 6. Install KPX backend (function pointers only — CPU instance created
-    //    later in kpx_cpu_init, which only runs in the child subprocess)
-    cpu_ppc_kpx_install(&platform_);
+    // 6. Install PPC backend (function pointers only — CPU instance created
+    //    later in the child subprocess). Selects KPX (default) or Unicorn PPC.
+    if (config.cpu_backend == config::CPUBackend::Unicorn) {
+        cpu_unicorn_ppc_install(&platform_);
+    } else {
+        cpu_ppc_kpx_install(&platform_);
+    }
     platform_.ppc_jit = config.ppc.jit;
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n", platform_.cpu_name, config.ppc.jit ? "on" : "off");
 

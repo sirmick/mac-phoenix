@@ -199,8 +199,10 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         else if (b == "kpx") cpu_backend = CPUBackend::KPX;
         else cpu_backend = CPUBackend::UAE;
     }
-    // PPC always uses KPX regardless of saved cpu_backend
-    if (architecture == Architecture::PPC) {
+    // PPC uses KPX or Unicorn. If neither is selected, default to KPX.
+    if (architecture == Architecture::PPC &&
+        cpu_backend != CPUBackend::KPX &&
+        cpu_backend != CPUBackend::Unicorn) {
         cpu_backend = CPUBackend::KPX;
     }
     if (j.contains("ram_mb")) ram_mb = json_utils::get_int(j, "ram_mb");
@@ -397,6 +399,7 @@ static void load_from_json(EmulatorConfig& config, const char* path) {
  */
 static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char** argv) {
     const char* rom_path = nullptr;
+    bool explicit_backend = false;
 
     for (int i = 1; i < argc; i++) {
         if (!argv[i]) continue;
@@ -495,6 +498,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             else if (strcmp(argv[i+1], "dualcpu") == 0) config.cpu_backend = CPUBackend::DualCPU;
             else if (strcmp(argv[i+1], "kpx") == 0) config.cpu_backend = CPUBackend::KPX;
             else config.cpu_backend = CPUBackend::UAE;
+            explicit_backend = true;
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
@@ -595,7 +599,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         if (strcmp(argv[i], "--arch") == 0 && i+1 < argc) {
             if (strcmp(argv[i+1], "ppc") == 0) {
                 config.architecture = Architecture::PPC;
-                config.cpu_backend = CPUBackend::KPX;  // Auto-select KPX for PPC
+                // Auto-select KPX for PPC unless --backend was explicitly passed
+                if (!explicit_backend) config.cpu_backend = CPUBackend::KPX;
             } else {
                 config.architecture = Architecture::M68K;
             }

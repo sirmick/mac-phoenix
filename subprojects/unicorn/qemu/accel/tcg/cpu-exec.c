@@ -29,8 +29,10 @@
 #include "sysemu/cpus.h"
 #include "uc_priv.h"
 
-/* Global CHECKLOAD counter - set by macemu-next, read here */
-volatile int g_cpu_exec_checkload_count = 0;
+/* Global CHECKLOAD counter - set by macemu-next, read here.
+ * weak: avoid duplicate-symbol errors when linking multiple arch libs
+ * (m68k-softmmu.a + ppc-softmmu.a) that each compile cpu-exec.c. */
+__attribute__((weak)) volatile int g_cpu_exec_checkload_count = 0;
 
 /* -icount align implementation. */
 
@@ -247,10 +249,11 @@ static inline void tb_add_jump(TranslationBlock *tb, int n,
     return;
 }
 
-/* TB lookup/compile counters — accessed from unicorn_wrapper.c */
-uint64_t g_tb_find_count = 0;
-uint64_t g_tb_miss_count = 0;
-uint64_t g_tb_buffer_flush_count = 0;
+/* TB lookup/compile counters — accessed from unicorn_wrapper.c.
+ * weak: see note on g_cpu_exec_checkload_count above. */
+__attribute__((weak)) uint64_t g_tb_find_count = 0;
+__attribute__((weak)) uint64_t g_tb_miss_count = 0;
+__attribute__((weak)) uint64_t g_tb_buffer_flush_count = 0;
 
 static inline TranslationBlock *tb_find(CPUState *cpu,
                                         TranslationBlock *last_tb,
