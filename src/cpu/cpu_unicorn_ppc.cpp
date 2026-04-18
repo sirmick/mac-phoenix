@@ -677,6 +677,41 @@ static bool uppc_cpu_init(void)
                     (void *)(void (*)(uc_engine *, uc_mem_type, uint64_t,
                                       int, int64_t, void *))wp_cb,
                     nullptr, 0x50400000, 0x50500000);
+
+        // r1-underflow tracer. Only fires when r1 actually goes to ~zero
+        // (stack fully drained). Dumps a ring of recent block PCs so we can
+        // see which preceding block zeroed r1.
+        static auto r1_lo_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
+            static uint32_t prev_r1 = 0xFFFFFFFFu;
+            static uint64_t log_n = 0;
+            static uint32_t ring[32] = {0};
+            static int ring_idx = 0;
+            uint32_t r1 = 0;
+            uc_reg_read(uc, UC_PPC_REG_1, &r1);
+            ring[ring_idx] = (uint32_t)addr;
+            ring_idx = (ring_idx + 1) & 31;
+            if (r1 == prev_r1) return;
+            if (r1 < 0x00000100u && log_n < 4) {
+                uint32_t lr = 0, r0 = 0, ctr = 0;
+                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                uc_reg_read(uc, UC_PPC_REG_0, &r0);
+                uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
+                fprintf(stderr, "[R1ZERO] pc=0x%08llx r1=0x%08x (prev=0x%08x) r0=0x%08x lr=0x%08x ctr=0x%08x\n",
+                        (unsigned long long)addr, r1, prev_r1, r0, lr, ctr);
+                fprintf(stderr, "[R1ZERO] recent blocks (oldest→newest):");
+                for (int k = 0; k < 32; k++) {
+                    int j = (ring_idx + k) & 31;
+                    fprintf(stderr, " 0x%08x", ring[j]);
+                }
+                fprintf(stderr, "\n");
+                log_n++;
+            }
+            prev_r1 = r1;
+        };
+        uc_hook hook_r1 = 0;
+        uc_hook_add(g_uc, &hook_r1, UC_HOOK_BLOCK,
+                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))r1_lo_cb,
+                    nullptr, 1, 0);
     }
 
     // Select CPU model (matches KPX PVR 0x000c0000 = PowerPC 750 / G3).
@@ -733,6 +768,17 @@ static bool uppc_cpu_init(void)
         // Dump the bctr-and-setup region that routes into zero-fill (0x5046xxx).
         fprintf(stderr, "[Unicorn-PPC] --- post-patch dump 0x50314200..0x50314260 ---\n");
         for (uint32_t a = 0x50314200; a < 0x50314260; a += 16) {
+            uint32_t buf[4] = {0,0,0,0};
+            if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
+                fprintf(stderr,
+                    "[Unicorn-PPC] ROM @0x%08x: %08x %08x %08x %08x\n",
+                    a, __builtin_bswap32(buf[0]), __builtin_bswap32(buf[1]),
+                    __builtin_bswap32(buf[2]), __builtin_bswap32(buf[3]));
+            }
+        }
+        // Dump around 0x5046d728 — where r1 goes to 0 just before the InstallDrivers crash.
+        fprintf(stderr, "[Unicorn-PPC] --- dump 0x5046d700..0x5046d760 ---\n");
+        for (uint32_t a = 0x5046d700; a < 0x5046d760; a += 16) {
             uint32_t buf[4] = {0,0,0,0};
             if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
                 fprintf(stderr,
@@ -1137,8 +1183,12 @@ static void uppc_cpu_execute_68k(uint32_t entry, struct M68kRegisters *r)
     uint32_t saved_gprs[19];
     for (int i = 0; i < 19; i++) saved_gprs[i] = rd_gpr(13 + i);
 
-    // Supervisor bit in CR[SO] of field 0.
-    wr_cr(0x10000000u);
+    // Supervisor bit in CR2.SO (bit 11) — matches KPX's CR_SO_field<2>::mask()
+    // (sheepshaver_cpu::execute_68k). The 68k-emulator opcode dispatch uses
+    // CR2.SO as its privilege flag; setting CR0.SO instead makes later
+    // conditional branches in the dispatch (e.g. 0x5046d720) take the wrong
+    // side and leave r1=0 at 0x5046d728's bclrl.
+    wr_cr(0x00100000u);
 
     for (int i = 0; i < 8; i++) wr_gpr(8 + i,  r->d[i]);
     for (int i = 0; i < 7; i++) wr_gpr(16 + i, r->a[i]);
@@ -1194,6 +1244,20 @@ static void uppc_cpu_execute_68k_trap(uint16_t trap, struct M68kRegisters *r)
     static constexpr uint32_t TRAP_PROC = 0x68ffec30u;  // 4 bytes scratch
     WriteMac16(TRAP_PROC, trap);
     WriteMac16(TRAP_PROC + 2, 0x4e75u);  // M68K_RTS
+    static bool dumped = false;
+    if (!dumped) {
+        dumped = true;
+        fprintf(stderr, "[Unicorn-PPC] First trap 0x%04x — KD+0x1000..0x1080 dump:\n", trap);
+        for (uint32_t a = 0x68fff000; a < 0x68fff080; a += 16) {
+            uint32_t buf[4] = {0,0,0,0};
+            uc_mem_read(g_uc, a, buf, sizeof(buf));
+            fprintf(stderr, "  0x%08x: %08x %08x %08x %08x\n",
+                    a, __builtin_bswap32(buf[0]), __builtin_bswap32(buf[1]),
+                    __builtin_bswap32(buf[2]), __builtin_bswap32(buf[3]));
+        }
+        fprintf(stderr, "[Unicorn-PPC]   r1=0x%08x (caller's) opcode_table=KD+0x1074=0x%08x emul=KD+0x1078=0x%08x\n",
+                rd_gpr(1), ReadMac32(0x68fff074), ReadMac32(0x68fff078));
+    }
     uppc_cpu_execute_68k(TRAP_PROC, r);
 }
 
