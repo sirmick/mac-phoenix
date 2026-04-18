@@ -80,9 +80,11 @@ namespace ppc { extern int ROMType; }
 // Native helpers invoked by EXEC_NATIVE. DoPatchNameRegistry is in the global
 // namespace; VideoInstallAccel/VideoVBL live in `namespace ppc`.
 extern void DoPatchNameRegistry(void);
+struct M68kRegisters;
 namespace ppc {
     extern void VideoInstallAccel(void);
     extern void VideoVBL(void);
+    extern void EmulOp(M68kRegisters *r, uint32_t pc, int selector);
 }
 
 // ----- Local constants (mirror src/cpu/kpx/compat/*) ------------------------
@@ -1196,9 +1198,15 @@ static void uppc_flush_code_cache(void)
 // callers that still poke this path.
 static uint16_t uppc_make_emulop(uint16_t op) { return op; }
 
-// These are stubs because the ppc_emulop path routes directly through the
-// shared g_platform.ppc_emulop_handler (set by emul_op_ppc.cpp's init).
-static void uppc_ppc_emulop_handler(void *, uint32_t, int) {}
+// Route EMUL_OP dispatch to the real KPX-shared handler. The previous stub
+// silently clobbered g_platform.ppc_emulop_handler so OP_CHECKLOAD and
+// friends ran as no-ops — leaving A7 un-cleaned and the next RTS popping the
+// stray parameter as a PC. Delegate to ppc::EmulOp (the same function
+// kpx_ppc_emulop_handler uses in the KPX backend).
+static void uppc_ppc_emulop_handler(void *r68k_regs, uint32_t pc, int selector)
+{
+    ppc::EmulOp(static_cast<M68kRegisters *>(r68k_regs), pc, selector);
+}
 static void uppc_ppc_cursor_move(uint32_t /*mouse_base*/, int /*x*/, int /*y*/)
 {
     // Cursor update requires Execute68k of CursorDeviceDispatch — deferred to
