@@ -428,8 +428,9 @@ def main():
 
     source_dir = os.path.abspath(args.source_dir)
     if not os.path.isdir(source_dir):
-        print(f"Error: {source_dir} does not exist", file=sys.stderr)
-        sys.exit(1)
+        os.makedirs(source_dir, exist_ok=True)
+        print(f"Created empty source dir {source_dir}. Drop installers in and rerun.")
+        sys.exit(0)
 
     to_process = []
     for root, dirs, files in os.walk(source_dir):
