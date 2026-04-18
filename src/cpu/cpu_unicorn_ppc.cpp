@@ -98,11 +98,16 @@ namespace ppc {
 #define POWERPC_EXEC_RETURN (POWERPC_EMUL_OP | 1u)
 #define EMUL_OP_SEL_MASK   0x0000003Fu  // low 6 bits of the opcode
 
-// XLM fields from kpx/compat/xlowmem.h (REAL_ADDRESSING, Mac addr = host addr).
-#define XLM_RUN_MODE          0x68ffec00u
-#define XLM_IRQ_NEST          0x68ffec20u
-#define XLM_68K_R25           0x68ffec0cu
-#define XLM_EXEC_RETURN_OPCODE 0x68ffec1cu
+// XLM fields from kpx/compat/xlowmem.h. These live in the 0x2800..0x28ff low-
+// memory page (REAL_ADDRESSING, Mac addr = host addr). A previous version of
+// this file had them as 0x68ffec00..0x68ffec1c which was wrong on both ends —
+// KPX init_ppc.cpp writes M68K_EMUL_RETURN to 0x284c, so pushing any other
+// address as the Execute68k return trampoline lands the 68k RTS on arbitrary
+// bytes and drives r1 to zero a few iterations later.
+#define XLM_RUN_MODE          0x2810u
+#define XLM_68K_R25           0x2814u
+#define XLM_IRQ_NEST          0x2818u
+#define XLM_EXEC_RETURN_OPCODE 0x284cu
 
 #define MODE_68K      0
 #define MODE_NATIVE   1
@@ -1075,10 +1080,36 @@ static void uppc_cpu_execute_ppc(uint32_t entry)
     wr_lr(POWERPC_EXEC_RETURN);
     wr_pc(entry);
 
-    uc_err err = uc_emu_start(g_uc, entry, 0, 0, 0);
-    if (err != UC_ERR_OK) {
+    // Skip-on-unmapped loop mirrors execute_fast: KPX's SIGSEGV handler
+    // advances PC past a dead load/store and resumes. Unicorn surfaces
+    // UC_ERR_{READ,WRITE}_UNMAPPED — we skip and retry so nested callouts
+    // (FindLibSymbol, 68k trap procs) don't abandon mid-flight with a
+    // half-restored r1. The loop terminates via uc_emu_stop from the
+    // EXEC_RETURN EmulOp handler, or on a true stall / fetch fault.
+    uint32_t run_pc = entry;
+    uint32_t stuck_pc = 0;
+    int stuck_count = 0;
+    for (;;) {
+        uc_err err = uc_emu_start(g_uc, run_pc, 0, 0, 0);
+        if (err == UC_ERR_OK) break;
+        if (err == UC_ERR_READ_UNMAPPED || err == UC_ERR_WRITE_UNMAPPED) {
+            uint32_t after = rd_pc();
+            if (!uppc_skip_memop_at(after)) {
+                fprintf(stderr, "[Unicorn-PPC] execute_ppc(0x%08x) unknown memop @pc=0x%08x — bailing\n",
+                        entry, after);
+                break;
+            }
+            run_pc = rd_pc();
+            stuck_count = 0;
+            continue;
+        }
+        uint32_t after = rd_pc();
         fprintf(stderr, "[Unicorn-PPC] execute_ppc(0x%08x) err=%s pc=0x%08x\n",
-                entry, uc_strerror(err), rd_pc());
+                entry, uc_strerror(err), after);
+        if (after == stuck_pc && ++stuck_count >= 3) break;
+        if (after != stuck_pc) { stuck_pc = after; stuck_count = 1; }
+        run_pc = after;
+        if (g_stop_requested) break;
     }
 
     wr_pc(saved_pc);
