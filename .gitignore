@@ -32,6 +32,7 @@ playwright-report/
 __pycache__/
 *.pyc
 *.iso
+*$py.class
 
 # Apple Universal Interfaces (licensed, not redistributable)
 Universal Interfaces/
