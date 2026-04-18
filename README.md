@@ -6,11 +6,11 @@ A classic Macintosh emulator that runs in your browser. Boot System 6 through Ma
 
 ![Mac OS 7.5.5 running in MacPhoenix — browser UI](docs/images/browser-desktop.png)
 
-![System 6 on a Mac SE — 1-bit monochrome](docs/images/se_system6_desktop.png)
-
 ## What is this?
 
 MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github.com/kanjitalk755/macemu) emulator family. It replaces the SDL desktop UI with a web-based streaming interface: the emulator runs as a headless server and streams video to your browser via WebRTC, with keyboard and mouse input sent back over a data channel.
+
+Most-tested guest OS versions: **System 6.0.8**, **System 7.5.5**, **Mac OS 7.6.1**, and **Mac OS 9.0.4**. Other 7.x / 8.x / 9.x releases mostly work; file a bug if they don't.
 
 ### Key features
 
@@ -18,6 +18,8 @@ MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github
 - **Browser UI** — connect from any device, no plugins or installs
 - **WebRTC streaming** — low-latency video with H.264, VP9, PNG, or WebP encoding
 - **REST API** — boot status, screenshots, config, app launching, and control via HTTP endpoints
+- **Automation bridge** — launch classic apps, graceful guest shutdown and restart, with clipboard integration on the roadmap
+- **NAT networking** — optional Unix-socket bridge (smoltcp + NAT) so the guest can reach the Internet without root
 - **Headless mode** — run without any UI for testing and automation
 
 ## Quick start
@@ -74,7 +76,7 @@ You choose a machine profile, then supply a matching ROM:
 | Quadra 650 | 68040 | 7.1–7.6 | 640×480 color | Quadra 650 (1 MB) |
 | Power Mac G3 | PPC 603e | 8.1–9.2 | Up to 1600×1200 | Power Mac G3 (4 MB) |
 
-The machine profile is auto-detected from the ROM at startup. A disk image is optional — the emulator boots to the ROM's built-in system if no disk is provided.
+The machine profile (CPU type, FPU, screen size, 24- vs 32-bit mode, disk refnum, …) is **auto-detected from the ROM version word at startup** — you never need to tell the emulator which Mac to be, just hand it the right ROM. A disk image is optional; without one the emulator boots to the ROM's built-in system.
 
 ![Emulator settings — select machine type, ROM, disk, and resolution](docs/images/browser-config.png)
 
@@ -145,13 +147,12 @@ MacPhoenix supports two CPU architectures, selected with `--arch`:
 
 ### 68K CPU backends
 
-The 68K architecture has multiple CPU backends, selected with `--backend`:
+The 68K architecture has two CPU backends, selected with `--backend`:
 
 | Backend | Engine | Boot time | Use case |
 |---------|--------|-----------|----------|
 | `uae` (default) | Hand-tuned interpreter | ~5s | General use |
-| `unicorn` | QEMU TCG JIT | ~48s | Validation |
-| `dualcpu` | Both in lockstep | Very slow | Debugging CPU divergences |
+| `unicorn` | QEMU TCG JIT | ~48s | Validation / perf work |
 
 The PPC architecture uses the Kheperix (KPX) interpreter.
 
@@ -188,7 +189,7 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 | Field | Default | Notes |
 |-------|---------|-------|
 | `architecture` | `"m68k"` | `"m68k"` or `"ppc"` |
-| `cpu_backend` | `"uae"` | `"uae"`, `"unicorn"`, `"dualcpu"` (68K only) |
+| `cpu_backend` | `"uae"` | `"uae"` or `"unicorn"` (68K only) |
 | `ram_mb` | `32` | |
 | `rom`, `disks`, `cdroms`, `floppies` | — | Absolute or relative to `storage_dir` |
 | `extfs` | `""` | Shared host folder (repeatable in the UI) |
@@ -213,15 +214,14 @@ Arch-specific fields live under `m68k` / `ppc` sub-objects (`cpu_type`, `fpu`, `
   --extfs PATH               Shared host folder (repeatable)
   --storage-dir PATH         Root for relative rom/disk paths (default: ~/storage)
   --arch m68k|ppc            CPU architecture (default: m68k)
-  --backend uae|unicorn|dualcpu|kpx
-                             CPU backend (default: uae; kpx auto-selected for ppc)
+  --backend uae|unicorn|kpx  CPU backend (default: uae; kpx auto-selected for ppc)
   --ram MB                   RAM size in megabytes
   --screen WxH               Display resolution (default: 640x480)
   --port N                   HTTP server port (default: 8000)
   --signaling-port N         WebRTC signaling port (default: 8090)
   --timeout N                Auto-exit after N seconds (useful for tests)
   --no-webserver             Headless mode (no HTTP / WebRTC)
-  --network MODE             Network: none | lwip | raw:<iface> | socket[:<path>]
+  --network MODE             Network: none | socket[:<unix-socket-path>]
   --bridge                   Enable the automation bridge (BridgeAgent + ExtFS)
   --config PATH              JSON config file (use /dev/null to ignore user config)
   --zap-pram                 Clear PRAM on startup
@@ -262,6 +262,47 @@ curl -s -X POST http://localhost:8000/api/shutdown
 ```
 
 See [docs/CommandBridge.md](docs/CommandBridge.md) for the full protocol and the list of files exchanged in the bridge directory.
+
+## Networking
+
+Guest networking is an opt-in `net-bridge` sidecar written in Rust (`net-bridge/`). It pairs a userspace TCP/IP stack (`smoltcp`) with a NAT that proxies the guest's TCP / UDP / ICMP through ordinary host sockets — so the Mac can reach the Internet without raw sockets, `CAP_NET_ADMIN`, or a TUN/TAP device. The bridge also runs a tiny DHCP server, so classic MacTCP / Open Transport just works with "Configure via DHCP".
+
+Default addressing:
+
+| Role | Value |
+|------|-------|
+| Gateway (bridge) | `10.0.2.1` |
+| Netmask | `255.255.255.0` |
+| Guest (via DHCP) | `10.0.2.x` |
+
+### Building the bridge
+
+```bash
+cargo build --release --manifest-path net-bridge/Cargo.toml
+# Produces net-bridge/target/release/net-bridge
+```
+
+### Enabling it
+
+Pick **NAT (net-bridge)** in Settings → Network, or launch with `--network socket`:
+
+```bash
+./build/mac-phoenix --network socket /path/to/quadra.rom
+```
+
+The emulator auto-spawns `net-bridge` over a Unix socket (default `/tmp/mac-ether.sock`) — it looks in `./net-bridge/target/release/`, `./net-bridge/`, and `/usr/local/bin/` in that order. Override the socket path with `--network socket:/some/where.sock`.
+
+If you'd rather manage the bridge yourself (e.g. attach `strace`, run under `valgrind`):
+
+```bash
+# Terminal 1
+./net-bridge/target/release/net-bridge --socket /tmp/mac-ether.sock
+
+# Terminal 2 — emulator connects to the existing socket
+./build/mac-phoenix --network socket:/tmp/mac-ether.sock /path/to/quadra.rom
+```
+
+Once the guest has an IP, MacTCP / Open Transport / Internet Config just works — try Netscape, Fetch, NCSA Telnet, iCab, or `curl` inside MPW. `--debug-network` turns on verbose packet logging on the emulator side; `RUST_LOG=debug` does the same for `net-bridge`.
 
 ## API
 
