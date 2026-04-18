@@ -47,6 +47,7 @@ legacy's older GCC, producing different machine code for the block dispatch loop
 | [Execution Model](ExecutionModel.md) | Boot sequence, mode switching, interrupts | Current |
 | [Legacy Comparison](LegacyComparison.md) | Full code diff with legacy IPC/SDL | Reference |
 | [Unicorn PPC](UnicornPpc.md) | Unicorn engine PPC API (unimplemented) | Reference |
+| [Unicorn PPC Plan](UnicornPpcPlan.md) | Integration plan: Unicorn PPC alongside KPX | Planning |
 
 ## Reference Code
 
