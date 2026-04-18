@@ -2702,7 +2702,7 @@ static bool handle_badaccess(SIGSEGV_FAULT_HANDLER_ARGLIST_1)
 	case SIGSEGV_RETURN_SUCCESS:
 		return true;
 
-#if HAVE_SIGSEGV_SKIP_INSTRUCTION
+#if HAVE_SIGSEGV_SKIP_INSTRUCTION && defined(SIGSEGV_SKIP_INSTRUCTION)
 	case SIGSEGV_RETURN_SKIP_INSTRUCTION:
 		// Call the instruction skipper with the register file
 		// available
