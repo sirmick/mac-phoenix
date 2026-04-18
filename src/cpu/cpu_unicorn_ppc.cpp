@@ -522,8 +522,13 @@ static bool uppc_cpu_init(void)
             static bool first = true;
             uint32_t r24 = 0;
             uc_reg_read(uc, UC_PPC_REG_24, &r24);
+            // TRAP_PROC scratch (0x68ffec30+2) is used for uppc_cpu_execute_68k_trap
+            // to hold "<trap>; rts" — r24 legitimately points there during trap
+            // dispatch. Treat the low-memory / XLM region (0x68ff0000..0x69000000)
+            // as valid too.
             bool bogus = !((r24 < 0x08800000) ||
-                           (r24 >= 0x50000000 && r24 < 0x50500000));
+                           (r24 >= 0x50000000 && r24 < 0x50500000) ||
+                           (r24 >= 0x68ff0000 && r24 < 0x69000000));
             int32_t delta = (int32_t)(r24 - prev_r24);
             bool branch = !first && (delta < -16 || delta > 16);
             if (first || branch || bogus) {
@@ -563,13 +568,9 @@ static bool uppc_cpu_init(void)
             }
             prev_r24 = r24;
             first = false;
-            if (bogus) {
-                static uint64_t bogus_n = 0;
-                if (++bogus_n > 4) {
-                    g_stop_requested = true;
-                    uc_emu_stop(uc);
-                }
-            }
+            // Previously this hook stopped the engine after 4 bogus r24 hits.
+            // That bail fired on healthy boot because TRAP_PROC (0x68ffec32)
+            // now registers as valid; leave the trace in place but don't stop.
             n++;
         };
         // Install the dispatch-trace hook at every `lha r27, 0(r24)` site in
