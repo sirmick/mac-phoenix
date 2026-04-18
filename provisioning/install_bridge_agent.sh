@@ -1,19 +1,23 @@
 #!/bin/bash
 #
 # install_bridge_agent.sh - Install BridgeAgent.bin into
-# :System Folder:Startup Items: on each test disk image so Finder
+# :System Folder:Startup Items: on a Mac OS HFS disk image so Finder
 # auto-launches it at desktop time.
+#
+# Usage:
+#   install_bridge_agent.sh <image1> [image2 ...]
+#
+# Disks without a :System Folder: are skipped (probably data disks).
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-AGENT_BIN="$ROOT/tests/guest/bridge/BridgeAgent.bin"
-IMAGES_DIR="${IMAGES_DIR:-$HOME/storage/images}"
-IMAGES=(
-    "macos-7.5.5.img"
-    "macos-7.6.1.img"
-    "macos-9.0.4.img"
-)
+AGENT_BIN="${BRIDGE_AGENT_BIN:-$ROOT/tests/guest/bridge/BridgeAgent.bin}"
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: $0 <image1> [image2 ...]" >&2
+    exit 2
+fi
 
 if [[ ! -f "$AGENT_BIN" ]]; then
     echo "BridgeAgent.bin not found at $AGENT_BIN" >&2
@@ -26,25 +30,45 @@ command -v hmount >/dev/null || { echo "hfsutils not installed (apt install hfsu
 humount_all() { humount >/dev/null 2>&1 || true; }
 trap humount_all EXIT
 
-for name in "${IMAGES[@]}"; do
-    img="$IMAGES_DIR/$name"
+for img in "$@"; do
+    name="$(basename "$img")"
     if [[ ! -f "$img" ]]; then
         echo "SKIP $name (not found)"
         continue
     fi
 
-    echo "=== $name ==="
     humount_all
-    hmount "$img" >/dev/null
+    if ! hmount "$img" >/dev/null 2>&1; then
+        echo "SKIP $name (not an HFS image)"
+        continue
+    fi
 
-    if ! hls ":System Folder:Startup Items:" >/dev/null 2>&1; then
+    # hls returns exit 0 for missing dirs when stderr is redirected, so probe
+    # existence by parsing `hls -1d` output instead.
+    if [[ -z "$(hls -1d ':System Folder' 2>/dev/null)" ]]; then
+        echo "SKIP $name (no System Folder — probably a data disk)"
+        continue
+    fi
+
+    if [[ -z "$(hls -1d ':System Folder:Startup Items' 2>/dev/null)" ]]; then
         hmkdir ":System Folder:Startup Items" 2>/dev/null || true
     fi
 
-    hdel ":System Folder:Startup Items:BridgeAgent" >/dev/null 2>&1 || true
+    # Upgrade path: hfsutils' hdel can't remove the agent once Finder has
+    # launched it (a catalog quirk we can't undo from Linux), and hcopy
+    # refuses to overwrite. Workaround: hrename moves it to :Trash: under a
+    # unique name, freeing the original path for a fresh hcopy. The orphan
+    # lives in the Trash for the user to empty at their leisure; since it's
+    # no longer in Startup Items, Finder won't launch it.
+    if [[ -n "$(hls -1d ':System Folder:Startup Items:BridgeAgent' 2>/dev/null)" ]]; then
+        # HFS filename limit is 31 chars. "Old-BA-<epoch>.<rand>" stays well
+        # under while still making collisions in the Trash unlikely.
+        stamp="$(date +%s).$RANDOM"
+        hrename ":System Folder:Startup Items:BridgeAgent" \
+                ":Trash:Old-BA-$stamp" >/dev/null
+    fi
+
     hcopy -m "$AGENT_BIN" ":System Folder:Startup Items:BridgeAgent"
-    hls -l ":System Folder:Startup Items:BridgeAgent"
+    echo "INSTALLED BridgeAgent → $name:System Folder:Startup Items:"
     humount_all
 done
-
-echo "Done."

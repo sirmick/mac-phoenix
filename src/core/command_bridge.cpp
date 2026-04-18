@@ -21,10 +21,15 @@
 #include "boot_progress.h"
 #include "../config/emulator_config.h"
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string>
 #include <thread>
+#include <vector>
 
 // ============================================================================
 // Read commands — peek Mac memory, no Toolbox calls needed
@@ -130,11 +135,59 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr, uint32_t len) {
 // in cfg.bridge_dir and are read/written by both parent and IPC child.
 // ============================================================================
 
+// Resolve a file relative to the executable's grandparent directory
+// (build/mac-phoenix → repo root). Returns "" if the candidate doesn't exist.
+static std::string resolve_repo_relative(const char* rel) {
+    char exe_path[4096];
+    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+    if (len <= 0) return "";
+    exe_path[len] = '\0';
+    char* last_slash = strrchr(exe_path, '/');
+    if (!last_slash) return "";
+    *last_slash = '\0';  // exe_path is now build/
+    std::string candidate = std::string(exe_path) + "/../" + rel;
+    struct stat st;
+    if (stat(candidate.c_str(), &st) != 0) return "";
+    return candidate;
+}
+
+// When the bridge is enabled, install BridgeAgent.bin into
+// :System Folder:Startup Items: on every configured non-CDROM disk that has a
+// System Folder. The script handles HFS / non-system-disk skipping.
+// Run before the emulator opens the disks (i.e. from command_bridge_init).
+static void provision_bridge_agent_disks() {
+    auto& cfg = config::EmulatorConfig::instance();
+    if (cfg.disk_paths.empty()) return;
+
+    std::string script = resolve_repo_relative("provisioning/install_bridge_agent.sh");
+    if (script.empty()) {
+        fprintf(stderr, "[Bridge] provisioning script not found — "
+                        "skipping BridgeAgent install\n");
+        return;
+    }
+
+    std::string cmd = "'" + script + "'";
+    for (const auto& p : cfg.disk_paths) {
+        if (p.empty()) continue;
+        cmd += " '" + p + "'";
+    }
+
+    fprintf(stderr, "[Bridge] Provisioning BridgeAgent across %zu configured "
+                    "disk(s)...\n", cfg.disk_paths.size());
+    int rc = std::system(cmd.c_str());
+    if (rc != 0) {
+        fprintf(stderr, "[Bridge] WARNING: provisioning script exited with "
+                        "status %d — guest may not auto-launch BridgeAgent\n",
+                        WEXITSTATUS(rc));
+    }
+}
+
 void command_bridge_init() {
     auto& cfg = config::EmulatorConfig::instance();
     if (!cfg.bridge_enabled) return;
     fprintf(stderr, "[Bridge] Enabled (dir=%s)\n",
             cfg.bridge_dir.empty() ? "<none>" : cfg.bridge_dir.c_str());
+    provision_bridge_agent_disks();
 }
 
 void command_bridge_start_watchdog(std::function<bool()> finder_reached, int grace_seconds) {

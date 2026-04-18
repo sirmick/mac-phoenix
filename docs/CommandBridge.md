@@ -85,7 +85,7 @@ The `_` prefix on `_bridge_cmd` / `_bridge_result` is cosmetic — there's no Ex
 
 ### Init (`command_bridge_init()`)
 
-Called once from `main.cpp` after `EmulatorConfig` is finalized. No-op when `bridge_enabled` is false; otherwise logs the bridge dir to stderr. There's no in-process bridge state to allocate — the directory itself is the state.
+Called once from `main.cpp` after `EmulatorConfig` is finalized. No-op when `bridge_enabled` is false; otherwise logs the bridge dir to stderr and runs `provisioning/install_bridge_agent.sh` against every entry in `cfg.disk_paths`. The script skips disks without a `:System Folder:` (data disks, CDROM-style images), and (re)installs `BridgeAgent.bin` into `:System Folder:Startup Items:` on the rest. Runs synchronously before the CPU subprocess is spawned, so disk-image writes don't race the emulator. There's no in-process bridge state to allocate — the directory itself is the state.
 
 ### Watchdog (`command_bridge_start_watchdog()`)
 
