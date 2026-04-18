@@ -27,6 +27,7 @@
 #include <thread>
 #include <chrono>
 #include <ctime>
+#include <unordered_map>
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -234,6 +235,75 @@ static inline void     wr_cr(uint32_t v) { wr_reg(UC_PPC_REG_CR, v); }
 static inline uint32_t rd_xer(void) { return rd_reg(UC_PPC_REG_XER); }
 static inline void     wr_xer(uint32_t v) { wr_reg(UC_PPC_REG_XER, v); }
 
+// Decode a PPC load/store at the given PC and "skip" it in the KPX-SIGSEGV
+// shape: for loads, zero the destination GPR; for update-mode, set ra to the
+// effective address; for stores, do nothing; then advance PC by 4. Mirrors
+// src/common/sigsegv.cpp:powerpc_skip_instruction / powerpc_decode_instruction.
+//
+// Returns true if the instruction was a recognized memory op and PC was
+// advanced, false if we don't know how to skip it (caller should bail).
+static bool uppc_skip_memop_at(uint32_t pc)
+{
+    uint32_t opcode = 0;
+    if (uc_mem_read(g_uc, pc, &opcode, 4) != UC_ERR_OK) return false;
+    opcode = __builtin_bswap32(opcode);
+
+    const uint32_t primop = opcode >> 26;
+    const uint32_t rd     = (opcode >> 21) & 0x1f;
+    const uint32_t ra     = (opcode >> 16) & 0x1f;
+    const uint32_t rb     = (opcode >> 11) & 0x1f;
+    const uint32_t exop   = (opcode >> 1) & 0x3ff;
+    const int32_t  imm    = (int16_t)(opcode & 0xffff);
+
+    enum { TR_NONE = 0, TR_LOAD, TR_STORE };
+    enum { MD_NONE = 0, MD_NORM, MD_U, MD_X, MD_UX };
+
+    int transfer = TR_NONE;
+    int mode     = MD_NONE;
+
+    switch (primop) {
+    case 31: // X-form: lXzx / lXzux / stXx / stXux
+        switch (exop) {
+        case 23: case 87: case 279: case 343:
+            transfer = TR_LOAD;  mode = MD_X;  break;   // lwzx/lbzx/lhzx/lhax
+        case 55: case 119: case 311: case 375:
+            transfer = TR_LOAD;  mode = MD_UX; break;   // lwzux/lbzux/lhzux/lhaux
+        case 151: case 215: case 407:
+            transfer = TR_STORE; mode = MD_X;  break;   // stwx/stbx/sthx
+        case 183: case 247: case 439:
+            transfer = TR_STORE; mode = MD_UX; break;   // stwux/stbux/sthux
+        }
+        break;
+    case 32: case 34: case 40: case 42:                 // lwz/lbz/lhz/lha
+        transfer = TR_LOAD;  mode = MD_NORM; break;
+    case 33: case 35: case 41: case 43:                 // lwzu/lbzu/lhzu/lhau
+        transfer = TR_LOAD;  mode = MD_U;    break;
+    case 36: case 38: case 44:                          // stw/stb/sth
+        transfer = TR_STORE; mode = MD_NORM; break;
+    case 37: case 39: case 45:                          // stwu/stbu/sthu
+        transfer = TR_STORE; mode = MD_U;    break;
+    default: break;
+    }
+
+    if (transfer == TR_NONE) return false;
+
+    uint32_t addr = 0;
+    switch (mode) {
+    case MD_X: case MD_UX:
+        addr = (ra == 0 ? 0 : rd_gpr(ra)) + rd_gpr(rb);
+        break;
+    case MD_NORM: case MD_U:
+        addr = (ra == 0 ? 0 : rd_gpr(ra)) + (uint32_t)imm;
+        break;
+    }
+
+    if (mode == MD_U || mode == MD_UX) wr_gpr(ra, addr);
+    if (transfer == TR_LOAD) wr_gpr(rd, 0);
+
+    wr_pc(pc + 4);
+    return true;
+}
+
 // ----- Memory mapping -------------------------------------------------------
 
 static bool map_region(uc_engine *uc, uint64_t addr, size_t size,
@@ -400,48 +470,137 @@ static bool uppc_cpu_init(void)
     // Debug: trace instructions executed until we hit the divergence at
     // 0x503141cc. Controlled by MP_UPPC_TRACE env var (prints count, stops
     // after N insns). Guarded so production paths are free.
-    if (const char *trc = getenv("MP_UPPC_TRACE")) {
-        static uint64_t limit = (uint64_t)strtoull(trc, nullptr, 0);
-        static uint64_t counter = 0;
-        auto code_cb = [](uc_engine *uc, uint64_t addr, uint32_t sz, void *) {
-            // Log only when r1 (SP) changes, so we see the stack setup path.
-            static uint32_t last_r1 = 0xffffffffu;
-            uint32_t r1 = 0;
-            uc_reg_read(uc, UC_PPC_REG_1, &r1);
-            if (r1 != last_r1) {
-                last_r1 = r1;
-                fprintf(stderr, "[TRC %6llu] pc=0x%08llx r1=%08x (changed)\n",
-                        (unsigned long long)counter,
-                        (unsigned long long)addr, r1);
-            }
-            if (++counter >= limit) {
-                g_stop_requested = true;
-                uc_emu_stop(uc);
+    // Narrow code hooks: fire only when PC is within a specific range. Much
+    // cheaper than a wildcard hook (which adds overhead per-insn). Uses one
+    // hook per range of interest.
+    {
+        // Dump r0..r31 + LR + CTR when entering the jump-to-emul patch and
+        // again at the 68k emulator entry. Lets us see which register holds
+        // the 68k PC going into the DR emulator.
+        static auto trc_patch_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
+            uint32_t r[32] = {0}, lr = 0, ctr = 0;
+            for (int i = 0; i < 32; i++) uc_reg_read(uc, UC_PPC_REG_0 + i, &r[i]);
+            uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+            uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
+            fprintf(stderr, "[TRC @0x%08llx] lr=%08x ctr=%08x\n",
+                    (unsigned long long)addr, lr, ctr);
+            for (int i = 0; i < 32; i += 8) {
+                fprintf(stderr, "  r%02d..r%02d: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+                        i, i+7, r[i], r[i+1], r[i+2], r[i+3],
+                        r[i+4], r[i+5], r[i+6], r[i+7]);
             }
         };
-        uc_hook hh = 0;
-        uc_hook_add(g_uc, &hh, UC_HOOK_CODE,
-                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))code_cb,
-                    nullptr, 1, 0);
-        fprintf(stderr, "[Unicorn-PPC] trace hook installed, limit=%llu insns\n",
-                (unsigned long long)limit);
+        uc_hook hh1 = 0, hh2 = 0, hh3 = 0;
+        // Just before the bctr to 68k emulator.
+        uc_hook_add(g_uc, &hh1, UC_HOOK_CODE,
+                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_patch_cb,
+                    nullptr, 0x50314230, 0x50314230);
+        // At the 68k emulator entry.
+        uc_hook_add(g_uc, &hh2, UC_HOOK_CODE,
+                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_patch_cb,
+                    nullptr, 0x5046e6f4, 0x5046e6f4);
+        // At the 68k emulator's dispatch point where it reads gpr(24).
+        uc_hook_add(g_uc, &hh3, UC_HOOK_CODE,
+                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_patch_cb,
+                    nullptr, 0x5046e854, 0x5046e854);
+
+        // Track the 68k PC (gpr 24) across the whole DR-emulator code region.
+        // Log whenever r24 moves to a value that's not a small step from the
+        // previous value (indicating a branch), or when it leaves the known
+        // valid address ranges (RAM / ROM). Hook covers the whole emulator
+        // span (0x50460000..0x504ff000 post-memcpy).
+        static auto trc_dispatch_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
+            static uint64_t n = 0;
+            static uint32_t prev_r24 = 0;
+            static bool first = true;
+            uint32_t r24 = 0;
+            uc_reg_read(uc, UC_PPC_REG_24, &r24);
+            bool bogus = !((r24 < 0x08800000) ||
+                           (r24 >= 0x50000000 && r24 < 0x50500000));
+            int32_t delta = (int32_t)(r24 - prev_r24);
+            bool branch = !first && (delta < -16 || delta > 16);
+            if (first || branch || bogus) {
+                uint32_t r27 = 0, r29 = 0, lr = 0;
+                uc_reg_read(uc, UC_PPC_REG_27, &r27);
+                uc_reg_read(uc, UC_PPC_REG_29, &r29);
+                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                // Keep a ring buffer of the last 32 iterations. When we hit
+                // a BOGUS r24, dump the ring so we can see what sequence of
+                // 68k instructions led to the divergence. Also peek at the
+                // memory at r24 to capture the actual 68k opcode about to be
+                // dispatched (the lha has not yet fired when the hook runs).
+                uint32_t opcode_be = 0;
+                if (r24 < 0x08800000 || (r24 >= 0x50000000 && r24 < 0x50500000)) {
+                    uc_mem_read(uc, r24, &opcode_be, 4);
+                }
+                struct Entry { uint64_t n; uint32_t addr, r24, lr, prev, op; };
+                static Entry ring[32]; static int rp = 0;
+                ring[rp] = { n, (uint32_t)addr, r24, lr, prev_r24,
+                             __builtin_bswap32(opcode_be) };
+                rp = (rp + 1) & 31;
+                if (bogus) {
+                    fprintf(stderr, "[TRC-DISP] --- last 32 before bogus ---\n");
+                    for (int i = 0; i < 32; i++) {
+                        int idx = (rp + i) & 31;
+                        fprintf(stderr, "[TRC-DISP %4llu] pc=0x%08x r24=%08x (prev=%08x) op@r24=%08x lr=%08x\n",
+                                (unsigned long long)ring[idx].n, ring[idx].addr,
+                                ring[idx].r24, ring[idx].prev, ring[idx].op, ring[idx].lr);
+                    }
+                }
+                if (n < 30) {
+                    fprintf(stderr, "[TRC-DISP %4llu] pc=0x%08llx r24=%08x (prev=%08x) r27=%08x lr=%08x%s\n",
+                            (unsigned long long)n, (unsigned long long)addr,
+                            r24, prev_r24, r27, lr,
+                            bogus ? " <BOGUS>" : (branch ? " <BRANCH>" : ""));
+                }
+            }
+            prev_r24 = r24;
+            first = false;
+            if (bogus) {
+                static uint64_t bogus_n = 0;
+                if (++bogus_n > 4) {
+                    g_stop_requested = true;
+                    uc_emu_stop(uc);
+                }
+            }
+            n++;
+        };
+        // Install the dispatch-trace hook at every `lha r27, 0(r24)` site in
+        // the DR emulator (found via static scan of the ROM). These are the
+        // opcode-fetch points for the 68k emulation loop.
+        static const uint32_t disp_sites[] = {
+            0x50466e30, 0x50467ce4, 0x50467da0, 0x504688c4,
+            0x50469604, 0x50469684, 0x504696e0, 0x50469740,
+            0x5046979c, 0x5046987c, 0x5046d740, 0x5046ddcc,
+            0x5046de30, 0x5046e0e4, 0x5046e854, 0x5047783c,
+        };
+        for (uint32_t site : disp_sites) {
+            uc_hook hh = 0;
+            uc_hook_add(g_uc, &hh, UC_HOOK_CODE,
+                        (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_dispatch_cb,
+                        nullptr, site, site);
+        }
     }
 
-    // Unmapped-memory hook. The nanokernel probes the 32-bit address space at
-    // various offsets (e.g. 0xFFFFFFFC) to discover memory topology — under
-    // KPX these reads SIGSEGV and the handler skips the instruction. Under
-    // Unicorn we dynamically map a zero-filled 4 KB page covering the probe
-    // address and return true so the access retries successfully, matching
-    // KPX's "read returns 0" behaviour. FETCH faults stay fatal.
+    // Unmapped-memory hook. KPX boots with a SIGSEGV handler that skips the
+    // faulting instruction without touching the destination register or memory
+    // — this is how the nanokernel's RAM-sizing probe loops at 0x50460c00,
+    // 0x50313fc8, etc. terminate (the "did the write stick?" check fails when
+    // the read is also skipped). We replicate that by returning false from the
+    // hook so Unicorn halts with UC_ERR_{READ,WRITE}_UNMAPPED, then execute_fast
+    // advances PC past the dead instruction and resumes. FETCH faults stay
+    // fatal — jumping into unmapped territory is a real bug, not a probe.
+    //
+    // Accounting in g_unmapped_read_pc lets execute_fast know to skip and
+    // avoids the probe-loop escaping as a "stuck PC" bailout.
     {
         static auto mem_unmapped_cb = [](uc_engine *uc, uc_mem_type type,
                                          uint64_t addr, int size,
                                          int64_t value, void *) -> bool {
-            (void)value; (void)size;
-            uint32_t pc = 0;
-            uc_reg_read(uc, UC_PPC_REG_PC, &pc);
-
+            (void)value;
             if (type == UC_MEM_FETCH_UNMAPPED) {
+                uint32_t pc = 0;
+                uc_reg_read(uc, UC_PPC_REG_PC, &pc);
                 fprintf(stderr, "[Unicorn-PPC] FETCH UNMAPPED @pc=0x%08x "
                                 "addr=0x%010llx (fatal)\n",
                         pc, (unsigned long long)addr);
@@ -449,27 +608,39 @@ static bool uppc_cpu_init(void)
                 uc_emu_stop(uc);
                 return false;
             }
-
-            // PPC32 effective addresses are 32-bit; Unicorn widens to 64 for
-            // the hook but uc_mem_map keys on the raw 64-bit value, so we
-            // normalize to the 32-bit-truncated page to match how subsequent
-            // accesses will look the mapping up.
-            uint64_t page = ((uint64_t)(uint32_t)addr) & ~0xFFFull;
-            uint32_t perms = UC_PROT_READ | UC_PROT_WRITE;
-            uc_err e = uc_mem_map(uc, page, 0x1000, perms);
-            fprintf(stderr, "[Unicorn-PPC] UNMAPPED %s @pc=0x%08x "
-                            "addr=0x%010llx size=%d — mapped zero page @0x%010llx (%s)\n",
-                    (type == UC_MEM_READ_UNMAPPED) ? "READ" : "WRITE",
-                    pc, (unsigned long long)addr, size,
-                    (unsigned long long)page, uc_strerror(e));
-            if (e != UC_ERR_OK && e != UC_ERR_MAP) {
-                // UC_ERR_MAP means a mapping for that region already exists —
-                // another concurrent fault mapped it, which is fine.
-                g_stop_requested = true;
-                uc_emu_stop(uc);
-                return false;
+            {
+                static uint64_t n = 0;
+                if (n < 16) {
+                    uint32_t pc = 0;
+                    uc_reg_read(uc, UC_PPC_REG_PC, &pc);
+                    fprintf(stderr, "[Unicorn-PPC] UNMAPPED %s pc=0x%08x target=0x%010llx size=%d\n",
+                            (type == UC_MEM_READ_UNMAPPED) ? "READ" : "WRITE",
+                            pc, (unsigned long long)addr, size);
+                    // Dump all 32 GPRs + LR/CTR + the instruction word so we can
+                    // decode which GPR holds the bogus effective address.
+                    if (n < 2) {
+                        uint32_t r[32] = {0};
+                        for (int i = 0; i < 32; i++)
+                            uc_reg_read(uc, UC_PPC_REG_0 + i, &r[i]);
+                        uint32_t lr = 0, ctr = 0, insn_be = 0;
+                        uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                        uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
+                        uc_mem_read(uc, pc, &insn_be, 4);
+                        uint32_t insn = __builtin_bswap32(insn_be);
+                        fprintf(stderr, "[Unicorn-PPC]   insn=0x%08x lr=0x%08x ctr=0x%08x\n",
+                                insn, lr, ctr);
+                        for (int i = 0; i < 32; i += 8) {
+                            fprintf(stderr, "[Unicorn-PPC]   r%02d..r%02d: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+                                    i, i+7, r[i], r[i+1], r[i+2], r[i+3],
+                                    r[i+4], r[i+5], r[i+6], r[i+7]);
+                        }
+                    }
+                }
+                n++;
             }
-            return true;
+            // Read/write to unmapped: let Unicorn raise UC_ERR_{READ,WRITE}_UNMAPPED.
+            // execute_fast will bump PC by 4 and resume (KPX skip-on-SIGSEGV shape).
+            return false;
         };
         uc_hook hook_unmapped = 0;
         uc_hook_add(g_uc, &hook_unmapped,
@@ -478,6 +649,27 @@ static bool uppc_cpu_init(void)
                     (void *)(bool (*)(uc_engine *, uc_mem_type, uint64_t,
                                       int, int64_t, void *))mem_unmapped_cb,
                     nullptr, 1, 0);
+
+        // Watchpoint on ROM zero-padding region (0x50400000..0x50500000). We
+        // want to see if the nanekernel populates code at 0x5046e6f4 etc.
+        static auto wp_cb = [](uc_engine *uc, uc_mem_type type, uint64_t addr,
+                               int size, int64_t value, void *) -> void {
+            (void)type;
+            static uint64_t n = 0;
+            if (n < 32) {
+                uint32_t pc = 0, lr = 0;
+                uc_reg_read(uc, UC_PPC_REG_PC, &pc);
+                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                fprintf(stderr, "[Unicorn-PPC] ROMZ-WRITE @0x%08llx val=0x%08llx size=%d pc=0x%08x lr=0x%08x\n",
+                        (unsigned long long)addr, (unsigned long long)value, size, pc, lr);
+            }
+            n++;
+        };
+        uc_hook hook_wp = 0;
+        uc_hook_add(g_uc, &hook_wp, UC_HOOK_MEM_WRITE,
+                    (void *)(void (*)(uc_engine *, uc_mem_type, uint64_t,
+                                      int, int64_t, void *))wp_cb,
+                    nullptr, 0x50400000, 0x50500000);
     }
 
     // Select CPU model (matches KPX PVR 0x000c0000 = PowerPC 750 / G3).
@@ -521,8 +713,8 @@ static bool uppc_cpu_init(void)
 
     // ---- Diagnostics: dump instructions around known divergence points ------
     {
-        // Dump the loop body at 0x50313fa8-0x50313fb0 (the divergence).
-        for (uint32_t a = 0x50313f80; a < 0x50314000; a += 16) {
+        // Dump around 0x504ff224 — the current execute_fast stuck point.
+        for (uint32_t a = 0x504ff200; a < 0x504ff280; a += 16) {
             uint32_t buf[4] = {0,0,0,0};
             if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
                 fprintf(stderr,
@@ -530,6 +722,56 @@ static bool uppc_cpu_init(void)
                     a, __builtin_bswap32(buf[0]), __builtin_bswap32(buf[1]),
                     __builtin_bswap32(buf[2]), __builtin_bswap32(buf[3]));
             }
+        }
+        // Dump the bctr-and-setup region that routes into zero-fill (0x5046xxx).
+        fprintf(stderr, "[Unicorn-PPC] --- post-patch dump 0x50314200..0x50314260 ---\n");
+        for (uint32_t a = 0x50314200; a < 0x50314260; a += 16) {
+            uint32_t buf[4] = {0,0,0,0};
+            if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
+                fprintf(stderr,
+                    "[Unicorn-PPC] ROM @0x%08x: %08x %08x %08x %08x\n",
+                    a, __builtin_bswap32(buf[0]), __builtin_bswap32(buf[1]),
+                    __builtin_bswap32(buf[2]), __builtin_bswap32(buf[3]));
+            }
+        }
+    }
+
+    // Low-memory sanity check: the nanokernel at pc=0x503101fc executes
+    //   lwz r1, 0x2804(r0)
+    // to load its stack pointer from XLM_KERNEL_DATA. InitAll_PPC should have
+    // stashed KernelDataAddr there via WriteMacInt32 BEFORE cpu_init runs.
+    // If this reads 0 we know the write never reached Unicorn-visible memory
+    // (either init ordering or host/guest-mapping mismatch).
+    {
+        uint32_t vals[8] = {0};
+        uc_err r = uc_mem_read(g_uc, 0x2800, vals, sizeof(vals));
+        fprintf(stderr, "[Unicorn-PPC] LOWMEM read @0x2800..0x2820 (%s):\n",
+                uc_strerror(r));
+        for (int i = 0; i < 8; ++i) {
+            fprintf(stderr, "    0x%04x = 0x%08x (be 0x%08x)\n",
+                    0x2800 + i*4, vals[i], __builtin_bswap32(vals[i]));
+        }
+        fprintf(stderr, "[Unicorn-PPC] Expected 0x2804 = KernelDataAddr = 0x%08x\n",
+                KernelDataAddr);
+
+        // Cross-check: read via the host pointer directly.
+        uint32_t host_val = *(uint32_t *)(uintptr_t)0x2804;
+        fprintf(stderr, "[Unicorn-PPC] HOST-DIRECT *0x2804 = 0x%08x (be 0x%08x)\n",
+                host_val, __builtin_bswap32(host_val));
+
+        // Dump KernelData+0x1180..0x11a0 before execution to see if the
+        // "emulator init routine pointer" field is already set.
+        uint32_t kd_vals[16] = {0};
+        uc_err kr = uc_mem_read(g_uc, 0x68fff180, kd_vals, sizeof(kd_vals));
+        fprintf(stderr, "[Unicorn-PPC] KernelData+0x1180..0x11c0 pre-exec (%s):\n",
+                uc_strerror(kr));
+        for (int i = 0; i < 16; i += 4) {
+            fprintf(stderr, "    0x%08x = %08x %08x %08x %08x\n",
+                    0x68fff180 + i*4,
+                    __builtin_bswap32(kd_vals[i+0]),
+                    __builtin_bswap32(kd_vals[i+1]),
+                    __builtin_bswap32(kd_vals[i+2]),
+                    __builtin_bswap32(kd_vals[i+3]));
         }
     }
 
@@ -547,6 +789,29 @@ static bool uppc_cpu_init(void)
 
         fprintf(stderr, "[Unicorn-PPC] cpu_init: entry=0x%08x gpr3=0x%08x gpr4=0x%08x\n",
                 entry, gpr3, gpr4);
+
+        // Dump initial MSR — KPX boots with IR/DR=0 (real addressing). If
+        // Unicorn ships a different default, translation-dependent paths in
+        // the nanokernel fork off silently.
+        uint32_t msr = 0;
+        uc_reg_read(g_uc, UC_PPC_REG_MSR, &msr);
+        fprintf(stderr, "[Unicorn-PPC] cpu_init: initial MSR=0x%08x (IR=%d DR=%d FP=%d PR=%d)\n",
+                msr, !!(msr & 0x20), !!(msr & 0x10), !!(msr & 0x2000),
+                !!(msr & 0x4000));
+
+        // Enable MSR.FP (bit 13, mask 0x2000). KPX is a user-mode interpreter
+        // with no real MSR, so FP instructions always execute; its ROM patches
+        // (rom_patches_ppc.cpp:1336,1398) specifically remove the nanokernel's
+        // "enable FPU" sequences because FP is assumed already on. Unicorn
+        // raises UC_ERR_EXCEPTION (POWERPC_EXCP_FPU) on any `lfd`/`stfd`/etc
+        // when MSR.FP=0 — e.g. the FP context-restore block at 0x50312e00.
+        // Force MSR.FP=1 to match KPX's effective runtime shape.
+        msr |= 0x2000u;
+        uc_reg_write(g_uc, UC_PPC_REG_MSR, &msr);
+        uc_reg_read(g_uc, UC_PPC_REG_MSR, &msr);
+        fprintf(stderr, "[Unicorn-PPC] cpu_init:   after MSR=0x%08x (IR=%d DR=%d FP=%d PR=%d)\n",
+                msr, !!(msr & 0x20), !!(msr & 0x10), !!(msr & 0x2000),
+                !!(msr & 0x4000));
     }
     return true;
 
@@ -718,19 +983,44 @@ static void uppc_cpu_execute_fast(void)
 
     // Run until QUIT or parent requests stop. uc_emu_start returns on every
     // EXEC_RETURN / EmulOp / IRQ kick — we resume at current PC.
+    //
+    // UC_ERR_{READ,WRITE}_UNMAPPED are KPX-style probe faults: advance PC by 4
+    // and resume, leaving destination register / memory unchanged. Only a
+    // *true* stall (same PC hit 3+ times after a hard error) bails out.
     uint32_t stuck_pc = 0;
     int stuck_count = 0;
+    uint64_t skipped = 0;
     while (!g_stop_requested) {
         uint32_t pc = rd_pc();
         uc_err err = uc_emu_start(g_uc, pc, 0, /*timeout*/0, /*count*/0);
+        if (err == UC_ERR_READ_UNMAPPED || err == UC_ERR_WRITE_UNMAPPED) {
+            // KPX SIGSEGV-skip shape: step past the dead instruction and keep
+            // going. Log the first few per-PC so probe loops don't flood the
+            // terminal but genuine bugs still surface.
+            uint32_t after = rd_pc();
+            static std::unordered_map<uint32_t, uint64_t> skip_counts;
+            uint64_t &c = skip_counts[after];
+            if (c < 3) {
+                fprintf(stderr, "[Unicorn-PPC] skip %s @pc=0x%08x (n=%llu)\n",
+                        (err == UC_ERR_READ_UNMAPPED) ? "READ" : "WRITE",
+                        after, (unsigned long long)(c + 1));
+            }
+            c++; skipped++;
+            if (!uppc_skip_memop_at(after)) {
+                fprintf(stderr, "[Unicorn-PPC] unknown memop at pc=0x%08x — bailing\n", after);
+                break;
+            }
+            stuck_count = 0;
+            continue;
+        }
         if (err != UC_ERR_OK) {
             uint32_t after = rd_pc();
             fprintf(stderr, "[Unicorn-PPC] uc_emu_start err=%s pc=0x%08x\n",
                     uc_strerror(err), after);
             if (after == stuck_pc) {
                 if (++stuck_count >= 3) {
-                    fprintf(stderr, "[Unicorn-PPC] stuck at pc=0x%08x — bailing out\n",
-                            after);
+                    fprintf(stderr, "[Unicorn-PPC] stuck at pc=0x%08x — bailing out (skipped=%llu)\n",
+                            after, (unsigned long long)skipped);
                     break;
                 }
             } else {
