@@ -223,9 +223,14 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 
     // JIT requires MEMBaseDiff to fit in a 32-bit x86 displacement, so allocate
     // in the low 32-bit address space. Fall back to heap if MAP_32BIT fails.
+#ifdef MAP_32BIT
+    int mmap_flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT;
+#else
+    int mmap_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+#endif
     mmap_ram_ = (uint8_t*)mmap(nullptr, total_alloc,
         PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT,
+        mmap_flags,
         -1, 0);
     if (mmap_ram_ != MAP_FAILED) {
         mmap_ram_size_ = total_alloc;

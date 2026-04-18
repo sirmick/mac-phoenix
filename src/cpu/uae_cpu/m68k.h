@@ -1009,6 +1009,160 @@ static inline uae_u32 sparc_v9_flag_addx_32(flag_struct *flags, uae_u32 src, uae
 
 #endif /* SPARC_V9_ASSEMBLY */
 
+#else /* no inline-asm flag optimization — generic C fallback */
+
+struct flag_struct {
+    uae_u32 cznv;
+    uae_u32 x;
+};
+
+extern struct flag_struct regflags;
+
+/* Bit layout matches the x86 branch (pushf encoding): C=bit0, Z=bit6, N=bit7, V=bit11. */
+#define FLAGVAL_C   0x0001
+#define FLAGVAL_Z   0x0040
+#define FLAGVAL_N   0x0080
+#define FLAGVAL_V   0x0800
+#define FLAGVAL_X   0x0001
+
+#define SET_ZFLG(y) (regflags.cznv = (regflags.cznv & ~FLAGVAL_Z) | (((y) & 1) << 6))
+#define SET_CFLG(y) (regflags.cznv = (regflags.cznv & ~FLAGVAL_C) | ((y) & 1))
+#define SET_VFLG(y) (regflags.cznv = (regflags.cznv & ~FLAGVAL_V) | (((y) & 1) << 11))
+#define SET_NFLG(y) (regflags.cznv = (regflags.cznv & ~FLAGVAL_N) | (((y) & 1) << 7))
+#define SET_XFLG(y) (regflags.x = (y))
+
+#define GET_ZFLG    ((regflags.cznv >> 6) & 1)
+#define GET_CFLG    (regflags.cznv & 1)
+#define GET_VFLG    ((regflags.cznv >> 11) & 1)
+#define GET_NFLG    ((regflags.cznv >> 7) & 1)
+#define GET_XFLG    (regflags.x & 1)
+
+#define CLEAR_CZNV  (regflags.cznv = 0)
+#define GET_CZNV    (regflags.cznv)
+#define IOR_CZNV(X) (regflags.cznv |= (X))
+#define SET_CZNV(X) (regflags.cznv = (X))
+
+#define COPY_CARRY  (regflags.x = regflags.cznv & 1)
+
+#define OPTFLAG_NZ_(r_, sign_mask_) \
+    (((r_) == 0 ? FLAGVAL_Z : 0) | (((r_) & (sign_mask_)) ? FLAGVAL_N : 0))
+
+#define optflag_testl(v) do { \
+    uae_u32 _r = (uae_u32)(uae_s32)(v); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x80000000u); \
+} while (0)
+
+#define optflag_testw(v) do { \
+    uae_u16 _r = (uae_u16)(uae_s16)(v); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x8000u); \
+} while (0)
+
+#define optflag_testb(v) do { \
+    uae_u8 _r = (uae_u8)(uae_s8)(v); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x80u); \
+} while (0)
+
+/* V = (d^r) & (s^r) & sign  — signed-overflow detection for add. */
+#define optflag_addl(v, s, d) do { \
+    uae_u32 _s = (uae_u32)(s), _d = (uae_u32)(d), _r = _d + _s; \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x80000000u) \
+        | ((((_d ^ _r) & (_s ^ _r)) & 0x80000000u) ? FLAGVAL_V : 0) \
+        | ((_r < _d) ? FLAGVAL_C : 0); \
+    (v) = (uae_s32)_r; \
+    COPY_CARRY; \
+} while (0)
+
+#define optflag_addw(v, s, d) do { \
+    uae_u16 _s = (uae_u16)(s), _d = (uae_u16)(d), _r = (uae_u16)(_d + _s); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x8000u) \
+        | ((((uae_u16)(_d ^ _r) & (uae_u16)(_s ^ _r)) & 0x8000u) ? FLAGVAL_V : 0) \
+        | ((_r < _d) ? FLAGVAL_C : 0); \
+    (v) = (uae_s16)_r; \
+    COPY_CARRY; \
+} while (0)
+
+#define optflag_addb(v, s, d) do { \
+    uae_u8 _s = (uae_u8)(s), _d = (uae_u8)(d), _r = (uae_u8)(_d + _s); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x80u) \
+        | ((((uae_u8)(_d ^ _r) & (uae_u8)(_s ^ _r)) & 0x80u) ? FLAGVAL_V : 0) \
+        | ((_r < _d) ? FLAGVAL_C : 0); \
+    (v) = (uae_s8)_r; \
+    COPY_CARRY; \
+} while (0)
+
+/* V = (d^s) & (d^r) & sign  — signed-overflow detection for sub/cmp. */
+#define optflag_subl(v, s, d) do { \
+    uae_u32 _s = (uae_u32)(s), _d = (uae_u32)(d), _r = _d - _s; \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x80000000u) \
+        | ((((_d ^ _s) & (_d ^ _r)) & 0x80000000u) ? FLAGVAL_V : 0) \
+        | ((_d < _s) ? FLAGVAL_C : 0); \
+    (v) = (uae_s32)_r; \
+    COPY_CARRY; \
+} while (0)
+
+#define optflag_subw(v, s, d) do { \
+    uae_u16 _s = (uae_u16)(s), _d = (uae_u16)(d), _r = (uae_u16)(_d - _s); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x8000u) \
+        | ((((uae_u16)(_d ^ _s) & (uae_u16)(_d ^ _r)) & 0x8000u) ? FLAGVAL_V : 0) \
+        | ((_d < _s) ? FLAGVAL_C : 0); \
+    (v) = (uae_s16)_r; \
+    COPY_CARRY; \
+} while (0)
+
+#define optflag_subb(v, s, d) do { \
+    uae_u8 _s = (uae_u8)(s), _d = (uae_u8)(d), _r = (uae_u8)(_d - _s); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x80u) \
+        | ((((uae_u8)(_d ^ _s) & (uae_u8)(_d ^ _r)) & 0x80u) ? FLAGVAL_V : 0) \
+        | ((_d < _s) ? FLAGVAL_C : 0); \
+    (v) = (uae_s8)_r; \
+    COPY_CARRY; \
+} while (0)
+
+#define optflag_cmpl(s, d) do { \
+    uae_u32 _s = (uae_u32)(s), _d = (uae_u32)(d), _r = _d - _s; \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x80000000u) \
+        | ((((_d ^ _s) & (_d ^ _r)) & 0x80000000u) ? FLAGVAL_V : 0) \
+        | ((_d < _s) ? FLAGVAL_C : 0); \
+} while (0)
+
+#define optflag_cmpw(s, d) do { \
+    uae_u16 _s = (uae_u16)(s), _d = (uae_u16)(d), _r = (uae_u16)(_d - _s); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x8000u) \
+        | ((((uae_u16)(_d ^ _s) & (uae_u16)(_d ^ _r)) & 0x8000u) ? FLAGVAL_V : 0) \
+        | ((_d < _s) ? FLAGVAL_C : 0); \
+} while (0)
+
+#define optflag_cmpb(s, d) do { \
+    uae_u8 _s = (uae_u8)(s), _d = (uae_u8)(d), _r = (uae_u8)(_d - _s); \
+    regflags.cznv = OPTFLAG_NZ_(_r, 0x80u) \
+        | ((((uae_u8)(_d ^ _s) & (uae_u8)(_d ^ _r)) & 0x80u) ? FLAGVAL_V : 0) \
+        | ((_d < _s) ? FLAGVAL_C : 0); \
+} while (0)
+
+static __inline__ int cctrue(int cc)
+{
+    uae_u32 cznv = regflags.cznv;
+    switch (cc) {
+    case 0: return 1;
+    case 1: return 0;
+    case 2: return (cznv & 0x41) == 0;
+    case 3: return (cznv & 0x41) != 0;
+    case 4: return (cznv & 1) == 0;
+    case 5: return (cznv & 1) != 0;
+    case 6: return (cznv & 0x40) == 0;
+    case 7: return (cznv & 0x40) != 0;
+    case 8: return (cznv & 0x800) == 0;
+    case 9: return (cznv & 0x800) != 0;
+    case 10: return (cznv & 0x80) == 0;
+    case 11: return (cznv & 0x80) != 0;
+    case 12: return (((cznv << 4) ^ cznv) & 0x800) == 0;
+    case 13: return (((cznv << 4) ^ cznv) & 0x800) != 0;
+    case 14: cznv &= 0x8c0; return (((cznv << 4) ^ cznv) & 0x840) == 0;
+    case 15: cznv &= 0x8c0; return (((cznv << 4) ^ cznv) & 0x840) != 0;
+    }
+    return 0;
+}
+
 #endif
 
 #else

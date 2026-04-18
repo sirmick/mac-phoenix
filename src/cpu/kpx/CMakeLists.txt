@@ -72,12 +72,21 @@ set(KPX_CPP_ARGS
   -DPPC_DETERMINISTIC_REPLAY=1
 )
 
-# Interpreter core at -O1 (hot loop needs optimization)
-add_library(kpx_interp STATIC ${KPX_INTERPRETER_SOURCES})
-target_include_directories(kpx_interp PRIVATE ${KPX_COMMON_INC})
-target_compile_options(kpx_interp PRIVATE ${KPX_CPP_ARGS} -O1)
+# KPX relies on SheepShaver's dyngen, whose precompiled machine code in
+# dyngen_precompiled/*.hpp is x86/x86_64-only. On other arches we build a
+# stub so the link succeeds; PPC mode at runtime prints an error and exits.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  # Interpreter core at -O1 (hot loop needs optimization)
+  add_library(kpx_interp STATIC ${KPX_INTERPRETER_SOURCES})
+  target_include_directories(kpx_interp PRIVATE ${KPX_COMMON_INC})
+  target_compile_options(kpx_interp PRIVATE ${KPX_CPP_ARGS} -O1)
 
-# Dyngen/JIT at -O0 (precompiled machine code in headers causes ICE at -O2)
-add_library(kpx_dyngen STATIC ${KPX_DYNGEN_SOURCES})
-target_include_directories(kpx_dyngen PRIVATE ${KPX_COMMON_INC})
-target_compile_options(kpx_dyngen PRIVATE ${KPX_CPP_ARGS})
+  # Dyngen/JIT at -O0 (precompiled machine code in headers causes ICE at -O2)
+  add_library(kpx_dyngen STATIC ${KPX_DYNGEN_SOURCES})
+  target_include_directories(kpx_dyngen PRIVATE ${KPX_COMMON_INC})
+  target_compile_options(kpx_dyngen PRIVATE ${KPX_CPP_ARGS})
+else()
+  add_library(kpx_interp STATIC kpx_stub.cpp)
+  target_include_directories(kpx_interp PRIVATE ${KPX_COMMON_INC})
+  add_library(kpx_dyngen STATIC kpx_stub_empty.cpp)
+endif()
