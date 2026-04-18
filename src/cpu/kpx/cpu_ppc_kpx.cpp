@@ -979,15 +979,32 @@ void kpx_flight_recorder_cmd(int cmd)
 // ============================================================================
 // call_macos functions (PPC calling conventions)
 // ============================================================================
+//
+// Backend dispatch: KPX sets ppc_cpu to its sheepshaver_cpu instance; the
+// Unicorn-PPC backend leaves ppc_cpu as nullptr and provides its own
+// uppc_cpu_execute_macos_code (in cpu_unicorn_ppc.cpp). When KPX isn't active,
+// dereferencing ppc_cpu here used to SIGSEGV — e.g. DoPatchNameRegistry →
+// RegistryCStrEntryCreate → call_macos3 — which the signal handler retried
+// forever, producing an apparent hang at OP_NAME_REGISTRY.
 
-uint32 call_macos(uint32 tvect) { return ppc_cpu->execute_macos_code(tvect, 0, NULL); }
-uint32 call_macos1(uint32 tvect, uint32 a1) { const uint32 args[] = {a1}; return ppc_cpu->execute_macos_code(tvect, 1, args); }
-uint32 call_macos2(uint32 tvect, uint32 a1, uint32 a2) { const uint32 args[] = {a1,a2}; return ppc_cpu->execute_macos_code(tvect, 2, args); }
-uint32 call_macos3(uint32 tvect, uint32 a1, uint32 a2, uint32 a3) { const uint32 args[] = {a1,a2,a3}; return ppc_cpu->execute_macos_code(tvect, 3, args); }
-uint32 call_macos4(uint32 tvect, uint32 a1, uint32 a2, uint32 a3, uint32 a4) { const uint32 args[] = {a1,a2,a3,a4}; return ppc_cpu->execute_macos_code(tvect, 4, args); }
-uint32 call_macos5(uint32 tvect, uint32 a1, uint32 a2, uint32 a3, uint32 a4, uint32 a5) { const uint32 args[] = {a1,a2,a3,a4,a5}; return ppc_cpu->execute_macos_code(tvect, 5, args); }
-uint32 call_macos6(uint32 tvect, uint32 a1, uint32 a2, uint32 a3, uint32 a4, uint32 a5, uint32 a6) { const uint32 args[] = {a1,a2,a3,a4,a5,a6}; return ppc_cpu->execute_macos_code(tvect, 6, args); }
-uint32 call_macos7(uint32 tvect, uint32 a1, uint32 a2, uint32 a3, uint32 a4, uint32 a5, uint32 a6, uint32 a7) { const uint32 args[] = {a1,a2,a3,a4,a5,a6,a7}; return ppc_cpu->execute_macos_code(tvect, 7, args); }
+extern "C" uint32_t uppc_cpu_execute_macos_code(uint32_t tvect, int nargs, uint32_t const *args) __attribute__((weak));
+
+static inline uint32 dispatch_macos_code(uint32 tvect, int nargs, uint32 const *args)
+{
+	if (ppc_cpu) return ppc_cpu->execute_macos_code(tvect, nargs, args);
+	if (uppc_cpu_execute_macos_code) return uppc_cpu_execute_macos_code(tvect, nargs, args);
+	fprintf(stderr, "[call_macos] no PPC backend available for tvect=0x%08x\n", tvect);
+	return 0;
+}
+
+uint32 call_macos(uint32 tvect) { return dispatch_macos_code(tvect, 0, NULL); }
+uint32 call_macos1(uint32 tvect, uint32 a1) { const uint32 args[] = {a1}; return dispatch_macos_code(tvect, 1, args); }
+uint32 call_macos2(uint32 tvect, uint32 a1, uint32 a2) { const uint32 args[] = {a1,a2}; return dispatch_macos_code(tvect, 2, args); }
+uint32 call_macos3(uint32 tvect, uint32 a1, uint32 a2, uint32 a3) { const uint32 args[] = {a1,a2,a3}; return dispatch_macos_code(tvect, 3, args); }
+uint32 call_macos4(uint32 tvect, uint32 a1, uint32 a2, uint32 a3, uint32 a4) { const uint32 args[] = {a1,a2,a3,a4}; return dispatch_macos_code(tvect, 4, args); }
+uint32 call_macos5(uint32 tvect, uint32 a1, uint32 a2, uint32 a3, uint32 a4, uint32 a5) { const uint32 args[] = {a1,a2,a3,a4,a5}; return dispatch_macos_code(tvect, 5, args); }
+uint32 call_macos6(uint32 tvect, uint32 a1, uint32 a2, uint32 a3, uint32 a4, uint32 a5, uint32 a6) { const uint32 args[] = {a1,a2,a3,a4,a5,a6}; return dispatch_macos_code(tvect, 6, args); }
+uint32 call_macos7(uint32 tvect, uint32 a1, uint32 a2, uint32 a3, uint32 a4, uint32 a5, uint32 a6, uint32 a7) { const uint32 args[] = {a1,a2,a3,a4,a5,a6,a7}; return dispatch_macos_code(tvect, 7, args); }
 
 #if PPC_ENABLE_JIT && PPC_REENTRANT_JIT
 // Initialize EmulOp trampolines

@@ -53,6 +53,10 @@ bool SheepMem::Init(void)
 
 extern "C" bool kpx_sheep_mem_init(void) { return SheepMem::Init(); }
 
+// Backend-neutral SheepMem reserve — used by the Unicorn-PPC backend to
+// allocate trampoline slots without pulling in kpx/compat/thunks.h.
+extern "C" uint32_t kpx_sheep_mem_reserve(uint32_t sz) { return SheepMem::Reserve(sz); }
+
 void SheepMem::Exit(void)
 {
     if (data) {

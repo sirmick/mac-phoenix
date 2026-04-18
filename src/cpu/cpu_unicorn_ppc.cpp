@@ -88,6 +88,15 @@ namespace ppc {
     extern void EmulOp(M68kRegisters *r, uint32_t pc, int selector);
 }
 
+// Backend-neutral SheepMem reserve wrapper exposed by kpx/ppc_memory.cpp. Used
+// from cpu_init to pre-allocate the execute_macos_code EXEC_RETURN trampoline.
+extern "C" uint32_t kpx_sheep_mem_reserve(uint32_t sz);
+
+// EXEC_RETURN trampoline slot — 4 bytes of SheepMem containing
+// POWERPC_EXEC_RETURN as a PPC instruction. Allocated once at cpu_init so it
+// sits at the top of SheepMem and isn't recycled by nested SheepVars.
+static uint32_t g_macos_trampoline = 0;
+
 // ----- Local constants (mirror src/cpu/kpx/compat/*) ------------------------
 
 // POWERPC_EMUL_OP sentinel — major opcode 6 (reserved in base PPC ISA).
@@ -421,6 +430,15 @@ static void uppc_dispatch_native_op(uint32_t pc, uint32_t opcode)
     // expected to be available at this point because cpu_context.cpp runs
     // InitAll_PPC (which calls PatchROM_PPC) before invoking cpu_init on any
     // backend.
+    static const bool s_trace_native = []() {
+        const char* e = std::getenv("MACEMU_PPC_TRACE_TRAP");
+        return e && *e && *e != '0';
+    }();
+    if (s_trace_native) {
+        fprintf(stderr, "[Unicorn-PPC]     EXEC_NATIVE selector=%u fn=%d @pc=0x%08x lr=0x%08x\n",
+                selector, (int)return_via_lr, pc, rd_lr());
+    }
+
     switch (selector) {
     case NATIVE_PATCH_NAME_REGISTRY:
         ::DoPatchNameRegistry();
@@ -439,6 +457,10 @@ static void uppc_dispatch_native_op(uint32_t pc, uint32_t opcode)
         fprintf(stderr, "[Unicorn-PPC] EXEC_NATIVE selector=%u (stub) @pc=0x%08x\n",
                 selector, pc);
         break;
+    }
+
+    if (s_trace_native) {
+        fprintf(stderr, "[Unicorn-PPC]     EXEC_NATIVE selector=%u done\n", selector);
     }
 
     // Advance PC per bit 19 of the opcode (FN_field in SheepShaver terms).
@@ -633,15 +655,16 @@ static bool uppc_cpu_init(void)
         s_lo = lo; s_hi = hi;
         static auto cr_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
             if (g_emul_op_seq < s_lo || g_emul_op_seq >= s_hi) return;
-            uint32_t cr = 0, lr = 0;
+            uint32_t cr = 0, lr = 0, r24 = 0;
             uc_reg_read(uc, UC_PPC_REG_CR, &cr);
             uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+            uc_reg_read(uc, UC_PPC_REG_24, &r24);
             uint32_t op_be = 0;
             uc_mem_read(uc, addr, &op_be, 4);
             uint32_t op = __builtin_bswap32(op_be);
-            fprintf(stderr, "[CR] seq=%llu pc=%08llx op=%08x cr=%08x lr=%08x\n",
+            fprintf(stderr, "[CR] seq=%llu pc=%08llx op=%08x cr=%08x lr=%08x r24=%08x\n",
                     (unsigned long long)g_emul_op_seq,
-                    (unsigned long long)addr, op, cr, lr);
+                    (unsigned long long)addr, op, cr, lr, r24);
         };
         uc_hook hh = 0;
         uc_hook_add(g_uc, &hh, UC_HOOK_CODE,
@@ -827,6 +850,17 @@ static bool uppc_cpu_init(void)
         }
     }
 
+    // Permanently reserve the EXEC_RETURN trampoline slot NOW, before any
+    // SheepVar lifetimes can intervene. Reserving later during execute_macos_code
+    // would place us in the middle of the stack, where subsequent SheepVar
+    // destructors raise `data` above us and later Reserves overwrite the slot.
+    {
+        g_macos_trampoline = kpx_sheep_mem_reserve(4);
+        WriteMac32(g_macos_trampoline, POWERPC_EXEC_RETURN);
+        fprintf(stderr, "[Unicorn-PPC] execute_macos_code trampoline @0x%08x = 0x%08x\n",
+                g_macos_trampoline, POWERPC_EXEC_RETURN);
+    }
+
     // DR Emulator / DR Cache — KPX `munmap`s these before nanokernel boot
     // (cpu_ppc_kpx.cpp:1204-1206) so probes hit SIGSEGV → skip instruction
     // → register stays untouched. Under Unicorn we leave them unmapped and
@@ -973,7 +1007,10 @@ static void uppc_interrupt(uint32_t entry)
 
     wr_gpr(1, (uint32_t)SignalStackBase() - 64);
 
-    uint32_t trampoline = POWERPC_EXEC_RETURN;  // set in LR after stash
+    // SheepMem address holding EXEC_RETURN as a PPC instruction. Used as a
+    // trampoline so blr / mtctr+bctr through LR/r10/r12 lands on a mapped
+    // address (which dispatches via gen_mac_emulop) instead of 0x18000000.
+    uint32_t trampoline = g_macos_trampoline;
 
     WriteMac32(KERNEL_DATA_BASE + 0x004, rd_gpr(1));
     WriteMac32(KERNEL_DATA_BASE + 0x018, rd_gpr(6));
@@ -990,9 +1027,6 @@ static void uppc_interrupt(uint32_t entry)
     wr_gpr(1, ppc::KernelDataAddr);
     wr_gpr(7, ReadMac32(KERNEL_DATA_BASE + 0x660));
     wr_gpr(8, 0);
-    // Use LR as the EXEC_RETURN trampoline instead of a SheepMem address —
-    // we can't easily build a SheepVar32 from here without KPX headers, and
-    // LR-as-return-address is architecturally correct for blr-style return.
     wr_lr(trampoline);
     wr_gpr(10, trampoline);
     wr_gpr(12, trampoline);
@@ -1215,7 +1249,12 @@ static void uppc_cpu_execute_ppc(uint32_t entry)
 
     uint32_t saved_pc = rd_pc();
     uint32_t saved_lr = rd_lr();
-    wr_lr(POWERPC_EXEC_RETURN);
+    // LR must point at a SheepMem slot containing the EXEC_RETURN instruction,
+    // not the literal sentinel value. Guest functions save/restore LR through
+    // their stack frames; if LR holds 0x18000001, a later blr fetches PC =
+    // 0x18000000 (low 2 bits masked) which is unmapped. The trampoline address
+    // survives prologue/epilogue round-trips and dispatches via gen_mac_emulop.
+    wr_lr(g_macos_trampoline);
     wr_pc(entry);
 
     // Skip-on-unmapped loop mirrors execute_fast: KPX's SIGSEGV handler
@@ -1242,8 +1281,10 @@ static void uppc_cpu_execute_ppc(uint32_t entry)
             continue;
         }
         uint32_t after = rd_pc();
-        fprintf(stderr, "[Unicorn-PPC] execute_ppc(0x%08x) err=%s pc=0x%08x\n",
-                entry, uc_strerror(err), after);
+        uint32_t lr_now = rd_lr();
+        uint32_t r1_now = rd_gpr(1);
+        fprintf(stderr, "[Unicorn-PPC] execute_ppc(0x%08x) err=%s pc=0x%08x lr=0x%08x r1=0x%08x\n",
+                entry, uc_strerror(err), after, lr_now, r1_now);
         if (after == stuck_pc && ++stuck_count >= 3) break;
         if (after != stuck_pc) { stuck_pc = after; stuck_count = 1; }
         run_pc = after;
@@ -1252,6 +1293,83 @@ static void uppc_cpu_execute_ppc(uint32_t entry)
 
     wr_pc(saved_pc);
     wr_lr(saved_lr);
+}
+
+// ----- execute_macos_code — port of sheepshaver_cpu::execute_macos_code ----
+// Invokes a PPC shared-library function via its transition vector (tvect)
+// from host context. Used by call_macos*() in cpu_ppc_kpx.cpp when the
+// Unicorn backend is active (ppc_cpu == nullptr).
+//
+// Matches KPX exactly (cpu_ppc_kpx.cpp:796-829): reads proc/toc from the
+// tvect, sets r3..r(3+nargs-1) to the args with r2 = toc, LR to a SheepMem
+// trampoline containing POWERPC_EXEC_RETURN, then runs until that sentinel
+// fires. Returns gpr(3).
+
+// Externally visible so call_macos*() in cpu_ppc_kpx.cpp can dispatch here
+// when ppc_cpu (the KPX singleton) is nullptr (i.e. Unicorn backend active).
+extern "C" uint32_t uppc_cpu_execute_macos_code(uint32_t tvect, int nargs, uint32_t const *args);
+extern "C" uint32_t uppc_cpu_execute_macos_code(uint32_t tvect, int nargs, uint32_t const *args)
+{
+    if (!g_uc || !g_macos_trampoline) return 0;
+
+    uint32_t saved_pc  = rd_pc();
+    uint32_t saved_lr  = rd_lr();
+    uint32_t saved_ctr = rd_ctr();
+
+    static const bool s_trace_macos = []() {
+        const char* e = std::getenv("MACEMU_PPC_TRACE_MACOS");
+        return e && *e && *e != '0';
+    }();
+    if (s_trace_macos) {
+        uint32_t proc_dbg = ReadMac32(tvect);
+        uint32_t toc_dbg  = ReadMac32(tvect + 4);
+        fprintf(stderr, "[Unicorn-PPC] execute_macos_code ENTER tvect=0x%08x proc=0x%08x toc=0x%08x nargs=%d tramp=0x%08x\n",
+                tvect, proc_dbg, toc_dbg, nargs, g_macos_trampoline);
+        for (int i = 0; i < nargs; i++)
+            fprintf(stderr, "[Unicorn-PPC]   arg%d=0x%08x\n", i, args[i]);
+        // Dump first 8 insns at proc
+        for (int i = 0; i < 8; i++) {
+            uint32_t w = ReadMac32(proc_dbg + i*4);
+            fprintf(stderr, "[Unicorn-PPC]   proc+%2d: 0x%08x\n", i*4, w);
+        }
+    }
+
+    wr_lr(g_macos_trampoline);
+
+    // KPX reserves 64 bytes of stack for the MacOS call frame.
+    uint32_t saved_sp = rd_gpr(1);
+    wr_gpr(1, saved_sp - 64);
+
+    uint32_t proc = ReadMac32(tvect);
+    uint32_t toc  = ReadMac32(tvect + 4);
+
+    // Save r2..r(2+nargs) so we can restore them after the call.
+    uint32_t saved_gprs[9] = {0};
+    saved_gprs[0] = rd_gpr(2);
+    for (int i = 0; i < nargs && i < 8; i++)
+        saved_gprs[i + 1] = rd_gpr(i + 3);
+
+    wr_gpr(2, toc);
+    for (int i = 0; i < nargs && i < 8; i++)
+        wr_gpr(i + 3, args[i]);
+
+    uppc_cpu_execute_ppc(proc);
+    uint32_t retval = rd_gpr(3);
+    if (s_trace_macos) {
+        fprintf(stderr, "[Unicorn-PPC] execute_macos_code EXIT  retval=0x%08x pc=0x%08x lr=0x%08x\n",
+                retval, rd_pc(), rd_lr());
+    }
+
+    // Restore r2..r(2+nargs).
+    for (int i = 0; i <= nargs && i <= 8; i++)
+        wr_gpr(i + 2, saved_gprs[i]);
+
+    wr_gpr(1, saved_sp);
+    wr_pc(saved_pc);
+    wr_lr(saved_lr);
+    wr_ctr(saved_ctr);
+
+    return retval;
 }
 
 // ----- execute_68k — port of sheepshaver_cpu::execute_68k ------------------
@@ -1309,7 +1427,21 @@ static void uppc_cpu_execute_68k(uint32_t entry, struct M68kRegisters *r)
     wr_gpr(24, g24 + 2);
     wr_gpr(29, rd_gpr(29) + opcode * 8);
 
+    static const bool s_trace_trap = []() {
+        const char* e = std::getenv("MACEMU_PPC_TRACE_TRAP");
+        return e && *e && *e != '0';
+    }();
+    if (s_trace_trap) {
+        fprintf(stderr, "[Unicorn-PPC]   execute_68k entry=0x%08x op=0x%04x dispatch=0x%08x\n",
+                entry, opcode, rd_gpr(29));
+    }
+
     uppc_cpu_execute_ppc(rd_gpr(29));
+
+    if (s_trace_trap) {
+        fprintf(stderr, "[Unicorn-PPC]   execute_68k done  pc=0x%08x lr=0x%08x r24=0x%08x r1=0x%08x\n",
+                rd_pc(), rd_lr(), rd_gpr(24), rd_gpr(1));
+    }
 
     WriteMac32(XLM_68K_R25, rd_gpr(25));
     WriteMac32(XLM_RUN_MODE, MODE_EMUL_OP);
@@ -1336,6 +1468,14 @@ static void uppc_cpu_execute_68k_trap(uint16_t trap, struct M68kRegisters *r)
     static constexpr uint32_t TRAP_PROC = 0x68ffec30u;  // 4 bytes scratch
     WriteMac16(TRAP_PROC, trap);
     WriteMac16(TRAP_PROC + 2, 0x4e75u);  // M68K_RTS
+    static const bool s_trace_trap = []() {
+        const char* e = std::getenv("MACEMU_PPC_TRACE_TRAP");
+        return e && *e && *e != '0';
+    }();
+    if (s_trace_trap) {
+        fprintf(stderr, "[Unicorn-PPC] execute_68k_trap enter trap=0x%04x d0=%08x a0=%08x sp=%08x\n",
+                trap, r->d[0], r->a[0], rd_gpr(1));
+    }
     static bool dumped = false;
     if (!dumped) {
         dumped = true;
@@ -1351,6 +1491,10 @@ static void uppc_cpu_execute_68k_trap(uint16_t trap, struct M68kRegisters *r)
                 rd_gpr(1), ReadMac32(0x68fff074), ReadMac32(0x68fff078));
     }
     uppc_cpu_execute_68k(TRAP_PROC, r);
+    if (s_trace_trap) {
+        fprintf(stderr, "[Unicorn-PPC] execute_68k_trap exit  trap=0x%04x d0=%08x a0=%08x\n",
+                trap, r->d[0], r->a[0]);
+    }
 }
 
 // ----- State query ---------------------------------------------------------
