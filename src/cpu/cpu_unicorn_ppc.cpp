@@ -397,6 +397,36 @@ static bool uppc_cpu_init(void)
     // through helper_mac_emulop call this (see mac_emulop_helper.c).
     uc_ppc_set_mac_emulop_cb(g_uc, uppc_mac_emulop_cb);
 
+    // Debug: trace instructions executed until we hit the divergence at
+    // 0x503141cc. Controlled by MP_UPPC_TRACE env var (prints count, stops
+    // after N insns). Guarded so production paths are free.
+    if (const char *trc = getenv("MP_UPPC_TRACE")) {
+        static uint64_t limit = (uint64_t)strtoull(trc, nullptr, 0);
+        static uint64_t counter = 0;
+        auto code_cb = [](uc_engine *uc, uint64_t addr, uint32_t sz, void *) {
+            // Log only when r1 (SP) changes, so we see the stack setup path.
+            static uint32_t last_r1 = 0xffffffffu;
+            uint32_t r1 = 0;
+            uc_reg_read(uc, UC_PPC_REG_1, &r1);
+            if (r1 != last_r1) {
+                last_r1 = r1;
+                fprintf(stderr, "[TRC %6llu] pc=0x%08llx r1=%08x (changed)\n",
+                        (unsigned long long)counter,
+                        (unsigned long long)addr, r1);
+            }
+            if (++counter >= limit) {
+                g_stop_requested = true;
+                uc_emu_stop(uc);
+            }
+        };
+        uc_hook hh = 0;
+        uc_hook_add(g_uc, &hh, UC_HOOK_CODE,
+                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))code_cb,
+                    nullptr, 1, 0);
+        fprintf(stderr, "[Unicorn-PPC] trace hook installed, limit=%llu insns\n",
+                (unsigned long long)limit);
+    }
+
     // Unmapped-memory hook. The nanokernel probes the 32-bit address space at
     // various offsets (e.g. 0xFFFFFFFC) to discover memory topology — under
     // KPX these reads SIGSEGV and the handler skips the instruction. Under
@@ -420,7 +450,11 @@ static bool uppc_cpu_init(void)
                 return false;
             }
 
-            uint64_t page = addr & ~0xFFFull;
+            // PPC32 effective addresses are 32-bit; Unicorn widens to 64 for
+            // the hook but uc_mem_map keys on the raw 64-bit value, so we
+            // normalize to the 32-bit-truncated page to match how subsequent
+            // accesses will look the mapping up.
+            uint64_t page = ((uint64_t)(uint32_t)addr) & ~0xFFFull;
             uint32_t perms = UC_PROT_READ | UC_PROT_WRITE;
             uc_err e = uc_mem_map(uc, page, 0x1000, perms);
             fprintf(stderr, "[Unicorn-PPC] UNMAPPED %s @pc=0x%08x "
@@ -428,7 +462,9 @@ static bool uppc_cpu_init(void)
                     (type == UC_MEM_READ_UNMAPPED) ? "READ" : "WRITE",
                     pc, (unsigned long long)addr, size,
                     (unsigned long long)page, uc_strerror(e));
-            if (e != UC_ERR_OK) {
+            if (e != UC_ERR_OK && e != UC_ERR_MAP) {
+                // UC_ERR_MAP means a mapping for that region already exists —
+                // another concurrent fault mapped it, which is fine.
                 g_stop_requested = true;
                 uc_emu_stop(uc);
                 return false;
@@ -476,19 +512,26 @@ static bool uppc_cpu_init(void)
                     (void *)(uintptr_t)0x5fffe000, "KD_lo"))
         goto fail;
 
-    // DR Emulator / DR Cache — see §3: KPX unmaps these so SIGSEGV skip-insn
-    // drives nanokernel down the right init path, then remaps as RAM after
-    // first IRQ. Unicorn can't cleanly skip instructions from
-    // UC_HOOK_MEM_UNMAPPED, so we map them RW up front (zeros on first read).
-    // Revisit with uc_mmio_map if boot diverges at probe points.
-    if (!map_region(g_uc, DR_EMUL_BASE, DR_EMUL_SIZE,
-                    UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC,
-                    (void *)(uintptr_t)DR_EMUL_BASE, "DR_emul"))
-        goto fail;
-    if (!map_region(g_uc, DR_CACHE_BASE, DR_CACHE_SIZE,
-                    UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC,
-                    (void *)(uintptr_t)DR_CACHE_BASE, "DR_cache"))
-        goto fail;
+    // DR Emulator / DR Cache — KPX `munmap`s these before nanokernel boot
+    // (cpu_ppc_kpx.cpp:1204-1206) so probes hit SIGSEGV → skip instruction
+    // → register stays untouched. Under Unicorn we leave them unmapped and
+    // let the unmapped-memory hook auto-map zero pages on first touch,
+    // matching KPX's "read returns 0, write is a no-op" shape. They're then
+    // remapped to real RW RAM after the first IRQ (uppc_remap_dr_probes_once).
+
+    // ---- Diagnostics: dump instructions around known divergence points ------
+    {
+        // Dump the loop body at 0x50313fa8-0x50313fb0 (the divergence).
+        for (uint32_t a = 0x50313f80; a < 0x50314000; a += 16) {
+            uint32_t buf[4] = {0,0,0,0};
+            if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
+                fprintf(stderr,
+                    "[Unicorn-PPC] ROM @0x%08x: %08x %08x %08x %08x\n",
+                    a, __builtin_bswap32(buf[0]), __builtin_bswap32(buf[1]),
+                    __builtin_bswap32(buf[2]), __builtin_bswap32(buf[3]));
+            }
+        }
+    }
 
     // ---- Initial CPU state — matches KPX's kpx_cpu_init --------------------
     {
