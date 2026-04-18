@@ -9510,7 +9510,14 @@ static int create_ppc_opcodes(PowerPCCPU *cpu)
 
     fill_new_table(cpu->opcodes, PPC_CPU_OPCODES_LEN);
     for (opc = opcodes; opc < &opcodes[ARRAY_SIZE(opcodes)]; opc++) {
-        if (((opc->handler.type & pcc->insns_flags) != 0) ||
+        /* Mac-phoenix EmulOp (major opcode 6, PPC_NONE/PPC_NONE) has no CPU
+         * feature flag and would otherwise be filtered out by the flags check
+         * below. Register it unconditionally — it's reserved in the base PPC
+         * ISA, so there's no risk of conflict with a legitimate instruction. */
+        bool is_mac_emulop = (opc->opc1 == 0x06 && opc->handler.type == PPC_NONE
+                              && opc->handler.type2 == PPC_NONE);
+        if (is_mac_emulop ||
+            ((opc->handler.type & pcc->insns_flags) != 0) ||
             ((opc->handler.type2 & pcc->insns_flags2) != 0)) {
             if (register_insn(cpu->opcodes, opc) < 0) {
 #if 0

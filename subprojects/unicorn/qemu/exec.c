@@ -1056,7 +1056,11 @@ static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
 
     new_block->offset = find_ram_offset(uc, new_block->max_length);
 
-    if (!new_block->host) {
+    /* Preallocated RAM comes from a caller-owned host pointer. REAL_ADDRESSING
+     * guests may legitimately map at host address 0 (mmap MAP_FIXED at NULL),
+     * so we can't use `!host` as the allocation trigger — check the explicit
+     * RAM_PREALLOC flag set by qemu_ram_alloc_from_ptr instead. */
+    if (!(new_block->flags & RAM_PREALLOC)) {
         new_block->host = phys_mem_alloc(uc, new_block->max_length,
                 &new_block->mr->align);
         if (!new_block->host) {
@@ -1107,13 +1111,13 @@ static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
 }
 
 RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *host,
-                                   MemoryRegion *mr)
+                                   bool prealloc, MemoryRegion *mr)
 {
     RAMBlock *new_block;
     ram_addr_t max_size = size;
 
     // Don't resize pre-alloced memory as they are given by users.
-    if (!host) {
+    if (!prealloc) {
         size = HOST_PAGE_ALIGN(uc, size);
         max_size = HOST_PAGE_ALIGN(uc, max_size);
     }
@@ -1127,7 +1131,7 @@ RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *h
     assert(max_size >= size);
     new_block->page_size = uc->qemu_real_host_page_size;
     new_block->host = host;
-    if (host) {
+    if (prealloc) {
         new_block->flags |= RAM_PREALLOC;
     }
 
@@ -1145,7 +1149,7 @@ RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *h
 
 RAMBlock *qemu_ram_alloc(struct uc_struct *uc, ram_addr_t size, MemoryRegion *mr)
 {
-    return qemu_ram_alloc_from_ptr(uc, size, NULL, mr);
+    return qemu_ram_alloc_from_ptr(uc, size, NULL, false, mr);
 }
 
 static void reclaim_ramblock(struct uc_struct *uc, RAMBlock *block)

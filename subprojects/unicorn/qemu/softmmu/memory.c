@@ -1267,9 +1267,10 @@ void memory_region_init_ram_ptr(struct uc_struct *uc,
     mr->terminates = true;
     mr->destructor = memory_region_destructor_ram;
 
-    /* qemu_ram_alloc_from_ptr cannot fail with ptr != NULL.  */
-    assert(ptr != NULL);
-    mr->ram_block = qemu_ram_alloc_from_ptr(uc, size, ptr, mr);
+    /* ptr may legitimately be NULL for REAL_ADDRESSING guests that map RAM
+     * at host address 0 via mmap MAP_FIXED. Pass prealloc=true so ram_block_add
+     * honours the caller-supplied host pointer unconditionally. */
+    mr->ram_block = qemu_ram_alloc_from_ptr(uc, size, ptr, true, mr);
 }
 
 uint64_t memory_region_size(MemoryRegion *mr)

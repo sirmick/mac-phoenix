@@ -44,7 +44,7 @@ static inline unsigned long int ramblock_recv_bitmap_offset(struct uc_struct *uc
 }
 
 RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *host,
-                                  MemoryRegion *mr);
+                                  bool prealloc, MemoryRegion *mr);
 RAMBlock *qemu_ram_alloc(struct uc_struct *uc, ram_addr_t size, MemoryRegion *mr);
 void qemu_ram_free(struct uc_struct *uc, RAMBlock *block);
 
