@@ -1413,10 +1413,11 @@ uc_err uc_mem_map_ptr(uc_engine *uc, uint64_t address, uint64_t size,
 
     UC_INIT(uc);
 
-    if (ptr == NULL) {
-        restore_jit_state(uc);
-        return UC_ERR_ARG;
-    }
+    // The NULL-pointer check was a sanity guard, but REAL_ADDRESSING guests
+    // (e.g., mac-phoenix's PPC layout) legitimately mmap RAM at host address 0
+    // via MAP_FIXED, making RAMBaseHost == NULL. The kernel-facing store only
+    // dereferences the pointer via offset arithmetic, so page 0 is fine as
+    // long as the caller has actually mapped it.
 
     res = mem_map_check(uc, address, size, perms);
     if (res) {
