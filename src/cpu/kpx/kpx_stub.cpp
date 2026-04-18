@@ -31,3 +31,11 @@ extern "C" void cpu_ppc_kpx_install(Platform *p) {
 
 extern "C" bool kpx_sheep_mem_init(void) { return false; }
 extern "C" void kpx_set_signal_stack(uintptr_t) {}
+
+// Additional PPC-path symbols referenced from core on the non-PPC link.
+// These are never reached because cpu_ppc_kpx_install() exits first, but
+// the linker needs a definition.
+bool DecodeROM(uint8_t *, uint32_t) { return false; }
+bool InitAll_PPC(const char *) { return false; }
+void FlushCodeCache(uintptr_t, uintptr_t) {}
+uint64_t ppc_insn_counter = 0;

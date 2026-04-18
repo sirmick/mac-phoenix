@@ -23,7 +23,11 @@ target_include_directories(cpu PRIVATE
 )
 
 # Match uae_cpu JIT flags so wrappers can use #if USE_JIT
-target_compile_definitions(cpu PRIVATE USE_JIT=1)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  target_compile_definitions(cpu PRIVATE USE_JIT=1)
+else()
+  target_compile_definitions(cpu PRIVATE USE_JIT=0)
+endif()
 
 # Don't link uae_all/kpx here - let top-level CMakeLists handle link order
 # with --start-group to resolve circular deps with core
