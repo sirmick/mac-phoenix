@@ -808,6 +808,25 @@ static bool uppc_cpu_init(void)
                     (void *)(uintptr_t)0x5fffe000, "KD_lo"))
         goto fail;
 
+    // SheepMem — host-allocated 512KB region at MAP_BASE (typically
+    // 0x10000000) holding SheepVar-allocated 68k procedures and scratch
+    // buffers. Without this mapping, any Execute68k() call into a SheepMem
+    // proc (e.g. macos_util_ppc.cpp's GetSharedLibrary trampoline) loops
+    // forever in the unmapped-skip handler. SheepMem::Init runs earlier in
+    // init_ppc, so SheepMem_base is valid by the time we get here.
+    {
+        extern uintptr_t SheepMem_base;
+        constexpr size_t SHEEPMEM_SIZE = 0x80000;  // matches SheepMem::size
+        if (SheepMem_base == 0) {
+            fprintf(stderr, "[Unicorn-PPC] WARNING: SheepMem_base unset — "
+                            "Execute68k() into SheepMem procs will fail\n");
+        } else if (!map_region(g_uc, (uint64_t)SheepMem_base, SHEEPMEM_SIZE,
+                               UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC,
+                               (void *)SheepMem_base, "SheepMem")) {
+            goto fail;
+        }
+    }
+
     // DR Emulator / DR Cache — KPX `munmap`s these before nanokernel boot
     // (cpu_ppc_kpx.cpp:1204-1206) so probes hit SIGSEGV → skip instruction
     // → register stays untouched. Under Unicorn we leave them unmapped and
