@@ -12,7 +12,37 @@ use std::os::unix::net::UnixStream;
 
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};
 use smoltcp::time::Instant;
-use smoltcp::wire::{EthernetFrame, Ipv4Packet};
+use smoltcp::wire::{EthernetFrame, EthernetProtocol, IpProtocol, Ipv4Packet, UdpPacket};
+
+fn log_frame_summary(n: u64, frame: &[u8]) {
+    let Ok(eth) = EthernetFrame::new_checked(frame) else {
+        log::info!("rx#{n} len={} [malformed]", frame.len());
+        return;
+    };
+    let src = eth.src_addr();
+    let dst = eth.dst_addr();
+    match eth.ethertype() {
+        EthernetProtocol::Arp => log::info!("rx#{n} ARP src={src} dst={dst}"),
+        EthernetProtocol::Ipv4 => {
+            let Ok(ip) = Ipv4Packet::new_checked(eth.payload()) else {
+                log::info!("rx#{n} IPv4 [malformed]"); return;
+            };
+            let proto = ip.next_header();
+            let sip = ip.src_addr();
+            let dip = ip.dst_addr();
+            if proto == IpProtocol::Udp {
+                let ip_hdr_len = ip.header_len() as usize;
+                if let Ok(udp) = UdpPacket::new_checked(&eth.payload()[ip_hdr_len..]) {
+                    log::info!("rx#{n} UDP {sip}:{} -> {dip}:{}",
+                        udp.src_port(), udp.dst_port());
+                    return;
+                }
+            }
+            log::info!("rx#{n} IPv4 {sip} -> {dip} proto={proto}");
+        }
+        other => log::info!("rx#{n} ethertype={other} src={src} dst={dst}"),
+    }
+}
 
 /// Maximum ethernet frame size
 const MTU: usize = 1514;
@@ -30,6 +60,8 @@ pub struct SocketDevice {
     pub nat_frames: Vec<Vec<u8>>,
     /// Outgoing frames (from smoltcp or NAT handler)
     tx_frames: Vec<Vec<u8>>,
+    /// Debug: number of frames received so far (Mac → bridge)
+    rx_count: u64,
 }
 
 impl SocketDevice {
@@ -40,6 +72,7 @@ impl SocketDevice {
             rx_frames: Vec::new(),
             nat_frames: Vec::new(),
             tx_frames: Vec::new(),
+            rx_count: 0,
         }
     }
 
@@ -80,6 +113,13 @@ impl SocketDevice {
 
             let frame = self.rx_buf[HEADER_LEN..HEADER_LEN + frame_len].to_vec();
             self.rx_buf.drain(..HEADER_LEN + frame_len);
+
+            self.rx_count += 1;
+            if self.rx_count <= 30 {
+                log_frame_summary(self.rx_count, &frame);
+            } else if self.rx_count == 31 {
+                log::info!("(further frames suppressed; seen 30)");
+            }
 
             if self.is_nat_frame(&frame) {
                 self.nat_frames.push(frame);
