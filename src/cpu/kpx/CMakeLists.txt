@@ -24,6 +24,7 @@ set(KPX_INTERPRETER_SOURCES
   name_registry_ppc.cpp
   serial_ppc.cpp
   compat/vm_alloc.cpp
+  compat/ppc_ether.cpp
 )
 
 set(KPX_DYNGEN_SOURCES

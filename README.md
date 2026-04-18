@@ -304,6 +304,21 @@ If you'd rather manage the bridge yourself (e.g. attach `strace`, run under `val
 
 Once the guest has an IP, MacTCP / Open Transport / Internet Config just works — try Netscape, Fetch, NCSA Telnet, iCab, or `curl` inside MPW. `--debug-network` turns on verbose packet logging on the emulator side; `RUST_LOG=debug` does the same for `net-bridge`.
 
+The bridge also exposes a tiny echo service on the gateway (`10.0.2.1:7`, both TCP and UDP) — handy for round-trip smoke tests from inside the guest without needing the host to run an `inetd`-style daemon.
+
+### Ping (ICMP echo)
+
+`net-bridge` proxies ICMP through Linux's *unprivileged* ICMP datagram sockets — no `CAP_NET_RAW` needed — but the kernel still gates them on the `net.ipv4.ping_group_range` sysctl. If guest `ping` returns "host unreachable" while TCP / UDP / DNS / traceroute all work, your gid is outside the range. Allow everyone:
+
+```bash
+sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
+# Persist:
+echo 'net.ipv4.ping_group_range = 0 2147483647' | \
+    sudo tee /etc/sysctl.d/99-mac-phoenix-ping.conf
+```
+
+Traceroute keeps working without this — classic Mac traceroute is UDP-to-33434 with low TTL, and the resulting ICMP Time-Exceeded replies arrive via the ordinary UDP NAT path.
+
 ## API
 
 Read-only:

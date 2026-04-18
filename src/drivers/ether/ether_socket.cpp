@@ -344,6 +344,33 @@ static int16_t ether_socket_write(uint32_t wds)
 static bool ether_socket_start_udp_thread(int socket_fd) { (void)socket_fd; return false; }
 static void ether_socket_stop_udp_thread(void) {}
 
+// ---- Public C entry points (used by PPC NDRV path) ----
+
+extern "C" bool ether_socket_send_raw(const uint8_t *frame, uint32_t len)
+{
+	if (s_sock_fd < 0 || !frame || len < 14)
+		return false;
+	return send_frame(s_sock_fd, frame, (int)len);
+}
+
+extern "C" void ether_socket_drain_rx(ether_socket_frame_handler_t handler)
+{
+	if (!handler)
+		return;
+	std::lock_guard<std::mutex> lock(s_rx_mutex);
+	while (!s_rx_queue.empty()) {
+		auto &frame = s_rx_queue.front();
+		if (frame.size() >= 14)
+			handler(frame.data(), (uint32_t)frame.size());
+		s_rx_queue.pop();
+	}
+}
+
+extern "C" void ether_socket_get_mac(uint8_t mac[6])
+{
+	memcpy(mac, s_mac_addr, 6);
+}
+
 // ---- Registration ----
 
 void ether_socket_register(const char *sock_path)

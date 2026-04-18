@@ -8,6 +8,7 @@
 
 mod device;
 mod dhcp_server;
+mod echo_server;
 mod icmp_proxy;
 mod nat;
 mod tcp_proxy;
@@ -21,6 +22,7 @@ use smoltcp::iface::{Config, Interface, SocketSet};
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, Ipv4Address};
 
 use device::SocketDevice;
+use echo_server::EchoServer;
 use icmp_proxy::IcmpNat;
 use tcp_proxy::TcpNat;
 use udp_proxy::UdpNat;
@@ -69,12 +71,13 @@ fn main() {
     });
 
     let mut sockets = SocketSet::new(vec![]);
+    let echo = EchoServer::new(&mut sockets);
     let mut tcp_nat = TcpNat::new();
     let mut udp_nat = UdpNat::new();
     let mut icmp_nat = IcmpNat::new();
 
     let startup = Instant::now();
-    log::info!("Bridge ready: gateway 10.0.2.1/24");
+    log::info!("Bridge ready: gateway 10.0.2.1/24 (echo on :7 TCP+UDP)");
 
     // Main poll loop
     loop {
@@ -103,6 +106,12 @@ fn main() {
 
         // 3. Let smoltcp process its frames (ARP, ICMP echo, etc.)
         let _result = iface.poll(timestamp, &mut device, &mut sockets);
+
+        // 3b. Service the in-bridge echo daemon on GW:7
+        echo.poll(&mut sockets);
+
+        // Re-poll smoltcp so any outgoing echo frames get egressed this tick.
+        let _ = iface.poll(timestamp, &mut device, &mut sockets);
 
         // 4. Poll host sockets for incoming data → relay to Mac
         tcp_nat.poll(&mut device);

@@ -36,17 +36,20 @@ enum {
 };
 // ROMType is in namespace ppc — declared in rom_patches.h
 
-// Interrupt flags — must match legacy SheepShaver main.h enum
+// Interrupt flags — must match src/common/include/main.h (shared drivers
+// set these flags, KPX emul_op_ppc.cpp OP_IRQ handler checks them).
+// INTFLAG_VIA is a KPX-side alias for the 60Hz VBL flag.
 enum {
-    INTFLAG_VIA    = 1,     // 60.15Hz VBL
-    INTFLAG_SERIAL = 2,     // Serial driver
-    INTFLAG_ETHER  = 4,     // Ethernet driver
+    INTFLAG_60HZ   = 1,     // 60.15Hz VBL
+    INTFLAG_VIA    = 1,     // alias: KPX code calls the 60Hz tick "VIA"
+    INTFLAG_1HZ    = 2,     // ~1Hz tick
+    INTFLAG_SERIAL = 4,     // Serial driver
+    INTFLAG_ETHER  = 8,     // Ethernet driver
     INTFLAG_AUDIO  = 16,    // Audio block read
     INTFLAG_TIMER  = 32,    // Time Manager
     INTFLAG_ADB    = 64,    // ADB
     INTFLAG_NMI    = 128    // NMI (Programmer's Key)
 };
-#define INTFLAG_1HZ  (1 << 1)   // mac-phoenix addition (alias for 1Hz tick)
 // InterruptFlags, SetInterruptFlag, ClearInterruptFlag, TriggerInterrupt
 // are declared in platform.h (backend-agnostic, C linkage)
 extern void DisableInterrupt(void);

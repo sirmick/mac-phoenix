@@ -143,6 +143,15 @@ sub test_network {
     }
     report_pass('net_socket_pm');
 
+    # MacPerl/GUSI doesn't export PF_INET/SOCK_* via Socket.pm reliably;
+    # hardcode the BSD numbers. AF_INET=2, SOCK_STREAM=1, SOCK_DGRAM=2,
+    # IPPROTO_TCP=6, IPPROTO_UDP=17.
+    my $AF_INET     = 2;
+    my $SOCK_STREAM = 1;
+    my $SOCK_DGRAM  = 2;
+    my $IPPROTO_TCP = 6;
+    my $IPPROTO_UDP = 17;
+
     # DNS
     my $packed = gethostbyname('example.com');
     if ($packed) {
@@ -152,18 +161,18 @@ sub test_network {
         report_fail('dns_resolve', 'gethostbyname failed');
     }
 
-    my $gw = inet_aton('10.0.2.1');
-    unless ($gw) { report_fail('inet_aton_gw'); return; }
+    # Build sockaddr_in(7, 10.0.2.1) by hand: 16 bytes, big-endian.
+    # Family in byte 1 (Mac is BSD-style: byte0=len, byte1=family). On
+    # MacPerl/GUSI both layouts seem to work, but big-endian 16-bit family
+    # also works on most stacks. We use Socket::sockaddr_in which knows.
+    my $gw = pack('C4', 10, 0, 2, 1);
+    my $to = pack('n n a4 x8', $AF_INET, 7, $gw);  # family, port, addr, padding
 
-    # UDP to gateway echo. Pass proto=0 (kernel default for SOCK_DGRAM):
-    # getprotobyname() requires a configured proto database, which classic
-    # Mac OS doesn't provide unless OpenTransport TCP/IP is set up.
-    if (socket(UDP, PF_INET, SOCK_DGRAM, 0)) {
+    # UDP to gateway echo (10.0.2.1:7)
+    if (socket(UDP, $AF_INET, $SOCK_DGRAM, $IPPROTO_UDP)) {
         report_pass('udp_socket');
-        my $to = sockaddr_in(7, $gw);
         if (send(UDP, 'ping', 0, $to)) {
             report_pass('udp_send');
-            # Wait up to 3s for reply via select()
             my $rin = ''; vec($rin, fileno(UDP), 1) = 1;
             my $n = select(my $rout = $rin, undef, undef, 3);
             if ($n && vec($rout, fileno(UDP), 1)) {
@@ -185,10 +194,21 @@ sub test_network {
     }
 
     # TCP connect to gateway echo
-    if (socket(TCP, PF_INET, SOCK_STREAM, 0)) {
-        my $to = sockaddr_in(7, $gw);
+    if (socket(TCP, $AF_INET, $SOCK_STREAM, $IPPROTO_TCP)) {
+        report_pass('tcp_socket');
         if (connect(TCP, $to)) {
             report_pass('tcp_connect');
+            if (syswrite(TCP, 'ping', 4)) {
+                my $rin = ''; vec($rin, fileno(TCP), 1) = 1;
+                my $n = select(my $rout = $rin, undef, undef, 3);
+                if ($n && sysread(TCP, my $buf, 64)) {
+                    report_pass('tcp_echo');
+                } else {
+                    report_skip('tcp_echo', 'no response');
+                }
+            } else {
+                report_fail('tcp_send', "err=$!");
+            }
         } else {
             report_skip('tcp_connect', "err=$!");
         }

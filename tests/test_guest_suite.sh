@@ -30,6 +30,7 @@ OS_VERSION=""
 ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 DISMISS=1
+NETWORK="socket"
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -41,7 +42,7 @@ while [[ $# -gt 0 ]]; do
         --backend) BACKEND="$2"; shift 2 ;;
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
-        --network) EXTRA_FLAGS+=(--network "$2"); shift 2 ;;
+        --network) NETWORK="$2"; shift 2 ;;
         --no-dismiss) DISMISS=0; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
@@ -49,6 +50,7 @@ done
 
 [[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
+[[ -n "$NETWORK" && "$NETWORK" != "none" ]] && EXTRA_FLAGS+=(--network "$NETWORK")
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
@@ -119,6 +121,7 @@ echo "ROM: $ROM"
 echo "Disk: $DISK"
 echo "ExtFS: $EXTFS_DIR"
 echo "Port: $PORT"
+echo "Network: ${NETWORK:-none}"
 
 # --- Boot emulator ---
 
