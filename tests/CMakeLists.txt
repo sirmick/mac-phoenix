@@ -8,6 +8,14 @@ set(TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 # --- Fast tests (no ROM / no boot required) ---
 
+add_executable(test_mac_roman
+  ${TEST_DIR}/test_mac_roman.cpp
+  ${CMAKE_SOURCE_DIR}/src/core/mac_roman.cpp
+)
+target_include_directories(test_mac_roman PRIVATE ${CMAKE_SOURCE_DIR}/src/core)
+add_test(NAME mac_roman COMMAND test_mac_roman)
+set_tests_properties(mac_roman PROPERTIES TIMEOUT 5 LABELS "unit")
+
 add_test(
   NAME api_endpoints
   COMMAND bash ${TEST_DIR}/test_api_endpoints.sh

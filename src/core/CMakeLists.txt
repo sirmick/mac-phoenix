@@ -9,6 +9,7 @@ add_library(core STATIC
   disk.cpp
   boot_progress.cpp
   command_bridge.cpp
+  mac_roman.cpp
   emul_op.cpp
   emulator_init.cpp
   ether.cpp

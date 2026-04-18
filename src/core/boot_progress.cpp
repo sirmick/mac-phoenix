@@ -866,7 +866,88 @@ static void serialize_mac_state(char *buf, int bufsize)
 		count++;
 	}
 
-	pos += snprintf(buf + pos, bufsize - pos, "]}");
+	pos += snprintf(buf + pos, bufsize - pos, "]");
+
+	/* Scrap Manager debug — low-memory globals (cxmon names):
+	 *   0x0960 ScrapSize  (long)  current scrap blob size in bytes
+	 *   0x0964 ScrapHandle (long) Handle to scrap blob
+	 *   0x0968 ScrapCount  (word) bumps on each PutScrap (echo-detect anchor)
+	 *   0x096A ScrapState  (word) >0 in memory, <0 on disk, 0 not loaded
+	 * Preview: first 64 bytes of the blob in hex (type FOURCC + length prefix
+	 * are visible at the start, e.g. 54 45 58 54 = 'TEXT'). */
+	uint32_t scrap_size   = ReadMacInt32(0x0960);
+	uint32_t scrap_handle = ReadMacInt32(0x0964);
+	int16_t  scrap_count  = static_cast<int16_t>(ReadMacInt16(0x0968));
+	int16_t  scrap_state  = static_cast<int16_t>(ReadMacInt16(0x096A));
+
+	pos += snprintf(buf + pos, bufsize - pos,
+		",\"scrap\":{\"count\":%d,\"state\":%d,\"size\":%u,\"handle\":\"0x%08x\"",
+		scrap_count, scrap_state, scrap_size, scrap_handle);
+
+	if (scrap_state > 0 && scrap_handle && scrap_handle < RAMSize - 4) {
+		uint32_t scrap_ptr = ReadMacInt32(scrap_handle);
+		if (scrap_ptr && scrap_ptr < RAMSize && scrap_size > 0) {
+			uint32_t preview_len = scrap_size < 64 ? scrap_size : 64;
+			if (preview_len > RAMSize - scrap_ptr) preview_len = RAMSize - scrap_ptr;
+			pos += snprintf(buf + pos, bufsize - pos, ",\"preview\":\"");
+			for (uint32_t i = 0; i < preview_len && pos < bufsize - 6; i++) {
+				pos += snprintf(buf + pos, bufsize - pos, "%02x",
+				                ReadMacInt8(scrap_ptr + i));
+			}
+			pos += snprintf(buf + pos, bufsize - pos, "\"");
+
+			/* Walk scrap blob: sequence of [FOURCC type][int32 length][data][even-pad].
+			 * Find 'TEXT' chunk and surface as ASCII (non-printable → '?'). */
+			uint32_t off = 0;
+			int chunks = 0;
+			pos += snprintf(buf + pos, bufsize - pos, ",\"chunks\":[");
+			bool first_chunk = true;
+			while (off + 8 <= scrap_size && off + 8 <= RAMSize - scrap_ptr && chunks < 16) {
+				uint32_t type = ReadMacInt32(scrap_ptr + off);
+				uint32_t clen = ReadMacInt32(scrap_ptr + off + 4);
+				char tstr[5] = {
+					(char)((type >> 24) & 0xff), (char)((type >> 16) & 0xff),
+					(char)((type >> 8) & 0xff),  (char)(type & 0xff), 0
+				};
+				for (int i = 0; i < 4; i++) if (tstr[i] < 0x20 || tstr[i] > 0x7e) tstr[i] = '?';
+				if (!first_chunk) buf[pos++] = ',';
+				first_chunk = false;
+				pos += snprintf(buf + pos, bufsize - pos,
+					"{\"type\":\"%s\",\"len\":%u,\"off\":%u}", tstr, clen, off + 8);
+				if (clen > scrap_size || off + 8 + clen > scrap_size) break;
+				off += 8 + clen;
+				if (off & 1) off++;  /* even-pad */
+				chunks++;
+			}
+			pos += snprintf(buf + pos, bufsize - pos, "]");
+
+			/* Locate TEXT chunk and emit ASCII (defer MacRoman codec). */
+			off = 0;
+			while (off + 8 <= scrap_size && off + 8 <= RAMSize - scrap_ptr) {
+				uint32_t type = ReadMacInt32(scrap_ptr + off);
+				uint32_t clen = ReadMacInt32(scrap_ptr + off + 4);
+				if (clen > scrap_size || off + 8 + clen > scrap_size) break;
+				if (type == 0x54455854 /* 'TEXT' */) {
+					uint32_t emit_len = clen < 256 ? clen : 256;
+					if (emit_len > RAMSize - (scrap_ptr + off + 8))
+						emit_len = RAMSize - (scrap_ptr + off + 8);
+					pos += snprintf(buf + pos, bufsize - pos, ",\"text\":\"");
+					for (uint32_t i = 0; i < emit_len && pos < bufsize - 8; i++) {
+						uint8_t c = ReadMacInt8(scrap_ptr + off + 8 + i);
+						if (c == '\r') { pos += snprintf(buf + pos, bufsize - pos, "\\n"); continue; }
+						if (c == '"' || c == '\\') buf[pos++] = '\\';
+						buf[pos++] = (c >= 0x20 && c <= 0x7e) ? (char)c : '?';
+					}
+					pos += snprintf(buf + pos, bufsize - pos, "\"");
+					break;
+				}
+				off += 8 + clen;
+				if (off & 1) off++;
+			}
+		}
+	}
+
+	pos += snprintf(buf + pos, bufsize - pos, "}}");
 
 	/* BridgeAgent (Startup Items app) running implies Finder reached
 	 * desktop — that's the only way Startup Items launch. Treat its
