@@ -35,6 +35,7 @@
 #include "platform.h"
 #include "m68k_registers.h"
 #include "unicorn/unicorn.h"
+#include "ppc_boundary_trace.h"
 
 // ----- Extern callbacks/hooks into shared code ------------------------------
 
@@ -369,6 +370,18 @@ static void uppc_dispatch_emul_op(uint32_t pc, uint32_t opcode)
 
     uint32_t saved_cr  = rd_cr() & 0xff9fffffu;
     uint32_t saved_xer = rd_xer();
+
+    {
+        PpcBoundaryState ts;
+        ts.pc = pc;
+        ts.selector = emul_op;
+        ts.cr = rd_cr();
+        ts.xer = saved_xer;
+        ts.lr = rd_lr();
+        ts.ctr = rd_ctr();
+        for (int i = 0; i < 32; ++i) ts.gpr[i] = rd_gpr(i);
+        ppc_trace_emul_op(ts);
+    }
 
     g_platform.ppc_emulop_handler(&r68, rd_gpr(24), emul_op);
 

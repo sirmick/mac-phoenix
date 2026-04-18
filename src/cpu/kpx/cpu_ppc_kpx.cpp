@@ -53,6 +53,7 @@ using namespace ppc;
 
 // Include mac-phoenix Platform API and SIGSEGV handler
 #include "../../common/include/sigsegv.h"
+#include "../../common/include/ppc_boundary_trace.h"
 extern "C" {
 #include "platform.h"
 }
@@ -543,6 +544,19 @@ void sheepshaver_cpu::execute_emul_op(uint32 emul_op)
     r68.a[7] = gpr(1);
     uint32 saved_cr = get_cr() & 0xff9fffff;
     uint32 saved_xer = get_xer();
+    {
+        PpcBoundaryState ts;
+        // KPX advances pc() past the EmulOp before dispatch; subtract 4 so the
+        // trace records the EmulOp instruction's own address, matching Unicorn.
+        ts.pc = pc() - 4;
+        ts.selector = emul_op;
+        ts.cr = get_cr();
+        ts.xer = saved_xer;
+        ts.lr = lr();
+        ts.ctr = ctr();
+        for (int i = 0; i < 32; ++i) ts.gpr[i] = gpr(i);
+        ppc_trace_emul_op(ts);
+    }
     g_platform.ppc_emulop_handler(&r68, gpr(24), emul_op);
     set_cr(saved_cr);
     set_xer(saved_xer);
