@@ -1097,6 +1097,15 @@ static void tick_thread_func() {
             next = GetTicks_usec();
         }
         if (tick_inhibit) continue;
+
+        // MACEMU_PPC_NO_IRQ suppresses async IRQ injection so KPX-vs-Unicorn
+        // EmulOp boundary trace is deterministic (see ppc_boundary_trace.h).
+        static const bool s_no_irq = [](){
+            const char* e = std::getenv("MACEMU_PPC_NO_IRQ");
+            return e && *e && *e != '0';
+        }();
+        if (s_no_irq) continue;
+
         ticks++;
 
         // Pseudo Mac 1Hz interrupt, update local time

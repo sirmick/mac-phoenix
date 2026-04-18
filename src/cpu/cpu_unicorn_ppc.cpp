@@ -343,6 +343,10 @@ static void uppc_remap_dr_probes_once(void)
 
 // ----- EmulOp dispatch (called from helper_mac_emulop) ---------------------
 
+// Monotonic count of EmulOps dispatched, shared with the CR-trace hook so we
+// can narrow per-instruction logging to a specific EmulOp range.
+static uint64_t g_emul_op_seq = 0;
+
 // Marshal PPC GPRs into M68kRegisters before invoking ppc_emulop_handler,
 // mirroring sheepshaver_cpu::execute_emul_op exactly.
 static void uppc_dispatch_emul_op(uint32_t pc, uint32_t opcode)
@@ -371,6 +375,7 @@ static void uppc_dispatch_emul_op(uint32_t pc, uint32_t opcode)
     uint32_t saved_cr  = rd_cr() & 0xff9fffffu;
     uint32_t saved_xer = rd_xer();
 
+    ++g_emul_op_seq;
     {
         PpcBoundaryState ts;
         ts.pc = pc;
@@ -601,6 +606,49 @@ static bool uppc_cpu_init(void)
                         (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_dispatch_cb,
                         nullptr, site, site);
         }
+    }
+
+    // CR-trace hook: gated by MACEMU_PPC_CR2_TRACE=<start>[:<end>] (EmulOp seq
+    // numbers). Inside the window, dumps pc/opcode/cr on EVERY instruction
+    // firing — no attribution heuristics, no deduping. Outside the window it
+    // is cheap (just reads the seq counter).
+    //
+    // This replaces the older "log only on CR2 change" variant, which gave
+    // wrong culprits whenever UC_HOOK_CODE skipped intermediate instructions
+    // (pre-translated TBs don't fire the hook per-instruction for wildcard
+    // ranges). Dumping every instruction inside a 1-EmulOp window is small
+    // enough to keep, and guarantees we can see the exact CR-modifying op.
+    if (const char* tr = std::getenv("MACEMU_PPC_CR2_TRACE"); tr && *tr && *tr != '0') {
+        uint64_t lo = 0, hi = ~0ull;
+        if (char* colon = const_cast<char*>(std::strchr(tr, ':'))) {
+            *colon = 0;
+            lo = std::strtoull(tr, nullptr, 10);
+            hi = std::strtoull(colon + 1, nullptr, 10);
+            *colon = ':';
+        } else {
+            lo = std::strtoull(tr, nullptr, 10);
+            hi = lo + 1;
+        }
+        static uint64_t s_lo = 0, s_hi = 0;
+        s_lo = lo; s_hi = hi;
+        static auto cr_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
+            if (g_emul_op_seq < s_lo || g_emul_op_seq >= s_hi) return;
+            uint32_t cr = 0, lr = 0;
+            uc_reg_read(uc, UC_PPC_REG_CR, &cr);
+            uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+            uint32_t op_be = 0;
+            uc_mem_read(uc, addr, &op_be, 4);
+            uint32_t op = __builtin_bswap32(op_be);
+            fprintf(stderr, "[CR] seq=%llu pc=%08llx op=%08x cr=%08x lr=%08x\n",
+                    (unsigned long long)g_emul_op_seq,
+                    (unsigned long long)addr, op, cr, lr);
+        };
+        uc_hook hh = 0;
+        uc_hook_add(g_uc, &hh, UC_HOOK_CODE,
+                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))cr_cb,
+                    nullptr, 0, 0xffffffffull);
+        fprintf(stderr, "[Unicorn-PPC] CR tracer enabled for EmulOp seq [%llu,%llu)\n",
+                (unsigned long long)lo, (unsigned long long)hi);
     }
 
     // Unmapped-memory hook. KPX boots with a SIGSEGV handler that skips the
@@ -1010,6 +1058,17 @@ static void uppc_tick_thread(void)
             next = GetTicks_usec();
         }
         if (tick_inhibit) continue;
+
+        // MACEMU_PPC_NO_IRQ suppresses all async IRQ injection so the
+        // KPX-vs-Unicorn EmulOp boundary trace is deterministic (see
+        // docs/ppc/UnicornPpcPlan.md debug §). Boot won't progress past the
+        // first async-IRQ-dependent point, but the pre-IRQ window is a clean
+        // comparison baseline.
+        static const bool s_no_irq = [](){
+            const char* e = std::getenv("MACEMU_PPC_NO_IRQ");
+            return e && *e && *e != '0';
+        }();
+        if (s_no_irq) continue;
 
         if (++tick_counter > 60) {
             tick_counter = 0;
