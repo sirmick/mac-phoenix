@@ -432,6 +432,12 @@ struct uc_struct {
     bool thread_executable_entry;
     bool current_executable;
     bool skip_sync_pc_on_exit;
+
+    // Mac-phoenix PPC EmulOp callback — invoked from helper_mac_emulop when the
+    // guest executes a major-opcode-6 instruction (POWERPC_EMUL_OP = 0x18xxxxxx).
+    // Set via direct assignment after uc_open; NULL means dispatch is disabled
+    // and the opcode falls back to the normal decoder (program-check exception).
+    void (*mac_emulop_cb)(struct uc_struct *uc, uint32_t pc, uint32_t opcode);
 };
 
 // Metadata stub for the variable-size cpu context used with uc_context_*()

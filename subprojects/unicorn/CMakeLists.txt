@@ -935,6 +935,7 @@ add_library(ppc-softmmu STATIC
     qemu/target/ppc/excp_helper.c
     qemu/target/ppc/fpu_helper.c
     qemu/target/ppc/int_helper.c
+    qemu/target/ppc/mac_emulop_helper.c
     qemu/target/ppc/machine.c
     qemu/target/ppc/mem_helper.c
     qemu/target/ppc/misc_helper.c
@@ -984,6 +985,7 @@ add_library(ppc64-softmmu STATIC
     qemu/target/ppc/excp_helper.c
     qemu/target/ppc/fpu_helper.c
     qemu/target/ppc/int_helper.c
+    qemu/target/ppc/mac_emulop_helper.c
     qemu/target/ppc/machine.c
     qemu/target/ppc/mem_helper.c
     qemu/target/ppc/misc_helper.c

@@ -4132,6 +4132,22 @@ static void gen_sc(DisasContext *ctx)
     gen_exception_err(ctx, POWERPC_SYSCALL, lev);
 }
 
+/* Mac-phoenix EmulOp dispatch — major opcode 6 (POWERPC_EMUL_OP = 0x18xxxxxx,
+ * reserved in the base PPC ISA). Routes to helper_mac_emulop(env, opcode),
+ * which invokes uc->mac_emulop_cb. env->nip is set to this insn's PC before
+ * the helper so the callback can read it; helper advances to pc+4 by default,
+ * and the callback may overwrite env->nip / GPRs. The TB is terminated so the
+ * CPU loop re-finds the next TB at the updated PC. */
+static void gen_mac_emulop(DisasContext *ctx)
+{
+    TCGContext *tcg_ctx = ctx->uc->tcg_ctx;
+    TCGv_i32 t_opcode = tcg_const_i32(tcg_ctx, ctx->opcode);
+    gen_update_nip(ctx, ctx->base.pc_next - 4);
+    gen_helper_mac_emulop(tcg_ctx, tcg_ctx->cpu_env, t_opcode);
+    tcg_temp_free_i32(tcg_ctx, t_opcode);
+    ctx->exception = POWERPC_EXCP_SYNC;
+}
+
 /***                                Trap                                   ***/
 
 /* Check for unconditional traps (always or never) */
@@ -6996,6 +7012,8 @@ GEN_HANDLER_E(rvwinkle, 0x13, 0x12, 0x0f, 0x03FFF801, PPC_NONE, PPC2_PM_ISA206),
 GEN_HANDLER(hrfid, 0x13, 0x12, 0x08, 0x03FF8001, PPC_64H),
 #endif
 GEN_HANDLER(sc, 0x11, 0xFF, 0xFF, 0x03FFF01D, PPC_FLOW),
+/* Mac-phoenix EmulOp: major opcode 6 (0x18xxxxxx), reserved in base PPC ISA. */
+GEN_HANDLER(mac_emulop, 0x06, 0xFF, 0xFF, 0x00000000, PPC_NONE),
 GEN_HANDLER(tw, 0x1F, 0x04, 0x00, 0x00000001, PPC_FLOW),
 GEN_HANDLER(twi, 0x03, 0xFF, 0xFF, 0x00000000, PPC_FLOW),
 #if defined(TARGET_PPC64)

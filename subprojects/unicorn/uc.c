@@ -493,6 +493,21 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
     }
 }
 
+// Mac-phoenix addition: install a host callback that fires when the guest
+// executes a major-opcode-6 PPC instruction (POWERPC_EMUL_OP = 0x18xxxxxx).
+// Dispatch happens inside helper_mac_emulop (target/ppc/mac_emulop_helper.c).
+// Pass NULL to disable; the opcode then falls through to the normal decoder
+// path (which raises a program-check exception).
+UNICORN_EXPORT
+void uc_ppc_set_mac_emulop_cb(uc_engine *uc,
+                              void (*cb)(struct uc_struct *uc,
+                                         uint32_t pc, uint32_t opcode))
+{
+    if (uc) {
+        uc->mac_emulop_cb = cb;
+    }
+}
+
 UNICORN_EXPORT
 uc_err uc_close(uc_engine *uc)
 {
