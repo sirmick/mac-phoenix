@@ -43,7 +43,11 @@
 #endif
 
 /* JIT compiler (x86/x86_64 only, runtime-selectable via config.m68k.jitexperimental) */
+#if defined(__x86_64__) || defined(__amd64__) || defined(__i386__) || defined(__i686__)
 #define USE_JIT 1
+#else
+#define USE_JIT 0
+#endif
 
 /* No prefetch buffer */
 #define USE_PREFETCH_BUFFER 0

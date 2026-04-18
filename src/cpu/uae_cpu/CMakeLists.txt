@@ -4,11 +4,18 @@
 # 1. Without -DNOFLAGS to get op_xxx_ff functions and op_smalltbl_X_ff tables
 # 2. With -DNOFLAGS to get op_xxx_nf functions and op_smalltbl_X_nf tables
 
+# UAE JIT only has x86/x86_64 code generators; disable on other arches
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  set(UAE_USE_JIT 1)
+else()
+  set(UAE_USE_JIT 0)
+endif()
+
 set(UAE_COMMON_ARGS
   -DCPU_EMU_SIZE=0
   -DREAL_ADDRESSING=0
   -DDIRECT_ADDRESSING=1
-  -DUSE_JIT=1
+  -DUSE_JIT=${UAE_USE_JIT}
   -DUSE_JIT_FPU=0
   -DUSE_PREFETCH_BUFFER=0
   -DFPU_IEEE
