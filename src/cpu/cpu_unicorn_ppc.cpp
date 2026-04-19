@@ -308,12 +308,16 @@ static bool uppc_skip_memop_at(uint32_t pc)
     }
 
     if (mode == MD_U || mode == MD_UX) wr_gpr(ra, addr);
-    // Leave dest GPR untouched on failed load. KPX's SIGSEGV handler returns
-    // SKIP_INSTRUCTION which advances the host PC past a faulting x86 MOV —
-    // the PPC-level dest register is whatever the interpreter's host reg held
-    // before. Zeroing it here breaks tight 68k probe loops that stash probe
-    // results in a caller-saved register across iterations (e.g. the
-    // 0x50461e94 stb loop that relies on r4 monotonically advancing).
+    // Zero the destination register on a failed load. This breaks dispatch-
+    // table probe loops that would otherwise spin forever on a preserved
+    // register value (e.g. 0x504a73ac: `lwz r24, 0(r1); b 0x50467da0` which
+    // re-enters with the same r24, branches to the same handler, loops).
+    // With rd=0 the dispatch takes the "null" path which eventually exits.
+    // KPX's SIGSEGV-skip on x86 leaves RAX at whatever the just-missed
+    // `mov (%r1), %rax` would have set it to; in practice that's often 0
+    // because the register was freshly loaded. Zeroing matches that common
+    // case without relying on host-register side effects.
+    if (transfer == TR_LOAD) wr_gpr(rd, 0);
 
     wr_pc(pc + 4);
     return true;
@@ -745,6 +749,42 @@ static bool uppc_cpu_init(void)
                 }
                 n++;
             }
+            // One-shot: on the VERY first unmapped access (of any kind), dump
+            // the block-PC ring + insns around LR. This captures the caller
+            // chain that led to the corrupt pointer — useful because the
+            // corruption value varies run-to-run (seen: 0xc0ff..., 0x48f9...,
+            // 0x4a6f... — all unmapped, different root pointer).
+            {
+                static bool dumped = false;
+                if (!dumped) {
+                    dumped = true;
+                    uint32_t pc = 0, lr = 0, insn_be = 0;
+                    uc_reg_read(uc, UC_PPC_REG_PC, &pc);
+                    uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                    uc_mem_read(uc, pc, &insn_be, 4);
+                    uint32_t insn = __builtin_bswap32(insn_be);
+                    fprintf(stderr,
+                            "[Unicorn-PPC] *** first unmapped access: "
+                            "pc=%08x insn=%08x target=0x%010llx lr=%08x ***\n",
+                            pc, insn, (unsigned long long)addr, lr);
+                    fprintf(stderr, "  recent block-PCs (ring; newest at idx=%d):\n   ",
+                            g_uppc_last_block_pcs_idx);
+                    for (int i = 0; i < 32; ++i) {
+                        fprintf(stderr, " %08x", g_uppc_last_block_pcs[i]);
+                        if (i == 15) fprintf(stderr, "\n   ");
+                    }
+                    fprintf(stderr, "\n");
+                    fprintf(stderr, "  --- insns @ lr-0x20 .. lr+0x10 ---\n");
+                    for (int off = -0x20; off <= 0x10; off += 4) {
+                        uint32_t ins = 0, at = lr + off;
+                        if (uc_mem_read(uc, at, &ins, 4) == UC_ERR_OK) {
+                            ins = __builtin_bswap32(ins);
+                            fprintf(stderr, "    %08x: %08x%s\n", at, ins,
+                                    off == 0 ? "  <== lr" : "");
+                        }
+                    }
+                }
+            }
             // Read/write to unmapped: let Unicorn raise UC_ERR_{READ,WRITE}_UNMAPPED.
             // execute_fast will bump PC by 4 and resume (KPX skip-on-SIGSEGV shape).
             return false;
@@ -1101,6 +1141,45 @@ static bool uppc_cpu_init(void)
         // Dump around 0x5046d728 — where r1 goes to 0 just before the InstallDrivers crash.
         fprintf(stderr, "[Unicorn-PPC] --- dump 0x5046d700..0x5046d760 ---\n");
         for (uint32_t a = 0x5046d700; a < 0x5046d760; a += 16) {
+            uint32_t buf[4] = {0,0,0,0};
+            if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
+                fprintf(stderr,
+                    "[Unicorn-PPC] ROM @0x%08x: %08x %08x %08x %08x\n",
+                    a, __builtin_bswap32(buf[0]), __builtin_bswap32(buf[1]),
+                    __builtin_bswap32(buf[2]), __builtin_bswap32(buf[3]));
+            }
+        }
+        // Dump around 0x5046f900 — new r1-corruption site after SCALE=10 unlocks
+        // the DiskPrime #800+ path (boot blocks fully loaded, CPU back in ROM).
+        // Block transitions land at 0x5046f900 → 0x5046f90c with r1 going from a
+        // valid RAM address (~0x05ff8044) to a tiny value like 0x00000002.
+        fprintf(stderr, "[Unicorn-PPC] --- dump 0x5046f8e0..0x5046f940 ---\n");
+        for (uint32_t a = 0x5046f8e0; a < 0x5046f940; a += 16) {
+            uint32_t buf[4] = {0,0,0,0};
+            if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
+                fprintf(stderr,
+                    "[Unicorn-PPC] ROM @0x%08x: %08x %08x %08x %08x\n",
+                    a, __builtin_bswap32(buf[0]), __builtin_bswap32(buf[1]),
+                    __builtin_bswap32(buf[2]), __builtin_bswap32(buf[3]));
+            }
+        }
+        // Dump around 0x504a73a8 — the probe-table where the repeat-skip loop
+        // stalls (r1 below KD, `lwz r24, 0(r1)` keeps faulting then branches
+        // to 0x50467da0 / 0x50467de0, which returns back to the table).
+        fprintf(stderr, "[Unicorn-PPC] --- dump 0x504a7380..0x504a73e0 ---\n");
+        for (uint32_t a = 0x504a7380; a < 0x504a73e0; a += 16) {
+            uint32_t buf[4] = {0,0,0,0};
+            if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
+                fprintf(stderr,
+                    "[Unicorn-PPC] ROM @0x%08x: %08x %08x %08x %08x\n",
+                    a, __builtin_bswap32(buf[0]), __builtin_bswap32(buf[1]),
+                    __builtin_bswap32(buf[2]), __builtin_bswap32(buf[3]));
+            }
+        }
+        // Dump 0x50467d80..0x50467e20 — the handler that the probe-table
+        // branches to. Tail-branches back into 0x504a73xx and forms the loop.
+        fprintf(stderr, "[Unicorn-PPC] --- dump 0x50467d80..0x50467e20 ---\n");
+        for (uint32_t a = 0x50467d80; a < 0x50467e20; a += 16) {
             uint32_t buf[4] = {0,0,0,0};
             if (uc_mem_read(g_uc, a, buf, sizeof(buf)) == UC_ERR_OK) {
                 fprintf(stderr,
@@ -1671,15 +1750,18 @@ static void uppc_cpu_execute_fast(void)
                 uint32_t insn = 0;
                 uc_mem_read(g_uc, stall_pc, &insn, 4);
                 insn = __builtin_bswap32(insn);
+                uint32_t nest_val = ReadMac32(XLM_IRQ_NEST);
+                uint32_t run_mode = ReadMac32(XLM_RUN_MODE);
                 fprintf(stderr,
                         "[Unicorn-PPC] progress stall: no EmulOp advance for "
                         "%lldms (%llu iters, %llu IRQs delivered, %llu skips) "
-                        "— bailing\n"
+                        "XLM_IRQ_NEST=%d XLM_RUN_MODE=%u — bailing\n"
                         "  pc=0x%08x insn=%08x lr=%08x ctr=%08x cr=%08x xer=%08x\n",
                         (long long)elapsed_ms,
                         (unsigned long long)iters_since_progress,
                         (unsigned long long)irqs_since_progress,
                         (unsigned long long)skipped,
+                        (int)nest_val, run_mode,
                         stall_pc, insn, rd_lr(), rd_ctr(), rd_cr(), rd_xer());
                 for (int i = 0; i < 32; ++i) {
                     fprintf(stderr, "  r%-2d=%08x%s", i, rd_gpr(i),
@@ -1705,6 +1787,13 @@ static void uppc_cpu_execute_fast(void)
                                 off == 0 ? "  <== lr" : "");
                     }
                 }
+                fprintf(stderr, "  recent block PCs (ring; newest at idx=%d):\n   ",
+                        g_uppc_last_block_pcs_idx);
+                for (int i = 0; i < 32; ++i) {
+                    fprintf(stderr, " %08x", g_uppc_last_block_pcs[i]);
+                    if (i == 15) fprintf(stderr, "\n   ");
+                }
+                fprintf(stderr, "\n");
                 break;
             }
         }

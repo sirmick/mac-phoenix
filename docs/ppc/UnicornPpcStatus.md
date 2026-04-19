@@ -1,6 +1,6 @@
 # Unicorn-PPC backend — session handoff
 
-Last updated: 2026-04-19 (branch `unicorn-ppc`, IRQ-timing quantification session).
+Last updated: 2026-04-19 (branch `unicorn-ppc`, zero-on-skip unlock session).
 
 This is a rolling status doc for the Unicorn PPC port. Append to it, don't
 rewrite it. The goal: a next-session reader should be able to pick up the
@@ -248,6 +248,153 @@ Trace format: EMULOP/POST pairs (original) interleaved with `IRQ` (entry into
 `{uppc,sheepshaver_cpu::}interrupt`) and `MODE68K` (entry into
 `{uppc_handle_interrupt,HandleInterrupt}` MODE_68K case). The latter two share
 the same seq counter as the most recent EMULOP so diffs align.
+
+### 2026-04-19 late-3 — zero-on-skip unlocks the probe-table loop; boot reaches 68k RAM
+
+Root cause of the `pc=0x504a73ac` progress stall: the 68k-emulator
+dispatch table at `0x504a7380..0x504a73e0` holds 8-byte slots of
+`lwz r24, 0(r1); b 0x50467da0`. The handler at `0x50467da0` reads
+`lha r27, 0(r24)` then computes another dispatch, ending with `bcctrl`
+back into the table. When `r1` is below the KernelData mapping (a
+downstream symptom of stack underflow from a different earlier bug),
+the `lwz r24, 0(r1)` faults → Unicorn's skip handler runs → the old
+preserve-dest-GPR policy leaves `r24` unchanged → branch target is
+the same → infinite loop.
+
+**Fix**: in `uppc_skip_memop_at` (`src/cpu/cpu_unicorn_ppc.cpp:~310`),
+zero `rd` when skipping a failed load. With `r24=0` the follow-on
+`lha r27, 0(r24)` faults at address 0 on the next iteration; the
+subsequent store uses `r27=0` as a flag that causes the 68k dispatcher
+to take a different path, breaking the loop. KPX's SIGSEGV skip on
+x86 leaves RAX at whatever the host `mov` would've set it to — in
+practice often 0 because the dest register was freshly loaded. Zeroing
+matches that common case without relying on host-register side-effects
+we can't observe at the PPC level.
+
+**Result**: one run of 3 reached `"Finder detected (CurApName PPC
+fallback)"` at Boot +3.32s with 1000 resources loaded — **first time
+the Unicorn backend has booted to Finder**.
+
+Five more `SCALE=10 --timeout 20` runs after that couldn't reproduce
+Finder reach, but showed consistent downstream progress:
+
+| n | fate | DiskPrime | notable signature |
+|---|------|-----------|-------------------|
+| 1 | early stall @ DP#20 | 20 | 31 iters, 31 IRQs, 0 skips, XLM_IRQ_NEST=0 |
+| 2 | R1ZERO @ DP#850 | 850 | pc=0x5046fa0c r1=0x00000002, then pc=0x5046f904 r1=0x00000001 |
+| 3 | early stall @ DP#20 | 20 | first unmapped at `pc=0x50465fb0 target=0xfffe85a4` |
+| 4 | timeout mid-progress | 850 | no stall, steady advance — needs more wall-clock |
+| 5 | wild branch | 550 | `execute_fast: exiting (pc=0x2c636f6c)` — ASCII `,clo` pattern, corrupted ctr |
+
+Three `SCALE=10 --timeout 45` long runs then showed a new downstream
+failure mode in 2 of 3: after DiskPrime #850 (boot blocks fully loaded),
+control transfers into booted 68k System code at `~0x001c13b0`, then
+faults on a 68k exception vector:
+
+```
+[Unicorn-PPC] *** first unmapped access:
+  pc=00000134 insn=deadbeef target=0x00ffffbeef lr=001c13b0 ***
+```
+
+The recent-blocks ring shows PPC executing at RAM addresses
+`0x00000028 → 0x00000060 → 0x00000068 → 0x00000080 → 0x00000134`
+— walking the 68k exception vector table (VBR=0). `insn=deadbeef`
+means vector 0x134 is uninitialized. This is real 68k System code
+running on the PPC 68k-emulator and trapping — a qualitatively
+different failure mode from the pre-zero-on-skip probe-table loops.
+The port is now past the probe-table stall class.
+
+**Two R1ZERO traces at boot entry (pc=0x50310000 r1=0 and pc=0x504a77d0
+r1=0) fire before `Boot +0.00s`** in every run. These reflect the
+initial vcpu state (r0/lr/ctr all zero) as the tracer starts; they
+are **noise, not regressions**. Consider suppressing the first two
+R1ZERO events or gating by `g_emulop_count > 0` so genuine corruption
+stands out.
+
+**Open questions**:
+1. **Why only 1-in-N reaches Finder.** The stall sites vary run-to-run
+   (#20, #550, #850, vector-deadbeef). Tick-phase-dependent CR2 poison
+   is still the leading theory — earlier IRQ lands = earlier corruption.
+2. **The DP#850 R1ZERO at `pc=0x5046f90c`** with `r1` going 0x05ff8048
+   → 0x00000002 → 0x00000001. The `0x05ff8xxx` range is valid 68k-on-PPC
+   stack; decrement by `2 * 0x5ff8047` would take it deeply negative
+   → masked to tiny. Something is subtracting a wrong value. Not the
+   probe-table loop (that's upstream), a fresh bug once we're into
+   DiskPrime-heavy phase.
+3. **The `pc=0x134 insn=deadbeef` vector fault** is a *valid* guest
+   crash, not a backend bug — the 68k OS booted, trapped, and found
+   no handler. On KPX either the vector gets initialized before the
+   trap fires, or KPX masks a fault that Unicorn surfaces.
+
+**Next-session lever**: compare KPX and Unicorn both running past
+DiskPrime #800 with `MACEMU_PPC_TRACE`. Find the first EmulOp where
+KPX writes the 68k vector table (or whatever initializes `@0x134`)
+and Unicorn doesn't. Could be an EmulOp selector KPX handles that
+Unicorn's pure dispatcher returns false for (see "GET_RESOURCE family"
+under Deferred work).
+
+### 2026-04-19 late-4 — **first Desktop boot**; new stall site at 0x504900fc
+
+Re-ran 15 trials at SCALE=10 with the zero-on-skip change in place.
+Run 5 (of the first 5) reached **`Desktop ready (Finder idle, no
+modal)` at Boot +30.28s** with 4900 DiskPrime reads completed — the
+full boot path now runs end-to-end on Unicorn for the first time.
+
+Reach rate is rare (1 / 15 across this session). Typical outcomes:
+
+| fate | frequency | example |
+|---|---|---|
+| Desktop ready | 1/15 | Finder +4.15s, Desktop +30.28s, DP#4900 |
+| progress-stall bail @ 0x504900fc | 5/15 | `70000 skips, 0 IRQs, XLM_IRQ_NEST=1` |
+| stall mid-run @ DP#850 | 4/15 | timeout before bail fires |
+| R1ZERO @ nanokernel region | 2/15 | `pc=0x50010030 r1=0x10 prev=0x05ff80d8` |
+| early stall (DP#0..#20) | 3/15 | 31 iters 31 IRQs, 0 skips |
+
+The **new dominant stall** is `pc=0x504900fc insn=4bfd8d44` (a `b
+0x5046DE40`). The preceding `lwz r8, 0(r1)` at `0x504900f8` faults
+because `r1 = 0x68ff9b9e` is ~16 KB below the KD_hi base at
+`0x68ffe000`. Register state at stall:
+
+```
+pc=0x504900fc insn=4bfd8d44 lr=504900f8 ctr=00000000 cr=8010ff53
+r1=68ff9b9e r8=? r22=05ff80d8 r31=68fff000
+```
+
+This is structurally the same bug as the pre-fix `0x504a73ac` probe
+loop — an `lwz rd, 0(r1)` + unconditional branch — just at a new site
+reached once the earlier site is unblocked. Zero-on-skip makes
+`r8=0` each iteration and the branch target at `0x5046DE40` still
+sends control back to `0x504900f8`, so the loop is eternal.
+
+**r1 underflow is the real root bug, not the skip-policy.** Zero-on-skip
+only hides one site; others keep surfacing. The underlying question is
+**why r1 drops below the KD_hi base** in the first place — some
+routine's prologue is `stwu r1, -N(r1)` on an r1 that starts inside
+KD (around `0x68ffe000..0x69000000`) and decrements past the bottom.
+Or r1 is being explicitly reloaded with a bad value somewhere.
+
+**Evidence that zero-on-skip is *net positive despite the stall move***:
+before the change, no run ever reached Finder. After the change, 1/15
+reaches Desktop in full, proving the complete boot path is executable
+on Unicorn when IRQ phase cooperates.
+
+**Suppress initial R1ZERO noise**: the first two R1ZERO fires (at
+`pc=0x50310000` and `pc=0x504a77d0`) happen before `Boot +0.00s`
+with `r0=lr=ctr=0` — fresh vcpu state, not corruption. Gate the
+tracer with `g_emulop_count > 0` so genuine r1-corruption stands out.
+
+**Next-session levers** (in order of expected payoff):
+
+1. **Track r1 across the DP#700→#850 window**: add a block hook that
+   logs every time r1 crosses below `0x68ffe000` for the first time
+   in a run (one-shot). The LR at that moment names the bad caller.
+2. **Compare KPX/Unicorn EmulOp traces post-DP#800**: find the last
+   EmulOp selector common to both before divergence. KPX's `sheepshaver_cpu`
+   handles a few selectors Unicorn's pure dispatcher doesn't (see
+   `kpx_ppc_native_op` selector 19 / GET_RESOURCE family).
+3. **Clamp r1 at skip time**: if `r1 < 0x68ffe000` when entering a skip,
+   reload r1 from a known-good value (e.g. the KernelData base). Crude
+   but would flush out whether r1-drift is the only mechanism.
 
 ## Real blocker: 0x500100xx lomem stall
 
