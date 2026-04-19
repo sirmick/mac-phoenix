@@ -1254,6 +1254,17 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
         clear_deleted_hooks(uc);
 
         restore_jit_state(uc);
+    } else {
+        // Returning to an outer nested uc_emu_start. The uc_emu_stop that
+        // terminated the inner run set uc->stop_request (and cpu->exit_request
+        // via break_translation_loop). If we leave those flags set, the outer
+        // level's next cpu_exec iteration will spuriously break out of
+        // tcg_cpu_exec at whatever PC it happens to be at — causing the outer
+        // uc_emu_start to return prematurely with UC_ERR_OK at a non-EMUL_OP
+        // instruction. Clear them here so the outer can resume cleanly.
+        // (Mac-phoenix PPC backend relies on nested uc_emu_start calls for
+        // Execute68k / execute_macos_code reentrancy.)
+        revert_uc_emu_stop(uc);
     }
 
     if (timeout) {
