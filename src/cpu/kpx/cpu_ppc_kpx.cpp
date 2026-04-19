@@ -752,7 +752,22 @@ void sheepshaver_cpu::execute_68k(uint32 entry, M68kRegisters *r)
     uint32 opcode = ReadMacInt16(gpr(24));
     gpr(27) = (int32)(int16)ReadMacInt16(gpr(24) += 2);
     gpr(29) += opcode * 8;
+
+    static const bool s_trace_trap = []() {
+        const char* e = std::getenv("MACEMU_PPC_TRACE_TRAP");
+        return e && *e && *e != '0';
+    }();
+    if (s_trace_trap) {
+        fprintf(stderr, "[KPX]   execute_68k entry=0x%08x op=0x%04x dispatch=0x%08x\n",
+                entry, opcode, gpr(29));
+    }
+
     execute(gpr(29));
+
+    if (s_trace_trap) {
+        fprintf(stderr, "[KPX]   execute_68k done  pc=0x%08x lr=0x%08x r24=0x%08x r1=0x%08x\n",
+                pc(), lr(), gpr(24), gpr(1));
+    }
 
     // Save r25 (contains current 68k interrupt level)
     WriteMacInt32(XLM_68K_R25, gpr(25));

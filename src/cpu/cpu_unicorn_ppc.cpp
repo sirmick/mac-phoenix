@@ -227,6 +227,28 @@ static std::atomic<bool> g_tick_thread_running{false};
 static bool g_dr_probes_remapped = false;
 static uint64_t g_emulop_count = 0;
 
+// Always-on last-block tracker. A wildcard UC_HOOK_BLOCK updates a 32-entry
+// ring with each TB's entry PC; the crash handler reads these globals to
+// report which guest PCs were executing just before a SIGABRT / SIGSEGV.
+// Linkage is C so the crash handler (which doesn't know about C++ name
+// mangling) can weak-extern them.
+extern "C" {
+    volatile uint32_t  g_uppc_last_block_pc       = 0;
+    uint32_t           g_uppc_last_block_pcs[32]  = {0};
+    volatile int       g_uppc_last_block_pcs_idx  = 0;
+    volatile uint64_t  g_uppc_block_seq           = 0;
+
+    // Secondary ring: narrow hook at MACEMU_PPC_BCTRL_WATCH=<pc>[,<pc>...]
+    // fires per-execution (no dedup) and records (PC, CTR, LR) so the crash
+    // handler can tell which indirect branch took us somewhere QEMU can't
+    // translate. 16 slots.
+    uint32_t           g_uppc_bctrl_pc[16]        = {0};
+    uint32_t           g_uppc_bctrl_ctr[16]       = {0};
+    uint32_t           g_uppc_bctrl_lr[16]        = {0};
+    volatile int       g_uppc_bctrl_idx           = 0;
+    volatile uint64_t  g_uppc_bctrl_seq           = 0;
+}
+
 // ----- Register helpers (uc_reg_read/write wrappers) -----------------------
 
 static inline uint32_t rd_reg(int r)
@@ -520,7 +542,12 @@ static bool uppc_cpu_init(void)
     // Narrow code hooks: fire only when PC is within a specific range. Much
     // cheaper than a wildcard hook (which adds overhead per-insn). Uses one
     // hook per range of interest.
-    {
+    //
+    // Gated by MACEMU_PPC_TRACE_DISP. These hooks fire on every 68k opcode
+    // dispatch (16 sites × millions of 68k instructions per boot) and each
+    // callback does 4× uc_reg_read, so the cumulative overhead slows boot by
+    // ~100×. Leave off by default; enable only when chasing a dispatch bug.
+    if (const char* td = std::getenv("MACEMU_PPC_TRACE_DISP"); td && *td && *td != '0') {
         // Dump r0..r31 + LR + CTR when entering the jump-to-emul patch and
         // again at the 68k emulator entry. Lets us see which register holds
         // the 68k PC going into the DR emulator.
@@ -565,8 +592,12 @@ static bool uppc_cpu_init(void)
             // TRAP_PROC scratch (0x68ffec30+2) is used for uppc_cpu_execute_68k_trap
             // to hold "<trap>; rts" — r24 legitimately points there during trap
             // dispatch. Treat the low-memory / XLM region (0x68ff0000..0x69000000)
-            // as valid too.
+            // as valid too. SheepMem (0x10000000..0x10080000) holds SheepVar-
+            // allocated 68k procedures built by FindLibSymbol / BuildSheepshaver
+            // Procedure, which Execute68k jumps into directly — r24 legitimately
+            // points there during those dispatches.
             bool bogus = !((r24 < 0x08800000) ||
+                           (r24 >= 0x10000000 && r24 < 0x10080000) ||
                            (r24 >= 0x50000000 && r24 < 0x50500000) ||
                            (r24 >= 0x68ff0000 && r24 < 0x69000000));
             int32_t delta = (int32_t)(r24 - prev_r24);
@@ -582,7 +613,9 @@ static bool uppc_cpu_init(void)
                 // memory at r24 to capture the actual 68k opcode about to be
                 // dispatched (the lha has not yet fired when the hook runs).
                 uint32_t opcode_be = 0;
-                if (r24 < 0x08800000 || (r24 >= 0x50000000 && r24 < 0x50500000)) {
+                if (r24 < 0x08800000 ||
+                    (r24 >= 0x10000000 && r24 < 0x10080000) ||
+                    (r24 >= 0x50000000 && r24 < 0x50500000)) {
                     uc_mem_read(uc, r24, &opcode_be, 4);
                 }
                 struct Entry { uint64_t n; uint32_t addr, r24, lr, prev, op; };
@@ -605,6 +638,23 @@ static bool uppc_cpu_init(void)
                             r24, prev_r24, r27, lr,
                             bogus ? " <BOGUS>" : (branch ? " <BRANCH>" : ""));
                 }
+            }
+            // Heartbeat: print every N dispatches so we can spot loops.
+            // MACEMU_PPC_TRACE_DISP=<N> sets the interval; 0/unset → no heartbeat.
+            static uint64_t s_beat = []() -> uint64_t {
+                const char* e = std::getenv("MACEMU_PPC_TRACE_DISP");
+                if (!e || !*e || *e == '0') return 0;
+                uint64_t v = std::strtoull(e, nullptr, 10);
+                return v > 1 ? v : 0;
+            }();
+            if (s_beat && (n % s_beat) == 0 && n > 0) {
+                uint32_t r27 = 0, r29 = 0, lr = 0;
+                uc_reg_read(uc, UC_PPC_REG_27, &r27);
+                uc_reg_read(uc, UC_PPC_REG_29, &r29);
+                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                fprintf(stderr, "[TRC-DISP heartbeat %llu] pc=0x%08llx r24=%08x r27=%08x r29=%08x lr=%08x\n",
+                        (unsigned long long)n, (unsigned long long)addr,
+                        r24, r27, r29, lr);
             }
             prev_r24 = r24;
             first = false;
@@ -742,6 +792,24 @@ static bool uppc_cpu_init(void)
                                       int, int64_t, void *))mem_unmapped_cb,
                     nullptr, 1, 0);
 
+        // Always-on last-block-PC tracker. Cheap (no uc_reg_read) — just
+        // updates a 32-slot ring and a counter per TB. The crash handler
+        // reads these globals to report "what guest PC were we at?" when
+        // QEMU internals abort (e.g. qemu_ram_addr_from_host_nofail).
+        static auto last_pc_cb = [](uc_engine *, uint64_t addr,
+                                    uint32_t, void *) {
+            uint32_t pc = (uint32_t)addr;
+            g_uppc_last_block_pc = pc;
+            int i = g_uppc_last_block_pcs_idx;
+            g_uppc_last_block_pcs[i & 31] = pc;
+            g_uppc_last_block_pcs_idx = (i + 1) & 31;
+            g_uppc_block_seq++;
+        };
+        uc_hook hook_last_pc = 0;
+        uc_hook_add(g_uc, &hook_last_pc, UC_HOOK_BLOCK,
+                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))last_pc_cb,
+                    nullptr, 1, 0);
+
         // Watchpoint on ROM zero-padding region (0x50400000..0x50500000). We
         // want to see if the nanekernel populates code at 0x5046e6f4 etc.
         static auto wp_cb = [](uc_engine *uc, uc_mem_type type, uint64_t addr,
@@ -762,6 +830,27 @@ static bool uppc_cpu_init(void)
                     (void *)(void (*)(uc_engine *, uc_mem_type, uint64_t,
                                       int, int64_t, void *))wp_cb,
                     nullptr, 0x50400000, 0x50500000);
+
+        // Low-memory write tracer (mem[0]..mem[0x10]). Focused on 68k reset
+        // vector area: mem[0] (initial SSP) and mem[4] (initial PC). These
+        // are read by the NanoKernel's 68k-emulation entry block.
+        static auto lowmem_wp_cb = [](uc_engine *uc, uc_mem_type, uint64_t addr,
+                                      int size, int64_t value, void *) -> void {
+            static uint64_t n = 0;
+            if (n < 256) {
+                uint32_t pc = 0, lr = 0;
+                uc_reg_read(uc, UC_PPC_REG_PC, &pc);
+                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                fprintf(stderr, "[LOWMEM-WRITE] @0x%08llx val=0x%08llx size=%d pc=0x%08x lr=0x%08x\n",
+                        (unsigned long long)addr, (unsigned long long)value, size, pc, lr);
+            }
+            n++;
+        };
+        uc_hook hook_lowmem = 0;
+        uc_hook_add(g_uc, &hook_lowmem, UC_HOOK_MEM_WRITE,
+                    (void *)(void (*)(uc_engine *, uc_mem_type, uint64_t,
+                                      int, int64_t, void *))lowmem_wp_cb,
+                    nullptr, 0x00000000, 0x00000010);
 
         // r1-underflow tracer. Only fires when r1 actually goes to ~zero
         // (stack fully drained). Dumps a ring of recent block PCs so we can
@@ -797,6 +886,93 @@ static bool uppc_cpu_init(void)
         uc_hook_add(g_uc, &hook_r1, UC_HOOK_BLOCK,
                     (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))r1_lo_cb,
                     nullptr, 1, 0);
+
+        // Per-firing bctrl watch: MACEMU_PPC_BCTRL_WATCH=<pc>[,<pc>...] records
+        // (pc, ctr, lr) every time the given PC executes. Ring of 16 slots is
+        // printed by the crash handler — use this to see what target the last
+        // indirect branch selected before Unicorn's TB translator aborted.
+        if (const char* bw = std::getenv("MACEMU_PPC_BCTRL_WATCH"); bw && *bw) {
+            static auto bctrl_cb = [](uc_engine *uc, uint64_t addr,
+                                      uint32_t, void *) {
+                uint32_t ctr = 0, lr = 0;
+                uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
+                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                int i = g_uppc_bctrl_idx;
+                g_uppc_bctrl_pc[i & 15]  = (uint32_t)addr;
+                g_uppc_bctrl_ctr[i & 15] = ctr;
+                g_uppc_bctrl_lr[i & 15]  = lr;
+                g_uppc_bctrl_idx = (i + 1) & 15;
+                g_uppc_bctrl_seq++;
+            };
+            char buf[256];
+            std::strncpy(buf, bw, sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = 0;
+            char *saveptr = nullptr;
+            for (char *tok = strtok_r(buf, ",", &saveptr); tok;
+                 tok = strtok_r(nullptr, ",", &saveptr)) {
+                uint32_t pc = (uint32_t)std::strtoul(tok, nullptr, 0);
+                if (!pc) continue;
+                uc_hook hook_bw = 0;
+                uc_hook_add(g_uc, &hook_bw, UC_HOOK_CODE,
+                            (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))bctrl_cb,
+                            nullptr, pc, pc);
+                fprintf(stderr, "[Unicorn-PPC] BCTRL-WATCH armed at 0x%08x\n", pc);
+            }
+        }
+
+        // One-shot dump hook: when triggered by MACEMU_PPC_DUMP_PC=<hex>[,hex...],
+        // on first hit at each listed PC dumps 16 PPC instructions around that
+        // address and snapshots register state. Useful for inspecting suspected
+        // tight loops in the DR emulator.
+        if (const char* dp = std::getenv("MACEMU_PPC_DUMP_PC"); dp && *dp) {
+            static auto dump_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
+                static uint32_t fired[16] = {0};
+                static int fired_n = 0;
+                for (int i = 0; i < fired_n; i++) {
+                    if (fired[i] == (uint32_t)addr) return;
+                }
+                if (fired_n < 16) fired[fired_n++] = (uint32_t)addr;
+                uint32_t gpr[32] = {0}, lr = 0, ctr = 0, cr = 0;
+                for (int i = 0; i < 32; i++) uc_reg_read(uc, UC_PPC_REG_0 + i, &gpr[i]);
+                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
+                uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
+                uc_reg_read(uc, UC_PPC_REG_CR, &cr);
+                fprintf(stderr, "[PC-DUMP] @0x%08llx lr=%08x ctr=%08x cr=%08x\n",
+                        (unsigned long long)addr, lr, ctr, cr);
+                for (int i = 0; i < 32; i += 8) {
+                    fprintf(stderr, "  r%02d..r%02d:", i, i+7);
+                    for (int k = 0; k < 8; k++) fprintf(stderr, " %08x", gpr[i+k]);
+                    fprintf(stderr, "\n");
+                }
+                uint8_t buf[16 * 4];
+                uint32_t start = (uint32_t)addr - 16;
+                if (uc_mem_read(uc, start, buf, sizeof(buf)) == UC_ERR_OK) {
+                    for (int i = 0; i < 16; i++) {
+                        uint32_t insn = ((uint32_t)buf[i*4] << 24) |
+                                        ((uint32_t)buf[i*4+1] << 16) |
+                                        ((uint32_t)buf[i*4+2] << 8) |
+                                        ((uint32_t)buf[i*4+3]);
+                        fprintf(stderr, "  %08x: %08x%s\n",
+                                start + i*4, insn,
+                                (start + i*4 == (uint32_t)addr) ? "  <--" : "");
+                    }
+                }
+            };
+            char buf[256];
+            std::strncpy(buf, dp, sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = 0;
+            char *saveptr = nullptr;
+            for (char *tok = strtok_r(buf, ",", &saveptr); tok;
+                 tok = strtok_r(nullptr, ",", &saveptr)) {
+                uint32_t pc = (uint32_t)std::strtoul(tok, nullptr, 0);
+                if (!pc) continue;
+                uc_hook hook_dump = 0;
+                uc_hook_add(g_uc, &hook_dump, UC_HOOK_CODE,
+                            (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))dump_cb,
+                            nullptr, pc, pc);
+                fprintf(stderr, "[Unicorn-PPC] PC-DUMP armed at 0x%08x\n", pc);
+            }
+        }
     }
 
     // Select CPU model (matches KPX PVR 0x000c0000 = PowerPC 750 / G3).
@@ -1289,6 +1465,20 @@ static void uppc_cpu_execute_ppc(uint32_t entry)
         if (after != stuck_pc) { stuck_pc = after; stuck_count = 1; }
         run_pc = after;
         if (g_stop_requested) break;
+    }
+
+    static const bool s_trace_trap_exit = []() {
+        const char* e = std::getenv("MACEMU_PPC_TRACE_TRAP");
+        return e && *e && *e != '0';
+    }();
+    if (s_trace_trap_exit) {
+        uint32_t exit_pc = rd_pc();
+        uint32_t opc = 0;
+        uc_mem_read(g_uc, exit_pc, &opc, 4);
+        // Big-endian opcode
+        opc = __builtin_bswap32(opc);
+        fprintf(stderr, "[Unicorn-PPC]     execute_ppc exit pc=0x%08x opcode=0x%08x (restoring saved_pc=0x%08x) lr=0x%08x r1=0x%08x r24=0x%08x\n",
+                exit_pc, opc, saved_pc, rd_lr(), rd_gpr(1), rd_gpr(24));
     }
 
     wr_pc(saved_pc);
