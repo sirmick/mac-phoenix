@@ -24,6 +24,7 @@
 #include "vm_alloc.h"
 #include "cpu/vm.hpp"
 #include "cpu/ppc/ppc-cpu.hpp"
+#include "ppc_boundary_trace.h"
 
 uint64_t ppc_insn_counter = 0;
 
@@ -696,6 +697,10 @@ void powerpc_cpu::execute(uint32 entry)
 				di = bi->di;
 				int n = bi->size;
 				for (int i = 0; i < n; i++) {
+					if (ppc_cr_trace_active_()) {
+						ppc_trace_cr_step(pc(), di[i].opcode, cr().get(),
+						                  lr(), gpr(24));
+					}
 					di[i].execute(this, di[i].opcode);
 					ppc_insn_counter++;
 				}
@@ -738,6 +743,9 @@ void powerpc_cpu::execute(uint32 entry)
 #else
 		assert(ii->execute.ptr() != 0);
 #endif
+		if (ppc_cr_trace_active_()) {
+			ppc_trace_cr_step(pc(), opcode, cr().get(), lr(), gpr(24));
+		}
 		ii->execute(this, opcode);
 		ppc_insn_counter++;
 #if PPC_EXECUTE_DUMP_STATE

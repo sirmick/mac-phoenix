@@ -1081,9 +1081,15 @@ static bool kpx_cpu_init(void)
     if (!ppc_cpu) {
         ppc_cpu = new sheepshaver_cpu();
         extern Platform g_platform;
-        if (g_platform.ppc_jit) {
+        // CR tracer lives inside the decode-cache/interpreter hot loops in
+        // ppc-cpu.cpp — the JIT path (codegen.execute) bypasses those and
+        // would emit zero [CR] lines. Force interp when a trace window is set.
+        const bool cr_trace_forces_interp = ppc_cr_trace_window_().enabled;
+        if (g_platform.ppc_jit && !cr_trace_forces_interp) {
             ppc_cpu->enable_jit();
             fprintf(stderr, "[KPX] JIT enabled\n");
+        } else if (cr_trace_forces_interp) {
+            fprintf(stderr, "[KPX] JIT disabled (MACEMU_PPC_CR2_TRACE active)\n");
         } else {
             fprintf(stderr, "[KPX] JIT disabled (interpreter mode)\n");
         }
