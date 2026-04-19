@@ -220,6 +220,14 @@ typedef struct {
     // PPC EmulOp handler (POWERPC_EMUL_OP dispatch from KPX interpreter)
     void (*ppc_emulop_handler)(void *r68k_regs, uint32_t pc, int selector);
 
+    // PPC NativeOp handler (POWERPC_EMUL_OP selector=2 dispatch).
+    // KPX's execute_native_op reads/writes gpr(3..10) (NQD/ether take p in r3,
+    // Serial* take r3/r4, GET_RESOURCE uses r3/r4, ether_open uses r3..r7).
+    // Backends marshal their own GPRs through `gprs`, indexed by PPC reg #
+    // (so gprs[3] is r3). Entries 0..2 and 11..31 are unused but reserved so
+    // a single flat array works.
+    void (*ppc_native_op)(uint32_t selector, uint32_t gprs[32]);
+
     // Trap handler (A-line and F-line exceptions)
     // Returns true if PC was advanced, false if caller should advance
     bool (*trap_handler)(int vector, uint16_t opcode, bool is_primary);

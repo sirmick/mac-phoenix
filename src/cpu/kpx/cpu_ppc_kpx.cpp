@@ -585,75 +585,80 @@ void sheepshaver_cpu::call_execute_native_op(powerpc_cpu *cpu, uint32 selector)
     static_cast<sheepshaver_cpu *>(cpu)->execute_native_op(selector);
 }
 
-void sheepshaver_cpu::execute_native_op(uint32 selector)
+// Backend-agnostic NativeOp body — operates on a caller-supplied GPR array
+// rather than `this->gpr(i)` so non-KPX backends (Unicorn) can invoke it via
+// g_platform.ppc_native_op after marshaling their own GPRs. Returns true if
+// the selector was handled; false means the caller must dispatch via a CPU
+// singleton (GET_RESOURCE family re-enters PPC via execute_ppc()).
+static bool execute_native_op_pure(uint32 selector, uint32 *gprs)
 {
     switch (selector) {
     case NATIVE_PATCH_NAME_REGISTRY:
         DoPatchNameRegistry();
-        break;
+        return true;
     case NATIVE_VIDEO_INSTALL_ACCEL:
         VideoInstallAccel();
-        break;
+        return true;
     case NATIVE_VIDEO_VBL:
         VideoVBL();
-        break;
+        return true;
     case NATIVE_VIDEO_DO_DRIVER_IO:
-        gpr(3) = (int32)(int16)VideoDoDriverIO(gpr(3), gpr(4), gpr(5), gpr(6), gpr(7));
-        break;
+        gprs[3] = (int32)(int16)VideoDoDriverIO(gprs[3], gprs[4], gprs[5], gprs[6], gprs[7]);
+        return true;
     case NATIVE_ETHER_AO_GET_HWADDR:
-        AO_get_ethernet_address(gpr(3));
-        break;
+        AO_get_ethernet_address(gprs[3]);
+        return true;
     case NATIVE_ETHER_AO_ADD_MULTI:
-        AO_enable_multicast(gpr(3));
-        break;
+        AO_enable_multicast(gprs[3]);
+        return true;
     case NATIVE_ETHER_AO_DEL_MULTI:
-        AO_disable_multicast(gpr(3));
-        break;
+        AO_disable_multicast(gprs[3]);
+        return true;
     case NATIVE_ETHER_AO_SEND_PACKET:
-        AO_transmit_packet(gpr(3));
-        break;
+        AO_transmit_packet(gprs[3]);
+        return true;
     case NATIVE_ETHER_IRQ:
         EtherIRQ();
-        break;
+        return true;
     case NATIVE_ETHER_INIT:
-        gpr(3) = InitStreamModule((void *)(uintptr_t)gpr(3));
-        break;
+        gprs[3] = InitStreamModule((void *)(uintptr_t)gprs[3]);
+        return true;
     case NATIVE_ETHER_TERM:
         TerminateStreamModule();
-        break;
+        return true;
     case NATIVE_ETHER_OPEN:
-        gpr(3) = ether_open((queue_t *)(uintptr_t)gpr(3), (void *)(uintptr_t)gpr(4), gpr(5), gpr(6), (void*)(uintptr_t)gpr(7));
-        break;
+        gprs[3] = ether_open((queue_t *)(uintptr_t)gprs[3], (void *)(uintptr_t)gprs[4], gprs[5], gprs[6], (void*)(uintptr_t)gprs[7]);
+        return true;
     case NATIVE_ETHER_CLOSE:
-        gpr(3) = ether_close((queue_t *)(uintptr_t)gpr(3), gpr(4), (void *)(uintptr_t)gpr(5));
-        break;
+        gprs[3] = ether_close((queue_t *)(uintptr_t)gprs[3], gprs[4], (void *)(uintptr_t)gprs[5]);
+        return true;
     case NATIVE_ETHER_WPUT:
-        gpr(3) = ether_wput((queue_t *)(uintptr_t)gpr(3), (mblk_t *)(uintptr_t)gpr(4));
-        break;
+        gprs[3] = ether_wput((queue_t *)(uintptr_t)gprs[3], (mblk_t *)(uintptr_t)gprs[4]);
+        return true;
     case NATIVE_ETHER_RSRV:
-        gpr(3) = ether_rsrv((queue_t *)(uintptr_t)gpr(3));
-        break;
+        gprs[3] = ether_rsrv((queue_t *)(uintptr_t)gprs[3]);
+        return true;
     case NATIVE_NQD_SYNC_HOOK:
-        gpr(3) = NQD_sync_hook(gpr(3));
-        break;
+        gprs[3] = NQD_sync_hook(gprs[3]);
+        return true;
     case NATIVE_NQD_UNKNOWN_HOOK:
-        gpr(3) = NQD_unknown_hook(gpr(3));
-        break;
+        gprs[3] = NQD_unknown_hook(gprs[3]);
+        return true;
     case NATIVE_NQD_BITBLT_HOOK:
-        gpr(3) = NQD_bitblt_hook(gpr(3));
-        break;
+        gprs[3] = NQD_bitblt_hook(gprs[3]);
+        return true;
     case NATIVE_NQD_BITBLT:
-        NQD_bitblt(gpr(3));
-        break;
+        NQD_bitblt(gprs[3]);
+        return true;
     case NATIVE_NQD_FILLRECT_HOOK:
-        gpr(3) = NQD_fillrect_hook(gpr(3));
-        break;
+        gprs[3] = NQD_fillrect_hook(gprs[3]);
+        return true;
     case NATIVE_NQD_INVRECT:
-        NQD_invrect(gpr(3));
-        break;
+        NQD_invrect(gprs[3]);
+        return true;
     case NATIVE_NQD_FILLRECT:
-        NQD_fillrect(gpr(3));
-        break;
+        NQD_fillrect(gprs[3]);
+        return true;
     case NATIVE_SERIAL_NOTHING:
     case NATIVE_SERIAL_OPEN:
     case NATIVE_SERIAL_PRIME_IN:
@@ -666,9 +671,41 @@ void sheepshaver_cpu::execute_native_op(uint32 selector)
             SerialNothing, SerialOpen, SerialPrimeIn, SerialPrimeOut,
             SerialControl, SerialStatus, SerialClose
         };
-        gpr(3) = serial_callbacks[selector - NATIVE_SERIAL_NOTHING](gpr(3), gpr(4));
-        break;
+        gprs[3] = serial_callbacks[selector - NATIVE_SERIAL_NOTHING](gprs[3], gprs[4]);
+        return true;
     }
+    case NATIVE_MAKE_EXECUTABLE:
+        MakeExecutable(0, gprs[4], gprs[5]);
+        return true;
+    case NATIVE_CHECK_LOAD_INVOC:
+        check_load_invoc(gprs[3], gprs[4], gprs[5]);
+        return true;
+    case NATIVE_NAMED_CHECK_LOAD_INVOC:
+        named_check_load_invoc(gprs[3], gprs[4], gprs[5]);
+        return true;
+    case NATIVE_GET_RESOURCE:
+    case NATIVE_GET_1_RESOURCE:
+    case NATIVE_GET_IND_RESOURCE:
+    case NATIVE_GET_1_IND_RESOURCE:
+    case NATIVE_R_GET_RESOURCE:
+    case NATIVE_GET_NAMED_RESOURCE:
+    case NATIVE_GET_1_NAMED_RESOURCE:
+        return false;  // needs CPU singleton (execute_ppc)
+    default:
+        printf("FATAL: NATIVE_OP called with bogus selector %d\n", selector);
+        QuitEmulator();
+        return true;
+    }
+}
+
+void sheepshaver_cpu::execute_native_op(uint32 selector)
+{
+    if (execute_native_op_pure(selector, &gpr(0)))
+        return;
+
+    // GET_RESOURCE family re-enters PPC via execute_ppc(old_get_resource);
+    // keep these on the method so they can use `this`.
+    switch (selector) {
     case NATIVE_GET_RESOURCE:
         get_resource(ReadMacInt32(XLM_GET_RESOURCE));
         break;
@@ -684,26 +721,27 @@ void sheepshaver_cpu::execute_native_op(uint32 selector)
     case NATIVE_R_GET_RESOURCE:
         get_resource(ReadMacInt32(XLM_R_GET_RESOURCE));
         break;
-    case NATIVE_MAKE_EXECUTABLE:
-        MakeExecutable(0, gpr(4), gpr(5));
-        break;
-    case NATIVE_CHECK_LOAD_INVOC:
-        check_load_invoc(gpr(3), gpr(4), gpr(5));
-        break;
-    case NATIVE_NAMED_CHECK_LOAD_INVOC:
-        named_check_load_invoc(gpr(3), gpr(4), gpr(5));
-        break;
     case NATIVE_GET_NAMED_RESOURCE:
         get_resource(ReadMacInt32(XLM_GET_NAMED_RESOURCE));
         break;
     case NATIVE_GET_1_NAMED_RESOURCE:
         get_resource(ReadMacInt32(XLM_GET_1_NAMED_RESOURCE));
         break;
-    default:
-        printf("FATAL: NATIVE_OP called with bogus selector %d\n", selector);
-        QuitEmulator();
-        break;
     }
+}
+
+// Platform wrapper: called via g_platform.ppc_native_op from both backends.
+// Non-static so cpu_unicorn_ppc.cpp can register it in its install function.
+// GET_RESOURCE-family selectors are currently stubbed for non-KPX backends —
+// they need execute_ppc(), which Unicorn doesn't yet expose as a reentrant
+// helper.
+extern "C" void kpx_ppc_native_op(uint32_t selector, uint32_t gprs[32])
+{
+    if (execute_native_op_pure(selector, gprs))
+        return;
+    fprintf(stderr, "[KPX] ppc_native_op: selector %u (GET_RESOURCE family) "
+                    "needs execute_ppc; not implemented for non-KPX backends\n",
+            selector);
 }
 
 // Execute 68k routine
@@ -1591,6 +1629,7 @@ extern "C" void cpu_ppc_kpx_install(Platform *p)
     // EmulOp/trap handlers
     p->m68k_emulop_handler = nullptr;  // PPC doesn't use m68k EmulOp traps
     p->ppc_emulop_handler = kpx_ppc_emulop_handler;
+    p->ppc_native_op = kpx_ppc_native_op;
     p->trap_handler = nullptr;
 
     // PPC cursor (CursorDeviceDispatch via Execute68k + SheepMem)

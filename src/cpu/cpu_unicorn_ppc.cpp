@@ -78,16 +78,11 @@ extern "C" void ClearInterruptFlag(uint32_t flag);
 namespace ppc { extern int ROMType; }
 #define ROMTYPE_NEWWORLD 6
 
-// Native helpers invoked by EXEC_NATIVE. DoPatchNameRegistry is in the global
-// namespace; VideoInstallAccel/VideoVBL live in `namespace ppc`.
-extern void DoPatchNameRegistry(void);
+// Native helpers invoked by EmulOp. EmulOp itself is dispatched via
+// g_platform.ppc_emulop_handler; EXEC_NATIVE selectors route through
+// g_platform.ppc_native_op (see KPX's kpx_ppc_native_op).
 struct M68kRegisters;
 namespace ppc {
-    extern void VideoInstallAccel(void);
-    extern void VideoVBL(void);
-    extern int16_t VideoDoDriverIO(uint32_t spaceID, uint32_t commandID,
-                                   uint32_t commandContents, uint32_t commandCode,
-                                   uint32_t commandKind);
     extern void EmulOp(M68kRegisters *r, uint32_t pc, int selector);
 }
 
@@ -134,52 +129,6 @@ static uint32_t g_macos_trampoline = 0;
 #define DR_EMUL_SIZE   0x00010000u
 #define DR_CACHE_BASE  0x69000000u
 #define DR_CACHE_SIZE  0x00080000u
-
-// NativeOp selector table — mirrors enum in kpx/compat/thunks.h. Used for
-// readable EXEC_NATIVE dispatch logs. Only referenced by selector number.
-// The actual handler functions live in thunks_ppc.cpp / video_ppc.cpp / etc.
-enum {
-    NATIVE_PATCH_NAME_REGISTRY = 0,
-    NATIVE_VIDEO_INSTALL_ACCEL,
-    NATIVE_VIDEO_VBL,
-    NATIVE_VIDEO_DO_DRIVER_IO,
-    NATIVE_ETHER_AO_GET_HWADDR,
-    NATIVE_ETHER_AO_ADD_MULTI,
-    NATIVE_ETHER_AO_DEL_MULTI,
-    NATIVE_ETHER_AO_SEND_PACKET,
-    NATIVE_ETHER_IRQ,
-    NATIVE_ETHER_INIT,
-    NATIVE_ETHER_TERM,
-    NATIVE_ETHER_OPEN,
-    NATIVE_ETHER_CLOSE,
-    NATIVE_ETHER_WPUT,
-    NATIVE_ETHER_RSRV,
-    NATIVE_SERIAL_NOTHING,
-    NATIVE_SERIAL_OPEN,
-    NATIVE_SERIAL_PRIME_IN,
-    NATIVE_SERIAL_PRIME_OUT,
-    NATIVE_SERIAL_CONTROL,
-    NATIVE_SERIAL_STATUS,
-    NATIVE_SERIAL_CLOSE,
-    NATIVE_GET_RESOURCE,
-    NATIVE_GET_1_RESOURCE,
-    NATIVE_GET_IND_RESOURCE,
-    NATIVE_GET_1_IND_RESOURCE,
-    NATIVE_R_GET_RESOURCE,
-    NATIVE_MAKE_EXECUTABLE,
-    NATIVE_CHECK_LOAD_INVOC,
-    NATIVE_NQD_SYNC_HOOK,
-    NATIVE_NQD_BITBLT_HOOK,
-    NATIVE_NQD_FILLRECT_HOOK,
-    NATIVE_NQD_UNKNOWN_HOOK,
-    NATIVE_NQD_BITBLT,
-    NATIVE_NQD_INVRECT,
-    NATIVE_NQD_FILLRECT,
-    NATIVE_NAMED_CHECK_LOAD_INVOC,
-    NATIVE_GET_NAMED_RESOURCE,
-    NATIVE_GET_1_NAMED_RESOURCE,
-    NATIVE_OP_MAX
-};
 
 extern "C" {
 
@@ -448,25 +397,17 @@ static void uppc_dispatch_emul_op(uint32_t pc, uint32_t opcode)
     }
 }
 
-// EXEC_NATIVE — dispatch one native-op selector. The individual routines are
-// shared between backends (defined in thunks_ppc.cpp / video_ppc.cpp /
-// ether_ppc.cpp). We mirror the KPX switch here; selectors we don't wire yet
-// are logged as stubs to be triaged during boot debugging.
-//
-// Many of these take GPR inputs / return via GPR3 — matches KPX semantics.
+// EXEC_NATIVE — dispatch one native-op selector through the Platform API.
+// The handlers (NQD_*, Serial*, AO_*, ether_*, VideoDoDriverIO,
+// check_load_invoc, MakeExecutable, etc.) are pure functions that live in KPX
+// but operate on a caller-supplied uint32[32] GPR array. We marshal r0..r31
+// into a flat array, invoke g_platform.ppc_native_op, and marshal the (few)
+// mutated entries back into Unicorn's register file.
 static void uppc_dispatch_native_op(uint32_t pc, uint32_t opcode)
 {
     uint32_t selector = (opcode >> 6) & 0x3F;
     bool return_via_lr = (opcode >> 12) & 1;
 
-    // These handlers all live outside this file. We forward-declare only the
-    // ones we can call without dragging in KPX headers; the rest stay logged
-    // until the debug pass wires them in.
-    //
-    // NOTE: many native ops rely on global state set up by KPX init; they are
-    // expected to be available at this point because cpu_context.cpp runs
-    // InitAll_PPC (which calls PatchROM_PPC) before invoking cpu_init on any
-    // backend.
     static const bool s_trace_native = []() {
         const char* e = std::getenv("MACEMU_PPC_TRACE_TRAP");
         return e && *e && *e != '0';
@@ -476,41 +417,22 @@ static void uppc_dispatch_native_op(uint32_t pc, uint32_t opcode)
                 selector, (int)return_via_lr, pc, rd_lr());
     }
 
-    switch (selector) {
-    case NATIVE_PATCH_NAME_REGISTRY:
-        ::DoPatchNameRegistry();
-        break;
-    case NATIVE_VIDEO_INSTALL_ACCEL:
-        ppc::VideoInstallAccel();
-        break;
-    case NATIVE_VIDEO_VBL:
-        ppc::VideoVBL();
-        break;
-    case NATIVE_VIDEO_DO_DRIVER_IO: {
-        int16_t rv = ppc::VideoDoDriverIO(rd_gpr(3), rd_gpr(4), rd_gpr(5),
-                                          rd_gpr(6), rd_gpr(7));
-        wr_gpr(3, (uint32_t)(int32_t)rv);
-        break;
-    }
-    default:
-        // Remaining selectors (NATIVE_VIDEO_DO_DRIVER_IO, NATIVE_ETHER_*,
-        // NATIVE_SERIAL_*, NATIVE_GET_RESOURCE family, NATIVE_NQD_*) each need
-        // their own argument marshalling. Deferred to the debug pass — log so
-        // the first divergence is visible.
-        fprintf(stderr, "[Unicorn-PPC] EXEC_NATIVE selector=%u (stub) @pc=0x%08x\n",
+    if (g_platform.ppc_native_op) {
+        uint32_t gprs[32];
+        for (int i = 0; i < 32; ++i) gprs[i] = rd_gpr(i);
+        g_platform.ppc_native_op(selector, gprs);
+        for (int i = 0; i < 32; ++i) wr_gpr(i, gprs[i]);
+    } else {
+        fprintf(stderr, "[Unicorn-PPC] EXEC_NATIVE selector=%u: no ppc_native_op registered @pc=0x%08x\n",
                 selector, pc);
-        break;
     }
 
     if (s_trace_native) {
         fprintf(stderr, "[Unicorn-PPC]     EXEC_NATIVE selector=%u done\n", selector);
     }
 
-    // Advance PC per bit 19 of the opcode (FN_field in SheepShaver terms).
     if (return_via_lr)
         wr_pc(rd_lr());
-    // else: helper already advanced env->nip to pc+4.
-    (void)return_via_lr;
 }
 
 static void uppc_mac_emulop_cb(struct uc_struct *uc, uint32_t pc, uint32_t opcode)
@@ -1731,6 +1653,12 @@ static void uppc_ppc_emulop_handler(void *r68k_regs, uint32_t pc, int selector)
 {
     ppc::EmulOp(static_cast<M68kRegisters *>(r68k_regs), pc, selector);
 }
+
+// EXEC_NATIVE dispatch — reuse KPX's backend-agnostic pure dispatcher, which
+// operates on the GPR array we marshal in uppc_dispatch_native_op. The handler
+// body (NQD_*, ether_*, Serial*, VideoDoDriverIO, MakeExecutable,
+// check_load_invoc, etc.) lives in libkpx_interp.a, linked unconditionally.
+extern "C" void kpx_ppc_native_op(uint32_t selector, uint32_t gprs[32]);
 static void uppc_ppc_cursor_move(uint32_t /*mouse_base*/, int /*x*/, int /*y*/)
 {
     // Cursor update requires Execute68k of CursorDeviceDispatch — deferred to
@@ -1784,6 +1712,7 @@ void cpu_unicorn_ppc_install(Platform *p)
     p->make_emulop = uppc_make_emulop;
     p->m68k_emulop_handler = nullptr;
     p->ppc_emulop_handler = uppc_ppc_emulop_handler;
+    p->ppc_native_op = kpx_ppc_native_op;
     p->trap_handler = nullptr;
     p->ppc_cursor_move = uppc_ppc_cursor_move;
 }
