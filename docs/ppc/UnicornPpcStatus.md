@@ -1,6 +1,6 @@
 # Unicorn-PPC backend — session handoff
 
-Last updated: 2026-04-19 (branch `unicorn-ppc`, zero-on-skip unlock session).
+Last updated: 2026-04-19 (branch `unicorn-ppc`, guest-OS-renders proof + A-trap target).
 
 This is a rolling status doc for the Unicorn PPC port. Append to it, don't
 rewrite it. The goal: a next-session reader should be able to pick up the
@@ -395,6 +395,53 @@ tracer with `g_emulop_count > 0` so genuine r1-corruption stands out.
 3. **Clamp r1 at skip time**: if `r1 < 0x68ffe000` when entering a skip,
    reload r1 from a known-good value (e.g. the KernelData base). Crude
    but would flush out whether r1-drift is the only mechanism.
+
+### 2026-04-19 late-5 — **proof of life: guest OS actually renders**
+
+Launched `mac-phoenix` with UI (port 8000) and `MACEMU_PPC_TICK_PERIOD_SCALE=30`,
+polled `/api/screenshot` mid-boot. The guest emitted:
+
+- Classic Mac OS splash with "Starting Up..." progress bar
+- Type 10 ("Unexpected exception") bomb dialog **rendered on top of the
+  guest splash**, with proper font, icon, and Restart button
+
+This proves the Unicorn PPC backend isn't just executing instructions —
+it's running enough of Mac OS 7.5.5 to render real UI through the
+framebuffer. The Type 10 is the downstream crash we've been chasing
+(walking 68k vector table at `0x28 → 0x60 → ... → 0x134` ending at
+`insn=deadbeef`).
+
+**A-trap (Line A, vector 0x28) is the crash source.** The 68k
+emulator on PPC dispatches every Mac toolbox call through vector 0x28.
+Something initializes `@0x28` incorrectly (or not at all) so when the
+first toolbox call after boot-block-loaded fires, it vectors to
+garbage, bombs to vector 0x134 which is `deadbeef`, and raises Type 10.
+
+At SCALE=30 the emulator does NOT bail — no progress-stall fires, CPU
+stays running indefinitely — but `boot_phase` never advances past
+`"boot blocks"` and DiskPrime throughput drops to ~2 ops/sec (vs ~100
+ops/sec at SCALE=10). The bomb dialog appears at `boot_elapsed≈90s`
+and the CPU keeps churning afterward (probably the bomb's input-wait
+loop).
+
+Reach rates observed this session:
+- **SCALE=10, 13 runs**: 0/13 reached Finder via UI (all stall at boot blocks)
+- **SCALE=10, batch earlier**: 1/15 reached Desktop in full (+30s)
+- **SCALE=30, 1 run**: no stall, splash + bomb dialog rendered at ~90s
+
+Stability picture: zero-on-skip is a real unlock (guest renders) but
+nondeterminism is severe. The user's intuition — "slower more stable"
+— is correct in the "no bail" sense, but slower doesn't cross the
+A-trap boundary any better than faster.
+
+**Next session focus (prompt below)**:
+1. Pin down the A-trap vector: what writes `@0x28`, `@0x134` etc. on
+   KPX and when. Likely an EmulOp dispatch that Unicorn's pure
+   dispatcher returns false for, causing the 68k vector table to stay
+   uninitialized.
+2. Drive stability up before more feature work: either the config-field
+   plumbing for `ppc_tick_scale` or a default-when-unicorn so UI launch
+   doesn't require env-var dance.
 
 ## Real blocker: 0x500100xx lomem stall
 
