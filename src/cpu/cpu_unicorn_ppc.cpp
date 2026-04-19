@@ -1490,7 +1490,23 @@ static void uppc_cpu_execute_fast(void)
     auto last_progress_ts = std::chrono::steady_clock::now();
     uint64_t iters_since_progress = 0;
     uint64_t irqs_since_progress = 0;
-    constexpr int kProgressStallBailMs = 10000;
+    constexpr int kProgressStallBailMs = 5000;
+    // Concentrated-skip bail: catches 2–3 PC alternating unmapped-write loops
+    // where consecutive_same_pc resets each toggle. If we've silently skipped
+    // many stores confined to very few PCs, something is wedged (usually a
+    // stack-push loop with a corrupt r1/r21) — bail so the state surfaces.
+    constexpr uint64_t kConcentratedSkipTotal = 200;
+    constexpr size_t kConcentratedSkipMaxPcs = 6;
+    // Block-PC window watchdog: catches tight loops that DO fire EmulOps
+    // (so progress-stall never trips) but stay inside a narrow code window.
+    // Checks the always-on 32-entry g_uppc_last_block_pcs ring: if every
+    // recent block-entry PC falls within a kBlockWindowBytes window for
+    // kBlockWindowStallMs wall-ms, bail. Boot-block loading legitimately
+    // cycles tightly, but not for many seconds — KPX crosses the milestone
+    // in <1 s.
+    constexpr uint32_t kBlockWindowBytes = 0x1000;  // 4 KB
+    constexpr int kBlockWindowStallMs = 8000;
+    auto last_block_window_break_ts = std::chrono::steady_clock::now();
     // Yield periodically so IRQs get polled even when the guest sits in a
     // pure-PPC code stretch without EmulOp dispatches. Without this, a tight
     // PPC loop (e.g. the NK idle/wait path) starves pending_irq and the 68k
@@ -1583,14 +1599,40 @@ static void uppc_cpu_execute_fast(void)
                 consecutive_same_pc = 1;
             }
 
+            // Concentrated-skip bail. Catches 2–3 PC alternating loops that
+            // consecutive_same_pc can't see (each toggle resets it).
+            if (skipped >= kConcentratedSkipTotal &&
+                skip_counts.size() <= kConcentratedSkipMaxPcs) {
+                fprintf(stderr,
+                        "[Unicorn-PPC] concentrated-skip bail: %llu skips "
+                        "across %zu distinct PCs — tight unmapped-write loop\n",
+                        (unsigned long long)skipped, skip_counts.size());
+                for (auto &kv : skip_counts) {
+                    uint32_t ins = 0;
+                    uc_mem_read(g_uc, kv.first, &ins, 4);
+                    ins = __builtin_bswap32(ins);
+                    fprintf(stderr, "  pc=0x%08x insn=%08x hits=%llu\n",
+                            kv.first, ins, (unsigned long long)kv.second);
+                }
+                fprintf(stderr,
+                        "  r1=%08x r21=%08x lr=%08x ctr=%08x cr=%08x\n",
+                        rd_gpr(1), rd_gpr(21), rd_lr(), rd_ctr(), rd_cr());
+                for (int i = 0; i < 32; ++i) {
+                    fprintf(stderr, "  r%-2d=%08x%s", i, rd_gpr(i),
+                            (i % 4 == 3) ? "\n" : "");
+                }
+                break;
+            }
+
             if (!uppc_skip_memop_at(after)) {
                 fprintf(stderr, "[Unicorn-PPC] unknown memop at pc=0x%08x — bailing\n", after);
                 break;
             }
             stuck_count = 0;
-            continue;
-        }
-        if (err != UC_ERR_OK) {
+            // Fall through to progress watchdog below — don't `continue` past
+            // it, otherwise unmapped-walk loops without EmulOp advance are
+            // never bailed.
+        } else if (err != UC_ERR_OK) {
             uint32_t after = rd_pc();
             fprintf(stderr, "[Unicorn-PPC] uc_emu_start err=%s pc=0x%08x\n",
                     uc_strerror(err), after);
@@ -1664,6 +1706,52 @@ static void uppc_cpu_execute_fast(void)
                     }
                 }
                 break;
+            }
+        }
+
+        // Block-PC window watchdog. EmulOps can keep advancing (e.g. CHECKLOAD
+        // spinning in boot-block-load) so progress-stall never trips — but if
+        // every recent block-entry PC sits inside a 4 KB window for many
+        // seconds, we're in a localized loop that won't exit. Snapshot the
+        // always-on ring non-atomically; a torn read at worst delays the bail
+        // by one iteration.
+        {
+            uint32_t lo = UINT32_MAX, hi = 0;
+            int non_zero = 0;
+            for (int i = 0; i < 32; ++i) {
+                uint32_t p = g_uppc_last_block_pcs[i];
+                if (!p) continue;
+                non_zero++;
+                if (p < lo) lo = p;
+                if (p > hi) hi = p;
+            }
+            bool window_tight = (non_zero >= 16) && (hi - lo < kBlockWindowBytes);
+            if (!window_tight) {
+                last_block_window_break_ts = std::chrono::steady_clock::now();
+            } else {
+                auto tight_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - last_block_window_break_ts).count();
+                if (tight_ms >= kBlockWindowStallMs) {
+                    fprintf(stderr,
+                            "[Unicorn-PPC] block-window stall: last 32 block "
+                            "PCs span [%08x..%08x] (%u bytes) for %lldms — "
+                            "bailing (emulops=%llu pc=%08x lr=%08x)\n",
+                            lo, hi, hi - lo, (long long)tight_ms,
+                            (unsigned long long)g_emulop_count, rd_pc(), rd_lr());
+                    fprintf(stderr, "  recent block PCs (ring, unordered):\n   ");
+                    for (int i = 0; i < 32; ++i) {
+                        fprintf(stderr, " %08x", g_uppc_last_block_pcs[i]);
+                        if (i == 15) fprintf(stderr, "\n   ");
+                    }
+                    fprintf(stderr, "\n");
+                    for (int i = 0; i < 32; ++i) {
+                        fprintf(stderr, "  r%-2d=%08x%s", i, rd_gpr(i),
+                                (i % 4 == 3) ? "\n" : "");
+                    }
+                    fprintf(stderr, "  ctr=%08x cr=%08x xer=%08x\n",
+                            rd_ctr(), rd_cr(), rd_xer());
+                    break;
+                }
             }
         }
 

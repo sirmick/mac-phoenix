@@ -150,6 +150,92 @@ as bad as SCALE=1.
 blocking boot. The remaining work is purely around IRQ scheduling
 (and, now, whatever downstream issue causes the r1→0 corruption).
 
+Long-run (300 s timeout) at SCALE=10, `/tmp/u_long1.log`: this run hit
+the early-stall mode. It reached "Loading boot blocks (resource #92)"
+at 1.86 s with 800 successful DiskPrime reads, then locked into a tight
+loop at `pc=0x504613d0` (`sthu r4, -2(r1)`) with `r1=0x00000001`
+writing to `0xffffffff` and at `pc=0x50461174` (`stw r21, 0(r21)`) with
+`r21` also near `0xffffffff`. The unmapped-write skip handler silently
+consumes each store so the loop never faults — it just burns CPU until
+the auto-exit timer fires. Boot state never advanced past "Loading boot
+blocks" for the remaining 298 s.
+
+Important: the *early-stall* fault at `pc=0x504613d0` is structurally
+the same r1→near-zero corruption already flagged as the post-SCALE=10
+"downstream stall" (`pc=0x5046f90c`). Different landing PC, same
+underlying bug — the stack pointer comes into a small helper routine
+already tiny, the routine's prologue pushes a few halfwords, and r1
+underflows past zero. So the "nondeterminism" likely isn't two
+separate bugs — it's one bug that's reached at different times
+depending on IRQ phase.
+
+**Next-session lever**: the unmapped-write skip handler hides the
+fault. Consider gating the skip to addresses ≥ a small threshold
+(e.g. 16 or 256) or emitting a one-shot abort when a *store* targets
+`0xffffff??` so the stall surfaces at the first symptom instead of
+looping silently. That would let the R1ZERO tracer capture the actual
+entry path (LR chain at the moment r1 becomes tiny) rather than the
+steady-state loop.
+
+### 2026-04-19 late-2 — stall watchdogs added; CR2-corruption signature
+
+Three watchdog changes in `execute_fast` so silent SCALE=10 spins
+surface with a register dump instead of eating the whole timeout:
+
+- **Moved progress-stall watchdog before the UNMAPPED `continue`.** Was
+  a latent bug: unmapped-walk loops bypassed the watchdog entirely.
+  Threshold also lowered 10 s → 5 s.
+- **Concentrated-skip bail**: if `skipped ≥ 200` and distinct skip-PC
+  set `≤ 6`, bail. Catches 2–3 PC alternating unmapped-write loops
+  (e.g. `sthu r4, -2(r1)` + `stw r21, 0(r21)`) that `consecutive_same_pc`
+  can't see because each toggle resets it.
+- **Block-window stall bail**: if all 32 entries in `g_uppc_last_block_pcs`
+  span `< 4 KB` for 8 s, bail. Catches tight loops that keep firing
+  EmulOps (so progress-stall doesn't trip) but stay in a localized
+  region of PPC code.
+
+Across 5 SCALE=10 runs at the new 30 s timeout:
+
+| n | fate | DiskPrime | notes |
+|---|------|-----------|-------|
+| 1 | 30 s timeout, no bail | #800 | wide-surface EmulOp cycling; window > 4 KB |
+| 2 | **progress-stall bail** | — | 70 251 skips, pc=0x504900fc |
+| 3 | **progress-stall bail** | — | 70 296 skips, pc=0x504900fc |
+| 4 | 30 s timeout, no bail | #200 | wide-surface EmulOp cycling |
+| 5 | 30 s timeout, no bail | #450 | wide-surface EmulOp cycling |
+
+One earlier sample also hit the **concentrated-skip bail**; its dump
+is the best clue to the underlying bug so far:
+
+```
+concentrated-skip bail: 200 skips across 4 distinct PCs
+  pc=0x50465f28 insn=80830000 (lwz r4, 0(r3))  hits=99
+  pc=0x50492350 insn=7e52d82e (lwzx r18,r18,r27) hits=99
+  r3 =c0ffa2ea  r18=c0ff944e  r27=00004240
+  r1 =05ff897e  r21=06000190  r31=68fff000
+```
+
+`r3 = 0xc0ffa2ea` and `r18 = 0xc0ff944e` — both point into the
+`0xc0000000` range, which is **unmapped** in REAL_ADDRESSING (VMBaseDiff=0).
+Meanwhile `r31 = 0x68fff000` is correctly inside the KernelData mapping.
+The pattern looks like a KernelData-ish pointer where the top nibble
+got flipped `0x68 → 0xc0` (XOR `0xa8000000`) — consistent with a
+CR-flag-driven conditional branch using poisoned CR2 state and picking
+the wrong pointer-computation arm. This is the first concrete
+downstream artifact of the early-IRQ-poisons-CR2 theory described
+above.
+
+**Unified picture**: every SCALE=10 run plateaus at `"Loading boot
+blocks (resource #92)"`. Three observed failure modes, all caused by
+the same root (early IRQ lands in the wrong CR2 state):
+1. **Unmapped-write loop** (progress-stall bail) — r1 or r21 corrupted.
+2. **Unmapped-read loop** (concentrated-skip bail) — r3/r18 corrupted.
+3. **Wide-surface EmulOp cycling** (no bail yet) — DiskPrime keeps
+   firing for the same boot-block-load sector indefinitely. Catching
+   this cleanly probably wants a *boot-phase-advance* watchdog
+   (e.g. bail if the boot phase hasn't advanced in 15 s while
+   DiskPrime count is still incrementing).
+
 Diagnostic instrumentation added this session (still in tree):
 
 - `src/core/disk.cpp` — `DiskPrime` unconditionally logs entry + result
