@@ -42,14 +42,32 @@ static inline FILE* ppc_trace_stream_() {
     return fp;
 }
 
+static inline uint64_t& ppc_trace_seq_() {
+    static uint64_t seq = 0;
+    return seq;
+}
+
 static inline void ppc_trace_emul_op(const PpcBoundaryState& s) {
     FILE* fp = ppc_trace_stream_();
     if (!fp) return;
-    static uint64_t seq = 0;
-    ++seq;
+    ++ppc_trace_seq_();
     std::fprintf(fp,
         "%08llu EMULOP pc=%08x sel=%02x cr=%08x xer=%08x lr=%08x ctr=%08x",
-        (unsigned long long)seq, s.pc, s.selector, s.cr, s.xer, s.lr, s.ctr);
+        (unsigned long long)ppc_trace_seq_(), s.pc, s.selector, s.cr, s.xer, s.lr, s.ctr);
+    for (int i = 0; i < 32; ++i)
+        std::fprintf(fp, " r%d=%08x", i, s.gpr[i]);
+    std::fputc('\n', fp);
+}
+
+// Emit post-handler state for the most recently dispatched EmulOp. Uses the
+// same sequence number as its EMULOP pre-state line so pairs align when the
+// two backends' traces are diffed.
+static inline void ppc_trace_emul_op_post(const PpcBoundaryState& s) {
+    FILE* fp = ppc_trace_stream_();
+    if (!fp) return;
+    std::fprintf(fp,
+        "%08llu POST   pc=%08x sel=%02x cr=%08x xer=%08x lr=%08x ctr=%08x",
+        (unsigned long long)ppc_trace_seq_(), s.pc, s.selector, s.cr, s.xer, s.lr, s.ctr);
     for (int i = 0; i < 32; ++i)
         std::fprintf(fp, " r%d=%08x", i, s.gpr[i]);
     std::fputc('\n', fp);

@@ -431,6 +431,18 @@ static void uppc_dispatch_emul_op(uint32_t pc, uint32_t opcode)
     wr_gpr(1, r68.a[7]);
 
     WriteMac32(XLM_RUN_MODE, MODE_68K);
+
+    {
+        PpcBoundaryState ts;
+        ts.pc = pc;
+        ts.selector = emul_op;
+        ts.cr = rd_cr();
+        ts.xer = rd_xer();
+        ts.lr = rd_lr();
+        ts.ctr = rd_ctr();
+        for (int i = 0; i < 32; ++i) ts.gpr[i] = rd_gpr(i);
+        ppc_trace_emul_op_post(ts);
+    }
 }
 
 // EXEC_NATIVE — dispatch one native-op selector. The individual routines are

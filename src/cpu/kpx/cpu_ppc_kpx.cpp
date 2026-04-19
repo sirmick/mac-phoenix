@@ -566,6 +566,18 @@ void sheepshaver_cpu::execute_emul_op(uint32 emul_op)
         gpr(16 + i) = r68.a[i];
     gpr(1) = r68.a[7];
     WriteMacInt32(XLM_RUN_MODE, MODE_68K);
+
+    {
+        PpcBoundaryState ts;
+        ts.pc = pc() - 4;
+        ts.selector = emul_op;
+        ts.cr = get_cr();
+        ts.xer = get_xer();
+        ts.lr = lr();
+        ts.ctr = ctr();
+        for (int i = 0; i < 32; ++i) ts.gpr[i] = gpr(i);
+        ppc_trace_emul_op_post(ts);
+    }
 }
 
 void sheepshaver_cpu::call_execute_native_op(powerpc_cpu *cpu, uint32 selector)
