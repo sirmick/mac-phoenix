@@ -63,6 +63,13 @@ extern uintptr_t SignalStackBase(void);
 // Timer helper from src/core/timer_unix.cpp, shared with KPX tick thread.
 extern uint64_t GetTicks_usec(void);
 
+// Framebuffer accessors — defined in src/cpu/kpx/video_ppc.cpp. Needed so we
+// can map the framebuffer region into Unicorn's guest memory (lives above
+// SheepMem, outside the SheepMem mapping).
+extern "C" uint8_t *video_ppc_get_framebuffer_host();
+extern "C" uint32_t video_ppc_get_framebuffer_size();
+namespace ppc { extern uint32_t screen_base; }  // Mac address, set by VideoInit
+
 // Interrupt-flag plumbing (uae_wrapper.cpp). INTFLAG_VIA is the 60Hz tick
 // signal the 68k emulator and nanokernel both watch.
 extern "C" void SetInterruptFlag(uint32_t flag);
@@ -175,6 +182,18 @@ static inline void     WriteMac16(uint32_t addr, uint16_t v) { uppc_mem_write_wo
 static uc_engine   *g_uc = nullptr;
 static volatile bool g_stop_requested = false;  // parent asked us to stop
 static std::atomic<bool> g_pending_irq{false};  // tick thread set; main loop handles
+// Nesting depth of uc_emu_start. Incremented by the outer execute_fast loop
+// and by the recursive execute_ppc / execute_68k callouts. The cooperative
+// IRQ-stop in uppc_mac_emulop_cb must only fire at the outermost level —
+// otherwise a pending tick interrupts a nested Execute68k (e.g. FindLibSymbol's
+// GetSharedLibrary → CFMDispatch trap proc) mid-dispatch, uc_emu_stop unwinds
+// before EXEC_RETURN, and the caller reads back corrupted D0/A-regs.
+static int g_emu_nest_depth = 0;
+// Set when the EXEC_RETURN EmulOp fires; consumed by nested execute_ppc to
+// distinguish a clean return ("function done") from a spurious uc_emu_stop
+// (tick thread IRQ kick that must not unwind the caller). Without this,
+// tick-thread stops while nested abandon Execute68k mid-dispatch.
+static bool g_exec_return_seen = false;
 static std::atomic<bool> g_tick_thread_running{false};
 static bool g_dr_probes_remapped = false;
 static uint64_t g_emulop_count = 0;
@@ -289,7 +308,12 @@ static bool uppc_skip_memop_at(uint32_t pc)
     }
 
     if (mode == MD_U || mode == MD_UX) wr_gpr(ra, addr);
-    if (transfer == TR_LOAD) wr_gpr(rd, 0);
+    // Leave dest GPR untouched on failed load. KPX's SIGSEGV handler returns
+    // SKIP_INSTRUCTION which advances the host PC past a faulting x86 MOV —
+    // the PPC-level dest register is whatever the interpreter's host reg held
+    // before. Zeroing it here breaks tight 68k probe loops that stash probe
+    // results in a caller-saved register across iterations (e.g. the
+    // 0x50461e94 stb loop that relies on r4 monotonically advancing).
 
     wr_pc(pc + 4);
     return true;
@@ -438,7 +462,20 @@ static void uppc_dispatch_native_op(uint32_t pc, uint32_t opcode)
 static void uppc_mac_emulop_cb(struct uc_struct *uc, uint32_t pc, uint32_t opcode)
 {
     g_emulop_count++;
+
     uint32_t sel = opcode & EMUL_OP_SEL_MASK;
+
+    // Optional per-EmulOp trace — emits a line for every dispatch. Use with
+    // `| tail` to see the last N before a stall / progress-watchdog bail.
+    static const bool s_trace_emulop = []() {
+        const char* e = std::getenv("MACEMU_PPC_TRACE_EMULOP");
+        return e && *e && *e != '0';
+    }();
+    if (s_trace_emulop) {
+        fprintf(stderr, "[EmulOp] #%llu pc=0x%08x opcode=0x%08x sel=%u lr=0x%08x\n",
+                (unsigned long long)g_emulop_count, pc, opcode, sel, rd_lr());
+    }
+
     switch (sel) {
     case 0: // EMUL_RETURN — QuitEmulator
         fprintf(stderr, "[Unicorn-PPC] EmulOp QUIT @pc=0x%08x\n", pc);
@@ -447,15 +484,18 @@ static void uppc_mac_emulop_cb(struct uc_struct *uc, uint32_t pc, uint32_t opcod
         return;
 
     case 1: // EXEC_RETURN — sentinel set by interrupt()/execute_ppc() in LR
+        g_exec_return_seen = true;
         uc_emu_stop(uc);
         return;
 
     case 2: // EXEC_NATIVE
         uppc_dispatch_native_op(pc, opcode);
+        if (g_emu_nest_depth <= 1 && g_pending_irq.load()) uc_emu_stop(uc);
         return;
 
     default: // EMUL_OP (selector = (opcode & 0x3f) - 3)
         uppc_dispatch_emul_op(pc, opcode);
+        if (g_emu_nest_depth <= 1 && g_pending_irq.load()) uc_emu_stop(uc);
         return;
     }
 }
@@ -762,7 +802,7 @@ static bool uppc_cpu_init(void)
         static auto lowmem_wp_cb = [](uc_engine *uc, uc_mem_type, uint64_t addr,
                                       int size, int64_t value, void *) -> void {
             static uint64_t n = 0;
-            if (n < 256) {
+            if (n < 32) {
                 uint32_t pc = 0, lr = 0;
                 uc_reg_read(uc, UC_PPC_REG_PC, &pc);
                 uc_reg_read(uc, UC_PPC_REG_LR, &lr);
@@ -922,6 +962,18 @@ static bool uppc_cpu_init(void)
                     ROMBaseHost, "ROM"))
         goto fail;
 
+    // Signal stack — 64KB at ROMEnd (0x50500000..0x50510000). Nanokernel IRQ
+    // entry switches to this stack via KPX kpx_set_signal_stack(ROMEnd). Without
+    // mapping it, the first stw at r1+offset faults UC_ERR_WRITE_UNMAPPED, the
+    // unmapped-skip handler advances past it but corrupts the NK's saved-state
+    // push, and subsequent interrupts wedge on the half-built frame.
+    // Host mapped this as part of the same mmap() in cpu_context.cpp (ROM area
+    // size = ROM_AREA_SIZE + SIG_STACK_SIZE), so the pages already exist.
+    if (!map_region(g_uc, ROMBase + 0x500000, 0x10000,
+                    UC_PROT_READ | UC_PROT_WRITE,
+                    ROMBaseHost + 0x500000, "SigStack"))
+        goto fail;
+
     // KernelData aliases — single SHM, mapped at two Mac addresses.
     if (!map_region(g_uc, 0x68ffe000, 0x2000,
                     UC_PROT_READ | UC_PROT_WRITE,
@@ -951,6 +1003,31 @@ static bool uppc_cpu_init(void)
         }
     }
 
+    // Framebuffer — vm_acquire'd in VideoInit (called from InitAll_PPC, which
+    // ran in step 7 of cpu_context.cpp:init_ppc, before this cpu_init hook).
+    // Lives at screen_base (typically 0x10080000, immediately above SheepMem).
+    // QuickDraw issues ~1M stw/lwz ops per frame against this region; without
+    // an explicit mapping they fault as UC_ERR_UNMAPPED and the unmapped-skip
+    // handler spins, pegging CPU and never making progress.
+    // Round up to page size so uc_mem_map accepts the length.
+    {
+        uint8_t *fb_host = video_ppc_get_framebuffer_host();
+        uint32_t fb_size = video_ppc_get_framebuffer_size();
+        uint32_t fb_mac = ppc::screen_base;
+        if (fb_host && fb_size && fb_mac) {
+            constexpr size_t PAGE = 0x1000;
+            size_t mapped_size = (fb_size + PAGE - 1) & ~(PAGE - 1);
+            if (!map_region(g_uc, fb_mac, mapped_size,
+                            UC_PROT_READ | UC_PROT_WRITE,
+                            (void *)fb_host, "Framebuffer"))
+                goto fail;
+        } else {
+            fprintf(stderr, "[Unicorn-PPC] WARNING: framebuffer not yet allocated "
+                            "(host=%p size=%u screen_base=%08x) — QuickDraw writes will fault\n",
+                    fb_host, fb_size, fb_mac);
+        }
+    }
+
     // Permanently reserve the EXEC_RETURN trampoline slot NOW, before any
     // SheepVar lifetimes can intervene. Reserving later during execute_macos_code
     // would place us in the middle of the stack, where subsequent SheepVar
@@ -968,6 +1045,35 @@ static bool uppc_cpu_init(void)
     // let the unmapped-memory hook auto-map zero pages on first touch,
     // matching KPX's "read returns 0, write is a no-op" shape. They're then
     // remapped to real RW RAM after the first IRQ (uppc_remap_dr_probes_once).
+
+    // Grand Central I/O controller (0xf3000000..0xf3020000). The 68k serial /
+    // SCC / MACE drivers poll registers here (0xf3012000 = SCCA, 0xf3016000 =
+    // SCCB, 0xf3018000 = MACE ENET). KPX lets these raw stores/loads SIGSEGV
+    // and silently skips the host instruction — the guest never blocks because
+    // each skip drains one instruction per fault. Under Unicorn each fault
+    // costs a full uc_emu_start teardown + unmapped-skip, and the tightloop
+    // polling SCC-status-until-ready never progresses in wall time.
+    // Stub it as MMIO: reads return 0 (driver sees "not busy / no data"),
+    // writes are discarded. Matches SheepShaver's 68k-backend dummy I/O map.
+    {
+        static auto gc_read_cb = [](uc_engine *, uint64_t, unsigned, void *) -> uint64_t {
+            return 0;
+        };
+        static auto gc_write_cb = [](uc_engine *, uint64_t, unsigned, uint64_t, void *) {
+        };
+        uc_err gc_err = uc_mmio_map(g_uc, 0xf3000000, 0x20000,
+                                    (uc_cb_mmio_read_t)(uint64_t (*)(uc_engine *, uint64_t, unsigned, void *))gc_read_cb,
+                                    nullptr,
+                                    (uc_cb_mmio_write_t)(void (*)(uc_engine *, uint64_t, unsigned, uint64_t, void *))gc_write_cb,
+                                    nullptr);
+        if (gc_err != UC_ERR_OK) {
+            fprintf(stderr, "[Unicorn-PPC] uc_mmio_map(GrandCentral) failed: %s\n",
+                    uc_strerror(gc_err));
+            goto fail;
+        }
+        fprintf(stderr, "[Unicorn-PPC] mapped %-12s mac=0x%08x size=0x%08x (MMIO stub)\n",
+                "GrandCentral", 0xf3000000, 0x20000);
+    }
 
     // ---- Diagnostics: dump instructions around known divergence points ------
     {
@@ -1126,20 +1232,51 @@ static void uppc_interrupt(uint32_t entry)
     WriteMac32(ksave + 0x16c, rd_gpr(13));
 
     wr_gpr(1, ppc::KernelDataAddr);
+    wr_gpr(6, ksave);
     wr_gpr(7, ReadMac32(KERNEL_DATA_BASE + 0x660));
     wr_gpr(8, 0);
     wr_lr(trampoline);
     wr_gpr(10, trampoline);
     wr_gpr(12, trampoline);
     wr_gpr(13, rd_cr());
-    wr_gpr(11, 0xf072);
 
-    uint32_t cr = rd_cr();
-    wr_cr((0xf072 & 0x0fff0000u) | (cr & ~0x0fff0000u));
+    {
+        uint32_t x7 = rd_gpr(7);
+        uint32_t rot = (x7 << 8) | (x7 >> 24);
+        uint32_t r7_new = (rot & 0x80000000u) | (x7 & ~0x80000000u);
+        wr_gpr(7, r7_new);
+
+        uint32_t xer = 0;
+        uc_reg_read(g_uc, UC_PPC_REG_XER, &xer);
+        uint32_t cr_now = rd_cr();
+        uint32_t cr0 = 0;
+        int32_t sv = (int32_t)r7_new;
+        if (sv < 0)      cr0 |= 0x8;
+        else if (sv > 0) cr0 |= 0x4;
+        else             cr0 |= 0x2;
+        if (xer & 0x80000000u) cr0 |= 0x1;
+        wr_cr((cr_now & 0x0fffffffu) | (cr0 << 28));
+    }
+
+    wr_gpr(11, 0xf072);
+    {
+        uint32_t cr = rd_cr();
+        wr_cr((rd_gpr(11) & 0x0fff0000u) | (cr & ~0x0fff0000u));
+    }
+
+    if (ppc_trace_stream_()) {
+        fprintf(ppc_trace_stream_(),
+                "%08llu IRQ    entry=%08x saved_pc=%08x saved_cr=%08x\n",
+                (unsigned long long)ppc_trace_seq_(), entry, saved_pc, rd_gpr(13));
+    }
 
     // Run nanokernel IRQ handler; returns when EXEC_RETURN fires.
+    // Bump nesting depth so the tick thread and EmulOp-boundary stop guards
+    // know not to interrupt us mid-handler.
     wr_pc(entry);
+    ++g_emu_nest_depth;
     uc_err err = uc_emu_start(g_uc, entry, 0, 0, 0);
+    --g_emu_nest_depth;
     if (err != UC_ERR_OK) {
         fprintf(stderr, "[Unicorn-PPC] interrupt(0x%08x) uc_emu_start err=%s pc=0x%08x\n",
                 entry, uc_strerror(err), rd_pc());
@@ -1155,16 +1292,39 @@ static void uppc_interrupt(uint32_t entry)
 // Decides whether to flag the 68k emulator or invoke the nanokernel handler.
 static void uppc_handle_interrupt(void)
 {
-    if ((int32_t)ReadMac32(XLM_IRQ_NEST) > 0)
+    static const bool s_trace_irq = [](){
+        const char* e = std::getenv("MACEMU_PPC_TRACE_IRQ");
+        return e && *e && *e != '0';
+    }();
+
+    int32_t nest = (int32_t)ReadMac32(XLM_IRQ_NEST);
+    if (nest > 0) {
+        if (s_trace_irq) {
+            fprintf(stderr, "[IRQ] skip (nest=%d) pc=%08x\n", nest, rd_pc());
+        }
         return;
+    }
 
     uint32_t mode = ReadMac32(XLM_RUN_MODE);
 
     switch (mode) {
-    case MODE_68K:
+    case MODE_68K: {
+        uint32_t or_mask = ReadMac32(KERNEL_DATA_BASE + 0x674);
+        uint32_t cr_before = rd_cr();
         WriteMac16(ReadMac32(KERNEL_DATA_BASE + 0x67c), 1);
-        wr_cr(rd_cr() | ReadMac32(KERNEL_DATA_BASE + 0x674));
+        wr_cr(cr_before | or_mask);
+        if (s_trace_irq) {
+            fprintf(stderr,
+                    "[IRQ] MODE_68K pc=%08x cr_before=%08x or_mask=%08x cr_after=%08x r22=%08x r24=%08x\n",
+                    rd_pc(), cr_before, or_mask, rd_cr(), rd_gpr(22), rd_gpr(24));
+        }
+        if (ppc_trace_stream_()) {
+            fprintf(ppc_trace_stream_(),
+                    "%08llu MODE68K cr_before=%08x or_mask=%08x cr_after=%08x\n",
+                    (unsigned long long)ppc_trace_seq_(), cr_before, or_mask, rd_cr());
+        }
         break;
+    }
 
     case MODE_NATIVE:
         if (rd_gpr(1) != ppc::KernelDataAddr) {
@@ -1172,13 +1332,17 @@ static void uppc_handle_interrupt(void)
             uint32_t kframe = ReadMac32(KERNEL_DATA_BASE + 0x658) + 0xdc;
             WriteMac32(kframe, ReadMac32(kframe) | ReadMac32(KERNEL_DATA_BASE + 0x674));
 
-            // Disable nested IRQs while running nanokernel handler, then fire.
-            WriteMac32(XLM_IRQ_NEST, 1);
+            // Mirror KPX HandleInterrupt: increment XLM_IRQ_NEST (DisableInterrupt
+            // semantics), run the NK handler, and let the ROM patch at 0x318000
+            // decrement nest on the handler's return path. Do NOT reset nest to 0
+            // unconditionally — that clobbers accumulated nest levels from ROM
+            // patches (e.g. MixedMode entry at 0x36fa00) and causes HandleInterrupt
+            // to re-fire during partial-handler execution.
+            WriteMac32(XLM_IRQ_NEST, (int32_t)ReadMac32(XLM_IRQ_NEST) + 1);
             uint32_t entry = (ppc::ROMType == ROMTYPE_NEWWORLD)
                 ? ppc::ROMBase + 0x312b1c
                 : ppc::ROMBase + 0x312a3c;
             uppc_interrupt(entry);
-            WriteMac32(XLM_IRQ_NEST, 0);
         }
         break;
 
@@ -1229,10 +1393,41 @@ static void uppc_tick_thread(void)
             WriteMac32(0x20c, (uint32_t)time(nullptr) + 0x7C25B080u);
         }
 
-        if (ReadMac32(XLM_IRQ_NEST) == 0) {
+        uint32_t nest = ReadMac32(XLM_IRQ_NEST);
+        static const bool s_tick_trace = [](){
+            const char* e = std::getenv("MACEMU_PPC_TRACE_TICK");
+            return e && *e && *e != '0';
+        }();
+        if (s_tick_trace && (tick_counter & 0x1f) == 0) {
+            fprintf(stderr, "[tick] counter=%d nest=%d pending=%d\n",
+                    tick_counter, nest, g_pending_irq.load() ? 1 : 0);
+        }
+        // MACEMU_PPC_MIN_EMULOPS_PER_IRQ: minimum emulops between IRQs.
+        // KPX boots with ~42 emulops between IRQs on average; Unicorn is ~10x
+        // slower, so 60Hz wall-clock ticks land roughly every 1.4 emulops in
+        // Unicorn. This starves the 68k side: most EmulOp boundaries see
+        // CR2.{LT,GT,EQ} polluted by the IRQ's OR-of-0xe00000 before the
+        // code that expects a clean CR2 runs. Gating on emulop count keeps
+        // the IRQ cadence at a KPX-like ratio so critical sections run
+        // to completion before the next IRQ fires.
+        static const uint64_t s_min_emulops = [](){
+            const char* e = std::getenv("MACEMU_PPC_MIN_EMULOPS_PER_IRQ");
+            return (e && *e && *e != '0') ? std::strtoull(e, nullptr, 10) : 0ull;
+        }();
+        static uint64_t s_last_irq_emulop = 0;
+        if (s_min_emulops && g_emulop_count - s_last_irq_emulop < s_min_emulops) continue;
+
+        if (nest == 0) {
             SetInterruptFlag(INTFLAG_VIA);
             g_pending_irq.store(true);
-            if (g_uc) uc_emu_stop(g_uc);  // kick CPU thread out of uc_emu_start
+            s_last_irq_emulop = g_emulop_count;
+            // Kick the engine out of whatever block it's in. Required for
+            // NK idle/wait loops that sit entirely in PPC code with no
+            // EmulOp dispatch (e.g. pc=0x50310fac writing to @0x00000000 in
+            // tight loop). Only fire at depth<=1 — interrupting a nested NK
+            // handler or execute_ppc mid-flight leaves XLM_IRQ_NEST stuck at
+            // its ROM-patched-incremented value and wedges the system.
+            if (g_uc && g_emu_nest_depth <= 1) uc_emu_stop(g_uc);
         }
 
         extern Platform g_platform;
@@ -1270,9 +1465,55 @@ static void uppc_cpu_execute_fast(void)
     uint32_t stuck_pc = 0;
     int stuck_count = 0;
     uint64_t skipped = 0;
+    // Hot-skip-loop detection: if the same PC is skipped N consecutive times
+    // (no other PC interleaved, no EmulOp advance), we're spinning on a probe
+    // the guest can't exit. Bail with diagnostics rather than hang forever.
+    uint32_t last_skip_pc = 0;
+    uint64_t consecutive_same_pc = 0;
+    constexpr uint64_t kHotSkipBailThreshold = 100000;
+    // Progress watchdog: bail out if g_emulop_count doesn't advance for
+    // kProgressStallBailMs wall-ms. Covers both valid-memory tight loops
+    // (uc_emu_start returns UC_ERR_OK on 1s timeout) and unmapped-walk
+    // loops (each UC_ERR_*_UNMAPPED iteration is microseconds). Measure
+    // wall time, not iteration count — iteration cadence varies by 6+
+    // orders of magnitude between these two failure modes.
+    uint64_t last_progress_emulop = g_emulop_count;
+    auto last_progress_ts = std::chrono::steady_clock::now();
+    uint64_t iters_since_progress = 0;
+    uint64_t irqs_since_progress = 0;
+    constexpr int kProgressStallBailMs = 10000;
+    // Yield periodically so IRQs get polled even when the guest sits in a
+    // pure-PPC code stretch without EmulOp dispatches. Without this, a tight
+    // PPC loop (e.g. the NK idle/wait path) starves pending_irq and the 68k
+    // emulator never gets a VBL. Unicorn's timeout is in microseconds, but
+    // short timeouts (<100ms) yield far too aggressively and torpedo throughput
+    // — empirically 1 insn per call at 50ms. Use a loose 1s ceiling: only a
+    // true PPC-only tight loop will hit it, and at 1Hz-yield the IRQ delivery
+    // is still well within the OS's tolerance.
+    const uint64_t s_emu_timeout_us = 1000000;
+    // Periodic PC sampler for debugging the post-first-IRQ stall. Off by default.
+    const bool s_trace_loop = [](){
+        const char* e = std::getenv("MACEMU_PPC_TRACE_LOOP");
+        return e && *e && *e != '0';
+    }();
+    uint64_t loop_iter = 0;
     while (!g_stop_requested) {
         uint32_t pc = rd_pc();
-        uc_err err = uc_emu_start(g_uc, pc, 0, /*timeout*/0, /*count*/0);
+        if (s_trace_loop) {
+            fprintf(stderr, "[loop] iter=%llu pc=%08x lr=%08x emulops=%llu\n",
+                    (unsigned long long)loop_iter, pc, rd_lr(),
+                    (unsigned long long)g_emulop_count);
+        }
+        ++loop_iter;
+        ++g_emu_nest_depth;
+        uint64_t emulops_before = g_emulop_count;
+        uc_err err = uc_emu_start(g_uc, pc, 0, s_emu_timeout_us, /*count*/0);
+        --g_emu_nest_depth;
+        if (s_trace_loop && err != UC_ERR_OK) {
+            fprintf(stderr, "[loop]   err=%s (delta_emulops=%llu)\n",
+                    uc_strerror(err),
+                    (unsigned long long)(g_emulop_count - emulops_before));
+        }
         if (err == UC_ERR_READ_UNMAPPED || err == UC_ERR_WRITE_UNMAPPED) {
             // KPX SIGSEGV-skip shape: step past the dead instruction and keep
             // going. Log the first few per-PC so probe loops don't flood the
@@ -1281,11 +1522,58 @@ static void uppc_cpu_execute_fast(void)
             static std::unordered_map<uint32_t, uint64_t> skip_counts;
             uint64_t &c = skip_counts[after];
             if (c < 3) {
-                fprintf(stderr, "[Unicorn-PPC] skip %s @pc=0x%08x (n=%llu)\n",
+                uint32_t insn = 0;
+                uc_mem_read(g_uc, after, &insn, 4);
+                insn = __builtin_bswap32(insn);
+                uint32_t ra_idx = (insn >> 16) & 0x1f;
+                int16_t imm = (int16_t)(insn & 0xffff);
+                uint32_t tgt = (ra_idx == 0 ? 0 : rd_gpr(ra_idx)) + (uint32_t)(int32_t)imm;
+                fprintf(stderr, "[Unicorn-PPC] skip %s @pc=0x%08x insn=%08x r%u=%08x tgt=%08x lr=%08x (n=%llu)\n",
                         (err == UC_ERR_READ_UNMAPPED) ? "READ" : "WRITE",
-                        after, (unsigned long long)(c + 1));
+                        after, insn, ra_idx, rd_gpr(ra_idx), tgt, rd_lr(), (unsigned long long)(c + 1));
             }
             c++; skipped++;
+
+            // Hot-skip-loop bail-out. If the same PC faults kHotSkipBailThreshold
+            // times in a row (no other PC interleaved, no EmulOp advance), we're
+            // spinning and will never escape. Dump a full snapshot so next
+            // session can figure out why the 68k-level loop counter never
+            // reaches its exit condition.
+            if (after == last_skip_pc) {
+                if (++consecutive_same_pc >= kHotSkipBailThreshold) {
+                    uint32_t insn = 0;
+                    uc_mem_read(g_uc, after, &insn, 4);
+                    insn = __builtin_bswap32(insn);
+                    fprintf(stderr,
+                            "[Unicorn-PPC] hot-skip loop at pc=0x%08x insn=%08x "
+                            "(%llu consecutive skips) — bailing\n"
+                            "  lr=%08x ctr=%08x cr=%08x xer=%08x\n",
+                            after, insn,
+                            (unsigned long long)consecutive_same_pc,
+                            rd_lr(), rd_ctr(), rd_cr(), rd_xer());
+                    for (int i = 0; i < 32; ++i) {
+                        fprintf(stderr, "  r%-2d=%08x%s", i, rd_gpr(i),
+                                (i % 4 == 3) ? "\n" : "");
+                    }
+                    // Dump 16 instructions around the stuck PC so next session
+                    // can see the full loop body (not just the faulting op).
+                    fprintf(stderr, "  --- instructions @ pc-0x20 .. pc+0x20 ---\n");
+                    for (int off = -0x20; off <= 0x20; off += 4) {
+                        uint32_t ins = 0;
+                        uint32_t at = after + off;
+                        if (uc_mem_read(g_uc, at, &ins, 4) == UC_ERR_OK) {
+                            ins = __builtin_bswap32(ins);
+                            fprintf(stderr, "    %08x: %08x%s\n", at, ins,
+                                    off == 0 ? "  <== stuck" : "");
+                        }
+                    }
+                    break;
+                }
+            } else {
+                last_skip_pc = after;
+                consecutive_same_pc = 1;
+            }
+
             if (!uppc_skip_memop_at(after)) {
                 fprintf(stderr, "[Unicorn-PPC] unknown memop at pc=0x%08x — bailing\n", after);
                 break;
@@ -1314,8 +1602,69 @@ static void uppc_cpu_execute_fast(void)
             stuck_count = 0;
         }
 
+        // Progress watchdog — covers every outer-loop iteration (any err
+        // status). Bails when EmulOp dispatches haven't advanced for
+        // kProgressStallBailMs wall-ms — catches both valid-memory tight
+        // loops and unmapped-walk loops.
+        ++iters_since_progress;
+        if (g_emulop_count != last_progress_emulop) {
+            last_progress_emulop = g_emulop_count;
+            last_progress_ts = std::chrono::steady_clock::now();
+            iters_since_progress = 0;
+            irqs_since_progress = 0;
+        } else {
+            auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - last_progress_ts).count();
+            if (elapsed_ms >= kProgressStallBailMs) {
+                uint32_t stall_pc = rd_pc();
+                uint32_t insn = 0;
+                uc_mem_read(g_uc, stall_pc, &insn, 4);
+                insn = __builtin_bswap32(insn);
+                fprintf(stderr,
+                        "[Unicorn-PPC] progress stall: no EmulOp advance for "
+                        "%lldms (%llu iters, %llu IRQs delivered, %llu skips) "
+                        "— bailing\n"
+                        "  pc=0x%08x insn=%08x lr=%08x ctr=%08x cr=%08x xer=%08x\n",
+                        (long long)elapsed_ms,
+                        (unsigned long long)iters_since_progress,
+                        (unsigned long long)irqs_since_progress,
+                        (unsigned long long)skipped,
+                        stall_pc, insn, rd_lr(), rd_ctr(), rd_cr(), rd_xer());
+                for (int i = 0; i < 32; ++i) {
+                    fprintf(stderr, "  r%-2d=%08x%s", i, rd_gpr(i),
+                            (i % 4 == 3) ? "\n" : "");
+                }
+                fprintf(stderr, "  --- instructions @ pc-0x20..pc+0x20 ---\n");
+                for (int off = -0x20; off <= 0x20; off += 4) {
+                    uint32_t ins = 0;
+                    uint32_t at = stall_pc + off;
+                    if (uc_mem_read(g_uc, at, &ins, 4) == UC_ERR_OK) {
+                        ins = __builtin_bswap32(ins);
+                        fprintf(stderr, "    %08x: %08x%s\n", at, ins,
+                                off == 0 ? "  <== stall" : "");
+                    }
+                }
+                fprintf(stderr, "  --- instructions @ lr-0x20..lr+0x10 ---\n");
+                for (int off = -0x20; off <= 0x10; off += 4) {
+                    uint32_t ins = 0;
+                    uint32_t at = rd_lr() + off;
+                    if (uc_mem_read(g_uc, at, &ins, 4) == UC_ERR_OK) {
+                        ins = __builtin_bswap32(ins);
+                        fprintf(stderr, "    %08x: %08x%s\n", at, ins,
+                                off == 0 ? "  <== lr" : "");
+                    }
+                }
+                break;
+            }
+        }
+
         if (g_pending_irq.exchange(false)) {
+            if (s_trace_loop) {
+                fprintf(stderr, "[loop]   -> handle_interrupt (mode=%u nest=%d pc=%08x)\n",
+                        ReadMac32(XLM_RUN_MODE), g_emu_nest_depth, rd_pc());
+            }
             uppc_handle_interrupt();
+            ++irqs_since_progress;
         }
     }
 
@@ -1334,8 +1683,10 @@ static void uppc_cpu_request_stop(void)
 
 static void uppc_cpu_trigger_interrupt(int /*level*/)
 {
+    // Match KPX's cooperative-at-block-boundary semantics: flag only, no
+    // mid-block abort. The main loop polls g_pending_irq at every
+    // uc_emu_start return (every EmulOp). See comment in uppc_tick_thread.
     g_pending_irq.store(true);
-    if (g_uc) uc_emu_stop(g_uc);
 }
 
 // ----- execute_ppc — run native PPC from host context ----------------------
@@ -1368,8 +1719,22 @@ static void uppc_cpu_execute_ppc(uint32_t entry)
     uint32_t stuck_pc = 0;
     int stuck_count = 0;
     for (;;) {
+        ++g_emu_nest_depth;
         uc_err err = uc_emu_start(g_uc, run_pc, 0, 0, 0);
-        if (err == UC_ERR_OK) break;
+        --g_emu_nest_depth;
+        if (err == UC_ERR_OK) {
+            // Distinguish EXEC_RETURN (caller-visible return) from a spurious
+            // uc_emu_stop (tick thread IRQ kick). A spurious stop would leave
+            // g_exec_return_seen false; restart at the current PC so the
+            // caller's 68k/PPC code finishes its work. Failing to restart
+            // corrupts the caller's D0/A-regs (e.g. FindSymbol returns 0).
+            if (g_exec_return_seen) {
+                g_exec_return_seen = false;
+                break;
+            }
+            run_pc = rd_pc();
+            continue;
+        }
         if (err == UC_ERR_READ_UNMAPPED || err == UC_ERR_WRITE_UNMAPPED) {
             uint32_t after = rd_pc();
             if (!uppc_skip_memop_at(after)) {

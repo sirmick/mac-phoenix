@@ -931,6 +931,12 @@ void sheepshaver_cpu::interrupt(uint32 entry)
     gpr(11) = 0xf072;
     cr().set((gpr(11) & 0x0fff0000) | (get_cr() & ~0x0fff0000));
 
+    if (ppc_trace_stream_()) {
+        fprintf(ppc_trace_stream_(),
+                "%08llu IRQ    entry=%08x saved_pc=%08x saved_cr=%08x\n",
+                (unsigned long long)ppc_trace_seq_(), entry, saved_pc, gpr(13));
+    }
+
     execute(entry);
 
     pc() = saved_pc;
@@ -976,11 +982,18 @@ void HandleInterrupt(powerpc_registers *r)
 
     // Interrupt action depends on current run mode
     switch (mode) {
-    case MODE_68K:
-        // 68k emulator active, trigger 68k interrupt level 1
+    case MODE_68K: {
+        uint32 or_mask = ReadMacInt32(KERNEL_DATA_BASE + 0x674);
+        uint32 cr_before = r->cr.get();
         WriteMacInt16(ReadMacInt32(KERNEL_DATA_BASE + 0x67c), 1);
-        r->cr.set(r->cr.get() | ReadMacInt32(KERNEL_DATA_BASE + 0x674));
+        r->cr.set(cr_before | or_mask);
+        if (ppc_trace_stream_()) {
+            fprintf(ppc_trace_stream_(),
+                    "%08llu MODE68K cr_before=%08x or_mask=%08x cr_after=%08x\n",
+                    (unsigned long long)ppc_trace_seq_(), cr_before, or_mask, r->cr.get());
+        }
         break;
+    }
 
 #if INTERRUPTS_IN_NATIVE_MODE
     case MODE_NATIVE:

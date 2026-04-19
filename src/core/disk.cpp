@@ -27,6 +27,8 @@
  */
 
 #include "sysdeps.h"
+#include <cstdio>
+#include <cstdlib>
 
 #include <string.h>
 #include <vector>
@@ -307,14 +309,30 @@ int16 DiskOpen(uint32 pb, uint32 dce)
 
 int16 DiskPrime(uint32 pb, uint32 dce)
 {
+	static const bool s_trace = [](){
+		const char* e = std::getenv("MACEMU_TRACE_DISKPRIME");
+		return e && *e && *e != '0';
+	}();
+	static uint64_t s_enter_count = 0;
+	++s_enter_count;
+	if (s_enter_count <= 20 || (s_enter_count % 50) == 0) {
+		fprintf(stderr, "[DiskPrime enter] #%llu pb=0x%08x dce=0x%08x\n",
+				(unsigned long long)s_enter_count, pb, dce);
+	}
+
 	WriteMacInt32(pb + ioActCount, 0);
 
 	// Drive valid and disk inserted?
 	drive_vec::iterator info = get_drive_info(ReadMacInt16(pb + ioVRefNum));
-	if (info == drives.end())
+	if (info == drives.end()) {
+		if (s_trace) fprintf(stderr, "[DiskPrime] vRef=%d NOT FOUND -> nsDrvErr\n",
+				(int16)ReadMacInt16(pb + ioVRefNum));
 		return nsDrvErr;
-	if (!ReadMacInt8(info->status + dsDiskInPlace))
+	}
+	if (!ReadMacInt8(info->status + dsDiskInPlace)) {
+		if (s_trace) fprintf(stderr, "[DiskPrime] drive %d offline -> offLinErr\n", info->num);
 		return offLinErr;
+	}
 
 	// Get parameters
 	void *buffer = Mac2HostAddr(ReadMacInt32(pb + ioBuffer));
@@ -322,33 +340,50 @@ int16 DiskPrime(uint32 pb, uint32 dce)
 	loff_t position = ReadMacInt32(dce + dCtlPosition);
 	if (ReadMacInt16(pb + ioPosMode) & 0x100)	// 64 bit positioning
 		position = ((loff_t)ReadMacInt32(pb + ioWPosOffset) << 32) | ReadMacInt32(pb + ioWPosOffset + 4);
-	if ((length & 0x1ff) || (position & 0x1ff))
+	if ((length & 0x1ff) || (position & 0x1ff)) {
+		if (s_trace) fprintf(stderr, "[DiskPrime] align err len=%zu pos=%lld\n",
+				length, (long long)position);
 		return paramErr;
+	}
 
+	uint16 trap = ReadMacInt16(pb + ioTrap);
 	size_t actual = 0;
-	if ((ReadMacInt16(pb + ioTrap) & 0xff) == aRdCmd) {
+	int16 result = noErr;
+	if ((trap & 0xff) == aRdCmd) {
 
 		// Read
 		actual = Sys_read(info->fh, buffer, position + info->start_byte, length);
 		if (actual != length)
-			return readErr;
+			result = readErr;
 
 	} else {
 
 		// Write
 		if (info->read_only)
-			return wPrErr;
-		actual = Sys_write(info->fh, buffer, position + info->start_byte, length);
-		if (actual != length)
-			return writErr;
+			result = wPrErr;
+		else {
+			actual = Sys_write(info->fh, buffer, position + info->start_byte, length);
+			if (actual != length)
+				result = writErr;
+		}
 	}
 
-	// Update ParamBlock and DCE
-	WriteMacInt32(pb + ioActCount, actual);
-	uint32 old_pos = ReadMacInt32(dce + dCtlPosition);
-	WriteMacInt32(dce + dCtlPosition, old_pos + actual);
+	// Update ParamBlock and DCE (only on success)
+	if (result == noErr) {
+		WriteMacInt32(pb + ioActCount, actual);
+		uint32 old_pos = ReadMacInt32(dce + dCtlPosition);
+		WriteMacInt32(dce + dCtlPosition, old_pos + actual);
+	}
 
-	return noErr;
+	if (s_enter_count <= 20 || (s_enter_count % 50) == 0) {
+		fprintf(stderr, "[DiskPrime result] #%llu %s drv=%d pos=0x%llx len=%zu act=%zu -> %d\n",
+				(unsigned long long)s_enter_count,
+				(trap & 0xff) == aRdCmd ? "R" : "W", info->num,
+				(unsigned long long)position, length, actual, result);
+	}
+	(void)s_trace;
+
+	return result;
 }
 
 

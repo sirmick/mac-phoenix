@@ -1188,6 +1188,12 @@ namespace video {
 
 static uint8_t *the_buffer = nullptr;
 static uint32_t the_buffer_size = 0;
+
+// Accessors for the Unicorn PPC backend, which must map the framebuffer region
+// into its guest memory map (the framebuffer lives OUTSIDE SheepMem, so without
+// an explicit mapping, QuickDraw writes fault as UC_ERR_UNMAPPED).
+extern "C" uint8_t *video_ppc_get_framebuffer_host() { return the_buffer; }
+extern "C" uint32_t video_ppc_get_framebuffer_size() { return the_buffer_size; }
 static int frame_width = 640;
 static int frame_height = 480;
 static int frame_bytes_per_row = 0;
