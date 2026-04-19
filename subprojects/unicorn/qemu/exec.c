@@ -1257,14 +1257,21 @@ RAMBlock *qemu_ram_block_from_host(struct uc_struct *uc, void *ptr,
     RAMBlock *block;
     uint8_t *host = ptr;
 
+    /* REAL_ADDRESSING guests (e.g. mac-phoenix PPC) may legitimately map RAM
+     * at host virtual address 0 via mmap MAP_FIXED, so block->host == NULL is
+     * a valid base for prealloc'ed blocks. Don't use block->host truthiness
+     * as a proxy for "mapped". */
     block = uc->ram_list.mru_block;
-    if (block && block->host && host - block->host < block->max_length) {
+    if (block && (block->host || (block->flags & RAM_PREALLOC)) &&
+        host - block->host < block->max_length) {
         goto found;
     }
 
     RAMBLOCK_FOREACH(block) {
-        /* This case append when the block is not mapped. */
-        if (block->host == NULL) {
+        /* Skip blocks that are truly not mapped. A prealloc block whose host
+         * pointer is NULL was explicitly mapped at host address 0 by the
+         * caller; keep it. */
+        if (block->host == NULL && !(block->flags & RAM_PREALLOC)) {
             continue;
         }
         if (host - block->host < block->max_length) {
