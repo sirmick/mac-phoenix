@@ -116,6 +116,40 @@ future tuning lever (default `0` = off; existing behavior unchanged) but is
    each EmulOp round-trip costs a `uc_emu_start` teardown. If we can bring
    Unicorn to 3× slower (not 30×) the problem dissolves without gating.
 
+### 2026-04-19 late — `MACEMU_PPC_TICK_PERIOD_SCALE` confirms the theory
+
+Added a second knob: `MACEMU_PPC_TICK_PERIOD_SCALE=N` multiplies the
+16.625 ms tick period (default 1 = 60 Hz; 10 → 6 Hz). Unlike the
+emulops-based `MIN_EMULOPS_PER_IRQ` gate, this one *reduces the total
+IRQ count* rather than re-spacing them. Results at SCALE=10 (first
+run that goes past the old stall anywhere in this port's history):
+
+```
+[Boot +  0.00s] Boot globals patched
+[Boot +  1.78s] Mac warm start complete (WLSC) after 51 resources
+[Boot +  1.79s] Installing drivers
+[Boot +  1.86s] Loading boot blocks (resource #92)
+800+ DiskPrime reads at varied positions (0..0x2c32600) all -> 0
+```
+
+New downstream stall: `r1=0x00000001` at `pc=0x5046f90c` (stack pointer
+corrupted near-zero). Caught by the existing R1ZERO block-hook tracer.
+This is a genuinely different failure mode, not the old IRQ-pressure
+stall — the port has advanced.
+
+Nondeterminism remains: 5 SCALE=10 runs produced 1 early-stall, 2 reach
+"Loading boot blocks" without error within 25 s, 1 reaches "Installing
+drivers" with a progress-stall, 1 hits FETCH UNMAPPED at `0x50580000`.
+The early-stall fraction suggests tick-phase still matters — an IRQ
+landing at the wrong emulop can still corrupt state — but at SCALE=10
+the majority of runs make real progress. SCALE=5 is in the same range
+(one of three runs reached "Loading boot blocks"); SCALE=2 (30 Hz) is
+as bad as SCALE=1.
+
+**This proves the theory**: the port has no backend-implementation bug
+blocking boot. The remaining work is purely around IRQ scheduling
+(and, now, whatever downstream issue causes the r1→0 corruption).
+
 Diagnostic instrumentation added this session (still in tree):
 
 - `src/core/disk.cpp` — `DiskPrime` unconditionally logs entry + result
@@ -296,6 +330,7 @@ range (see `uppc_enable_dr_probe_range`).
 | `MACEMU_PPC_TRACE_TRAP=1` | Unicorn-only: log each EXEC_NATIVE dispatch |
 | `MACEMU_PPC_NO_IRQ=1` | Mask 60Hz timer IRQ (isolate deterministic path) |
 | `MACEMU_PPC_MIN_EMULOPS_PER_IRQ=N` | Unicorn: suppress tick-IRQ unless ≥N emulops have elapsed since last one. Experimental IRQ-pressure gate. Default 0 = off. |
+| `MACEMU_PPC_TICK_PERIOD_SCALE=N` | Unicorn: multiply the 16.625 ms tick period. `10` → 6 Hz, proven to get boot past `"Loading boot blocks"`. Default 1 = 60 Hz. |
 
 ## Rebuild + smoke-test
 

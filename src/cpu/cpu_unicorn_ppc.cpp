@@ -1365,8 +1365,17 @@ static void uppc_tick_thread(void)
     uint64_t start = GetTicks_usec();
     uint64_t next = start;
 
+    // MACEMU_PPC_TICK_PERIOD_SCALE scales the 16.625ms 60Hz tick. scale=10
+    // → 166.25ms / ~6Hz. Used to test whether Unicorn's boot stall is caused
+    // by IRQ pressure (ticks landing too frequently in emulop-seq space).
+    // Default 1 = normal 60Hz.
+    static const int s_tick_scale = [](){
+        const char* e = std::getenv("MACEMU_PPC_TICK_PERIOD_SCALE");
+        int v = (e && *e) ? atoi(e) : 1;
+        return v > 0 ? v : 1;
+    }();
     while (g_tick_thread_running.load()) {
-        const int period_us = 16625;
+        const int period_us = 16625 * s_tick_scale;
         next += period_us;
         int64_t delay = (int64_t)(next - GetTicks_usec());
         if (delay > 0) {
