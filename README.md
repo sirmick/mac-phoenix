@@ -156,6 +156,26 @@ The 68K architecture has two CPU backends, selected with `--backend`:
 
 The PPC architecture uses the Kheperix (KPX) interpreter.
 
+### PowerPC prerequisite: `vm.mmap_min_addr`
+
+PPC emulation runs in real-addressing mode and maps guest RAM at host virtual address 0. On most Linux distributions the kernel refuses `mmap(NULL, …)` by default (`vm.mmap_min_addr=65536`), which shows up as:
+
+```
+[CPUContext] ERROR: Failed to map RAM at address 0
+[CPUContext] (Run: sudo sysctl vm.mmap_min_addr=0)
+```
+
+Allow it once per boot:
+
+```bash
+sudo sysctl vm.mmap_min_addr=0
+# Persist:
+echo 'vm.mmap_min_addr = 0' | \
+    sudo tee /etc/sysctl.d/99-mac-phoenix-ppc.conf
+```
+
+This is only needed for `--arch ppc`; 68K emulation is unaffected.
+
 ## Web UI
 
 Everything you need for day-to-day use lives in the browser. The top toolbar has:

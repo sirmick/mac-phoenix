@@ -3800,7 +3800,9 @@ function updateEmulatorPanelVisibility() {
     if (backendEl) {
         const prev = backendEl.value;
         if (isPPC) {
-            backendEl.innerHTML = '<option value="kpx">KPX</option>';
+            backendEl.innerHTML =
+                '<option value="kpx">KPX (Interpreter)</option>' +
+                '<option value="unicorn">Unicorn (QEMU JIT)</option>';
         } else {
             backendEl.innerHTML =
                 '<option value="uae">UAE (Interpreter)</option>' +
