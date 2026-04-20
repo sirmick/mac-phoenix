@@ -118,16 +118,13 @@ are also captured as numbered patches in `subprojects/unicorn-patches/`
 
 | # | One-line |
 |---|---|
+| 0000 | m68k: implement RTR instruction (predates the PPC series; reconstructed from the vendored tree) |
 | 0001 | scaffold backend alongside KPX (weak perf counters, TB-flush on MSR IR/DR flips) |
 | 0002 | drop `NULL`-ptr guard in `uc_mem_map_ptr` so RAM can mmap at host 0 |
 | 0003 | `mac_emulop` helper + CMake/helper.h plumbing (the one mac-phoenix-specific feature) |
 | 0004 | carry `RAM_PREALLOC` through `ram_block_add` + register `mac_emulop` unconditionally |
 | 0005 | `qemu_ram_block_from_host` ignores `block->host == NULL` sentinel when `RAM_PREALLOC` set |
 | 0006 | clear `stop_request` on nested `uc_emu_start` return so outer frame resumes cleanly |
-
-Also-modified (not yet in the patch series): `qemu/target/m68k/translate.c`
-has a local `DISAS_INSN(rtr)` + dispatch-table entry. Predates the
-patch-series era — extract from current state if submitting upstream.
 
 ## Known gaps
 

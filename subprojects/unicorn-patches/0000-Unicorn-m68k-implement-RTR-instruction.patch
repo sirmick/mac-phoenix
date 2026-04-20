@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Fri, 6 Mar 2026 11:12:00 -0800
+Subject: [PATCH 0/6] Unicorn m68k: implement RTR instruction
+
+The m68k RTR (Return and Restore) instruction — opcode 0x4E77 — was not
+decoded by the TCG target; it fell through to the "illegal instruction"
+path. Classic Mac OS relies on RTR for a few ROM-resident routines, so
+running classic-Mac guests on Unicorn required this.
+
+RTR pops a CCR word (low 8 bits loaded, high 8 discarded) and then a
+PC longword from the stack. Implementation mirrors RTS plus the CCR
+pop using the existing gen_helper_set_ccr helper.
+
+Note: this change predates the PPC patch series (0001..0006) —
+historically it was committed directly into mac-phoenix's vendored
+Unicorn tree rather than tracked as a separate patch. Extracted
+2026-04-20 from the vendored tree's current state so it can be
+submitted upstream as patch 0 of the series.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+---
+ qemu/target/m68k/translate.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/qemu/target/m68k/translate.c b/qemu/target/m68k/translate.c
+--- a/qemu/target/m68k/translate.c
++++ b/qemu/target/m68k/translate.c
+@@ -3094,6 +3094,24 @@ DISAS_INSN(rts)
+     gen_jmp(s, tmp);
+ }
+
++DISAS_INSN(rtr)
++{
++    TCGContext *tcg_ctx = s->uc->tcg_ctx;
++    TCGv tmp;
++    TCGv ccr;
++
++    /* Pop CCR (word) from stack — only lower 8 bits (CCR) are used */
++    ccr = gen_load(s, OS_WORD, QREG_SP, 0, IS_USER(s));
++    tcg_gen_addi_i32(tcg_ctx, QREG_SP, QREG_SP, 2);
++    gen_helper_set_ccr(tcg_ctx, tcg_ctx->cpu_env, ccr);
++    set_cc_op(s, CC_OP_FLAGS);
++
++    /* Pop PC (long) from stack */
++    tmp = gen_load(s, OS_LONG, QREG_SP, 0, IS_USER(s));
++    tcg_gen_addi_i32(tcg_ctx, QREG_SP, QREG_SP, 4);
++    gen_jmp(s, tmp);
++}
++
+ DISAS_INSN(jump)
+ {
+     TCGContext *tcg_ctx = s->uc->tcg_ctx;
+@@ -6189,6 +6207,7 @@ void register_m68k_insns (CPUM68KState *env)
+     BASE(nop,       4e71, ffff);
+     INSN(rtd,       4e74, ffff, RTD);
+     BASE(rts,       4e75, ffff);
++    BASE(rtr,       4e77, ffff);
+     BASE(jump,      4e80, ffc0);
+     BASE(jump,      4ec0, ffc0);
+     INSN(addsubq,   5000, f080, M68000);
+--
+2.43.0
+
