@@ -1,0 +1,64 @@
+From c021f18099a812a08f88aa13ef7034dcdd4a5e75 Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Sat, 18 Apr 2026 19:35:05 -0700
+Subject: [PATCH 5/6] Unicorn PPC: fix qemu_ram_block_from_host for host=NULL
+ prealloc blocks
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+REAL_ADDRESSING guests (mac-phoenix PPC) legitimately mmap RAM at host
+virtual address 0 via MAP_FIXED, so a RAMBlock with host == NULL is a
+valid prealloc mapping — not an unmapped block. The reverse-lookup code
+used block->host truthiness (MRU fast-path) and block->host == NULL (loop)
+as "not mapped" sentinels, so it skipped mac-phoenix's RAM block and
+returned NULL. That bubbled up as RAM_ADDR_INVALID in
+qemu_ram_addr_from_host_nofail → abort(), killing Unicorn as soon as
+TCG tried to translate code at a low RAM address (first hit: guest PC
+0x00037410 during a transition-vector bctrl).
+
+Distinguish by the RAM_PREALLOC flag: if it's set, the caller explicitly
+supplied the host pointer and NULL is intentional; only skip blocks that
+are both unmapped (host == NULL) and not prealloc. uc_mem_map_ptr already
+tolerated NULL; this is the matching change on the reverse path.
+
+Unicorn PPC boundary trace now advances from ~114 EmulOps (SIGABRT) to
+555, matching KPX's 557-op reference under MACEMU_PPC_NO_IRQ.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+---
+ qemu/exec.c | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/qemu/exec.c b/qemu/exec.c
+index 38eaa748..2b9014f1 100644
+--- a/qemu/exec.c
++++ b/qemu/exec.c
+@@ -1257,14 +1257,21 @@ RAMBlock *qemu_ram_block_from_host(struct uc_struct *uc, void *ptr,
+     RAMBlock *block;
+     uint8_t *host = ptr;
+ 
++    /* REAL_ADDRESSING guests (e.g. mac-phoenix PPC) may legitimately map RAM
++     * at host virtual address 0 via mmap MAP_FIXED, so block->host == NULL is
++     * a valid base for prealloc'ed blocks. Don't use block->host truthiness
++     * as a proxy for "mapped". */
+     block = uc->ram_list.mru_block;
+-    if (block && block->host && host - block->host < block->max_length) {
++    if (block && (block->host || (block->flags & RAM_PREALLOC)) &&
++        host - block->host < block->max_length) {
+         goto found;
+     }
+ 
+     RAMBLOCK_FOREACH(block) {
+-        /* This case append when the block is not mapped. */
+-        if (block->host == NULL) {
++        /* Skip blocks that are truly not mapped. A prealloc block whose host
++         * pointer is NULL was explicitly mapped at host address 0 by the
++         * caller; keep it. */
++        if (block->host == NULL && !(block->flags & RAM_PREALLOC)) {
+             continue;
+         }
+         if (host - block->host < block->max_length) {
+-- 
+2.43.0
+

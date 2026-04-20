@@ -1,0 +1,94 @@
+From f73a798a5137c493b6869f63e1ecde57b4abeb43 Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Sat, 18 Apr 2026 09:21:16 -0700
+Subject: [PATCH 1/6] Unicorn PPC: scaffold backend alongside KPX
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Builds Unicorn's PPC softmmu target alongside m68k and wires a
+stub cpu_unicorn_ppc backend into the Platform API. Selected via
+--backend unicorn when --arch ppc is passed; --arch ppc alone still
+defaults to KPX. The engine itself isn't implemented yet — init
+prints a pointer to docs/ppc/UnicornPpcPlan.md and exits.
+
+- CMakeLists.txt: UNICORN_ARCH includes ppc
+- cpu-exec.c: weak perf-counter globals so m68k + ppc libs coexist
+- unicorn.c (ppc): restore TB-flush on host-side MSR IR/DR flips
+- emulator_config: explicit_backend tracking; --arch ppc respects
+  a user-passed --backend; JSON merge allows PPC + Unicorn
+- cpu_context: PPC install dispatches on config.cpu_backend
+- cpu_unicorn_ppc.cpp: Platform API stubs, prints plan pointer
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+---
+ qemu/accel/tcg/cpu-exec.c | 15 +++++++++------
+ qemu/target/ppc/unicorn.c |  8 +++-----
+ 2 files changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/qemu/accel/tcg/cpu-exec.c b/qemu/accel/tcg/cpu-exec.c
+index 38e55134..556c0680 100644
+--- a/qemu/accel/tcg/cpu-exec.c
++++ b/qemu/accel/tcg/cpu-exec.c
+@@ -29,8 +29,10 @@
+ #include "sysemu/cpus.h"
+ #include "uc_priv.h"
+ 
+-/* Global CHECKLOAD counter - set by macemu-next, read here */
+-volatile int g_cpu_exec_checkload_count = 0;
++/* Global CHECKLOAD counter - set by macemu-next, read here.
++ * weak: avoid duplicate-symbol errors when linking multiple arch libs
++ * (m68k-softmmu.a + ppc-softmmu.a) that each compile cpu-exec.c. */
++__attribute__((weak)) volatile int g_cpu_exec_checkload_count = 0;
+ 
+ /* -icount align implementation. */
+ 
+@@ -247,10 +249,11 @@ static inline void tb_add_jump(TranslationBlock *tb, int n,
+     return;
+ }
+ 
+-/* TB lookup/compile counters — accessed from unicorn_wrapper.c */
+-uint64_t g_tb_find_count = 0;
+-uint64_t g_tb_miss_count = 0;
+-uint64_t g_tb_buffer_flush_count = 0;
++/* TB lookup/compile counters — accessed from unicorn_wrapper.c.
++ * weak: see note on g_cpu_exec_checkload_count above. */
++__attribute__((weak)) uint64_t g_tb_find_count = 0;
++__attribute__((weak)) uint64_t g_tb_miss_count = 0;
++__attribute__((weak)) uint64_t g_tb_buffer_flush_count = 0;
+ 
+ static inline TranslationBlock *tb_find(CPUState *cpu,
+                                         TranslationBlock *last_tb,
+diff --git a/qemu/target/ppc/unicorn.c b/qemu/target/ppc/unicorn.c
+index 2d615006..b0912b0e 100644
+--- a/qemu/target/ppc/unicorn.c
++++ b/qemu/target/ppc/unicorn.c
+@@ -22,10 +22,8 @@ typedef uint32_t ppcreg_t;
+ static inline int uc_ppc_store_msr(CPUPPCState *env, target_ulong value,
+                                    int alter_hv)
+ {
+-    // int excp;
+-    // CPUState *cs = env_cpu(env);
++    CPUState *cs = env_cpu(env);
+ 
+-    // excp = 0;
+     value &= env->msr_mask;
+ 
+     /* Neither mtmsr nor guest state can alter HV */
+@@ -35,11 +33,11 @@ static inline int uc_ppc_store_msr(CPUPPCState *env, target_ulong value,
+     }
+     if (((value >> MSR_IR) & 1) != msr_ir ||
+         ((value >> MSR_DR) & 1) != msr_dr) {
+-        // cpu_interrupt_exittb(cs);
++        cpu_interrupt_exittb(cs);
+     }
+     if ((env->mmu_model & POWERPC_MMU_BOOKE) &&
+         ((value >> MSR_GS) & 1) != msr_gs) {
+-        // cpu_interrupt_exittb(cs);
++        cpu_interrupt_exittb(cs);
+     }
+     if (unlikely((env->flags & POWERPC_FLAG_TGPR) &&
+                  ((value ^ env->msr) & (1 << MSR_TGPR)))) {
+-- 
+2.43.0
+

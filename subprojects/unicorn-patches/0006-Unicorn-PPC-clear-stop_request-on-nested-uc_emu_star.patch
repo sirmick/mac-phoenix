@@ -1,0 +1,46 @@
+From 7ef648e4b7eb9de4ca32935fde2153162d0c19a6 Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Sat, 18 Apr 2026 19:35:11 -0700
+Subject: [PATCH 6/6] Unicorn PPC: clear stop_request on nested uc_emu_start
+ return
+
+When a nested uc_emu_start returns (inner run terminated by uc_emu_stop),
+the stop_request flag and cpu->exit_request (set via break_translation_loop)
+remain asserted. The outer uc_emu_start's next cpu_exec iteration then
+spuriously breaks out of tcg_cpu_exec at whatever PC it happens to be at,
+so the outer frame returns UC_ERR_OK at a non-EMUL_OP instruction.
+
+The mac-phoenix PPC backend relies on nested uc_emu_start for Execute68k /
+execute_macos_code reentrancy. Clear the stop flags via revert_uc_emu_stop
+on the nested-return path so the outer level resumes cleanly.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+---
+ uc.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/uc.c b/uc.c
+index 06dc9521..b6c6d6d6 100644
+--- a/uc.c
++++ b/uc.c
+@@ -1254,6 +1254,17 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
+         clear_deleted_hooks(uc);
+ 
+         restore_jit_state(uc);
++    } else {
++        // Returning to an outer nested uc_emu_start. The uc_emu_stop that
++        // terminated the inner run set uc->stop_request (and cpu->exit_request
++        // via break_translation_loop). If we leave those flags set, the outer
++        // level's next cpu_exec iteration will spuriously break out of
++        // tcg_cpu_exec at whatever PC it happens to be at — causing the outer
++        // uc_emu_start to return prematurely with UC_ERR_OK at a non-EMUL_OP
++        // instruction. Clear them here so the outer can resume cleanly.
++        // (Mac-phoenix PPC backend relies on nested uc_emu_start calls for
++        // Execute68k / execute_macos_code reentrancy.)
++        revert_uc_emu_stop(uc);
+     }
+ 
+     if (timeout) {
+-- 
+2.43.0
+

@@ -1,0 +1,178 @@
+From b75f18494d048e0522140723d6e9a8d97219da72 Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Sat, 18 Apr 2026 10:38:46 -0700
+Subject: [PATCH 3/6] Unicorn PPC: theoretically complete backend + first smoke
+ test
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Implement full KPX-parity runtime on Unicorn: interrupt(entry), 60 Hz tick
+thread, execute_fast/ppc/68k/68k_trap, trigger_interrupt, and EmulOp /
+EXEC_NATIVE / EXEC_RETURN dispatch through major-opcode-6 (helper_mac_emulop
+via translate.c). Auto-maps zero pages on unmapped reads/writes to mimic
+KPX's SIGSEGV-skip on nanokernel memory probes, and bails execute_fast out
+of repeated stuck-PC errors. ROM region mapped RW+X so nanokernel can patch
+in place. Boot reaches 0x50313fc8 before diverging — debug phase next.
+---
+ CMakeLists.txt                      |  2 ++
+ include/uc_priv.h                   |  6 ++++++
+ qemu/target/ppc/helper.h            |  1 +
+ qemu/target/ppc/mac_emulop_helper.c | 32 +++++++++++++++++++++++++++++
+ qemu/target/ppc/translate.c         | 18 ++++++++++++++++
+ uc.c                                | 15 ++++++++++++++
+ 6 files changed, 74 insertions(+)
+ create mode 100644 subprojects/unicorn/qemu/target/ppc/mac_emulop_helper.c
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 033db096..6f303466 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -935,6 +935,7 @@ add_library(ppc-softmmu STATIC
+     qemu/target/ppc/excp_helper.c
+     qemu/target/ppc/fpu_helper.c
+     qemu/target/ppc/int_helper.c
++    qemu/target/ppc/mac_emulop_helper.c
+     qemu/target/ppc/machine.c
+     qemu/target/ppc/mem_helper.c
+     qemu/target/ppc/misc_helper.c
+@@ -984,6 +985,7 @@ add_library(ppc64-softmmu STATIC
+     qemu/target/ppc/excp_helper.c
+     qemu/target/ppc/fpu_helper.c
+     qemu/target/ppc/int_helper.c
++    qemu/target/ppc/mac_emulop_helper.c
+     qemu/target/ppc/machine.c
+     qemu/target/ppc/mem_helper.c
+     qemu/target/ppc/misc_helper.c
+diff --git a/include/uc_priv.h b/include/uc_priv.h
+index c3132dcc..a8bba6c3 100644
+--- a/include/uc_priv.h
++++ b/include/uc_priv.h
+@@ -432,6 +432,12 @@ struct uc_struct {
+     bool thread_executable_entry;
+     bool current_executable;
+     bool skip_sync_pc_on_exit;
++
++    // Mac-phoenix PPC EmulOp callback — invoked from helper_mac_emulop when the
++    // guest executes a major-opcode-6 instruction (POWERPC_EMUL_OP = 0x18xxxxxx).
++    // Set via direct assignment after uc_open; NULL means dispatch is disabled
++    // and the opcode falls back to the normal decoder (program-check exception).
++    void (*mac_emulop_cb)(struct uc_struct *uc, uint32_t pc, uint32_t opcode);
+ };
+ 
+ // Metadata stub for the variable-size cpu context used with uc_context_*()
+diff --git a/qemu/target/ppc/helper.h b/qemu/target/ppc/helper.h
+index b1c43439..98d4d948 100644
+--- a/qemu/target/ppc/helper.h
++++ b/qemu/target/ppc/helper.h
+@@ -3,6 +3,7 @@ DEF_HELPER_6(uc_traceopcode, void, ptr, i64, i64, i32, ptr, i64)
+ 
+ DEF_HELPER_FLAGS_3(raise_exception_err, TCG_CALL_NO_WG, void, env, i32, i32)
+ DEF_HELPER_FLAGS_2(raise_exception, TCG_CALL_NO_WG, void, env, i32)
++DEF_HELPER_2(mac_emulop, void, env, i32)
+ DEF_HELPER_FLAGS_4(tw, TCG_CALL_NO_WG, void, env, tl, tl, i32)
+ #if defined(TARGET_PPC64)
+ DEF_HELPER_FLAGS_4(td, TCG_CALL_NO_WG, void, env, tl, tl, i32)
+diff --git a/qemu/target/ppc/mac_emulop_helper.c b/qemu/target/ppc/mac_emulop_helper.c
+new file mode 100644
+index 00000000..b9a495b6
+--- /dev/null
++++ b/qemu/target/ppc/mac_emulop_helper.c
+@@ -0,0 +1,32 @@
++/*
++ * Mac-phoenix EmulOp helper — dispatches major-opcode-6 PPC instructions
++ * (POWERPC_EMUL_OP = 0x18xxxxxx) to a host-side callback stored on uc_struct.
++ *
++ * Added for the Unicorn PPC backend integration (docs/ppc/UnicornPpcPlan.md §5).
++ * The translate.c decoder routes op1=0x06 to gen_mac_emulop, which emits a call
++ * to helper_mac_emulop(env, opcode). env->nip has already been set to the
++ * faulting instruction's PC by gen_update_nip, and we advance it to pc+4 here
++ * as the default next-PC (the callback may overwrite it for branching EmulOps).
++ */
++
++#include "qemu/osdep.h"
++#include "cpu.h"
++#include "exec/exec-all.h"
++#include "exec/helper-proto.h"
++
++#include "uc_priv.h"
++
++void helper_mac_emulop(CPUPPCState *env, uint32_t opcode)
++{
++    struct uc_struct *uc = env->uc;
++    uint32_t pc = (uint32_t)env->nip;
++
++    /* Default: advance past this 4-byte instruction. The callback can
++     * override env->nip (and any GPR/SPR state) via uc_reg_write before
++     * returning. */
++    env->nip = pc + 4;
++
++    if (uc && uc->mac_emulop_cb) {
++        uc->mac_emulop_cb(uc, pc, opcode);
++    }
++}
+diff --git a/qemu/target/ppc/translate.c b/qemu/target/ppc/translate.c
+index 0b3e5c8c..34e593fe 100644
+--- a/qemu/target/ppc/translate.c
++++ b/qemu/target/ppc/translate.c
+@@ -4132,6 +4132,22 @@ static void gen_sc(DisasContext *ctx)
+     gen_exception_err(ctx, POWERPC_SYSCALL, lev);
+ }
+ 
++/* Mac-phoenix EmulOp dispatch — major opcode 6 (POWERPC_EMUL_OP = 0x18xxxxxx,
++ * reserved in the base PPC ISA). Routes to helper_mac_emulop(env, opcode),
++ * which invokes uc->mac_emulop_cb. env->nip is set to this insn's PC before
++ * the helper so the callback can read it; helper advances to pc+4 by default,
++ * and the callback may overwrite env->nip / GPRs. The TB is terminated so the
++ * CPU loop re-finds the next TB at the updated PC. */
++static void gen_mac_emulop(DisasContext *ctx)
++{
++    TCGContext *tcg_ctx = ctx->uc->tcg_ctx;
++    TCGv_i32 t_opcode = tcg_const_i32(tcg_ctx, ctx->opcode);
++    gen_update_nip(ctx, ctx->base.pc_next - 4);
++    gen_helper_mac_emulop(tcg_ctx, tcg_ctx->cpu_env, t_opcode);
++    tcg_temp_free_i32(tcg_ctx, t_opcode);
++    ctx->exception = POWERPC_EXCP_SYNC;
++}
++
+ /***                                Trap                                   ***/
+ 
+ /* Check for unconditional traps (always or never) */
+@@ -6996,6 +7012,8 @@ GEN_HANDLER_E(rvwinkle, 0x13, 0x12, 0x0f, 0x03FFF801, PPC_NONE, PPC2_PM_ISA206),
+ GEN_HANDLER(hrfid, 0x13, 0x12, 0x08, 0x03FF8001, PPC_64H),
+ #endif
+ GEN_HANDLER(sc, 0x11, 0xFF, 0xFF, 0x03FFF01D, PPC_FLOW),
++/* Mac-phoenix EmulOp: major opcode 6 (0x18xxxxxx), reserved in base PPC ISA. */
++GEN_HANDLER(mac_emulop, 0x06, 0xFF, 0xFF, 0x00000000, PPC_NONE),
+ GEN_HANDLER(tw, 0x1F, 0x04, 0x00, 0x00000001, PPC_FLOW),
+ GEN_HANDLER(twi, 0x03, 0xFF, 0xFF, 0x00000000, PPC_FLOW),
+ #if defined(TARGET_PPC64)
+diff --git a/uc.c b/uc.c
+index dbe106d9..06dc9521 100644
+--- a/uc.c
++++ b/uc.c
+@@ -493,6 +493,21 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
+     }
+ }
+ 
++// Mac-phoenix addition: install a host callback that fires when the guest
++// executes a major-opcode-6 PPC instruction (POWERPC_EMUL_OP = 0x18xxxxxx).
++// Dispatch happens inside helper_mac_emulop (target/ppc/mac_emulop_helper.c).
++// Pass NULL to disable; the opcode then falls through to the normal decoder
++// path (which raises a program-check exception).
++UNICORN_EXPORT
++void uc_ppc_set_mac_emulop_cb(uc_engine *uc,
++                              void (*cb)(struct uc_struct *uc,
++                                         uint32_t pc, uint32_t opcode))
++{
++    if (uc) {
++        uc->mac_emulop_cb = cb;
++    }
++}
++
+ UNICORN_EXPORT
+ uc_err uc_close(uc_engine *uc)
+ {
+-- 
+2.43.0
+

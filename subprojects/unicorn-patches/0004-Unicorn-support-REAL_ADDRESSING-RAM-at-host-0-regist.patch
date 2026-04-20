@@ -1,0 +1,135 @@
+From 32894332f1983524f2eacdcc9fef21b38f046048 Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Sat, 18 Apr 2026 11:44:35 -0700
+Subject: [PATCH 4/6] Unicorn: support REAL_ADDRESSING RAM at host 0 + register
+ PPC EmulOp
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+ram_block_add / qemu_ram_alloc_from_ptr used `host != NULL` to decide
+whether a RAM block is preallocated. That breaks REAL_ADDRESSING PPC
+guests which mmap guest RAM at host address 0 (MAP_FIXED at NULL): the
+valid host pointer would be rejected and Unicorn would try to allocate
+its own. Use the explicit RAM_PREALLOC flag instead, passing an explicit
+`prealloc` bool through qemu_ram_alloc_from_ptr, and drop the
+ptr != NULL assert in memory_region_init_ram_ptr.
+
+In translate_init.inc.c, register the major-opcode-6 mac_emulop handler
+unconditionally in create_ppc_opcodes — it has PPC_NONE flags and was
+being filtered out by the feature gate, leaving SHEEP opcodes to fault
+as illegal.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+---
+ qemu/exec.c                          | 14 +++++++++-----
+ qemu/include/exec/ram_addr.h         |  2 +-
+ qemu/softmmu/memory.c                |  7 ++++---
+ qemu/target/ppc/translate_init.inc.c |  9 ++++++++-
+ 4 files changed, 22 insertions(+), 10 deletions(-)
+
+diff --git a/qemu/exec.c b/qemu/exec.c
+index 002c14df..38eaa748 100644
+--- a/qemu/exec.c
++++ b/qemu/exec.c
+@@ -1056,7 +1056,11 @@ static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
+ 
+     new_block->offset = find_ram_offset(uc, new_block->max_length);
+ 
+-    if (!new_block->host) {
++    /* Preallocated RAM comes from a caller-owned host pointer. REAL_ADDRESSING
++     * guests may legitimately map at host address 0 (mmap MAP_FIXED at NULL),
++     * so we can't use `!host` as the allocation trigger — check the explicit
++     * RAM_PREALLOC flag set by qemu_ram_alloc_from_ptr instead. */
++    if (!(new_block->flags & RAM_PREALLOC)) {
+         new_block->host = phys_mem_alloc(uc, new_block->max_length,
+                 &new_block->mr->align);
+         if (!new_block->host) {
+@@ -1107,13 +1111,13 @@ static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
+ }
+ 
+ RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *host,
+-                                   MemoryRegion *mr)
++                                   bool prealloc, MemoryRegion *mr)
+ {
+     RAMBlock *new_block;
+     ram_addr_t max_size = size;
+ 
+     // Don't resize pre-alloced memory as they are given by users.
+-    if (!host) {
++    if (!prealloc) {
+         size = HOST_PAGE_ALIGN(uc, size);
+         max_size = HOST_PAGE_ALIGN(uc, max_size);
+     }
+@@ -1127,7 +1131,7 @@ RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *h
+     assert(max_size >= size);
+     new_block->page_size = uc->qemu_real_host_page_size;
+     new_block->host = host;
+-    if (host) {
++    if (prealloc) {
+         new_block->flags |= RAM_PREALLOC;
+     }
+ 
+@@ -1145,7 +1149,7 @@ RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *h
+ 
+ RAMBlock *qemu_ram_alloc(struct uc_struct *uc, ram_addr_t size, MemoryRegion *mr)
+ {
+-    return qemu_ram_alloc_from_ptr(uc, size, NULL, mr);
++    return qemu_ram_alloc_from_ptr(uc, size, NULL, false, mr);
+ }
+ 
+ static void reclaim_ramblock(struct uc_struct *uc, RAMBlock *block)
+diff --git a/qemu/include/exec/ram_addr.h b/qemu/include/exec/ram_addr.h
+index d6b96bc7..142ec056 100644
+--- a/qemu/include/exec/ram_addr.h
++++ b/qemu/include/exec/ram_addr.h
+@@ -44,7 +44,7 @@ static inline unsigned long int ramblock_recv_bitmap_offset(struct uc_struct *uc
+ }
+ 
+ RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *host,
+-                                  MemoryRegion *mr);
++                                  bool prealloc, MemoryRegion *mr);
+ RAMBlock *qemu_ram_alloc(struct uc_struct *uc, ram_addr_t size, MemoryRegion *mr);
+ void qemu_ram_free(struct uc_struct *uc, RAMBlock *block);
+ 
+diff --git a/qemu/softmmu/memory.c b/qemu/softmmu/memory.c
+index 08e747e8..d406031c 100644
+--- a/qemu/softmmu/memory.c
++++ b/qemu/softmmu/memory.c
+@@ -1267,9 +1267,10 @@ void memory_region_init_ram_ptr(struct uc_struct *uc,
+     mr->terminates = true;
+     mr->destructor = memory_region_destructor_ram;
+ 
+-    /* qemu_ram_alloc_from_ptr cannot fail with ptr != NULL.  */
+-    assert(ptr != NULL);
+-    mr->ram_block = qemu_ram_alloc_from_ptr(uc, size, ptr, mr);
++    /* ptr may legitimately be NULL for REAL_ADDRESSING guests that map RAM
++     * at host address 0 via mmap MAP_FIXED. Pass prealloc=true so ram_block_add
++     * honours the caller-supplied host pointer unconditionally. */
++    mr->ram_block = qemu_ram_alloc_from_ptr(uc, size, ptr, true, mr);
+ }
+ 
+ uint64_t memory_region_size(MemoryRegion *mr)
+diff --git a/qemu/target/ppc/translate_init.inc.c b/qemu/target/ppc/translate_init.inc.c
+index d2fb1974..ed6553b0 100644
+--- a/qemu/target/ppc/translate_init.inc.c
++++ b/qemu/target/ppc/translate_init.inc.c
+@@ -9510,7 +9510,14 @@ static int create_ppc_opcodes(PowerPCCPU *cpu)
+ 
+     fill_new_table(cpu->opcodes, PPC_CPU_OPCODES_LEN);
+     for (opc = opcodes; opc < &opcodes[ARRAY_SIZE(opcodes)]; opc++) {
+-        if (((opc->handler.type & pcc->insns_flags) != 0) ||
++        /* Mac-phoenix EmulOp (major opcode 6, PPC_NONE/PPC_NONE) has no CPU
++         * feature flag and would otherwise be filtered out by the flags check
++         * below. Register it unconditionally — it's reserved in the base PPC
++         * ISA, so there's no risk of conflict with a legitimate instruction. */
++        bool is_mac_emulop = (opc->opc1 == 0x06 && opc->handler.type == PPC_NONE
++                              && opc->handler.type2 == PPC_NONE);
++        if (is_mac_emulop ||
++            ((opc->handler.type & pcc->insns_flags) != 0) ||
+             ((opc->handler.type2 & pcc->insns_flags2) != 0)) {
+             if (register_insn(cpu->opcodes, opc) < 0) {
+ #if 0
+-- 
+2.43.0
+

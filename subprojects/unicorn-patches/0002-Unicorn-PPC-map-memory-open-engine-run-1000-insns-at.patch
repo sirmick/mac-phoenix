@@ -1,0 +1,62 @@
+From abb0970d2c30e1d9f747705894ed3243f257e675 Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Sat, 18 Apr 2026 09:29:36 -0700
+Subject: [PATCH 2/6] Unicorn PPC: map memory, open engine, run 1000 insns at
+ nanokernel entry
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Milestone 1 of docs/ppc/UnicornPpcPlan.md: the backend opens Unicorn,
+mirrors KPX's memory map byte-for-byte, sets initial CPU state
+(PC=ROM+0x310000, GPR3=ROM+0x30d000, GPR4=KD+0x1000, MODE_68K),
+and runs until a configurable instruction count or event.
+
+Changes:
+- cpu_unicorn_ppc.cpp: REAL_ADDRESSING memory accessors (usable by
+  InitAll_PPC immediately), uc_open with PPC32+BIG_ENDIAN, CPU model
+  PPC32_750_V3_1 (matches KPX PVR 0x000c0000), uc_mem_map_ptr for
+  RAM+NKpad / ROM / KD aliases / DR probe regions, PC/GPR setup,
+  register read/write wrappers, minimal execute loop with 1000-insn
+  cap.
+- subprojects/unicorn/uc.c: drop the NULL-pointer guard in
+  uc_mem_map_ptr — REAL_ADDRESSING legitimately mmaps RAM at host
+  address 0 (MAP_FIXED at 0 with vm.mmap_min_addr=0), which the
+  guard was rejecting.
+
+Still stubbed (next increments): EmulOp dispatch via major opcode 6
+(needs translate.c patch), IRQ injection handshake, PPC→68k execute
+bridge, tick thread.
+
+Verified: `--arch ppc --backend unicorn` runs 1000 insns from
+0x50310000 with UC_ERR_OK; `--arch m68k --backend unicorn` still
+boots to Finder in 11.47s.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+---
+ uc.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/uc.c b/uc.c
+index 75b89a01..dbe106d9 100644
+--- a/uc.c
++++ b/uc.c
+@@ -1413,10 +1413,11 @@ uc_err uc_mem_map_ptr(uc_engine *uc, uint64_t address, uint64_t size,
+ 
+     UC_INIT(uc);
+ 
+-    if (ptr == NULL) {
+-        restore_jit_state(uc);
+-        return UC_ERR_ARG;
+-    }
++    // The NULL-pointer check was a sanity guard, but REAL_ADDRESSING guests
++    // (e.g., mac-phoenix's PPC layout) legitimately mmap RAM at host address 0
++    // via MAP_FIXED, making RAMBaseHost == NULL. The kernel-facing store only
++    // dereferences the pointer via offset arithmetic, so page 0 is fine as
++    // long as the caller has actually mapped it.
+ 
+     res = mem_map_check(uc, address, size, perms);
+     if (res) {
+-- 
+2.43.0
+
