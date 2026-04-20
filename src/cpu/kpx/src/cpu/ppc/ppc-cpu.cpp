@@ -701,6 +701,11 @@ void powerpc_cpu::execute(uint32 entry)
 						ppc_trace_cr_step(pc(), di[i].opcode, cr().get(),
 						                  lr(), gpr(24));
 					}
+					if (int tgt = ppc_trace_68k_pc_match_(gpr(24)); tgt >= 0) {
+						uint32_t g[32];
+						for (int k = 0; k < 32; ++k) g[k] = gpr(k);
+						ppc_trace_68k_pc_dump_(tgt, pc(), g);
+					}
 					di[i].execute(this, di[i].opcode);
 					ppc_insn_counter++;
 				}
@@ -745,6 +750,11 @@ void powerpc_cpu::execute(uint32 entry)
 #endif
 		if (ppc_cr_trace_active_()) {
 			ppc_trace_cr_step(pc(), opcode, cr().get(), lr(), gpr(24));
+		}
+		if (int tgt = ppc_trace_68k_pc_match_(gpr(24)); tgt >= 0) {
+			uint32_t g[32];
+			for (int k = 0; k < 32; ++k) g[k] = gpr(k);
+			ppc_trace_68k_pc_dump_(tgt, pc(), g);
 		}
 		ii->execute(this, opcode);
 		ppc_insn_counter++;

@@ -209,15 +209,13 @@ extern "C" {
     volatile int       g_uppc_last_block_pcs_idx  = 0;
     volatile uint64_t  g_uppc_block_seq           = 0;
 
-    // Secondary ring: narrow hook at MACEMU_PPC_BCTRL_WATCH=<pc>[,<pc>...]
-    // fires per-execution (no dedup) and records (PC, CTR, LR) so the crash
-    // handler can tell which indirect branch took us somewhere QEMU can't
-    // translate. 16 slots.
-    uint32_t           g_uppc_bctrl_pc[16]        = {0};
-    uint32_t           g_uppc_bctrl_ctr[16]       = {0};
-    uint32_t           g_uppc_bctrl_lr[16]        = {0};
-    volatile int       g_uppc_bctrl_idx           = 0;
-    volatile uint64_t  g_uppc_bctrl_seq           = 0;
+    // 68k-PC ring populated only when MACEMU_PPC_TRACE_68K_ENTRY is armed.
+    // Each PPC block in ROM writes current r24 to this ring so the entry-cb
+    // can dump "recent 68k PCs" and we can see what 68k control flow led into
+    // a wild-jump target. Dedups adjacent identical values to compress bursts
+    // where one 68k instruction spans many PPC blocks.
+    uint32_t           g_uppc_last_r24s[128]      = {0};
+    int                g_uppc_last_r24s_idx       = 0;
 }
 
 // ----- Register helpers (uc_reg_read/write wrappers) -----------------------
@@ -469,17 +467,6 @@ static void uppc_mac_emulop_cb(struct uc_struct *uc, uint32_t pc, uint32_t opcod
 
     uint32_t sel = opcode & EMUL_OP_SEL_MASK;
 
-    // Optional per-EmulOp trace — emits a line for every dispatch. Use with
-    // `| tail` to see the last N before a stall / progress-watchdog bail.
-    static const bool s_trace_emulop = []() {
-        const char* e = std::getenv("MACEMU_PPC_TRACE_EMULOP");
-        return e && *e && *e != '0';
-    }();
-    if (s_trace_emulop) {
-        fprintf(stderr, "[EmulOp] #%llu pc=0x%08x opcode=0x%08x sel=%u lr=0x%08x\n",
-                (unsigned long long)g_emulop_count, pc, opcode, sel, rd_lr());
-    }
-
     switch (sel) {
     case 0: // EMUL_RETURN — QuitEmulator
         fprintf(stderr, "[Unicorn-PPC] EmulOp QUIT @pc=0x%08x\n", pc);
@@ -522,150 +509,6 @@ static bool uppc_cpu_init(void)
     // Install EmulOp dispatch callback. Major-opcode-6 instructions routed
     // through helper_mac_emulop call this (see mac_emulop_helper.c).
     uc_ppc_set_mac_emulop_cb(g_uc, uppc_mac_emulop_cb);
-
-    // Debug: trace instructions executed until we hit the divergence at
-    // 0x503141cc. Controlled by MP_UPPC_TRACE env var (prints count, stops
-    // after N insns). Guarded so production paths are free.
-    // Narrow code hooks: fire only when PC is within a specific range. Much
-    // cheaper than a wildcard hook (which adds overhead per-insn). Uses one
-    // hook per range of interest.
-    //
-    // Gated by MACEMU_PPC_TRACE_DISP. These hooks fire on every 68k opcode
-    // dispatch (16 sites × millions of 68k instructions per boot) and each
-    // callback does 4× uc_reg_read, so the cumulative overhead slows boot by
-    // ~100×. Leave off by default; enable only when chasing a dispatch bug.
-    if (const char* td = std::getenv("MACEMU_PPC_TRACE_DISP"); td && *td && *td != '0') {
-        // Dump r0..r31 + LR + CTR when entering the jump-to-emul patch and
-        // again at the 68k emulator entry. Lets us see which register holds
-        // the 68k PC going into the DR emulator.
-        static auto trc_patch_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
-            uint32_t r[32] = {0}, lr = 0, ctr = 0;
-            for (int i = 0; i < 32; i++) uc_reg_read(uc, UC_PPC_REG_0 + i, &r[i]);
-            uc_reg_read(uc, UC_PPC_REG_LR, &lr);
-            uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
-            fprintf(stderr, "[TRC @0x%08llx] lr=%08x ctr=%08x\n",
-                    (unsigned long long)addr, lr, ctr);
-            for (int i = 0; i < 32; i += 8) {
-                fprintf(stderr, "  r%02d..r%02d: %08x %08x %08x %08x %08x %08x %08x %08x\n",
-                        i, i+7, r[i], r[i+1], r[i+2], r[i+3],
-                        r[i+4], r[i+5], r[i+6], r[i+7]);
-            }
-        };
-        uc_hook hh1 = 0, hh2 = 0, hh3 = 0;
-        // Just before the bctr to 68k emulator.
-        uc_hook_add(g_uc, &hh1, UC_HOOK_CODE,
-                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_patch_cb,
-                    nullptr, 0x50314230, 0x50314230);
-        // At the 68k emulator entry.
-        uc_hook_add(g_uc, &hh2, UC_HOOK_CODE,
-                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_patch_cb,
-                    nullptr, 0x5046e6f4, 0x5046e6f4);
-        // At the 68k emulator's dispatch point where it reads gpr(24).
-        uc_hook_add(g_uc, &hh3, UC_HOOK_CODE,
-                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_patch_cb,
-                    nullptr, 0x5046e854, 0x5046e854);
-
-        // Track the 68k PC (gpr 24) across the whole DR-emulator code region.
-        // Log whenever r24 moves to a value that's not a small step from the
-        // previous value (indicating a branch), or when it leaves the known
-        // valid address ranges (RAM / ROM). Hook covers the whole emulator
-        // span (0x50460000..0x504ff000 post-memcpy).
-        static auto trc_dispatch_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
-            static uint64_t n = 0;
-            static uint32_t prev_r24 = 0;
-            static bool first = true;
-            uint32_t r24 = 0;
-            uc_reg_read(uc, UC_PPC_REG_24, &r24);
-            // TRAP_PROC scratch (0x68ffec30+2) is used for uppc_cpu_execute_68k_trap
-            // to hold "<trap>; rts" — r24 legitimately points there during trap
-            // dispatch. Treat the low-memory / XLM region (0x68ff0000..0x69000000)
-            // as valid too. SheepMem (0x10000000..0x10080000) holds SheepVar-
-            // allocated 68k procedures built by FindLibSymbol / BuildSheepshaver
-            // Procedure, which Execute68k jumps into directly — r24 legitimately
-            // points there during those dispatches.
-            bool bogus = !((r24 < 0x08800000) ||
-                           (r24 >= 0x10000000 && r24 < 0x10080000) ||
-                           (r24 >= 0x50000000 && r24 < 0x50500000) ||
-                           (r24 >= 0x68ff0000 && r24 < 0x69000000));
-            int32_t delta = (int32_t)(r24 - prev_r24);
-            bool branch = !first && (delta < -16 || delta > 16);
-            if (first || branch || bogus) {
-                uint32_t r27 = 0, r29 = 0, lr = 0;
-                uc_reg_read(uc, UC_PPC_REG_27, &r27);
-                uc_reg_read(uc, UC_PPC_REG_29, &r29);
-                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
-                // Keep a ring buffer of the last 32 iterations. When we hit
-                // a BOGUS r24, dump the ring so we can see what sequence of
-                // 68k instructions led to the divergence. Also peek at the
-                // memory at r24 to capture the actual 68k opcode about to be
-                // dispatched (the lha has not yet fired when the hook runs).
-                uint32_t opcode_be = 0;
-                if (r24 < 0x08800000 ||
-                    (r24 >= 0x10000000 && r24 < 0x10080000) ||
-                    (r24 >= 0x50000000 && r24 < 0x50500000)) {
-                    uc_mem_read(uc, r24, &opcode_be, 4);
-                }
-                struct Entry { uint64_t n; uint32_t addr, r24, lr, prev, op; };
-                static Entry ring[32]; static int rp = 0;
-                ring[rp] = { n, (uint32_t)addr, r24, lr, prev_r24,
-                             __builtin_bswap32(opcode_be) };
-                rp = (rp + 1) & 31;
-                if (bogus) {
-                    fprintf(stderr, "[TRC-DISP] --- last 32 before bogus ---\n");
-                    for (int i = 0; i < 32; i++) {
-                        int idx = (rp + i) & 31;
-                        fprintf(stderr, "[TRC-DISP %4llu] pc=0x%08x r24=%08x (prev=%08x) op@r24=%08x lr=%08x\n",
-                                (unsigned long long)ring[idx].n, ring[idx].addr,
-                                ring[idx].r24, ring[idx].prev, ring[idx].op, ring[idx].lr);
-                    }
-                }
-                if (n < 30) {
-                    fprintf(stderr, "[TRC-DISP %4llu] pc=0x%08llx r24=%08x (prev=%08x) r27=%08x lr=%08x%s\n",
-                            (unsigned long long)n, (unsigned long long)addr,
-                            r24, prev_r24, r27, lr,
-                            bogus ? " <BOGUS>" : (branch ? " <BRANCH>" : ""));
-                }
-            }
-            // Heartbeat: print every N dispatches so we can spot loops.
-            // MACEMU_PPC_TRACE_DISP=<N> sets the interval; 0/unset → no heartbeat.
-            static uint64_t s_beat = []() -> uint64_t {
-                const char* e = std::getenv("MACEMU_PPC_TRACE_DISP");
-                if (!e || !*e || *e == '0') return 0;
-                uint64_t v = std::strtoull(e, nullptr, 10);
-                return v > 1 ? v : 0;
-            }();
-            if (s_beat && (n % s_beat) == 0 && n > 0) {
-                uint32_t r27 = 0, r29 = 0, lr = 0;
-                uc_reg_read(uc, UC_PPC_REG_27, &r27);
-                uc_reg_read(uc, UC_PPC_REG_29, &r29);
-                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
-                fprintf(stderr, "[TRC-DISP heartbeat %llu] pc=0x%08llx r24=%08x r27=%08x r29=%08x lr=%08x\n",
-                        (unsigned long long)n, (unsigned long long)addr,
-                        r24, r27, r29, lr);
-            }
-            prev_r24 = r24;
-            first = false;
-            // Previously this hook stopped the engine after 4 bogus r24 hits.
-            // That bail fired on healthy boot because TRAP_PROC (0x68ffec32)
-            // now registers as valid; leave the trace in place but don't stop.
-            n++;
-        };
-        // Install the dispatch-trace hook at every `lha r27, 0(r24)` site in
-        // the DR emulator (found via static scan of the ROM). These are the
-        // opcode-fetch points for the 68k emulation loop.
-        static const uint32_t disp_sites[] = {
-            0x50466e30, 0x50467ce4, 0x50467da0, 0x504688c4,
-            0x50469604, 0x50469684, 0x504696e0, 0x50469740,
-            0x5046979c, 0x5046987c, 0x5046d740, 0x5046ddcc,
-            0x5046de30, 0x5046e0e4, 0x5046e854, 0x5047783c,
-        };
-        for (uint32_t site : disp_sites) {
-            uc_hook hh = 0;
-            uc_hook_add(g_uc, &hh, UC_HOOK_CODE,
-                        (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))trc_dispatch_cb,
-                        nullptr, site, site);
-        }
-    }
 
     // CR-trace hook: gated by MACEMU_PPC_CR2_TRACE=<start>[:<end>] (EmulOp seq
     // numbers). Inside the window, dumps pc/opcode/cr/lr/r24 on every
@@ -797,10 +640,12 @@ static bool uppc_cpu_init(void)
                                       int, int64_t, void *))mem_unmapped_cb,
                     nullptr, 1, 0);
 
-        // Always-on last-block-PC tracker. Cheap (no uc_reg_read) — just
-        // updates a 32-slot ring and a counter per TB. The crash handler
-        // reads these globals to report "what guest PC were we at?" when
-        // QEMU internals abort (e.g. qemu_ram_addr_from_host_nofail).
+        // Last-block-PC tracker. Cheap (no uc_reg_read) — just updates a
+        // 32-slot ring and a counter per TB. The crash handler reads these
+        // globals to report "what guest PC were we at?" when QEMU internals
+        // abort (e.g. qemu_ram_addr_from_host_nofail). Default ON because
+        // the forensics value outweighs ~2% perf cost from per-TB dispatch;
+        // set MACEMU_PPC_NO_BLOCK_TRACE=1 for perf measurement runs.
         static auto last_pc_cb = [](uc_engine *, uint64_t addr,
                                     uint32_t, void *) {
             uint32_t pc = (uint32_t)addr;
@@ -810,173 +655,113 @@ static bool uppc_cpu_init(void)
             g_uppc_last_block_pcs_idx = (i + 1) & 31;
             g_uppc_block_seq++;
         };
-        uc_hook hook_last_pc = 0;
-        uc_hook_add(g_uc, &hook_last_pc, UC_HOOK_BLOCK,
-                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))last_pc_cb,
-                    nullptr, 1, 0);
-
-        // Watchpoint on ROM zero-padding region (0x50400000..0x50500000). We
-        // want to see if the nanekernel populates code at 0x5046e6f4 etc.
-        static auto wp_cb = [](uc_engine *uc, uc_mem_type type, uint64_t addr,
-                               int size, int64_t value, void *) -> void {
-            (void)type;
-            static uint64_t n = 0;
-            if (n < 32) {
-                uint32_t pc = 0, lr = 0;
-                uc_reg_read(uc, UC_PPC_REG_PC, &pc);
-                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
-                fprintf(stderr, "[Unicorn-PPC] ROMZ-WRITE @0x%08llx val=0x%08llx size=%d pc=0x%08x lr=0x%08x\n",
-                        (unsigned long long)addr, (unsigned long long)value, size, pc, lr);
-            }
-            n++;
-        };
-        uc_hook hook_wp = 0;
-        uc_hook_add(g_uc, &hook_wp, UC_HOOK_MEM_WRITE,
-                    (void *)(void (*)(uc_engine *, uc_mem_type, uint64_t,
-                                      int, int64_t, void *))wp_cb,
-                    nullptr, 0x50400000, 0x50500000);
-
-        // Low-memory write tracer (mem[0]..mem[0x10]). Focused on 68k reset
-        // vector area: mem[0] (initial SSP) and mem[4] (initial PC). These
-        // are read by the NanoKernel's 68k-emulation entry block.
-        static auto lowmem_wp_cb = [](uc_engine *uc, uc_mem_type, uint64_t addr,
-                                      int size, int64_t value, void *) -> void {
-            static uint64_t n = 0;
-            if (n < 32) {
-                uint32_t pc = 0, lr = 0;
-                uc_reg_read(uc, UC_PPC_REG_PC, &pc);
-                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
-                fprintf(stderr, "[LOWMEM-WRITE] @0x%08llx val=0x%08llx size=%d pc=0x%08x lr=0x%08x\n",
-                        (unsigned long long)addr, (unsigned long long)value, size, pc, lr);
-            }
-            n++;
-        };
-        uc_hook hook_lowmem = 0;
-        uc_hook_add(g_uc, &hook_lowmem, UC_HOOK_MEM_WRITE,
-                    (void *)(void (*)(uc_engine *, uc_mem_type, uint64_t,
-                                      int, int64_t, void *))lowmem_wp_cb,
-                    nullptr, 0x00000000, 0x00000010);
-
-        // r1-underflow tracer. Only fires when r1 actually goes to ~zero
-        // (stack fully drained). Dumps a ring of recent block PCs so we can
-        // see which preceding block zeroed r1.
-        static auto r1_lo_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
-            static uint32_t prev_r1 = 0xFFFFFFFFu;
-            static uint64_t log_n = 0;
-            static uint32_t ring[32] = {0};
-            static int ring_idx = 0;
-            uint32_t r1 = 0;
-            uc_reg_read(uc, UC_PPC_REG_1, &r1);
-            ring[ring_idx] = (uint32_t)addr;
-            ring_idx = (ring_idx + 1) & 31;
-            if (r1 == prev_r1) return;
-            if (r1 < 0x00000100u && log_n < 4) {
-                uint32_t lr = 0, r0 = 0, ctr = 0;
-                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
-                uc_reg_read(uc, UC_PPC_REG_0, &r0);
-                uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
-                fprintf(stderr, "[R1ZERO] pc=0x%08llx r1=0x%08x (prev=0x%08x) r0=0x%08x lr=0x%08x ctr=0x%08x\n",
-                        (unsigned long long)addr, r1, prev_r1, r0, lr, ctr);
-                fprintf(stderr, "[R1ZERO] recent blocks (oldest→newest):");
-                for (int k = 0; k < 32; k++) {
-                    int j = (ring_idx + k) & 31;
-                    fprintf(stderr, " 0x%08x", ring[j]);
-                }
-                fprintf(stderr, "\n");
-                log_n++;
-            }
-            prev_r1 = r1;
-        };
-        uc_hook hook_r1 = 0;
-        uc_hook_add(g_uc, &hook_r1, UC_HOOK_BLOCK,
-                    (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))r1_lo_cb,
-                    nullptr, 1, 0);
-
-        // Per-firing bctrl watch: MACEMU_PPC_BCTRL_WATCH=<pc>[,<pc>...] records
-        // (pc, ctr, lr) every time the given PC executes. Ring of 16 slots is
-        // printed by the crash handler — use this to see what target the last
-        // indirect branch selected before Unicorn's TB translator aborted.
-        if (const char* bw = std::getenv("MACEMU_PPC_BCTRL_WATCH"); bw && *bw) {
-            static auto bctrl_cb = [](uc_engine *uc, uint64_t addr,
-                                      uint32_t, void *) {
-                uint32_t ctr = 0, lr = 0;
-                uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
-                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
-                int i = g_uppc_bctrl_idx;
-                g_uppc_bctrl_pc[i & 15]  = (uint32_t)addr;
-                g_uppc_bctrl_ctr[i & 15] = ctr;
-                g_uppc_bctrl_lr[i & 15]  = lr;
-                g_uppc_bctrl_idx = (i + 1) & 15;
-                g_uppc_bctrl_seq++;
-            };
-            char buf[256];
-            std::strncpy(buf, bw, sizeof(buf) - 1);
-            buf[sizeof(buf) - 1] = 0;
-            char *saveptr = nullptr;
-            for (char *tok = strtok_r(buf, ",", &saveptr); tok;
-                 tok = strtok_r(nullptr, ",", &saveptr)) {
-                uint32_t pc = (uint32_t)std::strtoul(tok, nullptr, 0);
-                if (!pc) continue;
-                uc_hook hook_bw = 0;
-                uc_hook_add(g_uc, &hook_bw, UC_HOOK_CODE,
-                            (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))bctrl_cb,
-                            nullptr, pc, pc);
-                fprintf(stderr, "[Unicorn-PPC] BCTRL-WATCH armed at 0x%08x\n", pc);
+        {
+            const char* nb = std::getenv("MACEMU_PPC_NO_BLOCK_TRACE");
+            const bool disabled = nb && *nb && *nb != '0';
+            if (!disabled) {
+                uc_hook hook_last_pc = 0;
+                uc_hook_add(g_uc, &hook_last_pc, UC_HOOK_BLOCK,
+                            (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))last_pc_cb,
+                            nullptr, 1, 0);
             }
         }
 
-        // One-shot dump hook: when triggered by MACEMU_PPC_DUMP_PC=<hex>[,hex...],
-        // on first hit at each listed PC dumps 16 PPC instructions around that
-        // address and snapshots register state. Useful for inspecting suspected
-        // tight loops in the DR emulator.
-        if (const char* dp = std::getenv("MACEMU_PPC_DUMP_PC"); dp && *dp) {
-            static auto dump_cb = [](uc_engine *uc, uint64_t addr, uint32_t, void *) {
-                static uint32_t fired[16] = {0};
-                static int fired_n = 0;
-                for (int i = 0; i < fired_n; i++) {
-                    if (fired[i] == (uint32_t)addr) return;
-                }
-                if (fired_n < 16) fired[fired_n++] = (uint32_t)addr;
-                uint32_t gpr[32] = {0}, lr = 0, ctr = 0, cr = 0;
-                for (int i = 0; i < 32; i++) uc_reg_read(uc, UC_PPC_REG_0 + i, &gpr[i]);
-                uc_reg_read(uc, UC_PPC_REG_LR, &lr);
-                uc_reg_read(uc, UC_PPC_REG_CTR, &ctr);
-                uc_reg_read(uc, UC_PPC_REG_CR, &cr);
-                fprintf(stderr, "[PC-DUMP] @0x%08llx lr=%08x ctr=%08x cr=%08x\n",
-                        (unsigned long long)addr, lr, ctr, cr);
-                for (int i = 0; i < 32; i += 8) {
-                    fprintf(stderr, "  r%02d..r%02d:", i, i+7);
-                    for (int k = 0; k < 8; k++) fprintf(stderr, " %08x", gpr[i+k]);
-                    fprintf(stderr, "\n");
-                }
-                uint8_t buf[16 * 4];
-                uint32_t start = (uint32_t)addr - 16;
-                if (uc_mem_read(uc, start, buf, sizeof(buf)) == UC_ERR_OK) {
-                    for (int i = 0; i < 16; i++) {
-                        uint32_t insn = ((uint32_t)buf[i*4] << 24) |
-                                        ((uint32_t)buf[i*4+1] << 16) |
-                                        ((uint32_t)buf[i*4+2] << 8) |
-                                        ((uint32_t)buf[i*4+3]);
-                        fprintf(stderr, "  %08x: %08x%s\n",
-                                start + i*4, insn,
-                                (start + i*4 == (uint32_t)addr) ? "  <--" : "");
-                    }
-                }
-            };
+        // 68k PC entry tracer: MACEMU_PPC_TRACE_68K_ENTRY=<hex>[,<hex>...]
+        // Fires once per PPC block across ROM; when r24 (68k PC) matches a
+        // target, dumps A0..A7/D0..D7 and memory at A1 (for JMP(A1)-return
+        // routines) and A7/SP. Built for hunting the caller of 0x500c6198
+        // (PStrToCStr). Every hit is logged (unlike PC-DUMP's first-only).
+        static uint32_t g_trace_68k_pcs[8] = {0};
+        static int g_trace_68k_pc_n = 0;
+        if (const char* tp = std::getenv("MACEMU_PPC_TRACE_68K_ENTRY"); tp && *tp) {
             char buf[256];
-            std::strncpy(buf, dp, sizeof(buf) - 1);
+            std::strncpy(buf, tp, sizeof(buf) - 1);
             buf[sizeof(buf) - 1] = 0;
             char *saveptr = nullptr;
-            for (char *tok = strtok_r(buf, ",", &saveptr); tok;
+            for (char *tok = strtok_r(buf, ",", &saveptr);
+                 tok && g_trace_68k_pc_n < 8;
                  tok = strtok_r(nullptr, ",", &saveptr)) {
                 uint32_t pc = (uint32_t)std::strtoul(tok, nullptr, 0);
                 if (!pc) continue;
-                uc_hook hook_dump = 0;
-                uc_hook_add(g_uc, &hook_dump, UC_HOOK_CODE,
-                            (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))dump_cb,
-                            nullptr, pc, pc);
-                fprintf(stderr, "[Unicorn-PPC] PC-DUMP armed at 0x%08x\n", pc);
+                g_trace_68k_pcs[g_trace_68k_pc_n++] = pc;
+                fprintf(stderr, "[Unicorn-PPC] 68K-ENTRY armed on r24=0x%08x\n", pc);
             }
+            static auto entry_cb = [](uc_engine *uc, uint64_t ppc_pc,
+                                      uint32_t, void *) {
+                uint32_t r24 = 0;
+                uc_reg_read(uc, UC_PPC_REG_24, &r24);
+                bool match = false;
+                for (int i = 0; i < g_trace_68k_pc_n; i++) {
+                    if (g_trace_68k_pcs[i] == r24) { match = true; break; }
+                }
+                if (!match) return;
+                uint32_t gpr[32] = {0};
+                for (int i = 0; i < 32; i++)
+                    uc_reg_read(uc, UC_PPC_REG_0 + i, &gpr[i]);
+                static uint32_t hit = 0;
+                hit++;
+                fprintf(stderr, "[68K-ENTRY #%u] r24=0x%08x ppc_pc=0x%08llx\n",
+                        hit, r24, (unsigned long long)ppc_pc);
+                fprintf(stderr, "  [68k D0..D7] %08x %08x %08x %08x %08x %08x %08x %08x\n",
+                        gpr[8], gpr[9], gpr[10], gpr[11],
+                        gpr[12], gpr[13], gpr[14], gpr[15]);
+                fprintf(stderr, "  [68k A0..A7] %08x %08x %08x %08x %08x %08x %08x %08x\n",
+                        gpr[16], gpr[17], gpr[18], gpr[19],
+                        gpr[20], gpr[21], gpr[22], gpr[23]);
+                // Peek 16 bytes @ A1 (return target for JMP(A1) convention)
+                uint8_t mem[32];
+                if (gpr[17] && uc_mem_read(uc, gpr[17], mem, 16) == UC_ERR_OK) {
+                    fprintf(stderr, "  [mem @A1=0x%08x]", gpr[17]);
+                    for (int i = 0; i < 16; i++) fprintf(stderr, " %02x", mem[i]);
+                    fprintf(stderr, "\n");
+                }
+                // Peek 16 bytes @ A7/SP (return addr if BSR/JSR caller)
+                if (gpr[23] && uc_mem_read(uc, gpr[23], mem, 16) == UC_ERR_OK) {
+                    fprintf(stderr, "  [mem @A7=0x%08x]", gpr[23]);
+                    for (int i = 0; i < 16; i++) fprintf(stderr, " %02x", mem[i]);
+                    fprintf(stderr, "\n");
+                }
+                // Recent block PCs from the ring
+                fprintf(stderr, "  recent PPC blocks: ");
+                int idx = g_uppc_last_block_pcs_idx;
+                for (int i = 0; i < 16; i++) {
+                    int j = (idx - 16 + i) & 31;
+                    fprintf(stderr, "%08x ", g_uppc_last_block_pcs[j]);
+                }
+                fprintf(stderr, "\n");
+                // Recent 68k PCs (dedup-adjacent) — shows 68k control flow
+                // path that led into this match. Useful for wild-jump diag.
+                fprintf(stderr, "  recent 68k PCs: ");
+                int ridx = g_uppc_last_r24s_idx;
+                for (int i = 0; i < 128; i++) {
+                    int j = (ridx - 128 + i) & 127;
+                    fprintf(stderr, "%08x ", g_uppc_last_r24s[j]);
+                }
+                fprintf(stderr, "\n");
+            };
+            uc_hook hook_entry = 0;
+            uc_hook_add(g_uc, &hook_entry, UC_HOOK_BLOCK,
+                        (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))entry_cb,
+                        nullptr, ROMBase, ROMBase + 0x500000);
+
+            // Secondary always-on (for this run) block cb: record r24 per PPC
+            // block across ROM into g_uppc_last_r24s ring. Dedup-adjacent so
+            // repeated blocks of the same 68k instruction don't flood the
+            // ring. Enables "recent 68k PCs" dump above.
+            static auto r24_ring_cb = [](uc_engine *uc, uint64_t, uint32_t,
+                                         void *) {
+                uint32_t r24 = 0;
+                uc_reg_read(uc, UC_PPC_REG_24, &r24);
+                int i = g_uppc_last_r24s_idx;
+                int prev = (i - 1) & 127;
+                if (g_uppc_last_r24s[prev] == r24) return;  // dedup
+                g_uppc_last_r24s[i & 127] = r24;
+                g_uppc_last_r24s_idx = (i + 1) & 127;
+            };
+            uc_hook hook_r24_ring = 0;
+            uc_hook_add(g_uc, &hook_r24_ring, UC_HOOK_BLOCK,
+                        (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))r24_ring_cb,
+                        nullptr, ROMBase, ROMBase + 0x500000);
         }
     }
 
@@ -1417,7 +1202,8 @@ static void uppc_handle_interrupt(void)
             // unconditionally — that clobbers accumulated nest levels from ROM
             // patches (e.g. MixedMode entry at 0x36fa00) and causes HandleInterrupt
             // to re-fire during partial-handler execution.
-            WriteMac32(XLM_IRQ_NEST, (int32_t)ReadMac32(XLM_IRQ_NEST) + 1);
+            int32_t new_nest = (int32_t)ReadMac32(XLM_IRQ_NEST) + 1;
+            WriteMac32(XLM_IRQ_NEST, new_nest);
             uint32_t entry = (ppc::ROMType == ROMTYPE_NEWWORLD)
                 ? ppc::ROMBase + 0x312b1c
                 : ppc::ROMBase + 0x312a3c;
@@ -1445,13 +1231,17 @@ static void uppc_tick_thread(void)
     uint64_t next = start;
 
     // MACEMU_PPC_TICK_PERIOD_SCALE scales the 16.625ms 60Hz tick. scale=10
-    // → 166.25ms / ~6Hz. Used to test whether Unicorn's boot stall is caused
-    // by IRQ pressure (ticks landing too frequently in emulop-seq space).
-    // Default 1 = normal 60Hz.
+    // → 166.25ms / ~6Hz. Used to work around Unicorn's IRQ-pressure stall
+    // (ticks landing too frequently in emulop-seq space starve the 68k
+    // side; see docs/ppc/UnicornPpcStatus.md "late" sections for details).
+    // Default for Unicorn PPC is 10 — empirically the only rate where
+    // boot reaches "Loading boot blocks" reliably, and the only rate where
+    // Desktop has ever been observed to render. Explicit env-var setting
+    // overrides (set to 1 to restore 60Hz for debugging).
     static const int s_tick_scale = [](){
         const char* e = std::getenv("MACEMU_PPC_TICK_PERIOD_SCALE");
-        int v = (e && *e) ? atoi(e) : 1;
-        return v > 0 ? v : 1;
+        int v = (e && *e) ? atoi(e) : 10;
+        return v > 0 ? v : 10;
     }();
     while (g_tick_thread_running.load()) {
         const int period_us = 16625 * s_tick_scale;
@@ -1482,14 +1272,6 @@ static void uppc_tick_thread(void)
         }
 
         uint32_t nest = ReadMac32(XLM_IRQ_NEST);
-        static const bool s_tick_trace = [](){
-            const char* e = std::getenv("MACEMU_PPC_TRACE_TICK");
-            return e && *e && *e != '0';
-        }();
-        if (s_tick_trace && (tick_counter & 0x1f) == 0) {
-            fprintf(stderr, "[tick] counter=%d nest=%d pending=%d\n",
-                    tick_counter, nest, g_pending_irq.load() ? 1 : 0);
-        }
         // MACEMU_PPC_MIN_EMULOPS_PER_IRQ: minimum emulops between IRQs.
         // KPX boots with ~42 emulops between IRQs on average; Unicorn is ~10x
         // slower, so 60Hz wall-clock ticks land roughly every 1.4 emulops in
@@ -1504,6 +1286,17 @@ static void uppc_tick_thread(void)
         }();
         static uint64_t s_last_irq_emulop = 0;
         if (s_min_emulops && g_emulop_count - s_last_irq_emulop < s_min_emulops) continue;
+
+        // MACEMU_PPC_DEFER_FIRST_IRQ=N: suppress 60Hz tick IRQs until
+        // g_emulop_count reaches N. KPX's natural first-IRQ cadence is ~105
+        // emulops from reset; Unicorn's is ~9. The premature first tick lands
+        // inside early ROM init where CR2.{LT,GT,EQ} are load-bearing and gets
+        // OR'd with 0xe00000, causing divergent boot paths.
+        static const uint64_t s_defer_first = [](){
+            const char* e = std::getenv("MACEMU_PPC_DEFER_FIRST_IRQ");
+            return (e && *e && *e != '0') ? std::strtoull(e, nullptr, 10) : 0ull;
+        }();
+        if (s_defer_first && g_emulop_count < s_defer_first) continue;
 
         if (nest == 0) {
             SetInterruptFlag(INTFLAG_VIA);
@@ -1566,10 +1359,20 @@ static void uppc_cpu_execute_fast(void)
     // wall time, not iteration count — iteration cadence varies by 6+
     // orders of magnitude between these two failure modes.
     uint64_t last_progress_emulop = g_emulop_count;
+    uint32_t last_progress_r24    = rd_gpr(24);
     auto last_progress_ts = std::chrono::steady_clock::now();
     uint64_t iters_since_progress = 0;
     uint64_t irqs_since_progress = 0;
     constexpr int kProgressStallBailMs = 5000;
+    // r24 (68k PC) snapshot ring. Populated once per main-loop iteration so
+    // the progress-stall bail can show whether the 68k emulator was making
+    // forward progress (r24 advancing) or literally stuck on one 68k insn
+    // during the stall window. Size 64 → covers ~1s of stall at 60Hz ticks.
+    // Also drives the r24-advance watchdog: if the 68k PC ever changes, the
+    // guest is making forward 68k progress (even if it doesn't dispatch an
+    // EmulOp — a tight 68k ALU loop in ROM init is a legitimate example).
+    uint32_t iter_r24_ring[64] = {0};
+    int      iter_r24_idx = 0;
     // Concentrated-skip bail: catches 2–3 PC alternating unmapped-write loops
     // where consecutive_same_pc resets each toggle. If we've silently skipped
     // many stores confined to very few PCs, something is wedged (usually a
@@ -1595,29 +1398,14 @@ static void uppc_cpu_execute_fast(void)
     // true PPC-only tight loop will hit it, and at 1Hz-yield the IRQ delivery
     // is still well within the OS's tolerance.
     const uint64_t s_emu_timeout_us = 1000000;
-    // Periodic PC sampler for debugging the post-first-IRQ stall. Off by default.
-    const bool s_trace_loop = [](){
-        const char* e = std::getenv("MACEMU_PPC_TRACE_LOOP");
-        return e && *e && *e != '0';
-    }();
-    uint64_t loop_iter = 0;
     while (!g_stop_requested) {
         uint32_t pc = rd_pc();
-        if (s_trace_loop) {
-            fprintf(stderr, "[loop] iter=%llu pc=%08x lr=%08x emulops=%llu\n",
-                    (unsigned long long)loop_iter, pc, rd_lr(),
-                    (unsigned long long)g_emulop_count);
-        }
-        ++loop_iter;
         ++g_emu_nest_depth;
         uint64_t emulops_before = g_emulop_count;
         uc_err err = uc_emu_start(g_uc, pc, 0, s_emu_timeout_us, /*count*/0);
         --g_emu_nest_depth;
-        if (s_trace_loop && err != UC_ERR_OK) {
-            fprintf(stderr, "[loop]   err=%s (delta_emulops=%llu)\n",
-                    uc_strerror(err),
-                    (unsigned long long)(g_emulop_count - emulops_before));
-        }
+        iter_r24_ring[iter_r24_idx & 63] = rd_gpr(24);
+        iter_r24_idx++;
         if (err == UC_ERR_READ_UNMAPPED || err == UC_ERR_WRITE_UNMAPPED) {
             // KPX SIGSEGV-skip shape: step past the dead instruction and keep
             // going. Log the first few per-PC so probe loops don't flood the
@@ -1737,8 +1525,15 @@ static void uppc_cpu_execute_fast(void)
         // kProgressStallBailMs wall-ms — catches both valid-memory tight
         // loops and unmapped-walk loops.
         ++iters_since_progress;
-        if (g_emulop_count != last_progress_emulop) {
+        uint32_t cur_r24 = rd_gpr(24);
+        // Either an EmulOp dispatch or a 68k-PC (r24) advance counts as
+        // forward progress. A tight 68k ALU loop in ROM init (MOVE/BNE/ADDA)
+        // produces no EmulOps but does move r24 through its body — at
+        // Unicorn TCG speed that can easily exceed the 5-s emulop watchdog.
+        if (g_emulop_count != last_progress_emulop ||
+            cur_r24 != last_progress_r24) {
             last_progress_emulop = g_emulop_count;
+            last_progress_r24    = cur_r24;
             last_progress_ts = std::chrono::steady_clock::now();
             iters_since_progress = 0;
             irqs_since_progress = 0;
@@ -1794,6 +1589,31 @@ static void uppc_cpu_execute_fast(void)
                     if (i == 15) fprintf(stderr, "\n   ");
                 }
                 fprintf(stderr, "\n");
+                // 68k opcode bytes at current r24 — four halfwords big-endian.
+                // Lets us see what 68k instruction the emulator was stuck on.
+                uint32_t r24_now = rd_gpr(24);
+                fprintf(stderr, "  68k code @ r24=0x%08x:", r24_now);
+                for (int off = 0; off < 16; off += 2) {
+                    uint16_t hw = 0;
+                    if (uc_mem_read(g_uc, r24_now + off, &hw, 2) == UC_ERR_OK) {
+                        fprintf(stderr, " %04x", __builtin_bswap16(hw));
+                    } else {
+                        fprintf(stderr, " ????");
+                    }
+                }
+                fprintf(stderr, "\n");
+                // r24 trajectory: last 64 main-loop iterations. If all values
+                // are identical → 68k PC stuck (handler hang). If varying →
+                // 68k emulator making progress but too slow to dispatch an
+                // EmulOp within the stall window (Unicorn TCG throughput).
+                fprintf(stderr, "  r24 (68k PC) ring (last %d iters, oldest->newest):\n   ",
+                        (iter_r24_idx < 64 ? iter_r24_idx : 64));
+                int r24_show = iter_r24_idx < 64 ? iter_r24_idx : 64;
+                for (int k = iter_r24_idx - r24_show; k < iter_r24_idx; ++k) {
+                    fprintf(stderr, " %08x", iter_r24_ring[k & 63]);
+                    if (((k - (iter_r24_idx - r24_show)) & 7) == 7) fprintf(stderr, "\n   ");
+                }
+                fprintf(stderr, "\n");
                 break;
             }
         }
@@ -1845,10 +1665,6 @@ static void uppc_cpu_execute_fast(void)
         }
 
         if (g_pending_irq.exchange(false)) {
-            if (s_trace_loop) {
-                fprintf(stderr, "[loop]   -> handle_interrupt (mode=%u nest=%d pc=%08x)\n",
-                        ReadMac32(XLM_RUN_MODE), g_emu_nest_depth, rd_pc());
-            }
             uppc_handle_interrupt();
             ++irqs_since_progress;
         }
@@ -1982,24 +1798,6 @@ extern "C" uint32_t uppc_cpu_execute_macos_code(uint32_t tvect, int nargs, uint3
     uint32_t saved_lr  = rd_lr();
     uint32_t saved_ctr = rd_ctr();
 
-    static const bool s_trace_macos = []() {
-        const char* e = std::getenv("MACEMU_PPC_TRACE_MACOS");
-        return e && *e && *e != '0';
-    }();
-    if (s_trace_macos) {
-        uint32_t proc_dbg = ReadMac32(tvect);
-        uint32_t toc_dbg  = ReadMac32(tvect + 4);
-        fprintf(stderr, "[Unicorn-PPC] execute_macos_code ENTER tvect=0x%08x proc=0x%08x toc=0x%08x nargs=%d tramp=0x%08x\n",
-                tvect, proc_dbg, toc_dbg, nargs, g_macos_trampoline);
-        for (int i = 0; i < nargs; i++)
-            fprintf(stderr, "[Unicorn-PPC]   arg%d=0x%08x\n", i, args[i]);
-        // Dump first 8 insns at proc
-        for (int i = 0; i < 8; i++) {
-            uint32_t w = ReadMac32(proc_dbg + i*4);
-            fprintf(stderr, "[Unicorn-PPC]   proc+%2d: 0x%08x\n", i*4, w);
-        }
-    }
-
     wr_lr(g_macos_trampoline);
 
     // KPX reserves 64 bytes of stack for the MacOS call frame.
@@ -2021,10 +1819,6 @@ extern "C" uint32_t uppc_cpu_execute_macos_code(uint32_t tvect, int nargs, uint3
 
     uppc_cpu_execute_ppc(proc);
     uint32_t retval = rd_gpr(3);
-    if (s_trace_macos) {
-        fprintf(stderr, "[Unicorn-PPC] execute_macos_code EXIT  retval=0x%08x pc=0x%08x lr=0x%08x\n",
-                retval, rd_pc(), rd_lr());
-    }
 
     // Restore r2..r(2+nargs).
     for (int i = 0; i <= nargs && i <= 8; i++)

@@ -1,0 +1,8 @@
+SKIP data.img (no System Folder — probably a data disk)
+SKIP installers.img (no System Folder — probably a data disk)
+INSTALLED BridgeAgent → macos-7.6.1.img:System Folder:Startup Items:
+=== mac-phoenix ===
+
+Auto-exit timer set: 30 seconds
+
+=== Initializing CPU Context (Headless) ===

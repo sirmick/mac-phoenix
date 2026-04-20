@@ -53,3 +53,6 @@ build_warnings.txt
 
 # Local scratch
 private/
+
+# Perf-record raw data (SVG/.folded/run_log are small; .data is ~60MB each)
+docs/ppc/late-*-artifacts/perf/*.data

@@ -121,3 +121,70 @@ inline void ppc_trace_cr_step(uint32_t pc, uint32_t op, uint32_t cr,
     std::fprintf(stderr, "[CR] seq=%llu pc=%08x op=%08x cr=%08x lr=%08x r24=%08x\n",
                  (unsigned long long)ppc_trace_seq_(), pc, op, cr, lr, r24);
 }
+
+// 68k-PC entry tracer. Gated by MACEMU_PPC_TRACE_68K_ENTRY=<hex>[,<hex>...].
+// Fires when gpr(24) (68k PC) matches any target; dumps D0..D7/A0..A7 in the
+// same format as the Unicorn-PPC tracer so KPX and Unicorn logs can be diffed.
+// First MACEMU_PPC_TRACE_68K_MAX (default 5) hits per target are emitted, then
+// silenced to prevent flooding when the match lands inside a hot loop.
+struct PpcTrace68kPc {
+    uint32_t targets[8];
+    int hit_count[8];
+    int n;
+    int max_per_target;
+    bool enabled;
+};
+
+inline PpcTrace68kPc& ppc_trace_68k_pc_state_() {
+    static PpcTrace68kPc s = []() {
+        PpcTrace68kPc r{};
+        const char* env = std::getenv("MACEMU_PPC_TRACE_68K_ENTRY");
+        if (!env || !*env) return r;
+        char buf[256];
+        std::strncpy(buf, env, sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = 0;
+        char* saveptr = nullptr;
+        for (char* tok = strtok_r(buf, ",", &saveptr);
+             tok && r.n < 8;
+             tok = strtok_r(nullptr, ",", &saveptr)) {
+            uint32_t v = (uint32_t)std::strtoul(tok, nullptr, 0);
+            if (!v) continue;
+            r.targets[r.n++] = v;
+        }
+        if (r.n == 0) return r;
+        const char* mx = std::getenv("MACEMU_PPC_TRACE_68K_MAX");
+        r.max_per_target = (mx && *mx) ? std::atoi(mx) : 5;
+        if (r.max_per_target <= 0) r.max_per_target = 1;
+        r.enabled = true;
+        return r;
+    }();
+    return s;
+}
+
+// Returns target index if gpr(24) matches and quota not exhausted, else -1.
+inline int ppc_trace_68k_pc_match_(uint32_t r24) {
+    auto& s = ppc_trace_68k_pc_state_();
+    if (!s.enabled) return -1;
+    for (int i = 0; i < s.n; ++i) {
+        if (s.targets[i] == r24) {
+            if (s.hit_count[i] >= s.max_per_target) return -1;
+            return i;
+        }
+    }
+    return -1;
+}
+
+inline void ppc_trace_68k_pc_dump_(int tgt_idx, uint32_t ppc_pc,
+                                    const uint32_t* gprs) {
+    auto& s = ppc_trace_68k_pc_state_();
+    int hit = ++s.hit_count[tgt_idx];
+    std::fprintf(stderr, "[68K-ENTRY #%d] r24=0x%08x ppc_pc=0x%08x target_idx=%d\n",
+                 hit, gprs[24], ppc_pc, tgt_idx);
+    std::fprintf(stderr, "  [68k D0..D7] %08x %08x %08x %08x %08x %08x %08x %08x\n",
+                 gprs[8], gprs[9], gprs[10], gprs[11],
+                 gprs[12], gprs[13], gprs[14], gprs[15]);
+    std::fprintf(stderr, "  [68k A0..A7] %08x %08x %08x %08x %08x %08x %08x %08x\n",
+                 gprs[16], gprs[17], gprs[18], gprs[19],
+                 gprs[20], gprs[21], gprs[22], gprs[23]);
+    std::fprintf(stderr, "  [gpr(1)=SP]  %08x\n", gprs[1]);
+}

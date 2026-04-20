@@ -22,12 +22,6 @@ extern "C" {
 	extern uint32_t g_uppc_last_block_pcs[32] __attribute__((weak));
 	extern volatile int g_uppc_last_block_pcs_idx __attribute__((weak));
 	extern volatile uint64_t g_uppc_block_seq __attribute__((weak));
-
-	extern uint32_t g_uppc_bctrl_pc[16] __attribute__((weak));
-	extern uint32_t g_uppc_bctrl_ctr[16] __attribute__((weak));
-	extern uint32_t g_uppc_bctrl_lr[16] __attribute__((weak));
-	extern volatile int g_uppc_bctrl_idx __attribute__((weak));
-	extern volatile uint64_t g_uppc_bctrl_seq __attribute__((weak));
 }
 
 static void print_uppc_last_pcs(void)
@@ -45,21 +39,6 @@ static void print_uppc_last_pcs(void)
 		fprintf(stderr, "  [%2d] 0x%08x\n", k, g_uppc_last_block_pcs[j]);
 	}
 	fprintf(stderr, "==================================\n\n");
-
-	if (&g_uppc_bctrl_seq != nullptr && g_uppc_bctrl_seq > 0) {
-		fprintf(stderr, "=== Unicorn PPC bctrl watch ring (last 16) ===\n");
-		fprintf(stderr, "Total recorded firings: %llu\n",
-		        (unsigned long long)g_uppc_bctrl_seq);
-		int idx = g_uppc_bctrl_idx;
-		for (int k = 0; k < 16; k++) {
-			int j = (idx + k) & 15;
-			fprintf(stderr, "  [%2d] pc=0x%08x ctr=0x%08x lr=0x%08x\n",
-			        k, g_uppc_bctrl_pc[j],
-			        g_uppc_bctrl_ctr[j],
-			        g_uppc_bctrl_lr[j]);
-		}
-		fprintf(stderr, "==============================================\n\n");
-	}
 }
 
 // Crash signal handler
