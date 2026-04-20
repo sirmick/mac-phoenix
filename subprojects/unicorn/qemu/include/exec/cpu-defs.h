@@ -100,6 +100,10 @@ typedef uint64_t target_ulong;
     MIN(22, TARGET_VIRT_ADDR_SPACE_BITS - TARGET_PAGE_BITS)
 # endif
 
+/* Forward decl — full type lives in exec/memory.h. CPUTLBEntry only needs
+ * to hold an opaque pointer. */
+struct MemoryRegion;
+
 typedef struct CPUTLBEntry {
     /* bit TARGET_LONG_BITS to TARGET_PAGE_BITS : virtual address
        bit TARGET_PAGE_BITS-1..4  : Nonzero for accesses that should not
@@ -116,6 +120,14 @@ typedef struct CPUTLBEntry {
             /* Addend to virtual address to get host address.  IO accesses
                use the corresponding iotlb value.  */
             uintptr_t addend;
+            /* Cached MR pointer. Softmmu used to call
+             * uc->memory_mapping(uc, paddr) on every access; now populated
+             * lazily on first miss per-entry and reused on subsequent
+             * accesses to the same page. NULL = not cached yet (or no
+             * mapping — recomputed each time, but that's the rare path).
+             * Invalidated wholesale via tlb_flush(), which memory_map /
+             * memory_unmap already trigger. */
+            struct MemoryRegion *mr;
         };
         /* padding to get a power of two size */
         uint8_t dummy[1 << CPU_TLB_ENTRY_BITS];

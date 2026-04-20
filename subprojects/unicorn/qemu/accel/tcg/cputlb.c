@@ -937,6 +937,10 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
     /* Now calculate the new entry */
     tn.addend = addend - vaddr_page;
     tn.paddr = paddr_page;
+    /* Lazy: resolved on first softmmu access to this page; tlb_flush()
+     * clears the whole entry via memset, so no invalidation needed on
+     * map/unmap beyond the flush already issued there. */
+    tn.mr = NULL;
     if (prot & PAGE_READ) {
         tn.addr_read = address;
         if (wp_flags & BP_MEM_READ) {
@@ -1194,7 +1198,11 @@ static void notdirty_write(CPUState *cpu, vaddr mem_vaddr, unsigned size,
     struct uc_struct *uc = cpu->uc;
 #endif
     ram_addr_t ram_addr = mem_vaddr + iotlbentry->addr;
-    MemoryRegion *mr = cpu->uc->memory_mapping(cpu->uc, tlbe->paddr | (mem_vaddr & ~TARGET_PAGE_MASK));
+    MemoryRegion *mr = tlbe->mr;
+    if (unlikely(!mr)) {
+        mr = cpu->uc->memory_mapping(cpu->uc, tlbe->paddr | (mem_vaddr & ~TARGET_PAGE_MASK));
+        tlbe->mr = mr;
+    }
 
     if (mr && (mr->perms & UC_PROT_EXEC) != 0) {
         struct page_collection *pages
@@ -1553,7 +1561,11 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
     }
 
     paddr = entry->paddr | (addr & ~TARGET_PAGE_MASK);
-    mr = uc->memory_mapping(uc, paddr);
+    mr = entry->mr;
+    if (unlikely(!mr)) {
+        mr = uc->memory_mapping(uc, paddr);
+        entry->mr = mr;
+    }
 
     // memory might be still unmapped while reading or fetching
     if (mr == NULL) {
@@ -1622,7 +1634,11 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                 tlb_addr &= ~TLB_INVALID_MASK;
             }
             paddr = entry->paddr | (addr & ~TARGET_PAGE_MASK);
-            mr = uc->memory_mapping(uc, paddr);
+            mr = entry->mr;
+            if (unlikely(!mr)) {
+                mr = uc->memory_mapping(uc, paddr);
+                entry->mr = mr;
+            }
             if (mr == NULL) {
                 uc->invalid_error = UC_ERR_MAP;
                 if (uc->nested_level > 0 && !uc->cpu->stopped) {
@@ -2192,7 +2208,11 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
 
     // Load the latest memory mapping.
     paddr = entry->paddr | (addr & ~TARGET_PAGE_MASK);
-    mr = uc->memory_mapping(uc, paddr);
+    mr = entry->mr;
+    if (unlikely(!mr)) {
+        mr = uc->memory_mapping(uc, paddr);
+        entry->mr = mr;
+    }
 
     if (!uc->size_recur_mem) { // disabling write callback if in recursive call
         // Unicorn: callback on memory write
@@ -2255,7 +2275,11 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
                 tlb_addr = tlb_addr_write(entry) & ~TLB_INVALID_MASK;
             }
             paddr = entry->paddr | (addr & ~TARGET_PAGE_MASK);
-            mr = uc->memory_mapping(uc, paddr);
+            mr = entry->mr;
+            if (unlikely(!mr)) {
+                mr = uc->memory_mapping(uc, paddr);
+                entry->mr = mr;
+            }
             if (mr == NULL) {
                 uc->invalid_error = UC_ERR_MAP;
                 cpu_exit(uc->cpu);
