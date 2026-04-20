@@ -180,44 +180,36 @@ static void dummy_bank_write(uc_engine *uc, uint64_t offset, unsigned size, uint
 // Uses zeroed memory with UC_PROT_ALL (writes are stored). This is safe because the big
 // NuBus/slot regions are already pre-mapped with MMIO dummy_bank. Any remaining unmapped
 // accesses are to non-NuBus regions where storing writes is acceptable.
+/* Fallback for unmapped accesses. In normal boot this never fires — the
+ * RAM/ROM/ScratchMem/FrameBuffer maps plus the dummy/gap/MMIO/high_mem
+ * mmio_maps cover the full 32-bit space. Log loudly if it ever does so
+ * we catch mapping regressions instead of silently papering over them.
+ * If we ever need to recover, re-enable the calloc+uc_mem_map_ptr path
+ * below (and track the buffer for cleanup — previously leaked). */
 static bool unicorn_unmapped_read_handler(uc_engine *uc, uc_mem_type type,
                                           uint64_t address, int size,
                                           int64_t value, void *user_data) {
-	(void)type; (void)size; (void)value; (void)user_data;
-
-	const uint32_t map_size = 1024 * 1024;
-	uint32_t map_base = (address / map_size) * map_size;
-
-	uint8_t *buffer = (uint8_t *)calloc(1, map_size);
-	if (!buffer) return false;
-
-	uc_err err = uc_mem_map_ptr(uc, map_base, map_size, UC_PROT_ALL, buffer);
-	if (err != UC_ERR_OK) {
-		free(buffer);
-		return false;
+	(void)uc; (void)type; (void)size; (void)value; (void)user_data;
+	static int warned = 0;
+	if (warned < 4) {
+		fprintf(stderr, "[Unicorn-m68k] Unmapped READ @ 0x%08llx — mapping gap (expected none). Returning 0.\n",
+		        (unsigned long long)address);
+		warned++;
 	}
-
-	return true;
+	return false;  /* halt with UC_ERR_READ_UNMAPPED so execute_fast/outer loop can react */
 }
 
 static bool unicorn_unmapped_write_handler(uc_engine *uc, uc_mem_type type,
                                            uint64_t address, int size,
                                            int64_t value, void *user_data) {
-	(void)type; (void)size; (void)value; (void)user_data;
-
-	const uint32_t map_size = 1024 * 1024;
-	uint32_t map_base = (address / map_size) * map_size;
-
-	uint8_t *buffer = (uint8_t *)calloc(1, map_size);
-	if (!buffer) return false;
-
-	uc_err err = uc_mem_map_ptr(uc, map_base, map_size, UC_PROT_ALL, buffer);
-	if (err != UC_ERR_OK) {
-		free(buffer);
-		return false;
+	(void)uc; (void)type; (void)size; (void)value; (void)user_data;
+	static int warned = 0;
+	if (warned < 4) {
+		fprintf(stderr, "[Unicorn-m68k] Unmapped WRITE @ 0x%08llx — mapping gap (expected none). Dropping.\n",
+		        (unsigned long long)address);
+		warned++;
 	}
-
-	return true;
+	return false;  /* halt with UC_ERR_WRITE_UNMAPPED so execute_fast/outer loop can react */
 }
 
 // ===== MMIO Callback Functions (for uc_mmio_map) =====

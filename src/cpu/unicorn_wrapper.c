@@ -27,6 +27,18 @@ static inline uint64_t perf_now_ns(void) {
     return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 }
 
+/* Gate per-block clock_gettime behind MACEMU_DEBUG_PERF — the vDSO call is
+ * cheap but we run it ~100M+ times per boot. Initialized lazily on first
+ * hook_block call. Values: 0=unset (read env), 1=off, 2=on. */
+static int g_perf_sampling = 0;
+
+static inline bool perf_sampling_enabled(void) {
+    if (__builtin_expect(g_perf_sampling == 0, 0)) {
+        g_perf_sampling = getenv("MACEMU_DEBUG_PERF") ? 2 : 1;
+    }
+    return g_perf_sampling == 2;
+}
+
 /* Shared M68K register structure (C-compatible) */
 #include "m68k_registers.h"
 
@@ -84,6 +96,7 @@ struct UnicornCPU {
     uc_hook insn_invalid_hook; /* UC_HOOK_INSN_INVALID for legacy EmulOps */
     uc_hook intr_hook;         /* UC_HOOK_INTR for A-line EmulOps */
     uc_hook trace_hook;        /* UC_HOOK_MEM_READ for CPU tracing */
+    uc_hook scsi_accel_hook;   /* UC_HOOK_CODE for SCSI probe timeout skip */
 
     /* Block statistics */
     BlockStats block_stats;
@@ -91,11 +104,12 @@ struct UnicornCPU {
     /* Performance counters */
     PerfCounters perf;
 
-    /* Deferred SR update */
+    /* Deferred register updates. `any_deferred` lets the hot path skip the
+     * per-register flag scan with a single branch when nothing is queued. */
+    bool any_deferred;
     bool has_deferred_sr_update;
     uint16_t deferred_sr_value;
 
-    /* Deferred register updates (D0-D7, A0-A7) */
     bool has_deferred_dreg_update[8];
     uint32_t deferred_dreg_value[8];
     bool has_deferred_areg_update[8];
@@ -108,6 +122,7 @@ void unicorn_defer_sr_update(void *unicorn_cpu, uint16_t new_sr) {
     if (cpu) {
         cpu->has_deferred_sr_update = true;
         cpu->deferred_sr_value = new_sr;
+        cpu->any_deferred = true;
     }
 }
 
@@ -117,6 +132,7 @@ void unicorn_defer_dreg_update(void *unicorn_cpu, int reg, uint32_t value) {
     if (cpu && reg >= 0 && reg <= 7) {
         cpu->has_deferred_dreg_update[reg] = true;
         cpu->deferred_dreg_value[reg] = value;
+        cpu->any_deferred = true;
     }
 }
 
@@ -126,6 +142,7 @@ void unicorn_defer_areg_update(void *unicorn_cpu, int reg, uint32_t value) {
     if (cpu && reg >= 0 && reg <= 7) {
         cpu->has_deferred_areg_update[reg] = true;
         cpu->deferred_areg_value[reg] = value;
+        cpu->any_deferred = true;
     }
 }
 
@@ -140,6 +157,8 @@ void unicorn_defer_areg_update(void *unicorn_cpu, int reg, uint32_t value) {
  */
 static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, const char *caller __attribute__((unused))) {
     if (!cpu || !uc) return false;
+    /* Fast-out: hook_block fires per TB and almost never has pending updates. */
+    if (!cpu->any_deferred) return false;
 
     bool any_updates = false;
 
@@ -169,6 +188,8 @@ static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, con
             any_updates = true;
         }
     }
+
+    cpu->any_deferred = false;
 
     /* IMPORTANT: Register writes do NOT require manual cache flushing!
      *
@@ -206,9 +227,42 @@ static bool apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, con
  *   4. Apply deferred register updates
  *   5. Pending interrupt delivery
  */
-static void hook_block(uc_engine *uc, uint64_t address, uint32_t size __attribute__((unused)), void *user_data) {
+/**
+ * SCSI timeout accelerator — UC_HOOK_CODE at three specific PCs in the ROM.
+ * ROM SCSI probe busy-waits reading Mac Ticks ($016A). Cap D5 and fast-forward
+ * Ticks to skip the wait. Previously lived as a branch inside hook_block that
+ * ran on every block; now only fires at the exact PCs.
+ */
+static void hook_scsi_accel(uc_engine *uc, uint64_t address, uint32_t size __attribute__((unused)), void *user_data __attribute__((unused))) {
+    if (address == 0x020014be || address == 0x020014c0) {
+        uint32_t d5 = 0;
+        uc_reg_read(uc, UC_M68K_REG_D5, &d5);
+        if (d5 > 240) {
+            d5 = 240;
+            uc_reg_write(uc, UC_M68K_REG_D5, &d5);
+        }
+    } else if (address == 0x020014ca) {
+        uint32_t d0 = 0;
+        uc_reg_read(uc, UC_M68K_REG_D0, &d0);
+        extern uint8_t *RAMBaseHost;
+        if (RAMBaseHost) {
+            uint8_t *tp = RAMBaseHost + 0x016A;
+            uint32_t ticks = (tp[0]<<24)|(tp[1]<<16)|(tp[2]<<8)|tp[3];
+            if (ticks < d0) {
+                uint32_t new_ticks = d0;
+                tp[0] = (new_ticks >> 24) & 0xFF;
+                tp[1] = (new_ticks >> 16) & 0xFF;
+                tp[2] = (new_ticks >> 8) & 0xFF;
+                tp[3] = new_ticks & 0xFF;
+            }
+        }
+    }
+}
+
+static void hook_block(uc_engine *uc, uint64_t address __attribute__((unused)), uint32_t size __attribute__((unused)), void *user_data) {
     UnicornCPU *cpu = (UnicornCPU *)user_data;
-    uint64_t t0 = perf_now_ns();
+    bool sample = perf_sampling_enabled();
+    uint64_t t0 = sample ? perf_now_ns() : 0;
     cpu->block_stats.total_blocks++;
 
     /* --- 1. Interrupt acknowledge --- */
@@ -217,41 +271,12 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size __attribut
         uc_m68k_trigger_interrupt(uc, 0, 0);
     }
 
-    /* --- 2. SCSI timeout accelerator ---
-     * ROM SCSI probe busy-waits reading Mac Ticks ($016A).
-     * Cap D5 and fast-forward Ticks to skip the wait. */
-    if (address == 0x020014be || address == 0x020014c0 || address == 0x020014ca) {
-        if (address == 0x020014be || address == 0x020014c0) {
-            uint32_t d5 = 0;
-            uc_reg_read(uc, UC_M68K_REG_D5, &d5);
-            if (d5 > 240) {
-                d5 = 240;
-                uc_reg_write(uc, UC_M68K_REG_D5, &d5);
-            }
-        }
-        if (address == 0x020014ca) {
-            uint32_t d0 = 0;
-            uc_reg_read(uc, UC_M68K_REG_D0, &d0);
-            extern uint8_t *RAMBaseHost;
-            if (RAMBaseHost) {
-                uint8_t *tp = RAMBaseHost + 0x016A;
-                uint32_t ticks = (tp[0]<<24)|(tp[1]<<16)|(tp[2]<<8)|tp[3];
-                if (ticks < d0) {
-                    uint32_t new_ticks = d0;
-                    tp[0] = (new_ticks >> 24) & 0xFF;
-                    tp[1] = (new_ticks >> 16) & 0xFF;
-                    tp[2] = (new_ticks >> 8) & 0xFF;
-                    tp[3] = new_ticks & 0xFF;
-                }
-            }
-        }
-    }
+    /* SCSI accelerator moved to dedicated UC_HOOK_CODE at specific PCs — see
+     * hook_scsi_accel below. Was branching here on every block. */
 
-    /* --- 3. Timer polling (every 4096 blocks) --- */
-    extern uint64_t poll_timer_interrupt(void);
-    if ((cpu->block_stats.total_blocks & 0xFFF) == 0) {
-        poll_timer_interrupt();
-    }
+    /* Timer polling removed — poll_timer_interrupt() is a no-op now;
+     * the 60 Hz tick thread drives interrupts asynchronously and calls
+     * into g_pending_interrupt_level below. */
 
     /* --- 4. Apply deferred register updates --- */
     if (apply_deferred_updates_and_flush(cpu, uc, "hook_block"))
@@ -275,7 +300,7 @@ static void hook_block(uc_engine *uc, uint64_t address, uint32_t size __attribut
         }
     }
 
-    cpu->perf.hook_block_ns += perf_now_ns() - t0;
+    if (sample) cpu->perf.hook_block_ns += perf_now_ns() - t0;
     cpu->perf.hook_block_count++;
 }
 
@@ -448,6 +473,19 @@ UnicornCPU *unicorn_create_with_model(UnicornArch arch, int cpu_model) {
                      cpu, 1, 0);
     if (err != UC_ERR_OK) {
         fprintf(stderr, "Failed to register interrupt hook: %s\n", uc_strerror(err));
+        uc_close(cpu->uc);
+        free(cpu);
+        return NULL;
+    }
+
+    /* Scoped code hook for the 3 SCSI-probe PCs. Range keeps it to one hook
+     * registration; inner branch picks the PC. Non-matching blocks never pay. */
+    err = uc_hook_add(cpu->uc, &cpu->scsi_accel_hook,
+                     UC_HOOK_CODE,
+                     (void*)hook_scsi_accel,
+                     cpu, 0x020014be, 0x020014ca);
+    if (err != UC_ERR_OK) {
+        fprintf(stderr, "Failed to register SCSI accelerator hook: %s\n", uc_strerror(err));
         uc_close(cpu->uc);
         free(cpu);
         return NULL;

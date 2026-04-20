@@ -174,12 +174,34 @@ static uc_err uc_set_tlb(struct uc_struct *uc, int mode) {
 
 MemoryRegion *find_memory_mapping(struct uc_struct *uc, hwaddr address)
 {
+    /* Fast path: page-aligned LRU. Boot hammers a handful of regions (RAM,
+     * ROM, ScratchMem, FrameBuffer, MMIO) over and over — a 4-entry cache
+     * catches nearly every call. Same paddr→MR mapping for every address
+     * within a page, so key off the page-aligned address. */
+    hwaddr page = address & ~(hwaddr)(TARGET_PAGE_SIZE - 1);
+    for (int i = 0; i < 4; i++) {
+        if (uc->mr_cache_key[i] == page) {
+            return uc->mr_cache_val[i];
+        }
+    }
+
     hwaddr xlat = 0;
     hwaddr len = 1;
     MemoryRegion *mr = address_space_translate(&uc->address_space_memory, address, &xlat, &len, false, MEMTXATTRS_UNSPECIFIED);
 
     if (mr == &uc->io_mem_unassigned) {
-        return NULL;
+        mr = NULL;
+    }
+
+    /* Round-robin insert. Only cache if the lookup succeeded — NULL results
+     * are rare (mapping gap) and we don't want them sticking around after a
+     * subsequent mem_map fills the hole. Invalidation via mr_cache_invalidate
+     * covers the unmap-then-remap case. */
+    if (mr) {
+        int slot = uc->mr_cache_next & 3;
+        uc->mr_cache_key[slot] = page;
+        uc->mr_cache_val[slot] = mr;
+        uc->mr_cache_next = (uint8_t)(slot + 1);
     }
     return mr;
 }
@@ -209,6 +231,10 @@ static inline void uc_common_init(struct uc_struct* uc)
     uc->memory_filter_subregions = memory_region_filter_subregions;
     uc->flatview_copy = flatview_copy;
     uc->memory_cow = memory_cow;
+
+    /* Seed the find_memory_mapping LRU so a zero-initialised key doesn't
+     * falsely match paddr 0 (legitimate on REAL_ADDRESSING guests). */
+    mr_cache_invalidate(uc);
 
     if (!uc->release)
         uc->release = release_common;

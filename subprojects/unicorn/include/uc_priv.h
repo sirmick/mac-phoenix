@@ -438,7 +438,25 @@ struct uc_struct {
     // Set via direct assignment after uc_open; NULL means dispatch is disabled
     // and the opcode falls back to the normal decoder (program-check exception).
     void (*mac_emulop_cb)(struct uc_struct *uc, uint32_t pc, uint32_t opcode);
+
+    // Page-keyed LRU for find_memory_mapping. The softmmu calls it on every
+    // TLB miss / notdirty write / unmapped probe — ~8.3% of PPC wall time per
+    // docs/ppc/UnicornPpcStatus.md; 68k benefits equally. Invalidated wholesale
+    // in memory_map / memory_map_ptr / memory_unmap.
+    hwaddr mr_cache_key[4];    // page-aligned paddr, ~0ULL = empty slot
+    MemoryRegion *mr_cache_val[4];
+    uint8_t mr_cache_next;     // round-robin replacement index
 };
+
+/* Invalidate the find_memory_mapping LRU. Called by memory_map / memory_unmap
+ * so stale MR pointers don't survive a remap. */
+static inline void mr_cache_invalidate(struct uc_struct *uc)
+{
+    for (int i = 0; i < 4; i++) {
+        uc->mr_cache_key[i] = ~(hwaddr)0;
+        uc->mr_cache_val[i] = NULL;
+    }
+}
 
 // Metadata stub for the variable-size cpu context used with uc_context_*()
 struct uc_context {

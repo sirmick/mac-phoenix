@@ -59,6 +59,7 @@ MemoryRegion *memory_map(struct uc_struct *uc, hwaddr begin, size_t size, uint32
         tlb_flush(uc->cpu);
     }
 
+    mr_cache_invalidate(uc);
     return ram;
 }
 
@@ -80,6 +81,7 @@ MemoryRegion *memory_map_ptr(struct uc_struct *uc, hwaddr begin, size_t size, ui
         tlb_flush(uc->cpu);
     }
 
+    mr_cache_invalidate(uc);
     return ram;
 }
 
@@ -125,6 +127,7 @@ MemoryRegion *memory_cow(struct uc_struct *uc, MemoryRegion *current, hwaddr beg
         }
     }
 
+    mr_cache_invalidate(uc);
     return ram;
 }
 
@@ -194,6 +197,7 @@ MemoryRegion *memory_map_io(struct uc_struct *uc, ram_addr_t begin, size_t size,
     if (uc->cpu)
         tlb_flush(uc->cpu);
 
+    mr_cache_invalidate(uc);
     return mmio;
 }
 
@@ -246,6 +250,7 @@ static void memory_region_remove_mapped_block(struct uc_struct *uc, MemoryRegion
 void memory_moveout(struct uc_struct *uc, MemoryRegion *mr)
 {
     hwaddr addr;
+    mr_cache_invalidate(uc);
     /* A bit dirty, but it works.
      * The first subregion will be the one with the smalest priority.
      * In case of CoW this will always be the region which is mapped initial and later be moved in the subregion of the container.
@@ -285,11 +290,14 @@ void memory_movein(struct uc_struct *uc, MemoryRegion *mr)
     memory_region_add_subregion_overlap(uc->system_memory, mr->addr, mr, mr->priority);
     uc->memory_region_update_pending = true;
     memory_region_transaction_commit(uc->system_memory);
+    mr_cache_invalidate(uc);
 }
 
 void memory_unmap(struct uc_struct *uc, MemoryRegion *mr)
 {
     hwaddr addr;
+
+    mr_cache_invalidate(uc);
 
     if (uc->cpu) {
         // We also need to remove all tb cache
