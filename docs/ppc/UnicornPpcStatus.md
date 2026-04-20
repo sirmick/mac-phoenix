@@ -203,12 +203,13 @@ vs. KPX's direct PPC-on-PPC interpretation — not a bug.
 phantoms — confirmed no runtime malloc via LD_PRELOAD counter (33
 mallocs in a 15 s boot).
 
-**Real perf lever**: `subprojects/unicorn/qemu/accel/tcg/cputlb.c:1556`
-calls `uc->memory_mapping(uc, paddr)` on every memory access, even
-on TLB hit. Caching the `MemoryRegion*` in the TLB entry would
-collapse the ~40 % softmmu chain to the actual fast-path plus hook
-dispatch. Not done yet — a future upstream-Unicorn optimization
-candidate.
+**Real perf lever** (addressed in late-9b): `cputlb.c:1556` used to
+call `uc->memory_mapping(uc, paddr)` on every memory access — even
+on TLB hit. Now cached in `CPUTLBEntry::mr` and reused until the
+entry is flushed. Five softmmu call sites rewired. Companion LRU in
+`find_memory_mapping` catches the remaining non-TLB callers (uc.c
+API paths). Rerun `perf record` to refresh this table — current
+numbers are from the pre-late-9b profile.
 
 Artifacts: `docs/ppc/late-8-artifacts/perf/` (flame SVGs + folded
 stacks; raw `.data` files gitignored).
@@ -308,6 +309,19 @@ Kept as one-line milestones. The rolling per-session diary was trimmed
   `VECTOR_TRACE`, `TRACE_NEST`, `BCTRL_WATCH`, `R1ZERO`, `TWI`,
   `DUMP_PC`, `TRACE_TICK`, `TRACE_LOOP`, `TRACE_MACOS`). Extracted
   the 6 upstream-targetable patches into `subprojects/unicorn-patches/`.
+- **late-9b (2026-04-20)** — perf tightening pass. Softmmu MR cache
+  landed in two layers: (a) 4-way page-keyed LRU inside
+  `find_memory_mapping` (`qemu/unicorn_common.h`) for the uc.c / other
+  callers, and (b) per-TLB-entry `MemoryRegion *mr` pointer in
+  `CPUTLBEntry` (`qemu/accel/tcg/cputlb.c`) so the five hot softmmu
+  sites skip the indirect `uc->memory_mapping` call on warm pages.
+  Invalidation piggybacks on `tlb_flush()`. Succ rate at SCALE=10
+  moved from doc baseline 3/10 to 5/10 (N=10); time-to-Desktop on
+  successful runs dropped from ~14s (stale doc measurement) to ~2.8s.
+  Hypothesis: less softmmu overhead per EmulOp → less IRQ-per-EmulOp
+  pressure → fewer corrupting mid-dispatch IRQs. N=10 is too small to
+  nail down but trend is consistent. 68k tightening (companion commit)
+  separately dropped 68k Unicorn boot from 15.78s → 11.75s.
 
 ## Next-session targets
 
@@ -323,6 +337,10 @@ Kept as one-line milestones. The rolling per-session diary was trimmed
 3. **CI gate that doesn't trust headless `Desktop ready`.** Either
    `/api/screenshot` → minimum-non-black pixel check, or bridge-read a
    Finder sentinel.
-4. **Optional perf experiment**: cache MR pointer in TLB entry
-   (cputlb.c:1556). Would land as patch 0007 in
-   `subprojects/unicorn-patches/`.
+4. ~~Cache MR pointer in TLB entry~~ — **done in late-9b**, see above.
+   Regenerate `subprojects/unicorn-patches/` as 0007 when ready to
+   ship the patch series upstream.
+5. **Larger N baseline matrix at SCALE=10 post-late-9b.** 5/10 is
+   promising but not confirmation; rerun with N≥30 to see if the
+   stability gain survives statistical scrutiny, and re-check
+   SCALE=1.
