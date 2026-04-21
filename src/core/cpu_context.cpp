@@ -666,9 +666,23 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     }
 
     // 7d. Write-protect ROM (SheepShaver main_unix.cpp:1157)
-    // Legacy protects ROM_AREA_SIZE (5MB). We match this.
-    // Writes to 0x50400000+ after init are silently dropped by SIGSEGV handler.
-    {
+    // Legacy protects ROM_AREA_SIZE (5MB). We match this, but only for KPX.
+    //
+    // KPX runs PPC code natively, so a guest write to ROM faults host-side
+    // at the guest instruction's PC, and the global SIGSEGV skip advances
+    // that one instruction cleanly.
+    //
+    // Under Unicorn/TCG, guest writes go through JIT-compiled host code.
+    // A SIGSEGV inside a JIT block at host_pc skips one host instruction —
+    // but the guest PPC instruction may be several host instructions,
+    // leaving register state half-updated. Observed concretely: after a
+    // SIGSEGV skip in a stwu, r1 walked to 0x00000001 and subsequent push
+    // sequences underflowed into 0xffff..., producing sporadic stwu-cascade
+    // crashes. Unicorn's own softmmu already handles unmapped writes via
+    // uppc_skip_memop_at (zero-on-skip reads, advance-PC writes), so
+    // leaving the host mapping RWX is both safe and prevents the host
+    // SIGSEGV handler from firing inside TCG at all.
+    if (config.cpu_backend != config::CPUBackend::Unicorn) {
         uint32_t protect_size = ROM_AREA_SIZE;  // 5MB, matching legacy
         if (mprotect(ROMBaseHost, protect_size, PROT_READ | PROT_EXEC) < 0) {
             fprintf(stderr, "[CPUContext] WARNING: Could not write-protect ROM\n");
@@ -676,6 +690,8 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
             fprintf(stderr, "[CPUContext] ROM write-protected (%d KB, opcode table area at +0x%x remains writable)\n",
                     protect_size / 1024, protect_size);
         }
+    } else {
+        fprintf(stderr, "[CPUContext] ROM left RW host-side for Unicorn (skip-in-JIT-block corrupts register state)\n");
     }
 
     // 8. Initialize PPC CPU state (GPR3, GPR4, MODE_68K)
