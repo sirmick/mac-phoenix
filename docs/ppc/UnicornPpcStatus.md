@@ -348,3 +348,160 @@ Kept as one-line milestones. The rolling per-session diary was trimmed
    promising but not confirmation; rerun with N≥30 to see if the
    stability gain survives statistical scrutiny, and re-check
    SCALE=1.
+
+## 2026-04-20 late session — SMC theory + SCALE=1/10 asymmetry
+
+Active task: #24 "Root-cause boot-blocks stall after DiskPrime #1200".
+Working tree: `src/cpu/cpu_unicorn_ppc.cpp` and
+`docs/UnicornPerformanceAnalysis.md` are modified but uncommitted.
+`index.html` is untracked (unrelated to this thread — user asked about an
+FFT visualisation at session end; not in this repo as far as we could
+find).
+
+### What ran
+
+1. **mprotect audit** — ruled out Theory 4 (SIGSEGV-skip-in-JIT-block
+   corrupting JIT state). `c6b65d79` already gates the ROM mprotect on
+   `!Unicorn`; remaining mprotect sites are test harness or inactive.
+   No `[SIGSEGV] #` markers in 10 stall logs → global sigsegv_handler
+   at `src/main.cpp:266` is not firing during these stalls.
+
+2. **SMC-staleness experiment** — `MACEMU_PPC_TB_FLUSH_EVERY=1` (flush
+   TB cache every outer-loop iter) gated into `cpu_unicorn_ppc.cpp`
+   around the outer `while (!g_stop_requested)` loop. 10× at SCALE=10:
+   desktop rate unchanged (0/10), but earliest `[Boot +0.00s]
+   Boot globals patched` stalls eliminated (0/10 vs 2/10 baseline).
+   Later stalls shifted to new failure modes (wild FETCH_UNMAPPED at
+   `0x50580000`, skip storms on `0x21000000`-range pointers). SMC
+   staleness is a contributor to the earliest stall only — not the
+   dominant cause. Keep the env gate in tree for future debugging; don't
+   revert.
+
+3. **IRQ-return / CR2 audit** — ruled out CR2.SO supervisor-flag
+   corruption. Save mask `0xff9fffff` at `cpu_unicorn_ppc.cpp:384` is
+   identical to KPX line 545. `or_mask=0x00e00000` correctly sets
+   CR2.LT|GT|EQ on IRQ entry. `cr_before` always has CR2.SO=1.
+
+4. **IRQ trace extended** with Ticks (`0x016a`) + D0 logging around
+   line 1180-1188 of `cpu_unicorn_ppc.cpp`. Revealed that during the
+   "boot blocks stall" at SCALE=10, **Ticks is advancing** (0→34 over
+   20s) and D0 rotates through different values. The "stall" is
+   sequential Ticks waits running at 10× slow speed, not a deadlock.
+
+5. **SCALE=1 test** (`/tmp/ppc_scale1.log`, 50s timeout). Result
+   contradicted the earlier "SCALE=10 just masks register corruption"
+   working theory:
+   - Only 2 early benign unmapped skips at startup (r17=0x101ac000,
+     just past framebuffer tail at 0x10080000+0x12c000).
+   - **No** concentrated-skip bail.
+   - **No** r3/r5/r6/r7=0x21000000 register corruption pattern.
+   - Steady DiskPrime progress (#1 → #250 in 50s, all returning 0).
+   - Never advanced past `[Boot +0.30s] Installing drivers` phase
+     marker in 50s, despite successful disk I/O throughout.
+
+   So SCALE=1 and SCALE=10 are **qualitatively different** failure
+   modes — not the same bug at different speeds. The
+   r3/r5/r6/r7=0x21000000 corruption pattern is SCALE=10-specific.
+
+### Summary state of each theory
+
+| # | Theory | Status |
+|---|--------|--------|
+| 1 | EmulOp CR2.SO clobber | Ruled out (mask correct) |
+| 2 | Stale TB / SMC from dirty-flag stub | Partial contributor (earliest stall only), NOT dominant |
+| 3 | IRQ nest XLM_IRQ_NEST stuck | Untested post-late-9b |
+| 4 | SIGSEGV-skip-in-JIT corrupts state | Ruled out (no SIGSEGV in recent logs, already gated) |
+| 5 | IRQ-mid-dispatch corrupts A-regs | Still the leading theory for SCALE=1 |
+| — | SCALE=10 register corruption to 0x21000000 | New; unexplained; SCALE=10-specific |
+
+### Next session — entry points
+
+1. **Why does SCALE=1 DiskPrime loop not advance phase past "Installing
+   drivers" despite healthy I/O?** Read `src/core/boot_progress.cpp`
+   for what gates the "Loading boot blocks" phase flip. Check whether
+   the phase marker needs a write to some memory location that happens
+   at 60Hz but not 6Hz cadence, or whether Finder CurApName peek just
+   never sees the expected value.
+
+2. **What is 0x21000000 in SCALE=10 register corruption?** Not RAM
+   (0..0x04000000), not SheepMem (0x10000000..0x10080000), not
+   framebuffer (0x10080000..0x101ac000), not ROM (0x50000000..). Could
+   be Mac OS nanokernel page-table base or similar. Grep SheepShaver
+   source for the constant.
+
+3. **Restore `cpu_physical_memory_set_dirty_flag`** (task #19) — the
+   proper fix needs a per-page bitmap in
+   `subprojects/unicorn/qemu/include/exec/ram_addr.h:75` with
+   `tb_invalidate_phys_page_fast` wired to it.
+
+4. **Uncommitted work to review before reset:** `MACEMU_PPC_TB_FLUSH_EVERY`
+   gate + extended IRQ trace in `cpu_unicorn_ppc.cpp`. Either commit as
+   instrumentation ("keep in tree, env-gated") or stash. **(Resolved
+   2026-04-20 — committed as 72344c54.)**
+
+## 2026-04-20 super-late session — dedup + targeted SMC flush shipped
+
+### Commits
+
+- **`398e1868`** — "Unicorn PPC: dedup tick-kick on already-pending IRQ".
+  `uppc_tick_kick` now `exchange(true)` on `g_pending_irq` and only
+  issues `uc_emu_stop` on the rising edge. Back-to-back kicks at
+  SCALE=1 (60Hz) were tearing the TB mid-execution and correlated with
+  wild-pointer corruption post-Finder.
+- **`72344c54`** — "Unicorn PPC: env-gated IRQ trace + TB_FLUSH_EVERY
+  diagnostics". Keeps the prior-session instrumentation (extended IRQ
+  trace with Ticks + D0, `MACEMU_PPC_TB_FLUSH_EVERY` knob) in tree but
+  gated off by default.
+- **`9977f5bd`** — "Unicorn PPC: flush TB cache after I/O EmulOps (SMC
+  via host writes)". After `g_platform.ppc_emulop_handler` returns for
+  `SONY_PRIME`, `DISK_PRIME`, `CDROM_PRIME`, `SOUNDIN_PRIME`,
+  `EXTFS_COMM`, `EXTFS_HFS`, `GET_SCRAP`, call `uc_ctl_flush_tb`.
+  These are the paths that `memcpy` from host into guest RAM through
+  `Sys_read` in `src/core/disk.cpp:310` and bypass the TLB entirely,
+  so `notdirty_write` never fires and the stubbed
+  `cpu_physical_memory_set_dirty_flag` can't help.
+
+### Impact
+
+| Config | Before dedup+flush | After dedup+flush |
+|---|---|---|
+| SCALE=10 | Finder 9.64s, then post-Finder wild-pointer crash | Finder 12.30s, 71 DiskPrimes/60s, no fatal |
+| SCALE=1 | Stuck at "Boot globals patched" forever (IRQ pressure) | WLSC 0.30s, boot blocks 0.41s, **still no Finder in 60s** |
+
+SCALE=10 is the new default for reaching Finder. SCALE=1 now *starts*
+cleanly but stalls at a different phase than before — it reaches
+"Loading boot blocks (resource #87)" and stays there while DiskPrime
+counts advance (~50 over 60s). This is a *different* failure mode
+from the pre-dedup "Boot globals patched forever" stall; the earlier
+IRQ-pressure pathology is gone.
+
+### Theory status, updated
+
+| # | Theory | Status |
+|---|--------|--------|
+| 2 | Stale TB / SMC from dirty-flag stub | **Partial fix shipped** — targeted flush after I/O EmulOps. Full bitmap still pending for writes that bypass EmulOp dispatch entirely. |
+| — | IRQ-pressure / redundant tick-kick | **Fixed** in `398e1868`. No longer a contributor at any SCALE. |
+| — | SCALE=1 post-boot-blocks stall | **New** — not the old IRQ-pressure stall. Leading candidate: one of the drivers/extensions that runs between "boot blocks" and "extensions" phases needs host-visible writes that our targeted flush misses. |
+
+### Next session — entry points
+
+1. **SCALE=1 post-boot-blocks stall**. Boot blocks resource #87 is the
+   last visible progress at 0.41s. Ticks advance, DiskPrime advances.
+   Check what *else* runs between boot blocks and the
+   `[Boot] Installing drivers` milestone: driver `open` calls?
+   `INITLoad`? Instrument entry/exit of each driver-install EmulOp with
+   a breadcrumb to see which one never returns.
+
+2. **Full dirty-bitmap restoration** (task #3 / old task #19). The
+   targeted flush is a load-bearing workaround, not a fix — any new
+   host-to-guest write path we add in the future will silently break
+   SMC again. Proper fix: per-RAMBlock bitmap in
+   `subprojects/unicorn/qemu/include/exec/ram_addr.h:75`, update
+   `cpu_physical_memory_set_dirty_flag` / `_range` / `_test_and_clear`,
+   wire `tb_invalidate_phys_page_fast` on dirty→clean transitions.
+   This also removes the cache-wide flush cost (currently ~unmeasured
+   but likely the reason SCALE=10 Finder regressed 9.64→12.30s).
+
+3. **SCALE=10 register corruption to 0x21000000** — still unexplained,
+   but now masked behind the successful Finder path. Revisit if
+   post-Finder interactive use shows crashes.
