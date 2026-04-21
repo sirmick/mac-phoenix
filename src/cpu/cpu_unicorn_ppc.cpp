@@ -1300,7 +1300,12 @@ static void uppc_tick_thread(void)
 
         if (nest == 0) {
             SetInterruptFlag(INTFLAG_VIA);
-            g_pending_irq.store(true);
+            // Only kick the engine when this is a newly-latched IRQ (prev=false).
+            // Back-to-back tick-kicks on an already-pending IRQ torpedo stability:
+            // each uc_emu_stop exits the current TB mid-execution, and compounding
+            // kicks at high tick rates (SCALE=1 → 60Hz) correlate with wild-pointer
+            // corruption post-Finder. Dedup ensures one kick per IRQ lifecycle.
+            bool was_pending = g_pending_irq.exchange(true);
             s_last_irq_emulop = g_emulop_count;
             // Kick the engine out of whatever block it's in. Required for
             // NK idle/wait loops that sit entirely in PPC code with no
@@ -1308,7 +1313,7 @@ static void uppc_tick_thread(void)
             // tight loop). Only fire at depth<=1 — interrupting a nested NK
             // handler or execute_ppc mid-flight leaves XLM_IRQ_NEST stuck at
             // its ROM-patched-incremented value and wedges the system.
-            if (g_uc && g_emu_nest_depth <= 1) uc_emu_stop(g_uc);
+            if (!was_pending && g_uc && g_emu_nest_depth <= 1) uc_emu_stop(g_uc);
         }
 
         extern Platform g_platform;
