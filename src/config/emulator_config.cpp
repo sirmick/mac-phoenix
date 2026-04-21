@@ -421,6 +421,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --storage-dir PATH    Storage directory for ROMs/images (default: ~/storage)\n");
             printf("  --timeout N           Auto-exit after N seconds\n");
             printf("  --no-webserver        Headless mode (no HTTP/WebRTC)\n");
+            printf("  --audio               Enable audio emulation (default: off)\n");
             printf("  --screenshots         Dump PPM screenshots to /tmp\n");
             printf("  --zap-pram            Clear PRAM on startup (fresh boot)\n");
             printf("  --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot\n");
@@ -570,6 +571,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --no-webserver
         if (strcmp(argv[i], "--no-webserver") == 0) {
             config.enable_webserver = false;
+            argv[i] = nullptr; continue;
+        }
+
+        // --audio (opt-in, modeled on --cdrom / --network)
+        if (strcmp(argv[i], "--audio") == 0) {
+            config.audio_enabled = true;
             argv[i] = nullptr; continue;
         }
 

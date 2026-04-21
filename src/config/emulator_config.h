@@ -96,8 +96,8 @@ struct EmulatorConfig {
     uint32_t screen_height = 480;
     bool screenshots = false;
 
-    // Audio
-    bool audio_enabled = true;
+    // Audio (opt-in — enable with --audio CLI flag)
+    bool audio_enabled = false;
 
     // Boot
     int bootdrive = 0;

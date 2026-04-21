@@ -152,6 +152,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --screen WxH          Display resolution (default: 640x480)
   --network MODE        Network: none, lwip, raw:<iface>, socket[:<path>] (default: none)
   --bridge              Enable automation bridge (BridgeAgent + auto ExtFS mount)
+  --audio               Enable audio emulation (opt-in, default off)
   --config path         JSON config file
   --screenshots         Dump PPM screenshots to /tmp
   --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot

@@ -508,13 +508,15 @@ int main(int argc, char **argv)
 
 		// Install platform drivers
 		g_platform.video_exit = []() {};
-		audio_direct_set_ipc_buffer(ipc_buf);
-		g_platform.audio_init = []() {
-			audio_direct_init();
-		};
-		g_platform.audio_exit = []() {
-			audio_direct_exit();
-		};
+		if (emu_config.audio_enabled) {
+			audio_direct_set_ipc_buffer(ipc_buf);
+			g_platform.audio_init = []() {
+				audio_direct_init();
+			};
+			g_platform.audio_exit = []() {
+				audio_direct_exit();
+			};
+		}  // else: platform defaults (audio_null_init/exit) stay in place
 
 		Platform* platform = g_cpu_ctx.get_platform();
 		*platform = g_platform;
@@ -534,8 +536,10 @@ int main(int argc, char **argv)
 			// Copy KPX CPU hooks back, then restore IPC video/audio hooks
 			g_platform = *platform;
 			g_platform.video_refresh = video_ipc_refresh;
-			g_platform.audio_init = []() { audio_direct_init(); };
-			g_platform.audio_exit = []() { audio_direct_exit(); };
+			if (emu_config.audio_enabled) {
+				g_platform.audio_init = []() { audio_direct_init(); };
+				g_platform.audio_exit = []() { audio_direct_exit(); };
+			}
 
 			// screen_base is 0 here — VideoInit runs during Mac boot.
 			// Set the framebuffer pointer from VideoInit instead.
@@ -685,15 +689,15 @@ int main(int argc, char **argv)
 		                            video::g_video_output, &emu_config,
 		                            &video::g_ipc_shm, &video::g_ipc_eventfd);
 
-		// Launch audio pipeline (parent side)
-		// audio_webrtc_init creates AudioOutput ring buffer + Opus encoder thread
-		// audio_ipc_reader reads from child's IPC SHM → byte-swaps → feeds AudioOutput
-		audio_webrtc_init();
-		if (g_ipc_client) {
-			extern AudioOutput* audio_direct_get_output(void);
-			AudioOutput* audio_out = audio_direct_get_output();
-			if (audio_out) {
-				audio_ipc_reader_start(g_ipc_client, audio_out);
+		// Launch audio pipeline (parent side) — only if --audio was passed
+		if (emu_config.audio_enabled) {
+			audio_webrtc_init();
+			if (g_ipc_client) {
+				extern AudioOutput* audio_direct_get_output(void);
+				AudioOutput* audio_out = audio_direct_get_output();
+				if (audio_out) {
+					audio_ipc_reader_start(g_ipc_client, audio_out);
+				}
 			}
 		}
 
@@ -707,9 +711,11 @@ int main(int argc, char **argv)
 
 		// Shutdown
 		if (subprocess_owner) subprocess_owner->stop();
-		audio_ipc_reader_stop();
-		audio::g_running.store(false, std::memory_order_release);
-		audio_webrtc_exit();
+		if (emu_config.audio_enabled) {
+			audio_ipc_reader_stop();
+			audio::g_running.store(false, std::memory_order_release);
+			audio_webrtc_exit();
+		}
 		video::g_running.store(false, std::memory_order_release);
 		video::g_video_output->shutdown();
 		encoder_thread.join();
@@ -735,12 +741,10 @@ int main(int argc, char **argv)
 				g_platform.video_refresh = video_screenshot_refresh;
 			}
 
-			// Install audio driver — Sound Manager needs audio_component_flags
-			// and AudioStatus set up before the component is registered at boot.
-			// In headless mode there's no IPC/WebRTC, but the audio thread
-			// handles this gracefully (skips frames when g_ipc_shm is null).
-			g_platform.audio_init = []() { audio_direct_init(); };
-			g_platform.audio_exit = []() { audio_direct_exit(); };
+			if (emu_config.audio_enabled) {
+				g_platform.audio_init = []() { audio_direct_init(); };
+				g_platform.audio_exit = []() { audio_direct_exit(); };
+			}  // else: platform defaults (audio_null_init/exit) stay in place
 
 			// Copy platform into CPUContext
 			Platform* platform = g_cpu_ctx.get_platform();
