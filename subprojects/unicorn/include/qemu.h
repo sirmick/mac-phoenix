@@ -30,6 +30,12 @@ struct RAMBlock {
     /* RCU-enabled, writes protected by the ramlist lock */
     QLIST_ENTRY(RAMBlock) next;
     size_t page_size;
+    /* Per-page CODE-dirty bitmap: bit=1 means page may be written freely
+     * (no compiled code watching), bit=0 means a TB covers this page and
+     * writes should go through notdirty_write. One bit per TARGET_PAGE_SIZE
+     * page across [offset, offset+max_length). Unicorn only uses the CODE
+     * client; VGA/MIGRATION are no-ops. */
+    unsigned long *dirty_code_bmap;
 };
 
 typedef struct {

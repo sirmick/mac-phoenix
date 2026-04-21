@@ -1,6 +1,6 @@
 # Unicorn PPC backend — status & handoff
 
-Last updated: 2026-04-20 (branch `unicorn-ppc`, post-prune + doc rewrite).
+Last updated: 2026-04-21 (dirty-bitmap restored; see §`2026-04-21 — dirty-bitmap restored`).
 
 Live pointer: this is the single place the Unicorn PPC port's state lives.
 Start here on any new session. Build/run snippets at the bottom.
@@ -558,3 +558,68 @@ Rollback knob: `MACEMU_PPC_NO_IRQ_HOOK=1` reinstates the legacy async
    `last_pc_cb`) might recover some of that. Profile first.
 3. **Post-Finder `0x21000000` register corruption** remains a separate
    bug, independent of the IRQ delivery path.
+
+## 2026-04-21 — dirty-bitmap restored (task #3 / old #19)
+
+### Commit
+
+- **(this commit)** — "Unicorn: restore per-RAMBlock CODE dirty bitmap".
+  Replaces the stubbed `cpu_physical_memory_{is_clean,set_dirty_flag,
+  set_dirty_range,test_and_clear_dirty}` implementations (which always
+  answered "clean=true / nothing dirty") with a real per-RAMBlock
+  bitmap. One bit per `TARGET_PAGE_SIZE` page, allocated in
+  `ram_block_add`, freed in `reclaim_ramblock`. Bit=1 means the page is
+  dirty (no compiled code is watching); bit=0 means a TB covers this
+  page and writes must go through `notdirty_write`. `tb_set_page` marks
+  pages clean via `tlb_protect_code`; `notdirty_write` re-dirties them
+  via `tlb_unprotect_code` once all TBs on that page are gone. All
+  helpers now take `struct uc_struct *uc` (needed to resolve the
+  address → block lookup per-arch).
+
+### Implementation notes
+
+- `RAMBlock.dirty_code_bmap` lives in `subprojects/unicorn/include/qemu.h`
+  (same struct-definition-here-due-to-circular-include hack the block
+  already has).
+- `qemu_get_ram_block` promoted from `static` → extern in `exec.c`;
+  declared in `ram_addr.h`; added to `symbols.sh` COMMON_SYMBOLS so
+  `symbols.sh` regenerates the per-arch `#define ... _ppc`/`_m68k`/...
+  mangling (otherwise link-time multiple-definition).
+- Only `DIRTY_MEMORY_CODE` is tracked. VGA and MIGRATION clients are
+  no-ops (return `false` / skip), matching how Unicorn has never needed
+  them.
+
+### Impact
+
+| Config | Before (stub) | After (bitmap) |
+|---|---|---|
+| PPC Finder, G3 ROM + 7.6.1, SCALE=1 | 10.15 / 10.17 / 10.19 s | **9.64 / 9.69 / 9.69 / 9.77 s** |
+| 68k Finder, quadra.rom | stalls in extensions phase (~2950 disk primes at 170s) | **identical** — pre-existing, not caused by this change |
+
+The ~0.5s PPC improvement comes from `TLB_NOTDIRTY` now correctly
+clearing on pages without compiled code, so writes skip the
+`notdirty_write` slow path and `tb_invalidate_phys_page_fast` work that
+was happening speculatively for every host-visible write before. The
+targeted post-I/O-EmulOp flush from commit `9977f5bd` remains —
+host-pointer writes from the Platform API still bypass the TLB and so
+bypass the bitmap. Removing the workaround is a separate task and
+needs per-write `cpu_physical_memory_set_dirty_range` calls (or a
+wrapper on the host-pointer write paths).
+
+### Post-Finder behavior
+
+Post-Finder `0x21000000`/`0xa4000000` register corruption still
+reproduces. Unaffected by this change (as expected — the corruption is
+on the execute path, not the dirty-tracking path).
+
+### Open items
+
+1. **Host-pointer write tracking.** The Platform API writes guest RAM
+   directly via `RAMBaseHost[...]`; those bypass both the TLB and the
+   bitmap. Either (a) keep the targeted flush workaround indefinitely,
+   (b) call `cpu_physical_memory_set_dirty_range` at every Platform
+   write site, or (c) narrow the flush to ranges that actually hold
+   compiled code (check `tb_tree`). Current workaround is load-bearing;
+   don't remove without a replacement.
+2. **68k Unicorn extensions-phase stall** is pre-existing (reproduced
+   on the baseline without this change). Separate investigation.

@@ -48,6 +48,10 @@ RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *h
 RAMBlock *qemu_ram_alloc(struct uc_struct *uc, ram_addr_t size, MemoryRegion *mr);
 void qemu_ram_free(struct uc_struct *uc, RAMBlock *block);
 
+/* Find the RAMBlock containing this ram_addr. Aborts if not found —
+ * callers must only pass addresses that belong to a mapped RAMBlock. */
+RAMBlock *qemu_get_ram_block(struct uc_struct *uc, ram_addr_t addr);
+
 #define DIRTY_CLIENTS_ALL     ((1 << DIRTY_MEMORY_NUM) - 1)
 #define DIRTY_CLIENTS_NOCODE  (DIRTY_CLIENTS_ALL & ~(1 << DIRTY_MEMORY_CODE))
 
@@ -67,20 +71,56 @@ static inline bool cpu_physical_memory_all_dirty(ram_addr_t start,
     return false;
 }
 
-static inline bool cpu_physical_memory_is_clean(ram_addr_t addr)
+/* Returns true when the page at `addr` currently holds compiled code that
+ * must be watched for self-modification. bit=0 in dirty_code_bmap means
+ * "clean" (being watched); bit=1 means "dirty" (free to write). */
+static inline bool cpu_physical_memory_is_clean(struct uc_struct *uc,
+                                                ram_addr_t addr)
 {
-    return true;
+    RAMBlock *block = qemu_get_ram_block(uc, addr);
+    if (!block || !block->dirty_code_bmap) {
+        return false;
+    }
+    ram_addr_t page = (addr - block->offset) >> TARGET_PAGE_BITS;
+    unsigned long mask = 1UL << (page % BITS_PER_LONG);
+    return (block->dirty_code_bmap[page / BITS_PER_LONG] & mask) == 0;
 }
 
-static inline void cpu_physical_memory_set_dirty_flag(ram_addr_t addr,
+static inline void cpu_physical_memory_set_dirty_flag(struct uc_struct *uc,
+                                                      ram_addr_t addr,
                                                       unsigned client)
 {
+    if (client != DIRTY_MEMORY_CODE) {
+        return;
+    }
+    RAMBlock *block = qemu_get_ram_block(uc, addr);
+    if (!block || !block->dirty_code_bmap) {
+        return;
+    }
+    ram_addr_t page = (addr - block->offset) >> TARGET_PAGE_BITS;
+    block->dirty_code_bmap[page / BITS_PER_LONG] |=
+        1UL << (page % BITS_PER_LONG);
 }
 
-static inline void cpu_physical_memory_set_dirty_range(ram_addr_t start,
+static inline void cpu_physical_memory_set_dirty_range(struct uc_struct *uc,
+                                                       ram_addr_t start,
                                                        ram_addr_t length,
                                                        uint8_t mask)
 {
+    if (!(mask & (1 << DIRTY_MEMORY_CODE))) {
+        return;
+    }
+    RAMBlock *block = qemu_get_ram_block(uc, start);
+    if (!block || !block->dirty_code_bmap) {
+        return;
+    }
+    ram_addr_t first = (start - block->offset) >> TARGET_PAGE_BITS;
+    ram_addr_t npages = (length + TARGET_PAGE_SIZE - 1) >> TARGET_PAGE_BITS;
+    for (ram_addr_t i = 0; i < npages; i++) {
+        ram_addr_t page = first + i;
+        block->dirty_code_bmap[page / BITS_PER_LONG] |=
+            1UL << (page % BITS_PER_LONG);
+    }
 }
 
 #if !defined(_WIN32)
@@ -91,7 +131,8 @@ static inline void cpu_physical_memory_set_dirty_lebitmap(unsigned long *bitmap,
 }
 #endif /* not _WIN32 */
 
-bool cpu_physical_memory_test_and_clear_dirty(ram_addr_t start,
+bool cpu_physical_memory_test_and_clear_dirty(struct uc_struct *uc,
+                                              ram_addr_t start,
                                               ram_addr_t length,
                                               unsigned client);
 

@@ -782,7 +782,7 @@ void cpu_abort(CPUState *cpu, const char *fmt, ...)
 }
 
 /* Called from RCU critical section */
-static RAMBlock *qemu_get_ram_block(struct uc_struct *uc, ram_addr_t addr)
+RAMBlock *qemu_get_ram_block(struct uc_struct *uc, ram_addr_t addr)
 {
     RAMBlock *block;
 
@@ -805,11 +805,34 @@ found:
 }
 
 /* Note: start and end must be within the same ram block.  */
-bool cpu_physical_memory_test_and_clear_dirty(ram_addr_t start,
+bool cpu_physical_memory_test_and_clear_dirty(struct uc_struct *uc,
+                                              ram_addr_t start,
                                               ram_addr_t length,
                                               unsigned client)
 {
-    return false;
+    if (client != DIRTY_MEMORY_CODE) {
+        return false;
+    }
+
+    RAMBlock *block = qemu_get_ram_block(uc, start);
+    if (!block || !block->dirty_code_bmap) {
+        return false;
+    }
+
+    ram_addr_t first_page = (start - block->offset) >> TARGET_PAGE_BITS;
+    ram_addr_t npages = (length + TARGET_PAGE_SIZE - 1) >> TARGET_PAGE_BITS;
+    bool was_dirty = false;
+
+    for (ram_addr_t i = 0; i < npages; i++) {
+        ram_addr_t page = first_page + i;
+        unsigned long mask = 1UL << (page % BITS_PER_LONG);
+        unsigned long *word = &block->dirty_code_bmap[page / BITS_PER_LONG];
+        if (*word & mask) {
+            was_dirty = true;
+            *word &= ~mask;
+        }
+    }
+    return was_dirty;
 }
 
 /* Called from RCU critical section */
@@ -1074,6 +1097,20 @@ static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
         // memory_try_enable_merging(new_block->host, new_block->max_length);
     }
 
+    /* Allocate the per-page CODE-dirty bitmap for this block. One bit per
+     * TARGET_PAGE_SIZE page. Freed in reclaim_ramblock(). */
+    {
+        ram_addr_t npages = new_block->max_length >> TARGET_PAGE_BITS;
+        if (npages > 0) {
+            unsigned long nwords =
+                (npages + BITS_PER_LONG - 1) / BITS_PER_LONG;
+            new_block->dirty_code_bmap =
+                g_malloc0(nwords * sizeof(unsigned long));
+        } else {
+            new_block->dirty_code_bmap = NULL;
+        }
+    }
+
     /* Keep the list sorted from biggest to smallest block.  Unlike QTAILQ,
      * QLIST (which has an RCU-friendly variant) does not have insertion at
      * tail, so save the last element in last_block.
@@ -1104,7 +1141,7 @@ static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
     /* Write list before version */
     //smp_wmb();
 
-    cpu_physical_memory_set_dirty_range(new_block->offset,
+    cpu_physical_memory_set_dirty_range(uc, new_block->offset,
                                         new_block->used_length,
                                         DIRTY_CLIENTS_ALL);
 
@@ -1160,6 +1197,7 @@ static void reclaim_ramblock(struct uc_struct *uc, RAMBlock *block)
     } else {
         qemu_anon_ram_free(uc, block->host, block->max_length);
     }
+    g_free(block->dirty_code_bmap);
     g_free(block);
 }
 

@@ -88,6 +88,7 @@ qemu_map_ram_ptr \
 qemu_ram_block_host_offset \
 qemu_ram_block_from_host \
 qemu_ram_addr_from_host \
+qemu_get_ram_block \
 cpu_check_watchpoint \
 iotlb_to_section \
 address_space_dispatch_new \
