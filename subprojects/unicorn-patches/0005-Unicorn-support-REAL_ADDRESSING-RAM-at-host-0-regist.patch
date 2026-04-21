@@ -1,7 +1,7 @@
-From 32894332f1983524f2eacdcc9fef21b38f046048 Mon Sep 17 00:00:00 2001
+From d43339be66e40ecd94f0aeb8ac4dfb006cfa2db8 Mon Sep 17 00:00:00 2001
 From: Mick <sirmick@gmail.com>
 Date: Sat, 18 Apr 2026 11:44:35 -0700
-Subject: [PATCH 4/6] Unicorn: support REAL_ADDRESSING RAM at host 0 + register
+Subject: [PATCH 5/9] Unicorn: support REAL_ADDRESSING RAM at host 0 + register
  PPC EmulOp
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -29,7 +29,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
  4 files changed, 22 insertions(+), 10 deletions(-)
 
 diff --git a/qemu/exec.c b/qemu/exec.c
-index 002c14df..38eaa748 100644
+index 002c14d..38eaa74 100644
 --- a/qemu/exec.c
 +++ b/qemu/exec.c
 @@ -1056,7 +1056,11 @@ static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
@@ -80,7 +80,7 @@ index 002c14df..38eaa748 100644
  
  static void reclaim_ramblock(struct uc_struct *uc, RAMBlock *block)
 diff --git a/qemu/include/exec/ram_addr.h b/qemu/include/exec/ram_addr.h
-index d6b96bc7..142ec056 100644
+index d6b96bc..142ec05 100644
 --- a/qemu/include/exec/ram_addr.h
 +++ b/qemu/include/exec/ram_addr.h
 @@ -44,7 +44,7 @@ static inline unsigned long int ramblock_recv_bitmap_offset(struct uc_struct *uc
@@ -93,7 +93,7 @@ index d6b96bc7..142ec056 100644
  void qemu_ram_free(struct uc_struct *uc, RAMBlock *block);
  
 diff --git a/qemu/softmmu/memory.c b/qemu/softmmu/memory.c
-index 08e747e8..d406031c 100644
+index 08e747e..d406031 100644
 --- a/qemu/softmmu/memory.c
 +++ b/qemu/softmmu/memory.c
 @@ -1267,9 +1267,10 @@ void memory_region_init_ram_ptr(struct uc_struct *uc,
@@ -111,7 +111,7 @@ index 08e747e8..d406031c 100644
  
  uint64_t memory_region_size(MemoryRegion *mr)
 diff --git a/qemu/target/ppc/translate_init.inc.c b/qemu/target/ppc/translate_init.inc.c
-index d2fb1974..ed6553b0 100644
+index d2fb197..ed6553b 100644
 --- a/qemu/target/ppc/translate_init.inc.c
 +++ b/qemu/target/ppc/translate_init.inc.c
 @@ -9510,7 +9510,14 @@ static int create_ppc_opcodes(PowerPCCPU *cpu)

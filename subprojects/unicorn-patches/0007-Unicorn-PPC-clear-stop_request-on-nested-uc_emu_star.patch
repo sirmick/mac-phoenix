@@ -1,7 +1,7 @@
-From 7ef648e4b7eb9de4ca32935fde2153162d0c19a6 Mon Sep 17 00:00:00 2001
+From 9d39411df9d3f88bca75233db3bdf6986b43f03c Mon Sep 17 00:00:00 2001
 From: Mick <sirmick@gmail.com>
 Date: Sat, 18 Apr 2026 19:35:11 -0700
-Subject: [PATCH 6/6] Unicorn PPC: clear stop_request on nested uc_emu_start
+Subject: [PATCH 7/9] Unicorn PPC: clear stop_request on nested uc_emu_start
  return
 
 When a nested uc_emu_start returns (inner run terminated by uc_emu_stop),
@@ -20,7 +20,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
  1 file changed, 11 insertions(+)
 
 diff --git a/uc.c b/uc.c
-index 06dc9521..b6c6d6d6 100644
+index 06dc952..b6c6d6d 100644
 --- a/uc.c
 +++ b/uc.c
 @@ -1254,6 +1254,17 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,

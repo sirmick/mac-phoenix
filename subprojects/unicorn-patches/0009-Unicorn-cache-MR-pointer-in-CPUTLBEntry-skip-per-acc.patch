@@ -1,0 +1,156 @@
+From 9edb7bcf4dab37278ac75057511d25eca7a66609 Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Mon, 20 Apr 2026 16:53:18 -0700
+Subject: [PATCH 9/9] Unicorn: cache MR pointer in CPUTLBEntry (skip per-access
+ memory_mapping)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Softmmu called uc->memory_mapping(uc, paddr) on every load/store/fetch
+after TLB lookup — even on TLB hit. Documented at ~8% of Unicorn PPC
+wall time (see docs/ppc/UnicornPpcStatus.md late-8e flame graph); the
+full softmmu translation chain was ~40%.
+
+Cache the resolved MemoryRegion* in the TLB entry itself, populated
+lazily on first miss per-page and reused on subsequent accesses to the
+same page. Invalidation piggybacks on tlb_flush(), which memory_map
+/ memory_unmap already issue.
+
+Layout: CPUTLBEntry's union is 1<<CPU_TLB_ENTRY_BITS bytes (32 on
+host32/target32, 64 otherwise). Existing fields consume ≤ 40 bytes
+in the worst case (host64/target64), so an 8-byte pointer fits with
+room to spare. Forward-declare struct MemoryRegion to avoid pulling
+exec/memory.h into cpu-defs.h. The TCG IR accesses addr_{read,write,
+code} at fixed offsets at the head of the struct — appending mr after
+addend doesn't disturb those.
+
+Touches 5 hot call sites:
+- notdirty_write (covers dirty-bitmap flips)
+- full_load + its unmapped-hook retry path
+- store_helper + its unmapped-hook retry path
+
+Measured: PPC Unicorn SCALE=10 boot-to-Desktop success rate 5/10 (vs
+doc baseline 3/10, pre-commit 1-2/5). Time-to-Desktop ~2.81s from
+~2.93s when it succeeds. KPX unaffected (0.52s). 68k boot tests: no
+regression.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+---
+ qemu/accel/tcg/cputlb.c      | 34 +++++++++++++++++++++++++++++-----
+ qemu/include/exec/cpu-defs.h | 12 ++++++++++++
+ 2 files changed, 41 insertions(+), 5 deletions(-)
+
+diff --git a/qemu/accel/tcg/cputlb.c b/qemu/accel/tcg/cputlb.c
+index 3d0bebd..8503543 100644
+--- a/qemu/accel/tcg/cputlb.c
++++ b/qemu/accel/tcg/cputlb.c
+@@ -937,6 +937,10 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
+     /* Now calculate the new entry */
+     tn.addend = addend - vaddr_page;
+     tn.paddr = paddr_page;
++    /* Lazy: resolved on first softmmu access to this page; tlb_flush()
++     * clears the whole entry via memset, so no invalidation needed on
++     * map/unmap beyond the flush already issued there. */
++    tn.mr = NULL;
+     if (prot & PAGE_READ) {
+         tn.addr_read = address;
+         if (wp_flags & BP_MEM_READ) {
+@@ -1194,7 +1198,11 @@ static void notdirty_write(CPUState *cpu, vaddr mem_vaddr, unsigned size,
+     struct uc_struct *uc = cpu->uc;
+ #endif
+     ram_addr_t ram_addr = mem_vaddr + iotlbentry->addr;
+-    MemoryRegion *mr = cpu->uc->memory_mapping(cpu->uc, tlbe->paddr | (mem_vaddr & ~TARGET_PAGE_MASK));
++    MemoryRegion *mr = tlbe->mr;
++    if (unlikely(!mr)) {
++        mr = cpu->uc->memory_mapping(cpu->uc, tlbe->paddr | (mem_vaddr & ~TARGET_PAGE_MASK));
++        tlbe->mr = mr;
++    }
+ 
+     if (mr && (mr->perms & UC_PROT_EXEC) != 0) {
+         struct page_collection *pages
+@@ -1553,7 +1561,11 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
+     }
+ 
+     paddr = entry->paddr | (addr & ~TARGET_PAGE_MASK);
+-    mr = uc->memory_mapping(uc, paddr);
++    mr = entry->mr;
++    if (unlikely(!mr)) {
++        mr = uc->memory_mapping(uc, paddr);
++        entry->mr = mr;
++    }
+ 
+     // memory might be still unmapped while reading or fetching
+     if (mr == NULL) {
+@@ -1622,7 +1634,11 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
+                 tlb_addr &= ~TLB_INVALID_MASK;
+             }
+             paddr = entry->paddr | (addr & ~TARGET_PAGE_MASK);
+-            mr = uc->memory_mapping(uc, paddr);
++            mr = entry->mr;
++            if (unlikely(!mr)) {
++                mr = uc->memory_mapping(uc, paddr);
++                entry->mr = mr;
++            }
+             if (mr == NULL) {
+                 uc->invalid_error = UC_ERR_MAP;
+                 if (uc->nested_level > 0 && !uc->cpu->stopped) {
+@@ -2192,7 +2208,11 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
+ 
+     // Load the latest memory mapping.
+     paddr = entry->paddr | (addr & ~TARGET_PAGE_MASK);
+-    mr = uc->memory_mapping(uc, paddr);
++    mr = entry->mr;
++    if (unlikely(!mr)) {
++        mr = uc->memory_mapping(uc, paddr);
++        entry->mr = mr;
++    }
+ 
+     if (!uc->size_recur_mem) { // disabling write callback if in recursive call
+         // Unicorn: callback on memory write
+@@ -2255,7 +2275,11 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
+                 tlb_addr = tlb_addr_write(entry) & ~TLB_INVALID_MASK;
+             }
+             paddr = entry->paddr | (addr & ~TARGET_PAGE_MASK);
+-            mr = uc->memory_mapping(uc, paddr);
++            mr = entry->mr;
++            if (unlikely(!mr)) {
++                mr = uc->memory_mapping(uc, paddr);
++                entry->mr = mr;
++            }
+             if (mr == NULL) {
+                 uc->invalid_error = UC_ERR_MAP;
+                 cpu_exit(uc->cpu);
+diff --git a/qemu/include/exec/cpu-defs.h b/qemu/include/exec/cpu-defs.h
+index 5c11015..e0adfd9 100644
+--- a/qemu/include/exec/cpu-defs.h
++++ b/qemu/include/exec/cpu-defs.h
+@@ -100,6 +100,10 @@ typedef uint64_t target_ulong;
+     MIN(22, TARGET_VIRT_ADDR_SPACE_BITS - TARGET_PAGE_BITS)
+ # endif
+ 
++/* Forward decl — full type lives in exec/memory.h. CPUTLBEntry only needs
++ * to hold an opaque pointer. */
++struct MemoryRegion;
++
+ typedef struct CPUTLBEntry {
+     /* bit TARGET_LONG_BITS to TARGET_PAGE_BITS : virtual address
+        bit TARGET_PAGE_BITS-1..4  : Nonzero for accesses that should not
+@@ -116,6 +120,14 @@ typedef struct CPUTLBEntry {
+             /* Addend to virtual address to get host address.  IO accesses
+                use the corresponding iotlb value.  */
+             uintptr_t addend;
++            /* Cached MR pointer. Softmmu used to call
++             * uc->memory_mapping(uc, paddr) on every access; now populated
++             * lazily on first miss per-entry and reused on subsequent
++             * accesses to the same page. NULL = not cached yet (or no
++             * mapping — recomputed each time, but that's the rare path).
++             * Invalidated wholesale via tlb_flush(), which memory_map /
++             * memory_unmap already trigger. */
++            struct MemoryRegion *mr;
+         };
+         /* padding to get a power of two size */
+         uint8_t dummy[1 << CPU_TLB_ENTRY_BITS];
+-- 
+2.43.0
+

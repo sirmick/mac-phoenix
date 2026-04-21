@@ -1,7 +1,7 @@
-From abb0970d2c30e1d9f747705894ed3243f257e675 Mon Sep 17 00:00:00 2001
+From 0296f744bf5843320585b4c57a93dcb64bdab79b Mon Sep 17 00:00:00 2001
 From: Mick <sirmick@gmail.com>
 Date: Sat, 18 Apr 2026 09:29:36 -0700
-Subject: [PATCH 2/6] Unicorn PPC: map memory, open engine, run 1000 insns at
+Subject: [PATCH 3/9] Unicorn PPC: map memory, open engine, run 1000 insns at
  nanokernel entry
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -38,7 +38,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
  1 file changed, 5 insertions(+), 4 deletions(-)
 
 diff --git a/uc.c b/uc.c
-index 75b89a01..dbe106d9 100644
+index 75b89a0..dbe106d 100644
 --- a/uc.c
 +++ b/uc.c
 @@ -1413,10 +1413,11 @@ uc_err uc_mem_map_ptr(uc_engine *uc, uint64_t address, uint64_t size,

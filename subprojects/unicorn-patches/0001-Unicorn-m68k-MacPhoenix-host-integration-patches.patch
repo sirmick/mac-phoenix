@@ -1,0 +1,375 @@
+From d8a7d4c2d13a639ab41ab6c266718e054bf42dda Mon Sep 17 00:00:00 2001
+From: Mick <sirmick@gmail.com>
+Date: Mon, 20 Apr 2026 17:56:27 -0700
+Subject: [PATCH 1/9] Unicorn m68k: MacPhoenix host-integration patches
+
+Collected 68k deltas that predate the PPC patch series and were
+historically committed directly into mac-phoenix's vendored Unicorn
+tree rather than tracked as standalone patches. Extracted here so
+the full series reproduces the vendored state from pristine 2.1.4.
+
+Per-file:
+
+- qemu/accel/tcg/cpu-exec.c
+  * M68K A-line opcode pre-read on exception_index==10: fetches the
+    instruction word before the interrupt handler runs so
+    cpu_m68k_exec_interrupt can inspect the unimplemented opcode
+    (used by the MacPhoenix EmulOp dispatch path).
+  * EXCP_RTE (0x100) fast-return: skip cpu_loop_exit_noexc on guest
+    RTE so the emulator stays on the TCG main loop instead of
+    unwinding to the C caller.
+  * CHECKLOAD counter (g_cpu_exec_checkload_count) read by the
+    MacPhoenix boot-progress tracker.
+  * TB-lookup perf counters (g_tb_find_count/g_tb_miss_count/
+    g_tb_buffer_flush_count) read by unicorn_wrapper.c.
+
+- qemu/accel/tcg/translate-all.c
+  * Bump g_tb_buffer_flush_count in tb_flush.
+
+- qemu/target/m68k/cpu.h
+  * Expose m68k_interrupt_all() for the non-static call from
+    uc_m68k_trigger_interrupt.
+
+- qemu/target/m68k/op_helper.c
+  * Un-static m68k_interrupt_all and auto-ack hardware IRQs so
+    guest timer/VBL interrupts are delivered in emulator-driven
+    flows where no external interrupt controller runs.
+
+- qemu/target/m68k/unicorn.c
+  * uc_m68k_trigger_interrupt() helper called from the MacPhoenix
+    timer thread.
+  * SR read preserves cc_op so reading SR mid-TB doesn't clobber
+    deferred condition-code state.
+
+- qemu/target/m68k/translate.c
+  * Loosen use_goto_tb: allow chaining for all branches (including
+    backward/loops). Interrupt delivery switched to cpu_exit() +
+    exit_request, which breaks goto_tb chains on demand.
+  * gen_jmp_tb: sync cc_op to env->cc_op before leaving this TB,
+    bypassing update_cc_op's cc_op_synced tracking because
+    gen_jmpcc calls gen_jmp_tb twice.
+
+All globals introduced here are non-weak; patch 0001 promotes them
+to __attribute__((weak)) once ppc-softmmu.a joins the link.
+---
+ qemu/accel/tcg/cpu-exec.c      | 61 ++++++++++++++++++++++++++++++++++
+ qemu/accel/tcg/translate-all.c |  2 ++
+ qemu/target/m68k/cpu.h         |  3 ++
+ qemu/target/m68k/op_helper.c   | 11 +++++-
+ qemu/target/m68k/translate.c   | 46 +++++++++++++++++++++++++
+ qemu/target/m68k/unicorn.c     | 23 ++++++++++++-
+ 6 files changed, 144 insertions(+), 2 deletions(-)
+
+diff --git a/qemu/accel/tcg/cpu-exec.c b/qemu/accel/tcg/cpu-exec.c
+index 77168f3..38e5513 100644
+--- a/qemu/accel/tcg/cpu-exec.c
++++ b/qemu/accel/tcg/cpu-exec.c
+@@ -29,6 +29,9 @@
+ #include "sysemu/cpus.h"
+ #include "uc_priv.h"
+ 
++/* Global CHECKLOAD counter - set by macemu-next, read here */
++volatile int g_cpu_exec_checkload_count = 0;
++
+ /* -icount align implementation. */
+ 
+ typedef struct SyncClocks {
+@@ -244,6 +247,11 @@ static inline void tb_add_jump(TranslationBlock *tb, int n,
+     return;
+ }
+ 
++/* TB lookup/compile counters — accessed from unicorn_wrapper.c */
++uint64_t g_tb_find_count = 0;
++uint64_t g_tb_miss_count = 0;
++uint64_t g_tb_buffer_flush_count = 0;
++
+ static inline TranslationBlock *tb_find(CPUState *cpu,
+                                         TranslationBlock *last_tb,
+                                         int tb_exit, uint32_t cf_mask)
+@@ -256,8 +264,10 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
+     struct list_item *cur;
+     struct hook *hook;
+ 
++    g_tb_find_count++;
+     tb = tb_lookup__cpu_state(cpu, &pc, &cs_base, &flags, cf_mask);
+     if (tb == NULL) {
++        g_tb_miss_count++;
+         mmap_lock();
+         tb = tb_gen_code(cpu, pc, cs_base, flags, cf_mask);
+         mmap_unlock();
+@@ -402,6 +412,41 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
+         CPUPPCState *env = &(POWERPC_CPU(uc->cpu)->env);
+         env->nip += 4;
+ #endif
++#if defined(TARGET_M68K)
++        /* M68K: Handle RTE (Return from Exception) by calling QEMU's native handler.
++         * EXCP_RTE (0x100) needs special handling because m68k_interrupt_all() must
++         * be called to update PC from stack. If we don't do this here, exception_index
++         * gets cleared (line 426) before m68k_interrupt_all() is ever called, causing
++         * an infinite RTE loop with batch execution.
++         */
++        if (cpu->exception_index == 0x100) {  /* EXCP_RTE */
++            CPUM68KState *env = &(M68K_CPU(uc->cpu)->env);
++            m68k_interrupt_all(env, 0);  /* is_hw=0 for software exception */
++            cpu->exception_index = -1;
++            *ret = EXCP_INTERRUPT;
++            return false;
++        }
++#endif
++
++#if defined(TARGET_M68K)
++        /* For M68K A-line exceptions: Read the opcode BEFORE calling hooks
++         * because the hook will advance PC, making it impossible to check afterward */
++        uint16_t m68k_aline_opcode = 0;
++        bool m68k_is_aline = (cpu->exception_index == 10);
++        bool m68k_is_emulop = false;
++
++        if (m68k_is_aline) {
++            CPUM68KState *env = &(M68K_CPU(uc->cpu)->env);
++            uint8_t opcode_bytes[2];
++            cpu_memory_rw_debug(env_cpu(env), env->pc, opcode_bytes, 2, 0);
++            m68k_aline_opcode = (opcode_bytes[0] << 8) | opcode_bytes[1];
++            m68k_is_emulop = ((m68k_aline_opcode & 0xFFC0) == 0xAE00);
++
++            /* (diagnostics stripped for performance) */
++        }
++        /* (exception counter stripped for performance) */
++#endif
++
+         // Unicorn: call registered interrupt callbacks
+         catched = false;
+         HOOK_FOREACH_VAR_DECLARE;
+@@ -412,6 +457,22 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
+             JIT_CALLBACK_GUARD(((uc_cb_hookintr_t)hook->callback)(uc, cpu->exception_index, hook->user_data));
+             catched = true;
+         }
++
++#if defined(TARGET_M68K)
++        /* Handle A-line traps based on what we determined BEFORE the hook ran */
++        if (m68k_is_aline) {
++            if (m68k_is_emulop) {
++                /* EmulOp - hook already handled it */
++                catched = true;
++            } else {
++                /* Non-EmulOp A-line trap - use proper exception handling */
++                CPUM68KState *env = &(M68K_CPU(uc->cpu)->env);
++                m68k_interrupt_all(env, 0);
++                catched = true;
++            }
++        }
++#endif
++
+         // Unicorn: If un-catched interrupt, stop executions.
+         if (!catched) {
+             // printf("AAAAAAAAAAAA\n"); qq
+diff --git a/qemu/accel/tcg/translate-all.c b/qemu/accel/tcg/translate-all.c
+index 71b6b2b..ba55f39 100644
+--- a/qemu/accel/tcg/translate-all.c
++++ b/qemu/accel/tcg/translate-all.c
+@@ -1734,6 +1734,8 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
+     tb = tcg_tb_alloc(tcg_ctx);
+     if (unlikely(!tb)) {
+         /* flush must be done */
++        extern uint64_t g_tb_buffer_flush_count;
++        g_tb_buffer_flush_count++;
+         tb_flush(cpu);
+         mmap_unlock();
+         /* Make the execution loop process the flush as soon as possible.  */
+diff --git a/qemu/target/m68k/cpu.h b/qemu/target/m68k/cpu.h
+index cc2c50e..a7e05d5 100644
+--- a/qemu/target/m68k/cpu.h
++++ b/qemu/target/m68k/cpu.h
+@@ -176,6 +176,9 @@ void m68k_cpu_do_interrupt(CPUState *cpu);
+ bool m68k_cpu_exec_interrupt(CPUState *cpu, int int_req);
+ hwaddr m68k_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
+ 
++/* Unicorn: Exposed for UC_HOOK_INTR handler to call directly */
++void m68k_interrupt_all(CPUM68KState *env, int is_hw);
++
+ void m68k_tcg_init(struct uc_struct *uc);
+ /*
+  * you can call this signal handler from your SIGBUS and SIGSEGV
+diff --git a/qemu/target/m68k/op_helper.c b/qemu/target/m68k/op_helper.c
+index 91c504f..7cb8a19 100644
+--- a/qemu/target/m68k/op_helper.c
++++ b/qemu/target/m68k/op_helper.c
+@@ -165,7 +165,8 @@ static inline void do_stack_frame(CPUM68KState *env, uint32_t *sp,
+     cpu_stw_mmuidx_ra(env, *sp, sr, MMU_KERNEL_IDX, 0);
+ }
+ 
+-static void m68k_interrupt_all(CPUM68KState *env, int is_hw)
++/* Unicorn: Made non-static so it can be called from UC_HOOK_INTR handler */
++void m68k_interrupt_all(CPUM68KState *env, int is_hw)
+ {
+     CPUState *cs = env_cpu(env);
+     uint32_t sp;
+@@ -389,6 +390,13 @@ bool m68k_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
+          */
+         cs->exception_index = env->pending_vector;
+         do_interrupt_m68k_hardirq(env);
++        /* Auto-acknowledge: clear pending interrupt after delivery.
++         * Mimics hardware IACK cycle. This eliminates the need for
++         * hook_block to manually clear pending_level, which in turn
++         * allows goto_tb to chain backward branches (loops). */
++        env->pending_level = 0;
++        env->pending_vector = 0;
++        cpu_reset_interrupt(cs, CPU_INTERRUPT_HARD);
+         return true;
+     }
+     return false;
+@@ -998,3 +1006,4 @@ void HELPER(chk2)(CPUM68KState *env, int32_t val, int32_t lb, int32_t ub)
+         cpu_loop_exit(cs);
+     }
+ }
++
+diff --git a/qemu/target/m68k/translate.c b/qemu/target/m68k/translate.c
+index 8f94004..84b9c67 100644
+--- a/qemu/target/m68k/translate.c
++++ b/qemu/target/m68k/translate.c
+@@ -1528,6 +1528,16 @@ static void gen_exit_tb(DisasContext *s)
+ 
+ static inline bool use_goto_tb(DisasContext *s, uint32_t dest)
+ {
++    /* Allow goto_tb for ALL branches (including backward/loops).
++     *
++     * Previously disabled for backward branches because hook_block
++     * was needed for timer polling and interrupt delivery. Now:
++     * - Interrupts auto-ack in m68k_cpu_exec_interrupt (no hook_block ack needed)
++     * - Timer polling still uses hook_block every 4096 blocks, but interrupt
++     *   delivery via uc_emu_stop() uses cpu_exit() which sets exit_request,
++     *   checked at each TB entry via gen_tb_start's icount_decr test.
++     * - goto_tb chains break when exit_request is set, so interrupts
++     *   are still delivered promptly even in tight loops. */
+     return (s->base.pc_first & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK)
+         || (s->base.pc_next & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK);
+ }
+@@ -1536,6 +1546,17 @@ static inline bool use_goto_tb(DisasContext *s, uint32_t dest)
+ static void gen_jmp_tb(DisasContext *s, int n, uint32_t dest)
+ {
+     TCGContext *tcg_ctx = s->uc->tcg_ctx;
++    /* Sync cc_op to env->cc_op before leaving this TB.
++     * When cc_op is known at compile time (not CC_OP_DYNAMIC), write it
++     * so the target TB can read it correctly at runtime.
++     * We bypass update_cc_op()'s cc_op_synced tracking because
++     * gen_jmpcc calls gen_jmp_tb twice (taken/not-taken) and the
++     * synced flag from the first call would suppress the second.
++     * When cc_op IS CC_OP_DYNAMIC, env->cc_op already holds the
++     * correct runtime value and must not be overwritten with 0.  */
++    if (s->cc_op != CC_OP_DYNAMIC) {
++        tcg_gen_movi_i32(tcg_ctx, QREG_CC_OP, s->cc_op);
++    }
+     if (unlikely(s->base.singlestep_enabled)) {
+         gen_exception(s, dest, EXCP_DEBUG);
+     } else if (use_goto_tb(s, dest)) {
+@@ -1580,6 +1601,7 @@ DISAS_INSN(dbcc)
+     reg = DREG(insn, 0);
+     base = s->pc;
+     offset = (int16_t)read_im16(env, s);
++
+     l1 = gen_new_label(tcg_ctx);
+     gen_jmpcc(s, (insn >> 8) & 0xf, l1);
+ 
+@@ -1588,7 +1610,9 @@ DISAS_INSN(dbcc)
+     tcg_gen_addi_i32(tcg_ctx, tmp, tmp, -1);
+     gen_partset_reg(tcg_ctx, OS_WORD, reg, tmp);
+     tcg_gen_brcondi_i32(tcg_ctx, TCG_COND_EQ, tmp, -1, l1);
++
+     gen_jmp_tb(s, 1, base + offset);
++
+     gen_set_label(tcg_ctx, l1);
+     gen_jmp_tb(s, 0, s->pc);
+ }
+@@ -1598,6 +1622,23 @@ DISAS_INSN(undef_mac)
+     gen_exception(s, s->base.pc_next, EXCP_LINEA);
+ }
+ 
++/* EmulOp handler for A-line opcodes 0xAE00-0xAE3F */
++DISAS_INSN(emulop_aline)
++{
++    /* For now, generate A-line exception so our hook can handle it.
++     * This validates that we're intercepting the right opcodes.
++     *
++     * Future: Will add helper to handle EmulOps directly without exceptions.
++     * TCGContext *tcg_ctx = s->uc->tcg_ctx;
++     * uint16_t emulop_num = insn & 0x3F;
++     * uint16_t legacy_opcode = 0x7100 | emulop_num;
++     * TCGv_i32 op = tcg_const_i32(tcg_ctx, legacy_opcode);
++     * gen_helper_emulop(tcg_ctx, tcg_ctx->cpu_env, op);
++     * tcg_temp_free_i32(tcg_ctx, op);
++     */
++    gen_exception(s, s->base.pc_next, EXCP_LINEA);
++}
++
+ DISAS_INSN(undef_fpu)
+ {
+     gen_exception(s, s->base.pc_next, EXCP_LINEF);
+@@ -3174,6 +3215,7 @@ DISAS_INSN(branch)
+     } else if (offset == -1) {
+         offset = read_im32(env, s);
+     }
++
+     if (op == 1) {
+         /* bsr */
+         gen_push(s, tcg_const_i32(tcg_ctx, s->pc));
+@@ -6198,6 +6240,9 @@ void register_m68k_insns (CPUM68KState *env)
+     INSN(suba,      91c0, f1c0, CF_ISA_A);
+     INSN(suba,      90c0, f0c0, M68000);
+ 
++    /* Register EmulOp handler for 0xAE00-0xAE3F BEFORE generic A-line handler */
++    INSN(emulop_aline, ae00, ffc0, M68000);  /* 0xAE00-0xAE3F: EmulOps */
++
+     BASE(undef_mac, a000, f000);
+     INSN(mac,       a000, f100, CF_EMAC);
+     INSN(from_mac,  a180, f9b0, CF_EMAC);
+@@ -6475,6 +6520,7 @@ void restore_state_to_opc(CPUM68KState *env, TranslationBlock *tb,
+ {
+     int cc_op = data[1];
+     env->pc = data[0];
++
+     if (cc_op != CC_OP_DYNAMIC) {
+         env->cc_op = cc_op;
+     }
+diff --git a/qemu/target/m68k/unicorn.c b/qemu/target/m68k/unicorn.c
+index 42ef1ff..b2d053c 100644
+--- a/qemu/target/m68k/unicorn.c
++++ b/qemu/target/m68k/unicorn.c
+@@ -49,6 +49,23 @@ static void reg_reset(struct uc_struct *uc)
+     env->pc = 0;
+ }
+ 
++/* Trigger M68K hardware interrupt using QEMU's native mechanism
++ * This is exported for use by macemu-next to trigger timer interrupts.
++ * Uses the same code path as QEMU's Quadra 800 platform (hw/m68k/q800.c).
++ */
++DEFAULT_VISIBILITY
++void uc_m68k_trigger_interrupt(struct uc_struct *uc, int level, uint8_t vector)
++{
++    if (!uc || !uc->cpu) {
++        fprintf(stderr, "[ERROR] uc_m68k_trigger_interrupt: NULL pointer! uc=%p, uc->cpu=%p\n",
++                (void*)uc, uc ? (void*)uc->cpu : NULL);
++        return;
++    }
++
++    M68kCPU *cpu = (M68kCPU *)uc->cpu;
++    m68k_set_irq_level(cpu, level, vector);
++}
++
+ DEFAULT_VISIBILITY
+ uc_err reg_read(void *_env, int mode, unsigned int regid, void *value,
+                 size_t *size)
+@@ -72,7 +89,11 @@ uc_err reg_read(void *_env, int mode, unsigned int regid, void *value,
+             break;
+         case UC_M68K_REG_SR:
+             CHECK_REG_TYPE(uint32_t);
+-            env->cc_op = CC_OP_FLAGS;
++            // cpu_m68k_get_sr() calls cpu_m68k_get_ccr() which handles all
++            // cc_op types non-destructively using local variables.
++            // Do NOT call helper_flush_flags() here - it destructively sets
++            // env->cc_op = CC_OP_FLAGS, corrupting lazy CC state that
++            // subsequent JIT translation blocks depend on.
+             *(uint32_t *)value = cpu_m68k_get_sr(env);
+             break;
+         case UC_M68K_REG_CR_SFC:
+-- 
+2.43.0
+

@@ -1,7 +1,7 @@
-From f73a798a5137c493b6869f63e1ecde57b4abeb43 Mon Sep 17 00:00:00 2001
+From 8da7220ab0aa0f4cdf4c02bc3e5f7be84dde1bbf Mon Sep 17 00:00:00 2001
 From: Mick <sirmick@gmail.com>
 Date: Sat, 18 Apr 2026 09:21:16 -0700
-Subject: [PATCH 1/6] Unicorn PPC: scaffold backend alongside KPX
+Subject: [PATCH 2/9] Unicorn PPC: scaffold backend alongside KPX
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -27,7 +27,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
  2 files changed, 12 insertions(+), 11 deletions(-)
 
 diff --git a/qemu/accel/tcg/cpu-exec.c b/qemu/accel/tcg/cpu-exec.c
-index 38e55134..556c0680 100644
+index 38e5513..556c068 100644
 --- a/qemu/accel/tcg/cpu-exec.c
 +++ b/qemu/accel/tcg/cpu-exec.c
 @@ -29,8 +29,10 @@
@@ -60,7 +60,7 @@ index 38e55134..556c0680 100644
  static inline TranslationBlock *tb_find(CPUState *cpu,
                                          TranslationBlock *last_tb,
 diff --git a/qemu/target/ppc/unicorn.c b/qemu/target/ppc/unicorn.c
-index 2d615006..b0912b0e 100644
+index 2d61500..b0912b0 100644
 --- a/qemu/target/ppc/unicorn.c
 +++ b/qemu/target/ppc/unicorn.c
 @@ -22,10 +22,8 @@ typedef uint32_t ppcreg_t;

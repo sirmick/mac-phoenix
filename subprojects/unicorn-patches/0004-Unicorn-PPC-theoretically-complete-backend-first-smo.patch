@@ -1,7 +1,7 @@
-From b75f18494d048e0522140723d6e9a8d97219da72 Mon Sep 17 00:00:00 2001
+From a0d137027c0c19932d7e87d558db16d9b8a9a187 Mon Sep 17 00:00:00 2001
 From: Mick <sirmick@gmail.com>
 Date: Sat, 18 Apr 2026 10:38:46 -0700
-Subject: [PATCH 3/6] Unicorn PPC: theoretically complete backend + first smoke
+Subject: [PATCH 4/9] Unicorn PPC: theoretically complete backend + first smoke
  test
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -22,10 +22,10 @@ in place. Boot reaches 0x50313fc8 before diverging — debug phase next.
  qemu/target/ppc/translate.c         | 18 ++++++++++++++++
  uc.c                                | 15 ++++++++++++++
  6 files changed, 74 insertions(+)
- create mode 100644 subprojects/unicorn/qemu/target/ppc/mac_emulop_helper.c
+ create mode 100644 qemu/target/ppc/mac_emulop_helper.c
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 033db096..6f303466 100644
+index 033db09..6f30346 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -935,6 +935,7 @@ add_library(ppc-softmmu STATIC
@@ -45,7 +45,7 @@ index 033db096..6f303466 100644
      qemu/target/ppc/mem_helper.c
      qemu/target/ppc/misc_helper.c
 diff --git a/include/uc_priv.h b/include/uc_priv.h
-index c3132dcc..a8bba6c3 100644
+index c3132dc..a8bba6c 100644
 --- a/include/uc_priv.h
 +++ b/include/uc_priv.h
 @@ -432,6 +432,12 @@ struct uc_struct {
@@ -62,7 +62,7 @@ index c3132dcc..a8bba6c3 100644
  
  // Metadata stub for the variable-size cpu context used with uc_context_*()
 diff --git a/qemu/target/ppc/helper.h b/qemu/target/ppc/helper.h
-index b1c43439..98d4d948 100644
+index b1c4343..98d4d94 100644
 --- a/qemu/target/ppc/helper.h
 +++ b/qemu/target/ppc/helper.h
 @@ -3,6 +3,7 @@ DEF_HELPER_6(uc_traceopcode, void, ptr, i64, i64, i32, ptr, i64)
@@ -75,7 +75,7 @@ index b1c43439..98d4d948 100644
  DEF_HELPER_FLAGS_4(td, TCG_CALL_NO_WG, void, env, tl, tl, i32)
 diff --git a/qemu/target/ppc/mac_emulop_helper.c b/qemu/target/ppc/mac_emulop_helper.c
 new file mode 100644
-index 00000000..b9a495b6
+index 0000000..b9a495b
 --- /dev/null
 +++ b/qemu/target/ppc/mac_emulop_helper.c
 @@ -0,0 +1,32 @@
@@ -112,7 +112,7 @@ index 00000000..b9a495b6
 +    }
 +}
 diff --git a/qemu/target/ppc/translate.c b/qemu/target/ppc/translate.c
-index 0b3e5c8c..34e593fe 100644
+index 0b3e5c8..34e593f 100644
 --- a/qemu/target/ppc/translate.c
 +++ b/qemu/target/ppc/translate.c
 @@ -4132,6 +4132,22 @@ static void gen_sc(DisasContext *ctx)
@@ -148,7 +148,7 @@ index 0b3e5c8c..34e593fe 100644
  GEN_HANDLER(twi, 0x03, 0xFF, 0xFF, 0x00000000, PPC_FLOW),
  #if defined(TARGET_PPC64)
 diff --git a/uc.c b/uc.c
-index dbe106d9..06dc9521 100644
+index dbe106d..06dc952 100644
 --- a/uc.c
 +++ b/uc.c
 @@ -493,6 +493,21 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)

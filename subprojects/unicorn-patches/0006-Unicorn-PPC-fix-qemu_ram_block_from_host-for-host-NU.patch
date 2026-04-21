@@ -1,7 +1,7 @@
-From c021f18099a812a08f88aa13ef7034dcdd4a5e75 Mon Sep 17 00:00:00 2001
+From d883da32c63e294d996ba3e9e18b359b94d98ba9 Mon Sep 17 00:00:00 2001
 From: Mick <sirmick@gmail.com>
 Date: Sat, 18 Apr 2026 19:35:05 -0700
-Subject: [PATCH 5/6] Unicorn PPC: fix qemu_ram_block_from_host for host=NULL
+Subject: [PATCH 6/9] Unicorn PPC: fix qemu_ram_block_from_host for host=NULL
  prealloc blocks
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -31,7 +31,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
  1 file changed, 10 insertions(+), 3 deletions(-)
 
 diff --git a/qemu/exec.c b/qemu/exec.c
-index 38eaa748..2b9014f1 100644
+index 38eaa74..2b9014f 100644
 --- a/qemu/exec.c
 +++ b/qemu/exec.c
 @@ -1257,14 +1257,21 @@ RAMBlock *qemu_ram_block_from_host(struct uc_struct *uc, void *ptr,

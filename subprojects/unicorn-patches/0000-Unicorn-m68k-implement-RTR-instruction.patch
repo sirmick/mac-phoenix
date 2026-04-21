@@ -1,7 +1,10 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From abe17fb2890562a0728a10f59022f6e0d4ee2023 Mon Sep 17 00:00:00 2001
 From: Mick <sirmick@gmail.com>
 Date: Fri, 6 Mar 2026 11:12:00 -0800
-Subject: [PATCH 0/6] Unicorn m68k: implement RTR instruction
+Subject: [PATCH 0/9] Unicorn m68k: implement RTR instruction
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 The m68k RTR (Return and Restore) instruction — opcode 0x4E77 — was not
 decoded by the TCG target; it fell through to the "illegal instruction"
@@ -24,12 +27,13 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
  1 file changed, 19 insertions(+)
 
 diff --git a/qemu/target/m68k/translate.c b/qemu/target/m68k/translate.c
+index 5b9a74c..8f94004 100644
 --- a/qemu/target/m68k/translate.c
 +++ b/qemu/target/m68k/translate.c
-@@ -3094,6 +3094,24 @@ DISAS_INSN(rts)
+@@ -3053,6 +3053,24 @@ DISAS_INSN(rts)
      gen_jmp(s, tmp);
  }
-
+ 
 +DISAS_INSN(rtr)
 +{
 +    TCGContext *tcg_ctx = s->uc->tcg_ctx;
@@ -51,7 +55,7 @@ diff --git a/qemu/target/m68k/translate.c b/qemu/target/m68k/translate.c
  DISAS_INSN(jump)
  {
      TCGContext *tcg_ctx = s->uc->tcg_ctx;
-@@ -6189,6 +6207,7 @@ void register_m68k_insns (CPUM68KState *env)
+@@ -6147,6 +6165,7 @@ void register_m68k_insns (CPUM68KState *env)
      BASE(nop,       4e71, ffff);
      INSN(rtd,       4e74, ffff, RTD);
      BASE(rts,       4e75, ffff);
@@ -59,6 +63,6 @@ diff --git a/qemu/target/m68k/translate.c b/qemu/target/m68k/translate.c
      BASE(jump,      4e80, ffc0);
      BASE(jump,      4ec0, ffc0);
      INSN(addsubq,   5000, f080, M68000);
---
+-- 
 2.43.0
 
