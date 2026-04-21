@@ -517,3 +517,44 @@ strictly a post-Finder artifact — doesn't block reaching desktop.
 3. **SCALE=10 register corruption to 0x21000000** — still unexplained,
    but now masked behind the successful Finder path. Revisit if
    post-Finder interactive use shows crashes.
+
+## 2026-04-21 — block-hook IRQ delivery unlocks SCALE=1
+
+### Commit
+
+- **`1e9dfbd0`** — "Unicorn PPC: in-place IRQ delivery via UC_HOOK_BLOCK".
+  Replaces the cross-thread async `uc_emu_stop` from `uppc_tick_thread`
+  with an always-on `UC_HOOK_BLOCK` callback. The tick thread now only
+  sets `g_pending_irq`; the block hook checks the flag at each TB entry
+  and exits cleanly via same-thread `uc_emu_stop` at a natural TB
+  boundary. No more mid-TB register unwind from TCG IR on every IRQ.
+
+### Impact
+
+| Config | Before block hook | After block hook |
+|---|---|---|
+| SCALE=1  | **Never reached Finder in 60s** | **Finder ~10.15s** (three runs: 10.12 / 10.17 / 10.19) |
+| SCALE=10 | Finder 12.30s                   | Finder 21.11s (hook overhead on every TB entry) |
+
+SCALE=1 now boots *faster* than the old SCALE=10 baseline. The block
+hook trades a small per-TB cost (one atomic load + compare + int
+compare) for eliminating the mid-TB state-unwind cost per IRQ. At
+60Hz tick rate the trade is overwhelmingly positive; at 6Hz the hook
+overhead slightly dominates. Since SCALE=1 is now the preferred
+configuration, the SCALE=10 regression is moot.
+
+Rollback knob: `MACEMU_PPC_NO_IRQ_HOOK=1` reinstates the legacy async
+`uc_emu_stop` from the tick thread (no block hook installed).
+
+### Open items
+
+1. **Make SCALE=1 the default.** Currently the default `SCALE` is 10
+   (set elsewhere — check `MACEMU_PPC_TICK_PERIOD_SCALE` default).
+   After confirming a few more workloads, flip the default.
+2. **Block-hook overhead characterization.** ~70% Finder-time regression
+   at SCALE=10 suggests per-TB hook cost is meaningful. If the hook
+   function-pointer dispatch is the bottleneck (not the atomic load),
+   inlining the check into an existing block hook (e.g. merging with
+   `last_pc_cb`) might recover some of that. Profile first.
+3. **Post-Finder `0x21000000` register corruption** remains a separate
+   bug, independent of the IRQ delivery path.
