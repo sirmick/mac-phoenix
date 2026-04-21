@@ -465,15 +465,20 @@ find).
 
 | Config | Before dedup+flush | After dedup+flush |
 |---|---|---|
-| SCALE=10 | Finder 9.64s, then post-Finder wild-pointer crash | Finder 12.30s, 71 DiskPrimes/60s, no fatal |
-| SCALE=1 | Stuck at "Boot globals patched" forever (IRQ pressure) | WLSC 0.30s, boot blocks 0.41s, **still no Finder in 60s** |
+| SCALE=10 | Finder 9.64s, then post-Finder wild-pointer crash | **Finder 12.30s, 2550 DiskPrimes/60s, no fatal** |
+| SCALE=1 | Stuck at "Boot globals patched" forever (IRQ pressure) | Boot blocks 0.41s, **only 50 DiskPrimes/60s, no Finder** |
 
 SCALE=10 is the new default for reaching Finder. SCALE=1 now *starts*
-cleanly but stalls at a different phase than before — it reaches
-"Loading boot blocks (resource #87)" and stays there while DiskPrime
-counts advance (~50 over 60s). This is a *different* failure mode
-from the pre-dedup "Boot globals patched forever" stall; the earlier
-IRQ-pressure pathology is gone.
+cleanly (WLSC 0.30s) but **wall-clock throughput collapses** after
+boot blocks: only ~50 DiskPrimes/60s at SCALE=1 vs ~2550 at SCALE=10
+= **~50× slower**, despite SCALE=1 supposedly being the "real" 60Hz
+tick rate. Zero errors, zero unmapped skips, zero warnings — pure
+throughput starvation, consistent with the engine spending almost
+all its time on IRQ entry/exit rather than forward progress.
+`uc_emu_stop`+re-enter at 60Hz is ~60 TB-tears/sec, and dedup only
+prevents *redundant* tears, not the mandatory one per rising edge.
+The SCALE=10 post-Finder `0x21000000` r3/r5/r6/r7 corruption is now
+strictly a post-Finder artifact — doesn't block reaching desktop.
 
 ### Theory status, updated
 
@@ -485,12 +490,19 @@ IRQ-pressure pathology is gone.
 
 ### Next session — entry points
 
-1. **SCALE=1 post-boot-blocks stall**. Boot blocks resource #87 is the
-   last visible progress at 0.41s. Ticks advance, DiskPrime advances.
-   Check what *else* runs between boot blocks and the
-   `[Boot] Installing drivers` milestone: driver `open` calls?
-   `INITLoad`? Instrument entry/exit of each driver-install EmulOp with
-   a breadcrumb to see which one never returns.
+1. **SCALE=1 wall-clock starvation** (reframed). DiskPrime rate is
+   ~50/60s at SCALE=1 vs ~2550/60s at SCALE=10 — a 50× throughput
+   collapse, not a stall. The engine is spending most of its CPU on
+   the IRQ entry/exit round-trip: one mandatory `uc_emu_stop`+TB-reenter
+   per rising-edge tick = ~60/s. Options to reduce IRQ overhead:
+   - (a) Make IRQ delivery *in-place* — check pending flag at TB
+     boundaries without `uc_emu_stop` (needs Unicorn hook support or
+     a host-side check inside a tight outer loop with `UC_HOOK_BLOCK`).
+   - (b) Batch ticks — at SCALE=1 coalesce multiple ticks if the guest
+     is slow, so we raise INTFLAG_VIA once and let the guest's own
+     `Ticks` counter catch up. Trades IRQ precision for throughput.
+   - (c) Accept SCALE≥5 as the shipping default and document it as
+     the CPU-performance knob until (a) lands.
 
 2. **Full dirty-bitmap restoration** (task #3 / old task #19). The
    targeted flush is a load-bearing workaround, not a fix — any new
