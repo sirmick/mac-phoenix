@@ -88,7 +88,6 @@
 #define qemu_ram_block_host_offset qemu_ram_block_host_offset_mips
 #define qemu_ram_block_from_host qemu_ram_block_from_host_mips
 #define qemu_ram_addr_from_host qemu_ram_addr_from_host_mips
-#define qemu_get_ram_block qemu_get_ram_block_mips
 #define cpu_check_watchpoint cpu_check_watchpoint_mips
 #define iotlb_to_section iotlb_to_section_mips
 #define address_space_dispatch_new address_space_dispatch_new_mips

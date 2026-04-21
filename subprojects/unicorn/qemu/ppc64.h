@@ -88,7 +88,6 @@
 #define qemu_ram_block_host_offset qemu_ram_block_host_offset_ppc64
 #define qemu_ram_block_from_host qemu_ram_block_from_host_ppc64
 #define qemu_ram_addr_from_host qemu_ram_addr_from_host_ppc64
-#define qemu_get_ram_block qemu_get_ram_block_ppc64
 #define cpu_check_watchpoint cpu_check_watchpoint_ppc64
 #define iotlb_to_section iotlb_to_section_ppc64
 #define address_space_dispatch_new address_space_dispatch_new_ppc64

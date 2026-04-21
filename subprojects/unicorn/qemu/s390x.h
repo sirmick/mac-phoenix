@@ -88,7 +88,6 @@
 #define qemu_ram_block_host_offset qemu_ram_block_host_offset_s390x
 #define qemu_ram_block_from_host qemu_ram_block_from_host_s390x
 #define qemu_ram_addr_from_host qemu_ram_addr_from_host_s390x
-#define qemu_get_ram_block qemu_get_ram_block_s390x
 #define cpu_check_watchpoint cpu_check_watchpoint_s390x
 #define iotlb_to_section iotlb_to_section_s390x
 #define address_space_dispatch_new address_space_dispatch_new_s390x

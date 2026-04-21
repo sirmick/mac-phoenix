@@ -614,7 +614,7 @@ void tlb_flush_page_all_cpus_synced(CPUState *src, target_ulong addr)
    can be detected */
 void tlb_protect_code(struct uc_struct *uc, ram_addr_t ram_addr)
 {
-    cpu_physical_memory_test_and_clear_dirty(uc, ram_addr, TARGET_PAGE_SIZE,
+    cpu_physical_memory_test_and_clear_dirty(ram_addr, TARGET_PAGE_SIZE,
                                              DIRTY_MEMORY_CODE);
 }
 
@@ -622,7 +622,7 @@ void tlb_protect_code(struct uc_struct *uc, ram_addr_t ram_addr)
    tested for self modifying code */
 void tlb_unprotect_code(struct uc_struct *uc, ram_addr_t ram_addr)
 {
-    cpu_physical_memory_set_dirty_flag(uc, ram_addr, DIRTY_MEMORY_CODE);
+    cpu_physical_memory_set_dirty_flag(ram_addr, DIRTY_MEMORY_CODE);
 }
 
 
@@ -874,7 +874,7 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
         if (prot & PAGE_WRITE) {
             if (section->readonly) {
                 write_address |= TLB_DISCARD_WRITE;
-            } else if (cpu_physical_memory_is_clean(cpu->uc, iotlb)) {
+            } else if (cpu_physical_memory_is_clean(iotlb)) {
                 write_address |= TLB_NOTDIRTY;
             }
         }
