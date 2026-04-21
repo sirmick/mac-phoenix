@@ -1289,18 +1289,16 @@ static void uppc_tick_thread(void)
     uint64_t start = GetTicks_usec();
     uint64_t next = start;
 
-    // MACEMU_PPC_TICK_PERIOD_SCALE scales the 16.625ms 60Hz tick. scale=10
-    // → 166.25ms / ~6Hz. Used to work around Unicorn's IRQ-pressure stall
-    // (ticks landing too frequently in emulop-seq space starve the 68k
-    // side; see docs/ppc/UnicornPpcStatus.md "late" sections for details).
-    // Default for Unicorn PPC is 10 — empirically the only rate where
-    // boot reaches "Loading boot blocks" reliably, and the only rate where
-    // Desktop has ever been observed to render. Explicit env-var setting
-    // overrides (set to 1 to restore 60Hz for debugging).
+    // MACEMU_PPC_TICK_PERIOD_SCALE scales the 16.625ms 60Hz tick.
+    // Default 1 → true 60Hz. Since the block-hook IRQ delivery landed
+    // (commit 1e9dfbd0), SCALE=1 reaches Finder in ~10s; before it was
+    // the best setting only for debugging and boot would stall at
+    // "Loading boot blocks". Raise to 10 (~6Hz) only if investigating
+    // the old IRQ-pressure path.
     static const int s_tick_scale = [](){
         const char* e = std::getenv("MACEMU_PPC_TICK_PERIOD_SCALE");
-        int v = (e && *e) ? atoi(e) : 10;
-        return v > 0 ? v : 10;
+        int v = (e && *e) ? atoi(e) : 1;
+        return v > 0 ? v : 1;
     }();
     while (g_tick_thread_running.load()) {
         const int period_us = 16625 * s_tick_scale;
