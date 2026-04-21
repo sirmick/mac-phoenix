@@ -128,6 +128,17 @@ static uint32_t g_macos_trampoline = 0;
 #define MODE_NATIVE   1
 #define MODE_EMUL_OP  2
 
+// EmulOp selectors we care about for SMC flush (host-side writes to guest RAM).
+// Values mirror the KPX OP_* enum in src/cpu/kpx/compat/emul_op.h — kept local
+// to avoid the KPX-vs-common header conflict that macos_util.h guards against.
+#define UPPC_OP_SONY_PRIME    11
+#define UPPC_OP_DISK_PRIME    15
+#define UPPC_OP_CDROM_PRIME   19
+#define UPPC_OP_SOUNDIN_PRIME 24
+#define UPPC_OP_GET_SCRAP     35
+#define UPPC_OP_EXTFS_COMM    49
+#define UPPC_OP_EXTFS_HFS     50
+
 #define KERNEL_DATA_BASE      0x68ffe000u
 
 // DR probe regions — munmap'd during init so nanokernel faults, then remapped
@@ -398,6 +409,25 @@ static void uppc_dispatch_emul_op(uint32_t pc, uint32_t opcode)
     }
 
     g_platform.ppc_emulop_handler(&r68, rd_gpr(24), emul_op);
+
+    // Host-side writes to guest RAM (disk/CD/ExtFS reads; scrap/audio buffers)
+    // bypass TCG's TLB, so the in-TB check for TLB_NOTDIRTY never fires and
+    // stale translations can outlive an overwritten code page. Flush the TB
+    // cache after EmulOps known to memcpy into guest space. Cheap relative to
+    // the I/O they follow; avoids the ~9x slowdown of per-iteration flush.
+    switch (emul_op) {
+        case UPPC_OP_SONY_PRIME:
+        case UPPC_OP_DISK_PRIME:
+        case UPPC_OP_CDROM_PRIME:
+        case UPPC_OP_SOUNDIN_PRIME:
+        case UPPC_OP_EXTFS_COMM:
+        case UPPC_OP_EXTFS_HFS:
+        case UPPC_OP_GET_SCRAP:
+            uc_ctl_flush_tb(g_uc);
+            break;
+        default:
+            break;
+    }
 
     wr_cr(saved_cr);
     wr_xer(saved_xer);
