@@ -1178,9 +1178,11 @@ static void uppc_handle_interrupt(void)
         WriteMac16(ReadMac32(KERNEL_DATA_BASE + 0x67c), 1);
         wr_cr(cr_before | or_mask);
         if (s_trace_irq) {
+            uint32_t ticks = ReadMac32(0x016a);
+            uint32_t d0 = rd_gpr(8);
             fprintf(stderr,
-                    "[IRQ] MODE_68K pc=%08x cr_before=%08x or_mask=%08x cr_after=%08x r22=%08x r24=%08x\n",
-                    rd_pc(), cr_before, or_mask, rd_cr(), rd_gpr(22), rd_gpr(24));
+                    "[IRQ] MODE_68K pc=%08x cr_before=%08x cr_after=%08x r22=%08x r24=%08x Ticks=%u D0=%08x\n",
+                    rd_pc(), cr_before, rd_cr(), rd_gpr(22), rd_gpr(24), ticks, d0);
         }
         if (ppc_trace_stream_()) {
             fprintf(ppc_trace_stream_(),
@@ -1403,7 +1405,18 @@ static void uppc_cpu_execute_fast(void)
     // true PPC-only tight loop will hit it, and at 1Hz-yield the IRQ delivery
     // is still well within the OS's tolerance.
     const uint64_t s_emu_timeout_us = 1000000;
+    // SMC-staleness experiment: MACEMU_PPC_TB_FLUSH_EVERY flushes the TB cache
+    // every outer-loop iteration, forcing TCG to re-translate all code. Tests
+    // whether the non-deterministic boot stall is caused by stale translations
+    // over self-modified code pages (stubbed cpu_physical_memory_set_dirty_flag).
+    const bool s_tb_flush_every = (getenv("MACEMU_PPC_TB_FLUSH_EVERY") != nullptr);
+    if (s_tb_flush_every) {
+        fprintf(stderr, "[Unicorn-PPC] MACEMU_PPC_TB_FLUSH_EVERY=1 — flushing TB every iter\n");
+    }
     while (!g_stop_requested) {
+        if (s_tb_flush_every) {
+            uc_ctl_flush_tb(g_uc);
+        }
         uint32_t pc = rd_pc();
         ++g_emu_nest_depth;
         uint64_t emulops_before = g_emulop_count;
