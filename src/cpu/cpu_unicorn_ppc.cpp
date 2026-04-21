@@ -640,12 +640,12 @@ static bool uppc_cpu_init(void)
                                       int, int64_t, void *))mem_unmapped_cb,
                     nullptr, 1, 0);
 
-        // Last-block-PC tracker. Cheap (no uc_reg_read) — just updates a
-        // 32-slot ring and a counter per TB. The crash handler reads these
-        // globals to report "what guest PC were we at?" when QEMU internals
-        // abort (e.g. qemu_ram_addr_from_host_nofail). Default ON because
-        // the forensics value outweighs ~2% perf cost from per-TB dispatch;
-        // set MACEMU_PPC_NO_BLOCK_TRACE=1 for perf measurement runs.
+        // Last-block-PC tracker. Updates a 32-slot ring + counter per TB so
+        // the crash handler can report "what guest PC were we at?" when
+        // QEMU internals abort. Opt-in via MACEMU_PPC_BLOCK_TRACE=1 —
+        // measured 6.58% wall on a 20s headless boot (late-9b profile),
+        // not the ~2% the old comment predicted. The hook-dispatch
+        // machinery, not the bookkeeping, is the cost.
         static auto last_pc_cb = [](uc_engine *, uint64_t addr,
                                     uint32_t, void *) {
             uint32_t pc = (uint32_t)addr;
@@ -656,9 +656,9 @@ static bool uppc_cpu_init(void)
             g_uppc_block_seq++;
         };
         {
-            const char* nb = std::getenv("MACEMU_PPC_NO_BLOCK_TRACE");
-            const bool disabled = nb && *nb && *nb != '0';
-            if (!disabled) {
+            const char* bt = std::getenv("MACEMU_PPC_BLOCK_TRACE");
+            const bool enabled = bt && *bt && *bt != '0';
+            if (enabled) {
                 uc_hook hook_last_pc = 0;
                 uc_hook_add(g_uc, &hook_last_pc, UC_HOOK_BLOCK,
                             (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))last_pc_cb,

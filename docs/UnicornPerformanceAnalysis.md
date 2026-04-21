@@ -1,11 +1,110 @@
 # Unicorn vs UAE: CPU Backend Performance Analysis
 
-**Date:** March 2026
 **Test environment:** Linux x86-64, Quadra 650 ROM, Mac OS 7.5.5 boot to Finder
 
-## Summary
+## Current status (April 2026, post-late-9b)
 
-Unicorn (QEMU TCG JIT) is **~10x slower** than UAE (hand-tuned interpreter) for M68K emulation. Linux `perf` profiling revealed the **dominant bottleneck is first-time TB (Translation Block) compilation** — 77% of CPU time is spent in QEMU's TCG compiler generating native code for ~1.4M unique guest code addresses encountered during Mac OS boot. Hook overhead is minimal at ~5%.
+Unicorn (QEMU TCG JIT) boots to Finder in **~11.75s** vs UAE's **~2.67s** — a
+**4.4x gap**, down from the 10.4x gap measured in March 2026. Gains came from
+a series of 68k hot-path tightenings (see "April 2026 optimizations" below);
+the fundamental bottleneck — first-time TB compilation — remains.
+
+| Milestone | UAE | Unicorn (Mar) | Unicorn (post-late-9b) | Ratio (now) |
+|-----------|-----|---------------|------------------------|-------------|
+| Finder launched | 2.67s | 46.01s | 11.75s | **4.4x** slower |
+
+A fresh flame-graph profile against the post-late-9b binary was recorded
+on 2026-04-20 (see "Fresh profile (2026-04-20)" below). The March 2026
+breakdowns remain the most detailed historical record; the April numbers
+are lower-sample (gathered over ~10-20s boot runs) but capture where the
+remaining headroom lives.
+
+## Fresh profile (2026-04-20, post-late-9b)
+
+`perf record -F 499 --call-graph dwarf` on headless boots against
+`macos-7.6.1.img`. Raw data in `/tmp/perf-profiles/perf-{uae,unicorn-68k,unicorn-ppc}.data`;
+flame graphs at `/tmp/perf-profiles/*.svg`.
+
+### Unicorn 68k (15s run, 2417 samples @ 499 Hz)
+
+| Function | Self % | Category |
+|---------|--------|----------|
+| `tcg_gen_code_m68k` | 14.47% | TCG codegen |
+| `liveness_pass_1` | 13.55% | TCG liveness |
+| `tcg_optimize_m68k` | 12.36% | TCG optimize |
+| `la_cross_call` | 3.08% | TCG liveness |
+| `tcg_out_opc` | 2.83% | TCG codegen |
+| `store_helper` | 2.14% | Memory access |
+| `tcg_out_branch` | 1.96% | TCG codegen |
+| `tcg_temp_new_internal` | 1.86% | TCG codegen |
+| `hook_block` | 1.15% | Hook overhead |
+| `notdirty_write.isra.0` | 0.79% | Memory access |
+
+**TCG compilation still dominates.** Optimize+liveness+codegen+regalloc
+aggregates to roughly 45% of self time — same shape as March's breakdown,
+just less extreme in absolute terms because the boot is shorter.
+
+Residual opportunities (no single huge lever left):
+- `store_helper` 2.14% + `notdirty_write` 0.79% = ~3% in the notdirty
+  slow path. Restoring `cpu_physical_memory_set_dirty_flag()` (optimization
+  #14) converts this to fast-path writes for non-code pages.
+- `hook_block` 1.15% — post perf_now_ns gate, this is all bookkeeping
+  (block-count, deferred register scan). The "block counter for timer
+  poll at every 4096 blocks" could move to an atomic fetch-add into
+  `env->icount_decr` or similar so the TCG prologue updates it for free.
+
+### Unicorn PPC (20s run, 9908 samples @ 499 Hz; Desktop not reached)
+
+| Function | Self % | Category |
+|---------|--------|----------|
+| `store_helper` | 8.24% | Memory access (notdirty) |
+| `helper_lookup_tb_ptr_ppc` | 6.83% | TB cache lookup |
+| `last_pc_cb` (anonymous lambda) | 6.58% | **Block-trace hook overhead** |
+| `helper_check_exit_request_ppc` | 3.86% | Per-TB dispatch |
+| `notdirty_write.isra.0` | 3.06% | Memory access |
+| `page_find_alloc` | 1.55% | Memory access (notdirty) |
+| `tb_htable_lookup_ppc` | 1.06% | TB cache lookup |
+| `tb_invalidate_phys_page_fast_ppc` | 1.07% | Memory access (notdirty) |
+| `tlb_set_page_with_attrs_ppc` | 0.67% | TLB fill |
+
+**Notdirty path is the #1 hotspot by far.** `store_helper + notdirty_write +
+page_find_alloc + tb_invalidate_phys_page_fast` = ~13.9% self time. PPC
+hammers RAM harder than 68k (bigger framebuffer, more memcpy-y code paths),
+and every write takes the slow path forever because the dirty bitmap is
+stubbed. Optimization #14 (restore `cpu_physical_memory_set_dirty_flag`)
+moves from "modest improvement" to the single largest identified win.
+
+**Surprise: block tracer was 6.58%.** The `last_pc_cb` hook (installed in
+`uppc_cpu_init`, `cpu_unicorn_ppc.cpp:649`) updated a 32-slot ring of
+block PCs and a sequence counter on every TB. The header comment
+predicted "~2% perf cost" but measured 6.58% — the hook-dispatch machinery,
+not the bookkeeping, is the cost. **Fixed in late-9c (2026-04-20)**: env
+var renamed from `MACEMU_PPC_NO_BLOCK_TRACE` (opt-out) to
+`MACEMU_PPC_BLOCK_TRACE` (opt-in), so the tracer is off by default. Crash
+handler loses its last-PC ring unless the user sets the env var for
+debug sessions.
+
+**TB lookup is expensive on PPC.** `helper_lookup_tb_ptr` + `tb_htable_lookup`
++ `tb_jmp_cache_hash_func` = ~8% of time in TB lookup alone. March's
+analysis showed 68k's `TB_JMP_CACHE_BITS 12→16` didn't help 68k; the
+same experiment on PPC may be more productive given how much time
+lookup consumes here.
+
+### Updated optimization priorities (post-2026-04-20 profile)
+
+1. **Disable `last_pc_cb` by default on PPC** (trivial; save ~6.58% on PPC).
+2. **Restore `cpu_physical_memory_set_dirty_flag`** (task #14; save
+   ~14% on PPC, ~3% on 68k).
+3. **Enlarge TB_JMP_CACHE on PPC** (retry the March experiment that
+   didn't help 68k; save ~3-5% if successful).
+4. **TB compilation caching** (unchanged; still the highest-impact
+   large investment).
+
+## Historical baseline (March 2026)
+
+### Summary (March 2026)
+
+Unicorn (QEMU TCG JIT) was **~10x slower** than UAE (hand-tuned interpreter) for M68K emulation. Linux `perf` profiling revealed the **dominant bottleneck is first-time TB (Translation Block) compilation** — 77% of CPU time was spent in QEMU's TCG compiler generating native code for ~1.4M unique guest code addresses encountered during Mac OS boot. Hook overhead was minimal at ~5%.
 
 ### Boot Milestone Timing (March 2026)
 
@@ -18,7 +117,7 @@ Unicorn (QEMU TCG JIT) is **~10x slower** than UAE (hand-tuned interpreter) for 
 | Finder launched | 4.41s | 46.01s | **10.4x** slower |
 | 2000 resources | 4.48s | 52.90s | **11.8x** slower |
 
-Note: Unicorn is **faster** during early ROM init (tight loops where JIT wins). The gap widens as Mac OS loads extensions (diverse code paths, small blocks, frequent traps).
+Note: Unicorn was **faster** during early ROM init (tight loops where JIT wins). The gap widened as Mac OS loaded extensions (diverse code paths, small blocks, frequent traps).
 
 ### Memory Usage
 
@@ -170,7 +269,7 @@ for (;;) {
 
 ## Optimizations Attempted
 
-### Applied (in production)
+### Applied (in production, chronological)
 
 1. **Auto-ack interrupts** — Modified QEMU's `m68k_cpu_exec_interrupt()` to auto-acknowledge, eliminating stop/start cycle on every interrupt.
 
@@ -178,43 +277,63 @@ for (;;) {
 
 3. **Lean `hook_block()`** — Stripped per-block timing, statistics, and stale TB detector. Reduced per-block overhead to timer polling (every 4096 blocks) and deferred register updates.
 
+### April 2026 optimizations (late-9 / late-9b)
+
+Wall time: 15.78s → 11.75s (UAE ratio 5.9x → 4.4x), commit `1d0eb4f6` plus
+the softmmu MR cache in `c9caeb1f`.
+
+4. **Gate per-block `perf_now_ns()` behind `MACEMU_DEBUG_PERF` env var** — Previously feared as ~1.9% of wall time, the actual cost under load was much higher (single largest hotspot in `hook_block`). The vDSO is cheap per call, but 100M+ calls per boot add up. Two `clock_gettime` calls per block are now lazy-init + gated on env var; production runs skip them entirely. Patch 0008 in `subprojects/unicorn-patches/`.
+
+5. **Extract SCSI probe accelerator from `hook_block`** — The SCSI accelerator was branched for 3 PCs on every block. Extracted into a dedicated `UC_HOOK_CODE` at the `0x020014be..0x020014ca` range so non-matching blocks never pay the branch cost.
+
+6. **`any_deferred` short-circuit in `apply_deferred_updates_and_flush`** — The common case for `hook_block` fires has nothing queued. Added a flag so the per-register scan short-circuits when nothing is deferred.
+
+7. **Remove dead `poll_timer_interrupt()` call** — No-op stub; 60 Hz tick thread already drives IRQs through `g_pending_interrupt_level`.
+
+8. **4-way page-keyed LRU in `find_memory_mapping`** — Softmmu hammered `address_space_translate` on every TLB miss / notdirty write / unmapped probe (documented at ~8% of PPC wall time; also non-trivial on 68k). 4-entry cache keyed on page-aligned paddr catches nearly every call. Round-robin replacement, NULL results not cached, invalidated wholesale in `memory_map` / `memory_unmap` / `memory_map_io` / `memory_cow` / `memory_moveout` / `memory_movein`. Patch 0008.
+
+9. **Per-TLB-entry MR pointer cache (late-9b)** — Extended the win in #8: add `MemoryRegion *mr` to `CPUTLBEntry`, populated lazily on first miss per-entry and reused on every subsequent access to the same page. Removes the `find_memory_mapping` call (and thus the 4-entry LRU lookup) from the hot path entirely for repeat accesses. Invalidated wholesale via `tlb_flush()`. Patch 0009.
+
+10. **Unmapped read/write handlers no longer leak** — Silently leaked 1MB of `calloc`'d memory per fault (and returned the bogus mapping as success). Now log once and return false so the outer loop can react. Verified zero fires during normal boot — full 32-bit space is covered by RAM/ROM/ScratchMem/FrameBuffer + dummy/gap/MMIO/high_mem maps.
+
 ### Tested and Reverted (no measurable impact)
 
-4. **TB_JMP_CACHE_BITS 12 to 16** — Increased direct-mapped TB lookup cache from 4096 to 65536 entries. Finder at 46.82s vs 46.01s baseline — no improvement. TB cache hit rate was already adequate; the bottleneck is compilation, not lookup.
+11. **TB_JMP_CACHE_BITS 12 to 16** — Increased direct-mapped TB lookup cache from 4096 to 65536 entries. Finder at 46.82s vs 46.01s baseline — no improvement. TB cache hit rate was already adequate; the bottleneck is compilation, not lookup.
 
-5. **`lookup_and_goto_ptr` for cross-page jumps** — Replaced `exit_tb(NULL, 0)` with `lookup_and_goto_ptr` in `gen_jmp_tb`'s cross-page else branch. Finder at 46.40s vs 46.01s baseline — no improvement. Cross-page dispatch overhead is negligible compared to compilation cost.
+12. **`lookup_and_goto_ptr` for cross-page jumps** — Replaced `exit_tb(NULL, 0)` with `lookup_and_goto_ptr` in `gen_jmp_tb`'s cross-page else branch. Finder at 46.40s vs 46.01s baseline — no improvement. Cross-page dispatch overhead is negligible compared to compilation cost.
 
 ### Tested and Reverted (no impact, carries risk)
 
-6. **Disable self-modifying code detection** — Disabled `tb_invalidate_phys_page_fast` in QEMU's `notdirty_write()`. This prevents TB invalidation when guest writes to pages containing translated code. **Result:** No measurable improvement — TB miss rate identical (85.1%) with or without. The miss rate is from first-time compilation of new code, not from invalidation of existing TBs. **Risk:** Would break any program that modifies code at runtime (unlikely for classic Mac apps, but not impossible for copy-protection schemes, self-patching code, or JIT compilers running inside the emulated Mac).
+13. **Disable self-modifying code detection** — Disabled `tb_invalidate_phys_page_fast` in QEMU's `notdirty_write()`. This prevents TB invalidation when guest writes to pages containing translated code. **Result:** No measurable improvement — TB miss rate identical (85.1%) with or without. The miss rate is from first-time compilation of new code, not from invalidation of existing TBs. **Risk:** Would break any program that modifies code at runtime (unlikely for classic Mac apps, but not impossible for copy-protection schemes, self-patching code, or JIT compilers running inside the emulated Mac).
 
-### Not Attempted (quick wins identified by perf)
+### Not Attempted (still open)
 
-7. **Remove `perf_now_ns()` from `hook_block()`** — Two `clock_gettime` vDSO calls per block × 32M blocks = 64M calls, costing ~1.9% of total time. These only feed the `hook_block_ns` perf counter printed at exit. Removing them is trivial and saves measurable time. **Estimated: ~1-2% improvement.**
-
-8. **Restore `cpu_physical_memory_set_dirty_flag()`** — Currently stubbed as a no-op in Unicorn's `ram_addr.h`. This means every RAM write goes through the `notdirty_write` slow path forever. Restoring just this one function (set a bit in a bitmap) would let non-code pages transition to the fast write path after their first write. `store_helper` is 1.6% self time; reducing slow-path writes could help. **Estimated: modest improvement in memory-heavy phases.**
+14. **Restore `cpu_physical_memory_set_dirty_flag()`** — Currently stubbed as a no-op in Unicorn's `ram_addr.h`. This means every RAM write goes through the `notdirty_write` slow path forever. Restoring just this one function (set a bit in a bitmap) would let non-code pages transition to the fast write path after their first write. Late-9b's per-TLB-entry MR cache (#9) removed the `memory_mapping` call from the notdirty path, so the residual cost is lower than March's 1.3% baseline — but the path is still taken unnecessarily. **Estimated: modest improvement in memory-heavy phases.**
 
 ### Not Attempted (deep QEMU modifications)
 
-9. **Selective CC flag materialization** — Instead of `gen_flush_flags()` computing all 5 flags (XNZVC) before every branch, only compute the flags the branch condition tests. Would require rewriting condition code handling in `target/m68k/translate.c`. Estimated weeks of work. Would improve JIT code quality but not compilation speed.
+15. **Selective CC flag materialization** — Instead of `gen_flush_flags()` computing all 5 flags (XNZVC) before every branch, only compute the flags the branch condition tests. Would require rewriting condition code handling in `target/m68k/translate.c`. Estimated weeks of work. Would improve JIT code quality but not compilation speed.
 
-10. **Register pinning** — Keep D0-D2, A0-A1 in host x86 registers across TB boundaries. Requires changes to TCG register allocator. Would reduce memory-indirect overhead.
+16. **Register pinning** — Keep D0-D2, A0-A1 in host x86 registers across TB boundaries. Requires changes to TCG register allocator. Would reduce memory-indirect overhead.
 
-11. **Faster TCG compiler** — The TCG optimization/liveness/register-allocation pipeline is the core bottleneck (25.3% optimize+liveness, 25.2% codegen+regalloc). Making it faster would directly help. But this is deep QEMU infrastructure used by all architectures.
+17. **Faster TCG compiler** — The TCG optimization/liveness/register-allocation pipeline is the core bottleneck (was 25.3% optimize+liveness, 25.2% codegen+regalloc in March). Making it faster would directly help. But this is deep QEMU infrastructure used by all architectures.
 
-12. **TB compilation caching** — Serialize compiled TBs to disk and reload on subsequent boots. Would eliminate recompilation cost for repeated boots. Novel approach, not implemented in upstream QEMU. This is the highest-impact optimization possible — it would eliminate the dominant ~55% compilation overhead on subsequent boots.
+18. **TB compilation caching** — Serialize compiled TBs to disk and reload on subsequent boots. Would eliminate recompilation cost for repeated boots. Novel approach, not implemented in upstream QEMU. This is the highest-impact optimization possible — it would eliminate the dominant compilation overhead on subsequent boots.
 
 ## Conclusion
 
-After optimization, hook overhead is minimal (~3.9% including vDSO timer calls). The ~10x gap has two components:
+After late-9b, Unicorn 68k boots in ~11.75s vs UAE's ~2.67s (4.4x gap, down
+from 10.4x in March). Remaining gap is expected to be dominated by
+TB compilation — confirming this requires a fresh flame-graph profile
+(task #17). The two components of the gap:
 
-1. **TB compilation cost (~55% self, ~77% inclusive)**: 2.8M unique code blocks need first-time JIT compilation. Each takes ~17µs through QEMU's multi-pass pipeline. The cost splits roughly evenly between optimization/liveness analysis (25.3%) and code generation/register allocation (25.2%). This is a one-time cost per code path, but Mac OS boot exercises enormous code diversity.
+1. **TB compilation cost**: 2.8M unique code blocks need first-time JIT compilation. Each takes ~17µs through QEMU's multi-pass pipeline. Most of this cost is unavoidable without persistent TB caching (#18).
 
-2. **JIT code quality + softmmu overhead (~18% of time)**: The generated x86 code is less efficient than UAE's gcc-optimized interpreter handlers, due to condition code overhead, memory-indirect registers, and small basic blocks. Additionally, the permanently-broken dirty bitmap causes all RAM writes to take the slow `notdirty_write` path.
+2. **JIT code quality + residual softmmu overhead**: The generated x86 code is less efficient than UAE's gcc-optimized interpreter handlers, due to condition code overhead, memory-indirect registers, and small basic blocks. Softmmu overhead shrank after late-9 (MR cache) and late-9b (per-TLB-entry MR), but `notdirty_write` still takes the slow path for all RAM writes (#14).
 
 Both backends boot to Mac OS 7.5.5 Finder desktop. UAE is faster for end users; Unicorn's value is as an independent M68K implementation for validation and as a path toward future improvements.
 
 **Next steps (in order of effort vs impact):**
-1. Remove `perf_now_ns()` from `hook_block()` — trivial, saves ~1.9%
-2. Restore `cpu_physical_memory_set_dirty_flag()` — small, reduces softmmu overhead
-3. TB compilation caching (persist compiled blocks across runs) — high effort but would eliminate the dominant ~55% compilation overhead on subsequent boots
+1. Fresh flame-graph profile of post-late-9b binary to re-prioritize (task #17)
+2. Restore `cpu_physical_memory_set_dirty_flag()` — small, reduces residual `notdirty_write` cost
+3. TB compilation caching (persist compiled blocks across runs) — high effort but would eliminate the dominant compilation overhead on subsequent boots

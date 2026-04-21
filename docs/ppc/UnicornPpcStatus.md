@@ -20,7 +20,9 @@ Start here on any new session. Build/run snippets at the bottom.
   doesn't inspect the framebuffer. Verify visually or via
   `/api/screenshot`. See `feedback_ppc_desktop_phase_vs_visual.md`.
 - **Patch set against upstream Unicorn** lives in
-  `subprojects/unicorn-patches/` (6 patches, ~24 KB of diff).
+  `subprojects/unicorn-patches/` (10 patches, ~31 KB of diff across 16
+  files). Verified to `git am` cleanly against pristine `2.1.4`. See
+  that directory's `README.md` for the per-patch breakdown.
 
 ## Architecture
 
@@ -42,7 +44,7 @@ earlier in `init_ppc`:
 
 | Region            | Mac addr              | Notes |
 |-------------------|-----------------------|-------|
-| RAM + NanoKernel pad | `0x00000000..`     | Host-address-0 mmap via REAL_ADDRESSING; requires patch 0002+0004+0005. |
+| RAM + NanoKernel pad | `0x00000000..`     | Host-address-0 mmap via REAL_ADDRESSING; requires patch 0003+0005+0006. |
 | ROM               | `0x40800000`, `0x50000000..` | Aliased so both low-ROM and nanokernel-ROM addresses resolve. Mapped RW+X because the nanokernel self-patches. |
 | KernelData        | `0x68ffe000..`, `0x5ffffe00..` | Dual-aliased per SheepShaver convention. |
 | SheepMem          | `0x80000000..`        | Includes the `POWERPC_EXEC_RETURN` trampoline slot reserved at init. |
@@ -56,7 +58,7 @@ earlier in `init_ppc`:
    `uc_emu_start(pc, 0, 0, 0)` and classifies the result. EmulOps raised
    via major-opcode-6 trap back to `uppc_mac_emulop_cb`
    (`cpu_unicorn_ppc.cpp:464`) through the `mac_emulop` TCG helper —
-   see patch 0003 + `qemu/target/ppc/mac_emulop_helper.c`.
+   see patch 0004 + `qemu/target/ppc/mac_emulop_helper.c`.
 2. **Unmapped memory** (`UC_ERR_{READ,WRITE}_UNMAPPED` / `FETCH_UNMAPPED`)
    is handled by `uppc_skip_memop_at`: if the PC is a load, decode `rd`
    and zero it; if a store, advance PC. Mimics KPX's host-level SIGSEGV
@@ -69,7 +71,7 @@ earlier in `init_ppc`:
    symbol references from `cpu_unicorn_ppc.cpp` into `libkpx_interp.a`.
 4. **68k reentrancy.** `uppc_cpu_execute_68k` sets up 68k register
    context in the `KernelData`-style layout and calls a nested
-   `uc_emu_start` at the 68k trampoline. Requires patch 0006 — without
+   `uc_emu_start` at the 68k trampoline. Requires patch 0007 — without
    it, the inner `uc_emu_stop` leaves `stop_request` asserted and the
    outer frame breaks out spuriously.
 5. **IRQ injection** is cooperative. `uppc_tick_thread` sets
@@ -84,7 +86,7 @@ earlier in `init_ppc`:
 
 | Hook | Purpose | Gate |
 |---|---|---|
-| `UC_HOOK_BLOCK` `hook_last_pc` | 32-slot ring of last guest PCs; crash handler reads it | `MACEMU_PPC_NO_BLOCK_TRACE=1` to disable |
+| `UC_HOOK_BLOCK` `hook_last_pc` | 32-slot ring of last guest PCs; crash handler reads it | `MACEMU_PPC_BLOCK_TRACE=1` to enable (opt-in since late-9c — was 6.58% wall on PPC) |
 | `UC_HOOK_MEM_INVALID` `hook_unmapped` | Drives `uppc_skip_memop_at`; auto-maps zero pages at DR probe ranges | Always on |
 | `UC_HOOK_CODE` at known EmulOp PCs | Forces `uc_emu_stop` so the outer loop observes the trap cleanly | Always on |
 | `UC_HOOK_BLOCK` `hook_entry` | `MACEMU_PPC_TRACE_68K_ENTRY=<hex>[,...]` — dump register + r24 ring context when a listed 68k PC executes | Opt-in |
@@ -118,13 +120,16 @@ are also captured as numbered patches in `subprojects/unicorn-patches/`
 
 | # | One-line |
 |---|---|
-| 0000 | m68k: implement RTR instruction (predates the PPC series; reconstructed from the vendored tree) |
-| 0001 | scaffold backend alongside KPX (weak perf counters, TB-flush on MSR IR/DR flips) |
-| 0002 | drop `NULL`-ptr guard in `uc_mem_map_ptr` so RAM can mmap at host 0 |
-| 0003 | `mac_emulop` helper + CMake/helper.h plumbing (the one mac-phoenix-specific feature) |
-| 0004 | carry `RAM_PREALLOC` through `ram_block_add` + register `mac_emulop` unconditionally |
-| 0005 | `qemu_ram_block_from_host` ignores `block->host == NULL` sentinel when `RAM_PREALLOC` set |
-| 0006 | clear `stop_request` on nested `uc_emu_start` return so outer frame resumes cleanly |
+| 0000 | m68k: implement RTR instruction (standalone — applies to pristine 2.1.4 alone) |
+| 0001 | m68k: MacPhoenix host-integration patches (A-line pre-read, RTE fast-return, interrupt auto-ack, perf counters, looser use_goto_tb) |
+| 0002 | scaffold PPC backend alongside KPX (promote 0001's perf counters to weak; TB-flush on MSR IR/DR flips) |
+| 0003 | drop `NULL`-ptr guard in `uc_mem_map_ptr` so RAM can mmap at host 0 |
+| 0004 | `mac_emulop` helper + CMake/helper.h plumbing (the one mac-phoenix-specific feature) |
+| 0005 | carry `RAM_PREALLOC` through `ram_block_add` + register `mac_emulop` unconditionally |
+| 0006 | `qemu_ram_block_from_host` ignores `block->host == NULL` sentinel when `RAM_PREALLOC` set |
+| 0007 | clear `stop_request` on nested `uc_emu_start` return so outer frame resumes cleanly |
+| 0008 | 4-way page-keyed LRU in `find_memory_mapping` (late-9, 68k +4s savings, also helps PPC) |
+| 0009 | Cache MR pointer in `CPUTLBEntry` — skip per-access `memory_mapping` on TLB hit (late-9b) |
 
 ## Known gaps
 
@@ -224,7 +229,7 @@ stacks; raw `.data` files gitignored).
 | `MACEMU_PPC_NO_IRQ=1` | Both backends: mask 60 Hz timer IRQ. Used by the boundary comparator for deterministic traces. |
 | `MACEMU_PPC_MIN_EMULOPS_PER_IRQ=N` | Unicorn: suppress tick IRQ unless ≥N emulops elapsed. Default 0 = off. Negative-result knob (late-8c) — kept as evidence. |
 | `MACEMU_PPC_DEFER_FIRST_IRQ=N` | Unicorn: suppress tick IRQs until `g_emulop_count ≥ N`. Default 0 = off. Also negative (late-8c). |
-| `MACEMU_PPC_NO_BLOCK_TRACE=1` | Unicorn: disable the always-on `hook_last_pc` UC_HOOK_BLOCK. Set only for clean perf runs — the crash handler loses its last-PC ring. |
+| `MACEMU_PPC_BLOCK_TRACE=1` | Unicorn: enable the `hook_last_pc` UC_HOOK_BLOCK that feeds the crash handler's last-PC ring. Opt-in since late-9c (measured 6.58% wall cost). |
 
 ### Tracers (all default off; ×1 in stderr unless otherwise noted)
 
@@ -338,8 +343,7 @@ Kept as one-line milestones. The rolling per-session diary was trimmed
    `/api/screenshot` → minimum-non-black pixel check, or bridge-read a
    Finder sentinel.
 4. ~~Cache MR pointer in TLB entry~~ — **done in late-9b**, see above.
-   Regenerate `subprojects/unicorn-patches/` as 0007 when ready to
-   ship the patch series upstream.
+   Captured as patch 0009 in `subprojects/unicorn-patches/` (2026-04-20).
 5. **Larger N baseline matrix at SCALE=10 post-late-9b.** 5/10 is
    promising but not confirmation; rerun with N≥30 to see if the
    stability gain survives statistical scrutiny, and re-check
