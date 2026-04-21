@@ -670,6 +670,33 @@ static bool uppc_cpu_init(void)
                                       int, int64_t, void *))mem_unmapped_cb,
                     nullptr, 1, 0);
 
+        // IRQ-delivery hook: always-on UC_HOOK_BLOCK that checks g_pending_irq
+        // at each TB boundary and exits cleanly via uc_emu_stop when set.
+        // This replaces the cross-thread async uc_emu_stop from the tick
+        // thread, which was torpedoing throughput at SCALE=1 (~50×
+        // wall-clock collapse): the async stop tears the current TB
+        // mid-execution with full state unwind, while a block-boundary stop
+        // is a cheap exit_request flag check at a natural TB exit point.
+        // Gate on g_emu_nest_depth <= 1 mirrors the old tick-thread guard —
+        // don't interrupt nested execute_ppc / NK handlers. Opt out via
+        // MACEMU_PPC_NO_IRQ_HOOK=1 if this regresses anything.
+        static const bool s_no_irq_hook = [](){
+            const char* e = std::getenv("MACEMU_PPC_NO_IRQ_HOOK");
+            return e && *e && *e != '0';
+        }();
+        if (!s_no_irq_hook) {
+            static auto irq_check_cb = [](uc_engine *uc, uint64_t, uint32_t, void *) {
+                if (g_pending_irq.load(std::memory_order_relaxed) &&
+                    g_emu_nest_depth <= 1) {
+                    uc_emu_stop(uc);
+                }
+            };
+            uc_hook hook_irq_check = 0;
+            uc_hook_add(g_uc, &hook_irq_check, UC_HOOK_BLOCK,
+                        (void *)(void (*)(uc_engine *, uint64_t, uint32_t, void *))irq_check_cb,
+                        nullptr, 1, 0);
+        }
+
         // Last-block-PC tracker. Updates a 32-slot ring + counter per TB so
         // the crash handler can report "what guest PC were we at?" when
         // QEMU internals abort. Opt-in via MACEMU_PPC_BLOCK_TRACE=1 —
@@ -1332,20 +1359,24 @@ static void uppc_tick_thread(void)
 
         if (nest == 0) {
             SetInterruptFlag(INTFLAG_VIA);
-            // Only kick the engine when this is a newly-latched IRQ (prev=false).
-            // Back-to-back tick-kicks on an already-pending IRQ torpedo stability:
-            // each uc_emu_stop exits the current TB mid-execution, and compounding
-            // kicks at high tick rates (SCALE=1 → 60Hz) correlate with wild-pointer
-            // corruption post-Finder. Dedup ensures one kick per IRQ lifecycle.
+            // Set the pending-IRQ flag only — do NOT call uc_emu_stop from
+            // this thread. The always-on UC_HOOK_BLOCK (see cpu_init) picks
+            // up the flag at the next TB boundary and exits cleanly. That
+            // avoids the cross-thread async stop which tore TBs mid-execution
+            // and collapsed SCALE=1 throughput ~50×.
+            //
+            // Fallback: opting out with MACEMU_PPC_NO_IRQ_HOOK=1 re-enables
+            // the legacy rising-edge kick so this thread can still punch
+            // idle loops that never hit a block boundary (can't happen in
+            // practice — any branch is a TB boundary — but kept for rollback).
             bool was_pending = g_pending_irq.exchange(true);
             s_last_irq_emulop = g_emulop_count;
-            // Kick the engine out of whatever block it's in. Required for
-            // NK idle/wait loops that sit entirely in PPC code with no
-            // EmulOp dispatch (e.g. pc=0x50310fac writing to @0x00000000 in
-            // tight loop). Only fire at depth<=1 — interrupting a nested NK
-            // handler or execute_ppc mid-flight leaves XLM_IRQ_NEST stuck at
-            // its ROM-patched-incremented value and wedges the system.
-            if (!was_pending && g_uc && g_emu_nest_depth <= 1) uc_emu_stop(g_uc);
+            static const bool s_no_irq_hook = [](){
+                const char* e = std::getenv("MACEMU_PPC_NO_IRQ_HOOK");
+                return e && *e && *e != '0';
+            }();
+            if (s_no_irq_hook && !was_pending && g_uc && g_emu_nest_depth <= 1)
+                uc_emu_stop(g_uc);
         }
 
         extern Platform g_platform;
