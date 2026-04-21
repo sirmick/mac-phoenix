@@ -35,6 +35,14 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom
 
 # Playwright E2E tests (requires running emulator)
 npx playwright test
+
+# Boot capacity matrix (12 cells: 6 backend×JIT configs × 2 OSes)
+# Writes CSV + PNG screenshots + per-cell logs to --out dir.
+tests/run_boot_matrix.sh --out /home/mick/mac-phoenix/test-results/boot-matrix
+# Single cell:
+tests/test_boot_matrix.sh --label unicorn-m68k-755 --backend unicorn --arch m68k \
+    --rom ~/roms/quadra.rom --disk ~/storage/images/macos-7.5.5.img \
+    --timeout 60 --port 19300 --screenshot-dir /tmp/one-cell
 ```
 
 ## CPU Backends
@@ -97,6 +105,8 @@ tests/
   guest/bridge/BridgeAgent.bin      — Pre-built MacBinary (committed)
   guest/MacTestSuite.pl             — MacPerl script run inside the guest by the agent
   test_extfs.sh                     — ExtFS config, CLI, backward compat tests (8 checks)
+  test_boot_matrix.sh               — Single-cell capacity check ({backend,arch,disk,jit} → Finder)
+  run_boot_matrix.sh                — Orchestrator: 12 cells, serial, CSV + PNG + per-cell log
   e2e/                              — Playwright browser tests
 
 client/                             — Browser UI (vanilla JS)
