@@ -105,7 +105,7 @@ std::string StaticFileHandler::inject_config_template(const std::string& html) c
     j["codec"] = config_->codec;
     j["mousemode"] = config_->mousemode;
     j["screen"] = config_->screen_string();
-    j["signaling_port"] = config_->signaling_port;
+    // Signaling rides the same port as HTTP via /ws upgrade — no separate port.
     j["debug_connection"] = config_->debug_connection;
     j["debug_mode_switch"] = config_->debug_mode_switch;
     j["debug_perf"] = config_->debug_perf;

@@ -120,7 +120,7 @@ npx playwright test --ui
 
 The `stall-detection.spec.ts` suite is the most comprehensive — it validates the full input-to-output pipeline:
 
-1. **Mouse round-trip**: Sends absolute/relative mouse positions via WebRTC data channel, polls `/api/mouse` to confirm Mac OS reflects the change, measures latency.
+1. **Mouse round-trip**: Sends absolute/relative mouse positions via the `/ws` WebSocket, polls `/api/mouse` to confirm Mac OS reflects the change, measures latency.
 2. **Pixel verification**: Takes screenshots via `/api/screenshot`, decodes PNG in the browser, checks for non-black pixels in key regions (menu bar, center).
 3. **Soak test**: Runs sustained mouse movement for 60s, alternating between 8 positions. Tracks latency percentiles (avg, p95, p99, max) and stall count. Passes if stall rate < 2%.
 

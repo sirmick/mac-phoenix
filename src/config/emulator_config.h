@@ -112,8 +112,7 @@ struct EmulatorConfig {
     bool headless_http = false;  // serve HTTP API in headless mode (no WebRTC/video/audio)
     bool bridge_enabled = false; // enable automation bridge (INIT injection + file-based commands)
     std::string bridge_dir;      // temp directory for bridge file I/O (auto-created)
-    int http_port = 8000;
-    int signaling_port = 8090;
+    int http_port = 11000;
     std::string client_dir = "./client";
     std::string storage_dir = "~/storage";
 

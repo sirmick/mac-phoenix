@@ -3,7 +3,7 @@
  *
  * Allows switching between different encoding strategies:
  * - H.264 via OpenH264 (WebRTC video track)
- * - PNG for dithered content (DataChannel binary, supports dirty rects)
+ * - PNG/WebP for dithered content (WebSocket binary, supports dirty rects)
  */
 
 #ifndef CODEC_H
@@ -16,8 +16,8 @@ enum class CodecType {
     H264,       // WebRTC video track with H.264
     AV1,        // Reserved (no encoder implementation)
     VP9,        // WebRTC video track with VP9 (great for UI/screen content)
-    PNG,        // PNG over DataChannel (good for dithered, supports dirty rects)
-    WEBP        // WebP over DataChannel (faster encoding than PNG, supports dirty rects)
+    PNG,        // PNG over WebSocket (good for dithered, supports dirty rects)
+    WEBP        // WebP over WebSocket (faster encoding than PNG, supports dirty rects)
 };
 
 struct EncodedFrame {
@@ -27,7 +27,7 @@ struct EncodedFrame {
     int width = 0;
     int height = 0;
 
-    // Dirty rectangle (for PNG/WebP DataChannel frames)
+    // Dirty rectangle (for PNG/WebP WebSocket frames)
     // When dirty_width < frame_width or dirty_height < frame_height,
     // the encoded data contains only the dirty sub-rectangle.
     int dirty_x = 0;

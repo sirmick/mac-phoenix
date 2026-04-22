@@ -3,6 +3,7 @@
 add_library(webserver STATIC
   http_server.cpp
   http_stream.cpp
+  websocket.cpp
   api_handlers.cpp
   static_files.cpp
   file_scanner.cpp
@@ -18,4 +19,10 @@ target_include_directories(webserver PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../drivers/video/encoders
 )
 
-target_link_libraries(webserver PRIVATE nlohmann_json::nlohmann_json codec_flags)
+find_package(OpenSSL REQUIRED)
+
+target_link_libraries(webserver PRIVATE
+  nlohmann_json::nlohmann_json
+  codec_flags
+  OpenSSL::Crypto
+)

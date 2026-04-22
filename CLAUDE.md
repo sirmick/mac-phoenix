@@ -82,10 +82,12 @@ src/
     platform/platform_unix.cpp      — Unix platform: disk I/O + ExtFS filesystem driver
     platform/timer_interrupt.cpp    — 60Hz timer via clock_gettime
   webserver/
+    http_server.cpp                 — HTTP/1.1 server, stream routes, RFC 6455 WS upgrade
+    websocket.cpp                   — In-process WebSocket (RFC 6455 framing + SHA1/base64 handshake)
     api_handlers.cpp                — All /api/ endpoints
-    webserver_main.cpp              — HTTP server thread
+    webserver_main.cpp              — HTTP server thread; registers /ws route via WebRTCServer
   webrtc/
-    webrtc_server.cpp               — WebRTC signaling + input handling
+    webrtc_server.cpp               — Signaling (/ws), peer connections for H.264/VP9 RTP
   common/
     sigsegv.cpp                     — SIGSEGV handler (skips bad accesses)
     include/platform.h              — Platform API (g_platform function pointers)
@@ -153,8 +155,7 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --cdrom path          CDROM image path (repeatable)
   --extfs path          Shared folder path (repeatable)
   --ram MB              RAM size in megabytes
-  --port N              HTTP server port (default: 8000)
-  --signaling-port N    WebRTC signaling port (default: 8090)
+  --port N              HTTP server port (default: 11000) — also hosts /ws signaling
   --backend uae|unicorn Backend selection (default: uae)
   --arch m68k|ppc       CPU architecture
   --timeout N           Auto-exit after N seconds
@@ -187,6 +188,8 @@ The emulator binary does not read environment variables. Use CLI flags instead.
 - **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
 - **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
+- **Single-port HTTP + WebSocket**: `src/webserver/websocket.cpp` implements RFC 6455 in-process; the HTTP server detects `Upgrade: websocket` on `/ws` and hands the fd to a WebSocket handler registered by `WebRTCServer`. One TCP listener serves static UI, REST API, `/api/frame` long-poll, and `/ws` (signaling + input + PNG/WebP frames). libdatachannel's `rtc::WebSocketServer` is not used. WebRTC RTP (H.264/VP9 media + Opus audio) still rides direct UDP ports negotiated via ICE.
+- **Three transport modes**: PNG/WebP → WebSocket binary on `/ws`; H.264/VP9 → WebRTC RTP track; `httpstream` → `/api/frame` long-poll. Signaling JSON + input events always ride the `/ws` WebSocket regardless of codec.
 - **Command bridge**: Two layers. **Read commands** (`/api/app`, `/api/windows`) peek Mac memory directly from the IRQ — no guest cooperation. **Action commands** (`/api/launch`, `/api/shutdown`, `/api/restart`, `/api/quit`) write a request file into `bridge_dir`, which a guest-side `BridgeAgent` app (installed in `:System Folder:Startup Items:`) polls and executes via Process Manager / Shutdown Manager / AppleEvents. Files in `bridge_dir` cross the parent/IPC-child process split for free since both processes see the same disk path. Enable with `--bridge` or `bridge_enabled: true`. See `docs/CommandBridge.md`.
 
 ## ROM

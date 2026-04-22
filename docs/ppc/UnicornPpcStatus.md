@@ -271,7 +271,7 @@ cmake --build build -j$(nproc)
   --no-webserver --timeout 15
 
 # Unicorn — reaches Finder-detect, hourglass, crashes before visible Desktop.
-# Visually confirm via UI at http://localhost:8000 instead of trusting the log.
+# Visually confirm via UI at http://localhost:11000 instead of trusting the log.
 ./build/mac-phoenix --backend unicorn --arch ppc --rom ~/storage/roms/g3.rom \
   --disk ~/storage/images/macos-7.6.1.img --ram 128 \
   --timeout 60

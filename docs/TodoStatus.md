@@ -48,7 +48,7 @@ Track what's done and what's next.
 - ✅ 4-thread architecture (CPU, video encoder, audio encoder, web server)
 - ✅ All encoders (H.264, VP9, WebP, PNG, Opus)
 - ✅ JSON configuration system
-- ✅ Mouse/keyboard input via WebRTC data channel
+- ✅ Mouse/keyboard input via WebSocket (single shared port)
 - ✅ Browser client (HTML/JS/CSS)
 - ✅ Playwright e2e tests
 

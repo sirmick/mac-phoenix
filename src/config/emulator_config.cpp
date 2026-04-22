@@ -126,7 +126,6 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["codec"] = codec;
     j["mousemode"] = mousemode;
     j["http_port"] = http_port;
-    j["signaling_port"] = signaling_port;
     j["client_dir"] = client_dir;
     j["storage_dir"] = storage_dir;
     j["log_level"] = log_level;
@@ -255,7 +254,11 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("codec")) codec = json_utils::get_string(j, "codec");
     if (j.contains("mousemode")) mousemode = json_utils::get_string(j, "mousemode");
     if (j.contains("http_port")) http_port = json_utils::get_int(j, "http_port");
-    if (j.contains("signaling_port")) signaling_port = json_utils::get_int(j, "signaling_port");
+    // signaling_port / signaling_path: accepted but ignored (deprecated — signaling
+    // now rides the same HTTP port via an in-process WebSocket upgrade on /ws).
+    if (j.contains("signaling_port") || j.contains("signaling_path")) {
+        fprintf(stderr, "[Config] signaling_port/signaling_path are deprecated; signaling now rides http_port (/ws)\n");
+    }
     if (j.contains("client_dir")) client_dir = json_utils::get_string(j, "client_dir");
     if (j.contains("storage_dir")) storage_dir = json_utils::get_string(j, "storage_dir");
     if (j.contains("log_level")) log_level = json_utils::get_int(j, "log_level");
@@ -416,8 +419,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --backend NAME        CPU backend: uae, unicorn, dualcpu, kpx (default: uae, auto for ppc)\n");
             printf("  --arch ARCH           CPU architecture: m68k, ppc (default: m68k)\n");
             printf("  --screen WxH          Display resolution (default: 640x480)\n");
-            printf("  --port N              HTTP server port (default: 8000)\n");
-            printf("  --signaling-port N    WebRTC signaling port (default: 8090)\n");
+            printf("  --port N              HTTP server port (default: 11000) — also hosts /ws signaling\n");
             printf("  --storage-dir PATH    Storage directory for ROMs/images (default: ~/storage)\n");
             printf("  --timeout N           Auto-exit after N seconds\n");
             printf("  --no-webserver        Headless mode (no HTTP/WebRTC)\n");
@@ -519,9 +521,14 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
-        // --signaling-port <n>
+        // --signaling-port / --signaling-path: deprecated. Accept + ignore so
+        // existing scripts don't break.
         if (strcmp(argv[i], "--signaling-port") == 0 && i+1 < argc) {
-            config.signaling_port = atoi(argv[i+1]);
+            fprintf(stderr, "[Config] --signaling-port is deprecated and ignored\n");
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--signaling-path") == 0 && i+1 < argc) {
+            fprintf(stderr, "[Config] --signaling-path is deprecated and ignored\n");
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
@@ -815,10 +822,10 @@ void print_config(const EmulatorConfig& config) {
     for (const auto& c : config.cdrom_paths)
         fprintf(stderr, "[Config] CDROM: %s\n", c.c_str());
     if (config.enable_webserver)
-        fprintf(stderr, "[Config] WebRTC: port %d, signaling %d\n",
-                config.http_port, config.signaling_port);
+        fprintf(stderr, "[Config] Web server: port %d (signaling WebSocket at /ws on same port)\n",
+                config.http_port);
     else
-        fprintf(stderr, "[Config] WebRTC: disabled\n");
+        fprintf(stderr, "[Config] Web server: disabled\n");
     if (config.timeout_seconds > 0)
         fprintf(stderr, "[Config] Timeout: %d seconds\n", config.timeout_seconds);
     if (config.screenshots)

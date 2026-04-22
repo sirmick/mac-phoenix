@@ -11,6 +11,7 @@
 #include "api_handlers.h"
 #include "http_stream.h"
 #include "../drivers/video/encoders/codec.h"
+#include "../webrtc/webrtc_server.h"
 #include <cstdio>
 #include <memory>
 #include <atomic>
@@ -24,7 +25,8 @@ extern std::atomic<bool> g_running;
 
 // HTTP server thread main function
 void http_server_main(const config::EmulatorConfig* config,
-                      http::APIContext* api_context)
+                      http::APIContext* api_context,
+                      webrtc::WebRTCServer* webrtc_server)
 {
     fprintf(stderr, "[WebServer] Starting HTTP server thread...\n");
     fprintf(stderr, "[WebServer] Codecs: PNG=yes H264=%s VP9=%s WebP=%s\n",
@@ -77,6 +79,11 @@ void http_server_main(const config::EmulatorConfig* config,
         [api_context](const http::Request& req, int fd) {
             http::handle_stream(req, fd, api_context);
         });
+
+    // Register WebRTC signaling WebSocket on /ws (shares this HTTP listener).
+    if (webrtc_server) {
+        webrtc_server->register_routes(server);
+    }
 
     // Start HTTP server
     if (!server.start(port, request_handler)) {

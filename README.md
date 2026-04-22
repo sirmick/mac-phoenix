@@ -8,7 +8,7 @@ A classic Macintosh emulator that runs in your browser. Boot System 6 through Ma
 
 ## What is this?
 
-MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github.com/kanjitalk755/macemu) emulator family. It replaces the SDL desktop UI with a web-based streaming interface: the emulator runs as a headless server and streams video to your browser via WebRTC, with keyboard and mouse input sent back over a data channel.
+MacPhoenix is a ground-up rewrite of the [BasiliskII/SheepShaver](https://github.com/kanjitalk755/macemu) emulator family. It replaces the SDL desktop UI with a web-based streaming interface: the emulator runs as a headless server on a single HTTP port and streams video to your browser. Everything — static UI, REST API, WebSocket signaling, PNG/WebP frames, and input — rides that one port; H.264/VP9 add a WebRTC media path for LAN use.
 
 Most-tested guest OS versions: **System 6.0.8**, **System 7.5.5**, **Mac OS 7.6.1**, and **Mac OS 9.0.4**. Other 7.x / 8.x / 9.x releases mostly work; file a bug if they don't.
 
@@ -16,7 +16,8 @@ Most-tested guest OS versions: **System 6.0.8**, **System 7.5.5**, **Mac OS 7.6.
 
 - **Multiple Macs** — Mac SE, Quadra 650, and Power Mac G3, with more on the way
 - **Browser UI** — connect from any device, no plugins or installs
-- **WebRTC streaming** — low-latency video with H.264, VP9, PNG, or WebP encoding
+- **Single-port deploy** — HTTP, WebSocket signaling, PNG/WebP frames, and the HTTP-stream fallback all share one TCP listener; trivial to put behind nginx or Caddy
+- **Three transport modes** — WebSocket for PNG/WebP (works through any HTTPS proxy), HTTP long-poll for locked-down networks, WebRTC RTP for H.264/VP9 on LAN
 - **REST API** — boot status, screenshots, config, app launching, and control via HTTP endpoints
 - **Automation bridge** — launch classic apps, graceful guest shutdown and restart, with clipboard integration on the roadmap
 - **NAT networking** — optional Unix-socket bridge (smoltcp + NAT) so the guest can reach the Internet without root
@@ -61,7 +62,7 @@ cmake --build build -j$(nproc)
 ./build/mac-phoenix /path/to/quadra.rom
 ```
 
-Open **http://localhost:8000** in your browser. That's it — you'll see the Mac desktop in a few seconds.
+Open **http://localhost:11000** in your browser. That's it — you'll see the Mac desktop in a few seconds.
 
 ### What you need
 
@@ -216,8 +217,7 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 | `screen` | `"640x480"` | `"WxH"` |
 | `codec` | `"png"` | `"png"`, `"h264"`, `"vp9"`, `"webp"` |
 | `mousemode` | `"absolute"` | `"absolute"` or `"relative"` |
-| `http_port` | `8000` | |
-| `signaling_port` | `8090` | WebRTC signaling |
+| `http_port` | `11000` | Serves HTTP, `/ws` WebSocket signaling + frames, and `/api/frame` long-poll — one port |
 | `bridge_enabled` | `false` | Enable the automation bridge (see below) |
 | `dismiss_shutdown_dialog` | `false` | Auto-dismiss the improper-shutdown dialog on boot |
 | `log_level` | `0` | 0 = milestones, 3 = + registers |
@@ -237,8 +237,7 @@ Arch-specific fields live under `m68k` / `ppc` sub-objects (`cpu_type`, `fpu`, `
   --backend uae|unicorn|kpx  CPU backend (default: uae; kpx auto-selected for ppc)
   --ram MB                   RAM size in megabytes
   --screen WxH               Display resolution (default: 640x480)
-  --port N                   HTTP server port (default: 8000)
-  --signaling-port N         WebRTC signaling port (default: 8090)
+  --port N                   HTTP server port (default: 11000) — also hosts /ws signaling
   --timeout N                Auto-exit after N seconds (useful for tests)
   --no-webserver             Headless mode (no HTTP / WebRTC)
   --network MODE             Network: none | socket[:<unix-socket-path>]
@@ -272,13 +271,13 @@ When `--bridge` is on, a fresh temp directory is created under `/tmp/macemu-brid
 
 ```bash
 # Launch an app and wait for it to come up
-curl -s -X POST http://localhost:8000/api/launch \
+curl -s -X POST http://localhost:11000/api/launch \
      -d '{"path":"Macintosh HD:Applications:TeachText"}'
-curl -s -X POST http://localhost:8000/api/wait \
+curl -s -X POST http://localhost:11000/api/wait \
      -d '{"app":"TeachText","timeout":10}'
 
 # Graceful power-off (quits every app, then ShutDwnPower)
-curl -s -X POST http://localhost:8000/api/shutdown
+curl -s -X POST http://localhost:11000/api/shutdown
 ```
 
 See [docs/CommandBridge.md](docs/CommandBridge.md) for the full protocol and the list of files exchanged in the bridge directory.
@@ -478,6 +477,41 @@ See [docs/Testing.md](docs/Testing.md) for the full matrix and tips on tracking 
 ## Architecture
 
 MacPhoenix uses a **Platform API** abstraction: all CPU backends implement the same function pointer table, so core code (ROM patching, interrupts, ADB, video) is backend-agnostic. Video uses a **lock-free triple buffer** — the CPU writes frames, the encoder reads them, and the screenshot API reads them, all without locks.
+
+### Transport modes
+
+Five codec menu options map to three transports that fail in different network conditions:
+
+| Codec | Transport | Works when… |
+|---|---|---|
+| PNG, WebP | WebSocket on `/ws` (TCP, same origin as HTTP) | Any HTTPS proxy will do |
+| H.264, VP9 | WebRTC RTP video track (UDP, ICE-negotiated) | Browser can reach emulator on UDP — LAN or public IP |
+| HTTP Stream | HTTP long-poll on `/api/frame` | Anywhere that plain GET/POST works |
+
+Signaling (WebRTC SDP/ICE) and input events (mouse/keyboard) always ride the WebSocket. The emulator opens exactly one TCP listener; the WebSocket lives on that same port via an in-process RFC 6455 upgrade handler. WebRTC media for H.264/VP9 negotiates additional UDP ports dynamically via ICE — nginx can't proxy those, but LAN deployments and hosts with a public IP work out of the box.
+
+### Behind a reverse proxy
+
+Because HTTP + WebSocket share the listener, one `location` block is enough:
+
+```nginx
+map $http_upgrade $conn_upgrade { default upgrade; '' close; }
+
+server {
+    listen 443 ssl http2;
+    location / {
+        proxy_pass http://127.0.0.1:11000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $conn_upgrade;
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+}
+```
+
+`proxy_buffering off` + long read timeout keep the WebSocket frames flowing and the `/api/frame` long-poll responsive. H.264/VP9 sessions still need UDP reachability to the emulator host for the RTP media path — use PNG/WebP or HTTP-stream for users behind proxies that block UDP.
 
 See [CLAUDE.md](CLAUDE.md) for the full developer reference.
 

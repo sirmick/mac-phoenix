@@ -83,7 +83,7 @@ What we're building and why.
 ### Phase 2: WebRTC Integration ✅ COMPLETE
 
 - 4-thread architecture, all encoders (H.264, VP9, WebP, PNG, Opus)
-- Mouse/keyboard input via data channel
+- Mouse/keyboard input via WebSocket (shared with signaling on /ws)
 - Browser client with settings UI
 
 ### Phase 3: Performance & Polish ✅ COMPLETE

@@ -33,7 +33,7 @@ cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
 ## Run
 
 ```bash
-# Default (UAE backend, web UI on port 8000)
+# Default (UAE backend, web UI on port 11000)
 ./build/mac-phoenix /home/mick/quadra.rom
 
 # Headless with timeout
@@ -86,7 +86,7 @@ npx playwright test --ui        # interactive UI
   --cdrom path          CDROM image path (repeatable)
   --ram MB              RAM size in megabytes
   --port N              HTTP server port (default: 8000)
-  --signaling-port N    WebRTC signaling port (default: 8090)
+  # --signaling-port / --signaling-path removed in 2026-04 — signaling rides /ws on the HTTP port.
   --backend uae|unicorn Backend selection (default: uae)
   --arch m68k|ppc       CPU architecture
   --timeout N           Auto-exit after N seconds

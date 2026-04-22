@@ -652,8 +652,8 @@ int main(int argc, char **argv)
 		printf("Launching HTTP server on port %d...\n", emu_config.http_port);
 
 		webrtc::WebRTCServer webrtc_server;
-		if (!webrtc_server.init(emu_config.signaling_port)) {
-			fprintf(stderr, "Failed to start WebRTC signaling server\n");
+		if (!webrtc_server.init()) {
+			fprintf(stderr, "Failed to initialize WebRTC server\n");
 			return 1;
 		}
 		webrtc::g_server = &webrtc_server;
@@ -675,9 +675,9 @@ int main(int argc, char **argv)
 			});
 		}
 
-		// Launch HTTP server thread
+		// Launch HTTP server thread (also hosts /ws signaling)
 		std::thread http_server_thread(webserver::http_server_main,
-		                                &emu_config, &api_context);
+		                                &emu_config, &api_context, &webrtc_server);
 
 		// Launch WebRTC signaling server thread
 		std::thread webrtc_server_thread(webrtc::webrtc_server_main,
@@ -811,7 +811,8 @@ int main(int argc, char **argv)
 				headless_api_context->config = &emu_config;
 				headless_api_context->subprocess = nullptr;  // in-process command bridge
 				headless_http_thread = std::thread(webserver::http_server_main,
-				                                    &emu_config, headless_api_context.get());
+				                                    &emu_config, headless_api_context.get(),
+				                                    /*webrtc_server=*/nullptr);
 			}
 
 			printf("Starting CPU execution...\n");

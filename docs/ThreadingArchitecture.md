@@ -35,26 +35,25 @@
 │                                                                 │
 │  Thread 2: VIDEO ENCODER 🎥 (Blocks on new frames)            │
 │  ├─ READS ← VideoOutput (triple buffer)                        │
-│  ├─ Encode to H.264/VP9/WebP                                   │
-│  ├─ WRITES → WebRTC DataChannel                                │
+│  ├─ Encode to H.264/VP9/PNG/WebP                               │
+│  ├─ WRITES → WebRTC RTP track (H.264/VP9) or WebSocket (PNG/WebP) │
 │  └─ Target: 60 FPS (16.7ms frame budget)                       │
 │                                                                 │
 │  Thread 3: AUDIO ENCODER 🔊 (Periodic - 20ms chunks)          │
 │  ├─ READS ← AudioOutput (ring buffer)                          │
 │  ├─ Encode to Opus                                             │
-│  ├─ WRITES → WebRTC DataChannel                                │
+│  ├─ WRITES → WebRTC RTP track (H.264/VP9 peers only)           │
 │  └─ Target: 20ms chunks (WebRTC standard)                      │
 │                                                                 │
-│  Thread 4: WEB SERVER 🌍 (Event-driven)                       │
+│  Thread 4: WEB SERVER 🌍 (Event-driven) — single TCP listener │
 │  ├─ HTTP server (serve client HTML/JS/CSS)                     │
-│  ├─ WebRTC peer connection management                          │
-│  ├─ Data channel input (mouse/keyboard → ADB)                 │
+│  ├─ /ws WebSocket (signaling + input + PNG/WebP frames)        │
+│  ├─ WebRTC peer connection management (H.264/VP9)              │
 │  ├─ ICE/STUN/TURN handling                                     │
-│  ├─ Signaling (websocket)                                      │
 │  ├─ Config API (GET/POST /config)                              │
 │  ├─ Control API (POST /reset, /pause)                          │
 │  ├─ File scanning API (GET /files)                             │
-│  └─ Network I/O (libdatachannel + cpp-httplib)                 │
+│  └─ Network I/O (libdatachannel + in-process HTTP/WS server)   │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -244,7 +243,8 @@ void video_encoder_main(JsonConfig* config, VideoOutput* video_output) {
 - **Config**: Codec selection (read-only)
 
 **WRITES**:
-- **WebRTC DataChannel**: Encoded frames (via queue/channel)
+- **WebRTC RTP track** for H.264/VP9 peers (libdatachannel)
+- **WebSocket** for PNG/WebP peers (in-process /ws handler)
 
 **Blocking**:
 - Blocks on `wait_for_frame()` (condition variable or polling)
@@ -296,7 +296,7 @@ void audio_encoder_main(JsonConfig* config, AudioOutput* audio_output) {
 - **Config**: Sample rate, channels (read-only)
 
 **WRITES**:
-- **WebRTC DataChannel**: Encoded audio frames
+- **WebRTC RTP track** for H.264/VP9 peers (Opus audio track alongside video)
 
 **Timing**:
 - 20ms chunks (WebRTC standard for Opus)
@@ -345,23 +345,26 @@ void web_server_main(JsonConfig* config) {
         res.json(roms);
     });
 
-    // 2. Set up WebRTC peer connection
-    rtc::Configuration rtc_config;
-    rtc_config.iceServers.push_back(rtc::IceServer("stun:stun.l.google.com:19302"));
-
-    auto peer = std::make_shared<rtc::PeerConnection>(rtc_config);
-
-    // Set up data channels
-    auto video_channel = peer->createDataChannel("video");
-    auto audio_channel = peer->createDataChannel("audio");
-
-    // Set up WebRTC callbacks
-    peer->onLocalDescription([](rtc::Description desc) {
-        send_sdp_to_client(desc);  // Via HTTP or WebSocket
+    // 2. Register /ws WebSocket route (signaling + input + PNG/WebP frames)
+    http_server.register_websocket_route("/ws", [](auto ws, const Request& req) {
+        // Each connection runs on a detached thread. Signaling JSON in, frames
+        // out, input events in, cursor metadata out.
+        ws->on_text(...); ws->on_binary(...); ws->on_close(...);
     });
 
-    peer->onLocalCandidate([](rtc::Candidate candidate) {
-        send_ice_candidate_to_client(candidate);
+    // 3. WebRTC peer (created per H.264/VP9 session on "connect" over /ws)
+    rtc::Configuration rtc_config;
+    auto peer = std::make_shared<rtc::PeerConnection>(rtc_config);
+
+    // Video + audio RTP tracks (no data channel — frames/input ride the WS)
+    auto video_track = peer->addTrack(rtc::Description::Video("v", SendOnly));
+    auto audio_track = peer->addTrack(rtc::Description::Audio("a", SendOnly));
+
+    peer->onLocalDescription([](rtc::Description desc) {
+        ws->send(describe_as_json(desc));  // SDP offer/answer over /ws
+    });
+    peer->onLocalCandidate([](rtc::Candidate cand) {
+        ws->send(candidate_as_json(cand)); // ICE candidate over /ws
     });
 
     // 3. Main event loop (handles both HTTP and WebRTC)
@@ -379,10 +382,10 @@ void web_server_main(JsonConfig* config) {
 - **Signaling**: SDP/ICE messages from browser
 
 **WRITES**:
-- **WebRTC DataChannels**: Video/audio frames to browser
-- **HTTP responses**: Client files, API responses
+- **WebSocket (/ws)**: Signaling JSON, PNG/WebP frames, cursor metadata
+- **WebRTC RTP tracks**: H.264/VP9 video + Opus audio (direct UDP to browser)
+- **HTTP responses**: Client files, API responses, `/api/frame` long-poll
 - **Config**: Updates from browser
-- **Signaling**: SDP/ICE messages to browser
 
 **Event-Driven**:
 - cpp-httplib has internal threads for HTTP requests
@@ -763,7 +766,7 @@ Video encoder compares current frame against previous. For PNG/WebP codecs, comp
 | **CPU/Main** | M68K emulation + timer | ~12M insns/sec | No | VideoOutput, AudioOutput, Interrupt flags | Interrupt flags |
 | **Video Enc** | H.264/VP9 | 60 FPS (16.7ms) | Yes (wait frame) | Encoded queue | VideoOutput |
 | **Audio Enc** | Opus | 50 Hz (20ms) | Yes (wait samples) | Encoded queue | AudioOutput |
-| **Web Server** | HTTP + WebRTC I/O | Event-driven | Yes (I/O) | Config, DataChannels | Config, filesystem, encoded queues |
+| **Web Server** | HTTP + /ws + WebRTC I/O | Event-driven | Yes (I/O) | Config, WS, RTP tracks | Config, filesystem, encoded queues |
 
 **Total threads**: 4 (4 workers, no orchestration thread)
 

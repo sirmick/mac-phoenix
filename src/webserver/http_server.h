@@ -12,9 +12,12 @@
 #include <thread>
 #include <atomic>
 #include <functional>
+#include <memory>
 #include <unordered_map>
 
 namespace http {
+
+class WebSocket;
 
 /**
  * HTTP Request Information
@@ -24,6 +27,9 @@ struct Request {
     std::string path;        // URL path without query string
     std::string query;       // Query string (after ?)
     std::string body;        // Request body content
+
+    // Lowercase-keyed headers. Used for WebSocket upgrade detection.
+    std::unordered_map<std::string, std::string> headers;
 };
 
 /**
@@ -69,6 +75,13 @@ public:
     // The handler runs on a detached thread, owns the fd, and must close it when done.
     using StreamHandler = std::function<void(const Request& req, int client_fd)>;
 
+    // WebSocket handler: the HTTP server performs the RFC 6455 upgrade handshake,
+    // then runs this callback on a detached thread with a live WebSocket. The
+    // handler should register callbacks on the socket and then call
+    // ws->run_read_loop() (blocks until the peer closes). The fd is owned by
+    // the WebSocket.
+    using WebSocketHandler = std::function<void(std::shared_ptr<WebSocket> ws, const Request& req)>;
+
     Server();
     ~Server();
 
@@ -80,6 +93,11 @@ public:
     // StreamHandler is called on a new thread with ownership of the fd.
     void register_stream_route(const std::string& path, StreamHandler handler);
 
+    // Register a WebSocket route. When a GET request matching this path
+    // arrives with Upgrade: websocket, the server completes the handshake and
+    // dispatches to the handler on a new thread.
+    void register_websocket_route(const std::string& path, WebSocketHandler handler);
+
     // Stop server and wait for thread to join
     void stop();
 
@@ -90,6 +108,7 @@ private:
     void run();
     bool handle_client(int client_fd);  // returns true if fd was handed off (don't close)
     bool parse_request(const char* buffer, size_t length, Request& req);
+    bool try_websocket_upgrade(const Request& req, int client_fd);  // true = handed off
 
     int port_;
     int server_fd_;
@@ -99,6 +118,8 @@ private:
 
     // Stream routes: path -> handler
     std::unordered_map<std::string, StreamHandler> stream_routes_;
+    // WebSocket routes: path -> handler
+    std::unordered_map<std::string, WebSocketHandler> websocket_routes_;
 };
 
 } // namespace http

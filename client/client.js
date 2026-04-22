@@ -975,7 +975,6 @@ class BasiliskWebRTC {
         this.canvas = canvasElement;
         this.ws = null;
         this.pc = null;
-        this.dataChannel = null;
         this.videoTrack = null;
         this.connected = false;
         this.wsUrl = null;
@@ -1213,6 +1212,7 @@ class BasiliskWebRTC {
 
         try {
             this.ws = new WebSocket(this.wsUrl);
+            this.ws.binaryType = 'arraybuffer';  // PNG/WebP frames arrive as binary
 
             this.ws.onopen = () => this.onWsOpen();
             this.ws.onmessage = (e) => this.onWsMessage(e);
@@ -1248,6 +1248,8 @@ class BasiliskWebRTC {
         this.updateStatus('Signaling connected', 'connecting');
         this.updateWebRTCState('ws', 'Open');
 
+        this._startHeartbeat();
+
         // Request connection with configured codec
         const codec = this.codecType || serverUIConfig.webcodec || 'h264';
         logger.debug('Sending connect request', { codec });
@@ -1257,7 +1259,41 @@ class BasiliskWebRTC {
         }));
     }
 
+    _startHeartbeat() {
+        this._stopHeartbeat();
+        this.lastPongAt = Date.now();
+        // Send ping every 20s; keeps nginx idle-timeout (default 60s) from firing.
+        this._pingInterval = setInterval(() => {
+            if (!this._wsIsOpen()) return;
+            try { this.ws.send('{"type":"ping"}'); } catch (e) {}
+        }, 20000);
+        // Every 10s, kill the socket if we haven't seen a pong in 45s — triggers
+        // the existing reconnect ladder via onWsClose.
+        this._pongCheckInterval = setInterval(() => {
+            if (!this._wsIsOpen()) return;
+            if (Date.now() - this.lastPongAt > 45000) {
+                logger.warn('No pong in 45s, closing stale WebSocket');
+                try { this.ws.close(); } catch (e) {}
+            }
+        }, 10000);
+    }
+
+    _stopHeartbeat() {
+        if (this._pingInterval) { clearInterval(this._pingInterval); this._pingInterval = null; }
+        if (this._pongCheckInterval) { clearInterval(this._pongCheckInterval); this._pongCheckInterval = null; }
+    }
+
     onWsMessage(event) {
+        // Binary = PNG/WebP frame bytes (frame delivery rides the same WS as signaling)
+        if (event.data instanceof ArrayBuffer) {
+            this.handleFrameBytes(event.data);
+            return;
+        }
+        if (event.data instanceof Blob) {
+            event.data.arrayBuffer().then(buf => this.handleFrameBytes(buf));
+            return;
+        }
+
         let msg;
         try {
             msg = JSON.parse(event.data);
@@ -1271,10 +1307,49 @@ class BasiliskWebRTC {
         this.handleSignaling(msg);
     }
 
+    handleFrameBytes(arrayBuffer) {
+        // Server sends the same 45-byte header + PNG/WebP bytes that previously
+        // rode the data channel. Decoder is format-agnostic.
+        const usesVideoTrack = (this.codecType === CodecType.H264 || this.codecType === CodecType.VP9);
+        if (!this.decoder || usesVideoTrack) return;
+
+        this.decoder.handleData(arrayBuffer);
+
+        this.pngStats.framesReceived++;
+        this.pngStats.bytesReceived += arrayBuffer.byteLength;
+        this.pngStats.lastFrameTime = performance.now();
+        this.pngStats.avgFrameSize = this.pngStats.bytesReceived / this.pngStats.framesReceived;
+
+        if (!this.firstFrameReceived) {
+            this.firstFrameReceived = true;
+            connectionSteps.setDone('frames');
+            if (debugConfig.debug_connection) {
+                logger.info('First PNG/WebP frame received via WebSocket');
+            }
+
+            if (this.webrtcFallbackTimer) {
+                clearTimeout(this.webrtcFallbackTimer);
+                this.webrtcFallbackTimer = null;
+            }
+            try { localStorage.removeItem('macemu_prefer_httpstream'); } catch (e) {}
+
+            this.connected = true;
+            this.updateStatus('Connected', 'connected');
+            this.hideOverlay();
+            this.updateConnectionUI(true);
+
+            const displayContainer = document.getElementById('display-container');
+            if (displayContainer) {
+                displayContainer.classList.remove('disconnected');
+            }
+        }
+    }
+
     onWsClose(event) {
         logger.warn('WebSocket closed', { code: event.code, reason: event.reason });
         this.updateWebRTCState('ws', 'Closed');
         this.connected = false;
+        this._stopHeartbeat();
         this.updateStatus('Disconnected', 'error');
         this.scheduleReconnect();
     }
@@ -1291,6 +1366,22 @@ class BasiliskWebRTC {
                     logger.info('Server acknowledged connection');
                 }
                 this.updateOverlayStatus('Waiting for video offer...');
+                break;
+
+            case 'pong':
+                this.lastPongAt = Date.now();
+                break;
+
+            case 'cursor':
+                // H.264/VP9 cursor metadata (used to ride the data channel)
+                this.currentCursorX = msg.x || 0;
+                this.currentCursorY = msg.y || 0;
+                this.cursorVisible = !!msg.visible;
+                break;
+
+            case 'capture':
+                logger.info('[Capture] Triggered by server!');
+                this.startAudioCapture();
                 break;
 
             case 'connected':
@@ -1316,11 +1407,21 @@ class BasiliskWebRTC {
                     }
                     updateCodecIndicator(this.codecType);
 
+                    // Wire input handlers to the appropriate display element and
+                    // send initial mouse mode. Input now rides the signaling WS
+                    // (used to ride the data channel).
+                    this.setupInputHandlers();
+                    this.sendMouseModeChange(this.mouseMode);
                 }
                 if (debugConfig.debug_connection) {
                     logger.info('Server acknowledged connection', { codec: msg.codec, peer_id: msg.peer_id });
                 }
-                this.updateOverlayStatus('Waiting for video offer...');
+                // PNG/WebP don't receive an SDP offer — frames just start flowing on WS.
+                if (this.codecType === CodecType.H264 || this.codecType === CodecType.VP9) {
+                    this.updateOverlayStatus('Waiting for video offer...');
+                } else {
+                    this.updateOverlayStatus('Waiting for first frame...');
+                }
                 break;
 
             case 'offer':
@@ -1471,7 +1572,6 @@ class BasiliskWebRTC {
         this.pc = new RTCPeerConnection(config);
 
         this.pc.ontrack = (e) => this.onTrack(e);
-        this.pc.ondatachannel = (e) => this.onDataChannel(e);
         this.pc.onicecandidate = (e) => this.onIceCandidate(e);
         this.pc.oniceconnectionstatechange = () => this.onIceConnectionStateChange();
         this.pc.onicegatheringstatechange = () => this.onIceGatheringStateChange();
@@ -1795,14 +1895,6 @@ class BasiliskWebRTC {
         logger.info('Stream is playing');
     }
 
-    onDataChannel(event) {
-        if (debugConfig.debug_connection) {
-            logger.info('Data channel received', { label: event.channel.label });
-        }
-        this.dataChannel = event.channel;
-        this.setupDataChannel();
-    }
-
     onIceCandidate(event) {
         // We now wait for ICE gathering complete and send all candidates in the answer SDP
         // So we don't need to send individual candidates via trickle ICE
@@ -1825,7 +1917,17 @@ class BasiliskWebRTC {
         } else if (state === 'failed') {
             connectionSteps.setError('ice');
             this.updateStatus('ICE connection failed', 'error');
-            logger.error('ICE connection failed - may need TURN server');
+            logger.error('ICE connection failed - falling back to HTTP stream');
+            // Fast fallback: UDP/ICE is never going to work here. Skip the 5s
+            // no-frames timer and switch now. Guarded so it only fires once.
+            if (!this._iceFailureFallbackFired) {
+                this._iceFailureFallbackFired = true;
+                try {
+                    localStorage.setItem('macemu_prefer_httpstream', '1');
+                    localStorage.setItem('macemu_last_fallback_reason', 'ice');
+                } catch (e) {}
+                this.fallbackToHTTPStream();
+            }
         } else if (state === 'disconnected') {
             logger.warn('ICE disconnected - may recover');
         }
@@ -1888,9 +1990,6 @@ class BasiliskWebRTC {
             this.pc.close();
             this.pc = null;
         }
-        if (this.dataChannel) {
-            this.dataChannel = null;
-        }
 
         // Reset state
         this.connected = false;
@@ -1919,101 +2018,6 @@ class BasiliskWebRTC {
         const state = this.pc.signalingState;
         logger.debug('Signaling state', { state });
         this.updateWebRTCState('signaling', state);
-    }
-
-    setupDataChannel() {
-        if (!this.dataChannel) return;
-
-        // Set binary type for receiving PNG frames
-        this.dataChannel.binaryType = 'arraybuffer';
-
-        this.dataChannel.onopen = () => {
-            if (debugConfig.debug_connection) {
-                logger.info('Data channel open');
-            }
-            this.updateWebRTCState('dc', 'Open');
-            this.setupInputHandlers();
-
-            // Send initial mouse mode to emulator
-            this.sendMouseModeChange(this.mouseMode);
-
-        };
-
-        this.dataChannel.onclose = () => {
-            logger.warn('Data channel closed');
-            this.updateWebRTCState('dc', 'Closed');
-        };
-
-        this.dataChannel.onerror = (e) => {
-            logger.error('Data channel error');
-            this.updateWebRTCState('dc', 'Error');
-        };
-
-        // Handle incoming messages (frames for PNG, or other messages)
-        this.dataChannel.onmessage = (event) => {
-            if (event.data instanceof ArrayBuffer) {
-                // Check if this is a frame metadata message for H.264/VP9
-                // Format: [cursor_x:2][cursor_y:2][cursor_visible:1]
-                if (event.data.byteLength === CONSTANTS.H264_METADATA_SIZE) {
-                    const view = new DataView(event.data);
-                    this.handleFrameMetadata(view);
-                    return;
-                }
-
-                // Binary data - this is a video frame for DataChannel codecs (PNG/WEBP)
-                const usesVideoTrack = (this.codecType === CodecType.H264 || this.codecType === CodecType.VP9);
-                if (this.decoder && !usesVideoTrack) {
-                    this.decoder.handleData(event.data);
-
-                    // Track PNG frame stats
-                    this.pngStats.framesReceived++;
-                    this.pngStats.bytesReceived += event.data.byteLength;
-                    this.pngStats.lastFrameTime = performance.now();
-                    this.pngStats.avgFrameSize = this.pngStats.bytesReceived / this.pngStats.framesReceived;
-
-                    // Update first frame received flag
-                    if (!this.firstFrameReceived) {
-                        this.firstFrameReceived = true;
-                        connectionSteps.setDone('frames');
-                        if (debugConfig.debug_connection) {
-                            logger.info('First frame received via DataChannel');
-                        }
-
-                        // Cancel HTTP stream fallback timer — DataChannel works
-                        if (this.webrtcFallbackTimer) {
-                            clearTimeout(this.webrtcFallbackTimer);
-                            this.webrtcFallbackTimer = null;
-                        }
-                        try { localStorage.removeItem('macemu_prefer_httpstream'); } catch(e) {}
-
-                        // For PNG codec, mark as connected and hide overlay
-                        this.connected = true;
-                        this.updateStatus('Connected', 'connected');
-                        this.hideOverlay();
-                        this.updateConnectionUI(true);
-
-                        // Remove disconnected visual state
-                        const displayContainer = document.getElementById('display-container');
-                        if (displayContainer) {
-                            displayContainer.classList.remove('disconnected');
-                        }
-                    }
-                }
-            } else {
-                // Text data - might be control messages
-                try {
-                    const msg = JSON.parse(event.data);
-                    if (msg.type === 'capture') {
-                        logger.info('[Capture] Triggered by server!');
-                        this.startAudioCapture();
-                    } else {
-                        logger.debug('DataChannel text message', { data: event.data });
-                    }
-                } catch (e) {
-                    logger.debug('DataChannel text message (not JSON)', { data: event.data });
-                }
-            }
-        };
     }
 
     setupInputHandlers() {
@@ -2142,43 +2146,47 @@ class BasiliskWebRTC {
     // Key: type=3, keycode:uint16, down:uint8, timestamp:float64
     // Mouse move (absolute): type=5, x:uint16, y:uint16, timestamp:float64
 
+    _wsIsOpen() {
+        return this.ws && this.ws.readyState === WebSocket.OPEN;
+    }
+
     sendMouseMove(dx, dy, timestamp) {
-        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+        if (this._wsIsOpen()) {
             const buffer = new ArrayBuffer(1 + 2 + 2 + 8);
             const view = new DataView(buffer);
             view.setUint8(0, 1);
             view.setInt16(1, dx, true);
             view.setInt16(3, dy, true);
             view.setFloat64(5, timestamp, true);
-            this.dataChannel.send(buffer);
+            this.ws.send(buffer);
         } else if (this.codecType === CodecType.HTTP_STREAM) {
             this._httpPostThrottled('mouse', { dx, dy });
         }
     }
 
     sendMouseAbsolute(x, y, timestamp) {
-        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+        if (this._wsIsOpen()) {
             const buffer = new ArrayBuffer(1 + 2 + 2 + 8);
             const view = new DataView(buffer);
             view.setUint8(0, 5);
             view.setUint16(1, x, true);
             view.setUint16(3, y, true);
             view.setFloat64(5, timestamp, true);
-            this.dataChannel.send(buffer);
+            this.ws.send(buffer);
         } else if (this.codecType === CodecType.HTTP_STREAM) {
             this._httpPostThrottled('mouse', { x, y });
         }
     }
 
     sendMouseButton(button, down, timestamp) {
-        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+        if (this._wsIsOpen()) {
             const buffer = new ArrayBuffer(1 + 1 + 1 + 8);
             const view = new DataView(buffer);
             view.setUint8(0, 2);
             view.setUint8(1, button);
             view.setUint8(2, down ? 1 : 0);
             view.setFloat64(3, timestamp, true);
-            this.dataChannel.send(buffer);
+            this.ws.send(buffer);
         } else if (this.codecType === CodecType.HTTP_STREAM) {
             // Mouse button events are not throttled — send immediately
             fetch(getApiUrl('mouse'), {
@@ -2190,14 +2198,14 @@ class BasiliskWebRTC {
     }
 
     sendKey(keycode, down, timestamp) {
-        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+        if (this._wsIsOpen()) {
             const buffer = new ArrayBuffer(1 + 2 + 1 + 8);
             const view = new DataView(buffer);
             view.setUint8(0, 3);
             view.setUint16(1, keycode, true);
             view.setUint8(3, down ? 1 : 0);
             view.setFloat64(4, timestamp, true);
-            this.dataChannel.send(buffer);
+            this.ws.send(buffer);
         } else if (this.codecType === CodecType.HTTP_STREAM) {
             fetch(getApiUrl('keypress'), {
                 method: 'POST',
@@ -2233,26 +2241,26 @@ class BasiliskWebRTC {
 
     // Send raw text message (legacy text protocol - fallback)
     sendRaw(msg) {
-        if (this.dataChannel && this.dataChannel.readyState === 'open') {
-            this.dataChannel.send(msg);
+        if (this._wsIsOpen()) {
+            this.ws.send(msg);
         }
     }
 
     // Legacy JSON method (kept for restart/shutdown commands)
     sendInput(msg) {
-        if (this.dataChannel && this.dataChannel.readyState === 'open') {
-            this.dataChannel.send(JSON.stringify(msg));
+        if (this._wsIsOpen()) {
+            this.ws.send(JSON.stringify(msg));
         }
     }
 
     // Send mouse mode change to server (type=6, mode: 0=absolute, 1=relative)
     sendMouseModeChange(mode) {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') return;
+        if (!this._wsIsOpen()) return;
         const buffer = new ArrayBuffer(1 + 1);
         const view = new DataView(buffer);
         view.setUint8(0, 6);  // type: mouse mode change
         view.setUint8(1, mode === 'relative' ? 1 : 0);  // 0=absolute, 1=relative
-        this.dataChannel.send(buffer);
+        this.ws.send(buffer);
 
         if (debugConfig.debug_connection) {
             logger.info('Mouse mode change sent to server', { mode });
@@ -2412,10 +2420,6 @@ class BasiliskWebRTC {
         if (this.decoder) {
             this.decoder.cleanup();
             this.decoder = null;
-        }
-        if (this.dataChannel) {
-            this.dataChannel.close();
-            this.dataChannel = null;
         }
         if (this.pc) {
             this.pc.close();
@@ -2955,28 +2959,21 @@ function getApiUrl(endpoint) {
     return `${getBasePath()}api/${endpoint}`;
 }
 
-// Build WebSocket URL for signaling server
-// Can be overridden via:
+// Build WebSocket URL for signaling server.
+// Signaling rides the same origin as the page — the server hosts /ws via an
+// in-process upgrade on the HTTP port. Overrides:
 //   - URL param: ?ws=wss://example.com/path
 //   - <meta name="ws-url" content="wss://example.com/path">
-// Default: uses signaling_port from server config (fetched before init)
 function getWebSocketUrl() {
-    // Check URL parameter first
     const urlParams = new URLSearchParams(window.location.search);
     const wsParam = urlParams.get('ws');
     if (wsParam) return wsParam;
 
-    // Check meta tag
     const wsMeta = document.querySelector('meta[name="ws-url"]');
     if (wsMeta?.content) return wsMeta.content;
 
-    // Use signaling_port from server config, fall back to HTTP port + 1
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const hostname = window.location.hostname;
-    const signalingPort = debugConfig.signaling_port
-        || (parseInt(window.location.port, 10) + 1)
-        || 8090;
-    return `${protocol}//${hostname}:${signalingPort}/`;
+    return `${protocol}//${window.location.host}/ws`;
 }
 
 function initClient() {

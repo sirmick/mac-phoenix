@@ -800,7 +800,7 @@ Response APIRouter::handle_screenshot(const Request& req) {
  * GET /api/frame — Single-frame endpoint for long-poll HTTP streaming.
  *
  * Returns one PNG frame with the same 45-byte metadata header used by
- * the DataChannel path. Client polls in a loop. Works through any proxy.
+ * the WebSocket path. Client polls in a loop. Works through any proxy.
  *
  * Query params (in req.query):
  *   sid=X  — Session ID for dirty rect tracking. Omit on first request;

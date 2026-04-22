@@ -3,7 +3,7 @@
  *
  * Streams video frames over plain HTTP chunked transfer encoding.
  * Each frame is length-prefixed with the same 45-byte metadata header
- * used by the DataChannel path (timestamps, dirty rect, cursor position).
+ * used by the WebSocket path (timestamps, dirty rect, cursor position).
  *
  * Wire format per frame:
  *   [4-byte total_length (LE uint32)] [45-byte header] [PNG image data]

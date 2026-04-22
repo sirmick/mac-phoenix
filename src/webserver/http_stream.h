@@ -3,7 +3,7 @@
  *
  * Proxy-friendly video streaming over plain HTTP chunked transfer encoding.
  * Each chunk contains a length-prefixed frame with dirty rect metadata,
- * using the same 45-byte header format as the DataChannel path.
+ * using the same 45-byte header format as the WebSocket path.
  *
  * No WebRTC, no WebSocket — works through any HTTP proxy, CDN, or reverse proxy.
  */

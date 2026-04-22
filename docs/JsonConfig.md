@@ -54,8 +54,7 @@ You only need to specify values that differ from defaults:
 | `bootdriver` | int | `0` | Boot driver (`0` = any disk, `-62` = CD-ROM) |
 | `codec` | string | `"png"` | Video codec (`"png"`, `"h264"`, `"vp9"`, `"webp"`) |
 | `mousemode` | string | `"absolute"` | Mouse mode (`"absolute"` or `"relative"`) |
-| `http_port` | int | `8000` | HTTP server port |
-| `signaling_port` | int | `8090` | WebRTC signaling port |
+| `http_port` | int | `11000` | HTTP server port (also hosts `/ws` signaling WebSocket) |
 | `storage_dir` | string | `"~/storage"` | Root directory for ROMs and disk images |
 | `nosound` | bool | `false` | Disable sound |
 | `zappram` | bool | `false` | Clear PRAM on startup |
@@ -141,8 +140,7 @@ The web UI's file picker scans these directories via `GET /api/storage`.
   "bootdriver": 0,
   "codec": "vp9",
   "mousemode": "relative",
-  "http_port": 8000,
-  "signaling_port": 8090,
+  "http_port": 11000,
   "storage_dir": "/home/user/storage",
   "m68k": {
     "cpu_type": 4,

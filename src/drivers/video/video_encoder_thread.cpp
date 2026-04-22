@@ -8,7 +8,7 @@
  * IPC shared memory — zero-copy, eliminating the relay thread's memcpy.
  * VideoOutput is still used for screenshot API (snapshot_frame).
  *
- * For PNG/WebP (DataChannel codecs): computes dirty rectangles by comparing
+ * For PNG/WebP (WebSocket codecs): computes dirty rectangles by comparing
  * current frame against previous frame, encodes only the changed region.
  * This reduces frame size from ~280KB to typically 5-50KB for static UI.
  *
@@ -174,78 +174,107 @@ static bool compute_dirty_rect(const uint32_t* curr, const uint32_t* prev,
 }
 
 /**
- * Encode a region as horizontal strips that fit within DataChannel size limit.
- * Sends each strip individually via send_encoded_frame().
- * Returns number of strips sent.
+ * Encode a region and send it. Almost always a single frame — the in-process
+ * WebSocket transport has no small-message cap, so we skip the strip-splitting
+ * tax (PNG headers + lost compression ratio) that was forced by the old data
+ * channel's ~256KB limit. Only falls back to bisection if a single encode
+ * exceeds a generous safety threshold.
+ * Returns number of frames sent.
  */
 static int encode_and_send_strips(VideoCodec* encoder, const uint32_t* pixels,
                                    int frame_w, int frame_h, PixelFormat format,
                                    int rect_x, int rect_y, int rect_w, int rect_h) {
-    const int DC_TARGET_SIZE = 200000;  // Keep under 200KB (256KB limit minus header)
+    // 4MB comfortably fits any realistic PNG/WebP dirty rect; our WS impl
+    // accepts up to 32MB per frame, so this is a soft ceiling that leaves
+    // headroom rather than a hard transport limit.
+    constexpr size_t MAX_FRAME_BYTES = 4 * 1024 * 1024;
+
+    auto encode_strip = [&](int sy, int sh) -> EncodedFrame {
+        EncodedFrame strip;
+        auto* png_enc = dynamic_cast<PNGEncoder*>(encoder);
+#ifdef HAVE_LIBWEBP
+        auto* webp_enc = dynamic_cast<WebPEncoder*>(encoder);
+#endif
+        if (format == PIXFMT_BGRA) {
+            if (png_enc)
+                strip = png_enc->encode_bgra_rect(
+                    reinterpret_cast<const uint8_t*>(pixels), frame_w, frame_h, frame_w * 4,
+                    rect_x, sy, rect_w, sh);
+#ifdef HAVE_LIBWEBP
+            else if (webp_enc)
+                strip = webp_enc->encode_bgra_rect(
+                    reinterpret_cast<const uint8_t*>(pixels), frame_w, frame_h, frame_w * 4,
+                    rect_x, sy, rect_w, sh);
+#endif
+        } else {
+            // ARGB (A,R,G,B) → BGRA (B,G,R,A)
+            std::vector<uint8_t> strip_bgra(rect_w * sh * 4);
+            for (int ry = 0; ry < sh; ry++) {
+                const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels) + (sy + ry) * frame_w * 4 + rect_x * 4;
+                uint8_t* dst = strip_bgra.data() + ry * rect_w * 4;
+                libyuv::BGRAToARGB(src, rect_w * 4, dst, rect_w * 4, rect_w, 1);
+            }
+            strip = encoder->encode_bgra(strip_bgra.data(), rect_w, sh, rect_w * 4);
+        }
+        return strip;
+    };
+
+    // Fast path: try a single encode covering the whole rect.
+    {
+        EncodedFrame whole = encode_strip(rect_y, rect_h);
+        if (whole.data.size() == 0) return 0;
+        if (whole.data.size() <= MAX_FRAME_BYTES) {
+            whole.dirty_x = rect_x;
+            whole.dirty_y = rect_y;
+            whole.dirty_width = rect_w;
+            whole.dirty_height = rect_h;
+            whole.frame_width = frame_w;
+            whole.frame_height = frame_h;
+            send_encoded_frame(whole);
+            return 1;
+        }
+        // Too big — fall through to bisection.
+    }
+
+    // Slow path: bisect until each strip fits. Only pathological full-screen
+    // keyframes at high resolutions should land here.
     int num_strips = 2;
     int strips_sent = 0;
-
     while (num_strips <= 16) {
         bool all_ok = true;
         strips_sent = 0;
+        std::vector<EncodedFrame> strips;
+        strips.reserve(num_strips);
         int strip_h = rect_h / num_strips;
         int remainder = rect_h - strip_h * num_strips;
 
         for (int s = 0; s < num_strips; s++) {
             int sy = rect_y + s * strip_h;
             int sh = strip_h + (s == num_strips - 1 ? remainder : 0);
-
-            EncodedFrame strip;
-            auto* png_enc = dynamic_cast<PNGEncoder*>(encoder);
-#ifdef HAVE_LIBWEBP
-            auto* webp_enc = dynamic_cast<WebPEncoder*>(encoder);
-#endif
-
-            if (format == PIXFMT_BGRA) {
-                if (png_enc)
-                    strip = png_enc->encode_bgra_rect(
-                        reinterpret_cast<const uint8_t*>(pixels), frame_w, frame_h, frame_w * 4,
-                        rect_x, sy, rect_w, sh);
-#ifdef HAVE_LIBWEBP
-                else if (webp_enc)
-                    strip = webp_enc->encode_bgra_rect(
-                        reinterpret_cast<const uint8_t*>(pixels), frame_w, frame_h, frame_w * 4,
-                        rect_x, sy, rect_w, sh);
-#endif
-            } else {
-                // ARGB (bytes A,R,G,B = libyuv "BGRA") → BGRA (bytes B,G,R,A = libyuv "ARGB")
-                // Use libyuv for SIMD-accelerated conversion instead of byte-at-a-time loop
-                std::vector<uint8_t> strip_bgra(rect_w * sh * 4);
-                for (int ry = 0; ry < sh; ry++) {
-                    const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels) + (sy + ry) * frame_w * 4 + rect_x * 4;
-                    uint8_t* dst = strip_bgra.data() + ry * rect_w * 4;
-                    libyuv::BGRAToARGB(src, rect_w * 4, dst, rect_w * 4, rect_w, 1);
-                }
-                strip = encoder->encode_bgra(strip_bgra.data(), rect_w, sh, rect_w * 4);
-            }
-
-            if (strip.data.size() > (size_t)DC_TARGET_SIZE) {
+            EncodedFrame strip = encode_strip(sy, sh);
+            if (strip.data.size() > MAX_FRAME_BYTES) {
                 num_strips *= 2;
                 all_ok = false;
                 break;
             }
-
             strip.dirty_x = rect_x;
             strip.dirty_y = sy;
             strip.dirty_width = rect_w;
             strip.dirty_height = sh;
             strip.frame_width = frame_w;
             strip.frame_height = frame_h;
+            strips.push_back(std::move(strip));
+        }
 
+        if (!all_ok) continue;
+        for (auto& strip : strips) {
             if (strip.data.size() > 0) {
                 send_encoded_frame(strip);
                 strips_sent++;
             }
         }
-
-        if (all_ok) break;
+        break;
     }
-
     return strips_sent;
 }
 
@@ -485,7 +514,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             // Encode the dirty rectangle
             auto encode_start = std::chrono::steady_clock::now();
 
-            // Encode rect (may split into strips if too large for DataChannel)
+            // Encode rect (may split into strips if too large for the transport)
             int sent = encode_and_send_strips(encoder.get(), pixels, w, h,
                                                format, dx, dy, dw, dh);
             frames_since_stats += sent;

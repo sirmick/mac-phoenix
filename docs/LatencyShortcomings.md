@@ -4,7 +4,7 @@ Known sources of avoidable latency in the input and video paths. Issues are
 grouped by path and tagged with a severity (high / medium / low) based on how
 visible they are to a user interacting with the WebUI.
 
-The healthy parts, for reference, are the WebRTC DataChannel → ADB ring-buffer
+The healthy parts, for reference, are the WebSocket → ADB ring-buffer
 input fast-path and the in-process eventfd-driven triple buffer. Everything
 below is a deviation from that baseline.
 

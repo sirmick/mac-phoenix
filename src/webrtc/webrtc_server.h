@@ -13,8 +13,22 @@
 #include <map>
 #include <mutex>
 #include <atomic>
-#include <rtc/rtc.hpp>
+#include <chrono>
 #include "../drivers/video/encoders/codec.h"
+
+// Forward declarations — full rtc headers are only included in webrtc_server.cpp
+// so that dependents of this header don't need libdatachannel's include path.
+namespace rtc {
+class PeerConnection;
+class Track;
+class RtpPacketizer;
+}
+
+namespace http {
+class Server;
+class Request;
+class WebSocket;
+}
 
 namespace webrtc {
 
@@ -26,14 +40,15 @@ class AudioOutput;
  * Peer Connection State
  */
 struct PeerConnection {
-    std::shared_ptr<rtc::PeerConnection> pc;
-    std::shared_ptr<rtc::Track> video_track;
-    std::shared_ptr<rtc::Track> audio_track;
-    std::shared_ptr<rtc::DataChannel> data_channel;
+    std::shared_ptr<rtc::PeerConnection> pc;          // Null for PNG/WebP peers (WS-only)
+    std::shared_ptr<rtc::Track> video_track;          // Null for PNG/WebP peers
+    std::shared_ptr<rtc::Track> audio_track;          // Null for PNG/WebP peers
+    std::weak_ptr<http::WebSocket> ws;                // Signaling/input/frame transport
     std::shared_ptr<rtc::RtpPacketizer> vp9_packetizer;  // For prepareFrame() on VP9
     std::string id;
     CodecType codec = CodecType::H264;
     bool ready = false;
+    bool is_webrtc = false;         // true for H.264/VP9; false for PNG/WebP (WS-only)
     bool needs_keyframe = true;     // Don't send P-frames until first keyframe delivered
     bool needs_first_frame = true;  // Still-image codecs need full first frame
 };
@@ -41,7 +56,8 @@ struct PeerConnection {
 /**
  * WebRTC Server
  *
- * Runs WebSocket server on signaling_port (default 8090) for WebRTC signaling.
+ * Registers a /ws WebSocket route on the shared HTTP server. Signaling,
+ * client input, and PNG/WebP frame delivery all ride that single socket.
  * Manages peer connections and routes video/audio frames to connected peers.
  */
 class WebRTCServer {
@@ -50,11 +66,16 @@ public:
     ~WebRTCServer();
 
     /**
-     * Initialize WebRTC server with signaling port
-     * @param signaling_port WebSocket port for WebRTC signaling (default 8090)
-     * @return true if successful
+     * Initialize libdatachannel. Call register_routes() separately once an
+     * http::Server is available.
      */
-    bool init(int signaling_port = 8090);
+    bool init();
+
+    /**
+     * Register the /ws WebSocket route on the given HTTP server. Must be
+     * called after init() and before the server starts accepting clients.
+     */
+    void register_routes(http::Server& http_server);
 
     /**
      * Shutdown server and close all peer connections
@@ -98,26 +119,27 @@ public:
 
 private:
     /**
-     * Process WebRTC signaling message from browser
+     * Process a signaling text message from a connected browser.
+     * peer_id_slot is the per-connection slot that identifies this WS; it's
+     * written on "connect"/"offer" so later close/candidate messages can find
+     * the peer by string key.
      */
-    void process_signaling(rtc::WebSocket* ws, const std::string& message);
+    void process_signaling(std::shared_ptr<http::WebSocket> ws, const std::string& message,
+                           std::shared_ptr<std::string> peer_id_slot);
 
     /**
-     * Create a new peer connection for a client
+     * Create a new peer connection for a client.
+     * For PNG/WebP codecs, no PeerConnection is created — the returned peer is
+     * WS-only (frames + input ride the signaling socket).
      */
-    std::shared_ptr<PeerConnection> create_peer_connection(const std::string& peer_id, CodecType codec);
+    std::shared_ptr<PeerConnection> create_peer_connection(const std::string& peer_id, CodecType codec,
+                                                           std::shared_ptr<http::WebSocket> ws);
 
-    // WebSocket server
-    std::unique_ptr<rtc::WebSocketServer> ws_server_;
+    // Remove peer by id (called from WS on_close)
+    void remove_peer(const std::string& peer_id);
 
     // Active peer connections (peer_id -> PeerConnection)
     std::map<std::string, std::shared_ptr<PeerConnection>> peers_;
-
-    // WebSocket to peer ID mapping (for disconnect handling)
-    std::map<rtc::WebSocket*, std::string> ws_to_peer_id_;
-
-    // WebSocket connections (to keep shared_ptr alive)
-    std::map<rtc::WebSocket*, std::shared_ptr<rtc::WebSocket>> ws_connections_;
 
     // Thread safety
     std::mutex peers_mutex_;
@@ -125,7 +147,6 @@ private:
     // State
     std::atomic<bool> initialized_{false};
     std::atomic<int> peer_count_{0};
-    int port_ = 8090;
 
     // Timing for RTP timestamps
     std::chrono::steady_clock::time_point start_time_;

@@ -107,7 +107,7 @@ Reject POSTs > 1 MiB UTF-8 with 413; cap GET at the same.
 
 ### Browser
 
-`client/client.js`. Pure HTTP, no DataChannel changes:
+`client/client.js`. Pure HTTP, independent of the signaling WebSocket:
 - On `visibilitychange`/`focus` → fetch GET, attempt `navigator.clipboard.writeText()` inside the user-gesture window.
 - On canvas `paste` event or "Paste to Mac" toolbar button → POST.
 - Permission-denied fallback: a "Paste from Mac" button that triggers the writeText on click.

@@ -5,11 +5,13 @@
  */
 
 #include "http_server.h"
+#include "websocket.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <cctype>
 #include <cstring>
 #include <cstdio>
 #include <errno.h>
@@ -206,6 +208,58 @@ void Server::register_stream_route(const std::string& path, StreamHandler handle
     stream_routes_[path] = std::move(handler);
 }
 
+void Server::register_websocket_route(const std::string& path, WebSocketHandler handler) {
+    websocket_routes_[path] = std::move(handler);
+}
+
+static bool iequals(const std::string& a, const char* b) {
+    size_t n = std::strlen(b);
+    if (a.size() != n) return false;
+    for (size_t i = 0; i < n; ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) !=
+            std::tolower(static_cast<unsigned char>(b[i]))) return false;
+    }
+    return true;
+}
+
+bool Server::try_websocket_upgrade(const Request& req, int client_fd) {
+    auto it = websocket_routes_.find(req.path);
+    if (it == websocket_routes_.end()) return false;
+
+    auto upg_it  = req.headers.find("upgrade");
+    auto conn_it = req.headers.find("connection");
+    auto key_it  = req.headers.find("sec-websocket-key");
+    auto ver_it  = req.headers.find("sec-websocket-version");
+
+    if (upg_it == req.headers.end() || !iequals(upg_it->second, "websocket")) return false;
+    if (conn_it == req.headers.end() ||
+        conn_it->second.find("Upgrade") == std::string::npos &&
+        conn_it->second.find("upgrade") == std::string::npos) return false;
+    if (key_it == req.headers.end()) return false;
+    if (ver_it == req.headers.end() || ver_it->second != "13") return false;
+
+    std::string accept = WebSocket::compute_accept(key_it->second);
+
+    std::string resp =
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        "Sec-WebSocket-Accept: " + accept + "\r\n"
+        "\r\n";
+    ::send(client_fd, resp.data(), resp.size(), 0);
+
+    // Hand off fd to a detached thread that owns the WebSocket object.
+    auto handler = it->second;
+    Request req_copy = req;
+    std::thread([handler, req_copy, client_fd]() {
+        auto ws = std::make_shared<WebSocket>(client_fd);
+        handler(ws, req_copy);
+        ws->run_read_loop();  // blocks until close
+    }).detach();
+
+    return true;
+}
+
 bool Server::handle_client(int client_fd) {
     std::string request;
     request.reserve(8192);
@@ -246,6 +300,11 @@ bool Server::handle_client(int client_fd) {
         std::string response_str = resp.build();
         send(client_fd, response_str.c_str(), response_str.size(), 0);
         return false;
+    }
+
+    // WebSocket upgrade takes over the fd entirely.
+    if (req.method == "GET" && try_websocket_upgrade(req, client_fd)) {
+        return true;
     }
 
     // Check stream routes first (GET only)
@@ -308,8 +367,33 @@ bool Server::parse_request(const char* buffer, size_t length, Request& req) {
         req.path = req.path.substr(0, query_pos);
     }
 
-    // Extract body (after \r\n\r\n)
+    // Parse headers between the request line and the empty line.
+    size_t header_start = request.find("\r\n");
     size_t body_start = request.find("\r\n\r\n");
+    if (header_start != std::string::npos && body_start != std::string::npos) {
+        header_start += 2;
+        size_t pos = header_start;
+        while (pos < body_start) {
+            size_t eol = request.find("\r\n", pos);
+            if (eol == std::string::npos || eol > body_start) break;
+            size_t colon = request.find(':', pos);
+            if (colon != std::string::npos && colon < eol) {
+                std::string name = request.substr(pos, colon - pos);
+                // Lowercase name for case-insensitive lookup
+                for (auto& c : name) c = std::tolower(static_cast<unsigned char>(c));
+                size_t val_start = colon + 1;
+                while (val_start < eol && std::isspace(static_cast<unsigned char>(request[val_start])))
+                    ++val_start;
+                size_t val_end = eol;
+                while (val_end > val_start && std::isspace(static_cast<unsigned char>(request[val_end - 1])))
+                    --val_end;
+                req.headers[name] = request.substr(val_start, val_end - val_start);
+            }
+            pos = eol + 2;
+        }
+    }
+
+    // Extract body (after \r\n\r\n)
     if (body_start != std::string::npos) {
         req.body = request.substr(body_start + 4);
     }

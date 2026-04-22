@@ -13,8 +13,7 @@
   "codec": "png",
   "mousemode": "absolute",
 
-  "http_port": 8000,
-  "signaling_port": 8090,
+  "http_port": 11000,
   "storage_dir": "~/storage",
 
   "m68k": {
