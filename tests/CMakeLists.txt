@@ -103,6 +103,17 @@ set_tests_properties(command_bridge PROPERTIES
 )
 
 add_test(
+  NAME wne_patch_sanity
+  COMMAND bash ${TEST_DIR}/test_wne_patch_sanity.sh --port 18108
+)
+set_tests_properties(wne_patch_sanity PROPERTIES
+  TIMEOUT 60
+  LABELS "bridge"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
   NAME boot_ppc_interp
   COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --no-ppc-jit --timeout 45 --port 18086
 )

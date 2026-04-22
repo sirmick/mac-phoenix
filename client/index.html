@@ -77,8 +77,8 @@
             </div>
 
             <button class="btn warning" id="invoke-debug-btn" title="Programmer's Key — invoke debugger">Debug</button>
-            <button class="btn" id="debug-toggle">Logs</button>
             <button class="btn" id="fullscreen-btn">Fullscreen</button>
+            <button class="btn" id="debug-toggle" style="margin-left: auto;" title="More options">…</button>
         </div>
     </header>
 
@@ -127,13 +127,23 @@
                 <button class="clear-btn" id="clear-log-btn">Clear</button>
             </div>
             <div class="debug-tabs">
-                <div class="debug-tab active" data-tab="log">Log</div>
+                <div class="debug-tab active" data-tab="clipboard">Clipboard</div>
+                <div class="debug-tab" data-tab="log">Log</div>
                 <div class="debug-tab" data-tab="stats">Stats</div>
                 <div class="debug-tab" data-tab="webrtc">WebRTC</div>
                 <div class="debug-tab" data-tab="mac">Mac</div>
             </div>
             <div class="debug-content">
-                <div class="debug-pane active" id="log-pane">
+                <div class="debug-pane active" id="clipboard-pane">
+                    <div class="clipboard-wrap" style="display: flex; flex-direction: column; height: 100%; padding: 8px; box-sizing: border-box; gap: 6px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="clipboard-status" style="font-size: 11px; color: #888;">Mac clipboard</span>
+                            <button class="btn" id="clipboard-send-btn" style="margin-left: auto;" title="Copy this text into the Mac clipboard">Send to Mac</button>
+                        </div>
+                        <textarea id="clipboard-text" spellcheck="false" style="flex: 1; min-height: 120px; font-family: monospace; font-size: 12px; background: #111; color: #ddd; border: 1px solid #333; padding: 6px; resize: none; white-space: pre; overflow: auto;" placeholder="(Mac clipboard is empty)"></textarea>
+                    </div>
+                </div>
+                <div class="debug-pane" id="log-pane">
                     <div id="debug-log"></div>
                 </div>
                 <div class="debug-pane" id="stats-pane">

@@ -32,8 +32,68 @@
 #include <Resources.h>
 #include <ToolUtils.h>
 #include <ShutDown.h>
+#include <Scrap.h>
+#include <Traps.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
+
+/* Build stamp — compiler fills in at each build so we can confirm the
+ * running BridgeAgent matches the latest source. Surfaced in the status
+ * window, the heartbeat JSON, and /api/status. */
+#define BRIDGE_AGENT_BUILD __DATE__ " " __TIME__
+
+/* ---------- WNE trap-patch (scheduling proof-of-life) ---------------------
+ *
+ * Classic Mac apps only run when they get scheduled. If another app hogs the
+ * CPU (MacPerl mid-eval, say), BridgeAgent's own WaitNextEvent loop never
+ * ticks. To make bridge work *independent* of which app is frontmost, we
+ * trap-patch _WaitNextEvent — the patched code then runs in the caller's
+ * context on every yield, by every cooperating app.
+ *
+ * This first cut only measures: it bumps two counters so the host can prove
+ * the patch actually installs, fires, and fires from other processes. No
+ * real work happens in the patched function yet.
+ *
+ * Counters live at absolute ScratchMem addresses (host RAM at phys
+ * 0x02100000 is guest-visible). Absolute addressing means the patch body
+ * touches no A5-relative globals, so it's safe to run with any process's A5
+ * current. Offsets picked below the existing bridge-nudge block at +0xFFE0.
+ */
+#define SCR_U32(addr) (*(volatile uint32_t *)(addr))
+#define kWNECountTotal 0x0210FFC0u    /* uint32: all patched WNE calls  */
+#define kWNECountOther 0x0210FFC4u    /* uint32: calls where A5 != ours */
+#define kWNEOldProc    0x0210FFC8u    /* uint32: saved old WNE trap ptr */
+#define kWNEBridgeA5   0x0210FFCCu    /* uint32: snapshot of our A5     */
+#define kLMCurrentA5   0x00000904u    /* lowmem CurrentA5                */
+
+typedef pascal Boolean (*WNEProcPtr)(EventMask, EventRecord *, UInt32, RgnHandle);
+
+static pascal Boolean WNEPatch(EventMask mask, EventRecord *evt,
+                               UInt32 sleep, RgnHandle rgn)
+{
+    SCR_U32(kWNECountTotal)++;
+    if (SCR_U32(kLMCurrentA5) != SCR_U32(kWNEBridgeA5))
+        SCR_U32(kWNECountOther)++;
+
+    WNEProcPtr old = (WNEProcPtr)SCR_U32(kWNEOldProc);
+    return old(mask, evt, sleep, rgn);
+}
+
+static void install_wne_patch(void)
+{
+    SCR_U32(kWNECountTotal) = 0;
+    SCR_U32(kWNECountOther) = 0;
+    SCR_U32(kWNEBridgeA5)   = SCR_U32(kLMCurrentA5);
+    SCR_U32(kWNEOldProc)    = (uint32_t)GetToolboxTrapAddress(_WaitNextEvent);
+    SetToolboxTrapAddress((UniversalProcPtr)WNEPatch, _WaitNextEvent);
+}
+
+static void remove_wne_patch(void)
+{
+    uint32_t old = SCR_U32(kWNEOldProc);
+    if (old) SetToolboxTrapAddress((UniversalProcPtr)old, _WaitNextEvent);
+}
 
 /* ---------- Status window state ---------- */
 
@@ -63,20 +123,26 @@ static void draw_status(void)
     MoveTo(8, 18);
     DrawString("\pMacPhoenix BridgeAgent");
 
-    MoveTo(8, 36);
-    snprintf(buf, sizeof(buf), "Heartbeat: %d", gHeartbeat);
+    MoveTo(8, 34);
+    snprintf(buf, sizeof(buf), "Build: %s", BRIDGE_AGENT_BUILD);
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
 
     MoveTo(8, 52);
+    snprintf(buf, sizeof(buf), "Heartbeat: %d", gHeartbeat);
+    pbuf[0] = (unsigned char)strlen(buf);
+    memcpy(pbuf + 1, buf, pbuf[0]);
+    DrawString(pbuf);
+
+    MoveTo(8, 68);
     snprintf(buf, sizeof(buf), "Commands: %d  last err: %d",
              gCmdCount, (int)gLastResult);
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
 
-    MoveTo(8, 68);
+    MoveTo(8, 84);
     DrawString("\pLast cmd: ");
     DrawString(gLastCmd);
 
@@ -86,12 +152,14 @@ static void draw_status(void)
 static void open_status_window(void)
 {
     Rect bounds;
-    SetRect(&bounds, 40, 60, 360, 160);
+    SetRect(&bounds, 40, 60, 400, 180);
     gStatusWin = NewWindow(NULL, &bounds, "\pBridgeAgent",
                            true, documentProc, (WindowPtr)-1, true, 0);
 }
 
 /* ---------- Bridge command handlers ---------- */
+
+static void bridge_step(const char *tag);
 
 static OSErr do_launch(const unsigned char *path)
 {
@@ -256,14 +324,166 @@ static OSErr do_open_document(const unsigned char *path)
     return err;
 }
 
-static OSErr do_quit_front(void)
-{
-    ProcessSerialNumber psn;
-    OSErr err = GetFrontProcess(&psn);
-    if (err != noErr) return err;
+/* Send kAEQuitApplication to an arbitrary PSN. The caller supplies the
+ * target because we self-foreground before dispatching bridge commands, so
+ * GetFrontProcess at send-time would return us (the bridge agent), not the
+ * user's original frontmost app. */
+/* Pending-clipboard state machine.
+ *
+ * SetFrontProcess is asynchronous: it schedules a front-switch that actually
+ * happens when BridgeAgent next yields through the Event Manager AND the
+ * outgoing app also yields. PutScrap run inline right after SetFrontProcess
+ * executes while BridgeAgent is still background from Scrap Manager's view —
+ * the write lands in the desk scrap but target apps won't sync it because no
+ * activate/deactivate cycle has occurred yet.
+ *
+ * So we split into two phases:
+ *   Phase 1 (do_set_clipboard): read file into handle, request SetFrontProcess,
+ *     stash pending state, return noErr immediately.
+ *   Phase 2 (commit_pending_clip, called each tick from main loop):
+ *     GetFrontProcess == self? If yes, we've actually reached foreground.
+ *     Now ZeroScrap + PutScrap; target apps that saw our activate event will
+ *     refresh their private TE scrap on next activate cycle.
+ *
+ * Switch-back is intentionally NOT done — leaves BridgeAgent frontmost so the
+ * user can verify the clip landed. We can add swap-back once transfer works. */
+static Boolean gClipPending = false;
+static Handle  gClipData    = NULL;  /* HLock'd while pending */
+static long    gClipLen     = 0;
 
+static void discard_pending_clip(void)
+{
+    if (gClipData) {
+        HUnlock(gClipData);
+        DisposeHandle(gClipData);
+        gClipData = NULL;
+    }
+    gClipLen = 0;
+    gClipPending = false;
+}
+
+/* Called each main-loop tick. If there's a pending SET_CLIPBOARD and
+ * BridgeAgent is genuinely the front process now, commit the PutScrap. */
+static void commit_pending_clip(void)
+{
+    if (!gClipPending || !gClipData) return;
+
+    ProcessSerialNumber front, self = {0, kCurrentProcess};
+    if (GetFrontProcess(&front) != noErr) return;
+    Boolean same = false;
+    if (SameProcess(&front, &self, &same) != noErr || !same) {
+        return; /* not front yet — try again next tick */
+    }
+
+    char dbg[96];
+    long size_before  = *(volatile long  *)0x0960;
+    short count_before = *(volatile short *)0x0968;
+
+    long zret    = ZeroScrap();
+    long put_err = PutScrap(gClipLen, 'TEXT', *gClipData);
+
+    long size_after  = *(volatile long  *)0x0960;
+    short count_after = *(volatile short *)0x0968;
+
+    snprintf(dbg, sizeof(dbg),
+             "commit_clip: len=%ld z=%ld p=%ld sz %ld->%ld cnt %d->%d",
+             gClipLen, zret, put_err,
+             size_before, size_after, (int)count_before, (int)count_after);
+    bridge_step(dbg);
+
+    discard_pending_clip();
+}
+
+/* Load Host:_bridge_clipboard into a locked handle, stash as pending, and
+ * ask Process Manager to bring BridgeAgent to front. Actual PutScrap happens
+ * later in commit_pending_clip once GetFrontProcess confirms we're foreground.
+ *
+ * prior_front is accepted for signature parity but is unused for now (no
+ * switch-back yet). */
+static OSErr do_set_clipboard(const ProcessSerialNumber *prior_front)
+{
+    (void)prior_front;
+    char dbg[96];
+    FSSpec spec;
+    OSErr err = FSMakeFSSpec(0, 0, "\pHost:_bridge_clipboard", &spec);
+    if (err != noErr) {
+        snprintf(dbg, sizeof(dbg), "set_clip: FSMakeFSSpec err=%d", (int)err);
+        bridge_step(dbg);
+        return err;
+    }
+
+    short ref;
+    err = FSpOpenDF(&spec, fsRdPerm, &ref);
+    if (err != noErr) {
+        snprintf(dbg, sizeof(dbg), "set_clip: FSpOpenDF err=%d", (int)err);
+        bridge_step(dbg);
+        return err;
+    }
+
+    long size = 0;
+    err = GetEOF(ref, &size);
+    if (err != noErr || size < 0) {
+        FSClose(ref);
+        snprintf(dbg, sizeof(dbg), "set_clip: GetEOF err=%d size=%ld", (int)err, size);
+        bridge_step(dbg);
+        return (err != noErr) ? err : paramErr;
+    }
+
+    /* Drop any previous pending clip before we load the new one. */
+    discard_pending_clip();
+
+    if (size == 0) {
+        FSClose(ref);
+        /* Empty: just request foreground, commit will ZeroScrap with zero len. */
+        gClipData = NewHandle(0);
+        if (!gClipData) {
+            bridge_step("set_clip: NewHandle(0) failed");
+            return memFullErr;
+        }
+        HLock(gClipData);
+        gClipLen = 0;
+        gClipPending = true;
+    } else {
+        Handle h = NewHandle(size);
+        if (!h) {
+            FSClose(ref);
+            bridge_step("set_clip: NewHandle failed");
+            return memFullErr;
+        }
+        HLock(h);
+        long rlen = size;
+        err = FSRead(ref, &rlen, *h);
+        FSClose(ref);
+        if (err != noErr && err != eofErr) {
+            HUnlock(h);
+            DisposeHandle(h);
+            snprintf(dbg, sizeof(dbg), "set_clip: FSRead err=%d", (int)err);
+            bridge_step(dbg);
+            return err;
+        }
+        gClipData = h;
+        gClipLen  = rlen;
+        gClipPending = true;
+    }
+
+    FSpDelete(&spec); /* file is single-shot; bytes are in the pending handle */
+
+    /* Ask Process Manager for the front slot. If we're already front this is
+     * a no-op and commit_pending_clip will fire on the very next tick. */
+    ProcessSerialNumber self = {0, kCurrentProcess};
+    OSErr sfp_err = SetFrontProcess(&self);
+
+    snprintf(dbg, sizeof(dbg), "set_clip: pending len=%ld sfp=%d",
+             gClipLen, (int)sfp_err);
+    bridge_step(dbg);
+
+    return noErr;
+}
+
+static OSErr do_quit_target(const ProcessSerialNumber *psn)
+{
     AEAddressDesc target;
-    err = AECreateDesc(typeProcessSerialNumber, &psn, sizeof(psn), &target);
+    OSErr err = AECreateDesc(typeProcessSerialNumber, psn, sizeof(*psn), &target);
     if (err != noErr) return err;
 
     AppleEvent evt, reply;
@@ -380,11 +600,16 @@ static void write_heartbeat(void)
         for (int i = 0; i < clen; i++)
             if (last_cmd[i] == '"' || last_cmd[i] == '\\') last_cmd[i] = '_';
 
-        char buf[256];
+        char buf[384];
         long len = snprintf(buf, sizeof(buf),
-            "{\"heartbeat\":%d,\"commands\":%d,"
-            "\"last_result\":%d,\"last_cmd\":\"%s\"}\r",
-            gHeartbeat, gCmdCount, (int)gLastResult, last_cmd);
+            "{\"build\":\"%s\","
+            "\"heartbeat\":%d,\"commands\":%d,"
+            "\"last_result\":%d,\"last_cmd\":\"%s\","
+            "\"wne_total\":%lu,\"wne_other\":%lu}\r",
+            BRIDGE_AGENT_BUILD,
+            gHeartbeat, gCmdCount, (int)gLastResult, last_cmd,
+            (unsigned long)SCR_U32(kWNECountTotal),
+            (unsigned long)SCR_U32(kWNECountOther));
         SetEOF(ref, 0);
         FSWrite(ref, &len, buf);
         FSClose(ref);
@@ -440,7 +665,17 @@ static void poll_bridge(void)
     gLastCmd[0] = (unsigned char)vlen;
     memcpy(gLastCmd + 1, cmd, vlen);
 
+    /* Capture the frontmost process so QUIT can target it. We do not
+     * self-foreground: our bridge commands (LaunchApplication, AESend,
+     * ShutDwnPower/Start) work from any scheduling context, and forcing a
+     * front-process switch dirties CurApName in a way that's hard to
+     * reliably restore. `canBackground` in the SIZE resource is what
+     * lets us poll responsively from the background. */
+    ProcessSerialNumber prior_front;
+    GetFrontProcess(&prior_front);
+
     OSErr result = -1;
+
     if (strncmp(cmd, "LAUNCH ", 7) == 0) {
         int len = (int)strlen(cmd + 7);
         while (len > 0 && (cmd[7+len-1] == '\n' || cmd[7+len-1] == '\r'
@@ -466,7 +701,9 @@ static void poll_bridge(void)
     } else if (strncmp(cmd, "RESTART", 7) == 0) {
         result = do_system_event(kAERestart);
     } else if (strncmp(cmd, "QUIT", 4) == 0) {
-        result = do_quit_front();
+        result = do_quit_target(&prior_front);
+    } else if (strncmp(cmd, "SET_CLIPBOARD", 13) == 0) {
+        result = do_set_clipboard(&prior_front);
     }
 
     gCmdCount++;
@@ -618,12 +855,29 @@ int main(void)
     install_ae_handlers();
     open_status_window();
     draw_status();
+    install_wne_patch();
+
+    /* Creating a visible window during startup yanked us to front. Hand
+     * focus back to Finder so we run as a true background agent; bridge
+     * commands will self-foreground explicitly when they arrive. Give
+     * Finder a tick to register in the process list before we query. */
+    {
+        unsigned long ticks;
+        Delay(6, &ticks);
+        ProcessSerialNumber finder_psn;
+        if (psn_for_creator('MACS', &finder_psn) == noErr) {
+            SetFrontProcess(&finder_psn);
+        }
+    }
 
     EventRecord evt;
     while (gRunning) {
         if (WaitNextEvent(everyEvent, &evt, 6, NULL))
             handle_event(&evt);
         poll_bridge();
+        commit_pending_clip();
     }
+
+    remove_wne_patch();
     return 0;
 }

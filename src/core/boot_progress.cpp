@@ -921,22 +921,44 @@ static void serialize_mac_state(char *buf, int bufsize)
 			}
 			pos += snprintf(buf + pos, bufsize - pos, "]");
 
-			/* Locate TEXT chunk and emit ASCII (defer MacRoman codec). */
+			/* Locate TEXT chunk and emit the raw MacRoman bytes as base64.
+			 * The browser decodes with TextDecoder('macintosh'); host stays
+			 * encoding-agnostic. Cap at 1024 bytes so base64 output
+			 * (~1368 chars) fits comfortably inside the 2048-byte state
+			 * buffer alongside the other fields. */
 			off = 0;
 			while (off + 8 <= scrap_size && off + 8 <= RAMSize - scrap_ptr) {
 				uint32_t type = ReadMacInt32(scrap_ptr + off);
 				uint32_t clen = ReadMacInt32(scrap_ptr + off + 4);
 				if (clen > scrap_size || off + 8 + clen > scrap_size) break;
 				if (type == 0x54455854 /* 'TEXT' */) {
-					uint32_t emit_len = clen < 256 ? clen : 256;
+					uint32_t emit_len = clen < 1024 ? clen : 1024;
 					if (emit_len > RAMSize - (scrap_ptr + off + 8))
 						emit_len = RAMSize - (scrap_ptr + off + 8);
-					pos += snprintf(buf + pos, bufsize - pos, ",\"text\":\"");
-					for (uint32_t i = 0; i < emit_len && pos < bufsize - 8; i++) {
-						uint8_t c = ReadMacInt8(scrap_ptr + off + 8 + i);
-						if (c == '\r') { pos += snprintf(buf + pos, bufsize - pos, "\\n"); continue; }
-						if (c == '"' || c == '\\') buf[pos++] = '\\';
-						buf[pos++] = (c >= 0x20 && c <= 0x7e) ? (char)c : '?';
+					static const char b64[] =
+						"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+					pos += snprintf(buf + pos, bufsize - pos,
+						",\"text_len\":%u,\"text_b64\":\"", emit_len);
+					uint32_t src = scrap_ptr + off + 8;
+					uint32_t i = 0;
+					while (i + 3 <= emit_len && pos < bufsize - 6) {
+						uint32_t v = (ReadMacInt8(src + i) << 16)
+						           | (ReadMacInt8(src + i + 1) << 8)
+						           |  ReadMacInt8(src + i + 2);
+						buf[pos++] = b64[(v >> 18) & 0x3f];
+						buf[pos++] = b64[(v >> 12) & 0x3f];
+						buf[pos++] = b64[(v >> 6)  & 0x3f];
+						buf[pos++] = b64[ v        & 0x3f];
+						i += 3;
+					}
+					if (i < emit_len && pos < bufsize - 6) {
+						uint32_t rem = emit_len - i;
+						uint32_t v = ReadMacInt8(src + i) << 16;
+						if (rem == 2) v |= ReadMacInt8(src + i + 1) << 8;
+						buf[pos++] = b64[(v >> 18) & 0x3f];
+						buf[pos++] = b64[(v >> 12) & 0x3f];
+						buf[pos++] = (rem == 2) ? b64[(v >> 6) & 0x3f] : '=';
+						buf[pos++] = '=';
 					}
 					pos += snprintf(buf + pos, bufsize - pos, "\"");
 					break;

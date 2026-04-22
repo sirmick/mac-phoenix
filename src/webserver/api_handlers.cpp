@@ -152,6 +152,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     if (req.path == "/api/wait" && req.method == "POST") {
         return handle_wait(req);
     }
+    if (req.path == "/api/clipboard" && req.method == "POST") {
+        return handle_clipboard_set(req);
+    }
     if (req.path == "/api/frame" && req.method == "GET") {
         return handle_frame(req);
     }
@@ -1356,6 +1359,72 @@ Response APIRouter::handle_launch(const Request& req) {
 Response APIRouter::handle_quit(const Request& req) {
     (void)req;
     return bridge_command("QUIT", 30);
+}
+
+// POST /api/clipboard — write raw MacRoman bytes (base64-encoded in body)
+// into the guest's scrap via BridgeAgent. Browser does the UTF-8↔MacRoman
+// translation; the host just pipes bytes through.
+Response APIRouter::handle_clipboard_set(const Request& req) {
+    nlohmann::json j;
+    try {
+        j = json_utils::parse(req.body);
+    } catch (const std::exception&) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"invalid JSON\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+    if (!j.contains("text_b64") || !j["text_b64"].is_string()) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"missing 'text_b64' field\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+
+    // base64 decode
+    const std::string& b64 = j["text_b64"].get_ref<const std::string&>();
+    static const int8_t b64_tab[256] = {
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
+        52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,
+        -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
+        15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
+        -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+        41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,
+    };
+    std::string bytes;
+    bytes.reserve(b64.size() * 3 / 4);
+    int buf_val = 0, buf_bits = 0;
+    for (char c : b64) {
+        if (c == '=' || c == '\n' || c == '\r' || c == ' ') continue;
+        int v = b64_tab[(uint8_t)c];
+        if (v < 0) {
+            Response r; r.set_status(400);
+            r.set_body("{\"error\": \"invalid base64\"}");
+            r.set_content_type("application/json");
+            return r;
+        }
+        buf_val = (buf_val << 6) | v;
+        buf_bits += 6;
+        if (buf_bits >= 8) {
+            buf_bits -= 8;
+            bytes.push_back((char)((buf_val >> buf_bits) & 0xff));
+        }
+    }
+    if (bytes.size() > 65536) {
+        return Response::json(
+            "{\"success\": false, \"error\": \"clipboard too large (>64KB)\"}");
+    }
+
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+        return Response::json(
+            "{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
+    }
+
+    bridge_write_file(cfg.bridge_dir, "_bridge_clipboard", bytes);
+    return bridge_command("SET_CLIPBOARD", 30);
 }
 
 Response APIRouter::handle_wait(const Request& req) {

@@ -407,7 +407,7 @@ This gives fast iteration for compilation, with MacPhoenix used only for testing
 
 ### Phase 2: EmulOp Bridge — DONE (different design)
 The actual implementation uses a simpler mailbox + jGNEFilter design instead of the 0x7180 sub-operation protocol described above:
-- [x] EmulOp `M68K_EMUL_OP_CMD_DISPATCH` (0x7139) in `emul_op.cpp`
+- [x] EmulOp `M68K_EMUL_OP_BRIDGE_REGISTER` (0x7139) / `_UNREGISTER` (0x713A) in `emul_op.cpp`
 - [x] Command bridge with mailbox in ScratchMem (`command_bridge.cpp`)
 - [x] jGNEFilter for app-context dispatch
 - [x] `/api/launch`, `/api/quit`, `/api/app`, `/api/windows`, `/api/wait` endpoints

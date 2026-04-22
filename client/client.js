@@ -16,7 +16,7 @@ const CONSTANTS = {
     STATS_UPDATE_INTERVAL_MS: 1000,
     LATENCY_LOG_INTERVAL_MS: 3000,
     DETAILED_STATS_INTERVAL_MS: 3000,
-    STATUS_POLL_INTERVAL_MS: 2000,
+    STATUS_POLL_INTERVAL_MS: 125,
     TRACK_READY_CHECK_INTERVAL_MS: 2000,
     FRAME_DETECTION_INTERVAL_MS: 1000,
 
@@ -4527,8 +4527,155 @@ async function pollEmulatorStatus() {
             macStateEl.textContent = JSON.stringify(data, null, 2);
         }
 
+        // Update Clipboard tab from Mac scrap
+        syncClipboardFromStatus(data);
+
     } catch (e) {
         // Silently fail status polling
+    }
+}
+
+// --- MacRoman <-> UTF-16 helpers ---------------------------------------
+// Browsers ship WHATWG 'macintosh' decoder; no encoder, so hand-roll reverse.
+const MAC_ROMAN_DECODER = new TextDecoder('macintosh');
+
+// 0x80..0xFF → Unicode code point (WHATWG "macintosh" table).
+const MAC_ROMAN_HIGH = [
+    0x00C4,0x00C5,0x00C7,0x00C9,0x00D1,0x00D6,0x00DC,0x00E1,
+    0x00E0,0x00E2,0x00E4,0x00E3,0x00E5,0x00E7,0x00E9,0x00E8,
+    0x00EA,0x00EB,0x00ED,0x00EC,0x00EE,0x00EF,0x00F1,0x00F3,
+    0x00F2,0x00F4,0x00F6,0x00F5,0x00FA,0x00F9,0x00FB,0x00FC,
+    0x2020,0x00B0,0x00A2,0x00A3,0x00A7,0x2022,0x00B6,0x00DF,
+    0x00AE,0x00A9,0x2122,0x00B4,0x00A8,0x2260,0x00C6,0x00D8,
+    0x221E,0x00B1,0x2264,0x2265,0x00A5,0x00B5,0x2202,0x2211,
+    0x220F,0x03C0,0x222B,0x00AA,0x00BA,0x03A9,0x00E6,0x00F8,
+    0x00BF,0x00A1,0x00AC,0x221A,0x0192,0x2248,0x2206,0x00AB,
+    0x00BB,0x2026,0x00A0,0x00C0,0x00C3,0x00D5,0x0152,0x0153,
+    0x2013,0x2014,0x201C,0x201D,0x2018,0x2019,0x00F7,0x25CA,
+    0x00FF,0x0178,0x2044,0x20AC,0x2039,0x203A,0xFB01,0xFB02,
+    0x2021,0x00B7,0x201A,0x201E,0x2030,0x00C2,0x00CA,0x00C1,
+    0x00CB,0x00C8,0x00CD,0x00CE,0x00CF,0x00CC,0x00D3,0x00D4,
+    0xF8FF,0x00D2,0x00DA,0x00DB,0x00D9,0x0131,0x02C6,0x02DC,
+    0x00AF,0x02D8,0x02D9,0x02DA,0x00B8,0x02DD,0x02DB,0x02C7,
+];
+
+let _macRomanEncodeMap = null;
+function macRomanEncodeMap() {
+    if (_macRomanEncodeMap) return _macRomanEncodeMap;
+    const m = new Map();
+    for (let i = 0; i < MAC_ROMAN_HIGH.length; i++) m.set(MAC_ROMAN_HIGH[i], 0x80 + i);
+    _macRomanEncodeMap = m;
+    return m;
+}
+
+function encodeMacRoman(str) {
+    const map = macRomanEncodeMap();
+    // Normalize newlines to CR (Classic Mac line ending) before encoding.
+    const s = str.replace(/\r\n/g, '\r').replace(/\n/g, '\r');
+    const out = new Uint8Array(s.length * 2);
+    let n = 0;
+    for (let i = 0; i < s.length; i++) {
+        let cp = s.charCodeAt(i);
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < s.length) {
+            const low = s.charCodeAt(i + 1);
+            if (low >= 0xDC00 && low <= 0xDFFF) {
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                i++;
+            }
+        }
+        if (cp < 0x80) out[n++] = cp;
+        else {
+            const b = map.get(cp);
+            out[n++] = (b !== undefined) ? b : 0x3F; // '?'
+        }
+    }
+    return out.subarray(0, n);
+}
+
+function bytesToBase64(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+}
+
+function base64ToBytes(b64) {
+    const s = atob(b64);
+    const out = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+}
+
+let _lastClipboardB64 = null;
+let _lastScrapCount = null;     // most recent ScrapCount seen in poll
+let _sendBaseCount = null;       // ScrapCount captured at POST time; null = not awaiting
+let _sendDeadline = 0;           // ms timestamp; fallback release after this
+function syncClipboardFromStatus(data) {
+    const ta = document.getElementById('clipboard-text');
+    if (!ta) return;
+    const scrap = data?.mac?.scrap;
+    const b64 = scrap?.text_b64;
+    const count = scrap?.count;
+    if (typeof count === 'number') _lastScrapCount = count;
+    if (typeof b64 !== 'string') return;
+
+    // After a Send, suppress textarea updates until ScrapCount advances (Mac
+    // accepted our PutScrap) or a 5s fallback elapses. Without this gate, a
+    // status poll between POST and the BridgeAgent applying the scrap would
+    // stomp the textarea with the pre-send value.
+    if (_sendBaseCount !== null) {
+        if (typeof count === 'number' && count !== _sendBaseCount) {
+            _sendBaseCount = null;
+        } else if (Date.now() > _sendDeadline) {
+            _sendBaseCount = null;
+        } else {
+            return;
+        }
+    }
+
+    if (b64 === _lastClipboardB64) return;
+    if (document.activeElement === ta) return; // don't stomp while user edits
+    _lastClipboardB64 = b64;
+    try {
+        const bytes = base64ToBytes(b64);
+        // MacRoman → UTF-16; then CR → LF for textarea display.
+        const text = MAC_ROMAN_DECODER.decode(bytes).replace(/\r/g, '\n');
+        ta.value = text;
+        const statusEl = document.getElementById('clipboard-status');
+        if (statusEl) statusEl.textContent = `Mac clipboard (${bytes.length} bytes)`;
+    } catch (e) {
+        // ignore decode errors
+    }
+}
+
+async function sendClipboardToMac() {
+    const ta = document.getElementById('clipboard-text');
+    if (!ta) return;
+    const bytes = encodeMacRoman(ta.value);
+    const b64 = bytesToBase64(bytes);
+    const statusEl = document.getElementById('clipboard-status');
+    const btn = document.getElementById('clipboard-send-btn');
+    if (btn) btn.disabled = true;
+    // Gate status-driven updates until scrap.count advances past the baseline.
+    _sendBaseCount = _lastScrapCount;
+    _sendDeadline = Date.now() + 5000;
+    try {
+        const res = await fetch('/api/clipboard', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text_b64: b64}),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.success === false) {
+            if (statusEl) statusEl.textContent = `Send failed: ${j.error || res.status}`;
+            _sendBaseCount = null; // release gate on failure
+        } else {
+            if (statusEl) statusEl.textContent = `Sent ${bytes.length} bytes to Mac`;
+        }
+    } catch (e) {
+        if (statusEl) statusEl.textContent = `Send error: ${e.message || e}`;
+        _sendBaseCount = null;
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
@@ -4583,6 +4730,9 @@ function setupEventListeners() {
     // Debug panel
     const clearLogBtn = document.getElementById('clear-log-btn');
     if (clearLogBtn) clearLogBtn.addEventListener('click', clearLog);
+
+    const clipboardSendBtn = document.getElementById('clipboard-send-btn');
+    if (clipboardSendBtn) clipboardSendBtn.addEventListener('click', sendClipboardToMac);
 
     const debugTabs = document.querySelectorAll('.debug-tab');
     debugTabs.forEach(tab => {

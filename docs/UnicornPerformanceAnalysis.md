@@ -90,14 +90,75 @@ analysis showed 68k's `TB_JMP_CACHE_BITS 12→16` didn't help 68k; the
 same experiment on PPC may be more productive given how much time
 lookup consumes here.
 
+### Instrumented counter follow-up (2026-04-20, 68k, 29 s run)
+
+A longer 29 s run (boot plus subsequent workload) on the post-late-9b binary:
+
+```
+Wall time in uc_emu_start():    29.426 s  (2415 calls, 12184.7 us/call)
+  hook_block() total:           0.000 s  ( 0.0%)  (893787811 calls, 0.0 us/call)
+  hook_interrupt() total:      13.056 s  (44.4%)  (752976 EmulOps, 17.3 us/op)
+  JIT execution (estimated):   16.370 s  (55.6%)
+  tb_find() calls:            5373738
+    tb_gen_code (compile):     3826155 (71.2%)
+  Code buffer full flushes:   0
+  uc_emu_start() restarts:    2415 (82.1/sec)
+```
+
+Three observations the counter dump hides:
+
+**`hook_block() 0.000 s / 0.0 us/call` is a reporting artifact, not reality.**
+`perf_now_ns()` is gated behind `MACEMU_DEBUG_PERF` (unicorn_wrapper.c:35;
+see optimization #4) — that gate zeros `hook_block_ns` but does not skip
+the hook itself. All 893 M TB executions still pay the TCG-emitted
+indirect call + host register save/restore around the callback. At
+~5–10 ns per call that is **~4–9 s of hidden overhead** rolled into the
+"JIT execution 16.4 s" line. The flame graph's `hook_block` 1.15 % self
+only covers the function *body*; the dispatch trampoline and the TCG
+code emitting the call are attributed elsewhere (or lost inside
+JIT-emitted blocks that DWARF-based `perf` can't symbolize).
+
+**`uc_reg_write(UC_M68K_REG_PC)` in `hook_interrupt` causes a redundant
+`break_translation_loop`.** The A-line exception already exited the
+current TB; `uc_reg_write(PC)` then sets `uc->quit_request` and calls
+`cpu_exit()` (uc.c:723–727), forcing an extra `tb_find()` round-trip per
+EmulOp. Combined with the standard Unicorn API tax (each of
+`uc_reg_read` / `uc_mem_read` / `uc_reg_write` runs `UC_INIT` +
+`restore_jit_state`), the three API calls per EmulOp account for an
+estimated **2–4 s of the reported 13 s `hook_interrupt` cost**. Direct
+access via `uc->cpu->env_ptr->pc` plus `RAMBaseHost[pc]` sidesteps both
+taxes and the redundant `cpu_exit`.
+
+**The 71 % `tb_find` compile rate is *not* SMC-driven.** March's
+baseline was 83.9 %; the new run at 71 % is slightly better because
+more code is warm by the time the second workload starts. Optimization
+#13 already established that disabling SMC detection in
+`notdirty_write()` produced zero measurable change, so the compile
+rate is bounded by "unique code addresses the OS touches," not by
+`tb_phys_invalidate`. Exposing `tcg_tb_phys_invalidate_count_m68k()`
+(symbol in `qemu/tcg/tcg.c:588`) in `unicorn_print_perf_counters()`
+would confirm this in the dump itself rather than relying on the #13
+toggle experiment.
+
 ### Updated optimization priorities (post-2026-04-20 profile)
 
 1. **Disable `last_pc_cb` by default on PPC** (trivial; save ~6.58% on PPC).
-2. **Restore `cpu_physical_memory_set_dirty_flag`** (task #14; save
+2. **Replace `UC_HOOK_BLOCK` on 68k with QEMU's native interrupt path**
+   (move IRQ delivery to `cpu->interrupt_request` +
+   `cc->tcg_ops->cpu_exec_interrupt`; deferred register updates already
+   run from `hook_interrupt`). Biggest structural lever identified in
+   the counter follow-up. **Estimated: 4–9 s reclaim (14–30 % of 68 k
+   emu time).**
+3. **Direct `env_ptr` / `RAMBaseHost` access in `hook_interrupt`.** Drop
+   the three `uc_*` API calls per EmulOp; removes the redundant
+   `break_translation_loop` on PC writes. **Estimated: 2–4 s reclaim.**
+4. **Restore `cpu_physical_memory_set_dirty_flag`** (task #14; save
    ~14% on PPC, ~3% on 68k).
-3. **Enlarge TB_JMP_CACHE on PPC** (retry the March experiment that
+5. **Expose `tb_phys_invalidate_count` in the perf dump.** One-line
+   diagnostic; closes out the SMC question definitively.
+6. **Enlarge TB_JMP_CACHE on PPC** (retry the March experiment that
    didn't help 68k; save ~3-5% if successful).
-4. **TB compilation caching** (unchanged; still the highest-impact
+7. **TB compilation caching** (unchanged; still the highest-impact
    large investment).
 
 ## Historical baseline (March 2026)
@@ -334,6 +395,13 @@ TB compilation — confirming this requires a fresh flame-graph profile
 Both backends boot to Mac OS 7.5.5 Finder desktop. UAE is faster for end users; Unicorn's value is as an independent M68K implementation for validation and as a path toward future improvements.
 
 **Next steps (in order of effort vs impact):**
-1. Fresh flame-graph profile of post-late-9b binary to re-prioritize (task #17)
-2. Restore `cpu_physical_memory_set_dirty_flag()` — small, reduces residual `notdirty_write` cost
-3. TB compilation caching (persist compiled blocks across runs) — high effort but would eliminate the dominant compilation overhead on subsequent boots
+1. Replace `UC_HOOK_BLOCK` with QEMU's native `cpu->interrupt_request` +
+   `cc->tcg_ops->cpu_exec_interrupt` path — biggest hidden cost from the
+   2026-04-20 follow-up (est. 4–9 s reclaim)
+2. Direct `env_ptr` / `RAMBaseHost` access in `hook_interrupt`, removing the
+   three `uc_*` calls + redundant `break_translation_loop` per EmulOp
+   (est. 2–4 s reclaim)
+3. Expose `tcg_tb_phys_invalidate_count_m68k()` in the perf dump (trivial
+   diagnostic; settles the SMC question inline)
+4. Restore `cpu_physical_memory_set_dirty_flag()` — small, reduces residual `notdirty_write` cost
+5. TB compilation caching (persist compiled blocks across runs) — high effort but would eliminate the dominant compilation overhead on subsequent boots
