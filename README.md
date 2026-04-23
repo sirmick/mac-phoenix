@@ -19,7 +19,8 @@ Most-tested guest OS versions: **System 6.0.8**, **System 7.5.5**, **Mac OS 7.6.
 - **Single-port deploy** — HTTP, WebSocket signaling, PNG/WebP frames, and the HTTP-stream fallback all share one TCP listener; trivial to put behind nginx or Caddy
 - **Three transport modes** — WebSocket for PNG/WebP (works through any HTTPS proxy), HTTP long-poll for locked-down networks, WebRTC RTP for H.264/VP9 on LAN
 - **REST API** — boot status, screenshots, config, app launching, and control via HTTP endpoints
-- **Automation bridge** — launch classic apps, graceful guest shutdown and restart, with clipboard integration on the roadmap
+- **Automation bridge** — launch classic apps, graceful guest shutdown and restart, and bidirectional TEXT-scrap clipboard sync between browser and Mac OS
+- **Optional audio** — opt-in Opus-encoded audio streaming over WebRTC (`--audio`)
 - **NAT networking** — optional Unix-socket bridge (smoltcp + NAT) so the guest can reach the Internet without root
 - **Headless mode** — run without any UI for testing and automation
 
@@ -186,7 +187,7 @@ Everything you need for day-to-day use lives in the browser. The top toolbar has
 - **Settings** — machine/ROM/RAM/disks/CDs/screen + an advanced section for CPU backend, FPU, JIT, network, and the automation bridge.
 - **Start / Power Off ▾ / Reset ▾** — the split buttons distinguish a hard kill (immediate `SIGTERM`) from a graceful **Shut Down…** / **Restart…** (routed through the bridge — see below).
 - **Debug** — invokes the Programmer's Key (NMI on 68K, Cmd+Power on PPC).
-- **Logs** — toggles a live debug / stats pane.
+- **Logs** — toggles a live debug pane with tabs for **Clipboard** (bidirectional TEXT scrap sync with the host / browser), **Log**, **Stats**, **WebRTC**, and **Mac** (scrap, WindowList, and command-bridge state).
 - **Fullscreen**.
 
 The Settings dialog supports named presets and saves changes into `~/.config/mac-phoenix/config.json`. Most changes take effect on the next emulator start; codec and mouse mode apply immediately.
@@ -219,7 +220,8 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 | `mousemode` | `"absolute"` | `"absolute"` or `"relative"` |
 | `http_port` | `11000` | Serves HTTP, `/ws` WebSocket signaling + frames, and `/api/frame` long-poll — one port |
 | `bridge_enabled` | `false` | Enable the automation bridge (see below) |
-| `dismiss_shutdown_dialog` | `false` | Auto-dismiss the improper-shutdown dialog on boot |
+| `audio` | `false` | Enable Opus audio emulation (opt-in) |
+| `dismiss_shutdown_dialog` | `true` | Auto-dismiss the improper-shutdown dialog on boot (set `false` if you want to see it) |
 | `log_level` | `0` | 0 = milestones, 3 = + registers |
 
 Arch-specific fields live under `m68k` / `ppc` sub-objects (`cpu_type`, `fpu`, `modelid`, `jit`, `idlewait`, `ignoresegv`, `swap_opt_cmd`, `keyboardtype`, …). See [docs/JsonConfig.md](docs/JsonConfig.md) for the full schema.
@@ -242,9 +244,11 @@ Arch-specific fields live under `m68k` / `ppc` sub-objects (`cpu_type`, `fpu`, `
   --no-webserver             Headless mode (no HTTP / WebRTC)
   --network MODE             Network: none | socket[:<unix-socket-path>]
   --bridge                   Enable the automation bridge (BridgeAgent + ExtFS)
+  --audio                    Enable audio emulation (Opus over WebRTC; default: off)
   --config PATH              JSON config file (use /dev/null to ignore user config)
   --zap-pram                 Clear PRAM on startup
-  --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog on boot
+  --dismiss-shutdown-dialog / --no-dismiss-shutdown-dialog
+                             Auto-dismiss the improper-shutdown dialog on boot (default: on)
   --screenshots              Dump PPM framebuffer snapshots to /tmp
   --log-level N              Log verbosity 0-3
   --debug-connection         Log WebRTC connection details
@@ -352,6 +356,7 @@ Read-only:
 | `/api/codecs` | GET | Available codecs + which ones were compiled in |
 | `/api/app` | GET | Current foreground application (bridge read command) |
 | `/api/windows` | GET | Window list as JSON (bridge read command) |
+| `/api/status` includes `mac.scrap` | — | Current Mac OS TEXT scrap (MacRoman → UTF-8) — host-side clipboard mirror |
 
 Control / input:
 
@@ -361,6 +366,7 @@ Control / input:
 | `/api/mouse` | POST | Absolute `{"x":N,"y":N}` or relative `{"dx":N,"dy":N}` |
 | `/api/keypress` | POST | `{"key":"return"}` or raw Mac keycode `{"key":36}` |
 | `/api/codec` | POST | Switch video codec |
+| `/api/clipboard` | POST | Write host → Mac OS TEXT scrap (MacRoman-encoded) |
 | `/api/emulator/start` | POST | Start CPU execution |
 | `/api/emulator/stop` | POST | Stop CPU execution |
 | `/api/invoke-debug` | POST | Programmer's Key (NMI / Cmd+Power) |
@@ -433,7 +439,7 @@ ctest --test-dir build
 ctest --test-dir build -V -R api_endpoints
 ```
 
-Tests pick up the ROM and a disk image from `MACEMU_ROM` / `MACEMU_DISK` (or `-DTEST_ROM=...` at `cmake -B build` time). Defaults assume `~/roms/quadra.rom` and `~/storage/images/7.6.img`.
+Tests pick up the ROM and a disk image from `MACEMU_ROM` / `MACEMU_DISK` (or `-DTEST_ROM=...` at `cmake -B build` time). Defaults assume `~/roms/quadra.rom` and the 7.5.5 image; each test run refreshes `~/storage/images/test-macos-7.5.5.img` from `macos-7.5.5.img.bak` (via `tests/lib/refresh_test_disk.sh`) so the pristine image is never mutated.
 
 ### Guest test suite (standalone)
 
@@ -463,7 +469,7 @@ Browser-level tests (WebRTC handshake, Settings dialog, codec switching, mouse i
 npm install
 npx playwright install chromium
 
-# Run the full suite (~2 min; starts its own emulator per spec)
+# Run the full suite (~5 min; starts its own emulator, runs 54 specs)
 npx playwright test
 
 # Debug / UI modes

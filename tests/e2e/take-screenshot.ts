@@ -12,6 +12,7 @@
  *   --wait <seconds>    Time to wait after boot before screenshot (default: 15)
  *   --port <number>     HTTP port (default: 18094)
  *   --output <path>     Screenshot output path (default: /tmp/screenshot.png)
+ *   --config-output <p> Also open Settings and capture it to <p>
  *   --dismiss-dialog    Press Return to dismiss startup dialog before screenshot
  */
 
@@ -27,6 +28,7 @@ function parseArgs(): {
   wait: number;
   port: number;
   output: string;
+  configOutput: string | null;
   dismissDialog: boolean;
 } {
   const args = process.argv.slice(2);
@@ -37,6 +39,7 @@ function parseArgs(): {
     wait: 15,
     port: 18094,
     output: '/tmp/screenshot.png',
+    configOutput: null as string | null,
     dismissDialog: false,
   };
 
@@ -59,6 +62,9 @@ function parseArgs(): {
         break;
       case '--output':
         result.output = args[++i];
+        break;
+      case '--config-output':
+        result.configOutput = args[++i];
         break;
       case '--dismiss-dialog':
         result.dismissDialog = true;
@@ -131,11 +137,16 @@ async function main() {
     process.exit(1);
   }
 
-  // Build emulator args
+  // Build emulator args. --config /dev/null so we don't inherit the user's
+  // saved machine profile (which may be set to SE/System 6 etc.).
   const emuArgs = [
+    '--config', '/dev/null',
     '--backend', 'uae',
     '--port', String(opts.port),
     '--signaling-port', String(sigPort),
+    '--screen', '640x480',
+    '--ram', '32',
+    '--dismiss-shutdown-dialog',
     opts.rom,
   ];
   for (const disk of opts.disks) {
@@ -154,8 +165,9 @@ async function main() {
   let exitCode = 0;
   try {
     await waitForServer(opts.port);
-    console.log('Server ready, waiting for boot...');
+    console.log('Server ready, starting CPU...');
 
+    await fetch(`http://localhost:${opts.port}/api/emulator/start`, { method: 'POST' });
     await waitForBoot(opts.port);
     console.log('Booted to Finder.');
 
@@ -179,7 +191,11 @@ async function main() {
       headless: true,
       args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
     });
-    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    // Desktop shot: viewport wide enough for the top toolbar (~1050px worth
+    // of buttons) and tall enough to avoid clipping the status bar, but no
+    // more — a 1280×900 viewport drowns the 640×480 Mac in black. Resized
+    // to 1280×900 for the config shot below.
+    const page = await browser.newPage({ viewport: { width: 1100, height: 680 } });
     await page.goto(`http://localhost:${opts.port}`);
     await page.waitForTimeout(3000);
 
@@ -206,6 +222,16 @@ async function main() {
 
     await page.screenshot({ path: opts.output });
     console.log(`Screenshot saved: ${opts.output}`);
+
+    if (opts.configOutput) {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      const configBtn = await page.$('#config-btn');
+      if (!configBtn) throw new Error('Config button not found in UI');
+      await configBtn.click();
+      await page.waitForTimeout(1500);  // let dropdowns populate from /api/storage
+      await page.screenshot({ path: opts.configOutput });
+      console.log(`Config screenshot saved: ${opts.configOutput}`);
+    }
 
     await browser.close();
   } catch (err) {
