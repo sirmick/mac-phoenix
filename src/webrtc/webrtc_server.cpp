@@ -383,9 +383,10 @@ void WebRTCServer::process_signaling(std::shared_ptr<http::WebSocket> ws, const 
             ack["codec"] = codec_name(codec);
             ws->send(ack.dump());
 
-            // For H.264/VP9: onLocalDescription fires automatically after addTrack,
-            // sending an "offer" over ws. PNG/WebP peers have no PC, so no offer —
-            // frames start flowing as soon as the encoder has one ready.
+            // For H.264/VP9: create_peer_connection() calls setLocalDescription()
+            // after addTrack, which drives onLocalDescription → "offer" over ws.
+            // PNG/WebP peers have no PC, so no offer — frames start flowing as
+            // soon as the encoder has one ready.
 
         } else if (type == "answer") {
             std::string sdp = json_utils::get_string(j, "sdp");
@@ -588,6 +589,11 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
 
     // Input events and cursor metadata ride the signaling WebSocket (see onClient
     // binary-dispatch handler and send_video_frame cursor path).
+
+    // Kick negotiation. addTrack() alone does not trigger it in libdatachannel;
+    // the old code got this for free from createDataChannel("metadata", ...),
+    // which was removed with the single-port refactor.
+    peer->pc->setLocalDescription();
 
     // NOTE: Don't set peer->ready here! It's set in video_track->onOpen() callback
     // This ensures we only send frames after the track is actually open
