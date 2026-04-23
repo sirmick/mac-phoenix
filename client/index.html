@@ -448,10 +448,26 @@
                             <option value="socket">NAT (net-bridge)</option>
                         </select>
                     </div>
+                    <div class="form-group" id="cfg-mitm-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-mitm-tls">
+                            <label for="cfg-mitm-tls">Enable MITM TLS proxy (SSLv3/TLS1.0 downgrade for classic browsers)</label>
+                        </div>
+                    </div>
+                    <div class="form-group" id="cfg-mitm-ports-group" style="display:none">
+                        <label for="cfg-mitm-ports">MITM ports (comma-separated)</label>
+                        <input type="text" id="cfg-mitm-ports" placeholder="443">
+                    </div>
+                    <div class="form-group" id="cfg-mitm-ca-dir-group" style="display:none">
+                        <label for="cfg-mitm-ca-dir">MITM CA directory</label>
+                        <input type="text" id="cfg-mitm-ca-dir" placeholder=".mitm_ca">
+                    </div>
                 </div>
 
                 <div class="note-banner">
                     Changes require emulator restart to take effect.
+                    MITM TLS also requires a one-time CA import in the guest browser —
+                    see <code>docs/MitmTlsProxy.md</code>.
                 </div>
             </div>
             <div class="modal-footer">

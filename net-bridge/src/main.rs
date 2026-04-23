@@ -11,7 +11,10 @@ mod dhcp_server;
 mod echo_server;
 mod icmp_proxy;
 mod nat;
+mod sni;
 mod tcp_proxy;
+mod tls_listener;
+mod tls_mitm;
 mod udp_proxy;
 
 use std::os::unix::net::UnixListener;
@@ -25,6 +28,7 @@ use device::SocketDevice;
 use echo_server::EchoServer;
 use icmp_proxy::IcmpNat;
 use tcp_proxy::TcpNat;
+use tls_mitm::{MitmConfig, MitmRuntime};
 use udp_proxy::UdpNat;
 
 /// Gateway (bridge) MAC and IP
@@ -37,11 +41,23 @@ fn main() {
         .format_timestamp_millis()
         .init();
 
-    let sock_path = std::env::args()
-        .skip_while(|a| a != "--socket")
+    let argv: Vec<String> = std::env::args().collect();
+
+    let sock_path = argv
+        .iter()
+        .skip_while(|a| a.as_str() != "--socket")
         .nth(1)
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp/mac-ether.sock"));
+
+    let mitm_cfg = MitmConfig::from_args(argv.iter().skip(1).cloned()).unwrap_or_else(|e| {
+        eprintln!("net-bridge: {}", e);
+        std::process::exit(2);
+    });
+    let mitm = MitmRuntime::from_config(mitm_cfg).unwrap_or_else(|e| {
+        eprintln!("net-bridge: MITM init failed: {}", e);
+        std::process::exit(2);
+    });
 
     // Clean up stale socket
     let _ = std::fs::remove_file(&sock_path);
@@ -72,7 +88,7 @@ fn main() {
 
     let mut sockets = SocketSet::new(vec![]);
     let echo = EchoServer::new(&mut sockets);
-    let mut tcp_nat = TcpNat::new();
+    let mut tcp_nat = TcpNat::new(mitm);
     let mut udp_nat = UdpNat::new();
     let mut icmp_nat = IcmpNat::new();
 

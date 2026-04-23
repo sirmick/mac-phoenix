@@ -140,6 +140,9 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["udpport"] = udpport;
     j["network"] = network_string();
     if (!network_if.empty()) j["network_if"] = network_if;
+    j["mitm_tls"] = mitm_tls;
+    if (!mitm_ports.empty()) j["mitm_ports"] = mitm_ports;
+    if (!mitm_ca_dir.empty()) j["mitm_ca_dir"] = mitm_ca_dir;
     j["debug_connection"] = debug_connection;
     j["debug_mode_switch"] = debug_mode_switch;
     j["debug_perf"] = debug_perf;
@@ -277,6 +280,9 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         else network = NetworkMode::None;
     }
     if (j.contains("network_if")) network_if = json_utils::get_string(j, "network_if");
+    if (j.contains("mitm_tls")) mitm_tls = json_utils::get_bool(j, "mitm_tls");
+    if (j.contains("mitm_ports")) mitm_ports = json_utils::get_string(j, "mitm_ports");
+    if (j.contains("mitm_ca_dir")) mitm_ca_dir = json_utils::get_string(j, "mitm_ca_dir");
     if (j.contains("debug_connection")) debug_connection = json_utils::get_bool(j, "debug_connection");
     if (j.contains("debug_mode_switch")) debug_mode_switch = json_utils::get_bool(j, "debug_mode_switch");
     if (j.contains("debug_perf")) debug_perf = json_utils::get_bool(j, "debug_perf");
@@ -428,6 +434,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --zap-pram            Clear PRAM on startup (fresh boot)\n");
             printf("  --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot\n");
             printf("  --network MODE        Network: none, lwip, raw:<interface> (default: none)\n");
+            printf("  --mitm-tls            Terminate modern TLS on host, downgrade to SSLv3/TLS1.0 for guest\n");
+            printf("  --mitm-ports LIST     Comma-separated TCP ports to intercept (default: 443)\n");
+            printf("  --mitm-ca-dir PATH    Where the MITM root CA lives (default: .mitm_ca in CWD)\n");
             printf("  --config PATH         JSON config file\n");
             printf("  --log-level N         Log level 0-3\n");
             printf("  --debug-connection    Debug WebRTC connections\n");
@@ -618,6 +627,19 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             } else {
                 config.architecture = Architecture::M68K;
             }
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --mitm-tls / --mitm-ports / --mitm-ca-dir
+        if (strcmp(argv[i], "--mitm-tls") == 0) {
+            config.mitm_tls = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--mitm-ports") == 0 && i+1 < argc) {
+            config.mitm_ports = argv[i+1];
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--mitm-ca-dir") == 0 && i+1 < argc) {
+            config.mitm_ca_dir = argv[i+1];
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 

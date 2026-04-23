@@ -162,6 +162,9 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
   --no-webserver        Headless mode (no HTTP/WebRTC)
   --screen WxH          Display resolution (default: 640x480)
   --network MODE        Network: none, lwip, raw:<iface>, socket[:<path>] (default: none)
+  --mitm-tls            Terminate modern TLS on host, downgrade to SSLv3/TLS1.0 for guest
+  --mitm-ports LIST     Comma-separated TCP ports to intercept (default: 443)
+  --mitm-ca-dir PATH    Where the MITM root CA lives (default: .mitm_ca in CWD)
   --bridge              Enable automation bridge (BridgeAgent + auto ExtFS mount)
   --audio               Enable audio emulation (opt-in, default off)
   --config path         JSON config file
@@ -191,6 +194,7 @@ The emulator binary does not read environment variables. Use CLI flags instead.
 - **Single-port HTTP + WebSocket**: `src/webserver/websocket.cpp` implements RFC 6455 in-process; the HTTP server detects `Upgrade: websocket` on `/ws` and hands the fd to a WebSocket handler registered by `WebRTCServer`. One TCP listener serves static UI, REST API, `/api/frame` long-poll, and `/ws` (signaling + input + PNG/WebP frames). libdatachannel's `rtc::WebSocketServer` is not used. WebRTC RTP (H.264/VP9 media + Opus audio) still rides direct UDP ports negotiated via ICE.
 - **Three transport modes**: PNG/WebP → WebSocket binary on `/ws`; H.264/VP9 → WebRTC RTP track; `httpstream` → `/api/frame` long-poll. Signaling JSON + input events always ride the `/ws` WebSocket regardless of codec.
 - **Command bridge**: Two layers. **Read commands** (`/api/app`, `/api/windows`) peek Mac memory directly from the IRQ — no guest cooperation. **Action commands** (`/api/launch`, `/api/shutdown`, `/api/restart`, `/api/quit`) write a request file into `bridge_dir`, which a guest-side `BridgeAgent` app (installed in `:System Folder:Startup Items:`) polls and executes via Process Manager / Shutdown Manager / AppleEvents. Files in `bridge_dir` cross the parent/IPC-child process split for free since both processes see the same disk path. Enable with `--bridge` or `bridge_enabled: true`. See `docs/CommandBridge.md`.
+- **MITM TLS proxy**: Opt-in (`--mitm-tls`) TLS downgrade inside `net-bridge` so classic Mac browsers can reach modern HTTPS sites. On matched ports (default 443) the bridge buffers the ClientHello to extract SNI, mints a leaf cert signed by a local root CA, terminates modern TLS upstream and re-encrypts to the guest using SSLv3/TLS1.0 with RC4-MD5 / 3DES-SHA. Requires a vendored legacy-capable OpenSSL (Ubuntu's strips SSLv3 and RC4) — build via `net-bridge/tools/build-legacy-openssl.sh`, then rebuild net-bridge with `OPENSSL_DIR` set. One-time manual CA import in the guest. See `docs/MitmTlsProxy.md`.
 
 ## ROM
 

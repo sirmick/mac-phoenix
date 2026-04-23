@@ -47,6 +47,9 @@ tests/guest/bridge/BridgeAgent.code.bin.gdb
 
 # Rust
 net-bridge/target/
+# Vendored legacy OpenSSL build tree — regenerate via
+# net-bridge/tools/build-legacy-openssl.sh (needed for --mitm-tls).
+net-bridge/vendor/
 build_output.txt
 build_stdout.txt
 build_warnings.txt

@@ -131,6 +131,13 @@ struct EmulatorConfig {
     NetworkMode network = NetworkMode::None;
     std::string network_if;  // Interface name for raw mode (e.g. "eth0")
 
+    // MITM TLS proxy (net-bridge): terminates modern TLS on the host side
+    // and re-encrypts to the guest using classic-Mac-compatible SSLv3/TLS1.0
+    // + weak-RSA ciphers. Opt-in only; one-time CA import required in guest.
+    bool mitm_tls = false;
+    std::string mitm_ports;    // comma-separated, e.g. "443,993"; empty → default (443)
+    std::string mitm_ca_dir;   // where the local MITM CA lives; empty → net-bridge default
+
     // IPC child mode (--ipc flag, used for PPC subprocess)
     bool ipc_mode = false;
 

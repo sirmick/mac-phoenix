@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
+use std::sync::Arc;
 
 use smoltcp::wire::{
     EthernetAddress, EthernetFrame, EthernetProtocol, EthernetRepr,
@@ -12,6 +13,8 @@ use smoltcp::wire::{
 };
 
 use crate::device::SocketDevice;
+use crate::tls_listener::TlsBridge;
+use crate::tls_mitm::{MitmCa, MitmRuntime, MitmSession, MitmState};
 
 /// MAC addresses
 const MAC_ADDR: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x01]);
@@ -34,10 +37,38 @@ struct ConnKey {
     dst_port: u16,
 }
 
+/// Byte-pipe mode of a TCP connection. Raw is the default NAT; the MITM
+/// variants take over once the dst_port matches the MITM config.
+enum Pipe {
+    /// Non-MITM: bytes flow guest ↔ real TCP socket unchanged.
+    Raw(TcpStream),
+    /// MITM-enabled: sniffing SNI from the first ClientHello. Guest bytes
+    /// are buffered in `session` (not yet forwarded) so the real
+    /// ClientHello stays on our side until we know the SNI and can mint
+    /// the leaf cert. Transitions to `Bridging` or `Raw` (abandon).
+    Sniffing {
+        stream: TcpStream,
+        session: MitmSession,
+    },
+    /// Full TLS MITM: guest talks legacy TLS to `bridge`; `bridge` talks
+    /// modern TLS to the real server. The TcpStream is owned by the
+    /// bridge now.
+    Bridging(Box<TlsBridge>),
+    /// Dummy variant used only as a short-lived placeholder during state
+    /// transitions (so we can move the previous value out of the enum).
+    Closed,
+}
+
+impl Default for Pipe {
+    fn default() -> Self {
+        Pipe::Closed
+    }
+}
+
 /// A single TCP proxy connection
 struct TcpConn {
     state: TcpState,
-    host_stream: TcpStream,
+    pipe: Pipe,
     /// Our sequence number (gateway → Mac)
     our_seq: u32,
     /// Their sequence number (Mac → gateway)
@@ -52,12 +83,14 @@ struct TcpConn {
 /// Manages all TCP NAT connections.
 pub struct TcpNat {
     conns: HashMap<ConnKey, TcpConn>,
+    mitm: Option<MitmRuntime>,
 }
 
 impl TcpNat {
-    pub fn new() -> Self {
+    pub fn new(mitm: Option<MitmRuntime>) -> Self {
         Self {
             conns: HashMap::new(),
+            mitm,
         }
     }
 
@@ -104,6 +137,7 @@ impl TcpNat {
             // Open host connection
             let dst_std = to_std_ip(dst_ip);
             let addr = SocketAddrV4::new(dst_std, dst_port);
+            let is_mitm = self.mitm.as_ref().is_some_and(|m| m.matches(dst_port));
             match TcpStream::connect_timeout(
                 &std::net::SocketAddr::V4(addr),
                 std::time::Duration::from_secs(5),
@@ -113,12 +147,30 @@ impl TcpNat {
                     let our_seq: u32 = 1000; // Simple starting sequence
                     let their_seq = TcpSeqNumber(tcp.seq_number().0 + 1).0 as u32; // SYN consumes 1
 
-                    log::info!("TCP NAT: {} {}:{} -> {}:{}",
-                        "connect", src_ip, src_port, dst_ip, dst_port);
+                    if is_mitm {
+                        log::info!(
+                            "TCP NAT [MITM]: connect {}:{} -> {}:{}",
+                            src_ip, src_port, dst_ip, dst_port
+                        );
+                    } else {
+                        log::info!(
+                            "TCP NAT: connect {}:{} -> {}:{}",
+                            src_ip, src_port, dst_ip, dst_port
+                        );
+                    }
+
+                    let pipe = if is_mitm {
+                        Pipe::Sniffing {
+                            stream,
+                            session: MitmSession::new(dst_std, dst_port),
+                        }
+                    } else {
+                        Pipe::Raw(stream)
+                    };
 
                     self.conns.insert(key, TcpConn {
                         state: TcpState::SynReceived,
-                        host_stream: stream,
+                        pipe,
                         our_seq,
                         their_seq,
                         mac_ip: src_ip,
@@ -166,10 +218,11 @@ impl TcpNat {
 
         // Data from Mac → host
         if conn.state == TcpState::Established && !payload.is_empty() {
-            match conn.host_stream.write_all(payload) {
-                Ok(()) => {
+            let ca = self.mitm.as_ref().map(|m| Arc::clone(&m.ca));
+            match handle_guest_data(conn, payload, ca.as_ref()) {
+                Ok(to_guest) => {
                     conn.their_seq += payload.len() as u32;
-                    // ACK the data
+                    // ACK the data (at TCP layer) regardless of pipe mode.
                     let ack = build_tcp_frame(
                         conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
                         TcpSeqNumber(conn.our_seq as i32),
@@ -179,9 +232,23 @@ impl TcpNat {
                         &[],
                     );
                     device.send_frame(&ack);
+                    // Bridge-produced ciphertext back to Mac rides its own frame
+                    // so the window is advanced correctly.
+                    if !to_guest.is_empty() {
+                        let data = build_tcp_frame(
+                            conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
+                            TcpSeqNumber(conn.our_seq as i32),
+                            TcpSeqNumber(conn.their_seq as i32),
+                            TcpControl::None,
+                            true,
+                            &to_guest,
+                        );
+                        device.send_frame(&data);
+                        conn.our_seq += to_guest.len() as u32;
+                    }
                 }
                 Err(e) => {
-                    log::warn!("TCP NAT: host write failed: {}", e);
+                    log::warn!("TCP NAT: pipe write failed: {}", e);
                     conn.state = TcpState::Closed;
                 }
             }
@@ -190,7 +257,7 @@ impl TcpNat {
         // FIN from Mac
         if tcp.fin() {
             conn.their_seq += 1; // FIN consumes 1
-            let _ = conn.host_stream.shutdown(std::net::Shutdown::Write);
+            shutdown_pipe_write(&mut conn.pipe);
 
             // ACK the FIN + send our FIN
             let fin_ack = build_tcp_frame(
@@ -224,11 +291,23 @@ impl TcpNat {
                 continue;
             }
 
-            // Read from host → send to Mac
-            let mut buf = [0u8; 4096];
-            match conn.host_stream.read(&mut buf) {
-                Ok(0) => {
-                    // Host closed: send FIN to Mac
+            let outcome = poll_pipe(&mut conn.pipe);
+            match outcome {
+                PollOutcome::Bytes(bytes) => {
+                    if !bytes.is_empty() {
+                        let data_frame = build_tcp_frame(
+                            conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
+                            TcpSeqNumber(conn.our_seq as i32),
+                            TcpSeqNumber(conn.their_seq as i32),
+                            TcpControl::None,
+                            true,
+                            &bytes,
+                        );
+                        device.send_frame(&data_frame);
+                        conn.our_seq += bytes.len() as u32;
+                    }
+                }
+                PollOutcome::Eof => {
                     log::debug!("TCP NAT: host closed {}:{}", conn.dst_ip, conn.dst_port);
                     let fin = build_tcp_frame(
                         conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
@@ -242,24 +321,11 @@ impl TcpNat {
                     conn.our_seq += 1;
                     conn.state = TcpState::FinWait;
                 }
-                Ok(n) => {
-                    // Send data to Mac
-                    let data_frame = build_tcp_frame(
-                        conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
-                        TcpSeqNumber(conn.our_seq as i32),
-                        TcpSeqNumber(conn.their_seq as i32),
-                        TcpControl::None,
-                        true,
-                        &buf[..n],
-                    );
-                    device.send_frame(&data_frame);
-                    conn.our_seq += n as u32;
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
-                Err(e) => {
-                    log::warn!("TCP NAT: host read error: {}", e);
+                PollOutcome::Err(e) => {
+                    log::warn!("TCP NAT: pipe read error: {}", e);
                     conn.state = TcpState::Closed;
                 }
+                PollOutcome::Idle => {}
             }
         }
 
@@ -273,6 +339,126 @@ impl TcpNat {
 fn to_std_ip(ip: Ipv4Address) -> Ipv4Addr {
     let o = ip.octets();
     Ipv4Addr::new(o[0], o[1], o[2], o[3])
+}
+
+enum PollOutcome {
+    Idle,
+    Bytes(Vec<u8>),
+    Eof,
+    Err(String),
+}
+
+/// Feed a Mac→host TCP payload into whatever byte pipe this connection
+/// currently uses. Returns bytes that should be sent back to Mac on the
+/// same tick (bridge-produced ciphertext; empty for Raw/Sniffing).
+fn handle_guest_data(
+    conn: &mut TcpConn,
+    payload: &[u8],
+    ca: Option<&Arc<MitmCa>>,
+) -> io::Result<Vec<u8>> {
+    let old = std::mem::take(&mut conn.pipe);
+    let (new, bytes) = match old {
+        Pipe::Raw(mut s) => {
+            s.write_all(payload)?;
+            (Pipe::Raw(s), Vec::new())
+        }
+        Pipe::Sniffing { mut stream, mut session } => {
+            session.observe_guest_bytes(payload);
+            match session.state().clone() {
+                MitmState::Sniffing => {
+                    // Still collecting; don't forward yet — bytes stay in `session.buf`.
+                    (Pipe::Sniffing { stream, session }, Vec::new())
+                }
+                s @ (MitmState::SniKnown(_) | MitmState::SniAbsent) => {
+                    let host = match s {
+                        MitmState::SniKnown(h) => h,
+                        _ => session.resolved_host().unwrap_or_else(|| {
+                            conn.dst_ip.to_string()
+                        }),
+                    };
+                    let buffered = session.take_buffer();
+                    log::info!(
+                        "MITM TLS begin: {}:{} (host={})",
+                        conn.dst_ip, conn.dst_port, host
+                    );
+                    let ca = ca.ok_or_else(|| io::Error::new(
+                        io::ErrorKind::Other, "MITM triggered but CA unavailable",
+                    ))?;
+                    let mut bridge = match TlsBridge::new(ca.as_ref(), &host, stream) {
+                        Ok(b) => Box::new(b),
+                        Err(e) => {
+                            return Err(io::Error::new(io::ErrorKind::Other,
+                                format!("TlsBridge::new: {}", e)));
+                        }
+                    };
+                    bridge.feed_from_guest(&buffered);
+                    let tick = bridge.drive().map_err(|e|
+                        io::Error::new(io::ErrorKind::Other, format!("bridge drive: {}", e))
+                    )?;
+                    (Pipe::Bridging(bridge), tick.bytes_to_guest)
+                }
+                MitmState::Abandoned => {
+                    // Fall back to raw: flush buffered bytes + current payload.
+                    let buffered = session.take_buffer();
+                    if !buffered.is_empty() {
+                        stream.write_all(&buffered)?;
+                    }
+                    stream.write_all(payload)?;
+                    (Pipe::Raw(stream), Vec::new())
+                }
+            }
+        }
+        Pipe::Bridging(mut bridge) => {
+            bridge.feed_from_guest(payload);
+            let tick = bridge.drive().map_err(|e|
+                io::Error::new(io::ErrorKind::Other, format!("bridge drive: {}", e))
+            )?;
+            (Pipe::Bridging(bridge), tick.bytes_to_guest)
+        }
+        Pipe::Closed => (Pipe::Closed, Vec::new()),
+    };
+    conn.pipe = new;
+    Ok(bytes)
+}
+
+/// Drain any bytes the pipe has ready to send to the Mac. Called each tick.
+fn poll_pipe(pipe: &mut Pipe) -> PollOutcome {
+    match pipe {
+        Pipe::Raw(s) | Pipe::Sniffing { stream: s, .. } => {
+            let mut buf = [0u8; 4096];
+            match s.read(&mut buf) {
+                Ok(0) => PollOutcome::Eof,
+                Ok(n) => PollOutcome::Bytes(buf[..n].to_vec()),
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => PollOutcome::Idle,
+                Err(e) => PollOutcome::Err(e.to_string()),
+            }
+        }
+        Pipe::Bridging(bridge) => {
+            match bridge.drive() {
+                Ok(tick) => {
+                    if tick.upstream_eof && tick.downstream_eof {
+                        PollOutcome::Eof
+                    } else if !tick.bytes_to_guest.is_empty() {
+                        PollOutcome::Bytes(tick.bytes_to_guest)
+                    } else {
+                        PollOutcome::Idle
+                    }
+                }
+                Err(e) => PollOutcome::Err(format!("bridge drive: {}", e)),
+            }
+        }
+        Pipe::Closed => PollOutcome::Idle,
+    }
+}
+
+fn shutdown_pipe_write(pipe: &mut Pipe) {
+    match pipe {
+        Pipe::Raw(s) | Pipe::Sniffing { stream: s, .. } => {
+            let _ = s.shutdown(std::net::Shutdown::Write);
+        }
+        Pipe::Bridging(bridge) => bridge.close_downstream(),
+        Pipe::Closed => {}
+    }
 }
 
 /// Build a complete ethernet frame containing an IPv4/TCP packet.

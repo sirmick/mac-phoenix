@@ -414,6 +414,11 @@ int main(int argc, char **argv)
 		const char *path = emu_config.network_if.empty()
 			? "/tmp/mac-ether.sock"
 			: emu_config.network_if.c_str();
+		ether_socket_set_mitm(
+			emu_config.mitm_tls,
+			emu_config.mitm_ports.empty() ? nullptr : emu_config.mitm_ports.c_str(),
+			emu_config.mitm_ca_dir.empty()  ? nullptr : emu_config.mitm_ca_dir.c_str()
+		);
 		ether_socket_register(path);
 	}
 

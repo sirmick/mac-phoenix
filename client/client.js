@@ -3307,7 +3307,10 @@ function loadPreset(name) {
         dismiss_shutdown_dialog: preset.dismiss_shutdown_dialog ?? true,
         bridge_enabled: preset.bridge_enabled ?? false,
         network: preset.network || 'none',
-        network_if: preset.network_if || ''
+        network_if: preset.network_if || '',
+        mitm_tls: preset.mitm_tls ?? false,
+        mitm_ports: preset.mitm_ports || '',
+        mitm_ca_dir: preset.mitm_ca_dir || ''
     };
 
     // Re-render storage lists for the new architecture, then update UI
@@ -3381,6 +3384,9 @@ function buildConfigJson() {
         bridge_enabled: document.getElementById('cfg-bridge-enabled')?.checked ?? false,
         network: document.getElementById('cfg-network')?.value || 'none',
         network_if: document.getElementById('cfg-network-if')?.value || '',
+        mitm_tls: document.getElementById('cfg-mitm-tls')?.checked ?? false,
+        mitm_ports: document.getElementById('cfg-mitm-ports')?.value || '',
+        mitm_ca_dir: document.getElementById('cfg-mitm-ca-dir')?.value || '',
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         m68k: isM68k ? archConfig : undefined,
@@ -3952,7 +3958,10 @@ async function loadCurrentConfig() {
             dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
             bridge_enabled: cfg.bridge_enabled ?? false,
             network: cfg.network || 'none',
-            network_if: cfg.network_if || ''
+            network_if: cfg.network_if || '',
+            mitm_tls: cfg.mitm_tls ?? false,
+            mitm_ports: cfg.mitm_ports || '',
+            mitm_ca_dir: cfg.mitm_ca_dir || ''
         };
 
         // Load saved presets
@@ -3993,6 +4002,30 @@ function updateConfigUI() {
     }
     if (networkIfEl) networkIfEl.value = currentConfig.network_if || '';
     if (networkIfGroup) networkIfGroup.style.display = (currentConfig.network === 'raw') ? '' : 'none';
+
+    const mitmTlsEl = document.getElementById('cfg-mitm-tls');
+    const mitmPortsEl = document.getElementById('cfg-mitm-ports');
+    const mitmCaDirEl = document.getElementById('cfg-mitm-ca-dir');
+    const mitmPortsGroup = document.getElementById('cfg-mitm-ports-group');
+    const mitmCaDirGroup = document.getElementById('cfg-mitm-ca-dir-group');
+    const mitmGroup = document.getElementById('cfg-mitm-group');
+    const syncMitmVisibility = () => {
+        const netMode = networkEl ? networkEl.value : (currentConfig.network || 'none');
+        const enabled = mitmTlsEl ? mitmTlsEl.checked : currentConfig.mitm_tls;
+        // MITM only makes sense on the `socket` (net-bridge) mode.
+        if (mitmGroup) mitmGroup.style.display = (netMode === 'socket') ? '' : 'none';
+        const showSubfields = (netMode === 'socket') && enabled;
+        if (mitmPortsGroup) mitmPortsGroup.style.display = showSubfields ? '' : 'none';
+        if (mitmCaDirGroup) mitmCaDirGroup.style.display = showSubfields ? '' : 'none';
+    };
+    if (mitmTlsEl) {
+        mitmTlsEl.checked = !!currentConfig.mitm_tls;
+        mitmTlsEl.addEventListener('change', syncMitmVisibility);
+    }
+    if (mitmPortsEl) mitmPortsEl.value = currentConfig.mitm_ports || '';
+    if (mitmCaDirEl) mitmCaDirEl.value = currentConfig.mitm_ca_dir || '';
+    if (networkEl) networkEl.addEventListener('change', syncMitmVisibility);
+    syncMitmVisibility();
 
     refreshBootFromOptions();
     const bootdriverEl = document.getElementById('cfg-bootdriver');

@@ -18,6 +18,11 @@ extern "C" {
 // sock_path: path to the Unix domain socket to connect to.
 void ether_socket_register(const char *sock_path);
 
+// Enable MITM TLS proxy mode. Passed to the auto-launched net-bridge as
+// --mitm-tls, --mitm-ports, --mitm-ca-dir. Call before ether_socket_register.
+// Pass nullptr for `ports`/`ca_dir` to use net-bridge defaults.
+void ether_socket_set_mitm(bool enabled, const char *ports, const char *ca_dir);
+
 // Push a flat ethernet frame to the bridge. Returns true on success.
 // Used by the PPC NDRV TX path (AO_transmit_packet → flatten mblk → here).
 bool ether_socket_send_raw(const uint8_t *frame, uint32_t len);
