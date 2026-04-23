@@ -21,7 +21,8 @@ SIG_PORT=18096
 WEBSERVER=false
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" macos-7.5.5)}"
 MIN_CHECKLOADS=200
 EXTRA_FLAGS=()
 

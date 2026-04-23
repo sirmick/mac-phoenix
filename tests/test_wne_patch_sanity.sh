@@ -41,7 +41,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" macos-7.5.5)}"
 
 [[ -x "$BINARY" ]] || { echo "SKIP: Binary not found: $BINARY"; exit 77; }
 [[ -f "$ROM"    ]] || { echo "SKIP: ROM not found: $ROM";       exit 77; }

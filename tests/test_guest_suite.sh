@@ -64,12 +64,16 @@ elif [[ "$ARCH" == "ppc" ]]; then
 else
     ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 fi
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -z "${DISK:-}" ]]; then
-    if [[ "$ARCH" == "ppc" ]]; then
-        DISK="${MACEMU_DISK:-$HOME/storage/images/macos-9.0.4.img}"
+    if [[ -n "$OS_VERSION" ]]; then
+        IMG_BASE="macos-${OS_VERSION}"
+    elif [[ "$ARCH" == "ppc" ]]; then
+        IMG_BASE="macos-9.0.4"
     else
-        DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
+        IMG_BASE="macos-7.5.5"
     fi
+    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "$IMG_BASE")}"
 fi
 
 # --- Preflight checks ---

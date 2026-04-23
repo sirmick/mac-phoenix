@@ -36,7 +36,8 @@ if [[ -z "${ROM:-}" ]]; then
         ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
     fi
 fi
-DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" macos-7.5.5)}"
 
 if [[ ! -x "$BINARY" ]]; then
     echo "SKIP: Binary not found: $BINARY"

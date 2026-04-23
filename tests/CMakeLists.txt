@@ -166,6 +166,17 @@ set_tests_properties(guest_suite PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
+add_test(
+  NAME guest_suite_761
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --timeout 60 --port 18108
+)
+set_tests_properties(guest_suite_761 PROPERTIES
+  TIMEOUT 90
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
 # --- PPC variants of API/boot tests ---
 
 add_test(
