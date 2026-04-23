@@ -3137,12 +3137,20 @@ function getRomInfo(checksum, md5) {
 }
 
 // Mode helpers: map emulator mode to architecture
-function modeToArch(mode) {
-    return mode === 'ppc' ? 'ppc' : 'm68k';
-}
-
+// "Emulator" dropdown is a UX persona picker; it suggests sensible defaults
+// when changed but is not part of the wire format. Architecture is derived
+// from the chosen backend.
 function isM68kMode(mode) {
     return mode === 'quadra' || mode === 'se';
+}
+
+function backendIsPpc(backend) {
+    return backend === 'kpx' || backend === 'unicorn-ppc';
+}
+
+function defaultBackendForMode(mode) {
+    if (mode === 'ppc') return 'kpx';
+    return 'uae';  // quadra, se → uae (m68k)
 }
 
 // Update header title with current model name
@@ -3273,85 +3281,82 @@ function renderPresetTabs() {
 function loadPreset(name) {
     const preset = App.savedPresets[name];
     if (!preset) return;
+    currentConfig = configFromServerJson(preset);
+    currentConfig.emulator = preset.emulator || name || guessEmulatorMode(currentConfig.backend);
 
-    // Convert server-format JSON to client currentConfig format (same as loadCurrentConfig)
-    const isM68k = (preset.architecture || 'm68k') === 'm68k';
-    const emulatorMode = preset.emulator || (isM68k ? 'quadra' : 'ppc');
+    Promise.all([loadRomList(), loadDiskList(), loadCdromList(), loadExtfsList()]).then(() => {
+        updateConfigUI();
+    });
 
+    document.querySelectorAll('#config-tabs .config-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.preset === name);
+    });
+}
+
+// Pick a sensible "Emulator" dropdown value from a backend. Used when loading
+// a preset that doesn't carry an explicit emulator persona.
+function guessEmulatorMode(backend) {
+    return backendIsPpc(backend) ? 'ppc' : 'quadra';
+}
+
+// Convert the flat server schema (with one release of legacy compat) to the
+// client's `currentConfig` shape. Shared by loadCurrentConfig and loadPreset.
+function configFromServerJson(cfg) {
     const stripPrefix = (p, dir) => {
         if (!p || p[0] !== '/') return p;
         const idx = p.indexOf(dir);
         return idx >= 0 ? p.substring(idx + dir.length) : p;
     };
 
-    currentConfig = {
-        emulator: emulatorMode,
-        rom: preset.rom ? stripPrefix(preset.rom, '/roms/') : '',
-        ram: preset.ram_mb || 32,
-        screen: preset.screen || '640x480',
-        sound: preset.audio ?? true,
-        fpu: isM68k ? (preset.m68k?.fpu ?? true) : (preset.ppc?.fpu ?? true),
-        jit: isM68k ? (preset.m68k?.jitexperimental ?? false) : (preset.ppc?.jit ?? true),
-        jit68k: preset.ppc?.jit68k ?? false,
-        bootdriver: preset.bootdriver || 0,
-        disks: (preset.disks || []).map(p => stripPrefix(p, '/images/')),
-        cdroms: (preset.cdroms || []).map(p => stripPrefix(p, '/images/')),
-        extfs: preset.extfs || [],
-        idlewait: isM68k ? (preset.m68k?.idlewait ?? true) : (preset.ppc?.idlewait ?? true),
-        ignoresegv: isM68k ? (preset.m68k?.ignoresegv ?? true) : (preset.ppc?.ignoresegv ?? true),
-        ignoreillegal: preset.ppc?.ignoreillegal ?? false,
-        swap_opt_cmd: preset.m68k?.swap_opt_cmd ?? true,
-        keyboardtype: isM68k ? (preset.m68k?.keyboardtype || 5) : (preset.ppc?.keyboardtype || 5),
-        backend: preset.cpu_backend || (isM68k ? 'uae' : 'kpx'),
-        zappram: preset.zappram ?? false,
-        dismiss_shutdown_dialog: preset.dismiss_shutdown_dialog ?? true,
-        bridge_enabled: preset.bridge_enabled ?? false,
-        network: preset.network || 'none',
-        network_if: preset.network_if || '',
-        mitm_tls: preset.mitm_tls ?? false,
-        mitm_ports: preset.mitm_ports || '',
-        mitm_ca_dir: preset.mitm_ca_dir || ''
+    // Backend: prefer flat new key; fall back to legacy {architecture, cpu_backend}.
+    let backend = cfg.backend;
+    if (!backend) {
+        const arch = cfg.architecture || 'm68k';
+        const old = cfg.cpu_backend || (arch === 'ppc' ? 'kpx' : 'uae');
+        if (old === 'unicorn') backend = arch === 'ppc' ? 'unicorn-ppc' : 'unicorn-m68k';
+        else backend = old;
+    }
+
+    // JIT: flat new key, then legacy nested.
+    const jit = cfg.jit ?? cfg.m68k?.jitexperimental ?? cfg.ppc?.jit ?? false;
+    const jit68k = cfg.jit68k ?? cfg.ppc?.jit68k ?? true;
+    const idlewait = cfg.idlewait ?? cfg.m68k?.idlewait ?? cfg.ppc?.idlewait ?? true;
+
+    return {
+        emulator: cfg.emulator || guessEmulatorMode(backend),
+        rom: cfg.rom ? stripPrefix(cfg.rom, '/roms/') : '',
+        ram: cfg.ram_mb || 64,
+        screen: cfg.screen || '640x480',
+        sound: cfg.audio ?? !cfg.nosound ?? true,
+        bootdriver: cfg.bootdriver || 0,
+        disks: (cfg.disks || []).map(p => stripPrefix(p, '/images/')),
+        cdroms: (cfg.cdroms || []).map(p => stripPrefix(p, '/images/')),
+        extfs: cfg.extfs || [],
+        backend,
+        jit,
+        jit68k,
+        idlewait,
+        zappram: cfg.zappram ?? false,
+        dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
+        bridge_enabled: cfg.bridge_enabled ?? false,
+        network: cfg.network || 'none',
+        network_if: cfg.network_if || '',
+        mitm_tls: cfg.mitm_tls ?? false,
+        mitm_ports: cfg.mitm_ports || '',
+        mitm_ca_dir: cfg.mitm_ca_dir || ''
     };
-
-    // Re-render storage lists for the new architecture, then update UI
-    Promise.all([loadRomList(), loadDiskList(), loadCdromList(), loadExtfsList()]).then(() => {
-        updateConfigUI();
-    });
-
-    // Update tab highlight
-    document.querySelectorAll('#config-tabs .config-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.preset === name);
-    });
 }
 
 function buildConfigJson() {
-    // Build the server-format JSON from current form values (shared with saveConfig)
-    const emulator = document.getElementById('cfg-emulator')?.value || 'quadra';
-    const isM68k = isM68kMode(emulator);
-
-    const jitChecked = document.getElementById('cfg-jit')?.checked ?? true;
-    const archConfig = {
-        fpu: document.getElementById('cfg-fpu')?.checked ?? true,
-        idlewait: document.getElementById('cfg-idlewait')?.checked ?? true,
-        ignoresegv: document.getElementById('cfg-ignoresegv')?.checked ?? true,
-        swap_opt_cmd: currentConfig.swap_opt_cmd ?? true,
-        keyboardtype: currentConfig.keyboardtype || 5
-    };
-    if (isM68k) {
-        archConfig.jitexperimental = jitChecked;
-    } else {
-        archConfig.jit = jitChecked;
-    }
-    if (!isM68k) {
-        archConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? false;
-        archConfig.ignoreillegal = document.getElementById('cfg-ignoreillegal')?.checked ?? false;
-    }
+    // Build the flat server-format JSON from current form values.
+    const backend = document.getElementById('cfg-backend')?.value
+                    || defaultBackendForMode(document.getElementById('cfg-emulator')?.value);
 
     const romDropdown = document.getElementById('cfg-rom');
     const rom = (romDropdown && romDropdown.value) ? romDropdown.value : currentConfig.rom;
 
     // Resolve "Boot From": a "disk:NAME" selection moves that disk to the front
-    // of the list (the Mac ROM boots the first drive), everything else is a
+    // of the list (the Mac ROM boots the first drive); everything else is a
     // numeric bootdriver value passed through as-is.
     const bootRaw = document.getElementById('cfg-bootdriver')?.value || '0';
     let disksOut = (currentConfig.disks || []).slice();
@@ -3368,16 +3373,17 @@ function buildConfigJson() {
     }
 
     return {
-        emulator: emulator,
-        architecture: isM68k ? 'm68k' : 'ppc',
-        cpu_backend: document.getElementById('cfg-backend')?.value || (isM68k ? 'uae' : 'kpx'),
-        rom: rom,
+        backend,
+        jit:      document.getElementById('cfg-jit')?.checked ?? false,
+        jit68k:   document.getElementById('cfg-jit68k')?.checked ?? true,
+        idlewait: document.getElementById('cfg-idlewait')?.checked ?? true,
+        rom,
         disks: disksOut,
         cdroms: currentConfig.cdroms || [],
         extfs: currentConfig.extfs || [],
-        bootdriver: bootdriver,
-        ram_mb: parseInt(document.getElementById('cfg-ram')?.value || 32),
-        screen: document.getElementById('cfg-screen')?.value || '800x600',
+        bootdriver,
+        ram_mb: parseInt(document.getElementById('cfg-ram')?.value || 64),
+        screen: document.getElementById('cfg-screen')?.value || '640x480',
         audio: document.getElementById('cfg-sound')?.checked ?? true,
         zappram: document.getElementById('cfg-zappram')?.checked ?? false,
         dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true,
@@ -3388,9 +3394,7 @@ function buildConfigJson() {
         mitm_ports: document.getElementById('cfg-mitm-ports')?.value || '',
         mitm_ca_dir: document.getElementById('cfg-mitm-ca-dir')?.value || '',
         codec: document.getElementById('codec-select')?.value || 'png',
-        mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
-        m68k: isM68k ? archConfig : undefined,
-        ppc: isM68k ? undefined : archConfig
+        mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute'
     };
 }
 
@@ -3489,8 +3493,7 @@ async function loadRomList() {
         }
 
         if (data.roms && data.roms.length > 0) {
-            const currentMode = currentConfig.emulator || 'quadra';
-            const currentArch = modeToArch(currentMode);
+            const currentArch = backendIsPpc(currentConfig.backend) ? 'ppc' : 'm68k';
 
             // Filter and categorize ROMs
             const recommendedRoms = [];
@@ -3514,7 +3517,8 @@ async function loadRomList() {
                     seenKnownMD5.add(hash);
                 }
 
-                // Recommended if the ROM's mode matches the current emulator mode
+                // Recommended if the ROM's mode matches the current persona.
+                const currentMode = currentConfig.emulator || (currentArch === 'ppc' ? 'ppc' : 'quadra');
                 if (info?.recommended && info.mode === currentMode) {
                     recommendedRoms.push(rom);
                 } else {
@@ -3785,52 +3789,30 @@ function removeExtfsPath(idx) {
     }
 }
 
-// Helper to show/hide emulator-specific settings panels (no side effects)
+// Show/hide backend-dependent settings rows. Driven by the selected backend.
 function updateEmulatorPanelVisibility() {
-    const emulatorType = document.getElementById('cfg-emulator')?.value;
-    if (!emulatorType) return;
+    const backend = document.getElementById('cfg-backend')?.value
+                    || currentConfig.backend
+                    || 'uae';
+    const isPpc = backendIsPpc(backend);
+    const supportsJit = (backend === 'uae' || backend === 'kpx');
+    const isKpx = (backend === 'kpx');
 
-    const isPPC = emulatorType === 'ppc';
-    const currentArch = isPPC ? 'ppc' : 'm68k';
+    // JIT row: hide for unicorn-* backends (no JIT available there)
+    const jitGroup = document.getElementById('cfg-jit-group');
+    if (jitGroup) jitGroup.style.display = supportsJit ? '' : 'none';
 
-    // Show/hide arch-specific form groups
-    document.querySelectorAll('#advanced-settings [data-arch]').forEach(el => {
-        el.style.display = el.dataset.arch === currentArch ? '' : 'none';
-    });
+    // 68k JIT row: KPX-only
+    const jit68kGroup = document.getElementById('cfg-jit68k-group');
+    if (jit68kGroup) jit68kGroup.style.display = isKpx ? '' : 'none';
 
-    // Populate backend dropdown with arch-appropriate options
-    const backendEl = document.getElementById('cfg-backend');
-    if (backendEl) {
-        const prev = backendEl.value;
-        if (isPPC) {
-            backendEl.innerHTML =
-                '<option value="kpx">KPX (Interpreter)</option>' +
-                '<option value="unicorn">Unicorn (QEMU JIT)</option>';
-        } else {
-            backendEl.innerHTML =
-                '<option value="uae">UAE (Interpreter)</option>' +
-                '<option value="unicorn">Unicorn (QEMU JIT)</option>';
-        }
-        if ([...backendEl.options].some(o => o.value === prev)) {
-            backendEl.value = prev;
-        }
-    }
-
-    // Update dynamic labels
-    const jitLabel = document.getElementById('cfg-jit-label');
-    if (jitLabel) jitLabel.textContent = isPPC ? 'Enable PPC JIT' : 'Enable JIT Compiler (experimental)';
-
-    const segvLabel = document.getElementById('cfg-ignoresegv-label');
-    if (segvLabel) segvLabel.textContent = isPPC ? 'Ignore SIGSEGV' : 'Ignore Illegal Memory Access';
-
-    // Update processor logo based on emulator type
+    // Header logo / title follow the architecture
     const processorLogo = document.getElementById('processor-logo');
     if (processorLogo) {
-        processorLogo.src = isPPC ? 'PowerPC.svg' : 'Motorola.svg';
-        processorLogo.alt = isPPC ? 'PowerPC' : 'Motorola';
+        processorLogo.src = isPpc ? 'PowerPC.svg' : 'Motorola.svg';
+        processorLogo.alt = isPpc ? 'PowerPC' : 'Motorola';
     }
 
-    // Update title with current model name
     updateHeaderTitle();
 }
 
@@ -3859,18 +3841,14 @@ function applyModeConstraints(mode) {
     }
 }
 
-// Called when user changes emulator dropdown
+// Called when user changes the "Emulator" persona dropdown. Suggests sensible
+// defaults; user can still tweak them in the advanced panel.
 async function onEmulatorChange() {
     const emulatorType = document.getElementById('cfg-emulator')?.value;
     if (!emulatorType) return;
 
-    // Show/hide appropriate settings
-    updateEmulatorPanelVisibility();
-
-    // Update current config emulator type
     currentConfig.emulator = emulatorType;
 
-    // Set mode defaults
     const defaults = {
         ppc:    { ram: 128, screen: '1024x768', backend: 'kpx' },
         quadra: { ram: 32,  screen: '1024x768', backend: 'uae' },
@@ -3889,16 +3867,9 @@ async function onEmulatorChange() {
     const backendEl = document.getElementById('cfg-backend');
     if (backendEl) backendEl.value = d.backend;
 
-    // Apply SE-specific constraints
+    updateEmulatorPanelVisibility();
     applyModeConstraints(emulatorType);
-
-    // Reload ROM list to show only compatible ROMs
     await loadRomList();
-
-    console.log('🔄 SWITCHED EMULATOR:', {
-        emulator: emulatorType,
-        jit: currentConfig.jit
-    });
 }
 
 function onRomChange() {
@@ -3920,51 +3891,7 @@ async function loadCurrentConfig() {
     try {
         const res = await fetch(getApiUrl('config'));
         const cfg = await res.json();
-
-        // Flat format from server
-        const isM68k = (cfg.architecture || 'm68k') === 'm68k';
-
-        // Determine emulator mode
-        let emulatorMode = cfg.emulator || (isM68k ? 'quadra' : 'ppc');
-
-        // Strip storage_dir prefix from paths to get relative names matching storage scan
-        // Only strip if the path is absolute (starts with /), otherwise it's already relative
-        const stripPrefix = (p, dir) => {
-            if (!p || p[0] !== '/') return p;
-            const idx = p.indexOf(dir);
-            return idx >= 0 ? p.substring(idx + dir.length) : p;
-        };
-
-        currentConfig = {
-            emulator: emulatorMode,
-            rom: cfg.rom ? stripPrefix(cfg.rom, '/roms/') : '',
-            ram: cfg.ram_mb || 32,
-            screen: cfg.screen || '640x480',
-            sound: cfg.audio ?? true,
-            fpu: isM68k ? (cfg.m68k?.fpu ?? true) : (cfg.ppc?.fpu ?? true),
-            jit: isM68k ? (cfg.m68k?.jitexperimental ?? false) : (cfg.ppc?.jit ?? true),
-            jit68k: cfg.ppc?.jit68k ?? false,
-            bootdriver: cfg.bootdriver || 0,
-            disks: (cfg.disks || []).map(p => stripPrefix(p, '/images/')),
-            cdroms: (cfg.cdroms || []).map(p => stripPrefix(p, '/images/')),
-            extfs: cfg.extfs || [],
-            idlewait: isM68k ? (cfg.m68k?.idlewait ?? true) : (cfg.ppc?.idlewait ?? true),
-            ignoresegv: isM68k ? (cfg.m68k?.ignoresegv ?? true) : (cfg.ppc?.ignoresegv ?? true),
-            ignoreillegal: cfg.ppc?.ignoreillegal ?? false,
-            swap_opt_cmd: cfg.m68k?.swap_opt_cmd ?? true,
-            keyboardtype: isM68k ? (cfg.m68k?.keyboardtype || 5) : (cfg.ppc?.keyboardtype || 5),
-            backend: cfg.cpu_backend || (isM68k ? 'uae' : 'kpx'),
-            zappram: cfg.zappram ?? false,
-            dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
-            bridge_enabled: cfg.bridge_enabled ?? false,
-            network: cfg.network || 'none',
-            network_if: cfg.network_if || '',
-            mitm_tls: cfg.mitm_tls ?? false,
-            mitm_ports: cfg.mitm_ports || '',
-            mitm_ca_dir: cfg.mitm_ca_dir || ''
-        };
-
-        // Load saved presets
+        currentConfig = configFromServerJson(cfg);
         App.savedPresets = cfg.configs || {};
     } catch (e) {
         logger.warn('Failed to load current config', { error: e.message });
@@ -3994,38 +3921,36 @@ function updateConfigUI() {
     const networkEl = document.getElementById('cfg-network');
     const networkIfEl = document.getElementById('cfg-network-if');
     const networkIfGroup = document.getElementById('cfg-network-if-group');
-    if (networkEl) {
-        networkEl.value = currentConfig.network || 'none';
-        networkEl.addEventListener('change', () => {
-            if (networkIfGroup) networkIfGroup.style.display = networkEl.value === 'raw' ? '' : 'none';
-        });
-    }
-    if (networkIfEl) networkIfEl.value = currentConfig.network_if || '';
-    if (networkIfGroup) networkIfGroup.style.display = (currentConfig.network === 'raw') ? '' : 'none';
-
     const mitmTlsEl = document.getElementById('cfg-mitm-tls');
     const mitmPortsEl = document.getElementById('cfg-mitm-ports');
     const mitmCaDirEl = document.getElementById('cfg-mitm-ca-dir');
+    const mitmGroup = document.getElementById('cfg-mitm-group');
     const mitmPortsGroup = document.getElementById('cfg-mitm-ports-group');
     const mitmCaDirGroup = document.getElementById('cfg-mitm-ca-dir-group');
-    const mitmGroup = document.getElementById('cfg-mitm-group');
-    const syncMitmVisibility = () => {
+
+    const syncNetworkVisibility = () => {
         const netMode = networkEl ? networkEl.value : (currentConfig.network || 'none');
         const enabled = mitmTlsEl ? mitmTlsEl.checked : currentConfig.mitm_tls;
-        // MITM only makes sense on the `socket` (net-bridge) mode.
+        // network_if (socket path) and MITM only make sense for the socket mode.
+        if (networkIfGroup) networkIfGroup.style.display = (netMode === 'socket') ? '' : 'none';
         if (mitmGroup) mitmGroup.style.display = (netMode === 'socket') ? '' : 'none';
         const showSubfields = (netMode === 'socket') && enabled;
         if (mitmPortsGroup) mitmPortsGroup.style.display = showSubfields ? '' : 'none';
         if (mitmCaDirGroup) mitmCaDirGroup.style.display = showSubfields ? '' : 'none';
     };
+
+    if (networkEl) {
+        networkEl.value = currentConfig.network || 'none';
+        networkEl.addEventListener('change', syncNetworkVisibility);
+    }
+    if (networkIfEl) networkIfEl.value = currentConfig.network_if || '';
     if (mitmTlsEl) {
         mitmTlsEl.checked = !!currentConfig.mitm_tls;
-        mitmTlsEl.addEventListener('change', syncMitmVisibility);
+        mitmTlsEl.addEventListener('change', syncNetworkVisibility);
     }
     if (mitmPortsEl) mitmPortsEl.value = currentConfig.mitm_ports || '';
     if (mitmCaDirEl) mitmCaDirEl.value = currentConfig.mitm_ca_dir || '';
-    if (networkEl) networkEl.addEventListener('change', syncMitmVisibility);
-    syncMitmVisibility();
+    syncNetworkVisibility();
 
     refreshBootFromOptions();
     const bootdriverEl = document.getElementById('cfg-bootdriver');
@@ -4038,27 +3963,18 @@ function updateConfigUI() {
         }
     }
 
-    // Show/hide arch-specific settings and populate backend options
-    updateEmulatorPanelVisibility();
-
-    // Backend
+    // Backend (selecting it also reveals/hides backend-dependent fields)
     const backendEl = document.getElementById('cfg-backend');
     if (backendEl) backendEl.value = currentConfig.backend || 'uae';
+    updateEmulatorPanelVisibility();
 
-    // Common (unified IDs)
-    const fpuEl = document.getElementById('cfg-fpu');
+    // CPU feature toggles
     const jitEl = document.getElementById('cfg-jit');
     const jit68kEl = document.getElementById('cfg-jit68k');
     const idlewaitEl = document.getElementById('cfg-idlewait');
-    const ignoresegvEl = document.getElementById('cfg-ignoresegv');
-    const ignoreillegalEl = document.getElementById('cfg-ignoreillegal');
-
-    if (fpuEl) fpuEl.checked = currentConfig.fpu ?? true;
-    if (jitEl) jitEl.checked = currentConfig.jit ?? true;
+    if (jitEl) jitEl.checked = currentConfig.jit ?? false;
     if (jit68kEl) jit68kEl.checked = currentConfig.jit68k ?? true;
     if (idlewaitEl) idlewaitEl.checked = currentConfig.idlewait ?? true;
-    if (ignoresegvEl) ignoresegvEl.checked = currentConfig.ignoresegv ?? true;
-    if (ignoreillegalEl) ignoreillegalEl.checked = currentConfig.ignoreillegal ?? true;
 
     // Update disk checkboxes
     document.querySelectorAll('#disk-list input[type="checkbox"]').forEach(cb => {
@@ -4087,32 +4003,26 @@ async function saveConfig() {
     if (romDropdown && romDropdown.value) {
         currentConfig.rom = romDropdown.value;
     }
-    currentConfig.ram = parseInt(document.getElementById('cfg-ram')?.value || 32);
-    currentConfig.screen = document.getElementById('cfg-screen')?.value || '800x600';
+    currentConfig.ram = parseInt(document.getElementById('cfg-ram')?.value || 64);
+    currentConfig.screen = document.getElementById('cfg-screen')?.value || '640x480';
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
     currentConfig.zappram = document.getElementById('cfg-zappram')?.checked ?? false;
     currentConfig.dismiss_shutdown_dialog = document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true;
     currentConfig.bridge_enabled = document.getElementById('cfg-bridge-enabled')?.checked ?? false;
-    // bootdriver is resolved inside buildConfigJson (a "disk:NAME" selection
-    // reorders disks instead of setting a numeric bootdriver), so skip it here.
-    currentConfig.backend = document.getElementById('cfg-backend')?.value || (isM68kMode(currentConfig.emulator) ? 'uae' : 'kpx');
-    currentConfig.fpu = document.getElementById('cfg-fpu')?.checked ?? true;
-    currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? true;
+    currentConfig.backend = document.getElementById('cfg-backend')?.value
+                            || defaultBackendForMode(currentConfig.emulator);
+    currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? false;
+    currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
     currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
-    currentConfig.ignoresegv = document.getElementById('cfg-ignoresegv')?.checked ?? true;
-    if (!isM68kMode(currentConfig.emulator)) {
-        currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
-        currentConfig.ignoreillegal = document.getElementById('cfg-ignoreillegal')?.checked ?? true;
-    }
 
     const jsonConfig = buildConfigJson();
 
-    // Keep the nested preset for this emulator in sync with the top-level
-    // config we're about to save. Otherwise a "Boot From" reorder (which
-    // lives in disks[]) gets clobbered next time loadPreset() runs.
-    if (jsonConfig.emulator && App.savedPresets[jsonConfig.emulator]) {
-        const { configs: _, ...flat } = jsonConfig;
-        App.savedPresets[jsonConfig.emulator] = flat;
+    // Keep the named preset for the current "Emulator" persona in sync with
+    // the top-level config we're about to save. Otherwise a "Boot From"
+    // reorder (which lives in disks[]) gets clobbered next loadPreset().
+    const presetName = currentConfig.emulator;
+    if (presetName && App.savedPresets[presetName]) {
+        App.savedPresets[presetName] = { ...jsonConfig };
     }
 
     // Include saved presets
@@ -4787,6 +4697,9 @@ function setupEventListeners() {
 
     const cfgEmulator = document.getElementById('cfg-emulator');
     if (cfgEmulator) cfgEmulator.addEventListener('change', onEmulatorChange);
+
+    const cfgBackend = document.getElementById('cfg-backend');
+    if (cfgBackend) cfgBackend.addEventListener('change', updateEmulatorPanelVisibility);
 
     const cfgRom = document.getElementById('cfg-rom');
     if (cfgRom) cfgRom.addEventListener('change', onRomChange);

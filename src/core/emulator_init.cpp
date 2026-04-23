@@ -151,8 +151,8 @@ bool init_cpu_subsystem(const char* cpu_backend)
     }
 #endif
 
-    // Install CPU backend
-    if (strcmp(cpu_backend, "unicorn") == 0) {
+    // Install CPU backend (m68k variants only — PPC is initialized via CPUContext::init_ppc)
+    if (strcmp(cpu_backend, "unicorn-m68k") == 0) {
         cpu_unicorn_install(&g_platform);
     } else if (strcmp(cpu_backend, "dualcpu") == 0) {
         cpu_dualcpu_install(&g_platform);
@@ -246,11 +246,11 @@ bool init_mac_subsystems(void)
     // CD-ROM), point XPRAM at drive 1 served by the machine's disk driver so
     // the ROM boots the first entry in disk_paths — DiskOpen assigns drive
     // numbers sequentially, so reordering disk_paths is the UI's lever.
-    int16 boot_drive = cfg.bootdrive;
+    int16 boot_drive = 0;
     int16 boot_driver = cfg.bootdriver;
     if (boot_driver == 0 && !cfg.disk_paths.empty()) {
         boot_driver = machine_profile().disk_refnum;
-        if (boot_drive == 0) boot_drive = 1;
+        boot_drive = 1;
     }
     XPRAM[0x78] = boot_drive >> 8;
     XPRAM[0x79] = boot_drive & 0xff;
@@ -365,7 +365,7 @@ bool init_emulator_from_config(const char* emulator_type,
     }
 
     // Get CPU backend from config
-    const char *cpu_backend = config::EmulatorConfig::instance().cpu_backend_string();
+    const char *cpu_backend = config::EmulatorConfig::instance().backend_string();
 
     // Initialize CPU subsystem (includes PatchROM and cpu_init)
     if (!init_cpu_subsystem(cpu_backend)) {

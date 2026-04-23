@@ -118,10 +118,9 @@ bool InitAll(const char *vmdir)
 
 	// Set boot volume
 	auto& cfg = config::EmulatorConfig::instance();
-	int16 i16 = cfg.bootdrive;
-	XPRAM[0x78] = i16 >> 8;
-	XPRAM[0x79] = i16 & 0xff;
-	i16 = cfg.bootdriver;
+	XPRAM[0x78] = 0;
+	XPRAM[0x79] = 0;
+	int16 i16 = cfg.bootdriver;
 	XPRAM[0x7a] = i16 >> 8;
 	XPRAM[0x7b] = i16 & 0xff;
 

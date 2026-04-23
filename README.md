@@ -134,29 +134,27 @@ Drop whatever 68K or PPC software you have into `~/storage/installers/` — subf
 
 See [docs/Provisioning.md](docs/Provisioning.md) for the full guide (including Retro68, MPW, and `hfsutils` internals).
 
-## Architectures
+## CPU backends
 
-MacPhoenix supports two CPU architectures, selected with `--arch`:
+MacPhoenix selects its CPU emulator with `--backend`. The chosen backend
+implies the CPU architecture — there is no separate `--arch` flag.
 
 ```bash
 # 68K (default) — machine type auto-detected from ROM
 ./build/mac-phoenix /path/to/quadra.rom
 ./build/mac-phoenix /path/to/mac-se.rom --disk /path/to/system6.img
 
-# PowerPC — Power Mac G3 emulation
-./build/mac-phoenix --arch ppc /path/to/g3.rom --disk /path/to/macos9.img
+# PowerPC — Power Mac G3 emulation (KPX is the default PPC backend)
+./build/mac-phoenix --backend kpx /path/to/g3.rom --disk /path/to/macos9.img
 ```
 
-### 68K CPU backends
-
-The 68K architecture has two CPU backends, selected with `--backend`:
-
-| Backend | Engine | Boot time | Use case |
-|---------|--------|-----------|----------|
-| `uae` (default) | Hand-tuned interpreter | ~5s | General use |
-| `unicorn` | QEMU TCG JIT | ~48s | Validation / perf work |
-
-The PPC architecture uses the Kheperix (KPX) interpreter.
+| Backend | Arch | Engine | Boot time | Use case |
+|---------|------|--------|-----------|----------|
+| `uae` (default) | m68k | Hand-tuned interpreter (+ optional `--jit`) | ~5s | General use |
+| `unicorn-m68k` | m68k | QEMU TCG | ~48s | Validation / perf work |
+| `unicorn-ppc`  | ppc  | QEMU TCG | slow | PPC validation |
+| `kpx` | ppc | KPX translator (+ optional `--jit`, + optional `--jit68k`) | medium | Default PPC |
+| `dualcpu` | m68k | UAE + Unicorn lockstep | very slow | Debugging divergences |
 
 ### PowerPC prerequisite: `vm.mmap_min_addr`
 
@@ -176,7 +174,7 @@ echo 'vm.mmap_min_addr = 0' | \
     sudo tee /etc/sysctl.d/99-mac-phoenix-ppc.conf
 ```
 
-This is only needed for `--arch ppc`; 68K emulation is unaffected.
+This is only needed for the PPC backends (`kpx`, `unicorn-ppc`); 68K emulation is unaffected.
 
 ## Web UI
 
@@ -210,13 +208,15 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `architecture` | `"m68k"` | `"m68k"` or `"ppc"` |
-| `cpu_backend` | `"uae"` | `"uae"` or `"unicorn"` (68K only) |
-| `ram_mb` | `32` | |
-| `rom`, `disks`, `cdroms`, `floppies` | — | Absolute or relative to `storage_dir` |
+| `backend` | `"uae"` | `"uae"`, `"unicorn-m68k"`, `"unicorn-ppc"`, `"kpx"`, `"dualcpu"` |
+| `jit` | `false` | Enable backend's primary JIT (uae, kpx) |
+| `jit68k` | `true` | Enable 68k-on-PPC DR JIT (kpx only) |
+| `idlewait` | `true` | Pause CPU when guest is idle |
+| `ram_mb` | `64` | |
+| `rom`, `disks`, `cdroms` | — | Absolute or relative to `storage_dir` |
 | `extfs` | `""` | Shared host folder (repeatable in the UI) |
 | `screen` | `"640x480"` | `"WxH"` |
-| `codec` | `"png"` | `"png"`, `"h264"`, `"vp9"`, `"webp"` |
+| `codec` | `"vp9"` | `"png"`, `"h264"`, `"vp9"`, `"webp"`, `"httpstream"` |
 | `mousemode` | `"absolute"` | `"absolute"` or `"relative"` |
 | `http_port` | `11000` | Serves HTTP, `/ws` WebSocket signaling + frames, and `/api/frame` long-poll — one port |
 | `bridge_enabled` | `false` | Enable the automation bridge (see below) |
@@ -224,7 +224,9 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 | `dismiss_shutdown_dialog` | `true` | Auto-dismiss the improper-shutdown dialog on boot (set `false` if you want to see it) |
 | `log_level` | `0` | 0 = milestones, 3 = + registers |
 
-Arch-specific fields live under `m68k` / `ppc` sub-objects (`cpu_type`, `fpu`, `modelid`, `jit`, `idlewait`, `ignoresegv`, `swap_opt_cmd`, `keyboardtype`, …). See [docs/JsonConfig.md](docs/JsonConfig.md) for the full schema.
+Legacy `architecture` + `cpu_backend` + `m68k.*` / `ppc.*` keys are accepted on
+load with a one-time deprecation warning, then dropped on first save. See
+[docs/JsonConfig.md](docs/JsonConfig.md) for the full schema.
 
 ## CLI reference
 
@@ -234,16 +236,24 @@ Arch-specific fields live under `m68k` / `ppc` sub-objects (`cpu_type`, `fpu`, `
   --disk PATH                Disk image (repeatable)
   --cdrom PATH               CD-ROM image (repeatable)
   --extfs PATH               Shared host folder (repeatable)
+  --bootdriver N             0=any, -62=CD-ROM (default: 0)
   --storage-dir PATH         Root for relative rom/disk paths (default: ~/storage)
-  --arch m68k|ppc            CPU architecture (default: m68k)
-  --backend uae|unicorn|kpx  CPU backend (default: uae; kpx auto-selected for ppc)
-  --ram MB                   RAM size in megabytes
+  --backend NAME             uae | unicorn-m68k | unicorn-ppc | kpx | dualcpu
+                             (default: uae; backend implies architecture)
+  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
+  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
+  --idlewait / --no-idlewait Pause CPU when guest is idle (default: on)
+  --ram MB                   RAM size in megabytes (default: 64)
   --screen WxH               Display resolution (default: 640x480)
   --port N                   HTTP server port (default: 11000) — also hosts /ws signaling
   --timeout N                Auto-exit after N seconds (useful for tests)
   --no-webserver             Headless mode (no HTTP / WebRTC)
   --network MODE             Network: none | socket[:<unix-socket-path>]
+  --mitm-tls                 Enable MITM TLS proxy
+  --mitm-ports LIST          Comma-separated TCP ports (default: 443)
+  --mitm-ca-dir PATH         CA directory (default: .mitm_ca)
   --bridge                   Enable the automation bridge (BridgeAgent + ExtFS)
+  --headless-http            HTTP API only (no video/audio); implies --bridge
   --audio                    Enable audio emulation (Opus over WebRTC; default: off)
   --config PATH              JSON config file (use /dev/null to ignore user config)
   --zap-pram                 Clear PRAM on startup
@@ -255,10 +265,11 @@ Arch-specific fields live under `m68k` / `ppc` sub-objects (`cpu_type`, `fpu`, `
   --debug-mode-switch        Log video mode switches
   --debug-perf               Log performance counters
   --debug-network            Log lwIP NAT/DNS/ICMP/TCP/UDP
-  --jitexperimental / --no-jitexperimental     M68K JIT (experimental)
-  --ppc-jit / --no-ppc-jit                     PPC JIT (default: off)
   -h, --help                 This help
 ```
+
+Legacy flags accepted with a deprecation warning (will be removed): `--arch`,
+`--jitexperimental` / `--no-jitexperimental`, `--ppc-jit` / `--no-ppc-jit`.
 
 CLI flags always win over the config file. The emulator binary does not read environment variables — test scripts use `MACEMU_ROM` / `MACEMU_DISK`, but the binary itself does not.
 
@@ -455,7 +466,7 @@ tests/test_guest_suite.sh --disk ~/storage/images/quadra.img
 
 # PPC (uses the PPC ROM + Mac OS 9 image; 68k BridgeAgent runs under PPC's
 # built-in 68k emulator)
-tests/test_guest_suite.sh --arch ppc
+tests/test_guest_suite.sh --backend kpx
 ```
 
 The script starts a headless emulator on port 18094, waits for `bridge_heartbeat`, calls `/api/launch` with the script path, polls for a result file in the bridge directory, and tears everything down.

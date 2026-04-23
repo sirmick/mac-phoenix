@@ -44,7 +44,6 @@
 #include "macos_util.h"
 #include "emul_op.h"
 #include "ether.h"
-#include "emulator_config.h"
 #include "ether_defs.h"
 #include "platform.h"
 
@@ -92,77 +91,8 @@ void EtherInit(void)
 {
 	net_open = false;
 	udp_tunnel = false;
-
-#if SUPPORTS_UDP_TUNNEL
-	// UDP tunnelling requested?
-	auto& cfg = config::EmulatorConfig::instance();
-	if (cfg.udptunnel) {
-		udp_tunnel = true;
-		udp_port = cfg.udpport;
-
-		// Open UDP socket
-		udp_socket = socket(PF_INET, SOCK_DGRAM, 0);
-		if (udp_socket < 0) {
-			perror("socket");
-			return;
-		}
-
-		// Bind to specified address and port
-		struct sockaddr_in sa;
-		memset(&sa, 0, sizeof(sa));
-		sa.sin_family = AF_INET;
-		sa.sin_addr.s_addr = INADDR_ANY;
-		sa.sin_port = htons(udp_port);
-		if (bind(udp_socket, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-			perror("bind");
-			CLOSESOCKET(udp_socket);
-			udp_socket = -1;
-			return;
-		}
-
-		// Retrieve local IP address (or at least one of them)
-		socklen_t sa_length = sizeof(sa);
-		getsockname(udp_socket, (struct sockaddr *)&sa, &sa_length);
-		uint32 udp_ip = sa.sin_addr.s_addr;
-		if (udp_ip == INADDR_ANY || udp_ip == INADDR_LOOPBACK) {
-			char name[256];
-			gethostname(name, sizeof(name));
-			struct hostent *local = gethostbyname(name);
-			if (local)
-				udp_ip = *(uint32 *)local->h_addr_list[0];
-		}
-		udp_ip = ntohl(udp_ip);
-
-		// Construct dummy Ethernet address from local IP address
-		ether_addr[0] = 'B';
-		ether_addr[1] = '2';
-		ether_addr[2] = udp_ip >> 24;
-		ether_addr[3] = udp_ip >> 16;
-		ether_addr[4] = udp_ip >> 8;
-		ether_addr[5] = udp_ip;
-		D(bug("Ethernet address %02x %02x %02x %02x %02x %02x\n", ether_addr[0], ether_addr[1], ether_addr[2], ether_addr[3], ether_addr[4], ether_addr[5]));
-
-		// Set socket options
-		int on = 1;
-#ifdef __BEOS__
-		setsockopt(udp_socket, SOL_SOCKET, SO_NONBLOCK, &on, sizeof(on));
-#else
-		setsockopt(udp_socket, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
-		ioctl(udp_socket, FIONBIO, &on);
-#endif
-
-		// Start thread for packet reception
-		if (!ether_start_udp_thread(udp_socket)) {
-			CLOSESOCKET(udp_socket);
-			udp_socket = -1;
-			return;
-		}
-
+	if (ether_init())
 		net_open = true;
-	} else
-#endif
-		if (ether_init())
-			net_open = true;
 }
 
 

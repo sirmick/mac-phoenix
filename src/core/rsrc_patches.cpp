@@ -68,7 +68,7 @@ static uint32 find_rsrc_data(const uint8 *rsrc, uint32 max, const uint8 *search,
 static void patch_idle_time(uint8 *p, uint32 size, int n = 1)
 {
 	(void)n;
-	if (!config::EmulatorConfig::instance().m68k.idlewait)
+	if (!config::EmulatorConfig::instance().idlewait)
 		return;
 
 	static const uint8 dat[] = {0x70, 0x03, 0xa0, 0x9f};

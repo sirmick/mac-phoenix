@@ -77,7 +77,8 @@ static B2_mutex *mouse_lock;
 void ADBInit(void)
 {
 	mouse_lock = B2_create_mutex();
-	m_keyboard_type = (uint8)config::EmulatorConfig::instance().m68k.keyboardtype;
+	// Mac extended keyboard, type 5 — universally correct for emulated machines
+	m_keyboard_type = 5;
 	key_reg_3[1] = m_keyboard_type;
 	// Seed rand() for deterministic ADB enumeration (matching legacy)
 	srand(1);

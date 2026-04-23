@@ -36,82 +36,95 @@ You only need to specify values that differ from defaults:
 
 ## Full Schema
 
-### Top-Level Fields
+All fields are flat at the top level. There are no `m68k.*` / `ppc.*`
+sub-objects in the new schema (legacy keys are still accepted on load and
+silently dropped on first save).
+
+### CPU
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `architecture` | string | `"m68k"` | CPU architecture (`"m68k"` or `"ppc"`) |
-| `cpu_backend` | string | `"uae"` | CPU backend (`"uae"`, `"unicorn"`, `"dualcpu"`) |
-| `ram_mb` | int | `32` | RAM size in megabytes |
+| `backend` | string | `"uae"` | `"uae"`, `"unicorn-m68k"`, `"unicorn-ppc"`, `"kpx"`, `"dualcpu"`. Determines architecture; there is no separate `architecture` field. |
+| `jit` | bool | `false` | Enable backend's primary JIT (uae, kpx). No-op for unicorn-* backends. |
+| `jit68k` | bool | `true` | Enable 68k-on-PPC DR JIT (kpx only). |
+| `idlewait` | bool | `true` | Pause CPU when guest is idle (m68k rsrc patch + ppc SynchIdleTime). |
+
+### UAE JIT internals (rarely tuned)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `jit_fpu` | bool | `true` | JIT-compile FPU instructions |
+| `jit_debug` | bool | `false` | Enable JIT debugger |
+| `jit_cache_size` | int | `8192` | JIT translation cache size in KB |
+| `jit_lazy_flush` | bool | `true` | Lazy invalidation of JIT cache |
+| `jit_inline` | bool | `true` | Inline constant jumps in JIT |
+| `jit_blacklist` | string | `""` | Opcodes to exclude from JIT |
+
+### Memory & media
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ram_mb` | int | `64` | RAM size in megabytes |
+| `screen` | string | `"640x480"` | Display resolution (`"WxH"`) |
 | `rom` | string | `""` | ROM file path (absolute, or relative to `storage_dir/roms/`) |
 | `disks` | array | `[]` | Disk image paths (absolute, or relative to `storage_dir/images/`) |
-| `cdroms` | array | `[]` | CD-ROM image paths (absolute, or relative to `storage_dir/images/`) |
-| `floppies` | array | `[]` | Floppy image paths (absolute, or relative to `storage_dir/images/`) |
-| `extfs` | string | `""` | Host filesystem directory to share with the emulator |
-| `screen` | string | `"640x480"` | Display resolution (`"WxH"`) |
-| `audio` | bool | `true` | Enable audio |
-| `bootdrive` | int | `0` | Boot drive number |
-| `bootdriver` | int | `0` | Boot driver (`0` = any disk, `-62` = CD-ROM) |
-| `codec` | string | `"png"` | Video codec (`"png"`, `"h264"`, `"vp9"`, `"webp"`) |
+| `cdroms` | array | `[]` | CD-ROM image paths (same resolution rules) |
+| `extfs` | array | `[]` | Host filesystem directories to share with the emulator |
+| `bootdriver` | int | `0` | Boot driver (`0` = first disk, `-62` = CD-ROM) |
+| `audio` | bool | `false` | Enable audio (Opus over WebRTC) |
+
+### Streaming
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `codec` | string | `"vp9"` | Video codec (`"png"`, `"webp"`, `"h264"`, `"vp9"`, `"httpstream"`) |
 | `mousemode` | string | `"absolute"` | Mouse mode (`"absolute"` or `"relative"`) |
+
+### Networking
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `network` | string | `"none"` | `"none"` or `"socket"` (Unix socket to net-bridge) |
+| `network_if` | string | `""` | Socket path when `network` is `"socket"` |
+| `mitm_tls` | bool | `false` | Enable MITM TLS proxy (downgrade modern TLS to SSLv3/TLS1.0 for guest) |
+| `mitm_ports` | string | `""` | Comma-separated TCP ports to intercept (default: `"443"`) |
+| `mitm_ca_dir` | string | `""` | Directory for the local MITM root CA |
+
+### System
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `zappram` | bool | `false` | Clear PRAM on startup |
+| `dismiss_shutdown_dialog` | bool | `true` | Auto-dismiss "improper shutdown" dialog |
+| `bridge_enabled` | bool | `false` | Enable the automation bridge (BridgeAgent + ExtFS) |
+
+### Server
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
 | `http_port` | int | `11000` | HTTP server port (also hosts `/ws` signaling WebSocket) |
 | `storage_dir` | string | `"~/storage"` | Root directory for ROMs and disk images |
-| `nosound` | bool | `false` | Disable sound |
-| `zappram` | bool | `false` | Clear PRAM on startup |
-| `dismiss_shutdown_dialog` | bool | `false` | Auto-dismiss "improper shutdown" dialog on boot |
-| `frameskip` | int | `6` | Frames to skip between refreshes |
-| `yearofs` | int | `0` | Year offset for Mac clock |
-| `dayofs` | int | `0` | Day offset for Mac clock |
-| `udptunnel` | bool | `false` | Tunnel network packets over UDP |
-| `udpport` | int | `6066` | UDP port for network tunneling |
+| `client_dir` | string | `"./client"` | Path to the web UI; resolved relative to the binary if not absolute |
+
+### Logging
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
 | `log_level` | int | `0` | Log verbosity (0=milestones, 1=important, 2=all, 3=+registers) |
 | `debug_connection` | bool | `false` | Log WebRTC connection details |
 | `debug_mode_switch` | bool | `false` | Log video mode switches |
 | `debug_perf` | bool | `false` | Log performance stats |
-
-### M68K Sub-Object (`m68k`)
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `cpu_type` | int | `4` | CPU type (0=68000, 1=68010, 2=68020, 3=68030, 4=68040) |
-| `fpu` | bool | `true` | Enable FPU emulation |
-| `modelid` | int | `14` | Mac model ID (Gestalt Model ID minus 6) |
-| `jit` | bool | `true` | Enable JIT compiler (UAE backend only) |
-| `jitfpu` | bool | `true` | JIT-compile FPU instructions |
-| `jitdebug` | bool | `false` | Enable JIT debugger |
-| `jitcachesize` | int | `8192` | JIT translation cache size in KB |
-| `jitlazyflush` | bool | `true` | Lazy invalidation of JIT cache |
-| `jitinline` | bool | `true` | Inline constant jumps in JIT |
-| `jitblacklist` | string | `""` | Opcodes to exclude from JIT |
-| `idlewait` | bool | `true` | Sleep when Mac OS is idle |
-| `ignoresegv` | bool | `true` | Skip illegal memory accesses |
-| `swap_opt_cmd` | bool | `true` | Swap Option and Command keys |
-| `keyboardtype` | int | `5` | Mac keyboard type |
-
-### PPC Sub-Object (`ppc`)
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `cpu_type` | int | `4` | PPC CPU type |
-| `fpu` | bool | `true` | Enable FPU |
-| `modelid` | int | `14` | Mac model ID |
-| `jit` | bool | `true` | Enable JIT compiler |
-| `jit68k` | bool | `false` | JIT-compile 68K code in PPC mode |
-| `idlewait` | bool | `true` | Sleep when idle |
-| `ignoresegv` | bool | `true` | Skip illegal memory accesses |
-| `ignoreillegal` | bool | `false` | Skip illegal instructions |
-| `keyboardtype` | int | `5` | Mac keyboard type |
+| `debug_network` | bool | `false` | Log net-bridge / lwIP NAT/DNS/ICMP/TCP/UDP |
 
 ## Path Resolution
 
-Relative paths in `rom`, `disks`, `cdroms`, and `floppies` are resolved against `storage_dir`:
+Relative paths in `rom`, `disks`, and `cdroms` are resolved against `storage_dir`:
 
 | Field | Resolved to |
 |-------|-------------|
 | `rom` | `storage_dir/roms/<path>` |
 | `disks` | `storage_dir/images/<path>` |
 | `cdroms` | `storage_dir/images/<path>` |
-| `floppies` | `storage_dir/images/<path>` |
 
 Absolute paths (starting with `/`) are used as-is. The `~` prefix is expanded to `$HOME`.
 
@@ -129,31 +142,41 @@ The web UI's file picker scans these directories via `GET /api/storage`.
 
 ```json
 {
-  "architecture": "m68k",
-  "cpu_backend": "uae",
   "rom": "1MB ROMs/Quadra 950.ROM",
   "disks": ["system-7.6.img"],
   "cdroms": [],
+
+  "backend": "uae",
+  "jit": true,
+  "idlewait": true,
+
   "ram_mb": 64,
   "screen": "800x600",
   "audio": true,
-  "bootdriver": 0,
+
   "codec": "vp9",
   "mousemode": "relative",
+
   "http_port": 11000,
-  "storage_dir": "/home/user/storage",
-  "m68k": {
-    "cpu_type": 4,
-    "fpu": true,
-    "modelid": 14,
-    "jit": true,
-    "idlewait": true,
-    "ignoresegv": true,
-    "swap_opt_cmd": true,
-    "keyboardtype": 5
-  }
+  "storage_dir": "/home/user/storage"
 }
 ```
+
+## Legacy Schema (accepted on load, dropped on save)
+
+For one release, configs in the old schema still load. Coercion is performed on
+read; once you save through the UI, the file is rewritten in the new format.
+
+| Old key | New key |
+|---------|---------|
+| `architecture` + `cpu_backend` (e.g. `architecture: ppc, cpu_backend: kpx`) | `backend` (e.g. `kpx`) |
+| `cpu_backend: unicorn` (with `architecture: ppc`/`m68k`) | `backend: unicorn-ppc` / `unicorn-m68k` |
+| `m68k.jitexperimental`, `ppc.jit` | `jit` |
+| `ppc.jit68k` | `jit68k` |
+| `m68k.idlewait`, `ppc.idlewait` | `idlewait` |
+| `m68k.jit{fpu,debug,cachesize,lazyflush,inline,blacklist}` | `jit_{fpu,debug,cache_size,lazy_flush,inline,blacklist}` |
+| `nosound: true` | `audio: false` |
+| `m68k.fpu`, `ppc.fpu`, `m68k.ignoresegv`, `ppc.ignoresegv`, `ppc.ignoreillegal`, `m68k.swap_opt_cmd`, `*.keyboardtype`, `floppies`, `frameskip`, `yearofs`, `dayofs`, `udptunnel`, `udpport`, `bootdrive`, `emulator`, `auto_launch_app` | _dropped_ (these were dead, machine-driven, or hardcoded) |
 
 ## Web UI Integration
 

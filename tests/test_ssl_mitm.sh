@@ -56,7 +56,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 EXTRA_FLAGS=()
-[[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
+# --arch was deprecated; backend determines arch. Derive ARCH from BACKEND for
+# the ROM/RAM selection logic only (not passed to the binary).
+[[ -z "$ARCH" && ( "$BACKEND" == "kpx" || "$BACKEND" == "unicorn-ppc" ) ]] && ARCH=ppc
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

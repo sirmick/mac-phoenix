@@ -375,52 +375,36 @@
                 </div>
                 <div class="advanced-content" id="advanced-settings">
                     <div class="form-group">
-                        <label>CPU Backend</label>
+                        <label for="cfg-backend">CPU Backend</label>
                         <select id="cfg-backend">
-                            <option value="uae">UAE (Interpreter)</option>
-                            <option value="unicorn">Unicorn (QEMU JIT)</option>
+                            <option value="uae">UAE (m68k, interpreter + JIT)</option>
+                            <option value="unicorn-m68k">Unicorn (m68k, QEMU TCG)</option>
+                            <option value="unicorn-ppc">Unicorn (PPC, QEMU TCG)</option>
+                            <option value="kpx">KPX (PPC, translator + JIT)</option>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="cfg-jit-group">
                         <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-fpu" checked>
-                            <label for="cfg-fpu">Enable FPU</label>
+                            <input type="checkbox" id="cfg-jit">
+                            <label for="cfg-jit">Enable JIT</label>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-jit" checked>
-                            <label for="cfg-jit" id="cfg-jit-label">Enable JIT Compiler (experimental)</label>
-                        </div>
-                    </div>
-                    <div class="form-group" data-arch="ppc">
+                    <div class="form-group" id="cfg-jit68k-group">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-jit68k" checked>
-                            <label for="cfg-jit68k">Enable 68k JIT (DR Emulator)</label>
+                            <label for="cfg-jit68k">Enable 68k JIT (DR emulator, KPX only)</label>
                         </div>
                     </div>
                     <div class="form-group">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-idlewait" checked>
-                            <label for="cfg-idlewait">Don't Use CPU When Idle</label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-ignoresegv" checked>
-                            <label for="cfg-ignoresegv" id="cfg-ignoresegv-label">Ignore Illegal Memory Access</label>
-                        </div>
-                    </div>
-                    <div class="form-group" data-arch="ppc">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-ignoreillegal" checked>
-                            <label for="cfg-ignoreillegal">Ignore Illegal Instructions</label>
+                            <label for="cfg-idlewait">Pause CPU when guest is idle</label>
                         </div>
                     </div>
                     <div class="form-group">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-sound" checked>
-                            <label for="cfg-sound">Enable Sound</label>
+                            <label for="cfg-sound">Enable sound</label>
                         </div>
                     </div>
                     <div class="form-group">
@@ -448,7 +432,11 @@
                             <option value="socket">NAT (net-bridge)</option>
                         </select>
                     </div>
-                    <div class="form-group" id="cfg-mitm-group">
+                    <div class="form-group" id="cfg-network-if-group" style="display:none">
+                        <label for="cfg-network-if">Socket path (optional)</label>
+                        <input type="text" id="cfg-network-if" placeholder="/tmp/macemu.sock">
+                    </div>
+                    <div class="form-group" id="cfg-mitm-group" style="display:none">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-mitm-tls">
                             <label for="cfg-mitm-tls">Enable MITM TLS proxy (SSLv3/TLS1.0 downgrade for classic browsers)</label>

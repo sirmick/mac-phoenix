@@ -81,23 +81,30 @@ npx playwright test --ui        # interactive UI
 
 ```
 ./build/mac-phoenix [options] [rom-path]
-  --rom path            ROM file path (alternative to positional arg)
-  --disk path           Disk image path (repeatable)
-  --cdrom path          CDROM image path (repeatable)
-  --ram MB              RAM size in megabytes
-  --port N              HTTP server port (default: 8000)
-  # --signaling-port / --signaling-path removed in 2026-04 — signaling rides /ws on the HTTP port.
-  --backend uae|unicorn Backend selection (default: uae)
-  --arch m68k|ppc       CPU architecture
-  --timeout N           Auto-exit after N seconds
-  --no-webserver        Headless mode (no HTTP/WebRTC)
-  --screen WxH          Display resolution (default: 640x480)
-  --config path         JSON config file
-  --screenshots         Dump PPM screenshots to /tmp
-  --log-level N         Log level 0-3
-  --debug-connection    Debug WebRTC connections
-  --debug-mode-switch   Debug video mode switches
-  --debug-perf          Debug performance
+  --rom PATH                 ROM file path (or positional arg)
+  --disk PATH                Disk image path (repeatable)
+  --cdrom PATH               CD-ROM image path (repeatable)
+  --extfs PATH               Shared host folder (repeatable)
+  --ram MB                   RAM size in megabytes (default: 64)
+  --screen WxH               Display resolution (default: 640x480)
+  --port N                   HTTP server port (default: 11000) — also hosts /ws signaling
+  --backend NAME             uae | unicorn-m68k | unicorn-ppc | kpx | dualcpu
+                             (default: uae; backend implies architecture)
+  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
+  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only)
+  --idlewait / --no-idlewait Pause CPU when guest is idle (default: on)
+  --network MODE             none | socket[:PATH]
+  --bridge                   Enable automation bridge
+  --audio                    Enable audio
+  --timeout N                Auto-exit after N seconds
+  --no-webserver             Headless mode (no HTTP/WebRTC)
+  --config PATH              JSON config file
+  --screenshots              Dump PPM screenshots to /tmp
+  --log-level N              Log level 0-3
+  --debug-connection         Debug WebRTC connections
+  --debug-mode-switch        Debug video mode switches
+  --debug-perf               Debug performance
+  --debug-network            Debug net-bridge / lwIP
 ```
 
 ---

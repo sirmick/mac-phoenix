@@ -81,7 +81,7 @@ QEMU-based JIT via Unicorn Engine. ~10x slower than UAE due to QEMU TCG M68K ove
 
 Kheperix interpreter from SheepShaver, targeting Gossamer (Beige G3) ROMs.
 
-- **Flags**: `--arch ppc`, `--ppc-jit`/`--no-ppc-jit`
+- **Flags**: `--backend kpx`, `--jit`/`--no-jit`, `--jit68k`/`--no-jit68k`
 - **Boot time**: ~45s to Finder (interpreter)
 - **OS**: Mac OS 9.0.4 (tested), 8.1-9.2.2 (expected)
 - **Files**: `src/cpu/kpx/`
@@ -98,7 +98,7 @@ Kheperix interpreter from SheepShaver, targeting Gossamer (Beige G3) ROMs.
 | `video_ppc.cpp` | Video driver (VideoDoDriverIO) |
 | `gfxaccel_ppc.cpp` | NQD acceleration hooks |
 
-**JIT Status**: Dyngen JIT compiled and available via `--ppc-jit`. Blocked by GCC 13 codegen difference in block dispatch loop — interpreter is the working default.
+**JIT Status**: Dyngen JIT compiled and available via `--jit` (when `--backend kpx`). Blocked by GCC 13 codegen difference in block dispatch loop — interpreter is the working default.
 
 See `docs/ppc/` for comprehensive PPC documentation.
 

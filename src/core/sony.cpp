@@ -152,18 +152,7 @@ static drive_vec::iterator get_drive_info(int num)
 
 void SonyInit(void)
 {
-	auto& cfg = config::EmulatorConfig::instance();
-	for (const auto& path : cfg.floppy_paths) {
-		const char *str = path.c_str();
-		bool read_only = false;
-		if (str[0] == '*') {
-			read_only = true;
-			str++;
-		}
-		void *fh = Sys_open(str, read_only);
-		if (fh)
-			drives.push_back(sony_drive_info(fh, SysIsReadOnly(fh)));
-	}
+	// Floppy support is not currently exposed via config.
 }
 
 

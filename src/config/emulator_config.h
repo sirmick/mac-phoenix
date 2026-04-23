@@ -4,7 +4,6 @@
  *  Single source of truth for emulator configuration, combining:
  *  - JSON config file
  *  - Command-line arguments (overrides)
- *  - Environment variables (lowest priority overrides)
  *  - Sensible defaults
  */
 
@@ -18,46 +17,27 @@
 
 namespace config {
 
+// CPU architecture. Not part of the JSON wire format — derived from the
+// chosen backend. Used internally by CPUContext to track which code paths
+// are active at runtime.
 enum class Architecture {
     M68K,
-    PPC  // Not yet implemented
+    PPC
 };
 
-enum class CPUBackend {
-    UAE,      // Original interpreter
-    Unicorn,  // QEMU-based JIT
-    DualCPU,  // Validation mode (UAE + Unicorn)
-    KPX       // Kheperix PPC interpreter
+// CPU backend. Each token uniquely determines the CPU architecture, so
+// there is no separate "architecture" axis in the config.
+enum class Backend {
+    UAE,           // m68k, hand-tuned interpreter (+optional JIT)
+    UnicornM68K,   // m68k, Unicorn TCG
+    UnicornPPC,    // ppc,  Unicorn TCG
+    KPX,           // ppc,  KPX translator (+optional PPC JIT, +optional 68k JIT)
+    DualCPU        // m68k, UAE + Unicorn lockstep validation
 };
 
 enum class NetworkMode {
     None,     // No networking (null driver)
     Socket    // Unix socket to net-bridge (smoltcp NAT + HTTPS proxy)
-};
-
-struct M68KConfig {
-    bool fpu = true;
-    bool jitexperimental = false;
-    bool jitfpu = true;
-    bool jitdebug = false;
-    int jitcachesize = 8192;
-    bool jitlazyflush = true;
-    bool jitinline = true;
-    std::string jitblacklist;
-    bool idlewait = true;
-    bool ignoresegv = true;
-    bool swap_opt_cmd = true;
-    int keyboardtype = 5;
-};
-
-struct PPCConfig {
-    bool fpu = true;
-    bool jit = false;
-    bool jit68k = true;
-    bool idlewait = true;
-    bool ignoresegv = true;
-    bool ignoreillegal = true;
-    int keyboardtype = 5;
 };
 
 /*
@@ -66,8 +46,7 @@ struct PPCConfig {
  * Priority order (highest to lowest):
  * 1. Command-line arguments
  * 2. JSON config file
- * 3. Environment variables
- * 4. Defaults (below)
+ * 3. Defaults (below)
  */
 struct EmulatorConfig {
     // Singleton access
@@ -76,10 +55,20 @@ struct EmulatorConfig {
         return s_instance;
     }
 
-    // Architecture & CPU
-    Architecture architecture = Architecture::M68K;
-    CPUBackend cpu_backend = CPUBackend::UAE;
-    std::string emulator = "quadra";   // "se", "quadra", or "ppc"
+    // CPU
+    Backend backend = Backend::UAE;
+    bool jit = false;        // enable backend's primary JIT (uae, kpx)
+    bool jit68k = true;      // enable 68k-on-PPC DR JIT (kpx only)
+    bool idlewait = true;    // pause CPU when guest idle (m68k rsrc patch + ppc SynchIdleTime)
+
+    // UAE JIT internals (only consulted when backend=uae && jit=true).
+    // Defaults are sensible; rarely tuned. Exposed via JSON for advanced users.
+    bool jit_fpu = true;
+    bool jit_debug = false;
+    int  jit_cache_size = 8192;
+    bool jit_lazy_flush = true;
+    bool jit_inline = true;
+    std::string jit_blacklist;
 
     // Memory
     uint32_t ram_mb = 64;
@@ -88,20 +77,18 @@ struct EmulatorConfig {
     std::string rom_path;
     std::vector<std::string> disk_paths;
     std::vector<std::string> cdrom_paths;
-    std::vector<std::string> floppy_paths;
     std::vector<std::string> extfs_paths;
 
     // Video
     uint32_t screen_width = 640;
     uint32_t screen_height = 480;
-    bool screenshots = false;
+    bool screenshots = false;          // CLI-only: dump PPM frames to /tmp
 
-    // Audio (opt-in — enable with --audio CLI flag)
-    bool audio_enabled = false;
+    // Audio
+    bool audio_enabled = false;        // opt-in via --audio
 
     // Boot
-    int bootdrive = 0;
-    int bootdriver = 0;  // 0=any, -62=CDROM
+    int bootdriver = 0;                // 0=any, -62=CDROM
 
     // Streaming
     std::string codec = "vp9";
@@ -109,34 +96,27 @@ struct EmulatorConfig {
 
     // Web/Network
     bool enable_webserver = true;
-    bool headless_http = false;  // serve HTTP API in headless mode (no WebRTC/video/audio)
-    bool bridge_enabled = false; // enable automation bridge (INIT injection + file-based commands)
-    std::string bridge_dir;      // temp directory for bridge file I/O (auto-created)
+    bool headless_http = false;        // serve HTTP API in headless mode (no WebRTC/video/audio)
+    bool bridge_enabled = false;       // automation bridge (INIT injection + file-based commands)
+    std::string bridge_dir;            // temp directory for bridge file I/O (auto-created)
     int http_port = 11000;
     std::string client_dir = "./client";
     std::string storage_dir = "~/storage";
 
     // System
-    bool nosound = false;
     bool zappram = false;
     bool dismiss_shutdown_dialog = true;
-    std::string auto_launch_app;  // Mac path launched after desktop reached
-    int frameskip = 6;
-    int yearofs = 0;
-    int dayofs = 0;
-    bool udptunnel = false;
-    int udpport = 6066;
 
     // Networking
     NetworkMode network = NetworkMode::None;
-    std::string network_if;  // Interface name for raw mode (e.g. "eth0")
+    std::string network_if;            // Socket path when network=socket
 
     // MITM TLS proxy (net-bridge): terminates modern TLS on the host side
     // and re-encrypts to the guest using classic-Mac-compatible SSLv3/TLS1.0
     // + weak-RSA ciphers. Opt-in only; one-time CA import required in guest.
     bool mitm_tls = false;
-    std::string mitm_ports;    // comma-separated, e.g. "443,993"; empty → default (443)
-    std::string mitm_ca_dir;   // where the local MITM CA lives; empty → net-bridge default
+    std::string mitm_ports;            // comma-separated, e.g. "443,993"; empty → default (443)
+    std::string mitm_ca_dir;           // where the local MITM CA lives; empty → net-bridge default
 
     // IPC child mode (--ipc flag, used for PPC subprocess)
     bool ipc_mode = false;
@@ -145,19 +125,15 @@ struct EmulatorConfig {
     int timeout_seconds = 0;
 
     // Logging & Debug
-    int log_level = 0;             // 0=milestones, 1=important, 2=all ops, 3=+registers
+    int log_level = 0;                 // 0=milestones, 1=important, 2=all ops, 3=+registers
     bool debug_connection = false;
     bool debug_mode_switch = false;
     bool debug_perf = false;
     bool debug_network = false;
 
-    // Internal (not serialized to JSON)
-    std::string config_path;       // where to save back
-    nlohmann::json file_config_;   // tracks what's persisted on disk (UI changes only)
-
-    // Arch sub-structs
-    M68KConfig m68k;
-    PPCConfig ppc;
+    // Internal (not serialized)
+    std::string config_path;
+    nlohmann::json file_config_;       // tracks what's persisted on disk (UI changes only)
 
     // Serialization
     nlohmann::json to_json() const;
@@ -170,22 +146,27 @@ struct EmulatorConfig {
         return std::to_string(screen_width) + "x" + std::to_string(screen_height);
     }
 
-    const char* cpu_backend_string() const {
-        switch (cpu_backend) {
-            case CPUBackend::UAE: return "uae";
-            case CPUBackend::Unicorn: return "unicorn";
-            case CPUBackend::DualCPU: return "dualcpu";
-            case CPUBackend::KPX: return "kpx";
+    const char* backend_string() const {
+        switch (backend) {
+            case Backend::UAE:         return "uae";
+            case Backend::UnicornM68K: return "unicorn-m68k";
+            case Backend::UnicornPPC:  return "unicorn-ppc";
+            case Backend::KPX:         return "kpx";
+            case Backend::DualCPU:     return "dualcpu";
         }
         return "uae";
     }
 
-    bool fpu() const {
-        return m68k.fpu;
+    bool is_ppc() const {
+        return backend == Backend::UnicornPPC || backend == Backend::KPX;
     }
 
-    const char* architecture_string() const {
-        return (architecture == Architecture::M68K) ? "m68k" : "ppc";
+    Architecture architecture() const {
+        return is_ppc() ? Architecture::PPC : Architecture::M68K;
+    }
+
+    const char* arch_string() const {
+        return is_ppc() ? "ppc" : "m68k";
     }
 
     const char* network_string() const {

@@ -46,7 +46,9 @@ fi
 echo "=== Command Bridge Test: $BACKEND backend ==="
 
 EXTRA_FLAGS=()
-[[ -n "$ARCH" ]] && EXTRA_FLAGS+=(--arch "$ARCH")
+# --arch was deprecated; backend now determines arch. Derive ARCH from BACKEND
+# for the ROM/RAM selection logic only (not passed to the binary).
+[[ -z "$ARCH" && ( "$BACKEND" == "kpx" || "$BACKEND" == "unicorn-ppc" ) ]] && ARCH=ppc
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 
 cleanup() {

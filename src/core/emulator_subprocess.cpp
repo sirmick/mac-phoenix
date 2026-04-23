@@ -43,18 +43,11 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     args.push_back("--config");
     args.push_back("/dev/null");
     args.push_back("--ipc");
-    args.push_back("--arch");
-    args.push_back(config_->architecture == config::Architecture::PPC ? "ppc" : "m68k");
     args.push_back("--no-webserver");
 
-    // Pass CPU backend for all architectures
+    // Pass CPU backend (encodes architecture)
     args.push_back("--backend");
-    switch (config_->cpu_backend) {
-        case config::CPUBackend::Unicorn: args.push_back("unicorn"); break;
-        case config::CPUBackend::DualCPU: args.push_back("dualcpu"); break;
-        case config::CPUBackend::KPX:     args.push_back("kpx"); break;
-        default: args.push_back("uae"); break;
-    }
+    args.push_back(config_->backend_string());
 
     if (!config_->rom_path.empty()) {
         args.push_back("--rom");
@@ -83,10 +76,6 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back("--bootdriver");
         args.push_back(std::to_string(config_->bootdriver));
     }
-    if (config_->bootdrive != 0) {
-        args.push_back("--bootdrive");
-        args.push_back(std::to_string(config_->bootdrive));
-    }
 
     args.push_back("--screen");
     args.push_back(config_->screen_string());
@@ -106,11 +95,6 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back("--bridge");
     }
 
-    if (!config_->auto_launch_app.empty()) {
-        args.push_back("--auto-launch");
-        args.push_back(config_->auto_launch_app);
-    }
-
     // Network
     if (config_->network != config::NetworkMode::None) {
         args.push_back("--network");
@@ -121,8 +105,10 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back(net_arg);
     }
 
-    // PPC-specific options
-    args.push_back(config_->ppc.jit ? "--ppc-jit" : "--no-ppc-jit");
+    // CPU feature flags
+    args.push_back(config_->jit ? "--jit" : "--no-jit");
+    args.push_back(config_->jit68k ? "--jit68k" : "--no-jit68k");
+    args.push_back(config_->idlewait ? "--idlewait" : "--no-idlewait");
 
     return args;
 }

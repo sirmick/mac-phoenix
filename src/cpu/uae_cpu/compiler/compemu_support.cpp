@@ -5031,13 +5031,13 @@ void compiler_init(void)
 
 #if JIT_DEBUG
 	// JIT debug mode ?
-	JITDebug = config::EmulatorConfig::instance().m68k.jitdebug;
+	JITDebug = config::EmulatorConfig::instance().jit_debug;
 #endif
 	write_log("<JIT compiler> : enable runtime disassemblers : %s\n", JITDebug ? "yes" : "no");
 	
 #ifdef USE_JIT_FPU
 	// Use JIT compiler for FPU instructions ?
-	avoid_fpu = !config::EmulatorConfig::instance().m68k.jitfpu;
+	avoid_fpu = !config::EmulatorConfig::instance().jit_fpu;
 #else
 	// JIT FPU is always disabled
 	avoid_fpu = true;
@@ -5045,7 +5045,7 @@ void compiler_init(void)
 	write_log("<JIT compiler> : compile FPU instructions : %s\n", !avoid_fpu ? "yes" : "no");
 	
 	// Get size of the translation cache (in KB)
-	cache_size = config::EmulatorConfig::instance().m68k.jitcachesize;
+	cache_size = config::EmulatorConfig::instance().jit_cache_size;
 	write_log("<JIT compiler> : requested translation cache size : %d KB\n", cache_size);
 	
 	// Initialize target CPU (check for features, e.g. CMOV, rat stalls)
@@ -5056,7 +5056,7 @@ void compiler_init(void)
 	write_log("<JIT compiler> : alignment for loops, jumps are %d, %d\n", align_loops, align_jumps);
 	
 	// Translation cache flush mechanism
-	lazy_flush = config::EmulatorConfig::instance().m68k.jitlazyflush;
+	lazy_flush = config::EmulatorConfig::instance().jit_lazy_flush;
 	write_log("<JIT compiler> : lazy translation cache invalidation : %s\n", str_on_off(lazy_flush));
 	flush_icache = lazy_flush ? flush_icache_lazy : flush_icache_hard;
 	
@@ -5065,7 +5065,7 @@ void compiler_init(void)
 	write_log("<JIT compiler> : FP register aliasing : %s\n", str_on_off(USE_F_ALIAS));
 	write_log("<JIT compiler> : lazy constant offsetting : %s\n", str_on_off(USE_OFFSET));
 #if USE_INLINING
-	follow_const_jumps = config::EmulatorConfig::instance().m68k.jitinline;
+	follow_const_jumps = config::EmulatorConfig::instance().jit_inline;
 #endif
 	write_log("<JIT compiler> : translate through constant jumps : %s\n", str_on_off(follow_const_jumps));
 	write_log("<JIT compiler> : separate blockinfo allocation : %s\n", str_on_off(USE_SEPARATE_BIA));
@@ -5158,12 +5158,12 @@ void compiler_exit(void)
 bool compiler_use_jit(void)
 {
 	// Check for the "jit" prefs item
-	auto& jcfg = config::EmulatorConfig::instance().m68k;
-	if (!jcfg.jitexperimental)
+	auto& jcfg = config::EmulatorConfig::instance();
+	if (!jcfg.jit)
 		return false;
 
 	// Don't use JIT if translation cache size is less then MIN_CACHE_SIZE KB
-	if (jcfg.jitcachesize < MIN_CACHE_SIZE) {
+	if (jcfg.jit_cache_size < MIN_CACHE_SIZE) {
 		write_log("<JIT compiler> : translation cache size is less than %d KB. Disabling JIT.\n", MIN_CACHE_SIZE);
 		return false;
 	}
@@ -6180,7 +6180,7 @@ static int read_opcode(const char *p)
 
 static bool merge_blacklist()
 {
-	const auto& bl = config::EmulatorConfig::instance().m68k.jitblacklist;
+	const auto& bl = config::EmulatorConfig::instance().jit_blacklist;
 	const char *blacklist = bl.empty() ? NULL : bl.c_str();
 	if (blacklist) {
 		const char *p = blacklist;

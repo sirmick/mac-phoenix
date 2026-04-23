@@ -36,24 +36,27 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom
 # Playwright E2E tests (requires running emulator)
 npx playwright test
 
-# Boot capacity matrix (12 cells: 6 backend×JIT configs × 2 OSes)
+# Boot capacity matrix (12 cells: backend × JIT configs × 2 OSes)
 # Writes CSV + PNG screenshots + per-cell logs to --out dir.
 tests/run_boot_matrix.sh --out /home/mick/mac-phoenix/test-results/boot-matrix
 # Single cell:
-tests/test_boot_matrix.sh --label unicorn-m68k-755 --backend unicorn --arch m68k \
+tests/test_boot_matrix.sh --label unicorn-m68k-755 --backend unicorn-m68k \
     --rom ~/roms/quadra.rom --disk ~/storage/images/macos-7.5.5.img \
     --timeout 60 --port 19300 --screenshot-dir /tmp/one-cell
 ```
 
 ## CPU Backends
 
-Selected via `--backend` flag (default: `uae`):
+Selected via `--backend` flag (default: `uae`). The backend token uniquely
+determines the CPU architecture — there is no separate `--arch` flag.
 
-| Backend | What | Speed | Use for |
-|---------|------|-------|---------|
-| `uae` | Hand-tuned interpreter | Fast (~5s boot) | Default, end users |
-| `unicorn` | QEMU TCG JIT | Slow (~48s boot) | Validation, future perf work |
-| `dualcpu` | UAE + Unicorn lockstep | Very slow | Debugging divergences |
+| Backend | Arch | What | Speed | Use for |
+|---------|------|------|-------|---------|
+| `uae` | m68k | Hand-tuned interpreter (+optional `--jit`) | Fast (~5s boot) | Default, end users |
+| `unicorn-m68k` | m68k | QEMU TCG | Slow (~48s boot) | Validation, future perf work |
+| `unicorn-ppc` | ppc | QEMU TCG | Slow | PPC validation |
+| `kpx` | ppc | KPX translator (+optional `--jit`, +optional `--jit68k`) | Medium | Default for PPC |
+| `dualcpu` | m68k | UAE + Unicorn lockstep | Very slow | Debugging divergences |
 
 ## Project Structure
 
@@ -150,31 +153,57 @@ Tracked in `boot_progress.cpp`, exposed via `/api/status`:
 
 ```
 ./build/mac-phoenix [options] [rom-path]
-  --rom path            ROM file path (alternative to positional arg)
-  --disk path           Disk image path (repeatable)
-  --cdrom path          CDROM image path (repeatable)
-  --extfs path          Shared folder path (repeatable)
-  --ram MB              RAM size in megabytes
-  --port N              HTTP server port (default: 11000) — also hosts /ws signaling
-  --backend uae|unicorn Backend selection (default: uae)
-  --arch m68k|ppc       CPU architecture
-  --timeout N           Auto-exit after N seconds
-  --no-webserver        Headless mode (no HTTP/WebRTC)
-  --screen WxH          Display resolution (default: 640x480)
-  --network MODE        Network: none, lwip, raw:<iface>, socket[:<path>] (default: none)
-  --mitm-tls            Terminate modern TLS on host, downgrade to SSLv3/TLS1.0 for guest
-  --mitm-ports LIST     Comma-separated TCP ports to intercept (default: 443)
-  --mitm-ca-dir PATH    Where the MITM root CA lives (default: .mitm_ca in CWD)
-  --bridge              Enable automation bridge (BridgeAgent + auto ExtFS mount)
-  --audio               Enable audio emulation (opt-in, default off)
-  --config path         JSON config file
-  --screenshots         Dump PPM screenshots to /tmp
-  --dismiss-shutdown-dialog  Auto-dismiss improper shutdown dialog on boot
-  --log-level N         Log level 0-3
-  --debug-connection    Debug WebRTC connections
-  --debug-mode-switch   Debug video mode switches
-  --debug-perf          Debug performance
+
+Machine:
+  --rom PATH                 ROM file (or positional arg)
+  --ram MB                   RAM size in megabytes (default: 64)
+  --screen WxH               Display resolution (default: 640x480)
+  --disk PATH                Disk image (repeatable)
+  --cdrom PATH               CD-ROM image (repeatable)
+  --extfs PATH               Shared folder (repeatable)
+  --bootdriver N             0=any, -62=CD-ROM (default: 0)
+  --storage-dir PATH         Default storage root (default: ~/storage)
+
+CPU:
+  --backend NAME             uae | unicorn-m68k | unicorn-ppc | kpx | dualcpu
+                             (default: uae; backend implies architecture)
+  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
+  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
+  --idlewait / --no-idlewait Pause CPU when guest idle (default: on)
+
+Media:
+  --audio                    Enable audio emulation (default: off)
+  --zap-pram                 Clear PRAM on startup
+  --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog
+
+Networking:
+  --network MODE             none | socket[:PATH] (default: none)
+  --mitm-tls                 Terminate modern TLS, downgrade to SSLv3/TLS1.0 for guest
+  --mitm-ports LIST          Comma-separated TCP ports (default: 443)
+  --mitm-ca-dir PATH         CA directory (default: .mitm_ca)
+
+Automation:
+  --bridge                   Enable automation bridge (BridgeAgent + auto ExtFS mount)
+  --headless-http            HTTP API only (no video/audio); implies --bridge
+
+Server:
+  --port N                   HTTP+WS port (default: 11000) — also hosts /ws signaling
+  --no-webserver             Headless, no HTTP/WebRTC
+  --timeout N                Auto-exit after N seconds
+  --config PATH              JSON config file
+  --screenshots              Dump PPM frames to /tmp
+
+Logging:
+  --log-level N              0–3
+  --debug-connection         Debug WebRTC connections
+  --debug-mode-switch        Debug video mode switches
+  --debug-perf               Debug performance
+  --debug-network            Debug net-bridge / lwIP NAT/DNS/ICMP/TCP/UDP
 ```
+
+Legacy flags accepted with a deprecation warning for one release: `--arch`,
+`--jitexperimental` / `--no-jitexperimental`, `--ppc-jit` / `--no-ppc-jit`,
+`--floppy`, `--bootdrive`, `--auto-launch`.
 
 ## Environment Variables
 
@@ -189,7 +218,7 @@ The emulator binary does not read environment variables. Use CLI flags instead.
 - **Platform API**: All backends implement the same `g_platform` function pointer table. Core code never calls backend-specific functions directly.
 - **Memory layout**: RAM(32MB @ 0x0) + ROM(1MB @ 0x02000000) + ScratchMem(64KB @ 0x02100000) + FrameBuffer(4MB @ 0x02110000). Framebuffer is outside RAM to avoid corrupting Mac data structures.
 - **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
-- **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format with `m68k`/`ppc` sub-structs for arch-specific fields.
+- **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format; backend token (`uae`/`unicorn-m68k`/`unicorn-ppc`/`kpx`/`dualcpu`) determines architecture; legacy `architecture`+`cpu_backend`+`m68k.*`+`ppc.*` keys are coerced on load for one release of backward compat.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
 - **Single-port HTTP + WebSocket**: `src/webserver/websocket.cpp` implements RFC 6455 in-process; the HTTP server detects `Upgrade: websocket` on `/ws` and hands the fd to a WebSocket handler registered by `WebRTCServer`. One TCP listener serves static UI, REST API, `/api/frame` long-poll, and `/ws` (signaling + input + PNG/WebP frames). libdatachannel's `rtc::WebSocketServer` is not used. WebRTC RTP (H.264/VP9 media + Opus audio) still rides direct UDP ports negotiated via ICE.
 - **Three transport modes**: PNG/WebP → WebSocket binary on `/ws`; H.264/VP9 → WebRTC RTP track; `httpstream` → `/api/frame` long-poll. Signaling JSON + input events always ride the `/ws` WebSocket regardless of codec.

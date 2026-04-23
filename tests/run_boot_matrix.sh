@@ -33,28 +33,28 @@ done
 mkdir -p "$OUT_DIR"
 CSV="$OUT_DIR/results.csv"
 rm -f "$CSV"
-echo "label,backend,arch,jit,disk,result,phase,elapsed_s,checkloads,screenshot" > "$CSV"
+echo "label,backend,jit,disk,result,phase,elapsed_s,checkloads,screenshot" > "$CSV"
 
 ROM_M68K="${MACEMU_ROM_M68K:-$HOME/roms/quadra.rom}"
 ROM_PPC="${MACEMU_ROM_PPC:-$HOME/storage/roms/g3.rom}"
 DISK_755="${MACEMU_DISK_755:-$HOME/storage/images/macos-7.5.5.img}"
 DISK_761="${MACEMU_DISK_761:-$HOME/storage/images/macos-7.6.1.img}"
 
-# Cells: label|backend|arch|jitflag|rom|disk|timeout|port
-# jitflag is one of: --jit, --no-jit, --ppc-jit, --no-ppc-jit, ""
+# Cells: label|backend|jitflag|rom|disk|timeout|port
+# jitflag is one of: --jit, --no-jit, ""  (no-op for unicorn-* backends)
 CELLS=(
-    "uae-interp-755|uae|m68k|--no-jit|$ROM_M68K|$DISK_755|45|18200"
-    "uae-interp-761|uae|m68k|--no-jit|$ROM_M68K|$DISK_761|45|18210"
-    "uae-jit-755|uae|m68k|--jit|$ROM_M68K|$DISK_755|45|18220"
-    "uae-jit-761|uae|m68k|--jit|$ROM_M68K|$DISK_761|45|18230"
-    "kpx-interp-755|kpx|ppc|--no-ppc-jit|$ROM_PPC|$DISK_755|90|18240"
-    "kpx-interp-761|kpx|ppc|--no-ppc-jit|$ROM_PPC|$DISK_761|90|18250"
-    "kpx-jit-755|kpx|ppc|--ppc-jit|$ROM_PPC|$DISK_755|90|18260"
-    "kpx-jit-761|kpx|ppc|--ppc-jit|$ROM_PPC|$DISK_761|90|18270"
-    "unicorn-m68k-755|unicorn|m68k||$ROM_M68K|$DISK_755|180|18280"
-    "unicorn-m68k-761|unicorn|m68k||$ROM_M68K|$DISK_761|180|18290"
-    "unicorn-ppc-755|unicorn|ppc||$ROM_PPC|$DISK_755|180|18300"
-    "unicorn-ppc-761|unicorn|ppc||$ROM_PPC|$DISK_761|180|18310"
+    "uae-interp-755|uae|--no-jit|$ROM_M68K|$DISK_755|45|18200"
+    "uae-interp-761|uae|--no-jit|$ROM_M68K|$DISK_761|45|18210"
+    "uae-jit-755|uae|--jit|$ROM_M68K|$DISK_755|45|18220"
+    "uae-jit-761|uae|--jit|$ROM_M68K|$DISK_761|45|18230"
+    "kpx-interp-755|kpx|--no-jit|$ROM_PPC|$DISK_755|90|18240"
+    "kpx-interp-761|kpx|--no-jit|$ROM_PPC|$DISK_761|90|18250"
+    "kpx-jit-755|kpx|--jit|$ROM_PPC|$DISK_755|90|18260"
+    "kpx-jit-761|kpx|--jit|$ROM_PPC|$DISK_761|90|18270"
+    "unicorn-m68k-755|unicorn-m68k||$ROM_M68K|$DISK_755|180|18280"
+    "unicorn-m68k-761|unicorn-m68k||$ROM_M68K|$DISK_761|180|18290"
+    "unicorn-ppc-755|unicorn-ppc||$ROM_PPC|$DISK_755|180|18300"
+    "unicorn-ppc-761|unicorn-ppc||$ROM_PPC|$DISK_761|180|18310"
 )
 
 should_run() {
@@ -71,7 +71,7 @@ should_run() {
 
 MATRIX_START=$(date +%s)
 for cell in "${CELLS[@]}"; do
-    IFS='|' read -r label backend arch jitflag rom disk timeout port <<< "$cell"
+    IFS='|' read -r label backend jitflag rom disk timeout port <<< "$cell"
     if ! should_run "$label"; then continue; fi
 
     echo ""
@@ -79,7 +79,6 @@ for cell in "${CELLS[@]}"; do
     args=(
         --label "$label"
         --backend "$backend"
-        --arch "$arch"
         --rom "$rom"
         --disk "$disk"
         --timeout "$timeout"
@@ -102,14 +101,14 @@ echo "════════════════════════�
 printf "%-22s %-10s %-7s %-9s %-12s\n" "LABEL" "RESULT" "TIME" "RESOURCES" "SHOT"
 printf "%-22s %-10s %-7s %-9s %-12s\n" "----------------------" "----------" "-------" "---------" "------------"
 # Skip header
-tail -n +2 "$CSV" | while IFS=',' read -r label backend arch jit disk result phase elapsed checkloads shot; do
+tail -n +2 "$CSV" | while IFS=',' read -r label backend jit disk result phase elapsed checkloads shot; do
     shot_tag="-"
     if [[ -n "$shot" && -f "$shot" ]]; then shot_tag="$(basename "$shot")"; fi
     printf "%-22s %-10s %-7s %-9s %-12s\n" "$label" "$result" "${elapsed}s" "$checkloads" "$shot_tag"
 done
 
 echo ""
-PASS=$(tail -n +2 "$CSV" | awk -F, '$6=="PASS"' | wc -l)
+PASS=$(tail -n +2 "$CSV" | awk -F, '$5=="PASS"' | wc -l)
 TOTAL=$(tail -n +2 "$CSV" | wc -l)
 echo "  $PASS / $TOTAL passed"
 echo "  screenshots: $OUT_DIR/*.png"

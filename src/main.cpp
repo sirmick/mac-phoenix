@@ -449,7 +449,7 @@ int main(int argc, char **argv)
 	// IPC Child Mode (subprocess, --ipc flag)
 	// ============================================================
 	if (emu_config.ipc_mode) {
-		bool is_ppc = (emu_config.architecture == config::Architecture::PPC);
+		bool is_ppc = emu_config.is_ppc();
 		printf("\n=== IPC Child Mode (%s) ===\n", is_ppc ? "PPC" : "m68k");
 
 		// Ask kernel to send us SIGTERM when parent dies (orphan prevention)
@@ -556,14 +556,14 @@ int main(int argc, char **argv)
 			*platform = g_platform;
 
 			// Install CPU backend
-			switch (emu_config.cpu_backend) {
-				case config::CPUBackend::Unicorn:
+			switch (emu_config.backend) {
+				case config::Backend::UnicornM68K:
 					cpu_unicorn_install(platform);
 					break;
-				case config::CPUBackend::DualCPU:
+				case config::Backend::DualCPU:
 					cpu_dualcpu_install(platform);
 					break;
-				case config::CPUBackend::UAE:
+				case config::Backend::UAE:
 				default:
 					cpu_uae_install(platform);
 					break;
@@ -756,21 +756,21 @@ int main(int argc, char **argv)
 			*platform = g_platform;
 
 			// Initialize based on architecture
-			if (emu_config.architecture == config::Architecture::PPC) {
+			if (emu_config.is_ppc()) {
 				if (!g_cpu_ctx.init_ppc(emu_config)) {
 					fprintf(stderr, "Failed to initialize PPC CPU context\n");
 					return 1;
 				}
 				g_platform = *platform;
 			} else {
-				switch (emu_config.cpu_backend) {
-					case config::CPUBackend::Unicorn:
+				switch (emu_config.backend) {
+					case config::Backend::UnicornM68K:
 						cpu_unicorn_install(platform);
 						break;
-					case config::CPUBackend::DualCPU:
+					case config::Backend::DualCPU:
 						cpu_dualcpu_install(platform);
 						break;
-					case config::CPUBackend::UAE:
+					case config::Backend::UAE:
 					default:
 						cpu_uae_install(platform);
 						break;
@@ -785,7 +785,7 @@ int main(int argc, char **argv)
 			}
 
 			// Set up signal stack for SIGSEGV handler (SheepShaver legacy pattern)
-			if (emu_config.architecture == config::Architecture::PPC) {
+			if (emu_config.is_ppc()) {
 				static uint8_t sig_stack_mem[0x10000];
 				stack_t sig_stack;
 				sig_stack.ss_sp = sig_stack_mem;

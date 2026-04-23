@@ -3,7 +3,7 @@
 # test_boot_to_finder.sh - Verify Mac OS boots to Finder desktop
 #
 # Usage:
-#   tests/test_boot_to_finder.sh [--backend uae|unicorn] [--timeout 30] [--rom /path/to/rom]
+#   tests/test_boot_to_finder.sh [--backend uae|unicorn-m68k] [--timeout 30] [--rom /path/to/rom]
 #
 # Starts the emulator, polls /api/status until boot_phase reaches "Finder",
 # then exits 0 (pass) or 1 (timeout/failure).
@@ -27,8 +27,8 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --rom) ROM="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
-        --jit) EXTRA_FLAGS+=("--jitexperimental"); shift ;;
-        --no-jit) EXTRA_FLAGS+=("--no-jitexperimental"); shift ;;
+        --jit) EXTRA_FLAGS+=("--jit"); shift ;;
+        --no-jit) EXTRA_FLAGS+=("--no-jit"); shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done

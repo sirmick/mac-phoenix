@@ -336,7 +336,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n",
             platform_.cpu_name ? platform_.cpu_name : "Unknown",
-            config.m68k.jitexperimental ? "on" : "off");
+            config.jit ? "on" : "off");
 
     // 9. Configure CPU type
     if (platform_.cpu_set_type) {
@@ -607,13 +607,13 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
 
     // 6. Install PPC backend (function pointers only — CPU instance created
     //    later in the child subprocess). Selects KPX (default) or Unicorn PPC.
-    if (config.cpu_backend == config::CPUBackend::Unicorn) {
+    if (config.backend == config::Backend::UnicornPPC) {
         cpu_unicorn_ppc_install(&platform_);
     } else {
         cpu_ppc_kpx_install(&platform_);
     }
-    platform_.ppc_jit = config.ppc.jit;
-    fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n", platform_.cpu_name, config.ppc.jit ? "on" : "off");
+    platform_.ppc_jit = config.jit;
+    fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n", platform_.cpu_name, config.jit ? "on" : "off");
 
     // 6b. Sync g_platform NOW so core code (disk.cpp, cdrom.cpp, extfs.cpp etc.)
     //     can use g_platform.mem_read_long / cpu_execute_68k_trap during InitAll_PPC.
@@ -682,7 +682,7 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     // uppc_skip_memop_at (zero-on-skip reads, advance-PC writes), so
     // leaving the host mapping RWX is both safe and prevents the host
     // SIGSEGV handler from firing inside TCG at all.
-    if (config.cpu_backend != config::CPUBackend::Unicorn) {
+    if (config.backend != config::Backend::UnicornM68K) {
         uint32_t protect_size = ROM_AREA_SIZE;  // 5MB, matching legacy
         if (mprotect(ROMBaseHost, protect_size, PROT_READ | PROT_EXEC) < 0) {
             fprintf(stderr, "[CPUContext] WARNING: Could not write-protect ROM\n");

@@ -32,7 +32,9 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --webserver) WEBSERVER=true; shift ;;
-        --ppc-jit|--no-ppc-jit) EXTRA_FLAGS+=("$1"); shift ;;
+        --jit|--no-jit) EXTRA_FLAGS+=("$1"); shift ;;
+        --ppc-jit) EXTRA_FLAGS+=("--jit"); shift ;;
+        --no-ppc-jit) EXTRA_FLAGS+=("--no-jit"); shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -67,8 +69,8 @@ cat > "$TMPCONFIG" << EOJSON
   "rom": "$ROM",
   "disks": ["$DISK"],
   "cdroms": [],
-  "ram": 128,
-  "architecture": "ppc"
+  "ram_mb": 128,
+  "backend": "kpx"
 }
 EOJSON
 
@@ -85,7 +87,7 @@ cleanup() {
 if [[ "$WEBSERVER" == "true" ]]; then
     # ── Webserver mode: poll /api/status for boot phases ──
 
-    "$BINARY" --config "$TMPCONFIG" --backend kpx --arch ppc \
+    "$BINARY" --config "$TMPCONFIG" --backend kpx \
         --timeout "$((TIMEOUT + 5))" \
         --port "$PORT" --signaling-port "$SIG_PORT" \
         "${EXTRA_FLAGS[@]}" &>"$LOG" &
@@ -151,7 +153,7 @@ if [[ "$WEBSERVER" == "true" ]]; then
 else
     # ── Headless mode: check log output for milestones ──
 
-    "$BINARY" --config "$TMPCONFIG" --backend kpx --arch ppc \
+    "$BINARY" --config "$TMPCONFIG" --backend kpx \
         --timeout "$TIMEOUT" --no-webserver \
         "${EXTRA_FLAGS[@]}" 2>&1 | tee "$LOG" &
     EMU_PID=$!

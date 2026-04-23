@@ -33,7 +33,9 @@ while [[ $# -gt 0 ]]; do
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --verbose) VERBOSE=true; shift ;;
-        --jit|--no-jit|--ppc-jit|--no-ppc-jit) EXTRA_FLAGS+=("$1"); shift ;;
+        --jit|--no-jit) EXTRA_FLAGS+=("$1"); shift ;;
+        --ppc-jit) EXTRA_FLAGS+=("--jit"); shift ;;
+        --no-ppc-jit) EXTRA_FLAGS+=("--no-jit"); shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -45,7 +47,7 @@ fi
 
 # Default: test all available backends
 if [[ ${#BACKENDS[@]} -eq 0 ]]; then
-    BACKENDS=(uae-interp uae-jit unicorn kpx-interp kpx-jit)
+    BACKENDS=(uae-interp uae-jit unicorn-m68k unicorn-ppc kpx-interp kpx-jit)
 fi
 
 LOG="/tmp/macemu_stoprestart_$$.log"
@@ -138,7 +140,9 @@ log_line() {
 run_backend_test() {
     local label="$1"
     local backend="$2"
-    local arch="$3"
+    # Arg 3 is legacy "arch" (m68k|ppc) — kept positional for caller readability;
+    # the binary derives arch from backend, so we don't pass it through.
+    local _arch="$3"
     local rom="$4"
     shift 4
     local extra=("$@")
@@ -157,7 +161,7 @@ run_backend_test() {
     local pass=0 fail=0
 
     # Start emulator
-    "$BINARY" --config /dev/null --backend "$backend" --arch "$arch" \
+    "$BINARY" --config /dev/null --backend "$backend" \
         --timeout 600 --dismiss-shutdown-dialog \
         --port "$PORT" --signaling-port "$SIG_PORT" \
         --disk "$DISK" "${extra[@]}" "$rom" &>"$LOG.${label}" &
@@ -309,12 +313,21 @@ for backend_spec in "${BACKENDS[@]}"; do
         uae-jit)
             run_backend_test "UAE-JIT" uae m68k "$ROM" --jit
             ;;
-        unicorn)
-            run_backend_test "Unicorn" unicorn m68k "$ROM"
+        unicorn|unicorn-m68k)
+            run_backend_test "Unicorn-m68k" unicorn-m68k m68k "$ROM"
+            ;;
+        unicorn-ppc)
+            if [[ -f "$PPC_ROM" ]]; then
+                run_backend_test "Unicorn-PPC" unicorn-ppc ppc "$PPC_ROM"
+            else
+                echo "SKIP: Unicorn-PPC (no PPC ROM)"
+                TOTAL_SKIP=$((TOTAL_SKIP + 1))
+                RESULTS+=("SKIP Unicorn-PPC (no PPC ROM)")
+            fi
             ;;
         kpx-interp|kpx)
             if [[ -f "$PPC_ROM" ]]; then
-                run_backend_test "KPX-interp" kpx ppc "$PPC_ROM" --no-ppc-jit
+                run_backend_test "KPX-interp" kpx ppc "$PPC_ROM" --no-jit
             else
                 echo "SKIP: KPX-interp (no PPC ROM)"
                 TOTAL_SKIP=$((TOTAL_SKIP + 1))
@@ -323,7 +336,7 @@ for backend_spec in "${BACKENDS[@]}"; do
             ;;
         kpx-jit)
             if [[ -f "$PPC_ROM" ]]; then
-                run_backend_test "KPX-JIT" kpx ppc "$PPC_ROM" --ppc-jit
+                run_backend_test "KPX-JIT" kpx ppc "$PPC_ROM" --jit
             else
                 echo "SKIP: KPX-JIT (no PPC ROM)"
                 TOTAL_SKIP=$((TOTAL_SKIP + 1))

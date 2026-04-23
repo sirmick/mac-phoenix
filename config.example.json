@@ -1,41 +1,27 @@
 {
-  "architecture": "m68k",
-  "cpu_backend": "uae",
-
   "rom": "",
   "disks": [],
   "cdroms": [],
 
-  "ram_mb": 32,
+  "backend": "uae",
+  "jit": false,
+  "jit68k": true,
+  "idlewait": true,
+
+  "ram_mb": 64,
   "screen": "640x480",
   "audio": true,
 
-  "codec": "png",
+  "codec": "vp9",
   "mousemode": "absolute",
 
   "http_port": 11000,
   "storage_dir": "~/storage",
 
-  "m68k": {
-    "cpu_type": 4,
-    "fpu": true,
-    "modelid": 14,
-    "jit": true,
-    "idlewait": true,
-    "ignoresegv": true,
-    "swap_opt_cmd": true,
-    "keyboardtype": 5
-  },
+  "zappram": false,
+  "dismiss_shutdown_dialog": true,
+  "bridge_enabled": false,
 
-  "ppc": {
-    "cpu_type": 4,
-    "fpu": true,
-    "modelid": 14,
-    "jit": true,
-    "jit68k": false,
-    "idlewait": true,
-    "ignoresegv": true,
-    "ignoreillegal": false,
-    "keyboardtype": 5
-  }
+  "network": "none",
+  "mitm_tls": false
 }

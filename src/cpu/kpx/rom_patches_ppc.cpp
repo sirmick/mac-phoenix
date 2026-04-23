@@ -30,6 +30,7 @@
 #include "rom_patches.h"
 #include "main.h"
 #include "prefs.h"
+#include "../../config/emulator_config.h"
 #include "kpx_cpu_emulation.h"
 #include "emul_op.h"
 #include "xlowmem.h"
@@ -2321,7 +2322,7 @@ static bool patch_68k(void)
 	WriteMacInt32(base + 4 * (0xa9fd & 0x3ff), GET_SCRAP_PATCH_SPACE);
 
 	// Patch SynchIdleTime()
-	if (PrefsFindBool("idlewait")) {
+	if (config::EmulatorConfig::instance().idlewait) {
 		base = find_rom_trap(0xabf7) + 4;						// SynchIdleTime()
 		wp = (uint16 *)(ROMBaseHost + base);
 		fprintf(stderr, "[ROMPATCH] SynchIdleTime at %08lx, opcode=%04x\n", (unsigned long)base, ntohs(*wp));

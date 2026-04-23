@@ -70,12 +70,6 @@ static const char *const BOOT_DIALOG_WHITELIST[] = {
 	NULL
 };
 
-static bool g_auto_launch_done = false;
-static double g_last_auto_launch_attempt = 0.0;
-static uint32_t g_pending_auto_launch_id = 0;
-static int g_auto_launch_attempts = 0;
-#define AUTO_LAUNCH_COOLDOWN 1.0   /* seconds between retries */
-#define AUTO_LAUNCH_MAX_ATTEMPTS 20
 
 static double elapsed_sec(void)
 {
@@ -398,82 +392,6 @@ static void check_shutdown_dialog(void)
  *  function retries on subsequent IDLE_TIME ticks until the command bridge
  *  reports success or we hit the attempt limit.
  */
-static void maybe_fire_auto_launch(void)
-{
-	if (g_auto_launch_done) return;
-	const std::string& path = config::EmulatorConfig::instance().auto_launch_app;
-	if (path.empty()) return;
-
-	/* Don't dispatch until Finder is *really* idle. Three gates replace the
-	 * old fixed 4s DESKTOP_SETTLE_SEC, closing the "4th dialog at +3.5s"
-	 * race:
-	 *   1. PHASE_DESKTOP held for >= 2s (brief settle after idle).
-	 *   2. No modal dialog currently front-most.
-	 *   3. No dismiss fired in the last 1s (lets a just-sent Return key be
-	 *      processed before we poke the Process Manager).
-	 */
-	static const double DESKTOP_SETTLE_SEC = 2.0;
-
-	double now = elapsed_sec();
-	if (g_desktop_ready_time == 0.0) return;  /* shouldn't happen — caller gates on PHASE_DESKTOP */
-	if (now - g_desktop_ready_time < DESKTOP_SETTLE_SEC) return;
-	if (front_is_modal_dialog()) return;
-	if (now - g_last_dialog_dismiss_time < 1.0) return;
-
-	/* Write bridge command file if bridge is enabled */
-	const auto& cfg = config::EmulatorConfig::instance();
-	if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
-		g_auto_launch_done = true;
-		return;
-	}
-
-	/* Check for result from previous attempt */
-	std::string res_path = cfg.bridge_dir + "/_bridge_result";
-	if (g_pending_auto_launch_id != 0) {
-		FILE* rf = fopen(res_path.c_str(), "r");
-		if (rf) {
-			char buf[32] = {};
-			fgets(buf, sizeof(buf), rf);
-			fclose(rf);
-			remove(res_path.c_str());
-			int err = atoi(buf);
-			if (err == 0) {
-				milestonef("Auto-launch: '%s' succeeded", path.c_str());
-				g_auto_launch_done = true;
-				return;
-			}
-			milestonef("Auto-launch: attempt %d failed (err=%d)", g_auto_launch_attempts, err);
-			g_pending_auto_launch_id = 0;
-		} else {
-			return;  /* still pending */
-		}
-	}
-
-	if (now - g_last_auto_launch_attempt < AUTO_LAUNCH_COOLDOWN) return;
-
-	if (g_auto_launch_attempts >= AUTO_LAUNCH_MAX_ATTEMPTS) {
-		if (!g_auto_launch_done) {
-			milestonef("Auto-launch: giving up on '%s' after %d attempts",
-			           path.c_str(), g_auto_launch_attempts);
-			g_auto_launch_done = true;
-		}
-		return;
-	}
-
-	g_auto_launch_attempts++;
-	g_last_auto_launch_attempt = now;
-	milestonef("Auto-launch: writing bridge cmd '%s' (attempt %d)",
-	           path.c_str(), g_auto_launch_attempts);
-
-	std::string cmd_path = cfg.bridge_dir + "/_bridge_cmd";
-	FILE* f = fopen(cmd_path.c_str(), "w");
-	if (f) {
-		fprintf(f, "LAUNCH %s", path.c_str());
-		fclose(f);
-		g_pending_auto_launch_id = 1;  /* flag as pending */
-	}
-}
-
 void boot_progress_update(uint16_t opcode, void *regs_ptr)
 {
 	int level = boot_log_level();
@@ -584,9 +502,6 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 		case M68K_EMUL_OP_IDLE_TIME:
 			check_shutdown_dialog();
 			try_promote_to_desktop();
-			if (g_current_phase >= PHASE_DESKTOP) {
-				maybe_fire_auto_launch();
-			}
 			break;
 
 		default:
@@ -682,9 +597,6 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 		case BOOT_EVENT_IDLE_TIME:
 			check_shutdown_dialog();
 			try_promote_to_desktop();
-			if (g_current_phase >= PHASE_DESKTOP) {
-				maybe_fire_auto_launch();
-			}
 			break;
 	}
 }

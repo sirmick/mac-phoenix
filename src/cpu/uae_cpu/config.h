@@ -42,7 +42,7 @@
 #define X86_ASSEMBLY 1
 #endif
 
-/* JIT compiler (x86/x86_64 only, runtime-selectable via config.m68k.jitexperimental) */
+/* JIT compiler (x86/x86_64 only, runtime-selectable via config.jit) */
 #if defined(__x86_64__) || defined(__amd64__) || defined(__i386__) || defined(__i686__)
 #define USE_JIT 1
 #else

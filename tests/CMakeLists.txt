@@ -83,7 +83,7 @@ set_tests_properties(boot_uae_jit PROPERTIES
 
 add_test(
   NAME boot_unicorn
-  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend unicorn --timeout 120 --port 18084
+  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend unicorn-m68k --timeout 120 --port 18084
 )
 set_tests_properties(boot_unicorn PROPERTIES
   TIMEOUT 180
@@ -115,7 +115,7 @@ set_tests_properties(wne_patch_sanity PROPERTIES
 
 add_test(
   NAME boot_ppc_interp
-  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --no-ppc-jit --timeout 45 --port 18086
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --no-jit --timeout 45 --port 18086
 )
 set_tests_properties(boot_ppc_interp PROPERTIES
   TIMEOUT 60
@@ -125,7 +125,7 @@ set_tests_properties(boot_ppc_interp PROPERTIES
 
 add_test(
   NAME boot_ppc_jit
-  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --ppc-jit --timeout 45 --port 18088
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --jit --timeout 45 --port 18088
 )
 set_tests_properties(boot_ppc_jit PROPERTIES
   TIMEOUT 60
@@ -181,7 +181,7 @@ set_tests_properties(guest_suite_761 PROPERTIES
 
 add_test(
   NAME command_bridge_ppc
-  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend kpx --arch ppc --timeout 20 --port 18100
+  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend kpx --timeout 20 --port 18100
 )
 set_tests_properties(command_bridge_ppc PROPERTIES
   TIMEOUT 35
@@ -192,7 +192,7 @@ set_tests_properties(command_bridge_ppc PROPERTIES
 
 add_test(
   NAME mouse_position_ppc
-  COMMAND bash ${TEST_DIR}/test_mouse_position.sh --backend kpx --arch ppc --timeout 20 --port 18102
+  COMMAND bash ${TEST_DIR}/test_mouse_position.sh --backend kpx --timeout 20 --port 18102
 )
 set_tests_properties(mouse_position_ppc PROPERTIES
   TIMEOUT 35
@@ -203,7 +203,7 @@ set_tests_properties(mouse_position_ppc PROPERTIES
 
 add_test(
   NAME guest_suite_ppc
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --arch ppc --timeout 60 --port 18104
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --timeout 60 --port 18104
 )
 set_tests_properties(guest_suite_ppc PROPERTIES
   TIMEOUT 90
