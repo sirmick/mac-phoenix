@@ -69,7 +69,7 @@ test.describe('Stall Detection', () => {
     test.setTimeout(60_000);
 
     await page.goto(PAGE_URL);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await waitForDataChannel(page);
 
     // Switch to absolute mouse mode
@@ -119,7 +119,7 @@ test.describe('Stall Detection', () => {
     test.setTimeout(60_000);
 
     await page.goto(PAGE_URL);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await waitForDataChannel(page);
 
     await page.evaluate(() => {
@@ -175,7 +175,7 @@ test.describe('Stall Detection', () => {
     test.setTimeout(60_000);
 
     await page.goto(PAGE_URL);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await waitForDataChannel(page);
 
     // First set absolute position to a known starting point (so we have room to move)
@@ -241,7 +241,7 @@ test.describe('Stall Detection', () => {
     test.setTimeout(60_000);
 
     await page.goto(PAGE_URL);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await waitForDataChannel(page);
 
     // Start in relative mode
@@ -379,7 +379,7 @@ test.describe('Stall Detection', () => {
     test.setTimeout(60_000);
 
     await page.goto(PAGE_URL);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await waitForDataChannel(page);
 
     // Switch to absolute mode and move cursor to corner
@@ -451,7 +451,7 @@ test.describe('Soak Test', () => {
     test.setTimeout((SOAK_DURATION_S + 30) * 1000);
 
     await page.goto(PAGE_URL);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Wait for data channel
     const dcOk = await page.evaluate(async () => {

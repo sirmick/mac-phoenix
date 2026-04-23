@@ -1,5 +1,5 @@
 import { test as base } from '@playwright/test';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execFileSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -8,6 +8,14 @@ const SIG_PORT = HTTP_PORT + 1;
 const ROM_PATH = process.env.MACEMU_ROM || `${process.env.HOME}/roms/quadra.rom`;
 const BUILD_DIR = path.resolve(__dirname, '../../build');
 const BINARY = path.join(BUILD_DIR, 'mac-phoenix');
+const REFRESH_SCRIPT = path.resolve(__dirname, '../lib/refresh_test_disk.sh');
+
+function refreshTestDisk(imgBase: string): string {
+  // Copies ~/storage/images/<imgBase>.img.bak → test-<imgBase>.img and echoes
+  // the destination path. Matches the shell-test refresh behavior.
+  const out = execFileSync('bash', [REFRESH_SCRIPT, imgBase], { encoding: 'utf8' });
+  return out.trim();
+}
 
 async function waitForServer(port: number, timeoutMs = 10_000): Promise<void> {
   const start = Date.now();
@@ -85,7 +93,7 @@ export async function spawnEmulator(opts?: { timeoutSeconds?: number; extraArgs?
     '--screen', '640x480',
     '--ram', '128',
     '--dismiss-shutdown-dialog',
-    '--disk', process.env.MACEMU_DISK || `${process.env.HOME}/storage/images/macos-7.5.5.img`,
+    '--disk', process.env.MACEMU_DISK || refreshTestDisk('macos-7.5.5'),
   ];
   if (opts?.extraArgs) {
     args.push(...opts.extraArgs);

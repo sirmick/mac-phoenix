@@ -230,7 +230,7 @@ test.describe('Full-stack Codec Tests (640x480)', () => {
   async function navigateAndConnect(page: any, emulatorPort: number) {
     await ensureBooted(emulatorPort);
     await page.goto(PAGE_URL);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await waitForDataChannel(page);
   }
 
