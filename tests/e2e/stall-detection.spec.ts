@@ -10,9 +10,8 @@
 import { test, expect, waitForBootPhase } from './fixtures';
 
 const HTTP_PORT = parseInt(process.env.MACEMU_HTTP_PORT || '18094');
-const SIG_PORT = HTTP_PORT + 1;
 const API = `http://localhost:${HTTP_PORT}`;
-const PAGE_URL = `http://localhost:${HTTP_PORT}/?ws=ws://localhost:${SIG_PORT}/`;
+const PAGE_URL = `http://localhost:${HTTP_PORT}/`;
 
 // Max time (ms) for a mouse position update to propagate through the pipeline.
 // The 60Hz interrupt fires every ~16.6ms, so 500ms is very generous.
@@ -50,12 +49,12 @@ test.describe('Stall Detection', () => {
     return { x: s.x, y: s.y };
   }
 
-  async function waitForDataChannel(page: any): Promise<void> {
+  async function waitForConnected(page: any): Promise<void> {
     const ok = await page.evaluate(async () => {
       const deadline = Date.now() + 15000;
       while (Date.now() < deadline) {
         const c = (window as any).client;
-        if (c?.dataChannel?.readyState === 'open') return true;
+        if (c?.connected) return true;
         await new Promise(r => setTimeout(r, 200));
       }
       return false;
@@ -70,7 +69,7 @@ test.describe('Stall Detection', () => {
 
     await page.goto(PAGE_URL);
     await page.waitForLoadState('domcontentloaded');
-    await waitForDataChannel(page);
+    await waitForConnected(page);
 
     // Switch to absolute mouse mode
     await page.evaluate(() => {
@@ -120,7 +119,7 @@ test.describe('Stall Detection', () => {
 
     await page.goto(PAGE_URL);
     await page.waitForLoadState('domcontentloaded');
-    await waitForDataChannel(page);
+    await waitForConnected(page);
 
     await page.evaluate(() => {
       const c = (window as any).client;
@@ -176,7 +175,7 @@ test.describe('Stall Detection', () => {
 
     await page.goto(PAGE_URL);
     await page.waitForLoadState('domcontentloaded');
-    await waitForDataChannel(page);
+    await waitForConnected(page);
 
     // First set absolute position to a known starting point (so we have room to move)
     await page.evaluate(() => {
@@ -242,7 +241,7 @@ test.describe('Stall Detection', () => {
 
     await page.goto(PAGE_URL);
     await page.waitForLoadState('domcontentloaded');
-    await waitForDataChannel(page);
+    await waitForConnected(page);
 
     // Start in relative mode
     await page.evaluate(() => {
@@ -380,7 +379,7 @@ test.describe('Stall Detection', () => {
 
     await page.goto(PAGE_URL);
     await page.waitForLoadState('domcontentloaded');
-    await waitForDataChannel(page);
+    await waitForConnected(page);
 
     // Switch to absolute mode and move cursor to corner
     await page.evaluate(() => {
@@ -453,12 +452,12 @@ test.describe('Soak Test', () => {
     await page.goto(PAGE_URL);
     await page.waitForLoadState('domcontentloaded');
 
-    // Wait for data channel
+    // Wait for client to connect (single-port transport — no RTCDataChannel anymore)
     const dcOk = await page.evaluate(async () => {
       const deadline = Date.now() + 15000;
       while (Date.now() < deadline) {
         const c = (window as any).client;
-        if (c?.dataChannel?.readyState === 'open') return true;
+        if (c?.connected) return true;
         await new Promise(r => setTimeout(r, 200));
       }
       return false;

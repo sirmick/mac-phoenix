@@ -21,9 +21,12 @@ test.describe('Settings Dialog', () => {
     await page.locator('#config-btn').click();
     await expect(page.locator('#cfg-bootdriver')).toBeEnabled({ timeout: 5000 });
 
-    // Should have "Any" and "CD-ROM" options
+    // The dropdown now lists one "Disk: <name>" entry per configured disk plus
+    // a "CD-ROM" option (refreshBootFromOptions in client.js). The old static
+    // "Any (first bootable disk)" entry was removed when the boot-priority
+    // semantics changed to "reorder disks, first one boots."
     const options = await page.locator('#cfg-bootdriver option').allTextContents();
-    expect(options).toContain('Any (first bootable disk)');
+    expect(options.some(o => o.startsWith('Disk: '))).toBe(true);
     expect(options).toContain('CD-ROM');
   });
 

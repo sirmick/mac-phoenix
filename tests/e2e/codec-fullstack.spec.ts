@@ -27,10 +27,11 @@ interface CodecStats {
 }
 
 function getUrls(port: number) {
-  const sigPort = port + 1;
+  // Signaling rides the main HTTP port at /ws (single-port transport);
+  // the page's default getWebSocketUrl() picks it up from window.location.
   return {
     API: `http://localhost:${port}`,
-    PAGE_URL: `http://localhost:${port}/?ws=ws://localhost:${sigPort}/`,
+    PAGE_URL: `http://localhost:${port}/`,
   };
 }
 
@@ -54,12 +55,16 @@ test.describe('Full-stack Codec Tests (640x480)', () => {
     booted = true;
   }
 
-  async function waitForDataChannel(page: any): Promise<void> {
+  async function waitForConnected(page: any): Promise<void> {
+    // Since the single-port transport refactor, there is no RTCDataChannel:
+    // PNG/WebP ride the /ws WebSocket; H.264/VP9 ride RTP video tracks.
+    // `client.connected` flips true once signaling has handshaken and the
+    // transport (WS or PC) is open.
     const ok = await page.evaluate(async () => {
       const deadline = Date.now() + 15000;
       while (Date.now() < deadline) {
         const c = (window as any).client;
-        if (c?.dataChannel?.readyState === 'open') return true;
+        if (c?.connected) return true;
         await new Promise(r => setTimeout(r, 200));
       }
       return false;
@@ -173,10 +178,14 @@ test.describe('Full-stack Codec Tests (640x480)', () => {
     const body = await resp.json();
     expect(body.ok).toBe(true);
 
-    await waitForDataChannel(page);
+    await waitForConnected(page);
 
     if (isRTP) {
-      const stats = await pollRTPStats(page, 15000, codec);
+      // Switches from a DC codec (png/webp) back to an RTP codec require the
+      // server to addTrack + renegotiate (commit 5b780be2). The post-switch
+      // handshake + first keyframe can take longer than a fresh start, so
+      // give 30s here instead of 15.
+      const stats = await pollRTPStats(page, 30000, codec);
       stats.codec = codec;
       return stats;
     } else {
@@ -231,7 +240,7 @@ test.describe('Full-stack Codec Tests (640x480)', () => {
     await ensureBooted(emulatorPort);
     await page.goto(PAGE_URL);
     await page.waitForLoadState('domcontentloaded');
-    await waitForDataChannel(page);
+    await waitForConnected(page);
   }
 
   // ── VP9: Full decode at 640x480 ─────────────────────────────────────
