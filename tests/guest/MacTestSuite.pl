@@ -119,12 +119,25 @@ sub test_extfs {
 # --- Audio test ---
 
 sub test_audio {
+    # Preferred path: Mac::Sound ships with the MacPerl toolbox glue on most
+    # builds (confirmed present on the PPC 9.0.4 image).
     my $ok = eval { require Mac::Sound; Mac::Sound::SysBeep(1); 1 };
     if ($ok) {
         report_pass('audio_sysbeep');
-    } else {
-        report_skip('audio_sysbeep', 'Mac::Sound not available');
+        return;
     }
+    my $err = $@; $err =~ s/[\r\n]+/ /g;
+
+    # Fallback: AppleScript 'beep' dispatches the same _SysBeep trap and is
+    # present on stock 7.5.5 (where this MacPerl build lacks Mac::Sound).
+    my $ok2 = eval { MacPerl::DoAppleScript('beep'); 1 };
+    if ($ok2) {
+        report_pass('audio_sysbeep');
+        return;
+    }
+    my $err2 = $@; $err2 =~ s/[\r\n]+/ /g;
+
+    report_fail('audio_sysbeep', "Mac::Sound=$err AppleScript=$err2");
 }
 
 # --- Network tests (built-in socket ops + Socket.pm) ---

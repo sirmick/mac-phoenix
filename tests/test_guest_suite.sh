@@ -237,6 +237,27 @@ SKIP_COUNT=$(grep -c "^SKIP " "$RESULTS_UNIX" || true)
 
 echo "$PASS_COUNT passed, $FAIL_COUNT failed, $SKIP_COUNT skipped"
 
+# --- Graceful shutdown via BridgeAgent (ShutDwnPower) ---
+
+echo -n "Shutting down..."
+SHUT_RESP=$(curl -sf --max-time 10 -X POST "http://localhost:$PORT/api/shutdown" \
+    -d '{}' 2>/dev/null || echo '{"success":false}')
+if echo "$SHUT_RESP" | grep -q '"success": true'; then
+    for i in $(seq 1 20); do
+        if ! kill -0 "$EMU_PID" 2>/dev/null; then
+            echo " done (${i}s)"
+            EMU_PID=""
+            break
+        fi
+        sleep 1
+    done
+    if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
+        echo " timeout, falling back to kill"
+    fi
+else
+    echo " dispatch failed: $SHUT_RESP"
+fi
+
 if [[ $FAIL_COUNT -gt 0 ]]; then
     EXIT_CODE=1
     echo "FAIL: $FAIL_COUNT test(s) failed"
