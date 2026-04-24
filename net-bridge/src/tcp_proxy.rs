@@ -20,6 +20,13 @@ use crate::tls_mitm::{MitmCa, MitmRuntime, MitmSession, MitmState};
 const MAC_ADDR: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x01]);
 const GW_MAC: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x02]);
 
+/// Maximum TCP payload per frame sent to the Mac. Stay below MSS 1460 so
+/// the resulting Ethernet frame (14 eth + 20 ip + 20 tcp + payload) sits
+/// safely under the 1514-byte MTU our device.rs enforces on the Unix
+/// socket transport. Larger frames silently dropped on the guest side —
+/// classic symptom: HTTP response truncates mid-body.
+const TX_MAX_PAYLOAD: usize = 1400;
+
 /// TCP connection state
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum TcpState {
@@ -232,20 +239,9 @@ impl TcpNat {
                         &[],
                     );
                     device.send_frame(&ack);
-                    // Bridge-produced ciphertext back to Mac rides its own frame
-                    // so the window is advanced correctly.
-                    if !to_guest.is_empty() {
-                        let data = build_tcp_frame(
-                            conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
-                            TcpSeqNumber(conn.our_seq as i32),
-                            TcpSeqNumber(conn.their_seq as i32),
-                            TcpControl::None,
-                            true,
-                            &to_guest,
-                        );
-                        device.send_frame(&data);
-                        conn.our_seq += to_guest.len() as u32;
-                    }
+                    // Bridge-produced ciphertext back to Mac; segment so that
+                    // no single frame exceeds MTU.
+                    send_data_in_segments(conn, &to_guest, device);
                 }
                 Err(e) => {
                     log::warn!("TCP NAT: pipe write failed: {}", e);
@@ -294,18 +290,7 @@ impl TcpNat {
             let outcome = poll_pipe(&mut conn.pipe);
             match outcome {
                 PollOutcome::Bytes(bytes) => {
-                    if !bytes.is_empty() {
-                        let data_frame = build_tcp_frame(
-                            conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
-                            TcpSeqNumber(conn.our_seq as i32),
-                            TcpSeqNumber(conn.their_seq as i32),
-                            TcpControl::None,
-                            true,
-                            &bytes,
-                        );
-                        device.send_frame(&data_frame);
-                        conn.our_seq += bytes.len() as u32;
-                    }
+                    send_data_in_segments(conn, &bytes, device);
                 }
                 PollOutcome::Eof => {
                     log::debug!("TCP NAT: host closed {}:{}", conn.dst_ip, conn.dst_port);
@@ -422,10 +407,13 @@ fn handle_guest_data(
 }
 
 /// Drain any bytes the pipe has ready to send to the Mac. Called each tick.
+/// Cap per-call read size to `TX_MAX_PAYLOAD` so that a single poll
+/// produces at most one full-MSS segment. The main poll loop re-reads
+/// on the next tick if more bytes are buffered.
 fn poll_pipe(pipe: &mut Pipe) -> PollOutcome {
     match pipe {
         Pipe::Raw(s) | Pipe::Sniffing { stream: s, .. } => {
-            let mut buf = [0u8; 4096];
+            let mut buf = [0u8; TX_MAX_PAYLOAD];
             match s.read(&mut buf) {
                 Ok(0) => PollOutcome::Eof,
                 Ok(n) => PollOutcome::Bytes(buf[..n].to_vec()),
@@ -448,6 +436,29 @@ fn poll_pipe(pipe: &mut Pipe) -> PollOutcome {
             }
         }
         Pipe::Closed => PollOutcome::Idle,
+    }
+}
+
+/// Send `payload` to the Mac as one or more TCP data frames, each no
+/// larger than `TX_MAX_PAYLOAD`. Advances `conn.our_seq` by the total
+/// bytes sent. Classic Mac Ethernet drivers silently drop oversize
+/// frames, so segmenting here is load-bearing.
+fn send_data_in_segments(conn: &mut TcpConn, payload: &[u8], device: &mut SocketDevice) {
+    let mut offset = 0;
+    while offset < payload.len() {
+        let end = (offset + TX_MAX_PAYLOAD).min(payload.len());
+        let chunk = &payload[offset..end];
+        let frame = build_tcp_frame(
+            conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
+            TcpSeqNumber(conn.our_seq as i32),
+            TcpSeqNumber(conn.their_seq as i32),
+            TcpControl::None,
+            true,
+            chunk,
+        );
+        device.send_frame(&frame);
+        conn.our_seq = conn.our_seq.wrapping_add(chunk.len() as u32);
+        offset = end;
     }
 }
 
