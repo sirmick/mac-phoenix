@@ -24,6 +24,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# --arch was deprecated; backend now determines arch. Derive ARCH from BACKEND
+# for the ROM/disk selection logic below (not passed to the binary).
+[[ -z "$ARCH" && ( "$BACKEND" == "kpx" || "$BACKEND" == "unicorn-ppc" ) ]] && ARCH=ppc
+
 # Select ROM and disk based on architecture
 if [[ "$ARCH" == "ppc" ]]; then
     ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
@@ -46,9 +50,6 @@ fi
 echo "=== Command Bridge Test: $BACKEND backend ==="
 
 EXTRA_FLAGS=()
-# --arch was deprecated; backend now determines arch. Derive ARCH from BACKEND
-# for the ROM/RAM selection logic only (not passed to the binary).
-[[ -z "$ARCH" && ( "$BACKEND" == "kpx" || "$BACKEND" == "unicorn-ppc" ) ]] && ARCH=ppc
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 
 cleanup() {
@@ -124,13 +125,18 @@ echo "Test 4: POST /api/wait app=Finder"
 WAIT_APP=$(curl -s -X POST "http://localhost:$PORT/api/wait" -d '{"condition": "app=Finder", "timeout": 3}' || echo "CURL_FAILED")
 check "/api/wait app=Finder" "$WAIT_APP" '"ok": true'
 
-# Test 5: /api/launch with nonexistent path — command is consumed but app stays Finder
+# Test 5: /api/launch with nonexistent path — command is consumed, front app
+# returns to Finder. BridgeAgent is transiently front while it processes the
+# request (especially on PPC), so poll for a few seconds.
 echo "Test 5: POST /api/launch (bad path)"
 LAUNCH=$(curl -s --max-time 10 -X POST "http://localhost:$PORT/api/launch" -d '{"path": "Macintosh HD:NoSuchApp"}' || echo "CURL_FAILED")
 check "/api/launch returns response" "$LAUNCH" '"success"'
-# After bad launch, app should still be Finder
-sleep 1
-APP_AFTER=$(curl -s "http://localhost:$PORT/api/app" || echo "CURL_FAILED")
+APP_AFTER=""
+for i in $(seq 1 8); do
+    APP_AFTER=$(curl -s "http://localhost:$PORT/api/app" || echo "CURL_FAILED")
+    if echo "$APP_AFTER" | grep -q 'Finder'; then break; fi
+    sleep 1
+done
 check "/api/launch bad path stays Finder" "$APP_AFTER" 'Finder'
 
 echo ""
