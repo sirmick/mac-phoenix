@@ -199,6 +199,63 @@ else()
 endif()
 
 # =============================================================================
+# net-bridge (Rust) — Unix-socket NAT bridge spawned when --network socket is set.
+# Optional: disable with -DBUILD_NET_BRIDGE=OFF if you don't need networking.
+# =============================================================================
+option(BUILD_NET_BRIDGE "Build the net-bridge Rust NAT bridge (needs cargo)" ON)
+
+if(BUILD_NET_BRIDGE)
+  find_program(CARGO_EXECUTABLE cargo)
+  if(NOT CARGO_EXECUTABLE)
+    message(STATUS "net-bridge: cargo not found — skipping. Run with -DBUILD_NET_BRIDGE=OFF to silence.")
+  else()
+    set(NET_BRIDGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/net-bridge")
+    set(NET_BRIDGE_BIN "${NET_BRIDGE_DIR}/target/release/net-bridge")
+    set(NET_BRIDGE_LEGACY_SSL "${NET_BRIDGE_DIR}/vendor/openssl-legacy")
+
+    # Rust sources that should trigger a rebuild when they change.
+    # (GLOB at configure time — re-run cmake after adding new .rs files.)
+    file(GLOB_RECURSE NET_BRIDGE_SOURCES CONFIGURE_DEPENDS
+      "${NET_BRIDGE_DIR}/src/*.rs"
+    )
+    list(APPEND NET_BRIDGE_SOURCES
+      "${NET_BRIDGE_DIR}/Cargo.toml"
+      "${NET_BRIDGE_DIR}/Cargo.lock"
+    )
+
+    # If the vendored legacy OpenSSL has been built (via
+    # net-bridge/tools/build-legacy-openssl.sh), link against it so
+    # --mitm-tls has SSLv3 + weak ciphers. Otherwise fall back to the
+    # system libssl — the crate still builds, it just won't be able to
+    # downgrade TLS at runtime.
+    if(EXISTS "${NET_BRIDGE_LEGACY_SSL}/lib/libssl.a")
+      set(NET_BRIDGE_ENV
+        "OPENSSL_DIR=${NET_BRIDGE_LEGACY_SSL}"
+        "OPENSSL_STATIC=1"
+      )
+      message(STATUS "net-bridge: linking vendored OpenSSL at ${NET_BRIDGE_LEGACY_SSL}")
+    else()
+      set(NET_BRIDGE_ENV "")
+      message(STATUS "net-bridge: vendored OpenSSL not built — --mitm-tls will fail at runtime.")
+      message(STATUS "            Run net-bridge/tools/build-legacy-openssl.sh then re-run cmake.")
+    endif()
+
+    add_custom_command(
+      OUTPUT "${NET_BRIDGE_BIN}"
+      COMMAND ${CMAKE_COMMAND} -E env ${NET_BRIDGE_ENV}
+              "${CARGO_EXECUTABLE}" build --release
+              --manifest-path "${NET_BRIDGE_DIR}/Cargo.toml"
+      DEPENDS ${NET_BRIDGE_SOURCES}
+      WORKING_DIRECTORY "${NET_BRIDGE_DIR}"
+      COMMENT "Building net-bridge (Rust release)"
+      VERBATIM
+    )
+
+    add_custom_target(net-bridge ALL DEPENDS "${NET_BRIDGE_BIN}")
+  endif()
+endif()
+
+# =============================================================================
 # Tests
 # =============================================================================
 if(BUILD_TESTS)

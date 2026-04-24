@@ -8,8 +8,11 @@ Classic Mac emulator with web-based UI. Boots Mac OS 7.5.5 to Finder on a Quadra
 # Configure (first time, or after changing CMakeLists.txt)
 cmake -B build
 
-# Build
+# Build (emulator + net-bridge Rust NAT)
 cmake --build build -j$(nproc)
+
+# Disable net-bridge build (skip cargo, e.g. in minimal CI)
+cmake -B build -DBUILD_NET_BRIDGE=OFF
 
 # Run (with web UI)
 ./build/mac-phoenix /home/mick/quadra.rom
