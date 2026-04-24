@@ -184,6 +184,8 @@ void video_ipc_set_framebuffer(const uint8_t* fb);
 void video_ipc_set_resolution(int width, int height);
 void video_ipc_refresh(void);
 IPCBuffer* video_ipc_get_buffer(void);
+void video_ipc_set_depth(int depth_bits, int bytes_per_row);
+void video_ipc_set_palette(const uint8_t *pal, int num);
 bool control_ipc_init(IPCBuffer* shm);
 void control_ipc_start(void);
 void control_ipc_exit(void);
@@ -280,25 +282,57 @@ static uint8_t* g_ipc_m68k_fb = nullptr;
 static int g_ipc_m68k_width = 1024;
 static int g_ipc_m68k_height = 768;
 
+// Map a video_depth enum value to its bit count for logging / IPC.
+static int vdepth_to_bits(video_depth d) {
+    switch (d) {
+        case VDEPTH_1BIT: return 1;
+        case VDEPTH_2BIT: return 2;
+        case VDEPTH_4BIT: return 4;
+        case VDEPTH_8BIT: return 8;
+        case VDEPTH_16BIT: return 16;
+        case VDEPTH_32BIT: return 32;
+        default: return 0;
+    }
+}
+
 class ipc_monitor_desc : public monitor_desc {
 public:
     ipc_monitor_desc(const vector<video_mode> &modes, video_depth depth, uint32 id)
-        : monitor_desc(modes, depth, id) {}
+        : monitor_desc(modes, depth, id) {
+        // Classic Mac CLUT default: index 0 = white, index 255 = black.
+        // Mac OS populates the real palette via SetEntries during boot.
+        memset(pal_, 0, sizeof(pal_));
+        pal_[0] = pal_[1] = pal_[2] = 255;
+    }
     ~ipc_monitor_desc() {}
+
     void switch_to_current_mode(void) {
         const video_mode &mode = get_current_mode();
         g_ipc_m68k_width = mode.x;
         g_ipc_m68k_height = mode.y;
-        if (g_ipc_m68k_fb) {
-            memset(g_ipc_m68k_fb, 0, mode.x * mode.y * 4);
+        int bits = vdepth_to_bits(mode.depth);
+        uint32_t fb_size = (uint32_t)mode.bytes_per_row * mode.y;
+        if (g_ipc_m68k_fb && fb_size <= 0x800000) {
+            memset(g_ipc_m68k_fb, 0, fb_size);
         }
-        // Update IPC framebuffer pointer and resolution
         video_ipc_set_framebuffer(g_ipc_m68k_fb);
         video_ipc_set_resolution(g_ipc_m68k_width, g_ipc_m68k_height);
-        fprintf(stderr, "[IPC Video] Mode switch to %dx%dx32\n", mode.x, mode.y);
+        video_ipc_set_depth(bits, mode.bytes_per_row);
+        fprintf(stderr,
+            "[IPC Video] Mode switch to %dx%dx%d (bpr=%u, fb=%u bytes)\n",
+            mode.x, mode.y, bits, (unsigned)mode.bytes_per_row, fb_size);
     }
-    void set_palette(uint8 *pal, int num) { (void)pal; (void)num; }
+
+    void set_palette(uint8 *pal, int num) {
+        if (num > 256) num = 256;
+        memcpy(pal_, pal, (size_t)num * 3);
+        video_ipc_set_palette(pal_, num);
+    }
+
     void set_gamma(uint8 *gamma, int num) { (void)gamma; (void)num; }
+
+private:
+    uint8 pal_[256 * 3];
 };
 
 static bool video_ipc_m68k_init(bool classic)
@@ -336,22 +370,32 @@ static bool video_ipc_m68k_init(bool classic)
     video_ipc_set_framebuffer(g_ipc_m68k_fb);
     video_ipc_set_resolution(g_ipc_m68k_width, g_ipc_m68k_height);
 
-    // Build video modes (32-bit only)
+    // Publish ALL depths for each resolution. InstallSlotROM() reads the
+    // set of depths via monitor.has_depth(VDEPTH_*) and writes matching
+    // sResource entries into the video card's slot ROM — Mac OS's
+    // Monitors cdev reads THAT to populate the depth picker.
     vector<video_mode> modes;
     uint32 default_res_id = 0x83;
+    const video_depth depths_to_publish[] = {
+        VDEPTH_1BIT, VDEPTH_2BIT, VDEPTH_4BIT,
+        VDEPTH_8BIT, VDEPTH_16BIT, VDEPTH_32BIT,
+    };
 
     for (const auto& sm : supported_modes) {
+        // 32-bit framebuffer bounds the worst case; lower depths trivially fit.
         if ((uint32_t)sm.w * sm.h * 4 > 0x800000) continue;
         if (sm.w > default_width || sm.h > default_height) continue;
 
-        video_mode mode;
-        mode.x = sm.w;
-        mode.y = sm.h;
-        mode.resolution_id = sm.res_id;
-        mode.depth = VDEPTH_32BIT;
-        mode.bytes_per_row = sm.w * 4;
-        mode.user_data = 0;
-        modes.push_back(mode);
+        for (video_depth d : depths_to_publish) {
+            video_mode mode;
+            mode.x = sm.w;
+            mode.y = sm.h;
+            mode.resolution_id = sm.res_id;
+            mode.depth = d;
+            mode.bytes_per_row = TrivialBytesPerRow(sm.w, d);
+            mode.user_data = 0;
+            modes.push_back(mode);
+        }
 
         if (sm.w == default_width && sm.h == default_height) {
             default_res_id = sm.res_id;
@@ -359,6 +403,9 @@ static bool video_ipc_m68k_init(bool classic)
     }
 
     ipc_monitor_desc *monitor = new ipc_monitor_desc(modes, VDEPTH_32BIT, default_res_id);
+    // Seed the IPC refresh side with the initial (32-bit) depth + stride
+    // so the first frames render correctly before any explicit mode switch.
+    video_ipc_set_depth(32, default_width * 4);
 
     uint32 mac_fb_addr = Host2MacAddr(g_ipc_m68k_fb);
     if (mac_fb_addr == 0) {

@@ -42,29 +42,64 @@ namespace {
 	uint32_t the_buffer_size = 0;
 }
 
-// WebRTC monitor descriptor — supports runtime resolution switching
+// Classic Mac CLUT defaults. Index 0 is white and index 255 is black on
+// the Mac (inverted from the usual GDI convention). Intermediate indices
+// start black — Mac OS will populate them via SetEntries during boot.
+static void init_default_palette(uint8 *pal)
+{
+	memset(pal, 0, 256 * 3);
+	pal[0] = pal[1] = pal[2] = 255;  // white
+	// 255 entries remain black (0,0,0)
+}
+
+// WebRTC monitor descriptor — supports runtime resolution + depth switching.
 class webrtc_monitor_desc : public monitor_desc {
 public:
 	webrtc_monitor_desc(const vector<video_mode> &available_modes, video_depth default_depth, uint32 default_id)
-		: monitor_desc(available_modes, default_depth, default_id) {}
+		: monitor_desc(available_modes, default_depth, default_id)
+	{
+		init_default_palette(pal);
+	}
 	~webrtc_monitor_desc() {}
 
 	void switch_to_current_mode(void) {
 		const video_mode &mode = get_current_mode();
-		uint32_t new_size = mode.x * mode.y * 4;
+		uint32_t new_size = (uint32_t)mode.bytes_per_row * mode.y;
 
-		// Clear framebuffer for new resolution
 		if (the_buffer && new_size <= 0x800000) {
 			memset(the_buffer, 0, new_size);
 			the_buffer_size = new_size;
-			fprintf(stderr, "[Video] Mode switch to %dx%dx32\n", mode.x, mode.y);
+			fprintf(stderr,
+				"[Video] Mode switch to %dx%dx%d (bpr=%u, fb=%u bytes)\n",
+				mode.x, mode.y, mode_depth_bits(mode.depth),
+				(unsigned)mode.bytes_per_row, new_size);
 
-			// Request keyframe so encoder picks up the new resolution cleanly
+			// Request keyframe so encoder picks up the new shape cleanly.
 			video::g_request_keyframe.store(true, std::memory_order_release);
 		}
 	}
-	void set_palette(uint8 *pal, int num) { (void)pal; (void)num; }
+
+	void set_palette(uint8 *src_pal, int num) {
+		if (num > 256) num = 256;
+		memcpy(pal, src_pal, num * 3);
+	}
+
 	void set_gamma(uint8 *gamma, int num) { (void)gamma; (void)num; }
+
+	// Report bit depth as a number (1/2/4/8/16/32) for log prefixes etc.
+	static int mode_depth_bits(video_depth d) {
+		switch (d) {
+			case VDEPTH_1BIT: return 1;
+			case VDEPTH_2BIT: return 2;
+			case VDEPTH_4BIT: return 4;
+			case VDEPTH_8BIT: return 8;
+			case VDEPTH_16BIT: return 16;
+			case VDEPTH_32BIT: return 32;
+			default: return 0;
+		}
+	}
+
+	uint8 pal[256 * 3];  // RGB CLUT for indexed modes (1/2/4/8-bit)
 };
 
 /*
@@ -93,7 +128,7 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 	// Default resolution from config — also used as max mode limit
 	const int default_width = config ? config->screen_width : 1024;
 	const int default_height = config ? config->screen_height : 768;
-	const video_depth depth = VDEPTH_32BIT;
+	const video_depth default_depth = VDEPTH_32BIT;
 	fprintf(stderr, "[Video] Max resolution from config: %dx%d\n", default_width, default_height);
 
 	// Allocate framebuffer at max supported size (8MB area in cpu_context.cpp)
@@ -112,33 +147,43 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 	D(bug("Video: Framebuffer at host addr %p, Mac addr 0x%08x\n",
 	      the_buffer, Host2MacAddr(the_buffer)));
 
-	// Build list of supported video modes (32-bit only)
+	// Build list of supported video modes — every resolution at every
+	// depth (1/2/4/8/16/32). Classic Mac apps and control panels expose
+	// depth switching via the Monitors cdev; publishing all of them lets
+	// the guest pick its native depth for performance or compatibility.
 	vector<video_mode> modes;
-	uint32 default_res_id = 0x83;  // Default to 1024x768 if config resolution not in list
+	uint32 default_res_id = 0x83;
+	const video_depth depths_to_publish[] = {
+		VDEPTH_1BIT, VDEPTH_2BIT, VDEPTH_4BIT,
+		VDEPTH_8BIT, VDEPTH_16BIT, VDEPTH_32BIT,
+	};
 
 	for (const auto& sm : supported_modes) {
-		// Only include modes that fit in framebuffer area
+		// Only include modes whose 32-bit framebuffer fits in our 8 MB
+		// area (all lower depths trivially fit since the buffer is
+		// sized for the worst case).
 		if ((uint32_t)sm.w * sm.h * 4 > 0x800000) continue;
-
-		// --screen limits maximum resolution (prevents Mac from mode-switching up)
+		// --screen limits maximum resolution
 		if (sm.w > (int)default_width || sm.h > (int)default_height) continue;
 
-		video_mode mode;
-		mode.x = sm.w;
-		mode.y = sm.h;
-		mode.resolution_id = sm.res_id;
-		mode.depth = depth;
-		mode.bytes_per_row = sm.w * 4;
-		mode.user_data = 0;
-		modes.push_back(mode);
+		for (video_depth d : depths_to_publish) {
+			video_mode mode;
+			mode.x = sm.w;
+			mode.y = sm.h;
+			mode.resolution_id = sm.res_id;
+			mode.depth = d;
+			mode.bytes_per_row = TrivialBytesPerRow(sm.w, d);
+			mode.user_data = 0;
+			modes.push_back(mode);
+		}
 
 		if (sm.w == default_width && sm.h == default_height) {
 			default_res_id = sm.res_id;
 		}
 	}
 
-	// Create monitor descriptor with default set to config resolution
-	webrtc_monitor_desc *monitor = new webrtc_monitor_desc(modes, depth, default_res_id);
+	// Create monitor descriptor; default to 32-bit at the configured resolution.
+	webrtc_monitor_desc *monitor = new webrtc_monitor_desc(modes, default_depth, default_res_id);
 
 	// Set Mac frame buffer address (now it's in Mac RAM!)
 	uint32 mac_fb_addr = Host2MacAddr(the_buffer);
@@ -200,11 +245,103 @@ void video_webrtc_exit(void)
 	D(bug("Video: WebRTC driver shutdown complete\n"));
 }
 
+// Intermediate ARGB buffer — used only when the Mac is in a non-32-bit
+// mode and we need to unpack/palette-lookup before handing frames to
+// the encoder. Sized to the max resolution we'll ever serve.
+namespace {
+	std::vector<uint32_t> g_convert_buf;
+
+	// Ensure g_convert_buf can hold width*height ARGB pixels.
+	uint32_t *ensure_convert_buf(int width, int height) {
+		size_t need = (size_t)width * (size_t)height;
+		if (g_convert_buf.size() < need) {
+			g_convert_buf.resize(need);
+		}
+		return g_convert_buf.data();
+	}
+
+	// Pack R,G,B into a uint32 whose in-memory bytes are A,R,G,B on
+	// little-endian hosts. See video_ipc_ppc.cpp's pack_argb for the
+	// full explanation of why we DON'T use A<<24 here.
+	inline uint32_t pack_argb(uint8_t r, uint8_t g, uint8_t b) {
+		return (uint32_t)0xff
+		     | ((uint32_t)r << 8)
+		     | ((uint32_t)g << 16)
+		     | ((uint32_t)b << 24);
+	}
+
+	// Expand a 5-bit color component to 8 bits using bit replication —
+	// avoids skewing dark colors the way `(c << 3)` alone would.
+	inline uint8_t expand5(uint8_t c) { return (c << 3) | (c >> 2); }
+
+	// Convert one row of the Mac framebuffer at `depth` into ARGB.
+	// `src` points at the row start (stride = bytes_per_row). `pal` is the
+	// active CLUT (256 * 3 bytes, R,G,B).
+	void convert_row_to_argb(const uint8_t *src, int width, video_depth depth,
+	                         const uint8_t *pal, uint32_t *dst)
+	{
+		switch (depth) {
+			case VDEPTH_1BIT: {
+				// 8 pixels per byte, MSB first. bit 1 = index 1, 0 = index 0.
+				for (int x = 0; x < width; x++) {
+					uint8_t bit = (src[x >> 3] >> (7 - (x & 7))) & 1;
+					const uint8_t *p = &pal[bit * 3];
+					dst[x] = pack_argb(p[0], p[1], p[2]);
+				}
+				break;
+			}
+			case VDEPTH_2BIT: {
+				// 4 pixels per byte, MSB pair first.
+				for (int x = 0; x < width; x++) {
+					uint8_t idx = (src[x >> 2] >> ((3 - (x & 3)) * 2)) & 0x3;
+					const uint8_t *p = &pal[idx * 3];
+					dst[x] = pack_argb(p[0], p[1], p[2]);
+				}
+				break;
+			}
+			case VDEPTH_4BIT: {
+				// 2 pixels per byte, high nibble first.
+				for (int x = 0; x < width; x++) {
+					uint8_t idx = (src[x >> 1] >> ((1 - (x & 1)) * 4)) & 0xf;
+					const uint8_t *p = &pal[idx * 3];
+					dst[x] = pack_argb(p[0], p[1], p[2]);
+				}
+				break;
+			}
+			case VDEPTH_8BIT: {
+				for (int x = 0; x < width; x++) {
+					const uint8_t *p = &pal[src[x] * 3];
+					dst[x] = pack_argb(p[0], p[1], p[2]);
+				}
+				break;
+			}
+			case VDEPTH_16BIT: {
+				// Mac 16-bit is 0RRRRRGG GGGBBBBB (big-endian uint16).
+				for (int x = 0; x < width; x++) {
+					uint16_t pix = ((uint16_t)src[x * 2] << 8) | src[x * 2 + 1];
+					uint8_t r = expand5((pix >> 10) & 0x1f);
+					uint8_t g = expand5((pix >> 5)  & 0x1f);
+					uint8_t b = expand5(pix & 0x1f);
+					dst[x] = pack_argb(r, g, b);
+				}
+				break;
+			}
+			case VDEPTH_32BIT:
+			default:
+				// Already ARGB — caller fast-paths this case without us.
+				memcpy(dst, src, (size_t)width * 4);
+				break;
+		}
+	}
+}
+
 /*
  *  Video refresh - called periodically to capture frames
  *
- *  Called from main emulation loop to submit frames to the encoder.
- *  Mac framebuffer is in ARGB format, we convert to BGRA for H.264 encoder.
+ *  Reads the Mac framebuffer at whatever depth the guest currently has
+ *  selected and submits an ARGB frame to the encoder. For 32-bit, this
+ *  is a pass-through; for 1/2/4/8-bit we palette-lookup through the
+ *  CLUT captured via set_palette(); for 16-bit we unpack RGB555.
  */
 void video_webrtc_refresh(void)
 {
@@ -218,30 +355,46 @@ void video_webrtc_refresh(void)
 		}
 		return;
 	}
+	if (VideoMonitors.empty()) return;
 
 	refresh_count++;
 
-	// Debug: Log first 5 calls and every 60 calls thereafter
-	if (refresh_count <= 5 || (debug_frames && (refresh_count % 60 == 0))) {
-		// Sample a few pixels to see what's in the framebuffer
+	webrtc_monitor_desc *monitor = static_cast<webrtc_monitor_desc *>(VideoMonitors[0]);
+	const video_mode &mode = monitor->get_current_mode();
+	const int width = mode.x;
+	const int height = mode.y;
+	const int bpr = mode.bytes_per_row;
+	const video_depth depth = mode.depth;
+
+	// Fast path: 32-bit is already ARGB, submit directly.
+	if (depth == VDEPTH_32BIT) {
+		if (refresh_count <= 5 || (debug_frames && (refresh_count % 60 == 0))) {
+			const uint32_t* pixels = reinterpret_cast<const uint32_t*>(the_buffer);
+			fprintf(stderr,
+				"[VideoRefresh] Frame %d (32bit %dx%d): p[0]=0x%08x center=0x%08x\n",
+				refresh_count, width, height,
+				pixels[0], pixels[width/2 + (height/2) * width]);
+		}
 		const uint32_t* pixels = reinterpret_cast<const uint32_t*>(the_buffer);
-		uint32_t p0 = pixels[0];          // Top-left corner
-		int w = VideoMonitors.empty() ? 1024 : VideoMonitors[0]->get_current_mode().x;
-		int h = VideoMonitors.empty() ? 768 : VideoMonitors[0]->get_current_mode().y;
-		uint32_t p1 = pixels[w - 1];       // Top-right corner
-		uint32_t p2 = pixels[w/2 + (h/2) * w]; // Center
-		fprintf(stderr, "[VideoRefresh] Frame %d: pixels[0]=0x%08x [1023]=0x%08x [center]=0x%08x\n",
-		        refresh_count, p0, p1, p2);
+		video::g_video_output->submit_frame(pixels, width, height, PIXFMT_ARGB);
+		return;
 	}
 
-	// Get current video mode dimensions from monitor descriptor
-	const int width = VideoMonitors.empty() ? 1024 : VideoMonitors[0]->get_current_mode().x;
-	const int height = VideoMonitors.empty() ? 768 : VideoMonitors[0]->get_current_mode().y;
+	// Indexed / 16-bit: unpack into an ARGB scratch buffer, one row at
+	// a time so we walk `src` with the real bytes_per_row stride.
+	uint32_t *argb = ensure_convert_buf(width, height);
+	const uint8_t *src = reinterpret_cast<const uint8_t *>(the_buffer);
+	for (int y = 0; y < height; y++) {
+		convert_row_to_argb(src + y * bpr, width, depth, monitor->pal,
+		                    argb + y * width);
+	}
 
-	// Mac framebuffer is already in ARGB format (32-bit)
-	// VideoOutput wants ARGB or BGRA - let's submit as ARGB since that's what Mac uses
-	const uint32_t* pixels = reinterpret_cast<const uint32_t*>(the_buffer);
+	if (refresh_count <= 5 || (debug_frames && (refresh_count % 60 == 0))) {
+		fprintf(stderr,
+			"[VideoRefresh] Frame %d (%dbit %dx%d bpr=%d) converted to ARGB\n",
+			refresh_count, webrtc_monitor_desc::mode_depth_bits(depth),
+			width, height, bpr);
+	}
 
-	// Submit frame to encoder (non-blocking, lock-free)
-	video::g_video_output->submit_frame(pixels, width, height, PIXFMT_ARGB);
+	video::g_video_output->submit_frame(argb, width, height, PIXFMT_ARGB);
 }
