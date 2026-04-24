@@ -82,6 +82,12 @@ pub fn handle_dhcp_frame(frame: &[u8], device: &mut SocketDevice) -> bool {
     // Extract transaction ID
     let xid = [bootp[4], bootp[5], bootp[6], bootp[7]];
 
+    // BOOTP flags (offset 10-11). Bit 0 of the high byte = broadcast flag:
+    // the client is asking us to broadcast the reply because it has no IP
+    // yet and its IP stack may not accept unicast before configuration
+    // (classic Open Transport requires this; MacTCP is lax about it).
+    let broadcast_requested = (bootp[10] & 0x80) != 0;
+
     // Extract client MAC (chaddr at offset 28, 6 bytes for ethernet)
     let mut client_mac = [0u8; 6];
     client_mac.copy_from_slice(&bootp[28..34]);
@@ -98,17 +104,18 @@ pub fn handle_dhcp_frame(frame: &[u8], device: &mut SocketDevice) -> bool {
     let reply_type = if msg_type == DHCP_DISCOVER { DHCP_OFFER } else { DHCP_ACK };
 
     log::info!(
-        "DHCP: {} -> sending {}",
+        "DHCP: {} (bcast={}) -> sending {} (to {} {})",
         if msg_type == DHCP_DISCOVER { "DISCOVER" } else { "REQUEST" },
+        broadcast_requested,
         if reply_type == DHCP_OFFER { "OFFER" } else { "ACK" },
+        if broadcast_requested { "ff:ff:ff:ff:ff:ff" } else { "chaddr" },
+        if broadcast_requested { "255.255.255.255" } else { "yiaddr" },
     );
 
     // Build DHCP reply
     let dhcp_payload = build_dhcp_reply(reply_type, &xid, &client_mac);
 
-    // Wrap in UDP/IP/Ethernet and send
-    // DHCP reply: src=10.0.2.1:67, dst=255.255.255.255:68
-    let reply_frame = build_dhcp_frame(&dhcp_payload, &client_mac);
+    let reply_frame = build_dhcp_frame(&dhcp_payload, &client_mac, broadcast_requested);
     device.send_frame(&reply_frame);
 
     true
@@ -182,7 +189,13 @@ fn build_dhcp_reply(msg_type: u8, xid: &[u8; 4], client_mac: &[u8; 6]) -> Vec<u8
 }
 
 /// Build the complete ethernet frame for a DHCP reply.
-fn build_dhcp_frame(dhcp_payload: &[u8], client_mac: &[u8; 6]) -> Vec<u8> {
+///
+/// When `broadcast` is true (BOOTP broadcast flag was set by the client),
+/// send with dst_ip=255.255.255.255 + dst_mac=ff:ff:ff:ff:ff:ff per RFC 2131.
+/// Open Transport on classic Mac OS requires this; MacTCP accepts either,
+/// which is why a "works for MacTCP, hangs for OT" DHCP timeout is the
+/// classic symptom of getting this wrong.
+fn build_dhcp_frame(dhcp_payload: &[u8], client_mac: &[u8; 6], broadcast: bool) -> Vec<u8> {
     let udp_repr = UdpRepr {
         src_port: 67,
         dst_port: 68,
@@ -190,16 +203,21 @@ fn build_dhcp_frame(dhcp_payload: &[u8], client_mac: &[u8; 6]) -> Vec<u8> {
 
     let udp_len = udp_repr.header_len() + dhcp_payload.len();
 
+    let (dst_ip, dst_mac) = if broadcast {
+        (Ipv4Address::BROADCAST, EthernetAddress([0xff; 6]))
+    } else {
+        // Unicast reply: dst is the offered IP (yiaddr) to the client's MAC.
+        (CLIENT_IP, EthernetAddress(*client_mac))
+    };
+
     let ip_repr = Ipv4Repr {
         src_addr: GW_IP,
-        dst_addr: Ipv4Address::BROADCAST,
+        dst_addr: dst_ip,
         next_header: IpProtocol::Udp,
         payload_len: udp_len,
         hop_limit: 64,
     };
 
-    // Send to client's MAC (not broadcast — the client knows its MAC)
-    let dst_mac = EthernetAddress(*client_mac);
     let eth_repr = EthernetRepr {
         src_addr: GW_MAC,
         dst_addr: dst_mac,
@@ -219,7 +237,7 @@ fn build_dhcp_frame(dhcp_payload: &[u8], client_mac: &[u8; 6]) -> Vec<u8> {
     udp_repr.emit(
         &mut udp_pkt,
         &GW_IP.into(),
-        &Ipv4Address::BROADCAST.into(),
+        &dst_ip.into(),
         dhcp_payload.len(),
         |buf| buf.copy_from_slice(dhcp_payload),
         &smoltcp::phy::ChecksumCapabilities::default(),
