@@ -50,6 +50,10 @@ net-bridge/target/
 # Vendored legacy OpenSSL build tree — regenerate via
 # net-bridge/tools/build-legacy-openssl.sh (needed for --mitm-tls).
 net-bridge/vendor/
+
+# MITM TLS root CA — default dir when --mitm-ca-dir isn't set.
+# Contains a private key; must never be committed.
+.mitm_ca/
 build_output.txt
 build_stdout.txt
 build_warnings.txt
