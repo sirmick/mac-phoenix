@@ -31,6 +31,8 @@
 #include <queue>
 #include <vector>
 #include <unistd.h>
+#include <climits>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -96,19 +98,58 @@ static int recv_frame(int fd, uint8_t *buf, int buf_size)
 
 // ---- Bridge process management ----
 
+// Return the directory of the running mac-phoenix executable (via
+// /proc/self/exe on Linux, dladdr elsewhere). Empty string on failure.
+static std::string exe_dir()
+{
+#ifdef __linux__
+	char buf[PATH_MAX];
+	ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+	if (n > 0) {
+		buf[n] = 0;
+		std::string p(buf);
+		size_t slash = p.rfind('/');
+		if (slash != std::string::npos) return p.substr(0, slash);
+	}
+#endif
+	return "";
+}
+
+static bool is_executable_file(const std::string& p)
+{
+	struct stat st;
+	if (stat(p.c_str(), &st) != 0) return false;
+	if (!S_ISREG(st.st_mode)) return false;
+	return access(p.c_str(), X_OK) == 0;
+}
+
 static std::string find_bridge_binary()
 {
-	// Look relative to the emulator binary, or in common locations
-	const char *candidates[] = {
+	// 1) Relative to the running mac-phoenix binary. Covers the common
+	//    dev workflow: `./build/mac-phoenix` launched from the repo root
+	//    OR `./mac-phoenix` launched from inside build/. The binary
+	//    location is stable; CWD is not.
+	std::string exe = exe_dir();
+	if (!exe.empty()) {
+		// build/mac-phoenix -> ../net-bridge/target/release/net-bridge
+		std::string candidates[] = {
+			exe + "/../net-bridge/target/release/net-bridge",
+			exe + "/net-bridge",
+		};
+		for (auto& c : candidates) {
+			if (is_executable_file(c)) return c;
+		}
+	}
+
+	// 2) Fall back to CWD-relative + system locations.
+	const char *rel[] = {
 		"./net-bridge/target/release/net-bridge",
 		"./net-bridge",
 		"/usr/local/bin/net-bridge",
 		nullptr
 	};
-	for (int i = 0; candidates[i]; i++) {
-		if (access(candidates[i], X_OK) == 0) {
-			return candidates[i];
-		}
+	for (int i = 0; rel[i]; i++) {
+		if (is_executable_file(rel[i])) return rel[i];
 	}
 	return "";
 }
