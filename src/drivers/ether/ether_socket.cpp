@@ -125,31 +125,17 @@ static bool is_executable_file(const std::string& p)
 
 static std::string find_bridge_binary()
 {
-	// 1) Relative to the running mac-phoenix binary. Covers the common
-	//    dev workflow: `./build/mac-phoenix` launched from the repo root
-	//    OR `./mac-phoenix` launched from inside build/. The binary
-	//    location is stable; CWD is not.
+	// Single canonical location: right next to the mac-phoenix binary.
+	// CMake drops a symlink to the Rust release artifact there; installed
+	// bundles ship the two side by side. No CWD-dependent search paths.
 	std::string exe = exe_dir();
 	if (!exe.empty()) {
-		// build/mac-phoenix -> ../net-bridge/target/release/net-bridge
-		std::string candidates[] = {
-			exe + "/../net-bridge/target/release/net-bridge",
-			exe + "/net-bridge",
-		};
-		for (auto& c : candidates) {
-			if (is_executable_file(c)) return c;
-		}
+		std::string p = exe + "/net-bridge";
+		if (is_executable_file(p)) return p;
 	}
-
-	// 2) Fall back to CWD-relative + system locations.
-	const char *rel[] = {
-		"./net-bridge/target/release/net-bridge",
-		"./net-bridge",
-		"/usr/local/bin/net-bridge",
-		nullptr
-	};
-	for (int i = 0; rel[i]; i++) {
-		if (is_executable_file(rel[i])) return rel[i];
+	// System fallback for a future `make install`.
+	if (is_executable_file("/usr/local/bin/net-bridge")) {
+		return "/usr/local/bin/net-bridge";
 	}
 	return "";
 }

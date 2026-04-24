@@ -240,18 +240,25 @@ if(BUILD_NET_BRIDGE)
       message(STATUS "            Run net-bridge/tools/build-legacy-openssl.sh then re-run cmake.")
     endif()
 
+    # After cargo finishes, drop a symlink into the CMake build tree next
+    # to mac-phoenix so find_bridge_binary() in the emulator can resolve
+    # it as <exe_dir>/net-bridge — one canonical location, no CWD games.
+    set(NET_BRIDGE_LINK "${CMAKE_BINARY_DIR}/net-bridge")
+
     add_custom_command(
-      OUTPUT "${NET_BRIDGE_BIN}"
+      OUTPUT "${NET_BRIDGE_LINK}"
       COMMAND ${CMAKE_COMMAND} -E env ${NET_BRIDGE_ENV}
               "${CARGO_EXECUTABLE}" build --release
               --manifest-path "${NET_BRIDGE_DIR}/Cargo.toml"
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+              "${NET_BRIDGE_BIN}" "${NET_BRIDGE_LINK}"
       DEPENDS ${NET_BRIDGE_SOURCES}
       WORKING_DIRECTORY "${NET_BRIDGE_DIR}"
-      COMMENT "Building net-bridge (Rust release)"
+      COMMENT "Building net-bridge (Rust release) → ${NET_BRIDGE_LINK}"
       VERBATIM
     )
 
-    add_custom_target(net-bridge ALL DEPENDS "${NET_BRIDGE_BIN}")
+    add_custom_target(net-bridge ALL DEPENDS "${NET_BRIDGE_LINK}")
   endif()
 endif()
 
