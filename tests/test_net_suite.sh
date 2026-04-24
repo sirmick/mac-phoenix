@@ -213,6 +213,11 @@ require_pass 'udp_ext_send$'
 require_pass 'udp_ext_recv_[0-9]\+_bytes$'
 require_pass 'udp_ext_txid$'
 require_pass 'udp_ext_answers_'
+# Large TCP transfer — the Mac-receive-window flow-control check.
+require_pass 'bulk_connect$'
+require_pass 'bulk_received_[0-9]\+_bytes$'
+require_pass 'bulk_length_exactly_65536$'
+require_pass 'bulk_pattern_intact$'
 # post_stall_connect PASS proves the NAT survived the dead-host attempt
 require_pass 'post_stall_connect_'
 

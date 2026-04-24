@@ -21,6 +21,15 @@ $IPPROTO_UDP = 17;
 $HTTP_HOST = 'example.com';
 $HTTP_PORT = 80;
 
+# Gateway host + the bridge's in-process bulk-data server on port 8.
+# The server streams 64 KB of predictable pattern (byte i = i & 0xff)
+# then closes. Used to verify the NAT's flow control: a broken flow
+# control pushes past the Mac's receive window, and the guest sees a
+# truncated transfer with the first wrong byte at a specific offset.
+$GW_IP     = '10.0.2.1';
+$BULK_PORT = 8;
+$BULK_BYTES = 65536;
+
 # MacPerl's text-mode I/O translates \n to CR (Mac native newline). If we
 # write "\r\n" literals in HTTP requests we get CR+CR on the wire, which
 # modern HTTP servers reject as malformed. Use explicit octal byte codes:
@@ -320,7 +329,67 @@ sub test_dead_host_timing {
 }
 
 # -----------------------------------------------------------------------
-# 5. Post-stall liveness. Immediately after the dead-host connect, can we
+# 5. Large TCP transfer from the bridge's in-process bulk server on
+#    gateway:8. Streams 64 KB of known-pattern data (byte i = i & 0xff).
+#    Truncated result or first wrong byte pinpoints the NAT flow-control
+#    bug — when we push past the Mac's advertised receive window, bytes
+#    are silently dropped on the guest side.
+# -----------------------------------------------------------------------
+sub test_bulk_tcp_transfer {
+    my $gw = pack('C4', split(/\./, $GW_IP));
+    my $to = pack_sin($BULK_PORT, $gw);
+
+    unless (socket(BULK, $AF_INET, $SOCK_STREAM, $IPPROTO_TCP)) {
+        report_fail('bulk_socket', "err=$!"); return;
+    }
+    unless (connect(BULK, $to)) {
+        report_fail('bulk_connect', "err=$!"); close(BULK); return;
+    }
+    report_pass('bulk_connect');
+
+    # Drain to EOF with a generous timeout. read_with_timeout stops at
+    # EOF, so we'll get exactly the bytes the server sent — no more,
+    # no less. Then byte-by-byte verify against the known pattern.
+    my $data = read_with_timeout(\*BULK, $BULK_BYTES + 4096, 30);
+    close(BULK);
+
+    my $got = length($data);
+    if ($got == 0) {
+        report_fail('bulk_read', 'no data'); return;
+    }
+    report_pass("bulk_received_${got}_bytes");
+
+    if ($got != $BULK_BYTES) {
+        report_fail('bulk_length',
+            "expected $BULK_BYTES got $got (delta=" . ($BULK_BYTES - $got) . ")");
+    } else {
+        report_pass("bulk_length_exactly_${BULK_BYTES}");
+    }
+
+    # Pattern check: byte at offset i must be (i & 0xff). Find the first
+    # mismatch so we can tell WHERE the flow broke.
+    my $first_bad = -1;
+    for (my $i = 0; $i < $got; $i++) {
+        my $expected = $i & 0xff;
+        my $actual = ord(substr($data, $i, 1));
+        if ($actual != $expected) {
+            $first_bad = $i;
+            last;
+        }
+    }
+
+    if ($first_bad < 0) {
+        report_pass('bulk_pattern_intact');
+    } else {
+        report_fail('bulk_pattern',
+            "first mismatch at offset $first_bad (expected " .
+            ($first_bad & 0xff) . ", got " .
+            ord(substr($data, $first_bad, 1)) . ")");
+    }
+}
+
+# -----------------------------------------------------------------------
+# 6. Post-stall liveness. Immediately after the dead-host connect, can we
 #    still reach a real host? If the blocking-connect-on-hot-path bug
 #    left the NAT in a bad state, this will fail.
 # -----------------------------------------------------------------------
@@ -351,6 +420,7 @@ report_init();
 test_http_get_integrity();
 test_sequential_connects();
 test_external_udp_dns();
+test_bulk_tcp_transfer();
 test_dead_host_timing();
 test_post_stall_liveness();
 report_finish();

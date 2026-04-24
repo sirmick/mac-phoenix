@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
 use std::sync::Arc;
+use std::time::Instant;
 
 use smoltcp::wire::{
     EthernetAddress, EthernetFrame, EthernetProtocol, EthernetRepr,
@@ -85,12 +86,37 @@ struct TcpConn {
     dst_ip: Ipv4Address,
     mac_port: u16,
     dst_port: u16,
+    /// Observability: conn lifetime, bytes each way, why it closed.
+    opened_at: Instant,
+    bytes_in: u64,   // guest → host
+    bytes_out: u64,  // host → guest
+    close_reason: Option<&'static str>,
+
+    /// TCP flow control (what we know about the Mac's receive window).
+    /// `last_mac_ack`: highest ack-number we've seen from the Mac; anything
+    /// between this and `our_seq` is data we've sent but the Mac hasn't
+    /// yet acknowledged.
+    /// `mac_window`: the Mac's most recently advertised receive window.
+    /// If we send more than `mac_window` bytes without an ACK, the Mac
+    /// silently drops the overflow — catastrophic for large transfers,
+    /// invisible to the user except "transfer truncated mysteriously".
+    last_mac_ack: u32,
+    mac_window: u16,
 }
 
 /// Manages all TCP NAT connections.
 pub struct TcpNat {
     conns: HashMap<ConnKey, TcpConn>,
     mitm: Option<MitmRuntime>,
+    // Lifetime counters for periodic stats logs.
+    total_opened: u64,
+    total_closed: u64,
+    total_connect_failed: u64,
+    last_stats_log: Instant,
+    // Per-peer connection budget: when this exceeds a soft threshold we
+    // log loudly so "works for a few then stops" shows up as "N stuck
+    // connections in Established with no byte flow".
+    last_activity: Instant,
 }
 
 impl TcpNat {
@@ -98,6 +124,11 @@ impl TcpNat {
         Self {
             conns: HashMap::new(),
             mitm,
+            total_opened: 0,
+            total_closed: 0,
+            total_connect_failed: 0,
+            last_stats_log: Instant::now(),
+            last_activity: Instant::now(),
         }
     }
 
@@ -184,7 +215,15 @@ impl TcpNat {
                         dst_ip,
                         mac_port: src_port,
                         dst_port,
+                        opened_at: Instant::now(),
+                        bytes_in: 0,
+                        bytes_out: 0,
+                        close_reason: None,
+                        last_mac_ack: our_seq,   // we haven't sent any data yet, so nothing outstanding
+                        mac_window: tcp.window_len(),
                     });
+                    self.total_opened += 1;
+                    self.last_activity = Instant::now();
 
                     // Send SYN-ACK
                     let resp = build_tcp_frame(
@@ -198,7 +237,11 @@ impl TcpNat {
                     device.send_frame(&resp);
                 }
                 Err(e) => {
-                    log::warn!("TCP NAT: connect to {}:{} failed: {}", dst_ip, dst_port, e);
+                    self.total_connect_failed += 1;
+                    log::warn!(
+                        "TCP NAT: connect to {}:{} failed: {} (total_failed={})",
+                        dst_ip, dst_port, e, self.total_connect_failed
+                    );
                     // Send RST
                     let resp = build_tcp_frame(
                         dst_ip, dst_port, src_ip, src_port,
@@ -216,11 +259,31 @@ impl TcpNat {
 
         let Some(conn) = self.conns.get_mut(&key) else { return };
 
+        // Learn Mac's current receive window from EVERY incoming frame.
+        // Their window shrinks as their TCP buffer fills; expands as the
+        // app drains it. Ignoring this means we send past their buffer
+        // and they silently drop — THE large-transfer truncation bug.
+        conn.mac_window = tcp.window_len();
+        if tcp.ack() {
+            // TcpSeqNumber is signed i32 but wraps like TCP seq. Cast
+            // through u32 for our unsigned arithmetic below.
+            let ack = tcp.ack_number().0 as u32;
+            // Only advance `last_mac_ack` — never move backwards even if
+            // a reordered segment shows an older ack number.
+            if ack.wrapping_sub(conn.last_mac_ack) < 0x8000_0000 {
+                conn.last_mac_ack = ack;
+            }
+        }
+
         // ACK of our SYN-ACK: connection established
         if conn.state == TcpState::SynReceived && tcp.ack() && !tcp.syn() {
             conn.state = TcpState::Established;
             conn.our_seq += 1; // SYN-ACK consumed 1 seq
-            log::debug!("TCP NAT: established {}:{}", dst_ip, dst_port);
+            conn.last_mac_ack = conn.our_seq; // they've acked up through our SYN-ACK
+            log::debug!(
+                "TCP NAT: established {}:{} (mac_window={})",
+                dst_ip, dst_port, conn.mac_window
+            );
         }
 
         // Data from Mac → host
@@ -229,6 +292,8 @@ impl TcpNat {
             match handle_guest_data(conn, payload, ca.as_ref()) {
                 Ok(to_guest) => {
                     conn.their_seq += payload.len() as u32;
+                    conn.bytes_in += payload.len() as u64;
+                    self.last_activity = Instant::now();
                     // ACK the data (at TCP layer) regardless of pipe mode.
                     let ack = build_tcp_frame(
                         conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
@@ -244,7 +309,11 @@ impl TcpNat {
                     send_data_in_segments(conn, &to_guest, device);
                 }
                 Err(e) => {
-                    log::warn!("TCP NAT: pipe write failed: {}", e);
+                    log::warn!(
+                        "TCP NAT: pipe write failed for {}:{} -> {}:{}: {}",
+                        conn.mac_ip, conn.mac_port, conn.dst_ip, conn.dst_port, e
+                    );
+                    conn.close_reason = Some("pipe_write_err");
                     conn.state = TcpState::Closed;
                 }
             }
@@ -254,6 +323,7 @@ impl TcpNat {
         if tcp.fin() {
             conn.their_seq += 1; // FIN consumes 1
             shutdown_pipe_write(&mut conn.pipe);
+            conn.close_reason = Some("guest_fin");
 
             // ACK the FIN + send our FIN
             let fin_ack = build_tcp_frame(
@@ -287,10 +357,23 @@ impl TcpNat {
                 continue;
             }
 
-            let outcome = poll_pipe(&mut conn.pipe);
+            // Don't read more from upstream than we can send to the Mac
+            // right now. If Mac's receive window is full, just stall this
+            // tick — Linux TCP will exert back-pressure on upstream.
+            let window_room = available_window(conn);
+            if window_room == 0 {
+                // Mac's buffer is full. Skip; next tick we'll re-check
+                // after any ACK opens it up.
+                continue;
+            }
+            let max_read = (window_room as usize).min(TX_MAX_PAYLOAD);
+            let outcome = poll_pipe(&mut conn.pipe, max_read);
             match outcome {
                 PollOutcome::Bytes(bytes) => {
-                    send_data_in_segments(conn, &bytes, device);
+                    if !bytes.is_empty() {
+                        send_data_in_segments(conn, &bytes, device);
+                        self.last_activity = Instant::now();
+                    }
                 }
                 PollOutcome::Eof => {
                     log::debug!("TCP NAT: host closed {}:{}", conn.dst_ip, conn.dst_port);
@@ -304,18 +387,95 @@ impl TcpNat {
                     );
                     device.send_frame(&fin);
                     conn.our_seq += 1;
+                    conn.close_reason = Some("host_eof");
                     conn.state = TcpState::FinWait;
                 }
                 PollOutcome::Err(e) => {
-                    log::warn!("TCP NAT: pipe read error: {}", e);
+                    log::warn!(
+                        "TCP NAT: pipe read error for {}:{} -> {}:{}: {}",
+                        conn.mac_ip, conn.mac_port, conn.dst_ip, conn.dst_port, e
+                    );
+                    conn.close_reason = Some("pipe_read_err");
                     conn.state = TcpState::Closed;
                 }
                 PollOutcome::Idle => {}
             }
         }
 
-        for key in to_remove {
-            self.conns.remove(&key);
+        // Log a close summary for each conn being reaped, then remove.
+        for key in &to_remove {
+            if let Some(conn) = self.conns.remove(key) {
+                let elapsed = conn.opened_at.elapsed().as_millis();
+                let reason = conn.close_reason.unwrap_or("unknown");
+                log::info!(
+                    "TCP close: {}:{} -> {}:{} ({}ms, in={}B out={}B, reason={})",
+                    conn.mac_ip, conn.mac_port,
+                    conn.dst_ip, conn.dst_port,
+                    elapsed,
+                    conn.bytes_in, conn.bytes_out,
+                    reason
+                );
+                self.total_closed += 1;
+            }
+        }
+
+        // Periodic top-of-hour stats + stall detector.
+        self.maybe_log_stats();
+    }
+
+    /// Emit a one-line stats snapshot every ~5s, plus a warning if the
+    /// NAT has open conns but saw no byte activity for a while (the
+    /// "works for a few then stops" fingerprint).
+    fn maybe_log_stats(&mut self) {
+        let now = Instant::now();
+        let since_stats = now.duration_since(self.last_stats_log);
+        if since_stats.as_secs() < 5 {
+            return;
+        }
+        self.last_stats_log = now;
+
+        // Summarise open-conn state distribution.
+        let mut n_syn_rcvd = 0u32;
+        let mut n_est = 0u32;
+        let mut n_fin = 0u32;
+        let mut n_closed = 0u32;
+        let mut per_state_pending: Vec<String> = Vec::new();
+        for (_, c) in &self.conns {
+            match c.state {
+                TcpState::SynReceived => n_syn_rcvd += 1,
+                TcpState::Established => {
+                    n_est += 1;
+                    if per_state_pending.len() < 5 {
+                        let age_s = c.opened_at.elapsed().as_secs();
+                        per_state_pending.push(format!(
+                            "{}:{}→{}:{}(in={}B,out={}B,age={}s)",
+                            c.mac_ip, c.mac_port, c.dst_ip, c.dst_port,
+                            c.bytes_in, c.bytes_out, age_s
+                        ));
+                    }
+                }
+                TcpState::FinWait => n_fin += 1,
+                TcpState::Closed => n_closed += 1,
+            }
+        }
+
+        log::info!(
+            "TCP stats: open={} (synrcv={} est={} fin={} closed={}) \
+             opened_total={} closed_total={} connfail_total={}",
+            self.conns.len(), n_syn_rcvd, n_est, n_fin, n_closed,
+            self.total_opened, self.total_closed, self.total_connect_failed,
+        );
+        if !per_state_pending.is_empty() {
+            log::info!("TCP established: [{}]", per_state_pending.join(", "));
+        }
+
+        // Stall detector: open Established conns but no activity recently.
+        let idle = now.duration_since(self.last_activity);
+        if n_est > 0 && idle.as_secs() >= 15 {
+            log::warn!(
+                "TCP NAT: {} established conns but no byte activity for {}s — possible stall",
+                n_est, idle.as_secs()
+            );
         }
     }
 }
@@ -406,15 +566,28 @@ fn handle_guest_data(
     Ok(bytes)
 }
 
+/// How many bytes of data we can send to the Mac right now without
+/// overrunning its advertised receive window. The window shrinks as we
+/// send data the Mac hasn't acked yet; grows as the Mac acks.
+fn available_window(conn: &TcpConn) -> u32 {
+    let in_flight = conn.our_seq.wrapping_sub(conn.last_mac_ack);
+    (conn.mac_window as u32).saturating_sub(in_flight)
+}
+
 /// Drain any bytes the pipe has ready to send to the Mac. Called each tick.
-/// Cap per-call read size to `TX_MAX_PAYLOAD` so that a single poll
-/// produces at most one full-MSS segment. The main poll loop re-reads
-/// on the next tick if more bytes are buffered.
-fn poll_pipe(pipe: &mut Pipe) -> PollOutcome {
+/// Caller passes `max_read` derived from the Mac's current receive window
+/// so we never produce more data than they can accept.
+fn poll_pipe(pipe: &mut Pipe, max_read: usize) -> PollOutcome {
+    if max_read == 0 {
+        return PollOutcome::Idle;
+    }
     match pipe {
         Pipe::Raw(s) | Pipe::Sniffing { stream: s, .. } => {
+            // Stack-allocated bound so any TX_MAX_PAYLOAD-sized buffer
+            // is safe; then slice to the tighter `max_read` window.
             let mut buf = [0u8; TX_MAX_PAYLOAD];
-            match s.read(&mut buf) {
+            let limit = max_read.min(buf.len());
+            match s.read(&mut buf[..limit]) {
                 Ok(0) => PollOutcome::Eof,
                 Ok(n) => PollOutcome::Bytes(buf[..n].to_vec()),
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => PollOutcome::Idle,
@@ -422,6 +595,13 @@ fn poll_pipe(pipe: &mut Pipe) -> PollOutcome {
             }
         }
         Pipe::Bridging(bridge) => {
+            // TlsBridge produces whatever rustls/openssl coughs up; we
+            // can't cap its read directly. Best-effort: if the drive
+            // tick yields more than `max_read`, the outer loop will
+            // buffer it via the usual send segmentation and we'll run
+            // a bit over window for this tick. Acceptable because
+            // bridge output is usually small handshake records plus
+            // bounded chunks of app data.
             match bridge.drive() {
                 Ok(tick) => {
                     if tick.upstream_eof && tick.downstream_eof {
@@ -458,6 +638,7 @@ fn send_data_in_segments(conn: &mut TcpConn, payload: &[u8], device: &mut Socket
         );
         device.send_frame(&frame);
         conn.our_seq = conn.our_seq.wrapping_add(chunk.len() as u32);
+        conn.bytes_out += chunk.len() as u64;
         offset = end;
     }
 }

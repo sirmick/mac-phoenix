@@ -6,6 +6,7 @@
 //!
 //! Usage: net-bridge [--socket /tmp/mac-ether.sock]
 
+mod bulk_server;
 mod device;
 mod dhcp_server;
 mod echo_server;
@@ -24,6 +25,7 @@ use std::time::Instant;
 use smoltcp::iface::{Config, Interface, SocketSet};
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, Ipv4Address};
 
+use bulk_server::BulkServer;
 use device::SocketDevice;
 use echo_server::EchoServer;
 use icmp_proxy::IcmpNat;
@@ -88,6 +90,7 @@ fn main() {
 
     let mut sockets = SocketSet::new(vec![]);
     let echo = EchoServer::new(&mut sockets);
+    let mut bulk = BulkServer::new(&mut sockets);
     let mut tcp_nat = TcpNat::new(mitm);
     let mut udp_nat = UdpNat::new();
     let mut icmp_nat = IcmpNat::new();
@@ -125,6 +128,7 @@ fn main() {
 
         // 3b. Service the in-bridge echo daemon on GW:7
         echo.poll(&mut sockets);
+        bulk.poll(&mut sockets);
 
         // Re-poll smoltcp so any outgoing echo frames get egressed this tick.
         let _ = iface.poll(timestamp, &mut device, &mut sockets);
