@@ -39,7 +39,7 @@ override_dh_auto_configure:
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
 		-DBUILD_TESTS=OFF \
 		-DBUILD_NET_BRIDGE=ON \
-		-DBUILD_BRIDGE_AGENT=OFF
+		-DBUILD_BRIDGE_AGENT=ON
 
 override_dh_auto_test:
 	# Skip ctest at package-build time — most tests need a Mac ROM and a

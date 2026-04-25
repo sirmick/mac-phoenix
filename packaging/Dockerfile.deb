@@ -1,21 +1,29 @@
 # Dockerfile.deb — builds a .deb from the source tarball and installs it
 # into a clean stage to verify the layout. Boot tests mount ~/storage at
-# runtime (see tests/packaging/run_matrix.sh).
+# runtime (see packaging/run_matrix.sh).
 #
 # Build context (set up by run_matrix.sh):
 #   ./mac-phoenix_<ver>.tar.xz
 #
+# Pre-requisite image: mac-phoenix:retro68 (built by Dockerfile.retro68);
+# we COPY --from it to get the m68k cross-compiler so the BridgeAgent is
+# rebuilt from C source rather than shipping the committed .bin.
+#
 # Usage:
-#   docker build -f tests/packaging/Dockerfile.deb \
+#   docker build -f packaging/Dockerfile.deb \
 #     --build-arg BASE=ubuntu:24.04 \
 #     -t mac-phoenix-pkg:ubuntu-24.04 \
-#     tests/packaging/build-ctx
+#     packaging/build-ctx
 
 ARG BASE=ubuntu:24.04
 
 # ---------- build stage ---------------------------------------------------
 FROM ${BASE} AS build
 ARG DEBIAN_FRONTEND=noninteractive
+
+# Pull in the prebuilt Retro68 toolchain (one-time ~30min image build).
+COPY --from=mac-phoenix:retro68 /opt/retro68 /opt/retro68
+ENV PATH=/opt/retro68/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \

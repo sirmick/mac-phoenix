@@ -58,16 +58,30 @@ export CARGO_NET_OFFLINE=true
 export CARGO_HOME=%{_builddir}/%{name}-%{version}/.cargo-home
 mkdir -p "$CARGO_HOME"
 
+# uae_cpu / uae_jit pass -Wno-format to silence the noisy upstream UAE
+# format warnings; that disables -Wformat-security too, and Fedora's default
+# -Werror=format-security then errors out ("ignored without -Wformat").
+# Strip just that one flag — keep the rest of the hardening (PIE, fortify,
+# stack-protector, bindnow). Mirrors debian/rules.
+CFLAGS=$(echo "%{optflags}" | sed 's/-Werror=format-security//g')
+CXXFLAGS=$(echo "%{optflags}" | sed 's/-Werror=format-security//g')
+export CFLAGS CXXFLAGS
+
 %cmake \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DBUILD_TESTS=OFF \
     -DBUILD_NET_BRIDGE=ON \
-    -DBUILD_BRIDGE_AGENT=OFF \
+    -DBUILD_BRIDGE_AGENT=ON \
     -DENABLE_H264=OFF
 %cmake_build
 
 %install
 %cmake_install
+
+# CMake install drops LICENSE under /usr/share/doc/mac-phoenix/, which is
+# fine on Debian but conflicts with Fedora's idiomatic /usr/share/licenses/
+# (handled by %license below). Drop the duplicate.
+rm -f %{buildroot}%{_docdir}/%{name}/LICENSE
 
 # Validate the .desktop file
 desktop-file-validate %{buildroot}%{_datadir}/applications/mac-phoenix.desktop

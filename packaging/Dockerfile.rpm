@@ -10,6 +10,11 @@ ARG BASE=fedora:40
 # ---------- build stage ---------------------------------------------------
 FROM ${BASE} AS build
 
+# Pull in the prebuilt Retro68 toolchain. Toolchain was compiled on
+# Ubuntu 22.04 (glibc 2.35) → forward-compatible with Fedora 40's 2.39.
+COPY --from=mac-phoenix:retro68 /opt/retro68 /opt/retro68
+ENV PATH=/opt/retro68/bin:$PATH
+
 RUN dnf install -y --setopt=install_weak_deps=False \
         rpm-build \
         gcc-c++ \

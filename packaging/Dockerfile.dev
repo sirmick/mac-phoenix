@@ -11,7 +11,7 @@
 #     so BridgeAgent.bin can be rebuilt from source
 #
 # Usage (host):
-#   docker build -f tests/packaging/Dockerfile.dev -t mac-phoenix:dev .
+#   docker build -f packaging/Dockerfile.dev -t mac-phoenix:dev .
 #
 #   # Mount source tree, work inside:
 #   docker run --rm -it \

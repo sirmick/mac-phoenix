@@ -8,7 +8,7 @@ toolchain/
 
 # Packaging artifacts
 /dist/
-/tests/packaging/build-ctx/
+/packaging/build-ctx/
 /debian/cargo-home/
 /debian/.debhelper/
 /debian/files
