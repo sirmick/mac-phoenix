@@ -25,8 +25,20 @@ set -euo pipefail
 
 docker info >/dev/null 2>&1 || { echo "docker not usable — install docker.io and add yourself to the docker group (newgrp docker)" >&2; exit 1; }
 
+# BuildKit auto-removes intermediate build containers; without it, every RUN
+# step leaves an exited container around and the host fills up fast.
+export DOCKER_BUILDKIT=1
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+
+# Sweep any orphaned exited build containers from previous (failed) runs and
+# any stopped containers we created earlier. Skips active containers.
+cleanup_docker() {
+    docker container prune -f --filter 'label=mac-phoenix-build' >/dev/null 2>&1 || true
+    docker container prune -f >/dev/null 2>&1 || true
+}
+trap cleanup_docker EXIT
 
 ROM="${MACEMU_ROM:-$HOME/quadra.rom}"
 DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
@@ -84,6 +96,23 @@ for target in $TARGETS; do
             "$CTX" 2>&1 | tee "$log"; then
         results+=("$target: BUILD_FAIL  (see $log)")
         continue
+    fi
+
+    # Extract built .deb / .rpm out of the test image to dist/packages/<target>/
+    pkg_dir="$ROOT/dist/packages/$target"
+    rm -rf "$pkg_dir"; mkdir -p "$pkg_dir"
+    cid="$(docker create "$image")"
+    docker cp "$cid:/pkg/." "$pkg_dir/" >/dev/null 2>&1 || true
+    docker rm "$cid" >/dev/null
+    artifact="$(ls -1 "$pkg_dir"/*.deb "$pkg_dir"/*.rpm 2>/dev/null | head -1)"
+    [[ -n "$artifact" ]] && echo "[matrix] artifact: $artifact"
+
+    # Drop the test image after extraction. Each one is 150-400MB; keeping
+    # them all adds up fast across runs. Set MACEMU_KEEP_IMAGES=1 to retain
+    # them for debugging (e.g. `docker run --rm -it mac-phoenix-pkg:<target>
+    # bash`). Base images (ubuntu:24.04 etc.) stay cached either way.
+    if [[ "${MACEMU_KEEP_IMAGES:-0}" != "1" ]]; then
+        docker rmi "$image" >/dev/null 2>&1 || true
     fi
 
     if [[ "${MACEMU_SKIP_BOOT:-0}" = "1" ]]; then

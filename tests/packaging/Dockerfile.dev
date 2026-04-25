@@ -1,0 +1,114 @@
+# Dockerfile.dev — full development environment for MacPhoenix.
+#
+# Replicates a working host build env on Ubuntu 24.04 so contributors can
+# clone-build-test without installing apt packages on their own machine.
+# Includes:
+#   - Emulator build deps (gcc/g++, cmake, libssl-dev, libyuv, codecs)
+#   - Current rust toolchain via rustup (for net-bridge; distro 1.75 is
+#     below smoltcp 0.12's MSRV)
+#   - hfsutils + unar for HFS disk-image provisioning
+#   - Retro68 build deps + (optionally) the toolchain itself, pre-built
+#     so BridgeAgent.bin can be rebuilt from source
+#
+# Usage (host):
+#   docker build -f tests/packaging/Dockerfile.dev -t mac-phoenix:dev .
+#
+#   # Mount source tree, work inside:
+#   docker run --rm -it \
+#       -v "$PWD":/src \
+#       -v ~/storage:/storage:ro \
+#       -p 11000:11000 \
+#       mac-phoenix:dev
+#
+#   # Then in the container:
+#   cd /src && cmake -B build && cmake --build build -j$(nproc)
+#   ./build/mac-phoenix /storage/roms/quadra.rom
+#   # browse to http://localhost:11000 on the host
+#
+# Build args:
+#   BUILD_RETRO68=1   pre-build the Retro68 toolchain into /opt/retro68 at
+#                     image-build time (~30 min, ~700MB). Default 0 — uses
+#                     the committed tests/guest/bridge/BridgeAgent.bin.
+
+ARG BASE=ubuntu:24.04
+FROM ${BASE}
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG BUILD_RETRO68=0
+
+# ---------- emulator build deps ------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        pkg-config \
+        git \
+        ca-certificates \
+        curl \
+        xz-utils \
+        # core libs
+        libssl-dev \
+        libyuv-dev \
+        # video/audio codecs
+        libopenh264-dev \
+        libvpx-dev \
+        libwebp-dev \
+        libopus-dev \
+        # provisioning
+        hfsutils \
+        unar \
+        python3 \
+        # networking helpers (handy for testing inside the container)
+        iproute2 \
+        iputils-ping \
+        net-tools \
+        # interactive tooling
+        less \
+        nano \
+        vim-tiny \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------- current rust via rustup --------------------------------------
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path \
+ && rustc --version
+
+# ---------- Retro68 build deps -------------------------------------------
+# Cheap to install whether or not we end up building the toolchain.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        bison \
+        flex \
+        ruby \
+        texinfo \
+        libgmp-dev \
+        libmpfr-dev \
+        libmpc-dev \
+        libboost-all-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------- optional: pre-build Retro68 toolchain ------------------------
+# Skips by default — building Retro68 is slow (~30min) and most contributors
+# don't touch BridgeAgent. Pass `--build-arg BUILD_RETRO68=1` to turn it on.
+RUN if [ "$BUILD_RETRO68" = "1" ]; then \
+        cd /opt && \
+        git clone --recursive https://github.com/autc04/Retro68.git Retro68-src && \
+        mkdir Retro68-build && \
+        cd Retro68-build && \
+        ../Retro68-src/build-toolchain.bash --no-carbon && \
+        ln -s /opt/Retro68-build/toolchain /opt/retro68 && \
+        rm -rf /opt/Retro68-build/build && \
+        echo "Retro68 installed at /opt/retro68"; \
+    else \
+        echo "BUILD_RETRO68=0; committed BridgeAgent.bin will be used. Re-run with --build-arg BUILD_RETRO68=1 to enable rebuild from source."; \
+    fi
+
+ENV PATH=/opt/retro68/bin:$PATH
+
+# ---------- workspace ----------------------------------------------------
+WORKDIR /src
+
+# Default: drop into a shell. The expected workflow is to bind-mount the
+# host source tree at /src.
+CMD ["/bin/bash"]
