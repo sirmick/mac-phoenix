@@ -772,18 +772,38 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
                 config.backend_string());
     }
 
-    // --bridge: auto-create a temp ExtFS mount for bridge file I/O
+    // --bridge: ExtFS mount for bridge file I/O. The guest BridgeAgent
+    // looks for every file under Host:MacPhoenix:... so we root
+    // bridge_dir at <extfs_path[0]>/MacPhoenix and ensure the directory
+    // exists. One-shot cleanup of any legacy top-level bridge_* files
+    // from the earlier scheme avoids duplicates living around.
     if (config.bridge_enabled) {
+        std::string root;
         if (config.extfs_paths.empty()) {
-            char bridge_dir[] = "/tmp/macemu-bridge-XXXXXX";
-            if (mkdtemp(bridge_dir)) {
-                config.bridge_dir = bridge_dir;
-                config.extfs_paths.push_back(bridge_dir);
-                fprintf(stderr, "[Config] Bridge ExtFS: %s\n", bridge_dir);
+            char tmp[] = "/tmp/macemu-bridge-XXXXXX";
+            if (mkdtemp(tmp)) {
+                root = tmp;
+                config.extfs_paths.push_back(root);
+                fprintf(stderr, "[Config] Bridge ExtFS: %s\n", tmp);
             }
         } else {
-            config.bridge_dir = config.extfs_paths[0];
-            fprintf(stderr, "[Config] Bridge dir: %s (shared with ExtFS)\n",
+            root = config.extfs_paths[0];
+        }
+        if (!root.empty()) {
+            config.bridge_dir = root + "/MacPhoenix";
+            mkdir(config.bridge_dir.c_str(), 0755);
+
+            // Remove stale top-level bridge files from the pre-subfolder layout.
+            for (const char *stale : {
+                "bridge_heartbeat", "bridge_loaded", "bridge_step",
+                "_bridge_cmd", "_bridge_result", "_bridge_clipboard",
+            }) {
+                std::string path = root + "/" + stale;
+                unlink(path.c_str());
+                std::string finf = root + "/.finf/" + stale;
+                unlink(finf.c_str());
+            }
+            fprintf(stderr, "[Config] Bridge dir: %s (under ExtFS)\n",
                     config.bridge_dir.c_str());
         }
     }
@@ -854,7 +874,9 @@ EmulatorConfig load_emulator_config(const char* config_path,
     dedup_paths(config.cdrom_paths);
     dedup_paths(config.extfs_paths);
 
-    // 8. Resolve client_dir relative to binary location if it's a relative path
+    // 8. Resolve client_dir relative to binary location if it's a relative path.
+    //    Searched in order: <exe>/../client (dev tree), <exe>/../share/mac-phoenix/client
+    //    (FHS install — /usr/bin/mac-phoenix → /usr/share/mac-phoenix/client).
     if (!config.client_dir.empty() && config.client_dir[0] != '/') {
         char exe_path[4096];
         ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
@@ -863,10 +885,17 @@ EmulatorConfig load_emulator_config(const char* config_path,
             char* last_slash = strrchr(exe_path, '/');
             if (last_slash) {
                 *last_slash = '\0';
-                std::string resolved = std::string(exe_path) + "/../" + config.client_dir;
-                struct stat st;
-                if (stat(resolved.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
-                    config.client_dir = resolved;
+                const std::string exe_dir = exe_path;
+                const std::string candidates[] = {
+                    exe_dir + "/../" + config.client_dir,
+                    exe_dir + "/../share/mac-phoenix/client",
+                };
+                for (const auto& candidate : candidates) {
+                    struct stat st;
+                    if (stat(candidate.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+                        config.client_dir = candidate;
+                        break;
+                    }
                 }
             }
         }

@@ -263,6 +263,126 @@ if(BUILD_NET_BRIDGE)
 endif()
 
 # =============================================================================
+# BridgeAgent (Retro68 68k Mac app) — guest-side automation helper.
+# Installed into :System Folder:Startup Items: on the guest disk during
+# boot by command_bridge.cpp's provisioning step. The committed
+# BridgeAgent.bin in tests/guest/bridge/ is our fallback; this target
+# rebuilds it from source when the Retro68 toolchain is available.
+# Opt out with -DBUILD_BRIDGE_AGENT=OFF.
+# =============================================================================
+option(BUILD_BRIDGE_AGENT "Build the BridgeAgent from source (needs Retro68)" ON)
+
+if(BUILD_BRIDGE_AGENT)
+  # Prefer the in-tree toolchain (toolchain/retro68/bin), fall back to
+  # whatever's on PATH.
+  set(RETRO68_INTREE "${CMAKE_CURRENT_SOURCE_DIR}/toolchain/retro68/bin")
+  find_program(RETRO68_GCC m68k-apple-macos-gcc
+    HINTS "${RETRO68_INTREE}" NO_DEFAULT_PATH)
+  if(NOT RETRO68_GCC)
+    find_program(RETRO68_GCC m68k-apple-macos-gcc)
+  endif()
+  find_program(RETRO68_REZ Rez
+    HINTS "${RETRO68_INTREE}" NO_DEFAULT_PATH)
+  if(NOT RETRO68_REZ)
+    find_program(RETRO68_REZ Rez)
+  endif()
+
+  if(NOT RETRO68_GCC OR NOT RETRO68_REZ)
+    message(STATUS "bridge-agent: Retro68 toolchain not found — keeping committed BridgeAgent.bin.")
+    message(STATUS "              Set -DBUILD_BRIDGE_AGENT=OFF to silence this message.")
+  else()
+    get_filename_component(RETRO68_BIN_DIR "${RETRO68_GCC}" DIRECTORY)
+    get_filename_component(RETRO68_ROOT "${RETRO68_BIN_DIR}" DIRECTORY)
+    set(RETRO68_RINCLUDES "${RETRO68_ROOT}/m68k-apple-macos/RIncludes")
+
+    set(BA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests/guest/bridge")
+    set(BA_CODE "${BA_DIR}/BridgeAgent.code.bin")
+    set(BA_BIN  "${BA_DIR}/BridgeAgent.bin")
+
+    # Compile C → Retro68 code binary
+    add_custom_command(
+      OUTPUT "${BA_CODE}"
+      COMMAND "${RETRO68_GCC}" -O2 -o "${BA_CODE}" bridge_agent.c
+      DEPENDS "${BA_DIR}/bridge_agent.c"
+      WORKING_DIRECTORY "${BA_DIR}"
+      COMMENT "Building BridgeAgent (m68k): bridge_agent.c → BridgeAgent.code.bin"
+      VERBATIM
+    )
+
+    # Rez the resource fork + pack into MacBinary (.bin), APPL (APPL fork),
+    # and disk image (.dsk). The committed .bin is what command_bridge
+    # installs into the guest's Startup Items.
+    add_custom_command(
+      OUTPUT "${BA_BIN}"
+      COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" bridge_agent.r
+              -I "${RETRO68_RINCLUDES}"
+              --copy "${BA_CODE}"
+              -o "${BA_BIN}"
+              -t APPL -c MxBr
+              --cc "${BA_DIR}/BridgeAgent.dsk"
+              --cc "${BA_DIR}/BridgeAgent.APPL"
+      DEPENDS "${BA_CODE}" "${BA_DIR}/bridge_agent.r"
+      WORKING_DIRECTORY "${BA_DIR}"
+      COMMENT "Rezzing BridgeAgent.bin"
+      VERBATIM
+    )
+
+    add_custom_target(bridge-agent ALL DEPENDS "${BA_BIN}")
+    message(STATUS "bridge-agent: using Retro68 at ${RETRO68_BIN_DIR}")
+  endif()
+endif()
+
+# =============================================================================
+# Install rules (used by .deb / .rpm packaging — see packaging/ and debian/)
+#
+# Layout when installed with -DCMAKE_INSTALL_PREFIX=/usr:
+#   /usr/bin/mac-phoenix                 — emulator
+#   /usr/bin/net-bridge                  — Rust NAT bridge (if built)
+#   /usr/share/mac-phoenix/client/       — web UI assets
+#   /usr/share/mac-phoenix/BridgeAgent.bin
+#   /usr/share/mac-phoenix/provisioning/install_bridge_agent.sh
+#   /usr/share/applications/mac-phoenix.desktop
+#   /usr/share/doc/mac-phoenix/{README.md,CLAUDE.md,LICENSE}
+#
+# Runtime path resolution lives in:
+#   src/config/emulator_config.cpp        — client_dir fallback
+#   src/drivers/ether/ether_socket.cpp    — find_bridge_binary()
+#   src/core/command_bridge.cpp           — resolve_repo_relative()
+# =============================================================================
+include(GNUInstallDirs)
+
+install(TARGETS mac-phoenix
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+if(BUILD_NET_BRIDGE AND CARGO_EXECUTABLE)
+  install(PROGRAMS "${NET_BRIDGE_BIN}"
+          DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+install(DIRECTORY client/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mac-phoenix/client
+        FILES_MATCHING
+        PATTERN "*.html"
+        PATTERN "*.js"
+        PATTERN "*.css"
+        PATTERN "*.svg"
+        PATTERN "*.json")
+
+install(FILES tests/guest/bridge/BridgeAgent.bin
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mac-phoenix)
+
+install(PROGRAMS provisioning/install_bridge_agent.sh
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mac-phoenix/provisioning)
+
+install(FILES packaging/mac-phoenix.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+        OPTIONAL)
+
+install(FILES README.md CLAUDE.md LICENSE
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}
+        OPTIONAL)
+
+# =============================================================================
 # Tests
 # =============================================================================
 if(BUILD_TESTS)

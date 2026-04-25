@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=MacPhoenix
+GenericName=Classic Mac Emulator
+Comment=Boot Mac OS 7.x / 8.x / 9.x with a browser-based UI
+Exec=mac-phoenix %f
+Terminal=false
+Icon=applications-emulator
+Categories=System;Emulator;
+Keywords=mac;emulator;68k;ppc;classic;basilisk;sheepshaver;
+StartupNotify=true

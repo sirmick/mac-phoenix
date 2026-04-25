@@ -1,0 +1,38 @@
+Source: mac-phoenix
+Section: otherosfs
+Priority: optional
+Maintainer: Mick <sirmick@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.16),
+               pkg-config,
+               libssl-dev,
+               libopenh264-dev,
+               libvpx-dev,
+               libwebp-dev,
+               libopus-dev,
+               libyuv-dev,
+               cargo,
+               rustc (>= 1.70)
+Standards-Version: 4.6.2
+Homepage: https://github.com/sirmick/mac-phoenix
+Rules-Requires-Root: no
+
+Package: mac-phoenix
+Architecture: amd64
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Recommends: hfsutils
+Description: Classic Macintosh emulator with web-based UI
+ MacPhoenix boots Mac OS 7.x / 8.x / 9.x in a window or in your browser.
+ .
+ Includes a 68k UAE interpreter (default), a Unicorn-engine-based 68k/PPC
+ backend for validation, and a KPX PowerPC translator. The browser UI
+ streams the framebuffer over WebRTC (H.264 / VP9) or WebSocket
+ (PNG / WebP) and routes mouse and keyboard input back to the guest.
+ .
+ An optional Rust net-bridge provides Unix-socket NAT networking via
+ smoltcp; with --mitm-tls it can downgrade modern TLS so classic Mac
+ browsers can reach today's HTTPS sites (requires a separately built
+ legacy OpenSSL — see /usr/share/doc/mac-phoenix/).
+ .
+ ROMs and disk images are not distributed.

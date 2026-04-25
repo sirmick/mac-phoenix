@@ -1,0 +1,61 @@
+# Dockerfile.rpm — builds an RPM from the source tarball and installs it
+# into a clean stage to verify the layout. Mirror of Dockerfile.deb.
+#
+# Build context (set up by run_matrix.sh):
+#   ./mac-phoenix_<ver>.tar.xz
+#   ./mac-phoenix.spec    (copied from rpm/mac-phoenix.spec)
+
+ARG BASE=fedora:40
+
+# ---------- build stage ---------------------------------------------------
+FROM ${BASE} AS build
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+        rpm-build \
+        gcc-c++ \
+        cmake \
+        pkgconf-pkg-config \
+        openssl-devel \
+        libvpx-devel \
+        libwebp-devel \
+        opus-devel \
+        libyuv-devel \
+        cargo \
+        rust \
+        desktop-file-utils \
+        xz \
+        tar \
+    && dnf clean all
+
+WORKDIR /root/rpmbuild
+RUN mkdir -p BUILD RPMS SOURCES SPECS SRPMS
+
+COPY mac-phoenix_*.tar.xz SOURCES/
+COPY mac-phoenix.spec SPECS/
+
+RUN rpmbuild -bb SPECS/mac-phoenix.spec \
+ && mkdir -p /pkg && cp RPMS/x86_64/*.rpm /pkg/
+
+# ---------- test stage (clean image, no build deps) -----------------------
+FROM ${BASE} AS test
+
+COPY --from=build /pkg/*.rpm /pkg/
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+        /pkg/*.rpm \
+        curl \
+        jq \
+        hfsutils \
+    && dnf clean all
+
+RUN set -eux; \
+    test -x /usr/bin/mac-phoenix; \
+    test -x /usr/bin/net-bridge; \
+    test -f /usr/share/mac-phoenix/client/index.html; \
+    test -f /usr/share/mac-phoenix/client/client.js; \
+    test -f /usr/share/mac-phoenix/BridgeAgent.bin; \
+    test -x /usr/share/mac-phoenix/provisioning/install_bridge_agent.sh; \
+    test -f /usr/share/applications/mac-phoenix.desktop; \
+    mac-phoenix --help | head -3
+
+CMD ["mac-phoenix", "--help"]

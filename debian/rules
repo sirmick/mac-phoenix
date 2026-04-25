@@ -1,0 +1,57 @@
+#!/usr/bin/make -f
+#
+# debian/rules — debhelper-driven build for mac-phoenix.
+#
+# CMake handles the C++ side; the net-bridge Rust binary is built as a
+# CMake custom target via cargo. Cargo runs in offline mode against the
+# vendored crates in net-bridge/vendor/cargo/, configured by
+# net-bridge/.cargo/config.toml (both shipped in the source tarball).
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# uae_cpu and friends pass -Wno-format to silence the (very noisy) format
+# warnings in the upstream UAE/BasiliskII source. That makes Debian's default
+# -Werror=format-security a hard error ("ignored without -Wformat"). Strip it;
+# we lose printf-format-string hardening but keep stack-protector + PIE +
+# bindnow + fortify. Upstream patch-out would mean rewriting decades-old code.
+export DEB_CFLAGS_STRIP = -Werror=format-security
+export DEB_CXXFLAGS_STRIP = -Werror=format-security
+
+# Force cargo offline + isolate CARGO_HOME so the build never touches the
+# network or the maintainer's ~/.cargo cache.
+export CARGO_NET_OFFLINE = true
+export CARGO_HOME = $(CURDIR)/debian/cargo-home
+
+%:
+	dh $@ --buildsystem=cmake
+
+# dh_clean's default cleanup deletes *.orig / *.rej / *.bak across the tree.
+# That nukes Cargo.toml.orig from every vendored crate (cargo writes one per
+# crate to record the upstream Cargo.toml before its rewrites), and cargo
+# then refuses to build because the checksums don't line up. Tell dh_clean
+# to skip the whole vendor tree.
+override_dh_clean:
+	dh_clean -Xnet-bridge/vendor
+
+override_dh_auto_configure:
+	mkdir -p $(CARGO_HOME)
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DBUILD_TESTS=OFF \
+		-DBUILD_NET_BRIDGE=ON \
+		-DBUILD_BRIDGE_AGENT=OFF
+
+override_dh_auto_test:
+	# Skip ctest at package-build time — most tests need a Mac ROM and a
+	# running emulator. Smoke tests live in tests/packaging/ instead.
+
+override_dh_auto_install:
+	dh_auto_install
+	# Strip CARGO_HOME out of the staged tree (created above for the
+	# build's sake; debhelper would otherwise complain about stray files).
+	rm -rf debian/cargo-home
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf debian/cargo-home
+	rm -rf net-bridge/target

@@ -1,0 +1,97 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mac-phoenix
+Source: https://github.com/sirmick/mac-phoenix
+
+Files: *
+Copyright: 2024-2026 Mick <sirmick@gmail.com>
+           1997-2008 Christian Bauer (BasiliskII / SheepShaver derivatives)
+           1995-2007 Bernd Schmidt and contributors (UAE m68k core)
+License: GPL-2+
+
+Files: src/cpu/uae_cpu/*
+Copyright: 1995-2007 Bernd Schmidt and the UAE contributors
+License: GPL-2+
+
+Files: src/core/emul_op.cpp src/core/rom_patches.cpp src/core/adb.cpp
+Copyright: 1997-2008 Christian Bauer
+           2024-2026 Mick <sirmick@gmail.com>
+License: GPL-2+
+
+Files: net-bridge/*
+Copyright: 2024-2026 Mick <sirmick@gmail.com>
+License: GPL-2+
+
+Files: subprojects/unicorn/*
+Copyright: 2015-2024 Nguyen Anh Quynh <aquynh@gmail.com>
+           2003-2024 Fabrice Bellard and the QEMU Project developers
+License: GPL-2
+
+Files: subprojects/libdatachannel/*
+Copyright: 2019-2024 Paul-Louis Ageneau <paul-louis@ageneau.net>
+License: MPL-2.0
+
+Files: subprojects/nlohmann_json/*
+Copyright: 2013-2026 Niels Lohmann
+License: Expat
+
+Files: subprojects/lwip/*
+Copyright: 2001-2004 Swedish Institute of Computer Science
+License: BSD-3-clause
+
+Files: net-bridge/vendor/cargo/*
+Copyright: Various — see each crate's LICENSE / Cargo.toml
+License: Various
+ Vendored Rust crates retain their upstream licenses (predominantly
+ Apache-2.0 / MIT dual). The combined work is distributed under GPL-2+.
+
+License: GPL-2+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ General Public License for more details.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in /usr/share/common-licenses/GPL-2.
+
+License: GPL-2
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License version 2 as
+ published by the Free Software Foundation.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in /usr/share/common-licenses/GPL-2.
+
+License: MPL-2.0
+ On Debian systems, the complete text of the Mozilla Public License
+ version 2.0 can be found in /usr/share/common-licenses/MPL-2.0.
+
+License: Expat
+ Permission is hereby granted, free of charge, to any person obtaining
+ a copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
+ .
+ The above copyright notice and this permission notice shall be
+ included in all copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+License: BSD-3-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met: 1. Redistributions of source code must retain the above
+ copyright notice, this list of conditions and the following
+ disclaimer. 2. Redistributions in binary form must reproduce the above
+ copyright notice, this list of conditions and the following disclaimer
+ in the documentation and/or other materials provided with the
+ distribution. 3. The name of the author may not be used to endorse or
+ promote products derived from this software without specific prior
+ written permission.

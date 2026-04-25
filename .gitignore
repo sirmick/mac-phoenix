@@ -6,6 +6,19 @@ toolchain/
 *.so
 *.dylib
 
+# Packaging artifacts
+/dist/
+/tests/packaging/build-ctx/
+/debian/cargo-home/
+/debian/.debhelper/
+/debian/files
+/debian/*.substvars
+/debian/mac-phoenix/
+/debian/debhelper-build-stamp
+/debian/tmp/
+/net-bridge/.cargo/config.toml
+/net-bridge/vendor/cargo/
+
 # Debug and validation logs
 *.log
 *.diff

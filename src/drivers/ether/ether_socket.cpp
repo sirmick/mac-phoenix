@@ -133,9 +133,13 @@ static std::string find_bridge_binary()
 		std::string p = exe + "/net-bridge";
 		if (is_executable_file(p)) return p;
 	}
-	// System fallback for a future `make install`.
+	// System fallbacks for installed packages (.deb / .rpm → /usr/bin,
+	// `make install` without prefix → /usr/local/bin).
 	if (is_executable_file("/usr/local/bin/net-bridge")) {
 		return "/usr/local/bin/net-bridge";
+	}
+	if (is_executable_file("/usr/bin/net-bridge")) {
+		return "/usr/bin/net-bridge";
 	}
 	return "";
 }

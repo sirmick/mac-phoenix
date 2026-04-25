@@ -144,11 +144,18 @@ static std::string resolve_repo_relative(const char* rel) {
     exe_path[len] = '\0';
     char* last_slash = strrchr(exe_path, '/');
     if (!last_slash) return "";
-    *last_slash = '\0';  // exe_path is now build/
-    std::string candidate = std::string(exe_path) + "/../" + rel;
+    *last_slash = '\0';  // exe_path is now build/ (or /usr/bin)
     struct stat st;
-    if (stat(candidate.c_str(), &st) != 0) return "";
-    return candidate;
+
+    // 1. Dev tree: build/../<rel>
+    std::string candidate = std::string(exe_path) + "/../" + rel;
+    if (stat(candidate.c_str(), &st) == 0) return candidate;
+
+    // 2. Installed: /usr/bin/mac-phoenix → /usr/share/mac-phoenix/<rel>
+    candidate = "/usr/share/mac-phoenix/" + std::string(rel);
+    if (stat(candidate.c_str(), &st) == 0) return candidate;
+
+    return "";
 }
 
 // When the bridge is enabled, install BridgeAgent.bin into

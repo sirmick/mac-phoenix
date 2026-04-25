@@ -1,0 +1,84 @@
+# Dockerfile.deb — builds a .deb from the source tarball and installs it
+# into a clean stage to verify the layout. Boot tests mount ~/storage at
+# runtime (see tests/packaging/run_matrix.sh).
+#
+# Build context (set up by run_matrix.sh):
+#   ./mac-phoenix_<ver>.tar.xz
+#
+# Usage:
+#   docker build -f tests/packaging/Dockerfile.deb \
+#     --build-arg BASE=ubuntu:24.04 \
+#     -t mac-phoenix-pkg:ubuntu-24.04 \
+#     tests/packaging/build-ctx
+
+ARG BASE=ubuntu:24.04
+
+# ---------- build stage ---------------------------------------------------
+FROM ${BASE} AS build
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        debhelper \
+        cmake \
+        pkg-config \
+        libssl-dev \
+        libopenh264-dev \
+        libvpx-dev \
+        libwebp-dev \
+        libopus-dev \
+        libyuv-dev \
+        cargo \
+        rustc \
+        ca-certificates \
+        curl \
+        xz-utils \
+        tar \
+    && rm -rf /var/lib/apt/lists/*
+
+# apt's rust satisfies debian/control's Build-Depends but is too old for
+# some crates (smoltcp 0.12 needs >= 1.80; Ubuntu 24.04 ships 1.75, Debian 12
+# ships 1.63). Install a recent stable via rustup and put it ahead of the
+# apt rust on PATH — dpkg-checkbuilddeps still sees the apt version, but the
+# actual build picks up rustup's. Crates remain offline-vendored; rustup-init
+# itself is the only network access.
+ENV RUSTUP_HOME=/usr/local/rustup \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | CARGO_HOME=/usr/local/cargo sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path \
+ && rustc --version
+
+WORKDIR /src
+COPY mac-phoenix_*.tar.xz /tmp/source.tar.xz
+RUN tar -xJf /tmp/source.tar.xz --strip-components=1 -C /src \
+ && dpkg-buildpackage -us -uc -b \
+ && mkdir -p /pkg && cp /*.deb /pkg/
+
+# ---------- test stage (clean image, no build deps) -----------------------
+FROM ${BASE} AS test
+ARG DEBIAN_FRONTEND=noninteractive
+
+COPY --from=build /pkg/*.deb /pkg/
+
+# Install package + a few runtime extras the boot test wants
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        /pkg/*.deb \
+        ca-certificates \
+        curl \
+        jq \
+        hfsutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Layout smoke tests — fail the image build if anything's misplaced.
+RUN set -eux; \
+    test -x /usr/bin/mac-phoenix; \
+    test -x /usr/bin/net-bridge; \
+    test -f /usr/share/mac-phoenix/client/index.html; \
+    test -f /usr/share/mac-phoenix/client/client.js; \
+    test -f /usr/share/mac-phoenix/BridgeAgent.bin; \
+    test -x /usr/share/mac-phoenix/provisioning/install_bridge_agent.sh; \
+    test -f /usr/share/applications/mac-phoenix.desktop; \
+    mac-phoenix --help | head -3
+
+# Default cmd kept generic so run_matrix.sh can override with a boot test.
+CMD ["mac-phoenix", "--help"]
