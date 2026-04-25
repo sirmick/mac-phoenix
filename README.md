@@ -26,25 +26,97 @@ Most-tested guest OS versions: **System 6.0.8**, **System 7.5.5**, **Mac OS 7.6.
 
 ## Quick start
 
-### 1. Install dependencies (Ubuntu/Debian)
+### 1. Install dependencies (Ubuntu 24.04)
+
+The emulator itself, the optional Rust net-bridge, and the optional Retro68
+toolchain (for rebuilding the guest BridgeAgent) each need a different set
+of apt packages. Install only what you need.
+
+#### Emulator (always required)
 
 ```bash
-# Required — build toolchain + JSON + libyuv for color conversion
+# Toolchain + the two libraries CMake hard-requires
 sudo apt install build-essential cmake pkg-config git \
-                 libssl-dev nlohmann-json3-dev libyuv-dev
+                 libssl-dev libyuv-dev
+```
 
-# Video/audio encoders (all optional — each codec appears in the UI only
-# if its library is present at configure time; PNG is always available).
-sudo apt install libopenh264-dev   # H.264
-sudo apt install libvpx-dev        # VP9
-sudo apt install libwebp-dev       # WebP
+`nlohmann_json` is bundled as a git submodule — do **not** install
+`nlohmann-json3-dev`; the system header silently masks the bundled copy
+and broke our packaging build until we caught it.
+
+#### Optional video/audio codecs
+
+Each one is auto-detected at configure time and shows up in the browser
+UI only if present. PNG is always available with no external library.
+
+```bash
+sudo apt install libopenh264-dev   # H.264 (WebRTC)
+sudo apt install libvpx-dev        # VP9   (WebRTC)
+sudo apt install libwebp-dev       # WebP  (WebSocket fallback)
 sudo apt install libopus-dev       # Opus audio
+```
 
-# Provisioning tools (for creating/populating HFS disk images)
+Re-run `cmake -B build` after installing one of these — the CMake summary
+prints which codecs were detected.
+
+#### Net-bridge (optional — for guest networking)
+
+```bash
+sudo apt install cargo rustc
+```
+
+⚠️ Ubuntu 24.04 ships **rustc 1.75**, which is below `smoltcp 0.12`'s
+MSRV of 1.80. With apt-rust alone, the net-bridge build will fail. Two
+ways forward:
+
+```bash
+# Option A — install a current toolchain via rustup (recommended)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+
+# Option B — skip the net-bridge entirely
+cmake -B build -DBUILD_NET_BRIDGE=OFF
+```
+
+The net-bridge is what `--network socket` uses; everything else (boot,
+video, input, automation bridge) works fine without it.
+
+#### BridgeAgent (optional — to rebuild the guest helper from source)
+
+The committed `tests/guest/bridge/BridgeAgent.bin` is what gets
+installed into your Mac OS guest's Startup Items, so most users never
+need to rebuild it. To rebuild from C source you need the Retro68
+m68k cross-toolchain:
+
+```bash
+# Build deps for Retro68 itself (one-time, ~30 min compile)
+sudo apt install cmake bison flex ruby texinfo \
+                 libgmp-dev libmpfr-dev libmpc-dev \
+                 libboost-all-dev
+
+# Build the toolchain — installs to ./toolchain/retro68/
+provisioning/build_retro68.sh
+```
+
+After the toolchain is in `toolchain/retro68/`, `cmake -B build` picks
+it up automatically and rebuilds `BridgeAgent.bin` whenever
+`tests/guest/bridge/bridge_agent.c` changes. To skip:
+
+```bash
+cmake -B build -DBUILD_BRIDGE_AGENT=OFF
+```
+
+#### Provisioning tools (optional — for creating HFS disk images)
+
+```bash
 sudo apt install hfsutils unar
 ```
 
-macOS equivalents are in [CLAUDE.md](CLAUDE.md#optional-codec-dependencies).
+#### macOS
+
+macOS equivalents for the codec libs are in [CLAUDE.md](CLAUDE.md#optional-codec-dependencies).
+For Retro68 on macOS, use Homebrew (`brew install bison flex ruby
+texinfo gmp mpfr libmpc boost`).
 
 ### 2. Build
 

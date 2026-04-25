@@ -12,7 +12,7 @@ Build-Depends: debhelper-compat (= 13),
                libopus-dev,
                libyuv-dev,
                cargo,
-               rustc (>= 1.70)
+               rustc
 Standards-Version: 4.6.2
 Homepage: https://github.com/sirmick/mac-phoenix
 Rules-Requires-Root: no
