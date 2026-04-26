@@ -8,12 +8,12 @@
 //! The CA cert is the trust anchor the guest must import once. Only the
 //! public cert needs to leave the host.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::io;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::sni::{peek_sni, SniPeek};
 
@@ -253,7 +253,15 @@ pub struct MitmCa {
     cert_pem: Vec<u8>,
     cert_der: Vec<u8>,
     cert_path: PathBuf,
+    /// Per-host leaf cache. Classic browsers open many parallel connections
+    /// to the same host; minting once and reusing saves ~tens of ms per
+    /// connection (RSA-1024 keygen is the dominant cost). Capped at
+    /// LEAF_CACHE_CAP entries — when full we wipe the whole cache rather
+    /// than fight a true LRU. Vintage sessions touch <100 hosts in practice.
+    leaf_cache: Mutex<HashMap<String, Arc<MintedCert>>>,
 }
+
+const LEAF_CACHE_CAP: usize = 1024;
 
 /// A freshly minted leaf cert + its matching private key.
 /// PEM is for tooling/inspection; DER is for feeding into OpenSSL SSL_CTX.
@@ -289,6 +297,7 @@ impl MitmCa {
             cert_pem,
             cert_der,
             cert_path: cert_path.to_path_buf(),
+            leaf_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -347,6 +356,7 @@ impl MitmCa {
             cert_pem,
             cert_der,
             cert_path: cert_path.to_path_buf(),
+            leaf_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -362,8 +372,22 @@ impl MitmCa {
         &self.cert_path
     }
 
-    /// Mint a leaf cert for `hostname` (DNS name or IPv4 literal).
-    pub fn mint_leaf(&self, hostname: &str) -> Result<MintedCert, Error> {
+    /// Mint a leaf cert for `hostname` (DNS name or IPv4 literal),
+    /// or return a cached one if we've seen this host before.
+    pub fn mint_leaf(&self, hostname: &str) -> Result<Arc<MintedCert>, Error> {
+        if let Some(hit) = self.leaf_cache.lock().unwrap().get(hostname) {
+            return Ok(Arc::clone(hit));
+        }
+        let leaf = Arc::new(self.mint_leaf_uncached(hostname)?);
+        let mut cache = self.leaf_cache.lock().unwrap();
+        if cache.len() >= LEAF_CACHE_CAP {
+            cache.clear();
+        }
+        cache.insert(hostname.to_string(), Arc::clone(&leaf));
+        Ok(leaf)
+    }
+
+    fn mint_leaf_uncached(&self, hostname: &str) -> Result<MintedCert, Error> {
         let rsa = Rsa::generate(LEAF_BITS)?;
         let key = PKey::from_rsa(rsa)?;
 
