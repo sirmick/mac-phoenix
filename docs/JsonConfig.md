@@ -162,22 +162,6 @@ The web UI's file picker scans these directories via `GET /api/storage`.
 }
 ```
 
-## Legacy Schema (accepted on load, dropped on save)
-
-For one release, configs in the old schema still load. Coercion is performed on
-read; once you save through the UI, the file is rewritten in the new format.
-
-| Old key | New key |
-|---------|---------|
-| `architecture` + `cpu_backend` (e.g. `architecture: ppc, cpu_backend: kpx`) | `backend` (e.g. `kpx`) |
-| `cpu_backend: unicorn` (with `architecture: ppc`/`m68k`) | `backend: unicorn-ppc` / `unicorn-m68k` |
-| `m68k.jitexperimental`, `ppc.jit` | `jit` |
-| `ppc.jit68k` | `jit68k` |
-| `m68k.idlewait`, `ppc.idlewait` | `idlewait` |
-| `m68k.jit{fpu,debug,cachesize,lazyflush,inline,blacklist}` | `jit_{fpu,debug,cache_size,lazy_flush,inline,blacklist}` |
-| `nosound: true` | `audio: false` |
-| `m68k.fpu`, `ppc.fpu`, `m68k.ignoresegv`, `ppc.ignoresegv`, `ppc.ignoreillegal`, `m68k.swap_opt_cmd`, `*.keyboardtype`, `floppies`, `frameskip`, `yearofs`, `dayofs`, `udptunnel`, `udpport`, `bootdrive`, `emulator`, `auto_launch_app` | _dropped_ (these were dead, machine-driven, or hardcoded) |
-
 ## Web UI Integration
 
 The config is read and written via the HTTP API:

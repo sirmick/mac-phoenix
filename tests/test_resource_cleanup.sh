@@ -79,7 +79,7 @@ echo "=== Test 1: Graceful exit (--timeout) cleans up ==="
 # ============================================================
 
 setsid "$BINARY" --config /dev/null --backend uae --timeout 3 \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" --dismiss-shutdown-dialog \
     "$ROM" &>/tmp/cleanup_test_$$.log &
 EMU_PID=$!
@@ -145,7 +145,7 @@ echo "=== Test 2: SIGTERM cleans up ==="
 # ============================================================
 
 setsid "$BINARY" --config /dev/null --backend uae --timeout 600 \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" --dismiss-shutdown-dialog \
     "$ROM" &>/tmp/cleanup_test_sigterm_$$.log &
 EMU_PID=$!
@@ -206,7 +206,7 @@ echo "=== Test 3: SIGKILL leaves no orphan subprocess ==="
 # ============================================================
 
 setsid "$BINARY" --config /dev/null --backend uae --timeout 600 \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" --dismiss-shutdown-dialog \
     "$ROM" &>/tmp/cleanup_test_sigkill_$$.log &
 EMU_PID=$!
@@ -264,7 +264,7 @@ echo "=== Test 4: Stop/start cycle doesn't leak ==="
 # ============================================================
 
 setsid "$BINARY" --config /dev/null --backend uae --timeout 600 \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" --dismiss-shutdown-dialog \
     "$ROM" &>/tmp/cleanup_test_cycle_$$.log &
 EMU_PID=$!
@@ -341,7 +341,7 @@ echo "=== Test 5: net-bridge cleanup ==="
 
 # Only test if network=socket is functional
 setsid "$BINARY" --config /dev/null --backend uae --timeout 3 \
-    --network socket --port "$PORT" --signaling-port "$SIG_PORT" \
+    --network socket --port "$PORT" \
     --disk "$DISK" --dismiss-shutdown-dialog \
     "$ROM" &>/tmp/cleanup_test_bridge_$$.log &
 EMU_PID=$!

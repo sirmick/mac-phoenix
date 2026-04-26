@@ -12,7 +12,6 @@
 set -euo pipefail
 
 PORT="${1:-18096}"
-SIG_PORT="$((PORT + 1))"
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 TMPCONFIG=$(mktemp)
@@ -32,15 +31,13 @@ fi
 # Create a clean config with known values
 cat > "$TMPCONFIG" << EOF
 {
-  "architecture": "m68k",
-  "cpu_backend": "uae",
+  "backend": "uae",
   "ram_mb": 32,
   "rom": "",
   "disks": [],
   "cdroms": ["System-7-Version-7.5.iso"],
   "bootdriver": 0,
-  "storage_dir": "/home/mick/storage",
-  "m68k": {"fpu": true}
+  "storage_dir": "/home/mick/storage"
 }
 EOF
 
@@ -54,7 +51,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Start emulator with clean config
-"$BINARY" --config "$TMPCONFIG" --port "$PORT" --signaling-port "$SIG_PORT" "$ROM" &>/tmp/test_config_$$.log &
+"$BINARY" --config "$TMPCONFIG" --port "$PORT" "$ROM" &>/tmp/test_config_$$.log &
 EMU_PID=$!
 
 # Wait for server

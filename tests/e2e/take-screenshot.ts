@@ -124,7 +124,6 @@ async function waitForBoot(port: number, timeoutMs = 120_000): Promise<void> {
 
 async function main() {
   const opts = parseArgs();
-  const sigPort = opts.port + 1;
   const buildDir = path.resolve(__dirname, '../../build');
   const binary = path.join(buildDir, 'mac-phoenix');
 
@@ -143,7 +142,6 @@ async function main() {
     '--config', '/dev/null',
     '--backend', 'uae',
     '--port', String(opts.port),
-    '--signaling-port', String(sigPort),
     '--screen', '640x480',
     '--ram', '32',
     '--dismiss-shutdown-dialog',

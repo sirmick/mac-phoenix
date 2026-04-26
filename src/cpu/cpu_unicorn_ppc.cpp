@@ -2,7 +2,7 @@
 //
 // Alternative PPC backend using Unicorn Engine's TCG-based PPC target instead
 // of KPX's SheepShaver-derived interpreter. Coexists with KPX and is selected
-// via `--backend unicorn --arch ppc`.
+// via `--backend unicorn-ppc`.
 //
 // Structurally this file mirrors src/cpu/kpx/cpu_ppc_kpx.cpp. The key mapping
 // is KPX's powerpc_cpu member functions -> Unicorn uc_emu_start / uc_reg_*:

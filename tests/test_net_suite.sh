@@ -125,7 +125,7 @@ fi
 
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 15))" \
     --config /dev/null "${DISMISS_FLAG[@]}" --headless-http \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" --extfs "$EXTFS_DIR" \
     --network socket \
     "${EXTRA_FLAGS[@]}" "$ROM" &>"$LOG" &

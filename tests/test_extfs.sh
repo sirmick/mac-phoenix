@@ -15,7 +15,6 @@
 set -euo pipefail
 
 PORT="${1:-18098}"
-SIG_PORT="$((PORT + 1))"
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 TMPCONFIG=$(mktemp)
@@ -63,18 +62,16 @@ echo "--- Config API round-trip ---"
 
 cat > "$TMPCONFIG" << EOF
 {
-  "architecture": "m68k",
-  "cpu_backend": "uae",
+  "backend": "uae",
   "ram_mb": 32,
   "rom": "",
   "disks": [],
   "extfs": [],
-  "storage_dir": "/home/mick/storage",
-  "m68k": {"fpu": true}
+  "storage_dir": "/home/mick/storage"
 }
 EOF
 
-"$BINARY" --config "$TMPCONFIG" --port "$PORT" --signaling-port "$SIG_PORT" "$ROM" &>/tmp/test_extfs_$$.log &
+"$BINARY" --config "$TMPCONFIG" --port "$PORT" "$ROM" &>/tmp/test_extfs_$$.log &
 EMU_PID=$!
 
 for i in $(seq 1 20); do
@@ -129,18 +126,16 @@ echo "--- CLI flags ---"
 
 cat > "$TMPCONFIG" << EOF
 {
-  "architecture": "m68k",
-  "cpu_backend": "uae",
+  "backend": "uae",
   "ram_mb": 32,
   "rom": "",
   "disks": [],
-  "extfs": [],
-  "m68k": {"fpu": true}
+  "extfs": []
 }
 EOF
 
 # Test 5: Single --extfs flag
-"$BINARY" --config "$TMPCONFIG" --port "$PORT" --signaling-port "$SIG_PORT" \
+"$BINARY" --config "$TMPCONFIG" --port "$PORT" \
     --extfs "$TMPDIR_EXTFS" "$ROM" &>/tmp/test_extfs_$$.log &
 EMU_PID=$!
 
@@ -162,7 +157,7 @@ unset EMU_PID
 sleep 0.5
 
 # Test 6: Multiple --extfs flags
-"$BINARY" --config "$TMPCONFIG" --port "$PORT" --signaling-port "$SIG_PORT" \
+"$BINARY" --config "$TMPCONFIG" --port "$PORT" \
     --extfs "$TMPDIR_EXTFS" --extfs "/tmp" "$ROM" &>/tmp/test_extfs_$$.log &
 EMU_PID=$!
 
@@ -191,17 +186,15 @@ echo "--- Backward compatibility ---"
 # Old-style single string extfs
 cat > "$TMPCONFIG" << EOF
 {
-  "architecture": "m68k",
-  "cpu_backend": "uae",
+  "backend": "uae",
   "ram_mb": 32,
   "rom": "",
   "disks": [],
-  "extfs": "$TMPDIR_EXTFS",
-  "m68k": {"fpu": true}
+  "extfs": "$TMPDIR_EXTFS"
 }
 EOF
 
-"$BINARY" --config "$TMPCONFIG" --port "$PORT" --signaling-port "$SIG_PORT" \
+"$BINARY" --config "$TMPCONFIG" --port "$PORT" \
     "$ROM" &>/tmp/test_extfs_$$.log &
 EMU_PID=$!
 
@@ -230,17 +223,15 @@ echo "--- ExtFS init validation ---"
 # Point extfs at a valid directory and check no crash
 cat > "$TMPCONFIG" << EOF
 {
-  "architecture": "m68k",
-  "cpu_backend": "uae",
+  "backend": "uae",
   "ram_mb": 32,
   "rom": "",
   "disks": [],
-  "extfs": ["$TMPDIR_EXTFS"],
-  "m68k": {"fpu": true}
+  "extfs": ["$TMPDIR_EXTFS"]
 }
 EOF
 
-"$BINARY" --config "$TMPCONFIG" --port "$PORT" --signaling-port "$SIG_PORT" \
+"$BINARY" --config "$TMPCONFIG" --port "$PORT" \
     --timeout 5 "$ROM" &>/tmp/test_extfs_$$.log &
 EMU_PID=$!
 

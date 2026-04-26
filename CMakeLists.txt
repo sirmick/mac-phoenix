@@ -304,10 +304,19 @@ if(BUILD_BRIDGE_AGENT)
     # tree itself). Apple's headers can't be redistributed in source, hence
     # the gitignored private/ location.
     set(BA_UI3 "${CMAKE_CURRENT_SOURCE_DIR}/private/Universal Interfaces/Universal/Interfaces")
-    set(BA_GCC_EXTRA_FLAGS "")
+    # Retro68's gcc preasserts cpu=m68k but not system=macos; UI 3.4's
+    # ConditionalMacros.h needs both for its #if #system(macos) check or it
+    # falls through to "#error unsupported GNU C compiler".
+    set(BA_GCC_EXTRA_FLAGS -A system=macos)
     set(BA_REZ_EXTRA_FLAGS "")
     if(EXISTS "${BA_UI3}/CIncludes/Script.h")
-      set(BA_GCC_EXTRA_FLAGS -I "${BA_UI3}/CIncludes")
+      # -idirafter (not -I): Retro68's Multiversal headers win for Files.h /
+      # Memory.h / etc. (which provide gcc-style inline trap glue), and UI 3.4
+      # only fills in headers Multiversal lacks (Script.h, Aliases.h,
+      # ShutDown.h, Scrap.h). With -I, UI 3.4's Files.h would shadow
+      # Multiversal and break linking — its FSWrite et al. are plain externs
+      # against an MPW/CodeWarrior runtime we don't have.
+      list(APPEND BA_GCC_EXTRA_FLAGS -idirafter "${BA_UI3}/CIncludes")
       set(BA_REZ_EXTRA_FLAGS -I "${BA_UI3}/RIncludes")
       message(STATUS "bridge-agent: using Apple UI 3.4 from private/")
     else()

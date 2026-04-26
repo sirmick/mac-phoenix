@@ -204,10 +204,6 @@ Logging:
   --debug-network            Debug net-bridge / lwIP NAT/DNS/ICMP/TCP/UDP
 ```
 
-Legacy flags accepted with a deprecation warning for one release: `--arch`,
-`--jitexperimental` / `--no-jitexperimental`, `--ppc-jit` / `--no-ppc-jit`,
-`--floppy`, `--bootdrive`, `--auto-launch`.
-
 ## Environment Variables
 
 The emulator binary does not read environment variables. Use CLI flags instead.

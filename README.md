@@ -340,9 +340,6 @@ load with a one-time deprecation warning, then dropped on first save. See
   -h, --help                 This help
 ```
 
-Legacy flags accepted with a deprecation warning (will be removed): `--arch`,
-`--jitexperimental` / `--no-jitexperimental`, `--ppc-jit` / `--no-ppc-jit`.
-
 CLI flags always win over the config file. The emulator binary does not read environment variables — test scripts use `MACEMU_ROM` / `MACEMU_DISK`, but the binary itself does not.
 
 ## Automation bridge

@@ -71,7 +71,7 @@ echo "Bridge dir: $BRIDGE_DIR"
 
 "$BINARY" --backend "$BACKEND" --timeout "$TIMEOUT" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" --extfs "$BRIDGE_DIR" --bridge "$ROM" \
     >"$BRIDGE_DIR/emu.log" 2>&1 &
 EMU_PID=$!
@@ -111,7 +111,7 @@ fi
 # Let Finder's idle loop run for a while so WNE gets hit many times.
 sleep 8
 
-HB="$BRIDGE_DIR/bridge_heartbeat"
+HB="$BRIDGE_DIR/MacPhoenix/bridge_heartbeat"
 if [[ ! -f "$HB" ]]; then
     echo "FAIL: no heartbeat file at $HB"
     ls -la "$BRIDGE_DIR"

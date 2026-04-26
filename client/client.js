@@ -3299,8 +3299,8 @@ function guessEmulatorMode(backend) {
     return backendIsPpc(backend) ? 'ppc' : 'quadra';
 }
 
-// Convert the flat server schema (with one release of legacy compat) to the
-// client's `currentConfig` shape. Shared by loadCurrentConfig and loadPreset.
+// Convert the flat server schema to the client's `currentConfig` shape.
+// Shared by loadCurrentConfig and loadPreset.
 function configFromServerJson(cfg) {
     const stripPrefix = (p, dir) => {
         if (!p || p[0] !== '/') return p;
@@ -3308,34 +3308,22 @@ function configFromServerJson(cfg) {
         return idx >= 0 ? p.substring(idx + dir.length) : p;
     };
 
-    // Backend: prefer flat new key; fall back to legacy {architecture, cpu_backend}.
-    let backend = cfg.backend;
-    if (!backend) {
-        const arch = cfg.architecture || 'm68k';
-        const old = cfg.cpu_backend || (arch === 'ppc' ? 'kpx' : 'uae');
-        if (old === 'unicorn') backend = arch === 'ppc' ? 'unicorn-ppc' : 'unicorn-m68k';
-        else backend = old;
-    }
-
-    // JIT: flat new key, then legacy nested.
-    const jit = cfg.jit ?? cfg.m68k?.jitexperimental ?? cfg.ppc?.jit ?? false;
-    const jit68k = cfg.jit68k ?? cfg.ppc?.jit68k ?? true;
-    const idlewait = cfg.idlewait ?? cfg.m68k?.idlewait ?? cfg.ppc?.idlewait ?? true;
+    const backend = cfg.backend || 'uae';
 
     return {
-        emulator: cfg.emulator || guessEmulatorMode(backend),
+        emulator: guessEmulatorMode(backend),
         rom: cfg.rom ? stripPrefix(cfg.rom, '/roms/') : '',
         ram: cfg.ram_mb || 64,
         screen: cfg.screen || '640x480',
-        sound: cfg.audio ?? !cfg.nosound ?? true,
+        sound: cfg.audio ?? true,
         bootdriver: cfg.bootdriver || 0,
         disks: (cfg.disks || []).map(p => stripPrefix(p, '/images/')),
         cdroms: (cfg.cdroms || []).map(p => stripPrefix(p, '/images/')),
         extfs: cfg.extfs || [],
         backend,
-        jit,
-        jit68k,
-        idlewait,
+        jit: cfg.jit ?? false,
+        jit68k: cfg.jit68k ?? true,
+        idlewait: cfg.idlewait ?? true,
         zappram: cfg.zappram ?? false,
         dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
         bridge_enabled: cfg.bridge_enabled ?? false,

@@ -60,7 +60,7 @@ EXTRA_FLAGS=()
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/macemu_mouse_test_$$.log &
 EMU_PID=$!
 

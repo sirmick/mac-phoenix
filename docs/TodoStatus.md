@@ -72,14 +72,14 @@ Track what's done and what's next.
 
 ## Phase 4: PowerPC Support ✅ COMPLETE
 
-- ✅ KPX interpreter integrated (`--arch ppc`)
+- ✅ KPX interpreter integrated (`--backend kpx`)
 - ✅ Mac OS 9 boots to Finder on Gossamer ROM
 - ✅ ROM patches (PatchROM_PPC, all 4 phases) — verified identical to legacy
 - ✅ All 40+ EmulOps, 38 NativeOps — functionally identical to SheepShaver
 - ✅ HandleInterrupt (all 3 modes), KernelData init, XLM setup
 - ✅ NQD acceleration, ExtFS, video driver — all working
 - ✅ Virtual clock, atomic interrupts, forced PatchAfterStartup
-- ✅ Dyngen JIT compiled (`--ppc-jit` flag) — blocked by GCC codegen, interpreter default
+- ✅ Dyngen JIT compiled (`--jit` flag) — blocked by GCC codegen, interpreter default
 
 ---
 

@@ -140,7 +140,7 @@ fi
 
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null "${DISMISS_FLAG[@]}" --headless-http \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" --extfs "$EXTFS_DIR" \
     "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/mactest_guest_$$.log &
 EMU_PID=$!

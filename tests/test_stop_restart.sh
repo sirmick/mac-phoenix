@@ -163,7 +163,7 @@ run_backend_test() {
     # Start emulator
     "$BINARY" --config /dev/null --backend "$backend" \
         --timeout 600 --dismiss-shutdown-dialog \
-        --port "$PORT" --signaling-port "$SIG_PORT" \
+        --port "$PORT" \
         --disk "$DISK" "${extra[@]}" "$rom" &>"$LOG.${label}" &
     EMU_PID=$!
     log_line "PID: $EMU_PID"

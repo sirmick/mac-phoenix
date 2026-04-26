@@ -85,19 +85,19 @@ src/cpu/kpx/
 - **ROM**: OldWorld 4MB (Gossamer / Beige Power Macintosh G3)
 - **CPU**: PowerPC 750 (G3), PVR 0x000c0000
 - **OS**: Mac OS 9.0.4 (tested), 8.1-9.2.2 (expected)
-- **Backend**: KPX interpreter (dyngen JIT available via --ppc-jit flag)
+- **Backend**: KPX interpreter (dyngen JIT available via --jit flag)
 - **RAM**: 64MB required
 
 ## Boot Command
 
 ```bash
 # Interpreter (default)
-./build/mac-phoenix --arch ppc --rom /path/to/g3.rom --disk /path/to/mac9.hfv \
+./build/mac-phoenix --backend kpx --rom /path/to/g3.rom --disk /path/to/mac9.hfv \
   --ram 64 --screen 640x480
 
 # With JIT (experimental — blocked by GCC codegen issue)
-./build/mac-phoenix --arch ppc --rom /path/to/g3.rom --disk /path/to/mac9.hfv \
-  --ppc-jit --ram 64 --screen 640x480
+./build/mac-phoenix --backend kpx --rom /path/to/g3.rom --disk /path/to/mac9.hfv \
+  --jit --ram 64 --screen 640x480
 ```
 
 ## Design Decisions
@@ -110,7 +110,7 @@ src/cpu/kpx/
   for subprocess mode. Framebuffer allocated via `vm_acquire`. Matches legacy
   IPC driver architecture (DIS_SCREEN, APPLE_CUSTOM, hardware cursor).
 
-- **JIT optional**: dyngen JIT compiled and available via `--ppc-jit` flag.
+- **JIT optional**: dyngen JIT compiled and available via `--jit` flag.
   Default is interpreter-only (matches tested legacy config).
 
 - **Virtual clock**: `timer_current_time()` uses `ppc_insn_counter * 4ns` when

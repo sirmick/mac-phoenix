@@ -25,7 +25,7 @@ extern "C" void cpu_ppc_kpx_install(Platform *p) {
     fprintf(stderr,
             "[KPX] PPC backend not available on this host architecture "
             "(dyngen requires x86/x86_64 precompiled blobs). "
-            "Run with --arch m68k.\n");
+            "Run with --backend uae.\n");
     std::exit(2);
 }
 

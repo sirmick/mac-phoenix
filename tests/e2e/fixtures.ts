@@ -4,7 +4,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 const HTTP_PORT = parseInt(process.env.MACEMU_HTTP_PORT || '18094');
-const SIG_PORT = HTTP_PORT + 1;
 const ROM_PATH = process.env.MACEMU_ROM || `${process.env.HOME}/roms/quadra.rom`;
 const BUILD_DIR = path.resolve(__dirname, '../../build');
 const BINARY = path.join(BUILD_DIR, 'mac-phoenix');
@@ -89,7 +88,6 @@ export async function spawnEmulator(opts?: { timeoutSeconds?: number; extraArgs?
     '--backend', 'uae',
     '--timeout', String(timeout),
     '--port', String(HTTP_PORT),
-    '--signaling-port', String(SIG_PORT),
     '--screen', '640x480',
     '--ram', '128',
     '--dismiss-shutdown-dialog',

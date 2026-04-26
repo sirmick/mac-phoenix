@@ -55,7 +55,7 @@ echo "Port: $PORT"
 # Start emulator in background with SE-appropriate flags
 "$BINARY" --backend uae --timeout "$((TIMEOUT + 5))" \
     --config /dev/null --dismiss-shutdown-dialog \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --ram 4 --screen 512x342 \
     --disk "$DISK" "$ROM" &>/tmp/macemu_test_se_$$.log &
 EMU_PID=$!

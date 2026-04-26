@@ -53,7 +53,7 @@ echo "Port: $PORT"
 # Start emulator in background
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 5))" \
     --config /dev/null --dismiss-shutdown-dialog \
-    --port "$PORT" --signaling-port "$SIG_PORT" \
+    --port "$PORT" \
     --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/macemu_test_$$.log &
 EMU_PID=$!
 

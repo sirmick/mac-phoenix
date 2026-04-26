@@ -89,7 +89,7 @@ if [[ "$WEBSERVER" == "true" ]]; then
 
     "$BINARY" --config "$TMPCONFIG" --backend kpx \
         --timeout "$((TIMEOUT + 5))" \
-        --port "$PORT" --signaling-port "$SIG_PORT" \
+        --port "$PORT" \
         "${EXTRA_FLAGS[@]}" &>"$LOG" &
     EMU_PID=$!
     trap cleanup EXIT SIGTERM SIGINT

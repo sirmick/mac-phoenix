@@ -145,7 +145,7 @@ EMU_ARGS=(
     --timeout "$((TIMEOUT + 10))"
     --dismiss-shutdown-dialog
     --port "$PORT"
-    --signaling-port "$SIG_PORT"
+
 )
 if [[ -n "$JIT_FLAG" ]]; then
     EMU_ARGS+=("$JIT_FLAG")

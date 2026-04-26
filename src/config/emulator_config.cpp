@@ -91,24 +91,6 @@ static bool parse_backend(const std::string& s, Backend& out) {
     return false;
 }
 
-// Coerce legacy {architecture, cpu_backend} pair into a Backend.
-// Used during merge_json for one release of backward compatibility.
-static bool coerce_legacy_backend(const std::string& arch,
-                                   const std::string& backend_str,
-                                   Backend& out) {
-    if (backend_str == "unicorn") {
-        out = (arch == "ppc") ? Backend::UnicornPPC : Backend::UnicornM68K;
-        return true;
-    }
-    if (backend_str == "uae")     { out = Backend::UAE;     return true; }
-    if (backend_str == "kpx")     { out = Backend::KPX;     return true; }
-    if (backend_str == "dualcpu") { out = Backend::DualCPU; return true; }
-    // Architecture alone, no explicit backend
-    if (arch == "ppc") { out = Backend::KPX; return true; }
-    if (arch == "m68k") { out = Backend::UAE; return true; }
-    return false;
-}
-
 /*
  * Convert config to JSON
  */
@@ -196,17 +178,6 @@ nlohmann::json EmulatorConfig::to_json() const {
 
 /*
  * Merge JSON into config (partial updates OK).
- *
- * Accepts current schema and one release of legacy keys for migration:
- *   - architecture+cpu_backend → backend
- *   - m68k.jitexperimental, ppc.jit → jit
- *   - ppc.jit68k → jit68k
- *   - m68k.idlewait, ppc.idlewait → idlewait
- *   - m68k.jit{fpu,debug,cachesize,lazyflush,inline,blacklist} → jit_*
- *   - nosound → audio (inverted)
- *   - bootdrive, floppies, frameskip, yearofs, dayofs, udptunnel, udpport,
- *     emulator, m68k.{fpu,ignoresegv,swap_opt_cmd,keyboardtype},
- *     ppc.{fpu,ignoresegv,ignoreillegal,keyboardtype} → silently dropped
  */
 void EmulatorConfig::merge_json(const nlohmann::json& j) {
     // ── CPU backend ──────────────────────────────────────────────
@@ -216,61 +187,20 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
             fprintf(stderr, "[Config] Unknown backend '%s', defaulting to 'uae'\n", b.c_str());
             backend = Backend::UAE;
         }
-    } else if (j.contains("architecture") || j.contains("cpu_backend")) {
-        // Legacy schema: arch + cpu_backend pair
-        std::string arch = j.contains("architecture") ? json_utils::get_string(j, "architecture") : "";
-        std::string b    = j.contains("cpu_backend")  ? json_utils::get_string(j, "cpu_backend")  : "";
-        Backend coerced;
-        if (coerce_legacy_backend(arch, b, coerced)) {
-            backend = coerced;
-            fprintf(stderr, "[Config] Legacy architecture+cpu_backend → backend=%s\n", backend_string());
-        }
     }
 
     // ── JIT toggles ──────────────────────────────────────────────
-    if (j.contains("jit")) {
-        // Could be either flat new "jit" or legacy ppc.jit. Flat wins.
-        jit = json_utils::get_bool(j, "jit");
-    } else if (j.contains("m68k") && j["m68k"].contains("jitexperimental")) {
-        jit = json_utils::get_bool(j["m68k"], "jitexperimental");
-    } else if (j.contains("ppc") && j["ppc"].contains("jit")) {
-        jit = json_utils::get_bool(j["ppc"], "jit");
-    }
-    if (j.contains("jit68k")) {
-        jit68k = json_utils::get_bool(j, "jit68k");
-    } else if (j.contains("ppc") && j["ppc"].contains("jit68k")) {
-        jit68k = json_utils::get_bool(j["ppc"], "jit68k");
-    }
-    if (j.contains("idlewait")) {
-        idlewait = json_utils::get_bool(j, "idlewait");
-    } else if (j.contains("m68k") && j["m68k"].contains("idlewait")) {
-        idlewait = json_utils::get_bool(j["m68k"], "idlewait");
-    } else if (j.contains("ppc") && j["ppc"].contains("idlewait")) {
-        idlewait = json_utils::get_bool(j["ppc"], "idlewait");
-    }
+    if (j.contains("jit"))      jit      = json_utils::get_bool(j, "jit");
+    if (j.contains("jit68k"))   jit68k   = json_utils::get_bool(j, "jit68k");
+    if (j.contains("idlewait")) idlewait = json_utils::get_bool(j, "idlewait");
 
-    // ── UAE JIT internals (flat new + legacy m68k.* fallback) ────
-    auto m68k_sub = [&]() -> const nlohmann::json* {
-        return (j.contains("m68k") && j["m68k"].is_object()) ? &j["m68k"] : nullptr;
-    }();
-    if (j.contains("jit_fpu"))           jit_fpu        = json_utils::get_bool(j, "jit_fpu");
-    else if (m68k_sub && m68k_sub->contains("jitfpu"))
-                                          jit_fpu        = json_utils::get_bool(*m68k_sub, "jitfpu");
-    if (j.contains("jit_debug"))         jit_debug      = json_utils::get_bool(j, "jit_debug");
-    else if (m68k_sub && m68k_sub->contains("jitdebug"))
-                                          jit_debug      = json_utils::get_bool(*m68k_sub, "jitdebug");
-    if (j.contains("jit_cache_size"))    jit_cache_size = json_utils::get_int(j, "jit_cache_size");
-    else if (m68k_sub && m68k_sub->contains("jitcachesize"))
-                                          jit_cache_size = json_utils::get_int(*m68k_sub, "jitcachesize");
-    if (j.contains("jit_lazy_flush"))    jit_lazy_flush = json_utils::get_bool(j, "jit_lazy_flush");
-    else if (m68k_sub && m68k_sub->contains("jitlazyflush"))
-                                          jit_lazy_flush = json_utils::get_bool(*m68k_sub, "jitlazyflush");
-    if (j.contains("jit_inline"))        jit_inline     = json_utils::get_bool(j, "jit_inline");
-    else if (m68k_sub && m68k_sub->contains("jitinline"))
-                                          jit_inline     = json_utils::get_bool(*m68k_sub, "jitinline");
-    if (j.contains("jit_blacklist"))     jit_blacklist  = json_utils::get_string(j, "jit_blacklist");
-    else if (m68k_sub && m68k_sub->contains("jitblacklist"))
-                                          jit_blacklist  = json_utils::get_string(*m68k_sub, "jitblacklist");
+    // ── UAE JIT internals ───────────────────────────────────────
+    if (j.contains("jit_fpu"))        jit_fpu        = json_utils::get_bool(j, "jit_fpu");
+    if (j.contains("jit_debug"))      jit_debug      = json_utils::get_bool(j, "jit_debug");
+    if (j.contains("jit_cache_size")) jit_cache_size = json_utils::get_int(j, "jit_cache_size");
+    if (j.contains("jit_lazy_flush")) jit_lazy_flush = json_utils::get_bool(j, "jit_lazy_flush");
+    if (j.contains("jit_inline"))     jit_inline     = json_utils::get_bool(j, "jit_inline");
+    if (j.contains("jit_blacklist"))  jit_blacklist  = json_utils::get_string(j, "jit_blacklist");
 
     // ── Memory & media ──────────────────────────────────────────
     if (j.contains("ram_mb")) ram_mb = json_utils::get_int(j, "ram_mb");
@@ -282,12 +212,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
             screen_height = h;
         }
     }
-    if (j.contains("audio")) {
-        audio_enabled = json_utils::get_bool(j, "audio");
-    } else if (j.contains("nosound")) {
-        // Legacy: nosound=true means audio off
-        audio_enabled = !json_utils::get_bool(j, "nosound");
-    }
+    if (j.contains("audio")) audio_enabled = json_utils::get_bool(j, "audio");
     if (j.contains("rom")) {
         rom_path = json_utils::get_string(j, "rom");
         if (!rom_path.empty() && rom_path[0] != '/' && !storage_dir.empty())
@@ -324,11 +249,6 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("client_dir"))  client_dir = json_utils::get_string(j, "client_dir");
     if (j.contains("storage_dir")) storage_dir = json_utils::get_string(j, "storage_dir");
 
-    // Deprecated signaling keys — tolerated, ignored
-    if (j.contains("signaling_port") || j.contains("signaling_path")) {
-        fprintf(stderr, "[Config] signaling_port/signaling_path are deprecated; signaling rides http_port (/ws)\n");
-    }
-
     // ── System ──────────────────────────────────────────────────
     if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
     if (j.contains("dismiss_shutdown_dialog"))
@@ -363,33 +283,11 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
 /*
  * Merge JSON into both runtime config AND file_config_ (for UI/API changes).
  * Only values merged here will be persisted on save().
- *
- * The UI sends flat JSON in the new schema; we strip any legacy keys before
- * persisting so we don't carry zombies forward.
  */
 void EmulatorConfig::merge_ui_json(const nlohmann::json& j) {
     merge_json(j);
-
-    static const std::vector<const char*> LEGACY_KEYS = {
-        "architecture", "cpu_backend", "emulator", "nosound", "floppies",
-        "frameskip", "yearofs", "dayofs", "udptunnel", "udpport",
-        "bootdrive", "auto_launch_app", "m68k", "ppc", "nocdrom",
-        "signaling_port", "signaling_path"
-    };
-
     for (auto& [key, value] : j.items()) {
-        bool legacy = false;
-        for (const char* lk : LEGACY_KEYS) {
-            if (key == lk) { legacy = true; break; }
-        }
-        if (legacy) continue;
         file_config_[key] = value;
-    }
-
-    // Also strip any legacy keys already present in file_config_ (carried over
-    // from a stale on-disk config). One UI save is enough to clean the file.
-    for (const char* lk : LEGACY_KEYS) {
-        file_config_.erase(lk);
     }
 }
 
@@ -597,16 +495,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
-        // --signaling-port / --signaling-path: deprecated, ignored
-        if (strcmp(argv[i], "--signaling-port") == 0 && i+1 < argc) {
-            fprintf(stderr, "[Config] --signaling-port is deprecated and ignored\n");
-            argv[i] = nullptr; argv[++i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--signaling-path") == 0 && i+1 < argc) {
-            fprintf(stderr, "[Config] --signaling-path is deprecated and ignored\n");
-            argv[i] = nullptr; argv[++i] = nullptr; continue;
-        }
-
         // --storage-dir <path>
         if (strcmp(argv[i], "--storage-dir") == 0 && i+1 < argc) {
             config.storage_dir = argv[i+1];
@@ -712,46 +600,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--debug-network") == 0) {
             config.debug_network = true; argv[i] = nullptr; continue;
-        }
-
-        // ── Legacy CLI flags (accepted with warning) ────────────
-        if (strcmp(argv[i], "--arch") == 0 && i+1 < argc) {
-            // Map --arch to a backend if --backend wasn't already set explicitly
-            std::string a = argv[i+1];
-            if (a == "ppc" && (config.backend == Backend::UAE || config.backend == Backend::DualCPU))
-                config.backend = Backend::KPX;
-            else if (a == "m68k" && (config.backend == Backend::KPX || config.backend == Backend::UnicornPPC))
-                config.backend = Backend::UAE;
-            fprintf(stderr, "[Config] --arch is deprecated; backend determines arch (now: %s)\n", config.backend_string());
-            argv[i] = nullptr; argv[++i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--jitexperimental") == 0) {
-            fprintf(stderr, "[Config] --jitexperimental is deprecated; use --jit\n");
-            config.jit = true; argv[i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--no-jitexperimental") == 0) {
-            fprintf(stderr, "[Config] --no-jitexperimental is deprecated; use --no-jit\n");
-            config.jit = false; argv[i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--ppc-jit") == 0) {
-            fprintf(stderr, "[Config] --ppc-jit is deprecated; use --jit\n");
-            config.jit = true; argv[i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--no-ppc-jit") == 0) {
-            fprintf(stderr, "[Config] --no-ppc-jit is deprecated; use --no-jit\n");
-            config.jit = false; argv[i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--floppy") == 0 && i+1 < argc) {
-            fprintf(stderr, "[Config] --floppy is no longer supported (ignored)\n");
-            argv[i] = nullptr; argv[++i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--bootdrive") == 0 && i+1 < argc) {
-            fprintf(stderr, "[Config] --bootdrive is no longer supported (ignored)\n");
-            argv[i] = nullptr; argv[++i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--auto-launch") == 0 && i+1 < argc) {
-            fprintf(stderr, "[Config] --auto-launch is no longer supported (ignored)\n");
-            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
         // Positional: ROM path (last non-flag arg)
