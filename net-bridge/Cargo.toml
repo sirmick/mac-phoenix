@@ -3,17 +3,23 @@ name = "net-bridge"
 version = "0.1.0"
 edition = "2021"
 description = "Standalone network bridge for Mac emulator - smoltcp TCP/IP + NAT"
+# Pinned at the floor of distro rust on Ubuntu 22.04+/Fedora 40+/Debian 12-bpo
+# so packaging builds don't need rustup. Bump only if a dep we actually need
+# raises its MSRV — pin smoltcp/env_logger here (not the latest) for the same
+# reason.
+rust-version = "1.75"
 
 [dependencies]
-smoltcp = { version = "0.12", features = [
+smoltcp = { version = "0.11", default-features = false, features = [
     "medium-ethernet",
     "proto-ipv4",
     "socket-tcp",
     "socket-udp",
     "socket-icmp",
     "socket-raw",
+    "std",
 ] }
 log = "0.4"
-env_logger = "0.11"
+env_logger = "0.10"
 libc = "0.2"
 openssl = "0.10"

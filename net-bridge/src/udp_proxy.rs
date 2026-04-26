@@ -84,7 +84,7 @@ impl UdpNat {
         let is_dns_to_gateway = dst_port == 53 && dst_ip == GW_IP;
         let actual_dst_ip = if is_dns_to_gateway {
             let dns = self.resolve_host_dns();
-            Ipv4Address::from(dns.octets())
+            Ipv4Address(dns.octets())
         } else {
             dst_ip
         };
@@ -245,7 +245,7 @@ fn read_resolv_conf() -> Option<Ipv4Addr> {
 
 /// Convert smoltcp Ipv4Address to std Ipv4Addr
 fn to_std_ip(ip: Ipv4Address) -> Ipv4Addr {
-    let o = ip.octets();
+    let o = ip.0;
     Ipv4Addr::new(o[0], o[1], o[2], o[3])
 }
 
@@ -308,9 +308,9 @@ fn check_icmp_error(flow: &UdpFlow) -> Option<Vec<u8>> {
             orig_hdr[8] = 1; // TTL (was 1 when it expired)
             orig_hdr[9] = 17; // UDP
             // src = Mac IP
-            orig_hdr[12..16].copy_from_slice(&flow.mac_ip.octets());
+            orig_hdr[12..16].copy_from_slice(&flow.mac_ip.0);
             // dst = original destination
-            orig_hdr[16..20].copy_from_slice(&flow.apparent_dst_ip.octets());
+            orig_hdr[16..20].copy_from_slice(&flow.apparent_dst_ip.0);
             // UDP src port
             orig_hdr[20] = (flow.mac_port >> 8) as u8;
             orig_hdr[21] = flow.mac_port as u8;

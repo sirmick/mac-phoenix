@@ -137,10 +137,10 @@ fn build_dhcp_reply(msg_type: u8, xid: &[u8; 4], client_mac: &[u8; 6]) -> Vec<u8
     // secs = 0, flags = 0 (already zero)
 
     // yiaddr: offered IP (10.0.2.15)
-    reply[16..20].copy_from_slice(&CLIENT_IP.octets());
+    reply[16..20].copy_from_slice(&CLIENT_IP.0);
 
     // siaddr: server IP (10.0.2.1)
-    reply[20..24].copy_from_slice(&GW_IP.octets());
+    reply[20..24].copy_from_slice(&GW_IP.0);
 
     // chaddr: client MAC + padding
     reply[28..34].copy_from_slice(client_mac);
@@ -157,7 +157,7 @@ fn build_dhcp_reply(msg_type: u8, xid: &[u8; 4], client_mac: &[u8; 6]) -> Vec<u8
 
     // Option 54: Server Identifier
     reply[pos] = 54; reply[pos + 1] = 4;
-    reply[pos + 2..pos + 6].copy_from_slice(&GW_IP.octets());
+    reply[pos + 2..pos + 6].copy_from_slice(&GW_IP.0);
     pos += 6;
 
     // Option 51: Lease Time
@@ -172,12 +172,12 @@ fn build_dhcp_reply(msg_type: u8, xid: &[u8; 4], client_mac: &[u8; 6]) -> Vec<u8
 
     // Option 3: Router (Gateway)
     reply[pos] = 3; reply[pos + 1] = 4;
-    reply[pos + 2..pos + 6].copy_from_slice(&GW_IP.octets());
+    reply[pos + 2..pos + 6].copy_from_slice(&GW_IP.0);
     pos += 6;
 
     // Option 6: DNS Server
     reply[pos] = 6; reply[pos + 1] = 4;
-    reply[pos + 2..pos + 6].copy_from_slice(&GW_IP.octets());
+    reply[pos + 2..pos + 6].copy_from_slice(&GW_IP.0);
     pos += 6;
 
     // Option 255: End

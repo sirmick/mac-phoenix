@@ -482,7 +482,7 @@ impl TcpNat {
 
 /// Convert smoltcp Ipv4Address to std Ipv4Addr
 fn to_std_ip(ip: Ipv4Address) -> Ipv4Addr {
-    let o = ip.octets();
+    let o = ip.0;
     Ipv4Addr::new(o[0], o[1], o[2], o[3])
 }
 
@@ -678,7 +678,6 @@ fn build_tcp_frame(
         sack_permitted: false,
         sack_ranges: [None; 3],
         payload,
-        timestamp: None,
     };
 
     let tcp_len = tcp_repr.header_len() + payload.len();

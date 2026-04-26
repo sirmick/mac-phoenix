@@ -152,7 +152,7 @@ impl SocketDevice {
 
         // If destined for gateway, let smoltcp handle most traffic (ping, etc.)
         // Exception: UDP port 53 (DNS) goes to NAT for DNS proxy
-        if dst_ip.octets() == GW_IP_BYTES {
+        if dst_ip.0 == GW_IP_BYTES {
             if ip.next_header() == smoltcp::wire::IpProtocol::Udp {
                 let ip_hdr_len = ip.header_len() as usize;
                 if let Ok(udp) = smoltcp::wire::UdpPacket::new_checked(&eth.payload()[ip_hdr_len..]) {
@@ -165,7 +165,7 @@ impl SocketDevice {
         }
 
         // Broadcast: intercept DHCP (UDP port 67), let smoltcp handle the rest
-        if dst_ip.octets()[0] >= 224 || dst_ip == smoltcp::wire::Ipv4Address::BROADCAST {
+        if dst_ip.0[0] >= 224 || dst_ip == smoltcp::wire::Ipv4Address::BROADCAST {
             if ip.next_header() == smoltcp::wire::IpProtocol::Udp {
                 let ip_hdr_len = ip.header_len() as usize;
                 if let Ok(udp) = smoltcp::wire::UdpPacket::new_checked(&eth.payload()[ip_hdr_len..]) {
@@ -239,11 +239,11 @@ pub struct RxToken {
 }
 
 impl phy::RxToken for RxToken {
-    fn consume<R, F>(self, f: F) -> R
+    fn consume<R, F>(mut self, f: F) -> R
     where
-        F: FnOnce(&[u8]) -> R,
+        F: FnOnce(&mut [u8]) -> R,
     {
-        f(&self.buffer)
+        f(&mut self.buffer)
     }
 }
 

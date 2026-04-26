@@ -126,7 +126,7 @@ impl IcmpNat {
         icmp_buf[3] = (cksum & 0xff) as u8;
 
         // Send via sendto
-        let dst_octets = dst_ip.octets();
+        let dst_octets = dst_ip.0;
         let mut addr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
         addr.sin_family = libc::AF_INET as u16;
         addr.sin_addr.s_addr = u32::from_ne_bytes(dst_octets);
