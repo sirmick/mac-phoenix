@@ -41,16 +41,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tar \
     && rm -rf /var/lib/apt/lists/*
 
-# apt's rust satisfies debian/control's Build-Depends but is too old for
-# some crates (smoltcp 0.12 needs >= 1.80; Ubuntu 24.04 ships 1.75, Debian 12
-# ships 1.63). Install a recent stable via rustup and put it ahead of the
-# apt rust on PATH — dpkg-checkbuilddeps still sees the apt version, but the
-# actual build picks up rustup's. Crates remain offline-vendored; rustup-init
-# itself is the only network access.
+# Cargo.toml pins rust-version = 1.75. That covers Ubuntu 24.04 (apt rustc
+# 1.75) and Fedora 40 (1.78) without rustup. Older distros (Ubuntu 22.04 apt
+# 1.66, Debian 12 apt 1.63) still need it — install conditionally so the
+# distros with adequate apt rust skip the curl entirely.
 ENV RUSTUP_HOME=/usr/local/rustup \
     PATH=/usr/local/cargo/bin:$PATH
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | CARGO_HOME=/usr/local/cargo sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path \
+RUN APT_RUSTC="$(rustc --version | awk '{print $2}')"; \
+    APT_MAJOR="$(echo "$APT_RUSTC" | cut -d. -f1)"; \
+    APT_MINOR="$(echo "$APT_RUSTC" | cut -d. -f2)"; \
+    if [ "$APT_MAJOR" -gt 1 ] || { [ "$APT_MAJOR" -eq 1 ] && [ "$APT_MINOR" -ge 75 ]; }; then \
+        echo "apt rustc $APT_RUSTC >= 1.75 — skipping rustup"; \
+    else \
+        echo "apt rustc $APT_RUSTC < 1.75 — installing via rustup"; \
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | CARGO_HOME=/usr/local/cargo sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path; \
+    fi \
  && rustc --version
 
 WORKDIR /src

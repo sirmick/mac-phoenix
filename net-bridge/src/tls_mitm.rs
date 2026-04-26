@@ -100,6 +100,10 @@ impl MitmRuntime {
         if !config.enabled {
             return Ok(None);
         }
+        // Eager provider load — surface OpenSSL legacy/RC4 misconfig at
+        // startup with a clear log line, instead of failing silently on
+        // the first guest TLS handshake half an hour into a session.
+        crate::tls_listener::enable_legacy_algorithms()?;
         let ca = MitmCa::load_or_generate(&config.ca_dir)?;
         log::info!(
             "MITM TLS enabled: ports={:?} ca={}",

@@ -37,17 +37,56 @@ static mut DEFAULT_PROVIDER: Option<Provider> = None;
 
 /// Load OpenSSL's legacy provider so RC4/DES primitives are available.
 /// Safe to call repeatedly; only the first call has an effect.
+///
+/// Logs success / failure loudly. The legacy provider lives inside our
+/// vendored OpenSSL (`enable-legacy` at configure time, statically linked
+/// because we use `no-dso`). On a system OpenSSL build without the legacy
+/// provider, the load fails — and the message tells you so instead of
+/// surfacing a generic "ErrorStack" twenty stack frames up.
 pub fn enable_legacy_algorithms() -> Result<(), ErrorStack> {
     let mut err: Option<ErrorStack> = None;
     PROVIDERS.call_once(|| {
+        let openssl_ver = openssl::version::version();
+        let modules_dir = std::env::var("OPENSSL_MODULES")
+            .unwrap_or_else(|_| "<unset; using compiled-in default>".into());
+        log::info!(
+            "TLS: initializing OpenSSL providers ({}, OPENSSL_MODULES={})",
+            openssl_ver, modules_dir
+        );
         // Loading `legacy` on its own disables the implicit default, so we
         // load both explicitly and hold them for the process lifetime.
-        match (Provider::load(None, "default"), Provider::load(None, "legacy")) {
-            (Ok(d), Ok(l)) => unsafe {
-                DEFAULT_PROVIDER = Some(d);
-                LEGACY_PROVIDER = Some(l);
-            },
-            (Err(e), _) | (_, Err(e)) => err = Some(e),
+        let default_res = Provider::load(None, "default");
+        let legacy_res = Provider::load(None, "legacy");
+        match (default_res, legacy_res) {
+            (Ok(d), Ok(l)) => {
+                log::info!("TLS: providers loaded — default + legacy (RC4/DES available)");
+                unsafe {
+                    DEFAULT_PROVIDER = Some(d);
+                    LEGACY_PROVIDER = Some(l);
+                }
+            }
+            (Err(e), _) => {
+                log::error!(
+                    "TLS: failed to load OpenSSL 'default' provider: {}\n\
+                     This usually means OpenSSL itself is misconfigured.",
+                    e
+                );
+                err = Some(e);
+            }
+            (Ok(_), Err(e)) => {
+                log::error!(
+                    "TLS: failed to load OpenSSL 'legacy' provider: {}\n\
+                     The MITM proxy needs RC4/DES for classic-Mac browsers — \
+                     these primitives live in the legacy provider, which the \
+                     system OpenSSL strips. Rebuild net-bridge against the \
+                     vendored OpenSSL: \
+                     `bash net-bridge/tools/build-legacy-openssl.sh && \
+                     OPENSSL_DIR=net-bridge/vendor/openssl-legacy \
+                     OPENSSL_STATIC=1 cargo build`",
+                    e
+                );
+                err = Some(e);
+            }
         }
     });
     if let Some(e) = err {
