@@ -212,3 +212,13 @@ set_tests_properties(guest_suite_ppc PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
+
+add_test(
+  NAME mitm_proxy
+  COMMAND python3 ${TEST_DIR}/test_mitm_proxy.py
+)
+set_tests_properties(mitm_proxy PROPERTIES
+  TIMEOUT 30
+  LABELS "mitm"
+  SKIP_RETURN_CODE 77
+)
