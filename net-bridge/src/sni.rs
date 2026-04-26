@@ -30,8 +30,18 @@ pub fn peek_sni(data: &[u8]) -> SniPeek {
     if data.len() < 5 {
         return SniPeek::NeedMore;
     }
+    // Netscape 3 / MSIE 3 / MSIE 2 on classic Mac send an "SSLv2-format
+    // ClientHello" — a legacy envelope whose first byte has the MSB set
+    // (2-byte length form) and byte 2 is 0x01 (ClientHello). It ADVERTISES
+    // SSLv3 or higher as a protocol version inside. OpenSSL accepts it
+    // and upgrades the negotiation to whatever the server supports, but
+    // SSLv2 has no extensions at all, so there is no SNI to sniff.
+    // Treat it as SniAbsent so the caller falls back to IP-as-hostname.
+    if (data[0] & 0x80) != 0 && data[2] == 0x01 {
+        return SniPeek::NotPresent;
+    }
     if data[0] != 0x16 {
-        return SniPeek::NotTls; // not a handshake record
+        return SniPeek::NotTls; // not a TLS 1.x handshake record either
     }
     let rec_len = u16::from_be_bytes([data[3], data[4]]) as usize;
     if rec_len > CLIENT_HELLO_CAP {
@@ -249,6 +259,15 @@ mod tests {
     fn not_a_handshake() {
         let data = [0x17, 0x03, 0x03, 0x00, 0x05, 1, 2, 3, 4, 5];
         assert_eq!(peek_sni(&data), SniPeek::NotTls);
+    }
+
+    #[test]
+    fn sslv2_format_hello_recognised_as_sni_absent() {
+        // Netscape 3's SSLv2-backwards-compat ClientHello shape:
+        //   [len_hi|0x80][len_lo][0x01][0x03 0x00 ... (SSLv3 advertised)]
+        // We don't parse contents — just need byte0 MSB set + byte2==0x01.
+        let hello: [u8; 11] = [0x80, 0x2e, 0x01, 0x03, 0x00, 0, 0, 0, 0, 0, 0];
+        assert_eq!(peek_sni(&hello), SniPeek::NotPresent);
     }
 
     #[test]

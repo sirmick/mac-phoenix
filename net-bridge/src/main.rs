@@ -7,6 +7,7 @@
 //! Usage: net-bridge [--socket /tmp/mac-ether.sock]
 
 mod bulk_server;
+mod ca_http_server;
 mod device;
 mod dhcp_server;
 mod echo_server;
@@ -26,6 +27,7 @@ use smoltcp::iface::{Config, Interface, SocketSet};
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, Ipv4Address};
 
 use bulk_server::BulkServer;
+use ca_http_server::CaHttpServer;
 use device::SocketDevice;
 use echo_server::EchoServer;
 use icmp_proxy::IcmpNat;
@@ -38,12 +40,28 @@ const GW_MAC: [u8; 6] = [0x02, 0x50, 0x48, 0x58, 0x00, 0x02];
 const GW_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 1);
 const NETMASK: u8 = 24;
 
+const NET_BRIDGE_BUILD_DATE: &str = env!("NET_BRIDGE_BUILD_DATE");
+
 fn main() {
+    let argv: Vec<String> = std::env::args().collect();
+
+    // `--version` / `-V`: print build info to stdout and exit. Used by
+    // mac-phoenix to surface the build date in NetworkInfo.txt without
+    // having to stat the binary or keep a parallel copy of the date.
+    if argv.iter().any(|a| a == "--version" || a == "-V") {
+        println!("net-bridge {} built {}",
+                 env!("CARGO_PKG_VERSION"),
+                 NET_BRIDGE_BUILD_DATE);
+        return;
+    }
+
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_millis()
         .init();
 
-    let argv: Vec<String> = std::env::args().collect();
+    log::info!("net-bridge {} built {}",
+               env!("CARGO_PKG_VERSION"),
+               NET_BRIDGE_BUILD_DATE);
 
     let sock_path = argv
         .iter()
@@ -91,6 +109,16 @@ fn main() {
     let mut sockets = SocketSet::new(vec![]);
     let echo = EchoServer::new(&mut sockets);
     let mut bulk = BulkServer::new(&mut sockets);
+    // Serve the MITM root CA on gateway:80 so classic browsers (NN2/3/4
+    // and early MSIE) can import it via the standard HTTP + MIME
+    // `application/x-x509-ca-cert` path. Only constructed when MITM is
+    // enabled; otherwise :80 stays available for anything else.
+    let mut ca_http: Option<CaHttpServer> = mitm.as_ref().map(|m| {
+        let pem = m.ca.cert_pem().to_vec();
+        let der = m.ca.cert_der().to_vec();
+        log::info!("ca-http: serving CA at http://10.0.2.1/MitmCA.crt (PEM) and .cer (DER)");
+        CaHttpServer::new(&mut sockets, pem, der)
+    });
     let mut tcp_nat = TcpNat::new(mitm);
     let mut udp_nat = UdpNat::new();
     let mut icmp_nat = IcmpNat::new();
@@ -129,6 +157,9 @@ fn main() {
         // 3b. Service the in-bridge echo daemon on GW:7
         echo.poll(&mut sockets);
         bulk.poll(&mut sockets);
+        if let Some(ref mut http) = ca_http {
+            http.poll(&mut sockets);
+        }
 
         // Re-poll smoltcp so any outgoing echo frames get egressed this tick.
         let _ = iface.poll(timestamp, &mut device, &mut sockets);

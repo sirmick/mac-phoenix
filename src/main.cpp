@@ -98,6 +98,7 @@ static void reserve_mac_address_space_early()
 // WebRTC streaming
 #include "config/emulator_config.h"
 #include "core/command_bridge.h"
+#include "core/network_info.h"
 #include "drivers/ether/ether_socket.h"
 #include "core/cpu_context.h"
 #include "core/emulator_subprocess.h"
@@ -468,6 +469,12 @@ int main(int argc, char **argv)
 		);
 		ether_socket_register(path);
 	}
+
+	// Drop a consolidated NetworkInfo.txt (plus MITM CA copies) into
+	// <extfs>/MacPhoenix/ so the guest can discover DHCP addresses,
+	// bridge/mitm status, build dates, and install the MITM CA without
+	// digging through the host filesystem. No-op when ExtFS isn't used.
+	core::write_network_info(emu_config);
 
 	// Set global debug/log state from config
 	g_debug_mode_switch = emu_config.debug_mode_switch;

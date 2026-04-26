@@ -247,6 +247,7 @@ pub struct MitmCa {
     key: PKey<Private>,
     cert: X509,
     cert_pem: Vec<u8>,
+    cert_der: Vec<u8>,
     cert_path: PathBuf,
 }
 
@@ -277,10 +278,12 @@ impl MitmCa {
         let cert_pem = fs::read(cert_path)?;
         let key = PKey::private_key_from_pem(&key_pem)?;
         let cert = X509::from_pem(&cert_pem)?;
+        let cert_der = cert.to_der()?;
         Ok(Self {
             key,
             cert,
             cert_pem,
+            cert_der,
             cert_path: cert_path.to_path_buf(),
         })
     }
@@ -324,6 +327,7 @@ impl MitmCa {
 
         let key_pem = key.private_key_to_pem_pkcs8()?;
         let cert_pem = cert.to_pem()?;
+        let cert_der = cert.to_der()?;
 
         fs::write(key_path, &key_pem)?;
         fs::write(cert_path, &cert_pem)?;
@@ -337,12 +341,17 @@ impl MitmCa {
             key,
             cert,
             cert_pem,
+            cert_der,
             cert_path: cert_path.to_path_buf(),
         })
     }
 
     pub fn cert_pem(&self) -> &[u8] {
         &self.cert_pem
+    }
+
+    pub fn cert_der(&self) -> &[u8] {
+        &self.cert_der
     }
 
     pub fn cert_path(&self) -> &Path {
