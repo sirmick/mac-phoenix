@@ -5,14 +5,17 @@
  * launches it at desktop time; it runs a WaitNextEvent loop at ~10Hz
  * polling the ExtFS "Host" volume for bridge commands.
  *
- * Protocol (file-based):
- *   Host writes Host:_bridge_cmd      - "LAUNCH path" or "QUIT"
+ * Protocol (file-based; all files live in Host:MacPhoenix: so the ExtFS
+ * share has one clean subfolder containing bridge IPC, network info,
+ * and MITM certs — rather than scattering half a dozen underscore-
+ * prefixed files at the root of Host:):
+ *   Host writes Host:MacPhoenix:_bridge_cmd      - "LAUNCH path" or "QUIT"
  *   Agent reads, deletes, executes
- *   Agent writes Host:_bridge_result  - decimal OSErr, CR-terminated
+ *   Agent writes Host:MacPhoenix:_bridge_result  - decimal OSErr, CR-terminated
  *
  * Liveness markers:
- *   Host:bridge_loaded       - created once at first poll
- *   Host:_bridge_heartbeat   - rewritten every ~2s with a counter
+ *   Host:MacPhoenix:bridge_loaded       - created once at first poll
+ *   Host:MacPhoenix:bridge_heartbeat    - rewritten every ~2s with a counter
  */
 #include <Quickdraw.h>
 #include <Fonts.h>
@@ -104,6 +107,76 @@ static Str255    gLastCmd;
 static OSErr     gLastResult = 0;
 static Boolean   gRunning   = true;
 
+/* Network info parsed from Host:MacPhoenix:netcfg.txt on startup. The
+ * host writes these fresh each launch so the values shown always match
+ * the running bridge/MITM configuration. Empty string = field missing. */
+static char gNetGateway[32] = "";
+static char gNetGuestIp[32] = "";
+static char gNetCaUrl[128]  = "";
+static Boolean gNetMitmActive = false;
+
+/* Read one CR-terminated key=value line from `src` starting at *off.
+ * Advances *off past the CR. Returns false at EOF. */
+static Boolean read_line(const char *src, long srclen, long *off,
+                         char *out, size_t outcap)
+{
+    if (*off >= srclen) return false;
+    size_t w = 0;
+    while (*off < srclen) {
+        char c = src[(*off)++];
+        if (c == '\r' || c == '\n') break;
+        if (w + 1 < outcap) out[w++] = c;
+    }
+    out[w] = 0;
+    return true;
+}
+
+/* Parse Host:MacPhoenix:netcfg.txt (written by the host) for the gateway,
+ * guest DHCP IP, MITM state, and CA URL. Values are displayed in the
+ * status window. Called once at startup; silent no-op if the file's
+ * absent (e.g. no --bridge --mitm-tls). */
+static void load_network_config(void)
+{
+    FSSpec spec;
+    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:netcfg.txt", &spec) != noErr) return;
+
+    short ref;
+    if (FSpOpenDF(&spec, fsRdPerm, &ref) != noErr) return;
+
+    long len = 0;
+    GetEOF(ref, &len);
+    if (len <= 0 || len > 4096) { FSClose(ref); return; }
+
+    char *buf = (char *)NewPtr(len);
+    if (!buf) { FSClose(ref); return; }
+
+    long want = len;
+    if (FSRead(ref, &want, buf) != noErr) {
+        FSClose(ref); DisposePtr(buf); return;
+    }
+    FSClose(ref);
+
+    long off = 0;
+    char line[160];
+    while (read_line(buf, want, &off, line, sizeof(line))) {
+        char *eq = strchr(line, '=');
+        if (!eq) continue;
+        *eq = 0;
+        const char *k = line;
+        const char *v = eq + 1;
+        if (!strcmp(k, "gw")) {
+            strncpy(gNetGateway, v, sizeof(gNetGateway) - 1);
+        } else if (!strcmp(k, "guest")) {
+            strncpy(gNetGuestIp, v, sizeof(gNetGuestIp) - 1);
+        } else if (!strcmp(k, "ca_url")) {
+            strncpy(gNetCaUrl, v, sizeof(gNetCaUrl) - 1);
+        } else if (!strcmp(k, "mitm")) {
+            gNetMitmActive = (v[0] == '1');
+        }
+    }
+    DisposePtr(buf);
+}
+
 static void draw_status(void)
 {
     if (!gStatusWin) return;
@@ -146,13 +219,44 @@ static void draw_status(void)
     DrawString("\pLast cmd: ");
     DrawString(gLastCmd);
 
+    /* Network pane — values loaded once at startup from netcfg.txt. */
+    MoveTo(8, 106);
+    DrawString("\p---- Network ----");
+
+    MoveTo(8, 122);
+    snprintf(buf, sizeof(buf), "Server (GW):  %s",
+             gNetGateway[0] ? gNetGateway : "(not configured)");
+    pbuf[0] = (unsigned char)strlen(buf);
+    memcpy(pbuf + 1, buf, pbuf[0]);
+    DrawString(pbuf);
+
+    MoveTo(8, 138);
+    snprintf(buf, sizeof(buf), "Client (me):  %s",
+             gNetGuestIp[0] ? gNetGuestIp : "(DHCP)");
+    pbuf[0] = (unsigned char)strlen(buf);
+    memcpy(pbuf + 1, buf, pbuf[0]);
+    DrawString(pbuf);
+
+    MoveTo(8, 154);
+    if (gNetMitmActive && gNetCaUrl[0]) {
+        snprintf(buf, sizeof(buf), "MITM CA: %s", gNetCaUrl);
+    } else if (gNetMitmActive) {
+        snprintf(buf, sizeof(buf), "MITM: active (no CA URL)");
+    } else {
+        snprintf(buf, sizeof(buf), "MITM: off");
+    }
+    pbuf[0] = (unsigned char)strlen(buf);
+    memcpy(pbuf + 1, buf, pbuf[0]);
+    DrawString(pbuf);
+
     SetPort(saved);
 }
 
 static void open_status_window(void)
 {
     Rect bounds;
-    SetRect(&bounds, 40, 60, 400, 180);
+    /* Extended vertically to fit the Network pane (was 40,60 → 400,180). */
+    SetRect(&bounds, 40, 60, 440, 240);
     gStatusWin = NewWindow(NULL, &bounds, "\pBridgeAgent",
                            true, documentProc, (WindowPtr)-1, true, 0);
 }
@@ -405,7 +509,7 @@ static OSErr do_set_clipboard(const ProcessSerialNumber *prior_front)
     (void)prior_front;
     char dbg[96];
     FSSpec spec;
-    OSErr err = FSMakeFSSpec(0, 0, "\pHost:_bridge_clipboard", &spec);
+    OSErr err = FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:_bridge_clipboard", &spec);
     if (err != noErr) {
         snprintf(dbg, sizeof(dbg), "set_clip: FSMakeFSSpec err=%d", (int)err);
         bridge_step(dbg);
@@ -558,7 +662,7 @@ static void write_result(OSErr result)
     char buf[16];
     long len;
 
-    FSMakeFSSpec(0, 0, "\pHost:_bridge_result", &spec);
+    FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:_bridge_result", &spec);
     FSpDelete(&spec);
     FSpCreate(&spec, 'ttxt', 'TEXT', smSystemScript);
     if (FSpOpenDF(&spec, fsWrPerm, &ref) != noErr) return;
@@ -574,7 +678,7 @@ static void write_marker_once(void)
     if (written) return;
     written = true;
     FSSpec mk;
-    if (FSMakeFSSpec(0, 0, "\pHost:bridge_loaded", &mk) == fnfErr)
+    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:bridge_loaded", &mk) == fnfErr)
         FSpCreate(&mk, 'ttxt', 'TEXT', smSystemScript);
 }
 
@@ -588,7 +692,7 @@ static void write_heartbeat(void)
 
     FSSpec hb;
     short ref;
-    if (FSMakeFSSpec(0, 0, "\pHost:bridge_heartbeat", &hb) == fnfErr)
+    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:bridge_heartbeat", &hb) == fnfErr)
         FSpCreate(&hb, 'ttxt', 'TEXT', smSystemScript);
     if (FSpOpenDF(&hb, fsWrPerm, &ref) == noErr) {
         /* JSON payload so the host can tail this file for live status. */
@@ -624,7 +728,7 @@ static void bridge_step(const char *tag)
 {
     FSSpec sp;
     short ref;
-    if (FSMakeFSSpec(0, 0, "\pHost:bridge_step", &sp) == fnfErr)
+    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:bridge_step", &sp) == fnfErr)
         FSpCreate(&sp, 'ttxt', 'TEXT', smSystemScript);
     if (FSpOpenDF(&sp, fsWrPerm, &ref) != noErr) return;
     long len = (long)strlen(tag);
@@ -640,7 +744,7 @@ static void poll_bridge(void)
     write_heartbeat();
 
     FSSpec cmd_spec;
-    if (FSMakeFSSpec(0, 0, "\pHost:_bridge_cmd", &cmd_spec) != noErr)
+    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:_bridge_cmd", &cmd_spec) != noErr)
         return;
 
     short refNum;
@@ -853,6 +957,7 @@ int main(void)
     gLastCmd[0] = 6; memcpy(gLastCmd + 1, "(none)", 6);
     build_menus();
     install_ae_handlers();
+    load_network_config();   /* Read Host:MacPhoenix:netcfg.txt before drawing */
     open_status_window();
     draw_status();
     install_wne_patch();

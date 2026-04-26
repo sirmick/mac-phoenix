@@ -39,11 +39,11 @@ override_dh_auto_configure:
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
 		-DBUILD_TESTS=OFF \
 		-DBUILD_NET_BRIDGE=ON \
-		-DBUILD_BRIDGE_AGENT=ON
+		-DBUILD_BRIDGE_AGENT=OFF
 
 override_dh_auto_test:
 	# Skip ctest at package-build time — most tests need a Mac ROM and a
-	# running emulator. Smoke tests live in tests/packaging/ instead.
+	# running emulator. Smoke tests live in packaging/ instead.
 
 override_dh_auto_install:
 	dh_auto_install

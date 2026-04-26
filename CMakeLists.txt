@@ -295,6 +295,27 @@ if(BUILD_BRIDGE_AGENT)
     get_filename_component(RETRO68_ROOT "${RETRO68_BIN_DIR}" DIRECTORY)
     set(RETRO68_RINCLUDES "${RETRO68_ROOT}/m68k-apple-macos/RIncludes")
 
+    # Apple Universal Interfaces 3.4 — the toolchain's default Multiversal
+    # headers are missing several files bridge_agent uses (Script.h,
+    # Aliases.h, ShutDown.h, Scrap.h, Processes.r). If the user has UI 3.4
+    # at private/Universal Interfaces/Universal/Interfaces/, prepend its
+    # CIncludes/RIncludes to the gcc/Rez search paths so the build works
+    # against vanilla Retro68 (no need to install UI 3.4 into the toolchain
+    # tree itself). Apple's headers can't be redistributed in source, hence
+    # the gitignored private/ location.
+    set(BA_UI3 "${CMAKE_CURRENT_SOURCE_DIR}/private/Universal Interfaces/Universal/Interfaces")
+    set(BA_GCC_EXTRA_FLAGS "")
+    set(BA_REZ_EXTRA_FLAGS "")
+    if(EXISTS "${BA_UI3}/CIncludes/Script.h")
+      set(BA_GCC_EXTRA_FLAGS -I "${BA_UI3}/CIncludes")
+      set(BA_REZ_EXTRA_FLAGS -I "${BA_UI3}/RIncludes")
+      message(STATUS "bridge-agent: using Apple UI 3.4 from private/")
+    else()
+      message(STATUS "bridge-agent: Apple UI 3.4 not present at private/Universal Interfaces/")
+      message(STATUS "              — bridge_agent.c needs Script.h/Aliases.h/ShutDown.h/Scrap.h.")
+      message(STATUS "              Either drop UI 3.4 there or set BUILD_BRIDGE_AGENT=OFF.")
+    endif()
+
     set(BA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests/guest/bridge")
     set(BA_CODE "${BA_DIR}/BridgeAgent.code.bin")
     set(BA_BIN  "${BA_DIR}/BridgeAgent.bin")
@@ -302,7 +323,7 @@ if(BUILD_BRIDGE_AGENT)
     # Compile C → Retro68 code binary
     add_custom_command(
       OUTPUT "${BA_CODE}"
-      COMMAND "${RETRO68_GCC}" -O2 -o "${BA_CODE}" bridge_agent.c
+      COMMAND "${RETRO68_GCC}" ${BA_GCC_EXTRA_FLAGS} -O2 -o "${BA_CODE}" bridge_agent.c
       DEPENDS "${BA_DIR}/bridge_agent.c"
       WORKING_DIRECTORY "${BA_DIR}"
       COMMENT "Building BridgeAgent (m68k): bridge_agent.c → BridgeAgent.code.bin"
@@ -316,6 +337,7 @@ if(BUILD_BRIDGE_AGENT)
       OUTPUT "${BA_BIN}"
       COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" bridge_agent.r
               -I "${RETRO68_RINCLUDES}"
+              ${BA_REZ_EXTRA_FLAGS}
               --copy "${BA_CODE}"
               -o "${BA_BIN}"
               -t APPL -c MxBr

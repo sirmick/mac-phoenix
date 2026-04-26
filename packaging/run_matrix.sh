@@ -4,11 +4,10 @@
 # native package on each target distro inside Docker.
 #
 # Targets are simple "tag:base-image" pairs, dispatched by extension to
-# Dockerfile.deb (apt-based) or Dockerfile.rpm (dnf-based).
-#
-# Pre-requisite: a Retro68 toolchain image (tag mac-phoenix:retro68). The
-# script builds it on first run via Dockerfile.retro68 (~30 min, one time).
-# Without it, BridgeAgent rebuilds in the package builds would fail.
+# Dockerfile.deb (apt-based) or Dockerfile.rpm (dnf-based). BridgeAgent.bin
+# is shipped as a committed artifact (BUILD_BRIDGE_AGENT=OFF in package
+# builds), so no Retro68 toolchain or Apple UI 3.4 is needed here. To
+# rebuild BridgeAgent, see packaging/Dockerfile.dev.
 #
 # Boot test: bind-mounts a host ROM and disk image into the container at
 # fixed paths and runs:
@@ -19,10 +18,6 @@
 # Skip boot test with MACEMU_SKIP_BOOT=1 (smoke checks still run as part of
 # the Docker build).
 #
-# Squashfs export: pass MACEMU_EXPORT_DEV_SQUASHFS=1 to additionally export
-# the mac-phoenix:dev image as dist/mac-phoenix-dev.squashfs (requires
-# squashfs-tools on the host). Useful for shipping a portable dev env.
-#
 # Env overrides:
 #   MACEMU_ROM       default: $HOME/quadra.rom
 #   MACEMU_DISK      default: $HOME/storage/images/macos-7.5.5.img
@@ -30,20 +25,20 @@
 #   MACEMU_TARGETS   default: ubuntu-24.04 ubuntu-22.04 debian-12 fedora-40
 #   MACEMU_SKIP_BOOT          skip the boot test (artifact-only run)
 #   MACEMU_KEEP_IMAGES        keep mac-phoenix-pkg:* images post-extraction
-#   MACEMU_EXPORT_DEV_SQUASHFS  also export mac-phoenix:dev as squashfs
 
 set -euo pipefail
 
 docker info >/dev/null 2>&1 || { echo "docker not usable — install docker.io and add yourself to the docker group (newgrp docker)" >&2; exit 1; }
 
-# BuildKit auto-removes intermediate build containers; without it, every RUN
-# step leaves an exited container around and the host fills up fast.
-export DOCKER_BUILDKIT=1
+# BuildKit needs the buildx plugin (not bundled with Ubuntu's docker.io).
+# Stick to the legacy builder; the EXIT trap below handles cleanup.
+export DOCKER_BUILDKIT=0
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# Sweep any orphaned exited build containers from previous (failed) runs.
+# Sweep any orphaned exited build containers from previous (failed) runs
+# and on EXIT — legacy docker build leaves them behind when a step fails.
 cleanup_docker() {
     docker container prune -f >/dev/null 2>&1 || true
 }
@@ -60,20 +55,6 @@ declare -A BASE=(
     [debian-12]=debian:12
     [fedora-40]=fedora:40
 )
-
-# --- Retro68 prerequisite ------------------------------------------------
-# Each package Dockerfile does `COPY --from=mac-phoenix:retro68 /opt/retro68
-# /opt/retro68` so the m68k cross-compiler is present and BridgeAgent can be
-# rebuilt from C source. Build it once if missing.
-if ! docker image inspect mac-phoenix:retro68 >/dev/null 2>&1; then
-    echo "[matrix] mac-phoenix:retro68 not found — building (one-time, ~30min)..."
-    docker build -f "$ROOT/packaging/Dockerfile.retro68" \
-        -t mac-phoenix:retro68 "$ROOT" \
-        2>&1 | tee "$ROOT/dist/retro68-build.log" || {
-            echo "[matrix] FAILED to build mac-phoenix:retro68 — see dist/retro68-build.log" >&2
-            exit 1
-        }
-fi
 
 # --- Source tarball ------------------------------------------------------
 echo "[matrix] producing source tarball..."
@@ -129,8 +110,8 @@ for target in $TARGETS; do
     cid="$(docker create "$image")"
     docker cp "$cid:/pkg/." "$pkg_dir/" >/dev/null 2>&1 || true
     docker rm "$cid" >/dev/null
-    artifact="$(ls -1 "$pkg_dir"/*.deb "$pkg_dir"/*.rpm 2>/dev/null | head -1)"
-    [[ -n "$artifact" ]] && echo "[matrix] artifact: $artifact"
+    artifact="$(find "$pkg_dir" -maxdepth 1 \( -name '*.deb' -o -name '*.rpm' \) | head -1)"
+    if [[ -n "$artifact" ]]; then echo "[matrix] artifact: $artifact"; fi
 
     # Boot test (uses the image, so must run BEFORE we rmi it).
     if [[ "${MACEMU_SKIP_BOOT:-0}" = "1" ]]; then
@@ -169,29 +150,6 @@ for target in $TARGETS; do
         docker rmi "$image" >/dev/null 2>&1 || true
     fi
 done
-
-# --- Optional: squashfs export of the dev image --------------------------
-if [[ "${MACEMU_EXPORT_DEV_SQUASHFS:-0}" = "1" ]]; then
-    echo
-    echo "[matrix] exporting mac-phoenix:dev as squashfs..."
-    if ! command -v mksquashfs >/dev/null; then
-        echo "[matrix] WARNING: mksquashfs not installed (sudo apt install squashfs-tools); skipping squashfs export"
-    elif ! docker image inspect mac-phoenix:dev >/dev/null 2>&1; then
-        echo "[matrix] WARNING: mac-phoenix:dev image not found — build it first:"
-        echo "             docker build -f packaging/Dockerfile.dev -t mac-phoenix:dev ."
-    else
-        sqfs="$ROOT/dist/mac-phoenix-dev.squashfs"
-        rootfs_dir="$(mktemp -d)"
-        trap 'rm -rf "$rootfs_dir"' RETURN
-        cid="$(docker create mac-phoenix:dev)"
-        docker export "$cid" | tar -x -C "$rootfs_dir"
-        docker rm "$cid" >/dev/null
-        rm -f "$sqfs"
-        mksquashfs "$rootfs_dir" "$sqfs" -comp zstd -all-root >/dev/null
-        rm -rf "$rootfs_dir"
-        echo "[matrix] squashfs: $sqfs ($(du -sh "$sqfs" | cut -f1))"
-    fi
-fi
 
 # --- Results -------------------------------------------------------------
 echo

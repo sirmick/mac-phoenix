@@ -89,8 +89,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------- optional: pre-build Retro68 toolchain ------------------------
-# Skips by default — building Retro68 is slow (~30min) and most contributors
-# don't touch BridgeAgent. Pass `--build-arg BUILD_RETRO68=1` to turn it on.
+# Skips by default — building Retro68 from scratch is slow (~30min) and
+# most contributors don't touch BridgeAgent. Pass `--build-arg BUILD_RETRO68=1`
+# to enable the in-image build.
+#
+# Faster alternative for those iterating on BridgeAgent: build
+# mac-phoenix:retro68 once via packaging/Dockerfile.retro68 (or just run
+# packaging/run_matrix.sh — it does that automatically), then add this
+# Dockerfile.dev to your dev workflow alongside it. Bind-mounting the host
+# source tree means CMake also picks up host's toolchain/retro68/ if you've
+# already built one there.
 RUN if [ "$BUILD_RETRO68" = "1" ]; then \
         cd /opt && \
         git clone --recursive https://github.com/autc04/Retro68.git Retro68-src && \
@@ -99,7 +107,7 @@ RUN if [ "$BUILD_RETRO68" = "1" ]; then \
         ../Retro68-src/build-toolchain.bash --no-carbon && \
         ln -s /opt/Retro68-build/toolchain /opt/retro68 && \
         rm -rf /opt/Retro68-build/build && \
-        echo "Retro68 installed at /opt/retro68"; \
+        echo "Retro68 installed at /opt/retro68 (built from source)"; \
     else \
         echo "BUILD_RETRO68=0; committed BridgeAgent.bin will be used. Re-run with --build-arg BUILD_RETRO68=1 to enable rebuild from source."; \
     fi

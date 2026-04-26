@@ -604,6 +604,86 @@ server {
 
 See [CLAUDE.md](CLAUDE.md) for the full developer reference.
 
+## Distribution packages
+
+`packaging/` builds native `.deb` (Ubuntu 22.04, 24.04, Debian 12) and
+`.rpm` (Fedora 40) artifacts inside Docker so the build environment is
+reproducible and free of host-specific gunk. Each package bundles the Rust
+`net-bridge` and the committed `BridgeAgent.bin` (rebuilt out-of-band when
+needed — see below).
+
+```bash
+packaging/run_matrix.sh                                   # all four, with boot test
+MACEMU_SKIP_BOOT=1 packaging/run_matrix.sh                # all four, no boot test (~5 min)
+MACEMU_TARGETS=ubuntu-24.04 packaging/run_matrix.sh       # one distro
+```
+
+Output:
+
+```
+dist/packages/
+  ├── ubuntu-22.04/mac-phoenix_2.0.0_amd64.deb
+  ├── ubuntu-24.04/mac-phoenix_2.0.0_amd64.deb
+  ├── debian-12/mac-phoenix_2.0.0_amd64.deb
+  └── fedora-40/mac-phoenix-2.0.0-1.fc40.x86_64.rpm
+```
+
+Attach those to a GitHub release and users install with the usual
+`apt install ./mac-phoenix_*.deb` or `dnf install ./mac-phoenix-*.rpm`.
+
+### Rebuilding BridgeAgent
+
+`tests/guest/bridge/BridgeAgent.bin` is committed to the repo and shipped
+unchanged in every package. It only needs rebuilding when
+`bridge_agent.c`/`bridge_agent.r` change.
+
+CMake's `BUILD_BRIDGE_AGENT` target needs:
+
+1. **A Retro68 m68k cross-toolchain** — either `provisioning/build_retro68.sh`
+   on the host (~30 min), or `docker build --build-arg BUILD_RETRO68=1 -f
+   packaging/Dockerfile.dev -t mac-phoenix:dev .` for an in-container build.
+2. **Apple's Universal Interfaces 3.4** at
+   `private/Universal Interfaces/Universal/Interfaces/`. Retro68's default
+   open-source Multiversal headers ship 38 of UI 3.4's 345 files and are
+   missing several `bridge_agent.c` uses (`Script.h`, `Aliases.h`,
+   `ShutDown.h`, `Scrap.h`, `Processes.r`). UI 3.4 isn't redistributable so
+   `private/` is gitignored.
+
+When both are present, `cmake -B build -DBUILD_BRIDGE_AGENT=ON` configures
+the rebuild and the build target overwrites
+`tests/guest/bridge/BridgeAgent.bin`. Commit the new `.bin` and the next
+release picks it up.
+
+```bash
+# Inside the dev container (with `private/` mounted via the source tree):
+docker run --rm -v "$PWD":/src -w /src mac-phoenix:dev sh -c '
+    cmake -B build -DBUILD_BRIDGE_AGENT=ON
+    cmake --build build --target bridge-agent
+'
+git add tests/guest/bridge/BridgeAgent.bin && git commit
+```
+
+### Dev environment image
+
+`packaging/Dockerfile.dev` is a self-contained Ubuntu 24.04 build env —
+all emulator deps, current rust via rustup, optional Retro68. Useful for
+contributors who don't want to install build deps on their host:
+
+```bash
+docker build -f packaging/Dockerfile.dev -t mac-phoenix:dev .
+docker run --rm -it -v "$PWD":/src -v ~/storage:/storage:ro \
+    -p 11000:11000 mac-phoenix:dev
+# inside:
+cd /src && cmake -B build && cmake --build build -j$(nproc)
+```
+
+### macOS — Homebrew tap
+
+`packaging/homebrew/` has a Formula draft. See
+[`packaging/homebrew/README.md`](packaging/homebrew/README.md) for how
+to test it locally on macOS, audit it with `brew audit`, and run it on
+`macos-latest` via GitHub Actions.
+
 ## Heritage
 
 MacPhoenix descends from the BasiliskII/SheepShaver emulator family originally created by Christian Bauer. The original source is preserved in [`legacy/`](legacy/) for reference.

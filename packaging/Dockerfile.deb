@@ -5,9 +5,10 @@
 # Build context (set up by run_matrix.sh):
 #   ./mac-phoenix_<ver>.tar.xz
 #
-# Pre-requisite image: mac-phoenix:retro68 (built by Dockerfile.retro68);
-# we COPY --from it to get the m68k cross-compiler so the BridgeAgent is
-# rebuilt from C source rather than shipping the committed .bin.
+# BridgeAgent.bin is shipped as a committed artifact in tests/guest/bridge/;
+# package builds set BUILD_BRIDGE_AGENT=OFF so they don't need Retro68.
+# Maintainers rebuild it via packaging/Dockerfile.dev when bridge_agent.c
+# changes (see README "Building guest components").
 #
 # Usage:
 #   docker build -f packaging/Dockerfile.deb \
@@ -20,10 +21,6 @@ ARG BASE=ubuntu:24.04
 # ---------- build stage ---------------------------------------------------
 FROM ${BASE} AS build
 ARG DEBIAN_FRONTEND=noninteractive
-
-# Pull in the prebuilt Retro68 toolchain (one-time ~30min image build).
-COPY --from=mac-phoenix:retro68 /opt/retro68 /opt/retro68
-ENV PATH=/opt/retro68/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
