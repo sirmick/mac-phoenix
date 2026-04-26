@@ -612,23 +612,53 @@ reproducible and free of host-specific gunk. Each package bundles the Rust
 `net-bridge` and the committed `BridgeAgent.bin` (rebuilt out-of-band when
 needed — see below).
 
+### Prerequisites
+
+Docker, with your user in the docker group:
+
+```bash
+sudo apt install -y docker.io && sudo usermod -aG docker $USER && newgrp docker
+```
+
+(For boot testing — optional — also have a Mac ROM and a disk image
+on the host. Defaults: `~/quadra.rom`, `~/storage/images/macos-7.5.5.img`.
+Without these the matrix builds packages but skips the boot test.)
+
+### Build the matrix
+
 ```bash
 packaging/run_matrix.sh                                   # all four, with boot test
 MACEMU_SKIP_BOOT=1 packaging/run_matrix.sh                # all four, no boot test (~5 min)
 MACEMU_TARGETS=ubuntu-24.04 packaging/run_matrix.sh       # one distro
 ```
 
-Output:
+Available env vars:
+
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `MACEMU_TARGETS`     | all four | space-separated subset: `ubuntu-22.04 ubuntu-24.04 debian-12 fedora-40` |
+| `MACEMU_ROM`         | `$HOME/quadra.rom` | Mac ROM bind-mounted into the container for the boot test |
+| `MACEMU_DISK`        | `$HOME/storage/images/macos-7.5.5.img` | disk image bind-mounted for the boot test |
+| `MACEMU_TIMEOUT`     | 60 | boot-test timeout in seconds |
+| `MACEMU_SKIP_BOOT`   | 0 | set to 1 to skip the boot test (artifact-only run) |
+| `MACEMU_KEEP_IMAGES` | 0 | set to 1 to retain `mac-phoenix-pkg:*` Docker images for debugging |
+
+### Output
 
 ```
-dist/packages/
-  ├── ubuntu-22.04/mac-phoenix_2.0.0_amd64.deb
-  ├── ubuntu-24.04/mac-phoenix_2.0.0_amd64.deb
-  ├── debian-12/mac-phoenix_2.0.0_amd64.deb
-  └── fedora-40/mac-phoenix-2.0.0-1.fc40.x86_64.rpm
+dist/
+  ├── mac-phoenix_2.0.0.tar.xz                              # source tarball (cargo-vendored)
+  └── packages/
+      ├── ubuntu-22.04/mac-phoenix_2.0.0_amd64.deb
+      ├── ubuntu-24.04/mac-phoenix_2.0.0_amd64.deb
+      ├── debian-12/mac-phoenix_2.0.0_amd64.deb
+      └── fedora-40/mac-phoenix-2.0.0-1.fc40.x86_64.rpm
 ```
 
-Attach those to a GitHub release and users install with the usual
+Per-target build logs land at `dist/<target>.log` (and `dist/<target>.boot.log`
+for the boot test) so you can diagnose failures without scrollback.
+
+Attach those to a GitHub release; users install with the usual
 `apt install ./mac-phoenix_*.deb` or `dnf install ./mac-phoenix-*.rpm`.
 
 ### Rebuilding BridgeAgent
