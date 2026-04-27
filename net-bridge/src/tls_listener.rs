@@ -218,14 +218,73 @@ impl Write for GuestIo {
     }
 }
 
-/// Build a modern TLS client context for the upstream hop. Validates
-/// against the system trust store via the openssl crate's default verify
-/// paths.
+/// Build a modern TLS client context for the upstream hop.
+///
+/// Trust store: our vendored OpenSSL 1.0.2u was built with --openssldir
+/// pointing at vendor/openssl-102-legacy/ssl/, which ships no CA bundle.
+/// `set_default_verify_paths` would point there and find nothing → every
+/// real-world cert verification fails. Point at the OS trust store
+/// instead. Falls through a few common paths so we work on Debian/Ubuntu
+/// (/etc/ssl/certs/ca-certificates.crt), Fedora/RHEL (/etc/pki/tls/certs/
+/// ca-bundle.crt), and a couple other distros.
 pub fn build_upstream_ctx() -> Result<SslContext, Error> {
     let mut b = SslContextBuilder::new(SslMethod::tls_client())?;
-    b.set_default_verify_paths()?;
+    let ca_file = system_ca_bundle_path();
+    if let Some(path) = &ca_file {
+        b.set_ca_file(path)?;
+        log::debug!("upstream CTX: trusting system CAs from {}", path);
+    } else {
+        // Fall back to OpenSSL's compile-time default (empty for vendored).
+        b.set_default_verify_paths()?;
+        log::warn!(
+            "upstream CTX: no system CA bundle found at any known path; \
+             upstream cert verification will likely fail"
+        );
+    }
     b.set_verify(SslVerifyMode::PEER);
     Ok(b.build())
+}
+
+/// Find a usable system-wide PEM-format CA bundle.
+fn system_ca_bundle_path() -> Option<String> {
+    // Allow override via env for unusual distros / containers.
+    if let Ok(p) = std::env::var("SSL_CERT_FILE") {
+        if std::path::Path::new(&p).exists() {
+            return Some(p);
+        }
+    }
+    for candidate in &[
+        "/etc/ssl/certs/ca-certificates.crt",       // Debian, Ubuntu, Alpine
+        "/etc/pki/tls/certs/ca-bundle.crt",          // Fedora, RHEL, CentOS
+        "/etc/ssl/ca-bundle.pem",                    // OpenSUSE
+        "/etc/pki/tls/cacert.pem",                   // OpenELEC
+        "/etc/ssl/cert.pem",                         // macOS, Alpine
+    ] {
+        if std::path::Path::new(candidate).exists() {
+            return Some((*candidate).to_string());
+        }
+    }
+    None
+}
+
+/// Upstream slot — handles deferred construction for SNI-less downstream
+/// connections (NN3, iCab old, anything that sends a v2-format hello). When
+/// the guest didn't give us an SNI, we wait until the downstream handshake
+/// finishes and we can read the HTTP Host: header from the decrypted request,
+/// then build the upstream SslStream with the proper SNI. Cloudflare and
+/// other shared-IP HTTPS hosts reject SNI-less connections with alert 40,
+/// so this matters.
+enum UpstreamSlot {
+    /// SNI was known up-front (sniffed from a modern TLS hello, or an IP
+    /// literal where we expect default-cert behaviour). Stream is ready
+    /// to handshake immediately.
+    Ready(SslStream<TcpStream>),
+    /// SNI unknown. Hold the raw TCP + ctx; build the SslStream once we
+    /// extract Host: from plaintext.
+    Pending {
+        tcp: Option<TcpStream>, // Option so we can take() it on transition
+        ctx: SslContext,
+    },
 }
 
 /// Per-connection TLS MITM state: downstream (guest-facing, legacy) +
@@ -233,14 +292,18 @@ pub fn build_upstream_ctx() -> Result<SslContext, Error> {
 pub struct TlsBridge {
     downstream: SslStream<GuestIo>,
     downstream_done: bool,
-    upstream: SslStream<TcpStream>,
+    upstream: UpstreamSlot,
     upstream_done: bool,
     /// Plaintext waiting to be re-encrypted upstream once upstream handshake
-    /// completes.
+    /// completes. Also serves as the buffer we scan for Host: when upstream
+    /// is in Pending state.
     pending_to_upstream: Vec<u8>,
     /// Plaintext from upstream waiting to be re-encrypted downstream once
     /// downstream handshake completes.
     pending_to_downstream: Vec<u8>,
+    /// Original dst IP literal — used as a last-resort SNI/CN if the guest
+    /// never sends a Host: header (non-HTTP TLS, or after the timeout).
+    fallback_host: String,
 }
 
 #[derive(Debug, Default)]
@@ -273,25 +336,29 @@ impl TlsBridge {
         let mut ds_ssl = Ssl::new(&ds_ctx)?;
         ds_ssl.set_accept_state();
         let downstream = SslStream::new(ds_ssl, GuestIo::default())?;
+        upstream_tcp.set_nonblocking(true).ok();
 
-        let mut us_ssl = Ssl::new(&us_ctx)?;
-        us_ssl.set_connect_state();
-        // SSLv2/3 have no SNI; if the guest didn't give us one we fell
-        // back to the IP literal as `hostname`. Sending that as upstream
-        // SNI is wrong (the server keys on the hostname). Skip it for IP
-        // literals; the chain still validates.
-        if hostname.parse::<std::net::Ipv4Addr>().is_err() {
+        let upstream = if hostname.parse::<std::net::Ipv4Addr>().is_err() {
+            // SNI was sniffed from the guest hello. Build upstream now.
+            let mut us_ssl = Ssl::new(&us_ctx)?;
+            us_ssl.set_connect_state();
             us_ssl.set_hostname(hostname)?;
             us_ssl.param_mut().set_host(hostname)?;
+            UpstreamSlot::Ready(SslStream::new(us_ssl, upstream_tcp)?)
         } else {
+            // No SNI from guest. Defer upstream until we read Host: from
+            // the decrypted HTTP request. Common for NN3 / iCab-old / any
+            // browser sending an SSLv2-format hello.
             log::debug!(
-                "TlsBridge: no SNI from guest for {}; upstream handshake \
-                 will skip hostname verification (chain still validated)",
+                "TlsBridge: no SNI from guest for {}; deferring upstream \
+                 connect until Host: header arrives",
                 hostname
             );
-        }
-        upstream_tcp.set_nonblocking(true).ok();
-        let upstream = SslStream::new(us_ssl, upstream_tcp)?;
+            UpstreamSlot::Pending {
+                tcp: Some(upstream_tcp),
+                ctx: us_ctx,
+            }
+        };
 
         Ok(Self {
             downstream,
@@ -300,7 +367,38 @@ impl TlsBridge {
             upstream_done: false,
             pending_to_upstream: Vec::new(),
             pending_to_downstream: Vec::new(),
+            fallback_host: hostname.to_string(),
         })
+    }
+
+    /// Promote a Pending upstream to Ready. Called once we've seen the
+    /// HTTP Host: header in the decrypted plaintext (or after a small
+    /// threshold elapsed without one — non-HTTP traffic).
+    fn realize_upstream(&mut self, sni_host: &str) -> Result<(), Error> {
+        let (tcp, ctx) = match &mut self.upstream {
+            UpstreamSlot::Pending { tcp, ctx } => {
+                let t = tcp.take().expect("pending tcp already taken");
+                (t, ctx.clone())
+            }
+            UpstreamSlot::Ready(_) => return Ok(()), // already promoted
+        };
+        let mut us_ssl = Ssl::new(&ctx)?;
+        us_ssl.set_connect_state();
+        // Only set SNI if it's a hostname, not an IP literal — Cloudflare
+        // accepts SNI=hostname; SNI=ip-literal returns alert 40 anyway.
+        if sni_host.parse::<std::net::Ipv4Addr>().is_err() && !sni_host.is_empty() {
+            us_ssl.set_hostname(sni_host)?;
+            us_ssl.param_mut().set_host(sni_host)?;
+            log::info!("TlsBridge: upstream SNI promoted to '{}'", sni_host);
+        } else {
+            log::warn!(
+                "TlsBridge: no usable Host:; upstream connect without SNI \
+                 (server may reject)"
+            );
+        }
+        let stream = SslStream::new(us_ssl, tcp)?;
+        self.upstream = UpstreamSlot::Ready(stream);
+        Ok(())
     }
 
     pub fn feed_from_guest(&mut self, bytes: &[u8]) {
@@ -316,7 +414,8 @@ impl TlsBridge {
     pub fn drive(&mut self) -> Result<BridgeTick, Error> {
         let mut tick = BridgeTick::default();
 
-        // 1. Advance handshakes where possible.
+        // 1a. Always advance the downstream handshake first — it's the side
+        // we control and it doesn't depend on upstream state.
         if !self.downstream_done {
             match self.downstream.do_handshake() {
                 Ok(()) => {
@@ -333,24 +432,10 @@ impl TlsBridge {
                 },
             }
         }
-        if !self.upstream_done {
-            match self.upstream.do_handshake() {
-                Ok(()) => {
-                    self.upstream_done = true;
-                    log::info!(
-                        "TlsBridge upstream handshake complete: cipher={:?} version={:?}",
-                        self.upstream.ssl().current_cipher().map(|c| c.name()),
-                        self.upstream.ssl().version_str(),
-                    );
-                }
-                Err(e) => match e.code() {
-                    ErrorCode::WANT_READ | ErrorCode::WANT_WRITE => {}
-                    _ => return Err(handshake_err("upstream", e)),
-                },
-            }
-        }
 
-        // 2. Read plaintext from downstream → queue for upstream.
+        // 1b. Read plaintext from downstream → queue for upstream. We do
+        // this BEFORE the upstream handshake when upstream is Pending, so
+        // we accumulate enough bytes to find the Host: header.
         if self.downstream_done {
             let mut buf = [0u8; 4096];
             loop {
@@ -377,49 +462,88 @@ impl TlsBridge {
             }
         }
 
-        // 3. Flush pending plaintext upstream.
-        if self.upstream_done && !self.pending_to_upstream.is_empty() {
-            let payload = std::mem::take(&mut self.pending_to_upstream);
-            match self.upstream.ssl_write(&payload) {
-                Ok(n) if n == payload.len() => {}
-                Ok(n) => self.pending_to_upstream = payload[n..].to_vec(),
-                Err(ref e) if e.code() == ErrorCode::WANT_READ
-                    || e.code() == ErrorCode::WANT_WRITE =>
-                {
-                    self.pending_to_upstream = payload;
-                }
-                Err(e) => return Err(handshake_err("upstream write", e)),
+        // 1c. If upstream is Pending, try to extract Host: header now and
+        // promote to Ready. Promote unconditionally once we've seen the
+        // end of the HTTP request headers, OR after 4096 bytes (assume
+        // non-HTTP and use fallback host).
+        if matches!(self.upstream, UpstreamSlot::Pending { .. }) && self.downstream_done {
+            let host = extract_http_host(&self.pending_to_upstream);
+            let promote = host.is_some()
+                || self.pending_to_upstream.windows(4).any(|w| w == b"\r\n\r\n")
+                || self.pending_to_upstream.len() >= 4096;
+            if promote {
+                let sni = host.unwrap_or_else(|| self.fallback_host.clone());
+                self.realize_upstream(&sni)?;
             }
         }
 
-        // 4. Read plaintext from upstream → queue for downstream.
-        if self.upstream_done {
-            let mut buf = [0u8; 4096];
-            loop {
-                match self.upstream.ssl_read(&mut buf) {
-                    Ok(0) => {
-                        tick.upstream_eof = true;
-                        break;
+        // 1d. Advance upstream handshake (only if Ready).
+        if !self.upstream_done {
+            if let UpstreamSlot::Ready(stream) = &mut self.upstream {
+                match stream.do_handshake() {
+                    Ok(()) => {
+                        self.upstream_done = true;
+                        log::info!(
+                            "TlsBridge upstream handshake complete: cipher={:?} version={:?}",
+                            stream.ssl().current_cipher().map(|c| c.name()),
+                            stream.ssl().version_str(),
+                        );
                     }
-                    Ok(n) => self.pending_to_downstream.extend_from_slice(&buf[..n]),
+                    Err(e) => match e.code() {
+                        ErrorCode::WANT_READ | ErrorCode::WANT_WRITE => {}
+                        _ => return Err(handshake_err("upstream", e)),
+                    },
+                }
+            }
+        }
+
+        // 2. Flush pending plaintext upstream.
+        if self.upstream_done && !self.pending_to_upstream.is_empty() {
+            let payload = std::mem::take(&mut self.pending_to_upstream);
+            if let UpstreamSlot::Ready(stream) = &mut self.upstream {
+                match stream.ssl_write(&payload) {
+                    Ok(n) if n == payload.len() => {}
+                    Ok(n) => self.pending_to_upstream = payload[n..].to_vec(),
                     Err(ref e) if e.code() == ErrorCode::WANT_READ
                         || e.code() == ErrorCode::WANT_WRITE =>
                     {
-                        break
+                        self.pending_to_upstream = payload;
                     }
-                    Err(e)
-                        if e.code() == ErrorCode::ZERO_RETURN
-                            || is_unexpected_eof(&e) =>
-                    {
-                        tick.upstream_eof = true;
-                        break;
-                    }
-                    Err(e) => return Err(handshake_err("upstream read", e)),
+                    Err(e) => return Err(handshake_err("upstream write", e)),
                 }
             }
         }
 
-        // 5. Flush plaintext to downstream.
+        // 3. Read plaintext from upstream → queue for downstream.
+        if self.upstream_done {
+            if let UpstreamSlot::Ready(stream) = &mut self.upstream {
+                let mut buf = [0u8; 4096];
+                loop {
+                    match stream.ssl_read(&mut buf) {
+                        Ok(0) => {
+                            tick.upstream_eof = true;
+                            break;
+                        }
+                        Ok(n) => self.pending_to_downstream.extend_from_slice(&buf[..n]),
+                        Err(ref e) if e.code() == ErrorCode::WANT_READ
+                            || e.code() == ErrorCode::WANT_WRITE =>
+                        {
+                            break
+                        }
+                        Err(e)
+                            if e.code() == ErrorCode::ZERO_RETURN
+                                || is_unexpected_eof(&e) =>
+                        {
+                            tick.upstream_eof = true;
+                            break;
+                        }
+                        Err(e) => return Err(handshake_err("upstream read", e)),
+                    }
+                }
+            }
+        }
+
+        // 4. Flush plaintext to downstream.
         if self.downstream_done && !self.pending_to_downstream.is_empty() {
             let payload = std::mem::take(&mut self.pending_to_downstream);
             match self.downstream.ssl_write(&payload) {
@@ -434,11 +558,34 @@ impl TlsBridge {
             }
         }
 
-        // 6. Drain ciphertext queued for the guest.
+        // 5. Drain ciphertext queued for the guest.
         tick.bytes_to_guest = self.downstream.get_mut().take_to_guest();
         tick.handshake_done = self.downstream_done && self.upstream_done;
         Ok(tick)
     }
+}
+
+/// Find the HTTP `Host: <name>` header in a buffer of decrypted plaintext.
+/// Strips port if present (`example.com:443` → `example.com`). Returns
+/// None if headers aren't complete yet OR if no Host: line is present.
+fn extract_http_host(buf: &[u8]) -> Option<String> {
+    let s = std::str::from_utf8(buf).ok()?;
+    for line in s.split("\r\n") {
+        if line.is_empty() {
+            // End of headers reached without Host:.
+            return None;
+        }
+        let lower_prefix = line.get(..6).map(|p| p.eq_ignore_ascii_case("host: ")).unwrap_or(false);
+        if lower_prefix {
+            let host = line[6..].trim();
+            // Strip port suffix if present.
+            let host = host.split(':').next().unwrap_or(host);
+            if !host.is_empty() {
+                return Some(host.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Many classic-era peers tear down the TCP socket without sending a TLS
