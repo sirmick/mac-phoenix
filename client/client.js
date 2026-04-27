@@ -1084,6 +1084,7 @@ let keyboardConfig = {
     ctrl: 'command',      // PC Ctrl → ⌘     (matches PC shortcut habit)
     alt:  'option',       // PC Alt  → ⌥
     meta: 'control',      // PC Win  → ⌃     (otherwise unreachable)
+    fn:   'off',          // PC Fn   → off   (most browsers don't fire Fn anyway)
     release_on_blur: true,
 };
 let modifierOverride = {};
@@ -1098,6 +1099,10 @@ function rebuildModifierOverride() {
     apply('ctrl', ['ControlLeft', 'ControlRight']);
     apply('alt',  ['AltLeft', 'AltRight']);
     apply('meta', ['MetaLeft', 'MetaRight', 'OSLeft', 'OSRight']);
+    // Fn rarely fires from browser (most laptops handle it in firmware
+    // before the OS sees it), but the W3C code is defined and some
+    // keyboards emit it — wire it up so users can opt in.
+    apply('fn',   ['Fn', 'FnLock']);
 }
 
 // Re-render the held-mods chip so its labels reflect the live remap. Each
@@ -1111,6 +1116,7 @@ function renderHeldModsChip() {
         { pc: 'Ctrl', cfgKey: 'ctrl' },
         { pc: 'Alt',  cfgKey: 'alt'  },
         { pc: 'Win',  cfgKey: 'meta' },
+        { pc: 'Fn',   cfgKey: 'fn'   },
     ];
     for (const {pc, cfgKey} of pcMappings) {
         const target = keyboardConfig[cfgKey];
@@ -3649,6 +3655,7 @@ function configFromServerJson(cfg) {
             ctrl: cfg.keyboard?.ctrl ?? 'command',
             alt:  cfg.keyboard?.alt  ?? 'option',
             meta: cfg.keyboard?.meta ?? 'control',
+            fn:   cfg.keyboard?.fn   ?? 'off',
             release_on_blur: cfg.keyboard?.release_on_blur ?? true,
         },
     };
@@ -3709,6 +3716,7 @@ function buildConfigJson() {
             ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'command',
             alt:  document.getElementById('cfg-kb-alt')?.value  || 'option',
             meta: document.getElementById('cfg-kb-meta')?.value || 'control',
+            fn:   document.getElementById('cfg-kb-fn')?.value   || 'off',
             release_on_blur: document.getElementById('cfg-kb-release-on-blur')?.checked ?? true,
         },
     };
@@ -4285,10 +4293,12 @@ function updateConfigUI() {
     const kbCtrlEl    = document.getElementById('cfg-kb-ctrl');
     const kbAltEl     = document.getElementById('cfg-kb-alt');
     const kbMetaEl    = document.getElementById('cfg-kb-meta');
+    const kbFnEl      = document.getElementById('cfg-kb-fn');
     const kbBlurEl    = document.getElementById('cfg-kb-release-on-blur');
     if (kbCtrlEl) kbCtrlEl.value = kb.ctrl ?? 'command';
     if (kbAltEl)  kbAltEl.value  = kb.alt  ?? 'option';
     if (kbMetaEl) kbMetaEl.value = kb.meta ?? 'control';
+    if (kbFnEl)   kbFnEl.value   = kb.fn   ?? 'off';
     if (kbBlurEl) kbBlurEl.checked = kb.release_on_blur ?? true;
 
     // Update disk checkboxes
@@ -4333,6 +4343,7 @@ async function saveConfig() {
         ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'command',
         alt:  document.getElementById('cfg-kb-alt')?.value  || 'option',
         meta: document.getElementById('cfg-kb-meta')?.value || 'control',
+        fn:   document.getElementById('cfg-kb-fn')?.value   || 'off',
         release_on_blur: document.getElementById('cfg-kb-release-on-blur')?.checked ?? true,
     };
 

@@ -102,6 +102,7 @@ struct EmulatorConfig {
     std::string kb_ctrl = "command";   // PC Ctrl  → Mac Command (default; matches PC shortcut habit)
     std::string kb_alt  = "option";    // PC Alt   → Mac Option
     std::string kb_meta = "control";   // PC Win   → Mac Control (otherwise unreachable)
+    std::string kb_fn   = "off";       // PC Fn    → off by default (most browsers don't emit Fn)
     bool kb_release_on_blur = true;    // synth keyup for held keys when window loses focus
 
     // Web/Network

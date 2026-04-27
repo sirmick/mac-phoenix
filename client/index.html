@@ -444,6 +444,16 @@
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="cfg-kb-fn">Fn key</label>
+                        <select id="cfg-kb-fn">
+                            <option value="off">— disabled (default)</option>
+                            <option value="control">⌃ Control</option>
+                            <option value="command">⌘ Command</option>
+                            <option value="option">⌥ Option</option>
+                            <option value="shift">⇧ Shift</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-kb-release-on-blur" checked>
                             <label for="cfg-kb-release-on-blur">Release held keys when window loses focus</label>
@@ -451,6 +461,7 @@
                     </div>
                     <div class="kb-help" style="font-size:11px;color:#777;margin-top:6px">
                         Shift always sends Shift; Caps Lock always sends Caps Lock.
+                        Most laptops handle Fn in firmware before the browser sees it.
                     </div>
                 </div>
 

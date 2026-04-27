@@ -150,6 +150,7 @@ nlohmann::json EmulatorConfig::to_json() const {
         kb["ctrl"] = kb_ctrl;
         kb["alt"]  = kb_alt;
         kb["meta"] = kb_meta;
+        kb["fn"]   = kb_fn;
         kb["release_on_blur"] = kb_release_on_blur;
         j["keyboard"] = kb;
     }
@@ -260,6 +261,7 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         if (kb.contains("ctrl")) kb_ctrl = json_utils::get_string(kb, "ctrl");
         if (kb.contains("alt"))  kb_alt  = json_utils::get_string(kb, "alt");
         if (kb.contains("meta")) kb_meta = json_utils::get_string(kb, "meta");
+        if (kb.contains("fn"))   kb_fn   = json_utils::get_string(kb, "fn");
         if (kb.contains("release_on_blur"))
             kb_release_on_blur = json_utils::get_bool(kb, "release_on_blur");
     }
