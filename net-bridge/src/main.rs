@@ -11,6 +11,7 @@ mod ca_http_server;
 mod device;
 mod dhcp_server;
 mod echo_server;
+mod http_proxy;
 mod icmp_proxy;
 mod nat;
 mod sni;
@@ -30,6 +31,7 @@ use bulk_server::BulkServer;
 use ca_http_server::CaHttpServer;
 use device::SocketDevice;
 use echo_server::EchoServer;
+use http_proxy::HttpProxy;
 use icmp_proxy::IcmpNat;
 use tcp_proxy::TcpNat;
 use tls_mitm::{MitmConfig, MitmRuntime};
@@ -119,6 +121,12 @@ fn main() {
         log::info!("ca-http: serving CA at http://10.0.2.1/MitmCA.crt (PEM) and .cer (DER)");
         CaHttpServer::new(&mut sockets, pem, der)
     });
+    // HTTP-rewrite proxy on :8080 — vintage browsers configure this as
+    // their HTTP proxy; bridge fetches https:// upstream with modern TLS
+    // and serves http:// downstream after rewriting links in the body.
+    // Sidesteps the cert-trust gap (NN3/iCab can't import a custom CA).
+    let mut http_proxy = HttpProxy::new(&mut sockets);
+    log::info!("http-proxy: listening on http://10.0.2.1:8080 (configure as guest HTTP proxy)");
     let mut tcp_nat = TcpNat::new(mitm);
     let mut udp_nat = UdpNat::new();
     let mut icmp_nat = IcmpNat::new();
@@ -160,6 +168,7 @@ fn main() {
         if let Some(ref mut http) = ca_http {
             http.poll(&mut sockets);
         }
+        http_proxy.poll(&mut sockets);
 
         // Re-poll smoltcp so any outgoing echo frames get egressed this tick.
         let _ = iface.poll(timestamp, &mut device, &mut sockets);

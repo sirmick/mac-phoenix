@@ -27,3 +27,8 @@ libc = "0.2"
 # (NN3-international-Mac); newer openssl-sys hard-rejects it at build.
 openssl = "=0.10.66"
 openssl-sys = "=0.9.103"
+# ureq is a synchronous HTTP/HTTPS client — pure Rust core, native-tls
+# backend = uses our system OpenSSL for upstream TLS (modern, current
+# trust store). Used by http_proxy.rs to fetch HTTPS for vintage browsers.
+# Pin to 2.10 (MSRV 1.71) — stays inside our 1.75 floor.
+ureq = { version = "=2.10.1", default-features = false, features = ["tls", "gzip"] }
