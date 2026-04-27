@@ -24,18 +24,35 @@ header {
     border-bottom: 1px solid #444;
     flex-shrink: 0;
     font-size: 0.8em;
-    transition: background-color 0.6s ease;
 }
 
-/* Phase tints: dark, low-saturation washes over the #2d2d2d baseline — meant to read
- * as a subtle hue hint on a dark header, not a saturated status bar. */
-header.phase-off       { background: #2d2d2d; }
-header.phase-red       { background: #3a2828; }
-header.phase-orange    { background: #3a302a; }
-header.phase-yellow    { background: #38362a; }
-header.phase-finder    { background: #2e3628; }
-/* Desktop tone — slight warm-green hint, off the blue axis so it doesn't clash with the blue Motorola wordmark. */
-header.phase-desktop   { background: #2a362e; }
+/* Boot-phase chip — colorized through boot stages. The header itself
+ * stays the static #2d2d2d baseline (no longer tinted) so the phase
+ * cue is contained to a small pill next to the title. Colors are more
+ * saturated than the previous header washes since the chip is small
+ * and needs visible hue contrast. */
+.boot-phase {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 12px;
+    padding: 3px 9px 4px 9px;
+    border-radius: 10px;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: #ddd;
+    background: #3a3a3a;
+    transition: background-color 0.6s ease, color 0.6s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+.boot-phase.phase-off       { background: #3a3a3a; color: #888; }
+.boot-phase.phase-red       { background: #7a2020; color: #fff; }
+.boot-phase.phase-orange    { background: #8a4a14; color: #fff; }
+.boot-phase.phase-yellow    { background: #8a7a14; color: #fff; }
+.boot-phase.phase-finder    { background: #4a6a20; color: #fff; }
+.boot-phase.phase-desktop   { background: #2f7a4a; color: #fff; }
 
 .logo {
     display: flex;
@@ -43,20 +60,32 @@ header.phase-desktop   { background: #2a362e; }
     gap: 8px;
 }
 
-/* Held-modifier indicator. Each glyph stays dim and only lights up when
- * the corresponding Mac modifier is currently down (per _heldKeys in
- * client.js). The chip itself is always present so the layout doesn't
- * shift when keys come and go. */
+/* Held-modifier indicator. Each segment shows the mapping from the
+ * user's PC modifier to the Mac modifier the guest sees (e.g. "Ctrl→⌘").
+ * Dim by default; brightens when its Mac modifier is currently down.
+ * Always rendered so layout doesn't shift as keys come and go. */
 .held-mods {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
     margin-left: 14px;
-    font-size: 14px;
+    font-size: 11px;
     line-height: 1;
+    font-weight: 500;
     user-select: none;
 }
-.held-mods .mod         { color: #555; transition: color 0.08s; }
+.held-mods .mod {
+    color: #555;
+    transition: color 0.08s;
+    white-space: nowrap;
+}
+/* The arrow glyph stays a touch dimmer than the labels even when lit,
+ * to keep the eye on the PC name and Mac symbol. */
+.held-mods .arrow { opacity: 0.55; margin: 0 1px; }
+/* Shift segment is just the symbol — bump font a hair so it visually
+ * matches the height of the wider "Ctrl→⌘" segments. */
+.held-mods .mod-shift { font-size: 13px; }
+
 .held-mods.has-shift   .mod-shift,
 .held-mods.has-control .mod-control,
 .held-mods.has-option  .mod-option,

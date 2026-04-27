@@ -18,18 +18,18 @@
             <img src="Apple.svg" alt="Apple" style="height: 1.6em; margin-right: 0.4em;">
             <img id="processor-logo" src="Motorola.svg" alt="Processor" style="height: 1.6em; margin-right: 0.4em;">
             <h1 id="emulator-title">Macintosh</h1>
+
+            <!-- Boot-phase chip — colorized through boot stages
+                 (pre-reset → ROM init → drivers → … → Finder → desktop).
+                 Replaces the old "tint the whole header" effect.  -->
+            <span id="boot-phase" class="boot-phase phase-off" title="Boot phase">offline</span>
         </div>
 
-        <!-- Held-modifier indicator: lights the Mac modifier (⇧⌃⌥⌘) the
-             guest currently sees as held, after the JS-side remap. Helps
-             spot stuck keys (alt-tab leaves a phantom ⌘ down, etc.) and
-             confirm Cmd-shortcut-from-PC-Ctrl is landing as expected. -->
-        <div id="held-mods" class="held-mods" title="Held Mac modifiers (after remap)">
-            <span class="mod mod-shift"   >⇧</span>
-            <span class="mod mod-control" >⌃</span>
-            <span class="mod mod-option"  >⌥</span>
-            <span class="mod mod-cmd"     >⌘</span>
-        </div>
+        <!-- Held-modifier indicator. Each segment shows "{PC key}→{Mac
+             symbol}", lit when its Mac modifier is currently down. The
+             content is rendered by renderHeldModsChip() so it always
+             reflects the live keyboard config from /api/config. -->
+        <div id="held-mods" class="held-mods" title="PC modifier → Mac modifier (lit when held)"></div>
 
         <div class="controls">
             <div class="codec-selector">
@@ -398,6 +398,59 @@
                             <input type="checkbox" id="cfg-mitm-tls">
                             <label for="cfg-mitm-tls">Enable MITM TLS proxy</label>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Keyboard remap. Three dropdowns map each PC modifier
+                     to a Mac modifier role; the held-mods chip in the
+                     header relabels itself live as you change these. -->
+                <div style="margin-top:12px"></div>
+                <div class="advanced-toggle" id="keyboard-toggle">
+                    <span class="arrow">&#9654;</span>
+                    <span>Keyboard</span>
+                </div>
+                <div class="advanced-content" id="keyboard-settings">
+                    <div class="kb-help" style="font-size:11px;color:#999;margin-bottom:8px">
+                        When you press a PC modifier, the Mac sees:
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-kb-ctrl">Ctrl key</label>
+                        <select id="cfg-kb-ctrl">
+                            <option value="command">⌘ Command</option>
+                            <option value="control">⌃ Control</option>
+                            <option value="option">⌥ Option</option>
+                            <option value="shift">⇧ Shift</option>
+                            <option value="off">— disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-kb-alt">Alt key</label>
+                        <select id="cfg-kb-alt">
+                            <option value="option">⌥ Option</option>
+                            <option value="command">⌘ Command</option>
+                            <option value="control">⌃ Control</option>
+                            <option value="shift">⇧ Shift</option>
+                            <option value="off">— disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-kb-meta">Win / ⌘ key</label>
+                        <select id="cfg-kb-meta">
+                            <option value="control">⌃ Control</option>
+                            <option value="command">⌘ Command</option>
+                            <option value="option">⌥ Option</option>
+                            <option value="shift">⇧ Shift</option>
+                            <option value="off">— disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-kb-release-on-blur" checked>
+                            <label for="cfg-kb-release-on-blur">Release held keys when window loses focus</label>
+                        </div>
+                    </div>
+                    <div class="kb-help" style="font-size:11px;color:#777;margin-top:6px">
+                        Shift always sends Shift; Caps Lock always sends Caps Lock.
                     </div>
                 </div>
 

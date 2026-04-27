@@ -1041,22 +1041,11 @@ const EVENT_CODE_TO_MAC = Object.freeze({
     // Whitespace & control
     Space: 0x31, Tab: 0x30, Enter: 0x24, Escape: 0x35,
     Backspace: 0x33, Delete: 0x75, CapsLock: 0x39,
-    // Modifiers — classic ADB doesn't split L/R.
-    //
-    // Default remap follows PC-shortcut habit: the Control key on a PC
-    // keyboard targets Mac Command (so Ctrl-C copies, Ctrl-Q quits, etc.),
-    // and the Win/⌘ key falls through to Mac Control. This means every
-    // Mac modifier is reachable from a PC keyboard and Cmd-* shortcuts
-    // work without retraining.
-    //   PC Ctrl  → 0x37 Mac Command     (legacy hardwired behavior)
-    //   PC Alt   → 0x3A Mac Option      (positional)
-    //   PC Win   → 0x36 Mac Control     (Control is otherwise unreachable)
-    //   PC Shift → 0x38 Mac Shift       (positional)
+    // Shift is the only modifier in this static table — it's never user-
+    // remapped (Mac Shift IS the only sensible target). Ctrl / Alt / Meta
+    // are owned by `modifierOverride` (built from keyboardConfig) so the
+    // user can change them in Settings → Keyboard at runtime.
     ShiftLeft: 0x38, ShiftRight: 0x38,
-    ControlLeft: 0x37, ControlRight: 0x37,
-    AltLeft: 0x3A,    AltRight: 0x3A,
-    MetaLeft: 0x36,   MetaRight: 0x36,
-    OSLeft: 0x36,     OSRight: 0x36,                  // legacy aliases
     // Editing & navigation
     Insert: 0x72,                                     // Mac Help
     Home: 0x73, End: 0x77, PageUp: 0x74, PageDown: 0x79,
@@ -1078,6 +1067,74 @@ const EVENT_CODE_TO_MAC = Object.freeze({
     Numpad8: 0x5B, Numpad9: 0x5C,
 });
 
+// User-remappable modifier overrides. Keys are KeyboardEvent.code values
+// for Ctrl/Alt/Meta L+R; values are classic Mac ADB scancodes. Built from
+// `keyboardConfig` whenever it changes (initial defaults + /api/config
+// load + Settings save). Always consulted before EVENT_CODE_TO_MAC so
+// the user's remap wins.
+const MAC_MOD_CODE = {
+    command: 0x37, control: 0x36, option: 0x3A, shift: 0x38,
+    off: null,            // produces no Mac event — browser keeps the key
+};
+const MAC_MOD_SYMBOL     = { command: '⌘', control: '⌃', option: '⌥', shift: '⇧' };
+const MAC_MOD_CHIP_CLASS = { command: 'mod-cmd', control: 'mod-control',
+                             option:  'mod-option', shift: 'mod-shift' };
+
+let keyboardConfig = {
+    ctrl: 'command',      // PC Ctrl → ⌘     (matches PC shortcut habit)
+    alt:  'option',       // PC Alt  → ⌥
+    meta: 'control',      // PC Win  → ⌃     (otherwise unreachable)
+    release_on_blur: true,
+};
+let modifierOverride = {};
+
+function rebuildModifierOverride() {
+    modifierOverride = {};
+    const apply = (cfgKey, codes) => {
+        const target = MAC_MOD_CODE[keyboardConfig[cfgKey]];
+        if (target == null) return;          // 'off' or unknown → leave unset
+        for (const c of codes) modifierOverride[c] = target;
+    };
+    apply('ctrl', ['ControlLeft', 'ControlRight']);
+    apply('alt',  ['AltLeft', 'AltRight']);
+    apply('meta', ['MetaLeft', 'MetaRight', 'OSLeft', 'OSRight']);
+}
+
+// Re-render the held-mods chip so its labels reflect the live remap. Each
+// segment shows "{PC name}→{Mac symbol}"; segments lit (.has-* on parent)
+// when their Mac modifier scancode is in _heldKeys.
+function renderHeldModsChip() {
+    const chip = document.getElementById('held-mods');
+    if (!chip) return;
+    const segments = ['<span class="mod mod-shift" title="Shift = ⇧">⇧</span>'];
+    const pcMappings = [
+        { pc: 'Ctrl', cfgKey: 'ctrl' },
+        { pc: 'Alt',  cfgKey: 'alt'  },
+        { pc: 'Win',  cfgKey: 'meta' },
+    ];
+    for (const {pc, cfgKey} of pcMappings) {
+        const target = keyboardConfig[cfgKey];
+        const sym    = MAC_MOD_SYMBOL[target];
+        const cls    = MAC_MOD_CHIP_CLASS[target];
+        if (!sym || !cls) continue;          // 'off' / unknown → omit
+        segments.push(
+            `<span class="mod ${cls}" title="PC ${pc} → Mac ${target}">` +
+            `${pc}<span class="arrow">→</span>${sym}</span>`
+        );
+    }
+    chip.innerHTML = segments.join('');
+}
+
+function applyKeyboardConfig(cfg) {
+    if (cfg) keyboardConfig = { ...keyboardConfig, ...cfg };
+    rebuildModifierOverride();
+    renderHeldModsChip();
+}
+
+// Apply the bundled defaults at module load so a key pressed before any
+// /api/config fetch still gets a sensible mapping.
+rebuildModifierOverride();
+
 // Fallback for events where `event.code` is empty/missing — older Safari
 // IME path, on-screen keyboards, synthesized events. Keys are KeyboardEvent.key
 // values; values are Mac ADB scancodes. Limited to keys we can map without
@@ -1095,11 +1152,17 @@ const EVENT_KEY_TO_MAC = Object.freeze({
 });
 
 // Resolve a KeyboardEvent to a Mac ADB scancode (0x00–0x7F), or null if
-// we can't map it. Tries `event.code` (layout-independent) first, then
-// `event.key` as a last resort.
+// we can't map it. Order: user-configurable modifier override (Ctrl/Alt/
+// Meta) → static EVENT_CODE_TO_MAC table (everything else, plus Shift) →
+// EVENT_KEY_TO_MAC fallback for events with empty `code` (IME paths).
 function macKeycodeForEvent(e) {
-    if (e.code && Object.prototype.hasOwnProperty.call(EVENT_CODE_TO_MAC, e.code)) {
-        return EVENT_CODE_TO_MAC[e.code];
+    if (e.code) {
+        if (Object.prototype.hasOwnProperty.call(modifierOverride, e.code)) {
+            return modifierOverride[e.code];
+        }
+        if (Object.prototype.hasOwnProperty.call(EVENT_CODE_TO_MAC, e.code)) {
+            return EVENT_CODE_TO_MAC[e.code];
+        }
     }
     if (e.key && Object.prototype.hasOwnProperty.call(EVENT_KEY_TO_MAC, e.key)) {
         return EVENT_KEY_TO_MAC[e.key];
@@ -2337,9 +2400,14 @@ class BasiliskWebRTC {
             this._updateHeldModsChip();
             this.sendKey(mac, false, performance.now());
         };
-        this._blurHandler = () => this._releaseHeldKeys();
+        this._blurHandler = () => {
+            if (keyboardConfig.release_on_blur !== false) this._releaseHeldKeys();
+        };
         this._visibilityHandler = () => {
-            if (document.visibilityState === 'hidden') this._releaseHeldKeys();
+            if (document.visibilityState === 'hidden' &&
+                keyboardConfig.release_on_blur !== false) {
+                this._releaseHeldKeys();
+            }
         };
 
         document.addEventListener('keydown', this._keydownHandler);
@@ -3431,13 +3499,17 @@ const PHASE_COLOR_CLASS = {
 
 let _lastHeaderPhaseClass = null;
 function updateHeaderPhaseColor(phase) {
-    const header = document.querySelector('header');
-    if (!header) return;
+    // Boot progress is now shown by a small pill chip rather than tinting
+    // the whole header — header stays a static dark color, only the chip
+    // takes on the phase-* tint. The chip's text label is the phase name.
+    const chip = document.getElementById('boot-phase');
+    if (!chip) return;
     const cls = phase == null ? 'phase-off' : (PHASE_COLOR_CLASS[phase] || 'phase-off');
     if (cls === _lastHeaderPhaseClass) return;
     _lastHeaderPhaseClass = cls;
-    header.classList.remove('phase-off', 'phase-red', 'phase-orange', 'phase-yellow', 'phase-finder', 'phase-desktop');
-    header.classList.add(cls);
+    chip.classList.remove('phase-off', 'phase-red', 'phase-orange', 'phase-yellow', 'phase-finder', 'phase-desktop');
+    chip.classList.add(cls);
+    chip.textContent = phase || 'offline';
 }
 
 // Handle fullscreen changes
@@ -3570,7 +3642,15 @@ function configFromServerJson(cfg) {
         network_if: cfg.network_if || '',
         mitm_tls: cfg.mitm_tls ?? false,
         mitm_ports: cfg.mitm_ports || '',
-        mitm_ca_dir: cfg.mitm_ca_dir || ''
+        mitm_ca_dir: cfg.mitm_ca_dir || '',
+        // Keyboard remap (nested in JSON for grouping). Defaults match the
+        // PC-shortcut habit: Ctrl→⌘, Alt→⌥, Win→⌃.
+        keyboard: {
+            ctrl: cfg.keyboard?.ctrl ?? 'command',
+            alt:  cfg.keyboard?.alt  ?? 'option',
+            meta: cfg.keyboard?.meta ?? 'control',
+            release_on_blur: cfg.keyboard?.release_on_blur ?? true,
+        },
     };
 }
 
@@ -3624,7 +3704,13 @@ function buildConfigJson() {
         mitm_ports: currentConfig.mitm_ports || '',
         mitm_ca_dir: currentConfig.mitm_ca_dir || '',
         codec: document.getElementById('codec-select')?.value || 'png',
-        mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute'
+        mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
+        keyboard: {
+            ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'command',
+            alt:  document.getElementById('cfg-kb-alt')?.value  || 'option',
+            meta: document.getElementById('cfg-kb-meta')?.value || 'control',
+            release_on_blur: document.getElementById('cfg-kb-release-on-blur')?.checked ?? true,
+        },
     };
 }
 
@@ -3702,11 +3788,14 @@ function closeConfig() {
     }
 }
 
-function toggleAdvanced() {
-    const toggle = document.querySelector('.advanced-toggle');
-    const content = document.getElementById('advanced-settings');
-    if (toggle && content) {
-        toggle.classList.toggle('open');
+// Generic collapsible-section toggle. The click handler binds (toggleEl,
+// contentId) explicitly because there's now more than one ".advanced-toggle"
+// in the modal (Advanced + Keyboard) and a class selector would match the
+// wrong one.
+function toggleSection(toggleEl, contentId) {
+    const content = document.getElementById(contentId);
+    if (toggleEl && content) {
+        toggleEl.classList.toggle('open');
         content.classList.toggle('open');
     }
 }
@@ -4123,6 +4212,8 @@ async function loadCurrentConfig() {
         const cfg = await res.json();
         currentConfig = configFromServerJson(cfg);
         App.savedPresets = cfg.configs || {};
+        // Push keyboard remap into the live keystroke pipeline + chip render.
+        applyKeyboardConfig(currentConfig.keyboard);
     } catch (e) {
         logger.warn('Failed to load current config', { error: e.message });
     }
@@ -4189,6 +4280,17 @@ function updateConfigUI() {
     if (jit68kEl) jit68kEl.checked = currentConfig.jit68k ?? true;
     if (idlewaitEl) idlewaitEl.checked = currentConfig.idlewait ?? true;
 
+    // Keyboard remap dropdowns
+    const kb = currentConfig.keyboard || {};
+    const kbCtrlEl    = document.getElementById('cfg-kb-ctrl');
+    const kbAltEl     = document.getElementById('cfg-kb-alt');
+    const kbMetaEl    = document.getElementById('cfg-kb-meta');
+    const kbBlurEl    = document.getElementById('cfg-kb-release-on-blur');
+    if (kbCtrlEl) kbCtrlEl.value = kb.ctrl ?? 'command';
+    if (kbAltEl)  kbAltEl.value  = kb.alt  ?? 'option';
+    if (kbMetaEl) kbMetaEl.value = kb.meta ?? 'control';
+    if (kbBlurEl) kbBlurEl.checked = kb.release_on_blur ?? true;
+
     // Update disk checkboxes
     document.querySelectorAll('#disk-list input[type="checkbox"]').forEach(cb => {
         cb.checked = currentConfig.disks.includes(cb.value);
@@ -4227,6 +4329,17 @@ async function saveConfig() {
     currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? false;
     currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
     currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
+    currentConfig.keyboard = {
+        ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'command',
+        alt:  document.getElementById('cfg-kb-alt')?.value  || 'option',
+        meta: document.getElementById('cfg-kb-meta')?.value || 'control',
+        release_on_blur: document.getElementById('cfg-kb-release-on-blur')?.checked ?? true,
+    };
+
+    // Apply the new keyboard remap immediately — no need to wait for the
+    // server round-trip; the chip relabels and the next keystroke uses
+    // the new mapping.
+    applyKeyboardConfig(currentConfig.keyboard);
 
     const jsonConfig = buildConfigJson();
 
@@ -4917,11 +5030,20 @@ function setupEventListeners() {
     if (cfgRom) cfgRom.addEventListener('change', onRomChange);
 
     const advancedToggle = document.getElementById('advanced-toggle');
-    if (advancedToggle) advancedToggle.addEventListener('click', toggleAdvanced);
+    if (advancedToggle) advancedToggle.addEventListener('click',
+        () => toggleSection(advancedToggle, 'advanced-settings'));
+
+    const keyboardToggle = document.getElementById('keyboard-toggle');
+    if (keyboardToggle) keyboardToggle.addEventListener('click',
+        () => toggleSection(keyboardToggle, 'keyboard-settings'));
 }
 
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', async () => {
+    // Paint the held-mods chip with bundled defaults right away so it's
+    // never blank — loadCurrentConfig() below will re-render with the
+    // server's persisted keyboard remap once that fetches.
+    renderHeldModsChip();
     await loadRomDatabase();  // Load ROM database from JSON
     await fetchConfig();  // Load debug config from server
     await loadCurrentConfig();  // Load emulator config from JSON

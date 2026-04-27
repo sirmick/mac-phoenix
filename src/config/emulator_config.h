@@ -94,6 +94,16 @@ struct EmulatorConfig {
     std::string codec = "vp9";
     std::string mousemode = "absolute";
 
+    // Keyboard remap. Drives the modifier mapping the JS client applies to
+    // KeyboardEvent.code → Mac scancode lookup. Server doesn't otherwise
+    // consult these — they're round-tripped to the client via /api/config.
+    // Values are canonical Mac modifier names: command, control, option,
+    // shift, off (= disabled, key produces no Mac event).
+    std::string kb_ctrl = "command";   // PC Ctrl  → Mac Command (default; matches PC shortcut habit)
+    std::string kb_alt  = "option";    // PC Alt   → Mac Option
+    std::string kb_meta = "control";   // PC Win   → Mac Control (otherwise unreachable)
+    bool kb_release_on_blur = true;    // synth keyup for held keys when window loses focus
+
     // Web/Network
     bool enable_webserver = true;
     bool headless_http = false;        // serve HTTP API in headless mode (no WebRTC/video/audio)

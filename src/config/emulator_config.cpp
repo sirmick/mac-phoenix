@@ -144,6 +144,16 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["codec"]     = codec;
     j["mousemode"] = mousemode;
 
+    // Keyboard remap (round-tripped to JS client)
+    {
+        nlohmann::json kb;
+        kb["ctrl"] = kb_ctrl;
+        kb["alt"]  = kb_alt;
+        kb["meta"] = kb_meta;
+        kb["release_on_blur"] = kb_release_on_blur;
+        j["keyboard"] = kb;
+    }
+
     // Web/server
     j["http_port"]   = http_port;
     j["client_dir"]  = client_dir;
@@ -243,6 +253,16 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     // ── Streaming ───────────────────────────────────────────────
     if (j.contains("codec"))     codec = json_utils::get_string(j, "codec");
     if (j.contains("mousemode")) mousemode = json_utils::get_string(j, "mousemode");
+
+    // ── Keyboard remap ──────────────────────────────────────────
+    if (j.contains("keyboard") && j["keyboard"].is_object()) {
+        const auto& kb = j["keyboard"];
+        if (kb.contains("ctrl")) kb_ctrl = json_utils::get_string(kb, "ctrl");
+        if (kb.contains("alt"))  kb_alt  = json_utils::get_string(kb, "alt");
+        if (kb.contains("meta")) kb_meta = json_utils::get_string(kb, "meta");
+        if (kb.contains("release_on_blur"))
+            kb_release_on_blur = json_utils::get_bool(kb, "release_on_blur");
+    }
 
     // ── Web/server ──────────────────────────────────────────────
     if (j.contains("http_port"))   http_port = json_utils::get_int(j, "http_port");
