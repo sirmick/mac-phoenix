@@ -18,6 +18,7 @@ mod tcp_proxy;
 mod tls_listener;
 mod tls_mitm;
 mod udp_proxy;
+mod wolfssl;
 
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
