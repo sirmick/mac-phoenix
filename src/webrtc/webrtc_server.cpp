@@ -10,7 +10,6 @@
 #include "../config/json_utils.h"
 #include "../webserver/http_server.h"
 #include "../webserver/websocket.h"
-#include "../webserver/keyboard_map.h"
 #include "../ipc/ipc_protocol.h"
 #include "../core/boot_progress.h"
 #include <rtc/rtc.hpp>
@@ -151,7 +150,11 @@ private:
  * Protocol: [type:uint8] [payload...]
  *   1 = mouse move relative: dx:int16LE, dy:int16LE, ts:float64LE (13 bytes)
  *   2 = mouse button: button:uint8, down:uint8, ts:float64LE (11 bytes)
- *   3 = key: keycode:uint16LE, down:uint8, ts:float64LE (12 bytes)
+ *   3 = key: mac_keycode:uint16LE, down:uint8, ts:float64LE (12 bytes)
+ *       — keycode is a Mac ADB virtual keycode (0x00–0x7F), pre-mapped by
+ *         the browser from KeyboardEvent.code (see EVENT_CODE_TO_MAC in
+ *         client.js). Only the low byte is meaningful; the upper byte is
+ *         reserved.
  *   5 = mouse move absolute: x:uint16LE, y:uint16LE, ts:float64LE (13 bytes)
  *   6 = mouse mode change: mode:uint8 (2 bytes, 0=absolute, 1=relative)
  */
@@ -186,13 +189,11 @@ static void process_input_message(const std::byte* data, size_t size) {
             }
             case 3: { // Key
                 if (size < 4) return;
-                uint16_t browser_keycode;
-                std::memcpy(&browser_keycode, data + 1, 2);
+                uint16_t wire;
+                std::memcpy(&wire, data + 1, 2);
+                uint8_t mac_keycode = wire & 0x7F;  // Mac ADB scancode range 0x00–0x7F
                 uint8_t down = static_cast<uint8_t>(data[3]);
-                int mac_keycode = keyboard_map::browser_to_mac_keycode(browser_keycode);
-                if (mac_keycode >= 0) {
-                    g_ipc_client->send_key(mac_keycode, down != 0);
-                }
+                g_ipc_client->send_key(mac_keycode, down != 0);
                 break;
             }
             case 5: { // Mouse move (absolute)
@@ -229,16 +230,14 @@ static void process_input_message(const std::byte* data, size_t size) {
         }
         case 3: { // Key
             if (size < 4) return;
-            uint16_t browser_keycode;
-            std::memcpy(&browser_keycode, data + 1, 2);
+            uint16_t wire;
+            std::memcpy(&wire, data + 1, 2);
+            uint8_t mac_keycode = wire & 0x7F;  // Mac ADB scancode range 0x00–0x7F
             uint8_t down = static_cast<uint8_t>(data[3]);
-            int mac_keycode = keyboard_map::browser_to_mac_keycode(browser_keycode);
-            if (mac_keycode >= 0) {
-                if (down)
-                    ADBKeyDown(mac_keycode);
-                else
-                    ADBKeyUp(mac_keycode);
-            }
+            if (down)
+                ADBKeyDown(mac_keycode);
+            else
+                ADBKeyUp(mac_keycode);
             break;
         }
         case 5: { // Mouse move (absolute)

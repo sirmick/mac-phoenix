@@ -6,7 +6,6 @@ webserver_sources = [
   'api_handlers.cpp',
   'static_files.cpp',
   'file_scanner.cpp',
-  'keyboard_map.cpp',
   'webserver_main.cpp',
 ]
 

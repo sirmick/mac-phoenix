@@ -19,7 +19,6 @@
 #include <unistd.h>
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
-#include "keyboard_map.h"
 
 // Clear all frame sessions on emulator stop/start (forces full frames on reconnect)
 static bool g_frame_sessions_dirty = false;
@@ -1197,31 +1196,30 @@ Response APIRouter::handle_keypress(const Request& req) {
     }
 
     if (j["key"].is_string()) {
+        // Small set of friendly names for shell/CI callers. The web client
+        // does its own KeyboardEvent.code → Mac mapping in JS and posts
+        // numeric Mac keycodes via the WS path, so this list only needs
+        // to cover the few keys tests poke (return/escape/arrows/etc.).
+        // Mac ADB scancodes — classic, not modern HIToolbox.
         std::string name = j["key"].get<std::string>();
-        if (name == "return" || name == "enter") keycode = 0x24;
-        else if (name == "escape" || name == "esc") keycode = 0x35;
-        else if (name == "space") keycode = 0x31;
-        else if (name == "tab") keycode = 0x30;
+        if      (name == "return" || name == "enter")     keycode = 0x24;
+        else if (name == "escape" || name == "esc")       keycode = 0x35;
+        else if (name == "space")                         keycode = 0x31;
+        else if (name == "tab")                           keycode = 0x30;
         else if (name == "delete" || name == "backspace") keycode = 0x33;
-        else if (name == "up") keycode = 0x3e;
-        else if (name == "down") keycode = 0x3d;
-        else if (name == "left") keycode = 0x3b;
-        else if (name == "right") keycode = 0x3c;
+        else if (name == "left")                          keycode = 0x3B;
+        else if (name == "right")                         keycode = 0x3C;
+        else if (name == "down")                          keycode = 0x3D;
+        else if (name == "up")                            keycode = 0x3E;
         else {
-            Response r2; r2.set_status(400); r2.set_body("{\"error\": \"unknown key name: " + name + "\"}"); r2.set_content_type("application/json"); return r2;
+            Response r2; r2.set_status(400);
+            r2.set_body("{\"error\": \"unknown key name: " + name + "\"}");
+            r2.set_content_type("application/json");
+            return r2;
         }
     } else if (j["key"].is_number()) {
-        int raw = j["key"].get<int>();
-        if (j.contains("down")) {
-            // Web client sends browser keycodes — convert to Mac ADB
-            keycode = keyboard_map::browser_to_mac_keycode(raw);
-            if (keycode < 0) {
-                return Response::json("{\"success\": false, \"error\": \"unmapped browser keycode\"}");
-            }
-        } else {
-            // Legacy API: caller provides Mac ADB keycodes directly
-            keycode = raw;
-        }
+        // Numeric `key` is a Mac ADB virtual keycode (0x00–0x7F).
+        keycode = j["key"].get<int>();
     } else {
         Response resp; resp.set_status(400);
         resp.set_body("{\"error\": \"'key' must be a string or number\"}");

@@ -1010,6 +1010,94 @@ function getCodecLabel(codecType) {
 }
 
 
+// W3C KeyboardEvent.code → classic Mac ADB virtual keycode.
+//
+// Classic Mac ADB scancodes (what BasiliskII / SheepShaver / our adb.cpp
+// expect) — NOT modern macOS HIToolbox kVK_* values. The big differences:
+//   - Arrow keys live at 0x3B–0x3E (not 0x7B–0x7E).
+//   - Modifiers don't split L/R: Control=0x36, Command=0x37, Shift=0x38,
+//     CapsLock=0x39, Option=0x3A. Both ControlLeft and ControlRight map
+//     to 0x36, etc.
+// We key off `event.code` (physical key position) so non-QWERTY layouts
+// — Dvorak, AZERTY, Colemak — produce the right Mac key. Keying off
+// `event.keyCode` (the previous behavior) was layout-dependent and got
+// every non-QWERTY user wrong characters.
+const EVENT_CODE_TO_MAC = Object.freeze({
+    // Letters
+    KeyA: 0x00, KeyB: 0x0B, KeyC: 0x08, KeyD: 0x02, KeyE: 0x0E,
+    KeyF: 0x03, KeyG: 0x05, KeyH: 0x04, KeyI: 0x22, KeyJ: 0x26,
+    KeyK: 0x28, KeyL: 0x25, KeyM: 0x2E, KeyN: 0x2D, KeyO: 0x1F,
+    KeyP: 0x23, KeyQ: 0x0C, KeyR: 0x0F, KeyS: 0x01, KeyT: 0x11,
+    KeyU: 0x20, KeyV: 0x09, KeyW: 0x0D, KeyX: 0x07, KeyY: 0x10,
+    KeyZ: 0x06,
+    // Digits
+    Digit0: 0x1D, Digit1: 0x12, Digit2: 0x13, Digit3: 0x14, Digit4: 0x15,
+    Digit5: 0x17, Digit6: 0x16, Digit7: 0x1A, Digit8: 0x1C, Digit9: 0x19,
+    // Punctuation
+    Backquote: 0x32, Minus: 0x1B, Equal: 0x18,
+    BracketLeft: 0x21, BracketRight: 0x1E, Backslash: 0x2A,
+    Semicolon: 0x29, Quote: 0x27, Comma: 0x2B, Period: 0x2F, Slash: 0x2C,
+    IntlBackslash: 0x0A, IntlYen: 0x5D, IntlRo: 0x5E,
+    // Whitespace & control
+    Space: 0x31, Tab: 0x30, Enter: 0x24, Escape: 0x35,
+    Backspace: 0x33, Delete: 0x75, CapsLock: 0x39,
+    // Modifiers — both L/R map to the same code.
+    ShiftLeft: 0x38, ShiftRight: 0x38,
+    ControlLeft: 0x36, ControlRight: 0x36,
+    AltLeft: 0x3A, AltRight: 0x3A,
+    MetaLeft: 0x37, MetaRight: 0x37,
+    OSLeft: 0x37, OSRight: 0x37,                      // legacy aliases
+    // Editing & navigation
+    Insert: 0x72,                                     // Mac Help
+    Home: 0x73, End: 0x77, PageUp: 0x74, PageDown: 0x79,
+    ArrowLeft: 0x3B, ArrowRight: 0x3C,
+    ArrowDown: 0x3D, ArrowUp: 0x3E,
+    // Function row (full Apple Extended Keyboard II range)
+    F1: 0x7A, F2: 0x78, F3: 0x63, F4: 0x76, F5: 0x60,
+    F6: 0x61, F7: 0x62, F8: 0x64, F9: 0x65, F10: 0x6D,
+    F11: 0x67, F12: 0x6F, F13: 0x69, F14: 0x6B, F15: 0x71,
+    // PC keys positionally aligned with Mac F13/F14/F15
+    PrintScreen: 0x69, ScrollLock: 0x6B, Pause: 0x71,
+    // Numpad
+    NumLock: 0x47,                                    // Mac Clear
+    NumpadDivide: 0x4B, NumpadMultiply: 0x43,
+    NumpadSubtract: 0x4E, NumpadAdd: 0x45,
+    NumpadEnter: 0x4C, NumpadDecimal: 0x41, NumpadEqual: 0x51,
+    Numpad0: 0x52, Numpad1: 0x53, Numpad2: 0x54, Numpad3: 0x55,
+    Numpad4: 0x56, Numpad5: 0x57, Numpad6: 0x58, Numpad7: 0x59,
+    Numpad8: 0x5B, Numpad9: 0x5C,
+});
+
+// Fallback for events where `event.code` is empty/missing — older Safari
+// IME path, on-screen keyboards, synthesized events. Keys are KeyboardEvent.key
+// values; values are Mac ADB scancodes. Limited to keys we can map without
+// knowing the physical position.
+const EVENT_KEY_TO_MAC = Object.freeze({
+    Enter: 0x24, Tab: 0x30, ' ': 0x31, Escape: 0x35, Backspace: 0x33,
+    Delete: 0x75, CapsLock: 0x39,
+    Shift: 0x38, Control: 0x36, Alt: 0x3A, Meta: 0x37,
+    ArrowLeft: 0x3B, ArrowRight: 0x3C, ArrowDown: 0x3D, ArrowUp: 0x3E,
+    Home: 0x73, End: 0x77, PageUp: 0x74, PageDown: 0x79,
+    Insert: 0x72, Help: 0x72, Clear: 0x47,
+    F1: 0x7A, F2: 0x78, F3: 0x63, F4: 0x76, F5: 0x60, F6: 0x61, F7: 0x62,
+    F8: 0x64, F9: 0x65, F10: 0x6D, F11: 0x67, F12: 0x6F,
+    F13: 0x69, F14: 0x6B, F15: 0x71,
+});
+
+// Resolve a KeyboardEvent to a Mac ADB scancode (0x00–0x7F), or null if
+// we can't map it. Tries `event.code` (layout-independent) first, then
+// `event.key` as a last resort.
+function macKeycodeForEvent(e) {
+    if (e.code && Object.prototype.hasOwnProperty.call(EVENT_CODE_TO_MAC, e.code)) {
+        return EVENT_CODE_TO_MAC[e.code];
+    }
+    if (e.key && Object.prototype.hasOwnProperty.call(EVENT_KEY_TO_MAC, e.key)) {
+        return EVENT_KEY_TO_MAC[e.key];
+    }
+    return null;
+}
+
+
 // Main WebRTC Client
 class BasiliskWebRTC {
     constructor(videoElement, canvasElement = null) {
@@ -2203,26 +2291,49 @@ class BasiliskWebRTC {
 
         displayElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        // Keyboard - binary protocol for minimal latency
-        // Remove previous listeners to avoid duplicates on reconnect
+        // Keyboard — binary protocol for minimal latency. We translate
+        // KeyboardEvent.code → classic Mac ADB scancode in JS (see
+        // EVENT_CODE_TO_MAC at module scope) and send the Mac code
+        // straight over the wire; the server just injects.
+        //
+        // Held-key tracking: if a keyup is missed (window blur, alt-tab,
+        // browser swallowed it for a shortcut) the Mac key matrix would
+        // stay stuck. We track every down and synthesize keyups on
+        // blur / visibility change / disconnect.
         if (this._keydownHandler) document.removeEventListener('keydown', this._keydownHandler);
-        if (this._keyupHandler) document.removeEventListener('keyup', this._keyupHandler);
+        if (this._keyupHandler)   document.removeEventListener('keyup',   this._keyupHandler);
+        if (this._blurHandler)    window.removeEventListener('blur',      this._blurHandler);
+        if (this._visibilityHandler) document.removeEventListener('visibilitychange', this._visibilityHandler);
+
+        this._heldKeys = this._heldKeys || new Set();
 
         this._keydownHandler = (e) => {
             if (!this.connected) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            const mac = macKeycodeForEvent(e);
+            if (mac == null) return;  // unmapped — let the browser handle it
             e.preventDefault();
-            this.sendKey(e.keyCode, true, performance.now());
+            this._heldKeys.add(mac);
+            this.sendKey(mac, true, performance.now());
         };
         this._keyupHandler = (e) => {
             if (!this.connected) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            const mac = macKeycodeForEvent(e);
+            if (mac == null) return;
             e.preventDefault();
-            this.sendKey(e.keyCode, false, performance.now());
+            this._heldKeys.delete(mac);
+            this.sendKey(mac, false, performance.now());
+        };
+        this._blurHandler = () => this._releaseHeldKeys();
+        this._visibilityHandler = () => {
+            if (document.visibilityState === 'hidden') this._releaseHeldKeys();
         };
 
         document.addEventListener('keydown', this._keydownHandler);
-        document.addEventListener('keyup', this._keyupHandler);
+        document.addEventListener('keyup',   this._keyupHandler);
+        window.addEventListener('blur',      this._blurHandler);
+        document.addEventListener('visibilitychange', this._visibilityHandler);
 
         if (debugConfig.debug_connection) {
             logger.info('Input handlers registered, element:', displayElement.tagName, 'mouseMode:', this.mouseMode);
@@ -2303,6 +2414,18 @@ class BasiliskWebRTC {
                 body: JSON.stringify({ key: keycode, down })
             }).catch(() => {});
         }
+    }
+
+    // Synthesize keyup for every Mac key we currently believe is held,
+    // so the guest's ADB key matrix doesn't end up stuck after a missed
+    // keyup (window blur, alt-tab, browser intercepting a shortcut).
+    _releaseHeldKeys() {
+        if (!this._heldKeys || this._heldKeys.size === 0) return;
+        const ts = performance.now();
+        for (const code of this._heldKeys) {
+            this.sendKey(code, false, ts);
+        }
+        this._heldKeys.clear();
     }
 
     // Throttled HTTP POST for mouse moves (avoid flooding the server)
