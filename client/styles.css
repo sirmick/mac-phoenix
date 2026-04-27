@@ -43,6 +43,25 @@ header.phase-desktop   { background: #2a362e; }
     gap: 8px;
 }
 
+/* Held-modifier indicator. Each glyph stays dim and only lights up when
+ * the corresponding Mac modifier is currently down (per _heldKeys in
+ * client.js). The chip itself is always present so the layout doesn't
+ * shift when keys come and go. */
+.held-mods {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 14px;
+    font-size: 14px;
+    line-height: 1;
+    user-select: none;
+}
+.held-mods .mod         { color: #555; transition: color 0.08s; }
+.held-mods.has-shift   .mod-shift,
+.held-mods.has-control .mod-control,
+.held-mods.has-option  .mod-option,
+.held-mods.has-cmd     .mod-cmd     { color: #fff; }
+
 .logo h1 {
     font-size: 1em;
     font-weight: 500;

@@ -20,6 +20,17 @@
             <h1 id="emulator-title">Macintosh</h1>
         </div>
 
+        <!-- Held-modifier indicator: lights the Mac modifier (⇧⌃⌥⌘) the
+             guest currently sees as held, after the JS-side remap. Helps
+             spot stuck keys (alt-tab leaves a phantom ⌘ down, etc.) and
+             confirm Cmd-shortcut-from-PC-Ctrl is landing as expected. -->
+        <div id="held-mods" class="held-mods" title="Held Mac modifiers (after remap)">
+            <span class="mod mod-shift"   >⇧</span>
+            <span class="mod mod-control" >⌃</span>
+            <span class="mod mod-option"  >⌥</span>
+            <span class="mod mod-cmd"     >⌘</span>
+        </div>
+
         <div class="controls">
             <div class="codec-selector">
                 <label for="codec-select">Codec:</label>

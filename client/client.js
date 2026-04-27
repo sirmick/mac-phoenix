@@ -1041,12 +1041,22 @@ const EVENT_CODE_TO_MAC = Object.freeze({
     // Whitespace & control
     Space: 0x31, Tab: 0x30, Enter: 0x24, Escape: 0x35,
     Backspace: 0x33, Delete: 0x75, CapsLock: 0x39,
-    // Modifiers — both L/R map to the same code.
+    // Modifiers — classic ADB doesn't split L/R.
+    //
+    // Default remap follows PC-shortcut habit: the Control key on a PC
+    // keyboard targets Mac Command (so Ctrl-C copies, Ctrl-Q quits, etc.),
+    // and the Win/⌘ key falls through to Mac Control. This means every
+    // Mac modifier is reachable from a PC keyboard and Cmd-* shortcuts
+    // work without retraining.
+    //   PC Ctrl  → 0x37 Mac Command     (legacy hardwired behavior)
+    //   PC Alt   → 0x3A Mac Option      (positional)
+    //   PC Win   → 0x36 Mac Control     (Control is otherwise unreachable)
+    //   PC Shift → 0x38 Mac Shift       (positional)
     ShiftLeft: 0x38, ShiftRight: 0x38,
-    ControlLeft: 0x36, ControlRight: 0x36,
-    AltLeft: 0x3A, AltRight: 0x3A,
-    MetaLeft: 0x37, MetaRight: 0x37,
-    OSLeft: 0x37, OSRight: 0x37,                      // legacy aliases
+    ControlLeft: 0x37, ControlRight: 0x37,
+    AltLeft: 0x3A,    AltRight: 0x3A,
+    MetaLeft: 0x36,   MetaRight: 0x36,
+    OSLeft: 0x36,     OSRight: 0x36,                  // legacy aliases
     // Editing & navigation
     Insert: 0x72,                                     // Mac Help
     Home: 0x73, End: 0x77, PageUp: 0x74, PageDown: 0x79,
@@ -2314,6 +2324,7 @@ class BasiliskWebRTC {
             if (mac == null) return;  // unmapped — let the browser handle it
             e.preventDefault();
             this._heldKeys.add(mac);
+            this._updateHeldModsChip();
             this.sendKey(mac, true, performance.now());
         };
         this._keyupHandler = (e) => {
@@ -2323,6 +2334,7 @@ class BasiliskWebRTC {
             if (mac == null) return;
             e.preventDefault();
             this._heldKeys.delete(mac);
+            this._updateHeldModsChip();
             this.sendKey(mac, false, performance.now());
         };
         this._blurHandler = () => this._releaseHeldKeys();
@@ -2426,6 +2438,19 @@ class BasiliskWebRTC {
             this.sendKey(code, false, ts);
         }
         this._heldKeys.clear();
+        this._updateHeldModsChip();
+    }
+
+    // Reflect the held-Mac-modifier state into the header chip. Driven off
+    // _heldKeys (Mac scancodes), so what lights up is what the guest sees.
+    _updateHeldModsChip() {
+        const chip = document.getElementById('held-mods');
+        if (!chip) return;
+        const held = this._heldKeys || new Set();
+        chip.classList.toggle('has-shift',   held.has(0x38));
+        chip.classList.toggle('has-control', held.has(0x36));
+        chip.classList.toggle('has-option',  held.has(0x3A));
+        chip.classList.toggle('has-cmd',     held.has(0x37));
     }
 
     // Throttled HTTP POST for mouse moves (avoid flooding the server)
