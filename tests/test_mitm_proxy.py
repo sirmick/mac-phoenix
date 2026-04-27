@@ -3,7 +3,7 @@
 test_mitm_proxy.py — Phase-1 smoke test for net-bridge --mitm-tls.
 
 Spawns net-bridge with MITM enabled and verifies:
-  1. wolfSSL initialised at startup (version line visible in the log).
+  1. MITM TLS subsystem comes up at startup (loud log line visible).
   2. Root CA cert was generated, is a valid X.509 root, RSA-2048 with SHA1
      or SHA256 signature, has the BasicConstraints CA:TRUE flag.
   3. CA cert reload survives a process restart (file-backed, deterministic).
@@ -68,16 +68,16 @@ def wait_for_log(log_path: Path, needle: str, timeout_s: float = 5.0) -> bool:
 
 
 def test_provider_loads(tmpdir: Path) -> bool:
-    """Smoke: wolfSSL init message appears in startup log."""
+    """Smoke: MITM TLS init message appears in startup log."""
     sock = tmpdir / "bridge.sock"
     ca_dir = tmpdir / "ca"
     log = tmpdir / "bridge.log"
     proc = spawn_bridge(ca_dir, sock, log)
     try:
-        if not wait_for_log(log, "wolfSSL initialised"):
+        if not wait_for_log(log, "MITM TLS enabled"):
             tail = log.read_text(errors="replace")[-1000:] if log.exists() else "(no log)"
-            return fail(f"wolfSSL init message missing within 5s. Log tail:\n{tail}")
-        return ok("wolfSSL initialised at startup")
+            return fail(f"MITM init message missing within 5s. Log tail:\n{tail}")
+        return ok("MITM TLS subsystem initialised at startup")
     finally:
         proc.terminate()
         try:

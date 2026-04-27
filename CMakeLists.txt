@@ -211,7 +211,7 @@ if(BUILD_NET_BRIDGE)
   else()
     set(NET_BRIDGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/net-bridge")
     set(NET_BRIDGE_BIN "${NET_BRIDGE_DIR}/target/release/net-bridge")
-    set(NET_BRIDGE_WOLFSSL "${NET_BRIDGE_DIR}/vendor/wolfssl-legacy")
+    set(NET_BRIDGE_LEGACY_SSL "${NET_BRIDGE_DIR}/vendor/openssl-102-legacy")
 
     # Rust sources that should trigger a rebuild when they change.
     # (GLOB at configure time — re-run cmake after adding new .rs files.)
@@ -223,20 +223,21 @@ if(BUILD_NET_BRIDGE)
       "${NET_BRIDGE_DIR}/Cargo.lock"
     )
 
-    # net-bridge requires the vendored wolfSSL (built with --enable-sslv3
-    # --enable-arc4 --enable-rc2 --enable-des3) to talk to classic-Mac
-    # browsers. System wolfSSL packages are typically built without those
-    # features, so we don't fall back to one. Cert minting still uses the
-    # system openssl (modern algorithms only — no legacy cipher needs).
-    if(EXISTS "${NET_BRIDGE_WOLFSSL}/lib/libwolfssl.a")
+    # net-bridge needs OpenSSL 1.0.2u to talk to classic-Mac browsers.
+    # System OpenSSL is 3.x which truly removed SSLv2 and the export
+    # ciphers NN3-export-Mac sends; we vendor 1.0.2u (last release with
+    # them) via tools/build-openssl-102.sh. No system fallback because
+    # there's no system distribution of 1.0.2 anymore.
+    if(EXISTS "${NET_BRIDGE_LEGACY_SSL}/lib/libssl.a")
       set(NET_BRIDGE_ENV
-        "WOLFSSL_DIR=${NET_BRIDGE_WOLFSSL}"
+        "OPENSSL_DIR=${NET_BRIDGE_LEGACY_SSL}"
+        "OPENSSL_STATIC=1"
       )
-      message(STATUS "net-bridge: linking vendored wolfSSL at ${NET_BRIDGE_WOLFSSL}")
+      message(STATUS "net-bridge: linking vendored OpenSSL 1.0.2u at ${NET_BRIDGE_LEGACY_SSL}")
     else()
       set(NET_BRIDGE_ENV "")
-      message(STATUS "net-bridge: vendored wolfSSL not built — net-bridge will fail to link.")
-      message(STATUS "            Run net-bridge/tools/build-wolfssl.sh then re-run cmake.")
+      message(STATUS "net-bridge: vendored OpenSSL 1.0.2u not built — net-bridge will fail.")
+      message(STATUS "            Run net-bridge/tools/build-openssl-102.sh then re-run cmake.")
     endif()
 
     # After cargo finishes, drop a symlink into the CMake build tree next
