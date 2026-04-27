@@ -11,21 +11,25 @@ Lives in `net-bridge` (the smoltcp-based network process spawned when
 
 ## Setup (one-time)
 
-1. **Build the legacy-capable OpenSSL**. The system `libssl` on Ubuntu has
-   SSLv3 and RC4 stripped — we ship a vendored OpenSSL build script:
+1. **Build the legacy-capable wolfSSL**. System OpenSSL on Ubuntu has SSLv3
+   and RC4 stripped (and OpenSSL 3.x removed them entirely — even
+   `enable-weak-ssl-ciphers` and the legacy provider can't bring them
+   back). wolfSSL keeps them as compile-time toggles, which is what its
+   embedded use case needs:
    ```
-   net-bridge/tools/build-legacy-openssl.sh
+   net-bridge/tools/build-wolfssl.sh
    ```
-   This downloads OpenSSL 3.0.13, verifies its sha256, and installs a
-   static build to `net-bridge/vendor/openssl-legacy/` with
-   `enable-ssl3 enable-ssl3-method enable-weak-ssl-ciphers enable-legacy`.
+   This downloads wolfSSL 5.9.1 and installs a static build to
+   `net-bridge/vendor/wolfssl-legacy/` with `--enable-sslv3 --enable-oldtls
+   --enable-arc4 --enable-rc2 --enable-des3 --enable-md5`.
 
-2. **Rebuild `net-bridge` against the vendored OpenSSL**:
+2. **Rebuild `net-bridge` against the vendored wolfSSL**:
    ```
-   export OPENSSL_DIR=$PWD/net-bridge/vendor/openssl-legacy
-   export OPENSSL_STATIC=1
+   export WOLFSSL_DIR=$PWD/net-bridge/vendor/wolfssl-legacy
    cargo build --release --manifest-path net-bridge/Cargo.toml
    ```
+   CMake-driven builds set this automatically when `vendor/wolfssl-legacy/`
+   exists.
 
 3. **Start the emulator with `--mitm-tls`**:
    ```
@@ -82,16 +86,21 @@ Lives in `net-bridge` (the smoltcp-based network process spawned when
 
 ## Testing
 
-Unit + integration tests live in `net-bridge/src/tls_listener.rs` and
-cover: CA + cert minting; SNI sniffer across TLS 1.2, SSLv3, truncated
-and malformed inputs; SSLv3 + RC4-MD5, TLS 1.0 + 3DES handshakes; and a
-full bridge end-to-end test with a mock upstream server.
+Unit tests in `net-bridge/src/tls_listener.rs` and `tls_mitm.rs` cover CA
+generation + persistence, leaf cert minting, and SNI sniffing across TLS
+1.2, SSLv3, SSLv2-format and malformed inputs.
 
 Run with:
 ```
-OPENSSL_DIR=$PWD/net-bridge/vendor/openssl-legacy OPENSSL_STATIC=1 \
+WOLFSSL_DIR=$PWD/net-bridge/vendor/wolfssl-legacy \
     cargo test --manifest-path net-bridge/Cargo.toml
 ```
+
+The `tests/test_mitm_proxy.py` ctest (label `mitm`) drives the binary and
+verifies the surface (CA generation, persistence, log output, no crashes).
+Full TLS handshake verification against a real classic browser is the
+live test — fire up the emulator with `--mitm-tls --bridge`, point NN3 /
+MSIE 4.5 at `http://10.0.2.1/MitmCA.crt`, then visit any HTTPS site.
 
 Guest-side protocol smoke test: `tests/guest/SslMitmTest.pl` — a
 MacPerl script that opens a raw TCP socket to `:443`, sends a
