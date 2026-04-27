@@ -27,12 +27,15 @@ header {
     transition: background-color 0.6s ease;
 }
 
+/* Phase tints: dark, low-saturation washes over the #2d2d2d baseline — meant to read
+ * as a subtle hue hint on a dark header, not a saturated status bar. */
 header.phase-off       { background: #2d2d2d; }
-header.phase-red       { background: #7a2020; }
-header.phase-orange    { background: #8a4a14; }
-header.phase-yellow    { background: #8a7a14; }
-header.phase-finder    { background: #4a6a20; }
-header.phase-desktop   { background: #3a6a8a; }
+header.phase-red       { background: #3a2828; }
+header.phase-orange    { background: #3a302a; }
+header.phase-yellow    { background: #38362a; }
+header.phase-finder    { background: #2e3628; }
+/* Desktop tone — slight warm-green hint, off the blue axis so it doesn't clash with the blue Motorola wordmark. */
+header.phase-desktop   { background: #2a362e; }
 
 .logo {
     display: flex;
@@ -142,32 +145,71 @@ header.phase-desktop   { background: #3a6a8a; }
     border-color: #777;
 }
 
+/* Buttons: transparent background, colored outline + colored text.
+ * Fixed pixel sizing so the parent's em (e.g. .form-group label = 0.75em
+ * in bold) doesn't shrink/embiggen the button.
+ */
 .btn {
-    background: #3d3d3d;
-    border: none;
-    color: #fff;
-    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid #c8c8c8;
+    color: #ddd;
+    /* Asymmetric padding nudges the glyph baseline up so labels read centered.
+     * Most sans-serif fonts have ~20% more space below the baseline than above
+     * cap-height; pure flex centering exposes that as bottom-heaviness. */
+    padding: 0 10px 2px 10px;
+    height: 22px;
+    min-width: 70px;
+    box-sizing: border-box;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.8em;
-    transition: background 0.2s;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1;
+    /* Flex centering so labels sit in the optical middle, not bottom-heavy. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .btn:hover {
-    background: #4d4d4d;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border-color: #fff;
 }
 
-.btn.primary {
-    background: #007AFF;
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
-.btn.primary:hover {
-    background: #0056b3;
-}
+.btn.primary  { border-color: #4a9bff; color: #4a9bff; }
+.btn.success  { border-color: #5fb55f; color: #5fb55f; }
+.btn.danger   { border-color: #e35353; color: #e35353; }
+.btn.warning  { border-color: #e89352; color: #e89352; }
+
+.btn.primary:hover { background: rgba(74,155,255,0.15); color: #4a9bff; border-color: #4a9bff; }
+.btn.success:hover { background: rgba(95,181,95,0.15); color: #5fb55f; border-color: #5fb55f; }
+.btn.danger:hover  { background: rgba(227,83,83,0.15); color: #e35353; border-color: #e35353; }
+.btn.warning:hover { background: rgba(232,147,82,0.15); color: #e89352; border-color: #e89352; }
 
 .btn.active {
-    background: #5a5a5a;
+    background: rgba(255,255,255,0.10);
 }
+
+/* Square icon-only button: drops the 70px min-width used by labelled buttons. */
+.btn.btn-icon {
+    min-width: 22px;
+    width: 22px;
+    padding: 0 0 1px 0;
+    font-size: 14px;
+}
+
+/* Chevron points left (toward the panel) by default = "panel is open, click to tuck away".
+ * When .active is removed (panel collapsed), it flips to point right = "click to expand". */
+.btn.btn-icon.panel-toggle           { transform: rotate(180deg); }
+.btn.btn-icon.panel-toggle.active    { transform: rotate(0deg); }
 
 /* Main Layout */
 main {
@@ -194,36 +236,12 @@ main {
     display: inline-block;
 }
 
-/* Disconnected state - grey out and show visual indicator */
+/* Disconnected state — just dim the (likely empty/last-frame) display.
+ * The overlay's spinner already conveys "connecting", so no extra glyph here.
+ */
 #display-container.disconnected {
     filter: grayscale(100%) brightness(0.5);
     opacity: 0.7;
-}
-
-#display-container.disconnected::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 100px;
-    height: 100px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-}
-
-#display-container.disconnected::before {
-    content: '⚠';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 48px;
-    color: rgba(255, 255, 255, 0.6);
-    z-index: 1;
-    text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
 #display {
@@ -350,17 +368,12 @@ main {
 }
 
 .debug-header {
-    padding: 10px 15px;
+    padding: 6px 10px;
     background: #2d2d2d;
     border-bottom: 1px solid #444;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-}
-
-.debug-header h3 {
-    font-size: 0.75em;
-    font-weight: bold;
+    gap: 6px;
 }
 
 .debug-tabs {
@@ -547,31 +560,6 @@ body.fullscreen #display {
     color: #fff;
 }
 
-/* Button variants */
-.btn.success {
-    background: #2e7d32;
-}
-
-.btn.success:hover {
-    background: #388e3c;
-}
-
-.btn.danger {
-    background: #c62828;
-}
-
-.btn.danger:hover {
-    background: #d32f2f;
-}
-
-.btn.warning {
-    background: #e65100;
-}
-
-.btn.warning:hover {
-    background: #f57c00;
-}
-
 /* Split button with dropdown menu */
 .split-btn {
     position: relative;
@@ -584,9 +572,11 @@ body.fullscreen #display {
 
 .split-btn .btn.split-arrow {
     border-radius: 0 4px 4px 0;
-    padding: 4px 6px;
-    margin-left: 1px;
-    font-size: 0.7em;
+    min-width: 22px;
+    width: 22px;
+    padding: 0;
+    margin-left: -1px;
+    font-size: 9px;
 }
 
 .split-menu {
@@ -763,20 +753,7 @@ body.fullscreen #display {
     background: #252525;
 }
 
-.modal .btn,
-.modal .btn.primary,
-.modal .btn.success {
-    background: #bbb;
-    color: #1a1a1a;
-    font-size: 0.8em;
-    padding: 4px 10px;
-}
-
-.modal .btn:hover,
-.modal .btn.primary:hover,
-.modal .btn.success:hover {
-    background: #d0d0d0;
-}
+/* Modal buttons inherit unified outlined style; nothing extra here. */
 
 .help-text {
     display: block;

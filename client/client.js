@@ -596,6 +596,14 @@ class PNGDecoder extends VideoDecoder {
 
         try {
             const bitmap = await createImageBitmap(blob);
+            // Cleanup may have run during the await (codec stepping, reconnect,
+            // or canvas swap). If so, drop the frame quietly — drawing into a
+            // null ctx or a transferred canvas throws InvalidStateError, which
+            // would otherwise fire logger.error → /api/log on every frame.
+            if (!this.ctx || !this.canvas || !this.canvas.isConnected) {
+                if (bitmap.close) bitmap.close();
+                return;
+            }
             const t6_draw = performance.now();  // Draw complete time (use performance.now for accuracy)
 
             // Calculate decode latency (receive to draw)
@@ -653,7 +661,15 @@ class PNGDecoder extends VideoDecoder {
                 this.lastLatencyLog = now;
             }
         } catch (e) {
-            logger.error('Failed to decode PNG', { error: e.message });
+            // Throttle so a stuck decoder can't fire a fetch per frame at 30 fps.
+            const now = performance.now();
+            this._lastDecodeErrAt = this._lastDecodeErrAt || 0;
+            this._decodeErrCount = (this._decodeErrCount || 0) + 1;
+            if (now - this._lastDecodeErrAt > 2000) {
+                logger.error('Failed to decode PNG', { error: e.message, suppressed: this._decodeErrCount - 1 });
+                this._lastDecodeErrAt = now;
+                this._decodeErrCount = 0;
+            }
         }
     }
 
@@ -725,6 +741,11 @@ async function renderFrameToCanvas(data, ctx, canvas, state, onFrame) {
 
     try {
         const bitmap = await createImageBitmap(blob);
+        // Same teardown-race guard as PNGDecoder.handleData (see comment there).
+        if (!ctx || !canvas || !canvas.isConnected) {
+            if (bitmap.close) bitmap.close();
+            return;
+        }
         const t6_draw = performance.now();
 
         const t5_receive_perf = performance.now() - (Date.now() - t5_receive);
@@ -762,7 +783,15 @@ async function renderFrameToCanvas(data, ctx, canvas, state, onFrame) {
             state.lastLatencyLog = now;
         }
     } catch (e) {
-        logger.error('Failed to decode frame', { error: e.message });
+        // Throttle so a stuck decoder can't fire a fetch per frame at 30 fps.
+        const now = performance.now();
+        state._lastDecodeErrAt = state._lastDecodeErrAt || 0;
+        state._decodeErrCount = (state._decodeErrCount || 0) + 1;
+        if (now - state._lastDecodeErrAt > 2000) {
+            logger.error('Failed to decode frame', { error: e.message, suppressed: state._decodeErrCount - 1 });
+            state._lastDecodeErrAt = now;
+            state._decodeErrCount = 0;
+        }
     }
 }
 
@@ -940,6 +969,19 @@ function parseCodecString(codecStr) {
         default:
             logger.warn('Unknown codec string, defaulting to PNG', { codec: codecStr });
             return CodecType.PNG;
+    }
+}
+
+// Helper: Convert CodecType enum back to its server-side string id.
+function codecTypeToString(codecType) {
+    switch (codecType) {
+        case CodecType.H264: return 'h264';
+        case CodecType.AV1: return 'av1';
+        case CodecType.VP9: return 'vp9';
+        case CodecType.PNG: return 'png';
+        case CodecType.WEBP: return 'webp';
+        case CodecType.HTTP_STREAM: return 'httpstream';
+        default: return null;
     }
 }
 
@@ -1187,6 +1229,49 @@ class BasiliskWebRTC {
         this._connectHTTPStream();
     }
 
+    // Walk the auto-fallback chain (vp9 → h264 → webp → png → httpstream) one step.
+    // Called when the current codec fails to deliver frames or ICE never connects.
+    // Returns true if a step was taken; false if we exhausted the chain.
+    _stepDownFallbackChain(reason) {
+        if (this.firstFrameReceived || this.connected) return false; // already working
+
+        const chain = (typeof buildCodecFallbackChain === 'function')
+            ? buildCodecFallbackChain()
+            : ['httpstream'];
+        const currentId = codecTypeToString(this.codecType);
+        const idx = chain.indexOf(currentId);
+        const next = (idx >= 0 && idx + 1 < chain.length) ? chain[idx + 1] : null;
+        if (!next || next === currentId) {
+            logger.warn('Fallback chain exhausted', { reason, from: currentId });
+            return false;
+        }
+
+        logger.warn(`Codec fallback: ${currentId} → ${next}`, { reason });
+
+        // Update visible codec dropdown
+        const codecSelect = document.getElementById('codec-select');
+        if (codecSelect) codecSelect.value = next;
+
+        if (next === 'httpstream') {
+            this.fallbackToHTTPStream();
+            return true;
+        }
+
+        // Cancel pending no-frames timer; we'll arm a fresh one on reconnect.
+        if (this.webrtcFallbackTimer) {
+            clearTimeout(this.webrtcFallbackTimer);
+            this.webrtcFallbackTimer = null;
+        }
+
+        // Tear down current connection and reconnect with the next codec.
+        this.cleanup();
+        if (this.ws) { try { this.ws.close(); } catch (e) {} this.ws = null; }
+        this.codecType = parseCodecString(next);
+        this.stats.codec = next;
+        this._connect();
+        return true;
+    }
+
     _connect() {
         // HTTP stream mode: skip WebRTC entirely
         if (this.codecType === CodecType.HTTP_STREAM) {
@@ -1219,13 +1304,15 @@ class BasiliskWebRTC {
             this.ws.onclose = (e) => this.onWsClose(e);
             this.ws.onerror = (e) => this.onWsError(e);
 
-            // Auto-fallback: if no frame arrives within N seconds, switch to HTTP stream.
-            // Skip if user previously fell back (remembered in localStorage).
+            // Auto-fallback: if no frame arrives within N seconds, walk the codec
+            // chain (vp9 → h264 → webp → png → httpstream) one step.
             this.webrtcFallbackTimer = setTimeout(() => {
                 if (!this.firstFrameReceived && !this.connected) {
-                    logger.warn(`WebRTC: no frames after ${this.httpStreamFallbackSec}s, falling back to HTTP stream`);
-                    try { localStorage.setItem('macemu_prefer_httpstream', '1'); } catch(e) {}
-                    this.fallbackToHTTPStream();
+                    if (!this._stepDownFallbackChain('no-frames-timeout')) {
+                        // Chain exhausted — last-ditch HTTP stream fallback
+                        try { localStorage.setItem('macemu_prefer_httpstream', '1'); } catch(e) {}
+                        this.fallbackToHTTPStream();
+                    }
                 }
             }, this.httpStreamFallbackSec * 1000);
 
@@ -1302,7 +1389,11 @@ class BasiliskWebRTC {
             return;
         }
 
-        logger.debug(`Received: ${msg.type}`, msg.type === 'offer' ? { sdpLength: msg.sdp?.length } : null);
+        // Skip logging high-frequency / pure-keepalive types — cursor fires on every
+        // mouse move and used to flood the debug log.
+        if (msg.type !== 'cursor' && msg.type !== 'pong' && msg.type !== 'ping') {
+            logger.debug(`Received: ${msg.type}`, msg.type === 'offer' ? { sdpLength: msg.sdp?.length } : null);
+        }
 
         this.handleSignaling(msg);
     }
@@ -1917,16 +2008,15 @@ class BasiliskWebRTC {
         } else if (state === 'failed') {
             connectionSteps.setError('ice');
             this.updateStatus('ICE connection failed', 'error');
-            logger.error('ICE connection failed - falling back to HTTP stream');
-            // Fast fallback: UDP/ICE is never going to work here. Skip the 5s
-            // no-frames timer and switch now. Guarded so it only fires once.
+            logger.error('ICE connection failed - stepping codec fallback chain');
+            // Fast fallback: UDP/ICE will never work here. Skip the 5s no-frames
+            // timer and step to the next codec. Guarded so it fires once per chain.
             if (!this._iceFailureFallbackFired) {
                 this._iceFailureFallbackFired = true;
-                try {
-                    localStorage.setItem('macemu_prefer_httpstream', '1');
-                    localStorage.setItem('macemu_last_fallback_reason', 'ice');
-                } catch (e) {}
-                this.fallbackToHTTPStream();
+                try { localStorage.setItem('macemu_last_fallback_reason', 'ice'); } catch (e) {}
+                if (!this._stepDownFallbackChain('ice-failed')) {
+                    this.fallbackToHTTPStream();
+                }
             }
         } else if (state === 'disconnected') {
             logger.warn('ICE disconnected - may recover');
@@ -2989,13 +3079,14 @@ function initClient() {
 
     client = new BasiliskWebRTC(video, canvas);
 
-    // Use server config codec as initial codec (overrides stale localStorage)
-    const configCodec = serverUIConfig.webcodec;
-    if (configCodec === 'httpstream') {
-        client.codecType = CodecType.HTTP_STREAM;
-    } else if (configCodec) {
-        client.codecType = parseCodecString(configCodec);
-    }
+    // Pick the best codec the server claims to support: vp9 → h264 → webp → png → httpstream.
+    // Falls back through the chain at runtime if WebRTC negotiation fails or no frames arrive.
+    const chain = buildCodecFallbackChain();
+    const initialCodec = chain[0] || serverUIConfig.webcodec || 'png';
+    logger.info('Initial codec from auto-fallback chain', { chain, picked: initialCodec });
+    client.codecType = parseCodecString(initialCodec);
+    const codecSelect = document.getElementById('codec-select');
+    if (codecSelect) codecSelect.value = initialCodec;
 
     // Apply saved mouse mode from config
     if (serverUIConfig.mousemode) {
@@ -3377,10 +3468,13 @@ function buildConfigJson() {
         dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true,
         bridge_enabled: document.getElementById('cfg-bridge-enabled')?.checked ?? false,
         network: document.getElementById('cfg-network')?.value || 'none',
-        network_if: document.getElementById('cfg-network-if')?.value || '',
+        // Socket path / MITM ports / MITM CA dir no longer have UI inputs —
+        // preserve whatever was loaded from disk so saving via the UI doesn't
+        // clobber custom server-side values.
+        network_if: currentConfig.network_if || '',
         mitm_tls: document.getElementById('cfg-mitm-tls')?.checked ?? false,
-        mitm_ports: document.getElementById('cfg-mitm-ports')?.value || '',
-        mitm_ca_dir: document.getElementById('cfg-mitm-ca-dir')?.value || '',
+        mitm_ports: currentConfig.mitm_ports || '',
+        mitm_ca_dir: currentConfig.mitm_ca_dir || '',
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute'
     };
@@ -3907,37 +4001,20 @@ function updateConfigUI() {
     if (bridgeEnabledEl) bridgeEnabledEl.checked = currentConfig.bridge_enabled;
 
     const networkEl = document.getElementById('cfg-network');
-    const networkIfEl = document.getElementById('cfg-network-if');
-    const networkIfGroup = document.getElementById('cfg-network-if-group');
     const mitmTlsEl = document.getElementById('cfg-mitm-tls');
-    const mitmPortsEl = document.getElementById('cfg-mitm-ports');
-    const mitmCaDirEl = document.getElementById('cfg-mitm-ca-dir');
     const mitmGroup = document.getElementById('cfg-mitm-group');
-    const mitmPortsGroup = document.getElementById('cfg-mitm-ports-group');
-    const mitmCaDirGroup = document.getElementById('cfg-mitm-ca-dir-group');
 
+    // MITM TLS toggle only makes sense when networking is enabled (socket mode).
     const syncNetworkVisibility = () => {
         const netMode = networkEl ? networkEl.value : (currentConfig.network || 'none');
-        const enabled = mitmTlsEl ? mitmTlsEl.checked : currentConfig.mitm_tls;
-        // network_if (socket path) and MITM only make sense for the socket mode.
-        if (networkIfGroup) networkIfGroup.style.display = (netMode === 'socket') ? '' : 'none';
         if (mitmGroup) mitmGroup.style.display = (netMode === 'socket') ? '' : 'none';
-        const showSubfields = (netMode === 'socket') && enabled;
-        if (mitmPortsGroup) mitmPortsGroup.style.display = showSubfields ? '' : 'none';
-        if (mitmCaDirGroup) mitmCaDirGroup.style.display = showSubfields ? '' : 'none';
     };
 
     if (networkEl) {
         networkEl.value = currentConfig.network || 'none';
         networkEl.addEventListener('change', syncNetworkVisibility);
     }
-    if (networkIfEl) networkIfEl.value = currentConfig.network_if || '';
-    if (mitmTlsEl) {
-        mitmTlsEl.checked = !!currentConfig.mitm_tls;
-        mitmTlsEl.addEventListener('change', syncNetworkVisibility);
-    }
-    if (mitmPortsEl) mitmPortsEl.value = currentConfig.mitm_ports || '';
-    if (mitmCaDirEl) mitmCaDirEl.value = currentConfig.mitm_ca_dir || '';
+    if (mitmTlsEl) mitmTlsEl.checked = !!currentConfig.mitm_tls;
     syncNetworkVisibility();
 
     refreshBootFromOptions();
@@ -4196,11 +4273,27 @@ async function invokeDebugger() {
     }
 }
 
+// Set of codec ids the server reports as available. httpstream is always usable.
+let availableCodecIds = new Set(['httpstream']);
+
+// Build the auto-fallback chain: best-quality first, narrowing to most-compatible.
+//   WebRTC tier (UDP/RTP)        : vp9, h264
+//   WebSocket tier (TCP frames)  : webp, png
+//   HTTP long-poll (last resort) : httpstream
+function buildCodecFallbackChain() {
+    const order = ['vp9', 'h264', 'webp', 'png', 'httpstream'];
+    return order.filter(id => availableCodecIds.has(id));
+}
+
 // Apply codec availability to the dropdown (removes unavailable codecs)
 function applyCodecAvailability(codecs) {
     const select = document.getElementById('codec-select');
-    if (!select || !codecs) return;
+    if (!codecs) return;
 
+    availableCodecIds = new Set(['httpstream']);
+    for (const c of codecs) if (c.available) availableCodecIds.add(c.id);
+
+    if (!select) return;
     const currentValue = select.value;
     select.innerHTML = '';
 
@@ -4425,28 +4518,11 @@ async function pollEmulatorStatus() {
             }
         }
 
-        // Update mouse latency stat (from emulator via server)
-        const mouseLatencyEl = document.getElementById('stat-mouse-latency');
-        if (mouseLatencyEl && data.mouse_latency_ms !== undefined) {
-            if (data.mouse_latency_samples > 0) {
-                mouseLatencyEl.textContent = data.mouse_latency_ms.toFixed(1) + ' ms';
-            } else {
-                mouseLatencyEl.textContent = '-- ms';
-            }
-        }
-
         // Update video latency stat
         const videoLatencyEl = document.getElementById('stat-video-latency');
         if (videoLatencyEl) {
             const avgLatency = client?.decoder?.getAverageLatency?.() || 0;
             videoLatencyEl.textContent = avgLatency > 0 ? avgLatency.toFixed(1) + ' ms' : '-- ms';
-        }
-
-        // Update RTT stat
-        const rttEl = document.getElementById('stat-rtt');
-        if (rttEl) {
-            const avgRtt = client?.decoder?.getAverageRtt?.() || 0;
-            rttEl.textContent = avgRtt > 0 ? avgRtt.toFixed(1) + ' ms' : '-- ms';
         }
 
         // Update Mac state tab

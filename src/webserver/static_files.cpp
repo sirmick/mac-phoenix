@@ -22,6 +22,7 @@ bool StaticFileHandler::handles(const std::string& path) const {
            path == "/index.html" ||
            path == "/client.js" ||
            path == "/styles.css" ||
+           path == "/favicon.png" ||
            path == "/Apple.svg" ||
            path == "/Motorola.svg" ||
            path == "/PowerPC.svg" ||
@@ -34,8 +35,8 @@ Response StaticFileHandler::serve(const std::string& path) {
         return Response::not_found();
     }
 
-    // Read file
-    std::ifstream file(file_path);
+    // Read file in binary mode so PNG/SVG bytes pass through verbatim.
+    std::ifstream file(file_path, std::ios::binary);
     if (!file.is_open()) {
         return Response::not_found();
     }
@@ -70,6 +71,8 @@ std::string StaticFileHandler::map_path_to_file(const std::string& path) const {
         return root_dir_ + "/client.js";
     } else if (path == "/styles.css") {
         return root_dir_ + "/styles.css";
+    } else if (path == "/favicon.png") {
+        return root_dir_ + "/favicon.png";
     } else if (path == "/Apple.svg") {
         return root_dir_ + "/Apple.svg";
     } else if (path == "/Motorola.svg") {
@@ -91,6 +94,8 @@ std::string StaticFileHandler::get_content_type(const std::string& path) const {
         return "text/css";
     } else if (path.find(".svg") != std::string::npos) {
         return "image/svg+xml";
+    } else if (path.find(".png") != std::string::npos) {
+        return "image/png";
     } else if (path.find(".json") != std::string::npos) {
         return "application/json";
     }

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MacEmu Web - WebRTC Streaming</title>
+    <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="styles.css">
 
     <!-- Server-injected configuration (eliminates race conditions) -->
@@ -17,23 +18,6 @@
             <img src="Apple.svg" alt="Apple" style="height: 1.6em; margin-right: 0.4em;">
             <img id="processor-logo" src="Motorola.svg" alt="Processor" style="height: 1.6em; margin-right: 0.4em;">
             <h1 id="emulator-title">Macintosh</h1>
-        </div>
-
-        <div class="status-bar">
-            <div class="status-item">
-                <span id="connection-icon">🔌</span>
-            </div>
-            <div class="status-item">
-                <span id="emulator-icon">💻</span>
-            </div>
-            <div class="status-item" id="fps-display">
-                <span>🎬</span>
-                <span>--</span>
-            </div>
-            <div class="status-item" id="bitrate-display">
-                <span>📊</span>
-                <span>-- kbps</span>
-            </div>
         </div>
 
         <div class="controls">
@@ -76,9 +60,7 @@
                 </div>
             </div>
 
-            <button class="btn warning" id="invoke-debug-btn" title="Programmer's Key — invoke debugger">Debug</button>
-            <button class="btn" id="fullscreen-btn">Fullscreen</button>
-            <button class="btn" id="debug-toggle" style="margin-left: auto;" title="More options">…</button>
+            <button class="btn btn-icon panel-toggle" id="debug-toggle" style="margin-left: auto;" title="Toggle side panel">&rsaquo;</button>
         </div>
     </header>
 
@@ -91,31 +73,7 @@
                 <div class="overlay" id="overlay">
                     <div class="overlay-content">
                         <div class="spinner" id="spinner"></div>
-                        <h2 id="overlay-title">Connecting to Basilisk II</h2>
-                        <p id="overlay-status">Initializing...</p>
-
-                        <div class="connection-steps" id="connection-steps">
-                            <div class="step" id="step-ws">
-                                <span class="step-icon">1</span>
-                                <span>WebSocket signaling</span>
-                            </div>
-                            <div class="step" id="step-offer">
-                                <span class="step-icon">2</span>
-                                <span>Receiving offer</span>
-                            </div>
-                            <div class="step" id="step-ice">
-                                <span class="step-icon">3</span>
-                                <span>ICE negotiation</span>
-                            </div>
-                            <div class="step" id="step-track">
-                                <span class="step-icon">4</span>
-                                <span>Video track</span>
-                            </div>
-                            <div class="step" id="step-frames">
-                                <span class="step-icon">5</span>
-                                <span>Receiving frames</span>
-                            </div>
-                        </div>
+                        <p id="overlay-status">Connecting…</p>
                     </div>
                 </div>
             </div>
@@ -123,8 +81,8 @@
 
         <div id="debug-panel">
             <div class="debug-header">
-                <h3>Debug Console</h3>
-                <button class="clear-btn" id="clear-log-btn">Clear</button>
+                <button class="btn" id="fullscreen-btn">Fullscreen</button>
+                <button class="btn warning" id="invoke-debug-btn" title="Programmer's Key — invoke debugger">Debug</button>
             </div>
             <div class="debug-tabs">
                 <div class="debug-tab active" data-tab="clipboard">Clipboard</div>
@@ -144,6 +102,10 @@
                     </div>
                 </div>
                 <div class="debug-pane" id="log-pane">
+                    <div class="log-toolbar" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #222;background:#1a1a1a;flex-shrink:0;">
+                        <span style="font-size:11px;color:#888;">Browser & emulator log</span>
+                        <button class="btn" id="clear-log-btn" style="margin-left:auto;" title="Clear log entries">Clear</button>
+                    </div>
                     <div id="debug-log"></div>
                 </div>
                 <div class="debug-pane" id="stats-pane">
@@ -173,16 +135,8 @@
                             <div class="value" id="stat-jitter">-- ms</div>
                         </div>
                         <div class="stat-card">
-                            <div class="label">Mouse Latency</div>
-                            <div class="value" id="stat-mouse-latency">-- ms</div>
-                        </div>
-                        <div class="stat-card">
                             <div class="label">Video Latency</div>
                             <div class="value" id="stat-video-latency">-- ms</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="label">RTT</div>
-                            <div class="value" id="stat-rtt">-- ms</div>
                         </div>
                     </div>
                 </div>
@@ -272,11 +226,6 @@
         </div>
     </main>
 
-    <footer>
-        <span>Basilisk II WebRTC Streaming</span>
-        <span id="resolution">-- x --</span>
-    </footer>
-
     <!-- Configuration Modal -->
     <div class="modal-overlay" id="config-modal">
         <div class="modal">
@@ -297,7 +246,6 @@
                         <option value="se">Mac SE (68000, System 6)</option>
                         <option value="ppc">PowerPC (PPC, System 7.1.2 - Mac OS 9.0.4)</option>
                     </select>
-                    <small class="help-text">Requires restart to change emulator</small>
                 </div>
 
                 <div class="form-group">
@@ -374,15 +322,24 @@
                     <span>Advanced Settings</span>
                 </div>
                 <div class="advanced-content" id="advanced-settings">
+                    <!-- Row 1: CPU + Network side by side -->
                     <div class="form-group">
-                        <label for="cfg-backend">CPU Backend</label>
+                        <label for="cfg-backend">CPU</label>
                         <select id="cfg-backend">
-                            <option value="uae">UAE (m68k, interpreter + JIT)</option>
-                            <option value="unicorn-m68k">Unicorn (m68k, QEMU TCG)</option>
-                            <option value="unicorn-ppc">Unicorn (PPC, QEMU TCG)</option>
-                            <option value="kpx">KPX (PPC, translator + JIT)</option>
+                            <option value="uae">UAE</option>
+                            <option value="unicorn-m68k">Unicorn (68k)</option>
+                            <option value="unicorn-ppc">Unicorn (PPC)</option>
+                            <option value="kpx">KPX</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="cfg-network">Network</label>
+                        <select id="cfg-network">
+                            <option value="none">None</option>
+                            <option value="socket">NAT (net-bridge)</option>
+                        </select>
+                    </div>
+                    <!-- JIT toggles (shown only for backends that support them) -->
                     <div class="form-group" id="cfg-jit-group">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-jit">
@@ -392,7 +349,7 @@
                     <div class="form-group" id="cfg-jit68k-group">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-jit68k" checked>
-                            <label for="cfg-jit68k">Enable 68k JIT (DR emulator, KPX only)</label>
+                            <label for="cfg-jit68k">Enable 68k JIT (DR emulator)</label>
                         </div>
                     </div>
                     <div class="form-group">
@@ -422,46 +379,22 @@
                     <div class="form-group">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-bridge-enabled">
-                            <label for="cfg-bridge-enabled">Enable automation bridge (BridgeAgent + ExtFS)</label>
+                            <label for="cfg-bridge-enabled">Enable bridge agent</label>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="cfg-network">Network</label>
-                        <select id="cfg-network">
-                            <option value="none">None</option>
-                            <option value="socket">NAT (net-bridge)</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="cfg-network-if-group" style="display:none">
-                        <label for="cfg-network-if">Socket path (optional)</label>
-                        <input type="text" id="cfg-network-if" placeholder="/tmp/macemu.sock">
                     </div>
                     <div class="form-group" id="cfg-mitm-group" style="display:none">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-mitm-tls">
-                            <label for="cfg-mitm-tls">Enable MITM TLS proxy (SSLv3/TLS1.0 downgrade for classic browsers)</label>
+                            <label for="cfg-mitm-tls">Enable MITM TLS proxy</label>
                         </div>
-                    </div>
-                    <div class="form-group" id="cfg-mitm-ports-group" style="display:none">
-                        <label for="cfg-mitm-ports">MITM ports (comma-separated)</label>
-                        <input type="text" id="cfg-mitm-ports" placeholder="443">
-                    </div>
-                    <div class="form-group" id="cfg-mitm-ca-dir-group" style="display:none">
-                        <label for="cfg-mitm-ca-dir">MITM CA directory</label>
-                        <input type="text" id="cfg-mitm-ca-dir" placeholder=".mitm_ca">
                     </div>
                 </div>
 
-                <div class="note-banner">
-                    Changes require emulator restart to take effect.
-                    MITM TLS also requires a one-time CA import in the guest browser —
-                    see <code>docs/MitmTlsProxy.md</code>.
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn" id="cancel-config-btn">Cancel</button>
                 <button class="btn" id="save-preset-btn">Save As Preset</button>
-                <button class="btn success" id="save-config-btn">Save</button>
+                <button class="btn primary" id="save-config-btn">Save</button>
             </div>
         </div>
     </div>
