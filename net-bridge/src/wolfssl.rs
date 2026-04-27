@@ -304,18 +304,22 @@ extern "C" fn custom_io_recv(
     ctx: *mut c_void,
 ) -> c_int {
     if ctx.is_null() {
+        log::error!("wolfSSL recv cb: NULL ctx");
         return WOLFSSL_CBIO_ERR_GENERAL;
     }
     // SAFETY: pointer was set via SetIOReadCtx with our CustomIo box ptr.
     let io = unsafe { &mut *(ctx as *mut CustomIo<DynIo>) };
     let slice = unsafe { std::slice::from_raw_parts_mut(buf as *mut u8, sz as usize) };
-    match io.io.read(slice) {
+    let result = io.io.read(slice);
+    log::trace!("wolfSSL recv cb: requested={} result={:?}", sz, result.as_ref().map(|n| *n));
+    match result {
         Ok(0) => 0, // EOF
         Ok(n) => n as c_int,
         Err(e) => {
             if e.kind() == io::ErrorKind::WouldBlock {
                 WOLFSSL_CBIO_ERR_WANT_READ
             } else {
+                log::warn!("wolfSSL recv cb: io error: {}", e);
                 io.last_io_err = Some(e);
                 WOLFSSL_CBIO_ERR_GENERAL
             }
@@ -330,16 +334,20 @@ extern "C" fn custom_io_send(
     ctx: *mut c_void,
 ) -> c_int {
     if ctx.is_null() {
+        log::error!("wolfSSL send cb: NULL ctx");
         return WOLFSSL_CBIO_ERR_GENERAL;
     }
     let io = unsafe { &mut *(ctx as *mut CustomIo<DynIo>) };
     let slice = unsafe { std::slice::from_raw_parts(buf as *const u8, sz as usize) };
-    match io.io.write(slice) {
+    let result = io.io.write(slice);
+    log::trace!("wolfSSL send cb: bytes={} result={:?}", sz, result.as_ref().map(|n| *n));
+    match result {
         Ok(n) => n as c_int,
         Err(e) => {
             if e.kind() == io::ErrorKind::WouldBlock {
                 WOLFSSL_CBIO_ERR_WANT_WRITE
             } else {
+                log::warn!("wolfSSL send cb: io error: {}", e);
                 io.last_io_err = Some(e);
                 WOLFSSL_CBIO_ERR_GENERAL
             }

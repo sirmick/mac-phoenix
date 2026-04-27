@@ -211,7 +211,7 @@ if(BUILD_NET_BRIDGE)
   else()
     set(NET_BRIDGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/net-bridge")
     set(NET_BRIDGE_BIN "${NET_BRIDGE_DIR}/target/release/net-bridge")
-    set(NET_BRIDGE_LEGACY_SSL "${NET_BRIDGE_DIR}/vendor/openssl-legacy")
+    set(NET_BRIDGE_WOLFSSL "${NET_BRIDGE_DIR}/vendor/wolfssl-legacy")
 
     # Rust sources that should trigger a rebuild when they change.
     # (GLOB at configure time — re-run cmake after adding new .rs files.)
@@ -223,21 +223,20 @@ if(BUILD_NET_BRIDGE)
       "${NET_BRIDGE_DIR}/Cargo.lock"
     )
 
-    # If the vendored legacy OpenSSL has been built (via
-    # net-bridge/tools/build-legacy-openssl.sh), link against it so
-    # --mitm-tls has SSLv3 + weak ciphers. Otherwise fall back to the
-    # system libssl — the crate still builds, it just won't be able to
-    # downgrade TLS at runtime.
-    if(EXISTS "${NET_BRIDGE_LEGACY_SSL}/lib/libssl.a")
+    # net-bridge requires the vendored wolfSSL (built with --enable-sslv3
+    # --enable-arc4 --enable-rc2 --enable-des3) to talk to classic-Mac
+    # browsers. System wolfSSL packages are typically built without those
+    # features, so we don't fall back to one. Cert minting still uses the
+    # system openssl (modern algorithms only — no legacy cipher needs).
+    if(EXISTS "${NET_BRIDGE_WOLFSSL}/lib/libwolfssl.a")
       set(NET_BRIDGE_ENV
-        "OPENSSL_DIR=${NET_BRIDGE_LEGACY_SSL}"
-        "OPENSSL_STATIC=1"
+        "WOLFSSL_DIR=${NET_BRIDGE_WOLFSSL}"
       )
-      message(STATUS "net-bridge: linking vendored OpenSSL at ${NET_BRIDGE_LEGACY_SSL}")
+      message(STATUS "net-bridge: linking vendored wolfSSL at ${NET_BRIDGE_WOLFSSL}")
     else()
       set(NET_BRIDGE_ENV "")
-      message(STATUS "net-bridge: vendored OpenSSL not built — --mitm-tls will fail at runtime.")
-      message(STATUS "            Run net-bridge/tools/build-legacy-openssl.sh then re-run cmake.")
+      message(STATUS "net-bridge: vendored wolfSSL not built — net-bridge will fail to link.")
+      message(STATUS "            Run net-bridge/tools/build-wolfssl.sh then re-run cmake.")
     endif()
 
     # After cargo finishes, drop a symlink into the CMake build tree next

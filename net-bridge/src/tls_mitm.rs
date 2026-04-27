@@ -100,10 +100,10 @@ impl MitmRuntime {
         if !config.enabled {
             return Ok(None);
         }
-        // Eager provider load — surface OpenSSL legacy/RC4 misconfig at
-        // startup with a clear log line, instead of failing silently on
-        // the first guest TLS handshake half an hour into a session.
-        crate::tls_listener::enable_legacy_algorithms()?;
+        // Eager wolfSSL init — surface library/symbol misconfig at startup
+        // with a clear log line, instead of failing silently on the first
+        // guest TLS handshake half an hour into a session.
+        crate::wolfssl::init();
         let ca = MitmCa::load_or_generate(&config.ca_dir)?;
         log::info!(
             "MITM TLS enabled: ports={:?} ca={}",
@@ -213,7 +213,11 @@ const CA_KEY_FILE: &str = "mitm_ca.key";
 const CA_CERT_FILE: &str = "mitm_ca.crt";
 
 const CA_BITS: u32 = 2048;
-const LEAF_BITS: u32 = 1024;
+// 2048 because wolfSSL rejects RSA-1024 keys at the default min-size and
+// we don't want to fight its security defaults. NN3.0.4 / NN4 / MSIE 4.5
+// Mac all support 2048-bit RSA in cert chains; the constraint that pushed
+// us to 1024 was a Netscape 2 / MSIE 3 era limit nobody cares about.
+const LEAF_BITS: u32 = 2048;
 const CA_VALID_DAYS: u32 = 3650;
 const LEAF_VALID_DAYS: u32 = 825;
 
