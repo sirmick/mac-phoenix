@@ -97,6 +97,13 @@ impl CaHttpServer {
     /// to decide whether to serve PEM or DER. Anything else → small
     /// landing page.
     fn build_response(&self, req: &str) -> Vec<u8> {
+        // Diagnostic: log the request line + headers so we can see what
+        // NN3 / MSIE actually sends (URL, User-Agent, Accept).
+        log::info!(
+            "ca-http: request:\n{}",
+            req.lines().take(8).collect::<Vec<_>>().join("\n")
+        );
+
         // First line looks like "GET /path HTTP/1.0\r\n..."
         let path = req
             .split_whitespace()
@@ -104,26 +111,48 @@ impl CaHttpServer {
             .unwrap_or("/")
             .to_string();
 
+        // NN3 / NN4 / MSIE 4.5 Mac all expect DER-encoded certs under the
+        // application/x-x509-ca-cert MIME type — they don't parse PEM.
+        // Serve DER at every URL; .pem is for tooling only.
         let (body, content_type): (Vec<u8>, &str) = match path.as_str() {
-            "/MitmCA.crt" | "/mitmca.crt" => {
-                (self.pem.clone(), "application/x-x509-ca-cert")
-            }
-            "/MitmCA.cer" | "/mitmca.cer" => {
+            "/MitmCA.crt" | "/mitmca.crt"
+            | "/MitmCA.cer" | "/mitmca.cer"
+            | "/ca" | "/cert" => {
                 (self.der.clone(), "application/x-x509-ca-cert")
+            }
+            "/MitmCA.pem" | "/mitmca.pem" => {
+                // Plain text for openssl x509 -in / curl-piped tooling.
+                (self.pem.clone(), "application/x-pem-file")
             }
             _ => {
                 let page = concat!(
                     "<html><head><title>MacPhoenix MITM CA</title></head>",
                     "<body><h1>MacPhoenix MITM Root CA</h1>",
-                    "<p>Click one of the links below to install this CA ",
-                    "as a trusted root for your browser.</p>",
+                    "<p>Click the link below to install this CA as a trusted ",
+                    "root for your browser.</p>",
                     "<ul>",
-                    "<li><a href=\"/MitmCA.crt\">MitmCA.crt</a> (PEM — Netscape)</li>",
-                    "<li><a href=\"/MitmCA.cer\">MitmCA.cer</a> (DER — MSIE)</li>",
+                    "<li><a href=\"/MitmCA.crt\">MitmCA.crt</a> (DER — for browsers)</li>",
+                    "<li><a href=\"/MitmCA.pem\">MitmCA.pem</a> (PEM — for tooling)</li>",
                     "</ul></body></html>"
                 );
                 (page.as_bytes().to_vec(), "text/html")
             }
+        };
+
+        // For the cert downloads, add Content-Disposition: attachment so
+        // even browsers without a built-in cert-import dialog (NN3 for
+        // Mac 68K, very early MSIE) pop a "Save File" dialog. The user
+        // can then manually import via Preferences → Security → Site
+        // Certificates → Import.
+        let is_cert = matches!(
+            path.as_str(),
+            "/MitmCA.crt" | "/mitmca.crt" | "/MitmCA.cer" | "/mitmca.cer"
+                | "/MitmCA.pem" | "/mitmca.pem" | "/ca" | "/cert"
+        );
+        let disposition = if is_cert {
+            "Content-Disposition: attachment; filename=\"MitmCA.cer\"\r\n"
+        } else {
+            ""
         };
 
         let mut resp = Vec::with_capacity(body.len() + 256);
@@ -131,10 +160,12 @@ impl CaHttpServer {
             "HTTP/1.0 200 OK\r\n\
              Content-Type: {}\r\n\
              Content-Length: {}\r\n\
+             {}\
              Connection: close\r\n\
              \r\n",
             content_type,
-            body.len()
+            body.len(),
+            disposition
         );
         resp.extend_from_slice(header.as_bytes());
         resp.extend_from_slice(&body);

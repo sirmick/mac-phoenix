@@ -16,9 +16,18 @@ use std::net::TcpStream;
 use openssl::pkey::PKey;
 use openssl::ssl::{
     ErrorCode, Ssl, SslContext, SslContextBuilder, SslMethod, SslOptions, SslStream,
-    SslVerifyMode, SslVersion,
+    SslVerifyMode,
 };
 use openssl::x509::X509;
+
+/// `SslMethod::tls_server()` in openssl-rs maps to `TLS_server_method()`,
+/// which in OpenSSL 1.0.2 = TLS1.0+ only — it doesn't accept SSLv2 or
+/// SSLv3 ClientHellos at all. We need `SSLv23_server_method()` (the
+/// any-version method) to talk to NN3. The safe wrapper doesn't expose
+/// it, so we drop to FFI for this one call.
+fn sslv23_server_method() -> SslMethod {
+    unsafe { SslMethod::from_ptr(openssl_sys::SSLv23_server_method()) }
+}
 
 use crate::tls_mitm::{Error, MitmCa};
 
@@ -32,7 +41,15 @@ use crate::tls_mitm::{Error, MitmCa};
 ///
 /// `!aNULL:!eNULL` because we always present a real cert. No `@SECLEVEL`
 /// because 1.0.2 doesn't have that filter (it was added in 1.1.0).
-const LEGACY_CIPHERS: &str = "ALL:SSLv2:EXP:!aNULL:!eNULL";
+// Explicit list — no keywords. Matches both NN3-export-Mac (top three)
+// and the strong-crypto vintage browsers (NN4 / MSIE 4.5 / NN3 US).
+const LEGACY_CIPHERS: &str = concat!(
+    "EXP-RC4-MD5:EXP-RC2-CBC-MD5:EXP-DES-CBC-SHA:",
+    "RC4-MD5:RC4-SHA:",
+    "DES-CBC-SHA:DES-CBC3-SHA:",
+    "IDEA-CBC-MD5:IDEA-CBC-SHA:",
+    "AES128-SHA:AES256-SHA",
+);
 
 /// Build an `SslContext` that presents a freshly minted leaf for
 /// `hostname`, signed by `ca`, and accepts any classic-Mac handshake
@@ -42,13 +59,21 @@ pub fn build_acceptor_ctx(ca: &MitmCa, hostname: &str) -> Result<SslContext, Err
     let cert = X509::from_pem(&leaf.cert_pem)?;
     let key = PKey::private_key_from_pem(&leaf.key_pem)?;
 
-    let mut b = SslContextBuilder::new(SslMethod::tls_server())?;
-    // `SslMethod::tls_server()` on 1.0.2 = SSLv23 — accepts any version.
-    // The crate sets a bunch of NO_xxx options by default; clear all the
-    // vintage ones so SSLv2 / SSLv3 / TLS1.0 ClientHellos are accepted.
-    b.clear_options(SslOptions::NO_SSLV2);
-    b.clear_options(SslOptions::NO_SSLV3);
-    b.clear_options(SslOptions::NO_TLSV1);
+    let mut b = SslContextBuilder::new(sslv23_server_method())?;
+    // Clear EVERY restrictive option OpenSSL defaults set on a new SSL_CTX
+    // — we want SSLv2-format hellos with v3 capability to negotiate down
+    // to whatever weak cipher the client offers. The openssl crate's
+    // SslContextBuilder doesn't set anything itself, but OpenSSL 1.0.2's
+    // SSLv23_server_method() ships with NO_SSLv2 / NO_SSLv3 set by default
+    // since CVE-2014-3566 (POODLE).
+    b.clear_options(
+        SslOptions::NO_SSLV2
+            | SslOptions::NO_SSLV3
+            | SslOptions::NO_TLSV1
+            | SslOptions::NO_TLSV1_1
+            | SslOptions::NO_TLSV1_2
+            | SslOptions::ALL,
+    );
     b.set_cipher_list(LEGACY_CIPHERS)?;
     b.set_certificate(&cert)?;
     b.set_private_key(&key)?;
@@ -56,7 +81,68 @@ pub fn build_acceptor_ctx(ca: &MitmCa, hostname: &str) -> Result<SslContext, Err
     // Classic clients don't do session tickets; suppress noise.
     b.set_options(SslOptions::NO_TICKET);
 
+    // Export-grade ciphers (EXP-RC4-MD5 etc.) need an ephemeral 512-bit
+    // RSA key for key exchange — the cert key (RSA-2048) is too large to
+    // serve directly per US-export rules. Without this callback, OpenSSL
+    // silently drops every EXP cipher from the negotiable list, leaving
+    // an export-only client (NN3-international-Mac) with no shared
+    // cipher. `s_server` registers an equivalent callback by default; the
+    // openssl-rs crate doesn't expose it, so we go through openssl-sys.
+    install_tmp_rsa(&mut b);
+
     Ok(b.build())
+}
+
+// Callback for SSL_CTX_set_tmp_rsa_callback. Called by OpenSSL on demand
+// when a handshake selects an RSA-EXPORT cipher and the cert key is too
+// large to use directly. We generate a fresh 512-bit RSA key per call —
+// not hot-path code (export ciphers are rare even with vintage clients).
+extern "C" fn tmp_rsa_cb(
+    _ssl: *mut openssl_sys::SSL,
+    _is_export: std::os::raw::c_int,
+    keylen: std::os::raw::c_int,
+) -> *mut openssl_sys::RSA {
+    unsafe {
+        let bn = openssl_sys::BN_new();
+        if bn.is_null() {
+            return std::ptr::null_mut();
+        }
+        openssl_sys::BN_set_word(bn, 65537);
+        let rsa = openssl_sys::RSA_new();
+        if rsa.is_null() {
+            openssl_sys::BN_free(bn);
+            return std::ptr::null_mut();
+        }
+        let ok = openssl_sys::RSA_generate_key_ex(
+            rsa, keylen, bn, std::ptr::null_mut(),
+        );
+        openssl_sys::BN_free(bn);
+        if ok != 1 {
+            openssl_sys::RSA_free(rsa);
+            return std::ptr::null_mut();
+        }
+        rsa
+    }
+}
+
+fn install_tmp_rsa(b: &mut SslContextBuilder) {
+    // SSL_CTX_set_tmp_rsa_callback macro = SSL_CTX_callback_ctrl(ctx,
+    // SSL_CTRL_SET_TMP_RSA_CB, (void(*)())cb). openssl-sys still exposes
+    // SSL_CTX_callback_ctrl as a shim. The callback approach matches what
+    // `openssl s_server` does; the static-key approach (SET_TMP_RSA ctrl)
+    // didn't move the needle in our setup for reasons unclear.
+    const SSL_CTRL_SET_TMP_RSA_CB: i32 = 5;
+    unsafe {
+        // Erase the typed callback through a generic fn() pointer.
+        let cb_ptr: extern "C" fn() = std::mem::transmute(
+            tmp_rsa_cb as extern "C" fn(*mut _, _, _) -> *mut _,
+        );
+        openssl_sys::SSL_CTX_callback_ctrl(
+            b.as_ptr(),
+            SSL_CTRL_SET_TMP_RSA_CB,
+            Some(cb_ptr),
+        );
+    }
 }
 
 /// In-memory duplex used as the downstream `SslStream`'s I/O. The guest-side
@@ -73,6 +159,19 @@ pub struct GuestIo {
 
 impl GuestIo {
     pub fn feed_from_guest(&mut self, data: &[u8]) {
+        // Diagnostic: dump the first bytes the guest sends so we can
+        // identify what cipher set its ClientHello offered. Only logs
+        // until the inbound queue first hits 80 bytes (one TLS hello
+        // worth) — keeps the log clean post-handshake.
+        if self.inbound.len() < 80 && !data.is_empty() {
+            let take = data.len().min(80);
+            let mut hex = String::with_capacity(take * 3);
+            for b in &data[..take] {
+                use std::fmt::Write;
+                let _ = write!(hex, "{:02x} ", b);
+            }
+            log::info!("MITM downstream first bytes ({}): {}", data.len(), hex.trim());
+        }
         self.inbound.extend(data);
     }
 
@@ -363,5 +462,126 @@ fn handshake_err(where_: &str, e: openssl::ssl::Error) -> Error {
         Error::from(stack.clone())
     } else {
         Error::from(io::Error::new(io::ErrorKind::Other, format!("{}: {}", where_, e)))
+    }
+}
+
+#[cfg(test)]
+mod nn3_repro {
+    //! Feed NN3-export-Mac's actual ClientHello bytes into a fresh SSL
+    //! context configured exactly the way build_acceptor_ctx does, see
+    //! what comes out. Run with: `cargo test nn3_export -- --nocapture`.
+    use super::*;
+    use openssl::asn1::Asn1Time;
+    use openssl::bn::{BigNum, MsbOption};
+    use openssl::hash::MessageDigest;
+    use openssl::rsa::Rsa;
+    use openssl::x509::extension::{BasicConstraints, KeyUsage, SubjectAlternativeName};
+    use openssl::x509::{X509Builder, X509NameBuilder};
+    use std::io::{Read, Write};
+
+    #[test]
+    fn nn3_export_clienthello_repro() {
+        // Self-signed RSA-2048 cert (same shape as MitmCa::mint_leaf).
+        let rsa = Rsa::generate(2048).unwrap();
+        let key = PKey::from_rsa(rsa).unwrap();
+        let mut nb = X509NameBuilder::new().unwrap();
+        nb.append_entry_by_text("CN", "test.example").unwrap();
+        let n = nb.build();
+        let mut cb = X509Builder::new().unwrap();
+        cb.set_version(2).unwrap();
+        cb.set_subject_name(&n).unwrap();
+        cb.set_issuer_name(&n).unwrap();
+        cb.set_pubkey(&key).unwrap();
+        let mut bn = BigNum::new().unwrap();
+        bn.rand(64, MsbOption::MAYBE_ZERO, false).unwrap();
+        cb.set_serial_number(&bn.to_asn1_integer().unwrap()).unwrap();
+        cb.set_not_before(&Asn1Time::days_from_now(0).unwrap()).unwrap();
+        cb.set_not_after(&Asn1Time::days_from_now(30).unwrap()).unwrap();
+        cb.append_extension(BasicConstraints::new().critical().build().unwrap()).unwrap();
+        cb.append_extension(KeyUsage::new().critical().digital_signature().key_encipherment().build().unwrap()).unwrap();
+        let san = SubjectAlternativeName::new().dns("test.example").build(&cb.x509v3_context(None, None)).unwrap();
+        cb.append_extension(san).unwrap();
+        cb.sign(&key, MessageDigest::sha1()).unwrap();
+        let cert = cb.build();
+
+        let mut b = SslContextBuilder::new(sslv23_server_method()).unwrap();
+        b.clear_options(
+            SslOptions::NO_SSLV2
+                | SslOptions::NO_SSLV3
+                | SslOptions::NO_TLSV1
+                | SslOptions::NO_TLSV1_1
+                | SslOptions::NO_TLSV1_2
+                | SslOptions::ALL,
+        );
+        b.set_cipher_list(LEGACY_CIPHERS).unwrap();
+        b.set_certificate(&cert).unwrap();
+        b.set_private_key(&key).unwrap();
+        b.check_private_key().unwrap();
+        b.set_options(SslOptions::NO_TICKET);
+        install_tmp_rsa(&mut b);
+        let ctx = b.build();
+
+        let nn3_hello: Vec<u8> = vec![
+            0x80, 0x28, 0x01, 0x03, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x10,
+            0x04, 0x00, 0x80, 0x02, 0x00, 0x80, 0x00, 0x00, 0x03, 0x00, 0x00,
+            0x06, 0x00, 0x00, 0x01, 0xa6, 0x99, 0x31, 0xa9, 0xf0, 0xf4, 0x0c,
+            0x66, 0x89, 0x4d, 0xe2, 0x71, 0xe1, 0x86, 0x6c, 0xc6,
+        ];
+
+        struct Pipe {
+            inbound: std::collections::VecDeque<u8>,
+            outbound: std::collections::VecDeque<u8>,
+        }
+        impl Read for Pipe {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                if self.inbound.is_empty() {
+                    return Err(std::io::Error::from(std::io::ErrorKind::WouldBlock));
+                }
+                let n = buf.len().min(self.inbound.len());
+                for s in buf.iter_mut().take(n) {
+                    *s = self.inbound.pop_front().unwrap();
+                }
+                Ok(n)
+            }
+        }
+        impl Write for Pipe {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.outbound.extend(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+        }
+
+        let pipe = Pipe { inbound: nn3_hello.into(), outbound: Default::default() };
+
+        let mut ssl = Ssl::new(&ctx).unwrap();
+        ssl.set_accept_state();
+        let mut stream = SslStream::new(ssl, pipe).unwrap();
+
+        match stream.do_handshake() {
+            Ok(_) => {
+                println!("HANDSHAKE OK: cipher={:?} version={:?}",
+                    stream.ssl().current_cipher().map(|c| c.name().to_string()),
+                    stream.ssl().version_str());
+            }
+            Err(e) => {
+                println!("HANDSHAKE ERR: code={:?}", e.code());
+                if let Some(stack) = e.ssl_error() {
+                    for err in stack.errors() {
+                        println!("  reason: {} ({})",
+                            err.reason().unwrap_or("?"), err.code());
+                    }
+                }
+                let pipe = stream.get_ref();
+                println!("outbound bytes from server: {}", pipe.outbound.len());
+                if !pipe.outbound.is_empty() {
+                    print!("  first 32: ");
+                    for b in pipe.outbound.iter().take(32) {
+                        print!("{:02x} ", b);
+                    }
+                    println!();
+                }
+            }
+        }
     }
 }
