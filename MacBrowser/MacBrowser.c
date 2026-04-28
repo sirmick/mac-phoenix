@@ -360,11 +360,15 @@ static void open_window(void)
 {
     /* Window y origin = 22 puts the title bar just below the 20 px
      * menu bar; total height (port + title bar) = 440 + 18 = 458,
-     * so the window ends at y=480 exactly — full Mac screen used. */
+     * so the window ends at y=480 exactly — full Mac screen used.
+     *
+     * NewCWindow gives us a CGrafPort with full Color QuickDraw, so
+     * RGBBackColor + EraseRect can fill a solid light gray for the
+     * chrome row (instead of QD's dithered ltGray pattern). */
     Rect bounds;
     SetRect(&bounds, 0, 40, kViewportW, 40 + kWinH);
-    gWin = NewWindow(NULL, &bounds, "\pMacBrowser",
-                     true, documentProc, (WindowPtr)-1, true, 0);
+    gWin = NewCWindow(NULL, &bounds, "\pMacBrowser",
+                      true, documentProc, (WindowPtr)-1, true, 0);
 
     SetPort(gWin);
     make_toolbar();
@@ -390,33 +394,26 @@ static void draw_chrome_row(void)
     GetPort(&saved);
     SetPort(gWin);
 
-    /* Fill the chrome row with stereotypical light Mac gray (ltGray
-     * = 50%-density 8x8 dot pattern, the System 7 dialog backdrop
-     * idiom). Keep BackPat=ltGray briefly for EraseRect to use it. */
-    BackPat(&qd.ltGray);
+    /* "Platinum" gray that the Mac OS 7.5+ chrome conjures up —
+     * RGB ≈ 0xBBBB (73% white) is the classic platinum fill, the
+     * same shade Apple later codified in Mac OS 8's Appearance
+     * Manager. Color QuickDraw + RGBBackColor + EraseRect gives a
+     * solid (non-dithered) fill. */
+    RGBColor gray  = { 0xBBBB, 0xBBBB, 0xBBBB };
+    RGBColor white = { 0xFFFF, 0xFFFF, 0xFFFF };
+
+    /* 1. Erase the whole chrome row to gray. */
+    RGBBackColor(&gray);
     Rect row;
     SetRect(&row, 0, kToolbarY, kViewportW, kToolbarY + kToolbarH);
     EraseRect(&row);
-    BackPat(&qd.white);
 
-    /* Re-draw all controls (buttons + scroll bars) on top of the
-     * fresh background. */
+    /* 2. Draw all controls. With BackColor still = gray, each
+     * button's bounding box erases to gray (matching the chrome),
+     * leaving the rounded white button bodies on a gray field. */
     DrawControls(gWin);
 
-    /* URL text field: white background under the framed rect, then
-     * the frame, then the TE contents on top. */
-    Rect ur;
-    url_bar_rect(&ur);
-    EraseRect(&ur);          /* white (BackPat just reset) */
-    FrameRect(&ur);
-    if (gURL) {
-        TextFont(4);   /* monaco — period-correct for URL display */
-        TextSize(9);
-        TEUpdate(&ur, gURL);
-    }
-
-    /* Right-aligned status label. Placeholder for M5-C; will read
-     * BR_EV_STATUS strings out of h2g once that lands. */
+    /* 3. Right-aligned "Ready" label, drawn on the gray bg. */
     TextFont(applFont);   /* Geneva */
     TextSize(9);
     const unsigned char *label = (const unsigned char *)"\pReady";
@@ -424,7 +421,20 @@ static void draw_chrome_row(void)
     MoveTo(kViewportW - 6 - tw, kBtnY + kBtnH - 4);
     DrawString(label);
 
-    /* 1-px separator between chrome and viewport. */
+    /* 4. URL text field: switch to white BackColor for the field
+     * interior; frame + TE contents on top. */
+    RGBBackColor(&white);
+    Rect ur;
+    url_bar_rect(&ur);
+    EraseRect(&ur);
+    FrameRect(&ur);
+    if (gURL) {
+        TextFont(4);   /* monaco — period-correct for URL display */
+        TextSize(9);
+        TEUpdate(&ur, gURL);
+    }
+
+    /* 5. 1-px separator between chrome and viewport. */
     PenNormal();
     MoveTo(0, kToolbarH - 1);
     LineTo(kViewportW - 1, kToolbarH - 1);
