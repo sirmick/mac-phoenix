@@ -108,24 +108,16 @@ void run()
             browser::cmd_dispatch(cmd_type, cmd_buf, cmd_len);
         }
 
-        /* Push a BR_EV_STATUS once per second so the guest can prove
-         * it's draining h2g. Payload = 1 status byte + ASCII counter. */
-        auto now = std::chrono::steady_clock::now();
-        if (now - last_status >= std::chrono::seconds(1)) {
-            last_status = now;
-            uint8_t status_payload[40];
-            int n = snprintf((char*)status_payload + 2, sizeof(status_payload) - 2,
-                             "tick %u", status_count);
-            status_payload[0] = BR_STATUS_READY;
-            status_payload[1] = (uint8_t)n;
-            uint16_t total = (uint16_t)(2 + n);
-            if (browser::send_event(BR_EV_STATUS, status_payload, total)) {
-                status_count++;
-            }
-        }
+        /* M2-era validation: the spike used to push a fake
+         * BR_EV_STATUS "tick N" every second so the guest could
+         * prove it was draining h2g. Now that M4.5 wires real
+         * BR_EV_STATUS to BiDi navigation events and the M5 guest
+         * UI displays them in the URL bar, the fake traffic would
+         * overwrite the URL bar with "tick N" strings. Removed. */
+        (void)last_status;
+        (void)status_count;
 
-        /* Poll the guest's debug log channel each tick. Cheap; will move
-         * to the VBL hook in M3 once we wire that up. */
+        /* Poll the guest's debug log channel each tick. */
         browser::poll_log();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

@@ -146,6 +146,13 @@ static uint32_t       gH2gReceived = 0;       /* events from host       */
 static uint16_t       gLastEvtType = 0;
 static unsigned long  gLastG2hTicks = 0;
 
+/* Mirrored from the most recent BR_EV_STATUS we drained out of h2g.
+ * gStatusCode is BR_STATUS_*; gStatusDirty signals the main loop to
+ * redraw + (optionally) update the URL bar with the new URL. */
+static uint8_t        gStatusCode = BR_STATUS_READY;
+static unsigned char  gStatusURL[252];   /* Pascal-string scratch */
+static Boolean        gStatusDirty = false;
+
 /* Off-screen 16-bit RGB555 PixMap header that wraps gShm->fb.pixels. */
 static PixMap     gShmPixMap;
 static CTabHandle gShmCTab = NULL;
@@ -290,6 +297,24 @@ static void poll_shm(void)
     blit_one_frame();
 }
 
+static void draw_chrome_row(void);
+
+/* Apply the latest BR_EV_STATUS to the UI: refresh the URL bar with
+ * the newly-committed URL (unless the user is mid-edit), then
+ * redraw the chrome row so the status label picks up the new code. */
+static void apply_status(void)
+{
+    if (!gWin) return;
+
+    /* Update URL bar text (only if user isn't actively editing it,
+     * to avoid stomping on partial input). */
+    if (gURL && !gURLActive && gStatusURL[0] > 0) {
+        TESetText((Ptr)(gStatusURL + 1), (long)gStatusURL[0], gURL);
+    }
+
+    draw_chrome_row();
+}
+
 /* Drain any host events queued in h2g. Cheap on every tick. */
 static void drain_h2g(void)
 {
@@ -299,6 +324,19 @@ static void drain_h2g(void)
     while (br_ring_pop(&gShm->h2g, &type, buf, sizeof(buf), &len) == 0) {
         gLastEvtType = type;
         gH2gReceived++;
+
+        /* BR_EV_STATUS: u8 code, u8 urllen, u8 url[urllen]. */
+        if (type == BR_EV_STATUS && len >= 2) {
+            uint8_t code = buf[0];
+            uint8_t urllen = buf[1];
+            if ((uint16_t)(2 + urllen) > len) urllen = (uint8_t)(len - 2);
+            if (urllen > sizeof(gStatusURL) - 1)
+                urllen = (uint8_t)(sizeof(gStatusURL) - 1);
+            gStatusCode = code;
+            gStatusURL[0] = urllen;
+            if (urllen) memcpy(gStatusURL + 1, buf + 2, urllen);
+            gStatusDirty = true;
+        }
     }
 }
 
@@ -449,13 +487,23 @@ static void draw_chrome_row(void)
      * leaving the rounded white button bodies on a gray field. */
     DrawControls(gWin);
 
-    /* 3. Right-aligned "Ready" label, drawn on the gray bg in the
-     * area between URL bar and the +/- buttons, vertically centered. */
+    /* 3. Right-aligned status label, drawn on the gray bg between
+     * URL bar and the +/- buttons. The label text is derived from
+     * the most recent BR_EV_STATUS code; "\311" is the MacRoman
+     * ellipsis glyph (…). */
     TextFont(applFont);   /* Geneva */
     TextSize(9);
-    const unsigned char *label = (const unsigned char *)"\pReady";
+    const unsigned char *label;
+    switch (gStatusCode) {
+    case BR_STATUS_LOADING: label = (const unsigned char *)"\pLoading\311"; break;
+    case BR_STATUS_ERROR:   label = (const unsigned char *)"\pError"; break;
+    case BR_STATUS_READY:
+    default:                label = (const unsigned char *)"\pReady"; break;
+    }
     short tw = StringWidth(label);
-    MoveTo(kStatusRight - tw, kStatusBaseY);
+    short sx = kStatusRight - tw;
+    if (sx < kStatusLeft) sx = kStatusLeft;
+    MoveTo(sx, kStatusBaseY);
     DrawString(label);
 
     /* 4. URL text field: switch to white BackColor for the field
@@ -723,6 +771,11 @@ int main(void)
         poll_shm();
         drain_h2g();
         maybe_push_g2h();
+
+        if (gStatusDirty) {
+            gStatusDirty = false;
+            apply_status();
+        }
 
         /* TEIdle blinks the caret roughly every 30 ticks. Cheap. */
         if (gURL && gURLActive) TEIdle(gURL);
