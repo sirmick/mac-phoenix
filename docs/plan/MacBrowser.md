@@ -227,18 +227,18 @@ Build deps used: `libxcb`, `libxcb-shm`, `libxcb-damage`, `libxcb-composite`
 libdatachannel already gives us a WebSocket implementation we can
 reuse if hand-rolling becomes a hassle.
 
-### Guest: `tests/guest/browser/`
+### Guest: `MacBrowser/`  (top-level, peer to `src/`)
 
 Following the BridgeAgent pattern.
 
 | File | Role |
 |---|---|
-| `browser.c` | main app: window, controls, VBL task install, event loop, BlockMove + CopyBits from shm |
+| `MacBrowser.c` | main app: window, URL bar, toolbar, viewport, event loop, BlockMove + CopyBits from shm |
 | `browser_shm.c` | guest-side helpers for ring read/write, magic/version check |
-| `browser.r` | resources: WIND, MENU, ALRT, icon family |
-| `Makefile` | Retro68 + UI 3.4 build, produces `Browser.bin` |
+| `MacBrowser.r` | resources: SIZE, WIND, MENU, ALRT, icon family |
+| `Makefile` | Retro68 + UI 3.4 build, produces `MacBrowser.bin` |
 
-Pre-built `Browser.bin` committed to repo (same pattern as `BridgeAgent.bin`).
+Pre-built `MacBrowser.bin` committed to repo (same pattern as `BridgeAgent.bin`). Auto-installs in the guest's `:System Folder:Startup Items:` so it launches when a `--browser`-mode disk boots.
 
 ### Wiring
 
@@ -623,12 +623,10 @@ src/main.cpp                             ← +--browser flag ✅ M1
 tools/png2icn.py                         ← PNG → 'ICN#'/'icl8' .r blocks (M5)
 
 tests/test_browser_shm.cpp               ← SPSC protocol unit test ✅ M2
-tests/guest/browser/
+MacBrowser/                              ← top-level guest app dir
   browser_shm.{h,c}                      ← ring helpers ✅ M2
-  browser_spike.{c,r}                    ← M1/M2 spike app ✅
-  BrowserSpike.bin                       ← committed binary ✅
-  browser.{c,r}                          ← real guest app (M5)
-  browser_hig.h                          ← HIG spacing constants (M5)
+  MacBrowser.{c,r}                       ← guest app source
+  MacBrowser.bin                         ← committed binary ✅ M5-A
+  browser_hig.h                          ← HIG spacing constants (M5-E)
   Makefile                               ← Retro68 build ✅
-  Browser.bin                            ← committed binary (M5)
 ```

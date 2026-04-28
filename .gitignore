@@ -58,11 +58,11 @@ tests/guest/bridge/BridgeAgent.dsk
 tests/guest/bridge/BridgeAgent.code.bin
 tests/guest/bridge/BridgeAgent.code.bin.gdb
 
-# Retro68 BrowserSpike build artifacts (BrowserSpike.bin is checked in)
-tests/guest/browser/BrowserSpike.APPL
-tests/guest/browser/BrowserSpike.dsk
-tests/guest/browser/BrowserSpike.code.bin
-tests/guest/browser/BrowserSpike.code.bin.gdb
+# Retro68 MacBrowser build artifacts (MacBrowser.bin is checked in)
+MacBrowser/MacBrowser.APPL
+MacBrowser/MacBrowser.dsk
+MacBrowser/MacBrowser.code.bin
+MacBrowser/MacBrowser.code.bin.gdb
 
 # Rust
 net-bridge/target/

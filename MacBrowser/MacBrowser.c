@@ -1,15 +1,18 @@
 /*
- * BrowserSpike — M1 validation app.
+ * MacBrowser — guest-side app for the MacBrowser pipeline.
  *
  * 1. NewPtrClear(sizeof(BrowserShm)) out of the app heap (4 MiB SIZE).
  * 2. Stamp magic + version + framebuffer defaults.
  * 3. Write the buffer's Mac address as ASCII hex into
  *    Host:MacPhoenix:browser_shm.txt so mac-phoenix can find the buffer
  *    via Mac2HostAddr.
- * 4. Open one window, poll fb.seq, CopyBits the gradient that the host
- *    writes into fb.pixels.
+ * 4. Open a window with URL bar + pixel viewport + status strip.
+ *    Polls fb.seq each tick and CopyBits the host's rendered Firefox
+ *    pixels into the viewport. Pushes BR_CMD_* (NAV / CLICK / KEY /
+ *    SCROLL / BACK / ...) into g2h on user input; drains BR_EV_*
+ *    events out of h2g for status / page / download notifications.
  *
- * Quit via File→Quit (Cmd+Q).
+ * Cmd+L = focus URL bar; Return = navigate; Cmd+Q = quit.
  */
 #include <Quickdraw.h>
 #include <Fonts.h>
@@ -68,13 +71,13 @@ static unsigned long  gLastG2hTicks = 0;
 static PixMap     gShmPixMap;
 static CTabHandle gShmCTab = NULL;
 
-/* Write a freeform line into Host:MacPhoenix:browser_spike for host-side
- * debugging. Uses ExtFS like BridgeAgent does. */
+/* Write a freeform line into Host:MacPhoenix:MacBrowser.log for
+ * host-side debugging. Uses ExtFS like BridgeAgent does. */
 static void spike_log(const char *tag)
 {
     FSSpec sp;
     short ref;
-    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:browser_spike", &sp) == fnfErr)
+    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:MacBrowser.log", &sp) == fnfErr)
         FSpCreate(&sp, 'ttxt', 'TEXT', 0);
     if (FSpOpenDF(&sp, fsWrPerm, &ref) != noErr) return;
     long len = (long)strlen(tag);
@@ -287,7 +290,7 @@ static void open_window(void)
 {
     Rect bounds;
     SetRect(&bounds, 30, 60, 30 + kViewportW, 60 + kWinH);
-    gWin = NewWindow(NULL, &bounds, "\pBrowserSpike",
+    gWin = NewWindow(NULL, &bounds, "\pMacBrowser",
                      true, documentProc, (WindowPtr)-1, true, 0);
 
     /* TENew destRect == viewRect for simple single-line input. */
@@ -356,7 +359,7 @@ static void send_url_nav(void)
 static void build_menus(void)
 {
     gAppleMenuH = NewMenu(kAppleMenu, "\p\024");
-    AppendMenu(gAppleMenuH, "\pAbout BrowserSpike\311");
+    AppendMenu(gAppleMenuH, "\pAbout MacBrowser\311");
     InsertMenu(gAppleMenuH, 0);
 
     gFileMenuH = NewMenu(kFileMenu, "\pFile");
@@ -368,7 +371,7 @@ static void build_menus(void)
 
 static void do_about(void)
 {
-    ParamText("\pMacPhoenix BrowserSpike\rM1 host-pipe validator.",
+    ParamText("\pMacPhoenix MacBrowser\rModern web inside System 7.",
               "\p", "\p", "\p");
     NoteAlert(128, NULL);
 }
@@ -513,7 +516,7 @@ int main(void)
          * the pointer, log a startup line through the new debug channel
          * so we can see end-to-end flow. */
         br_log(&gShm->log, BR_LOG_INF,
-               "BrowserSpike up; shm=0x%08lx size=%lu",
+               "MacBrowser up; shm=0x%08lx size=%lu",
                (unsigned long)gShmAddr,
                (unsigned long)sizeof(BrowserShm));
     }
