@@ -26,6 +26,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace browser {
 
@@ -61,10 +62,47 @@ public:
                      std::chrono::milliseconds timeout =
                          std::chrono::seconds(10));
 
-    /* Convenience wrapper for browsingContext.navigate. wait="complete"
-     * blocks until DOMContentLoaded — feels like a page load to the
-     * caller. */
+    /* Convenience wrappers — all return true on success. Errors are
+     * the BiDi error envelope (JSON) on protocol failures, or short
+     * strings ("timeout", "not connected") on transport problems.
+     * Call call() directly if you need the raw response body. */
+
     bool navigate(const std::string& url, std::string* error = nullptr);
+    bool reload  (std::string* error = nullptr);
+    bool go_back (std::string* error = nullptr);  /* delta=-1 */
+    bool go_forward(std::string* error = nullptr); /* delta=+1 */
+
+    /* Pointer at viewport coords (x,y), single click of `button`
+     * (0=left, 1=middle, 2=right) with `count` clicks. */
+    bool click(int x, int y, int button = 0, int count = 1,
+               std::string* error = nullptr);
+
+    /* Hover/move-only (no buttons). Useful for hover-driven UI. */
+    bool mouse_move(int x, int y, std::string* error = nullptr);
+
+    /* Wheel scroll at coords. Positive dy = scroll down. */
+    bool scroll(int x, int y, int dx, int dy,
+                std::string* error = nullptr);
+
+    /* Type a string of text into the focused element. Each character
+     * fires a keyDown + keyUp pair. UTF-8 in, BiDi handles unicode. */
+    bool type(const std::string& utf8, std::string* error = nullptr);
+
+    /* Resize the browser viewport. The pixel pipeline picks up the
+     * new dimensions on the next paint. */
+    bool set_viewport(int width, int height,
+                      std::string* error = nullptr);
+
+    /* Evaluate JS in the top-level frame. Returns the serialized
+     * result (BiDi remote-value JSON) on success. */
+    std::string evaluate(const std::string& expr,
+                         std::string* error = nullptr);
+
+    /* session.subscribe to one or more BiDi event names — required
+     * before on_event will receive them. Common: "browsingContext.load",
+     * "browsingContext.navigationCommitted", "log.entryAdded". */
+    bool subscribe(const std::vector<std::string>& events,
+                   std::string* error = nullptr);
 
     /* Async event hook: receives the raw JSON for any non-response
      * frame (BiDi events have type=="event" and a method field). */

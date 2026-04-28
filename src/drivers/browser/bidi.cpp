@@ -258,4 +258,200 @@ bool BidiClient::navigate(const std::string& url, std::string* error)
     return !result.empty();
 }
 
+bool BidiClient::reload(std::string* error)
+{
+    if (impl_->top_context.empty()) {
+        if (error) *error = "no top-level browsing context";
+        return false;
+    }
+    json p = {{"context", impl_->top_context}, {"wait", "complete"}};
+    std::string e;
+    return !call("browsingContext.reload", p.dump(),
+                 error ? error : &e, std::chrono::seconds(20)).empty();
+}
+
+namespace {
+
+bool traverse(const std::string& ctx, int delta, BidiClient* c,
+              std::string* error)
+{
+    json p = {{"context", ctx}, {"delta", delta}};
+    std::string e;
+    /* call() lives on the client, so route through a public path. */
+    return !c->call("browsingContext.traverseHistory", p.dump(),
+                    error ? error : &e).empty();
+}
+
+}  // namespace
+
+bool BidiClient::go_back(std::string* error)
+{
+    return traverse(impl_->top_context, -1, this, error);
+}
+bool BidiClient::go_forward(std::string* error)
+{
+    return traverse(impl_->top_context, +1, this, error);
+}
+
+namespace {
+
+/* Build a single-action input.performActions request with a
+ * pointer-source. Each call/method below routes through here. */
+json pointer_action(const std::string& ctx,
+                    const json& actions)
+{
+    json src = {
+        {"id", "mouse"},
+        {"type", "pointer"},
+        {"parameters", {{"pointerType", "mouse"}}},
+        {"actions", actions},
+    };
+    return {
+        {"context", ctx},
+        {"actions", json::array({src})},
+    };
+}
+
+}  // namespace
+
+bool BidiClient::click(int x, int y, int button, int count,
+                       std::string* error)
+{
+    if (impl_->top_context.empty()) {
+        if (error) *error = "no top-level browsing context";
+        return false;
+    }
+    /* Move to (x,y), then alternate down/up `count` times. count
+     * is the BiDi `clickCount` semantic; for now we send one
+     * down/up pair (chained clicks for double-click are M5+). */
+    json actions = json::array({
+        json{{"type", "pointerMove"}, {"x", x}, {"y", y}, {"duration", 0}},
+        json{{"type", "pointerDown"}, {"button", button}},
+        json{{"type", "pointerUp"},   {"button", button}},
+    });
+    json p = pointer_action(impl_->top_context, actions);
+    (void)count;
+    std::string e;
+    return !call("input.performActions", p.dump(),
+                 error ? error : &e).empty();
+}
+
+bool BidiClient::mouse_move(int x, int y, std::string* error)
+{
+    if (impl_->top_context.empty()) {
+        if (error) *error = "no top-level browsing context";
+        return false;
+    }
+    json actions = json::array({
+        json{{"type", "pointerMove"}, {"x", x}, {"y", y}, {"duration", 0}},
+    });
+    json p = pointer_action(impl_->top_context, actions);
+    std::string e;
+    return !call("input.performActions", p.dump(),
+                 error ? error : &e).empty();
+}
+
+bool BidiClient::scroll(int x, int y, int dx, int dy,
+                        std::string* error)
+{
+    if (impl_->top_context.empty()) {
+        if (error) *error = "no top-level browsing context";
+        return false;
+    }
+    json src = {
+        {"id", "wheel"},
+        {"type", "wheel"},
+        {"actions", json::array({
+            json{{"type", "scroll"}, {"x", x}, {"y", y},
+                 {"deltaX", dx},     {"deltaY", dy}},
+        })},
+    };
+    json p = {
+        {"context", impl_->top_context},
+        {"actions", json::array({src})},
+    };
+    std::string e;
+    return !call("input.performActions", p.dump(),
+                 error ? error : &e).empty();
+}
+
+bool BidiClient::type(const std::string& text, std::string* error)
+{
+    if (impl_->top_context.empty()) {
+        if (error) *error = "no top-level browsing context";
+        return false;
+    }
+    /* BiDi key-source actions take one Unicode code point per action.
+     * For a UTF-8 string we send keyDown+keyUp per character; BiDi
+     * handles the rest (modifiers from special keys are M5+). */
+    json actions = json::array();
+    for (size_t i = 0; i < text.size();) {
+        /* Decode one UTF-8 codepoint to a single char string. BiDi
+         * accepts the UTF-8 bytes verbatim as a string. */
+        size_t step = 1;
+        unsigned c = (unsigned char)text[i];
+        if      ((c & 0x80) == 0x00) step = 1;
+        else if ((c & 0xE0) == 0xC0) step = 2;
+        else if ((c & 0xF0) == 0xE0) step = 3;
+        else if ((c & 0xF8) == 0xF0) step = 4;
+        if (i + step > text.size()) break;
+        std::string ch = text.substr(i, step);
+        actions.push_back(json{{"type", "keyDown"}, {"value", ch}});
+        actions.push_back(json{{"type", "keyUp"},   {"value", ch}});
+        i += step;
+    }
+    json src = {
+        {"id", "kbd"},
+        {"type", "key"},
+        {"actions", actions},
+    };
+    json p = {
+        {"context", impl_->top_context},
+        {"actions", json::array({src})},
+    };
+    std::string e;
+    return !call("input.performActions", p.dump(),
+                 error ? error : &e).empty();
+}
+
+bool BidiClient::set_viewport(int width, int height, std::string* error)
+{
+    if (impl_->top_context.empty()) {
+        if (error) *error = "no top-level browsing context";
+        return false;
+    }
+    json p = {
+        {"context", impl_->top_context},
+        {"viewport", {{"width", width}, {"height", height}}},
+    };
+    std::string e;
+    return !call("browsingContext.setViewport", p.dump(),
+                 error ? error : &e).empty();
+}
+
+std::string BidiClient::evaluate(const std::string& expr,
+                                 std::string* error)
+{
+    if (impl_->top_context.empty()) {
+        if (error) *error = "no top-level browsing context";
+        return {};
+    }
+    json p = {
+        {"expression", expr},
+        {"target",      {{"context", impl_->top_context}}},
+        {"awaitPromise", true},
+    };
+    std::string e;
+    return call("script.evaluate", p.dump(), error ? error : &e);
+}
+
+bool BidiClient::subscribe(const std::vector<std::string>& events,
+                           std::string* error)
+{
+    json p = {{"events", events}};
+    std::string e;
+    return !call("session.subscribe", p.dump(),
+                 error ? error : &e).empty();
+}
+
 }  // namespace browser

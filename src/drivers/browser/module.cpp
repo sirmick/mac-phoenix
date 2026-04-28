@@ -3,7 +3,14 @@
  */
 #include "module.h"
 #include "bidi.h"
+#include "cmd.h"
 #include "pipeline.h"
+#include "shm.h"
+
+#define BR_HOST 1
+#include "MacBrowser.h"
+
+#include <nlohmann/json.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -57,6 +64,55 @@ bool BrowserModule::start(const std::string& initial_url)
         bidi_.reset();
     } else {
         fprintf(stderr, "[BrowserModule] BiDi connected\n");
+        cmd_set_bidi(bidi_.get());
+
+        /* Subscribe to navigation events so the guest can drive a
+         * loading-state UI in M5. The on_event callback runs on the
+         * WebSocket I/O thread; send_event is mutex-protected. */
+        bidi_->on_event([](const std::string& json_text) {
+            using nlohmann::json;
+            json j;
+            try { j = json::parse(json_text); }
+            catch (...) { return; }
+            std::string method = j.value("method", "");
+            if (method == "browsingContext.navigationStarted" ||
+                method == "browsingContext.navigationCommitted") {
+                /* Send a brief STATUS message; the guest's URL bar
+                 * displays "Loading…" while waiting for the matching
+                 * load event. */
+                std::string url = j["params"].value("url", "");
+                fprintf(stderr, "[BiDi event] %s url=%s\n",
+                        method.c_str(), url.c_str());
+                uint8_t buf[2 + 250];
+                buf[0] = BR_STATUS_LOADING;
+                size_t n = std::min(url.size(), (size_t)250);
+                buf[1] = (uint8_t)n;
+                memcpy(buf + 2, url.data(), n);
+                send_event(BR_EV_STATUS, buf, (uint16_t)(2 + n));
+            } else if (method == "browsingContext.load") {
+                /* Fire READY status. The page dimensions + title go
+                 * out as a follow-up BR_EV_PAGE message; the guest
+                 * uses BR_EV_FRAME (already published by pipeline)
+                 * to know to repaint. */
+                std::string url = j["params"].value("url", "");
+                fprintf(stderr, "[BiDi event] load url=%s\n", url.c_str());
+                uint8_t buf[2 + 250];
+                buf[0] = BR_STATUS_READY;
+                size_t n = std::min(url.size(), (size_t)250);
+                buf[1] = (uint8_t)n;
+                memcpy(buf + 2, url.data(), n);
+                send_event(BR_EV_STATUS, buf, (uint16_t)(2 + n));
+            }
+        });
+        std::string sub_err;
+        if (!bidi_->subscribe({"browsingContext.navigationStarted",
+                               "browsingContext.navigationCommitted",
+                               "browsingContext.load"},
+                              &sub_err)) {
+            fprintf(stderr, "[BrowserModule] BiDi subscribe failed: %s\n",
+                    sub_err.c_str());
+        }
+
     }
 
     running_ = true;
@@ -68,6 +124,7 @@ bool BrowserModule::start(const std::string& initial_url)
 void BrowserModule::stop()
 {
     running_ = false;
+    cmd_set_bidi(nullptr);
     if (bidi_)       { bidi_->stop();       bidi_.reset(); }
     pipeline_stop();
     if (capture_)    { capture_->stop();    capture_.reset(); }

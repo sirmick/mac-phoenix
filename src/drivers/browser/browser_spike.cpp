@@ -8,6 +8,7 @@
  *  into its window.
  */
 #include "browser_spike.h"
+#include "cmd.h"
 #include "shm.h"
 
 #define BR_HOST 1
@@ -86,21 +87,25 @@ void run()
         }
         frame++;
 
-        /* Drain any g2h commands the guest pushed since last tick. */
+        /* Drain any g2h commands the guest pushed since last tick.
+         * BR_CMD_BACK with a 4-byte payload is the spike's "are you
+         * alive" ping (counter); everything else is real input
+         * forwarded to BiDi. */
         uint16_t cmd_type = 0, cmd_len = 0;
-        uint8_t  cmd_buf[256];
+        uint8_t  cmd_buf[1024];
         while (browser::read_command(&cmd_type, cmd_buf,
                                      sizeof(cmd_buf), &cmd_len)) {
             cmd_count++;
-            uint32_t guest_counter = 0;
-            if (cmd_len >= 4) {
+            if (cmd_type == BR_CMD_BACK && cmd_len == 4) {
+                uint32_t guest_counter = 0;
                 memcpy(&guest_counter, cmd_buf, 4);
-                /* Guest is BE; on x86 host swap. */
                 guest_counter = __builtin_bswap32(guest_counter);
+                fprintf(stderr, "[BrowserSpike] host got cmd type=0x%x "
+                        "len=%u (guest_counter=%u, host_total=%u)\n",
+                        cmd_type, cmd_len, guest_counter, cmd_count);
+                continue;
             }
-            fprintf(stderr, "[BrowserSpike] host got cmd type=0x%x len=%u "
-                    "(guest_counter=%u, host_total=%u)\n",
-                    cmd_type, cmd_len, guest_counter, cmd_count);
+            browser::cmd_dispatch(cmd_type, cmd_buf, cmd_len);
         }
 
         /* Push a BR_EV_STATUS once per second so the guest can prove
