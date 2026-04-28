@@ -78,7 +78,6 @@ bool CdpClient::open(const std::string& browser_ws_url,
         close();
         return false;
     }
-
     std::string target_id;
     if (targets.result.contains("targetInfos") &&
         targets.result["targetInfos"].is_array()) {
@@ -136,7 +135,10 @@ CdpClient::Response CdpClient::call(const std::string& method,
                                     std::chrono::milliseconds timeout)
 {
     Response resp;
-    if (!open_.load() || !ws_) return resp;
+    if (!open_.load() || !ws_) {
+        fprintf(stderr, "[CDP] call(%s) refused: not open\n", method.c_str());
+        return resp;
+    }
 
     Json req = {
         {"method", method},
@@ -159,6 +161,8 @@ CdpClient::Response CdpClient::call(const std::string& method,
 
     std::string text = req.dump();
     if (!ws_->send(text)) {
+        fprintf(stderr, "[CDP] send(%s id=%d) failed; dropping\n",
+                method.c_str(), id);
         std::lock_guard<std::mutex> lk(mtx_);
         pending_.erase(id);
         return resp;
@@ -167,11 +171,32 @@ CdpClient::Response CdpClient::call(const std::string& method,
     std::unique_lock<std::mutex> lk(mtx_);
     if (!cv_.wait_for(lk, timeout, [&]{ return pending->done; })) {
         pending_.erase(id);
-        fprintf(stderr, "[CDP] timeout on %s (id=%d)\n", method.c_str(), id);
+        fprintf(stderr, "[CDP] timeout on %s (id=%d, %lldms)\n",
+                method.c_str(), id, (long long)timeout.count());
         return resp;
     }
     pending_.erase(id);
     return pending->resp;
+}
+
+void CdpClient::send_no_reply(const std::string& method, const Json& params)
+{
+    if (!open_.load() || !ws_) return;
+    Json req = {
+        {"method", method},
+        {"params", params},
+    };
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        req["id"] = next_id_++;
+        if (!session_id_.empty() &&
+            method != "Target.getTargets" &&
+            method != "Target.attachToTarget" &&
+            method.rfind("Browser.", 0) != 0) {
+            req["sessionId"] = session_id_;
+        }
+    }
+    ws_->send(req.dump());
 }
 
 void CdpClient::on_event(const std::string& method, EventHandler handler)
@@ -199,7 +224,7 @@ void CdpClient::handle_message(const std::string& text)
             std::lock_guard<std::mutex> lk(mtx_);
             auto it = pending_.find(id);
             if (it == pending_.end()) {
-                /* Stale or duplicate; ignore. */
+                fprintf(stderr, "[CDP] stale response id=%d (no pending)\n", id);
                 return;
             }
             p = it->second;

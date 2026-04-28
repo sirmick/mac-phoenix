@@ -24,6 +24,7 @@ namespace {
 
 std::thread g_thread;
 std::atomic<bool> g_running{false};
+bool g_paint_gradient = false;
 
 constexpr uint16_t kSpikeWidth  = 640;
 constexpr uint16_t kSpikeHeight = 480;
@@ -46,41 +47,43 @@ void run()
     }
     if (!shm) return;
 
-    /* Reset framebuffer header. Trust the guest published a sensible
-     * default, but assert our spike geometry on the off chance it
-     * differs. M2+ will negotiate this through events. */
-    br_u16_store(&shm->fb.width,  kSpikeWidth);
-    br_u16_store(&shm->fb.height, kSpikeHeight);
-    shm->fb.depth = 16;
-    br_u16_store(&shm->fb.dirty_count, 1);
-    br_u16_store((uint16_t*)&shm->fb.dirty[0].top,    0);
-    br_u16_store((uint16_t*)&shm->fb.dirty[0].left,   0);
-    br_u16_store((uint16_t*)&shm->fb.dirty[0].bottom, kSpikeHeight);
-    br_u16_store((uint16_t*)&shm->fb.dirty[0].right,  kSpikeWidth);
-
-    fprintf(stderr, "[BrowserSpike] gradient writer running (%dx%d, RGB555, "
-            "shm=%p)\n", kSpikeWidth, kSpikeHeight, (void*)shm);
+    if (g_paint_gradient) {
+        /* Reset framebuffer header to spike geometry. */
+        br_u16_store(&shm->fb.width,  kSpikeWidth);
+        br_u16_store(&shm->fb.height, kSpikeHeight);
+        shm->fb.depth = 16;
+        br_u16_store(&shm->fb.dirty_count, 1);
+        br_u16_store((uint16_t*)&shm->fb.dirty[0].top,    0);
+        br_u16_store((uint16_t*)&shm->fb.dirty[0].left,   0);
+        br_u16_store((uint16_t*)&shm->fb.dirty[0].bottom, kSpikeHeight);
+        br_u16_store((uint16_t*)&shm->fb.dirty[0].right,  kSpikeWidth);
+        fprintf(stderr, "[BrowserSpike] gradient writer running (%dx%d, "
+                "RGB555, shm=%p)\n", kSpikeWidth, kSpikeHeight, (void*)shm);
+    } else {
+        fprintf(stderr, "[BrowserSpike] ring/log loop only (pipeline owns fb)\n");
+    }
 
     uint32_t frame = 0;
     uint32_t status_count = 0;
     uint32_t cmd_count = 0;
     auto last_status = std::chrono::steady_clock::now();
     while (g_running.load(std::memory_order_acquire)) {
-        uint8_t phase = (uint8_t)(frame * 4);
-        for (int y = 0; y < kSpikeHeight; y++) {
-            uint16_t* row = (uint16_t*)&shm->fb.pixels[y * kSpikeWidth * 2];
-            uint8_t b = (uint8_t)(y * 255 / (kSpikeHeight - 1));
-            for (int x = 0; x < kSpikeWidth; x++) {
-                uint8_t r = (uint8_t)(((x + phase) * 255) / (kSpikeWidth - 1));
-                uint8_t g = (uint8_t)(((x ^ y) + phase) & 0xFF);
-                uint16_t pix = rgb555(r, g, b);
-                /* Big-endian on the wire — guest is native big-endian m68k. */
-                row[x] = (uint16_t)((pix >> 8) | (pix << 8));
+        if (g_paint_gradient) {
+            uint8_t phase = (uint8_t)(frame * 4);
+            for (int y = 0; y < kSpikeHeight; y++) {
+                uint16_t* row = (uint16_t*)&shm->fb.pixels[y * kSpikeWidth * 2];
+                uint8_t b = (uint8_t)(y * 255 / (kSpikeHeight - 1));
+                for (int x = 0; x < kSpikeWidth; x++) {
+                    uint8_t r = (uint8_t)(((x + phase) * 255) / (kSpikeWidth - 1));
+                    uint8_t g = (uint8_t)(((x ^ y) + phase) & 0xFF);
+                    uint16_t pix = rgb555(r, g, b);
+                    /* BE on wire — guest is native big-endian m68k. */
+                    row[x] = (uint16_t)((pix >> 8) | (pix << 8));
+                }
             }
+            BR_FENCE_RELEASE();
+            br_u32_store(&shm->fb.seq, frame + 1);
         }
-
-        BR_FENCE_RELEASE();
-        br_u32_store(&shm->fb.seq, frame + 1);
         frame++;
 
         /* Drain any g2h commands the guest pushed since last tick. */
@@ -128,9 +131,10 @@ void run()
 
 }  // namespace
 
-extern "C" void browser_spike_start()
+extern "C" void browser_spike_start(int with_gradient)
 {
     if (g_running.exchange(true)) return;
+    g_paint_gradient = (with_gradient != 0);
     g_thread = std::thread(run);
 }
 

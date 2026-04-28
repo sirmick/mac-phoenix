@@ -637,7 +637,7 @@ int main(int argc, char **argv)
 			}
 			if (emu_config.browser_enabled) {
 				browser::shm_init();
-				browser_spike_start();
+				browser_spike_start(emu_config.browser_initial_url.empty() ? 1 : 0);
 				browser::browser_module_start(emu_config.browser_initial_url);
 			}
 		}
@@ -846,7 +846,7 @@ int main(int argc, char **argv)
 				}
 				if (emu_config.browser_enabled) {
 					browser::shm_init();
-					browser_spike_start();
+					browser_spike_start(emu_config.browser_initial_url.empty() ? 1 : 0);
 					browser::browser_module_start(emu_config.browser_initial_url);
 				}
 			}

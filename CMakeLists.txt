@@ -72,6 +72,7 @@ target_include_directories(libyuv::libyuv INTERFACE ${LIBYUV_INC})
 
 # Math library
 find_library(M_LIB m)
+
 if(NOT M_LIB)
   set(M_LIB "")
 endif()

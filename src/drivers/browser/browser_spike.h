@@ -17,7 +17,12 @@
 extern "C" {
 #endif
 
-void browser_spike_start();
+/* If `with_gradient` is true, the spike thread paints an animated
+ * gradient into BrowserShm.fb so the guest has something to blit even
+ * when no Chromium is wired up (M1/M2 standalone testing). When the
+ * M4 pipeline is feeding real pixels, pass false — the spike thread
+ * still runs (rings + log poll) but stays out of fb.pixels. */
+void browser_spike_start(int with_gradient);
 void browser_spike_stop();
 
 #ifdef __cplusplus

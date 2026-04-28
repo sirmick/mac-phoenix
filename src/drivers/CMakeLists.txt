@@ -32,11 +32,12 @@ add_library(drivers STATIC
   platform/platform_null.cpp
   platform/platform_unix.cpp
   platform/timer_interrupt.cpp
-  # MacBrowser (M1 spike — gradient writer; full module M3+)
+  # MacBrowser (host-side pipeline)
   browser/ring.cpp
   browser/shm.cpp
   browser/supervisor.cpp
   browser/cdp.cpp
+  browser/pipeline.cpp
   browser/module.cpp
   browser/browser_spike.cpp
   # Consolidated null drivers
@@ -63,4 +64,9 @@ target_link_libraries(drivers PRIVATE
   nlohmann_json::nlohmann_json
   codec_flags
   libyuv::libyuv
+)
+
+# MacBrowser pixel pipeline: vendored stb_image for PNG/JPEG decode.
+target_include_directories(drivers PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subprojects/stb
 )

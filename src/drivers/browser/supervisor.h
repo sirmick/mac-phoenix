@@ -1,26 +1,19 @@
 /*
  *  supervisor.h — owns the Xvfb + Chromium child processes.
  *
- *  start() picks a free X display + remote-debugging port, spawns
- *  Xvfb on the display, waits for the X socket to appear, then
- *  spawns Chromium pointing at that display with
- *  --remote-debugging-port=<port> and --app=about:blank so the page
- *  fills the Xvfb root with no browser chrome.
+ *  start(initial_url) picks a free X display + remote-debugging
+ *  port, spawns Xvfb on the display, waits for the X socket, then
+ *  spawns Chromium with --kiosk pointing at that display. The Xvfb
+ *  is purely there so chromium agrees to run in headed mode —
+ *  pixels are captured via CDP Page.startScreencast (which pulls
+ *  from chromium's compositor, not from X), not from Xvfb itself.
  *
- *  stop() SIGTERMs the kids (Chromium first, Xvfb second) and
- *  waitpid()s. Idempotent. Safe to call from main thread on shutdown.
+ *  Chromium binary is resolved from playwright's bundled "Chrome
+ *  for Testing" first, then deb-installed chrome / chromium. Snap
+ *  chromium is deliberately not supported.
  *
- *  We use Xvfb (not --headless=new) because M4's pixel pipeline
- *  reads frames via XShmGetImage off the Xvfb root — that gives us
- *  pre-decoded raw pixels in a host-mapped shared region, so the VBL
- *  hook is just memcpy + RGB→RGB555 conversion. The CDP screencast
- *  alternative would force base64 + JPEG decode per frame.
- *
- *  On accidental child exit (Chromium crash, Xvfb crash) the
- *  supervisor logs and currently does NOT auto-restart — restart
- *  semantics depend on what state we want to preserve (open page,
- *  scroll position, login cookies). Defer until we hit a real crash
- *  and have data on what users care about.
+ *  stop() SIGTERMs the chromium process group then Xvfb and
+ *  waitpid()s. Idempotent.
  */
 #ifndef DRIVERS_BROWSER_SUPERVISOR_H
 #define DRIVERS_BROWSER_SUPERVISOR_H
@@ -34,40 +27,37 @@ public:
     Supervisor();
     ~Supervisor();
 
-    /* Spawn Xvfb + Chromium. Returns true iff both came up and the
-     * CDP /json/version endpoint responded. */
-    bool start();
+    /* Spawn Chromium. `initial_url` (if non-empty) is loaded by
+     * chromium directly on its command line, bypassing an attach-
+     * to-about:blank-then-Page.navigate race in flatten-mode
+     * session routing. Returns true iff /json/version responded. */
+    bool start(const std::string& initial_url);
 
-    /* Tear down the children. Always called on Supervisor destruction;
-     * exposed so callers can stop early. */
+    /* Tear down the child. Always called by destructor. */
     void stop();
 
-    /* Once start() succeeds, this is the WebSocket URL of the browser
-     * target that the CDP client should connect to. Empty before
-     * start() / after stop(). */
+    /* WebSocket URL of the browser-level CDP target, populated on
+     * successful start(). Empty before start / after stop. */
     const std::string& browser_ws_url() const { return browser_ws_url_; }
 
-    /* Display ":N" we picked (informational; useful for log messages
-     * and for the M4 XShm capture code). */
-    int display() const { return display_; }
     int cdp_port() const { return cdp_port_; }
+    int display()  const { return display_; }
 
 private:
     bool spawn_xvfb();
-    bool spawn_chromium();
     bool wait_for_x_socket(int timeout_ms);
+    bool spawn_chromium(const std::string& url);
     bool wait_for_cdp(int timeout_ms);
     bool fetch_browser_ws_url();
-
-    int  pick_free_display();
     int  pick_free_port();
+    int  pick_free_display();
 
-    int  display_         = -1;          /* :N where Xvfb runs        */
-    int  cdp_port_        = 0;
-    int  xvfb_pid_        = 0;
-    int  chromium_pid_    = 0;
+    int  display_      = -1;
+    int  cdp_port_     = 0;
+    int  xvfb_pid_     = 0;
+    int  chromium_pid_ = 0;
     std::string browser_ws_url_;
-    std::string user_data_dir_;          /* persisted under ~/.cache  */
+    std::string user_data_dir_;
 };
 
 }  // namespace browser

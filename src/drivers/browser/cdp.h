@@ -74,6 +74,14 @@ public:
                   std::chrono::milliseconds timeout =
                       std::chrono::milliseconds(5000));
 
+    /* Fire-and-forget — sends the JSON and returns immediately.
+     * For methods where we don't care about the response (acks,
+     * notifications). Crucially, safe to invoke from inside an
+     * event handler running on the WS receive thread, where
+     * call() would deadlock waiting for its own response. */
+    void send_no_reply(const std::string& method,
+                       const Json& params = Json::object());
+
     /* Register a CDP event handler. Method is e.g. "Page.frameNavigated"
      * or "Page.loadEventFired". Replaces any previous handler for that
      * method. Pass nullptr to clear. Called from the WS receiver

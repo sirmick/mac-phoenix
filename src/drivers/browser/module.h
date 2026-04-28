@@ -27,9 +27,10 @@ public:
     BrowserModule();
     ~BrowserModule();
 
-    /* Bring up Xvfb + Chromium and attach the CDP client. Returns true
-     * iff every stage succeeded. Logs progress to stderr. */
-    bool start();
+    /* Bring up Xvfb + Chromium (loaded with initial_url if non-empty),
+     * then attach the CDP client. Returns true iff every stage
+     * succeeded. Logs progress to stderr. */
+    bool start(const std::string& initial_url);
 
     /* Tear everything down. Idempotent. */
     void stop();
