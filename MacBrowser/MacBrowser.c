@@ -100,8 +100,9 @@
 #define kStatusW      48
 #define kStatusRight (kBtnMinusX - kPad)
 #define kStatusLeft  (kStatusRight - kStatusW)
-/* Status baseline — slightly above center for a snugger feel. */
-#define kStatusBaseY  ((kToolbarH + 9) / 2 - 5)
+/* Status baseline — slightly below center, sits closer to the
+ * baseline of the button labels. */
+#define kStatusBaseY  ((kToolbarH + 9) / 2 - 2)
 
 /* refCon values used to identify which button got clicked. */
 #define kCtlBack     1
