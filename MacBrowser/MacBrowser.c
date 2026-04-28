@@ -161,6 +161,15 @@ static uint8_t        gStatusCode = BR_STATUS_READY;
 static unsigned char  gStatusURL[252];   /* Pascal-string scratch */
 static Boolean        gStatusDirty = false;
 
+/* Mirrored from the most recent BR_EV_PAGE_METRICS. Latched in
+ * drain_h2g; consumed by refresh_scrollbars in the main loop, where
+ * the GrafPort is guaranteed to be set to the browser window. */
+static uint32_t       gPageW       = 0, gPageH       = 0;
+static uint32_t       gScrollX     = 0, gScrollY     = 0;
+static uint32_t       gViewportPxW = 0, gViewportPxH = 0;
+static Boolean        gMetricsDirty = false;
+static unsigned long  gLastBarsRepaint = 0;
+
 /* Off-screen 16-bit RGB555 PixMap header that wraps gShm->fb.pixels. */
 static PixMap     gShmPixMap;
 static CTabHandle gShmCTab = NULL;
@@ -323,6 +332,79 @@ static void apply_status(void)
     draw_chrome_row();
 }
 
+/* Read big-endian u32 from a byte buffer. */
+static uint32_t be32_load(const uint8_t *p)
+{
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+           ((uint32_t)p[2] <<  8) |  (uint32_t)p[3];
+}
+
+/* Update one scrollbar from its corresponding axis of the latest
+ * BR_EV_PAGE_METRICS. min stays 0; max = max(0, page - viewport);
+ * value = scroll. SetControlMaximum to 0 → bar renders inactive
+ * (greyed-out, no thumb), which is exactly the "no scrolling
+ * possible" state.
+ *
+ * NB: SetControlMaximum/SetControlValue auto-redraw the control
+ * but only into the *current* GrafPort. Call sites guarantee the
+ * window's port is set before invoking us. We additionally force a
+ * Draw1Control at the end as belt-and-suspenders — the auto-redraw
+ * is conditional on "value actually changed" which trips when the
+ * page is fully static (no metrics change → no SetControlValue call
+ * → no redraw → bar visually stale after a window-update event). */
+static void apply_scroll_axis(ControlHandle ctl, long page, long vp, long pos)
+{
+    if (!ctl) return;
+    long maxv = page - vp;
+    if (maxv < 0) maxv = 0;
+    if (maxv > 32767) maxv = 32767;   /* Mac Control Manager is i16 */
+    if (pos  < 0) pos  = 0;
+    if (pos  > maxv) pos = maxv;
+
+    SetControlMaximum(ctl, (short)maxv);
+    SetControlMinimum(ctl, 0);
+    SetControlValue  (ctl, (short)pos);
+    /* HiliteControl 255 = inactive; 0 = active. The Control Manager
+     * also auto-greys when min==max, but being explicit keeps the
+     * appearance crisp on slow paint paths. */
+    HiliteControl(ctl, (maxv == 0) ? 255 : 0);
+    Draw1Control(ctl);
+}
+
+/* Apply the latched gPage / gScroll metrics to the V/H scrollbars,
+ * then force a Draw1Control on each. Called from the main loop
+ * with gWin's GrafPort already current.
+ *
+ * Why this is its own pass instead of just inside drain_h2g: the
+ * Control Manager only paints into the *current* port, and drain_h2g
+ * runs in whatever port WaitNextEvent left set, typically not the
+ * browser window's. Also, calling this every tick (not only on
+ * gMetricsDirty) papers over the "control didn't redraw" cases
+ * where update events for the bar's region get coalesced or eaten
+ * by the framebuffer copy. Cost is two Draw1Control calls per
+ * tick, each microseconds on a Quadra. */
+static void refresh_scrollbars(void)
+{
+    if (!gWin) return;
+
+    /* The 16×16 corner where the V and H scrollbars meet sits outside
+     * both controls' invalidated rects, so it accumulates stale
+     * framebuffer pixels (Firefox content drifts in via CopyBits, the
+     * scrollbars paint around it). Easy fix: white-fill it before the
+     * bars repaint. Mac default fore/back is black/white, so a plain
+     * EraseRect with the saved port produces the correct color. */
+    Rect corner;
+    SetRect(&corner, gPortW - kSBSize, gPortH - kSBSize, gPortW, gPortH);
+    EraseRect(&corner);
+
+    apply_scroll_axis(gVSB, (long)gPageH, (long)gViewportPxH,
+                      (long)gScrollY);
+    apply_scroll_axis(gHSB, (long)gPageW, (long)gViewportPxW,
+                      (long)gScrollX);
+    gMetricsDirty = false;
+    gLastBarsRepaint = TickCount();
+}
+
 /* Drain any host events queued in h2g. Cheap on every tick. */
 static void drain_h2g(void)
 {
@@ -344,6 +426,26 @@ static void drain_h2g(void)
             gStatusURL[0] = urllen;
             if (urllen) memcpy(gStatusURL + 1, buf + 2, urllen);
             gStatusDirty = true;
+        }
+        /* BR_EV_PAGE_METRICS: 6× u32 BE — page_w, page_h,
+         * scroll_x, scroll_y, vp_w, vp_h. Drives V/H scrollbar
+         * range + thumb. Sent only when something changed host-side,
+         * so this path is cold most ticks. The Control Manager paints
+         * into the *current* GrafPort, so swap to the browser window
+         * before applying. */
+        else if (type == BR_EV_PAGE_METRICS && len >= 24) {
+            uint32_t pw = be32_load(buf +  0);
+            uint32_t ph = be32_load(buf +  4);
+            uint32_t sx = be32_load(buf +  8);
+            uint32_t sy = be32_load(buf + 12);
+            uint32_t vw = be32_load(buf + 16);
+            uint32_t vh = be32_load(buf + 20);
+            /* Mirror the latest values so the per-tick repaint can
+             * keep the bars fresh between events. */
+            gPageW = pw; gPageH = ph;
+            gScrollX = sx; gScrollY = sy;
+            gViewportPxW = vw; gViewportPxH = vh;
+            gMetricsDirty = true;
         }
     }
 }
@@ -415,10 +517,18 @@ static void relayout(void)
         MoveControl(gVSB, gPortW - kSBSize, kViewportY);
         SizeControl(gVSB, kSBSize,
                           gPortH - kToolbarH - kSBSize);
+        /* Force a fresh paint at the new geometry. MoveControl +
+         * SizeControl normally redraw, but during fast drag-resize
+         * the bar's region can be left holding stale framebuffer
+         * pixels (CopyBits had it before, the resize moved it, no
+         * updateEvt fired in time). Draw1Control bypasses the event
+         * queue and paints right now. */
+        Draw1Control(gVSB);
     }
     if (gHSB) {
         MoveControl(gHSB, 0, gPortH - kSBSize);
         SizeControl(gHSB, gPortW - kSBSize, kSBSize);
+        Draw1Control(gHSB);
     }
 
     /* Re-bound the URL TE. */
@@ -1027,6 +1137,23 @@ int main(void)
         if (gStatusDirty) {
             gStatusDirty = false;
             apply_status();
+        }
+
+        /* Repaint the scrollbars. Always force-redraw on a fresh
+         * BR_EV_PAGE_METRICS, *and* unconditionally every ~15 ticks
+         * (~250 ms) to paper over the cases where the auto-redraw
+         * inside SetControlValue gets eaten by an update-event race
+         * or a stale GrafPort on the host side. Cheap — Draw1Control
+         * on a 16-px-wide control is microseconds. */
+        {
+            GrafPtr saved;
+            GetPort(&saved);
+            SetPort(gWin);
+            unsigned long now = TickCount();
+            if (gMetricsDirty || now - gLastBarsRepaint > 15) {
+                refresh_scrollbars();
+            }
+            SetPort(saved);
         }
 
         /* TEIdle blinks the caret roughly every 30 ticks. Cheap. */

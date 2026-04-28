@@ -11,6 +11,8 @@
 #include "../common/include/sysdeps.h"
 #include "../common/include/cpu_emulation.h"
 
+#include <nlohmann/json.hpp>
+
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -30,6 +32,14 @@ constexpr uint32_t kAddrCurApName  = 0x0910;   /* Pascal string, 32 bytes   */
 
 /* Poll cadence: 60 Hz matches the emulator's VBL clock. */
 constexpr int kTickMs              = 16;
+
+/* Page-metrics poll cadence: 250 ms. We BiDi-evaluate to read
+ * scrollHeight + scrollY; doing it every 16 ms would saturate
+ * the WS round-trip budget on slower machines. 4 Hz is plenty for
+ * scrollbar-thumb tracking — Firefox is the source of truth and
+ * the guest's own BR_CMD_SCROLL clicks are what change the value
+ * 99% of the time. */
+constexpr int kMetricsPollMs       = 250;
 
 /* Click-coalescing rule: emit at most this many bidi.click calls per
  * second (bidi.click runs an input.performActions round-trip across
@@ -65,6 +75,12 @@ void poll_loop()
     bool last_btn_down = false;
     auto last_click_window_start = std::chrono::steady_clock::now();
     int  clicks_this_window = 0;
+
+    /* Page-metrics state: poll every kMetricsPollMs and only push a
+     * BR_EV_PAGE_METRICS event when something actually changed. */
+    auto last_metrics_at = std::chrono::steady_clock::time_point{};
+    uint32_t last_pw = 0, last_ph = 0, last_sx = 0, last_sy = 0,
+             last_vw = 0, last_vh = 0;
 
     while (g_running.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs));
@@ -126,6 +142,68 @@ void poll_loop()
             last_y = page_y;
             std::string err;
             (void)g_bidi->mouse_move(page_x, page_y, &err);
+        }
+
+        /* Page metrics — slower than the per-tick mouse poll. */
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_metrics_at >=
+            std::chrono::milliseconds(kMetricsPollMs)) {
+            last_metrics_at = now;
+            std::string err;
+            /* Single round-trip: ask Firefox for page + scroll +
+             * viewport dims as one JSON-serializable array. Guard
+             * against frame load races by null-checking documentElement. */
+            std::string r = g_bidi->evaluate(
+                "(()=>{const e=document.scrollingElement"
+                "||document.documentElement||document.body;"
+                "if(!e)return [0,0,0,0,0,0];"
+                "return [e.scrollWidth|0, e.scrollHeight|0, "
+                "(window.scrollX|0), (window.scrollY|0), "
+                "(window.innerWidth|0), (window.innerHeight|0)];})()",
+                &err);
+            if (!r.empty()) {
+                /* BiDi script.evaluate returns:
+                 *   {"type":"array","value":[
+                 *      {"type":"number","value":N}, ...
+                 *   ]}
+                 * Pull the six numbers; if anything's malformed, just
+                 * skip this tick. */
+                try {
+                    auto j = nlohmann::json::parse(r);
+                    auto v = j.at("result").at("value");
+                    if (v.is_array() && v.size() >= 6) {
+                        uint32_t pw = v[0].at("value").get<uint32_t>();
+                        uint32_t ph = v[1].at("value").get<uint32_t>();
+                        uint32_t sx = v[2].at("value").get<uint32_t>();
+                        uint32_t sy = v[3].at("value").get<uint32_t>();
+                        uint32_t vw = v[4].at("value").get<uint32_t>();
+                        uint32_t vh = v[5].at("value").get<uint32_t>();
+                        if (pw != last_pw || ph != last_ph ||
+                            sx != last_sx || sy != last_sy ||
+                            vw != last_vw || vh != last_vh) {
+                            last_pw = pw; last_ph = ph;
+                            last_sx = sx; last_sy = sy;
+                            last_vw = vw; last_vh = vh;
+                            uint8_t buf[24];
+                            auto put_be32 = [](uint8_t* p, uint32_t v) {
+                                p[0] = (uint8_t)(v >> 24);
+                                p[1] = (uint8_t)(v >> 16);
+                                p[2] = (uint8_t)(v >>  8);
+                                p[3] = (uint8_t)(v);
+                            };
+                            put_be32(buf +  0, pw);
+                            put_be32(buf +  4, ph);
+                            put_be32(buf +  8, sx);
+                            put_be32(buf + 12, sy);
+                            put_be32(buf + 16, vw);
+                            put_be32(buf + 20, vh);
+                            send_event(BR_EV_PAGE_METRICS, buf, 24);
+                        }
+                    }
+                } catch (...) {
+                    /* malformed BiDi reply — skip */
+                }
+            }
         }
     }
 }

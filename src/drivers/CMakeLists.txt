@@ -43,7 +43,7 @@ add_library(drivers STATIC
   browser/bidi.cpp
   browser/cmd.cpp
   browser/mouse_poll.cpp
-  browser/randr_resize.cpp
+  browser/window_resize.cpp
   # Consolidated null drivers
   null_drivers.cpp
 )

@@ -123,12 +123,20 @@ static inline void br_u16_store(volatile uint16_t *p, uint16_t v) {
 #define BR_CMD_RESIZE        13   /* u16 w, u16 h — guest viewport size changed     */
 
 /* Host → Guest (events, written into BrowserShm.h2g) */
-#define BR_EV_STATUS        128   /* u8 code, u8 msglen, u8 msg[msglen]             */
-#define BR_EV_PAGE          129   /* u32 page_w, u32 page_h, u8 tlen, u8 title[]    */
-#define BR_EV_FRAME         130   /* — (FB updated; consult fb.seq + fb.dirty)      */
-#define BR_EV_DOWNLOAD      131   /* u32 guid, u8 state, u32 bytes, u32 total,      */
-                                  /*   u8 plen, u8 path[plen]                       */
-#define BR_EV_SELECTION     132   /* u16 len, u8 text[len]                          */
+#define BR_EV_STATUS         128   /* u8 code, u8 msglen, u8 msg[msglen]            */
+#define BR_EV_PAGE           129   /* u32 page_w, u32 page_h, u8 tlen, u8 title[]   */
+#define BR_EV_FRAME          130   /* — (FB updated; consult fb.seq + fb.dirty)     */
+#define BR_EV_DOWNLOAD       131   /* u32 guid, u8 state, u32 bytes, u32 total,     */
+                                   /*   u8 plen, u8 path[plen]                      */
+#define BR_EV_SELECTION      132   /* u16 len, u8 text[len]                         */
+#define BR_EV_PAGE_METRICS   133   /* u32 page_w, u32 page_h,                       */
+                                   /* u32 scroll_x, u32 scroll_y,                   */
+                                   /* u32 viewport_w, u32 viewport_h                */
+                                   /* — page sizing for scrollbar thumb/range.      */
+                                   /* Guest sets V/H scrollbar min=0,               */
+                                   /* max=max(0, page_h-viewport_h),                */
+                                   /* value=scroll_y. max=0 → bar inactive          */
+                                   /* (Mac scrollBarProc behavior).                 */
 
 /* Wrap sentinel — written when the next real message wouldn't fit
  * before the end of the ring. Producer emits a normal 4-byte header

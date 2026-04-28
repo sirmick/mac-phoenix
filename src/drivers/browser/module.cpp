@@ -82,16 +82,35 @@ bool BrowserModule::start(const std::string& initial_url)
                 method == "browsingContext.navigationCommitted") {
                 /* Send a brief STATUS message; the guest's URL bar
                  * displays "Loading…" while waiting for the matching
-                 * load event. */
+                 * load event.
+                 *
+                 * Exception: when navigationCommitted points at
+                 * about:neterror (Firefox's internal DNS-fail / TLS-fail
+                 * page), Firefox will never fire browsingContext.load
+                 * for the inner error frame, leaving the guest stuck
+                 * on LOADING. Treat it as a terminal ERROR state. */
                 std::string url = j["params"].value("url", "");
-                fprintf(stderr, "[BiDi event] %s url=%s\n",
-                        method.c_str(), url.c_str());
+                bool is_neterror =
+                    method == "browsingContext.navigationCommitted" &&
+                    url.compare(0, 14, "about:neterror") == 0;
+                fprintf(stderr, "[BiDi event] %s url=%s%s\n",
+                        method.c_str(), url.c_str(),
+                        is_neterror ? " (treating as ERROR)" : "");
                 uint8_t buf[2 + 250];
-                buf[0] = BR_STATUS_LOADING;
+                buf[0] = is_neterror ? BR_STATUS_ERROR : BR_STATUS_LOADING;
                 size_t n = std::min(url.size(), (size_t)250);
                 buf[1] = (uint8_t)n;
                 memcpy(buf + 2, url.data(), n);
                 send_event(BR_EV_STATUS, buf, (uint16_t)(2 + n));
+            } else if (method == "log.entryAdded") {
+                /* Forward Firefox console output for debugging — only
+                 * messages from our preload (prefixed [mac-phoenix])
+                 * to avoid drowning in page-side console noise. */
+                std::string text = j["params"].value("text", "");
+                if (text.find("[mac-phoenix]") != std::string::npos) {
+                    fprintf(stderr, "[FF console] %s\n", text.c_str());
+                }
+                return;
             } else if (method == "browsingContext.load") {
                 /* Fire READY status. The page dimensions + title go
                  * out as a follow-up BR_EV_PAGE message; the guest
@@ -110,7 +129,8 @@ bool BrowserModule::start(const std::string& initial_url)
         std::string sub_err;
         if (!bidi_->subscribe({"browsingContext.navigationStarted",
                                "browsingContext.navigationCommitted",
-                               "browsingContext.load"},
+                               "browsingContext.load",
+                               "log.entryAdded"},
                               &sub_err)) {
             fprintf(stderr, "[BrowserModule] BiDi subscribe failed: %s\n",
                     sub_err.c_str());
@@ -119,19 +139,79 @@ bool BrowserModule::start(const std::string& initial_url)
         /* Hide Firefox's internal scrollbars on every page — Mac's
          * scroll bars own the UI. Inject a global stylesheet via
          * script.addPreloadScript so it runs before each page's own
-         * scripts and applies to nested frames too. */
+         * scripts and applies to nested frames too.
+         *
+         * Three layers, because `scrollbar-width:none` alone leaves a
+         * pale gutter visible at the right edge once Firefox's overlay
+         * scrollbar has been activated by a scroll event:
+         *   1. scrollbar-color: transparent transparent  — neuters the
+         *      track + thumb colors so even if Firefox decides to paint
+         *      the overlay on top, it's invisible
+         *   2. scrollbar-width: none + ::-webkit-scrollbar{display:none}
+         *      — the original "no widget" hint, kept for cross-engine
+         *   3. Dedicated <style> element appended to documentElement
+         *      before any page script runs, with !important to outrank
+         *      page styles (some pages set scrollbar-color themselves).
+         *
+         * Plus: an injected 2-px red border drawn at the viewport edges
+         * via a fixed-position ::before pseudo-element on the html. If
+         * any of {Xvfb root, Firefox layout viewport, BiDi setViewport,
+         * xshm capture rect, pipeline dst_stride, BrowserShm fb.width,
+         * Mac PixMap rowBytes} disagrees with the others, the border on
+         * one or more sides will appear cropped, missing, or shifted.
+         * It's a visual sync probe across the whole pipe. */
         std::string ps_err;
+        /* Single-quoted JS string — keep CSS rules separated by spaces
+         * (browser parses just fine, easier to read in stderr if we
+         * ever console.log it). */
+        /* Note: each line below is one JS string concatenated to the
+         * next via JS `+`. Adjacent C-string concat fuses them into a
+         * single C string, but JS still needs explicit `+` to glue
+         * adjacent quoted JS literals — without it, only the first
+         * literal lands and the rest are dead expression statements. */
         const char* hide_scrollbars =
-            "const s=document.createElement('style');"
-            "s.textContent="
-            "  'html,body{scrollbar-width:none!important;"
-            "             -ms-overflow-style:none!important;}"
-            "   ::-webkit-scrollbar{display:none!important;width:0!important;"
-            "                       height:0!important;}';"
-            "(document.head||document.documentElement).appendChild(s);";
+            "console.log('[mac-phoenix] preload firing');"
+            "const inject=()=>{"
+              "const s=document.createElement('style');"
+              "s.id='mac-phoenix-injected';"
+              "s.textContent="
+                "'html,body{scrollbar-width:none!important;'+"
+                "'scrollbar-color:transparent transparent!important;'+"
+                "'-ms-overflow-style:none!important;}'+"
+                "'::-webkit-scrollbar{display:none!important;'+"
+                "'width:0!important;height:0!important;}'+"
+                /* Sync probe: a fixed-position <div> ringing the viewport
+                 * with a 2-px red border. If any of {Xvfb root, FF
+                 * layout viewport, BiDi setViewport, xshm capture,
+                 * pipeline dst_stride, BrowserShm fb.width, Mac PixMap
+                 * rowBytes} disagrees, the border on the disagreeing
+                 * side appears clipped, missing, or shifted. */
+                "'body>#mac-phoenix-probe{position:fixed!important;'+"
+                "'top:0!important;left:0!important;'+"
+                "'right:0!important;bottom:0!important;'+"
+                "'border:2px solid red!important;'+"
+                "'pointer-events:none!important;'+"
+                "'z-index:2147483647!important;}';"
+              "(document.head||document.documentElement).appendChild(s);"
+              "if(document.body && !document.getElementById('mac-phoenix-probe')){"
+                "const d=document.createElement('div');"
+                "d.id='mac-phoenix-probe';"
+                "document.body.appendChild(d);"
+                "console.log('[mac-phoenix] probe div planted');"
+              "}"
+            "};"
+            /* document_start fires before <body> exists, so retry on
+             * DOMContentLoaded to actually plant the probe div. */
+            "if(document.readyState==='loading'){"
+              "document.addEventListener('DOMContentLoaded',inject,{once:true});"
+            "}"
+            "inject();";
         if (!bidi_->add_preload_script(hide_scrollbars, &ps_err)) {
             fprintf(stderr, "[BrowserModule] preload script failed: %s\n",
                     ps_err.c_str());
+        } else {
+            fprintf(stderr, "[BrowserModule] preload script registered "
+                    "(scrollbar suppression + sync-probe border)\n");
         }
 
         /* Seed the guest's URL bar with whatever Firefox is currently

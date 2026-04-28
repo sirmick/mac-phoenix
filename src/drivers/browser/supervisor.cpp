@@ -25,13 +25,22 @@ namespace {
 constexpr int kFirstDisplay     = 99;
 constexpr int kLastDisplay      = 119;
 constexpr int kXReadyTimeoutMs  = 5000;
-/* Match the guest MacBrowser window's *visible* pixel area. The
- * guest viewport is 640×400 but the right 16 cols and bottom 16 rows
- * are scroll bars, so Firefox renders into 624×384. CopyBits stays
- * a 1:1 copy with no scaling or clipping. */
+/* Initial Mac viewport size — Firefox spawns at this size, the guest
+ * can grow/shrink within [1, kCanvasWidth × kCanvasHeight] via
+ * BR_CMD_RESIZE → xcb_configure_window on the Firefox top-level. */
 constexpr int kViewportWidth    = 624;
 constexpr int kViewportHeight   = 384;
 constexpr int kViewportDepth    = 24;
+/* Xvfb root stays a fixed canvas — never resized after spawn. We
+ * pick 1024×768 to match BR_FB_MAX, so the host SHM segment, the
+ * pipeline's destination, and the maximum Mac window all line up
+ * without per-layer caps. Resizing happens at the Firefox window
+ * level (sub-region of root), not at the X server level — that
+ * sidesteps Xvfb's RandR mode-list bookkeeping (which only honours
+ * pre-existing modes; runtime mode creation works for the first
+ * call but fails BadMatch on subsequent adds). */
+constexpr int kCanvasWidth      = 1024;
+constexpr int kCanvasHeight     =  768;
 /* WebDriver BiDi listens here (M4.5). Firefox accepts both BiDi and
  * the legacy CDP on the same port; we use BiDi only. */
 constexpr int kBidiPort         = 9222;
@@ -152,7 +161,7 @@ bool Supervisor::spawn_xvfb()
     snprintf(display_arg, sizeof(display_arg), ":%d", display_);
     char screen_arg[64];
     snprintf(screen_arg, sizeof(screen_arg),
-             "%dx%dx%d", kViewportWidth, kViewportHeight, kViewportDepth);
+             "%dx%dx%d", kCanvasWidth, kCanvasHeight, kViewportDepth);
 
     pid_t pid = fork();
     if (pid < 0) { perror("[BrowserSup] fork(Xvfb)"); return false; }
@@ -238,7 +247,17 @@ bool Supervisor::prepare_firefox_profile()
         /* WebDriver BiDi (M4.5). active-protocols=1 enables CDP only,
          * 2 enables BiDi only, 3 enables both. We only need BiDi. */
         "user_pref(\"remote.active-protocols\", 2);\n"
-        "user_pref(\"remote.log.level\", \"Info\");\n",
+        "user_pref(\"remote.log.level\", \"Info\");\n"
+        /* Belt-and-suspenders for scrollbar suppression: switch from
+         * GTK overlay scrollbars (which paint a track during/after
+         * scroll, leaking a 16-px gutter into the guest PixMap) to
+         * classic always-on scrollbars. The CSS preload's
+         * scrollbar-width:none then collapses them to zero width and
+         * no gutter is reserved. (The other two prefs I tried —
+         * layout.testing.overlay-scrollbars.always-visible and
+         * ui.useOverlayScrollbars — turned out to be no-ops on Linux
+         * Firefox; dropped.) */
+        "user_pref(\"widget.gtk.overlay-scrollbars.enabled\", false);\n",
         f);
     fclose(f);
     return true;

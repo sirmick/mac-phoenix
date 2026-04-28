@@ -110,18 +110,37 @@ void run()
     fprintf(stderr, "[BrowserShm] watching %s for guest handshake\n",
             path.c_str());
 
+    /* Keep watching for the lifetime of the host: when MacBrowser quits
+     * and is re-launched, the new instance allocates a fresh BrowserShm
+     * and re-publishes here. We re-handshake on any change to the
+     * handshake file — either the published address differs or the
+     * mtime advances (same-address heap reuse stamps a fresh struct
+     * whose ring/log/seq counters reset to zero, so the host's cached
+     * seq state goes invalid even though the pointer hasn't moved). */
+    uint32_t prev_addr  = 0;
+    time_t   last_mtime = 0;
     while (g_running.load(std::memory_order_acquire)) {
-        std::string contents = slurp(path);
-        if (!contents.empty()) {
+        struct stat st;
+        bool changed = (stat(path.c_str(), &st) == 0)
+                     ? (st.st_mtime != last_mtime)
+                     : false;
+        if (changed) {
+            std::string contents = slurp(path);
             uint32_t mac_addr = parse_hex_addr(contents);
-            BrowserShm* shm = try_resolve(mac_addr);
-            if (shm) {
-                g_shm.store(shm, std::memory_order_release);
-                /* Stop polling once handshake completes. The guest's
-                 * BrowserShm pointer is stable for the lifetime of
-                 * Browser.app — if Browser.app quits we'll need a
-                 * separate teardown signal (M2+). */
-                return;
+            if (mac_addr != 0) {
+                BrowserShm* shm = try_resolve(mac_addr);
+                if (shm) {
+                    BrowserShm* old = g_shm.exchange(shm,
+                        std::memory_order_acq_rel);
+                    last_mtime = st.st_mtime;
+                    if (old) {
+                        fprintf(stderr, "[BrowserShm] re-handshake: "
+                                "%p (mac 0x%08x) → %p (mac 0x%08x)\n",
+                                (void*)old, prev_addr,
+                                (void*)shm, mac_addr);
+                    }
+                    prev_addr = mac_addr;
+                }
             }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

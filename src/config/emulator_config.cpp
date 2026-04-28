@@ -409,7 +409,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("\nAutomation:\n");
             printf("  --bridge                   Enable automation bridge\n");
             printf("  --browser                  Reserve BrowserShm region (MacBrowser spike)\n");
-            printf("  --browser-url URL          Spawn headless Chromium and navigate to URL (implies --browser)\n");
+            printf("  --browser-url URL          Spawn Firefox on Xvfb and navigate to URL (implies --browser)\n");
             printf("  --headless-http            HTTP API only (no video/audio)\n");
             printf("\nServer:\n");
             printf("  --port N                   HTTP+WS port (default: 11000)\n");

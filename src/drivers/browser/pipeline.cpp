@@ -68,9 +68,19 @@ void maybe_report()
             ? (double)g_perf.pixels_out * 100.0
                 / (g_perf.frames * g_capture->width() * g_capture->height())
             : 0.0;
+        BrowserShm* shm = browser::shm_get();
+        uint16_t fb_w = shm ? br_u16_load(&shm->fb.width)  : 0;
+        uint16_t fb_h = shm ? br_u16_load(&shm->fb.height) : 0;
+        /* Cross-stack dump: canvas (Xvfb root, fixed) vs crop (current
+         * Mac viewport from shm.fb). Disagreement on crop is normal —
+         * crop is just the visible Firefox sub-region. Diagonal smear
+         * would mean the guest's PixMap rowBytes ≠ host dst_stride,
+         * which is impossible now that both derive from fb.width. */
         fprintf(stderr,
-                "[Pipeline] %.1f fps  pull=%.1fms blit=%.2fms  dirty=%.1f%%\n",
-                fps, avg_pull / 1000.0, avg_blit / 1000.0, dirty_pct);
+                "[Pipeline] %.1f fps  pull=%.1fms blit=%.2fms  "
+                "dirty=%.1f%%  canvas=%dx%d  crop=%ux%u\n",
+                fps, avg_pull / 1000.0, avg_blit / 1000.0, dirty_pct,
+                g_capture->width(), g_capture->height(), fb_w, fb_h);
     }
     g_perf = {};
     g_last_report = now;
@@ -88,18 +98,54 @@ void run()
     }
     if (!shm) return;
 
-    int cap_w = g_capture->width();
-    int cap_h = g_capture->height();
-    if (cap_w > (int)BR_FB_MAX_W) cap_w = (int)BR_FB_MAX_W;
-    if (cap_h > (int)BR_FB_MAX_H) cap_h = (int)BR_FB_MAX_H;
-    br_u16_store(&shm->fb.width,  (uint16_t)cap_w);
-    br_u16_store(&shm->fb.height, (uint16_t)cap_h);
-    shm->fb.depth = 16;
-    fprintf(stderr, "[Pipeline] viewport %dx%d (clipped to %dx%d)\n",
-            g_capture->width(), g_capture->height(), cap_w, cap_h);
+    fprintf(stderr, "[Pipeline] starting at viewport %dx%d\n",
+            g_capture->width(), g_capture->height());
 
+    BrowserShm* last_shm = nullptr;
     uint32_t frame = 0;
     while (g_running.load(std::memory_order_acquire)) {
+        /* Re-resolve shm + capture dims every iteration: the watcher
+         * thread may swap g_shm under us when MacBrowser relaunches,
+         * and a future BR_CMD_RESIZE can grow Xvfb's root mid-stream.
+         * Cheap (load + getter), and skipping it caused the fb.width/
+         * stride desync that produced diagonal smears after relaunch. */
+        BrowserShm* live = browser::shm_get();
+        if (!live) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+        }
+        /* Crop region: what the guest currently wants visible. cmd.cpp
+         * writes fb.width/height when BR_CMD_RESIZE arrives; we read
+         * here every iteration. The Xvfb root is a fixed 1024×768
+         * canvas — any pixels outside the crop region are unrendered
+         * X background and we simply ignore them. dst_stride = crop_w*2
+         * matches the guest's PixMap rowBytes exactly, so no shearing
+         * regardless of how the guest resizes. */
+        int crop_w = (int)br_u16_load(&live->fb.width);
+        int crop_h = (int)br_u16_load(&live->fb.height);
+        if (crop_w == 0 || crop_h == 0) {
+            /* Guest hasn't published a viewport yet — fall back to the
+             * Xvfb root size so the initial frame still gets through. */
+            crop_w = g_capture->width();
+            crop_h = g_capture->height();
+            if (crop_w > (int)BR_FB_MAX_W) crop_w = (int)BR_FB_MAX_W;
+            if (crop_h > (int)BR_FB_MAX_H) crop_h = (int)BR_FB_MAX_H;
+            br_u16_store(&live->fb.width,  (uint16_t)crop_w);
+            br_u16_store(&live->fb.height, (uint16_t)crop_h);
+        }
+        if (crop_w > (int)BR_FB_MAX_W) crop_w = (int)BR_FB_MAX_W;
+        if (crop_h > (int)BR_FB_MAX_H) crop_h = (int)BR_FB_MAX_H;
+        live->fb.depth = 16;
+        if (live != last_shm) {
+            fprintf(stderr, "[Pipeline] (re)bound shm=%p crop=%dx%d "
+                    "(canvas=%dx%d)\n",
+                    (void*)live, crop_w, crop_h,
+                    g_capture->width(), g_capture->height());
+            last_shm = live;
+            frame = br_u32_load(&live->fb.seq);
+        }
+        shm = live;
+
         auto t0 = std::chrono::steady_clock::now();
         const uint8_t* img = nullptr;
         XShmCapture::Rect r{ 0, 0, 0, 0 };
@@ -110,26 +156,37 @@ void run()
         }
         uint64_t pull_us = us_since(t0);
 
-        /* Clip rect to the BrowserShm fb geometry. */
+        /* Source data in `img` is packed at the ORIGINAL r.w stride
+         * (drain() did `xcb_shm_get_image(r.x, r.y, r.w, r.h)` then
+         * laid the result down with stride r.w*4). We must remember
+         * that width before clipping — if we recompute src_stride
+         * from the clipped r.w we'd step by less than the actual row
+         * size and every row beyond the first lands offset by
+         * `(orig_rw - clipped_rw) * 4` bytes, which presents as a
+         * diagonal tear. Caused the shrink-side smear we just hit. */
+        const int src_row_w   = r.w;
+        const int src_stride  = src_row_w * 4;
+        const int src_x0      = (r.x < 0) ? -r.x : 0;
+        const int src_y0      = (r.y < 0) ? -r.y : 0;
+
+        /* Clip damage rect to the crop region. Anything outside is
+         * unrendered X background and shouldn't reach BrowserShm. */
         if (r.x < 0) { r.w = (uint16_t)(r.w + r.x); r.x = 0; }
         if (r.y < 0) { r.h = (uint16_t)(r.h + r.y); r.y = 0; }
-        if ((int)r.x + r.w > cap_w) r.w = (uint16_t)(cap_w - r.x);
-        if ((int)r.y + r.h > cap_h) r.h = (uint16_t)(cap_h - r.y);
-        if (r.w == 0 || r.h == 0) continue;
+        if ((int)r.x + r.w > crop_w) r.w = (uint16_t)(crop_w - r.x);
+        if ((int)r.y + r.h > crop_h) r.h = (uint16_t)(crop_h - r.y);
+        if ((int)r.w <= 0 || (int)r.h <= 0) continue;
 
         auto t1 = std::chrono::steady_clock::now();
-        /* drain() places pixels at offset 0 of the SHM, packed at
-         * stride r.w*4 (NOT capture->width()*4). */
-        int src_stride = r.w * 4;
-        int dst_stride = cap_w * 2;
+        const int dst_stride = crop_w * 2;
         for (int y = 0; y < r.h; y++) {
             const uint32_t* src_row =
-                (const uint32_t*)(img + (size_t)y * src_stride);
+                (const uint32_t*)(img + (size_t)(src_y0 + y) * src_stride);
             uint16_t* dst_row =
                 (uint16_t*)&shm->fb.pixels[
                     (size_t)(r.y + y) * dst_stride + (r.x * 2)];
             for (int x = 0; x < r.w; x++) {
-                dst_row[x] = bgrx_to_rgb555_be(src_row[x]);
+                dst_row[x] = bgrx_to_rgb555_be(src_row[src_x0 + x]);
             }
         }
         uint64_t blit_us = us_since(t1);
