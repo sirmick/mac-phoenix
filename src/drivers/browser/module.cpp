@@ -4,6 +4,7 @@
 #include "module.h"
 #include "bidi.h"
 #include "cmd.h"
+#include "mouse_poll.h"
 #include "pipeline.h"
 #include "shm.h"
 
@@ -65,6 +66,7 @@ bool BrowserModule::start(const std::string& initial_url)
     } else {
         fprintf(stderr, "[BrowserModule] BiDi connected\n");
         cmd_set_bidi(bidi_.get());
+        mouse_poll_start(bidi_.get());
 
         /* Subscribe to navigation events so the guest can drive a
          * loading-state UI in M5. The on_event callback runs on the
@@ -124,6 +126,7 @@ bool BrowserModule::start(const std::string& initial_url)
 void BrowserModule::stop()
 {
     running_ = false;
+    mouse_poll_stop();
     cmd_set_bidi(nullptr);
     if (bidi_)       { bidi_->stop();       bidi_.reset(); }
     pipeline_stop();

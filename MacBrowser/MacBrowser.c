@@ -531,6 +531,29 @@ static void draw_chrome_row(void)
 #define BR_CMD_ZOOM_OUT   15
 #define BR_CMD_ZOOM_IN    16
 
+/* Publish the viewport's screen position to the host so its VBL
+ * hook can synthesize mouse events from the Mac.Mouse globals. The
+ * guest's window port + chrome-row offset gives us viewport top-left
+ * in *window* coords; LocalToGlobal turns it into screen coords. */
+static void publish_viewport_pos(void)
+{
+    if (!gShm || !gWin) return;
+    GrafPtr saved;
+    GetPort(&saved);
+    SetPort(gWin);
+
+    Point tl;
+    tl.h = 0;
+    tl.v = kViewportY;
+    LocalToGlobal(&tl);
+    SetPort(saved);
+
+    /* Guest is m68k native big-endian; the int16_t stores are no-op
+     * on the host's BR_HOST byte-swap path. */
+    gShm->viewport.screen_left = (int16_t)tl.h;
+    gShm->viewport.screen_top  = (int16_t)tl.v;
+}
+
 /* Push a BR_CMD_CLICK with page-coord (x,y), button index (0 = left,
  * 1 = middle, 2 = right), and click count. Payload is BE i32 x, i32 y,
  * u8 btn, u8 count = 10 bytes. */
@@ -661,6 +684,9 @@ static void handle_event(EventRecord *evt)
         case inDrag: {
             Rect b = (*GetGrayRgn())->rgnBBox;
             DragWindow(win, evt->where, &b);
+            /* Window moved — refresh the published top-left so the
+             * host can keep mouse-coord translation accurate. */
+            publish_viewport_pos();
             break;
         }
         case inContent: {
@@ -689,19 +715,12 @@ static void handle_event(EventRecord *evt)
                 break;
             }
 
-            /* 3. Click landed outside the chrome row — deactivate URL
-             * bar so further keypresses don't go there, and if the
-             * click is inside the visible pixel viewport (excludes
-             * scroll bars and the corner box), forward it to the
-             * host as BR_CMD_CLICK at page-relative coords. */
+            /* 3. Click landed outside the chrome row — deactivate
+             * URL bar so further keypresses don't go there. The host
+             * polls Mac.Mouse globals each VBL and synthesizes the
+             * click directly via BiDi when MacBrowser is the front
+             * app — no need to forward the click through the ring. */
             set_url_active(false);
-            if (local.h >= 0 && local.h < (short)kPixelsW &&
-                local.v >= kViewportY &&
-                local.v < kViewportY + (short)kPixelsH) {
-                int page_x = local.h;
-                int page_y = local.v - kViewportY;
-                send_click(page_x, page_y, 0, 1);   /* left, single */
-            }
             break;
         }
         case inGoAway:
@@ -788,6 +807,10 @@ int main(void)
                "MacBrowser up; shm=0x%08lx size=%lu",
                (unsigned long)gShmAddr,
                (unsigned long)sizeof(BrowserShm));
+
+        /* Publish our viewport's on-screen position so the host's
+         * VBL hook can compute page coords from Mac.Mouse globals. */
+        publish_viewport_pos();
 
         /* Push our default home URL through the ring. Host's
          * cmd_dispatch picks it up → bidi.navigate → Firefox loads

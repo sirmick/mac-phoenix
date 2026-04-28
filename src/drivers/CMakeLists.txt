@@ -42,6 +42,7 @@ add_library(drivers STATIC
   browser/browser_spike.cpp
   browser/bidi.cpp
   browser/cmd.cpp
+  browser/mouse_poll.cpp
   # Consolidated null drivers
   null_drivers.cpp
 )
