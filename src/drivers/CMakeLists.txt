@@ -40,6 +40,7 @@ add_library(drivers STATIC
   browser/pipeline.cpp
   browser/module.cpp
   browser/browser_spike.cpp
+  browser/bidi.cpp
   # Consolidated null drivers
   null_drivers.cpp
 )

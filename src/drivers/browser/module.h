@@ -21,6 +21,8 @@
 
 namespace browser {
 
+class BidiClient;
+
 class BrowserModule {
 public:
     BrowserModule();
@@ -31,10 +33,12 @@ public:
 
     Supervisor*  supervisor() { return supervisor_.get(); }
     XShmCapture* capture()    { return capture_.get(); }
+    BidiClient*  bidi()       { return bidi_.get(); }
 
 private:
     std::unique_ptr<Supervisor>  supervisor_;
     std::unique_ptr<XShmCapture> capture_;
+    std::unique_ptr<BidiClient>  bidi_;
     bool running_ = false;
 };
 

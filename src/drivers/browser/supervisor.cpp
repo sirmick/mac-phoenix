@@ -28,6 +28,9 @@ constexpr int kXReadyTimeoutMs  = 5000;
 constexpr int kViewportWidth    = 1024;
 constexpr int kViewportHeight   = 768;
 constexpr int kViewportDepth    = 24;
+/* WebDriver BiDi listens here (M4.5). Firefox accepts both BiDi and
+ * the legacy CDP on the same port; we use BiDi only. */
+constexpr int kBidiPort         = 9222;
 
 bool x_socket_present(int display)
 {
@@ -227,7 +230,11 @@ bool Supervisor::prepare_firefox_profile()
         "user_pref(\"app.update.auto\", false);\n"
         "user_pref(\"app.update.enabled\", false);\n"
         "user_pref(\"extensions.autoDisableScopes\", 0);\n"
-        "user_pref(\"signon.rememberSignons\", false);\n",
+        "user_pref(\"signon.rememberSignons\", false);\n"
+        /* WebDriver BiDi (M4.5). active-protocols=1 enables CDP only,
+         * 2 enables BiDi only, 3 enables both. We only need BiDi. */
+        "user_pref(\"remote.active-protocols\", 2);\n"
+        "user_pref(\"remote.log.level\", \"Info\");\n",
         f);
     fclose(f);
     return true;
@@ -281,9 +288,13 @@ bool Supervisor::spawn_firefox(const std::string& url)
         reset_signals_for_exec();
         setpgid(0, 0);
 
+        char port_arg[24];
+        snprintf(port_arg, sizeof(port_arg), "%d", kBidiPort);
+
         execl(firefox, firefox,
               "--no-remote",
               "--profile", profile_dir_.c_str(),
+              "--remote-debugging-port", port_arg,
               "--kiosk",
               "--new-window", startup_url.c_str(),
               (char*)nullptr);

@@ -2,10 +2,13 @@
  *  module.cpp — BrowserModule lifecycle. See module.h.
  */
 #include "module.h"
+#include "bidi.h"
 #include "pipeline.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <mutex>
 #include <thread>
 
@@ -36,15 +39,36 @@ bool BrowserModule::start(const std::string& initial_url)
 
     pipeline_start(capture_.get());
 
+    /* Connect BiDi to Firefox's --remote-debugging-port. Firefox needs
+     * a moment after spawn to bind the port; loop until it's up. */
+    bidi_ = std::make_unique<BidiClient>();
+    bool bidi_up = false;
+    for (int i = 0; i < 50; i++) {  /* up to 10 s */
+        if (bidi_->start("127.0.0.1", 9222,
+                         std::chrono::milliseconds(500))) {
+            bidi_up = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+    if (!bidi_up) {
+        fprintf(stderr, "[BrowserModule] BiDi never came up — control "
+                "channel disabled, pixel pipeline still works\n");
+        bidi_.reset();
+    } else {
+        fprintf(stderr, "[BrowserModule] BiDi connected\n");
+    }
+
     running_ = true;
-    fprintf(stderr, "[BrowserModule] running (display=:%d)\n",
-            supervisor_->display());
+    fprintf(stderr, "[BrowserModule] running (display=:%d, bidi=%s)\n",
+            supervisor_->display(), bidi_ ? "yes" : "no");
     return true;
 }
 
 void BrowserModule::stop()
 {
     running_ = false;
+    if (bidi_)       { bidi_->stop();       bidi_.reset(); }
     pipeline_stop();
     if (capture_)    { capture_->stop();    capture_.reset(); }
     if (supervisor_) { supervisor_->stop(); supervisor_.reset(); }
