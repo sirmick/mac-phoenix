@@ -98,14 +98,14 @@ struct EmulatorConfig {
     // KeyboardEvent.code → Mac scancode lookup. Server doesn't otherwise
     // consult these — they're round-tripped to the client via /api/config.
     // Values are canonical Mac modifier names: command, control, option,
-    // shift, off (= disabled, key produces no Mac event), or "auto" which
-    // resolves at the client based on navigator platform — Mac users get
-    // identity mapping (their ⌘ key sends Mac Command), PC users get the
-    // shortcut-habit swap (Ctrl→⌘, Win→⌃).
-    std::string kb_ctrl = "auto";      // PC Ctrl / Mac ⌃ — see resolveAuto() in client.js
-    std::string kb_alt  = "auto";      // PC Alt  / Mac ⌥
-    std::string kb_meta = "auto";      // PC Win  / Mac ⌘
-    std::string kb_fn   = "auto";      // PC Fn   / Mac fn — usually "off" on both platforms
+    // shift, or off (= disabled, key produces no Mac event). Empty string
+    // means "no preference saved" — the client picks a platform-appropriate
+    // default (Mac users get identity mapping; PC/Linux users get the
+    // shortcut-habit swap of Ctrl→⌘ + Win→⌃).
+    std::string kb_ctrl;               // empty → JS picks per platform
+    std::string kb_alt;
+    std::string kb_meta;
+    std::string kb_fn;
     bool kb_release_on_blur = true;    // synth keyup for held keys when window loses focus
 
     // Web/Network

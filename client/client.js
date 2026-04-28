@@ -1080,13 +1080,13 @@ const MAC_MOD_SYMBOL     = { command: '⌘', control: '⌃', option: '⌥', shif
 const MAC_MOD_CHIP_CLASS = { command: 'mod-cmd', control: 'mod-control',
                              option:  'mod-option', shift: 'mod-shift' };
 
-// Platform-aware "auto" resolution. On Mac the user's ⌘ key reports as
-// MetaLeft/Right and they expect ⌘-C to land as Mac Command-C — i.e.
-// identity mapping. On PC users have habituated to Ctrl-C as the
-// "primary" shortcut, so PC Ctrl→⌘, with PC Win→⌃ keeping Mac Control
-// reachable. Detection: prefer the modern Client-Hints API
-// (Chromium-only, accurate); fall back to navigator.platform string
-// matching (still works in all current browsers despite deprecation).
+// Platform-appropriate default modifier mapping. On Mac the user's ⌘
+// reports as MetaLeft/Right and they expect ⌘-C to land as Mac
+// Command-C — identity mapping. On PC users have habituated to Ctrl-C
+// as the primary shortcut, so PC Ctrl→⌘ with PC Win→⌃ keeping Mac
+// Control reachable. Detection prefers the modern Client-Hints API
+// (Chromium-only, accurate); falls back to navigator.platform string
+// matching (deprecated but still reliable across all current browsers).
 function isMacPlatform() {
     try {
         if (navigator.userAgentData?.platform) {
@@ -1095,27 +1095,19 @@ function isMacPlatform() {
     } catch (_) { /* fall through */ }
     return /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
 }
-const AUTO_DEFAULTS_MAC = { ctrl: 'control', alt: 'option', meta: 'command', fn: 'off' };
-const AUTO_DEFAULTS_PC  = { ctrl: 'command', alt: 'option', meta: 'control', fn: 'off' };
-function resolveAutoTarget(value, key) {
-    if (value !== 'auto') return value;
-    return (isMacPlatform() ? AUTO_DEFAULTS_MAC : AUTO_DEFAULTS_PC)[key];
+function defaultKeyboardModMap() {
+    return isMacPlatform()
+        ? { ctrl: 'control', alt: 'option', meta: 'command', fn: 'off' }   // identity
+        : { ctrl: 'command', alt: 'option', meta: 'control', fn: 'off' };  // PC habit
 }
 
-let keyboardConfig = {
-    ctrl: 'auto',         // resolved by resolveAutoTarget() — Mac: ⌃, PC: ⌘
-    alt:  'auto',         // both platforms: ⌥
-    meta: 'auto',         // Mac: ⌘ (identity), PC: ⌃
-    fn:   'auto',         // both platforms: off
-    release_on_blur: true,
-};
+let keyboardConfig = { ...defaultKeyboardModMap(), release_on_blur: true };
 let modifierOverride = {};
 
 function rebuildModifierOverride() {
     modifierOverride = {};
     const apply = (cfgKey, codes) => {
-        const resolved = resolveAutoTarget(keyboardConfig[cfgKey], cfgKey);
-        const target = MAC_MOD_CODE[resolved];
+        const target = MAC_MOD_CODE[keyboardConfig[cfgKey]];
         if (target == null) return;          // 'off' or unknown → leave unset
         for (const c of codes) modifierOverride[c] = target;
     };
@@ -1142,7 +1134,7 @@ function renderHeldModsChip() {
         { pc: 'Fn',   cfgKey: 'fn'   },
     ];
     for (const {pc, cfgKey} of pcMappings) {
-        const target = resolveAutoTarget(keyboardConfig[cfgKey], cfgKey);
+        const target = keyboardConfig[cfgKey];
         const sym    = MAC_MOD_SYMBOL[target];
         const cls    = MAC_MOD_CHIP_CLASS[target];
         if (!sym || !cls) continue;          // 'off' / unknown → omit
@@ -1155,7 +1147,20 @@ function renderHeldModsChip() {
 }
 
 function applyKeyboardConfig(cfg) {
-    if (cfg) keyboardConfig = { ...keyboardConfig, ...cfg };
+    if (cfg) {
+        // Empty / missing fields fall back to the platform default. Server
+        // stores "" as the "no preference saved" sentinel — fresh installs
+        // land here, and the JS picks Mac vs PC defaults from navigator.
+        // Explicit user picks (any non-empty Mac modifier name) win.
+        const def = defaultKeyboardModMap();
+        keyboardConfig = {
+            ctrl: cfg.ctrl || def.ctrl,
+            alt:  cfg.alt  || def.alt,
+            meta: cfg.meta || def.meta,
+            fn:   cfg.fn   || def.fn,
+            release_on_blur: cfg.release_on_blur ?? true,
+        };
+    }
     rebuildModifierOverride();
     renderHeldModsChip();
 }
@@ -3674,13 +3679,9 @@ function configFromServerJson(cfg) {
         mitm_ca_dir: cfg.mitm_ca_dir || '',
         // Keyboard remap (nested in JSON for grouping). Defaults match the
         // PC-shortcut habit: Ctrl→⌘, Alt→⌥, Win→⌃.
-        keyboard: {
-            ctrl: cfg.keyboard?.ctrl ?? 'auto',
-            alt:  cfg.keyboard?.alt  ?? 'auto',
-            meta: cfg.keyboard?.meta ?? 'auto',
-            fn:   cfg.keyboard?.fn   ?? 'auto',
-            release_on_blur: cfg.keyboard?.release_on_blur ?? true,
-        },
+        // Pass keyboard fields through verbatim — applyKeyboardConfig() resolves
+        // empties to platform defaults at the JS layer.
+        keyboard: cfg.keyboard || {},
     };
 }
 
@@ -3736,10 +3737,10 @@ function buildConfigJson() {
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         keyboard: {
-            ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'auto',
-            alt:  document.getElementById('cfg-kb-alt')?.value  || 'auto',
-            meta: document.getElementById('cfg-kb-meta')?.value || 'auto',
-            fn:   document.getElementById('cfg-kb-fn')?.value   || 'auto',
+            ctrl: document.getElementById('cfg-kb-ctrl')?.value || '',
+            alt:  document.getElementById('cfg-kb-alt')?.value  || '',
+            meta: document.getElementById('cfg-kb-meta')?.value || '',
+            fn:   document.getElementById('cfg-kb-fn')?.value   || '',
             release_on_blur: document.getElementById('cfg-kb-release-on-blur')?.checked ?? true,
         },
     };
@@ -4318,10 +4319,15 @@ function updateConfigUI() {
     const kbMetaEl    = document.getElementById('cfg-kb-meta');
     const kbFnEl      = document.getElementById('cfg-kb-fn');
     const kbBlurEl    = document.getElementById('cfg-kb-release-on-blur');
-    if (kbCtrlEl) kbCtrlEl.value = kb.ctrl ?? 'auto';
-    if (kbAltEl)  kbAltEl.value  = kb.alt  ?? 'auto';
-    if (kbMetaEl) kbMetaEl.value = kb.meta ?? 'auto';
-    if (kbFnEl)   kbFnEl.value   = kb.fn   ?? 'auto';
+    // Populate dropdowns from live keyboardConfig (already resolved past
+    // any empty/missing values by applyKeyboardConfig). Falling through
+    // to the platform default keeps the dropdowns sensible if the modal
+    // opens before /api/config has settled.
+    const def = defaultKeyboardModMap();
+    if (kbCtrlEl) kbCtrlEl.value = keyboardConfig.ctrl || def.ctrl;
+    if (kbAltEl)  kbAltEl.value  = keyboardConfig.alt  || def.alt;
+    if (kbMetaEl) kbMetaEl.value = keyboardConfig.meta || def.meta;
+    if (kbFnEl)   kbFnEl.value   = keyboardConfig.fn   || def.fn;
     if (kbBlurEl) kbBlurEl.checked = kb.release_on_blur ?? true;
 
     // Update disk checkboxes
@@ -4363,10 +4369,10 @@ async function saveConfig() {
     currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
     currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
     currentConfig.keyboard = {
-        ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'auto',
-        alt:  document.getElementById('cfg-kb-alt')?.value  || 'auto',
-        meta: document.getElementById('cfg-kb-meta')?.value || 'auto',
-        fn:   document.getElementById('cfg-kb-fn')?.value   || 'auto',
+        ctrl: document.getElementById('cfg-kb-ctrl')?.value || '',
+        alt:  document.getElementById('cfg-kb-alt')?.value  || '',
+        meta: document.getElementById('cfg-kb-meta')?.value || '',
+        fn:   document.getElementById('cfg-kb-fn')?.value   || '',
         release_on_blur: document.getElementById('cfg-kb-release-on-blur')?.checked ?? true,
     };
 
