@@ -4,14 +4,15 @@
 
 Let a classic-Mac user inside the emulator browse the modern web (HTTPS,
 JS, fonts, images, video) by **moving the actual rendering off the
-guest** onto a host-side headless Chromium, and shipping the rendered
-pixels into a guest-native window.
+guest** onto a host-side Firefox running on a virtual X server, and
+shipping the rendered pixels into a guest-native window.
 
 The guest sees a normal Mac app — `Browser.app` — with a window, URL bar,
 back/forward buttons, scrollbars. Inside the window is a `PixMap` that
-shows whatever Chromium just rendered. Mouse/keyboard events from the
-guest are forwarded to Chromium; rendered pixels come back. Downloads
-land in the guest filesystem via the existing ExtFS share.
+shows whatever Firefox just rendered. Mouse/keyboard events from the
+guest are forwarded to Firefox via WebDriver BiDi; rendered pixels come
+back via XShm + XDamage. Downloads land in the guest filesystem via the
+existing ExtFS share.
 
 This avoids three intractable problems with running a 1996 browser
 against the modern web:
@@ -30,11 +31,12 @@ clipboard sync.
 ```
 ┌─ mac-phoenix process ────────────────────────────────────┐
 │                                                          │
-│  ┌─ src/drivers/browser/ (new module) ────────────────┐  │
+│  ┌─ src/drivers/browser/ ─────────────────────────────┐  │
 │  │                                                    │  │
-│  │  supervisor   ─ spawns + supervises Xvfb + Chrome  │  │
-│  │  cdp          ─ WebSocket client → ws:9222         │  │
+│  │  supervisor   ─ spawns + supervises Xvfb + Firefox │  │
+│  │  bidi         ─ WebSocket client → ws:9222         │  │
 │  │  xshm         ─ XShm + XDamage on Xvfb root        │  │
+│  │                  (COMPOSITE redirects subwindows)  │  │
 │  │  shm          ─ owns BrowserShm region             │  │
 │  │  pipeline     ─ damage → convert → mark_dirty      │  │
 │  │                                                    │  │
@@ -47,7 +49,7 @@ clipboard sync.
 │  │  ROM       @ 0x02000000 (1 MiB)                    │  │
 │  │  Scratch   @ 0x02100000 (64 KiB)                   │  │
 │  │  FrameBuf  @ 0x02110000 (8 MiB)                    │  │
-│  │  BrowserShm@ 0x02910000 (~1.7 MiB) ← NEW           │  │
+│  │  BrowserShm@ 0x02910000 (~1.7 MiB)                 │  │
 │  └────────────────────────────────────────────────────┘  │
 │         ▲                                                │
 │         │ guest reads/writes via normal memory access    │
@@ -59,12 +61,14 @@ clipboard sync.
 │  └────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────┘
                                  ▲
-                                 │ xcb (X protocol + MIT-SHM + DAMAGE)
-                                 │ ws  (CDP control)
+                                 │ xcb (X protocol + MIT-SHM + DAMAGE
+                                 │      + COMPOSITE)
+                                 │ ws  (WebDriver BiDi control)
                                  │
                 ┌────────────────┴───────────────┐
                 │  Xvfb :99    (headless X)      │
-                │  Chromium    (--display=:99,   │
+                │  Firefox     (--display=:99,   │
+                │   --kiosk --no-remote          │
                 │   --remote-debugging-port=9222)│
                 └────────────────────────────────┘
 
@@ -211,15 +215,17 @@ host owns the timer, so it knows exactly when the guest is mid-blit.
 | `ring.{h,cpp}` | SPSC ring push/pop, shared with the unit test | ✅ M2 |
 | `shm.{h,cpp}` | ExtFS handshake watcher; `send_event`, `read_command`; will gain `publish_frame`, `on_pre_vbl`, log polling | ✅ M1+M2 |
 | `browser_spike.{h,cpp}` | M1/M2 gradient writer + bidirectional ring exercise | ✅ |
-| `supervisor.{h,cpp}` | spawns + restarts Xvfb and Chromium child processes; lifecycle | M3 |
-| `cdp.{h,cpp}` | minimal CDP WebSocket client; `Page.navigate`, `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Browser.setDownloadBehavior`, `Runtime.evaluate` | M3 |
-| `xshm.{h,cpp}` | XShm + XDamage subscription on Xvfb root window; emits damage events | M4 |
-| `pipeline.{h,cpp}` | orchestrates: receive damage event → XShmGetImage → RGBA→RGB555 convert → write to fb.pixels → mark_dirty → publish_frame | M4 |
-| `module.{h,cpp}` | `BrowserModule` top-level lifecycle; constructed when `--browser` is set | M3 |
+| `supervisor.{h,cpp}` | spawns + supervises Xvfb and Firefox child processes; lifecycle | ✅ M3 |
+| `xshm.{h,cpp}` | XShm + XDamage subscription on Xvfb root window with COMPOSITE redirect on root subwindows; emits damage events for child-window repaints | ✅ M4 |
+| `pipeline.{h,cpp}` | receive damage event → `xcb_shm_get_image` → BGRX→RGB555-BE convert → write into fb.pixels → publish dirty rect + bump fb.seq | ✅ M4 |
+| `module.{h,cpp}` | `BrowserModule` top-level lifecycle; constructed when `--browser` is set | ✅ M3 |
+| `bidi.{h,cpp}` | minimal WebDriver BiDi WebSocket client; `session.new`, `browsingContext.navigate`, `input.performActions`, `script.evaluate`, `browsingContext.print` (or `network.*` for downloads) | M4.5 |
 
-Build deps to add for M3: `libxcb`, `libxcb-shm`, `libxcb-damage`. CDP
-WebSocket client is simple enough to write by hand (text framing,
-JSON-RPC over a single ws connection) — one less third-party dep.
+Build deps used: `libxcb`, `libxcb-shm`, `libxcb-damage`, `libxcb-composite`
+(all `apt`-installable on Ubuntu). The BiDi client is a small WebSocket
++ JSON-RPC client we write by hand — one less third-party dep, and
+libdatachannel already gives us a WebSocket implementation we can
+reuse if hand-rolling becomes a hassle.
 
 ### Guest: `tests/guest/browser/`
 
@@ -283,28 +289,104 @@ Pre-built `Browser.bin` committed to repo (same pattern as `BridgeAgent.bin`).
   counters. End-to-end confirmed: 12 commands pushed with monotonic
   counters, 80 events received, no losses.
 
-### M3 — Xvfb + Chromium supervisor (2 days)
+### M3 — Xvfb + Firefox supervisor ✅
 
-- `supervisor.cpp` spawns `Xvfb :99` and `chromium --headless=new
-  --remote-debugging-port=9222 --display=:99`.
-- Detect Xvfb ready (poll for socket), then spawn Chromium.
-- Restart on exit; clean shutdown on mac-phoenix exit.
-- CDP WebSocket connect, fetch first target, attach.
+Initially scoped as Xvfb + Chromium-headless. Pivoted to Firefox: stock
+Chromium-headless on Ubuntu fails HTTPS during GPU init (Xwayland holds
+DRM master, `amdgpu_query_info` fails, TLS handshake hangs). Firefox in
+kiosk mode against a real Xvfb display sidesteps the headless GPU code
+path entirely.
 
-**Deliverable:** `--browser` gives you a running headless Chromium
-controlled by mac-phoenix. No guest involvement yet.
+- `supervisor.cpp` picks a free `:N` in 99..119, spawns `Xvfb :N -screen
+  0 640x480x24`, waits for the X socket, then spawns
+  `/opt/firefox/firefox --no-remote --kiosk --profile <dir> <url>` with
+  `DISPLAY=:N`.
+- Profile pre-seeded with `user.js` to silence first-run, what's-new,
+  data-collection, default-browser-check, vpn-promo. Persistent (reused
+  across launches → cookies/logins survive).
+- Fork-child env stripped to a strict allowlist (HOME, USER, LANG,
+  PATH, DISPLAY, GDK_BACKEND, MOZ_DISABLE_GMP_SANDBOX). Without this,
+  inherited SSH/VS-Code env vars (WAYLAND_DISPLAY, GNOME_*) trigger
+  Firefox's headless detection regardless of DISPLAY.
+- All CrashHandler signals reset to SIG_DFL in the fork child, signal
+  mask cleared. Inherited fds closed via `closefrom(3)` /
+  `/proc/self/fd` walk.
+- `setpgid(0, 0)` on each child so `kill(-pid, SIGTERM)` sweeps the
+  whole tree on stop. (Reaping is currently best-effort — Firefox
+  sometimes leaks helper processes through this; cleanup task tracked
+  separately.)
 
-### M4 — Pixel pipeline (2 days)
+Prefers `/opt/firefox/firefox` (deb tarball install) over
+`/usr/bin/firefox` (which is the snap stub on modern Ubuntu and brings
+sandbox / profile-path / auto-update behaviors that don't compose with
+Xvfb).
 
-- `xshm.cpp`: `XShmGetImage` from Xvfb root, subscribe XDamage events.
-- `pipeline.cpp`: on damage event, read changed region, RGBA→RGB555
-  convert into `fb.pixels`, accumulate damage rects, call
-  `publish_frame()` once per VBL.
-- Update `BrowserSpike.bin` to navigate (via hard-coded URL in host) and
-  blit Chromium pixels.
+**Deliverable:** ✅ `--browser --browser-url <URL>` brings up Firefox
+on Xvfb and navigates to the URL.
 
-**Deliverable:** typing a URL in mac-phoenix CLI causes a real web page
-to render in the guest window.
+### M4 — Pixel pipeline ✅
+
+- `xshm.cpp` opens an xcb connection to Xvfb, allocates a single
+  shared-memory segment sized to the root, attaches via MIT-SHM.
+- **Critical fix:** `xcb_composite_redirect_subwindows(root,
+  AUTOMATIC)` *before* `xcb_damage_create`. Without COMPOSITE,
+  GetImage on a root drawable returns only root's own pixels — child
+  windows are not included. Firefox renders into a child window of
+  root, so XShm was returning all-zero pixels and dirty=87% was 87%
+  of zeros. With AUTOMATIC redirect the X server allocates a backing
+  pixmap on root and composites every child window into it; GetImage
+  on root returns the visible scene, and damage on root reflects
+  child-window repaints.
+- A background thread blocks on `xcb_wait_for_event`; on each
+  `DAMAGE_NOTIFY` it unions the rect into a pending bbox and calls
+  `xcb_damage_subtract`.
+- `pipeline.cpp` polls `XShmCapture::drain()` on a 60 Hz timer; on
+  each non-empty drain, BGRX→RGB555-BE converts each row, writes into
+  `BrowserShm.fb.pixels` at the screen-coord offset, publishes the
+  rect into `fb.dirty[0]`, release-fences, bumps `fb.seq`.
+
+**Deliverable:** ✅ a fresh `--browser-url https://example.com` run
+shows the page rendered through Firefox+Xvfb in the Mac OS 7.5
+BrowserSpike window via CopyBits.
+Screenshots: `docs/plan/screenshots/m4-firefox-composite-{xvfb,mac}.png`.
+
+### M4.5 — WebDriver BiDi control (1 day)
+
+The supervisor spawns Firefox with a fixed initial URL and that's it.
+To navigate, click, scroll, type, or query the page we need a control
+channel. WebDriver BiDi is the right tool: WebSocket, W3C standard,
+event-subscription support (page-load notifications, navigation start,
+network requests), session-scoped, native to Firefox via
+`--remote-debugging-port=N`.
+
+- Update `supervisor.cpp` to add `--remote-debugging-port=9222` to the
+  Firefox command line.
+- `bidi.{h,cpp}`: WebSocket client connects to
+  `ws://127.0.0.1:9222/session`. Sends `session.new` with
+  `webSocketUrl: true` capability to upgrade the connection to BiDi.
+  Reads back the session's `webSocketUrl`, reconnects to that, and
+  parks there.
+- Synchronous request/response over the socket: each command gets an
+  incrementing id, response matched on id, the worker thread blocks
+  on a `condition_variable` keyed by id. Async events
+  (`browsingContext.load`, `network.responseStarted`, etc.) get
+  dispatched into the h2g ring as `BR_EV_*` messages.
+- Map `BR_CMD_*` ring messages from the guest into BiDi calls:
+  - `BR_CMD_NAV` → `browsingContext.navigate { url, wait: "complete" }`
+  - `BR_CMD_BACK` / `_FORWARD` / `_RELOAD` → corresponding
+    `browsingContext.traverseHistory` / `reload`
+  - `BR_CMD_CLICK` → `input.performActions` with a pointer-source
+    `pointerDown` + `pointerUp` at coords
+  - `BR_CMD_KEY_*` → `input.performActions` with a key-source
+  - `BR_CMD_SCROLL` → `script.evaluate` of `window.scrollTo(...)` (or
+    a wheel pointer-source action)
+  - `BR_CMD_GET_SELECTION` → `script.evaluate` of
+    `window.getSelection().toString()`, send result back as
+    `BR_EV_SELECTION`
+
+**Deliverable:** sending a `BR_CMD_NAV` through the g2h ring causes
+Firefox to load a different URL and the new pixels reach the guest
+window.
 
 ### M5 — Browser.app (3 days)
 
@@ -313,8 +395,8 @@ toolbar, status text strip, scrollable PixMap viewport. Bookmarks menu
 populated from a plain-text `Browser Prefs` file in
 `<extfs>/MacPhoenix/`. Cmd-key shortcuts: Cmd+L (focus URL bar), Cmd+R
 (reload), Cmd+\[ / Cmd+\] (back/forward), Cmd+W (close = quit), Cmd+Q
-(quit). Chromium runs with a persistent `--user-data-dir` so logins
-survive launches.
+(quit). Firefox runs with a persistent `--profile <dir>` so cookies +
+logins survive launches (already true since M3).
 
 Pre-built `Browser.bin` committed; auto-installed in
 `:System Folder:Apple Menu Items:` like BridgeAgent.
@@ -361,19 +443,27 @@ reads modern web pages.
 
 ### M6 — Forms, selection, clipboard (2 days)
 
-- Forward `KEY_DOWN` / `KEY_UP` for typing in form fields.
-- `BR_CMD_GET_SELECTION` → `Runtime.evaluate('window.getSelection()')`
-  → `BR_EV_SELECTION` back.
-- Cmd+C / Cmd+V via existing TEScrap sync infrastructure.
+- Forward `KEY_DOWN` / `KEY_UP` for typing in form fields via
+  `input.performActions` (key-source).
+- `BR_CMD_GET_SELECTION` → `script.evaluate` of
+  `window.getSelection().toString()` → `BR_EV_SELECTION` back.
+- Cmd+C / Cmd+V via existing TEScrap sync infrastructure (no BiDi
+  call needed — guest TEScrap stays the source of truth, host
+  pushes/pulls via `script.evaluate` of clipboard read/write).
 
 **Deliverable:** can fill out a search form, copy text out, paste
 text in.
 
 ### M7 — Downloads (1 day)
 
-- `Browser.setDownloadBehavior` → save to ExtFS dir
-  `/MacPhoenix/downloads/`.
-- `Browser.downloadWillBegin` / `downloadProgress` → `BR_EV_DOWNLOAD`.
+- BiDi: subscribe to `network.responseStarted` events, watch
+  `Content-Disposition: attachment` or non-HTML mime types; trigger a
+  redirect to the local file via `script.evaluate(fetch + save)`. Or
+  set Firefox prefs `browser.download.dir` + `browser.download.folderList=2`
+  in the profile to point at the ExtFS share's downloads dir, and
+  watch the dir from the host.
+- On detection, push `BR_EV_DOWNLOAD` (start, progress, done) into the
+  ring.
 - Guest dialog shows progress; on completion, file is in the shared
   folder.
 
@@ -431,9 +521,12 @@ comparable Linux C work. Mitigation: the in-shm log channel cuts
 debug-cycle time by replacing "rebuild + reinstall + reboot to add a
 printf" with "log lines stream to host stderr live."
 
-**8. Chromium dependency at runtime.** Adds a non-trivial dep when
-`--browser` is set. Mitigation: feature-gated, off by default. Builds
-of mac-phoenix without `--browser` flag don't need Chromium.
+**8. Firefox dependency at runtime.** Adds a non-trivial dep when
+`--browser` is set: Firefox itself plus Xvfb + xcb-composite. Mitigation:
+feature-gated by `BUILD_BROWSER` (CMake) and `--browser` (runtime), off
+by default. The supervisor only fails when the user explicitly opts in
+without the binaries installed; mac-phoenix without `--browser` doesn't
+care.
 
 **9. Linux-only initially.** Xvfb doesn't run on macOS without XQuartz.
 Mitigation: Linux is the primary dev/deploy platform anyway. macOS users
@@ -457,9 +550,10 @@ no guest cooperation required.
 | `LMGetCurrentA5()` / `BrowserShm.flags` BR_FRONT bit | Is Browser.app frontmost? | Cheap pre-check before the rest |
 
 `page_xy = mouse_screen_xy - window.content_topleft + viewport_scroll`,
-then `Input.dispatchMouseEvent` to Chromium. Same per-VBL cost as the
-existing command_bridge `/api/app` peek path; the `WindowList`-walking
-helper already exists in `boot_progress.cpp`.
+then `input.performActions` (BiDi pointer-source `pointerMove`) to
+Firefox. Same per-VBL cost as the existing command_bridge `/api/app`
+peek path; the `WindowList`-walking helper already exists in
+`boot_progress.cpp`.
 
 ### What the guest still has to send
 
@@ -506,7 +600,7 @@ and the host re-reads on mismatch. Defer until observed.
 - **Default homepage.** What does Browser.app open to on launch? A
   "MacPhoenix Browser" landing page on the host? Google? Nothing?
 - **Multi-window.** Single window only for v1. Multiple windows would
-  need multiple CDP target attachments + multiple `BrowserShm` regions.
+  need multiple BiDi browsing contexts + multiple `BrowserShm` regions.
   Out of scope.
 
 ## File layout summary
@@ -517,13 +611,13 @@ src/common/include/MacBrowser.h          ← shared layout ✅ M0
 src/drivers/browser/
   ring.{h,cpp}                           ← SPSC ring helpers ✅ M2
   shm.{h,cpp}                            ← handshake watcher + send_event/read_command ✅ M1+M2
-  browser_spike.{h,cpp}                  ← M1 gradient writer ✅
-  supervisor.{h,cpp}                     ← Xvfb + Chrome (M3)
-  cdp.{h,cpp}                            ← CDP client (M3)
-  xshm.{h,cpp}                           ← X capture (M4)
-  pipeline.{h,cpp}                       ← orchestration (M4)
-  module.{h,cpp}                         ← lifecycle (M3)
-src/drivers/platform/timer_interrupt.cpp ← +on_pre_vbl hook (M3)
+  browser_spike.{h,cpp}                  ← M1/M2 spike writer ✅
+  supervisor.{h,cpp}                     ← Xvfb + Firefox lifecycle ✅ M3
+  xshm.{h,cpp}                           ← X capture w/ COMPOSITE redirect ✅ M4
+  pipeline.{h,cpp}                       ← BGRX → RGB555 + dirty-rect publish ✅ M4
+  module.{h,cpp}                         ← top-level lifecycle ✅ M3
+  bidi.{h,cpp}                           ← WebDriver BiDi client (M4.5)
+src/drivers/platform/timer_interrupt.cpp ← +on_pre_vbl hook (M5)
 src/main.cpp                             ← +--browser flag ✅ M1
 
 tools/png2icn.py                         ← PNG → 'ICN#'/'icl8' .r blocks (M5)
