@@ -58,12 +58,18 @@
  * cosmetic for now; M5+ will hook them up to BR_CMD_SCROLL.
  *
  * Total port height = 24 + 400 = 424; with title bar = 442. */
-#define kToolbarH   24
+/* Single padding constant. Used between every pair of adjacent
+ * controls, between the controls and the top/bottom of the chrome
+ * bar, and between the leftmost / rightmost button and the window
+ * edge. Keeps spacing consistent everywhere. */
+#define kPad         4
+
 #define kViewportW  640
 #define kViewportH  400
 #define kSBSize     16   /* scroll bar thickness, classic Mac 7.5 */
-#define kStatusW    72   /* right-aligned status label area */
-#define kWinH       (kToolbarH + kViewportH)   /* 424 */
+#define kBtnH       20   /* main toolbar button body height */
+#define kToolbarH   (kBtnH + 2 * kPad)   /* 28 = 4 + 20 + 4 */
+#define kWinH       (kToolbarH + kViewportH)
 
 /* Vertical position of each row's TOP edge, in window-port coords. */
 #define kToolbarY   0
@@ -76,18 +82,35 @@
 #define kPixelsH    (kViewportH - kSBSize)
 
 /* Toolbar buttons — text-only, period-correct (NN3 had a Pictures /
- * Text / Pictures+Text option). Four pushButProc controls. */
-#define kBtnW        64
-#define kBtnGap       4
-#define kBtnLeftPad   8
-#define kBtnH        20
-#define kBtnY        ((kToolbarH - kBtnH) / 2)   /* vertical-center in row */
+ * Text / Pictures+Text option). Four pushButProc controls on the
+ * left, two small zoom controls right-justified. All gaps + edge
+ * margins use kPad. */
+#define kBtnW         64
+#define kBtnY         kPad
+
+#define kSmallBtnW    22
+#define kSmallBtnH    16
+#define kSmallBtnY   ((kToolbarH - kSmallBtnH) / 2)
+
+/* +/- buttons (right-justified, [-] left of [+]). */
+#define kBtnPlusX    (kViewportW - kPad - kSmallBtnW)
+#define kBtnMinusX   (kBtnPlusX - kPad - kSmallBtnW)
+
+/* "Ready" status label area, between URL bar and the +/- buttons. */
+#define kStatusW      48
+#define kStatusRight (kBtnMinusX - kPad)
+#define kStatusLeft  (kStatusRight - kStatusW)
+/* Status baseline — vertically centered on the bar. Geneva 9 pt
+ * ascent ≈ 9 px; baseline at (bar + ascent) / 2. */
+#define kStatusBaseY  ((kToolbarH + 9) / 2)
 
 /* refCon values used to identify which button got clicked. */
 #define kCtlBack     1
 #define kCtlForward  2
 #define kCtlReload   3
 #define kCtlStop     4
+#define kCtlMinus    5
+#define kCtlPlus     6
 
 static MenuHandle gAppleMenuH;
 static MenuHandle gFileMenuH;
@@ -104,6 +127,8 @@ static ControlHandle gBtnBack    = NULL;
 static ControlHandle gBtnForward = NULL;
 static ControlHandle gBtnReload  = NULL;
 static ControlHandle gBtnStop    = NULL;
+static ControlHandle gBtnMinus   = NULL;
+static ControlHandle gBtnPlus    = NULL;
 
 /* Scroll bars on the viewport. Cosmetic for M5-B; M5+ wires them
  * to BR_CMD_SCROLL + a guest-side scroll offset. */
@@ -300,10 +325,11 @@ static void maybe_push_g2h(void)
 }
 
 
-/* URL field starts right after the last toolbar button and ends
- * before the right-aligned status label area. */
-#define kURLLeft     (kBtnLeftPad + 4 * kBtnW + 3 * kBtnGap + kBtnGap)
-#define kURLRight    (kViewportW - kStatusW - 6)
+/* URL field fills the chrome row between the last toolbar button
+ * (right edge of [Stop]) and the start of the right-aligned status
+ * label area. Left edge: [Stop right edge] + kPad. */
+#define kURLLeft     (kPad + 4 * kBtnW + 3 * kPad + kPad)
+#define kURLRight    (kStatusLeft - kPad)
 
 static void url_bar_rect(Rect *out)
 {
@@ -337,23 +363,33 @@ static void make_scrollbars(void)
 static void make_toolbar(void)
 {
     if (!gWin) return;
-    int x = kBtnLeftPad;
+    int x = kPad;
     Rect r;
     SetRect(&r, x, kBtnY, x + kBtnW, kBtnY + kBtnH);
     gBtnBack    = NewControl(gWin, &r, "\pBack",     true, 0,0,0,
                               0, (long)kCtlBack);     /* 0 = pushButProc */
-    x += kBtnW + kBtnGap;
+    x += kBtnW + kPad;
     SetRect(&r, x, kBtnY, x + kBtnW, kBtnY + kBtnH);
     gBtnForward = NewControl(gWin, &r, "\pForward",  true, 0,0,0,
                               0, (long)kCtlForward);  /* 0 = pushButProc */
-    x += kBtnW + kBtnGap;
+    x += kBtnW + kPad;
     SetRect(&r, x, kBtnY, x + kBtnW, kBtnY + kBtnH);
     gBtnReload  = NewControl(gWin, &r, "\pReload",   true, 0,0,0,
                               0, (long)kCtlReload);   /* 0 = pushButProc */
-    x += kBtnW + kBtnGap;
+    x += kBtnW + kPad;
     SetRect(&r, x, kBtnY, x + kBtnW, kBtnY + kBtnH);
     gBtnStop    = NewControl(gWin, &r, "\pStop",     true, 0,0,0,
                               0, (long)kCtlStop);     /* 0 = pushButProc */
+
+    /* Right-side small buttons: zoom out [-] and zoom in [+]. */
+    SetRect(&r, kBtnMinusX, kSmallBtnY,
+                kBtnMinusX + kSmallBtnW, kSmallBtnY + kSmallBtnH);
+    gBtnMinus = NewControl(gWin, &r, "\p-", true, 0,0,0,
+                           0, (long)kCtlMinus);
+    SetRect(&r, kBtnPlusX, kSmallBtnY,
+                kBtnPlusX + kSmallBtnW, kSmallBtnY + kSmallBtnH);
+    gBtnPlus  = NewControl(gWin, &r, "\p+", true, 0,0,0,
+                           0, (long)kCtlPlus);
 }
 
 static void open_window(void)
@@ -413,12 +449,13 @@ static void draw_chrome_row(void)
      * leaving the rounded white button bodies on a gray field. */
     DrawControls(gWin);
 
-    /* 3. Right-aligned "Ready" label, drawn on the gray bg. */
+    /* 3. Right-aligned "Ready" label, drawn on the gray bg in the
+     * area between URL bar and the +/- buttons, vertically centered. */
     TextFont(applFont);   /* Geneva */
     TextSize(9);
     const unsigned char *label = (const unsigned char *)"\pReady";
     short tw = StringWidth(label);
-    MoveTo(kViewportW - 6 - tw, kBtnY + kBtnH - 4);
+    MoveTo(kStatusRight - tw, kStatusBaseY);
     DrawString(label);
 
     /* 4. URL text field: switch to white BackColor for the field
@@ -442,11 +479,12 @@ static void draw_chrome_row(void)
     SetPort(saved);
 }
 
-/* Push a 0-byte BR_CMD_BACK / FORWARD / RELOAD / STOP through g2h.
- * STOP isn't in the protocol header yet — host dispatcher rejects
- * unknown types harmlessly so we send it anyway as BR_CMD_STOP=14
- * for forward compatibility. */
-#define BR_CMD_STOP   14
+/* Push a 0-byte ring command through g2h. Several of these aren't in
+ * the protocol header yet — host dispatcher logs unknown types but
+ * keeps running, so we forward-define them here for now. */
+#define BR_CMD_STOP       14
+#define BR_CMD_ZOOM_OUT   15
+#define BR_CMD_ZOOM_IN    16
 static void send_toolbar_cmd(uint16_t cmd_type)
 {
     if (!gShm) return;
@@ -463,10 +501,12 @@ static void dispatch_button(ControlHandle ctl)
 {
     long id = (**ctl).contrlRfCon;
     switch (id) {
-    case kCtlBack:    send_toolbar_cmd(BR_CMD_BACK);    break;
-    case kCtlForward: send_toolbar_cmd(BR_CMD_FORWARD); break;
-    case kCtlReload:  send_toolbar_cmd(BR_CMD_RELOAD);  break;
-    case kCtlStop:    send_toolbar_cmd(BR_CMD_STOP);    break;
+    case kCtlBack:    send_toolbar_cmd(BR_CMD_BACK);     break;
+    case kCtlForward: send_toolbar_cmd(BR_CMD_FORWARD);  break;
+    case kCtlReload:  send_toolbar_cmd(BR_CMD_RELOAD);   break;
+    case kCtlStop:    send_toolbar_cmd(BR_CMD_STOP);     break;
+    case kCtlMinus:   send_toolbar_cmd(BR_CMD_ZOOM_OUT); break;
+    case kCtlPlus:    send_toolbar_cmd(BR_CMD_ZOOM_IN);  break;
     }
 }
 
