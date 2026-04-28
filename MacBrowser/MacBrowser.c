@@ -64,22 +64,23 @@
  * edge. Keeps spacing consistent everywhere. */
 #define kPad         4
 
-#define kViewportW  640
-#define kViewportH  400
+/* Initial window port size. The window can be grown / shrunk after
+ * launch — gPortW/gPortH track the current size. */
+#define kInitPortW  640
+#define kInitPortH  428
 #define kSBSize     16   /* scroll bar thickness, classic Mac 7.5 */
 #define kBtnH       20   /* main toolbar button body height */
 #define kToolbarH   (kBtnH + 2 * kPad)   /* 28 = 4 + 20 + 4 */
-#define kWinH       (kToolbarH + kViewportH)
+
+/* GrowWindow size limits. */
+#define kMinPortW    320
+#define kMinPortH    (kToolbarH + 100)
+#define kMaxPortW    BR_FB_MAX_W
+#define kMaxPortH    (kToolbarH + BR_FB_MAX_H)
 
 /* Vertical position of each row's TOP edge, in window-port coords. */
 #define kToolbarY   0
 #define kViewportY  (kToolbarY  + kToolbarH)
-
-/* Visible pixel area inside the viewport row (scroll bars consume
- * the right 16 cols and bottom 16 rows). The host pipeline writes
- * fb.pixels into a buffer of these dimensions. */
-#define kPixelsW    (kViewportW - kSBSize)
-#define kPixelsH    (kViewportH - kSBSize)
 
 /* Toolbar buttons — text-only, period-correct (NN3 had a Pictures /
  * Text / Pictures+Text option). Four pushButProc controls on the
@@ -92,17 +93,24 @@
 #define kSmallBtnH    kBtnH      /* same height as the main buttons */
 #define kSmallBtnY    kBtnY
 
-/* +/- buttons (right-justified, [-] left of [+]). */
-#define kBtnPlusX    (kViewportW - kPad - kSmallBtnW)
-#define kBtnMinusX   (kBtnPlusX - kPad - kSmallBtnW)
-
 /* "Ready" status label area, between URL bar and the +/- buttons. */
 #define kStatusW      48
-#define kStatusRight (kBtnMinusX - kPad)
-#define kStatusLeft  (kStatusRight - kStatusW)
-/* Status baseline — slightly below center, sits closer to the
- * baseline of the button labels. */
 #define kStatusBaseY  ((kToolbarH + 9) / 2 - 2)
+
+/* Runtime layout: derived from the current window port size. The
+ * relayout() function recomputes these whenever we open or grow
+ * the window so every drawer + hit-tester sees consistent
+ * dimensions. */
+static int gPortW;             /* port width (= window content width) */
+static int gPortH;             /* port height (= chrome + viewport rows) */
+static int gPixelsW;           /* visible viewport width  = gPortW - kSBSize */
+static int gPixelsH;           /* visible viewport height = gPortH - kToolbarH - kSBSize */
+static int gBtnPlusX;          /* x of [+] button */
+static int gBtnMinusX;         /* x of [-] button */
+static int gStatusLeft;        /* left edge of status label area */
+static int gStatusRight;       /* right edge of status label area */
+static int gURLLeft;           /* left edge of URL field */
+static int gURLRight;          /* right edge of URL field */
 
 /* refCon values used to identify which button got clicked. */
 #define kCtlBack     1
@@ -363,15 +371,86 @@ static void maybe_push_g2h(void)
 }
 
 
-/* URL field fills the chrome row between the last toolbar button
- * (right edge of [Stop]) and the start of the right-aligned status
- * label area. Left edge: [Stop right edge] + kPad. */
-#define kURLLeft     (kPad + 4 * kBtnW + 3 * kPad + kPad)
-#define kURLRight    (kStatusLeft - kPad)
-
 static void url_bar_rect(Rect *out)
 {
-    SetRect(out, kURLLeft, kBtnY, kURLRight, kBtnY + kBtnH);
+    SetRect(out, gURLLeft, kBtnY, gURLRight, kBtnY + kBtnH);
+}
+
+/* Recompute layout from gPortW/gPortH. Reposition every control,
+ * update the URL field's TE bounds, and force a redraw. Called
+ * on window-open and after a successful GrowWindow. */
+static void relayout(void)
+{
+    /* Pixel area shrinks by the scroll bar thickness on right + bottom. */
+    gPixelsW = gPortW - kSBSize;
+    gPixelsH = gPortH - kToolbarH - kSBSize;
+    if (gPixelsW < 32) gPixelsW = 32;
+    if (gPixelsH < 32) gPixelsH = 32;
+
+    /* Right-justified positions on the chrome row. */
+    gBtnPlusX    = gPortW - kPad - kSmallBtnW;
+    gBtnMinusX   = gBtnPlusX - kPad - kSmallBtnW;
+    gStatusRight = gBtnMinusX - kPad;
+    gStatusLeft  = gStatusRight - kStatusW;
+    /* URL field stretches from after the last toolbar button to
+     * just before the status label. */
+    gURLLeft     = kPad + 4 * kBtnW + 3 * kPad + kPad;
+    gURLRight    = gStatusLeft - kPad;
+
+    if (!gWin) return;
+
+    /* Move/size the right-side controls. */
+    Rect r;
+    if (gBtnMinus) {
+        SetRect(&r, gBtnMinusX, kSmallBtnY,
+                    gBtnMinusX + kSmallBtnW, kSmallBtnY + kSmallBtnH);
+        MoveControl(gBtnMinus, r.left, r.top);
+    }
+    if (gBtnPlus) {
+        SetRect(&r, gBtnPlusX, kSmallBtnY,
+                    gBtnPlusX + kSmallBtnW, kSmallBtnY + kSmallBtnH);
+        MoveControl(gBtnPlus, r.left, r.top);
+    }
+    if (gVSB) {
+        MoveControl(gVSB, gPortW - kSBSize, kViewportY);
+        SizeControl(gVSB, kSBSize,
+                          gPortH - kToolbarH - kSBSize);
+    }
+    if (gHSB) {
+        MoveControl(gHSB, 0, gPortH - kSBSize);
+        SizeControl(gHSB, gPortW - kSBSize, kSBSize);
+    }
+
+    /* Re-bound the URL TE. */
+    if (gURL) {
+        Rect ur;
+        url_bar_rect(&ur);
+        InsetRect(&ur, 3, 2);
+        (**gURL).destRect = ur;
+        (**gURL).viewRect = ur;
+    }
+
+    /* Force a repaint of the whole window. */
+    Rect all;
+    SetRect(&all, 0, 0, gPortW, gPortH);
+    InvalRect(&all);
+}
+
+/* Push current pixel area dims through the ring as BR_CMD_RESIZE.
+ * Host's cmd_dispatch maps this to bidi.set_viewport. Called on
+ * window-open (sync host with whatever size we ended up at) and
+ * after every GrowWindow. */
+static void publish_size(void)
+{
+    if (!gShm) return;
+    uint8_t buf[4];
+    uint16_t w = (uint16_t)gPixelsW;
+    uint16_t h = (uint16_t)gPixelsH;
+    buf[0] = (uint8_t)((w >> 8) & 0xFF);
+    buf[1] = (uint8_t)( w       & 0xFF);
+    buf[2] = (uint8_t)((h >> 8) & 0xFF);
+    buf[3] = (uint8_t)( h       & 0xFF);
+    br_ring_push(&gShm->g2h, BR_CMD_RESIZE, buf, 4);
 }
 
 /* Vertical + horizontal scroll bars on the viewport. M5-B is just
@@ -386,13 +465,13 @@ static void make_scrollbars(void)
      * value=0; M5+ wires real ranges from page dimensions. */
     /* Vertical: right edge, from kViewportY to bottom of viewport
      * minus the corner square. */
-    SetRect(&r, kViewportW - kSBSize, kViewportY,
-                kViewportW,             kViewportY + kViewportH - kSBSize);
+    SetRect(&r, gPortW - kSBSize, kViewportY,
+                gPortW,             gPortH - kSBSize);
     gVSB = NewControl(gWin, &r, "\p", true, 0, 0, 100, 16, 0);
 
     /* Horizontal: bottom edge of viewport, from 0 to corner. */
-    SetRect(&r, 0,                       kViewportY + kViewportH - kSBSize,
-                kViewportW - kSBSize,    kViewportY + kViewportH);
+    SetRect(&r, 0,                  gPortH - kSBSize,
+                gPortW - kSBSize,   gPortH);
     gHSB = NewControl(gWin, &r, "\p", true, 0, 0, 100, 16, 0);
 }
 
@@ -420,12 +499,12 @@ static void make_toolbar(void)
                               0, (long)kCtlStop);     /* 0 = pushButProc */
 
     /* Right-side small buttons: zoom out [-] and zoom in [+]. */
-    SetRect(&r, kBtnMinusX, kSmallBtnY,
-                kBtnMinusX + kSmallBtnW, kSmallBtnY + kSmallBtnH);
+    SetRect(&r, gBtnMinusX, kSmallBtnY,
+                gBtnMinusX + kSmallBtnW, kSmallBtnY + kSmallBtnH);
     gBtnMinus = NewControl(gWin, &r, "\p-", true, 0,0,0,
                            0, (long)kCtlMinus);
-    SetRect(&r, kBtnPlusX, kSmallBtnY,
-                kBtnPlusX + kSmallBtnW, kSmallBtnY + kSmallBtnH);
+    SetRect(&r, gBtnPlusX, kSmallBtnY,
+                gBtnPlusX + kSmallBtnW, kSmallBtnY + kSmallBtnH);
     gBtnPlus  = NewControl(gWin, &r, "\p+", true, 0,0,0,
                            0, (long)kCtlPlus);
 }
@@ -440,11 +519,18 @@ static void open_window(void)
      * RGBBackColor + EraseRect can fill a solid light gray for the
      * chrome row (instead of QD's dithered ltGray pattern). */
     Rect bounds;
-    SetRect(&bounds, 0, 40, kViewportW, 40 + kWinH);
+    SetRect(&bounds, 0, 40, kInitPortW, 40 + kInitPortH);
     gWin = NewCWindow(NULL, &bounds, "\pMacBrowser",
                       true, documentProc, (WindowPtr)-1, true, 0);
 
+    /* Seed runtime layout from the window we just opened. SetPort
+     * must come first because relayout() ends with InvalRect, which
+     * needs a valid current port. */
     SetPort(gWin);
+    gPortW = kInitPortW;
+    gPortH = kInitPortH;
+    relayout();
+
     make_toolbar();
     make_scrollbars();
 
@@ -476,7 +562,7 @@ static void draw_chrome_row(void)
     /* 1. Erase the whole chrome row to gray. */
     RGBBackColor(&gray);
     Rect row;
-    SetRect(&row, 0, kToolbarY, kViewportW, kToolbarY + kToolbarH);
+    SetRect(&row, 0, kToolbarY, gPortW, kToolbarY + kToolbarH);
     EraseRect(&row);
 
     /* 2. Draw all controls. With BackColor still = gray, each
@@ -498,8 +584,8 @@ static void draw_chrome_row(void)
     default:                label = (const unsigned char *)"\pReady"; break;
     }
     short tw = StringWidth(label);
-    short sx = kStatusRight - tw;
-    if (sx < kStatusLeft) sx = kStatusLeft;
+    short sx = gStatusRight - tw;
+    if (sx < gStatusLeft) sx = gStatusLeft;
     MoveTo(sx, kStatusBaseY);
     DrawString(label);
 
@@ -519,7 +605,7 @@ static void draw_chrome_row(void)
     /* 5. 1-px separator between chrome and viewport. */
     PenNormal();
     MoveTo(0, kToolbarH - 1);
-    LineTo(kViewportW - 1, kToolbarH - 1);
+    LineTo(gPortW - 1, kToolbarH - 1);
 
     SetPort(saved);
 }
@@ -550,8 +636,8 @@ static void publish_viewport_pos(void)
 
     /* Guest is m68k native big-endian; the int16_t stores are no-op
      * on the host's BR_HOST byte-swap path. */
-    gShm->viewport.screen_left = (int16_t)tl.h;
-    gShm->viewport.screen_top  = (int16_t)tl.v;
+    gShm->viewport_screen_left = (int16_t)tl.h;
+    gShm->viewport_screen_top  = (int16_t)tl.v;
 }
 
 /* Push a BR_CMD_KEY_DOWN with the cooked character that came out of
@@ -758,6 +844,22 @@ static void handle_event(EventRecord *evt)
             publish_viewport_pos();
             break;
         }
+        case inGrow: {
+            Rect limits;
+            SetRect(&limits, kMinPortW, kMinPortH, kMaxPortW, kMaxPortH);
+            long sz = GrowWindow(win, evt->where, &limits);
+            if (sz != 0) {
+                int new_w = (int)(sz & 0xFFFF);
+                int new_h = (int)((sz >> 16) & 0xFFFF);
+                SizeWindow(win, new_w, new_h, true);
+                gPortW = new_w;
+                gPortH = new_h;
+                relayout();
+                publish_viewport_pos();
+                publish_size();
+            }
+            break;
+        }
         case inContent: {
             if (win != FrontWindow()) { SelectWindow(win); break; }
             SetPort(win);
@@ -895,6 +997,12 @@ int main(void)
         /* Publish our viewport's on-screen position so the host's
          * VBL hook can compute page coords from Mac.Mouse globals. */
         publish_viewport_pos();
+
+        /* Sync the host's Firefox viewport with whatever pixel area
+         * we ended up at. Even if we stayed at the initial size,
+         * this catches any drift between the supervisor's Xvfb
+         * dims and our compiled-in defaults. */
+        publish_size();
 
         /* Push our default home URL through the ring. Host's
          * cmd_dispatch picks it up → bidi.navigate → Firefox loads

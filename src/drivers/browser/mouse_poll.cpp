@@ -88,8 +88,8 @@ void poll_loop()
         /* Page coords = mouse - viewport top-left. The viewport
          * struct fields are int16 in BE on the wire; on host we
          * byte-swap on read. */
-        int viewport_x = (int16_t)br_u16_load((uint16_t*)&shm->viewport.screen_left);
-        int viewport_y = (int16_t)br_u16_load((uint16_t*)&shm->viewport.screen_top);
+        int viewport_x = (int16_t)br_u16_load((uint16_t*)&shm->viewport_screen_left);
+        int viewport_y = (int16_t)br_u16_load((uint16_t*)&shm->viewport_screen_top);
         int page_x = mouse_h - viewport_x;
         int page_y = mouse_v - viewport_y;
 

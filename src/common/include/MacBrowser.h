@@ -256,23 +256,15 @@ typedef struct BrLogSlot {
 
 /* ── Top-level region ───────────────────────────────────────── */
 
-/* Viewport position published by the guest each time its window
- * moves or resizes. Lets the host's VBL hook compute page coords
- * from Mac.Mouse globals: page_xy = mouse_screen_xy - (left, top).
- * Combined with fb.width/height, the host can synthesize hover +
- * click events without per-event ring traffic. */
-typedef struct BrViewport {
-    int16_t  screen_left;           /* Mac screen X of viewport top-left */
-    int16_t  screen_top;            /* Mac screen Y of viewport top-left */
-    uint16_t reserved[2];
-} BrViewport;
-
 typedef struct BrowserShm {
     uint32_t      magic;            /* BR_MAGIC; guest checks this first */
     uint32_t      version;          /* BR_VERSION */
     uint32_t      flags;            /* host capability bits, future use */
-    uint32_t      reserved;
-    BrViewport    viewport;         /* guest publishes window-pos for mouse polling */
+    /* Viewport top-left in Mac screen coords. Updated by the guest
+     * on window-open + drag so the host's mouse poller can convert
+     * mouse_screen_xy → page_xy without per-event ring traffic. */
+    int16_t       viewport_screen_left;
+    int16_t       viewport_screen_top;
     BrRing        h2g;              /* host → guest events */
     BrRing        g2h;              /* guest → host commands */
     BrLogSlot     log;              /* guest → host debug log (lossy) */
@@ -292,14 +284,13 @@ typedef struct BrowserShm {
 #endif
 
 BR_STATIC_ASSERT(sizeof(BrRect)        == 8,    "BrRect must be 8 bytes");
-BR_STATIC_ASSERT(sizeof(BrViewport)    == 8,    "BrViewport must be 8 bytes");
 BR_STATIC_ASSERT(sizeof(BrRing)        == 8 + BR_RING_SIZE,
                  "BrRing layout drift");
 BR_STATIC_ASSERT(sizeof(BrLogSlot)     == 8 + BR_LOG_BUFSZ,
                  "BrLogSlot layout drift");
 BR_STATIC_ASSERT(sizeof(BrFrameBuffer) == 16 + BR_DIRTY_MAX * 8 + BR_FB_BYTES,
                  "BrFrameBuffer layout drift");
-BR_STATIC_ASSERT(sizeof(BrowserShm)    == 16 + 8
+BR_STATIC_ASSERT(sizeof(BrowserShm)    == 16
                                             + 2 * (8 + BR_RING_SIZE)
                                             + (8 + BR_LOG_BUFSZ)
                                             + 16 + BR_DIRTY_MAX * 8 + BR_FB_BYTES,
