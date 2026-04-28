@@ -36,6 +36,22 @@ CdpClient* g_cdp = nullptr;
 std::atomic<bool> g_running{false};
 std::mutex g_mtx;
 
+/* Rolling perf counters. Reset each report interval (1 s).
+ *  decode_us  = base64 + PNG decode time
+ *  diff_us    = bbox diff vs previous frame
+ *  blit_us    = BGRA→RGB555 + write to BrowserShm.fb.pixels
+ *  total_us   = whole on_screencast_frame() handler */
+struct PerfCounters {
+    uint64_t frames     = 0;
+    uint64_t decode_us  = 0;
+    uint64_t diff_us    = 0;
+    uint64_t blit_us    = 0;
+    uint64_t total_us   = 0;
+    uint64_t bytes_in   = 0;     /* pre-decode PNG payload */
+    uint64_t pixels_out = 0;     /* dirty pixels written to fb */
+} g_perf;
+std::chrono::steady_clock::time_point g_last_report;
+
 /* Previous frame for diffing. Same layout as the decoded frame:
  * RGBA, top-down, w*4 bytes per row. */
 std::vector<uint8_t> g_prev;
@@ -130,9 +146,50 @@ bool compute_dirty_bbox(const uint8_t* prev, const uint8_t* cur,
     return true;
 }
 
+/* Time delta in microseconds. */
+template <typename Tp>
+inline uint64_t us_since(const Tp& t0) {
+    return (uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - t0).count();
+}
+
+void maybe_report_perf()
+{
+    auto now = std::chrono::steady_clock::now();
+    if (g_last_report.time_since_epoch().count() == 0) {
+        g_last_report = now;
+        return;
+    }
+    auto window_us = (uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(
+        now - g_last_report).count();
+    if (window_us < 1'000'000) return;  /* once per second */
+
+    if (g_perf.frames > 0) {
+        double fps = (double)g_perf.frames * 1e6 / (double)window_us;
+        double avg_total = (double)g_perf.total_us / g_perf.frames;
+        double avg_dec   = (double)g_perf.decode_us / g_perf.frames;
+        double avg_diff  = (double)g_perf.diff_us / g_perf.frames;
+        double avg_blit  = (double)g_perf.blit_us / g_perf.frames;
+        double mb_in     = (double)g_perf.bytes_in / (1024.0 * 1024.0);
+        double dirty_pct =
+            g_prev_w && g_prev_h
+              ? (double)g_perf.pixels_out * 100.0
+                  / (g_perf.frames * g_prev_w * g_prev_h)
+              : 0.0;
+        fprintf(stderr,
+                "[Pipeline] %.1f fps  total=%.1fms (decode=%.1f diff=%.1f "
+                "blit=%.1f)  png=%.2fMiB  dirty=%.1f%%\n",
+                fps, avg_total/1000.0, avg_dec/1000.0, avg_diff/1000.0,
+                avg_blit/1000.0, mb_in, dirty_pct);
+    }
+    g_perf = {};
+    g_last_report = now;
+}
+
 void on_screencast_frame(const CdpClient::Json& params)
 {
     if (!params.contains("data")) return;
+    auto t_start = std::chrono::steady_clock::now();
 
     /* "sessionId" inside the screencastFrame params is chromium's
      * per-frame ack token, not the CDP attach session. We must echo
@@ -156,6 +213,7 @@ void on_screencast_frame(const CdpClient::Json& params)
     BrowserShm* shm = browser::shm_get();
     if (!shm) { ack(); return; }
 
+    auto t_dec_start = std::chrono::steady_clock::now();
     std::vector<uint8_t> png;
     if (base64_decode(b64, png) < 0) {
         fprintf(stderr, "[Pipeline] base64 decode failed\n");
@@ -172,6 +230,8 @@ void on_screencast_frame(const CdpClient::Json& params)
         ack();
         return;
     }
+    uint64_t decode_us = us_since(t_dec_start);
+    uint64_t bytes_in  = png.size();
 
     int cap_w = (w > (int)BR_FB_MAX_W) ? (int)BR_FB_MAX_W : w;
     int cap_h = (h > (int)BR_FB_MAX_H) ? (int)BR_FB_MAX_H : h;
@@ -190,11 +250,19 @@ void on_screencast_frame(const CdpClient::Json& params)
                     w, h, cap_w, cap_h);
         }
 
+        auto t_diff_start = std::chrono::steady_clock::now();
         int dx, dy, dw, dh;
-        if (compute_dirty_bbox(g_prev.data(), px, w, h, &dx, &dy, &dw, &dh)) {
+        bool dirty = compute_dirty_bbox(g_prev.data(), px, w, h,
+                                        &dx, &dy, &dw, &dh);
+        uint64_t diff_us = us_since(t_diff_start);
+        uint64_t blit_us = 0;
+        uint64_t pixels_out = 0;
+
+        if (dirty) {
             if (dx + dw > cap_w) dw = cap_w - dx;
             if (dy + dh > cap_h) dh = cap_h - dy;
             if (dw > 0 && dh > 0) {
+                auto t_blit_start = std::chrono::steady_clock::now();
                 int dst_stride = cap_w * 2;
                 for (int y = 0; y < dh; y++) {
                     const uint32_t* src_row =
@@ -214,10 +282,21 @@ void on_screencast_frame(const CdpClient::Json& params)
                 br_u16_store((uint16_t*)&shm->fb.dirty[0].right,  dx + dw);
                 BR_FENCE_RELEASE();
                 br_u32_store(&shm->fb.seq, (uint32_t)++g_frame_count);
+                blit_us    = us_since(t_blit_start);
+                pixels_out = (uint64_t)dw * (uint64_t)dh;
             }
         }
 
         memcpy(g_prev.data(), px, (size_t)w * h * 4);
+
+        g_perf.frames++;
+        g_perf.decode_us  += decode_us;
+        g_perf.diff_us    += diff_us;
+        g_perf.blit_us    += blit_us;
+        g_perf.bytes_in   += bytes_in;
+        g_perf.pixels_out += pixels_out;
+        g_perf.total_us   += us_since(t_start);
+        maybe_report_perf();
     }
 
     stbi_image_free(px);
