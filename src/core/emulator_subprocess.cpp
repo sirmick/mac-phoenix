@@ -96,7 +96,12 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     }
 
     if (config_->browser_enabled) {
-        args.push_back("--browser");
+        if (!config_->browser_initial_url.empty()) {
+            args.push_back("--browser-url");
+            args.push_back(config_->browser_initial_url);
+        } else {
+            args.push_back("--browser");
+        }
     }
 
     // Network

@@ -409,6 +409,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("\nAutomation:\n");
             printf("  --bridge                   Enable automation bridge\n");
             printf("  --browser                  Reserve BrowserShm region (MacBrowser spike)\n");
+            printf("  --browser-url URL          Spawn headless Chromium and navigate to URL (implies --browser)\n");
             printf("  --headless-http            HTTP API only (no video/audio)\n");
             printf("\nServer:\n");
             printf("  --port N                   HTTP+WS port (default: 11000)\n");
@@ -577,6 +578,15 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --browser
         if (strcmp(argv[i], "--browser") == 0) {
             config.browser_enabled = true; argv[i] = nullptr; continue;
+        }
+
+        // --browser-url URL  (implies --browser)
+        if (strcmp(argv[i], "--browser-url") == 0 && i + 1 < argc) {
+            config.browser_enabled = true;
+            config.browser_initial_url = argv[i+1];
+            argv[i] = argv[i+1] = nullptr;
+            i++;
+            continue;
         }
 
         // --ipc (IPC child mode for PPC subprocess)

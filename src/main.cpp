@@ -51,6 +51,7 @@
 #include "sigsegv.h"
 #include "drivers/browser/browser_spike.h"
 #include "drivers/browser/shm.h"
+#include "drivers/browser/module.h"
 
 // ============================================================================
 // Early Mac address space reservation — runs BEFORE main(), before any threads.
@@ -637,6 +638,7 @@ int main(int argc, char **argv)
 			if (emu_config.browser_enabled) {
 				browser::shm_init();
 				browser_spike_start();
+				browser::browser_module_start(emu_config.browser_initial_url);
 			}
 		}
 
@@ -845,6 +847,7 @@ int main(int argc, char **argv)
 				if (emu_config.browser_enabled) {
 					browser::shm_init();
 					browser_spike_start();
+					browser::browser_module_start(emu_config.browser_initial_url);
 				}
 			}
 
