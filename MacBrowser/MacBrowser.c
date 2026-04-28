@@ -530,6 +530,26 @@ static void draw_chrome_row(void)
 #define BR_CMD_STOP       14
 #define BR_CMD_ZOOM_OUT   15
 #define BR_CMD_ZOOM_IN    16
+
+/* Push a BR_CMD_CLICK with page-coord (x,y), button index (0 = left,
+ * 1 = middle, 2 = right), and click count. Payload is BE i32 x, i32 y,
+ * u8 btn, u8 count = 10 bytes. */
+static void send_click(int page_x, int page_y,
+                       uint8_t btn, uint8_t count)
+{
+    if (!gShm) return;
+    uint8_t buf[10];
+    int32_t bx = (int32_t)page_x;   /* m68k native = BE; copy verbatim */
+    int32_t by = (int32_t)page_y;
+    memcpy(buf + 0, &bx, 4);
+    memcpy(buf + 4, &by, 4);
+    buf[8] = btn;
+    buf[9] = count;
+    if (br_ring_push(&gShm->g2h, BR_CMD_CLICK, buf, 10) == 0) {
+        br_log(&gShm->log, BR_LOG_INF,
+               "click %d,%d btn=%u", page_x, page_y, (unsigned)btn);
+    }
+}
 static void send_toolbar_cmd(uint16_t cmd_type)
 {
     if (!gShm) return;
@@ -669,9 +689,19 @@ static void handle_event(EventRecord *evt)
                 break;
             }
 
-            /* 3. Anything else: deactivate URL bar.
-             * TODO M5 phase D: forward viewport clicks as BR_CMD_CLICK. */
+            /* 3. Click landed outside the chrome row — deactivate URL
+             * bar so further keypresses don't go there, and if the
+             * click is inside the visible pixel viewport (excludes
+             * scroll bars and the corner box), forward it to the
+             * host as BR_CMD_CLICK at page-relative coords. */
             set_url_active(false);
+            if (local.h >= 0 && local.h < (short)kPixelsW &&
+                local.v >= kViewportY &&
+                local.v < kViewportY + (short)kPixelsH) {
+                int page_x = local.h;
+                int page_y = local.v - kViewportY;
+                send_click(page_x, page_y, 0, 1);   /* left, single */
+            }
             break;
         }
         case inGoAway:
