@@ -1146,6 +1146,30 @@ function renderHeldModsChip() {
     chip.innerHTML = segments.join('');
 }
 
+// Refresh the "Platform default" option label in each Keyboard dropdown
+// so it shows the resolved target, e.g. "Platform default (⌘ Command)".
+// The value attribute stays "" — picking it persists the empty-string
+// sentinel so the next load re-resolves on whatever platform the user
+// is on. Called once at init; platform doesn't change mid-session.
+function relabelKeyboardDefaults() {
+    const def = defaultKeyboardModMap();
+    const fmt = (target) => {
+        if (target === 'off') return 'Platform default (off)';
+        const sym  = MAC_MOD_SYMBOL[target] || '';
+        const name = target.charAt(0).toUpperCase() + target.slice(1);
+        return `Platform default (${sym} ${name})`;
+    };
+    const relabel = (selectId, key) => {
+        const sel = document.getElementById(selectId);
+        const opt = sel?.querySelector('option[value=""]');
+        if (opt) opt.textContent = fmt(def[key]);
+    };
+    relabel('cfg-kb-ctrl', 'ctrl');
+    relabel('cfg-kb-alt',  'alt');
+    relabel('cfg-kb-meta', 'meta');
+    relabel('cfg-kb-fn',   'fn');
+}
+
 function applyKeyboardConfig(cfg) {
     if (cfg) {
         // Empty / missing fields fall back to the platform default. Server
@@ -4319,15 +4343,16 @@ function updateConfigUI() {
     const kbMetaEl    = document.getElementById('cfg-kb-meta');
     const kbFnEl      = document.getElementById('cfg-kb-fn');
     const kbBlurEl    = document.getElementById('cfg-kb-release-on-blur');
-    // Populate dropdowns from live keyboardConfig (already resolved past
-    // any empty/missing values by applyKeyboardConfig). Falling through
-    // to the platform default keeps the dropdowns sensible if the modal
-    // opens before /api/config has settled.
-    const def = defaultKeyboardModMap();
-    if (kbCtrlEl) kbCtrlEl.value = keyboardConfig.ctrl || def.ctrl;
-    if (kbAltEl)  kbAltEl.value  = keyboardConfig.alt  || def.alt;
-    if (kbMetaEl) kbMetaEl.value = keyboardConfig.meta || def.meta;
-    if (kbFnEl)   kbFnEl.value   = keyboardConfig.fn   || def.fn;
+    // Populate dropdowns from the *saved* values (currentConfig.keyboard
+    // — preserves empties), NOT the resolved keyboardConfig. An empty
+    // string selects the "Platform default" option, so users keep that
+    // tracking behavior across sessions/devices instead of accidentally
+    // freezing in whatever the platform happens to resolve to today.
+    const savedKb = currentConfig.keyboard || {};
+    if (kbCtrlEl) kbCtrlEl.value = savedKb.ctrl ?? '';
+    if (kbAltEl)  kbAltEl.value  = savedKb.alt  ?? '';
+    if (kbMetaEl) kbMetaEl.value = savedKb.meta ?? '';
+    if (kbFnEl)   kbFnEl.value   = savedKb.fn   ?? '';
     if (kbBlurEl) kbBlurEl.checked = kb.release_on_blur ?? true;
 
     // Update disk checkboxes
@@ -5084,6 +5109,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // never blank — loadCurrentConfig() below will re-render with the
     // server's persisted keyboard remap once that fetches.
     renderHeldModsChip();
+    // Inject the platform-resolved target into each Keyboard dropdown's
+    // "Platform default" option so the user can see what it'll do.
+    relabelKeyboardDefaults();
     await loadRomDatabase();  // Load ROM database from JSON
     await fetchConfig();  // Load debug config from server
     await loadCurrentConfig();  // Load emulator config from JSON
