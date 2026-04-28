@@ -1080,11 +1080,33 @@ const MAC_MOD_SYMBOL     = { command: '⌘', control: '⌃', option: '⌥', shif
 const MAC_MOD_CHIP_CLASS = { command: 'mod-cmd', control: 'mod-control',
                              option:  'mod-option', shift: 'mod-shift' };
 
+// Platform-aware "auto" resolution. On Mac the user's ⌘ key reports as
+// MetaLeft/Right and they expect ⌘-C to land as Mac Command-C — i.e.
+// identity mapping. On PC users have habituated to Ctrl-C as the
+// "primary" shortcut, so PC Ctrl→⌘, with PC Win→⌃ keeping Mac Control
+// reachable. Detection: prefer the modern Client-Hints API
+// (Chromium-only, accurate); fall back to navigator.platform string
+// matching (still works in all current browsers despite deprecation).
+function isMacPlatform() {
+    try {
+        if (navigator.userAgentData?.platform) {
+            return /macOS|iOS/i.test(navigator.userAgentData.platform);
+        }
+    } catch (_) { /* fall through */ }
+    return /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+}
+const AUTO_DEFAULTS_MAC = { ctrl: 'control', alt: 'option', meta: 'command', fn: 'off' };
+const AUTO_DEFAULTS_PC  = { ctrl: 'command', alt: 'option', meta: 'control', fn: 'off' };
+function resolveAutoTarget(value, key) {
+    if (value !== 'auto') return value;
+    return (isMacPlatform() ? AUTO_DEFAULTS_MAC : AUTO_DEFAULTS_PC)[key];
+}
+
 let keyboardConfig = {
-    ctrl: 'command',      // PC Ctrl → ⌘     (matches PC shortcut habit)
-    alt:  'option',       // PC Alt  → ⌥
-    meta: 'control',      // PC Win  → ⌃     (otherwise unreachable)
-    fn:   'off',          // PC Fn   → off   (most browsers don't fire Fn anyway)
+    ctrl: 'auto',         // resolved by resolveAutoTarget() — Mac: ⌃, PC: ⌘
+    alt:  'auto',         // both platforms: ⌥
+    meta: 'auto',         // Mac: ⌘ (identity), PC: ⌃
+    fn:   'auto',         // both platforms: off
     release_on_blur: true,
 };
 let modifierOverride = {};
@@ -1092,7 +1114,8 @@ let modifierOverride = {};
 function rebuildModifierOverride() {
     modifierOverride = {};
     const apply = (cfgKey, codes) => {
-        const target = MAC_MOD_CODE[keyboardConfig[cfgKey]];
+        const resolved = resolveAutoTarget(keyboardConfig[cfgKey], cfgKey);
+        const target = MAC_MOD_CODE[resolved];
         if (target == null) return;          // 'off' or unknown → leave unset
         for (const c of codes) modifierOverride[c] = target;
     };
@@ -1119,12 +1142,12 @@ function renderHeldModsChip() {
         { pc: 'Fn',   cfgKey: 'fn'   },
     ];
     for (const {pc, cfgKey} of pcMappings) {
-        const target = keyboardConfig[cfgKey];
+        const target = resolveAutoTarget(keyboardConfig[cfgKey], cfgKey);
         const sym    = MAC_MOD_SYMBOL[target];
         const cls    = MAC_MOD_CHIP_CLASS[target];
         if (!sym || !cls) continue;          // 'off' / unknown → omit
         segments.push(
-            `<span class="mod ${cls}" title="PC ${pc} → Mac ${target}">` +
+            `<span class="mod ${cls}" title="${pc} → Mac ${target}">` +
             `${pc}<span class="arrow">→</span>${sym}</span>`
         );
     }
@@ -3652,10 +3675,10 @@ function configFromServerJson(cfg) {
         // Keyboard remap (nested in JSON for grouping). Defaults match the
         // PC-shortcut habit: Ctrl→⌘, Alt→⌥, Win→⌃.
         keyboard: {
-            ctrl: cfg.keyboard?.ctrl ?? 'command',
-            alt:  cfg.keyboard?.alt  ?? 'option',
-            meta: cfg.keyboard?.meta ?? 'control',
-            fn:   cfg.keyboard?.fn   ?? 'off',
+            ctrl: cfg.keyboard?.ctrl ?? 'auto',
+            alt:  cfg.keyboard?.alt  ?? 'auto',
+            meta: cfg.keyboard?.meta ?? 'auto',
+            fn:   cfg.keyboard?.fn   ?? 'auto',
             release_on_blur: cfg.keyboard?.release_on_blur ?? true,
         },
     };
@@ -3713,10 +3736,10 @@ function buildConfigJson() {
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         keyboard: {
-            ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'command',
-            alt:  document.getElementById('cfg-kb-alt')?.value  || 'option',
-            meta: document.getElementById('cfg-kb-meta')?.value || 'control',
-            fn:   document.getElementById('cfg-kb-fn')?.value   || 'off',
+            ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'auto',
+            alt:  document.getElementById('cfg-kb-alt')?.value  || 'auto',
+            meta: document.getElementById('cfg-kb-meta')?.value || 'auto',
+            fn:   document.getElementById('cfg-kb-fn')?.value   || 'auto',
             release_on_blur: document.getElementById('cfg-kb-release-on-blur')?.checked ?? true,
         },
     };
@@ -4295,10 +4318,10 @@ function updateConfigUI() {
     const kbMetaEl    = document.getElementById('cfg-kb-meta');
     const kbFnEl      = document.getElementById('cfg-kb-fn');
     const kbBlurEl    = document.getElementById('cfg-kb-release-on-blur');
-    if (kbCtrlEl) kbCtrlEl.value = kb.ctrl ?? 'command';
-    if (kbAltEl)  kbAltEl.value  = kb.alt  ?? 'option';
-    if (kbMetaEl) kbMetaEl.value = kb.meta ?? 'control';
-    if (kbFnEl)   kbFnEl.value   = kb.fn   ?? 'off';
+    if (kbCtrlEl) kbCtrlEl.value = kb.ctrl ?? 'auto';
+    if (kbAltEl)  kbAltEl.value  = kb.alt  ?? 'auto';
+    if (kbMetaEl) kbMetaEl.value = kb.meta ?? 'auto';
+    if (kbFnEl)   kbFnEl.value   = kb.fn   ?? 'auto';
     if (kbBlurEl) kbBlurEl.checked = kb.release_on_blur ?? true;
 
     // Update disk checkboxes
@@ -4340,10 +4363,10 @@ async function saveConfig() {
     currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
     currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
     currentConfig.keyboard = {
-        ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'command',
-        alt:  document.getElementById('cfg-kb-alt')?.value  || 'option',
-        meta: document.getElementById('cfg-kb-meta')?.value || 'control',
-        fn:   document.getElementById('cfg-kb-fn')?.value   || 'off',
+        ctrl: document.getElementById('cfg-kb-ctrl')?.value || 'auto',
+        alt:  document.getElementById('cfg-kb-alt')?.value  || 'auto',
+        meta: document.getElementById('cfg-kb-meta')?.value || 'auto',
+        fn:   document.getElementById('cfg-kb-fn')?.value   || 'auto',
         release_on_blur: document.getElementById('cfg-kb-release-on-blur')?.checked ?? true,
     };
 

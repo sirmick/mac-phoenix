@@ -411,11 +411,13 @@
                 </div>
                 <div class="advanced-content" id="keyboard-settings">
                     <div class="kb-help" style="font-size:11px;color:#999;margin-bottom:8px">
-                        When you press a PC modifier, the Mac sees:
+                        When you press a modifier, the Mac sees:
+                        <span style="color:#777">(Auto = identity on Mac, shortcut-habit swap on PC/Linux)</span>
                     </div>
                     <div class="form-group">
                         <label for="cfg-kb-ctrl">Ctrl key</label>
                         <select id="cfg-kb-ctrl">
+                            <option value="auto">Auto</option>
                             <option value="command">⌘ Command</option>
                             <option value="control">⌃ Control</option>
                             <option value="option">⌥ Option</option>
@@ -424,8 +426,9 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="cfg-kb-alt">Alt key</label>
+                        <label for="cfg-kb-alt">Alt / ⌥ key</label>
                         <select id="cfg-kb-alt">
+                            <option value="auto">Auto</option>
                             <option value="option">⌥ Option</option>
                             <option value="command">⌘ Command</option>
                             <option value="control">⌃ Control</option>
@@ -436,6 +439,7 @@
                     <div class="form-group">
                         <label for="cfg-kb-meta">Win / ⌘ key</label>
                         <select id="cfg-kb-meta">
+                            <option value="auto">Auto</option>
                             <option value="control">⌃ Control</option>
                             <option value="command">⌘ Command</option>
                             <option value="option">⌥ Option</option>
@@ -446,7 +450,8 @@
                     <div class="form-group">
                         <label for="cfg-kb-fn">Fn key</label>
                         <select id="cfg-kb-fn">
-                            <option value="off">— disabled (default)</option>
+                            <option value="auto">Auto (off)</option>
+                            <option value="off">— disabled</option>
                             <option value="control">⌃ Control</option>
                             <option value="command">⌘ Command</option>
                             <option value="option">⌥ Option</option>
