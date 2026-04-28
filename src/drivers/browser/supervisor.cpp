@@ -25,11 +25,12 @@ namespace {
 constexpr int kFirstDisplay     = 99;
 constexpr int kLastDisplay      = 119;
 constexpr int kXReadyTimeoutMs  = 5000;
-/* Match the guest MacBrowser window's viewport area. CopyBits in
- * the guest is then a 1:1 copy — no scaling, no clipping. The Mac
- * window total is 462 px tall (24 chrome + 422 viewport + 16 status). */
-constexpr int kViewportWidth    = 640;
-constexpr int kViewportHeight   = 422;
+/* Match the guest MacBrowser window's *visible* pixel area. The
+ * guest viewport is 640×400 but the right 16 cols and bottom 16 rows
+ * are scroll bars, so Firefox renders into 624×384. CopyBits stays
+ * a 1:1 copy with no scaling or clipping. */
+constexpr int kViewportWidth    = 624;
+constexpr int kViewportHeight   = 384;
 constexpr int kViewportDepth    = 24;
 /* WebDriver BiDi listens here (M4.5). Firefox accepts both BiDi and
  * the legacy CDP on the same port; we use BiDi only. */

@@ -38,28 +38,42 @@
 #define kAppleMenu  128
 #define kFileMenu   129
 
-/* Window layout. Toolbar buttons + URL field share one row, viewport
- * fills the middle, status strip at the bottom:
+/* Window layout. Toolbar buttons + URL field + a right-aligned
+ * status label share one chrome row at the top (light-gray fill,
+ * 1-px separator below). Viewport fills the rest with V + H scroll
+ * bars at right + bottom. No dedicated status bar.
  *
  *   ┌──── title bar (window manager, ~18 px) ────────────────────┐
- *   ├ toolbar  ── [Back][Forward][Reload][Stop] [https://... ] ──│
- *   ├ viewport ── BrowserShm.fb.pixels via CopyBits ────────────  │
- *   ├ status   ── [spinner] msg from BR_EV_STATUS ──────────────  │
+ *   ├ chrome   [Back][Forward][Reload][Stop] [https://... ] Ready│
+ *   ├──── 1-px separator ────────────────────────────────────────│
+ *   │ viewport (BrowserShm.fb pixels)                          │▲│
+ *   │                                                          │ │
+ *   │                                                          │▼│
+ *   ├──◀────── horizontal scroll bar ───────▶───────────────┬───┤
  *   └────────────────────────────────────────────────────────────┘
  *
- * Total port height = 24 + 422 + 16 = 462; with title bar = 480, so
- * the window fits the 480-px Mac screen exactly. Xvfb runs at
- * 640×422 to match the viewport — no CopyBits scaling. */
+ * Visible viewport area shrinks to (kViewportW - kSBSize) ×
+ * (kViewportH - kSBSize). Xvfb is sized to match exactly so
+ * CopyBits stays 1:1 — no scaling, no clipping. Scroll bars are
+ * cosmetic for now; M5+ will hook them up to BR_CMD_SCROLL.
+ *
+ * Total port height = 24 + 400 = 424; with title bar = 442. */
 #define kToolbarH   24
-#define kStatusH    16
 #define kViewportW  640
-#define kViewportH  422
-#define kWinH       (kToolbarH + kViewportH + kStatusH)
+#define kViewportH  400
+#define kSBSize     16   /* scroll bar thickness, classic Mac 7.5 */
+#define kStatusW    72   /* right-aligned status label area */
+#define kWinH       (kToolbarH + kViewportH)   /* 424 */
 
 /* Vertical position of each row's TOP edge, in window-port coords. */
 #define kToolbarY   0
 #define kViewportY  (kToolbarY  + kToolbarH)
-#define kStatusY    (kViewportY + kViewportH)
+
+/* Visible pixel area inside the viewport row (scroll bars consume
+ * the right 16 cols and bottom 16 rows). The host pipeline writes
+ * fb.pixels into a buffer of these dimensions. */
+#define kPixelsW    (kViewportW - kSBSize)
+#define kPixelsH    (kViewportH - kSBSize)
 
 /* Toolbar buttons — text-only, period-correct (NN3 had a Pictures /
  * Text / Pictures+Text option). Four pushButProc controls. */
@@ -90,6 +104,11 @@ static ControlHandle gBtnBack    = NULL;
 static ControlHandle gBtnForward = NULL;
 static ControlHandle gBtnReload  = NULL;
 static ControlHandle gBtnStop    = NULL;
+
+/* Scroll bars on the viewport. Cosmetic for M5-B; M5+ wires them
+ * to BR_CMD_SCROLL + a guest-side scroll offset. */
+static ControlHandle gVSB = NULL;
+static ControlHandle gHSB = NULL;
 
 /* The BrowserShm buffer this app owns. Allocated once at startup. */
 static Ptr            gShmPtr  = NULL;        /* raw heap pointer       */
@@ -280,48 +299,37 @@ static void maybe_push_g2h(void)
     }
 }
 
-static void draw_status(void)
-{
-    if (!gWin) return;
-    GrafPtr saved;
-    GetPort(&saved);
-    SetPort(gWin);
 
-    Rect bar = gWin->portRect;
-    bar.top = bar.bottom - 16;
-    EraseRect(&bar);
-
-    TextFont(3);
-    TextSize(9);
-
-    char buf[160];
-    Str255 pbuf;
-    snprintf(buf, sizeof(buf),
-             "shm=0x%08lx %s  seq=%lu shown=%lu  g2h=%lu  h2g=%lu evt=0x%x",
-             (unsigned long)gShmAddr,
-             (gShm && gShm->magic == BR_MAGIC) ? "OK" : "MISS",
-             (unsigned long)gLastSeq,
-             (unsigned long)gFramesShown,
-             (unsigned long)gG2hPushed,
-             (unsigned long)gH2gReceived,
-             (unsigned)gLastEvtType);
-    pbuf[0] = (unsigned char)strlen(buf);
-    memcpy(pbuf + 1, buf, pbuf[0]);
-    MoveTo(8, bar.bottom - 4);
-    DrawString(pbuf);
-
-    SetPort(saved);
-}
-
-/* URL field starts right after the last toolbar button. Same vertical
- * extent as the buttons so the row reads as a single chrome strip. */
+/* URL field starts right after the last toolbar button and ends
+ * before the right-aligned status label area. */
 #define kURLLeft     (kBtnLeftPad + 4 * kBtnW + 3 * kBtnGap + kBtnGap)
+#define kURLRight    (kViewportW - kStatusW - 6)
 
 static void url_bar_rect(Rect *out)
 {
-    SetRect(out,
-            kURLLeft, kBtnY,
-            kViewportW - 8, kBtnY + kBtnH);
+    SetRect(out, kURLLeft, kBtnY, kURLRight, kBtnY + kBtnH);
+}
+
+/* Vertical + horizontal scroll bars on the viewport. M5-B is just
+ * the visual; clicks/thumb-drag get hooked to BR_CMD_SCROLL later.
+ * scrollBarProc = 16 in classic Mac control procIDs. */
+static void make_scrollbars(void)
+{
+    if (!gWin) return;
+    Rect r;
+    /* min=max would render an inactive (blank) scroll bar. Setting
+     * min=0 max=100 gives a normal-looking bar with a thumb at
+     * value=0; M5+ wires real ranges from page dimensions. */
+    /* Vertical: right edge, from kViewportY to bottom of viewport
+     * minus the corner square. */
+    SetRect(&r, kViewportW - kSBSize, kViewportY,
+                kViewportW,             kViewportY + kViewportH - kSBSize);
+    gVSB = NewControl(gWin, &r, "\p", true, 0, 0, 100, 16, 0);
+
+    /* Horizontal: bottom edge of viewport, from 0 to corner. */
+    SetRect(&r, 0,                       kViewportY + kViewportH - kSBSize,
+                kViewportW - kSBSize,    kViewportY + kViewportH);
+    gHSB = NewControl(gWin, &r, "\p", true, 0, 0, 100, 16, 0);
 }
 
 /* Allocate the four toolbar buttons. refCon = control ID so click
@@ -350,6 +358,9 @@ static void make_toolbar(void)
 
 static void open_window(void)
 {
+    /* Window y origin = 22 puts the title bar just below the 20 px
+     * menu bar; total height (port + title bar) = 440 + 18 = 458,
+     * so the window ends at y=480 exactly — full Mac screen used. */
     Rect bounds;
     SetRect(&bounds, 0, 40, kViewportW, 40 + kWinH);
     gWin = NewWindow(NULL, &bounds, "\pMacBrowser",
@@ -357,6 +368,7 @@ static void open_window(void)
 
     SetPort(gWin);
     make_toolbar();
+    make_scrollbars();
 
     /* TENew destRect == viewRect for simple single-line input. */
     Rect ur;
@@ -378,23 +390,45 @@ static void draw_chrome_row(void)
     GetPort(&saved);
     SetPort(gWin);
 
-    /* Erase the whole row, then draw controls + URL field on top. */
+    /* Fill the chrome row with stereotypical light Mac gray (ltGray
+     * = 50%-density 8x8 dot pattern, the System 7 dialog backdrop
+     * idiom). Keep BackPat=ltGray briefly for EraseRect to use it. */
+    BackPat(&qd.ltGray);
     Rect row;
     SetRect(&row, 0, kToolbarY, kViewportW, kToolbarY + kToolbarH);
     EraseRect(&row);
+    BackPat(&qd.white);
+
+    /* Re-draw all controls (buttons + scroll bars) on top of the
+     * fresh background. */
     DrawControls(gWin);
 
-    /* Framed URL text field (no label — the field stands on its own
-     * inline with the buttons). */
+    /* URL text field: white background under the framed rect, then
+     * the frame, then the TE contents on top. */
     Rect ur;
     url_bar_rect(&ur);
+    EraseRect(&ur);          /* white (BackPat just reset) */
     FrameRect(&ur);
-
     if (gURL) {
         TextFont(4);   /* monaco — period-correct for URL display */
         TextSize(9);
         TEUpdate(&ur, gURL);
     }
+
+    /* Right-aligned status label. Placeholder for M5-C; will read
+     * BR_EV_STATUS strings out of h2g once that lands. */
+    TextFont(applFont);   /* Geneva */
+    TextSize(9);
+    const unsigned char *label = (const unsigned char *)"\pReady";
+    short tw = StringWidth(label);
+    MoveTo(kViewportW - 6 - tw, kBtnY + kBtnH - 4);
+    DrawString(label);
+
+    /* 1-px separator between chrome and viewport. */
+    PenNormal();
+    MoveTo(0, kToolbarH - 1);
+    LineTo(kViewportW - 1, kToolbarH - 1);
+
     SetPort(saved);
 }
 
@@ -586,7 +620,6 @@ static void handle_event(EventRecord *evt)
         if (win == gWin) {
             draw_chrome_row();
             blit_one_frame();
-            draw_status();
         }
         EndUpdate(win);
         break;
@@ -632,8 +665,6 @@ int main(void)
                (unsigned long)sizeof(BrowserShm));
     }
 
-    unsigned long last_status = TickCount();
-
     EventRecord evt;
     while (gRunning) {
         if (WaitNextEvent(everyEvent, &evt, 1, NULL))
@@ -645,12 +676,6 @@ int main(void)
 
         /* TEIdle blinks the caret roughly every 30 ticks. Cheap. */
         if (gURL && gURLActive) TEIdle(gURL);
-
-        unsigned long now = TickCount();
-        if (now - last_status >= 60) {
-            last_status = now;
-            draw_status();
-        }
     }
 
     if (gURL)    { TEDispose(gURL);   gURL = NULL; }
