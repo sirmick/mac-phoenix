@@ -38,14 +38,45 @@
 #define kAppleMenu  128
 #define kFileMenu   129
 
-/* Window layout. URL bar at top, viewport in middle, status strip
- * at bottom. Heights chosen so the viewport is exactly 480 px
- * tall — matches the host pipeline's BrowserShm.fb.height. */
-#define kURLBarH    24
+/* Window layout — modeled on Netscape Navigator 3 / iCab on classic
+ * Mac OS. Five rows:
+ *
+ *   ┌──── title bar (window manager, ~18 px) ────────────────────┐
+ *   ├ toolbar  ── [Back][Forward][Reload][Stop] ────────────────  │
+ *   ├ location ── Location: [https://...                       ]  │
+ *   ├ viewport ── BrowserShm.fb.pixels via CopyBits ────────────  │
+ *   ├ status   ── [spinner] msg from BR_EV_STATUS ──────────────  │
+ *   └────────────────────────────────────────────────────────────┘
+ *
+ * Total port height = 24 + 22 + 400 + 16 = 462; with title bar = 480,
+ * so the window fits the 480-px Mac screen exactly. The host pipeline
+ * runs Xvfb at 640×400 to match the viewport (no scaling). */
+#define kToolbarH   24
+#define kURLBarH    22
 #define kStatusH    16
 #define kViewportW  640
-#define kViewportH  480
-#define kWinH       (kURLBarH + kViewportH + kStatusH)   /* 520 */
+#define kViewportH  400
+#define kWinH       (kToolbarH + kURLBarH + kViewportH + kStatusH)
+
+/* Vertical position of each row's TOP edge, in window-port coords. */
+#define kToolbarY   0
+#define kURLY       (kToolbarY + kToolbarH)
+#define kViewportY  (kURLY     + kURLBarH)
+#define kStatusY    (kViewportY + kViewportH)
+
+/* Toolbar buttons — text-only, period-correct (NN3 had a Pictures /
+ * Text / Pictures+Text option). Four pushButProc controls. */
+#define kBtnW        64
+#define kBtnGap       4
+#define kBtnLeftPad   8
+#define kBtnH        20
+#define kBtnY        ((kToolbarH - kBtnH) / 2)   /* vertical-center in row */
+
+/* refCon values used to identify which button got clicked. */
+#define kCtlBack     1
+#define kCtlForward  2
+#define kCtlReload   3
+#define kCtlStop     4
 
 static MenuHandle gAppleMenuH;
 static MenuHandle gFileMenuH;
@@ -55,6 +86,13 @@ static Boolean    gRunning = true;
 /* URL bar TextEdit field. Active = caret blinks + keys go here. */
 static TEHandle   gURL = NULL;
 static Boolean    gURLActive = false;
+
+/* Toolbar control handles. Tagged via the refCon so click dispatch
+ * can find them in O(1). */
+static ControlHandle gBtnBack    = NULL;
+static ControlHandle gBtnForward = NULL;
+static ControlHandle gBtnReload  = NULL;
+static ControlHandle gBtnStop    = NULL;
 
 /* The BrowserShm buffer this app owns. Allocated once at startup. */
 static Ptr            gShmPtr  = NULL;        /* raw heap pointer       */
@@ -191,8 +229,8 @@ static void blit_one_frame(void)
 
     Rect src = gShmPixMap.bounds;
     Rect dst = src;
-    /* Viewport sits below the URL bar in window-port coords. */
-    OffsetRect(&dst, 0, kURLBarH);
+    /* Viewport sits below the toolbar + URL bar rows. */
+    OffsetRect(&dst, 0, kViewportY);
 
     CopyBits((BitMap *)&gShmPixMap, &(gWin->portBits),
              &src, &dst, srcCopy, NULL);
@@ -278,32 +316,59 @@ static void draw_status(void)
     SetPort(saved);
 }
 
+/* "Location:" label width incl. spacing. Geneva 9 pt at ~7px/char × 9
+ * chars + a few pixels of padding. */
+#define kURLLabelW    62
+
 static void url_bar_rect(Rect *out)
 {
-    /* URL bar: full window width minus 8 px margin on each side,
-     * inset 4 px from top, height = kURLBarH - 8 (room for the
-     * frame). */
-    SetRect(out, 8, 4, kViewportW - 8, kURLBarH - 4);
+    SetRect(out,
+            kURLLabelW + 4, kURLY + 3,
+            kViewportW - 8, kURLY + kURLBarH - 3);
+}
+
+/* Allocate the four toolbar buttons. refCon = control ID so click
+ * dispatch can identify which one. Visible+active by default. */
+static void make_toolbar(void)
+{
+    if (!gWin) return;
+    int x = kBtnLeftPad;
+    Rect r;
+    SetRect(&r, x, kBtnY, x + kBtnW, kBtnY + kBtnH);
+    gBtnBack    = NewControl(gWin, &r, "\pBack",     true, 0,0,0,
+                              0, (long)kCtlBack);     /* 0 = pushButProc */
+    x += kBtnW + kBtnGap;
+    SetRect(&r, x, kBtnY, x + kBtnW, kBtnY + kBtnH);
+    gBtnForward = NewControl(gWin, &r, "\pForward",  true, 0,0,0,
+                              0, (long)kCtlForward);  /* 0 = pushButProc */
+    x += kBtnW + kBtnGap;
+    SetRect(&r, x, kBtnY, x + kBtnW, kBtnY + kBtnH);
+    gBtnReload  = NewControl(gWin, &r, "\pReload",   true, 0,0,0,
+                              0, (long)kCtlReload);   /* 0 = pushButProc */
+    x += kBtnW + kBtnGap;
+    SetRect(&r, x, kBtnY, x + kBtnW, kBtnY + kBtnH);
+    gBtnStop    = NewControl(gWin, &r, "\pStop",     true, 0,0,0,
+                              0, (long)kCtlStop);     /* 0 = pushButProc */
 }
 
 static void open_window(void)
 {
     Rect bounds;
-    SetRect(&bounds, 30, 60, 30 + kViewportW, 60 + kWinH);
+    SetRect(&bounds, 0, 40, kViewportW, 40 + kWinH);
     gWin = NewWindow(NULL, &bounds, "\pMacBrowser",
                      true, documentProc, (WindowPtr)-1, true, 0);
 
-    /* TENew destRect == viewRect for simple single-line input. */
     SetPort(gWin);
+    make_toolbar();
+
+    /* TENew destRect == viewRect for simple single-line input. */
     Rect ur;
     url_bar_rect(&ur);
-    InsetRect(&ur, 3, 3);   /* margin inside the framed URL bar */
+    InsetRect(&ur, 3, 2);   /* margin inside the framed field */
     gURL = TENew(&ur, &ur);
     if (gURL) {
         TEAutoView(true, gURL);
-        /* Pre-fill with the initial URL Firefox is loading; users can
-         * select-all + retype to navigate. Real "fetch current URL
-         * from BiDi" is M5 phase C. */
+        /* Pre-fill with the initial URL Firefox is loading. */
         const char *seed = "https://example.com/";
         TESetText((Ptr)seed, (long)strlen(seed), gURL);
     }
@@ -316,17 +381,69 @@ static void draw_url_bar(void)
     GetPort(&saved);
     SetPort(gWin);
 
+    /* Erase the row background. */
+    Rect row;
+    SetRect(&row, 0, kURLY, kViewportW, kURLY + kURLBarH);
+    EraseRect(&row);
+
+    /* "Location:" prefix, Geneva 9 pt — same idiom as Netscape Mac. */
+    TextFont(applFont);   /* application font = Geneva on System 7 */
+    TextSize(9);
+    MoveTo(8, kURLY + kURLBarH - 6);
+    DrawString("\pLocation:");
+
+    /* Framed text field. */
     Rect ur;
     url_bar_rect(&ur);
-    EraseRect(&ur);
     FrameRect(&ur);
 
     if (gURL) {
-        TextFont(4);  /* monaco — period-correct for URL fields */
+        TextFont(4);   /* monaco */
         TextSize(9);
         TEUpdate(&ur, gURL);
     }
     SetPort(saved);
+}
+
+static void draw_toolbar_row(void)
+{
+    if (!gWin) return;
+    GrafPtr saved;
+    GetPort(&saved);
+    SetPort(gWin);
+    Rect row;
+    SetRect(&row, 0, kToolbarY, kViewportW, kToolbarY + kToolbarH);
+    EraseRect(&row);
+    DrawControls(gWin);
+    SetPort(saved);
+}
+
+/* Push a 0-byte BR_CMD_BACK / FORWARD / RELOAD / STOP through g2h.
+ * STOP isn't in the protocol header yet — host dispatcher rejects
+ * unknown types harmlessly so we send it anyway as BR_CMD_STOP=14
+ * for forward compatibility. */
+#define BR_CMD_STOP   14
+static void send_toolbar_cmd(uint16_t cmd_type)
+{
+    if (!gShm) return;
+    if (br_ring_push(&gShm->g2h, cmd_type, NULL, 0) == 0) {
+        br_log(&gShm->log, BR_LOG_INF,
+               "toolbar cmd 0x%x", (unsigned)cmd_type);
+    } else {
+        br_log(&gShm->log, BR_LOG_ERR,
+               "toolbar cmd 0x%x ring full", (unsigned)cmd_type);
+    }
+}
+
+static void dispatch_button(ControlHandle ctl)
+{
+    long id = (**ctl).contrlRfCon;
+    switch (id) {
+    case kCtlBack:    send_toolbar_cmd(BR_CMD_BACK);    break;
+    case kCtlForward: send_toolbar_cmd(BR_CMD_FORWARD); break;
+    case kCtlReload:  send_toolbar_cmd(BR_CMD_RELOAD);  break;
+    case kCtlStop:    send_toolbar_cmd(BR_CMD_STOP);    break;
+    }
 }
 
 /* Push a BR_CMD_NAV with the current URL bar text. The text comes
@@ -422,16 +539,30 @@ static void handle_event(EventRecord *evt)
             SetPort(win);
             Point local = evt->where;
             GlobalToLocal(&local);
+
+            /* 1. Toolbar button hit? */
+            ControlHandle ctl = NULL;
+            short part = FindControl(local, win, &ctl);
+            if (part && ctl) {
+                if (TrackControl(ctl, local, NULL) == part) {
+                    dispatch_button(ctl);
+                }
+                break;
+            }
+
+            /* 2. URL bar hit? */
             Rect ur;
             url_bar_rect(&ur);
             if (PtInRect(local, &ur)) {
                 set_url_active(true);
                 if (gURL) TEClick(local, (evt->modifiers & shiftKey) != 0,
                                   gURL);
-            } else {
-                set_url_active(false);
-                /* TODO M5 phase D: forward click to viewport (page coords). */
+                break;
             }
+
+            /* 3. Anything else: deactivate URL bar.
+             * TODO M5 phase D: forward viewport clicks as BR_CMD_CLICK. */
+            set_url_active(false);
             break;
         }
         case inGoAway:
@@ -473,8 +604,9 @@ static void handle_event(EventRecord *evt)
         WindowPtr win = (WindowPtr)evt->message;
         BeginUpdate(win);
         if (win == gWin) {
-            blit_one_frame();
+            draw_toolbar_row();
             draw_url_bar();
+            blit_one_frame();
             draw_status();
         }
         EndUpdate(win);
