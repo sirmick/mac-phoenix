@@ -294,11 +294,20 @@ bool Supervisor::spawn_firefox(const std::string& url)
 
         char port_arg[24];
         snprintf(port_arg, sizeof(port_arg), "%d", kBidiPort);
+        char width_arg[16], height_arg[16];
+        snprintf(width_arg,  sizeof(width_arg),  "%d", kViewportWidth);
+        snprintf(height_arg, sizeof(height_arg), "%d", kViewportHeight);
 
+        /* --kiosk hides chrome but on Linux/Xvfb doesn't reliably
+         * fullscreen the window (Mozilla bug 1848677). --width /
+         * --height force the initial window to match the Xvfb screen
+         * exactly so Firefox actually fills the root pixmap. */
         execl(firefox, firefox,
               "--no-remote",
               "--profile", profile_dir_.c_str(),
               "--remote-debugging-port", port_arg,
+              "--width",  width_arg,
+              "--height", height_arg,
               "--kiosk",
               "--new-window", startup_url.c_str(),
               (char*)nullptr);
