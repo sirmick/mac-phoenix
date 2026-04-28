@@ -115,6 +115,40 @@ bool BrowserModule::start(const std::string& initial_url)
                     sub_err.c_str());
         }
 
+        /* Seed the guest's URL bar with whatever Firefox is currently
+         * showing. Pages loaded before subscription don't get a
+         * synthetic event, so without this the URL bar stays empty
+         * until the user navigates. Run on its own thread because
+         * we have to wait for the guest's handshake (which happens
+         * after this function returns) and we don't want to block
+         * the boot path. */
+        BidiClient* bp = bidi_.get();
+        std::thread([bp]() {
+            /* Wait up to 30 s for guest handshake. */
+            for (int i = 0; i < 300 && !browser::shm_get(); i++) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            if (!browser::shm_get() || !bp || !bp->is_open()) return;
+
+            std::string err;
+            std::string r = bp->evaluate("window.location.href", &err);
+            if (r.empty()) return;
+            std::string url;
+            try {
+                auto j = nlohmann::json::parse(r);
+                url = j.at("result").at("value").get<std::string>();
+            } catch (...) { return; }
+            if (url.empty() || url == "about:blank") return;
+
+            uint8_t buf[2 + 250];
+            buf[0] = BR_STATUS_READY;
+            size_t n = std::min(url.size(), (size_t)250);
+            buf[1] = (uint8_t)n;
+            memcpy(buf + 2, url.data(), n);
+            send_event(BR_EV_STATUS, buf, (uint16_t)(2 + n));
+            fprintf(stderr, "[BrowserModule] seeded URL bar with %s\n",
+                    url.c_str());
+        }).detach();
     }
 
     running_ = true;

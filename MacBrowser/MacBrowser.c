@@ -554,6 +554,41 @@ static void publish_viewport_pos(void)
     gShm->viewport.screen_top  = (int16_t)tl.v;
 }
 
+/* Push a BR_CMD_KEY_DOWN with the cooked character that came out of
+ * Mac OS's key translation (Mac's Event Manager has already run
+ * dead-keys + modifiers + KCHR/KCHK against the raw scancode, so
+ * `ch` is the Unicode-ish character we want to send to the page).
+ * Payload format matches MacBrowser.h:
+ *   u16 vk BE, u16 mods BE, u8 text_len, u8 text[text_len] */
+static void send_key(uint16_t vk, uint16_t mods, char ch)
+{
+    if (!gShm) return;
+    /* For now we send a single ASCII byte; the host's bidi.type
+     * helper handles UTF-8 already, so when we later feed it a
+     * full unicode char (via TextEncoding) it'll just work. */
+    uint8_t buf[6];
+    buf[0] = (uint8_t)((vk   >> 8) & 0xFF);
+    buf[1] = (uint8_t)( vk         & 0xFF);
+    buf[2] = (uint8_t)((mods >> 8) & 0xFF);
+    buf[3] = (uint8_t)( mods       & 0xFF);
+    buf[4] = 1;
+    buf[5] = (uint8_t)ch;
+    br_ring_push(&gShm->g2h, BR_CMD_KEY_DOWN, buf, 6);
+}
+
+/* Push a BR_CMD_SCROLL with delta-x/delta-y in pixels. Used by the
+ * scroll-bar click handler. Payload: i32 dx BE, i32 dy BE = 8 bytes. */
+static void send_scroll(int dx, int dy)
+{
+    if (!gShm) return;
+    uint8_t buf[8];
+    int32_t bx = (int32_t)dx;
+    int32_t by = (int32_t)dy;
+    memcpy(buf + 0, &bx, 4);
+    memcpy(buf + 4, &by, 4);
+    br_ring_push(&gShm->g2h, BR_CMD_SCROLL, buf, 8);
+}
+
 /* Push a BR_CMD_CLICK with page-coord (x,y), button index (0 = left,
  * 1 = middle, 2 = right), and click count. Payload is BE i32 x, i32 y,
  * u8 btn, u8 count = 10 bytes. */
@@ -585,17 +620,51 @@ static void send_toolbar_cmd(uint16_t cmd_type)
     }
 }
 
-static void dispatch_button(ControlHandle ctl)
+/* Scroll-step deltas (in CSS pixels). Match common browser behavior:
+ * arrow click = ~ one line, page-area click = roughly the visible
+ * viewport height. */
+#define kScrollStepLine    40
+#define kScrollStepPage    320
+
+/* Classic Mac Control Manager part codes for scroll bars. Retro68's
+ * Controls.h doesn't always define these symbolically, so we use
+ * the canonical numeric values from Inside Macintosh. */
+#define kPartUpArrow      20
+#define kPartDownArrow    21
+#define kPartPageUp       22
+#define kPartPageDown     23
+#define kPartIndicator   129
+
+static void dispatch_control(ControlHandle ctl, short part)
 {
     long id = (**ctl).contrlRfCon;
     switch (id) {
-    case kCtlBack:    send_toolbar_cmd(BR_CMD_BACK);     break;
-    case kCtlForward: send_toolbar_cmd(BR_CMD_FORWARD);  break;
-    case kCtlReload:  send_toolbar_cmd(BR_CMD_RELOAD);   break;
-    case kCtlStop:    send_toolbar_cmd(BR_CMD_STOP);     break;
-    case kCtlMinus:   send_toolbar_cmd(BR_CMD_ZOOM_OUT); break;
-    case kCtlPlus:    send_toolbar_cmd(BR_CMD_ZOOM_IN);  break;
+    case kCtlBack:    send_toolbar_cmd(BR_CMD_BACK);     return;
+    case kCtlForward: send_toolbar_cmd(BR_CMD_FORWARD);  return;
+    case kCtlReload:  send_toolbar_cmd(BR_CMD_RELOAD);   return;
+    case kCtlStop:    send_toolbar_cmd(BR_CMD_STOP);     return;
+    case kCtlMinus:   send_toolbar_cmd(BR_CMD_ZOOM_OUT); return;
+    case kCtlPlus:    send_toolbar_cmd(BR_CMD_ZOOM_IN);  return;
     }
+
+    /* Scroll bars (refCon = 0; identify by control handle). */
+    Boolean is_v = (ctl == gVSB);
+    Boolean is_h = (ctl == gHSB);
+    if (!is_v && !is_h) return;
+
+    int dx = 0, dy = 0;
+    int sign = 0, step = 0;
+    switch (part) {
+    case kPartUpArrow:    sign = -1; step = kScrollStepLine; break;
+    case kPartDownArrow:  sign = +1; step = kScrollStepLine; break;
+    case kPartPageUp:     sign = -1; step = kScrollStepPage; break;
+    case kPartPageDown:   sign = +1; step = kScrollStepPage; break;
+    case kPartIndicator:  /* TODO: read new value, compute delta */ return;
+    default: return;
+    }
+    if (is_v) dy = sign * step;
+    else      dx = sign * step;
+    send_scroll(dx, dy);
 }
 
 /* Push a BR_CMD_NAV with the current URL bar text. The text comes
@@ -695,12 +764,22 @@ static void handle_event(EventRecord *evt)
             Point local = evt->where;
             GlobalToLocal(&local);
 
-            /* 1. Toolbar button hit? */
+            /* 1. Toolbar button or scroll bar hit? FindControl
+             * returns the part code at the click location; for
+             * push buttons we still TrackControl so the user can
+             * drag off to cancel, but for scroll bar arrows /
+             * track we dispatch directly on the FindControl result
+             * (TrackControl with a NULL actionProc returns 0 for
+             * those parts in classic Mac, swallowing the click). */
             ControlHandle ctl = NULL;
             short part = FindControl(local, win, &ctl);
             if (part && ctl) {
-                if (TrackControl(ctl, local, NULL) == part) {
-                    dispatch_button(ctl);
+                if (part == kPartIndicator || part == 10 /* button */) {
+                    short tracked = TrackControl(ctl, local, NULL);
+                    if (tracked) dispatch_control(ctl, tracked);
+                } else {
+                    /* arrows + page areas */
+                    dispatch_control(ctl, part);
                 }
                 break;
             }
@@ -731,7 +810,9 @@ static void handle_event(EventRecord *evt)
     }
     case keyDown:
     case autoKey: {
-        char ch = evt->message & charCodeMask;
+        char     ch   = evt->message & charCodeMask;
+        uint16_t vk   = (uint16_t)((evt->message & keyCodeMask) >> 8);
+        uint16_t mods = (uint16_t)evt->modifiers;
         if (evt->modifiers & cmdKey) {
             /* Cmd+L: focus URL bar (browser convention). */
             if (ch == 'l' || ch == 'L') { focus_url_bar(); break; }
@@ -747,7 +828,10 @@ static void handle_event(EventRecord *evt)
             } else {
                 TEKey(ch, gURL);
             }
+            break;
         }
+        /* URL bar isn't active — forward the key to the page. */
+        send_key(vk, mods, ch);
         break;
     }
     case activateEvt: {
