@@ -20,6 +20,11 @@ class BidiClient;
  * test context where BiDi isn't available). Idempotent. */
 void cmd_set_bidi(BidiClient* bidi);
 
+/* Tell the dispatcher which Xvfb display we should RandR-resize on
+ * BR_CMD_RESIZE. Pass -1 to disable (resize will only setViewport,
+ * skipping the screen-size change). */
+void cmd_set_display(int display);
+
 /* Dispatch one ring message. type is BR_CMD_*; payload is the raw
  * bytes pulled from g2h, length `len`. Returns true if the message
  * was recognized (not necessarily that the BiDi call succeeded —

@@ -12,6 +12,8 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
+#define BR_HOST 1
+#include "MacBrowser.h"
 #include <xcb/xcb.h>
 #include <xcb/shm.h>
 #include <xcb/damage.h>
@@ -101,8 +103,12 @@ bool XShmCapture::start(int display)
     fprintf(stderr, "[XShm] connected display=:%d root=0x%x size=%dx%d\n",
             display, root_, root_w_, root_h_);
 
-    /* Allocate SHM segment sized for full root. */
-    size_t shm_bytes = (size_t)root_w_ * root_h_ * 4;
+    /* Allocate SHM segment at the max viewport size so RandR resize
+     * (BR_CMD_RESIZE → randr_resize) can grow the root without
+     * overflowing our buffer. We capture damage rects clipped to
+     * the live root_w_/root_h_, so we never xcb_shm_get_image past
+     * what we've allocated. */
+    size_t shm_bytes = (size_t)BR_FB_MAX_W * BR_FB_MAX_H * 4;
     shmid_ = shmget(IPC_PRIVATE, shm_bytes, IPC_CREAT | 0600);
     if (shmid_ < 0) {
         fprintf(stderr, "[XShm] shmget(%zu) failed: %s\n",

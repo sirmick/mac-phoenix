@@ -454,4 +454,17 @@ bool BidiClient::subscribe(const std::vector<std::string>& events,
                  error ? error : &e).empty();
 }
 
+bool BidiClient::add_preload_script(const std::string& js,
+                                    std::string* error)
+{
+    /* script.addPreloadScript runs the function on every realm
+     * created in any browsing context. We wrap our JS in a thunk
+     * because the BiDi spec wants a function expression. */
+    std::string thunk = "()=>{\n" + js + "\n}";
+    json p = {{"functionDeclaration", thunk}};
+    std::string e;
+    return !call("script.addPreloadScript", p.dump(),
+                 error ? error : &e).empty();
+}
+
 }  // namespace browser

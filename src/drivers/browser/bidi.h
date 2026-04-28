@@ -104,6 +104,12 @@ public:
     bool subscribe(const std::vector<std::string>& events,
                    std::string* error = nullptr);
 
+    /* Register a script that runs in every page before its own
+     * scripts (BiDi script.addPreloadScript). Useful for injecting
+     * style overrides like scrollbar-hide CSS once per session. */
+    bool add_preload_script(const std::string& js,
+                            std::string* error = nullptr);
+
     /* Async event hook: receives the raw JSON for any non-response
      * frame (BiDi events have type=="event" and a method field). */
     void on_event(std::function<void(const std::string& json)> cb);

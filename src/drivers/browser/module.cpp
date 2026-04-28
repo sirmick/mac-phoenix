@@ -66,6 +66,7 @@ bool BrowserModule::start(const std::string& initial_url)
     } else {
         fprintf(stderr, "[BrowserModule] BiDi connected\n");
         cmd_set_bidi(bidi_.get());
+        cmd_set_display(supervisor_->display());
         mouse_poll_start(bidi_.get());
 
         /* Subscribe to navigation events so the guest can drive a
@@ -115,6 +116,24 @@ bool BrowserModule::start(const std::string& initial_url)
                     sub_err.c_str());
         }
 
+        /* Hide Firefox's internal scrollbars on every page — Mac's
+         * scroll bars own the UI. Inject a global stylesheet via
+         * script.addPreloadScript so it runs before each page's own
+         * scripts and applies to nested frames too. */
+        std::string ps_err;
+        const char* hide_scrollbars =
+            "const s=document.createElement('style');"
+            "s.textContent="
+            "  'html,body{scrollbar-width:none!important;"
+            "             -ms-overflow-style:none!important;}"
+            "   ::-webkit-scrollbar{display:none!important;width:0!important;"
+            "                       height:0!important;}';"
+            "(document.head||document.documentElement).appendChild(s);";
+        if (!bidi_->add_preload_script(hide_scrollbars, &ps_err)) {
+            fprintf(stderr, "[BrowserModule] preload script failed: %s\n",
+                    ps_err.c_str());
+        }
+
         /* Seed the guest's URL bar with whatever Firefox is currently
          * showing. Pages loaded before subscription don't get a
          * synthetic event, so without this the URL bar stays empty
@@ -161,6 +180,7 @@ void BrowserModule::stop()
 {
     running_ = false;
     mouse_poll_stop();
+    cmd_set_display(-1);
     cmd_set_bidi(nullptr);
     if (bidi_)       { bidi_->stop();       bidi_.reset(); }
     pipeline_stop();

@@ -81,7 +81,7 @@ if(BUILD_BROWSER)
     message(FATAL_ERROR "BUILD_BROWSER requires pkg-config")
   endif()
   pkg_check_modules(XCB REQUIRED IMPORTED_TARGET
-    xcb xcb-shm xcb-damage xcb-composite)
+    xcb xcb-shm xcb-damage xcb-composite xcb-randr)
 endif()
 
 if(NOT M_LIB)

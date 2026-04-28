@@ -3,6 +3,7 @@
  */
 #include "cmd.h"
 #include "bidi.h"
+#include "randr_resize.h"
 
 #define BR_HOST 1
 #include "MacBrowser.h"
@@ -18,6 +19,7 @@ namespace browser {
 namespace {
 
 std::atomic<BidiClient*> g_bidi{nullptr};
+std::atomic<int>         g_display{-1};
 
 /* Read big-endian fields from the guest payload. Guest is m68k, so
  * everything in the ring arrives BE. */
@@ -50,6 +52,11 @@ void log_remote_err(const char* method, const std::string& err)
 void cmd_set_bidi(BidiClient* bidi)
 {
     g_bidi.store(bidi, std::memory_order_release);
+}
+
+void cmd_set_display(int display)
+{
+    g_display.store(display, std::memory_order_release);
 }
 
 bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
@@ -149,6 +156,12 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         if (len < 4) return false;
         uint16_t w = be16(payload + 0);
         uint16_t h = be16(payload + 2);
+        /* RandR first: physically resize Xvfb's root → Firefox kiosk
+         * follows automatically. Then setViewport so Firefox's BiDi
+         * layout viewport matches. The two together produce one
+         * reflow + repaint at the new dimensions. */
+        int disp = g_display.load(std::memory_order_acquire);
+        if (disp >= 0) randr_resize(disp, w, h);
         if (!b) return true;
         std::string err;
         if (!b->set_viewport(w, h, &err))
