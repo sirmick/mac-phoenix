@@ -35,10 +35,23 @@
 #define kAppleMenu  128
 #define kFileMenu   129
 
+/* Window layout. URL bar at top, viewport in middle, status strip
+ * at bottom. Heights chosen so the viewport is exactly 480 px
+ * tall — matches the host pipeline's BrowserShm.fb.height. */
+#define kURLBarH    24
+#define kStatusH    16
+#define kViewportW  640
+#define kViewportH  480
+#define kWinH       (kURLBarH + kViewportH + kStatusH)   /* 520 */
+
 static MenuHandle gAppleMenuH;
 static MenuHandle gFileMenuH;
 static WindowPtr  gWin = NULL;
 static Boolean    gRunning = true;
+
+/* URL bar TextEdit field. Active = caret blinks + keys go here. */
+static TEHandle   gURL = NULL;
+static Boolean    gURLActive = false;
 
 /* The BrowserShm buffer this app owns. Allocated once at startup. */
 static Ptr            gShmPtr  = NULL;        /* raw heap pointer       */
@@ -174,17 +187,12 @@ static void blit_one_frame(void)
     gShmPixMap.baseAddr      = (Ptr)gShm->fb.pixels;
 
     Rect src = gShmPixMap.bounds;
-    Rect dst = gShmPixMap.bounds;
+    Rect dst = src;
+    /* Viewport sits below the URL bar in window-port coords. */
+    OffsetRect(&dst, 0, kURLBarH);
 
     CopyBits((BitMap *)&gShmPixMap, &(gWin->portBits),
              &src, &dst, srcCopy, NULL);
-
-    /* Diagnostic strip: a black rect drawn via plain QuickDraw, top-right.
-     * If this shows up but the gradient doesn't, CopyBits/PixMap is the
-     * culprit (not the port). */
-    Rect probe = { 0, 0, 8, 32 };
-    OffsetRect(&probe, w - 36, 0);
-    PaintRect(&probe);
 
     SetPort(saved);
     gFramesShown++;
@@ -267,12 +275,82 @@ static void draw_status(void)
     SetPort(saved);
 }
 
+static void url_bar_rect(Rect *out)
+{
+    /* URL bar: full window width minus 8 px margin on each side,
+     * inset 4 px from top, height = kURLBarH - 8 (room for the
+     * frame). */
+    SetRect(out, 8, 4, kViewportW - 8, kURLBarH - 4);
+}
+
 static void open_window(void)
 {
     Rect bounds;
-    SetRect(&bounds, 30, 60, 30 + 640, 60 + 480 + 16);
+    SetRect(&bounds, 30, 60, 30 + kViewportW, 60 + kWinH);
     gWin = NewWindow(NULL, &bounds, "\pBrowserSpike",
                      true, documentProc, (WindowPtr)-1, true, 0);
+
+    /* TENew destRect == viewRect for simple single-line input. */
+    SetPort(gWin);
+    Rect ur;
+    url_bar_rect(&ur);
+    InsetRect(&ur, 3, 3);   /* margin inside the framed URL bar */
+    gURL = TENew(&ur, &ur);
+    if (gURL) {
+        TEAutoView(true, gURL);
+        /* Pre-fill with the initial URL Firefox is loading; users can
+         * select-all + retype to navigate. Real "fetch current URL
+         * from BiDi" is M5 phase C. */
+        const char *seed = "https://example.com/";
+        TESetText((Ptr)seed, (long)strlen(seed), gURL);
+    }
+}
+
+static void draw_url_bar(void)
+{
+    if (!gWin) return;
+    GrafPtr saved;
+    GetPort(&saved);
+    SetPort(gWin);
+
+    Rect ur;
+    url_bar_rect(&ur);
+    EraseRect(&ur);
+    FrameRect(&ur);
+
+    if (gURL) {
+        TextFont(4);  /* monaco — period-correct for URL fields */
+        TextSize(9);
+        TEUpdate(&ur, gURL);
+    }
+    SetPort(saved);
+}
+
+/* Push a BR_CMD_NAV with the current URL bar text. The text comes
+ * out of the TE handle, with Mac CR (\r, 0x0D) line terminators
+ * still in it — strip a trailing CR so the URL is clean. */
+static void send_url_nav(void)
+{
+    if (!gShm || !gURL) return;
+    Handle h = (**gURL).hText;
+    if (!h) return;
+    long len = GetHandleSize(h);
+    /* Strip trailing CR introduced by the Return key event. */
+    while (len > 0 && (((unsigned char *)*h)[len - 1] == 0x0D ||
+                       ((unsigned char *)*h)[len - 1] == 0x0A)) len--;
+    if (len <= 0) return;
+
+    HLock(h);
+    int rc = br_ring_push(&gShm->g2h, BR_CMD_NAV, *h, (uint16_t)len);
+    HUnlock(h);
+
+    if (rc == 0) {
+        br_log(&gShm->log, BR_LOG_INF,
+               "BR_CMD_NAV pushed (%ld bytes)", (long)len);
+    } else {
+        br_log(&gShm->log, BR_LOG_ERR,
+               "BR_CMD_NAV ring push failed rc=%d len=%ld", rc, (long)len);
+    }
 }
 
 static void build_menus(void)
@@ -307,6 +385,21 @@ static void do_menu(long choice)
     HiliteMenu(0);
 }
 
+static void set_url_active(Boolean active)
+{
+    if (!gURL) return;
+    if (active == gURLActive) return;
+    SetPort(gWin);
+    if (active) TEActivate(gURL); else TEDeactivate(gURL);
+    gURLActive = active;
+}
+
+static void focus_url_bar(void)
+{
+    set_url_active(true);
+    if (gURL) TESetSelect(0, 32767, gURL);  /* select all */
+}
+
 static void handle_event(EventRecord *evt)
 {
     switch (evt->what) {
@@ -321,9 +414,23 @@ static void handle_event(EventRecord *evt)
             DragWindow(win, evt->where, &b);
             break;
         }
-        case inContent:
-            if (win != FrontWindow()) SelectWindow(win);
+        case inContent: {
+            if (win != FrontWindow()) { SelectWindow(win); break; }
+            SetPort(win);
+            Point local = evt->where;
+            GlobalToLocal(&local);
+            Rect ur;
+            url_bar_rect(&ur);
+            if (PtInRect(local, &ur)) {
+                set_url_active(true);
+                if (gURL) TEClick(local, (evt->modifiers & shiftKey) != 0,
+                                  gURL);
+            } else {
+                set_url_active(false);
+                /* TODO M5 phase D: forward click to viewport (page coords). */
+            }
             break;
+        }
         case inGoAway:
             if (TrackGoAway(win, evt->where)) gRunning = false;
             break;
@@ -334,8 +441,28 @@ static void handle_event(EventRecord *evt)
     case autoKey: {
         char ch = evt->message & charCodeMask;
         if (evt->modifiers & cmdKey) {
+            /* Cmd+L: focus URL bar (browser convention). */
+            if (ch == 'l' || ch == 'L') { focus_url_bar(); break; }
             long choice = MenuKey(ch);
             if (HiWord(choice)) do_menu(choice);
+            break;
+        }
+        if (gURLActive && gURL) {
+            if (ch == 0x0D || ch == 0x03) {
+                /* Return / Enter: ship the URL, deactivate. */
+                send_url_nav();
+                set_url_active(false);
+            } else {
+                TEKey(ch, gURL);
+            }
+        }
+        break;
+    }
+    case activateEvt: {
+        WindowPtr win = (WindowPtr)evt->message;
+        if (win == gWin && gURL) {
+            if ((evt->modifiers & activeFlag) && gURLActive) TEActivate(gURL);
+            else TEDeactivate(gURL);
         }
         break;
     }
@@ -344,6 +471,7 @@ static void handle_event(EventRecord *evt)
         BeginUpdate(win);
         if (win == gWin) {
             blit_one_frame();
+            draw_url_bar();
             draw_status();
         }
         EndUpdate(win);
@@ -401,6 +529,9 @@ int main(void)
         drain_h2g();
         maybe_push_g2h();
 
+        /* TEIdle blinks the caret roughly every 30 ticks. Cheap. */
+        if (gURL && gURLActive) TEIdle(gURL);
+
         unsigned long now = TickCount();
         if (now - last_status >= 60) {
             last_status = now;
@@ -408,10 +539,7 @@ int main(void)
         }
     }
 
-    if (gShmPtr) {
-        DisposePtr(gShmPtr);
-        gShmPtr = NULL;
-        gShm    = NULL;
-    }
+    if (gURL)    { TEDispose(gURL);   gURL = NULL; }
+    if (gShmPtr) { DisposePtr(gShmPtr); gShmPtr = NULL; gShm = NULL; }
     return 0;
 }
