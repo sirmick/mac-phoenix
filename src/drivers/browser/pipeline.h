@@ -1,34 +1,26 @@
 /*
- *  pipeline.h — CDP screencast → BrowserShm.fb pixel pump.
+ *  pipeline.h — XShm → BrowserShm.fb pixel pump.
  *
- *  Subscribes to Page.screencastFrame on the attached page session.
- *  Per frame:
- *    1. base64-decode JPEG payload
- *    2. stb_image-decode to RGBA8
- *    3. diff against the previous frame (row granularity) to extract
- *       a single bounding-box dirty rect
- *    4. BGRA→RGB555 convert + write into BrowserShm.fb.pixels
- *    5. publish dirty rect + bump fb.seq
- *    6. ACK back to chromium via Page.screencastFrameAck
+ *  Polls XShmCapture::drain() at 60 Hz. On each pull:
+ *    1. drain() returns a pointer to the dirty rect's pixels (BGRX,
+ *       packed at the top-left of the SHM segment, stride=w*4) plus
+ *       the rect in screen coords.
+ *    2. BGRX → big-endian RGB555 convert per row into
+ *       BrowserShm.fb.pixels at the matching screen-coord offset.
+ *    3. Publish the rect into BrowserShm.fb.dirty[0], release-fence,
+ *       bump fb.seq.
  *
- *  Dirty-rect tracking is preserved end-to-end: we read a full frame
- *  from CDP but only push the *changed* region into BrowserShm.fb,
- *  so the guest's CopyBits-only-dirty-rects optimization still
- *  applies.
+ *  No PNG decode, no host-side diff — XDamage already gives us the
+ *  rects, the X server already has the pixels in shared memory.
  */
 #ifndef DRIVERS_BROWSER_PIPELINE_H
 #define DRIVERS_BROWSER_PIPELINE_H
 
 namespace browser {
 
-class CdpClient;
+class XShmCapture;
 
-/* Issue Page.startScreencast on the attached session and register the
- * frame handler. Idempotent. The pipeline keeps internal state for
- * frame diffing — keep called once per BrowserModule lifecycle. */
-void pipeline_start(CdpClient* cdp);
-
-/* Stop the screencast and clear pipeline state. Idempotent. */
+void pipeline_start(XShmCapture* capture);
 void pipeline_stop();
 
 }  // namespace browser

@@ -36,7 +36,7 @@ add_library(drivers STATIC
   browser/ring.cpp
   browser/shm.cpp
   browser/supervisor.cpp
-  browser/cdp.cpp
+  browser/xshm.cpp
   browser/pipeline.cpp
   browser/module.cpp
   browser/browser_spike.cpp
@@ -66,7 +66,7 @@ target_link_libraries(drivers PRIVATE
   libyuv::libyuv
 )
 
-# MacBrowser pixel pipeline: vendored stb_image for PNG/JPEG decode.
-target_include_directories(drivers PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../subprojects/stb
-)
+# MacBrowser pixel pipeline: xcb + MIT-SHM + XDamage.
+if(BUILD_BROWSER)
+  target_link_libraries(drivers PUBLIC PkgConfig::XCB)
+endif()

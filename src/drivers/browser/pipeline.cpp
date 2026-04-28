@@ -1,159 +1,55 @@
 /*
- *  pipeline.cpp — CDP screencast → BrowserShm.fb. See pipeline.h.
+ *  pipeline.cpp — XShm → BrowserShm.fb. See pipeline.h.
  */
 #include "pipeline.h"
-#include "cdp.h"
+#include "xshm.h"
 #include "shm.h"
 
 #define BR_HOST 1
 #include "MacBrowser.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_STATIC
-#define STBI_NO_HDR
-#define STBI_NO_GIF
-#define STBI_NO_PIC
-#define STBI_NO_PSD
-#define STBI_NO_PNM
-#define STBI_NO_TGA
-#define STBI_NO_BMP
-#include "stb_image.h"
-
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
-#include <cstring>
-#include <mutex>
 #include <thread>
-#include <vector>
 
 namespace browser {
 
 namespace {
 
-CdpClient* g_cdp = nullptr;
-std::atomic<bool> g_running{false};
-std::mutex g_mtx;
+XShmCapture*       g_capture = nullptr;
+std::atomic<bool>  g_running{false};
+std::thread        g_thread;
 
-/* Rolling perf counters. Reset each report interval (1 s).
- *  decode_us  = base64 + PNG decode time
- *  diff_us    = bbox diff vs previous frame
- *  blit_us    = BGRA→RGB555 + write to BrowserShm.fb.pixels
- *  total_us   = whole on_screencast_frame() handler */
+/* Rolling perf counters; reported once per second. */
 struct PerfCounters {
     uint64_t frames     = 0;
-    uint64_t decode_us  = 0;
-    uint64_t diff_us    = 0;
-    uint64_t blit_us    = 0;
-    uint64_t total_us   = 0;
-    uint64_t bytes_in   = 0;     /* pre-decode PNG payload */
-    uint64_t pixels_out = 0;     /* dirty pixels written to fb */
+    uint64_t pull_us    = 0;   /* xcb_shm_get_image round-trip */
+    uint64_t blit_us    = 0;   /* BGRX → RGB555 + BrowserShm write */
+    uint64_t pixels_out = 0;
 } g_perf;
 std::chrono::steady_clock::time_point g_last_report;
 
-/* Previous frame for diffing. Same layout as the decoded frame:
- * RGBA, top-down, w*4 bytes per row. */
-std::vector<uint8_t> g_prev;
-int g_prev_w = 0;
-int g_prev_h = 0;
-
-uint64_t g_frame_count = 0;
-
-/* Standard base64 decoder. Output buffer must be at least
- * ((input.size() / 4) * 3) bytes. Returns decoded length, or -1 on
- * malformed input. Tolerates whitespace + standard padding. */
-int base64_decode(const std::string& in, std::vector<uint8_t>& out)
+inline uint16_t bgrx_to_rgb555_be(uint32_t bgrx)
 {
-    static const int8_t T[256] = {
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
-        52,53,54,55,56,57,58,59,60,61,-1,-1,-1, 0,-1,-1,
-        -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
-        15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
-        -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
-        41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,
-    };
-    out.clear();
-    out.reserve((in.size() / 4) * 3 + 3);
-    int  acc = 0, bits = 0;
-    for (unsigned char c : in) {
-        if (c <= ' ') continue;
-        if (c == '=') break;
-        int8_t v = T[c];
-        if (v < 0) return -1;
-        acc = (acc << 6) | v;
-        bits += 6;
-        if (bits >= 8) {
-            bits -= 8;
-            out.push_back((uint8_t)((acc >> bits) & 0xFF));
-        }
-    }
-    return (int)out.size();
-}
-
-/* Convert one RGBA8 pixel to big-endian RGB555. */
-inline uint16_t rgba_to_rgb555_be(uint32_t rgba)
-{
-    uint8_t r = (uint8_t)(rgba & 0xFF);
-    uint8_t g = (uint8_t)((rgba >>  8) & 0xFF);
-    uint8_t b = (uint8_t)((rgba >> 16) & 0xFF);
+    uint8_t b = (uint8_t)(bgrx & 0xFF);
+    uint8_t g = (uint8_t)((bgrx >>  8) & 0xFF);
+    uint8_t r = (uint8_t)((bgrx >> 16) & 0xFF);
     uint16_t pix = (uint16_t)(((r & 0xF8) << 7) |
                               ((g & 0xF8) << 2) |
                               (b >> 3));
     return (uint16_t)((pix >> 8) | (pix << 8));
 }
 
-/* Walk the new frame vs prev row-by-row to find the smallest bbox
- * containing all changed pixels. Returns false if frames are
- * identical (skip publish). g_prev_w/h must match w/h; caller
- * handles resize case separately. */
-bool compute_dirty_bbox(const uint8_t* prev, const uint8_t* cur,
-                        int w, int h,
-                        int* out_x, int* out_y,
-                        int* out_w, int* out_h)
-{
-    int min_y = h, max_y = -1;
-    int min_x = w, max_x = -1;
-    int row_bytes = w * 4;
-    for (int y = 0; y < h; y++) {
-        const uint8_t* a = prev + y * row_bytes;
-        const uint8_t* b = cur  + y * row_bytes;
-        if (memcmp(a, b, row_bytes) == 0) continue;
-        if (y < min_y) min_y = y;
-        max_y = y;
-        /* Find first/last differing pixel in this row. */
-        int x_first = -1, x_last = -1;
-        const uint32_t* pa = (const uint32_t*)a;
-        const uint32_t* pb = (const uint32_t*)b;
-        for (int x = 0; x < w; x++) {
-            if (pa[x] != pb[x]) { x_first = x; break; }
-        }
-        for (int x = w - 1; x >= 0; x--) {
-            if (pa[x] != pb[x]) { x_last = x; break; }
-        }
-        if (x_first >= 0) {
-            if (x_first < min_x) min_x = x_first;
-            if (x_last  > max_x) max_x = x_last;
-        }
-    }
-    if (max_y < 0) return false;
-    *out_x = min_x;
-    *out_y = min_y;
-    *out_w = (max_x - min_x) + 1;
-    *out_h = (max_y - min_y) + 1;
-    return true;
-}
-
-/* Time delta in microseconds. */
 template <typename Tp>
-inline uint64_t us_since(const Tp& t0) {
+inline uint64_t us_since(const Tp& t0)
+{
     return (uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - t0).count();
 }
 
-void maybe_report_perf()
+void maybe_report()
 {
     auto now = std::chrono::steady_clock::now();
     if (g_last_report.time_since_epoch().count() == 0) {
@@ -162,186 +58,118 @@ void maybe_report_perf()
     }
     auto window_us = (uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(
         now - g_last_report).count();
-    if (window_us < 1'000'000) return;  /* once per second */
+    if (window_us < 1'000'000) return;
 
-    if (g_perf.frames > 0) {
-        double fps = (double)g_perf.frames * 1e6 / (double)window_us;
-        double avg_total = (double)g_perf.total_us / g_perf.frames;
-        double avg_dec   = (double)g_perf.decode_us / g_perf.frames;
-        double avg_diff  = (double)g_perf.diff_us / g_perf.frames;
-        double avg_blit  = (double)g_perf.blit_us / g_perf.frames;
-        double mb_in     = (double)g_perf.bytes_in / (1024.0 * 1024.0);
-        double dirty_pct =
-            g_prev_w && g_prev_h
-              ? (double)g_perf.pixels_out * 100.0
-                  / (g_perf.frames * g_prev_w * g_prev_h)
-              : 0.0;
+    if (g_perf.frames > 0 && g_capture) {
+        double fps      = (double)g_perf.frames * 1e6 / (double)window_us;
+        double avg_pull = (double)g_perf.pull_us / g_perf.frames;
+        double avg_blit = (double)g_perf.blit_us / g_perf.frames;
+        double dirty_pct = (g_capture->width() && g_capture->height())
+            ? (double)g_perf.pixels_out * 100.0
+                / (g_perf.frames * g_capture->width() * g_capture->height())
+            : 0.0;
         fprintf(stderr,
-                "[Pipeline] %.1f fps  total=%.1fms (decode=%.1f diff=%.1f "
-                "blit=%.1f)  png=%.2fMiB  dirty=%.1f%%\n",
-                fps, avg_total/1000.0, avg_dec/1000.0, avg_diff/1000.0,
-                avg_blit/1000.0, mb_in, dirty_pct);
+                "[Pipeline] %.1f fps  pull=%.1fms blit=%.2fms  dirty=%.1f%%\n",
+                fps, avg_pull / 1000.0, avg_blit / 1000.0, dirty_pct);
     }
     g_perf = {};
     g_last_report = now;
 }
 
-void on_screencast_frame(const CdpClient::Json& params)
+void run()
 {
-    if (!params.contains("data")) return;
-    auto t_start = std::chrono::steady_clock::now();
-
-    /* "sessionId" inside the screencastFrame params is chromium's
-     * per-frame ack token, not the CDP attach session. We must echo
-     * it back via Page.screencastFrameAck or chromium throttles. */
-    int frame_ack_id = -1;
-    if (params.contains("sessionId") && params["sessionId"].is_number()) {
-        frame_ack_id = params["sessionId"].get<int>();
+    /* Wait for both the guest BrowserShm handshake and a non-zero
+     * capture geometry. */
+    BrowserShm* shm = nullptr;
+    while (g_running.load(std::memory_order_acquire)) {
+        shm = browser::shm_get();
+        if (shm && g_capture && g_capture->width() > 0) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+    if (!shm) return;
 
-    const std::string b64 = params["data"].get<std::string>();
-    auto ack = [frame_ack_id]() {
-        /* Fire-and-forget — calling cdp->call() here would deadlock,
-         * since we're inside the WS receive thread and the ack's own
-         * response would never get processed. */
-        if (g_cdp && frame_ack_id >= 0) {
-            g_cdp->send_no_reply("Page.screencastFrameAck",
-                                 {{"sessionId", frame_ack_id}});
+    int cap_w = g_capture->width();
+    int cap_h = g_capture->height();
+    if (cap_w > (int)BR_FB_MAX_W) cap_w = (int)BR_FB_MAX_W;
+    if (cap_h > (int)BR_FB_MAX_H) cap_h = (int)BR_FB_MAX_H;
+    br_u16_store(&shm->fb.width,  (uint16_t)cap_w);
+    br_u16_store(&shm->fb.height, (uint16_t)cap_h);
+    shm->fb.depth = 16;
+    fprintf(stderr, "[Pipeline] viewport %dx%d (clipped to %dx%d)\n",
+            g_capture->width(), g_capture->height(), cap_w, cap_h);
+
+    uint32_t frame = 0;
+    while (g_running.load(std::memory_order_acquire)) {
+        auto t0 = std::chrono::steady_clock::now();
+        const uint8_t* img = nullptr;
+        XShmCapture::Rect r{ 0, 0, 0, 0 };
+
+        if (!g_capture->drain(&img, &r)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+            continue;
         }
-    };
+        uint64_t pull_us = us_since(t0);
 
-    BrowserShm* shm = browser::shm_get();
-    if (!shm) { ack(); return; }
+        /* Clip rect to the BrowserShm fb geometry. */
+        if (r.x < 0) { r.w = (uint16_t)(r.w + r.x); r.x = 0; }
+        if (r.y < 0) { r.h = (uint16_t)(r.h + r.y); r.y = 0; }
+        if ((int)r.x + r.w > cap_w) r.w = (uint16_t)(cap_w - r.x);
+        if ((int)r.y + r.h > cap_h) r.h = (uint16_t)(cap_h - r.y);
+        if (r.w == 0 || r.h == 0) continue;
 
-    auto t_dec_start = std::chrono::steady_clock::now();
-    std::vector<uint8_t> png;
-    if (base64_decode(b64, png) < 0) {
-        fprintf(stderr, "[Pipeline] base64 decode failed\n");
-        ack();
-        return;
-    }
-
-    int w = 0, h = 0, channels = 0;
-    uint8_t* px = stbi_load_from_memory(png.data(), (int)png.size(),
-                                        &w, &h, &channels, 4);
-    if (!px) {
-        fprintf(stderr, "[Pipeline] png decode failed: %s\n",
-                stbi_failure_reason());
-        ack();
-        return;
-    }
-    uint64_t decode_us = us_since(t_dec_start);
-    uint64_t bytes_in  = png.size();
-
-    int cap_w = (w > (int)BR_FB_MAX_W) ? (int)BR_FB_MAX_W : w;
-    int cap_h = (h > (int)BR_FB_MAX_H) ? (int)BR_FB_MAX_H : h;
-
-    {
-        std::lock_guard<std::mutex> lk(g_mtx);
-
-        if (w != g_prev_w || h != g_prev_h) {
-            g_prev.assign((size_t)w * h * 4, 0);
-            g_prev_w = w;
-            g_prev_h = h;
-            br_u16_store(&shm->fb.width,  (uint16_t)cap_w);
-            br_u16_store(&shm->fb.height, (uint16_t)cap_h);
-            shm->fb.depth = 16;
-            fprintf(stderr, "[Pipeline] viewport %dx%d (clipped to %dx%d)\n",
-                    w, h, cap_w, cap_h);
-        }
-
-        auto t_diff_start = std::chrono::steady_clock::now();
-        int dx, dy, dw, dh;
-        bool dirty = compute_dirty_bbox(g_prev.data(), px, w, h,
-                                        &dx, &dy, &dw, &dh);
-        uint64_t diff_us = us_since(t_diff_start);
-        uint64_t blit_us = 0;
-        uint64_t pixels_out = 0;
-
-        if (dirty) {
-            if (dx + dw > cap_w) dw = cap_w - dx;
-            if (dy + dh > cap_h) dh = cap_h - dy;
-            if (dw > 0 && dh > 0) {
-                auto t_blit_start = std::chrono::steady_clock::now();
-                int dst_stride = cap_w * 2;
-                for (int y = 0; y < dh; y++) {
-                    const uint32_t* src_row =
-                        (const uint32_t*)(px + (size_t)(dy + y) * w * 4);
-                    uint16_t* dst_row =
-                        (uint16_t*)&shm->fb.pixels[
-                            (size_t)(dy + y) * dst_stride + (dx * 2)];
-                    for (int x = 0; x < dw; x++) {
-                        dst_row[x] = rgba_to_rgb555_be(src_row[dx + x]);
-                    }
-                }
-
-                br_u16_store(&shm->fb.dirty_count, 1);
-                br_u16_store((uint16_t*)&shm->fb.dirty[0].top,    dy);
-                br_u16_store((uint16_t*)&shm->fb.dirty[0].left,   dx);
-                br_u16_store((uint16_t*)&shm->fb.dirty[0].bottom, dy + dh);
-                br_u16_store((uint16_t*)&shm->fb.dirty[0].right,  dx + dw);
-                BR_FENCE_RELEASE();
-                br_u32_store(&shm->fb.seq, (uint32_t)++g_frame_count);
-                blit_us    = us_since(t_blit_start);
-                pixels_out = (uint64_t)dw * (uint64_t)dh;
+        auto t1 = std::chrono::steady_clock::now();
+        /* drain() places pixels at offset 0 of the SHM, packed at
+         * stride r.w*4 (NOT capture->width()*4). */
+        int src_stride = r.w * 4;
+        int dst_stride = cap_w * 2;
+        for (int y = 0; y < r.h; y++) {
+            const uint32_t* src_row =
+                (const uint32_t*)(img + (size_t)y * src_stride);
+            uint16_t* dst_row =
+                (uint16_t*)&shm->fb.pixels[
+                    (size_t)(r.y + y) * dst_stride + (r.x * 2)];
+            for (int x = 0; x < r.w; x++) {
+                dst_row[x] = bgrx_to_rgb555_be(src_row[x]);
             }
         }
+        uint64_t blit_us = us_since(t1);
 
-        memcpy(g_prev.data(), px, (size_t)w * h * 4);
+        br_u16_store(&shm->fb.dirty_count, 1);
+        br_u16_store((uint16_t*)&shm->fb.dirty[0].top,    r.y);
+        br_u16_store((uint16_t*)&shm->fb.dirty[0].left,   r.x);
+        br_u16_store((uint16_t*)&shm->fb.dirty[0].bottom, r.y + r.h);
+        br_u16_store((uint16_t*)&shm->fb.dirty[0].right,  r.x + r.w);
+        BR_FENCE_RELEASE();
+        br_u32_store(&shm->fb.seq, ++frame);
 
         g_perf.frames++;
-        g_perf.decode_us  += decode_us;
-        g_perf.diff_us    += diff_us;
+        g_perf.pull_us    += pull_us;
         g_perf.blit_us    += blit_us;
-        g_perf.bytes_in   += bytes_in;
-        g_perf.pixels_out += pixels_out;
-        g_perf.total_us   += us_since(t_start);
-        maybe_report_perf();
-    }
+        g_perf.pixels_out += (uint64_t)r.w * (uint64_t)r.h;
+        maybe_report();
 
-    stbi_image_free(px);
-    ack();
+        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+    }
+    fprintf(stderr, "[Pipeline] stopped after %u frames\n", frame);
 }
 
 }  // namespace
 
-void pipeline_start(CdpClient* cdp)
+void pipeline_start(XShmCapture* capture)
 {
-    if (!cdp) return;
+    if (!capture) return;
     if (g_running.exchange(true)) return;
-    g_cdp = cdp;
-
-    cdp->on_event("Page.screencastFrame", on_screencast_frame);
-
-    /* PNG: lossless. Chromium pushes frames event-driven — only when
-     * it actually paints. Static page = zero pushes. */
-    auto resp = cdp->call("Page.startScreencast",
-                          {
-                              {"format",        "png"},
-                              {"everyNthFrame", 1},
-                          },
-                          std::chrono::milliseconds(5000));
-    if (!resp.ok) {
-        fprintf(stderr, "[Pipeline] Page.startScreencast failed\n");
-        g_running.store(false, std::memory_order_release);
-        g_cdp = nullptr;
-        return;
-    }
-    fprintf(stderr, "[Pipeline] screencast subscribed (png lossless)\n");
+    g_capture = capture;
+    g_thread = std::thread(run);
 }
 
 void pipeline_stop()
 {
     if (!g_running.exchange(false)) return;
-    if (g_cdp) {
-        g_cdp->call("Page.stopScreencast");
-        g_cdp->on_event("Page.screencastFrame", nullptr);
-        g_cdp = nullptr;
-    }
-    std::lock_guard<std::mutex> lk(g_mtx);
-    g_prev.clear();
-    g_prev_w = g_prev_h = 0;
-    g_frame_count = 0;
+    if (g_thread.joinable()) g_thread.join();
+    g_capture = nullptr;
+    g_perf = {};
+    g_last_report = {};
 }
 
 }  // namespace browser

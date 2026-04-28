@@ -73,6 +73,16 @@ target_include_directories(libyuv::libyuv INTERFACE ${LIBYUV_INC})
 # Math library
 find_library(M_LIB m)
 
+# X protocol bindings for the MacBrowser pixel pipeline (Firefox + Xvfb).
+# xcb + MIT-SHM + XDamage; required when BUILD_BROWSER is on (default).
+option(BUILD_BROWSER "Build the MacBrowser host pipeline (xcb + Firefox)" ON)
+if(BUILD_BROWSER)
+  if(NOT PKG_CONFIG_FOUND)
+    message(FATAL_ERROR "BUILD_BROWSER requires pkg-config")
+  endif()
+  pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb xcb-shm xcb-damage)
+endif()
+
 if(NOT M_LIB)
   set(M_LIB "")
 endif()
