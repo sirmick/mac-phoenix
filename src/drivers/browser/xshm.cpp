@@ -15,6 +15,7 @@
 #include <xcb/xcb.h>
 #include <xcb/shm.h>
 #include <xcb/damage.h>
+#include <xcb/composite.h>
 
 namespace browser {
 
@@ -130,9 +131,34 @@ bool XShmCapture::start(int display)
         return false;
     }
 
-    /* Subscribe XDamage on root. Firefox in kiosk fills the root, so
-     * its repaints flow as DAMAGE_NOTIFY events on the root window
-     * (Cairo/XRender draws directly, no compositor in between). */
+    /* Redirect every child of root through the X COMPOSITE extension.
+     * Without this, GetImage on the root window returns only root's
+     * own pixels (typically all-black) — Firefox renders into a child
+     * window and root has no idea. With AUTOMATIC redirect the X
+     * server keeps a backing pixmap of root's compositing-result, so
+     * xcb_shm_get_image(root, ...) returns the visible scene including
+     * all child windows, and XDamage on root reflects child repaints.
+     *
+     * Has to happen before damage_create — damage events on root only
+     * cover the regions the server actually paints into root's backing
+     * store, which exists only once redirect is active. */
+    {
+        auto cookie = xcb_composite_redirect_subwindows_checked(
+            as_conn(conn_), root_, XCB_COMPOSITE_REDIRECT_AUTOMATIC);
+        auto* err2 = xcb_request_check(as_conn(conn_), cookie);
+        if (err2) {
+            fprintf(stderr, "[XShm] xcb_composite_redirect_subwindows "
+                    "failed: code=%u (Composite ext required)\n",
+                    err2->error_code);
+            free(err2);
+            stop();
+            return false;
+        }
+    }
+
+    /* Subscribe XDamage on root. With COMPOSITE redirect active, root
+     * receives composited child repaints; DAMAGE_NOTIFY fires for the
+     * union of changed regions across all visible windows. */
     damage_ = xcb_generate_id(as_conn(conn_));
     auto dmg_cookie = xcb_damage_create_checked(
         as_conn(conn_), damage_, root_,
