@@ -110,6 +110,7 @@ struct EmulatorConfig {
     bool headless_http = false;        // serve HTTP API in headless mode (no WebRTC/video/audio)
     bool bridge_enabled = false;       // automation bridge (INIT injection + file-based commands)
     std::string bridge_dir;            // temp directory for bridge file I/O (auto-created)
+    bool browser_enabled = false;      // MacBrowser: allocate BrowserShm region (host-side spike + guest Browser.app)
     int http_port = 11000;
     std::string client_dir = "./client";
     std::string storage_dir = "~/storage";

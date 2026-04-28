@@ -95,6 +95,10 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back("--bridge");
     }
 
+    if (config_->browser_enabled) {
+        args.push_back("--browser");
+    }
+
     // Network
     if (config_->network != config::NetworkMode::None) {
         args.push_back("--network");

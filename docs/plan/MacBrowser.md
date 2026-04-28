@@ -46,8 +46,8 @@ clipboard sync.
 │  │  RAM       @ 0x00000000 (32 MiB)                   │  │
 │  │  ROM       @ 0x02000000 (1 MiB)                    │  │
 │  │  Scratch   @ 0x02100000 (64 KiB)                   │  │
-│  │  FrameBuf  @ 0x02110000 (4 MiB)                    │  │
-│  │  BrowserShm@ 0x02520000 (~1.7 MiB) ← NEW           │  │
+│  │  FrameBuf  @ 0x02110000 (8 MiB)                    │  │
+│  │  BrowserShm@ 0x02910000 (~1.7 MiB) ← NEW           │  │
 │  └────────────────────────────────────────────────────┘  │
 │         ▲                                                │
 │         │ guest reads/writes via normal memory access    │
@@ -90,7 +90,7 @@ communication goes through `BrowserShm`.
 
 ## The shared memory contract
 
-A single `BrowserShm` struct, mapped at guest address `0x02520000`,
+A single `BrowserShm` struct, mapped at guest address `0x02910000`,
 contains:
 
 | Field | Direction | Description |
@@ -208,10 +208,10 @@ Pre-built `Browser.bin` committed to repo (same pattern as `BridgeAgent.bin`).
 ### M1 — Memory region + spike (1 day)
 
 - Allocate the 1.7 MiB region in mac-phoenix at startup behind `--browser`.
-- Expose at guest address `0x02520000` (extend the existing memory layout in `cpu_context.cpp`).
+- Expose at guest address `0x02910000` (extend the existing memory layout in `cpu_context.cpp`).
 - Verify both UAE (m68k) and Unicorn-PPC backends can read/write at that address.
 - Write `BrowserSpike.bin` (~100 LOC Retro68): one window, blits from
-  `0x02520000` directly. Host writes a gradient pattern to `fb.pixels`,
+  `0x02910000` directly. Host writes a gradient pattern to `fb.pixels`,
   bumps `fb.seq`. Guest blits.
 
 **Deliverable:** end-to-end pixel pipe proven on every backend. If the
@@ -323,7 +323,7 @@ mid-CopyBits → torn frames. Mitigation: gate host pixel writes to
 inter-VBL interval. Host owns the VBL clock so this is straightforward.
 Fall back to double-buffer (+1.5 MiB) if tearing shows up in practice.
 
-**6. Memory region mapping on Unicorn-PPC.** New region at `0x02520000`
+**6. Memory region mapping on Unicorn-PPC.** New region at `0x02910000`
 must be MMU-mapped on every backend. The existing FrameBuffer at
 `0x02110000` works on all backends, so the precedent is good — but
 worth verifying explicitly during M1.
@@ -342,6 +342,46 @@ of mac-phoenix without `--browser` flag don't need Chromium.
 **9. Linux-only initially.** Xvfb doesn't run on macOS without XQuartz.
 Mitigation: Linux is the primary dev/deploy platform anyway. macOS users
 can use XQuartz or wait for a future macOS-native screencapture path.
+
+## Mouse model — host-side polling (no guest events)
+
+We do **not** push mouse moves through the g2h ring. The host already
+knows the screen-space mouse position (it owns the cursor) and can read
+it any time. To translate to page-space we need: (a) the window's
+content rect in screen coords, and (b) the scroll offset.
+
+VBL hook on the host side, each tick:
+
+1. Check whether `Browser.app` is the front Mac process. Cheap test:
+   read the front-process PSN from the existing `command_bridge`
+   peek path, or have Browser.app set a "front" flag in
+   `BrowserShm.flags` from its activate/deactivate handlers.
+2. If front: read the host cursor position (already tracked by the
+   ADB / web input pipeline).
+3. Read the viewport's screen-space rect from `BrowserShm.viewport`.
+   The app keeps that field current. Two valid disciplines:
+     - **Event-driven (preferred):** Browser.app updates the field on
+       every `windowMoved`/`windowResized`/scrollbar event and pushes a
+       single `BR_CMD_VIEWPORT` so the host invalidates any cached
+       transform. Cheap, and we already pay the cost of those handlers.
+     - **VBL-resampled (fallback):** the app re-publishes the field
+       every VBL even if nothing changed. Costs one ring push every
+       tick — acceptable but wasteful, and safer if we ever add
+       compositing tricks (System 7 Drag Manager moves windows without
+       firing a high-level event, for example).
+   Start with event-driven; add a periodic resample once we see if any
+   classic-Mac path slips past the events.
+4. Subtract: `page_xy = mouse_screen_xy - viewport_origin + scroll`.
+5. Forward to Chromium via CDP `Input.dispatchMouseEvent`.
+
+This eliminates all `BR_CMD_MOUSE_MOVE` / `BR_CMD_MOUSE_OUT` traffic
+(saves ~60 ring pushes per second of hover) and removes the latency of
+the round-trip. The guest only sends commands for events it
+intrinsically owns: clicks, key presses, nav requests, scroll wheel.
+
+Mouse-down / mouse-up still need to go through the ring — we want the
+press to be timed against whatever frame was visible to the user.
+Mouse position itself is stateless and pollable.
 
 ## Open questions (to revisit during implementation)
 

@@ -164,6 +164,7 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["zappram"]                  = zappram;
     j["dismiss_shutdown_dialog"]  = dismiss_shutdown_dialog;
     j["bridge_enabled"]           = bridge_enabled;
+    j["browser_enabled"]          = browser_enabled;
 
     // Network
     j["network"] = network_string();
@@ -277,6 +278,8 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         dismiss_shutdown_dialog = json_utils::get_bool(j, "dismiss_shutdown_dialog");
     if (j.contains("bridge_enabled"))
         bridge_enabled = json_utils::get_bool(j, "bridge_enabled");
+    if (j.contains("browser_enabled"))
+        browser_enabled = json_utils::get_bool(j, "browser_enabled");
 
     // ── Network ─────────────────────────────────────────────────
     if (j.contains("network")) {
@@ -405,6 +408,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --mitm-ca-dir PATH         CA directory (default: .mitm_ca)\n");
             printf("\nAutomation:\n");
             printf("  --bridge                   Enable automation bridge\n");
+            printf("  --browser                  Reserve BrowserShm region (MacBrowser spike)\n");
             printf("  --headless-http            HTTP API only (no video/audio)\n");
             printf("\nServer:\n");
             printf("  --port N                   HTTP+WS port (default: 11000)\n");
@@ -568,6 +572,11 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --bridge
         if (strcmp(argv[i], "--bridge") == 0) {
             config.bridge_enabled = true; argv[i] = nullptr; continue;
+        }
+
+        // --browser
+        if (strcmp(argv[i], "--browser") == 0) {
+            config.browser_enabled = true; argv[i] = nullptr; continue;
         }
 
         // --ipc (IPC child mode for PPC subprocess)

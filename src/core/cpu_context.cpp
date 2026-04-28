@@ -204,7 +204,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 
     fprintf(stderr, "[CPUContext] Allocating RAM: %u MB\n", ram_size_ / (1024 * 1024));
 
-    // Allocate contiguous block: [RAM...][ROM 1MB][ScratchMem 64KB][FrameBuffer 4MB]
+    // Allocate contiguous block: [RAM...][ROM 1MB][ScratchMem 64KB][FrameBuffer 8MB]
     // For 24-bit ROMs, rom_offset may exceed ram_size_ (gap is unmapped Mac space).
     // For Mac II (24-bit), hardcoded I/O addresses at $50F0xxxx map to $0F0xxxx
     // in the 24-bit space. Allocate the full 16MB (24-bit range) so these

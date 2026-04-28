@@ -16,6 +16,20 @@ target_include_directories(test_mac_roman PRIVATE ${CMAKE_SOURCE_DIR}/src/core)
 add_test(NAME mac_roman COMMAND test_mac_roman)
 set_tests_properties(mac_roman PROPERTIES TIMEOUT 5 LABELS "unit")
 
+# BrowserShm SPSC ring protocol — host-only, no emulator. Compiles
+# ring.cpp directly so we exercise the exact code shm.cpp links against.
+add_executable(test_browser_shm
+  ${TEST_DIR}/test_browser_shm.cpp
+  ${CMAKE_SOURCE_DIR}/src/drivers/browser/ring.cpp
+)
+target_include_directories(test_browser_shm PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/src/common/include
+  ${CMAKE_SOURCE_DIR}/src/drivers
+)
+add_test(NAME browser_shm COMMAND test_browser_shm)
+set_tests_properties(browser_shm PROPERTIES TIMEOUT 10 LABELS "unit")
+
 add_test(
   NAME api_endpoints
   COMMAND bash ${TEST_DIR}/test_api_endpoints.sh

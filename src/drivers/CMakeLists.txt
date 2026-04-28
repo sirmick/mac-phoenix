@@ -32,6 +32,10 @@ add_library(drivers STATIC
   platform/platform_null.cpp
   platform/platform_unix.cpp
   platform/timer_interrupt.cpp
+  # MacBrowser (M1 spike — gradient writer; full module M3+)
+  browser/ring.cpp
+  browser/shm.cpp
+  browser/browser_spike.cpp
   # Consolidated null drivers
   null_drivers.cpp
 )

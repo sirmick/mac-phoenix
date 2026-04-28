@@ -49,6 +49,8 @@
 #include "core/emulator_init.h"
 #include "crash_handler_init.h"
 #include "sigsegv.h"
+#include "drivers/browser/browser_spike.h"
+#include "drivers/browser/shm.h"
 
 // ============================================================================
 // Early Mac address space reservation — runs BEFORE main(), before any threads.
@@ -632,6 +634,10 @@ int main(int argc, char **argv)
 				video_ipc_exit();
 				return 1;
 			}
+			if (emu_config.browser_enabled) {
+				browser::shm_init();
+				browser_spike_start();
+			}
 		}
 
 		// Set up signal stack for SIGSEGV handler (SheepShaver legacy pattern)
@@ -835,6 +841,10 @@ int main(int argc, char **argv)
 				if (!g_cpu_ctx.init_m68k(emu_config)) {
 					fprintf(stderr, "Failed to initialize M68K CPU context\n");
 					return 1;
+				}
+				if (emu_config.browser_enabled) {
+					browser::shm_init();
+					browser_spike_start();
 				}
 			}
 

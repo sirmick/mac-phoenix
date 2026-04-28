@@ -1,16 +1,28 @@
 /*
  *  MacBrowser.h — shared layout for the BrowserShm region.
  *
- *  Mapped at guest address 0x02520000 (~1.7 MiB). Both mac-phoenix
- *  (host) and Browser.app (Retro68 m68k guest) include this header so
- *  the layout stays in lockstep.
+ *  ALLOCATION: Browser.app allocates the entire BrowserShm struct out
+ *  of its own application heap via NewPtrClear(sizeof(BrowserShm)).
+ *  The guest is the owner; the host borrows the address.
  *
- *  Synchronization is the existing 60 Hz VBL: host drains pending
- *  events into the h2g ring before firing each VBL; guest's VBL task
- *  drains them, queues commands the other way. No locks on the guest
- *  side; one mutex on the host.
+ *  HANDSHAKE: Browser.app writes the buffer's Mac address (8 hex
+ *  digits, ASCII) into Host:MacPhoenix:browser_shm.txt on the ExtFS
+ *  share. mac-phoenix polls that file, reads the address, validates
+ *  magic + version, and translates Mac → host via Mac2HostAddr() to
+ *  get a writable host pointer. From then on the host writes pixels
+ *  and events directly into the guest's buffer.
  *
- *  Wire format: classic Mac is big-endian; host is typically
+ *  Sized for the worst case (1024×768×16 framebuffer + two 64 KB
+ *  rings ≈ 1.7 MiB), so the guest's SIZE resource needs to advertise
+ *  at least 4 MiB of partition. NewPtrClear may fail if the
+ *  application heap is configured smaller — the guest must handle
+ *  that and report it back via the same handshake file.
+ *
+ *  SYNCHRONIZATION: The existing 60 Hz VBL drives both rings. Host
+ *  drains pending events into h2g before firing each VBL; the guest
+ *  VBL task drains them and queues commands back through g2h.
+ *
+ *  WIRE FORMAT: classic Mac is big-endian; host is typically
  *  little-endian. ALL multi-byte fields in this region are stored
  *  big-endian on the wire. Use br_u16/u32_load/store accessors. NEVER
  *  load or store a multi-byte field with a raw pointer dereference.
@@ -32,9 +44,11 @@ extern "C" {
 #define BR_MAGIC          0x42525753u    /* 'BRWS' */
 #define BR_VERSION        1u
 
-/* Guest-visible Mac address. Sits past the existing FrameBuffer
- * region (0x02110000 + 4 MiB = 0x02510000) with a small pad. */
-#define BR_BASE_ADDR      0x02520000u
+/* Path on the ExtFS share where Browser.app publishes the Mac address
+ * of its NewPtrClear'd BrowserShm. ASCII hex, 8 chars + newline. The
+ * host polls this file (via the same bridge_dir mechanism BridgeAgent
+ * uses for command IPC) and parses it once present. */
+#define BR_HANDSHAKE_FILE "browser_shm.txt"
 
 #define BR_RING_SIZE      65536u         /* 64 KiB per direction */
 #define BR_DIRTY_MAX      64u
@@ -116,9 +130,12 @@ static inline void br_u16_store(volatile uint16_t *p, uint16_t v) {
                                   /*   u8 plen, u8 path[plen]                       */
 #define BR_EV_SELECTION     132   /* u16 len, u8 text[len]                          */
 
-/* Sentinel — written into either ring when a message would straddle
- * the buffer end. Consumer interprets type=0 as "jump read_idx to 0
- * and re-read from there." Carries no length. */
+/* Wrap sentinel — written when the next real message wouldn't fit
+ * before the end of the ring. Producer emits a normal 4-byte header
+ * with type=BR_MSG_WRAP and len=0, then sets write_idx to 0 and
+ * writes the real message at offset 0. Consumer that reads type=0
+ * advances read_idx to 0 and re-reads from there. Sized identical
+ * to a normal header so wrap handling is just one branch. */
 #define BR_MSG_WRAP           0
 
 /* BR_EV_STATUS codes */
@@ -135,30 +152,43 @@ static inline void br_u16_store(volatile uint16_t *p, uint16_t v) {
 
 /* ── Ring buffer ────────────────────────────────────────────── */
 
-/* Single-producer / single-consumer ring. Producer writes write_idx
- * (with release fence after data writes); consumer writes read_idx
- * (with acquire fence before data reads).
+/* Single-producer / single-consumer ring. Race-free without locks:
+ * producer writes write_idx (only producer touches it), consumer
+ * writes read_idx (only consumer touches it). Memory ordering is
+ * release-on-write_idx (producer) and acquire-on-write_idx-read
+ * (consumer). Mirrors hold for read_idx in the opposite direction.
  *
- * Empty:    write_idx == read_idx
- * Full:     (write_idx + 1) % BR_RING_SIZE == read_idx
- * Capacity: BR_RING_SIZE - 1 bytes (one slot reserved to disambiguate)
+ *   Empty: write_idx == read_idx
+ *   Full:  (write_idx + 4) % BR_RING_SIZE == read_idx
+ *   (4 bytes reserved so empty and full are distinguishable, and
+ *    every legal write_idx leaves room for at least a WRAP header.)
  *
- * Each message is laid out as:
- *   [u16 type][u16 len][u8 payload[len]]   (header = 4 bytes)
+ * Layout per message:
+ *   [u16 type][u16 len][u8 payload[ALIGN4(len)]]   header = 4 bytes
  *
- * BR_MSG_WRAP carries no length — it's a single u16 that tells the
- * reader to jump back to offset 0 in data[]. Producer emits it when
- * 4+len wouldn't fit before BR_RING_SIZE.
+ * Payloads are PADDED to a 4-byte boundary in the ring (extra bytes
+ * are uninitialized — consumer reads only `len` bytes). This keeps
+ * write_idx u32-aligned so the wrap check is a simple compare, and
+ * lets a 4-byte-wide WRAP header always fit at the tail.
  *
- * Both write_idx and read_idx are byte offsets into data[]. */
-typedef struct {
+ * BR_MSG_WRAP is a normal 4-byte header (type=0, len=0). Producer
+ * emits it whenever the next real message wouldn't fit before
+ * BR_RING_SIZE; it then resets write_idx to 0 and writes the real
+ * message at offset 0. Consumer that reads type=0 jumps read_idx
+ * to 0 and re-reads.
+ *
+ * Both write_idx and read_idx are byte offsets into data[]. Always
+ * stored big-endian on the wire — use br_u32_load/store accessors. */
+typedef struct BrRing {
     uint32_t write_idx;             /* big-endian; producer writes only */
     uint32_t read_idx;              /* big-endian; consumer writes only */
     uint8_t  data[BR_RING_SIZE];
 } BrRing;
 
 #define BR_MSG_HDR_BYTES   4u       /* sizeof(u16 type) + sizeof(u16 len) */
-#define BR_MSG_MAX_PAYLOAD (BR_RING_SIZE - BR_MSG_HDR_BYTES - 1u)
+#define BR_MSG_ALIGN(n)    (((n) + 3u) & ~3u)
+#define BR_MSG_FRAME(len)  (BR_MSG_HDR_BYTES + BR_MSG_ALIGN(len))
+#define BR_MSG_MAX_PAYLOAD (BR_RING_SIZE - BR_MSG_HDR_BYTES - 4u)
 
 /* ── Framebuffer (snapshot, not queued) ─────────────────────── */
 
@@ -192,7 +222,7 @@ typedef struct {
 
 /* ── Top-level region ───────────────────────────────────────── */
 
-typedef struct {
+typedef struct BrowserShm {
     uint32_t      magic;            /* BR_MAGIC; guest checks this first */
     uint32_t      version;          /* BR_VERSION */
     uint32_t      flags;            /* host capability bits, future use */
