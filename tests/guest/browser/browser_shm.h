@@ -38,6 +38,17 @@ int br_ring_push(BrRing *ring, uint16_t type,
 int br_ring_pop(BrRing *ring, uint16_t *out_type,
                 void *buf, uint16_t buf_capacity, uint16_t *out_len);
 
+/* Write one debug line into BrowserShm.log. Lossy: if the host hasn't
+ * polled before the next call, the previous line is overwritten and
+ * the host will report it as a drop. Truncates messages longer than
+ * BR_LOG_BUFSZ. Cheap to call unconditionally; host filters by
+ * BROWSER_LOG_LEVEL.
+ *
+ * `slot` is a pointer to BrowserShm.log (caller passes &gShm->log).
+ * Passing the slot rather than reaching for a global keeps the helper
+ * self-contained. */
+void br_log(struct BrLogSlot *slot, uint8_t level, const char *fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif

@@ -90,24 +90,67 @@ communication goes through `BrowserShm`.
 
 ## The shared memory contract
 
-A single `BrowserShm` struct, mapped at guest address `0x02910000`,
-contains:
+A single `BrowserShm` struct contains:
 
 | Field | Direction | Description |
 |---|---|---|
-| `magic` | host writes | `'BRWS'`, lets guest detect whether browser support is enabled |
-| `version` | host writes | `BR_VERSION = 1` |
-| `flags` | host writes | capability bits (future use) |
+| `magic` | guest writes | `'BRWS'`, lets host validate the handshake |
+| `version` | guest writes | `BR_VERSION = 1` |
+| `flags` | guest writes | capability bits (future use) |
 | `h2g` | host → guest ring | events (frame-ready, status, downloads, selection) |
 | `g2h` | guest → host ring | commands (nav, click, key, paste, scroll) |
+| `log` | guest writes | single-slot lossy debug log; host polls + prints |
 | `fb.seq` | host writes | bumped per frame; guest detects new frames |
 | `fb.dirty[]` | host writes | damage rectangles for the current `seq` |
 | `fb.pixels[]` | host writes | RGB555 pixel data, top-down |
 
-Both rings use single-producer / single-consumer with separate read/write
-indices. Messages are `[u16 type][u16 len][payload]`. A `BR_MSG_WRAP`
-sentinel jumps the read pointer back to ring offset 0 when a message
-would straddle the buffer end.
+### Handshake (allocation discovery)
+
+`BrowserShm` lives in **guest memory**, allocated by Browser.app via
+`NewPtrClear(sizeof(BrowserShm))` out of its application heap (the SIZE
+resource advertises ≥ 4 MiB). On startup Browser.app stamps the magic +
+version, then writes the buffer's Mac address as ASCII hex into
+`Host:MacPhoenix:browser_shm.txt` on the ExtFS share. mac-phoenix's host
+shm watcher polls that file, parses the address, validates magic +
+version, and translates Mac → host via `Mac2HostAddr()` to obtain a
+writable host pointer.
+
+This dodges the per-backend banking work — the buffer is just normal
+guest RAM, mapped uniformly on every backend (UAE, Unicorn-m68k,
+Unicorn-PPC, KPX). No fixed `BR_BASE_ADDR`, no UAE `ram_bank` extension,
+no Unicorn `uc_mem_map_ptr` for the region. All four backends use the
+same handshake code path.
+
+### SPSC ring discipline
+
+Both rings use single-producer / single-consumer with separate
+write_idx / read_idx, plus a 4-byte gap so empty (`write == read`) is
+distinguishable from full. Messages are `[u16 type][u16 len][payload]`,
+payload **padded to 4-byte alignment**. A `BR_MSG_WRAP` sentinel
+(normal 4-byte header with type=0, len=0) jumps the read pointer back
+to ring offset 0 when a message wouldn't fit before the buffer end. The
+producer accounts for both the WRAP header AND the unused tail bytes
+between write_idx and the ring boundary when checking free space —
+forgetting the tail bytes lets write_idx land exactly on read_idx after
+a successful push, which then *looks* empty and silently loses the
+just-pushed payload. (Caught by the unit test; both implementations now
+match.)
+
+`tests/test_browser_shm.cpp` round-trips messages through both rings
+under wraparound, fill-to-full, interleaved push/pop, and truncation
+scenarios. Wired into ctest under the `unit` label.
+
+### Debug log channel
+
+`BrowserShm.log` is a single-slot lossy buffer for guest-side
+`printf`-style breadcrumbs. The guest writes a line into `log.buf`,
+sets `log.len` and `log.level`, release-fences, and bumps `log.seq`.
+The host polls `log.seq` once per tick (gradient writer thread for
+now, VBL hook in M3); on any change it prints the line to its own
+stderr with a `[BrowserGuest <level>]` tag. Drops are observable: if
+seq jumps by more than 1, the host emits "dropped N log lines" before
+the latest entry. Lossy by design — bursts get dropped instead of
+clogging the command rings.
 
 Total region size: ~1.7 MiB (mostly the framebuffer).
 
@@ -115,7 +158,10 @@ The full layout, message types, and accessor helpers live in
 `src/common/include/MacBrowser.h`. Both the host module and the guest
 app `#include` that file. Host defines `BR_HOST` to enable byte-swap on
 multi-byte field access; guest is native big-endian and the swap is a
-no-op.
+no-op. Per-direction barriers (`__sync_synchronize` on host, `eieio` /
+`lwsync` on PPC guests, compiler fences on m68k) are wrapped in
+`BR_FENCE_RELEASE`/`BR_FENCE_ACQUIRE` macros so callers don't have to
+remember backend-specific instructions.
 
 ## VBL synchronization
 
@@ -160,16 +206,20 @@ host owns the timer, so it knows exactly when the guest is mid-blit.
 
 ### Host: `src/drivers/browser/`
 
-| File | Role |
-|---|---|
-| `shm.{h,cpp}` | `BrowserShmHost` — wraps the `BrowserShm` region, exposes `send_event`, `read_command`, `mark_dirty`, `publish_frame`, `on_pre_vbl` |
-| `supervisor.{h,cpp}` | spawns + restarts Xvfb and Chromium child processes; lifecycle |
-| `cdp.{h,cpp}` | minimal CDP WebSocket client; `Page.navigate`, `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Browser.setDownloadBehavior`, `Runtime.evaluate` |
-| `xshm.{h,cpp}` | XShm + XDamage subscription on Xvfb root window; emits damage events |
-| `pipeline.{h,cpp}` | orchestrates: receive damage event → XShmGetImage → RGBA→RGB555 convert → write to fb.pixels → mark_dirty → publish_frame |
-| `module.{h,cpp}` | `BrowserModule` top-level lifecycle; constructed when `--browser` is set |
+| File | Role | Status |
+|---|---|---|
+| `ring.{h,cpp}` | SPSC ring push/pop, shared with the unit test | ✅ M2 |
+| `shm.{h,cpp}` | ExtFS handshake watcher; `send_event`, `read_command`; will gain `publish_frame`, `on_pre_vbl`, log polling | ✅ M1+M2 |
+| `browser_spike.{h,cpp}` | M1/M2 gradient writer + bidirectional ring exercise | ✅ |
+| `supervisor.{h,cpp}` | spawns + restarts Xvfb and Chromium child processes; lifecycle | M3 |
+| `cdp.{h,cpp}` | minimal CDP WebSocket client; `Page.navigate`, `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Browser.setDownloadBehavior`, `Runtime.evaluate` | M3 |
+| `xshm.{h,cpp}` | XShm + XDamage subscription on Xvfb root window; emits damage events | M4 |
+| `pipeline.{h,cpp}` | orchestrates: receive damage event → XShmGetImage → RGBA→RGB555 convert → write to fb.pixels → mark_dirty → publish_frame | M4 |
+| `module.{h,cpp}` | `BrowserModule` top-level lifecycle; constructed when `--browser` is set | M3 |
 
-Build deps added: `libxcb`, `libxcb-shm`, `libxcb-damage`, `tungstenite` or `tokio-tungstenite` for WebSocket (or just write a minimal client — CDP framing is simple).
+Build deps to add for M3: `libxcb`, `libxcb-shm`, `libxcb-damage`. CDP
+WebSocket client is simple enough to write by hand (text framing,
+JSON-RPC over a single ws connection) — one less third-party dep.
 
 ### Guest: `tests/guest/browser/`
 
@@ -186,49 +236,52 @@ Pre-built `Browser.bin` committed to repo (same pattern as `BridgeAgent.bin`).
 
 ### Wiring
 
-| File | Change |
-|---|---|
-| `src/main.cpp` | new `--browser` CLI flag; construct `BrowserModule` if set |
-| `src/config/emulator_config.cpp` | add `browser_enabled` boolean |
-| `src/core/cpu_context.cpp` | reserve `BrowserShm` region in memory layout |
-| `src/drivers/platform/timer_interrupt.cpp` | call `browser_module->on_pre_vbl()` before firing VBL |
-| `tests/run_boot_matrix.sh` | (later) browser-mode boot smoke test |
+| File | Change | Status |
+|---|---|---|
+| `src/main.cpp` | `--browser` CLI flag; `browser::shm_init()` + `browser_spike_start()` after `init_m68k` (parent + IPC child) | ✅ M1 |
+| `src/config/emulator_config.{h,cpp}` | `browser_enabled` boolean, JSON serialize, CLI parse | ✅ M1 |
+| `src/core/emulator_subprocess.cpp` | propagate `--browser` to IPC child argv | ✅ M1 |
+| `src/drivers/platform/timer_interrupt.cpp` | call `BrowserModule::on_pre_vbl()` before firing VBL | M3 |
+| `tests/run_boot_matrix.sh` | browser-mode boot smoke test | M5+ |
 
 ## Implementation milestones
 
-### M0 — Shared contract (1 day)
+### M0 — Shared contract ✅
 
-- Write `MacBrowser.h` with full struct layout, accessors, message-type constants.
-- Verify it compiles cleanly under both host C++ (`-Wall -Wextra`) and Retro68 m68k C.
-- `static_assert` on struct sizes so layout drift gets caught at build time.
-- Tiny host unit test that round-trips a few messages through a fake ring.
+- `MacBrowser.h` with full struct layout, accessors, message-type
+  constants.
+- Compiles cleanly under host C++ and Retro68 m68k C.
+- `static_assert` on struct sizes catches layout drift at build time.
 
-**Deliverable:** the contract is locked. Both sides build against it.
+### M1 — Memory region + spike ✅
 
-### M1 — Memory region + spike (1 day)
+- `--browser` CLI flag + config wiring (parent + IPC child).
+- Browser.app allocates `BrowserShm` itself (`NewPtrClear`), publishes
+  the Mac address via ExtFS handshake; host watcher resolves it through
+  `Mac2HostAddr()`. Backend-agnostic.
+- `BrowserSpike.bin` (Retro68 m68k, 4 MiB SIZE) opens one window, polls
+  `fb.seq`, and `CopyBits` the host's RGB555 gradient into a window
+  each tick. Validated end-to-end on UAE; pattern extends to all
+  backends without code changes.
 
-- Allocate the 1.7 MiB region in mac-phoenix at startup behind `--browser`.
-- Expose at guest address `0x02910000` (extend the existing memory layout in `cpu_context.cpp`).
-- Verify both UAE (m68k) and Unicorn-PPC backends can read/write at that address.
-- Write `BrowserSpike.bin` (~100 LOC Retro68): one window, blits from
-  `0x02910000` directly. Host writes a gradient pattern to `fb.pixels`,
-  bumps `fb.seq`. Guest blits.
+### M2 — SPSC ring buffers ✅
 
-**Deliverable:** end-to-end pixel pipe proven on every backend. If the
-gradient animates correctly, the architecture is viable.
-
-### M2 — VBL ring buffers (2 days)
-
-- Implement `BrowserShmHost` host-side wrapper (`send_event`,
-  `read_command`, `on_pre_vbl`).
-- Wire `on_pre_vbl()` into `timer_interrupt.cpp`.
-- Guest-side `browser_shm.c` ring helpers + a VBL task that just
-  toggles a counter visible in the window title.
-- Verify the counter advances at 60 Hz via the ring, not via guest-side
-  polling.
-
-**Deliverable:** the control plane is working. We can shuttle bytes
-both directions, synchronized on VBL.
+- Locked SPSC contract in `MacBrowser.h`: 4-byte WRAP sentinel, 4-byte
+  payload alignment, explicit release/acquire fence discipline.
+- Host helpers (`browser::send_event` / `browser::read_command`) and
+  guest helpers (`br_ring_push` / `br_ring_pop`) share the same
+  wraparound math.
+- Host-only protocol unit test (`tests/test_browser_shm.cpp`, 10
+  cases / 47 assertions, ctest `unit` label) covers empty/full,
+  varying sizes, fill-until-full, 5000-iteration wraparound, 1000-batch
+  interleaved push/pop, bidirectional independence, oversized
+  rejection, truncation reporting. Caught a real wraparound bug where
+  `total_needed` forgot the SIZE-write_idx tail bytes consumed by
+  WRAP+padding.
+- BrowserSpike upgraded for both directions: pushes `BR_CMD_BACK` once
+  per second, drains `BR_EV_STATUS` from h2g; status bar shows both
+  counters. End-to-end confirmed: 12 commands pushed with monotonic
+  counters, 80 events received, no losses.
 
 ### M3 — Xvfb + Chromium supervisor (2 days)
 
@@ -255,12 +308,53 @@ to render in the guest window.
 
 ### M5 — Browser.app (3 days)
 
-- Real guest app: window with URL bar, back/forward/reload buttons,
-  scrollable PixMap viewport.
-- Translate guest events → commands (URL Enter → NAV, mouseDown → CLICK,
-  scroll → SCROLL, keyDown → KEY).
-- Pre-built `Browser.bin` committed; auto-installed in
-  `:System Folder:Apple Menu Items:` like BridgeAgent.
+Real guest app: one window with URL bar, back/forward/stop/reload
+toolbar, status text strip, scrollable PixMap viewport. Bookmarks menu
+populated from a plain-text `Browser Prefs` file in
+`<extfs>/MacPhoenix/`. Cmd-key shortcuts: Cmd+L (focus URL bar), Cmd+R
+(reload), Cmd+\[ / Cmd+\] (back/forward), Cmd+W (close = quit), Cmd+Q
+(quit). Chromium runs with a persistent `--user-data-dir` so logins
+survive launches.
+
+Pre-built `Browser.bin` committed; auto-installed in
+`:System Folder:Apple Menu Items:` like BridgeAgent.
+
+**UI discipline (look idiomatically Mac OS 7.5):**
+
+- **Toolbar = text labels**, not icons. `NewControl(pushButProc)` with
+  "Back" / "Forward" / "Stop" / "Reload" labels, ~52 px wide. More
+  period-correct than glyphs (Netscape Navigator 3, iCab 1, Cyberdog
+  all used text); avoids the "icons that don't quite match Susan Kare
+  voice" uncanny valley.
+- **Loading spinner** drawn live with QuickDraw — six lines at 60°
+  intervals, rotate which one is darkest each tick. Universal Mac
+  idiom, no resources.
+- **App icon family**: 32×32 + 16×16 across `'ICN#'`, `'icl4'`,
+  `'icl8'`, `'ics#'`, `'ics4'`, `'ics8'`. 4-bit palette drawn from the
+  System 7 system colors — that's what gives the unmistakable 1995-Mac
+  look. Black 1-px outline, light from upper-left, isometric "floating
+  object" perspective. Subject TBD; default is a stylized globe with a
+  page floating over it.
+- **Document icons** for the downloads list use Finder's Desktop
+  Database via `PBDTGetIconSync` — free, native, perfectly consistent
+  with whatever the Finder shows.
+- **Fonts**: `TextFont(systemFont)` + `TextSize(0)` for menus and
+  toolbar (Chicago 12), `TextFont(applFont) + TextSize(9)` for body
+  (Geneva 9), `TextFont(monaco) + TextSize(9)` for the URL bar.
+- **HIG spacing constants** in `browser_hig.h` — 13 px window edge
+  margin, 8 px between items, 16 px between groups, 68×20 buttons —
+  used everywhere instead of magic numbers.
+- **Color discipline**: outside the app icon, chrome uses only
+  `whiteColor`, `blackColor`, `grayColor`, `ltGray`, `dkGray` — no
+  `RGBForeColor`. One rule prevents most "looks ugly" failures.
+- **Default + Cancel keyboard binding**: Return → default button
+  (highlighted in dialogs via `kControlPushButtonDefaultTag`),
+  Esc / Cmd-`.` → Cancel.
+
+Pipeline for adding pixel art: `tools/png2icn.py` (one-shot, ~30 LOC)
+takes a 32×32 PNG and emits the `data 'ICN#' (...)` / `data 'icl8' (...)`
+blocks for `browser.r`. Hand-pixel a PNG in any editor, pipe it through
+the script, drop the output into the resource file.
 
 **Deliverable:** user double-clicks `Browser` in Apple menu, types URL,
 reads modern web pages.
@@ -299,41 +393,43 @@ AI-iteration tax on guest code.
 
 ## Risks
 
-**1. Endianness handling.** Every multi-byte field crossing the shm
-must go through the byte-swap accessors. One missed access = silent
-data corruption that's brutal to debug. Mitigation: lint rule, code
-review, accessor-only API, no raw `*(uint32_t*)p` anywhere.
+**1. Endianness handling.** *(M0–M2 scaffolded.)* All multi-byte shm
+access goes through `br_u16/u32_load/store` accessors with `BR_HOST`
+gating the byte-swap. The wraparound bug caught by the unit test
+involved tail-byte accounting, not endianness — accessors did their
+job. Continue: no raw `*(uint32_t*)p` anywhere.
 
-**2. PPC weak memory ordering.** Lock-free ring needs explicit barriers
-on PPC: `eieio` for stores, `lwsync` for loads, around `write_idx` /
-`read_idx` updates. Mitigation: encapsulate in the accessors with
-`#if defined(__ppc__)` from the start; never debug a hung guest later.
+**2. PPC weak memory ordering.** *(M2 mitigated for the rings.)*
+`BR_FENCE_RELEASE` / `BR_FENCE_ACQUIRE` macros emit `eieio` / `lwsync`
+on PPC guests, `__sync_synchronize` on host, compiler fences on m68k.
+Both `ring.cpp` and `browser_shm.c` use them around index updates.
+Worth re-validating once we run the spike on Unicorn-PPC / KPX.
 
-**3. VBL handler restrictions.** Interrupt-level code can't allocate,
-can't move handles, can't call most of the Toolbox. Mitigation: VBL task
-does memory access only, sets a flag, main loop does real work. Standard
-classic-Mac pattern; documented in IM:Processes.
+**3. VBL handler restrictions.** Standard classic-Mac pattern: VBL
+task does memory access only, sets a flag, main loop does real work.
+Documented in IM:Processes. Will validate when M3 wires the host VBL
+hook.
 
-**4. A5 world.** VBL handlers must save/restore A5 to access app
-globals. Mitigation: stash A5 in `VBLTask` struct, restore at handler
-entry. ~10 LOC of boilerplate, well-known idiom.
+**4. A5 world.** *(BridgeAgent solved this; same pattern applies.)*
+VBL handlers stash A5 in their `VBLTask` struct, restore at handler
+entry. ~10 LOC of boilerplate.
 
 **5. Framebuffer tearing.** Host writes pixels while guest is
 mid-CopyBits → torn frames. Mitigation: gate host pixel writes to
 inter-VBL interval. Host owns the VBL clock so this is straightforward.
 Fall back to double-buffer (+1.5 MiB) if tearing shows up in practice.
 
-**6. Memory region mapping on Unicorn-PPC.** New region at `0x02910000`
-must be MMU-mapped on every backend. The existing FrameBuffer at
-`0x02110000` works on all backends, so the precedent is good — but
-worth verifying explicitly during M1.
+**6. ~~Memory region mapping on every backend.~~** *(Mitigated by
+design pivot in M1.)* Browser.app allocates BrowserShm out of its app
+heap; the host translates Mac → host via `Mac2HostAddr()`. No
+per-backend banking work. Pattern works identically on UAE,
+Unicorn-m68k, Unicorn-PPC, KPX.
 
-**7. AI iteration cost on guest code.** Classic Mac C in Retro68 is
-unfamiliar territory. Each build cycle is ~30 sec (build → MacBinary →
-inject → boot → test). Plan ~3× the cycles of comparable Linux C
-work. Mitigation: keep guest code minimal (~400 LOC total), lean on the
-BridgeAgent template, use `BrowserSpike` to validate primitives before
-adding UI.
+**7. AI iteration cost on guest code.** Each build cycle is ~30 sec
+(build → MacBinary → inject → boot → test). Plan ~3× the cycles of
+comparable Linux C work. Mitigation: the in-shm log channel cuts
+debug-cycle time by replacing "rebuild + reinstall + reboot to add a
+printf" with "log lines stream to host stderr live."
 
 **8. Chromium dependency at runtime.** Adds a non-trivial dep when
 `--browser` is set. Mitigation: feature-gated, off by default. Builds
@@ -343,45 +439,59 @@ of mac-phoenix without `--browser` flag don't need Chromium.
 Mitigation: Linux is the primary dev/deploy platform anyway. macOS users
 can use XQuartz or wait for a future macOS-native screencapture path.
 
-## Mouse model — host-side polling (no guest events)
+## Mouse model — host-side polling (zero guest events)
 
-We do **not** push mouse moves through the g2h ring. The host already
-knows the screen-space mouse position (it owns the cursor) and can read
-it any time. To translate to page-space we need: (a) the window's
-content rect in screen coords, and (b) the scroll offset.
+We do **not** push mouse moves through the g2h ring. Both pieces of
+state the host needs — cursor position and window geometry — are
+already in guest memory at fixed locations the host can read directly,
+no guest cooperation required.
 
-VBL hook on the host side, each tick:
+### What the host pulls each VBL
 
-1. Check whether `Browser.app` is the front Mac process. Cheap test:
-   read the front-process PSN from the existing `command_bridge`
-   peek path, or have Browser.app set a "front" flag in
-   `BrowserShm.flags` from its activate/deactivate handlers.
-2. If front: read the host cursor position (already tracked by the
-   ADB / web input pipeline).
-3. Read the viewport's screen-space rect from `BrowserShm.viewport`.
-   The app keeps that field current. Two valid disciplines:
-     - **Event-driven (preferred):** Browser.app updates the field on
-       every `windowMoved`/`windowResized`/scrollbar event and pushes a
-       single `BR_CMD_VIEWPORT` so the host invalidates any cached
-       transform. Cheap, and we already pay the cost of those handlers.
-     - **VBL-resampled (fallback):** the app re-publishes the field
-       every VBL even if nothing changed. Costs one ring push every
-       tick — acceptable but wasteful, and safer if we ever add
-       compositing tricks (System 7 Drag Manager moves windows without
-       firing a high-level event, for example).
-   Start with event-driven; add a periodic resample once we see if any
-   classic-Mac path slips past the events.
-4. Subtract: `page_xy = mouse_screen_xy - viewport_origin + scroll`.
-5. Forward to Chromium via CDP `Input.dispatchMouseEvent`.
+| Source | What | Notes |
+|---|---|---|
+| `LMGetMouse()` (`Mouse.v` at $082C, `Mouse.h` at $082E) | Screen-space cursor | Mac low-memory global, always current |
+| `LMGetMBState()` ($0172) | Mouse button state | Single byte, 0xFF = up, 0x00 = down |
+| `LMGetWindowList()` ($09D6) → walk `windowList` | Front-window struct + `portRect` + `portBits.bounds` | Gives screen-space content rect of any window |
+| `BrowserShm.viewport_scroll` | Current scroll offset within the page | Browser.app updates whenever its scrollbars move |
+| `LMGetCurrentA5()` / `BrowserShm.flags` BR_FRONT bit | Is Browser.app frontmost? | Cheap pre-check before the rest |
 
-This eliminates all `BR_CMD_MOUSE_MOVE` / `BR_CMD_MOUSE_OUT` traffic
-(saves ~60 ring pushes per second of hover) and removes the latency of
-the round-trip. The guest only sends commands for events it
-intrinsically owns: clicks, key presses, nav requests, scroll wheel.
+`page_xy = mouse_screen_xy - window.content_topleft + viewport_scroll`,
+then `Input.dispatchMouseEvent` to Chromium. Same per-VBL cost as the
+existing command_bridge `/api/app` peek path; the `WindowList`-walking
+helper already exists in `boot_progress.cpp`.
 
-Mouse-down / mouse-up still need to go through the ring — we want the
-press to be timed against whatever frame was visible to the user.
-Mouse position itself is stateless and pollable.
+### What the guest still has to send
+
+Only events with *intrinsic semantics* the host can't infer:
+
+- `BR_CMD_CLICK` (mouse down/up — must be tied to the frame the user
+  saw, so the guest is the authority on timing)
+- `BR_CMD_KEY_DOWN` / `BR_CMD_KEY_UP` (text input, modifiers)
+- `BR_CMD_NAV` / `_BACK` / `_FORWARD` / `_STOP` / `_RELOAD`
+- `BR_CMD_SCROLL` if the user uses Page Down or arrow keys (scrollbar
+  drag is reflected via `viewport_scroll` instead)
+- `BR_CMD_PASTE` / `BR_CMD_GET_SELECTION` (clipboard)
+
+No `BR_CMD_MOUSE_MOVE`. No `BR_CMD_MOUSE_OUT`. No periodic viewport
+re-publication. Saves ~60 ring pushes per second of hover and removes
+the round-trip latency on hover-driven UI.
+
+### Window geometry maintenance
+
+The host's per-VBL walk reads `WindowList` directly, so window
+move/resize events don't need to reach the host through the ring at
+all — the next VBL just sees the new `portRect`. The one piece
+Browser.app does have to publish is `viewport_scroll`, since that's an
+internal app concept (it's the offset applied during `CopyBits`, not
+a Mac OS-tracked thing). Cheap: one `br_u32_store` whenever the
+scrollbar value changes, which is at most a few hundred times per
+second under aggressive scrolling.
+
+If we ever discover a path where `WindowList` is mid-update during the
+VBL peek (Drag Manager? unlikely on 7.5/7.6), we can add a single
+`generation` counter that the guest bumps before/after window mutation
+and the host re-reads on mismatch. Defer until observed.
 
 ## Open questions (to revisit during implementation)
 
@@ -403,23 +513,28 @@ Mouse position itself is stateless and pollable.
 
 ```
 docs/plan/MacBrowser.md                  ← this document
-src/common/include/MacBrowser.h          ← shared layout (M0)
+src/common/include/MacBrowser.h          ← shared layout ✅ M0
 src/drivers/browser/
-  shm.{h,cpp}                            ← BrowserShmHost (M2)
+  ring.{h,cpp}                           ← SPSC ring helpers ✅ M2
+  shm.{h,cpp}                            ← handshake watcher + send_event/read_command ✅ M1+M2
+  browser_spike.{h,cpp}                  ← M1 gradient writer ✅
   supervisor.{h,cpp}                     ← Xvfb + Chrome (M3)
   cdp.{h,cpp}                            ← CDP client (M3)
   xshm.{h,cpp}                           ← X capture (M4)
   pipeline.{h,cpp}                       ← orchestration (M4)
   module.{h,cpp}                         ← lifecycle (M3)
-src/drivers/platform/timer_interrupt.cpp ← +on_pre_vbl hook (M2)
-src/core/cpu_context.cpp                 ← +BrowserShm region (M1)
-src/main.cpp                             ← +--browser flag (M1)
+src/drivers/platform/timer_interrupt.cpp ← +on_pre_vbl hook (M3)
+src/main.cpp                             ← +--browser flag ✅ M1
 
+tools/png2icn.py                         ← PNG → 'ICN#'/'icl8' .r blocks (M5)
+
+tests/test_browser_shm.cpp               ← SPSC protocol unit test ✅ M2
 tests/guest/browser/
-  browser.c                              ← guest app (M5)
-  browser_shm.c                          ← ring helpers (M2)
-  browser.r                              ← resources (M5)
-  Makefile                               ← Retro68 build
-  Browser.bin                            ← committed binary
-  BrowserSpike.bin                       ← M1/M4 test app
+  browser_shm.{h,c}                      ← ring helpers ✅ M2
+  browser_spike.{c,r}                    ← M1/M2 spike app ✅
+  BrowserSpike.bin                       ← committed binary ✅
+  browser.{c,r}                          ← real guest app (M5)
+  browser_hig.h                          ← HIG spacing constants (M5)
+  Makefile                               ← Retro68 build ✅
+  Browser.bin                            ← committed binary (M5)
 ```

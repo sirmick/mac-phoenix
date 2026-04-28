@@ -150,6 +150,13 @@ static inline void br_u16_store(volatile uint16_t *p, uint16_t v) {
 #define BR_DL_CANCELED        4
 #define BR_DL_ERROR           5
 
+/* Debug log severity levels (BrLogSlot.level). Host filters at print
+ * time via BROWSER_LOG_LEVEL env var; guest emits unconditionally. */
+#define BR_LOG_DBG            0
+#define BR_LOG_INF            1
+#define BR_LOG_WRN            2
+#define BR_LOG_ERR            3
+
 /* ── Ring buffer ────────────────────────────────────────────── */
 
 /* Single-producer / single-consumer ring. Race-free without locks:
@@ -220,6 +227,33 @@ typedef struct {
     uint8_t  pixels[BR_FB_BYTES];
 } BrFrameBuffer;
 
+/* ── Debug log channel ──────────────────────────────────────── */
+
+/* Single-slot lossy debug log. Guest writes a printf-formatted line
+ * into buf[], sets len + level, release-fences, and bumps seq. The
+ * host polls seq each tick (browser_spike thread today, VBL hook in
+ * M3) and prints any new line to its own stderr with a
+ * [BrowserGuest <level>] tag.
+ *
+ * Lossy by design: if the guest writes faster than the host polls,
+ * intermediate lines are overwritten. The host detects gaps via seq
+ * deltas and emits "(dropped N lines)" before the latest entry, so
+ * losses are observable.
+ *
+ * Race: a partial overwrite is possible if the guest writes line N+1
+ * while the host is mid-read of line N. Tolerable for a debug
+ * channel — at 60 Hz polling vs typical log rates, vanishingly rare.
+ * Fix later by double-buffering if needed. */
+#define BR_LOG_BUFSZ        256
+
+typedef struct BrLogSlot {
+    uint32_t seq;                   /* big-endian; bumped after write (0 = no log) */
+    uint16_t len;                   /* big-endian; bytes valid in buf */
+    uint8_t  level;                 /* BR_LOG_DBG/INF/WRN/ERR */
+    uint8_t  reserved;
+    uint8_t  buf[BR_LOG_BUFSZ];
+} BrLogSlot;
+
 /* ── Top-level region ───────────────────────────────────────── */
 
 typedef struct BrowserShm {
@@ -229,6 +263,7 @@ typedef struct BrowserShm {
     uint32_t      reserved;
     BrRing        h2g;              /* host → guest events */
     BrRing        g2h;              /* guest → host commands */
+    BrLogSlot     log;              /* guest → host debug log (lossy) */
     BrFrameBuffer fb;
 } BrowserShm;
 
@@ -247,9 +282,12 @@ typedef struct BrowserShm {
 BR_STATIC_ASSERT(sizeof(BrRect)        == 8,    "BrRect must be 8 bytes");
 BR_STATIC_ASSERT(sizeof(BrRing)        == 8 + BR_RING_SIZE,
                  "BrRing layout drift");
+BR_STATIC_ASSERT(sizeof(BrLogSlot)     == 8 + BR_LOG_BUFSZ,
+                 "BrLogSlot layout drift");
 BR_STATIC_ASSERT(sizeof(BrFrameBuffer) == 16 + BR_DIRTY_MAX * 8 + BR_FB_BYTES,
                  "BrFrameBuffer layout drift");
 BR_STATIC_ASSERT(sizeof(BrowserShm)    == 16 + 2 * (8 + BR_RING_SIZE)
+                                            + (8 + BR_LOG_BUFSZ)
                                             + 16 + BR_DIRTY_MAX * 8 + BR_FB_BYTES,
                  "BrowserShm total size drift");
 

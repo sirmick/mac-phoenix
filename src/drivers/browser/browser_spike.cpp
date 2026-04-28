@@ -116,6 +116,10 @@ void run()
             }
         }
 
+        /* Poll the guest's debug log channel each tick. Cheap; will move
+         * to the VBL hook in M3 once we wire that up. */
+        browser::poll_log();
+
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 

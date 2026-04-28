@@ -8,6 +8,8 @@
  *  test that locks both sides.
  */
 #include "browser_shm.h"
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 static uint32_t ring_free_bytes(uint32_t write_idx, uint32_t read_idx)
@@ -105,4 +107,27 @@ int br_ring_pop(BrRing *ring, uint16_t *out_type,
     BR_FENCE_RELEASE();
     br_u32_store(&ring->read_idx, read_idx);
     return 0;
+}
+
+void br_log(BrLogSlot *slot, uint8_t level, const char *fmt, ...)
+{
+    if (!slot) return;
+
+    char tmp[BR_LOG_BUFSZ];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(tmp, sizeof(tmp), fmt, ap);
+    va_end(ap);
+    if (n < 0) return;
+    if (n > BR_LOG_BUFSZ) n = BR_LOG_BUFSZ;
+
+    /* Order: payload → metadata → release fence → seq.
+     * Host's acquire-on-seq sees a fully-written record. */
+    memcpy(slot->buf, tmp, (size_t)n);
+    br_u16_store(&slot->len, (uint16_t)n);
+    slot->level = level;
+    BR_FENCE_RELEASE();
+
+    uint32_t prev = br_u32_load(&slot->seq);
+    br_u32_store(&slot->seq, prev + 1);
 }

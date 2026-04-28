@@ -226,6 +226,11 @@ static void maybe_push_g2h(void)
     if (br_ring_push(&gShm->g2h, BR_CMD_BACK,
                      &payload, sizeof(payload)) == 0) {
         gG2hPushed++;
+        br_log(&gShm->log, BR_LOG_DBG,
+               "g2h tick %lu  h2g_seen=%lu  evt=0x%x",
+               (unsigned long)gG2hPushed,
+               (unsigned long)gH2gReceived,
+               (unsigned)gLastEvtType);
     }
 }
 
@@ -375,6 +380,14 @@ int main(void)
         spike_log(tag);
 
         init_shm_pixmap(640, 480);
+
+        /* Now that BrowserShm is published and the host has resolved
+         * the pointer, log a startup line through the new debug channel
+         * so we can see end-to-end flow. */
+        br_log(&gShm->log, BR_LOG_INF,
+               "BrowserSpike up; shm=0x%08lx size=%lu",
+               (unsigned long)gShmAddr,
+               (unsigned long)sizeof(BrowserShm));
     }
 
     unsigned long last_status = TickCount();

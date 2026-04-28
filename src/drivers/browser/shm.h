@@ -54,6 +54,13 @@ bool send_event(uint16_t type, const void* payload, uint16_t len);
 bool read_command(uint16_t* type, void* buf, uint16_t buf_capacity,
                   uint16_t* out_len);
 
+/* Poll the BrLogSlot in BrowserShm. If the guest published a new line
+ * since the last call, prints it to stderr with a [BrowserGuest level]
+ * tag. Cheap to call every tick; emits "(dropped N lines)" if seq
+ * jumped by more than 1 between calls. Filters by the BROWSER_LOG_LEVEL
+ * env var ("dbg" / "inf" / "wrn" / "err"; default = "inf"). */
+void poll_log();
+
 }  // namespace browser
 
 #endif  // DRIVERS_BROWSER_SHM_H

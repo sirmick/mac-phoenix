@@ -173,4 +173,61 @@ bool read_command(uint16_t* type, void* buf, uint16_t buf_capacity,
     return ring_pop(&shm->g2h, type, buf, buf_capacity, out_len);
 }
 
+namespace {
+
+const char* level_str(uint8_t level)
+{
+    switch (level) {
+    case BR_LOG_DBG: return "dbg";
+    case BR_LOG_INF: return "inf";
+    case BR_LOG_WRN: return "wrn";
+    case BR_LOG_ERR: return "err";
+    default:         return "?";
+    }
+}
+
+uint8_t parse_log_level(const char* s)
+{
+    if (!s) return BR_LOG_INF;
+    if (s[0] == 'd' || s[0] == 'D') return BR_LOG_DBG;
+    if (s[0] == 'i' || s[0] == 'I') return BR_LOG_INF;
+    if (s[0] == 'w' || s[0] == 'W') return BR_LOG_WRN;
+    if (s[0] == 'e' || s[0] == 'E') return BR_LOG_ERR;
+    return BR_LOG_INF;
+}
+
+uint8_t threshold()
+{
+    /* Cache once: getenv across each tick is wasteful. */
+    static uint8_t cached = parse_log_level(getenv("BROWSER_LOG_LEVEL"));
+    return cached;
+}
+
+uint32_t g_last_log_seq = 0;
+
+}  // namespace
+
+void poll_log()
+{
+    BrowserShm* shm = shm_get();
+    if (!shm) return;
+
+    uint32_t seq = br_u32_load(&shm->log.seq);
+    if (seq == g_last_log_seq) return;
+
+    BR_FENCE_ACQUIRE();
+    uint32_t dropped = (seq - g_last_log_seq) - 1;
+    if (dropped > 0) {
+        fprintf(stderr, "[BrowserGuest] (dropped %u log lines)\n", dropped);
+    }
+    uint8_t  level = shm->log.level;
+    if (level >= threshold()) {
+        uint16_t len = br_u16_load(&shm->log.len);
+        if (len > BR_LOG_BUFSZ) len = BR_LOG_BUFSZ;
+        fprintf(stderr, "[BrowserGuest %s] %.*s\n",
+                level_str(level), (int)len, shm->log.buf);
+    }
+    g_last_log_seq = seq;
+}
+
 }  // namespace browser
