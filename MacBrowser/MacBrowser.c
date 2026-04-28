@@ -448,17 +448,14 @@ static void open_window(void)
     make_toolbar();
     make_scrollbars();
 
-    /* TENew destRect == viewRect for simple single-line input. */
+    /* TENew destRect == viewRect for simple single-line input. Empty
+     * at startup — the BR_CMD_NAV we push from main() will trigger a
+     * navigation event whose BR_EV_STATUS fills the URL bar. */
     Rect ur;
     url_bar_rect(&ur);
-    InsetRect(&ur, 3, 2);   /* margin inside the framed field */
+    InsetRect(&ur, 3, 2);
     gURL = TENew(&ur, &ur);
-    if (gURL) {
-        TEAutoView(true, gURL);
-        /* Pre-fill with the initial URL Firefox is loading. */
-        const char *seed = "https://example.com/";
-        TESetText((Ptr)seed, (long)strlen(seed), gURL);
-    }
+    if (gURL) TEAutoView(true, gURL);
 }
 
 static void draw_chrome_row(void)
@@ -761,6 +758,16 @@ int main(void)
                "MacBrowser up; shm=0x%08lx size=%lu",
                (unsigned long)gShmAddr,
                (unsigned long)sizeof(BrowserShm));
+
+        /* Push our default home URL through the ring. Host's
+         * cmd_dispatch picks it up → bidi.navigate → Firefox loads
+         * the page → load events fire → BR_EV_STATUS comes back →
+         * apply_status puts the URL into our URL bar. The host
+         * spawned Firefox at about:blank, so this is the first
+         * navigation. */
+        const char *start = "https://example.com/";
+        br_ring_push(&gShm->g2h, BR_CMD_NAV,
+                     (void *)start, (uint16_t)strlen(start));
     }
 
     EventRecord evt;
