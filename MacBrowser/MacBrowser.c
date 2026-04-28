@@ -38,30 +38,27 @@
 #define kAppleMenu  128
 #define kFileMenu   129
 
-/* Window layout — modeled on Netscape Navigator 3 / iCab on classic
- * Mac OS. Five rows:
+/* Window layout. Toolbar buttons + URL field share one row, viewport
+ * fills the middle, status strip at the bottom:
  *
  *   ┌──── title bar (window manager, ~18 px) ────────────────────┐
- *   ├ toolbar  ── [Back][Forward][Reload][Stop] ────────────────  │
- *   ├ location ── Location: [https://...                       ]  │
+ *   ├ toolbar  ── [Back][Forward][Reload][Stop] [https://... ] ──│
  *   ├ viewport ── BrowserShm.fb.pixels via CopyBits ────────────  │
  *   ├ status   ── [spinner] msg from BR_EV_STATUS ──────────────  │
  *   └────────────────────────────────────────────────────────────┘
  *
- * Total port height = 24 + 22 + 400 + 16 = 462; with title bar = 480,
- * so the window fits the 480-px Mac screen exactly. The host pipeline
- * runs Xvfb at 640×400 to match the viewport (no scaling). */
+ * Total port height = 24 + 422 + 16 = 462; with title bar = 480, so
+ * the window fits the 480-px Mac screen exactly. Xvfb runs at
+ * 640×422 to match the viewport — no CopyBits scaling. */
 #define kToolbarH   24
-#define kURLBarH    22
 #define kStatusH    16
 #define kViewportW  640
-#define kViewportH  400
-#define kWinH       (kToolbarH + kURLBarH + kViewportH + kStatusH)
+#define kViewportH  422
+#define kWinH       (kToolbarH + kViewportH + kStatusH)
 
 /* Vertical position of each row's TOP edge, in window-port coords. */
 #define kToolbarY   0
-#define kURLY       (kToolbarY + kToolbarH)
-#define kViewportY  (kURLY     + kURLBarH)
+#define kViewportY  (kToolbarY  + kToolbarH)
 #define kStatusY    (kViewportY + kViewportH)
 
 /* Toolbar buttons — text-only, period-correct (NN3 had a Pictures /
@@ -316,15 +313,15 @@ static void draw_status(void)
     SetPort(saved);
 }
 
-/* "Location:" label width incl. spacing. Geneva 9 pt at ~7px/char × 9
- * chars + a few pixels of padding. */
-#define kURLLabelW    62
+/* URL field starts right after the last toolbar button. Same vertical
+ * extent as the buttons so the row reads as a single chrome strip. */
+#define kURLLeft     (kBtnLeftPad + 4 * kBtnW + 3 * kBtnGap + kBtnGap)
 
 static void url_bar_rect(Rect *out)
 {
     SetRect(out,
-            kURLLabelW + 4, kURLY + 3,
-            kViewportW - 8, kURLY + kURLBarH - 3);
+            kURLLeft, kBtnY,
+            kViewportW - 8, kBtnY + kBtnH);
 }
 
 /* Allocate the four toolbar buttons. refCon = control ID so click
@@ -374,47 +371,30 @@ static void open_window(void)
     }
 }
 
-static void draw_url_bar(void)
+static void draw_chrome_row(void)
 {
     if (!gWin) return;
     GrafPtr saved;
     GetPort(&saved);
     SetPort(gWin);
 
-    /* Erase the row background. */
+    /* Erase the whole row, then draw controls + URL field on top. */
     Rect row;
-    SetRect(&row, 0, kURLY, kViewportW, kURLY + kURLBarH);
+    SetRect(&row, 0, kToolbarY, kViewportW, kToolbarY + kToolbarH);
     EraseRect(&row);
+    DrawControls(gWin);
 
-    /* "Location:" prefix, Geneva 9 pt — same idiom as Netscape Mac. */
-    TextFont(applFont);   /* application font = Geneva on System 7 */
-    TextSize(9);
-    MoveTo(8, kURLY + kURLBarH - 6);
-    DrawString("\pLocation:");
-
-    /* Framed text field. */
+    /* Framed URL text field (no label — the field stands on its own
+     * inline with the buttons). */
     Rect ur;
     url_bar_rect(&ur);
     FrameRect(&ur);
 
     if (gURL) {
-        TextFont(4);   /* monaco */
+        TextFont(4);   /* monaco — period-correct for URL display */
         TextSize(9);
         TEUpdate(&ur, gURL);
     }
-    SetPort(saved);
-}
-
-static void draw_toolbar_row(void)
-{
-    if (!gWin) return;
-    GrafPtr saved;
-    GetPort(&saved);
-    SetPort(gWin);
-    Rect row;
-    SetRect(&row, 0, kToolbarY, kViewportW, kToolbarY + kToolbarH);
-    EraseRect(&row);
-    DrawControls(gWin);
     SetPort(saved);
 }
 
@@ -604,8 +584,7 @@ static void handle_event(EventRecord *evt)
         WindowPtr win = (WindowPtr)evt->message;
         BeginUpdate(win);
         if (win == gWin) {
-            draw_toolbar_row();
-            draw_url_bar();
+            draw_chrome_row();
             blit_one_frame();
             draw_status();
         }

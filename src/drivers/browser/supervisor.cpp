@@ -27,10 +27,9 @@ constexpr int kLastDisplay      = 119;
 constexpr int kXReadyTimeoutMs  = 5000;
 /* Match the guest MacBrowser window's viewport area. CopyBits in
  * the guest is then a 1:1 copy — no scaling, no clipping. The Mac
- * window total is 462 px tall (24 toolbar + 22 URL + 400 viewport
- * + 16 status); Xvfb renders into the 400-tall area. */
+ * window total is 462 px tall (24 chrome + 422 viewport + 16 status). */
 constexpr int kViewportWidth    = 640;
-constexpr int kViewportHeight   = 400;
+constexpr int kViewportHeight   = 422;
 constexpr int kViewportDepth    = 24;
 /* WebDriver BiDi listens here (M4.5). Firefox accepts both BiDi and
  * the legacy CDP on the same port; we use BiDi only. */
