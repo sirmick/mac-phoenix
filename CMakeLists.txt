@@ -321,11 +321,23 @@ if(BUILD_BRIDGE_AGENT)
     set(BA_CODE "${BA_DIR}/BridgeAgent.code.bin")
     set(BA_BIN  "${BA_DIR}/BridgeAgent.bin")
 
+    # Shared guest helper sources (bridge_cfg.c, etc.). Built into both
+    # BridgeAgent and MacBrowser so each app reads the same MacPhoenix.cfg
+    # at startup and resolves bridge file paths the same way.
+    set(GUEST_COMMON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/common/guest")
+    set(GUEST_COMMON_INC "${CMAKE_CURRENT_SOURCE_DIR}/src/common/include")
+    set(GUEST_COMMON_SRCS "${GUEST_COMMON_DIR}/bridge_cfg.c")
+
     # Compile C → Retro68 code binary
     add_custom_command(
       OUTPUT "${BA_CODE}"
-      COMMAND "${RETRO68_GCC}" ${BA_GCC_EXTRA_FLAGS} -O2 -o "${BA_CODE}" bridge_agent.c
+      COMMAND "${RETRO68_GCC}" ${BA_GCC_EXTRA_FLAGS} -O2
+              -I "${GUEST_COMMON_DIR}" -I "${GUEST_COMMON_INC}"
+              -o "${BA_CODE}" bridge_agent.c ${GUEST_COMMON_SRCS}
       DEPENDS "${BA_DIR}/bridge_agent.c"
+              ${GUEST_COMMON_SRCS}
+              "${GUEST_COMMON_DIR}/bridge_cfg.h"
+              "${GUEST_COMMON_INC}/bridge_paths.h"
       WORKING_DIRECTORY "${BA_DIR}"
       COMMENT "Building BridgeAgent (m68k): bridge_agent.c → BridgeAgent.code.bin"
       VERBATIM
@@ -373,19 +385,24 @@ if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ)
   set(MB_CODE "${MB_DIR}/MacBrowser.code.bin")
   set(MB_BIN  "${MB_DIR}/MacBrowser.bin")
 
-  # Compile MacBrowser.c + browser_shm.c → m68k code binary. The
-  # -I path lets the guest pull in the host-shared protocol header
-  # (src/common/include/MacBrowser.h) — same struct layout the host
-  # uses, just compiled native-BE instead of with byte-swap accessors.
+  # Compile MacBrowser.c + browser_shm.c + shared guest helpers →
+  # m68k code binary. The -I paths let the guest pull in the
+  # host-shared protocol header (MacBrowser.h, bridge_paths.h) and
+  # the bridge cfg helper. Same code path BridgeAgent uses.
   add_custom_command(
     OUTPUT "${MB_CODE}"
     COMMAND "${RETRO68_GCC}" -O2
             -I "${CMAKE_CURRENT_SOURCE_DIR}/src/common/include"
+            -I "${CMAKE_CURRENT_SOURCE_DIR}/src/common/guest"
             -o "${MB_CODE}" MacBrowser.c browser_shm.c
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/common/guest/bridge_cfg.c"
     DEPENDS "${MB_DIR}/MacBrowser.c"
             "${MB_DIR}/browser_shm.c"
             "${MB_DIR}/browser_shm.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/src/common/include/MacBrowser.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/common/include/bridge_paths.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/common/guest/bridge_cfg.c"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/common/guest/bridge_cfg.h"
     WORKING_DIRECTORY "${MB_DIR}"
     COMMENT "Building MacBrowser (m68k): MacBrowser.c → MacBrowser.code.bin"
     VERBATIM

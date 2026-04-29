@@ -41,6 +41,9 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "bridge_cfg.h"
+#include "bridge_paths.h"
+
 /* Build stamp — compiler fills in at each build so we can confirm the
  * running BridgeAgent matches the latest source. Surfaced in the status
  * window, the heartbeat JSON, and /api/status. */
@@ -138,7 +141,8 @@ static Boolean read_line(const char *src, long srclen, long *off,
 static void load_network_config(void)
 {
     FSSpec spec;
-    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:netcfg.txt", &spec) != noErr) return;
+    Str255 path; br_cfg_path(path, BR_FILE_NETCFG);
+    if (FSMakeFSSpec(0, 0, path, &spec) != noErr) return;
 
     short ref;
     if (FSpOpenDF(&spec, fsRdPerm, &ref) != noErr) return;
@@ -509,7 +513,8 @@ static OSErr do_set_clipboard(const ProcessSerialNumber *prior_front)
     (void)prior_front;
     char dbg[96];
     FSSpec spec;
-    OSErr err = FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:_bridge_clipboard", &spec);
+    Str255 cb_path; br_cfg_path(cb_path, BR_FILE_CLIPBOARD);
+    OSErr err = FSMakeFSSpec(0, 0, cb_path, &spec);
     if (err != noErr) {
         snprintf(dbg, sizeof(dbg), "set_clip: FSMakeFSSpec err=%d", (int)err);
         bridge_step(dbg);
@@ -662,7 +667,8 @@ static void write_result(OSErr result)
     char buf[16];
     long len;
 
-    FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:_bridge_result", &spec);
+    Str255 res_path; br_cfg_path(res_path, BR_FILE_RESULT);
+    FSMakeFSSpec(0, 0, res_path, &spec);
     FSpDelete(&spec);
     FSpCreate(&spec, 'ttxt', 'TEXT', smSystemScript);
     if (FSpOpenDF(&spec, fsWrPerm, &ref) != noErr) return;
@@ -678,7 +684,8 @@ static void write_marker_once(void)
     if (written) return;
     written = true;
     FSSpec mk;
-    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:bridge_loaded", &mk) == fnfErr)
+    Str255 loaded_path; br_cfg_path(loaded_path, BR_FILE_LOADED);
+    if (FSMakeFSSpec(0, 0, loaded_path, &mk) == fnfErr)
         FSpCreate(&mk, 'ttxt', 'TEXT', smSystemScript);
 }
 
@@ -692,7 +699,8 @@ static void write_heartbeat(void)
 
     FSSpec hb;
     short ref;
-    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:bridge_heartbeat", &hb) == fnfErr)
+    Str255 hb_path; br_cfg_path(hb_path, BR_FILE_HEARTBEAT);
+    if (FSMakeFSSpec(0, 0, hb_path, &hb) == fnfErr)
         FSpCreate(&hb, 'ttxt', 'TEXT', smSystemScript);
     if (FSpOpenDF(&hb, fsWrPerm, &ref) == noErr) {
         /* JSON payload so the host can tail this file for live status. */
@@ -728,7 +736,8 @@ static void bridge_step(const char *tag)
 {
     FSSpec sp;
     short ref;
-    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:bridge_step", &sp) == fnfErr)
+    Str255 step_path; br_cfg_path(step_path, BR_FILE_STEP);
+    if (FSMakeFSSpec(0, 0, step_path, &sp) == fnfErr)
         FSpCreate(&sp, 'ttxt', 'TEXT', smSystemScript);
     if (FSpOpenDF(&sp, fsWrPerm, &ref) != noErr) return;
     long len = (long)strlen(tag);
@@ -744,7 +753,8 @@ static void poll_bridge(void)
     write_heartbeat();
 
     FSSpec cmd_spec;
-    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:_bridge_cmd", &cmd_spec) != noErr)
+    Str255 cmd_path; br_cfg_path(cmd_path, BR_FILE_CMD);
+    if (FSMakeFSSpec(0, 0, cmd_path, &cmd_spec) != noErr)
         return;
 
     short refNum;
@@ -955,9 +965,13 @@ int main(void)
     MaxApplZone();
 
     gLastCmd[0] = 6; memcpy(gLastCmd + 1, "(none)", 6);
+    /* Read :System Folder:Preferences:MacPhoenix.cfg first — every
+     * Host:MacPhoenix path we build below depends on the bridge dir
+     * resolved from cfg (or the legacy "Host:MacPhoenix" fallback). */
+    br_cfg_load();
     build_menus();
     install_ae_handlers();
-    load_network_config();   /* Read Host:MacPhoenix:netcfg.txt before drawing */
+    load_network_config();   /* Read netcfg.txt from the resolved bridge dir */
     open_status_window();
     draw_status();
     install_wne_patch();

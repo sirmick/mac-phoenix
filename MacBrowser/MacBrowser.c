@@ -36,6 +36,12 @@
 #include "MacBrowser.h"
 #include "browser_shm.h"
 
+/* Per-instance bridge dir resolved from :System Folder:Preferences:
+ * MacPhoenix.cfg (written by the host installer). Same helper
+ * BridgeAgent uses — keeps both apps in lock-step. */
+#include "bridge_cfg.h"
+#include "bridge_paths.h"
+
 #define kAppleMenu  128
 #define kFileMenu   129
 #define kEditMenu   130
@@ -197,7 +203,8 @@ static void spike_log(const char *tag)
 {
     FSSpec sp;
     short ref;
-    if (FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:MacBrowser.log", &sp) == fnfErr)
+    Str255 log_path; br_cfg_path(log_path, BR_FILE_BROWSER_LOG);
+    if (FSMakeFSSpec(0, 0, log_path, &sp) == fnfErr)
         FSpCreate(&sp, 'ttxt', 'TEXT', 0);
     if (FSpOpenDF(&sp, fsWrPerm, &ref) != noErr) return;
     long len = (long)strlen(tag);
@@ -242,7 +249,8 @@ static Boolean alloc_shm(void)
 static OSErr publish_handshake(void)
 {
     FSSpec sp;
-    OSErr err = FSMakeFSSpec(0, 0, "\pHost:MacPhoenix:browser_shm.txt", &sp);
+    Str255 shm_path; br_cfg_path(shm_path, BR_FILE_BROWSER_SHM);
+    OSErr err = FSMakeFSSpec(0, 0, shm_path, &sp);
     if (err == noErr) {
         FSpDelete(&sp);
     } else if (err != fnfErr) {
@@ -1213,6 +1221,12 @@ int main(void)
     TEInit();
     InitDialogs(NULL);
     MaxApplZone();
+
+    /* Resolve the bridge dir (Host:MacPhoenix:<pid>) before any code
+     * that writes log lines or the shm handshake — both go through
+     * br_cfg_path, which lazy-loads but resolving up-front is one
+     * less surprise during startup. */
+    br_cfg_load();
 
     build_menus();
     open_window();

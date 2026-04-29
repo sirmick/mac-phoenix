@@ -67,7 +67,14 @@ void write_network_info(const config::EmulatorConfig &cfg)
 {
     if (cfg.extfs_paths.empty()) return;
     const std::string &extfs_root = cfg.extfs_paths[0];
-    const std::string info_dir = extfs_root + "/MacPhoenix";
+    /* Drop NetworkInfo.txt + netcfg.txt into the per-instance bridge
+     * dir (cfg.bridge_dir, set by load_emulator_config to
+     * <extfs>/MacPhoenix/<pid>/). When --bridge isn't enabled the
+     * dir is empty, so fall back to the legacy location for
+     * non-bridge runs that still want the docs. */
+    const std::string info_dir = !cfg.bridge_dir.empty()
+                                 ? cfg.bridge_dir
+                                 : extfs_root + "/MacPhoenix";
     ensure_dir(info_dir);
 
     // Clean up files we used to drop at the root (earlier MITM iteration).

@@ -629,11 +629,13 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
                 config.backend_string());
     }
 
-    // --bridge: ExtFS mount for bridge file I/O. The guest BridgeAgent
-    // looks for every file under Host:MacPhoenix:... so we root
-    // bridge_dir at <extfs_path[0]>/MacPhoenix and ensure the directory
-    // exists. One-shot cleanup of any legacy top-level bridge_* files
-    // from the earlier scheme avoids duplicates living around.
+    // --bridge: per-instance ExtFS dir for bridge file I/O. Each
+    // mac-phoenix gets its own subfolder under <extfs>/MacPhoenix/
+    // keyed by host pid, so two concurrent processes don't fight
+    // over the same handshake files. The guest learns this pid by
+    // reading :System Folder:Preferences:MacPhoenix.cfg, which the
+    // bridge-agent installer writes alongside BridgeAgent.bin into
+    // each disk image — see provisioning/install_bridge_agent.sh.
     if (config.bridge_enabled) {
         std::string root;
         if (config.extfs_paths.empty()) {
@@ -647,10 +649,28 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             root = config.extfs_paths[0];
         }
         if (!root.empty()) {
-            config.bridge_dir = root + "/MacPhoenix";
+            std::string parent_dir = root + "/MacPhoenix";
+            mkdir(parent_dir.c_str(), 0755);
+            /* Parent + IPC child must agree on the same bridge_dir
+             * so the BridgeAgent in the guest writes to the same
+             * path the parent's /api/* readers poll. Parent
+             * publishes its pid via env; child inherits via fork
+             * and reuses it. */
+            int pid_for_dir = (int)getpid();
+            const char* env_pid = getenv("MACPHOENIX_HOST_PID");
+            if (env_pid && *env_pid) {
+                int v = atoi(env_pid);
+                if (v > 0) pid_for_dir = v;
+            } else {
+                setenv("MACPHOENIX_HOST_PID",
+                       std::to_string(pid_for_dir).c_str(), 1);
+            }
+            config.bridge_dir = parent_dir + "/" +
+                                std::to_string(pid_for_dir);
             mkdir(config.bridge_dir.c_str(), 0755);
 
-            // Remove stale top-level bridge files from the pre-subfolder layout.
+            // Remove stale top-level bridge files from the pre-subfolder
+            // layout (legacy, when bridge_dir was the extfs root itself).
             for (const char *stale : {
                 "bridge_heartbeat", "bridge_loaded", "bridge_step",
                 "_bridge_cmd", "_bridge_result", "_bridge_clipboard",

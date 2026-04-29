@@ -173,14 +173,47 @@ static void provision_bridge_agent_disks() {
         return;
     }
 
-    std::string cmd = "'" + script + "'";
+    /* Derive the Mac-side colon path for our pid-keyed bridge dir.
+     * cfg.bridge_dir on the host is something like
+     *   /home/mick/storage/MacPhoenix/12345
+     * which the guest sees as
+     *   Host:MacPhoenix:12345
+     * because the first --extfs root surfaces as the "Host" volume.
+     * (See user_strings.cpp STR_EXTFS_VOLUME_NAME.) The install
+     * script writes that string into :System Folder:Preferences:
+     * MacPhoenix.cfg in every disk image so guest apps can read it
+     * at startup and prefix all their bridge file paths with the
+     * right pid. Skip the env if bridge_dir is empty — script then
+     * falls back to legacy paths. */
+    std::string bridge_bpath;
+    {
+        const auto& roots = cfg.extfs_paths;
+        if (!cfg.bridge_dir.empty() && !roots.empty()) {
+            const std::string& root = roots[0];
+            if (cfg.bridge_dir.size() > root.size() + 1 &&
+                cfg.bridge_dir.compare(0, root.size(), root) == 0) {
+                std::string tail = cfg.bridge_dir.substr(root.size() + 1);
+                /* Replace '/' with ':' for Mac path syntax. */
+                for (char& c : tail) if (c == '/') c = ':';
+                bridge_bpath = "Host:" + tail;
+            }
+        }
+    }
+
+    std::string cmd;
+    if (!bridge_bpath.empty()) {
+        cmd = "BRIDGE_BPATH='" + bridge_bpath + "' ";
+    }
+    cmd += "'" + script + "'";
     for (const auto& p : cfg.disk_paths) {
         if (p.empty()) continue;
         cmd += " '" + p + "'";
     }
 
     fprintf(stderr, "[Bridge] Provisioning BridgeAgent across %zu configured "
-                    "disk(s)...\n", cfg.disk_paths.size());
+                    "disk(s) (bpath=%s)...\n",
+            cfg.disk_paths.size(),
+            bridge_bpath.empty() ? "<legacy>" : bridge_bpath.c_str());
     int rc = std::system(cmd.c_str());
     if (rc != 0) {
         fprintf(stderr, "[Bridge] WARNING: provisioning script exited with "

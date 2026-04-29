@@ -14,6 +14,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 AGENT_BIN="${BRIDGE_AGENT_BIN:-$ROOT/tests/guest/bridge/BridgeAgent.bin}"
 
+# BRIDGE_BPATH (env): Mac-style colon path for the per-instance bridge
+# dir, e.g. "Host:MacPhoenix:12345". Gets written into
+# :System Folder:Preferences:MacPhoenix.cfg so the guest BridgeAgent
+# and MacBrowser both know where to read/write IPC files. Empty →
+# legacy mode, no cfg written (guest falls back to a default path).
+: "${BRIDGE_BPATH:=}"
+
 if [[ $# -eq 0 ]]; then
     echo "Usage: $0 <image1> [image2 ...]" >&2
     exit 2
@@ -25,10 +32,31 @@ if [[ ! -f "$AGENT_BIN" ]]; then
     exit 1
 fi
 
+# Generate a small text cfg (one key=value per line, LF-terminated)
+# describing the host's bridge dir. Written into each System-Folder-
+# bearing disk's :Preferences: so whichever the user ends up booting
+# from carries the correct pid.
+CFG_TMP=""
+if [[ -n "$BRIDGE_BPATH" ]]; then
+    CFG_TMP="$(mktemp)"
+    trap 'rm -f "$CFG_TMP"' EXIT
+    # MacPerl + classic apps read this with <FILE>; CR-terminate so
+    # both \n-readers (MacPerl in unix mode) and CR-readers (Toolbox
+    # FSRead loops) see one line.
+    printf 'bridge_dir=%s\r' "$BRIDGE_BPATH" > "$CFG_TMP"
+fi
+
 command -v hmount >/dev/null || { echo "hfsutils not installed (apt install hfsutils)" >&2; exit 1; }
 
 humount_all() { humount >/dev/null 2>&1 || true; }
-trap humount_all EXIT
+# Combined cleanup: unmount any mounted HFS volume and rm the cfg
+# tempfile. Built up incrementally so a partial trap doesn't lose
+# the other handler.
+cleanup() {
+    humount_all
+    [[ -n "$CFG_TMP" ]] && rm -f "$CFG_TMP"
+}
+trap cleanup EXIT
 
 for img in "$@"; do
     name="$(basename "$img")"
@@ -70,5 +98,19 @@ for img in "$@"; do
 
     hcopy -m "$AGENT_BIN" ":System Folder:Startup Items:BridgeAgent"
     echo "INSTALLED BridgeAgent → $name:System Folder:Startup Items:"
+
+    # Write per-instance config so the guest knows which pid-keyed
+    # bridge dir to use. Idempotent overwrite. Skipped if BRIDGE_BPATH
+    # wasn't passed (legacy callers).
+    if [[ -n "$CFG_TMP" ]]; then
+        if [[ -z "$(hls -1d ':System Folder:Preferences' 2>/dev/null)" ]]; then
+            hmkdir ":System Folder:Preferences" 2>/dev/null || true
+        fi
+        # hcopy refuses to overwrite — delete any prior cfg first.
+        # hdel returns nonzero when the file's missing, which is fine.
+        hdel ":System Folder:Preferences:MacPhoenix.cfg" 2>/dev/null || true
+        hcopy -t "$CFG_TMP" ":System Folder:Preferences:MacPhoenix.cfg"
+        echo "INSTALLED MacPhoenix.cfg ($BRIDGE_BPATH) → $name:System Folder:Preferences:"
+    fi
     humount_all
 done
