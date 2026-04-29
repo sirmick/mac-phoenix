@@ -1,10 +1,11 @@
-//! Minimal DHCP server for the NAT gateway.
+//! Minimal DHCP server for the NAT gateway with a per-MAC lease pool.
 //!
-//! Responds to DHCP DISCOVER with OFFER and REQUEST with ACK.
-//! Assigns a fixed IP (10.0.2.15) with gateway and DNS at 10.0.2.1.
-//!
-//! DHCP frames arrive as raw ethernet frames (broadcast UDP 67→68).
-//! Responses are built using smoltcp wire types for checksums.
+//! Hands out 10.0.2.15 .. 10.0.2.250 from a small pool keyed by client
+//! chaddr (the guest's ethernet MAC). Once a MAC has a lease, the same
+//! IP is returned for renewals — no rotation, no expiry. Suitable for
+//! the handful of guests this bridge ever sees.
+
+use std::collections::HashMap;
 
 use smoltcp::wire::{
     EthernetAddress, EthernetFrame, EthernetProtocol, EthernetRepr,
@@ -12,15 +13,14 @@ use smoltcp::wire::{
     UdpPacket, UdpRepr,
 };
 
-use crate::device::SocketDevice;
+use crate::device::{SocketDevice, GW_IP, GW_MAC};
 
-const MAC_ADDR: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x01]);
-const GW_MAC: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x02]);
-
-const GW_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 1);
-const CLIENT_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 15);
 const SUBNET_MASK: [u8; 4] = [255, 255, 255, 0];
 const LEASE_TIME: u32 = 86400; // 1 day
+
+// Lease pool: 10.0.2.15 through 10.0.2.250 inclusive.
+const POOL_FIRST: u8 = 15;
+const POOL_LAST: u8 = 250;
 
 // DHCP message types
 const DHCP_DISCOVER: u8 = 1;
@@ -34,9 +34,47 @@ const BOOTP_REPLY: u8 = 2;
 const BOOTP_MIN_LEN: usize = 236;
 const MAGIC_COOKIE: [u8; 4] = [99, 130, 83, 99];
 
+/// Per-MAC lease state. One instance lives in `main.rs` and is threaded
+/// through `handle_dhcp_frame` so leases persist across DISCOVER →
+/// REQUEST → renewal.
+pub struct LeasePool {
+    leases: HashMap<EthernetAddress, Ipv4Address>,
+}
+
+impl LeasePool {
+    pub fn new() -> Self {
+        Self { leases: HashMap::new() }
+    }
+
+    /// Return this MAC's lease, allocating a new IP from the pool if
+    /// needed. Returns None only if the pool is fully exhausted.
+    pub fn lease_for(&mut self, mac: EthernetAddress) -> Option<Ipv4Address> {
+        if let Some(&ip) = self.leases.get(&mac) {
+            return Some(ip);
+        }
+        // Find lowest free octet.
+        let used: std::collections::HashSet<u8> =
+            self.leases.values().map(|ip| ip.0[3]).collect();
+        for octet in POOL_FIRST..=POOL_LAST {
+            if !used.contains(&octet) {
+                let ip = Ipv4Address::new(10, 0, 2, octet);
+                self.leases.insert(mac, ip);
+                log::info!("DHCP: new lease {} -> {}", mac, ip);
+                return Some(ip);
+            }
+        }
+        log::warn!("DHCP: lease pool exhausted (256 entries)");
+        None
+    }
+}
+
 /// Check if a raw ethernet frame is a DHCP request and handle it.
 /// Returns true if the frame was consumed (was DHCP).
-pub fn handle_dhcp_frame(frame: &[u8], device: &mut SocketDevice) -> bool {
+pub fn handle_dhcp_frame(
+    frame: &[u8],
+    device: &mut SocketDevice,
+    pool: &mut LeasePool,
+) -> bool {
     let Ok(eth) = EthernetFrame::new_checked(frame) else { return false };
 
     if eth.ethertype() != EthernetProtocol::Ipv4 {
@@ -45,7 +83,6 @@ pub fn handle_dhcp_frame(frame: &[u8], device: &mut SocketDevice) -> bool {
 
     let Ok(ip) = Ipv4Packet::new_checked(eth.payload()) else { return false };
 
-    // DHCP is UDP, broadcast (255.255.255.255) or to gateway
     if ip.next_header() != IpProtocol::Udp {
         return false;
     }
@@ -58,7 +95,7 @@ pub fn handle_dhcp_frame(frame: &[u8], device: &mut SocketDevice) -> bool {
         return false;
     }
 
-    let udp_payload_offset = ip_hdr_len + 8; // UDP header is 8 bytes
+    let udp_payload_offset = ip_hdr_len + 8;
     let udp_payload_len = udp.len() as usize - 8;
     if eth.payload().len() < udp_payload_offset + udp_payload_len {
         return false;
@@ -69,17 +106,14 @@ pub fn handle_dhcp_frame(frame: &[u8], device: &mut SocketDevice) -> bool {
         return false;
     }
 
-    // Verify BOOTP request
     if bootp[0] != BOOTP_REQUEST {
         return false;
     }
 
-    // Verify magic cookie at offset 236
     if bootp[236..240] != MAGIC_COOKIE {
         return false;
     }
 
-    // Extract transaction ID
     let xid = [bootp[4], bootp[5], bootp[6], bootp[7]];
 
     // BOOTP flags (offset 10-11). Bit 0 of the high byte = broadcast flag:
@@ -91,64 +125,75 @@ pub fn handle_dhcp_frame(frame: &[u8], device: &mut SocketDevice) -> bool {
     // Extract client MAC (chaddr at offset 28, 6 bytes for ethernet)
     let mut client_mac = [0u8; 6];
     client_mac.copy_from_slice(&bootp[28..34]);
+    let client_mac_addr = EthernetAddress(client_mac);
 
-    // Find DHCP message type (option 53)
     let msg_type = find_dhcp_option(&bootp[240..], 53)
         .and_then(|data| data.first().copied());
 
     let msg_type = match msg_type {
         Some(DHCP_DISCOVER) | Some(DHCP_REQUEST) => msg_type.unwrap(),
-        _ => return false, // Not a DISCOVER or REQUEST
+        _ => return false,
     };
 
     let reply_type = if msg_type == DHCP_DISCOVER { DHCP_OFFER } else { DHCP_ACK };
 
+    let client_ip = match pool.lease_for(client_mac_addr) {
+        Some(ip) => ip,
+        None => {
+            // Out of leases — drop silently rather than NAK; the guest
+            // will retry and a freed entry might appear later.
+            return true;
+        }
+    };
+
+    // Tell the device which port owns this IP so NAT replies to flows
+    // initiated from this guest go to the right port.
+    device.record_lease(client_mac_addr, client_ip);
+
     log::info!(
-        "DHCP: {} (bcast={}) -> sending {} (to {} {})",
+        "DHCP: {} from {} -> {} {} ({})",
         if msg_type == DHCP_DISCOVER { "DISCOVER" } else { "REQUEST" },
-        broadcast_requested,
+        client_mac_addr,
         if reply_type == DHCP_OFFER { "OFFER" } else { "ACK" },
-        if broadcast_requested { "ff:ff:ff:ff:ff:ff" } else { "chaddr" },
-        if broadcast_requested { "255.255.255.255" } else { "yiaddr" },
+        client_ip,
+        if broadcast_requested { "bcast" } else { "ucast" },
     );
 
-    // Build DHCP reply
-    let dhcp_payload = build_dhcp_reply(reply_type, &xid, &client_mac);
-
-    let reply_frame = build_dhcp_frame(&dhcp_payload, &client_mac, broadcast_requested);
+    let dhcp_payload = build_dhcp_reply(reply_type, &xid, &client_mac, client_ip);
+    let reply_frame = build_dhcp_frame(&dhcp_payload, &client_mac, client_ip, broadcast_requested);
     device.send_frame(&reply_frame);
 
     true
 }
 
 /// Build BOOTP/DHCP reply payload.
-fn build_dhcp_reply(msg_type: u8, xid: &[u8; 4], client_mac: &[u8; 6]) -> Vec<u8> {
-    // BOOTP header (236 bytes) + magic cookie (4) + options
+fn build_dhcp_reply(
+    msg_type: u8,
+    xid: &[u8; 4],
+    client_mac: &[u8; 6],
+    client_ip: Ipv4Address,
+) -> Vec<u8> {
     let mut reply = vec![0u8; 300];
 
-    reply[0] = BOOTP_REPLY;  // op
-    reply[1] = 1;             // htype: ethernet
-    reply[2] = 6;             // hlen
-    reply[3] = 0;             // hops
+    reply[0] = BOOTP_REPLY;
+    reply[1] = 1; // htype: ethernet
+    reply[2] = 6; // hlen
+    reply[3] = 0;
 
-    // xid (transaction ID)
     reply[4..8].copy_from_slice(xid);
 
-    // secs = 0, flags = 0 (already zero)
+    // yiaddr: offered IP
+    reply[16..20].copy_from_slice(&client_ip.0);
 
-    // yiaddr: offered IP (10.0.2.15)
-    reply[16..20].copy_from_slice(&CLIENT_IP.0);
-
-    // siaddr: server IP (10.0.2.1)
+    // siaddr: server IP (gateway)
     reply[20..24].copy_from_slice(&GW_IP.0);
 
-    // chaddr: client MAC + padding
+    // chaddr
     reply[28..34].copy_from_slice(client_mac);
 
     // Magic cookie
     reply[236..240].copy_from_slice(&MAGIC_COOKIE);
 
-    // DHCP options start at 240
     let mut pos = 240;
 
     // Option 53: DHCP Message Type
@@ -189,13 +234,12 @@ fn build_dhcp_reply(msg_type: u8, xid: &[u8; 4], client_mac: &[u8; 6]) -> Vec<u8
 }
 
 /// Build the complete ethernet frame for a DHCP reply.
-///
-/// When `broadcast` is true (BOOTP broadcast flag was set by the client),
-/// send with dst_ip=255.255.255.255 + dst_mac=ff:ff:ff:ff:ff:ff per RFC 2131.
-/// Open Transport on classic Mac OS requires this; MacTCP accepts either,
-/// which is why a "works for MacTCP, hangs for OT" DHCP timeout is the
-/// classic symptom of getting this wrong.
-fn build_dhcp_frame(dhcp_payload: &[u8], client_mac: &[u8; 6], broadcast: bool) -> Vec<u8> {
+fn build_dhcp_frame(
+    dhcp_payload: &[u8],
+    client_mac: &[u8; 6],
+    client_ip: Ipv4Address,
+    broadcast: bool,
+) -> Vec<u8> {
     let udp_repr = UdpRepr {
         src_port: 67,
         dst_port: 68,
@@ -206,8 +250,8 @@ fn build_dhcp_frame(dhcp_payload: &[u8], client_mac: &[u8; 6], broadcast: bool) 
     let (dst_ip, dst_mac) = if broadcast {
         (Ipv4Address::BROADCAST, EthernetAddress([0xff; 6]))
     } else {
-        // Unicast reply: dst is the offered IP (yiaddr) to the client's MAC.
-        (CLIENT_IP, EthernetAddress(*client_mac))
+        // Unicast reply: dst is the offered IP, addressed to chaddr.
+        (client_ip, EthernetAddress(*client_mac))
     };
 
     let ip_repr = Ipv4Repr {
@@ -251,8 +295,8 @@ fn find_dhcp_option(options: &[u8], tag: u8) -> Option<&[u8]> {
     let mut pos = 0;
     while pos < options.len() {
         let opt = options[pos];
-        if opt == 255 { break; }     // End
-        if opt == 0 { pos += 1; continue; } // Pad
+        if opt == 255 { break; }
+        if opt == 0 { pos += 1; continue; }
         if pos + 1 >= options.len() { break; }
         let len = options[pos + 1] as usize;
         if pos + 2 + len > options.len() { break; }

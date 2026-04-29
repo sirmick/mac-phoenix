@@ -12,11 +12,7 @@ use smoltcp::wire::{
     TcpControl, TcpPacket, TcpRepr, TcpSeqNumber,
 };
 
-use crate::device::SocketDevice;
-
-/// MAC addresses
-const MAC_ADDR: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x01]);
-const GW_MAC: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x02]);
+use crate::device::{SocketDevice, GW_MAC};
 
 /// Maximum TCP payload per frame sent to the Mac. Stay below MSS 1460 so
 /// the resulting Ethernet frame (14 eth + 20 ip + 20 tcp + payload) sits
@@ -34,9 +30,12 @@ enum TcpState {
     Closed,
 }
 
-/// Key for tracking TCP connections
+/// Key for tracking TCP connections. Includes the guest's source IP so
+/// two guests on the same bridge can pick identical (src_port, dst_ip,
+/// dst_port) tuples without colliding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ConnKey {
+    src_ip: Ipv4Address,
     src_port: u16,
     dst_ip: Ipv4Address,
     dst_port: u16,
@@ -52,6 +51,9 @@ struct TcpConn {
     their_seq: u32,
     /// Original addresses for building response frames
     mac_ip: Ipv4Address,
+    /// MAC address of the originating guest. Used as dst MAC on every
+    /// reply frame so the L2 switch routes back to the right port.
+    mac_addr: EthernetAddress,
     dst_ip: Ipv4Address,
     mac_port: u16,
     dst_port: u16,
@@ -111,6 +113,7 @@ impl TcpNat {
         let ip_hdr_len = ip.header_len() as usize;
         let Ok(tcp) = TcpPacket::new_checked(&eth.payload()[ip_hdr_len..]) else { return };
 
+        let src_mac = eth.src_addr();
         let src_ip = ip.src_addr();
         let dst_ip = ip.dst_addr();
         let src_port = tcp.src_port();
@@ -118,7 +121,7 @@ impl TcpNat {
         let tcp_data_offset = tcp.header_len() as usize;
         let payload = &eth.payload()[ip_hdr_len + tcp_data_offset..];
 
-        let key = ConnKey { src_port, dst_ip, dst_port };
+        let key = ConnKey { src_ip, src_port, dst_ip, dst_port };
 
         // SYN: new connection
         if tcp.syn() && !tcp.ack() {
@@ -128,6 +131,7 @@ impl TcpNat {
                 if conn.state == TcpState::SynReceived {
                     let resp = build_tcp_frame(
                         dst_ip, dst_port, src_ip, src_port,
+                        conn.mac_addr,
                         TcpSeqNumber(conn.our_seq as i32),
                         TcpSeqNumber(conn.their_seq as i32),
                         TcpControl::Syn,
@@ -162,6 +166,7 @@ impl TcpNat {
                         our_seq,
                         their_seq,
                         mac_ip: src_ip,
+                        mac_addr: src_mac,
                         dst_ip,
                         mac_port: src_port,
                         dst_port,
@@ -178,6 +183,7 @@ impl TcpNat {
                     // Send SYN-ACK
                     let resp = build_tcp_frame(
                         dst_ip, dst_port, src_ip, src_port,
+                        src_mac,
                         TcpSeqNumber(our_seq as i32),
                         TcpSeqNumber(their_seq as i32),
                         TcpControl::Syn,
@@ -195,6 +201,7 @@ impl TcpNat {
                     // Send RST
                     let resp = build_tcp_frame(
                         dst_ip, dst_port, src_ip, src_port,
+                        src_mac,
                         TcpSeqNumber(0),
                         TcpSeqNumber(tcp.seq_number().0 + 1),
                         TcpControl::Rst,
@@ -250,6 +257,7 @@ impl TcpNat {
                     self.last_activity = Instant::now();
                     let ack = build_tcp_frame(
                         conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
+                        conn.mac_addr,
                         TcpSeqNumber(conn.our_seq as i32),
                         TcpSeqNumber(conn.their_seq as i32),
                         TcpControl::None,
@@ -280,6 +288,7 @@ impl TcpNat {
             // ACK the FIN + send our FIN
             let fin_ack = build_tcp_frame(
                 conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
+                conn.mac_addr,
                 TcpSeqNumber(conn.our_seq as i32),
                 TcpSeqNumber(conn.their_seq as i32),
                 TcpControl::Fin,
@@ -327,6 +336,7 @@ impl TcpNat {
                     log::debug!("TCP NAT: host closed {}:{}", conn.dst_ip, conn.dst_port);
                     let fin = build_tcp_frame(
                         conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
+                        conn.mac_addr,
                         TcpSeqNumber(conn.our_seq as i32),
                         TcpSeqNumber(conn.their_seq as i32),
                         TcpControl::Fin,
@@ -458,6 +468,7 @@ fn send_data_in_segments(conn: &mut TcpConn, payload: &[u8], device: &mut Socket
         let chunk = &payload[offset..end];
         let frame = build_tcp_frame(
             conn.dst_ip, conn.dst_port, conn.mac_ip, conn.mac_port,
+            conn.mac_addr,
             TcpSeqNumber(conn.our_seq as i32),
             TcpSeqNumber(conn.their_seq as i32),
             TcpControl::None,
@@ -472,12 +483,14 @@ fn send_data_in_segments(conn: &mut TcpConn, payload: &[u8], device: &mut Socket
 }
 
 /// Build a complete ethernet frame containing an IPv4/TCP packet.
-/// Uses smoltcp's wire module for correct checksums.
+/// `dst_mac` is the destination guest's MAC, so the L2 switch in
+/// `device.rs` routes the frame back to the right port.
 fn build_tcp_frame(
     src_ip: Ipv4Address,
     src_port: u16,
     dst_ip: Ipv4Address,
     dst_port: u16,
+    dst_mac: EthernetAddress,
     seq: TcpSeqNumber,
     ack: TcpSeqNumber,
     control: TcpControl,
@@ -510,7 +523,7 @@ fn build_tcp_frame(
 
     let eth_repr = EthernetRepr {
         src_addr: GW_MAC,
-        dst_addr: MAC_ADDR,
+        dst_addr: dst_mac,
         ethertype: EthernetProtocol::Ipv4,
     };
 

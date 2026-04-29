@@ -14,21 +14,17 @@ use smoltcp::wire::{
     UdpPacket, UdpRepr,
 };
 
-use crate::device::SocketDevice;
-
-/// MAC addresses
-const MAC_ADDR: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x01]);
-const GW_MAC: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x02]);
-
-/// Gateway IP
-const GW_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 1);
+use crate::device::{SocketDevice, GW_IP, GW_MAC};
 
 /// Connection timeout (seconds)
 const CONN_TIMEOUT_SECS: u64 = 60;
 
-/// Key for tracking UDP flows
+/// Key for tracking UDP flows. Includes the guest's source IP so two
+/// guests on the same bridge can pick identical (src_port, dst) tuples
+/// without colliding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct UdpFlowKey {
+    src_ip: Ipv4Address,
     src_port: u16,
     dst_ip: Ipv4Address,
     dst_port: u16,
@@ -39,6 +35,8 @@ struct UdpFlow {
     host_socket: UdpSocket,
     /// Original addresses for building response frames
     mac_ip: Ipv4Address,
+    /// MAC address of the originating guest, for L2 routing on replies.
+    mac_addr: EthernetAddress,
     /// The IP that the Mac thinks it's talking to (for response src_ip)
     apparent_dst_ip: Ipv4Address,
     mac_port: u16,
@@ -62,7 +60,7 @@ impl UdpNat {
     }
 
     /// Process a NAT'd UDP frame from the Mac.
-    pub fn handle_frame(&mut self, frame: &[u8], device: &mut SocketDevice) {
+    pub fn handle_frame(&mut self, frame: &[u8], _device: &mut SocketDevice) {
         let Ok(eth) = EthernetFrame::new_checked(frame) else { return };
         let Ok(ip) = Ipv4Packet::new_checked(eth.payload()) else { return };
 
@@ -73,6 +71,7 @@ impl UdpNat {
         let ip_hdr_len = ip.header_len() as usize;
         let Ok(udp) = UdpPacket::new_checked(&eth.payload()[ip_hdr_len..]) else { return };
 
+        let src_mac = eth.src_addr();
         let src_ip = ip.src_addr();
         let dst_ip = ip.dst_addr();
         let src_port = udp.src_port();
@@ -89,7 +88,7 @@ impl UdpNat {
             dst_ip
         };
 
-        let key = UdpFlowKey { src_port, dst_ip, dst_port };
+        let key = UdpFlowKey { src_ip, src_port, dst_ip, dst_port };
 
         // Look up or create flow
         if !self.flows.contains_key(&key) {
@@ -125,6 +124,7 @@ impl UdpNat {
                     self.flows.insert(key, UdpFlow {
                         host_socket: sock,
                         mac_ip: src_ip,
+                        mac_addr: src_mac,
                         apparent_dst_ip: dst_ip,
                         mac_port: src_port,
                         dst_port,
@@ -183,6 +183,7 @@ impl UdpNat {
                         flow.dst_port,
                         flow.mac_ip,
                         flow.mac_port,
+                        flow.mac_addr,
                         &buf[..n],
                     );
                     device.send_frame(&resp);
@@ -348,7 +349,7 @@ fn check_icmp_error(flow: &UdpFlow) -> Option<Vec<u8>> {
             };
             let eth_repr = EthernetRepr {
                 src_addr: GW_MAC,
-                dst_addr: MAC_ADDR,
+                dst_addr: flow.mac_addr,
                 ethertype: EthernetProtocol::Ipv4,
             };
 
@@ -369,12 +370,13 @@ fn check_icmp_error(flow: &UdpFlow) -> Option<Vec<u8>> {
 }
 
 /// Build a complete ethernet frame containing an IPv4/UDP packet.
-/// Uses smoltcp's wire module for correct checksums.
+/// `dst_mac` is the destination guest's MAC for L2 routing.
 fn build_udp_frame(
     src_ip: Ipv4Address,
     src_port: u16,
     dst_ip: Ipv4Address,
     dst_port: u16,
+    dst_mac: EthernetAddress,
     payload: &[u8],
 ) -> Vec<u8> {
     let udp_repr = UdpRepr {
@@ -394,7 +396,7 @@ fn build_udp_frame(
 
     let eth_repr = EthernetRepr {
         src_addr: GW_MAC,
-        dst_addr: MAC_ADDR,
+        dst_addr: dst_mac,
         ethertype: EthernetProtocol::Ipv4,
     };
 

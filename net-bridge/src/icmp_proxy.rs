@@ -10,14 +10,7 @@ use smoltcp::wire::{
     Icmpv4Packet, IpProtocol, Ipv4Address, Ipv4Packet, Ipv4Repr,
 };
 
-use crate::device::SocketDevice;
-
-/// MAC addresses (same as tcp_proxy)
-const MAC_ADDR: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x01]);
-const GW_MAC: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x02]);
-
-/// Gateway IP
-const GW_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 1);
+use crate::device::{SocketDevice, GW_IP, GW_MAC};
 
 /// Connection timeout
 const ICMP_TIMEOUT_SECS: u64 = 10;
@@ -27,9 +20,11 @@ const ICMP_ECHO_REQUEST: u8 = 8;
 const ICMP_ECHO_REPLY: u8 = 0;
 const ICMP_TIME_EXCEEDED: u8 = 11;
 
-/// Key for tracking ICMP echo sessions
+/// Key for tracking ICMP echo sessions. Includes guest src IP so two
+/// guests pinging the same target with the same id+seq don't collide.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct IcmpKey {
+    src_ip: Ipv4Address,
     dst_ip: Ipv4Address,
     /// Original ICMP id from the Mac
     orig_id: u16,
@@ -44,6 +39,8 @@ struct IcmpPending {
     orig_id: u16,
     /// Source IP of the Mac
     mac_ip: Ipv4Address,
+    /// MAC address of the originating guest, for L2 routing on replies.
+    mac_addr: EthernetAddress,
     /// Destination IP
     dst_ip: Ipv4Address,
     /// Original sequence number
@@ -92,6 +89,7 @@ impl IcmpNat {
         let seq = u16::from_be_bytes([icmp_data[6], icmp_data[7]]);
         let payload = &icmp_data[8..];
 
+        let src_mac = eth.src_addr();
         let src_ip = ip.src_addr();
         let dst_ip = ip.dst_addr();
 
@@ -147,11 +145,12 @@ impl IcmpNat {
             return;
         }
 
-        let key = IcmpKey { dst_ip, orig_id, seq };
+        let key = IcmpKey { src_ip, dst_ip, orig_id, seq };
         self.pending.insert(key, IcmpPending {
             fd,
             orig_id,
             mac_ip: src_ip,
+            mac_addr: src_mac,
             dst_ip,
             seq,
             sent_at: Instant::now(),
@@ -232,6 +231,7 @@ impl IcmpNat {
             let frame = build_icmp_frame(
                 pending.dst_ip,
                 pending.mac_ip,
+                pending.mac_addr,
                 64,
                 &icmp_reply,
             );
@@ -260,6 +260,7 @@ pub fn check_ttl_exceeded(frame: &[u8], device: &mut SocketDevice) -> bool {
         return false;
     }
 
+    let src_mac = eth.src_addr();
     let src_ip = ip.src_addr();
     let ip_payload = eth.payload();
 
@@ -289,16 +290,18 @@ pub fn check_ttl_exceeded(frame: &[u8], device: &mut SocketDevice) -> bool {
     icmp_buf[3] = (cksum & 0xff) as u8;
 
     // Build ethernet frame: from gateway to Mac
-    let frame = build_icmp_frame(GW_IP, src_ip, 64, &icmp_buf);
+    let frame = build_icmp_frame(GW_IP, src_ip, src_mac, 64, &icmp_buf);
     device.send_frame(&frame);
 
     true
 }
 
 /// Build a complete ethernet frame containing an IPv4/ICMP packet.
+/// `dst_mac` is the destination guest's MAC for L2 routing.
 fn build_icmp_frame(
     src_ip: Ipv4Address,
     dst_ip: Ipv4Address,
+    dst_mac: EthernetAddress,
     hop_limit: u8,
     icmp_payload: &[u8],
 ) -> Vec<u8> {
@@ -312,7 +315,7 @@ fn build_icmp_frame(
 
     let eth_repr = EthernetRepr {
         src_addr: GW_MAC,
-        dst_addr: MAC_ADDR,
+        dst_addr: dst_mac,
         ethertype: EthernetProtocol::Ipv4,
     };
 

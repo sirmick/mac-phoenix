@@ -52,7 +52,7 @@ bool BrowserModule::start(const std::string& initial_url)
     bidi_ = std::make_unique<BidiClient>();
     bool bidi_up = false;
     for (int i = 0; i < 50; i++) {  /* up to 10 s */
-        if (bidi_->start("127.0.0.1", 9222,
+        if (bidi_->start("127.0.0.1", supervisor_->bidi_port(),
                          std::chrono::milliseconds(500))) {
             bidi_up = true;
             break;

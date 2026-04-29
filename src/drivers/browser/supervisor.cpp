@@ -4,6 +4,10 @@
 #include "supervisor.h"
 #include "emulator_config.h"
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
 #include <cerrno>
 #include <chrono>
 #include <csignal>
@@ -44,7 +48,10 @@ constexpr int kCanvasWidth      = 1024;
 constexpr int kCanvasHeight     =  768;
 /* WebDriver BiDi listens here (M4.5). Firefox accepts both BiDi and
  * the legacy CDP on the same port; we use BiDi only. */
-constexpr int kBidiPort         = 9222;
+/* BiDi base port — supervisor probes from here upward to find the
+ * first free TCP slot. Hardcoded 9222 collided when two mac-phoenix
+ * processes ran on the same host. */
+constexpr int kBidiBasePort     = 9222;
 
 bool x_socket_present(int display)
 {
@@ -137,7 +144,11 @@ Supervisor::Supervisor()
 {
     const char* home = getenv("HOME");
     if (!home) home = "/tmp";
-    profile_dir_ = std::string(home) + "/.cache/mac-phoenix/firefox-profile";
+    /* Per-pid profile so two mac-phoenix processes don't fight over
+     * the same Firefox profile (cookies, cache, prefs.js writes).
+     * Cleaned up at stop(). */
+    profile_dir_ = std::string(home) + "/.cache/mac-phoenix/firefox-profile-"
+                 + std::to_string((int)getpid());
 }
 
 Supervisor::~Supervisor() { stop(); }
@@ -146,6 +157,29 @@ int Supervisor::pick_free_display()
 {
     for (int d = kFirstDisplay; d <= kLastDisplay; d++) {
         if (!x_socket_present(d)) return d;
+    }
+    return -1;
+}
+
+int Supervisor::pick_free_bidi_port()
+{
+    /* BiDi (WebDriver) listens on a TCP port that Firefox binds via
+     * --remote-debugging-port. Hardcoded 9222 collides between
+     * concurrent mac-phoenix instances. Probe upward and pick the
+     * first free one. */
+    constexpr int kRange = 21;   /* 9222..9242 */
+    for (int p = kBidiBasePort; p < kBidiBasePort + kRange; p++) {
+        int s = socket(AF_INET, SOCK_STREAM, 0);
+        if (s < 0) return -1;
+        int yes = 1;
+        setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = htons(p);
+        bool free_ = (::bind(s, (sockaddr*)&addr, sizeof(addr)) == 0);
+        ::close(s);
+        if (free_) return p;
     }
     return -1;
 }
@@ -353,7 +387,7 @@ bool Supervisor::spawn_firefox(const std::string& url)
         setpgid(0, 0);
 
         char port_arg[24];
-        snprintf(port_arg, sizeof(port_arg), "%d", kBidiPort);
+        snprintf(port_arg, sizeof(port_arg), "%d", bidi_port_);
         char width_arg[16], height_arg[16];
         snprintf(width_arg,  sizeof(width_arg),  "%d", kViewportWidth);
         snprintf(height_arg, sizeof(height_arg), "%d", kViewportHeight);
@@ -387,6 +421,14 @@ bool Supervisor::start(const std::string& initial_url)
                 kFirstDisplay, kLastDisplay);
         return false;
     }
+    bidi_port_ = pick_free_bidi_port();
+    if (bidi_port_ < 0) {
+        fprintf(stderr, "[BrowserSup] no free BiDi port near %d\n",
+                kBidiBasePort);
+        return false;
+    }
+    fprintf(stderr, "[BrowserSup] picked display=:%d  bidi=%d\n",
+            display_, bidi_port_);
 
     if (!spawn_xvfb()) return false;
     if (!wait_for_x_socket(kXReadyTimeoutMs)) {
@@ -416,7 +458,21 @@ void Supervisor::stop()
     };
     kill_group(firefox_pid_);
     kill_group(xvfb_pid_);
-    display_ = -1;
+    display_   = -1;
+    bidi_port_ = -1;
+
+    /* Best-effort cleanup of the per-pid Firefox profile so we don't
+     * accumulate ~/.cache/mac-phoenix/firefox-profile-12345/ directories
+     * after every run. Skipped if profile_dir_ doesn't look like ours
+     * (defensive — never delete a hand-picked profile). */
+    if (!profile_dir_.empty() &&
+        profile_dir_.find("/firefox-profile-") != std::string::npos) {
+        std::string cmd = "rm -rf -- '" + profile_dir_ + "'";
+        if (system(cmd.c_str()) != 0) {
+            fprintf(stderr, "[BrowserSup] note: profile cleanup left "
+                    "%s on disk\n", profile_dir_.c_str());
+        }
+    }
 }
 
 }  // namespace browser

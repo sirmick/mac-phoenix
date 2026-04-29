@@ -30,7 +30,8 @@ public:
     bool start(const std::string& initial_url);
     void stop();
 
-    int display() const { return display_; }
+    int display()   const { return display_;   }
+    int bidi_port() const { return bidi_port_; }
 
 private:
     bool spawn_xvfb();
@@ -39,8 +40,10 @@ private:
     bool spawn_firefox(const std::string& url);
 
     int  pick_free_display();
+    int  pick_free_bidi_port();
 
     int  display_     = -1;
+    int  bidi_port_   = -1;
     int  xvfb_pid_    = 0;
     int  firefox_pid_ = 0;
     std::string profile_dir_;

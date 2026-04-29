@@ -462,6 +462,12 @@ int main(int argc, char **argv)
 
 	// Select network driver based on config
 	if (emu_config.network == config::NetworkMode::Socket) {
+		// Shared socket: net-bridge is multi-guest, so a second emulator
+		// joins an existing bridge here instead of spawning its own.
+		// That gives us one virtual ethernet segment shared across
+		// every running MacPhoenix — peer-to-peer IP and AppleTalk
+		// between guests work without any extra config. Override with
+		// network_if to use a different (possibly isolated) socket.
 		const char *path = emu_config.network_if.empty()
 			? "/tmp/mac-ether.sock"
 			: emu_config.network_if.c_str();

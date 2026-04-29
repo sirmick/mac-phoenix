@@ -50,8 +50,23 @@ static pid_t s_bridge_pid = -1;
 static std::atomic<bool> s_running{false};
 static std::thread s_rx_thread;
 
-// Mac's ethernet address (must match net-bridge's MAC_ADDR)
+// Mac's ethernet address. Locally-administered (02:xx:xx:xx:xx:xx) prefix
+// `02:50:48:58` (= "PHX") plus the low 16 bits of our PID, so each running
+// emulator gets a distinct MAC on a shared net-bridge. Two emulators with
+// PIDs whose low 16 bits collide will conflict — vanishingly rare in
+// practice (1/65536) but if it happens, restart one of them.
 static uint8_t s_mac_addr[6] = {0x02, 0x50, 0x48, 0x58, 0x00, 0x01};
+
+static void init_mac_from_pid(void)
+{
+	pid_t pid = getpid();
+	s_mac_addr[0] = 0x02;
+	s_mac_addr[1] = 0x50;
+	s_mac_addr[2] = 0x48;
+	s_mac_addr[3] = 0x58;
+	s_mac_addr[4] = (uint8_t)((pid >> 8) & 0xff);
+	s_mac_addr[5] = (uint8_t)(pid & 0xff);
+}
 
 // Queue of frames to deliver to the Mac
 static std::mutex s_rx_mutex;
@@ -139,7 +154,27 @@ static std::string find_bridge_binary()
 	return "";
 }
 
-static bool launch_bridge()
+// Try to connect to the bridge socket. Returns the open fd on success, -1
+// on failure. Used by `connect_or_spawn` so we either join an existing
+// (possibly multi-guest) bridge or spawn a new one — without the wasted
+// probe-and-close step that creates a transient port on the bridge.
+static int try_connect()
+{
+	if (access(s_sock_path.c_str(), F_OK) != 0) return -1;
+	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0) return -1;
+	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	strncpy(addr.sun_path, s_sock_path.c_str(), sizeof(addr.sun_path) - 1);
+	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+		return fd;
+	}
+	close(fd);
+	return -1;
+}
+
+static bool spawn_bridge()
 {
 	std::string binary = find_bridge_binary();
 	if (binary.empty()) {
@@ -147,7 +182,8 @@ static bool launch_bridge()
 		return false;
 	}
 
-	// Remove stale socket
+	// Remove stale socket file (no listener, but the inode persisted from
+	// a crashed previous run).
 	unlink(s_sock_path.c_str());
 
 	pid_t pid = fork();
@@ -173,9 +209,7 @@ static bool launch_bridge()
 
 	// Wait for socket to appear (up to 5 seconds)
 	for (int i = 0; i < 50; i++) {
-		if (access(s_sock_path.c_str(), F_OK) == 0) {
-			return true;
-		}
+		if (access(s_sock_path.c_str(), F_OK) == 0) return true;
 		usleep(100000);  // 100ms
 	}
 
@@ -184,6 +218,29 @@ static bool launch_bridge()
 	waitpid(s_bridge_pid, nullptr, 0);
 	s_bridge_pid = -1;
 	return false;
+}
+
+// Connect to the bridge — joining an existing one if running, else
+// spawning a new one. Returns the open fd or -1 on total failure.
+static int connect_or_spawn()
+{
+	int fd = try_connect();
+	if (fd >= 0) {
+		fprintf(stderr, "[Socket] Joined existing net-bridge at %s\n",
+			s_sock_path.c_str());
+		return fd;
+	}
+
+	// Either no socket file or a stale one. Spawn a fresh bridge then
+	// connect to it.
+	if (!spawn_bridge()) return -1;
+	// Brief retry: bridge writes the socket then accept()s; we may race.
+	for (int i = 0; i < 50; i++) {
+		fd = try_connect();
+		if (fd >= 0) return fd;
+		usleep(100000);
+	}
+	return -1;
 }
 
 static void stop_bridge()
@@ -253,38 +310,20 @@ static bool ether_socket_init(void)
 {
 	fprintf(stderr, "[Socket] Initializing Unix socket networking\n");
 
-	// Set Mac ethernet address
+	// Derive a per-process MAC so multiple mac-phoenix instances on the
+	// same net-bridge don't collide.
+	init_mac_from_pid();
 	memcpy(ether_addr, s_mac_addr, 6);
+	fprintf(stderr, "[Socket] MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		s_mac_addr[0], s_mac_addr[1], s_mac_addr[2],
+		s_mac_addr[3], s_mac_addr[4], s_mac_addr[5]);
 
-	// Always launch bridge (cleans up stale sockets)
-	if (!launch_bridge()) {
-		// Bridge launch failed — try connecting to an existing one
-		if (access(s_sock_path.c_str(), F_OK) != 0) {
-			fprintf(stderr, "[Socket] Cannot start bridge and socket %s not found\n",
-				s_sock_path.c_str());
-			return false;
-		}
-	}
-
-	// Connect to Unix socket (retry briefly for bridge startup)
-	s_sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	s_sock_fd = connect_or_spawn();
 	if (s_sock_fd < 0) {
-		perror("[Socket] socket(AF_UNIX)");
+		fprintf(stderr, "[Socket] Cannot connect to or start bridge at %s\n",
+			s_sock_path.c_str());
 		return false;
 	}
-
-	struct sockaddr_un addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, s_sock_path.c_str(), sizeof(addr.sun_path) - 1);
-
-	if (connect(s_sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-		perror("[Socket] connect");
-		close(s_sock_fd);
-		s_sock_fd = -1;
-		return false;
-	}
-
 	fprintf(stderr, "[Socket] Connected to bridge at %s\n", s_sock_path.c_str());
 
 	// Start receive thread
