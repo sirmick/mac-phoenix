@@ -67,12 +67,12 @@ prints which codecs were detected.
 sudo apt install cargo rustc
 ```
 
-⚠️ Ubuntu 24.04 ships **rustc 1.75**, which is below `smoltcp 0.12`'s
-MSRV of 1.80. With apt-rust alone, the net-bridge build will fail. Two
-ways forward:
+Apt rust is enough on Ubuntu 24.04, Fedora 40, and Debian 12-bpo.
+Older releases (Ubuntu 22.04, Debian 12 stock) need a newer toolchain
+via rustup, or skip the net-bridge:
 
 ```bash
-# Option A — install a current toolchain via rustup (recommended)
+# Option A — rustup (only needed on pre-24.04 / pre-bpo)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 . "$HOME/.cargo/env"
 
@@ -85,7 +85,7 @@ video, input, automation bridge) works fine without it.
 
 #### BridgeAgent (optional — to rebuild the guest helper from source)
 
-The committed `bridge/BridgeAgent.bin` is what gets
+The committed `BridgeAgent/BridgeAgent.bin` is what gets
 installed into your Mac OS guest's Startup Items, so most users never
 need to rebuild it. To rebuild from C source you need the Retro68
 m68k cross-toolchain:
@@ -102,7 +102,7 @@ provisioning/build_retro68.sh
 
 After the toolchain is in `toolchain/retro68/`, `cmake -B build` picks
 it up automatically and rebuilds `BridgeAgent.bin` whenever
-`bridge/bridge_agent.c` changes. To skip:
+`BridgeAgent/BridgeAgent.c` changes. To skip:
 
 ```bash
 cmake -B build -DBUILD_BRIDGE_AGENT=OFF
@@ -140,8 +140,11 @@ To run, mount the floppy and pass `--browser`:
   /path/to/quadra.rom
 ```
 
-Then double-click **MacBrowser** on the floppy inside the guest. See
-[`docs/plan/MacBrowser.md`](docs/plan/MacBrowser.md) for the protocol
+Then double-click **MacBrowser** on the floppy inside the guest.
+
+![MacBrowser inside System 7.5.5 — host-side Firefox pixels rendered in a native Mac window, viewed through the MacPhoenix web UI](docs/images/macbrowser-in-browser.png)
+
+See [`docs/plan/MacBrowser.md`](docs/plan/MacBrowser.md) for the protocol
 and architecture deep-dive.
 
 #### Provisioning tools (optional — for creating HFS disk images)
@@ -360,6 +363,7 @@ load with a one-time deprecation warning, then dropped on first save. See
   --no-webserver             Headless mode (no HTTP / WebRTC)
   --network MODE             Network: none | socket[:<unix-socket-path>]
   --bridge                   Enable the automation bridge (BridgeAgent + ExtFS)
+  --browser                  Run MacBrowser (Firefox-on-Xvfb pipeline)
   --headless-http            HTTP API only (no video/audio); implies --bridge
   --audio                    Enable audio emulation (Opus over WebRTC; default: off)
   --config PATH              JSON config file (use /dev/null to ignore user config)
@@ -534,7 +538,7 @@ export PATH="$PWD/toolchain/retro68/bin:$PATH"
 
 ```bash
 # Produces BridgeAgent.bin (MacBinary, committed to the tree)
-make -C bridge
+make -C BridgeAgent
 ```
 
 The `.bin` is installed into `:System Folder:Startup Items:` of every `--disk` automatically when the bridge is enabled (see [Automation bridge](#automation-bridge)); `provisioning/install_bridge_agent.sh <image>` does the same thing manually.
@@ -714,9 +718,9 @@ Attach those to a GitHub release; users install with the usual
 
 ### Rebuilding BridgeAgent
 
-`bridge/BridgeAgent.bin` is committed to the repo and shipped
+`BridgeAgent/BridgeAgent.bin` is committed to the repo and shipped
 unchanged in every package. It only needs rebuilding when
-`bridge_agent.c`/`bridge_agent.r` change.
+`BridgeAgent.c`/`BridgeAgent.r` change.
 
 CMake's `BUILD_BRIDGE_AGENT` target needs:
 
@@ -726,13 +730,13 @@ CMake's `BUILD_BRIDGE_AGENT` target needs:
 2. **Apple's Universal Interfaces 3.4** at
    `private/Universal Interfaces/Universal/Interfaces/`. Retro68's default
    open-source Multiversal headers ship 38 of UI 3.4's 345 files and are
-   missing several `bridge_agent.c` uses (`Script.h`, `Aliases.h`,
+   missing several `BridgeAgent.c` uses (`Script.h`, `Aliases.h`,
    `ShutDown.h`, `Scrap.h`, `Processes.r`). UI 3.4 isn't redistributable so
    `private/` is gitignored.
 
 When both are present, `cmake -B build -DBUILD_BRIDGE_AGENT=ON` configures
 the rebuild and the build target overwrites
-`bridge/BridgeAgent.bin`. Commit the new `.bin` and the next
+`BridgeAgent/BridgeAgent.bin`. Commit the new `.bin` and the next
 release picks it up.
 
 ```bash
@@ -741,7 +745,7 @@ docker run --rm -v "$PWD":/src -w /src mac-phoenix:dev sh -c '
     cmake -B build -DBUILD_BRIDGE_AGENT=ON
     cmake --build build --target bridge-agent
 '
-git add bridge/BridgeAgent.bin && git commit
+git add BridgeAgent/BridgeAgent.bin && git commit
 ```
 
 ### Dev environment image

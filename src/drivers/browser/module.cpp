@@ -153,7 +153,7 @@ bool BrowserModule::start(const std::string& initial_url)
          *      before any page script runs, with !important to outrank
          *      page styles (some pages set scrollbar-color themselves).
          *
-         * Plus: an injected 2-px red border drawn at the viewport edges
+         * Plus: an injected 1-px black border drawn at the viewport edges
          * via a fixed-position ::before pseudo-element on the html. If
          * any of {Xvfb root, Firefox layout viewport, BiDi setViewport,
          * xshm capture rect, pipeline dst_stride, BrowserShm fb.width,
@@ -181,7 +181,7 @@ bool BrowserModule::start(const std::string& initial_url)
                 "'::-webkit-scrollbar{display:none!important;'+"
                 "'width:0!important;height:0!important;}'+"
                 /* Sync probe: a fixed-position <div> ringing the viewport
-                 * with a 2-px red border. If any of {Xvfb root, FF
+                 * with a 1-px black border. If any of {Xvfb root, FF
                  * layout viewport, BiDi setViewport, xshm capture,
                  * pipeline dst_stride, BrowserShm fb.width, Mac PixMap
                  * rowBytes} disagrees, the border on the disagreeing
@@ -189,7 +189,7 @@ bool BrowserModule::start(const std::string& initial_url)
                 "'body>#mac-phoenix-probe{position:fixed!important;'+"
                 "'top:0!important;left:0!important;'+"
                 "'right:0!important;bottom:0!important;'+"
-                "'border:2px solid red!important;'+"
+                "'border:1px solid black!important;'+"
                 "'pointer-events:none!important;'+"
                 "'z-index:2147483647!important;}';"
               "(document.head||document.documentElement).appendChild(s);"
