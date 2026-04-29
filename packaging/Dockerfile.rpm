@@ -20,6 +20,7 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         libwebp-devel \
         opus-devel \
         libyuv-devel \
+        libxcb-devel \
         cargo \
         rust \
         desktop-file-utils \
@@ -54,6 +55,8 @@ RUN set -eux; \
     test -f /usr/share/mac-phoenix/client/index.html; \
     test -f /usr/share/mac-phoenix/client/client.js; \
     test -f /usr/share/mac-phoenix/BridgeAgent.bin; \
+    test -f /usr/share/mac-phoenix/MacBrowser.bin; \
+    test -f /usr/share/mac-phoenix/MacBrowser.dsk; \
     test -x /usr/share/mac-phoenix/provisioning/install_bridge_agent.sh; \
     test -f /usr/share/applications/mac-phoenix.desktop; \
     mac-phoenix --help | head -3

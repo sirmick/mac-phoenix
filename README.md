@@ -748,6 +748,24 @@ docker run --rm -v "$PWD":/src -w /src mac-phoenix:dev sh -c '
 git add BridgeAgent/BridgeAgent.bin && git commit
 ```
 
+### Rebuilding MacBrowser
+
+`MacBrowser/MacBrowser.bin` (and the `MacBrowser.dsk` floppy that bundles
+it for `--browser`) follows the same model as BridgeAgent: the committed
+binary is shipped unchanged in every distro package, and rebuilding from
+`MacBrowser.c`/`MacBrowser.r` needs the Retro68 toolchain plus Apple
+Universal Interfaces 3.4 at `private/Universal Interfaces/`. Package
+builds set `-DBUILD_MAC_BROWSER=OFF`, so the in-container build never
+touches the m68k toolchain. Same out-of-band rebuild flow:
+
+```bash
+docker run --rm -v "$PWD":/src -w /src mac-phoenix:dev sh -c '
+    cmake -B build -DBUILD_MAC_BROWSER=ON
+    cmake --build build --target mac-browser
+'
+git add MacBrowser/MacBrowser.bin MacBrowser/MacBrowser.dsk && git commit
+```
+
 ### Dev environment image
 
 `packaging/Dockerfile.dev` is a self-contained Ubuntu 24.04 build env —

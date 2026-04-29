@@ -11,6 +11,11 @@ Build-Depends: debhelper-compat (= 13),
                libwebp-dev,
                libopus-dev,
                libyuv-dev,
+               libxcb1-dev,
+               libxcb-shm0-dev,
+               libxcb-damage0-dev,
+               libxcb-composite0-dev,
+               libxcb-randr0-dev,
                cargo,
                rustc
 Standards-Version: 4.6.2

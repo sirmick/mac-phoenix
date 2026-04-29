@@ -506,6 +506,9 @@ install(DIRECTORY client/
 install(FILES BridgeAgent/BridgeAgent.bin
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mac-phoenix)
 
+install(FILES MacBrowser/MacBrowser.bin MacBrowser/MacBrowser.dsk
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mac-phoenix)
+
 install(PROGRAMS provisioning/install_bridge_agent.sh
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mac-phoenix/provisioning)
 

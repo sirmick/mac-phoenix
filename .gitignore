@@ -58,9 +58,8 @@ BridgeAgent/BridgeAgent.dsk
 BridgeAgent/BridgeAgent.code.bin
 BridgeAgent/BridgeAgent.code.bin.gdb
 
-# Retro68 MacBrowser build artifacts (MacBrowser.bin is checked in)
+# Retro68 MacBrowser build artifacts (MacBrowser.bin and .dsk are checked in)
 MacBrowser/MacBrowser.APPL
-MacBrowser/MacBrowser.dsk
 MacBrowser/MacBrowser.code.bin
 MacBrowser/MacBrowser.code.bin.gdb
 

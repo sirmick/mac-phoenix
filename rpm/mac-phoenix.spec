@@ -30,6 +30,7 @@ BuildRequires:  libvpx-devel
 BuildRequires:  libwebp-devel
 BuildRequires:  opus-devel
 BuildRequires:  libyuv-devel
+BuildRequires:  libxcb-devel
 BuildRequires:  cargo
 BuildRequires:  rust
 BuildRequires:  desktop-file-utils
@@ -72,6 +73,7 @@ export CFLAGS CXXFLAGS
     -DBUILD_TESTS=OFF \
     -DBUILD_NET_BRIDGE=ON \
     -DBUILD_BRIDGE_AGENT=OFF \
+    -DBUILD_MAC_BROWSER=OFF \
     -DENABLE_H264=OFF
 %cmake_build
 
