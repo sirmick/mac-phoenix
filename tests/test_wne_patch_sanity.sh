@@ -111,10 +111,12 @@ fi
 # Let Finder's idle loop run for a while so WNE gets hit many times.
 sleep 8
 
-HB="$BRIDGE_DIR/MacPhoenix/bridge_heartbeat"
-if [[ ! -f "$HB" ]]; then
-    echo "FAIL: no heartbeat file at $HB"
-    ls -la "$BRIDGE_DIR"
+# Bridge dir is per-pid: $BRIDGE_DIR/MacPhoenix/<host-pid>/. Glob for it
+# rather than hard-coding the pid (parent and IPC child share via env var).
+HB=$(ls -1 "$BRIDGE_DIR"/MacPhoenix/*/bridge_heartbeat 2>/dev/null | head -1 || true)
+if [[ -z "$HB" || ! -f "$HB" ]]; then
+    echo "FAIL: no heartbeat file under $BRIDGE_DIR/MacPhoenix/*/"
+    find "$BRIDGE_DIR" -maxdepth 4 -ls
     exit 1
 fi
 
