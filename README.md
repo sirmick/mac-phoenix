@@ -23,6 +23,7 @@ Most-tested guest OS versions: **System 6.0.8**, **System 7.5.5**, **Mac OS 7.6.
 - **MacBrowser** — modern web inside System 7: a native Mac app whose viewport is filled live with pixels from a host-side Firefox-on-Xvfb (`--browser`). Works around the three intractable problems with running 1996-era browsers on the modern web (TLS handshake, cert imports, 25 MHz HTML/CSS/JS).
 - **Optional audio** — opt-in Opus-encoded audio streaming over WebRTC (`--audio`)
 - **NAT networking** — optional Unix-socket bridge (smoltcp + NAT) so the guest can reach the Internet without root
+- **Peer-to-peer between guests** — multiple emulators share one bridge as a virtual ethernet segment; AppleTalk file sharing and Chooser see each other natively, IP between guests routes via the bridge's L2 switch (no NAT involved for intra-segment traffic)
 - **Headless mode** — run without any UI for testing and automation
 
 ## Quick start
@@ -442,6 +443,25 @@ If you'd rather manage the bridge yourself (e.g. attach `strace`, run under `val
 Once the guest has an IP, MacTCP / Open Transport / Internet Config just works — try Netscape, Fetch, NCSA Telnet, iCab, or `curl` inside MPW. `--debug-network` turns on verbose packet logging on the emulator side; `RUST_LOG=debug` does the same for `net-bridge`.
 
 The bridge also exposes a tiny echo service on the gateway (`10.0.2.1:7`, both TCP and UDP) — handy for round-trip smoke tests from inside the guest without needing the host to run an `inetd`-style daemon.
+
+### Multiple guests on one bridge (peer-to-peer + AppleTalk)
+
+`net-bridge` is a multi-port virtual ethernet switch, not a 1:1 tunnel. Start two `mac-phoenix` instances and they automatically share one bridge:
+
+```bash
+./build/mac-phoenix --port 8001 --network socket --disk macos-7.6.1.img quadra.rom &
+./build/mac-phoenix --port 8002 --network socket --disk macos-7.5.5.img quadra.rom &
+```
+
+The first one to start spawns `net-bridge` at `/tmp/mac-ether.sock`; subsequent instances detect the running bridge via `connect()` and join it. Each emulator gets a unique MAC address derived from its PID (`02:50:48:58:<pidhi>:<pidlo>`), and the bridge's per-MAC DHCP pool hands out distinct leases (`10.0.2.15`, `10.0.2.16`, …).
+
+What flows guest-to-guest:
+
+- **IP** — once both guests have configured TCP/IP for DHCP, `ping 10.0.2.16` from the other Mac just works. Inter-guest unicast routes through the bridge's L2 switch directly; no host NAT involved.
+- **AppleTalk** — turn on AppleTalk in each guest (control panel → Connect-via Ethernet) and Chooser sees the other Mac for File Sharing, AppleShare, and printer sharing. The bridge passes EtherTalk Phase 2 frames (ethertypes `0x809B` DDP and `0x80F3` AARP) between ports as opaque ethernet — no AppleTalk stack on the host required, the classic Mac OS stacks talk to each other directly.
+- **Broadcasts and multicast** — ARP, NBP lookups, and AppleTalk multicast (`09:00:07:*`) flood across all ports the way a real ethernet hub would.
+
+`--network socket:/path/to/other.sock` opts out of the shared default for instances you want isolated on their own bridge. There's no UI control needed for the common case — the join-or-spawn behavior is automatic.
 
 ### Ping (ICMP echo)
 
