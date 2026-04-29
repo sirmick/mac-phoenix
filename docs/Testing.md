@@ -73,7 +73,7 @@ Tests use dedicated ports (18090-18093) to avoid conflicts with a running emulat
 provisioning/install_bridge_agent.sh
 ```
 
-The script writes `bridge/BridgeAgent.bin` (which is committed to the repo) into the disk images via `hcopy`. Rebuild the agent with `make -C bridge` if you change `bridge_agent.c`; the Makefile expects the Retro68 toolchain at `~/Retro68`.
+The script writes `BridgeAgent/BridgeAgent.bin` (which is committed to the repo) into the disk images via `hcopy`. Rebuild the agent with `make -C BridgeAgent` if you change `bridge_agent.c`; the Makefile expects the Retro68 toolchain at `~/Retro68`.
 
 The test harness boots the emulator with `--bridge --extfs <tmp>` (the temp dir doubles as the bridge transport and the `Host:` volume the script reads/writes), waits for the agent to drop `bridge_heartbeat`, posts to `/api/launch`, and reads `test_results.txt` back from the same dir.
 

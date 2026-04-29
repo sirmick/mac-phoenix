@@ -19,11 +19,11 @@ DSK      = $(TARGET).dsk
 
 all: $(BIN)
 
-$(CODE_BIN): bridge_agent.c
-	$(CC) $(CFLAGS) -o $(CODE_BIN) bridge_agent.c
+$(CODE_BIN): BridgeAgent.c
+	$(CC) $(CFLAGS) -o $(CODE_BIN) BridgeAgent.c
 
-$(BIN): $(CODE_BIN) bridge_agent.r
-	$(REZ) $(RINCLUDES)/Retro68APPL.r bridge_agent.r \
+$(BIN): $(CODE_BIN) BridgeAgent.r
+	$(REZ) $(RINCLUDES)/Retro68APPL.r BridgeAgent.r \
 		-I$(RINCLUDES) \
 		--copy $(CODE_BIN) \
 		-o $(BIN) \

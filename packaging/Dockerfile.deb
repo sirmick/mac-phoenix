@@ -5,9 +5,9 @@
 # Build context (set up by run_matrix.sh):
 #   ./mac-phoenix_<ver>.tar.xz
 #
-# BridgeAgent.bin is shipped as a committed artifact in bridge/;
+# BridgeAgent.bin is shipped as a committed artifact in BridgeAgent/;
 # package builds set BUILD_BRIDGE_AGENT=OFF so they don't need Retro68.
-# Maintainers rebuild it via packaging/Dockerfile.dev when bridge_agent.c
+# Maintainers rebuild it via packaging/Dockerfile.dev when BridgeAgent.c
 # changes (see README "Building guest components").
 #
 # Usage:

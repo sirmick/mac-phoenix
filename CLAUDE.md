@@ -103,10 +103,10 @@ subprojects/
     qemu/target/m68k/translate.c    — M68K → TCG IR decoder (added RTR instruction)
     qemu/accel/tcg/cpu-exec.c       — TB find/compile loop (perf counters added)
 
-bridge/
-  bridge_agent.c                    — BridgeAgent source (Retro68 m68k); polls bridge files in Host: ExtFS
+BridgeAgent/
+  BridgeAgent.c                     — BridgeAgent source (Retro68 m68k); polls bridge files in Host: ExtFS
   BridgeAgent.bin                   — Pre-built MacBinary (committed; rebuilt by CMake when Retro68 present)
-  bridge_agent.r                    — Resource fork: SIZE, BNDL, FREF, creator sig, icons.r include
+  BridgeAgent.r                     — Resource fork: SIZE, BNDL, FREF, creator sig, icons.r include
 
 tests/
   test_api_endpoints.sh             — API smoke tests (10 checks)

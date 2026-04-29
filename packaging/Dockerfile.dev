@@ -28,7 +28,7 @@
 # Build args:
 #   BUILD_RETRO68=1   pre-build the Retro68 toolchain into /opt/retro68 at
 #                     image-build time (~30 min, ~700MB). Default 0 — uses
-#                     the committed bridge/BridgeAgent.bin.
+#                     the committed BridgeAgent/BridgeAgent.bin.
 
 ARG BASE=ubuntu:24.04
 FROM ${BASE}

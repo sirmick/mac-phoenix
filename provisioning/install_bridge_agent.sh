@@ -12,7 +12,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-AGENT_BIN="${BRIDGE_AGENT_BIN:-$ROOT/bridge/BridgeAgent.bin}"
+AGENT_BIN="${BRIDGE_AGENT_BIN:-$ROOT/BridgeAgent/BridgeAgent.bin}"
 
 # BRIDGE_BPATH (env): Mac-style colon path for the per-instance bridge
 # dir, e.g. "Host:MacPhoenix:12345". Gets written into

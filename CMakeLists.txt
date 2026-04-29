@@ -262,7 +262,7 @@ endif()
 # BridgeAgent (Retro68 68k Mac app) — guest-side automation helper.
 # Installed into :System Folder:Startup Items: on the guest disk during
 # boot by command_bridge.cpp's provisioning step. The committed
-# BridgeAgent.bin in bridge/ is our fallback; this target
+# BridgeAgent.bin in BridgeAgent/ is our fallback; this target
 # rebuilds it from source when the Retro68 toolchain is available.
 # Opt out with -DBUILD_BRIDGE_AGENT=OFF.
 # =============================================================================
@@ -292,7 +292,7 @@ if(BUILD_BRIDGE_AGENT)
     set(RETRO68_RINCLUDES "${RETRO68_ROOT}/m68k-apple-macos/RIncludes")
 
     # Apple Universal Interfaces 3.4 — the toolchain's default Multiversal
-    # headers are missing several files bridge_agent uses (Script.h,
+    # headers are missing several files BridgeAgent uses (Script.h,
     # Aliases.h, ShutDown.h, Scrap.h, Processes.r). If the user has UI 3.4
     # at private/Universal Interfaces/Universal/Interfaces/, prepend its
     # CIncludes/RIncludes to the gcc/Rez search paths so the build works
@@ -317,11 +317,11 @@ if(BUILD_BRIDGE_AGENT)
       message(STATUS "bridge-agent: using Apple UI 3.4 from private/")
     else()
       message(STATUS "bridge-agent: Apple UI 3.4 not present at private/Universal Interfaces/")
-      message(STATUS "              — bridge_agent.c needs Script.h/Aliases.h/ShutDown.h/Scrap.h.")
+      message(STATUS "              — BridgeAgent.c needs Script.h/Aliases.h/ShutDown.h/Scrap.h.")
       message(STATUS "              Either drop UI 3.4 there or set BUILD_BRIDGE_AGENT=OFF.")
     endif()
 
-    set(BA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bridge")
+    set(BA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/BridgeAgent")
     set(BA_CODE "${BA_DIR}/BridgeAgent.code.bin")
     set(BA_BIN  "${BA_DIR}/BridgeAgent.bin")
 
@@ -337,18 +337,18 @@ if(BUILD_BRIDGE_AGENT)
       OUTPUT "${BA_CODE}"
       COMMAND "${RETRO68_GCC}" ${BA_GCC_EXTRA_FLAGS} -O2
               -I "${GUEST_COMMON_DIR}" -I "${GUEST_COMMON_INC}"
-              -o "${BA_CODE}" bridge_agent.c ${GUEST_COMMON_SRCS}
-      DEPENDS "${BA_DIR}/bridge_agent.c"
+              -o "${BA_CODE}" BridgeAgent.c ${GUEST_COMMON_SRCS}
+      DEPENDS "${BA_DIR}/BridgeAgent.c"
               ${GUEST_COMMON_SRCS}
               "${GUEST_COMMON_DIR}/bridge_cfg.h"
               "${GUEST_COMMON_INC}/bridge_paths.h"
       WORKING_DIRECTORY "${BA_DIR}"
-      COMMENT "Building BridgeAgent (m68k): bridge_agent.c → BridgeAgent.code.bin"
+      COMMENT "Building BridgeAgent (m68k): BridgeAgent.c → BridgeAgent.code.bin"
       VERBATIM
     )
 
     # Regenerate icons.r from the PNG sources whenever they change.
-    # bridge_agent.r #includes the resulting snippet.
+    # BridgeAgent.r #includes the resulting snippet.
     add_custom_command(
       OUTPUT "${BA_DIR}/icons.r"
       COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/png2icn.py"
@@ -365,10 +365,10 @@ if(BUILD_BRIDGE_AGENT)
     # Rez the resource fork + pack into MacBinary (.bin), APPL (APPL fork),
     # and disk image (.dsk). The committed .bin is what command_bridge
     # installs into the guest's Startup Items. Creator code is 'MxBA'
-    # so the BNDL in bridge_agent.r matches.
+    # so the BNDL in BridgeAgent.r matches.
     add_custom_command(
       OUTPUT "${BA_BIN}"
-      COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" bridge_agent.r
+      COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" BridgeAgent.r
               -I "${RETRO68_RINCLUDES}"
               ${BA_REZ_EXTRA_FLAGS}
               --copy "${BA_CODE}"
@@ -376,7 +376,7 @@ if(BUILD_BRIDGE_AGENT)
               -t APPL -c MxBA
               --cc "${BA_DIR}/BridgeAgent.dsk"
               --cc "${BA_DIR}/BridgeAgent.APPL"
-      DEPENDS "${BA_CODE}" "${BA_DIR}/bridge_agent.r" "${BA_DIR}/icons.r"
+      DEPENDS "${BA_CODE}" "${BA_DIR}/BridgeAgent.r" "${BA_DIR}/icons.r"
       WORKING_DIRECTORY "${BA_DIR}"
       COMMENT "Rezzing BridgeAgent.bin"
       VERBATIM
@@ -503,7 +503,7 @@ install(DIRECTORY client/
         PATTERN "*.svg"
         PATTERN "*.json")
 
-install(FILES bridge/BridgeAgent.bin
+install(FILES BridgeAgent/BridgeAgent.bin
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mac-phoenix)
 
 install(PROGRAMS provisioning/install_bridge_agent.sh

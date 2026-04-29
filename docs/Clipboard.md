@@ -9,7 +9,7 @@ Bidirectional clipboard sync between the host (and ultimately the browser UI) an
 - [x] Codec unit test (`ctest -R mac_roman`) — `tests/test_mac_roman.cpp`
 - [ ] Host clipboard cache + 200 ms poller thread — `src/core/command_bridge.cpp`
 - [ ] `GET`/`POST /api/clipboard` — `src/webserver/api_handlers.cpp`
-- [ ] BridgeAgent scrap watch + apply — `bridge/bridge_agent.c`, rebuild `BridgeAgent.bin`
+- [ ] BridgeAgent scrap watch + apply — `BridgeAgent/BridgeAgent.c`, rebuild `BridgeAgent.bin`
 - [ ] Browser clipboard module — `client/client.js`
 - [ ] End-to-end test (m68k + PPC) — `tests/test_clipboard.sh`
 
@@ -55,7 +55,7 @@ GUEST → HOST  (user copies in MacWrite)
 
 ### Mac side — BridgeAgent
 
-`bridge/bridge_agent.c`. Add one new function `poll_clipboard()` called from the main loop alongside the existing `poll_bridge()`. Add `<Scrap.h>` include.
+`BridgeAgent/BridgeAgent.c`. Add one new function `poll_clipboard()` called from the main loop alongside the existing `poll_bridge()`. Add `<Scrap.h>` include.
 
 ```c
 static void poll_clipboard(void) {
@@ -88,7 +88,7 @@ static void poll_clipboard(void) {
 
 Cap each direction at 1 MiB. After PutScrap from a host POST, re-stash `scrapCount` so the export branch on the same tick won't bounce the text back.
 
-Rebuild via `make -C bridge` (Retro68 toolchain expected on `PATH`). Reinstall via `provisioning/install_bridge_agent.sh`.
+Rebuild via `make -C BridgeAgent` (Retro68 toolchain expected on `PATH`). Reinstall via `provisioning/install_bridge_agent.sh`.
 
 ### Host side — poller + endpoints
 
@@ -158,7 +158,7 @@ Unit test (`tests/test_mac_roman.cpp`) covers ASCII, NBSP, curly quotes, en/em d
 | `src/core/boot_progress.cpp` | Scrap debug surfaced via `/api/status` |
 | `src/core/command_bridge.cpp` | (todo) clipboard cache + poller thread |
 | `src/webserver/api_handlers.cpp` | (todo) `/api/clipboard` GET/POST |
-| `bridge/bridge_agent.c` | (todo) `poll_clipboard()` |
+| `BridgeAgent/BridgeAgent.c` | (todo) `poll_clipboard()` |
 | `client/client.js` | (todo) browser clipboard module |
 | `tests/test_mac_roman.cpp` | Codec unit test |
 | `tests/test_clipboard.sh` | (todo) end-to-end round-trip |

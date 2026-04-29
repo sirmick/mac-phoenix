@@ -33,7 +33,7 @@ Implemented in `command_bridge_read()` (`src/core/command_bridge.cpp`). Safe to 
 
 ### 2. Action Commands (BridgeAgent)
 
-A small Retro68 m68k application (`bridge/bridge_agent.c`) installed in `:System Folder:Startup Items:` of every test disk image. Finder launches it at desktop time. The same 68k binary runs natively on System 7.x and under Mac OS 9's built-in 68k emulator on PPC.
+A small Retro68 m68k application (`BridgeAgent/BridgeAgent.c`) installed in `:System Folder:Startup Items:` of every test disk image. Finder launches it at desktop time. The same 68k binary runs natively on System 7.x and under Mac OS 9's built-in 68k emulator on PPC.
 
 BridgeAgent runs a `WaitNextEvent` loop. Each tick it:
 
@@ -143,9 +143,9 @@ A checkbox in Settings → "Enable automation bridge (BridgeAgent + ExtFS)" togg
 | `src/webserver/api_handlers.cpp` | HTTP endpoints; disk-backed bridge file helpers |
 | `src/config/emulator_config.cpp` | `bridge_enabled`, `bridge_dir`, `--bridge` CLI flag, auto extfs mount |
 | `src/main.cpp` | Calls `command_bridge_init()` and `command_bridge_start_watchdog()` |
-| `bridge/bridge_agent.c` | BridgeAgent source (Retro68, m68k) |
-| `bridge/BridgeAgent.bin` | Pre-built MacBinary (committed) |
-| `bridge/Makefile` | `make` against Retro68 toolchain |
+| `BridgeAgent/BridgeAgent.c` | BridgeAgent source (Retro68, m68k) |
+| `BridgeAgent/BridgeAgent.bin` | Pre-built MacBinary (committed) |
+| `BridgeAgent/Makefile` | `make` against Retro68 toolchain |
 | `provisioning/install_bridge_agent.sh` | hfsutils install of `BridgeAgent.bin` into `:System Folder:Startup Items:` |
 | `tests/guest/MacTestSuite.pl` | MacPerl test script (runs on m68k & PPC) |
 | `tests/guest/install_perl_test.py` | Lay out `.pl` + `.finf` for ExtFS |
