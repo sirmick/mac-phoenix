@@ -29,6 +29,10 @@ set(ENABLE_OPUS "AUTO" CACHE STRING "Opus audio (AUTO/ON/OFF)")
 
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
+# tools/png2icn.py turns the PNG icon sources into Rez data blocks;
+# called from the MacBrowser/BridgeAgent build commands. Pillow is
+# the only third-party dep — ships in `python3-pil` on Debian/Ubuntu.
+find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # --- Optional codecs (auto-detected, with manual override) ---
 # ENABLE_xxx = AUTO (default), ON (require, fail if missing), OFF (disable)
@@ -343,9 +347,25 @@ if(BUILD_BRIDGE_AGENT)
       VERBATIM
     )
 
+    # Regenerate icons.r from the PNG sources whenever they change.
+    # bridge_agent.r #includes the resulting snippet.
+    add_custom_command(
+      OUTPUT "${BA_DIR}/icons.r"
+      COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/png2icn.py"
+              --in32 "${CMAKE_CURRENT_SOURCE_DIR}/tools/icons/bridge-32.png"
+              --in16 "${CMAKE_CURRENT_SOURCE_DIR}/tools/icons/bridge-16.png"
+              --id 128 --out "${BA_DIR}/icons.r"
+      DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/icons/bridge-32.png"
+              "${CMAKE_CURRENT_SOURCE_DIR}/tools/icons/bridge-16.png"
+              "${CMAKE_CURRENT_SOURCE_DIR}/tools/png2icn.py"
+      COMMENT "Generating BridgeAgent icons.r from bridge-{32,16}.png"
+      VERBATIM
+    )
+
     # Rez the resource fork + pack into MacBinary (.bin), APPL (APPL fork),
     # and disk image (.dsk). The committed .bin is what command_bridge
-    # installs into the guest's Startup Items.
+    # installs into the guest's Startup Items. Creator code is 'MxBA'
+    # so the BNDL in bridge_agent.r matches.
     add_custom_command(
       OUTPUT "${BA_BIN}"
       COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" bridge_agent.r
@@ -353,10 +373,10 @@ if(BUILD_BRIDGE_AGENT)
               ${BA_REZ_EXTRA_FLAGS}
               --copy "${BA_CODE}"
               -o "${BA_BIN}"
-              -t APPL -c MxBr
+              -t APPL -c MxBA
               --cc "${BA_DIR}/BridgeAgent.dsk"
               --cc "${BA_DIR}/BridgeAgent.APPL"
-      DEPENDS "${BA_CODE}" "${BA_DIR}/bridge_agent.r"
+      DEPENDS "${BA_CODE}" "${BA_DIR}/bridge_agent.r" "${BA_DIR}/icons.r"
       WORKING_DIRECTORY "${BA_DIR}"
       COMMENT "Rezzing BridgeAgent.bin"
       VERBATIM
@@ -408,9 +428,24 @@ if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ)
     VERBATIM
   )
 
+  # Regenerate icons.r from the PNG sources. Mirrors the BridgeAgent
+  # block — same script, different source PNGs.
+  add_custom_command(
+    OUTPUT "${MB_DIR}/icons.r"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/png2icn.py"
+            --in32 "${CMAKE_CURRENT_SOURCE_DIR}/tools/icons/macbrowser-32.png"
+            --in16 "${CMAKE_CURRENT_SOURCE_DIR}/tools/icons/macbrowser-16.png"
+            --id 128 --out "${MB_DIR}/icons.r"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/icons/macbrowser-32.png"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/icons/macbrowser-16.png"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/png2icn.py"
+    COMMENT "Generating MacBrowser icons.r from macbrowser-{32,16}.png"
+    VERBATIM
+  )
+
   # Rez resource fork + pack into MacBinary, APPL fork, and the .dsk
   # floppy. The floppy is what users `--disk` to expose the app to
-  # their guest.
+  # their guest. Creator stays 'MxBr' (matches MacBrowser.r BNDL).
   add_custom_command(
     OUTPUT "${MB_BIN}"
     COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" MacBrowser.r
@@ -420,7 +455,7 @@ if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ)
             -t APPL -c MxBr
             --cc "${MB_DIR}/MacBrowser.dsk"
             --cc "${MB_DIR}/MacBrowser.APPL"
-    DEPENDS "${MB_CODE}" "${MB_DIR}/MacBrowser.r"
+    DEPENDS "${MB_CODE}" "${MB_DIR}/MacBrowser.r" "${MB_DIR}/icons.r"
     WORKING_DIRECTORY "${MB_DIR}"
     COMMENT "Rezzing MacBrowser.bin"
     VERBATIM
