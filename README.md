@@ -20,6 +20,7 @@ Most-tested guest OS versions: **System 6.0.8**, **System 7.5.5**, **Mac OS 7.6.
 - **Three transport modes** — WebSocket for PNG/WebP (works through any HTTPS proxy), HTTP long-poll for locked-down networks, WebRTC RTP for H.264/VP9 on LAN
 - **REST API** — boot status, screenshots, config, app launching, and control via HTTP endpoints
 - **Automation bridge** — launch classic apps, graceful guest shutdown and restart, and bidirectional TEXT-scrap clipboard sync between browser and Mac OS
+- **MacBrowser** — modern web inside System 7: a native Mac app whose viewport is filled live with pixels from a host-side Firefox-on-Xvfb (`--browser`). Works around the three intractable problems with running 1996-era browsers on the modern web (TLS handshake, cert imports, 25 MHz HTML/CSS/JS).
 - **Optional audio** — opt-in Opus-encoded audio streaming over WebRTC (`--audio`)
 - **NAT networking** — optional Unix-socket bridge (smoltcp + NAT) so the guest can reach the Internet without root
 - **Headless mode** — run without any UI for testing and automation
@@ -105,6 +106,42 @@ it up automatically and rebuilds `BridgeAgent.bin` whenever
 ```bash
 cmake -B build -DBUILD_BRIDGE_AGENT=OFF
 ```
+
+#### MacBrowser (optional — Firefox-on-Xvfb pipeline for `--browser`)
+
+The `--browser` flag spawns a host-side `Xvfb` + `Firefox` and pipes
+the rendered pixels into a guest Mac app called MacBrowser. Two
+runtime deps:
+
+```bash
+sudo apt install xvfb                      # virtual X server
+# Install Firefox via Mozilla's tarball, NOT the snap (the snap's
+# sandbox + auto-update don't compose with Xvfb):
+#   https://www.mozilla.org/firefox/all/
+# Extract to /opt/firefox/ (the supervisor probes that path first).
+```
+
+The committed `MacBrowser/MacBrowser.bin` is what gets loaded inside
+the guest; rebuilding from source uses the same Retro68 toolchain as
+BridgeAgent (see above) and is wired into `cmake --build build`. To
+skip the rebuild:
+
+```bash
+cmake -B build -DBUILD_MAC_BROWSER=OFF
+```
+
+To run, mount the floppy and pass `--browser`:
+
+```bash
+./build/mac-phoenix --browser \
+  --disk MacBrowser/MacBrowser.dsk \
+  --bridge \
+  /path/to/quadra.rom
+```
+
+Then double-click **MacBrowser** on the floppy inside the guest. See
+[`docs/plan/MacBrowser.md`](docs/plan/MacBrowser.md) for the protocol
+and architecture deep-dive.
 
 #### Provisioning tools (optional — for creating HFS disk images)
 
@@ -321,9 +358,6 @@ load with a one-time deprecation warning, then dropped on first save. See
   --timeout N                Auto-exit after N seconds (useful for tests)
   --no-webserver             Headless mode (no HTTP / WebRTC)
   --network MODE             Network: none | socket[:<unix-socket-path>]
-  --mitm-tls                 Enable MITM TLS proxy
-  --mitm-ports LIST          Comma-separated TCP ports (default: 443)
-  --mitm-ca-dir PATH         CA directory (default: .mitm_ca)
   --bridge                   Enable the automation bridge (BridgeAgent + ExtFS)
   --headless-http            HTTP API only (no video/audio); implies --bridge
   --audio                    Enable audio emulation (Opus over WebRTC; default: off)

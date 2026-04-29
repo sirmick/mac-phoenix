@@ -169,9 +169,6 @@ nlohmann::json EmulatorConfig::to_json() const {
     // Network
     j["network"] = network_string();
     if (!network_if.empty()) j["network_if"] = network_if;
-    j["mitm_tls"] = mitm_tls;
-    if (!mitm_ports.empty())  j["mitm_ports"]  = mitm_ports;
-    if (!mitm_ca_dir.empty()) j["mitm_ca_dir"] = mitm_ca_dir;
 
     // Logging
     j["log_level"]          = log_level;
@@ -288,9 +285,6 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         else network = NetworkMode::None;
     }
     if (j.contains("network_if")) network_if = json_utils::get_string(j, "network_if");
-    if (j.contains("mitm_tls"))    mitm_tls    = json_utils::get_bool(j, "mitm_tls");
-    if (j.contains("mitm_ports"))  mitm_ports  = json_utils::get_string(j, "mitm_ports");
-    if (j.contains("mitm_ca_dir")) mitm_ca_dir = json_utils::get_string(j, "mitm_ca_dir");
 
     // ── Logging ─────────────────────────────────────────────────
     if (j.contains("log_level"))         log_level         = json_utils::get_int(j, "log_level");
@@ -403,12 +397,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog\n");
             printf("\nNetworking:\n");
             printf("  --network MODE             none | socket[:PATH] (default: none)\n");
-            printf("  --mitm-tls                 Enable MITM TLS proxy\n");
-            printf("  --mitm-ports LIST          Comma-separated TCP ports (default: 443)\n");
-            printf("  --mitm-ca-dir PATH         CA directory (default: .mitm_ca)\n");
             printf("\nAutomation:\n");
             printf("  --bridge                   Enable automation bridge\n");
-            printf("  --browser                  Reserve BrowserShm region (MacBrowser spike)\n");
+            printf("  --browser                  Run MacBrowser (Firefox-on-Xvfb pipeline)\n");
             printf("  --headless-http            HTTP API only (no video/audio)\n");
             printf("\nServer:\n");
             printf("  --port N                   HTTP+WS port (default: 11000)\n");
@@ -584,19 +575,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             config.ipc_mode = true;
             config.enable_webserver = false;
             argv[i] = nullptr; continue;
-        }
-
-        // --mitm-tls / --mitm-ports / --mitm-ca-dir
-        if (strcmp(argv[i], "--mitm-tls") == 0) {
-            config.mitm_tls = true; argv[i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--mitm-ports") == 0 && i+1 < argc) {
-            config.mitm_ports = argv[i+1];
-            argv[i] = nullptr; argv[++i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--mitm-ca-dir") == 0 && i+1 < argc) {
-            config.mitm_ca_dir = argv[i+1];
-            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
         // --network <mode>[:<path>]

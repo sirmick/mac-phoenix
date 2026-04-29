@@ -223,7 +223,6 @@ if(BUILD_NET_BRIDGE)
   else()
     set(NET_BRIDGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/net-bridge")
     set(NET_BRIDGE_BIN "${NET_BRIDGE_DIR}/target/release/net-bridge")
-    set(NET_BRIDGE_LEGACY_SSL "${NET_BRIDGE_DIR}/vendor/openssl-102-legacy")
 
     # Rust sources that should trigger a rebuild when they change.
     # (GLOB at configure time — re-run cmake after adding new .rs files.)
@@ -232,25 +231,7 @@ if(BUILD_NET_BRIDGE)
     )
     list(APPEND NET_BRIDGE_SOURCES
       "${NET_BRIDGE_DIR}/Cargo.toml"
-      "${NET_BRIDGE_DIR}/Cargo.lock"
     )
-
-    # net-bridge needs OpenSSL 1.0.2u to talk to classic-Mac browsers.
-    # System OpenSSL is 3.x which truly removed SSLv2 and the export
-    # ciphers NN3-export-Mac sends; we vendor 1.0.2u (last release with
-    # them) via tools/build-openssl-102.sh. No system fallback because
-    # there's no system distribution of 1.0.2 anymore.
-    if(EXISTS "${NET_BRIDGE_LEGACY_SSL}/lib/libssl.a")
-      set(NET_BRIDGE_ENV
-        "OPENSSL_DIR=${NET_BRIDGE_LEGACY_SSL}"
-        "OPENSSL_STATIC=1"
-      )
-      message(STATUS "net-bridge: linking vendored OpenSSL 1.0.2u at ${NET_BRIDGE_LEGACY_SSL}")
-    else()
-      set(NET_BRIDGE_ENV "")
-      message(STATUS "net-bridge: vendored OpenSSL 1.0.2u not built — net-bridge will fail.")
-      message(STATUS "            Run net-bridge/tools/build-openssl-102.sh then re-run cmake.")
-    endif()
 
     # After cargo finishes, drop a symlink into the CMake build tree next
     # to mac-phoenix so find_bridge_binary() in the emulator can resolve
@@ -259,8 +240,7 @@ if(BUILD_NET_BRIDGE)
 
     add_custom_command(
       OUTPUT "${NET_BRIDGE_LINK}"
-      COMMAND ${CMAKE_COMMAND} -E env ${NET_BRIDGE_ENV}
-              "${CARGO_EXECUTABLE}" build --release
+      COMMAND "${CARGO_EXECUTABLE}" build --release
               --manifest-path "${NET_BRIDGE_DIR}/Cargo.toml"
       COMMAND ${CMAKE_COMMAND} -E create_symlink
               "${NET_BRIDGE_BIN}" "${NET_BRIDGE_LINK}"
@@ -373,6 +353,66 @@ if(BUILD_BRIDGE_AGENT)
     add_custom_target(bridge-agent ALL DEPENDS "${BA_BIN}")
     message(STATUS "bridge-agent: using Retro68 at ${RETRO68_BIN_DIR}")
   endif()
+endif()
+
+# =============================================================================
+# MacBrowser (Retro68 68k Mac app) — guest-side browser viewport.
+# CopyBits's host-rendered Firefox pixels out of BrowserShm into a
+# native Mac window with toolbar, URL bar, and scroll bars. Loaded
+# from MacBrowser/MacBrowser.dsk (a small floppy committed alongside
+# the source) which the user mounts via `--disk MacBrowser/MacBrowser.dsk`.
+#
+# Same opt-in pattern as bridge-agent: needs the Retro68 toolchain;
+# falls back to the committed MacBrowser.bin when the toolchain isn't
+# available. Opt out with -DBUILD_MAC_BROWSER=OFF.
+# =============================================================================
+option(BUILD_MAC_BROWSER "Build the MacBrowser guest app from source (needs Retro68)" ON)
+
+if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ)
+  set(MB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/MacBrowser")
+  set(MB_CODE "${MB_DIR}/MacBrowser.code.bin")
+  set(MB_BIN  "${MB_DIR}/MacBrowser.bin")
+
+  # Compile MacBrowser.c + browser_shm.c → m68k code binary. The
+  # -I path lets the guest pull in the host-shared protocol header
+  # (src/common/include/MacBrowser.h) — same struct layout the host
+  # uses, just compiled native-BE instead of with byte-swap accessors.
+  add_custom_command(
+    OUTPUT "${MB_CODE}"
+    COMMAND "${RETRO68_GCC}" -O2
+            -I "${CMAKE_CURRENT_SOURCE_DIR}/src/common/include"
+            -o "${MB_CODE}" MacBrowser.c browser_shm.c
+    DEPENDS "${MB_DIR}/MacBrowser.c"
+            "${MB_DIR}/browser_shm.c"
+            "${MB_DIR}/browser_shm.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/common/include/MacBrowser.h"
+    WORKING_DIRECTORY "${MB_DIR}"
+    COMMENT "Building MacBrowser (m68k): MacBrowser.c → MacBrowser.code.bin"
+    VERBATIM
+  )
+
+  # Rez resource fork + pack into MacBinary, APPL fork, and the .dsk
+  # floppy. The floppy is what users `--disk` to expose the app to
+  # their guest.
+  add_custom_command(
+    OUTPUT "${MB_BIN}"
+    COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" MacBrowser.r
+            -I "${RETRO68_RINCLUDES}"
+            --copy "${MB_CODE}"
+            -o "${MB_BIN}"
+            -t APPL -c MxBr
+            --cc "${MB_DIR}/MacBrowser.dsk"
+            --cc "${MB_DIR}/MacBrowser.APPL"
+    DEPENDS "${MB_CODE}" "${MB_DIR}/MacBrowser.r"
+    WORKING_DIRECTORY "${MB_DIR}"
+    COMMENT "Rezzing MacBrowser.bin"
+    VERBATIM
+  )
+
+  add_custom_target(macbrowser-app ALL DEPENDS "${MB_BIN}")
+  message(STATUS "macbrowser-app: building from source")
+elseif(BUILD_MAC_BROWSER)
+  message(STATUS "macbrowser-app: Retro68 unavailable — keeping committed MacBrowser.bin.")
 endif()
 
 # =============================================================================
