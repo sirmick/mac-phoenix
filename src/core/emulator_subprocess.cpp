@@ -109,22 +109,6 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back(net_arg);
     }
 
-    // MITM TLS proxy — propagated to the IPC child so its ether_socket
-    // init spawns net-bridge with the right flags. Without this, the
-    // parent loads mitm_tls=true from config.json but the child silently
-    // launches a vanilla net-bridge.
-    if (config_->mitm_tls) {
-        args.push_back("--mitm-tls");
-    }
-    if (!config_->mitm_ports.empty()) {
-        args.push_back("--mitm-ports");
-        args.push_back(config_->mitm_ports);
-    }
-    if (!config_->mitm_ca_dir.empty()) {
-        args.push_back("--mitm-ca-dir");
-        args.push_back(config_->mitm_ca_dir);
-    }
-
     // CPU feature flags
     args.push_back(config_->jit ? "--jit" : "--no-jit");
     args.push_back(config_->jit68k ? "--jit68k" : "--no-jit68k");

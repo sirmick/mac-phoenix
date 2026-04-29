@@ -50,11 +50,6 @@ static pid_t s_bridge_pid = -1;
 static std::atomic<bool> s_running{false};
 static std::thread s_rx_thread;
 
-// MITM TLS config plumbed through to the spawned net-bridge (see --mitm-tls).
-static bool s_mitm_enabled = false;
-static std::string s_mitm_ports;
-static std::string s_mitm_ca_dir;
-
 // Mac's ethernet address (must match net-bridge's MAC_ADDR)
 static uint8_t s_mac_addr[6] = {0x02, 0x50, 0x48, 0x58, 0x00, 0x01};
 
@@ -162,33 +157,19 @@ static bool launch_bridge()
 	}
 
 	if (pid == 0) {
-		// Child: exec the bridge. Build argv dynamically so optional flags
-		// (e.g. --mitm-tls) only appear when configured.
-		std::vector<const char *> argv;
-		argv.push_back("net-bridge");
-		argv.push_back("--socket");
-		argv.push_back(s_sock_path.c_str());
-		if (s_mitm_enabled) {
-			argv.push_back("--mitm-tls");
-			if (!s_mitm_ports.empty()) {
-				argv.push_back("--mitm-ports");
-				argv.push_back(s_mitm_ports.c_str());
-			}
-			if (!s_mitm_ca_dir.empty()) {
-				argv.push_back("--mitm-ca-dir");
-				argv.push_back(s_mitm_ca_dir.c_str());
-			}
-		}
-		argv.push_back(nullptr);
-		execvp(binary.c_str(), const_cast<char * const *>(argv.data()));
+		const char *argv[] = {
+			"net-bridge",
+			"--socket", s_sock_path.c_str(),
+			nullptr,
+		};
+		execvp(binary.c_str(), const_cast<char * const *>(argv));
 		perror("[Socket] exec net-bridge");
 		_exit(1);
 	}
 
 	s_bridge_pid = pid;
-	fprintf(stderr, "[Socket] Launched net-bridge (pid=%d): %s --socket %s%s\n",
-		pid, binary.c_str(), s_sock_path.c_str(),
-		s_mitm_enabled ? " --mitm-tls" : "");
+	fprintf(stderr, "[Socket] Launched net-bridge (pid=%d): %s --socket %s\n",
+		pid, binary.c_str(), s_sock_path.c_str());
 
 	// Wait for socket to appear (up to 5 seconds)
 	for (int i = 0; i < 50; i++) {
@@ -427,13 +408,6 @@ extern "C" void ether_socket_get_mac(uint8_t mac[6])
 }
 
 // ---- Registration ----
-
-void ether_socket_set_mitm(bool enabled, const char *ports, const char *ca_dir)
-{
-	s_mitm_enabled = enabled;
-	s_mitm_ports = ports ? ports : "";
-	s_mitm_ca_dir = ca_dir ? ca_dir : "";
-}
 
 void ether_socket_register(const char *sock_path)
 {

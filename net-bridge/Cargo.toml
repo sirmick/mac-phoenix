@@ -22,13 +22,3 @@ smoltcp = { version = "0.11", default-features = false, features = [
 log = "0.4"
 env_logger = "0.10"
 libc = "0.2"
-# openssl 0.10.66 (= openssl-sys 0.9.103) is the last release that still
-# supports OpenSSL 1.0.x. We need 1.0.2u for SSLv2 + 40-bit export ciphers
-# (NN3-international-Mac); newer openssl-sys hard-rejects it at build.
-openssl = "=0.10.66"
-openssl-sys = "=0.9.103"
-# ureq is a synchronous HTTP/HTTPS client — pure Rust core, native-tls
-# backend = uses our system OpenSSL for upstream TLS (modern, current
-# trust store). Used by http_proxy.rs to fetch HTTPS for vintage browsers.
-# Pin to 2.10 (MSRV 1.71) — stays inside our 1.75 floor.
-ureq = { version = "=2.10.1", default-features = false, features = ["tls", "gzip"] }

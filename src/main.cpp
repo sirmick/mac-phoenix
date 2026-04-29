@@ -465,18 +465,13 @@ int main(int argc, char **argv)
 		const char *path = emu_config.network_if.empty()
 			? "/tmp/mac-ether.sock"
 			: emu_config.network_if.c_str();
-		ether_socket_set_mitm(
-			emu_config.mitm_tls,
-			emu_config.mitm_ports.empty() ? nullptr : emu_config.mitm_ports.c_str(),
-			emu_config.mitm_ca_dir.empty()  ? nullptr : emu_config.mitm_ca_dir.c_str()
-		);
 		ether_socket_register(path);
 	}
 
-	// Drop a consolidated NetworkInfo.txt (plus MITM CA copies) into
-	// <extfs>/MacPhoenix/ so the guest can discover DHCP addresses,
-	// bridge/mitm status, build dates, and install the MITM CA without
-	// digging through the host filesystem. No-op when ExtFS isn't used.
+	// Drop a consolidated NetworkInfo.txt into <extfs>/MacPhoenix/ so the
+	// guest can discover DHCP addresses, bridge status, and build dates
+	// without digging through the host filesystem. No-op when ExtFS isn't
+	// used.
 	core::write_network_info(emu_config);
 
 	// Set global debug/log state from config

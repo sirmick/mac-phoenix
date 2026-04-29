@@ -7,17 +7,12 @@
 //! Usage: net-bridge [--socket /tmp/mac-ether.sock]
 
 mod bulk_server;
-mod ca_http_server;
 mod device;
 mod dhcp_server;
 mod echo_server;
-mod http_proxy;
 mod icmp_proxy;
 mod nat;
-mod sni;
 mod tcp_proxy;
-mod tls_listener;
-mod tls_mitm;
 mod udp_proxy;
 
 use std::os::unix::net::UnixListener;
@@ -28,13 +23,10 @@ use smoltcp::iface::{Config, Interface, SocketSet};
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, Ipv4Address};
 
 use bulk_server::BulkServer;
-use ca_http_server::CaHttpServer;
 use device::SocketDevice;
 use echo_server::EchoServer;
-use http_proxy::HttpProxy;
 use icmp_proxy::IcmpNat;
 use tcp_proxy::TcpNat;
-use tls_mitm::{MitmConfig, MitmRuntime};
 use udp_proxy::UdpNat;
 
 /// Gateway (bridge) MAC and IP
@@ -72,15 +64,6 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp/mac-ether.sock"));
 
-    let mitm_cfg = MitmConfig::from_args(argv.iter().skip(1).cloned()).unwrap_or_else(|e| {
-        eprintln!("net-bridge: {}", e);
-        std::process::exit(2);
-    });
-    let mitm = MitmRuntime::from_config(mitm_cfg).unwrap_or_else(|e| {
-        eprintln!("net-bridge: MITM init failed: {}", e);
-        std::process::exit(2);
-    });
-
     // Clean up stale socket
     let _ = std::fs::remove_file(&sock_path);
 
@@ -111,23 +94,7 @@ fn main() {
     let mut sockets = SocketSet::new(vec![]);
     let echo = EchoServer::new(&mut sockets);
     let mut bulk = BulkServer::new(&mut sockets);
-    // Serve the MITM root CA on gateway:80 so classic browsers (NN2/3/4
-    // and early MSIE) can import it via the standard HTTP + MIME
-    // `application/x-x509-ca-cert` path. Only constructed when MITM is
-    // enabled; otherwise :80 stays available for anything else.
-    let mut ca_http: Option<CaHttpServer> = mitm.as_ref().map(|m| {
-        let pem = m.ca.cert_pem().to_vec();
-        let der = m.ca.cert_der().to_vec();
-        log::info!("ca-http: serving CA at http://10.0.2.1/MitmCA.crt (PEM) and .cer (DER)");
-        CaHttpServer::new(&mut sockets, pem, der)
-    });
-    // HTTP-rewrite proxy on :8080 — vintage browsers configure this as
-    // their HTTP proxy; bridge fetches https:// upstream with modern TLS
-    // and serves http:// downstream after rewriting links in the body.
-    // Sidesteps the cert-trust gap (NN3/iCab can't import a custom CA).
-    let mut http_proxy = HttpProxy::new(&mut sockets);
-    log::info!("http-proxy: listening on http://10.0.2.1:8080 (configure as guest HTTP proxy)");
-    let mut tcp_nat = TcpNat::new(mitm);
+    let mut tcp_nat = TcpNat::new();
     let mut udp_nat = UdpNat::new();
     let mut icmp_nat = IcmpNat::new();
 
@@ -165,10 +132,6 @@ fn main() {
         // 3b. Service the in-bridge echo daemon on GW:7
         echo.poll(&mut sockets);
         bulk.poll(&mut sockets);
-        if let Some(ref mut http) = ca_http {
-            http.poll(&mut sockets);
-        }
-        http_proxy.poll(&mut sockets);
 
         // Re-poll smoltcp so any outgoing echo frames get egressed this tick.
         let _ = iface.poll(timestamp, &mut device, &mut sockets);

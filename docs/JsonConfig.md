@@ -86,9 +86,6 @@ silently dropped on first save).
 |-------|------|---------|-------------|
 | `network` | string | `"none"` | `"none"` or `"socket"` (Unix socket to net-bridge) |
 | `network_if` | string | `""` | Socket path when `network` is `"socket"` |
-| `mitm_tls` | bool | `false` | Enable MITM TLS proxy (downgrade modern TLS to SSLv3/TLS1.0 for guest) |
-| `mitm_ports` | string | `""` | Comma-separated TCP ports to intercept (default: `"443"`) |
-| `mitm_ca_dir` | string | `""` | Directory for the local MITM root CA |
 
 ### System
 

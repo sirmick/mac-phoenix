@@ -9,10 +9,9 @@ namespace config { struct EmulatorConfig; }
 
 namespace core {
 
-// Writes <extfs[0]>/MacPhoenix/NetworkInfo.txt and, when MITM is enabled,
-// copies the MITM root CA into the same subfolder with Finder-Info
-// sidecars so it shows up with the right icon in the guest. No-op when
-// ExtFS isn't configured.
+// Writes <extfs[0]>/MacPhoenix/NetworkInfo.txt + netcfg.txt with the
+// host gateway, DHCP lease, BridgeAgent status, and host/net-bridge
+// build stamps. No-op when ExtFS isn't configured.
 void write_network_info(const config::EmulatorConfig &cfg);
 
 } // namespace core

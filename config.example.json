@@ -22,6 +22,5 @@
   "dismiss_shutdown_dialog": true,
   "bridge_enabled": false,
 
-  "network": "none",
-  "mitm_tls": false
+  "network": "none"
 }

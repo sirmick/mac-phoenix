@@ -3698,9 +3698,6 @@ function configFromServerJson(cfg) {
         bridge_enabled: cfg.bridge_enabled ?? false,
         network: cfg.network || 'none',
         network_if: cfg.network_if || '',
-        mitm_tls: cfg.mitm_tls ?? false,
-        mitm_ports: cfg.mitm_ports || '',
-        mitm_ca_dir: cfg.mitm_ca_dir || '',
         // Keyboard remap (nested in JSON for grouping). Defaults match the
         // PC-shortcut habit: Ctrl→⌘, Alt→⌥, Win→⌃.
         // Pass keyboard fields through verbatim — applyKeyboardConfig() resolves
@@ -3751,13 +3748,10 @@ function buildConfigJson() {
         dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true,
         bridge_enabled: document.getElementById('cfg-bridge-enabled')?.checked ?? false,
         network: document.getElementById('cfg-network')?.value || 'none',
-        // Socket path / MITM ports / MITM CA dir no longer have UI inputs —
-        // preserve whatever was loaded from disk so saving via the UI doesn't
-        // clobber custom server-side values.
+        // Socket path no longer has a UI input — preserve whatever was loaded
+        // from disk so saving via the UI doesn't clobber custom server-side
+        // values.
         network_if: currentConfig.network_if || '',
-        mitm_tls: document.getElementById('cfg-mitm-tls')?.checked ?? false,
-        mitm_ports: currentConfig.mitm_ports || '',
-        mitm_ca_dir: currentConfig.mitm_ca_dir || '',
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         keyboard: {
@@ -4296,21 +4290,9 @@ function updateConfigUI() {
     if (bridgeEnabledEl) bridgeEnabledEl.checked = currentConfig.bridge_enabled;
 
     const networkEl = document.getElementById('cfg-network');
-    const mitmTlsEl = document.getElementById('cfg-mitm-tls');
-    const mitmGroup = document.getElementById('cfg-mitm-group');
-
-    // MITM TLS toggle only makes sense when networking is enabled (socket mode).
-    const syncNetworkVisibility = () => {
-        const netMode = networkEl ? networkEl.value : (currentConfig.network || 'none');
-        if (mitmGroup) mitmGroup.style.display = (netMode === 'socket') ? '' : 'none';
-    };
-
     if (networkEl) {
         networkEl.value = currentConfig.network || 'none';
-        networkEl.addEventListener('change', syncNetworkVisibility);
     }
-    if (mitmTlsEl) mitmTlsEl.checked = !!currentConfig.mitm_tls;
-    syncNetworkVisibility();
 
     refreshBootFromOptions();
     const bootdriverEl = document.getElementById('cfg-bootdriver');
