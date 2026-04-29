@@ -774,7 +774,10 @@ static void udp_nat_recv(void *arg, struct udp_pcb * /*pcb*/, struct pbuf *p,
 		proxy->orig_dst_ip = dst_ip;
 		proxy->orig_dst_port = dst_port;
 		proxy->ttl = ip_ttl;
-		proxy->last_activity = 0;
+		// Stamp last_activity at creation so the 60s expiry sweep collects
+		// proxies whose remote never replies. Otherwise a guest sending
+		// UDP to a black-hole IP would leak host_fds indefinitely.
+		proxy->last_activity = sys_now();
 		proxy->next = s_udp_proxies;
 		s_udp_proxies = proxy;
 	}
@@ -1148,7 +1151,10 @@ int lwip_nat_ip4_input(struct pbuf *p, struct netif * /*inp*/)
 			proxy->mac_src_ip = src_ip;
 			proxy->orig_dst_ip = dst_ip;
 			proxy->id = icmp_id;
-			proxy->last_activity = 0;
+			// Stamp last_activity at creation; the 10s sweep skips
+			// proxies with last_activity == 0, which would leak fds for
+			// pings to non-responsive hosts.
+			proxy->last_activity = sys_now();
 			proxy->next = s_icmp_proxies;
 			s_icmp_proxies = proxy;
 		}

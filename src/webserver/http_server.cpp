@@ -274,13 +274,34 @@ bool Server::handle_client(int client_fd) {
         header_end = request.find("\r\n\r\n");
     }
 
-    // Check Content-Length and read remaining body if needed
+    // Check Content-Length and read remaining body if needed.
+    // Cap to a sane maximum so a hostile client can't OOM us with
+    // `Content-Length: 4000000000` and a slow trickle of bytes.
+    constexpr size_t kMaxBodyBytes = 16 * 1024 * 1024;
     size_t content_length = 0;
     size_t cl_pos = request.find("Content-Length: ");
     if (cl_pos == std::string::npos)
         cl_pos = request.find("content-length: ");
     if (cl_pos != std::string::npos) {
-        content_length = std::stoul(request.substr(cl_pos + 16));
+        try {
+            size_t parsed = std::stoul(request.substr(cl_pos + 16));
+            if (parsed > kMaxBodyBytes) {
+                Response resp;
+                resp.set_status(413, "Payload Too Large");
+                resp.set_body("Payload Too Large");
+                std::string response_str = resp.build();
+                ::send(client_fd, response_str.c_str(), response_str.size(), 0);
+                return false;
+            }
+            content_length = parsed;
+        } catch (const std::exception &) {
+            Response resp;
+            resp.set_status(400, "Bad Request");
+            resp.set_body("Invalid Content-Length");
+            std::string response_str = resp.build();
+            ::send(client_fd, response_str.c_str(), response_str.size(), 0);
+            return false;
+        }
     }
 
     size_t body_start = header_end + 4;

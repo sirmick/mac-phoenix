@@ -406,12 +406,22 @@ static void audio_thread_func()
 					IPCAudioFrame* frame = &g_ipc_shm->audio_frames[write_idx];
 					uint32_t sr = AudioStatus.sample_rate >> 16;
 					if (sr == 0) sr = 44100;
+					uint32_t ch = AudioStatus.channels ? (uint32_t)AudioStatus.channels : 1;
+					uint32_t samples = (sr * 20) / 1000;
+					// Cap silence-frame size to the SHM slot capacity. AudioStatus
+					// values come from the guest and a hostile/buggy combo of
+					// sample_rate + channels could otherwise overrun frame->data.
+					size_t total_bytes = (size_t)samples * 2 * ch;
+					if (total_bytes > IPC_AUDIO_MAX_FRAME_BYTES) {
+						total_bytes = IPC_AUDIO_MAX_FRAME_BYTES;
+						samples = (uint32_t)(total_bytes / (2 * ch));
+					}
 
 					frame->sample_rate = sr;
-					frame->channels = AudioStatus.channels;
-					frame->samples = (sr * 20) / 1000;
+					frame->channels = ch;
+					frame->samples = samples;
 					frame->format = 1;
-					memset(frame->data, 0, frame->samples * 2 * frame->channels);
+					memset(frame->data, 0, total_bytes);
 
 					IPC_ATOMIC_STORE(g_ipc_shm->audio_write_idx, next_write);
 				}

@@ -175,6 +175,7 @@ void video_ipc_set_depth(int depth_bits, int bytes_per_row)
 // (happens continuously during boot and app launches in indexed modes).
 void video_ipc_set_palette(const uint8_t *pal, int num)
 {
+    if (num < 0) return;
     if (num > 256) num = 256;
     memcpy(g_frame_palette, pal, (size_t)num * 3);
 }

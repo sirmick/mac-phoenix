@@ -18,6 +18,7 @@
 #include "../common/include/cpu_emulation.h"
 #include "../common/include/m68k_registers.h"
 #include "../common/include/platform.h"
+#include "../webserver/file_scanner.h"  // storage::json_escape
 #include "boot_progress.h"
 #include "../config/emulator_config.h"
 #include <sys/stat.h>
@@ -78,11 +79,8 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr, uint32_t len) {
                 uint32_t title_ptr = ReadMacInt32(title_handle);
                 if (title_ptr && title_ptr < RAMSize) {
                     uint8_t tlen = ReadMacInt8(title_ptr);
-                    for (int i = 0; i < tlen; i++) {
-                        char c = static_cast<char>(ReadMacInt8(title_ptr + 1 + i));
-                        if (c == '"' || c == '\\') json += "\\";
-                        title += c;
-                    }
+                    for (int i = 0; i < tlen; i++)
+                        title += static_cast<char>(ReadMacInt8(title_ptr + 1 + i));
                 }
             }
 
@@ -92,7 +90,7 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr, uint32_t len) {
             int16_t right = static_cast<int16_t>(ReadMacInt16(wp + 22));
             bool visible = ReadMacInt8(wp + 110) != 0;
 
-            json += "{\"title\":\"" + title + "\""
+            json += "{\"title\":\"" + storage::json_escape(title) + "\""
                  +  ",\"rect\":[" + std::to_string(left) + ","
                  +  std::to_string(top) + ","
                  +  std::to_string(right) + ","

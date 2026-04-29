@@ -176,8 +176,12 @@ void handle_stream(const Request& req, int client_fd, APIContext* ctx) {
     int target_fps = 30;
     std::string fps_str = parse_query_param(req.query, "fps");
     if (!fps_str.empty()) {
-        int parsed = std::stoi(fps_str);
-        if (parsed >= 1 && parsed <= 60) target_fps = parsed;
+        try {
+            int parsed = std::stoi(fps_str);
+            if (parsed >= 1 && parsed <= 60) target_fps = parsed;
+        } catch (const std::exception &) {
+            // Ignore garbage fps= and keep the default
+        }
     }
 
     auto frame_interval = std::chrono::milliseconds(1000 / target_fps);

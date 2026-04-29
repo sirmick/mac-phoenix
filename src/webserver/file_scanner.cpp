@@ -214,17 +214,30 @@ std::string get_storage_json(const std::string& roms_path, const std::string& im
     return json.str();
 }
 
-// Helper: Escape string for JSON (basic implementation)
+// Helper: Escape string for JSON. Handles all control bytes (< 0x20) so
+// raw Mac strings (filenames, window titles, app names) can be safely
+// interpolated into JSON responses without producing invalid output.
 std::string json_escape(const std::string& s) {
     std::string result;
-    for (char c : s) {
+    result.reserve(s.size());
+    for (unsigned char c : s) {
         switch (c) {
             case '"': result += "\\\""; break;
             case '\\': result += "\\\\"; break;
             case '\n': result += "\\n"; break;
             case '\r': result += "\\r"; break;
             case '\t': result += "\\t"; break;
-            default: result += c; break;
+            case '\b': result += "\\b"; break;
+            case '\f': result += "\\f"; break;
+            default:
+                if (c < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", c);
+                    result += buf;
+                } else {
+                    result += static_cast<char>(c);
+                }
+                break;
         }
     }
     return result;

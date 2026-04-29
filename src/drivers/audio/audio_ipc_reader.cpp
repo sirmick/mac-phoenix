@@ -56,9 +56,11 @@ static void audio_ipc_reader_loop(IPCClient* client, AudioOutput* output)
             continue;
         }
 
-        // Read from SHM ring buffer
-        uint32_t read_idx = IPC_ATOMIC_LOAD(shm->audio_read_idx);
-        uint32_t write_idx = IPC_ATOMIC_LOAD(shm->audio_write_idx);
+        // Read from SHM ring buffer. Mask both indices defensively in case
+        // a child crash/restart left a stale or corrupt counter in SHM —
+        // an unmasked index would OOB into adjacent SHM regions.
+        uint32_t read_idx = IPC_ATOMIC_LOAD(shm->audio_read_idx) % IPC_AUDIO_FRAME_RING_SIZE;
+        uint32_t write_idx = IPC_ATOMIC_LOAD(shm->audio_write_idx) % IPC_AUDIO_FRAME_RING_SIZE;
 
         if (read_idx == write_idx) {
             // Ring buffer empty — underrun
