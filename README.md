@@ -85,7 +85,7 @@ video, input, automation bridge) works fine without it.
 
 #### BridgeAgent (optional — to rebuild the guest helper from source)
 
-The committed `tests/guest/bridge/BridgeAgent.bin` is what gets
+The committed `bridge/BridgeAgent.bin` is what gets
 installed into your Mac OS guest's Startup Items, so most users never
 need to rebuild it. To rebuild from C source you need the Retro68
 m68k cross-toolchain:
@@ -102,7 +102,7 @@ provisioning/build_retro68.sh
 
 After the toolchain is in `toolchain/retro68/`, `cmake -B build` picks
 it up automatically and rebuilds `BridgeAgent.bin` whenever
-`tests/guest/bridge/bridge_agent.c` changes. To skip:
+`bridge/bridge_agent.c` changes. To skip:
 
 ```bash
 cmake -B build -DBUILD_BRIDGE_AGENT=OFF
@@ -534,7 +534,7 @@ export PATH="$PWD/toolchain/retro68/bin:$PATH"
 
 ```bash
 # Produces BridgeAgent.bin (MacBinary, committed to the tree)
-make -C tests/guest/bridge
+make -C bridge
 ```
 
 The `.bin` is installed into `:System Folder:Startup Items:` of every `--disk` automatically when the bridge is enabled (see [Automation bridge](#automation-bridge)); `provisioning/install_bridge_agent.sh <image>` does the same thing manually.
@@ -714,7 +714,7 @@ Attach those to a GitHub release; users install with the usual
 
 ### Rebuilding BridgeAgent
 
-`tests/guest/bridge/BridgeAgent.bin` is committed to the repo and shipped
+`bridge/BridgeAgent.bin` is committed to the repo and shipped
 unchanged in every package. It only needs rebuilding when
 `bridge_agent.c`/`bridge_agent.r` change.
 
@@ -732,7 +732,7 @@ CMake's `BUILD_BRIDGE_AGENT` target needs:
 
 When both are present, `cmake -B build -DBUILD_BRIDGE_AGENT=ON` configures
 the rebuild and the build target overwrites
-`tests/guest/bridge/BridgeAgent.bin`. Commit the new `.bin` and the next
+`bridge/BridgeAgent.bin`. Commit the new `.bin` and the next
 release picks it up.
 
 ```bash
@@ -741,7 +741,7 @@ docker run --rm -v "$PWD":/src -w /src mac-phoenix:dev sh -c '
     cmake -B build -DBUILD_BRIDGE_AGENT=ON
     cmake --build build --target bridge-agent
 '
-git add tests/guest/bridge/BridgeAgent.bin && git commit
+git add bridge/BridgeAgent.bin && git commit
 ```
 
 ### Dev environment image

@@ -262,7 +262,7 @@ endif()
 # BridgeAgent (Retro68 68k Mac app) — guest-side automation helper.
 # Installed into :System Folder:Startup Items: on the guest disk during
 # boot by command_bridge.cpp's provisioning step. The committed
-# BridgeAgent.bin in tests/guest/bridge/ is our fallback; this target
+# BridgeAgent.bin in bridge/ is our fallback; this target
 # rebuilds it from source when the Retro68 toolchain is available.
 # Opt out with -DBUILD_BRIDGE_AGENT=OFF.
 # =============================================================================
@@ -321,7 +321,7 @@ if(BUILD_BRIDGE_AGENT)
       message(STATUS "              Either drop UI 3.4 there or set BUILD_BRIDGE_AGENT=OFF.")
     endif()
 
-    set(BA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests/guest/bridge")
+    set(BA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bridge")
     set(BA_CODE "${BA_DIR}/BridgeAgent.code.bin")
     set(BA_BIN  "${BA_DIR}/BridgeAgent.bin")
 
@@ -503,7 +503,7 @@ install(DIRECTORY client/
         PATTERN "*.svg"
         PATTERN "*.json")
 
-install(FILES tests/guest/bridge/BridgeAgent.bin
+install(FILES bridge/BridgeAgent.bin
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mac-phoenix)
 
 install(PROGRAMS provisioning/install_bridge_agent.sh

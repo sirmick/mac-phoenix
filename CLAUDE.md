@@ -103,14 +103,17 @@ subprojects/
     qemu/target/m68k/translate.c    — M68K → TCG IR decoder (added RTR instruction)
     qemu/accel/tcg/cpu-exec.c       — TB find/compile loop (perf counters added)
 
+bridge/
+  bridge_agent.c                    — BridgeAgent source (Retro68 m68k); polls bridge files in Host: ExtFS
+  BridgeAgent.bin                   — Pre-built MacBinary (committed; rebuilt by CMake when Retro68 present)
+  bridge_agent.r                    — Resource fork: SIZE, BNDL, FREF, creator sig, icons.r include
+
 tests/
   test_api_endpoints.sh             — API smoke tests (10 checks)
   test_boot_to_finder.sh            — Boot-to-Finder test (parameterized by backend)
   test_mouse_position.sh            — Mouse position API test
   test_command_bridge.sh            — Command bridge integration tests (7 checks)
   test_guest_suite.sh               — Boot → dispatch MacTestSuite.pl via /api/launch → read results
-  guest/bridge/bridge_agent.c       — BridgeAgent source (Retro68 m68k); polls bridge files in Host: ExtFS
-  guest/bridge/BridgeAgent.bin      — Pre-built MacBinary (committed)
   guest/MacTestSuite.pl             — MacPerl script run inside the guest by the agent
   test_extfs.sh                     — ExtFS config, CLI, backward compat tests (8 checks)
   test_boot_matrix.sh               — Single-cell capacity check ({backend,arch,disk,jit} → Finder)

@@ -12,7 +12,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-AGENT_BIN="${BRIDGE_AGENT_BIN:-$ROOT/tests/guest/bridge/BridgeAgent.bin}"
+AGENT_BIN="${BRIDGE_AGENT_BIN:-$ROOT/bridge/BridgeAgent.bin}"
 
 # BRIDGE_BPATH (env): Mac-style colon path for the per-instance bridge
 # dir, e.g. "Host:MacPhoenix:12345". Gets written into
@@ -28,7 +28,7 @@ fi
 
 if [[ ! -f "$AGENT_BIN" ]]; then
     echo "BridgeAgent.bin not found at $AGENT_BIN" >&2
-    echo "Build it first: make -C tests/guest/bridge" >&2
+    echo "Build it first: make -C bridge" >&2
     exit 1
 fi
 
