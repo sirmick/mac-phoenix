@@ -476,6 +476,42 @@ text in.
 - Bookmarks (stored in guest as a `Browser Prefs` file).
 - Multi-tab? (probably out of scope.)
 
+### M9 — Audio (2 days)
+
+YouTube embeds, podcast players, web-radio, and the half of the
+modern web that lives inside `<audio>` / `<video>` are silent until
+this. Plan: terminate Firefox audio at a virtual sink on the host
+and feed the resulting PCM into the existing Mac audio pipeline (the
+emulator already plumbs Sound Manager → Opus → WebRTC client).
+
+- **Sink**: `pactl load-module module-null-sink sink_name=mac_phoenix
+  rate=44100 channels=2`. Firefox's `dom.webaudio.enabled` is on by
+  default; the supervisor sets `PULSE_SINK=mac_phoenix` in the
+  Firefox env so all of Firefox's output (`<audio>`, WebAudio,
+  `<video>` track) lands in our sink instead of the host's default.
+- **Capture**: open `mac_phoenix.monitor` via `parec` (or libpulse
+  directly), 44.1 kHz S16LE stereo, 20 ms frames. Feed those frames
+  into the same path the emulator's audio driver uses for guest
+  output → `Sound Manager` → already-existing Opus + WebRTC.
+- **Mixing**: on a guest that's playing its own sound (a System 7
+  app), we want both audible. Two options:
+    1. Software-mix Firefox PCM with the guest's PCM in the audio
+       driver before the encoder sees it.
+    2. Two parallel sinks, encode separately, mix client-side.
+       Cleaner but doubles encode cost.
+  Defer the choice until we hear what the unmixed Firefox stream
+  sounds like.
+- **Sync**: Firefox audio can lag the visual frame by 50–150 ms
+  through the null-sink → parec hop. If it's audible, add a fixed
+  audio-pre-roll delay on the visual side (we already buffer ~3
+  frames in the encoder).
+- **Mute UI**: a guest-controllable mute is one BiDi
+  `script.evaluate` of `document.querySelectorAll('audio,video')
+  .forEach(e=>e.muted=...)`. Tracks page-loads via the existing
+  preload-script machinery.
+
+**Deliverable**: open YouTube in MacBrowser, hear the video.
+
 ---
 
 Total to M5 (usable browser): ~10 days of focused work, plus the

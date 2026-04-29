@@ -23,6 +23,7 @@
 #include <Events.h>
 #include <Memory.h>
 #include <OSUtils.h>
+#include <Scrap.h>
 #include <ToolUtils.h>
 #include <Resources.h>
 #include <Files.h>
@@ -37,6 +38,21 @@
 
 #define kAppleMenu  128
 #define kFileMenu   129
+#define kEditMenu   130
+
+/* Standard System 7 Edit-menu item indices. Order is mandated by HIG
+ * (Inside Macintosh: Macintosh Toolbox Essentials, Ch. 3): Undo,
+ * separator, Cut, Copy, Paste, Clear, Select All. The DA-supporting
+ * gap (item 1 = Undo) is preserved even though MacBrowser doesn't
+ * implement undo — keeping the menu shape conventional means any
+ * desk accessory the user opens can use AppendResMenu / SystemEdit
+ * dispatch transparently. */
+#define kEditUndo       1
+#define kEditCut        3
+#define kEditCopy       4
+#define kEditPaste      5
+#define kEditClear      6
+#define kEditSelectAll  7
 
 /* Window layout. Toolbar buttons + URL field + a right-aligned
  * status label share one chrome row at the top (light-gray fill,
@@ -122,6 +138,7 @@ static int gURLRight;          /* right edge of URL field */
 
 static MenuHandle gAppleMenuH;
 static MenuHandle gFileMenuH;
+static MenuHandle gEditMenuH;
 static WindowPtr  gWin = NULL;
 static Boolean    gRunning = true;
 
@@ -405,11 +422,15 @@ static void refresh_scrollbars(void)
     gLastBarsRepaint = TickCount();
 }
 
-/* Drain any host events queued in h2g. Cheap on every tick. */
+/* Drain any host events queued in h2g. Cheap on every tick.
+ * Buffer sized for the largest event payload we currently push:
+ * BR_EV_SELECTION caps text at 4096 bytes. Anything bigger gets
+ * truncated by br_ring_pop (still ring-consistent) — bump if we
+ * ever ship larger payloads. */
 static void drain_h2g(void)
 {
     if (!gShm) return;
-    uint8_t buf[256];
+    static uint8_t buf[4096 + 4];     /* static so we don't blow the stack */
     uint16_t type = 0, len = 0;
     while (br_ring_pop(&gShm->h2g, &type, buf, sizeof(buf), &len) == 0) {
         gLastEvtType = type;
@@ -426,6 +447,20 @@ static void drain_h2g(void)
             gStatusURL[0] = urllen;
             if (urllen) memcpy(gStatusURL + 1, buf + 2, urllen);
             gStatusDirty = true;
+        }
+        /* BR_EV_SELECTION: u16 len, u8 text[len]. Reply to a
+         * BR_CMD_GET_SELECTION we sent on Cmd+C. Land the payload
+         * into the Mac scrap as 'TEXT' so the user can Cmd+V the
+         * web-copied text into any other Mac app. v1: text bytes
+         * are UTF-8 from Firefox; we drop them into 'TEXT' as-is,
+         * which is correct for ASCII and lossy for non-ASCII (the
+         * Mac apps will see UTF-8 multi-byte sequences as MacRoman
+         * gibberish). UTF-8↔MacRoman lookup is a TODO. */
+        else if (type == BR_EV_SELECTION && len >= 2) {
+            uint16_t n = (uint16_t)((buf[0] << 8) | buf[1]);
+            if ((uint16_t)(2 + n) > len) n = (uint16_t)(len - 2);
+            ZeroScrap();
+            if (n > 0) PutScrap((long)n, 'TEXT', (Ptr)(buf + 2));
         }
         /* BR_EV_PAGE_METRICS: 6× u32 BE — page_w, page_h,
          * scroll_x, scroll_y, vp_w, vp_h. Drives V/H scrollbar
@@ -720,13 +755,6 @@ static void draw_chrome_row(void)
     SetPort(saved);
 }
 
-/* Push a 0-byte ring command through g2h. Several of these aren't in
- * the protocol header yet — host dispatcher logs unknown types but
- * keeps running, so we forward-define them here for now. */
-#define BR_CMD_STOP       14
-#define BR_CMD_ZOOM_OUT   15
-#define BR_CMD_ZOOM_IN    16
-
 /* Publish the viewport's screen position to the host so its VBL
  * hook can synthesize mouse events from the Mac.Mouse globals. The
  * guest's window port + chrome-row offset gives us viewport top-left
@@ -748,6 +776,57 @@ static void publish_viewport_pos(void)
      * on the host's BR_HOST byte-swap path. */
     gShm->viewport_screen_left = (int16_t)tl.h;
     gShm->viewport_screen_top  = (int16_t)tl.v;
+}
+
+/* Push BR_CMD_GET_SELECTION (no payload). Host BiDi-evaluates
+ * window.getSelection().toString() and replies with a
+ * BR_EV_SELECTION whose payload we land into the Mac scrap from
+ * drain_h2g. v1 is text only; HTML / styled text → defer. */
+static void request_web_copy(void)
+{
+    if (!gShm) return;
+    br_ring_push(&gShm->g2h, BR_CMD_GET_SELECTION, NULL, 0);
+}
+
+/* Read 'TEXT' out of the Mac scrap and ship it as BR_CMD_PASTE.
+ * Mac 'TEXT' is MacRoman. v1: pass bytes through verbatim — works
+ * for ASCII content (which is what 99% of paste targets are);
+ * upper-MacRoman codepoints arrive at Firefox as garbled UTF-8.
+ * MacRoman→UTF-8 conversion is a 256-entry lookup we can wire
+ * later if it bites.
+ *
+ * Logs to the host shm log on each call so we can see "scrap empty"
+ * vs "scrap has N bytes" without instrumenting both sides. */
+static void paste_scrap_to_web(void)
+{
+    if (!gShm) return;
+    Handle h = NewHandle(0);
+    if (!h) return;
+    long off = 0;
+    long size = GetScrap(h, 'TEXT', &off);
+    if (size <= 0) {
+        /* No 'TEXT' flavor — try 'utxt' (UTF-16). Some apps don't
+         * push 'TEXT' alongside, especially if the source had
+         * non-Latin characters. */
+        SetHandleSize(h, 0);
+        size = GetScrap(h, 'utxt', &off);
+        br_log(&gShm->log, BR_LOG_INF,
+               "paste_scrap: TEXT=empty, utxt=%ld", (long)size);
+        DisposeHandle(h);
+        return;
+    }
+    br_log(&gShm->log, BR_LOG_INF,
+           "paste_scrap: TEXT=%ld bytes", (long)size);
+    if (size > 4096) size = 4096;     /* clamp to ring payload */
+    HLock(h);
+    uint16_t n = (uint16_t)size;
+    static uint8_t buf[2 + 4096];
+    buf[0] = (uint8_t)(n >> 8);
+    buf[1] = (uint8_t)(n & 0xFF);
+    memcpy(buf + 2, *h, n);
+    HUnlock(h);
+    DisposeHandle(h);
+    br_ring_push(&gShm->g2h, BR_CMD_PASTE, buf, (uint16_t)(2 + n));
 }
 
 /* Push a BR_CMD_KEY_DOWN with the cooked character that came out of
@@ -900,6 +979,23 @@ static void build_menus(void)
     AppendMenu(gFileMenuH, "\pQuit/Q");
     InsertMenu(gFileMenuH, 0);
 
+    /* Standard Edit menu — the keyboard equivalents are handled in
+     * the keyDown branch directly (so URL-bar TextEdit gets the
+     * local-edit path), but the menu items must exist so MenuKey()
+     * highlights them on Cmd-press and they're discoverable in the
+     * menu bar. The "/" syntax in AppendMenu binds Cmd+letter to
+     * the item. */
+    gEditMenuH = NewMenu(kEditMenu, "\pEdit");
+    AppendMenu(gEditMenuH, "\pUndo/Z");
+    AppendMenu(gEditMenuH, "\p-");
+    AppendMenu(gEditMenuH, "\pCut/X");
+    AppendMenu(gEditMenuH, "\pCopy/C");
+    AppendMenu(gEditMenuH, "\pPaste/V");
+    AppendMenu(gEditMenuH, "\pClear");
+    AppendMenu(gEditMenuH, "\pSelect All/A");
+    DisableItem(gEditMenuH, kEditUndo);    /* No undo path yet. */
+    InsertMenu(gEditMenuH, 0);
+
     DrawMenuBar();
 }
 
@@ -918,6 +1014,44 @@ static void do_menu(long choice)
         if (item == 1) do_about();
     } else if (menuID == kFileMenu) {
         if (item == 1) gRunning = false;
+    } else if (menuID == kEditMenu) {
+        /* URL-bar Cmd+C / Cmd+X always need ZeroScrap + TECut/TECopy
+         * + TEToScrap so the text reaches the desk scrap (TECut/TECopy
+         * alone only fill TextEdit's *private* scrap, invisible to
+         * other apps and to our paste_scrap_to_web reader). Cmd+V
+         * needs TEFromScrap before TEPaste so any text the user just
+         * copied in another app overrides the stale TE scrap. */
+        switch (item) {
+        case kEditCut:
+            if (gURLActive && gURL) {
+                ZeroScrap(); TECut(gURL); TEToScrap();
+            } else {
+                request_web_copy();
+            }
+            break;
+        case kEditCopy:
+            if (gURLActive && gURL) {
+                ZeroScrap(); TECopy(gURL); TEToScrap();
+            } else {
+                request_web_copy();
+            }
+            break;
+        case kEditPaste:
+            if (gURLActive && gURL) {
+                TEFromScrap(); TEPaste(gURL);
+            } else {
+                paste_scrap_to_web();
+            }
+            break;
+        case kEditClear:
+            if (gURLActive && gURL) TEDelete(gURL);
+            break;
+        case kEditSelectAll:
+            if (gURLActive && gURL) TESetSelect(0, 32767, gURL);
+            else if (gShm) br_ring_push(&gShm->g2h, BR_CMD_SELECT_ALL,
+                                        NULL, 0);
+            break;
+        }
     }
     HiliteMenu(0);
 }
@@ -1026,7 +1160,10 @@ static void handle_event(EventRecord *evt)
         uint16_t vk   = (uint16_t)((evt->message & keyCodeMask) >> 8);
         uint16_t mods = (uint16_t)evt->modifiers;
         if (evt->modifiers & cmdKey) {
-            /* Cmd+L: focus URL bar (browser convention). */
+            /* Cmd+L: focus URL bar (browser convention; not exposed
+             * as a menu item). All other Cmd-keys route through the
+             * menu bar — Cmd+C/X/V/A hit the Edit menu, Cmd+Q hits
+             * File. do_menu branches URL-bar vs web-context. */
             if (ch == 'l' || ch == 'L') { focus_url_bar(); break; }
             long choice = MenuKey(ch);
             if (HiWord(choice)) do_menu(choice);
@@ -1114,15 +1251,13 @@ int main(void)
          * dims and our compiled-in defaults. */
         publish_size();
 
-        /* Push our default home URL through the ring. Host's
-         * cmd_dispatch picks it up → bidi.navigate → Firefox loads
-         * the page → load events fire → BR_EV_STATUS comes back →
-         * apply_status puts the URL into our URL bar. The host
-         * spawned Firefox at about:blank, so this is the first
-         * navigation. */
-        const char *start = "https://example.com/";
+        /* MacBrowser owns the start URL. Host now spawns Firefox at
+         * about:blank, so our first BR_CMD_NAV defines the home
+         * page. TODO: read from a "Browser Prefs" file on Host:
+         * MacPhoenix:Prefs so the user can edit it without rebuilding. */
+        const char *home = "https://en.wikipedia.org/wiki/Classic_Mac_OS";
         br_ring_push(&gShm->g2h, BR_CMD_NAV,
-                     (void *)start, (uint16_t)strlen(start));
+                     (void *)home, (uint16_t)strlen(home));
     }
 
     EventRecord evt;

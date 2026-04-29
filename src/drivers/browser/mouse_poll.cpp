@@ -76,6 +76,18 @@ void poll_loop()
     auto last_click_window_start = std::chrono::steady_clock::now();
     int  clicks_this_window = 0;
 
+    /* Multi-click detection. A second mouse-down within 500 ms and
+     * within 5 px of the prior one bumps the click count. Mac OS
+     * ROM uses a similar rule for kDoubleTime / DoubleTime. Gives
+     * the page a real "doubleclick" event so word-select on text
+     * works. Tracked separately from rate-limiting; the limiter
+     * counts physical clicks (so a rapid double counts as 2). */
+    auto last_click_at = std::chrono::steady_clock::time_point{};
+    int  last_click_x = -10000, last_click_y = -10000;
+    int  multi_count  = 0;
+    constexpr auto kMultiClickWindow = std::chrono::milliseconds(500);
+    constexpr int  kMultiClickRadius = 5;
+
     /* Page-metrics state: poll every kMetricsPollMs and only push a
      * BR_EV_PAGE_METRICS event when something actually changed. */
     auto last_metrics_at = std::chrono::steady_clock::time_point{};
@@ -125,8 +137,27 @@ void poll_loop()
             }
             if (clicks_this_window < kMaxClicksPerSec) {
                 clicks_this_window++;
+                /* Multi-click count: extend if within the time + space
+                 * window, else reset to 1. Capped at 3 (triple-click =
+                 * select paragraph in most editors; further is rare).*/
+                int dx = page_x - last_click_x;
+                int dy = page_y - last_click_y;
+                int sq = dx * dx + dy * dy;
+                bool within_radius = sq <=
+                    kMultiClickRadius * kMultiClickRadius;
+                bool within_time = (now - last_click_at) <
+                    kMultiClickWindow;
+                if (within_radius && within_time && multi_count < 3) {
+                    multi_count++;
+                } else {
+                    multi_count = 1;
+                }
+                last_click_at = now;
+                last_click_x  = page_x;
+                last_click_y  = page_y;
+
                 std::string err;
-                if (!g_bidi->click(page_x, page_y, 0, 1, &err)) {
+                if (!g_bidi->click(page_x, page_y, 0, multi_count, &err)) {
                     fprintf(stderr, "[MousePoll] click err: %s\n",
                             err.c_str());
                 }

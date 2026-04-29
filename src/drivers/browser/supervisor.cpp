@@ -2,6 +2,7 @@
  *  supervisor.cpp — Xvfb + Firefox orchestration. See supervisor.h.
  */
 #include "supervisor.h"
+#include "emulator_config.h"
 
 #include <cerrno>
 #include <chrono>
@@ -212,6 +213,21 @@ bool Supervisor::prepare_firefox_profile()
 {
     mkdir_p(profile_dir_);
 
+    /* Where browser downloads land. Inside bridge_dir means the guest
+     * already sees this folder via ExtFS at Host:MacPhoenix:Downloads,
+     * so there's nothing extra to plumb — Save As… in Firefox writes
+     * the file, the guest's Finder sees it on the desktop folder
+     * almost immediately. mkdir_p so Firefox doesn't fall back to
+     * its own ~/Downloads if our path doesn't exist. */
+    std::string downloads_dir;
+    {
+        const auto& cfg = config::EmulatorConfig::instance();
+        if (!cfg.bridge_dir.empty()) {
+            downloads_dir = cfg.bridge_dir + "/Downloads";
+            mkdir_p(downloads_dir);
+        }
+    }
+
     /* user.js applied on every Firefox start — overrides matching
      * prefs.js entries. Silences the noise that polluted our last
      * test (welcome panel, "import from Chrome", what's new tour,
@@ -259,6 +275,31 @@ bool Supervisor::prepare_firefox_profile()
          * Firefox; dropped.) */
         "user_pref(\"widget.gtk.overlay-scrollbars.enabled\", false);\n",
         f);
+
+    /* Downloads → bridge_dir/Downloads. folderList=2 means "use the
+     * dir specified in browser.download.dir" (0 = desktop, 1 = system
+     * default Downloads). useDownloadDir=true skips the Save As…
+     * sheet for known mime types. always_ask… on a per-mime basis
+     * stays at default — Firefox still asks before opening a file
+     * with a helper app, just doesn't ask *where* to save. */
+    if (!downloads_dir.empty()) {
+        std::string esc;
+        esc.reserve(downloads_dir.size());
+        for (char c : downloads_dir) {
+            if (c == '\\' || c == '"') esc.push_back('\\');
+            esc.push_back(c);
+        }
+        fprintf(f, "user_pref(\"browser.download.folderList\", 2);\n");
+        fprintf(f, "user_pref(\"browser.download.dir\", \"%s\");\n",
+                esc.c_str());
+        fprintf(f, "user_pref(\"browser.download.useDownloadDir\", true);\n");
+        fprintf(f, "user_pref(\"browser.download.alwaysOpenPanel\", false);\n");
+        fprintf(f, "user_pref(\"browser.download.always_ask_before_handling_new_types\", false);\n");
+        fprintf(f, "user_pref(\"browser.download.manager.showWhenStarting\", false);\n");
+        fprintf(stderr, "[BrowserSup] downloads → %s\n",
+                downloads_dir.c_str());
+    }
+
     fclose(f);
     return true;
 }

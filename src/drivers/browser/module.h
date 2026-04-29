@@ -42,7 +42,7 @@ private:
     bool running_ = false;
 };
 
-void browser_module_start(const std::string& initial_url);
+void browser_module_start();
 void browser_module_stop();
 BrowserModule* browser_module_get();
 

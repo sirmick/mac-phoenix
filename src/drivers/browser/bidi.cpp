@@ -321,16 +321,25 @@ bool BidiClient::click(int x, int y, int button, int count,
         if (error) *error = "no top-level browsing context";
         return false;
     }
-    /* Move to (x,y), then alternate down/up `count` times. count
-     * is the BiDi `clickCount` semantic; for now we send one
-     * down/up pair (chained clicks for double-click are M5+). */
+    /* Move to (x,y), then alternate pointerDown/pointerUp `count`
+     * times. BiDi's pointer-source automatically tracks clickCount
+     * across consecutive down/up pairs at the same coords within a
+     * short window — sending two pairs back-to-back fires a real
+     * `dblclick` event on the page, which is what the user expects
+     * for word-select. count==1 → single click. count>=2 → multi.
+     * Cap at 3 (triple-click = paragraph select in most editors). */
+    if (count < 1) count = 1;
+    if (count > 3) count = 3;
     json actions = json::array({
         json{{"type", "pointerMove"}, {"x", x}, {"y", y}, {"duration", 0}},
-        json{{"type", "pointerDown"}, {"button", button}},
-        json{{"type", "pointerUp"},   {"button", button}},
     });
+    for (int i = 0; i < count; i++) {
+        actions.push_back(json{{"type", "pointerDown"},
+                               {"button", button}});
+        actions.push_back(json{{"type", "pointerUp"},
+                               {"button", button}});
+    }
     json p = pointer_action(impl_->top_context, actions);
-    (void)count;
     std::string e;
     return !call("input.performActions", p.dump(),
                  error ? error : &e).empty();
@@ -400,6 +409,52 @@ bool BidiClient::type(const std::string& text, std::string* error)
         actions.push_back(json{{"type", "keyUp"},   {"value", ch}});
         i += step;
     }
+    json src = {
+        {"id", "kbd"},
+        {"type", "key"},
+        {"actions", actions},
+    };
+    json p = {
+        {"context", impl_->top_context},
+        {"actions", json::array({src})},
+    };
+    std::string e;
+    return !call("input.performActions", p.dump(),
+                 error ? error : &e).empty();
+}
+
+bool BidiClient::send_key_with_mods(const std::string& key,
+                                    unsigned mods,
+                                    std::string* error)
+{
+    if (impl_->top_context.empty()) {
+        if (error) *error = "no top-level browsing context";
+        return false;
+    }
+    /* W3C-WebDriver modifier codepoints. Mac side maps:
+     *   shiftKey   → kModShift ()
+     *   cmdKey     → kModCtrl  ()  — Cmd on Mac ≡ Ctrl on PC
+     *                                       for keyboard shortcuts
+     *   optionKey  → kModAlt   ()
+     *   controlKey → also kModCtrl
+     * Order: press shift/ctrl/alt/meta, press key, release key,
+     * release in reverse. Single performActions call. */
+    json actions = json::array();
+    auto press = [&](const char* k, bool down) {
+        actions.push_back(json{{"type", down ? "keyDown" : "keyUp"},
+                               {"value", k}});
+    };
+    if (mods & kModShift) press("\xEE\x80\x88", true);
+    if (mods & kModCtrl)  press("\xEE\x80\x89", true);
+    if (mods & kModAlt)   press("\xEE\x80\x8A", true);
+    if (mods & kModMeta)  press("\xEE\x80\xBD", true);
+    press(key.c_str(), true);
+    press(key.c_str(), false);
+    if (mods & kModMeta)  press("\xEE\x80\xBD", false);
+    if (mods & kModAlt)   press("\xEE\x80\x8A", false);
+    if (mods & kModCtrl)  press("\xEE\x80\x89", false);
+    if (mods & kModShift) press("\xEE\x80\x88", false);
+
     json src = {
         {"id", "kbd"},
         {"type", "key"},

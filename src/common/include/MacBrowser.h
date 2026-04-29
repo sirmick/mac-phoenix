@@ -121,6 +121,11 @@ static inline void br_u16_store(volatile uint16_t *p, uint16_t v) {
 #define BR_CMD_GET_SELECTION 11   /* — (server replies with BR_EV_SELECTION)        */
 #define BR_CMD_PASTE         12   /* u16 len, u8 text[len] — insert at focused el   */
 #define BR_CMD_RESIZE        13   /* u16 w, u16 h — guest viewport size changed     */
+#define BR_CMD_SELECT_ALL    14   /* — select-all on focused element / page         */
+#define BR_CMD_STOP          15   /* — abort current navigation                     */
+#define BR_CMD_ZOOM_OUT      16   /* — bump page zoom one step smaller (~10%)       */
+#define BR_CMD_ZOOM_IN       17   /* — bump page zoom one step larger  (~10%)       */
+#define BR_CMD_ZOOM_RESET    18   /* — restore zoom to 100%                         */
 
 /* Host → Guest (events, written into BrowserShm.h2g) */
 #define BR_EV_STATUS         128   /* u8 code, u8 msglen, u8 msg[msglen]            */

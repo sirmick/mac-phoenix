@@ -9,11 +9,14 @@
 #define BR_HOST 1
 #include "MacBrowser.h"
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 #include <thread>
 
 namespace browser {
@@ -197,28 +200,46 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
          *  1. Special key (Return / Delete / Tab / Esc / Arrows / etc.)
          *     — vk wins. Send the W3C-WebDriver private-use codepoint
          *     so Firefox sees a proper "Enter" / "Backspace" key event
-         *     (form submission, input deletion). Without this, a bare
-         *     \r or \b reaches Firefox as a literal character which
-         *     <input> handlers ignore.
+         *     (form submission, input deletion).
          *  2. Printable character — text wins. Send the UTF-8 bytes
          *     verbatim through BiDi's type() helper.
          *
-         * Mods are still ignored; held-modifier keystrokes (e.g.
-         * Shift-A) are pre-cooked by Mac's Event Manager into 'A',
-         * which is what the page sees. Held Cmd/Ctrl combos beyond
-         * Mac-side shortcuts (Cmd-C / Cmd-V) are M6+ work. */
+         * Modifier handling: Mac sends `mods` with shiftKey/cmdKey/
+         * optionKey/controlKey bits. We pass shift through (so
+         * Shift+ArrowRight extends selection), and skip cmd/ctrl
+         * because those are already intercepted by Mac's menu bar
+         * and never reach send_key. */
         if (len < 5) return false;
         uint16_t vk       = be16(payload + 0);
+        uint16_t mods     = be16(payload + 2);
         uint8_t  text_len = payload[4];
         if (5u + text_len > len) return false;
         if (!b) return true;
+        /* Mac modifier bits — see Events.h. We only honour shift here;
+         * cmd/ctrl/option don't reach this command (cmd → menu bar,
+         * ctrl is rare on Mac, option produces special characters
+         * already pre-cooked into `text`). */
+        constexpr uint16_t kMacShift = 0x0200;
+        unsigned w3c_mods = 0;
+        if (mods & kMacShift) w3c_mods |= BidiClient::kModShift;
+
         std::string err;
         const char* w3c = mac_vk_to_w3c_key(vk);
         if (w3c[0] != '\0') {
-            if (!b->type(w3c, &err)) log_remote_err("type-special", err);
+            bool ok = w3c_mods
+                ? b->send_key_with_mods(w3c, w3c_mods, &err)
+                : b->type(w3c, &err);
+            if (!ok) log_remote_err("type-special", err);
         } else if (text_len > 0) {
             std::string text((const char*)payload + 5, text_len);
-            if (!b->type(text, &err)) log_remote_err("type", err);
+            /* Modifier+printable: route through send_key_with_mods so
+             * Shift+letter-still-as-letter (Mac pre-cooked it as 'A'
+             * not 'a') reaches the page with shift held — matters
+             * for word-by-word selection extension on Shift+Right. */
+            bool ok = w3c_mods
+                ? b->send_key_with_mods(text, w3c_mods, &err)
+                : b->type(text, &err);
+            if (!ok) log_remote_err("type", err);
         }
         return true;
     }
@@ -281,14 +302,165 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         return true;
     }
 
+    case BR_CMD_STOP:
+        /* Toolbar Stop button — cancel the current load. BiDi has no
+         * top-level stop call; window.stop() is the JS equivalent
+         * and works for all in-flight resources. */
+        dispatch_async([](BidiClient* c) {
+            std::string err;
+            (void)c->evaluate("window.stop()", &err);
+        });
+        return true;
+
+    case BR_CMD_ZOOM_IN:
+    case BR_CMD_ZOOM_OUT:
+    case BR_CMD_ZOOM_RESET: {
+        /* Page zoom via Firefox's full-page zoom (browser.zoom). We
+         * can't reach the privileged ZoomManager from BiDi script
+         * context, but `document.documentElement.style.zoom` (CSS
+         * zoom — supported in Firefox 126+ as an explicitly-shipped
+         * non-standard prop, identical to Blink) gives us full-page
+         * scaling that reflows content. Levels mirror the standard
+         * Firefox steps: 50/67/80/90/100/110/125/150/175/200%. */
+        const char* op = (type == BR_CMD_ZOOM_IN)    ? "in"
+                        : (type == BR_CMD_ZOOM_OUT)  ? "out"
+                                                     : "reset";
+        std::string js =
+            "(()=>{const steps=[0.5,0.67,0.8,0.9,1.0,1.1,1.25,1.5,1.75,2.0];"
+            "const e=document.documentElement;"
+            "const cur=parseFloat(e.style.zoom||'1.0')||1.0;"
+            "let i=steps.findIndex(s=>Math.abs(s-cur)<0.005);"
+            "if(i<0){i=steps.findIndex(s=>s>=cur);if(i<0)i=steps.length-1;}"
+            "let next=cur;"
+            "if('" + std::string(op) + "'==='in')   next=steps[Math.min(steps.length-1,i+1)];"
+            "if('" + std::string(op) + "'==='out')  next=steps[Math.max(0,i-1)];"
+            "if('" + std::string(op) + "'==='reset')next=1.0;"
+            "e.style.zoom=String(next);"
+            "return next;})()";
+        dispatch_async([js](BidiClient* c) {
+            std::string err;
+            std::string r = c->evaluate(js, &err);
+            if (r.empty()) log_remote_err("zoom", err);
+            else {
+                try {
+                    auto j = nlohmann::json::parse(r);
+                    double z = j.at("result").at("value").get<double>();
+                    fprintf(stderr, "[Cmd] zoom → %.0f%%\n", z * 100.0);
+                } catch (...) {}
+            }
+        });
+        return true;
+    }
+
+    case BR_CMD_SELECT_ALL:
+        /* Cmd+A in MacBrowser web context. JS path covers the three
+         * common cases: <input>/<textarea> via .select(), generic
+         * editable + page text via document.execCommand('selectAll'),
+         * or a window.getSelection / Range.selectNodeContents fallback
+         * if execCommand returns false. */
+        dispatch_async([](BidiClient* c) {
+            std::string err;
+            std::string js =
+                "(()=>{const el=document.activeElement;"
+                "const t=(el&&el.tagName||'').toLowerCase();"
+                "if(t==='input'||t==='textarea'){"
+                "  if(typeof el.select==='function'){el.select();return true;}"
+                "}"
+                "if(document.execCommand('selectAll',false,null))return true;"
+                "const sel=window.getSelection();"
+                "if(sel){"
+                "  const r=document.createRange();"
+                "  r.selectNodeContents(document.body);"
+                "  sel.removeAllRanges();sel.addRange(r);return true;"
+                "}"
+                "return false;})()";
+            std::string r = c->evaluate(js, &err);
+            if (r.empty()) log_remote_err("select_all", err);
+        });
+        return true;
+
     case BR_CMD_GET_SELECTION:
-        /* TODO(M6): script.evaluate of getSelection().toString() then
-         * push BR_EV_SELECTION through h2g. */
+        /* Cmd+C in MacBrowser: ask Firefox what's currently selected,
+         * round-trip the text back through h2g as BR_EV_SELECTION.
+         * Mac side puts that into TEScrap so a subsequent Cmd+V in
+         * any app sees the web-copied text. evaluate runs sync on
+         * the BiDi worker thread; we dispatch async to keep the
+         * guest unblocked. */
+        dispatch_async([](BidiClient* c) {
+            std::string err;
+            std::string r = c->evaluate(
+                "(window.getSelection&&window.getSelection().toString())||''",
+                &err);
+            if (r.empty()) {
+                log_remote_err("get_selection", err);
+                return;
+            }
+            std::string text;
+            try {
+                auto j = nlohmann::json::parse(r);
+                text = j.at("result").at("value").get<std::string>();
+            } catch (...) { return; }
+            uint16_t n = (uint16_t)std::min(text.size(), (size_t)4096);
+            std::vector<uint8_t> buf(2 + n);
+            buf[0] = (uint8_t)(n >> 8);
+            buf[1] = (uint8_t)(n & 0xFF);
+            if (n) memcpy(buf.data() + 2, text.data(), n);
+            send_event(BR_EV_SELECTION, buf.data(), (uint16_t)buf.size());
+        });
         return true;
-    case BR_CMD_PASTE:
-        /* TODO(M6): script.evaluate of document.execCommand('insertText',
-         * false, <text>) at the focused element. */
+    case BR_CMD_PASTE: {
+        /* Cmd+V in MacBrowser: drop Mac scrap text at the focused
+         * element. Three paths, in order of preference:
+         *   1. <input>/<textarea> — patch .value around the current
+         *      selection and fire `input`/`change` events so React-
+         *      like frameworks notice. setRangeText is the modern
+         *      idiomatic API; it fires input automatically.
+         *   2. contentEditable element — execCommand('insertText'),
+         *      which is the path rich-text editors expect.
+         *   3. nothing focused — silently no-op (Firefox would just
+         *      eat a stray Ctrl-V too).
+         *
+         * execCommand alone broke for plain <input>: Firefox's modern
+         * legacy-execCommand path won't insert text into <input> when
+         * called from BiDi script context (no user gesture). */
+        if (len < 2) return false;
+        uint16_t n = be16(payload + 0);
+        if ((uint16_t)(2 + n) > len) return false;
+        std::string text((const char*)payload + 2, n);
+        fprintf(stderr, "[Cmd] BR_CMD_PASTE %u bytes: \"%.*s%s\"\n",
+                (unsigned)n, (int)std::min(n, (uint16_t)40),
+                text.c_str(), n > 40 ? "…" : "");
+        dispatch_async([text](BidiClient* c) {
+            std::string lit = nlohmann::json(text).dump();
+            std::string js =
+                "(()=>{const t=" + lit + ";"
+                "const el=document.activeElement;"
+                "if(!el)return false;"
+                "const tag=(el.tagName||'').toLowerCase();"
+                "if(tag==='input'||tag==='textarea'){"
+                "  const s=el.selectionStart||0,e=el.selectionEnd||0;"
+                "  if(typeof el.setRangeText==='function'){"
+                "    el.setRangeText(t,s,e,'end');"
+                "    el.dispatchEvent(new Event('input',{bubbles:true}));"
+                "    el.dispatchEvent(new Event('change',{bubbles:true}));"
+                "    return true;"
+                "  }"
+                "  el.value=el.value.slice(0,s)+t+el.value.slice(e);"
+                "  el.selectionStart=el.selectionEnd=s+t.length;"
+                "  el.dispatchEvent(new Event('input',{bubbles:true}));"
+                "  return true;"
+                "}"
+                "if(el.isContentEditable){"
+                "  document.execCommand('insertText',false,t);"
+                "  return true;"
+                "}"
+                "return false;})()";
+            std::string err;
+            std::string r = c->evaluate(js, &err);
+            if (r.empty()) log_remote_err("paste", err);
+        });
         return true;
+    }
 
     default:
         fprintf(stderr, "[Cmd] unknown type=0x%x len=%u\n", type, len);

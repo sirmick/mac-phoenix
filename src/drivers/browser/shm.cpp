@@ -29,6 +29,12 @@ std::thread g_thread;
 std::atomic<bool>      g_running{false};
 std::atomic<BrowserShm*> g_shm{nullptr};
 
+/* Tracks the last log.seq we saw, so poll_log can detect new entries
+ * + count drops. Reset to 0 in run() on every re-handshake — the
+ * fresh BrowserShm starts seq from 0, so stale state would underflow
+ * into "dropped 4 billion log lines". */
+uint32_t g_last_log_seq = 0;
+
 /* Resolve the host filesystem path of <bridge_dir>/browser_shm.txt.
  * Returns empty string if the bridge isn't configured. */
 std::string handshake_path()
@@ -133,6 +139,13 @@ void run()
                     BrowserShm* old = g_shm.exchange(shm,
                         std::memory_order_acq_rel);
                     last_mtime = st.st_mtime;
+                    /* Reset host-side seq trackers — the new BrowserShm
+                     * starts log/frame seq at 0, so a stale cache would
+                     * underflow into "dropped 4 billion log lines" or
+                     * cause poll_log to spam every event again. The
+                     * pipeline already handles fb.seq via its own
+                     * last_shm check; only the log seq lives here. */
+                    g_last_log_seq = 0;
                     if (old) {
                         fprintf(stderr, "[BrowserShm] re-handshake: "
                                 "%p (mac 0x%08x) → %p (mac 0x%08x)\n",
@@ -221,8 +234,6 @@ uint8_t threshold()
     static uint8_t cached = parse_log_level(getenv("BROWSER_LOG_LEVEL"));
     return cached;
 }
-
-uint32_t g_last_log_seq = 0;
 
 }  // namespace
 

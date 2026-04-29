@@ -280,10 +280,10 @@ std::atomic<bool>              g_init_running{false};
  * The IPC child's main thread runs cpu_execute right after this
  * is called, so blocking it would delay guest boot. Off-load to a
  * background thread; the guest boots in parallel. */
-void init_thread_main(std::string initial_url)
+void init_thread_main()
 {
     auto m = std::make_unique<BrowserModule>();
-    if (!m->start(initial_url)) {
+    if (!m->start(std::string{})) {
         fprintf(stderr, "[BrowserModule] start failed\n");
         g_init_running.store(false, std::memory_order_release);
         return;
@@ -297,7 +297,7 @@ void init_thread_main(std::string initial_url)
 
 }  // namespace
 
-void browser_module_start(const std::string& initial_url)
+void browser_module_start()
 {
     {
         std::lock_guard<std::mutex> lk(g_module_mtx);
@@ -305,7 +305,7 @@ void browser_module_start(const std::string& initial_url)
     }
     if (g_init_running.exchange(true, std::memory_order_acq_rel)) return;
     if (g_init_thread.joinable()) g_init_thread.join();
-    g_init_thread = std::thread(init_thread_main, initial_url);
+    g_init_thread = std::thread(init_thread_main);
 }
 
 void browser_module_stop()

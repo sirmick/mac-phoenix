@@ -88,6 +88,21 @@ public:
      * fires a keyDown + keyUp pair. UTF-8 in, BiDi handles unicode. */
     bool type(const std::string& utf8, std::string* error = nullptr);
 
+    /* Press one key with one or more modifiers held (Shift, Ctrl,
+     * Alt, Meta). Builds an input.performActions sequence that
+     * keyDown's each modifier, keyDown+keyUp's the key, then keyUp's
+     * the modifiers in reverse. Used for Mac→W3C key combos like
+     * Shift+ArrowRight or Ctrl+A. `key` is one Unicode codepoint
+     * (W3C private-use \uE0xx for special keys, or a printable). */
+    enum KeyMod {
+        kModShift = 1u << 0,
+        kModCtrl  = 1u << 1,
+        kModAlt   = 1u << 2,
+        kModMeta  = 1u << 3,
+    };
+    bool send_key_with_mods(const std::string& key, unsigned mods,
+                            std::string* error = nullptr);
+
     /* Resize the browser viewport. The pixel pipeline picks up the
      * new dimensions on the next paint. */
     bool set_viewport(int width, int height,
