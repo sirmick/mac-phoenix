@@ -1282,11 +1282,11 @@ Response APIRouter::handle_app(const Request& req) {
         std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
         const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
         std::string app = buf ? buf->cur_app_name : "";
-        return Response::json("{\"app\": \"" + app + "\"}");
+        return Response::json("{\"app\": \"" + storage::json_escape(app) + "\"}");
     }
 
     auto result = command_bridge_read(CmdType::GET_APP_NAME);
-    return Response::json("{\"app\": \"" + result.data + "\"}");
+    return Response::json("{\"app\": \"" + storage::json_escape(result.data) + "\"}");
 }
 
 Response APIRouter::handle_windows(const Request& req) {
@@ -1475,7 +1475,7 @@ Response APIRouter::handle_wait(const Request& req) {
                 app = result.data;
             }
             if (app == cond_value) {
-                return Response::json("{\"ok\": true, \"app\": \"" + app + "\"}");
+                return Response::json("{\"ok\": true, \"app\": \"" + storage::json_escape(app) + "\"}");
             }
         } else if (cond_type == "boot") {
             std::string phase;
