@@ -89,8 +89,14 @@ void poll_loop()
     constexpr int  kMultiClickRadius = 5;
 
     /* Page-metrics state: poll every kMetricsPollMs and only push a
-     * BR_EV_PAGE_METRICS event when something actually changed. */
+     * BR_EV_PAGE_METRICS event when something actually changed.
+     * `last_metrics_shm` is the BrowserShm pointer the cached values
+     * were captured against — if shm_get() returns a different pointer
+     * (MacBrowser relaunched into a fresh BrowserShm), the cache is
+     * stale and would suppress the first paint of metrics on the new
+     * instance. */
     auto last_metrics_at = std::chrono::steady_clock::time_point{};
+    BrowserShm* last_metrics_shm = nullptr;
     uint32_t last_pw = 0, last_ph = 0, last_sx = 0, last_sy = 0,
              last_vw = 0, last_vh = 0;
 
@@ -177,6 +183,15 @@ void poll_loop()
 
         /* Page metrics — slower than the per-tick mouse poll. */
         auto now = std::chrono::steady_clock::now();
+        if (shm != last_metrics_shm) {
+            /* BrowserShm pointer changed (re-handshake). The diff
+             * suppression below would otherwise compare the new
+             * page's metrics against the previous instance's cached
+             * values and silently drop the first paint. */
+            last_metrics_shm = shm;
+            last_pw = last_ph = last_sx = last_sy =
+                last_vw = last_vh = 0xFFFFFFFFu;
+        }
         if (now - last_metrics_at >=
             std::chrono::milliseconds(kMetricsPollMs)) {
             last_metrics_at = now;
