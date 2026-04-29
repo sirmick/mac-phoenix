@@ -5,17 +5,17 @@
  * launches it at desktop time; it runs a WaitNextEvent loop at ~10Hz
  * polling the ExtFS "Host" volume for bridge commands.
  *
- * Protocol (file-based; all files live in Host:MacPhoenix: so the ExtFS
- * share has one clean subfolder containing bridge IPC, network info,
- * and MITM certs — rather than scattering half a dozen underscore-
- * prefixed files at the root of Host:):
- *   Host writes Host:MacPhoenix:_bridge_cmd      - "LAUNCH path" or "QUIT"
+ * Protocol (file-based; all files live in a per-instance bridge dir
+ * resolved at startup from :System Folder:Preferences:MacPhoenix.cfg
+ * — host writes that file when it installs us. See bridge_cfg.h.
+ * Resolved paths look like Host:MacPhoenix:<host_pid>:<leaf>):
+ *   Host writes <bridge_dir>:_bridge_cmd      - "LAUNCH path" or "QUIT"
  *   Agent reads, deletes, executes
- *   Agent writes Host:MacPhoenix:_bridge_result  - decimal OSErr, CR-terminated
+ *   Agent writes <bridge_dir>:_bridge_result  - decimal OSErr, CR-terminated
  *
  * Liveness markers:
- *   Host:MacPhoenix:bridge_loaded       - created once at first poll
- *   Host:MacPhoenix:bridge_heartbeat    - rewritten every ~2s with a counter
+ *   <bridge_dir>:bridge_loaded       - created once at first poll
+ *   <bridge_dir>:bridge_heartbeat    - rewritten every ~2s with a counter
  */
 #include <Quickdraw.h>
 #include <Fonts.h>
@@ -110,13 +110,11 @@ static Str255    gLastCmd;
 static OSErr     gLastResult = 0;
 static Boolean   gRunning   = true;
 
-/* Network info parsed from Host:MacPhoenix:netcfg.txt on startup. The
- * host writes these fresh each launch so the values shown always match
- * the running bridge/MITM configuration. Empty string = field missing. */
+/* Network info parsed from netcfg.txt on startup. The host writes
+ * these fresh each launch so the values shown always match the
+ * running bridge configuration. Empty string = field missing. */
 static char gNetGateway[32] = "";
 static char gNetGuestIp[32] = "";
-static char gNetCaUrl[128]  = "";
-static Boolean gNetMitmActive = false;
 
 /* Read one CR-terminated key=value line from `src` starting at *off.
  * Advances *off past the CR. Returns false at EOF. */
@@ -134,10 +132,9 @@ static Boolean read_line(const char *src, long srclen, long *off,
     return true;
 }
 
-/* Parse Host:MacPhoenix:netcfg.txt (written by the host) for the gateway,
- * guest DHCP IP, MITM state, and CA URL. Values are displayed in the
- * status window. Called once at startup; silent no-op if the file's
- * absent (e.g. no --bridge --mitm-tls). */
+/* Parse netcfg.txt (written by the host) for the gateway and guest
+ * DHCP IP. Values are displayed in the status window. Called once
+ * at startup; silent no-op if the file's absent (e.g. no --bridge). */
 static void load_network_config(void)
 {
     FSSpec spec;
@@ -172,11 +169,10 @@ static void load_network_config(void)
             strncpy(gNetGateway, v, sizeof(gNetGateway) - 1);
         } else if (!strcmp(k, "guest")) {
             strncpy(gNetGuestIp, v, sizeof(gNetGuestIp) - 1);
-        } else if (!strcmp(k, "ca_url")) {
-            strncpy(gNetCaUrl, v, sizeof(gNetCaUrl) - 1);
-        } else if (!strcmp(k, "mitm")) {
-            gNetMitmActive = (v[0] == '1');
         }
+        /* mitm/ca_url keys still arrive in cfg from older host
+         * builds — we just ignore them now that the MITM proxy is
+         * gone. */
     }
     DisposePtr(buf);
 }
@@ -197,58 +193,46 @@ static void draw_status(void)
     char buf[64];
     Str255 pbuf;
 
-    MoveTo(8, 18);
-    DrawString("\pMacPhoenix BridgeAgent");
+    MoveTo(6, 18);
+    DrawString("\pBridgeAgent");
 
-    MoveTo(8, 34);
+    MoveTo(6, 34);
     snprintf(buf, sizeof(buf), "Build: %s", BRIDGE_AGENT_BUILD);
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
 
-    MoveTo(8, 52);
-    snprintf(buf, sizeof(buf), "Heartbeat: %d", gHeartbeat);
+    MoveTo(6, 52);
+    snprintf(buf, sizeof(buf), "HB: %d", gHeartbeat);
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
 
-    MoveTo(8, 68);
-    snprintf(buf, sizeof(buf), "Commands: %d  last err: %d",
+    MoveTo(6, 68);
+    snprintf(buf, sizeof(buf), "Cmds: %d  err: %d",
              gCmdCount, (int)gLastResult);
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
 
-    MoveTo(8, 84);
-    DrawString("\pLast cmd: ");
+    MoveTo(6, 84);
+    DrawString("\pLast: ");
     DrawString(gLastCmd);
 
     /* Network pane — values loaded once at startup from netcfg.txt. */
-    MoveTo(8, 106);
-    DrawString("\p---- Network ----");
+    MoveTo(6, 106);
+    DrawString("\p--- Network ---");
 
-    MoveTo(8, 122);
-    snprintf(buf, sizeof(buf), "Server (GW):  %s",
-             gNetGateway[0] ? gNetGateway : "(not configured)");
+    MoveTo(6, 122);
+    snprintf(buf, sizeof(buf), "GW: %s",
+             gNetGateway[0] ? gNetGateway : "(none)");
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
 
-    MoveTo(8, 138);
-    snprintf(buf, sizeof(buf), "Client (me):  %s",
+    MoveTo(6, 138);
+    snprintf(buf, sizeof(buf), "IP: %s",
              gNetGuestIp[0] ? gNetGuestIp : "(DHCP)");
-    pbuf[0] = (unsigned char)strlen(buf);
-    memcpy(pbuf + 1, buf, pbuf[0]);
-    DrawString(pbuf);
-
-    MoveTo(8, 154);
-    if (gNetMitmActive && gNetCaUrl[0]) {
-        snprintf(buf, sizeof(buf), "MITM CA: %s", gNetCaUrl);
-    } else if (gNetMitmActive) {
-        snprintf(buf, sizeof(buf), "MITM: active (no CA URL)");
-    } else {
-        snprintf(buf, sizeof(buf), "MITM: off");
-    }
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
@@ -259,8 +243,10 @@ static void draw_status(void)
 static void open_status_window(void)
 {
     Rect bounds;
-    /* Extended vertically to fit the Network pane (was 40,60 → 400,180). */
-    SetRect(&bounds, 40, 60, 440, 240);
+    /* ~40% of the prior 400-px width so we don't hog desktop real
+     * estate. Height shrunk from 180 → 152 since the MITM row is
+     * gone. */
+    SetRect(&bounds, 40, 60, 200, 212);
     gStatusWin = NewWindow(NULL, &bounds, "\pBridgeAgent",
                            true, documentProc, (WindowPtr)-1, true, 0);
 }
