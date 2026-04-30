@@ -1,1 +1,0 @@
-../../../BasiliskII/src/include/color_scheme.h

@@ -122,7 +122,6 @@ tests/
 
 client/                             — Browser UI (vanilla JS)
 
-legacy/                             — Original BasiliskII/SheepShaver source (read-only reference)
 ```
 
 ## API Endpoints
