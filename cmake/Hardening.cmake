@@ -78,10 +78,13 @@ _phoenix_try_flag("-Wformat")
 _phoenix_try_flag("-Wformat-security")
 
 # ── libc fortification ───────────────────────────────────────────────
-# _FORTIFY_SOURCE=3 needs at least -O1; CMake's Release/RelWithDebInfo
-# already imply that. Defining unconditionally is safe — glibc's macro
-# is a no-op when optimization is off.
-add_compile_definitions(_FORTIFY_SOURCE=3)
+# Intentionally NOT adding _FORTIFY_SOURCE=3 here. dpkg-buildflags
+# already injects _FORTIFY_SOURCE=2 in the .deb path, and adding our
+# own value collides under -Werror with "macro redefined". Plain
+# `cmake -B build` builds skip the fortification check, but the LTO
+# undefined-ref class — the reason this module exists — is unaffected.
+# If you want fortification locally, pass it on the command line:
+#     cmake -B build -DCMAKE_CXX_FLAGS=-D_FORTIFY_SOURCE=3
 
 # ── Control-flow integrity ───────────────────────────────────────────
 # x86: Intel CET (CF_PROTECTION). arm64: pointer authentication +
