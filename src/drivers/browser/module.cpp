@@ -153,24 +153,9 @@ bool BrowserModule::start(const std::string& initial_url)
          *      before any page script runs, with !important to outrank
          *      page styles (some pages set scrollbar-color themselves).
          *
-         * Plus: an injected 1-px black border drawn at the viewport edges
-         * via a fixed-position ::before pseudo-element on the html. If
-         * any of {Xvfb root, Firefox layout viewport, BiDi setViewport,
-         * xshm capture rect, pipeline dst_stride, BrowserShm fb.width,
-         * Mac PixMap rowBytes} disagrees with the others, the border on
-         * one or more sides will appear cropped, missing, or shifted.
-         * It's a visual sync probe across the whole pipe. */
+         */
         std::string ps_err;
-        /* Single-quoted JS string — keep CSS rules separated by spaces
-         * (browser parses just fine, easier to read in stderr if we
-         * ever console.log it). */
-        /* Note: each line below is one JS string concatenated to the
-         * next via JS `+`. Adjacent C-string concat fuses them into a
-         * single C string, but JS still needs explicit `+` to glue
-         * adjacent quoted JS literals — without it, only the first
-         * literal lands and the rest are dead expression statements. */
         const char* hide_scrollbars =
-            "console.log('[mac-phoenix] preload firing');"
             "const inject=()=>{"
               "const s=document.createElement('style');"
               "s.id='mac-phoenix-injected';"
@@ -179,29 +164,9 @@ bool BrowserModule::start(const std::string& initial_url)
                 "'scrollbar-color:transparent transparent!important;'+"
                 "'-ms-overflow-style:none!important;}'+"
                 "'::-webkit-scrollbar{display:none!important;'+"
-                "'width:0!important;height:0!important;}'+"
-                /* Sync probe: a fixed-position <div> ringing the viewport
-                 * with a 1-px black border. If any of {Xvfb root, FF
-                 * layout viewport, BiDi setViewport, xshm capture,
-                 * pipeline dst_stride, BrowserShm fb.width, Mac PixMap
-                 * rowBytes} disagrees, the border on the disagreeing
-                 * side appears clipped, missing, or shifted. */
-                "'body>#mac-phoenix-probe{position:fixed!important;'+"
-                "'top:0!important;left:0!important;'+"
-                "'right:0!important;bottom:0!important;'+"
-                "'border:1px solid black!important;'+"
-                "'pointer-events:none!important;'+"
-                "'z-index:2147483647!important;}';"
+                "'width:0!important;height:0!important;}';"
               "(document.head||document.documentElement).appendChild(s);"
-              "if(document.body && !document.getElementById('mac-phoenix-probe')){"
-                "const d=document.createElement('div');"
-                "d.id='mac-phoenix-probe';"
-                "document.body.appendChild(d);"
-                "console.log('[mac-phoenix] probe div planted');"
-              "}"
             "};"
-            /* document_start fires before <body> exists, so retry on
-             * DOMContentLoaded to actually plant the probe div. */
             "if(document.readyState==='loading'){"
               "document.addEventListener('DOMContentLoaded',inject,{once:true});"
             "}"
@@ -211,7 +176,7 @@ bool BrowserModule::start(const std::string& initial_url)
                     ps_err.c_str());
         } else {
             fprintf(stderr, "[BrowserModule] preload script registered "
-                    "(scrollbar suppression + sync-probe border)\n");
+                    "(scrollbar suppression)\n");
         }
 
         /* Seed the guest's URL bar with whatever Firefox is currently

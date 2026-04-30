@@ -12,10 +12,32 @@
 #include <cstdio>
 #include <cstring>
 #include <chrono>
+#include <string>
+#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
+
+namespace {
+// Locate a repo-relative asset (dev tree first, then /usr/share install).
+// Returns "" if the asset isn't present in either location.
+std::string resolve_asset(const char* rel) {
+    char exe_path[4096];
+    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+    if (len <= 0) return "";
+    exe_path[len] = '\0';
+    char* last_slash = strrchr(exe_path, '/');
+    if (!last_slash) return "";
+    *last_slash = '\0';
+    struct stat st;
+    std::string dev = std::string(exe_path) + "/../" + rel;
+    if (stat(dev.c_str(), &st) == 0) return dev;
+    std::string installed = std::string("/usr/share/mac-phoenix/") + rel;
+    if (stat(installed.c_str(), &st) == 0) return installed;
+    return "";
+}
+}  // namespace
 
 EmulatorSubprocess::EmulatorSubprocess(config::EmulatorConfig* config)
     : config_(config)
@@ -97,6 +119,34 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
 
     if (config_->browser_enabled) {
         args.push_back("--browser");
+        // Auto-mount the MacBrowser floppy so the guest has the .app
+        // available without the user editing disk_paths by hand. Skip
+        // if it's already in the list (or if we couldn't find the asset).
+        std::string dsk = resolve_asset("MacBrowser/MacBrowser.dsk");
+        if (dsk.empty()) {
+            // Installed layout drops the floppy directly under /usr/share.
+            dsk = resolve_asset("MacBrowser.dsk");
+        }
+        if (!dsk.empty()) {
+            bool already = false;
+            for (const auto& d : config_->disk_paths) {
+                if (d == dsk || (d.size() >= 16 &&
+                    d.substr(d.size() - 16) == "/MacBrowser.dsk")) {
+                    already = true;
+                    break;
+                }
+            }
+            if (!already) {
+                args.push_back("--disk");
+                args.push_back(dsk);
+                fprintf(stderr, "[EmulatorSubprocess] auto-mounted %s\n",
+                        dsk.c_str());
+            }
+        } else {
+            fprintf(stderr, "[EmulatorSubprocess] MacBrowser.dsk not found "
+                    "— browser pipeline will run but the guest app won't "
+                    "be available\n");
+        }
     }
 
     // Network

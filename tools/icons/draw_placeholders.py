@@ -1,84 +1,168 @@
 #!/usr/bin/env python3
 """
-draw_placeholders.py — first-pass app icons for MacBrowser + BridgeAgent.
+draw_placeholders.py — fallback hand-pixeled app icons.
 
-Run this once to produce 32×32 + 16×16 PNGs in this directory. The
-build system feeds them into png2icn.py to emit the ICN#/ics# Rez
-blocks each app's .r file embeds.
+The committed PNGs in this directory are sourced from the GNOME
+HighContrast theme (LGPL-2.1+), which is GPL-2 compatible:
+  /usr/share/icons/HighContrast/{16,32}x{16,32}/apps/web-browser.png
+      → macbrowser-{16,32}.png
+  /usr/share/icons/HighContrast/{16,32}x{16,32}/apps/preferences-system-network.png
+      → bridge-{16,32}.png
 
-These are placeholder pixel-art icons drawn directly with PIL — easy
-to iterate on without depending on rsvg-convert. Replace the call
-sites with proper SVG-derived art (Lucide / Phosphor) later; the
-ImageDraw API stays the same downstream.
+This script regenerates throwaway hand-drawn pixel art if the source
+PNGs are missing for some reason. Normal flow: copy a clean 1-bit
+silhouette PNG over the file, run png2icn.py, rebuild.
 """
 from PIL import Image, ImageDraw
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-# 1-bit canvas ergonomics: black foreground on transparent background.
 FG = (0, 0, 0, 255)
 
 
-def make_canvas(size: int) -> tuple[Image.Image, ImageDraw.ImageDraw]:
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    return img, ImageDraw.Draw(img)
+def _img(size: int) -> Image.Image:
+    return Image.new("RGBA", (size, size), (0, 0, 0, 0))
 
 
-def macbrowser_icon(size: int) -> Image.Image:
-    """Globe with crosshair + horizontal latitudes — small enough to
-    survive the 32×32 → 16×16 downscale without becoming mush."""
-    img, d = make_canvas(size)
-    # Outer circle, inset 2px from edge, 1-px stroke
-    inset = max(1, size // 16)
-    d.ellipse((inset, inset, size - inset - 1, size - inset - 1),
-              outline=FG, width=1)
-    # Equator
-    cy = size // 2
-    d.line((inset + 1, cy, size - inset - 2, cy), fill=FG, width=1)
-    # Vertical meridian — short arc-ish: just a vertical line at center
-    cx = size // 2
-    d.line((cx, inset + 1, cx, size - inset - 2), fill=FG, width=1)
-    # One curved line above + below for a hint of latitude
-    if size >= 24:
-        # Top latitude band
-        d.line((inset + 4, cy - size // 4 + 1,
-                size - inset - 5, cy - size // 4 + 1),
-               fill=FG, width=1)
-        # Bottom latitude band
-        d.line((inset + 4, cy + size // 4 - 1,
-                size - inset - 5, cy + size // 4 - 1),
-               fill=FG, width=1)
-    return img
+def _set(img: Image.Image, x: int, y: int) -> None:
+    if 0 <= x < img.size[0] and 0 <= y < img.size[1]:
+        img.putpixel((x, y), FG)
 
 
-def bridge_icon(size: int) -> Image.Image:
-    """Two squares connected by a horizontal line — host ↔ guest
-    bridge metaphor. Plus a small dot in the middle to suggest a
-    packet in flight. Period-correct simple."""
-    img, d = make_canvas(size)
-    box = max(4, size // 4)
-    pad = max(2, size // 16)
-    cy = size // 2
-    # Left box
-    d.rectangle((pad, cy - box // 2, pad + box, cy + box // 2 - 1),
-                outline=FG, width=1)
-    # Right box
-    d.rectangle((size - pad - box - 1, cy - box // 2,
-                 size - pad - 1, cy + box // 2 - 1),
-                outline=FG, width=1)
-    # Connecting wire
-    d.line((pad + box, cy, size - pad - box - 1, cy), fill=FG, width=1)
-    # Mid-point packet dot
-    if size >= 16:
-        cx = size // 2
-        d.rectangle((cx - 1, cy - 1, cx, cy), fill=FG)
-    # Tiny "screen" detail inside each box for size>=24
-    if size >= 24:
-        for x_box_left in (pad + 2, size - pad - box + 1):
-            d.rectangle((x_box_left, cy - box // 2 + 2,
-                         x_box_left + box - 5, cy - box // 2 + 3),
-                        fill=FG)
+def _rows(img: Image.Image, rows: list[str]) -> None:
+    """Stamp a bitmap-art string array (one row per line, '#' = on,
+    anything else = off). Caller pads each row to the canvas width."""
+    for y, line in enumerate(rows):
+        for x, ch in enumerate(line):
+            if ch == "#":
+                _set(img, x, y)
+
+
+# 32x32 globe — chunky outline + crossed meridians + polar caps.
+# Designed so that at 16x16 it still reads as a sphere with grid.
+MACBROWSER_32 = [
+    "................................",
+    "............########............",
+    ".........###..####..###.........",
+    ".......##....##..##....##.......",
+    "......#.....##....##.....#......",
+    ".....#......#......#......#.....",
+    "....#......#........#......#....",
+    "...#.......#........#.......#...",
+    "...#.......#........#.......#...",
+    "..#........#........#........#..",
+    "..#........#........#........#..",
+    "..#........#........#........#..",
+    "..#........#........#........#..",
+    "..############################..",
+    "..#........#........#........#..",
+    "..#........#........#........#..",
+    "..#........#........#........#..",
+    "..#........#........#........#..",
+    "..#........#........#........#..",
+    "..#........#........#........#..",
+    "...#.......#........#.......#...",
+    "...#.......#........#.......#...",
+    "....#......#........#......#....",
+    ".....#......#......#......#.....",
+    "......#.....##....##.....#......",
+    ".......##....##..##....##.......",
+    ".........###..####..###.........",
+    "............########............",
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+]
+
+# 16x16 globe — looser, fewer meridians so the grid still reads.
+MACBROWSER_16 = [
+    "................",
+    "....########....",
+    "..##........##..",
+    ".#....#..#....#.",
+    ".#....#..#....#.",
+    "#.....#..#.....#",
+    "#.....#..#.....#",
+    "################",
+    "#.....#..#.....#",
+    "#.....#..#.....#",
+    "#.....#..#.....#",
+    ".#....#..#....#.",
+    ".#....#..#....#.",
+    "..##........##..",
+    "....########....",
+    "................",
+]
+
+
+# 32x32 bridge — Roman/arch-bridge silhouette: a flat deck on top
+# resting on three semicircular arches, plus a water line below.
+# This silhouette survives the 1-bit downscale far better than a
+# suspension-cable design (whose diagonal cables alias into mush).
+BRIDGE_32 = [
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+    "..############################..",
+    "..############################..",
+    "..##..####....####....####..##..",
+    "..##.##..##..##..##..##..##.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "..##.#....#..#....#..#....#.##..",
+    "................................",
+    "..#.##..##..##..##..##..##..#...",
+    "...##..##..##..##..##..##..##...",
+    "................................",
+    "..##..##..##..##..##..##..##....",
+    "...##..##..##..##..##..##..##...",
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+]
+
+
+# 16x16 bridge — single arch shrunk to fit, with the wavy water line
+# below. Two arches at this size collide; one bigger arch reads
+# better.
+BRIDGE_16 = [
+    "................",
+    "................",
+    ".##############.",
+    ".##############.",
+    ".##.##....##.##.",
+    ".##.#......#.##.",
+    ".##.#......#.##.",
+    ".##.#......#.##.",
+    ".##.#......#.##.",
+    ".##.#......#.##.",
+    ".##.#......#.##.",
+    "................",
+    ".##.##.##.##.##.",
+    "..##.##.##.##.##",
+    "................",
+    "................",
+]
+
+
+def from_rows(rows: list[str], size: int) -> Image.Image:
+    img = _img(size)
+    _rows(img, rows)
     return img
 
 
@@ -90,11 +174,11 @@ def save(img: Image.Image, name: str) -> None:
 
 def main() -> None:
     print("MacBrowser icons:")
-    save(macbrowser_icon(32), "macbrowser-32.png")
-    save(macbrowser_icon(16), "macbrowser-16.png")
+    save(from_rows(MACBROWSER_32, 32), "macbrowser-32.png")
+    save(from_rows(MACBROWSER_16, 16), "macbrowser-16.png")
     print("BridgeAgent icons:")
-    save(bridge_icon(32), "bridge-32.png")
-    save(bridge_icon(16), "bridge-16.png")
+    save(from_rows(BRIDGE_32, 32), "bridge-32.png")
+    save(from_rows(BRIDGE_16, 16), "bridge-16.png")
 
 
 if __name__ == "__main__":

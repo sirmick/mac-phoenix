@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 
@@ -48,6 +49,15 @@ void run()
     }
     if (!shm) return;
 
+    /* Gate verbose per-command spam behind an opt-in env var. The
+     * BR_CMD_BACK heartbeat (and the startup banner below) are M1
+     * spike-era validation tooling — useful when bringing the pipe
+     * up, just noise during normal use. */
+    static const bool s_trace = [](){
+        const char* e = ::getenv("MACEMU_TRACE_BROWSER");
+        return e && *e && *e != '0';
+    }();
+
     if (g_paint_gradient) {
         /* Reset framebuffer header to spike geometry. */
         br_u16_store(&shm->fb.width,  kSpikeWidth);
@@ -58,10 +68,10 @@ void run()
         br_u16_store((uint16_t*)&shm->fb.dirty[0].left,   0);
         br_u16_store((uint16_t*)&shm->fb.dirty[0].bottom, kSpikeHeight);
         br_u16_store((uint16_t*)&shm->fb.dirty[0].right,  kSpikeWidth);
-        fprintf(stderr, "[BrowserSpike] gradient writer running (%dx%d, "
+        fprintf(stderr, "[MacBrowser] gradient writer running (%dx%d, "
                 "RGB555, shm=%p)\n", kSpikeWidth, kSpikeHeight, (void*)shm);
-    } else {
-        fprintf(stderr, "[BrowserSpike] ring/log loop only (pipeline owns fb)\n");
+    } else if (s_trace) {
+        fprintf(stderr, "[MacBrowser] ring/log loop only (pipeline owns fb)\n");
     }
 
     uint32_t frame = 0;
@@ -97,12 +107,14 @@ void run()
                                      sizeof(cmd_buf), &cmd_len)) {
             cmd_count++;
             if (cmd_type == BR_CMD_BACK && cmd_len == 4) {
-                uint32_t guest_counter = 0;
-                memcpy(&guest_counter, cmd_buf, 4);
-                guest_counter = __builtin_bswap32(guest_counter);
-                fprintf(stderr, "[BrowserSpike] host got cmd type=0x%x "
-                        "len=%u (guest_counter=%u, host_total=%u)\n",
-                        cmd_type, cmd_len, guest_counter, cmd_count);
+                if (s_trace) {
+                    uint32_t guest_counter = 0;
+                    memcpy(&guest_counter, cmd_buf, 4);
+                    guest_counter = __builtin_bswap32(guest_counter);
+                    fprintf(stderr, "[MacBrowser] host got cmd type=0x%x "
+                            "len=%u (guest_counter=%u, host_total=%u)\n",
+                            cmd_type, cmd_len, guest_counter, cmd_count);
+                }
                 continue;
             }
             browser::cmd_dispatch(cmd_type, cmd_buf, cmd_len);
@@ -123,7 +135,10 @@ void run()
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    fprintf(stderr, "[BrowserSpike] writer stopped after %u frames\n", frame);
+    if (s_trace) {
+        fprintf(stderr, "[MacBrowser] writer stopped after %u frames\n",
+                frame);
+    }
 }
 
 }  // namespace

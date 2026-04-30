@@ -52,6 +52,12 @@ public:
      * start() succeeds. */
     std::string top_context() const;
 
+    /* Current input target — the most recently created top-level
+     * browsing context (popup, target=_blank, window.open), or the
+     * original top_context if no popup is live. Pointer/wheel/key
+     * methods route here automatically. */
+    std::string active_context() const;
+
     /* Send a method call with arbitrary JSON params, block for
      * response. Returns the response object's `result` field
      * serialized as JSON, or empty string + sets `error` on failure

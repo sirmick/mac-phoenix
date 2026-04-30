@@ -32,6 +32,12 @@ struct BidiClient::Impl {
     std::map<int, bool>              ok;          /* id → success vs error */
 
     std::string                      top_context;
+    /* Most recently created top-level browsing context (popup, target=_blank,
+     * window.open). Pointer/wheel/keyboard actions route here so popups
+     * actually receive input. Falls back to top_context when it gets
+     * destroyed. Updated from the WS thread, read from caller threads,
+     * so always read/write under `mtx`. */
+    std::string                      active_context;
     std::function<void(const std::string&)> on_event_cb;
 };
 
@@ -74,7 +80,12 @@ bool BidiClient::start(const std::string& host, int port,
         impl_->cv_resp.notify_all();
     });
     impl_->ws->onError([this](std::string err) {
-        fprintf(stderr, "[BiDi] ws error: %s\n", err.c_str());
+        /* Connect retries are normal during Firefox boot — only surface
+         * the error once the channel was actually open. The caller logs
+         * a single summary on permanent failure. */
+        if (impl_->opened.load()) {
+            fprintf(stderr, "[BiDi] ws error: %s\n", err.c_str());
+        }
         impl_->closed.store(true);
         impl_->cv_open.notify_all();
         impl_->cv_resp.notify_all();
@@ -91,6 +102,33 @@ bool BidiClient::start(const std::string& host, int port,
             }
             std::string type = get_string(j, "type");
             if (type == "event") {
+                /* Track top-level browsing contexts internally so input
+                 * events follow popups and new windows. The user-supplied
+                 * on_event_cb still fires unmodified. */
+                std::string method = get_string(j, "method");
+                if (method == "browsingContext.contextCreated") {
+                    auto pit = j.find("params");
+                    if (pit != j.end() && pit->is_object()) {
+                        std::string ctx = get_string(*pit, "context");
+                        auto par = pit->find("parent");
+                        bool is_top = (par == pit->end()) || par->is_null() ||
+                                      (par->is_string() &&
+                                       par->get<std::string>().empty());
+                        if (is_top && !ctx.empty()) {
+                            std::lock_guard<std::mutex> lk(impl_->mtx);
+                            impl_->active_context = ctx;
+                        }
+                    }
+                } else if (method == "browsingContext.contextDestroyed") {
+                    auto pit = j.find("params");
+                    if (pit != j.end() && pit->is_object()) {
+                        std::string ctx = get_string(*pit, "context");
+                        std::lock_guard<std::mutex> lk(impl_->mtx);
+                        if (!ctx.empty() && ctx == impl_->active_context) {
+                            impl_->active_context = impl_->top_context;
+                        }
+                    }
+                }
                 if (impl_->on_event_cb) impl_->on_event_cb(msg);
                 return;
             }
@@ -119,13 +157,12 @@ bool BidiClient::start(const std::string& host, int port,
         if (!impl_->cv_open.wait_for(lk, timeout, [this]() {
                 return impl_->opened.load() || impl_->closed.load();
             })) {
-            fprintf(stderr, "[BiDi] connect timeout (%s)\n",
-                    url.str().c_str());
+            /* Caller (BrowserModule) loops with short timeouts during
+             * startup; staying silent here keeps the log clean. */
             return false;
         }
     }
     if (impl_->closed.load()) {
-        fprintf(stderr, "[BiDi] connect closed before open\n");
         return false;
     }
     fprintf(stderr, "[BiDi] connected to %s\n", url.str().c_str());
@@ -169,12 +206,25 @@ bool BidiClient::start(const std::string& host, int port,
             auto& contexts = r["contexts"];
             if (!contexts.empty()) {
                 impl_->top_context = contexts[0].value("context", "");
+                impl_->active_context = impl_->top_context;
             }
         } catch (const std::exception& e) {
             fprintf(stderr, "[BiDi] getTree parse: %s\n", e.what());
         }
         fprintf(stderr, "[BiDi] top context = '%s'\n",
                 impl_->top_context.c_str());
+    }
+
+    /* Subscribe to context lifecycle so popups + new windows route
+     * pointer/wheel/keyboard input correctly. The caller's own
+     * subscribe() call is additive — both sets stick. */
+    {
+        std::string err;
+        if (!subscribe({"browsingContext.contextCreated",
+                        "browsingContext.contextDestroyed"}, &err)) {
+            fprintf(stderr, "[BiDi] context lifecycle subscribe failed: %s\n",
+                    err.c_str());
+        }
     }
     return true;
 }
@@ -190,6 +240,15 @@ void BidiClient::stop()
 
 bool BidiClient::is_open() const { return impl_->opened.load(); }
 std::string BidiClient::top_context() const { return impl_->top_context; }
+
+/* Snapshot the current input target. Falls back to the original top
+ * context when no popup has been adopted yet. Caller threads only —
+ * locks impl_->mtx. */
+std::string BidiClient::active_context() const {
+    std::lock_guard<std::mutex> lk(impl_->mtx);
+    return impl_->active_context.empty() ? impl_->top_context
+                                         : impl_->active_context;
+}
 
 void BidiClient::on_event(std::function<void(const std::string&)> cb)
 {
@@ -317,7 +376,8 @@ json pointer_action(const std::string& ctx,
 bool BidiClient::click(int x, int y, int button, int count,
                        std::string* error)
 {
-    if (impl_->top_context.empty()) {
+    std::string ctx = active_context();
+    if (ctx.empty()) {
         if (error) *error = "no top-level browsing context";
         return false;
     }
@@ -339,7 +399,7 @@ bool BidiClient::click(int x, int y, int button, int count,
         actions.push_back(json{{"type", "pointerUp"},
                                {"button", button}});
     }
-    json p = pointer_action(impl_->top_context, actions);
+    json p = pointer_action(ctx, actions);
     std::string e;
     return !call("input.performActions", p.dump(),
                  error ? error : &e).empty();
@@ -347,14 +407,15 @@ bool BidiClient::click(int x, int y, int button, int count,
 
 bool BidiClient::mouse_move(int x, int y, std::string* error)
 {
-    if (impl_->top_context.empty()) {
+    std::string ctx = active_context();
+    if (ctx.empty()) {
         if (error) *error = "no top-level browsing context";
         return false;
     }
     json actions = json::array({
         json{{"type", "pointerMove"}, {"x", x}, {"y", y}, {"duration", 0}},
     });
-    json p = pointer_action(impl_->top_context, actions);
+    json p = pointer_action(ctx, actions);
     std::string e;
     return !call("input.performActions", p.dump(),
                  error ? error : &e).empty();
@@ -363,7 +424,8 @@ bool BidiClient::mouse_move(int x, int y, std::string* error)
 bool BidiClient::scroll(int x, int y, int dx, int dy,
                         std::string* error)
 {
-    if (impl_->top_context.empty()) {
+    std::string ctx = active_context();
+    if (ctx.empty()) {
         if (error) *error = "no top-level browsing context";
         return false;
     }
@@ -376,7 +438,7 @@ bool BidiClient::scroll(int x, int y, int dx, int dy,
         })},
     };
     json p = {
-        {"context", impl_->top_context},
+        {"context", ctx},
         {"actions", json::array({src})},
     };
     std::string e;
@@ -386,7 +448,8 @@ bool BidiClient::scroll(int x, int y, int dx, int dy,
 
 bool BidiClient::type(const std::string& text, std::string* error)
 {
-    if (impl_->top_context.empty()) {
+    std::string ctx = active_context();
+    if (ctx.empty()) {
         if (error) *error = "no top-level browsing context";
         return false;
     }
@@ -415,7 +478,7 @@ bool BidiClient::type(const std::string& text, std::string* error)
         {"actions", actions},
     };
     json p = {
-        {"context", impl_->top_context},
+        {"context", ctx},
         {"actions", json::array({src})},
     };
     std::string e;
@@ -427,7 +490,8 @@ bool BidiClient::send_key_with_mods(const std::string& key,
                                     unsigned mods,
                                     std::string* error)
 {
-    if (impl_->top_context.empty()) {
+    std::string ctx = active_context();
+    if (ctx.empty()) {
         if (error) *error = "no top-level browsing context";
         return false;
     }
@@ -461,7 +525,7 @@ bool BidiClient::send_key_with_mods(const std::string& key,
         {"actions", actions},
     };
     json p = {
-        {"context", impl_->top_context},
+        {"context", ctx},
         {"actions", json::array({src})},
     };
     std::string e;
