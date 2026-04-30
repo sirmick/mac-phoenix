@@ -60,15 +60,18 @@ git ls-files --cached --modified --others --exclude-standard -z \
     | tar --null --files-from=- -cf - \
     | tar -x -C "$STAGE"
 
-# 2. Each registered submodule (read from .gitmodules — ignores stale legacy/ dirs)
-echo "[tarball] exporting submodules..."
-git config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
-    | awk '{print $2}' | while read -r sub; do
-    [[ -d "$sub/.git" || -f "$sub/.git" ]] || { echo "[tarball]   skip $sub (uninitialized)"; continue; }
-    echo "[tarball]   $sub"
-    mkdir -p "$STAGE/$sub"
-    (cd "$sub" && git archive --format=tar HEAD) | tar -x -C "$STAGE/$sub"
-done
+# 2. Each registered submodule. Skipped when there's no .gitmodules — v1.0
+# vendors all subprojects directly into the parent tree.
+if [[ -f .gitmodules ]]; then
+    echo "[tarball] exporting submodules..."
+    git config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
+        | awk '{print $2}' | while read -r sub; do
+        [[ -d "$sub/.git" || -f "$sub/.git" ]] || { echo "[tarball]   skip $sub (uninitialized)"; continue; }
+        echo "[tarball]   $sub"
+        mkdir -p "$STAGE/$sub"
+        (cd "$sub" && git archive --format=tar HEAD) | tar -x -C "$STAGE/$sub"
+    done
+fi
 
 # 3. Vendor cargo crates for offline build
 echo "[tarball] vendoring cargo crates..."
