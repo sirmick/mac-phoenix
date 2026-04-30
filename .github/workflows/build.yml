@@ -1,0 +1,162 @@
+name: build
+
+# PR + main: build all four (distro × arch) cells, smoke-test the .deb,
+#            upload as workflow artifacts.
+# Tag v*:    same builds, plus the source tarball, posted to the GitHub
+#            Release as downloadable assets.
+# Manual:    workflow_dispatch from the Actions tab.
+#
+# Build-deps come from `apt-get build-dep .` reading debian/control —
+# same path packaging/Dockerfile.deb takes, so this CI and a local
+# `dpkg-buildpackage` produce identical packages.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  package:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: ubuntu-24.04-amd64
+            distro: ubuntu24.04
+            runner: ubuntu-24.04
+            container: ''
+          - label: ubuntu-24.04-arm64
+            distro: ubuntu24.04
+            runner: ubuntu-24.04-arm
+            container: ''
+          - label: debian-12-amd64
+            distro: debian12
+            runner: ubuntu-24.04
+            container: debian:12
+          - label: debian-12-arm64
+            distro: debian12
+            runner: ubuntu-24.04-arm
+            container: debian:12
+    steps:
+      - name: Bootstrap container (Debian 12 only)
+        if: matrix.container != ''
+        run: |
+          # The debian:12 image is bare — install git + sudo so the
+          # rest of the workflow looks the same as on ubuntu runners.
+          apt-get update
+          apt-get install -y --no-install-recommends \
+              ca-certificates git sudo
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build deps
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              build-essential debhelper devscripts dpkg-dev \
+              ca-certificates curl xz-utils
+          # Reads Build-Depends: from debian/control — single source of
+          # truth shared with packaging/Dockerfile.deb.
+          sudo apt-get build-dep -y .
+
+      - name: dpkg-buildpackage
+        run: |
+          set -eux
+          # -us -uc: don't sign source/changes (CI has no maintainer key).
+          # -b:      binary-only (.deb, no .dsc/.tar.gz duplicates).
+          dpkg-buildpackage -us -uc -b
+
+      - name: Install + smoke-test
+        run: |
+          set -eux
+          sudo dpkg -i ../mac-phoenix_*.deb || true
+          sudo apt-get install -y -f
+          ./packaging/ci/smoke-installed.sh
+
+      - name: Stage artifact with descriptive name
+        run: |
+          set -eux
+          mkdir -p staging
+          # Inject the distro tag between version and arch using the
+          # Debian "+suffix" convention so all four .debs coexist
+          # without colliding. Example:
+          #   mac-phoenix_1.0.0-1_amd64.deb
+          #     → mac-phoenix_1.0.0-1+${{ matrix.distro }}_amd64.deb
+          for f in ../mac-phoenix_*.deb; do
+              base="$(basename "$f" .deb)"
+              ver_rev="${base%_*}"   # mac-phoenix_1.0.0-1
+              arch="${base##*_}"     # amd64 / arm64
+              cp "$f" "staging/${ver_rev}+${{ matrix.distro }}_${arch}.deb"
+          done
+          ls -la staging/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.label }}
+          path: staging/*.deb
+          retention-days: 90
+
+  unit-tests:
+    name: ctest -L unit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install build deps
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dpkg-dev
+          # Same single source of truth as the package job — debian/control's
+          # Build-Depends covers everything CMake needs.
+          sudo apt-get build-dep -y .
+      - run: cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - run: cmake --build build -j$(nproc)
+      - run: ctest --test-dir build -L unit --output-on-failure
+
+  release:
+    name: Publish release
+    needs: [package, unit-tests]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build source tarball
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              cargo rustc xz-utils
+          tools/make-source-tarball.sh
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: deb-*
+          merge-multiple: true
+      - name: Collect release assets
+        run: |
+          set -eux
+          mkdir -p release
+          cp dist/mac-phoenix_*.tar.xz release/
+          cp artifacts/*.deb release/
+          ls -la release/
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

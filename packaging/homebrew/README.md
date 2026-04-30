@@ -76,14 +76,14 @@ Once the formula works against `--HEAD`, switch to a versioned tarball:
 tools/make-source-tarball.sh
 
 # 2. Create a GitHub release and upload the tarball
-gh release create v2.0.0 dist/mac-phoenix_2.0.0.tar.xz \
-    --title "MacPhoenix 2.0.0" --notes "..."
+gh release create v1.0.0 dist/mac-phoenix_1.0.0.tar.xz \
+    --title "MacPhoenix 1.0.0" --notes "..."
 
 # 3. Get the sha256
-shasum -a 256 dist/mac-phoenix_2.0.0.tar.xz
+shasum -a 256 dist/mac-phoenix_1.0.0.tar.xz
 
 # 4. Replace the `head do ... end` block in the formula with:
-#       url    "https://github.com/sirmick/mac-phoenix/releases/download/v2.0.0/mac-phoenix_2.0.0.tar.xz"
+#       url    "https://github.com/sirmick/mac-phoenix/releases/download/v1.0.0/mac-phoenix_1.0.0.tar.xz"
 #       sha256 "<the sha from step 3>"
 ```
 

@@ -23,7 +23,7 @@ Homepage: https://github.com/sirmick/mac-phoenix
 Rules-Requires-Root: no
 
 Package: mac-phoenix
-Architecture: amd64
+Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Recommends: hfsutils

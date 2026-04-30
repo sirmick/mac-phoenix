@@ -1,9 +1,17 @@
-mac-phoenix (2.0.0) unstable; urgency=medium
+mac-phoenix (1.0.0) unstable; urgency=medium
 
-  * Initial native Debian packaging.
+  * First stable release. Boots Mac OS 7.5.5 / 7.6 / 9.0.4 to the Finder
+    on UAE/m68k, KPX/PowerPC, and Unicorn validation backends.
+  * Web UI ships H.264, VP9, WebP, PNG, and HTTP-stream codecs with
+    auto-fallback; absolute + relative mouse modes; configurable
+    keyboard remap.
+  * MacBrowser bridge: host-side Firefox-on-Xvfb pipeline + 68k guest
+    app for native Mac chrome around live web content.
+  * BridgeAgent: in-guest 68k app for shutdown/restart/launch/quit
+    AppleEvents, driven from /api/* endpoints over a file-based bridge.
   * Bundles vendored cargo crates so net-bridge builds offline.
   * Installs to /usr/bin (mac-phoenix, net-bridge),
-    /usr/share/mac-phoenix/{client,BridgeAgent.bin,provisioning},
-    /usr/share/applications/mac-phoenix.desktop.
+    /usr/share/mac-phoenix/{client,BridgeAgent.bin,MacBrowser.{bin,dsk},
+    provisioning}, /usr/share/applications/mac-phoenix.desktop.
 
- -- Mick <sirmick@gmail.com>  Sat, 25 Apr 2026 15:00:00 +0000
+ -- Mick <sirmick@gmail.com>  Thu, 30 Apr 2026 00:00:00 +0000

@@ -9,7 +9,7 @@ class MacPhoenix < Formula
   #   3. shasum -a 256 dist/mac-phoenix_<v>.tar.xz
   #   4. fill in the url + sha256 below, drop the `head` block.
   #
-  # url "https://github.com/sirmick/mac-phoenix/releases/download/v2.0.0/mac-phoenix_2.0.0.tar.xz"
+  # url "https://github.com/sirmick/mac-phoenix/releases/download/v1.0.0/mac-phoenix_1.0.0.tar.xz"
   # sha256 "..."
 
   head do

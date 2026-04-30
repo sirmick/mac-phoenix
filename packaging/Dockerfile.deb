@@ -5,10 +5,13 @@
 # Build context (set up by run_matrix.sh):
 #   ./mac-phoenix_<ver>.tar.xz
 #
-# BridgeAgent.bin is shipped as a committed artifact in BridgeAgent/;
-# package builds set BUILD_BRIDGE_AGENT=OFF so they don't need Retro68.
-# Maintainers rebuild it via packaging/Dockerfile.dev when BridgeAgent.c
-# changes (see README "Building guest components").
+# BridgeAgent.bin / MacBrowser.bin are shipped as committed artifacts;
+# package builds set BUILD_BRIDGE_AGENT=OFF + BUILD_MAC_BROWSER=OFF so
+# they don't need Retro68. Maintainers rebuild via packaging/Dockerfile.dev.
+#
+# Build-deps come from `apt-get build-dep .` reading debian/control —
+# single source of truth shared with the GH Actions workflow. To change
+# build-deps, edit debian/control only.
 #
 # Usage:
 #   docker build -f packaging/Dockerfile.deb \
@@ -22,34 +25,25 @@ ARG BASE=ubuntu:24.04
 FROM ${BASE} AS build
 ARG DEBIAN_FRONTEND=noninteractive
 
+WORKDIR /src
+COPY mac-phoenix_*.tar.xz /tmp/source.tar.xz
+RUN tar -xJf /tmp/source.tar.xz --strip-components=1 -C /src
+
+# Build deps + helpers. apt-get build-dep . reads Build-Depends from
+# debian/control, so this list stays in lockstep with the workflow.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         debhelper \
-        cmake \
-        pkg-config \
-        libssl-dev \
-        libopenh264-dev \
-        libvpx-dev \
-        libwebp-dev \
-        libopus-dev \
-        libyuv-dev \
-        libxcb1-dev \
-        libxcb-shm0-dev \
-        libxcb-damage0-dev \
-        libxcb-composite0-dev \
-        libxcb-randr0-dev \
-        cargo \
-        rustc \
+        devscripts \
+        dpkg-dev \
         ca-certificates \
         curl \
         xz-utils \
-        tar \
+    && apt-get build-dep -y . \
     && rm -rf /var/lib/apt/lists/*
 
-# Cargo.toml pins rust-version = 1.75. That covers Ubuntu 24.04 (apt rustc
-# 1.75) and Fedora 40 (1.78) without rustup. Older distros (Ubuntu 22.04 apt
-# 1.66, Debian 12 apt 1.63) still need it — install conditionally so the
-# distros with adequate apt rust skip the curl entirely.
+# Cargo.toml pins rust-version = 1.75. Ubuntu 24.04 (apt rustc 1.75) and
+# Fedora 40 (1.78) are fine; older distros need a rustup fallback.
 ENV RUSTUP_HOME=/usr/local/rustup \
     PATH=/usr/local/cargo/bin:$PATH
 RUN APT_RUSTC="$(rustc --version | awk '{print $2}')"; \
@@ -64,10 +58,7 @@ RUN APT_RUSTC="$(rustc --version | awk '{print $2}')"; \
     fi \
  && rustc --version
 
-WORKDIR /src
-COPY mac-phoenix_*.tar.xz /tmp/source.tar.xz
-RUN tar -xJf /tmp/source.tar.xz --strip-components=1 -C /src \
- && dpkg-buildpackage -us -uc -b \
+RUN dpkg-buildpackage -us -uc -b \
  && mkdir -p /pkg && cp /*.deb /pkg/
 
 # ---------- test stage (clean image, no build deps) -----------------------
@@ -76,7 +67,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 COPY --from=build /pkg/*.deb /pkg/
 
-# Install package + a few runtime extras the boot test wants
 RUN apt-get update && apt-get install -y --no-install-recommends \
         /pkg/*.deb \
         ca-certificates \
@@ -85,18 +75,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         hfsutils \
     && rm -rf /var/lib/apt/lists/*
 
-# Layout smoke tests — fail the image build if anything's misplaced.
-RUN set -eux; \
-    test -x /usr/bin/mac-phoenix; \
-    test -x /usr/bin/net-bridge; \
-    test -f /usr/share/mac-phoenix/client/index.html; \
-    test -f /usr/share/mac-phoenix/client/client.js; \
-    test -f /usr/share/mac-phoenix/BridgeAgent.bin; \
-    test -f /usr/share/mac-phoenix/MacBrowser.bin; \
-    test -f /usr/share/mac-phoenix/MacBrowser.dsk; \
-    test -x /usr/share/mac-phoenix/provisioning/install_bridge_agent.sh; \
-    test -f /usr/share/applications/mac-phoenix.desktop; \
-    mac-phoenix --help | head -3
+# Layout smoke test — fails the image build if anything's misplaced.
+COPY --from=build /src/packaging/ci/smoke-installed.sh /smoke-installed.sh
+RUN /smoke-installed.sh
 
 # Default cmd kept generic so run_matrix.sh can override with a boot test.
 CMD ["mac-phoenix", "--help"]

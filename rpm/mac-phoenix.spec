@@ -3,7 +3,7 @@
 #
 # Build with the source tarball produced by tools/make-source-tarball.sh:
 #   tools/make-source-tarball.sh
-#   cp dist/mac-phoenix_2.0.0.tar.xz ~/rpmbuild/SOURCES/
+#   cp dist/mac-phoenix_1.0.0.tar.xz ~/rpmbuild/SOURCES/
 #   rpmbuild -bb rpm/mac-phoenix.spec
 #
 # Cargo runs offline against the vendored crates bundled in the tarball
@@ -14,7 +14,7 @@
 # WebP, Opus) plus PNG cover the browser UI fine.
 
 Name:           mac-phoenix
-Version:        2.0.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        Classic Macintosh emulator with web-based UI
 
@@ -97,5 +97,5 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/mac-phoenix.desktop
 %{_datadir}/applications/mac-phoenix.desktop
 
 %changelog
-* Sat Apr 25 2026 Mick <sirmick@gmail.com> - 2.0.0-1
-- Initial RPM packaging.
+* Thu Apr 30 2026 Mick <sirmick@gmail.com> - 1.0.0-1
+- First stable release: m68k + PPC backends, web UI, MacBrowser bridge.
