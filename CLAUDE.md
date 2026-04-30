@@ -256,7 +256,7 @@ PNG encoding (fpng) has no external dependencies and is always available.
 pixels into a guest Mac app called **MacBrowser**. The guest app
 provides a native Mac chrome (toolbar, URL bar, V/H scrollbars) over
 a 1:1 pixel viewport; clicks/keys/scroll are forwarded to Firefox
-via WebDriver-BiDi. See [`docs/plan/MacBrowser.md`](docs/plan/MacBrowser.md)
+via WebDriver-BiDi. See [`docs/MacBrowser.md`](docs/MacBrowser.md)
 for the architecture deep-dive (memory layout, ring protocol, BiDi
 flow).
 

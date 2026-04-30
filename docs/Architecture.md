@@ -1,582 +1,220 @@
 # Architecture Overview
 
-How mac-phoenix fits together: Platform API, CPU backends, memory system.
+How mac-phoenix fits together: Platform API, the five CPU backends,
+memory layout, traps, interrupts, web/WebRTC plumbing.
 
----
+## Core principle: everything goes through the Platform API
 
-## Core Design Principle
-
-**Everything goes through the Platform API**
-
-The entire emulator is built around a single abstraction layer that separates:
-- **What** the emulator needs (CPU execution, memory access, trap handling)
-- **How** it's implemented (UAE, Unicorn, or future backends)
-
----
-
-## Platform API (The Heart of the System)
-
-### What Is It?
-
-The `Platform` struct ([src/common/include/platform.h](../src/common/include/platform.h)) defines function pointers for all backend operations:
+The `Platform` struct (`src/common/include/platform.h`) is a function-pointer
+table. Core code never calls a backend directly — it dispatches through
+`g_platform`. Backend installers fill in the pointers; null drivers (in
+`src/drivers/*/`*_null.cpp`) provide safe defaults so unimplemented hooks
+never crash.
 
 ```c
 typedef struct Platform {
-    // CPU Execution
+    /* CPU lifecycle + execution */
     bool (*cpu_init)(void);
     CPUExecResult (*cpu_execute_one)(void);
+    void (*cpu_execute_fast)(void);            /* optional run-to-completion */
     uint32_t (*cpu_get_pc)(void);
-    void (*cpu_set_pc)(uint32_t pc);
-    uint32_t (*cpu_get_dreg)(int n);
-    uint32_t (*cpu_get_areg)(int n);
-    // ... 20+ more CPU operations
+    /* … register accessors, m68k + ppc variants … */
 
-    // Trap/Exception Handling
+    /* Trap / EmulOp dispatch */
     bool (*emulop_handler)(uint16_t opcode, bool probe);
     void (*trap_handler)(int type, uint16_t opcode, bool probe);
     void (*cpu_execute_68k_trap)(uint16_t trap, struct M68kRegisters *r);
 
-    // Memory Operations (optional, for direct backend access)
-    uint8_t (*cpu_read_byte)(uint32_t addr);
-    void (*cpu_write_byte)(uint32_t addr, uint8_t val);
-    // ... etc
+    /* Interrupts */
+    void (*cpu_trigger_interrupt)(int level);
 
+    /* Driver subsystems (video, audio, scsi, serial, ether, …) */
+    /* All start as null-driver pointers; real drivers swap in at startup. */
 } Platform;
 
 extern Platform g_platform;
 ```
 
-### Why This Design?
+## CPU backends
 
-**Benefits:**
-1. **Backend Independence** - Core code never calls UAE or Unicorn directly
-2. **Runtime Selection** - Choose backend via `--backend` CLI flag
-3. **Easy Testing** - Can mock out backends for unit tests
-4. **Future Expansion** - Add new backends (QEMU? Custom JIT?) without touching core
+Selected by `--backend`. The token also implies architecture — there is no
+separate `--arch` flag.
 
-**Example Usage:**
+| Backend         | Arch | Implementation | Speed (Quadra boot) | Use |
+|-----------------|------|----------------|---------------------|------|
+| `uae`           | m68k | Hand-tuned interpreter from BasiliskII (`src/cpu/uae_cpu/`, `cpu_uae.c`) | ~5s (interp), ~3s (`--jit`) | Default for end users |
+| `unicorn-m68k`  | m68k | Unicorn QEMU TCG (`cpu_unicorn.cpp`, `unicorn_wrapper.c`) | ~12s | Validation, perf research |
+| `unicorn-ppc`   | ppc  | Unicorn QEMU TCG (`cpu_unicorn_ppc.cpp`) | reaches Finder, unstable | See `ppc/UnicornPpcStatus.md` |
+| `kpx`           | ppc  | Kheperix interpreter from SheepShaver (`src/cpu/kpx/`) | ~45s (interp); `--jit` blocked by codegen | Default for PPC |
+| `dualcpu`       | m68k | UAE + Unicorn-m68k in lockstep | very slow | Catch divergences |
+
+Backend installers — `cpu_uae_install`, `cpu_unicorn_install`,
+`cpu_unicorn_ppc_install`, `cpu_ppc_kpx_install`, `cpu_dualcpu_install` — each
+write into the same `g_platform` table.
+
+## Memory
+
+### m68k (Quadra) layout
+
+```
+RAM           0x00000000  32 MB
+ROM           0x02000000  1 MB    (writable for patching)
+ScratchMem    0x02100000  64 KB   (unit tables, host scratch)
+FrameBuffer   0x02110000  4 MB    (outside RAM so CPU can't corrupt heap)
+```
+
+Direct addressing: `host_ptr = mac_addr + MEMBaseDiff`. Mac SE uses 24-bit
+addressing with ROM at `0x400000`; the actual layout is selected by the
+machine profile (`src/config/machine_profile.cpp`), auto-detected from the
+ROM version.
+
+UAE keeps RAM in big-endian and byte-swaps inside `do_get_mem_*`. Unicorn
+keeps the same big-endian layout — see `deepdive/cpu/UaeQuirks.md`,
+`deepdive/cpu/UnicornQuirks.md`, and `deepdive/MemoryArchitecture.md`.
+
+### PPC (Gossamer) layout
+
+A 512 MB `mmap` region with `VMBaseDiff = 0` (REAL_ADDRESSING). RAM at 0,
+ROM at `0x00400000`, KernelData at `0x68FFE000` (aliased at `0x5FFFE000`),
+SheepMem at top of RAM. See `ppc/MemoryLayout.md`.
+
+## Traps and EmulOps
+
+Three flavours of trap, all dispatched through `g_platform`:
+
+1. **EmulOps** — synthetic illegal opcodes inserted by ROM patching. UAE uses
+   `0x71xx`; Unicorn-m68k uses A-line range `0xAExx`. The CPU raises an
+   illegal-instruction exception and the platform's `emulop_handler()` runs
+   in C++.
+2. **A-line traps** (`0xAxxx`) — Mac OS Toolbox calls. Both backends reach an
+   identical 87-entry trap table.
+3. **F-line traps** (`0xFxxx`) — FPU emulation.
+
+PPC uses **SHEEP opcodes** (`0x18000000` family, an undefined PPC instruction)
+for the equivalent of EmulOps; the encoding splits into EMUL_RETURN /
+EXEC_RETURN / EXEC_NATIVE / EMUL_OP. KPX catches them through its decoder; the
+Unicorn-PPC backend dispatches via a major-opcode-6 helper added in
+`subprojects/unicorn-patches/0004-mac-emulop-helper.patch`.
+
+### Native trap execution
+
+When a host EmulOp needs to call back into Mac code (e.g. running a device
+driver), the backend builds a 68k frame and runs the inner interpreter:
+
+- UAE: native `Execute68kTrap()`.
+- Unicorn-m68k: pushes a return marker (`0x7100`), runs `uc_emu_start` until
+  it hits the marker, copies registers back. No UAE dependency.
+- KPX: `sheepshaver_cpu::execute_68k()` enters the ROM's PPC-native 68k
+  emulator with a fake stack containing `EXEC_RETURN`.
+
+## Interrupts
+
+Timer/device code calls `g_platform.cpu_trigger_interrupt(level)`. The 60 Hz
+tick comes from `src/drivers/platform/timer_interrupt.cpp` (UAE/Unicorn) or
+`src/cpu/kpx/cpu_ppc_kpx.cpp`'s tick thread (PPC).
+
+- **UAE**: sets `SPCFLAG_INT`, processed by `do_specialties()`. UAE's native
+  `Interrupt()` builds the m68k stack frame, switches to supervisor mode, reads
+  the autovector, and jumps.
+- **Unicorn-m68k**: stores a pending level in a global, drained from
+  `UC_HOOK_BLOCK`. Stack frame is built manually with `uc_mem_write` /
+  `uc_reg_write`, deferred-applied at the next block boundary so QEMU's
+  post-hook PC restoration doesn't clobber the change. (See
+  `deepdive/cpu/UnicornQuirks.md` and `deepdive/cpu/ALineAndFLineStatus.md`.)
+- **KPX / Unicorn-PPC**: nanokernel IRQ entry. KPX uses
+  `sheepshaver_cpu::interrupt(entry)`; Unicorn-PPC mirrors the same register
+  setup and re-enters via `uc_emu_start` with a sentinel return opcode.
+
+PPC interrupt delivery has its own concerns (in-place vs cross-thread
+`uc_emu_stop`, IRQ pressure at SCALE=1 vs SCALE=10) — see
+`ppc/UnicornPpcStatus.md`.
+
+## Process and thread topology
+
+In webserver mode there are **two processes**:
+
+- **Parent** (`mac-phoenix`): HTTP server, WebRTC signaling, video encoder
+  thread, video relay thread, BridgeAgent watchdog, MacBrowser supervisor.
+- **CPU subprocess** (`--ipc`): runs the actual emulator, writes frames into
+  the IPC SHM, reads input over a Unix socket.
+
+Both processes see the same bridge directory on disk, which is how
+`/api/launch` etc. communicate with the in-guest BridgeAgent without an
+in-memory mailbox.
+
+`--no-webserver` runs single-process; the bridge still goes through files
+because the agent inside the guest is a separate Mac OS process.
+
+See `ThreadingArchitecture.md` for thread-by-thread roles and ownership rules.
+
+## Web stack
+
+One TCP listener on `--port` (default 11000) serves:
+
+- The static client (HTML/JS/CSS in `client/`).
+- REST API at `/api/*` (see CLAUDE.md for the full table).
+- `/api/frame` long-poll for the `httpstream` codec.
+- WebSocket upgrade at `/ws` — signaling JSON, input events, and PNG/WebP
+  frames all ride this socket.
+
+WebRTC RTP (H.264 / VP9 video, Opus audio) negotiates over `/ws` and ends up
+on independently-bound UDP ports — that traffic doesn't pass through the
+HTTP listener.
+
+## Backend selection flow
+
 ```c
-// Core emulation code doesn't know if it's UAE or Unicorn:
-uint32_t pc = g_platform.cpu_get_pc();
-CPUExecResult result = g_platform.cpu_execute_one();
-if (result == CPU_EXEC_EMULOP) {
-    g_platform.emulop_handler(opcode, false);
+switch (config.cpu_backend) {
+    case Backend::UnicornM68K: cpu_unicorn_install(&g_platform);     break;
+    case Backend::UnicornPPC:  cpu_unicorn_ppc_install(&g_platform); break;
+    case Backend::DualCPU:     cpu_dualcpu_install(&g_platform);     break;
+    case Backend::KPX:         cpu_ppc_kpx_install(&g_platform);     break;
+    case Backend::UAE:
+    default:                   cpu_uae_install(&g_platform);         break;
 }
 ```
 
----
+`--backend unicorn` (no `-m68k`/`-ppc` suffix) is accepted but warned and
+silently mapped to `unicorn-m68k`.
 
-## Three CPU Backends
-
-### 1. UAE (Legacy, Interpreter)
-
-**Purpose**: Proven, stable baseline for validation
-
-**Implementation**: [src/cpu/cpu_uae.c](../src/cpu/cpu_uae.c)
-
-**Characteristics**:
-- Original BasiliskII CPU core (C++ interpreter)
-- Well-tested, reliable
-- Slower than JIT but 100% compatible
-- Direct memory access via `mem_banks[]`
-
-**Role in Project**:
-- Default backend for end users (~5s boot)
-- Validation baseline for Unicorn
-
-### 2. Unicorn (Primary, JIT)
-
-**Purpose**: **Primary backend** - fast JIT execution
-
-**Implementation**: [src/cpu/cpu_unicorn.cpp](../src/cpu/cpu_unicorn.cpp) + [src/cpu/unicorn_wrapper.c](../src/cpu/unicorn_wrapper.c)
-
-**Characteristics**:
-- QEMU-based JIT compiler
-- Efficient hook architecture (UC_HOOK_BLOCK, UC_HOOK_INTR)
-- Self-contained (no UAE dependency for trap execution)
-- Deferred register updates for EmulOp correctness
-- MMIO via `uc_mmio_map()` for hardware registers
-
-**Status (March 2026)**: Boot parity with UAE achieved. Both backends reach identical state.
-
-**Role in Project**:
-- **END GOAL** - This is what we're building toward
-- Fast, clean, maintainable
-- Validated via dual-CPU mode
-
-**Hook Architecture** (Performance-Optimized):
-```c
-// UC_HOOK_BLOCK - Timer polling, interrupt delivery, deferred register application
-// Called at basic block boundaries (~100k times/sec)
-static void hook_block(...) {
-    // Apply any deferred register updates from previous EmulOp
-    apply_deferred_updates_and_flush(cpu, uc, "hook_block");
-
-    // Poll timer every ~4096 blocks
-    if (block_count % 4096 == 0) {
-        poll_timer_interrupt();
-    }
-}
-
-// UC_HOOK_INTR - EmulOps and A-line/F-line traps
-// Called on exception #10 (A-line) for 0xAExx opcodes
-static void hook_interrupt(...) {
-    // Handle EmulOp, DEFER register updates (writes inside hooks don't persist)
-    deferred_dregs[0] = new_d0;
-    deferred_dregs_valid |= 1;
-    deferred_pc = new_pc;
-    deferred_pc_valid = 1;
-    // Updates applied at next hook_block() call
-}
-```
-
-**Key Unicorn Quirks**:
-- Register writes inside `UC_HOOK_INTR` don't persist (QEMU overwrites PC)
-- SR requires `uint32_t*` not `uint16_t*` for `uc_reg_write()`
-- `UC_HOOK_MEM_READ` bypassed by JIT for `uc_mem_map_ptr` regions -- use `uc_mmio_map()`
-- JIT TB invalidation: QEMU's `notdirty_write()` handles most SMC; STALE-TB detector catches the rest
-
-### 3. DualCPU (Validation Tool)
-
-**Purpose**: Run UAE and Unicorn in lockstep to catch bugs
-
-**Implementation**: [src/cpu/cpu_dualcpu.c](../src/cpu/cpu_dualcpu.c)
-
-**Algorithm**:
-```c
-while (running) {
-    // 1. Save state
-    uint32_t pc = uae_get_pc();
-    assert(unicorn_get_pc() == pc);  // Must be in sync
-
-    // 2. Execute on BOTH
-    uae_execute_one();
-    unicorn_execute_one();
-
-    // 3. Compare ALL registers
-    for (int i = 0; i < 8; i++) {
-        assert(uae_get_dreg(i) == unicorn_get_dreg(i));
-        assert(uae_get_areg(i) == unicorn_get_areg(i));
-    }
-    assert(uae_get_pc() == unicorn_get_pc());
-    assert(uae_get_sr() == unicorn_get_sr());
-
-    // If ANY differ → STOP and report divergence
-}
-```
-
-**Role in Project**:
-- **Validation tool** to ensure Unicorn correctness
-- Caught VBR bug, CPU type bug, interrupt timing issues
-- Not for end users, just for development
-
-**Achievement**: ✅ 514,000+ instructions validated with zero divergence. Both backends now reach identical boot state (March 2026).
-
----
-
-## Memory System
-
-### Direct Addressing Mode
-
-BasiliskII uses "direct addressing" for maximum performance:
+## File map
 
 ```
-Mac Address              Host Memory
-0x00000000 (RAM) ----→   RAMBaseHost + 0x00000000
-0x40800000 (ROM) ----→   ROMBaseHost
+src/common/include/platform.h        — Platform struct (function pointers)
+src/common/platform.cpp              — wires null drivers
+src/common/sigsegv.cpp               — host SIGSEGV skip-instruction handler
 
-# Simple arithmetic:
-host_ptr = mac_addr + MEMBaseDiff
+src/cpu/cpu_uae.c                    — UAE backend installer
+src/cpu/cpu_unicorn.cpp              — Unicorn-m68k backend
+src/cpu/cpu_unicorn_ppc.cpp          — Unicorn-PPC backend
+src/cpu/cpu_dualcpu.c                — Lockstep validator
+src/cpu/uae_cpu/                     — UAE interpreter sources
+src/cpu/uae_wrapper.{cpp,h}          — UAE wrapper
+src/cpu/unicorn_wrapper.{c,h}        — Unicorn wrapper (hooks, deferred updates)
+src/cpu/unicorn_exec_loop.c          — Unicorn execute-with-interrupts loop
+src/cpu/unicorn_validation.cpp       — DualCPU validation
+src/cpu/kpx/cpu_ppc_kpx.cpp          — KPX install + sheepshaver_cpu glue
+src/cpu/kpx/src/cpu/ppc/             — KPX interpreter (verbatim from SheepShaver)
+
+src/core/main.cpp                    — entry point
+src/core/cpu_context.cpp             — RAM/ROM allocation, init_m68k, init_ppc
+src/core/rom_patches.cpp             — m68k ROM patches + EmulOp insertion
+src/core/emul_op.cpp                 — m68k EmulOp dispatcher
+src/core/command_bridge.{cpp,h}      — read commands + watchdog
+src/core/boot_progress.{cpp,h}       — boot phase / CHECKLOAD tracking
+
+src/webserver/                       — HTTP server, /ws, API handlers
+src/webrtc/                          — peer-connection plumbing
+
+subprojects/unicorn/                  — vendored Unicorn (modified)
+subprojects/unicorn-patches/          — numbered patches against pristine 2.1.4
 ```
 
-**Benefits**:
-- Fast: No table lookup, just pointer arithmetic
-- Simple: Direct memory access
-- Native: C++ can work with Mac memory directly
-
-**Drawbacks**:
-- Requires contiguous memory allocation
-- Less flexible than banking
-
-See [deepdive/MemoryArchitecture.md](deepdive/MemoryArchitecture.md) for details.
-
-### Endianness Handling
-
-**Problem**: M68K is big-endian, x86 is little-endian
-
-**UAE Approach**:
-- RAM stored in little-endian (host native)
-- ROM stored in big-endian (as loaded)
-- Byte-swap on every memory access via `get_long()` / `put_long()`
-
-**Unicorn Approach**:
-- All memory in big-endian (M68K native)
-- No automatic swapping
-- Must byte-swap when copying from UAE's RAM
-
-**Implication**: When initializing Unicorn, must byte-swap RAM but NOT ROM!
-
-See [deepdive/UaeQuirks.md](deepdive/UaeQuirks.md) for details.
-
----
-
-## Trap and Exception System
-
-### Three Types of Traps
-
-#### 1. EmulOps (0x71xx)
-**Purpose**: Illegal instructions that call emulator functions
-
-**How It Works**:
-```assembly
-# ROM originally had:
-_OpenDriver:  ; ... many instructions ...
-
-# BasiliskII patches ROM to:
-_OpenDriver:  .word 0x7105  ; EmulOp #5 (EMUL_OP_OPENPATCH)
-```
-
-**When CPU executes 0x71xx**:
-1. Unicorn raises `UC_ERR_INSN_INVALID`
-2. `hook_insn_invalid()` catches it
-3. Calls `g_platform.emulop_handler(0x7105)`
-4. Emulator function runs (e.g., OpenDriver logic)
-5. Returns to Mac code
-
-#### 2. A-line Traps (0xAxxx)
-**Purpose**: Mac OS Toolbox calls
-
-**Examples**:
-- `0xA9FF` - `_OpenDriver` (device manager)
-- `0xA247` - `_SetToolTrap` (trap table manipulation)
-- `0xA055` - `_SysError` (display error dialog)
-
-**Handling**: Same as EmulOps but calls `g_platform.trap_handler()`
-
-#### 3. F-line Traps (0xFxxx)
-**Purpose**: FPU emulation
-
-**Handling**: Same mechanism, different handler
-
-### Native Trap Execution
-
-When an EmulOp needs to execute 68K code (e.g., device driver):
-
-```c
-// Platform API provides backend-specific trap execution:
-g_platform.cpu_execute_68k_trap(trap_number, &registers);
-```
-
-**Unicorn Implementation** ([cpu_unicorn.cpp:462-548](../src/cpu/cpu_unicorn.cpp#L462-L548)):
-1. Save current PC/SR
-2. Copy registers to Unicorn
-3. Push trap number + return marker (0x7100) on stack
-4. Execute until hitting return marker
-5. Copy registers back
-6. Restore PC/SR
-
-**Key Point**: Unicorn is **self-contained** - no UAE dependency!
-
----
-
-## Unicorn Interrupt Improvements (2026)
-
-### QEMU-Style Execution Loop
-**File**: [src/cpu/unicorn_exec_loop.c](../src/cpu/unicorn_exec_loop.c)
-
-The Unicorn backend now uses a QEMU-inspired execution loop that addresses JIT translation block issues:
-
-```c
-int unicorn_execute_with_interrupts(UnicornCPU *cpu, int max_insns) {
-    while (total_executed < max_insns) {
-        // 1. Check interrupts BEFORE execution (QEMU pattern)
-        if (poll_and_check_interrupts(cpu)) {
-            continue;  // Interrupt delivered, restart
-        }
-
-        // 2. Adaptive batch sizing based on PC
-        int batch_size = calculate_batch_size(cpu, pc);
-        // - 3 instructions for IRQ polling regions
-        // - 20 instructions for ROM code
-        // - 50 instructions for application code
-
-        // 3. Execute small batch
-        uc_emu_start(uc, pc, 0, 0, batch_size);
-
-        // 4. Check for backward branches (force interrupt check)
-        if (detected_backward_branch(cpu)) {
-            continue;
-        }
-    }
-}
-```
-
-### M68K Interrupt Delivery
-**File**: [src/cpu/m68k_interrupt.c](../src/cpu/m68k_interrupt.c)
-
-Proper M68K exception frame building and interrupt delivery:
-
-```c
-void deliver_m68k_interrupt(UnicornCPU *cpu, int level, int vector) {
-    // 1. Check interrupt priority mask
-    if (level <= current_ipl) return;  // Masked
-
-    // 2. Build exception frame (Format 0 for 68000)
-    build_exception_frame(uc, &sp, 0, old_sr, pc, vector);
-
-    // 3. Enter supervisor mode, update IPL
-    sr |= 0x2000;  // S bit
-    sr = (sr & 0xF8FF) | (level << 8);
-
-    // 4. Jump to handler
-    uint32_t handler = read_vector(vector);
-    uc_reg_write(uc, UC_M68K_REG_PC, &handler);
-}
-```
-
-### Fixed IRQ Storm Issue
-**Problem**: ROM patcher was converting 0x7129 (EmulOp) to 0xAE29 (A-line)
-**Solution**: Use direct encoding in [src/core/rom_patches.cpp](../src/core/rom_patches.cpp):
-```c
-// Before: *wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));  // Wrong: 0xAE29
-// After:  *wp++ = htons(0x7129);                         // Correct: 0x7129
-```
-**Result**: 99.99% reduction in IRQ polling overhead
-
----
-
-## Interrupt System
-
-### Platform API Abstraction (c388b229)
-
-**Interrupts are triggered through the Platform API**, eliminating backend-specific global state.
-
-**Timer/Device Code** ([src/drivers/platform/timer_interrupt.cpp](../src/drivers/platform/timer_interrupt.cpp)):
-```c
-extern Platform g_platform;
-int level = intlev();  // Get interrupt level from Mac hardware state
-if (level > 0) {
-    g_platform.cpu_trigger_interrupt(level);  // Backend-agnostic
-}
-```
-
-**Platform API** ([src/common/include/platform.h](../src/common/include/platform.h)):
-```c
-typedef struct Platform {
-    // ... other function pointers ...
-    void (*cpu_trigger_interrupt)(int level);  // Trigger M68K interrupt
-} Platform;
-```
-
-### Backend Implementations
-
-**UAE Backend** ([src/cpu/uae_wrapper.cpp](../src/cpu/uae_wrapper.cpp)):
-```c
-static void uae_backend_trigger_interrupt(int level) {
-    // Set UAE's native interrupt flag
-    if (level > 0 && level <= 7) {
-        SPCFLAGS_SET(SPCFLAG_INT);  // UAE checks this in do_specialties()
-    }
-    // UAE's Interrupt() function handles:
-    // - Building M68K exception stack frame (SR, PC, Format/Vector)
-    // - Setting supervisor mode
-    // - Updating interrupt mask
-    // - Reading vector table
-    // - Jumping to handler
-}
-```
-
-**Unicorn Backend** ([src/cpu/unicorn_wrapper.c](../src/cpu/unicorn_wrapper.c)):
-```c
-static volatile int g_pending_interrupt_level = 0;  // 0=none, 1-7=level
-
-void unicorn_trigger_interrupt_internal(int level) {
-    if (level >= 1 && level <= 7) {
-        g_pending_interrupt_level = level;
-    }
-}
-
-// In hook_block() - checked at every basic block boundary
-if (g_pending_interrupt_level > 0) {
-    int intr_level = g_pending_interrupt_level;
-    g_pending_interrupt_level = 0;
-
-    // Check interrupt mask in SR
-    if (intr_level > current_mask) {
-        // Manually execute M68K interrupt sequence:
-        // 1. Push PC (4 bytes, big-endian) to stack
-        // 2. Push SR (2 bytes, big-endian) to stack
-        // 3. Update SR: set supervisor bit, update interrupt mask
-        // 4. Read vector from (VBR + (24 + level) * 4)
-        // 5. Update PC to vector address
-        uc_emu_stop(uc);  // Stop to apply register changes
-    }
-}
-```
-
-### Design Decision: Manual vs QEMU Interrupt Handling
-
-Unicorn uses **manual M68K exception stack frame building** rather than QEMU's `m68k_set_irq_level()`.
-
-**Why not QEMU's function?**
-- Requires accessing internal structs: `uc_engine` → `uc_struct` → `CPUState` → `M68kCPU`
-- Struct field offsets vary by architecture, compiler, QEMU version
-- Including QEMU headers creates complex build dependencies
-- Hardcoded offsets are fragile (0x140 caused segfault, actual offset unknown)
-
-**Why manual approach is better:**
-- Uses only public Unicorn API (`uc_reg_read`, `uc_mem_write`, etc.)
-- Portable across architectures, compilers, Unicorn versions
-- Explicit and debuggable - exact M68K interrupt sequence visible
-- Matches QEMU's `do_interrupt_m68k_hardirq()` behavior
-- Tested and validated with 60Hz timer interrupts
-
-### Interrupt Flow
-
-1. **Timer polling** (checked in CPU execution loops at 60Hz)
-   - `poll_timer_interrupt()` checks wall-clock time using `clock_gettime(CLOCK_MONOTONIC)`
-   - Called from UAE (every 100 instructions) and Unicorn (every block)
-2. **Timer fires** (when 16.667ms elapsed)
-   - Calls `g_platform.cpu_trigger_interrupt(level)`
-3. **Backend-specific**:
-   - **UAE**: Sets `SPCFLAG_INT`, processed by `do_specialties()`
-   - **Unicorn**: Sets `g_pending_interrupt_level`, checked by `hook_block()`
-4. **M68K interrupt**:
-   - Check interrupt mask in SR (level must exceed mask)
-   - Build exception stack frame (PC, SR)
-   - Update SR (supervisor mode, interrupt mask)
-   - Read autovector from vector table (vectors 25-31 for interrupts 1-7)
-   - Jump to interrupt handler
-5. **RTE instruction** restores PC and SR from stack, returns from interrupt
-
-Timer uses polling-based `clock_gettime(CLOCK_MONOTONIC)` at 60Hz. See `src/drivers/platform/timer_interrupt.cpp`.
-
----
-
-## Backend Selection Flow
-
-### Startup Sequence
-
-```c
-// 1. main.cpp parses --backend CLI flag (default: "uae")
-const char *backend = config.backend;  // "uae", "unicorn", "dualcpu"
-
-// 2. Initialize appropriate backend
-if (strcmp(backend, "unicorn") == 0) {
-    unicorn_backend_init();
-} else if (strcmp(backend, "dualcpu") == 0) {
-    dualcpu_backend_init();
-} else {
-    uae_backend_init();
-}
-
-// 3. Backend fills in g_platform function pointers
-g_platform.cpu_init = unicorn_backend_cpu_init;
-g_platform.cpu_execute_one = unicorn_backend_execute_one;
-g_platform.cpu_get_pc = unicorn_backend_get_pc;
-// ... etc
-
-// 4. Core emulation code uses g_platform
-while (running) {
-    CPUExecResult result = g_platform.cpu_execute_one();
-    // ... handle EmulOps, interrupts, etc.
-}
-```
-
----
-
-## Data Flow Diagram
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ Core Emulation (emul_op.cpp, main.cpp, xpram.cpp)      │
-│                                                         │
-│  Uses: g_platform.cpu_execute_one()                    │
-│        g_platform.emulop_handler()                     │
-│        g_platform.trap_handler()                       │
-└────────────────────┬───────────────────────────────────┘
-                     │
-          ┌──────────┴──────────┐
-          │  Platform API       │
-          │  (function pointers)│
-          └──────────┬──────────┘
-                     │
-     ┌───────────────┼───────────────┐
-     │               │               │
-┌────▼─────┐  ┌─────▼──────┐  ┌────▼──────┐
-│   UAE    │  │  Unicorn   │  │ DualCPU   │
-│ Backend  │  │  Backend   │  │ Backend   │
-│          │  │            │  │           │
-│ cpu_uae  │  │cpu_unicorn │  │cpu_dualcpu│
-│   .cpp   │  │    .cpp    │  │   .cpp    │
-└────┬─────┘  └─────┬──────┘  └────┬──────┘
-     │              │               │
-     │              │          ┌────┴────┐
-     │              │          │ Calls   │
-     │              │          │ BOTH    │
-     │              │          └─────────┘
-     │              │               │
-     ▼              ▼               ▼
-┌──────────┐  ┌──────────┐   ┌──────────┐
-│UAE M68K  │  │ Unicorn  │   │UAE + UNI │
-│Interpret │  │  Engine  │   │ in sync  │
-│  (C++)   │  │  (JIT)   │   │          │
-└──────────┘  └──────────┘   └──────────┘
-```
-
----
-
-## File Organization
-
-### Core Platform Code
-```
-src/common/include/
-├── platform.h          # Platform API struct
-├── cpu_emulation.h     # CPU types, registers
-└── main.h              # InterruptFlags, global state
-
-src/common/
-└── platform.cpp        # Platform implementation
-```
-
-### Backend Implementations
-```
-src/cpu/
-├── cpu_uae.c           # UAE backend (fills g_platform)
-├── cpu_unicorn.cpp     # Unicorn backend (fills g_platform)
-├── cpu_dualcpu.c       # DualCPU backend (fills g_platform)
-│
-├── uae_cpu/            # UAE internals (newcpu.cpp, memory.cpp, etc.)
-├── uae_wrapper.cpp     # UAE wrapper + shared interrupt code
-├── unicorn_wrapper.c   # Unicorn API wrapper
-└── unicorn_validation.cpp  # DualCPU validation logic
-```
-
-### Core Emulation (Backend-Agnostic)
-```
-src/core/
-├── emul_op.cpp         # EmulOp handlers (uses g_platform)
-├── main.cpp            # Main loop (uses g_platform)
-├── xpram.cpp           # XPRAM storage
-└── ... other managers
-```
-
----
-
-## Key Takeaways
-
-1. **Platform API is the abstraction boundary** - Everything goes through it
-2. **Unicorn is the primary goal** - UAE is legacy, DualCPU is validation
-3. **Backends are swappable at runtime** - via `--backend` CLI flag
-4. **Hook optimization is critical** - UC_HOOK_BLOCK + UC_HOOK_INSN_INVALID for performance
-5. **Native trap execution** - Unicorn is self-contained, no UAE dependency
-
----
-
-## Related Documentation
-
-- [deepdive/MemoryArchitecture.md](deepdive/MemoryArchitecture.md) - Direct addressing, endianness
-- [deepdive/UaeQuirks.md](deepdive/UaeQuirks.md) - UAE memory model, byte-swapping
-- [deepdive/UnicornQuirks.md](deepdive/UnicornQuirks.md) - Hook types, register persistence
-- [deepdive/InterruptTimingAnalysis.md](deepdive/InterruptTimingAnalysis.md) - Timer interrupt timing
-- [deepdive/PlatformAdapterImplementation.md](deepdive/PlatformAdapterImplementation.md) - Detailed platform code
+## Related
+
+- `CLAUDE.md` — high-density project overview.
+- `Commands.md` — build/run/test commands.
+- `JsonConfig.md` — config schema.
+- `ThreadingArchitecture.md` — per-thread responsibilities.
+- `deepdive/MemoryArchitecture.md`, `deepdive/cpu/*` — quirks and gotchas.
+- `ppc/` — PPC integration in detail.

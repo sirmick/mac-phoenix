@@ -1,122 +1,120 @@
 # mac-phoenix
 
-Modern Mac emulator with multiple CPU backends and web-based streaming UI.
+Classic Mac emulator with multiple CPU backends and a web-based streaming UI.
+Derived from BasiliskII / SheepShaver but cleanly separated from their legacy
+plumbing.
 
----
+The canonical project overview lives in [`../CLAUDE.md`](../CLAUDE.md) — flags,
+endpoints, project structure, and a one-glance summary of every subsystem.
+This folder contains the deeper-dive docs.
 
-## What Is This?
+## What works
 
-**mac-phoenix** emulates classic Macintosh computers across multiple machine profiles:
+- **Mac SE** (68000) boots System 6 to Finder — 512×342 monochrome.
+- **Quadra 650** (68040) boots Mac OS 7.5.5 / 7.6.1 to Finder.
+  - UAE backend: ~5 s (~3 s with `--jit`).
+  - Unicorn-m68k backend: ~12 s.
+- **Power Mac G3** (PPC 750) boots Mac OS 7.5.5 / 7.6.1 to Finder under KPX
+  (~45 s, default for PPC). The dyngen JIT (`--jit`) is compiled but
+  blocked by a GCC codegen difference.
+- **Unicorn-PPC** reaches Finder under 7.6.1 but is unstable — see
+  [`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md). Not the default.
+- HTTP API + WebRTC streaming, file-based automation bridge (BridgeAgent),
+  MacBrowser (Firefox-on-Xvfb piped into a guest Mac app),
+  guest-side networking via the Rust net-bridge.
 
-1. **Multiple Machines** — Mac SE (68000), Quadra 650 (68040), Power Mac G3 (PPC), auto-detected from ROM
-2. **M68K Backends** — UAE interpreter (default, fast, JIT), Unicorn QEMU backend, DualCPU validation
-3. **PowerPC** — KPX (Kheperix) interpreter from SheepShaver, boots Mac OS 9
-4. **Web-Based UI** — WebRTC streaming with mouse/keyboard input, HTTP API
-5. **Modern Architecture** — Clean platform API, modular drivers, CMake build
+Audio output is still a stub (`src/drivers/audio/audio_null.cpp` —
+encoder thread infrastructure exists but isn't wired to a real Sound
+Manager hook).
 
-**Current Status** (April 2026):
-- ✅ Mac SE: System 6 boots to Finder (512×342 monochrome)
-- ✅ Quadra 650: Mac OS 7.5.5 boots to Finder (UAE ~5s, Unicorn ~48s)
-- ✅ Power Mac G3: Mac OS 9 boots to Finder (KPX interpreter ~45s)
-- ✅ Machine profiles auto-detected from ROM version
-- ✅ M68K JIT compiler (`--jit` flag)
-- ✅ Command bridge API (app launch/quit, window list, boot polling)
+## Why
 
----
+- **Modern host integration.** WebRTC streaming, HTTP API, browser
+  client. Drive the emulator from any modern stack; no native UI per OS.
+- **Multiple CPU backends behind one Platform API.** UAE (m68k default),
+  Unicorn-m68k (QEMU TCG, validation), Unicorn-PPC (experimental), KPX
+  (PPC default), DualCPU (lockstep). New backends don't touch core code.
+- **Programmable.** BridgeAgent for automation, MacBrowser for the modern
+  web inside System 7, ExtFS for host filesystem access without restarting.
+- **Validation built in.** DualCPU runs UAE and Unicorn-m68k in lockstep
+  and fails fast on register divergence.
 
-## Quick Start
+We are explicitly **not** chasing cycle accuracy, every Mac model
+(focus is SE, Quadra 650, Beige G3), or replacing BasiliskII /
+SheepShaver for end users — this is a research + preservation project.
 
-### Build
+## Quick start
+
 ```bash
-cmake -B build
-cmake --build build -j$(nproc)
-```
+cmake -B build && cmake --build build -j$(nproc)
 
-### Run
-```bash
-# Quadra 650 (default)
-./build/mac-phoenix ~/quadra.rom
+# Quadra 650, UAE backend (default), web UI on :11000
+./build/mac-phoenix ~/storage/roms/quadra.rom
+
+# Power Mac G3, KPX backend
+./build/mac-phoenix --backend kpx --rom ~/storage/roms/g3.rom \
+                    --disk ~/storage/images/macos-7.6.1.img --ram 128
 
 # Mac SE
-./build/mac-phoenix ~/mac-se.rom --disk ~/system6.img
-
-# Power Mac G3
-./build/mac-phoenix --arch ppc --rom ~/g3.rom --disk ~/mac9.hfv --ram 64
+./build/mac-phoenix ~/storage/roms/mac-se.rom --disk ~/storage/images/system6.img
 ```
 
-See **[Commands.md](Commands.md)** for complete build and testing guide.
-See **[JsonConfig.md](JsonConfig.md)** for configuration documentation.
-
----
+There is no `--arch` flag — the `--backend` token determines the CPU
+architecture (`uae` / `unicorn-m68k` / `dualcpu` → m68k,
+`kpx` / `unicorn-ppc` → ppc).
 
 ## Documentation
 
-### Essential
-- **[Architecture.md](Architecture.md)** — Platform API, backends, memory layout
-- **[ProjectGoals.md](ProjectGoals.md)** — Vision, roadmap, current status
-- **[Commands.md](Commands.md)** — Build, test, debug commands
-- **[JsonConfig.md](JsonConfig.md)** — Configuration system
-- **[TodoStatus.md](TodoStatus.md)** — What's done ✅ and what's next ⏳
-- **[DeveloperGuide.md](DeveloperGuide.md)** — Backend details, debugging, contributing
+### Reference
+- [Architecture.md](Architecture.md) — Platform API, backends, memory, traps, IRQs.
+- [Commands.md](Commands.md) — Build, run, test, debug commands.
+- [JsonConfig.md](JsonConfig.md) — Config file schema.
+- [DeveloperGuide.md](DeveloperGuide.md) — Backend internals, common dev tasks.
+- [Testing.md](Testing.md) — CTest + Playwright suites.
+- [TroubleshootingGuide.md](TroubleshootingGuide.md) — Quick diagnostics.
 
-### Command & Control
-- **[CommandBridge.md](CommandBridge.md)** — jGNEFilter, mailbox, HTTP API for controlling Mac OS
-- **[ApplianceLayer.md](ApplianceLayer.md)** — Programmable appliance design (partially implemented)
+### Subsystems
+- [CommandBridge.md](CommandBridge.md) — Read commands (peek Mac mem) +
+  action commands (BridgeAgent file-based dispatch).
+- [ThreadingArchitecture.md](ThreadingArchitecture.md) — Process + thread model.
+- [LatencyShortcomings.md](LatencyShortcomings.md) — Known latency cliffs in
+  the input/video paths.
+- [UnicornPerformanceAnalysis.md](UnicornPerformanceAnalysis.md) — Unicorn-m68k
+  vs UAE perf breakdown.
 
 ### PowerPC
-- **[ppc/](ppc/)** — PPC emulation documentation
-  - **[ppc/README.md](ppc/README.md)** — Status, boot commands, file map
-  - **[ppc/Architecture.md](ppc/Architecture.md)** — Platform API integration
-  - **[ppc/ExecutionModel.md](ppc/ExecutionModel.md)** — Boot sequence, mode switching
-  - **[ppc/MemoryLayout.md](ppc/MemoryLayout.md)** — PPC memory map, kernel data
+- [ppc/README.md](ppc/README.md) — Backends, memory layout, execution model,
+  ROM patching, networking, file map.
+- [ppc/UnicornPpcStatus.md](ppc/UnicornPpcStatus.md) — Unicorn-PPC live status,
+  debug knobs, known crashes.
 
-### Technical Deep Dives
-- **[deepdive/](deepdive/)** — Detailed technical documentation
-  - **[cpu/](deepdive/cpu/)** — CPU backend details, quirks, analysis
-  - **[MemoryArchitecture.md](deepdive/MemoryArchitecture.md)** — Memory system
-  - **[PlatformAPIInterrupts.md](deepdive/PlatformAPIInterrupts.md)** — Interrupt abstraction
+- [MacBrowser.md](MacBrowser.md) — MacBrowser host pipeline + guest
+  app architecture.
 
-### Other
-- **[ThreadingArchitecture.md](ThreadingArchitecture.md)** — Thread model, IPC, video/audio
-- **[ConfigUnification.md](ConfigUnification.md)** — Config system design
-- **[Provisioning.md](Provisioning.md)** — Disk image creation, provisioning scripts, ExtFS, MPW
-- **[Testing.md](Testing.md)** — Test framework documentation
-- **[TroubleshootingGuide.md](TroubleshootingGuide.md)** — Debug help
+### Deep dives
+- [deepdive/README.md](deepdive/README.md) — Index.
 
----
-
-## Directory Structure
+## Project layout
 
 ```
 mac-phoenix/
 ├── src/
-│   ├── common/include/    # Shared headers (platform.h, emul_op.h)
-│   ├── core/              # Core Mac managers (emul_op, adb, rom_patches, command_bridge)
-│   ├── cpu/               # CPU backends
-│   │   ├── uae_cpu/       # UAE M68K interpreter + JIT
-│   │   ├── cpu_unicorn.cpp     # Unicorn M68K backend
-│   │   ├── cpu_dualcpu.c       # DualCPU validation backend
-│   │   └── kpx/                # KPX PPC interpreter + dyngen JIT
-│   ├── drivers/           # Video, audio, platform, network drivers
-│   ├── webrtc/            # WebRTC server (signaling + input)
-│   ├── webserver/         # HTTP server, API handlers
-│   └── config/            # JSON config, machine profiles
-├── client/                # Browser client (HTML, JS, CSS)
-├── tests/                 # Shell + Playwright tests
-├── provisioning/          # Disk image creation & population scripts
-├── subprojects/           # Unicorn, libdatachannel, nlohmann_json
-├── docs/                  # Documentation (you are here!)
-└── CMakeLists.txt
+│   ├── common/include/    # Shared headers (platform.h, MacBrowser.h, ...)
+│   ├── core/              # Mac managers, command_bridge, rom_patches, etc.
+│   ├── cpu/               # uae/, kpx/, cpu_unicorn{,_ppc}.cpp, dualcpu, traces
+│   ├── drivers/           # video, audio, browser, ether, serial, scsi, platform
+│   ├── webrtc/            # WebRTC server (signaling + RTP)
+│   ├── webserver/         # HTTP server, /ws WebSocket, API handlers
+│   └── config/            # EmulatorConfig, machine profiles
+├── client/                # Browser UI (vanilla JS)
+├── BridgeAgent/           # Guest m68k automation agent (Retro68 source + .bin)
+├── MacBrowser/            # Guest m68k browser app (Retro68 source + .bin)
+├── tests/                 # Shell + Playwright + unit tests
+├── provisioning/          # Disk image creation/population scripts
+├── subprojects/           # Unicorn (vendored) + patches, libdatachannel, json
+└── docs/
 ```
-
----
 
 ## License
 
-GPL v2 (based on BasiliskII / SheepShaver)
-
-## References
-
-- Original BasiliskII: https://github.com/kanjitalk755/macemu
-- Unicorn Engine: https://www.unicorn-engine.org/
-- M68K Reference: Motorola M68000 Family Programmer's Reference Manual
+GPL v2 (based on BasiliskII / SheepShaver).

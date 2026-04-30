@@ -1,113 +1,94 @@
 # Developer Guide
 
-## Architecture Overview
+Backend internals, common dev tasks, and contribution rules. The
+high-level architecture lives in [Architecture.md](Architecture.md);
+this doc covers the parts a contributor needs to actually change code.
 
-### Core Components
+## Backends
 
-```
-┌─────────────────────────────────────────────────┐
-│               Mac Application                    │
-└─────────────────────────────────────────────────┘
-                        ↓
-┌─────────────────────────────────────────────────┐
-│               Platform API                       │
-│  • Backend-agnostic interface                   │
-│  • Register access, memory, interrupts          │
-│  • EmulOp handling                              │
-└─────────────────────────────────────────────────┘
-                        ↓
-┌─────────────────────────────────────────────────┐
-│           CPU Backend (pluggable)               │
-│  • UAE      (M68K default, fast + JIT)          │
-│  • Unicorn  (M68K QEMU JIT, validation)         │
-│  • DualCPU  (M68K lockstep validation)          │
-│  • KPX      (PPC interpreter + dyngen JIT)      │
-└─────────────────────────────────────────────────┘
-```
+| Backend | Arch | File | `--backend` token |
+|---------|------|------|-------------------|
+| UAE | m68k | `src/cpu/cpu_uae.c`, `src/cpu/uae_cpu/` | `uae` (default) |
+| Unicorn-m68k | m68k | `src/cpu/cpu_unicorn.cpp`, `unicorn_wrapper.c` | `unicorn-m68k` |
+| Unicorn-PPC | ppc | `src/cpu/cpu_unicorn_ppc.cpp` | `unicorn-ppc` |
+| KPX | ppc | `src/cpu/kpx/cpu_ppc_kpx.cpp` + `src/cpu/kpx/src/` | `kpx` |
+| DualCPU | m68k | `src/cpu/cpu_dualcpu.c` | `dualcpu` |
 
-### Key Design Principles
-
-1. **Backend Independence**: All CPU operations go through Platform API
-2. **Clean Separation**: No direct dependencies between backends
-3. **Validation First**: DualCPU mode catches M68K bugs early
-4. **Performance Second**: Optimize after correctness
+Backend installers all write into the same `g_platform` table
+(`src/common/include/platform.h`). Core code never references a backend
+directly.
 
 ## Machine Profiles
 
-Machine profiles configure hardware parameters based on the ROM. Each profile sets the CPU type, RAM limits, display dimensions, addressing mode, and more. Profiles are auto-detected at startup via `set_machine_profile()` in `src/config/machine_profile.cpp`.
+Profiles auto-detect from the ROM at startup via `set_machine_profile()` in
+`src/config/machine_profile.cpp`. Each profile sets CPU type, RAM caps,
+display size, and addressing mode.
 
-| Profile | ROM Version | CPU | RAM | Display | Addressing |
-|---------|-------------|-----|-----|---------|------------|
-| `se` | 0x0276 | 68000 | 4 MB max | 512×342 mono | 24-bit |
-| `quadra` | 0x067c | 68040 | Unlimited | 640×480 color | 32-bit |
-| PPC | (4 MB ROM) | PPC 603e | Configurable | Up to 1600×1200 | 32-bit |
+| Profile | ROM ver | CPU | RAM | Display | Addr |
+|---------|---------|-----|-----|---------|------|
+| `se` | `0x0276` | 68000 | 4 MB | 512×342 mono | 24-bit |
+| `quadra` | `0x067c` | 68040 | unlimited | 640×480 color | 32-bit |
+| PPC | (4 MB ROM) | PPC 750 (G3) | configurable | up to 1600×1200 | 32-bit |
 
-To add a new machine profile, define a `MachineProfile` struct in `machine_profile.cpp` and add a ROM version check in `set_machine_profile()`.
+Add a new profile by appending a `MachineProfile` struct in
+`machine_profile.cpp` and a ROM-version branch in `set_machine_profile()`.
 
-## CPU Backends
+## Backend internals (the parts you'd touch)
 
-### UAE (M68K)
+### UAE
 
-Default M68K backend. Hand-tuned interpreter with optional JIT compiler.
+Default m68k. Hand-tuned interpreter from BasiliskII; `--jit` enables the
+WinUAE JIT compiler. ~5 s boot interpreter, ~3 s with JIT. Memory is
+big-endian and accessed through `do_get_mem_*` byte-swap macros — see
+[`deepdive/cpu/UaeQuirks.md`](deepdive/cpu/UaeQuirks.md).
 
-- **Flags**: `--backend uae` (default), `--jit`/`--no-jit`
-- **Boot time**: ~5s to Finder
-- **Files**: `src/cpu/cpu_uae.c`, `src/cpu/uae_cpu/`
+### Unicorn-m68k
 
-### Unicorn (M68K)
+QEMU TCG JIT. ~12 s boot — the perf gap to UAE is structural (TCG
+compilation dominates; see
+[`UnicornPerformanceAnalysis.md`](UnicornPerformanceAnalysis.md)).
 
-QEMU-based JIT via Unicorn Engine. ~10x slower than UAE due to QEMU TCG M68K overhead.
+Execution flow:
 
-**Execution Flow**:
-1. `hook_block()` — Apply deferred register updates, poll timer, deliver interrupts
-2. `hook_interrupt()` — Handle A-line/F-line traps via EmulOp dispatch
-3. All register writes deferred (QEMU overwrites PC after hook return)
+1. `hook_block` (UC_HOOK_BLOCK) — apply deferred register updates, poll
+   60 Hz timer at 4096-block intervals, deliver pending interrupts.
+2. `hook_interrupt` (UC_HOOK_INTR) — A-line / F-line trap dispatch into
+   `g_platform.emulop_handler` / `trap_handler`.
+3. All register writes from inside `hook_interrupt` are **deferred** —
+   QEMU overwrites PC after the hook returns, so changes are queued and
+   applied at the next `hook_block` boundary.
 
-**Key Files**:
+Key files: `cpu_unicorn.cpp` (backend install, memory map, MMIO via
+`uc_mmio_map`), `unicorn_wrapper.c` (hooks, deferred updates, perf
+counters), `unicorn_exec_loop.c` (`unicorn_execute_with_interrupts`),
+`unicorn_exception.c` (A-line dispatch into `op_illg`).
 
-| File | Purpose |
-|------|---------|
-| `unicorn_wrapper.c` | Hooks, deferred updates, diagnostics |
-| `unicorn_exec_loop.c` | Main execution loop |
-| `cpu_unicorn.cpp` | Backend interface, MMIO, memory map |
-| `timer_interrupt.cpp` | 60Hz timer via `clock_gettime` |
+Quirks live in [`deepdive/cpu/UnicornQuirks.md`](deepdive/cpu/UnicornQuirks.md)
+and [`deepdive/cpu/ALineAndFLineStatus.md`](deepdive/cpu/ALineAndFLineStatus.md).
+SMC/dirty-bit story in [`deepdive/JitSmcDetectionAnalysis.md`](deepdive/JitSmcDetectionAnalysis.md).
 
-**Key Concepts**:
-- **Deferred Register Updates**: EmulOp handlers queue register writes, applied at next `hook_block()`
-- **MMIO**: Must use `uc_mmio_map()` — JIT compiles direct loads for `uc_mem_map_ptr` regions
-- **JIT TB Invalidation**: QEMU's `notdirty_write()` + STALE-TB detector
+### KPX
 
-### KPX (PPC)
+PPC interpreter from SheepShaver. ~45 s boot. `--jit` compiles dyngen but
+is currently blocked by a GCC codegen difference in the block dispatch loop;
+interpreter is the working default. `--jit68k` (default on) controls the
+68k-on-PPC DR JIT.
 
-Kheperix interpreter from SheepShaver, targeting Gossamer (Beige G3) ROMs.
+Mixed-mode execution — PPC nanokernel runs Mac OS's built-in 68k emulator
+inside the ROM, with mode tracked at `XLM_RUN_MODE`. The boot sequence,
+KernelData layout, IRQ delivery, and ROM patching are documented in
+[`ppc/README.md`](ppc/README.md).
 
-- **Flags**: `--backend kpx`, `--jit`/`--no-jit`, `--jit68k`/`--no-jit68k`
-- **Boot time**: ~45s to Finder (interpreter)
-- **OS**: Mac OS 9.0.4 (tested), 8.1-9.2.2 (expected)
-- **Files**: `src/cpu/kpx/`
+### Unicorn-PPC
 
-**Execution Model**: Mixed-mode — PPC nanokernel runs Mac OS 68K emulator (DR Emulator) which handles 68K code. PPC native code runs directly. Mode switches via EmulOps and NativeOps.
+Experimental QEMU TCG PPC backend. Reaches Finder under 7.6.1 but unstable —
+status, debug knobs, and known crashes in
+[`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md).
 
-**Key Files**:
+### DualCPU
 
-| File | Purpose |
-|------|---------|
-| `cpu_ppc_kpx.cpp` | sheepshaver_cpu, HandleInterrupt, Platform API |
-| `emul_op_ppc.cpp` | EmulOp dispatch (40+ operations) |
-| `rom_patches_ppc.cpp` | ROM patching (4 phases) |
-| `video_ppc.cpp` | Video driver (VideoDoDriverIO) |
-| `gfxaccel_ppc.cpp` | NQD acceleration hooks |
-
-**JIT Status**: Dyngen JIT compiled and available via `--jit` (when `--backend kpx`). Blocked by GCC 13 codegen difference in block dispatch loop — interpreter is the working default.
-
-See `docs/ppc/` for comprehensive PPC documentation.
-
-### DualCPU (M68K Validation)
-
-Runs UAE + Unicorn in lockstep, compares registers after each instruction. Returns `CPU_EXEC_DIVERGENCE` on mismatch.
-
-- **Flag**: `--backend dualcpu`
-- Not for end users — ~2x slower
+UAE + Unicorn-m68k in lockstep. Returns `CPU_EXEC_DIVERGENCE` on register
+mismatch. ~2× slower than either alone — debugging tool only.
 
 ## Common Development Tasks
 
@@ -147,27 +128,30 @@ grep "EmulOp" logfile | sort | uniq -c
 ## Testing
 
 ```bash
-# All tests
-ctest --test-dir build
+# Unit + API
+ctest --test-dir build -L "unit|api"
 
-# Fast tests (~20s)
-ctest --test-dir build -R "api_endpoints|boot_uae|mouse_position|command_bridge|extfs"
+# Boot tests (~3 min total)
+ctest --test-dir build -L boot
 
-# PPC boot test
-ctest --test-dir build -R boot_ppc_interp
+# PPC only
+ctest --test-dir build -R boot_ppc
 
 # Verbose
 ctest --test-dir build -V
 
-# Dual-CPU validation
-./build/mac-phoenix --backend dualcpu --no-webserver ~/quadra.rom
+# DualCPU lockstep run (catch m68k divergences)
+./build/mac-phoenix --backend dualcpu --no-webserver ~/storage/roms/quadra.rom
 ```
+
+Full test inventory in [Testing.md](Testing.md).
 
 ## Profiling
 
 ```bash
 sudo sysctl kernel.perf_event_paranoid=-1
-perf record -g -F 997 ./build/mac-phoenix --backend unicorn --no-webserver ~/quadra.rom
+perf record -g -F 997 ./build/mac-phoenix --backend unicorn-m68k \
+    --no-webserver ~/storage/roms/quadra.rom
 perf report
 ```
 
@@ -192,26 +176,24 @@ Detailed explanation of what changed and why.
 
 ## Resources
 
-### Documentation
-- [Architecture.md](Architecture.md) — System design
-- [TroubleshootingGuide.md](TroubleshootingGuide.md) — Debug help
-- [deepdive/](deepdive/) — Technical deep dives
-- [ppc/](ppc/) — PPC-specific documentation
+### Internal docs
+- [Architecture.md](Architecture.md), [Commands.md](Commands.md),
+  [Testing.md](Testing.md), [TroubleshootingGuide.md](TroubleshootingGuide.md)
+- [deepdive/](deepdive/) — quirks and detailed analyses
+- [ppc/](ppc/) — PPC backends + Unicorn-PPC live status
 
-### External References
-- [Unicorn Engine](https://www.unicorn-engine.org/docs/)
-- [QEMU M68K](https://github.com/qemu/qemu/tree/master/target/m68k)
-- [Inside Macintosh](https://developer.apple.com/library/archive/documentation/mac/pdf/)
+### External
+- Unicorn Engine — https://www.unicorn-engine.org/docs/
+- QEMU m68k target — https://github.com/qemu/qemu/tree/master/target/m68k
+- Inside Macintosh — https://developer.apple.com/library/archive/documentation/mac/pdf/
 
-### Key Concepts
-- **EmulOp**: Emulator operation (0xAExx for Unicorn, 0x71xx for UAE)
-- **IPL**: Interrupt Priority Level (0-7)
-- **VBR**: Vector Base Register (interrupt vectors)
-- **TB**: Translation Block (JIT compiled code)
-- **KPX**: Kheperix PPC interpreter/JIT engine
-- **NativeOp**: PPC native operation thunk (38 operations)
-- **DR Emulator**: Macintosh 68K emulator running under PPC nanokernel
-
----
-
-*Last Updated: April 2026*
+### Glossary
+- **EmulOp** — host-side dispatch from a synthetic illegal opcode
+  (m68k `0x71xx` for UAE, `0xAExx` for Unicorn-m68k; PPC `0x18000000`+
+  family).
+- **IPL** — m68k interrupt priority level (0–7).
+- **VBR** — m68k vector base register.
+- **TB** — QEMU translation block (JIT-compiled code).
+- **KPX** — Kheperix; the SheepShaver-derived PPC interpreter.
+- **NativeOp** — PPC native operation thunk (38 selectors).
+- **DR Emulator** — the 68k emulator inside Mac OS's PPC ROM.

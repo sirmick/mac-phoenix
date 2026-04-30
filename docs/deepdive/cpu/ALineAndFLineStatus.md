@@ -1,137 +1,85 @@
-# A-line/F-line Exception Handling - Status
+# A-line / F-line trap dispatch (Unicorn-m68k)
 
-## Current State (March 2026)
+How `0xAxxx` (Mac OS Toolbox) and `0xFxxx` (FPU) traps actually reach
+their handlers under the Unicorn-m68k backend, given that QEMU
+overwrites PC after every `UC_HOOK_INTR` callback.
 
-### ✅ WORKING - Via Deferred Register Updates
+## The problem in one line
 
-A-line/F-line trap handling in Unicorn **now works correctly**. The previous limitation (Unicorn ignoring PC changes from interrupt hooks) was overcome by the deferred register update mechanism.
+Calling `uc_reg_write(UC_M68K_REG_PC, …)` from inside `UC_HOOK_INTR`
+silently does nothing — Unicorn's QEMU backend restores
+`exception_next_eip` after the hook returns, clobbering whatever you
+wrote.
 
-**Evidence**: Both UAE and Unicorn populate 87 identical OS trap table entries and dispatch 16,879 EmulOps in 30 seconds. All A-line traps (0xA000-0xAFFF) are handled successfully.
+## The mechanism
 
-### How It Works Now
+Don't fight it — defer.
 
-1. A-line (0xAxxx) or F-line (0xFxxx) instruction triggers `UC_ERR_EXCEPTION`
-2. Unicorn calls `UC_HOOK_INTR` callback (`hook_interrupt()`)
-3. Our code identifies the opcode and calls the appropriate EmulOp handler
-4. Register updates (including PC) are **deferred** -- queued for later application
-5. `hook_interrupt()` returns without calling `uc_emu_stop()`
-6. At the next basic block boundary, `hook_block()` calls `apply_deferred_updates_and_flush()`
-7. Deferred register writes are applied via `uc_reg_write()`, including the new PC
-8. Execution continues from the correct address
-
-### The Deferred Update Mechanism
+1. `0xAxxx` / `0xFxxx` raises `UC_ERR_EXCEPTION`.
+2. `hook_interrupt()` (`unicorn_wrapper.c`) identifies the opcode and
+   runs the EmulOp / trap handler in C++.
+3. The handler queues every register change it wants — D0–D7, A0–A7, PC,
+   SR — into per-register `deferred_*` slots, with corresponding
+   `_valid` bits. Returns from the hook **without** calling
+   `uc_emu_stop()`.
+4. QEMU restores its own PC (clobbering nothing of ours, because we
+   wrote nothing).
+5. At the next basic-block boundary, `hook_block()` runs
+   `apply_deferred_updates_and_flush()`:
 
 ```c
-// In hook_interrupt() - register writes are DEFERRED:
-deferred_dregs[reg] = value;
-deferred_dregs_valid |= (1 << reg);
-
-// In hook_block() - deferred writes are APPLIED:
-void apply_deferred_updates_and_flush(UnicornCPU *cpu, uc_engine *uc, const char *caller) {
-    for (int i = 0; i < 8; i++) {
-        if (deferred_dregs_valid & (1 << i))
-            uc_reg_write(uc, UC_M68K_REG_D0 + i, &deferred_dregs[i]);
-        if (deferred_aregs_valid & (1 << i))
-            uc_reg_write(uc, UC_M68K_REG_A0 + i, &deferred_aregs[i]);
-    }
-    if (deferred_pc_valid)
-        uc_reg_write(uc, UC_M68K_REG_PC, &deferred_pc);
-    if (deferred_sr_valid) {
-        uint32_t sr32 = deferred_sr;  // Must be uint32_t, not uint16_t!
-        uc_reg_write(uc, UC_M68K_REG_SR, &sr32);
-    }
-    // Clear all valid flags
+for (int i = 0; i < 8; i++) {
+    if (deferred_dregs_valid & (1 << i))
+        uc_reg_write(uc, UC_M68K_REG_D0 + i, &deferred_dregs[i]);
+    if (deferred_aregs_valid & (1 << i))
+        uc_reg_write(uc, UC_M68K_REG_A0 + i, &deferred_aregs[i]);
 }
+if (deferred_pc_valid) uc_reg_write(uc, UC_M68K_REG_PC, &deferred_pc);
+if (deferred_sr_valid) {
+    uint32_t sr32 = deferred_sr;     /* must be uint32_t — see UnicornQuirks */
+    uc_reg_write(uc, UC_M68K_REG_SR, &sr32);
+}
+/* clear all valid bits */
 ```
 
-### Why This Works (And Previous Attempts Failed)
+By the time we get here, QEMU has finished its post-hook PC restoration,
+and our deferred PC write is the one that takes effect. Execution
+resumes at the trap handler.
 
-**Previous approach (January 2026)**: Tried to write registers directly inside `UC_HOOK_INTR`:
-- ❌ Unicorn's QEMU backend overwrites PC with `exception_next_eip` after hook returns
-- ❌ `uc_emu_stop()` caused JIT restart overhead
-- ❌ All direct PC modification attempts failed
+## Trap classes
 
-**Current approach (February-March 2026)**: Defer all register writes:
-- ✅ Don't fight Unicorn's hook behavior -- let it overwrite PC
-- ✅ Queue register updates for application at the next `hook_block()` call
-- ✅ `hook_block()` fires at every basic block boundary (before any JIT code runs)
-- ✅ By the time deferred updates are applied, Unicorn has finished its post-hook PC restoration
-- ✅ The deferred PC write at block boundary takes effect correctly
+| Range | Source | Dispatch |
+|-------|--------|----------|
+| `0x71xx` | UAE EmulOp encoding | `UC_HOOK_INSN_INVALID` (Unicorn raises `UC_ERR_INSN_INVALID`) |
+| `0xAE00..0xAE3F` | BasiliskII A-line EmulOps | `UC_HOOK_INTR` (A-line exception) |
+| `0xA000..0xAFFF` | Mac OS Toolbox traps | `UC_HOOK_INTR`; trap_handler builds the m68k exception frame in deferred state |
+| `0xF000..0xFFFF` | FPU | `UC_HOOK_INTR`; same path as A-line |
 
-### Key Insight: SR Requires uint32_t
+UAE patches the m68k ROM with `0x71xx`; Unicorn-m68k patches with
+`0xAExx` to reuse the A-line exception path. ROM patching in
+`src/core/rom_patches.cpp` checks the active backend.
 
-A subtle but critical detail: `uc_reg_write()` for SR requires a `uint32_t*`, not `uint16_t*`. QEMU internally represents SR as a 32-bit value. Passing a 16-bit pointer causes the upper bits to be garbage, corrupting the status register.
+## Why we don't use QEMU's native trap delivery
 
-```c
-// WRONG:
-uint16_t sr = 0x2700;
-uc_reg_write(uc, UC_M68K_REG_SR, &sr);  // Reads 4 bytes from &sr!
+`do_interrupt_m68k_aline` etc. would build the exception frame
+internally, but reaching it requires accessing `CPUM68KState` through
+opaque `uc_struct` pointers at offsets that vary by build. The
+deferred-update approach uses only the public Unicorn API
+(`uc_reg_*`, `uc_mem_*`) and is portable across compiler / arch /
+Unicorn version. See the rationale in
+[`../PlatformAPIInterrupts.md`](../PlatformAPIInterrupts.md).
 
-// CORRECT:
-uint32_t sr32 = 0x2700;
-uc_reg_write(uc, UC_M68K_REG_SR, &sr32);
-```
+## Boot parity
 
-## Historical Context
+Both backends populate the same 87 entries in the OS trap table from
+the same 16 K+ EmulOp dispatches and reach identical state at every
+boot-progress checkpoint, including `$0b78 = 0xfd89ffff`.
 
-### The Original Problem (January 2026)
+## Files
 
-Unicorn cannot change PC from interrupt hooks -- this was a known architectural issue (Unicorn GitHub issue #1027). When we tried to set PC inside `UC_HOOK_INTR`, Unicorn's internal `exception_next_eip` mechanism would overwrite our PC value.
-
-This affected:
-- All non-EmulOp A-line traps (e.g., `0xA05D`, `0xA247`)
-- ROM boot sequence after PATCH_BOOT_GLOBS
-- Any Mac OS trap execution
-
-### What We Tried (That Failed)
-
-From commits `9464afa4` and `32a6926b`:
-1. ✗ `uc_ctl_remove_cache()` + `uc_reg_write()` -- Unicorn still overwrites PC
-2. ✗ `uc_emu_stop()` to break execution -- causes JIT restart overhead
-3. ✗ Skipping instruction -- prevents infinite loop but doesn't execute handler
-
-### The Breakthrough
-
-The deferred register update mechanism was developed as part of the IRQ storm fix (January-February 2026). It was originally needed because EmulOp handlers run inside `UC_HOOK_INTR` callbacks where register writes don't persist. The same mechanism naturally solved the A-line/F-line trap problem.
-
-## Current Boot Results
-
-### Unicorn Backend (30 seconds)
-- ✅ 87 OS trap table entries populated (A001-A0FF range)
-- ✅ 16,879 EmulOps dispatched
-- ✅ All A-line traps handled correctly
-- ✅ Boot progress $0b78 = 0xfd89ffff
-- ✅ Identical state to UAE at every checkpoint
-
-### UAE Backend (30 seconds)
-- ✅ 87 OS trap table entries populated (identical)
-- ✅ Same EmulOp count
-- ✅ Same boot progress
-
-Both backends stall at the same resource chain search (PC=0x0001c3d4) because there is no SCSI boot disk providing system resources.
-
-## Code Structure
-
-```
-src/cpu/
-├── unicorn_wrapper.c       # Hook infrastructure, deferred updates, apply_deferred_updates_and_flush()
-├── cpu_unicorn.cpp         # Backend interface, MMIO, memory mapping
-├── unicorn_exec_loop.c     # QEMU-style execution loop
-└── unicorn_validation.cpp  # DualCPU validation logic
-```
-
-## Testing
-
-```bash
-# Run Unicorn for 30s and check trap table count
-./build/mac-phoenix --backend unicorn --timeout 30 --no-webserver /home/mick/quadra.rom 2>&1 | grep "TRAP TABLE"
-
-# Compare with UAE
-./build/mac-phoenix --backend uae --timeout 30 --no-webserver /home/mick/quadra.rom 2>&1 | grep "TRAP TABLE"
-
-# Both should show 87 RAM entries
-```
-
----
-
-*Last updated: March 1, 2026*
+- `src/cpu/unicorn_wrapper.c` — hook surface, deferred-update arrays,
+  `apply_deferred_updates_and_flush`.
+- `src/cpu/cpu_unicorn.cpp` — backend installer, MMIO, memory map.
+- `src/cpu/unicorn_exec_loop.c` — `unicorn_execute_with_interrupts`.
+- `src/cpu/unicorn_exception.c` — A-line dispatch into `op_illg`.
+- `src/cpu/unicorn_validation.cpp` — DualCPU lockstep glue.

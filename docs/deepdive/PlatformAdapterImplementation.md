@@ -1,54 +1,68 @@
-# Platform Adapter Implementation ✅ COMPLETE
+# Platform adapter pattern
 
-## Overview
-
-All driver subsystems use the adapter pattern: core code calls adapter functions which defer to `g_platform` function pointers. Null drivers provide safe defaults. Real drivers override at startup.
-
-## Completed Adapters
-
-| Subsystem | Adapter | Null Driver | Real Drivers |
-|-----------|---------|-------------|--------------|
-| SCSI | `scsi_adapter.cpp` | `scsi_null.cpp` | — |
-| Video | `video_adapter.cpp` | `video_null.cpp` | `video_webrtc.cpp` |
-| Audio | `audio_adapter.cpp` | `audio_null.cpp` | `audio_webrtc.cpp` |
-| Serial | `serial_adapter.cpp` | `serial_null.cpp` | — |
-| Ethernet | `ether_adapter.cpp` | `ether_null.cpp` | `ether_lwip.cpp`, `ether_raw.cpp` |
-| Disk | — (uses Sys_* layer) | `disk_null.cpp` | `platform_unix.cpp` |
-| Platform | `platform_adapter.cpp` | `platform_null.cpp` | `platform_unix.cpp` |
-
-## Infrastructure
-
-- **`src/common/include/platform.h`** — `Platform` struct with 100+ function pointers covering all subsystems plus CPU backends
-- **`src/common/platform.cpp`** — `platform_init()` wires all pointers to null drivers at startup
-- **`src/drivers/CMakeLists.txt`** — All adapters, null drivers, and real drivers compiled
-
-## CPU Backend Support
-
-The platform header declares backend installers that override CPU-related function pointers:
-- `cpu_uae_install(Platform *p)` — M68K UAE interpreter
-- `cpu_unicorn_install(Platform *p)` — M68K Unicorn JIT
-- `cpu_dualcpu_install(Platform *p)` — M68K lockstep validation
-- `cpu_ppc_kpx_install(Platform *p)` — PPC KPX interpreter/JIT
+Every driver subsystem (video, audio, scsi, serial, ether, disk,
+platform) follows the same shape: a small adapter that defers to a
+function pointer in `g_platform`, a null driver that fills the pointer
+with safe defaults at startup, and a real driver that overrides those
+pointers when the system actually wants the feature.
 
 ## Pattern
 
 ```cpp
-// Adapter: core code calls this
+/* core code calls the adapter — never the backend */
 void SCSIInit(void) { g_platform.scsi_init(); }
 
-// Null driver: safe default
+/* null driver — installed at startup, never crashes */
 void scsi_null_init(void) { /* no-op */ }
 
-// platform_init(): wires defaults
-void platform_init(void) { g_platform.scsi_init = scsi_null_init; ... }
+/* platform_init() wires every g_platform.* to its null variant */
+void platform_init(void) {
+    g_platform.scsi_init = scsi_null_init;
+    /* … */
+}
 
-// Backend installer: overrides specific pointers
-void cpu_uae_install(Platform *p) { p->cpu_execute_one = uae_execute_one; ... }
+/* a real driver swaps in its own functions when initialised */
+void cpu_uae_install(Platform *p) {
+    p->cpu_execute_one = uae_execute_one;
+    /* … */
+}
 ```
 
-## Design Benefits
+Core code calls `g_platform.thing()` directly — there are no
+`if (g_platform.thing)` checks anywhere because the null defaults make
+the pointer always safe.
 
-1. Zero changes to core BasiliskII code
-2. Runtime driver selection via function pointers
-3. Always initialized to safe null drivers (no NULL checks needed)
-4. Easy for tests to inject custom implementations
+## Subsystems
+
+| Subsystem | Adapter | Null driver | Real drivers |
+|-----------|---------|-------------|--------------|
+| SCSI | `scsi_adapter.cpp` | `scsi_null.cpp` | — |
+| Video | `video_adapter.cpp` | `video_null.cpp` | `video_webrtc.cpp` |
+| Audio | `audio_adapter.cpp` | `audio_null.cpp` | `audio_webrtc.cpp` (encoder thread infra; no Sound Manager hookup yet) |
+| Serial | `serial_adapter.cpp` | — | `serial_unix.cpp` (PTY/tty backend) |
+| Ethernet | `ether_adapter.cpp` | `ether_null.cpp` | `ether_socket.cpp` (Unix socket → net-bridge), `ether_lwip.cpp`, `ether_raw.cpp` |
+| Disk | (uses `Sys_*` layer in core) | — | `platform_unix.cpp` |
+| Platform | `platform_adapter.cpp` | `platform_null.cpp` | `platform_unix.cpp` |
+
+CPU backends use the same scheme — `cpu_uae_install`,
+`cpu_unicorn_install`, `cpu_unicorn_ppc_install`, `cpu_ppc_kpx_install`,
+`cpu_dualcpu_install` each fill in CPU-related fields on top of the
+null defaults.
+
+## Files
+
+- `src/common/include/platform.h` — the `Platform` struct, ~100+
+  function pointers covering CPU + every driver subsystem.
+- `src/common/platform.cpp` — `platform_init()` wires null defaults.
+- `src/drivers/CMakeLists.txt` — build wiring.
+- `src/drivers/<subsystem>/<name>_adapter.cpp` — adapter calls.
+- `src/drivers/<subsystem>/<name>_null.cpp` — safe defaults.
+- Real driver files swap in via their `_install(Platform *p)` entry
+  points from `init_m68k` / `init_ppc` / `webserver_main` / etc.
+
+## Why
+
+- **Zero changes to the core** when adding a backend or a new driver.
+- **Runtime selection** of every subsystem.
+- **Always initialised** — no NULL-check noise in callers.
+- **Trivially mockable** for tests.

@@ -1,157 +1,76 @@
-# UAE vs Unicorn: Implementation Analysis
+# UAE vs Unicorn-m68k
 
-**Purpose**: Document the architectural differences between the two M68K CPU backends.
+Side-by-side of the two m68k backends. UAE is the end-user default;
+Unicorn is for validation, research, and tooling.
 
----
+## Architecture
 
-## Executive Summary
+**UAE** is the WinUAE m68k interpreter. Direct access to the register
+struct (`regs.regs[]`), inline opcode dispatch, optional JIT
+(`--jit`/`--no-jit`), prefetch buffer disabled. Exceptions are built
+internally by `Exception()`.
 
-**mac-phoenix** implements two M68K CPU backends:
-- **UAE** (WinUAE M68K interpreter) — default backend, ~5s boot, JIT available
-- **Unicorn** (QEMU-based JIT) — validation backend, ~48s boot, standalone Finder boot
+**Unicorn-m68k** is QEMU TCG via Unicorn Engine. Translation blocks
+JIT-compiled into x86, register access through `uc_reg_*` API, hooks
+fire at block boundaries (`UC_HOOK_BLOCK`) and on
+exceptions / illegal instructions (`UC_HOOK_INTR`,
+`UC_HOOK_INSN_INVALID`). Trap entry is built manually in host code via
+deferred register updates; see [`cpu/ALineAndFLineStatus.md`](cpu/ALineAndFLineStatus.md).
 
-Both backends achieve full boot parity. 514,000+ instructions validated in lockstep via DualCPU mode.
+## Feature matrix
 
----
+| Feature | UAE | Unicorn-m68k |
+|---------|-----|--------------|
+| Boot Mac OS 7.5.5 / 7.6.1 | ~5 s | ~12 s |
+| `0x71xx` EmulOps | `op_illg` | `UC_HOOK_INSN_INVALID` |
+| `0xAExx` A-line EmulOps | `op_illg` | `UC_HOOK_INTR` |
+| `0xA000+` Toolbox traps | `Exception()` | deferred-update path |
+| `0xF000+` FPU traps | `Exception()` | deferred-update path |
+| Interrupt delivery | `SPCFLAG_INT` per instruction | `UC_HOOK_BLOCK` poll |
+| RTE | native interpreter | patched in QEMU's `cpu-exec.c` |
+| VBR | native | custom `UC_M68K_REG_CR_VBR` |
+| Cycle counting | accurate (disabled) | approximate |
+| Prefetch queue | optional (off) | not modelled |
+| ROM patching | direct memory write | direct memory write |
 
-## Architecture Comparison
+Both backends populate the same 87 entries in the OS trap table from
+the same EmulOp dispatch sequence and reach identical state at every
+boot-progress checkpoint.
 
-### UAE Backend Architecture
+## Why the perf gap
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ UAE M68K Interpreter (from WinUAE)                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐ │
-│  │  Instruction │ →  │   Execute    │ →  │   Update     │ │
-│  │    Fetch     │    │  Interpreter │    │   Registers  │ │
-│  └──────────────┘    └──────────────┘    └──────────────┘ │
-│         │                    │                    │        │
-│         ▼                    ▼                    ▼        │
-│  ┌──────────────────────────────────────────────────────┐ │
-│  │         UAE Internal State Machine                   │ │
-│  │  • Direct register access (regs.regs[])            │ │
-│  │  • Exception handling (Exception() function)        │ │
-│  │  • SPCFLAGS for interrupts/exceptions              │ │
-│  │  • Prefetch queue emulation                        │ │
-│  │  • Cycle-accurate timing (optional)                │ │
-│  └──────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+QEMU TCG compilation cost dominates — first-time compilation of ~2.8 M
+unique guest code addresses, ~17 µs each, accounts for most of the
+boot-time gap. Detailed breakdown in
+[`../UnicornPerformanceAnalysis.md`](../UnicornPerformanceAnalysis.md).
 
-### Unicorn Backend Architecture
+Other contributors:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Unicorn M68K JIT (from QEMU)                                │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐ │
-│  │  Basic Block │ →  │  QEMU TCG    │ →  │  Host Code   │ │
-│  │  Translation │    │  JIT Compile │    │  Execution   │ │
-│  └──────────────┘    └──────────────┘    └──────────────┘ │
-│         │                    │                    │        │
-│         ▼                    ▼                    ▼        │
-│  ┌──────────────────────────────────────────────────────┐ │
-│  │           Unicorn Hook System                        │ │
-│  │  • UC_HOOK_BLOCK — basic block boundaries           │ │
-│  │  • UC_HOOK_INTR — interrupt/exception trigger       │ │
-│  │  • UC_HOOK_INSN_INVALID — illegal instructions      │ │
-│  │  • API-based register access (uc_reg_read/write)    │ │
-│  │  • Deferred register updates at block boundaries    │ │
-│  └──────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+- m68k condition codes are lazy in QEMU; every branch materialises 5–10
+  host instructions to compute the test.
+- Average TB is 1.95 instructions ([`cpu/JitBlockSizeAnalysis.md`](cpu/JitBlockSizeAnalysis.md)),
+  so per-TB entry/exit overhead is a large fraction of useful work.
+- m68k is a less-optimised QEMU target than ARM/x86.
 
----
+The structural pieces aren't easily fixable. The remaining tunable
+items live in the perf doc.
 
-## Feature Comparison Matrix
+## When to use which
 
-| Feature | UAE | Unicorn | Notes |
-|---------|-----|---------|-------|
-| **Normal Instructions** | ✅ | ✅ | Both execute M68K correctly |
-| **Performance** | ~5s boot | ~48s boot | UAE faster as interpreter; Unicorn's QEMU TCG overhead |
-| **EmulOps (0x71xx)** | ✅ Via `op_illg()` | ✅ Via UC_HOOK_INSN_INVALID | |
-| **A-line EmulOps (0xAE00-0xAE3F)** | ✅ Via `op_illg()` | ✅ Via UC_HOOK_INTR | |
-| **Mac OS A-line Traps (0xA000+)** | ✅ Via Exception() | ✅ Via deferred register updates | |
-| **Mac OS F-line Traps (0xF000+)** | ✅ Via Exception() | ✅ Via deferred register updates | |
-| **Interrupts** | ✅ SPCFLAGS | ✅ UC_HOOK_BLOCK polling | |
-| **Exception Simulation** | ✅ Direct | ✅ Via deferred register updates | |
-| **RTE Instruction** | ✅ | ✅ Patched in cpu-exec.c | |
-| **VBR Register** | ✅ Native | ✅ Custom API (UC_M68K_REG_CR_VBR) | |
-| **SR Lazy Flags** | ✅ | ⚠️ Minor upstream bugs | Known Unicorn issue, not critical |
-| **Prefetch Queue** | Optional | Not modeled | Not critical for macemu |
-| **Cycle Counting** | Accurate | Approximate | Not critical for macemu |
-| **ROM Patching** | ✅ Direct | ✅ Via memory copy | |
+- **UAE** — running the emulator. Default.
+- **Unicorn-m68k** — when you need an independent m68k implementation
+  to validate against UAE, or when you're working on the QEMU TCG
+  layer.
+- **DualCPU** (`--backend dualcpu`) — when you suspect a UAE CPU bug.
+  Runs both in lockstep, fails fast on register divergence.
 
----
+## Files
 
-## Deferred Register Updates
+- `src/cpu/cpu_uae.c`, `src/cpu/uae_cpu/`, `src/cpu/uae_wrapper.{cpp,h}`
+- `src/cpu/cpu_unicorn.cpp`, `src/cpu/unicorn_wrapper.{c,h}`,
+  `src/cpu/unicorn_exec_loop.c`, `src/cpu/unicorn_exception.c`
+- `src/cpu/cpu_dualcpu.c`, `src/cpu/unicorn_validation.cpp`
 
-Unicorn's QEMU backend overwrites PC after `UC_HOOK_INTR` returns (via `exception_next_eip`). To handle A-line/F-line traps and exceptions, Unicorn defers all register writes and applies them at the next `hook_block()` boundary:
-
-1. `hook_interrupt()` queues register changes (including PC) in deferred arrays
-2. At the next basic block boundary, `hook_block()` fires
-3. `apply_deferred_updates_and_flush()` applies all queued register writes
-4. Execution continues from the correct address
-
-SR updates are also deferred for the same reason (`unicorn_defer_sr_update()`).
-
----
-
-## EmulOp Handling
-
-### 0x71xx EmulOps (Illegal Instructions)
-
-**UAE**: Native `op_illg()` handler dispatches to `EmulOp_C()`.
-**Unicorn**: `UC_HOOK_INSN_INVALID` catches the opcode, extracts/restores registers, advances PC by 2.
-
-### A-line EmulOps (0xAE00-0xAE3F)
-
-BasiliskII-specific A-line instructions for emulation services. These don't require PC changes — the handler runs and PC auto-advances.
-
-### Mac OS A-line Traps (0xA000-0xAFFF)
-
-Both backends build an M68K exception frame (push SR, push PC, read vector) and jump to the trap handler. UAE does this natively via `Exception()`. Unicorn does this via deferred register updates.
-
-Both backends populate 87 identical OS trap table entries.
-
----
-
-## Interrupt Delivery
-
-**UAE**: Polls timer via `SPCFLAG_INT` on every instruction. On interrupt, builds exception frame via `Exception()`.
-
-**Unicorn**: Polls timer in `UC_HOOK_BLOCK` (~every 100 instructions). On interrupt, manually builds the M68K exception frame in memory and defers PC/SR updates.
-
-Timer interrupts fire at different instruction counts between backends because the timer is wall-clock based — UAE's slower execution reaches the 16.67ms boundary at a different instruction count than Unicorn. This is expected and not a bug.
-
----
-
-## Known Limitations
-
-| Feature | UAE | Unicorn | Impact |
-|---------|-----|---------|--------|
-| SR lazy flags | ✅ | ⚠️ Minor bugs | Upstream issue, doesn't affect boot |
-| Cycle timing | ✅ Accurate | Approximate | Not needed for macemu |
-| Prefetch queue | ✅ Optional | Not modeled | Not needed for macemu |
-| Interrupt timing | Wall-clock | Wall-clock | Non-deterministic between backends (expected) |
-
-The ~10x performance gap is structural — QEMU's TCG M68K code generation has inherent overhead from translation block compilation and the JIT pipeline.
-
----
-
-## Remaining Work
-
-1. **Unicorn performance** — structural QEMU TCG overhead, not easily fixable
-2. **SR lazy flag bugs** — upstream Unicorn issue, minor impact
-3. **Machine profile testing** — validate Unicorn with Mac SE (68000) and other profiles
-
----
-
-**See Also**:
-- [cpu/UnicornQuirks.md](cpu/UnicornQuirks.md) — Unicorn-specific implementation details
-- [cpu/ALineAndFLineStatus.md](cpu/ALineAndFLineStatus.md) — Trap handling details
-- [cpu/UaeQuirks.md](cpu/UaeQuirks.md) — UAE-specific implementation details
-- [InterruptTimingAnalysis.md](InterruptTimingAnalysis.md) — Timing divergence analysis
+See also: [`cpu/UaeQuirks.md`](cpu/UaeQuirks.md),
+[`cpu/UnicornQuirks.md`](cpu/UnicornQuirks.md),
+[`InterruptTimingAnalysis.md`](InterruptTimingAnalysis.md).

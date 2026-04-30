@@ -75,11 +75,12 @@ Plain files in `cfg.bridge_dir`, which is mounted into the guest as an ExtFS vol
 |------|-----------|--------|
 | `_bridge_cmd` | host → guest | ASCII line: `LAUNCH path` / `OPEN path` / `QUIT` / `SHUTDOWN` / `RESTART` |
 | `_bridge_result` | guest → host | Decimal OSErr, CR-terminated |
+| `_bridge_clipboard` | host → guest | Raw MacRoman bytes from `POST /api/clipboard` (host pushes, agent applies via `ZeroScrap` + `PutScrap('TEXT', …)`, then deletes the file) |
 | `bridge_heartbeat` | guest → host | JSON: `{"heartbeat":N,"commands":N,"last_result":N,"last_cmd":"..."}` |
 | `bridge_loaded` | guest → host | Empty marker, written once at first poll |
-| `bridge_step` | guest → host | Single-step debug breadcrumb (`do_open_document` only) |
+| `bridge_step` | guest → host | Single-step debug breadcrumb |
 
-The `_` prefix on `_bridge_cmd` / `_bridge_result` is cosmetic — there's no ExtFS interception anymore. Heartbeat / loaded / step are unprefixed by historical accident.
+The `_` prefix on `_bridge_*` files is cosmetic — there's no ExtFS interception. Heartbeat / loaded / step are unprefixed by historical accident.
 
 ## Lifecycle
 

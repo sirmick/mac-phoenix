@@ -144,7 +144,7 @@ Then double-click **MacBrowser** on the floppy inside the guest.
 
 ![MacBrowser inside System 7.5.5 — host-side Firefox pixels rendered in a native Mac window, viewed through the MacPhoenix web UI](docs/images/macbrowser-in-browser.png)
 
-See [`docs/plan/MacBrowser.md`](docs/plan/MacBrowser.md) for the protocol
+See [`docs/MacBrowser.md`](docs/MacBrowser.md) for the protocol
 and architecture deep-dive.
 
 #### Provisioning tools (optional — for creating HFS disk images)

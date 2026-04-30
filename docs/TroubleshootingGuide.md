@@ -1,272 +1,153 @@
-# mac-phoenix Troubleshooting Guide
+# Troubleshooting
 
-## Quick Diagnostics
+Quick triage for the common failure modes. Backend-specific perf details
+live in [`UnicornPerformanceAnalysis.md`](UnicornPerformanceAnalysis.md);
+PPC-specific debug knobs live in
+[`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md).
 
-### 1. Check for IRQ Storm
+## First-line checks
+
 ```bash
-# Should show ~20, NOT 780,000+
-./build/mac-phoenix --backend unicorn --timeout 10 --no-webserver 2>&1 | grep -c poll_timer
+# Headless smoke — should print "Boot phase: …" lines and exit clean
+./build/mac-phoenix --no-webserver --timeout 5 ~/storage/roms/quadra.rom
+
+# Compare backends side-by-side
+./build/mac-phoenix --backend uae           --no-webserver --timeout 5 ~/storage/roms/quadra.rom 2>&1 | tail -20
+./build/mac-phoenix --backend unicorn-m68k  --no-webserver --timeout 15 ~/storage/roms/quadra.rom 2>&1 | tail -20
+
+# Trace first N instructions (m68k)
+CPU_TRACE=0-1000 ./build/mac-phoenix --no-webserver ~/storage/roms/quadra.rom 2>&1 | head -100
+
+# DualCPU lockstep — fail-fast on register divergence
+./build/mac-phoenix --backend dualcpu --no-webserver ~/storage/roms/quadra.rom
 ```
 
-**Expected**: ~20 polls
-**If seeing 100,000+**: IRQ storm is back, check Phase 1 fix in rom_patches.cpp
+## Common issues
 
-### 2. Verify Timer Rate
+### Boot hangs early
+
+m68k: enable `CPU_TRACE` over the suspect range, look for an EmulOp loop.
+The IRQ EmulOp encoding is `0x7129` in `src/core/rom_patches.cpp` — if
+you see it dispatching as `0xAE29`, the patcher regressed.
+
+PPC: check `boot_phase` in `/api/status` (or stderr `[Boot +N.Ns]`
+markers). A stall at "Installing drivers" with healthy DiskPrime
+throughput is the SCALE=1 throughput collapse — see
+`ppc/UnicornPpcStatus.md`.
+
+### "ROM not found"
+
+Use absolute paths. `~` expansion fails in some shells / IDEs. Tests use
+`MACEMU_ROM` (m68k) or `TEST_PPC_ROM` (PPC) cmake cache variables.
+
+### Port already in use
+
+Pick a different `--port`. There is no separate signaling port — `/ws`
+rides the same TCP listener.
+
+### Unicorn-m68k boot is slow
+
+That's the QEMU TCG cost, not a bug. ~12 s to Finder is current; the
+detailed perf breakdown is in [`UnicornPerformanceAnalysis.md`](UnicornPerformanceAnalysis.md).
+Persistent TB caching across runs would close most of the remaining
+gap (not done).
+
+### Unicorn-PPC reaches `[Boot +N] Desktop ready` but the framebuffer is
+hourglass-only or all black
+
+Read [`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md) before
+debugging — the headless `Desktop ready` flag flips on a `CurApName` peek
+and idle poll, not on actual paint. Verify with `/api/screenshot`.
+
+### Build issues in `subprojects/unicorn`
+
+Rebuild that subproject directly first, then the top level:
+
 ```bash
-# Should show 300 interrupts in 5 seconds (60Hz)
-./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | grep "Timer:"
+cmake --build subprojects/unicorn/build -j$(nproc)
+cmake --build build -j$(nproc)
 ```
 
-**Expected**: "Timer: Stopped after 300 interrupts (5 seconds)"
-**If different**: Timer delivery issue
+If patches in `subprojects/unicorn-patches/` won't apply, the vendored
+tree drifted from pristine 2.1.4 — `git -C subprojects/unicorn status`
+to find the divergence.
 
-### 3. Compare Backends
+## Debug environment variables
+
+These are read by the binary or test scripts, not by the JSON config.
+
+### m68k tracing
+
+| Variable | Purpose |
+|----------|---------|
+| `CPU_TRACE=N` or `N-M` | Trace first N instructions or range |
+| `CPU_TRACE_MEMORY=1` | Include memory reads |
+| `CPU_TRACE_QUIET=1` | Suppress banner |
+| `EMULOP_VERBOSE=1` | Log each EmulOp dispatch |
+| `MACEMU_DEBUG_PERF=1` | Enable per-block timing in Unicorn-m68k hooks |
+
+### DualCPU validation
+
+| Variable | Purpose |
+|----------|---------|
+| `DUALCPU_TRACE_DEPTH=N` | History depth on divergence |
+| `DUALCPU_MASTER=uae|unicorn` | Authoritative side (default `uae`) |
+
+### PPC
+
+See [`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md) — the
+`MACEMU_PPC_*` family of knobs is documented there.
+
+## GDB
+
 ```bash
-# UAE (reference implementation)
-./build/mac-phoenix --backend uae --timeout 5 --no-webserver 2>&1 | tail -20
-
-# Unicorn (optimized implementation)
-./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | tail -20
-```
-
-Both should show similar progress.
-
-## Common Issues and Solutions
-
-### Issue: IRQ Storm Returns
-**Symptom**: Millions of EmulOp 0x7129 calls, system stuck
-**Cause**: ROM patcher regression
-**Solution**:
-```c
-// Check src/core/rom_patches.cpp lines 1043 and 1696
-// MUST be: *wp++ = htons(0x7129);
-// NOT: *wp++ = htons(make_emulop(M68K_EMUL_OP_IRQ));
-```
-
-### Issue: No Timer Interrupts
-**Symptom**: No timer fires, boot hangs
-**Cause**: Interrupt delivery broken
-**Solution**:
-1. Check timer setup in cpu_context.cpp
-2. Verify poll_timer_interrupt() is being called
-3. Check IPL masking in m68k_interrupt.c
-
-### Issue: EmulOps Not Working
-**Symptom**: EmulOps cause crashes or don't execute
-**Cause**: Register update issues
-**Solution**:
-1. Verify immediate updates in unicorn_exec_loop.c
-2. Check platform API linkage
-3. Ensure deferred updates are disabled
-
-### Issue: Boot Hangs Early
-**Symptom**: Stuck before CLKNOMEM
-**Cause**: Basic execution failure
-**Debug Steps**:
-```bash
-# Enable CPU trace
-CPU_TRACE=0-100 ./build/mac-phoenix --backend unicorn --no-webserver 2>&1 | head -100
-
-# Check for illegal instructions
-CPU_VERBOSE=1 ./build/mac-phoenix --backend unicorn --no-webserver 2>&1 | grep "illegal\|invalid"
-```
-
-### Issue: Performance Degradation
-**Symptom**: Slow execution, <1000 instructions/sec
-**Cause**: Execution batches too small
-**Solution**:
-Check batch sizes in unicorn_exec_loop.c:
-- IRQ regions: 3 instructions (correct)
-- ROM code: 20 instructions (correct)
-- RAM code: 50 instructions (correct)
-
-## Debug Environment Variables
-
-### Execution Tracing
-```bash
-# Trace first N instructions
-CPU_TRACE=0-1000
-
-# Trace specific PC range
-CPU_TRACE=0x02000000-0x02001000
-
-# Verbose execution
-CPU_VERBOSE=1
-```
-
-### Component-Specific Debug
-```bash
-# EmulOp debugging
-EMULOP_VERBOSE=1
-
-# Interrupt debugging
-INTERRUPT_VERBOSE=1
-
-# Timer debugging
-TIMER_VERBOSE=1
-```
-
-### Performance Analysis
-```bash
-# Show execution statistics
-CPU_STATS=1
-
-# Show JIT block statistics
-BLOCK_STATS=1
-```
-
-## Build Issues
-
-### Clean Rebuild
-```bash
-cd /home/mick/macemu-dual-cpu/mac-phoenix
-rm -rf build && cmake -B build && cmake --build build -j$(nproc)
-```
-
-### Verify Installation
-```bash
-# Check binary exists
-ls -la build/mac-phoenix
-
-# Check libraries
-ldd build/mac-phoenix | grep -E "unicorn|uae"
-
-# Check ROM file
-ls -la ~/quadra.rom
-```
-
-## Testing Commands
-
-### Basic Functionality Test
-```bash
-# 1. Minimal test - should not crash
-./build/mac-phoenix --backend unicorn --timeout 1 --no-webserver
-
-# 2. Check boot progress
-./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | grep "EmulOp"
-
-# 3. Full comparison test
-./scripts/compare_boot.sh
-```
-
-### Regression Tests
-```bash
-# Test IRQ storm fix
-./build/mac-phoenix --backend unicorn --timeout 10 --no-webserver 2>&1 | grep -c "EmulOp 0x7129"
-# MUST be < 100
-
-# Test timer delivery
-./build/mac-phoenix --backend unicorn --timeout 5 --no-webserver 2>&1 | grep "Timer:" | grep "300"
-# MUST show 300 interrupts
-
-# Test EmulOp execution
-EMULOP_VERBOSE=1 ./build/mac-phoenix --backend unicorn --timeout 2 --no-webserver 2>&1 | grep "CLKNOMEM"
-# MUST show CLKNOMEM calls
-```
-
-## Advanced Debugging
-
-### GDB Debugging
-```bash
-# Build with debug symbols
 cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j$(nproc)
-
-# Run under GDB
-gdb ./build/mac-phoenix
-(gdb) break unicorn_execute_with_interrupts
-(gdb) run --backend unicorn --timeout 10 --no-webserver
+gdb --args ./build/mac-phoenix --no-webserver ~/storage/roms/quadra.rom
 ```
 
-### Key Breakpoints
-```gdb
-# IRQ EmulOp handling
-break rom_patches.cpp:1044
+Useful breakpoints:
 
-# Execution loop
-break unicorn_exec_loop.c:unicorn_execute_with_interrupts
+| Where | Why |
+|-------|-----|
+| `unicorn_execute_with_interrupts` (`unicorn_exec_loop.c`) | Top of the Unicorn-m68k execute loop |
+| `apply_deferred_updates_and_flush` (`unicorn_wrapper.c`) | Where deferred register writes land |
+| `command_bridge_*` (`src/core/command_bridge.cpp`) | Bridge read commands |
+| `bridge_command` (`src/webserver/api_handlers.cpp`) | Action commands (LAUNCH/QUIT/SHUTDOWN/RESTART) |
+| `ppc_emul_op` / `execute_native_op_pure` (`src/cpu/kpx/`) | PPC EmulOp / NativeOp dispatch |
 
-# Interrupt delivery
-break m68k_interrupt.c:deliver_m68k_interrupt
-
-# EmulOp handler
-break handle_emulop_immediate
-```
-
-### Memory Debugging
-```bash
-# Check for memory leaks
-valgrind --leak-check=full ./build/mac-phoenix --no-webserver
-
-# Check for memory errors
-valgrind --tool=memcheck ./build/mac-phoenix --no-webserver
-```
-
-## Log Analysis
-
-### Finding Patterns
-```bash
-# Count specific EmulOps
-grep "EmulOp 0x" logfile | sort | uniq -c | sort -rn
-
-# Find timer events
-grep -E "timer|Timer|interrupt" logfile
-
-# Find errors
-grep -iE "error|fail|crash|abort" logfile
-```
-
-### Performance Analysis
-```bash
-# Count instructions per second
-timeout 10 ./build/mac-phoenix --no-webserver 2>&1 | grep "total_instructions" | tail -1
-
-# Measure JIT efficiency
-grep "TB executed" logfile | wc -l
-```
-
-## Contact and Resources
-
-### Documentation
-- Architecture: docs/Architecture.md
-- Developer Guide: docs/DeveloperGuide.md
-- Unicorn Quirks: docs/deepdive/cpu/UnicornQuirks.md
-
-### Key Files for Debugging
-1. `src/core/rom_patches.cpp` - ROM patching (IRQ fix)
-2. `src/cpu/unicorn_exec_loop.c` - Execution loop
-3. `src/cpu/m68k_interrupt.c` - Interrupt delivery
-4. `src/cpu/cpu_unicorn.cpp` - Unicorn backend
-5. `src/cpu/unicorn_wrapper.c` - Unicorn wrapper
-
-### Common Error Messages
-
-| Error | Meaning | Solution |
-|-------|---------|----------|
-| "Unsupported ROM type" | ROM file invalid | Use proper Mac ROM |
-| "EmulOp 0xAE29" | Wrong encoding | Fix rom_patches.cpp |
-| "UC_ERR_INSN_INVALID" | Illegal instruction | Check EmulOp handler |
-| "Timer not initialized" | Timer setup failed | Check cpu_context.cpp |
-| "IPL blocked" | Interrupts masked | Normal during boot |
-
-## Quick Reference Card
+## Memory debugging
 
 ```bash
-# Run with Unicorn (fast)
-./build/mac-phoenix --no-webserver
-
-# Run with UAE (reference)
-./build/mac-phoenix --backend uae --no-webserver
-
-# Debug mode
-CPU_VERBOSE=1 EMULOP_VERBOSE=1 ./build/mac-phoenix --no-webserver
-
-# Trace execution
-CPU_TRACE=0-1000 ./build/mac-phoenix --no-webserver
-
-# Check IRQ storm
-timeout 10 ./build/mac-phoenix --no-webserver 2>&1 | grep -c poll_timer
+valgrind --leak-check=full --suppressions=tools/valgrind.supp \
+    ./build/mac-phoenix --no-webserver --timeout 5 ~/storage/roms/quadra.rom
 ```
 
----
+Expect noise from Unicorn's TCG code generator and libdatachannel — live
+with it or build with `-DBUILD_BROWSER=OFF -DBUILD_NET_BRIDGE=OFF` to
+narrow the surface.
 
-*Last Updated: March 2026 - Both backends boot to Mac OS 7.5.5 Finder desktop*
+## Log analysis
+
+```bash
+# EmulOp histogram
+grep "EmulOp" /tmp/run.log | awk '{print $NF}' | sort | uniq -c | sort -rn
+
+# Boot phases
+grep -E "\[Boot \+[0-9]+\.[0-9]+s\]" /tmp/run.log
+
+# Errors / aborts
+grep -iE "error|fail|crash|abort|assert" /tmp/run.log
+```
+
+## Where to look first
+
+| Failure | Files |
+|---------|-------|
+| ROM patching regression | `src/core/rom_patches.cpp` (m68k), `src/cpu/kpx/rom_patches_ppc.cpp` (PPC) |
+| Boot phase wrong / stuck | `src/core/boot_progress.cpp` |
+| EmulOp dispatch | `src/core/emul_op.cpp` (m68k), `src/cpu/kpx/emul_op_ppc.cpp` (PPC) |
+| Bridge timeouts | `src/core/command_bridge.cpp`, `src/webserver/api_handlers.cpp:bridge_command`, `BridgeAgent/BridgeAgent.c` |
+| Mouse / keyboard | `src/core/adb.cpp`, `src/webserver/api_handlers.cpp:1105+` |
+| Video frame issues | `src/drivers/video/video_output.cpp`, `video_encoder_thread.cpp` |
+| WebRTC / signaling | `src/webrtc/`, `src/webserver/websocket.cpp` |
+| MacBrowser | `src/drivers/browser/`, `MacBrowser/MacBrowser.c`, `docs/MacBrowser.md` |

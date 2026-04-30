@@ -7,16 +7,19 @@ Both require a built binary (`cmake --build build -j$(nproc)`) and a Quadra 650 
 ## Quick Reference
 
 ```bash
-# CTest integration tests — fast suite (~15s)
-ctest --test-dir build -R "api_endpoints|boot_uae|mouse_position|command_bridge"
+# Fast suite (unit + api, ~15s)
+ctest --test-dir build -L "unit|api"
 
-# CTest integration tests — full suite including Unicorn (~60s)
+# Boot + bridge (excludes guest_suite, ~3 min)
+ctest --test-dir build -L "boot|bridge"
+
+# Full ctest (including guest_suite — needs BridgeAgent + MacPerl, ~5 min)
 ctest --test-dir build
 
-# Playwright E2E tests (~2 min)
+# Playwright E2E (~2 min)
 npx playwright test
 
-# Both suites
+# Everything
 ctest --test-dir build && npx playwright test
 ```
 
@@ -35,47 +38,72 @@ ctest --test-dir build -R boot_uae
 ctest --test-dir build -V
 
 # Run by label
-ctest --test-dir build -L api    # API-only tests
-ctest --test-dir build -L boot   # Tests that require booting
-ctest --test-dir build -L guest  # Tests that require the BridgeAgent installed
+ctest --test-dir build -L unit     # mac_roman, browser_shm — host-only
+ctest --test-dir build -L api      # api_endpoints, config_api, extfs
+ctest --test-dir build -L boot     # boot_*, mouse_position*, command_bridge*
+ctest --test-dir build -L bridge   # wne_patch_sanity
+ctest --test-dir build -L guest    # guest_suite{,_761,_ppc}
 ```
 
 ### Test List
 
-| Name | File | Suite | Time | What it tests |
+| Name | File | Label | Time | What it tests |
 |------|------|-------|------|---------------|
-| `api_endpoints` | `test_api_endpoints.sh` | api | ~5s | All API endpoints return expected HTTP status codes and JSON fields (10 checks) |
-| `config_api` | `test_config_api.sh` | api | ~5s | Config round-trip, CDROM config, boot driver settings |
-| `boot_uae` | `test_boot_to_finder.sh` | boot | ~8s | UAE backend boots Mac OS to Finder, tracking boot phases |
-| `boot_unicorn` | `test_boot_to_finder.sh` | boot | ~50s | Unicorn backend boots to Finder (slow — JIT compilation) |
-| `mouse_position` | `test_mouse_position.sh` | boot | ~10s | Absolute and relative mouse movement via POST /api/mouse, verifies Mac OS reflects changes (8 checks) |
-| `command_bridge` | `test_command_bridge.sh` | boot | ~10s | `/api/app`, `/api/windows`, `/api/wait` (read commands), `/api/launch` (BridgeAgent dispatch) — 7 checks |
-| `guest_suite` | `test_guest_suite.sh` | guest | ~30s | Boots, dispatches `MacTestSuite.pl` to MacPerl via `/api/launch`, reads results back from ExtFS (m68k) |
-| `guest_suite_ppc` | `test_guest_suite.sh` | guest | ~60s | Same, on Mac OS 9 / PPC via the 68k emulator |
+| `mac_roman` | `test_mac_roman.cpp` | unit | ~1s | MacRoman ↔ UTF-8 codec round-trip |
+| `browser_shm` | `test_browser_shm.cpp` | unit | ~1s | BrowserShm SPSC ring (10 cases / 47 assertions) |
+| `api_endpoints` | `test_api_endpoints.sh` | api | ~5s | All `/api/*` endpoints return expected status + JSON |
+| `config_api` | `test_config_api.sh` | api | ~5s | Config round-trip, CD-ROM config, boot driver |
+| `extfs` | `test_extfs.sh` | api | ~30s | ExtFS config, CLI, backward compat (8 checks) |
+| `boot_se` | `test_boot_se.sh` | boot | ~30s | Mac SE boot to Finder (System 6) — needs SE ROM |
+| `boot_uae_interp` | `test_boot_to_finder.sh` | boot | ~10s | UAE backend, no JIT, boots to Finder |
+| `boot_uae_jit` | `test_boot_to_finder.sh` | boot | ~10s | UAE backend, JIT, boots to Finder |
+| `boot_unicorn` | `test_boot_to_finder.sh` | boot | ~120s | Unicorn-m68k boots to Finder |
+| `boot_ppc_interp` | `test_boot_ppc.sh` | boot | ~45s | KPX interpreter boots Mac OS 7.5.5 to Finder |
+| `boot_ppc_jit` | `test_boot_ppc.sh` | boot | ~45s | KPX dyngen JIT boot attempt (currently blocked by GCC codegen) |
+| `boot_ppc_api` | `test_boot_ppc.sh` | boot | ~45s | PPC + webserver, status API + boot phase tracking |
+| `mouse_position` | `test_mouse_position.sh` | boot | ~15s | Absolute + relative mouse via POST /api/mouse (m68k) |
+| `mouse_position_ppc` | `test_mouse_position.sh` | boot | ~20s | Same, KPX backend |
+| `command_bridge` | `test_command_bridge.sh` | boot | ~20s | `/api/app`, `/api/windows`, `/api/wait`, `/api/launch` (m68k) |
+| `command_bridge_ppc` | `test_command_bridge.sh` | boot | ~20s | Same, KPX backend |
+| `wne_patch_sanity` | `test_wne_patch_sanity.sh` | bridge | ~60s | Verifies the WaitNextEvent jGNEFilter shim doesn't crash long-running idle |
+| `guest_suite` | `test_guest_suite.sh` | guest | ~60s | Boots 7.5.5, dispatches `MacTestSuite.pl` → MacPerl via `/api/launch`, reads results back from ExtFS |
+| `guest_suite_761` | `test_guest_suite.sh` | guest | ~60s | Same, 7.6.1 disk |
+| `guest_suite_ppc` | `test_guest_suite.sh` | guest | ~60s | Same, KPX backend (PPC's 68k emulator running MacPerl) |
 
 ### Configuration
 
-Tests use these defaults (override with environment variables or CMake options):
+Tests pick up paths from CMake cache or environment variables:
 
 | Setting | Default | Override |
 |---------|---------|----------|
-| ROM path | `/home/mick/quadra.rom` | `MACEMU_ROM` env var or `cmake -B build -DTEST_ROM=/path` |
-| Disk image | `/home/mick/storage/images/7.6.img` | `MACEMU_DISK` env var |
+| m68k ROM | `~/roms/quadra.rom` | `cmake -B build -DTEST_ROM=...` or `MACEMU_ROM` |
+| PPC ROM | `~/storage/roms/g3.rom` | `cmake -B build -DTEST_PPC_ROM=...` or `MACEMU_ROM` |
+| Mac SE ROM | (unset; `boot_se` skips) | `cmake -B build -DTEST_SE_ROM=...` or `MACEMU_SE_ROM` |
+| Disk image | `~/storage/images/macos-7.5.5.img` | `MACEMU_DISK`; `tests/lib/refresh_test_disk.sh` clones a fresh copy per run |
 
-Tests use dedicated ports (18090-18093) to avoid conflicts with a running emulator.
+Tests pick non-overlapping ports in the 18080–18108 range so they don't
+collide with a running emulator on :11000.
 
 ### Guest Tests (BridgeAgent + MacPerl)
 
-`guest_suite` and `guest_suite_ppc` (label: `guest`) require the test disk image to have **BridgeAgent** installed in `:System Folder:Startup Items:` so Finder auto-launches it at desktop time. The agent is what receives `/api/launch` requests, locates MacPerl by creator code, and dispatches the Perl script via a `'misc'`/`'dosc'` AppleEvent.
+`guest_suite{,_761,_ppc}` (label `guest`) need a disk image with
+**BridgeAgent** installed in `:System Folder:Startup Items:` so Finder
+auto-launches it at desktop time. The agent receives `/api/launch` calls,
+finds MacPerl by creator code, and dispatches the script via a
+`'misc'`/`'dosc'` AppleEvent. MacPerl writes `test_results.txt` back into
+the same ExtFS share the test reads from.
 
 ```bash
-# (Re)install the BridgeAgent into the test disk images
+# (Re)install BridgeAgent.bin into the test disk images
 provisioning/install_bridge_agent.sh
 ```
 
-The script writes `BridgeAgent/BridgeAgent.bin` (which is committed to the repo) into the disk images via `hcopy`. Rebuild the agent with `make -C BridgeAgent` if you change `bridge_agent.c`; the Makefile expects the Retro68 toolchain at `~/Retro68`.
-
-The test harness boots the emulator with `--bridge --extfs <tmp>` (the temp dir doubles as the bridge transport and the `Host:` volume the script reads/writes), waits for the agent to drop `bridge_heartbeat`, posts to `/api/launch`, and reads `test_results.txt` back from the same dir.
+`BridgeAgent/BridgeAgent.bin` is committed; the install script `hcopy`s it
+into the image. `cmake --build build` rebuilds it from `BridgeAgent.c`
+when Retro68 is detected (default at `~/Retro68`); opt out with
+`-DBUILD_BRIDGE_AGENT=OFF`. The harness runs the emulator with
+`--bridge --extfs <tmp>` and waits for `bridge_heartbeat` before posting
+to `/api/launch`.
 
 ## Playwright E2E Tests
 
@@ -97,17 +125,18 @@ npx playwright test --ui
 
 ### Test Specs
 
-| File | Tests | What it covers |
-|------|-------|----------------|
-| `ui-basic.spec.ts` | 5 | Page loads without JS errors, all UI controls present, dropdowns populated |
-| `emulator.spec.ts` | 4 | Start/stop buttons hit correct API endpoints, status JSON structure |
-| `stop-reset.spec.ts` | 7 | Start/stop/restart state machine, button label toggling, CPU halt verification |
-| `screenshot.spec.ts` | 2 | /api/screenshot returns 503 when stopped, valid PNG when running |
-| `mouse-input.spec.ts` | 3 | Absolute/relative mouse via HTTP API, position readback after boot |
-| `config-modal.spec.ts` | 6 | Config modal open/close, dropdown population, save persistence |
-| `settings-dialog.spec.ts` | 7 | Boot priority, disk/CDROM checkboxes, ROM dropdown, config round-trip |
-| `codec.spec.ts` | 1 | Mouse mode dropdown has options |
-| `stall-detection.spec.ts` | 7 | WebRTC mouse latency (<500ms), framebuffer pixel verification, 60s soak test (stall rate <2%) |
+| File | What it covers |
+|------|----------------|
+| `ui-basic.spec.ts` | Page loads, no JS errors, controls present, dropdowns populated |
+| `emulator.spec.ts` | Start/stop buttons, status JSON shape |
+| `stop-reset.spec.ts` | Start/stop/restart state machine, CPU halt |
+| `screenshot.spec.ts` | `/api/screenshot` 503 when stopped, valid PNG when running |
+| `mouse-input.spec.ts` | Absolute/relative mouse via HTTP API + readback |
+| `config-modal.spec.ts` | Config modal open/close, persistence |
+| `settings-dialog.spec.ts` | Boot priority, disk/CD-ROM checkboxes, ROM dropdown, round-trip |
+| `codec.spec.ts` | Mouse-mode dropdown has options |
+| `codec-fullstack.spec.ts` | Codec switching (h264/vp9/png/webp/httpstream) end-to-end |
+| `stall-detection.spec.ts` | WebRTC mouse latency, pixel verification, 60s soak (stall rate <2%) |
 
 ### Architecture
 

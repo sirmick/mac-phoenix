@@ -1,278 +1,116 @@
-# JIT Self-Modifying Code Detection: What Unicorn Broke
+# JIT SMC detection in the Unicorn fork
 
-## Executive Summary
+What's wired and what's stubbed in Unicorn's QEMU fork around
+self-modifying-code detection, what that means for us, and where the
+safety nets are.
 
-Unicorn's QEMU fork has **systematically gutted** the dirty memory bitmap system that QEMU uses to detect self-modifying code (SMC). This is why we need the `uc_ctl_flush_tb()` 60x/second workaround. This document explains exactly what was removed, what still partially works, and the options for fixing it.
-
-## The Problem
-
-Mac OS writes over RAM containing our EmulOp patch code during heap allocation. QEMU's JIT retains compiled translations for the old code. Executing stale translation blocks (TBs) crashes at `PC=0x00000002`.
-
-Our current workaround: flush the **entire** JIT cache 60 times per second via `uc_ctl_flush_tb()` in the timer interrupt. This works but defeats much of the JIT's benefit.
-
-## How QEMU's SMC Detection Works (Upstream)
-
-QEMU has a multi-layer system for detecting when guest code writes over previously-compiled code:
-
-### Layer 1: Dirty Memory Bitmap
-
-QEMU maintains a per-page dirty bitmap (`ram_list.dirty_memory[DIRTY_MEMORY_CODE]`). Each bit tracks whether a page containing compiled code has been written to since it was last compiled.
-
-### Layer 2: TLB_NOTDIRTY Flag
-
-When `tb_gen_code()` compiles a new translation block:
-
-1. It calls `tlb_reset_dirty_by_vaddr()` (`cputlb.c:644-660`)
-2. This sets `TLB_NOTDIRTY` on the TLB entry's `addr_write` for that page
-3. Future guest stores to that page go through the slow path
-
-### Layer 3: store_helper / notdirty_write
-
-When guest code writes to a page with `TLB_NOTDIRTY` set:
-
-1. `store_helper()` (`cputlb.c:2362`) checks: `if (tlb_addr & TLB_NOTDIRTY)`
-2. Calls `notdirty_write()` (`cputlb.c:1189`)
-3. `notdirty_write()` calls `tb_invalidate_phys_page_fast()` (`translate-all.c:2019`)
-4. This looks up the `PageDesc` for the written page and invalidates affected TBs
-5. `cpu_physical_memory_set_dirty_flag()` marks the page dirty
-6. `tlb_set_dirty()` removes `TLB_NOTDIRTY` so future writes go fast
-
-### Layer 4: invalidate_and_set_dirty (API writes)
-
-When the host writes to guest memory via `uc_mem_write()` / `flatview_write_continue()`:
-
-1. After the `memcpy()`, calls `invalidate_and_set_dirty()`
-2. This checks if the page is clean (contains compiled code)
-3. If so, calls `tb_invalidate_phys_range()` to invalidate affected TBs
-
-### The Full Cycle
+## Upstream QEMU's SMC machinery
 
 ```
-tb_gen_code() compiles code at page P
-  → tlb_reset_dirty_by_vaddr(P) sets TLB_NOTDIRTY
-  → cpu_physical_memory_is_clean(P) checked → true → flag stays
+tb_gen_code(page P)
+  → tlb_reset_dirty_by_vaddr(P)             // sets TLB_NOTDIRTY on the entry
+  → cpu_physical_memory_is_clean(P)         // checked, kept "clean" while compiled
 
-Guest writes to page P:
-  → store_helper() sees TLB_NOTDIRTY
+guest write to page P (with TLB_NOTDIRTY set)
+  → store_helper()
   → notdirty_write()
-    → tb_invalidate_phys_page_fast() — INVALIDATES STALE TBs
-    → cpu_physical_memory_set_dirty_flag(P) — marks page dirty
-    → tlb_set_dirty() — removes TLB_NOTDIRTY for fast future writes
+    → tb_invalidate_phys_page_fast(P)       // kills stale TBs
+    → cpu_physical_memory_set_dirty_flag(P) // marks page dirty
+    → tlb_set_dirty()                       // future writes go fast-path
 
-Next time tb_gen_code() compiles at page P:
-  → Cycle repeats
+uc_mem_write() / flatview_write_continue() to page P
+  → memcpy
+  → invalidate_and_set_dirty()
+    → if is_clean(P), tb_invalidate_phys_range()
 ```
 
-## What Unicorn Gutted
+## What's stubbed in Unicorn's fork
 
-### ram_addr.h — Every dirty bitmap function stubbed
-
-File: `subprojects/unicorn/qemu/include/exec/ram_addr.h`
+`subprojects/unicorn/qemu/include/exec/ram_addr.h` — every dirty-bitmap
+helper is a no-op or returns a hardcoded value:
 
 ```c
-// ALWAYS returns "clean" — every page looks like it has compiled code
-static inline bool cpu_physical_memory_is_clean(ram_addr_t addr)
-{
-    return true;   // upstream: checks dirty bitmap
-}
-
-// NO-OP — dirty flag never gets set
-static inline void cpu_physical_memory_set_dirty_flag(ram_addr_t addr,
-                                                      unsigned client)
-{
-}   // upstream: sets bit in dirty_memory[client]
-
-// NO-OP — dirty range never gets set
-static inline void cpu_physical_memory_set_dirty_range(ram_addr_t start,
-                                                       ram_addr_t length,
-                                                       uint8_t mask)
-{
-}   // upstream: sets range of bits
-
-// ALWAYS returns false — nothing is ever "dirty"
-static inline bool cpu_physical_memory_get_dirty(ram_addr_t start,
-                                                 ram_addr_t length,
-                                                 unsigned client)
-{
-    return false;   // upstream: checks bitmap
-}
+static inline bool cpu_physical_memory_is_clean(ram_addr_t)         { return true;  }
+static inline void cpu_physical_memory_set_dirty_flag(...)          { /* nothing */ }
+static inline void cpu_physical_memory_set_dirty_range(...)         { /* nothing */ }
+static inline bool cpu_physical_memory_get_dirty(...)               { return false; }
 ```
 
-### exec.c — invalidate_and_set_dirty emptied
+`subprojects/unicorn/qemu/exec.c` — `invalidate_and_set_dirty()` is
+empty; `flatview_write_continue()` does a raw memcpy with no
+post-write invalidation; `cpu_physical_memory_test_and_clear_dirty`
+hardcodes `false`.
 
-File: `subprojects/unicorn/qemu/exec.c:1531-1534`
+`subprojects/unicorn/qemu/accel/tcg/translate-all.c` —
+`page_collection_lock()` is `#if 0`'d out, but that's harmless on m68k
+(`TARGET_HAS_PRECISE_SMC` isn't defined for m68k, only x86; the fast
+path doesn't need the lock).
 
-```c
-static void invalidate_and_set_dirty(MemoryRegion *mr, hwaddr addr,
-                                     hwaddr length)
-{
-}   // upstream: checks is_clean(), calls tb_invalidate_phys_range()
-```
+## What still works
 
-Also: `flatview_write_continue()` at line 1597 does a raw `memcpy()` for RAM writes. Upstream QEMU would call `invalidate_and_set_dirty()` after the memcpy — Unicorn both **removed the call site** and **emptied the function body**.
+Because `is_clean()` always returns true, every RAM page gets
+`TLB_NOTDIRTY` set on first TLB fill. That means **every guest store**
+goes through `store_helper` → `notdirty_write` → which **is wired
+correctly**, including the `mr->perms & UC_PROT_EXEC` check that gates
+TB invalidation. Guest m68k stores into executable pages *do* invalidate
+stale TBs.
 
-### translate-all.c — page_collection_lock disabled
+Cost: every RAM page stays in the slow path forever, because
+`set_dirty_flag()` is a no-op so `notdirty_write` never transitions a
+page to fast writes. That's a permanent perf tax — see
+`UnicornPerformanceAnalysis.md`. Restoring `set_dirty_flag()` is the
+top open lever.
 
-File: `subprojects/unicorn/qemu/accel/tcg/translate-all.c:644`
+## Three write paths, three answers
 
-```c
-struct page_collection *
-page_collection_lock(struct uc_struct *uc, tb_page_addr_t start, tb_page_addr_t end)
-{
-#if 0
-    // ... entire implementation disabled ...
-#endif
-    return NULL;
-}
-```
+| Write path | TB invalidation | mac-phoenix usage |
+|------------|-----------------|-------------------|
+| Guest m68k stores (`MOVE`, `CLR`, …) | partial via `notdirty_write` → `tb_invalidate_phys_page_fast` — works | Mac OS heap manager overwriting EmulOp patches |
+| `uc_mem_write()` API | broken — empty `invalidate_and_set_dirty`, raw memcpy | ROM patching at startup; not a problem since JIT hasn't run yet |
+| Host pointer writes via `uc_mem_map_ptr` | invisible to QEMU | BasiliskII's `put_long()` etc. — these can produce stale TBs |
 
-This is actually **not harmful for M68K** because `TARGET_HAS_PRECISE_SMC` is not defined for M68K (only x86). The `page_collection_lock()` return value is passed through `notdirty_write()` → `tb_invalidate_phys_page_fast()`, but the fast path doesn't need the lock to work.
+The third path is the loose end — when an EmulOp handler writes to RAM
+via host pointer arithmetic, QEMU sees nothing. Most of the time the
+written address isn't a code page; when it is, the STALE-TB detector
+catches it.
 
-### exec.c — test_and_clear_dirty hardcoded
+## STALE-TB safety net
 
-File: `subprojects/unicorn/qemu/exec.c:808`
+`hook_block()` validates expected EmulOp opcodes at execution time. If
+a block's first instruction has been overwritten since compile, the
+detector forces a **targeted** `uc_ctl_flush_tb()` on that block before
+it runs.
 
-```c
-bool cpu_physical_memory_test_and_clear_dirty(ram_addr_t start,
-                                              ram_addr_t length,
-                                              unsigned client)
-{
-    return false;   // upstream: atomically tests and clears bitmap
-}
-```
+Numbers from a 30 s boot:
 
-## What Still Partially Works
+- 0 blanket TB-cache flushes (we removed the earlier 60 Hz
+  `uc_ctl_flush_tb()` workaround once the `notdirty_write` path was
+  confirmed to handle most of the SMC).
+- ~18 targeted STALE-TB flushes, all in the `0x0001ca…0x0001ce` system
+  heap range. 100× fewer flushes than the old workaround.
 
-Because `cpu_physical_memory_is_clean()` always returns `true`, the `TLB_NOTDIRTY` flag gets set on **every** RAM page (at `cputlb.c:877-878`). This means:
+The detector is **production code**. Don't strip it when cleaning up
+`hook_block`. Final boot state with and without it is identical
+(`$0b78 = 0xfd89ffff` either way), but the detector keeps that true
+under workloads we haven't characterised.
 
-1. **Every guest write** goes through `store_helper()` → `notdirty_write()` slow path
-2. `notdirty_write()` checks `mr->perms & UC_PROT_EXEC` (Unicorn addition at `cputlb.c:1199`)
-3. If the page is executable, calls `tb_invalidate_phys_page_fast()` — **THIS WORKS**
+## What it would take to fix properly
 
-So **guest-to-guest SMC detection partially works** for M68K instructions writing to executable pages. The Mac OS heap manager writing over our EmulOp patches with M68K `MOVE` instructions should trigger TB invalidation.
+Restore the dirty bitmap. Re-implement the four `ram_addr.h` helpers
+against an actual per-`RAMBlock` bitmap, hook `tb_invalidate_phys_page_fast`
+on dirty→clean transitions, populate it via `tlb_reset_dirty_by_vaddr`
+on TB compilation. Then drop the no-op stubs, drop the STALE-TB safety
+net, and the slow-path tax on every RAM write goes away too. Big change
+in deep QEMU infrastructure; not done.
 
-### But there are problems:
+## Files
 
-1. **`set_dirty_flag()` is a no-op**: After `notdirty_write()` invalidates TBs, it would normally mark the page dirty so future writes go through the fast path. Since `set_dirty_flag()` is empty, the page **never transitions out of the slow path**. Every write to every page goes through `notdirty_write()` forever. This is a permanent performance penalty.
-
-2. **`tlb_set_dirty()` conditions**: The `notdirty_write()` at line 1211-1214 has conditions that may prevent `tlb_set_dirty()` from being called, keeping pages in the slow path even longer.
-
-3. **Stale state between TLB flushes**: The dirty bitmap tracks state across TLB flushes. Without it, there's no persistent record of which pages need `TLB_NOTDIRTY`. When the TLB is flushed (via `tlb_flush()` on context switches or `uc_ctl_flush_tb()`), all entries are rebuilt from scratch. `is_clean()` returns `true` for everything, so `TLB_NOTDIRTY` gets set on everything again.
-
-## Three Broken Write Paths
-
-| Write Path | TB Invalidation? | macemu Usage |
-|---|---|---|
-| Guest M68K stores (`MOVE`, etc.) | **Partial** — via `notdirty_write()` → `tb_invalidate_phys_page_fast()` | Mac OS heap manager overwrites |
-| `uc_mem_write()` API | **BROKEN** — `flatview_write_continue()` does raw memcpy, then `invalidate_and_set_dirty()` is empty | ROM patching at startup |
-| Host pointer writes via `uc_mem_map_ptr()` | **BROKEN** — bypasses QEMU entirely | BasiliskII's `put_long()` etc. |
-
-### For macemu specifically:
-
-- **ROM patching** (`uc_mem_write()`): Only happens at startup before JIT runs. **Not a problem.**
-- **EmulOp installation** (`uc_mem_write()`): Happens at startup. **Not a problem.**
-- **Mac OS heap overwrites** (guest M68K stores): Partially handled by `notdirty_write()`. **May be sufficient** if the `UC_PROT_EXEC` check covers our RAM.
-- **BasiliskII memory writes** (`put_long()` etc.): These go through host pointers. **Completely invisible to JIT.** If any EmulOp handler writes to RAM that was previously compiled... stale TBs.
-
-## Known Unicorn Issues
-
-Multiple GitHub issues document SMC detection problems:
-
-- **#1148**: `uc_mem_write()` doesn't flush translation cache
-- **#820**: Incorrect memory content after self-modifying code
-- **#1561**: Editing instruction before execution doesn't take effect
-- **#1344**: `uc_mem_map_ptr()` synchronization issues
-- **#437**: Stale TB after `HOOK_CODE` modification
-
-## Fix Options
-
-### Option A: Restore Dirty Memory Bitmap
-
-**Approach**: Re-implement the stubbed functions in `ram_addr.h` with actual bitmap tracking.
-
-**Pros**: Most correct fix, matches upstream QEMU behavior.
-**Cons**: Most work. Requires understanding QEMU's `ram_list.dirty_memory[]` allocation, the `DirtyMemoryBlocks` structure, and atomic bitmap operations. Risk of introducing new bugs.
-
-**Effort**: High. Needs careful study of upstream QEMU's memory.c implementation.
-
-### Option B: Add TB Invalidation to uc_mem_write()
-
-**Approach**: In `flatview_write_continue()`, after the `memcpy()`, call `tb_invalidate_phys_range()` for the written range if the page contains compiled code.
-
-**Pros**: Targeted fix for API writes. Relatively simple.
-**Cons**: Only fixes `uc_mem_write()` path, not host pointer writes. For our case, startup-only writes via `uc_mem_write()` aren't the main problem.
-
-**Effort**: Low. ~5 lines of code.
-
-### Option C: Use uc_ctl_remove_cache() for Specific Ranges
-
-**Approach**: From macemu, call `uc_ctl_remove_cache(start, end)` whenever we know we've written to memory that might contain compiled code. This is finer-grained than `uc_ctl_flush_tb()`.
-
-**Pros**: No Unicorn fork changes needed. Precise invalidation.
-**Cons**: Requires knowing exactly when and where writes happen. Mac OS heap writes happen inside the emulated CPU — we can't intercept them from the host side without hooks.
-
-**Effort**: Medium. Would need memory write hooks on the EmulOp code ranges.
-
-### Option D: Smarter Timer-Based Flush
-
-**Approach**: Instead of flushing the entire TB cache, track which pages were written (via write hooks or bitmap) and only flush those.
-
-**Pros**: Better than current 60Hz full flush. No Unicorn fork changes.
-**Cons**: Still polling-based. Write hooks add overhead.
-
-**Effort**: Medium.
-
-### Option E: Verify Guest-to-Guest Path Works
-
-**Approach**: The partial `notdirty_write()` path may already handle our main problem (Mac OS heap overwriting EmulOp patches). Verify this by:
-1. Checking that RAM pages are mapped with `UC_PROT_EXEC`
-2. Testing if removing the 60Hz `uc_ctl_flush_tb()` still works
-3. If it does, the `notdirty_write()` path is handling it
-
-**Pros**: Might require no code changes at all! Just removing the workaround.
-**Cons**: May reveal edge cases. Need thorough testing.
-
-**Effort**: Low. Just testing.
-
-## Test Results: Option E Verified (March 2026)
-
-**The 60Hz `uc_ctl_flush_tb()` has been removed.** Testing confirmed:
-
-| Metric | With 60Hz flush | Without 60Hz flush |
-|---|---|---|
-| Full TB cache flushes | **1,804** (60Hz × 30s) | **0** |
-| STALE-TB targeted flushes | 18 | 18 |
-| Boot progress ($0b78) | `0xfd89ffff` | `0xfd89ffff` |
-| Final state (PC, TopMap, etc.) | Identical | Identical |
-
-The `notdirty_write()` path handles most SMC. A small number of stale TBs (18 in 30 seconds, all in the 0x0001ca-0x0001ce system heap range) are caught by the existing STALE-TB detector in `hook_block()`, which performs targeted `uc_ctl_flush_tb()` calls only when stale code is detected.
-
-**The STALE-TB detector is NOT debug cruft** — it's a production SMC safety net. It must be preserved when cleaning up `hook_block()`. The 18 targeted flushes replace 1,804 blanket flushes (100x reduction).
-
-### Why notdirty_write() misses some cases
-
-The 18 remaining stale TBs are likely caused by:
-1. Host-side writes via `put_long()` / `Mac2HostAddr()` in EmulOp handlers — these go through direct host pointers, completely bypassing QEMU's memory system
-2. Or edge cases in TLB repopulation where `TLB_NOTDIRTY` isn't set before a write occurs
-
-The STALE-TB detector catches these because it validates block contents at execution time, regardless of how the memory was modified.
-
-## Key Files
-
-| File | What It Contains |
-|---|---|
-| `subprojects/unicorn/qemu/include/exec/ram_addr.h` | **THE SMOKING GUN** — all dirty bitmap functions stubbed |
-| `subprojects/unicorn/qemu/exec.c:1531` | Empty `invalidate_and_set_dirty()` |
-| `subprojects/unicorn/qemu/exec.c:1597` | Raw `memcpy()` in `flatview_write_continue()` |
-| `subprojects/unicorn/qemu/accel/tcg/cputlb.c:877` | `TLB_NOTDIRTY` set based on `is_clean()` (always true) |
-| `subprojects/unicorn/qemu/accel/tcg/cputlb.c:1189` | `notdirty_write()` — partial SMC detection |
-| `subprojects/unicorn/qemu/accel/tcg/cputlb.c:2362` | `store_helper()` — checks `TLB_NOTDIRTY` |
-| `subprojects/unicorn/qemu/accel/tcg/translate-all.c:644` | `page_collection_lock()` — `#if 0`'d out |
-| `subprojects/unicorn/qemu/accel/tcg/translate-all.c:1841` | `tb_gen_code()` — `tlb_reset_dirty_by_vaddr()` |
-| `subprojects/unicorn/qemu/accel/tcg/translate-all.c:2019` | `tb_invalidate_phys_page_fast()` — **WORKS** |
-| `src/cpu/unicorn_wrapper.c` | Our `hook_block()` with 60Hz `uc_ctl_flush_tb()` workaround |
-
-## See Also
-
-- [cpu/UnicornQuirks.md](cpu/UnicornQuirks.md) — JIT TB invalidation section
-- Unicorn Issues: #1148, #820, #1561, #1344, #437
+- `subprojects/unicorn/qemu/include/exec/ram_addr.h:75` — the smoking gun.
+- `subprojects/unicorn/qemu/exec.c` — empty `invalidate_and_set_dirty`,
+  raw `memcpy` in `flatview_write_continue`.
+- `subprojects/unicorn/qemu/accel/tcg/cputlb.c:877` — where `TLB_NOTDIRTY`
+  gets set; `:1189` is `notdirty_write`; `:2362` is `store_helper`.
+- `subprojects/unicorn/qemu/accel/tcg/translate-all.c:2019` —
+  `tb_invalidate_phys_page_fast` (working).
+- `src/cpu/unicorn_wrapper.c` — `hook_block` STALE-TB detector and
+  targeted-flush call.

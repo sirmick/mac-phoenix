@@ -246,9 +246,12 @@ read(rom_fd, ROMBaseHost, ROMSize);
 close(rom_fd);
 ```
 
-## Unicorn Backend Memory Map (March 2026)
+## Unicorn-m68k memory map
 
-The Unicorn backend maps a much larger address space than the basic RAM+ROM layout, covering the full 32-bit address space. The layout below is for the **Quadra 650** profile (32 MB RAM, 32-bit addressing). Other machine profiles will have different RAM sizes and ROM placements, but the overall structure is similar:
+The Unicorn backend maps the full 32-bit address space, not just RAM +
+ROM. Layout below is the **Quadra 650** profile (32 MB RAM, 32-bit
+addressing). Other machine profiles vary in RAM size and ROM placement
+but follow the same shape:
 
 ```
 Region              Address Range           Size      Content
