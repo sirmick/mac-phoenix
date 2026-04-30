@@ -145,6 +145,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     if (req.path == "/api/launch" && req.method == "POST") {
         return handle_launch(req);
     }
+    if (req.path == "/api/script" && req.method == "POST") {
+        return handle_script(req);
+    }
     if (req.path == "/api/quit" && req.method == "POST") {
         return handle_quit(req);
     }
@@ -1352,6 +1355,106 @@ Response APIRouter::handle_launch(const Request& req) {
 
     bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
     return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge agent\"}");
+}
+
+// POST /api/script — generic 'misc'/'dosc' ("do script") to any classic-Mac
+// scripting host. Body:
+//   { "creator": "<4-char OSType>", "script": "<utf-8 source>" }
+// Or, for non-ASCII bodies that need exact MacRoman bytes:
+//   { "creator": "<4-char OSType>", "script_b64": "<base64 of mac-roman bytes>" }
+//
+// Examples:
+//   { "creator": "McPL", "script": "print 'hi from perl';\n" }      → MacPerl
+//   { "creator": "LAND", "script": "msg(\"hi\")" }                  → Frontier UserLand
+//   { "creator": "MPS ", "script": "Echo hi" }                      → MPW Shell
+//   { "creator": "ToyS", "script": "say \"hi\"" }                   → AppleScript editor
+//
+// The host is responsible for any language-specific quirks (e.g. MacPerl's
+// \r-vs-\n eval bug). BridgeAgent just delivers the source verbatim.
+Response APIRouter::handle_script(const Request& req) {
+    nlohmann::json j;
+    try {
+        j = json_utils::parse(req.body);
+    } catch (const std::exception&) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"invalid JSON\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+
+    if (!j.contains("creator") || !j["creator"].is_string()) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"missing 'creator' field (4-char OSType)\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+    std::string creator = j["creator"].get<std::string>();
+    if (creator.size() != 4) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"'creator' must be exactly 4 characters\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+
+    // Resolve script body — either inline UTF-8 string or base64 bytes.
+    std::string script;
+    if (j.contains("script") && j["script"].is_string()) {
+        script = j["script"].get<std::string>();
+    } else if (j.contains("script_b64") && j["script_b64"].is_string()) {
+        const std::string& b64 = j["script_b64"].get_ref<const std::string&>();
+        static const int8_t b64_tab[256] = {
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
+            52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,
+            -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
+            15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
+            -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+            41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,
+        };
+        int buf_val = 0, buf_bits = 0;
+        script.reserve(b64.size() * 3 / 4);
+        for (char c : b64) {
+            if (c == '=' || c == '\n' || c == '\r' || c == ' ') continue;
+            int v = b64_tab[(uint8_t)c];
+            if (v < 0) {
+                Response r; r.set_status(400);
+                r.set_body("{\"error\": \"invalid base64 in 'script_b64'\"}");
+                r.set_content_type("application/json");
+                return r;
+            }
+            buf_val = (buf_val << 6) | v;
+            buf_bits += 6;
+            if (buf_bits >= 8) {
+                buf_bits -= 8;
+                script.push_back((char)((buf_val >> buf_bits) & 0xff));
+            }
+        }
+    } else {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"missing 'script' or 'script_b64' field\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+
+    // 1 MB cap matches the BridgeAgent's NewPtr budget plus the AE Manager's
+    // practical limit on dosc payloads.
+    if (script.size() > 1024 * 1024) {
+        return Response::json(
+            "{\"success\": false, \"error\": \"script too large (>1MB)\"}");
+    }
+
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+        return Response::json(
+            "{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
+    }
+
+    // Body in BR_FILE_SCRIPT, command in BR_FILE_CMD. Order matters — the agent
+    // can fire as soon as it sees _bridge_cmd, so the script body must be
+    // visible first.
+    bridge_write_file(cfg.bridge_dir, "_bridge_script", script);
+    return bridge_command(("SCRIPT " + creator).c_str(), 100);
 }
 
 Response APIRouter::handle_quit(const Request& req) {

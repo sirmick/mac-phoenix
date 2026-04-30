@@ -143,7 +143,8 @@ client/                             — Browser UI (vanilla JS)
 | `/api/app` | GET | Current app name (read command — peek `CurApName`) |
 | `/api/windows` | GET | Window list (read command — walk `WindowList`) |
 | `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` |
-| `/api/launch` | POST | Launch app or open document via BridgeAgent: `{"path":"HD:App","open":bool?}` |
+| `/api/launch` | POST | Launch app via BridgeAgent: `{"path":"HD:App"}`. With `"open":true`, opens the document via generic `'aevt'/'odoc'` (any registered creator: Frontier `LAND`, MacPerl `McPL`, MPW `MPS `, …) |
+| `/api/script` | POST | Generic do-script via `'misc'/'dosc'`: `{"creator":"McPL","script":"..."}` (or `"script_b64"` for exact MacRoman bytes). Works for MacPerl, Frontier UserLand, MPW Shell, AppleScript editor — any app registered for `dosc`. |
 | `/api/quit` | POST | Quit front app via BridgeAgent (`kAEQuitApplication`) |
 | `/api/shutdown` | POST | Graceful guest OS shutdown via BridgeAgent (`ShutDwnPower`) |
 | `/api/restart` | POST | Graceful guest OS restart via BridgeAgent (`ShutDwnStart`) |

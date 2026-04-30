@@ -60,10 +60,16 @@ POST /api/shutdown
 | Command | Argument | Guest action |
 |---------|----------|--------------|
 | `LAUNCH <path>` | HFS path | `LaunchApplication` on the FSSpec |
-| `OPEN <path>` | HFS path to a doc | Find owning app via Desktop DB, launch it, then `'misc'`/`'dosc'` AppleEvent (used to dispatch Perl scripts to MacPerl) |
+| `OPEN <path>` | HFS path to a doc | Find owning app via Desktop DB, launch it, send generic `'aevt'/'odoc'` with the doc as a typeAlias list — same AE Finder sends on double-click. Works for any registered creator (Frontier `LAND`, MacPerl `McPL`, ResEdit, …) |
+| `SCRIPT <creator>` | 4-char OSType, body in `_bridge_script` | Find app by creator, launch it, send `'misc'/'dosc'` with the body as `typeChar` direct parameter. Generic over any "do script" host — MacPerl, Frontier UserLand 5, MPW Shell, AppleScript editor |
 | `QUIT` | — | `kAEQuitApplication` to the front process |
 | `SHUTDOWN` | — | Best-effort Quit AE to every other app, then `ShutDwnPower()` |
 | `RESTART` | — | Same, but `ShutDwnStart()` |
+| `SET_CLIPBOARD` | body in `_bridge_clipboard` | `ZeroScrap` + `PutScrap('TEXT', …)` after a SetFrontProcess round-trip |
+
+Language-specific quirks (e.g. MacPerl needs `\n`, not Mac-style `\r`, in
+`eval` bodies to install sub defs) are the **host's** responsibility, not
+the bridge's. The agent just delivers the source verbatim.
 
 **Why `ShutDwnPower`/`ShutDwnStart` instead of an AppleEvent to Finder?** Inside Macintosh Vol VI shows that Finder only handles the four Required Apple Events (Open App, Open Docs, Print Docs, Quit App). `kAEShutDown`/`kAERestart` are events Finder *sends*, not ones it receives — so an AE-to-Finder shutdown silently no-ops. The Shutdown Manager is the entry point Finder itself uses after quitting apps.
 
@@ -73,8 +79,9 @@ Plain files in `cfg.bridge_dir`, which is mounted into the guest as an ExtFS vol
 
 | File | Direction | Format |
 |------|-----------|--------|
-| `_bridge_cmd` | host → guest | ASCII line: `LAUNCH path` / `OPEN path` / `QUIT` / `SHUTDOWN` / `RESTART` |
+| `_bridge_cmd` | host → guest | ASCII line: `LAUNCH path` / `OPEN path` / `SCRIPT <creator>` / `QUIT` / `SHUTDOWN` / `RESTART` / `SET_CLIPBOARD` |
 | `_bridge_result` | guest → host | Decimal OSErr, CR-terminated |
+| `_bridge_script` | host → guest | Script source for the `SCRIPT` command (any size up to 1 MiB). Single-shot — agent deletes after dispatch. |
 | `_bridge_clipboard` | host → guest | Raw MacRoman bytes from `POST /api/clipboard` (host pushes, agent applies via `ZeroScrap` + `PutScrap('TEXT', …)`, then deletes the file) |
 | `bridge_heartbeat` | guest → host | JSON: `{"heartbeat":N,"commands":N,"last_result":N,"last_cmd":"..."}` |
 | `bridge_loaded` | guest → host | Empty marker, written once at first poll |
@@ -113,12 +120,15 @@ In webserver mode the parent reads `boot_phase` out of the IPC SHM (the actual C
 | `/api/app` | GET | Current app name (read command, no guest cooperation) |
 | `/api/windows` | GET | Window list as JSON (read command) |
 | `/api/wait` | POST | Block on `boot=Finder` or `app=Name` (host-side polling of read commands) |
-| `/api/launch` | POST | `{"path":"Host:foo","open":true?}` — `LAUNCH` or `OPEN` via the agent |
+| `/api/launch` | POST | `{"path":"Host:foo","open":true?}` — `LAUNCH` or `OPEN` via the agent. With `open:true`, the file is delivered as a generic `'aevt'/'odoc'` (Frontier `LAND`, MacPerl `McPL`, ResEdit, anything registered for the doc's creator). |
+| `/api/script` | POST | `{"creator":"<4-char>","script":"<utf-8 source>"}` (or `"script_b64"` for exact MacRoman bytes) — `SCRIPT <creator>` via the agent. Generic over MacPerl, Frontier, MPW Shell, AppleScript editor. 1 MiB cap. |
 | `/api/quit` | POST | `QUIT` front app via the agent |
 | `/api/shutdown` | POST | `SHUTDOWN` via the agent (`ShutDwnPower`) |
 | `/api/restart` | POST | `RESTART` via the agent (`ShutDwnStart`) |
+| `/api/clipboard` | POST | `{"text_b64":"<base64 macroman>"}` — `SET_CLIPBOARD` via the agent |
 
-`/api/launch`, `/api/quit`, `/api/shutdown`, `/api/restart` all return:
+`/api/launch`, `/api/script`, `/api/quit`, `/api/shutdown`, `/api/restart`,
+`/api/clipboard` all return:
 
 ```json
 { "success": true, "error_code": 0 }

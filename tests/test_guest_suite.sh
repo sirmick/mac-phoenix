@@ -191,13 +191,24 @@ done
 sleep 2  # Finder settle
 
 # --- Dispatch test script via bridge ---
+#
+# Use /api/script (generic 'misc'/'dosc') instead of /api/launch with open=true.
+# The "Perl path" is just the eval-from-file stub composed here — BridgeAgent
+# stays language-agnostic. Stub does the \r→\n fix that MacPerl needs to
+# install sub defs from a slurped Mac-text-mode file.
+PERL_STUB='open(R,"<Host:MacTestSuite.pl")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
+PAYLOAD=$(python3 -c '
+import json, sys
+print(json.dumps({"creator": "McPL", "script": sys.argv[1]}))
+' "$PERL_STUB")
 
-echo "Launching MacTestSuite.pl..."
-LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/launch" \
-    -d '{"path":"Host:MacTestSuite.pl","open":true}' || echo '{"success":false}')
+echo "Dispatching MacTestSuite.pl via MacPerl..."
+LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/script" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD" || echo '{"success":false}')
 
 if ! echo "$LAUNCH" | grep -q '"success": true'; then
-    echo "FAIL: Could not launch MacTestSuite.pl"
+    echo "FAIL: Could not dispatch MacTestSuite.pl to MacPerl"
     echo "  Response: $LAUNCH"
     exit 1
 fi

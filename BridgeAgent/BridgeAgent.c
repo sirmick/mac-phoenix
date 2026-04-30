@@ -9,7 +9,14 @@
  * resolved at startup from :System Folder:Preferences:MacPhoenix.cfg
  * — host writes that file when it installs us. See bridge_cfg.h.
  * Resolved paths look like Host:MacPhoenix:<host_pid>:<leaf>):
- *   Host writes <bridge_dir>:_bridge_cmd      - "LAUNCH path" or "QUIT"
+ *   Host writes <bridge_dir>:_bridge_cmd     - one of:
+ *       LAUNCH  <hfs-path>             — LaunchApplication
+ *       OPEN    <hfs-path>             — generic 'aevt'/'odoc' to creator's app
+ *       SCRIPT  <4-char creator>       — 'misc'/'dosc' with body from
+ *                                        <bridge_dir>:_bridge_script
+ *                                        (works for McPL/LAND/MPS /ToyS/...)
+ *       QUIT / SHUTDOWN / RESTART      — Process / Shutdown manager
+ *       SET_CLIPBOARD                  — see do_set_clipboard
  *   Agent reads, deletes, executes
  *   Agent writes <bridge_dir>:_bridge_result  - decimal OSErr, CR-terminated
  *
@@ -325,6 +332,71 @@ static OSErr psn_for_creator(OSType creator, ProcessSerialNumber *outPSN)
     return procNotFound;
 }
 
+/* Launch the app for a creator (via Desktop Database lookup), wait for it
+ * to register AE handlers, return its PSN. Used by both OPEN (generic
+ * 'odoc') and SCRIPT (generic 'misc'/'dosc'). LaunchApplication brings an
+ * already-running app to front, so we don't pre-check; the 3s Delay is the
+ * tax in either case but is what classic Mac apps need to install
+ * 'misc'/'dosc' / 'aevt'/'odoc' handlers after their auto 'oapp' AE.
+ *
+ * Yield via Delay() rather than a nested WaitNextEvent loop — once the
+ * target is frontmost, BridgeAgent's own WNE doesn't always get scheduled,
+ * but Delay() is a Process Manager call that always yields. */
+static OSErr launch_app_for_creator(OSType creator, ProcessSerialNumber *outPSN)
+{
+    FSSpec appSpec;
+    OSErr err = find_app_for_creator(creator, &appSpec);
+    if (err != noErr) return err;
+
+    LaunchParamBlockRec lpb;
+    memset(&lpb, 0, sizeof(lpb));
+    lpb.launchBlockID      = extendedBlock;
+    lpb.launchEPBLength    = extendedBlockLen;
+    lpb.launchControlFlags = launchContinue | launchNoFileFlags;
+    lpb.launchAppSpec      = &appSpec;
+    err = LaunchApplication(&lpb);
+    if (err != noErr) return err;
+
+    unsigned long finalTicks;
+    Delay(180, &finalTicks);
+
+    return psn_for_creator(creator, outPSN);
+}
+
+/* Send a one-direct-parameter AppleEvent to a process by PSN.
+ * Flags match MPDrop.c (MacPerl's droplet sender) and work for any
+ * "do script"-class app: kAEAlwaysInteract (AE Manager otherwise refuses
+ * to deliver to apps that haven't called AESetInteractionAllowed),
+ * kAENoReply (target may run the script async via AESuspendTheCurrentEvent). */
+static OSErr send_aevt_psn(const ProcessSerialNumber *psn,
+                           AEEventClass cls, AEEventID id,
+                           DescType paramType, const void *paramData,
+                           long paramLen)
+{
+    AEAddressDesc target;
+    OSErr err = AECreateDesc(typeProcessSerialNumber, psn, sizeof(*psn), &target);
+    if (err != noErr) return err;
+
+    AppleEvent evt;
+    err = AECreateAppleEvent(cls, id, &target, kAutoGenerateReturnID,
+                             kAnyTransactionID, &evt);
+    AEDisposeDesc(&target);
+    if (err != noErr) return err;
+
+    err = AEPutParamPtr(&evt, keyDirectObject, paramType, paramData, paramLen);
+    if (err == noErr) {
+        err = AESend(&evt, NULL,
+                     kAENoReply | kAEAlwaysInteract,
+                     kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
+    }
+    AEDisposeDesc(&evt);
+    return err;
+}
+
+/* Open a document via 'aevt'/'odoc' — the AE that Finder sends when the
+ * user double-clicks. Generic over MacPerl, Frontier (UserLand), ResEdit,
+ * AppleScript editor, or any other app registered for the document's
+ * creator. The receiving app handles the file natively. */
 static OSErr do_open_document(const unsigned char *path)
 {
     FSSpec docSpec;
@@ -335,86 +407,110 @@ static OSErr do_open_document(const unsigned char *path)
     err = FSpGetFInfo(&docSpec, &fndrInfo);
     if (err != noErr) return err;
 
-    FSSpec appSpec;
-    err = find_app_for_creator(fndrInfo.fdCreator, &appSpec);
-    if (err != noErr) return err;
-
-    /* Launch the app with no AppParameters. We send the script via a
-     * follow-up 'misc'/'dosc' AppleEvent rather than packaging it as
-     * an 'odoc' alias on launch, because MacPerl handles dosc as the
-     * canonical "execute Perl source" entry point. */
-    LaunchParamBlockRec lpb;
-    memset(&lpb, 0, sizeof(lpb));
-    lpb.launchBlockID      = extendedBlock;
-    lpb.launchEPBLength    = extendedBlockLen;
-    lpb.launchControlFlags = launchContinue | launchNoFileFlags;
-    lpb.launchAppSpec      = &appSpec;
-    err = LaunchApplication(&lpb);
-    if (err != noErr) return err;
-
-    /* Yield via Delay() rather than a nested WaitNextEvent loop.
-     * Once MacPerl is frontmost, BridgeAgent's WNE doesn't always get
-     * scheduled; Delay() is a Process Manager call that always yields.
-     * ~3s gives MacPerl time to process its auto-generated 'oapp' AE
-     * and register the 'misc'/'dosc' handler. */
-    unsigned long finalTicks;
-    Delay(180, &finalTicks);
-
     ProcessSerialNumber appPSN;
-    if (psn_for_creator(fndrInfo.fdCreator, &appPSN) != noErr) return fnfErr;
+    err = launch_app_for_creator(fndrInfo.fdCreator, &appPSN);
+    if (err != noErr) return err;
+
+    /* 'odoc' wants typeAEList of typeAlias as the direct parameter. */
+    AliasHandle alias = NULL;
+    err = NewAlias(NULL, &docSpec, &alias);
+    if (err != noErr || alias == NULL) return err ? err : memFullErr;
 
     AEAddressDesc target;
-    err = AECreateDesc(typeProcessSerialNumber, &appPSN,
-                       sizeof(appPSN), &target);
-    if (err != noErr) return err;
+    err = AECreateDesc(typeProcessSerialNumber, &appPSN, sizeof(appPSN), &target);
+    if (err != noErr) { DisposeHandle((Handle)alias); return err; }
 
     AppleEvent evt;
-    err = AECreateAppleEvent('misc', 'dosc',
-                             &target, kAutoGenerateReturnID,
-                             kAnyTransactionID, &evt);
+    err = AECreateAppleEvent(kCoreEventClass, kAEOpenDocuments, &target,
+                             kAutoGenerateReturnID, kAnyTransactionID, &evt);
     AEDisposeDesc(&target);
+    if (err != noErr) { DisposeHandle((Handle)alias); return err; }
+
+    AEDescList docList;
+    err = AECreateList(NULL, 0, false, &docList);
+    if (err == noErr) {
+        HLock((Handle)alias);
+        err = AEPutPtr(&docList, 1, typeAlias, *alias,
+                       GetHandleSize((Handle)alias));
+        HUnlock((Handle)alias);
+        if (err == noErr) {
+            err = AEPutParamDesc(&evt, keyDirectObject, &docList);
+        }
+        AEDisposeDesc(&docList);
+    }
+    DisposeHandle((Handle)alias);
+
+    if (err == noErr) {
+        err = AESend(&evt, NULL, kAENoReply | kAEAlwaysInteract,
+                     kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
+    }
+    AEDisposeDesc(&evt);
+    return err;
+}
+
+/* Read Host:_bridge_script into a freshly NewPtr'd buffer. Caller frees.
+ * Returns noErr + (*outBuf, *outLen) on success; *outBuf is NULL on empty.
+ * The file is consumed (deleted) on success — single-shot like _bridge_cmd. */
+static OSErr load_bridge_script(char **outBuf, long *outLen)
+{
+    *outBuf = NULL;
+    *outLen = 0;
+
+    FSSpec spec;
+    Str255 path; br_cfg_path(path, BR_FILE_SCRIPT);
+    OSErr err = FSMakeFSSpec(0, 0, path, &spec);
     if (err != noErr) return err;
 
-    /* Direct parameter is a tiny Perl stub that reads the real script
-     * and evals it. We can't just inline the script body — MacPerl
-     * truncates large dosc payloads. */
-    Str255 volName;
-    HParamBlockRec vpb;
-    memset(&vpb, 0, sizeof(vpb));
-    vpb.volumeParam.ioNamePtr = volName;
-    vpb.volumeParam.ioVRefNum = docSpec.vRefNum;
-    if (PBHGetVInfoSync(&vpb) != noErr) {
-        AEDisposeDesc(&evt);
-        return ioErr;
+    short ref;
+    err = FSpOpenDF(&spec, fsRdPerm, &ref);
+    if (err != noErr) return err;
+
+    long size = 0;
+    err = GetEOF(ref, &size);
+    if (err != noErr || size < 0) { FSClose(ref); return err ? err : paramErr; }
+
+    if (size == 0) {
+        FSClose(ref);
+        FSpDelete(&spec);
+        return noErr;  /* empty script is legal, lets host send a no-op */
     }
 
-    /* MacPerl opens text files in Mac mode so the slurped content has
-     * \r line terminators, and MacPerl's eval silently fails to install
-     * sub definitions from \r-terminated source (eval returns undef
-     * with empty $@ — no error, just no subs defined). The tr/// fixes
-     * that by converting to \n before eval. */
-    char src[512];
-    int plen = volName[0];
-    int dnlen = docSpec.name[0];
-    snprintf(src, sizeof(src),
-             "open(R,\"<%.*s:%.*s\")||die;"
-             "local $/;$c=<R>;close R;"
-             "$c=~tr/\\r/\\n/;"
-             "eval $c;die $@ if $@;\r",
-             plen, (char *)volName + 1,
-             dnlen, (char *)docSpec.name + 1);
-    AEPutParamPtr(&evt, keyDirectObject, typeChar,
-                  src, (long)strlen(src));
+    char *buf = (char *)NewPtr(size);
+    if (!buf) { FSClose(ref); return memFullErr; }
 
-    /* Flags match MPDrop.c (MacPerl's own droplet sender).
-     * kAEAlwaysInteract: AE Manager otherwise refuses to deliver to
-     * apps that haven't called AESetInteractionAllowed.
-     * kAENoReply: DoScript runs async via AESuspendTheCurrentEvent. */
-    err = AESend(&evt, NULL,
-                 kAENoReply | kAEAlwaysInteract,
-                 kAENormalPriority,
-                 kAEDefaultTimeout, NULL, NULL);
-    AEDisposeDesc(&evt);
+    long rlen = size;
+    err = FSRead(ref, &rlen, buf);
+    FSClose(ref);
+    if (err != noErr && err != eofErr) { DisposePtr(buf); return err; }
+
+    FSpDelete(&spec);
+    *outBuf = buf;
+    *outLen = rlen;
+    return noErr;
+}
+
+/* Send a script source verbatim to the app for `creator` via 'misc'/'dosc'
+ * ("do script"). Generic — works for MacPerl (creator 'McPL'), Frontier
+ * UserLand 5 ('LAND'), AppleScript editor ('ToyS'), MPW Toolserver ('MPS '),
+ * or anything else registered for 'misc'/'dosc'. The host is responsible
+ * for any language-specific escaping or workarounds (e.g. MacPerl needs
+ * \n, not \r, in eval bodies — that's a host concern, not ours). */
+static OSErr do_script(OSType creator)
+{
+    char *src = NULL;
+    long src_len = 0;
+    OSErr err = load_bridge_script(&src, &src_len);
+    if (err != noErr) return err;
+
+    ProcessSerialNumber appPSN;
+    err = launch_app_for_creator(creator, &appPSN);
+    if (err != noErr) { if (src) DisposePtr(src); return err; }
+
+    if (src && src_len > 0) {
+        err = send_aevt_psn(&appPSN, 'misc', 'dosc',
+                            typeChar, src, src_len);
+    }
+    if (src) DisposePtr(src);
     return err;
 }
 
@@ -796,6 +892,21 @@ static void poll_bridge(void)
         path[0] = (unsigned char)len;
         memcpy(path + 1, cmd + 5, len);
         result = do_open_document(path);
+    } else if (strncmp(cmd, "SCRIPT ", 7) == 0) {
+        /* "SCRIPT <4-char creator>" — body lives in BR_FILE_SCRIPT.
+         * Examples: SCRIPT McPL (MacPerl), SCRIPT LAND (Frontier
+         * UserLand), SCRIPT MPS  (MPW Shell — note the trailing space),
+         * SCRIPT ToyS (AppleScript editor). */
+        const char *cp = cmd + 7;
+        if ((int)strlen(cp) < 4) {
+            result = paramErr;
+        } else {
+            OSType creator = ((OSType)(unsigned char)cp[0] << 24)
+                           | ((OSType)(unsigned char)cp[1] << 16)
+                           | ((OSType)(unsigned char)cp[2] << 8)
+                           |  (OSType)(unsigned char)cp[3];
+            result = do_script(creator);
+        }
     } else if (strncmp(cmd, "SHUTDOWN", 8) == 0) {
         result = do_system_event(kAEShutDown);
     } else if (strncmp(cmd, "RESTART", 7) == 0) {
