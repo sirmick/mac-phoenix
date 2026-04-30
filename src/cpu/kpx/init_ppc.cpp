@@ -53,6 +53,16 @@
 
 using namespace ppc;
 
+// PVR + clock-speed defaults — read by init_ppc + name_registry_ppc to
+// stamp the kernel data block / Open Firmware properties. Lived in
+// cpu_ppc_kpx.cpp historically (x86-only); moved here so kpx_shared
+// owns them and the unicorn-ppc backend on arm64 sees a definition
+// at link time. SheepShaver-default PowerPC 7400 / AltiVec, 100 MHz.
+uint32 PVR = 0x000c0000;
+int64 TimebaseSpeed = 25000000;    // 25 MHz timebase
+int64 BusClockSpeed = 100000000;   // 100 MHz bus
+int64 CPUClockSpeed = 100000000;   // 100 MHz CPU
+
 #ifdef ENABLE_MON
 #include "mon.h"
 

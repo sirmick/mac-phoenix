@@ -80,13 +80,8 @@ namespace ppc {
 // InterruptFlags: SHARED — single definition in uae_wrapper.cpp.
 // SetInterruptFlag/ClearInterruptFlag: SHARED — defined in uae_wrapper.cpp.
 
-// PVR (Processor Version Register) - PowerPC 7400 with AltiVec (matching SheepShaver default)
-uint32 PVR = 0x000c0000;
-
-// Clock speeds (matching SheepShaver defaults, int64 to match legacy)
-int64 TimebaseSpeed = 25000000;    // 25 MHz timebase
-int64 BusClockSpeed = 100000000;   // 100 MHz bus
-int64 CPUClockSpeed = 100000000;   // 100 MHz CPU
+// PVR + clock-speed defaults moved to init_ppc.cpp (kpx_shared) so
+// the cross-arch link sees a definition. See init_ppc.cpp.
 
 // BootGlobs address (set during init, at top of RAM)
 uint32 BootGlobsAddr = 0;
