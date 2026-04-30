@@ -1,0 +1,58 @@
+# Dockerfile.sandbox — basic Ubuntu 24.04 sandbox for testing built packages
+# from dist/ against a clean install + your storage tree.
+#
+# Build:
+#   docker build -t mp-sandbox -f packaging/Dockerfile.sandbox packaging/
+#
+# Run (host network, bind-mounts):
+#   docker run -d --name mp-sandbox --network host \
+#       -v ~/storage:/home/mick/storage \
+#       -v ~/mac-phoenix/dist:/home/mick/dist \
+#       mp-sandbox sleep infinity
+#
+# Drop into a shell:
+#   docker exec -it -u mick mp-sandbox bash
+#
+# Then inside the container, e.g.:
+#   sudo apt install ~/dist/packages/ubuntu-24.04/mac-phoenix_*.deb
+#   mac-phoenix ~/storage/roms/quadra.rom &
+#   curl localhost:11000/api/status
+#
+# Tear down:
+#   docker rm -f mp-sandbox
+
+FROM ubuntu:24.04
+ARG DEBIAN_FRONTEND=noninteractive
+ARG UID=1000
+ARG GID=1000
+
+# Keep /var/lib/apt/lists populated (no `rm -rf` after install) so users can
+# `apt install ~/dist/.../mac-phoenix_*.deb` straight away without running
+# `apt update` first. ~30MB extra; fine for a dev sandbox.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        sudo \
+        ca-certificates \
+        curl \
+        less \
+        nano \
+        vim-tiny \
+        iproute2 \
+        iputils-ping \
+        net-tools \
+        procps \
+        bash-completion
+
+# Match host UID/GID so bind-mounted paths are read/writable without chown.
+# Ubuntu 24.04's base image ships with `ubuntu` at UID/GID 1000 — drop it
+# first so the typical UID=1000 host doesn't collide.
+RUN if id ubuntu >/dev/null 2>&1; then userdel -r ubuntu 2>/dev/null || true; fi \
+ && if getent group ubuntu >/dev/null; then groupdel ubuntu 2>/dev/null || true; fi \
+ && groupadd -g ${GID} mick \
+ && useradd -m -u ${UID} -g ${GID} -s /bin/bash mick \
+ && chmod 0755 /home/mick \
+ && echo 'mick ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/mick \
+ && chmod 0440 /etc/sudoers.d/mick
+
+USER mick
+WORKDIR /home/mick
+CMD ["/bin/bash"]
