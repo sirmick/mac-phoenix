@@ -97,10 +97,20 @@ jobs:
               rm -rf "$HOME/.cargo/bin"
           else
               echo "apt rust <1.75 — installing rustup stable"
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-                  | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
-              export PATH="$HOME/.cargo/bin:$PATH"
-              echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+              # GitHub Actions sets HOME=/github/home inside container jobs,
+              # but euid root has /root. rustup-init refuses to proceed on
+              # that mismatch. Pin both rustup state and CARGO_HOME under
+              # /root so installer + every later cargo invocation agree.
+              EUID_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)"
+              export RUSTUP_HOME="${EUID_HOME}/.rustup"
+              export CARGO_HOME="${EUID_HOME}/.cargo"
+              HOME="$EUID_HOME" curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                  | HOME="$EUID_HOME" sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
+              export PATH="${CARGO_HOME}/bin:$PATH"
+              echo "${CARGO_HOME}/bin" >> "$GITHUB_PATH"
+              # Persist the homes so dpkg-buildpackage's child env keeps them.
+              echo "RUSTUP_HOME=${RUSTUP_HOME}" >> "$GITHUB_ENV"
+              echo "CARGO_HOME=${CARGO_HOME}"   >> "$GITHUB_ENV"
           fi
           hash -r
           which cargo
