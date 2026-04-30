@@ -52,10 +52,14 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
               ca-certificates git sudo
+          # Inside a container the workspace dir is owned by the runner
+          # user (uid 1001) but git runs as root, tripping git's
+          # CVE-2022-24765 "dubious ownership" guard. Mark the workspace
+          # safe before checkout. Wildcard is fine here — the container
+          # is single-use per job.
+          git config --global --add safe.directory '*'
 
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install build deps
         run: |
@@ -134,8 +138,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - name: Install build deps
         run: |
           set -eux
@@ -163,8 +165,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - name: Build source tarball
         run: |
           set -eux
