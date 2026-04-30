@@ -952,7 +952,14 @@ body.fullscreen #display {
     margin-left: 8px;
 }
 
-/* Advanced settings */
+/* Collapsible config section: title bar visually fused to its content panel.
+   When closed, the toggle keeps fully rounded corners. When open, we square
+   the bottom of the toggle and the top of the content so they read as one
+   block with no seam. */
+.config-section {
+    margin-bottom: 12px;
+}
+
 .advanced-toggle {
     display: flex;
     align-items: center;
@@ -961,7 +968,6 @@ body.fullscreen #display {
     background: #1a1a1a;
     border-radius: 4px;
     cursor: pointer;
-    margin-bottom: 10px;
     color: #aaa;
     font-size: 0.75em;
     font-weight: bold;
@@ -975,6 +981,11 @@ body.fullscreen #display {
     transition: transform 0.2s;
 }
 
+.advanced-toggle.open {
+    border-radius: 4px 4px 0 0;
+    border-bottom: 1px solid #2a2a2a;
+}
+
 .advanced-toggle.open .arrow {
     transform: rotate(90deg);
 }
@@ -983,8 +994,7 @@ body.fullscreen #display {
     display: none;
     padding: 15px;
     background: #1a1a1a;
-    border-radius: 5px;
-    margin-bottom: 15px;
+    border-radius: 0 0 5px 5px;
 }
 
 .advanced-content.open {

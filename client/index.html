@@ -325,86 +325,44 @@
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label>MacBrowser</label>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cfg-browser-enabled">
+                        <label for="cfg-browser-enabled">Enable Firefox bridge — auto-mounts MacBrowser.dsk on next start</label>
+                    </div>
+                </div>
+
                 </div><!-- end modal-columns -->
 
-                <div style="margin-top:12px"></div>
-                <div class="advanced-toggle" id="advanced-toggle">
-                    <span class="arrow">&#9654;</span>
-                    <span>Advanced Settings</span>
-                </div>
-                <div class="advanced-content" id="advanced-settings">
-                    <!-- Row 1: CPU + Network side by side -->
-                    <div class="form-group">
-                        <label for="cfg-backend">CPU</label>
-                        <select id="cfg-backend">
-                            <option value="uae">UAE</option>
-                            <option value="unicorn-m68k">Unicorn (68k)</option>
-                            <option value="unicorn-ppc">Unicorn (PPC)</option>
-                            <option value="kpx">KPX</option>
-                        </select>
+                <!-- I/O: serial + network. Grouped so the Advanced section
+                     stays focused on CPU/system toggles. -->
+                <div class="config-section">
+                    <div class="advanced-toggle" id="io-toggle">
+                        <span class="arrow">&#9654;</span>
+                        <span>I/O</span>
                     </div>
-                    <div class="form-group">
-                        <label for="cfg-network">Network</label>
-                        <select id="cfg-network">
-                            <option value="none">None</option>
-                            <option value="socket">NAT (net-bridge)</option>
-                        </select>
-                    </div>
-                    <!-- Serial ports — empty = disabled. "pty" auto-allocates a
-                         pseudo-terminal at boot and logs the slave path
-                         (`screen /dev/pts/N` etc.). Anything else is opened
-                         as a path (/dev/ttyUSB0, a socat link, etc.). -->
-                    <div class="form-group">
-                        <label for="cfg-serial-a">Serial port A</label>
-                        <input type="text" id="cfg-serial-a"
-                               placeholder='off, "pty", or /dev/ttyUSB0'>
-                    </div>
-                    <div class="form-group">
-                        <label for="cfg-serial-b">Serial port B</label>
-                        <input type="text" id="cfg-serial-b"
-                               placeholder='off, "pty", or /dev/ttyUSB0'>
-                    </div>
-                    <!-- JIT toggles (shown only for backends that support them) -->
-                    <div class="form-group" id="cfg-jit-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-jit">
-                            <label for="cfg-jit">Enable JIT</label>
+                    <div class="advanced-content" id="io-settings">
+                        <div class="form-group">
+                            <label for="cfg-network">Network</label>
+                            <select id="cfg-network">
+                                <option value="none">None</option>
+                                <option value="socket">NAT (net-bridge)</option>
+                            </select>
                         </div>
-                    </div>
-                    <div class="form-group" id="cfg-jit68k-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-jit68k" checked>
-                            <label for="cfg-jit68k">Enable 68k JIT (DR emulator)</label>
+                        <!-- Serial ports — empty = disabled. "pty" auto-allocates a
+                             pseudo-terminal at boot and logs the slave path
+                             (`screen /dev/pts/N` etc.). Anything else is opened
+                             as a path (/dev/ttyUSB0, a socat link, etc.). -->
+                        <div class="form-group">
+                            <label for="cfg-serial-a">Serial port A</label>
+                            <input type="text" id="cfg-serial-a"
+                                   placeholder='off, "pty", or /dev/ttyUSB0'>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-idlewait" checked>
-                            <label for="cfg-idlewait">Pause CPU when guest is idle</label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-sound" checked>
-                            <label for="cfg-sound">Enable sound</label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-zappram">
-                            <label for="cfg-zappram">Zap PRAM on startup</label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
-                            <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss shutdown dialog</label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-bridge-enabled">
-                            <label for="cfg-bridge-enabled">Enable bridge agent</label>
+                        <div class="form-group">
+                            <label for="cfg-serial-b">Serial port B</label>
+                            <input type="text" id="cfg-serial-b"
+                                   placeholder='off, "pty", or /dev/ttyUSB0'>
                         </div>
                     </div>
                 </div>
@@ -412,7 +370,7 @@
                 <!-- Keyboard remap. Three dropdowns map each PC modifier
                      to a Mac modifier role; the held-mods chip in the
                      header relabels itself live as you change these. -->
-                <div style="margin-top:12px"></div>
+                <div class="config-section">
                 <div class="advanced-toggle" id="keyboard-toggle">
                     <span class="arrow">&#9654;</span>
                     <span>Keyboard</span>
@@ -475,6 +433,70 @@
                         Shift always sends Shift; Caps Lock always sends Caps Lock.
                         Most laptops handle Fn in firmware before the browser sees it.
                     </div>
+                </div>
+                </div>
+
+                <!-- Advanced: CPU + miscellaneous toggles. Lives at the bottom
+                     because most users never touch it. -->
+                <div class="config-section">
+                <div class="advanced-toggle" id="advanced-toggle">
+                    <span class="arrow">&#9654;</span>
+                    <span>Advanced Settings</span>
+                </div>
+                <div class="advanced-content" id="advanced-settings">
+                    <div class="form-group">
+                        <label for="cfg-backend">CPU</label>
+                        <select id="cfg-backend">
+                            <option value="uae">UAE</option>
+                            <option value="unicorn-m68k">Unicorn (68k)</option>
+                            <option value="unicorn-ppc">Unicorn (PPC)</option>
+                            <option value="kpx">KPX</option>
+                        </select>
+                    </div>
+                    <!-- JIT toggles (shown only for backends that support them) -->
+                    <div class="form-group" id="cfg-jit-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-jit">
+                            <label for="cfg-jit">Enable JIT</label>
+                        </div>
+                    </div>
+                    <div class="form-group" id="cfg-jit68k-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-jit68k" checked>
+                            <label for="cfg-jit68k">Enable 68k JIT (DR emulator)</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-idlewait" checked>
+                            <label for="cfg-idlewait">Pause CPU when guest is idle</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-sound" checked>
+                            <label for="cfg-sound">Enable sound</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-zappram">
+                            <label for="cfg-zappram">Zap PRAM on startup</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
+                            <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss shutdown dialog</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-bridge-enabled">
+                            <label for="cfg-bridge-enabled">Enable bridge agent</label>
+                        </div>
+                    </div>
+                </div>
                 </div>
 
             </div>

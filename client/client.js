@@ -1302,6 +1302,7 @@ class BasiliskWebRTC {
         // WebRTC → HTTP stream auto-fallback
         this.webrtcFallbackTimer = null;
         this.httpStreamFallbackSec = 5;  // Seconds before falling back
+        this._iceFailureFallbackFired = false;
 
     }
 
@@ -1505,6 +1506,9 @@ class BasiliskWebRTC {
 
         this.cleanup();
         connectionSteps.reset();
+        // Reset per-attempt fallback guard so the new codec can fall back on ICE
+        // failure too (the flag is set-once per connection attempt).
+        this._iceFailureFallbackFired = false;
 
         // Note: Decoder will be initialized once server sends codec in "connected" message
 
@@ -3696,6 +3700,7 @@ function configFromServerJson(cfg) {
         zappram: cfg.zappram ?? false,
         dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
         bridge_enabled: cfg.bridge_enabled ?? false,
+        browser_enabled: cfg.browser_enabled ?? false,
         network: cfg.network || 'none',
         network_if: cfg.network_if || '',
         serial_a: cfg.serial_a || '',
@@ -3749,6 +3754,7 @@ function buildConfigJson() {
         zappram: document.getElementById('cfg-zappram')?.checked ?? false,
         dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true,
         bridge_enabled: document.getElementById('cfg-bridge-enabled')?.checked ?? false,
+        browser_enabled: document.getElementById('cfg-browser-enabled')?.checked ?? false,
         network: document.getElementById('cfg-network')?.value || 'none',
         // Socket path no longer has a UI input — preserve whatever was loaded
         // from disk so saving via the UI doesn't clobber custom server-side
@@ -4289,6 +4295,7 @@ function updateConfigUI() {
     const zappramEl = document.getElementById('cfg-zappram');
     const dismissDialogEl = document.getElementById('cfg-dismiss-shutdown-dialog');
     const bridgeEnabledEl = document.getElementById('cfg-bridge-enabled');
+    const browserEnabledEl = document.getElementById('cfg-browser-enabled');
 
     if (emulatorEl) emulatorEl.value = currentConfig.emulator || 'quadra';
     if (romEl) romEl.value = currentConfig.rom;
@@ -4298,6 +4305,7 @@ function updateConfigUI() {
     if (zappramEl) zappramEl.checked = currentConfig.zappram;
     if (dismissDialogEl) dismissDialogEl.checked = currentConfig.dismiss_shutdown_dialog;
     if (bridgeEnabledEl) bridgeEnabledEl.checked = currentConfig.bridge_enabled;
+    if (browserEnabledEl) browserEnabledEl.checked = currentConfig.browser_enabled;
 
     const networkEl = document.getElementById('cfg-network');
     if (networkEl) {
@@ -5096,6 +5104,10 @@ function setupEventListeners() {
     const keyboardToggle = document.getElementById('keyboard-toggle');
     if (keyboardToggle) keyboardToggle.addEventListener('click',
         () => toggleSection(keyboardToggle, 'keyboard-settings'));
+
+    const ioToggle = document.getElementById('io-toggle');
+    if (ioToggle) ioToggle.addEventListener('click',
+        () => toggleSection(ioToggle, 'io-settings'));
 }
 
 // Initialize on page load
