@@ -72,29 +72,37 @@ jobs:
       - name: Pin rustup default
         run: |
           # GitHub-hosted runners ship rustup in PATH but with no default
-          # toolchain configured. CMake's net-bridge target invokes
-          # `cargo`, which resolves to rustup's wrapper (in ~/.cargo/bin)
-          # before the apt /usr/bin/cargo we just installed — and rustup
-          # bails with "could not choose a version of cargo to run". Set
-          # stable as the default so the wrapper dispatches successfully.
-          # If rustup isn't installed (debian:12 container) this is a
-          # no-op and the apt cargo handles the build.
+          # toolchain configured. Set stable so the wrapper at
+          # ~/.cargo/bin/cargo can dispatch — used by tools/make-source-
+          # tarball.sh below to vendor crates. The debian:12 container
+          # has no rustup; this is a no-op there and the apt cargo runs.
           if command -v rustup >/dev/null; then
               rustup default stable
-              rustup show
           fi
 
-      - name: dpkg-buildpackage
+      - name: Build vendored source tarball, then build from it
         run: |
           set -eux
-          # -us -uc: don't sign source/changes (CI has no maintainer key).
-          # -b:      binary-only (.deb, no .dsc/.tar.gz duplicates).
+          # tools/make-source-tarball.sh produces a self-contained tarball
+          # at dist/mac-phoenix_<ver>.tar.xz with vendored cargo crates
+          # (net-bridge/vendor/cargo/) + .cargo/config.toml + Cargo.lock
+          # downgraded to v3. debian/rules requires CARGO_NET_OFFLINE=true,
+          # so dpkg-buildpackage MUST find these in the build tree.
+          # Building from the extracted tarball is the same path Dockerfile.deb
+          # takes — avoids drift between local and CI builds.
+          tools/make-source-tarball.sh
+          mkdir -p /tmp/build
+          tar -xJf dist/mac-phoenix_*.tar.xz --strip-components=1 -C /tmp/build
+          cd /tmp/build
           dpkg-buildpackage -us -uc -b
+          # dpkg drops the .deb one dir up from the source root.
+          mkdir -p "$GITHUB_WORKSPACE/debs"
+          cp /tmp/*.deb "$GITHUB_WORKSPACE/debs/"
 
       - name: Install + smoke-test
         run: |
           set -eux
-          sudo dpkg -i ../mac-phoenix_*.deb || true
+          sudo dpkg -i debs/mac-phoenix_*.deb || true
           sudo apt-get install -y -f
           ./packaging/ci/smoke-installed.sh
 
@@ -107,7 +115,7 @@ jobs:
           # without colliding. Example:
           #   mac-phoenix_1.0.0-1_amd64.deb
           #     → mac-phoenix_1.0.0-1+${{ matrix.distro }}_amd64.deb
-          for f in ../mac-phoenix_*.deb; do
+          for f in debs/mac-phoenix_*.deb; do
               base="$(basename "$f" .deb)"
               ver_rev="${base%_*}"   # mac-phoenix_1.0.0-1
               arch="${base##*_}"     # amd64 / arm64
