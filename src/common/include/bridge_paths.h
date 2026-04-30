@@ -45,7 +45,8 @@
 #define BR_FILE_CMD          "_bridge_cmd"
 #define BR_FILE_RESULT       "_bridge_result"
 #define BR_FILE_CLIPBOARD    "_bridge_clipboard"
-#define BR_FILE_SCRIPT       "_bridge_script"   /* SCRIPT command body */
+#define BR_FILE_SCRIPT       "_bridge_script"   /* SCRIPT/EXEC command body */
+#define BR_FILE_REPLY        "_bridge_reply"    /* EXEC AE reply payload */
 #define BR_FILE_NETCFG       "netcfg.txt"
 #define BR_FILE_NETWORKINFO  "NetworkInfo.txt"
 

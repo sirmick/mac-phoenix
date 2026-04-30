@@ -86,6 +86,7 @@ private:
     Response handle_windows(const Request& req);
     Response handle_launch(const Request& req);
     Response handle_script(const Request& req);  // POST /api/script — generic 'misc'/'dosc'
+    Response handle_exec(const Request& req);    // POST /api/exec — dosc with reply capture (ToolServer)
     Response handle_quit(const Request& req);
     Response handle_wait(const Request& req);
     Response handle_clipboard_set(const Request& req);  // POST /api/clipboard

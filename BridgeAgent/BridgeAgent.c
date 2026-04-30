@@ -13,8 +13,15 @@
  *       LAUNCH  <hfs-path>             — LaunchApplication
  *       OPEN    <hfs-path>             — generic 'aevt'/'odoc' to creator's app
  *       SCRIPT  <4-char creator>       — 'misc'/'dosc' with body from
- *                                        <bridge_dir>:_bridge_script
- *                                        (works for McPL/LAND/MPS /ToyS/...)
+ *                                        <bridge_dir>:_bridge_script,
+ *                                        fire-and-forget. Works for
+ *                                        McPL/LAND/MPS /ToyS/...
+ *       EXEC    <4-char creator>       — same as SCRIPT but waits for
+ *                                        the AE reply; captures stdout,
+ *                                        stderr, and {Status} into
+ *                                        <bridge_dir>:_bridge_reply.
+ *                                        Canonical target: ToolServer
+ *                                        (creator MPSX).
  *       QUIT / SHUTDOWN / RESTART      — Process / Shutdown manager
  *       SET_CLIPBOARD                  — see do_set_clipboard
  *   Agent reads, deletes, executes
@@ -514,6 +521,178 @@ static OSErr do_script(OSType creator)
     return err;
 }
 
+/* Write a single AE reply payload file. Format is text with three sections,
+ * each preceded by a CR-terminated header line:
+ *
+ *   STDOUT <decimal-byte-count>\r
+ *   <stdout bytes>
+ *   STDERR <decimal-byte-count>\r
+ *   <stderr bytes>
+ *   STATUS <decimal>\r
+ *
+ * Sections that aren't present are written with count 0. The host parses
+ * the header lines and slices out the byte ranges. We chose this over
+ * AppleSingle / typeAEList serialisation because the host doesn't link
+ * against any AE library; this format is a few lines of C on each side. */
+static OSErr write_bridge_reply(const char *stdout_buf, long stdout_len,
+                                const char *stderr_buf, long stderr_len,
+                                long status)
+{
+    Str255 path; br_cfg_path(path, BR_FILE_REPLY);
+    FSSpec spec;
+    OSErr err = FSMakeFSSpec(0, 0, path, &spec);
+    if (err == fnfErr) {
+        err = FSpCreate(&spec, 'MxBr', 'TEXT', smSystemScript);
+        if (err != noErr) return err;
+    } else if (err != noErr) {
+        return err;
+    } else {
+        FSpDelete(&spec);
+        err = FSpCreate(&spec, 'MxBr', 'TEXT', smSystemScript);
+        if (err != noErr) return err;
+    }
+
+    short ref;
+    err = FSpOpenDF(&spec, fsWrPerm, &ref);
+    if (err != noErr) return err;
+
+    char hdr[64];
+    long n;
+
+    n = snprintf(hdr, sizeof(hdr), "STDOUT %ld\r", stdout_len);
+    FSWrite(ref, &n, hdr);
+    if (stdout_len > 0 && stdout_buf) {
+        long len = stdout_len;
+        FSWrite(ref, &len, stdout_buf);
+    }
+
+    n = snprintf(hdr, sizeof(hdr), "STDERR %ld\r", stderr_len);
+    FSWrite(ref, &n, hdr);
+    if (stderr_len > 0 && stderr_buf) {
+        long len = stderr_len;
+        FSWrite(ref, &len, stderr_buf);
+    }
+
+    n = snprintf(hdr, sizeof(hdr), "STATUS %ld\r", status);
+    FSWrite(ref, &n, hdr);
+
+    FSClose(ref);
+    return noErr;
+}
+
+/* Pull a typeChar parameter out of an AE descriptor, returning a freshly
+ * NewPtr'd buffer. Caller frees. Returns NULL + 0 if the parameter isn't
+ * present or has zero size. */
+static void extract_text_param(const AppleEvent *ae, AEKeyword key,
+                               char **outBuf, long *outLen)
+{
+    *outBuf = NULL;
+    *outLen = 0;
+
+    DescType actualType;
+    Size actualSize;
+    OSErr err = AESizeOfParam(ae, key, &actualType, &actualSize);
+    if (err != noErr || actualSize <= 0) return;
+
+    char *buf = (char *)NewPtr(actualSize);
+    if (!buf) return;
+
+    Size got = 0;
+    err = AEGetParamPtr(ae, key, typeChar, &actualType,
+                        buf, actualSize, &got);
+    if (err != noErr) { DisposePtr(buf); return; }
+
+    *outBuf = buf;
+    *outLen = got;
+}
+
+/* Pull keyErrorNumber as a signed long. Returns 0 if absent. */
+static long extract_status_param(const AppleEvent *ae)
+{
+    DescType actualType;
+    Size actualSize;
+    long status = 0;
+    Size got = 0;
+    OSErr err = AEGetParamPtr(ae, keyErrorNumber, typeLongInteger,
+                              &actualType, &status, sizeof(status), &got);
+    if (err == noErr && got >= (Size)sizeof(status)) return status;
+
+    short s16 = 0;
+    err = AEGetParamPtr(ae, keyErrorNumber, typeShortInteger,
+                        &actualType, &s16, sizeof(s16), &got);
+    if (err == noErr && got >= (Size)sizeof(s16)) return (long)s16;
+
+    return 0;
+}
+
+/* EXEC <creator> — like SCRIPT but waits for the AE reply and captures
+ * stdout / stderr / exit status into _bridge_reply. The canonical target
+ * is ToolServer (creator 'MPSX') which runs commands headlessly and
+ * fills the reply with keyDirectObject (stdout), keyErrorString (stderr),
+ * and keyErrorNumber ({Status}). MPW Shell doesn't return useful reply
+ * payloads; use do_script for that.
+ *
+ * timeout is the AE wait timeout in ticks (1/60 sec). 60 * 60 = 3600
+ * gives the script a minute. AI/host can re-issue for longer compiles. */
+static OSErr do_exec(OSType creator)
+{
+    char *src = NULL;
+    long src_len = 0;
+    OSErr err = load_bridge_script(&src, &src_len);
+    if (err != noErr) return err;
+
+    ProcessSerialNumber appPSN;
+    err = launch_app_for_creator(creator, &appPSN);
+    if (err != noErr) { if (src) DisposePtr(src); return err; }
+
+    AEAddressDesc target;
+    err = AECreateDesc(typeProcessSerialNumber, &appPSN,
+                       sizeof(appPSN), &target);
+    if (err != noErr) { if (src) DisposePtr(src); return err; }
+
+    AppleEvent evt;
+    err = AECreateAppleEvent('misc', 'dosc', &target,
+                             kAutoGenerateReturnID, kAnyTransactionID, &evt);
+    AEDisposeDesc(&target);
+    if (err != noErr) { if (src) DisposePtr(src); return err; }
+
+    if (src && src_len > 0) {
+        err = AEPutParamPtr(&evt, keyDirectObject, typeChar, src, src_len);
+    }
+    if (src) DisposePtr(src);
+    if (err != noErr) { AEDisposeDesc(&evt); return err; }
+
+    /* Zero-init: an AEDesc with descriptorType=typeNull (0) and
+     * dataHandle=NULL is the documented "empty" state — AEDisposeDesc on
+     * it is a no-op. AEInitializeDesc is Carbon-only / not in the Retro68
+     * universal headers we build against. */
+    AppleEvent reply;
+    memset(&reply, 0, sizeof(reply));
+    err = AESend(&evt, &reply,
+                 kAEWaitReply | kAEAlwaysInteract,
+                 kAENormalPriority,
+                 60 * 60 /* 60s in ticks */, NULL, NULL);
+    AEDisposeDesc(&evt);
+    if (err != noErr) {
+        write_bridge_reply(NULL, 0, NULL, 0, (long)err);
+        AEDisposeDesc(&reply);
+        return err;
+    }
+
+    char *stdout_buf = NULL; long stdout_len = 0;
+    char *stderr_buf = NULL; long stderr_len = 0;
+    extract_text_param(&reply, keyDirectObject, &stdout_buf, &stdout_len);
+    extract_text_param(&reply, keyErrorString,  &stderr_buf, &stderr_len);
+    long status = extract_status_param(&reply);
+    AEDisposeDesc(&reply);
+
+    OSErr werr = write_bridge_reply(stdout_buf, stdout_len,
+                                    stderr_buf, stderr_len, status);
+    if (stdout_buf) DisposePtr(stdout_buf);
+    if (stderr_buf) DisposePtr(stderr_buf);
+    return werr;
+}
+
 /* Send kAEQuitApplication to an arbitrary PSN. The caller supplies the
  * target because we self-foreground before dispatching bridge commands, so
  * GetFrontProcess at send-time would return us (the bridge agent), not the
@@ -892,12 +1071,17 @@ static void poll_bridge(void)
         path[0] = (unsigned char)len;
         memcpy(path + 1, cmd + 5, len);
         result = do_open_document(path);
-    } else if (strncmp(cmd, "SCRIPT ", 7) == 0) {
-        /* "SCRIPT <4-char creator>" — body lives in BR_FILE_SCRIPT.
-         * Examples: SCRIPT McPL (MacPerl), SCRIPT LAND (Frontier
-         * UserLand), SCRIPT MPS  (MPW Shell — note the trailing space),
-         * SCRIPT ToyS (AppleScript editor). */
-        const char *cp = cmd + 7;
+    } else if (strncmp(cmd, "SCRIPT ", 7) == 0 ||
+               strncmp(cmd, "EXEC ",   5) == 0) {
+        /* "SCRIPT <4-char creator>" — fire-and-forget 'misc'/'dosc'.
+         * "EXEC   <4-char creator>" — same, but waits for the AE reply
+         * and captures stdout/stderr/{Status} into _bridge_reply.
+         * Body lives in BR_FILE_SCRIPT for both.
+         * Examples: SCRIPT McPL (MacPerl), SCRIPT LAND (Frontier),
+         * SCRIPT MPS  (MPW Shell — trailing space!), EXEC MPSX (ToolServer
+         * — the canonical target for /api/exec). */
+        Boolean exec_mode = (cmd[0] == 'E');
+        const char *cp = cmd + (exec_mode ? 5 : 7);
         if ((int)strlen(cp) < 4) {
             result = paramErr;
         } else {
@@ -905,7 +1089,7 @@ static void poll_bridge(void)
                            | ((OSType)(unsigned char)cp[1] << 16)
                            | ((OSType)(unsigned char)cp[2] << 8)
                            |  (OSType)(unsigned char)cp[3];
-            result = do_script(creator);
+            result = exec_mode ? do_exec(creator) : do_script(creator);
         }
     } else if (strncmp(cmd, "SHUTDOWN", 8) == 0) {
         result = do_system_event(kAEShutDown);

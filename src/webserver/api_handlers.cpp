@@ -35,6 +35,7 @@ namespace webrtc {
 #include <sstream>
 #include <iomanip>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <chrono>
 #include <shared_mutex>
@@ -147,6 +148,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/script" && req.method == "POST") {
         return handle_script(req);
+    }
+    if (req.path == "/api/exec" && req.method == "POST") {
+        return handle_exec(req);
     }
     if (req.path == "/api/quit" && req.method == "POST") {
         return handle_quit(req);
@@ -1455,6 +1459,225 @@ Response APIRouter::handle_script(const Request& req) {
     // visible first.
     bridge_write_file(cfg.bridge_dir, "_bridge_script", script);
     return bridge_command(("SCRIPT " + creator).c_str(), 100);
+}
+
+// Minimal base64 encoder for reply payloads. RFC 4648, with padding.
+static std::string b64_encode(const std::string& in) {
+    static const char tab[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve((in.size() + 2) / 3 * 4);
+    size_t i = 0;
+    while (i + 3 <= in.size()) {
+        uint32_t v = ((uint8_t)in[i] << 16) | ((uint8_t)in[i+1] << 8) | (uint8_t)in[i+2];
+        out += tab[(v >> 18) & 0x3f];
+        out += tab[(v >> 12) & 0x3f];
+        out += tab[(v >>  6) & 0x3f];
+        out += tab[ v        & 0x3f];
+        i += 3;
+    }
+    if (i < in.size()) {
+        uint32_t v = (uint8_t)in[i] << 16;
+        if (i + 1 < in.size()) v |= (uint8_t)in[i+1] << 8;
+        out += tab[(v >> 18) & 0x3f];
+        out += tab[(v >> 12) & 0x3f];
+        out += (i + 1 < in.size()) ? tab[(v >> 6) & 0x3f] : '=';
+        out += '=';
+    }
+    return out;
+}
+
+// Parse the BridgeAgent's _bridge_reply file. Format is three sections:
+//   STDOUT <n>\r<n bytes>
+//   STDERR <n>\r<n bytes>
+//   STATUS <n>\r
+// Headers are CR-terminated; binary payloads follow each header verbatim.
+// Returns true on success and fills the out parameters.
+static bool parse_bridge_reply(const std::string& blob,
+                               std::string& stdout_bytes,
+                               std::string& stderr_bytes,
+                               long& exit_status) {
+    stdout_bytes.clear();
+    stderr_bytes.clear();
+    exit_status = 0;
+
+    size_t pos = 0;
+    auto read_section = [&](const char* tag, std::string* dest) -> bool {
+        size_t tag_len = std::strlen(tag);
+        if (pos + tag_len > blob.size()) return false;
+        if (blob.compare(pos, tag_len, tag) != 0) return false;
+        pos += tag_len;
+        if (pos >= blob.size() || blob[pos] != ' ') return false;
+        pos++;
+        // Read decimal byte count up to CR.
+        size_t cr = blob.find('\r', pos);
+        if (cr == std::string::npos) return false;
+        long n = std::strtol(blob.c_str() + pos, nullptr, 10);
+        pos = cr + 1;
+        if (n < 0) return false;
+        if (dest) {
+            if (pos + (size_t)n > blob.size()) return false;
+            dest->assign(blob, pos, n);
+        } else {
+            // STATUS has no body.
+            exit_status = n;
+        }
+        if (dest) pos += n;
+        return true;
+    };
+
+    if (!read_section("STDOUT", &stdout_bytes)) return false;
+    if (!read_section("STDERR", &stderr_bytes)) return false;
+    if (!read_section("STATUS", nullptr))       return false;
+    return true;
+}
+
+// POST /api/exec — synchronous "do script" with reply capture. Canonical
+// target is ToolServer (creator 'MPSX'), which fills the AE reply with
+// stdout / stderr / {Status}. Body:
+//   { "creator": "MPSX", "command": "Echo hello" }
+// Or for non-ASCII bytes: { ..., "command_b64": "<base64 macroman>" }
+//
+// Returns:
+//   { "success": true,  "exit_status": 0,  "stdout_b64": "...", "stderr_b64": "..." }
+//   { "success": false, "error": "...", "error_code": <OSErr>? }
+//
+// Use case: AI dev loop. Send `SC -o foo.c.o foo.c`, get back stderr; fix
+// the source via ExtFS, re-issue. 1 MiB cap on input. AE timeout is 60s
+// per call (BridgeAgent side); long compiles can use redirect-to-ExtFS
+// inside the script and tail the output file.
+Response APIRouter::handle_exec(const Request& req) {
+    nlohmann::json j;
+    try {
+        j = json_utils::parse(req.body);
+    } catch (const std::exception&) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"invalid JSON\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+
+    if (!j.contains("creator") || !j["creator"].is_string()) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"missing 'creator' field (4-char OSType)\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+    std::string creator = j["creator"].get<std::string>();
+    if (creator.size() != 4) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"'creator' must be exactly 4 characters\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+
+    std::string command;
+    if (j.contains("command") && j["command"].is_string()) {
+        command = j["command"].get<std::string>();
+    } else if (j.contains("command_b64") && j["command_b64"].is_string()) {
+        const std::string& b64 = j["command_b64"].get_ref<const std::string&>();
+        static const int8_t b64_tab[256] = {
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
+            52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,
+            -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
+            15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
+            -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+            41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,
+        };
+        int buf_val = 0, buf_bits = 0;
+        for (char c : b64) {
+            if (c == '=' || c == '\n' || c == '\r' || c == ' ') continue;
+            int v = b64_tab[(uint8_t)c];
+            if (v < 0) {
+                Response r; r.set_status(400);
+                r.set_body("{\"error\": \"invalid base64 in 'command_b64'\"}");
+                r.set_content_type("application/json");
+                return r;
+            }
+            buf_val = (buf_val << 6) | v;
+            buf_bits += 6;
+            if (buf_bits >= 8) {
+                buf_bits -= 8;
+                command.push_back((char)((buf_val >> buf_bits) & 0xff));
+            }
+        }
+    } else {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"missing 'command' or 'command_b64'\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+
+    if (command.size() > 1024 * 1024) {
+        return Response::json(
+            "{\"success\": false, \"error\": \"command too large (>1MB)\"}");
+    }
+
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+        return Response::json(
+            "{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
+    }
+
+    // Stale reply from a previous call would otherwise leak into ours.
+    bridge_remove_file(cfg.bridge_dir, "_bridge_reply");
+    bridge_write_file(cfg.bridge_dir, "_bridge_script", command);
+
+    // EXEC needs a longer poll than other commands — the agent is blocked
+    // inside AESend(kAEWaitReply) for up to 60s per script.
+    bridge_remove_file(cfg.bridge_dir, "_bridge_result");
+    bridge_write_file(cfg.bridge_dir, "_bridge_cmd", "EXEC " + creator);
+
+    // 90s host-side budget = 60s AE wait + 30s overhead.
+    const int kPollIters = 900;  // 900 * 100ms
+    int mac_err = 0;
+    bool got_result = false;
+    for (int i = 0; i < kPollIters; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::string result;
+        if (bridge_read_file(cfg.bridge_dir, "_bridge_result", result)) {
+            bridge_remove_file(cfg.bridge_dir, "_bridge_result");
+            mac_err = std::atoi(result.c_str());
+            got_result = true;
+            break;
+        }
+    }
+    if (!got_result) {
+        bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
+        return Response::json(
+            "{\"success\": false, \"error\": \"timeout waiting for bridge agent\"}");
+    }
+
+    if (mac_err != 0) {
+        std::ostringstream err;
+        err << "{\"success\": false, \"error_code\": " << mac_err
+            << ", \"error\": \"AESend failed (Mac OS error " << mac_err << ")\"}";
+        return Response::json(err.str());
+    }
+
+    // Reply file should be present now.
+    std::string reply;
+    if (!bridge_read_file(cfg.bridge_dir, "_bridge_reply", reply)) {
+        return Response::json(
+            "{\"success\": true, \"exit_status\": 0, \"stdout_b64\": \"\", \"stderr_b64\": \"\", \"warning\": \"no reply file\"}");
+    }
+    bridge_remove_file(cfg.bridge_dir, "_bridge_reply");
+
+    std::string stdout_bytes, stderr_bytes;
+    long exit_status = 0;
+    if (!parse_bridge_reply(reply, stdout_bytes, stderr_bytes, exit_status)) {
+        return Response::json(
+            "{\"success\": false, \"error\": \"malformed bridge reply\"}");
+    }
+
+    std::ostringstream out;
+    out << "{\"success\": true,"
+        << " \"exit_status\": " << exit_status << ","
+        << " \"stdout_b64\": \"" << b64_encode(stdout_bytes) << "\","
+        << " \"stderr_b64\": \"" << b64_encode(stderr_bytes) << "\"}";
+    return Response::json(out.str());
 }
 
 Response APIRouter::handle_quit(const Request& req) {
