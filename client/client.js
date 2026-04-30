@@ -1,5 +1,5 @@
 /**
- * Basilisk II WebRTC Client (libdatachannel backend)
+ * MacPhoenix WebRTC Client (libdatachannel backend)
  *
  * Full-featured client with debugging, stats tracking, and connection monitoring.
  */
@@ -1230,7 +1230,7 @@ function macKeycodeForEvent(e) {
 
 
 // Main WebRTC Client
-class BasiliskWebRTC {
+class MacPhoenixClient {
     constructor(videoElement, canvasElement = null) {
         this.video = videoElement;
         this.canvas = canvasElement;
@@ -1299,11 +1299,57 @@ class BasiliskWebRTC {
         this.firstFrameReceived = false;
         this.frameCheckInterval = null;
 
-        // WebRTC → HTTP stream auto-fallback
-        this.webrtcFallbackTimer = null;
-        this.httpStreamFallbackSec = 5;  // Seconds before falling back
-        this._iceFailureFallbackFired = false;
+        // Codec auto-fallback state machine. The controller owns the chain
+        // (vp9||h264 → webp||png → httpstream), the no-frames deadline, and
+        // the "Mac off" idle phase. We feed it transport events (ICE/WS/frame)
+        // and react to its selectCodec emissions.
+        this.fallbackCtl = new CodecFallbackController({ noFramesMs: 2000 });
+        this.fallbackCtl.on('selectCodec', ({ codec, reason }) =>
+            this._onFallbackSelectCodec(codec, reason));
+        this.fallbackCtl.on('uiState', (s) => this._onFallbackUiState(s));
+        this.fallbackCtl.on('debug', (e) => this._onFallbackDebug(e));
+    }
 
+    // Controller picked a codec. Tear down the current transport and reconnect
+    // with the new one. httpstream takes its own dedicated path.
+    _onFallbackSelectCodec(codec, reason) {
+        logger.info('Codec selected by controller', { codec, reason });
+        if (codec === 'httpstream') {
+            this._connectHTTPStream();
+            return;
+        }
+        this.cleanup();
+        if (this.ws) { try { this.ws.close(); } catch (e) {} this.ws = null; }
+        this.codecType = parseCodecString(codec);
+        this.stats.codec = codec;
+        const codecSelect = document.getElementById('codec-select');
+        if (codecSelect) codecSelect.value = codec;
+        this._connect();
+    }
+
+    _onFallbackUiState({ phase, codec, reason }) {
+        const overlay = document.getElementById('overlay');
+        const spinner = document.getElementById('spinner');
+        if (phase === 'idle-mac-off') {
+            if (overlay) overlay.classList.remove('hidden');
+            if (spinner) spinner.style.display = 'none';
+            this.updateOverlayStatus('Mac is off — click Start to power on');
+        } else if (phase === 'connecting') {
+            if (overlay) overlay.classList.remove('hidden');
+            if (spinner) spinner.style.display = '';
+            this.updateOverlayStatus('Connecting via ' + codec + '...');
+        } else if (phase === 'exhausted') {
+            if (spinner) spinner.style.display = 'none';
+            this.updateStatus('Connection failed', 'error');
+            this.updateOverlayStatus(reason || 'No working codec');
+        }
+        // 'connected' is handled by onWsOpen / onVideoPlaying / first-frame paths.
+    }
+
+    _onFallbackDebug(payload) {
+        // Routes through the existing logger — `logger.info` is forwarded to
+        // the backend, giving us server-side timing for fallback events.
+        logger.info('codec.fallback', payload);
     }
 
     // Set codec type before connecting
@@ -1430,66 +1476,10 @@ class BasiliskWebRTC {
         });
     }
 
-    // Fall back from WebRTC to HTTP stream (auto-detected or manual)
+    // Manual fallback to HTTP stream — used by UI dropdown when user picks
+    // 'httpstream'. Goes through the controller so the state machine knows.
     fallbackToHTTPStream() {
-        // Cancel any pending fallback timer
-        if (this.webrtcFallbackTimer) {
-            clearTimeout(this.webrtcFallbackTimer);
-            this.webrtcFallbackTimer = null;
-        }
-
-        // Tear down WebRTC
-        this.cleanup();
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
-        }
-
-        // Switch to HTTP stream
-        this._connectHTTPStream();
-    }
-
-    // Walk the auto-fallback chain (vp9 → h264 → webp → png → httpstream) one step.
-    // Called when the current codec fails to deliver frames or ICE never connects.
-    // Returns true if a step was taken; false if we exhausted the chain.
-    _stepDownFallbackChain(reason) {
-        if (this.firstFrameReceived || this.connected) return false; // already working
-
-        const chain = (typeof buildCodecFallbackChain === 'function')
-            ? buildCodecFallbackChain()
-            : ['httpstream'];
-        const currentId = codecTypeToString(this.codecType);
-        const idx = chain.indexOf(currentId);
-        const next = (idx >= 0 && idx + 1 < chain.length) ? chain[idx + 1] : null;
-        if (!next || next === currentId) {
-            logger.warn('Fallback chain exhausted', { reason, from: currentId });
-            return false;
-        }
-
-        logger.warn(`Codec fallback: ${currentId} → ${next}`, { reason });
-
-        // Update visible codec dropdown
-        const codecSelect = document.getElementById('codec-select');
-        if (codecSelect) codecSelect.value = next;
-
-        if (next === 'httpstream') {
-            this.fallbackToHTTPStream();
-            return true;
-        }
-
-        // Cancel pending no-frames timer; we'll arm a fresh one on reconnect.
-        if (this.webrtcFallbackTimer) {
-            clearTimeout(this.webrtcFallbackTimer);
-            this.webrtcFallbackTimer = null;
-        }
-
-        // Tear down current connection and reconnect with the next codec.
-        this.cleanup();
-        if (this.ws) { try { this.ws.close(); } catch (e) {} this.ws = null; }
-        this.codecType = parseCodecString(next);
-        this.stats.codec = next;
-        this._connect();
-        return true;
+        this.fallbackCtl.onCodecChangeRequested('httpstream');
     }
 
     _connect() {
@@ -1506,9 +1496,6 @@ class BasiliskWebRTC {
 
         this.cleanup();
         connectionSteps.reset();
-        // Reset per-attempt fallback guard so the new codec can fall back on ICE
-        // failure too (the flag is set-once per connection attempt).
-        this._iceFailureFallbackFired = false;
 
         // Note: Decoder will be initialized once server sends codec in "connected" message
 
@@ -1527,25 +1514,13 @@ class BasiliskWebRTC {
             this.ws.onclose = (e) => this.onWsClose(e);
             this.ws.onerror = (e) => this.onWsError(e);
 
-            // Auto-fallback: if no frame arrives within N seconds, walk the codec
-            // chain (vp9 → h264 → webp → png → httpstream) one step.
-            this.webrtcFallbackTimer = setTimeout(() => {
-                if (!this.firstFrameReceived && !this.connected) {
-                    if (!this._stepDownFallbackChain('no-frames-timeout')) {
-                        // Chain exhausted — last-ditch HTTP stream fallback
-                        try { localStorage.setItem('macemu_prefer_httpstream', '1'); } catch(e) {}
-                        this.fallbackToHTTPStream();
-                    }
-                }
-            }, this.httpStreamFallbackSec * 1000);
-
+            // No-frames deadline is owned by the controller (see CodecFallbackController).
         } catch (e) {
             logger.error('WebSocket creation failed', { error: e.message });
             this.updateStatus('Connection failed', 'error');
             connectionSteps.setError('ws');
-            // WebSocket failed entirely — try HTTP stream directly
-            logger.info('WebSocket unavailable, trying HTTP stream');
-            this.fallbackToHTTPStream();
+            // WebSocket creation failed — feed the controller; it'll step the chain.
+            this.fallbackCtl.onWsState('error');
         }
     }
 
@@ -1641,11 +1616,7 @@ class BasiliskWebRTC {
                 logger.info('First PNG/WebP frame received via WebSocket');
             }
 
-            if (this.webrtcFallbackTimer) {
-                clearTimeout(this.webrtcFallbackTimer);
-                this.webrtcFallbackTimer = null;
-            }
-            try { localStorage.removeItem('macemu_prefer_httpstream'); } catch (e) {}
+            this.fallbackCtl.onFrame();
 
             this.connected = true;
             this.updateStatus('Connected', 'connected');
@@ -1753,22 +1724,21 @@ class BasiliskWebRTC {
                 break;
 
             case 'reconnect':
-                // Server is requesting reconnection (e.g., codec change)
+                // Server is requesting reconnection (e.g., codec change driven
+                // by an external /api/codec POST). Route through the controller
+                // so its chain index stays accurate; selectCodec will fire and
+                // the host listener will tear down + reconnect.
                 logger.info('Server requested reconnection', { reason: msg.reason, codec: msg.codec });
                 if (msg.reason === 'codec_change' && msg.codec) {
-                    this.codecType = parseCodecString(msg.codec);
-                    this.stats.codec = msg.codec;
-                    updateCodecIndicator(this.codecType);
+                    this.fallbackCtl.onCodecChangeRequested(msg.codec);
+                } else {
+                    if (this.isReconnecting) {
+                        logger.info('Reconnect already in progress, skipping duplicate');
+                        break;
+                    }
+                    this.isReconnecting = true;
+                    this.reconnectPeerConnection();
                 }
-                // If auto-reconnect already fired (PC close arrived before this message),
-                // skip duplicate reconnect to avoid nulling the in-flight PC
-                if (this.isReconnecting) {
-                    logger.info('Reconnect already in progress, skipping duplicate');
-                    break;
-                }
-                this.isReconnecting = true;
-                // Reconnect the PeerConnection with new codec
-                this.reconnectPeerConnection();
                 break;
 
             case 'candidate':
@@ -2192,13 +2162,7 @@ class BasiliskWebRTC {
         this.hideOverlay();
         this.updateConnectionUI(true);
 
-        // Cancel HTTP stream fallback timer — WebRTC succeeded
-        if (this.webrtcFallbackTimer) {
-            clearTimeout(this.webrtcFallbackTimer);
-            this.webrtcFallbackTimer = null;
-        }
-        // Clear any saved fallback preference since WebRTC works now
-        try { localStorage.removeItem('macemu_prefer_httpstream'); } catch(e) {}
+        this.fallbackCtl.onFrame();
 
         // Remove disconnected visual state
         const displayContainer = document.getElementById('display-container');
@@ -2231,16 +2195,7 @@ class BasiliskWebRTC {
         } else if (state === 'failed') {
             connectionSteps.setError('ice');
             this.updateStatus('ICE connection failed', 'error');
-            logger.error('ICE connection failed - stepping codec fallback chain');
-            // Fast fallback: UDP/ICE will never work here. Skip the 5s no-frames
-            // timer and step to the next codec. Guarded so it fires once per chain.
-            if (!this._iceFailureFallbackFired) {
-                this._iceFailureFallbackFired = true;
-                try { localStorage.setItem('macemu_last_fallback_reason', 'ice'); } catch (e) {}
-                if (!this._stepDownFallbackChain('ice-failed')) {
-                    this.fallbackToHTTPStream();
-                }
-            }
+            this.fallbackCtl.onIceState('failed');
         } else if (state === 'disconnected') {
             logger.warn('ICE disconnected - may recover');
         }
@@ -2773,10 +2728,6 @@ class BasiliskWebRTC {
     }
 
     cleanup() {
-        if (this.webrtcFallbackTimer) {
-            clearTimeout(this.webrtcFallbackTimer);
-            this.webrtcFallbackTimer = null;
-        }
         if (this.frameCheckInterval) {
             clearInterval(this.frameCheckInterval);
             this.frameCheckInterval = null;
@@ -3048,7 +2999,7 @@ class BasiliskWebRTC {
         const statusEl = document.getElementById('overlay-status');
 
         if (overlay) overlay.classList.remove('hidden');
-        if (titleEl) titleEl.textContent = title || 'Connecting to Basilisk II';
+        if (titleEl) titleEl.textContent = title || 'Connecting to MacPhoenix';
         if (statusEl) statusEl.textContent = status || 'Initializing...';
     }
 
@@ -3346,7 +3297,7 @@ function getWebSocketUrl() {
 
 function initClient() {
     logger.init();
-    logger.info('Basilisk II WebRTC Client initialized');
+    logger.info('MacPhoenix WebRTC Client initialized');
 
     const video = document.getElementById('display');
     const canvas = document.getElementById('display-canvas');
@@ -3355,16 +3306,7 @@ function initClient() {
         return;
     }
 
-    client = new BasiliskWebRTC(video, canvas);
-
-    // Pick the best codec the server claims to support: vp9 → h264 → webp → png → httpstream.
-    // Falls back through the chain at runtime if WebRTC negotiation fails or no frames arrive.
-    const chain = buildCodecFallbackChain();
-    const initialCodec = chain[0] || serverUIConfig.webcodec || 'png';
-    logger.info('Initial codec from auto-fallback chain', { chain, picked: initialCodec });
-    client.codecType = parseCodecString(initialCodec);
-    const codecSelect = document.getElementById('codec-select');
-    if (codecSelect) codecSelect.value = initialCodec;
+    client = new MacPhoenixClient(video, canvas);
 
     // Apply saved mouse mode from config
     if (serverUIConfig.mousemode) {
@@ -3382,10 +3324,18 @@ function initClient() {
         displayContainer.classList.add('disconnected');
     }
 
-    // Auto-connect
-    const wsUrl = getWebSocketUrl();
-    logger.info('Auto-connecting', { url: wsUrl });
-    client.connect(wsUrl);
+    // Bootstrap the controller — its selectCodec emit triggers the first
+    // _connect() via the listener wired in the constructor.
+    client.wsUrl = getWebSocketUrl();
+    client.reconnectAttempts = 0;
+    logger.info('Auto-connecting via fallback chain', {
+        url: client.wsUrl,
+        chain: buildCodecFallbackChain(),
+    });
+    client.fallbackCtl.start({
+        availableCodecs: Array.from(availableCodecIds),
+        emulatorRunning: true,
+    });
 }
 
 function toggleConnection() {
@@ -4660,7 +4610,11 @@ async function populateAvailableCodecs() {
     }
 }
 
-// Codec management
+// Codec management — manual user pick from the dropdown.
+// The controller does the reconnect; we also POST /api/codec so the server's
+// encoder lines up (server picks the same codec from the next connect's
+// `{type:'connect', codec}` message anyway, but the POST keeps any external
+// /api/codec callers in sync with what the UI shows).
 async function changeCodec() {
     const select = document.getElementById('codec-select');
     if (!select || !client) return;
@@ -4668,19 +4622,9 @@ async function changeCodec() {
     const newCodec = select.value;
     logger.info('Changing codec', { codec: newCodec });
 
-    // Switching to HTTP stream — client-side only, no server codec change needed
-    if (newCodec === 'httpstream') {
-        try { localStorage.setItem('macemu_prefer_httpstream', '1'); } catch(e) {}
-        client.fallbackToHTTPStream();
-        return;
-    }
+    client.fallbackCtl.onCodecChangeRequested(newCodec);
 
-    // Switching away from HTTP stream — tell server to switch encoder, then reconnect via WebRTC
-    if (client.codecType === CodecType.HTTP_STREAM) {
-        try { localStorage.removeItem('macemu_prefer_httpstream'); } catch(e) {}
-        client.cleanup();
-        if (client.ws) { client.ws.close(); client.ws = null; }
-        // Update server-side encoder (same as normal WebRTC codec change)
+    if (newCodec !== 'httpstream') {
         try {
             await fetch(getApiUrl('codec'), {
                 method: 'POST',
@@ -4690,29 +4634,6 @@ async function changeCodec() {
         } catch (e) {
             logger.error('Failed to set server codec', { error: e.message });
         }
-        // Connect via WebRTC — server encoder now matches the requested codec
-        client.codecType = parseCodecString(newCodec);
-        const wsUrl = getWebSocketUrl();
-        client.connect(wsUrl);
-        return;
-    }
-
-    // Normal WebRTC codec change — tell server
-    try {
-        const res = await fetch(getApiUrl('codec'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ codec: newCodec })
-        });
-        const data = await res.json();
-        if (data.ok) {
-            logger.info('Codec changed successfully', { codec: newCodec });
-            // Server will send "reconnect" message to trigger client reconnection
-        } else if (data.error) {
-            logger.error('Failed to change codec', { error: data.error });
-        }
-    } catch (e) {
-        logger.error('Failed to change codec', { error: e.message });
     }
 }
 
@@ -4753,6 +4674,21 @@ async function pollEmulatorStatus() {
     try {
         const res = await fetch(getApiUrl('status'));
         const data = await res.json();
+
+        if (client && client.fallbackCtl) {
+            const wasOff = client.fallbackCtl.phase === 'idle-mac-off';
+            client.fallbackCtl.onEmulatorState({ running: !!data.emulator_running });
+            if (wasOff && data.emulator_running) {
+                // Mac came back on — refresh codec availability and restart
+                // the chain. Manual codec change resets are also picked up
+                // (e.g., codecs disabled at config time).
+                await populateAvailableCodecs();
+                client.fallbackCtl.start({
+                    availableCodecs: Array.from(availableCodecIds),
+                    emulatorRunning: true,
+                });
+            }
+        }
 
         const dotRunning = document.getElementById('dot-running');
         const dotConnected = document.getElementById('dot-connected');
