@@ -73,16 +73,23 @@ jobs:
           # truth shared with packaging/Dockerfile.deb.
           sudo apt-get build-dep -y .
 
-      - name: Pin rustup default
+      - name: Disable rustup wrapper
         run: |
-          # GitHub-hosted runners ship rustup in PATH but with no default
-          # toolchain configured. Set stable so the wrapper at
-          # ~/.cargo/bin/cargo can dispatch — used by tools/make-source-
-          # tarball.sh below to vendor crates. The debian:12 container
-          # has no rustup; this is a no-op there and the apt cargo runs.
-          if command -v rustup >/dev/null; then
-              rustup default stable
+          # GitHub-hosted ubuntu runners ship rustup wrappers at
+          # ~/.cargo/bin/{cargo,rustc} ahead of /usr/bin in PATH, with
+          # no default toolchain set. Even after `rustup default stable`,
+          # dpkg-buildpackage's build env loses the default somewhere and
+          # the wrapper bails with "no default is configured". Just
+          # delete the wrapper dir so CMake's find_program(CARGO cargo)
+          # falls through to /usr/bin/cargo (the apt rust we just
+          # installed via build-dep). debian:12 container has no
+          # ~/.cargo to begin with — no-op there.
+          if [ -d "$HOME/.cargo/bin" ]; then
+              rm -rf "$HOME/.cargo/bin"
           fi
+          hash -r
+          which cargo
+          cargo --version
 
       - name: Build vendored source tarball, then build from it
         run: |
@@ -147,11 +154,12 @@ jobs:
           # Same single source of truth as the package job — debian/control's
           # Build-Depends covers everything CMake needs.
           sudo apt-get build-dep -y .
-      - name: Pin rustup default
+      - name: Disable rustup wrapper
         run: |
-          if command -v rustup >/dev/null; then
-              rustup default stable
+          if [ -d "$HOME/.cargo/bin" ]; then
+              rm -rf "$HOME/.cargo/bin"
           fi
+          hash -r
       - run: cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
       - run: cmake --build build -j$(nproc)
       - run: ctest --test-dir build -L unit --output-on-failure
