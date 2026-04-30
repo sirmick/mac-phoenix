@@ -6,10 +6,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 # Build type default
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
+
+# Mirror debian/rules hardening flags so a plain `cmake -B build`
+# fails the same way the .deb build would (LTO undefined refs,
+# format-string regressions, missing frame pointers). Opt-out for
+# fast iteration: -DBUILD_HARDENED=OFF.
+include(Hardening)
 
 # Options
 option(BUILD_TESTS "Build test suite" ON)
@@ -144,6 +152,18 @@ add_subdirectory(src/webserver)
 add_subdirectory(src/webrtc)
 add_subdirectory(src/drivers/video/encoders)
 add_subdirectory(src/drivers/audio/encoders)
+
+# Exempt the SheepShaver/Basilisk-derived CPU emulation libraries from
+# the heavy hardening flags (LTO, _FORTIFY_SOURCE=3, stack-protector).
+# Decades-old pointer-math hot loops + precompiled-machine-code blobs
+# in dyngen don't tolerate aggressive instrumentation, and we don't
+# want LTO inlining across these TUs to alter generated-code patch
+# points. Format/frame-pointer/CFI/linker hardening still applies —
+# those don't change runtime semantics.
+foreach(_voodoo_target uae_cpu uae_jit cpuemu_ff cpustbl_ff
+                       kpx_shared kpx_interp kpx_dyngen vm_alloc)
+    phoenix_exempt_from_hardening(${_voodoo_target})
+endforeach()
 
 # =============================================================================
 # Main executable
