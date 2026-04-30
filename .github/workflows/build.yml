@@ -73,19 +73,34 @@ jobs:
           # truth shared with packaging/Dockerfile.deb.
           sudo apt-get build-dep -y .
 
-      - name: Disable rustup wrapper
+      - name: Pick rust toolchain
         run: |
-          # GitHub-hosted ubuntu runners ship rustup wrappers at
-          # ~/.cargo/bin/{cargo,rustc} ahead of /usr/bin in PATH, with
-          # no default toolchain set. Even after `rustup default stable`,
-          # dpkg-buildpackage's build env loses the default somewhere and
-          # the wrapper bails with "no default is configured". Just
-          # delete the wrapper dir so CMake's find_program(CARGO cargo)
-          # falls through to /usr/bin/cargo (the apt rust we just
-          # installed via build-dep). debian:12 container has no
-          # ~/.cargo to begin with — no-op there.
-          if [ -d "$HOME/.cargo/bin" ]; then
+          # Two cases:
+          #
+          #  1. ubuntu-24.04 runner — apt rustc 1.75 + a rustup wrapper at
+          #     ~/.cargo/bin/{cargo,rustc} ahead of /usr/bin. The wrapper
+          #     has no default toolchain and can't be coaxed back through
+          #     dpkg-buildpackage's child env (we tried `rustup default
+          #     stable`, the env loses it). Delete the wrapper so CMake's
+          #     find_program(CARGO cargo) hits /usr/bin/cargo.
+          #
+          #  2. debian:12 container — apt rustc 1.63, too old for our
+          #     transitive deps (regex 1.12.3 needs 1.65+). Install rustup
+          #     with stable so /root/.cargo/bin/cargo IS the cargo CMake
+          #     finds first. Mirrors packaging/Dockerfile.deb's policy.
+          set -eux
+          APT_RUSTC_MAJOR=$(rustc --version | awk '{print $2}' | cut -d. -f1)
+          APT_RUSTC_MINOR=$(rustc --version | awk '{print $2}' | cut -d. -f2)
+          if [ "$APT_RUSTC_MAJOR" -gt 1 ] || \
+             { [ "$APT_RUSTC_MAJOR" -eq 1 ] && [ "$APT_RUSTC_MINOR" -ge 75 ]; }; then
+              echo "apt rust >=1.75 — using it, removing any rustup wrapper"
               rm -rf "$HOME/.cargo/bin"
+          else
+              echo "apt rust <1.75 — installing rustup stable"
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                  | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
+              export PATH="$HOME/.cargo/bin:$PATH"
+              echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           fi
           hash -r
           which cargo
