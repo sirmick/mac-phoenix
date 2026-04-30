@@ -65,35 +65,10 @@ extern "C" {
 // REAL_ADDRESSING: VMBaseDiff = 0 (defined as const in vm.hpp)
 // No need for gZeroPage, gKernelData, gPageTable etc. — all mapped directly
 
-// PPC-only globals — SheepShaver naming, ppc:: namespace.
-// BasiliskII uses RAMBaseMac/ROMBaseMac (different globals in basilisk_glue.cpp).
-// Set by cpu_context.cpp:init_ppc().
-namespace ppc {
-    uint32 RAMBase = 0;
-    uint32 RAMSize = 0;
-    uint8 *RAMBaseHost = nullptr;
-    uint32 ROMBase = 0;
-    uint8 *ROMBaseHost = nullptr;
-    uint32 KernelDataAddr = KERNEL_DATA_BASE;
-}
-
-// InterruptFlags: SHARED — single definition in uae_wrapper.cpp.
-// SetInterruptFlag/ClearInterruptFlag: SHARED — defined in uae_wrapper.cpp.
-
-// PVR + clock-speed defaults moved to init_ppc.cpp (kpx_shared) so
-// the cross-arch link sees a definition. See init_ppc.cpp.
-
-// BootGlobs address (set during init, at top of RAM)
-uint32 BootGlobsAddr = 0;
-
-// GetTicks_usec provided by timer_unix.cpp
-
-// SheepMem static members (stubbed - initialized during PPC boot, out of scope)
-uint32  SheepMem::page_size = 4096;
-uintptr SheepMem::zero_page = 0;
-uintptr SheepMem::base = 0;
-uintptr SheepMem::data = 0;
-uintptr SheepMem::proc = 0;
+// PPC-mode VM layout, BootGlobsAddr, SheepMem static members all moved
+// to init_ppc.cpp (kpx_shared) so the cross-arch link sees a definition
+// — see init_ppc.cpp. InterruptFlags / SetInterruptFlag /
+// ClearInterruptFlag remain in uae_wrapper.cpp.
 
 // ============================================================================
 // Stub functions referenced by KPX code (implemented during PPC boot, out of scope)

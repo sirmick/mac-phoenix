@@ -53,15 +53,39 @@
 
 using namespace ppc;
 
-// PVR + clock-speed defaults — read by init_ppc + name_registry_ppc to
-// stamp the kernel data block / Open Firmware properties. Lived in
-// cpu_ppc_kpx.cpp historically (x86-only); moved here so kpx_shared
-// owns them and the unicorn-ppc backend on arm64 sees a definition
-// at link time. SheepShaver-default PowerPC 7400 / AltiVec, 100 MHz.
+// PPC-mode shared state. All of this used to live in cpu_ppc_kpx.cpp
+// (x86-only). Moved into kpx_shared so cpu_unicorn_ppc.cpp sees a
+// definition at link time on every arch. Backends WRITE these during
+// boot via cpu_context.cpp:init_ppc(); kpx_shared READS them from
+// the Mac OS infrastructure (rom_patches, name_registry, etc).
+
+// PVR + clock-speed defaults. SheepShaver: PowerPC 7400 + AltiVec, 100 MHz.
 uint32 PVR = 0x000c0000;
 int64 TimebaseSpeed = 25000000;    // 25 MHz timebase
 int64 BusClockSpeed = 100000000;   // 100 MHz bus
 int64 CPUClockSpeed = 100000000;   // 100 MHz CPU
+
+// PPC VM layout — set by init_ppc() in cpu_context.cpp.
+namespace ppc {
+    uint32 RAMBase = 0;
+    uint32 RAMSize = 0;
+    uint8 *RAMBaseHost = nullptr;
+    uint32 ROMBase = 0;
+    uint8 *ROMBaseHost = nullptr;
+    uint32 KernelDataAddr = KERNEL_DATA_BASE;
+}
+
+// BootGlobs address (set during init, at top of RAM).
+uint32 BootGlobsAddr = 0;
+
+// SheepMem static members — class declared in compat/thunks.h. Storage
+// lives here so name_registry_ppc, ppc_memory, thunks_ppc all link
+// against the same definition.
+uint32  SheepMem::page_size = 4096;
+uintptr SheepMem::zero_page = 0;
+uintptr SheepMem::base = 0;
+uintptr SheepMem::data = 0;
+uintptr SheepMem::proc = 0;
 
 #ifdef ENABLE_MON
 #include "mon.h"
