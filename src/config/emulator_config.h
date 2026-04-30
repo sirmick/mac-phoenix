@@ -126,6 +126,13 @@ struct EmulatorConfig {
     NetworkMode network = NetworkMode::None;
     std::string network_if;            // Socket path when network=socket
 
+    // Serial ports — empty = port disabled (driver Open returns openErr).
+    // Non-empty values: "pty" allocates a fresh pseudo-tty (slave path
+    // logged to stderr); anything else is treated as a device path
+    // (/dev/ttyUSB0, /tmp/socat-link, /dev/pts/N) and opened directly.
+    std::string serial_a;
+    std::string serial_b;
+
     // IPC child mode (--ipc flag, used for PPC subprocess)
     bool ipc_mode = false;
 

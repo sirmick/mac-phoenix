@@ -350,6 +350,20 @@
                             <option value="socket">NAT (net-bridge)</option>
                         </select>
                     </div>
+                    <!-- Serial ports — empty = disabled. "pty" auto-allocates a
+                         pseudo-terminal at boot and logs the slave path
+                         (`screen /dev/pts/N` etc.). Anything else is opened
+                         as a path (/dev/ttyUSB0, a socat link, etc.). -->
+                    <div class="form-group">
+                        <label for="cfg-serial-a">Serial port A</label>
+                        <input type="text" id="cfg-serial-a"
+                               placeholder='off, "pty", or /dev/ttyUSB0'>
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-serial-b">Serial port B</label>
+                        <input type="text" id="cfg-serial-b"
+                               placeholder='off, "pty", or /dev/ttyUSB0'>
+                    </div>
                     <!-- JIT toggles (shown only for backends that support them) -->
                     <div class="form-group" id="cfg-jit-group">
                         <div class="checkbox-group">

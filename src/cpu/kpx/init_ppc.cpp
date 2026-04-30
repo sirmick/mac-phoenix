@@ -149,7 +149,9 @@ bool InitAll_PPC(const char *vmdir)
 	// Init network
 	EtherInit();
 
-	// Init serial ports
+	// Init serial ports — global SerialInit (serial_adapter.cpp) routes
+	// through g_platform.serial_init = serial_unix_init. Same code path
+	// as m68k; both backends share the_serd_port[] storage.
 	SerialInit();
 
 	// Init Time Manager
@@ -304,7 +306,7 @@ void ExitAll_PPC(void)
 	// Exit Time Manager
 	TimerExit();
 
-	// Exit serial
+	// Exit serial (platform-routed; see init counterpart above).
 	SerialExit();
 
 	// Exit network

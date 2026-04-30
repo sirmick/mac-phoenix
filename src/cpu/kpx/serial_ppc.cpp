@@ -12,72 +12,17 @@
 #include "sysdeps.h"
 #include "main.h"
 #include "macos_util.h"
+#include "serial.h"          // kpx/compat/serial.h: SERDPort + extern ::the_serd_port[2] + serdt enum
 #include "serial_defs.h"
-
-// SERDPort class definition — must be outside namespace ppc
-// (it's a shared type defined in the common serial.h)
-class SERDPort {
-public:
-	SERDPort() { is_open = false; input_dt = output_dt = 0; }
-	virtual ~SERDPort() {}
-	virtual int16 open(uint16 config) = 0;
-	virtual int16 prime_in(uint32 pb, uint32 dce) = 0;
-	virtual int16 prime_out(uint32 pb, uint32 dce) = 0;
-	virtual int16 control(uint32 pb, uint32 dce, uint16 code) = 0;
-	virtual int16 status(uint32 pb, uint32 dce, uint16 code) = 0;
-	virtual int16 close(void) = 0;
-	bool is_open;
-	uint8 cum_errors;
-	bool read_pending;
-	bool read_done;
-	uint32 input_dt;
-	bool write_pending;
-	bool write_done;
-	uint32 output_dt;
-	uint32 dt_store;
-};
-
-// Serial driver Deferred Task structure offsets (from common serial.h)
-enum {
-	serdtCode = 20,
-	serdtResult = 30,
-	serdtDCE = 34,
-	SIZEOF_serdt = 38
-};
 
 #define DEBUG 0
 #include "debug.h"
 
 namespace ppc {
 
-SERDPort *the_serd_port[2];
-
-// ============================================================================
-// Null SERDPort — rejects all I/O immediately but does so properly
-// ============================================================================
-
-class NullSERDPort : public SERDPort {
-public:
-	NullSERDPort() {}
-	virtual ~NullSERDPort() {}
-
-	virtual int16 open(uint16 config) { return noErr; }
-	virtual int16 prime_in(uint32 pb, uint32 dce) { return readErr; }
-	virtual int16 prime_out(uint32 pb, uint32 dce) { return writErr; }
-	virtual int16 control(uint32 pb, uint32 dce, uint16 code) { return controlErr; }
-	virtual int16 status(uint32 pb, uint32 dce, uint16 code)
-	{
-		switch (code) {
-			case kSERDInputCount:
-				WriteMacInt32(pb + csParam, 0); // 0 bytes available
-				return noErr;
-			default:
-				return statusErr;
-		}
-	}
-	virtual int16 close() { return noErr; }
-};
-
+// SerialInit / SerialExit are NOT provided here — they live at global
+// scope (serial_adapter.cpp → g_platform.serial_init → serial_unix_init)
+// and serve both PPC and m68k init paths.
 
 // IOCommandIsComplete function pointer (resolved at first SerialOpen)
 typedef int16 (*iocic_ptr)(uint32, int16);
@@ -85,24 +30,6 @@ static uint32 iocic_tvect = 0;
 static inline int16 IOCommandIsComplete(uint32 arg1, int16 arg2)
 {
 	return (int16)CallMacOS2(iocic_ptr, iocic_tvect, arg1, arg2);
-}
-
-
-// ============================================================================
-// SerialInit / SerialExit
-// ============================================================================
-
-void SerialInit(void)
-{
-	the_serd_port[0] = new NullSERDPort();
-	the_serd_port[1] = new NullSERDPort();
-}
-
-void SerialExit(void)
-{
-	delete the_serd_port[0];
-	delete the_serd_port[1];
-	the_serd_port[0] = the_serd_port[1] = nullptr;
 }
 
 

@@ -109,6 +109,18 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back(net_arg);
     }
 
+    // Serial — child loads from /dev/null so JSON is unavailable; relay
+    // these explicitly via CLI. Only emit when set (empty = port disabled,
+    // matching today's "omit from JSON" pattern).
+    if (!config_->serial_a.empty()) {
+        args.push_back("--serial-a");
+        args.push_back(config_->serial_a);
+    }
+    if (!config_->serial_b.empty()) {
+        args.push_back("--serial-b");
+        args.push_back(config_->serial_b);
+    }
+
     // CPU feature flags
     args.push_back(config_->jit ? "--jit" : "--no-jit");
     args.push_back(config_->jit68k ? "--jit68k" : "--no-jit68k");

@@ -3698,6 +3698,8 @@ function configFromServerJson(cfg) {
         bridge_enabled: cfg.bridge_enabled ?? false,
         network: cfg.network || 'none',
         network_if: cfg.network_if || '',
+        serial_a: cfg.serial_a || '',
+        serial_b: cfg.serial_b || '',
         // Keyboard remap (nested in JSON for grouping). Defaults match the
         // PC-shortcut habit: Ctrl→⌘, Alt→⌥, Win→⌃.
         // Pass keyboard fields through verbatim — applyKeyboardConfig() resolves
@@ -3752,6 +3754,11 @@ function buildConfigJson() {
         // from disk so saving via the UI doesn't clobber custom server-side
         // values.
         network_if: currentConfig.network_if || '',
+        // Serial port A/B — text inputs; trim whitespace so an empty/spaces
+        // value disables the port. Backend treats "" as disabled, "pty" as
+        // auto-allocate, anything else as a device path.
+        serial_a: (document.getElementById('cfg-serial-a')?.value || '').trim(),
+        serial_b: (document.getElementById('cfg-serial-b')?.value || '').trim(),
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         keyboard: {
@@ -4296,6 +4303,10 @@ function updateConfigUI() {
     if (networkEl) {
         networkEl.value = currentConfig.network || 'none';
     }
+    const serialAEl = document.getElementById('cfg-serial-a');
+    if (serialAEl) serialAEl.value = currentConfig.serial_a || '';
+    const serialBEl = document.getElementById('cfg-serial-b');
+    if (serialBEl) serialBEl.value = currentConfig.serial_b || '';
 
     refreshBootFromOptions();
     const bootdriverEl = document.getElementById('cfg-bootdriver');
@@ -4378,6 +4389,8 @@ async function saveConfig() {
     currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? false;
     currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
     currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
+    currentConfig.serial_a = (document.getElementById('cfg-serial-a')?.value || '').trim();
+    currentConfig.serial_b = (document.getElementById('cfg-serial-b')?.value || '').trim();
     currentConfig.keyboard = {
         ctrl: document.getElementById('cfg-kb-ctrl')?.value || '',
         alt:  document.getElementById('cfg-kb-alt')?.value  || '',

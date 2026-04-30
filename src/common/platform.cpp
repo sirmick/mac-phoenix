@@ -5,6 +5,7 @@
  */
 
 #include "platform.h"
+#include "../drivers/serial/serial_unix.h"
 
 /*
  *  Global platform instance
@@ -37,9 +38,9 @@ void platform_init(void)
 	g_platform.audio_init = audio_null_init;
 	g_platform.audio_exit = audio_null_exit;
 
-	// Serial - null driver
-	g_platform.serial_init = serial_null_init;
-	g_platform.serial_exit = serial_null_exit;
+	// Serial - Unix backend (PTY + tty); reads g_emu_config.serial_a/b at init.
+	g_platform.serial_init = serial_unix_init;
+	g_platform.serial_exit = serial_unix_exit;
 
 	// Ether - null driver
 	g_platform.ether_init = ether_null_init;

@@ -21,8 +21,8 @@ add_library(drivers STATIC
   disk/disk_null.cpp
   scsi/scsi_null.cpp
   scsi/scsi_adapter.cpp
-  serial/serial_null.cpp
   serial/serial_adapter.cpp
+  serial/serial_unix.cpp
   # Ethernet
   ether/ether_null.cpp
   ether/ether_adapter.cpp

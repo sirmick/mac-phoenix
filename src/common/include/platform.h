@@ -312,10 +312,6 @@ extern void video_null_refresh(void);
 extern void audio_null_init(void);
 extern void audio_null_exit(void);
 
-// Serial null driver
-extern void serial_null_init(void);
-extern void serial_null_exit(void);
-
 // Ether null driver
 extern bool ether_null_init(void);
 extern void ether_null_exit(void);

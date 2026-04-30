@@ -231,6 +231,26 @@ sub test_network {
     }
 }
 
+# --- Serial port probe (passive — no open() calls) ---
+#
+# The first cut of this probe attempted open('/dev/printer') etc. via GUSI;
+# that hung MacPerl indefinitely (classic Mac serial drivers can block
+# waiting for DTR or hardware init when no backend is wired). Restricted
+# here to MODULE-PRESENCE checks only — answers "what bindings does this
+# MacPerl have" without touching any driver.
+#
+# Once the host serial backend is wired up, a follow-up test can safely
+# attempt open() against a known-good path.
+
+sub test_serial_probe {
+    # Disabled: probing serial without a wired backend reproducibly hangs
+    # the test suite (Mac::* require itself, or first Toolbox call after,
+    # blocks waiting for hardware the emulator doesn't model yet). Active
+    # probe lives in a separate post-backend-port test that only runs
+    # after --serial-a is configured.
+    report_skip('serial_probe_disabled', 'awaiting host serial backend');
+}
+
 # --- Main ---
 
 report_init();
@@ -238,6 +258,7 @@ test_disk();
 test_extfs();
 test_audio();
 test_network();
+test_serial_probe();
 report_finish();
 
 print "MacTestSuite complete: $gPass passed, $gFail failed, $gSkip skipped\n";

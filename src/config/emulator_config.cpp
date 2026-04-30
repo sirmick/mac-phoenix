@@ -170,6 +170,10 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["network"] = network_string();
     if (!network_if.empty()) j["network_if"] = network_if;
 
+    // Serial — only emit when set; absence means "disabled".
+    if (!serial_a.empty()) j["serial_a"] = serial_a;
+    if (!serial_b.empty()) j["serial_b"] = serial_b;
+
     // Logging
     j["log_level"]          = log_level;
     j["debug_connection"]   = debug_connection;
@@ -286,6 +290,15 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     }
     if (j.contains("network_if")) network_if = json_utils::get_string(j, "network_if");
 
+    // ── Serial ──────────────────────────────────────────────────
+    // Treat "none" / "off" as explicit disable, mapping to empty string.
+    auto normalize_serial = [](std::string s) {
+        if (s == "none" || s == "off") return std::string();
+        return s;
+    };
+    if (j.contains("serial_a")) serial_a = normalize_serial(json_utils::get_string(j, "serial_a"));
+    if (j.contains("serial_b")) serial_b = normalize_serial(json_utils::get_string(j, "serial_b"));
+
     // ── Logging ─────────────────────────────────────────────────
     if (j.contains("log_level"))         log_level         = json_utils::get_int(j, "log_level");
     if (j.contains("debug_connection"))  debug_connection  = json_utils::get_bool(j, "debug_connection");
@@ -397,6 +410,11 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog\n");
             printf("\nNetworking:\n");
             printf("  --network MODE             none | socket[:PATH] (default: none)\n");
+            printf("\nSerial:\n");
+            printf("  --serial-a PATH            Port A: 'pty' (auto-allocate),\n");
+            printf("                             /dev/pts/N or /dev/ttyUSB0 (open path),\n");
+            printf("                             'none'/'off' or omit (disabled)\n");
+            printf("  --serial-b PATH            Port B (same syntax as --serial-a)\n");
             printf("\nAutomation:\n");
             printf("  --bridge                   Enable automation bridge\n");
             printf("  --browser                  Run MacBrowser (Firefox-on-Xvfb pipeline)\n");
@@ -575,6 +593,19 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             config.ipc_mode = true;
             config.enable_webserver = false;
             argv[i] = nullptr; continue;
+        }
+
+        // --serial-a / --serial-b — "none"/"off" disables; anything else
+        // is stored as-is (interpreted by serial_unix_init at backend init).
+        if (strcmp(argv[i], "--serial-a") == 0 && i+1 < argc) {
+            std::string v = argv[i+1];
+            config.serial_a = (v == "none" || v == "off") ? std::string() : v;
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--serial-b") == 0 && i+1 < argc) {
+            std::string v = argv[i+1];
+            config.serial_b = (v == "none" || v == "off") ? std::string() : v;
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
         // --network <mode>[:<path>]
@@ -801,6 +832,11 @@ void print_config(const EmulatorConfig& config) {
         fprintf(stderr, "[Config] Network: %s%s%s\n", config.network_string(),
                 config.network_if.empty() ? "" : ":",
                 config.network_if.empty() ? "" : config.network_if.c_str());
+    }
+    if (!config.serial_a.empty() || !config.serial_b.empty()) {
+        fprintf(stderr, "[Config] Serial A: %s, Serial B: %s\n",
+                config.serial_a.empty() ? "-" : config.serial_a.c_str(),
+                config.serial_b.empty() ? "-" : config.serial_b.c_str());
     }
     for (const auto& d : config.disk_paths)
         fprintf(stderr, "[Config] Disk: %s\n", d.c_str());
