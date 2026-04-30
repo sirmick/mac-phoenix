@@ -14,9 +14,10 @@ test.describe('UI Basic', () => {
   test('key UI elements are present', async ({ page, emulatorPort }) => {
     await page.goto(`http://localhost:${emulatorPort}/`);
 
-    // Header controls
-    await expect(page.locator('#start-btn')).toBeVisible();
-    await expect(page.locator('#stop-btn')).toBeVisible();
+    // Both start and stop live in the DOM; one is visible at a time based
+    // on emulator state. Just assert they're attached.
+    await expect(page.locator('#start-btn')).toBeAttached();
+    await expect(page.locator('#stop-btn')).toBeAttached();
     await expect(page.locator('#config-btn')).toBeVisible();
     await expect(page.locator('#codec-select')).toBeVisible();
     await expect(page.locator('#mouse-mode-select')).toBeVisible();

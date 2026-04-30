@@ -5,6 +5,15 @@ import { test, expect } from './fixtures';
 
 test.describe('Stop and Reset', () => {
 
+  // The fixture spawns one emulator per worker and reuses it across tests, so
+  // an earlier test can leave the CPU running. Reset to a known stopped state
+  // before each test that drives the UI from the start button.
+  test.beforeEach(async ({ request, emulatorPort, hasRom }) => {
+    if (!hasRom) return;
+    await request.post(`http://localhost:${emulatorPort}/api/emulator/stop`);
+    await new Promise(r => setTimeout(r, 500));
+  });
+
   test('stop button stops the emulator', async ({ page, request, emulatorPort, hasRom }) => {
     test.skip(!hasRom, 'ROM required');
 
@@ -105,13 +114,15 @@ test.describe('Stop and Reset', () => {
     test.skip(!hasRom, 'ROM required');
 
     await page.goto(`http://localhost:${emulatorPort}/`);
+    await expect(page.locator('#start-btn')).toBeVisible();
 
     // Start
     await page.locator('#start-btn').click();
     await page.waitForTimeout(2000);
 
-    // Wait for button to change to "Reset" (confirms running state)
-    await expect(page.locator('#start-btn')).toHaveText('Reset', { timeout: 5000 });
+    // Start hides + stop split appears once status polling sees running.
+    await expect(page.locator('#start-btn')).toBeHidden({ timeout: 5000 });
+    await expect(page.locator('#stop-btn')).toBeVisible({ timeout: 5000 });
 
     // Click stop and intercept the network request
     const [stopResponse] = await Promise.all([
@@ -124,8 +135,10 @@ test.describe('Stop and Reset', () => {
     const stopBody = await stopResponse.json();
     expect(stopBody.success).toBe(true);
 
-    // Wait for status polling to update the button back to "Start"
-    await expect(page.locator('#start-btn')).toHaveText('Start', { timeout: 5000 });
+    // Polling flips back: Start visible, stop split hidden, reset disabled.
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#stop-btn')).toBeHidden({ timeout: 5000 });
+    await expect(page.locator('#reset-btn')).toBeDisabled({ timeout: 5000 });
   });
 
   test('reset button click sends POST restart and page reflects running state', async ({ page, emulatorPort, hasRom }) => {
@@ -133,32 +146,37 @@ test.describe('Stop and Reset', () => {
 
     await page.goto(`http://localhost:${emulatorPort}/`);
 
+    // Reset is disabled until the emulator is running.
+    await expect(page.locator('#reset-btn')).toBeDisabled();
+
     // Start
     await page.locator('#start-btn').click();
     await page.waitForTimeout(2000);
 
-    // Wait for button to change to "Reset"
-    await expect(page.locator('#start-btn')).toHaveText('Reset', { timeout: 5000 });
+    // Reset gets enabled once polling sees emulator_running.
+    await expect(page.locator('#reset-btn')).toBeEnabled({ timeout: 5000 });
 
     // Click reset and intercept the network request
     const [restartResponse] = await Promise.all([
       page.waitForResponse(resp =>
         resp.url().includes('/api/emulator/restart') && resp.status() === 200
       ),
-      page.locator('#start-btn').click(),  // Button says "Reset" now
+      page.locator('#reset-btn').click(),
     ]);
 
     const restartBody = await restartResponse.json();
     expect(restartBody.success).toBe(true);
 
-    // Should remain running after reset
-    await expect(page.locator('#start-btn')).toHaveText('Reset', { timeout: 5000 });
+    // Still running after reset → reset stays enabled, start stays hidden.
+    await expect(page.locator('#start-btn')).toBeHidden({ timeout: 5000 });
+    await expect(page.locator('#reset-btn')).toBeEnabled({ timeout: 5000 });
   });
 
   test('start after stop works', async ({ page, request, emulatorPort, hasRom }) => {
     test.skip(!hasRom, 'ROM required');
 
     await page.goto(`http://localhost:${emulatorPort}/`);
+    await expect(page.locator('#start-btn')).toBeVisible();
 
     // Start
     await page.locator('#start-btn').click();
@@ -173,8 +191,9 @@ test.describe('Stop and Reset', () => {
     let body = await resp.json();
     expect(body.emulator_running).toBe(false);
 
-    // Button should say "Start" again
-    await expect(page.locator('#start-btn')).toHaveText('Start', { timeout: 5000 });
+    // Start button should reappear once polling sees stopped state.
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#start-btn')).toHaveText('Start');
 
     // Start again
     await page.locator('#start-btn').click();

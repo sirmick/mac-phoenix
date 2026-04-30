@@ -3583,8 +3583,8 @@ document.addEventListener('fullscreenchange', () => {
 // Configuration Modal
 // ============================================================================
 
-async function loadStorage() {
-    if (storageCache) return storageCache;
+async function loadStorage(force = false) {
+    if (storageCache && !force) return storageCache;
     try {
         const res = await fetch(getApiUrl('storage'));
         storageCache = await res.json();
@@ -4041,6 +4041,9 @@ function initCreateImageDialog() {
             }
             statusEl.textContent = `Created ${data.filename}`;
             close();
+            // Bypass the cache — the file was just created and the
+            // existing storageCache predates it.
+            await loadStorage(true);
             await loadDiskList();
             await loadCdromList();
         } catch (e) {
@@ -4560,12 +4563,6 @@ async function restartGuest() {
     }
 }
 
-async function resetEmulator() {
-    // Reset = Restart (stop + start) since MACEMU_CMD_RESET crashes SheepShaver
-    logger.info('Resetting emulator...');
-    await restartEmulator();
-}
-
 async function invokeDebugger() {
     logger.info('Invoking debugger (Programmer\'s Key)...');
     try {
@@ -4752,16 +4749,14 @@ async function pollEmulatorStatus() {
             emuPid.textContent = 'PID: ' + (data.emulator_pid > 0 ? data.emulator_pid : '-');
         }
 
-        // Update Start/Reset button based on emulator state
+        // Start vs Power-Off occupy the same slot: Start (green) when stopped,
+        // Power Off / Shut Down… split (red) when running.
         const startBtn = document.getElementById('start-btn');
-        if (startBtn) {
-            if (data.emulator_running) {
-                startBtn.textContent = 'Reset';
-                startBtn.onclick = resetEmulator;
-            } else {
-                startBtn.textContent = 'Start';
-                startBtn.onclick = startEmulator;
-            }
+        const stopSplit = document.getElementById('stop-split');
+        if (startBtn && stopSplit) {
+            startBtn.style.display = data.emulator_running ? 'none' : '';
+            stopSplit.style.display = data.emulator_running ? '' : 'none';
+            startBtn.onclick = startEmulator;
         }
 
         // Default the primary Stop/Reset buttons to graceful actions only while
@@ -4771,6 +4766,7 @@ async function pollEmulatorStatus() {
         const useGraceful = data.emulator_running && data.bridge_agent_connected;
         const stopBtnP = document.getElementById('stop-btn');
         const resetBtnP = document.getElementById('reset-btn');
+        const resetMenuBtn = document.getElementById('reset-menu-btn');
         if (stopBtnP) {
             if (useGraceful) {
                 stopBtnP.textContent = 'Shut Down…';
@@ -4782,7 +4778,9 @@ async function pollEmulatorStatus() {
                 stopBtnP.onclick = stopEmulator;
             }
         }
+        // Reset/Restart only makes sense while the emulator is running.
         if (resetBtnP) {
+            resetBtnP.disabled = !data.emulator_running;
             if (useGraceful) {
                 resetBtnP.textContent = 'Restart…';
                 resetBtnP.title = 'Ask the guest OS to restart (quits apps first)';
@@ -4792,6 +4790,9 @@ async function pollEmulatorStatus() {
                 resetBtnP.title = 'Hard reset (restart emulator process)';
                 resetBtnP.onclick = restartEmulator;
             }
+        }
+        if (resetMenuBtn) {
+            resetMenuBtn.disabled = !data.emulator_running;
         }
 
         // Update emulator status in header status bar
@@ -5009,7 +5010,6 @@ function setupEventListeners() {
     const configBtn = document.getElementById('config-btn');
     if (configBtn) configBtn.addEventListener('click', openConfig);
 
-    // Set default start handler (status polling will switch to resetEmulator when running)
     const startBtn = document.getElementById('start-btn');
     if (startBtn) startBtn.onclick = startEmulator;
 

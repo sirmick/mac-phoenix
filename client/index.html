@@ -53,7 +53,7 @@
             <button class="btn" id="config-btn">Settings</button>
             <button class="btn success" id="start-btn">Start</button>
 
-            <div class="split-btn">
+            <div class="split-btn" id="stop-split" style="display: none;">
                 <button class="btn danger" id="stop-btn" title="Hard power off (kill emulator process)">Power Off</button>
                 <button class="btn danger split-arrow" id="stop-menu-btn" aria-label="Stop options" aria-haspopup="true" aria-expanded="false">▾</button>
                 <div class="split-menu" id="stop-menu" role="menu">
@@ -62,9 +62,9 @@
                 </div>
             </div>
 
-            <div class="split-btn">
-                <button class="btn warning" id="reset-btn" title="Hard reset (restart emulator process)">Reset</button>
-                <button class="btn warning split-arrow" id="reset-menu-btn" aria-label="Reset options" aria-haspopup="true" aria-expanded="false">▾</button>
+            <div class="split-btn" id="reset-split">
+                <button class="btn warning" id="reset-btn" title="Hard reset (restart emulator process)" disabled>Reset</button>
+                <button class="btn warning split-arrow" id="reset-menu-btn" aria-label="Reset options" aria-haspopup="true" aria-expanded="false" disabled>▾</button>
                 <div class="split-menu" id="reset-menu" role="menu">
                     <div class="split-menu-item" role="menuitem" data-action="reset" title="Restart the emulator process">Reset</div>
                     <div class="split-menu-item" role="menuitem" data-action="restart" title="Ask the guest OS to restart (quits apps first)">Restart…</div>
