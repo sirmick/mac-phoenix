@@ -69,6 +69,21 @@ jobs:
           # truth shared with packaging/Dockerfile.deb.
           sudo apt-get build-dep -y .
 
+      - name: Pin rustup default
+        run: |
+          # GitHub-hosted runners ship rustup in PATH but with no default
+          # toolchain configured. CMake's net-bridge target invokes
+          # `cargo`, which resolves to rustup's wrapper (in ~/.cargo/bin)
+          # before the apt /usr/bin/cargo we just installed — and rustup
+          # bails with "could not choose a version of cargo to run". Set
+          # stable as the default so the wrapper dispatches successfully.
+          # If rustup isn't installed (debian:12 container) this is a
+          # no-op and the apt cargo handles the build.
+          if command -v rustup >/dev/null; then
+              rustup default stable
+              rustup show
+          fi
+
       - name: dpkg-buildpackage
         run: |
           set -eux
@@ -122,6 +137,11 @@ jobs:
           # Same single source of truth as the package job — debian/control's
           # Build-Depends covers everything CMake needs.
           sudo apt-get build-dep -y .
+      - name: Pin rustup default
+        run: |
+          if command -v rustup >/dev/null; then
+              rustup default stable
+          fi
       - run: cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
       - run: cmake --build build -j$(nproc)
       - run: ctest --test-dir build -L unit --output-on-failure
