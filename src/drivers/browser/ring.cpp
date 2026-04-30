@@ -6,10 +6,30 @@
 #define BR_HOST 1
 #include "MacBrowser.h"
 
+#include <cstdio>
 #include <cstring>
+#include <mutex>
+#include <unordered_set>
 
 namespace browser {
 namespace {
+
+/* Host-side "this ring is dead" cache. We can't add fields to BrRing
+ * (it's a fixed cross-process layout), so the poison bit lives here.
+ * Guest restart allocates a fresh BrRing in new shm — its pointer
+ * won't be in this set, so the new ring starts clean. */
+std::mutex g_poison_mtx;
+std::unordered_set<BrRing*> g_poisoned;
+
+bool ring_is_poisoned(BrRing* r) {
+    std::lock_guard<std::mutex> lk(g_poison_mtx);
+    return g_poisoned.count(r) != 0;
+}
+
+void ring_poison(BrRing* r) {
+    std::lock_guard<std::mutex> lk(g_poison_mtx);
+    g_poisoned.insert(r);
+}
 
 /* Bytes available for new producer writes, accounting for the 4-byte
  * "reserved gap" we keep between write_idx and read_idx. */
@@ -80,26 +100,52 @@ bool ring_push(BrRing* ring, uint16_t type, const void* payload, uint16_t len)
 bool ring_pop(BrRing* ring, uint16_t* out_type, void* buf,
               uint16_t buf_capacity, uint16_t* out_len)
 {
+    /* Once we've seen a corrupt header on this ring, stop draining.
+     * Either the guest crashed mid-write or write_idx itself got
+     * stomped — continuing to "dispatch" garbage floods the caller
+     * with [Cmd] unknown spam. */
+    if (ring_is_poisoned(ring)) return false;
+
     uint32_t write_idx = br_u32_load(&ring->write_idx);
     BR_FENCE_ACQUIRE();
     uint32_t read_idx  = br_u32_load(&ring->read_idx);
 
     if (read_idx == write_idx) return false;  /* empty */
 
+    /* Bounds check the indices themselves. A wild write_idx would
+     * otherwise let us read past data[] into the next struct field. */
+    if (write_idx >= BR_RING_SIZE || read_idx >= BR_RING_SIZE ||
+        (read_idx & 3u) || (write_idx & 3u)) {
+        fprintf(stderr, "[Ring] poisoned: read=%u write=%u (size=%u)\n",
+                read_idx, write_idx, BR_RING_SIZE);
+        ring_poison(ring);
+        return false;
+    }
+
     uint16_t type, len;
     ring_read_hdr(ring, read_idx, &type, &len);
     if (type == BR_MSG_WRAP) {
         read_idx = 0;
         if (read_idx == write_idx) {
-            /* Producer wrapped but next message not yet visible. Commit
-             * the read_idx jump so we don't re-read the WRAP, then tell
-             * the caller to retry. */
             BR_FENCE_RELEASE();
             br_u32_store(&ring->read_idx, read_idx);
             return false;
         }
         ring_read_hdr(ring, read_idx, &type, &len);
         if (type == BR_MSG_WRAP) return false;  /* defensive */
+    }
+
+    /* Validate the header before trusting it. A length > the ring's
+     * payload capacity, or the residual gap between read_idx and the
+     * end-of-data, can only be garbage — the producer would have
+     * emitted a WRAP first. Poison rather than dispatch. */
+    uint32_t aligned_len = (uint32_t)BR_MSG_ALIGN(len);
+    if (len > BR_MSG_MAX_PAYLOAD ||
+        read_idx + BR_MSG_HDR_BYTES + aligned_len > BR_RING_SIZE) {
+        fprintf(stderr, "[Ring] poisoned: bogus header type=0x%x "
+                "len=%u at read=%u\n", type, len, read_idx);
+        ring_poison(ring);
+        return false;
     }
 
     *out_type = type;
@@ -109,7 +155,6 @@ bool ring_pop(BrRing* ring, uint16_t* out_type, void* buf,
         memcpy(buf, &ring->data[read_idx + BR_MSG_HDR_BYTES], to_copy);
     }
 
-    uint32_t aligned_len = (uint32_t)BR_MSG_ALIGN(len);
     read_idx += BR_MSG_HDR_BYTES + aligned_len;
     if (read_idx == BR_RING_SIZE) read_idx = 0;
 

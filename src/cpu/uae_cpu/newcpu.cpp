@@ -1314,7 +1314,24 @@ void REGPARAM2 op_illg (uae_u32 opcode)
 		return;
 	}
 
-	write_log ("Illegal instruction: %04x at %08x\n", opcode, pc);
+	{
+		/* Throttle: a CPU stuck in an exception loop hits the same
+		 * (opcode, pc) every cycle. Print once per (opcode, pc)
+		 * change, and once every 4096 hits otherwise — enough to
+		 * notice a steady stall without flooding stderr. */
+		static uae_u32 last_pc = 0;
+		static unsigned last_opcode = 0;
+		static uae_u64 hits = 0;
+		hits++;
+		if (pc != last_pc || opcode != last_opcode || (hits & 0xFFF) == 0) {
+			write_log ("Illegal instruction: %04x at %08x%s\n",
+			           opcode, pc,
+			           (pc == last_pc && opcode == last_opcode)
+			               ? " (stalled)" : "");
+			last_pc = pc;
+			last_opcode = opcode;
+		}
+	}
 #if USE_JIT && JIT_DEBUG
 	compiler_dumpstate();
 #endif

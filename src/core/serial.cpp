@@ -128,13 +128,15 @@ int16 SerialPrime(uint32 pb, uint32 dce, int port)
 
 	if (port == 0 || port == 2) {
 		if (the_port->read_pending) {
-			printf("FATAL: SerialPrimeIn() called while request is pending\n");
+			fprintf(stderr, "[Serial] SerialPrimeIn(port=%d) overlap — "
+			        "request still pending\n", port);
 			return readErr;
 		} else
 			return the_port->prime_in(pb, dce);
 	} else {
 		if (the_port->write_pending) {
-			printf("FATAL: SerialPrimeOut() called while request is pending\n");
+			fprintf(stderr, "[Serial] SerialPrimeOut(port=%d) overlap — "
+			        "request still pending\n", port);
 			return readErr;
 		} else
 			return the_port->prime_out(pb, dce);

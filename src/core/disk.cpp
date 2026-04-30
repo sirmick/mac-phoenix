@@ -315,7 +315,7 @@ int16 DiskPrime(uint32 pb, uint32 dce)
 	}();
 	static uint64_t s_enter_count = 0;
 	++s_enter_count;
-	if (s_enter_count <= 20 || (s_enter_count % 50) == 0) {
+	if (s_trace) {
 		fprintf(stderr, "[DiskPrime enter] #%llu pb=0x%08x dce=0x%08x\n",
 				(unsigned long long)s_enter_count, pb, dce);
 	}
@@ -375,13 +375,12 @@ int16 DiskPrime(uint32 pb, uint32 dce)
 		WriteMacInt32(dce + dCtlPosition, old_pos + actual);
 	}
 
-	if (s_enter_count <= 20 || (s_enter_count % 50) == 0) {
+	if (s_trace) {
 		fprintf(stderr, "[DiskPrime result] #%llu %s drv=%d pos=0x%llx len=%zu act=%zu -> %d\n",
 				(unsigned long long)s_enter_count,
 				(trap & 0xff) == aRdCmd ? "R" : "W", info->num,
 				(unsigned long long)position, length, actual, result);
 	}
-	(void)s_trace;
 
 	return result;
 }
