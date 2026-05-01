@@ -668,10 +668,15 @@ Response APIRouter::handle_codec_post(const Request& req) {
 }
 
 Response APIRouter::handle_codecs_get(const Request& /*req*/) {
+    // H.264 IDR keyframes get fragile across RTP at high resolutions; the
+    // browser's RTP reassembly window can't hold a >~2K keyframe reliably.
+    // Advertise a per-codec ceiling so the client controller can drop H.264
+    // out of the auto-fallback chain when the guest exceeds it.
     std::string json = "{\"codecs\":[";
     json += "{\"id\":\"png\",\"name\":\"PNG\",\"available\":true}";
     json += ",{\"id\":\"h264\",\"name\":\"H.264\",\"available\":";
     json += codec_available(CodecType::H264) ? "true" : "false";
+    json += ",\"max_width\":2560,\"max_height\":1080";
     json += "}";
     json += ",{\"id\":\"vp9\",\"name\":\"VP9\",\"available\":";
     json += codec_available(CodecType::VP9) ? "true" : "false";

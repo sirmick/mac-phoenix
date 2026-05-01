@@ -19,12 +19,41 @@
         { name: 'http',   codecs: ['httpstream'] },
     ];
 
-    function buildChain(availableCodecs) {
-        const set = availableCodecs instanceof Set ? availableCodecs : new Set(availableCodecs);
+    // Accepts:
+    //   Array<string> / Set<string>                     — availability only
+    //   Object { id: {max_width?, max_height?} }       — also gates by current res
+    //   Map   <id, {max_width?, max_height?}>          — same
+    function _normalizeCodecs(input) {
+        if (input instanceof Map) return input;
+        const m = new Map();
+        if (input == null) return m;
+        if (input instanceof Set) {
+            for (const id of input) m.set(id, {});
+        } else if (Array.isArray(input)) {
+            for (const id of input) m.set(id, {});
+        } else if (typeof input === 'object') {
+            for (const id of Object.keys(input)) m.set(id, input[id] || {});
+        }
+        return m;
+    }
+
+    function _fitsResolution(info, res) {
+        if (!res) return true;
+        if (info.max_width != null && res.w > info.max_width) return false;
+        if (info.max_height != null && res.h > info.max_height) return false;
+        return true;
+    }
+
+    function buildChain(codecsInfo, currentResolution) {
+        const m = _normalizeCodecs(codecsInfo);
         const chain = [];
         for (const tier of TIERS) {
-            const pick = tier.codecs.find(c => set.has(c));
-            if (pick) chain.push(pick);
+            for (const id of tier.codecs) {
+                if (!m.has(id)) continue;
+                if (!_fitsResolution(m.get(id), currentResolution)) continue;
+                chain.push(id);
+                break;
+            }
         }
         return chain;
     }
@@ -59,6 +88,10 @@
             this.attemptStart = 0;
             this.firstFrameSeen = false;
             this.emulatorRunning = true;
+            // Codec info + current resolution drive buildChain. Cached on
+            // start() so onResolutionChange() can rebuild without re-fetching.
+            this.codecsInfo = null;
+            this.currentResolution = null;
             this._cancelTimer();
             this.phase = 'idle';
         }
@@ -115,13 +148,18 @@
         }
 
         // Host calls this once per session (page load, or when the emulator
-        // comes back up after being off).
+        // comes back up after being off). availableCodecs may be a plain
+        // array of ids OR an object/Map keyed by id with {max_width,
+        // max_height} info — the latter drives the resolution gate.
         start(opts) {
             const availableCodecs = (opts && opts.availableCodecs) || [];
             const emulatorRunning = !opts || opts.emulatorRunning !== false;
+            const currentResolution = (opts && opts.currentResolution) || null;
             this._reset();
             this.emulatorRunning = emulatorRunning;
-            this.chain = buildChain(availableCodecs);
+            this.codecsInfo = availableCodecs;
+            this.currentResolution = currentResolution;
+            this.chain = buildChain(availableCodecs, currentResolution);
             if (!this.emulatorRunning) {
                 this._setPhase('idle-mac-off');
                 return null;
@@ -131,6 +169,38 @@
                 return null;
             }
             return this._tryNext('start');
+        }
+
+        // Host calls this when the guest reports a new screen resolution
+        // (videoWidth/Height changed, canvas frame metadata, etc). If the
+        // resolution gate makes the active codec invalid, step to the
+        // first valid codec in the rebuilt chain. Otherwise — same codec
+        // still fits — no-op so we don't churn the transport.
+        onResolutionChange(res) {
+            if (!res || !this.codecsInfo) return;
+            this.currentResolution = res;
+            const newChain = buildChain(this.codecsInfo, res);
+            const currentCodec = this.chain[this.chainIdx];
+            if (currentCodec && newChain.includes(currentCodec)) {
+                // Still valid — just retain the new chain so future fallbacks
+                // step against the resolution-aware list.
+                this.chain = newChain;
+                this.chainIdx = newChain.indexOf(currentCodec);
+                return;
+            }
+            this._emit('debug', {
+                event: 'codec.resolution_invalidates',
+                codec: currentCodec,
+                resolution: res,
+            });
+            this.chain = newChain;
+            this.chainIdx = -1;
+            if (this.chain.length === 0) {
+                this._cancelTimer();
+                this._setPhase('exhausted', { reason: 'no-codec-fits-resolution' });
+                return;
+            }
+            this._tryNext('resolution-change');
         }
 
         // ICE state from RTCPeerConnection. ICE-failed steps the chain even

@@ -386,6 +386,90 @@ test('WS close on vp9 (tier 1): ignored — does not fall back', () => {
 
 // ── debug timing payload ────────────────────────────────────────────────
 
+// ── resolution gate ─────────────────────────────────────────────────────
+
+test('buildChain: per-codec max_width/max_height filters when resolution exceeds', () => {
+    const codecs = {
+        vp9: {},                                          // unbounded
+        h264: { max_width: 1920, max_height: 1080 },     // bounded
+        webp: {},
+        png: {},
+        httpstream: {},
+    };
+    // Below cap: h264 stays in tier 1 alongside vp9 (vp9 still wins; first match)
+    assert.deepEqual(
+        buildChain(codecs, { w: 1024, h: 768 }),
+        ['vp9', 'webp', 'httpstream'],
+    );
+    // Above h264 cap but vp9 unbounded: tier 1 still picks vp9
+    assert.deepEqual(
+        buildChain(codecs, { w: 2560, h: 1440 }),
+        ['vp9', 'webp', 'httpstream'],
+    );
+    // h264 only, above cap: tier 1 drops out entirely → tier 2 wins
+    const h264only = { h264: { max_width: 1920, max_height: 1080 }, webp: {}, httpstream: {} };
+    assert.deepEqual(
+        buildChain(h264only, { w: 2560, h: 1440 }),
+        ['webp', 'httpstream'],
+    );
+    // h264 only, at cap exactly: still in
+    assert.deepEqual(
+        buildChain(h264only, { w: 1920, h: 1080 }),
+        ['h264', 'webp', 'httpstream'],
+    );
+});
+
+test('buildChain: object form without resolution is same as array form', () => {
+    const obj = { vp9: {}, webp: {}, httpstream: {} };
+    const arr = ['vp9', 'webp', 'httpstream'];
+    assert.deepEqual(buildChain(obj), buildChain(arr));
+});
+
+test('onResolutionChange: stays on current codec when still valid', () => {
+    const clock = makeFakeClock();
+    const c = makeController(clock);
+    const r = makeRecorder();
+    r.wire(c);
+    c.start({
+        availableCodecs: { vp9: {}, h264: { max_width: 1920, max_height: 1080 }, webp: {}, httpstream: {} },
+        currentResolution: { w: 1024, h: 768 },
+    });
+    assert.equal(c.chain[c.chainIdx], 'vp9');
+    const codecsBefore = r.codecs().slice();
+    // Bump resolution past h264 cap — vp9 unbounded, controller stays put
+    c.onResolutionChange({ w: 2560, h: 1440 });
+    assert.deepEqual(r.codecs(), codecsBefore, 'no extra selectCodec emitted');
+    assert.equal(c.chain[c.chainIdx], 'vp9', 'still on vp9');
+});
+
+test('onResolutionChange: steps when current codec becomes invalid', () => {
+    const clock = makeFakeClock();
+    const c = makeController(clock);
+    const r = makeRecorder();
+    r.wire(c);
+    // h264-only universe (no vp9 compiled in)
+    c.start({
+        availableCodecs: { h264: { max_width: 1920, max_height: 1080 }, webp: {}, httpstream: {} },
+        currentResolution: { w: 1024, h: 768 },
+    });
+    assert.equal(c.chain[c.chainIdx], 'h264');
+    // Resolution exceeds h264 cap → controller drops to webp
+    c.onResolutionChange({ w: 2560, h: 1440 });
+    assert.equal(r.codecs().slice(-1)[0], 'webp');
+    assert.ok(r.events.debug.some(e => e.event === 'codec.resolution_invalidates'));
+});
+
+test('onResolutionChange: no-op without prior start', () => {
+    const clock = makeFakeClock();
+    const c = makeController(clock);
+    const r = makeRecorder();
+    r.wire(c);
+    c.onResolutionChange({ w: 1920, h: 1080 });
+    assert.deepEqual(r.codecs(), []);
+});
+
+// ── debug timing payload ────────────────────────────────────────────────
+
 test('debug events include elapsedMs measured from attempt start', () => {
     const clock = makeFakeClock();
     const c = makeController(clock);

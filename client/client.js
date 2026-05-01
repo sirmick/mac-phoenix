@@ -1414,9 +1414,18 @@ class MacPhoenixClient {
         if (usesCanvas) {
             this.decoder.onFrame = (frameCount, metadata) => {
                 if (metadata && metadata.frameWidth && metadata.frameHeight) {
+                    const changed =
+                        this.currentScreenWidth !== metadata.frameWidth ||
+                        this.currentScreenHeight !== metadata.frameHeight;
                     this.currentScreenWidth = metadata.frameWidth;
                     this.currentScreenHeight = metadata.frameHeight;
                     this.cachedMouseRect = null;
+                    if (changed && this.fallbackCtl) {
+                        this.fallbackCtl.onResolutionChange({
+                            w: metadata.frameWidth,
+                            h: metadata.frameHeight,
+                        });
+                    }
                 }
 
                 // For HTTP stream: mark as connected on first frame
@@ -2057,6 +2066,12 @@ class MacPhoenixClient {
                     this.video.width = this.video.videoWidth;
                     this.video.height = this.video.videoHeight;
                     this.cachedMouseRect = null;
+                    if (this.fallbackCtl) {
+                        this.fallbackCtl.onResolutionChange({
+                            w: this.video.videoWidth,
+                            h: this.video.videoHeight,
+                        });
+                    }
                 };
 
                 // Mid-stream resolution changes (e.g., guest Mac switches
@@ -2081,6 +2096,12 @@ class MacPhoenixClient {
                     this.updateWebRTCState('video-size',
                         `${this.video.videoWidth} x ${this.video.videoHeight}`);
                     this.cachedMouseRect = null;
+                    if (this.fallbackCtl) {
+                        this.fallbackCtl.onResolutionChange({
+                            w: this.video.videoWidth,
+                            h: this.video.videoHeight,
+                        });
+                    }
                 };
 
                 this.video.onloadeddata = () => {
@@ -3383,7 +3404,7 @@ function initClient() {
         chain: buildCodecFallbackChain(),
     });
     client.fallbackCtl.start({
-        availableCodecs: Array.from(availableCodecIds),
+        availableCodecs: availableCodecsInfo,
         emulatorRunning: true,
     });
 }
@@ -4601,6 +4622,9 @@ async function invokeDebugger() {
 
 // Set of codec ids the server reports as available. httpstream is always usable.
 let availableCodecIds = new Set(['httpstream']);
+// Per-codec metadata from /api/codecs (max_width / max_height etc.)
+// used by the controller's resolution gate. Keyed by codec id.
+let availableCodecsInfo = { httpstream: {} };
 
 // Build the auto-fallback chain: best-quality first, narrowing to most-compatible.
 //   WebRTC tier (UDP/RTP)        : vp9, h264
@@ -4617,7 +4641,17 @@ function applyCodecAvailability(codecs) {
     if (!codecs) return;
 
     availableCodecIds = new Set(['httpstream']);
-    for (const c of codecs) if (c.available) availableCodecIds.add(c.id);
+    availableCodecsInfo = { httpstream: {} };
+    for (const c of codecs) {
+        if (!c.available) continue;
+        availableCodecIds.add(c.id);
+        // Carry through the resolution caps (used by the controller's
+        // codec-vs-current-resolution gate).
+        const info = {};
+        if (c.max_width != null) info.max_width = c.max_width;
+        if (c.max_height != null) info.max_height = c.max_height;
+        availableCodecsInfo[c.id] = info;
+    }
 
     if (!select) return;
     const currentValue = select.value;
@@ -4718,8 +4752,11 @@ async function pollEmulatorStatus() {
                 // (e.g., codecs disabled at config time).
                 await populateAvailableCodecs();
                 client.fallbackCtl.start({
-                    availableCodecs: Array.from(availableCodecIds),
+                    availableCodecs: availableCodecsInfo,
                     emulatorRunning: true,
+                    currentResolution: client.currentScreenWidth && client.currentScreenHeight
+                        ? { w: client.currentScreenWidth, h: client.currentScreenHeight }
+                        : null,
                 });
             }
         }
