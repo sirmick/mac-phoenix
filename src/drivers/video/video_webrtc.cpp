@@ -114,7 +114,8 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 	g_config = config;
 
 	// Create VideoOutput triple buffer (1080p max)
-	video::g_video_output = new VideoOutput(1920, 1080);
+	video::g_video_output = new VideoOutput(mp::video::kMaxWidth_M68k,
+	                                        mp::video::kMaxHeight_M68k);
 
 	// Default resolution from config — selects the boot mode only; does
 	// NOT cap the rest of the published list (drove a "why isn't 1280x1024

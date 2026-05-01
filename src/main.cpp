@@ -43,6 +43,15 @@
 #include "rom_patches.h"
 #include "machine_profile.h"
 #include "video_modes.h"
+#include "../ipc/ipc_protocol.h"
+
+// Keep IPC_MAX_WIDTH/HEIGHT in lockstep with the largest PPC mode in
+// kVideoModes. If you add a bigger entry to the table without bumping
+// the IPC cap, the subprocess will SIGSEGV writing past frame_data[].
+static_assert(IPC_MAX_WIDTH  >= mp::video::kMaxWidth_Ppc,
+              "IPC_MAX_WIDTH must cover the largest PPC mode in kVideoModes");
+static_assert(IPC_MAX_HEIGHT >= mp::video::kMaxHeight_Ppc,
+              "IPC_MAX_HEIGHT must cover the largest PPC mode in kVideoModes");
 #include "user_strings.h"
 #include "platform.h"
 #include "extfs.h"
@@ -709,8 +718,16 @@ int main(int argc, char **argv)
 	if (emu_config.enable_webserver) {
 		printf("\n=== WebRTC Mode (Subprocess+IPC) ===\n");
 
-		// Create VideoOutput for parent-side encoder
-		auto video_output_owner = std::make_unique<VideoOutput>(1920, 1080);
+		// Create VideoOutput for parent-side encoder. Size for the largest
+		// mode the configured backend can ever switch to — undersizing here
+		// will SIGSEGV the subprocess once the guest hops past the cap (the
+		// IPC reader keeps writing the new dimensions, encoder reads off
+		// the end of the smaller buffer).
+		const int vo_max_w = emu_config.is_ppc() ? mp::video::kMaxWidth_Ppc
+		                                         : mp::video::kMaxWidth_M68k;
+		const int vo_max_h = emu_config.is_ppc() ? mp::video::kMaxHeight_Ppc
+		                                         : mp::video::kMaxHeight_M68k;
+		auto video_output_owner = std::make_unique<VideoOutput>(vo_max_w, vo_max_h);
 		video::g_video_output = video_output_owner.get();
 
 		// Create subprocess manager (works for both m68k and PPC)

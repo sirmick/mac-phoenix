@@ -13,6 +13,7 @@
 #include "../ipc/ipc_client.h"    // For g_ipc_shm_mutex
 #include "../ipc/ipc_protocol.h"  // For IPC buffer
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
+#include "../common/include/video_modes.h"
 #include "../core/boot_progress.h"  // For boot phase query
 #include "../core/command_bridge.h"  // For command bridge
 #include <sys/stat.h>
@@ -760,10 +761,12 @@ Response APIRouter::handle_screenshot(const Request& req) {
         }
     }
 
-    // Allocate buffer for snapshot (max 1920x1080x4 = ~8MB)
+    // Allocate buffer for snapshot — sized for the largest mode any backend
+    // can produce (see comment in handle_frame).
     int width = 0, height = 0;
     PixelFormat format;
-    std::vector<uint32_t> pixels(1920 * 1080);
+    std::vector<uint32_t> pixels(
+        std::size_t(mp::video::kMaxWidth_Ppc) * mp::video::kMaxHeight_Ppc);
 
     if (!ctx_->video_output->snapshot_frame(pixels.data(), &width, &height, &format)) {
         Response resp;
@@ -924,8 +927,13 @@ Response APIRouter::handle_frame(const Request& req) {
     }
     session->last_access = now_steady;
 
-    // Snapshot current frame
-    static thread_local std::vector<uint32_t> pixels(1920 * 1080);
+    // Snapshot current frame. Size for the largest mode any backend can
+    // produce — undersizing here lets snapshot_frame_ex memcpy past the
+    // vector and SIGSEGV the HTTP thread when the guest hops to a higher
+    // resolution mid-poll.
+    constexpr std::size_t kMaxPixels =
+        std::size_t(mp::video::kMaxWidth_Ppc) * mp::video::kMaxHeight_Ppc;
+    static thread_local std::vector<uint32_t> pixels(kMaxPixels);
     int width = 0, height = 0;
     PixelFormat format;
     uint64_t sequence = 0;

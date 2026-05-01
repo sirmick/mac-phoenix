@@ -89,9 +89,15 @@ enum {	// viAppleID
 	APPLE_3840x1080,         // 0x93  dual-4K side-by-side 32:9
 	APPLE_3840x1600,         // 0x94  UWQHD+ 21:9
 	APPLE_3840x2160,         // 0x95  4K UHD
+	APPLE_1600x900,          // 0x96  HD+ entry laptop
+	APPLE_2256x1504,         // 0x97  Surface Laptop
+	APPLE_2560x1600,         // 0x98  MBP 13" / many laptops
+	APPLE_2880x1800,         // 0x99  MBP 15" Intel
+	APPLE_3024x1964,         // 0x9A  MBP 14" M-series
+	APPLE_3456x2234,         // 0x9B  MBP 16" M-series
 
 	APPLE_ID_MIN = APPLE_640x480,
-	APPLE_ID_MAX = APPLE_3840x2160
+	APPLE_ID_MAX = APPLE_3456x2234
 };
 
 enum {	// Display type

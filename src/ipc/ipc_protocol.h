@@ -51,8 +51,14 @@ extern "C" {
 #define IPC_VIDEO_MAGIC 0x4D504850  /* "MPHP" */
 #define IPC_VERSION 1
 
-#define IPC_MAX_WIDTH  1920
-#define IPC_MAX_HEIGHT 1080
+/* Must cover the per-axis max of every mode in
+ * src/common/include/video_modes.h (mp::video::kMaxWidth_Ppc /
+ * kMaxHeight_Ppc). Kept as raw #defines because ipc_protocol.h is
+ * consumed from both C and C++ contexts. A static_assert in main.cpp
+ * catches drift. Headroom rounded to 4K-class so adding modest entries
+ * to the table doesn't require a protocol recompile every time. */
+#define IPC_MAX_WIDTH  3840
+#define IPC_MAX_HEIGHT 2304
 #define IPC_FRAME_SIZE (IPC_MAX_WIDTH * IPC_MAX_HEIGHT * 4)
 #define IPC_NUM_BUFFERS 3
 

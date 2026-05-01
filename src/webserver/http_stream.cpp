@@ -29,6 +29,7 @@
 #include "../drivers/video/video_output.h"
 #include "../drivers/video/encoders/png_encoder.h"
 #include "../drivers/video/encoders/codec.h"
+#include "../common/include/video_modes.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -199,7 +200,8 @@ void handle_stream(const Request& req, int client_fd, APIContext* ctx) {
     PNGEncoder encoder;
     bool encoder_initialized = false;
 
-    std::vector<uint32_t> curr_frame(1920 * 1080);
+    std::vector<uint32_t> curr_frame(
+        std::size_t(mp::video::kMaxWidth_Ppc) * mp::video::kMaxHeight_Ppc);
     std::vector<uint32_t> prev_frame;
     bool have_prev_frame = false;
     uint64_t last_sequence = 0;

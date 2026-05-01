@@ -1360,7 +1360,8 @@ static void video_ppc_init_webrtc_impl(config::EmulatorConfig *config)
 	// Create VideoOutput triple buffer if not already created
 	// (main.cpp creates one for webserver mode; headless mode needs one here)
 	if (!video::g_video_output) {
-		video::g_video_output = new VideoOutput(1920, 1080);
+		video::g_video_output = new VideoOutput(mp::video::kMaxWidth_Ppc,
+		                                        mp::video::kMaxHeight_Ppc);
 		// Only start encoder thread if we created the VideoOutput
 		// (webserver mode has its own encoder thread from main.cpp)
 		video::g_running.store(true, std::memory_order_release);
