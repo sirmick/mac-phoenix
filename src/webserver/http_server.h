@@ -44,6 +44,8 @@ public:
     void set_body(const std::string& body);
     void add_header(const std::string& name, const std::string& value);
 
+    const std::string& body() const { return body_; }
+
     std::string build() const;
 
     // Convenience methods

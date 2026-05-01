@@ -22,6 +22,9 @@
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 
 namespace browser {
 
@@ -106,6 +109,24 @@ void reset_signals_for_exec()
         if (sig == SIGKILL || sig == SIGSTOP) continue;
         sigaction(sig, &sa, nullptr);
     }
+}
+
+/* Ask the kernel to send us SIGTERM when our parent dies. Without this,
+ * a SIGKILL'd or crashed mac-phoenix leaves Xvfb + Firefox orphaned and
+ * reparented to init, where they run forever. PR_SET_PDEATHSIG is set
+ * on the *thread* and inherited across exec(), so Firefox / Xvfb post-
+ * exec still honour it. Linux-only — no portable equivalent on macOS,
+ * but we don't ship --browser there anyway (Xvfb isn't a thing).
+ *
+ * Race window: parent could die between our fork and our prctl. We then
+ * race against that signal arriving. The window is microseconds and we
+ * call prctl as the very first child action; not worth a getppid() check
+ * given the rest of the failure modes. */
+void install_parent_death_signal()
+{
+#ifdef __linux__
+    prctl(PR_SET_PDEATHSIG, SIGTERM);
+#endif
 }
 
 void close_inherited_fds()
@@ -201,6 +222,7 @@ bool Supervisor::spawn_xvfb()
     pid_t pid = fork();
     if (pid < 0) { perror("[BrowserSup] fork(Xvfb)"); return false; }
     if (pid == 0) {
+        install_parent_death_signal();
         int devnull = ::open("/dev/null", O_RDWR);
         if (devnull >= 0) {
             ::dup2(devnull, 0);
@@ -356,6 +378,7 @@ bool Supervisor::spawn_firefox(const std::string& url)
     pid_t pid = fork();
     if (pid < 0) { perror("[BrowserSup] fork(firefox)"); return false; }
     if (pid == 0) {
+        install_parent_death_signal();
         int devnull = ::open("/dev/null", O_RDWR);
         if (devnull >= 0) {
             ::dup2(devnull, 0);
@@ -456,8 +479,24 @@ void Supervisor::stop()
         waitpid(pid, nullptr, 0);
         pid = 0;
     };
+    int killed_display = display_;
     kill_group(firefox_pid_);
     kill_group(xvfb_pid_);
+
+    /* Xvfb deletes its own socket + lock cleanly on SIGTERM, but a SIGKILL
+     * fallback (or an Xvfb that was already wedged) leaves them behind.
+     * Stale `/tmp/.X<n>-lock` makes a fresh Xvfb on the same display
+     * refuse to start ("Server is already active"); stale
+     * `/tmp/.X11-unix/X<n>` makes pick_free_display() skip the slot.
+     * Best-effort unlink — harmless if Xvfb already cleaned up. */
+    if (killed_display >= 0) {
+        char p[64];
+        snprintf(p, sizeof(p), "/tmp/.X%d-lock", killed_display);
+        ::unlink(p);
+        snprintf(p, sizeof(p), "/tmp/.X11-unix/X%d", killed_display);
+        ::unlink(p);
+    }
+
     display_   = -1;
     bidi_port_ = -1;
 
