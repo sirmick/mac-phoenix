@@ -42,6 +42,7 @@
 #include "audio.h"
 #include "rom_patches.h"
 #include "machine_profile.h"
+#include "video_modes.h"
 #include "user_strings.h"
 #include "platform.h"
 #include "extfs.h"
@@ -343,73 +344,87 @@ static bool video_ipc_m68k_init(bool classic)
 {
     (void)classic;
 
-    struct { int w, h; uint32 res_id; } supported_modes[] = {
-        {  512,  342, 0x80 },  // Mac SE (1-bit mono)
-        {  640,  480, 0x81 },
-        {  800,  600, 0x82 },
-        { 1024,  768, 0x83 },
-        { 1280, 1024, 0x85 },
-        { 1600, 1200, 0x86 },
-        { 1920, 1080, 0x87 },
-    };
-
     config::EmulatorConfig& cfg = config::EmulatorConfig::instance();
-    const int default_width = cfg.screen_width;
-    const int default_height = cfg.screen_height;
+    const int cfg_width = cfg.screen_width;
+    const int cfg_height = cfg.screen_height;
 
-    // Use machine profile for screen dimensions (e.g. SE: fixed 512x342 mono)
-    if (machine_profile().mono_framebuffer) {
-        g_ipc_m68k_width = machine_profile().screen_width;
-        g_ipc_m68k_height = machine_profile().screen_height;
-    } else {
-        g_ipc_m68k_width = default_width;
-        g_ipc_m68k_height = default_height;
-    }
-
-    // Place framebuffer after ScratchMem (same layout as video_webrtc)
+    // Place framebuffer after ScratchMem (same layout as video_webrtc).
+    // Sized for the largest m68k mode in kVideoModes (1920x1080x32 = 7.91 MB,
+    // fits the 8 MB arena).
+    constexpr uint32_t kFbArenaBytes = 0x800000;  // 8 MB
     g_ipc_m68k_fb = ROMBaseHost + ROMSize + 0x10000;
-    memset(g_ipc_m68k_fb, 0, 0x800000);
+    memset(g_ipc_m68k_fb, 0, kFbArenaBytes);
 
-    // Tell IPC driver where the framebuffer is
-    video_ipc_set_framebuffer(g_ipc_m68k_fb);
-    video_ipc_set_resolution(g_ipc_m68k_width, g_ipc_m68k_height);
-
-    // Publish ALL depths for each resolution. InstallSlotROM() reads the
-    // set of depths via monitor.has_depth(VDEPTH_*) and writes matching
-    // sResource entries into the video card's slot ROM — Mac OS's
-    // Monitors cdev reads THAT to populate the depth picker.
     vector<video_mode> modes;
-    uint32 default_res_id = 0x83;
-    const video_depth depths_to_publish[] = {
-        VDEPTH_1BIT, VDEPTH_2BIT, VDEPTH_4BIT,
-        VDEPTH_8BIT, VDEPTH_16BIT, VDEPTH_32BIT,
-    };
+    uint32 default_res_id = 0;
+    int boot_w = 0, boot_h = 0;
 
-    for (const auto& sm : supported_modes) {
-        // 32-bit framebuffer bounds the worst case; lower depths trivially fit.
-        if ((uint32_t)sm.w * sm.h * 4 > 0x800000) continue;
-        if (sm.w > default_width || sm.h > default_height) continue;
+    // Mac SE (mono) — short-circuit the table. 512x342 is the only mode the
+    // hardware ever supported; we publish exactly that and only at 1-bit.
+    if (machine_profile().mono_framebuffer) {
+        boot_w = machine_profile().screen_width;
+        boot_h = machine_profile().screen_height;
+        video_mode m;
+        m.x = boot_w;
+        m.y = boot_h;
+        m.resolution_id = 0x80;       // SheepShaver convention for SE-class
+        m.depth = VDEPTH_1BIT;
+        m.bytes_per_row = TrivialBytesPerRow(boot_w, VDEPTH_1BIT);
+        m.user_data = 0;
+        modes.push_back(m);
+        default_res_id = m.resolution_id;
+    } else {
+        // Walk the shared table, filtered to m68k-capable modes. Boot config
+        // (cfg.screen_width/height) is now just the *default mode picker* —
+        // it doesn't cap which other modes are offered to the guest.
+        const video_depth depths_to_publish[] = {
+            VDEPTH_1BIT, VDEPTH_2BIT, VDEPTH_4BIT,
+            VDEPTH_8BIT, VDEPTH_16BIT, VDEPTH_32BIT,
+        };
+        for (std::size_t i = 0; i < mp::video::kModeCount; ++i) {
+            const auto& md = mp::video::kModes[i];
+            if (!(md.flags & mp::video::kFlagM68k)) continue;
+            // Memory budget — even though the table is hand-curated to fit,
+            // belt-and-braces in case it grows past the arena later.
+            if ((uint32_t)md.w * md.h * 4 > kFbArenaBytes) continue;
 
-        for (video_depth d : depths_to_publish) {
-            video_mode mode;
-            mode.x = sm.w;
-            mode.y = sm.h;
-            mode.resolution_id = sm.res_id;
-            mode.depth = d;
-            mode.bytes_per_row = TrivialBytesPerRow(sm.w, d);
-            mode.user_data = 0;
-            modes.push_back(mode);
+            for (video_depth d : depths_to_publish) {
+                video_mode m;
+                m.x = md.w;
+                m.y = md.h;
+                m.resolution_id = md.apple_id;
+                m.depth = d;
+                m.bytes_per_row = TrivialBytesPerRow(md.w, d);
+                m.user_data = 0;
+                modes.push_back(m);
+            }
+            if (md.w == cfg_width && md.h == cfg_height) {
+                default_res_id = md.apple_id;
+                boot_w = md.w;
+                boot_h = md.h;
+            }
         }
-
-        if (sm.w == default_width && sm.h == default_height) {
-            default_res_id = sm.res_id;
+        // No exact match for cfg.screen — fall back to the first published
+        // mode so the guest still has *something* sensible at boot.
+        if (default_res_id == 0 && !modes.empty()) {
+            default_res_id = modes.front().resolution_id;
+            boot_w = modes.front().x;
+            boot_h = modes.front().y;
         }
     }
+
+    g_ipc_m68k_width = boot_w;
+    g_ipc_m68k_height = boot_h;
+
+    video_ipc_set_framebuffer(g_ipc_m68k_fb);
+    video_ipc_set_resolution(boot_w, boot_h);
 
     ipc_monitor_desc *monitor = new ipc_monitor_desc(modes, VDEPTH_32BIT, default_res_id);
     // Seed the IPC refresh side with the initial (32-bit) depth + stride
     // so the first frames render correctly before any explicit mode switch.
-    video_ipc_set_depth(32, default_width * 4);
+    video_ipc_set_depth(machine_profile().mono_framebuffer ? 1 : 32,
+                        boot_w * (machine_profile().mono_framebuffer ? 1 : 4) /
+                        (machine_profile().mono_framebuffer ? 8 : 1));
 
     uint32 mac_fb_addr = Host2MacAddr(g_ipc_m68k_fb);
     if (mac_fb_addr == 0) {
@@ -420,8 +435,8 @@ static bool video_ipc_m68k_init(bool classic)
     monitor->set_mac_frame_base(mac_fb_addr);
     VideoMonitors.push_back(monitor);
 
-    fprintf(stderr, "[IPC Video] m68k initialized %dx%dx32 (%zu modes), fb at Mac 0x%08x\n",
-            default_width, default_height, modes.size(), mac_fb_addr);
+    fprintf(stderr, "[IPC Video] m68k initialized %dx%d (%zu modes), fb at Mac 0x%08x\n",
+            boot_w, boot_h, modes.size(), mac_fb_addr);
     return true;
 }
 
@@ -602,6 +617,12 @@ int main(int argc, char **argv)
 			if (emu_config.audio_enabled) {
 				g_platform.audio_init = []() { audio_direct_init(); };
 				g_platform.audio_exit = []() { audio_direct_exit(); };
+			}
+
+			if (emu_config.browser_enabled) {
+				browser::shm_init();
+				browser_spike_start(0);
+				browser::browser_module_start();
 			}
 
 			// screen_base is 0 here — VideoInit runs during Mac boot.
@@ -825,6 +846,11 @@ int main(int argc, char **argv)
 					return 1;
 				}
 				g_platform = *platform;
+				if (emu_config.browser_enabled) {
+					browser::shm_init();
+					browser_spike_start(0);
+					browser::browser_module_start();
+				}
 			} else {
 				switch (emu_config.backend) {
 					case config::Backend::UnicornM68K:

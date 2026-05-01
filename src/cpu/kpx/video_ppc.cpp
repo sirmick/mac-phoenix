@@ -37,6 +37,7 @@
 #include "macos_util.h"
 #include "thunks.h"
 #include "vm_alloc.h"
+#include "../../common/include/video_modes.h"
 
 // video_ppc.cpp: Lifted from SheepShaver's video.cpp
 // Provides VideoInit, VideoDoDriverIO, VideoVBL, VideoInstallAccel
@@ -832,60 +833,20 @@ static int16 VideoStatus(uint32 pb, VidLocals *csSave)
 			}
 			WriteMacInt32(param + csRIDisplayModeID, work_id);
 			WriteMacInt16(param + csMaxDepthMode, max_depth(work_id));
-			switch (work_id) {
-				case APPLE_640x480:
-					WriteMacInt32(param + csHorizontalPixels, 640);
-					WriteMacInt32(param + csVerticalLines, 480);
-					WriteMacInt32(param + csRefreshRate, 75<<16);
-					break;
-				case APPLE_W_640x480:
-					WriteMacInt32(param + csHorizontalPixels, 640);
-					WriteMacInt32(param + csVerticalLines, 480);
-					WriteMacInt32(param + csRefreshRate, 60<<16);
-					break;
-				case APPLE_800x600:
-					WriteMacInt32(param + csHorizontalPixels, 800);
-					WriteMacInt32(param + csVerticalLines, 600);
-					WriteMacInt32(param + csRefreshRate, 75<<16);
-					break;
-				case APPLE_W_800x600:
-					WriteMacInt32(param + csHorizontalPixels, 800);
-					WriteMacInt32(param + csVerticalLines, 600);
-					WriteMacInt32(param + csRefreshRate, 60<<16);
-					break;
-				case APPLE_1024x768:
-					WriteMacInt32(param + csHorizontalPixels, 1024);
-					WriteMacInt32(param + csVerticalLines, 768);
-					WriteMacInt32(param + csRefreshRate, 75<<16);
-					break;
-				case APPLE_1152x768:
-					WriteMacInt32(param + csHorizontalPixels, 1152);
-					WriteMacInt32(param + csVerticalLines, 768);
-					WriteMacInt32(param + csRefreshRate, 75<<16);
-					break;
-				case APPLE_1152x900:
-					WriteMacInt32(param + csHorizontalPixels, 1152);
-					WriteMacInt32(param + csVerticalLines, 900);
-					WriteMacInt32(param + csRefreshRate, 75<<16);
-					break;
-				case APPLE_1280x1024:
-					WriteMacInt32(param + csHorizontalPixels, 1280);
-					WriteMacInt32(param + csVerticalLines, 1024);
-					WriteMacInt32(param + csRefreshRate, 75<<16);
-					break;
-				case APPLE_1600x1200:
-					WriteMacInt32(param + csHorizontalPixels, 1600);
-					WriteMacInt32(param + csVerticalLines, 1200);
-					WriteMacInt32(param + csRefreshRate, 75<<16);
-					break;
-				case APPLE_CUSTOM: {
-					uint32 x, y;
-					get_size_of_resolution(work_id, x, y);
-					WriteMacInt32(param + csHorizontalPixels, x);
-					WriteMacInt32(param + csVerticalLines, y);
-					WriteMacInt32(param + csRefreshRate, 75<<16);
-					break;
-				}
+
+			// Geometry from the shared table; refresh defaults to 75 Hz for
+			// IDs Apple shipped originally and 60 Hz otherwise (mac-phoenix
+			// extensions). Custom mode falls through to dynamic lookup.
+			if (const auto* md = mp::video::find_by_apple_id(work_id)) {
+				WriteMacInt32(param + csHorizontalPixels, md->w);
+				WriteMacInt32(param + csVerticalLines, md->h);
+				WriteMacInt32(param + csRefreshRate, md->refresh_hz << 16);
+			} else if (work_id == APPLE_CUSTOM) {
+				uint32 x, y;
+				get_size_of_resolution(work_id, x, y);
+				WriteMacInt32(param + csHorizontalPixels, x);
+				WriteMacInt32(param + csVerticalLines, y);
+				WriteMacInt32(param + csRefreshRate, 75 << 16);
 			}
 			return noErr;
 		}
@@ -1250,36 +1211,30 @@ bool ppc::VideoInit(void)
 	private_data = NULL;
 	video_activated = true;
 
-	// Supported resolutions (32-bit only), capped by --screen config
-	struct { int w, h; uint32 id; } supported_modes[] = {
-		{  640,  480, APPLE_W_640x480 },
-		{  800,  600, APPLE_W_800x600 },
-		{ 1024,  768, APPLE_1024x768  },
-		{ 1280, 1024, APPLE_1280x1024 },
-		{ 1600, 1200, APPLE_1600x1200 },
-	};
-
+	// Walk the shared video-mode table (filtered to PPC-capable). Boot
+	// config is the *default mode picker* only — no longer caps the list.
 	config::EmulatorConfig& cfg = config::EmulatorConfig::instance();
-	int max_width = cfg.screen_width;
-	int max_height = cfg.screen_height;
+	const int cfg_width = cfg.screen_width;
+	const int cfg_height = cfg.screen_height;
 
-	// Build VModes table — all modes that fit within the configured max
 	int n = 0;
 	int default_mode = 0;
-	for (const auto& sm : supported_modes) {
-		if (sm.w > max_width || sm.h > max_height) continue;
+	for (std::size_t i = 0; i < mp::video::kModeCount; ++i) {
+		const auto& md = mp::video::kModes[i];
+		if (!(md.flags & mp::video::kFlagPpc)) continue;
 		VModes[n].viType = DIS_SCREEN;
-		VModes[n].viRowBytes = sm.w * 4;
-		VModes[n].viXsize = sm.w;
-		VModes[n].viYsize = sm.h;
+		VModes[n].viRowBytes = md.w * 4;
+		VModes[n].viXsize = md.w;
+		VModes[n].viYsize = md.h;
 		VModes[n].viAppleMode = APPLE_32_BIT;
-		VModes[n].viAppleID = sm.id;
-		if (sm.w == max_width && sm.h == max_height)
+		VModes[n].viAppleID = md.apple_id;
+		if (md.w == cfg_width && md.h == cfg_height)
 			default_mode = n;
 		n++;
 	}
 	if (n == 0) {
-		// Fallback: at least one mode (640x480)
+		// Should never happen — the table always contains at least 640x480
+		// for PPC. Defensive in case someone removes the entry.
 		VModes[0].viType = DIS_SCREEN;
 		VModes[0].viRowBytes = 640 * 4;
 		VModes[0].viXsize = 640;

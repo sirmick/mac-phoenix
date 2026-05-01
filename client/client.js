@@ -2059,6 +2059,30 @@ class MacPhoenixClient {
                     this.cachedMouseRect = null;
                 };
 
+                // Mid-stream resolution changes (e.g., guest Mac switches
+                // 1024x768 → 800x600) fire `resize` on the <video>. Update
+                // the element's width/height attrs to match — without this
+                // the new frames are stretched into the old box and the
+                // absolute mouse mapping skews.
+                this.video.onresize = () => {
+                    if (!this.video.videoWidth || !this.video.videoHeight) return;
+                    if (this.currentScreenWidth === this.video.videoWidth &&
+                        this.currentScreenHeight === this.video.videoHeight) return;
+                    if (currentConfig.debug_mode_switch) {
+                        logger.info('[MODE] video resize', {
+                            from: `${this.currentScreenWidth}x${this.currentScreenHeight}`,
+                            to: `${this.video.videoWidth}x${this.video.videoHeight}`,
+                        });
+                    }
+                    this.currentScreenWidth = this.video.videoWidth;
+                    this.currentScreenHeight = this.video.videoHeight;
+                    this.video.width = this.video.videoWidth;
+                    this.video.height = this.video.videoHeight;
+                    this.updateWebRTCState('video-size',
+                        `${this.video.videoWidth} x ${this.video.videoHeight}`);
+                    this.cachedMouseRect = null;
+                };
+
                 this.video.onloadeddata = () => {
                     logger.info('Video: loadeddata (first frame decoded)', {
                         width: this.video.videoWidth,

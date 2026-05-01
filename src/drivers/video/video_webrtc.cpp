@@ -15,6 +15,7 @@
 #include "video_output.h"
 #include "video_encoder_thread.h"
 #include "../../config/emulator_config.h"
+#include "../../common/include/video_modes.h"
 #include <thread>
 #include <atomic>
 
@@ -115,21 +116,13 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 	// Create VideoOutput triple buffer (1080p max)
 	video::g_video_output = new VideoOutput(1920, 1080);
 
-	// Supported resolutions (resolution_id follows legacy BasiliskII convention)
-	struct { int w, h; uint32 res_id; } supported_modes[] = {
-		{  640,  480, 0x81 },
-		{  800,  600, 0x82 },
-		{ 1024,  768, 0x83 },
-		{ 1280, 1024, 0x85 },
-		{ 1600, 1200, 0x86 },
-		{ 1920, 1080, 0x87 },
-	};
-
-	// Default resolution from config — also used as max mode limit
-	const int default_width = config ? config->screen_width : 1024;
-	const int default_height = config ? config->screen_height : 768;
+	// Default resolution from config — selects the boot mode only; does
+	// NOT cap the rest of the published list (drove a "why isn't 1280x1024
+	// in the picker?" surprise pre-refactor).
+	const int cfg_width = config ? config->screen_width : 1024;
+	const int cfg_height = config ? config->screen_height : 768;
 	const video_depth default_depth = VDEPTH_32BIT;
-	fprintf(stderr, "[Video] Max resolution from config: %dx%d\n", default_width, default_height);
+	fprintf(stderr, "[Video] Default mode from config: %dx%d\n", cfg_width, cfg_height);
 
 	// Allocate framebuffer at max supported size (8MB area in cpu_context.cpp)
 	// All modes share the same buffer — only the used portion changes
@@ -147,39 +140,40 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 	D(bug("Video: Framebuffer at host addr %p, Mac addr 0x%08x\n",
 	      the_buffer, Host2MacAddr(the_buffer)));
 
-	// Build list of supported video modes — every resolution at every
-	// depth (1/2/4/8/16/32). Classic Mac apps and control panels expose
-	// depth switching via the Monitors cdev; publishing all of them lets
-	// the guest pick its native depth for performance or compatibility.
+	// Walk the shared video-mode table (filtered to m68k-capable). Every
+	// listed resolution gets fanned out to every depth so the Monitors cdev
+	// can offer the full 1/2/4/8/16/32-bit picker.
 	vector<video_mode> modes;
-	uint32 default_res_id = 0x83;
+	uint32 default_res_id = 0;
 	const video_depth depths_to_publish[] = {
 		VDEPTH_1BIT, VDEPTH_2BIT, VDEPTH_4BIT,
 		VDEPTH_8BIT, VDEPTH_16BIT, VDEPTH_32BIT,
 	};
 
-	for (const auto& sm : supported_modes) {
-		// Only include modes whose 32-bit framebuffer fits in our 8 MB
-		// area (all lower depths trivially fit since the buffer is
-		// sized for the worst case).
-		if ((uint32_t)sm.w * sm.h * 4 > 0x800000) continue;
-		// --screen limits maximum resolution
-		if (sm.w > (int)default_width || sm.h > (int)default_height) continue;
+	for (std::size_t i = 0; i < mp::video::kModeCount; ++i) {
+		const auto& md = mp::video::kModes[i];
+		if (!(md.flags & mp::video::kFlagM68k)) continue;
+		// Memory budget — belt-and-braces in case the table grows past
+		// our 8 MB framebuffer arena.
+		if ((uint32_t)md.w * md.h * 4 > 0x800000) continue;
 
 		for (video_depth d : depths_to_publish) {
 			video_mode mode;
-			mode.x = sm.w;
-			mode.y = sm.h;
-			mode.resolution_id = sm.res_id;
+			mode.x = md.w;
+			mode.y = md.h;
+			mode.resolution_id = md.apple_id;
 			mode.depth = d;
-			mode.bytes_per_row = TrivialBytesPerRow(sm.w, d);
+			mode.bytes_per_row = TrivialBytesPerRow(md.w, d);
 			mode.user_data = 0;
 			modes.push_back(mode);
 		}
 
-		if (sm.w == default_width && sm.h == default_height) {
-			default_res_id = sm.res_id;
+		if (md.w == cfg_width && md.h == cfg_height) {
+			default_res_id = md.apple_id;
 		}
+	}
+	if (default_res_id == 0 && !modes.empty()) {
+		default_res_id = modes.front().resolution_id;
 	}
 
 	// Create monitor descriptor; default to 32-bit at the configured resolution.

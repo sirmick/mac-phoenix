@@ -292,12 +292,18 @@ main {
     opacity: 0.7;
 }
 
-#display {
+#display, #display-canvas {
     display: block;
-    max-width: 100%;
-    max-height: calc(100vh - 150px);
     background: #000;
     cursor: none;
+    /* Never CSS-scale the video/canvas — Mac frames render at their native
+     * pixel count. On HiDPI panels the browser still maps 1 CSS pixel to
+     * dpr×dpr device pixels, so a 1024-CSS-px video shows as 2048 device px
+     * on a Retina panel. `pixelated` swaps the default bilinear upscale for
+     * nearest-neighbor — chunky authentic Mac pixels instead of smeared
+     * filtering, and sharp at any dpr. */
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;  /* Firefox fallback */
 }
 
 /* Overlay */

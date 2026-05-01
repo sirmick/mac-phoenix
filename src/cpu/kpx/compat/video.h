@@ -74,9 +74,24 @@ enum {	// viAppleID
 	APPLE_1152x900,
 	APPLE_1280x1024,
 	APPLE_1600x1200,
-	APPLE_CUSTOM,
+	APPLE_CUSTOM,            // 0x8A — pinned, semantic preserved
+
+	// mac-phoenix extensions — Apple never shipped IDs for these.
+	// See src/common/include/video_modes.h for the canonical table.
+	APPLE_832x624,           // 0x8B  Mac 16" RGB
+	APPLE_1152x870,          // 0x8C  Mac 21" two-page
+	APPLE_1440x900,          // 0x8D  16:10
+	APPLE_1920x1080,         // 0x8E  FHD
+	APPLE_1920x1200,         // 0x8F  WUXGA
+	APPLE_2560x1080,         // 0x90  UWHD 21:9
+	APPLE_2560x1440,         // 0x91  QHD
+	APPLE_3440x1440,         // 0x92  UWQHD 21:9
+	APPLE_3840x1080,         // 0x93  dual-4K side-by-side 32:9
+	APPLE_3840x1600,         // 0x94  UWQHD+ 21:9
+	APPLE_3840x2160,         // 0x95  4K UHD
+
 	APPLE_ID_MIN = APPLE_640x480,
-	APPLE_ID_MAX = APPLE_CUSTOM
+	APPLE_ID_MAX = APPLE_3840x2160
 };
 
 enum {	// Display type
