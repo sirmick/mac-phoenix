@@ -1310,20 +1310,38 @@ class MacPhoenixClient {
         this.fallbackCtl.on('debug', (e) => this._onFallbackDebug(e));
     }
 
-    // Controller picked a codec. Tear down the current transport and reconnect
-    // with the new one. httpstream takes its own dedicated path.
-    _onFallbackSelectCodec(codec, reason) {
+    // Controller picked a codec. Align the server-side encoder first
+    // (otherwise the new WS opens against whatever encoder was previously
+    // running, frames don't decode, and we keep stepping the chain), then
+    // tear down the current transport and reconnect. httpstream takes its
+    // own dedicated path — there's no server-side encoder to align.
+    async _onFallbackSelectCodec(codec, reason) {
         logger.info('Codec selected by controller', { codec, reason });
         if (codec === 'httpstream') {
             this._connectHTTPStream();
             return;
         }
-        this.cleanup();
-        if (this.ws) { try { this.ws.close(); } catch (e) {} this.ws = null; }
+
+        // Set codecType BEFORE the await so any echoed `reconnect{codec}`
+        // message that arrives mid-await sees us already in the new state
+        // and the loop-prevention check in handleSignaling matches.
         this.codecType = parseCodecString(codec);
         this.stats.codec = codec;
         const codecSelect = document.getElementById('codec-select');
         if (codecSelect) codecSelect.value = codec;
+
+        try {
+            await fetch(getApiUrl('codec'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codec })
+            });
+        } catch (e) {
+            logger.warn('Failed to align server codec', { error: e.message });
+        }
+
+        this.cleanup();
+        if (this.ws) { try { this.ws.close(); } catch (e) {} this.ws = null; }
         this._connect();
     }
 
@@ -1730,6 +1748,14 @@ class MacPhoenixClient {
                 // the host listener will tear down + reconnect.
                 logger.info('Server requested reconnection', { reason: msg.reason, codec: msg.codec });
                 if (msg.reason === 'codec_change' && msg.codec) {
+                    // Loop prevention: when WE just POSTed /api/codec from
+                    // _onFallbackSelectCodec, the server echoes back this
+                    // message. codecType was set before the POST, so a match
+                    // here means we're already transitioning — nothing to do.
+                    if (msg.codec === codecTypeToString(this.codecType)) {
+                        logger.debug('Server reconnect echoes our codec, ignoring', { codec: msg.codec });
+                        break;
+                    }
                     this.fallbackCtl.onCodecChangeRequested(msg.codec);
                 } else {
                     if (this.isReconnecting) {
@@ -4611,30 +4637,14 @@ async function populateAvailableCodecs() {
 }
 
 // Codec management — manual user pick from the dropdown.
-// The controller does the reconnect; we also POST /api/codec so the server's
-// encoder lines up (server picks the same codec from the next connect's
-// `{type:'connect', codec}` message anyway, but the POST keeps any external
-// /api/codec callers in sync with what the UI shows).
-async function changeCodec() {
+// The controller emits selectCodec, and the host listener handles both the
+// /api/codec POST and the WS reconnect.
+function changeCodec() {
     const select = document.getElementById('codec-select');
     if (!select || !client) return;
-
     const newCodec = select.value;
     logger.info('Changing codec', { codec: newCodec });
-
     client.fallbackCtl.onCodecChangeRequested(newCodec);
-
-    if (newCodec !== 'httpstream') {
-        try {
-            await fetch(getApiUrl('codec'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ codec: newCodec })
-            });
-        } catch (e) {
-            logger.error('Failed to set server codec', { error: e.message });
-        }
-    }
 }
 
 // Debug: cycle through all codecs to test switching (call from console: testCodecCycle())
