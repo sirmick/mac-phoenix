@@ -151,9 +151,12 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 		VDEPTH_8BIT, VDEPTH_16BIT, VDEPTH_32BIT,
 	};
 
+	const uint32_t cfg_max_w = config ? config->max_screen_width  : 0;
+	const uint32_t cfg_max_h = config ? config->max_screen_height : 0;
 	for (std::size_t i = 0; i < mp::video::kModeCount; ++i) {
 		const auto& md = mp::video::kModes[i];
-		if (!(md.flags & mp::video::kFlagM68k)) continue;
+		if (!mp::video::mode_is_advertised(md, mp::video::kFlagM68k,
+		                                    cfg_max_w, cfg_max_h)) continue;
 		// Memory budget — belt-and-braces in case the table grows past
 		// our 8 MB framebuffer arena.
 		if ((uint32_t)md.w * md.h * 4 > 0x800000) continue;

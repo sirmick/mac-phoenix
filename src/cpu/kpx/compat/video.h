@@ -95,9 +95,11 @@ enum {	// viAppleID
 	APPLE_2880x1800,         // 0x99  MBP 15" Intel
 	APPLE_3024x1964,         // 0x9A  MBP 14" M-series
 	APPLE_3456x2234,         // 0x9B  MBP 16" M-series
+	APPLE_1280x800,          // 0x9C  16:10 laptop
+	APPLE_2240x1400,         // 0x9D  16:10 (Windows-150% native CSS×dpr)
 
 	APPLE_ID_MIN = APPLE_640x480,
-	APPLE_ID_MAX = APPLE_3456x2234
+	APPLE_ID_MAX = APPLE_2240x1400
 };
 
 enum {	// Display type

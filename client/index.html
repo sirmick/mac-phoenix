@@ -92,6 +92,15 @@
 
         <div id="debug-panel">
             <div class="debug-header">
+                <div class="resolution-controls" id="resolution-controls">
+                    <select id="resolution-select" class="select" disabled title="Switch the guest Mac's resolution (requires bridge agent). Stays read-only without bridge — shows current guest resolution."></select>
+                    <label class="auto-resize-label" title="Auto: keep the guest at the largest mode that fits the browser; in fullscreen, match the display's native resolution.">
+                        <input type="checkbox" id="auto-resize-toggle" disabled> Auto
+                    </label>
+                    <label class="auto-resize-label" title="Pixel-double: each Mac pixel maps to 2×2 device pixels for sharp rendering on HiDPI displays.">
+                        <input type="checkbox" id="pixel-double-toggle" checked> 2×
+                    </label>
+                </div>
                 <button class="btn" id="fullscreen-btn">Fullscreen</button>
                 <button class="btn warning" id="invoke-debug-btn" title="Programmer's Key — invoke debugger">Debug</button>
             </div>
@@ -288,16 +297,24 @@
                     <span id="create-image-status" style="font-size:11px;color:#888"></span>
                 </div>
 
+                <div class="form-group">
+                    <label>MacBrowser</label>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cfg-browser-enabled">
+                        <label for="cfg-browser-enabled">Enable Firefox bridge — auto-mounts MacBrowser.dsk on next start</label>
+                    </div>
+                </div>
+
                 <!-- Column 2: display + media -->
                 <div class="form-group">
-                    <label>Screen Resolution</label>
-                    <select id="cfg-screen">
-                        <option value="512x342">512 x 342 (Mac SE)</option>
-                        <option value="640x480">640 x 480</option>
-                        <option value="800x600" selected>800 x 600</option>
-                        <option value="1024x768">1024 x 768</option>
-                        <option value="1280x1024">1280 x 1024</option>
-                        <option value="1920x1080">1920 x 1080</option>
+                    <label title="Resolution the guest defaults to at boot. Mac OS can switch to any other published mode at runtime via Monitors cdev.">Boot Resolution</label>
+                    <select id="cfg-screen"></select>
+                </div>
+
+                <div class="form-group">
+                    <label title="Cap on what's offered to the guest. Modes larger than this never appear in Monitors cdev or in the API. Empty = no cap.">Max Resolution</label>
+                    <select id="cfg-max-resolution">
+                        <option value="">No limit</option>
                     </select>
                 </div>
 
@@ -322,14 +339,6 @@
                     <div class="extfs-add-row" style="display:flex;gap:4px;margin-top:4px">
                         <input type="text" id="extfs-path-input" placeholder="/path/to/folder" style="flex:1;font-size:12px;padding:2px 6px">
                         <button id="extfs-add-btn" type="button" class="btn">Add</button>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>MacBrowser</label>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="cfg-browser-enabled">
-                        <label for="cfg-browser-enabled">Enable Firefox bridge — auto-mounts MacBrowser.dsk on next start</label>
                     </div>
                 </div>
 

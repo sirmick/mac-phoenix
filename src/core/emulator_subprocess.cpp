@@ -102,6 +102,12 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     args.push_back("--screen");
     args.push_back(config_->screen_string());
 
+    if (config_->max_screen_width && config_->max_screen_height) {
+        args.push_back("--max-resolution");
+        args.push_back(std::to_string(config_->max_screen_width) + "x" +
+                       std::to_string(config_->max_screen_height));
+    }
+
     args.push_back("--log-level");
     args.push_back(std::to_string(config_->log_level));
 

@@ -1221,7 +1221,9 @@ bool ppc::VideoInit(void)
 	int default_mode = 0;
 	for (std::size_t i = 0; i < mp::video::kModeCount; ++i) {
 		const auto& md = mp::video::kModes[i];
-		if (!(md.flags & mp::video::kFlagPpc)) continue;
+		if (!mp::video::mode_is_advertised(md, mp::video::kFlagPpc,
+		                                    cfg.max_screen_width,
+		                                    cfg.max_screen_height)) continue;
 		VModes[n].viType = DIS_SCREEN;
 		VModes[n].viRowBytes = md.w * 4;
 		VModes[n].viXsize = md.w;

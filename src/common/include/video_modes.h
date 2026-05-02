@@ -47,12 +47,14 @@ inline constexpr ModeDef kModes[] = {
     { 1280, 1024, 0x88,        75,   kFlagM68k | kFlagPpc | kFlagH264 },  // SXGA
     { 1440,  900, 0x8D,        60,   kFlagM68k | kFlagPpc | kFlagH264 },  // 16:10
     /* Modern 16:9 / 16:10 desktop + entry-level laptop */
+    { 1280,  800, 0x9C,        60,   kFlagM68k | kFlagPpc | kFlagH264 },  // 16:10 laptop
     { 1600,  900, 0x96,        60,   kFlagM68k | kFlagPpc | kFlagH264 },  // HD+ laptop
     { 1600, 1200, 0x89,        75,   kFlagM68k | kFlagPpc | kFlagH264 },  // UXGA
     { 1920, 1080, 0x8E,        60,   kFlagM68k | kFlagPpc | kFlagH264 },  // FHD; m68k cap
     /* PPC-only beyond here (m68k 8 MB framebuffer would overflow) */
     { 1920, 1200, 0x8F,        60,               kFlagPpc | kFlagH264 },  // WUXGA
     /* Common laptop natives — Apple Retina + Surface */
+    { 2240, 1400, 0x9D,        60,               kFlagPpc },              // 16:10 (Windows-150% native CSS×dpr)
     { 2256, 1504, 0x97,        60,               kFlagPpc },              // Surface Laptop
     { 2560, 1080, 0x90,        60,               kFlagPpc | kFlagH264 },  // UWHD 21:9; h264 reliable ceiling
     /* h264 unreliable beyond 2560x1080 keyframes; client falls to vp9 */
@@ -88,6 +90,18 @@ inline constexpr std::uint16_t kMaxWidth_M68k  = _max_dim_for<kFlagM68k>(false);
 inline constexpr std::uint16_t kMaxHeight_M68k = _max_dim_for<kFlagM68k>(true);
 inline constexpr std::uint16_t kMaxWidth_Ppc   = _max_dim_for<kFlagPpc>(false);
 inline constexpr std::uint16_t kMaxHeight_Ppc  = _max_dim_for<kFlagPpc>(true);
+
+// True if mode `m` should be advertised given the requested backend flag
+// and an optional max-dimension cap. max_w / max_h == 0 means "no cap".
+inline bool mode_is_advertised(const ModeDef& m,
+                                std::uint8_t want_flag,
+                                std::uint32_t max_w,
+                                std::uint32_t max_h) {
+    if (!(m.flags & want_flag)) return false;
+    if (max_w && m.w > max_w) return false;
+    if (max_h && m.h > max_h) return false;
+    return true;
+}
 
 inline constexpr const ModeDef* find_by_apple_id(std::uint16_t apple_id) {
     for (std::size_t i = 0; i < kModeCount; ++i) {

@@ -392,7 +392,9 @@ static bool video_ipc_m68k_init(bool classic)
         };
         for (std::size_t i = 0; i < mp::video::kModeCount; ++i) {
             const auto& md = mp::video::kModes[i];
-            if (!(md.flags & mp::video::kFlagM68k)) continue;
+            if (!mp::video::mode_is_advertised(md, mp::video::kFlagM68k,
+                                                cfg.max_screen_width,
+                                                cfg.max_screen_height)) continue;
             // Memory budget — even though the table is hand-curated to fit,
             // belt-and-braces in case it grows past the arena later.
             if ((uint32_t)md.w * md.h * 4 > kFbArenaBytes) continue;

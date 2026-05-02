@@ -79,9 +79,14 @@ struct EmulatorConfig {
     std::vector<std::string> cdrom_paths;
     std::vector<std::string> extfs_paths;
 
-    // Video
+    // Video — boot resolution (the mode the guest defaults to at boot)
     uint32_t screen_width = 640;
     uint32_t screen_height = 480;
+    // Max resolution cap — if non-zero, modes whose width OR height exceed
+    // these are filtered out of the published list (so guest never sees
+    // them in Monitors cdev / can't switch up to them). 0 = unlimited.
+    uint32_t max_screen_width = 0;
+    uint32_t max_screen_height = 0;
     bool screenshots = false;          // CLI-only: dump PPM frames to /tmp
 
     // Audio

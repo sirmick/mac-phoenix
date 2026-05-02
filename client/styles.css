@@ -278,9 +278,7 @@ main {
 
 #display-container {
     position: relative;
-    background: #000;
     overflow: hidden;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     display: inline-block;
 }
 
@@ -292,9 +290,45 @@ main {
     opacity: 0.7;
 }
 
+.resolution-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.resolution-controls select {
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #2a2a2a;
+    color: #ddd;
+    border: 1px solid #444;
+    font-size: 12px;
+    min-width: 120px;
+}
+
+.resolution-controls select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.auto-resize-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #ddd;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.auto-resize-label input[type="checkbox"]:disabled + * ,
+.auto-resize-label:has(input[type="checkbox"]:disabled) {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 #display, #display-canvas {
     display: block;
-    background: #000;
     cursor: none;
     /* Never CSS-scale the video/canvas — Mac frames render at their native
      * pixel count. On HiDPI panels the browser still maps 1 CSS pixel to
@@ -428,6 +462,10 @@ main {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.debug-header #invoke-debug-btn {
+    margin-left: auto;
 }
 
 .debug-tabs {

@@ -105,6 +105,12 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     if (req.path == "/api/codecs" && req.method == "GET") {
         return handle_codecs_get(req);
     }
+    if (req.path == "/api/resolution" && req.method == "POST") {
+        return handle_resolution_post(req);
+    }
+    if (req.path == "/api/resolutions" && req.method == "GET") {
+        return handle_resolutions_get(req);
+    }
     if (req.path == "/api/emulator/start" && req.method == "POST") {
         return handle_emulator_start(req);
     }
@@ -687,6 +693,132 @@ Response APIRouter::handle_codecs_get(const Request& /*req*/) {
     json += "}";
     json += "]}";
     return Response::json(json);
+}
+
+// ============================================================================
+// Resolution list — modes the active backend can publish to the guest.
+// Used by the UI dropdown and by the client's "auto" mode to pick the
+// largest fit for the current viewport / fullscreen display.
+Response APIRouter::handle_resolutions_get(const Request& /*req*/) {
+    auto& cfg = config::EmulatorConfig::instance();
+    const std::uint8_t want_flag = cfg.is_ppc()
+        ? mp::video::kFlagPpc : mp::video::kFlagM68k;
+
+    // Return the full backend-supported list — the cap is reported as
+    // a separate field so callers (config UI vs runtime dropdown) can
+    // decide whether to enforce it. The server-side cap still filters
+    // VideoInit + the snap-to-nearest math in /api/resolution.
+    std::ostringstream json;
+    json << "{\"backend\":\"" << (cfg.is_ppc() ? "ppc" : "m68k") << "\","
+         << "\"max_width\":" << cfg.max_screen_width << ","
+         << "\"max_height\":" << cfg.max_screen_height << ","
+         << "\"resolutions\":[";
+    bool first = true;
+    for (std::size_t i = 0; i < mp::video::kModeCount; ++i) {
+        const auto& m = mp::video::kModes[i];
+        if (!(m.flags & want_flag)) continue;
+        if (!first) json << ",";
+        json << "{\"w\":" << m.w << ",\"h\":" << m.h
+             << ",\"apple_id\":" << m.apple_id << "}";
+        first = false;
+    }
+    json << "]}";
+    return Response::json(json.str());
+}
+
+// ============================================================================
+// Resolution API — host-initiated guest screen-mode switch
+// ============================================================================
+//
+// Caller posts {"w": 1920, "h": 1080}. Server snaps to the nearest mode in
+// kVideoModes filtered by the active backend's flags, then dispatches a
+// "RESIZE w h apple_id" command through BridgeAgent. The guest agent's
+// Control(cscSwitchMode) call goes through our PPC video driver
+// (ppc::video_mode_change in src/cpu/kpx/video_ppc.cpp) which updates the
+// active mode and reinits the encoder. Returns the snapped resolution and
+// Mac error code (0 = ok).
+
+Response APIRouter::handle_resolution_post(const Request& req) {
+    if (req.body.empty()) {
+        return Response::json("{\"success\": false, \"error\": \"empty body\"}");
+    }
+
+    nlohmann::json j = nlohmann::json::parse(req.body, nullptr, false);
+    if (j.is_discarded()) {
+        return Response::json("{\"success\": false, \"error\": \"bad json\"}");
+    }
+
+    int want_w = j.value("w", 0);
+    int want_h = j.value("h", 0);
+    if (want_w <= 0 || want_h <= 0) {
+        return Response::json("{\"success\": false, \"error\": \"missing w/h\"}");
+    }
+
+    auto& cfg = config::EmulatorConfig::instance();
+    const std::uint8_t want_flag = cfg.is_ppc()
+        ? mp::video::kFlagPpc : mp::video::kFlagM68k;
+
+    // Snap to nearest valid mode by squared distance. Filter out modes the
+    // active backend can't drive — m68k can't reach 4K-class, etc.
+    const mp::video::ModeDef* best = nullptr;
+    long best_dist = -1;
+    for (std::size_t i = 0; i < mp::video::kModeCount; ++i) {
+        const auto& m = mp::video::kModes[i];
+        if (!mp::video::mode_is_advertised(m, want_flag,
+                                            cfg.max_screen_width,
+                                            cfg.max_screen_height)) continue;
+        long dw = long(m.w) - want_w;
+        long dh = long(m.h) - want_h;
+        long d  = dw * dw + dh * dh;
+        if (best_dist < 0 || d < best_dist) { best_dist = d; best = &m; }
+    }
+    if (!best) {
+        return Response::json("{\"success\": false, \"error\": \"no modes for backend\"}");
+    }
+
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+        std::ostringstream e;
+        e << "{\"success\": false, \"error\": \"bridge not enabled\","
+          << "\"snapped\":{\"w\":" << best->w << ",\"h\":" << best->h << "}}";
+        return Response::json(e.str());
+    }
+
+    char cmd[64];
+    std::snprintf(cmd, sizeof(cmd), "RESIZE %u %u %u",
+                  best->w, best->h, best->apple_id);
+
+    bridge_remove_file(cfg.bridge_dir, "_bridge_result");
+    bridge_write_file(cfg.bridge_dir, "_bridge_cmd", cmd);
+
+    int mac_err = 0;
+    bool got_result = false;
+    bool timed_out = true;
+    for (int i = 0; i < 30; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::string result;
+        if (bridge_read_file(cfg.bridge_dir, "_bridge_result", result)) {
+            bridge_remove_file(cfg.bridge_dir, "_bridge_result");
+            mac_err = std::atoi(result.c_str());
+            got_result = true;
+            timed_out = false;
+            break;
+        }
+        if (!bridge_has_file(cfg.bridge_dir, "_bridge_cmd")) {
+            // Agent picked it up but didn't write a result. Treat as ok.
+            timed_out = false;
+            break;
+        }
+    }
+    if (timed_out) bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
+
+    std::ostringstream out;
+    out << "{\"success\":" << ((!timed_out && mac_err == 0) ? "true" : "false");
+    if (got_result) out << ",\"error_code\":" << mac_err;
+    if (timed_out)  out << ",\"error\":\"timeout waiting for bridge agent\"";
+    out << ",\"requested\":{\"w\":" << want_w << ",\"h\":" << want_h << "},"
+        << "\"snapped\":{\"w\":" << best->w << ",\"h\":" << best->h
+        << ",\"apple_id\":" << best->apple_id << "}}";
+    return Response::json(out.str());
 }
 
 // ============================================================================

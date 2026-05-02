@@ -51,6 +51,8 @@
 #include <ShutDown.h>
 #include <Scrap.h>
 #include <Traps.h>
+#include <Video.h>      /* VDSwitchInfoRec, cscSwitchMode */
+#include <Displays.h>   /* GetMainDevice — already pulled by Quickdraw, kept explicit */
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -850,6 +852,36 @@ static OSErr do_set_clipboard(const ProcessSerialNumber *prior_front)
     return noErr;
 }
 
+/* ---------- RESIZE ----------
+ *
+ * Host writes "RESIZE <w> <h> <appleID>" into _bridge_cmd. We hand the
+ * appleID to Display Manager's DMSetDisplayMode — the canonical
+ * resolution-switching API on System 7.5+ and Mac OS 9.
+ *
+ * Why DM not raw cscSwitchMode: cscSwitchMode flips the driver's
+ * internal state but does NOT update the GDevice/PixMap fields apps
+ * read for layout (gdRect, gdPMap.bounds, gdPMap.rowBytes). DM is the
+ * blessed wrapper that calls cscSwitchMode + cscGetVideoParameters,
+ * patches the GDevice, and broadcasts a display-changed notification
+ * so apps redraw. Without those steps, apps keep drawing with stale
+ * rowBytes into the new framebuffer — the classic diagonal smear.
+ *
+ * Depth: PPC publishes only APPLE_32_BIT, so we always pass kDepthMode6
+ * (0x85). w/h params are unused — DM derives the new geometry from the
+ * driver's response to its internal cscGetVideoParameters call.
+ */
+static OSErr do_resize(int width, int height, unsigned long appleID)
+{
+    (void)width; (void)height;
+
+    GDHandle gd = GetMainDevice();
+    if (gd == NULL) return paramErr;
+
+    unsigned long depthMode = 0x85;  /* kDepthMode6 = 32-bit */
+    return DMSetDisplayMode(gd, (DisplayIDType)appleID,
+                            &depthMode, 0, NULL);
+}
+
 static OSErr do_quit_target(const ProcessSerialNumber *psn)
 {
     AEAddressDesc target;
@@ -1090,6 +1122,17 @@ static void poll_bridge(void)
                            | ((OSType)(unsigned char)cp[2] << 8)
                            |  (OSType)(unsigned char)cp[3];
             result = exec_mode ? do_exec(creator) : do_script(creator);
+        }
+    } else if (strncmp(cmd, "RESIZE ", 7) == 0) {
+        /* "RESIZE <width> <height> <appleID>" — host snaps to a known
+         * mode from kVideoModes and passes the matching APPLE_* ID so
+         * we don't have to keep a parallel table on the guest side. */
+        int w = 0, h = 0;
+        unsigned long ide = 0;
+        if (sscanf(cmd + 7, "%d %d %lu", &w, &h, &ide) == 3) {
+            result = do_resize(w, h, ide);
+        } else {
+            result = paramErr;
         }
     } else if (strncmp(cmd, "SHUTDOWN", 8) == 0) {
         result = do_system_event(kAEShutDown);

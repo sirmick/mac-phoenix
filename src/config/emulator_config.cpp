@@ -133,6 +133,9 @@ nlohmann::json EmulatorConfig::to_json() const {
     // Memory & media
     j["ram_mb"]      = ram_mb;
     j["screen"]      = screen_string();
+    j["max_resolution"] = (max_screen_width && max_screen_height)
+        ? (std::to_string(max_screen_width) + "x" + std::to_string(max_screen_height))
+        : std::string("");
     j["audio"]       = audio_enabled;
     j["rom"]         = strip_roms(rom_path);
     j["disks"]       = strip_images(disk_paths);
@@ -223,6 +226,14 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         if (parse_screen(s, w, h)) {
             screen_width = w;
             screen_height = h;
+        }
+    }
+    if (j.contains("max_resolution")) {
+        std::string s = json_utils::get_string(j, "max_resolution");
+        uint32_t w = 0, h = 0;
+        if (s.empty() || parse_screen(s, w, h)) {
+            max_screen_width = w;
+            max_screen_height = h;
         }
     }
     if (j.contains("audio")) audio_enabled = json_utils::get_bool(j, "audio");
@@ -520,6 +531,16 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             if (parse_screen(argv[i+1], w, h)) {
                 config.screen_width = w;
                 config.screen_height = h;
+            }
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --max-resolution <WxH>  (cap on what's advertised to the guest)
+        if (strcmp(argv[i], "--max-resolution") == 0 && i+1 < argc) {
+            uint32_t w = 0, h = 0;
+            if (parse_screen(argv[i+1], w, h)) {
+                config.max_screen_width = w;
+                config.max_screen_height = h;
             }
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }

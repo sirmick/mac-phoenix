@@ -43,7 +43,16 @@ const CONSTANTS = {
     // Conversion factors
     BITS_PER_BYTE: 8,
     BITS_TO_KILOBITS: 1000,
+
+    // Default for the runtime-mutable pixel-doubling ratio (see
+    // `pixelDoubleRatio` below). The "2×" header toggle flips this between
+    // 1 (no doubling) and 2 (Retina-style doubling).
+    PIXEL_DOUBLE_RATIO_DEFAULT: 2,
 };
+
+// Runtime-mutable pixel-doubling ratio. Read by _applyPixelDoubleSize
+// and pickAutoResolution. Toggled by the header "2×" checkbox.
+let pixelDoubleRatio = CONSTANTS.PIXEL_DOUBLE_RATIO_DEFAULT;
 
 // Global debug configuration (fetched from server)
 const debugConfig = {
@@ -1370,6 +1379,60 @@ class MacPhoenixClient {
         logger.info('codec.fallback', payload);
     }
 
+    // Force the display element (video or canvas) to render at exactly
+    // CONSTANTS.PIXEL_DOUBLE_RATIO × device pixels per emulated pixel,
+    // regardless of the browser's devicePixelRatio. CSS box size =
+    // w × RATIO / dpr makes device-pixel size = w × RATIO uniform, even
+    // on fractional dpr (Windows 150%, Linux 1.25×, etc.).
+    _applyPixelDoubleSize(el, w, h) {
+        if (!el || !w || !h) return;
+        const dpr = window.devicePixelRatio || 1;
+        const ratio = pixelDoubleRatio;
+        const cssW = (w * ratio / dpr).toFixed(3);
+        const cssH = (h * ratio / dpr).toFixed(3);
+        el.style.width  = cssW + 'px';
+        el.style.height = cssH + 'px';
+    }
+
+    // One-shot dump of the browser's monitor/viewport state on every WS
+    // connect. Useful for diagnosing pixel-doubling weirdness on HiDPI
+    // panels (devicePixelRatio != 2 = fractional scaling, etc).
+    _logMonitorInfo() {
+        const c = document.getElementById('display-container');
+        const cRect = c ? c.getBoundingClientRect() : null;
+        const sec = document.getElementById('video-section');
+        const sRect = sec ? sec.getBoundingClientRect() : null;
+        // Use warn so the server's handle_log forwards it (info-level is
+        // suppressed there to keep the server log quiet).
+        logger.warn('monitor', {
+            devicePixelRatio: window.devicePixelRatio,
+            screen: {
+                width: window.screen.width,
+                height: window.screen.height,
+                availWidth: window.screen.availWidth,
+                availHeight: window.screen.availHeight,
+                colorDepth: window.screen.colorDepth,
+                pixelDepth: window.screen.pixelDepth,
+                orientation: window.screen.orientation && window.screen.orientation.type,
+            },
+            window: {
+                innerWidth: window.innerWidth,
+                innerHeight: window.innerHeight,
+                outerWidth: window.outerWidth,
+                outerHeight: window.outerHeight,
+            },
+            videoSection: sRect ? { width: sRect.width, height: sRect.height } : null,
+            displayContainer: cRect ? { width: cRect.width, height: cRect.height } : null,
+            video: this.video ? {
+                clientWidth: this.video.clientWidth,
+                clientHeight: this.video.clientHeight,
+                videoWidth: this.video.videoWidth,
+                videoHeight: this.video.videoHeight,
+            } : null,
+            ua: navigator.userAgent,
+        });
+    }
+
     // Set codec type before connecting
     setCodec(codecType) {
         if (this.connected) {
@@ -1420,11 +1483,15 @@ class MacPhoenixClient {
                     this.currentScreenWidth = metadata.frameWidth;
                     this.currentScreenHeight = metadata.frameHeight;
                     this.cachedMouseRect = null;
-                    if (changed && this.fallbackCtl) {
-                        this.fallbackCtl.onResolutionChange({
-                            w: metadata.frameWidth,
-                            h: metadata.frameHeight,
-                        });
+                    if (changed) {
+                        this._applyPixelDoubleSize(this.canvas,
+                            metadata.frameWidth, metadata.frameHeight);
+                        if (this.fallbackCtl) {
+                            this.fallbackCtl.onResolutionChange({
+                                w: metadata.frameWidth,
+                                h: metadata.frameHeight,
+                            });
+                        }
                     }
                 }
 
@@ -1449,9 +1516,16 @@ class MacPhoenixClient {
             if (usesVideoElement) {
                 this.video.width = this.currentScreenWidth || 640;
                 this.video.height = this.currentScreenHeight || 480;
+                this._applyPixelDoubleSize(this.video, this.video.width, this.video.height);
             }
         }
-        if (this.canvas) this.canvas.style.display = !usesVideoElement ? 'block' : 'none';
+        if (this.canvas) {
+            this.canvas.style.display = !usesVideoElement ? 'block' : 'none';
+            if (!usesVideoElement && this.currentScreenWidth && this.currentScreenHeight) {
+                this._applyPixelDoubleSize(this.canvas,
+                    this.currentScreenWidth, this.currentScreenHeight);
+            }
+        }
 
         // Clear canvas to avoid stale pixels from previous session on reconnect
         if (!usesVideoElement && this.canvas) {
@@ -1559,6 +1633,8 @@ class MacPhoenixClient {
         connectionSteps.setActive('offer');
         this.updateStatus('Signaling connected', 'connecting');
         this.updateWebRTCState('ws', 'Open');
+
+        this._logMonitorInfo();
 
         this._startHeartbeat();
 
@@ -2065,6 +2141,8 @@ class MacPhoenixClient {
                     this.currentScreenHeight = this.video.videoHeight;
                     this.video.width = this.video.videoWidth;
                     this.video.height = this.video.videoHeight;
+                    this._applyPixelDoubleSize(this.video,
+                        this.video.videoWidth, this.video.videoHeight);
                     this.cachedMouseRect = null;
                     if (this.fallbackCtl) {
                         this.fallbackCtl.onResolutionChange({
@@ -2093,6 +2171,8 @@ class MacPhoenixClient {
                     this.currentScreenHeight = this.video.videoHeight;
                     this.video.width = this.video.videoWidth;
                     this.video.height = this.video.videoHeight;
+                    this._applyPixelDoubleSize(this.video,
+                        this.video.videoWidth, this.video.videoHeight);
                     this.updateWebRTCState('video-size',
                         `${this.video.videoWidth} x ${this.video.videoHeight}`);
                     this.cachedMouseRect = null;
@@ -3595,9 +3675,158 @@ function updateHeaderPhaseColor(phase) {
     chip.textContent = phase || 'offline';
 }
 
+// ============================================================================
+// Resolution dropdown + auto-resize
+// ============================================================================
+//
+// "Auto" mode keeps the guest at the largest published mode that still fits
+// the available browser real estate. In fullscreen we target the display's
+// native CSS workspace (which, combined with image-rendering: pixelated,
+// pixel-doubles to fill the device 1:1). In windowed mode we measure the
+// display container's clientRect and pick the biggest mode whose width AND
+// height both fit. Resize events are debounced (500 ms) so dragging a window
+// doesn't spam the bridge.
+
+let availableResolutions = [];   // [{w, h, apple_id}, ...] from /api/resolutions
+let autoResizeEnabled = false;
+let _autoResizeDebounceId = null;
+
+async function populateResolutionDropdown() {
+    let serverMax = { w: 0, h: 0 };
+    try {
+        const r = await fetch(getApiUrl('resolutions'));
+        const data = await r.json();
+        availableResolutions = data.resolutions || [];
+        serverMax = { w: data.max_width || 0, h: data.max_height || 0 };
+    } catch (e) {
+        logger.warn('Failed to fetch resolutions', { error: e.message });
+        return;
+    }
+    // Header dropdown — only modes within the current max-cap. The cap
+    // is enforced server-side too; this is just so the runtime picker
+    // doesn't list options the guest will never advertise.
+    const capped = availableResolutions.filter(m =>
+        (!serverMax.w || m.w <= serverMax.w) &&
+        (!serverMax.h || m.h <= serverMax.h));
+    _populateResSelect(document.getElementById('resolution-select'),
+                       capped, /*includeNoLimit*/ false);
+    // Config modal — boot + max get the full list. Boot can be set to
+    // any mode (the cap restricts what the GUEST sees, not which mode
+    // the user picks as initial); max can be any value to limit further.
+    _populateResSelect(document.getElementById('cfg-screen'),
+                       availableResolutions, /*includeNoLimit*/ false);
+    _populateResSelect(document.getElementById('cfg-max-resolution'),
+                       availableResolutions, /*includeNoLimit*/ true);
+}
+
+function _populateResSelect(select, modes, includeNoLimit) {
+    if (!select) return;
+    const prev = select.value;
+    if (includeNoLimit) {
+        // Wipe everything past the leading "No limit" option, then re-add.
+        while (select.options.length > 1) select.remove(1);
+    } else {
+        select.innerHTML = '';
+    }
+    for (const m of modes) {
+        const opt = document.createElement('option');
+        opt.value = m.w + 'x' + m.h;
+        opt.textContent = m.w + ' × ' + m.h;
+        opt.dataset.w = m.w;
+        opt.dataset.h = m.h;
+        select.appendChild(opt);
+    }
+    if (prev && [...select.options].some(o => o.value === prev)) {
+        select.value = prev;
+    }
+}
+
+function requestGuestResolution(w, h, reason) {
+    if (!w || !h) return;
+    return fetch(getApiUrl('resolution'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ w, h }),
+    })
+        .then(r => r.json())
+        .then(d => {
+            logger.info('Resize request', { reason, requested: { w, h }, result: d });
+            // Reflect what the server actually snapped to in the dropdown.
+            if (d && d.snapped) {
+                const select = document.getElementById('resolution-select');
+                if (select) {
+                    const v = d.snapped.w + 'x' + d.snapped.h;
+                    if ([...select.options].some(o => o.value === v)) select.value = v;
+                }
+            }
+            return d;
+        })
+        .catch(e => logger.warn('Resize request failed', { error: e.message, reason }));
+}
+
+// Pick the "best" resolution from availableResolutions for the current
+// available area. In fullscreen → display native CSS workspace. Otherwise
+// → display container's clientRect. "Best" = largest mode whose w AND h
+// both fit; falls back to the smallest mode if nothing fits.
+function pickAutoResolution() {
+    if (!availableResolutions.length) return null;
+    let availCssW, availCssH;
+    if (document.fullscreenElement) {
+        availCssW = window.screen.width;
+        availCssH = window.screen.height;
+    } else {
+        const c = document.getElementById('display-container');
+        const rect = c ? c.getBoundingClientRect() : null;
+        const sec = document.getElementById('video-section');
+        const secRect = sec ? sec.getBoundingClientRect() : null;
+        availCssW = (secRect && secRect.width)  || (rect && rect.width)  || 1024;
+        availCssH = (secRect && secRect.height) || (rect && rect.height) || 768;
+    }
+    // We render the Mac framebuffer at RATIO× device pixels per Mac pixel
+    // via _applyPixelDoubleSize — CSS box = mac × RATIO/dpr. Mac pixels
+    // that fit the available CSS area: mac ≤ avail × dpr / RATIO.
+    const dpr = window.devicePixelRatio || 1;
+    const ratio = pixelDoubleRatio;
+    const availMacW = Math.floor(availCssW * dpr / ratio);
+    const availMacH = Math.floor(availCssH * dpr / ratio);
+    let best = null;
+    for (const m of availableResolutions) {
+        if (m.w > availMacW || m.h > availMacH) continue;
+        if (!best || m.w * m.h > best.w * best.h) best = m;
+    }
+    if (!best) {
+        // Nothing fits — pick the smallest available.
+        best = availableResolutions.reduce(
+            (a, b) => (a.w * a.h <= b.w * b.h ? a : b),
+            availableResolutions[0],
+        );
+    }
+    return best;
+}
+
+function applyAutoResize(reason) {
+    if (!autoResizeEnabled) return;
+    const pick = pickAutoResolution();
+    if (!pick) return;
+    requestGuestResolution(pick.w, pick.h, reason || 'auto');
+}
+
+function scheduleAutoResize(reason) {
+    if (_autoResizeDebounceId) clearTimeout(_autoResizeDebounceId);
+    _autoResizeDebounceId = setTimeout(() => {
+        _autoResizeDebounceId = null;
+        applyAutoResize(reason);
+    }, 500);
+}
+
 // Handle fullscreen changes
 document.addEventListener('fullscreenchange', () => {
     document.body.classList.toggle('fullscreen', !!document.fullscreenElement);
+    if (autoResizeEnabled) applyAutoResize(document.fullscreenElement ? 'fullscreen' : 'windowed');
+});
+
+window.addEventListener('resize', () => {
+    if (autoResizeEnabled) scheduleAutoResize('viewport-resize');
 });
 
 // ============================================================================
@@ -3771,6 +4000,7 @@ function buildConfigJson() {
         bootdriver,
         ram_mb: parseInt(document.getElementById('cfg-ram')?.value || 64),
         screen: document.getElementById('cfg-screen')?.value || '640x480',
+        max_resolution: document.getElementById('cfg-max-resolution')?.value || '',
         audio: document.getElementById('cfg-sound')?.checked ?? true,
         zappram: document.getElementById('cfg-zappram')?.checked ?? false,
         dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true,
@@ -4322,6 +4552,8 @@ function updateConfigUI() {
     if (romEl) romEl.value = currentConfig.rom;
     if (ramEl) ramEl.value = currentConfig.ram;
     if (screenEl) screenEl.value = currentConfig.screen;
+    const maxResEl = document.getElementById('cfg-max-resolution');
+    if (maxResEl) maxResEl.value = currentConfig.max_resolution || '';
     if (soundEl) soundEl.checked = currentConfig.sound;
     if (zappramEl) zappramEl.checked = currentConfig.zappram;
     if (dismissDialogEl) dismissDialogEl.checked = currentConfig.dismiss_shutdown_dialog;
@@ -4792,6 +5024,24 @@ async function pollEmulatorStatus() {
         // otherwise fall back to hard Power Off / Reset. Split-menu items
         // remain available either way.
         const useGraceful = data.emulator_running && data.bridge_agent_connected;
+
+        // Resolution dropdown + Auto checkbox use the same gate as the
+        // graceful shutdown buttons — they only work when the bridge
+        // agent's heartbeating, since they go through it. The dropdown's
+        // value still tracks the current guest resolution while disabled,
+        // so the user can see what the Mac is at.
+        const resSelect = document.getElementById('resolution-select');
+        const autoToggle = document.getElementById('auto-resize-toggle');
+        if (resSelect) resSelect.disabled = !useGraceful;
+        if (autoToggle) autoToggle.disabled = !useGraceful;
+        if (resSelect && client && client.currentScreenWidth && client.currentScreenHeight) {
+            const v = client.currentScreenWidth + 'x' + client.currentScreenHeight;
+            if (resSelect.value !== v &&
+                [...resSelect.options].some(o => o.value === v)) {
+                resSelect.value = v;
+            }
+        }
+
         const stopBtnP = document.getElementById('stop-btn');
         const resetBtnP = document.getElementById('reset-btn');
         const resetMenuBtn = document.getElementById('reset-menu-btn');
@@ -5028,12 +5278,67 @@ function setupEventListeners() {
     // Populate codec dropdown based on server-compiled codecs
     populateAvailableCodecs();
 
+    // Populate resolution dropdown from /api/resolutions (filtered by backend).
+    populateResolutionDropdown();
+
     // Header controls
     const codecSelect = document.getElementById('codec-select');
     if (codecSelect) codecSelect.addEventListener('change', changeCodec);
 
     const mouseModeSelect = document.getElementById('mouse-mode-select');
     if (mouseModeSelect) mouseModeSelect.addEventListener('change', changeMouseMode);
+
+    const resSelect = document.getElementById('resolution-select');
+    if (resSelect) {
+        resSelect.addEventListener('change', () => {
+            const opt = resSelect.options[resSelect.selectedIndex];
+            const w = parseInt(opt?.dataset.w || '0', 10);
+            const h = parseInt(opt?.dataset.h || '0', 10);
+            if (w && h) {
+                // Manual pick implies the user took over; turn off auto so we
+                // don't immediately re-snap to whatever fits the viewport.
+                const autoToggle = document.getElementById('auto-resize-toggle');
+                if (autoToggle && autoToggle.checked) {
+                    autoToggle.checked = false;
+                    autoResizeEnabled = false;
+                }
+                requestGuestResolution(w, h, 'manual');
+            }
+        });
+    }
+
+    const autoToggle = document.getElementById('auto-resize-toggle');
+    if (autoToggle) {
+        autoToggle.addEventListener('change', () => {
+            autoResizeEnabled = !!autoToggle.checked;
+            if (autoResizeEnabled) applyAutoResize('toggle-on');
+        });
+    }
+
+    const pixelDoubleToggle = document.getElementById('pixel-double-toggle');
+    if (pixelDoubleToggle) {
+        pixelDoubleToggle.addEventListener('change', () => {
+            pixelDoubleRatio = pixelDoubleToggle.checked ? 2 : 1;
+            // Re-apply CSS sizing to the active display element so the new
+            // ratio takes effect immediately without waiting for the next
+            // frame / resolution change.
+            if (client) {
+                if (client.video && client.video.style.display !== 'none' &&
+                    client.video.videoWidth && client.video.videoHeight) {
+                    client._applyPixelDoubleSize(client.video,
+                        client.video.videoWidth, client.video.videoHeight);
+                }
+                if (client.canvas && client.canvas.style.display !== 'none' &&
+                    client.currentScreenWidth && client.currentScreenHeight) {
+                    client._applyPixelDoubleSize(client.canvas,
+                        client.currentScreenWidth, client.currentScreenHeight);
+                }
+                client.cachedMouseRect = null;
+            }
+            // If auto mode is on, the resolution that fits has changed too.
+            if (autoResizeEnabled) applyAutoResize('pixel-double-toggle');
+        });
+    }
 
     const configBtn = document.getElementById('config-btn');
     if (configBtn) configBtn.addEventListener('click', openConfig);
