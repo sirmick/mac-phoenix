@@ -54,6 +54,12 @@ const CONSTANTS = {
 // and pickAutoResolution. Toggled by the header "2×" checkbox.
 let pixelDoubleRatio = CONSTANTS.PIXEL_DOUBLE_RATIO_DEFAULT;
 
+// GPU upscaler — wraps a WebGL canvas that samples the active display
+// element (video or 2D canvas) and runs Scale2x. Initialised on first
+// "Smooth" toggle so non-WebGL browsers don't crash on load.
+let upscaler = null;
+let smoothEnabled = false;
+
 // Global debug configuration (fetched from server)
 const debugConfig = {
     debug_connection: false,   // WebRTC/ICE/signaling logs
@@ -1384,6 +1390,22 @@ class MacPhoenixClient {
     // regardless of the browser's devicePixelRatio. CSS box size =
     // w × RATIO / dpr makes device-pixel size = w × RATIO uniform, even
     // on fractional dpr (Windows 150%, Linux 1.25×, etc.).
+    // Tell the upscaler about the current source element + dimensions.
+    // Called whenever the active codec / resolution changes. No-op when
+    // smoothing is disabled.
+    _syncUpscaler() {
+        if (!smoothEnabled || !upscaler) return;
+        const usesVideo = (this.codecType === CodecType.H264 ||
+                           this.codecType === CodecType.VP9);
+        const src = usesVideo ? this.video : this.canvas;
+        upscaler.setSource(src);
+        if (usesVideo && this.video.videoWidth) {
+            upscaler.setSourceSize(this.video.videoWidth, this.video.videoHeight);
+        } else if (this.currentScreenWidth && this.currentScreenHeight) {
+            upscaler.setSourceSize(this.currentScreenWidth, this.currentScreenHeight);
+        }
+    }
+
     _applyPixelDoubleSize(el, w, h) {
         if (!el || !w || !h) return;
         const dpr = window.devicePixelRatio || 1;
@@ -1428,7 +1450,24 @@ class MacPhoenixClient {
                 clientHeight: this.video.clientHeight,
                 videoWidth: this.video.videoWidth,
                 videoHeight: this.video.videoHeight,
+                styleWidth: this.video.style.width,
+                styleHeight: this.video.style.height,
             } : null,
+            upscaler: (function () {
+                const u = document.getElementById('display-upscale');
+                if (!u) return null;
+                return {
+                    smoothEnabled: smoothEnabled,
+                    pixelDoubleRatio: pixelDoubleRatio,
+                    visible: u.style.display !== 'none',
+                    bufferWidth:  u.width,
+                    bufferHeight: u.height,
+                    clientWidth:  u.clientWidth,
+                    clientHeight: u.clientHeight,
+                    styleWidth:   u.style.width,
+                    styleHeight:  u.style.height,
+                };
+            })(),
             ua: navigator.userAgent,
         });
     }
@@ -1486,6 +1525,7 @@ class MacPhoenixClient {
                     if (changed) {
                         this._applyPixelDoubleSize(this.canvas,
                             metadata.frameWidth, metadata.frameHeight);
+                        this._syncUpscaler();
                         if (this.fallbackCtl) {
                             this.fallbackCtl.onResolutionChange({
                                 w: metadata.frameWidth,
@@ -2143,6 +2183,7 @@ class MacPhoenixClient {
                     this.video.height = this.video.videoHeight;
                     this._applyPixelDoubleSize(this.video,
                         this.video.videoWidth, this.video.videoHeight);
+                    this._syncUpscaler();
                     this.cachedMouseRect = null;
                     if (this.fallbackCtl) {
                         this.fallbackCtl.onResolutionChange({
@@ -5312,6 +5353,32 @@ function setupEventListeners() {
         autoToggle.addEventListener('change', () => {
             autoResizeEnabled = !!autoToggle.checked;
             if (autoResizeEnabled) applyAutoResize('toggle-on');
+        });
+    }
+
+    const smoothToggle = document.getElementById('smooth-toggle');
+    if (smoothToggle) {
+        smoothToggle.addEventListener('change', () => {
+            smoothEnabled = !!smoothToggle.checked;
+            const upCanvas = document.getElementById('display-upscale');
+            if (smoothEnabled) {
+                if (!upscaler) {
+                    try {
+                        upscaler = new Upscaler(upCanvas);
+                    } catch (e) {
+                        logger.error('Upscaler init failed', { error: e.message });
+                        smoothToggle.checked = false;
+                        smoothEnabled = false;
+                        return;
+                    }
+                }
+                if (upCanvas) upCanvas.style.display = 'block';
+                if (client) client._syncUpscaler();
+                upscaler.start();
+            } else {
+                if (upscaler) upscaler.stop();
+                if (upCanvas) upCanvas.style.display = 'none';
+            }
         });
     }
 

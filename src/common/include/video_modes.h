@@ -56,6 +56,7 @@ inline constexpr ModeDef kModes[] = {
     /* Common laptop natives — Apple Retina + Surface */
     { 2240, 1400, 0x9D,        60,               kFlagPpc },              // 16:10 (Windows-150% native CSS×dpr)
     { 2256, 1504, 0x97,        60,               kFlagPpc },              // Surface Laptop
+    { 2560,  720, 0x9E,        60,               kFlagPpc | kFlagH264 },  // 32:9 ultrawide half-fill (Samsung G9 5120x1440 / 2)
     { 2560, 1080, 0x90,        60,               kFlagPpc | kFlagH264 },  // UWHD 21:9; h264 reliable ceiling
     /* h264 unreliable beyond 2560x1080 keyframes; client falls to vp9 */
     { 2560, 1440, 0x91,        60,               kFlagPpc },              // QHD
