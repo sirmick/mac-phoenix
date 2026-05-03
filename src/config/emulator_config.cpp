@@ -10,14 +10,17 @@
 #include <fstream>
 #include <unistd.h>
 #include <climits>
-#include <sys/stat.h>
+
+#include <QDir>
+#include <QFileInfo>
+#include <QString>
 
 namespace config {
 
 // Helper: Check if file exists
 static bool file_exists(const char* path) {
-    struct stat st;
-    return (stat(path, &st) == 0 && S_ISREG(st.st_mode));
+    QFileInfo info{QString::fromLocal8Bit(path)};
+    return info.exists() && info.isFile();
 }
 
 // Helper: Expand ~ to home directory
@@ -45,18 +48,8 @@ static bool parse_screen(const std::string& s, uint32_t& w, uint32_t& h) {
 static void ensure_parent_dir(const std::string& path) {
     size_t slash = path.rfind('/');
     if (slash == std::string::npos) return;
-    std::string dir = path.substr(0, slash);
-    struct stat st;
-    if (stat(dir.c_str(), &st) != 0) {
-        size_t parent_slash = dir.rfind('/');
-        if (parent_slash != std::string::npos) {
-            std::string parent = dir.substr(0, parent_slash);
-            if (stat(parent.c_str(), &st) != 0) {
-                mkdir(parent.c_str(), 0755);
-            }
-        }
-        mkdir(dir.c_str(), 0755);
-    }
+    const QString dir = QString::fromStdString(path.substr(0, slash));
+    QDir().mkpath(dir);  // mkpath creates intermediate directories
 }
 
 // Remove duplicate paths from a vector, preserving order. Compares by
@@ -702,7 +695,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (!root.empty()) {
             std::string parent_dir = root + "/MacPhoenix";
-            mkdir(parent_dir.c_str(), 0755);
+            QDir().mkpath(QString::fromStdString(parent_dir));
             /* Parent + IPC child must agree on the same bridge_dir
              * so the BridgeAgent in the guest writes to the same
              * path the parent's /api/* readers poll. Parent
@@ -719,7 +712,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             }
             config.bridge_dir = parent_dir + "/" +
                                 std::to_string(pid_for_dir);
-            mkdir(config.bridge_dir.c_str(), 0755);
+            QDir().mkpath(QString::fromStdString(config.bridge_dir));
 
             // Remove stale top-level bridge files from the pre-subfolder
             // layout (legacy, when bridge_dir was the extfs root itself).
@@ -820,8 +813,7 @@ EmulatorConfig load_emulator_config(const char* config_path,
                     exe_dir + "/../share/mac-phoenix/client",
                 };
                 for (const auto& candidate : candidates) {
-                    struct stat st;
-                    if (stat(candidate.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+                    if (QFileInfo{QString::fromStdString(candidate)}.isDir()) {
                         config.client_dir = candidate;
                         break;
                     }

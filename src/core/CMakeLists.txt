@@ -43,9 +43,12 @@ target_include_directories(core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../ipc
 )
 
+find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
+
 target_link_libraries(core PRIVATE
   Threads::Threads
   nlohmann_json::nlohmann_json
+  Qt6::Core
 )
 
 target_compile_options(core PRIVATE

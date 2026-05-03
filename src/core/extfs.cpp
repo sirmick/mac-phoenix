@@ -45,12 +45,15 @@
 
 #ifndef WIN32
 #include <unistd.h>
-#include <dirent.h>
 #endif
 
 #if defined __APPLE__ && defined __MACH__
 #include <sys/attr.h>
 #endif
+
+#include <QDir>
+#include <QString>
+#include <QStringList>
 
 #include "cpu_emulation.h"
 #include "emul_op.h"
@@ -1282,27 +1285,34 @@ static int16 fs_get_file_info(uint32 pb, bool hfs, uint32 dirID)
 			return dirNFErr;
 		get_path_for_fsitem(p);
 
-		// Look for nth item in directory and add name to path
-		DIR *d = opendir(full_path);
-		if (d == NULL)
+		// Look for nth item in directory and add name to path.
+		// QDir::NoDotAndDotDot strips . and ..; we additionally skip
+		// any "." prefix entries since MacOS could interpret those as
+		// driver names. QDir::Unsorted preserves filesystem order so
+		// guest-side enumeration matches the original readdir() walk.
+		QDir qd{QString::fromLocal8Bit(full_path)};
+		if (!qd.exists())
 			return dirNFErr;
-		struct dirent *de = NULL;
-		for (int i=0; i<dir_index; i++) {
-read_next_de:
-			de = readdir(d);
-			if (de == NULL) {
-				closedir(d);
-				return fnfErr;
+		const QStringList all_names = qd.entryList(
+			QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
+			QDir::Unsorted);
+		QByteArray picked_name;
+		int seen = 0;
+		for (const QString &q : all_names) {
+			const QByteArray b = q.toLocal8Bit();
+			if (b.isEmpty() || b[0] == '.')
+				continue;
+			if (++seen == dir_index) {
+				picked_name = b;
+				break;
 			}
-			if (de->d_name[0] == '.')
-				goto read_next_de;	// Suppress names beginning with '.' (MacOS could interpret these as driver names)
-			//!! suppress directories
 		}
-		add_path_comp(de->d_name);
+		if (picked_name.isEmpty())
+			return fnfErr;
+		add_path_comp(picked_name.constData());
 
 		// Get FSItem for queried item
-		fs_item = find_fsitem(de->d_name, p);
-		closedir(d);
+		fs_item = find_fsitem(picked_name.constData(), p);
 	}
 
 	// Get stats
@@ -1407,25 +1417,30 @@ static int16 fs_get_cat_info(uint32 pb)
 		get_path_for_fsitem(p);
 
 		// Look for nth item in directory and add name to path
-		DIR *d = opendir(full_path);
-		if (d == NULL)
+		// (same enumeration semantics as the GetFInfo path above).
+		QDir qd{QString::fromLocal8Bit(full_path)};
+		if (!qd.exists())
 			return dirNFErr;
-		struct dirent *de = NULL;
-		for (int i=0; i<dir_index; i++) {
-read_next_de:
-			de = readdir(d);
-			if (de == NULL) {
-				closedir(d);
-				return fnfErr;
+		const QStringList all_names = qd.entryList(
+			QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
+			QDir::Unsorted);
+		QByteArray picked_name;
+		int seen = 0;
+		for (const QString &q : all_names) {
+			const QByteArray b = q.toLocal8Bit();
+			if (b.isEmpty() || b[0] == '.')
+				continue;
+			if (++seen == dir_index) {
+				picked_name = b;
+				break;
 			}
-			if (de->d_name[0] == '.')
-				goto read_next_de;	// Suppress names beginning with '.' (MacOS could interpret these as driver names)
 		}
-		add_path_comp(de->d_name);
+		if (picked_name.isEmpty())
+			return fnfErr;
+		add_path_comp(picked_name.constData());
 
 		// Get FSItem for queried item
-		fs_item = find_fsitem(de->d_name, p);
-		closedir(d);
+		fs_item = find_fsitem(picked_name.constData(), p);
 	}
 	D(bug("  path %s\n", full_path));
 
@@ -1470,18 +1485,13 @@ read_next_de:
 			count = fs_item->cache_dircount;
 		else {
 			count = 0;
-			DIR *d = opendir(full_path);
-			if (d) {
-				struct dirent *de;
-				for (;;) {
-					de = readdir(d);
-					if (de == NULL)
-						break;
-					if (de->d_name[0] == '.')
-						continue;	// Suppress names beginning with '.'
+			const QStringList names = QDir{QString::fromLocal8Bit(full_path)}.entryList(
+				QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
+				QDir::Unsorted);
+			for (const QString &q : names) {
+				const QByteArray b = q.toLocal8Bit();
+				if (!b.isEmpty() && b[0] != '.')
 					count++;
-				}
-				closedir(d);
 			}
 			fs_item->cache_dircount = count;
 		}

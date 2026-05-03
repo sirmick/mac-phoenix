@@ -6,14 +6,17 @@
  */
 
 #include "file_scanner.h"
-#include <dirent.h>
-#include <sys/stat.h>
 #include <algorithm>
 #include <cstdio>
 #include <cerrno>
 #include <openssl/evp.h>
 #include <sstream>
 #include <iomanip>
+
+#include <QDir>
+#include <QDirIterator>
+#include <QFileInfo>
+#include <QString>
 
 namespace storage {
 
@@ -79,45 +82,43 @@ static void scan_directory_recursive(const std::string& base_dir, const std::str
                                      std::vector<FileInfo>& files) {
     std::string current_dir = relative_path.empty() ? base_dir : base_dir + "/" + relative_path;
 
-    DIR* dir = opendir(current_dir.c_str());
-    if (!dir) {
+    QDir dir(QString::fromStdString(current_dir));
+    if (!dir.exists()) {
         fprintf(stderr, "[Storage] Failed to open directory: %s (errno=%d)\n", current_dir.c_str(), errno);
         return;
     }
 
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        if (entry->d_name[0] == '.') continue;
+    const QFileInfoList entries = dir.entryInfoList(
+        QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
 
-        std::string name = entry->d_name;
-        std::string full_path = current_dir + "/" + name;
-        std::string rel_name = relative_path.empty() ? name : relative_path + "/" + name;
+    for (const QFileInfo& info : entries) {
+        const std::string name = info.fileName().toStdString();
+        if (name.empty() || name[0] == '.') continue;
 
-        struct stat st;
-        if (stat(full_path.c_str(), &st) != 0) continue;
+        const std::string full_path = current_dir + "/" + name;
+        const std::string rel_name = relative_path.empty() ? name : relative_path + "/" + name;
 
-        if (S_ISDIR(st.st_mode)) {
+        if (info.isDir()) {
             scan_directory_recursive(base_dir, rel_name, extensions, read_checksums, files);
-        } else if (S_ISREG(st.st_mode)) {
+        } else if (info.isFile()) {
             if (has_extension(name, extensions)) {
-                FileInfo info;
-                info.name = rel_name;
-                info.size = st.st_size;
-                info.checksum = 0;
-                info.has_checksum = false;
-                info.md5 = "";
+                FileInfo fi;
+                fi.name = rel_name;
+                fi.size = info.size();
+                fi.checksum = 0;
+                fi.has_checksum = false;
+                fi.md5 = "";
 
                 if (read_checksums) {
-                    info.checksum = read_rom_checksum(full_path);
-                    info.has_checksum = true;
-                    info.md5 = calculate_md5(full_path);
+                    fi.checksum = read_rom_checksum(full_path);
+                    fi.has_checksum = true;
+                    fi.md5 = calculate_md5(full_path);
                 }
 
-                files.push_back(info);
+                files.push_back(fi);
             }
         }
     }
-    closedir(dir);
 }
 
 // Public: Scan directory for files with given extensions
@@ -129,38 +130,34 @@ std::vector<FileInfo> scan_directory(const std::string& directory,
     if (recursive) {
         scan_directory_recursive(directory, "", extensions, read_checksums, files);
     } else {
-        DIR* dir = opendir(directory.c_str());
-        if (!dir) return files;
+        QDir dir(QString::fromStdString(directory));
+        if (!dir.exists()) return files;
 
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            if (entry->d_name[0] == '.') continue;
+        const QFileInfoList entries = dir.entryInfoList(
+            QDir::Files | QDir::NoDotAndDotDot);
 
-            std::string name = entry->d_name;
+        for (const QFileInfo& info : entries) {
+            const std::string name = info.fileName().toStdString();
+            if (name.empty() || name[0] == '.') continue;
+
             if (has_extension(name, extensions)) {
-                FileInfo info;
-                info.name = name;
-                info.size = 0;
-                info.checksum = 0;
-                info.has_checksum = false;
-                info.md5 = "";
+                FileInfo fi;
+                fi.name = name;
+                fi.size = info.size();
+                fi.checksum = 0;
+                fi.has_checksum = false;
+                fi.md5 = "";
 
-                std::string full_path = directory + "/" + name;
-                struct stat st;
-                if (stat(full_path.c_str(), &st) == 0) {
-                    info.size = st.st_size;
-                }
-
+                const std::string full_path = directory + "/" + name;
                 if (read_checksums) {
-                    info.checksum = read_rom_checksum(full_path);
-                    info.has_checksum = true;
-                    info.md5 = calculate_md5(full_path);
+                    fi.checksum = read_rom_checksum(full_path);
+                    fi.has_checksum = true;
+                    fi.md5 = calculate_md5(full_path);
                 }
 
-                files.push_back(info);
+                files.push_back(fi);
             }
         }
-        closedir(dir);
     }
 
     std::sort(files.begin(), files.end(), [](const FileInfo& a, const FileInfo& b) {
