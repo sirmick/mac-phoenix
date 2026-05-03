@@ -142,6 +142,14 @@ event loop placement.
 **Commit split**: 3a = `QSharedMemory` swap only (no protocol change),
 3b = sockets + notification together (entangled via SCM_RIGHTS).
 
+**Status (2026-05-03)**: 3a landed (commit `702ccba8`). 3b was attempted
+but introduced a child-side regression in `init_mac_subsystems` (boot_se
+crashed in `VideoMonitors[0].get_current_mode()` after IPC connect — root
+cause not isolated). Reverted; will revisit once a more isolated
+prototype confirms the QLocalSocket + raw-fd hybrid pattern works against
+the existing init flow. Possibly folds into Phase 4 (threading cleanup)
+where the encoder thread needs restructuring anyway.
+
 **Validation**:
 - Subprocess + IPC mode boots
 - Frame rate unchanged (compare PPM dump cadence)
