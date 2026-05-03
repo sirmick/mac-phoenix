@@ -71,7 +71,8 @@
                 </div>
             </div>
 
-            <button class="btn btn-icon panel-toggle" id="debug-toggle" style="margin-left: auto;" title="Toggle side panel">&rsaquo;</button>
+            <button class="btn" id="fullscreen-btn" style="margin-left: auto;">Fullscreen</button>
+            <button class="btn btn-icon panel-toggle" id="debug-toggle" title="Toggle side panel">&rsaquo;</button>
         </div>
     </header>
 
@@ -105,7 +106,6 @@
                         <input type="checkbox" id="smooth-toggle"> Smooth
                     </label>
                 </div>
-                <button class="btn" id="fullscreen-btn">Fullscreen</button>
                 <button class="btn warning" id="invoke-debug-btn" title="Programmer's Key — invoke debugger">Debug</button>
             </div>
             <div class="debug-tabs">
@@ -262,6 +262,7 @@
             </div>
             <div class="modal-body">
                 <div class="modal-columns">
+                <div class="modal-column">
                 <!-- Column 1: system + storage -->
                 <div class="form-group">
                     <label>Emulator Mode</label>
@@ -301,15 +302,24 @@
                     <span id="create-image-status" style="font-size:11px;color:#888"></span>
                 </div>
 
+                </div><!-- end column 1 -->
+
+                <div class="modal-column">
+                <!-- Column 2: display + media. Wrapped in its own flex column
+                     so async-loaded lists in column 1 (Disk Images, etc.)
+                     can't reflow Guest Additions out of the top slot. -->
                 <div class="form-group">
-                    <label>MacBrowser</label>
+                    <label title="Host helpers that integrate the guest with the outside world. Bridge agent is required for AppleScript-style automation, /api/launch, and resolution switching. MacBrowser pipes a host Firefox into a guest window.">Guest Additions</label>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cfg-bridge-enabled">
+                        <label for="cfg-bridge-enabled">Enable bridge agent</label>
+                    </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="cfg-browser-enabled">
-                        <label for="cfg-browser-enabled">Enable Firefox bridge — auto-mounts MacBrowser.dsk on next start</label>
+                        <label for="cfg-browser-enabled">Enable MacBrowser (Firefox via MacBrowser.dsk)</label>
                     </div>
                 </div>
 
-                <!-- Column 2: display + media -->
                 <div class="form-group">
                     <label title="Resolution the guest defaults to at boot. Mac OS can switch to any other published mode at runtime via Monitors cdev.">Boot Resolution</label>
                     <select id="cfg-screen"></select>
@@ -336,15 +346,10 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Shared Folders</label>
-                    <div id="extfs-list" class="disk-checkbox-list">
-                        <div class="empty-state">No shared folders configured</div>
-                    </div>
-                    <div class="extfs-add-row" style="display:flex;gap:4px;margin-top:4px">
-                        <input type="text" id="extfs-path-input" placeholder="/path/to/folder" style="flex:1;font-size:12px;padding:2px 6px">
-                        <button id="extfs-add-btn" type="button" class="btn">Add</button>
-                    </div>
+                    <label title="Host folder mounted as the 'Host:' volume on the Mac desktop. One only — the ExtFS driver supports a single root volume. For multi-folder access, symlink subfolders inside this root.">Shared Folder</label>
+                    <input type="text" id="cfg-extfs" placeholder="/path/to/folder (leave empty to disable)">
                 </div>
+                </div><!-- end column 2 -->
 
                 </div><!-- end modal-columns -->
 
@@ -389,9 +394,6 @@
                     <span>Keyboard</span>
                 </div>
                 <div class="advanced-content" id="keyboard-settings">
-                    <div class="kb-help" style="font-size:11px;color:#999;margin-bottom:8px">
-                        When you press a modifier, the Mac sees:
-                    </div>
                     <div class="form-group">
                         <label for="cfg-kb-ctrl">Ctrl key</label>
                         <select id="cfg-kb-ctrl">
@@ -501,12 +503,6 @@
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
                             <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss shutdown dialog</label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="cfg-bridge-enabled">
-                            <label for="cfg-bridge-enabled">Enable bridge agent</label>
                         </div>
                     </div>
                 </div>

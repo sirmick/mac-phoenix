@@ -271,7 +271,6 @@ main {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 20px;
     background: #111;
     min-width: 0;
 }
@@ -818,18 +817,21 @@ body.fullscreen #video-section {
 }
 
 .modal-columns {
-    columns: 2;
-    column-gap: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 24px;
+    align-items: start;
 }
 
-.modal-columns > .form-group {
-    break-inside: avoid;
+.modal-column {
+    min-width: 0;
 }
 
 .modal-body .advanced-content.open {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0 24px;
+    align-items: start;
 }
 
 .modal-footer {
@@ -896,13 +898,23 @@ body.fullscreen #video-section {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.75em;
 }
 
 .checkbox-group input[type="checkbox"] {
     width: 14px;
     height: 14px;
     accent-color: #007AFF;
+}
+
+/* The label *next to* a checkbox is the row's body text; match the
+ * dropdown option font (size + weight) so the form reads as a list of
+ * choices, not as headers. The "section label" above (.form-group > label)
+ * keeps its bold-caption style. */
+.checkbox-group label {
+    margin: 0;
+    color: #ddd;
+    font-size: 0.85em;
+    font-weight: normal;
 }
 
 /* ROM/Disk selection */

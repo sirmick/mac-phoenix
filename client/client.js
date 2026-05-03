@@ -3842,6 +3842,12 @@ function pickAutoResolution() {
             availableResolutions[0],
         );
     }
+    logger.warn('pickAutoResolution', {
+        availCssW: +availCssW.toFixed(1), availCssH: +availCssH.toFixed(1),
+        dpr, ratio, availMacW, availMacH,
+        modeCount: availableResolutions.length,
+        picked: best ? `${best.w}x${best.h}` : null,
+    });
     return best;
 }
 
@@ -3869,6 +3875,18 @@ document.addEventListener('fullscreenchange', () => {
 window.addEventListener('resize', () => {
     if (autoResizeEnabled) scheduleAutoResize('viewport-resize');
 });
+
+if (typeof ResizeObserver !== 'undefined') {
+    const _ro = new ResizeObserver(() => {
+        if (autoResizeEnabled) scheduleAutoResize('section-resize');
+    });
+    const _start = () => {
+        const sec = document.getElementById('video-section');
+        if (sec) _ro.observe(sec); else setTimeout(_start, 100);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _start);
+    else _start();
+}
 
 // ============================================================================
 // Prefs File Handling
@@ -3979,6 +3997,7 @@ function configFromServerJson(cfg) {
         rom: cfg.rom ? stripPrefix(cfg.rom, '/roms/') : '',
         ram: cfg.ram_mb || 64,
         screen: cfg.screen || '640x480',
+        max_resolution: cfg.max_resolution || '',
         sound: cfg.audio ?? true,
         bootdriver: cfg.bootdriver || 0,
         disks: (cfg.disks || []).map(p => stripPrefix(p, '/images/')),
@@ -4424,46 +4443,19 @@ function updateCdromSelection() {
     currentConfig.cdroms = Array.from(checkboxes).map(cb => cb.value);
 }
 
+// ExtFS exposes exactly one mounted root ("Host:") on the Mac desktop —
+// the driver in src/core/extfs.cpp uses extfs_paths[0] only. We keep the
+// JSON shape as an array for back-compat but only the first element is
+// meaningful; the UI reads/writes that one slot as a single field.
 async function loadExtfsList() {
-    renderExtfsList();
-    const addBtn = document.getElementById('extfs-add-btn');
-    const input = document.getElementById('extfs-path-input');
-    if (addBtn && input) {
-        addBtn.onclick = () => {
-            const path = input.value.trim();
-            if (path) {
-                if (!currentConfig.extfs) currentConfig.extfs = [];
-                if (!currentConfig.extfs.includes(path)) {
-                    currentConfig.extfs.push(path);
-                    renderExtfsList();
-                }
-                input.value = '';
-            }
-        };
-        input.onkeydown = (e) => { if (e.key === 'Enter') addBtn.click(); };
-    }
-}
-
-function renderExtfsList() {
-    const container = document.getElementById('extfs-list');
-    if (!container) return;
+    const input = document.getElementById('cfg-extfs');
+    if (!input) return;
     const paths = currentConfig.extfs || [];
-    if (paths.length === 0) {
-        container.innerHTML = '<div class="empty-state">No shared folders configured</div>';
-        return;
-    }
-    container.innerHTML = paths.map((p, idx) => `
-        <div class="checkbox-group" style="display:flex;align-items:center;gap:4px">
-            <span style="flex:1;font-size:12px">${p}</span>
-            <button type="button" class="btn" onclick="removeExtfsPath(${idx})">Remove</button>
-        </div>`).join('');
-}
-
-function removeExtfsPath(idx) {
-    if (currentConfig.extfs) {
-        currentConfig.extfs.splice(idx, 1);
-        renderExtfsList();
-    }
+    input.value = paths[0] || '';
+    input.oninput = () => {
+        const v = input.value.trim();
+        currentConfig.extfs = v ? [v] : [];
+    };
 }
 
 // Show/hide backend-dependent settings rows. Driven by the selected backend.
@@ -4663,8 +4655,11 @@ function updateConfigUI() {
         cb.checked = currentConfig.cdroms.includes(cb.value);
     });
 
-    // Update shared folders list
-    renderExtfsList();
+    // Refresh shared-folder field from the (re)loaded config.
+    {
+        const input = document.getElementById('cfg-extfs');
+        if (input) input.value = (currentConfig.extfs || [])[0] || '';
+    }
 
     // Apply mode constraints (e.g., SE fixed screen)
     applyModeConstraints(currentConfig.emulator);
@@ -4682,6 +4677,7 @@ async function saveConfig() {
     }
     currentConfig.ram = parseInt(document.getElementById('cfg-ram')?.value || 64);
     currentConfig.screen = document.getElementById('cfg-screen')?.value || '640x480';
+    currentConfig.max_resolution = document.getElementById('cfg-max-resolution')?.value || '';
     currentConfig.sound = document.getElementById('cfg-sound')?.checked ?? true;
     currentConfig.zappram = document.getElementById('cfg-zappram')?.checked ?? false;
     currentConfig.dismiss_shutdown_dialog = document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true;
@@ -5065,6 +5061,7 @@ async function pollEmulatorStatus() {
         // otherwise fall back to hard Power Off / Reset. Split-menu items
         // remain available either way.
         const useGraceful = data.emulator_running && data.bridge_agent_connected;
+        _bridgeAgentConnected = !!data.bridge_agent_connected;
 
         // Resolution dropdown + Auto checkbox use the same gate as the
         // graceful shutdown buttons — they only work when the bridge
@@ -5313,6 +5310,151 @@ async function sendClipboardToMac() {
 
 // Start status polling
 setInterval(pollEmulatorStatus, CONSTANTS.STATUS_POLL_INTERVAL_MS);
+
+// ============================================================================
+// Resolution / pixel-double / viewport auditor
+// ============================================================================
+//
+// Sanity-checks the active display pipeline every 2 s and logs any rule
+// violations as a warn (which the server log captures via /api/log). The
+// expected invariants:
+//
+//   1. The display element's CSS size = guest_res × ratio / dpr  (within
+//      ±1 px rounding).
+//   2. The display element's CSS size fits inside the video-section
+//      bounding rect — overflow means auto-resize picked too big or the
+//      guest switched mid-flight.
+//   3. The display element's drawing/intrinsic size matches the guest's
+//      reported resolution.
+//   4. If fullscreen + auto-resize: the device-pixel size of the display
+//      element ≈ the screen's device pixels (auto picked the right mode).
+//   5. Guest resolution does not exceed the configured max-resolution cap.
+//   6. Bridge agent gates auto-resize / dropdown — if it's not heart-
+//      beating, those features are inert (no rule violation, just noted).
+//
+// The 2-second cadence is "fast enough to catch edge cases live, slow
+// enough not to spam logs." Cancel by clearInterval(window._resAudit).
+
+let _bridgeAgentConnected = false;  // last seen value, fed by pollEmulatorStatus
+
+function runResolutionAudit() {
+    if (!client) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const ratio = pixelDoubleRatio;
+    const fs = !!document.fullscreenElement;
+
+    // Active display element (codec-dependent).
+    const usesVideo = (client.codecType === CodecType.H264 ||
+                       client.codecType === CodecType.VP9);
+    const el = usesVideo ? client.video : client.canvas;
+    if (!el) return;
+
+    const elRect = el.getBoundingClientRect();
+    const elCssW = elRect.width, elCssH = elRect.height;
+
+    const sec = document.getElementById('video-section');
+    const secRect = sec ? sec.getBoundingClientRect() : null;
+    const secCssW = secRect ? secRect.width : 0;
+    const secCssH = secRect ? secRect.height : 0;
+
+    // Source intrinsic dims (what the guest is actually producing).
+    const srcW = usesVideo ? el.videoWidth  : el.width;
+    const srcH = usesVideo ? el.videoHeight : el.height;
+
+    const guestW = client.currentScreenWidth  || 0;
+    const guestH = client.currentScreenHeight || 0;
+
+    const screenDevW = (window.screen.width  || 0) * dpr;
+    const screenDevH = (window.screen.height || 0) * dpr;
+
+    const maxRes = (currentConfig && currentConfig.max_resolution) || '';
+    let maxW = 0, maxH = 0;
+    if (maxRes) {
+        const m = maxRes.match(/^(\d+)x(\d+)$/);
+        if (m) { maxW = +m[1]; maxH = +m[2]; }
+    }
+
+    const violations = [];
+    const close = (a, b, tol) => Math.abs(a - b) <= (tol || 1);
+
+    // (3) source intrinsic == guest reported
+    if (srcW && guestW && srcW !== guestW)
+        violations.push(`source width ${srcW} != guest ${guestW}`);
+    if (srcH && guestH && srcH !== guestH)
+        violations.push(`source height ${srcH} != guest ${guestH}`);
+
+    // (1) CSS size = guest × ratio / dpr
+    if (guestW && elCssW) {
+        const expectedCssW = guestW * ratio / dpr;
+        if (!close(elCssW, expectedCssW, 2))
+            violations.push(`css w ${elCssW.toFixed(1)} != expected ${expectedCssW.toFixed(1)} (guest ${guestW} × ratio ${ratio} / dpr ${dpr})`);
+    }
+    if (guestH && elCssH) {
+        const expectedCssH = guestH * ratio / dpr;
+        if (!close(elCssH, expectedCssH, 2))
+            violations.push(`css h ${elCssH.toFixed(1)} != expected ${expectedCssH.toFixed(1)}`);
+    }
+
+    // (2) display fits in section
+    if (secCssW && elCssW > secCssW + 1)
+        violations.push(`display overflows section width: ${elCssW.toFixed(1)} > ${secCssW.toFixed(1)}`);
+    if (secCssH && elCssH > secCssH + 1)
+        violations.push(`display overflows section height: ${elCssH.toFixed(1)} > ${secCssH.toFixed(1)}`);
+
+    // (4) fullscreen + auto: device size ≈ screen device size
+    if (fs && autoResizeEnabled && guestW && guestH) {
+        const elDevW = elCssW * dpr, elDevH = elCssH * dpr;
+        if (Math.abs(elDevW - screenDevW) > screenDevW * 0.05)
+            violations.push(`fullscreen device w ${elDevW.toFixed(0)} != screen ${screenDevW.toFixed(0)} (>5%)`);
+        if (Math.abs(elDevH - screenDevH) > screenDevH * 0.05)
+            violations.push(`fullscreen device h ${elDevH.toFixed(0)} != screen ${screenDevH.toFixed(0)} (>5%)`);
+    }
+
+    // (5) guest within max-cap
+    if (maxW && guestW > maxW)
+        violations.push(`guest w ${guestW} exceeds max ${maxW}`);
+    if (maxH && guestH > maxH)
+        violations.push(`guest h ${guestH} exceeds max ${maxH}`);
+
+    // Auto-resize / dropdown gated on bridge agent.
+    const autoApplies = _bridgeAgentConnected;
+
+    const audit = {
+        dpr, ratio, smoothEnabled, autoResizeEnabled,
+        bridgeAgent: _bridgeAgentConnected,
+        autoApplies,
+        fullscreen: fs,
+        codec: usesVideo ? 'video' : 'canvas',
+        guest: { w: guestW, h: guestH },
+        source: { w: srcW, h: srcH },
+        elementCss: { w: +elCssW.toFixed(1), h: +elCssH.toFixed(1) },
+        elementDevice: { w: +(elCssW * dpr).toFixed(0), h: +(elCssH * dpr).toFixed(0) },
+        section: { w: +secCssW.toFixed(1), h: +secCssH.toFixed(1) },
+        screenDevice: { w: +screenDevW.toFixed(0), h: +screenDevH.toFixed(0) },
+        maxRes: maxRes || null,
+        violations,
+    };
+
+    // Log every tick at warn-level for now so the server captures it.
+    // Switch back to info-on-clean once the pipeline's stable.
+    logger.warn('resolution-audit', audit);
+
+    // Self-correct: if auto-resize is on but the display overflows the
+    // section, applyAutoResize hasn't been triggered (window/section
+    // resize event missed, or section shrank for a non-resize reason).
+    // Kick it via the debounced scheduler — picks the largest mode that
+    // fits and POSTs /api/resolution. Safe to call repeatedly: the
+    // server snaps to nearest valid mode and noops if already there.
+    if (autoResizeEnabled && autoApplies && violations.some(v => v.startsWith('display overflows'))) {
+        logger.warn('audit-self-correct triggered');
+        // Bypass debounce — direct call. (ResizeObserver might be firing fast
+        // enough to keep resetting scheduleAutoResize's 500ms timer.)
+        if (_autoResizeDebounceId) { clearTimeout(_autoResizeDebounceId); _autoResizeDebounceId = null; }
+        applyAutoResize('audit-overflow');
+    }
+}
+window._resAudit = setInterval(runResolutionAudit, 2000);
 
 // Setup event listeners for UI elements
 function setupEventListeners() {

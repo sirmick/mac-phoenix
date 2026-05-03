@@ -406,7 +406,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --screen WxH               Display resolution (default: 640x480)\n");
             printf("  --disk PATH                Disk image (repeatable)\n");
             printf("  --cdrom PATH               CD-ROM image (repeatable)\n");
-            printf("  --extfs PATH               Shared folder (repeatable)\n");
+            printf("  --extfs PATH               Shared folder (only first is mounted; ExtFS is single-volume)\n");
             printf("  --bootdriver N             0=any, -62=CD-ROM (default: 0)\n");
             printf("  --storage-dir PATH         Default storage root (default: ~/storage)\n");
             printf("\nCPU:\n");
