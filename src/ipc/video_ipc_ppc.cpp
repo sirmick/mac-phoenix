@@ -17,15 +17,15 @@
 #include <cstring>
 #include <string>
 #include <chrono>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
 #include <unistd.h>
+
+#include <QSharedMemory>
+#include <QString>
 
 // IPC resources (child-owned)
 static IPCBuffer* g_ipc_buffer = nullptr;
-static int g_shm_fd = -1;
-static std::string g_shm_name;
+static QSharedMemory* g_shm = nullptr;
+static std::string g_shm_name;  // kept for diagnostic logs
 
 // Frame parameters
 static int g_frame_width = 640;
@@ -52,34 +52,43 @@ static const uint8_t* g_framebuffer_ptr = nullptr;
 static bool create_video_shm()
 {
     pid_t pid = getpid();
-    g_shm_name = std::string(IPC_VIDEO_SHM_PREFIX) + std::to_string(pid);
+    // Strip the leading slash from IPC_VIDEO_SHM_PREFIX — QSharedMemory
+    // turns the key into a system-specific identifier internally and
+    // doesn't want the POSIX SHM convention.
+    g_shm_name = std::string(IPC_VIDEO_SHM_PREFIX + 1) + std::to_string(pid);
 
-    // Remove any stale SHM
-    shm_unlink(g_shm_name.c_str());
+    g_shm = new QSharedMemory(QString::fromStdString(g_shm_name));
 
-    g_shm_fd = shm_open(g_shm_name.c_str(), O_CREAT | O_RDWR, 0600);
-    if (g_shm_fd < 0) {
-        fprintf(stderr, "IPC: Failed to create SHM %s: %s\n",
-                g_shm_name.c_str(), strerror(errno));
-        return false;
+    const size_t shm_size = sizeof(IPCBuffer);
+    if (!g_shm->create(static_cast<int>(shm_size))) {
+        // AlreadyExists from a prior crash: attach + detach to drop the
+        // stale segment, then create cleanly.
+        if (g_shm->error() == QSharedMemory::AlreadyExists) {
+            g_shm->attach();
+            g_shm->detach();
+            if (!g_shm->create(static_cast<int>(shm_size))) {
+                fprintf(stderr, "IPC: QSharedMemory::create failed for %s: %s\n",
+                        g_shm_name.c_str(),
+                        g_shm->errorString().toUtf8().constData());
+                delete g_shm;
+                g_shm = nullptr;
+                return false;
+            }
+        } else {
+            fprintf(stderr, "IPC: QSharedMemory::create failed for %s: %s\n",
+                    g_shm_name.c_str(),
+                    g_shm->errorString().toUtf8().constData());
+            delete g_shm;
+            g_shm = nullptr;
+            return false;
+        }
     }
 
-    size_t shm_size = sizeof(IPCBuffer);
-    if (ftruncate(g_shm_fd, shm_size) < 0) {
-        fprintf(stderr, "IPC: Failed to size SHM: %s\n", strerror(errno));
-        close(g_shm_fd);
-        shm_unlink(g_shm_name.c_str());
-        return false;
-    }
-
-    g_ipc_buffer = (IPCBuffer*)mmap(nullptr, shm_size,
-                                     PROT_READ | PROT_WRITE,
-                                     MAP_SHARED, g_shm_fd, 0);
-    if (g_ipc_buffer == MAP_FAILED) {
-        fprintf(stderr, "IPC: Failed to mmap SHM: %s\n", strerror(errno));
-        close(g_shm_fd);
-        shm_unlink(g_shm_name.c_str());
-        g_ipc_buffer = nullptr;
+    g_ipc_buffer = static_cast<IPCBuffer*>(g_shm->data());
+    if (!g_ipc_buffer) {
+        fprintf(stderr, "IPC: QSharedMemory::data() returned null\n");
+        delete g_shm;
+        g_shm = nullptr;
         return false;
     }
 
@@ -97,17 +106,14 @@ static void destroy_video_shm()
         if (g_ipc_buffer->frame_ready_eventfd >= 0) {
             close(g_ipc_buffer->frame_ready_eventfd);
         }
-        munmap(g_ipc_buffer, sizeof(IPCBuffer));
         g_ipc_buffer = nullptr;
     }
-    if (g_shm_fd >= 0) {
-        close(g_shm_fd);
-        g_shm_fd = -1;
+    if (g_shm) {
+        g_shm->detach();  // releases the segment when last attached process exits
+        delete g_shm;
+        g_shm = nullptr;
     }
-    if (!g_shm_name.empty()) {
-        shm_unlink(g_shm_name.c_str());
-        g_shm_name.clear();
-    }
+    g_shm_name.clear();
 }
 
 /*
@@ -137,13 +143,13 @@ void video_ipc_exit(void)
     fprintf(stderr, "IPC: Video driver shut down\n");
 }
 
-// Signal-safe: only unlinks the SHM name (no munmap, no malloc).
-// Safe to call from a signal handler.
+// Previously called shm_unlink() from the SIGSEGV path. With QSharedMemory
+// there's no signal-safe cleanup — Qt's detach() takes a mutex. Stale
+// segments are reaped on the next launch via the AlreadyExists recovery
+// path in create_video_shm().
 void video_ipc_unlink(void)
 {
-    if (!g_shm_name.empty()) {
-        shm_unlink(g_shm_name.c_str());
-    }
+    /* no-op under QSharedMemory */
 }
 
 void video_ipc_set_framebuffer(const uint8_t* fb)

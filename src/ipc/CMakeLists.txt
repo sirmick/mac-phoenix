@@ -11,7 +11,12 @@ target_include_directories(ipc PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
 )
 
-target_link_libraries(ipc PRIVATE Threads::Threads)
+find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
+
+target_link_libraries(ipc PRIVATE
+  Threads::Threads
+  Qt6::Core
+)
 
 target_compile_options(ipc PRIVATE
   -Wno-sign-compare

@@ -9,9 +9,12 @@
 #define IPC_CLIENT_H
 
 #include "ipc_protocol.h"
+#include <memory>
 #include <string>
 #include <shared_mutex>
 #include <sys/types.h>
+
+class QSharedMemory;
 
 // Global reader-writer lock protecting the parent-side lifetime of any
 // IPC SHM mapping. Parent-side threads that dereference IPCBuffer* (api
@@ -56,7 +59,7 @@ private:
     bool connected_ = false;
 
     IPCBuffer* shm_ = nullptr;
-    int shm_fd_ = -1;
+    std::unique_ptr<QSharedMemory> shm_owner_;
     int control_socket_ = -1;
     int frame_eventfd_ = -1;
 

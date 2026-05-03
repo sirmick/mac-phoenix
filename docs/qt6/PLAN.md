@@ -130,11 +130,17 @@ event loop placement.
   the `QSharedMemory::setKey()` argument; semantics map cleanly)
 - `AF_UNIX/SOCK_STREAM` → `QLocalSocket` / `QLocalServer` (uses Unix
   sockets on Linux, named pipes on Windows — same API)
-- `eventfd` + `SCM_RIGHTS` → `QSystemSemaphore` for frame-ready signal.
-  No fd to pass; semaphore is shared by name. **Risk**: wakeup latency
-  may be worse than `eventfd`. **Mitigation**: prototype against the
-  existing triple-buffer atomics first; if regression > 1ms, fall back
-  to a TCP-localhost notify or stay on `eventfd` for Linux only.
+- `eventfd` + `SCM_RIGHTS` → **dedicated notification `QLocalSocket`,
+  child writes 1 byte per frame**. Originally planned `QSystemSemaphore`,
+  but its `acquire()` is indefinite-block only (no timeout); the encoder
+  uses `poll(eventfd, 16ms)` for periodic wakeups. `QLocalSocket::
+  waitForReadyRead(16)` is a direct 1:1 replacement. Two `QLocalSocket`s
+  total: one for control (parent→child commands), one for notification
+  (child→parent frame-ready). Latency ~20μs vs eventfd ~3μs — invisible
+  at 60fps.
+
+**Commit split**: 3a = `QSharedMemory` swap only (no protocol change),
+3b = sockets + notification together (entangled via SCM_RIGHTS).
 
 **Validation**:
 - Subprocess + IPC mode boots

@@ -13,10 +13,12 @@
 #include <shared_mutex>
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
+
+#include <QSharedMemory>
+#include <QString>
 
 std::shared_mutex g_ipc_shm_mutex;
 
@@ -29,22 +31,24 @@ IPCClient::~IPCClient()
 
 bool IPCClient::connect_shm(pid_t pid)
 {
-    shm_name_ = std::string(IPC_VIDEO_SHM_PREFIX) + std::to_string(pid);
+    // Strip leading slash from IPC_VIDEO_SHM_PREFIX — QSharedMemory keys
+    // are arbitrary strings, not POSIX SHM paths. Must match the key
+    // chosen on the child side in video_ipc_ppc.cpp.
+    shm_name_ = std::string(IPC_VIDEO_SHM_PREFIX + 1) + std::to_string(pid);
 
-    shm_fd_ = shm_open(shm_name_.c_str(), O_RDWR, 0);
-    if (shm_fd_ < 0) {
+    shm_owner_ = std::make_unique<QSharedMemory>(QString::fromStdString(shm_name_));
+    if (!shm_owner_->attach()) {
+        // Caller polls — silent failure here is normal during the
+        // initial wait for the child to publish.
+        shm_owner_.reset();
         return false;
     }
 
-    shm_ = (IPCBuffer*)mmap(nullptr, sizeof(IPCBuffer),
-                             PROT_READ | PROT_WRITE, MAP_SHARED,
-                             shm_fd_, 0);
-    if (shm_ == MAP_FAILED) {
-        fprintf(stderr, "IPC Client: Failed to map SHM for PID %d: %s\n",
-                pid, strerror(errno));
-        close(shm_fd_);
-        shm_fd_ = -1;
-        shm_ = nullptr;
+    shm_ = static_cast<IPCBuffer*>(shm_owner_->data());
+    if (!shm_) {
+        fprintf(stderr, "IPC Client: QSharedMemory::data() returned null for PID %d\n", pid);
+        shm_owner_->detach();
+        shm_owner_.reset();
         return false;
     }
 
@@ -52,9 +56,8 @@ bool IPCClient::connect_shm(pid_t pid)
     if (result != 0) {
         fprintf(stderr, "IPC Client: SHM validation failed for PID %d (error %d)\n",
                 pid, result);
-        munmap(shm_, sizeof(IPCBuffer));
-        close(shm_fd_);
-        shm_fd_ = -1;
+        shm_owner_->detach();
+        shm_owner_.reset();
         shm_ = nullptr;
         return false;
     }
@@ -66,17 +69,14 @@ bool IPCClient::connect_shm(pid_t pid)
 
 void IPCClient::disconnect_shm()
 {
-    // Safe to munmap immediately: disconnect() holds the exclusive lock on
+    // Safe to detach immediately: disconnect() holds the exclusive lock on
     // g_ipc_shm_mutex, so all shared-lock readers have drained and no new
     // readers can start until the lock is released.
-    if (shm_ && shm_ != MAP_FAILED) {
-        munmap(shm_, sizeof(IPCBuffer));
-        shm_ = nullptr;
+    if (shm_owner_) {
+        shm_owner_->detach();
+        shm_owner_.reset();
     }
-    if (shm_fd_ >= 0) {
-        close(shm_fd_);
-        shm_fd_ = -1;
-    }
+    shm_ = nullptr;
     shm_name_.clear();
 }
 
