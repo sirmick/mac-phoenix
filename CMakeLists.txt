@@ -37,6 +37,10 @@ set(ENABLE_OPUS "AUTO" CACHE STRING "Opus audio (AUTO/ON/OFF)")
 
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
+# Qt6 — see docs/qt6/PLAN.md. Phase 0 links Core only; later phases add
+# HttpServer (Phase 5), WebSockets (Phase 6), WebEngineCore (Phase 8),
+# Multimedia + Quick (Phase 9). Qt 6.4 minimum (QHttpServer landed in 6.4).
+find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
 # tools/png2icn.py turns the PNG icon sources into Rez data blocks;
 # called from the MacBrowser/BridgeAgent build commands. Pillow is
 # the only third-party dep — ships in `python3-pil` on Debian/Ubuntu.
@@ -185,6 +189,7 @@ target_link_libraries(mac-phoenix PRIVATE
   datachannel-static
   OpenSSL::SSL
   OpenSSL::Crypto
+  Qt6::Core
 )
 
 # Optional codec libraries linked at top level

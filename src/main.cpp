@@ -22,6 +22,8 @@
 #include <memory>
 #include <csignal>
 
+#include <QCoreApplication>
+
 #include "sysdeps.h"
 #include "cpu_emulation.h"
 #include "newcpu.h"
@@ -457,6 +459,11 @@ int main(int argc, char **argv)
 
 	// Mac address space guards: constructor(101) already reserved 0x08000000-0x70000000
 	// in 4MB chunks before any threads existed.
+
+	// Qt6 bootstrap (Phase 0 of qt-port). Constructed but exec() is not
+	// called — the CPU emulator owns the main thread. Later phases will
+	// run a Qt event loop on a dedicated QThread once subsystems migrate.
+	QCoreApplication qt_app(argc, argv);
 
 	// Install crash handlers
 	install_crash_handlers();
