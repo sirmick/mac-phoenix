@@ -13,11 +13,14 @@
 #include <cstring>
 #include <chrono>
 #include <string>
-#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
-#include <signal.h>
-#include <sys/wait.h>
+
+#include <QCoreApplication>
+#include <QFileInfo>
+#include <QProcess>
+#include <QString>
+#include <QStringList>
 
 namespace {
 // Locate a repo-relative asset (dev tree first, then /usr/share install).
@@ -30,11 +33,10 @@ std::string resolve_asset(const char* rel) {
     char* last_slash = strrchr(exe_path, '/');
     if (!last_slash) return "";
     *last_slash = '\0';
-    struct stat st;
-    std::string dev = std::string(exe_path) + "/../" + rel;
-    if (stat(dev.c_str(), &st) == 0) return dev;
-    std::string installed = std::string("/usr/share/mac-phoenix/") + rel;
-    if (stat(installed.c_str(), &st) == 0) return installed;
+    QFileInfo dev{QString::fromLocal8Bit(exe_path) + "/../" + rel};
+    if (dev.exists()) return dev.filePath().toStdString();
+    QFileInfo installed{QString("/usr/share/mac-phoenix/") + rel};
+    if (installed.exists()) return installed.filePath().toStdString();
     return "";
 }
 }  // namespace
@@ -187,7 +189,7 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
 
 bool EmulatorSubprocess::start()
 {
-    if (child_pid_ > 0) {
+    if (child_process_ && child_process_->state() != QProcess::NotRunning) {
         fprintf(stderr, "[EmulatorSubprocess] Already running (pid %d)\n", child_pid_);
         return false;
     }
@@ -206,41 +208,38 @@ bool EmulatorSubprocess::start()
     for (const auto& a : args) fprintf(stderr, " %s", a.c_str());
     fprintf(stderr, "\n");
 
-    pid_t pid = fork();
-    if (pid < 0) {
-        perror("[EmulatorSubprocess] fork failed");
+    // Build QProcess. ForwardedChannels makes the child's stdout/stderr
+    // appear in the parent's terminal — same behavior as the original
+    // fork+execv which inherited file descriptors.
+    child_process_ = std::make_unique<QProcess>();
+    child_process_->setProcessChannelMode(QProcess::ForwardedChannels);
+
+    const QString program = QString::fromStdString(args.front());
+    QStringList qargs;
+    for (size_t i = 1; i < args.size(); i++) {
+        qargs << QString::fromStdString(args[i]);
+    }
+
+    child_process_->start(program, qargs);
+    if (!child_process_->waitForStarted(5000)) {
+        fprintf(stderr, "[EmulatorSubprocess] QProcess failed to start: %s\n",
+                child_process_->errorString().toUtf8().constData());
+        child_process_.reset();
         return false;
     }
 
-    if (pid == 0) {
-        // Child: exec the new process
-        std::vector<char*> argv;
-        for (auto& a : args) {
-            argv.push_back(const_cast<char*>(a.c_str()));
-        }
-        argv.push_back(nullptr);
-
-        execv(argv[0], argv.data());
-        // If exec fails
-        perror("[EmulatorSubprocess] execv failed");
-        _exit(1);
-    }
-
-    // Parent
-    child_pid_ = pid;
+    child_pid_ = static_cast<pid_t>(child_process_->processId());
     fprintf(stderr, "[EmulatorSubprocess] Child started (pid %d)\n", child_pid_);
 
-    // Poll for SHM to appear (child creates it during init)
+    // Poll for SHM to appear (child creates it during init).
     bool connected = false;
     for (int attempt = 0; attempt < 400; attempt++) {  // 10 seconds
         std::this_thread::sleep_for(std::chrono::milliseconds(25));
 
-        // Check if child is still alive
-        int status;
-        pid_t result = waitpid(child_pid_, &status, WNOHANG);
-        if (result > 0) {
-            fprintf(stderr, "[EmulatorSubprocess] Child exited before connection (status %d)\n",
-                    WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+        if (child_process_->state() == QProcess::NotRunning) {
+            fprintf(stderr, "[EmulatorSubprocess] Child exited before connection (code %d)\n",
+                    child_process_->exitCode());
+            child_process_.reset();
             child_pid_ = -1;
             return false;
         }
@@ -253,41 +252,19 @@ bool EmulatorSubprocess::start()
 
     if (!connected) {
         fprintf(stderr, "[EmulatorSubprocess] Failed to connect to child after 10s\n");
-        kill(child_pid_, SIGKILL);
-        waitpid(child_pid_, nullptr, 0);
+        child_process_->kill();
+        child_process_->waitForFinished(2000);
+        child_process_.reset();
         child_pid_ = -1;
         return false;
     }
 
     fprintf(stderr, "[EmulatorSubprocess] Connected to child IPC\n");
 
-    // Start monitor thread
-    if (monitor_thread_.joinable()) {
-        monitor_thread_.detach();
-    }
-    monitor_thread_ = std::thread([this]() {
-        int status;
-        pid_t result = waitpid(child_pid_, &status, 0);
-        if (result > 0) {
-            if (WIFSIGNALED(status)) {
-                int sig = WTERMSIG(status);
-                if (sig != SIGKILL && sig != SIGTERM) {
-                    fprintf(stderr, "[EmulatorSubprocess] Child killed by signal %d\n", sig);
-                }
-            } else if (WIFEXITED(status)) {
-                int code = WEXITSTATUS(status);
-                if (code != 0) {
-                    fprintf(stderr, "[EmulatorSubprocess] Child exited with code %d\n", code);
-                }
-            }
-            // Clear atomic SHM/eventfd so the encoder thread stops
-            // dereferencing the dead child's SHM and falls back to
-            // the VideoOutput path. This also resets ipc_was_connected
-            // so the next start() triggers proper reconnect detection.
-            clear_ipc_shm();
-            child_pid_ = -1;
-        }
-    });
+    // No monitor thread: QProcess isn't thread-safe, and the IPC heartbeat
+    // watchdog (command_bridge.cpp) plus the lazy reap_if_dead() in
+    // is_running()/stop() catch async death within one heartbeat tick. The
+    // encoder also has a fallback path for stale ipc_shm pointers.
 
     // Publish IPC SHM to encoder thread (zero-copy video)
     publish_ipc_shm();
@@ -297,61 +274,38 @@ bool EmulatorSubprocess::start()
 
 bool EmulatorSubprocess::stop()
 {
-    pid_t pid = child_pid_;
-    if (pid <= 0) {
-        // Still need to join monitor thread if it's running
-        if (monitor_thread_.joinable()) {
-            monitor_thread_.join();
-        }
+    if (!child_process_ || child_process_->state() == QProcess::NotRunning) {
+        child_process_.reset();
+        child_pid_ = -1;
         return true;
     }
 
-    fprintf(stderr, "[EmulatorSubprocess] Stopping child (pid %d)\n", pid);
+    fprintf(stderr, "[EmulatorSubprocess] Stopping child (pid %d)\n", child_pid_);
 
     // Clear the atomic first so readers that see it go straight to the
     // nullptr fallback path without racing for the lock. Existing readers
     // holding the shared lock will finish their in-flight dereference;
     // disconnect() below takes the exclusive lock, waits for them to
     // drain, then munmaps. After this, no thread can observe an unmapped
-    // page. (Replaces the old 50ms "hope the encoder noticed" sleep.)
+    // page.
     clear_ipc_shm();
     ipc_client_.disconnect();
 
-    // Send SIGTERM, then SIGKILL after grace period
-    kill(pid, SIGTERM);
-
-    // Wait briefly for graceful exit
-    for (int i = 0; i < 10; i++) {
-        int status;
-        pid_t result = waitpid(pid, &status, WNOHANG);
-        if (result > 0) {
-            child_pid_ = -1;
-            if (monitor_thread_.joinable()) {
-                monitor_thread_.join();
-            }
-            fprintf(stderr, "[EmulatorSubprocess] Child stopped gracefully\n");
-            return true;
-        }
-        if (result < 0) {
-            // Already reaped (by monitor thread)
-            child_pid_ = -1;
-            if (monitor_thread_.joinable()) {
-                monitor_thread_.join();
-            }
-            fprintf(stderr, "[EmulatorSubprocess] Child already exited\n");
-            return true;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // QProcess::terminate() sends SIGTERM on Unix, posts WM_CLOSE on Windows.
+    child_process_->terminate();
+    if (child_process_->waitForFinished(1000)) {
+        child_process_.reset();
+        child_pid_ = -1;
+        fprintf(stderr, "[EmulatorSubprocess] Child stopped gracefully\n");
+        return true;
     }
 
-    // Force kill — use saved pid, never kill(-1)
-    kill(pid, SIGKILL);
-    waitpid(pid, nullptr, 0);
+    // Force kill — QProcess::kill() sends SIGKILL on Unix, TerminateProcess
+    // on Windows.
+    child_process_->kill();
+    child_process_->waitForFinished(2000);
+    child_process_.reset();
     child_pid_ = -1;
-
-    if (monitor_thread_.joinable()) {
-        monitor_thread_.join();
-    }
 
     fprintf(stderr, "[EmulatorSubprocess] Child killed\n");
     return true;
@@ -363,8 +317,26 @@ bool EmulatorSubprocess::reset()
     return start();
 }
 
+void EmulatorSubprocess::reap_if_dead()
+{
+    if (child_process_ && child_process_->state() == QProcess::NotRunning &&
+        child_pid_ > 0) {
+        const QProcess::ExitStatus es = child_process_->exitStatus();
+        const int code = child_process_->exitCode();
+        if (es == QProcess::CrashExit) {
+            fprintf(stderr, "[EmulatorSubprocess] Child crashed (signal/code %d)\n", code);
+        } else if (code != 0) {
+            fprintf(stderr, "[EmulatorSubprocess] Child exited with code %d\n", code);
+        }
+        clear_ipc_shm();
+        child_pid_ = -1;
+    }
+}
+
 bool EmulatorSubprocess::is_running() const
 {
+    // Lazy death check — see header for why we don't have a monitor thread.
+    const_cast<EmulatorSubprocess*>(this)->reap_if_dead();
     if (child_pid_ <= 0) return false;
     if (!ipc_client_.is_connected()) return false;
     const IPCBuffer* buf = ipc_client_.shm();

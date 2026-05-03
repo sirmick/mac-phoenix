@@ -11,10 +11,11 @@
 
 #include "../config/emulator_config.h"
 #include "../ipc/ipc_client.h"
-#include <thread>
 #include <atomic>
+#include <memory>
 #include <sys/types.h>
 
+class QProcess;
 struct IPCBuffer;
 
 class EmulatorSubprocess {
@@ -39,6 +40,10 @@ public:
 
 private:
     config::EmulatorConfig* config_;
+
+    // QProcess owns child lifecycle. PID is cached separately because
+    // IPCClient::connect() and the SHM key /macemu-video-{PID} need it.
+    std::unique_ptr<QProcess> child_process_;
     pid_t child_pid_ = -1;
 
     IPCClient ipc_client_;
@@ -47,11 +52,11 @@ private:
     std::atomic<IPCBuffer*>* ipc_shm_atom_ = nullptr;
     std::atomic<int>* ipc_eventfd_atom_ = nullptr;
 
-    // Monitor thread (waitpid)
-    std::thread monitor_thread_;
-
     void publish_ipc_shm();
     void clear_ipc_shm();
+    // Lazily detect that the child has died (no monitor thread); called
+    // from is_running()/stop() to keep ipc_shm_atom_ honest.
+    void reap_if_dead();
 
     // Build argv for child process
     std::vector<std::string> build_child_args();
