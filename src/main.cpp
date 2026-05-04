@@ -760,7 +760,16 @@ int main(int argc, char **argv)
 			}
 		}
 
-		// Cleanup (normally reached via _exit or signal)
+		// Cleanup (normally reached via _exit or signal). When the guest
+		// shuts down gracefully (POST /api/shutdown → BridgeAgent →
+		// ShutDwnPower), QuitEmulator() returns and we land here. Without
+		// browser_module_stop, the QtWebEngine worker thread + mouse-poll
+		// thread are left joinable, and `terminate called without an
+		// active exception` fires when their std::thread dtors run during
+		// static teardown.
+		if (emu_config.browser_enabled) {
+			browser::browser_module_stop();
+		}
 		control_ipc_exit();
 		video_ipc_exit();
 		return 0;
