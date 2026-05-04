@@ -3,6 +3,7 @@
  */
 #include "cmd.h"
 #include "bidi.h"
+#include "qtwebengine_browser.h"
 #include "window_resize.h"
 #include "shm.h"
 
@@ -176,6 +177,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         int32_t  y = be32(payload + 4);
         uint8_t  btn = payload[8];
         uint8_t  count = payload[9];
+        if (qt_dispatch_click(x, y, btn, count)) return true;
         if (!b) return true;
         std::string err;
         if (!b->click(x, y, btn, count ? count : 1, &err))
@@ -186,6 +188,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         if (len < 8) return false;
         int32_t x = be32(payload + 0);
         int32_t y = be32(payload + 4);
+        if (qt_dispatch_mouse_move(x, y)) return true;
         if (!b) return true;
         std::string err;
         if (!b->mouse_move(x, y, &err))
@@ -193,6 +196,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         return true;
     }
     case BR_CMD_MOUSE_OUT:
+        if (qt_dispatch_mouse_out()) return true;
         /* No direct BiDi equivalent — most pages don't need explicit
          * mouseout. Move pointer well off-screen as a best-effort. */
         if (b) b->mouse_move(-1, -1);
@@ -218,6 +222,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         uint16_t mods     = be16(payload + 2);
         uint8_t  text_len = payload[4];
         if (5u + text_len > len) return false;
+        if (qt_dispatch_key_down(vk, mods, payload + 5, text_len)) return true;
         if (!b) return true;
         /* Mac modifier bits — see Events.h. We only honour shift here;
          * cmd/ctrl/option don't reach this command (cmd → menu bar,
@@ -247,17 +252,22 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         }
         return true;
     }
-    case BR_CMD_KEY_UP:
+    case BR_CMD_KEY_UP: {
+        if (len < 2) return false;
+        uint16_t vk = be16(payload + 0);
+        if (qt_dispatch_key_up(vk)) return true;
         /* Per-character keyDown+keyUp is already done in BR_CMD_KEY_DOWN
          * (BiDi's input.performActions emits both for us). KEY_UP from
          * the guest is currently a no-op; revisit when we add held
          * modifiers. */
         return true;
+    }
 
     case BR_CMD_SCROLL: {
         if (len < 8) return false;
         int32_t dx = be32(payload + 0);
         int32_t dy = be32(payload + 4);
+        if (qt_dispatch_scroll(dx, dy)) return true;
         if (!b) return true;
         std::string err;
         /* Scroll origin = viewport center; refine when guest reports
