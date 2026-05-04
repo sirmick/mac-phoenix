@@ -50,6 +50,12 @@ public:
     void dispatch_key_up(uint16_t vk);
     void dispatch_scroll(int dx, int dy);
 
+    void dispatch_nav(const std::string& url);
+    void dispatch_reload();
+    void dispatch_back();
+    void dispatch_forward();
+    void dispatch_stop();
+
 private:
     void capture_tick();
 
@@ -87,5 +93,13 @@ bool qt_dispatch_key_down(uint16_t vk, uint16_t mods,
                           const uint8_t* text, uint8_t text_len);
 bool qt_dispatch_key_up(uint16_t vk);
 bool qt_dispatch_scroll(int dx, int dy);
+
+// ── Navigation (Phase 8e) ────────────────────────────────────────────
+// Same gating + threading semantics as the input dispatchers.
+bool qt_dispatch_nav(const std::string& url);
+bool qt_dispatch_reload();
+bool qt_dispatch_back();
+bool qt_dispatch_forward();
+bool qt_dispatch_stop();
 
 }  // namespace browser

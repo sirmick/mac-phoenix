@@ -38,6 +38,19 @@ namespace browser {
 
 namespace {
 
+// Push a BR_EV_STATUS event into the h2g ring. Guest's URL bar loading
+// indicator clears on STATUS_READY/ERROR. Mirrors send_status() in
+// cmd.cpp (also a 250-byte URL cap to fit a single ring message).
+void send_status(uint8_t code, const std::string& url)
+{
+    uint8_t buf[2 + 250];
+    buf[0] = code;
+    size_t n = std::min(url.size(), (size_t)250);
+    buf[1] = (uint8_t)n;
+    if (n) memcpy(buf + 2, url.data(), n);
+    send_event(BR_EV_STATUS, buf, (uint16_t)(2 + n));
+}
+
 // ARGB32 (Qt's QImage::Format_ARGB32 / RGB32) and BGRX share byte layout
 // on little-endian: B at byte 0, G at 1, R at 2, A/X at 3 — the same
 // uint32 pattern. We can reuse the BGRX-to-RGB555 lambda from pipeline.cpp
@@ -162,16 +175,24 @@ QtWebEngineBrowser::QtWebEngineBrowser()
     QWebEngineView* raw = view_.get();
 
     QObject::connect(page, &QWebEnginePage::loadStarted, raw, [raw]() {
-        fprintf(stderr, "[QtWebEngine] loadStarted url=%s\n",
-                raw->url().toString().toUtf8().constData());
+        std::string url = raw->url().toString().toStdString();
+        fprintf(stderr, "[QtWebEngine] loadStarted url=%s\n", url.c_str());
+        send_status(BR_STATUS_LOADING, url);
     });
     QObject::connect(page, &QWebEnginePage::loadFinished, raw, [raw](bool ok) {
+        std::string url = raw->url().toString().toStdString();
         fprintf(stderr, "[QtWebEngine] loadFinished ok=%d url=%s\n",
-                ok ? 1 : 0, raw->url().toString().toUtf8().constData());
+                ok ? 1 : 0, url.c_str());
+        send_status(ok ? BR_STATUS_READY : BR_STATUS_ERROR, url);
     });
     QObject::connect(page, &QWebEnginePage::urlChanged, raw, [](const QUrl& url) {
         fprintf(stderr, "[QtWebEngine] urlChanged %s\n",
                 url.toString().toUtf8().constData());
+        // urlChanged fires for in-page anchors and history.pushState too;
+        // the guest URL bar is driven from loadStarted/loadFinished, so
+        // just log here. If the URL bar starts looking stale we can also
+        // emit a STATUS_READY on urlChanged after the initial load — for
+        // now, the BiDi-side parity wins.
     });
 
     // 60 Hz capture timer. QWidget::grab() forces a synchronous render
@@ -332,6 +353,37 @@ void QtWebEngineBrowser::dispatch_key_up(uint16_t /*vk*/)
     // Standalone KEY_UP from the guest is a no-op, matching the BiDi path.
 }
 
+void QtWebEngineBrowser::dispatch_nav(const std::string& url)
+{
+    if (!view_) return;
+    fprintf(stderr, "[QtWebEngine] nav %s\n", url.c_str());
+    view_->setUrl(QUrl(QString::fromStdString(url)));
+}
+
+void QtWebEngineBrowser::dispatch_reload()
+{
+    if (!view_) return;
+    view_->page()->triggerAction(QWebEnginePage::Reload);
+}
+
+void QtWebEngineBrowser::dispatch_back()
+{
+    if (!view_) return;
+    view_->page()->triggerAction(QWebEnginePage::Back);
+}
+
+void QtWebEngineBrowser::dispatch_forward()
+{
+    if (!view_) return;
+    view_->page()->triggerAction(QWebEnginePage::Forward);
+}
+
+void QtWebEngineBrowser::dispatch_stop()
+{
+    if (!view_) return;
+    view_->page()->triggerAction(QWebEnginePage::Stop);
+}
+
 void QtWebEngineBrowser::dispatch_scroll(int dx, int dy)
 {
     if (!view_) return;
@@ -468,6 +520,56 @@ bool qt_dispatch_scroll(int dx, int dy)
     if (!app) return false;
     QMetaObject::invokeMethod(app, [dx, dy]() {
         if (g_browser) g_browser->dispatch_scroll(dx, dy);
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_nav(const std::string& url)
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, [url]() {
+        if (g_browser) g_browser->dispatch_nav(url);
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_reload()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_reload();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_back()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_back();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_forward()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_forward();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_stop()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_stop();
     }, Qt::QueuedConnection);
     return true;
 }

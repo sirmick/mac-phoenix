@@ -134,6 +134,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
     switch (type) {
     case BR_CMD_NAV: {
         std::string url((const char*)payload, len);
+        if (qt_dispatch_nav(url)) return true;
         dispatch_async([url](BidiClient* c) {
             std::string err;
             if (!c->navigate(url, &err)) {
@@ -144,6 +145,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         return true;
     }
     case BR_CMD_RELOAD:
+        if (qt_dispatch_reload()) return true;
         dispatch_async([](BidiClient* c) {
             std::string err;
             if (!c->reload(&err)) {
@@ -153,6 +155,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         });
         return true;
     case BR_CMD_BACK:
+        if (qt_dispatch_back()) return true;
         dispatch_async([](BidiClient* c) {
             std::string err;
             if (!c->go_back(&err)) {
@@ -162,6 +165,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         });
         return true;
     case BR_CMD_FORWARD:
+        if (qt_dispatch_forward()) return true;
         dispatch_async([](BidiClient* c) {
             std::string err;
             if (!c->go_forward(&err)) {
@@ -317,6 +321,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
     }
 
     case BR_CMD_STOP:
+        if (qt_dispatch_stop()) return true;
         /* Toolbar Stop button — cancel the current load. BiDi has no
          * top-level stop call; window.stop() is the JS equivalent
          * and works for all in-flight resources. */
