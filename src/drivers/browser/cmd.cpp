@@ -284,6 +284,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         if (len < 4) return false;
         uint16_t w = be16(payload + 0);
         uint16_t h = be16(payload + 2);
+        if (qt_dispatch_resize(w, h)) return true;
         /* Resize the Firefox top-level *inside* the fixed Xvfb root
          * (instead of resizing the X server's root via RandR — Xvfb
          * mode-list bookkeeping fights us on that path). Three steps:
@@ -332,8 +333,15 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         return true;
 
     case BR_CMD_ZOOM_IN:
+        if (qt_dispatch_zoom_in()) return true;
+        goto bidi_zoom;
     case BR_CMD_ZOOM_OUT:
-    case BR_CMD_ZOOM_RESET: {
+        if (qt_dispatch_zoom_out()) return true;
+        goto bidi_zoom;
+    case BR_CMD_ZOOM_RESET:
+        if (qt_dispatch_zoom_reset()) return true;
+        goto bidi_zoom;
+    bidi_zoom: {
         /* Page zoom via Firefox's full-page zoom (browser.zoom). We
          * can't reach the privileged ZoomManager from BiDi script
          * context, but `document.documentElement.style.zoom` (CSS

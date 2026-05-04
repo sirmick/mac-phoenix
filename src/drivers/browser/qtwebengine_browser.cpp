@@ -448,6 +448,55 @@ void QtWebEngineBrowser::dispatch_stop()
     view_->page()->triggerAction(QWebEnginePage::Stop);
 }
 
+namespace {
+// Same step table cmd.cpp uses for BiDi page zoom — keep parity so a
+// session that toggles between backends doesn't see jarring zoom jumps.
+constexpr double kZoomSteps[]   = { 0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0 };
+constexpr int    kZoomStepCount = sizeof(kZoomSteps) / sizeof(kZoomSteps[0]);
+constexpr int    kZoomStep100   = 4;
+}  // namespace
+
+void QtWebEngineBrowser::dispatch_zoom_in()
+{
+    if (!view_) return;
+    if (zoom_step_ < kZoomStepCount - 1) zoom_step_++;
+    view_->setZoomFactor(kZoomSteps[zoom_step_]);
+    fprintf(stderr, "[QtWebEngine] zoom → %.0f%%\n",
+            kZoomSteps[zoom_step_] * 100.0);
+}
+
+void QtWebEngineBrowser::dispatch_zoom_out()
+{
+    if (!view_) return;
+    if (zoom_step_ > 0) zoom_step_--;
+    view_->setZoomFactor(kZoomSteps[zoom_step_]);
+    fprintf(stderr, "[QtWebEngine] zoom → %.0f%%\n",
+            kZoomSteps[zoom_step_] * 100.0);
+}
+
+void QtWebEngineBrowser::dispatch_zoom_reset()
+{
+    if (!view_) return;
+    zoom_step_ = kZoomStep100;
+    view_->setZoomFactor(kZoomSteps[zoom_step_]);
+    fprintf(stderr, "[QtWebEngine] zoom → 100%%\n");
+}
+
+void QtWebEngineBrowser::dispatch_resize(uint16_t w, uint16_t h)
+{
+    if (!view_) return;
+    view_->resize(w, h);
+    // Publish the new dims so the capture pipeline + guest both pick
+    // them up. The legacy BiDi path also updates fb.width/height here;
+    // mirror that so the Mac CopyBits sees the new viewport on the
+    // next BR_EV_FRAME.
+    if (BrowserShm* s = browser::shm_get()) {
+        br_u16_store(&s->fb.width,  w);
+        br_u16_store(&s->fb.height, h);
+    }
+    fprintf(stderr, "[QtWebEngine] resize → %ux%u\n", w, h);
+}
+
 void QtWebEngineBrowser::dispatch_get_selection()
 {
     if (!view_) return;
@@ -729,6 +778,46 @@ bool qt_dispatch_paste(const std::string& text)
     if (!app) return false;
     QMetaObject::invokeMethod(app, [text]() {
         if (g_browser) g_browser->dispatch_paste(text);
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_zoom_in()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_zoom_in();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_zoom_out()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_zoom_out();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_zoom_reset()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_zoom_reset();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_resize(uint16_t w, uint16_t h)
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, [w, h]() {
+        if (g_browser) g_browser->dispatch_resize(w, h);
     }, Qt::QueuedConnection);
     return true;
 }

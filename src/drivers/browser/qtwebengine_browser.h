@@ -60,6 +60,11 @@ public:
     void dispatch_select_all();
     void dispatch_paste(const std::string& text);
 
+    void dispatch_zoom_in();
+    void dispatch_zoom_out();
+    void dispatch_zoom_reset();
+    void dispatch_resize(uint16_t w, uint16_t h);
+
 private:
     void capture_tick();
     void metrics_tick();
@@ -72,6 +77,11 @@ private:
     uint32_t last_pw_ = 0, last_ph_ = 0;
     uint32_t last_sx_ = 0, last_sy_ = 0;
     uint32_t last_vw_ = 0, last_vh_ = 0;
+
+    // Zoom step index into the standard Firefox zoom-level table.
+    // Matches the [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
+    // step list in cmd.cpp's BiDi path; index 4 = 100%.
+    int zoom_step_ = 4;
 };
 
 // Create QtWebEngineBrowser on the main (GUI) thread, load `initial_url`.
@@ -120,5 +130,11 @@ bool qt_dispatch_stop();
 bool qt_dispatch_get_selection();
 bool qt_dispatch_select_all();
 bool qt_dispatch_paste(const std::string& text);
+
+// ── Zoom + resize (Phase 8g) ─────────────────────────────────────────
+bool qt_dispatch_zoom_in();
+bool qt_dispatch_zoom_out();
+bool qt_dispatch_zoom_reset();
+bool qt_dispatch_resize(uint16_t w, uint16_t h);
 
 }  // namespace browser
