@@ -59,3 +59,13 @@ target_compile_options(core PRIVATE
   -Wno-sign-compare
   -O2
 )
+
+# Windows: switch sigsegv.cpp from POSIX signals to SEH (Structured
+# Exception Handling). The Windows path was inherited from Bruno Haible's
+# clisp library and Basilisk II — already in src/common/sigsegv.cpp at
+# lines 596-644 (handler-args macros) and 3093-3166 (SetUnhandledException
+# Filter installer). HAVE_WIN32_EXCEPTIONS is the gate. Linux build
+# unaffected. See docs/qt6/PLAN.md Phase 7.
+if(WIN32)
+  target_compile_definitions(core PRIVATE HAVE_WIN32_EXCEPTIONS)
+endif()
