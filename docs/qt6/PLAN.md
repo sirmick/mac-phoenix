@@ -472,19 +472,19 @@ Per phase:
 | 3a | IPC SHM → QSharedMemory | ✅ done | `702ccba8` |
 | 3b | IPC sockets + notify → QLocalSocket | ⚠️ deferred (attempted, reverted — see `76f9a086`) |
 | 4 | Threading cleanup at Qt seams | ⚠️ deferred (no work in current state; lands with 3b retry) |
-| 5 | HTTP server → QTcpServer/QTcpSocket | ✅ done — pivoted from QHttpServer; see notes |
-| 6 | WebSocket → QWebSocketServer | pending |
+| 5 | HTTP server → QTcpServer/QTcpSocket | ✅ done — pivoted from QHttpServer | `63ddd652` |
+| 6 | WebSocket → QWebSocketServer | pending — fold into Phase 8? `/ws` works on QTcpServer today |
 | 7 | Windows SEH path activation | ✅ done | `e80f314f` |
-| 8 | MacBrowser → QtWebEngine | pending |
+| 8 | MacBrowser → QtWebEngine | pending — handoff doc at `docs/qt6/Phase8.md` | `23bcc2b5` (doc) |
 | 9 | Native head (QApplication mode) | pending |
 | 10 | Windows port + installer | pending |
 | 11 | macOS port + signed `.app` + DMG | pending |
-| 12 | OpenSSL → QCryptographicHash | ✅ done — drops direct OpenSSL use (libdatachannel still needs it transitively for DTLS/SRTP) |
-| 13 | POSIX timing → `QElapsedTimer` + `QThread::usleep` | ✅ done — `timer_interrupt.cpp`; ctest 20/20 |
-| 14 | Leftover `fork`/`execvp` → `QProcess` | ✅ done — `api_handlers::run_fork_exec` + `ether_socket::spawn_bridge`/`stop_bridge` |
-| 15 | `pthread`/`sem_t` in `serial_unix.cpp` → `QThread`/`QSemaphore` | ✅ done — input/output workers wrapped in QThread subclass; ctest 19/20 (known flake) |
-| 16 | `std::thread` in webserver → `QThread` | ✅ done — accept loop wrapped in `HttpServerThread : QThread` |
-| 17 | `nlohmann::json` → `QJsonDocument`/`QJsonObject` | partial — all kept files migrated; subproject drop blocks on Phase 8 (bidi.cpp still uses it) |
+| 12 | OpenSSL → QCryptographicHash | ✅ done — drops direct OpenSSL (libdatachannel still uses transitively) | `4d273997` |
+| 13 | POSIX timing → `QElapsedTimer` + `QThread::usleep` | ✅ done — `timer_interrupt.cpp` | `440bb808` |
+| 14 | Leftover `fork`/`execvp` → `QProcess` | ✅ done — `api_handlers::run_fork_exec` + `ether_socket` | `3f1079dc` |
+| 15 | `pthread`/`sem_t` in `serial_unix.cpp` → `QThread`/`QSemaphore` | ✅ done — workers wrapped in QThread subclass; **no test coverage**, manual smoke needed | `ed8f47fe` |
+| 16 | `std::thread` in webserver → `QThread` | ✅ done — accept loop wrapped in `HttpServerThread : QThread` | `14b143ee` |
+| 17 | `nlohmann::json` → `QJson` | partial — kept files done; subproject drop blocks on Phase 8 (bidi.cpp still imports it) | `606189c9` (17a) `28735177` (17b) `9e0ec260` (17c) |
 
 **Recommended execution order for the dep-drop phases**: 12 (easy
 warmup, deletes a `find_package`) → 13/14 (small, mechanical) → 17
@@ -492,6 +492,21 @@ warmup, deletes a `find_package`) → 13/14 (small, mechanical) → 17
 Phase 8 (xcb → QtWebEngine) drops 5 more apt deps but is
 independently large and orthogonal — schedule when there's appetite
 for a multi-day chunk.
+
+## Session log
+
+**2026-05-03 session** (11 commits, qt-port branch):
+Phase 5 + 12 + 13 + 14 + 15 + 16 + 17 (a/b/c) all landed. Phase 8
+handoff doc written but implementation deferred. Net effect:
+
+- Direct OpenSSL use removed (libdatachannel still pulls libssl-dev
+  transitively).
+- All POSIX socket/threading/timing/semaphore/process primitives
+  used by kept code are now Qt — Windows port is materially closer.
+- nlohmann_json migration is functionally complete for all kept
+  code; subproject can't drop until Phase 8 deletes bidi.cpp.
+
+Next session entry point: `docs/qt6/Phase8.md`.
 
 ## Phase 1.5 — Qt6 in build/packaging/CI
 
