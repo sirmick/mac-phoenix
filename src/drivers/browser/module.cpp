@@ -12,7 +12,9 @@
 #define BR_HOST 1
 #include "MacBrowser.h"
 
+#include <QApplication>
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -32,6 +34,19 @@ BrowserModule::~BrowserModule() { stop(); }
 bool BrowserModule::start(const std::string& initial_url)
 {
     if (running_) return true;
+
+    // Phase 8c: when QApplication is the active Qt instance, QtWebEngine
+    // owns the pixel pipeline (qtwebengine_browser.cpp publishes to
+    // BrowserShm). Skip the legacy Xvfb+Firefox+XShm pipeline entirely —
+    // both publishing would race for fb.seq + dirty[]. Phase 8i deletes
+    // supervisor/xshm/bidi outright; this is the transitional gate.
+    if (qobject_cast<QApplication*>(QCoreApplication::instance())) {
+        fprintf(stderr, "[BrowserModule] QApplication active → QtWebEngine "
+                "owns pixel publish; legacy supervisor + XShm pipeline "
+                "skipped (deleted in 8i)\n");
+        running_ = true;
+        return true;
+    }
 
     supervisor_ = std::make_unique<Supervisor>();
     if (!supervisor_->start(initial_url)) {
