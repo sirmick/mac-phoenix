@@ -63,11 +63,14 @@ target_include_directories(drivers PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/ether
 )
 
+find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
+
 target_link_libraries(drivers PRIVATE
   datachannel-static
   nlohmann_json::nlohmann_json
   codec_flags
   libyuv::libyuv
+  Qt6::Core
 )
 
 # MacBrowser pixel pipeline: xcb + MIT-SHM + XDamage.

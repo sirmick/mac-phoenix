@@ -16,7 +16,9 @@
 #include "uae_wrapper.h"   // For intlev()
 #include "macos_util.h"    // For HasMacStarted()
 
-#include <time.h>
+#include <QElapsedTimer>
+#include <QThread>
+
 #include <stdio.h>
 #include <thread>
 #include <atomic>
@@ -36,12 +38,12 @@ extern "C" uint32 TimerDateTime(void);
 static std::atomic<bool> tick_thread_running{false};
 static std::thread tick_thread;
 static uint64_t interrupt_count = 0;
+static QElapsedTimer g_tick_clock;
 
-// Get current time in microseconds (matches PPC GetTicks_usec pattern)
+// Get current time in microseconds (matches PPC GetTicks_usec pattern).
+// Returns time-since-tick-thread-start; only deltas matter for tick scheduling.
 static uint64_t get_ticks_usec() {
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	return (uint64_t)now.tv_sec * 1000000ULL + now.tv_nsec / 1000;
+	return (uint64_t)(g_tick_clock.nsecsElapsed() / 1000);
 }
 
 /*
@@ -103,8 +105,7 @@ static void tick_thread_func()
 		next += period;
 		int64_t delay = next - get_ticks_usec();
 		if (delay > 0) {
-			struct timespec ts = {0, (long)(delay * 1000)};
-			nanosleep(&ts, nullptr);
+			QThread::usleep((unsigned long)delay);
 		} else if (delay < -period) {
 			next = get_ticks_usec();  // Resynchronize if too late
 		}
@@ -124,6 +125,7 @@ void setup_timer_interrupt(void)
 	if (tick_thread_running.load()) return;
 
 	interrupt_count = 0;
+	g_tick_clock.start();
 	tick_thread_running.store(true, std::memory_order_release);
 	tick_thread = std::thread(tick_thread_func);
 
