@@ -48,6 +48,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         # core libs
         libssl-dev \
         libyuv-dev \
+        # Qt6 (cross-platform abstraction; see docs/qt6/PLAN.md)
+        qt6-base-dev \
+        qt6-tools-dev \
         # video/audio codecs
         libopenh264-dev \
         libvpx-dev \

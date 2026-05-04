@@ -31,6 +31,8 @@ BuildRequires:  libwebp-devel
 BuildRequires:  opus-devel
 BuildRequires:  libyuv-devel
 BuildRequires:  libxcb-devel
+BuildRequires:  qt6-qtbase-devel >= 6.4
+BuildRequires:  qt6-qttools-devel
 BuildRequires:  cargo
 BuildRequires:  rust
 BuildRequires:  desktop-file-utils

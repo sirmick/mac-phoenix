@@ -21,6 +21,8 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         opus-devel \
         libyuv-devel \
         libxcb-devel \
+        qt6-qtbase-devel \
+        qt6-qttools-devel \
         cargo \
         rust \
         desktop-file-utils \

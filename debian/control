@@ -16,6 +16,8 @@ Build-Depends: debhelper-compat (= 13),
                libxcb-damage0-dev,
                libxcb-composite0-dev,
                libxcb-randr0-dev,
+               qt6-base-dev (>= 6.4),
+               qt6-tools-dev,
                cargo,
                rustc
 Standards-Version: 4.6.2
