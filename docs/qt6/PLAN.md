@@ -183,29 +183,37 @@ threading section.
 
 ---
 
-### Phase 5 — HTTP server → QHttpServer
+### Phase 5 — HTTP server → QTcpServer/QTcpSocket (QHttpServer rejected)
 
-**Scope**: Raw `socket`+`poll` HTTP/1.1 → `QHttpServer`.
+**Scope**: Raw `socket`+`poll` HTTP/1.1 → `QTcpServer`/`QTcpSocket`
+(via `Qt6::Network`, no new package). Pivoted from `QHttpServer`
+after surveying Qt 6.4's tech-preview status and its lack of native
+WebSocket-on-same-port support — see "Phase 5 — actual scope (revised
+2026-05-03)" below.
 
 **Files**:
-- `src/webserver/http_server.cpp` (full rewrite)
-- `src/webserver/api_handlers.cpp` (handler signatures unchanged;
-  dispatch wrapper changes)
+- `src/webserver/http_server.h` — forward-decl `QTcpSocket`, private
+  signatures take `QTcpSocket*`
+- `src/webserver/http_server.cpp` — full rewrite of the server class
+  internals; public `Request`/`Response`/`Server` API unchanged
+- `src/webserver/CMakeLists.txt` — add `Qt6::Network` link
 
-**Refactor approach**: `QHttpServer` uses `route()` with lambda
-handlers. Preserve handler bodies; rewrite the dispatch wrapper. Static
-file serving via `QHttpServer::route("/<arg>", ...)` reading from disk.
-`/api/screenshot` returns PNG bytes via `QHttpServerResponse`.
-`/api/frame` long-poll needs `QFuture` or deferred response — verify
-`QHttpServer` supports this idiom.
+**Refactor approach**: `QTcpServer::listen()` + `waitForNewConnection`
+on a dedicated `std::thread`. Per-request reads via
+`QTcpSocket::waitForReadyRead` + `readAll`; writes via `write` +
+`waitForBytesWritten`. For long-poll stream and WebSocket upgrade, dup
+the underlying fd via `socketDescriptor()` and hand it to the worker
+thread — Qt closes its own fd when the `QTcpSocket` is destroyed but
+the dup'd reference keeps the TCP connection alive on the worker.
 
 **Validation**:
 - `tests/test_api_endpoints.sh` (all 10 checks)
 - `tests/test_mouse_position.sh`
 - `npx playwright test` (browser-side E2E)
+- Full `ctest --test-dir build`
 
 **Docs**: CLAUDE.md "Single-port HTTP + WebSocket" architectural decision
-needs rewriting to reflect QHttpServer.
+updated to reflect QTcpServer.
 
 ---
 
@@ -448,13 +456,18 @@ Per phase:
 | 3a | IPC SHM → QSharedMemory | ✅ done | `702ccba8` |
 | 3b | IPC sockets + notify → QLocalSocket | ⚠️ deferred (attempted, reverted — see `76f9a086`) |
 | 4 | Threading cleanup at Qt seams | ⚠️ deferred (no work in current state; lands with 3b retry) |
-| 5 | HTTP server → QHttpServer | pending — start of next session |
+| 5 | HTTP server → QTcpServer/QTcpSocket | ✅ done — pivoted from QHttpServer; see notes |
 | 6 | WebSocket → QWebSocketServer | pending |
 | 7 | Windows SEH path activation | ✅ done | `e80f314f` |
 | 8 | MacBrowser → QtWebEngine | pending |
 | 9 | Native head (QApplication mode) | pending |
 | 10 | Windows port + installer | pending |
 | 11 | macOS port + signed `.app` + DMG | pending |
+| 12 | OpenSSL → QCryptographicHash | pending — drops OpenSSL dep entirely |
+| 13 | POSIX timing → `QElapsedTimer` + `QThread::usleep` | pending — Phase 10 unblocker |
+| 14 | Leftover `fork`/`execvp` → `QProcess` | pending — Phase 10 unblocker |
+| 15 | `pthread`/`sem_t` in `serial_unix.cpp` → `QThread`/`QSemaphore` | pending — Phase 10 unblocker |
+| 16 | `std::thread` in webserver → `QThread` | pending — completeness sweep after Phase 5 lands |
 
 ## Phase 1.5 — Qt6 in build/packaging/CI
 
@@ -503,32 +516,129 @@ in the deferred-from-this-session timebox.
   (a synthetic child + parent that just exchange the IPC handshake)
   before re-touching the real code.
 
-## Phase 5 — actual scope (revised)
+## Phase 5 — actual scope (revised 2026-05-03)
 
-Originally estimated as a clean QHttpServer swap; turns out:
+Originally planned as `QHttpServer`. **Pivoted to `QTcpServer` /
+`QTcpSocket` directly** after this round of investigation surfaced two
+blockers that the original PLAN didn't fully internalize:
 
-- `http_server.cpp` (425 lines) — full rewrite
-- `http_stream.cpp` (381 lines) — `/api/frame` long-poll. Qt 6.4's
-  QHttpServer has limited async response support; deferred responses
-  via `QHttpServerResponder` matured in 6.5+. Fallback: extract raw
-  client fd from QTcpSocket via `socketDescriptor()` and keep the
-  current stream-handler model (hybrid pattern, like Phase 3b's plan).
-- `websocket.cpp` (290 lines) — RFC 6455 upgrade. Becomes Phase 6.
-- `webrtc_server.cpp` — `register_routes(server)` will need to adapt
-  to QHttpServer's API too.
-- `api_handlers.cpp` (1978 lines) — handler bodies stay; dispatch
-  wrapper changes.
-- Build infra: add `qt6-httpserver-dev` to deb/rpm/dockerfiles per
-  Phase 1.5 protocol.
+1. Qt 6.4's `QHttpServer` is shipped as a Tech Preview module; the API
+   wasn't fully stabilized until ~6.7.
+2. `QHttpServer` in 6.4 has no native WebSocket-on-same-port support
+   (`QHttpServerWebSocketUpgradeResponse` only landed in 6.5+). To keep
+   `/ws` and `/api/stream` sharing port 11000 with the new HTTP routes
+   we'd have needed a custom `QTcpServer` subclass with `peek()`-based
+   dispatch — i.e., we'd be working around `QHttpServer` for ~half the
+   surface anyway.
 
-**Recommended sub-decomposition for Phase 5**:
-- **5a**: GET routes that don't need long-poll or WebSocket — `/api/status`,
-  `/api/mouse`, `/api/screenshot`, `/api/storage`, `/api/config`,
-  `/api/codec`, `/api/codecs`, `/api/keypress`, `/api/app`, `/api/windows`.
-  Static UI files. Map cleanly to `QHttpServer::route()`.
-- **5b**: Long-poll `/api/frame` and `/api/stream`. Hybrid raw-fd if
-  QHttpServer's deferred-response support is too limited in 6.4.
-- **5c**: WebSocket `/ws` upgrade — folds into Phase 6.
+Since the goal of Phase 5 is "get off raw POSIX so Windows port is
+unblocked," `QTcpServer` directly achieves it with strictly less risk.
+What landed:
+
+- `http_server.h` — forward-decl `QTcpSocket`, private signatures
+  switch from `int client_fd` to `QTcpSocket*`.
+- `http_server.cpp` — `Server::run()` owns a stack-allocated
+  `QTcpServer` for its lifetime; `start()` waits on a
+  `std::promise<bool>` so it can still return `false` on bind failure.
+  Per-request reads via `waitForReadyRead` + `readAll`; writes via
+  `write` + `waitForBytesWritten`. Long-poll stream and WebSocket
+  upgrade `dup()` the underlying `socketDescriptor()` and hand the
+  copy to a worker thread; the original Qt-owned fd is closed at
+  `QTcpSocket` destruction but the dup'd reference keeps the TCP
+  connection alive on the worker.
+- Public `Request`/`Response`/`Server` API and `StreamHandler`/
+  `WebSocketHandler` callback signatures unchanged → `api_handlers.cpp`,
+  `webrtc_server.cpp`, `webserver_main.cpp`, `static_files.cpp`,
+  `http_stream.cpp`, and `websocket.cpp` need no changes.
+- `src/webserver/CMakeLists.txt` — link `Qt6::Network`. No new package
+  dep (Network is part of `qt6-base-dev`).
+
+WebSocket move to `QWebSocketServer` defers to Phase 6 as planned.
+`std::thread` → `QThread` sweep tracked separately as Phase 16.
+
+## Phases 12–16 — POSIX cleanup & Qt completeness
+
+Identified during the Phase 5 investigation. Sequenced before Phase 10
+(Windows port) because each one is a Windows-build blocker.
+
+### Phase 12 — OpenSSL → QCryptographicHash
+
+**Scope**: Drop the OpenSSL build dep entirely.
+
+**Files**:
+- `src/webserver/websocket.cpp` — `SHA1()` for RFC 6455 accept hash
+- `src/webserver/file_scanner.cpp` — `EVP_DigestInit_ex(md5)` for ROM
+  fingerprinting
+
+**Refactor**: `QCryptographicHash::hash(data, QCryptographicHash::Sha1)`
+returns a `QByteArray`. Identical for MD5. Drop `find_package(OpenSSL)`
+and `OpenSSL::Crypto` link from `src/webserver/CMakeLists.txt` and
+top-level `CMakeLists.txt`. Remove `libssl-dev` from `debian/control`
+and the rpm/Dockerfile equivalents.
+
+**Validation**: `tests/test_api_endpoints.sh` (websocket handshake),
+ROM scan in `/api/storage`.
+
+### Phase 13 — POSIX timing → Qt timing
+
+**Scope**: Replace `nanosleep` and `clock_gettime` so the timer thread
+is portable.
+
+**Files**:
+- `src/drivers/platform/timer_interrupt.cpp` — `clock_gettime` →
+  `QElapsedTimer`, `nanosleep` → `QThread::usleep` (Qt's portable
+  sleep, no header dance on Windows).
+
+**Validation**: 60.15 Hz tick rate unchanged (boot timing within
+noise of pre-13 numbers).
+
+### Phase 14 — Leftover `fork`/`execvp` → `QProcess`
+
+**Scope**: Phase 2 ported the big subprocess fork. Two leftover sites
+remain.
+
+**Files**:
+- `src/webserver/api_handlers.cpp::handle_create_image` — wraps
+  `hfsutils` invocation in a fork/execvp.
+- `src/drivers/ether/ether_socket.cpp` — net-bridge spawn.
+
+**Refactor**: `QProcess::execute(program, args)` for synchronous
+invocations; `QProcess::start()` + signals for the long-lived
+net-bridge spawn (or keep synchronous if the lifecycle is simple).
+
+**Validation**: `POST /api/storage/create-image` round-trip;
+`--network socket:` smoke test.
+
+### Phase 15 — `pthread`/`sem_t` → `QThread`/`QSemaphore` in serial driver
+
+**Scope**: `serial_unix.cpp` is the last big POSIX-threaded
+subsystem. Rename to `serial.cpp` (cross-platform).
+
+**Files**:
+- `src/drivers/serial/serial_unix.cpp` — `pthread_create`/`_cancel`/
+  `_join` → `QThread`; `sem_init`/`sem_wait`/`sem_post` →
+  `QSemaphore::acquire`/`release`.
+
+**Validation**: Serial port loopback if any test exists; otherwise
+manual smoke (rare-use feature).
+
+### Phase 16 — `std::thread` in webserver → `QThread`
+
+**Scope**: Completeness sweep — once Phase 5 is in, the HTTP accept
+loop and detached stream/WS workers should be `QThread` for
+consistency with the rest of the Qt port. Functionally `std::thread`
+works (Qt 6.4 doesn't enforce QObject thread-affinity for synchronous
+`waitForX` calls), but `QThread` integrates with Qt's debug/warning
+machinery and signals.
+
+**Files**:
+- `src/webserver/http_server.cpp` — wrap `Server::run()` in a
+  `QThread` subclass.
+- Detached stream/WS worker threads — optional swap; they don't use
+  Qt APIs after the fd handoff so `std::thread::detach()` is fine.
+
+**Validation**: full ctest, no Qt cross-thread warnings in debug
+build.
 
 5a alone is ~70% of the user-facing API surface.
 | 11 | macOS port + signed `.app` + DMG | pending |

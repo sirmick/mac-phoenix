@@ -1,8 +1,11 @@
 /*
  * HTTP Server Module
  *
- * Simple HTTP/1.1 server for serving static files and JSON APIs
- * Non-blocking socket with polling, handles one request per connection
+ * Simple HTTP/1.1 server for serving static files and JSON APIs.
+ * Built on QTcpServer/QTcpSocket so the listener and per-request I/O
+ * are cross-platform; long-poll stream handlers and WebSocket upgrades
+ * detach the underlying file descriptor (via dup()) and keep using
+ * POSIX-style send/recv on it.
  */
 
 #ifndef HTTP_SERVER_H
@@ -11,9 +14,12 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <future>
 #include <functional>
 #include <memory>
 #include <unordered_map>
+
+class QTcpSocket;
 
 namespace http {
 
@@ -107,13 +113,14 @@ public:
     bool is_running() const { return running_; }
 
 private:
-    void run();
-    bool handle_client(int client_fd);  // returns true if fd was handed off (don't close)
+    // run() owns the QTcpServer for its lifetime and signals listen() success
+    // back through the promise so start() can return false on bind failure.
+    void run(std::shared_ptr<std::promise<bool>> listen_result);
+    bool handle_client(QTcpSocket* socket);  // returns true if fd was handed off
     bool parse_request(const char* buffer, size_t length, Request& req);
-    bool try_websocket_upgrade(const Request& req, int client_fd);  // true = handed off
+    bool try_websocket_upgrade(const Request& req, QTcpSocket* socket);  // true = handed off
 
     int port_;
-    int server_fd_;
     std::atomic<bool> running_;
     std::thread thread_;
     RequestHandler handler_;

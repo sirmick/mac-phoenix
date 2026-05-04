@@ -1,16 +1,23 @@
 /*
  * HTTP Server Module
  *
- * Simple HTTP/1.1 server implementation
+ * HTTP/1.1 server backed by QTcpServer/QTcpSocket. The listen accept
+ * loop and per-request read/write use Qt's synchronous waitForX APIs,
+ * so the server runs on a dedicated std::thread without needing a Qt
+ * event loop. For long-poll stream and WebSocket routes the underlying
+ * file descriptor is dup'd and handed to a worker thread that keeps
+ * using POSIX send/recv on its own copy — the QTcpSocket's fd is then
+ * closed by Qt as normal, but the dup'd reference keeps the TCP
+ * connection alive.
  */
 
 #include "http_server.h"
 #include "websocket.h"
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QHostAddress>
+#include <QByteArray>
 #include <unistd.h>
-#include <fcntl.h>
-#include <poll.h>
 #include <cctype>
 #include <cstring>
 #include <cstdio>
@@ -18,7 +25,7 @@
 
 namespace http {
 
-// Response implementation
+// Response implementation — unchanged from the POSIX-backed version.
 Response::Response()
     : status_code_(200)
     , status_message_("OK")
@@ -30,7 +37,6 @@ void Response::set_status(int code, const std::string& message) {
     if (!message.empty()) {
         status_message_ = message;
     } else {
-        // Default status messages
         switch (code) {
             case 200: status_message_ = "OK"; break;
             case 404: status_message_ = "Not Found"; break;
@@ -97,7 +103,6 @@ Response Response::not_found() {
 // Server implementation
 Server::Server()
     : port_(0)
-    , server_fd_(-1)
     , running_(false)
 {}
 
@@ -114,58 +119,18 @@ bool Server::start(int port, RequestHandler handler) {
     port_ = port;
     handler_ = handler;
 
-    // Create socket
-    server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd_ < 0) {
-        fprintf(stderr, "HTTP: Failed to create socket\n");
-        return false;
-    }
+    auto listen_result = std::make_shared<std::promise<bool>>();
+    auto listen_future = listen_result->get_future();
 
-    // Set SO_REUSEADDR
-    int opt = 1;
-    if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        fprintf(stderr, "HTTP: Warning: Failed to set SO_REUSEADDR: %s\n", strerror(errno));
-    }
-
-    // Set non-blocking
-    int flags = fcntl(server_fd_, F_GETFL, 0);
-    if (flags < 0) {
-        fprintf(stderr, "HTTP: Failed to get socket flags: %s\n", strerror(errno));
-        close(server_fd_);
-        server_fd_ = -1;
-        return false;
-    }
-    if (fcntl(server_fd_, F_SETFL, flags | O_NONBLOCK) < 0) {
-        fprintf(stderr, "HTTP: Failed to set non-blocking mode: %s\n", strerror(errno));
-        close(server_fd_);
-        server_fd_ = -1;
-        return false;
-    }
-
-    // Bind
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
-
-    if (bind(server_fd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        fprintf(stderr, "HTTP: Failed to bind port %d: %s\n", port, strerror(errno));
-        close(server_fd_);
-        server_fd_ = -1;
-        return false;
-    }
-
-    // Listen
-    if (listen(server_fd_, 10) < 0) {
-        fprintf(stderr, "HTTP: Failed to listen: %s\n", strerror(errno));
-        close(server_fd_);
-        server_fd_ = -1;
-        return false;
-    }
-
-    // Start thread
     running_ = true;
-    thread_ = std::thread(&Server::run, this);
+    thread_ = std::thread(&Server::run, this, listen_result);
+
+    bool ok = listen_future.get();
+    if (!ok) {
+        running_ = false;
+        if (thread_.joinable()) thread_.join();
+        return false;
+    }
 
     fprintf(stderr, "HTTP: Server on port %d\n", port);
     return true;
@@ -173,34 +138,46 @@ bool Server::start(int port, RequestHandler handler) {
 
 void Server::stop() {
     running_ = false;
-    if (server_fd_ >= 0) {
-        close(server_fd_);
-        server_fd_ = -1;
-    }
     if (thread_.joinable()) {
         thread_.join();
     }
 }
 
-void Server::run() {
-    while (running_) {
-        struct pollfd pfd;
-        pfd.fd = server_fd_;
-        pfd.events = POLLIN;
+void Server::run(std::shared_ptr<std::promise<bool>> listen_result) {
+    QTcpServer tcp_server;
+    if (!tcp_server.listen(QHostAddress::Any, port_)) {
+        fprintf(stderr, "HTTP: Failed to listen on port %d: %s\n", port_,
+                tcp_server.errorString().toUtf8().constData());
+        listen_result->set_value(false);
+        return;
+    }
+    listen_result->set_value(true);
 
-        int ret = poll(&pfd, 1, 100);
-        if (ret <= 0) continue;
-
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
-        int client_fd = accept(server_fd_, (struct sockaddr*)&client_addr, &client_len);
-        if (client_fd < 0) continue;
-
-        // handle_client returns true if fd was handed off to a stream handler
-        // (caller must NOT close it in that case)
-        if (!handle_client(client_fd)) {
-            close(client_fd);
+    while (running_.load()) {
+        bool timed_out = false;
+        if (!tcp_server.waitForNewConnection(100, &timed_out)) {
+            // Either a 100ms idle timeout (normal) or a server error.
+            // Bail only if the server has actually stopped listening.
+            if (!timed_out && !tcp_server.isListening()) {
+                fprintf(stderr, "HTTP: Server stopped listening, exiting accept loop\n");
+                running_ = false;
+                break;
+            }
+            continue;
         }
+
+        QTcpSocket* socket = tcp_server.nextPendingConnection();
+        if (!socket) continue;
+
+        bool handed_off = handle_client(socket);
+        if (!handed_off) {
+            // Make sure response bytes hit the kernel before we tear the socket down.
+            socket->waitForBytesWritten(2000);
+        }
+        // For handed-off connections the worker thread holds an independent
+        // dup'd fd — QTcpSocket destruction closes Qt's fd, but the dup
+        // reference keeps the TCP connection alive on the worker side.
+        delete socket;
     }
 }
 
@@ -222,7 +199,19 @@ static bool iequals(const std::string& a, const char* b) {
     return true;
 }
 
-bool Server::try_websocket_upgrade(const Request& req, int client_fd) {
+// Send a short response (error pages, mostly) and flush. Caller is
+// responsible for socket teardown.
+static void send_simple_response(QTcpSocket* socket, int code,
+                                 const char* status, const char* body) {
+    Response resp;
+    resp.set_status(code, status);
+    resp.set_body(body);
+    std::string s = resp.build();
+    socket->write(s.data(), static_cast<qint64>(s.size()));
+    socket->waitForBytesWritten(2000);
+}
+
+bool Server::try_websocket_upgrade(const Request& req, QTcpSocket* socket) {
     auto it = websocket_routes_.find(req.path);
     if (it == websocket_routes_.end()) return false;
 
@@ -233,8 +222,8 @@ bool Server::try_websocket_upgrade(const Request& req, int client_fd) {
 
     if (upg_it == req.headers.end() || !iequals(upg_it->second, "websocket")) return false;
     if (conn_it == req.headers.end() ||
-        conn_it->second.find("Upgrade") == std::string::npos &&
-        conn_it->second.find("upgrade") == std::string::npos) return false;
+        (conn_it->second.find("Upgrade") == std::string::npos &&
+         conn_it->second.find("upgrade") == std::string::npos)) return false;
     if (key_it == req.headers.end()) return false;
     if (ver_it == req.headers.end() || ver_it->second != "13") return false;
 
@@ -246,37 +235,56 @@ bool Server::try_websocket_upgrade(const Request& req, int client_fd) {
         "Connection: Upgrade\r\n"
         "Sec-WebSocket-Accept: " + accept + "\r\n"
         "\r\n";
-    ::send(client_fd, resp.data(), resp.size(), 0);
+    socket->write(resp.data(), static_cast<qint64>(resp.size()));
+    socket->waitForBytesWritten(2000);
 
-    // Hand off fd to a detached thread that owns the WebSocket object.
+    int qt_fd = socket->socketDescriptor();
+    if (qt_fd < 0) return false;
+    int worker_fd = ::dup(qt_fd);
+    if (worker_fd < 0) {
+        fprintf(stderr, "HTTP: dup() for websocket handoff failed: %s\n", strerror(errno));
+        return false;
+    }
+
     auto handler = it->second;
     Request req_copy = req;
-    std::thread([handler, req_copy, client_fd]() {
-        auto ws = std::make_shared<WebSocket>(client_fd);
+    std::thread([handler, req_copy, worker_fd]() {
+        auto ws = std::make_shared<WebSocket>(worker_fd);
         handler(ws, req_copy);
-        ws->run_read_loop();  // blocks until close
+        ws->run_read_loop();  // blocks until peer close or protocol error
     }).detach();
 
     return true;
 }
 
-bool Server::handle_client(int client_fd) {
+bool Server::handle_client(QTcpSocket* socket) {
     std::string request;
     request.reserve(8192);
-    char buffer[4096];
 
-    // Read until we have complete headers
+    // Read until we have complete headers (or the client gives up).
+    // 30s is generous for an idle browser holding a keep-alive open.
+    constexpr int kReadTimeoutMs = 30000;
+    constexpr size_t kMaxHeaderBytes = 64 * 1024;
+
     size_t header_end = std::string::npos;
     while (header_end == std::string::npos) {
-        ssize_t n = recv(client_fd, buffer, sizeof(buffer), 0);
-        if (n <= 0) return false;
-        request.append(buffer, n);
+        if (socket->bytesAvailable() == 0) {
+            if (!socket->waitForReadyRead(kReadTimeoutMs)) return false;
+        }
+        QByteArray data = socket->readAll();
+        if (data.isEmpty()) return false;
+        request.append(data.constData(), data.size());
         header_end = request.find("\r\n\r\n");
+        if (header_end == std::string::npos && request.size() > kMaxHeaderBytes) {
+            send_simple_response(socket, 431, "Request Header Fields Too Large",
+                                 "Request Header Fields Too Large");
+            return false;
+        }
     }
 
-    // Check Content-Length and read remaining body if needed.
-    // Cap to a sane maximum so a hostile client can't OOM us with
-    // `Content-Length: 4000000000` and a slow trickle of bytes.
+    // Parse Content-Length so we know how much body to wait for. Cap at
+    // 16MB so a hostile client can't OOM us with a fake Content-Length and
+    // a slow trickle of bytes.
     constexpr size_t kMaxBodyBytes = 16 * 1024 * 1024;
     size_t content_length = 0;
     size_t cl_pos = request.find("Content-Length: ");
@@ -286,20 +294,12 @@ bool Server::handle_client(int client_fd) {
         try {
             size_t parsed = std::stoul(request.substr(cl_pos + 16));
             if (parsed > kMaxBodyBytes) {
-                Response resp;
-                resp.set_status(413, "Payload Too Large");
-                resp.set_body("Payload Too Large");
-                std::string response_str = resp.build();
-                ::send(client_fd, response_str.c_str(), response_str.size(), 0);
+                send_simple_response(socket, 413, "Payload Too Large", "Payload Too Large");
                 return false;
             }
             content_length = parsed;
         } catch (const std::exception &) {
-            Response resp;
-            resp.set_status(400, "Bad Request");
-            resp.set_body("Invalid Content-Length");
-            std::string response_str = resp.build();
-            ::send(client_fd, response_str.c_str(), response_str.size(), 0);
+            send_simple_response(socket, 400, "Bad Request", "Invalid Content-Length");
             return false;
         }
     }
@@ -307,35 +307,31 @@ bool Server::handle_client(int client_fd) {
     size_t body_start = header_end + 4;
     size_t body_received = request.size() - body_start;
     while (body_received < content_length) {
-        ssize_t n = recv(client_fd, buffer, sizeof(buffer), 0);
-        if (n <= 0) break;
-        request.append(buffer, n);
-        body_received += n;
+        if (socket->bytesAvailable() == 0) {
+            if (!socket->waitForReadyRead(kReadTimeoutMs)) break;
+        }
+        QByteArray data = socket->readAll();
+        if (data.isEmpty()) break;
+        request.append(data.constData(), data.size());
+        body_received += data.size();
     }
 
     Request req;
     if (!parse_request(request.c_str(), request.size(), req)) {
-        Response resp;
-        resp.set_status(400, "Bad Request");
-        resp.set_body("Bad Request");
-        std::string response_str = resp.build();
-        send(client_fd, response_str.c_str(), response_str.size(), 0);
+        send_simple_response(socket, 400, "Bad Request", "Bad Request");
         return false;
     }
 
     // WebSocket upgrade takes over the fd entirely.
-    if (req.method == "GET" && try_websocket_upgrade(req, client_fd)) {
+    if (req.method == "GET" && try_websocket_upgrade(req, socket)) {
         return true;
     }
 
-    // Check stream routes first (GET only)
+    // Stream routes (GET only) — send the chunked-streaming preamble, then
+    // hand a dup'd fd off to the stream handler thread.
     if (req.method == "GET") {
         auto it = stream_routes_.find(req.path);
         if (it != stream_routes_.end()) {
-            // Send HTTP headers for chunked streaming.
-            // Content-Type: text/event-stream tricks proxies into not buffering.
-            // X-Accel-Buffering: no is an nginx-specific directive for the same.
-            // The client uses fetch() not EventSource, so the MIME type is irrelevant.
             std::string headers =
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Type: text/event-stream\r\n"
@@ -345,24 +341,30 @@ bool Server::handle_client(int client_fd) {
                 "X-Accel-Buffering: no\r\n"
                 "Connection: keep-alive\r\n"
                 "\r\n";
-            send(client_fd, headers.c_str(), headers.size(), 0);
+            socket->write(headers.data(), static_cast<qint64>(headers.size()));
+            socket->waitForBytesWritten(2000);
 
-            // Hand off fd to stream handler on a detached thread.
-            // The handler owns the fd and must close it.
+            int qt_fd = socket->socketDescriptor();
+            if (qt_fd < 0) return false;
+            int worker_fd = ::dup(qt_fd);
+            if (worker_fd < 0) {
+                fprintf(stderr, "HTTP: dup() for stream handoff failed: %s\n", strerror(errno));
+                return false;
+            }
+
             auto handler = it->second;
-            std::thread([handler, req, client_fd]() {
-                handler(req, client_fd);
+            std::thread([handler, req, worker_fd]() {
+                handler(req, worker_fd);
             }).detach();
 
-            // Return true — fd handed off, caller must not close it
             return true;
         }
     }
 
-    // Call normal handler
+    // Normal request — synchronous response.
     Response resp = handler_(req);
     std::string response_str = resp.build();
-    send(client_fd, response_str.c_str(), response_str.size(), 0);
+    socket->write(response_str.data(), static_cast<qint64>(response_str.size()));
     return false;
 }
 
@@ -400,7 +402,6 @@ bool Server::parse_request(const char* buffer, size_t length, Request& req) {
             size_t colon = request.find(':', pos);
             if (colon != std::string::npos && colon < eol) {
                 std::string name = request.substr(pos, colon - pos);
-                // Lowercase name for case-insensitive lookup
                 for (auto& c : name) c = std::tolower(static_cast<unsigned char>(c));
                 size_t val_start = colon + 1;
                 while (val_start < eol && std::isspace(static_cast<unsigned char>(request[val_start])))
@@ -414,7 +415,6 @@ bool Server::parse_request(const char* buffer, size_t length, Request& req) {
         }
     }
 
-    // Extract body (after \r\n\r\n)
     if (body_start != std::string::npos) {
         req.body = request.substr(body_start + 4);
     }
