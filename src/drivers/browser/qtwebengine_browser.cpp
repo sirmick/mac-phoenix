@@ -128,12 +128,30 @@ void maybe_report(int crop_w, int crop_h)
     g_last_report = now;
 }
 
-// Push one captured QImage frame into BrowserShm.fb if a guest handshake
-// has happened. Whole image treated as one dirty rect — per-region diff
-// is a follow-up optimization once the smoothness gate passes.
+// Push one captured QImage frame into BrowserShm.fb. Single fused pass:
+// each pixel is converted ARGB32 → RGB555 and compared against the host's
+// last-published value already in fb.pixels in one cache-friendly loop.
+// Per-row {xmin,xmax} extents are tracked, then contiguous dirty rows
+// are coalesced into rectangles (capped at BR_DIRTY_MAX = 64).
+//
+// Comparing against fb.pixels rather than a kept prev-buffer is safe: the
+// guest READS fb.pixels via CopyBits but never writes; the host is the
+// only writer, so what's there is exactly what we last published.
+//
+// Wins:
+//   - 50% memory traffic vs. separate diff+convert (touch each pixel once)
+//   - No prev_img_ allocation
+//   - Static page → zero rectangles → no fb.seq bump → guest sees no
+//     redundant frame, no CopyBits cost
 //
 // Returns the {crop_w, crop_h} actually published (zero if no shm/viewport).
 struct CropDims { int w; int h; };
+
+// Force-dirty state — when crop_w/h changes (BR_CMD_RESIZE), the existing
+// fb.pixels content is at the OLD geometry, so per-pixel diffs against it
+// are meaningless. First publish post-resize writes everything.
+int s_last_crop_w = 0, s_last_crop_h = 0;
+
 CropDims push_frame_to_browser_shm(const QImage& img)
 {
     BrowserShm* shm = browser::shm_get();
@@ -150,27 +168,100 @@ CropDims push_frame_to_browser_shm(const QImage& img)
     const int h = std::min(img.height(), crop_h);
     if (w <= 0 || h <= 0) return {crop_w, crop_h};
 
+    const bool force_full = (crop_w != s_last_crop_w ||
+                             crop_h != s_last_crop_h);
+    s_last_crop_w = crop_w;
+    s_last_crop_h = crop_h;
+
     auto t1 = std::chrono::steady_clock::now();
     const int dst_stride = crop_w * 2;
+    int row_xmin[BR_FB_MAX_H];
+    int row_xmax[BR_FB_MAX_H];
+    uint64_t pixels_changed = 0;
+
     for (int y = 0; y < h; y++) {
         const uint32_t* src_row = (const uint32_t*)img.scanLine(y);
         uint16_t* dst_row =
             (uint16_t*)&shm->fb.pixels[(size_t)y * dst_stride];
-        for (int x = 0; x < w; x++) {
-            dst_row[x] = argb32_to_rgb555_be(src_row[x]);
+        int xmin = -1, xmax = -1;
+        if (force_full) {
+            for (int x = 0; x < w; x++) {
+                dst_row[x] = argb32_to_rgb555_be(src_row[x]);
+            }
+            xmin = 0;
+            xmax = w - 1;
+            pixels_changed += (uint64_t)w;
+        } else {
+            for (int x = 0; x < w; x++) {
+                uint16_t pix = argb32_to_rgb555_be(src_row[x]);
+                if (pix != dst_row[x]) {
+                    dst_row[x] = pix;
+                    if (xmin < 0) xmin = x;
+                    xmax = x;
+                }
+            }
+            if (xmin >= 0) pixels_changed += (uint64_t)(xmax - xmin + 1);
         }
+        row_xmin[y] = xmin;
+        row_xmax[y] = xmax;
     }
     g_perf.blit_us += us_since(t1);
 
-    br_u16_store(&shm->fb.dirty_count, 1);
-    br_u16_store((uint16_t*)&shm->fb.dirty[0].top,    0);
-    br_u16_store((uint16_t*)&shm->fb.dirty[0].left,   0);
-    br_u16_store((uint16_t*)&shm->fb.dirty[0].bottom, (uint16_t)h);
-    br_u16_store((uint16_t*)&shm->fb.dirty[0].right,  (uint16_t)w);
+    // Coalesce contiguous dirty rows into rectangles.
+    BrRect rects[BR_DIRTY_MAX];
+    int n_rects = 0;
+    int run_top = -1, run_xmin = 0, run_xmax = 0;
+
+    auto close_run = [&](int bottom) {
+        if (run_top < 0) return;
+        if (n_rects < (int)BR_DIRTY_MAX) {
+            BrRect& r = rects[n_rects++];
+            r.top = (int16_t)run_top;
+            r.left = (int16_t)run_xmin;
+            r.bottom = (int16_t)bottom;
+            r.right = (int16_t)(run_xmax + 1);
+        } else {
+            BrRect& r = rects[BR_DIRTY_MAX - 1];
+            r.bottom = (int16_t)bottom;
+            if (run_xmin < r.left)  r.left = (int16_t)run_xmin;
+            if (run_xmax + 1 > r.right) r.right = (int16_t)(run_xmax + 1);
+        }
+        run_top = -1;
+    };
+
+    for (int y = 0; y < h; y++) {
+        if (row_xmin[y] < 0) {
+            close_run(y);
+        } else {
+            if (run_top < 0) {
+                run_top = y;
+                run_xmin = row_xmin[y];
+                run_xmax = row_xmax[y];
+            } else {
+                if (row_xmin[y] < run_xmin) run_xmin = row_xmin[y];
+                if (row_xmax[y] > run_xmax) run_xmax = row_xmax[y];
+            }
+        }
+    }
+    close_run(h);
+
+    if (n_rects == 0) {
+        // Static frame — nothing changed. Don't bump seq → guest sees
+        // no new frame → zero CopyBits cost.
+        return {crop_w, crop_h};
+    }
+
+    br_u16_store(&shm->fb.dirty_count, (uint16_t)n_rects);
+    for (int i = 0; i < n_rects; i++) {
+        br_u16_store((uint16_t*)&shm->fb.dirty[i].top,    rects[i].top);
+        br_u16_store((uint16_t*)&shm->fb.dirty[i].left,   rects[i].left);
+        br_u16_store((uint16_t*)&shm->fb.dirty[i].bottom, rects[i].bottom);
+        br_u16_store((uint16_t*)&shm->fb.dirty[i].right,  rects[i].right);
+    }
     BR_FENCE_RELEASE();
     br_u32_store(&shm->fb.seq, ++g_frame_seq);
 
-    g_perf.pixels_out += (uint64_t)w * (uint64_t)h;
+    g_perf.pixels_out += pixels_changed;
     return {crop_w, crop_h};
 }
 
