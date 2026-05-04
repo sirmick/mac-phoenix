@@ -21,6 +21,7 @@
 #include <QEventLoop>
 #include <QThread>
 
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -319,6 +320,17 @@ bool Server::try_websocket_upgrade(const Request& req, QTcpSocket* socket) {
         fprintf(stderr, "HTTP: dup() for websocket handoff failed: %s\n", strerror(errno));
         return false;
     }
+    // Qt's QTcpSocket::setSocketDescriptor sets O_NONBLOCK on the fd, and
+    // dup() inherits the file status flags. The websocket worker uses
+    // blocking send/recv (its send_all bails on EAGAIN, treating it as
+    // an error and closing the connection — 1006 abnormal close on the
+    // browser side). Force blocking mode on the dup'd fd so a transient
+    // full TCP send buffer (frame burst on resolution/codec change)
+    // doesn't tear down the socket.
+    {
+        int flags = ::fcntl(worker_fd, F_GETFL, 0);
+        if (flags >= 0) ::fcntl(worker_fd, F_SETFL, flags & ~O_NONBLOCK);
+    }
 
     auto handler = it->second;
     Request req_copy = req;
@@ -424,6 +436,12 @@ bool Server::handle_client(QTcpSocket* socket) {
             if (worker_fd < 0) {
                 fprintf(stderr, "HTTP: dup() for stream handoff failed: %s\n", strerror(errno));
                 return false;
+            }
+            // Same O_NONBLOCK fix as the websocket handoff: dup inherits
+            // Qt's non-blocking flag; stream workers expect blocking I/O.
+            {
+                int flags = ::fcntl(worker_fd, F_GETFL, 0);
+                if (flags >= 0) ::fcntl(worker_fd, F_SETFL, flags & ~O_NONBLOCK);
             }
 
             auto handler = it->second;
