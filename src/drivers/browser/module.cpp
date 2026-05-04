@@ -6,6 +6,7 @@
 #include "cmd.h"
 #include "mouse_poll.h"
 #include "pipeline.h"
+#include "qtwebengine_browser.h"
 #include "shm.h"
 
 #define BR_HOST 1
@@ -271,10 +272,19 @@ void browser_module_start()
     if (g_init_running.exchange(true, std::memory_order_acq_rel)) return;
     if (g_init_thread.joinable()) g_init_thread.join();
     g_init_thread = std::thread(init_thread_main);
+
+    // Phase 8b: spin up the QtWebEngine path alongside the existing
+    // supervisor (Firefox-on-Xvfb). Both run in parallel during the
+    // 8a..8i transition; only the supervisor publishes pixels to
+    // BrowserShm today, the QtWebEngine side just loads a URL and
+    // logs the navigation lifecycle. Phase 8c wires capture; 8i
+    // deletes supervisor + xshm + bidi + browser_spike.
+    qtwebengine_module_start();
 }
 
 void browser_module_stop()
 {
+    qtwebengine_module_stop();
     if (g_init_thread.joinable()) g_init_thread.join();
     std::lock_guard<std::mutex> lk(g_module_mtx);
     if (!g_module) return;

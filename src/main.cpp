@@ -23,6 +23,7 @@
 #include <csignal>
 
 #include <QCoreApplication>
+#include <QApplication>
 
 #include "sysdeps.h"
 #include "cpu_emulation.h"
@@ -466,10 +467,42 @@ int main(int argc, char **argv)
 	// Mac address space guards: constructor(101) already reserved 0x08000000-0x70000000
 	// in 4MB chunks before any threads existed.
 
-	// Qt6 bootstrap (Phase 0 of qt-port). Constructed but exec() is not
-	// called — the CPU emulator owns the main thread. Later phases will
-	// run a Qt event loop on a dedicated QThread once subsystems migrate.
-	QCoreApplication qt_app(argc, argv);
+	// Phase 8b: pre-scan argv for --browser before any Qt activity. When
+	// the IPC subprocess will run QtWebEngine (--browser + --ipc), set
+	// Qt's GL-context-sharing attribute and the Chromium env vars BEFORE
+	// QCoreApplication construction — both must be set before the first
+	// Qt application instance exists or QtWebEngine refuses to render.
+	bool browser_requested = false;
+	bool ipc_subprocess = false;
+	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--browser") == 0) browser_requested = true;
+		if (strcmp(argv[i], "--ipc") == 0)     ipc_subprocess   = true;
+	}
+	if (browser_requested && ipc_subprocess) {
+		QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+		if (!qEnvironmentVariableIsSet("QTWEBENGINE_CHROMIUM_FLAGS")) {
+			qputenv("QTWEBENGINE_CHROMIUM_FLAGS",
+				"--no-sandbox --disable-gpu-compositing "
+				"--in-process-gpu --use-gl=swiftshader");
+		}
+		if (!qEnvironmentVariableIsSet("QSG_RHI_BACKEND"))   qputenv("QSG_RHI_BACKEND",   "software");
+		if (!qEnvironmentVariableIsSet("QT_QUICK_BACKEND"))  qputenv("QT_QUICK_BACKEND",  "software");
+		if (!qEnvironmentVariableIsSet("DISPLAY") &&
+		    !qEnvironmentVariableIsSet("WAYLAND_DISPLAY") &&
+		    !qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
+			qputenv("QT_QPA_PLATFORM", "offscreen");
+		}
+	}
+
+	// Qt6 bootstrap. When --browser is requested in the IPC subprocess,
+	// construct QApplication (needs widget infrastructure for QWebEngineView
+	// and brings in offscreen QPA + GL context sharing); else QCoreApplication.
+	// Heap-allocated so the conditional choice doesn't fragment the rest of
+	// main(). Lives until process exit.
+	QCoreApplication* qt_app = (browser_requested && ipc_subprocess)
+		? static_cast<QCoreApplication*>(new QApplication(argc, argv))
+		: new QCoreApplication(argc, argv);
+	(void)qt_app;
 
 	// Install crash handlers
 	install_crash_handlers();
@@ -713,11 +746,27 @@ int main(int argc, char **argv)
 		printf("IPC child ready (PID %d, %s), starting CPU execution...\n",
 		       getpid(), is_ppc ? "PPC" : "m68k");
 
-		if (platform->cpu_execute_fast) {
-			platform->cpu_execute_fast();
+		if (emu_config.browser_enabled && qobject_cast<QApplication*>(qt_app)) {
+			// QtWebEngine path: QApplication owns the main thread; CPU runs
+			// on a worker. The browser module's QWebEngineView was created
+			// on the main thread (queued via qtwebengine_module_start), so
+			// signals + paintEvent are delivered here through app.exec().
+			std::thread cpu_thread([&platform]() {
+				if (platform->cpu_execute_fast) {
+					platform->cpu_execute_fast();
+				} else {
+					while (true) platform->cpu_execute_one();
+				}
+			});
+			cpu_thread.detach();  // CPU loop never returns; cleanup via _exit
+			static_cast<QApplication*>(qt_app)->exec();
 		} else {
-			while (true) {
-				platform->cpu_execute_one();
+			if (platform->cpu_execute_fast) {
+				platform->cpu_execute_fast();
+			} else {
+				while (true) {
+					platform->cpu_execute_one();
+				}
 			}
 		}
 

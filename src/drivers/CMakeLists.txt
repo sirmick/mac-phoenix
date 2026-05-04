@@ -44,6 +44,7 @@ add_library(drivers STATIC
   browser/cmd.cpp
   browser/mouse_poll.cpp
   browser/window_resize.cpp
+  browser/qtwebengine_browser.cpp
   # Consolidated null drivers
   null_drivers.cpp
 )
