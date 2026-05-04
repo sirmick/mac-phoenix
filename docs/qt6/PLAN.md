@@ -439,17 +439,96 @@ Per phase:
 
 ## Status
 
-| # | Phase | Status |
-|---|---|---|
-| 0 | Bootstrap Qt6 in CMake | pending |
-| 1 | File I/O → QDir/QFileInfo | pending |
-| 2 | Subprocess → QProcess | pending |
-| 3 | IPC SHM → QSharedMemory + QLocalSocket | pending |
-| 4 | Threading cleanup at Qt seams | pending |
-| 5 | HTTP server → QHttpServer | pending |
+| # | Phase | Status | Commit |
+|---|---|---|---|
+| 0 | Bootstrap Qt6 in CMake | ✅ done | `faed9de9` |
+| 1 | File I/O → QDir/QFileInfo | ✅ done | `731602f3` |
+| 1.5 | Qt6 in build/packaging/CI infra | ✅ done | `a0cb5df8` |
+| 2 | Subprocess → QProcess | ✅ done | `bbf10324` |
+| 3a | IPC SHM → QSharedMemory | ✅ done | `702ccba8` |
+| 3b | IPC sockets + notify → QLocalSocket | ⚠️ deferred (attempted, reverted — see `76f9a086`) |
+| 4 | Threading cleanup at Qt seams | ⚠️ deferred (no work in current state; lands with 3b retry) |
+| 5 | HTTP server → QHttpServer | pending — start of next session |
 | 6 | WebSocket → QWebSocketServer | pending |
-| 7 | Windows SEH path activation | pending |
+| 7 | Windows SEH path activation | ✅ done | `e80f314f` |
 | 8 | MacBrowser → QtWebEngine | pending |
 | 9 | Native head (QApplication mode) | pending |
 | 10 | Windows port + installer | pending |
+| 11 | macOS port + signed `.app` + DMG | pending |
+
+## Phase 1.5 — Qt6 in build/packaging/CI
+
+Added retroactively after Phase 1 because the deb/rpm build path isn't
+covered by `cmake -B build` validation. Single source-of-truth files:
+
+- `debian/control` Build-Depends — also covers
+  `.github/workflows/build.yml` (uses `apt-get build-dep .`) and
+  `packaging/Dockerfile.deb` (same)
+- `rpm/mac-phoenix.spec` BuildRequires
+- `packaging/Dockerfile.dev` (apt install)
+- `packaging/Dockerfile.rpm` (dnf install)
+
+`packaging/build-ctx/` is gitignored (regenerated from source-of-truth
+files by `tools/make-source-tarball.sh` / `packaging/run_matrix.sh`).
+`packaging/Dockerfile.sandbox` runs the installed .deb so its Qt6
+runtime libs come in via `${shlibs:Depends}`.
+
+**Protocol**: each subsequent phase that introduces a new Qt component
+(httpserver in 5, websockets in 6, webengine in 8, multimedia in 9)
+updates this same set of files in its commit.
+
+## Phase 3b lessons (for retry)
+
+The attempt swapped AF_UNIX socket for `QLocalServer`/`QLocalSocket` and
+replaced `eventfd` + `SCM_RIGHTS` with a notify-byte over a second
+`QLocalSocket`. Build was clean; tests caught a child-side regression in
+`init_mac_subsystems` at `VideoMonitors[0].get_current_mode()` after IPC
+setup completes (`boot_se` deterministic crash). Root cause not isolated
+in the deferred-from-this-session timebox.
+
+**For retry**:
+- Run **Phase 4 first** — encoder thread becomes a `QObject` in a `QThread`
+  with `exec()`. Then the notify socket has a natural home (lives on the
+  encoder thread, signal/slot driven via `QLocalSocket::readyRead`).
+- The hybrid raw-`::send` pattern from CPU thread is still correct; what
+  was wrong was either init ordering or some interaction between
+  `QLocalServer` setup and the child's video init that we didn't isolate.
+- Keep `IPCBuffer` struct layout stable (rename `frame_ready_eventfd` →
+  `_reserved_eventfd`, don't change size — both processes rebuild from
+  same source, but stable layout makes for easier diffing).
+- Single biggest bisection question: does the regression appear if we
+  swap *only* the control socket (not notification) with everything else
+  unchanged? That isolates the QLocalServer-vs-init-ordering interaction.
+- Strongly consider doing the swap in a tiny one-file prototype first
+  (a synthetic child + parent that just exchange the IPC handshake)
+  before re-touching the real code.
+
+## Phase 5 — actual scope (revised)
+
+Originally estimated as a clean QHttpServer swap; turns out:
+
+- `http_server.cpp` (425 lines) — full rewrite
+- `http_stream.cpp` (381 lines) — `/api/frame` long-poll. Qt 6.4's
+  QHttpServer has limited async response support; deferred responses
+  via `QHttpServerResponder` matured in 6.5+. Fallback: extract raw
+  client fd from QTcpSocket via `socketDescriptor()` and keep the
+  current stream-handler model (hybrid pattern, like Phase 3b's plan).
+- `websocket.cpp` (290 lines) — RFC 6455 upgrade. Becomes Phase 6.
+- `webrtc_server.cpp` — `register_routes(server)` will need to adapt
+  to QHttpServer's API too.
+- `api_handlers.cpp` (1978 lines) — handler bodies stay; dispatch
+  wrapper changes.
+- Build infra: add `qt6-httpserver-dev` to deb/rpm/dockerfiles per
+  Phase 1.5 protocol.
+
+**Recommended sub-decomposition for Phase 5**:
+- **5a**: GET routes that don't need long-poll or WebSocket — `/api/status`,
+  `/api/mouse`, `/api/screenshot`, `/api/storage`, `/api/config`,
+  `/api/codec`, `/api/codecs`, `/api/keypress`, `/api/app`, `/api/windows`.
+  Static UI files. Map cleanly to `QHttpServer::route()`.
+- **5b**: Long-poll `/api/frame` and `/api/stream`. Hybrid raw-fd if
+  QHttpServer's deferred-response support is too limited in 6.4.
+- **5c**: WebSocket `/ws` upgrade — folds into Phase 6.
+
+5a alone is ~70% of the user-facing API surface.
 | 11 | macOS port + signed `.app` + DMG | pending |
