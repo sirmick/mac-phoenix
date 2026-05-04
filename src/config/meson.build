@@ -15,7 +15,7 @@ config_inc = include_directories(
 config_lib = static_library('config',
   config_sources,
   include_directories: config_inc,
-  dependencies: [nlohmann_json_dep],
+  dependencies: [],
 )
 
 config_dep = declare_dependency(

@@ -33,12 +33,8 @@ threads_dep = dependency('threads', required: true)
 m_dep = cc.find_library('m', required: true)  # Math library for Unicorn
 
 # WebRTC streaming dependencies (always enabled)
-# JSON configuration (nlohmann/json from submodule)
-nlohmann_json_dep = dependency('nlohmann_json', required: false, fallback: ['nlohmann_json', 'nlohmann_json_dep'])
-if not nlohmann_json_dep.found()
-  nlohmann_json_inc = include_directories('subprojects/nlohmann_json/include')
-  nlohmann_json_dep = declare_dependency(include_directories: nlohmann_json_inc)
-endif
+# (nlohmann/json removed in qt-port Phase 8i — JSON now goes through
+# QJsonDocument/QJsonObject from Qt6::Core.)
 
 # Video encoders
 openh264_dep = dependency('openh264', required: false)
@@ -99,7 +95,6 @@ else
 endif
 
 message('WebRTC dependencies:')
-message('  nlohmann_json: ' + nlohmann_json_dep.found().to_string())
 message('  openh264: ' + openh264_dep.found().to_string())
 message('  libvpx (VP9): ' + libvpx_dep.found().to_string())
 message('  libwebp: ' + libwebp_dep.found().to_string())
@@ -145,7 +140,7 @@ macemu_next_cpp_args = ['-DHAVE_SIGSEGV_SKIP_INSTRUCTION', '-DHAVE_SIGINFO_T']
 
 # Add WebRTC support (always enabled)
 macemu_next_link_with += [config_lib, webserver_lib, webrtc_lib, video_encoder_lib, audio_encoder_lib]
-macemu_next_deps += [nlohmann_json_dep, libdatachannel_dep]
+macemu_next_deps += [libdatachannel_dep]
 
 # Add codec dependencies if found
 if openh264_dep.found()

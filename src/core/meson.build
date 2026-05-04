@@ -43,7 +43,7 @@ core_inc = include_directories(
 core_lib = static_library('core',
   core_sources,
   include_directories: core_inc,
-  dependencies: [threads_dep, nlohmann_json_dep],
+  dependencies: [threads_dep],
   cpp_args: ['-DHAVE_SIGINFO_T', '-DHAVE_SIGACTION', '-DHAVE_SIGSEGV_SKIP_INSTRUCTION', '-DHAVE_UNISTD_H',
              '-Wno-sign-compare',   # sigsegv.cpp legacy code
              '-O2'],                # PPC interpreter hot path calls into core functions

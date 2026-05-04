@@ -5,10 +5,13 @@
  *  Xvfb, captured via XShm+XDamage, controlled via WebDriver-BiDi) with
  *  an in-process Chromium running under Qt6 WebEngine.
  *
- *  Threading: QApplication owns the IPC subprocess's main thread (set up
- *  in main.cpp when --browser is detected); CPU runs on a worker thread.
- *  QtWebEngine objects live on the main thread; cross-thread calls marshal
- *  via QMetaObject::invokeMethod(Qt::QueuedConnection).
+ *  Threading: QApplication runs on a dedicated worker thread spawned
+ *  here (qtwebengine_module_start). CPU stays on the IPC subprocess's
+ *  main thread — QtWebEngine + Chromium tolerate a non-main GUI thread
+ *  as long as it's a single dedicated thread for *all* QtWebEngine
+ *  state. Cross-thread calls (input dispatch, navigation, etc.) marshal
+ *  via QMetaObject::invokeMethod(Qt::QueuedConnection) onto the GUI
+ *  thread before touching view_/page_.
  *
  *  Smoothness: software rasterization is forced via QTWEBENGINE_CHROMIUM_FLAGS
  *  before QApplication construction so <video>/WebGL frames land in the

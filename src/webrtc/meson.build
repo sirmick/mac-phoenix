@@ -11,6 +11,6 @@ webrtc_lib = static_library('webrtc',
     include_directories('../config'),
     include_directories('../drivers/video/encoders'),
   ],
-  dependencies: [libdatachannel_dep, nlohmann_json_dep],
+  dependencies: [libdatachannel_dep],
   cpp_args: ['-DWEBRTC_ENABLED'],
 )
