@@ -179,11 +179,14 @@ CropDims push_frame_to_browser_shm(const QImage& img)
 QtWebEngineBrowser::QtWebEngineBrowser()
 {
     view_ = std::make_unique<QWebEngineView>();
-    // Hidden but rendered: WA_DontShowOnScreen keeps the view off any
-    // real display while still serving paint events into the backing
-    // store (QWidget::grab reads from there).
-    view_->setAttribute(Qt::WA_DontShowOnScreen);
     view_->resize(1024, 768);
+    // show() is required for Chromium's compositor to paint into the
+    // backing store grab() reads from. WA_DontShowOnScreen suppresses
+    // the paint entirely (grab returns all-white pixels). With
+    // QT_QPA_PLATFORM=offscreen the show() is harmless — the offscreen
+    // platform plugin gives us a backing store but never displays the
+    // widget on a real screen.
+    view_->show();
 
     QWebEnginePage* page = view_->page();
     QWebEngineView* raw = view_.get();
