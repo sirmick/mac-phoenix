@@ -12,8 +12,10 @@ target_include_directories(webrtc_lib PRIVATE
 
 target_compile_definitions(webrtc_lib PRIVATE WEBRTC_ENABLED)
 
+find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
+
 target_link_libraries(webrtc_lib PRIVATE
   datachannel-static
-  nlohmann_json::nlohmann_json
   codec_flags
+  Qt6::Core
 )

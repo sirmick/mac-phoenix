@@ -7,13 +7,16 @@
 
 #include "webrtc_server.h"
 #include "../drivers/audio/encoders/audio_config.h"
-#include "../config/json_utils.h"
+#include <QByteArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
+#include <QString>
 #include "../webserver/http_server.h"
 #include "../webserver/websocket.h"
 #include "../ipc/ipc_protocol.h"
 #include "../core/boot_progress.h"
 #include <rtc/rtc.hpp>
-#include <nlohmann/json.hpp>
 #include <cstdio>
 #include <chrono>
 #include <shared_mutex>
@@ -346,95 +349,97 @@ static const char* codec_name(CodecType c) {
 
 void WebRTCServer::process_signaling(std::shared_ptr<http::WebSocket> ws, const std::string& message,
                                      std::shared_ptr<std::string> peer_id_slot) {
-    try {
-        auto j = nlohmann::json::parse(message);
-        std::string type = json_utils::get_string(j, "type");
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(message));
+    if (doc.isNull() || !doc.isObject()) {
+        fprintf(stderr, "[WebRTC] Signaling: malformed JSON (%zu bytes)\n", message.size());
+        return;
+    }
+    QJsonObject j = doc.object();
+    std::string type = j.value("type").toString().toStdString();
 
-        if (type == "ping") {
-            // Heartbeat: reply with pong to keep the connection alive and
-            // let the client detect dead sockets (nginx idle-timeout, etc.).
-            ws->send(std::string("{\"type\":\"pong\"}"));
+    if (type == "ping") {
+        // Heartbeat: reply with pong to keep the connection alive and
+        // let the client detect dead sockets (nginx idle-timeout, etc.).
+        ws->send(std::string("{\"type\":\"pong\"}"));
+        return;
+    }
+
+    if (type == "connect") {
+        // Client is requesting connection - server creates offer
+        std::string default_peer_id = "client-" + std::to_string(peer_count_.load());
+        std::string peer_id = j.value("peerId").toString(QString::fromStdString(default_peer_id)).toStdString();
+        CodecType codec = parse_codec(j.value("codec").toString("h264").toStdString());
+
+        auto peer = create_peer_connection(peer_id, codec, ws);
+        if (!peer) {
+            fprintf(stderr, "[WebRTC] Failed to create peer connection\n");
             return;
         }
 
-        if (type == "connect") {
-            // Client is requesting connection - server creates offer
-            std::string peer_id = json_utils::get_string(j, "peerId", "client-" + std::to_string(peer_count_.load()));
-            CodecType codec = parse_codec(json_utils::get_string(j, "codec", "h264"));
-
-            auto peer = create_peer_connection(peer_id, codec, ws);
-            if (!peer) {
-                fprintf(stderr, "[WebRTC] Failed to create peer connection\n");
-                return;
-            }
-
-            {
-                std::lock_guard<std::mutex> lock(peers_mutex_);
-                peers_[peer_id] = peer;
-                peer_count_++;
-            }
-            *peer_id_slot = peer_id;
-
-            // Send "connected" acknowledgment
-            nlohmann::json ack;
-            ack["type"] = "connected";
-            ack["peer_id"] = peer_id;
-            ack["codec"] = codec_name(codec);
-            ws->send(ack.dump());
-
-            // For H.264/VP9: create_peer_connection() calls setLocalDescription()
-            // after addTrack, which drives onLocalDescription → "offer" over ws.
-            // PNG/WebP peers have no PC, so no offer — frames start flowing as
-            // soon as the encoder has one ready.
-
-        } else if (type == "answer") {
-            std::string sdp = json_utils::get_string(j, "sdp");
-
+        {
             std::lock_guard<std::mutex> lock(peers_mutex_);
-            if (peer_id_slot->empty()) {
-                fprintf(stderr, "[WebRTC] Received answer but no peer associated with this WebSocket\n");
-                return;
-            }
-            auto peer_it = peers_.find(*peer_id_slot);
-            if (peer_it != peers_.end() && peer_it->second->pc) {
-                peer_it->second->pc->setRemoteDescription(rtc::Description(sdp, "answer"));
-            }
+            peers_[peer_id] = peer;
+            peer_count_++;
+        }
+        *peer_id_slot = peer_id;
 
-        } else if (type == "offer") {
-            std::string peer_id = json_utils::get_string(j, "peerId");
-            std::string sdp = json_utils::get_string(j, "sdp");
-            CodecType codec = parse_codec(json_utils::get_string(j, "codec", "h264"));
+        // Send "connected" acknowledgment
+        QJsonObject ack{
+            {"type", "connected"},
+            {"peer_id", QString::fromStdString(peer_id)},
+            {"codec", codec_name(codec)},
+        };
+        ws->send(QJsonDocument(ack).toJson(QJsonDocument::Compact).toStdString());
 
-            auto peer = create_peer_connection(peer_id, codec, ws);
-            if (!peer || !peer->pc) {
-                fprintf(stderr, "[WebRTC] Offer received but peer has no PeerConnection (codec=%s)\n",
-                        codec_name(codec));
-                return;
-            }
+        // For H.264/VP9: create_peer_connection() calls setLocalDescription()
+        // after addTrack, which drives onLocalDescription → "offer" over ws.
+        // PNG/WebP peers have no PC, so no offer — frames start flowing as
+        // soon as the encoder has one ready.
 
-            {
-                std::lock_guard<std::mutex> lock(peers_mutex_);
-                peers_[peer_id] = peer;
-                peer_count_++;
-            }
-            *peer_id_slot = peer_id;
+    } else if (type == "answer") {
+        std::string sdp = j.value("sdp").toString().toStdString();
 
-            peer->pc->setRemoteDescription(rtc::Description(sdp, "offer"));
-
-        } else if (type == "candidate") {
-            std::string peer_id = json_utils::get_string(j, "peerId");
-            std::string candidate = json_utils::get_string(j, "candidate");
-            std::string sdp_mid = json_utils::get_string(j, "sdpMid");
-
-            std::lock_guard<std::mutex> lock(peers_mutex_);
-            auto it = peers_.find(peer_id);
-            if (it != peers_.end() && it->second->pc) {
-                it->second->pc->addRemoteCandidate(rtc::Candidate(candidate, sdp_mid));
-            }
+        std::lock_guard<std::mutex> lock(peers_mutex_);
+        if (peer_id_slot->empty()) {
+            fprintf(stderr, "[WebRTC] Received answer but no peer associated with this WebSocket\n");
+            return;
+        }
+        auto peer_it = peers_.find(*peer_id_slot);
+        if (peer_it != peers_.end() && peer_it->second->pc) {
+            peer_it->second->pc->setRemoteDescription(rtc::Description(sdp, "answer"));
         }
 
-    } catch (const std::exception& e) {
-        fprintf(stderr, "[WebRTC] Signaling error: %s\n", e.what());
+    } else if (type == "offer") {
+        std::string peer_id = j.value("peerId").toString().toStdString();
+        std::string sdp = j.value("sdp").toString().toStdString();
+        CodecType codec = parse_codec(j.value("codec").toString("h264").toStdString());
+
+        auto peer = create_peer_connection(peer_id, codec, ws);
+        if (!peer || !peer->pc) {
+            fprintf(stderr, "[WebRTC] Offer received but peer has no PeerConnection (codec=%s)\n",
+                    codec_name(codec));
+            return;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(peers_mutex_);
+            peers_[peer_id] = peer;
+            peer_count_++;
+        }
+        *peer_id_slot = peer_id;
+
+        peer->pc->setRemoteDescription(rtc::Description(sdp, "offer"));
+
+    } else if (type == "candidate") {
+        std::string peer_id = j.value("peerId").toString().toStdString();
+        std::string candidate = j.value("candidate").toString().toStdString();
+        std::string sdp_mid = j.value("sdpMid").toString().toStdString();
+
+        std::lock_guard<std::mutex> lock(peers_mutex_);
+        auto it = peers_.find(peer_id);
+        if (it != peers_.end() && it->second->pc) {
+            it->second->pc->addRemoteCandidate(rtc::Candidate(candidate, sdp_mid));
+        }
     }
 }
 
@@ -474,21 +479,23 @@ std::shared_ptr<PeerConnection> WebRTCServer::create_peer_connection(const std::
                     desc.typeString().c_str(), peer_id.c_str());
             return;
         }
-        nlohmann::json msg;
-        msg["type"] = desc.typeString();
-        msg["sdp"] = std::string(desc);
-        ws->send(msg.dump());
+        QJsonObject msg{
+            {"type", QString::fromStdString(desc.typeString())},
+            {"sdp", QString::fromStdString(std::string(desc))},
+        };
+        ws->send(QJsonDocument(msg).toJson(QJsonDocument::Compact).toStdString());
     });
 
     // Send ICE candidates to browser
     peer->pc->onLocalCandidate([ws_weak](rtc::Candidate cand) {
         auto ws = ws_weak.lock();
         if (!ws) return;
-        nlohmann::json candidate;
-        candidate["type"] = "candidate";
-        candidate["candidate"] = std::string(cand);
-        candidate["mid"] = cand.mid();
-        ws->send(candidate.dump());
+        QJsonObject candidate{
+            {"type", "candidate"},
+            {"candidate", QString::fromStdString(std::string(cand))},
+            {"mid", QString::fromStdString(cand.mid())},
+        };
+        ws->send(QJsonDocument(candidate).toJson(QJsonDocument::Compact).toStdString());
     });
 
     peer->pc->onStateChange([peer_id](rtc::PeerConnection::State state) {
@@ -725,12 +732,13 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
 
                 // Send cursor metadata over WS (was data-channel; now same transport as signaling)
                 if (auto ws = peer->ws.lock(); ws && ws->is_open()) {
-                    nlohmann::json cursor_msg;
-                    cursor_msg["type"] = "cursor";
-                    cursor_msg["x"] = cx;
-                    cursor_msg["y"] = cy;
-                    cursor_msg["visible"] = metadata[4] != 0;
-                    ws->send(cursor_msg.dump());
+                    QJsonObject cursor_msg{
+                        {"type", "cursor"},
+                        {"x", cx},
+                        {"y", cy},
+                        {"visible", metadata[4] != 0},
+                    };
+                    ws->send(QJsonDocument(cursor_msg).toJson(QJsonDocument::Compact).toStdString());
                 }
 
                 sent_to++;
@@ -791,11 +799,12 @@ void WebRTCServer::notify_codec_change(CodecType new_codec) {
     const char* name = codec_name(new_codec);
     fprintf(stderr, "[WebRTC] Codec change requested: %s\n", name);
 
-    nlohmann::json msg;
-    msg["type"] = "reconnect";
-    msg["reason"] = "codec_change";
-    msg["codec"] = name;
-    std::string msg_str = msg.dump();
+    QJsonObject msg{
+        {"type", "reconnect"},
+        {"reason", "codec_change"},
+        {"codec", name},
+    };
+    std::string msg_str = QJsonDocument(msg).toJson(QJsonDocument::Compact).toStdString();
 
     std::lock_guard<std::mutex> lock(peers_mutex_);
 
