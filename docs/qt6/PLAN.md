@@ -9,6 +9,18 @@ by the existing test suite.
 
 - **Cross-platform abstraction**: get off raw POSIX (`fork`/`shm_open`/
   `eventfd`/`AF_UNIX`) and X11 (`xcb-shm`/`xcb-damage`/Xvfb).
+- **Drop dependencies wherever Qt has a credible replacement.** Each
+  dropped dep removes one `find_package` call, one `apt install` line,
+  one set of platform-specific quirks. Active targets:
+  - `OpenSSL` → `QCryptographicHash` (drops `libssl-dev` apt dep)
+  - `nlohmann::json` → `QJsonDocument`/`QJsonObject` (drops the
+    `nlohmann_json` subproject)
+  - `libxcb-*` → `QtWebEngine` (drops 5 apt deps; Phase 8)
+- **Idiomatic Qt where possible.** `QThread` over `std::thread`,
+  `QSemaphore` over `sem_t`, `QElapsedTimer` over `clock_gettime`,
+  `QProcess` over `fork`/`execvp` — even when the existing primitive
+  works on Linux. Reduces the Windows-port surface and makes the
+  codebase consistent.
 - **Windows is a first-class target.** Native Windows build, no Cygwin/
   WSL, packaged as an installer.
 - **macOS distribution becomes easy.** `macdeployqt`-driven `.app` bundle
@@ -18,8 +30,6 @@ by the existing test suite.
   (`QCoreApplication`) and serves the existing web UI. Optional
   `-DBUILD_NATIVE_HEAD=ON` build adds a Qt Quick window for direct video/
   audio display, with the same web-based settings UI.
-- **Drop the Xvfb+Firefox+xcb supervisor entirely.** Replace with
-  in-process `QWebEnginePage`. Same on Linux, Windows, macOS.
 
 ## Non-goals
 
@@ -30,18 +40,24 @@ by the existing test suite.
   make this impractical. Direct download via Developer ID is the target.
 - **Wholesale `QString` migration.** Keep `std::string` internally;
   convert at Qt API boundaries with `QString::fromStdString` /
-  `.toStdString`. Same for `nlohmann::json` (kept) vs `QJsonDocument`
-  (used only when a Qt API hands us one).
+  `.toStdString`. UTF-16 doubling for ASCII is not worth the diff.
+- **Replacing `libdatachannel`.** Qt has no RTP stack; keep it.
+- **Replacing the codec libs** (OpenH264, libvpx, libwebp, Opus, libyuv).
+  Qt Multimedia uses ffmpeg by default — much larger blast radius than
+  the current per-codec libs. Keep current per-codec deps.
 
 ## Architectural decisions (locked in)
 
 | Decision | Choice | Reason |
 |---|---|---|
 | Migration style | Hard switch per subsystem (no `#ifdef USE_QT`) | Cleaner reviews, no dual maintenance |
-| Qt version | Qt 6.4 minimum | `QHttpServer` landed in 6.4; Ubuntu 24.04 ships it |
+| Qt version | Qt 6.4 minimum | Ubuntu 24.04 ships it; sufficient for Phase 5–9 + dep-drops |
 | String type | `std::string` internal, `QString` at Qt boundaries | Avoid massive textual diff, no UTF-16 doubling for ASCII |
-| JSON | Keep `nlohmann::json` | More ergonomic than `QJsonDocument`; would touch most of `api_handlers.cpp` for nothing |
+| JSON | **Migrate to `QJsonDocument`/`QJsonObject`** (was: keep `nlohmann::json`) | Drops the `nlohmann_json` subproject; aligns with "drop deps" goal. Migration is mechanical (`j["k"]=v` → `obj["k"]=v`); ~2k LOC of api_handlers.cpp to touch but no behavior change. |
+| HTTP server | `QTcpServer` + thin custom router (was: `QHttpServer`) | Qt 6.4 `QHttpServer` is Tech Preview + lacks WebSocket-on-same-port. Pivot decided 2026-05-03 in Phase 5. |
 | WebRTC | Keep `libdatachannel` | Qt has no RTP stack |
+| Codec libs | Keep per-codec libs | Qt Multimedia → ffmpeg is bigger blast radius |
+| Threading | `QThread` over `std::thread`; `QSemaphore` over `sem_t` | Idiomatic Qt; uniform Windows behavior |
 | Tooling | grep + sed + tests, no `comby` | Patterns are simple; tests are the safety net |
 | Plan tracking | `TaskCreate`/`TaskUpdate` per phase | One task per phase, marked in-progress when started |
 
@@ -463,11 +479,19 @@ Per phase:
 | 9 | Native head (QApplication mode) | pending |
 | 10 | Windows port + installer | pending |
 | 11 | macOS port + signed `.app` + DMG | pending |
-| 12 | OpenSSL → QCryptographicHash | pending — drops OpenSSL dep entirely |
+| 12 | OpenSSL → QCryptographicHash | pending — drops `libssl-dev` apt dep (next up) |
 | 13 | POSIX timing → `QElapsedTimer` + `QThread::usleep` | pending — Phase 10 unblocker |
 | 14 | Leftover `fork`/`execvp` → `QProcess` | pending — Phase 10 unblocker |
 | 15 | `pthread`/`sem_t` in `serial_unix.cpp` → `QThread`/`QSemaphore` | pending — Phase 10 unblocker |
 | 16 | `std::thread` in webserver → `QThread` | pending — completeness sweep after Phase 5 lands |
+| 17 | `nlohmann::json` → `QJsonDocument`/`QJsonObject` | pending — drops `nlohmann_json` subproject |
+
+**Recommended execution order for the dep-drop phases**: 12 (easy
+warmup, deletes a `find_package`) → 13/14 (small, mechanical) → 17
+(big diff but biggest dep payoff) → 15/16 (cosmetic at this point).
+Phase 8 (xcb → QtWebEngine) drops 5 more apt deps but is
+independently large and orthogonal — schedule when there's appetite
+for a multi-day chunk.
 
 ## Phase 1.5 — Qt6 in build/packaging/CI
 
@@ -639,6 +663,53 @@ machinery and signals.
 
 **Validation**: full ctest, no Qt cross-thread warnings in debug
 build.
+
+### Phase 17 — `nlohmann::json` → `QJsonDocument` / `QJsonObject`
+
+**Scope**: Drop the `nlohmann_json` subproject entirely. Big mechanical
+diff but biggest single dep removal in the port.
+
+**Files** (every site that includes `<nlohmann/json.hpp>`):
+- `src/webserver/api_handlers.cpp` (~1978 LOC; majority of touch
+  surface — every request body parse + response build)
+- `src/webserver/static_files.cpp` (`inject_config_template`)
+- `src/webrtc/webrtc_server.cpp` (signaling JSON)
+- `src/config/json_utils.{h,cpp}` (the local convenience wrapper —
+  becomes a `QJsonObject` wrapper instead, or gets inlined out)
+- `src/config/emulator_config.cpp` (config save/load)
+- `src/core/command_bridge.cpp`, `src/core/emulator_subprocess.cpp`,
+  `src/core/boot_progress.cpp` — any site that builds JSON for
+  inter-process or status reporting
+
+**Refactor approach**: `nlohmann::json` and `QJsonObject` differ in
+two ways that matter:
+
+1. `nlohmann` uses initializer lists: `j["k"] = v;`,
+   `j.push_back({{"k", "v"}})`. `QJsonObject` requires explicit
+   construction: `QJsonObject obj; obj["k"] = QJsonValue(v);`. Each
+   leaf assignment translates 1:1.
+2. `nlohmann` parses with `json::parse(str)` returning `json`;
+   `QJsonDocument` parses with `QJsonDocument::fromJson(QByteArray)`
+   returning `QJsonDocument`, then `.object()` for the root.
+
+The `json_utils::get_string`/`get_int` helpers become
+`QJsonObject::value(k).toString()`/`.toInt()` — same pattern, fewer
+characters.
+
+Recommended sub-decomposition:
+- **17a**: introduce a `QJsonObject`-backed `json_utils` and migrate
+  all the small sites (config, command_bridge, boot_progress, webrtc,
+  static_files). Validates the helper is right.
+- **17b**: migrate `api_handlers.cpp` in topical chunks (config
+  endpoints → storage → emulator → command bridge → media). Each
+  chunk testable in isolation against `tests/test_api_endpoints.sh`.
+- **17c**: drop the `nlohmann_json` subproject, remove `find_package`
+  from `CMakeLists.txt`, remove the linkage from
+  `src/webserver/CMakeLists.txt`.
+
+**Validation**: every API endpoint response byte-identical to
+pre-migration (compare via `diff` against captured baseline JSON).
+ctest 20/20.
 
 5a alone is ~70% of the user-facing API surface.
 | 11 | macOS port + signed `.app` + DMG | pending |
