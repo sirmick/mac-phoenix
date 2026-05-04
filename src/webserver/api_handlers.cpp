@@ -18,6 +18,8 @@
 #include "../core/command_bridge.h"  // For command bridge
 #include <sys/stat.h>
 #include <unistd.h>
+#include <QProcess>
+#include <QStringList>
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
 
@@ -46,7 +48,6 @@ namespace webrtc {
 #include <time.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <vector>
 
 // Globals from main.cpp for checking emulator state
@@ -189,25 +190,32 @@ Response APIRouter::handle_storage(const Request& /*req*/) {
 }
 
 static bool run_fork_exec(const std::vector<std::string>& args, std::string& err_out) {
-    pid_t pid = fork();
-    if (pid < 0) { err_out = "fork failed"; return false; }
-    if (pid == 0) {
-        std::vector<char*> argv;
-        for (const auto& s : args) argv.push_back(const_cast<char*>(s.c_str()));
-        argv.push_back(nullptr);
-        int devnull = open("/dev/null", O_WRONLY);
-        if (devnull >= 0) { dup2(devnull, STDOUT_FILENO); dup2(devnull, STDERR_FILENO); close(devnull); }
-        execvp(argv[0], argv.data());
-        _exit(127);
+    if (args.empty()) { err_out = "empty args"; return false; }
+
+    QStringList qargs;
+    for (size_t i = 1; i < args.size(); ++i) {
+        qargs << QString::fromStdString(args[i]);
     }
-    int status = 0;
-    if (waitpid(pid, &status, 0) < 0) { err_out = "waitpid failed"; return false; }
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return true;
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 127) {
+
+    QProcess proc;
+    proc.setStandardOutputFile(QProcess::nullDevice());
+    proc.setStandardErrorFile(QProcess::nullDevice());
+    proc.start(QString::fromStdString(args[0]), qargs);
+
+    if (!proc.waitForStarted(5000)) {
         err_out = args[0] + " not found (install hfsutils/hfsprogs)";
-    } else {
-        err_out = args[0] + " failed";
+        return false;
     }
+    if (!proc.waitForFinished(60000)) {
+        err_out = args[0] + " timed out";
+        proc.kill();
+        proc.waitForFinished(2000);
+        return false;
+    }
+    if (proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0) {
+        return true;
+    }
+    err_out = args[0] + " failed";
     return false;
 }
 

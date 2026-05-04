@@ -481,7 +481,7 @@ Per phase:
 | 11 | macOS port + signed `.app` + DMG | pending |
 | 12 | OpenSSL → QCryptographicHash | ✅ done — drops direct OpenSSL use (libdatachannel still needs it transitively for DTLS/SRTP) |
 | 13 | POSIX timing → `QElapsedTimer` + `QThread::usleep` | ✅ done — `timer_interrupt.cpp`; ctest 20/20 |
-| 14 | Leftover `fork`/`execvp` → `QProcess` | pending — Phase 10 unblocker |
+| 14 | Leftover `fork`/`execvp` → `QProcess` | ✅ done — `api_handlers::run_fork_exec` + `ether_socket::spawn_bridge`/`stop_bridge` |
 | 15 | `pthread`/`sem_t` in `serial_unix.cpp` → `QThread`/`QSemaphore` | pending — Phase 10 unblocker |
 | 16 | `std::thread` in webserver → `QThread` | pending — completeness sweep after Phase 5 lands |
 | 17 | `nlohmann::json` → `QJsonDocument`/`QJsonObject` | pending — drops `nlohmann_json` subproject |

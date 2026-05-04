@@ -35,9 +35,11 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/wait.h>
 #include <poll.h>
-#include <signal.h>
+
+#include <QProcess>
+#include <QStringList>
+#include <QThread>
 
 #define DEBUG 0
 #include "debug.h"
@@ -46,7 +48,7 @@
 
 static std::string s_sock_path;
 static int s_sock_fd = -1;
-static pid_t s_bridge_pid = -1;
+static QProcess* s_bridge_proc = nullptr;
 static std::atomic<bool> s_running{false};
 static std::thread s_rx_thread;
 
@@ -186,37 +188,36 @@ static bool spawn_bridge()
 	// a crashed previous run).
 	unlink(s_sock_path.c_str());
 
-	pid_t pid = fork();
-	if (pid < 0) {
-		perror("[Socket] fork");
+	s_bridge_proc = new QProcess();
+	QStringList args;
+	args << "--socket" << QString::fromStdString(s_sock_path);
+	s_bridge_proc->start(QString::fromStdString(binary), args);
+
+	if (!s_bridge_proc->waitForStarted(5000)) {
+		fprintf(stderr, "[Socket] net-bridge failed to start: %s\n",
+			s_bridge_proc->errorString().toUtf8().constData());
+		delete s_bridge_proc;
+		s_bridge_proc = nullptr;
 		return false;
 	}
 
-	if (pid == 0) {
-		const char *argv[] = {
-			"net-bridge",
-			"--socket", s_sock_path.c_str(),
-			nullptr,
-		};
-		execvp(binary.c_str(), const_cast<char * const *>(argv));
-		perror("[Socket] exec net-bridge");
-		_exit(1);
-	}
-
-	s_bridge_pid = pid;
-	fprintf(stderr, "[Socket] Launched net-bridge (pid=%d): %s --socket %s\n",
-		pid, binary.c_str(), s_sock_path.c_str());
+	fprintf(stderr, "[Socket] Launched net-bridge (pid=%lld): %s --socket %s\n",
+		(long long)s_bridge_proc->processId(), binary.c_str(), s_sock_path.c_str());
 
 	// Wait for socket to appear (up to 5 seconds)
 	for (int i = 0; i < 50; i++) {
 		if (access(s_sock_path.c_str(), F_OK) == 0) return true;
-		usleep(100000);  // 100ms
+		QThread::usleep(100000);  // 100ms
 	}
 
 	fprintf(stderr, "[Socket] Timeout waiting for bridge socket\n");
-	kill(s_bridge_pid, SIGTERM);
-	waitpid(s_bridge_pid, nullptr, 0);
-	s_bridge_pid = -1;
+	s_bridge_proc->terminate();
+	if (!s_bridge_proc->waitForFinished(2000)) {
+		s_bridge_proc->kill();
+		s_bridge_proc->waitForFinished(1000);
+	}
+	delete s_bridge_proc;
+	s_bridge_proc = nullptr;
 	return false;
 }
 
@@ -238,18 +239,21 @@ static int connect_or_spawn()
 	for (int i = 0; i < 50; i++) {
 		fd = try_connect();
 		if (fd >= 0) return fd;
-		usleep(100000);
+		QThread::usleep(100000);
 	}
 	return -1;
 }
 
 static void stop_bridge()
 {
-	if (s_bridge_pid > 0) {
-		pid_t pid = s_bridge_pid;
-		s_bridge_pid = -1;
-		kill(pid, SIGTERM);
-		waitpid(pid, nullptr, 0);
+	if (s_bridge_proc) {
+		s_bridge_proc->terminate();
+		if (!s_bridge_proc->waitForFinished(2000)) {
+			s_bridge_proc->kill();
+			s_bridge_proc->waitForFinished(1000);
+		}
+		delete s_bridge_proc;
+		s_bridge_proc = nullptr;
 		fprintf(stderr, "[Socket] Bridge process stopped\n");
 	}
 }
