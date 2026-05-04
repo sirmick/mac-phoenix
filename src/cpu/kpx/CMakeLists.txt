@@ -89,9 +89,11 @@ set(KPX_CPP_ARGS
 # Shared PPC infrastructure — every arch builds this. cpu_unicorn_ppc.cpp
 # links against it and so does kpx_interp on x86. Same -O1 + KPX_CPP_ARGS
 # as the interpreter so the Mac-OS helper code keeps its tuning.
+find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
+
 add_library(kpx_shared STATIC ${KPX_SHARED_SOURCES})
 target_include_directories(kpx_shared PRIVATE ${KPX_COMMON_INC})
-target_link_libraries(kpx_shared PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(kpx_shared PRIVATE Qt6::Core)
 target_compile_options(kpx_shared PRIVATE ${KPX_CPP_ARGS} -O1)
 
 # KPX relies on SheepShaver's dyngen, whose precompiled machine code in
@@ -101,13 +103,13 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|i[3-6]86)$")
   # Interpreter core at -O1 (hot loop needs optimization)
   add_library(kpx_interp STATIC ${KPX_INTERPRETER_SOURCES})
   target_include_directories(kpx_interp PRIVATE ${KPX_COMMON_INC})
-  target_link_libraries(kpx_interp PRIVATE nlohmann_json::nlohmann_json kpx_shared)
+  target_link_libraries(kpx_interp PRIVATE Qt6::Core kpx_shared)
   target_compile_options(kpx_interp PRIVATE ${KPX_CPP_ARGS} -O1)
 
   # Dyngen/JIT at -O0 (precompiled machine code in headers causes ICE at -O2)
   add_library(kpx_dyngen STATIC ${KPX_DYNGEN_SOURCES})
   target_include_directories(kpx_dyngen PRIVATE ${KPX_COMMON_INC})
-  target_link_libraries(kpx_dyngen PRIVATE nlohmann_json::nlohmann_json)
+  target_link_libraries(kpx_dyngen PRIVATE Qt6::Core)
   target_compile_options(kpx_dyngen PRIVATE ${KPX_CPP_ARGS})
 else()
   # Tiny stub: cpu_ppc_kpx_install() prints "use --backend uae" and exits.

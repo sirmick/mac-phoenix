@@ -18,7 +18,12 @@
 #include "../core/command_bridge.h"  // For command bridge
 #include <sys/stat.h>
 #include <unistd.h>
+#include <QByteArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QProcess>
+#include <QString>
 #include <QStringList>
 #include "../drivers/video/encoders/fpng.h"  // For PNG encoding
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
@@ -751,13 +756,14 @@ Response APIRouter::handle_resolution_post(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"empty body\"}");
     }
 
-    nlohmann::json j = nlohmann::json::parse(req.body, nullptr, false);
-    if (j.is_discarded()) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!doc.isObject()) {
         return Response::json("{\"success\": false, \"error\": \"bad json\"}");
     }
+    QJsonObject j = doc.object();
 
-    int want_w = j.value("w", 0);
-    int want_h = j.value("h", 0);
+    int want_w = j.value("w").toInt(0);
+    int want_h = j.value("h").toInt(0);
     if (want_w <= 0 || want_h <= 0) {
         return Response::json("{\"success\": false, \"error\": \"missing w/h\"}");
     }
@@ -840,7 +846,7 @@ Response APIRouter::handle_config_get(const Request& req) {
         return Response::json("{\"error\": \"No config available\"}");
     }
 
-    std::string json_str = ctx_->config->to_json().dump(2);
+    std::string json_str = QJsonDocument(ctx_->config->to_json()).toJson(QJsonDocument::Indented).toStdString();
     fprintf(stderr, "[API] GET /api/config → %zu bytes\n", json_str.size());
     return Response::json(json_str);
 }
@@ -857,13 +863,12 @@ Response APIRouter::handle_config_save(const Request& req) {
     fprintf(stderr, "[API] POST /api/config ← %zu bytes: %s\n",
             req.body.size(), req.body.c_str());
 
-    nlohmann::json j;
-    try {
-        j = json_utils::parse(req.body);
-    } catch (const std::exception& e) {
-        fprintf(stderr, "[API] Config parse error: %s\n", e.what());
+    QJsonDocument cfg_doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!cfg_doc.isObject()) {
+        fprintf(stderr, "[API] Config parse error: not an object\n");
         return Response::json("{\"success\": false, \"error\": \"Invalid JSON\"}");
     }
+    QJsonObject j = cfg_doc.object();
 
     // Merge updates into live config AND file-level config
     ctx_->config->merge_ui_json(j);
@@ -873,7 +878,7 @@ Response APIRouter::handle_config_save(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"Failed to save config file\"}");
     }
 
-    std::string saved_json = ctx_->config->to_json().dump(2);
+    std::string saved_json = QJsonDocument(ctx_->config->to_json()).toJson(QJsonDocument::Indented).toStdString();
     fprintf(stderr, "[API] Config saved → %s:\n%s\n", ctx_->config->config_path.c_str(), saved_json.c_str());
 
     return Response::json("{\"success\": true}");
@@ -1264,15 +1269,14 @@ Response APIRouter::handle_mouse(const Request& req) {
 
 // POST /api/mouse - move the mouse
 Response APIRouter::handle_mouse_move(const Request& req) {
-    nlohmann::json j;
-    try {
-        j = json_utils::parse(req.body);
-    } catch (const std::exception& e) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!doc.isObject()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"invalid JSON\"}");
         r.set_content_type("application/json");
         return r;
     }
+    QJsonObject j = doc.object();
 
     // Track button state so move events carry correct button mask over IPC
     static uint8_t api_buttons = 0;
@@ -1280,7 +1284,7 @@ Response APIRouter::handle_mouse_move(const Request& req) {
     // Mouse button event: {"button": 0, "down": true}
     if (j.contains("button") && j.contains("down")) {
         int button = json_utils::get_int(j, "button");
-        bool down = j["down"].get<bool>();
+        bool down = j.value("down").toBool();
 
         if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
             uint8_t mask = (1 << button);
@@ -1338,15 +1342,14 @@ Response APIRouter::handle_mouse_move(const Request& req) {
 Response APIRouter::handle_keypress(const Request& req) {
     int keycode = -1;
 
-    nlohmann::json j;
-    try {
-        j = json_utils::parse(req.body);
-    } catch (const std::exception&) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!doc.isObject()) {
         Response resp; resp.set_status(400);
         resp.set_body("{\"error\": \"invalid JSON\"}");
         resp.set_content_type("application/json");
         return resp;
     }
+    QJsonObject j = doc.object();
 
     if (!j.contains("key")) {
         Response resp; resp.set_status(400);
@@ -1355,13 +1358,14 @@ Response APIRouter::handle_keypress(const Request& req) {
         return resp;
     }
 
-    if (j["key"].is_string()) {
+    QJsonValue key_val = j.value("key");
+    if (key_val.isString()) {
         // Small set of friendly names for shell/CI callers. The web client
         // does its own KeyboardEvent.code → Mac mapping in JS and posts
         // numeric Mac keycodes via the WS path, so this list only needs
         // to cover the few keys tests poke (return/escape/arrows/etc.).
         // Mac ADB scancodes — classic, not modern HIToolbox.
-        std::string name = j["key"].get<std::string>();
+        std::string name = key_val.toString().toStdString();
         if      (name == "return" || name == "enter")     keycode = 0x24;
         else if (name == "escape" || name == "esc")       keycode = 0x35;
         else if (name == "space")                         keycode = 0x31;
@@ -1377,9 +1381,9 @@ Response APIRouter::handle_keypress(const Request& req) {
             r2.set_content_type("application/json");
             return r2;
         }
-    } else if (j["key"].is_number()) {
+    } else if (key_val.isDouble()) {
         // Numeric `key` is a Mac ADB virtual keycode (0x00–0x7F).
-        keycode = j["key"].get<int>();
+        keycode = key_val.toInt();
     } else {
         Response resp; resp.set_status(400);
         resp.set_body("{\"error\": \"'key' must be a string or number\"}");
@@ -1394,7 +1398,7 @@ Response APIRouter::handle_keypress(const Request& req) {
     // If "down" field is present, send a discrete key down or key up event.
     // Otherwise, send a complete keypress (down + 50ms + up) for backward compatibility.
     if (j.contains("down")) {
-        bool down = j["down"].get<bool>();
+        bool down = j.value("down").toBool();
         if (ctx_->subprocess && ctx_->subprocess->ipc_client()->is_connected()) {
             ctx_->subprocess->ipc_client()->send_key(keycode, down);
         } else {
@@ -1460,23 +1464,22 @@ Response APIRouter::handle_windows(const Request& req) {
 }
 
 Response APIRouter::handle_launch(const Request& req) {
-    nlohmann::json j;
-    try {
-        j = json_utils::parse(req.body);
-    } catch (const std::exception&) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!doc.isObject()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"invalid JSON\"}");
         r.set_content_type("application/json");
         return r;
     }
+    QJsonObject j = doc.object();
 
-    if (!j.contains("path") || !j["path"].is_string()) {
+    if (!j.value("path").isString()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"missing 'path' field\"}");
         r.set_content_type("application/json");
         return r;
     }
-    std::string path = j["path"].get<std::string>();
+    std::string path = j.value("path").toString().toStdString();
 
     // Write command file to bridge dir — the guest agent reads it via ExtFS
     auto& cfg = config::EmulatorConfig::instance();
@@ -1484,7 +1487,7 @@ Response APIRouter::handle_launch(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
     }
 
-    bool open_doc = j.contains("open") && j["open"].is_boolean() && j["open"].get<bool>();
+    bool open_doc = j.value("open").toBool(false);
 
     bridge_remove_file(cfg.bridge_dir, "_bridge_result");
     bridge_write_file(cfg.bridge_dir, "_bridge_cmd", (open_doc ? "OPEN " : "LAUNCH ") + path);
@@ -1529,23 +1532,22 @@ Response APIRouter::handle_launch(const Request& req) {
 // The host is responsible for any language-specific quirks (e.g. MacPerl's
 // \r-vs-\n eval bug). BridgeAgent just delivers the source verbatim.
 Response APIRouter::handle_script(const Request& req) {
-    nlohmann::json j;
-    try {
-        j = json_utils::parse(req.body);
-    } catch (const std::exception&) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!doc.isObject()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"invalid JSON\"}");
         r.set_content_type("application/json");
         return r;
     }
+    QJsonObject j = doc.object();
 
-    if (!j.contains("creator") || !j["creator"].is_string()) {
+    if (!j.value("creator").isString()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"missing 'creator' field (4-char OSType)\"}");
         r.set_content_type("application/json");
         return r;
     }
-    std::string creator = j["creator"].get<std::string>();
+    std::string creator = j.value("creator").toString().toStdString();
     if (creator.size() != 4) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"'creator' must be exactly 4 characters\"}");
@@ -1555,10 +1557,10 @@ Response APIRouter::handle_script(const Request& req) {
 
     // Resolve script body — either inline UTF-8 string or base64 bytes.
     std::string script;
-    if (j.contains("script") && j["script"].is_string()) {
-        script = j["script"].get<std::string>();
-    } else if (j.contains("script_b64") && j["script_b64"].is_string()) {
-        const std::string& b64 = j["script_b64"].get_ref<const std::string&>();
+    if (j.value("script").isString()) {
+        script = j.value("script").toString().toStdString();
+    } else if (j.value("script_b64").isString()) {
+        std::string b64 = j.value("script_b64").toString().toStdString();
         static const int8_t b64_tab[256] = {
             -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
             -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
@@ -1700,23 +1702,22 @@ static bool parse_bridge_reply(const std::string& blob,
 // per call (BridgeAgent side); long compiles can use redirect-to-ExtFS
 // inside the script and tail the output file.
 Response APIRouter::handle_exec(const Request& req) {
-    nlohmann::json j;
-    try {
-        j = json_utils::parse(req.body);
-    } catch (const std::exception&) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!doc.isObject()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"invalid JSON\"}");
         r.set_content_type("application/json");
         return r;
     }
+    QJsonObject j = doc.object();
 
-    if (!j.contains("creator") || !j["creator"].is_string()) {
+    if (!j.value("creator").isString()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"missing 'creator' field (4-char OSType)\"}");
         r.set_content_type("application/json");
         return r;
     }
-    std::string creator = j["creator"].get<std::string>();
+    std::string creator = j.value("creator").toString().toStdString();
     if (creator.size() != 4) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"'creator' must be exactly 4 characters\"}");
@@ -1725,10 +1726,10 @@ Response APIRouter::handle_exec(const Request& req) {
     }
 
     std::string command;
-    if (j.contains("command") && j["command"].is_string()) {
-        command = j["command"].get<std::string>();
-    } else if (j.contains("command_b64") && j["command_b64"].is_string()) {
-        const std::string& b64 = j["command_b64"].get_ref<const std::string&>();
+    if (j.value("command").isString()) {
+        command = j.value("command").toString().toStdString();
+    } else if (j.value("command_b64").isString()) {
+        std::string b64 = j.value("command_b64").toString().toStdString();
         static const int8_t b64_tab[256] = {
             -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
             -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
@@ -1842,16 +1843,15 @@ Response APIRouter::handle_quit(const Request& req) {
 // into the guest's scrap via BridgeAgent. Browser does the UTF-8↔MacRoman
 // translation; the host just pipes bytes through.
 Response APIRouter::handle_clipboard_set(const Request& req) {
-    nlohmann::json j;
-    try {
-        j = json_utils::parse(req.body);
-    } catch (const std::exception&) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!doc.isObject()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"invalid JSON\"}");
         r.set_content_type("application/json");
         return r;
     }
-    if (!j.contains("text_b64") || !j["text_b64"].is_string()) {
+    QJsonObject j = doc.object();
+    if (!j.value("text_b64").isString()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"missing 'text_b64' field\"}");
         r.set_content_type("application/json");
@@ -1859,7 +1859,7 @@ Response APIRouter::handle_clipboard_set(const Request& req) {
     }
 
     // base64 decode
-    const std::string& b64 = j["text_b64"].get_ref<const std::string&>();
+    std::string b64 = j.value("text_b64").toString().toStdString();
     static const int8_t b64_tab[256] = {
         -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
         -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
@@ -1905,28 +1905,27 @@ Response APIRouter::handle_clipboard_set(const Request& req) {
 }
 
 Response APIRouter::handle_wait(const Request& req) {
-    nlohmann::json j;
-    try {
-        j = json_utils::parse(req.body);
-    } catch (const std::exception&) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (!doc.isObject()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"invalid JSON\"}");
         r.set_content_type("application/json");
         return r;
     }
+    QJsonObject j = doc.object();
 
-    if (!j.contains("condition") || !j["condition"].is_string()) {
+    if (!j.value("condition").isString()) {
         Response r; r.set_status(400);
         r.set_body("{\"error\": \"missing 'condition' field\"}");
         r.set_content_type("application/json");
         return r;
     }
-    std::string condition = j["condition"].get<std::string>();
+    std::string condition = j.value("condition").toString().toStdString();
 
     // Parse timeout (default 30s)
     int timeout_s = 30;
-    if (j.contains("timeout") && j["timeout"].is_number()) {
-        timeout_s = j["timeout"].get<int>();
+    if (j.value("timeout").isDouble()) {
+        timeout_s = j.value("timeout").toInt(30);
     }
 
     // Parse condition type

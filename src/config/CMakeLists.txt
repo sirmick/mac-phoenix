@@ -16,6 +16,5 @@ target_include_directories(config PUBLIC
 find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
 
 target_link_libraries(config PRIVATE
-  nlohmann_json::nlohmann_json
   Qt6::Core
 )

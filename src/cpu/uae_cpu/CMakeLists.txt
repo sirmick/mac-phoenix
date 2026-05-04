@@ -70,10 +70,9 @@ add_library(uae_jit STATIC
 )
 target_include_directories(uae_jit PRIVATE ${UAE_INC})
 # compemu_support.cpp transitively includes config/emulator_config.h which
-# pulls in <nlohmann/json.hpp>. The header-only target propagates the right
-# include path; without this, builds without a system-installed
-# nlohmann-json3-dev (e.g. fresh Debian/Ubuntu Docker images) fail.
-target_link_libraries(uae_jit PRIVATE nlohmann_json::nlohmann_json)
+# pulls in <QJsonObject>. Link Qt6::Core for the include path.
+find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
+target_link_libraries(uae_jit PRIVATE Qt6::Core)
 target_compile_options(uae_jit PRIVATE
   ${UAE_COMMON_ARGS}
   -fpermissive

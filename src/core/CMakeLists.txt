@@ -47,7 +47,6 @@ find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
 
 target_link_libraries(core PRIVATE
   Threads::Threads
-  nlohmann_json::nlohmann_json
   Qt6::Core
 )
 

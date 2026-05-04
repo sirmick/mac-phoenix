@@ -185,7 +185,6 @@ target_link_libraries(mac-phoenix PRIVATE
   unicorn
   Threads::Threads
   ${M_LIB}
-  nlohmann_json::nlohmann_json
   datachannel-static
   OpenSSL::SSL
   OpenSSL::Crypto

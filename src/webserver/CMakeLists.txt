@@ -21,7 +21,6 @@ target_include_directories(webserver PUBLIC
 find_package(Qt6 6.4 COMPONENTS Core Network REQUIRED)
 
 target_link_libraries(webserver PRIVATE
-  nlohmann_json::nlohmann_json
   codec_flags
   Qt6::Core
   Qt6::Network

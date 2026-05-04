@@ -484,7 +484,7 @@ Per phase:
 | 14 | Leftover `fork`/`execvp` → `QProcess` | ✅ done — `api_handlers::run_fork_exec` + `ether_socket::spawn_bridge`/`stop_bridge` |
 | 15 | `pthread`/`sem_t` in `serial_unix.cpp` → `QThread`/`QSemaphore` | pending — Phase 10 unblocker |
 | 16 | `std::thread` in webserver → `QThread` | ✅ done — accept loop wrapped in `HttpServerThread : QThread` |
-| 17 | `nlohmann::json` → `QJsonDocument`/`QJsonObject` | pending — drops `nlohmann_json` subproject |
+| 17 | `nlohmann::json` → `QJsonDocument`/`QJsonObject` | partial — all kept files migrated; subproject drop blocks on Phase 8 (bidi.cpp still uses it) |
 
 **Recommended execution order for the dep-drop phases**: 12 (easy
 warmup, deletes a `find_package`) → 13/14 (small, mechanical) → 17

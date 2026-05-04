@@ -1,98 +1,88 @@
 /*
- * JSON Utilities Implementation
+ * JSON Utilities — QJsonObject wrapper implementation.
  */
 
 #include "json_utils.h"
-#include <fstream>
+#include <QByteArray>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonValue>
+#include <QString>
+#include <stdexcept>
 
 namespace json_utils {
 
+namespace {
+inline QString qkey(const std::string& key) {
+    return QString::fromStdString(key);
+}
+}
+
 json parse(const std::string& str) {
-    return json::parse(str);
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(str));
+    return doc.isObject() ? doc.object() : QJsonObject{};
 }
 
 std::string to_string(const json& j, int indent) {
-    return j.dump(indent);
+    QJsonDocument doc(j);
+    QByteArray ba = doc.toJson(indent < 0 ? QJsonDocument::Compact
+                                          : QJsonDocument::Indented);
+    return ba.toStdString();
 }
 
 std::string get_string(const json& j, const std::string& key,
                        const std::string& default_val) {
-    if (!j.is_object()) {
-        return default_val;
-    }
-
-    auto it = j.find(key);
-    if (it == j.end() || !it->is_string()) {
-        return default_val;
-    }
-
-    return it->get<std::string>();
+    QJsonValue v = j.value(qkey(key));
+    if (!v.isString()) return default_val;
+    return v.toString().toStdString();
 }
 
 int get_int(const json& j, const std::string& key, int default_val) {
-    if (!j.is_object()) {
-        return default_val;
-    }
-
-    auto it = j.find(key);
-    if (it == j.end() || !it->is_number_integer()) {
-        return default_val;
-    }
-
-    return it->get<int>();
+    QJsonValue v = j.value(qkey(key));
+    if (!v.isDouble()) return default_val;
+    return v.toInt(default_val);
 }
 
 bool get_bool(const json& j, const std::string& key, bool default_val) {
-    if (!j.is_object()) {
-        return default_val;
-    }
-
-    auto it = j.find(key);
-    if (it == j.end() || !it->is_boolean()) {
-        return default_val;
-    }
-
-    return it->get<bool>();
+    QJsonValue v = j.value(qkey(key));
+    if (!v.isBool()) return default_val;
+    return v.toBool(default_val);
 }
 
 bool has_key(const json& j, const std::string& key) {
-    if (!j.is_object()) {
-        return false;
-    }
-
-    return j.find(key) != j.end();
+    return j.contains(qkey(key));
 }
 
 std::vector<std::string> get_string_array(const json& j, const std::string& key) {
     std::vector<std::string> result;
-
-    if (!j.is_object()) {
-        return result;
-    }
-
-    auto it = j.find(key);
-    if (it == j.end() || !it->is_array()) {
-        return result;
-    }
-
-    for (const auto& elem : *it) {
-        if (elem.is_string()) {
-            result.push_back(elem.get<std::string>());
+    QJsonValue v = j.value(qkey(key));
+    if (!v.isArray()) return result;
+    QJsonArray arr = v.toArray();
+    for (const QJsonValue& elem : arr) {
+        if (elem.isString()) {
+            result.push_back(elem.toString().toStdString());
         }
     }
-
     return result;
 }
 
 json parse_file(const std::string& path) {
-    std::ifstream file(path);
-    if (!file) {
+    QFile file(QString::fromStdString(path));
+    if (!file.open(QIODevice::ReadOnly)) {
         throw std::runtime_error("Failed to open file: " + path);
     }
-
-    json j;
-    file >> j;
-    return j;
+    QByteArray data = file.readAll();
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError) {
+        throw std::runtime_error("JSON parse error in " + path + ": " +
+                                 err.errorString().toStdString());
+    }
+    if (!doc.isObject()) {
+        throw std::runtime_error("JSON root in " + path + " is not an object");
+    }
+    return doc.object();
 }
 
 } // namespace json_utils

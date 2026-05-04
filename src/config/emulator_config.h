@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <nlohmann/json.hpp>
+#include <QJsonObject>
 
 namespace config {
 
@@ -153,12 +153,12 @@ struct EmulatorConfig {
 
     // Internal (not serialized)
     std::string config_path;
-    nlohmann::json file_config_;       // tracks what's persisted on disk (UI changes only)
+    QJsonObject file_config_;          // tracks what's persisted on disk (UI changes only)
 
     // Serialization
-    nlohmann::json to_json() const;
-    void merge_json(const nlohmann::json& j);      // file/startup → runtime only
-    void merge_ui_json(const nlohmann::json& j);   // UI changes → runtime + file_config_
+    QJsonObject to_json() const;
+    void merge_json(const QJsonObject& j);      // file/startup → runtime only
+    void merge_ui_json(const QJsonObject& j);   // UI changes → runtime + file_config_
     bool save() const;
 
     // Helpers

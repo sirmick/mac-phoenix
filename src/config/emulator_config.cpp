@@ -13,6 +13,10 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QString>
 
 namespace config {
@@ -87,8 +91,14 @@ static bool parse_backend(const std::string& s, Backend& out) {
 /*
  * Convert config to JSON
  */
-nlohmann::json EmulatorConfig::to_json() const {
-    nlohmann::json j;
+QJsonObject EmulatorConfig::to_json() const {
+    QJsonObject j;
+    auto qstr = [](const std::string& s) { return QString::fromStdString(s); };
+    auto str_array = [&](const std::vector<std::string>& v) {
+        QJsonArray a;
+        for (const auto& s : v) a.append(qstr(s));
+        return a;
+    };
 
     // Strip storage_dir prefix to save portable relative paths
     auto strip_roms = [&](const std::string& p) -> std::string {
@@ -121,40 +131,38 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["jit_cache_size"]  = jit_cache_size;
     j["jit_lazy_flush"]  = jit_lazy_flush;
     j["jit_inline"]      = jit_inline;
-    j["jit_blacklist"]   = jit_blacklist;
+    j["jit_blacklist"]   = qstr(jit_blacklist);
 
     // Memory & media
-    j["ram_mb"]      = ram_mb;
-    j["screen"]      = screen_string();
+    j["ram_mb"]      = (int)ram_mb;
+    j["screen"]      = qstr(screen_string());
     j["max_resolution"] = (max_screen_width && max_screen_height)
-        ? (std::to_string(max_screen_width) + "x" + std::to_string(max_screen_height))
-        : std::string("");
+        ? qstr(std::to_string(max_screen_width) + "x" + std::to_string(max_screen_height))
+        : QString();
     j["audio"]       = audio_enabled;
-    j["rom"]         = strip_roms(rom_path);
-    j["disks"]       = strip_images(disk_paths);
-    j["cdroms"]      = strip_images(cdrom_paths);
-    j["extfs"]       = extfs_paths;
+    j["rom"]         = qstr(strip_roms(rom_path));
+    j["disks"]       = str_array(strip_images(disk_paths));
+    j["cdroms"]      = str_array(strip_images(cdrom_paths));
+    j["extfs"]       = str_array(extfs_paths);
     j["bootdriver"]  = bootdriver;
 
     // Streaming
-    j["codec"]     = codec;
-    j["mousemode"] = mousemode;
+    j["codec"]     = qstr(codec);
+    j["mousemode"] = qstr(mousemode);
 
     // Keyboard remap (round-tripped to JS client)
-    {
-        nlohmann::json kb;
-        kb["ctrl"] = kb_ctrl;
-        kb["alt"]  = kb_alt;
-        kb["meta"] = kb_meta;
-        kb["fn"]   = kb_fn;
-        kb["release_on_blur"] = kb_release_on_blur;
-        j["keyboard"] = kb;
-    }
+    j["keyboard"] = QJsonObject{
+        {"ctrl", qstr(kb_ctrl)},
+        {"alt",  qstr(kb_alt)},
+        {"meta", qstr(kb_meta)},
+        {"fn",   qstr(kb_fn)},
+        {"release_on_blur", kb_release_on_blur},
+    };
 
     // Web/server
     j["http_port"]   = http_port;
-    j["client_dir"]  = client_dir;
-    j["storage_dir"] = storage_dir;
+    j["client_dir"]  = qstr(client_dir);
+    j["storage_dir"] = qstr(storage_dir);
 
     // System
     j["zappram"]                  = zappram;
@@ -163,12 +171,12 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["browser_enabled"]          = browser_enabled;
 
     // Network
-    j["network"] = network_string();
-    if (!network_if.empty()) j["network_if"] = network_if;
+    j["network"] = qstr(network_string());
+    if (!network_if.empty()) j["network_if"] = qstr(network_if);
 
     // Serial — only emit when set; absence means "disabled".
-    if (!serial_a.empty()) j["serial_a"] = serial_a;
-    if (!serial_b.empty()) j["serial_b"] = serial_b;
+    if (!serial_a.empty()) j["serial_a"] = qstr(serial_a);
+    if (!serial_b.empty()) j["serial_b"] = qstr(serial_b);
 
     // Logging
     j["log_level"]          = log_level;
@@ -178,8 +186,8 @@ nlohmann::json EmulatorConfig::to_json() const {
     j["debug_network"]      = debug_network;
 
     // Preserve saved presets from file_config_ (UI-managed)
-    if (file_config_.contains("configs") && file_config_["configs"].is_object()) {
-        j["configs"] = file_config_["configs"];
+    if (file_config_.contains("configs") && file_config_.value("configs").isObject()) {
+        j["configs"] = file_config_.value("configs");
     }
 
     return j;
@@ -188,7 +196,7 @@ nlohmann::json EmulatorConfig::to_json() const {
 /*
  * Merge JSON into config (partial updates OK).
  */
-void EmulatorConfig::merge_json(const nlohmann::json& j) {
+void EmulatorConfig::merge_json(const QJsonObject& j) {
     // ── CPU backend ──────────────────────────────────────────────
     if (j.contains("backend")) {
         std::string b = json_utils::get_string(j, "backend");
@@ -248,9 +256,10 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
         for (auto& p : cdrom_paths) resolve_image(p);
     }
     if (j.contains("extfs")) {
-        if (j["extfs"].is_array()) {
+        QJsonValue ev = j.value("extfs");
+        if (ev.isArray()) {
             extfs_paths = json_utils::get_string_array(j, "extfs");
-        } else if (j["extfs"].is_string()) {
+        } else if (ev.isString()) {
             std::string s = json_utils::get_string(j, "extfs");
             if (!s.empty()) extfs_paths = {s};
         }
@@ -262,8 +271,8 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
     if (j.contains("mousemode")) mousemode = json_utils::get_string(j, "mousemode");
 
     // ── Keyboard remap ──────────────────────────────────────────
-    if (j.contains("keyboard") && j["keyboard"].is_object()) {
-        const auto& kb = j["keyboard"];
+    if (j.value("keyboard").isObject()) {
+        QJsonObject kb = j.value("keyboard").toObject();
         if (kb.contains("ctrl")) kb_ctrl = json_utils::get_string(kb, "ctrl");
         if (kb.contains("alt"))  kb_alt  = json_utils::get_string(kb, "alt");
         if (kb.contains("meta")) kb_meta = json_utils::get_string(kb, "meta");
@@ -320,10 +329,10 @@ void EmulatorConfig::merge_json(const nlohmann::json& j) {
  * Merge JSON into both runtime config AND file_config_ (for UI/API changes).
  * Only values merged here will be persisted on save().
  */
-void EmulatorConfig::merge_ui_json(const nlohmann::json& j) {
+void EmulatorConfig::merge_ui_json(const QJsonObject& j) {
     merge_json(j);
-    for (auto& [key, value] : j.items()) {
-        file_config_[key] = value;
+    for (auto it = j.constBegin(); it != j.constEnd(); ++it) {
+        file_config_[it.key()] = it.value();
     }
 }
 
@@ -347,7 +356,7 @@ bool EmulatorConfig::save() const {
             return false;
         }
 
-        file << file_config_.dump(2);
+        file << QJsonDocument(file_config_).toJson(QJsonDocument::Indented).toStdString();
         file.close();
         fprintf(stderr, "[Config] Saved to %s\n", config_path.c_str());
         return true;
