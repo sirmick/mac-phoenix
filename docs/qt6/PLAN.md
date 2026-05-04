@@ -479,7 +479,7 @@ Per phase:
 | 9 | Native head (QApplication mode) | pending |
 | 10 | Windows port + installer | pending |
 | 11 | macOS port + signed `.app` + DMG | pending |
-| 12 | OpenSSL → QCryptographicHash | pending — drops `libssl-dev` apt dep (next up) |
+| 12 | OpenSSL → QCryptographicHash | ✅ done — drops direct OpenSSL use (libdatachannel still needs it transitively for DTLS/SRTP) |
 | 13 | POSIX timing → `QElapsedTimer` + `QThread::usleep` | pending — Phase 10 unblocker |
 | 14 | Leftover `fork`/`execvp` → `QProcess` | pending — Phase 10 unblocker |
 | 15 | `pthread`/`sem_t` in `serial_unix.cpp` → `QThread`/`QSemaphore` | pending — Phase 10 unblocker |

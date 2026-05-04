@@ -18,13 +18,11 @@ target_include_directories(webserver PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../drivers/video/encoders
 )
 
-find_package(OpenSSL REQUIRED)
 find_package(Qt6 6.4 COMPONENTS Core Network REQUIRED)
 
 target_link_libraries(webserver PRIVATE
   nlohmann_json::nlohmann_json
   codec_flags
-  OpenSSL::Crypto
   Qt6::Core
   Qt6::Network
 )

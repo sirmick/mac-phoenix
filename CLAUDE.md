@@ -247,7 +247,7 @@ PNG encoding (fpng) has no external dependencies and is always available.
 | Library | Package (Ubuntu) | Package (macOS) | Purpose |
 |---------|-----------------|-----------------|---------|
 | CMake | `cmake` | Xcode CLI Tools or `brew install cmake` | Build system |
-| OpenSSL | `libssl-dev` | `brew install openssl` | MD5, WebRTC |
+| OpenSSL | `libssl-dev` | `brew install openssl` | DTLS/SRTP for libdatachannel (WebRTC). Our code no longer uses it directly — `QCryptographicHash` handles SHA1/MD5. |
 | pkg-config | `pkg-config` | `brew install pkg-config` | Dependency detection |
 | Qt6 (≥6.4) | `qt6-base-dev qt6-tools-dev` | `brew install qt@6` | Cross-platform abstraction (see [docs/qt6/PLAN.md](docs/qt6/PLAN.md)) |
 | xcb (+shm/damage/composite/randr) | `libxcb1-dev libxcb-shm0-dev libxcb-damage0-dev libxcb-composite0-dev libxcb-randr0-dev` | n/a (Linux-only feature) | MacBrowser host pipeline (removed in Phase 8) |

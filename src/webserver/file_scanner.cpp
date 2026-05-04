@@ -9,12 +9,12 @@
 #include <algorithm>
 #include <cstdio>
 #include <cerrno>
-#include <openssl/evp.h>
 #include <sstream>
-#include <iomanip>
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
+#include <QFile>
 #include <QFileInfo>
 #include <QString>
 
@@ -46,34 +46,15 @@ static uint32_t read_rom_checksum(const std::string& path) {
            ((uint32_t)buf[2] << 8) | (uint32_t)buf[3];
 }
 
-// Helper: Calculate MD5 hash of entire file (using EVP API, OpenSSL 3.0+)
+// Helper: Calculate MD5 hash of entire file
 static std::string calculate_md5(const std::string& path) {
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) return "";
+    QFile file(QString::fromStdString(path));
+    if (!file.open(QIODevice::ReadOnly)) return "";
 
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (!ctx) { fclose(f); return ""; }
-    EVP_DigestInit_ex(ctx, EVP_md5(), nullptr);
+    QCryptographicHash hash(QCryptographicHash::Md5);
+    if (!hash.addData(&file)) return "";
 
-    unsigned char buffer[4096];
-    size_t bytes_read;
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), f)) > 0) {
-        EVP_DigestUpdate(ctx, buffer, bytes_read);
-    }
-
-    unsigned char digest[EVP_MAX_MD_SIZE];
-    unsigned int digest_len = 0;
-    EVP_DigestFinal_ex(ctx, digest, &digest_len);
-    EVP_MD_CTX_free(ctx);
-    fclose(f);
-
-    // Convert to hex string
-    std::ostringstream hex;
-    for (unsigned int i = 0; i < digest_len; i++) {
-        hex << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(digest[i]);
-    }
-
-    return hex.str();
+    return hash.result().toHex().toStdString();
 }
 
 // Recursive directory scanning

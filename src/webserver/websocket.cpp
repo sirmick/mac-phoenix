@@ -4,7 +4,8 @@
 
 #include "websocket.h"
 
-#include <openssl/sha.h>
+#include <QByteArray>
+#include <QCryptographicHash>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cerrno>
@@ -14,33 +15,6 @@
 namespace http {
 
 namespace {
-
-// Base64 encode. Returns printable ASCII with padding.
-std::string base64_encode(const unsigned char* data, std::size_t len) {
-    static const char tab[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    std::string out;
-    out.reserve(((len + 2) / 3) * 4);
-
-    std::size_t i = 0;
-    for (; i + 3 <= len; i += 3) {
-        uint32_t v = (uint32_t(data[i]) << 16) | (uint32_t(data[i + 1]) << 8) | data[i + 2];
-        out.push_back(tab[(v >> 18) & 0x3F]);
-        out.push_back(tab[(v >> 12) & 0x3F]);
-        out.push_back(tab[(v >> 6)  & 0x3F]);
-        out.push_back(tab[ v        & 0x3F]);
-    }
-    if (i < len) {
-        uint32_t v = uint32_t(data[i]) << 16;
-        if (i + 1 < len) v |= uint32_t(data[i + 1]) << 8;
-        out.push_back(tab[(v >> 18) & 0x3F]);
-        out.push_back(tab[(v >> 12) & 0x3F]);
-        out.push_back(i + 1 < len ? tab[(v >> 6) & 0x3F] : '=');
-        out.push_back('=');
-    }
-    return out;
-}
 
 // Blocking send of the full buffer, retrying on EINTR/EAGAIN.
 bool send_all(int fd, const void* data, std::size_t len) {
@@ -62,10 +36,9 @@ bool send_all(int fd, const void* data, std::size_t len) {
 std::string WebSocket::compute_accept(const std::string& client_key) {
     // RFC 6455: accept = base64(SHA1(key + magic))
     static constexpr char magic[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    std::string concat = client_key + magic;
-    unsigned char sha[SHA_DIGEST_LENGTH];
-    SHA1(reinterpret_cast<const unsigned char*>(concat.data()), concat.size(), sha);
-    return base64_encode(sha, SHA_DIGEST_LENGTH);
+    QByteArray concat = QByteArray::fromStdString(client_key) + QByteArray(magic);
+    QByteArray sha = QCryptographicHash::hash(concat, QCryptographicHash::Sha1);
+    return sha.toBase64().toStdString();
 }
 
 WebSocket::WebSocket(int fd) : fd_(fd) {}
