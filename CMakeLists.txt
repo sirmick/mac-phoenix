@@ -90,22 +90,14 @@ target_include_directories(libyuv::libyuv INTERFACE ${LIBYUV_INC})
 # Math library
 find_library(M_LIB m)
 
-# MacBrowser host pipeline. Phase 8 (qt-port) is migrating from xcb +
-# Xvfb + Firefox to QtWebEngine; both dep sets are pulled in during the
-# transition. Phase 8i drops the xcb deps once xshm/supervisor/bidi
-# are deleted.
+# MacBrowser host pipeline. Phase 8 migrated from Xvfb + Firefox + xcb
+# to in-process QtWebEngine; the xcb/Xvfb/Firefox path was deleted in 8i.
 option(BUILD_BROWSER "Build the MacBrowser host pipeline" ON)
 if(BUILD_BROWSER)
-  if(NOT PKG_CONFIG_FOUND)
-    message(FATAL_ERROR "BUILD_BROWSER requires pkg-config")
-  endif()
-  # Old pipeline: xcb + MIT-SHM + XDamage on Xvfb. Removed in Phase 8i.
-  pkg_check_modules(XCB REQUIRED IMPORTED_TARGET
-    xcb xcb-shm xcb-damage xcb-composite xcb-randr)
-  # New pipeline: in-process QWebEnginePage. Widgets is required by
-  # WebEngineWidgets (and by the QApplication switch in main.cpp when
-  # BUILD_BROWSER is on — QtWebEngine needs widget infrastructure on
-  # the GUI thread, can't run under QCoreApplication).
+  # Widgets is required by WebEngineWidgets (and by the QApplication
+  # switch in main.cpp when BUILD_BROWSER is on — QtWebEngine needs
+  # widget infrastructure on the GUI thread, can't run under
+  # QCoreApplication).
   find_package(Qt6 6.4 COMPONENTS Widgets WebEngineCore WebEngineWidgets REQUIRED)
 endif()
 
@@ -130,10 +122,8 @@ set(NO_MEDIA OFF CACHE BOOL "" FORCE)
 set(USE_NICE OFF CACHE BOOL "" FORCE)
 add_subdirectory(subprojects/libdatachannel EXCLUDE_FROM_ALL)
 
-# nlohmann_json (header-only)
-set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
-set(JSON_Install OFF CACHE BOOL "" FORCE)
-add_subdirectory(subprojects/nlohmann_json EXCLUDE_FROM_ALL)
+# nlohmann_json was removed in Phase 8i. All JSON now goes through
+# QJsonDocument / QJsonObject (Qt6::Core).
 
 # =============================================================================
 # Codec compile definitions (propagated to all targets that need them)

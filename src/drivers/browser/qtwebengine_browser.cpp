@@ -3,6 +3,7 @@
  */
 #include "qtwebengine_browser.h"
 
+#include "cmd.h"
 #include "shm.h"
 #include "emulator_config.h"
 #define BR_HOST 1
@@ -238,9 +239,44 @@ QtWebEngineBrowser::QtWebEngineBrowser()
                      [this](QWebEngineDownloadRequest* req) {
                          handle_download_request(req);
                      });
+
+    // Worker thread that drains the g2h ring (guest → host commands)
+    // and dispatches via cmd_dispatch — used to live in browser_spike,
+    // which 8i deletes. Polls the guest debug log channel on the same
+    // tick. Plain std::thread (no Qt event loop needed); cmd_dispatch
+    // routes to qt_dispatch_*, which marshals to the GUI thread.
+    g2h_running_.store(true, std::memory_order_release);
+    g2h_thread_ = std::thread([this]() { g2h_drain_loop(); });
 }
 
-QtWebEngineBrowser::~QtWebEngineBrowser() = default;
+QtWebEngineBrowser::~QtWebEngineBrowser()
+{
+    g2h_running_.store(false, std::memory_order_release);
+    if (g2h_thread_.joinable()) g2h_thread_.join();
+}
+
+void QtWebEngineBrowser::g2h_drain_loop()
+{
+    // Wait for the guest handshake before doing real work — Browser.app
+    // doesn't NewPtrClear the BrowserShm region until well after Finder.
+    // poll_log + cmd_dispatch are no-ops without shm anyway, but the
+    // wait avoids unnecessary syscalls.
+    while (g2h_running_.load(std::memory_order_acquire)) {
+        if (browser::shm_get()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    while (g2h_running_.load(std::memory_order_acquire)) {
+        uint16_t cmd_type = 0, cmd_len = 0;
+        uint8_t  cmd_buf[1024];
+        while (browser::read_command(&cmd_type, cmd_buf,
+                                     sizeof(cmd_buf), &cmd_len)) {
+            browser::cmd_dispatch(cmd_type, cmd_buf, cmd_len);
+        }
+        browser::poll_log();
+        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+    }
+}
 
 void QtWebEngineBrowser::load(const std::string& url)
 {

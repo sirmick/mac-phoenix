@@ -1,10 +1,10 @@
 /*
  *  mouse_poll.h — host-side mouse poller for the MacBrowser pipeline.
  *
- *  Per docs/plan/MacBrowser.md "Mouse model — host-side polling":
- *  rather than have the guest forward each mouseDown / mouseMove
- *  through the g2h ring (one ring push per pixel of cursor motion!),
- *  the host reads:
+ *  Per docs/MacBrowser.md "Mouse model — host-side polling": rather
+ *  than have the guest forward each mouseDown / mouseMove through the
+ *  g2h ring (one ring push per pixel of cursor motion!), the host
+ *  reads:
  *
  *    - Mouse global at $082C (Point: v, h)            — cursor on Mac screen
  *    - MBState at $0172                               — 0xFF up / 0x00 down
@@ -13,25 +13,24 @@
  *    - BrowserShm.fb.{width,height}                   — viewport extent
  *
  *  …each ~16 ms tick, gates on CurApName == "MacBrowser", computes
- *  page-relative (x, y), and synthesizes BiDi events directly:
- *    - mouse moved → bidi.mouse_move(x, y)
- *    - button transition to down → bidi.click(x, y, 0, 1)
+ *  page-relative (x, y), and forwards via qt_dispatch_mouse_move /
+ *  qt_dispatch_click — same routing the BR_CMD_* g2h commands use.
  *
- *  Zero ring traffic for input. Hover support comes for free.
+ *  Page metrics are no longer polled here — QtWebEngineBrowser owns
+ *  that timer (see metrics_tick). Mouse polling stays separate because
+ *  it needs raw access to Mac low-memory globals via ReadMacInt8/16,
+ *  which is the CPU-thread-affinity layer rather than QtWebEngine.
  */
 #ifndef DRIVERS_BROWSER_MOUSE_POLL_H
 #define DRIVERS_BROWSER_MOUSE_POLL_H
 
 namespace browser {
 
-class BidiClient;
+// Spawn the poll thread. Idempotent — second call is a no-op until
+// mouse_poll_stop() is called.
+void mouse_poll_start();
 
-/* Spawn the poll thread. Idempotent — second call is a no-op until
- * mouse_poll_stop() is called. nullptr disables (e.g. when BiDi
- * never came up). */
-void mouse_poll_start(BidiClient* bidi);
-
-/* Tear down the poll thread. Idempotent. */
+// Tear down the poll thread. Idempotent.
 void mouse_poll_stop();
 
 }  // namespace browser

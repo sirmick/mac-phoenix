@@ -21,9 +21,11 @@
  */
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <thread>
 
 class QWebEngineView;
 class QWebEngineDownloadRequest;
@@ -70,10 +72,13 @@ private:
     void capture_tick();
     void metrics_tick();
     void handle_download_request(::QWebEngineDownloadRequest* req);
+    void g2h_drain_loop();
 
     std::unique_ptr<QWebEngineView> view_;
     std::unique_ptr<QTimer>         capture_timer_;
     std::unique_ptr<QTimer>         metrics_timer_;
+    std::thread                     g2h_thread_;
+    std::atomic<bool>               g2h_running_{false};
 
     // Last-published page metrics — only re-emit on change.
     uint32_t last_pw_ = 0, last_ph_ = 0;

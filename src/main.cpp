@@ -62,7 +62,6 @@ static_assert(IPC_MAX_HEIGHT >= mp::video::kMaxHeight_Ppc,
 #include "core/emulator_init.h"
 #include "crash_handler_init.h"
 #include "sigsegv.h"
-#include "drivers/browser/browser_spike.h"
 #include "drivers/browser/shm.h"
 #include "drivers/browser/module.h"
 
@@ -678,7 +677,6 @@ int main(int argc, char **argv)
 
 			if (emu_config.browser_enabled) {
 				browser::shm_init();
-				browser_spike_start(0);
 				browser::browser_module_start();
 			}
 
@@ -716,7 +714,6 @@ int main(int argc, char **argv)
 			}
 			if (emu_config.browser_enabled) {
 				browser::shm_init();
-				browser_spike_start(0);
 				browser::browser_module_start();
 			}
 		}
@@ -929,7 +926,6 @@ int main(int argc, char **argv)
 				g_platform = *platform;
 				if (emu_config.browser_enabled) {
 					browser::shm_init();
-					browser_spike_start(0);
 					browser::browser_module_start();
 				}
 			} else {
@@ -954,7 +950,6 @@ int main(int argc, char **argv)
 				}
 				if (emu_config.browser_enabled) {
 					browser::shm_init();
-					browser_spike_start(0);
 					browser::browser_module_start();
 				}
 			}

@@ -35,15 +35,9 @@ add_library(drivers STATIC
   # MacBrowser (host-side pipeline)
   browser/ring.cpp
   browser/shm.cpp
-  browser/supervisor.cpp
-  browser/xshm.cpp
-  browser/pipeline.cpp
   browser/module.cpp
-  browser/browser_spike.cpp
-  browser/bidi.cpp
   browser/cmd.cpp
   browser/mouse_poll.cpp
-  browser/window_resize.cpp
   browser/qtwebengine_browser.cpp
   # Consolidated null drivers
   null_drivers.cpp
@@ -68,17 +62,13 @@ find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
 
 target_link_libraries(drivers PRIVATE
   datachannel-static
-  nlohmann_json::nlohmann_json
   codec_flags
   libyuv::libyuv
   Qt6::Core
 )
 
-# MacBrowser pixel pipeline. Old: xcb + MIT-SHM + XDamage on Xvfb.
-# New (Phase 8): in-process QtWebEngine. Both link during the
-# transition; Phase 8i drops the xcb pull.
+# MacBrowser pixel pipeline (Phase 8): in-process QtWebEngine.
 if(BUILD_BROWSER)
-  target_link_libraries(drivers PUBLIC PkgConfig::XCB)
   target_link_libraries(drivers PUBLIC
     Qt6::Widgets
     Qt6::WebEngineCore
