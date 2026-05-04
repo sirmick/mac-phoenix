@@ -494,13 +494,18 @@ int main(int argc, char **argv)
 	}
 
 	// Qt6 bootstrap. When --browser is requested in the IPC subprocess,
-	// construct QApplication (needs widget infrastructure for QWebEngineView
-	// and brings in offscreen QPA + GL context sharing); else QCoreApplication.
-	// Heap-allocated so the conditional choice doesn't fragment the rest of
-	// main(). Lives until process exit.
-	QCoreApplication* qt_app = (browser_requested && ipc_subprocess)
-		? static_cast<QCoreApplication*>(new QApplication(argc, argv))
-		: new QCoreApplication(argc, argv);
+	// SKIP construction here — qtwebengine_browser.cpp will construct
+	// QApplication on its own worker thread inside the IPC child. That
+	// keeps the m68k/PPC CPU loop on the main thread (where the
+	// emulator's signal stack and timer interrupts are wired), while
+	// QtWebEngine + Chromium event loop run independently. Constructing
+	// QCoreApplication here too would create *two* Qt application
+	// instances in the same process — Qt rejects that and signals
+	// (loadFinished, etc.) silently never fire.
+	QCoreApplication* qt_app = nullptr;
+	if (!(browser_requested && ipc_subprocess)) {
+		qt_app = new QCoreApplication(argc, argv);
+	}
 	(void)qt_app;
 
 	// Install crash handlers
@@ -743,27 +748,15 @@ int main(int argc, char **argv)
 		printf("IPC child ready (PID %d, %s), starting CPU execution...\n",
 		       getpid(), is_ppc ? "PPC" : "m68k");
 
-		if (emu_config.browser_enabled && qobject_cast<QApplication*>(qt_app)) {
-			// QtWebEngine path: QApplication owns the main thread; CPU runs
-			// on a worker. The browser module's QWebEngineView was created
-			// on the main thread (queued via qtwebengine_module_start), so
-			// signals + paintEvent are delivered here through app.exec().
-			std::thread cpu_thread([&platform]() {
-				if (platform->cpu_execute_fast) {
-					platform->cpu_execute_fast();
-				} else {
-					while (true) platform->cpu_execute_one();
-				}
-			});
-			cpu_thread.detach();  // CPU loop never returns; cleanup via _exit
-			static_cast<QApplication*>(qt_app)->exec();
+		// CPU on main thread (this thread). When --browser is set,
+		// qtwebengine_browser.cpp's qt_thread_main has already spawned
+		// a worker thread that owns QApplication + QtWebEngine; that
+		// runs in parallel with this CPU loop.
+		if (platform->cpu_execute_fast) {
+			platform->cpu_execute_fast();
 		} else {
-			if (platform->cpu_execute_fast) {
-				platform->cpu_execute_fast();
-			} else {
-				while (true) {
-					platform->cpu_execute_one();
-				}
+			while (true) {
+				platform->cpu_execute_one();
 			}
 		}
 

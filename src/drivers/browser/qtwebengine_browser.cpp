@@ -742,49 +742,72 @@ void QtWebEngineBrowser::dispatch_scroll(int dx, int dy)
 namespace {
 
 std::unique_ptr<QtWebEngineBrowser> g_browser;
+std::thread                         g_qt_thread;
+std::atomic<QApplication*>          g_app{nullptr};
+std::atomic<bool>                   g_stopping{false};
+
+void qt_thread_main(std::string initial_url)
+{
+    int argc = 1;
+    char prog[] = "mac-phoenix-browser";
+    char* argv[] = {prog, nullptr};
+    QApplication app(argc, argv);
+    g_app.store(&app, std::memory_order_release);
+
+    fprintf(stderr, "[QtWebEngine] QApplication on tid=%lu (qpa=%s)\n",
+            (unsigned long)pthread_self(),
+            qgetenv("QT_QPA_PLATFORM").constData());
+
+    g_browser = std::make_unique<QtWebEngineBrowser>();
+    std::string url = initial_url.empty()
+        ? "data:text/html,<html><body><h1>QtWebEngine smoke</h1>"
+          "<p style=\"font-size:48px\">capture pipeline live</p></body></html>"
+        : initial_url;
+    g_browser->load(url);
+
+    fprintf(stderr, "[QtWebEngine] entering event loop\n");
+    app.exec();
+    fprintf(stderr, "[QtWebEngine] event loop exited\n");
+
+    g_browser.reset();
+    g_app.store(nullptr, std::memory_order_release);
+}
 
 }  // namespace
 
 void qtwebengine_module_start(const std::string& initial_url)
 {
-    if (g_browser) return;
+    if (g_qt_thread.joinable()) return;
 
-    QCoreApplication* app = QCoreApplication::instance();
-    if (!app) {
-        fprintf(stderr, "[QtWebEngine] no QCoreApplication — skipping start "
-                "(needs --browser at process startup)\n");
-        return;
+    // Chromium flags + QPA + GL-context-sharing must be set BEFORE the
+    // FIRST QCoreApplication ctor in this process. main.cpp set them
+    // pre-fork when it saw --browser + --ipc; this block is a safety
+    // net for direct callers (tests, future entry points).
+    if (qgetenv("QTWEBENGINE_CHROMIUM_FLAGS").isEmpty()) {
+        qputenv("QTWEBENGINE_CHROMIUM_FLAGS",
+                "--no-sandbox --disable-gpu-compositing "
+                "--in-process-gpu --use-gl=swiftshader");
     }
-    if (!qobject_cast<QApplication*>(app)) {
-        fprintf(stderr, "[QtWebEngine] QApplication not active — skipping "
-                "(headless QCoreApplication can't host QWebEngineView)\n");
-        return;
+    if (qgetenv("QSG_RHI_BACKEND").isEmpty())  qputenv("QSG_RHI_BACKEND",  "software");
+    if (qgetenv("QT_QUICK_BACKEND").isEmpty()) qputenv("QT_QUICK_BACKEND", "software");
+    if (qgetenv("DISPLAY").isEmpty() &&
+        qgetenv("WAYLAND_DISPLAY").isEmpty() &&
+        qgetenv("QT_QPA_PLATFORM").isEmpty()) {
+        qputenv("QT_QPA_PLATFORM", "offscreen");
     }
-    if (QThread::currentThread() != app->thread()) {
-        QMetaObject::invokeMethod(app, [initial_url]() {
-            qtwebengine_module_start(initial_url);
-        }, Qt::QueuedConnection);
-        return;
-    }
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
-    g_browser = std::make_unique<QtWebEngineBrowser>();
-    std::string url = initial_url.empty()
-        ? "data:text/html,<html><body><h1>QtWebEngine 8c smoke</h1>"
-          "<p style=\"font-size:48px\">capture pipeline live</p></body></html>"
-        : initial_url;
-    g_browser->load(url);
+    std::string url = initial_url;
+    g_qt_thread = std::thread(qt_thread_main, url);
 }
 
 void qtwebengine_module_stop()
 {
-    QCoreApplication* app = QCoreApplication::instance();
-    if (!app) { g_browser.reset(); return; }
-    if (QThread::currentThread() != app->thread()) {
-        QMetaObject::invokeMethod(app, []() { g_browser.reset(); },
-                                  Qt::BlockingQueuedConnection);
-        return;
+    if (g_stopping.exchange(true)) return;
+    if (auto* app = g_app.load(std::memory_order_acquire)) {
+        QMetaObject::invokeMethod(app, "quit", Qt::QueuedConnection);
     }
-    g_browser.reset();
+    if (g_qt_thread.joinable()) g_qt_thread.join();
 }
 
 namespace {
