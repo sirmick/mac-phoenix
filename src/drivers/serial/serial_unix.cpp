@@ -21,15 +21,17 @@
 
 #include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
-#include <pthread.h>
-#include <semaphore.h>
 #include <termios.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>     // posix_openpt, grantpt, unlockpt, ptsname
 #include <string.h>
 #include <unistd.h>
+
+#include <QSemaphore>
+#include <QThread>
+#include <functional>
+#include <memory>
 
 #include "cpu_emulation.h"
 #include "main.h"
@@ -42,6 +44,20 @@
 #define DEBUG 0
 #include "debug.h"
 
+
+// Tiny QThread subclass: runs an arbitrary closure on its run() override.
+// Used for the input/output worker threads; lets us keep the worker code
+// as plain XSERDPort member functions captured by lambda.
+namespace {
+class SerialIOThread : public QThread {
+public:
+    explicit SerialIOThread(std::function<void()> fn) : fn_(std::move(fn)) {}
+protected:
+    void run() override { fn_(); }
+private:
+    std::function<void()> fn_;
+};
+}  // namespace
 
 // Driver private variables
 class XSERDPort : public SERDPort {
@@ -58,20 +74,20 @@ public:
     {
         if (input_thread_active) {
             input_thread_cancel = true;
-#ifdef HAVE_PTHREAD_CANCEL
-            pthread_cancel(input_thread);
-#endif
-            pthread_join(input_thread, NULL);
-            sem_destroy(&input_signal);
+            quitting = true;
+            if (input_signal) input_signal->release();
+            input_thread->wait();
+            delete input_thread; input_thread = nullptr;
+            input_signal.reset();
             input_thread_active = false;
         }
         if (output_thread_active) {
             output_thread_cancel = true;
-#ifdef HAVE_PTHREAD_CANCEL
-            pthread_cancel(output_thread);
-#endif
-            pthread_join(output_thread, NULL);
-            sem_destroy(&output_signal);
+            quitting = true;
+            if (output_signal) output_signal->release();
+            output_thread->wait();
+            delete output_thread; output_thread = nullptr;
+            output_signal.reset();
             output_thread_active = false;
         }
     }
@@ -87,8 +103,8 @@ private:
     bool open_pty(void);
     bool configure(uint16 config);
     void set_handshake(uint32 s, bool with_dtr);
-    static void *input_func(void *arg);
-    static void *output_func(void *arg);
+    void input_loop();
+    void output_loop();
 
     std::string device_name;            // Configured device string
     int port_index;                     // 0=A, 1=B (for log labelling)
@@ -98,17 +114,17 @@ private:
     bool io_killed;                     // Flag: KillIO called, I/O threads must not call deferred tasks
     bool quitting;                      // Flag: Quit threads
 
-    bool input_thread_active;           // Flag: Input thread installed
-    volatile bool input_thread_cancel;  // Flag: Cancel input thread
-    pthread_t input_thread;             // Data input thread
-    sem_t input_signal;                 // Signal for input thread: execute command
-    uint32 input_pb;                    // Command parameter for input thread
+    bool input_thread_active;                   // Flag: Input thread installed
+    volatile bool input_thread_cancel;          // Flag: Cancel input thread
+    SerialIOThread* input_thread = nullptr;     // Data input thread
+    std::unique_ptr<QSemaphore> input_signal;   // Signal: execute command
+    uint32 input_pb;                            // Command parameter
 
-    bool output_thread_active;          // Flag: Output thread installed
-    volatile bool output_thread_cancel; // Flag: Cancel output thread
-    pthread_t output_thread;            // Data output thread
-    sem_t output_signal;                // Signal for output thread: execute command
-    uint32 output_pb;                   // Command parameter for output thread
+    bool output_thread_active;                  // Flag: Output thread installed
+    volatile bool output_thread_cancel;         // Flag: Cancel output thread
+    SerialIOThread* output_thread = nullptr;    // Data output thread
+    std::unique_ptr<QSemaphore> output_signal;  // Signal: execute command
+    uint32 output_pb;                           // Command parameter
 
     struct termios mode;                // Terminal configuration
 };
@@ -185,33 +201,33 @@ int16 XSERDPort::open(uint16 config)
     // Start input/output threads
     input_thread_cancel = false;
     output_thread_cancel = false;
-    if (sem_init(&input_signal, 0, 0) < 0)
-        goto open_error;
-    if (sem_init(&output_signal, 0, 0) < 0)
-        goto open_error;
-    input_thread_active = (pthread_create(&input_thread, NULL, input_func, this) == 0);
-    output_thread_active = (pthread_create(&output_thread, NULL, output_func, this) == 0);
-    if (!input_thread_active || !output_thread_active)
-        goto open_error;
+    input_signal = std::make_unique<QSemaphore>(0);
+    output_signal = std::make_unique<QSemaphore>(0);
+    input_thread = new SerialIOThread([this](){ input_loop(); });
+    output_thread = new SerialIOThread([this](){ output_loop(); });
+    input_thread->start();
+    output_thread->start();
+    input_thread_active = true;
+    output_thread_active = true;
     return noErr;
 
 open_error:
     if (input_thread_active) {
         input_thread_cancel = true;
-#ifdef HAVE_PTHREAD_CANCEL
-        pthread_cancel(input_thread);
-#endif
-        pthread_join(input_thread, NULL);
-        sem_destroy(&input_signal);
+        quitting = true;
+        if (input_signal) input_signal->release();
+        input_thread->wait();
+        delete input_thread; input_thread = nullptr;
+        input_signal.reset();
         input_thread_active = false;
     }
     if (output_thread_active) {
         output_thread_cancel = true;
-#ifdef HAVE_PTHREAD_CANCEL
-        pthread_cancel(output_thread);
-#endif
-        pthread_join(output_thread, NULL);
-        sem_destroy(&output_signal);
+        quitting = true;
+        if (output_signal) output_signal->release();
+        output_thread->wait();
+        delete output_thread; output_thread = nullptr;
+        output_signal.reset();
         output_thread_active = false;
     }
     if (fd > 0) {
@@ -232,7 +248,7 @@ int16 XSERDPort::prime_in(uint32 pb, uint32 dce)
     read_pending = true;
     input_pb = pb;
     WriteMacInt32(input_dt + serdtDCE, dce);
-    sem_post(&input_signal);
+    if (input_signal) input_signal->release();
     return 1;   // Command in progress
 }
 
@@ -247,7 +263,7 @@ int16 XSERDPort::prime_out(uint32 pb, uint32 dce)
     write_pending = true;
     output_pb = pb;
     WriteMacInt32(output_dt + serdtDCE, dce);
-    sem_post(&output_signal);
+    if (output_signal) output_signal->release();
     return 1;   // Command in progress
 }
 
@@ -454,17 +470,19 @@ int16 XSERDPort::close()
 {
     if (input_thread_active) {
         quitting = true;
-        sem_post(&input_signal);
-        pthread_join(input_thread, NULL);
+        if (input_signal) input_signal->release();
+        input_thread->wait();
+        delete input_thread; input_thread = nullptr;
         input_thread_active = false;
-        sem_destroy(&input_signal);
+        input_signal.reset();
     }
     if (output_thread_active) {
         quitting = true;
-        sem_post(&output_signal);
-        pthread_join(output_thread, NULL);
+        if (output_signal) output_signal->release();
+        output_thread->wait();
+        delete output_thread; output_thread = nullptr;
         output_thread_active = false;
-        sem_destroy(&output_signal);
+        output_signal.reset();
     }
 
     if (fd > 0)
@@ -623,40 +641,38 @@ void XSERDPort::set_handshake(uint32 s, bool with_dtr)
  *  Data input thread
  */
 
-void *XSERDPort::input_func(void *arg)
+void XSERDPort::input_loop()
 {
-    XSERDPort *s = (XSERDPort *)arg;
-    while (!s->input_thread_cancel) {
+    while (!input_thread_cancel) {
 
-        sem_wait(&s->input_signal);
-        if (s->quitting)
+        input_signal->acquire();
+        if (quitting)
             break;
 
-        void *buf = Mac2HostAddr(ReadMacInt32(s->input_pb + ioBuffer));
-        uint32 length = ReadMacInt32(s->input_pb + ioReqCount);
-        D(bug("input_func waiting for %ld bytes of data...\n", length));
-        int32 actual = read(s->fd, buf, length);
+        void *buf = Mac2HostAddr(ReadMacInt32(input_pb + ioBuffer));
+        uint32 length = ReadMacInt32(input_pb + ioReqCount);
+        D(bug("input_loop waiting for %ld bytes of data...\n", length));
+        int32 actual = read(fd, buf, length);
         D(bug(" %ld bytes received\n", actual));
 
-        if (s->io_killed) {
-            WriteMacInt16(s->input_pb + ioResult, uint16(abortErr));
-            WriteMacInt32(s->input_pb + ioActCount, 0);
-            s->read_pending = s->read_done = false;
+        if (io_killed) {
+            WriteMacInt16(input_pb + ioResult, uint16(abortErr));
+            WriteMacInt32(input_pb + ioActCount, 0);
+            read_pending = read_done = false;
         } else {
             if (actual >= 0) {
-                WriteMacInt32(s->input_pb + ioActCount, actual);
-                WriteMacInt32(s->input_dt + serdtResult, noErr);
+                WriteMacInt32(input_pb + ioActCount, actual);
+                WriteMacInt32(input_dt + serdtResult, noErr);
             } else {
-                WriteMacInt32(s->input_pb + ioActCount, 0);
-                WriteMacInt32(s->input_dt + serdtResult, uint16(readErr));
+                WriteMacInt32(input_pb + ioActCount, 0);
+                WriteMacInt32(input_dt + serdtResult, uint16(readErr));
             }
             D(bug(" triggering serial interrupt\n"));
-            s->read_done = true;
+            read_done = true;
             SetInterruptFlag(INTFLAG_SERIAL);
             TriggerInterrupt();
         }
     }
-    return NULL;
 }
 
 
@@ -664,39 +680,37 @@ void *XSERDPort::input_func(void *arg)
  *  Data output thread
  */
 
-void *XSERDPort::output_func(void *arg)
+void XSERDPort::output_loop()
 {
-    XSERDPort *s = (XSERDPort *)arg;
-    while (!s->output_thread_cancel) {
+    while (!output_thread_cancel) {
 
-        sem_wait(&s->output_signal);
-        if (s->quitting)
+        output_signal->acquire();
+        if (quitting)
             break;
 
-        void *buf = Mac2HostAddr(ReadMacInt32(s->output_pb + ioBuffer));
-        uint32 length = ReadMacInt32(s->output_pb + ioReqCount);
-        D(bug("output_func transmitting %ld bytes of data...\n", length));
+        void *buf = Mac2HostAddr(ReadMacInt32(output_pb + ioBuffer));
+        uint32 length = ReadMacInt32(output_pb + ioReqCount);
+        D(bug("output_loop transmitting %ld bytes of data...\n", length));
 
-        int32 actual = write(s->fd, buf, length);
+        int32 actual = write(fd, buf, length);
         D(bug(" %ld bytes transmitted\n", actual));
 
-        if (s->io_killed) {
-            WriteMacInt16(s->output_pb + ioResult, uint16(abortErr));
-            WriteMacInt32(s->output_pb + ioActCount, 0);
-            s->write_pending = s->write_done = false;
+        if (io_killed) {
+            WriteMacInt16(output_pb + ioResult, uint16(abortErr));
+            WriteMacInt32(output_pb + ioActCount, 0);
+            write_pending = write_done = false;
         } else {
             if (actual >= 0) {
-                WriteMacInt32(s->output_pb + ioActCount, actual);
-                WriteMacInt32(s->output_dt + serdtResult, noErr);
+                WriteMacInt32(output_pb + ioActCount, actual);
+                WriteMacInt32(output_dt + serdtResult, noErr);
             } else {
-                WriteMacInt32(s->output_pb + ioActCount, 0);
-                WriteMacInt32(s->output_dt + serdtResult, uint16(writErr));
+                WriteMacInt32(output_pb + ioActCount, 0);
+                WriteMacInt32(output_dt + serdtResult, uint16(writErr));
             }
             D(bug(" triggering serial interrupt\n"));
-            s->write_done = true;
+            write_done = true;
             SetInterruptFlag(INTFLAG_SERIAL);
             TriggerInterrupt();
         }
     }
-    return NULL;
 }
