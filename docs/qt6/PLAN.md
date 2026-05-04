@@ -475,7 +475,8 @@ Per phase:
 | 5 | HTTP server → QTcpServer/QTcpSocket | ✅ done — pivoted from QHttpServer | `63ddd652` |
 | 6 | WebSocket → QWebSocketServer | pending — fold into Phase 8? `/ws` works on QTcpServer today |
 | 7 | Windows SEH path activation | ✅ done | `e80f314f` |
-| 8 | MacBrowser → QtWebEngine | pending — handoff doc at `docs/qt6/Phase8.md` | `23bcc2b5` (doc) |
+| 8 | MacBrowser → QtWebEngine | ✅ done | 8a `baeb69df` · 8b `324aab24` · 8c `00137c26` · 8d `d9b2f44c` · 8e `44b1127d` · 8f `08afe6a9` · 8g `c6c7da1d` · 8h `438fe231` · 8i `44f65426` · 8j (this) |
+| 8c-2 | QQuickWebEngineView event-driven capture | pending — replaces 8c's QTimer+grab poll. See `qtwebengine_browser.cpp::capture_tick` |
 | 9 | Native head (QApplication mode) | pending |
 | 10 | Windows port + installer | pending |
 | 11 | macOS port + signed `.app` + DMG | pending |
@@ -506,7 +507,36 @@ handoff doc written but implementation deferred. Net effect:
 - nlohmann_json migration is functionally complete for all kept
   code; subproject can't drop until Phase 8 deletes bidi.cpp.
 
-Next session entry point: `docs/qt6/Phase8.md`.
+**2026-05-03 → 2026-05-04 session** (12 commits, qt-port branch):
+Phase 8 landed end-to-end as 8a..8j. Net effect:
+
+- xcb + Xvfb + Firefox + WebDriver-BiDi pipeline is gone.
+  `--browser` now runs in-process Chromium via `QWebEngineView`.
+- 5 apt deps dropped (`libxcb1-dev`, `libxcb-shm0-dev`,
+  `libxcb-damage0-dev`, `libxcb-composite0-dev`, `libxcb-randr0-dev`)
+  + 2 runtime deps (Xvfb, Firefox tarball).
+- `nlohmann_json` subproject deleted (188k SLOC) — every JSON site
+  in the kept tree now uses `QJsonDocument`/`QJsonObject`.
+- Net code change in `src/drivers/browser/`: 12 files deleted
+  (~3200 LOC: bidi/supervisor/xshm/pipeline/browser_spike/window_resize),
+  1 file added (`qtwebengine_browser.{cpp,h}`, ~750 LOC), 4 files
+  refactored thin (`cmd`, `module`, `mouse_poll`, `shm`).
+- Side-fix: `main.cpp:435` mono-Mac default-depth bug exposed as
+  Phase 8a regression — `init_mac_subsystems` was deref'ing a wild
+  `current_mode` pointer when modes vector was 1-bit-only and default
+  depth was 32-bit. Pre-Qt the wild pointer happened to deref to
+  zero memory; with Chromium libs mapped, ASLR shifted the layout
+  and SE booted SIGSEGV'd. Fix: pass `VDEPTH_1BIT` when
+  `mono_framebuffer` is true. Also added `APPLE_512x342 = 0x9F` to
+  the kModes table so non-IPC video init paths don't yield empty
+  modes for the same configuration.
+
+8c-2 is queued as a follow-up: switch QTimer-poll capture to
+QQuickWebEngineView + `afterRendering()` for event-driven semantics
+matching the original XDamage path.
+
+Next session entry point: pick up 8c-2 (event-driven capture), then
+move into Phase 9 (native head) or Phase 10 (Windows port).
 
 ## Phase 1.5 — Qt6 in build/packaging/CI
 

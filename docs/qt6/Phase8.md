@@ -1,8 +1,13 @@
 # Phase 8 handoff — MacBrowser host pipeline → QtWebEngine
 
-This is a planning doc for the Phase 8 rewrite. **Phase 8 is not
-started yet** — it's a multi-day chunk that needs its own session.
-Read `docs/MacBrowser.md` first for the full architecture.
+> **STATUS: COMPLETE** (2026-05-04). 8a..8j shipped on `qt-port`.
+> See [`docs/MacBrowser.md`](../MacBrowser.md) for the current
+> architecture and [`PLAN.md`](PLAN.md) for the Phase 8 commit list.
+> One follow-up tracked: **8c-2** (event-driven capture via
+> `QQuickWebEngineView` + `afterRendering()`).
+>
+> The rest of this doc is the original handoff plan, kept for
+> historical context. Read `docs/MacBrowser.md` for what landed.
 
 ## What Phase 8 buys
 
