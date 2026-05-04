@@ -295,15 +295,31 @@ void WebRTCServer::register_routes(http::Server& http_server) {
         });
 
         ws->on_binary([](std::vector<std::byte> data) {
+            unsigned t = data.empty() ? 0u : (unsigned)data[0];
+            // Always log key (3), mouse-button (2), mouse-mode (6).
+            // Suppress per-mouse-move spam (1, 5).
+            if (t == 2 || t == 3 || t == 6) {
+                fprintf(stderr, "[WS-IN] type=%u size=%zu", t, data.size());
+                if (t == 3 && data.size() >= 4) {
+                    uint16_t kc;
+                    std::memcpy(&kc, data.data() + 1, 2);
+                    fprintf(stderr, " keycode=0x%04x down=%u",
+                            kc, (unsigned)data[3]);
+                }
+                fprintf(stderr, "\n");
+            }
             process_input_message(data.data(), data.size());
         });
 
         ws->on_close([this, peer_id_slot]() {
+            fprintf(stderr, "[WS-IN] close (peer_id=%s)\n",
+                    peer_id_slot->c_str());
             if (!peer_id_slot->empty()) {
                 remove_peer(*peer_id_slot);
             }
         });
 
+        fprintf(stderr, "[WS-IN] WebSocket connected\n");
         // Fire synchronous welcome (matches the old libdatachannel behavior).
         ws->send(std::string("{\"type\":\"welcome\",\"peerId\":\"server\"}"));
     });
