@@ -44,6 +44,15 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         qt_dispatch_reload();
         return true;
     case BR_CMD_BACK:
+        // Filter out the legacy "spike heartbeat": MacBrowser.c's
+        // maybe_push_g2h() used to push BR_CMD_BACK with a 4-byte
+        // counter payload roughly once per second as a g2h framing
+        // test. browser_spike.cpp had the matching filter, which got
+        // deleted with the rest of the spike in 8i — the heartbeats
+        // started getting dispatched as real Back actions, silently
+        // navigating the user's page back to whatever was first in
+        // history every second. Real toolbar Back has len=0.
+        if (len == 4) return true;
         qt_dispatch_back();
         return true;
     case BR_CMD_FORWARD:

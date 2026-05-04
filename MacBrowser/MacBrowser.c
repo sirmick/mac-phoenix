@@ -172,10 +172,8 @@ static BrowserShm    *gShm     = NULL;        /* same, typed            */
 static uint32_t       gShmAddr = 0;           /* Mac address of gShm    */
 static uint32_t       gLastSeq = 0;
 static uint32_t       gFramesShown = 0;
-static uint32_t       gG2hPushed   = 0;       /* commands sent to host  */
 static uint32_t       gH2gReceived = 0;       /* events from host       */
 static uint16_t       gLastEvtType = 0;
-static unsigned long  gLastG2hTicks = 0;
 
 /* Mirrored from the most recent BR_EV_STATUS we drained out of h2g.
  * gStatusCode is BR_STATUS_*; gStatusDirty signals the main loop to
@@ -492,29 +490,6 @@ static void drain_h2g(void)
         }
     }
 }
-
-/* Push one BR_CMD_BACK roughly once per second. The payload is a
- * little 4-byte counter so the host log can verify framing + content. */
-static void maybe_push_g2h(void)
-{
-    if (!gShm) return;
-    unsigned long now = TickCount();
-    if (now - gLastG2hTicks < 60) return;  /* ~1s */
-    gLastG2hTicks = now;
-
-    uint32_t payload = gG2hPushed;
-    /* Already big-endian since the guest is native BE. */
-    if (br_ring_push(&gShm->g2h, BR_CMD_BACK,
-                     &payload, sizeof(payload)) == 0) {
-        gG2hPushed++;
-        br_log(&gShm->log, BR_LOG_DBG,
-               "g2h tick %lu  h2g_seen=%lu  evt=0x%x",
-               (unsigned long)gG2hPushed,
-               (unsigned long)gH2gReceived,
-               (unsigned)gLastEvtType);
-    }
-}
-
 
 static void url_bar_rect(Rect *out)
 {
@@ -1281,7 +1256,6 @@ int main(void)
 
         poll_shm();
         drain_h2g();
-        maybe_push_g2h();
 
         if (gStatusDirty) {
             gStatusDirty = false;
