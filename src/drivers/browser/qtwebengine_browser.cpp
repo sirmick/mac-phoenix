@@ -4,6 +4,7 @@
 #include "qtwebengine_browser.h"
 
 #include "shm.h"
+#include "emulator_config.h"
 #define BR_HOST 1
 #include "MacBrowser.h"
 
@@ -28,7 +29,12 @@
 #include <QUrl>
 #include <QVariant>
 #include <QVariantList>
+#include <QDir>
+#include <QFileInfo>
+#include <QStandardPaths>
+#include <QWebEngineDownloadRequest>
 #include <QWebEnginePage>
+#include <QWebEngineProfile>
 #include <QWebEngineView>
 #include <QWheelEvent>
 
@@ -220,6 +226,18 @@ QtWebEngineBrowser::QtWebEngineBrowser()
     QObject::connect(metrics_timer_.get(), &QTimer::timeout, view_.get(),
                      [this]() { metrics_tick(); });
     metrics_timer_->start();
+
+    // Phase 8h: downloads. Hook the profile's downloadRequested signal
+    // and route lifecycle to BR_EV_DOWNLOAD events. Destination matches
+    // the supervisor.cpp convention: bridge_dir/Downloads (guest sees
+    // it via ExtFS at Host:MacPhoenix:Downloads). Falls back to the
+    // system Downloads dir if no bridge.
+    QWebEngineProfile* profile = view_->page()->profile();
+    QObject::connect(profile, &QWebEngineProfile::downloadRequested,
+                     view_.get(),
+                     [this](QWebEngineDownloadRequest* req) {
+                         handle_download_request(req);
+                     });
 }
 
 QtWebEngineBrowser::~QtWebEngineBrowser() = default;
@@ -228,6 +246,111 @@ void QtWebEngineBrowser::load(const std::string& url)
 {
     fprintf(stderr, "[QtWebEngine] load %s\n", url.c_str());
     view_->setUrl(QUrl(QString::fromStdString(url)));
+}
+
+namespace {
+
+// Pack one BR_EV_DOWNLOAD payload and emit. Layout (matches MacBrowser.h):
+//   u32 guid, u8 state, u32 bytes, u32 total, u8 plen, u8 path[plen]
+void send_download(uint32_t guid, uint8_t state,
+                   uint64_t bytes, uint64_t total,
+                   const std::string& path)
+{
+    uint8_t buf[1 + 4 + 4 + 4 + 1 + 250];
+    auto put_be32 = [](uint8_t* p, uint32_t v) {
+        p[0] = (uint8_t)(v >> 24);
+        p[1] = (uint8_t)(v >> 16);
+        p[2] = (uint8_t)(v >>  8);
+        p[3] = (uint8_t)(v);
+    };
+    put_be32(buf + 0, guid);
+    buf[4] = state;
+    put_be32(buf + 5, (uint32_t)std::min(bytes, (uint64_t)0xFFFFFFFFu));
+    put_be32(buf + 9, (uint32_t)std::min(total, (uint64_t)0xFFFFFFFFu));
+    size_t n = std::min(path.size(), (size_t)250);
+    buf[13] = (uint8_t)n;
+    if (n) memcpy(buf + 14, path.data(), n);
+    send_event(BR_EV_DOWNLOAD, buf, (uint16_t)(14 + n));
+}
+
+}  // namespace
+
+void QtWebEngineBrowser::handle_download_request(QWebEngineDownloadRequest* req)
+{
+    if (!req) return;
+
+    // Resolve destination directory. Bridge dir wins (guest already
+    // sees it via ExtFS at Host:MacPhoenix:Downloads); else system
+    // Downloads dir. Either way mkdir -p so accept() doesn't fail.
+    QString dl_dir;
+    {
+        const auto& cfg = config::EmulatorConfig::instance();
+        if (!cfg.bridge_dir.empty()) {
+            dl_dir = QString::fromStdString(cfg.bridge_dir) + "/Downloads";
+        } else {
+            dl_dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+        }
+    }
+    QDir().mkpath(dl_dir);
+
+    // Pick a filename. QWebEngineDownloadRequest gives us a suggested
+    // name; the host directory is ours. Avoid collision by appending
+    // a counter if the chosen path exists already.
+    QString fn = req->suggestedFileName();
+    if (fn.isEmpty()) fn = "download";
+    QString path = dl_dir + "/" + fn;
+    {
+        QFileInfo info(path);
+        QString stem = info.completeBaseName();
+        QString ext = info.suffix();
+        for (int i = 1; QFileInfo::exists(path); i++) {
+            path = dl_dir + "/" + stem + QString("-%1").arg(i)
+                 + (ext.isEmpty() ? QString() : ("." + ext));
+        }
+    }
+    req->setDownloadDirectory(dl_dir);
+    req->setDownloadFileName(QFileInfo(path).fileName());
+
+    // Mint a guid. Per-process counter; fits in u32 for a long time.
+    static std::atomic<uint32_t> s_next_guid{1};
+    uint32_t guid = s_next_guid.fetch_add(1, std::memory_order_relaxed);
+
+    fprintf(stderr, "[QtWebEngine] download begin guid=%u → %s\n",
+            guid, path.toUtf8().constData());
+    send_download(guid, BR_DL_BEGIN, 0,
+                  (uint64_t)req->totalBytes(), path.toStdString());
+
+    QObject::connect(req, &QWebEngineDownloadRequest::receivedBytesChanged,
+                     view_.get(),
+                     [guid, req, path]() {
+                         send_download(guid, BR_DL_PROGRESS,
+                                       (uint64_t)req->receivedBytes(),
+                                       (uint64_t)req->totalBytes(),
+                                       path.toStdString());
+                     });
+    QObject::connect(req, &QWebEngineDownloadRequest::isFinishedChanged,
+                     view_.get(),
+                     [guid, req, path]() {
+                         if (!req->isFinished()) return;
+                         uint8_t state = BR_DL_DONE;
+                         switch (req->state()) {
+                             case QWebEngineDownloadRequest::DownloadCompleted:
+                                 state = BR_DL_DONE; break;
+                             case QWebEngineDownloadRequest::DownloadCancelled:
+                                 state = BR_DL_CANCELED; break;
+                             case QWebEngineDownloadRequest::DownloadInterrupted:
+                                 state = BR_DL_ERROR; break;
+                             default: state = BR_DL_DONE; break;
+                         }
+                         fprintf(stderr, "[QtWebEngine] download finished "
+                                 "guid=%u state=%u\n", guid, state);
+                         send_download(guid, state,
+                                       (uint64_t)req->receivedBytes(),
+                                       (uint64_t)req->totalBytes(),
+                                       path.toStdString());
+                     });
+
+    req->accept();
 }
 
 void QtWebEngineBrowser::metrics_tick()

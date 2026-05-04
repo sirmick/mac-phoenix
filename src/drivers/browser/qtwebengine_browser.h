@@ -26,6 +26,7 @@
 #include <string>
 
 class QWebEngineView;
+class QWebEngineDownloadRequest;
 class QTimer;
 
 namespace browser {
@@ -68,6 +69,7 @@ public:
 private:
     void capture_tick();
     void metrics_tick();
+    void handle_download_request(::QWebEngineDownloadRequest* req);
 
     std::unique_ptr<QWebEngineView> view_;
     std::unique_ptr<QTimer>         capture_timer_;
