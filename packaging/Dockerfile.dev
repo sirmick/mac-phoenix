@@ -51,6 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         # Qt6 (cross-platform abstraction; see docs/qt6/PLAN.md)
         qt6-base-dev \
         qt6-tools-dev \
+        qt6-webengine-dev \
         # video/audio codecs
         libopenh264-dev \
         libvpx-dev \

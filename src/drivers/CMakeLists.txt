@@ -73,7 +73,14 @@ target_link_libraries(drivers PRIVATE
   Qt6::Core
 )
 
-# MacBrowser pixel pipeline: xcb + MIT-SHM + XDamage.
+# MacBrowser pixel pipeline. Old: xcb + MIT-SHM + XDamage on Xvfb.
+# New (Phase 8): in-process QtWebEngine. Both link during the
+# transition; Phase 8i drops the xcb pull.
 if(BUILD_BROWSER)
   target_link_libraries(drivers PUBLIC PkgConfig::XCB)
+  target_link_libraries(drivers PUBLIC
+    Qt6::Widgets
+    Qt6::WebEngineCore
+    Qt6::WebEngineWidgets
+  )
 endif()

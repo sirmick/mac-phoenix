@@ -138,11 +138,23 @@ turn on `QApplication` and `Qt6::Widgets`.
 
 ## Sequence of commits to land Phase 8
 
-1. **Phase 8a**: install `qt6-webengine-dev`; add `Qt6::WebEngineCore`
-   + `Qt6::WebEngineWidgets` to `src/drivers/CMakeLists.txt` under
-   `if(BUILD_BROWSER)`; add to `debian/control`, `rpm/mac-phoenix.spec`,
-   `packaging/Dockerfile.{dev,rpm}` (Phase 1.5 protocol). No code yet
-   — verify CMake configure picks up the deps.
+1. **Phase 8a**: install `qt6-webengine-dev`; add Qt6 WebEngine to the
+   top-level `find_package` + link `Qt6::Widgets` / `Qt6::WebEngineCore`
+   / `Qt6::WebEngineWidgets` into the `drivers` library under
+   `if(BUILD_BROWSER)`; update `debian/control`, `rpm/mac-phoenix.spec`,
+   `packaging/Dockerfile.{dev,rpm}`, `CLAUDE.md` (Phase 1.5 protocol).
+   Side-fixes (latent UB exposed by Chromium libs shifting address-space
+   layout — pre-Qt the wild deref hit zero memory; with Qt loaded it
+   SIGSEGVs at `init_mac_subsystems:303`):
+     - `main.cpp:435` (IPC video init): pass `VDEPTH_1BIT` as the
+       `default_depth` to `ipc_monitor_desc` when `mono_framebuffer`
+       is true. The mono SE branch publishes a single 1-bit mode but
+       was passing `VDEPTH_32BIT` as the default — `find_mode()` then
+       returns null and `current_mode` stays uninitialized.
+     - `kModes`: add `APPLE_512x342 = 0x9F` + a 512x342 m68k entry so
+       any non-IPC video init paths that filter the table at
+       `--screen 512x342` don't yield an empty modes vector.
+   No browser code yet — verify CMake configure clean + ctest 19/20.
 2. **Phase 8b**: write `qtwebengine_browser.{cpp,h}` skeleton —
    `QWebEnginePage` instantiation, signal connections, basic
    navigation. Validate by booting `--browser`, opening a URL,

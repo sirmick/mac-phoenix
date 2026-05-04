@@ -38,8 +38,9 @@ set(ENABLE_OPUS "AUTO" CACHE STRING "Opus audio (AUTO/ON/OFF)")
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 # Qt6 — see docs/qt6/PLAN.md. Phase 0 links Core only; later phases add
-# HttpServer (Phase 5), WebSockets (Phase 6), WebEngineCore (Phase 8),
-# Multimedia + Quick (Phase 9). Qt 6.4 minimum (QHttpServer landed in 6.4).
+# Network (Phase 5), WebSockets (Phase 6), WebEngineCore (Phase 8),
+# Multimedia + Quick (Phase 9). Qt 6.4 minimum.
+# WebEngine + Widgets are pulled in below under if(BUILD_BROWSER).
 find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
 # tools/png2icn.py turns the PNG icon sources into Rez data blocks;
 # called from the MacBrowser/BridgeAgent build commands. Pillow is
@@ -89,15 +90,23 @@ target_include_directories(libyuv::libyuv INTERFACE ${LIBYUV_INC})
 # Math library
 find_library(M_LIB m)
 
-# X protocol bindings for the MacBrowser pixel pipeline (Firefox + Xvfb).
-# xcb + MIT-SHM + XDamage; required when BUILD_BROWSER is on (default).
-option(BUILD_BROWSER "Build the MacBrowser host pipeline (xcb + Firefox)" ON)
+# MacBrowser host pipeline. Phase 8 (qt-port) is migrating from xcb +
+# Xvfb + Firefox to QtWebEngine; both dep sets are pulled in during the
+# transition. Phase 8i drops the xcb deps once xshm/supervisor/bidi
+# are deleted.
+option(BUILD_BROWSER "Build the MacBrowser host pipeline" ON)
 if(BUILD_BROWSER)
   if(NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "BUILD_BROWSER requires pkg-config")
   endif()
+  # Old pipeline: xcb + MIT-SHM + XDamage on Xvfb. Removed in Phase 8i.
   pkg_check_modules(XCB REQUIRED IMPORTED_TARGET
     xcb xcb-shm xcb-damage xcb-composite xcb-randr)
+  # New pipeline: in-process QWebEnginePage. Widgets is required by
+  # WebEngineWidgets (and by the QApplication switch in main.cpp when
+  # BUILD_BROWSER is on — QtWebEngine needs widget infrastructure on
+  # the GUI thread, can't run under QCoreApplication).
+  find_package(Qt6 6.4 COMPONENTS Widgets WebEngineCore WebEngineWidgets REQUIRED)
 endif()
 
 if(NOT M_LIB)
