@@ -483,7 +483,7 @@ Per phase:
 | 13 | POSIX timing → `QElapsedTimer` + `QThread::usleep` | ✅ done — `timer_interrupt.cpp`; ctest 20/20 |
 | 14 | Leftover `fork`/`execvp` → `QProcess` | ✅ done — `api_handlers::run_fork_exec` + `ether_socket::spawn_bridge`/`stop_bridge` |
 | 15 | `pthread`/`sem_t` in `serial_unix.cpp` → `QThread`/`QSemaphore` | pending — Phase 10 unblocker |
-| 16 | `std::thread` in webserver → `QThread` | pending — completeness sweep after Phase 5 lands |
+| 16 | `std::thread` in webserver → `QThread` | ✅ done — accept loop wrapped in `HttpServerThread : QThread` |
 | 17 | `nlohmann::json` → `QJsonDocument`/`QJsonObject` | pending — drops `nlohmann_json` subproject |
 
 **Recommended execution order for the dep-drop phases**: 12 (easy

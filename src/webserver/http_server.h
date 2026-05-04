@@ -12,7 +12,6 @@
 #define HTTP_SERVER_H
 
 #include <string>
-#include <thread>
 #include <atomic>
 #include <future>
 #include <functional>
@@ -24,6 +23,7 @@ class QTcpSocket;
 namespace http {
 
 class WebSocket;
+class HttpServerThread;  // QThread subclass running the accept loop; impl-private
 
 /**
  * HTTP Request Information
@@ -113,16 +113,19 @@ public:
     bool is_running() const { return running_; }
 
 private:
-    // run() owns the QTcpServer for its lifetime and signals listen() success
-    // back through the promise so start() can return false on bind failure.
-    void run(std::shared_ptr<std::promise<bool>> listen_result);
+    // server_loop() owns the QTcpServer for its lifetime and signals listen()
+    // success back through the promise so start() can return false on bind
+    // failure. Called from HttpServerThread::run().
+    void server_loop(std::shared_ptr<std::promise<bool>> listen_result);
     bool handle_client(QTcpSocket* socket);  // returns true if fd was handed off
     bool parse_request(const char* buffer, size_t length, Request& req);
     bool try_websocket_upgrade(const Request& req, QTcpSocket* socket);  // true = handed off
 
+    friend class HttpServerThread;
+
     int port_;
     std::atomic<bool> running_;
-    std::thread thread_;
+    std::unique_ptr<HttpServerThread> thread_;
     RequestHandler handler_;
 
     // Stream routes: path -> handler

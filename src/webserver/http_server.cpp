@@ -13,10 +13,11 @@
 
 #include "http_server.h"
 #include "websocket.h"
+#include <QByteArray>
+#include <QHostAddress>
 #include <QTcpServer>
 #include <QTcpSocket>
-#include <QHostAddress>
-#include <QByteArray>
+#include <QThread>
 #include <unistd.h>
 #include <cctype>
 #include <cstring>
@@ -24,6 +25,22 @@
 #include <errno.h>
 
 namespace http {
+
+// QThread subclass that drives the accept loop. The actual loop body lives
+// in Server::server_loop so it can keep direct access to private members
+// without exposing them through the QObject interface.
+class HttpServerThread : public QThread {
+public:
+    HttpServerThread(Server* owner, std::shared_ptr<std::promise<bool>> listen_result)
+        : owner_(owner), listen_result_(std::move(listen_result)) {}
+
+protected:
+    void run() override { owner_->server_loop(listen_result_); }
+
+private:
+    Server* owner_;
+    std::shared_ptr<std::promise<bool>> listen_result_;
+};
 
 // Response implementation — unchanged from the POSIX-backed version.
 Response::Response()
@@ -123,12 +140,14 @@ bool Server::start(int port, RequestHandler handler) {
     auto listen_future = listen_result->get_future();
 
     running_ = true;
-    thread_ = std::thread(&Server::run, this, listen_result);
+    thread_ = std::make_unique<HttpServerThread>(this, listen_result);
+    thread_->start();
 
     bool ok = listen_future.get();
     if (!ok) {
         running_ = false;
-        if (thread_.joinable()) thread_.join();
+        thread_->wait();
+        thread_.reset();
         return false;
     }
 
@@ -138,12 +157,13 @@ bool Server::start(int port, RequestHandler handler) {
 
 void Server::stop() {
     running_ = false;
-    if (thread_.joinable()) {
-        thread_.join();
+    if (thread_) {
+        thread_->wait();
+        thread_.reset();
     }
 }
 
-void Server::run(std::shared_ptr<std::promise<bool>> listen_result) {
+void Server::server_loop(std::shared_ptr<std::promise<bool>> listen_result) {
     QTcpServer tcp_server;
     if (!tcp_server.listen(QHostAddress::Any, port_)) {
         fprintf(stderr, "HTTP: Failed to listen on port %d: %s\n", port_,
