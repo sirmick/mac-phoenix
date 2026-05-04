@@ -853,11 +853,12 @@ void qt_thread_main(std::string initial_url)
             qgetenv("QT_QPA_PLATFORM").constData());
 
     g_browser = std::make_unique<QtWebEngineBrowser>();
-    std::string url = initial_url.empty()
-        ? "data:text/html,<html><body><h1>QtWebEngine smoke</h1>"
-          "<p style=\"font-size:48px\">capture pipeline live</p></body></html>"
-        : initial_url;
-    g_browser->load(url);
+    // Blank initial page. The guest's MacBrowser sends BR_CMD_NAV to set
+    // the real URL when the user types in the URL bar; until then there's
+    // nothing useful to show. about:blank renders cleanly without the
+    // earlier smoke-test placeholder bleeding through into screenshots.
+    g_browser->load(initial_url.empty() ? std::string("about:blank")
+                                        : initial_url);
 
     fprintf(stderr, "[QtWebEngine] entering event loop\n");
     app.exec();
