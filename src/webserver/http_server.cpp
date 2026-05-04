@@ -17,7 +17,14 @@
 #include <QHostAddress>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QThread>
+
+#include <netinet/in.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <unistd.h>
 #include <cctype>
 #include <cstring>
@@ -164,40 +171,87 @@ void Server::stop() {
 }
 
 void Server::server_loop(std::shared_ptr<std::promise<bool>> listen_result) {
-    QTcpServer tcp_server;
-    if (!tcp_server.listen(QHostAddress::Any, port_)) {
-        fprintf(stderr, "HTTP: Failed to listen on port %d: %s\n", port_,
-                tcp_server.errorString().toUtf8().constData());
+    // Bypass QTcpServer for accept entirely. Qt's accept machinery
+    // depends on QSocketNotifier signals dispatched via a Qt event loop;
+    // without one (we run on a plain std::thread), Qt's pendingConnections
+    // buffer fills up after ~5 simultaneous arrivals and waitForNewConnection
+    // stops returning new sockets. Raw POSIX accept() on the listening fd
+    // has no such state — it's just a kernel syscall.
+    int listen_fd = ::socket(AF_INET6, SOCK_STREAM, 0);
+    if (listen_fd < 0) {
+        fprintf(stderr, "HTTP: socket() failed: %s\n", strerror(errno));
+        listen_result->set_value(false);
+        return;
+    }
+    int reuse = 1;
+    ::setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    int v6only = 0;
+    ::setsockopt(listen_fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only));
+    sockaddr_in6 addr{};
+    addr.sin6_family = AF_INET6;
+    addr.sin6_addr   = in6addr_any;
+    addr.sin6_port   = htons((uint16_t)port_);
+    if (::bind(listen_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
+        fprintf(stderr, "HTTP: bind(%d) failed: %s\n", port_, strerror(errno));
+        ::close(listen_fd);
+        listen_result->set_value(false);
+        return;
+    }
+    if (::listen(listen_fd, 128) < 0) {
+        fprintf(stderr, "HTTP: listen() failed: %s\n", strerror(errno));
+        ::close(listen_fd);
         listen_result->set_value(false);
         return;
     }
     listen_result->set_value(true);
 
     while (running_.load()) {
-        bool timed_out = false;
-        if (!tcp_server.waitForNewConnection(100, &timed_out)) {
-            // Either a 100ms idle timeout (normal) or a server error.
-            // Bail only if the server has actually stopped listening.
-            if (!timed_out && !tcp_server.isListening()) {
-                fprintf(stderr, "HTTP: Server stopped listening, exiting accept loop\n");
-                running_ = false;
-                break;
-            }
+        // Poll for accept readiness with a short timeout so we can notice
+        // running_ flipping to false and exit cleanly.
+        pollfd pfd{ listen_fd, POLLIN, 0 };
+        int rc = ::poll(&pfd, 1, 100);
+        if (rc < 0) {
+            if (errno == EINTR) continue;
+            fprintf(stderr, "HTTP: poll() failed: %s\n", strerror(errno));
+            break;
+        }
+        if (rc == 0 || !(pfd.revents & POLLIN)) continue;
+
+        sockaddr_storage peer{};
+        socklen_t peer_len = sizeof(peer);
+        int conn_fd = ::accept4(listen_fd, (sockaddr*)&peer, &peer_len,
+                                SOCK_CLOEXEC);
+        if (conn_fd < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            fprintf(stderr, "HTTP: accept() failed: %s\n", strerror(errno));
             continue;
         }
 
-        QTcpSocket* socket = tcp_server.nextPendingConnection();
-        if (!socket) continue;
-
-        bool handed_off = handle_client(socket);
+        // Handle the connection inline on the accept thread. Serial
+        // dispatch is fine: the work per request is small (build the
+        // response, write it to the kernel buffer, drain). For long-
+        // running paths, handle_client's stream/websocket detection
+        // already spawns its own worker thread + dup-fd hand-off.
+        QTcpSocket sock;
+        sock.setSocketDescriptor(conn_fd, QAbstractSocket::ConnectedState);
+        bool handed_off = handle_client(&sock);
         if (!handed_off) {
-            // Make sure response bytes hit the kernel before we tear the socket down.
-            socket->waitForBytesWritten(2000);
+            constexpr int kFlushBudgetMs = 5000;
+            auto deadline = std::chrono::steady_clock::now() +
+                            std::chrono::milliseconds(kFlushBudgetMs);
+            while (sock.bytesToWrite() > 0) {
+                int rem = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
+                    deadline - std::chrono::steady_clock::now()).count();
+                if (rem <= 0) break;
+                if (!sock.waitForBytesWritten(rem)) break;
+            }
+        } else {
+            // Handed off — the inner handler dup'd the fd. Release Qt's
+            // ownership without closing the dup'd reference.
+            sock.setSocketDescriptor(-1, QAbstractSocket::UnconnectedState,
+                                     QIODevice::NotOpen);
         }
-        // For handed-off connections the worker thread holds an independent
-        // dup'd fd — QTcpSocket destruction closes Qt's fd, but the dup
-        // reference keeps the TCP connection alive on the worker side.
-        delete socket;
+        // sock dtor closes conn_fd (or no-ops if released above).
     }
 }
 
