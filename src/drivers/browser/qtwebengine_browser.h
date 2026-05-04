@@ -56,11 +56,22 @@ public:
     void dispatch_forward();
     void dispatch_stop();
 
+    void dispatch_get_selection();
+    void dispatch_select_all();
+    void dispatch_paste(const std::string& text);
+
 private:
     void capture_tick();
+    void metrics_tick();
 
     std::unique_ptr<QWebEngineView> view_;
     std::unique_ptr<QTimer>         capture_timer_;
+    std::unique_ptr<QTimer>         metrics_timer_;
+
+    // Last-published page metrics — only re-emit on change.
+    uint32_t last_pw_ = 0, last_ph_ = 0;
+    uint32_t last_sx_ = 0, last_sy_ = 0;
+    uint32_t last_vw_ = 0, last_vh_ = 0;
 };
 
 // Create QtWebEngineBrowser on the main (GUI) thread, load `initial_url`.
@@ -101,5 +112,13 @@ bool qt_dispatch_reload();
 bool qt_dispatch_back();
 bool qt_dispatch_forward();
 bool qt_dispatch_stop();
+
+// ── Selection / paste (Phase 8f) ─────────────────────────────────────
+// dispatch_get_selection emits BR_EV_SELECTION asynchronously when the
+// runJavaScript callback fires. Page metrics (BR_EV_PAGE_METRICS) are
+// pushed by an internal QTimer at 4Hz; no command needed to trigger.
+bool qt_dispatch_get_selection();
+bool qt_dispatch_select_all();
+bool qt_dispatch_paste(const std::string& text);
 
 }  // namespace browser

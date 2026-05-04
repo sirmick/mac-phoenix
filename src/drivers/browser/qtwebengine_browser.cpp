@@ -12,6 +12,9 @@
 #include <QCoreApplication>
 #include <QEvent>
 #include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonValue>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QObject>
@@ -23,6 +26,8 @@
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
+#include <QVariant>
+#include <QVariantList>
 #include <QWebEnginePage>
 #include <QWebEngineView>
 #include <QWheelEvent>
@@ -32,7 +37,9 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
 #include <memory>
+#include <vector>
 
 namespace browser {
 
@@ -204,6 +211,15 @@ QtWebEngineBrowser::QtWebEngineBrowser()
     QObject::connect(capture_timer_.get(), &QTimer::timeout, view_.get(),
                      [this]() { capture_tick(); });
     capture_timer_->start();
+
+    // 4 Hz page-metrics poll. Same cadence and JS as the BiDi mouse_poll
+    // path. Only re-emits BR_EV_PAGE_METRICS when at least one of the six
+    // values changed, so a static page produces no ring traffic.
+    metrics_timer_ = std::make_unique<QTimer>();
+    metrics_timer_->setInterval(250);
+    QObject::connect(metrics_timer_.get(), &QTimer::timeout, view_.get(),
+                     [this]() { metrics_tick(); });
+    metrics_timer_->start();
 }
 
 QtWebEngineBrowser::~QtWebEngineBrowser() = default;
@@ -212,6 +228,54 @@ void QtWebEngineBrowser::load(const std::string& url)
 {
     fprintf(stderr, "[QtWebEngine] load %s\n", url.c_str());
     view_->setUrl(QUrl(QString::fromStdString(url)));
+}
+
+void QtWebEngineBrowser::metrics_tick()
+{
+    if (!view_) return;
+    QWebEnginePage* page = view_->page();
+    if (!page) return;
+    // Six numbers as a JSON-serializable array. Mirrors mouse_poll.cpp's
+    // BiDi script. document.scrollingElement is null only during very
+    // early page load; null-guard so the timer doesn't spam errors.
+    static const char* kJs =
+        "(()=>{const e=document.scrollingElement"
+        "||document.documentElement||document.body;"
+        "if(!e)return [0,0,0,0,0,0];"
+        "return [e.scrollWidth|0, e.scrollHeight|0, "
+        "(window.scrollX|0), (window.scrollY|0), "
+        "(window.innerWidth|0), (window.innerHeight|0)];})()";
+    page->runJavaScript(QString::fromLatin1(kJs),
+        [this](const QVariant& result) {
+            QVariantList arr = result.toList();
+            if (arr.size() < 6) return;
+            uint32_t pw = arr.at(0).toUInt();
+            uint32_t ph = arr.at(1).toUInt();
+            uint32_t sx = arr.at(2).toUInt();
+            uint32_t sy = arr.at(3).toUInt();
+            uint32_t vw = arr.at(4).toUInt();
+            uint32_t vh = arr.at(5).toUInt();
+            if (pw == last_pw_ && ph == last_ph_ &&
+                sx == last_sx_ && sy == last_sy_ &&
+                vw == last_vw_ && vh == last_vh_) return;
+            last_pw_ = pw; last_ph_ = ph;
+            last_sx_ = sx; last_sy_ = sy;
+            last_vw_ = vw; last_vh_ = vh;
+            uint8_t buf[24];
+            auto put_be32 = [](uint8_t* p, uint32_t v) {
+                p[0] = (uint8_t)(v >> 24);
+                p[1] = (uint8_t)(v >> 16);
+                p[2] = (uint8_t)(v >>  8);
+                p[3] = (uint8_t)(v);
+            };
+            put_be32(buf +  0, pw);
+            put_be32(buf +  4, ph);
+            put_be32(buf +  8, sx);
+            put_be32(buf + 12, sy);
+            put_be32(buf + 16, vw);
+            put_be32(buf + 20, vh);
+            send_event(BR_EV_PAGE_METRICS, buf, 24);
+        });
 }
 
 void QtWebEngineBrowser::capture_tick()
@@ -382,6 +446,71 @@ void QtWebEngineBrowser::dispatch_stop()
 {
     if (!view_) return;
     view_->page()->triggerAction(QWebEnginePage::Stop);
+}
+
+void QtWebEngineBrowser::dispatch_get_selection()
+{
+    if (!view_) return;
+    QWebEnginePage* page = view_->page();
+    if (!page) return;
+    page->runJavaScript(
+        "(window.getSelection&&window.getSelection().toString())||''",
+        [](const QVariant& result) {
+            std::string text = result.toString().toStdString();
+            uint16_t n = (uint16_t)std::min(text.size(), (size_t)4096);
+            std::vector<uint8_t> buf(2 + n);
+            buf[0] = (uint8_t)(n >> 8);
+            buf[1] = (uint8_t)(n & 0xFF);
+            if (n) memcpy(buf.data() + 2, text.data(), n);
+            send_event(BR_EV_SELECTION, buf.data(), (uint16_t)buf.size());
+        });
+}
+
+void QtWebEngineBrowser::dispatch_select_all()
+{
+    if (!view_) return;
+    // QWebEnginePage::SelectAll handles the focused element correctly
+    // for inputs, textareas, contentEditable, and the document itself.
+    view_->page()->triggerAction(QWebEnginePage::SelectAll);
+}
+
+void QtWebEngineBrowser::dispatch_paste(const std::string& text)
+{
+    if (!view_) return;
+    // Replicates the BiDi-path JS in cmd.cpp's BR_CMD_PASTE: handle
+    // <input>/<textarea> via setRangeText (fires input/change events),
+    // contentEditable via execCommand('insertText'), no-op otherwise.
+    // Going via JS instead of QWebEnginePage::Paste because the latter
+    // pulls from the Qt clipboard — we'd need a separate sync from
+    // the Mac scrap, and a JS injection is simpler.
+    QByteArray wrapped = QJsonDocument(QJsonArray{
+        QJsonValue(QString::fromStdString(text))
+    }).toJson(QJsonDocument::Compact);
+    std::string lit(wrapped.constData() + 1, wrapped.size() - 2);
+    std::string js =
+        "(()=>{const t=" + lit + ";"
+        "const el=document.activeElement;"
+        "if(!el)return false;"
+        "const tag=(el.tagName||'').toLowerCase();"
+        "if(tag==='input'||tag==='textarea'){"
+        "  const s=el.selectionStart||0,e=el.selectionEnd||0;"
+        "  if(typeof el.setRangeText==='function'){"
+        "    el.setRangeText(t,s,e,'end');"
+        "    el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "    el.dispatchEvent(new Event('change',{bubbles:true}));"
+        "    return true;"
+        "  }"
+        "  el.value=el.value.slice(0,s)+t+el.value.slice(e);"
+        "  el.selectionStart=el.selectionEnd=s+t.length;"
+        "  el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "  return true;"
+        "}"
+        "if(el.isContentEditable){"
+        "  document.execCommand('insertText',false,t);"
+        "  return true;"
+        "}"
+        "return false;})()";
+    view_->page()->runJavaScript(QString::fromStdString(js));
 }
 
 void QtWebEngineBrowser::dispatch_scroll(int dx, int dy)
@@ -570,6 +699,36 @@ bool qt_dispatch_stop()
     if (!app) return false;
     QMetaObject::invokeMethod(app, []() {
         if (g_browser) g_browser->dispatch_stop();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_get_selection()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_get_selection();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_select_all()
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, []() {
+        if (g_browser) g_browser->dispatch_select_all();
+    }, Qt::QueuedConnection);
+    return true;
+}
+
+bool qt_dispatch_paste(const std::string& text)
+{
+    QApplication* app = qapp_if_active();
+    if (!app) return false;
+    QMetaObject::invokeMethod(app, [text]() {
+        if (g_browser) g_browser->dispatch_paste(text);
     }, Qt::QueuedConnection);
     return true;
 }

@@ -372,6 +372,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
     }
 
     case BR_CMD_SELECT_ALL:
+        if (qt_dispatch_select_all()) return true;
         /* Cmd+A in MacBrowser web context. JS path covers the three
          * common cases: <input>/<textarea> via .select(), generic
          * editable + page text via document.execCommand('selectAll'),
@@ -399,6 +400,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         return true;
 
     case BR_CMD_GET_SELECTION:
+        if (qt_dispatch_get_selection()) return true;
         /* Cmd+C in MacBrowser: ask Firefox what's currently selected,
          * round-trip the text back through h2g as BR_EV_SELECTION.
          * Mac side puts that into TEScrap so a subsequent Cmd+V in
@@ -447,6 +449,7 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
         fprintf(stderr, "[Cmd] BR_CMD_PASTE %u bytes: \"%.*s%s\"\n",
                 (unsigned)n, (int)std::min(n, (uint16_t)40),
                 text.c_str(), n > 40 ? "…" : "");
+        if (qt_dispatch_paste(text)) return true;
         dispatch_async([text](BidiClient* c) {
             // JSON-encode the string for use as a JS literal. QJsonDocument
             // only serializes objects/arrays so wrap in a single-element
