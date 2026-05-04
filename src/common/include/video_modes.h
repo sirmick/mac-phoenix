@@ -6,14 +6,16 @@
  *   src/cpu/kpx/video_ppc.cpp          (PPC, all modes)
  *   src/drivers/video/video_webrtc.cpp (m68k non-IPC, legacy WebRTC mode)
  *
- * Each backend filters by its own flag bit. Mono machines (Mac SE) bypass
- * the table entirely and publish a single 512x342 1-bit mode from the
- * machine profile — there's no point pretending the SE could do anything
- * else.
+ * Each backend filters by its own flag bit. Compact mono Macs (SE/Plus/
+ * Classic) get a 512x342 entry so the m68k filter at `--screen 512x342`
+ * doesn't yield an empty modes vector — empty modes leaves
+ * webrtc_monitor_desc with a wild current_mode pointer that crashes
+ * init_mac_subsystems once any address-space-shifting library
+ * (e.g. Qt6 WebEngine) is loaded.
  *
  * The `apple_id` field is the slot-ROM display ID that gets written into
  * sResource entries and read back by Monitors cdev. Values 0x80..0x8A are
- * SheepShaver's vintage range (kept verbatim for back-compat); 0x8B..0x95
+ * SheepShaver's vintage range (kept verbatim for back-compat); 0x8B..0x9F
  * are mac-phoenix extensions for modes Apple never shipped IDs for.
  */
 
@@ -38,6 +40,8 @@ inline constexpr std::uint8_t kFlagH264 = 1u << 2;  // safe to encode with OpenH
 
 inline constexpr ModeDef kModes[] = {
     /* w     h    apple_id  refresh  flags */
+    /* Compact mono — Mac SE/Plus/Classic native 9" display */
+    {  512,  342, 0x9F,        60,   kFlagM68k },                         // SE/Plus/Classic
     /* Classic 4:3 / 5:4 */
     {  640,  480, 0x82,        60,   kFlagM68k | kFlagPpc | kFlagH264 },  // VGA
     {  800,  600, 0x84,        60,   kFlagM68k | kFlagPpc | kFlagH264 },  // SVGA

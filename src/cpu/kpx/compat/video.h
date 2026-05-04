@@ -98,9 +98,10 @@ enum {	// viAppleID
 	APPLE_1280x800,          // 0x9C  16:10 laptop
 	APPLE_2240x1400,         // 0x9D  16:10 (Windows-150% native CSS×dpr)
 	APPLE_2560x720,          // 0x9E  32:9 ultrawide half-fill (G9 5120x1440 / 2)
+	APPLE_512x342,           // 0x9F  classic compact Mac (SE/Plus/Classic)
 
 	APPLE_ID_MIN = APPLE_640x480,
-	APPLE_ID_MAX = APPLE_2560x720
+	APPLE_ID_MAX = APPLE_512x342
 };
 
 enum {	// Display type

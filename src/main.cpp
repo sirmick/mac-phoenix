@@ -432,7 +432,13 @@ static bool video_ipc_m68k_init(bool classic)
     video_ipc_set_framebuffer(g_ipc_m68k_fb);
     video_ipc_set_resolution(boot_w, boot_h);
 
-    ipc_monitor_desc *monitor = new ipc_monitor_desc(modes, VDEPTH_32BIT, default_res_id);
+    // Default depth: 32-bit for color machines, 1-bit for mono compacts (SE
+    // et al.) — must match what the modes vector actually published, or
+    // monitor_desc::find_mode() returns null and get_current_mode() derefs
+    // a wild pointer in init_mac_subsystems.
+    const video_depth default_depth = machine_profile().mono_framebuffer
+        ? VDEPTH_1BIT : VDEPTH_32BIT;
+    ipc_monitor_desc *monitor = new ipc_monitor_desc(modes, default_depth, default_res_id);
     // Seed the IPC refresh side with the initial (32-bit) depth + stride
     // so the first frames render correctly before any explicit mode switch.
     video_ipc_set_depth(machine_profile().mono_framebuffer ? 1 : 32,
