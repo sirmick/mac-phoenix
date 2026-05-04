@@ -11,7 +11,10 @@
 #define BR_HOST 1
 #include "MacBrowser.h"
 
-#include <nlohmann/json.hpp>
+#include <QByteArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 
 #include <atomic>
 #include <chrono>
@@ -73,11 +76,10 @@ bool BrowserModule::start(const std::string& initial_url)
          * loading-state UI in M5. The on_event callback runs on the
          * WebSocket I/O thread; send_event is mutex-protected. */
         bidi_->on_event([](const std::string& json_text) {
-            using nlohmann::json;
-            json j;
-            try { j = json::parse(json_text); }
-            catch (...) { return; }
-            std::string method = j.value("method", "");
+            QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(json_text));
+            if (doc.isNull()) return;
+            QJsonObject j = doc.object();
+            std::string method = j.value("method").toString().toStdString();
             if (method == "browsingContext.navigationStarted" ||
                 method == "browsingContext.navigationCommitted") {
                 /* Send a brief STATUS message; the guest's URL bar
@@ -89,7 +91,7 @@ bool BrowserModule::start(const std::string& initial_url)
                  * page), Firefox will never fire browsingContext.load
                  * for the inner error frame, leaving the guest stuck
                  * on LOADING. Treat it as a terminal ERROR state. */
-                std::string url = j["params"].value("url", "");
+                std::string url = j.value("params").toObject().value("url").toString().toStdString();
                 bool is_neterror =
                     method == "browsingContext.navigationCommitted" &&
                     url.compare(0, 14, "about:neterror") == 0;
@@ -106,7 +108,7 @@ bool BrowserModule::start(const std::string& initial_url)
                 /* Forward Firefox console output for debugging — only
                  * messages from our preload (prefixed [mac-phoenix])
                  * to avoid drowning in page-side console noise. */
-                std::string text = j["params"].value("text", "");
+                std::string text = j.value("params").toObject().value("text").toString().toStdString();
                 if (text.find("[mac-phoenix]") != std::string::npos) {
                     fprintf(stderr, "[FF console] %s\n", text.c_str());
                 }
@@ -116,7 +118,7 @@ bool BrowserModule::start(const std::string& initial_url)
                  * out as a follow-up BR_EV_PAGE message; the guest
                  * uses BR_EV_FRAME (already published by pipeline)
                  * to know to repaint. */
-                std::string url = j["params"].value("url", "");
+                std::string url = j.value("params").toObject().value("url").toString().toStdString();
                 fprintf(stderr, "[BiDi event] load url=%s\n", url.c_str());
                 uint8_t buf[2 + 250];
                 buf[0] = BR_STATUS_READY;
@@ -197,11 +199,9 @@ bool BrowserModule::start(const std::string& initial_url)
             std::string err;
             std::string r = bp->evaluate("window.location.href", &err);
             if (r.empty()) return;
-            std::string url;
-            try {
-                auto j = nlohmann::json::parse(r);
-                url = j.at("result").at("value").get<std::string>();
-            } catch (...) { return; }
+            QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(r));
+            if (doc.isNull()) return;
+            std::string url = doc.object().value("result").toObject().value("value").toString().toStdString();
             if (url.empty() || url == "about:blank") return;
 
             uint8_t buf[2 + 250];

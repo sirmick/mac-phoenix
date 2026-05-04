@@ -11,7 +11,11 @@
 #include "../common/include/sysdeps.h"
 #include "../common/include/cpu_emulation.h"
 
-#include <nlohmann/json.hpp>
+#include <QByteArray>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 
 #include <atomic>
 #include <chrono>
@@ -215,15 +219,15 @@ void poll_loop()
                  * Pull the six numbers; if anything's malformed, just
                  * skip this tick. */
                 try {
-                    auto j = nlohmann::json::parse(r);
-                    auto v = j.at("result").at("value");
-                    if (v.is_array() && v.size() >= 6) {
-                        uint32_t pw = v[0].at("value").get<uint32_t>();
-                        uint32_t ph = v[1].at("value").get<uint32_t>();
-                        uint32_t sx = v[2].at("value").get<uint32_t>();
-                        uint32_t sy = v[3].at("value").get<uint32_t>();
-                        uint32_t vw = v[4].at("value").get<uint32_t>();
-                        uint32_t vh = v[5].at("value").get<uint32_t>();
+                    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(r));
+                    QJsonArray v = doc.object().value("result").toObject().value("value").toArray();
+                    if (v.size() >= 6) {
+                        uint32_t pw = (uint32_t)v.at(0).toObject().value("value").toDouble();
+                        uint32_t ph = (uint32_t)v.at(1).toObject().value("value").toDouble();
+                        uint32_t sx = (uint32_t)v.at(2).toObject().value("value").toDouble();
+                        uint32_t sy = (uint32_t)v.at(3).toObject().value("value").toDouble();
+                        uint32_t vw = (uint32_t)v.at(4).toObject().value("value").toDouble();
+                        uint32_t vh = (uint32_t)v.at(5).toObject().value("value").toDouble();
                         if (pw != last_pw || ph != last_ph ||
                             sx != last_sx || sy != last_sy ||
                             vw != last_vw || vh != last_vh) {

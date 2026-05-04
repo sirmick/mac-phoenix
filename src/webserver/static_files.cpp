@@ -6,7 +6,9 @@
 
 #include "static_files.h"
 #include "../drivers/video/encoders/codec.h"
-#include <nlohmann/json.hpp>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <fstream>
 #include <sstream>
 
@@ -112,28 +114,28 @@ std::string StaticFileHandler::inject_config_template(const std::string& html) c
     if (!config_) return html;
 
     // Build JSON from EmulatorConfig (client expects these keys)
-    nlohmann::json j;
-    j["codec"] = config_->codec;
-    j["mousemode"] = config_->mousemode;
-    j["screen"] = config_->screen_string();
+    QJsonObject j;
+    j["codec"] = QString::fromStdString(config_->codec);
+    j["mousemode"] = QString::fromStdString(config_->mousemode);
+    j["screen"] = QString::fromStdString(config_->screen_string());
     // Signaling rides the same port as HTTP via /ws upgrade — no separate port.
     j["debug_connection"] = config_->debug_connection;
     j["debug_mode_switch"] = config_->debug_mode_switch;
     j["debug_perf"] = config_->debug_perf;
 
     // Client compat keys
-    j["webcodec"] = config_->codec;
-    j["resolution"] = config_->screen_string();
+    j["webcodec"] = QString::fromStdString(config_->codec);
+    j["resolution"] = QString::fromStdString(config_->screen_string());
 
     // Codec availability (so client doesn't need a separate /api/codecs fetch)
-    nlohmann::json codecs = nlohmann::json::array();
-    codecs.push_back({{"id", "png"},  {"name", "PNG"},  {"available", true}});
-    codecs.push_back({{"id", "h264"}, {"name", "H.264"}, {"available", codec_available(CodecType::H264)}});
-    codecs.push_back({{"id", "vp9"},  {"name", "VP9"},  {"available", codec_available(CodecType::VP9)}});
-    codecs.push_back({{"id", "webp"}, {"name", "WebP"}, {"available", codec_available(CodecType::WEBP)}});
+    QJsonArray codecs;
+    codecs.append(QJsonObject{{"id", "png"},  {"name", "PNG"},   {"available", true}});
+    codecs.append(QJsonObject{{"id", "h264"}, {"name", "H.264"}, {"available", codec_available(CodecType::H264)}});
+    codecs.append(QJsonObject{{"id", "vp9"},  {"name", "VP9"},   {"available", codec_available(CodecType::VP9)}});
+    codecs.append(QJsonObject{{"id", "webp"}, {"name", "WebP"},  {"available", codec_available(CodecType::WEBP)}});
     j["codecs"] = codecs;
 
-    std::string config_json = j.dump(2);
+    std::string config_json = QJsonDocument(j).toJson(QJsonDocument::Indented).toStdString();
 
     // Replace {{CONFIG_JSON}} placeholder
     std::string result = html;

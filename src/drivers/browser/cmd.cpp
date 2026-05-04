@@ -9,7 +9,11 @@
 #define BR_HOST 1
 #include "MacBrowser.h"
 
-#include <nlohmann/json.hpp>
+#include <QByteArray>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 
 #include <algorithm>
 #include <atomic>
@@ -342,11 +346,11 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
             std::string r = c->evaluate(js, &err);
             if (r.empty()) log_remote_err("zoom", err);
             else {
-                try {
-                    auto j = nlohmann::json::parse(r);
-                    double z = j.at("result").at("value").get<double>();
+                QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(r));
+                if (!doc.isNull()) {
+                    double z = doc.object().value("result").toObject().value("value").toDouble();
                     fprintf(stderr, "[Cmd] zoom → %.0f%%\n", z * 100.0);
-                } catch (...) {}
+                }
             }
         });
         return true;
@@ -395,11 +399,9 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
                 log_remote_err("get_selection", err);
                 return;
             }
-            std::string text;
-            try {
-                auto j = nlohmann::json::parse(r);
-                text = j.at("result").at("value").get<std::string>();
-            } catch (...) { return; }
+            QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(r));
+            if (doc.isNull()) return;
+            std::string text = doc.object().value("result").toObject().value("value").toString().toStdString();
             uint16_t n = (uint16_t)std::min(text.size(), (size_t)4096);
             std::vector<uint8_t> buf(2 + n);
             buf[0] = (uint8_t)(n >> 8);
@@ -431,7 +433,13 @@ bool cmd_dispatch(uint16_t type, const uint8_t* payload, uint16_t len)
                 (unsigned)n, (int)std::min(n, (uint16_t)40),
                 text.c_str(), n > 40 ? "…" : "");
         dispatch_async([text](BidiClient* c) {
-            std::string lit = nlohmann::json(text).dump();
+            // JSON-encode the string for use as a JS literal. QJsonDocument
+            // only serializes objects/arrays so wrap in a single-element
+            // array and strip the brackets.
+            QByteArray wrapped = QJsonDocument(QJsonArray{
+                QJsonValue(QString::fromStdString(text))
+            }).toJson(QJsonDocument::Compact);
+            std::string lit(wrapped.constData() + 1, wrapped.size() - 2);
             std::string js =
                 "(()=>{const t=" + lit + ";"
                 "const el=document.activeElement;"
