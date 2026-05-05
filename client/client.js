@@ -2488,8 +2488,20 @@ class MacPhoenixClient {
 
         // Mouse event handlers - support both relative and absolute modes
 
-        // Click handler - request pointer lock only in relative mode
+        // Click handler - request pointer lock only in relative mode.
+        // Also steal focus from any UI input (Settings dialog field,
+        // URL bar, etc.) so subsequent keydowns reach the Mac instead
+        // of being filtered out by the keydownHandler's
+        // INPUT/TEXTAREA guard. This was a recurring "keyboard stops
+        // after using Settings" symptom.
         displayElement.addEventListener('click', () => {
+            const ae = document.activeElement;
+            if (ae && ae !== document.body &&
+                typeof ae.blur === 'function' &&
+                (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' ||
+                 ae.tagName === 'SELECT')) {
+                ae.blur();
+            }
             if (this.mouseMode === 'relative' && !document.pointerLockElement) {
                 displayElement.requestPointerLock();
             }
