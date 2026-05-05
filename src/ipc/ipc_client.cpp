@@ -1,7 +1,9 @@
 /*
  * ipc_client.cpp - Parent-side IPC connection to child emulator
  *
- * Based on legacy/web-streaming/server/ipc/ipc_connection.cpp.
+ * Phase 3b: AF_UNIX + SCM_RIGHTS + eventfd replaced with QSharedMemory
+ * (already 3a) + two QLocalSockets (control + notify, name-based
+ * discovery). Same wire format, portable to Windows.
  */
 
 #include "ipc_client.h"
@@ -12,12 +14,10 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unistd.h>
-#include <fcntl.h>
 #include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/time.h>
 
 #include <QSharedMemory>
+#include <QLocalSocket>
 #include <QString>
 
 std::shared_mutex g_ipc_shm_mutex;
@@ -29,12 +29,11 @@ IPCClient::~IPCClient()
     disconnect();
 }
 
+// ── Shared memory ─────────────────────────────────────────────────
+
 bool IPCClient::connect_shm(pid_t pid)
 {
-    // Strip leading slash from IPC_VIDEO_SHM_PREFIX — QSharedMemory keys
-    // are arbitrary strings, not POSIX SHM paths. Must match the key
-    // chosen on the child side in video_ipc_ppc.cpp.
-    shm_name_ = std::string(IPC_VIDEO_SHM_PREFIX + 1) + std::to_string(pid);
+    shm_name_ = std::string(IPC_VIDEO_SHM_PREFIX) + std::to_string(pid);
 
     shm_owner_ = std::make_unique<QSharedMemory>(QString::fromStdString(shm_name_));
     if (!shm_owner_->attach()) {
@@ -69,9 +68,6 @@ bool IPCClient::connect_shm(pid_t pid)
 
 void IPCClient::disconnect_shm()
 {
-    // Safe to detach immediately: disconnect() holds the exclusive lock on
-    // g_ipc_shm_mutex, so all shared-lock readers have drained and no new
-    // readers can start until the lock is released.
     if (shm_owner_) {
         shm_owner_->detach();
         shm_owner_.reset();
@@ -80,99 +76,83 @@ void IPCClient::disconnect_shm()
     shm_name_.clear();
 }
 
-bool IPCClient::connect_socket(pid_t pid)
+// ── Sockets ───────────────────────────────────────────────────────
+
+namespace {
+// Connect a QLocalSocket to a named server with a 2s timeout. Returns
+// nullptr on failure. The child opens both servers in its IPC worker
+// thread, so by the time the parent's IPCClient::connect runs, both
+// names should resolve. Timeout protects against the child spawning
+// the worker late (or never).
+std::unique_ptr<QLocalSocket> connect_local_socket(const QString& name,
+                                                   const char*    role)
 {
-    socket_path_ = std::string(IPC_CONTROL_SOCK_PREFIX) + std::to_string(pid) +
-                   std::string(IPC_CONTROL_SOCK_SUFFIX);
-
-    control_socket_ = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (control_socket_ < 0) {
-        fprintf(stderr, "IPC Client: Failed to create socket: %s\n", strerror(errno));
-        return false;
+    auto sock = std::make_unique<QLocalSocket>();
+    sock->connectToServer(name, QIODevice::ReadWrite);
+    if (!sock->waitForConnected(2000)) {
+        fprintf(stderr, "IPC Client: %s connect to '%s' failed: %s\n",
+                role,
+                name.toUtf8().constData(),
+                sock->errorString().toUtf8().constData());
+        return nullptr;
     }
+    return sock;
+}
+}  // namespace
 
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, socket_path_.c_str(), sizeof(addr.sun_path) - 1);
-
-    if (::connect(control_socket_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        close(control_socket_);
-        control_socket_ = -1;
-        return false;
-    }
-
-    fprintf(stderr, "IPC Client: Connected to socket '%s'\n", socket_path_.c_str());
-
-    // Receive eventfd via SCM_RIGHTS
-    struct msghdr msg = {};
-    struct cmsghdr *cmsg;
-    char buf[CMSG_SPACE(sizeof(int))];
-    char data;
-    struct iovec iov = { &data, 1 };
-
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    msg.msg_control = buf;
-    msg.msg_controllen = sizeof(buf);
-
-    // Set blocking with timeout for eventfd reception
-    struct timeval tv = { .tv_sec = 2, .tv_usec = 0 };
-    setsockopt(control_socket_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-    ssize_t n = recvmsg(control_socket_, &msg, 0);
-    if (n > 0 && data == 'E') {
-        for (cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-            if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
-                int* fds = (int*)CMSG_DATA(cmsg);
-                frame_eventfd_ = fds[0];
-                fprintf(stderr, "IPC Client: Received eventfd %d\n", frame_eventfd_);
-                break;
-            }
-        }
-    }
-
-    // Set non-blocking for normal operation
-    int flags = fcntl(control_socket_, F_GETFL, 0);
-    if (flags >= 0) {
-        fcntl(control_socket_, F_SETFL, flags | O_NONBLOCK);
-    }
-
-    // Clear receive timeout
-    tv = { .tv_sec = 0, .tv_usec = 0 };
-    setsockopt(control_socket_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
+bool IPCClient::connect_control_socket(pid_t pid)
+{
+    control_name_ = std::string(IPC_CONTROL_NAME_PREFIX) + std::to_string(pid);
+    control_socket_ = connect_local_socket(QString::fromStdString(control_name_),
+                                           "control");
+    if (!control_socket_) return false;
+    control_fd_ = (int)control_socket_->socketDescriptor();
+    fprintf(stderr, "IPC Client: Connected to control '%s' (fd=%d)\n",
+            control_name_.c_str(), control_fd_);
     return true;
 }
 
-void IPCClient::disconnect_socket()
+bool IPCClient::connect_notify_socket(pid_t pid)
 {
-    if (control_socket_ >= 0) {
-        close(control_socket_);
-        control_socket_ = -1;
-    }
-    if (frame_eventfd_ >= 0) {
-        close(frame_eventfd_);
-        frame_eventfd_ = -1;
-    }
-    socket_path_.clear();
+    notify_name_ = std::string(IPC_NOTIFY_NAME_PREFIX) + std::to_string(pid);
+    notify_socket_ = connect_local_socket(QString::fromStdString(notify_name_),
+                                          "notify");
+    if (!notify_socket_) return false;
+    notify_fd_ = (int)notify_socket_->socketDescriptor();
+    fprintf(stderr, "IPC Client: Connected to notify '%s' (fd=%d)\n",
+            notify_name_.c_str(), notify_fd_);
+    return true;
 }
+
+void IPCClient::disconnect_sockets()
+{
+    control_socket_.reset();   // Qt closes the underlying fd
+    notify_socket_.reset();
+    control_fd_ = -1;
+    notify_fd_  = -1;
+    control_name_.clear();
+    notify_name_.clear();
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────
 
 bool IPCClient::connect(pid_t pid)
 {
     if (connected_) {
         disconnect();
     }
-
     if (!connect_shm(pid)) {
         return false;
     }
-
-    if (!connect_socket(pid)) {
+    if (!connect_control_socket(pid)) {
         disconnect_shm();
         return false;
     }
-
+    if (!connect_notify_socket(pid)) {
+        disconnect_sockets();
+        disconnect_shm();
+        return false;
+    }
     pid_ = pid;
     connected_ = true;
     return true;
@@ -185,60 +165,57 @@ void IPCClient::disconnect()
     // lock for the duration of their dereference, so this will block until
     // in-flight reads finish — then no thread can observe an unmapped page.
     std::unique_lock<std::shared_mutex> shm_guard(g_ipc_shm_mutex);
-    disconnect_socket();
+    disconnect_sockets();
     disconnect_shm();
     pid_ = -1;
     connected_ = false;
 }
 
+// ── Send helpers (control socket) ─────────────────────────────────
+//
+// We grab the raw fd and ::send() directly. QLocalSocket::write() would
+// also work but requires the QObject's owning thread; multiple parent
+// threads call these methods (api handlers, audio request thread, etc.)
+// so the fd is the safer common substrate. The fd itself is shared
+// across threads with no locking — kernel send() is atomic for messages
+// up to PIPE_BUF.
+
 bool IPCClient::send_key(int mac_keycode, bool down)
 {
-    if (control_socket_ < 0) return false;
-
-    IPCKeyInput msg;
-    memset(&msg, 0, sizeof(msg));
+    if (control_fd_ < 0) return false;
+    IPCKeyInput msg{};
     msg.hdr.type = IPC_INPUT_KEY;
     msg.hdr.flags = down ? IPC_KEY_DOWN : IPC_KEY_UP;
-    msg.mac_keycode = mac_keycode;
-
-    return send(control_socket_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
+    msg.mac_keycode = (uint8_t)mac_keycode;
+    return ::send(control_fd_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
 }
 
 bool IPCClient::send_mouse(int x, int y, uint8_t buttons, bool absolute)
 {
-    if (control_socket_ < 0) return false;
-
-    IPCMouseInput msg;
-    memset(&msg, 0, sizeof(msg));
+    if (control_fd_ < 0) return false;
+    IPCMouseInput msg{};
     msg.hdr.type = IPC_INPUT_MOUSE;
     msg.hdr.flags = absolute ? IPC_MOUSE_ABSOLUTE : 0;
-    msg.x = static_cast<int16_t>(x);
-    msg.y = static_cast<int16_t>(y);
+    msg.x = (int16_t)x;
+    msg.y = (int16_t)y;
     msg.buttons = buttons;
-
-    return send(control_socket_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
+    return ::send(control_fd_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
 }
 
 bool IPCClient::send_command(uint8_t command)
 {
-    if (control_socket_ < 0) return false;
-
-    IPCCommandInput msg;
-    memset(&msg, 0, sizeof(msg));
+    if (control_fd_ < 0) return false;
+    IPCCommandInput msg{};
     msg.hdr.type = IPC_INPUT_COMMAND;
     msg.command = command;
-
-    return send(control_socket_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
+    return ::send(control_fd_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
 }
 
 bool IPCClient::send_audio_request(uint32_t requested_samples)
 {
-    if (control_socket_ < 0) return false;
-
-    IPCAudioRequestInput msg;
-    memset(&msg, 0, sizeof(msg));
+    if (control_fd_ < 0) return false;
+    IPCAudioRequestInput msg{};
     msg.hdr.type = IPC_INPUT_AUDIO_REQUEST;
     msg.requested_samples = requested_samples;
-
-    return send(control_socket_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
+    return ::send(control_fd_, &msg, sizeof(msg), MSG_NOSIGNAL) == sizeof(msg);
 }

@@ -1,25 +1,37 @@
 /*
- * control_ipc_child.cpp - Control socket and input handling for IPC child
+ * control_ipc_child.cpp - Control + notify endpoints (child side)
  *
- * Creates a Unix domain socket, accepts connection from parent, sends
- * frame_ready_eventfd via SCM_RIGHTS, and processes binary input.
+ * Phase 3b: replaced AF_UNIX socket() + epoll + SCM_RIGHTS with two
+ * QLocalServer instances using the same Qt API on Linux (Unix sockets)
+ * and Windows (named pipes).
  *
- * Based on legacy/BasiliskII/src/IPC/control_ipc.cpp.
+ *   macemu-control-{PID}  parent → child commands (key/mouse/cmd/audio)
+ *   macemu-notify-{PID}   child → parent: 1 byte per published frame
+ *
+ * Threading: a dedicated worker thread owns both QLocalServer/Socket
+ * objects and runs a poll loop using waitForReadyRead(1ms). All Qt
+ * objects are constructed on this thread, so cross-thread affinity
+ * issues don't arise. The video frame thread can publish a notify by
+ * writing to the raw notify socket fd — captured at peer-connect time —
+ * via ::send() without any QObject method calls.
  */
 
 #include "ipc_protocol.h"
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <thread>
-#include <atomic>
+
 #include <fcntl.h>
 #include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/epoll.h>
 #include <unistd.h>
 #include <errno.h>
+
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QString>
 
 // ADB input functions (C++ linkage, defined in adb.cpp)
 extern void ADBMouseMoved(int x, int y);
@@ -33,84 +45,42 @@ extern "C" void InvokeDebugger(void);
 // Audio request handler (defined in audio_direct.cpp)
 extern void audio_request_data(uint32_t requested_samples);
 
-// Global state
-static int g_listen_socket = -1;
-static int g_control_socket = -1;
-static std::string g_socket_path;
-static IPCBuffer* g_video_shm = nullptr;
+// ── State ─────────────────────────────────────────────────────────
 
-static std::thread g_control_thread;
-static std::atomic<bool> g_control_running(false);
+namespace {
+std::string         g_control_name;
+std::string         g_notify_name;
+IPCBuffer*          g_video_shm = nullptr;
 
-/*
- * Create Unix socket (child owns this)
- */
+std::thread         g_worker_thread;
+std::atomic<bool>   g_worker_running{false};
 
-static bool create_control_socket()
+// Notify socket fd, captured at peer-connect time. Written by the
+// video frame thread via the global ipc_frame_notifier hook below.
+// Independent of QLocalSocket's QObject lifetime — we never close
+// this fd; QLocalSocket owns it and will close on its destructor.
+std::atomic<int>    g_notify_fd{-1};
+}  // namespace
+
+// Provide the global notifier symbol declared in ipc_protocol.h.
+ipc_frame_notifier_fn g_ipc_frame_notifier = nullptr;
+
+namespace {
+// Thread-safe: writes 1 byte to the notify fd. Called from the video
+// frame thread (potentially many threads in the future). EAGAIN means
+// the parent's read buffer is full — drop, the parent's next poll
+// pass will pick up the latest frame_count anyway.
+void notify_frame_ready()
 {
-    pid_t pid = getpid();
-    g_socket_path = std::string(IPC_CONTROL_SOCK_PREFIX) + std::to_string(pid) +
-                    std::string(IPC_CONTROL_SOCK_SUFFIX);
-
-    unlink(g_socket_path.c_str());
-
-    g_listen_socket = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (g_listen_socket < 0) {
-        fprintf(stderr, "IPC: Failed to create socket: %s\n", strerror(errno));
-        return false;
-    }
-
-    int flags = fcntl(g_listen_socket, F_GETFL, 0);
-    if (flags >= 0) {
-        fcntl(g_listen_socket, F_SETFL, flags | O_NONBLOCK);
-    }
-
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, g_socket_path.c_str(), sizeof(addr.sun_path) - 1);
-
-    if (bind(g_listen_socket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        fprintf(stderr, "IPC: Failed to bind socket to %s: %s\n",
-                g_socket_path.c_str(), strerror(errno));
-        close(g_listen_socket);
-        g_listen_socket = -1;
-        return false;
-    }
-
-    if (listen(g_listen_socket, 1) < 0) {
-        fprintf(stderr, "IPC: Failed to listen: %s\n", strerror(errno));
-        close(g_listen_socket);
-        g_listen_socket = -1;
-        unlink(g_socket_path.c_str());
-        return false;
-    }
-
-    fprintf(stderr, "IPC: Listening on '%s'\n", g_socket_path.c_str());
-    return true;
+    int fd = g_notify_fd.load(std::memory_order_acquire);
+    if (fd < 0) return;
+    char b = 1;
+    ::send(fd, &b, 1, MSG_NOSIGNAL | MSG_DONTWAIT);
 }
 
-static void destroy_control_socket()
-{
-    if (g_control_socket >= 0) {
-        close(g_control_socket);
-        g_control_socket = -1;
-    }
-    if (g_listen_socket >= 0) {
-        close(g_listen_socket);
-        g_listen_socket = -1;
-    }
-    if (!g_socket_path.empty()) {
-        unlink(g_socket_path.c_str());
-        g_socket_path.clear();
-    }
-}
+// ── Input parsing ─────────────────────────────────────────────────
 
-/*
- * Process binary input from parent
- */
-
-static void process_binary_input(const uint8_t* data, size_t len)
+void process_binary_input(const uint8_t* data, size_t len)
 {
     if (len < sizeof(IPCInputHeader)) return;
 
@@ -152,16 +122,12 @@ static void process_binary_input(const uint8_t* data, size_t len)
             static uint8_t last_buttons = 0;
             uint8_t changed = mouse->buttons ^ last_buttons;
             if (changed & IPC_MOUSE_LEFT) {
-                if (mouse->buttons & IPC_MOUSE_LEFT)
-                    ADBMouseDown(0);
-                else
-                    ADBMouseUp(0);
+                if (mouse->buttons & IPC_MOUSE_LEFT) ADBMouseDown(0);
+                else                                  ADBMouseUp(0);
             }
             if (changed & IPC_MOUSE_RIGHT) {
-                if (mouse->buttons & IPC_MOUSE_RIGHT)
-                    ADBMouseDown(1);
-                else
-                    ADBMouseUp(1);
+                if (mouse->buttons & IPC_MOUSE_RIGHT) ADBMouseDown(1);
+                else                                  ADBMouseUp(1);
             }
             last_buttons = mouse->buttons;
             break;
@@ -199,158 +165,174 @@ static void process_binary_input(const uint8_t* data, size_t len)
     }
 }
 
-/*
- * Control socket thread (epoll-based)
- */
-
-static void control_socket_thread()
+// Drain whatever the control client just sent and demux into individual
+// IPCInput messages. Mirrors the recv() loop in the legacy code.
+void drain_control_socket(QLocalSocket* sock)
 {
-    uint8_t buffer[256];
+    QByteArray buf = sock->readAll();
+    const uint8_t* data = (const uint8_t*)buf.constData();
+    size_t total = (size_t)buf.size();
+    size_t offset = 0;
+    while (offset < total) {
+        if (offset + sizeof(IPCInputHeader) > total) break;
+        const IPCInputHeader* hdr = (const IPCInputHeader*)(data + offset);
+        size_t msg_size = 0;
+        switch (hdr->type) {
+            case IPC_INPUT_KEY:           msg_size = sizeof(IPCKeyInput); break;
+            case IPC_INPUT_MOUSE:         msg_size = sizeof(IPCMouseInput); break;
+            case IPC_INPUT_COMMAND:       msg_size = sizeof(IPCCommandInput); break;
+            case IPC_INPUT_AUDIO_REQUEST: msg_size = sizeof(IPCAudioRequestInput); break;
+            default: msg_size = sizeof(IPCInputHeader); break;
+        }
+        if (offset + msg_size > total) break;
+        process_binary_input(data + offset, msg_size);
+        offset += msg_size;
+    }
+}
 
+// ── Worker thread ─────────────────────────────────────────────────
+
+void worker_main()
+{
     ADBSetRelMouseMode(true);
 
-    int epoll_fd = epoll_create1(0);
-    if (epoll_fd < 0) {
-        fprintf(stderr, "IPC: Failed to create epoll: %s\n", strerror(errno));
+    // Construct QObjects on this thread so their thread affinity matches
+    // the methods we'll call. QLocalServer::listen() is the equivalent
+    // of bind+listen; we listen synchronously and then poll for
+    // connections + readable bytes via waitFor* APIs (no event loop).
+    QLocalServer control_server;
+    QLocalServer notify_server;
+
+    QString control_name = QString::fromStdString(g_control_name);
+    QString notify_name  = QString::fromStdString(g_notify_name);
+
+    // QLocalServer::removeServer cleans up a stale socket file from a
+    // previous crashed run — same role as the unlink() in the old code.
+    QLocalServer::removeServer(control_name);
+    QLocalServer::removeServer(notify_name);
+
+    if (!control_server.listen(control_name)) {
+        fprintf(stderr, "IPC: control listen(%s) failed: %s\n",
+                control_name.toUtf8().constData(),
+                control_server.errorString().toUtf8().constData());
         return;
     }
+    if (!notify_server.listen(notify_name)) {
+        fprintf(stderr, "IPC: notify listen(%s) failed: %s\n",
+                notify_name.toUtf8().constData(),
+                notify_server.errorString().toUtf8().constData());
+        return;
+    }
+    fprintf(stderr, "IPC: Listening on '%s' + '%s'\n",
+            control_name.toUtf8().constData(),
+            notify_name.toUtf8().constData());
 
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = g_listen_socket;
-    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, g_listen_socket, &ev);
+    QLocalSocket* control_client = nullptr;
+    QLocalSocket* notify_client  = nullptr;
 
-    fprintf(stderr, "IPC: Control thread started (epoll)\n");
-
-    struct epoll_event events[2];
-
-    while (g_control_running.load(std::memory_order_acquire)) {
-        int n = epoll_wait(epoll_fd, events, 2, 1);  // 1ms for responsive input
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            fprintf(stderr, "IPC: epoll_wait error: %s\n", strerror(errno));
-            break;
+    while (g_worker_running.load(std::memory_order_acquire)) {
+        // Accept new control connection. Single-client (parent only).
+        if (!control_client &&
+            control_server.waitForNewConnection(1)) {
+            control_client = control_server.nextPendingConnection();
+            fprintf(stderr, "IPC: Parent connected to control\n");
+        }
+        // Accept new notify connection — same one-shot pattern.
+        if (!notify_client &&
+            notify_server.waitForNewConnection(1)) {
+            notify_client = notify_server.nextPendingConnection();
+            int fd = (int)notify_client->socketDescriptor();
+            g_notify_fd.store(fd, std::memory_order_release);
+            // Hook the global notifier so ipc_frame_complete can write
+            // to the parent's notify socket from any thread.
+            g_ipc_frame_notifier = notify_frame_ready;
+            fprintf(stderr, "IPC: Parent connected to notify (fd=%d)\n", fd);
         }
 
-        for (int i = 0; i < n; i++) {
-            int fd = events[i].data.fd;
-
-            if (fd == g_listen_socket && (events[i].events & EPOLLIN)) {
-                if (g_control_socket < 0) {
-                    struct sockaddr_un addr;
-                    socklen_t len = sizeof(addr);
-                    int new_fd = accept(g_listen_socket, (struct sockaddr*)&addr, &len);
-                    if (new_fd >= 0) {
-                        int flags = fcntl(new_fd, F_GETFL, 0);
-                        if (flags >= 0) {
-                            fcntl(new_fd, F_SETFL, flags | O_NONBLOCK);
-                        }
-
-                        g_control_socket = new_fd;
-                        fprintf(stderr, "IPC: Parent connected\n");
-
-                        // Send eventfd via SCM_RIGHTS
-                        if (g_video_shm && g_video_shm->frame_ready_eventfd >= 0) {
-                            int fds[1] = { g_video_shm->frame_ready_eventfd };
-
-                            struct msghdr msg = {};
-                            struct cmsghdr *cmsg;
-                            char ctrl_buf[CMSG_SPACE(sizeof(int))];
-                            char data = 'E';
-                            struct iovec iov = { &data, 1 };
-
-                            msg.msg_iov = &iov;
-                            msg.msg_iovlen = 1;
-                            msg.msg_control = ctrl_buf;
-                            msg.msg_controllen = sizeof(ctrl_buf);
-
-                            cmsg = CMSG_FIRSTHDR(&msg);
-                            cmsg->cmsg_level = SOL_SOCKET;
-                            cmsg->cmsg_type = SCM_RIGHTS;
-                            cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-                            memcpy(CMSG_DATA(cmsg), fds, sizeof(int));
-
-                            if (sendmsg(g_control_socket, &msg, 0) > 0) {
-                                fprintf(stderr, "IPC: Sent eventfd %d to parent\n",
-                                        g_video_shm->frame_ready_eventfd);
-                            } else {
-                                fprintf(stderr, "IPC: Failed to send eventfd: %s\n",
-                                        strerror(errno));
-                            }
-                        }
-
-                        ev.events = EPOLLIN;
-                        ev.data.fd = g_control_socket;
-                        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, g_control_socket, &ev);
-                    }
-                }
+        // Drain control reads. waitForReadyRead returns true if data
+        // arrived in the last <1ms, false on timeout — both fine.
+        if (control_client) {
+            if (control_client->waitForReadyRead(1)) {
+                drain_control_socket(control_client);
             }
-            else if (fd == g_control_socket && (events[i].events & EPOLLIN)) {
-                ssize_t nr = recv(g_control_socket, buffer, sizeof(buffer), 0);
-                if (nr > 0) {
-                    size_t offset = 0;
-                    while (offset < (size_t)nr) {
-                        if (offset + sizeof(IPCInputHeader) > (size_t)nr) break;
-                        const IPCInputHeader* hdr = (const IPCInputHeader*)(buffer + offset);
-                        size_t msg_size = 0;
-                        switch (hdr->type) {
-                            case IPC_INPUT_KEY:     msg_size = sizeof(IPCKeyInput); break;
-                            case IPC_INPUT_MOUSE:   msg_size = sizeof(IPCMouseInput); break;
-                            case IPC_INPUT_COMMAND: msg_size = sizeof(IPCCommandInput); break;
-                            case IPC_INPUT_AUDIO_REQUEST: msg_size = sizeof(IPCAudioRequestInput); break;
-                            default: msg_size = sizeof(IPCInputHeader); break;
-                        }
-                        if (offset + msg_size > (size_t)nr) break;
-                        process_binary_input(buffer + offset, msg_size);
-                        offset += msg_size;
-                    }
-                } else if (nr == 0 || (nr < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
-                    fprintf(stderr, "IPC: Parent disconnected\n");
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, g_control_socket, nullptr);
-                    close(g_control_socket);
-                    g_control_socket = -1;
-                }
+            if (control_client->state() == QLocalSocket::UnconnectedState) {
+                fprintf(stderr, "IPC: Parent disconnected from control\n");
+                control_client->deleteLater();
+                control_client = nullptr;
             }
+        }
+        // Notify socket is write-only from our side; just check
+        // disconnect state so we drop the fd if the parent dies.
+        if (notify_client &&
+            notify_client->state() == QLocalSocket::UnconnectedState) {
+            fprintf(stderr, "IPC: Parent disconnected from notify\n");
+            g_ipc_frame_notifier = nullptr;
+            g_notify_fd.store(-1, std::memory_order_release);
+            notify_client->deleteLater();
+            notify_client = nullptr;
+        }
+
+        // No connections, no readable bytes — yield briefly so we
+        // don't burn CPU when the parent isn't there yet.
+        if (!control_client && !notify_client) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 
-    close(epoll_fd);
+    g_ipc_frame_notifier = nullptr;
+    g_notify_fd.store(-1, std::memory_order_release);
+    if (control_client) control_client->deleteLater();
+    if (notify_client)  notify_client->deleteLater();
     fprintf(stderr, "IPC: Control thread exiting\n");
 }
 
-/*
- * Public API
- */
+}  // namespace
+
+// ── Public C API ─────────────────────────────────────────────────
 
 extern "C" {
 
 bool control_ipc_init(IPCBuffer* shm)
 {
     g_video_shm = shm;
-    return create_control_socket();
+    pid_t pid = getpid();
+    g_control_name = std::string(IPC_CONTROL_NAME_PREFIX) + std::to_string(pid);
+    g_notify_name  = std::string(IPC_NOTIFY_NAME_PREFIX)  + std::to_string(pid);
+    return true;  // QLocalServer::listen happens on the worker thread
 }
 
 void control_ipc_start(void)
 {
-    g_control_running.store(true, std::memory_order_release);
-    g_control_thread = std::thread(control_socket_thread);
+    g_worker_running.store(true, std::memory_order_release);
+    g_worker_thread = std::thread(worker_main);
 }
 
 void control_ipc_exit(void)
 {
-    g_control_running.store(false, std::memory_order_release);
-    if (g_control_thread.joinable()) {
-        g_control_thread.join();
+    g_worker_running.store(false, std::memory_order_release);
+    if (g_worker_thread.joinable()) {
+        g_worker_thread.join();
     }
-    destroy_control_socket();
+    // QLocalServer::removeServer cleans up the socket file even if the
+    // server already destructed — safe to call on a stale name.
+    QLocalServer::removeServer(QString::fromStdString(g_control_name));
+    QLocalServer::removeServer(QString::fromStdString(g_notify_name));
+    g_control_name.clear();
+    g_notify_name.clear();
 }
 
-// Signal-safe: only unlinks the socket path (no malloc, no thread join).
-// Safe to call from a signal handler.
+// Signal-safe: only unlinks the socket files (no malloc, no thread join).
+// Safe to call from a signal handler — uses POSIX unlink(2) directly,
+// not Qt APIs.
 void control_ipc_unlink(void)
 {
-    if (!g_socket_path.empty()) {
-        unlink(g_socket_path.c_str());
+    if (!g_control_name.empty()) {
+        std::string p = "/tmp/" + g_control_name;
+        unlink(p.c_str());
+    }
+    if (!g_notify_name.empty()) {
+        std::string p = "/tmp/" + g_notify_name;
+        unlink(p.c_str());
     }
 }
 

@@ -2,11 +2,19 @@
  * IPC Protocol for mac-phoenix subprocess mode
  *
  * Used when PPC runs as a subprocess (--ipc mode).
- * Child creates SHM + Unix socket; parent connects by PID.
+ * Child creates SHM + two named-socket endpoints; parent connects by PID.
  *
- * SHM: /macemu-video-{PID}  (triple-buffered video + boot status)
- * Socket: /tmp/macemu-{PID}.sock  (binary input: key/mouse/command)
- * Eventfd: sent via SCM_RIGHTS for zero-latency frame notifications
+ * SHM (QSharedMemory key): macemu-video-{PID}  — triple-buffered video
+ *                                                + boot status / cursor
+ * Control socket (QLocalServer name): macemu-control-{PID}
+ *      Parent → child: key / mouse / command messages.
+ * Notify socket (QLocalServer name):  macemu-notify-{PID}
+ *      Child → parent: 1 byte per published frame, parent polls the
+ *      socket fd to wake the encoder.
+ *
+ * Phase 3b: replaced AF_UNIX socket() + eventfd + SCM_RIGHTS fd-passing
+ * with two QLocalServer/QLocalSocket pairs. Same wire semantics, but
+ * portable to Windows (named pipes) without the SCM_RIGHTS quirk.
  *
  * Video frames stored as packed pixels (no stride padding).
  */
@@ -17,7 +25,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <unistd.h>
-#include <sys/eventfd.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -42,9 +49,18 @@ extern "C" {
 
 /* ── Resource naming ─────────────────────────────────────────────── */
 
-#define IPC_VIDEO_SHM_PREFIX "/macemu-video-"
-#define IPC_CONTROL_SOCK_PREFIX "/tmp/macemu-"
-#define IPC_CONTROL_SOCK_SUFFIX ".sock"
+/* QSharedMemory key prefix (no leading slash — that was a relic of POSIX
+ * shm_open paths). Both parent and child concatenate the child's PID. */
+#define IPC_VIDEO_SHM_PREFIX     "macemu-video-"
+/* QLocalServer name prefixes. On Linux these resolve to
+ * /tmp/<name>.sock; on Windows to \\\\.\\pipe\\<name>. Same Qt API. */
+#define IPC_CONTROL_NAME_PREFIX  "macemu-control-"
+#define IPC_NOTIFY_NAME_PREFIX   "macemu-notify-"
+
+/* Legacy aliases — deleted with phase 3b. Bare numeric defines kept as
+ * historical comments only:
+ *   "/macemu-video-" (POSIX shm_open path) → "macemu-video-" (Qt key)
+ *   "/tmp/macemu-{PID}.sock"               → split into control + notify */
 
 /* ── Constants ───────────────────────────────────────────────────── */
 
@@ -168,9 +184,12 @@ typedef struct IPCBuffer {
     IPC_ATOMIC_UINT64 frame_count;   /* monotonic, for new-frame detection */
     uint64_t timestamp_us;
 
-    /* Frame notification (sent to parent via SCM_RIGHTS) */
-    int32_t frame_ready_eventfd;
-    int32_t _eventfd_pad;
+    /* Reserved (was the eventfd handle pre-3b; now notification rides
+     * a separate QLocalSocket and the SHM struct doesn't carry an fd
+     * across the parent/child boundary). Kept zero-initialized so an
+     * old parent attaching to a new child doesn't see junk. */
+    int32_t _reserved_was_eventfd;
+    int32_t _reserved_pad;
 
     /* Boot progress (child writes, parent reads for /api/status) */
     char boot_phase[32];
@@ -203,6 +222,15 @@ typedef struct IPCBuffer {
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
 
+/* Frame-ready notification hook — set by the child's IPC server once
+ * the parent has connected to the notify socket. ipc_frame_complete
+ * calls it after publishing. NULL is fine (no parent attached yet);
+ * the SHM frame_count + ready_index updates still happen so a
+ * later-attaching parent can pick up the latest frame on its first
+ * poll. */
+typedef void (*ipc_frame_notifier_fn)(void);
+extern ipc_frame_notifier_fn g_ipc_frame_notifier;
+
 /* Called by child after writing a frame to frames[write_index] */
 static inline void ipc_frame_complete(IPCBuffer* buf, uint64_t ts_us) {
     uint32_t cur = IPC_ATOMIC_LOAD(buf->write_index);
@@ -211,11 +239,7 @@ static inline void ipc_frame_complete(IPCBuffer* buf, uint64_t ts_us) {
     IPC_ATOMIC_STORE(buf->write_index, (cur + 1) % IPC_NUM_BUFFERS);
     IPC_ATOMIC_STORE(buf->frame_count, IPC_ATOMIC_LOAD(buf->frame_count) + 1);
 
-    if (buf->frame_ready_eventfd >= 0) {
-        uint64_t val = 1;
-        ssize_t ignored = write(buf->frame_ready_eventfd, &val, sizeof(val));
-        (void)ignored;
-    }
+    if (g_ipc_frame_notifier) g_ipc_frame_notifier();
 }
 
 /* Called by child at startup */
@@ -231,10 +255,6 @@ static inline void ipc_init_buffer(IPCBuffer* buf, uint32_t pid,
     buf->width = width;
     buf->height = height;
     buf->pixel_format = IPC_PIXFMT_ARGB;
-
-    buf->frame_ready_eventfd = eventfd(0, EFD_NONBLOCK | EFD_SEMAPHORE);
-    if (buf->frame_ready_eventfd < 0)
-        fprintf(stderr, "IPC: eventfd failed: %s\n", strerror(errno));
 
     strncpy(buf->boot_phase, "pre-reset", sizeof(buf->boot_phase));
     IPC_ATOMIC_STORE(buf->checkload_count, 0);

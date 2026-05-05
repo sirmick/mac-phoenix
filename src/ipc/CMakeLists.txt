@@ -11,11 +11,12 @@ target_include_directories(ipc PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
 )
 
-find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
+find_package(Qt6 6.4 COMPONENTS Core Network REQUIRED)
 
 target_link_libraries(ipc PRIVATE
   Threads::Threads
   Qt6::Core
+  Qt6::Network          # QLocalServer / QLocalSocket (3b)
 )
 
 target_compile_options(ipc PRIVATE

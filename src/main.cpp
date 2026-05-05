@@ -642,13 +642,17 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		// Initialize IPC control socket
+		// Initialize IPC control socket. Phase 3b: control_ipc_init no
+		// longer creates listening sockets — that's deferred to
+		// control_ipc_start (worker thread does the QLocalServer::listen).
+		// We start the worker AFTER init_mac_subsystems completes so the
+		// parent can't race in with input commands before VideoMonitors
+		// is populated (the deterministic crash that killed the prior 3b).
 		if (!control_ipc_init(ipc_buf)) {
 			fprintf(stderr, "Failed to initialize IPC control socket\n");
 			video_ipc_exit();
 			return 1;
 		}
-		control_ipc_start();
 
 		// Set boot progress to write to IPC buffer
 		boot_progress_set_ipc_buffer(ipc_buf);
@@ -693,6 +697,10 @@ int main(int argc, char **argv)
 				browser::browser_module_start();
 			}
 
+			// Mac subsystems are now up — safe to accept the parent's
+			// IPC connection and start serving input.
+			control_ipc_start();
+
 			// screen_base is 0 here — VideoInit runs during Mac boot.
 			// Set the framebuffer pointer from VideoInit instead.
 			// (see video_ppc.cpp VideoInit → video_ipc_set_framebuffer)
@@ -729,6 +737,10 @@ int main(int argc, char **argv)
 				browser::shm_init();
 				browser::browser_module_start();
 			}
+
+			// Mac subsystems are now up — safe to start serving the
+			// parent's IPC commands.
+			control_ipc_start();
 		}
 
 		// Set up signal stack for SIGSEGV handler (SheepShaver legacy pattern)

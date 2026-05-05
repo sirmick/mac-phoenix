@@ -355,10 +355,14 @@ void EmulatorSubprocess::publish_ipc_shm()
         ipc_shm_atom_->store(ipc_client_.shm(), std::memory_order_release);
     }
     if (ipc_eventfd_atom_) {
-        ipc_eventfd_atom_->store(ipc_client_.frame_eventfd(), std::memory_order_release);
+        // Phase 3b: the field name is preserved for binary compat with
+        // existing call sites (g_ipc_eventfd) but now carries the
+        // notify-socket fd from QLocalSocket::socketDescriptor().
+        ipc_eventfd_atom_->store(ipc_client_.frame_notify_fd(),
+                                 std::memory_order_release);
     }
-    fprintf(stderr, "[EmulatorSubprocess] Published IPC SHM to encoder (shm=%p, eventfd=%d)\n",
-            (void*)ipc_client_.shm(), ipc_client_.frame_eventfd());
+    fprintf(stderr, "[EmulatorSubprocess] Published IPC SHM to encoder (shm=%p, notify_fd=%d)\n",
+            (void*)ipc_client_.shm(), ipc_client_.frame_notify_fd());
 }
 
 void EmulatorSubprocess::clear_ipc_shm()

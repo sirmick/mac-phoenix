@@ -52,10 +52,10 @@ static const uint8_t* g_framebuffer_ptr = nullptr;
 static bool create_video_shm()
 {
     pid_t pid = getpid();
-    // Strip the leading slash from IPC_VIDEO_SHM_PREFIX — QSharedMemory
-    // turns the key into a system-specific identifier internally and
-    // doesn't want the POSIX SHM convention.
-    g_shm_name = std::string(IPC_VIDEO_SHM_PREFIX + 1) + std::to_string(pid);
+    // Phase 3b dropped the legacy leading slash from IPC_VIDEO_SHM_PREFIX
+    // (it was a relic of POSIX shm_open paths; QSharedMemory keys are
+    // arbitrary strings). Use the prefix verbatim now.
+    g_shm_name = std::string(IPC_VIDEO_SHM_PREFIX) + std::to_string(pid);
 
     g_shm = new QSharedMemory(QString::fromStdString(g_shm_name));
 
@@ -103,9 +103,8 @@ static void destroy_video_shm()
 {
     if (g_ipc_buffer) {
         g_ipc_buffer->state = IPC_STATE_STOPPED;
-        if (g_ipc_buffer->frame_ready_eventfd >= 0) {
-            close(g_ipc_buffer->frame_ready_eventfd);
-        }
+        // Phase 3b: no eventfd to close — frame notify rides a
+        // QLocalSocket owned by the IPC server worker thread.
         g_ipc_buffer = nullptr;
     }
     if (g_shm) {
