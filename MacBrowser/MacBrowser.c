@@ -42,9 +42,34 @@
 #include "bridge_cfg.h"
 #include "bridge_paths.h"
 
-#define kAppleMenu  128
-#define kFileMenu   129
-#define kEditMenu   130
+#define kAppleMenu      128
+#define kFileMenu       129
+#define kEditMenu       130
+#define kBookmarksMenu  131
+
+/* Bookmarks. Compile-time list; first entry is the home URL. To edit,
+ * append/replace here and rebuild — there's no on-disk prefs path yet
+ * (TODO: read from Host:MacPhoenix:Prefs:Bookmarks). Each entry has a
+ * Pascal-string title for the menu item and a C string URL to navigate
+ * to. Title length includes the leading length byte (Mac convention). */
+typedef struct {
+    const unsigned char *title;     /* Pascal string */
+    const char          *url;       /* C string */
+} BookmarkEntry;
+
+static const BookmarkEntry gBookmarks[] = {
+    { (const unsigned char *)"\pGoogle",
+      "https://www.google.com/" },
+    { (const unsigned char *)"\pYouTube test video",
+      "https://www.youtube.com/watch?v=y0sF5xhGreA" },
+    { (const unsigned char *)"\pMacintosh Repository",
+      "https://www.macintoshrepository.org/" },
+    { (const unsigned char *)"\pMacintosh Garden",
+      "https://macintoshgarden.org/" },
+    { (const unsigned char *)"\pmac-phoenix on GitHub",
+      "https://github.com/sirmick/mac-phoenix" },
+};
+#define kBookmarkCount   ((short)(sizeof(gBookmarks) / sizeof(gBookmarks[0])))
 
 /* Standard System 7 Edit-menu item indices. Order is mandated by HIG
  * (Inside Macintosh: Macintosh Toolbox Essentials, Ch. 3): Undo,
@@ -145,6 +170,7 @@ static int gURLRight;          /* right edge of URL field */
 static MenuHandle gAppleMenuH;
 static MenuHandle gFileMenuH;
 static MenuHandle gEditMenuH;
+static MenuHandle gBookmarksMenuH;
 static WindowPtr  gWin = NULL;
 static Boolean    gRunning = true;
 
@@ -190,6 +216,18 @@ static uint32_t       gScrollX     = 0, gScrollY     = 0;
 static uint32_t       gViewportPxW = 0, gViewportPxH = 0;
 static Boolean        gMetricsDirty = false;
 static unsigned long  gLastBarsRepaint = 0;
+
+/* Mirrored from BR_EV_TITLE/HISTORY/ZOOM. Apply on the next main-loop
+ * tick so we have a valid GrafPort. The host emits each event only on
+ * change, so dirty-flag → apply_x() → clear-flag is enough; no need to
+ * remember the previous value on the guest side. */
+static unsigned char  gWinTitle[252];      /* Pascal string */
+static Boolean        gTitleDirty    = false;
+static Boolean        gCanGoBack     = false;
+static Boolean        gCanGoForward  = false;
+static Boolean        gHistoryDirty  = false;
+static uint16_t       gZoomPct       = 100;
+static Boolean        gZoomDirty     = false;
 
 /* Off-screen 16-bit RGB555 PixMap header that wraps gShm->fb.pixels. */
 static PixMap     gShmPixMap;
@@ -355,6 +393,36 @@ static void apply_status(void)
     draw_chrome_row();
 }
 
+/* Apply the latest BR_EV_TITLE: paint the new page title into the
+ * window's title bar. SetWTitle handles the title-bar redraw. */
+static void apply_title(void)
+{
+    if (!gWin) return;
+    if (gWinTitle[0] == 0) {
+        SetWTitle(gWin, "\pMacBrowser");
+    } else {
+        SetWTitle(gWin, gWinTitle);
+    }
+}
+
+/* Apply the latest BR_EV_HISTORY: enable/disable Back+Forward toolbar
+ * buttons. HiliteControl(c, 0) = active; HiliteControl(c, 255) =
+ * inactive (greyed out — Mac convention for "can't act on this"). */
+static void apply_history(void)
+{
+    if (!gWin) return;
+    GrafPtr saved;
+    GetPort(&saved);
+    SetPort(gWin);
+
+    if (gBtnBack)
+        HiliteControl(gBtnBack,    gCanGoBack    ? 0 : 255);
+    if (gBtnForward)
+        HiliteControl(gBtnForward, gCanGoForward ? 0 : 255);
+
+    SetPort(saved);
+}
+
 /* Read big-endian u32 from a byte buffer. */
 static uint32_t be32_load(const uint8_t *p)
 {
@@ -487,6 +555,33 @@ static void drain_h2g(void)
             gScrollX = sx; gScrollY = sy;
             gViewportPxW = vw; gViewportPxH = vh;
             gMetricsDirty = true;
+        }
+        /* BR_EV_TITLE: u8 title_len, u8 title[title_len]. utf8 from
+         * QtWebEngine; we land it as a Pascal string and let
+         * SetWTitle paint it on the next apply_title() tick. UTF-8 →
+         * MacRoman is a pass-through here (lossy for non-ASCII);
+         * proper transcoding is a TODO. */
+        else if (type == BR_EV_TITLE && len >= 1) {
+            uint8_t tlen = buf[0];
+            if ((uint16_t)(1 + tlen) > len) tlen = (uint8_t)(len - 1);
+            if (tlen > sizeof(gWinTitle) - 1)
+                tlen = (uint8_t)(sizeof(gWinTitle) - 1);
+            gWinTitle[0] = tlen;
+            if (tlen) memcpy(gWinTitle + 1, buf + 1, tlen);
+            gTitleDirty = true;
+        }
+        /* BR_EV_HISTORY: u8 can_back, u8 can_forward. Drives
+         * Back/Forward toolbar button enable. */
+        else if (type == BR_EV_HISTORY && len >= 2) {
+            gCanGoBack    = (buf[0] != 0);
+            gCanGoForward = (buf[1] != 0);
+            gHistoryDirty = true;
+        }
+        /* BR_EV_ZOOM: u16 zoom_pct (BE). Mirrored for future UI; v2
+         * stores it without a chrome-row indicator. */
+        else if (type == BR_EV_ZOOM && len >= 2) {
+            gZoomPct   = (uint16_t)((buf[0] << 8) | buf[1]);
+            gZoomDirty = true;
         }
     }
 }
@@ -911,13 +1006,29 @@ static void dispatch_control(ControlHandle ctl, short part)
     if (!is_v && !is_h) return;
 
     int dx = 0, dy = 0;
+    if (part == kPartIndicator) {
+        /* Thumb drag: control's value is the new absolute scroll
+         * position in the same units we set on the scale (CSS pixels).
+         * Compute the delta from the cached gScrollX/Y mirror, ship
+         * it as BR_CMD_SCROLL, and update the mirror locally so the
+         * next drag computes from the new position rather than
+         * waiting on the next BR_EV_PAGE_METRICS round-trip. */
+        long target  = (long)GetControlValue(ctl);
+        long current = is_v ? (long)gScrollY : (long)gScrollX;
+        long delta   = target - current;
+        if (delta == 0) return;
+        if (is_v) { dy = (int)delta; gScrollY = (uint32_t)target; }
+        else      { dx = (int)delta; gScrollX = (uint32_t)target; }
+        send_scroll(dx, dy);
+        return;
+    }
+
     int sign = 0, step = 0;
     switch (part) {
     case kPartUpArrow:    sign = -1; step = kScrollStepLine; break;
     case kPartDownArrow:  sign = +1; step = kScrollStepLine; break;
     case kPartPageUp:     sign = -1; step = kScrollStepPage; break;
     case kPartPageDown:   sign = +1; step = kScrollStepPage; break;
-    case kPartIndicator:  /* TODO: read new value, compute delta */ return;
     default: return;
     }
     if (is_v) dy = sign * step;
@@ -979,6 +1090,18 @@ static void build_menus(void)
     DisableItem(gEditMenuH, kEditUndo);    /* No undo path yet. */
     InsertMenu(gEditMenuH, 0);
 
+    /* Bookmarks menu — one item per entry in gBookmarks. AppendMenu's
+     * "/X" syntax interprets the rest of the string as an option flag,
+     * so we use SetMenuItemText after AppendMenu("\px") to set the
+     * actual title verbatim and avoid surprises with URL-y characters. */
+    gBookmarksMenuH = NewMenu(kBookmarksMenu, "\pBookmarks");
+    for (short i = 0; i < kBookmarkCount; i++) {
+        AppendMenu(gBookmarksMenuH, "\px");
+        SetMenuItemText(gBookmarksMenuH, i + 1,
+                        (unsigned char *)gBookmarks[i].title);
+    }
+    InsertMenu(gBookmarksMenuH, 0);
+
     DrawMenuBar();
 }
 
@@ -989,6 +1112,20 @@ static void do_about(void)
     NoteAlert(128, NULL);
 }
 
+/* Navigate to one of the precanned bookmarks. Pushes BR_CMD_NAV with
+ * the URL exactly as authored (no trailing CR like the URL-bar path).
+ * The URL bar will refresh from the host's BR_EV_STATUS once the load
+ * starts, so we don't need to update gURL ourselves. */
+static void go_bookmark(short item_1based)
+{
+    if (!gShm) return;
+    if (item_1based < 1 || item_1based > kBookmarkCount) return;
+    const char *url = gBookmarks[item_1based - 1].url;
+    if (!url) return;
+    br_ring_push(&gShm->g2h, BR_CMD_NAV,
+                 (void *)url, (uint16_t)strlen(url));
+}
+
 static void do_menu(long choice)
 {
     short menuID = HiWord(choice);
@@ -997,6 +1134,8 @@ static void do_menu(long choice)
         if (item == 1) do_about();
     } else if (menuID == kFileMenu) {
         if (item == 1) gRunning = false;
+    } else if (menuID == kBookmarksMenu) {
+        go_bookmark(item);
     } else if (menuID == kEditMenu) {
         /* URL-bar Cmd+C / Cmd+X always need ZeroScrap + TECut/TECopy
          * + TEToScrap so the text reaches the desk scrap (TECut/TECopy
@@ -1240,11 +1379,11 @@ int main(void)
          * dims and our compiled-in defaults. */
         publish_size();
 
-        /* MacBrowser owns the start URL. Host now spawns Firefox at
-         * about:blank, so our first BR_CMD_NAV defines the home
-         * page. TODO: read from a "Browser Prefs" file on Host:
-         * MacPhoenix:Prefs so the user can edit it without rebuilding. */
-        const char *home = "https://en.wikipedia.org/wiki/Classic_Mac_OS";
+        /* MacBrowser owns the start URL. The first bookmark is the
+         * home page — keep this convention so the next iteration
+         * (ExtFS-backed bookmarks file, one URL per line) can drop in
+         * with the same "first line wins" rule. */
+        const char *home = gBookmarks[0].url;
         br_ring_push(&gShm->g2h, BR_CMD_NAV,
                      (void *)home, (uint16_t)strlen(home));
     }
@@ -1260,6 +1399,20 @@ int main(void)
         if (gStatusDirty) {
             gStatusDirty = false;
             apply_status();
+        }
+        if (gTitleDirty) {
+            gTitleDirty = false;
+            apply_title();
+        }
+        if (gHistoryDirty) {
+            gHistoryDirty = false;
+            apply_history();
+        }
+        if (gZoomDirty) {
+            /* No chrome-row UI for zoom yet; just consume the flag so
+             * the host's BR_EV_ZOOM doesn't pile up. The mirrored
+             * gZoomPct is available for future menu / status display. */
+            gZoomDirty = false;
         }
 
         /* Repaint the scrollbars. Always force-redraw on a fresh
