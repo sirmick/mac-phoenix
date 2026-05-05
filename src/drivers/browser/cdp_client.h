@@ -35,6 +35,7 @@
 namespace rtc { class WebSocket; }
 
 class QJsonObject;
+class QJsonValue;
 
 namespace browser {
 
@@ -119,6 +120,14 @@ public:
     // the on_selection callback registered through set_selection_cb.
     void get_selection();
     void set_selection_cb(std::function<void(std::string)> cb);
+
+    // Generic Runtime.evaluate. Fires the JS expression in the page
+    // context, invokes `cb` with the unwrapped `result.value` on the
+    // CDP I/O thread. cb is invoked once; pass an empty std::function
+    // for fire-and-forget. `returnByValue` is forced true so the
+    // result arrives as JSON, not as a remote-object handle.
+    void evaluate(const std::string& expression,
+                  std::function<void(const QJsonValue&)> cb);
 
 private:
     void worker_main();

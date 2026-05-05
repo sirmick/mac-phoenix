@@ -179,8 +179,10 @@ void maybe_report(int crop_w, int crop_h)
 //     3072 tiles). BR_DIRTY_MAX=64 caps emitted rects; overflow extends
 //     the last rect's bbox, same as the row-coalescer did.
 //
-// Returns the {crop_w, crop_h} actually published (zero if no shm/viewport).
-struct CropDims { int w; int h; };
+// Returns the {crop_w, crop_h} actually published, plus whether a new
+// frame was actually emitted (any dirty tiles found). The published
+// flag drives the adaptive capture poll — see capture_tick.
+struct CropDims { int w; int h; bool published; };
 
 constexpr int kTileShift = 4;          // 16×16 tiles
 constexpr int kTileSize  = 1 << kTileShift;
@@ -195,18 +197,18 @@ int s_last_crop_w = 0, s_last_crop_h = 0;
 CropDims push_frame_to_browser_shm(const QImage& img)
 {
     BrowserShm* shm = browser::shm_get();
-    if (!shm) return {0, 0};
+    if (!shm) return {0, 0, false};
 
     int crop_w = (int)br_u16_load(&shm->fb.width);
     int crop_h = (int)br_u16_load(&shm->fb.height);
-    if (crop_w == 0 || crop_h == 0) return {0, 0};
+    if (crop_w == 0 || crop_h == 0) return {0, 0, false};
     if (crop_w > (int)BR_FB_MAX_W) crop_w = (int)BR_FB_MAX_W;
     if (crop_h > (int)BR_FB_MAX_H) crop_h = (int)BR_FB_MAX_H;
     shm->fb.depth = 16;
 
     const int w = std::min(img.width(),  crop_w);
     const int h = std::min(img.height(), crop_h);
-    if (w <= 0 || h <= 0) return {crop_w, crop_h};
+    if (w <= 0 || h <= 0) return {crop_w, crop_h, false};
 
     const bool force_full = (crop_w != s_last_crop_w ||
                              crop_h != s_last_crop_h);
@@ -361,8 +363,9 @@ CropDims push_frame_to_browser_shm(const QImage& img)
 
     if (n_rects == 0) {
         // Static frame — nothing changed. Don't bump seq → guest sees
-        // no new frame → zero CopyBits cost.
-        return {crop_w, crop_h};
+        // no new frame → zero CopyBits cost. Caller's adaptive poll
+        // uses the `published=false` return to count idle ticks.
+        return {crop_w, crop_h, false};
     }
 
     br_u16_store(&shm->fb.dirty_count, (uint16_t)n_rects);
@@ -376,7 +379,7 @@ CropDims push_frame_to_browser_shm(const QImage& img)
     br_u32_store(&shm->fb.seq, ++g_frame_seq);
 
     g_perf.pixels_out += pixels_changed;
-    return {crop_w, crop_h};
+    return {crop_w, crop_h, true};
 }
 
 }  // namespace
@@ -700,6 +703,31 @@ void QtWebEngineBrowser::capture_tick()
     CropDims cd = push_frame_to_browser_shm(img);
     maybe_report(cd.w ? cd.w : pm.width(),
                  cd.h ? cd.h : pm.height());
+
+    // Adaptive poll: drop to 4Hz once we've seen kIdleThreshold ticks
+    // in a row with nothing dirty; snap back to 60Hz the moment any
+    // tile changes again. Costs a couple of grab() calls per second
+    // on a static page instead of 60. Real event-driven capture
+    // (Phase 8c-2 proper) is blocked on Qt6 packaging that doesn't
+    // ship the QtWebEngine QML plugin — once that's available, this
+    // adaptive timer goes away in favor of QQuickWindow::afterRendering.
+    constexpr int kIdleThreshold = 60;   // ~1s at 60Hz
+    constexpr int kFastIntervalMs = 16;  // 60Hz
+    constexpr int kSlowIntervalMs = 250; // 4Hz
+    if (cd.published) {
+        idle_ticks_ = 0;
+        if (capture_timer_->interval() != kFastIntervalMs) {
+            capture_timer_->setInterval(kFastIntervalMs);
+        }
+    } else {
+        if (idle_ticks_ < kIdleThreshold) {
+            idle_ticks_++;
+            if (idle_ticks_ == kIdleThreshold &&
+                capture_timer_->interval() != kSlowIntervalMs) {
+                capture_timer_->setInterval(kSlowIntervalMs);
+            }
+        }
+    }
 }
 
 namespace {

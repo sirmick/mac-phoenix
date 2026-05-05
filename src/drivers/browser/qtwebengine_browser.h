@@ -111,6 +111,11 @@ private:
     // Matches the [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
     // step list; index 4 = 100%.
     int zoom_step_ = 4;
+
+    // Adaptive capture poll: idle_ticks_ counts consecutive captures
+    // that found nothing dirty. Past kIdleThreshold the timer slows
+    // from 60Hz to 4Hz; snaps back the moment something paints again.
+    int idle_ticks_ = 0;
 };
 
 // Create QtWebEngineBrowser on the main (GUI) thread, load `initial_url`.

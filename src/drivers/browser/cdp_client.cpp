@@ -425,16 +425,30 @@ void CdpClient::set_selection_cb(std::function<void(std::string)> cb)
 
 void CdpClient::get_selection()
 {
+    evaluate(
+        "(window.getSelection&&window.getSelection().toString())||''",
+        [this](const QJsonValue& v) {
+            std::string text = v.toString().toStdString();
+            if (selection_cb_) selection_cb_(std::move(text));
+        });
+}
+
+void CdpClient::evaluate(const std::string& expression,
+                         std::function<void(const QJsonValue&)> cb)
+{
     QJsonObject p;
-    p["expression"] = QStringLiteral(
-        "(window.getSelection&&window.getSelection().toString())||''");
+    p["expression"]    = QString::fromStdString(expression);
     p["returnByValue"] = true;
-    send_with_reply("Runtime.evaluate", p,
-                    [this](const QJsonObject& result) {
-        QJsonObject r = result.value("result").toObject();
-        std::string text = r.value("value").toString().toStdString();
-        if (selection_cb_) selection_cb_(std::move(text));
-    });
+    if (cb) {
+        send_with_reply("Runtime.evaluate", p,
+                        [cb = std::move(cb)](const QJsonObject& result) {
+            // result.result.value carries the unwrapped JSON value.
+            QJsonObject r = result.value("result").toObject();
+            cb(r.value("value"));
+        });
+    } else {
+        send("Runtime.evaluate", p);
+    }
 }
 
 }  // namespace browser
