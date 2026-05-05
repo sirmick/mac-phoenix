@@ -482,7 +482,15 @@ int main(int argc, char **argv)
 		if (!qEnvironmentVariableIsSet("QTWEBENGINE_CHROMIUM_FLAGS")) {
 			qputenv("QTWEBENGINE_CHROMIUM_FLAGS",
 				"--no-sandbox --disable-gpu-compositing "
-				"--in-process-gpu --use-gl=swiftshader");
+				"--in-process-gpu --use-gl=swiftshader "
+				"--enable-logging=stderr --log-level=0");
+		}
+		// QtWebEngine's own env var enables the Chromium DevTools
+		// HTTP+WS endpoint. The chromium-flag form (--remote-debugging-port
+		// in QTWEBENGINE_CHROMIUM_FLAGS) is silently ignored by the
+		// QtWebEngine bootstrap on 6.4; this env var is the supported path.
+		if (!qEnvironmentVariableIsSet("QTWEBENGINE_REMOTE_DEBUGGING")) {
+			qputenv("QTWEBENGINE_REMOTE_DEBUGGING", "12000");
 		}
 		if (!qEnvironmentVariableIsSet("QSG_RHI_BACKEND"))   qputenv("QSG_RHI_BACKEND",   "software");
 		if (!qEnvironmentVariableIsSet("QT_QUICK_BACKEND"))  qputenv("QT_QUICK_BACKEND",  "software");

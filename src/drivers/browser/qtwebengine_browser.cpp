@@ -3,6 +3,7 @@
  */
 #include "qtwebengine_browser.h"
 
+#include "cdp_client.h"
 #include "cmd.h"
 #include "shm.h"
 #include "emulator_config.h"
@@ -34,6 +35,7 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QWebEngineDownloadRequest>
+#include <QWebEngineHistory>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineView>
@@ -53,8 +55,8 @@ namespace browser {
 namespace {
 
 // Push a BR_EV_STATUS event into the h2g ring. Guest's URL bar loading
-// indicator clears on STATUS_READY/ERROR. Mirrors send_status() in
-// cmd.cpp (also a 250-byte URL cap to fit a single ring message).
+// indicator clears on STATUS_READY/ERROR. 250-byte URL cap so the
+// payload fits a single ring message comfortably.
 void send_status(uint8_t code, const std::string& url)
 {
     uint8_t buf[2 + 250];
@@ -63,6 +65,34 @@ void send_status(uint8_t code, const std::string& url)
     buf[1] = (uint8_t)n;
     if (n) memcpy(buf + 2, url.data(), n);
     send_event(BR_EV_STATUS, buf, (uint16_t)(2 + n));
+}
+
+// Push BR_EV_TITLE — utf8 title, capped to 250 bytes (single message).
+void send_title(const std::string& title)
+{
+    uint8_t buf[1 + 250];
+    size_t n = std::min(title.size(), (size_t)250);
+    buf[0] = (uint8_t)n;
+    if (n) memcpy(buf + 1, title.data(), n);
+    send_event(BR_EV_TITLE, buf, (uint16_t)(1 + n));
+}
+
+// Push BR_EV_HISTORY — two booleans for Back/Forward enable.
+void send_history(bool can_back, bool can_forward)
+{
+    uint8_t buf[2];
+    buf[0] = can_back     ? 1 : 0;
+    buf[1] = can_forward  ? 1 : 0;
+    send_event(BR_EV_HISTORY, buf, sizeof(buf));
+}
+
+// Push BR_EV_ZOOM — u16 percent (BE).
+void send_zoom(uint16_t zoom_pct)
+{
+    uint8_t buf[2];
+    buf[0] = (uint8_t)(zoom_pct >> 8);
+    buf[1] = (uint8_t)(zoom_pct & 0xFF);
+    send_event(BR_EV_ZOOM, buf, sizeof(buf));
 }
 
 // ARGB32 (Qt's QImage::Format_ARGB32 / RGB32) and BGRX share byte layout
@@ -130,22 +160,32 @@ void maybe_report(int crop_w, int crop_h)
 
 // Push one captured QImage frame into BrowserShm.fb. Single fused pass:
 // each pixel is converted ARGB32 → RGB555 and compared against the host's
-// last-published value already in fb.pixels in one cache-friendly loop.
-// Per-row {xmin,xmax} extents are tracked, then contiguous dirty rows
-// are coalesced into rectangles (capped at BR_DIRTY_MAX = 64).
+// last-published value already in fb.pixels. Dirty pixels mark a 16×16
+// tile; tiles coalesce into rectangles via run-detection per tile-row +
+// vertical extension.
 //
-// Comparing against fb.pixels rather than a kept prev-buffer is safe: the
-// guest READS fb.pixels via CopyBits but never writes; the host is the
-// only writer, so what's there is exactly what we last published.
+// Why tiles vs the earlier per-row {xmin,xmax}: per-row coalescing
+// produced a single bbox-union rect when contiguous rows were dirty —
+// fine for one cursor blink, terrible when two animations fired at
+// opposite ends of the viewport (rect spanned the full width). Tiles
+// give us per-region resolution: each connected blob of changed pixels
+// becomes its own rect.
 //
-// Wins:
-//   - 50% memory traffic vs. separate diff+convert (touch each pixel once)
-//   - No prev_img_ allocation
-//   - Static page → zero rectangles → no fb.seq bump → guest sees no
-//     redundant frame, no CopyBits cost
+// Tradeoffs:
+//   - Tile granularity rounds up: a 1-pixel change marks a 16×16 tile.
+//     For typical web content (cursor blink, hover, scroll) the rounding
+//     is in the noise; the savings from finer x-granularity dominate.
+//   - Worst case rect count grows with screen size (1024×768 → 64×48 =
+//     3072 tiles). BR_DIRTY_MAX=64 caps emitted rects; overflow extends
+//     the last rect's bbox, same as the row-coalescer did.
 //
 // Returns the {crop_w, crop_h} actually published (zero if no shm/viewport).
 struct CropDims { int w; int h; };
+
+constexpr int kTileShift = 4;          // 16×16 tiles
+constexpr int kTileSize  = 1 << kTileShift;
+constexpr int kMaxTilesX = (BR_FB_MAX_W + kTileSize - 1) >> kTileShift;
+constexpr int kMaxTilesY = (BR_FB_MAX_H + kTileSize - 1) >> kTileShift;
 
 // Force-dirty state — when crop_w/h changes (BR_CMD_RESIZE), the existing
 // fb.pixels content is at the OLD geometry, so per-pixel diffs against it
@@ -173,77 +213,151 @@ CropDims push_frame_to_browser_shm(const QImage& img)
     s_last_crop_w = crop_w;
     s_last_crop_h = crop_h;
 
+    const int tiles_x = (w + kTileSize - 1) >> kTileShift;
+    const int tiles_y = (h + kTileSize - 1) >> kTileShift;
+
+    // Per-tile dirty bitmap (1 byte per tile — fast, no bit-fiddling).
+    // Stack-allocated: 64×48 = 3072 B at 1024×768 ceiling.
+    uint8_t tile_dirty[kMaxTilesY][kMaxTilesX];
+    std::memset(tile_dirty, 0, (size_t)tiles_y * kMaxTilesX);
+
     auto t1 = std::chrono::steady_clock::now();
     const int dst_stride = crop_w * 2;
-    int row_xmin[BR_FB_MAX_H];
-    int row_xmax[BR_FB_MAX_H];
     uint64_t pixels_changed = 0;
 
     for (int y = 0; y < h; y++) {
         const uint32_t* src_row = (const uint32_t*)img.scanLine(y);
         uint16_t* dst_row =
             (uint16_t*)&shm->fb.pixels[(size_t)y * dst_stride];
-        int xmin = -1, xmax = -1;
+        uint8_t* tile_row = tile_dirty[y >> kTileShift];
+
         if (force_full) {
             for (int x = 0; x < w; x++) {
                 dst_row[x] = argb32_to_rgb555_be(src_row[x]);
             }
-            xmin = 0;
-            xmax = w - 1;
+            // Mark every tile in this tile-row dirty.
+            for (int tx = 0; tx < tiles_x; tx++) tile_row[tx] = 1;
             pixels_changed += (uint64_t)w;
         } else {
+            // Hoist the redundant tile-mark check out of the inner loop:
+            // track the last tile we already marked, only touch the
+            // bitmap on tile boundaries.
+            int last_tx = -1;
+            int run_pixels = 0;
             for (int x = 0; x < w; x++) {
                 uint16_t pix = argb32_to_rgb555_be(src_row[x]);
                 if (pix != dst_row[x]) {
                     dst_row[x] = pix;
-                    if (xmin < 0) xmin = x;
-                    xmax = x;
+                    int tx = x >> kTileShift;
+                    if (tx != last_tx) {
+                        tile_row[tx] = 1;
+                        last_tx = tx;
+                    }
+                    run_pixels++;
                 }
             }
-            if (xmin >= 0) pixels_changed += (uint64_t)(xmax - xmin + 1);
+            pixels_changed += (uint64_t)run_pixels;
         }
-        row_xmin[y] = xmin;
-        row_xmax[y] = xmax;
     }
     g_perf.blit_us += us_since(t1);
 
-    // Coalesce contiguous dirty rows into rectangles.
+    // Build rectangles from the tile bitmap.
+    //
+    //   Phase 1: walk top→bottom, for each tile-row find contiguous
+    //     runs of dirty tiles. Each run is a candidate rect 16 px tall.
+    //   Phase 2: extend a rect downward if the next tile-row has an
+    //     identical run (same xmin, xmax). Otherwise close the rect and
+    //     open a new one for the new run.
+    //
+    // This is the standard "scanline → rectangle" decomposition. For
+    // the common case of one connected blob (cursor, hover) the result
+    // is a single tight rect. For multiple disjoint blobs at the same
+    // height it produces one rect per blob — the win this whole change
+    // is about.
     BrRect rects[BR_DIRTY_MAX];
     int n_rects = 0;
-    int run_top = -1, run_xmin = 0, run_xmax = 0;
 
-    auto close_run = [&](int bottom) {
-        if (run_top < 0) return;
+    // Open rects (matched in the previous tile-row but not yet closed).
+    struct Open { int top_ty, xmin_tx, xmax_tx; };
+    Open open[BR_DIRTY_MAX];
+    int n_open = 0;
+
+    auto emit_rect = [&](int top_ty, int bottom_ty, int xmin_tx, int xmax_tx) {
+        int top    = top_ty * kTileSize;
+        int bottom = std::min(bottom_ty * kTileSize, crop_h);
+        int left   = xmin_tx * kTileSize;
+        int right  = std::min((xmax_tx + 1) * kTileSize, crop_w);
         if (n_rects < (int)BR_DIRTY_MAX) {
             BrRect& r = rects[n_rects++];
-            r.top = (int16_t)run_top;
-            r.left = (int16_t)run_xmin;
+            r.top = (int16_t)top;
+            r.left = (int16_t)left;
             r.bottom = (int16_t)bottom;
-            r.right = (int16_t)(run_xmax + 1);
+            r.right = (int16_t)right;
         } else {
+            // Overflow — extend last rect's bbox (mirrors the row coalescer).
             BrRect& r = rects[BR_DIRTY_MAX - 1];
-            r.bottom = (int16_t)bottom;
-            if (run_xmin < r.left)  r.left = (int16_t)run_xmin;
-            if (run_xmax + 1 > r.right) r.right = (int16_t)(run_xmax + 1);
+            if (top    < r.top)    r.top    = (int16_t)top;
+            if (bottom > r.bottom) r.bottom = (int16_t)bottom;
+            if (left   < r.left)   r.left   = (int16_t)left;
+            if (right  > r.right)  r.right  = (int16_t)right;
         }
-        run_top = -1;
     };
 
-    for (int y = 0; y < h; y++) {
-        if (row_xmin[y] < 0) {
-            close_run(y);
-        } else {
-            if (run_top < 0) {
-                run_top = y;
-                run_xmin = row_xmin[y];
-                run_xmax = row_xmax[y];
+    for (int ty = 0; ty < tiles_y; ty++) {
+        // Find runs in this tile-row.
+        struct Run { int xmin_tx, xmax_tx; };
+        Run cur[kMaxTilesX];
+        int n_cur = 0;
+        for (int tx = 0; tx < tiles_x; ) {
+            if (!tile_dirty[ty][tx]) { tx++; continue; }
+            int start = tx;
+            while (tx < tiles_x && tile_dirty[ty][tx]) tx++;
+            cur[n_cur++] = {start, tx - 1};
+        }
+
+        // Match cur runs against open rects. open[]/cur[] are both
+        // sorted left-to-right, so a single linear walk suffices.
+        Open next_open[BR_DIRTY_MAX];
+        int n_next = 0;
+        int oi = 0, ci = 0;
+        while (oi < n_open && ci < n_cur) {
+            if (open[oi].xmin_tx == cur[ci].xmin_tx &&
+                open[oi].xmax_tx == cur[ci].xmax_tx) {
+                // Exact match — extend down.
+                next_open[n_next++] = open[oi];
+                oi++; ci++;
+            } else if (open[oi].xmin_tx < cur[ci].xmin_tx) {
+                // open[oi] has no matching run → close it.
+                emit_rect(open[oi].top_ty, ty,
+                          open[oi].xmin_tx, open[oi].xmax_tx);
+                oi++;
             } else {
-                if (row_xmin[y] < run_xmin) run_xmin = row_xmin[y];
-                if (row_xmax[y] > run_xmax) run_xmax = row_xmax[y];
+                // cur[ci] is a fresh run.
+                if (n_next < (int)BR_DIRTY_MAX) {
+                    next_open[n_next++] = {ty, cur[ci].xmin_tx, cur[ci].xmax_tx};
+                }
+                ci++;
             }
         }
+        while (oi < n_open) {
+            emit_rect(open[oi].top_ty, ty,
+                      open[oi].xmin_tx, open[oi].xmax_tx);
+            oi++;
+        }
+        while (ci < n_cur) {
+            if (n_next < (int)BR_DIRTY_MAX) {
+                next_open[n_next++] = {ty, cur[ci].xmin_tx, cur[ci].xmax_tx};
+            }
+            ci++;
+        }
+        std::memcpy(open, next_open, (size_t)n_next * sizeof(Open));
+        n_open = n_next;
     }
-    close_run(h);
+    // Close any rects still open at the bottom.
+    for (int i = 0; i < n_open; i++) {
+        emit_rect(open[i].top_ty, tiles_y,
+                  open[i].xmin_tx, open[i].xmax_tx);
+    }
 
     if (n_rects == 0) {
         // Static frame — nothing changed. Don't bump seq → guest sees
@@ -282,25 +396,35 @@ QtWebEngineBrowser::QtWebEngineBrowser()
     QWebEnginePage* page = view_->page();
     QWebEngineView* raw = view_.get();
 
-    QObject::connect(page, &QWebEnginePage::loadStarted, raw, [raw]() {
+    QObject::connect(page, &QWebEnginePage::loadStarted, raw, [raw, this]() {
         std::string url = raw->url().toString().toStdString();
         fprintf(stderr, "[QtWebEngine] loadStarted url=%s\n", url.c_str());
         send_status(BR_STATUS_LOADING, url);
+        publish_history();
     });
-    QObject::connect(page, &QWebEnginePage::loadFinished, raw, [raw](bool ok) {
+    QObject::connect(page, &QWebEnginePage::loadFinished, raw, [raw, this](bool ok) {
         std::string url = raw->url().toString().toStdString();
         fprintf(stderr, "[QtWebEngine] loadFinished ok=%d url=%s\n",
                 ok ? 1 : 0, url.c_str());
         send_status(ok ? BR_STATUS_READY : BR_STATUS_ERROR, url);
+        publish_history();
     });
-    QObject::connect(page, &QWebEnginePage::urlChanged, raw, [](const QUrl& url) {
+    QObject::connect(page, &QWebEnginePage::urlChanged, raw,
+                     [this](const QUrl& url) {
         fprintf(stderr, "[QtWebEngine] urlChanged %s\n",
                 url.toString().toUtf8().constData());
-        // urlChanged fires for in-page anchors and history.pushState too;
-        // the guest URL bar is driven from loadStarted/loadFinished, so
-        // just log here. If the URL bar starts looking stale we can also
-        // emit a STATUS_READY on urlChanged after the initial load — for
-        // now, the BiDi-side parity wins.
+        // Fires for in-page anchors and history.pushState too. Back /
+        // Forward enable can flip without a load round-trip, so refresh
+        // history here as well.
+        publish_history();
+    });
+    QObject::connect(page, &QWebEnginePage::titleChanged, raw,
+                     [this](const QString& title) {
+        std::string utf8 = title.toStdString();
+        if (utf8 == last_title_) return;
+        last_title_ = utf8;
+        fprintf(stderr, "[QtWebEngine] titleChanged \"%s\"\n", utf8.c_str());
+        send_title(utf8);
     });
 
     // 60 Hz capture timer. QWidget::grab() forces a synchronous render
@@ -333,6 +457,13 @@ QtWebEngineBrowser::QtWebEngineBrowser()
                      [this](QWebEngineDownloadRequest* req) {
                          handle_download_request(req);
                      });
+
+    // Spin up the CDP client. The Chromium DevTools server is up but
+    // discovery + WS handshake takes ~200ms; the client connects in
+    // the background and is_connected() flips when ready. Until then
+    // dispatch_* falls back to QApplication::postEvent on focusProxy.
+    cdp_ = std::make_unique<CdpClient>(12000);
+    cdp_->start();
 
     // Worker thread that drains the g2h ring (guest → host commands)
     // and dispatches via cmd_dispatch — used to live in browser_spike,
@@ -483,6 +614,33 @@ void QtWebEngineBrowser::handle_download_request(QWebEngineDownloadRequest* req)
     req->accept();
 }
 
+void QtWebEngineBrowser::publish_history()
+{
+    if (!view_) return;
+    QWebEngineHistory* hist = view_->page()->history();
+    bool can_back    = hist && hist->canGoBack();
+    bool can_forward = hist && hist->canGoForward();
+    int8_t b = can_back    ? 1 : 0;
+    int8_t f = can_forward ? 1 : 0;
+    if (b == last_can_back_ && f == last_can_forward_) return;
+    last_can_back_    = b;
+    last_can_forward_ = f;
+    fprintf(stderr, "[QtWebEngine] history back=%d fwd=%d\n", (int)b, (int)f);
+    send_history(can_back, can_forward);
+}
+
+void QtWebEngineBrowser::publish_zoom()
+{
+    if (!view_) return;
+    int pct = (int)(view_->zoomFactor() * 100.0 + 0.5);
+    if (pct < 0) pct = 0;
+    if (pct > 65535) pct = 65535;
+    if ((int16_t)pct == last_zoom_pct_) return;
+    last_zoom_pct_ = (int16_t)pct;
+    fprintf(stderr, "[QtWebEngine] zoom → %d%%\n", pct);
+    send_zoom((uint16_t)pct);
+}
+
 void QtWebEngineBrowser::metrics_tick()
 {
     if (!view_) return;
@@ -546,159 +704,140 @@ void QtWebEngineBrowser::capture_tick()
 
 namespace {
 
-// Mac VK → Qt::Key mapping. Keys not in this table fall back to the text
-// content of the BR_CMD_KEY_DOWN payload (Mac KCHR-translated UTF-8) — see
-// dispatch_key_down for the routing logic. Mirrors mac_vk_to_w3c_key in
-// cmd.cpp (which targets W3C WebDriver private-use codepoints).
-Qt::Key mac_vk_to_qt_key(uint16_t vk)
+// Mac VK → CDP key descriptor (W3C `key` + `code` strings + Windows
+// virtual key code). Returns true for keys we handle as "special";
+// false means "treat the BR_CMD_KEY_DOWN text payload as the
+// character to type via Input.dispatchKeyEvent type=char".
+struct CdpKey {
+    const char* key;
+    const char* code;
+    int         windows_vk;
+};
+
+bool mac_vk_to_cdp(uint16_t vk, CdpKey* out)
 {
     switch (vk) {
-    case 0x33: return Qt::Key_Backspace;     // Mac "Delete" = Backspace
-    case 0x75: return Qt::Key_Delete;        // Forward Delete
-    case 0x24: return Qt::Key_Return;
-    case 0x4C: return Qt::Key_Enter;         // Numpad enter
-    case 0x30: return Qt::Key_Tab;
-    case 0x35: return Qt::Key_Escape;
-    case 0x7B: return Qt::Key_Left;
-    case 0x7C: return Qt::Key_Right;
-    case 0x7E: return Qt::Key_Up;
-    case 0x7D: return Qt::Key_Down;
-    case 0x73: return Qt::Key_Home;
-    case 0x77: return Qt::Key_End;
-    case 0x74: return Qt::Key_PageUp;
-    case 0x79: return Qt::Key_PageDown;
-    case 0x7A: return Qt::Key_F1;
-    case 0x78: return Qt::Key_F2;
-    case 0x63: return Qt::Key_F3;
-    case 0x76: return Qt::Key_F4;
-    default:   return Qt::Key_unknown;
+    case 0x33: *out = {"Backspace",  "Backspace",   8}; return true;
+    case 0x75: *out = {"Delete",     "Delete",     46}; return true;
+    case 0x24: *out = {"Enter",      "Enter",      13}; return true;
+    case 0x4C: *out = {"Enter",      "NumpadEnter",13}; return true;
+    case 0x30: *out = {"Tab",        "Tab",         9}; return true;
+    case 0x35: *out = {"Escape",     "Escape",     27}; return true;
+    case 0x7B: *out = {"ArrowLeft",  "ArrowLeft",  37}; return true;
+    case 0x7E: *out = {"ArrowUp",    "ArrowUp",    38}; return true;
+    case 0x7C: *out = {"ArrowRight", "ArrowRight", 39}; return true;
+    case 0x7D: *out = {"ArrowDown",  "ArrowDown",  40}; return true;
+    case 0x73: *out = {"Home",       "Home",       36}; return true;
+    case 0x77: *out = {"End",        "End",        35}; return true;
+    case 0x74: *out = {"PageUp",     "PageUp",     33}; return true;
+    case 0x79: *out = {"PageDown",   "PageDown",   34}; return true;
+    case 0x7A: *out = {"F1", "F1", 112}; return true;
+    case 0x78: *out = {"F2", "F2", 113}; return true;
+    case 0x63: *out = {"F3", "F3", 114}; return true;
+    case 0x76: *out = {"F4", "F4", 115}; return true;
+    default: return false;
     }
 }
 
-// Mac modifier bits → Qt::KeyboardModifiers. Only shift currently flows
-// through to the page (cmd is intercepted by the Mac menu bar; option
-// produces pre-cooked text). Mirrors cmd.cpp's kMacShift comment.
-Qt::KeyboardModifiers mac_mods_to_qt(uint16_t mods)
+// Mac modifier bits → CDP modifier bitfield.
+//   CDP: 1=Alt, 2=Ctrl, 4=Meta, 8=Shift
+//   Mac: shiftKey=0x0200, optionKey=0x0800, controlKey=0x1000, cmdKey=0x0100
+int mac_mods_to_cdp(uint16_t mods)
 {
-    constexpr uint16_t kMacShift = 0x0200;
-    Qt::KeyboardModifiers out = Qt::NoModifier;
-    if (mods & kMacShift) out |= Qt::ShiftModifier;
+    int out = 0;
+    if (mods & 0x0200) out |= 8;  // Shift
+    if (mods & 0x0800) out |= 1;  // Option → Alt
+    if (mods & 0x1000) out |= 2;  // Control
+    if (mods & 0x0100) out |= 4;  // Cmd → Meta
     return out;
-}
-
-// Map BR_CMD_CLICK button code (0=left, 1=middle, 2=right) to Qt enum.
-Qt::MouseButton br_button_to_qt(uint8_t btn)
-{
-    switch (btn) {
-    case 0:  return Qt::LeftButton;
-    case 1:  return Qt::MiddleButton;
-    case 2:  return Qt::RightButton;
-    default: return Qt::LeftButton;
-    }
 }
 
 }  // namespace
 
+namespace {
+const char* cdp_button_name(uint8_t btn)
+{
+    switch (btn) {
+    case 0:  return "left";
+    case 1:  return "middle";
+    case 2:  return "right";
+    default: return "left";
+    }
+}
+}  // namespace
+
 void QtWebEngineBrowser::dispatch_click(int x, int y, int button, int count)
 {
-    if (!view_) return;
-    QPointF pt(x, y);
-    Qt::MouseButton qbtn = br_button_to_qt((uint8_t)button);
+    const std::string btn = cdp_button_name((uint8_t)button);
     int n = count > 0 ? count : 1;
     for (int i = 0; i < n; i++) {
-        // Press → Release pair per click. Qt detects double-click from
-        // timing of consecutive press events on the same widget.
-        QApplication::postEvent(view_.get(), new QMouseEvent(
-            QEvent::MouseButtonPress, pt, pt,
-            qbtn, qbtn, Qt::NoModifier));
-        QApplication::postEvent(view_.get(), new QMouseEvent(
-            QEvent::MouseButtonRelease, pt, pt,
-            qbtn, Qt::NoButton, Qt::NoModifier));
+        cdp_->mouse_event("mousePressed",  x, y, btn, i + 1, 0);
+        cdp_->mouse_event("mouseReleased", x, y, btn, i + 1, 0);
     }
 }
 
 void QtWebEngineBrowser::dispatch_mouse_move(int x, int y)
 {
-    if (!view_) return;
-    QPointF pt(x, y);
-    QApplication::postEvent(view_.get(), new QMouseEvent(
-        QEvent::MouseMove, pt, pt,
-        Qt::NoButton, Qt::NoButton, Qt::NoModifier));
+    cdp_->mouse_event("mouseMoved", x, y, "none", 0, 0);
 }
 
 void QtWebEngineBrowser::dispatch_mouse_out()
 {
-    // No direct Qt event for "pointer left widget" without showing a
-    // widget — best effort is to move pointer well off any visible
-    // page region, matching the BiDi mouse_out(-1, -1) behavior.
-    dispatch_mouse_move(-1, -1);
+    // CDP has no "pointer left page" event; mirror the legacy
+    // behavior of moving the pointer well off any visible region.
+    cdp_->mouse_event("mouseMoved", -1, -1, "none", 0, 0);
 }
 
 void QtWebEngineBrowser::dispatch_key_down(uint16_t vk, uint16_t mods,
                                            const std::string& text)
 {
-    if (!view_) return;
-    Qt::KeyboardModifiers qmods = mac_mods_to_qt(mods);
-    Qt::Key qk = mac_vk_to_qt_key(vk);
-
-    QString qtext;
-    int qkey = (int)qk;
-    if (qk == Qt::Key_unknown) {
-        // Printable character path: the Mac sends the post-KCHR UTF-8
-        // text. Use the first character's code as Qt::Key (sufficient
-        // for ASCII; Qt::Key just identifies the key, the actual text
-        // comes via QKeyEvent's text parameter).
-        if (text.empty()) return;
-        qtext = QString::fromUtf8(text.data(), (int)text.size());
-        if (qtext.isEmpty()) return;
-        qkey = qtext.at(0).unicode();
+    int cdp_mods = mac_mods_to_cdp(mods);
+    CdpKey k;
+    if (mac_vk_to_cdp(vk, &k)) {
+        cdp_->key_event("keyDown", k.windows_vk, k.key, k.code, "", cdp_mods);
+        cdp_->key_event("keyUp",   k.windows_vk, k.key, k.code, "", cdp_mods);
+    } else if (!text.empty()) {
+        // Printable: type=char inserts the cooked Unicode text
+        // (post-KCHR), fires a real `input` event, and works for
+        // <input>, <textarea>, contenteditable, plus IME-aware pages.
+        cdp_->type_text(text);
     }
-
-    // Press, then immediately Release. Mac's BR_CMD_KEY_UP is currently
-    // a no-op (the BiDi path comment notes per-character keyDown+keyUp
-    // is already done in BR_CMD_KEY_DOWN); replicate that here so the
-    // page sees a complete key event.
-    QApplication::postEvent(view_.get(), new QKeyEvent(
-        QEvent::KeyPress, qkey, qmods, qtext));
-    QApplication::postEvent(view_.get(), new QKeyEvent(
-        QEvent::KeyRelease, qkey, qmods, qtext));
 }
 
 void QtWebEngineBrowser::dispatch_key_up(uint16_t /*vk*/)
 {
-    // Per dispatch_key_down: KEY_DOWN already emits both press + release.
-    // Standalone KEY_UP from the guest is a no-op, matching the BiDi path.
+    // dispatch_key_down already emits both press + release in CDP.
+    // Standalone KEY_UP from the guest is a no-op.
 }
 
 void QtWebEngineBrowser::dispatch_nav(const std::string& url)
 {
-    if (!view_) return;
     fprintf(stderr, "[QtWebEngine] nav %s\n", url.c_str());
-    view_->setUrl(QUrl(QString::fromStdString(url)));
+    cdp_->navigate(url);
 }
 
 void QtWebEngineBrowser::dispatch_reload()
 {
-    if (!view_) return;
-    view_->page()->triggerAction(QWebEnginePage::Reload);
+    fprintf(stderr, "[QtWebEngine] reload\n");
+    cdp_->reload();
 }
 
 void QtWebEngineBrowser::dispatch_back()
 {
-    if (!view_) return;
-    view_->page()->triggerAction(QWebEnginePage::Back);
+    fprintf(stderr, "[QtWebEngine] back\n");
+    cdp_->back();
 }
 
 void QtWebEngineBrowser::dispatch_forward()
 {
-    if (!view_) return;
-    view_->page()->triggerAction(QWebEnginePage::Forward);
+    fprintf(stderr, "[QtWebEngine] forward\n");
+    cdp_->forward();
 }
 
 void QtWebEngineBrowser::dispatch_stop()
 {
-    if (!view_) return;
-    view_->page()->triggerAction(QWebEnginePage::Stop);
+    fprintf(stderr, "[QtWebEngine] stop\n");
+    cdp_->stop();
 }
 
 namespace {
@@ -714,8 +853,7 @@ void QtWebEngineBrowser::dispatch_zoom_in()
     if (!view_) return;
     if (zoom_step_ < kZoomStepCount - 1) zoom_step_++;
     view_->setZoomFactor(kZoomSteps[zoom_step_]);
-    fprintf(stderr, "[QtWebEngine] zoom → %.0f%%\n",
-            kZoomSteps[zoom_step_] * 100.0);
+    publish_zoom();
 }
 
 void QtWebEngineBrowser::dispatch_zoom_out()
@@ -723,8 +861,7 @@ void QtWebEngineBrowser::dispatch_zoom_out()
     if (!view_) return;
     if (zoom_step_ > 0) zoom_step_--;
     view_->setZoomFactor(kZoomSteps[zoom_step_]);
-    fprintf(stderr, "[QtWebEngine] zoom → %.0f%%\n",
-            kZoomSteps[zoom_step_] * 100.0);
+    publish_zoom();
 }
 
 void QtWebEngineBrowser::dispatch_zoom_reset()
@@ -732,7 +869,7 @@ void QtWebEngineBrowser::dispatch_zoom_reset()
     if (!view_) return;
     zoom_step_ = kZoomStep100;
     view_->setZoomFactor(kZoomSteps[zoom_step_]);
-    fprintf(stderr, "[QtWebEngine] zoom → 100%%\n");
+    publish_zoom();
 }
 
 void QtWebEngineBrowser::dispatch_resize(uint16_t w, uint16_t h)
@@ -752,20 +889,20 @@ void QtWebEngineBrowser::dispatch_resize(uint16_t w, uint16_t h)
 
 void QtWebEngineBrowser::dispatch_get_selection()
 {
-    if (!view_) return;
-    QWebEnginePage* page = view_->page();
-    if (!page) return;
-    page->runJavaScript(
-        "(window.getSelection&&window.getSelection().toString())||''",
-        [](const QVariant& result) {
-            std::string text = result.toString().toStdString();
-            uint16_t n = (uint16_t)std::min(text.size(), (size_t)4096);
-            std::vector<uint8_t> buf(2 + n);
-            buf[0] = (uint8_t)(n >> 8);
-            buf[1] = (uint8_t)(n & 0xFF);
-            if (n) memcpy(buf.data() + 2, text.data(), n);
-            send_event(BR_EV_SELECTION, buf.data(), (uint16_t)buf.size());
-        });
+    // CDP Runtime.evaluate. Reply lands in the WS I/O thread; send_event
+    // is safe from any thread (br_ring_push is SPSC and we're the sole
+    // producer for h2g). The callback is set once here per call —
+    // serialized by the CdpClient since only one Runtime.evaluate is
+    // in flight per BR_CMD_GET_SELECTION.
+    cdp_->set_selection_cb([](const std::string& text) {
+        uint16_t n = (uint16_t)std::min(text.size(), (size_t)4096);
+        std::vector<uint8_t> buf(2 + n);
+        buf[0] = (uint8_t)(n >> 8);
+        buf[1] = (uint8_t)(n & 0xFF);
+        if (n) memcpy(buf.data() + 2, text.data(), n);
+        send_event(BR_EV_SELECTION, buf.data(), (uint16_t)buf.size());
+    });
+    cdp_->get_selection();
 }
 
 void QtWebEngineBrowser::dispatch_select_all()
@@ -817,20 +954,13 @@ void QtWebEngineBrowser::dispatch_paste(const std::string& text)
 
 void QtWebEngineBrowser::dispatch_scroll(int dx, int dy)
 {
-    if (!view_) return;
-    // Wheel events deliver pixelDelta (CSS pixels). dy positive = scroll
-    // toward the top of the page; in BR_CMD_SCROLL the guest sends raw
-    // dx/dy in CSS px so we forward unchanged. Origin = viewport center
-    // (matches the BiDi path's hardcoded 320,240 from the original 640x480
-    // viewport assumption — refine when the guest reports cursor pos).
-    QPointF pos(view_->width() / 2, view_->height() / 2);
-    QPoint pixelDelta(dx, dy);
-    QPoint angleDelta(dx * 8, dy * 8);  // 1px ≈ 1/8 of a wheel notch
-    QApplication::postEvent(view_.get(), new QWheelEvent(
-        pos, view_->mapToGlobal(pos.toPoint()),
-        pixelDelta, angleDelta,
-        Qt::NoButton, Qt::NoModifier,
-        Qt::NoScrollPhase, false));
+    // BR_CMD_SCROLL exclusively comes from the Mac chrome scrollbars —
+    // user-driven scrollbar arrow / page-area / thumb-drag clicks. The
+    // intent is "scroll the document by N px"; window.scrollBy hits the
+    // root scrolling element directly. (mouse_wheel would route to the
+    // hovered element and miss when the cursor is over a scrollable
+    // div or fixed-position widget.)
+    cdp_->scroll_by(dx, dy);
 }
 
 namespace {
@@ -848,17 +978,25 @@ void qt_thread_main(std::string initial_url)
     QApplication app(argc, argv);
     g_app.store(&app, std::memory_order_release);
 
-    fprintf(stderr, "[QtWebEngine] QApplication on tid=%lu (qpa=%s)\n",
+    fprintf(stderr,
+            "[QtWebEngine] QApplication on tid=%lu (qpa=%s)\n"
+            "[QtWebEngine] CHROMIUM_FLAGS=%s\n",
             (unsigned long)pthread_self(),
-            qgetenv("QT_QPA_PLATFORM").constData());
+            qgetenv("QT_QPA_PLATFORM").constData(),
+            qgetenv("QTWEBENGINE_CHROMIUM_FLAGS").constData());
 
     g_browser = std::make_unique<QtWebEngineBrowser>();
-    // Blank initial page. The guest's MacBrowser sends BR_CMD_NAV to set
-    // the real URL when the user types in the URL bar; until then there's
-    // nothing useful to show. about:blank renders cleanly without the
-    // earlier smoke-test placeholder bleeding through into screenshots.
-    g_browser->load(initial_url.empty() ? std::string("about:blank")
-                                        : initial_url);
+    // No initial load. Loading anything (even about:blank) puts it into
+    // QWebEngineHistory, which then becomes the abort fallback: a Stop
+    // mid-reload, or a failed reload, would silently navigate the page
+    // BACK to about:blank, dropping whatever the user was actually
+    // looking at. Letting history start empty means Reload/Stop on the
+    // first real navigation are no-ops if nothing's loaded, and stay on
+    // the current page once something is. The viewport renders a benign
+    // empty surface until the guest's first BR_CMD_NAV.
+    if (!initial_url.empty()) {
+        g_browser->load(initial_url);
+    }
 
     fprintf(stderr, "[QtWebEngine] entering event loop\n");
     app.exec();
@@ -881,7 +1019,9 @@ void qtwebengine_module_start(const std::string& initial_url)
     if (qgetenv("QTWEBENGINE_CHROMIUM_FLAGS").isEmpty()) {
         qputenv("QTWEBENGINE_CHROMIUM_FLAGS",
                 "--no-sandbox --disable-gpu-compositing "
-                "--in-process-gpu --use-gl=swiftshader");
+                "--in-process-gpu --use-gl=swiftshader "
+                "--remote-debugging-port=12000 "
+                "--remote-debugging-address=127.0.0.1");
     }
     if (qgetenv("QSG_RHI_BACKEND").isEmpty())  qputenv("QSG_RHI_BACKEND",  "software");
     if (qgetenv("QT_QUICK_BACKEND").isEmpty()) qputenv("QT_QUICK_BACKEND", "software");

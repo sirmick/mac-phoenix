@@ -36,6 +36,8 @@ class QTimer;
 
 namespace browser {
 
+class CdpClient;
+
 class QtWebEngineBrowser {
 public:
     QtWebEngineBrowser();
@@ -77,9 +79,18 @@ private:
     void handle_download_request(::QWebEngineDownloadRequest* req);
     void g2h_drain_loop();
 
+    // Re-emit BR_EV_HISTORY only when canGoBack/canGoForward change.
+    // Call from any urlChanged/loadFinished/loadStarted hook.
+    void publish_history();
+    // Re-emit BR_EV_ZOOM only when the percent changes. Call after
+    // every setZoomFactor() so the guest URL bar / menu state stays
+    // synced with whatever zoom step we ended up on.
+    void publish_zoom();
+
     std::unique_ptr<QWebEngineView> view_;
     std::unique_ptr<QTimer>         capture_timer_;
     std::unique_ptr<QTimer>         metrics_timer_;
+    std::unique_ptr<CdpClient>      cdp_;
     std::thread                     g2h_thread_;
     std::atomic<bool>               g2h_running_{false};
 
@@ -88,9 +99,17 @@ private:
     uint32_t last_sx_ = 0, last_sy_ = 0;
     uint32_t last_vw_ = 0, last_vh_ = 0;
 
+    // Last-published title / history / zoom — only re-emit on change.
+    // Empty string = "no title yet"; a guest that just attached gets
+    // an immediate emit on the first titleChanged callback.
+    std::string last_title_;
+    int8_t      last_can_back_     = -1;   // -1 = unsent
+    int8_t      last_can_forward_  = -1;
+    int16_t     last_zoom_pct_     = -1;
+
     // Zoom step index into the standard Firefox zoom-level table.
     // Matches the [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
-    // step list in cmd.cpp's BiDi path; index 4 = 100%.
+    // step list; index 4 = 100%.
     int zoom_step_ = 4;
 };
 

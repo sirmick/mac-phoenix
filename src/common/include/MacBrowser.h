@@ -27,6 +27,46 @@
  *  big-endian on the wire. Use br_u16/u32_load/store accessors. NEVER
  *  load or store a multi-byte field with a raw pointer dereference.
  *
+ *  ── State ownership ────────────────────────────────────────────
+ *
+ *  HOST (mac-phoenix + QtWebEngine) is authoritative for everything
+ *  the page produces. Each piece of state has exactly one canonical
+ *  storage location and one event that publishes changes to the
+ *  guest. The guest mirrors what it needs for UI; it must not invent
+ *  page state on its own.
+ *
+ *    State                    Owner   Storage                Event
+ *    ─────────────────────────────────────────────────────────────────
+ *    Current URL              host    QWebEnginePage::url    BR_EV_STATUS
+ *    Loading state            host    Qt loadStarted/Finished BR_EV_STATUS.code
+ *    Page title               host    QWebEnginePage::title  BR_EV_TITLE
+ *    canGoBack/canGoForward   host    QWebEngineHistory      BR_EV_HISTORY
+ *    Zoom factor              host    setZoomFactor cache    BR_EV_ZOOM
+ *    Page metrics             host    JS poll (4 Hz)         BR_EV_PAGE_METRICS
+ *    Selection text           host    JS getSelection()      BR_EV_SELECTION
+ *    Download progress        host    QWebEngineDownloadReq  BR_EV_DOWNLOAD
+ *    Framebuffer              host    fb.pixels + fb.dirty   BR_EV_FRAME
+ *
+ *  GUEST (MacBrowser.app) owns its own UI surface only:
+ *
+ *    State                    Storage
+ *    ────────────────────────────────────────────────────────────
+ *    Window position          BrowserShm.viewport_screen_left/top
+ *    URL bar text (in flight) gURL TextEdit handle (committed via BR_CMD_NAV on Enter)
+ *    Visibility flag          (host polls Mac CurApName)
+ *
+ *  Bidirectional with explicit handoff:
+ *    Viewport pixel size      guest commits via BR_CMD_RESIZE,
+ *                             host applies + acknowledges by emitting
+ *                             the next frame at the new fb.width/height
+ *    Page scroll              host reports via BR_EV_PAGE_METRICS,
+ *                             guest scrolls page via BR_CMD_SCROLL
+ *
+ *  PROTOCOL VERSIONING: BR_VERSION below is the single contract
+ *  number. Bump it whenever the wire format changes. The host checks
+ *  magic + version on handshake and refuses to attach to a mismatched
+ *  guest (rather than corrupting state).
+ *
  *  See docs/plan/MacBrowser.md for the design rationale.
  */
 #ifndef MACBROWSER_H
@@ -42,7 +82,9 @@ extern "C" {
 /* ── Constants ──────────────────────────────────────────────── */
 
 #define BR_MAGIC          0x42525753u    /* 'BRWS' */
-#define BR_VERSION        1u
+/* v2 (qt-port): added BR_EV_TITLE/HISTORY/ZOOM. Strict per-opcode
+ * length validation in the host; any mismatched payload is dropped. */
+#define BR_VERSION        2u
 
 /* Path on the ExtFS share where Browser.app publishes the Mac address
  * of its NewPtrClear'd BrowserShm. ASCII hex, 8 chars + newline. The
@@ -107,41 +149,64 @@ static inline void br_u16_store(volatile uint16_t *p, uint16_t v) {
 
 /* ── Message types ──────────────────────────────────────────── */
 
-/* Guest → Host (commands, written into BrowserShm.g2h) */
-#define BR_CMD_NAV            1   /* utf8 url                                       */
-#define BR_CMD_CLICK          2   /* i32 page_x, i32 page_y, u8 btn, u8 click_count */
-#define BR_CMD_MOUSE_MOVE     3   /* i32 page_x, i32 page_y                         */
-#define BR_CMD_MOUSE_OUT      4   /* —                                              */
-#define BR_CMD_KEY_DOWN       5   /* u16 vk, u16 mods, u8 text_len, u8 text[]       */
-#define BR_CMD_KEY_UP         6   /* u16 vk                                         */
-#define BR_CMD_SCROLL         7   /* i32 dx, i32 dy                                 */
-#define BR_CMD_BACK           8   /* —                                              */
-#define BR_CMD_FORWARD        9   /* —                                              */
-#define BR_CMD_RELOAD        10   /* —                                              */
-#define BR_CMD_GET_SELECTION 11   /* — (server replies with BR_EV_SELECTION)        */
-#define BR_CMD_PASTE         12   /* u16 len, u8 text[len] — insert at focused el   */
-#define BR_CMD_RESIZE        13   /* u16 w, u16 h — guest viewport size changed     */
-#define BR_CMD_SELECT_ALL    14   /* — select-all on focused element / page         */
-#define BR_CMD_STOP          15   /* — abort current navigation                     */
-#define BR_CMD_ZOOM_OUT      16   /* — bump page zoom one step smaller (~10%)       */
-#define BR_CMD_ZOOM_IN       17   /* — bump page zoom one step larger  (~10%)       */
-#define BR_CMD_ZOOM_RESET    18   /* — restore zoom to 100%                         */
+/* Guest → Host (commands, written into BrowserShm.g2h)
+ *
+ * Each opcode has a STRICT payload length contract. The host
+ * validates len before dispatch; mismatched payloads are dropped
+ * with a one-line warning. Don't pad or truncate at the producer. */
+#define BR_CMD_NAV            1   /* len = url length, payload = utf8 url           */
+#define BR_CMD_CLICK          2   /* len = 10: i32 x, i32 y, u8 btn, u8 click_count */
+#define BR_CMD_MOUSE_MOVE     3   /* len =  8: i32 x, i32 y                         */
+#define BR_CMD_MOUSE_OUT      4   /* len =  0                                       */
+#define BR_CMD_KEY_DOWN       5   /* len = 5 + text_len:                            */
+                                   /*   u16 vk, u16 mods, u8 text_len, u8 text[]    */
+#define BR_CMD_KEY_UP         6   /* len =  2: u16 vk                               */
+#define BR_CMD_SCROLL         7   /* len =  8: i32 dx, i32 dy                       */
+#define BR_CMD_BACK           8   /* len =  0                                       */
+#define BR_CMD_FORWARD        9   /* len =  0                                       */
+#define BR_CMD_RELOAD        10   /* len =  0                                       */
+#define BR_CMD_GET_SELECTION 11   /* len =  0; host replies via BR_EV_SELECTION     */
+#define BR_CMD_PASTE         12   /* len = 2 + text_len:                            */
+                                   /*   u16 text_len, u8 text[text_len]             */
+#define BR_CMD_RESIZE        13   /* len =  4: u16 w, u16 h                         */
+#define BR_CMD_SELECT_ALL    14   /* len =  0                                       */
+#define BR_CMD_STOP          15   /* len =  0                                       */
+#define BR_CMD_ZOOM_OUT      16   /* len =  0                                       */
+#define BR_CMD_ZOOM_IN       17   /* len =  0                                       */
+#define BR_CMD_ZOOM_RESET    18   /* len =  0                                       */
 
-/* Host → Guest (events, written into BrowserShm.h2g) */
-#define BR_EV_STATUS         128   /* u8 code, u8 msglen, u8 msg[msglen]            */
+/* Host → Guest (events, written into BrowserShm.h2g)
+ *
+ * Events are coalesced at the host: each is emitted only when the
+ * host-owned state actually changes. Repeating an event with
+ * identical payload is a host bug (it will spam the guest's
+ * drain_h2g loop). */
+#define BR_EV_STATUS         128   /* u8 code, u8 urllen, u8 url[urllen]            */
+                                   /*   code = BR_STATUS_LOADING/READY/ERROR        */
 #define BR_EV_PAGE           129   /* u32 page_w, u32 page_h, u8 tlen, u8 title[]   */
+                                   /*   (legacy combined event; titles now ride     */
+                                   /*    BR_EV_TITLE, dimensions BR_EV_PAGE_METRICS) */
 #define BR_EV_FRAME          130   /* — (FB updated; consult fb.seq + fb.dirty)     */
 #define BR_EV_DOWNLOAD       131   /* u32 guid, u8 state, u32 bytes, u32 total,     */
                                    /*   u8 plen, u8 path[plen]                      */
-#define BR_EV_SELECTION      132   /* u16 len, u8 text[len]                         */
+#define BR_EV_SELECTION      132   /* u16 text_len, u8 text[text_len]               */
 #define BR_EV_PAGE_METRICS   133   /* u32 page_w, u32 page_h,                       */
-                                   /* u32 scroll_x, u32 scroll_y,                   */
-                                   /* u32 viewport_w, u32 viewport_h                */
+                                   /*   u32 scroll_x, u32 scroll_y,                 */
+                                   /*   u32 viewport_w, u32 viewport_h              */
                                    /* — page sizing for scrollbar thumb/range.      */
                                    /* Guest sets V/H scrollbar min=0,               */
                                    /* max=max(0, page_h-viewport_h),                */
                                    /* value=scroll_y. max=0 → bar inactive          */
                                    /* (Mac scrollBarProc behavior).                 */
+#define BR_EV_TITLE          134   /* u8 title_len, u8 title[title_len]             */
+                                   /*   utf8; guest blits to window title (truncated*/
+                                   /*    + MacRoman-best-effort).                   */
+#define BR_EV_HISTORY        135   /* u8 can_back, u8 can_forward                   */
+                                   /*   each 0 or 1; guest enables/disables Back +  */
+                                   /*   Forward toolbar buttons via HiliteControl.  */
+#define BR_EV_ZOOM           136   /* u16 zoom_pct                                  */
+                                   /*   percent (e.g. 100 = 100%); guest displays   */
+                                   /*   on the chrome row (or stores for menu UI).  */
 
 /* Wrap sentinel — written when the next real message wouldn't fit
  * before the end of the ring. Producer emits a normal 4-byte header
