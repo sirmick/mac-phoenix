@@ -288,7 +288,7 @@ static int encode_and_send_strips(VideoCodec* encoder, const uint32_t* pixels,
  */
 void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* config,
                         std::atomic<IPCBuffer*>* ipc_shm_ptr,
-                        std::atomic<int>* ipc_eventfd_ptr) {
+                        std::atomic<int>* ipc_notify_fd_ptr) {
     fprintf(stderr, "[VideoEncoder] Thread starting%s\n",
             ipc_shm_ptr ? " (IPC zero-copy capable)" : "");
 
@@ -298,7 +298,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
 
     // IPC direct-read state (reset on each subprocess restart)
     uint64_t ipc_last_frame_count = 0;
-    int ipc_eventfd = -1;
+    int ipc_notify_fd = -1;
     bool ipc_logged = false;
     bool ipc_was_connected = false;  // Track IPC transitions for reset
 
@@ -377,7 +377,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             if (!ipc_was_connected) {
                 fprintf(stderr, "[VideoEncoder] IPC (re)connected — resetting encoder state\n");
                 ipc_last_frame_count = 0;
-                ipc_eventfd = -1;
+                ipc_notify_fd = -1;
                 ipc_logged = false;
                 have_prev_frame = false;
                 encoder_initialized = false;
@@ -385,23 +385,23 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
                 g_request_keyframe.store(true, std::memory_order_release);
             }
 
-            // Pick up parent's eventfd on first IPC connection
-            if (ipc_eventfd < 0 && ipc_eventfd_ptr) {
-                ipc_eventfd = ipc_eventfd_ptr->load(std::memory_order_acquire);
-                if (ipc_eventfd >= 0 && !ipc_logged) {
-                    fprintf(stderr, "[VideoEncoder] IPC zero-copy active, eventfd=%d\n", ipc_eventfd);
+            // Pick up parent's notify-socket fd on first IPC connection
+            if (ipc_notify_fd < 0 && ipc_notify_fd_ptr) {
+                ipc_notify_fd = ipc_notify_fd_ptr->load(std::memory_order_acquire);
+                if (ipc_notify_fd >= 0 && !ipc_logged) {
+                    fprintf(stderr, "[VideoEncoder] IPC zero-copy active, notify_fd=%d\n", ipc_notify_fd);
                     ipc_logged = true;
                 }
             }
 
             // Wait for frame notification (no lock held — disconnect() can proceed)
 #ifdef __linux__
-            if (ipc_eventfd >= 0) {
-                struct pollfd pfd = { ipc_eventfd, POLLIN, 0 };
+            if (ipc_notify_fd >= 0) {
+                struct pollfd pfd = { ipc_notify_fd, POLLIN, 0 };
                 int ret = poll(&pfd, 1, 16);  // 16ms = ~60fps
                 if (ret > 0) {
                     uint64_t val;
-                    ssize_t ignored = read(ipc_eventfd, &val, sizeof(val));
+                    ssize_t ignored = read(ipc_notify_fd, &val, sizeof(val));
                     (void)ignored;
                 }
             } else {
@@ -418,7 +418,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             ipc_shm = ipc_shm_ptr->load(std::memory_order_acquire);
             if (!ipc_shm) {
                 ipc_was_connected = false;
-                ipc_eventfd = -1;
+                ipc_notify_fd = -1;
                 continue;
             }
 

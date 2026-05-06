@@ -19,22 +19,10 @@ VideoOutput::VideoOutput(int max_width, int max_height)
     , max_height(max_height)
 {
     allocate_buffers();
-#ifdef __linux__
-    frame_eventfd = eventfd(0, EFD_NONBLOCK);
-    if (frame_eventfd < 0) {
-        fprintf(stderr, "[VideoOutput] WARNING: eventfd() failed, falling back to polling\n");
-    }
-#endif
 }
 
 VideoOutput::~VideoOutput() {
     free_buffers();
-#ifdef __linux__
-    if (frame_eventfd >= 0) {
-        close(frame_eventfd);
-        frame_eventfd = -1;
-    }
-#endif
 }
 
 void VideoOutput::allocate_buffers() {
@@ -152,52 +140,37 @@ const FrameBuffer* VideoOutput::wait_for_frame(int timeout_ms) {
         return nullptr;
     }
 
-#ifdef __linux__
-    if (frame_eventfd >= 0) {
-        // Event-driven: block on eventfd until frame ready or timeout
-        struct pollfd pfd = { frame_eventfd, POLLIN, 0 };
-        int poll_timeout = (timeout_ms < 0) ? -1 : timeout_ms;
-
-        while (!shutdown_requested.load(std::memory_order_acquire)) {
-            int ret = poll(&pfd, 1, poll_timeout);
-            if (ret > 0) {
-                // Drain eventfd (may have accumulated multiple writes)
-                uint64_t val;
-                ssize_t ignored = read(frame_eventfd, &val, sizeof(val));
-                (void)ignored;
-            }
-
-            // Check for frame regardless of poll result
-            idx = ready_index.load(std::memory_order_acquire);
-            buf = &buffers[idx];
-            if (buf->sequence > last_read_sequence) {
-                return buf;
-            }
-
-            if (ret == 0) {
-                return nullptr;  // Timeout
-            }
-        }
-        return nullptr;  // Shutdown
-    }
-#endif
-
-    // Fallback: poll with 1ms sleep (non-Linux or eventfd creation failed)
+    // Block on the QSemaphore until notify_frame() releases. The
+    // counter accumulates across multiple writes — drain by acquiring
+    // whatever's available before re-checking the buffer state. Same
+    // semantics the eventfd-with-counter gave us, just portable.
+    int remaining_ms = (timeout_ms < 0) ? -1 : timeout_ms;
     auto start = std::chrono::steady_clock::now();
     while (!shutdown_requested.load(std::memory_order_acquire)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        bool got = (remaining_ms < 0)
+            ? (frame_sem.acquire(1), true)
+            : frame_sem.tryAcquire(1, remaining_ms);
+        // Drain any extra notifies so the next call doesn't return
+        // immediately on a stale wakeup. Cheap — non-blocking polls
+        // until the counter is zero.
+        if (got) {
+            while (frame_sem.tryAcquire(1, 0)) { /* drain */ }
+        }
 
         idx = ready_index.load(std::memory_order_acquire);
         buf = &buffers[idx];
         if (buf->sequence > last_read_sequence) {
             return buf;
         }
+        if (!got) return nullptr;  // tryAcquire timed out
 
-        if (timeout_ms > 0) {
+        // Spurious wakeup (notify but no real new frame yet) — recompute
+        // remaining timeout and try again.
+        if (remaining_ms > 0) {
             auto elapsed = std::chrono::steady_clock::now() - start;
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() >= timeout_ms) {
-                return nullptr;
-            }
+            int spent = (int)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+            remaining_ms = timeout_ms - spent;
+            if (remaining_ms <= 0) return nullptr;
         }
     }
     return nullptr;
@@ -257,13 +230,7 @@ void VideoOutput::get_stats(uint64_t* out_total_frames, uint64_t* out_dropped_fr
 }
 
 void VideoOutput::notify_frame() {
-#ifdef __linux__
-    if (frame_eventfd >= 0) {
-        uint64_t val = 1;
-        ssize_t ignored = write(frame_eventfd, &val, sizeof(val));
-        (void)ignored;
-    }
-#endif
+    frame_sem.release();
 }
 
 void VideoOutput::shutdown() {

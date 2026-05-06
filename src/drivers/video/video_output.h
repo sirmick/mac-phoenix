@@ -18,13 +18,10 @@
 #include <cstdint>
 #include <atomic>
 #include <cstring>
+#include <memory>
 #include <vector>
 
-#ifdef __linux__
-#include <sys/eventfd.h>
-#include <unistd.h>
-#include <poll.h>
-#endif
+#include <QSemaphore>
 
 // Maximum supported resolution (1080p)
 #define VIDEO_MAX_WIDTH  1920
@@ -209,9 +206,11 @@ private:
     int max_width;
     int max_height;
 
-#ifdef __linux__
-    int frame_eventfd = -1;  // eventfd for frame-ready notification
-#endif
+    // Frame-ready notification. notify_frame() calls release(); the
+    // encoder's wait_for_frame() calls tryAcquire(1, timeout). Counts
+    // accumulate across notifies — same semantics as the legacy
+    // eventfd, but cross-platform (was POSIX-only via <sys/eventfd.h>).
+    QSemaphore frame_sem;
 
     // Helper: Allocate pixel buffers
     void allocate_buffers();

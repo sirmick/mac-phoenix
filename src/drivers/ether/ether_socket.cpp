@@ -28,16 +28,19 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <memory>
 #include <queue>
 #include <vector>
 #include <unistd.h>
 #include <climits>
 #include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/un.h>
+#include <sys/socket.h>   // ::send only; sockaddr_un and AF_UNIX gone (Phase 3b-followup)
 #include <poll.h>
 
+#include <QFileInfo>
+#include <QLocalSocket>
 #include <QProcess>
+#include <QString>
 #include <QStringList>
 #include <QThread>
 
@@ -47,10 +50,18 @@
 // ---- Internal state ----
 
 static std::string s_sock_path;
-static int s_sock_fd = -1;
-static QProcess* s_bridge_proc = nullptr;
-static std::atomic<bool> s_running{false};
-static std::thread s_rx_thread;
+// QLocalSocket owns the connection's lifecycle; s_sock_fd is the cached
+// descriptor (socketDescriptor()) so the rx thread's poll() loop and the
+// Mac-thread send_frame() path can keep using raw I/O without QObject
+// affinity gymnastics. On Linux this is a Unix socket fd; the Windows
+// port (whenever it lands) would need to switch reads/writes to
+// QLocalSocket APIs since QLocalSocket-on-Windows uses named-pipe
+// HANDLEs that aren't fd-compatible with poll/read.
+static std::unique_ptr<QLocalSocket> s_sock_qt;
+static int                         s_sock_fd = -1;
+static QProcess*                   s_bridge_proc = nullptr;
+static std::atomic<bool>           s_running{false};
+static std::thread                 s_rx_thread;
 
 // Mac's ethernet address. Locally-administered (02:xx:xx:xx:xx:xx) prefix
 // `02:50:48:58` (= "PHX") plus the low 16 bits of our PID, so each running
@@ -156,24 +167,30 @@ static std::string find_bridge_binary()
 	return "";
 }
 
-// Try to connect to the bridge socket. Returns the open fd on success, -1
-// on failure. Used by `connect_or_spawn` so we either join an existing
-// (possibly multi-guest) bridge or spawn a new one — without the wasted
-// probe-and-close step that creates a transient port on the bridge.
-static int try_connect()
+// Try to connect to the bridge socket via QLocalSocket. Returns true
+// on success and stores the QLocalSocket + cached fd in module statics.
+// QLocalSocket::connectToServer accepts a full filesystem path on Unix
+// (the "name" form is handled identically when it contains a '/').
+static bool try_connect()
 {
-	if (access(s_sock_path.c_str(), F_OK) != 0) return -1;
-	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (fd < 0) return -1;
-	struct sockaddr_un addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, s_sock_path.c_str(), sizeof(addr.sun_path) - 1);
-	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-		return fd;
+	if (!QFileInfo::exists(QString::fromStdString(s_sock_path))) return false;
+	auto sock = std::make_unique<QLocalSocket>();
+	sock->connectToServer(QString::fromStdString(s_sock_path),
+	                      QIODevice::ReadWrite);
+	if (!sock->waitForConnected(2000)) return false;
+	int fd = (int)sock->socketDescriptor();
+	if (fd < 0) {
+		// Shouldn't happen on Linux; QLocalSocket's Unix-socket backend
+		// always exposes a real fd. Bail loudly so a Windows porter
+		// isn't surprised by the silent fallback.
+		fprintf(stderr, "[Socket] QLocalSocket::socketDescriptor() returned %d "
+		                "— Windows port will need to migrate read/write to QLocalSocket APIs\n",
+		        fd);
+		return false;
 	}
-	close(fd);
-	return -1;
+	s_sock_qt = std::move(sock);
+	s_sock_fd = fd;
+	return true;
 }
 
 static bool spawn_bridge()
@@ -222,26 +239,24 @@ static bool spawn_bridge()
 }
 
 // Connect to the bridge — joining an existing one if running, else
-// spawning a new one. Returns the open fd or -1 on total failure.
-static int connect_or_spawn()
+// spawning a new one. Returns true on success; on success
+// s_sock_qt + s_sock_fd are populated.
+static bool connect_or_spawn()
 {
-	int fd = try_connect();
-	if (fd >= 0) {
+	if (try_connect()) {
 		fprintf(stderr, "[Socket] Joined existing net-bridge at %s\n",
 			s_sock_path.c_str());
-		return fd;
+		return true;
 	}
-
 	// Either no socket file or a stale one. Spawn a fresh bridge then
 	// connect to it.
-	if (!spawn_bridge()) return -1;
+	if (!spawn_bridge()) return false;
 	// Brief retry: bridge writes the socket then accept()s; we may race.
 	for (int i = 0; i < 50; i++) {
-		fd = try_connect();
-		if (fd >= 0) return fd;
+		if (try_connect()) return true;
 		QThread::usleep(100000);
 	}
-	return -1;
+	return false;
 }
 
 static void stop_bridge()
@@ -322,13 +337,13 @@ static bool ether_socket_init(void)
 		s_mac_addr[0], s_mac_addr[1], s_mac_addr[2],
 		s_mac_addr[3], s_mac_addr[4], s_mac_addr[5]);
 
-	s_sock_fd = connect_or_spawn();
-	if (s_sock_fd < 0) {
+	if (!connect_or_spawn()) {
 		fprintf(stderr, "[Socket] Cannot connect to or start bridge at %s\n",
 			s_sock_path.c_str());
 		return false;
 	}
-	fprintf(stderr, "[Socket] Connected to bridge at %s\n", s_sock_path.c_str());
+	fprintf(stderr, "[Socket] Connected to bridge at %s (fd=%d)\n",
+		s_sock_path.c_str(), s_sock_fd);
 
 	// Start receive thread
 	s_running = true;
@@ -341,10 +356,8 @@ static bool ether_socket_init(void)
 			s_running = false;
 			if (s_rx_thread.joinable())
 				s_rx_thread.join();
-			if (s_sock_fd >= 0) {
-				close(s_sock_fd);
-				s_sock_fd = -1;
-			}
+			s_sock_qt.reset();   // closes the underlying fd
+			s_sock_fd = -1;
 			stop_bridge();
 		});
 		atexit_registered = true;
@@ -364,10 +377,8 @@ static void ether_socket_exit(void)
 	if (s_rx_thread.joinable())
 		s_rx_thread.join();
 
-	if (s_sock_fd >= 0) {
-		close(s_sock_fd);
-		s_sock_fd = -1;
-	}
+	s_sock_qt.reset();   // closes the underlying fd
+	s_sock_fd = -1;
 
 	stop_bridge();
 

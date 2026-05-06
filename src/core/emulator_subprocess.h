@@ -36,7 +36,7 @@ public:
     const IPCClient* ipc_client() const { return &ipc_client_; }
 
     // Zero-copy video: encoder reads directly from IPC SHM
-    void set_ipc_shm_atoms(std::atomic<IPCBuffer*>* shm, std::atomic<int>* eventfd);
+    void set_ipc_shm_atoms(std::atomic<IPCBuffer*>* shm, std::atomic<int>* notify_fd);
 
 private:
     config::EmulatorConfig* config_;
@@ -50,7 +50,7 @@ private:
 
     // Atomic pointers set by encoder thread for zero-copy IPC reads
     std::atomic<IPCBuffer*>* ipc_shm_atom_ = nullptr;
-    std::atomic<int>* ipc_eventfd_atom_ = nullptr;
+    std::atomic<int>* ipc_notify_fd_atom_ = nullptr;
 
     void publish_ipc_shm();
     void clear_ipc_shm();

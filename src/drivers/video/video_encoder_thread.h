@@ -29,7 +29,7 @@ namespace video {
  */
 void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* config,
                         std::atomic<IPCBuffer*>* ipc_shm_ptr = nullptr,
-                        std::atomic<int>* ipc_eventfd_ptr = nullptr);
+                        std::atomic<int>* ipc_notify_fd_ptr = nullptr);
 
 } // namespace video
 

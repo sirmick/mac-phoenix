@@ -144,7 +144,7 @@ namespace video {
 	std::atomic<bool> g_request_keyframe(false);
 	extern VideoOutput* g_video_output;  // defined in video_webrtc.cpp
 	std::atomic<IPCBuffer*> g_ipc_shm{nullptr};  // Set when subprocess connects; encoder reads directly
-	std::atomic<int> g_ipc_eventfd{-1};          // Parent's copy of the frame-ready eventfd
+	std::atomic<int> g_ipc_notify_fd{-1};          // Parent's notify-socket fd (frame-ready wakeups)
 }
 
 // Audio encoder globals
@@ -815,7 +815,7 @@ int main(int argc, char **argv)
 
 		// Create subprocess manager (works for both m68k and PPC)
 		auto subprocess_owner = std::make_unique<EmulatorSubprocess>(&emu_config);
-		subprocess_owner->set_ipc_shm_atoms(&video::g_ipc_shm, &video::g_ipc_eventfd);
+		subprocess_owner->set_ipc_shm_atoms(&video::g_ipc_shm, &video::g_ipc_notify_fd);
 		g_subprocess = subprocess_owner.get();
 		g_ipc_client = subprocess_owner->ipc_client();
 
@@ -876,7 +876,7 @@ int main(int argc, char **argv)
 		video::g_running.store(true, std::memory_order_release);
 		std::thread encoder_thread(video::video_encoder_main,
 		                            video::g_video_output, &emu_config,
-		                            &video::g_ipc_shm, &video::g_ipc_eventfd);
+		                            &video::g_ipc_shm, &video::g_ipc_notify_fd);
 
 		// Launch audio pipeline (parent side) — only if --audio was passed
 		if (emu_config.audio_enabled) {
