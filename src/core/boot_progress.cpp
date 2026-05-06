@@ -235,6 +235,35 @@ static inline bool mac_ptr_valid(uint32_t ptr, uint32_t size)
 }
 
 /*
+ * Append a JSON-escaped string to buf at *pos. Escapes ", \, control bytes
+ * (0x00–0x1F via short forms or \u00XX), and high bytes (0x7F–0xFF as
+ * \u00XX) so MacRoman input never produces invalid UTF-8 in the output.
+ * Stops at NUL or when src is exhausted; respects bufsize (always leaves
+ * room for the closing context, never writes past bufsize-1).
+ */
+static int json_escape_into(char *buf, int pos, int bufsize, const char *src)
+{
+	for (; *src && pos + 7 < bufsize; src++) {
+		uint8_t c = static_cast<uint8_t>(*src);
+		switch (c) {
+			case '"':  buf[pos++] = '\\'; buf[pos++] = '"';  continue;
+			case '\\': buf[pos++] = '\\'; buf[pos++] = '\\'; continue;
+			case '\b': buf[pos++] = '\\'; buf[pos++] = 'b';  continue;
+			case '\f': buf[pos++] = '\\'; buf[pos++] = 'f';  continue;
+			case '\n': buf[pos++] = '\\'; buf[pos++] = 'n';  continue;
+			case '\r': buf[pos++] = '\\'; buf[pos++] = 'r';  continue;
+			case '\t': buf[pos++] = '\\'; buf[pos++] = 't';  continue;
+		}
+		if (c < 0x20 || c >= 0x7f) {
+			pos += snprintf(buf + pos, bufsize - pos, "\\u%04x", c);
+		} else {
+			buf[pos++] = static_cast<char>(c);
+		}
+	}
+	return pos;
+}
+
+/*
  * Safely read a Pascal string from Mac RAM into a C buffer.
  * Returns length copied (0 if invalid / empty). Always zero-terminates.
  * Clamps to min(31, bufsize-1) — Pascal strings can't exceed 255 but Mac
@@ -729,9 +758,11 @@ static void serialize_mac_state(char *buf, int bufsize)
 	uint32_t ticks = ReadMacInt32(0x016A);
 	bool menu_bar = ReadMacInt32(0x0A1C) != 0;
 
+	pos += snprintf(buf + pos, bufsize - pos, "{\"app\":\"");
+	pos = json_escape_into(buf, pos, bufsize, app_name);
 	pos += snprintf(buf + pos, bufsize - pos,
-		"{\"app\":\"%s\",\"ticks\":%u,\"menu_bar\":%s,\"windows\":[",
-		app_name, ticks, menu_bar ? "true" : "false");
+		"\",\"ticks\":%u,\"menu_bar\":%s,\"windows\":[",
+		ticks, menu_bar ? "true" : "false");
 
 	/* Walk WindowList — also detect Finder via characteristic windows */
 	uint32_t wp = ReadMacInt32(0x09D6);
@@ -759,19 +790,11 @@ static void serialize_mac_state(char *buf, int bufsize)
 			found_finder = true;
 		}
 
-		/* Escape quotes in title */
-		char escaped[128];
-		int ei = 0;
-		for (int i = 0; title[i] && ei < (int)sizeof(escaped) - 2; i++) {
-			if (title[i] == '"' || title[i] == '\\')
-				escaped[ei++] = '\\';
-			escaped[ei++] = title[i];
-		}
-		escaped[ei] = '\0';
-
+		pos += snprintf(buf + pos, bufsize - pos, "{\"title\":\"");
+		pos = json_escape_into(buf, pos, bufsize, title);
 		pos += snprintf(buf + pos, bufsize - pos,
-			"{\"title\":\"%s\",\"kind\":%d,\"visible\":%s,\"rect\":[%d,%d,%d,%d]}",
-			escaped, kind, visible ? "true" : "false",
+			"\",\"kind\":%d,\"visible\":%s,\"rect\":[%d,%d,%d,%d]}",
+			kind, visible ? "true" : "false",
 			left, top, right, bottom);
 
 		wp = ReadMacInt32(wp + 144);
