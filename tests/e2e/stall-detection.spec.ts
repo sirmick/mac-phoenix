@@ -18,8 +18,11 @@ const PAGE_URL = `http://localhost:${HTTP_PORT}/`;
 const STALL_THRESHOLD_MS = 500;
 
 test.describe('Stall Detection', () => {
-  test.beforeAll(async () => {
-    // Emulator is auto-spawned by the fixture; just start CPU and wait for boot
+  // Take emulatorPort to force worker-fixture activation before the body runs;
+  // without it, the fixture's lazy spawn doesn't fire until the first test() and
+  // beforeAll's fetch hits ECONNREFUSED.
+  test.beforeAll(async ({ emulatorPort }) => {
+    void emulatorPort;
     await fetch(`${API}/api/emulator/start`, { method: 'POST' });
     await waitForBootPhase(HTTP_PORT, 'Finder', 30_000).catch(() =>
       waitForBootPhase(HTTP_PORT, 'desktop', 5_000)
@@ -436,8 +439,9 @@ test.describe('Soak Test', () => {
   const SOAK_POLL_INTERVAL_MS = 100; // How often to send mouse + check position
   const SOAK_STALL_THRESHOLD_MS = 500;
 
-  test.beforeAll(async () => {
-    // Emulator is auto-spawned by the fixture; just start CPU and wait for boot
+  // Same fixture-activation gotcha as the Stall Detection block above.
+  test.beforeAll(async ({ emulatorPort }) => {
+    void emulatorPort;
     await fetch(`${API}/api/emulator/start`, { method: 'POST' });
     await waitForBootPhase(HTTP_PORT, 'Finder', 45_000).catch(() =>
       waitForBootPhase(HTTP_PORT, 'desktop', 5_000)

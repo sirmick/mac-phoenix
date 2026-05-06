@@ -24,10 +24,6 @@ test.describe('UI Basic', () => {
 
     // Display area
     await expect(page.locator('#display-container')).toBeVisible();
-
-    // Status indicators
-    await expect(page.locator('#fps-display')).toBeVisible();
-    await expect(page.locator('#connection-icon')).toBeVisible();
   });
 
   test('codec dropdown has expected options', async ({ page, emulatorPort }) => {

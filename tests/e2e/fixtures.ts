@@ -63,9 +63,16 @@ export const test = base.extend<{}, EmulatorFixture>({
       if (sharedEmulatorProc) {
         console.log('[fixture] Emulator process died, respawning...');
       }
-      sharedEmulatorProc = await spawnEmulator({ timeoutSeconds: 1800 });
+      sharedEmulatorProc = await spawnEmulator({ timeoutSeconds: 1200 });
     }
     await use(HTTP_PORT);
+
+    // Worker teardown: kill the spawned subprocess so it doesn't leak past
+    // the test run. Without this, the emulator survives until --timeout fires.
+    if (sharedEmulatorProc) {
+      await killEmulator(sharedEmulatorProc);
+      sharedEmulatorProc = null;
+    }
   }, { scope: 'worker' }],
 
   hasRom: [async ({}, use) => {

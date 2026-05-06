@@ -1,10 +1,14 @@
 import { test, expect } from './fixtures';
 
 test.describe('Emulator Controls', () => {
-  test('start button triggers POST /api/emulator/start', async ({ page, request, emulatorPort }) => {
-    // Ensure emulator is stopped so button says "Start" (not "Reset")
+  // Worker fixture reuses one emulator across tests; reset to a known-stopped
+  // state so each test starts from the same baseline.
+  test.beforeEach(async ({ request, emulatorPort }) => {
     await request.post(`http://localhost:${emulatorPort}/api/emulator/stop`);
+    await new Promise(r => setTimeout(r, 500));
+  });
 
+  test('start button triggers POST /api/emulator/start', async ({ page, request, emulatorPort }) => {
     await page.goto(`http://localhost:${emulatorPort}/`);
 
     // Wait for button to say "Start" (set by status polling)
