@@ -202,7 +202,7 @@ Logging:
   --debug-connection         Debug WebRTC connections
   --debug-mode-switch        Debug video mode switches
   --debug-perf               Debug performance
-  --debug-network            Debug net-bridge / lwIP NAT/DNS/ICMP/TCP/UDP
+  --debug-network            Debug net-bridge NAT/DNS/ICMP/TCP/UDP
 ```
 
 ## Environment Variables

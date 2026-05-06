@@ -19,21 +19,6 @@ audio_driver_sources = [
   'audio/audio_encoder_thread.cpp',
 ]
 
-# lwIP (unity build)
-lwip_src_root = meson.project_source_root() / 'subprojects/lwip/src'
-lwip_inc_args = ['-I' + lwip_src_root / 'include', '-I' + meson.current_source_dir() / 'ether']
-
-lwip_lib = static_library('lwip',
-  'ether/lwip_build.c',
-  'ether/sys_arch.c',
-  c_args: ['-w'] + lwip_inc_args + ['-I' + lwip_src_root],
-)
-
-lwip_dep = declare_dependency(
-  link_with: lwip_lib,
-  compile_args: lwip_inc_args,
-)
-
 # Other drivers
 other_driver_sources = [
   'disk/disk_null.cpp',
@@ -44,9 +29,7 @@ other_driver_sources = [
   'serial/serial_adapter.cpp',
   'ether/ether_null.cpp',
   'ether/ether_adapter.cpp',
-  'ether/ether_lwip.cpp',
-  'ether/ether_raw.cpp',
-  'ether/lwip_nat.cpp',
+  'ether/ether_socket.cpp',
   'platform/platform_adapter.cpp',
   'platform/platform_null.cpp',
   'platform/platform_unix.cpp',
@@ -77,7 +60,7 @@ driver_inc = include_directories(
 driver_lib = static_library('drivers',
   driver_sources,
   include_directories: driver_inc,
-  dependencies: [libdatachannel_dep, lwip_dep],
+  dependencies: [libdatachannel_dep],
 )
 
 driver_dep = declare_dependency(

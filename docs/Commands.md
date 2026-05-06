@@ -104,7 +104,7 @@ Logging:
   --debug-connection         WebRTC connection details
   --debug-mode-switch        Video mode switches
   --debug-perf               Performance stats
-  --debug-network            net-bridge / lwIP NAT/DNS/ICMP/TCP/UDP
+  --debug-network            net-bridge NAT/DNS/ICMP/TCP/UDP
 
 Internal:
   --ipc                      Run as the CPU IPC subprocess (set by parent)

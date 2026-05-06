@@ -53,10 +53,20 @@ static std::string s_sock_path;
 // QLocalSocket owns the connection's lifecycle; s_sock_fd is the cached
 // descriptor (socketDescriptor()) so the rx thread's poll() loop and the
 // Mac-thread send_frame() path can keep using raw I/O without QObject
-// affinity gymnastics. On Linux this is a Unix socket fd; the Windows
-// port (whenever it lands) would need to switch reads/writes to
-// QLocalSocket APIs since QLocalSocket-on-Windows uses named-pipe
-// HANDLEs that aren't fd-compatible with poll/read.
+// affinity gymnastics.
+//
+// Connect is portable now (QLocalSocket::connectToServer transparently
+// uses Unix sockets on Linux/macOS and named pipes on Windows). The hot
+// path is not — the cached fd works for poll/read/write only on Unix.
+// A Windows port has two coupled prerequisites:
+//   1. net-bridge.exe (Rust) must move from std::os::unix::net to a
+//      cross-platform local-IPC abstraction (the `interprocess` crate
+//      or cfg-gated named-pipe code).
+//   2. The hot-path raw fd reads/writes here switch to QLocalSocket
+//      APIs (write() / waitForReadyRead() / readAll()). Same-thread
+//      ownership for the QLocalSocket means the rx thread becomes the
+//      sole owner; sends marshal via QMetaObject::invokeMethod.
+// Both can wait until Windows port is actually in scope.
 static std::unique_ptr<QLocalSocket> s_sock_qt;
 static int                         s_sock_fd = -1;
 static QProcess*                   s_bridge_proc = nullptr;
@@ -180,12 +190,11 @@ static bool try_connect()
 	if (!sock->waitForConnected(2000)) return false;
 	int fd = (int)sock->socketDescriptor();
 	if (fd < 0) {
-		// Shouldn't happen on Linux; QLocalSocket's Unix-socket backend
-		// always exposes a real fd. Bail loudly so a Windows porter
-		// isn't surprised by the silent fallback.
-		fprintf(stderr, "[Socket] QLocalSocket::socketDescriptor() returned %d "
-		                "— Windows port will need to migrate read/write to QLocalSocket APIs\n",
-		        fd);
+		// Should always be a real fd on Unix-socket backends. If we
+		// land here on Windows (named-pipe HANDLE not fd-compatible),
+		// the rx loop + send_frame must move off raw read/write —
+		// see the comment block at the top of this file.
+		fprintf(stderr, "[Socket] QLocalSocket::socketDescriptor() returned %d\n", fd);
 		return false;
 	}
 	s_sock_qt = std::move(sock);

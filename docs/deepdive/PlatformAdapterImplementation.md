@@ -40,7 +40,7 @@ the pointer always safe.
 | Video | `video_adapter.cpp` | `video_null.cpp` | `video_webrtc.cpp` |
 | Audio | `audio_adapter.cpp` | `audio_null.cpp` | `audio_webrtc.cpp` (encoder thread infra; no Sound Manager hookup yet) |
 | Serial | `serial_adapter.cpp` | — | `serial_unix.cpp` (PTY/tty backend) |
-| Ethernet | `ether_adapter.cpp` | `ether_null.cpp` | `ether_socket.cpp` (Unix socket → net-bridge), `ether_lwip.cpp`, `ether_raw.cpp` |
+| Ethernet | `ether_adapter.cpp` | `ether_null.cpp` | `ether_socket.cpp` (Unix socket → net-bridge) |
 | Disk | (uses `Sys_*` layer in core) | — | `platform_unix.cpp` |
 | Platform | `platform_adapter.cpp` | `platform_null.cpp` | `platform_unix.cpp` |
 

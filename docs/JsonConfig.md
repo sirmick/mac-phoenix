@@ -112,7 +112,7 @@ silently dropped on first save).
 | `debug_connection` | bool | `false` | Log WebRTC connection details |
 | `debug_mode_switch` | bool | `false` | Log video mode switches |
 | `debug_perf` | bool | `false` | Log performance stats |
-| `debug_network` | bool | `false` | Log net-bridge / lwIP NAT/DNS/ICMP/TCP/UDP |
+| `debug_network` | bool | `false` | Log net-bridge NAT/DNS/ICMP/TCP/UDP |
 
 ## Path Resolution
 
