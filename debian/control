@@ -12,7 +12,6 @@ Build-Depends: debhelper-compat (= 13),
                libopus-dev,
                libyuv-dev,
                qt6-base-dev (>= 6.4),
-               qt6-tools-dev,
                qt6-webengine-dev (>= 6.4),
                cargo,
                rustc
