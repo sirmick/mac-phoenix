@@ -5,7 +5,9 @@ grouped by path and tagged with a severity (high / medium / low) based on how
 visible they are to a user interacting with the WebUI.
 
 The healthy parts, for reference, are the WebSocket → ADB ring-buffer
-input fast-path and the in-process eventfd-driven triple buffer. Everything
+input fast-path and the QLocalSocket-notify-driven encoder wakeup
+(IPC Phase 3b replaced the prior eventfd path with a Qt-wrapped Unix
+domain socket — same kernel-level wakeup, no extra fd). Everything
 below is a deviation from that baseline.
 
 ## Input path (WebUI → ADB)
@@ -87,14 +89,16 @@ even when almost nothing changed. H.264/VP9 don't need this — for the
 still-image codecs, a coarse tile hash or a quad-tree would cut it by
 orders of magnitude.
 
-### LOW — 1 ms sleep polling in the non-eventfd fallback
+### LOW — 1 ms sleep polling in the non-notify fallback
 
 `src/drivers/video/video_output.cpp:185–202`,
-`src/drivers/video/video_encoder_thread.cpp:418`
+`src/drivers/video/video_encoder_thread.cpp:407–411`
 
-Linux uses eventfd and wakes immediately. The portable fallback polls on a
-1 ms `sleep_for`, so a frame submitted at t=0 is observed at the next 1 ms
-tick. Small; only relevant on non-Linux builds or if eventfd creation fails.
+Linux polls the IPC notify fd (a QLocalSocket) and wakes immediately on
+a frame-ready byte. The fallback path — when the notify fd hasn't
+connected yet, or on non-Linux builds — sleeps 1 ms between checks, so a
+frame submitted at t=0 is observed at the next 1 ms tick. Small; mostly
+visible during the few hundred ms before child IPC is up.
 
 ### LOW — Mode-switch reinit without in-flight flush
 

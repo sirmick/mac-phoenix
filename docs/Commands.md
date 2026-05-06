@@ -89,7 +89,7 @@ Networking:
 
 Automation:
   --bridge                   Enable BridgeAgent automation + auto ExtFS mount
-  --browser                  Run MacBrowser (Firefox-on-Xvfb host pipeline)
+  --browser                  Run MacBrowser (in-process Chromium via Qt6 WebEngine)
   --headless-http            HTTP API only, no video/audio (implies --bridge)
 
 Server:

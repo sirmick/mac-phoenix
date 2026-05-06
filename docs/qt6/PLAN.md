@@ -1,9 +1,18 @@
 # Qt6 Port Plan
 
-Branch: `qt-port`. Hard-switching POSIX/X11 subsystems to Qt6 to enable a
-proper Windows port and easier macOS distribution. Each phase is one
-PR-sized change; Linux must remain fully working at every step, validated
-by the existing test suite.
+> **Status (2026-05-06):** all phases complete; `qt-port` fast-forwarded
+> into `main`. Qt 6.4 minimum (set by `QWebEngineDownloadRequest` in
+> MacBrowser). The session log at the bottom of this file records the
+> finishing commits — IPC Phase 3b dropped the last `eventfd`/`AF_UNIX`
+> path in favour of `QLocalSocket`/`QLocalServer`, and a packaging pass
+> retired `qt6-tools-dev`/`qt6-qttools-devel` (never used) plus the
+> `ubuntu-22.04` build cell (jammy ships Qt 6.2). Doc kept as-is for
+> historical reference; the design notes still describe today's code.
+
+Branch: `qt-port` (merged). Hard-switched POSIX/X11 subsystems to Qt6 to
+enable a proper Windows port and easier macOS distribution. Each phase
+was one PR-sized change; Linux had to remain fully working at every step,
+validated by the existing test suite.
 
 ## Goals
 
@@ -537,6 +546,31 @@ matching the original XDamage path.
 
 Next session entry point: pick up 8c-2 (event-driven capture), then
 move into Phase 9 (native head) or Phase 10 (Windows port).
+
+**2026-05-04 → 2026-05-06 sessions** (qt-port → main merge):
+
+- IPC Phase 3b (commits `5a8dac81` + `2de18725`): replaced the last
+  `AF_UNIX`/`eventfd`/`SCM_RIGHTS` paths with `QLocalSocket`/
+  `QLocalServer`. Control + notify channels are now Qt-native;
+  `clear_ipc_shm()` and the encoder-thread notify poll work
+  unchanged because the underlying fd is still a Unix socket.
+- Orphan cleanup (commit `ffe1fa29`): deleted unused `ether_raw` +
+  lwIP driver files left over from earlier net-bridge experiments.
+- e2e green again (commits `bc8383d1` + `bc2f6279`): root-cause
+  was raw control bytes / high MacRoman bleeding into
+  `/api/status` JSON; added a JSON-string escape helper in
+  `boot_progress.cpp`. Test-side: fixture teardown to stop leaking
+  emulator subprocesses, per-test reset in `emulator.spec.ts`,
+  fixture-activation parameter in stall-detection's `beforeAll`.
+- Packaging cleanup (commit `a0901284`): dropped `ubuntu-22.04`
+  from the matrix (jammy main only ships Qt 6.2; 6.4 minimum is
+  load-bearing because of `QWebEngineDownloadRequest`) and removed
+  the never-used `qt6-tools-dev`/`qt6-qttools-devel` build-deps —
+  verified via full local matrix build (ubuntu-24.04, debian-12,
+  fedora-40 all booted to Desktop).
+- Fast-forward merge to `main`; GH Actions green on all 5 jobs
+  (4 package cells across amd64/arm64 × ubuntu-24.04/debian-12,
+  plus `ctest -L unit`).
 
 ## Phase 1.5 — Qt6 in build/packaging/CI
 

@@ -1,21 +1,25 @@
 # Threading & process model
 
-Two processes, four threads in the parent, one CPU thread in the child.
+Two processes, threads in the parent, one CPU thread in the child.
 
 ## Topology
 
 ```
 parent (mac-phoenix)
-├── Thread 1: WEB SERVER       — HTTP listener on --port, /ws upgrade,
-│                                 WebRTC signaling, REST API, file scanner
-├── Thread 2: VIDEO ENCODER    — reads IPC SHM frame, encodes
+├── HTTP server thread         — accept loop on --port (QTcpServer), /ws
+│                                 upgrade, WebRTC signaling, REST API
+├── WebRTC signaling thread    — libdatachannel peer connections
+├── Video encoder thread       — polls IPC notify (QLocalSocket fd),
+│                                 reads SHM frame, encodes
 │                                 H.264 / VP9 / WebP / PNG, ships via
-│                                 RTP (libdatachannel) or /ws binary
-├── Thread 3: VIDEO RELAY      — epoll on eventfd, copies SHM frame into
-│                                 VideoOutput triple buffer for screenshots
-├── Thread 4: BRIDGE WATCHDOG  — waits for Finder + BridgeAgent heartbeat,
-│                                 logs warnings if missing
-└── (MacBrowser supervisor + Xvfb/Firefox children if --browser)
+│                                 RTP (libdatachannel) or /ws binary;
+│                                 also fans out into VideoOutput triple
+│                                 buffer for screenshots
+├── Bridge watchdog            — waits for Finder + BridgeAgent
+│                                 heartbeat, logs warnings if missing
+├── (timeout thread if --timeout)
+└── (Qt6 WebEngine main thread + Chromium child processes if --browser —
+     in-process; MacBrowser pipes pixels into the guest via SHM ring)
 
 CPU subprocess (mac-phoenix --ipc)
 └── CPU/MAIN thread            — runs UAE / Unicorn / KPX / DualCPU
@@ -42,12 +46,15 @@ files because the agent inside the guest is a separate Mac OS process.
 
 ## IPC
 
-- **SHM (`/tmp/mac-phoenix-<pid>`)** — framebuffer, mouse position, boot
-  phase, `cur_app_name`, audio (when enabled), `command_bridge` mailbox
-  for backward compat (passive read-only on the parent side).
-- **Unix socket** — input events from `/ws` to the CPU thread, lifecycle
-  control, codec / mode-switch requests.
-- **eventfd** — wakes the video relay thread on each new frame.
+- **QSharedMemory (`macemu-video-<pid>`)** — framebuffer, mouse position,
+  boot phase, `cur_app_name`, audio (when enabled), `command_bridge`
+  mailbox for backward compat (passive read-only on the parent side).
+- **QLocalSocket — control channel (`macemu-control-<pid>`)** — input
+  events from `/ws` to the CPU thread, lifecycle control, codec /
+  mode-switch requests. Length-prefixed messages, no SCM_RIGHTS.
+- **QLocalSocket — notify channel (`macemu-notify-<pid>`)** — child
+  writes one byte per new frame; the encoder thread polls the fd to wake
+  immediately. Replaced the eventfd path in IPC Phase 3b.
 - **Disk files** in `cfg.bridge_dir` — the BridgeAgent transport
   (`_bridge_cmd`, `_bridge_result`, `bridge_heartbeat`,
   `_bridge_clipboard`). Both processes see the same path.

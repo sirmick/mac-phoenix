@@ -187,7 +187,7 @@ Networking:
 
 Automation:
   --bridge                   Enable automation bridge (BridgeAgent + auto ExtFS mount)
-  --browser                  Run MacBrowser (Firefox-on-Xvfb pipeline; needs xvfb + firefox)
+  --browser                  Run MacBrowser (in-process Chromium via Qt6 WebEngine)
   --headless-http            HTTP API only (no video/audio); implies --bridge
 
 Server:
@@ -249,8 +249,8 @@ PNG encoding (fpng) has no external dependencies and is always available.
 | CMake | `cmake` | Xcode CLI Tools or `brew install cmake` | Build system |
 | OpenSSL | `libssl-dev` | `brew install openssl` | DTLS/SRTP for libdatachannel (WebRTC). Our code no longer uses it directly — `QCryptographicHash` handles SHA1/MD5. |
 | pkg-config | `pkg-config` | `brew install pkg-config` | Dependency detection |
-| Qt6 (≥6.4) | `qt6-base-dev qt6-tools-dev` | `brew install qt@6` | Cross-platform abstraction (see [docs/qt6/PLAN.md](docs/qt6/PLAN.md)) |
-| Qt6 WebEngine (≥6.4) | `qt6-webengine-dev` | included in `brew install qt@6` | In-process Chromium for MacBrowser |
+| Qt6 (≥6.4) | `qt6-base-dev` | `brew install qt@6` | Core, Network (QLocalSocket / QTcpServer), Widgets, plus QJsonDocument for all JSON parsing. 6.4 minimum is set by MacBrowser's use of `QWebEngineDownloadRequest` + its `receivedBytesChanged`/`isFinishedChanged` signals. See [docs/qt6/PLAN.md](docs/qt6/PLAN.md) for the port history. |
+| Qt6 WebEngine (≥6.4) | `qt6-webengine-dev` | included in `brew install qt@6` | In-process Chromium for MacBrowser (replaces the old Xvfb + Firefox + xcb-shm pipeline) |
 
 ## MacBrowser
 
@@ -284,12 +284,12 @@ BrowserShm):
 
 | Command (g2h) | Description |
 |---|---|
-| `BR_CMD_NAV` | Navigate to URL — `bidi.navigate` |
+| `BR_CMD_NAV` | Navigate to URL — `QWebEnginePage::load` |
 | `BR_CMD_CLICK` / `_MOUSE_MOVE` / `_MOUSE_OUT` | Pointer input (host-polled, mostly) |
 | `BR_CMD_KEY_DOWN` / `_KEY_UP` | Key events; mods passed through, special keys remapped to W3C codepoints |
 | `BR_CMD_SCROLL` | Wheel scroll, dx/dy in CSS px |
 | `BR_CMD_BACK` / `_FORWARD` / `_RELOAD` / `_STOP` | Toolbar nav |
-| `BR_CMD_RESIZE` | Window grew/shrunk → resize Firefox window inside Xvfb |
+| `BR_CMD_RESIZE` | Window grew/shrunk → resize the QWebEngineView |
 | `BR_CMD_GET_SELECTION` / `_PASTE` / `_SELECT_ALL` | Clipboard + select-all bridge |
 | `BR_CMD_ZOOM_IN` / `_ZOOM_OUT` / `_ZOOM_RESET` | CSS-zoom step |
 

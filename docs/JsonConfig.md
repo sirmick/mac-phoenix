@@ -94,7 +94,7 @@ silently dropped on first save).
 | `zappram` | bool | `false` | Clear PRAM on startup |
 | `dismiss_shutdown_dialog` | bool | `true` | Auto-dismiss "improper shutdown" dialog |
 | `bridge_enabled` | bool | `false` | Enable the automation bridge (BridgeAgent + ExtFS) |
-| `browser_enabled` | bool | `false` | Run the MacBrowser host pipeline (Xvfb + Firefox); needs `--browser` runtime deps |
+| `browser_enabled` | bool | `false` | Run the MacBrowser host pipeline (in-process Chromium via Qt6 WebEngine) |
 
 ### Server
 

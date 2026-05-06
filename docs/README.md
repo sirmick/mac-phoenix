@@ -20,8 +20,8 @@ This folder contains the deeper-dive docs.
 - **Unicorn-PPC** reaches Finder under 7.6.1 but is unstable — see
   [`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md). Not the default.
 - HTTP API + WebRTC streaming, file-based automation bridge (BridgeAgent),
-  MacBrowser (Firefox-on-Xvfb piped into a guest Mac app),
-  guest-side networking via the Rust net-bridge.
+  MacBrowser (in-process Chromium via Qt6 WebEngine, piped into a guest
+  Mac app), guest-side networking via the Rust net-bridge.
 
 Audio output is still a stub (`src/drivers/audio/audio_null.cpp` —
 encoder thread infrastructure exists but isn't wired to a real Sound

@@ -20,7 +20,7 @@ Most-tested guest OS versions: **System 6.0.8**, **System 7.5.5**, **Mac OS 7.6.
 - **Three transport modes** — WebSocket for PNG/WebP (works through any HTTPS proxy), HTTP long-poll for locked-down networks, WebRTC RTP for H.264/VP9 on LAN
 - **REST API** — boot status, screenshots, config, app launching, and control via HTTP endpoints
 - **Automation bridge** — launch classic apps, graceful guest shutdown and restart, and bidirectional TEXT-scrap clipboard sync between browser and Mac OS
-- **MacBrowser** — modern web inside System 7: a native Mac app whose viewport is filled live with pixels from a host-side Firefox-on-Xvfb (`--browser`). Works around the three intractable problems with running 1996-era browsers on the modern web (TLS handshake, cert imports, 25 MHz HTML/CSS/JS).
+- **MacBrowser** — modern web inside System 7: a native Mac app whose viewport is filled live with pixels from an in-process Chromium (Qt6 WebEngine, `--browser`). Works around the three intractable problems with running 1996-era browsers on the modern web (TLS handshake, cert imports, 25 MHz HTML/CSS/JS).
 - **Optional audio** — opt-in Opus-encoded audio streaming over WebRTC (`--audio`)
 - **NAT networking** — optional Unix-socket bridge (smoltcp + NAT) so the guest can reach the Internet without root
 - **Peer-to-peer between guests** — multiple emulators share one bridge as a virtual ethernet segment; AppleTalk file sharing and Chooser see each other natively, IP between guests routes via the bridge's L2 switch (no NAT involved for intra-segment traffic)
@@ -37,14 +37,19 @@ of apt packages. Install only what you need.
 #### Emulator (always required)
 
 ```bash
-# Toolchain + the two libraries CMake hard-requires
+# Toolchain + the libraries CMake hard-requires
 sudo apt install build-essential cmake pkg-config git \
-                 libssl-dev libyuv-dev
+                 libssl-dev libyuv-dev \
+                 qt6-base-dev qt6-webengine-dev
 ```
 
-`nlohmann_json` is bundled as a git submodule — do **not** install
-`nlohmann-json3-dev`; the system header silently masks the bundled copy
-and broke our packaging build until we caught it.
+Qt 6.4 or newer is required — that's what Ubuntu 24.04, Debian 12-bpo,
+and Fedora 40 ship in their main repos. Ubuntu 22.04 (Qt 6.2) is **not**
+supported: MacBrowser uses `QWebEngineDownloadRequest` and its
+`receivedBytesChanged`/`isFinishedChanged` signals, both 6.4-only.
+
+JSON parsing is handled by `QJsonDocument` (Qt6::Core); there is no
+nlohmann_json dependency anymore.
 
 #### Optional video/audio codecs
 
@@ -108,19 +113,12 @@ it up automatically and rebuilds `BridgeAgent.bin` whenever
 cmake -B build -DBUILD_BRIDGE_AGENT=OFF
 ```
 
-#### MacBrowser (optional — Firefox-on-Xvfb pipeline for `--browser`)
+#### MacBrowser (optional — in-process Chromium for `--browser`)
 
-The `--browser` flag spawns a host-side `Xvfb` + `Firefox` and pipes
-the rendered pixels into a guest Mac app called MacBrowser. Two
-runtime deps:
-
-```bash
-sudo apt install xvfb                      # virtual X server
-# Install Firefox via Mozilla's tarball, NOT the snap (the snap's
-# sandbox + auto-update don't compose with Xvfb):
-#   https://www.mozilla.org/firefox/all/
-# Extract to /opt/firefox/ (the supervisor probes that path first).
-```
+The `--browser` flag runs an in-process Chromium via Qt6 WebEngine and
+pipes the rendered pixels into a guest Mac app called MacBrowser. The
+runtime dep is just `qt6-webengine-dev` (or its non-`-dev` runtime
+sibling on a slim install), already installed above.
 
 The committed `MacBrowser/MacBrowser.bin` is what gets loaded inside
 the guest; rebuilding from source uses the same Retro68 toolchain as
@@ -363,7 +361,7 @@ load with a one-time deprecation warning, then dropped on first save. See
   --no-webserver             Headless mode (no HTTP / WebRTC)
   --network MODE             Network: none | socket[:<unix-socket-path>]
   --bridge                   Enable the automation bridge (BridgeAgent + ExtFS)
-  --browser                  Run MacBrowser (Firefox-on-Xvfb pipeline)
+  --browser                  Run MacBrowser (in-process Chromium via Qt6 WebEngine)
   --headless-http            HTTP API only (no video/audio); implies --bridge
   --audio                    Enable audio emulation (Opus over WebRTC; default: off)
   --config PATH              JSON config file (use /dev/null to ignore user config)
@@ -375,7 +373,7 @@ load with a one-time deprecation warning, then dropped on first save. See
   --debug-connection         Log WebRTC connection details
   --debug-mode-switch        Log video mode switches
   --debug-perf               Log performance counters
-  --debug-network            Log lwIP NAT/DNS/ICMP/TCP/UDP
+  --debug-network            Log net-bridge NAT/DNS/ICMP/TCP/UDP
   -h, --help                 This help
 ```
 
