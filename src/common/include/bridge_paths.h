@@ -53,6 +53,13 @@
 /* MacBrowser-specific. Same per-instance bridge dir. */
 #define BR_FILE_BROWSER_SHM  "browser_shm.txt"
 #define BR_FILE_BROWSER_LOG  "MacBrowser.log"
+
+/* MacBrowser persistent data — sibling of MacPhoenix/<pid> at the ExtFS
+ * root. Survives across PIDs so bookmarks/downloads aren't ephemeral when
+ * the user supplies their own --extfs path. Guest path:
+ * Host:macbrowser:bookmarks.txt and Host:macbrowser:Downloads:<file>. */
+#define BR_DIR_MACBROWSER    "macbrowser"
 #define BR_DIR_DOWNLOADS     "Downloads"
+#define BR_FILE_BOOKMARKS    "bookmarks.txt"
 
 #endif  /* BRIDGE_PATHS_H */

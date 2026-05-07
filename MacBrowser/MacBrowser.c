@@ -27,6 +27,7 @@
 #include <ToolUtils.h>
 #include <Resources.h>
 #include <Files.h>
+#include <Sound.h>          /* SysBeep — download-complete chime */
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -47,17 +48,23 @@
 #define kEditMenu       130
 #define kBookmarksMenu  131
 
-/* Bookmarks. Compile-time list; first entry is the home URL. To edit,
- * append/replace here and rebuild — there's no on-disk prefs path yet
- * (TODO: read from Host:MacPhoenix:Prefs:Bookmarks). Each entry has a
- * Pascal-string title for the menu item and a C string URL to navigate
- * to. Title length includes the leading length byte (Mac convention). */
+/* Bookmarks.
+ *
+ * Loaded at startup from Host:macbrowser:bookmarks.txt (one
+ * "title<TAB>url" per line; lines starting with '#' are comments).
+ * The host seeds the file with the defaults below the first time
+ * --browser runs; users can then edit it on the host with any text
+ * editor. First entry is the home URL.
+ *
+ * If the file is missing or empty we fall back to the compiled list
+ * so the app still boots without bridge/extfs (e.g. running off the
+ * floppy alone). */
 typedef struct {
     const unsigned char *title;     /* Pascal string */
     const char          *url;       /* C string */
 } BookmarkEntry;
 
-static const BookmarkEntry gBookmarks[] = {
+static const BookmarkEntry gBookmarksDefault[] = {
     { (const unsigned char *)"\pGoogle",
       "https://www.google.com/" },
     { (const unsigned char *)"\pYouTube test video",
@@ -69,7 +76,38 @@ static const BookmarkEntry gBookmarks[] = {
     { (const unsigned char *)"\pmac-phoenix on GitHub",
       "https://github.com/sirmick/mac-phoenix" },
 };
-#define kBookmarkCount   ((short)(sizeof(gBookmarks) / sizeof(gBookmarks[0])))
+#define kBookmarkDefaultCount ((short)(sizeof(gBookmarksDefault) / sizeof(gBookmarksDefault[0])))
+
+/* Runtime list populated by load_bookmarks_from_file(). Storage is
+ * one NewPtrClear block — title goes in a Str255 inline, URL in a
+ * fixed-size C buffer. 32 entries × ~512 bytes = 16 KB, well within
+ * MacBrowser's preferred 4 MB heap. */
+#define kBookmarkMax    32
+typedef struct {
+    Str255 title;
+    char   url[256];
+} BookmarkRuntime;
+static BookmarkRuntime *gBookmarksRuntime = NULL;
+static short            gBookmarksRuntimeCount = 0;
+
+/* Accessors hide the "loaded from file" vs "compiled fallback" branch
+ * from menu / nav code. Always hand back a Pascal title + C URL. */
+static short bookmark_count(void)
+{
+    return gBookmarksRuntimeCount > 0
+        ? gBookmarksRuntimeCount
+        : kBookmarkDefaultCount;
+}
+static const unsigned char *bookmark_title(short i_zero)
+{
+    if (gBookmarksRuntimeCount > 0) return gBookmarksRuntime[i_zero].title;
+    return gBookmarksDefault[i_zero].title;
+}
+static const char *bookmark_url(short i_zero)
+{
+    if (gBookmarksRuntimeCount > 0) return gBookmarksRuntime[i_zero].url;
+    return gBookmarksDefault[i_zero].url;
+}
 
 /* Standard System 7 Edit-menu item indices. Order is mandated by HIG
  * (Inside Macintosh: Macintosh Toolbox Essentials, Ch. 3): Undo,
@@ -229,6 +267,18 @@ static Boolean        gHistoryDirty  = false;
 static uint16_t       gZoomPct       = 100;
 static Boolean        gZoomDirty     = false;
 
+/* Latest BR_EV_DOWNLOAD payload — for the URL-bar status overlay
+ * during downloads + a SysBeep on completion. We don't model
+ * concurrent downloads in v1; if the user starts another mid-flight
+ * the status text just reflects whichever event arrived most
+ * recently. */
+static uint32_t       gDlGuid        = 0;
+static uint8_t        gDlState       = 0;
+static uint32_t       gDlBytes       = 0;
+static uint32_t       gDlTotal       = 0;
+static unsigned char  gDlPath[252];          /* Pascal string of guest path */
+static Boolean        gDlDirty       = false;
+
 /* Off-screen 16-bit RGB555 PixMap header that wraps gShm->fb.pixels. */
 static PixMap     gShmPixMap;
 static CTabHandle gShmCTab = NULL;
@@ -376,6 +426,77 @@ static void poll_shm(void)
 }
 
 static void draw_chrome_row(void);
+
+/* Apply the latest BR_EV_DOWNLOAD: latch a visible message into the
+ * chrome status area so the user knows a download started/finished.
+ * BEGIN/PROGRESS frames clobber the navigation status text — the user
+ * is informed that something's downloading; the URL bar's URL stays
+ * untouched. DONE plays a SysBeep and logs the saved-to path. v1
+ * tracks one in-flight download; concurrent downloads coalesce on
+ * the latest event. */
+static void apply_download(void)
+{
+    if (!gShm) return;
+
+    /* Pull a basename out of gDlPath (Pascal-string) so the chrome
+     * row shows just the filename, not the whole "Host:macbrowser:..."
+     * mac path. */
+    char fname[64] = "(file)";
+    {
+        unsigned char plen = gDlPath[0];
+        if (plen) {
+            short start = 0;
+            for (short i = plen - 1; i > 0; i--) {
+                if (gDlPath[1 + i - 1] == ':') { start = i; break; }
+            }
+            short take = (short)plen - start;
+            if (take > (short)sizeof(fname) - 1)
+                take = (short)sizeof(fname) - 1;
+            memcpy(fname, gDlPath + 1 + start, take);
+            fname[take] = 0;
+        }
+    }
+
+    char msg[160];
+    switch (gDlState) {
+        case BR_DL_BEGIN:
+            snprintf(msg, sizeof(msg), "Downloading %s", fname);
+            break;
+        case BR_DL_PROGRESS: {
+            unsigned pct = 0;
+            if (gDlTotal > 0) {
+                /* Round-down percentage; gDlBytes/gDlTotal both u32. */
+                pct = (unsigned)((double)gDlBytes * 100.0 / (double)gDlTotal);
+                if (pct > 99) pct = 99;
+            }
+            snprintf(msg, sizeof(msg), "Downloading %s (%u%%)", fname, pct);
+            break;
+        }
+        case BR_DL_DONE:
+            snprintf(msg, sizeof(msg), "Saved %s", fname);
+            SysBeep(2);
+            spike_log(msg);
+            break;
+        case BR_DL_CANCELED:
+            snprintf(msg, sizeof(msg), "Canceled %s", fname);
+            break;
+        case BR_DL_ERROR:
+            snprintf(msg, sizeof(msg), "Failed %s", fname);
+            SysBeep(2);
+            break;
+        default:
+            return;
+    }
+
+    /* Land in gStatusURL so the chrome row picks it up via apply_status's
+     * paint path. The trailing nav status code is left at its last value
+     * (Loading/Ready/Error) — irrelevant to the user during a download. */
+    size_t mn = strlen(msg);
+    if (mn > sizeof(gStatusURL) - 1) mn = sizeof(gStatusURL) - 1;
+    gStatusURL[0] = (unsigned char)mn;
+    if (mn) memcpy(gStatusURL + 1, msg, mn);
+    gStatusDirty = true;
+}
 
 /* Apply the latest BR_EV_STATUS to the UI: refresh the URL bar with
  * the newly-committed URL (unless the user is mid-edit), then
@@ -582,6 +703,22 @@ static void drain_h2g(void)
         else if (type == BR_EV_ZOOM && len >= 2) {
             gZoomPct   = (uint16_t)((buf[0] << 8) | buf[1]);
             gZoomDirty = true;
+        }
+        /* BR_EV_DOWNLOAD: u32 guid, u8 state, u32 bytes, u32 total,
+         * u8 plen, u8 path[plen]. Latch into globals; the main loop
+         * formats it into the URL-bar status overlay and beeps once
+         * on completion. v1 ignores guid (single-flight UI). */
+        else if (type == BR_EV_DOWNLOAD && len >= 14) {
+            gDlGuid  = be32_load(buf + 0);
+            gDlState = buf[4];
+            gDlBytes = be32_load(buf + 5);
+            gDlTotal = be32_load(buf + 9);
+            uint8_t plen = buf[13];
+            if ((uint16_t)(14 + plen) > len) plen = (uint8_t)(len - 14);
+            if (plen > sizeof(gDlPath) - 1) plen = (uint8_t)(sizeof(gDlPath) - 1);
+            gDlPath[0] = plen;
+            if (plen) memcpy(gDlPath + 1, buf + 14, plen);
+            gDlDirty = true;
         }
     }
 }
@@ -1063,8 +1200,105 @@ static void send_url_nav(void)
     }
 }
 
+/* Read Host:macbrowser:bookmarks.txt and populate gBookmarksRuntime.
+ * On any failure (file missing, empty, allocation fail) leaves
+ * gBookmarksRuntimeCount == 0 so the accessors fall back to the
+ * compiled defaults. Format is one entry per line:
+ *
+ *     # comments and blank lines are skipped
+ *     Title<TAB>https://url
+ *
+ * No trailing whitespace handling beyond a basic trim. Cap at
+ * kBookmarkMax entries. */
+static void load_bookmarks_from_file(void)
+{
+    FSSpec sp;
+    Str255 path;
+    br_macbrowser_path(path, BR_FILE_BOOKMARKS);
+    if (FSMakeFSSpec(0, 0, path, &sp) != noErr) return;
+
+    short ref = 0;
+    if (FSpOpenDF(&sp, fsRdPerm, &ref) != noErr) return;
+
+    long flen = 0;
+    GetEOF(ref, &flen);
+    if (flen <= 0 || flen > 32 * 1024L) { FSClose(ref); return; }
+
+    char *buf = (char *)NewPtr(flen + 1);
+    if (!buf) { FSClose(ref); return; }
+
+    long want = flen;
+    OSErr rerr = FSRead(ref, &want, buf);
+    FSClose(ref);
+    if ((rerr != noErr && rerr != eofErr) || want <= 0) {
+        DisposePtr(buf);
+        return;
+    }
+    buf[want] = 0;
+
+    if (!gBookmarksRuntime) {
+        gBookmarksRuntime = (BookmarkRuntime *)NewPtrClear(
+            (Size)(sizeof(BookmarkRuntime) * kBookmarkMax));
+        if (!gBookmarksRuntime) { DisposePtr(buf); return; }
+    }
+    gBookmarksRuntimeCount = 0;
+
+    char *p = buf;
+    while (*p && gBookmarksRuntimeCount < kBookmarkMax) {
+        /* Find end of line. */
+        char *eol = p;
+        while (*eol && *eol != '\r' && *eol != '\n') eol++;
+        char saved = *eol;
+        *eol = 0;
+
+        /* Skip leading whitespace, then comments + blanks. */
+        char *line = p;
+        while (*line == ' ' || *line == '\t') line++;
+        if (*line && *line != '#') {
+            char *tab = strchr(line, '\t');
+            if (tab) {
+                *tab = 0;
+                char *title = line;
+                char *url = tab + 1;
+                /* Trim trailing whitespace from URL. */
+                char *u_end = url + strlen(url);
+                while (u_end > url
+                       && (u_end[-1] == ' ' || u_end[-1] == '\t')) {
+                    *--u_end = 0;
+                }
+                if (*title && *url) {
+                    BookmarkRuntime *b =
+                        &gBookmarksRuntime[gBookmarksRuntimeCount];
+                    size_t tn = strlen(title);
+                    if (tn > 255) tn = 255;
+                    b->title[0] = (unsigned char)tn;
+                    memcpy(b->title + 1, title, tn);
+
+                    size_t un = strlen(url);
+                    if (un > sizeof(b->url) - 1) un = sizeof(b->url) - 1;
+                    memcpy(b->url, url, un);
+                    b->url[un] = 0;
+
+                    gBookmarksRuntimeCount++;
+                }
+            }
+        }
+
+        if (saved == 0) break;
+        p = eol + 1;
+        while (*p == '\r' || *p == '\n') p++;
+    }
+
+    DisposePtr(buf);
+}
+
 static void build_menus(void)
 {
+    /* Pull bookmarks from disk before constructing the menu so
+     * bookmark_count() reports the right number of items. Falls back
+     * to the compiled defaults silently on any error. */
+    load_bookmarks_from_file();
+
     gAppleMenuH = NewMenu(kAppleMenu, "\p\024");
     AppendMenu(gAppleMenuH, "\pAbout MacBrowser\311");
     InsertMenu(gAppleMenuH, 0);
@@ -1090,15 +1324,20 @@ static void build_menus(void)
     DisableItem(gEditMenuH, kEditUndo);    /* No undo path yet. */
     InsertMenu(gEditMenuH, 0);
 
-    /* Bookmarks menu — one item per entry in gBookmarks. AppendMenu's
-     * "/X" syntax interprets the rest of the string as an option flag,
-     * so we use SetMenuItemText after AppendMenu("\px") to set the
-     * actual title verbatim and avoid surprises with URL-y characters. */
+    /* Bookmarks menu — one item per entry, source is bookmarks.txt
+     * (or the compiled defaults if the file's missing/empty).
+     * AppendMenu's "/X" syntax interprets the rest of the string as an
+     * option flag, so we use SetMenuItemText after AppendMenu("\px") to
+     * set the actual title verbatim and avoid surprises with URL-y
+     * characters. */
     gBookmarksMenuH = NewMenu(kBookmarksMenu, "\pBookmarks");
-    for (short i = 0; i < kBookmarkCount; i++) {
-        AppendMenu(gBookmarksMenuH, "\px");
-        SetMenuItemText(gBookmarksMenuH, i + 1,
-                        (unsigned char *)gBookmarks[i].title);
+    {
+        short n = bookmark_count();
+        for (short i = 0; i < n; i++) {
+            AppendMenu(gBookmarksMenuH, "\px");
+            SetMenuItemText(gBookmarksMenuH, i + 1,
+                            (unsigned char *)bookmark_title(i));
+        }
     }
     InsertMenu(gBookmarksMenuH, 0);
 
@@ -1119,9 +1358,10 @@ static void do_about(void)
 static void go_bookmark(short item_1based)
 {
     if (!gShm) return;
-    if (item_1based < 1 || item_1based > kBookmarkCount) return;
-    const char *url = gBookmarks[item_1based - 1].url;
-    if (!url) return;
+    short n = bookmark_count();
+    if (item_1based < 1 || item_1based > n) return;
+    const char *url = bookmark_url(item_1based - 1);
+    if (!url || !url[0]) return;
     br_ring_push(&gShm->g2h, BR_CMD_NAV,
                  (void *)url, (uint16_t)strlen(url));
 }
@@ -1373,19 +1613,20 @@ int main(void)
          * VBL hook can compute page coords from Mac.Mouse globals. */
         publish_viewport_pos();
 
-        /* Sync the host's Firefox viewport with whatever pixel area
-         * we ended up at. Even if we stayed at the initial size,
-         * this catches any drift between the supervisor's Xvfb
-         * dims and our compiled-in defaults. */
+        /* Sync the host's QWebEngineView viewport with whatever pixel
+         * area we ended up at. Even if we stayed at the initial size,
+         * this catches any drift between host defaults and our
+         * compiled-in defaults. */
         publish_size();
 
         /* MacBrowser owns the start URL. The first bookmark is the
-         * home page — keep this convention so the next iteration
-         * (ExtFS-backed bookmarks file, one URL per line) can drop in
-         * with the same "first line wins" rule. */
-        const char *home = gBookmarks[0].url;
-        br_ring_push(&gShm->g2h, BR_CMD_NAV,
-                     (void *)home, (uint16_t)strlen(home));
+         * home page — same rule whether it came from bookmarks.txt
+         * or the compiled fallback. */
+        const char *home = bookmark_url(0);
+        if (home && home[0]) {
+            br_ring_push(&gShm->g2h, BR_CMD_NAV,
+                         (void *)home, (uint16_t)strlen(home));
+        }
     }
 
     EventRecord evt;
@@ -1396,6 +1637,16 @@ int main(void)
         poll_shm();
         drain_h2g();
 
+        /* Download events first — they latch into gStatusURL/gStatusDirty
+         * to surface a "Downloading…" message in the chrome status area.
+         * If a navigation BR_EV_STATUS arrived in the same drain pass,
+         * the apply_status() call below paints whatever is currently in
+         * gStatusURL — which for an active download is the download
+         * message, not the URL. That's the intended priority. */
+        if (gDlDirty) {
+            gDlDirty = false;
+            apply_download();
+        }
         if (gStatusDirty) {
             gStatusDirty = false;
             apply_status();

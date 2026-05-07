@@ -31,4 +31,11 @@ void br_cfg_load(void);
  * room for 256 bytes. */
 void br_cfg_path(unsigned char *out, const char *leaf);
 
+/* Build a path under the persistent MacBrowser data folder:
+ * `Host:macbrowser:<leaf>` as a Pascal string. Independent of the
+ * per-instance bridge dir — bookmarks/downloads survive a PID change.
+ * `leaf` may itself contain `:` separators (e.g. "Downloads:foo.zip").
+ * `out` must have room for 256 bytes. */
+void br_macbrowser_path(unsigned char *out, const char *leaf);
+
 #endif  /* GUEST_BRIDGE_CFG_H */

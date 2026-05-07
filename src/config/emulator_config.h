@@ -119,6 +119,7 @@ struct EmulatorConfig {
     bool bridge_enabled = false;       // automation bridge (INIT injection + file-based commands)
     std::string bridge_dir;            // temp directory for bridge file I/O (auto-created)
     bool browser_enabled = false;      // MacBrowser: allocate BrowserShm region (host-side spike + guest Browser.app)
+    std::string macbrowser_dir;        // <extfs>/macbrowser/, persistent home for bookmarks.txt + Downloads/ (set when --browser is on)
     int http_port = 11000;
     std::string client_dir = "./client";
     std::string storage_dir = "~/storage";

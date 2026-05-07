@@ -143,3 +143,31 @@ void br_cfg_path(unsigned char *out, const char *leaf)
         memcpy(out + off, leaf, take);
     }
 }
+
+void br_macbrowser_path(unsigned char *out, const char *leaf)
+{
+    /* Fixed prefix — independent of MacPhoenix.cfg contents because
+     * the host always writes the macbrowser/ folder at the ExtFS root,
+     * not under MacPhoenix/<pid>. */
+    static const char kPrefix[] = BR_VOLUME ":" BR_DIR_MACBROWSER;
+    size_t pn = sizeof(kPrefix) - 1;
+    size_t ln = strlen(leaf);
+    size_t total = pn + 1 + ln;
+    if (total > 255) total = 255;
+    out[0] = (unsigned char)total;
+    size_t off = 1;
+    {
+        size_t take = pn;
+        if (take > total) take = total;
+        memcpy(out + off, kPrefix, take);
+        off += take;
+    }
+    if (off < total + 1u) {
+        out[off++] = ':';
+    }
+    if (off < total + 1u) {
+        size_t take = ln;
+        if (off + take > total + 1u) take = (total + 1u) - off;
+        memcpy(out + off, leaf, take);
+    }
+}

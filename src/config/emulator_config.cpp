@@ -4,6 +4,7 @@
 
 #include "emulator_config.h"
 #include "json_utils.h"
+#include "bridge_paths.h"
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
@@ -736,6 +737,36 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             }
             fprintf(stderr, "[Config] Bridge dir: %s (under ExtFS)\n",
                     config.bridge_dir.c_str());
+
+            // MacBrowser data dir — sibling to MacPhoenix/<pid>, persistent
+            // across PIDs (so bookmarks/downloads survive a restart when the
+            // user has an explicit --extfs root). Seed bookmarks.txt with
+            // the compiled-in defaults if it doesn't exist; users can edit
+            // it on the host with any text editor and the guest reads it
+            // via Host:macbrowser:bookmarks.txt.
+            if (config.browser_enabled) {
+                config.macbrowser_dir = root + "/" + BR_DIR_MACBROWSER;
+                std::string dl_dir   = config.macbrowser_dir + "/" + BR_DIR_DOWNLOADS;
+                std::string bm_file  = config.macbrowser_dir + "/" + BR_FILE_BOOKMARKS;
+                QDir().mkpath(QString::fromStdString(config.macbrowser_dir));
+                QDir().mkpath(QString::fromStdString(dl_dir));
+                if (access(bm_file.c_str(), F_OK) != 0) {
+                    FILE* f = fopen(bm_file.c_str(), "w");
+                    if (f) {
+                        fprintf(f, "# MacBrowser bookmarks — title<tab>url, one per line.\n");
+                        fprintf(f, "# Lines starting with # are ignored.\n");
+                        fprintf(f, "# First entry is the home page.\n");
+                        fprintf(f, "Google\thttps://www.google.com/\n");
+                        fprintf(f, "YouTube test video\thttps://www.youtube.com/watch?v=y0sF5xhGreA\n");
+                        fprintf(f, "Macintosh Repository\thttps://www.macintoshrepository.org/\n");
+                        fprintf(f, "Macintosh Garden\thttps://macintoshgarden.org/\n");
+                        fprintf(f, "mac-phoenix on GitHub\thttps://github.com/sirmick/mac-phoenix\n");
+                        fclose(f);
+                        fprintf(stderr, "[Config] Seeded %s\n", bm_file.c_str());
+                    }
+                }
+                fprintf(stderr, "[Config] MacBrowser data: %s\n", config.macbrowser_dir.c_str());
+            }
         }
     }
 

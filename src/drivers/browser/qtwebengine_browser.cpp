@@ -7,6 +7,7 @@
 #include "cmd.h"
 #include "shm.h"
 #include "emulator_config.h"
+#include "bridge_paths.h"
 #define BR_HOST 1
 #include "MacBrowser.h"
 
@@ -543,13 +544,17 @@ void QtWebEngineBrowser::handle_download_request(QWebEngineDownloadRequest* req)
 {
     if (!req) return;
 
-    // Resolve destination directory. Bridge dir wins (guest already
-    // sees it via ExtFS at Host:MacPhoenix:Downloads); else system
+    // Resolve destination directory. Persistent macbrowser/ folder
+    // wins (guest sees it via ExtFS at Host:macbrowser:Downloads);
+    // legacy bridge_dir/Downloads still works for setups built before
+    // the macbrowser/ subfolder existed; otherwise the system
     // Downloads dir. Either way mkdir -p so accept() doesn't fail.
     QString dl_dir;
     {
         const auto& cfg = config::EmulatorConfig::instance();
-        if (!cfg.bridge_dir.empty()) {
+        if (!cfg.macbrowser_dir.empty()) {
+            dl_dir = QString::fromStdString(cfg.macbrowser_dir) + "/Downloads";
+        } else if (!cfg.bridge_dir.empty()) {
             dl_dir = QString::fromStdString(cfg.bridge_dir) + "/Downloads";
         } else {
             dl_dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
@@ -579,22 +584,48 @@ void QtWebEngineBrowser::handle_download_request(QWebEngineDownloadRequest* req)
     static std::atomic<uint32_t> s_next_guid{1};
     uint32_t guid = s_next_guid.fetch_add(1, std::memory_order_relaxed);
 
-    fprintf(stderr, "[QtWebEngine] download begin guid=%u → %s\n",
-            guid, path.toUtf8().constData());
+    // Build the guest-visible Mac path so the BR_EV_DOWNLOAD payload
+    // tells the user where to look inside System 7. When we landed in
+    // the persistent macbrowser/Downloads folder this is
+    // "Host:macbrowser:Downloads:<file>"; for the legacy bridge_dir
+    // case it stays "Host:MacPhoenix:<pid>:Downloads:<file>" via the
+    // bridge_paths convention; the system Downloads case has no Mac
+    // equivalent so we send the bare filename.
+    QString guest_path;
+    {
+        const auto& cfg = config::EmulatorConfig::instance();
+        QString fname = QFileInfo(path).fileName();
+        if (!cfg.macbrowser_dir.empty()) {
+            guest_path = QString("%1:%2:%3:%4")
+                .arg(BR_VOLUME).arg(BR_DIR_MACBROWSER)
+                .arg(BR_DIR_DOWNLOADS).arg(fname);
+        } else if (!cfg.bridge_dir.empty()) {
+            QFileInfo bd(QString::fromStdString(cfg.bridge_dir));
+            guest_path = QString("%1:%2:%3:%4:%5")
+                .arg(BR_VOLUME).arg(BR_PARENT)
+                .arg(bd.fileName()).arg(BR_DIR_DOWNLOADS).arg(fname);
+        } else {
+            guest_path = fname;
+        }
+    }
+
+    fprintf(stderr, "[QtWebEngine] download begin guid=%u → %s (%s)\n",
+            guid, path.toUtf8().constData(),
+            guest_path.toUtf8().constData());
     send_download(guid, BR_DL_BEGIN, 0,
-                  (uint64_t)req->totalBytes(), path.toStdString());
+                  (uint64_t)req->totalBytes(), guest_path.toStdString());
 
     QObject::connect(req, &QWebEngineDownloadRequest::receivedBytesChanged,
                      view_.get(),
-                     [guid, req, path]() {
+                     [guid, req, guest_path]() {
                          send_download(guid, BR_DL_PROGRESS,
                                        (uint64_t)req->receivedBytes(),
                                        (uint64_t)req->totalBytes(),
-                                       path.toStdString());
+                                       guest_path.toStdString());
                      });
     QObject::connect(req, &QWebEngineDownloadRequest::isFinishedChanged,
                      view_.get(),
-                     [guid, req, path]() {
+                     [guid, req, guest_path]() {
                          if (!req->isFinished()) return;
                          uint8_t state = BR_DL_DONE;
                          switch (req->state()) {
@@ -611,7 +642,7 @@ void QtWebEngineBrowser::handle_download_request(QWebEngineDownloadRequest* req)
                          send_download(guid, state,
                                        (uint64_t)req->receivedBytes(),
                                        (uint64_t)req->totalBytes(),
-                                       path.toStdString());
+                                       guest_path.toStdString());
                      });
 
     req->accept();
