@@ -473,7 +473,8 @@ class CIncludesGenerator < Generator
             "Resources", "SegLoad", "Sound", "TextEdit", "TextUtils", "Timer",
             "ToolUtils", "Traps", "Types", "Windows", "ConditionalMacros",
             "Gestalt", "AppleEvents", "Serial", "StandardFile", "Strings",
-            "Navigation", "Drag",
+            "Navigation", "Drag", "DriverServices", "Kernel", "Interrupts",
+            "NameRegistry", "PCI",
             # Universal Interfaces names for what the definitions cover too
             "Aliases", "Balloons", "CodeFragments", "Controls", "Desk",
             "DeskBus", "DiskInit", "Disks", "Displays", "Editions", "Finder",
