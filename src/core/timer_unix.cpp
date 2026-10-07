@@ -381,7 +381,7 @@ void idle_wait(void)
 #ifdef IDLE_USES_COND_WAIT
 	// Wait for idle_resume() signal or 16ms timeout (one 60Hz tick).
 	// - kpx backend: tick thread calls idle_resume(), wakes immediately
-	// - UAE/Unicorn: poll-based timer on CPU thread, timeout prevents deadlock
+	// - UAE: poll-based timer on CPU thread, timeout prevents deadlock
 	pthread_mutex_lock(&idle_lock);
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);

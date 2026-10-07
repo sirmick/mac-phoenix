@@ -1,9 +1,8 @@
 # Troubleshooting
 
-Quick triage for the common failure modes. Backend-specific perf details
-live in [`UnicornPerformanceAnalysis.md`](UnicornPerformanceAnalysis.md);
-PPC-specific debug knobs live in
-[`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md).
+Quick triage for the common failure modes. PPC-specific background lives
+in [`ppc/README.md`](ppc/README.md); the `MACEMU_PPC_*` trace knobs are
+listed in [`Commands.md`](Commands.md).
 
 ## First-line checks
 
@@ -11,15 +10,12 @@ PPC-specific debug knobs live in
 # Headless smoke — should print "Boot phase: …" lines and exit clean
 ./build/mac-phoenix --no-webserver --timeout 5 ~/storage/roms/quadra.rom
 
-# Compare backends side-by-side
-./build/mac-phoenix --backend uae           --no-webserver --timeout 5 ~/storage/roms/quadra.rom 2>&1 | tail -20
-./build/mac-phoenix --backend unicorn-m68k  --no-webserver --timeout 15 ~/storage/roms/quadra.rom 2>&1 | tail -20
+# Compare interpreter vs JIT side-by-side
+./build/mac-phoenix --backend uae --no-jit --no-webserver --timeout 5 ~/storage/roms/quadra.rom 2>&1 | tail -20
+./build/mac-phoenix --backend uae --jit    --no-webserver --timeout 5 ~/storage/roms/quadra.rom 2>&1 | tail -20
 
 # Trace first N instructions (m68k)
 CPU_TRACE=0-1000 ./build/mac-phoenix --no-webserver ~/storage/roms/quadra.rom 2>&1 | head -100
-
-# DualCPU lockstep — fail-fast on register divergence
-./build/mac-phoenix --backend dualcpu --no-webserver ~/storage/roms/quadra.rom
 ```
 
 ## Common issues
@@ -31,9 +27,8 @@ The IRQ EmulOp encoding is `0x7129` in `src/core/rom_patches.cpp` — if
 you see it dispatching as `0xAE29`, the patcher regressed.
 
 PPC: check `boot_phase` in `/api/status` (or stderr `[Boot +N.Ns]`
-markers). A stall at "Installing drivers" with healthy DiskPrime
-throughput is the SCALE=1 throughput collapse — see
-`ppc/UnicornPpcStatus.md`.
+markers) to see which phase stalled, then enable `MACEMU_PPC_TRACE` to
+find the last EmulOp dispatched.
 
 ### "ROM not found"
 
@@ -45,32 +40,11 @@ Use absolute paths. `~` expansion fails in some shells / IDEs. Tests use
 Pick a different `--port`. There is no separate signaling port — `/ws`
 rides the same TCP listener.
 
-### Unicorn-m68k boot is slow
-
-That's the QEMU TCG cost, not a bug. ~12 s to Finder is current; the
-detailed perf breakdown is in [`UnicornPerformanceAnalysis.md`](UnicornPerformanceAnalysis.md).
-Persistent TB caching across runs would close most of the remaining
-gap (not done).
-
-### Unicorn-PPC reaches `[Boot +N] Desktop ready` but the framebuffer is
+### Headless log says `[Boot +N] Desktop ready` but the framebuffer is
 hourglass-only or all black
 
-Read [`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md) before
-debugging — the headless `Desktop ready` flag flips on a `CurApName` peek
-and idle poll, not on actual paint. Verify with `/api/screenshot`.
-
-### Build issues in `subprojects/unicorn`
-
-Rebuild that subproject directly first, then the top level:
-
-```bash
-cmake --build subprojects/unicorn/build -j$(nproc)
-cmake --build build -j$(nproc)
-```
-
-If patches in `subprojects/unicorn-patches/` won't apply, the vendored
-tree drifted from pristine 2.1.4 — `git -C subprojects/unicorn status`
-to find the divergence.
+The headless `Desktop ready` flag flips on a `CurApName` peek and idle
+poll, not on actual paint. Verify visually or with `/api/screenshot`.
 
 ## Debug environment variables
 
@@ -84,19 +58,14 @@ These are read by the binary or test scripts, not by the JSON config.
 | `CPU_TRACE_MEMORY=1` | Include memory reads |
 | `CPU_TRACE_QUIET=1` | Suppress banner |
 | `EMULOP_VERBOSE=1` | Log each EmulOp dispatch |
-| `MACEMU_DEBUG_PERF=1` | Enable per-block timing in Unicorn-m68k hooks |
-
-### DualCPU validation
-
-| Variable | Purpose |
-|----------|---------|
-| `DUALCPU_TRACE_DEPTH=N` | History depth on divergence |
-| `DUALCPU_MASTER=uae|unicorn` | Authoritative side (default `uae`) |
+| `MACEMU_DEBUG_PERF=1` | Video encoder thread performance statistics |
 
 ### PPC
 
-See [`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md) — the
-`MACEMU_PPC_*` family of knobs is documented there.
+The KPX `MACEMU_PPC_*` trace knobs (`MACEMU_PPC_TRACE`,
+`MACEMU_PPC_CR2_TRACE`, `MACEMU_PPC_TRACE_TRAP`,
+`MACEMU_PPC_TRACE_68K_ENTRY`, `MACEMU_PPC_NO_IRQ`) are tabulated in
+[`Commands.md`](Commands.md#environment-variables).
 
 ## GDB
 
@@ -109,8 +78,8 @@ Useful breakpoints:
 
 | Where | Why |
 |-------|-----|
-| `unicorn_execute_with_interrupts` (`unicorn_exec_loop.c`) | Top of the Unicorn-m68k execute loop |
-| `apply_deferred_updates_and_flush` (`unicorn_wrapper.c`) | Where deferred register writes land |
+| `m68k_do_execute` (`src/cpu/uae_cpu/newcpu.cpp`) | UAE interpreter inner loop (opcode fetch → `cpufunctbl` dispatch → `SPCFLAGS` check) |
+| `uae_backend_trigger_interrupt` (`src/cpu/cpu_uae.c`) | Where `g_platform.cpu_trigger_interrupt` lands for UAE |
 | `command_bridge_*` (`src/core/command_bridge.cpp`) | Bridge read commands |
 | `bridge_command` (`src/webserver/api_handlers.cpp`) | Action commands (LAUNCH/QUIT/SHUTDOWN/RESTART) |
 | `ppc_emul_op` / `execute_native_op_pure` (`src/cpu/kpx/`) | PPC EmulOp / NativeOp dispatch |
@@ -122,8 +91,8 @@ valgrind --leak-check=full --suppressions=tools/valgrind.supp \
     ./build/mac-phoenix --no-webserver --timeout 5 ~/storage/roms/quadra.rom
 ```
 
-Expect noise from Unicorn's TCG code generator and libdatachannel — live
-with it or build with `-DBUILD_BROWSER=OFF -DBUILD_NET_BRIDGE=OFF` to
+Expect noise from libdatachannel and Qt WebEngine — live with it or build
+with `-DBUILD_BROWSER=OFF -DBUILD_NET_BRIDGE=OFF` to
 narrow the surface.
 
 ## Log analysis

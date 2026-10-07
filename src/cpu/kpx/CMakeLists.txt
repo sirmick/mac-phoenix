@@ -9,9 +9,9 @@
 # subsystem helpers (name registry, gfxaccel, serial, ether). None of
 # these reach into dyngen — they implement Mac OS via KPX's vm.hpp
 # direct-memory model and the platform abstraction. Compiles on every
-# host arch so cpu_unicorn_ppc.cpp gets the same symbols on arm64
-# that it does on x86, and matches how src/core/{cpu_context.cpp,
-# emul_op.cpp} hold the equivalent shared state for the m68k mode.
+# host arch (the dyngen interpreter itself is x86-only), and matches
+# how src/core/{cpu_context.cpp, emul_op.cpp} hold the equivalent
+# shared state for the m68k mode.
 set(KPX_SHARED_SOURCES
   rom_patches_ppc.cpp
   emul_op_ppc.cpp
@@ -86,9 +86,9 @@ set(KPX_CPP_ARGS
   -DPPC_DETERMINISTIC_REPLAY=1
 )
 
-# Shared PPC infrastructure — every arch builds this. cpu_unicorn_ppc.cpp
-# links against it and so does kpx_interp on x86. Same -O1 + KPX_CPP_ARGS
-# as the interpreter so the Mac-OS helper code keeps its tuning.
+# Shared PPC infrastructure — every arch builds this; kpx_interp links
+# against it on x86. Same -O1 + KPX_CPP_ARGS as the interpreter so the
+# Mac-OS helper code keeps its tuning.
 find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
 
 add_library(kpx_shared STATIC ${KPX_SHARED_SOURCES})

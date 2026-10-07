@@ -120,7 +120,6 @@ static void uae_invoke_debug(void) {
  */
 void cpu_uae_install(Platform *p) {
 	p->cpu_name = "UAE Interpreter";
-	p->use_aline_emulops = false;
 
 	// Configuration
 	p->cpu_set_type = uae_backend_set_type;

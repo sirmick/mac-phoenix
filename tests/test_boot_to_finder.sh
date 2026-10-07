@@ -3,7 +3,7 @@
 # test_boot_to_finder.sh - Verify Mac OS boots to Finder desktop
 #
 # Usage:
-#   tests/test_boot_to_finder.sh [--backend uae|unicorn-m68k] [--timeout 30] [--rom /path/to/rom]
+#   tests/test_boot_to_finder.sh [--backend uae|kpx] [--timeout 30] [--rom /path/to/rom]
 #
 # Starts the emulator, polls /api/status until boot_phase reaches "Finder",
 # then exits 0 (pass) or 1 (timeout/failure).

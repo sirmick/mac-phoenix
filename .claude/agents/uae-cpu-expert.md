@@ -64,7 +64,7 @@ The JIT is **x86/x86-64 only** and provides ~10x speedup:
 ## Legacy Status
 This is **legacy code in the `BasiliskII/` directory**.
 - 🔴 **Legacy**: `BasiliskII/src/uae_cpu/` (master branch)
-- 🟢 **New**: `mac-phoenix/` will use **Qemu instead of UAE**
+- 🟢 **New**: `mac-phoenix/` keeps UAE as the default m68k backend (`src/cpu/uae_cpu/`, `--backend uae`)
 
 ## Instructions
 When working on UAE CPU:
@@ -85,6 +85,3 @@ When working on UAE CPU:
 - Incorrect flag calculations (especially overflow/carry)
 - Missing exception checks (address error on odd addresses)
 - Performance regressions in hot paths (main loop is critical)
-
-## Future
-The new branch will migrate to **Qemu for CPU emulation**, retiring the UAE core.

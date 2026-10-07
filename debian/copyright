@@ -21,11 +21,6 @@ Files: net-bridge/*
 Copyright: 2024-2026 Mick <sirmick@gmail.com>
 License: GPL-2+
 
-Files: subprojects/unicorn/*
-Copyright: 2015-2024 Nguyen Anh Quynh <aquynh@gmail.com>
-           2003-2024 Fabrice Bellard and the QEMU Project developers
-License: GPL-2
-
 Files: subprojects/libdatachannel/*
 Copyright: 2019-2024 Paul-Louis Ageneau <paul-louis@ageneau.net>
 License: MPL-2.0

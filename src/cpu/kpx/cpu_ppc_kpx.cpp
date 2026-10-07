@@ -517,7 +517,7 @@ void sheepshaver_cpu::execute_emul_op(uint32 emul_op)
     {
         PpcBoundaryState ts;
         // KPX advances pc() past the EmulOp before dispatch; subtract 4 so the
-        // trace records the EmulOp instruction's own address, matching Unicorn.
+        // trace records the EmulOp instruction's own address.
         ts.pc = pc() - 4;
         ts.selector = emul_op;
         ts.cr = get_cr();
@@ -556,8 +556,8 @@ void sheepshaver_cpu::call_execute_native_op(powerpc_cpu *cpu, uint32 selector)
 }
 
 // Backend-agnostic NativeOp body — operates on a caller-supplied GPR array
-// rather than `this->gpr(i)` so non-KPX backends (Unicorn) can invoke it via
-// g_platform.ppc_native_op after marshaling their own GPRs. Returns true if
+// rather than `this->gpr(i)` so another PPC backend could invoke it via
+// g_platform.ppc_native_op after marshaling its own GPRs. Returns true if
 // the selector was handled; false means the caller must dispatch via a CPU
 // singleton (GET_RESOURCE family re-enters PPC via execute_ppc()).
 static bool execute_native_op_pure(uint32 selector, uint32 *gprs)
@@ -700,11 +700,9 @@ void sheepshaver_cpu::execute_native_op(uint32 selector)
     }
 }
 
-// Platform wrapper: called via g_platform.ppc_native_op from both backends.
-// Non-static so cpu_unicorn_ppc.cpp can register it in its install function.
-// GET_RESOURCE-family selectors are currently stubbed for non-KPX backends —
-// they need execute_ppc(), which Unicorn doesn't yet expose as a reentrant
-// helper.
+// Platform wrapper: registered as g_platform.ppc_native_op. GET_RESOURCE-family
+// selectors need execute_ppc() and so only work when the KPX CPU singleton is
+// active.
 extern "C" void kpx_ppc_native_op(uint32_t selector, uint32_t gprs[32])
 {
     if (execute_native_op_pure(selector, gprs))
@@ -1028,19 +1026,14 @@ void kpx_flight_recorder_cmd(int cmd)
 // call_macos functions (PPC calling conventions)
 // ============================================================================
 //
-// Backend dispatch: KPX sets ppc_cpu to its sheepshaver_cpu instance; the
-// Unicorn-PPC backend leaves ppc_cpu as nullptr and provides its own
-// uppc_cpu_execute_macos_code (in cpu_unicorn_ppc.cpp). When KPX isn't active,
-// dereferencing ppc_cpu here used to SIGSEGV — e.g. DoPatchNameRegistry →
-// RegistryCStrEntryCreate → call_macos3 — which the signal handler retried
-// forever, producing an apparent hang at OP_NAME_REGISTRY.
-
-extern "C" uint32_t uppc_cpu_execute_macos_code(uint32_t tvect, int nargs, uint32_t const *args) __attribute__((weak));
+// KPX sets ppc_cpu to its sheepshaver_cpu instance at install time. Guard
+// the dereference: before that, DoPatchNameRegistry → RegistryCStrEntryCreate
+// → call_macos3 used to SIGSEGV here, and the signal handler retried forever,
+// producing an apparent hang at OP_NAME_REGISTRY.
 
 static inline uint32 dispatch_macos_code(uint32 tvect, int nargs, uint32 const *args)
 {
 	if (ppc_cpu) return ppc_cpu->execute_macos_code(tvect, nargs, args);
-	if (uppc_cpu_execute_macos_code) return uppc_cpu_execute_macos_code(tvect, nargs, args);
 	fprintf(stderr, "[call_macos] no PPC backend available for tvect=0x%08x\n", tvect);
 	return 0;
 }
@@ -1174,8 +1167,8 @@ static void tick_thread_func() {
         }
         if (tick_inhibit) continue;
 
-        // MACEMU_PPC_NO_IRQ suppresses async IRQ injection so KPX-vs-Unicorn
-        // EmulOp boundary trace is deterministic (see ppc_boundary_trace.h).
+        // MACEMU_PPC_NO_IRQ suppresses async IRQ injection so the EmulOp
+        // boundary trace is deterministic (see ppc_boundary_trace.h).
         static const bool s_no_irq = [](){
             const char* e = std::getenv("MACEMU_PPC_NO_IRQ");
             return e && *e && *e != '0';
@@ -1558,7 +1551,6 @@ extern "C" void cpu_ppc_kpx_install(Platform *p)
 
     // Backend identification
     p->cpu_name = "KPX";
-    p->use_aline_emulops = false;  // PPC uses POWERPC_EMUL_OP (0x18xxxxxx), not A-line
 
     // Lifecycle
     p->cpu_init = kpx_cpu_init;

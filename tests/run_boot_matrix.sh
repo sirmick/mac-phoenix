@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# run_boot_matrix.sh - Boot-capacity matrix: 6 backends x 2 OSes = 12 cells.
+# run_boot_matrix.sh - Boot-capacity matrix: 4 backend/JIT configs x 2 OSes = 8 cells.
 #
 # For each cell:
 #   - boot, poll until boot_phase=Finder, sustain 5s, capture screenshot
@@ -41,7 +41,7 @@ DISK_755="${MACEMU_DISK_755:-$HOME/storage/images/macos-7.5.5.img}"
 DISK_761="${MACEMU_DISK_761:-$HOME/storage/images/macos-7.6.1.img}"
 
 # Cells: label|backend|jitflag|rom|disk|timeout|port
-# jitflag is one of: --jit, --no-jit, ""  (no-op for unicorn-* backends)
+# jitflag is one of: --jit, --no-jit, ""  (empty = backend default)
 CELLS=(
     "uae-interp-755|uae|--no-jit|$ROM_M68K|$DISK_755|45|18200"
     "uae-interp-761|uae|--no-jit|$ROM_M68K|$DISK_761|45|18210"
@@ -51,10 +51,6 @@ CELLS=(
     "kpx-interp-761|kpx|--no-jit|$ROM_PPC|$DISK_761|90|18250"
     "kpx-jit-755|kpx|--jit|$ROM_PPC|$DISK_755|90|18260"
     "kpx-jit-761|kpx|--jit|$ROM_PPC|$DISK_761|90|18270"
-    "unicorn-m68k-755|unicorn-m68k||$ROM_M68K|$DISK_755|180|18280"
-    "unicorn-m68k-761|unicorn-m68k||$ROM_M68K|$DISK_761|180|18290"
-    "unicorn-ppc-755|unicorn-ppc||$ROM_PPC|$DISK_755|180|18300"
-    "unicorn-ppc-761|unicorn-ppc||$ROM_PPC|$DISK_761|180|18310"
 )
 
 should_run() {

@@ -90,7 +90,7 @@ void platform_init(void)
 	g_platform.ppc_emulop_handler = nullptr;
 	g_platform.trap_handler = nullptr;
 
-	// Code cache flush (NULL by default - set by JIT backends like Unicorn)
+	// Code cache flush (NULL by default - set by JIT backends)
 	g_platform.flush_code_cache = nullptr;
 
 	// PPC CPU backend (NULL by default - set by KPX backend)

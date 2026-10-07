@@ -39,11 +39,11 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom
 # Playwright E2E tests (requires running emulator)
 npx playwright test
 
-# Boot capacity matrix (12 cells: backend × JIT configs × 2 OSes)
+# Boot capacity matrix (all backend × JIT config × OS cells)
 # Writes CSV + PNG screenshots + per-cell logs to --out dir.
 tests/run_boot_matrix.sh --out /home/mick/mac-phoenix/test-results/boot-matrix
 # Single cell:
-tests/test_boot_matrix.sh --label unicorn-m68k-755 --backend unicorn-m68k \
+tests/test_boot_matrix.sh --label uae-755 --backend uae \
     --rom ~/roms/quadra.rom --disk ~/storage/images/macos-7.5.5.img \
     --timeout 60 --port 19300 --screenshot-dir /tmp/one-cell
 ```
@@ -51,15 +51,14 @@ tests/test_boot_matrix.sh --label unicorn-m68k-755 --backend unicorn-m68k \
 ## CPU Backends
 
 Selected via `--backend` flag (default: `uae`). The backend token uniquely
-determines the CPU architecture — there is no separate `--arch` flag.
+determines the CPU architecture — there is no separate `--arch` flag. The
+`Backend` enum and Platform API are kept as the extension point for adding
+further backends.
 
 | Backend | Arch | What | Speed | Use for |
 |---------|------|------|-------|---------|
 | `uae` | m68k | Hand-tuned interpreter (+optional `--jit`) | Fast (~5s boot) | Default, end users |
-| `unicorn-m68k` | m68k | QEMU TCG | Slow (~48s boot) | Validation, future perf work |
-| `unicorn-ppc` | ppc | QEMU TCG | Slow | PPC validation |
 | `kpx` | ppc | KPX translator (+optional `--jit`, +optional `--jit68k`) | Medium | Default for PPC |
-| `dualcpu` | m68k | UAE + Unicorn lockstep | Very slow | Debugging divergences |
 
 ## Project Structure
 
@@ -79,9 +78,8 @@ src/
     cpu_context.cpp                 — Memory allocation, backend init
   cpu/
     cpu_uae.c                       — UAE backend (Platform API bridge)
-    cpu_unicorn.cpp                 — Unicorn backend (MMIO hooks, memory mapping)
-    unicorn_wrapper.c               — Unicorn engine wrapper (hooks, perf counters)
     uae_cpu/                        — UAE interpreter source (newcpu.cpp, cpuemu.cpp)
+    kpx/                            — KPX PPC backend (SheepShaver Kheperix interpreter)
   drivers/
     video/video_output.h            — Lock-free triple buffer for frames
     video/video_webrtc.cpp          — WebRTC video driver
@@ -97,11 +95,6 @@ src/
   common/
     sigsegv.cpp                     — SIGSEGV handler (skips bad accesses)
     include/platform.h              — Platform API (g_platform function pointers)
-
-subprojects/
-  unicorn/                          — Unicorn engine (forked, with m68k patches)
-    qemu/target/m68k/translate.c    — M68K → TCG IR decoder (added RTR instruction)
-    qemu/accel/tcg/cpu-exec.c       — TB find/compile loop (perf counters added)
 
 BridgeAgent/
   BridgeAgent.c                     — BridgeAgent source (Retro68 m68k); polls bridge files in Host: ExtFS
@@ -171,7 +164,7 @@ Machine:
   --storage-dir PATH         Default storage root (default: ~/storage)
 
 CPU:
-  --backend NAME             uae | unicorn-m68k | unicorn-ppc | kpx | dualcpu
+  --backend NAME             uae | kpx
                              (default: uae; backend implies architecture)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
@@ -217,8 +210,8 @@ The emulator binary does not read environment variables. Use CLI flags instead.
 
 - **Platform API**: All backends implement the same `g_platform` function pointer table. Core code never calls backend-specific functions directly.
 - **Memory layout**: RAM(32MB @ 0x0) + ROM(1MB @ 0x02000000) + ScratchMem(64KB @ 0x02100000) + FrameBuffer(4MB @ 0x02110000). Framebuffer is outside RAM to avoid corrupting Mac data structures.
-- **EmulOps**: ROM patches insert trap opcodes (0xAExx for Unicorn, 0x71xx for UAE) that trigger host-side handlers for I/O, drivers, and system functions.
-- **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format; backend token (`uae`/`unicorn-m68k`/`unicorn-ppc`/`kpx`/`dualcpu`) determines architecture; legacy `architecture`+`cpu_backend`+`m68k.*`+`ppc.*` keys are coerced on load for one release of backward compat.
+- **EmulOps**: ROM patches insert trap opcodes (0x71xx) that trigger host-side handlers for I/O, drivers, and system functions.
+- **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format; backend token (`uae`/`kpx`) determines architecture; legacy `architecture`+`cpu_backend`+`m68k.*`+`ppc.*` keys are coerced on load for one release of backward compat.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
 - **Single-port HTTP + WebSocket**: HTTP/1.1 server in `src/webserver/http_server.cpp` is built on `QTcpServer` + `QTcpSocket` (`Qt6::Network`); the accept loop runs on a dedicated `std::thread` using synchronous `waitForX` APIs (no Qt event loop required). On `Upgrade: websocket` the upgrade handshake is written via the QTcpSocket and the underlying fd is `dup()`'d off to a worker thread that owns the WebSocket. Long-poll stream routes (`/api/stream`) use the same fd-handoff pattern. `src/webserver/websocket.cpp` implements RFC 6455 in-process on the dup'd fd. One TCP listener serves static UI, REST API, `/api/frame` long-poll, and `/ws` (signaling + input + PNG/WebP frames). libdatachannel's `rtc::WebSocketServer` is not used. WebRTC RTP (H.264/VP9 media + Opus audio) still rides direct UDP ports negotiated via ICE.
 - **Three transport modes**: PNG/WebP → WebSocket binary on `/ws`; H.264/VP9 → WebRTC RTP track; `httpstream` → `/api/frame` long-poll. Signaling JSON + input events always ride the `/ws` WebSocket regardless of codec.

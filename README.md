@@ -262,10 +262,7 @@ implies the CPU architecture — there is no separate `--arch` flag.
 | Backend | Arch | Engine | Boot time | Use case |
 |---------|------|--------|-----------|----------|
 | `uae` (default) | m68k | Hand-tuned interpreter (+ optional `--jit`) | ~5s | General use |
-| `unicorn-m68k` | m68k | QEMU TCG | ~48s | Validation / perf work |
-| `unicorn-ppc`  | ppc  | QEMU TCG | slow | PPC validation |
 | `kpx` | ppc | KPX translator (+ optional `--jit`, + optional `--jit68k`) | medium | Default PPC |
-| `dualcpu` | m68k | UAE + Unicorn lockstep | very slow | Debugging divergences |
 
 ### PowerPC prerequisite: `vm.mmap_min_addr`
 
@@ -285,7 +282,7 @@ echo 'vm.mmap_min_addr = 0' | \
     sudo tee /etc/sysctl.d/99-mac-phoenix-ppc.conf
 ```
 
-This is only needed for the PPC backends (`kpx`, `unicorn-ppc`); 68K emulation is unaffected.
+This is only needed for the PPC backend (`kpx`); 68K emulation is unaffected.
 
 ## Web UI
 
@@ -319,7 +316,7 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `backend` | `"uae"` | `"uae"`, `"unicorn-m68k"`, `"unicorn-ppc"`, `"kpx"`, `"dualcpu"` |
+| `backend` | `"uae"` | `"uae"` (m68k) or `"kpx"` (ppc) |
 | `jit` | `false` | Enable backend's primary JIT (uae, kpx) |
 | `jit68k` | `true` | Enable 68k-on-PPC DR JIT (kpx only) |
 | `idlewait` | `true` | Pause CPU when guest is idle |
@@ -349,7 +346,7 @@ load with a one-time deprecation warning, then dropped on first save. See
   --extfs PATH               Shared host folder (repeatable)
   --bootdriver N             0=any, -62=CD-ROM (default: 0)
   --storage-dir PATH         Root for relative rom/disk paths (default: ~/storage)
-  --backend NAME             uae | unicorn-m68k | unicorn-ppc | kpx | dualcpu
+  --backend NAME             uae | kpx
                              (default: uae; backend implies architecture)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
@@ -562,7 +559,7 @@ ctest --test-dir build -L unit
 # API + config + ExtFS — boots to Finder with the default backend (~15 s)
 ctest --test-dir build -L api
 
-# Boot tests across backends (UAE interpreter, UAE JIT, Unicorn, PPC) (~5 min)
+# Boot tests across backends (UAE interpreter, UAE JIT, PPC) (~5 min)
 ctest --test-dir build -L boot
 
 # Guest-side suite (requires MacPerl + BridgeAgent on the disk image)
@@ -787,7 +784,7 @@ to test it locally on macOS, audit it with `brew audit`, and run it on
 
 ## Heritage
 
-MacPhoenix descends from the BasiliskII/SheepShaver emulator family originally created by Christian Bauer. The original source is preserved in [`legacy/`](legacy/) for reference.
+MacPhoenix descends from the BasiliskII/SheepShaver emulator family originally created by Christian Bauer.
 
 ## License
 

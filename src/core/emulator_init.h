@@ -28,7 +28,7 @@ bool load_rom_file(const char* rom_path,
 // Initialize CPU subsystem (m68k only for now)
 // Must be called after ROM is loaded.
 // Args:
-//   cpu_backend: "uae", "unicorn", or "dualcpu"
+//   cpu_backend: m68k backend token ("uae")
 // Returns: true on success, false on error
 bool init_cpu_subsystem(const char* cpu_backend);
 

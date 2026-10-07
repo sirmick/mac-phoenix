@@ -115,8 +115,7 @@ typedef struct {
     /*
      *  CPU Emulation Backend
      */
-    const char *cpu_name;  // Backend name: "UAE", "Unicorn", "DualCPU"
-    bool use_aline_emulops;  // true: EmulOps encoded as 0xAExx (Unicorn); false: 0x71xx (UAE)
+    const char *cpu_name;  // Backend name, e.g. "UAE", "KPX"
     bool ppc_jit;            // true: enable PPC dyngen JIT; false: interpreter only
 
     // Lifecycle
@@ -154,7 +153,7 @@ typedef struct {
     // Executes 68k code at given address, returns updated registers
     void (*cpu_execute_68k)(uint32_t addr, struct M68kRegisters *r);
 
-    // Code cache flush (for JIT backends like Unicorn)
+    // Code cache flush (for JIT backends)
     // Called when code is patched at runtime (system patches, CheckLoad, etc.)
     // JIT backends must invalidate cached translations for the affected region.
     void (*flush_code_cache)(void);
@@ -183,8 +182,6 @@ typedef struct {
      *  These functions provide memory access for initialization and ROM patching.
      *  Different backends implement these differently:
      *    - UAE: Uses memory banking system (get_long/put_long with byte-swapping)
-     *    - Unicorn: Direct memory access to ROMBaseHost/RAMBaseHost
-     *    - DualCPU: Uses UAE's implementation
      *
      *  All functions read/write in big-endian (M68K native) format.
      */
@@ -248,15 +245,15 @@ typedef struct {
 extern Platform g_platform;
 
 /*
- *  Convert EmulOp to correct encoding for active backend.
- *  UAE uses 0x71xx (overloaded MOVEQ); Unicorn uses 0xAExx (A-line trap).
+ *  Convert EmulOp to the encoding the active backend traps on.
+ *  The canonical encoding is 0x71xx (an overloaded MOVEQ that UAE treats
+ *  as an illegal instruction). A backend that cannot trap on 0x71xx can
+ *  install make_emulop to remap it; the ROM patcher routes every EmulOp
+ *  it emits through this helper.
  */
 static inline uint16_t platform_make_emulop(uint16_t emulop) {
     if (g_platform.make_emulop)
         return g_platform.make_emulop(emulop);
-    if (g_platform.use_aline_emulops && (emulop & 0xFF00) == 0x7100) {
-        return 0xAE00 | (emulop & 0x3F);
-    }
     return emulop;
 }
 
@@ -389,10 +386,7 @@ extern bool platform_unix_sys_cd_read_toc(void *fh, uint8_t *toc);
  *  CPU Backend Installation Functions
  */
 extern void cpu_uae_install(Platform *p);
-extern void cpu_unicorn_install(Platform *p);
-extern void cpu_dualcpu_install(Platform *p);
 extern void cpu_ppc_kpx_install(Platform *p);
-extern void cpu_unicorn_ppc_install(Platform *p);
 
 #ifdef __cplusplus
 }

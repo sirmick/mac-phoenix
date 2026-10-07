@@ -44,9 +44,8 @@ the pointer always safe.
 | Disk | (uses `Sys_*` layer in core) | — | `platform_unix.cpp` |
 | Platform | `platform_adapter.cpp` | `platform_null.cpp` | `platform_unix.cpp` |
 
-CPU backends use the same scheme — `cpu_uae_install`,
-`cpu_unicorn_install`, `cpu_unicorn_ppc_install`, `cpu_ppc_kpx_install`,
-`cpu_dualcpu_install` each fill in CPU-related fields on top of the
+CPU backends use the same scheme — `cpu_uae_install` and
+`cpu_ppc_kpx_install` each fill in CPU-related fields on top of the
 null defaults.
 
 ## Files

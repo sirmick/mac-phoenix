@@ -1264,7 +1264,7 @@ void m68k_emulop(uae_u32 opcode)
 {
 	/* Platform handler overrides UAE built-in EmulOp dispatch.
 	 * NULL is valid for UAE backend (uses built-in EmulOp below).
-	 * Non-UAE backends (Unicorn, DualCPU) MUST set this. */
+	 * Non-UAE backends MUST set this. */
 	if (g_platform.m68k_emulop_handler) {
 		g_platform.m68k_emulop_handler((uint16_t)opcode, true);
 		return;

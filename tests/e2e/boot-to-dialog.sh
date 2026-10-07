@@ -2,7 +2,7 @@
 # Boot-to-dialog test: boots the emulator, waits for Finder, kills it,
 # boots again, and captures the "not shut down cleanly" dialog.
 #
-# Usage: ./tests/e2e/boot-to-dialog.sh [uae|unicorn]
+# Usage: ./tests/e2e/boot-to-dialog.sh [uae]
 
 set -euo pipefail
 

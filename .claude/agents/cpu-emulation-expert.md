@@ -5,8 +5,6 @@
 ## Purpose
 Deep expertise in the 68k and PowerPC CPU emulation cores, including interpreter and JIT compilation (legacy UAE and KPX implementations).
 
-**Note**: A new version is in development that will include **Qemu CPU emulation**. For new CPU work, check which branch you're on.
-
 ## Expertise
 - UAE 68k CPU emulator (interpreter and JIT)
 - 68k instruction set architecture
@@ -40,7 +38,7 @@ Deep expertise in the 68k and PowerPC CPU emulation cores, including interpreter
 
 ## Legacy Status
 This agent covers the **legacy master branch** with UAE (68k) and KPX (PowerPC) CPU cores.
-The new version in development will use **Qemu CPU emulation**.
+mac-phoenix keeps both cores behind a pluggable Platform API (`--backend uae | kpx`).
 
 ## Instructions
 When working on CPU emulation:
@@ -53,6 +51,3 @@ When working on CPU emulation:
 7. Use existing memory access macros (ReadMacInt32, etc.)
 8. Consider performance impact on hot paths
 9. Document any non-standard instruction behavior
-
-## Future: Qemu Integration
-The new branch will replace UAE/KPX with **Qemu for CPU emulation**.

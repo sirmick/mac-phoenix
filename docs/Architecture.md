@@ -1,6 +1,6 @@
 # Architecture Overview
 
-How mac-phoenix fits together: Platform API, the five CPU backends,
+How mac-phoenix fits together: Platform API, the CPU backends,
 memory layout, traps, interrupts, web/WebRTC plumbing.
 
 ## Core principle: everything goes through the Platform API
@@ -43,14 +43,11 @@ separate `--arch` flag.
 | Backend         | Arch | Implementation | Speed (Quadra boot) | Use |
 |-----------------|------|----------------|---------------------|------|
 | `uae`           | m68k | Hand-tuned interpreter from BasiliskII (`src/cpu/uae_cpu/`, `cpu_uae.c`) | ~5s (interp), ~3s (`--jit`) | Default for end users |
-| `unicorn-m68k`  | m68k | Unicorn QEMU TCG (`cpu_unicorn.cpp`, `unicorn_wrapper.c`) | ~12s | Validation, perf research |
-| `unicorn-ppc`   | ppc  | Unicorn QEMU TCG (`cpu_unicorn_ppc.cpp`) | reaches Finder, unstable | See `ppc/UnicornPpcStatus.md` |
-| `kpx`           | ppc  | Kheperix interpreter from SheepShaver (`src/cpu/kpx/`) | ~45s (interp); `--jit` blocked by codegen | Default for PPC |
-| `dualcpu`       | m68k | UAE + Unicorn-m68k in lockstep | very slow | Catch divergences |
+| `kpx`           | ppc  | Kheperix interpreter from SheepShaver (`src/cpu/kpx/`) | ~15s (interp), ~7s (`--jit`) | Default for PPC |
 
-Backend installers — `cpu_uae_install`, `cpu_unicorn_install`,
-`cpu_unicorn_ppc_install`, `cpu_ppc_kpx_install`, `cpu_dualcpu_install` — each
-write into the same `g_platform` table.
+Backend installers — `cpu_uae_install`, `cpu_ppc_kpx_install` — each write
+into the same `g_platform` table. The `Backend` enum and `--backend` flag are
+the extension point for adding further backends.
 
 ## Memory
 
@@ -68,9 +65,8 @@ addressing with ROM at `0x400000`; the actual layout is selected by the
 machine profile (`src/config/machine_profile.cpp`), auto-detected from the
 ROM version.
 
-UAE keeps RAM in big-endian and byte-swaps inside `do_get_mem_*`. Unicorn
-keeps the same big-endian layout — see `deepdive/cpu/UaeQuirks.md`,
-`deepdive/cpu/UnicornQuirks.md`, and `deepdive/MemoryArchitecture.md`.
+UAE keeps RAM in big-endian and byte-swaps inside `do_get_mem_*` — see
+`deepdive/cpu/UaeQuirks.md` and `deepdive/MemoryArchitecture.md`.
 
 ### PPC (Gossamer) layout
 
@@ -82,19 +78,17 @@ SheepMem at top of RAM. See `ppc/MemoryLayout.md`.
 
 Three flavours of trap, all dispatched through `g_platform`:
 
-1. **EmulOps** — synthetic illegal opcodes inserted by ROM patching. UAE uses
-   `0x71xx`; Unicorn-m68k uses A-line range `0xAExx`. The CPU raises an
-   illegal-instruction exception and the platform's `emulop_handler()` runs
-   in C++.
-2. **A-line traps** (`0xAxxx`) — Mac OS Toolbox calls. Both backends reach an
-   identical 87-entry trap table.
+1. **EmulOps** — synthetic illegal opcodes (`0x71xx`) inserted by ROM
+   patching. The CPU raises an illegal-instruction exception and the
+   platform's `emulop_handler()` runs in C++.
+2. **A-line traps** (`0xAxxx`) — Mac OS Toolbox calls (an 87-entry trap table
+   is populated during boot).
 3. **F-line traps** (`0xFxxx`) — FPU emulation.
 
 PPC uses **SHEEP opcodes** (`0x18000000` family, an undefined PPC instruction)
 for the equivalent of EmulOps; the encoding splits into EMUL_RETURN /
-EXEC_RETURN / EXEC_NATIVE / EMUL_OP. KPX catches them through its decoder; the
-Unicorn-PPC backend dispatches via a major-opcode-6 helper added in
-`subprojects/unicorn-patches/0004-mac-emulop-helper.patch`.
+EXEC_RETURN / EXEC_NATIVE / EMUL_OP. KPX catches them through its decoder
+(major opcode 6 is undefined in real PPC).
 
 ### Native trap execution
 
@@ -102,32 +96,22 @@ When a host EmulOp needs to call back into Mac code (e.g. running a device
 driver), the backend builds a 68k frame and runs the inner interpreter:
 
 - UAE: native `Execute68kTrap()`.
-- Unicorn-m68k: pushes a return marker (`0x7100`), runs `uc_emu_start` until
-  it hits the marker, copies registers back. No UAE dependency.
 - KPX: `sheepshaver_cpu::execute_68k()` enters the ROM's PPC-native 68k
   emulator with a fake stack containing `EXEC_RETURN`.
 
 ## Interrupts
 
 Timer/device code calls `g_platform.cpu_trigger_interrupt(level)`. The 60 Hz
-tick comes from `src/drivers/platform/timer_interrupt.cpp` (UAE/Unicorn) or
+tick comes from `src/drivers/platform/timer_interrupt.cpp` (m68k) or
 `src/cpu/kpx/cpu_ppc_kpx.cpp`'s tick thread (PPC).
 
 - **UAE**: sets `SPCFLAG_INT`, processed by `do_specialties()`. UAE's native
   `Interrupt()` builds the m68k stack frame, switches to supervisor mode, reads
   the autovector, and jumps.
-- **Unicorn-m68k**: stores a pending level in a global, drained from
-  `UC_HOOK_BLOCK`. Stack frame is built manually with `uc_mem_write` /
-  `uc_reg_write`, deferred-applied at the next block boundary so QEMU's
-  post-hook PC restoration doesn't clobber the change. (See
-  `deepdive/cpu/UnicornQuirks.md` and `deepdive/cpu/ALineAndFLineStatus.md`.)
-- **KPX / Unicorn-PPC**: nanokernel IRQ entry. KPX uses
-  `sheepshaver_cpu::interrupt(entry)`; Unicorn-PPC mirrors the same register
-  setup and re-enters via `uc_emu_start` with a sentinel return opcode.
+- **KPX**: nanokernel IRQ entry via `sheepshaver_cpu::interrupt(entry)`.
 
-PPC interrupt delivery has its own concerns (in-place vs cross-thread
-`uc_emu_stop`, IRQ pressure at SCALE=1 vs SCALE=10) — see
-`ppc/UnicornPpcStatus.md`.
+PPC interrupt delivery (`XLM_IRQ_NEST` gating, per-mode entry for MODE_68K /
+MODE_NATIVE / MODE_EMUL_OP) is covered in `ppc/README.md`.
 
 ## Process and thread topology
 
@@ -165,17 +149,11 @@ HTTP listener.
 
 ```c
 switch (config.cpu_backend) {
-    case Backend::UnicornM68K: cpu_unicorn_install(&g_platform);     break;
-    case Backend::UnicornPPC:  cpu_unicorn_ppc_install(&g_platform); break;
-    case Backend::DualCPU:     cpu_dualcpu_install(&g_platform);     break;
     case Backend::KPX:         cpu_ppc_kpx_install(&g_platform);     break;
     case Backend::UAE:
     default:                   cpu_uae_install(&g_platform);         break;
 }
 ```
-
-`--backend unicorn` (no `-m68k`/`-ppc` suffix) is accepted but warned and
-silently mapped to `unicorn-m68k`.
 
 ## File map
 
@@ -185,14 +163,8 @@ src/common/platform.cpp              — wires null drivers
 src/common/sigsegv.cpp               — host SIGSEGV skip-instruction handler
 
 src/cpu/cpu_uae.c                    — UAE backend installer
-src/cpu/cpu_unicorn.cpp              — Unicorn-m68k backend
-src/cpu/cpu_unicorn_ppc.cpp          — Unicorn-PPC backend
-src/cpu/cpu_dualcpu.c                — Lockstep validator
 src/cpu/uae_cpu/                     — UAE interpreter sources
 src/cpu/uae_wrapper.{cpp,h}          — UAE wrapper
-src/cpu/unicorn_wrapper.{c,h}        — Unicorn wrapper (hooks, deferred updates)
-src/cpu/unicorn_exec_loop.c          — Unicorn execute-with-interrupts loop
-src/cpu/unicorn_validation.cpp       — DualCPU validation
 src/cpu/kpx/cpu_ppc_kpx.cpp          — KPX install + sheepshaver_cpu glue
 src/cpu/kpx/src/cpu/ppc/             — KPX interpreter (verbatim from SheepShaver)
 
@@ -205,9 +177,6 @@ src/core/boot_progress.{cpp,h}       — boot phase / CHECKLOAD tracking
 
 src/webserver/                       — HTTP server, /ws, API handlers
 src/webrtc/                          — peer-connection plumbing
-
-subprojects/unicorn/                  — vendored Unicorn (modified)
-subprojects/unicorn-patches/          — numbered patches against pristine 2.1.4
 ```
 
 ## Related

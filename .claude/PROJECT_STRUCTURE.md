@@ -17,7 +17,7 @@ This repository contains **two versions** of the macemu emulator:
 **Location**: `mac-phoenix/` directory (separate branch)
 
 - **Status**: Major rewrite in progress, not production-ready
-- **CPU Emulation**: **Qemu** (replacing UAE and KPX)
+- **CPU Emulation**: UAE (68k) and KPX (PowerPC) behind a pluggable Platform API
 - **Platforms**: macOS, Windows, Linux **only** (reduced scope)
 - **Build System**: Modern build system (TBD)
 - **Architecture**: Refactored, modernized codebase
@@ -55,7 +55,7 @@ macemu/
 │   └── libdatachannel/  # WebRTC library (submodule)
 │
 ├── mac-phoenix/         # 🟢 New rewrite (separate branch)
-│   └── [Qemu-based emulator - in development]
+│   └── [Platform-API emulator — UAE + KPX backends]
 │
 ├── cxmon/               # Debugger/monitor tool
 ├── docs/                # Documentation
@@ -83,7 +83,7 @@ macemu/
 
 ### New-Only Agents (mac-phoenix)
 - *To be created when new codebase is ready*
-- Will focus on Qemu integration
+- Will focus on the Platform API backends (UAE, KPX)
 - Modern architecture patterns
 
 ## When Working on Code
@@ -98,9 +98,9 @@ macemu/
 ### ✅ For New Code (mac-phoenix)
 1. Check you're on the rewrite branch
 2. Work in `mac-phoenix/` directory
-3. Use Qemu-focused agents (when available)
+3. Use the UAE / KPX agents
 4. Target macOS/Windows/Linux only
-5. Expect Qemu CPU emulation
+5. Expect UAE / KPX CPU emulation behind the Platform API
 
 ### ✅ For Shared Code (web-streaming)
 1. Works with both legacy and new emulators
@@ -118,5 +118,5 @@ macemu/
 
 The project is transitioning:
 - 🔴 **From**: UAE (68k) + KPX (PowerPC)
-- 🟢 **To**: Qemu (unified CPU emulation)
+- 🟢 **To**: UAE + KPX behind a pluggable Platform API (`--backend`)
 - 🔵 **Keeping**: IPC system, WebRTC streaming (already modern)

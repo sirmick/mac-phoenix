@@ -6,7 +6,7 @@
 # Tests subprocess mode (webserver) across multiple backends.
 #
 # Usage:
-#   tests/test_stop_restart.sh [--backend uae|unicorn|kpx] [--cycles 3]
+#   tests/test_stop_restart.sh [--backend uae|kpx] [--cycles 3]
 #                              [--port 18070] [--timeout 30]
 #
 # If --backend is omitted, runs all backends sequentially.
@@ -47,7 +47,7 @@ fi
 
 # Default: test all available backends
 if [[ ${#BACKENDS[@]} -eq 0 ]]; then
-    BACKENDS=(uae-interp uae-jit unicorn-m68k unicorn-ppc kpx-interp kpx-jit)
+    BACKENDS=(uae-interp uae-jit kpx-interp kpx-jit)
 fi
 
 LOG="/tmp/macemu_stoprestart_$$.log"
@@ -312,18 +312,6 @@ for backend_spec in "${BACKENDS[@]}"; do
             ;;
         uae-jit)
             run_backend_test "UAE-JIT" uae m68k "$ROM" --jit
-            ;;
-        unicorn|unicorn-m68k)
-            run_backend_test "Unicorn-m68k" unicorn-m68k m68k "$ROM"
-            ;;
-        unicorn-ppc)
-            if [[ -f "$PPC_ROM" ]]; then
-                run_backend_test "Unicorn-PPC" unicorn-ppc ppc "$PPC_ROM"
-            else
-                echo "SKIP: Unicorn-PPC (no PPC ROM)"
-                TOTAL_SKIP=$((TOTAL_SKIP + 1))
-                RESULTS+=("SKIP Unicorn-PPC (no PPC ROM)")
-            fi
             ;;
         kpx-interp|kpx)
             if [[ -f "$PPC_ROM" ]]; then

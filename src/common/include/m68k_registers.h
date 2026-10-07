@@ -2,7 +2,7 @@
  *  m68k_registers.h - M68K register structure for EmulOp and Execute68k
  *
  *  Shared between C and C++ code. This is the single definition used by
- *  all CPU backends (UAE, Unicorn, DualCPU).
+ *  all m68k CPU backends.
  */
 
 #ifndef M68K_REGISTERS_H

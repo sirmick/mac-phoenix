@@ -1,19 +1,16 @@
 # PowerPC
 
 PPC (PowerPC) Mac emulation in mac-phoenix targeting OldWorld 4 MB ROMs
-(Gossamer / Beige G3). Two backends:
+(Gossamer / Beige G3). One backend:
 
-- **KPX** (default) — Kheperix interpreter from SheepShaver. Stable. Boots
-  Mac OS 7.5.5 / 7.6.1 to Finder in ~45 s (interpreter; `--jit` available
-  but blocked by a GCC codegen difference in the block dispatch loop).
-- **Unicorn-PPC** — QEMU TCG JIT via Unicorn. Reaches Finder under 7.6.1 but
-  is unstable. **Not recommended for normal use.** Live status, debug knobs,
-  and known crashes are tracked in [UnicornPpcStatus.md](UnicornPpcStatus.md).
+- **KPX** (default) — Kheperix interpreter from SheepShaver with the dyngen
+  PPC JIT. Boots Mac OS 7.5.5 to the Desktop in ~7 s with `--jit` and ~15 s
+  as a pure interpreter (`--no-jit`), measured headless 2026-10-06.
 
-Both backends share the same `g_platform` shim, the same ROM/kernel-data
-init in `cpu_context::init_ppc`, the same `execute_native_op_pure`, and the
-same BridgeAgent automation surface — `/api/launch`, `/api/shutdown`, etc.
-work identically on either.
+KPX sits behind the same `g_platform` shim as the m68k backend; the
+ROM/kernel-data init in `cpu_context::init_ppc`, `execute_native_op_pure`,
+and the BridgeAgent automation surface (`/api/launch`, `/api/shutdown`, etc.)
+are backend-independent, so a future PPC backend would reuse them unchanged.
 
 ## Boot
 
@@ -22,14 +19,15 @@ work identically on either.
 ./build/mac-phoenix --backend kpx --rom ~/storage/roms/g3.rom \
     --disk ~/storage/images/macos-7.6.1.img --ram 128
 
-# KPX with dyngen JIT (compiled but blocked — interpreter is the working default)
+# KPX with dyngen JIT
 ./build/mac-phoenix --backend kpx --jit --rom ~/storage/roms/g3.rom \
     --disk ~/storage/images/macos-7.6.1.img --ram 128
-
-# Unicorn-PPC (debugging only — see UnicornPpcStatus.md)
-./build/mac-phoenix --backend unicorn-ppc --rom ~/storage/roms/g3.rom \
-    --disk ~/storage/images/macos-7.6.1.img --ram 128 --timeout 60
 ```
+
+`--backend kpx` must be space-separated: the parser does not recognise the
+`--backend=kpx` form, which silently falls through to the UAE default (the
+PPC-ROM auto-promotion then lifts it back to KPX, but don't rely on that in
+scripts).
 
 Targets:
 
@@ -51,7 +49,6 @@ host addr).
 | KernelData          | `0x68FFE000`    | 8 KB  | Aliased at `0x5FFFE000`. 4 KB kernel vars + EmulatorData at +0x1000. |
 | SheepMem            | `0x80000000` (KPX) / top of RAM (KPX legacy layout) | ~64 KB | Thunks + zero page |
 | Framebuffer         | from video driver | ~4 MB | Host-allocated, address handed to nanokernel |
-| Grand Central I/O   | `0xf3000000..0xf3020000` | — | MMIO stubs (Unicorn-PPC) |
 
 **XLM offsets** (initialised by `InitXLM`): `XLM_SIGNATURE = 0x2800` ("Baah"),
 `XLM_KERNEL_DATA = 0x2804`, `XLM_RUN_MODE = 0x2810`
@@ -76,7 +73,7 @@ word, set CR bits at `+0x0674`, return.
    compressed, set `RAMBaseHost`/`ROMBaseHost`/`VMBaseDiff`, run shared
    subsystem init, `CheckROM_PPC` / `DecodeROM_PPC` / `PatchROM_PPC` (all
    four phases), `InitXLM`, `InitKernelData`, `SheepMem::Init`. Install
-   backend (KPX or Unicorn-PPC). Set `GPR3 = ROMBase + 0x30d000`,
+   the KPX backend. Set `GPR3 = ROMBase + 0x30d000`,
    `GPR4 = KernelDataAddr + 0x1000`. Start at `ROMBase + 0x310000`.
 2. **Nanokernel boot** (patched ROM PPC code): reads boot structures from
    `0x30d000+`, skips SR/BAT/SDR init (NOPed by patches), loads PVR from
@@ -105,7 +102,7 @@ HandleInterrupt branches by mode:
 - **MODE_EMUL_OP**: synthesise a 68k exception frame and re-enter via
   `execute_68k`, but only if `XLM_68K_R25` says interrupts are enabled.
 
-Copied verbatim from legacy SheepShaver — do not modify.
+Copied verbatim from upstream SheepShaver — do not modify.
 
 ## SHEEP opcodes (PPC's EmulOp encoding)
 
@@ -117,20 +114,18 @@ Copied verbatim from legacy SheepShaver — do not modify.
 ```
 
 Major opcode 6 is undefined in real PPC. KPX hooks its decoder to dispatch.
-Unicorn-PPC adds a `mac_emulop` TCG helper via patch 0004 in
-`subprojects/unicorn-patches/`.
 
-## Verified identical to legacy SheepShaver (KPX)
+## Verified identical to upstream SheepShaver (KPX)
 
-The KPX integration was audited file-by-file against
-`legacy/SheepShaver/`. The PPC CPU core (17 files in
+The KPX integration was audited file-by-file against upstream
+SheepShaver. The PPC CPU core (17 files in
 `src/cpu/kpx/src/cpu/ppc/`), `HandleInterrupt`, `execute_68k` /
 `execute_emul_op` / `execute_sheep`, all 40+ EmulOps, all 38 NativeOps, the
 ROM patches (`PatchROM_PPC`, four phases), resource patches, KernelData /
 XLM init, video driver (`VideoDoDriverIO`/`Control`/`Status`/NQD hooks),
 disk/SCSI/Sony/CDROM/serial/ADB driver dispatch, the tick + PRECISE_TIMING
 threads — all match character-for-character. Reference target for the video
-driver is the legacy IPC build (`legacy/SheepShaver/src/IPC/video_ipc_sheep.cpp`),
+driver is upstream SheepShaver's IPC build (`src/IPC/video_ipc_sheep.cpp`),
 **not** the SDL build.
 
 ## Networking (FULL_DRIVER mode)
@@ -149,7 +144,7 @@ The host only needs:
 - `ppc_ether_dispatch_frame(buf, len)` — RX callback, `CallMacOS2` into the
   stored tvect.
 
-The 1748-line DLPI state machine in legacy `ether.cpp` is **not** ported.
+The 1748-line DLPI state machine in upstream `ether.cpp` is **not** ported.
 18/18 guest network tests pass on PPC (DNS, UDP echo, TCP echo). Implementation
 is `src/cpu/kpx/compat/ppc_ether.{h,cpp}`.
 
@@ -176,17 +171,15 @@ src/cpu/kpx/
   dyngen_precompiled/       — JIT bytecode (x86_64)
   CMakeLists.txt            — `-fno-weak`, `-DSHEEPSHAVER=1`
 
-src/cpu/cpu_unicorn_ppc.cpp — Unicorn-PPC backend (memory map, EmulOp callback,
-                              execute loop, IRQ injection)
-subprojects/unicorn-patches/ — 10 numbered patches against pristine 2.1.4
-                               (PPC scaffolding, RAM at host 0, mac_emulop
-                               helper, nested uc_emu_start fix, …)
+src/common/include/ppc_boundary_trace.h — per-EmulOp / per-instruction CR
+                              tracers (MACEMU_PPC_TRACE, MACEMU_PPC_CR2_TRACE,
+                              MACEMU_PPC_TRACE_68K_ENTRY)
 ```
 
 ## ROM patching summary
 
-`PatchROM_PPC` runs four phases (verbatim from
-`legacy/SheepShaver/src/rom_patches.cpp`):
+`PatchROM_PPC` runs four phases (verbatim from upstream SheepShaver's
+`src/rom_patches.cpp`):
 
 1. **`patch_nanokernel_boot`** — boot structure pointers at `0x30d000+`,
    bypass SR/BAT/SDR init, load PVR from XLM, fill cache/TLB params from a
@@ -229,6 +222,6 @@ NativeOp selectors in `src/cpu/kpx/compat/thunks.h`:
 
 ## Related
 
-- [UnicornPpcStatus.md](UnicornPpcStatus.md) — live Unicorn-PPC status.
+- `../Commands.md` — `MACEMU_PPC_*` debug environment variables.
 - `../Architecture.md` — full Platform API + interrupt overview.
 - `../../CLAUDE.md` — project-wide cheat sheet.

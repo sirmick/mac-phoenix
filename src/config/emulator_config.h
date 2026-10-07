@@ -29,10 +29,7 @@ enum class Architecture {
 // there is no separate "architecture" axis in the config.
 enum class Backend {
     UAE,           // m68k, hand-tuned interpreter (+optional JIT)
-    UnicornM68K,   // m68k, Unicorn TCG
-    UnicornPPC,    // ppc,  Unicorn TCG
-    KPX,           // ppc,  KPX translator (+optional PPC JIT, +optional 68k JIT)
-    DualCPU        // m68k, UAE + Unicorn lockstep validation
+    KPX            // ppc,  KPX translator (+optional PPC JIT, +optional 68k JIT)
 };
 
 enum class NetworkMode {
@@ -170,16 +167,13 @@ struct EmulatorConfig {
     const char* backend_string() const {
         switch (backend) {
             case Backend::UAE:         return "uae";
-            case Backend::UnicornM68K: return "unicorn-m68k";
-            case Backend::UnicornPPC:  return "unicorn-ppc";
             case Backend::KPX:         return "kpx";
-            case Backend::DualCPU:     return "dualcpu";
         }
         return "uae";
     }
 
     bool is_ppc() const {
-        return backend == Backend::UnicornPPC || backend == Backend::KPX;
+        return backend == Backend::KPX;
     }
 
     Architecture architecture() const {

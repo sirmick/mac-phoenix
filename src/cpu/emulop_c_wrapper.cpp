@@ -1,7 +1,7 @@
 /*
  * EmulOp C Wrapper
  *
- * Provides C linkage for calling EmulOp from C code (like unicorn_wrapper.c).
+ * Provides C linkage for calling EmulOp from C code (e.g. a C CPU backend).
  * With the shared m68k_registers.h, the C and C++ structs are identical —
  * no conversion needed, just a thin extern "C" bridge.
  */

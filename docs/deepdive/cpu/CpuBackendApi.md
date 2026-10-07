@@ -31,10 +31,12 @@ Each backend implements these `Platform` function pointers:
 
 | Backend | File | `execute_fast` | Selection |
 |---------|------|----------------|-----------|
-| UAE | `cpu_uae.c` | Yes (continuous loop) | `--backend uae` (default for m68k) |
-| Unicorn | `cpu_unicorn.cpp` | NULL (single-step only) | `--backend unicorn` |
-| DualCPU | `cpu_dualcpu.c` | NULL (validation requires per-instruction) | `--backend dualcpu` |
-| KPX | `cpu_ppc_kpx.cpp` | Yes (PPC interpreter/JIT loop) | `--arch ppc` |
+| UAE | `cpu_uae.c` | Yes (continuous loop) | `--backend uae` (default) |
+| KPX | `cpu_ppc_kpx.cpp` | Yes (PPC interpreter/JIT loop) | `--backend kpx` |
+
+The `Backend` enum and `--backend` flag are the extension point for adding
+further backends; a backend that cannot provide `cpu_execute_fast` leaves it
+NULL and is driven per-instruction.
 
 ## Execution Loop (main.cpp)
 
@@ -43,7 +45,7 @@ if (platform->cpu_execute_fast) {
     platform->cpu_execute_fast();  // UAE/KPX: optimized loop
 } else {
     while (true) {
-        platform->cpu_execute_one();  // Unicorn/DualCPU: caller-controlled
+        platform->cpu_execute_one();  // single-step backends: caller-controlled
     }
 }
 ```
@@ -52,8 +54,6 @@ if (platform->cpu_execute_fast) {
 
 ```c
 switch (emu_config.cpu_backend) {
-    case CPUBackend::Unicorn:  cpu_unicorn_install(platform); break;
-    case CPUBackend::DualCPU:  cpu_dualcpu_install(platform); break;
     case CPUBackend::KPX:      cpu_ppc_kpx_install(platform); break;
     default:                   cpu_uae_install(platform);      break;
 }

@@ -124,9 +124,8 @@ ASCII hex into `Host:MacPhoenix:browser_shm.txt` on the ExtFS share.
 The host's shm watcher reads that file, validates `magic == 'BRWS'`
 and `version == BR_VERSION`, and translates Mac → host via
 `Mac2HostAddr()`. That dodges per-backend banking work — every backend
-(UAE, Unicorn-m68k, Unicorn-PPC, KPX) sees ordinary guest RAM, no
-fixed `BR_BASE_ADDR`, no `uc_mem_map_ptr` for the region, no UAE
-`ram_bank` extension.
+(UAE, KPX) sees ordinary guest RAM, no fixed `BR_BASE_ADDR`, no
+backend-specific mapping for the region, no UAE `ram_bank` extension.
 
 | Field | Direction | Description |
 |---|---|---|

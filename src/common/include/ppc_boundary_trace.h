@@ -1,11 +1,11 @@
-// Canonical per-EmulOp state trace for KPX-vs-Unicorn-PPC divergence debugging.
+// Canonical per-EmulOp state trace for PPC backend divergence debugging.
 //
-// Enable with MACEMU_PPC_TRACE=/path/to/trace.log. Each backend writes one
-// fixed-format line per EmulOp entry; diff the two logs to find the first
-// divergence point.
+// Enable with MACEMU_PPC_TRACE=/path/to/trace.log. The backend writes one
+// fixed-format line per EmulOp entry; diff two logs (different builds,
+// different backends) to find the first divergence point.
 //
-// Header-only: both backends include it and each gets its own static FILE*.
-// Only one backend runs per process, so there's no sharing concern.
+// Header-only. Only one backend runs per process, so there's no sharing
+// concern.
 
 #pragma once
 
@@ -80,7 +80,7 @@ inline void ppc_trace_emul_op_post(const PpcBoundaryState& s) {
 
 // Per-instruction CR tracer. Gated by MACEMU_PPC_CR2_TRACE=<lo>[:<hi>] where
 // lo/hi are EmulOp seq bounds (half-open). Both backends emit the same line
-// format so /tmp/kpx.cr.log and /tmp/unicorn.cr.log can be diffed directly.
+// format so two logs can be diffed directly.
 // Output goes to stderr (lowest-overhead path; trace file is line-buffered
 // and would serialize the ~3M-line bursts too slowly).
 struct PpcCrTraceWindow {
@@ -124,7 +124,7 @@ inline void ppc_trace_cr_step(uint32_t pc, uint32_t op, uint32_t cr,
 
 // 68k-PC entry tracer. Gated by MACEMU_PPC_TRACE_68K_ENTRY=<hex>[,<hex>...].
 // Fires when gpr(24) (68k PC) matches any target; dumps D0..D7/A0..A7 in the
-// same format as the Unicorn-PPC tracer so KPX and Unicorn logs can be diffed.
+// same fixed format so two logs can be diffed.
 // First MACEMU_PPC_TRACE_68K_MAX (default 5) hits per target are emitted, then
 // silenced to prevent flooding when the match lands inside a hot loop.
 struct PpcTrace68kPc {

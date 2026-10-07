@@ -82,10 +82,7 @@ static void dedup_paths(std::vector<std::string>& paths) {
 // Parse a backend token. Returns true on success.
 static bool parse_backend(const std::string& s, Backend& out) {
     if (s == "uae")          { out = Backend::UAE;         return true; }
-    if (s == "unicorn-m68k") { out = Backend::UnicornM68K; return true; }
-    if (s == "unicorn-ppc")  { out = Backend::UnicornPPC;  return true; }
     if (s == "kpx")          { out = Backend::KPX;         return true; }
-    if (s == "dualcpu")      { out = Backend::DualCPU;     return true; }
     return false;
 }
 
@@ -413,7 +410,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --bootdriver N             0=any, -62=CD-ROM (default: 0)\n");
             printf("  --storage-dir PATH         Default storage root (default: ~/storage)\n");
             printf("\nCPU:\n");
-            printf("  --backend NAME             uae | unicorn-m68k | unicorn-ppc | kpx | dualcpu\n");
+            printf("  --backend NAME             uae | kpx\n");
             printf("                             (default: uae)\n");
             printf("  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)\n");
             printf("  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)\n");
@@ -489,17 +486,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --backend <name>
         if (strcmp(argv[i], "--backend") == 0 && i+1 < argc) {
             if (!parse_backend(argv[i+1], config.backend)) {
-                // Tolerate legacy "unicorn" with no -m68k/-ppc suffix: choose by ROM path
-                // heuristic later, but for now default to m68k variant.
-                std::string b = argv[i+1];
-                if (b == "unicorn") {
-                    config.backend = Backend::UnicornM68K;
-                    fprintf(stderr, "[Config] --backend unicorn is ambiguous; using unicorn-m68k. "
-                                    "Use unicorn-m68k or unicorn-ppc explicitly.\n");
-                } else {
-                    fprintf(stderr, "[Config] Unknown backend '%s', defaulting to 'uae'\n", argv[i+1]);
-                    config.backend = Backend::UAE;
-                }
+                fprintf(stderr, "[Config] Unknown backend '%s', defaulting to 'uae'\n", argv[i+1]);
+                config.backend = Backend::UAE;
             }
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
@@ -679,11 +667,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
     if (config.jit68k && config.backend != Backend::KPX) {
         // jit68k only meaningful for KPX; silently leave value but warn if explicitly set
     }
-    if (config.jit && (config.backend == Backend::UnicornM68K || config.backend == Backend::UnicornPPC)) {
-        fprintf(stderr, "[Config] --jit is a no-op for %s backend (no JIT available)\n",
-                config.backend_string());
-    }
-
     // --bridge: per-instance ExtFS dir for bridge file I/O. Each
     // mac-phoenix gets its own subfolder under <extfs>/MacPhoenix/
     // keyed by host pid, so two concurrent processes don't fight

@@ -198,7 +198,7 @@ void Start680x0_until_stopped(void)
 /*
  *  Interrupt handling
  *  NOTE: TriggerInterrupt(), InvokeDebugger(), and intlev() are now in uae_wrapper.cpp
- *        They are shared by all CPU backends (UAE, Unicorn, DualCPU)
+ *        They are shared by all CPU backends
  */
 
 
@@ -206,7 +206,7 @@ void Start680x0_until_stopped(void)
  *  Execute MacOS 68k trap
  *  r->a[7] and r->sr are unused!
  *
- *  Now uses platform API to support multiple CPU backends (UAE, Unicorn, DualCPU)
+ *  Now uses platform API to support multiple CPU backends
  */
 
 // UAE-specific trap execution (for use by UAE backend via platform API)

@@ -14,7 +14,7 @@ class MacPhoenix < Formula
 
   head do
     url "https://github.com/sirmick/mac-phoenix.git", branch: "main"
-    # The submodules (libdatachannel, unicorn, nlohmann_json, lwip) must be
+    # The submodules (libdatachannel, nlohmann_json, lwip) must be
     # fetched too — Homebrew handles that with :using => :git when the URL
     # is a git repo. The release-tarball path above bundles them already.
   end

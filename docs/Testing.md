@@ -57,9 +57,8 @@ ctest --test-dir build -L guest    # guest_suite{,_761,_ppc}
 | `boot_se` | `test_boot_se.sh` | boot | ~30s | Mac SE boot to Finder (System 6) — needs SE ROM |
 | `boot_uae_interp` | `test_boot_to_finder.sh` | boot | ~10s | UAE backend, no JIT, boots to Finder |
 | `boot_uae_jit` | `test_boot_to_finder.sh` | boot | ~10s | UAE backend, JIT, boots to Finder |
-| `boot_unicorn` | `test_boot_to_finder.sh` | boot | ~120s | Unicorn-m68k boots to Finder |
 | `boot_ppc_interp` | `test_boot_ppc.sh` | boot | ~45s | KPX interpreter boots Mac OS 7.5.5 to Finder |
-| `boot_ppc_jit` | `test_boot_ppc.sh` | boot | ~45s | KPX dyngen JIT boot attempt (currently blocked by GCC codegen) |
+| `boot_ppc_jit` | `test_boot_ppc.sh` | boot | ~45s | KPX dyngen JIT boots Mac OS 7.5.5 to Finder |
 | `boot_ppc_api` | `test_boot_ppc.sh` | boot | ~45s | PPC + webserver, status API + boot phase tracking |
 | `mouse_position` | `test_mouse_position.sh` | boot | ~15s | Absolute + relative mouse via POST /api/mouse (m68k) |
 | `mouse_position_ppc` | `test_mouse_position.sh` | boot | ~20s | Same, KPX backend |
@@ -185,6 +184,6 @@ Two additional shell scripts in `tests/e2e/` test the dirty-shutdown dialog scen
 
 Run manually:
 ```bash
-tests/e2e/boot-to-dialog.sh [uae|unicorn]
-tests/e2e/boot-to-dialog-headless.sh [uae|unicorn]
+tests/e2e/boot-to-dialog.sh uae
+tests/e2e/boot-to-dialog-headless.sh uae
 ```

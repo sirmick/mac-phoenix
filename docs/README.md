@@ -13,12 +13,8 @@ This folder contains the deeper-dive docs.
 - **Mac SE** (68000) boots System 6 to Finder — 512×342 monochrome.
 - **Quadra 650** (68040) boots Mac OS 7.5.5 / 7.6.1 to Finder.
   - UAE backend: ~5 s (~3 s with `--jit`).
-  - Unicorn-m68k backend: ~12 s.
 - **Power Mac G3** (PPC 750) boots Mac OS 7.5.5 / 7.6.1 to Finder under KPX
-  (~45 s, default for PPC). The dyngen JIT (`--jit`) is compiled but
-  blocked by a GCC codegen difference.
-- **Unicorn-PPC** reaches Finder under 7.6.1 but is unstable — see
-  [`ppc/UnicornPpcStatus.md`](ppc/UnicornPpcStatus.md). Not the default.
+  (default for PPC): ~7 s with the dyngen JIT (`--jit`), ~15 s interpreted.
 - HTTP API + WebRTC streaming, file-based automation bridge (BridgeAgent),
   MacBrowser (in-process Chromium via Qt6 WebEngine, piped into a guest
   Mac app), guest-side networking via the Rust net-bridge.
@@ -31,13 +27,10 @@ Manager hook).
 
 - **Modern host integration.** WebRTC streaming, HTTP API, browser
   client. Drive the emulator from any modern stack; no native UI per OS.
-- **Multiple CPU backends behind one Platform API.** UAE (m68k default),
-  Unicorn-m68k (QEMU TCG, validation), Unicorn-PPC (experimental), KPX
-  (PPC default), DualCPU (lockstep). New backends don't touch core code.
+- **Multiple CPU backends behind one Platform API.** UAE (m68k default)
+  and KPX (PPC default). New backends don't touch core code.
 - **Programmable.** BridgeAgent for automation, MacBrowser for the modern
   web inside System 7, ExtFS for host filesystem access without restarting.
-- **Validation built in.** DualCPU runs UAE and Unicorn-m68k in lockstep
-  and fails fast on register divergence.
 
 We are explicitly **not** chasing cycle accuracy, every Mac model
 (focus is SE, Quadra 650, Beige G3), or replacing BasiliskII /
@@ -60,8 +53,7 @@ cmake -B build && cmake --build build -j$(nproc)
 ```
 
 There is no `--arch` flag — the `--backend` token determines the CPU
-architecture (`uae` / `unicorn-m68k` / `dualcpu` → m68k,
-`kpx` / `unicorn-ppc` → ppc).
+architecture (`uae` → m68k, `kpx` → ppc).
 
 ## Documentation
 
@@ -79,14 +71,10 @@ architecture (`uae` / `unicorn-m68k` / `dualcpu` → m68k,
 - [ThreadingArchitecture.md](ThreadingArchitecture.md) — Process + thread model.
 - [LatencyShortcomings.md](LatencyShortcomings.md) — Known latency cliffs in
   the input/video paths.
-- [UnicornPerformanceAnalysis.md](UnicornPerformanceAnalysis.md) — Unicorn-m68k
-  vs UAE perf breakdown.
 
 ### PowerPC
 - [ppc/README.md](ppc/README.md) — Backends, memory layout, execution model,
   ROM patching, networking, file map.
-- [ppc/UnicornPpcStatus.md](ppc/UnicornPpcStatus.md) — Unicorn-PPC live status,
-  debug knobs, known crashes.
 
 - [MacBrowser.md](MacBrowser.md) — MacBrowser host pipeline + guest
   app architecture.
@@ -101,7 +89,7 @@ mac-phoenix/
 ├── src/
 │   ├── common/include/    # Shared headers (platform.h, MacBrowser.h, ...)
 │   ├── core/              # Mac managers, command_bridge, rom_patches, etc.
-│   ├── cpu/               # uae/, kpx/, cpu_unicorn{,_ppc}.cpp, dualcpu, traces
+│   ├── cpu/               # uae_cpu/, cpu_uae.c, kpx/, cpu_trace
 │   ├── drivers/           # video, audio, browser, ether, serial, scsi, platform
 │   ├── webrtc/            # WebRTC server (signaling + RTP)
 │   ├── webserver/         # HTTP server, /ws WebSocket, API handlers
@@ -111,7 +99,7 @@ mac-phoenix/
 ├── MacBrowser/            # Guest m68k browser app (Retro68 source + .bin)
 ├── tests/                 # Shell + Playwright + unit tests
 ├── provisioning/          # Disk image creation/population scripts
-├── subprojects/           # Unicorn (vendored) + patches, libdatachannel, json
+├── subprojects/           # libdatachannel (vendored)
 └── docs/
 ```
 

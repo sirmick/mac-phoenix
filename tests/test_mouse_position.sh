@@ -30,7 +30,7 @@ done
 
 # --arch was deprecated; backend now determines arch. Derive ARCH from BACKEND
 # for the ROM/disk selection logic below (not passed to the binary).
-[[ -z "$ARCH" && ( "$BACKEND" == "kpx" || "$BACKEND" == "unicorn-ppc" ) ]] && ARCH=ppc
+[[ -z "$ARCH" && "$BACKEND" == "kpx" ]] && ARCH=ppc
 
 # Select ROM and disk based on architecture (--rom flag overrides)
 if [[ -z "${ROM:-}" ]]; then

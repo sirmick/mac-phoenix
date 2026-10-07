@@ -96,17 +96,6 @@ set_tests_properties(boot_uae_jit PROPERTIES
 )
 
 add_test(
-  NAME boot_unicorn
-  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend unicorn-m68k --timeout 120 --port 18084
-)
-set_tests_properties(boot_unicorn PROPERTIES
-  TIMEOUT 180
-  LABELS "boot"
-  SKIP_RETURN_CODE 77
-  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
-)
-
-add_test(
   NAME command_bridge
   COMMAND bash ${TEST_DIR}/test_command_bridge.sh --port 18106
 )

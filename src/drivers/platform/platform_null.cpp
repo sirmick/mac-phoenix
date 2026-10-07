@@ -244,7 +244,7 @@ void FlushCodeCache(void *start, uint32 size)
 	(void)start;
 	(void)size;
 	// Notify CPU backend that code was patched so JIT caches are invalidated.
-	// Without this, JIT backends (Unicorn) execute stale translation blocks
+	// Without this, JIT backends execute stale translation blocks
 	// after system patches (ptch resources) modify code in RAM.
 	if (g_platform.flush_code_cache) {
 		g_platform.flush_code_cache();

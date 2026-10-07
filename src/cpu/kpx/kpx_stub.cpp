@@ -14,9 +14,9 @@
 // dispatch into the dyngen interpreter and only have a real
 // implementation in cpu_ppc_kpx.cpp on x86. On non-x86,
 // kpx_shared code that calls them (serial_ppc, name_registry_ppc, etc.)
-// will link against these no-op stubs. unicorn-ppc never reaches them
-// at runtime because cpu_ppc_kpx_install() exits below before any
-// Mac OS code can dispatch.
+// will link against these no-op stubs. They are never reached at
+// runtime because cpu_ppc_kpx_install() exits below before any Mac OS
+// code can dispatch.
 
 #include <cstdio>
 #include <cstdlib>
@@ -29,7 +29,7 @@ extern "C" void cpu_ppc_kpx_install(Platform *p) {
     fprintf(stderr,
             "[KPX] PPC backend not available on this host architecture "
             "(dyngen requires x86/x86_64 precompiled blobs). "
-            "Run with --backend uae or --backend unicorn-ppc.\n");
+            "Run with --backend uae.\n");
     std::exit(2);
 }
 

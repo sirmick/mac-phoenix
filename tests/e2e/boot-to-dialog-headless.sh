@@ -3,7 +3,7 @@
 # captures PPM screenshots, hard kills, reboots, captures "not shut down
 # cleanly" dialog.
 #
-# Usage: ./tests/e2e/boot-to-dialog-headless.sh [uae|unicorn]
+# Usage: ./tests/e2e/boot-to-dialog-headless.sh [uae]
 
 set -euo pipefail
 

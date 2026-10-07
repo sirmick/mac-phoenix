@@ -24,9 +24,6 @@ cmake -B build -DBUILD_NET_BRIDGE=OFF      # skip Rust net-bridge
 cmake -B build -DBUILD_BROWSER=OFF         # skip MacBrowser host pipeline
 cmake -B build -DBUILD_BRIDGE_AGENT=OFF    # skip Retro68 build of BridgeAgent.bin
 cmake -B build -DBUILD_MAC_BROWSER=OFF     # skip Retro68 build of MacBrowser.bin
-
-# Rebuild Unicorn after touching qemu sources
-cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
 ```
 
 ## Run
@@ -38,8 +35,8 @@ cd subprojects/unicorn && cmake --build build -j$(nproc) && cd ../..
 # Headless, time-bounded
 ./build/mac-phoenix --timeout 10 --no-webserver ~/storage/roms/quadra.rom
 
-# Specific backend (uae | unicorn-m68k | unicorn-ppc | kpx | dualcpu)
-./build/mac-phoenix --backend unicorn-m68k ~/storage/roms/quadra.rom
+# Specific backend (uae | kpx)
+./build/mac-phoenix --backend uae --jit ~/storage/roms/quadra.rom
 ./build/mac-phoenix --backend kpx --rom ~/storage/roms/g3.rom \
                     --disk ~/storage/images/macos-7.6.1.img --ram 128
 
@@ -70,7 +67,7 @@ Machine:
   --storage-dir PATH         Default storage root (default ~/storage)
 
 CPU:
-  --backend NAME             uae | unicorn-m68k | unicorn-ppc | kpx | dualcpu
+  --backend NAME             uae | kpx
                              (default: uae; backend implies architecture)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx; default on)
@@ -111,7 +108,9 @@ Internal:
 ```
 
 There is no `--arch`, `--signaling-port`, or `--appliance` flag — earlier docs
-that mentioned them are wrong.
+that mentioned them are wrong. `--backend` takes its value as a separate
+argument; the `--backend=NAME` form is not recognised and silently falls
+through to the default.
 
 ## Test
 
@@ -145,7 +144,7 @@ npx playwright test --headed
 
 The test names registered in `tests/CMakeLists.txt` are
 `mac_roman`, `browser_shm`, `api_endpoints`, `config_api`, `extfs`, `boot_se`,
-`boot_uae_interp`, `boot_uae_jit`, `boot_unicorn`, `boot_ppc_interp`,
+`boot_uae_interp`, `boot_uae_jit`, `boot_ppc_interp`,
 `boot_ppc_jit`, `boot_ppc_api`, `mouse_position`, `mouse_position_ppc`,
 `command_bridge`, `command_bridge_ppc`, `wne_patch_sanity`, `guest_suite`,
 `guest_suite_761`, `guest_suite_ppc`.
@@ -153,11 +152,11 @@ The test names registered in `tests/CMakeLists.txt` are
 ## Boot capacity matrix
 
 ```bash
-# 12 cells: backend × JIT × OS — serial, with screenshots + per-cell logs
+# All backend × JIT × OS cells — serial, with screenshots + per-cell logs
 tests/run_boot_matrix.sh --out test-results/boot-matrix
 
 # Single cell
-tests/test_boot_matrix.sh --label unicorn-m68k-755 --backend unicorn-m68k \
+tests/test_boot_matrix.sh --label uae-755 --backend uae \
     --rom ~/storage/roms/quadra.rom --disk ~/storage/images/macos-7.5.5.img \
     --timeout 60 --port 19300 --screenshot-dir /tmp/one-cell
 ```
@@ -180,23 +179,18 @@ test scripts or by trace/debug code paths.
 | `CPU_TRACE_MEMORY=1` | Include memory reads in trace |
 | `CPU_TRACE_QUIET=1` | Suppress banner, trace only |
 | `EMULOP_VERBOSE=1` | Log EmulOp dispatch |
-| `MACEMU_DEBUG_PERF=1` | Enable per-block timing in Unicorn-m68k hooks |
+| `MACEMU_DEBUG_PERF=1` | Video encoder thread performance statistics |
 
-### DualCPU validation
+### Tracing (PPC / KPX)
 
 | Variable | Effect |
 |----------|--------|
-| `DUALCPU_TRACE_DEPTH=N` | History depth for divergence reports |
-| `DUALCPU_MASTER=uae\|unicorn` | Authoritative side on divergence (default uae) |
-
-### Unicorn PPC (debug knobs — see `docs/ppc/UnicornPpcStatus.md`)
-
-`MACEMU_PPC_TICK_PERIOD_SCALE`, `MACEMU_PPC_NO_IRQ`,
-`MACEMU_PPC_BLOCK_TRACE`, `MACEMU_PPC_TRACE`, `MACEMU_PPC_TRACE_TRAP`,
-`MACEMU_PPC_TRACE_IRQ`, `MACEMU_PPC_TRACE_68K_ENTRY`,
-`MACEMU_PPC_CR2_TRACE`, `MACEMU_PPC_NO_IRQ_HOOK`,
-`MACEMU_PPC_TB_FLUSH_EVERY`, `MACEMU_PPC_MIN_EMULOPS_PER_IRQ`,
-`MACEMU_PPC_DEFER_FIRST_IRQ`.
+| `MACEMU_PPC_TRACE=<path>` | Per-EmulOp boundary state (EMULOP + POST lines) to a file |
+| `MACEMU_PPC_CR2_TRACE=<lo>[:<hi>]` | Per-instruction `[CR]` lines for EmulOp seq in `[lo, hi)`; disables the KPX JIT |
+| `MACEMU_PPC_TRACE_TRAP=1` | Log each `execute_68k` / EXEC_NATIVE dispatch |
+| `MACEMU_PPC_TRACE_68K_ENTRY=<hex>[,<hex>...]` | Dump register context when a listed 68k PC (`r24`) executes; disables the KPX JIT |
+| `MACEMU_PPC_TRACE_68K_MAX=N` | Max hits per target for `TRACE_68K_ENTRY` before suppression (default 5) |
+| `MACEMU_PPC_NO_IRQ=1` | Suppress async IRQ injection so EmulOp traces are deterministic |
 
 ## Debug workflows
 
@@ -207,22 +201,11 @@ cmake --build build -j$(nproc) && \
     ./build/mac-phoenix --timeout 5 --no-webserver ~/storage/roms/quadra.rom
 ```
 
-### UAE vs Unicorn-m68k trace diff
+### Instruction trace (m68k)
 
 ```bash
 CPU_TRACE=0-250000 ./build/mac-phoenix --backend uae --timeout 2 \
     --no-webserver ~/storage/roms/quadra.rom > uae.log 2>&1
-CPU_TRACE=0-250000 ./build/mac-phoenix --backend unicorn-m68k --timeout 2 \
-    --no-webserver ~/storage/roms/quadra.rom > unicorn.log 2>&1
-diff uae.log unicorn.log | head -50
-```
-
-### DualCPU lockstep
-
-```bash
-DUALCPU_TRACE_DEPTH=20 \
-    ./build/mac-phoenix --backend dualcpu --timeout 30 \
-    --no-webserver ~/storage/roms/quadra.rom
 ```
 
 ### GDB
@@ -235,7 +218,7 @@ gdb --args ./build/mac-phoenix --no-webserver ~/storage/roms/quadra.rom
 
 ```bash
 sudo sysctl kernel.perf_event_paranoid=-1
-perf record -g -F 997 ./build/mac-phoenix --backend unicorn-m68k \
+perf record -g -F 997 ./build/mac-phoenix --backend uae \
     --no-webserver ~/storage/roms/quadra.rom
 perf report
 ```
@@ -256,5 +239,3 @@ actually changes — CLI args are runtime-only and never saved.
 - **ROM not found**: use absolute paths, `~` expansion fails in some shells.
 - **Port in use**: pick a different `--port`. `/ws` rides the same port; there
   is no separate signaling port.
-- **Unicorn build issues**: rebuild `subprojects/unicorn`'s build dir directly,
-  then run the top-level build again.

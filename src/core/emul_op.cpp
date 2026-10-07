@@ -26,7 +26,6 @@
 #include "cpu_emulation.h"
 #include "uae_wrapper.h"  // For InvokeDebugger()
 #include "platform.h"      // For g_platform
-#include "unicorn_wrapper.h"  // For g_pending_interrupt_level
 #include "main.h"
 #include "machine_profile.h"
 
@@ -63,7 +62,6 @@ using namespace m68k;
 #include "boot_progress.h"
 
 extern bool tick_inhibit;
-extern volatile int g_pending_interrupt_level;  // From unicorn_wrapper.c
 extern uint8 *ScratchMem;  // Platform scratch memory (safe target for hardware base redirect)
 extern void command_bridge_drain_from_irq(M68kRegisters *r);
 
@@ -139,7 +137,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			r->a[7] = RAMBaseMac + 0x10000;								// Boot stack
 
 			// Clear interrupt mask to enable interrupts (Mac OS expects this)
-			// Both UAE and Unicorn start with SR=0x2700 (all interrupts blocked)
+			// The CPU starts with SR=0x2700 (all interrupts blocked)
 			// We need SR=0x2000 (supervisor mode but interrupts enabled)
 			// Just update r->sr - the backends will sync this properly
 			r->sr = (r->sr & 0xF8FF) | 0x2000;  // Clear interrupt mask, keep supervisor
@@ -532,15 +530,6 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_IRQ: {		// Level 1 interrupt
 			r->d[0] = 0;
-
-			// Check if Unicorn backend has a pending interrupt that was blocked by SR
-			// This happens when ROM sets IPL=7 to disable CPU interrupts, then polls IRQ EmulOp
-			if (g_pending_interrupt_level > 0) {
-				g_pending_interrupt_level = 0;
-				if (InterruptFlags == 0) {
-					SetInterruptFlag(INTFLAG_60HZ);
-				}
-			}
 
 			if (InterruptFlags & INTFLAG_60HZ) {
 				ClearInterruptFlag(INTFLAG_60HZ);

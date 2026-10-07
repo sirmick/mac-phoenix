@@ -57,8 +57,8 @@ done
 
 # Derive arch from backend (used only for RAM defaults + CSV/labels)
 case "$BACKEND" in
-    kpx|unicorn-ppc) ARCH=ppc ;;
-    *)               ARCH=m68k ;;
+    kpx) ARCH=ppc ;;
+    *)   ARCH=m68k ;;
 esac
 
 if [[ -z "$LABEL" ]]; then
@@ -92,7 +92,7 @@ emit_csv() {
 
 # Capture screenshot to $SHOT. Retries for up to $1 seconds (default 15) because the
 # WebRTC video encoder is async from boot progress — /api/screenshot returns 503 until
-# the first frame is produced, which lags on slow backends (Unicorn especially).
+# the first frame is produced, which lags on slower backends (kpx interpreter).
 # Also useful on TIMEOUT/LIES to capture the visual state at failure.
 # Echoes the shot path on success, empty string on failure.
 capture_screenshot() {

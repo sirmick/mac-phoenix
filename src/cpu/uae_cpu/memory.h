@@ -27,10 +27,9 @@
  *   - get_long/put_long: Automatically byte-swap between LE storage and BE M68K view
  *   - ROM is an exception: Stored in big-endian as loaded from file
  *
- * When interfacing with other M68K emulators (e.g., Unicorn):
- *   - They expect BIG-ENDIAN memory (M68K native byte order)
- *   - DO NOT copy RAMBaseHost directly - must byte-swap first!
- *   - See unicorn_wrapper.c:unicorn_map_ram() for proper byte-swapping
+ * When interfacing with another M68K emulator that expects big-endian
+ * memory (M68K native byte order): DO NOT copy RAMBaseHost directly,
+ * byte-swap first.
  * ============================================================================
  */
 
@@ -204,10 +203,10 @@ extern bool cpu_trace_memory_enabled(void);
 
 /* Platform API for backend-independent memory access
  *
- * IMPORTANT: REAL_ADDRESSING mode is NOT compatible with Unicorn or other
- * non-UAE backends. REAL_ADDRESSING was designed for running on actual M68K
- * hardware where the CPU natively executes M68K instructions. Unicorn requires
- * its own managed memory space and cannot share host memory directly.
+ * IMPORTANT: REAL_ADDRESSING mode is only valid for UAE. It was designed for
+ * running on actual M68K hardware where the CPU natively executes M68K
+ * instructions; a backend with its own managed guest memory cannot share
+ * host memory directly.
  *
  * Only DIRECT_ADDRESSING and banking modes support multi-backend operation.
  */
@@ -224,7 +223,7 @@ extern Platform g_platform;
  * Memory access functions — all dispatch through Platform API.
  *
  * NO FALLBACK PATHS. If g_platform.mem_* is not set, these abort immediately.
- * The platform backend (UAE, Unicorn, KPX) MUST be installed before any
+ * The platform backend (UAE, KPX) MUST be installed before any
  * memory access. This catches initialization ordering bugs at the point of
  * failure instead of silently using the wrong backend's memory model.
  */

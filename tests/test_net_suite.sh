@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 EXTRA_FLAGS=()
-[[ -z "$ARCH" && ( "$BACKEND" == "kpx" || "$BACKEND" == "unicorn-ppc" ) ]] && ARCH=ppc
+[[ -z "$ARCH" && "$BACKEND" == "kpx" ]] && ARCH=ppc
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

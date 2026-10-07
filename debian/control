@@ -27,10 +27,10 @@ Recommends: hfsutils
 Description: Classic Macintosh emulator with web-based UI
  MacPhoenix boots Mac OS 7.x / 8.x / 9.x in a window or in your browser.
  .
- Includes a 68k UAE interpreter (default), a Unicorn-engine-based 68k/PPC
- backend for validation, and a KPX PowerPC translator. The browser UI
- streams the framebuffer over WebRTC (H.264 / VP9) or WebSocket
- (PNG / WebP) and routes mouse and keyboard input back to the guest.
+ Includes a 68k UAE interpreter (default, with optional JIT) and a KPX
+ PowerPC interpreter. The browser UI streams the framebuffer over WebRTC
+ (H.264 / VP9) or WebSocket (PNG / WebP) and routes mouse and keyboard
+ input back to the guest.
  .
  An optional Rust net-bridge provides Unix-socket NAT networking via
  smoltcp; with --mitm-tls it can downgrade modern TLS so classic Mac

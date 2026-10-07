@@ -45,7 +45,7 @@ The KPX engine emulates PowerPC architecture with:
 - Debugging AltiVec/VMX code
 
 ## Legacy Status
-This is **legacy code** on the master branch. The new version will replace KPX with **Qemu CPU emulation**.
+This is **legacy code** on the master branch. mac-phoenix keeps KPX as its PPC backend (`src/cpu/kpx/`, `--backend kpx`).
 
 ## Instructions
 When working on KPX CPU:
@@ -78,6 +78,3 @@ When working on KPX CPU:
 - Uses same drivers as BasiliskII (video, audio, networking)
 - Many files are symlinked between BasiliskII and SheepShaver
 - Requires PowerPC ROM file
-
-## Future
-The new branch will migrate to **Qemu for CPU emulation**, retiring the KPX core.

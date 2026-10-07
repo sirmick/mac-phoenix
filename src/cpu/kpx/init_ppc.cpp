@@ -54,10 +54,10 @@
 using namespace ppc;
 
 // PPC-mode shared state. All of this used to live in cpu_ppc_kpx.cpp
-// (x86-only). Moved into kpx_shared so cpu_unicorn_ppc.cpp sees a
-// definition at link time on every arch. Backends WRITE these during
-// boot via cpu_context.cpp:init_ppc(); kpx_shared READS them from
-// the Mac OS infrastructure (rom_patches, name_registry, etc).
+// (x86-only). Moved into kpx_shared so there is a definition at link
+// time on every arch. Backends WRITE these during boot via
+// cpu_context.cpp:init_ppc(); kpx_shared READS them from the Mac OS
+// infrastructure (rom_patches, name_registry, etc).
 
 // PVR + clock-speed defaults. SheepShaver: PowerPC 7400 + AltiVec, 100 MHz.
 uint32 PVR = 0x000c0000;

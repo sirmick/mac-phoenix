@@ -152,13 +152,10 @@ bool init_cpu_subsystem(const char* cpu_backend)
 #endif
 
     // Install CPU backend (m68k variants only — PPC is initialized via CPUContext::init_ppc)
-    if (strcmp(cpu_backend, "unicorn-m68k") == 0) {
-        cpu_unicorn_install(&g_platform);
-    } else if (strcmp(cpu_backend, "dualcpu") == 0) {
-        cpu_dualcpu_install(&g_platform);
-    } else {
-        cpu_uae_install(&g_platform);  // Default to UAE
+    if (strcmp(cpu_backend, "uae") != 0) {
+        fprintf(stderr, "[Init] Unknown m68k backend '%s', using UAE\n", cpu_backend);
     }
+    cpu_uae_install(&g_platform);
 
     fprintf(stderr, "[Init] CPU Backend: %s\n", g_platform.cpu_name);
 

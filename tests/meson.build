@@ -76,18 +76,6 @@ test('boot_uae_jit',
   },
 )
 
-# Unicorn backend boots to Finder (slow - QEMU TCG JIT)
-test('boot_unicorn',
-  find_program('bash'),
-  args: [test_dir / 'test_boot_to_finder.sh', '--backend', 'unicorn-m68k', '--timeout', '120', '--port', '18090'],
-  timeout: 180,
-  is_parallel: false,
-  suite: 'boot',
-  env: {
-    'MACEMU_ROM': test_rom,
-  },
-)
-
 # Command bridge API endpoints
 test('command_bridge',
   find_program('bash'),

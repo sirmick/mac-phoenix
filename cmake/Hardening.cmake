@@ -56,8 +56,8 @@ endfunction()
 # Whole-program optimization at link time. The reason for this whole
 # module: LTO turns "static-lib reference resolved by --start-group"
 # into "undefined reference" if the symbol's defining .o never gets
-# pulled in. That's how the unicorn-ppc / kpx coupling slipped past
-# local builds for so long.
+# pulled in. Cross-backend couplings that only resolve via
+# --start-group have slipped past local builds before.
 _phoenix_try_flag("-flto=auto")
 _phoenix_try_flag("-ffat-lto-objects")
 _phoenix_try_link_flag("-flto=auto")

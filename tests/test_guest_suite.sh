@@ -50,7 +50,7 @@ done
 
 # --arch was deprecated; backend determines arch. Derive ARCH from BACKEND for
 # the ROM/RAM/disk selection logic only (not passed to the binary).
-[[ -z "$ARCH" && ( "$BACKEND" == "kpx" || "$BACKEND" == "unicorn-ppc" ) ]] && ARCH=ppc
+[[ -z "$ARCH" && "$BACKEND" == "kpx" ]] && ARCH=ppc
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 [[ -n "$NETWORK" && "$NETWORK" != "none" ]] && EXTRA_FLAGS+=(--network "$NETWORK")
 

@@ -107,12 +107,7 @@ endif()
 
 # --- Subprojects ---
 
-# Unicorn (m68k + ppc CPU engines)
-set(UNICORN_ARCH "m68k;ppc" CACHE STRING "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(UNICORN_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(UNICORN_INSTALL OFF CACHE BOOL "" FORCE)
-add_subdirectory(subprojects/unicorn EXCLUDE_FROM_ALL)
 
 # libdatachannel (WebRTC)
 set(NO_EXAMPLES ON CACHE BOOL "" FORCE)
@@ -181,7 +176,6 @@ target_link_libraries(mac-phoenix PRIVATE
   core drivers cpu ipc kpx_shared kpx_interp kpx_dyngen uae_cpu uae_jit vm_alloc
   webserver webrtc_lib video_encoders audio_encoders config
   -Wl,--end-group
-  unicorn
   Threads::Threads
   ${M_LIB}
   datachannel-static

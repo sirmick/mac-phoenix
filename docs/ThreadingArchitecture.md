@@ -22,7 +22,7 @@ parent (mac-phoenix)
      in-process; MacBrowser pipes pixels into the guest via SHM ring)
 
 CPU subprocess (mac-phoenix --ipc)
-└── CPU/MAIN thread            — runs UAE / Unicorn / KPX / DualCPU
+└── CPU/MAIN thread            — runs UAE / KPX
                                   inside one process; shared SHM with parent
 
 PPC also has:
@@ -80,16 +80,9 @@ SHM and Unix socket, then enters the per-backend main loop:
 
 - **UAE** — `uae_cpu_execute_one()` in a tight loop with `SPCFLAGS`
   checks; 60 Hz timer polled every 100 instructions inside that loop.
-- **Unicorn-m68k** — `unicorn_execute_with_interrupts(cpu, N)` from
-  `unicorn_exec_loop.c`. `UC_HOOK_BLOCK` polls the timer and applies
-  deferred register updates.
 - **KPX** — `cpu_ppc_kpx_install`'s `cpu_execute_fast` enters
   `emul_ppc(ROMBase + 0x310000)`. Has its own tick thread inside the
   child (60 Hz) and a PRECISE_TIMING thread for PrimeTime.
-- **Unicorn-PPC** — outer `uc_emu_start` loop with stall watchdogs and
-  hot-skip detection. Tick thread sets `g_pending_irq`; a `UC_HOOK_BLOCK`
-  drains it at TB boundaries (in-place, no `uc_emu_stop` per IRQ — see
-  `ppc/UnicornPpcStatus.md`).
 
 ## Boundaries between threads
 
@@ -125,10 +118,7 @@ waits for it to exit. The CPU child closes its SHM and socket and
 
 ## What this doc deliberately doesn't cover
 
-- The UAE / Unicorn / KPX execution loops in detail — see the per-backend
+- The UAE / KPX execution loops in detail — see the per-backend
   files in `src/cpu/`.
-- Hook ordering and deferred-update semantics in Unicorn-m68k —
-  [`deepdive/cpu/UnicornQuirks.md`](deepdive/cpu/UnicornQuirks.md) and
-  [`deepdive/cpu/ALineAndFLineStatus.md`](deepdive/cpu/ALineAndFLineStatus.md).
 - BridgeAgent internals — [`CommandBridge.md`](CommandBridge.md).
 - MacBrowser host pipeline — [`MacBrowser.md`](MacBrowser.md).

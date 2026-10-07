@@ -19,13 +19,12 @@ by the `ROMVersion` word at ROM offset `$8`:
 Version `$0178` (Mac II original, IIx, IIcx, SE/30) is currently **not
 covered** — see §"The $0178 gap" below.
 
-Both functions are derived from Basilisk II upstream
-(`legacy/BasiliskII/src/rom_patches.cpp`) and are essentially verbatim
-copies with one adaptation for the Unicorn backend: every
-`M68K_EMUL_OP_X` constant is wrapped in `platform_make_emulop(...)`
-so the emitted opcode is `0x71xx` for UAE or `0xAExx` for Unicorn
-(QEMU TCG treats `0x71xx` as a legal `MOVEQ` and won't trap, so the
-Unicorn path needs the A-line encoding).
+Both functions are derived from upstream Basilisk II
+(`src/rom_patches.cpp`) and are essentially verbatim copies with one
+adaptation: every `M68K_EMUL_OP_X` constant is wrapped in
+`platform_make_emulop(...)`. EmulOps are encoded as `0x71xx`; the helper
+is a backend hook, kept so a future CPU backend that needs a different
+trap encoding can supply one without touching the patch tables.
 
 ## The signature-driven core
 
@@ -168,17 +167,17 @@ any fixed-offset patch that isn't in the reset-vector zone.
 
 ## The one non-baseline deviation in our tree
 
-Our `patch_rom_32` has exactly one non-Basilisk addition beyond
-cosmetic Unicorn adaptations: **the `RTS` inserted at ROM offset
-`$1256`** to short-circuit a `.netBOOT` open call that hangs under
-Unicorn. This is a fixed offset, derived from one specific ROM
-revision, and is the single patch in the file that *should* be
-revisited when restarting the effort. See
+Our `patch_rom_32` has exactly one non-Basilisk addition beyond the
+`platform_make_emulop` wrapping: **the `RTS` inserted at ROM offset
+`$1256`** to short-circuit a `.netBOOT` open call that hung under a
+since-removed CPU backend. This is a fixed offset, derived from one
+specific ROM revision, and is the single patch in the file that
+*should* be revisited when restarting the effort. See
 `src/core/rom_patches.cpp` line ~1390 and the TODO note in the
 surrounding comment. The right fix is either a signature scan for
 the `.netBOOT` pascal string + `_GetNamedResource` pattern, or
-resolving the underlying Unicorn hang so the patch isn't needed at
-all.
+confirming the open no longer hangs under UAE so the patch can be
+dropped.
 
 ## The `$0178` gap
 
@@ -220,7 +219,7 @@ stable by definition.
 - `src/core/rom_patches.cpp::patch_rom_32` — canonical implementation
 - `src/core/rom_patches.cpp::patch_rom_classic` — SE/Plus/Classic
 - `src/core/rom_patches.cpp::find_rom_data` — the signature scanner
-- `legacy/BasiliskII/src/rom_patches.cpp` — upstream reference (in-tree)
+- upstream Basilisk II `src/rom_patches.cpp` — reference these patches were derived from
 - Inside Macintosh: *Devices*, chapter 1 (Slot Manager, hardware
   base discovery via `UniversalInfo`)
 - `se/boot_flow.md`, `macii/boot_flow.md`, `iici/boot_flow.md` —

@@ -3668,7 +3668,7 @@ function isM68kMode(mode) {
 }
 
 function backendIsPpc(backend) {
-    return backend === 'kpx' || backend === 'unicorn-ppc';
+    return backend === 'kpx';
 }
 
 function defaultBackendForMode(mode) {
@@ -4479,7 +4479,7 @@ function updateEmulatorPanelVisibility() {
     const supportsJit = (backend === 'uae' || backend === 'kpx');
     const isKpx = (backend === 'kpx');
 
-    // JIT row: hide for unicorn-* backends (no JIT available there)
+    // JIT row: only shown for backends that support a JIT (uae, kpx)
     const jitGroup = document.getElementById('cfg-jit-group');
     if (jitGroup) jitGroup.style.display = supportsJit ? '' : 'none';
 

@@ -32,7 +32,7 @@ You are a testing agent for the mac-phoenix classic Mac emulator. Your job is to
 ## What to watch for
 
 - **Port collisions**: tests use ports 18070-18098. A stale `net-bridge` or previous emulator squatting a port causes cascading failures. Always clean before running.
-- **Flaky tests**: `boot_unicorn` is the slowest m68k backend (~8s). If it fails once but passes solo, it's a port-reuse issue.
+- **Flaky tests**: if a boot test fails once but passes solo, it's a port-reuse issue.
 - **SHM leaks**: each subprocess creates ~24MB in `/dev/shm/macemu-video-{pid}`. Leaks accumulate fast.
 - **Config contamination**: if a test fails with unexpected disks/network, the child subprocess may be loading `~/.config/mac-phoenix/config.json` instead of using `--config /dev/null`.
 - **guest_suite**: always "Skipped" (no Retro68 binary). This is expected, not a failure.
@@ -52,7 +52,7 @@ PASS: 54/54
 (list any failures with test name + error)
 
 ## Stop/restart
-PASS: 5/5 backends (UAE-interp, UAE-JIT, Unicorn, KPX-interp, KPX-JIT)
+PASS: 4/4 backends (UAE-interp, UAE-JIT, KPX-interp, KPX-JIT)
 
 ## Resource cleanup
 PASS: 14/14

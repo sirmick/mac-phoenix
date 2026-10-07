@@ -2,7 +2,7 @@
  *  memory_access.h - Backend-independent memory access functions
  *
  *  These functions provide direct memory access for ROM patching and
- *  system initialization, independent of any CPU backend (UAE, Unicorn, etc.)
+ *  system initialization, independent of any CPU backend.
  *
  *  Unlike UAE's get_long/put_long which go through memory banks, these
  *  functions access ROMBaseHost and RAMBaseHost directly.

@@ -51,7 +51,7 @@ Specialized in identifying and resolving performance bottlenecks across the enti
 ## Branch Awareness
 This agent works with **both legacy and new codebases**:
 - **Legacy (master)**: UAE/KPX CPU cores, older IPC protocol versions
-- **New (rewrite branch)**: Qemu CPU, modern IPC (v4+), refactored architecture
+- **New (mac-phoenix)**: UAE / KPX behind a Platform API, modern IPC (v4+), refactored architecture
 
 Always clarify which codebase when profiling or optimizing.
 
@@ -68,4 +68,3 @@ When optimizing performance:
 9. Document performance characteristics
 10. Consider maintainability vs. performance tradeoffs
 11. Test with realistic workloads (not synthetic benchmarks)
-12. **Note**: Qemu CPU in new version has different performance profile than UAE/KPX

@@ -212,8 +212,6 @@ void control_ipc_unlink(void);
 // CPU backend install functions
 extern "C" {
 void cpu_uae_install(Platform* platform);
-void cpu_unicorn_install(Platform* platform);
-void cpu_dualcpu_install(Platform* platform);
 }
 
 #define DEBUG 1
@@ -711,14 +709,8 @@ int main(int argc, char **argv)
 			g_platform.video_refresh = video_ipc_refresh;
 			*platform = g_platform;
 
-			// Install CPU backend
+			// Install m68k CPU backend
 			switch (emu_config.backend) {
-				case config::Backend::UnicornM68K:
-					cpu_unicorn_install(platform);
-					break;
-				case config::Backend::DualCPU:
-					cpu_dualcpu_install(platform);
-					break;
 				case config::Backend::UAE:
 				default:
 					cpu_uae_install(platform);
@@ -953,12 +945,6 @@ int main(int argc, char **argv)
 				}
 			} else {
 				switch (emu_config.backend) {
-					case config::Backend::UnicornM68K:
-						cpu_unicorn_install(platform);
-						break;
-					case config::Backend::DualCPU:
-						cpu_dualcpu_install(platform);
-						break;
 					case config::Backend::UAE:
 					default:
 						cpu_uae_install(platform);

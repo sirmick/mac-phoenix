@@ -64,8 +64,6 @@ extern uint32 ROMBaseMac;
 // CPU backend install functions
 extern "C" {
 void cpu_uae_install(Platform* platform);
-void cpu_unicorn_install(Platform* platform);
-void cpu_dualcpu_install(Platform* platform);
 }
 
 // ========================================
@@ -606,12 +604,8 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     }
 
     // 6. Install PPC backend (function pointers only — CPU instance created
-    //    later in the child subprocess). Selects KPX (default) or Unicorn PPC.
-    if (config.backend == config::Backend::UnicornPPC) {
-        cpu_unicorn_ppc_install(&platform_);
-    } else {
-        cpu_ppc_kpx_install(&platform_);
-    }
+    //    later in the child subprocess).
+    cpu_ppc_kpx_install(&platform_);
     platform_.ppc_jit = config.jit;
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n", platform_.cpu_name, config.jit ? "on" : "off");
 
@@ -666,23 +660,13 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     }
 
     // 7d. Write-protect ROM (SheepShaver main_unix.cpp:1157)
-    // Legacy protects ROM_AREA_SIZE (5MB). We match this, but only for KPX.
-    //
-    // KPX runs PPC code natively, so a guest write to ROM faults host-side
-    // at the guest instruction's PC, and the global SIGSEGV skip advances
-    // that one instruction cleanly.
-    //
-    // Under Unicorn/TCG, guest writes go through JIT-compiled host code.
-    // A SIGSEGV inside a JIT block at host_pc skips one host instruction —
-    // but the guest PPC instruction may be several host instructions,
-    // leaving register state half-updated. Observed concretely: after a
-    // SIGSEGV skip in a stwu, r1 walked to 0x00000001 and subsequent push
-    // sequences underflowed into 0xffff..., producing sporadic stwu-cascade
-    // crashes. Unicorn's own softmmu already handles unmapped writes via
-    // uppc_skip_memop_at (zero-on-skip reads, advance-PC writes), so
-    // leaving the host mapping RWX is both safe and prevents the host
-    // SIGSEGV handler from firing inside TCG at all.
-    if (config.backend != config::Backend::UnicornM68K) {
+    // Legacy protects ROM_AREA_SIZE (5MB). KPX interprets PPC code, so a
+    // guest write to ROM faults host-side at the guest instruction and the
+    // global SIGSEGV skip advances that one instruction cleanly. A backend
+    // that runs guest code through JIT-compiled host blocks must not rely
+    // on this: skipping one host instruction mid-block leaves guest
+    // register state half-updated.
+    {
         uint32_t protect_size = ROM_AREA_SIZE;  // 5MB, matching legacy
         if (mprotect(ROMBaseHost, protect_size, PROT_READ | PROT_EXEC) < 0) {
             fprintf(stderr, "[CPUContext] WARNING: Could not write-protect ROM\n");
@@ -690,8 +674,6 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
             fprintf(stderr, "[CPUContext] ROM write-protected (%d KB, opcode table area at +0x%x remains writable)\n",
                     protect_size / 1024, protect_size);
         }
-    } else {
-        fprintf(stderr, "[CPUContext] ROM left RW host-side for Unicorn (skip-in-JIT-block corrupts register state)\n");
     }
 
     // 8. Initialize PPC CPU state (GPR3, GPR4, MODE_68K)
@@ -777,17 +759,9 @@ CPUExecResult CPUContext::execute_loop() {
     set_state(CPUState::RUNNING);
     fprintf(stderr, "[CPUContext] Starting execution loop...\n");
 
-    // Execute until stopped
-    if (platform_.cpu_execute_fast) {
-        // Fast path (Unicorn, DualCPU) - runs until interrupted
-        while (state_ == CPUState::RUNNING) {
-            platform_.cpu_execute_one();
-        }
-    } else {
-        // Slow path (UAE) - execute one instruction at a time
-        while (state_ == CPUState::RUNNING) {
-            platform_.cpu_execute_one();
-        }
+    // Execute one instruction at a time until stopped
+    while (state_ == CPUState::RUNNING) {
+        platform_.cpu_execute_one();
     }
 
     fprintf(stderr, "[CPUContext] Execution loop stopped\n");
