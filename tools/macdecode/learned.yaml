@@ -1,0 +1,24 @@
+# What we've learned that multiversal doesn't say (yet).
+#
+# Layered over src/executor/multiversal/defs by macdecode: an entry here
+# adds a name or replaces multiversal's entry at the same address/trap.
+# Multiversal itself stays untouched until we decide to fold these in.
+#
+# status: known (documented or proven) | guess (plausible, unproven)
+#         | placeholder (nonzero, meaning unknown)
+# replaces: the multiversal name this overrides, as a reminder
+# source: where we learned it (Inside Mac page, disassembly, snapshot)
+
+lowmem:
+  - address: 0x2B6
+    name: ExpandMem
+    type: Ptr
+    status: known
+    replaces: AE_info
+    source: Inside Macintosh (System 7 low memory), MEMORY_MAP.md
+    comment: >
+      Pointer to ExpandMemRec (Gestalt table, Script Manager and other
+      post-128K-ROM globals). Executor reuses this slot for AppleEvents
+      state under the name AE_info.
+
+traps: []

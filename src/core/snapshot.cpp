@@ -69,6 +69,16 @@ static bool write_file(const std::string& path, const uint8* data, uint32 size)
     return fclose(f) == 0 && ok;
 }
 
+static std::string json_str(const std::string& v)
+{
+    std::string out;
+    for (char c : v) {
+        if (c == '"' || c == '\\') out += '\\';
+        out += c;
+    }
+    return out;
+}
+
 static std::string hex32(uint32 v)
 {
     char buf[16];
@@ -105,6 +115,11 @@ void snapshot_service_from_irq(M68kRegisters* r)
       << "  \"ram_size\": " << RAMSize << ",\n"
       << "  \"rom_base\": " << hex32(ROMBaseMac) << ",\n"
       << "  \"rom_size\": " << ROMSize << ",\n"
+      << "  \"rom_path\": \"" << json_str(cfg.rom_path) << "\",\n"
+      << "  \"disks\": [";
+    for (size_t i = 0; i < cfg.disk_paths.size(); i++)
+        j << (i ? ", " : "") << "\"" << json_str(expand_home(cfg.disk_paths[i])) << "\"";
+    j << "],\n"
       << "  \"context\": \"60Hz IRQ EmulOp (registers are the IRQ handler's, not the interrupted code's)\",\n"
       << "  \"regs\": {";
     for (int i = 0; i < 8; i++) j << (i ? ", " : "") << "\"d" << i << "\": " << hex32(r->d[i]);

@@ -64,7 +64,7 @@ Memory-map vocabulary for M1: [MEMORY_MAP.md](MEMORY_MAP.md).
 System memory area that looks identical to a real one — vectors,
 lowmem, trap tables at `$400`/`$E00`, System heap holding Apple System
 file resources, Process Manager heap, A5 worlds. Snapshots of real
-7.5.5 boots (`POST /api/snapshot`, `tools/memmap/memmap.py`) are the
+7.5.5 boots (`POST /api/snapshot`, `tools/macdecode/macdecode.py`) are the
 reference; nothing from them is copied in at runtime, and no Apple
 boot or `ptch`/`lpch` code runs.
 
@@ -73,6 +73,27 @@ boot or `ptch`/`lpch` code runs.
 `MoreMasters`; Executor then hits a fatal heap error. Same on upstream
 Executor/syn68k, so not the UAE facade. Likely direct heap/lowmem
 pokes by a pre-32-bit-clean app; revisit with the M1 heap work.
+
+**Decoder:** `tools/macdecode/macdecode.py SNAPSHOT [--serve]` decodes a
+snapshot using multiversal (`src/executor/multiversal/defs/*.yaml`) as
+its database: lowmem globals by multiversal name and type, zones
+(including the Process Manager heap and app partitions, found by
+scanning), resource maps, and trap names. `--serve` (port 8765) shows the
+decode next to multiversal as HTML and reloads when a YAML file changes.
+Multiversal stays untouched for now: what we learn goes in the overlay
+`tools/macdecode/learned.yaml` (lowmem names/types and trap names, each
+with a status: known, guess or placeholder), which the decoder layers
+on top. Unnamed nonzero lowmem becomes placeholder entries for it. First
+entry: `$2B6` is `ExpandMem` (multiversal calls it `AE_info`).
+
+Origins: the decoder matches the System heap against the resources of
+the boot disk's System Folder (hfsutils), so trap entries and heap
+addresses say where their code came from — ROM, `System 'lpch' 31`,
+`'ptch'`, `'scod'` (Process Manager), `'gpch'`, or an INIT by file.
+On 7.5.5 at Finder idle: 595 entries in ROM, 350 of 464 patched entries
+traced, 114 unknown. Linked patches are relocated and compacted by the
+loader, so a masked match (address fields as wildcards) backs up the
+exact one.
 
 **Where we left off:** snapshot API and a first reader (lowmem, heap
 walk, trap classification) work; reference snapshot

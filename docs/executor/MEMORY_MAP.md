@@ -159,7 +159,7 @@ world. Missing:
 
 ## First snapshot: 7.5.5 at Finder idle (UAE, Quadra ROM, 64 MB)
 
-Taken with `POST /api/snapshot`, read with `tools/memmap/memmap.py`.
+Taken with `POST /api/snapshot`, read with `tools/macdecode/macdecode.py`.
 
 - `SysZone` = `RAMBase` = `$2000`, 2.2 MB: 1045 handles, 296 pointers.
 - Trap tables: of the implemented entries, 102 of 234 OS traps and 356
