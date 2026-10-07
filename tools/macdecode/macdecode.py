@@ -7,6 +7,8 @@ Sections: summary lowmem zones resources traps coverage placeholders
 (default: summary lowmem zones traps coverage).
 --serve [--port 8765] serves the same decode as HTML, side by side with
 multiversal, reloading the defs whenever a YAML file changes.
+--diff CANDIDATE compares SNAPSHOT (the real boot) with CANDIDATE
+(Executor); with --serve it adds a /diff page.
 
 SNAPSHOT is a directory written by POST /api/snapshot (ram.bin, rom.bin,
 meta.json). Names, types and addresses come from
@@ -582,13 +584,27 @@ def main():
                     help="overlay of names/types learned so far (default: tools/macdecode/learned.yaml)")
     ap.add_argument("--disk", help="boot disk image for origin matching (default: from meta.json)")
     ap.add_argument("--json", metavar="OUT", help="also write the full decode as JSON")
+    ap.add_argument("--diff", metavar="CANDIDATE",
+                    help="compare against another snapshot (e.g. Executor's) instead of decoding")
     ap.add_argument("--serve", action="store_true", help="serve an HTML view instead of printing")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
     if args.serve:
         import web
-        web.serve(args.snapshot, args.defs, args.learned, args.disk, args.host, args.port)
+        web.serve(args.snapshot, args.defs, args.learned, args.disk, args.host, args.port,
+                  compare=args.diff)
+        return
+    if args.diff:
+        import diff
+        db = load_db(args.defs, args.learned)
+        ref_snap, cand_snap = Snapshot(args.snapshot), Snapshot(args.diff)
+        rz = find_zones(ref_snap)
+        ref = World(ref_snap, db, load_origins(ref_snap, rz, args.disk), rz)
+        cand = World(cand_snap, db)
+        out = []
+        diff.text(ref, cand, out)
+        print("\n".join(out))
         return
     for sec in args.sections:
         if sec not in SECTIONS:

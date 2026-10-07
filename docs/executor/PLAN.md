@@ -95,6 +95,23 @@ traced, 114 unknown. Linked patches are relocated and compacted by the
 loader, so a masked match (address fields as wildcards) backs up the
 exact one.
 
+**Diff:** the Executor child takes snapshots too (at its event loop,
+`/api/snapshot`), and `macdecode.py REF --diff CANDIDATE` (or
+`--serve --diff`, page `/diff`) scores Executor's memory against a real
+boot. Baseline, 7.5.5 Finder idle vs Executor's Browser idle: lowmem 76
+same + 19 same shape of 247 (100 differ, 52 unset); System resources
+loaded 9 of 78; trap tables at `$400`/`$E00` 5 of 1059; no Process
+Manager heap (one 61 MB ApplZone instead).
+
+**Next (agreed 2026-10-07):** Executor sideloads Apple's System file and
+its C++ builds the memory a real boot leaves, step by step, each checked
+with the diff: (1) System heap contents and lowmem setup from Apple's
+System file, with a mapping file choosing Apple's 68k code or
+Executor's C++ per code resource; (2) our own Process Manager in C++
+with Apple's layout (PM heap up to BufPtr, SIZE-sized partitions, A5
+world at the top, per-process lowmem swap); (3) trap tables at
+`$400`/`$E00` once extensions need to patch.
+
 **Where we left off:** snapshot API and a first reader (lowmem, heap
 walk, trap classification) work; reference snapshot
 `~/storage/snapshots/7.5.5-finder-idle`. Next: find the Process

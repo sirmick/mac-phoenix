@@ -11,6 +11,7 @@
 
 #include "emulator_config.h"
 #include "ipc_protocol.h"
+#include "../../core/snapshot.h"
 
 #include <algorithm>
 #include <chrono>
@@ -115,6 +116,18 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     control_ipc_set_input_hooks(&g_hooks);
     control_ipc_start();
     buf->state = IPC_STATE_RUNNING;
+
+    // POST /api/snapshot: dump guest RAM (identity-mapped at 0) when the
+    // app next asks for events, where the heap is consistent.
+    executor_host::set_event_poll_hook([] {
+        if (!snapshot_pending())
+            return;
+        SnapshotMemory mem;
+        mem.ram = (const uint8_t *)(uintptr_t)0;
+        mem.ram_size = executor_host::guest_ram_size();
+        mem.context = "Executor event poll (GetNextEvent/WaitNextEvent)";
+        snapshot_service(mem);
+    });
 
     executor_host::Config c;
     c.width = cfg.screen_width;

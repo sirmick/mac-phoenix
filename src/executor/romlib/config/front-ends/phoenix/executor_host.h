@@ -54,4 +54,11 @@ bool app_idle();
 // Name of the running Mac application (CurApName), empty before launch.
 std::string current_app_name();
 
+// Called on the emulator thread each time the app asks for events
+// (GetNextEvent/WaitNextEvent): a safe point to inspect guest memory.
+void set_event_poll_hook(std::function<void()> hook);
+
+// Guest RAM is identity-mapped at address 0; this is its size in bytes.
+uint32_t guest_ram_size();
+
 }  // namespace executor_host

@@ -447,11 +447,14 @@ done:
 // MacPhoenix: set once the application first asks for events, i.e. it is
 // up and idle in its event loop. Read by the host to report "desktop".
 std::atomic<bool> Executor::ROMlib_app_polled_events{false};
+void (*Executor::ROMlib_event_poll_hook)(void) = nullptr;
 
 Boolean Executor::C_GetNextEvent(INTEGER em, EventRecord *evt)
 {
     Boolean retval;
     ROMlib_app_polled_events.store(true, std::memory_order_relaxed);
+    if(ROMlib_event_poll_hook)
+        ROMlib_event_poll_hook();
 
     TRACE(1);
     retval = doevent(em, evt, true);
@@ -472,6 +475,8 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
 {
     Boolean retval;
     ROMlib_app_polled_events.store(true, std::memory_order_relaxed);
+    if(ROMlib_event_poll_hook)
+        ROMlib_event_poll_hook();
     Point p;
     TMTask tm;
 

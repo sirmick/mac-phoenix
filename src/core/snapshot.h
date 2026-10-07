@@ -14,6 +14,7 @@
 #ifndef SNAPSHOT_H
 #define SNAPSHOT_H
 
+#include <cstdint>
 #include <string>
 
 struct M68kRegisters;
@@ -25,7 +26,24 @@ std::string snapshot_prepare(const std::string& storage_dir, const std::string& 
 // Child side: flag a pending request (control IPC thread).
 void snapshot_request();
 
-// Child side: service a pending request (emulator thread, IRQ EmulOp).
+// Child side: is a request waiting?
+bool snapshot_pending();
+
+// What to dump. ram/rom are host pointers to the guest's RAM/ROM; ram may
+// be address 0 (Executor maps guest RAM there).
+struct SnapshotMemory {
+    const uint8_t* ram = nullptr;
+    uint32_t ram_base = 0, ram_size = 0;
+    const uint8_t* rom = nullptr;
+    uint32_t rom_base = 0, rom_size = 0;
+    const char* context = "";
+    const M68kRegisters* regs = nullptr;   // optional
+};
+
+// Child side: write the pending snapshot (emulator thread, at a safe point).
+void snapshot_service(const SnapshotMemory& mem);
+
+// Child side, ROM backends: service a pending request from the IRQ EmulOp.
 void snapshot_service_from_irq(M68kRegisters* r);
 
 #endif // SNAPSHOT_H

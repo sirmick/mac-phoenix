@@ -63,8 +63,11 @@ def addr_link(a, text=None):
 
 
 class Site:
-    def __init__(self, snap_path, defs, learned_path, disk):
+    def __init__(self, snap_path, defs, learned_path, disk, compare=None):
         self.snap_path, self.defs, self.learned = snap_path, defs, learned_path
+        self.cand_snap = md.Snapshot(compare) if compare else None
+        self.cand_zones = md.find_zones(self.cand_snap) if compare else None
+        self.cand = None
         self.lock = threading.Lock()
         self.snap = md.Snapshot(snap_path)
         # Zones and origins depend only on the RAM and disk: compute once.
@@ -76,6 +79,8 @@ class Site:
     def load(self):
         db = md.load_db(self.defs, self.learned)
         self.world = md.World(self.snap, db, self.origins, self.zone_map)
+        if self.cand_snap:
+            self.cand = md.World(self.cand_snap, db, None, self.cand_zones)
 
     def fresh(self):
         with self.lock:
@@ -88,8 +93,9 @@ class Site:
     def page(self, title, body):
         w = self.world
         s = w.snap
-        nav = "".join(f'<a href="/{p}">{p or "summary"}</a>'
-                      for p in ("", "lowmem", "traps", "zones", "resources", "placeholders"))
+        pages = ("", "lowmem", "traps", "zones", "resources", "placeholders") + \
+            (("diff",) if self.cand else ())
+        nav = "".join(f'<a href="/{p}">{p or "summary"}</a>' for p in pages)
         return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>macdecode · {esc(title)}</title><style>{CSS}</style></head><body>
@@ -273,6 +279,48 @@ class Site:
                 "overlay on refresh; multiversal stays untouched.</p>" + "".join(items))
         return self.page("Placeholder YAML", body)
 
+    def diff(self, q):
+        import diff as df
+        ref, cand = self.world, self.cand
+        if not cand:
+            return self.page("Diff", "<p>Start with <code>--serve --diff CANDIDATE</code>.</p>")
+        sc = df.score(ref, cand)
+        lm = sc["lowmem"]
+        filt = q.get("f", ["differs"])[0]
+        links = " · ".join(f'<a href="/diff?f={k}">{k} {lm.get(k, 0) if k != "all" else sc["lowmem_total"]}</a>'
+                           if k != filt else f"<b>{k}</b>"
+                           for k in ("differs", "unset", "same shape", "same", "all"))
+        cls = {"same": "ok", "same shape": "ok", "differs": "bad", "unset": "warn"}
+        rows = "".join(
+            f"<tr><td class='mono'>${r['global']['address']:04x}</td><td><b>{esc(r['global']['name'])}</b></td>"
+            f"<td class='mono'>{esc(r['global']['type'])}</td><td class='{cls[r['status']]}'>{r['status']}</td>"
+            f"<td class='val mono'>{esc(r['ref'])}</td><td class='val mono'>{esc(r['cand'])}</td></tr>"
+            for r in df.lowmem(ref, cand) if filt == "all" or r["status"] == filt)
+        rz, cz = df.zones(ref, cand)
+        zr = "".join(
+            "<tr>" + "".join(
+                (f"<td>{esc(z['name'])}</td><td class='mono'>${z['addr']:08x}</td>"
+                 f"<td>{(z['end'] - z['addr']) >> 10} KB</td><td class='mut'>{esc(z['parent'] or '')}</td>")
+                if z else "<td></td><td></td><td></td><td></td>"
+                for z in (rz[i] if i < len(rz) else None, cz[i] if i < len(cz) else None)) + "</tr>"
+            for i in range(max(len(rz), len(cz))))
+        rs, cs = df.system_resources(ref, cand)
+        missing = sorted(rs - cs)
+        t = sc["traps"]
+        body = f"""<p>Reference <b>{esc(ref.snap.dir.name)}</b> vs candidate <b>{esc(cand.snap.dir.name)}</b>.
+Pointers count as <i>same shape</i> when both point into the same kind of place.</p>
+<table><tr><th>Measure</th><th>Score</th></tr>
+<tr><td>Low-memory globals</td><td>{lm.get('same', 0)} same, {lm.get('same shape', 0)} same shape,
+{lm.get('differs', 0)} differ, {lm.get('unset', 0)} unset (of {sc['lowmem_total']})</td></tr>
+<tr><td>System resources loaded</td><td>{sc['sys_resources_both']} of {sc['sys_resources_ref']}</td></tr>
+<tr><td>Trap tables $400/$E00</td><td>{t['cand_implemented_too']} of {t['ref_implemented']} entries</td></tr></table>
+<h3>Zones</h3><table><tr><th colspan=4>Reference</th><th colspan=4>Candidate</th></tr>{zr}</table>
+<h3>Low memory</h3><p>Show: {links}</p><div class='wrap'><table><tr><th>Addr</th><th>Name</th><th>Type</th>
+<th>Status</th><th>Reference</th><th>Candidate</th></tr>{rows}</table></div>
+<h3>System resources loaded in the reference but not the candidate ({len(missing)})</h3>
+<p class='mono'>{' '.join(esc(f"'{t_}' {i}") for t_, i in missing)}</p>"""
+        return self.page("Diff", body)
+
     def addr(self, q):
         w, s = self.world, self.world.snap
         try:
@@ -296,8 +344,8 @@ class Site:
         return self.page(f"${a:08x}", body)
 
 
-def serve(snap_path, defs, learned_path, disk, host, port):
-    site = Site(snap_path, defs, learned_path, disk)
+def serve(snap_path, defs, learned_path, disk, host, port, compare=None):
+    site = Site(snap_path, defs, learned_path, disk, compare)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -308,6 +356,7 @@ def serve(snap_path, defs, learned_path, disk, host, port):
                      "/traps": lambda: site.traps(q), "/zones": lambda: site.zones(q),
                      "/resources": lambda: site.resources(q),
                      "/placeholders": lambda: site.placeholders(q),
+                     "/diff": lambda: site.diff(q),
                      "/addr": lambda: site.addr(q)}.get(u.path)
             if not route:
                 self.send_error(404)

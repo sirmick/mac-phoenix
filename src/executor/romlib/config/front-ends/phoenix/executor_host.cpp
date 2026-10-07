@@ -150,4 +150,23 @@ std::string current_app_name()
     return name;
 }
 
+static std::function<void()> poll_hook;
+
+static void call_poll_hook()
+{
+    if(poll_hook)
+        poll_hook();
+}
+
+void set_event_poll_hook(std::function<void()> hook)
+{
+    poll_hook = std::move(hook);
+    ROMlib_event_poll_hook = poll_hook ? call_poll_hook : nullptr;
+}
+
+uint32_t guest_ram_size()
+{
+    return (uint32_t)ROMlib_memtop;
+}
+
 }  // namespace executor_host
