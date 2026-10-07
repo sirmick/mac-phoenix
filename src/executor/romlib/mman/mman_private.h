@@ -250,6 +250,8 @@ extern void ROMlib_sledgehammer_zones(const char *fn,
 #define REL 2
 
 extern void mman_heap_death(const char *func, const char *where);
+/* MacPhoenix: false = no error dialog on heap death, just log and _exit(70). */
+extern bool ROMlib_heap_death_dialog;
 
 /* Preprocessor sludge to get __LINE__ as a string for HEAP_DEATH macro. */
 #define __HEAP_DEATH(func, file, l) mman_heap_death(func, file #l)

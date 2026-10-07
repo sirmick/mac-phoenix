@@ -58,6 +58,29 @@ Dropped from the import: syn68k, PowerCore, cxmon debugger, the
 qt/x/sdl/sdl2/wayland front ends, LMDB (its CNID mapper was already
 disabled), the bundled Browser app stays as a resource for now.
 
+Memory-map vocabulary for M1: [MEMORY_MAP.md](MEMORY_MAP.md).
+
+**M1 approach (decided 2026-10-07):** no ROM. Executor's C++ builds a
+System memory area that looks identical to a real one — vectors,
+lowmem, trap tables at `$400`/`$E00`, System heap holding Apple System
+file resources, Process Manager heap, A5 worlds. Snapshots of real
+7.5.5 boots (`POST /api/snapshot`, `tools/memmap/memmap.py`) are the
+reference; nothing from them is copied in at runtime, and no Apple
+boot or `ptch`/`lpch` code runs.
+
+**Known incompatibility (test case):** WorldBuilder's *Demo World*
+(games.img, 1987) corrupts its app heap between `LoadSeg` and its first
+`MoreMasters`; Executor then hits a fatal heap error. Same on upstream
+Executor/syn68k, so not the UAE facade. Likely direct heap/lowmem
+pokes by a pre-32-bit-clean app; revisit with the M1 heap work.
+
+**Where we left off:** snapshot API and a first reader (lowmem, heap
+walk, trap classification) work; reference snapshot
+`~/storage/snapshots/7.5.5-finder-idle`. Next: find the Process
+Manager heap and partitions, tag System heap blocks with resource
+type/ID, disassemble via Retro68 objdump, snapshot the Executor child,
+then `diff-world`.
+
 ## Milestones
 
 | | Milestone | Gate | Status |
@@ -127,5 +150,7 @@ Kept small so upstream fixes can be merged by hand:
 * `file/localvolume/localvolume.cpp`: `ROMlib_local_volume_roots` instead of `/`.
 * `hfs/hfsHelper.cpp`: `ROMlib_readonly_images`.
 * `toolevent.cpp`: `ROMlib_app_polled_events` set by Get/WaitNextEvent.
+* `mman/mmansubr.cpp`: `ROMlib_heap_death_dialog`; off in MacPhoenix, so a
+  fatal heap error logs and `_exit(70)`s instead of crashing in the dialog.
 * `file/localvolume/localvolume.cpp`: LMDB include dropped.
 * `tests/`: low-stack test thread, PPC tests skip, fixture path, ctest names.

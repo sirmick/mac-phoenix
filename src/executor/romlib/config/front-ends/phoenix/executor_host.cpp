@@ -2,6 +2,7 @@
 #include "phoenix.h"
 
 #include <base/common.h>
+#include <mman/mman_private.h>
 #include <hfs/hfs.h>
 #include <file/file.h>
 #include <vdriver/vdriver.h>
@@ -60,6 +61,7 @@ int run(const Config& c)
     }
     paths["MacVolumes"] = vols;
     ROMlib_readonly_images = true;
+    ROMlib_heap_death_dialog = false;
 
     screenW = c.width;
     screenH = c.height;

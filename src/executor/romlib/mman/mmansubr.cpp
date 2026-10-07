@@ -4,6 +4,7 @@
 
 /* Miscellaneous subroutines for memory management */
 
+#include <unistd.h>
 #include <base/common.h>
 
 #include <MemoryMgr.h>
@@ -20,6 +21,8 @@
 #include <stdarg.h>
 
 using namespace Executor;
+
+bool Executor::ROMlib_heap_death_dialog = true;
 
 /* Attempts to notify the user of a catastrophic heap failure then exits. */
 void Executor::mman_heap_death(const char *func, const char *where)
@@ -44,8 +47,20 @@ void Executor::mman_heap_death(const char *func, const char *where)
        * may crash or try to recurse here.  But at least we got the
        * warning_unexpected out.
        */
-        LM(TheZone) = LM(SysZone);
-        system_error(err_msg, 0, "Exit", nullptr, nullptr, nullptr, nullptr, nullptr);
+        if(ROMlib_heap_death_dialog)
+        {
+            LM(TheZone) = LM(SysZone);
+            system_error(err_msg, 0, "Exit", nullptr, nullptr, nullptr, nullptr, nullptr);
+        }
+    }
+
+    /* MacPhoenix: the dialog needs a working heap and usually crashes
+       instead; just report and leave so the parent sees a clean exit. */
+    if(!ROMlib_heap_death_dialog)
+    {
+        fprintf(stderr, "[Executor] %s\n", err_msg);
+        fflush(nullptr);
+        _exit(70);
     }
 
     /* Don't bother calling ExitToShell; things are too smashed. */
