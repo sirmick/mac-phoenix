@@ -16,6 +16,7 @@
 #include "../common/include/video_modes.h"
 #include "../core/boot_progress.h"  // For boot phase query
 #include "../core/command_bridge.h"  // For command bridge
+#include "../core/snapshot.h"  // For /api/snapshot
 #include <sys/stat.h>
 #include <unistd.h>
 #include <QByteArray>
@@ -146,6 +147,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/keypress" && req.method == "POST") {
         return handle_keypress(req);
+    }
+    if (req.path == "/api/snapshot" && req.method == "POST") {
+        return handle_snapshot(req);
     }
     if (req.path == "/api/invoke-debug" && req.method == "POST") {
         return handle_invoke_debug(req);
@@ -1432,6 +1436,50 @@ Response APIRouter::handle_invoke_debug(const Request& req) {
         ::InvokeDebugger();
     }
     return Response::json("{\"success\": true, \"message\": \"debugger invoked\"}");
+}
+
+static Response json_status(const std::string& body, int code) {
+    Response resp = Response::json(body);
+    resp.set_status(code);
+    return resp;
+}
+
+// POST /api/snapshot - dump guest RAM/ROM to <storage>/snapshots/<name>/
+// Body (optional): {"name": "finder-idle"}. Default name is a timestamp.
+// Waits up to 10 s for the child to finish; see src/core/snapshot.h.
+Response APIRouter::handle_snapshot(const Request& req) {
+    if (!ctx_->subprocess || !ctx_->subprocess->ipc_client()->is_connected())
+        return json_status("{\"error\": \"emulator not running\"}", 503);
+    if (!ctx_->config)
+        return json_status("{\"error\": \"no config\"}", 500);
+
+    std::string name;
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    if (doc.isObject())
+        name = doc.object().value("name").toString().toStdString();
+    if (name.empty()) {
+        char buf[32];
+        time_t t = time(nullptr);
+        strftime(buf, sizeof(buf), "%Y%m%d-%H%M%S", localtime(&t));
+        name = buf;
+    }
+    if (name.find('/') != std::string::npos || name[0] == '.')
+        return json_status("{\"error\": \"bad name\"}", 400);
+
+    std::string dir = snapshot_prepare(ctx_->config->storage_dir, name);
+    if (dir.empty())
+        return json_status("{\"error\": \"cannot create snapshot dir\"}", 500);
+
+    ctx_->subprocess->ipc_client()->send_command(IPC_CMD_SNAPSHOT);
+    std::string meta = dir + "/meta.json";
+    for (int i = 0; i < 200; i++) {
+        struct stat st;
+        if (stat(meta.c_str(), &st) == 0)
+            return Response::json("{\"success\": true, \"path\": \"" + storage::json_escape(dir) + "\"}");
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return json_status("{\"error\": \"timed out (guest not taking 60Hz IRQs?)\", \"path\": \"" +
+                          storage::json_escape(dir) + "\"}", 504);
 }
 
 // ── Command Bridge Endpoints ──

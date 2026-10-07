@@ -64,6 +64,7 @@ using namespace m68k;
 extern bool tick_inhibit;
 extern uint8 *ScratchMem;  // Platform scratch memory (safe target for hardware base redirect)
 extern void command_bridge_drain_from_irq(M68kRegisters *r);
+#include "snapshot.h"
 
 void PlayStartupSound();
 
@@ -644,6 +645,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			// Drain command bridge queue (launch app, quit, etc.)
 			if (HasMacStarted()) {
 				command_bridge_drain_from_irq(r);
+				snapshot_service_from_irq(r);
 			}
 			break;
 		}

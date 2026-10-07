@@ -16,6 +16,7 @@
  * via ::send() without any QObject method calls.
  */
 
+#include "../core/snapshot.h"
 #include "ipc_protocol.h"
 
 #include <atomic>
@@ -176,6 +177,9 @@ void process_binary_input(const uint8_t* data, size_t len)
                 case IPC_CMD_INVOKE_DEBUG:
                     fprintf(stderr, "IPC: Invoke debugger command received\n");
                     InvokeDebugger();
+                    break;
+                case IPC_CMD_SNAPSHOT:
+                    snapshot_request();
                     break;
                 default:
                     break;
