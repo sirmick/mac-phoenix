@@ -1,0 +1,11 @@
+[
+    { include: ["@<bits/stdint-.*.h>", "private", "<stdint.h>", "public"]},
+    { include: ["@<boost/filesystem/.*>", "private", "<rsys/filesystem.h>", "public"]},
+    { include: ["@<boost/system/error_code.hpp>", "private", "<rsys/filesystem.h>", "public"]},
+    { include: ["\"base/lowglobals.h\"", "private", "\"ExMacTypes.h\"", "public"]},
+    { include: ["\"rsys/macros.h\"", "private", "\"ExMacTypes.h\"", "public"]},
+    { include: ["\"base/mactype.h\"", "private", "\"ExMacTypes.h\"", "public"]},
+    { include: ["\"rsys/error.h\"", "private", "\"ExMacTypes.h\"", "public"]},
+    { include: ["\"base/functions.h\"", "private", "\"ExMacTypes.h\"", "public"]},
+    { include: ["\"rsys/traps.h\"", "private", "\"ExMacTypes.h\"", "public"]}
+]

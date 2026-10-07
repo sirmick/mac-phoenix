@@ -15,6 +15,8 @@ This folder contains the deeper-dive docs.
   - UAE backend: ~5 s (~3 s with `--jit`).
 - **Power Mac G3** (PPC 750) boots Mac OS 7.5.5 / 7.6.1 to Finder under KPX
   (default for PPC): ~7 s with the dyngen JIT (`--jit`), ~15 s interpreted.
+- **Executor** (`--backend executor`) runs Executor 2000's reimplemented
+  Toolbox on UAE with no ROM — see [executor/PLAN.md](executor/PLAN.md).
 - HTTP API + WebRTC streaming, file-based automation bridge (BridgeAgent),
   MacBrowser (in-process Chromium via Qt6 WebEngine, piped into a guest
   Mac app), guest-side networking via the Rust net-bridge.
@@ -53,7 +55,7 @@ cmake -B build && cmake --build build -j$(nproc)
 ```
 
 There is no `--arch` flag — the `--backend` token determines the CPU
-architecture (`uae` → m68k, `kpx` → ppc).
+architecture (`uae` → m68k, `kpx` → ppc, `executor` → m68k without a ROM).
 
 ## Documentation
 

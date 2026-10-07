@@ -1,0 +1,54 @@
+serial.c: setbaud
+    INTEGER rates[] = { ... 38400 ... };
+        // this can't work
+
+=====
+rename "futzwithdosdisks" (and its module) to something sensible
+
+
+region: mixed endianness, CWC_RAW
+hfs: some CWC_RAW
+blitting, colors: some CWC_RAW
+
+=========
+suspicious things and fixes that are only guesses:
+
+
+hfsVolume.cpp:528
+dqp->dq.qType = 1;      // endian?
+
+hfsVolume.cpp:645
+function getnmfls: local variable key is filled but never used
+(endianness also shaky)
+
+
+qPict2.cpp:316ff
+      {
+	struct link *t;
+	
+	for (i = 0, t = head; i < colors_requested && t; i ++, t = t->next)
+	  {
+	    table[i].value     = i;
+	    
+#define TILE(x) (((uint32_t) (x) * 0x8421UL) >> 4)
+	  
+	    table[i].rgb.red   = TILE (t->bank_index >> 10);
+	    table[i].rgb.green = TILE (t->bank_index >> 5);
+	    table[i].rgb.blue  = TILE (t->bank_index >> 0);
+	  }
+	gui_assert (t == nullptr && i == colors_requested);
+      }
+WTF?
+my version:
+#define TILE(x) CW(((uint32_t) (x & 0x1F) * 0x8421UL) >> 4)
+
+
+osutil.cpp:772
+#if !defined (BIGENDIAN)
+	sp.misc     = SPMisc2;
+#else
+	sp.misc     = SPMisc2 << 8;
+#endif
+my version:
+        sp.misc = SPMisc2, this matches InitUtil
+

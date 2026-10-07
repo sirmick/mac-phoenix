@@ -1,0 +1,27 @@
+Bill Goldman Ð Browser, Testing
+Mat Hostetter Ð Syn68k, Low Level Graphics, DOS port, more...
+Joel Hunter Ð Low Level DOS Sound
+Sam Lantinga Ð Win32 port
+Patrick LoPresti Ð High Level Sound, Low Level Linux Sound
+Cliff Matthews Ð this credit list (and most things not listed)
+Cotton Seed Ð High Level Graphics, Apple Events, more...
+Lauri Pesonen Ð Low Level Win32 CD-ROM access (Executor 2.1)
+Samuel Vincent Ð Low Level DOS Serial Port Support
+and all the engineers and testers who helped us build version 1.x
+
+Windows Appearance:
+
+The windows appearance option uses "Jim's CDEFs" copyright Jim Stout and the "Infinity Windoid" copyright Troy Gaul.
+
+Primary Pre-Beta Testers:
+
+Jon Abbott Ð Testing, Icon Design
+Ziv Arazi Ð Testing
+Edmund Ronald Ð Advice, Testing
+K. Harrison Liang Ð Testing
+Hugh Mclenaghan Ð Testing
+Emilio Moreno Ð Testing, Spanish Translation + Keyboard, Icon Design
+Ernst Oud Ð Documentation, Testing
+
+
+This product includes software developed by the University of California, Berkeley and its contributors.

@@ -270,6 +270,7 @@
                         <option value="quadra">Quadra (68040, System 7 - Mac OS 8.1)</option>
                         <option value="se">Mac SE (68000, System 6)</option>
                         <option value="ppc">PowerPC (PPC, System 7.1.2 - Mac OS 9.0.4)</option>
+                        <option value="executor">Executor (68k, no ROM, reimplemented Toolbox)</option>
                     </select>
                 </div>
 
@@ -278,6 +279,22 @@
                     <select id="cfg-rom">
                         <option value="">Loading...</option>
                     </select>
+                </div>
+
+                <div class="backend-note" id="cfg-executor-note" hidden>
+                    <strong>Executor needs no ROM.</strong>
+                    It runs Mac applications on Executor 2000, a C++
+                    reimplementation of the Macintosh Toolbox, with the 68k CPU
+                    emulated by UAE. It starts in Executor's Browser, a simple
+                    Finder stand-in.
+                    <ul>
+                        <li>Disk images are mounted read-only, so the ROM
+                            backends' disks stay safe.</li>
+                        <li>The shared folder appears as a volume. The host's
+                            own files are not visible.</li>
+                        <li>Not yet: the real Finder, System extensions,
+                            PowerPC applications, sound.</li>
+                    </ul>
                 </div>
 
                 <div class="form-group">
@@ -464,6 +481,7 @@
                         <select id="cfg-backend">
                             <option value="uae">UAE</option>
                             <option value="kpx">KPX</option>
+                            <option value="executor">Executor (no ROM)</option>
                         </select>
                     </div>
                     <!-- JIT toggles (shown only for backends that support them) -->

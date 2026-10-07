@@ -62,6 +62,15 @@ std::atomic<bool>   g_worker_running{false};
 std::atomic<int>    g_notify_fd{-1};
 }  // namespace
 
+namespace {
+const IPCInputHooks* g_input_hooks = nullptr;
+}
+
+void control_ipc_set_input_hooks(const IPCInputHooks *hooks)
+{
+    g_input_hooks = hooks;
+}
+
 // Provide the global notifier symbol declared in ipc_protocol.h.
 ipc_frame_notifier_fn g_ipc_frame_notifier = nullptr;
 
@@ -90,6 +99,10 @@ void process_binary_input(const uint8_t* data, size_t len)
         case IPC_INPUT_KEY: {
             if (len < sizeof(IPCKeyInput)) return;
             const IPCKeyInput* key = (const IPCKeyInput*)data;
+            if (g_input_hooks) {
+                g_input_hooks->key((hdr->flags & IPC_KEY_DOWN) != 0, key->mac_keycode);
+                break;
+            }
             if (hdr->flags & IPC_KEY_DOWN) {
                 ADBKeyDown(key->mac_keycode);
             } else {
@@ -103,6 +116,22 @@ void process_binary_input(const uint8_t* data, size_t len)
 
             bool absolute = (mouse->hdr.flags & IPC_MOUSE_ABSOLUTE) != 0;
             bool has_motion = (mouse->x != 0 || mouse->y != 0) || absolute;
+
+            if (g_input_hooks) {
+                if (absolute)
+                    g_input_hooks->mouse_absolute(static_cast<uint16_t>(mouse->x),
+                                                  static_cast<uint16_t>(mouse->y));
+                else if (has_motion)
+                    g_input_hooks->mouse_relative(mouse->x, mouse->y);
+                static uint8_t hook_last_buttons = 0;
+                uint8_t hchanged = mouse->buttons ^ hook_last_buttons;
+                if (hchanged & IPC_MOUSE_LEFT)
+                    g_input_hooks->mouse_button(0, (mouse->buttons & IPC_MOUSE_LEFT) != 0);
+                if (hchanged & IPC_MOUSE_RIGHT)
+                    g_input_hooks->mouse_button(1, (mouse->buttons & IPC_MOUSE_RIGHT) != 0);
+                hook_last_buttons = mouse->buttons;
+                break;
+            }
 
             // Only change mouse mode when there's actual motion.
             // Button-only events (dx=dy=0, relative) must not toggle the mode,

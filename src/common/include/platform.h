@@ -237,6 +237,13 @@ typedef struct {
     // Converts common M68K_EMUL_OP_* values (0x71xx) to backend-specific encoding.
     // NULL = use default logic (passthrough or A-line conversion).
     uint16_t (*make_emulop)(uint16_t common_emulop);
+
+    // UAE interrupt overrides (set by the Executor core's syn68k facade).
+    // NULL = UAE's default InterruptFlags/timer path.
+    // m68k_intlev: level to deliver now, or -1 for none.
+    int (*m68k_intlev)(void);
+    // m68k_poll_interrupts: called from UAE's tick check on the CPU thread.
+    void (*m68k_poll_interrupts)(void);
 } Platform;
 
 /*

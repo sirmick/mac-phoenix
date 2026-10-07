@@ -10,6 +10,7 @@ this doc covers the parts a contributor needs to actually change code.
 |---------|------|------|-------------------|
 | UAE | m68k | `src/cpu/cpu_uae.c`, `src/cpu/uae_cpu/` | `uae` (default) |
 | KPX | ppc | `src/cpu/kpx/cpu_ppc_kpx.cpp` + `src/cpu/kpx/src/` | `kpx` |
+| Executor | m68k | `src/executor/` (Toolbox in C++ on UAE, no ROM) | `executor` |
 
 Backend installers all write into the same `g_platform` table
 (`src/common/include/platform.h`). Core code never references a backend
@@ -50,6 +51,13 @@ Mixed-mode execution — PPC nanokernel runs Mac OS's built-in 68k emulator
 inside the ROM, with mode tracked at `XLM_RUN_MODE`. The boot sequence,
 KernelData layout, IRQ delivery, and ROM patching are documented in
 [`ppc/README.md`](ppc/README.md).
+
+### Executor
+
+No ROM: the Executor 2000 Toolbox (C++) runs in the IPC child on top of
+UAE through a syn68k-compatible facade (`src/executor/cpu/`). Guest
+addresses are host addresses, so it needs `vm.mmap_min_addr=0`. Plan,
+milestones and gotchas: [`executor/PLAN.md`](executor/PLAN.md).
 
 ## Common Development Tasks
 

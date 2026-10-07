@@ -118,6 +118,9 @@ static void reserve_mac_address_space_early()
 #include "core/cpu_context.h"
 #include "core/emulator_subprocess.h"
 #include "core/boot_progress.h"
+#ifdef HAVE_EXECUTOR
+#include "executor_child.h"
+#endif
 #include "ipc/ipc_protocol.h"
 #include "drivers/video/video_webrtc.h"
 #include "drivers/video/video_screenshot.h"
@@ -617,7 +620,7 @@ int main(int argc, char **argv)
 		});
 
 		const char *rom_path = emu_config.rom_path.empty() ? nullptr : emu_config.rom_path.c_str();
-		if (!rom_path) {
+		if (!rom_path && emu_config.needs_rom()) {
 			fprintf(stderr, "No ROM file specified for IPC mode\n");
 			return 1;
 		}
@@ -655,6 +658,18 @@ int main(int argc, char **argv)
 
 		// Set boot progress to write to IPC buffer
 		boot_progress_set_ipc_buffer(ipc_buf);
+
+		// Executor: no ROM, no Mac boot. The Toolbox runs in-process on UAE
+		// and publishes frames itself (src/executor/host/executor_child.cpp).
+		if (emu_config.backend == config::Backend::EXECUTOR) {
+#ifdef HAVE_EXECUTOR
+			g_emulator_initialized = true;
+			return executor_child_main(emu_config, ipc_buf);
+#else
+			fprintf(stderr, "This build has no Executor core (BUILD_EXECUTOR=OFF)\n");
+			return 1;
+#endif
+		}
 
 		// Install platform drivers
 		g_platform.video_exit = []() {};
@@ -912,6 +927,13 @@ int main(int argc, char **argv)
 		// Headless Mode (Direct CPU Execution, No Subprocess)
 		// ============================================================
 		const char *rom_path = emu_config.rom_path.empty() ? nullptr : emu_config.rom_path.c_str();
+
+#ifdef HAVE_EXECUTOR
+		if (emu_config.backend == config::Backend::EXECUTOR) {
+			printf("\n=== Executor core (Headless) ===\n");
+			return executor_direct_main(emu_config);
+		}
+#endif
 
 		if (rom_path) {
 			printf("\n=== Initializing CPU Context (Headless) ===\n");

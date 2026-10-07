@@ -1,0 +1,21 @@
+
+Do not remove floppy disks or CD-ROMs from their drives while Executor
+is running unless you have clicked on an "Eject" button and Executor
+has told you that it's OK to remove it.  Changing removable media
+behind Executor's back will cause Executor to crash, just like pushing
+a paper-clip into a Macintosh floppy drive and changing floppies
+without the Macintosh knowing will cause a Macintosh to crash.
+
+If a program claims that it needs System 7 to run, use Cmd-Shift-5
+(Cmd-Option-5 on Macs) to
+bring up the preferences panel.  You can then alter which version of
+the System Executor emulates.  More details are available on pages 19
+and 23 of the Executor 2 manual.
+
+Cmd-Shift-3, or Cmd-Option-3 on Macs, causes Executor to create a TIFF screen dump.
+
+If you would like fewer choices in the "Page Setup..." dialog box, you
+can edit the file printers.ini to remove entries that correspond to printers
+that you don't have.
+
+On Windows and Linux, use your control key when Mac Apps ask for the "command" key.

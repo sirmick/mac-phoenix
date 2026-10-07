@@ -83,6 +83,7 @@ static void dedup_paths(std::vector<std::string>& paths) {
 static bool parse_backend(const std::string& s, Backend& out) {
     if (s == "uae")          { out = Backend::UAE;         return true; }
     if (s == "kpx")          { out = Backend::KPX;         return true; }
+    if (s == "executor")     { out = Backend::EXECUTOR;    return true; }
     return false;
 }
 
@@ -410,7 +411,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --bootdriver N             0=any, -62=CD-ROM (default: 0)\n");
             printf("  --storage-dir PATH         Default storage root (default: ~/storage)\n");
             printf("\nCPU:\n");
-            printf("  --backend NAME             uae | kpx\n");
+            printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
             printf("  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)\n");
             printf("  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)\n");

@@ -3671,8 +3671,14 @@ function backendIsPpc(backend) {
     return backend === 'kpx';
 }
 
+// Executor: Toolbox reimplemented in C++ on the UAE 68k core. No ROM.
+function backendIsExecutor(backend) {
+    return backend === 'executor';
+}
+
 function defaultBackendForMode(mode) {
     if (mode === 'ppc') return 'kpx';
+    if (mode === 'executor') return 'executor';
     return 'uae';  // quadra, se → uae (m68k)
 }
 
@@ -3680,6 +3686,16 @@ function defaultBackendForMode(mode) {
 function updateHeaderTitle() {
     const titleEl = document.getElementById('emulator-title');
     if (!titleEl) return;
+
+    // While the settings dialog is open the header follows the draft choice;
+    // otherwise it follows the loaded config.
+    const modalOpen = document.getElementById('config-modal')?.classList.contains('open');
+    const backend = (modalOpen && document.getElementById('cfg-backend')?.value)
+                    || currentConfig.backend;
+    if (backendIsExecutor(backend)) {
+        titleEl.textContent = 'Executor';
+        return;
+    }
 
     // Get current ROM and look up its info
     if (!currentConfig.rom || !storageCache?.roms) {
@@ -3990,6 +4006,7 @@ function loadPreset(name) {
 // Pick a sensible "Emulator" dropdown value from a backend. Used when loading
 // a preset that doesn't carry an explicit emulator persona.
 function guessEmulatorMode(backend) {
+    if (backendIsExecutor(backend)) return 'executor';
     return backendIsPpc(backend) ? 'ppc' : 'quadra';
 }
 
@@ -4476,8 +4493,32 @@ function updateEmulatorPanelVisibility() {
                     || currentConfig.backend
                     || 'uae';
     const isPpc = backendIsPpc(backend);
+    const isExecutor = backendIsExecutor(backend);
     const supportsJit = (backend === 'uae' || backend === 'kpx');
     const isKpx = (backend === 'kpx');
+
+    // Executor has no ROM and no boot drive: grey those out and explain.
+    const romEl = document.getElementById('cfg-rom');
+    if (romEl) {
+        romEl.disabled = isExecutor;
+        romEl.title = isExecutor ? 'Not used: Executor reimplements the ROM in C++' : '';
+    }
+    const bootEl = document.getElementById('cfg-bootdriver');
+    if (bootEl) bootEl.disabled = isExecutor;
+    const note = document.getElementById('cfg-executor-note');
+    if (note) note.hidden = !isExecutor;
+
+    // Keep the Emulator Mode persona in step with the CPU choice.
+    const modeEl = document.getElementById('cfg-emulator');
+    if (modeEl) {
+        if (isExecutor && modeEl.value !== 'executor') {
+            modeEl.value = 'executor';
+            currentConfig.emulator = 'executor';
+        } else if (!isExecutor && modeEl.value === 'executor') {
+            modeEl.value = guessEmulatorMode(backend);
+            currentConfig.emulator = modeEl.value;
+        }
+    }
 
     // JIT row: only shown for backends that support a JIT (uae, kpx)
     const jitGroup = document.getElementById('cfg-jit-group');
@@ -4533,7 +4574,8 @@ async function onEmulatorChange() {
     const defaults = {
         ppc:    { ram: 128, screen: '1024x768', backend: 'kpx' },
         quadra: { ram: 32,  screen: '1024x768', backend: 'uae' },
-        se:     { ram: 4,   screen: '512x342',  backend: 'uae' }
+        se:     { ram: 4,   screen: '512x342',  backend: 'uae' },
+        executor: { ram: 64, screen: '1024x768', backend: 'executor' }
     };
     const d = defaults[emulatorType] || defaults.quadra;
 

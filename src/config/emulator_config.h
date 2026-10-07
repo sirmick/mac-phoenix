@@ -29,7 +29,8 @@ enum class Architecture {
 // there is no separate "architecture" axis in the config.
 enum class Backend {
     UAE,           // m68k, hand-tuned interpreter (+optional JIT)
-    KPX            // ppc,  KPX translator (+optional PPC JIT, +optional 68k JIT)
+    KPX,           // ppc,  KPX translator (+optional PPC JIT, +optional 68k JIT)
+    EXECUTOR       // m68k, no ROM: Executor's C++ Toolbox on the UAE core
 };
 
 enum class NetworkMode {
@@ -168,12 +169,19 @@ struct EmulatorConfig {
         switch (backend) {
             case Backend::UAE:         return "uae";
             case Backend::KPX:         return "kpx";
+            case Backend::EXECUTOR:    return "executor";
         }
         return "uae";
     }
 
     bool is_ppc() const {
         return backend == Backend::KPX;
+    }
+
+    // Backends that boot a real Mac ROM. Executor reimplements the Toolbox
+    // and needs no ROM file.
+    bool needs_rom() const {
+        return backend != Backend::EXECUTOR;
     }
 
     Architecture architecture() const {

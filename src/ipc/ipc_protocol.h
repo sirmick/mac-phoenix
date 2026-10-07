@@ -228,6 +228,16 @@ typedef struct IPCBuffer {
  * the SHM frame_count + ready_index updates still happen so a
  * later-attaching parent can pick up the latest frame on its first
  * poll. */
+/* Child-side input routing. NULL (the default) sends input to the ADB
+ * emulation; a non-ROM core (Executor) installs its own handlers. */
+typedef struct {
+    void (*key)(int down, uint8_t mac_keycode);
+    void (*mouse_absolute)(int x, int y);
+    void (*mouse_relative)(int dx, int dy);
+    void (*mouse_button)(int button, int down);   /* 0 = left, 1 = right */
+} IPCInputHooks;
+void control_ipc_set_input_hooks(const IPCInputHooks *hooks);
+
 typedef void (*ipc_frame_notifier_fn)(void);
 extern ipc_frame_notifier_fn g_ipc_frame_notifier;
 

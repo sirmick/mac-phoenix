@@ -546,6 +546,15 @@ if(BUILD_TESTS)
 endif()
 
 # =============================================================================
+# Executor core on UAE (docs/executor/PLAN.md). Separate child binary.
+# After enable_testing() so its gtest suite registers with ctest.
+# =============================================================================
+option(BUILD_EXECUTOR "Build the Executor Toolbox core (mac-phoenix-executor)" ON)
+if(BUILD_EXECUTOR)
+    add_subdirectory(src/executor)
+endif()
+
+# =============================================================================
 # Configuration summary
 # =============================================================================
 message(STATUS "")

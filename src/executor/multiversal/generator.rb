@@ -1,0 +1,298 @@
+require 'tempfile'
+
+class Generator
+    def self.filter_key
+        nil
+    end
+
+    def initialize
+        @type_size_map = {
+            "uint8_t" => 1,
+            "uint16_t" => 2,
+            "uint32_t" => 4,
+            "uint64_t" => 8,
+            "int8_t" => 1,
+            "int16_t" => 2,
+            "int32_t" => 4,
+            "int64_t" => 8,
+            "char" => 1,
+            "Point" => 4,
+            "ProcPtr" => 4,
+            "void" => 0,
+            "double" => 8
+        }
+        @fancy_comments = false
+        @expand_common = true
+    end
+    def size_of_type(type)
+        return nil if not type
+        return @type_size_map[type] if @type_size_map[type]
+        return 4 if type =~ /[*\[\]]/
+        return nil
+    end
+
+    def starredtext(str, align, lchar:'*', rchar:'*')
+        maxlinelen = str.lines.map{|s| s.rstrip.length}.max
+        
+        str.each_line do |s|
+            s.rstrip!
+            c = (75 - s.length)
+            b = case align
+                when "center" then c/2
+                when "left" then c - 1
+                when "right" then 1
+            end
+            a = c - b
+            a = 0 if a < 0
+            b = 0 if b < 0
+            @out << " #{lchar}#{' '*a}#{s}#{' '*b}#{rchar}\n"
+        end
+
+    end
+
+    def starline
+        @out << "/#{'*'*77}/\n"
+    end
+
+    def box(title, comment=nil, order:1)
+        if title or comment then
+            @out << "/#{'*'*77}\n"
+            #print " *#{' '*75}*\n"
+            starredtext(title, 'center') if title
+            @out << " *#{' '*75}*\n" if title and comment
+            starredtext(comment, 'left') if comment
+
+            @out << " #{'*'*77}/\n"
+        else
+            starline
+        end
+    end
+
+
+    def document_dependencies(header)
+        out = ""
+        if header.included.size > 0 then
+            out << "Needs:\n"
+            
+            colwidth = header.included.map(&:size).max + 4 + 2 + 4
+            maxlinelen = 70
+
+            header.included.each do |inc|
+                line = " " * 4 + inc + ".h"
+                line << " " * (colwidth - line.length)
+                indent = line.length
+                whys = header.included_why[inc].to_a
+                whys.each_index do |idx|
+                    why = whys[idx]
+                    last = (idx == whys.size - 1)
+                    if line.length + why.size + (last ? 0 : 1) > maxlinelen
+                        out << line << "\n"
+                        line = " " * indent
+                    end
+                    line << why
+                    line << ", " unless last
+                end
+                out << line << "\n"
+            end
+        end
+        return out
+    end
+
+    def declare_members(members)
+        members.each do |member|
+            sub = (member["struct"] or member["union"])
+            if sub then
+                @out << (if member["struct"] then "struct" else "union" end) << "{"
+                declare_members sub
+                @out << "} " << member["name"] << ";"
+            elsif member["common"]
+                if @expand_common then
+                    declare_members($global_name_map[member["common"]]["common"]["members"])
+                else
+                    @out << member["common"] << ";"
+                end
+            else
+                @out << decl(member["type"], member["name"]) << ";"
+                if member["comment"] then
+                    trailing_comment(member["comment"])
+                    @out << "\n"
+                end
+            end
+        end
+    end
+
+    # Emit a trailing "//" comment.  Every line has to be prefixed: a
+    # multi-line comment that only comments its first line leaves the
+    # remaining lines sitting in the header as stray code.
+    def trailing_comment(text)
+        lines = text.rstrip.lines.map(&:rstrip)
+        return if lines.empty?
+        @out << " // " << lines.shift
+        lines.each { |l| @out << "\n// " << l }
+    end
+
+    def convert_expression(expr)
+        return expr
+    end
+
+    def declare_enum(value)
+        @out << "typedef " if value["name"]
+        @out << "enum {"
+        value["values"].each do |val|
+            @out << val["name"]
+            if val["value"] then
+                @out << " = " << convert_expression(val["value"].to_s) << ","
+            else
+                @out << ","
+            end
+            trailing_comment(val["comment"]) if val["comment"]
+            @out << "\n"
+            if val["old_name"] then
+                @out << "#if OLDROUTINENAMES\n"
+                @out << "#define #{val["old_name"]} #{val["name"]}\n"
+                @out << "#endif\n"
+            end
+        end
+        @out << "}"
+        @out << value["name"] if value["name"]
+        @out << ";"
+    end
+
+    def declare_typedef(value)
+        @out << "typedef "
+        @out << decl(value["type"], value["name"])
+        @out << ";"
+
+        sz = size_of_type(value["type"])
+        @type_size_map[value["name"]] = sz if sz
+    end
+
+    def generate_preamble(header)
+        title = "\n" + header.name + ".h\n" + "="*(header.name.length+2) + "\n"
+        titlecomment = nil
+        if header.included.size > 0 then
+            titlecomment = document_dependencies(header)
+            titlecomment << "\n\n"
+        else
+            title << "\n"
+        end
+        box(title, titlecomment)
+        @out << "\n\n"
+    end
+    def generate_postamble(header)
+    end
+    def generate_comment(key, value)
+        if @fancy_comments then
+            box(value["name"], value["comment"])
+        else
+            return unless value["comment"]
+            value["comment"].each_line do |l|
+                @out << "// " << l.rstrip << "\n"
+            end
+        end
+    end
+
+    def declare_verbatim(value)
+        @out << value.strip << "\n"
+    end
+
+    def generate_header(header)
+        @out = ""
+
+        generate_preamble(header)
+
+        header.data.each do |item|
+            key, value = main_elem(item)
+
+            make_api_ifdef item["api"] do
+                generate_comment(key, value)
+            
+                case key
+                when "enum"
+                    declare_enum(value)
+
+                when "struct", "union"
+                    declare_struct_union(key, value)
+
+                when "dispatcher"
+                    declare_dispatcher(value)
+
+                when "typedef"
+                    declare_typedef(value)
+
+                when "function"
+                    declare_function(value)
+
+                when "lowmem"
+                    declare_lowmem(value)
+
+                when "funptr"
+                    @type_size_map[value["name"]] = 4
+                    declare_funptr(value)
+
+                when "verbatim"
+                    declare_verbatim(value)
+
+                when "executor_only"
+                    declare_verbatim(value["code"])
+                end
+                @out << "\n"
+            end
+            @out << "\n"
+        end
+        generate_postamble(header)
+        return @out
+    end
+
+    def make_api_ifdef(api)
+        yield
+    end
+
+    def formatted_file(name, &block)
+        if not @format_command then
+            if system('clang-format --version', [:out, :err]=>File::NULL) then
+                @format_command = "clang-format"
+            elsif system('uncrustify --version', [:out, :err]=>File::NULL) then
+                @format_command = "uncrustify -l cpp -q -c uncrustify.cfg"
+            elsif system('astyle --version', [:out, :err]=>File::NULL) then
+                @format_command = "astyle --style=allman --max-code-length=79 --mode=c"
+            end
+        end
+        #IO.popen("#{@format_command} > \"#{name}\"", "w", &block)
+        tmp = Tempfile.new('multiverse-tmp')
+        block.call(tmp)
+        tmp.close
+
+        rawtext = File.read(tmp.path)
+        if @format_command then
+            newtext = ""
+            IO.popen("#{@format_command}", "r", :in => tmp.path) do |pipe|
+                newtext = pipe.read
+            end
+            # A misconfigured or unhappy formatter must never be allowed to
+            # silently truncate a generated header to nothing.
+            if !$?.success? || (newtext.strip.empty? && !rawtext.strip.empty?) then
+                STDERR.puts "warning: '#{@format_command}' failed for #{name}; writing unformatted output"
+                newtext = rawtext
+            end
+        else
+            newtext = rawtext
+        end
+
+        tmp.unlink
+
+        filtered = ""
+        newtext.each_line do |line|
+            if line =~ /^\/\/ clang-format o.*/ then
+            else
+                filtered += line
+            end
+        end
+        newtext = filtered
+        
+        if !File.readable?(name) || File.read(name) != newtext then
+            File.write(name, newtext)
+            print "#{name}\n"
+        end
+    end
+end

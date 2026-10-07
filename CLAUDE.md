@@ -39,6 +39,11 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom
 # Playwright E2E tests (requires running emulator)
 npx playwright test
 
+# Executor backend: no ROM, C++ Toolbox on UAE (docs/executor/PLAN.md).
+# Needs vm.mmap_min_addr=0. Pick "Executor" in the web UI, or:
+./build/mac-phoenix --backend executor
+ctest --test-dir build -L executor
+
 # Boot capacity matrix (all backend × JIT config × OS cells)
 # Writes CSV + PNG screenshots + per-cell logs to --out dir.
 tests/run_boot_matrix.sh --out /home/mick/mac-phoenix/test-results/boot-matrix
@@ -59,6 +64,7 @@ further backends.
 |---------|------|------|-------|---------|
 | `uae` | m68k | Hand-tuned interpreter (+optional `--jit`) | Fast (~5s boot) | Default, end users |
 | `kpx` | ppc | KPX translator (+optional `--jit`, +optional `--jit68k`) | Medium | Default for PPC |
+| `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM | Fast start | Toolbox reimplementation work (`src/executor/`) |
 
 ## Project Structure
 
@@ -92,6 +98,11 @@ src/
     webserver_main.cpp              — HTTP server thread; registers /ws route via WebRTCServer
   webrtc/
     webrtc_server.cpp               — Signaling (/ws), peer connections for H.264/VP9 RTP
+  executor/                         — Executor 2000 Toolbox core (MIT), imported; see docs/executor/PLAN.md
+    cpu/                            — syn68k API facade over UAE + PowerCore stub
+    romlib/                         — the Toolbox (lightly patched upstream source)
+    multiversal/                    — API definitions → generated headers/trap glue (Ruby)
+    tests/                          — Executor gtest suite (ctest label: executor)
   common/
     sigsegv.cpp                     — SIGSEGV handler (skips bad accesses)
     include/platform.h              — Platform API (g_platform function pointers)
@@ -164,8 +175,9 @@ Machine:
   --storage-dir PATH         Default storage root (default: ~/storage)
 
 CPU:
-  --backend NAME             uae | kpx
-                             (default: uae; backend implies architecture)
+  --backend NAME             uae | kpx | executor
+                             (default: uae; backend implies architecture;
+                             executor needs no ROM)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
   --idlewait / --no-idlewait Pause CPU when guest idle (default: on)
@@ -243,6 +255,7 @@ PNG encoding (fpng) has no external dependencies and is always available.
 | OpenSSL | `libssl-dev` | `brew install openssl` | DTLS/SRTP for libdatachannel (WebRTC). Our code no longer uses it directly — `QCryptographicHash` handles SHA1/MD5. |
 | pkg-config | `pkg-config` | `brew install pkg-config` | Dependency detection |
 | Qt6 (≥6.4) | `qt6-base-dev` | `brew install qt@6` | Core, Network (QLocalSocket / QTcpServer), Widgets, plus QJsonDocument for all JSON parsing. 6.4 minimum is set by MacBrowser's use of `QWebEngineDownloadRequest` + its `receivedBytesChanged`/`isFinishedChanged` signals. See [docs/qt6/PLAN.md](docs/qt6/PLAN.md) for the port history. |
+| Boost, Ruby, Bison, Perl | `libboost-filesystem-dev libboost-program-options-dev ruby bison perl` | `brew install boost ruby bison` | Executor backend only. If missing, the build skips it with a warning; `-DBUILD_EXECUTOR=OFF` disables it. |
 | Qt6 WebEngine (≥6.4) | `qt6-webengine-dev` | included in `brew install qt@6` | In-process Chromium for MacBrowser (replaces the old Xvfb + Firefox + xcb-shm pipeline) |
 
 ## MacBrowser

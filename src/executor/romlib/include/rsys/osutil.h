@@ -1,0 +1,40 @@
+#if !defined(__RSYS_OSUTIL__)
+#define __RSYS_OSUTIL__
+
+/*
+ * Copyright 1995 by Abacus Research and Development, Inc.
+ * All rights reserved.
+ *
+ */
+#include <ExMacTypes.h>
+
+#define MODULE_NAME rsys_osutil
+#include <base/api-module.h>
+
+namespace Executor
+{
+extern long long ROMlib_long_long_secs(Executor::INTEGER year, Executor::INTEGER month,
+                                       Executor::INTEGER day, Executor::INTEGER hour,
+                                       Executor::INTEGER minute, Executor::INTEGER second);
+
+extern void date_to_swapped_fields(long long mactime, GUEST<INTEGER> *yearp,
+                                   GUEST<INTEGER> *monthp, GUEST<INTEGER> *dayp,
+                                   GUEST<INTEGER> *hourp, GUEST<INTEGER> *minutep,
+                                   GUEST<INTEGER> *secondp, GUEST<INTEGER> *dayofweekp,
+                                   GUEST<INTEGER> *dayofyearp, GUEST<INTEGER> *weekofyearp);
+
+    // case insitive, diac insensitive
+extern int ROMlib_strcmp(const Byte *s1, const Byte *s2);
+
+#define PARAMRAMMACNAME "\010ParamRAM"
+
+extern Executor::LONGINT ROMlib_GMTcorrect; /* Correction for GMT to localtime */
+
+#define U70MINUSM04 2082844800 /* 1/1/1970 - 1/1/1904 */
+#define UNIXTIMETOMACTIME(x) ((x)-ROMlib_GMTcorrect + U70MINUSM04)
+#define MACTIMETOLUNIXTIME(x) ((x)-U70MINUSM04)
+#define MACTIMETOGUNIXTIME(x) ((x) + ROMlib_GMTcorrect - U70MINUSM04)
+
+extern char ROMlib_phoneyrom[];
+}
+#endif /* ! efined(__RSYS_OSUTIL__) */

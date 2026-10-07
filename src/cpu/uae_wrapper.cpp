@@ -417,6 +417,8 @@ void InvokeDebugger(void) {
  * NMI (level 7) takes priority; otherwise returns 1 for any pending interrupt.
  */
 int intlev(void) {
+    if (g_platform.m68k_intlev)
+        return g_platform.m68k_intlev();
     if (InterruptFlags & INTFLAG_NMI) {
         ClearInterruptFlag(INTFLAG_NMI);
         return 7;

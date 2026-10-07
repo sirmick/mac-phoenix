@@ -493,7 +493,7 @@ Response APIRouter::handle_emulator_start(const Request& req) {
         if (ctx_->subprocess->is_running()) {
             return Response::json("{\"success\": false, \"error\": \"Already running\"}");
         }
-        if (!ctx_->config || ctx_->config->rom_path.empty()) {
+        if (!ctx_->config || (ctx_->config->needs_rom() && ctx_->config->rom_path.empty())) {
             return Response::json(
                 "{\"success\": false, "
                 "\"error\": \"No ROM configured\", "

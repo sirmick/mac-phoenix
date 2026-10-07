@@ -1136,3 +1136,21 @@ body.fullscreen #video-section {
 .dot.red {
     background: #f44336;
 }
+
+/* Explanation shown under the ROM field when a ROM-less backend is chosen. */
+.backend-note {
+    margin: -4px 0 12px;
+    padding: 8px 10px;
+    border-left: 3px solid #6a9fd8;
+    background: rgba(106, 159, 216, 0.08);
+    font-size: 12px;
+    line-height: 1.45;
+    color: inherit;
+}
+.backend-note ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+}
+.backend-note[hidden] {
+    display: none;
+}

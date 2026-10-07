@@ -138,6 +138,8 @@ void setup_timer_interrupt(void)
  */
 uint64_t poll_timer_interrupt(void)
 {
+	if (g_platform.m68k_poll_interrupts)
+		g_platform.m68k_poll_interrupts();
 	return 0;
 }
 
