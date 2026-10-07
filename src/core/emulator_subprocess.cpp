@@ -15,6 +15,9 @@
 #include <string>
 #include <thread>
 #include <unistd.h>
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -280,6 +283,7 @@ bool EmulatorSubprocess::start()
 
 bool EmulatorSubprocess::stop()
 {
+    std::lock_guard<std::mutex> lk(reap_mutex_);
     if (!child_process_ || child_process_->state() == QProcess::NotRunning) {
         child_process_.reset();
         child_pid_ = -1;
@@ -325,8 +329,25 @@ bool EmulatorSubprocess::reset()
 
 void EmulatorSubprocess::reap_if_dead()
 {
-    if (child_process_ && child_process_->state() == QProcess::NotRunning &&
-        child_pid_ > 0) {
+    std::lock_guard<std::mutex> lk(reap_mutex_);
+    if (!child_process_ || child_pid_ <= 0) return;
+
+    // The parent has no Qt event loop, so QProcess never hears about a
+    // child that dies on its own: state() stays Running and the child
+    // stays a zombie. Ask the kernel without reaping (WNOWAIT), then let
+    // waitForFinished() do the reap so QProcess records the exit status.
+#ifndef _WIN32
+    if (child_process_->state() != QProcess::NotRunning) {
+        siginfo_t si;
+        memset(&si, 0, sizeof(si));
+        if (waitid(P_PID, child_pid_, &si, WEXITED | WNOHANG | WNOWAIT) != 0 ||
+            si.si_pid == 0)
+            return;
+        child_process_->waitForFinished(1000);
+    }
+#endif
+
+    if (child_process_->state() == QProcess::NotRunning) {
         const QProcess::ExitStatus es = child_process_->exitStatus();
         const int code = child_process_->exitCode();
         if (es == QProcess::CrashExit) {
@@ -335,6 +356,9 @@ void EmulatorSubprocess::reap_if_dead()
             fprintf(stderr, "[EmulatorSubprocess] Child exited with code %d\n", code);
         }
         clear_ipc_shm();
+        // No ipc_client_.disconnect() here: callers of is_running() may
+        // hold g_ipc_shm_mutex shared, and disconnect() takes it
+        // exclusively. start()/stop() disconnect.
         child_pid_ = -1;
     }
 }

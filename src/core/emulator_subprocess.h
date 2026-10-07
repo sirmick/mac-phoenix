@@ -13,6 +13,7 @@
 #include "../ipc/ipc_client.h"
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <sys/types.h>
 
 class QProcess;
@@ -45,6 +46,7 @@ private:
     // IPCClient::connect() and the SHM key /macemu-video-{PID} need it.
     std::unique_ptr<QProcess> child_process_;
     pid_t child_pid_ = -1;
+    std::mutex reap_mutex_;  // is_running() is called from many HTTP threads
 
     IPCClient ipc_client_;
 

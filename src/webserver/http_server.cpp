@@ -184,6 +184,9 @@ void Server::server_loop(std::shared_ptr<std::promise<bool>> listen_result) {
         listen_result->set_value(false);
         return;
     }
+    // Not inherited by the emulator child (it would hold the port open
+    // and show up as a second owner in ss/lsof).
+    ::fcntl(listen_fd, F_SETFD, FD_CLOEXEC);
     int reuse = 1;
     ::setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     int v6only = 0;
@@ -315,7 +318,7 @@ bool Server::try_websocket_upgrade(const Request& req, QTcpSocket* socket) {
 
     int qt_fd = socket->socketDescriptor();
     if (qt_fd < 0) return false;
-    int worker_fd = ::dup(qt_fd);
+    int worker_fd = ::fcntl(qt_fd, F_DUPFD_CLOEXEC, 0);
     if (worker_fd < 0) {
         fprintf(stderr, "HTTP: dup() for websocket handoff failed: %s\n", strerror(errno));
         return false;
@@ -432,7 +435,7 @@ bool Server::handle_client(QTcpSocket* socket) {
 
             int qt_fd = socket->socketDescriptor();
             if (qt_fd < 0) return false;
-            int worker_fd = ::dup(qt_fd);
+            int worker_fd = ::fcntl(qt_fd, F_DUPFD_CLOEXEC, 0);
             if (worker_fd < 0) {
                 fprintf(stderr, "HTTP: dup() for stream handoff failed: %s\n", strerror(errno));
                 return false;
