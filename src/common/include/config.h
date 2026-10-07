@@ -1,7 +1,7 @@
 /*
  *  config.h - Minimal configuration for mac-phoenix
  *
- *  This is a simplified config.h for meson builds.
+ *  Simplified config.h for the CMake build.
  *  Platform detection and feature configuration.
  */
 
