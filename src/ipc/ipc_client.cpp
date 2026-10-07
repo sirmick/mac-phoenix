@@ -15,7 +15,12 @@
 #include <shared_mutex>
 #include <unistd.h>
 #include <sys/socket.h>
+#ifndef _WIN32
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#endif
 
+#include <QFile>
 #include <QSharedMemory>
 #include <QLocalSocket>
 #include <QString>
@@ -64,6 +69,29 @@ bool IPCClient::connect_shm(pid_t pid)
     fprintf(stderr, "IPC Client: Connected to SHM '%s' (%dx%d)\n",
             shm_name_.c_str(), shm_->width, shm_->height);
     return true;
+}
+
+// QSharedMemory (SysV backend) only removes the segment when the last
+// process to detach goes through Qt's detach(). Both sides _exit() on
+// signals, so a parent+child killed together left a ~100 MB segment
+// behind on every run. Once both sides are attached, mark it for
+// removal: the kernel keeps it alive until the last process detaches,
+// however that process dies. Qt derives the SysV key as
+// ftok(nativeKey(), 'Q'), so we can find the id it uses.
+void IPCClient::release_shm_name()
+{
+#ifndef _WIN32
+    if (!shm_owner_) return;
+    QByteArray key_file = QFile::encodeName(shm_owner_->nativeKey());
+    key_t key = ftok(key_file.constData(), 'Q');
+    int id = key == -1 ? -1 : shmget(key, 0, 0);
+    if (id == -1 || shmctl(id, IPC_RMID, nullptr) != 0) {
+        fprintf(stderr, "IPC Client: could not mark SHM '%s' for removal: %s\n",
+                shm_name_.c_str(), strerror(errno));
+        return;
+    }
+    QFile::remove(shm_owner_->nativeKey());
+#endif
 }
 
 void IPCClient::disconnect_shm()
@@ -153,6 +181,8 @@ bool IPCClient::connect(pid_t pid)
         disconnect_shm();
         return false;
     }
+    // Child is up and has nothing left to re-attach by name.
+    release_shm_name();
     pid_ = pid;
     connected_ = true;
     return true;

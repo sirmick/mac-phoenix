@@ -61,6 +61,7 @@ public:
 
 private:
     bool connect_shm(pid_t pid);
+    void release_shm_name();
     void disconnect_shm();
     bool connect_control_socket(pid_t pid);
     bool connect_notify_socket(pid_t pid);
