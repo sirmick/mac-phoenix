@@ -18,3 +18,14 @@ Handle Executor::C_GetResourceMapHandle(INTEGER refNum)
     ROMlib_setreserr(map ? noErr : resFNotFound);
     return (Handle)map;
 }
+
+SignedByte Executor::C_GetResourceMapPrivateFlags(Handle map)
+{
+    if(!map)
+    {
+        ROMlib_setreserr(-109); /* nilHandleErr */
+        return 0;
+    }
+    ROMlib_setreserr(noErr);
+    return (*(resmaphand)map)->resfatr & 0x1E;
+}

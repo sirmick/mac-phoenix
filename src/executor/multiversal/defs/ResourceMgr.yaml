@@ -702,6 +702,24 @@
 # ####
 
 - function:
+    name: GetResourceMapPrivateFlags
+    return: SignedByte
+    args:
+      - name: map
+        type: Handle
+    dispatcher: ResourceDispatch
+    selector: 0x0008
+    executor: C_
+    comment: >
+      MacPhoenix. Private in 7.5.5 (name is a guess): the map's attribute
+      byte (offset 23) masked with $1E -- the private bits, not
+      read-only/compact/changed; a nil map sets ResErr to nilHandleErr and
+      returns 0. Finder (opening a disk's saved windows) and the System's
+      HOpenResFile/CloseResFile patches call it.
+
+# ####
+
+- function:
     name: ReadPartialResource
     args:
       - name: resource
