@@ -495,7 +495,9 @@ void LocalVolume::getInfoCommon(CInfoPBPtr pb, InfoKind infoKind)
 
 /* MacPhoenix: report the data folder as a volume of vcbNmAlBlks blocks
    holding what the folder actually holds (both forks, rounded up to whole
-   blocks, as HFS allocates), with no more free space than the host has.
+   blocks, as HFS allocates), with no more free space than the host has,
+   and its file and folder counts (Finder rebuilds the desktop database
+   only on a volume with files on it).
    The walk is redone at most every two seconds and gives up after a
    quarter of a second (a big shared folder): the volume then counts as
    full apart from the host's free space. */
@@ -510,7 +512,7 @@ void LocalVolume::updateSpace()
     const uint64_t block = vcb.vcbAlBlkSiz;
     const uint64_t total = vcb.vcbNmAlBlks;
     auto blocks = [block](uint64_t n) { return (n + block - 1) / block; };
-    uint64_t used = 0;
+    uint64_t used = 0, files = 0, dirs = 0;
     bool complete = true;
     boost::system::error_code ec;
     for(fs::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
@@ -521,8 +523,24 @@ void LocalVolume::updateSpace()
             break;
         }
         boost::system::error_code sec;
+        if(isHidden(*it))
+        {
+            if(fs::is_directory(it->path(), sec))
+                it.disable_recursion_pending();
+            continue;
+        }
         if(fs::is_regular_file(it->path(), sec))
+        {
             used += blocks(fs::file_size(it->path(), sec));
+            ++files;
+        }
+        else if(fs::is_directory(it->path(), sec))
+            ++dirs;
+    }
+    if(complete)
+    {
+        vcb.vcbFilCnt = files;
+        vcb.vcbDirCnt = dirs;
     }
 
     uint64_t free = complete && used < total ? total - used : complete ? 0 : total;

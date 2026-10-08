@@ -45,18 +45,20 @@ dispatchers:
       - value: 0x31
         name: AddAppleMenuItem
         status: guess
-        source: 7.5.5 trace + disassembly (scod +3020; Finder CODE 2 +c68)
+        source: 7.5.5 trace + disassembly (scod -16463 +3020; Finder CODE 2 +c68)
         comment: >
-          16 bytes of params, returns OSErr. Adds an entry to a list the
-          Process Manager owns (head at PM A5-1200; entries are handles in
-          the PM heap): first removes the caller's entries with the same
-          key (as $32), then inserts a copy of the name string in sorted
-          order. Key (long) must be nonzero and the name non-empty, else
+          22 bytes of params (Pascal order: StringPtr name, short sortGroup,
+          short flagA, Handle iconSuite, short flagB, StringPtr info, long
+          key), returns OSErr. Finder leaves name on the stack from an
+          earlier call, so its own pushes look like 18 bytes. Removes the
+          caller's entries with the same key (as $32), then inserts an entry
+          {next, suite, owner, key, sortGroup.w, flagA.b, flagB.b,
+          NewString(info), [len+2][0][0]name} sorted (sortGroup goes to the
+          comparison). Key must be nonzero and name non-empty, else
           paramErr. Finder calls it up to 50 times at startup, once per
-          object, after building an icon suite for it. Name: in System 7
-          the Process Manager draws the Apple menu and Finder feeds it the
-          Apple Menu Items folder (sorted by name, small icons, 50-item
-          limit), which this matches.
+          object in the Apple Menu Items folder, after building an icon
+          suite for it; the two zero bytes are where the Apple menu draws
+          the item's small icon.
       - value: 0x32
         name: RemoveAppleMenuItems
         status: guess

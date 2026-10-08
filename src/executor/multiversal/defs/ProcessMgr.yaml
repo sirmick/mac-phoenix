@@ -267,22 +267,31 @@
     name: AddAppleMenuItem
     return: OSErr
     args:
-      - name: flags
+      - name: name
+        type: StringPtr
+      - name: sortGroup
+        type: int16_t
+      - name: flagA
         type: int16_t
       - name: iconSuite
         type: Handle
-      - name: reserved
+      - name: flagB
         type: int16_t
-      - name: item
-        type: Ptr
+      - name: info
+        type: StringPtr
       - name: key
-        type: Ptr
+        type: int32_t
     dispatcher: OSDispatch
     selector: 0x0031
     executor: C_
     comment: >
       Finder feeds the Apple Menu Items folder to the Process Manager, which
-      draws the Apple menu. Argument roles beyond the icon suite are guesses.
+      draws the Apple menu (22 bytes of params; System 'scod' -16463 +3020).
+      name must be non-empty and key nonzero, else paramErr. The entry keeps
+      the name behind two placeholder bytes (the icon's room), the suite,
+      the key, sortGroup (passed to the sort comparison), the low bytes of
+      flagA/flagB and a copy of info. Names other than name, iconSuite and
+      key are guesses.
 
 # ####
 

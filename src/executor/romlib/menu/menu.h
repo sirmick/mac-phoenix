@@ -55,6 +55,11 @@ extern void ROMlib_install_system_menus();
 extern bool ROMlib_system_menu_select(INTEGER mid, INTEGER item);
 extern bool ROMlib_icon_title_p(MenuHandle mh);
 extern Handle ROMlib_icon_title_suite(MenuHandle mh);
+extern void ROMlib_apple_menu_add(StringPtr name, int16_t group, Handle suite, int32_t key);
+extern bool ROMlib_apple_menu_remove(int32_t key);
+extern void ROMlib_apple_menu_attach(MenuHandle mh);
+extern void ROMlib_apple_menu_update();
+extern Handle ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item);
 enum { kSystemMenuTitleWidth = 28, kSystemMenuRightMargin = 11 };
 
 #define mbDraw 0

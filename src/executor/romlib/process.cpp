@@ -3,6 +3,7 @@
  */
 
 #include <base/common.h>
+#include <menu/menu.h>
 
 #include <ProcessMgr.h>
 #include <ResourceMgr.h>
@@ -432,32 +433,22 @@ OSErr Executor::C_SetProcessDragHooks(int32_t hooks)
     return noErr;
 }
 
-/* The Apple menu's items as Finder hands them over; drawing the Apple menu
-   from them is Process Manager work still to come. */
-struct AppleMenuItem
+/* The Apple menu's items as Finder hands them over (menu/sysmenu.cpp
+   keeps them and builds the Apple menu). */
+OSErr Executor::C_AddAppleMenuItem(StringPtr name, int16_t sortGroup, int16_t flagA,
+                                   Handle iconSuite, int16_t flagB, StringPtr info,
+                                   int32_t key)
 {
-    int32_t key;
-    Ptr item;
-    Handle iconSuite;
-};
-static std::vector<AppleMenuItem> apple_menu_items;
-
-OSErr Executor::C_AddAppleMenuItem(int16_t flags, Handle iconSuite, int16_t reserved,
-                                   Ptr item, Ptr key)
-{
-    (void)flags;
-    (void)reserved;
-    if(!key)
+    (void)flagA;
+    (void)flagB;
+    (void)info;
+    if(!name || !name[0] || !key)
         return paramErr;
-    apple_menu_items.push_back({ (int32_t)US_TO_SYN68K(key), item, iconSuite });
+    ROMlib_apple_menu_add(name, sortGroup, iconSuite, key);
     return noErr;
 }
 
 OSErr Executor::C_RemoveAppleMenuItems(int32_t key)
 {
-    auto n = apple_menu_items.size();
-    apple_menu_items.erase(std::remove_if(apple_menu_items.begin(), apple_menu_items.end(),
-                                          [key](const AppleMenuItem& i) { return !key || i.key == key; }),
-                           apple_menu_items.end());
-    return (key && n == apple_menu_items.size()) ? paramErr : noErr;
+    return ROMlib_apple_menu_remove(key) ? noErr : paramErr;
 }

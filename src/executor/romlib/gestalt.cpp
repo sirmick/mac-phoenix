@@ -151,8 +151,10 @@ static gestaltentry_t gtable[] = {
     {
         gestaltNativeCPUtype, gestaltCPU68040,
     },
+    /* MacPhoenix: was gestaltMacQuadra610; a real 7.5.5 boot under
+       Basilisk II reports 20 ('mach' in its Gestalt table). */
     {
-        gestaltMachineType, gestaltMacQuadra610,
+        gestaltMachineType, 20,
     },
 #endif
     /* MacPhoenix: was PowerPC-only, 0x3FF. Bit 10 added: Finder 7.5.5 hands

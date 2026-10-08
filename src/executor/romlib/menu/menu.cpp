@@ -482,6 +482,14 @@ static void handleinsert(Handle h, StringPtr strp)
 
 void Executor::C_AppendResMenu(MenuHandle mh, ResType restype)
 {
+    /* MacPhoenix: with Apple's System file this is the Apple menu, and the
+       Process Manager lists the Apple Menu Items folder in it instead of
+       desk accessories (menu/sysmenu.cpp). */
+    if(mh && restype == "DRVR"_4 && ROMlib_apple_system_file)
+    {
+        ROMlib_apple_menu_attach(mh);
+        return;
+    }
     if(mh)
     {
         int nres, n;
@@ -1328,6 +1336,7 @@ LONGINT Executor::C_MenuSelect(Point p)
     Rect spooeyr;
     LONGINT retval;
 
+    ROMlib_apple_menu_update();
     LM(TopMenuItem) = LM(MBarHeight);
     retval = ROMlib_menuhelper((MenuHandle)0, &spooeyr, 0, false, 0);
     return retval;
@@ -1420,6 +1429,7 @@ LONGINT Executor::C_MenuKey(CharParameter thec)
 
     if(thec >= 0x1B && thec <= 0x1F)
         /*-->*/ return 0;
+    ROMlib_apple_menu_update();
     c = thec;
     if(c >= 'a' && c <= 'z')
         c = 'A' + c - 'a';

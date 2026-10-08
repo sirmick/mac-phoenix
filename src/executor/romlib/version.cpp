@@ -61,10 +61,36 @@ const char *ROMlib_executor_full_name = "Executor 2000 " EXECUTOR_VERSION;
                    _major, _minor, _rev, args);                                                                  \
     } while(0)
 
+bool ROMlib_apple_system_file;
+
 void
 ROMlib_set_system_version(uint32_t version)
 {
     static uint32_t old_version = -1;
+
+    /* MacPhoenix: Apple's System file (it has 'lpch' resources; Executor's
+       own has none) says its version in 'vers' 1, and its resources stay
+       as Apple wrote them. */
+    {
+        GUEST<INTEGER> save_map = LM(CurMap);
+        LM(CurMap) = LM(SysMap);
+        bool apple = Count1Resources("lpch"_4) > 0;
+        Handle vers = apple ? C_Get1Resource("vers"_4, 1) : nullptr;
+        LM(CurMap) = save_map;
+        ROMlib_apple_system_file = apple;
+        if(apple)
+        {
+            if(vers && GetHandleSize(vers) >= 2)
+            {
+                uint8_t *v = (uint8_t *)*vers;
+                version = ((v[0] >> 4) * 10 + (v[0] & 0xF)) << 8 | v[1];
+            }
+            system_version = version;
+            LM(SysVersion) = version;
+            gestalt_set_system_version(version);
+            return;
+        }
+    }
 
     if(version != old_version)
     {

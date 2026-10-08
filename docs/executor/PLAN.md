@@ -314,6 +314,18 @@ Kept small so upstream fixes can be merged by hand:
 * `appleevent/AE_hdlr.cpp`: ExpandMem+$1AE (System heap reserve) is 64K;
   multiversal `AE_info_t` names it.
 * `file/localvolume/localvolume.cpp`: host volumes report a 2 GB HFS volume
-  holding the folder's real contents (capped by host free space) and bless
-  their System Folder (`vcbFndrInfo[0]`).
+  holding the folder's real contents (capped by host free space) and its
+  file/folder counts (Finder only rebuilds the desktop database of a volume
+  with files), and bless their System Folder (`vcbFndrInfo[0]`).
+* `menu/sysmenu.cpp`, `process.cpp`: the Apple menu from Finder's Apple Menu
+  Items list (OSDispatch $31/$32, 22-byte $31); `AppendResMenu('DRVR')`
+  with Apple's System file marks the Apple menu instead of listing desk
+  accessories and Executor's items; `MenuSelect`/`MenuKey` bring it up to
+  date; `stdmdef.cpp` draws each entry's small icon (18-pixel rows) and
+  sizes items as 7.5.5 does (10-pixel margin, command-key room only with a
+  key).
+* `version.cpp`: with Apple's System file (it has `lpch`), the system
+  version comes from its `vers` 1 and its resources are left alone
+  (`ROMlib_apple_system_file`); `gestalt.cpp` `mach` 20 as on the
+  reference boot.
 * `tests/`: low-stack test thread, PPC tests skip, fixture path, ctest names.

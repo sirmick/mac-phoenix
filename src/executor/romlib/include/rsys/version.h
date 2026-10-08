@@ -10,6 +10,10 @@ extern const char *ROMlib_executor_full_name;
 
 extern void ROMlib_set_system_version(uint32_t version);
 
+/* MacPhoenix: the system resource map is Apple's System file (set by
+   ROMlib_set_system_version, after InitResources). */
+extern bool ROMlib_apple_system_file;
+
 #ifdef __cplusplus
 }
 #endif

@@ -20,11 +20,14 @@
 #include <ToolboxUtil.h>
 #include <OSUtil.h>
 #include <FontMgr.h>
+#include <IntlUtil.h>
 
 #include <menu/menu.h>
 #include <mman/mman.h>
 
+#include <algorithm>
 #include <cstring>
+#include <vector>
 
 using namespace Executor;
 
@@ -290,4 +293,90 @@ Handle Executor::ROMlib_icon_title_suite(MenuHandle mh)
 {
     const uint8_t *t = (const uint8_t *)(*mh)->menuData + 2;
     return (Handle)(uintptr_t)((uint32_t)t[0] << 24 | t[1] << 16 | t[2] << 8 | t[3]);
+}
+
+/* The Apple menu (Process Manager, System 7). Finder hands over the Apple
+   Menu Items folder one item at a time (OSDispatch $31/$32); AppendResMenu
+   of 'DRVR' on an application's Apple menu, which on 7.5.5 lists these
+   items instead of desk accessories, marks that menu as theirs, and the
+   menu is brought up to date before it is pulled down. Item text is the
+   name behind two placeholder bytes, as on a real boot; the menu
+   definition draws the item's small icon in their place (18-pixel rows,
+   text 20 pixels in). */
+namespace
+{
+struct AppleItem
+{
+    std::vector<uint8_t> text; /* Str255: [len][0][0][name] */
+    int16_t group;
+    Handle suite;
+    int32_t key;
+};
+std::vector<AppleItem> apple_items;
+MenuHandle apple_menu;
+INTEGER apple_base; /* items before the Apple Menu Items ones */
+bool apple_dirty;
+}
+
+void Executor::ROMlib_apple_menu_add(StringPtr name, int16_t group, Handle suite, int32_t key)
+{
+    apple_items.erase(std::remove_if(apple_items.begin(), apple_items.end(),
+                                     [key](const AppleItem& i) { return i.key == key; }),
+                      apple_items.end());
+    AppleItem item;
+    int len = std::min(name[0], (uint8_t)253);
+    item.text.assign(len + 3, 0);
+    item.text[0] = len + 2;
+    memcpy(&item.text[3], name + 1, len);
+    item.group = group;
+    item.suite = suite;
+    item.key = key;
+    auto pos = std::upper_bound(apple_items.begin(), apple_items.end(), item,
+        [](const AppleItem& a, const AppleItem& b) {
+            if(a.group != b.group)
+                return a.group < b.group;
+            return IUCompString((StringPtr)a.text.data(), (StringPtr)b.text.data()) < 0;
+        });
+    apple_items.insert(pos, std::move(item));
+    apple_dirty = true;
+}
+
+bool Executor::ROMlib_apple_menu_remove(int32_t key)
+{
+    auto n = apple_items.size();
+    apple_items.erase(std::remove_if(apple_items.begin(), apple_items.end(),
+                                     [key](const AppleItem& i) { return !key || i.key == key; }),
+                      apple_items.end());
+    apple_dirty = true;
+    return !key || n != apple_items.size();
+}
+
+void Executor::ROMlib_apple_menu_attach(MenuHandle mh)
+{
+    apple_menu = mh;
+    apple_base = CountMItems(mh);
+    apple_dirty = true;
+}
+
+void Executor::ROMlib_apple_menu_update()
+{
+    if(!apple_dirty || !apple_menu || ROMlib_mentosix((*apple_menu)->menuID) == -1)
+        return;
+    apple_dirty = false;
+    while(CountMItems(apple_menu) > apple_base)
+        DeleteMenuItem(apple_menu, CountMItems(apple_menu));
+    for(const AppleItem& item : apple_items)
+    {
+        INTEGER n = CountMItems(apple_menu) + 1;
+        AppendMenu(apple_menu, (StringPtr) "\001x");
+        SetMenuItemText(apple_menu, n, (StringPtr)item.text.data());
+    }
+}
+
+Handle Executor::ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item)
+{
+    if(mh != apple_menu || item <= apple_base
+       || item - apple_base > (INTEGER)apple_items.size())
+        return nullptr;
+    return apple_items[item - apple_base - 1].suite;
 }

@@ -103,6 +103,12 @@ class Disk:
                 names.append(line[:-1] if line[-1:] in b"*" else line)
         return names
 
+    def folders(self, folder):
+        """Sub-folders of a folder, as raw Mac names (bytes)."""
+        self._mount()
+        r = self._run("hls", "-1aF", b":" + folder)
+        return [line[:-1] for line in r.stdout.split(b"\n") if line.endswith(b":")]
+
     def macbinary(self, path):
         """One file (raw Mac path, bytes) as MacBinary, or None."""
         key = hashlib.sha1(str(self.image).encode() + path).hexdigest()[:16]

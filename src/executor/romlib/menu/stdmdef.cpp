@@ -21,6 +21,18 @@ using namespace Executor;
 
 static Rect *current_menu_rect;
 
+/* Apple Menu Items entries (menu/sysmenu.cpp), measured on a real 7.5.5
+   boot: 18-pixel rows, a 16x16 icon where the text would start, the text
+   20 pixels further in; the item text starts with two placeholder bytes. */
+enum
+{
+    kAppleItemHeight = 18,
+    kAppleItemTextIndent = 20,
+    kApplePlaceholder = 2,
+    kAppleItemIconRoom = 16,
+    kMenuRightMargin = 10,
+};
+
 #define TOP_ARROW_P() \
     (LM(TopMenuItem) < current_menu_rect->top)
 #define BOTTOM_ARROW_P() \
@@ -164,11 +176,19 @@ void size_menu(MenuHandle mh, tablePtr tablep)
 
         height += tp[1].top - tp[0].top;
         TextFace(tp->options->mstyle);
-        w += StringWidth(tp->name);
-#if 0
-      if (iskeyequiv(tp) || tp->options->mkeyeq == 0x1B)
-#endif
-        w += 2 * cloversize + 1;
+        /* MacPhoenix: widths as a 7.5.5 boot draws them (File, Special and
+           Apple menus measured): text plus a 10-pixel margin, room for the
+           command key only on items that have one (or a submenu arrow),
+           and 16 pixels for an Apple Menu Items entry's icon, whose
+           placeholder bytes don't count. */
+        if(ROMlib_apple_menu_icon(mh, tp - tablep->entry + 1))
+            w += kAppleItemIconRoom
+                 + TextWidth((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
+        else
+            w += StringWidth(tp->name);
+        w += kMenuRightMargin;
+        if(iskeyequiv(tp) || tp->options->mkeyeq == 0x1B)
+            w += 2 * cloversize + 2;
         if(height < max_height)
             actual_height = height;
         if(width < w)
@@ -332,8 +352,11 @@ draw_item(Rect *rp, struct table::tableentry *tp, int32_t bit, int item, MenuHan
     v = top + ascent;
 
     draw_icon_p = get_icon_info(tp->options, &icon_info, true);
+    Handle apple_suite = ROMlib_apple_menu_icon(mh, item);
     if(draw_icon_p)
         v += (icon_info.height - lineheight) / 2;
+    else if(apple_suite)
+        v += (kAppleItemHeight - lineheight) / 2;
 
     menu_item_colors(MI_ID(mh), item,
                      &bk_color, &title_color, &mark_color, &command_color);
@@ -423,7 +446,20 @@ draw_item(Rect *rp, struct table::tableentry *tp, int32_t bit, int item, MenuHan
 
         MoveTo(rp->left + icon_info.width + checksize + 2, v);
         TextFace(tp->options->mstyle);
-        DrawString(tp->name);
+        if(apple_suite)
+        {
+            Rect ir;
+            ir.left = rp->left + checksize + 2;
+            ir.top = top + (kAppleItemHeight - 16) / 2;
+            ir.right = ir.left + 16;
+            ir.bottom = ir.top + 16;
+            PlotIconSuite(&ir, atNone, invert_p ? ttSelected : ttNone, apple_suite);
+            RGBForeColor(invert_p ? &bk_color : &title_color);
+            Move(kAppleItemTextIndent, 0);
+            DrawText((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
+        }
+        else
+            DrawString(tp->name);
         TextFace(0);
     }
     rtmp.left = rp->left;
@@ -757,6 +793,8 @@ void Executor::C_mdef0(INTEGER mess, MenuHandle mh, Rect *rp, Point p,
         tabp->options = (mextp)(sp + (unsigned char)*sp + 1);
         tabp->top = v;
         get_icon_info(tabp->options, &icon_info, false);
+        if(ROMlib_apple_menu_icon(mh, tabp - tp->entry + 1))
+            icon_info.height = kAppleItemHeight;
         v += icon_info.height ? std::max<INTEGER>(icon_info.height, lineheight) : lineheight;
     }
     tabp->top = v;
