@@ -1289,6 +1289,13 @@ void m68k_emulop(uae_u32 opcode)
 	MakeFromSR();
 }
 
+/* Called for every A-line trap when set (--trace-atraps, core/snapshot.cpp). */
+void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, int intmask) = nullptr;
+/* Return address of the innermost traced trap (0: none). The interpreter
+   loop calls uae_atrap_return_hook when PC reaches it. */
+uint32_t uae_atrap_watch_pc = 0;
+void (*uae_atrap_return_hook)(uint32_t sp) = nullptr;
+
 void REGPARAM2 op_illg (uae_u32 opcode)
 {
 	uaecptr pc = m68k_getpc ();
@@ -1296,6 +1303,8 @@ void REGPARAM2 op_illg (uae_u32 opcode)
 	/* Check if platform trap handler is registered (g_platform declared in platform.h) */
 
 	if ((opcode & 0xF000) == 0xA000) {
+		if (uae_atrap_hook)
+			uae_atrap_hook((uint16_t)opcode, pc, m68k_areg(regs, 7), regs.intmask);
 		if (g_platform.trap_handler) {
 			/* Platform handler - pass is_primary=true for UAE */
 			g_platform.trap_handler(0xA, (uint16_t)opcode, true);
@@ -1463,6 +1472,8 @@ void m68k_do_execute (void)
 		m68k_record_step(m68k_getpc());
 #endif
 		(*cpufunctbl[opcode])(opcode);
+		if (uae_atrap_watch_pc && m68k_getpc() == uae_atrap_watch_pc)
+			uae_atrap_return_hook(m68k_areg(regs, 7));
 
 		cpu_check_ticks();
 		if (SPCFLAGS_TEST(SPCFLAG_ALL_BUT_EXEC_RETURN)) {

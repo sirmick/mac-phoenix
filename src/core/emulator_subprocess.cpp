@@ -134,6 +134,10 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back("--audio");
     }
 
+    if (config_->trace_atraps) {
+        args.push_back("--trace-atraps");
+    }
+
     if (config_->bridge_enabled) {
         args.push_back("--bridge");
     }

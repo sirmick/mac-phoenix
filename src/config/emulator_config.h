@@ -153,6 +153,7 @@ struct EmulatorConfig {
     bool debug_mode_switch = false;
     bool debug_perf = false;
     bool debug_network = false;
+    bool trace_atraps = false;         // record (A-trap, caller) pairs; dumped with snapshots
 
     // Internal (not serialized)
     std::string config_path;

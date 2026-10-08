@@ -183,6 +183,8 @@ void Start680x0_until_stopped(void)
 		opcode = do_get_mem_word((uae_u16 *)regs.pc_p);
 #endif
 		(*cpufunctbl[opcode])(opcode);
+		if (uae_atrap_watch_pc && m68k_getpc() == uae_atrap_watch_pc)
+			uae_atrap_return_hook(m68k_areg(regs, 7));
 
 		// Check CPU tick timers
 		cpu_check_ticks();

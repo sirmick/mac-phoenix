@@ -133,6 +133,7 @@ static void reserve_mac_address_space_early()
 #include "webserver/api_handlers.h"
 #include "webrtc/webrtc_server.h"
 #include "drivers/video/encoders/codec.h"
+#include "core/snapshot.h"
 
 // WebRTC globals
 namespace webrtc {
@@ -542,6 +543,8 @@ int main(int argc, char **argv)
 	}
 
 	config::print_config(emu_config);
+	if (emu_config.trace_atraps)
+		atrap_trace_enable();
 
 	command_bridge_init();
 

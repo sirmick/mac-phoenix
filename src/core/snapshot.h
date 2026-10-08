@@ -46,4 +46,12 @@ void snapshot_service(const SnapshotMemory& mem);
 // Child side, ROM backends: service a pending request from the IRQ EmulOp.
 void snapshot_service_from_irq(M68kRegisters* r);
 
+// A-trap trace (--trace-atraps, UAE). Every A-line trap is recorded; each
+// distinct (trap word, caller PC, enclosing trap) is kept with a hit count,
+// first-seen order, interrupt mask, CurApName and the code bytes around the
+// call, so a caller can be matched to its resource even after its segment
+// moved or was purged. The enclosing trap comes from a shadow stack keyed
+// on A7. Snapshots write it as atraps.tsv.
+void atrap_trace_enable();
+
 #endif // SNAPSHOT_H

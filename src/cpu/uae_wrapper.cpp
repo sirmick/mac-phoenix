@@ -288,6 +288,8 @@ void uae_cpu_execute_one(void) {
     }
 
     (*cpufunctbl[opcode])(opcode);
+    if (uae_atrap_watch_pc && m68k_getpc() == uae_atrap_watch_pc)
+    	uae_atrap_return_hook(m68k_areg(regs, 7));
 
     /* Check tick counter — drives cpu_do_check_ticks() → poll_timer_interrupt()
      * which sets SPCFLAG_INT via TriggerInterrupt(). The interrupt will be
