@@ -85,6 +85,7 @@ public:
     std::optional<FSSpec> nativePathToFSSpec(const fs::path& p);
 
     mac_string getVolumeName() const;
+    const fs::path& getRoot() const { return root; }
 
     LocalVolume(VCB& vcb, fs::path root);
 

@@ -504,7 +504,7 @@ source_group(MPW FILES ${mpw_sources})
 set(misc_sources
   desk.cpp device.cpp disk.cpp diskinit.cpp dump.cpp
   gestalt.cpp iu.cpp launch.cpp  notify.cpp 
-   osutil.cpp pack.cpp scrap.cpp script.cpp segment.cpp serial.cpp
+   osutil.cpp pack.cpp scrap.cpp script.cpp segment.cpp serial.cpp hostdisk.cpp
   stdfile.cpp romlib_stubs.cpp  toolevent.cpp toolutil.cpp 
    aboutbox.cpp
   version.cpp shutdown.cpp screen-dump.cpp

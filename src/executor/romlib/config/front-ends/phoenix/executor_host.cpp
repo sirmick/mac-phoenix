@@ -61,6 +61,14 @@ int run(const Config& c)
         vols += disk;
     }
     paths["MacVolumes"] = vols;
+    // The data folder is the boot volume, so the System Folder sits at its
+    // root as on a real disk; Finder walks whole volumes (Desktop rebuild),
+    // so the host root must never be one.
+    ROMlib_local_volume_roots.clear();
+    if(!c.data_dir.empty())
+        ROMlib_local_volume_roots.push_back(c.data_dir);
+    for(const auto& f : c.shared_folders)
+        ROMlib_local_volume_roots.push_back(f);
     ROMlib_readonly_images = true;
     ROMlib_heap_death_dialog = false;
 

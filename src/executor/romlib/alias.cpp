@@ -110,35 +110,6 @@ test_directory(INTEGER vref, LONGINT dirid, const char *sub_dirp,
 
 
 static OSErr
-get_tmp_vref_and_dirid(INTEGER vref, INTEGER *tmp_vrefp, LONGINT *tmp_diridp)
-{
-    // FIXME: get proper paths
-    // FIXME: temp directory for other volumes?
-#ifdef _WIN32
-    auto spec = nativePathToFSSpec("C:/temp");
-#else
-    auto spec = nativePathToFSSpec("/tmp");
-#endif
-    if(!spec)
-        return fnfErr;
-
-    CInfoPBRec cpb;
-
-    cpb.hFileInfo.ioNamePtr = spec->name;
-    cpb.hFileInfo.ioVRefNum = spec->vRefNum;
-    cpb.hFileInfo.ioFDirIndex = 0;
-    cpb.hFileInfo.ioDirID = spec->parID;
-    OSErr err = PBGetCatInfo(&cpb, false);
-    if(err == noErr && !(cpb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR))
-        err = dupFNErr;
-    if(err == noErr)
-    {
-        *tmp_diridp = cpb.dirInfo.ioDrDirID;
-        *tmp_vrefp = spec->vRefNum;
-    }
-    return err;
-}
-static OSErr
 create_directory(INTEGER sys_vref, LONGINT sys_dirid, const char *sub_dirp,
                  LONGINT *new_idp)
 {
@@ -155,6 +126,58 @@ create_directory(INTEGER sys_vref, LONGINT sys_dirid, const char *sub_dirp,
     OSErr err = PBDirCreate(&pb, false);
     if(err == noErr)
         *new_idp = pb.fileParam.ioDirID;
+    return err;
+}
+
+/* The folders at a volume's root, named as in Apple's Folder Manager
+   (System 7.5.5 'lpch' 31); 'empt' is "Network Trash Folder" only on
+   shared volumes. */
+enum { kOnSystemDisk = -32768 };
+
+static OSErr
+find_volume_folder(int16_t vRefNum, OSType folderType, Boolean createFolder,
+                   GUEST<int16_t> *foundVRefNum, GUEST<int32_t> *foundDirID)
+{
+    const char *name = folderType == kDesktopFolderType ? "Desktop Folder"
+                     : folderType == kTemporaryFolderType ? "Temporary Items"
+                     : "Trash";
+
+    HParamBlockRec vpb;
+    memset(&vpb, 0, sizeof vpb);
+    vpb.volumeParam.ioVRefNum = vRefNum == kOnSystemDisk ? (int16_t)LM(BootDrive)
+                                                          : vRefNum;
+    OSErr err = PBHGetVInfo(&vpb, false);
+    if(err != noErr)
+        return err;
+    INTEGER vref = vpb.volumeParam.ioVRefNum;
+
+    LONGINT dirid;
+    err = test_directory(vref, 2, name, &dirid);
+    if(err == fnfErr && createFolder)
+    {
+        err = create_directory(vref, 2, name, &dirid);
+        if(err == noErr)
+        {
+            CInfoPBRec cpb;
+            Str255 pname;
+            str255_from_c_string(pname, name);
+            memset(&cpb, 0, sizeof cpb);
+            cpb.dirInfo.ioNamePtr = pname;
+            cpb.dirInfo.ioVRefNum = vref;
+            cpb.dirInfo.ioDrDirID = 2;
+            if(PBGetCatInfo(&cpb, false) == noErr)
+            {
+                cpb.dirInfo.ioDrUsrWds.frFlags = cpb.dirInfo.ioDrUsrWds.frFlags | fInvisible;
+                cpb.dirInfo.ioDrDirID = 2;
+                PBSetCatInfo(&cpb, false);
+            }
+        }
+    }
+    if(err == noErr)
+    {
+        *foundVRefNum = vref;
+        *foundDirID = dirid;
+    }
     return err;
 }
 
@@ -207,22 +230,8 @@ OSErr Executor::C_FindFolder(int16_t vRefNum, OSType folderType,
             case kTrashFolderType:
             case kWhereToEmptyTrashFolderType:
             case kTemporaryFolderType:
-                /* These cases aren't properly handled, but they should allow some apps
-   to get further */
-                {
-                    INTEGER tmp_vref;
-                    LONGINT tmp_dirid;
-
-                    retval = get_tmp_vref_and_dirid(vRefNum, &tmp_vref, &tmp_dirid);
-                    warning_unimplemented("poorly implemented");
-                    if(retval == fnfErr && createFolder)
-                        warning_unimplemented("Didn't attempt to create folder");
-                    if(retval == noErr)
-                    {
-                        *foundVRefNum = tmp_vref;
-                        *foundDirID = tmp_dirid;
-                    }
-                }
+                retval = find_volume_folder(vRefNum, folderType, createFolder,
+                                            foundVRefNum, foundDirID);
                 break;
             default:
                 warning_unexpected("unknown folderType");

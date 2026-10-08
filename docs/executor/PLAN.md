@@ -268,4 +268,25 @@ Kept small so upstream fixes can be merged by hand:
   child snapshots RAM and registers as `executor-fatal`).
 * `res/resPrivate.cpp` (new): private `ResourceDispatch` selectors;
   multiversal `ResourceDispatch` selector mask `D0<0xFF>`.
+* `config/front-ends/phoenix/executor_host.cpp`: the data folder (and the
+  shared folders) are the volumes, so the boot volume's root holds the
+  System Folder; volumes are named after their folder.
+* `mman/mman.cpp`: `HandleZone` keeps an empty handle in `TheZone` when that
+  zone (nested in the Process Manager heap) holds its master pointer.
+* `icon.cpp`: `GetLabel` takes nil outputs and label 0; Icon Utilities
+  rewritten around one icon source (suite, cache, `PlotIconMethod` getter):
+  alignment, label/selected/open/offline/disabled transforms, regions, hit
+  tests, icon caches, `ForEachIconDo`; suite layout in `rsys/icon.h`;
+  multiversal `IconGetterUPP`/`IconActionUPP` are typed callbacks.
+* `alias.cpp`: `FindFolder` desktop/trash/temporary folders are "Desktop
+  Folder", "Trash" and "Temporary Items" at the volume root (Apple's Folder
+  Manager names), created invisible; were host `/tmp`.
+* `finder.cpp`: the Desktop Manager (`PBDT*`), one database per volume, kept
+  in `.desktopdb` at a host volume's root; host volumes report
+  `bHasDesktopMgr` (`hfs/hfsXbar.cpp` `PBHGetVolParms`).
+* `hostdisk.cpp` (new): `.Disk` driver (unit -63, as Basilisk II) and a
+  fixed drive per host volume: driver gestalt, drive info, drive icon;
+  multiversal `NDEVICES` 96 (the real unit table's size).
+* `quickdraw/qIMVI.cpp`: `BitMapToRegion` builds the region in host memory
+  and sizes the handle once (it wrote past a handle it failed to grow).
 * `tests/`: low-stack test thread, PPC tests skip, fixture path, ctest names.

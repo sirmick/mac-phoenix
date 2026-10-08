@@ -177,7 +177,7 @@
 - enum:
     values:
       - name: NDEVICES
-        value: 48
+        value: 96
 
 # ####
 

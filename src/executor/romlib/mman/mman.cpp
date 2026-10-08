@@ -880,8 +880,11 @@ THz HandleZone(Handle h)
     /* MacPhoenix: temp memory handles live in the Process Manager heap. An
        empty one belongs there too: real 7.5.5 Finder reloads purged code
        with ReallocateHandle and TheZone = 0, and the block lands in the PM
-       heap. */
-    else if(ROMlib_pm_zone && HANDLE_IN_ZONE_P(h, ROMlib_pm_zone))
+       heap. A zone nested in the PM heap (Finder's code heap) still owns
+       its own handles, so TheZone wins when it holds the master pointer. */
+    else if(ROMlib_pm_zone && HANDLE_IN_ZONE_P(h, ROMlib_pm_zone)
+            && !(LM(TheZone) && LM(TheZone) != ROMlib_pm_zone
+                 && HANDLE_IN_ZONE_P(h, LM(TheZone))))
         pmzone_p = true;
     /*
    * Prevent us from returning a zone when a dereference of the handle would

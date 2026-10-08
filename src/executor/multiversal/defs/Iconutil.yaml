@@ -189,15 +189,27 @@
 
 # ####
 
-- typedef:
+- funptr:
+    return: OSErr
+    args:
+      - name: theType
+        type: ResType
+      - name: theIcon
+        type: GUEST<Handle>*
+      - name: yourDataPtr
+        type: void*
     name: IconActionUPP
-    type: ProcPtr
 
 # ####
 
-- typedef:
+- funptr:
+    return: Handle
+    args:
+      - name: theType
+        type: ResType
+      - name: yourDataPtr
+        type: void*
     name: IconGetterUPP
-    type: ProcPtr
 
 # ####
 

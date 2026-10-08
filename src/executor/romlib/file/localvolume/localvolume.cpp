@@ -1,4 +1,5 @@
 #include "localvolume.h"
+#include <rsys/hostdisk.h>
 #include <base/common.h>
 #include <FileMgr.h>
 #include <MemoryMgr.h>
@@ -84,6 +85,10 @@ LocalVolume::LocalVolume(VCB& vcb, fs::path root)
 
 bool LocalVolume::isHidden(const fs::directory_entry& e)
 {
+    // The Desktop Manager's database (finder.cpp); a real volume keeps its
+    // "Desktop DB"/"Desktop DF" as invisible files instead.
+    if(e.path().filename() == ".desktopdb")
+        return true;
     for(auto& itemFactory : itemFactories)
     {
         if(itemFactory->isHidden(e))
@@ -916,12 +921,20 @@ static void MountLocalVolume(fs::path root)
     if(!vp)
         return;
     memset(vp, 0, sizeof(VCBExtra));
-    vp->vcb.vcbDrvNum = 42;//pb->ioParam.ioVRefNum;
+    // MacPhoenix: a fixed drive on .Disk (hostdisk.cpp), so Finder can ask
+    // the driver what the volume is and for its icon.
+    vp->vcb.vcbDrvNum = ROMlib_add_host_drive(root.string().c_str());
+    if(vp->vcb.vcbDrvNum)
+        vp->vcb.vcbDRefNum = kHostDiskRefNum;
+    else
+        vp->vcb.vcbDrvNum = 42;
 
     --ROMlib_nextvrn;
     vp->vcb.vcbVRefNum = ROMlib_nextvrn;
 
     std::string rootName = root.root_name().string();
+    if(rootName.empty() && root.has_relative_path())
+        rootName = root.filename().string().substr(0, 27);
     if(rootName.empty())
         rootName = "vol";
     else if(rootName.back() == ':')

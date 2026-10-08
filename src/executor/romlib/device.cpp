@@ -14,6 +14,7 @@
 #include <ToolboxEvent.h>
 #include <mman/mman.h>
 #include <rsys/device.h>
+#include <rsys/hostdisk.h>
 #include <file/file.h>
 #include <rsys/serial.h>
 #include <rsys/mactcp.h>
@@ -274,6 +275,7 @@ static void InitBuiltinDrivers()
 {
     InitSerialDriver();
     InitMacTCPDriver();
+    InitHostDiskDriver();
 }
 
 /*

@@ -4,16 +4,17 @@
 #define N_SUITE_ICONS 6
 namespace Executor
 {
-/* NOTE:  Cotton didn't really use a struct and I'm not about to munch his
-   code, especially since we don't know the real layout and this is subject
-   to change.  I just wanted to paste in the flags field so we can drop a
-   label in there. */
-
-struct cotton_suite_layout_t
+/* One layout for icon suites and icon caches (icon.cpp); a cache sets
+   flags bit 0 and fills missing members from cacheProc. Apple's own layout
+   is not known, so guest code must not look inside. */
+struct suite_layout_t
 {
     GUEST_STRUCT;
-    Handle icons[N_SUITE_ICONS]; // icon.cpp stores native pointers here
+    GUEST<Handle> icons[N_SUITE_ICONS]; // ICN#, icl4, icl8, ics#, ics4, ics8
     GUEST<INTEGER> label;
+    GUEST<INTEGER> flags;
+    GUEST<void *> cacheData;
+    GUEST<IconGetterUPP> cacheProc;
 };
 }
 #endif /* !defined (__rsys_icon_h__) */

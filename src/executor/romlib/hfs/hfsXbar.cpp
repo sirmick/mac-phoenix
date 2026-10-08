@@ -13,6 +13,7 @@
 #include <prefs/prefs.h>
 #include <base/cpu.h>
 #include <file/volume.h>
+#include <file/localvolume/localvolume.h>
 
 using namespace Executor;
 
@@ -1082,7 +1083,13 @@ OSErr Executor::PBHGetVolParms(HParmBlkPtr pb, Boolean async)
         }
         if(roomfor(infop, vMAttrib, rc))
         {
-            infop->vMAttrib = VOL_BITS;
+            // A host folder is a local volume with a Desktop Manager
+            // (finder.cpp); disk images keep the foreign-volume bits.
+            if(dynamic_cast<LocalVolume *>(((VCBExtra *)vcbp)->volume))
+                infop->vMAttrib = (1L << bLimitFCBs) | (1L << bLocalWList)
+                                  | (1L << bHasDesktopMgr);
+            else
+                infop->vMAttrib = VOL_BITS;
             nused += sizeof(infop->vMAttrib);
         }
         if(roomfor(infop, vMLocalHand, rc))
