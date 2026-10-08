@@ -3,6 +3,7 @@
  */
 
 #include <base/common.h>
+#include <rsys/process.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <MemoryMgr.h>
@@ -20,6 +21,15 @@ void Executor::ROMlib_InitGWorlds(void)
 {
     gw_info_head = nullptr;
     gw_info_free = nullptr;
+    /* MacPhoenix: the records live in the application's heap, so each
+       process has its own list (Process Manager state). */
+    static bool registered;
+    if(!registered)
+    {
+        registered = true;
+        ROMlib_process_register_state(&gw_info_head, sizeof gw_info_head);
+        ROMlib_process_register_state(&gw_info_free, sizeof gw_info_free);
+    }
 }
 
 #define LOOKUP_GW_INFO_BY_EXPR(expr, value)   \
