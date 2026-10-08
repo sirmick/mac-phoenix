@@ -41,6 +41,8 @@
 
 #include <MemoryMgr.h>
 #include <mman/mman.h>
+#include <rsys/process.h>
+#include <syn68k_public.h>
 
 namespace Executor
 {
@@ -59,10 +61,11 @@ typedef struct
         Executor::Handle handle;
         void *ptr;
     } u;
+    size_t low_bytes; /* of a TEMP_ALLOC_FREE block */
 } temp_alloc_data_t;
 
 #define TEMP_ALLOC_DECL(name) \
-    temp_alloc_data_t name = {TEMP_ALLOC_NO_FREE, {0}}
+    temp_alloc_data_t name = {TEMP_ALLOC_NO_FREE, {0}, 0}
 
 #define TEMP_ALLOC_ALLOCATE(ptr_var, name, size)                                        \
     do                                                                                  \
@@ -83,6 +86,12 @@ typedef struct
                 TheZoneGuard guard(LM(ApplZone)); /* Then LM(ApplZone). */              \
                 (name).u.handle = NewHandle(size);                                      \
             }                                                                           \
+            if(!(name).u.handle && Executor::ROMlib_pm_zone)                            \
+            {                                                                           \
+                /* MacPhoenix: then temporary memory (the Process Manager heap). */    \
+                TheZoneGuard guard(Executor::ROMlib_pm_zone);                           \
+                (name).u.handle = NewHandle(size);                                      \
+            }                                                                           \
             if((name).u.handle)                                                         \
             {                                                                           \
                 (name).status = TEMP_ALLOC_DISPOSHANDLE;                                \
@@ -91,9 +100,10 @@ typedef struct
             }                                                                           \
             else                                                                        \
             {                                                                           \
-                /* Use malloc. */                                                       \
+                /* MacPhoenix: host memory guest code can address (not malloc). */  \
                 (name).status = TEMP_ALLOC_FREE;                                        \
-                (name).u.ptr = (void *)malloc(size);                                    \
+                (name).low_bytes = (size);                                                 \
+                (name).u.ptr = syn68k_alloc_low(size);                                  \
                 ptr_var = (decltype(ptr_var))(name.u.ptr);                              \
             }                                                                           \
         }                                                                               \
@@ -103,7 +113,7 @@ typedef struct
     do                                                    \
     {                                                     \
         if((name).status == TEMP_ALLOC_FREE)              \
-            free((name).u.ptr);                           \
+            syn68k_free_low((name).u.ptr, (name).low_bytes);\
         else if((name).status == TEMP_ALLOC_DISPOSHANDLE) \
         {                                                 \
             HUnlock((name).u.handle);                     \
