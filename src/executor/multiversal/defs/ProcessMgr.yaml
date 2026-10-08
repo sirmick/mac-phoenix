@@ -419,7 +419,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: GetFrontProcess
     return: OSErr
     args:
