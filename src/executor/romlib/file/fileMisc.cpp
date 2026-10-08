@@ -186,6 +186,11 @@ StringPtr Executor::ROMlib_exefname;
 
 std::string Executor::ROMlib_ConfigurationFolder;
 static std::string ROMlib_SystemFolder;
+
+std::string Executor::ROMlib_system_folder_path()
+{
+    return ROMlib_SystemFolder;
+}
 fs::path Executor::ROMlib_DirectoryMap;
 static std::string ROMlib_MacVolumes;
 std::string Executor::ROMlib_ScreenDumpFile;

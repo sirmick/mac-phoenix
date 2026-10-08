@@ -1,0 +1,19 @@
+# Which code resources in the System file the guest gets: Apple's own 68k
+# code ("apple", the default) or Executor's version from its built-in
+# System file ("executor": usually a 10-byte stub into native C++).
+#
+# Only matters when the System Folder holds Apple's System file
+# (tools/macdecode/sideload_system.py + --executor-data). Override per data
+# directory with <data_dir>/resource-policy.txt (same format; it replaces
+# this table). See docs/executor/PLAN.md.
+#
+# type  id   source     why
+MBDF    0    executor   # menu bar: Apple's calls traps Executor lacks ($A81E)
+MDEF    0    executor   # standard menu
+WDEF    0    executor   # document windows
+WDEF    1    executor   # rounded windows
+CDEF    0    executor   # buttons
+CDEF    1    executor   # scroll bars
+CDEF    63   executor   # popup menus
+LDEF    0    executor   # lists
+snth    5    executor   # sound synth

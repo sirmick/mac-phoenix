@@ -173,6 +173,7 @@ Machine:
   --extfs PATH               Shared folder (repeatable)
   --bootdriver N             0=any, -62=CD-ROM (default: 0)
   --storage-dir PATH         Default storage root (default: ~/storage)
+  --executor-data PATH       Executor data dir (default: <storage>/executor)
 
 CPU:
   --backend NAME             uae | kpx | executor

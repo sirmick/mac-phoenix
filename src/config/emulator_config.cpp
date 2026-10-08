@@ -162,6 +162,7 @@ QJsonObject EmulatorConfig::to_json() const {
     j["http_port"]   = http_port;
     j["client_dir"]  = qstr(client_dir);
     j["storage_dir"] = qstr(storage_dir);
+    if (!executor_data_dir.empty()) j["executor_data_dir"] = qstr(executor_data_dir);
 
     // System
     j["zappram"]                  = zappram;
@@ -284,6 +285,7 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
     if (j.contains("http_port"))   http_port = json_utils::get_int(j, "http_port");
     if (j.contains("client_dir"))  client_dir = json_utils::get_string(j, "client_dir");
     if (j.contains("storage_dir")) storage_dir = json_utils::get_string(j, "storage_dir");
+    if (j.contains("executor_data_dir")) executor_data_dir = json_utils::get_string(j, "executor_data_dir");
 
     // ── System ──────────────────────────────────────────────────
     if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
@@ -410,6 +412,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --extfs PATH               Shared folder (only first is mounted; ExtFS is single-volume)\n");
             printf("  --bootdriver N             0=any, -62=CD-ROM (default: 0)\n");
             printf("  --storage-dir PATH         Default storage root (default: ~/storage)\n");
+            printf("  --executor-data PATH       Executor data dir (default: <storage>/executor)\n");
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
@@ -546,6 +549,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --storage-dir <path>
         if (strcmp(argv[i], "--storage-dir") == 0 && i+1 < argc) {
             config.storage_dir = argv[i+1];
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --executor-data <path>
+        if (strcmp(argv[i], "--executor-data") == 0 && i+1 < argc) {
+            config.executor_data_dir = argv[i+1];
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 

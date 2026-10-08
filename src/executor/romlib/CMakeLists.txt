@@ -301,7 +301,7 @@ set(res_sources
     res/resource.h
 
     res/resGet.cpp res/resGetinfo.cpp res/resGettype.cpp res/resIMIV.cpp
-    res/resInit.cpp res/resMisc.cpp res/resMod.cpp res/resOpen.cpp
+    res/resInit.cpp res/resMisc.cpp res/resMod.cpp res/resOpen.cpp res/resPolicy.cpp
     res/resSetcur.cpp res/resPartial.cpp) 
 
 source_group(Resources FILES ${res_sources})

@@ -313,6 +313,14 @@ Executor::ROMlib_mgetres2(resmaphand map, resref *rr)
     retval = rr->rhand;
     if(retval && *retval)
         ROMlib_setreserr(noErr);
+    else if(Handle h = ROMlib_policy_load(map, rr))
+    {
+        ROMlib_setreserr(noErr);
+        HSetState(h, (RSRCBIT
+                      | ((rr->ratr & resLocked) ? LOCKBIT : 0)
+                      | ((rr->ratr & resPurgeable) ? PURGEBIT : 0)));
+        retval = h;
+    }
     else
     {
         GUEST<THz> savezone;

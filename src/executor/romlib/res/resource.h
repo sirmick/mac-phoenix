@@ -101,6 +101,8 @@ extern Handle ROMlib_getrestid(ResType restype, INTEGER id);
 extern INTEGER ROMlib_setreserr(INTEGER reserr);
 extern LONGINT ROMlib_SizeResource(Handle res, Boolean usehandle);
 extern Handle ROMlib_mgetres2(resmaphand map, resref *rr);
+/* MacPhoenix: resource policy (res/resPolicy.cpp). */
+extern Handle ROMlib_policy_load(resmaphand map, resref *rr);
 
 #define REF0 0 /* special refrence number signifying system file */
 

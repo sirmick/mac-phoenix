@@ -121,6 +121,10 @@ struct EmulatorConfig {
     int http_port = 11000;
     std::string client_dir = "./client";
     std::string storage_dir = "~/storage";
+    // Executor backend: its data directory (System Folder etc.). Empty =
+    // <storage_dir>/executor. tools/macdecode/sideload_system.py fills one
+    // with Apple's System file.
+    std::string executor_data_dir;
 
     // System
     bool zappram = false;

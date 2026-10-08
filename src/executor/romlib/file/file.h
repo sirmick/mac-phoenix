@@ -185,6 +185,8 @@ extern std::vector<std::string> ROMlib_local_volume_roots;
 /* MacPhoenix: path settings by variable name (SystemFolder, MacVolumes,
  * ...), consulted before the environment. */
 extern std::map<std::string, std::string> ROMlib_path_overrides;
+/* MacPhoenix: host path of the System Folder Executor booted from. */
+extern std::string ROMlib_system_folder_path();
 std::optional<FSSpec> nativePathToFSSpec(const fs::path& p);
 std::optional<FSSpec> cmdlinePathToFSSpec(const std::string& p);
 

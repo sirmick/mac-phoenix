@@ -170,6 +170,43 @@ Taken with `POST /api/snapshot`, read with `tools/macdecode/macdecode.py`.
 - Our UAE layout puts ROM at `$04000000` and the screen at
   `$04110000`, not the Quadra's real addresses.
 
+## Per-process low memory (System 'lmem' -16458)
+
+The Process Manager swaps these ranges on every process switch:
+28 `(length word, address long)` pairs, 670 bytes, in the 7.5.5 System
+file. It is why `MemTop` reads like a per-process value.
+
+| Range | Globals |
+|---|---|
+| `$0100` 2 | monkeylives |
+| `$0108` 8 | MemTop, BufPtr |
+| `$0114` 8 | HeapEnd, TheZone |
+| `$015C` 1 | SEvtEnb |
+| `$0278` 2 | (unnamed) |
+| `$02F8` 1 | ScrDmpEnb |
+| `$0316` 4 | MacPgm/heapcheck |
+| `$031E` 34 | MinStack, DefltStack, GZRootHnd, GZMoveHnd, EjectNotify, IAZNotify |
+| `$08E0` 8 | JSwapFont, WidthListHand |
+| `$08F2` 228 | WWExist, QDExist, …, CurApRefNum, CurrentA5, CurStackBase, CurApName, CurJTOffset, CurPageOption, … |
+| `$09DA` 4 | SaveUpdate, PaintWhite |
+| `$09E6` 8 | OldStructure, OldContent |
+| `$09F2` 50 | SaveVisRgn, DragHook, …, TopMenuItem, AtMenuBottom, MenuList, MBarEnable |
+| `$0A26` 22 | TheMenu, MBarHook, MenuHook, DragPattern |
+| `$0A44` 76 | TopMapHndl, SysMapHndl, SysMap, CurMap, …, DeskHook, … |
+| `$0A98` 80 | ANumber, ACount, DABeeper, DAStrings, TEScrpLength, TEScrpHandle, AppPacks, SysResName |
+| `$0AEC` 16 | AppParmHandle, DSErrCode, ResErrProc, DlgFont |
+| `$0B21` 1 | (unnamed) |
+| `$0B2A` 4 | WidthTabHandle |
+| `$0B4C` 4 | LastSPExtra |
+| `$0B54` 12 | MenuDisable, MBDFHndl, MBSaveLoc |
+| `$0BA6` 4 | SysFontFam, SysFontSiz |
+| `$0BAE` 6 | (unnamed) |
+| `$0BAA` 2 | MBarHeight |
+| `$0BC2` 60 | LastFOND, fondid, FractEnable, … |
+| `$0D32` 17 | SynListHandle, … |
+| `$0DCC` 4 | (unnamed) |
+| `$0CC8` 4 | TheGDevice |
+
 ## Snapshot tooling (on the UAE ROM boot)
 
 - Dump vectors, lowmem and both trap tables; classify each entry by

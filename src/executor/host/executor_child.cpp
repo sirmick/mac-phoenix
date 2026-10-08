@@ -134,7 +134,8 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.height = cfg.screen_height;
     c.bpp = 8;
     c.ram_mb = (int)cfg.ram_mb;
-    c.data_dir = expand_home(cfg.storage_dir) + "/executor";
+    c.data_dir = cfg.executor_data_dir.empty() ? expand_home(cfg.storage_dir) + "/executor"
+                                               : expand_home(cfg.executor_data_dir);
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
     c.on_frame = publish_frame;
@@ -153,7 +154,8 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
     c.width = cfg.screen_width;
     c.height = cfg.screen_height;
     c.ram_mb = (int)cfg.ram_mb;
-    c.data_dir = expand_home(cfg.storage_dir) + "/executor";
+    c.data_dir = cfg.executor_data_dir.empty() ? expand_home(cfg.storage_dir) + "/executor"
+                                               : expand_home(cfg.executor_data_dir);
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
     return executor_host::run(c);

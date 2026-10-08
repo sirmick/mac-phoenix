@@ -112,6 +112,21 @@ with Apple's layout (PM heap up to BufPtr, SIZE-sized partitions, A5
 world at the top, per-process lowmem swap); (3) trap tables at
 `$400`/`$E00` once extensions need to patch.
 
+**Step 1 started:** `tools/macdecode/sideload_system.py IMAGE DIR` puts
+Apple's System file into an Executor data directory, and
+`--executor-data DIR` (config `executor_data_dir`) points Executor at it.
+Apple's 68k definition procedures would replace Executor's native stubs
+(Apple's MBDF calls unimplemented `$A81E` and recursed into a crash), so
+a resource policy (`src/executor/res/resource-policy.txt`, embedded;
+`<data_dir>/resource-policy.txt` overrides) serves Executor's version of
+listed System resources from `ROMlib_mgetres2`; the map stays Apple's.
+Executor's Browser now runs on Apple's 7.5.5 System file; System
+resources loaded 21 of 78 (was 9). The rest come from components we
+don't have yet: Process Manager (`scod`, `proc`, `lstr`, `lmem`),
+Script Manager (`itl0-2`, `KSWP`), `PACK` 6/14, `dcmp` 0. The
+Process Manager's per-process lowmem list is `lmem` -16458 (see
+MEMORY_MAP.md): the spec for our context switch.
+
 **Where we left off:** snapshot API and a first reader (lowmem, heap
 walk, trap classification) work; reference snapshot
 `~/storage/snapshots/7.5.5-finder-idle`. Next: find the Process
