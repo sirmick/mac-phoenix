@@ -165,6 +165,26 @@ def load_tags(path=None):
             for t in data.get("tags") or []}
 
 
+def read_mem(path):
+    """lowmem_access.tsv: who read/wrote which low-memory or ExpandMem byte.
+    Returns (rows, expandmem base, expandmem size)."""
+    rows, em, em_size = [], 0, 0
+    if not Path(path).exists():
+        return rows, em, em_size
+    for line in Path(path).read_text(encoding="latin-1").splitlines():
+        if line.startswith("# expandmem"):
+            f = line.split()
+            em, em_size = int(f[2], 16), int(f[4])
+            continue
+        if line.startswith("#") or not line.strip():
+            continue
+        f = line.split("\t") + [""] * 3
+        rows.append({"addr": int(f[0], 16), "size": int(f[1]), "write": f[2] == "w",
+                     "pc": int(f[3], 16), "count": int(f[4]), "seq": int(f[5]), "app": f[6],
+                     "owner": f[7], "expandmem": f[8] == "1"})
+    return rows, em, em_size
+
+
 def read_installs(path):
     """trap_installs.tsv: every _SetTrapAddress in the traced boot, in order."""
     rows = []
@@ -356,6 +376,20 @@ class Analysis:
             s["scope"] = scope_of(s["origin"], self.policy)
         self._components()
         self.rows = self._rows()
+        self.mem, self.expandmem, self.expandmem_size = read_mem(Path(snapshot) / "lowmem_access.tsv")
+        for m in self.mem:
+            m["origin"] = self.place_pc(m["pc"], m["owner"])
+            m["scope"] = scope_of(m["origin"], self.policy)
+
+    def place_pc(self, pc, recorded=""):
+        """Where the code at pc came from: ROM, the resource the tracer saw,
+        or a match of the live bytes in the snapshot."""
+        if self.snap.in_rom(pc):
+            return "ROM"
+        if recorded:
+            return recorded
+        code = bytes(self.snap.ram[max(pc - 8, 0):pc + 16]) if self.snap.ok(pc, 16) else b""
+        return self.resolver.resolve({"pc": pc, "code": code})
 
     def _components(self):
         """A component instance is named by the code that ran inside its calls."""

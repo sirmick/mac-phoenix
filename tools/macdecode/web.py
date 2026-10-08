@@ -136,33 +136,183 @@ class Site:
         return self.page("Summary", body)
 
     def lowmem(self, q):
+        """Every low-memory global and touched ExpandMem field, with who
+        touches it in the traced boot, Executor's value, and filters."""
         w, s, db = self.world, self.world.snap, self.world.db
-        show_all = "all" in q
-        rows = []
+        ext = q.get("ext", ["0"])[0] == "1"
+        an = self.analysis(ext)
+        mem = an.mem if an else []
+        cand = self.cand
+
+        def runs(scope):
+            return scope == "run" or (ext and scope == "extension")
+
+        # ── rows: named globals, unnamed nonzero runs, touched bytes nobody
+        #    names, touched ExpandMem fields
+        items = []
         for g in db.lowmem:
-            if g["address"] >= md.LOWMEM_END:
-                continue
-            size = db.size(g["type"]) or 0
-            raw = s.ram[g["address"]:g["address"] + min(size, 32)].hex()
-            rows.append((g["address"], f"""<tr><td class="mono">${g['address']:04x}</td>
-<td><b>{esc(g['name'])}</b></td><td class="mono">{esc(g['type'])}</td><td class="mono">{size}</td>
-<td class="val mono">{esc(md.fmt_value(w, g['type'], g['address']))}</td>
-<td class="mono mut raw" title="{raw}">{raw}</td><td>{source_cell(g)}</td>
-<td class="mut cmt" title="{esc((g.get('comment') or '').strip())}">{esc(first_line(g.get('comment')))}</td></tr>"""))
-        runs, _ = md.uncovered_runs(w)
-        for a, e in runs:
-            v = s.u32(a) if e - a == 4 else None
-            hint = f" → {w.where(v)}" if v else ""
-            rows.append((a, f"""<tr class="unnamed"><td class="mono">${a:04x}</td>
-<td><i>unnamed</i></td><td class="mono">Byte[{e - a}]</td><td class="mono">{e - a}</td>
-<td class="val mono">{esc(hint.strip(' →'))}</td><td class="mono mut raw">{s.ram[a:min(e, a + 32)].hex()}</td>
-<td colspan="2"><a href="/placeholders#p{a:x}">placeholder</a></td></tr>"""))
-        rows.sort(key=lambda r: r[0])
-        body = ("<p>Every multiversal low-memory global, decoded with its multiversal type, merged with "
-                "the nonzero bytes multiversal doesn't name (highlighted). Trap tables are on their own page.</p>"
-                "<div class='wrap'><table><tr><th>Addr</th><th>Name</th><th>Type</th><th>Size</th>"
-                "<th>Decoded</th><th>Bytes</th><th>Source</th><th>Comment</th></tr>"
-                + "".join(r for _, r in rows) + "</table></div>")
+            if g["address"] < md.LOWMEM_END:
+                items.append({"addr": g["address"], "size": max(db.size(g["type"]) or 1, 1),
+                              "name": g["name"], "type": g["type"], "g": g,
+                              "source": g.get("source", "multiversal"), "em": False})
+        runs_, _ = md.uncovered_runs(w)
+        for a, e in runs_:
+            items.append({"addr": a, "size": e - a, "name": "", "type": f"Byte[{e - a}]", "g": None,
+                          "source": "unnamed", "em": False})
+        items.sort(key=lambda i: i["addr"])
+        starts = [i["addr"] for i in items]
+        import bisect
+
+        def owner_row(m):
+            if m["expandmem"]:
+                return None
+            k = bisect.bisect_right(starts, m["addr"]) - 1
+            if k >= 0 and items[k]["addr"] <= m["addr"] < items[k]["addr"] + items[k]["size"]:
+                return items[k]
+            return None
+        # Touched bytes nobody names: merge adjacent accesses into runs, one
+        # row per run (low memory) or per field (ExpandMem).
+        loose = sorted((m["addr"], m["addr"] + m["size"]) for m in mem
+                       if not m["expandmem"] and owner_row(m) is None)
+        merged = []
+        for a, e in loose:
+            if merged and a <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], e)
+            else:
+                merged.append([a, e])
+        extra = {}
+        for a, e in merged:
+            extra[("lm", a)] = {"addr": a, "size": e - a, "em": False, "name": "",
+                                "type": f"Byte[{e - a}]", "g": None, "source": "unnamed"}
+        mstarts = [a for a, _ in merged]
+        touched = {}
+        for m in mem:
+            if m["expandmem"]:
+                off = m["addr"] - an.expandmem
+                row = extra.setdefault(("em", off), {"addr": m["addr"], "size": m["size"], "em": True,
+                                                     "name": f"ExpandMem+${off:03X}", "type": f"{m['size']} bytes",
+                                                     "g": None, "source": "unnamed", "off": off})
+            else:
+                row = owner_row(m)
+                if row is None:
+                    k = bisect.bisect_right(mstarts, m["addr"]) - 1
+                    row = extra[("lm", mstarts[k])]
+            touched.setdefault(id(row), []).append(m)
+        items += list(extra.values())
+        items.sort(key=lambda i: (i["em"], i["addr"]))
+
+        # ── Executor side (the --diff candidate snapshot)
+        cstatus = {}
+        if cand:
+            import diff
+            for r in diff.lowmem(w, cand):
+                cstatus[r["global"]["address"]] = (r["status"], r["cand"])
+        cem = cand.snap.u32(0x2B6) if cand else 0
+
+        def executor_status(i):
+            if not cand:
+                return "no candidate", ""
+            if i["g"] is not None and i["addr"] in cstatus:
+                return cstatus[i["addr"]]
+            a = i["addr"] if not i["em"] else (cem + i["off"] if cem and cand.snap.ok(cem, 4) else None)
+            if a is None or not cand.snap.ok(a, i["size"]):
+                return "unset", "no ExpandMem" if i["em"] else ""
+            rb = s.ram[i["addr"]:i["addr"] + i["size"]]
+            cb = cand.snap.ram[a:a + i["size"]]
+            if rb == cb:
+                return "same", cb.hex()
+            if not any(cb) or all(c == 0xFF for c in cb):
+                return "unset", cb.hex()
+            return "differs", cb.hex()
+
+        for i in items:
+            ms = touched.get(id(i), [])
+            i["reads"] = sum(m["count"] for m in ms if not m["write"])
+            i["writes"] = sum(m["count"] for m in ms if m["write"])
+            run_ms = [m for m in ms if runs(m["scope"])]
+            who = {}
+            for m in run_ms:
+                who[m["origin"].split(" +")[0]] = who.get(m["origin"].split(" +")[0], 0) + m["count"]
+            i["who"] = ", ".join(f"{k} {n}" for k, n in sorted(who.items(), key=lambda kv: -kv[1])[:3])
+            i["run_rw"] = ("r" if any(not m["write"] for m in run_ms) else "") + \
+                          ("w" if any(m["write"] for m in run_ms) else "")
+            other = {}
+            for m in ms:
+                if not runs(m["scope"]):
+                    other[m["scope"]] = other.get(m["scope"], 0) + m["count"]
+            i["other"] = ", ".join(f"{k} {n}" for k, n in sorted(other.items(), key=lambda kv: -kv[1]))
+            if run_ms:
+                i["verdict"] = "needed"
+            elif any(m["scope"] == "unknown" for m in ms):
+                i["verdict"] = "unresolved"
+            elif ms:
+                i["verdict"] = "apple only"
+            else:
+                i["verdict"] = "untouched" if mem else "no trace"
+            i["ex"], i["exval"] = executor_status(i)
+
+        allv = ("needed", "unresolved", "apple only", "untouched")
+        alle = ("same", "same shape", "differs", "unset", "no candidate")
+        alls = ("multiversal", "learned", "unnamed")
+        filtered = "f" in q
+        vs = set(q.get("v", [])) if filtered else set(allv) | {"no trace"}
+        es = set(q.get("e", [])) if filtered else set(alle)
+        ss = set(q.get("s", [])) if filtered else set(alls)
+        text = q.get("q", [""])[0].strip().lower()
+        src = lambda i: "learned" if (i["source"] or "").startswith("learned") else i["source"] or "multiversal"
+        shown = [i for i in items if i["verdict"] in vs | ({"no trace"} if not mem else set())
+                 and i["ex"] in es and src(i) in ss
+                 and (not text or text in i["name"].lower() or text in f"{i['addr']:04x}")]
+        vcount = {v: sum(1 for i in items if i["verdict"] == v) for v in allv}
+        ecount = {e: sum(1 for i in items if i["ex"] == e) for e in alle}
+
+        def box(name, val, on, text_):
+            return (f'<label style="margin-right:12px"><input type="checkbox" name="{name}" value="{val}"'
+                    f'{" checked" if on else ""}> {esc(text_)}</label>')
+        form = ('<form method="get" style="line-height:2"><input type="hidden" name="f" value="1">'
+                + ('<input type="hidden" name="ext" value="1">' if ext else "")
+                + "<b>Verdict</b> " + "".join(box("v", v, v in vs, f"{v} ({vcount[v]})") for v in allv)
+                + "<br><b>Executor</b> " + "".join(box("e", e, e in es, f"{e} ({ecount[e]})") for e in alle)
+                + "<br><b>Source</b> " + "".join(box("s", x, x in ss, x) for x in alls)
+                + f' <input name="q" value="{esc(text)}" placeholder="search name or address" size="22">'
+                ' <button>Filter</button></form>')
+        every_e = "&".join(f"e={e.replace(' ', '+')}" for e in alle)
+        every_s = "&".join(f"s={x}" for x in alls)
+        presets = " · ".join(f'<a href="/lowmem?{qs}">{esc(t)}</a>' for t, qs in (
+            ("everything", ""),
+            ("needed for Finder", f"f=1&v=needed&{every_e}&{every_s}"),
+            ("needed, wrong in Executor", f"f=1&v=needed&v=unresolved&e=differs&e=unset&{every_s}"),
+            ("touched but unnamed", f"f=1&v=needed&v=unresolved&v=apple+only&{every_e}&s=unnamed")))
+        toggle = (f'<a href="/lowmem?ext={0 if ext else 1}">extensions count as run: {"on" if ext else "off"}</a>')
+        trs = []
+        for i in shown:
+            g = i["g"]
+            v = i["verdict"].replace(" ", "-")
+            decoded = md.fmt_value(w, g["type"], g["address"]) if g else \
+                s.ram[i["addr"]:i["addr"] + min(i["size"], 32)].hex()
+            name = (f"<b>{esc(i['name'])}</b>" if i["name"] else "<i>unnamed</i>")
+            vcls = {"needed": "todo", "unresolved": "unresolved", "apple-only": "out",
+                    "untouched": "never", "no-trace": "never"}[v]
+            ecls = {"same": "done", "same shape": "done", "differs": "todo", "unset": "todo"}.get(i["ex"], "never")
+            trs.append(f"""<tr class="v-{'out' if v == 'apple-only' else 'x'}"><td class="mono slot">${i['addr']:04x}</td>
+<td class="nm">{name}</td><td class="mono">{esc(i['type'])}</td>
+<td><span class="v v-{vcls}-p">{esc(i['verdict'])}</span></td>
+<td class="mono">{esc(i['run_rw'])}</td><td class="mut">{esc(i['who'])}</td><td class="mut">{esc(i['other'])}</td>
+<td class="val mono">{esc(decoded)}</td>
+<td><span class="v v-{ecls}-p">{esc(i['ex'])}</span> <span class="mono mut">{esc(str(i['exval'])[:60])}</span></td>
+<td>{source_cell(g) if g else '<span class="mut">unnamed</span>'}</td></tr>""")
+        note = ("" if mem else "<p class='warn'>This snapshot has no <code>lowmem_access.tsv</code>: boot "
+                "with <code>--trace-atraps</code> to see who touches what.</p>")
+        cnote = (f"Executor column compares with <code>{esc(cand.snap.dir.name)}</code>." if cand else
+                 "No Executor snapshot: start with <code>--diff CANDIDATE</code> for the Executor column.")
+        body = (form + f"<p>Presets: {presets} — {toggle} — <b>{len(shown)}</b> of {len(items)}. {cnote}</p>"
+                + note +
+                "<p class='mut'>Needed = read or written directly (not through a trap) by code Executor runs: "
+                "Finder, System defprocs not served by Executor (extensions if on). Apple only = only ROM, "
+                "patches or replaced System code touch it. Exception vectors ($0-$FF) aren't watched.</p>"
+                "<div class='wrap'><table><tr><th>Addr</th><th>Name</th><th>Type</th><th>Verdict</th>"
+                "<th>R/W</th><th>By code we run</th><th>By others</th><th>Value (reference)</th>"
+                "<th>Executor</th><th>Source</th></tr>" + "".join(trs) + "</table></div>")
         return self.page("Low memory", body)
 
     def traps(self, q):
