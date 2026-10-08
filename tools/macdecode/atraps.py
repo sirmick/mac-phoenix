@@ -156,16 +156,28 @@ ROOT = Path(__file__).resolve().parents[2]
 # file (patches, PACKs, drivers, boot code) Executor replaces with C++.
 SYSTEM_RUN_TYPES = {"WDEF", "MDEF", "CDEF", "LDEF", "MBDF"}
 
-# Hardware, boot and low-level traps: below the Toolbox Executor provides.
-HARDWARE = re.compile(
-    r"^(ADB|SCSI|Slot|SInt|S[A-Z]\w*SRsrc|Read(X)?PRam|Write(X)?PRam|ClkNoMem|InternalWait|"
-    r"PowerMgr|PMgrOp|PowerOff|DTInstall|DTRemove|VInstall|VRemove|SlotVInstall|SlotVRemove|"
-    r"AttachVBL|DoVBLTask|SwapMMUMode|HWPriv|Flush\w*Cache\w*|Translate24To32|"
-    r"(Get|Set)(Video|OS)Default|(Get|Set)DefaultStartup|IOPMsgRequest|IOPInfoAccess|"
-    r"DebugUtil|Debugger\w*|SysDebug\w*|Sleep\w*|DrvrInstall|DrvrRemove|AddDrive|RDrvrInstall|"
-    r"Init(FS|Events|IOMgr|Util|AllPacks|ZoneA?|Resources)|SetApplBase|InitApplZone|RsrcZoneInit|"
-    r"CommToolboxDispatch|ServerDispatch|MemoryDispatch|HeapDispatch|StripAddress|"
-    r"Microseconds|InsTime|InsXTime|PrimeTime|RmvTime|Delay|SysError|SysBreak\w*)$")
+def load_tags(path=None):
+    """learned.yaml tags: {(slot, selector or None): (tag, reason)}."""
+    import yaml
+    path = Path(path) if path else Path(__file__).resolve().parent / "learned.yaml"
+    data = (yaml.safe_load(path.read_text()) if path.exists() else {}) or {}
+    return {(trap_slot(t["trap"]), t.get("selector")): (t["tag"], t.get("reason", ""))
+            for t in data.get("tags") or []}
+
+
+def read_installs(path):
+    """trap_installs.tsv: every _SetTrapAddress in the traced boot, in order."""
+    rows = []
+    if not Path(path).exists():
+        return rows
+    for line in Path(path).read_text(encoding="latin-1").splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        f = line.split("\t") + [""] * 3
+        rows.append({"seq": int(f[0]), "trap": int(f[1], 16), "slot": (f[2], int(f[3], 16)),
+                     "addr": int(f[4], 16), "old": int(f[5], 16), "pc": int(f[6], 16),
+                     "app": f[7], "installer": f[8], "target": f[9]})
+    return rows
 
 
 def basilisk_impls():
@@ -334,6 +346,8 @@ class Analysis:
         disk = disk or (self.snap.meta.get("disks") or [None])[0]
         self.resolver = Resolver(self.snap, zones, disk, md.World(self.snap, self.db, None, zones))
         self.policy = load_policy()
+        self.tags = load_tags()
+        self.installs = read_installs(Path(snapshot) / "trap_installs.tsv")
         self.extensions = extensions
         self.sites = read_sites(Path(snapshot) / "atraps.tsv")
         for s in self.sites:
@@ -383,9 +397,11 @@ class Analysis:
                 reason = ""
             else:
                 verdict = "out"
-                base = name.split(" ")[0]
-                if HARDWARE.match(base) or (k[0] == "os" and k[1] in DRIVER_TRAPS and not detail):
-                    reason = "hardware/boot"
+                tag = self.tags.get((k, sel)) or self.tags.get((k, None))
+                if tag:
+                    reason = f"{tag[0]}: {tag[1]}"
+                elif k[0] == "os" and k[1] in DRIVER_TRAPS and detail:
+                    reason = "driver only Apple code uses"
                 elif set(scopes) <= {"rom", "patch"}:
                     reason = "only Apple ROM/patch code calls it"
                 elif set(scopes) <= {"rom", "patch", "replaced"}:
@@ -394,7 +410,9 @@ class Analysis:
                     reason = "only extensions"
                 else:
                     verdict, reason = "unresolved", "callers not resolved (moved/boot code)"
+            tag = self.tags.get((k, sel)) or self.tags.get((k, None))
             rows.append({"slot": k, "trap": f"{word:04X}", "sel": sel, "sub": sub, "obj": obj,
+                         "tag": tag[0] if tag else None, "detail": detail,
                          "name": name, "named_by": nm.name_source(word, sel), "executor": ex,
                          "verdict": verdict, "reason": reason,
                          "calls": sum(s["count"] for s in ss), "sites": len(ss),

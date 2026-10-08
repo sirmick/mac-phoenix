@@ -170,6 +170,21 @@ struct AtrapKeyHash {
 std::unordered_map<AtrapKey, AtrapSite, AtrapKeyHash> g_atrap_sites;
 uint32_t g_atrap_seq = 0;
 
+// Trap installs (_SetTrapAddress and its variants), in order: the patch
+// history of every slot. Owners are resolved when the install happens,
+// while the installing code and the new routine are still where they were.
+struct TrapInstall {
+    uint32_t seq;                // position among all traced trap calls
+    uint16_t trap;               // the _SetTrapAddress word used
+    uint8_t tool;                // Toolbox table (else OS)
+    uint16_t index;
+    uint32_t addr, old, pc;      // new entry, previous entry, installer
+    char app[32];
+    char installer[64], target[64];
+};
+std::vector<TrapInstall> g_trap_installs;
+uint64_t g_atrap_calls = 0;
+
 // Shadow stack of active traps. Each ends when the CPU reaches its return
 // address (the interpreter loop watches the innermost one). As a backstop
 // for returns we miss (non-local exits), an entry whose A7 at entry is at
@@ -187,6 +202,24 @@ const uint8_t* guest_bytes(uint32_t addr, uint32_t len)
     if (ROMBaseHost && addr >= ROMBaseMac && addr + len <= ROMBaseMac + ROMSize)
         return ROMBaseHost + (addr - ROMBaseMac);
     return nullptr;
+}
+
+bool write_installs(const std::string& path)
+{
+    FILE* f = fopen(path.c_str(), "w");
+    if (!f)
+        return false;
+    fprintf(f, "# seq\ttrap\ttable\tindex\taddr\told\tpc\tapp\tinstaller\ttarget\n");
+    for (const TrapInstall& t : g_trap_installs) {
+        fprintf(f, "%u\t%04X\t%s\t%03X\t%08X\t%08X\t%08X\t", t.seq, t.trap,
+                t.tool ? "tool" : "os", t.index, t.addr, t.old, t.pc);
+        for (int i = 1; i <= (uint8_t)t.app[0] && i < 32; i++) {
+            char c = t.app[i];
+            fputc((c == '\t' || c == '\n' || (unsigned char)c < 0x20) ? '?' : c, f);
+        }
+        fprintf(f, "\t%s\t%s\n", t.installer, t.target);
+    }
+    return fclose(f) == 0;
 }
 
 bool write_atraps(const std::string& path)
@@ -358,8 +391,43 @@ void resource_owner(uint32_t pc, char out[64])
     }
 }
 
+// _SetTrapAddress ($A047): D0 = trap number, A0 = routine. Bit $0200 of
+// the trap word means the new form, where bit $0400 picks the Toolbox
+// table; the old form puts numbers above $4F (except $54, $57) there.
+// Tables: OS at $400 (256 longs), Toolbox at $E00 (1024 longs).
+void record_install(uint16_t opcode, uint32_t pc, uint32_t d0, uint32_t a0)
+{
+    TrapInstall t = {};
+    bool tool;
+    uint16_t n = d0 & 0xFFFF;
+    if (opcode & 0x0200) {
+        tool = opcode & 0x0400;
+    } else {
+        n &= 0x1FF;
+        tool = n > 0x4F && n != 0x54 && n != 0x57;
+    }
+    t.seq = (uint32_t)g_atrap_calls;
+    t.trap = opcode;
+    t.tool = tool;
+    t.index = n & (tool ? 0x3FF : 0xFF);
+    t.addr = a0;
+    t.old = guest_long((tool ? 0xE00 : 0x400) + 4 * t.index);
+    t.pc = pc;
+    if (const uint8_t* name = guest_bytes(0x910, 32))
+        memcpy(t.app, name, 32);
+    if (pc < ROMBaseMac)
+        resource_owner(pc, t.installer);
+    if (a0 < ROMBaseMac)
+        resource_owner(a0, t.target);
+    g_trap_installs.push_back(t);
+}
+
 static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, uint32_t a0, int intmask)
 {
+    g_atrap_calls++;
+    if ((opcode & 0xF1FF) == 0xA047)
+        record_install(opcode, pc, d0, a0);
+
     while (!g_atrap_active.empty()
            && (g_atrap_active.back().sp <= sp || g_atrap_active.back().sp - sp > kOtherStack))
         g_atrap_active.pop_back();
@@ -431,6 +499,8 @@ void snapshot_service(const SnapshotMemory& mem)
 
     if (!g_atrap_sites.empty())
         ok = ok && write_atraps(dir + "/atraps.tsv");
+    if (!g_trap_installs.empty())
+        ok = ok && write_installs(dir + "/trap_installs.tsv");
 
     std::ostringstream j;
     j << "{\n"

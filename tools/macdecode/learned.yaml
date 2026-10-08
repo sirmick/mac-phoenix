@@ -67,3 +67,60 @@ dispatchers:
           them), disposing each entry's handles; paramErr if a nonzero key
           matches nothing. Finder calls it with 0 before re-adding.
 
+# Tags: entry points below the Toolbox Executor provides. A tagged entry
+# point that only Apple ROM/patch code calls is "not needed" for that
+# reason; code we run calling it still makes it needed. Review freely:
+# tag is hardware | boot | debug; selector is optional (whole trap if
+# absent).
+tags:
+  # hardware: Executor talks to the host, not to Mac hardware
+  - {trap: 0xA07C, name: ADBOp, tag: hardware, reason: ADB bus transaction; input comes from the host}
+  - {trap: 0xA077, name: CountADBs, tag: hardware, reason: ADB device table}
+  - {trap: 0xA078, name: GetIndADB, tag: hardware, reason: ADB device table}
+  - {trap: 0xA079, name: GetADBInfo, tag: hardware, reason: ADB device table}
+  - {trap: 0xA07A, name: SetADBInfo, tag: hardware, reason: ADB device table}
+  - {trap: 0xA07B, name: ADBReInit, tag: hardware, reason: ADB bus reset}
+  - {trap: 0xA815, name: SCSIDispatch, tag: hardware, reason: SCSI bus; disks are host files}
+  - {trap: 0xA089, name: SCSIAtomic, tag: hardware, reason: SCSI Manager 4.3}
+  - {trap: 0xA06E, name: SlotManager, tag: hardware, reason: NuBus slot ROMs}
+  - {trap: 0xA075, name: SIntInstall, tag: hardware, reason: slot interrupt handlers}
+  - {trap: 0xA076, name: SIntRemove, tag: hardware, reason: slot interrupt handlers}
+  - {trap: 0xA06F, name: SlotVInstall, tag: hardware, reason: per-slot VBL tasks}
+  - {trap: 0xA070, name: SlotVRemove, tag: hardware, reason: per-slot VBL tasks}
+  - {trap: 0xA071, name: AttachVBL, tag: hardware, reason: binds VBL tasks to a video slot}
+  - {trap: 0xA072, name: DoVBLTask, tag: hardware, reason: run by the video interrupt}
+  - {trap: 0xA051, name: ReadXPRam, tag: hardware, reason: parameter RAM chip}
+  - {trap: 0xA052, name: WriteXPRam, tag: hardware, reason: parameter RAM chip}
+  - {trap: 0xA053, name: ClkNoMem, tag: hardware, reason: clock chip access}
+  - {trap: 0xA05B, name: PowerOff, tag: hardware, reason: power hardware}
+  - {trap: 0xA085, name: PMgrOp, tag: hardware, reason: Power Manager microcontroller}
+  - {trap: 0xA09E, name: PowerMgrDispatch, tag: hardware, reason: Power Manager}
+  - {trap: 0xA05D, name: SwapMMUMode, tag: hardware, reason: 24/32-bit MMU mode}
+  - {trap: 0xA091, name: Translate24To32, tag: hardware, reason: 24-bit addressing}
+  - {trap: 0xA080, name: GetVideoDefault, tag: hardware, reason: video slot defaults in PRAM}
+  - {trap: 0xA081, name: SetVideoDefault, tag: hardware, reason: video slot defaults in PRAM}
+  - {trap: 0xA084, name: GetOSDefault, tag: hardware, reason: startup OS defaults in PRAM}
+  - {trap: 0xA083, name: SetOSDefault, tag: hardware, reason: startup OS defaults in PRAM}
+  - {trap: 0xA07D, name: GetDefaultStartup, tag: hardware, reason: startup device in PRAM}
+  - {trap: 0xA07E, name: SetDefaultStartup, tag: hardware, reason: startup device in PRAM}
+  - {trap: 0xA07F, name: InternalWait, tag: hardware, reason: hardware wait states}
+  - {trap: 0xA086, name: IOPInfoAccess, tag: hardware, reason: I/O processor}
+  - {trap: 0xA087, name: IOPMsgRequest, tag: hardware, reason: I/O processor}
+  - {trap: 0xA088, name: IOPMoveData, tag: hardware, reason: I/O processor}
+  # boot: run while the system starts, before any application
+  - {trap: 0xA06C, name: InitFS, tag: boot, reason: File Manager start-up}
+  - {trap: 0xA06D, name: InitEvents, tag: boot, reason: Event Manager start-up}
+  - {trap: 0xA03F, name: InitUtil, tag: boot, reason: PRAM/clock start-up}
+  - {trap: 0xA995, name: InitResources, tag: boot, reason: opens the System file at start-up}
+  - {trap: 0xA9E6, name: InitAllPacks, tag: boot, reason: start-up}
+  - {trap: 0xA057, name: SetApplBase, tag: boot, reason: start-up heap layout}
+  - {trap: 0xA02C, name: InitApplZone, tag: boot, reason: start-up / launch heap layout (Executor does this in C++)}
+  - {trap: 0xA996, name: RsrcZoneInit, tag: boot, reason: closes resource files at launch}
+  - {trap: 0xA03D, name: DrvrInstall, tag: boot, reason: driver installation by the system and INITs}
+  - {trap: 0xA03E, name: DrvrRemove, tag: boot, reason: driver removal}
+  - {trap: 0xA04F, name: RDrvrInstall, tag: boot, reason: ROM driver installation}
+  - {trap: 0xA04E, name: AddDrive, tag: boot, reason: drive queue set-up by disk drivers}
+  # debug: debugger hooks
+  - {trap: 0xA08D, name: DebugUtil, tag: debug, reason: low-level debugger interface}
+  - {trap: 0xA9FF, name: Debugger, tag: debug, reason: breaks into MacsBug}
+  - {trap: 0xABFF, name: DebugStr, tag: debug, reason: breaks into MacsBug}

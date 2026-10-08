@@ -151,6 +151,12 @@ Basilisk II core) / todo; struck out if only Apple ROM/patch code,
 hardware/boot or replaced System code calls it. Compressed resources are
 decompressed with `rsrcfork` (venv at `~/.venvs/macdecode`). 7.5.5 to
 Finder: 16 todo, 2 basilisk (`.Disk` status/control), 171 done.
+The tracer also records every trap install (`trap_installs.tsv`: slot,
+old/new address, installer and target resources), shown as each slot's
+patch history on `/traps`. `/entrypoints` lists all 4098 known entry
+points (traps, selectors, drivers, components) with checkbox filters;
+the work list (needed, not in Executor) is 28. Hardware/boot/debug tags
+live in `learned.yaml` (`tags:`) for review.
 
 **Where we left off:** snapshot API and a first reader (lowmem, heap
 walk, trap classification) work; reference snapshot

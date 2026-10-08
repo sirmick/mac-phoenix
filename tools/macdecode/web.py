@@ -102,9 +102,10 @@ class Site:
     def page(self, title, body):
         w = self.world
         s = w.snap
-        pages = ("", "lowmem", "traps", "needs", "zones", "resources", "placeholders") + \
+        pages = ("", "lowmem", "traps", "entrypoints", "zones", "resources", "placeholders") + \
             (("diff",) if self.cand else ())
-        nav = "".join(f'<a href="/{p}">{p or "summary"}</a>' for p in pages)
+        nav = "".join(f'<a href="/{p}">{ {"": "summary", "entrypoints": "entry points"}.get(p, p)}</a>'
+                      for p in pages)
         return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>macdecode · {esc(title)}</title><style>{CSS}</style></head><body>
@@ -184,6 +185,26 @@ class Site:
                "rom": lambda r: w.snap.in_rom(r["addr"])}[filt]
         links = " · ".join(f'<a href="/traps?f={k}">{k}</a>' if k != filt else f"<b>{k}</b>"
                            for k in ("patched", "unnamed", "rom", "implemented", "all"))
+        an = self.analysis()
+        history = {}
+        for ins in (an.installs if an else []):
+            history.setdefault(ins["slot"], []).append(ins)
+
+        def place(addr, recorded=""):
+            if w.snap.in_rom(addr):
+                return f"ROM +{addr - w.snap.rom_base:x}"
+            return recorded or w.origin(addr) or "?"
+
+        def chain(slot, r):
+            hs = history.get(slot)
+            if not hs:
+                return "<span class='mut'>never patched</span>" if not r["unimplemented"] else ""
+            steps = [f"<span class='mono'>{place(hs[0]['old'])}</span>"]
+            for h in hs:
+                steps.append(f"→ {addr_link(h['addr'])} {esc(place(h['addr'], h['target']))}"
+                             f" <span class='mut'>by {esc(h['installer'] or place(h['pc']))}</span>")
+            return "<br>".join(steps)
+
         trs = []
         for r in rows:
             if not sel(r) or (ogroup and r["origin_group"] != ogroup):
@@ -200,7 +221,8 @@ class Site:
                      else esc(r["where"]))
             trs.append(f"""<tr{' class="unnamed"' if not info and not r['unimplemented'] else ''}>
 <td class="mono">${r['trap']:04X}</td><td class="mono mut">{r['table']}[{r['index']}]</td>
-<td>{names}</td><td>{addr_link(r['addr'])}</td><td>{origin}</td><td class="mut">{where}</td></tr>""")
+<td>{names}</td><td>{addr_link(r['addr'])}</td><td>{origin}</td><td class="mut">{where}</td>
+<td class="mut" style="font-size:12px">{chain((r['table'], r['index']), r)}</td></tr>""")
         disk = getattr(w.origins, "disk", None)
         note = (f"Origins matched against <code>{esc(disk)}</code>." if disk else
                 "<span class='warn'>No boot disk: pass --disk to match origins.</span>")
@@ -208,116 +230,139 @@ class Site:
                 f"<p class='mut'>Implemented entries by origin: {origin_links}</p>"
                 "<div class='wrap'><table><tr><th>Trap</th>"
                 "<th>Slot</th><th>Names (multiversal / learned)</th><th>Address</th><th>Origin</th>"
-                "<th>Points into</th></tr>"
+                "<th>Points into</th><th>Patch history (traced boot)</th></tr>"
                 + "".join(trs) + "</table></div>")
         return self.page("Trap tables", body)
 
-    def needs(self, q):
-        """The trap table, crossed out where we know Executor won't need it.
-
-        Needed = called (in the traced real boot) from code Executor runs:
-        Finder and the System definition procedures it doesn't replace.
-        Everything only Apple ROM/patch code calls, hardware/boot traps,
-        and traps called only by System code Executor replaces are out.
-        """
+    def analysis(self, ext=False):
+        """The traced boot's analysis (atraps.py), cached; None without a trace."""
         snap_dir = self.world.snap.dir
         if not (snap_dir / "atraps.tsv").exists():
-            return self.page("Needs", "<p>This snapshot has no <code>atraps.tsv</code>: boot with "
-                             "<code>--trace-atraps</code> and snapshot again.</p>")
+            return None
         import atraps
-        ext = q.get("ext", ["0"])[0] == "1"
         key = (ext, learned.mtime(self.learned))
         if key not in self.needs_cache:
             self.needs_cache = {key: atraps.Analysis(str(snap_dir), extensions=ext)}
-        an = self.needs_cache[key]
-        show = q.get("v", ["all"])[0]
+        return self.needs_cache[key]
+
+    def entry_points_list(self, an):
+        """Every entry point we know of, unrolled: traced routines (with
+        their verdicts) plus known selectors and named slots never seen."""
         w = self.world
+        nm, ds = an.names, an.names.ds
+        entries = {(r["table"], r["index"]): r for r in md.trap_entries(w)}
         by_slot = {}
         for r in an.rows:
             by_slot.setdefault(r["slot"], []).append(r)
-        entries = {(r["table"], r["index"]): r for r in md.trap_entries(w)}
-        order = ("todo", "basilisk", "unresolved", "done", "out")
-        nm, ds = an.names, an.names.ds
-        # Every routine we know of: slots the real table fills, slots any
-        # source names, every dispatcher selector, plus what the trace saw.
         slots = (set(by_slot) | {k for k, e in entries.items() if not e["unimplemented"]}
                  | set(w.db.traps) | set(nm.ui) | set(ds.slots))
-        trs, tally, rtally = [], {}, {}
-
-        def ex_label(ex):
-            return {"implemented": "Executor has it", "whole-trap": "Executor has it (whole trap)",
-                    "basilisk": "host code in Basilisk II core", "missing": "Executor lacks it",
-                    "unknown": "not in multiversal"}.get(ex, ex)
-
+        out = []
         for slot in sorted(slots, key=lambda k: (k[0] != "tool", k[1])):
-            routines = by_slot.get(slot, [])
-            e = entries.get(slot)
             word = (0xA800 | slot[1]) if slot[0] == "tool" else (0xA000 | slot[1])
+            e = entries.get(slot)
+            origin = (e["origin"] or "?") if e and not e["unimplemented"] else "empty in 7.5.5 table"
             d = ds.slots.get(slot)
-            # Known selectors the trace never saw.
-            seen = {(r["sel"] & (d["mask"] or 0xFFFFFFFF)) for r in routines if d and r["sel"] is not None}
-            unseen = [(v, sel) for v, sel in sorted(d["selectors"].items()) if v not in seen] if d else []
-            verdict = next((v for v in order if any(r["verdict"] == v for r in routines)), "never")
-            tally[verdict] = tally.get(verdict, 0) + 1
+            routines = by_slot.get(slot, [])
             for r in routines:
-                rtally[r["verdict"]] = rtally.get(r["verdict"], 0) + 1
-            rtally["never"] = rtally.get("never", 0) + len(unseen) + (0 if routines or d else 1)
-            if show != "all" and verdict != show and not any(r["verdict"] == show for r in routines) \
-                    and not (show == "never" and unseen):
-                continue
-            origin = esc(e["origin"]) if e and e["origin"] else (
-                "" if e and not e["unimplemented"] else "<i>empty in the 7.5.5 table</i>")
-            calls = sum(r["calls"] for r in routines)
-            if verdict == "never":
-                why = "not called on the way to Finder"
-                if not d:
-                    why += "; " + ex_label(nm.executor(word))
-            else:
-                why = "; ".join(sorted({r["reason"] or r["executor"] for r in routines}))
-            kind = f" <span class='pill'>dispatcher · {len(d['selectors'])} known</span>" if d else ""
-            trs.append(f'''<tr class="v-{verdict}"><td class="mono slot">${word:04X}</td>
-<td class="nm">{esc(nm.trap(word))}{kind}</td><td><span class="v v-{verdict}-p">{verdict}</span></td>
-<td class="mono">{calls or ""}</td><td class="mut">{esc(why)}</td><td class="mut">{origin}</td></tr>''')
-            subs = [("seen", r) for r in routines if r["sel"] is not None or r["obj"] is not None]
-            subs += [("known", (v, sel)) for v, sel in unseen]
-            subs.sort(key=lambda x: (x[1]["sel"] or 0) if x[0] == "seen" else x[1][0])
-            for kind_, x in subs:
-                if kind_ == "seen":
-                    r = x
-                    if show != "all" and r["verdict"] != show:
+                kind = ("driver" if r["detail"] else "component" if r["sub"] is not None
+                        else "selector" if r["sel"] is not None else "trap")
+                out.append(dict(r, word=word, kind=kind, origin=origin,
+                                loc=f"{d['kind']} & {d['mask']:X}" if d and kind == "selector" else ""))
+            seen = {(r["sel"] & (d["mask"] or 0xFFFFFFFF)) for r in routines if d and r["sel"] is not None}
+            if d:
+                for v, sel in sorted(d["selectors"].items()):
+                    if v in seen:
                         continue
-                    g = ", ".join(f"{k} {n}" for k, n in list(r["groups"].items())[:3])
-                    p = ", ".join(f"{k} {n}" for k, n in list(r["parents"].items())[:2])
-                    trs.append(f'''<tr class="sel v-{r['verdict']}"><td class="mono mut">{'' if r['sel'] is None else f"{r['sel']:X}"}</td>
-<td class="nm">{esc(r['name'])}</td><td><span class="v v-{r['verdict']}-p">{r['verdict']}</span></td>
-<td class="mono">{r['calls']}</td><td class="mut">{esc(r['reason'] or ex_label(r['executor']))}</td>
-<td class="mut">by {esc(g)} · in {esc(p)}</td></tr>''')
-                else:
-                    if show not in ("all", "never"):
-                        continue
-                    v, sel = x
-                    trs.append(f'''<tr class="sel v-never"><td class="mono mut">{v:X}</td>
-<td class="nm">{esc(sel['name'])}</td><td><span class="v v-never-p">never</span></td><td></td>
-<td class="mut">{esc(ex_label(nm.executor(word, v)))}</td><td class="mut">named by {esc(sel['source'])}</td></tr>''')
-        links = " · ".join((f"<b>{v} {tally.get(v, 0)}</b>" if v == show else
-                            f'<a href="/needs?v={v}&ext={int(ext)}">{v}</a> {tally.get(v, 0)}')
-                           for v in ("todo", "basilisk", "unresolved", "done", "out", "never"))
-        links += " · " + (f'<a href="/needs?v={show}&ext={int(ext)}">all</a>' if show != "all" else "<b>all</b>")
-        toggle = (f'<a href="/needs?v={show}&ext={0 if ext else 1}">'
-                  + ("extensions count as run: on" if ext else "extensions count as run: off") + "</a>")
-        rlinks = ", ".join(f"{v} {rtally.get(v, 0)}" for v in ("todo", "basilisk", "unresolved", "done", "out", "never"))
-        body = (f"<p>Trap slots by verdict: {links} — {toggle}</p>"
-                f"<p class='mut'>Routines (slots unrolled into selectors, drivers, components): {rlinks}; "
-                f"{sum(rtally.values())} known in all.</p>"
-                "<p class='mut'>Needed = called in the traced real 7.5.5 boot from code Executor runs "
-                "(Finder; System WDEF/MDEF/CDEF/LDEF/MBDF not served by Executor; extensions if on). "
-                "<b class='warn'>todo</b>: Executor lacks it. <b style='color:var(--acc)'>basilisk</b>: "
-                "host code exists in the Basilisk II core. <span class='bad'>Struck out</span>: only Apple "
-                "ROM/patch code, hardware/boot, or System code Executor replaces calls it. Dispatchers list "
-                "their selectors below the slot.</p>"
-                "<div class='wrap'><table><tr><th>Trap</th><th>Routine</th><th>Verdict</th><th>Calls</th>"
-                "<th>Why</th><th>Entry in the real table / callers</th></tr>" + "".join(trs) + "</table></div>")
-        return self.page("Needs (to Finder)", body)
+                    tag = an.tags.get((slot, v)) or an.tags.get((slot, None))
+                    out.append({"slot": slot, "word": word, "trap": f"{word:04X}", "sel": v, "sub": None,
+                                "obj": None, "detail": "", "kind": "selector", "name": sel["name"],
+                                "named_by": sel["source"].split(" ")[0], "executor": nm.executor(word, v),
+                                "verdict": "never", "reason": "", "tag": tag[0] if tag else None,
+                                "calls": 0, "groups": {}, "parents": {}, "origin": origin,
+                                "loc": f"{d['kind']} & {d['mask']:X}"})
+            elif not routines:
+                tag = an.tags.get((slot, None))
+                out.append({"slot": slot, "word": word, "trap": f"{word:04X}", "sel": None, "sub": None,
+                            "obj": None, "detail": "", "kind": "trap", "name": nm.trap(word),
+                            "named_by": nm.name_source(word), "executor": nm.executor(word),
+                            "verdict": "never", "reason": "", "tag": tag[0] if tag else None,
+                            "calls": 0, "groups": {}, "parents": {}, "origin": origin, "loc": ""})
+        return out
+
+    def entry_points(self, q):
+        """Every entry point we know of, unrolled per dispatch kind, with
+        checkbox filters (verdict, Executor status, kind) and a search."""
+        ext = q.get("ext", ["0"])[0] == "1"
+        an = self.analysis(ext)
+        if an is None:
+            return self.page("Entry points", "<p>This snapshot has no <code>atraps.tsv</code>: boot with "
+                             "<code>--trace-atraps</code> and snapshot again.</p>")
+        allv = ("todo", "basilisk", "unresolved", "done", "out", "never")
+        alle = ("has", "lacks", "basilisk")
+        allk = ("trap", "selector", "driver", "component")
+        filtered = "f" in q            # the form was submitted
+        vs = set(q.get("v", [])) if filtered else set(allv)
+        es = set(q.get("e", [])) if filtered else set(alle)
+        ks = set(q.get("k", [])) if filtered else set(allk)
+        text = q.get("q", [""])[0].strip().lower()
+
+        def estatus(ex):
+            return "has" if ex in ("implemented", "whole-trap") else "basilisk" if ex == "basilisk" else "lacks"
+
+        items = self.entry_points_list(an)
+        counts = {v: sum(1 for i in items if i["verdict"] == v) for v in allv}
+        shown = [i for i in items if i["verdict"] in vs and estatus(i["executor"]) in es and i["kind"] in ks
+                 and (not text or text in i["name"].lower() or text in i["trap"].lower())]
+        label = {"todo": "todo", "basilisk": "basilisk", "unresolved": "unresolved", "done": "done",
+                 "out": "not needed", "never": "never called"}
+        elabel = {"has": "Executor has it", "lacks": "Executor lacks it", "basilisk": "Basilisk host code"}
+
+        def box(name, val, on, text_):
+            return (f'<label style="margin-right:12px"><input type="checkbox" name="{name}" value="{val}"'
+                    f'{" checked" if on else ""}> {esc(text_)}</label>')
+        form = ('<form method="get" style="line-height:2">'
+                '<input type="hidden" name="f" value="1">'
+                + (f'<input type="hidden" name="ext" value="1">' if ext else "")
+                + "<b>Verdict</b> " + "".join(box("v", v, v in vs, f"{label[v]} ({counts[v]})") for v in allv)
+                + "<br><b>Executor</b> " + "".join(box("e", e, e in es, elabel[e]) for e in alle)
+                + "<br><b>Kind</b> " + "".join(box("k", k, k in ks, k) for k in allk)
+                + f' <input name="q" value="{esc(text)}" placeholder="search name or trap" size="22">'
+                ' <button>Filter</button></form>')
+        presets = " · ".join(f'<a href="/entrypoints?{qs}">{esc(t)}</a>' for t, qs in (
+            ("everything", ""),
+            ("needed for Finder", "f=1&v=todo&v=basilisk&v=unresolved&v=done&e=has&e=lacks&e=basilisk"
+                                  "&k=trap&k=selector&k=driver&k=component"),
+            ("work list", "f=1&v=todo&v=basilisk&v=unresolved&e=lacks&e=basilisk"
+                          "&k=trap&k=selector&k=driver&k=component"),
+            ("hide not needed", "f=1&v=todo&v=basilisk&v=unresolved&v=done&v=never&e=has&e=lacks&e=basilisk"
+                                "&k=trap&k=selector&k=driver&k=component"),
+            ("implemented in Executor", "f=1&v=todo&v=basilisk&v=unresolved&v=done&v=out&v=never&e=has"
+                                        "&k=trap&k=selector&k=driver&k=component")))
+        toggle = (f'<a href="/entrypoints?ext={0 if ext else 1}">extensions count as run: '
+                  f'{"on" if ext else "off"}</a>')
+        trs = []
+        for i in shown:
+            sel = "" if i["sel"] is None else f"{i['sel']:X}"
+            g = ", ".join(f"{k} {n}" for k, n in list(i["groups"].items())[:3])
+            p = ", ".join(f"{k} {n}" for k, n in list(i["parents"].items())[:2])
+            why = i["reason"] or ("" if i["verdict"] == "never" else "")
+            tag = f" <span class='pill'>{esc(i['tag'])}</span>" if i.get("tag") else ""
+            v = i["verdict"]
+            trs.append(f'''<tr class="v-{v}"><td class="mono slot">${i['word']:04X}</td><td class="mono mut">{sel}</td>
+<td class="nm">{esc(i['name'])}{tag}</td><td class="mut">{i['kind']}{(' · ' + esc(i['loc'])) if i['loc'] else ''}</td>
+<td><span class="v v-{v}-p">{label[v]}</span></td><td class="mut">{esc(elabel[estatus(i['executor'])])}</td>
+<td class="mono">{i['calls'] or ''}</td><td class="mut">{esc(why)}</td>
+<td class="mut">{('by ' + esc(g)) if g else ''}{(' · in ' + esc(p)) if p else ''}</td>
+<td class="mut">{esc(i['named_by'])}</td><td class="mut">{esc(i['origin'])}</td></tr>''')
+        body = (form + f"<p>Presets: {presets} — {toggle} — <b>{len(shown)}</b> of {len(items)} entry points.</p>"
+                "<p class='mut'>Needed = called in the traced real 7.5.5 boot from code Executor runs (Finder; "
+                "System defprocs not served by Executor; extensions if on). Not needed = only Apple ROM/patch "
+                "code, hardware/boot/debug (tags in learned.yaml), or System code Executor replaces calls it. "
+                "Never called = known, but the trace didn't reach it: not the same as not needed.</p>"
+                "<div class='wrap'><table><tr><th>Trap</th><th>Sel</th><th>Entry point</th><th>Kind</th>"
+                "<th>Verdict</th><th>Executor</th><th>Calls</th><th>Why</th><th>Callers / inside</th>"
+                "<th>Named by</th><th>Slot in the real table</th></tr>" + "".join(trs) + "</table></div>")
+        return self.page("Entry points", body)
 
     def zones(self, q):
         w = self.world
@@ -470,7 +515,8 @@ def serve(snap_path, defs, learned_path, disk, host, port, compare=None):
             site.fresh()
             route = {"/": lambda: site.summary(), "/lowmem": lambda: site.lowmem(q),
                      "/traps": lambda: site.traps(q), "/zones": lambda: site.zones(q),
-                     "/needs": lambda: site.needs(q),
+                     "/entrypoints": lambda: site.entry_points(q),
+                     "/needs": lambda: site.entry_points(q),
                      "/resources": lambda: site.resources(q),
                      "/placeholders": lambda: site.placeholders(q),
                      "/diff": lambda: site.diff(q),
