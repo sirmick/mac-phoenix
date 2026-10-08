@@ -90,12 +90,31 @@ static bool prepare(const fs::path& work, bool fresh, std::string& err)
     return true;
 }
 
+std::string system_image(const config::EmulatorConfig& config)
+{
+    if (config.executor_system.empty() || !valid_name(config.executor_system))
+        return "";
+    std::error_code ec;
+    fs::path img = fs::path(config.storage_dir) / "images" / config.executor_system;
+    return fs::is_regular_file(img, ec) ? img.string() : "";
+}
+
 void resolve(const config::EmulatorConfig& config, std::string& data_dir, std::string& app)
 {
     data_dir = config.executor_data_dir;
     app = config.executor_app;
 
     if (data_dir.empty() && !config.executor_system.empty()) {
+        // An image picked as the System: extract its System Folder once.
+        std::string image = system_image(config);
+        std::error_code ec;
+        if (!image.empty()
+            && !fs::is_directory(fs::path(root(config.storage_dir)) / (config.executor_system + ".clean"), ec)) {
+            std::string err;
+            fprintf(stderr, "[Executor] extracting the System Folder from %s\n", image.c_str());
+            if (!create_from_image(config.storage_dir, config.executor_system, image, err))
+                fprintf(stderr, "[Executor] %s\n", err.c_str());
+        }
         if (!valid_name(config.executor_system)) {
             fprintf(stderr, "[Executor] bad system name '%s'\n", config.executor_system.c_str());
         } else {
@@ -126,7 +145,7 @@ void resolve(const config::EmulatorConfig& config, std::string& data_dir, std::s
 }
 
 bool create_from_image(const std::string& storage_dir, const std::string& name,
-                       const std::string& image_path, std::string& err)
+                       const std::string& image_path, std::string& err, bool refresh)
 {
     if (!valid_name(name)) {
         err = "invalid name";
@@ -138,6 +157,8 @@ bool create_from_image(const std::string& storage_dir, const std::string& name,
         return false;
     }
     fs::path clean = fs::path(root(storage_dir)) / (name + ".clean");
+    if (refresh)
+        fs::remove_all(clean, ec);
     if (fs::exists(clean, ec)) {
         err = name + " already exists";
         return false;

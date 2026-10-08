@@ -4067,30 +4067,42 @@ function configFromServerJson(cfg) {
     };
 }
 
-// Executor's System list (from /api/storage) and its start choices.
+// Executor's System disk: any image in storage; "ready" ones have their
+// System Folder extracted already (/api/storage executor_systems).
 function populateExecutorSystems() {
     const sel = document.getElementById('cfg-executor-system');
     if (!sel) return;
-    const systems = storageCache?.executor_systems || [];
-    const want = currentConfig.executor_system ?? (systems[0]?.name || '');
+    const ready = new Map((storageCache?.executor_systems || []).map(s => [s.name, s]));
+    const images = (storageCache?.disks || []).map(d => d.name || d).filter(Boolean);
+    const names = [...images, ...[...ready.keys()].filter(n => !images.includes(n))];
+    const want = currentConfig.executor_system ?? defaultExecutorSystem();
     sel.innerHTML = '';
-    for (const s of systems) {
+    for (const n of names) {
         const o = document.createElement('option');
-        o.value = s.name;
-        o.textContent = s.name;
-        o.dataset.finder = s.finder ? '1' : '';
+        o.value = n;
+        const r = ready.get(n);
+        o.textContent = n + (r ? (r.finder ? '  · ready' : '  · no Finder') : '');
+        o.dataset.finder = (!r || r.finder) ? '1' : '';
         sel.appendChild(o);
     }
     const none = document.createElement('option');
     none.value = '';
     none.textContent = 'None (Executor only, no Apple System)';
     sel.appendChild(none);
-    sel.value = [...sel.options].some(o => o.value === want) ? want : (systems[0]?.name || '');
+    sel.value = [...sel.options].some(o => o.value === want) ? want : '';
     const start = document.getElementById('cfg-executor-start');
     if (start) start.value = currentConfig.executor_start || 'finder';
     const fresh = document.getElementById('cfg-executor-fresh');
     if (fresh) fresh.checked = currentConfig.executor_fresh ?? true;
     updateExecutorStart();
+}
+
+// An extracted System with a Finder, else a 7.5.x image, else none.
+function defaultExecutorSystem() {
+    const ready = (storageCache?.executor_systems || []).find(s => s.finder);
+    if (ready) return ready.name;
+    const images = (storageCache?.disks || []).map(d => d.name || d);
+    return images.find(n => /7\.5/.test(n)) || '';
 }
 
 // Without a System (or one without Finder) only the Browser can start.
@@ -4104,28 +4116,31 @@ function updateExecutorStart() {
     if (!finder) start.value = 'browser';
     const fresh = document.getElementById('cfg-executor-fresh');
     if (fresh) fresh.disabled = !sel.value;
+    const again = document.getElementById('executor-system-new-btn');
+    if (again) again.disabled = !sel.value;
 }
 
-async function createExecutorSystem() {
-    await loadStorage();
-    const images = (storageCache?.disks || storageCache?.images || []).map(d => d.name || d).filter(Boolean);
-    const image = prompt('Make a System from which disk image in storage/images?\n\n' + images.join('\n'),
-                         images.find(n => /7\.5/.test(n)) || images[0] || '');
+// Copy the System Folder out of the selected image again.
+async function reextractExecutorSystem() {
+    const image = document.getElementById('cfg-executor-system')?.value;
     if (!image) return;
-    const name = prompt('Name for the new System:', image.replace(/\.(img|dsk|hfv|image)$/i, ''));
-    if (!name) return;
+    const btn = document.getElementById('executor-system-new-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Extracting…'; }
     try {
         const res = await fetch('/api/executor/system', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, image }),
+            body: JSON.stringify({ image }),
         });
         const data = await res.json();
-        if (!res.ok) { alert('Could not make the System: ' + (data.error || res.status)); return; }
+        if (!res.ok) alert('Could not extract the System Folder: ' + (data.error || res.status));
         await loadStorage(true);
-        currentConfig.executor_system = name;
+        currentConfig.executor_system = image;
         populateExecutorSystems();
     } catch (e) {
-        alert('Could not make the System: ' + e.message);
+        alert('Could not extract the System Folder: ' + e.message);
+    } finally {
+        if (btn) btn.textContent = 'Re-extract';
+        updateExecutorStart();
     }
 }
 
@@ -4659,10 +4674,10 @@ async function onEmulatorChange() {
     currentConfig.screen = d.screen;
     currentConfig.backend = d.backend;
     if (emulatorType === 'executor') {
-        // Default: the first System with a Finder, started fresh.
-        const storage = await loadStorage();
-        const sys = (storage?.executor_systems || []).find(s => s.finder);
-        currentConfig.executor_system = sys ? sys.name : '';
+        // Default: an extracted System with a Finder (or a 7.5 image), fresh.
+        await loadStorage();
+        const sys = defaultExecutorSystem();
+        currentConfig.executor_system = sys;
         currentConfig.executor_start = sys ? 'finder' : 'browser';
         currentConfig.executor_fresh = true;
     }
@@ -4701,9 +4716,9 @@ function onRomChange() {
 const EXECUTOR_PROFILE = 'Executor 7.5.5';
 async function seedExecutorProfile(cfg) {
     App.builtinPresets = {};
-    const storage = await loadStorage();
-    const sys = (storage?.executor_systems || []).find(s => s.name === '7.5.5' && s.finder);
-    if (!sys) return;
+    await loadStorage();
+    const sys = { name: defaultExecutorSystem() };
+    if (!/7\.5\.5/.test(sys.name)) return;
     App.builtinPresets[EXECUTOR_PROFILE] = {
         ...cfg, configs: undefined,
         emulator: 'executor', backend: 'executor', rom: '',
@@ -5773,7 +5788,7 @@ function setupEventListeners() {
     document.getElementById('cfg-executor-fresh')?.addEventListener('change', e => {
         currentConfig.executor_fresh = e.target.checked;
     });
-    document.getElementById('executor-system-new-btn')?.addEventListener('click', createExecutorSystem);
+    document.getElementById('executor-system-new-btn')?.addEventListener('click', reextractExecutorSystem);
     const savePresetBtn = document.getElementById('save-preset-btn');
     if (savePresetBtn) savePresetBtn.addEventListener('click', savePreset);
 

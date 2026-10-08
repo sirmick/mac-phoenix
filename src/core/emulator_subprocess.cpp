@@ -10,6 +10,7 @@
 #include "executor_systems.h"
 #include "../ipc/ipc_protocol.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <chrono>
@@ -108,6 +109,15 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     for (const auto& d : config_->disk_paths) {
         args.push_back("--disk");
         args.push_back(d);
+    }
+    // Executor: the System's image is mounted too (its applications).
+    if (config_->backend_string() == "executor") {
+        std::string img = executor_systems::system_image(*config_);
+        if (!img.empty() && std::find(config_->disk_paths.begin(), config_->disk_paths.end(), img)
+                            == config_->disk_paths.end()) {
+            args.push_back("--disk");
+            args.push_back(img);
+        }
     }
     for (const auto& c : config_->cdrom_paths) {
         args.push_back("--cdrom");

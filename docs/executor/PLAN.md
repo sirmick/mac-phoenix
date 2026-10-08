@@ -266,15 +266,19 @@ Tools carried alongside:
 
 * Run: pick **Executor** as Emulator Mode or CPU in the web UI, or
   `./build/mac-phoenix --backend executor`. No ROM. Needs `vm.mmap_min_addr=0`.
-* Systems: `<storage>/executor-systems/<name>.clean/` holds a System Folder
-  made from a disk image (`sideload_system.py`, or Settings > System >
-  New…, `POST /api/executor/system`); `<name>/` is the working copy the run
-  uses, restored from `.clean` each run unless "start fresh" is off (file
-  times are kept: Finder compares its own date with its preferences'
-  segment cache). `--executor-system`, `--executor-start finder|browser|
-  path`, `--[no-]executor-fresh`; resolved by the parent
+* System disk: `--executor-system IMAGE` (Settings > System disk) names a
+  disk image in `<storage>/images`. On first use its System Folder is
+  copied out (`sideload_system.py`) into
+  `<storage>/executor-systems/IMAGE.clean/`, and the image is mounted
+  read-only beside it so its applications are there. `IMAGE/` is the
+  working copy the run uses, restored from `.clean` each run unless "start
+  fresh" is off (file times are kept: Finder compares its own date with
+  its preferences' segment cache). Re-extract (`POST /api/executor/system
+  {image}`) after the image changes. A name that isn't an image picks a
+  hand-made `NAME.clean`. `--executor-start finder|browser|path`,
+  `--[no-]executor-fresh`; resolved by the parent
   (`src/core/executor_systems.cpp`) into `--executor-data/--executor-app`.
-  The web UI offers an "Executor 7.5.5" profile when that System exists.
+  The web UI offers a built-in "Executor 7.5.5" profile.
 * Without a System, Executor's files live in `<storage>/executor/` (System Folder, prefs).
   That folder and the configured shared folder are the only host folders the
   guest sees; Executor's default of mounting `/` is disabled. Disk images

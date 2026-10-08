@@ -214,8 +214,9 @@ Response APIRouter::handle_storage(const Request& /*req*/) {
     return Response::json(json_utils::to_string(j));
 }
 
-/* POST /api/executor/system {"name": "7.5.5", "image": "macos-7.5.5.img"}:
-   a new Executor System from a disk image in <storage>/images. */
+/* POST /api/executor/system {"image": "macos-7.5.5.img"[, "name": ...]}:
+   (re-)extract an Executor System from a disk image in <storage>/images;
+   named after the image unless given a name. */
 Response APIRouter::handle_executor_system_create(const Request& req) {
     auto bad = [](int code, const std::string& msg) {
         Response r;
@@ -227,15 +228,16 @@ Response APIRouter::handle_executor_system_create(const Request& req) {
     if (!ctx_->config || ctx_->config->storage_dir.empty())
         return bad(500, "storage_dir not configured");
     auto j = json_utils::parse(req.body);
-    std::string name = json_utils::get_string(j, "name");
     std::string image = json_utils::get_string(j, "image");
+    std::string name = json_utils::get_string(j, "name", image);
     if (!executor_systems::valid_name(name))
         return bad(400, "invalid name");
     if (image.empty() || image.find('/') != std::string::npos || image.find("..") != std::string::npos)
         return bad(400, "invalid image");
     std::string err;
     if (!executor_systems::create_from_image(ctx_->config->storage_dir, name,
-                                             ctx_->config->storage_dir + "/images/" + image, err))
+                                             ctx_->config->storage_dir + "/images/" + image, err,
+                                             /*refresh=*/true))
         return bad(500, err);
     return Response::json("{\"success\":true,\"name\":\"" + storage::json_escape(name) + "\"}");
 }

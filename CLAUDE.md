@@ -42,9 +42,8 @@ npx playwright test
 # Executor backend: no ROM, C++ Toolbox on UAE (docs/executor/PLAN.md).
 # Needs vm.mmap_min_addr=0. Pick "Executor" in the web UI, or:
 ./build/mac-phoenix --backend executor
-# ... on Apple's 7.5.5 System with real Finder (System made in Settings, or
-# tools/macdecode/sideload_system.py IMG ~/storage/executor-systems/7.5.5.clean):
-./build/mac-phoenix --backend executor --executor-system 7.5.5
+# ... on Apple's 7.5.5 System with real Finder (Settings > System disk):
+./build/mac-phoenix --backend executor --executor-system macos-7.5.5-noext.img
 ctest --test-dir build -L executor
 
 # Boot capacity matrix (all backend × JIT config × OS cells)
@@ -177,10 +176,10 @@ Machine:
   --bootdriver N             0=any, -62=CD-ROM (default: 0)
   --storage-dir PATH         Default storage root (default: ~/storage)
   --executor-data PATH       Executor data dir (default: <storage>/executor)
-  --executor-system NAME     Run on <storage>/executor-systems/NAME (a System
-                             Folder made from a disk image; Settings > System)
+  --executor-system IMAGE    Run on the System Folder of <storage>/images/IMAGE
+                             (copied out on first use, image mounted too)
   --executor-start WHAT      finder | browser | path in the System (default: finder)
-  --[no-]executor-fresh      Restore the System from NAME.clean each run (default: on)
+  --[no-]executor-fresh      Restore the System from its clean copy each run (default: on)
 
 CPU:
   --backend NAME             uae | kpx | executor

@@ -286,10 +286,10 @@
                         Executor's C++ Toolbox. Not yet: extensions, desk accessories,
                         PowerPC applications, sound.</p>
                     <div class="form-group">
-                        <label for="cfg-executor-system" title="A System Folder prepared from a disk image (storage/executor-systems)">System</label>
+                        <label for="cfg-executor-system" title="A disk image with a System Folder. Its System Folder is copied out the first time (cached in storage/executor-systems) and the image is mounted read-only too.">System disk</label>
                         <div style="display:flex;gap:6px">
                             <select id="cfg-executor-system" style="flex:1"></select>
-                            <button id="executor-system-new-btn" type="button" class="btn" title="Make a System from a disk image">New…</button>
+                            <button id="executor-system-new-btn" type="button" class="btn" title="Copy the System Folder out of the image again (after the image changed)">Re-extract</button>
                         </div>
                     </div>
                     <div class="form-group">
