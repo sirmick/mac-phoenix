@@ -139,6 +139,19 @@ reference: lowmem same shape 19 → 33, differs 100 → 87; zones now show
 a PM heap holding `ApplZone:Browser`. Slices next: process records and
 the `lmem` swap (2), per-process host stacks and switching (3).
 
+**What Finder needs (trace):** `mac-phoenix --trace-atraps` (UAE) records
+every A-trap call site as a routine: trap, dispatcher selector
+(`tools/macdecode/dispatch.py`: multiversal + Universal Interfaces glue +
+`learned.yaml`), component instance or driver + csCode, the enclosing
+routine, and the resource holding the caller. `tools/macdecode/atraps.py`
+and the web view's `/needs` page classify each routine: needed if code
+Executor runs calls it (Finder, System defprocs not in the resource
+policy, optionally extensions), then done / basilisk (host code in the
+Basilisk II core) / todo; struck out if only Apple ROM/patch code,
+hardware/boot or replaced System code calls it. Compressed resources are
+decompressed with `rsrcfork` (venv at `~/.venvs/macdecode`). 7.5.5 to
+Finder: 16 todo, 2 basilisk (`.Disk` status/control), 171 done.
+
 **Where we left off:** snapshot API and a first reader (lowmem, heap
 walk, trap classification) work; reference snapshot
 `~/storage/snapshots/7.5.5-finder-idle`. Next: find the Process

@@ -15,6 +15,26 @@ from pathlib import Path
 SYSTEM_DIRS = [b"System Folder", b"System Folder:Extensions", b"System Folder:Control Panels"]
 
 
+try:    # Apple's dcmp 0/1/2 decompressors (pip install rsrcfork; optional)
+    from rsrcfork import compress as _compress
+except ImportError:
+    _compress = None
+
+COMPRESSED_MAGIC = b"\xa8\x9f\x65\x72"
+
+
+def decompress(data):
+    """A compressed resource ($A89F6572 header) as loaded into RAM, or the
+    bytes unchanged if it isn't compressed or we can't decompress it (no
+    rsrcfork, or a dcmp other than 0/1/2)."""
+    if _compress is None or data[:4] != COMPRESSED_MAGIC:
+        return data
+    try:
+        return _compress.decompress(data)
+    except Exception:
+        return data
+
+
 def parse_resource_fork(data):
     """{(type, id): (name, bytes)} from a raw resource fork."""
     if len(data) < 16:
@@ -40,7 +60,7 @@ def parse_resource_fork(data):
                 name = m[nl_off + name_off + 1:nl_off + name_off + 1 + n].decode("mac_roman")
             p = data_off + doff
             ln = struct.unpack_from(">I", data, p)[0]
-            out[(rtype, rid)] = (name, data[p + 4:p + 4 + ln])
+            out[(rtype, rid)] = (name, decompress(data[p + 4:p + 4 + ln]))
     return out
 
 

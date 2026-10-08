@@ -28,6 +28,12 @@ SKIP_TYPES = {"ICN#", "icl4", "icl8", "ics#", "ics4", "ics8", "ICON", "cicn", "P
               "fctb", "ictb", "mctb", "tlst", "flst", "card"}
 
 
+# Opcodes followed by a 32-bit absolute address or immediate pointer:
+# JMP/JSR abs.L, LEA abs.L,An, PEA abs.L, MOVEA.L #imm,An, MOVE.L #imm,-(SP).
+ABS_LONG_OPS = {0x4EF9, 0x4EB9, 0x4879, 0x2F3C} | {0x41F9 + (r << 9) for r in range(8)} | \
+    {0x207C + (r << 9) for r in range(8)}
+
+
 def _keys(region):
     """8-byte big-endian keys at every even offset of region."""
     n = (len(region) - 8) // 2 + 1
@@ -114,20 +120,42 @@ class Origins:
         if a in self._masked:
             return self._masked[a]
         result = None
-        for size in (window, 2 * window):
+        for size in (window // 2, window, 2 * window):
             ram = self.ram[a:a + size]
             if len(ram) < size:
                 break
             pat, i, fixed = b"", 0, 0
             while i < len(ram):
-                if i + 4 <= len(ram) and self.is_address(int.from_bytes(ram[i:i + 4], "big")):
+                op = int.from_bytes(ram[i:i + 2], "big") if i % 2 == 0 and i + 2 <= len(ram) else None
+                val = int.from_bytes(ram[i:i + 4], "big") if i + 4 <= len(ram) else None
+                if op is not None and i + 6 <= len(ram) and op in ABS_LONG_OPS:
+                    # JMP/JSR/LEA/PEA abs.L, MOVEA.L #imm: the operand is an
+                    # address the loader filled in (a link token on disk).
+                    pat += re.escape(ram[i:i + 2]) + b".{4}"
+                    fixed += 2
+                    i += 6
+                elif val is not None and self.is_address(val) and (val >= 0x100000 or not val >> 24 == 0):
                     pat += b".{4}"
                     i += 4
+                elif op is not None and i + 4 <= len(ram) and (
+                        op in (0x4EBA, 0x4EFA, 0x6100, 0x41FA, 0x43FA, 0x45FA, 0x47FA, 0x49FA,
+                               0x4BFA, 0x4DFA, 0x487A) or (op & 0xF0FF) == 0x6000):
+                    # PC-relative: JSR/JMP/LEA/PEA d16(PC), BSR.W, Bcc.W.
+                    # In an 'lpch' a call to another routine is a 4-byte
+                    # link token the loader rewrites into the instruction
+                    # (RAM 4EBA FF82 <- resource 0009 9771), and compaction
+                    # changes displacements anyway: wildcard all 4 bytes.
+                    pat += b".{4}"
+                    i += 4
+                elif op is not None and (op & 0xFF00) == 0x6100:
+                    pat += re.escape(ram[i:i + 1]) + b"."      # BSR.S
+                    fixed += 1
+                    i += 2
                 else:
                     pat += re.escape(ram[i:i + 1])
                     fixed += 1
                     i += 1
-            if fixed < size // 2:
+            if fixed < max(12, size // 3):
                 continue
             rx = re.compile(pat, re.DOTALL)
             found = []
@@ -137,17 +165,21 @@ class Origins:
                         continue
                     for m in rx.finditer(data):
                         found.append((fname, rtype, rid, m.start()))
-                        if len(found) > 1:
+                        if len(found) > 8:
                             break
-                    if len(found) > 1:
+                    if len(found) > 8:
                         break
-                if len(found) > 1:
+                if len(found) > 8:
                     break
             if len(found) == 1:
-                result = found[0]
+                result = found[0] + (1,)
                 break
             if not found:
                 break
+            if len({f[:3] for f in found}) == 1 and len(found) <= 8:
+                # Same resource, near-identical stubs: the resource is
+                # certain, the offset is the first candidate.
+                result = found[0] + (len(found),)
         self._masked[a] = result
         return result
 
@@ -158,5 +190,6 @@ class Origins:
             return f"{fname} '{rtype}' {rid} +{roff + (a - start):x}"
         m = self.masked(a)
         if m:
-            return f"{m[0]} '{m[1]}' {m[2]} +{m[3]:x} (masked match)"
+            amb = f", 1 of {m[4]}" if m[4] > 1 else ""
+            return f"{m[0]} '{m[1]}' {m[2]} +{m[3]:x} (masked match{amb})"
         return None
