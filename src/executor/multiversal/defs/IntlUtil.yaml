@@ -578,3 +578,94 @@
     dispatcher: Pack6
     selector: 0x0024
     executor: C_
+
+# ####
+
+# MacPhoenix: the Type Select routines (System 7.5; Lists.h in Universal
+# Interfaces 3.x), keyboard "type to select" for lists. Finder 7.5.5 uses them.
+
+- struct:
+    name: TypeSelectRecord
+    members:
+      - name: tsrLastKeyTime
+        type: uint32_t
+      - name: tsrScript
+        type: ScriptCode
+      - name: tsrKeyStrokes
+        type: Str63
+
+# ####
+
+- funptr:
+    return: Boolean
+    args:
+      - name: item
+        type: INTEGER
+      - name: itemsScript
+        type: ScriptCode*
+      - name: itemsStringPtr
+        type: StringPtr*
+      - name: yourDataPtr
+        type: void*
+    name: IndexToStringUPP
+
+# ####
+
+- function:
+    name: TypeSelectClear
+    args:
+      - name: tsr
+        type: TypeSelectRecord*
+    dispatcher: Pack6
+    selector: 0x0028
+    executor: C_
+
+# ####
+
+- function:
+    name: TypeSelectNewKey
+    return: Boolean
+    args:
+      - name: theEvent
+        type: EventRecord*
+      - name: tsr
+        type: TypeSelectRecord*
+    dispatcher: Pack6
+    selector: 0x002A
+    executor: C_
+
+# ####
+
+- function:
+    name: TypeSelectFindItem
+    return: INTEGER
+    args:
+      - name: tsr
+        type: TypeSelectRecord*
+      - name: listSize
+        type: INTEGER
+      - name: selectMode
+        type: INTEGER
+      - name: getStringProc
+        type: IndexToStringUPP
+      - name: getStringRefCon
+        type: void*
+    dispatcher: Pack6
+    selector: 0x002C
+    executor: C_
+
+# ####
+
+- function:
+    name: TypeSelectCompare
+    return: INTEGER
+    args:
+      - name: tsr
+        type: TypeSelectRecord*
+      - name: testStringScript
+        type: ScriptCode
+      - name: testStringPtr
+        type: StringPtr
+    dispatcher: Pack6
+    selector: 0x002E
+    executor: C_

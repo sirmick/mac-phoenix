@@ -452,9 +452,9 @@ void LocalVolume::getInfoCommon(CInfoPBPtr pb, InfoKind infoKind)
 
         // TODO:
         pb->dirInfo.ioACUser = 0;
-        pb->dirInfo.ioDrUsrWds = {};
+        pb->dirInfo.ioDrUsrWds = info.dir.info;
         pb->dirInfo.ioDrBkDat = 0;
-        pb->dirInfo.ioDrFndrInfo = {};
+        pb->dirInfo.ioDrFndrInfo = info.dir.xinfo;
 
 
     }
@@ -524,8 +524,19 @@ void LocalVolume::setInfoCommon(const ItemPtr& item, CInfoPBPtr pb, InfoKind inf
         }
         // TODO: if(infoKind == InfoKind::CatInfo)) ioFlBkDat
     }
+    else if(auto ditem = std::dynamic_pointer_cast<DirectoryItem>(item))
+    {
+        if(infoKind != InfoKind::CatInfo)
+            throw OSErrorException(paramErr);
+        ItemInfo info;
+        info.dir.info = pb->dirInfo.ioDrUsrWds;
+        info.dir.xinfo = pb->dirInfo.ioDrFndrInfo;
+        info.modTime = pb->dirInfo.ioDrMdDat;
+        info.creationTime = pb->dirInfo.ioDrCrDat;
+        ditem->setInfo(info);
+    }
     else
-        throw OSErrorException(paramErr);   // TODO: item is a directory
+        throw OSErrorException(paramErr);
 }
 
 void LocalVolume::PBSetCatInfo(CInfoPBPtr pb)

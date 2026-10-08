@@ -11,6 +11,13 @@
 
 #include <mman/mman.h>
 #include <rsys/process.h>
+#include <ScrapMgr.h>
+#include <wind/wind.h>
+#include <quickdraw/cquick.h>
+#include <WindowMgr.h>
+#include <QuickDraw.h>
+#include <vector>
+#include <algorithm>
 
 using namespace Executor;
 
@@ -219,6 +226,12 @@ void Executor::process_create(bool desk_accessory_p,
 
     /* ### hack */
     current_process_info = info;
+
+    /* MacPhoenix: the Process Manager hands every application an initialised
+       desk scrap (Finder 7.5.5 dereferences ScrapHandle without checking
+       ScrapState). */
+    if(LM(ScrapState) < 0)
+        ZeroScrap();
 }
 
 process_info_t *
@@ -356,3 +369,95 @@ OSErr Executor::C_GetPortNameFromProcessSerialNumber(
 /* ### temp memory spew; these go elsewhere */
 
 /* ### launch/da spew; these go elsewhere */
+
+/* ── Private OSDispatch selectors Finder 7.5.5 uses ─────────────────────
+ * Single process for now: per-process state lives here until the Process
+ * Manager keeps real records (slice 2). Names are guesses (learned.yaml). */
+
+static WindowPtr desktop_layer;
+
+OSErr Executor::C_TakeDesktopLayer(GUEST<WindowPtr> *layer)
+{
+    if(desktop_layer)
+        return -603; /* protocolErr; not in multiversal */
+
+    /* Like the real one: a GrafPort over the whole screen in a window record,
+       visRgn the desktop, clipRgn wide open, updateRgn empty, no strucRgn or
+       contRgn. Finder takes visRgn as its desktop window's visRgn and contRgn,
+       and updateRgn as its updateRgn. */
+    GUEST<GrafPtr> save_port = qdGlobals().thePort;
+    {
+        TheZoneGuard guard(LM(SysZone));
+        desktop_layer = (WindowPtr)NewPtrClear(sizeof(WindowRecord));
+        OpenPort(desktop_layer);
+        CopyRgn(LM(GrayRgn), PORT_VIS_REGION(desktop_layer));
+        WINDOW_UPDATE_REGION(desktop_layer) = NewRgn();
+    }
+    qdGlobals().thePort = save_port;
+    if(layer)
+        *layer = desktop_layer;
+    return noErr;
+}
+
+struct ProcessCallback
+{
+    Ptr proc;
+    int32_t refCon;
+};
+static std::vector<ProcessCallback> process_callbacks;
+
+OSErr Executor::C_AddProcessCallback(Ptr proc, int32_t refCon)
+{
+    process_callbacks.push_back({ proc, refCon });
+    return noErr;
+}
+
+OSErr Executor::C_GetTempMemInfo(GUEST<int32_t> *freeBytes, GUEST<int32_t> *maxBlock)
+{
+    if(freeBytes)
+        *freeBytes = TempFreeMem();
+    if(maxBlock)
+    {
+        GUEST<Size> grow;
+        *maxBlock = TempMaxMem(&grow);
+    }
+    return noErr;
+}
+
+static int32_t process_drag_hooks;
+
+OSErr Executor::C_SetProcessDragHooks(int32_t hooks)
+{
+    process_drag_hooks = hooks;
+    return noErr;
+}
+
+/* The Apple menu's items as Finder hands them over; drawing the Apple menu
+   from them is Process Manager work still to come. */
+struct AppleMenuItem
+{
+    int32_t key;
+    Ptr item;
+    Handle iconSuite;
+};
+static std::vector<AppleMenuItem> apple_menu_items;
+
+OSErr Executor::C_AddAppleMenuItem(int16_t flags, Handle iconSuite, int16_t reserved,
+                                   Ptr item, Ptr key)
+{
+    (void)flags;
+    (void)reserved;
+    if(!key)
+        return paramErr;
+    apple_menu_items.push_back({ (int32_t)US_TO_SYN68K(key), item, iconSuite });
+    return noErr;
+}
+
+OSErr Executor::C_RemoveAppleMenuItems(int32_t key)
+{
+    auto n = apple_menu_items.size();
+    apple_menu_items.erase(std::remove_if(apple_menu_items.begin(), apple_menu_items.end(),
+                                          [key](const AppleMenuItem& i) { return !key || i.key == key; }),
+                           apple_menu_items.end());
+    return (key && n == apple_menu_items.size()) ? paramErr : noErr;
+}

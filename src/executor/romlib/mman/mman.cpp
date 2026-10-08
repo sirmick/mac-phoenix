@@ -840,6 +840,7 @@ THz HandleZone(Handle h)
     block_header_t *block;
     bool applzone_p;
     bool syszone_p;
+    bool pmzone_p;
 
     MM_SLAM("entry");
 
@@ -851,6 +852,7 @@ THz HandleZone(Handle h)
 
     applzone_p = false;
     syszone_p = false;
+    pmzone_p = false;
     if(HANDLE_IN_ZONE_P(h, LM(ApplZone)))
     {
         Ptr p;
@@ -875,6 +877,12 @@ THz HandleZone(Handle h)
         }
         syszone_p = true;
     }
+    /* MacPhoenix: temp memory handles live in the Process Manager heap. An
+       empty one belongs there too: real 7.5.5 Finder reloads purged code
+       with ReallocateHandle and TheZone = 0, and the block lands in the PM
+       heap. */
+    else if(ROMlib_pm_zone && HANDLE_IN_ZONE_P(h, ROMlib_pm_zone))
+        pmzone_p = true;
     /*
    * Prevent us from returning a zone when a dereference of the handle would
    * cause a segmentation fault.
@@ -903,6 +911,8 @@ THz HandleZone(Handle h)
         zone = LM(ApplZone);
     else if(syszone_p)
         zone = LM(SysZone);
+    else if(pmzone_p)
+        zone = ROMlib_pm_zone;
     else
         zone = LM(TheZone);
 

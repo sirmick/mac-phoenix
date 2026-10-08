@@ -146,7 +146,6 @@ static gestaltentry_t gtable[] = {
         gestaltSysArchitecture, gestaltPowerPC,
     },
     // FIXME: #warning questionable gestalt values for StuffitExpander
-    { gestaltOSAttr, 0x3FF },
     { "thds"_4, 0 },
 #else
     {
@@ -156,6 +155,10 @@ static gestaltentry_t gtable[] = {
         gestaltMachineType, gestaltMacQuadra610,
     },
 #endif
+    /* MacPhoenix: was PowerPC-only, 0x3FF. Bit 10 added: Finder 7.5.5 hands
+       the Process Manager its drag hooks (OSDispatch $55, SetProcessDragHooks)
+       only when it is set, as it does on real 7.5.5. */
+    { gestaltOSAttr, 0x7FF },
 
 #if defined(ORIGINAL_QD)
     {

@@ -795,3 +795,17 @@ OSErr Executor::C_SetIconCacheProc(Handle cache, IconGetterUPP proc)
     warning_unimplemented("");
     ICON_RETURN_ERROR(paramErr);
 }
+
+/* MacPhoenix: see SetIconDrawContext in Iconutil.yaml. Executor's icon
+   drawing has no use for the value; it is kept for GetIconDrawContext. */
+static int32_t icon_draw_context;
+
+void Executor::C_SetIconDrawContext(int32_t context)
+{
+    icon_draw_context = context;
+}
+
+void Executor::C_GetIconDrawContext(GUEST<int32_t> *context)
+{
+    *context = icon_draw_context;
+}

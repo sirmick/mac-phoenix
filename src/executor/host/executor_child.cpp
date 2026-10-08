@@ -11,6 +11,11 @@
 
 #include "emulator_config.h"
 #include "ipc_protocol.h"
+
+#include <csignal>
+#include <cstdio>
+
+extern "C++" uint32_t uae_current_pc(void);
 #include "../../core/snapshot.h"
 #include "../../common/include/m68k_registers.h"
 
@@ -86,6 +91,63 @@ void publish_frame(const uint32_t *pixels, int w, int h)
         std::chrono::duration_cast<std::chrono::microseconds>(now).count());
 }
 
+std::string expand_home(std::string p)
+{
+    if (!p.empty() && p[0] == '~') {
+        if (const char *home = getenv("HOME"))
+            p = home + p.substr(1);
+    }
+    return p;
+}
+
+// Snapshot guest RAM as "executor-fatal": called on a fatal Executor error and
+// when the host faults on a guest access (Executor maps guest memory 1:1, so a
+// bad guest pointer is a host SIGSEGV).
+void fatal_snapshot(const char *message)
+{
+    auto& cfg = config::EmulatorConfig::instance();
+    if (snapshot_prepare(expand_home(cfg.storage_dir), "executor-fatal").empty())
+        return;
+    snapshot_request();
+    static M68kRegisters regs;
+    executor_host::get_registers(regs.d, regs.a);
+    SnapshotMemory mem;
+    mem.ram = (const uint8_t *)(uintptr_t)0;
+    mem.ram_size = executor_host::guest_ram_size();
+    mem.context = message;
+    mem.regs = &regs;
+    snapshot_service(mem);
+}
+
+struct sigaction prev_segv, prev_bus;
+
+void crash_snapshot(int sig, siginfo_t *info, void *uctx)
+{
+    static char message[96];
+    snprintf(message, sizeof message, "host signal %d at guest pc $%08x, address %p",
+             sig, uae_current_pc(), info->si_addr);
+    fprintf(stderr, "[Executor] %s: snapshotting\n", message);
+    fatal_snapshot(message);
+    struct sigaction& prev = sig == SIGBUS ? prev_bus : prev_segv;
+    sigaction(sig, &prev, nullptr);
+    if (prev.sa_flags & SA_SIGINFO)
+        prev.sa_sigaction(sig, info, uctx);
+    else if (prev.sa_handler != SIG_DFL && prev.sa_handler != SIG_IGN)
+        prev.sa_handler(sig);
+    else
+        raise(sig);
+}
+
+void install_crash_snapshot()
+{
+    struct sigaction sa = {};
+    sa.sa_sigaction = crash_snapshot;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGSEGV, &sa, &prev_segv);
+    sigaction(SIGBUS, &sa, &prev_bus);
+}
+
 void hook_key(int down, uint8_t code) { executor_host::key(down != 0, code); }
 void hook_abs(int x, int y) { executor_host::mouse_moved(x, y); }
 void hook_rel(int dx, int dy) { executor_host::mouse_moved_relative(dx, dy); }
@@ -96,15 +158,6 @@ void hook_button(int button, int down)
 }
 
 const IPCInputHooks g_hooks = { hook_key, hook_abs, hook_rel, hook_button };
-
-std::string expand_home(std::string p)
-{
-    if (!p.empty() && p[0] == '~') {
-        if (const char *home = getenv("HOME"))
-            p = home + p.substr(1);
-    }
-    return p;
-}
 
 }  // namespace
 
@@ -131,20 +184,8 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     });
 
     // A fatal Executor error snapshots guest RAM as "executor-fatal".
-    executor_host::set_fatal_hook([](const char *message) {
-        auto& cfg = config::EmulatorConfig::instance();
-        if (snapshot_prepare(expand_home(cfg.storage_dir), "executor-fatal").empty())
-            return;
-        snapshot_request();
-        static M68kRegisters regs;
-        executor_host::get_registers(regs.d, regs.a);
-        SnapshotMemory mem;
-        mem.ram = (const uint8_t *)(uintptr_t)0;
-        mem.ram_size = executor_host::guest_ram_size();
-        mem.context = message;
-        mem.regs = &regs;
-        snapshot_service(mem);
-    });
+    executor_host::set_fatal_hook(fatal_snapshot);
+    install_crash_snapshot();
 
     executor_host::Config c;
     c.width = cfg.screen_width;

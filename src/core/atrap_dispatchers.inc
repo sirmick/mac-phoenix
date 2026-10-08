@@ -17,7 +17,7 @@
     { 1, 0x000, 1, 0x00FFFFFFu, 0, 0x00000000u },  // SoundDispatch
     { 1, 0x015, 2, 0x0000FFFFu, 0, 0x00000000u },  // SCSIDispatch
     { 1, 0x016, 1, 0x0000FFFFu, 0, 0x00000000u },  // Pack8
-    { 1, 0x022, 1, 0x0000000Fu, 0, 0x00000000u },  // ResourceDispatch
+    { 1, 0x022, 1, 0x000000FFu, 0, 0x00000000u },  // ResourceDispatch
     { 1, 0x023, 1, 0x0000FFFFu, 0, 0x00000000u },  // AliasDispatch
     { 1, 0x024, 1, 0x0000FFFFu, 0, 0x00000000u },  // HFSUtilDispatch
     { 1, 0x025, 1, 0x0000FFFFu, 0, 0x00000000u },  // MenuDispatch

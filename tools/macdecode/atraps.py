@@ -77,7 +77,10 @@ def read_sites(path):
                      "owner": f[14] if len(f) > 15 else "",
                      "detail": f[15] if len(f) > 15 else (f[14] if len(f) > 14 else ""),
                      "res_d0": opt(f[16]) if len(f) > 17 else None,
-                     "res_top": opt(f[17]) if len(f) > 17 else None})
+                     "res_top": opt(f[17]) if len(f) > 17 else None,
+                     "in_d0": opt(f[18]) if len(f) > 18 else None,
+                     "in_a0": opt(f[19]) if len(f) > 19 else None,
+                     "in_zone": opt(f[20]) if len(f) > 20 else None})
     return rows
 
 
@@ -516,11 +519,31 @@ def result_difference(names, name, ra, cb):
     return None
 
 
-def compare(ref, cand, context=6, more=12):
-    """Print where the candidate's app call sequence first leaves the reference's."""
+def compare(ref, cand, context=6, more=12, window=None):
+    """Print where the candidate's app call sequence first leaves the reference's
+    (or, with window=(start, count), the aligned listing from reference #start)."""
     import difflib
     a, b = app_sequence(ref), app_sequence(cand)
     sm = difflib.SequenceMatcher(a=[x["key"] for x in a], b=[x["key"] for x in b], autojunk=False)
+    if window:
+        start, count = window
+        shown = 0
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if i2 <= start and not (tag == "insert" and i1 == start):
+                continue
+            for k in range(max(i1, start), i2):
+                if shown >= count:
+                    return
+                mark = "  = " if tag == "equal" else "  -R"
+                print(f"{mark} R#{k:<4} {a[k]['loc']:34} {a[k]['name']}")
+                shown += 1
+            if tag != "equal":
+                for k in range(j1, j2):
+                    if shown >= count:
+                        return
+                    print(f"  +C C#{k:<4} {b[k]['loc']:34} {b[k]['name']}")
+                    shown += 1
+        return
     ops = [op for op in sm.get_opcodes() if op[0] != "equal"]
     same = sum(j2 - j1 for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag == "equal")
     print(f"# app calls: reference {len(a)}, candidate {len(b)}, matching {same}")
@@ -570,6 +593,8 @@ def main():
     ap.add_argument("--compare", metavar="CANDIDATE",
                     help="first divergence of the app's call sequence from this snapshot's")
     ap.add_argument("--compare-disk", help="disk for the candidate's resources (Executor snapshots have none)")
+    ap.add_argument("--window", nargs=2, type=int, metavar=("START", "COUNT"),
+                    help="with --compare: the aligned listing from reference #START")
     ap.add_argument("--trap", help="every site of one trap word (hex)")
     ap.add_argument("--all", action="store_true", help="every routine with its verdict")
     ap.add_argument("--extensions", action="store_true", help="count extensions as code we run")
@@ -581,7 +606,7 @@ def main():
     if a.compare:
         cand = Analysis(a.compare, a.compare_disk or a.disk or (an.snap.meta.get("disks") or [None])[0],
                         a.extensions)
-        compare(an, cand)
+        compare(an, cand, window=a.window)
         return
     if a.trap:
         k = trap_key(int(a.trap, 16))

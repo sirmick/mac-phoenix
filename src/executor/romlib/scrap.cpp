@@ -113,7 +113,11 @@ LONGINT Executor::C_ZeroScrap()
         LM(ScrapHandle) = NewHandle((Size)0);
         LM(TheZone) = saveZone;
         LM(ScrapState) = 1;
-        LM(ScrapName) = (StringPtr) "\016Clipboard File";
+        /* MacPhoenix: the name lives in low memory (ScrapTag, $970) as on
+           a real Mac; the old host string literal isn't a guest address. */
+        StringPtr tag = ptr_from_longint<StringPtr>(0x970);
+        memcpy(tag, "\011Clipboard", 10);
+        LM(ScrapName) = tag;
     }
     else if(LM(ScrapState) == 0)
     {

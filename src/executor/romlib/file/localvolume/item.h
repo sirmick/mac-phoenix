@@ -113,6 +113,10 @@ public:
     int countItems() { return contents_.size(); }
 
     virtual void deleteItem();
+    virtual ItemInfo getInfo() override;
+    virtual void setInfo(ItemInfo info) override;
+private:
+    fs::path finderInfoPath() const;
 };
 
 class FileItem : public Item

@@ -129,6 +129,9 @@ struct AtrapSite {
     uint8_t has_result = 0;      // first call's result, taken at its return:
     uint32_t res_d0 = 0;         //   D0 (OS traps' result code)
     uint32_t res_top = 0;        //   long at (SP) (a Pascal function's result)
+    uint32_t in_d0 = 0;          // D0, A0 and TheZone at the first call
+    uint32_t in_a0 = 0;
+    uint32_t in_zone = 0;
 };
 
 // Dispatch traps: where each one's selector is at the A-line (generated
@@ -319,7 +322,7 @@ bool write_atraps(const std::string& path)
     FILE* f = fopen(path.c_str(), "w");
     if (!f)
         return false;
-    fprintf(f, "# trap\tsel\tsub\tobj\tpc\tparent\tparent_sel\tparent_sub\tparent_obj\tirq\tcount\tseq\tapp\tcode (from pc-8)\towner\tdetail\tres_d0\tres_top\n");
+    fprintf(f, "# trap\tsel\tsub\tobj\tpc\tparent\tparent_sel\tparent_sub\tparent_obj\tirq\tcount\tseq\tapp\tcode (from pc-8)\towner\tdetail\tres_d0\tres_top\tin_d0\tin_a0\tin_zone\n");
     auto opt = [f](uint8_t has, uint32_t v) {
         if (has) fprintf(f, "%08X\t", v); else fputs("-\t", f);
     };
@@ -348,9 +351,10 @@ bool write_atraps(const std::string& path)
             fputc((c == '\t' || c == '\n' || (unsigned char)c < 0x20) ? '?' : c, f);
         }
         if (s->has_result)
-            fprintf(f, "\t%08X\t%08X\n", s->res_d0, s->res_top);
+            fprintf(f, "\t%08X\t%08X", s->res_d0, s->res_top);
         else
-            fputs("\t-\t-\n", f);
+            fputs("\t-\t-", f);
+        fprintf(f, "\t%08X\t%08X\t%08X\n", s->in_d0, s->in_a0, s->in_zone);
     }
     return fclose(f) == 0;
 }
@@ -626,6 +630,9 @@ static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32
     if (s.count++ == 0) {
         s.seq = g_atrap_seq++;
         s.irq = (uint8_t)intmask;
+        s.in_d0 = d0;
+        s.in_a0 = a0;
+        s.in_zone = guest_long(0x118);
         if (const uint8_t* name = guest_bytes(0x910, 32))
             memcpy(s.app, name, 32);
         const Dispatcher* d = (opcode & 0x0800) ? nullptr : g_dispatch_os[opcode & 0xFF];

@@ -66,6 +66,63 @@ dispatchers:
           process's entries with that key from the $31 list (key 0: all of
           them), disposing each entry's handles; paramErr if a nonzero key
           matches nothing. Finder calls it with 0 before re-adding.
+      - value: 0x14
+        name: TakeDesktopLayer
+        status: guess
+        source: 7.5.5 disassembly (scod, det-a 0x2a282; Finder CODE 185 +26e)
+        comment: >
+          4 bytes of params (WindowPtr *out), returns OSErr. First caller
+          only: *out = the Process Manager's desk layer (PM A5-0x470), owner
+          set to the current process, Layer Manager $A829 selector -5 called,
+          process +0x70 copied to layer +0x98; later callers get -603. The
+          layer is a window-shaped GrafPort over the screen: visRgn = the
+          desktop, clipRgn wide open, updateRgn empty, no strucRgn/contRgn.
+          Finder adopts visRgn as its desktop window's visRgn and contRgn and
+          updateRgn as its updateRgn; it SysErrors(41) on failure.
+      - value: 0x42
+        name: AddProcessCallback
+        status: guess
+        source: 7.5.5 disassembly (scod, det-a 0x283fc; Finder CODE 25 +3a)
+        comment: >
+          8 bytes of params (proc, refCon), returns OSErr. Links a 20-byte
+          {next, proc, refCon, current PSN} record into a list at PM
+          A5-0x136; memFullErr if the PM heap is full.
+      - value: 0x47
+        name: GetTempMemInfo
+        status: guess
+        source: 7.5.5 disassembly (scod, det-a 0x28ed4; Finder CODE 26 +54)
+        comment: >
+          8 bytes of params (long *first, long *second), returns noErr.
+          *first = HeapDispatch $19, *second = HeapDispatch $18 on the PM
+          heap; total free vs largest block is our reading.
+      - value: 0x55
+        name: SetProcessDragHooks
+        status: guess
+        source: 7.5.5 disassembly (scod, det-a 0x2a508; Finder CODE 32 +20a)
+        comment: >
+          4 bytes of params (long), returns OSErr. Stores the long at
+          current process +0x15C (-600 without a current process). Finder
+          passes its drag-hook record when Gestalt 'os  ' bit 10 is set and
+          DragDispatch $C301 succeeded.
+  - trap: 0xABC9
+    name: IconDispatch
+    selectors:
+      - value: 0x218
+        name: SetIconDrawContext
+        status: guess
+        source: 7.5.5 disassembly (Icon Utilities table at det-c 0x690fc, entry 0x68b76; Finder CODE 117 +2fe)
+        comment: >
+          4 bytes of params (long), no result. With Color QuickDraw stores
+          the long at icon globals (**(ExpandMem+0x174)) +0x260. Finder sets
+          it to an object field around calling the object's draw proc and
+          clears it after. Shares its body with $220.
+      - value: 0x220
+        name: GetIconDrawContext
+        status: guess
+        source: 7.5.5 disassembly (entry 0x68b72)
+        comment: >
+          4 bytes of params (long *out), no result: *out = the value $218
+          stored (nil without Color QuickDraw).
 
 # Tags: entry points below the Toolbox Executor provides. A tagged entry
 # point that only Apple ROM/patch code calls is "not needed" for that

@@ -13,6 +13,11 @@
 #include <res/resource.h>
 #include <rsys/hook.h>
 #include <ctype.h>
+#include <ScriptMgr.h>
+#include <ToolboxEvent.h>
+#include <EventMgr.h>
+#include <algorithm>
+#include <base/functions.impl.h>
 
 using namespace Executor;
 
@@ -679,4 +684,74 @@ void Executor::C_GetIntlResourceTable(ScriptCode script, INTEGER tablecode,
 {
     warning_unimplemented("");
     ROMlib_hook(iu_unimplementednumber);
+}
+
+/* ── Type Select (System 7.5; Lists.h in Universal Interfaces 3.x) ──────
+ * MacPhoenix. Clear and NewKey follow the documented behaviour; how
+ * FindItem picks among items and the callback's result are our reading of
+ * the API (status: guess). Matching ignores case and diacriticals. */
+
+void Executor::C_TypeSelectClear(TypeSelectRecord *tsr)
+{
+    tsr->tsrLastKeyTime = 0;
+    tsr->tsrScript = smSystemScript;
+    tsr->tsrKeyStrokes[0] = 0;
+}
+
+Boolean Executor::C_TypeSelectNewKey(EventRecord *theEvent, TypeSelectRecord *tsr)
+{
+    if((theEvent->what != keyDown && theEvent->what != autoKey)
+       || (theEvent->modifiers & cmdKey))
+        return false;
+    /* A pause longer than twice the key repeat threshold starts a new word. */
+    if(theEvent->when - tsr->tsrLastKeyTime > 2 * (uint32_t)LM(KeyThresh))
+        tsr->tsrKeyStrokes[0] = 0;
+    tsr->tsrLastKeyTime = theEvent->when;
+    if(tsr->tsrKeyStrokes[0] < 63)
+    {
+        tsr->tsrKeyStrokes[0] = tsr->tsrKeyStrokes[0] + 1;
+        tsr->tsrKeyStrokes[tsr->tsrKeyStrokes[0]] = theEvent->message & charCodeMask;
+    }
+    return true;
+}
+
+/* <0, 0, >0 as the keystrokes sort before, match, or sort after the
+   start of the test string. */
+INTEGER Executor::C_TypeSelectCompare(TypeSelectRecord *tsr, ScriptCode testStringScript,
+                                      StringPtr testStringPtr)
+{
+    (void)testStringScript;
+    int keylen = tsr->tsrKeyStrokes[0];
+    int testlen = std::min<int>(testStringPtr[0], keylen);
+    LONGINT r = ROMlib_RelString(tsr->tsrKeyStrokes + 1, testStringPtr + 1, false, false,
+                                 ((LONGINT)keylen << 16) | testlen);
+    return r < 0 ? -1 : r > 0 ? 1 : 0;
+}
+
+/* Normal mode: the item whose string sorts first at or after the
+   keystrokes; next/previous mode: the neighbour of the matching item. The
+   callback returns true to stop the scan early. */
+INTEGER Executor::C_TypeSelectFindItem(TypeSelectRecord *tsr, INTEGER listSize, INTEGER selectMode,
+                                       IndexToStringUPP getStringProc, void *getStringRefCon)
+{
+    INTEGER best = -1;
+    Str255 best_str;
+    for(INTEGER item = 0; item < listSize; item++)
+    {
+        GUEST<ScriptCode> script = smSystemScript;
+        GUEST<StringPtr> str = nullptr;
+        bool stop = getStringProc(item, &script, &str, getStringRefCon);
+        StringPtr s = str;
+        if(s && C_TypeSelectCompare(tsr, script, s) <= 0
+           && (best < 0 || RelString(s, best_str, false, false) < 0))
+        {
+            best = item;
+            memcpy(best_str, s, s[0] + 1);
+        }
+        if(stop)
+            break;
+    }
+    if(best >= 0 && selectMode != 0)
+        best = std::max<INTEGER>(0, std::min<INTEGER>(listSize - 1, best + selectMode));
+    return best;
 }

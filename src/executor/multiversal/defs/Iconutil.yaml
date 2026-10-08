@@ -513,6 +513,32 @@
 
 # ####
 
+# MacPhoenix: a private pair in System 7.5's Icon Utilities (names are our
+# guesses; tools/macdecode/learned.yaml). The real ones keep the value in
+# the Icon Utilities globals (+$260); Finder sets it around drawing an icon.
+
+- function:
+    name: SetIconDrawContext
+    args:
+      - name: context
+        type: int32_t
+    dispatcher: IconDispatch
+    selector: 0x0218
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconDrawContext
+    args:
+      - name: context
+        type: GUEST<int32_t>*
+    dispatcher: IconDispatch
+    selector: 0x0220
+    executor: C_
+
+# ####
+
 - function:
     name: SetSuiteLabel
     return: OSErr

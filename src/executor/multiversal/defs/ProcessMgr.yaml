@@ -192,6 +192,114 @@
 
 # ####
 
+# MacPhoenix: private OSDispatch selectors Finder 7.5.5 calls, identified
+# from a traced real boot and Apple's Process Manager (System 'scod'
+# -16463; tools/macdecode). Names are our guesses (learned.yaml).
+
+- function:
+    name: TakeDesktopLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: GUEST<WindowPtr>*
+    dispatcher: OSDispatch
+    selector: 0x0014
+    executor: C_
+    comment: >
+      The first caller (Finder) takes the Process Manager's desk layer: a
+      window-shaped port whose visRgn is the desktop (GrayRgn), and gets
+      protocolErr after that. Finder adopts its regions for its desktop
+      window and SysErrors(41) unless this returns noErr.
+
+# ####
+
+- function:
+    name: AddProcessCallback
+    return: OSErr
+    args:
+      - name: proc
+        type: Ptr
+      - name: refCon
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0042
+    executor: C_
+    comment: >
+      Apple's links {next, proc, refCon, current PSN} into a Process Manager
+      list (PM globals -$136); Finder registers one of its routines.
+
+# ####
+
+- function:
+    name: GetTempMemInfo
+    return: OSErr
+    args:
+      - name: freeBytes
+        type: GUEST<int32_t>*
+      - name: maxBlock
+        type: GUEST<int32_t>*
+    dispatcher: OSDispatch
+    selector: 0x0047
+    executor: C_
+    comment: >
+      Either pointer may be nil. Apple's fills them from HeapDispatch $19 and
+      $18 (Process Manager heap); which one is the total free and which the
+      largest block is our best reading. Finder checks memory with it.
+
+# ####
+
+- function:
+    name: SetProcessDragHooks
+    return: OSErr
+    args:
+      - name: hooks
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0055
+    executor: C_
+    comment: >
+      Stores a long in the current process's record (+$15C in Apple's);
+      Finder passes its drag-hook record (see DragDispatch $C301).
+
+# ####
+
+- function:
+    name: AddAppleMenuItem
+    return: OSErr
+    args:
+      - name: flags
+        type: int16_t
+      - name: iconSuite
+        type: Handle
+      - name: reserved
+        type: int16_t
+      - name: item
+        type: Ptr
+      - name: key
+        type: Ptr
+    dispatcher: OSDispatch
+    selector: 0x0031
+    executor: C_
+    comment: >
+      Finder feeds the Apple Menu Items folder to the Process Manager, which
+      draws the Apple menu. Argument roles beyond the icon suite are guesses.
+
+# ####
+
+- function:
+    name: RemoveAppleMenuItems
+    return: OSErr
+    args:
+      - name: key
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0032
+    executor: C_
+    comment: >
+      Removes the caller's items with that key (0: all of them).
+
+# ####
+
 - function:
     name: GetCurrentProcess
     return: OSErr

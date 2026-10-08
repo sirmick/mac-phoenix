@@ -4,6 +4,7 @@
 #include <base/functions.impl.h>
 #include <base/logging.h>
 #include <base/debugger.h>
+#include <error/error.h>
 
 #include <cassert>
 #include <iostream>
@@ -216,7 +217,19 @@ syn68k_addr_t DispatcherTrap<SelectorConvention>::invokeFrom68K(syn68k_addr_t ad
             return POPADDR();
         }
         else
+        {
+            /* MacPhoenix: a fatal error (snapshot + log) instead of abort(). */
+            char msg[96];
+            snprintf(msg, sizeof msg, "Unknown selector 0x%x for trap %s",
+                     (unsigned)sel, self->name);
+            if(ROMlib_fatal_hook)
+            {
+                auto hook = ROMlib_fatal_hook;
+                ROMlib_fatal_hook = nullptr;
+                hook(msg);
+            }
             std::abort();
+        }
     }
 }
 

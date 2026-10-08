@@ -29,7 +29,10 @@ void Item::moveItem(const fs::path& newPath, mac_string_view newName)
         name_ = newName;
 }
 
-const int64_t macToUnixEpoch = 86400 * (365 * (1970-1904) + (1970-1904)/4);
+/* MacPhoenix: 1904 is a leap year, so 1904-1968 holds 17 leap days, not
+   (1970-1904)/4 = 16; the old value made every host file's date a day early
+   (and Finder 7.5 rebuilt its segment cache, keyed on its own file date). */
+const int64_t macToUnixEpoch = 86400 * (365 * (1970-1904) + (1970-1904+3)/4);
 
 ItemInfo Item::getInfo()
 {
@@ -132,4 +135,36 @@ void DirectoryItem::deleteItem()
         else
             throw OSErrorException(paramErr);
     }
+}
+
+/* MacPhoenix: a folder's Finder info (DInfo + DXInfo) lives where Basilisk
+   II's ExtFS keeps it, in the parent's .finf/<name>; the volume's root
+   keeps its own in .finf/.root. Finder sets it on every folder (window
+   position, view, flags), and failing that made it retry endlessly. */
+fs::path DirectoryItem::finderInfoPath() const
+{
+    if(cnid() == 2)
+        return path() / ".finf" / ".root";
+    return path().parent_path() / ".finf" / path().filename();
+}
+
+ItemInfo DirectoryItem::getInfo()
+{
+    ItemInfo info = Item::getInfo();
+    info.dir = {};
+    fs::ifstream(finderInfoPath(), std::ios::binary).read((char*)&info.dir, sizeof(info.dir));
+    return info;
+}
+
+void DirectoryItem::setInfo(ItemInfo info)
+{
+    fs::path finf = finderInfoPath();
+    /* .finf sits inside a folder Finder watches: keep that folder's
+       modification date, or Finder sees it change and rescans it. */
+    fs::path holder = finf.parent_path().parent_path();
+    auto holder_time = fs::last_write_time(holder);
+    fs::create_directory(finf.parent_path());
+    fs::ofstream(finf, std::ios::binary).write((char*)&info.dir, sizeof(info.dir));
+    fs::last_write_time(holder, holder_time);
+    Item::setInfo(info);
 }

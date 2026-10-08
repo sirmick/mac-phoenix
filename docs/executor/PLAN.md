@@ -243,9 +243,25 @@ Kept small so upstream fixes can be merged by hand:
 * `res/resGetinfo.cpp`: `GetResourceSizeOnDisk` returns the on-disk length
   (compressed size), not the loaded handle's size.
 * `mman/tempmem.cpp`: temporary memory comes from the Process Manager heap.
+* `file/localvolume/item.cpp`: Mac/Unix epoch counts 1904's leap day
+  (host file dates were a day early).
 * `toolevent.cpp`: no `/tmp/testvol` probe (upstream posted its mount
   result as a `diskEvt` on the first `GetNextEvent`).
 * `drag.cpp` (new): private `DragDispatch` selector Finder needs.
+* `process.cpp`: private `OSDispatch` selectors Finder needs ($14 desk
+  layer, $31/$32 Apple menu items, $42, $47, $55; names are guesses, see
+  `tools/macdecode/learned.yaml`); every application gets an initialised
+  scrap.
+* `scrap.cpp`: `ScrapName` points at `ScrapTag` ($970) in low memory.
+* `mman/mman.cpp`: `HandleZone` places an empty handle whose master pointer
+  is in the Process Manager heap in that heap (temp memory).
+* `gestalt.cpp`: `gestaltOSAttr` on 68k too, with bit 10.
+* `iu.cpp`: Type Select (`Pack6` $28-$2E).
+* `icon.cpp`: private `IconDispatch` $218/$220.
+* `file/localvolume`: folders keep Finder info in `.finf` (Basilisk II
+  layout) instead of failing `PBSetCatInfo` with `paramErr`.
+* `base/traps.impl.h`: an unknown selector snapshots (fatal hook) before
+  aborting.
 * `file/localvolume/localvolume.cpp`: positioning uses `ioPosMode & 3`
   (flag bits such as `noCacheBit` were read as an unknown mode).
 * `error/error.cpp`: `ROMlib_fatal_hook`, called first on a fatal error (the
