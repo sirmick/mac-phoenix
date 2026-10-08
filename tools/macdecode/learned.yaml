@@ -34,5 +34,36 @@ traps: []
 #     name: OSDispatch
 #     selectors:
 #       - {value: 0x31, name: ..., status: guess, source: ...}
-dispatchers: []
+dispatchers:
+  - trap: 0xA88F
+    name: OSDispatch
+    comment: >
+      Apple's Process Manager (System 'scod' -16463 +206) keeps its globals
+      at *$0B7C and a selector table at A5-3310: 8-byte entries
+      {routine.l, param bytes.w, result bytes.w}, selectors $00-$6A.
+    selectors:
+      - value: 0x31
+        name: AddAppleMenuItem
+        status: guess
+        source: 7.5.5 trace + disassembly (scod +3020; Finder CODE 2 +c68)
+        comment: >
+          16 bytes of params, returns OSErr. Adds an entry to a list the
+          Process Manager owns (head at PM A5-1200; entries are handles in
+          the PM heap): first removes the caller's entries with the same
+          key (as $32), then inserts a copy of the name string in sorted
+          order. Key (long) must be nonzero and the name non-empty, else
+          paramErr. Finder calls it up to 50 times at startup, once per
+          object, after building an icon suite for it. Name: in System 7
+          the Process Manager draws the Apple menu and Finder feeds it the
+          Apple Menu Items folder (sorted by name, small icons, 50-item
+          limit), which this matches.
+      - value: 0x32
+        name: RemoveAppleMenuItems
+        status: guess
+        source: 7.5.5 trace + disassembly (scod +327e -> +9bc2; Finder CODE 2 +93e)
+        comment: >
+          4 bytes of params (key.l), returns OSErr. Removes the current
+          process's entries with that key from the $31 list (key 0: all of
+          them), disposing each entry's handles; paramErr if a nonzero key
+          matches nothing. Finder calls it with 0 before re-adding.
 
