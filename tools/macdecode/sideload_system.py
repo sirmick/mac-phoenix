@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Put Apple's System file into an Executor data directory.
+"""Put Apple's System file and Finder into an Executor data directory.
 
-    tools/macdecode/sideload_system.py IMAGE DATA_DIR
+    tools/macdecode/sideload_system.py IMAGE DATA_DIR [FILE...]
 
-Copies ":System Folder:System" from the HFS disk IMAGE into
-DATA_DIR/System Folder/ in the form Executor reads (empty data fork
-`System` + AppleDouble `%System` holding Finder info and the resource
-fork). Run Executor with --executor-data DATA_DIR; it fills in its own
-Browser, Printer etc. around it. Executor's default data directory is
-left alone.
+Copies ":System Folder:<FILE>" (default: System and Finder) from the HFS
+disk IMAGE into DATA_DIR/System Folder/ in the form Executor reads (data
+fork `<FILE>` + AppleDouble `%<FILE>` holding Finder info and the
+resource fork). Run Executor with --executor-data DATA_DIR, and
+--executor-app "DATA_DIR/System Folder/Finder" to start Finder. Executor
+fills in its own Browser, Printer etc. around them. Executor's default
+data directory is left alone.
 """
 import struct
 import sys
@@ -34,22 +35,27 @@ def appledouble(finder_info, rsrc):
 
 
 def main():
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3:
         sys.exit(__doc__)
     image, data_dir = sys.argv[1], Path(sys.argv[2]).expanduser()
+    names = sys.argv[3:] or ["System", "Finder"]
     sysdir = data_dir / "System Folder"
     sysdir.mkdir(parents=True, exist_ok=True)
     d = Disk(image, data_dir / ".sideload-cache")
     try:
-        d.resources(b"System Folder:System")          # extracts + caches the MacBinary
-        blob = next((data_dir / ".sideload-cache").glob("*.bin")).read_bytes()
+        for name in names:
+            blob = d.macbinary(b"System Folder:" + name.encode("mac_roman"))
+            if blob is None:
+                print(f"{name}: not on {image}")
+                continue
+            data, rsrc = macbinary_forks(blob)
+            # MacBinary: type/creator/flags at 65..74, location 75..80.
+            finder_info = blob[65:65 + 8] + blob[73:74] + b"\0" + blob[75:81] + b"\0" * 16
+            (sysdir / name).write_bytes(data)
+            (sysdir / f"%{name}").write_bytes(appledouble(finder_info.ljust(32, b"\0")[:32], rsrc))
+            print(f"{name} from {image}: {len(data)} data, {len(rsrc)} resource bytes -> {sysdir}")
     finally:
         d.close()
-    data, rsrc = macbinary_forks(blob)
-    finder_info = blob[65:65 + 8] + blob[73:74] + b"\0" + blob[75:81] + b"\0" * 16  # type/creator/flags/loc/fldr
-    (sysdir / "System").write_bytes(data)
-    (sysdir / "%System").write_bytes(appledouble(finder_info.ljust(32, b"\0")[:32], rsrc))
-    print(f"System from {image}: {len(rsrc)} bytes of resources -> {sysdir}")
 
 
 if __name__ == "__main__":

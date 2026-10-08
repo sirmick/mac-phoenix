@@ -100,17 +100,24 @@ class Disk:
                 names.append(line[:-1] if line[-1:] in b"*" else line)
         return names
 
-    def resources(self, path):
-        """Resource map of one file (raw Mac path, bytes)."""
+    def macbinary(self, path):
+        """One file (raw Mac path, bytes) as MacBinary, or None."""
         key = hashlib.sha1(str(self.image).encode() + path).hexdigest()[:16]
         cached = self.cache / f"{key}.bin"
         if not cached.exists():
             self._mount()
             r = self._run("hcopy", "-m", b":" + path, str(cached))
             if r.returncode or not cached.exists():
-                return {}
+                return None
+        return cached.read_bytes()
+
+    def resources(self, path):
+        """Resource map of one file (raw Mac path, bytes)."""
+        blob = self.macbinary(path)
+        if blob is None:
+            return {}
         try:
-            return parse_resource_fork(macbinary_forks(cached.read_bytes())[1])
+            return parse_resource_fork(macbinary_forks(blob)[1])
         except (struct.error, IndexError, UnicodeDecodeError):
             return {}
 

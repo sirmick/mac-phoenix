@@ -1,0 +1,23 @@
+# Motorola 68040 for classic Mac OS: Ghidra's 68040 spec plus the A-line
+# trap, so disassembly flows through Toolbox and OS calls.
+#
+# An A-line word ($Axxx) is a trap: the dispatcher runs the routine and
+# returns to the next instruction. A Toolbox trap ($A800-$AFFF) with the
+# auto-pop bit ($0400) instead returns to the address on top of the
+# stack (the caller's caller), so for flow it acts like RTS.
+
+@define MC68040 ""
+@include "68000.sinc"
+
+define pcodeop atrap;
+
+:atrap "#"^op015 is op=10 & op11=1 & op10=1 & op015 {
+	atrap(op015:2);
+	ret:4 = *:4 SP;
+	SP = SP + 4;
+	return [ret];
+}
+
+:atrap "#"^op015 is op=10 & op015 {
+	atrap(op015:2);
+}
