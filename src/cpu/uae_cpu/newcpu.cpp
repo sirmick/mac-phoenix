@@ -1289,6 +1289,10 @@ void m68k_emulop(uae_u32 opcode)
 	MakeFromSR();
 }
 
+/* The current PC, for host code that runs inside an instruction (the
+   A-trap trace's memory watch). Points into the executing instruction. */
+uint32_t uae_current_pc(void) { return m68k_getpc(); }
+
 /* Called for every A-line trap when set (--trace-atraps, core/snapshot.cpp). */
 void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, uint32_t a0, int intmask) = nullptr;
 /* Return address of the innermost traced trap (0: none). The interpreter

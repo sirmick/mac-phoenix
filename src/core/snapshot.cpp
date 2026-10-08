@@ -14,6 +14,7 @@
 #include "../common/include/m68k_registers.h"
 #include "../config/emulator_config.h"
 #include "boot_progress.h"
+#include "../common/include/platform.h"
 
 #include <atomic>
 #include <cerrno>
@@ -110,6 +111,7 @@ bool snapshot_pending()
 
 extern void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, uint32_t a0, int intmask);
 extern uint32_t uae_atrap_watch_pc;
+extern uint32_t uae_current_pc(void);
 extern void (*uae_atrap_return_hook)(uint32_t sp);
 
 namespace {
@@ -185,6 +187,39 @@ struct TrapInstall {
 std::vector<TrapInstall> g_trap_installs;
 uint64_t g_atrap_calls = 0;
 
+// Low-memory / ExpandMem watch: which code reads or writes which global.
+// The trace wraps the platform's data access functions; each distinct
+// (address, size, write, pc) is kept with a count and, at first hit, the
+// app and the resource holding the pc.
+struct MemKey {
+    uint32_t addr, pc;
+    uint8_t size, write;
+    bool operator==(const MemKey& o) const {
+        return addr == o.addr && pc == o.pc && size == o.size && write == o.write;
+    }
+};
+struct MemKeyHash {
+    size_t operator()(const MemKey& k) const {
+        return std::hash<uint64_t>()(((uint64_t)k.addr << 32 | k.pc) ^ ((uint64_t)k.size << 61) ^ k.write);
+    }
+};
+struct MemSite {
+    uint64_t count = 0;
+    uint32_t seq = 0;            // trap calls traced before the first hit
+    char app[32] = {};
+    char owner[64] = {};
+};
+std::unordered_map<MemKey, MemSite, MemKeyHash> g_mem_sites;
+uint32_t g_expandmem = 0, g_expandmem_size = 0;
+uint8_t (*g_read8)(uint32_t);
+uint16_t (*g_read16)(uint32_t);
+uint32_t (*g_read32)(uint32_t);
+void (*g_write8)(uint32_t, uint8_t);
+void (*g_write16)(uint32_t, uint16_t);
+void (*g_write32)(uint32_t, uint32_t);
+bool g_watch_on = false;
+bool g_in_watch = false;     // our own reads (owner lookup) aren't traced
+
 // Shadow stack of active traps. Each ends when the CPU reaches its return
 // address (the interpreter loop watches the innermost one). As a backstop
 // for returns we miss (non-local exits), an entry whose A7 at entry is at
@@ -202,6 +237,32 @@ const uint8_t* guest_bytes(uint32_t addr, uint32_t len)
     if (ROMBaseHost && addr >= ROMBaseMac && addr + len <= ROMBaseMac + ROMSize)
         return ROMBaseHost + (addr - ROMBaseMac);
     return nullptr;
+}
+
+bool write_mem_sites(const std::string& path)
+{
+    std::vector<std::pair<MemKey, const MemSite*>> rows;
+    for (auto& [k, s] : g_mem_sites)
+        rows.emplace_back(k, &s);
+    std::sort(rows.begin(), rows.end(), [](auto& a, auto& b) {
+        return a.first.addr != b.first.addr ? a.first.addr < b.first.addr : a.second->seq < b.second->seq;
+    });
+    FILE* f = fopen(path.c_str(), "w");
+    if (!f)
+        return false;
+    fprintf(f, "# addr\tsize\trw\tpc\tcount\tseq\tapp\towner\texpandmem\n");
+    fprintf(f, "# expandmem %08X size %u\n", g_expandmem, g_expandmem_size);
+    for (auto& [k, s] : rows) {
+        fprintf(f, "%08X\t%u\t%c\t%08X\t%llu\t%u\t", k.addr, k.size, k.write ? 'w' : 'r', k.pc,
+                (unsigned long long)s->count, s->seq);
+        for (int i = 1; i <= (uint8_t)s->app[0] && i < 32; i++) {
+            char c = s->app[i];
+            fputc((c == '\t' || c == '\n' || (unsigned char)c < 0x20) ? '?' : c, f);
+        }
+        fprintf(f, "\t%s\t%s\n", s->owner,
+                (g_expandmem && k.addr >= g_expandmem) ? "1" : "");
+    }
+    return fclose(f) == 0;
 }
 
 bool write_installs(const std::string& path)
@@ -391,6 +452,57 @@ void resource_owner(uint32_t pc, char out[64])
     }
 }
 
+void mem_note(uint32_t addr, int size, bool write)
+{
+    if (g_in_watch)
+        return;
+    // $0-$FF are the exception vectors: the CPU fetches them on every
+    // trap and interrupt, which would be charged to the trapping code.
+    bool low = addr >= 0x100 && addr < 0x2000;
+    bool em = g_expandmem && addr >= g_expandmem && addr < g_expandmem + g_expandmem_size;
+    if (!low && !em)
+        return;
+    g_in_watch = true;
+    uint32_t pc = uae_current_pc();
+    MemSite& s = g_mem_sites[MemKey{addr, pc, (uint8_t)size, (uint8_t)write}];
+    if (s.count++ == 0) {
+        s.seq = (uint32_t)g_atrap_calls;
+        if (const uint8_t* name = guest_bytes(0x910, 32))
+            memcpy(s.app, name, 32);
+        if (pc < ROMBaseMac)
+            resource_owner(pc, s.owner);
+    }
+    g_in_watch = false;
+}
+
+uint8_t watch_read8(uint32_t a) { mem_note(a, 1, false); return g_read8(a); }
+uint16_t watch_read16(uint32_t a) { mem_note(a, 2, false); return g_read16(a); }
+uint32_t watch_read32(uint32_t a) { mem_note(a, 4, false); return g_read32(a); }
+void watch_write8(uint32_t a, uint8_t v) { mem_note(a, 1, true); g_write8(a, v); }
+void watch_write16(uint32_t a, uint16_t v) { mem_note(a, 2, true); g_write16(a, v); }
+void watch_write32(uint32_t a, uint32_t v) { mem_note(a, 4, true); g_write32(a, v); }
+
+// Wrap the platform's data access functions once they exist (at the first
+// traced trap), and follow ExpandMem ($2B6) as the boot sets it up. The
+// record's own header gives its size (emSize, a long at +2).
+void watch_update()
+{
+    if (!g_watch_on && g_platform.mem_read_long) {
+        g_read8 = g_platform.mem_read_byte;   g_platform.mem_read_byte = watch_read8;
+        g_read16 = g_platform.mem_read_word;  g_platform.mem_read_word = watch_read16;
+        g_read32 = g_platform.mem_read_long;  g_platform.mem_read_long = watch_read32;
+        g_write8 = g_platform.mem_write_byte;   g_platform.mem_write_byte = watch_write8;
+        g_write16 = g_platform.mem_write_word;  g_platform.mem_write_word = watch_write16;
+        g_write32 = g_platform.mem_write_long;  g_platform.mem_write_long = watch_write32;
+        g_watch_on = true;
+    }
+    uint32_t em = guest_long(0x2B6);
+    if (em != g_expandmem && em && em < RAMBaseMac + RAMSize) {
+        g_expandmem = em;
+        g_expandmem_size = std::min<uint32_t>(guest_long(em + 2), 0x10000);
+    }
+}
+
 // _SetTrapAddress ($A047): D0 = trap number, A0 = routine. Bit $0200 of
 // the trap word means the new form, where bit $0400 picks the Toolbox
 // table; the old form puts numbers above $4F (except $54, $57) there.
@@ -425,6 +537,8 @@ void record_install(uint16_t opcode, uint32_t pc, uint32_t d0, uint32_t a0)
 static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, uint32_t a0, int intmask)
 {
     g_atrap_calls++;
+    if ((g_atrap_calls & 0xFF) == 1)
+        watch_update();
     if ((opcode & 0xF1FF) == 0xA047)
         record_install(opcode, pc, d0, a0);
 
@@ -435,10 +549,13 @@ static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32
     Routine routine = routine_for(opcode, sp, d0, a0);
 
     // Toolbox traps with the auto-pop bit return to the caller's caller.
+    // _LoadSeg never returns: it fixes the jump table entry and jumps into
+    // the segment, so it doesn't open a nesting level.
     uint32_t ret = (opcode & 0x0C00) == 0x0C00 ? guest_long(sp) : pc + 2;
-    if (g_atrap_active.size() < 256)
+    if ((opcode & 0xFBFF) != 0xA9F0 && g_atrap_active.size() < 256)
         g_atrap_active.push_back({routine, sp, ret});
-    uae_atrap_watch_pc = g_atrap_active.back().ret;
+    if (!g_atrap_active.empty())
+        uae_atrap_watch_pc = g_atrap_active.back().ret;
 
     AtrapSite& s = g_atrap_sites[AtrapKey{pc, routine, parent}];
     if (s.count++ == 0) {
@@ -501,6 +618,8 @@ void snapshot_service(const SnapshotMemory& mem)
         ok = ok && write_atraps(dir + "/atraps.tsv");
     if (!g_trap_installs.empty())
         ok = ok && write_installs(dir + "/trap_installs.tsv");
+    if (!g_mem_sites.empty())
+        ok = ok && write_mem_sites(dir + "/lowmem_access.tsv");
 
     std::ostringstream j;
     j << "{\n"
