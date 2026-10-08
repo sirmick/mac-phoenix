@@ -127,6 +127,18 @@ Script Manager (`itl0-2`, `KSWP`), `PACK` 6/14, `dcmp` 0. The
 Process Manager's per-process lowmem list is `lmem` -16458 (see
 MEMORY_MAP.md): the spec for our context switch.
 
+**Step 2, slice 1 (one process, real layout):** `ROMlib_InitZones`
+makes the region above the System heap the Process Manager heap
+(`BufPtr` at its top; the boot stack sits above `BufPtr`). At launch,
+`process_layout_partition` peeks the app's SIZE and CODE 0, allocates a
+locked partition (preferred + 16K) at the top of the PM heap, and lays
+out `ApplZone`, `ApplLimit`, the stack, the A5 world and `MemTop` inside
+it as 7.5.5 does (MEMORY_MAP.md, *Application partitions*); the app's
+resource map then opens inside its heap. Diff against the Finder-idle
+reference: lowmem same shape 19 → 33, differs 100 → 87; zones now show
+a PM heap holding `ApplZone:Browser`. Slices next: process records and
+the `lmem` swap (2), per-process host stacks and switching (3).
+
 **Where we left off:** snapshot API and a first reader (lowmem, heap
 walk, trap classification) work; reference snapshot
 `~/storage/snapshots/7.5.5-finder-idle`. Next: find the Process

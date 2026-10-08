@@ -33,6 +33,110 @@ get_size_resource()
     return (size_resource_handle)size;
 }
 
+/* ── Partitions ─────────────────────────────────────────────────────────
+ * Slice 1 of our Process Manager: one process, laid out the way 7.5.5
+ * lays out each application (measured on a real boot, see
+ * docs/executor/MEMORY_MAP.md):
+ *
+ *   Process Manager heap: SysZone end .. BufPtr
+ *     partition: a locked handle at the top, SIZE preferred size + 16K
+ *       ApplZone          at the partition start, bkLim = ApplLimit - 24
+ *       ApplLimit         = CurStackBase - DefltStack
+ *       stack             grows down from CurStackBase
+ *       A5 globals        belowA5 bytes, from CurStackBase up to CurrentA5
+ *       A5 world above A5 abovea5 bytes, to the partition top
+ *
+ *   MemTop reads as SysZone's bkLim + the partition size: an
+ *   application sees a machine as big as its partition.
+ */
+THz Executor::ROMlib_pm_zone;
+static Handle partition;
+static uint32_t partition_size;
+
+/* Measured on 7.5.5: a partition is the SIZE preferred size plus 16K. */
+static const uint32_t partition_extra = 16 * 1024;
+/* No SIZE resource: Process Manager's default. */
+static const uint32_t default_partition = 512 * 1024;
+
+void Executor::process_reset_heap(THz pm_zone)
+{
+    ROMlib_pm_zone = pm_zone;
+    partition = nullptr;
+    partition_size = 0;
+}
+
+void Executor::process_layout_partition(ConstStringPtr app_name)
+{
+    uint32_t preferred = default_partition;
+    uint32_t minimum = default_partition;
+    int32_t abovea5 = 4, belowa5 = 0; /* no CODE 0 (PowerPC): A5 at the top */
+
+    SetZone(ROMlib_pm_zone);
+    if(partition)
+    {
+        /* Chain: the old partition goes, the heap stays. */
+        HUnlock(partition);
+        DisposeHandle(partition);
+        partition = nullptr;
+    }
+
+    /* Peek at SIZE and CODE 0 before the partition exists, so the
+       application's resource map can be opened inside it afterwards. */
+    INTEGER rn = OpenResFile(app_name);
+    if(rn != -1)
+    {
+        if(size_resource_handle size = get_size_resource())
+        {
+            preferred = (*size)->pref_size;
+            minimum = (*size)->min_size;
+        }
+        if(Handle code0 = Get1Resource("CODE"_4, 0))
+        {
+            auto lp = (GUEST<int32_t> *)*code0;
+            abovea5 = lp[0];
+            belowa5 = lp[1];
+        }
+        CloseResFile(rn);
+    }
+    SetZone(ROMlib_pm_zone);
+
+    GUEST<Size> grow;
+    Size avail = MaxMem(&grow);
+    uint32_t want = preferred + partition_extra;
+    if(want > (uint32_t)avail)
+        want = minimum + partition_extra;
+    if(want > (uint32_t)avail)
+    {
+        warning_unexpected("partition: %u wanted, %d available", want, (int)avail);
+        want = avail & ~3;
+    }
+
+    /* The Process Manager hands out partitions from the top of its heap.
+       Claim the space below first, so the partition lands at the top. */
+    Ptr below = nullptr;
+    if((uint32_t)avail > want + 64)
+        below = NewPtr(avail - want - 64);
+    partition = NewHandle(want);
+    if(below)
+        DisposePtr(below);
+    if(!partition)
+        gui_fatal("unable to allocate a %u byte application partition", want);
+    HLock(partition);
+    partition_size = want;
+
+    Ptr p = *partition;
+    Ptr top = p + want;
+    LM(CurrentA5) = top - abovea5;
+    LM(CurStackBase) = LM(CurrentA5) - belowa5;
+    LM(ApplLimit) = LM(CurStackBase) - (int32_t)LM(DefltStack);
+    LM(ApplZone) = (THz)p;
+    /* Executor keeps HeapEnd 8 above bkLim; this puts bkLim at
+       ApplLimit - 24, as 7.5.5 does. */
+    LM(HeapEnd) = LM(ApplLimit) - 16;
+    InitZone(nullptr, 64, LM(HeapEnd) + 12, (THz)p);
+    LM(MemTop) = (Ptr)LM(SysZone)->bkLim + want;
+}
+
 #define PSN_EQ_P(psn0, psn1)                      \
     ((psn0).highLongOfPSN == (psn1).highLongOfPSN \
      && (psn0).lowLongOfPSN == (psn1).lowLongOfPSN)
@@ -104,10 +208,7 @@ void Executor::process_create(bool desk_accessory_p,
     info->type = type;
     info->signature = signature;
 
-    /* ### fixme; major bogosity */
-    info->size = (zone_size(LM(ApplZone))
-                  /* + A5 world size */
-                  /* + stack size */);
+    info->size = partition_size ? partition_size : zone_size(LM(ApplZone));
     info->launch_ticks = TickCount();
 
     info->serial_number.highLongOfPSN = -1;

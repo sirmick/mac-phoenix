@@ -434,8 +434,8 @@ void Executor::InitPerProcessLowMem()
     LM(PrintErr) = 0;
     LM(mouseoffset) = 0;
     LM(heapcheck) = 0;
-    LM(DefltStack) = 0x2000; /* nobody really cares about these two */
-    LM(MinStack) = 0x400; /* values ... */
+    LM(DefltStack) = 0x6000; /* 7.5.5's values; DefltStack sizes */
+    LM(MinStack) = 0x400;    /* the stack in each partition */
     LM(IAZNotify) = 0;
     LM(CurPitch) = 0;
     LM(JSwapFont) = (ProcPtr)&FMSwapFont;

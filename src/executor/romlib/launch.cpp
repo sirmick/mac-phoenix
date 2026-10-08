@@ -45,6 +45,7 @@
 #include <prefs/crc.h>
 #include <sane/float.h>
 #include <mman/mman.h>
+#include <rsys/process.h>
 #include <vdriver/vdriver.h>
 #include <quickdraw/font.h>
 #include <base/emustubs.h>
@@ -245,6 +246,9 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
 	CloseResFile(LM(CurMap));
 #endif
     SetVol((StringPtr)0, ROMlib_exevrefnum);
+    /* MacPhoenix: the partition (ApplZone, stack, A5 world) comes first,
+       so the application's resource map is opened inside it. */
+    process_layout_partition(ROMlib_exefname);
     LM(CurApRefNum) = OpenResFile(ROMlib_exefname);
 
     err = GetFInfo(ROMlib_exefname, ROMlib_exevrefnum, &finfo);
@@ -332,31 +336,15 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
                 == SZisHighLevelEventAware);
     }
 
-    LM(BufPtr) = LM(MemTop);
-
-    if(!code0)
-    {
-        LM(CurrentA5) = LM(BufPtr) - 4;
-        LM(CurStackBase) = LM(CurrentA5);       
-    }
-    else
+    /* CurrentA5 and CurStackBase were set by process_layout_partition. */
+    if(code0)
     {
         HLock(code0);
 
         auto lp = (GUEST<LONGINT> *)*code0;
-        LONGINT abovea5 = *lp++;
-        LONGINT belowa5 = *lp++;
+        lp += 2; /* abovea5, belowa5 */
         LONGINT jumplen = *lp++;
         LONGINT jumpoff = *lp++;
-
-        /*
-         * NOTE: The stack initialization code that was here has been moved
-         *	     to ROMlib_InitZones in mman.c
-         */
-        /* #warning Stack is getting reinitialized even when Chain is called ... */
-
-        LM(CurrentA5) = LM(BufPtr) - abovea5;
-        LM(CurStackBase) = LM(CurrentA5) - belowa5;
 
         LM(CurJTOffset) = jumpoff;
         memcpy(LM(CurrentA5) + jumpoff, lp, jumplen); /* copy in the

@@ -23,6 +23,7 @@
 #include <prefs/options.h>
 #include <rsys/toolutil.h>
 #include <rsys/gestalt.h>
+#include <rsys/process.h>
 #include <vdriver/vdriver.h>   /* for WeOwnScrapX */
 #include <algorithm>
 
@@ -351,13 +352,18 @@ void print_mem_full_message(void)
 
 void ROMlib_InitZones()
 {
+    /* MacPhoenix: this is the Process Manager heap, from the System heap
+       up to BufPtr.  It serves as ApplZone until a launch lays out the
+       application's partition inside it (process_layout_partition). */
     LM(ApplZone) = (THz)((Ptr)LM(SysZone) + ROMlib_syszone_size);
 
     Executor::InitApplZone();
 
     LM(ApplLimit) = ((Ptr)LM(ApplZone) + ROMlib_applzone_size);
+    process_reset_heap(LM(ApplZone));
 
-    EM_A7 = ptr_to_longint(LM(MemTop));
+    /* The boot stack lives above BufPtr; MemTop is per-process. */
+    EM_A7 = (uint32_t)ROMlib_memtop;
 
     LM(MemErr) = noErr;
 }
@@ -396,8 +402,8 @@ void InitMemory(void *thingOnStack)
     Ptr memory = (Ptr)syn68k_map_guest_ram(total_allocated_memory);
 
     memset(memory, ~0, lastlowglobal.address);
-    LM(CurStackBase) = LM(BufPtr) = LM(MemTop)
-        = memory + total_allocated_memory;
+    LM(CurStackBase) = LM(MemTop) = memory + total_allocated_memory;
+    LM(BufPtr) = memory + ROMlib_syszone_size + ROMlib_applzone_size;
     LM(SysZone) = (THz)(memory + lastlowglobal.address);
 
     ROMlib_syszone = (uintptr_t)LM(SysZone);

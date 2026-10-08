@@ -207,6 +207,28 @@ file. It is why `MemTop` reads like a per-process value.
 | `$0DCC` 4 | (unnamed) |
 | `$0CC8` 4 | TheGDevice |
 
+## Application partitions (7.5.5, measured)
+
+From the Finder-idle reference, current process BridgeAgent (SIZE
+preferred 1024K, CODE 0 abovea5 200, belowa5 4548):
+
+| Item | Value | Rule |
+|---|---|---|
+| Process Manager heap | `$0022D8C0`..`$03FDF014` | a plain zone from the System heap's end to just below `BufPtr` |
+| Partition | locked handle, data `$03E14EB0`, `$104000` bytes | SIZE preferred + 16K; at the top of the PM heap, free space below it (Finder: 185K + 16K) |
+| `ApplZone` | `$03E14EB0` | partition start |
+| zone `bkLim` / `HeapEnd` | `$03F11E44` | `ApplLimit - 24` |
+| `ApplLimit` | `$03F11E5C` | `CurStackBase - $6008` (`DefltStack` = `$6000`) |
+| `CurStackBase` | `$03F17E64` | `CurrentA5 - 3980` (not `belowa5`; open) |
+| `CurrentA5` | `$03F18DF0` | partition end + 8 - abovea5; the jump table runs to the partition end |
+| `MemTop` | `$003318B0` | SysZone `bkLim` + partition size: the app sees a machine as big as its partition |
+| `BufPtr` | `$03FE64E2` | global, above the PM heap |
+
+Executor follows these rules (`process_layout_partition` in
+`romlib/process.cpp`), except `CurStackBase = CurrentA5 - belowa5` and
+`CurrentA5 = partition end - abovea5`, Inside Macintosh's rules, until
+the two open offsets are explained.
+
 ## Snapshot tooling (on the UAE ROM boot)
 
 - Dump vectors, lowmem and both trap tables; classify each entry by
