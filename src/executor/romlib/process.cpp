@@ -23,6 +23,7 @@
 
 using namespace Executor;
 #include <AppleEvents.h>
+#include <IntlUtil.h>
 #include <OSEvent.h>
 #include <TimeMgr.h>
 #include <VRetraceMgr.h>
@@ -115,12 +116,22 @@ struct process_info
     RgnHandle uncovered = nullptr;
     bool died_pending = false;
     ProcessSerialNumber died = {};
+    /* Brought to the front: what of its windows the layers that were in
+       front covered, and suspend/resume to deliver (osEvt message). */
+    RgnHandle raised = nullptr;
+    bool activate_pending = false;
+    bool os_event_pending = false;
+    int32_t os_event_message = 0;
 };
 typedef struct process_info process_info_t;
 
 static process_info_t *process_info_list;
 static process_info_t *current_process_info;
 static process_info_t *pending_launch;
+static process_info_t *pending_front;
+/* Layers, front first: whose windows are in front of whose. */
+static std::vector<process_info_t *> layer_order;
+static process_info_t *front_process;
 /* 7.5.5 numbers processes from $2000 (Jigsaw launched by Finder: $2001). */
 static uint32_t next_free_psn = 0x2000;
 
@@ -164,6 +175,8 @@ static void process_bootstrap()
         return;
     current_process_info = new_process();
     current_process_info->state = process_info_t::running;
+    layer_order.push_back(current_process_info);
+    front_process = current_process_info;
 }
 
 /* ── The switched world ── */
@@ -184,6 +197,7 @@ struct host_var
 
 static std::vector<lm_range> lm_ranges;
 static size_t lm_bytes;
+static size_t windowlist_offset; /* of WindowList in a saved world */
 static std::vector<uint8_t> lowmem_template;
 static std::vector<uint8_t> cpu_template;
 static std::vector<syn68k_addr_t> traps_template;
@@ -264,7 +278,11 @@ static void load_switch_list()
 
     lm_bytes = 0;
     for(const lm_range &r : lm_ranges)
+    {
+        if(r.addr == 0x9D6)
+            windowlist_offset = lm_bytes;
         lm_bytes += r.len;
+    }
 }
 
 static void save_lowmem(std::vector<uint8_t> &buf)
@@ -309,7 +327,11 @@ static void restore_world(process_info_t *p)
     size_t off = 0;
     for(const host_var &v : host_vars())
     {
-        memcpy(v.p, &p->host[off], v.n);
+        /* State registered after this process was saved starts cleared. */
+        if(off + v.n <= p->host.size())
+            memcpy(v.p, &p->host[off], v.n);
+        else
+            memset(v.p, 0, v.n);
         off += v.n;
     }
     if(LM(AE_info))
@@ -340,6 +362,214 @@ void Executor::process_capture_template()
         syn68k_save_context(cpu_template.data());
         save_traps(traps_template);
     }
+}
+
+/* ── Layers ──
+ * Each process's windows are its layer: its own window list (WindowList is
+ * switched with the process).  The Window Manager works on the current
+ * layer and asks here about the others: what the layers in front cover,
+ * and to carry painting on into the layers behind.  A layer view lets it
+ * look from another process's layer (LM(WindowList) is that process's
+ * list meanwhile). */
+
+static process_info_t *layer_view_p;
+static GUEST<WindowPeek> current_list_stash; /* while a view looks elsewhere */
+
+static process_info_t *viewer()
+{
+    return layer_view_p ? layer_view_p : current_process_info;
+}
+
+/* A process's window list, wherever it is kept right now. */
+static WindowPeek chain_of(process_info_t *p)
+{
+    if(p == viewer())
+        return LM(WindowList);
+    if(p == current_process_info)
+        return current_list_stash;
+    if(p->lowmem.size() < windowlist_offset + 4)
+        return nullptr;
+    GUEST<WindowPeek> w;
+    memcpy(&w, &p->lowmem[windowlist_offset], sizeof w);
+    return w;
+}
+
+namespace
+{
+struct LayerView
+{
+    process_info_t *saved_view;
+    GUEST<WindowPeek> saved_list;
+
+    explicit LayerView(process_info_t *p)
+        : saved_view(layer_view_p), saved_list(LM(WindowList))
+    {
+        WindowPeek head = chain_of(p);
+        if(!layer_view_p)
+            current_list_stash = LM(WindowList);
+        layer_view_p = p;
+        LM(WindowList) = head;
+    }
+    ~LayerView()
+    {
+        LM(WindowList) = saved_list;
+        layer_view_p = saved_view;
+    }
+};
+}
+
+static std::vector<process_info_t *> layers_in_front_of(process_info_t *v)
+{
+    std::vector<process_info_t *> out;
+    for(process_info_t *p : layer_order)
+    {
+        if(p == v)
+            break;
+        out.push_back(p);
+    }
+    return out;
+}
+
+static std::vector<process_info_t *> layers_behind(process_info_t *v)
+{
+    std::vector<process_info_t *> out;
+    bool behind = false;
+    for(process_info_t *p : layer_order)
+    {
+        if(behind)
+            out.push_back(p);
+        if(p == v)
+            behind = true;
+    }
+    return out;
+}
+
+static void subtract_layer(process_info_t *p, RgnHandle rgn)
+{
+    for(WindowPeek w = chain_of(p); w; w = WINDOW_NEXT_WINDOW(w))
+        if(WINDOW_VISIBLE(w))
+            DiffRgn(rgn, WINDOW_STRUCT_REGION(w), rgn);
+}
+
+void Executor::ROMlib_layers_clip_above(RgnHandle rgn)
+{
+    if(!viewer())
+        return;
+    for(process_info_t *p : layers_in_front_of(viewer()))
+        subtract_layer(p, rgn);
+}
+
+void Executor::ROMlib_layers_clip_below(RgnHandle rgn)
+{
+    if(!viewer())
+        return;
+    for(process_info_t *p : layers_behind(viewer()))
+        subtract_layer(p, rgn);
+}
+
+void Executor::ROMlib_layers_paint_behind(RgnHandle rh)
+{
+    if(!viewer())
+        return;
+    for(process_info_t *p : layers_behind(viewer()))
+    {
+        if(EmptyRgn(rh))
+            return;
+        LayerView view(p);
+        for(WindowPeek w = LM(WindowList); w && !EmptyRgn(rh); w = WINDOW_NEXT_WINDOW(w))
+        {
+            if(!WINDOW_VISIBLE(w))
+                continue;
+            RgnHandle t = NewRgn();
+            SectRgn(rh, WINDOW_STRUCT_REGION(w), t);
+            if(!EmptyRgn(t))
+            {
+                PaintOne(w, rh);
+                DiffRgn(rh, WINDOW_STRUCT_REGION(w), rh);
+            }
+            DisposeRgn(t);
+        }
+    }
+}
+
+void Executor::ROMlib_layers_calcvis_behind(RgnHandle rh)
+{
+    if(!viewer())
+        return;
+    for(process_info_t *p : layers_behind(viewer()))
+    {
+        LayerView view(p);
+        for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
+            if(WINDOW_VISIBLE(w))
+                CalcVis(w);
+    }
+}
+
+/* Every window's visible region, after the layers changed order. */
+static void recalc_all_layers()
+{
+    for(process_info_t *p : layer_order)
+    {
+        LayerView view(p);
+        for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
+            if(WINDOW_VISIBLE(w))
+                CalcVis(w);
+    }
+}
+
+/* The process whose layer has a window at pt (front first), else null. */
+static process_info_t *layer_at(Point pt)
+{
+    for(process_info_t *p : layer_order)
+    {
+        for(WindowPeek w = chain_of(p); w; w = WINDOW_NEXT_WINDOW(w))
+            if(WINDOW_VISIBLE(w) && PtInRgn(pt, WINDOW_STRUCT_REGION(w)))
+                return p;
+    }
+    return nullptr;
+}
+
+/* A long of a process's switched low memory, wherever it is kept. */
+static uint32_t lowmem_long(process_info_t *p, uint32_t addr)
+{
+    if(p == current_process_info)
+        return *(GUEST<uint32_t> *)SYN68K_TO_US(addr);
+    size_t off = 0;
+    for(const lm_range &r : lm_ranges)
+    {
+        if(addr >= r.addr && addr + 4 <= r.addr + r.len && p->lowmem.size() >= off + r.len)
+        {
+            GUEST<uint32_t> v;
+            memcpy(&v, &p->lowmem[off + (addr - r.addr)], sizeof v);
+            return v;
+        }
+        off += r.len;
+    }
+    return 0;
+}
+
+static bool has_updates(process_info_t *p);
+
+/* Something waits for this process's next event call. */
+static bool wants_time(process_info_t *p)
+{
+    return has_updates(p) || p->os_event_pending
+        || lowmem_long(p, 0xA64) /* CurActivate */
+        || lowmem_long(p, 0xA68) /* CurDeactive */;
+}
+
+static bool has_updates(process_info_t *p)
+{
+    for(WindowPeek w = chain_of(p); w; w = WINDOW_NEXT_WINDOW(w))
+        if(WINDOW_VISIBLE(w) && !EmptyRgn(WINDOW_UPDATE_REGION(w)))
+            return true;
+    return false;
+}
+
+static void raise_layer(process_info_t *p)
+{
+    layer_order.erase(std::remove(layer_order.begin(), layer_order.end(), p), layer_order.end());
+    layer_order.insert(layer_order.begin(), p);
 }
 
 /* ── The baton ── */
@@ -460,6 +690,9 @@ std::vector<ROMlib_process_entry> Executor::ROMlib_process_entries()
         e.current = p == current_process_info;
         out.push_back(e);
     }
+    std::sort(out.begin(), out.end(), [](const ROMlib_process_entry &a, const ROMlib_process_entry &b) {
+        return IUCompString(a.name, b.name) < 0;
+    });
     return out;
 }
 
@@ -484,6 +717,42 @@ static void resumed()
             PaintOne(nullptr, rgn);
         DisposeRgn(rgn);
         DrawMenuBar();
+    }
+    if(me->raised)
+    {
+        /* Brought to the front: redraw what the layers in front covered. */
+        RgnHandle rgn = me->raised;
+        me->raised = nullptr;
+        recalc_all_layers();
+        for(WindowPeek w = LM(WindowList); w && !EmptyRgn(rgn); w = WINDOW_NEXT_WINDOW(w))
+        {
+            if(!WINDOW_VISIBLE(w))
+                continue;
+            RgnHandle t = NewRgn();
+            SectRgn(rgn, WINDOW_STRUCT_REGION(w), t);
+            if(!EmptyRgn(t))
+            {
+                PaintOne(w, rgn);
+                DiffRgn(rgn, WINDOW_STRUCT_REGION(w), rgn);
+            }
+            DisposeRgn(t);
+        }
+        DisposeRgn(rgn);
+    }
+    if(me->activate_pending)
+    {
+        me->activate_pending = false;
+        if(WindowPtr w = FrontWindow())
+        {
+            HiliteWindow(w, true);
+            if(!(me->mode & 0x0800)) /* SIZE doesActivateOnFGSwitch */
+                LM(CurActivate) = w;
+        }
+        if(me->mode & 0x4000) /* SIZE acceptSuspendResumeEvents */
+        {
+            me->os_event_pending = true;
+            me->os_event_message = 1 << 24 | 1; /* resume */
+        }
     }
     if(me->died_pending)
     {
@@ -591,6 +860,9 @@ static void exit_current()
     if(me->icon)
         DisposeIconSuite(me->icon, true);
     me->icon = nullptr;
+    layer_order.erase(std::remove(layer_order.begin(), layer_order.end(), me), layer_order.end());
+    if(pending_front == me)
+        pending_front = nullptr;
     forget_process(me);
     me->state = process_info_t::dead;
     reap_list.push_back(me);
@@ -602,6 +874,12 @@ static void exit_current()
     if(!next)
         next = process_info_list;
 
+    if(front_process == me)
+    {
+        raise_layer(next);
+        front_process = next;
+        next->activate_pending = true;
+    }
     current_process_info = next;
     restore_world(next);
     next->state = process_info_t::running;
@@ -635,15 +913,130 @@ bool Executor::ROMlib_process_has_thread()
     return current_process_info && current_process_info->own_thread;
 }
 
-/* Every event call: a process just launched gets the processor. */
+/* The front process steps back: its front window is unhilited (7.5.5's
+   Process Manager does this itself), a deactivate event follows unless the
+   application handles that on suspend (SIZE doesActivateOnFGSwitch), and
+   it gets a suspend event (SIZE acceptSuspendResumeEvents). */
+static void step_back(process_info_t *p)
+{
+    if(WindowPtr w = FrontWindow())
+    {
+        HiliteWindow(w, false);
+        if(!(p->mode & 0x0800))
+            LM(CurDeactive) = w;
+    }
+    if(p->mode & 0x4000)
+    {
+        p->os_event_pending = true;
+        p->os_event_message = 1 << 24; /* suspend */
+    }
+}
+
+/* Major switch, from the front process: q comes to the front. */
+static void bring_to_front(process_info_t *q)
+{
+    step_back(current_process_info);
+    RgnHandle covered;
+    {
+        TheZoneGuard guard(LM(SysZone));
+        covered = NewRgn();
+    }
+    for(process_info_t *p : layers_in_front_of(q))
+        for(WindowPeek w = chain_of(p); w; w = WINDOW_NEXT_WINDOW(w))
+            if(WINDOW_VISIBLE(w))
+                UnionRgn(WINDOW_STRUCT_REGION(w), covered, covered);
+    raise_layer(q);
+    front_process = q;
+    q->raised = covered;
+    q->activate_pending = true;
+    switch_to(q);
+}
+
+/* Every event call: where processes switch, as 7.5.5's Process Manager
+   does in GetNextEvent/WaitNextEvent/EventAvail. */
 void Executor::ROMlib_process_event_hook()
 {
+    process_info_t *me = current_process_info;
+    if(!me)
+        return;
+
     if(pending_launch)
     {
+        /* A process just launched comes to the front. */
         process_info_t *p = pending_launch;
         pending_launch = nullptr;
+        step_back(me);
+        raise_layer(p);
+        front_process = p;
         switch_to(p);
+        return;
     }
+
+    if(me != front_process)
+    {
+        /* Background time: back to the front once we are up to date. */
+        if(!wants_time(me))
+            switch_to(front_process);
+        return;
+    }
+
+    if(pending_front)
+    {
+        process_info_t *q = pending_front;
+        pending_front = nullptr;
+        if(q != me)
+        {
+            bring_to_front(q);
+            return;
+        }
+    }
+
+    /* A click in another process's window (or on the desktop, which is
+       Finder's) brings that process to the front.  It keeps the click if
+       its SIZE says getFrontClicks. */
+    EventRecord evt;
+    if(OSEventAvail(mDownMask, &evt))
+    {
+        Point pt = evt.where.get();
+        if(pt.v >= LM(MBarHeight))
+        {
+            process_info_t *hit = layer_at(pt);
+            if(!hit)
+                hit = process_info_list; /* the desktop */
+            if(hit && hit != me && hit->state == process_info_t::parked)
+            {
+                if(!(hit->mode & 0x0200))
+                    GetOSEvent(mDownMask, &evt);
+                bring_to_front(hit);
+                return;
+            }
+        }
+    }
+
+    /* Minor switch: a process behind with something waiting gets time. */
+    for(process_info_t *p : layer_order)
+        if(p != me && p->state == process_info_t::parked && wants_time(p))
+        {
+            switch_to(p);
+            return;
+        }
+}
+
+bool Executor::ROMlib_process_is_front()
+{
+    return !current_process_info || current_process_info == front_process;
+}
+
+bool Executor::ROMlib_process_os_event(EventRecord *evt, bool remove)
+{
+    process_info_t *me = current_process_info;
+    if(!me || !me->os_event_pending)
+        return false;
+    evt->what = osEvt;
+    evt->message = me->os_event_message;
+    if(remove)
+        me->os_event_pending = false;
+    return true;
 }
 
 OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
@@ -913,20 +1306,24 @@ OSErr Executor::C_SameProcess(ProcessSerialNumber *serial_number0,
 
 OSErr Executor::C_GetFrontProcess(ProcessSerialNumber *serial_number, int32_t dummy)
 {
-    *serial_number = current_process_info->serial_number;
+    *serial_number = front_process->serial_number;
     return noErr;
 }
 
+/* Takes effect at the front process's next event call, as on 7.5.5. */
 OSErr Executor::C_SetFrontProcess(ProcessSerialNumber *serial_number)
 {
-    warning_unimplemented("");
-    return paramErr;
+    process_info_t *p = get_process_info(serial_number);
+    if(!p)
+        return procNotFound;
+    if(p != front_process)
+        pending_front = p;
+    return noErr;
 }
 
 OSErr Executor::C_WakeUpProcess(ProcessSerialNumber *serial_number)
 {
-    warning_unimplemented("");
-    return paramErr;
+    return get_process_info(serial_number) ? noErr : procNotFound;
 }
 
 /* MacPhoenix: a process's PPC port, as the Process Manager registers it:

@@ -248,6 +248,19 @@ static Boolean doevent(INTEGER em, EventRecord *evt,
     hle_reset();
 
     evt->message = 0;
+
+    /* MacPhoenix: suspend/resume from the Process Manager. */
+    if((em & app4Mask) && ROMlib_process_os_event(evt, false)) /* osMask */
+    {
+        EventRecord e;
+        GetOSEvent(0, &e);
+        e.what = evt->what;
+        e.message = evt->message;
+        *evt = e;
+        ROMlib_process_os_event(evt, remflag);
+        retval = true;
+        goto done;
+    }
     TRACE(2);
     if(LM(SPVolCtl) & 0x80)
     {
@@ -460,6 +473,9 @@ Boolean Executor::C_GetNextEvent(INTEGER em, EventRecord *evt)
 {
     Boolean retval;
     ROMlib_process_event_hook();
+    /* MacPhoenix: mouse and keyboard go to the front process only. */
+    if(!ROMlib_process_is_front())
+        em &= ~(mDownMask | mUpMask | keyDownMask | keyUpMask | autoKeyMask);
     ROMlib_app_polled_events.store(true, std::memory_order_relaxed);
     if(ROMlib_event_poll_hook)
         ROMlib_event_poll_hook();
@@ -538,6 +554,8 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
 Boolean Executor::C_EventAvail(INTEGER em, EventRecord *evt)
 {
     ROMlib_process_event_hook();
+    if(!ROMlib_process_is_front())
+        em &= ~(mDownMask | mUpMask | keyDownMask | keyUpMask | autoKeyMask);
     return (doevent(em, evt, false));
 }
 

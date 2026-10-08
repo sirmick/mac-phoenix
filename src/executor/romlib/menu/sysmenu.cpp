@@ -304,7 +304,19 @@ void Executor::ROMlib_install_system_menus()
 bool Executor::ROMlib_system_menu_select(INTEGER mid, INTEGER item)
 {
     if(mid == kApplicationMenuID)
-        return true; /* hide/show and switching: not yet */
+    {
+        /* A process: it comes to the front.  Hide/Show: not yet. */
+        if(item > app_menu_fixed)
+        {
+            std::vector<ROMlib_process_entry> procs = ROMlib_process_entries();
+            if(item - app_menu_fixed <= (int)procs.size())
+            {
+                ProcessSerialNumber psn = procs[item - app_menu_fixed - 1].psn;
+                SetFrontProcess(&psn);
+            }
+        }
+        return true;
+    }
     if(mid == kHMHelpMenuID)
         return item <= help_system_items; /* balloons aren't implemented */
     return false;
@@ -339,9 +351,18 @@ struct AppleItem
     int32_t key;
 };
 std::vector<AppleItem> apple_items;
-MenuHandle apple_menu;
-INTEGER apple_base; /* items before the Apple Menu Items ones */
-bool apple_dirty;
+/* The items are the system's; each process has its own Apple menu, built
+   from them whenever they changed since (Process Manager state). */
+struct AppleMenuState
+{
+    MenuHandle menu;
+    INTEGER base; /* items before the Apple Menu Items ones */
+    uint32_t built; /* apple_generation it shows */
+};
+AppleMenuState apple_state;
+uint32_t apple_generation = 1;
+#define apple_menu apple_state.menu
+#define apple_base apple_state.base
 }
 
 void Executor::ROMlib_apple_menu_add(StringPtr name, int16_t group, Handle suite, int32_t key)
@@ -364,7 +385,7 @@ void Executor::ROMlib_apple_menu_add(StringPtr name, int16_t group, Handle suite
             return IUCompString((StringPtr)a.text.data(), (StringPtr)b.text.data()) < 0;
         });
     apple_items.insert(pos, std::move(item));
-    apple_dirty = true;
+    ++apple_generation;
 }
 
 bool Executor::ROMlib_apple_menu_remove(int32_t key)
@@ -373,22 +394,29 @@ bool Executor::ROMlib_apple_menu_remove(int32_t key)
     apple_items.erase(std::remove_if(apple_items.begin(), apple_items.end(),
                                      [key](const AppleItem& i) { return !key || i.key == key; }),
                       apple_items.end());
-    apple_dirty = true;
+    ++apple_generation;
     return !key || n != apple_items.size();
 }
 
 void Executor::ROMlib_apple_menu_attach(MenuHandle mh)
 {
+    static bool registered;
+    if(!registered)
+    {
+        registered = true;
+        ROMlib_process_register_state(&apple_state, sizeof apple_state);
+    }
     apple_menu = mh;
     apple_base = CountMItems(mh);
-    apple_dirty = true;
+    apple_state.built = 0;
 }
 
 void Executor::ROMlib_apple_menu_update()
 {
-    if(!apple_dirty || !apple_menu || ROMlib_mentosix((*apple_menu)->menuID) == -1)
+    if(apple_state.built == apple_generation || !apple_menu
+       || ROMlib_mentosix((*apple_menu)->menuID) == -1)
         return;
-    apple_dirty = false;
+    apple_state.built = apple_generation;
     while(CountMItems(apple_menu) > apple_base)
         DeleteMenuItem(apple_menu, CountMItems(apple_menu));
     for(const AppleItem& item : apple_items)

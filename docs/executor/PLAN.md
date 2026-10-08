@@ -199,7 +199,34 @@ then `diff-world`.
   QuickTime, AppleScript, Color Picker, Speech Manager and Color SW Pro.
 * **Whitelist order** (small and self-contained first): Color Picker →
   Speech Manager + MacinTalk 3 → AppleScript (+ Finder Scripting
-  Extension) → QuickTime → Macintosh Easy Open.
+  Extension) → QuickTime. Macintosh Easy Open ships its own `lpch` 31
+  (linked patch code), so it likely won't load as a plain INIT; skip it.
+
+**Write or borrow (decided 2026-10-08).** Apple's code runs as is when
+it's a self-contained resource (`PACK`, definition procedure,
+component, INIT, a standalone pre-7.5 extension) *and* reaches the rest
+of the system only through public traps; the resource policy and the
+INIT whitelist are the switch. It's written in C++ when it exists only
+as linked patch code (`lpch`/`gpch`: loading it means faking the ROM it
+binds to, so no linked-patch loader), when it's tied to internals we
+own in C++ (Process Manager context switch, Window Manager layers,
+Memory/File Manager internals), or when it's a thin dispatcher on a hot
+path. The trace and diff tools make a C++ rewrite cheap to check against
+a real boot; debugging Apple's 68k against a non-Apple internal state is
+the expensive direction.
+
+| Piece | Decision | Why |
+|---|---|---|
+| Component Manager | C++ (M3) | `gpch` 667; dispatcher |
+| Thread Manager | C++ (M3) | ~20 selectors, all stack switching inside our Process Manager |
+| Drag Manager | C++ (M4) | the pre-7.5 extension hooks Window/Process Manager internals |
+| Help Manager | Apple's `PACK` 14 (M3) | 68k calling public traps; resource policy `apple` |
+| Apple Event Manager | try Apple's `PACK` 8 (M3) | may close Finder's `'aevt'` wire-format gap; depends on HLE delivery matching Apple's (unverified) |
+| TSM, Dictionary, Collection Managers | stub | Gestalt absent, error results, until a real caller shows up |
+| Translation Manager / Easy Open | skip | its own `lpch` |
+| Third-party INITs poking ROM or private structures | never written | whitelist what works; mimic a private structure only if a popular INIT needs it and it's cheap |
+| Come-from patches | nothing to do | they fix ROM bugs we don't have |
+| Apple Guide | as is, last, if ever | patches Help/Menu/Window Managers and drives apps through AEs |
 
 ## Milestones
 
@@ -210,9 +237,14 @@ then `diff-world`.
 | M0c | Headless app run | built-in Browser reaches its event loop, screenshot | done: `executor.smoke.browser_screenshot` |
 | M0d | Shell integration | `--backend executor` in the web UI shows video, takes input | done: one binary, UI option, `executor.smoke.web_backend` |
 | M1 | Finder desktop | our boot phase, Apple System file as resource root, real Finder draws |
-| M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix | in progress: Finder launches Jigsaw Puzzle in its own process, it runs and quits back to Finder |
-| M3 | Extensions | real trap tables, whitelisted INITs, Component Manager in C++; Color Picker, Speech, AppleScript, QuickTime load and work |
-| M4 | 7.5.5 + Drag Manager | |
+| M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix | in progress: Finder, Jigsaw Puzzle and Note Pad run side by side; switching by click or Application menu; quit back to the launcher |
+| M3a | Trap tables | real tables at `$400`/`$E00`, every entry 68k-callable; patch histories diff against `trap_installs.tsv`; `$A82A` stub (no components) |
+| M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; Color Picker loads (with M3c) |
+| M3c | Component Manager in C++ | System file components register; Color Picker's `GetColor` matches a real boot |
+| M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs |
+| M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` |
+| M3f | Extension set | Speech Manager + MacinTalk 3, AppleScript + Finder Scripting Extension, QuickTime load and work (QuickTime movie plays in SimpleText) |
+| M4 | 7.5.5 + Drag Manager | Drag Manager in C++; drag between SimpleText and Finder; TSM/Dictionary/Collection stubs |
 | P | PPC | KPX behind the PowerCore facade, InterfaceLib to native |
 
 Tools carried alongside:
@@ -362,7 +394,22 @@ Kept small so upstream fixes can be merged by hand:
   is tidied up (windows, resource files, VBL tasks, partition) and its
   launcher gets the uncovered screen redrawn and, with SIZE
   acceptAppDiedEvents, `'aevt'/'obit'` in 7.5.5's wire format. PSNs start at
-  $2000. The Application menu is system-wide and lists the processes.
+  $2000. The Application menu is system-wide, lists the processes and
+  switches between them.
+  Layers: each process's window list is its layer, in a front-to-back
+  order. The Window Manager clips out layers in front (`ClipAbove`,
+  `CalcVis`; the desktop also those behind) and carries `PaintBehind` /
+  `CalcVisBehind` on into the layers behind (`ROMlib_layers_*`, via a
+  layer view that lends it another process's list). A click in another
+  process's window, or on the desktop (Finder's), brings that process to
+  the front at the front process's next event call; so does
+  `SetFrontProcess`. The old front's window is unhilited, the new one's
+  hilited, with activate events unless SIZE doesActivateOnFGSwitch and
+  suspend/resume events with acceptSuspendResumeEvents; the newly front
+  layer's uncovered parts are redrawn. Background processes get time when
+  something waits for them (updates, suspend/resume, activate) and never
+  mouse or keyboard events. The Apple menu items are the system's; each
+  process's Apple menu catches up with them.
 * `time/syncint.cpp`: the timer is a Qt thread; it wakes whichever thread
   is idle in `syncint_wait_interrupt()` (upstream aimed SIGALRM at one).
 * `toolevent.cpp`: `WaitNextEvent` also checks its own deadline (its

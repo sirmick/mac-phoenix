@@ -4,6 +4,7 @@
 #include <MemoryMgr.h>
 #include <PPC.h>
 #include <ProcessMgr.h>
+#include <EventMgr.h>
 #include <vector>
 
 namespace Executor
@@ -56,6 +57,18 @@ struct ROMlib_process_entry
     bool current;
 };
 extern std::vector<ROMlib_process_entry> ROMlib_process_entries();
+
+/* Layers (process.cpp): the Window Manager asks about other processes'
+   windows -- clip out those in front (and, for the desktop, behind), and
+   carry painting / visible regions on into the layers behind. */
+extern void ROMlib_layers_clip_above(RgnHandle rgn);
+extern void ROMlib_layers_clip_below(RgnHandle rgn);
+extern void ROMlib_layers_paint_behind(RgnHandle rgn);
+extern void ROMlib_layers_calcvis_behind(RgnHandle rgn);
+/* Is the current process the front one (gets mouse and keyboard)? */
+extern bool ROMlib_process_is_front();
+/* A pending suspend/resume event for the current process. */
+extern bool ROMlib_process_os_event(EventRecord *evt, bool remove);
 
 /* The desktop was repainted there: an update for the desktop layer. */
 extern void ROMlib_desktop_layer_invalidate(RgnHandle rgn);

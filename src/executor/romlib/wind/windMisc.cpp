@@ -236,6 +236,11 @@ void Executor::C_ClipAbove(WindowPeek w)
         if(WINDOW_VISIBLE(wp))
             DiffRgn(PORT_CLIP_REGION(wmgr_port), WINDOW_STRUCT_REGION(wp),
                     PORT_CLIP_REGION(wmgr_port));
+    /* MacPhoenix: other processes' layers in front -- and for the desktop,
+       which is behind everything, those behind too. */
+    ROMlib_layers_clip_above(PORT_CLIP_REGION(wmgr_port));
+    if(!w)
+        ROMlib_layers_clip_below(PORT_CLIP_REGION(wmgr_port));
 }
 
 Boolean Executor::C_CheckUpdate(EventRecord *ev)
@@ -364,6 +369,9 @@ void Executor::C_PaintBehind(WindowPeek w, RgnHandle clobbered)
             }
         }
     }
+    /* MacPhoenix: then the layers behind, then the desktop. */
+    if(!EmptyRgn(rh))
+        ROMlib_layers_paint_behind(rh);
     if(!EmptyRgn(rh))
         PaintOne((WindowPeek)0, rh);
     DisposeRgn(testrgn);
@@ -377,6 +385,7 @@ void Executor::C_CalcVis(WindowPeek w)
     if(w && WINDOW_VISIBLE(w))
     {
         SectRgn(LM(GrayRgn), WINDOW_CONT_REGION(w), PORT_VIS_REGION(w));
+        ROMlib_layers_clip_above(PORT_VIS_REGION(w));
         for(wp = LM(WindowList); wp != w; wp = WINDOW_NEXT_WINDOW(wp))
             if(WINDOW_VISIBLE(wp))
                 DiffRgn(PORT_VIS_REGION(w), WINDOW_STRUCT_REGION(wp),
@@ -411,6 +420,9 @@ void Executor::C_CalcVisBehind(WindowPeek w, RgnHandle clobbered)
             }
         }
     }
+    /* MacPhoenix: and the layers behind. */
+    if(!EmptyRgn(rh))
+        ROMlib_layers_calcvis_behind(rh);
 
     DisposeRgn(rh);
     DisposeRgn(testrgn);
