@@ -237,4 +237,19 @@ Kept small so upstream fixes can be merged by hand:
 * `mman/mmansubr.cpp`: `ROMlib_heap_death_dialog`; off in MacPhoenix, so a
   fatal heap error logs and `_exit(70)`s instead of crashing in the dialog.
 * `file/localvolume/localvolume.cpp`: LMDB include dropped.
+* `executor.cpp`: launches `FNDR` files (Finder) as well as `APPL`/`MPST`.
+* `alias.cpp`: `FindFolder` with `kCreateFolder` creates the folder (was a
+  `paramErr` stub).
+* `res/resGetinfo.cpp`: `GetResourceSizeOnDisk` returns the on-disk length
+  (compressed size), not the loaded handle's size.
+* `mman/tempmem.cpp`: temporary memory comes from the Process Manager heap.
+* `toolevent.cpp`: no `/tmp/testvol` probe (upstream posted its mount
+  result as a `diskEvt` on the first `GetNextEvent`).
+* `drag.cpp` (new): private `DragDispatch` selector Finder needs.
+* `file/localvolume/localvolume.cpp`: positioning uses `ioPosMode & 3`
+  (flag bits such as `noCacheBit` were read as an unknown mode).
+* `error/error.cpp`: `ROMlib_fatal_hook`, called first on a fatal error (the
+  child snapshots RAM and registers as `executor-fatal`).
+* `res/resPrivate.cpp` (new): private `ResourceDispatch` selectors;
+  multiversal `ResourceDispatch` selector mask `D0<0xFF>`.
 * `tests/`: low-stack test thread, PPC tests skip, fixture path, ctest names.

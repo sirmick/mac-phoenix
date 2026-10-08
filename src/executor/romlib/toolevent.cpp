@@ -233,7 +233,7 @@ static Boolean doevent(INTEGER em, EventRecord *evt,
     Boolean retval;
     GUEST<ULONGINT> now_s;
     ULONGINT now;
-    static int beenhere = 0;
+    [[maybe_unused]] static int beenhere = 0;
     ALLOCABEGIN
 
     /* We tend to call this routine from various ROMlib modal loops, so this
@@ -375,6 +375,10 @@ static Boolean doevent(INTEGER em, EventRecord *evt,
  *	 mount anyway and it potentially gets lost if no one is looking for
  *	 it).
  */
+    /* MacPhoenix: upstream probed "/tmp/testvol" as a hard disk on the first
+       call with diskMask and reported the mount as a diskEvt (Finder then
+       ran DIBadMount on the junk result). Disks come from the config. */
+#if 0
     if(!retval && remflag && (em & diskMask))
     {
         TRACE(26);
@@ -391,6 +395,7 @@ static Boolean doevent(INTEGER em, EventRecord *evt,
             }
         }
     }
+#endif
     if(!retval && (em & updateMask))
     {
         TRACE(28);

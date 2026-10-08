@@ -12,6 +12,7 @@
 #include "emulator_config.h"
 #include "ipc_protocol.h"
 #include "../../core/snapshot.h"
+#include "../../common/include/m68k_registers.h"
 
 #include <algorithm>
 #include <chrono>
@@ -129,6 +130,22 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
         snapshot_service(mem);
     });
 
+    // A fatal Executor error snapshots guest RAM as "executor-fatal".
+    executor_host::set_fatal_hook([](const char *message) {
+        auto& cfg = config::EmulatorConfig::instance();
+        if (snapshot_prepare(expand_home(cfg.storage_dir), "executor-fatal").empty())
+            return;
+        snapshot_request();
+        static M68kRegisters regs;
+        executor_host::get_registers(regs.d, regs.a);
+        SnapshotMemory mem;
+        mem.ram = (const uint8_t *)(uintptr_t)0;
+        mem.ram_size = executor_host::guest_ram_size();
+        mem.context = message;
+        mem.regs = &regs;
+        snapshot_service(mem);
+    });
+
     executor_host::Config c;
     c.width = cfg.screen_width;
     c.height = cfg.screen_height;
@@ -138,6 +155,8 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
                                                : expand_home(cfg.executor_data_dir);
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
+    c.app = expand_home(cfg.executor_app);
+    c.logtraps = cfg.executor_logtraps;
     c.on_frame = publish_frame;
 
     fprintf(stderr, "[Executor] %dx%d, %d MB, data in %s, %zu disk image(s) read-only\n",

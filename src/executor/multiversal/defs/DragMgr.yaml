@@ -460,6 +460,25 @@
 # ####
 
 - function:
+    name: SetFinderDragHooks
+    return: OSErr
+    args:
+      - name: hooks
+        type: Ptr
+      - name: install
+        type: Boolean
+    dispatcher: DragDispatch
+    selector: 0xC301
+    executor: C_
+    comment: >
+      MacPhoenix. Private in 7.5.5 (name is our guess). Finder registers a
+      7-long record holding two of its routines with the System's Drag
+      Manager core (System 'gpch' 668) at start-up when Gestalt('drag') is
+      absent, install = true, and removes it at quit (install = false).
+
+# ####
+
+- function:
     name: NewDrag
     return: OSErr
     args:

@@ -77,6 +77,13 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     args.push_back(config_->backend_string());
 
     // Storage root: the Executor backend keeps its System Folder there.
+    if (config_->executor_logtraps) {
+        args.push_back("--executor-logtraps");
+    }
+    if (!config_->executor_app.empty()) {
+        args.push_back("--executor-app");
+        args.push_back(config_->executor_app);
+    }
     if (!config_->executor_data_dir.empty()) {
         args.push_back("--executor-data");
         args.push_back(config_->executor_data_dir);

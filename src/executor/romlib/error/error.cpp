@@ -226,6 +226,10 @@ err_printf(const char *fmt, ...)
     va_end(ap);
 }
 
+/* MacPhoenix: called first on a fatal error, while guest memory is still
+   as the failure left it (the front end snapshots it). */
+void (*Executor::ROMlib_fatal_hook)(const char *message) = nullptr;
+
 void _gui_fatal(const char *file, int line, const char *fn,
                 const char *fmt, ...)
 {
@@ -238,6 +242,13 @@ void _gui_fatal(const char *file, int line, const char *fn,
     va_start(ap, fmt);
     vsprintf(errbuf, fmt, ap);
     va_end(ap);
+
+    if(Executor::ROMlib_fatal_hook)
+    {
+        auto hook = Executor::ROMlib_fatal_hook;
+        Executor::ROMlib_fatal_hook = nullptr;   /* once */
+        hook(errbuf);
+    }
 
     if(LM(WWExist) == EXIST_YES)
     {

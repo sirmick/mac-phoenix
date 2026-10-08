@@ -25,6 +25,7 @@
 #include <osevent/osevent.h>
 #include <prefs/options.h>
 #include <error/syserr.h>
+#include <base/cpu.h>
 
 using namespace Executor;
 
@@ -243,6 +244,7 @@ void Executor::C_SysError(short errorcode)
 
     LONGINT tmpa5;
 
+    fprintf(stderr, "SysError(%d) from trap at pc $%08x\n", errorcode, (unsigned)currentTrapPC);
     main_gd_rect = PIXMAP_BOUNDS(GD_PMAP(LM(MainDevice)));
 
     if(!LM(DSAlertTab))

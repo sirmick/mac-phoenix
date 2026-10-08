@@ -723,7 +723,10 @@ void LocalVolume::setFPosCommon(ParmBlkPtr pb, bool checkEOF)
     int32_t eof = (int32_t)fcbx.access->getEOF();
     int32_t newPos = fcbx.fcb->fcbCrPs;
     
-    switch(pb->ioParam.ioPosMode)
+    // MacPhoenix: bits 0-1 are the positioning mode; the rest are flags
+    // (noCacheBit $20, newline mode $80, newline char in the high byte).
+    // Finder 7.5 reads its code with fsFromStart | noCacheBit.
+    switch(pb->ioParam.ioPosMode & 0x3)
     {
         case fsAtMark:
             break;

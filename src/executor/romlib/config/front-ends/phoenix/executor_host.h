@@ -33,6 +33,9 @@ struct Config
 
     bool logtraps = false;
 
+    // Application to start instead of Executor's Browser (host path).
+    std::string app;
+
     // Rendered frames, 0xAARRGGBB per pixel (BGRA bytes on little-endian),
     // cursor included. Called on the thread that called run().
     std::function<void(const uint32_t *pixels, int width, int height)> on_frame;
@@ -57,6 +60,13 @@ std::string current_app_name();
 // Called on the emulator thread each time the app asks for events
 // (GetNextEvent/WaitNextEvent): a safe point to inspect guest memory.
 void set_event_poll_hook(std::function<void()> hook);
+
+// Called first on a fatal Executor error, with its message, while guest
+// memory is still as the failure left it.
+void set_fatal_hook(std::function<void(const char *)> hook);
+
+// The 68k registers as Executor last synced them (cpu_state).
+void get_registers(uint32_t d[8], uint32_t a[8]);
 
 // Guest RAM is identity-mapped at address 0; this is its size in bytes.
 uint32_t guest_ram_size();

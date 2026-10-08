@@ -6,9 +6,15 @@
 
 #include <MemoryMgr.h>
 #include <mman/mman.h>
+#include <rsys/process.h>
 #include <algorithm>
 
 using namespace Executor;
+
+/* MacPhoenix: as in System 7, temporary memory comes from the Process
+   Manager heap (the free space outside every partition), not from the
+   application or System heap. Without a PM heap, Executor's old rule:
+   whichever of ApplZone and SysZone has more free space. */
 
 /* #define TEMP_MEM_FAIL */
 #define paramErr (-50)
@@ -20,6 +26,11 @@ int32_t Executor::C_TempFreeMem()
 #else
     int32_t sysfree, applfree, retval;
 
+    if(ROMlib_pm_zone)
+    {
+        TheZoneGuard guard(ROMlib_pm_zone);
+        return FreeMem();
+    }
     {
         TheZoneGuard guard(LM(ApplZone));
 
@@ -37,7 +48,13 @@ Size Executor::C_TempMaxMem(GUEST<Size> *grow_s)
     return 0;
 #else
     int32_t sysfree, applmax, retval;
-    
+
+    if(ROMlib_pm_zone)
+    {
+        TheZoneGuard guard(ROMlib_pm_zone);
+        GUEST<Size> tmp;
+        return MaxMem(grow_s ? grow_s : &tmp);
+    }
     {
         TheZoneGuard guard(LM(ApplZone));
 
@@ -66,7 +83,9 @@ Handle Executor::C_TempNewHandle(Size logical_size, GUEST<OSErr> *result_code)
         Handle retval;
 
         TheZoneGuard guard(LM(ApplZone));
-        if(FreeMemSys() >= FreeMem())
+        if(ROMlib_pm_zone)
+            LM(TheZone) = ROMlib_pm_zone;
+        else if(FreeMemSys() >= FreeMem())
             LM(TheZone) = LM(SysZone);
 
         retval = NewHandle(logical_size);

@@ -163,6 +163,7 @@ QJsonObject EmulatorConfig::to_json() const {
     j["client_dir"]  = qstr(client_dir);
     j["storage_dir"] = qstr(storage_dir);
     if (!executor_data_dir.empty()) j["executor_data_dir"] = qstr(executor_data_dir);
+    if (!executor_app.empty()) j["executor_app"] = qstr(executor_app);
 
     // System
     j["zappram"]                  = zappram;
@@ -286,6 +287,7 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
     if (j.contains("client_dir"))  client_dir = json_utils::get_string(j, "client_dir");
     if (j.contains("storage_dir")) storage_dir = json_utils::get_string(j, "storage_dir");
     if (j.contains("executor_data_dir")) executor_data_dir = json_utils::get_string(j, "executor_data_dir");
+    if (j.contains("executor_app")) executor_app = json_utils::get_string(j, "executor_app");
 
     // ── System ──────────────────────────────────────────────────
     if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
@@ -413,6 +415,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --bootdriver N             0=any, -62=CD-ROM (default: 0)\n");
             printf("  --storage-dir PATH         Default storage root (default: ~/storage)\n");
             printf("  --executor-data PATH       Executor data dir (default: <storage>/executor)\n");
+            printf("  --executor-app PATH        App Executor starts instead of Browser (host path)\n");
+            printf("  --executor-logtraps        Executor logs every trap call to stderr\n");
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
@@ -553,6 +557,14 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
+        if (strcmp(argv[i], "--executor-logtraps") == 0) {
+            config.executor_logtraps = true; argv[i] = nullptr; continue;
+        }
+        // --executor-app <path>
+        if (strcmp(argv[i], "--executor-app") == 0 && i+1 < argc) {
+            config.executor_app = argv[i+1];
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
         // --executor-data <path>
         if (strcmp(argv[i], "--executor-data") == 0 && i+1 < argc) {
             config.executor_data_dir = argv[i+1];

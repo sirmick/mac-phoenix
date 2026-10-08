@@ -142,8 +142,20 @@ static OSErr
 create_directory(INTEGER sys_vref, LONGINT sys_dirid, const char *sub_dirp,
                  LONGINT *new_idp)
 {
-    warning_unimplemented("");
-    return paramErr;
+    /* MacPhoenix: FindFolder with kCreateFolder (Finder creates the
+       Extensions folder at start-up this way). */
+    HParamBlockRec pb;
+    Str255 name;
+
+    str255_from_c_string(name, sub_dirp);
+    memset(&pb, 0, sizeof pb);
+    pb.fileParam.ioNamePtr = (StringPtr)name;
+    pb.fileParam.ioVRefNum = sys_vref;
+    pb.fileParam.ioDirID = sys_dirid;
+    OSErr err = PBDirCreate(&pb, false);
+    if(err == noErr)
+        *new_idp = pb.fileParam.ioDirID;
+    return err;
 }
 
 OSErr Executor::C_FindFolder(int16_t vRefNum, OSType folderType,

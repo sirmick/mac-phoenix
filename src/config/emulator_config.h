@@ -125,6 +125,10 @@ struct EmulatorConfig {
     // <storage_dir>/executor. tools/macdecode/sideload_system.py fills one
     // with Apple's System file.
     std::string executor_data_dir;
+    // Application Executor starts instead of its Browser (a host path,
+    // e.g. "<data_dir>/System Folder/Finder"). Empty: Browser.
+    std::string executor_app;
+    bool executor_logtraps = false;    // Executor logs every trap call (args, results) to stderr
 
     // System
     bool zappram = false;

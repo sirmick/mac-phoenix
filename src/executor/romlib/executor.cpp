@@ -88,7 +88,8 @@ void Executor::executor_main()
     {
         GetAppFiles(1, &thefile);
     
-        if(thefile.fType == "APPL"_4 || thefile.fType == "MPST"_4)
+        // MacPhoenix: Finder's type is 'FNDR'.
+        if(thefile.fType == "APPL"_4 || thefile.fType == "MPST"_4 || thefile.fType == "FNDR"_4)
         {
             ClrAppFiles(1);
             Munger(LM(AppParmHandle), 2L * sizeof(INTEGER), (Ptr)0,

@@ -7,6 +7,7 @@
 #include <file/file.h>
 #include <vdriver/vdriver.h>
 #include <rsys/toolevent.h>
+#include <error/error.h>
 
 #include <algorithm>
 #include <atomic>
@@ -80,6 +81,8 @@ int run(const Config& c)
     };
     if(c.logtraps)
         args.push_back("--logtraps");
+    if(!c.app.empty())
+        args.push_back(c.app);
 
     std::vector<char *> argv;
     for(auto& a : args)
@@ -156,6 +159,26 @@ static void call_poll_hook()
 {
     if(poll_hook)
         poll_hook();
+}
+
+void get_registers(uint32_t d[8], uint32_t a[8])
+{
+    for(int i = 0; i < 8; i++)
+    {
+        d[i] = EM_DREG(i);
+        a[i] = EM_AREG(i);
+    }
+}
+
+static std::function<void(const char *)> fatal_hook;
+
+void set_fatal_hook(std::function<void(const char *)> hook)
+{
+    fatal_hook = std::move(hook);
+    if(fatal_hook)
+        ROMlib_fatal_hook = [](const char *m) { fatal_hook(m); };
+    else
+        ROMlib_fatal_hook = nullptr;
 }
 
 void set_event_poll_hook(std::function<void()> hook)

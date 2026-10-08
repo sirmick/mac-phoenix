@@ -183,7 +183,10 @@
 - dispatcher:
     name: ResourceDispatch
     trap: 0xA822
-    selector-location: D0<0xF>
+    # MacPhoenix: Apple's dispatcher compares the signed low byte of D0
+    # (selectors -4..10 in 7.5.5); the high byte is the parameter size in
+    # words. D0<0xF> folded the private selectors -1..-4 onto 15..12.
+    selector-location: D0<0xFF>
 
 # ####
 
@@ -678,6 +681,23 @@
         type: INTEGER
     trap: 0xA998
     executor: C_
+
+# ####
+
+- function:
+    name: GetResourceMapHandle
+    return: Handle
+    args:
+      - name: refNum
+        type: INTEGER
+    dispatcher: ResourceDispatch
+    selector: 0x0000
+    executor: C_
+    comment: >
+      MacPhoenix. Private in 7.5.5 (name is our guess, tools/macdecode/learned.yaml):
+      the resource map handle of an open resource file, 0 meaning the System
+      file. Apple's version walks the map chain from TopMapHndl and sets
+      ResErr to resFNotFound when the file isn't open. Finder calls it.
 
 # ####
 

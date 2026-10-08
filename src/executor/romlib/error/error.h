@@ -92,6 +92,7 @@ extern bool error_set_enabled(int err, bool enabled_p);
 #define gui_fatal(...) \
     _gui_fatal(__FILE__, __LINE__, __PRETTY_FUNCTION__, __VA_ARGS__)
 
+namespace Executor { extern void (*ROMlib_fatal_hook)(const char *message); }
 extern _NORET_1_ void _gui_fatal(const char *file, int line, const char *fn,
                                  const char *fmt, ...) _NORET_2_;
 
