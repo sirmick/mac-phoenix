@@ -6,6 +6,7 @@
 
 #include <DialogMgr.h>
 #include <dial/dial.h>
+#include <OSEvent.h>
 
 using namespace Executor;
 
@@ -44,4 +45,35 @@ OSErr Executor::C_SetDialogTracksCursor(DialogPtr dialog, Boolean tracks)
 {
     warning_unimplemented("");
     return noErr; /* paramErr is too harsh */
+}
+
+/* MacPhoenix: DialogDispatch 7 and 8 as the 7.5.5 System implements them.
+   IsCmdChar is reduced to the unshifted character. */
+
+Boolean Executor::C_IsCancelEvent(EventRecord *event)
+{
+    if(event->what != keyDown)
+        return false;
+    if((event->message & 0xFFFF) == 0x351B)
+        return true;
+    return (event->modifiers & cmdKey) && (event->message & charCodeMask) == '.';
+}
+
+Boolean Executor::C_CheckEventQueueForUserCancel(EventRecord *event)
+{
+    EventRecord local;
+    bool found = false;
+
+    for(EvQEl *qp = (EvQEl *)LM(EventQueue).qHead; qp && !found;
+        qp = (EvQEl *)qp->qLink)
+        found = C_IsCancelEvent((EventRecord *)&qp->evtQWhat);
+    if(!found)
+        return false;
+
+    if(!event)
+        event = &local;
+    while(GetOSEvent(mDownMask | mUpMask | keyDownMask | keyUpMask | autoKeyMask, event))
+        if(C_IsCancelEvent(event))
+            return true;
+    return false;
 }

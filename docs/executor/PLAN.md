@@ -303,4 +303,17 @@ Kept small so upstream fixes can be merged by hand:
   title width; `balloon.cpp` `HMGetHelpMenuHandle` returns the Help menu;
   `stdmdef.cpp` key equivalent $1C means a script code, not an icon.
 * multiversal `umacdriver` starts like a `DRVR` header (name at 18).
+* `gestalt.cpp`: `dply` 7, `dplv` $00020006, `hdwr`, `vm  ` 0, as on a real
+  7.5.5 boot.
+* `quickdraw/displays.cpp`: the Display Manager calls Finder makes (first/
+  next screen device, draw desktop rect/region, desk region, notify procs,
+  private -6/-9/-10 as 7.5.5 implements them); multiversal
+  `DisplayDispatch` and `DialogDispatch` select on D0's low byte.
+* `dial/dialDispatch.cpp`: `DialogDispatch` 7 (`IsCancelEvent`, a guess) and
+  8 (`CheckEventQueueForUserCancel`).
+* `appleevent/AE_hdlr.cpp`: ExpandMem+$1AE (System heap reserve) is 64K;
+  multiversal `AE_info_t` names it.
+* `file/localvolume/localvolume.cpp`: host volumes report a 2 GB HFS volume
+  holding the folder's real contents (capped by host free space) and bless
+  their System Folder (`vcbFndrInfo[0]`).
 * `tests/`: low-stack test thread, PPC tests skip, fixture path, ctest names.

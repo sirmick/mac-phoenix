@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 #include <optional>
+#include <chrono>
 
 namespace Executor
 {
@@ -81,6 +82,9 @@ class LocalVolume : public Volume, private ItemFactory
 
     FileItemPtr upgradeItem(FileItemPtr item, ItemFactory* betterFactory);
 
+    void updateSpace();
+    std::optional<std::chrono::steady_clock::time_point> spaceAt;
+
 public:
     std::optional<FSSpec> nativePathToFSSpec(const fs::path& p);
 
@@ -89,6 +93,7 @@ public:
 
     LocalVolume(VCB& vcb, fs::path root);
 
+    virtual void PBGetVInfo(ParmBlkPtr pb) override;
     virtual void PBGetCatInfo(CInfoPBPtr pb) override;
     virtual void PBGetFInfo(ParmBlkPtr pb) override;
     virtual void PBHGetFInfo(HParmBlkPtr pb) override;

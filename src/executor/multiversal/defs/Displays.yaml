@@ -9,7 +9,10 @@
 - dispatcher:
     name: DisplayDispatch
     trap: 0xABEB
-    selector-location: D0W
+    selector-location: D0<0xFF>
+    comment: |
+      Like the real 7.5.5 dispatcher (through lowmem $7B0), only D0's low
+      byte selects; the high byte is the parameter size in words.
 
 # ####
 
@@ -23,4 +26,123 @@
         type: ProcessSerialNumber*
     dispatcher: DisplayDispatch
     selector: 0x0414
+    executor: C_
+
+# ####
+
+- function:
+    name: DMRemoveNotifyProc
+    return: OSErr
+    args:
+      - name: proc
+        type: DMNotificationUPP
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: DisplayDispatch
+    selector: 0x0415
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetFirstScreenDevice
+    return: GDHandle
+    args:
+      - name: activeOnly
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0000
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetNextScreenDevice
+    return: GDHandle
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: activeOnly
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0001
+    executor: C_
+
+# ####
+
+- function:
+    name: DMDrawDesktopRect
+    args:
+      - name: globalRect
+        type: Rect*
+    dispatcher: DisplayDispatch
+    selector: 0x0002
+    executor: C_
+
+# ####
+
+- function:
+    name: DMDrawDesktopRegion
+    args:
+      - name: globalRgn
+        type: RgnHandle
+    dispatcher: DisplayDispatch
+    selector: 0x0003
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetDeskRegion
+    return: OSErr
+    args:
+      - name: desktopRegion
+        type: GUEST<RgnHandle>*
+    dispatcher: DisplayDispatch
+    selector: 0x0213
+    executor: C_
+
+# ####
+
+- function:
+    name: DMKeepWindowOnScreen
+    comment: |
+      Private (selector -6). Name and meaning are a guess: on 7.5.5 it takes
+      a window and a region and fits the window against the screen devices.
+      Finder calls it for each of its windows (CODE 12 +60), ignoring the
+      result.
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: rgn
+        type: RgnHandle
+    dispatcher: DisplayDispatch
+    selector: 0x04FA
+    executor: C_
+
+# ####
+
+- function:
+    name: DMPlacesWindow
+    comment: |
+      Private (selector -10). Name is a guess. On 7.5.5 it always returns
+      false, and Finder (CODE 152 +6f4) then does its own placement.
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: DisplayDispatch
+    selector: 0xFFF6
+    executor: C_
+
+# ####
+
+- function:
+    name: DMDesktopIconRgnChanged
+    comment: |
+      Private (selector -9). Name is a guess. Finder calls it after editing
+      the region at ExpandMem+$1F4; on 7.5.5 it does nothing.
+    dispatcher: DisplayDispatch
+    selector: 0xFFF7
     executor: C_

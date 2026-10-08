@@ -1,5 +1,6 @@
 #include "localvolume.h"
 #include <rsys/hostdisk.h>
+#include <chrono>
 #include <base/common.h>
 #include <FileMgr.h>
 #include <MemoryMgr.h>
@@ -492,6 +493,52 @@ void LocalVolume::getInfoCommon(CInfoPBPtr pb, InfoKind infoKind)
         std::abort();
 }
 
+/* MacPhoenix: report the data folder as a volume of vcbNmAlBlks blocks
+   holding what the folder actually holds (both forks, rounded up to whole
+   blocks, as HFS allocates), with no more free space than the host has.
+   The walk is redone at most every two seconds and gives up after a
+   quarter of a second (a big shared folder): the volume then counts as
+   full apart from the host's free space. */
+void LocalVolume::updateSpace()
+{
+    using clock = std::chrono::steady_clock;
+    auto now = clock::now();
+    if(spaceAt && now - *spaceAt < std::chrono::seconds(2))
+        return;
+    spaceAt = now;
+
+    const uint64_t block = vcb.vcbAlBlkSiz;
+    const uint64_t total = vcb.vcbNmAlBlks;
+    auto blocks = [block](uint64_t n) { return (n + block - 1) / block; };
+    uint64_t used = 0;
+    bool complete = true;
+    boost::system::error_code ec;
+    for(fs::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
+    {
+        if(clock::now() - now > std::chrono::milliseconds(250))
+        {
+            complete = false;
+            break;
+        }
+        boost::system::error_code sec;
+        if(fs::is_regular_file(it->path(), sec))
+            used += blocks(fs::file_size(it->path(), sec));
+    }
+
+    uint64_t free = complete && used < total ? total - used : complete ? 0 : total;
+    fs::space_info si = fs::space(root, ec);
+    if(!ec)
+        free = std::min<uint64_t>(free, si.available / block);
+    vcb.vcbFreeBks = free;
+}
+
+void LocalVolume::PBGetVInfo(ParmBlkPtr pb)
+{
+    updateSpace();
+    if(pb)
+        Volume::PBGetVInfo(pb);
+}
+
 void LocalVolume::PBGetCatInfo(CInfoPBPtr pb)
 {
     getInfoCommon(pb, InfoKind::CatInfo);
@@ -946,13 +993,14 @@ static void MountLocalVolume(fs::path root)
     fprintf(stderr, "Volume %s mounted as %s, vref %d\n", root.string().c_str(), rootName.c_str(), int(vp->vcb.vcbVRefNum));
 
     vp->vcb.vcbSigWord = 0x4244; /* IMIV-188 */
-    vp->vcb.vcbFreeBks = 20480; /* arbitrary */
     vp->vcb.vcbCrDate = 0; /* I'm lying here */
     vp->vcb.vcbVolBkUp = 0;
     vp->vcb.vcbAtrb = VNONEJECTABLEBIT;
     vp->vcb.vcbNmFls = 100;
-    vp->vcb.vcbNmAlBlks = 20480;
-    vp->vcb.vcbAlBlkSiz = 10240;
+    /* MacPhoenix: sized like the largest HFS volume 7.5.5 handles;
+       LocalVolume::updateSpace fills in the free blocks. */
+    vp->vcb.vcbNmAlBlks = 0xFFFF;
+    vp->vcb.vcbAlBlkSiz = 0x8000;
     vp->vcb.vcbClpSiz = 1;
     vp->vcb.vcbAlBlSt = 10;
     vp->vcb.vcbNxtCNID = 1000;
@@ -964,7 +1012,17 @@ static void MountLocalVolume(fs::path root)
     }
     Enqueue((QElemPtr)vp, &LM(VCBQHdr));
 
-    vp->volume = new LocalVolume(vp->vcb, root);
+    auto *volume = new LocalVolume(vp->vcb, root);
+    vp->volume = volume;
+    volume->PBGetVInfo(nullptr);
+
+    // MacPhoenix: bless the System Folder as HFS does (vcbFndrInfo[0] is
+    // its dirID). Finder gives a volume's special folders their icons only
+    // when it has one.
+    boost::system::error_code ec;
+    if(fs::is_regular_file(root / "System Folder" / "System", ec))
+        if(auto spec = volume->nativePathToFSSpec(root / "System Folder" / "System"))
+            vp->vcb.vcbFndrInfo[0] = spec->parID;
 }
 
 void Executor::MountLocalVolumes()

@@ -472,7 +472,16 @@
       - name: system_zone_tables
         type: AE_zone_tables_h
       - name: pad_3
-        type: char[212]
+        type: char[46]
+      - name: sys_heap_reserve
+        type: int32_t
+        comment: |
+          ExpandMem+$1AE (name is a guess). Free space the System heap
+          keeps in reserve: the Process Manager grows it by request plus
+          this, Standard File and Finder check against it. 64K on a real
+          7.5.5 boot; a gpch drops it to 32K while retrying a full heap.
+      - name: pad_4
+        type: char[162]
     name: AE_info_t
     size: 596
 

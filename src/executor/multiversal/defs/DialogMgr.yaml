@@ -316,7 +316,10 @@
 - dispatcher:
     name: DialogDispatch
     trap: 0xAA68
-    selector-location: D0W
+    selector-location: D0<0xFF>
+    comment: |
+      Like the real 7.5.5 dispatcher (through lowmem $7B0), only D0's low
+      byte selects: Finder calls selectors 7 and 8 with moveq.
 
 # ####
 
@@ -802,6 +805,38 @@
         type: Boolean
     dispatcher: DialogDispatch
     selector: 0x0306
+    executor: C_
+
+# ####
+
+- function:
+    name: IsCancelEvent
+    comment: |
+      DialogDispatch 7 on 7.5.5 (name is a guess): true for a keyDown that
+      is Escape (char $1B, key $35) or Command-period (IsCmdChar '.').
+    return: Boolean
+    args:
+      - name: event
+        type: EventRecord*
+    dispatcher: DialogDispatch
+    selector: 0x0207
+    executor: C_
+
+# ####
+
+- function:
+    name: CheckEventQueueForUserCancel
+    comment: |
+      DialogDispatch 8 on 7.5.5. Scans the OS event queue for a cancel event
+      (IsCancelEvent); if one is there, removes mouse and key events up to
+      and including it (copying it to *event when event is not nil) and
+      returns true.
+    return: Boolean
+    args:
+      - name: event
+        type: EventRecord*
+    dispatcher: DialogDispatch
+    selector: 0x0208
     executor: C_
 
 # ####

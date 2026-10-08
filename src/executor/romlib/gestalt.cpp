@@ -160,6 +160,15 @@ static gestaltentry_t gtable[] = {
        only when it is set, as it does on real 7.5.5. */
     { gestaltOSAttr, 0x7FF },
 
+    /* MacPhoenix: values from a real 7.5.5 boot (Quadra 650, no extensions).
+       Display Manager 2.0.6: Finder registers a notify proc only when 'dply'
+       is present. 'hdwr' is the ROM's value for the Quadra's lowmem flags
+       plus bit 19 set by the System's patch (bits 17 and 24 are a guess). */
+    { "dply"_4, 7 },
+    { "dplv"_4, 0x00020006 },
+    { "hdwr"_4, 0x0008489D },
+    { "vm  "_4, 0 },
+
 #if defined(ORIGINAL_QD)
     {
         gestaltQuickdrawVersion, gestaltOriginalQD,

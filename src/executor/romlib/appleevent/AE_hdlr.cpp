@@ -27,6 +27,7 @@ void Executor::AE_init(void)
     OSErr err;
 
     info = (AE_info_t *)NewPtrSysClear(sizeof *info);
+    info->sys_heap_reserve = 0x10000;
 
     TheZoneGuard guard(LM(SysZone));
 
