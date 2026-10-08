@@ -164,6 +164,9 @@ QJsonObject EmulatorConfig::to_json() const {
     j["storage_dir"] = qstr(storage_dir);
     if (!executor_data_dir.empty()) j["executor_data_dir"] = qstr(executor_data_dir);
     if (!executor_app.empty()) j["executor_app"] = qstr(executor_app);
+    j["executor_system"] = qstr(executor_system);
+    j["executor_start"]  = qstr(executor_start);
+    j["executor_fresh"]  = executor_fresh;
 
     // System
     j["zappram"]                  = zappram;
@@ -288,6 +291,9 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
     if (j.contains("storage_dir")) storage_dir = json_utils::get_string(j, "storage_dir");
     if (j.contains("executor_data_dir")) executor_data_dir = json_utils::get_string(j, "executor_data_dir");
     if (j.contains("executor_app")) executor_app = json_utils::get_string(j, "executor_app");
+    if (j.contains("executor_system")) executor_system = json_utils::get_string(j, "executor_system");
+    if (j.contains("executor_start")) executor_start = json_utils::get_string(j, "executor_start");
+    if (j.contains("executor_fresh")) executor_fresh = json_utils::get_bool(j, "executor_fresh", true);
 
     // ── System ──────────────────────────────────────────────────
     if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
@@ -416,6 +422,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --storage-dir PATH         Default storage root (default: ~/storage)\n");
             printf("  --executor-data PATH       Executor data dir (default: <storage>/executor)\n");
             printf("  --executor-app PATH        App Executor starts instead of Browser (host path)\n");
+            printf("  --executor-system NAME     System under <storage>/executor-systems to run on\n");
+            printf("  --executor-start WHAT      finder | browser | path inside the System (default: finder)\n");
+            printf("  --[no-]executor-fresh      Start each run from the System's clean copy (default: on)\n");
             printf("  --executor-logtraps        Executor logs every trap call to stderr\n");
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
@@ -566,6 +575,20 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         if (strcmp(argv[i], "--executor-app") == 0 && i+1 < argc) {
             config.executor_app = argv[i+1];
             argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-system") == 0 && i+1 < argc) {
+            config.executor_system = argv[i+1];
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-start") == 0 && i+1 < argc) {
+            config.executor_start = argv[i+1];
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-fresh") == 0) {
+            config.executor_fresh = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--no-executor-fresh") == 0) {
+            config.executor_fresh = false; argv[i] = nullptr; continue;
         }
         // --executor-data <path>
         if (strcmp(argv[i], "--executor-data") == 0 && i+1 < argc) {

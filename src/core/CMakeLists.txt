@@ -6,6 +6,7 @@ add_library(core STATIC
   cdrom.cpp
   cpu_context.cpp
   emulator_subprocess.cpp
+  executor_systems.cpp
   disk.cpp
   boot_progress.cpp
   command_bridge.cpp

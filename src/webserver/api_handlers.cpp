@@ -7,6 +7,8 @@
 #include "api_handlers.h"
 #include "file_scanner.h"
 #include "../config/json_utils.h"
+#include "../core/executor_systems.h"
+#include <QJsonArray>
 #include "../common/include/sysdeps.h"  // For uint32 type
 #include "../core/emulator_init.h"  // For deferred initialization
 #include "../core/emulator_subprocess.h"  // For subprocess
@@ -96,6 +98,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/storage/create-image" && req.method == "POST") {
         return handle_create_image(req);
+    }
+    if (req.path == "/api/executor/system" && req.method == "POST") {
+        return handle_executor_system_create(req);
     }
     if (req.path == "/api/restart" && req.method == "POST") {
         return handle_restart(req);
@@ -195,7 +200,44 @@ Response APIRouter::handle_storage(const Request& /*req*/) {
     std::string roms_path = storage_dir + "/roms";
     std::string images_path = storage_dir + "/images";
     std::string json_body = storage::get_storage_json(roms_path, images_path);
-    return Response::json(json_body);
+
+    // The Systems the Executor backend can run on.
+    auto j = json_utils::parse(json_body);
+    QJsonArray systems;
+    for (const auto& s : executor_systems::list(storage_dir)) {
+        QJsonObject o;
+        o["name"] = QString::fromStdString(s.name);
+        o["finder"] = s.has_finder;
+        systems.append(o);
+    }
+    j["executor_systems"] = systems;
+    return Response::json(json_utils::to_string(j));
+}
+
+/* POST /api/executor/system {"name": "7.5.5", "image": "macos-7.5.5.img"}:
+   a new Executor System from a disk image in <storage>/images. */
+Response APIRouter::handle_executor_system_create(const Request& req) {
+    auto bad = [](int code, const std::string& msg) {
+        Response r;
+        r.set_status(code);
+        r.set_body("{\"error\":\"" + storage::json_escape(msg) + "\"}");
+        r.set_content_type("application/json");
+        return r;
+    };
+    if (!ctx_->config || ctx_->config->storage_dir.empty())
+        return bad(500, "storage_dir not configured");
+    auto j = json_utils::parse(req.body);
+    std::string name = json_utils::get_string(j, "name");
+    std::string image = json_utils::get_string(j, "image");
+    if (!executor_systems::valid_name(name))
+        return bad(400, "invalid name");
+    if (image.empty() || image.find('/') != std::string::npos || image.find("..") != std::string::npos)
+        return bad(400, "invalid image");
+    std::string err;
+    if (!executor_systems::create_from_image(ctx_->config->storage_dir, name,
+                                             ctx_->config->storage_dir + "/images/" + image, err))
+        return bad(500, err);
+    return Response::json("{\"success\":true,\"name\":\"" + storage::json_escape(name) + "\"}");
 }
 
 static bool run_fork_exec(const std::vector<std::string>& args, std::string& err_out) {

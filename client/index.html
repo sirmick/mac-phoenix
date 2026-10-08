@@ -274,27 +274,37 @@
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group rom-only">
                     <label>ROM File</label>
                     <select id="cfg-rom">
                         <option value="">Loading...</option>
                     </select>
                 </div>
 
-                <div class="backend-note" id="cfg-executor-note" hidden>
-                    <strong>Executor needs no ROM.</strong>
-                    It runs Mac applications on Executor 2000, a C++
-                    reimplementation of the Macintosh Toolbox, with the 68k CPU
-                    emulated by UAE. It starts in Executor's Browser, a simple
-                    Finder stand-in.
-                    <ul>
-                        <li>Disk images are mounted read-only, so the ROM
-                            backends' disks stay safe.</li>
-                        <li>The shared folder appears as a volume. The host's
-                            own files are not visible.</li>
-                        <li>Not yet: the real Finder, System extensions,
-                            PowerPC applications, sound.</li>
-                    </ul>
+                <div class="executor-only" id="cfg-executor-panel" hidden>
+                    <p class="backend-note">No ROM: Apple's System and applications run on
+                        Executor's C++ Toolbox. Not yet: extensions, desk accessories,
+                        PowerPC applications, sound.</p>
+                    <div class="form-group">
+                        <label for="cfg-executor-system" title="A System Folder prepared from a disk image (storage/executor-systems)">System</label>
+                        <div style="display:flex;gap:6px">
+                            <select id="cfg-executor-system" style="flex:1"></select>
+                            <button id="executor-system-new-btn" type="button" class="btn" title="Make a System from a disk image">New…</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-executor-start">Start in</label>
+                        <select id="cfg-executor-start">
+                            <option value="finder">Finder</option>
+                            <option value="browser">Executor's Browser</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cfg-executor-fresh" checked>
+                            <label for="cfg-executor-fresh" title="Each run starts from the System's clean copy. Off: desktop and preferences persist.">Start fresh each time</label>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -325,7 +335,7 @@
                 <!-- Column 2: display + media. Wrapped in its own flex column
                      so async-loaded lists in column 1 (Disk Images, etc.)
                      can't reflow Guest Additions out of the top slot. -->
-                <div class="form-group">
+                <div class="form-group rom-only">
                     <label title="Host helpers that integrate the guest with the outside world. Bridge agent is required for AppleScript-style automation, /api/launch, and resolution switching. MacBrowser pipes a host Firefox into a guest window.">Guest Additions</label>
                     <div class="checkbox-group">
                         <input type="checkbox" id="cfg-bridge-enabled">
@@ -342,14 +352,14 @@
                     <select id="cfg-screen"></select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group rom-only">
                     <label title="Cap on what's offered to the guest. Modes larger than this never appear in Monitors cdev or in the API. Empty = no cap.">Max Resolution</label>
                     <select id="cfg-max-resolution">
                         <option value="">No limit</option>
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group rom-only">
                     <label>Boot From</label>
                     <select id="cfg-bootdriver">
                         <option value="0">Any (first bootable disk)</option>
@@ -357,7 +367,7 @@
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group rom-only">
                     <label>CD-ROM Images</label>
                     <div id="cdrom-list" class="disk-checkbox-list"><div class="empty-state">Loading...</div></div>
                 </div>
@@ -497,25 +507,25 @@
                             <label for="cfg-jit68k">Enable 68k JIT (DR emulator)</label>
                         </div>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group rom-only">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-idlewait" checked>
                             <label for="cfg-idlewait">Pause CPU when guest is idle</label>
                         </div>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group rom-only">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-sound" checked>
                             <label for="cfg-sound">Enable sound</label>
                         </div>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group rom-only">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-zappram">
                             <label for="cfg-zappram">Zap PRAM on startup</label>
                         </div>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group rom-only">
                         <div class="checkbox-group">
                             <input type="checkbox" id="cfg-dismiss-shutdown-dialog">
                             <label for="cfg-dismiss-shutdown-dialog">Auto-dismiss shutdown dialog</label>

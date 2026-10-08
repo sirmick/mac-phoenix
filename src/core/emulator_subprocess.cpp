@@ -7,6 +7,7 @@
  */
 
 #include "emulator_subprocess.h"
+#include "executor_systems.h"
 #include "../ipc/ipc_protocol.h"
 
 #include <cstdio>
@@ -80,13 +81,19 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     if (config_->executor_logtraps) {
         args.push_back("--executor-logtraps");
     }
-    if (!config_->executor_app.empty()) {
-        args.push_back("--executor-app");
-        args.push_back(config_->executor_app);
-    }
-    if (!config_->executor_data_dir.empty()) {
-        args.push_back("--executor-data");
-        args.push_back(config_->executor_data_dir);
+    if (config_->backend_string() == "executor") {
+        // System, start application and a fresh working copy, resolved
+        // here so the child just gets paths (src/core/executor_systems.h).
+        std::string data_dir, app;
+        executor_systems::resolve(*config_, data_dir, app);
+        if (!app.empty()) {
+            args.push_back("--executor-app");
+            args.push_back(app);
+        }
+        if (!data_dir.empty()) {
+            args.push_back("--executor-data");
+            args.push_back(data_dir);
+        }
     }
     if (!config_->storage_dir.empty()) {
         args.push_back("--storage-dir");

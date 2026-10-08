@@ -128,6 +128,13 @@ struct EmulatorConfig {
     // Application Executor starts instead of its Browser (a host path,
     // e.g. "<data_dir>/System Folder/Finder"). Empty: Browser.
     std::string executor_app;
+    // The usual way to pick the above (src/core/executor_systems.h): a
+    // System under <storage>/executor-systems/<name>, what to start in it
+    // ("finder", "browser" or a path inside it), and whether each run
+    // starts from its clean copy. executor_data_dir/executor_app override.
+    std::string executor_system;
+    std::string executor_start = "finder";
+    bool executor_fresh = true;
     bool executor_logtraps = false;    // Executor logs every trap call (args, results) to stderr
 
     // System

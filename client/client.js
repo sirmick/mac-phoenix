@@ -4044,12 +4044,77 @@ function configFromServerJson(cfg) {
         network_if: cfg.network_if || '',
         serial_a: cfg.serial_a || '',
         serial_b: cfg.serial_b || '',
+        executor_system: cfg.executor_system ?? null,
+        executor_start: cfg.executor_start || 'finder',
+        executor_fresh: cfg.executor_fresh ?? true,
         // Keyboard remap (nested in JSON for grouping). Defaults match the
         // PC-shortcut habit: Ctrl→⌘, Alt→⌥, Win→⌃.
         // Pass keyboard fields through verbatim — applyKeyboardConfig() resolves
         // empties to platform defaults at the JS layer.
         keyboard: cfg.keyboard || {},
     };
+}
+
+// Executor's System list (from /api/storage) and its start choices.
+function populateExecutorSystems() {
+    const sel = document.getElementById('cfg-executor-system');
+    if (!sel) return;
+    const systems = storageCache?.executor_systems || [];
+    const want = currentConfig.executor_system ?? (systems[0]?.name || '');
+    sel.innerHTML = '';
+    for (const s of systems) {
+        const o = document.createElement('option');
+        o.value = s.name;
+        o.textContent = s.name;
+        o.dataset.finder = s.finder ? '1' : '';
+        sel.appendChild(o);
+    }
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = 'None (Executor only, no Apple System)';
+    sel.appendChild(none);
+    sel.value = [...sel.options].some(o => o.value === want) ? want : (systems[0]?.name || '');
+    const start = document.getElementById('cfg-executor-start');
+    if (start) start.value = currentConfig.executor_start || 'finder';
+    const fresh = document.getElementById('cfg-executor-fresh');
+    if (fresh) fresh.checked = currentConfig.executor_fresh ?? true;
+    updateExecutorStart();
+}
+
+// Without a System (or one without Finder) only the Browser can start.
+function updateExecutorStart() {
+    const sel = document.getElementById('cfg-executor-system');
+    const start = document.getElementById('cfg-executor-start');
+    if (!sel || !start) return;
+    const opt = sel.selectedOptions[0];
+    const finder = !!(opt && opt.dataset.finder);
+    start.querySelector('option[value="finder"]').disabled = !finder;
+    if (!finder) start.value = 'browser';
+    const fresh = document.getElementById('cfg-executor-fresh');
+    if (fresh) fresh.disabled = !sel.value;
+}
+
+async function createExecutorSystem() {
+    await loadStorage();
+    const images = (storageCache?.disks || storageCache?.images || []).map(d => d.name || d).filter(Boolean);
+    const image = prompt('Make a System from which disk image in storage/images?\n\n' + images.join('\n'),
+                         images.find(n => /7\.5/.test(n)) || images[0] || '');
+    if (!image) return;
+    const name = prompt('Name for the new System:', image.replace(/\.(img|dsk|hfv|image)$/i, ''));
+    if (!name) return;
+    try {
+        const res = await fetch('/api/executor/system', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, image }),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert('Could not make the System: ' + (data.error || res.status)); return; }
+        await loadStorage(true);
+        currentConfig.executor_system = name;
+        populateExecutorSystems();
+    } catch (e) {
+        alert('Could not make the System: ' + e.message);
+    }
 }
 
 function buildConfigJson() {
@@ -4105,6 +4170,9 @@ function buildConfigJson() {
         // auto-allocate, anything else as a device path.
         serial_a: (document.getElementById('cfg-serial-a')?.value || '').trim(),
         serial_b: (document.getElementById('cfg-serial-b')?.value || '').trim(),
+        executor_system: document.getElementById('cfg-executor-system')?.value ?? (currentConfig.executor_system || ''),
+        executor_start: document.getElementById('cfg-executor-start')?.value || currentConfig.executor_start || 'finder',
+        executor_fresh: document.getElementById('cfg-executor-fresh')?.checked ?? true,
         codec: document.getElementById('codec-select')?.value || 'png',
         mousemode: document.getElementById('mouse-mode-select')?.value || 'absolute',
         keyboard: {
@@ -4497,16 +4565,12 @@ function updateEmulatorPanelVisibility() {
     const supportsJit = (backend === 'uae' || backend === 'kpx');
     const isKpx = (backend === 'kpx');
 
-    // Executor has no ROM and no boot drive: grey those out and explain.
-    const romEl = document.getElementById('cfg-rom');
-    if (romEl) {
-        romEl.disabled = isExecutor;
-        romEl.title = isExecutor ? 'Not used: Executor reimplements the ROM in C++' : '';
-    }
-    const bootEl = document.getElementById('cfg-bootdriver');
-    if (bootEl) bootEl.disabled = isExecutor;
-    const note = document.getElementById('cfg-executor-note');
-    if (note) note.hidden = !isExecutor;
+    // Executor: its own panel (System, start application, fresh start);
+    // the ROM machine's settings don't apply.
+    document.querySelectorAll('.rom-only').forEach(el => { el.hidden = isExecutor; });
+    const execPanel = document.getElementById('cfg-executor-panel');
+    if (execPanel) execPanel.hidden = !isExecutor;
+    if (isExecutor) loadStorage().then(populateExecutorSystems);
 
     // Keep the Emulator Mode persona in step with the CPU choice.
     const modeEl = document.getElementById('cfg-emulator');
@@ -4575,13 +4639,21 @@ async function onEmulatorChange() {
         ppc:    { ram: 128, screen: '1024x768', backend: 'kpx' },
         quadra: { ram: 32,  screen: '1024x768', backend: 'uae' },
         se:     { ram: 4,   screen: '512x342',  backend: 'uae' },
-        executor: { ram: 64, screen: '1024x768', backend: 'executor' }
+        executor: { ram: 64, screen: '1024x768', backend: 'executor' }  // System/start: populateExecutorSystems
     };
     const d = defaults[emulatorType] || defaults.quadra;
 
     currentConfig.ram = d.ram;
     currentConfig.screen = d.screen;
     currentConfig.backend = d.backend;
+    if (emulatorType === 'executor') {
+        // Default: the first System with a Finder, started fresh.
+        const storage = await loadStorage();
+        const sys = (storage?.executor_systems || []).find(s => s.finder);
+        currentConfig.executor_system = sys ? sys.name : '';
+        currentConfig.executor_start = sys ? 'finder' : 'browser';
+        currentConfig.executor_fresh = true;
+    }
 
     const ramEl = document.getElementById('cfg-ram');
     if (ramEl) ramEl.value = d.ram;
@@ -4610,12 +4682,30 @@ function onRomChange() {
     updateHeaderTitle();
 }
 
+// The default Executor profile: real Finder on the 7.5.5 System, fresh
+// each run. Offered as a profile tab while the System exists and no saved
+// profile has the name; saved with the config like any other.
+const EXECUTOR_PROFILE = 'Executor 7.5.5';
+async function seedExecutorProfile(cfg) {
+    if (App.savedPresets[EXECUTOR_PROFILE]) return;
+    const storage = await loadStorage();
+    const sys = (storage?.executor_systems || []).find(s => s.name === '7.5.5' && s.finder);
+    if (!sys) return;
+    App.savedPresets[EXECUTOR_PROFILE] = {
+        ...cfg, configs: undefined,
+        emulator: 'executor', backend: 'executor', rom: '',
+        ram_mb: 64, screen: '1024x768', audio: false,
+        executor_system: sys.name, executor_start: 'finder', executor_fresh: true,
+    };
+}
+
 async function loadCurrentConfig() {
     try {
         const res = await fetch(getApiUrl('config'));
         const cfg = await res.json();
         currentConfig = configFromServerJson(cfg);
         App.savedPresets = cfg.configs || {};
+        await seedExecutorProfile(cfg);
         // Push keyboard remap into the live keystroke pipeline + chip render.
         applyKeyboardConfig(currentConfig.keyboard);
     } catch (e) {
@@ -5660,6 +5750,17 @@ function setupEventListeners() {
     const saveConfigBtn = document.getElementById('save-config-btn');
     if (saveConfigBtn) saveConfigBtn.addEventListener('click', saveConfig);
 
+    document.getElementById('cfg-executor-system')?.addEventListener('change', e => {
+        currentConfig.executor_system = e.target.value;
+        updateExecutorStart();
+    });
+    document.getElementById('cfg-executor-start')?.addEventListener('change', e => {
+        currentConfig.executor_start = e.target.value;
+    });
+    document.getElementById('cfg-executor-fresh')?.addEventListener('change', e => {
+        currentConfig.executor_fresh = e.target.checked;
+    });
+    document.getElementById('executor-system-new-btn')?.addEventListener('click', createExecutorSystem);
     const savePresetBtn = document.getElementById('save-preset-btn');
     if (savePresetBtn) savePresetBtn.addEventListener('click', savePreset);
 
