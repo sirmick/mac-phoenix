@@ -463,11 +463,22 @@ static void reinitialize_things(void)
     ROMlib_clock = 0; /* CLOCKOFF */
 
     special_fn = 0;
+    /* MacPhoenix: only the files above the System file belong to the old
+       application; the System file and the font files chained below it
+       (res/resInit.cpp) stay open, files and all. */
+    std::vector<INTEGER> system_chain;
+    bool below_system = false;
     for(map = (resmaphand)LM(TopMapHndl); map; map = nextmap)
     {
         nextmap = (resmaphand)(*map)->nextmap;
         if((*map)->resfn == LM(SysMap))
-            UpdateResFile((*map)->resfn);
+            below_system = true;
+        if(below_system)
+        {
+            system_chain.push_back((*map)->resfn);
+            if((*map)->resfn == LM(SysMap))
+                UpdateResFile((*map)->resfn);
+        }
         else
             CloseResFile((*map)->resfn);
     }
@@ -484,6 +495,7 @@ static void reinitialize_things(void)
         if(fcbp->fcbCName[0]
            /* && rn != Param_ram_rn */
            && rn != LM(SysMap)
+           && std::find(system_chain.begin(), system_chain.end(), rn) == system_chain.end()
            && rn != special_fn)
             FSClose((char *)fcbp - (char *)LM(FCBSPtr));
     }

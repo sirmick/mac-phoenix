@@ -289,4 +289,18 @@ Kept small so upstream fixes can be merged by hand:
   multiversal `NDEVICES` 96 (the real unit table's size).
 * `quickdraw/qIMVI.cpp`: `BitMapToRegion` builds the region in host memory
   and sizes the handle once (it wrote past a handle it failed to grow).
+* `res/resInit.cpp`: the Fonts folder's suitcases are opened and chained
+  below the System file (System 7.1+); `launch.cpp` keeps the System file
+  and everything below it open across launches (it closed every file but
+  the System file).
+* `quickdraw/font.cpp`: a family whose first FOND points at a missing face
+  (Chicago 12 is `FONT` 12 in a real ROM) tries the same family's FOND in
+  the other open files.
+* `menu/sysmenu.cpp` (new): the Help and Application system menus, kept at
+  the end of the menu list with icon-suite titles; `menu.cpp` inserts
+  application menus before them and re-adds them after `ClearMenuBar`/
+  `SetMenuBar`; `stdmbdf.cpp` right-aligns and draws them, hit-tests by
+  title width; `balloon.cpp` `HMGetHelpMenuHandle` returns the Help menu;
+  `stdmdef.cpp` key equivalent $1C means a script code, not an icon.
+* multiversal `umacdriver` starts like a `DRVR` header (name at 18).
 * `tests/`: low-stack test thread, PPC tests skip, fixture path, ctest names.

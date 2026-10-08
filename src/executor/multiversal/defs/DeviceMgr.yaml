@@ -34,7 +34,23 @@
 # ####
 
 - struct:
+    comment: |
+      Executor's native (C++) driver. MacPhoenix: starts like a real 'DRVR'
+      header (the routine offsets are 0), so the name is where code walking
+      the unit table expects it; the entry points follow the name.
     members:
+      - name: udrvrFlags
+        type: INTEGER
+      - name: udrvrDelay
+        type: INTEGER
+      - name: udrvrEMask
+        type: INTEGER
+      - name: udrvrMenu
+        type: INTEGER
+      - name: udrvrOffsets
+        type: INTEGER[5]
+      - name: udrvrName
+        type: Str255
       - name: udrvrOpen
         type: DriverUPP
       - name: udrvrPrime
@@ -49,8 +65,6 @@
         type: DriverUPP
       - name: udrvrClose
         type: DriverUPP
-      - name: udrvrName
-        type: Str255
     name: umacdriver
 
 # ####

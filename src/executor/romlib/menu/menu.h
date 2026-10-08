@@ -48,6 +48,15 @@ extern LONGINT ROMlib_menuhelper(MenuHandle mh, Rect *saver, LONGINT where,
                                  Boolean ispopup, INTEGER ndisplayed);
 extern Boolean ROMlib_shouldalarm(void);
 
+/* System 7 system menus (sysmenu.cpp) */
+extern bool ROMlib_system_menu_p(INTEGER mid);
+extern MenuHandle ROMlib_help_menu();
+extern void ROMlib_install_system_menus();
+extern bool ROMlib_system_menu_select(INTEGER mid, INTEGER item);
+extern bool ROMlib_icon_title_p(MenuHandle mh);
+extern Handle ROMlib_icon_title_suite(MenuHandle mh);
+enum { kSystemMenuTitleWidth = 28, kSystemMenuRightMargin = 11 };
+
 #define mbDraw 0
 #define mbHit 1
 #define mbCalc 2

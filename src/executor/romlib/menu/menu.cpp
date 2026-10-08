@@ -102,6 +102,8 @@ void Executor::C_ClearMenuBar()
 
     (&(*MENULIST)->mufu)[3] = sizeof(muelem); /* lastHMenu: int 6 */
     (*(GUEST<Handle> *)&(&(*MENULIST)->mufu)[1]) = nullptr; /* menuTitleSave: int 4,5 */
+    if(LM(MBDFHndl))
+        ROMlib_install_system_menus(); /* they survive ClearMenuBar */
 }
 
 #define BLACK_RGB        \
@@ -188,6 +190,7 @@ void Executor::C_InitMenus()
     InitProcMenu(0); /* sets mbResID */ /* int 3 */
 
     MBDFCALL(mbHeight, 0, 0L);
+    ROMlib_install_system_menus();
 
     DrawMenuBar();
 }
@@ -697,6 +700,15 @@ void Executor::C_InsertMenu(MenuHandle mh, INTEGER before)
                 if(mid2 == before)
                     bindex = mp;
             }
+            /* MacPhoenix: appending puts an application menu before the
+               system menus, which stay last (sysmenu.cpp). */
+            if(bindex == 0 && !ROMlib_system_menu_p(mid1))
+                for(mp = (*MENULIST)->mulist; mp != mpend; mp++)
+                    if(ROMlib_system_menu_p((*mp->muhandle)->menuID))
+                    {
+                        bindex = mp;
+                        break;
+                    }
             newmuelem.muhandle = mh;
             if(bindex == 0)
             {
@@ -817,6 +829,7 @@ void Executor::C_SetMenuBar(Handle ml)
     temph = ml;
     HandToHand(&temph);
     LM(MenuList) = temph;
+    ROMlib_install_system_menus();
 }
 
 enum
@@ -1270,6 +1283,11 @@ int32_t Executor::ROMlib_menuhelper(MenuHandle mh, Rect *saverp,
             restoren(nmenusdisplayed, (RgnHandle)0, 0);
     }
     else
+    {
+        mid = 0;
+        item = 0;
+    }
+    if(mid && ROMlib_system_menu_select(mid, item))
     {
         mid = 0;
         item = 0;

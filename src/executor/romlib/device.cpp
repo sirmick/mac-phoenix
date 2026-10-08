@@ -361,7 +361,7 @@ OSErr Executor::ROMlib_driveropen(ParmBlkPtr pbp, Boolean a) /* INTERNAL */
                 else
                 {
                     memset((char *)*h, 0, sizeof(DCtlEntry));
-                    up = (umacdriverptr)NewPtr(sizeof(umacdriver));
+                    up = (umacdriverptr)NewPtrClear(sizeof(umacdriver));
                     if(!((*h)->dCtlDriver = up))
                         err = MemError();
                     else

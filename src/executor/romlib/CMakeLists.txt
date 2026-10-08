@@ -216,7 +216,8 @@ source_group(Lists FILES ${list_sources})
 
 set(menu_sources
     menu/menu.h
-    menu/menu.cpp menu/menuColor.cpp menu/menuV.cpp menu/stdmdef.cpp menu/stdmbdf.cpp)
+    menu/menu.cpp menu/menuColor.cpp menu/menuV.cpp menu/stdmdef.cpp menu/stdmbdf.cpp
+    menu/sysmenu.cpp)
 source_group(Menus FILES ${menu_sources})
 
 set(print_sources

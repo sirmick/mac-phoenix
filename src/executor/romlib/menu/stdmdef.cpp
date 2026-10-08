@@ -65,7 +65,8 @@ int Executor::get_icon_info(mextp item_info, icon_info_t *info, int need_icon_p)
     info->width = info->height = 0;
     info->icon = nullptr;
 
-    if(item_info->micon)
+    /* key equivalent $1C: the icon field is the item's script code */
+    if(item_info->micon && item_info->mkeyeq != 0x1C)
     {
         if(item_info->mkeyeq != SICN_FLAG)
         {

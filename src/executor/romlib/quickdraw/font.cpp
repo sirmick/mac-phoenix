@@ -14,6 +14,7 @@
 #include <OSUtil.h>
 #include <quickdraw/cquick.h>
 #include <quickdraw/font.h>
+#include <res/resource.h>
 
 using namespace Executor;
 
@@ -571,6 +572,38 @@ Boolean Executor::C_RealFont(INTEGER fnum, INTEGER sz) /* IMI-223 */
     return retval;
 }
 
+static INTEGER closestface();
+
+/* MacPhoenix: the System file's FOND points Chicago 12 at FONT 12, which a
+   real Mac has in ROM. With no ROM, look for the same family's FOND in the
+   other open files (the Fonts folder suitcases, chained below the System
+   file) and take the face from there. */
+static Handle font_from_other_fonds(INTEGER family, FHandle first)
+{
+    Handle found = nullptr;
+    INTEGER saved = LM(CurMap);
+    resmaphand map;
+    WALKMAPTOP(map)
+        UseResFile((*map)->resfn);
+        Handle h = Get1Resource("FOND"_4, family);
+        if(!h || h == (Handle)first)
+            continue;
+        LM(LastFOND) = (FamRecHandle)h;
+        INTEGER resid = closestface();
+        if(!(found = GetResource("NFNT"_4, resid)))
+            found = GetResource("FONT"_4, resid);
+        if(found)
+        {
+            WIDTHPTR->fHand = h;
+            break;
+        }
+    EWALKMAP()
+    if(!found)
+        LM(LastFOND) = (FamRecHandle)first;
+    LM(CurMap) = saved;
+    return found;
+}
+
 static INTEGER closestface() /* no args, uses WIDTHPTR */
 {
     fatabentry *p, *ep, *bestp;
@@ -740,6 +773,8 @@ static void newwidthtable(FMInput *fmip)
             if(!WIDTHPTR->tabFont)
                 WIDTHPTR->tabFont = GetResource("FONT"_4,
                                                    FONTRESID(family, WIDTHPTR->fSize));
+            if(!WIDTHPTR->tabFont)
+                WIDTHPTR->tabFont = font_from_other_fonds(family, fh);
             if(!WIDTHPTR->tabFont)
                 warning_unexpected("");
         }

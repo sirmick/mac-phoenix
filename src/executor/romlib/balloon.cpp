@@ -3,6 +3,7 @@
  */
 
 #include <base/common.h>
+#include <menu/menu.h>
 #include <HelpMgr.h>
 
 using namespace Executor;
@@ -50,9 +51,9 @@ OSErr Executor::C_HMRemoveBalloon()
 
 OSErr Executor::C_HMGetHelpMenuHandle(GUEST<MenuHandle> *mhp)
 {
-    warning_unimplemented("");
-    *mhp = nullptr;
-    return noErr;
+    /* the system Help menu (menu/sysmenu.cpp); applications append to it */
+    *mhp = ROMlib_help_menu();
+    return *mhp ? noErr : hmHelpManagerNotInited;
 }
 
 OSErr Executor::C_HMGetFont(GUEST<INTEGER> *fontp)

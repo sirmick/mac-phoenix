@@ -4,7 +4,8 @@
     tools/macdecode/sideload_system.py IMAGE DATA_DIR [FILE...]
 
 Copies ":System Folder:<FILE>" (default: System, Finder and every file in
-Preferences; FILE may be a sub-path like "Preferences:Finder Preferences")
+Preferences and Fonts; FILE may be a sub-path like "Preferences:Finder
+Preferences")
 from the HFS disk IMAGE into DATA_DIR/System Folder/ in the form Executor
 reads (data fork `<FILE>` + AppleDouble `%<FILE>` holding Finder info and
 the resource fork). Preferences matter for comparing runs: Finder caches
@@ -45,9 +46,10 @@ def main():
     d0 = Disk(image, data_dir / ".sideload-cache")
     try:
         prefs = ["Preferences:" + n.decode("mac_roman") for n in d0.files(b"System Folder:Preferences")]
+        fonts = ["Fonts:" + n.decode("mac_roman") for n in d0.files(b"System Folder:Fonts")]
     finally:
         d0.close()
-    names = sys.argv[3:] or ["System", "Finder"] + prefs
+    names = sys.argv[3:] or ["System", "Finder"] + prefs + fonts
     sysdir = data_dir / "System Folder"
     sysdir.mkdir(parents=True, exist_ok=True)
     d = Disk(image, data_dir / ".sideload-cache")

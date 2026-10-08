@@ -22,6 +22,7 @@
 #include <rsys/executor.h>
 #include <prefs/options.h>
 #include <algorithm>
+#include <Iconutil.h>
 
 /* apple image */
 namespace Executor
@@ -35,6 +36,15 @@ enum
     APPLE_CHAR = 0x14,
     INFINITY_CHAR = 0xB0
 };
+
+/* MacPhoenix: a system menu's title is an icon suite (menu/sysmenu.cpp). */
+static int title_width(MenuHandle mh)
+{
+    if(ROMlib_icon_title_p(mh))
+        return kSystemMenuTitleWidth;
+    HLockGuard guard(mh);
+    return StringWidth((*mh)->menuData) + SLOP;
+}
 
 /*
  * NOTE:  if sixbyteoffset == 0 then realhilite does the entire menubar
@@ -60,10 +70,7 @@ draw_menu_title(muelem *elt,
     dstr.top = hilite_p ? 1 : 0;
     dstr.bottom = LM(MBarHeight) - 1;
     dstr.left = elt->muleft;
-    if(last_menu_p)
-        dstr.right = muright;
-    else
-        dstr.right = elt[1].muleft;
+    dstr.right = elt->muleft + title_width(muhandle);
 
     RGBForeColor(hilite_p ? &bar_color : &title_color);
     RGBBackColor(hilite_p ? &title_color : &bar_color);
@@ -71,6 +78,20 @@ draw_menu_title(muelem *elt,
     EraseRect(&dstr);
 
     title = (char *)MI_DATA(muhandle);
+
+    if(ROMlib_icon_title_p(muhandle))
+    {
+        Rect ir;
+        ir.top = (LM(MBarHeight) - 16) / 2;
+        ir.bottom = ir.top + 16;
+        ir.left = elt->muleft + (kSystemMenuTitleWidth - 16) / 2;
+        ir.right = ir.left + 16;
+        PlotIconSuite(&ir, atNone, hilite_p ? ttSelected : ttNone,
+                      ROMlib_icon_title_suite(muhandle));
+        RGBForeColor(&ROMlib_black_rgb_color);
+        RGBBackColor(&ROMlib_white_rgb_color);
+        return;
+    }
 
 #if defined(COLOR_APPLE_MENU_ICON)
     gd = LM(MainDevice);
@@ -246,13 +267,13 @@ static LONGINT hit(LONGINT mousept)
 
     if(p.v < LM(MBarHeight))
     {
+        /* titles need not be contiguous: the system menus are at the
+           right */
         mpend = (*MENULIST)->mulist + (*MENULIST)->muoff / sizeof(muelem);
-        for(mp = (*MENULIST)->mulist; mp != mpend && mp->muleft <= p.h; mp++)
-            ;
-        if(mp == (*MENULIST)->mulist || p.h > (*MENULIST)->muright)
-            /*-->*/ return NOTHITINMBAR;
-        else
-            /*-->*/ return (char *)(mp - 1) - (char *)*LM(MenuList);
+        for(mp = (*MENULIST)->mulist; mp != mpend; mp++)
+            if(p.h >= mp->muleft && p.h < mp->muleft + title_width(mp->muhandle))
+                /*-->*/ return (char *)mp - (char *)*LM(MenuList);
+        /*-->*/ return NOTHITINMBAR;
     }
     else
     {
@@ -277,34 +298,37 @@ static void calc(LONGINT offset)
     PORT_TX_FACE(wmgr_port) = (Style)0;
     PORT_TX_FONT(wmgr_port) = LM(SysFontFam);
 
+    /* MacPhoenix: always lay out the whole bar: application menus from the
+       left (muright ends them), system menus right-aligned. */
+    (void)offset;
     HLock(LM(MenuList));
     menulistp = *MENULIST;
     firstmp = menulistp->mulist;
-    if(offset == 0)
-        mp = firstmp;
-    else
-        mp = (muelem *)((char *)menulistp + offset);
-    if(mp == firstmp)
-        left = MENULEFT;
-    else
+    mep = (muelem *)((char *)menulistp + menulistp->muoff) + 1;
+    left = MENULEFT;
+    int system_width = 0;
+    for(mp = firstmp; mp < mep; mp++)
     {
-        mh = mp[-1].muhandle;
-        HLock((Handle)mh);
-        titsize = StringWidth((*mh)->menuData) + SLOP;
-        HUnlock((Handle)mh);
-        left = mp[-1].muleft + titsize;
-    }
-    for(mep = (muelem *)((char *)menulistp + menulistp->muoff) + 1;
-        mp < mep; mp++)
-    {
-        mp->muleft = left;
         mh = mp->muhandle;
-        HLock((Handle)mh);
-        titsize = StringWidth((*mh)->menuData) + SLOP;
-        HUnlock((Handle)mh);
+        titsize = title_width(mh);
+        if(ROMlib_system_menu_p((*mh)->menuID))
+        {
+            system_width += titsize;
+            continue;
+        }
+        mp->muleft = left;
         left += titsize;
     }
     menulistp->muright = left;
+    left = PORT_RECT(wmgr_port).right - kSystemMenuRightMargin - system_width;
+    for(mp = firstmp; mp < mep; mp++)
+    {
+        mh = mp->muhandle;
+        if(!ROMlib_system_menu_p((*mh)->menuID))
+            continue;
+        mp->muleft = left;
+        left += title_width(mh);
+    }
     HUnlock(LM(MenuList));
 }
 

@@ -16,6 +16,10 @@
 #include <commandline/flags.h>
 #include <rsys/version.h>
 #include <rsys/appearance.h>
+#include <FileMgr.h>
+#include <AliasMgr.h>
+
+#include <cstring>
 
 using namespace Executor;
 
@@ -23,6 +27,48 @@ using namespace Executor;
    the required system version.  set by `InitResources ()', and used
    by `InitWindows ()' */
 bool Executor::system_file_version_skew_p = false;
+
+/* MacPhoenix: as System 7.1 and later, open the font files in the Fonts
+   folder read-only and chain their maps directly below the System file's,
+   in catalog order (so the first file ends up last, as on a real boot). */
+static void open_font_files()
+{
+    GUEST<INTEGER> vref;
+    GUEST<LONGINT> dirid;
+    if(FindFolder(-32768 /* kOnSystemDisk */, "font"_4, false, &vref, &dirid) != noErr)
+        return;
+    INTEGER saved = LM(CurMap);
+    for(INTEGER i = 1;; i++)
+    {
+        Str255 name;
+        CInfoPBRec pb;
+        memset(&pb, 0, sizeof pb);
+        pb.hFileInfo.ioNamePtr = name;
+        pb.hFileInfo.ioVRefNum = vref;
+        pb.hFileInfo.ioFDirIndex = i;
+        pb.hFileInfo.ioDirID = dirid;
+        if(PBGetCatInfo(&pb, false) != noErr)
+            break;
+        if(pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
+            continue;
+        OSType type = pb.hFileInfo.ioFlFndrInfo.fdType;
+        if(type != "FFIL"_4 && type != "ffil"_4 && type != "tfil"_4)
+            continue;
+        if(HOpenResFile(vref, dirid, name, fsRdPerm) == -1)
+            continue;
+        /* the new file is on top: move it below the System file */
+        resmaphand top = (resmaphand)LM(TopMapHndl);
+        resmaphand sys = (resmaphand)LM(SysMapHndl);
+        if(top != sys)
+        {
+            LM(TopMapHndl) = (*top)->nextmap;
+            (*top)->nextmap = (*sys)->nextmap;
+            (*sys)->nextmap = (Handle)top;
+        }
+    }
+    LM(CurMap) = saved;
+    ROMlib_resTypesChanged();
+}
 
 INTEGER Executor::C_InitResources()
 {
@@ -46,6 +92,7 @@ INTEGER Executor::C_InitResources()
     LM(SysMapHndl) = LM(TopMapHndl);
     ROMlib_resTypesChanged();
     SetResLoad(true);
+    open_font_files();
 
     /*
     TODO: decide whether to re-instate a system file version check
