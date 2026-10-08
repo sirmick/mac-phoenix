@@ -158,6 +158,8 @@ struct EmulatorConfig {
     bool debug_perf = false;
     bool debug_network = false;
     bool trace_atraps = false;         // record (A-trap, caller) pairs; dumped with snapshots
+    bool deterministic = false;        // virtual clock: time counted in instructions (vclock.h)
+    std::string snapshot_at;           // "NAME@SECONDS": snapshot that long after the traced app starts
 
     // Internal (not serialized)
     std::string config_path;

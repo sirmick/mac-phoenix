@@ -37,6 +37,7 @@
 #include "memory.h"
 #include "readcpu.h"
 #include "newcpu.h"
+#include "vclock.h"
 #include "compiler/compemu.h"
 #include "fpu/fpu.h"
 
@@ -1298,7 +1299,7 @@ void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, u
 /* Return address of the innermost traced trap (0: none). The interpreter
    loop calls uae_atrap_return_hook when PC reaches it. */
 uint32_t uae_atrap_watch_pc = 0;
-void (*uae_atrap_return_hook)(uint32_t sp) = nullptr;
+void (*uae_atrap_return_hook)(uint32_t sp, uint32_t d0) = nullptr;
 
 void REGPARAM2 op_illg (uae_u32 opcode)
 {
@@ -1475,9 +1476,11 @@ void m68k_do_execute (void)
 #if FLIGHT_RECORDER
 		m68k_record_step(m68k_getpc());
 #endif
+		if (vclock_enabled)
+			vclock_count(m68k_getpc());
 		(*cpufunctbl[opcode])(opcode);
 		if (uae_atrap_watch_pc && m68k_getpc() == uae_atrap_watch_pc)
-			uae_atrap_return_hook(m68k_areg(regs, 7));
+			uae_atrap_return_hook(m68k_areg(regs, 7), m68k_dreg(regs, 0));
 
 		cpu_check_ticks();
 		if (SPCFLAGS_TEST(SPCFLAG_ALL_BUT_EXEC_RETURN)) {

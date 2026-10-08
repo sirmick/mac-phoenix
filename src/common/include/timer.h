@@ -30,6 +30,7 @@ extern void TimerExit(void);
 extern void TimerReset(void);
 
 extern void TimerInterrupt(void);
+extern void TimerVirtualPoll(void);	// --deterministic: Time Manager check on the virtual clock
 
 extern int16 InsTime(uint32 tm, uint16 trap);
 extern int16 RmvTime(uint32 tm);

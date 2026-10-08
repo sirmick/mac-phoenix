@@ -20,6 +20,7 @@
 #include <PowerCore.h>
 #include <base/debugger.h>
 #include <chrono>
+#include "../../../cpu/uae_cpu/vclock.h"
 
 using namespace Executor;
 
@@ -37,6 +38,8 @@ static int timewarpNumerator = 1, timewarpDenominator = 1;
 unsigned long
 Executor::msecs_elapsed()
 {
+    if(vclock_enabled)     /* MacPhoenix --deterministic */
+        return (unsigned long)(vclock_usec() / 1000);
     static auto startTime = std::chrono::steady_clock::now();
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         (std::chrono::steady_clock::now() - startTime) * timewarpNumerator / timewarpDenominator).count();

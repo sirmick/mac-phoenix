@@ -451,6 +451,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-perf\n");
             printf("  --debug-network\n");
             printf("  --trace-atraps             Record every (A-trap, caller PC); snapshots write atraps.tsv\n");
+            printf("  --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait\n");
+            printf("  --snapshot-at NAME@SECS    With --deterministic: snapshot SECS virtual seconds after Finder starts\n");
             printf("  -h, --help                 Show this help message\n");
             exit(0);
         }
@@ -669,6 +671,13 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--debug-mode-switch") == 0) {
             config.debug_mode_switch = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--snapshot-at") == 0 && i+1 < argc) {
+            config.snapshot_at = argv[i+1];
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--deterministic") == 0) {
+            config.deterministic = true; argv[i] = nullptr; continue;
         }
         if (strcmp(argv[i], "--trace-atraps") == 0) {
             config.trace_atraps = true; argv[i] = nullptr; continue;

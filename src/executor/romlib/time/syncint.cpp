@@ -7,6 +7,7 @@
 #include <chrono>
 #include <array>
 #include <optional>
+#include "../../../cpu/uae_cpu/vclock.h"
 
 #if defined(_WIN32)
 #define USE_TIMER_THREAD 1
@@ -70,6 +71,22 @@ namespace
     };
 
     SyncintTimer timer;
+
+    /* MacPhoenix --deterministic: the timer runs on the virtual clock. post()
+       records a deadline, the CPU loop's poll fires it, wait() skips the
+       clock forward instead of sleeping. */
+    constexpr uint64_t noDeadline = UINT64_MAX;
+    uint64_t vDeadline = noDeadline, vLast = 0;
+
+    void vclockPoll()
+    {
+        if(vDeadline != noDeadline && vclock_usec() >= vDeadline)
+        {
+            vLast = vDeadline;
+            vDeadline = noDeadline;
+            timerInterrupt.trigger();
+        }
+    }
 }
 
 Interrupt::Interrupt(std::function<void ()> f)
@@ -193,6 +210,8 @@ SyncintTimer::SyncintTimer()
 
 void SyncintTimer::start()
 {
+    if(vclock_enabled)
+        vclock_poll_hook = vclockPoll;
 #if USE_TIMER_THREAD
     thread = std::thread([this] {
         std::unique_lock<std::mutex> lock(mutex);
@@ -249,6 +268,11 @@ SyncintTimer::~SyncintTimer()
 
 void SyncintTimer::post(std::chrono::microseconds usecs, bool fromLast)
 {
+    if(vclock_enabled)
+    {
+        vDeadline = (fromLast ? vLast : vclock_usec()) + usecs.count();
+        return;
+    }
 #if USE_TIMER_THREAD
     std::unique_lock<std::mutex> lock(mutex);
 
@@ -273,6 +297,13 @@ void SyncintTimer::post(std::chrono::microseconds usecs, bool fromLast)
 
 void SyncintTimer::wait()
 {
+    if(vclock_enabled)
+    {
+        /* Idle: jump to the next timer interrupt (or one tick if none). */
+        vclock_skip_to(vDeadline != noDeadline ? vDeadline : vclock_usec() + 16667);
+        vclockPoll();
+        return;
+    }
 #if USE_TIMER_THREAD
     using namespace std::literals::chrono_literals;
 

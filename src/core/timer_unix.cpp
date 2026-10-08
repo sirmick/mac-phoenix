@@ -21,6 +21,7 @@
 #include "sysdeps.h"
 #include "macos_util.h"
 #include "timer.h"
+#include "../cpu/uae_cpu/vclock.h"
 
 #include <errno.h>
 
@@ -70,6 +71,12 @@ static void host_uptime(tm_time_t & t) {
 void Microseconds(uint32 &hi, uint32 &lo)
 {
 	D(bug("Microseconds\n"));
+	if (vclock_enabled) {		// --deterministic
+		uint64 tl = vclock_usec();
+		hi = tl >> 32;
+		lo = tl;
+		return;
+	}
 #if defined(__MACH__)
 	tm_time_t t;
 	mach_current_time(t);
@@ -94,6 +101,8 @@ void Microseconds(uint32 &hi, uint32 &lo)
 
 uint32 TimerDateTime(void)
 {
+	if (vclock_enabled)		// --deterministic: fixed start date
+		return vclock_mac_time();
 	return TimeToMacTime(time(NULL));
 }
 
@@ -108,6 +117,12 @@ bool g_use_ppc_virtual_clock = false;
 
 void timer_current_time(tm_time_t &t)
 {
+	if (vclock_enabled) {		// --deterministic (68k virtual clock)
+		uint64_t usec = vclock_usec();
+		t.tv_sec = usec / 1000000;
+		t.tv_nsec = (usec % 1000000) * 1000;
+		return;
+	}
 	if (g_use_ppc_virtual_clock) {
 		extern uint64_t ppc_insn_counter;
 		uint64_t virtual_ns = ppc_insn_counter * 4;

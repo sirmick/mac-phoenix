@@ -45,6 +45,7 @@ class DB:
         self.trap_info = {}       # (table, index) -> [{name, file, kind, ...}]
         self.dispatchers = {}     # name -> {trap, location, file}
         self.selector_funcs = []  # {dispatcher, selector, name, executor, file}
+        self.returns = {}         # function name -> return type (None: procedure)
         self._sizes = {}
         for f in sorted(self.defs.glob("*.yaml")):
             for item in yaml.safe_load(f.read_text()) or []:
@@ -70,6 +71,8 @@ class DB:
                             self.consts[val["name"]] = val["value"]
                 elif kind == "lowmem":
                     self.lowmem.append(dict(v, file=f.name))
+                if kind == "function" and name:
+                    self.returns[name] = v.get("return")
                 if kind == "dispatcher" and isinstance(v.get("trap"), int):
                     self.dispatchers[name] = {"trap": v["trap"], "file": f.name,
                                               "location": v.get("selector-location")}

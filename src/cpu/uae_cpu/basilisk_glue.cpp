@@ -29,6 +29,7 @@
 #include "memory.h"
 #include "readcpu.h"
 #include "newcpu.h"
+#include "vclock.h"
 #include "compiler/compemu.h"
 #include "vm_alloc.h"
 #include "platform.h"  // For platform API (cpu_execute_68k_trap)
@@ -182,9 +183,11 @@ void Start680x0_until_stopped(void)
 #else
 		opcode = do_get_mem_word((uae_u16 *)regs.pc_p);
 #endif
+		if (vclock_enabled)
+			vclock_count(m68k_getpc());
 		(*cpufunctbl[opcode])(opcode);
 		if (uae_atrap_watch_pc && m68k_getpc() == uae_atrap_watch_pc)
-			uae_atrap_return_hook(m68k_areg(regs, 7));
+			uae_atrap_return_hook(m68k_areg(regs, 7), m68k_dreg(regs, 0));
 
 		// Check CPU tick timers
 		cpu_check_ticks();

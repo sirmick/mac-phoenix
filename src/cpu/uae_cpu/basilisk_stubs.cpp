@@ -7,6 +7,56 @@
 #include "sysdeps.h"
 #include "cpu_emulation.h"
 #include "timer_interrupt.h"  // For poll_timer_interrupt()
+#include "vclock.h"
+#include "m68k.h"
+#include "memory.h"
+
+// Deterministic virtual clock (vclock.h).
+int vclock_enabled = 0;
+void (*vclock_poll_hook)(void) = nullptr;
+uint32_t vclock_app_lo = 0xFFFFFFFF, vclock_app_hi = 0;
+uint64_t vclock_app_insns = 0;
+int vclock_rebased = 0;
+int vclock_idle_depth = 0;
+static uint64_t vclock_skipped = 0;
+
+uint64_t vclock_usec(void) { return vclock_app_insns / VCLOCK_INSNS_PER_USEC + vclock_skipped; }
+
+// Per quantum: refresh the application region. It starts where the System
+// heap ends (SysZone's bkLim, the zone header's first long, SysZone at
+// $2A6) and runs to the top of RAM.
+// Guest reads that bypass the platform accessors (and so the A-trap
+// trace's low-memory watch).
+static uint32_t vclock_peek(uint32_t a) { return do_get_mem_long((uae_u32 *)get_real_address(a)); }
+
+void vclock_advance_insns(uint64_t)
+{
+    // Executor maps guest RAM at 0 without setting RAMSize: its RAM is far
+    // below 1GB and its callback cells far above.
+    uint32_t top = RAMSize ? RAMBaseMac + RAMSize : 0x40000000;
+    uint32_t sys = vclock_peek(0x2A6);
+    uint32_t lo = (sys >= 0x2000 && sys < top) ? vclock_peek(sys) : 0;
+    if (lo > 0x2000 && lo < top) {
+        vclock_app_lo = lo;
+        vclock_app_hi = top;
+    }
+}
+
+void vclock_rebase(void)
+{
+    if (vclock_rebased)
+        return;
+    vclock_rebased = 1;
+    fprintf(stderr, "[vclock] app start at %.3f virtual s: rebased to %.0f s (app region $%08x-$%08x)\n",
+            vclock_usec() / 1e6, VCLOCK_APP_START_USEC / 1e6, vclock_app_lo, vclock_app_hi);
+    vclock_skip_to(VCLOCK_APP_START_USEC);
+}
+void vclock_skip_to(uint64_t usec)
+{
+    uint64_t now = vclock_usec();
+    if (usec > now)
+        vclock_skipped += usec - now;
+}
 
 // Tick counting for timing
 //
@@ -39,6 +89,14 @@ void cpu_do_check_ticks(void) {
     //             (unsigned long long)call_count, (unsigned long long)total_instructions);
     //     fflush(stderr);
     // }
+
+    // Deterministic mode: advance the virtual clock and let the backend fire
+    // whatever became due, on this (the CPU) thread.
+    if (vclock_enabled) {
+        vclock_advance_insns(emulated_ticks_quantum);
+        if (vclock_poll_hook)
+            vclock_poll_hook();
+    }
 
     // Poll the timerfd-based timer system
     // This will call one_tick() -> SetInterruptFlag() -> TriggerInterrupt() as needed

@@ -134,6 +134,7 @@ static void reserve_mac_address_space_early()
 #include "webrtc/webrtc_server.h"
 #include "drivers/video/encoders/codec.h"
 #include "core/snapshot.h"
+#include "cpu/uae_cpu/vclock.h"
 
 // WebRTC globals
 namespace webrtc {
@@ -545,6 +546,13 @@ int main(int argc, char **argv)
 	config::print_config(emu_config);
 	if (emu_config.trace_atraps)
 		atrap_trace_enable();
+	if (emu_config.deterministic) {
+		// Virtual clock (vclock.h); idle waits would block on wall time.
+		// The A-trap hook rebases the clock when the traced app starts.
+		vclock_enabled = 1;
+		emu_config.idlewait = false;
+		atrap_trace_enable();
+	}
 
 	command_bridge_init();
 

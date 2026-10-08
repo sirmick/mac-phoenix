@@ -20,6 +20,7 @@
 
 #include "sysdeps.h"
 #include "timer.h"
+#include "../cpu/uae_cpu/vclock.h"
 #include "macos_util.h"
 #include "main.h"
 #include "cpu_emulation.h"
@@ -28,6 +29,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <unistd.h>
 #endif
 
 #ifdef PRECISE_TIMING_MACH
@@ -587,6 +589,12 @@ static void *timer_func(void *arg)
 static void *timer_func(void * /*arg*/)
 {
 	while (!timer_thread_cancel) {
+		// --deterministic: Time Manager wakeups are checked on the CPU
+		// thread against the virtual clock (TimerVirtualPoll).
+		if (vclock_enabled) {
+			usleep(10000);
+			continue;
+		}
 		// Wait until time specified by wakeup_time
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &wakeup_time, NULL);
 
@@ -605,6 +613,29 @@ static void *timer_func(void * /*arg*/)
 	return NULL;
 }
 #endif
+
+
+/*
+ *  --deterministic: raise the Time Manager interrupt once its next wakeup
+ *  has passed on the virtual clock (called from the CPU thread).
+ */
+
+void TimerVirtualPoll(void)
+{
+#if PRECISE_TIMING_POSIX
+	tm_time_t now;
+	timer_current_time(now);
+	pthread_mutex_lock(&wakeup_time_lock);
+	bool due = timer_cmp_time(wakeup_time, now) < 0;
+	if (due)
+		wakeup_time = wakeup_time_max;
+	pthread_mutex_unlock(&wakeup_time_lock);
+	if (due) {
+		SetInterruptFlag(INTFLAG_TIMER);
+		TriggerInterrupt();
+	}
+#endif
+}
 
 
 /*

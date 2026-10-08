@@ -20,6 +20,9 @@ Manager's scod; code Executor never runs), or the file the code is in.
   atraps.py SNAPSHOT --needed            traps called from code Executor runs
                                          (not ROM, not patches), by name status
   atraps.py SNAPSHOT --json OUT
+  atraps.py REF --compare CAND [--compare-disk IMG]
+                                         first divergence of Finder's own call
+                                         sequence (by CODE location + routine)
 """
 import argparse
 import json
@@ -72,7 +75,9 @@ def read_sites(path):
                      "irq": int(f[9]), "count": int(f[10]), "seq": int(f[11]),
                      "app": f[12], "code": bytes.fromhex(f[13]) if len(f) > 13 and f[13] else b"",
                      "owner": f[14] if len(f) > 15 else "",
-                     "detail": f[15] if len(f) > 15 else (f[14] if len(f) > 14 else "")})
+                     "detail": f[15] if len(f) > 15 else (f[14] if len(f) > 14 else ""),
+                     "res_d0": opt(f[16]) if len(f) > 17 else None,
+                     "res_top": opt(f[17]) if len(f) > 17 else None})
     return rows
 
 
@@ -457,10 +462,114 @@ class Analysis:
         return rows
 
 
+def app_sequence(an, app="Finder"):
+    """The traced app's own calls in first-seen order, as comparable keys:
+    (code location, routine). Locations are resource-relative, so the same
+    call matches across backends whatever address the code ended up at."""
+    out = []
+    for s in sorted(an.sites, key=lambda s: s["seq"]):
+        o = s["origin"]
+        if not o.startswith(app + " "):
+            continue
+        loc = re.sub(r" \((code|masked match[^)]*)\)$", "", o)
+        name = an.names.routine(s["trap"], s["sel"], s["sub"], s["obj"], s["detail"])
+        out.append({"key": (loc, re.sub(r" \[.*\]", "", name)), "site": s, "name": name, "loc": loc})
+    return out
+
+
+def result_difference(names, name, ra, cb):
+    """How two first results of the same call differ, judged by the
+    routine's return type (multiversal), or None if they agree. Addresses
+    and refnums legitimately differ between backends, so pointers compare
+    as nil / non-nil and integers only when one side is an error."""
+    if ra["res_d0"] is None or cb["res_d0"] is None:
+        return None
+    base = name.split(" ")[0]
+    rtype = names.db.returns.get(base, "?")
+    os_trap = (ra["trap"] & 0x0800) == 0
+    if os_trap:
+        x, y = ra["res_d0"] & 0xFFFF, cb["res_d0"] & 0xFFFF
+        sx, sy = x - 0x10000 if x & 0x8000 else x, y - 0x10000 if y & 0x8000 else y
+        if (sx < 0 or sy < 0) and sx != sy:
+            return f"D0 {sx} vs {sy}"
+        return None
+    if rtype in (None, "void"):
+        return None
+    if rtype == "?":
+        return None
+    top_a, top_b = ra["res_top"], cb["res_top"]
+    if rtype in ("Boolean", "bool"):
+        x, y = top_a >> 24, top_b >> 24
+        return f"{rtype} {x} vs {y}" if (x != 0) != (y != 0) else None
+    if rtype in ("OSErr", "INTEGER", "int16_t", "short", "OSStatus16", "ResFileRefNum", "SInt16"):
+        x, y = top_a >> 16, top_b >> 16
+        sx, sy = x - 0x10000 if x & 0x8000 else x, y - 0x10000 if y & 0x8000 else y
+        if (sx < 0 or sy < 0) and sx != sy:
+            return f"{rtype} {sx} vs {sy}"
+        return None
+    if "Handle" in rtype or "Ptr" in rtype or rtype.endswith("*") or rtype in ("WindowPtr", "GrafPtr", "MenuHandle", "THz"):
+        if (top_a == 0) != (top_b == 0):
+            return f"{rtype} {'nil' if not top_a else 'set'} vs {'nil' if not top_b else 'set'}"
+        return None
+    if rtype in ("LONGINT", "int32_t", "Size", "OSType", "ResType", "uint32_t", "UInt32"):
+        return f"{rtype} {top_a:#x} vs {top_b:#x}" if top_a != top_b and (top_a == 0 or top_b == 0) else None
+    return None
+
+
+def compare(ref, cand, context=6, more=12):
+    """Print where the candidate's app call sequence first leaves the reference's."""
+    import difflib
+    a, b = app_sequence(ref), app_sequence(cand)
+    sm = difflib.SequenceMatcher(a=[x["key"] for x in a], b=[x["key"] for x in b], autojunk=False)
+    ops = [op for op in sm.get_opcodes() if op[0] != "equal"]
+    same = sum(j2 - j1 for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag == "equal")
+    print(f"# app calls: reference {len(a)}, candidate {len(b)}, matching {same}")
+    if not ops:
+        print("  sequences match")
+        return
+    # A lone extra call before anything matched (e.g. made before the trace
+    # caught up) isn't where the paths split: report the next one.
+    if len(ops) > 1 and ops[0][1] == 0 and ops[0][3] == 0 and ops[0][2] - ops[0][1] + ops[0][4] - ops[0][3] <= 2:
+        print(f"  (skipping leading {ops[0][0]}: {'; '.join(x['loc'] + ' ' + x['name'] for x in a[ops[0][1]:ops[0][2]] + b[ops[0][3]:ops[0][4]])})")
+        ops = ops[1:]
+    tag, i1, i2, j1, j2 = ops[0]
+    print(f"\n## first divergence ({tag}) at reference #{i1}, candidate #{j1}")
+    for k in range(max(0, i1 - context), i1):
+        print(f"   = {a[k]['loc']:34} {a[k]['name']}")
+    for k in range(i1, min(i2, i1 + more)):
+        print(f"  -R {a[k]['loc']:34} {a[k]['name']}  x{a[k]['site']['count']}")
+    for k in range(j1, min(j2, j1 + more)):
+        print(f"  +C {b[k]['loc']:34} {b[k]['name']}  x{b[k]['site']['count']}")
+    # Calls both sides made (in order) whose first results differ in a way
+    # that matters: a result that differs just before a divergence is
+    # usually its cause.
+    print("\n## matched calls with different results (before the divergence)")
+    shown = 0
+    for tag2, x1, x2, y1, y2 in sm.get_opcodes():
+        if tag2 != "equal" or x1 >= i1:
+            continue
+        for k in range(x2 - x1):
+            ra, cb = a[x1 + k]["site"], b[y1 + k]["site"]
+            why = result_difference(ref.names, a[x1 + k]["name"], ra, cb)
+            if why:
+                print(f"  R#{x1 + k:<4} {a[x1 + k]['loc']:30} {a[x1 + k]['name'][:32]:32} {why}")
+                shown += 1
+    if not shown:
+        print("  (none)")
+    print(f"\n## next divergences")
+    for tag, i1, i2, j1, j2 in ops[1:8]:
+        ra = "; ".join(f"{x['loc']} {x['name']}" for x in a[i1:min(i2, i1 + 2)])
+        cb = "; ".join(f"{x['loc']} {x['name']}" for x in b[j1:min(j2, j1 + 2)])
+        print(f"  {tag:7} R#{i1}: {ra[:70]:70} | C#{j1}: {cb[:70]}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("snapshot")
     ap.add_argument("--disk")
+    ap.add_argument("--compare", metavar="CANDIDATE",
+                    help="first divergence of the app's call sequence from this snapshot's")
+    ap.add_argument("--compare-disk", help="disk for the candidate's resources (Executor snapshots have none)")
     ap.add_argument("--trap", help="every site of one trap word (hex)")
     ap.add_argument("--all", action="store_true", help="every routine with its verdict")
     ap.add_argument("--extensions", action="store_true", help="count extensions as code we run")
@@ -469,6 +578,11 @@ def main():
 
     an = Analysis(a.snapshot, a.disk, a.extensions)
     nm = an.names
+    if a.compare:
+        cand = Analysis(a.compare, a.compare_disk or a.disk or (an.snap.meta.get("disks") or [None])[0],
+                        a.extensions)
+        compare(an, cand)
+        return
     if a.trap:
         k = trap_key(int(a.trap, 16))
         for s in sorted((s for s in an.sites if trap_key(s["trap"]) == k),

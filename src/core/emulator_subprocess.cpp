@@ -144,6 +144,13 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     if (config_->trace_atraps) {
         args.push_back("--trace-atraps");
     }
+    if (config_->deterministic) {
+        args.push_back("--deterministic");
+    }
+    if (!config_->snapshot_at.empty()) {
+        args.push_back("--snapshot-at");
+        args.push_back(config_->snapshot_at);
+    }
 
     if (config_->bridge_enabled) {
         args.push_back("--bridge");

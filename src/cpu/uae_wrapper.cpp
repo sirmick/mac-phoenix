@@ -15,6 +15,7 @@ extern "C" {
 #include "uae_cpu/cpu_emulation.h"  // C++ linkage for Init680x0/Exit680x0
 #include "uae_cpu/m68k.h"
 #include "uae_cpu/newcpu.h"
+#include "uae_cpu/vclock.h"
 #include "uae_cpu/memory.h"
 
 #include <cstdlib>
@@ -287,9 +288,11 @@ void uae_cpu_execute_one(void) {
         );
     }
 
+    if (vclock_enabled)
+    	vclock_count(m68k_getpc());
     (*cpufunctbl[opcode])(opcode);
     if (uae_atrap_watch_pc && m68k_getpc() == uae_atrap_watch_pc)
-    	uae_atrap_return_hook(m68k_areg(regs, 7));
+    	uae_atrap_return_hook(m68k_areg(regs, 7), m68k_dreg(regs, 0));
 
     /* Check tick counter — drives cpu_do_check_ticks() → poll_timer_interrupt()
      * which sets SPCFLAG_INT via TriggerInterrupt(). The interrupt will be

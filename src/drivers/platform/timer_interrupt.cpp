@@ -15,6 +15,8 @@
 #include "rom_patches.h"   // For ROMVersion, ROM_VERSION_CLASSIC
 #include "uae_wrapper.h"   // For intlev()
 #include "macos_util.h"    // For HasMacStarted()
+#include "timer.h"         // TimerVirtualPoll()
+#include "../../cpu/uae_cpu/vclock.h"
 
 #include <QElapsedTimer>
 #include <QThread>
@@ -47,9 +49,12 @@ static uint64_t get_ticks_usec() {
 }
 
 /*
- *  one_tick() - Called every 16.625ms (60.15 Hz) from tick thread
+ *  guest_tick() - the part of a tick the guest sees: 1 Hz date update,
+ *  60 Hz and 1 Hz interrupt flags, the CPU interrupt. Wall-clock mode runs
+ *  it from the tick thread; --deterministic runs it from the CPU thread at
+ *  virtual-clock intervals (vclock_tick_poll).
  */
-static void one_tick(void)
+static void guest_tick(void)
 {
 	static uint64_t tick_counter = 0;
 
@@ -61,6 +66,43 @@ static void one_tick(void)
 		SetInterruptFlag(INTFLAG_1HZ);
 	}
 
+	// Set 60Hz interrupt flag
+	SetInterruptFlag(INTFLAG_60HZ);
+
+	// Trigger CPU-level interrupt
+	if (g_platform.cpu_trigger_interrupt) {
+		int level = intlev();
+		if (level > 0) {
+			g_platform.cpu_trigger_interrupt(level);
+		}
+	}
+
+	interrupt_count++;
+}
+
+// --deterministic: fire due ticks and Time Manager wakeups on the CPU thread.
+static void vclock_tick_poll(void)
+{
+	static uint64_t next_tick_usec = 16625;
+	uint64_t now = vclock_usec();
+	if (now > next_tick_usec + 1000000) {
+		// The clock skipped (app start rebase): resume the 60 Hz schedule
+		// from here and set Ticks to match, as Executor derives it from time.
+		next_tick_usec = now + 16625;
+		WriteMacInt32(0x16a, (uint32)(now * 3 / 50000));
+	}
+	while (vclock_usec() >= next_tick_usec) {
+		guest_tick();
+		next_tick_usec += 16625;
+	}
+	TimerVirtualPoll();
+}
+
+/*
+ *  one_tick() - Called every 16.625ms (60.15 Hz) from tick thread
+ */
+static void one_tick(void)
+{
 	// Poll shared input queue (no-op in subprocess mode)
 	ADBPollSharedInput();
 
@@ -76,18 +118,9 @@ static void one_tick(void)
 	boot_progress_export_app_to_ipc();
 	boot_progress_export_mac_state();
 
-	// Set 60Hz interrupt flag
-	SetInterruptFlag(INTFLAG_60HZ);
-
-	// Trigger CPU-level interrupt
-	if (g_platform.cpu_trigger_interrupt) {
-		int level = intlev();
-		if (level > 0) {
-			g_platform.cpu_trigger_interrupt(level);
-		}
-	}
-
-	interrupt_count++;
+	// The guest part runs here unless the virtual clock drives it.
+	if (!vclock_enabled)
+		guest_tick();
 }
 
 /*
@@ -126,6 +159,8 @@ void setup_timer_interrupt(void)
 
 	interrupt_count = 0;
 	g_tick_clock.start();
+	if (vclock_enabled)
+		vclock_poll_hook = vclock_tick_poll;
 	tick_thread_running.store(true, std::memory_order_release);
 	tick_thread = std::thread(tick_thread_func);
 

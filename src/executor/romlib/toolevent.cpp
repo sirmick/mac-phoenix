@@ -49,6 +49,7 @@
 
 #include <algorithm>
 
+#include "../../cpu/uae_cpu/vclock.h"
 using namespace Executor;
 
 /* #define	EVENTTRACE */
@@ -601,7 +602,10 @@ ULONGINT Executor::C_TickCount()
     if(ROMlib_clock)
         LM(Ticks) = ticks;
 
-    new_time = UNIXTIMETOMACTIME(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+    if(vclock_enabled)     /* MacPhoenix --deterministic: fixed start date */
+        new_time = vclock_mac_time();
+    else
+        new_time = UNIXTIMETOMACTIME(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
             
     LM(Time) = new_time;
     return ticks;

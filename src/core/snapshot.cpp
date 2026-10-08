@@ -15,6 +15,7 @@
 #include "../config/emulator_config.h"
 #include "boot_progress.h"
 #include "../common/include/platform.h"
+#include "../cpu/uae_cpu/vclock.h"
 
 #include <atomic>
 #include <cerrno>
@@ -112,7 +113,7 @@ bool snapshot_pending()
 extern void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, uint32_t a0, int intmask);
 extern uint32_t uae_atrap_watch_pc;
 extern uint32_t uae_current_pc(void);
-extern void (*uae_atrap_return_hook)(uint32_t sp);
+extern void (*uae_atrap_return_hook)(uint32_t sp, uint32_t d0);
 
 namespace {
 
@@ -125,6 +126,9 @@ struct AtrapSite {
     uint8_t code_len = 0;
     char detail[32] = {};        // driver name (Pascal) for driver calls
     char owner[64] = {};         // resource holding the caller, at first hit
+    uint8_t has_result = 0;      // first call's result, taken at its return:
+    uint32_t res_d0 = 0;         //   D0 (OS traps' result code)
+    uint32_t res_top = 0;        //   long at (SP) (a Pascal function's result)
 };
 
 // Dispatch traps: where each one's selector is at the A-line (generated
@@ -225,8 +229,28 @@ bool g_in_watch = false;     // our own reads (owner lookup) aren't traced
 // for returns we miss (non-local exits), an entry whose A7 at entry is at
 // or below the current A7 has returned, and one far above it (another
 // stack: a process switch) is stale.
-struct ActiveTrap { Routine routine; uint32_t sp, ret; };
+struct ActiveTrap { Routine routine; uint32_t sp, ret; bool idle; AtrapSite* site; };
+
+// Traps that wait for time to pass (vclock counts every instruction inside).
+bool is_idle_trap(uint16_t w)
+{
+    switch (w & 0xFBFF) {
+    case 0xA860:    // WaitNextEvent
+    case 0xA970:    // GetNextEvent
+    case 0xA971:    // EventAvail
+    case 0xA9B4:    // SystemTask
+        return true;
+    }
+    return (w & 0xF0FF) == 0xA03B;   // Delay
+}
+
 std::vector<ActiveTrap> g_atrap_active;
+void active_pop()
+{
+    if (g_atrap_active.back().idle && vclock_idle_depth > 0)
+        vclock_idle_depth--;
+    g_atrap_active.pop_back();
+}
 constexpr uint32_t kOtherStack = 256 * 1024;
 
 // Guest bytes for the trace: RAM or ROM only.
@@ -295,7 +319,7 @@ bool write_atraps(const std::string& path)
     FILE* f = fopen(path.c_str(), "w");
     if (!f)
         return false;
-    fprintf(f, "# trap\tsel\tsub\tobj\tpc\tparent\tparent_sel\tparent_sub\tparent_obj\tirq\tcount\tseq\tapp\tcode (from pc-8)\towner\tdetail\n");
+    fprintf(f, "# trap\tsel\tsub\tobj\tpc\tparent\tparent_sel\tparent_sub\tparent_obj\tirq\tcount\tseq\tapp\tcode (from pc-8)\towner\tdetail\tres_d0\tres_top\n");
     auto opt = [f](uint8_t has, uint32_t v) {
         if (has) fprintf(f, "%08X\t", v); else fputs("-\t", f);
     };
@@ -323,7 +347,10 @@ bool write_atraps(const std::string& path)
             char c = s->detail[i];
             fputc((c == '\t' || c == '\n' || (unsigned char)c < 0x20) ? '?' : c, f);
         }
-        fputc('\n', f);
+        if (s->has_result)
+            fprintf(f, "\t%08X\t%08X\n", s->res_d0, s->res_top);
+        else
+            fputs("\t-\t-\n", f);
     }
     return fclose(f) == 0;
 }
@@ -538,9 +565,36 @@ void record_install(uint16_t opcode, uint32_t pc, uint32_t d0, uint32_t a0)
     g_trap_installs.push_back(t);
 }
 
+// --deterministic: both backends rebase their virtual clock when the traced
+// application first calls a trap from its own code, so boot time before it
+// (the whole ROM boot on one side, almost none on Executor) drops out.
+static const char kTracedApp[] = "\006Finder";
+
+// --snapshot-at NAME@SECONDS: request a snapshot once the virtual clock is
+// that far past the traced app's start (the snapshot itself is taken at the
+// backend's next safe point).
+static uint64_t g_snapshot_at_usec = 0;
+static std::string g_snapshot_at_name;
+
+static void snapshot_at_check()
+{
+    if (!g_snapshot_at_usec || !vclock_rebased || vclock_usec() < g_snapshot_at_usec)
+        return;
+    g_snapshot_at_usec = 0;
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!snapshot_prepare(cfg.storage_dir, g_snapshot_at_name).empty())
+        snapshot_request();
+}
+
 static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, uint32_t a0, int intmask)
 {
     g_atrap_calls++;
+    snapshot_at_check();
+    if (vclock_enabled && !vclock_rebased && pc >= vclock_app_lo && pc < vclock_app_hi) {
+        const uint8_t* name = guest_bytes(0x910, 8);
+        if (name && memcmp(name, kTracedApp, kTracedApp[0] + 1) == 0)
+            vclock_rebase();
+    }
     if ((g_atrap_calls & 0xFF) == 1)
         watch_update();
     if ((opcode & 0xF1FF) == 0xA047)
@@ -548,7 +602,7 @@ static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32
 
     while (!g_atrap_active.empty()
            && (g_atrap_active.back().sp <= sp || g_atrap_active.back().sp - sp > kOtherStack))
-        g_atrap_active.pop_back();
+        active_pop();
     Routine parent = g_atrap_active.empty() ? Routine{} : g_atrap_active.back().routine;
     Routine routine = routine_for(opcode, sp, d0, a0);
 
@@ -556,12 +610,19 @@ static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32
     // _LoadSeg never returns: it fixes the jump table entry and jumps into
     // the segment, so it doesn't open a nesting level.
     uint32_t ret = (opcode & 0x0C00) == 0x0C00 ? guest_long(sp) : pc + 2;
-    if ((opcode & 0xFBFF) != 0xA9F0 && g_atrap_active.size() < 256)
-        g_atrap_active.push_back({routine, sp, ret});
+    if ((opcode & 0xFBFF) != 0xA9F0 && g_atrap_active.size() < 256) {
+        bool idle = is_idle_trap(opcode);
+        g_atrap_active.push_back({routine, sp, ret, idle, nullptr});
+        if (idle)
+            vclock_idle_depth++;
+    }
     if (!g_atrap_active.empty())
         uae_atrap_watch_pc = g_atrap_active.back().ret;
 
     AtrapSite& s = g_atrap_sites[AtrapKey{pc, routine, parent}];
+    // unordered_map nodes stay put: the return hook fills in the result.
+    if (!g_atrap_active.empty() && g_atrap_active.back().routine == routine && !s.has_result)
+        g_atrap_active.back().site = &s;
     if (s.count++ == 0) {
         s.seq = g_atrap_seq++;
         s.irq = (uint8_t)intmask;
@@ -570,6 +631,12 @@ static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32
         const Dispatcher* d = (opcode & 0x0800) ? nullptr : g_dispatch_os[opcode & 0xFF];
         if (d && routine.has_obj)
             driver_name((int16_t)routine.obj, s.detail);
+        // Auto-pop glue leaves its caller's return address on top: keep it,
+        // since the trap's own pc is just the shared glue.
+        if ((opcode & 0x0C00) == 0x0C00) {
+            int n = snprintf(s.detail + 1, sizeof s.detail - 1, "caller $%08X", guest_long(sp) - 4);
+            s.detail[0] = (char)std::min<int>(n, sizeof s.detail - 2);
+        }
         if (pc < ROMBaseMac)
             resource_owner(pc, s.owner);
         uint32_t from = pc >= 8 ? pc - 8 : pc;
@@ -583,17 +650,29 @@ static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32
     }
 }
 
-static void atrap_trace_return(uint32_t sp)
+static void atrap_trace_return(uint32_t sp, uint32_t d0)
 {
     // Recursion through the same call site returns innermost first; an
     // A7 below the entry A7 means this is a deeper copy still running.
-    if (!g_atrap_active.empty() && sp >= g_atrap_active.back().sp)
-        g_atrap_active.pop_back();
+    if (!g_atrap_active.empty() && sp >= g_atrap_active.back().sp) {
+        if (AtrapSite* site = g_atrap_active.back().site) {
+            site->has_result = 1;
+            site->res_d0 = d0;
+            site->res_top = guest_long(sp);
+        }
+        active_pop();
+    }
     uae_atrap_watch_pc = g_atrap_active.empty() ? 0 : g_atrap_active.back().ret;
 }
 
 void atrap_trace_enable()
 {
+    auto& cfg = config::EmulatorConfig::instance();
+    auto at = cfg.snapshot_at.rfind('@');
+    if (at != std::string::npos) {
+        g_snapshot_at_name = cfg.snapshot_at.substr(0, at);
+        g_snapshot_at_usec = VCLOCK_APP_START_USEC + (uint64_t)(atof(cfg.snapshot_at.c_str() + at + 1) * 1e6);
+    }
     for (const Dispatcher& d : kDispatchers)
         (d.tool ? g_dispatch_tool : g_dispatch_os)[d.index] = &d;
     uae_atrap_hook = atrap_trace_record;
