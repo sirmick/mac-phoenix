@@ -23,6 +23,8 @@
 #include <prefs/options.h>
 #include <algorithm>
 #include <Iconutil.h>
+#include <TextEdit.h>
+#include <ScriptMgr.h>
 
 /* apple image */
 namespace Executor
@@ -244,6 +246,32 @@ mbdf_draw(int32_t draw_p)
     /* resent the fg/bk colors */
     RGBForeColor(&ROMlib_black_rgb_color);
     RGBBackColor(&ROMlib_white_rgb_color);
+}
+
+/* Message 15 of the 7.5.5 MBDF: hilite nothing, clear the bar without its
+   titles and draw the Pascal string param2 across it in bold, inset (10,1),
+   TETextBox-justified by param1's high byte.  If bit 7 of param1's low byte
+   is set, the font and size are the system font of script (low byte & $7F). */
+static void
+drawmsg(int16_t param1, int32_t param2)
+{
+    StringPtr msg = (StringPtr)SYN68K_TO_US(param2);
+    Rect r;
+
+    HiliteMenu(0);
+    mbdf_draw(-1);
+    if(param1 & 0x80)
+    {
+        int32_t fs = GetScriptVariable(param1 & 0x7F, 84 /* smScriptSysFondSize */);
+        TextFont(fs >> 16);
+        TextSize(fs & 0xFFFF);
+    }
+    TextFace(bold);
+    r = PORT_RECT(wmgr_port);
+    r.bottom = LM(MBarHeight) - 1;
+    InsetRect(&r, 10, 1);
+    if(msg)
+        TETextBox((Ptr)(msg + 1), msg[0], &r, param1 >> 8);
 }
 
 static LONGINT hit(LONGINT);
@@ -667,6 +695,9 @@ int32_t Executor::C_mbdf0(int16_t sel, int16_t mess, int16_t param1,
             break;
         case mbResetAlt:
             resetalt(param2);
+            break;
+        case mbDrawMsg:
+            drawmsg(param1, param2);
             break;
         case mbMenuRgn:
             retval = (LONGINT)

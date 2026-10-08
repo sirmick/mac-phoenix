@@ -803,3 +803,84 @@
     executor: C_
     inline: LMGetMBarHeight()
     noinline: carbon, ppc
+
+# ####
+
+- dispatcher:
+    name: MenuDispatch
+    trap: 0xA825
+    selector-location: D0<0xFF>
+    comment: |
+      7.5.5's dispatcher (through lowmem $7B0) covers selectors -6..1 and
+      only D0's low byte selects.  -4..-1 (MBDF message 14, menu title
+      rectangles) are not implemented yet.
+
+# ####
+
+- function:
+    name: InsertFontResMenu
+    args:
+      - name: mh
+        type: MenuHandle
+      - name: after
+        type: INTEGER
+      - name: scriptFilter
+        type: INTEGER
+    dispatcher: MenuDispatch
+    selector: 0x0400
+    executor: C_
+
+# ####
+
+- function:
+    name: InsertIntlResMenu
+    args:
+      - name: mh
+        type: MenuHandle
+      - name: theType
+        type: ResType
+      - name: after
+        type: INTEGER
+      - name: scriptFilter
+        type: INTEGER
+    dispatcher: MenuDispatch
+    selector: 0x0601
+    executor: C_
+
+# ####
+
+- function:
+    name: DrawMenuBarMessage
+    comment: |
+      MenuDispatch -5 on 7.5.5 (name is a guess).  Calls the MBDF with
+      message 15 (param1 = just << 8 | font byte, param2 = msg): the bar
+      is cleared and msg drawn across it in bold.  Sets $B20 bit 6 so the
+      next MenuSelect/MenuKey redraws the titles first.  Finder uses it.
+    return: OSErr
+    args:
+      - name: msg
+        type: ConstStringPtr
+      - name: font
+        type: int16_t
+      - name: just
+        type: int16_t
+    dispatcher: MenuDispatch
+    selector: 0x08FB
+    executor: C_
+
+# ####
+
+- function:
+    name: IsSystemMenu
+    comment: |
+      MenuDispatch -6 on 7.5.5 (name is a guess): *result is true when
+      menuID is in the system menu range -20480..-16385.
+    return: OSErr
+    args:
+      - name: menuID
+        type: INTEGER
+      - name: result
+        type: Boolean*
+    dispatcher: MenuDispatch
+    selector: 0x03FA
+    executor: C_

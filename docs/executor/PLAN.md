@@ -311,6 +311,11 @@ Kept small so upstream fixes can be merged by hand:
   `DisplayDispatch` and `DialogDispatch` select on D0's low byte.
 * `dial/dialDispatch.cpp`: `DialogDispatch` 7 (`IsCancelEvent`, a guess) and
   8 (`CheckEventQueueForUserCancel`).
+* `menu/menu.cpp`, `menu/stdmbdf.cpp`: `MenuDispatch` ($A825, D0 low byte):
+  `InsertFontResMenu`, `InsertIntlResMenu`, private -6 (`IsSystemMenu`) and
+  -5 (`DrawMenuBarMessage`, names guessed) which, like 7.5.5, has the MBDF
+  (message 15) clear the bar and draw a bold message across it until the
+  next `MenuSelect`/`MenuKey`/`DrawMenuBar`.
 * `appleevent/AE_hdlr.cpp`: ExpandMem+$1AE (System heap reserve) is 64K;
   multiversal `AE_info_t` names it.
 * `file/localvolume/localvolume.cpp`: host volumes report a 2 GB HFS volume

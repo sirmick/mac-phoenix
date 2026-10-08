@@ -74,8 +74,48 @@ void Executor::C_InvalMenuBar()
     DrawMenuBar();
 }
 
+/* Set while DrawMenuBarMessage text covers the titles (7.5.5 keeps this
+   in $B20 bit 6). */
+bool Executor::ROMlib_menubar_message;
+
+void Executor::ROMlib_menubar_message_clear()
+{
+    if(ROMlib_menubar_message)
+        DrawMenuBar();
+}
+
+OSErr Executor::C_DrawMenuBarMessage(ConstStringPtr msg, int16_t font,
+                                     int16_t just)
+{
+    if(LM(MBDFHndl))
+    {
+        MBDFCALL(mbDrawMsg, (just << 8) | (font & 0xFF), ptr_to_longint(msg));
+        ROMlib_menubar_message = true;
+    }
+    return noErr;
+}
+
+OSErr Executor::C_IsSystemMenu(INTEGER menuID, Boolean *result)
+{
+    *result = menuID >= -20480 && menuID <= -16385;
+    return noErr;
+}
+
+void Executor::C_InsertFontResMenu(MenuHandle mh, INTEGER after,
+                                   INTEGER scriptFilter)
+{
+    InsertResMenu(mh, "FONT"_4, after);
+}
+
+void Executor::C_InsertIntlResMenu(MenuHandle mh, ResType theType,
+                                   INTEGER after, INTEGER scriptFilter)
+{
+    InsertResMenu(mh, theType, after);
+}
+
 void Executor::C_DrawMenuBar()
 {
+    ROMlib_menubar_message = false;
     if(LM(MBDFHndl))
     {
         LM(TheMenu) = 0;
@@ -1336,6 +1376,7 @@ LONGINT Executor::C_MenuSelect(Point p)
     Rect spooeyr;
     LONGINT retval;
 
+    ROMlib_menubar_message_clear();
     ROMlib_apple_menu_update();
     LM(TopMenuItem) = LM(MBarHeight);
     retval = ROMlib_menuhelper((MenuHandle)0, &spooeyr, 0, false, 0);
@@ -1429,6 +1470,7 @@ LONGINT Executor::C_MenuKey(CharParameter thec)
 
     if(thec >= 0x1B && thec <= 0x1F)
         /*-->*/ return 0;
+    ROMlib_menubar_message_clear();
     ROMlib_apple_menu_update();
     c = thec;
     if(c >= 'a' && c <= 'z')

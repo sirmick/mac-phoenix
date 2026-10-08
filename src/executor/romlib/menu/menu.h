@@ -61,6 +61,8 @@ extern void ROMlib_apple_menu_attach(MenuHandle mh);
 extern void ROMlib_apple_menu_update();
 extern Handle ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item);
 extern bool ROMlib_apple_menu_open(ConstStringPtr name);
+extern bool ROMlib_menubar_message;
+extern void ROMlib_menubar_message_clear();
 enum { kSystemMenuTitleWidth = 28, kSystemMenuRightMargin = 11 };
 
 #define mbDraw 0
@@ -76,6 +78,7 @@ enum { kSystemMenuTitleWidth = 28, kSystemMenuRightMargin = 11 };
 #define mbSaveAlt 10
 #define mbResetAlt 11
 #define mbMenuRgn 12
+#define mbDrawMsg 15 /* 7.5.5 MBDF: text across the empty bar (name is a guess) */
 
 #define MLMAX 16
 
