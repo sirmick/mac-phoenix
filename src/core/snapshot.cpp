@@ -360,6 +360,10 @@ Routine routine_for(uint16_t opcode, uint32_t sp, uint32_t d0, uint32_t a0)
 {
     Routine r;
     r.trap = opcode;
+    // A Toolbox trap with the auto-pop bit is reached through glue that
+    // left its caller's return address on top: stack arguments start at +4.
+    if ((opcode & 0x0C00) == 0x0C00)
+        sp += 4;
     const Dispatcher* d = (opcode & 0x0800) ? g_dispatch_tool[opcode & 0x3FF] : g_dispatch_os[opcode & 0xFF];
     if (!d)
         return r;

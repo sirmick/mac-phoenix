@@ -17,6 +17,9 @@ SYSTEM_DIRS = [b"System Folder", b"System Folder:Extensions", b"System Folder:Co
 
 try:    # Apple's dcmp 0/1/2 decompressors (pip install rsrcfork; optional)
     from rsrcfork import compress as _compress
+    from rsrcfork.compress import dcmp0 as _dcmp0
+    import dcmp0_ext as _dcmp0_ext       # adds extended codes 0x01, 0x05
+    _dcmp0.decompress_stream_inner = _dcmp0_ext.decompress_stream_inner
 except ImportError:
     _compress = None
 
