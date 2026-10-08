@@ -22,3 +22,17 @@ lowmem:
       state under the name AE_info.
 
 traps: []
+
+# Dispatch traps: one trap word, many routines picked by a selector
+# (tools/macdecode/dispatch.py). Multiversal and Universal Interfaces'
+# inline glue come first; entries here fill gaps. location uses
+# multiversal's spelling: D0W, D0L, D0<mask>, StackW, StackL, TrapBits.
+# After editing, regenerate the tracer's table:
+#   python3 tools/macdecode/dispatch.py --emit-c src/core/atrap_dispatchers.inc
+#
+#   - trap: 0xA88F
+#     name: OSDispatch
+#     selectors:
+#       - {value: 0x31, name: ..., status: guess, source: ...}
+dispatchers: []
+

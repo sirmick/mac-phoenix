@@ -108,7 +108,7 @@ bool snapshot_pending()
 
 // ── A-trap trace ─────────────────────────────────────────────────────
 
-extern void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, int intmask);
+extern void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, int intmask);
 extern uint32_t uae_atrap_watch_pc;
 extern void (*uae_atrap_return_hook)(uint32_t sp);
 
@@ -123,15 +123,41 @@ struct AtrapSite {
     uint8_t code_len = 0;
 };
 
-// Key: caller pc, trap word, and the trap active when it fired (0: none).
+// Dispatch traps: where each one's selector is at the A-line (generated
+// from multiversal + Universal Interfaces by tools/macdecode/dispatch.py).
+struct Dispatcher { int tool, index, kind; uint32_t mask; int sub_kind; uint32_t sub_when; };
+const Dispatcher kDispatchers[] = {
+#include "atrap_dispatchers.inc"
+};
+enum { SEL_NONE, SEL_D0, SEL_STACKW, SEL_STACKL, SEL_TRAPBITS };
+const Dispatcher* g_dispatch_os[256];
+const Dispatcher* g_dispatch_tool[1024];
+
+// A routine: trap word plus selector (and sub-selector) when it's a dispatcher.
+struct Routine {
+    uint16_t trap = 0;
+    uint8_t has_sel = 0, has_sub = 0;
+    uint32_t sel = 0, sub = 0;
+    bool operator==(const Routine& o) const {
+        return trap == o.trap && has_sel == o.has_sel && has_sub == o.has_sub
+            && sel == o.sel && sub == o.sub;
+    }
+};
+
+// Key: caller pc, the routine, and the routine active when it fired.
 struct AtrapKey {
     uint32_t pc;
-    uint16_t trap, parent;
-    bool operator==(const AtrapKey& o) const { return pc == o.pc && trap == o.trap && parent == o.parent; }
+    Routine routine, parent;
+    bool operator==(const AtrapKey& o) const {
+        return pc == o.pc && routine == o.routine && parent == o.parent;
+    }
 };
 struct AtrapKeyHash {
+    static uint64_t mix(const Routine& r) {
+        return ((uint64_t)r.trap << 48) ^ ((uint64_t)r.sel << 16) ^ r.sub ^ ((uint64_t)r.has_sel << 47);
+    }
     size_t operator()(const AtrapKey& k) const {
-        return std::hash<uint64_t>()(((uint64_t)k.pc << 32) | ((uint32_t)k.trap << 16) | k.parent);
+        return std::hash<uint64_t>()(mix(k.routine) * 31 ^ mix(k.parent) * 17 ^ k.pc);
     }
 };
 std::unordered_map<AtrapKey, AtrapSite, AtrapKeyHash> g_atrap_sites;
@@ -142,7 +168,7 @@ uint32_t g_atrap_seq = 0;
 // for returns we miss (non-local exits), an entry whose A7 at entry is at
 // or below the current A7 has returned, and one far above it (another
 // stack: a process switch) is stale.
-struct ActiveTrap { uint16_t trap; uint32_t sp, ret; };
+struct ActiveTrap { Routine routine; uint32_t sp, ret; };
 std::vector<ActiveTrap> g_atrap_active;
 constexpr uint32_t kOtherStack = 256 * 1024;
 
@@ -168,10 +194,18 @@ bool write_atraps(const std::string& path)
     FILE* f = fopen(path.c_str(), "w");
     if (!f)
         return false;
-    fprintf(f, "# trap\tpc\tparent\tirq\tcount\tseq\tapp\tcode (from pc-8)\n");
+    fprintf(f, "# trap\tsel\tsub\tpc\tparent\tparent_sel\tparent_sub\tirq\tcount\tseq\tapp\tcode (from pc-8)\n");
+    auto opt = [f](uint8_t has, uint32_t v) {
+        if (has) fprintf(f, "%08X\t", v); else fputs("-\t", f);
+    };
     for (auto& [key, s] : rows) {
-        fprintf(f, "%04X\t%08X\t%04X\t%u\t%llu\t%u\t", key.trap, key.pc, key.parent,
-                s->irq, (unsigned long long)s->count, s->seq);
+        fprintf(f, "%04X\t", key.routine.trap);
+        opt(key.routine.has_sel, key.routine.sel);
+        opt(key.routine.has_sub, key.routine.sub);
+        fprintf(f, "%08X\t%04X\t", key.pc, key.parent.trap);
+        opt(key.parent.has_sel, key.parent.sel);
+        opt(key.parent.has_sub, key.parent.sub);
+        fprintf(f, "%u\t%llu\t%u\t", s->irq, (unsigned long long)s->count, s->seq);
         for (int i = 1; i <= (uint8_t)s->app[0] && i < 32; i++) {
             char c = s->app[i];
             fputc((c == '\t' || c == '\n' || (unsigned char)c < 0x20) ? '?' : c, f);
@@ -186,24 +220,56 @@ bool write_atraps(const std::string& path)
 
 } // namespace
 
-static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, int intmask)
+uint32_t guest_long(uint32_t addr)
+{
+    const uint8_t* p = guest_bytes(addr, 4);
+    return p ? (uint32_t)(p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]) : 0;
+}
+
+// The selector a dispatcher reads, at the A-line: nothing pushed yet, so
+// a stack selector is at (A7).
+uint32_t read_selector(int kind, uint32_t mask, uint16_t opcode, uint32_t sp, uint32_t d0)
+{
+    switch (kind) {
+    case SEL_D0:       return d0 & mask;
+    case SEL_STACKW:   return (guest_long(sp) >> 16) & mask;
+    case SEL_STACKL:   return guest_long(sp) & mask;
+    case SEL_TRAPBITS: return opcode & mask;
+    }
+    return 0;
+}
+
+Routine routine_for(uint16_t opcode, uint32_t sp, uint32_t d0)
+{
+    Routine r;
+    r.trap = opcode;
+    const Dispatcher* d = (opcode & 0x0800) ? g_dispatch_tool[opcode & 0x3FF] : g_dispatch_os[opcode & 0xFF];
+    if (d) {
+        r.has_sel = 1;
+        r.sel = read_selector(d->kind, d->mask, opcode, sp, d0);
+        if (d->sub_kind && r.sel == d->sub_when) {
+            r.has_sub = 1;
+            r.sub = read_selector(d->sub_kind, 0xFFFFFFFFu, opcode, sp, d0);
+        }
+    }
+    return r;
+}
+
+static void atrap_trace_record(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, int intmask)
 {
     while (!g_atrap_active.empty()
            && (g_atrap_active.back().sp <= sp || g_atrap_active.back().sp - sp > kOtherStack))
         g_atrap_active.pop_back();
-    uint16_t parent = g_atrap_active.empty() ? 0 : g_atrap_active.back().trap;
+    Routine parent = g_atrap_active.empty() ? Routine{} : g_atrap_active.back().routine;
+    Routine routine = routine_for(opcode, sp, d0);
 
     // Toolbox traps with the auto-pop bit return to the caller's caller.
-    uint32_t ret = pc + 2;
-    if ((opcode & 0x0C00) == 0x0C00) {
-        const uint8_t* p = guest_bytes(sp, 4);
-        ret = p ? (uint32_t)(p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]) : 0;
-    }
+    uint32_t ret = (opcode & 0x0C00) == 0x0C00 ? guest_long(sp) : pc + 2;
     if (g_atrap_active.size() < 256)
-        g_atrap_active.push_back({opcode, sp, ret});
+        g_atrap_active.push_back({routine, sp, ret});
     uae_atrap_watch_pc = g_atrap_active.back().ret;
 
-    AtrapSite& s = g_atrap_sites[AtrapKey{pc, opcode, parent}];
+    AtrapSite& s = g_atrap_sites[AtrapKey{pc, routine, parent}];
     if (s.count++ == 0) {
         s.seq = g_atrap_seq++;
         s.irq = (uint8_t)intmask;
@@ -231,6 +297,8 @@ static void atrap_trace_return(uint32_t sp)
 
 void atrap_trace_enable()
 {
+    for (const Dispatcher& d : kDispatchers)
+        (d.tool ? g_dispatch_tool : g_dispatch_os)[d.index] = &d;
     uae_atrap_hook = atrap_trace_record;
     uae_atrap_return_hook = atrap_trace_return;
 }

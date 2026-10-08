@@ -43,6 +43,8 @@ class DB:
         self.lowmem = []          # dicts: name, type, address, comment, file, ...
         self.traps = {}           # (table, index) -> [names]
         self.trap_info = {}       # (table, index) -> [{name, file, kind, ...}]
+        self.dispatchers = {}     # name -> {trap, location, file}
+        self.selector_funcs = []  # {dispatcher, selector, name, executor, file}
         self._sizes = {}
         for f in sorted(self.defs.glob("*.yaml")):
             for item in yaml.safe_load(f.read_text()) or []:
@@ -68,7 +70,14 @@ class DB:
                             self.consts[val["name"]] = val["value"]
                 elif kind == "lowmem":
                     self.lowmem.append(dict(v, file=f.name))
-                elif kind in ("function", "dispatcher") and isinstance(v.get("trap"), int):
+                if kind == "dispatcher" and isinstance(v.get("trap"), int):
+                    self.dispatchers[name] = {"trap": v["trap"], "file": f.name,
+                                              "location": v.get("selector-location")}
+                if kind == "function" and v.get("dispatcher") and isinstance(v.get("selector"), int):
+                    self.selector_funcs.append(
+                        {"dispatcher": v["dispatcher"], "selector": v["selector"], "name": name,
+                         "executor": v.get("executor"), "file": f.name})
+                if kind in ("function", "dispatcher") and isinstance(v.get("trap"), int):
                     slot = trap_slot(v["trap"])
                     self.traps.setdefault(slot, []).append(name)
                     self.trap_info.setdefault(slot, []).append(

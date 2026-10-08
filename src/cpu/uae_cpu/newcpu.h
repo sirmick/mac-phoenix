@@ -86,7 +86,7 @@ struct comptbl {
 extern void REGPARAM2 op_illg (uae_u32) REGPARAM;
 
 /* A-trap trace hooks (core/snapshot.cpp, --trace-atraps). */
-extern void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, int intmask);
+extern void (*uae_atrap_hook)(uint16_t opcode, uint32_t pc, uint32_t sp, uint32_t d0, int intmask);
 extern uint32_t uae_atrap_watch_pc;
 extern void (*uae_atrap_return_hook)(uint32_t sp);
 extern void m68k_dumpstate(uaecptr *nextpc);

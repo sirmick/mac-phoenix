@@ -33,6 +33,7 @@ import macdecode as md                      # noqa: E402
 from mvdb import trap_slot                  # noqa: E402
 from origins import Origins                 # noqa: E402
 from rsrc import Disk                       # noqa: E402
+from dispatch import Dispatchers            # noqa: E402
 
 PATCH_TYPES = {"ptch", "lpch", "gpch", "PTCH", "scod"}
 UI_TRAPS = Path(__file__).resolve().parents[2] / "private/Universal Interfaces/Universal/Interfaces/CIncludes/Traps.h"
@@ -54,14 +55,18 @@ def ui_names():
 
 
 def read_sites(path):
+    def opt(v):
+        return None if v == "-" else int(v, 16)
     rows = []
     for line in Path(path).read_text(encoding="latin-1").splitlines():
         if line.startswith("#") or not line.strip():
             continue
         f = line.split("\t")
-        rows.append({"trap": int(f[0], 16), "pc": int(f[1], 16), "parent": int(f[2], 16),
-                     "irq": int(f[3]), "count": int(f[4]), "seq": int(f[5]),
-                     "app": f[6], "code": bytes.fromhex(f[7]) if len(f) > 7 else b""})
+        rows.append({"trap": int(f[0], 16), "sel": opt(f[1]), "sub": opt(f[2]),
+                     "pc": int(f[3], 16),
+                     "parent": int(f[4], 16), "parent_sel": opt(f[5]), "parent_sub": opt(f[6]),
+                     "irq": int(f[7]), "count": int(f[8]), "seq": int(f[9]),
+                     "app": f[10], "code": bytes.fromhex(f[11]) if len(f) > 11 else b""})
     return rows
 
 
@@ -146,92 +151,138 @@ def group(origin):
     return fname
 
 
+class Names:
+    """Routine names and Executor status, (trap, selector[, sub]) as the unit."""
+
+    def __init__(self, db):
+        self.db, self.ui, self.ds = db, ui_names(), Dispatchers(db)
+        # Traps Executor implements as raw register-level 68k stubs; multiversal
+        # declares these functions without their trap words.
+        stubs = Path(__file__).resolve().parents[2] / "src/executor/romlib/base/emustubs.h"
+        self.raw = {trap_key(int(t, 16)) for t in
+                    re.findall(r"RAW_68K_TRAP\(\w+,\s*(0x[0-9A-Fa-f]+)", stubs.read_text())}
+
+    def trap(self, word):
+        k = trap_key(word)
+        return (self.db.traps.get(k) or self.ui.get(k) or [f"_{word:04X}"])[0]
+
+    def routine(self, word, sel=None, sub=None):
+        if not word:
+            return "(top)"
+        base = self.trap(word)
+        if sel is None:
+            return base
+        name = self.ds.selector_name(word, sel) or f"{base}#{sel:X}"
+        if sub is not None:
+            cands = self.ds.sub_selector_names(word, sub)
+            what = f"what={sub & 0xFFFF:04X}"
+            name += f" {what} ({'/'.join(cands[:2])}{'…' if len(cands) > 2 else ''})" if cands else f" {what}"
+        return name
+
+    def name_source(self, word, sel=None):
+        k = trap_key(word)
+        if sel is not None:
+            d = self.ds.get(word)
+            s = d and d["selectors"].get(sel & (d["mask"] or 0xFFFFFFFF))
+            return s["source"].split(" ")[0] if s else "unnamed"
+        return "multiversal" if self.db.traps.get(k) else "Traps.h" if self.ui.get(k) else "unnamed"
+
+    def executor(self, word, sel=None):
+        """implemented | missing | unknown (not in any table)."""
+        k = trap_key(word)
+        if k in self.raw:
+            return "implemented"
+        # One function for the whole trap (it decodes the selector itself).
+        if any(e.get("kind") == "function" and e.get("executor") for e in self.db.trap_info.get(k, [])):
+            return "implemented" if sel is None else "whole-trap"
+        if sel is not None:
+            d = self.ds.get(word)
+            s = d and d["selectors"].get(sel & (d["mask"] or 0xFFFFFFFF))
+            if s and s["executor"]:
+                return "implemented"
+            return "missing" if s else "unknown"
+        info = self.db.trap_info.get(k)
+        if not info:
+            return "unknown"
+        return "implemented" if any(e.get("executor") for e in info) else "missing"
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("snapshot")
     ap.add_argument("--disk")
-    ap.add_argument("--trap", help="show every site of one trap word (hex)")
-    ap.add_argument("--needed", action="store_true",
-                    help="traps called from code Executor runs (not ROM, not patches)")
+    ap.add_argument("--trap", help="every site of one trap word (hex), by selector")
+    ap.add_argument("--all", action="store_true", help="every routine, not just the gaps")
     ap.add_argument("--json")
     a = ap.parse_args()
 
     snap = md.Snapshot(a.snapshot)
     db = md.load_db()
-    ui = ui_names()
+    nm = Names(db)
     zones = md.find_zones(snap)
     disk = a.disk or (snap.meta.get("disks") or [None])[0]
     res = Resolver(snap, zones, disk, md.World(snap, db, None, zones))
     sites = read_sites(Path(a.snapshot) / "atraps.tsv")
-
-    def names(word):
-        k = trap_key(word)
-        return db.traps.get(k, []), ui.get(k, [])
-
-    def label(word):
-        mv, u = names(word)
-        return (mv or u or ["-"])[0]
-
     for s in sites:
         s["origin"] = res.resolve(s)
         s["group"] = group(s["origin"])
 
-    by_trap = defaultdict(list)
-    for s in sites:
-        by_trap[trap_key(s["trap"])].append(s)
+    def rkey(s):
+        return (trap_key(s["trap"]), s["sel"], s["sub"])
 
     if a.trap:
         k = trap_key(int(a.trap, 16))
-        for s in sorted(by_trap.get(k, []), key=lambda s: -s["count"]):
-            print(f"{s['trap']:04X} {label(s['trap']):24} pc {s['pc']:08X} x{s['count']:<7} "
-                  f"in {s['parent']:04X} {label(s['parent']) if s['parent'] else '(top)':22} "
+        for s in sorted((s for s in sites if trap_key(s["trap"]) == k),
+                        key=lambda s: (s["sel"] or 0, -s["count"])):
+            print(f"{nm.routine(s['trap'], s['sel'], s['sub']):34} pc {s['pc']:08X} x{s['count']:<6} "
+                  f"in {nm.routine(s['parent'], s['parent_sel'], s['parent_sub']):28} "
                   f"irq{s['irq']} {s['origin']}")
         return
 
-    def status(k):
-        mv, u = db.traps.get(k, []), ui.get(k, [])
-        return "multiversal" if mv else "Traps.h" if u else "unnamed"
-
+    by = defaultdict(list)
+    for s in sites:
+        by[rkey(s)].append(s)
     rows = []
-    for k, ss in sorted(by_trap.items()):
-        groups = Counter()
+    for (k, sel, sub), ss in by.items():
+        word = ss[0]["trap"]
+        groups, parents = Counter(), Counter()
         for s in ss:
             groups[s["group"]] += s["count"]
-        parents = Counter()
-        for s in ss:
-            parents[s["parent"]] += s["count"]
-        rows.append({"table": k[0], "index": k[1], "word": ss[0]["trap"],
-                     "name": label(ss[0]["trap"]), "status": status(k),
+            parents[nm.routine(s["parent"], s["parent_sel"], s["parent_sub"])] += s["count"]
+        rows.append({"trap": f"{word:04X}", "sel": sel, "sub": sub,
+                     "name": nm.routine(word, sel, sub), "named_by": nm.name_source(word, sel),
+                     "executor": nm.executor(word, sel),
                      "calls": sum(s["count"] for s in ss), "sites": len(ss),
-                     "groups": dict(groups.most_common()),
-                     "parents": {f"{p:04X}": n for p, n in parents.most_common(8)},
-                     "needed": any(g not in ("ROM", "patch", "?") for g in groups)})
-
+                     "groups": dict(groups.most_common()), "parents": dict(parents.most_common(6)),
+                     "runs": any(g not in ("ROM", "patch", "?") for g in groups)})
+    rows.sort(key=lambda r: (r["trap"], r["sel"] or 0, r["sub"] or 0))
     if a.json:
         Path(a.json).write_text(json.dumps(rows, indent=1))
 
-    tot = Counter(r["status"] for r in rows)
-    resolved = Counter(s["group"] for s in sites)
-    print(f"# {a.snapshot}: {len(sites)} call sites, {len(rows)} distinct traps "
-          f"({tot['multiversal']} in multiversal, {tot['Traps.h']} only in Traps.h, {tot['unnamed']} unnamed)")
-    print("  call sites by caller: " + ", ".join(f"{g} {n}" for g, n in resolved.most_common(12)))
+    disp = [r for r in rows if r["sel"] is not None]
+    print(f"# {a.snapshot}: {len(sites)} call sites, {len(rows)} routines "
+          f"({len(rows) - len(disp)} plain traps, {len(disp)} dispatcher selectors "
+          f"over {len({r['trap'] for r in disp})} dispatchers)")
+    print("  named by: " + ", ".join(f"{k} {v}" for k, v in Counter(r["named_by"] for r in rows).most_common()))
+    print("  call sites by caller: " + ", ".join(
+        f"{g} {n}" for g, n in Counter(s["group"] for s in sites).most_common(10)))
 
     def show(rs, title):
         print(f"\n## {title} ({len(rs)})")
         for r in rs:
-            g = ", ".join(f"{k} {v}" for k, v in list(r["groups"].items())[:5])
-            p = ", ".join(f"{label(int(w, 16)) if w != '0000' else '(top)'} {n}"
-                          for w, n in list(r["parents"].items())[:3])
-            print(f"  {r['word']:04X} {r['name']:22} {r['status']:11} calls {r['calls']:<8} "
-                  f"callers: {g}  |  inside: {p}")
+            sel = f"{r['sel']:08X}" if r["sel"] is not None else "-"
+            g = ", ".join(f"{k} {v}" for k, v in list(r["groups"].items())[:4])
+            p = ", ".join(f"{k} {v}" for k, v in list(r["parents"].items())[:2])
+            print(f"  {r['trap']} {sel:8} {r['name'][:34]:34} {r['named_by']:11} {r['executor']:11} "
+                  f"x{r['calls']:<6} by {g}  | in {p}")
 
-    if a.needed:
-        need = [r for r in rows if r["needed"]]
-        for st in ("unnamed", "Traps.h", "multiversal"):
-            show([r for r in need if r["status"] == st],
-                 f"called from code Executor runs, {st}")
+    if a.all:
+        show(rows, "all routines")
         return
-    show([r for r in rows if r["status"] != "multiversal"], "traps without a multiversal name")
+    runs = [r for r in rows if r["runs"]]
+    gap = [r for r in runs if r["executor"] not in ("implemented", "whole-trap")]
+    show(gap, "called from code Executor runs (not ROM, not patches) and not in Executor")
+    show([r for r in gap if "Finder" in r["groups"]], "of which Finder calls")
 
 
 if __name__ == "__main__":
