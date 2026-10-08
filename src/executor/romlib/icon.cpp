@@ -663,17 +663,36 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
         }
         uint8_t *d = (uint8_t *)data_p;
         const uint8_t *m = (const uint8_t *)mask_p;
+        bool color_port = CGrafPort_p(port);
+        int rb = n / 8;
+        auto in_mask = [&](int x, int y) {
+            return x >= 0 && y >= 0 && x < n && y < n && (m[y * rb + x / 8] & (0x80 >> (x & 7)));
+        };
         for(int y = 0; y < n; y++)
-            for(int x = 0; x < n / 8; x++)
+            for(int x = 0; x < rb; x++)
             {
-                int i = y * (n / 8) + x;
+                int i = y * rb + x;
                 if(state == ttOpen)
-                    d[i] = m[i] & gray_rows[y & 1];
+                {
+                    /* As 7.5.5 draws an open item: the mask's outline in
+                       black, a 50% pattern inside. */
+                    uint8_t outline = 0;
+                    for(int b = 0; b < 8; b++)
+                    {
+                        int px = x * 8 + b;
+                        if(in_mask(px, y) && !(in_mask(px - 1, y) && in_mask(px + 1, y)
+                                               && in_mask(px, y - 1) && in_mask(px, y + 1)))
+                            outline |= 0x80 >> b;
+                    }
+                    d[i] = (m[i] & gray_rows[y & 1]) | outline;
+                }
                 else if(state == ttOffline)
                     d[i] = (d[i] & ~m[i]) | (m[i] & ltgray_rows[y & 3]);
                 if(disabled)
                     d[i] &= gray_rows[y & 1];
-                if(selected)
+                /* Selected: inverted in black and white; on a colour port
+                   the white parts take the selection darkening instead. */
+                if(selected && !color_port)
                     d[i] = m[i] & ~d[i];
             }
         BitMap data_bm = mask_bm;
@@ -681,13 +700,15 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
 
         GUEST<int32_t> fg = PORT_FG_COLOR(port), bk = PORT_BK_COLOR(port);
         RGBColor fg_rgb, bk_rgb;
-        bool color_port = CGrafPort_p(port);
         if(color_port)
         {
             fg_rgb = CPORT_RGB_FG_COLOR(port);
             bk_rgb = CPORT_RGB_BK_COLOR(port);
+            RGBColor back = ROMlib_white_rgb_color;
+            if(selected)
+                tint(back, ROMlib_white_rgb_color, true, false);
             RGBForeColor(labelled ? &label_rgb : &ROMlib_black_rgb_color);
-            RGBBackColor(&ROMlib_white_rgb_color);
+            RGBBackColor(&back);
         }
         CopyMask(&data_bm, &mask_bm, PORT_BITS_FOR_COPY(port), &icon_rect,
                  &icon_rect, &dst);

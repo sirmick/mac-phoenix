@@ -401,7 +401,12 @@ void Executor::C_CalcVisBehind(WindowPeek w, RgnHandle clobbered)
     WindowPeek wp;
 
     if(!w)
+    {
+        /* MacPhoenix: nothing behind in this layer; the layers behind
+           still need their visible regions recomputed. */
+        ROMlib_layers_calcvis_behind(clobbered);
         return;
+    }
     rh = NewRgn();
     testrgn = NewRgn();
     CopyRgn(clobbered, rh);
