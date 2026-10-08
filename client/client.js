@@ -3986,10 +3986,22 @@ function renderPresetTabs() {
         tab.addEventListener('click', () => loadPreset(name));
         container.appendChild(tab);
     }
+
+    // Built-in profiles (not saved, no delete button) unless saved over.
+    for (const name of Object.keys(App.builtinPresets || {})) {
+        if (App.savedPresets[name]) continue;
+        const tab = document.createElement('div');
+        tab.className = 'config-tab';
+        tab.dataset.preset = name;
+        tab.textContent = name;
+        tab.title = 'Built-in profile';
+        tab.addEventListener('click', () => loadPreset(name));
+        container.appendChild(tab);
+    }
 }
 
 function loadPreset(name) {
-    const preset = App.savedPresets[name];
+    const preset = App.savedPresets[name] || App.builtinPresets?.[name];
     if (!preset) return;
     currentConfig = configFromServerJson(preset);
     currentConfig.emulator = preset.emulator || name || guessEmulatorMode(currentConfig.backend);
@@ -4683,15 +4695,16 @@ function onRomChange() {
 }
 
 // The default Executor profile: real Finder on the 7.5.5 System, fresh
-// each run. Offered as a profile tab while the System exists and no saved
-// profile has the name; saved with the config like any other.
+// each run. A built-in tab while the System exists: never written into the
+// saved presets (saving the config sends App.savedPresets whole, so a
+// seeded entry there would replace the user's), unless saved as a preset.
 const EXECUTOR_PROFILE = 'Executor 7.5.5';
 async function seedExecutorProfile(cfg) {
-    if (App.savedPresets[EXECUTOR_PROFILE]) return;
+    App.builtinPresets = {};
     const storage = await loadStorage();
     const sys = (storage?.executor_systems || []).find(s => s.name === '7.5.5' && s.finder);
     if (!sys) return;
-    App.savedPresets[EXECUTOR_PROFILE] = {
+    App.builtinPresets[EXECUTOR_PROFILE] = {
         ...cfg, configs: undefined,
         emulator: 'executor', backend: 'executor', rom: '',
         ram_mb: 64, screen: '1024x768', audio: false,
