@@ -5,6 +5,7 @@
 /* Forward declarations in WindowMgr.h (DO NOT DELETE THIS LINE) */
 
 #include <base/common.h>
+#include <rsys/process.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <WindowMgr.h>
@@ -333,6 +334,9 @@ void Executor::C_PaintOne(WindowPeek w, RgnHandle clobbered)
                     FillRgn(clobbered, &LM(DeskPattern));
             }
         }
+        /* MacPhoenix: what of the desktop was repainted is an update for
+           the desktop layer's owner (Finder redraws its desktop icons). */
+        ROMlib_desktop_layer_invalidate(PORT_CLIP_REGION(wmgr_port));
     }
 }
 

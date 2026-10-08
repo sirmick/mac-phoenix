@@ -129,6 +129,15 @@ extern int syn68k_track_pc;
 syn68k_addr_t syn68k_current_pc(void);
 extern int emulation_depth;
 
+/* MacPhoenix: one guest CPU context per Mac process (Process Manager).
+ * Saves the register file, condition codes, status register, the
+ * interpreter's own state and the nesting depth; interrupt state and the
+ * trap handler table belong to the machine and are not part of it. Only
+ * valid between instructions, i.e. from host code a trap is running. */
+size_t syn68k_context_size(void);
+void syn68k_save_context(void *context);
+void syn68k_restore_context(const void *context);
+
 #define ADDRESS_BITS 32
 #define CLEAN(addr) ((ptr_sized_uint)(addr))
 #define ADDRESS_MASK 0xFFFFFFFFU

@@ -3,6 +3,8 @@
 
 #include <MemoryMgr.h>
 #include <PPC.h>
+#include <ProcessMgr.h>
+#include <vector>
 
 namespace Executor
 {
@@ -27,6 +29,36 @@ extern void process_reset_heap(THz pm_zone);
    HeapEnd, ApplLimit, CurStackBase, CurrentA5 and MemTop.  The heap is
    left as TheZone, so the application's resource map lands in it. */
 extern void process_layout_partition(ConstStringPtr app_name);
+
+/* MacPhoenix Process Manager (process.cpp). */
+
+/* Remember the low memory and CPU state a new process starts from (the
+   first process's, just before its launch). */
+extern void process_capture_template();
+/* Host state that is per process: saved and restored on every switch,
+   zeroed for a new process. */
+extern void ROMlib_process_register_state(void *p, size_t n);
+/* Is the current process one that runs on its own thread (not the first)? */
+extern bool ROMlib_process_has_thread();
+/* Called on every event call: where processes switch. */
+extern void ROMlib_process_event_hook();
+/* LaunchApplication with launchContinue: create the process. */
+extern OSErr process_launch(LaunchParamBlockRec *lpbp);
+/* launch.cpp: start the application in the (new) current process. */
+extern void ROMlib_launch_process(FSSpec *app);
+
+/* The processes, for the Application menu. */
+struct ROMlib_process_entry
+{
+    ProcessSerialNumber psn;
+    Str31 name;
+    Handle icon;   /* icon suite, System heap */
+    bool current;
+};
+extern std::vector<ROMlib_process_entry> ROMlib_process_entries();
+
+/* The desktop was repainted there: an update for the desktop layer. */
+extern void ROMlib_desktop_layer_invalidate(RgnHandle rgn);
 
 /* The current process's PPC port name (its high-level events' sender). */
 extern void ROMlib_process_port_name(PPCPortRec *port);

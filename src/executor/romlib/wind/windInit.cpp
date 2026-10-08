@@ -5,6 +5,7 @@
 /* Forward declarations in WindowMgr.h (DO NOT DELETE THIS LINE) */
 
 #include <base/common.h>
+#include <rsys/process.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <WindowMgr.h>
@@ -100,21 +101,33 @@ void Executor::C_InitWindows()
     {
         ThePortGuard guard(qdGlobals().thePort);
 
-        /* FIXME: is this a memory leak, to just call InitPort () again? */
-        InitPort(LM(WMgrPort));
-        InitCPort(LM(WMgrCPort));
+        /* MacPhoenix: the Window Manager ports, desktop pattern and gray
+           region belong to the machine.  The first process sets them up
+           and paints the desktop; a later one (Process Manager) only gets
+           its own window list, menus and palettes, like on 7.5.5 where
+           launching an application leaves the screen alone. */
+        bool first_process = !ROMlib_process_has_thread();
+        if(first_process)
+        {
+            /* FIXME: is this a memory leak, to just call InitPort () again? */
+            InitPort(LM(WMgrPort));
+            InitCPort(LM(WMgrCPort));
 
-        ph = GetPattern(deskPatID);
-        new_ph = GetPixPat(deskPatID);
-        if(new_ph)
-            LM(DeskCPat) = new_ph;
-        else
-            USE_DESKCPAT_VAR &= ~USE_DESKCPAT_BIT;
+            ph = GetPattern(deskPatID);
+            new_ph = GetPixPat(deskPatID);
+            if(new_ph)
+                LM(DeskCPat) = new_ph;
+            else
+                USE_DESKCPAT_VAR &= ~USE_DESKCPAT_BIT;
+        }
         InitPalettes();
         InitMenus();
-        LM(DeskPattern) = **ph;
-        LM(GrayRgn) = NewRgn();
-        ROMLib_InitGrayRgn();
+        if(first_process)
+        {
+            LM(DeskPattern) = **ph;
+            LM(GrayRgn) = NewRgn();
+            ROMLib_InitGrayRgn();
+        }
         LM(WindowList) = nullptr;
         LM(SaveUpdate) = -1;
         LM(PaintWhite) = -1;

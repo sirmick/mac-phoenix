@@ -9,25 +9,15 @@
 #include <optional>
 #include "../../../cpu/uae_cpu/vclock.h"
 
-#if defined(_WIN32)
-#define USE_TIMER_THREAD 1
-#define USE_SIGNALS 0
-#else
-#define USE_TIMER_THREAD 0
-#define USE_SIGNALS 1
-#endif
-
-
-#if USE_TIMER_THREAD
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#else
-#include <unistd.h>
-#include <sys/time.h>
-#include <signal.h>
-#include <pthread.h>
-#endif
+/* MacPhoenix: the timer is a Qt thread sleeping until the next deadline.
+   It raises the interrupt and wakes whichever host thread is idle in
+   syncint_wait_interrupt() -- under the Process Manager that is the thread
+   of whatever process holds the baton, not a fixed one (upstream's SIGALRM
+   was aimed at a single thread). */
+#include <QDeadlineTimer>
+#include <QMutex>
+#include <QThread>
+#include <QWaitCondition>
 
 using namespace Executor;
 
@@ -44,23 +34,19 @@ namespace
 
     Interrupt timerInterrupt;
 
-#if USE_TIMER_THREAD
-    std::mutex mutex;
-    std::condition_variable wake_cond;
-#else
-    std::optional<pthread_t> waitingThread;
-#endif
+    /* Idle guest-running threads wait here for an interrupt. */
+    QMutex wake_mutex;
+    QWaitCondition wake_cond;
 
     struct SyncintTimer
     {
-#if USE_TIMER_THREAD
         using clock = std::chrono::steady_clock;
-        std::thread thread;
-        std::condition_variable cond;
+        QThread *thread = nullptr;
+        QMutex mutex;
+        QWaitCondition cond;
         bool terminate = false;
         clock::time_point last_interrupt;
         clock::time_point scheduled_interrupt;
-#endif
 
         SyncintTimer();
         ~SyncintTimer();
@@ -109,12 +95,8 @@ void Interrupt::trigger()
     getPowerCore().requestInterrupt();
 
 
-#if USE_TIMER_THREAD
-    wake_cond.notify_all();
-#else
-    if(waitingThread && !pthread_equal(pthread_self(), *waitingThread))
-        pthread_kill(*waitingThread, SIGALRM);
-#endif
+    QMutexLocker lock(&wake_mutex);
+    wake_cond.wakeAll();
 }
 
 void Interrupt::handleCommon()
@@ -198,72 +180,53 @@ void Executor::syncint_check_interrupt()
 
 SyncintTimer::SyncintTimer()
 {
-#if USE_TIMER_THREAD
     last_interrupt = scheduled_interrupt = clock::now();
-#else
-    sigset_t sigs;
-    sigemptyset(&sigs);
-    sigaddset(&sigs, SIGALRM);
-    pthread_sigmask(SIG_BLOCK, &sigs, NULL);
-#endif
 }
 
 void SyncintTimer::start()
 {
     if(vclock_enabled)
         vclock_poll_hook = vclockPoll;
-#if USE_TIMER_THREAD
-    thread = std::thread([this] {
-        std::unique_lock<std::mutex> lock(mutex);
+    thread = QThread::create([this] {
+        QMutexLocker lock(&mutex);
         while(!terminate)
         {
             if(scheduled_interrupt > last_interrupt)
             {
-                auto status = cond.wait_until(lock, scheduled_interrupt);
-                if(status == std::cv_status::timeout)
+                auto left = scheduled_interrupt - clock::now();
+                if(left <= clock::duration::zero()
+                   || !cond.wait(&mutex, QDeadlineTimer(
+                          std::chrono::duration_cast<std::chrono::nanoseconds>(left),
+                          Qt::PreciseTimer)))
                 {
-                    last_interrupt = scheduled_interrupt;
-
-                    timerInterrupt.trigger();
+                    /* Not woken by a new post: the deadline passed. */
+                    if(clock::now() >= scheduled_interrupt)
+                    {
+                        last_interrupt = scheduled_interrupt;
+                        timerInterrupt.trigger();
+                    }
                 }
             }
             else
-            {
-                cond.wait(lock);
-            }
+                cond.wait(&mutex);
         }
     });
-#else
-    struct sigaction s;
-
-    s.sa_handler = [](int n) {
-        timerInterrupt.trigger();
-    };
-    sigemptyset(&s.sa_mask);
-    s.sa_flags = 0;
-    sigaction(SIGALRM, &s, nullptr);
-
-    sigset_t sigs;
-    sigemptyset(&sigs);
-    sigaddset(&sigs, SIGALRM);
-    pthread_sigmask(SIG_UNBLOCK, &sigs, NULL);
-
-    waitingThread = pthread_self();
-#endif
+    thread->setObjectName("syncint timer");
+    thread->start(QThread::TimeCriticalPriority);
 }
 
 SyncintTimer::~SyncintTimer()
 {
-#if USE_TIMER_THREAD
-    if(thread.joinable())
+    if(thread)
     {
         {
-            std::unique_lock<std::mutex> lock(mutex);
+            QMutexLocker lock(&mutex);
             terminate = true;
+            cond.wakeAll();
         }
-        thread.join();
+        thread->wait();
+        delete thread;
     }
-#endif
 }
 
 void SyncintTimer::post(std::chrono::microseconds usecs, bool fromLast)
@@ -273,8 +236,7 @@ void SyncintTimer::post(std::chrono::microseconds usecs, bool fromLast)
         vDeadline = (fromLast ? vLast : vclock_usec()) + usecs.count();
         return;
     }
-#if USE_TIMER_THREAD
-    std::unique_lock<std::mutex> lock(mutex);
+    QMutexLocker lock(&mutex);
 
     auto time = (fromLast ? last_interrupt : clock::now()) + usecs;
 
@@ -282,17 +244,8 @@ void SyncintTimer::post(std::chrono::microseconds usecs, bool fromLast)
         last_interrupt = clock::time_point();
     if(scheduled_interrupt <= last_interrupt || time < scheduled_interrupt)
         scheduled_interrupt = time;
-    
-    cond.notify_one();
-#else
-    struct itimerval t;
 
-    t.it_value.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(usecs).count();
-    t.it_value.tv_usec = usecs.count() % 1000000;
-    t.it_interval.tv_sec = 0;
-    t.it_interval.tv_usec = 0;
-    setitimer(ITIMER_REAL, &t, nullptr);
-#endif
+    cond.wakeAll();
 }
 
 void SyncintTimer::wait()
@@ -304,20 +257,10 @@ void SyncintTimer::wait()
         vclockPoll();
         return;
     }
-#if USE_TIMER_THREAD
-    using namespace std::literals::chrono_literals;
-
-    std::unique_lock<std::mutex> lock(mutex);
-    wake_cond.wait(lock, []() { return INTERRUPT_PENDING(); });
-
-    // unlock here, in case the subsequent call to syncint_check_interrupt()
-    // triggers a call to syncint_post(), which will need to lock 'mutex'.
-    lock.unlock();
-#else
-    sigset_t zero_mask;
-    sigemptyset(&zero_mask);
-    sigsuspend(&zero_mask);
-#endif
+    /* Checked under the lock trigger() takes, so no wake-up is lost. */
+    QMutexLocker lock(&wake_mutex);
+    while(!INTERRUPT_PENDING())
+        wake_cond.wait(&wake_mutex);
 }
 
 void Executor::syncint_init()

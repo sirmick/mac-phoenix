@@ -85,6 +85,18 @@ hlock_return_orig_state(Handle h)
     return state;
 }
 
+bool ROMlib_live_handle_p(Handle h)
+{
+    block_header_t *block = HANDLE_TO_BLOCK(h);
+    if(!block || USE(block) != REL)
+        return false;
+    for(THz zone : { (THz)LM(ApplZone), (THz)LM(SysZone), (THz)LM(TheZone), ROMlib_pm_zone })
+        if(zone && (char *)block > (char *)zone && (char *)block < (char *)ZONE_BK_LIM(zone)
+           && BLOCK_TO_HANDLE(zone, block) == h)
+            return true;
+    return false;
+}
+
 Size zone_size(THz zone)
 {
     return (char *)ZONE_BK_LIM(zone) - (char *)zone;

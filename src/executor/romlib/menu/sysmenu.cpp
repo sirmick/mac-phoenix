@@ -10,6 +10,7 @@
  * adds to the Help menu are returned to it. */
 
 #include <base/common.h>
+#include <rsys/process.h>
 
 #include <MenuMgr.h>
 #include <ResourceMgr.h>
@@ -43,7 +44,8 @@ enum
 
 MenuHandle help_menu;
 MenuHandle app_menu;
-INTEGER app_menu_refnum; /* the application app_menu was built for */
+INTEGER app_menu_fixed;  /* items from the resource, divider included */
+std::vector<std::vector<uint8_t>> app_menu_texts; /* their text, with ^0 */
 INTEGER help_system_items; /* items before the application's own */
 
 /* title = [5][$01][suite handle] */
@@ -189,19 +191,50 @@ void make_help_menu()
     help_menu = mh;
 }
 
+/* The Application menu: one for the whole system, as on 7.5.5.  Its items
+   name the current application (^0), then list every process. */
 void make_app_menu()
 {
     MenuHandle mh = GetMenu(kApplicationMenuID);
     if(!mh)
         return;
     DetachResource((Handle)mh);
-
-    Str255 app;
-    memcpy(app, LM(CurApName), LM(CurApName)[0] + 1);
-    for(INTEGER i = 1; i <= CountMItems(mh); i++)
+    app_menu_fixed = CountMItems(mh);
+    app_menu_texts.clear();
+    for(INTEGER i = 1; i <= app_menu_fixed; i++)
     {
-        Str255 text, out_text;
+        Str255 text;
         GetMenuItemText(mh, i, text);
+        app_menu_texts.emplace_back(text, text + text[0] + 1);
+    }
+    app_menu = mh;
+}
+}
+
+Handle Executor::ROMlib_app_icon_suite()
+{
+    TheZoneGuard guard(LM(SysZone));
+    return app_icon_suite();
+}
+
+void Executor::ROMlib_app_menu_update()
+{
+    if(!app_menu)
+        return;
+    TheZoneGuard guard(LM(SysZone));
+    std::vector<ROMlib_process_entry> procs = ROMlib_process_entries();
+    const ROMlib_process_entry *cur = nullptr;
+    for(const ROMlib_process_entry &e : procs)
+        if(e.current)
+            cur = &e;
+
+    Str255 app = { 0 };
+    if(cur)
+        memcpy(app, cur->name, cur->name[0] + 1);
+    for(INTEGER i = 1; i <= app_menu_fixed; i++)
+    {
+        const std::vector<uint8_t> &text = app_menu_texts[i - 1];
+        Str255 out_text;
         int o = 0;
         for(int k = 1; k <= text[0]; k++)
         {
@@ -215,23 +248,24 @@ void make_app_menu()
                 out_text[++o] = text[k];
         }
         out_text[0] = o;
-        SetMenuItemText(mh, i, out_text);
+        SetMenuItemText(app_menu, i, out_text);
     }
-    /* the process list after the resource's divider: this world runs one
-       application, so there is nothing to hide or show (as on a real boot
-       with only Finder running) */
-    AppendMenu(mh, (StringPtr) "\001 ");
-    INTEGER n = CountMItems(mh);
-    SetMenuItemText(mh, n, app);
-    SetItemMark(mh, n, checkMark);
-    for(INTEGER i = 1; i <= 3; i++)
-        DisableItem(mh, i);
+    /* Hide/Show are not implemented yet. */
+    for(INTEGER i = 1; i <= 3 && i <= app_menu_fixed; i++)
+        DisableItem(app_menu, i);
 
-    if(Handle suite = app_icon_suite())
-        set_icon_title(mh, suite);
-    app_menu = mh;
-    app_menu_refnum = LM(CurApRefNum);
-}
+    while(CountMItems(app_menu) > app_menu_fixed)
+        DeleteMenuItem(app_menu, CountMItems(app_menu));
+    for(const ROMlib_process_entry &e : procs)
+    {
+        AppendMenu(app_menu, (StringPtr) "\001 ");
+        INTEGER n = CountMItems(app_menu);
+        SetMenuItemText(app_menu, n, e.name);
+        if(e.current)
+            SetItemMark(app_menu, n, checkMark);
+    }
+    if(cur && cur->icon)
+        set_icon_title(app_menu, cur->icon);
 }
 
 bool Executor::ROMlib_system_menu_p(INTEGER mid)
@@ -257,20 +291,10 @@ void Executor::ROMlib_install_system_menus()
     {
         TheZoneGuard guard(LM(SysZone));
         make_help_menu();
-        /* the Application menu belongs to the current application; none
-           before one is running */
-        if(app_menu && app_menu_refnum != LM(CurApRefNum))
-        {
-            /* the old application's Help items go too */
-            while(help_menu && CountMItems(help_menu) > help_system_items)
-                DeleteMenuItem(help_menu, CountMItems(help_menu));
-            if(ROMlib_mentosix((*app_menu)->menuID) != -1)
-                DeleteMenu((*app_menu)->menuID);
-            DisposeMenu(app_menu);
-            app_menu = nullptr;
-        }
+        /* none before an application is running */
         if(!app_menu && LM(CurApRefNum) > 0)
             make_app_menu();
+        ROMlib_app_menu_update();
     }
     for(MenuHandle mh : { help_menu, app_menu })
         if(mh && ROMlib_mentosix((*mh)->menuID) == -1)
@@ -280,7 +304,7 @@ void Executor::ROMlib_install_system_menus()
 bool Executor::ROMlib_system_menu_select(INTEGER mid, INTEGER item)
 {
     if(mid == kApplicationMenuID)
-        return true; /* hide/show and switching: one process, nothing to do */
+        return true; /* hide/show and switching: not yet */
     if(mid == kHMHelpMenuID)
         return item <= help_system_items; /* balloons aren't implemented */
     return false;

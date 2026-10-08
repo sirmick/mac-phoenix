@@ -394,6 +394,58 @@ static void run_until_exit(syn68k_addr_t addr)
     }
 }
 
+/* ---------------------------------------------------------------------- */
+/* Process contexts                                                       */
+/* ---------------------------------------------------------------------- */
+
+namespace {
+struct Context
+{
+    regstruct uae_regs;
+    flag_struct uae_flags;
+    bool quit;
+    CPUState cpu;
+    int depth;
+};
+}
+
+size_t syn68k_context_size(void)
+{
+    return sizeof(Context);
+}
+
+void syn68k_save_context(void *context)
+{
+    Context *c = (Context *)context;
+    c->uae_regs = regs;
+    c->uae_flags = regflags;
+    c->quit = quit_program;
+    memcpy((void *)&c->cpu, (const void *)&cpu_state, sizeof cpu_state);
+    c->depth = emulation_depth;
+}
+
+void syn68k_restore_context(const void *context)
+{
+    const Context *c = (const Context *)context;
+    regs = c->uae_regs;
+    regflags = c->uae_flags;
+    quit_program = c->quit;
+    /* Everything but the machine's interrupt and trap handler state. */
+    memcpy((void *)cpu_state.regs, (const void *)c->cpu.regs, sizeof cpu_state.regs);
+    cpu_state.ccnz = c->cpu.ccnz;
+    cpu_state.ccn = c->cpu.ccn;
+    cpu_state.ccc = c->cpu.ccc;
+    cpu_state.ccv = c->cpu.ccv;
+    cpu_state.ccx = c->cpu.ccx;
+    cpu_state.amode_p = c->cpu.amode_p;
+    cpu_state.reversed_amode_p = c->cpu.reversed_amode_p;
+    cpu_state.sr = c->cpu.sr;
+    cpu_state.vbr = c->cpu.vbr;
+    emulation_depth = c->depth;
+    /* A pending interrupt raised while another context ran. */
+    interrupt_note_if_present();
+}
+
 void syn68k_call_emulator(syn68k_addr_t addr)
 {
     PUSHADDR(MAGIC_EXIT_EMULATOR_ADDRESS);

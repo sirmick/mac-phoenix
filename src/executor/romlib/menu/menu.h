@@ -61,6 +61,8 @@ extern void ROMlib_apple_menu_attach(MenuHandle mh);
 extern void ROMlib_apple_menu_update();
 extern Handle ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item);
 extern bool ROMlib_apple_menu_open(ConstStringPtr name);
+extern Handle ROMlib_app_icon_suite();
+extern void ROMlib_app_menu_update();
 extern bool ROMlib_menubar_message;
 extern void ROMlib_menubar_message_clear();
 enum { kSystemMenuTitleWidth = 28, kSystemMenuRightMargin = 11 };

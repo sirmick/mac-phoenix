@@ -27,6 +27,9 @@ void Executor::hle_init(void)
 {
     hle_q = nullptr;
     current_hle_msg = nullptr;
+    /* Each process has its own queue. */
+    ROMlib_process_register_state(&hle_q, sizeof hle_q);
+    ROMlib_process_register_state(&current_hle_msg, sizeof current_hle_msg);
 }
 
 void Executor::hle_reinit(void)

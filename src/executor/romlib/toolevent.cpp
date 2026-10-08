@@ -6,6 +6,7 @@
 /* Forward declarations in ToolboxEvent.h (DO NOT DELETE THIS LINE) */
 
 #include <base/common.h>
+#include <rsys/process.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <EventMgr.h>
@@ -458,6 +459,7 @@ void (*Executor::ROMlib_event_poll_hook)(void) = nullptr;
 Boolean Executor::C_GetNextEvent(INTEGER em, EventRecord *evt)
 {
     Boolean retval;
+    ROMlib_process_event_hook();
     ROMlib_app_polled_events.store(true, std::memory_order_relaxed);
     if(ROMlib_event_poll_hook)
         ROMlib_event_poll_hook();
@@ -485,6 +487,9 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
         ROMlib_event_poll_hook();
     Point p;
     TMTask tm;
+    /* MacPhoenix: wneTimeout is shared by all processes, and another one may
+       run (and clear it) while this one waits; the deadline is this call's. */
+    uint32_t deadline = TickCount() + (sleep > 0 ? sleep : 0);
 
     if(sleep > 0)
     {
@@ -513,10 +518,12 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
                 evp->message = mouseMovedMessage << 24;
                 retval = true;
             }
-            else if(!wneTimeout)
+            else if(!wneTimeout && (int32_t)(TickCount() - deadline) < 0)
             {
                 syncint_wait_interrupt();
             }
+            else
+                wneTimeout = true;
             saved_h = p.h;
             saved_v = p.v;
         }
@@ -530,6 +537,7 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
 
 Boolean Executor::C_EventAvail(INTEGER em, EventRecord *evt)
 {
+    ROMlib_process_event_hook();
     return (doevent(em, evt, false));
 }
 

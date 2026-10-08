@@ -17,6 +17,11 @@ namespace Executor
    pre-locked handle state */
 extern SignedByte hlock_return_orig_state(Handle h);
 extern Size zone_size(THz zone);
+/* MacPhoenix: is h an allocated relocatable block's handle (not a disposed
+   one whose master pointer went back on the free list)?  The real Memory
+   Manager shrugs off disposing a dead handle; Executor code that follows
+   a handle's contents first should ask. */
+extern bool ROMlib_live_handle_p(Handle h);
 
 /* Helper function that prints a useful error message when out of memory. */
 extern void print_mem_full_message(void);

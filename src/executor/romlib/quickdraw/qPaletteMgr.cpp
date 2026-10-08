@@ -5,6 +5,7 @@
 /* Palette Manager */
 
 #include <base/common.h>
+#include <rsys/process.h>
 #include <QuickDraw.h>
 #include <WindowMgr.h>
 #include <CQuickDraw.h>
@@ -772,6 +773,16 @@ void Executor::C_InitPalettes()
     pm_resource_holder_t *pm_resource_holders;
     window_palette_alist_t elt;
     int i;
+
+    /* MacPhoenix: each process has its own window/palette list (each
+       application calls InitPalettes; the list lives in its heap). */
+    static bool registered;
+    if(!registered)
+    {
+        registered = true;
+        ROMlib_process_register_state(&window_palette_alist, sizeof window_palette_alist);
+        ROMlib_process_register_state(&free_list, sizeof free_list);
+    }
 
     pm_resource_holders = lookup_pm_resource_holders();
 

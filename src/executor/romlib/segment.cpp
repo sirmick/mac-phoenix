@@ -28,6 +28,7 @@
 #include <quickdraw/cquick.h>
 #include <rsys/desk.h>
 #include <rsys/launch.h>
+#include <rsys/process.h>
 #include <rsys/paths.h>
 #include <util/macstrings.h>
 #include <rsys/keyboard.h>
@@ -174,6 +175,11 @@ void Executor::C_ExitToShell()
     {
         fprintf(stderr, "launch failure: %d\n", ROMlib_launch_failure);
     }
+
+    /* MacPhoenix: a process with its own thread just ends; the Process
+       Manager tidies up and switches on (process.cpp). */
+    if(ROMlib_process_has_thread())
+        throw ExitToShellException();
 
 #if 1
 

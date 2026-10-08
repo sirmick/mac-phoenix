@@ -67,12 +67,24 @@ OSErr Executor::PBHMoveRename(HParmBlkPtr pb, Boolean a)
     return retval;
 }
 
+/* MacPhoenix: multiversal has no FIDParam; its fields as Inside Macintosh
+   lays them out after the I/O header. */
 OSErr Executor::PBExchangeFiles(ParmBlkPtr pb, Boolean async)
 {
     OSErr retval;
+    char *p = (char *)pb;
+    FSSpec src, dst;
 
-    warning_unimplemented("");
-    retval = paramErr;
+    StringPtr src_name = pb->ioParam.ioNamePtr;
+    StringPtr dst_name = *(GUEST<StringPtr> *)(p + 28);   /* ioDestNamePtr */
+    LONGINT dst_dir = *(GUEST<LONGINT> *)(p + 36);        /* ioDestDirID */
+    LONGINT src_dir = *(GUEST<LONGINT> *)(p + 48);        /* ioSrcDirID */
+
+    retval = FSMakeFSSpec(pb->ioParam.ioVRefNum, src_dir, src_name, &src);
+    if(retval == noErr)
+        retval = FSMakeFSSpec(pb->ioParam.ioVRefNum, dst_dir, dst_name, &dst);
+    if(retval == noErr)
+        retval = FSpExchangeFiles(&src, &dst);
     FAKEASYNC(pb, async, retval);
 }
 

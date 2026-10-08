@@ -589,7 +589,7 @@ target_include_directories(romlib PUBLIC config/os/${HOST_OS})
 
 
 
-target_link_libraries(romlib Threads::Threads executor_cpu)
+target_link_libraries(romlib Threads::Threads executor_cpu Qt6::Core)  # MacPhoenix: Qt threads (timer, processes)
 
 target_link_libraries(romlib Boost::filesystem)  # mxe doesn't like this
 if(WIN32 AND NOT MSVC)

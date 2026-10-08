@@ -155,51 +155,96 @@ create_temp_name(Str63 name, int i)
     name[0] = strlen((char *)name + 1);
 }
 
-/*
- * On real HFS volumes we could do some B-tree manipulation to achieve
- * the correct results, *but* we'd need this code for ufs volumes anyway,
- * so for now we do the same thing on both.
- */
+/* MacPhoenix: ExchangeFiles as HFS does it -- the two files swap contents
+ * (both forks and the dates) while names, places and Finder info stay --
+ * done with renames and moves, which any volume supports. */
+
+static OSErr move_into(FSSpec *f, LONGINT dirID)
+{
+    if(f->parID == dirID)
+        return noErr;
+    CMovePBRec cbr = {};
+    cbr.ioVRefNum = f->vRefNum;
+    cbr.ioDirID = f->parID;
+    cbr.ioNamePtr = f->name;
+    cbr.ioNewName = nullptr;
+    cbr.ioNewDirID = dirID;
+    OSErr err = PBCatMove(&cbr, false);
+    if(err == noErr)
+        f->parID = dirID;
+    return err;
+}
+
+static OSErr file_cat_info(FSSpecPtr spec, CInfoPBRec *pb)
+{
+    memset(pb, 0, sizeof *pb);
+    pb->hFileInfo.ioNamePtr = (StringPtr)spec->name;
+    pb->hFileInfo.ioVRefNum = spec->vRefNum;
+    pb->hFileInfo.ioDirID = spec->parID;
+    OSErr err = PBGetCatInfo(pb, false);
+    if(err == noErr && (pb->hFileInfo.ioFlAttrib & ATTRIB_ISADIR))
+        err = -1302; /* notAFileErr */
+    return err;
+}
+
+/* What stays with a name: Finder info.  What moves with the contents: dates. */
+static void set_kept_info(FSSpecPtr spec, const CInfoPBRec *name_info,
+                          const CInfoPBRec *content_info)
+{
+    CInfoPBRec pb;
+    if(file_cat_info(spec, &pb) != noErr)
+        return;
+    pb.hFileInfo.ioNamePtr = (StringPtr)spec->name;
+    pb.hFileInfo.ioVRefNum = spec->vRefNum;
+    pb.hFileInfo.ioDirID = spec->parID;
+    pb.hFileInfo.ioFlFndrInfo = name_info->hFileInfo.ioFlFndrInfo;
+    pb.hFileInfo.ioFlXFndrInfo = name_info->hFileInfo.ioFlXFndrInfo;
+    pb.hFileInfo.ioFlCrDat = content_info->hFileInfo.ioFlCrDat;
+    pb.hFileInfo.ioFlMdDat = content_info->hFileInfo.ioFlMdDat;
+    pb.hFileInfo.ioFlBkDat = content_info->hFileInfo.ioFlBkDat;
+    PBSetCatInfo(&pb, false);
+}
 
 OSErr Executor::C_FSpExchangeFiles(FSSpecPtr src, FSSpecPtr dst)
 {
-    OSErr retval;
+    CInfoPBRec src_info, dst_info;
+    OSErr err;
 
-    warning_unimplemented("poorly implemented");
     if(src->vRefNum != dst->vRefNum)
-        retval = diffVolErr;
-    else if(ROMlib_creator != "PAUP"_4 || src->parID != dst->parID)
-        retval = wrgVolTypeErr;
-    else
-    {
-        /* Evil hack to get PAUP to work -- doesn't bother adjusting FCBs */
-        FSSpec tmp_spec;
-        int i;
+        return diffVolErr;
+    if((err = file_cat_info(src, &src_info)) != noErr
+       || (err = file_cat_info(dst, &dst_info)) != noErr)
+        return err;
 
-        i = 0;
-        tmp_spec = *dst;
-        do
-        {
-            create_temp_name(tmp_spec.name, i++);
-            retval = FSpRename(dst, tmp_spec.name);
-        } while(retval == dupFNErr);
-        if(retval == noErr)
-        {
-            retval = FSpRename(src, dst->name);
-            if(retval != noErr)
-                FSpRename(&tmp_spec, dst->name);
-            else
-            {
-                retval = FSpRename(&tmp_spec, src->name);
-                if(retval != noErr)
-                {
-                    FSpRename(dst, src->name);
-                    FSpRename(&tmp_spec, dst->name);
-                }
-            }
-        }
+    /* dst's contents step aside under a temporary name. */
+    FSSpec tmp = *dst;
+    int i = 0;
+    do
+    {
+        create_temp_name(tmp.name, i++);
+        err = FSpRename(dst, tmp.name);
+    } while(err == dupFNErr);
+    if(err != noErr)
+        return err;
+
+    /* src's contents take dst's name and place... */
+    FSSpec s = *src;
+    if((err = move_into(&s, dst->parID)) == noErr
+       && (err = FSpRename(&s, dst->name)) == noErr)
+    {
+        /* ...and dst's contents take src's. */
+        if((err = move_into(&tmp, src->parID)) == noErr)
+            err = FSpRename(&tmp, src->name);
     }
-    return retval;
+    if(err != noErr)
+    {
+        warning_unexpected("FSpExchangeFiles: %d", err);
+        return err;
+    }
+
+    set_kept_info(src, &src_info, &dst_info);
+    set_kept_info(dst, &dst_info, &src_info);
+    return noErr;
 }
 
 typedef OSErr (*open_procp)(HParmBlkPtr pb, Boolean sync);

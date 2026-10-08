@@ -593,6 +593,9 @@ Executor::NewLaunch(ConstStringPtr fName_arg, INTEGER vRefNum_arg, LaunchParamBl
 
         ROMlib_init_stdfile();
 
+        /* MacPhoenix: the low memory a later process starts from. */
+        process_capture_template();
+
         launchchain(fName, vRefNum, true, &lpb);
     }
     return retval;
@@ -603,9 +606,32 @@ void Executor::Launch(ConstStringPtr fName_arg, INTEGER vRefNum_arg)
     NewLaunch(fName_arg, vRefNum_arg, 0);
 }
 
+/* MacPhoenix: a new process, the application started in it.  Runs on the
+   process's own thread (process.cpp) with its fresh world in place. */
+void Executor::ROMlib_launch_process(FSSpec *app_arg)
+{
+    /* Guest code sees it: keep it on this (guest-addressable) stack. */
+    FSSpec app_spec = *app_arg;
+    FSSpec *app = &app_spec;
+    logging::resetNestingLevel();
+    hle_reinit();
+    AE_reinit();
+
+    LaunchParamBlockRec lpb = {};
+    lpb.launchBlockID = extendedBlock;
+    lpb.launchAppSpec = app;
+    launchchain(app->name, app->vRefNum, false, &lpb);
+}
+
 OSErr Executor::LaunchApplication(LaunchParamBlockRec *lpbp)
 {
     StringPtr strp;
+
+    /* MacPhoenix: launchContinue (the launcher keeps running) starts a
+       new process; otherwise the launcher is replaced, as before. */
+    if(lpbp->launchBlockID == extendedBlock
+       && (lpbp->launchControlFlags & launchContinue))
+        return process_launch(lpbp);
 
     if(lpbp->launchBlockID == extendedBlock)
         strp = 0;

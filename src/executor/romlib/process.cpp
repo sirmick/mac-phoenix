@@ -22,6 +22,20 @@
 #include <algorithm>
 
 using namespace Executor;
+#include <AppleEvents.h>
+#include <OSEvent.h>
+#include <TimeMgr.h>
+#include <VRetraceMgr.h>
+#include <rsys/launch.h>
+#include <res/resource.h>
+#include <syn68k_public.h>
+#include <base/trapglue.h>
+
+#include <QMutex>
+#include <QThread>
+#include <QWaitCondition>
+#include <ucontext.h>
+
 
 #define declare_handle_type(type_prefix)        \
     typedef type_prefix##_t *type_prefix##_ptr; \
@@ -42,13 +56,613 @@ get_size_resource()
     return (size_resource_handle)size;
 }
 
+/* ── Processes ──────────────────────────────────────────────────────────
+ * Our Process Manager.  Every process but the first (the one Executor
+ * boots, normally Finder) runs on its own host thread, so its C++ frames
+ * (a trap that called back into guest code that called WaitNextEvent...)
+ * stay on its own stack while others run.  Only one thread runs at a time:
+ * the one holding the baton (pm_running).  A switch saves the outgoing
+ * process's world and installs the incoming one's:
+ *
+ *   - the low memory 7.5.5's Process Manager switches: its list is the
+ *     System file's 'lmem' -16458 (length.w, address.l pairs), plus
+ *     ApplZone and ApplLimit (which it sets itself) and WindowList (the
+ *     process's layer);
+ *   - the 68k context (registers, interpreter state, nesting depth);
+ *   - the trap tables: a process's own patches (Finder patches traps with
+ *     code in its partition) only apply while it runs, as on 7.5.5;
+ *   - host state modules register (ROMlib_process_register_state) and the
+ *     Apple Event Manager's handler tables.
+ *
+ * As on 7.5.5, LaunchApplication only creates the process; it first runs
+ * at the launcher's next event call, which switches to it.  A new process
+ * starts from the low memory the first process had before its launch. */
+
+struct process_info
+{
+    struct process_info *next = nullptr;
+
+    uint32_t mode = 0;
+    uint32_t type = 0;
+    uint32_t signature = 0;
+    uint32_t size = 0;
+    uint32_t launch_ticks = 0;
+
+    ProcessSerialNumber serial_number = {};
+    ProcessSerialNumber launcher = {};
+    Str31 name = { 0 };
+    Handle icon = nullptr; /* icon suite in the System heap */
+
+    /* Partition in the Process Manager heap. */
+    Handle partition = nullptr;
+    uint32_t partition_size = 0;
+
+    enum { fresh, parked, running, dead } state = fresh;
+    std::vector<uint8_t> lowmem;
+    std::vector<uint8_t> cpu;
+    std::vector<uint8_t> host;
+    std::vector<syn68k_addr_t> traps;
+    AE_zone_tables_h ae_tables = nullptr;
+
+    /* Every process but the first: its thread and what it runs. */
+    bool own_thread = false;
+    QThread *thread = nullptr;
+    int stack_slot = -1;
+    FSSpec app = {};
+
+    /* Left by the process that quit and switched to us: screen to redraw,
+       and (SIZE acceptAppDiedEvents) whose death to report. */
+    RgnHandle uncovered = nullptr;
+    bool died_pending = false;
+    ProcessSerialNumber died = {};
+};
+typedef struct process_info process_info_t;
+
+static process_info_t *process_info_list;
+static process_info_t *current_process_info;
+static process_info_t *pending_launch;
+/* 7.5.5 numbers processes from $2000 (Jigsaw launched by Finder: $2001). */
+static uint32_t next_free_psn = 0x2000;
+
+static const int default_process_mode_flags = 0;
+
+static ProcessSerialNumber system_process = { 0, kSystemProcess };
+static ProcessSerialNumber no_process = { 0, kNoProcess };
+static ProcessSerialNumber current_process = { 0, kCurrentProcess };
+
+#define PSN_EQ_P(psn0, psn1)                      \
+    ((psn0).highLongOfPSN == (psn1).highLongOfPSN \
+     && (psn0).lowLongOfPSN == (psn1).lowLongOfPSN)
+
+static process_info_t *new_process()
+{
+    process_info_t *p = new process_info_t;
+    p->serial_number.highLongOfPSN = 0;
+    p->serial_number.lowLongOfPSN = next_free_psn++;
+    p->launch_ticks = TickCount();
+    process_info_t **pp = &process_info_list;
+    while(*pp)
+        pp = &(*pp)->next;
+    *pp = p;
+    return p;
+}
+
+static void forget_process(process_info_t *p)
+{
+    for(process_info_t **pp = &process_info_list; *pp; pp = &(*pp)->next)
+        if(*pp == p)
+        {
+            *pp = p->next;
+            break;
+        }
+}
+
+/* The first process: Executor's own thread. */
+static void process_bootstrap()
+{
+    if(current_process_info)
+        return;
+    current_process_info = new_process();
+    current_process_info->state = process_info_t::running;
+}
+
+/* ── The switched world ── */
+
+namespace
+{
+struct lm_range
+{
+    uint32_t addr;
+    uint16_t len;
+};
+struct host_var
+{
+    void *p;
+    size_t n;
+};
+}
+
+static std::vector<lm_range> lm_ranges;
+static size_t lm_bytes;
+static std::vector<uint8_t> lowmem_template;
+static std::vector<uint8_t> cpu_template;
+static std::vector<syn68k_addr_t> traps_template;
+
+static void save_traps(std::vector<syn68k_addr_t> &buf)
+{
+    buf.assign(tooltraptable, tooltraptable + NTOOLENTRIES);
+    buf.insert(buf.end(), ostraptable, ostraptable + NOSENTRIES);
+}
+
+static void restore_traps(const std::vector<syn68k_addr_t> &buf)
+{
+    std::copy(buf.begin(), buf.begin() + NTOOLENTRIES, tooltraptable);
+    std::copy(buf.begin() + NTOOLENTRIES, buf.end(), ostraptable);
+}
+
+static std::vector<host_var> &host_vars()
+{
+    static std::vector<host_var> vars;
+    return vars;
+}
+
+void Executor::ROMlib_process_register_state(void *p, size_t n)
+{
+    host_vars().push_back({ p, n });
+}
+
+/* 7.5.5's 'lmem' -16458, should the System file lack it. */
+static const uint8_t builtin_lmem[] = {
+    0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x01, 0x08,
+    0x00, 0x08, 0x00, 0x00, 0x01, 0x14, 0x00, 0x01, 0x00, 0x00, 0x01, 0x5c,
+    0x00, 0x02, 0x00, 0x00, 0x02, 0x78, 0x00, 0x01, 0x00, 0x00, 0x02, 0xf8,
+    0x00, 0x04, 0x00, 0x00, 0x03, 0x16, 0x00, 0x22, 0x00, 0x00, 0x03, 0x1e,
+    0x00, 0x08, 0x00, 0x00, 0x08, 0xe0, 0x00, 0xe4, 0x00, 0x00, 0x08, 0xf2,
+    0x00, 0x04, 0x00, 0x00, 0x09, 0xda, 0x00, 0x08, 0x00, 0x00, 0x09, 0xe6,
+    0x00, 0x32, 0x00, 0x00, 0x09, 0xf2, 0x00, 0x16, 0x00, 0x00, 0x0a, 0x26,
+    0x00, 0x4c, 0x00, 0x00, 0x0a, 0x44, 0x00, 0x50, 0x00, 0x00, 0x0a, 0x98,
+    0x00, 0x10, 0x00, 0x00, 0x0a, 0xec, 0x00, 0x01, 0x00, 0x00, 0x0b, 0x21,
+    0x00, 0x04, 0x00, 0x00, 0x0b, 0x2a, 0x00, 0x04, 0x00, 0x00, 0x0b, 0x4c,
+    0x00, 0x0c, 0x00, 0x00, 0x0b, 0x54, 0x00, 0x04, 0x00, 0x00, 0x0b, 0xa6,
+    0x00, 0x06, 0x00, 0x00, 0x0b, 0xae, 0x00, 0x02, 0x00, 0x00, 0x0b, 0xaa,
+    0x00, 0x3c, 0x00, 0x00, 0x0b, 0xc2, 0x00, 0x11, 0x00, 0x00, 0x0d, 0x32,
+    0x00, 0x04, 0x00, 0x00, 0x0d, 0xcc, 0x00, 0x04, 0x00, 0x00, 0x0c, 0xc8,
+    0x00, 0x00,
+};
+
+static void load_switch_list()
+{
+    if(!lm_ranges.empty())
+        return;
+
+    std::vector<uint8_t> data;
+    INTEGER save_map = LM(CurMap);
+    UseResFile(LM(SysMap));
+    Handle h = Get1Resource("lmem"_4, -16458);
+    UseResFile(save_map);
+    if(h)
+        data.assign((uint8_t *)*h, (uint8_t *)*h + GetHandleSize(h));
+    else
+        data.assign(builtin_lmem, builtin_lmem + sizeof builtin_lmem);
+
+    for(size_t i = 0; i + 6 <= data.size(); i += 6)
+    {
+        uint16_t len = data[i] << 8 | data[i + 1];
+        if(!len)
+            break;
+        uint32_t addr = data[i + 2] << 24 | data[i + 3] << 16 | data[i + 4] << 8 | data[i + 5];
+        lm_ranges.push_back({ addr, len });
+    }
+    lm_ranges.push_back({ 0x2AA, 4 }); /* ApplZone */
+    lm_ranges.push_back({ 0x130, 4 }); /* ApplLimit */
+    lm_ranges.push_back({ 0x9D6, 4 }); /* WindowList: the process's layer */
+    /* Executor allocates these in the application's heap (7.5.5 shares
+       them system-wide), so under Executor they belong to the process. */
+    lm_ranges.push_back({ 0xCD0, 4 }); /* AuxWinHead */
+    lm_ranges.push_back({ 0xCD4, 4 }); /* AuxCtlHead */
+    lm_ranges.push_back({ 0xD50, 4 }); /* MenuCInfo */
+
+    lm_bytes = 0;
+    for(const lm_range &r : lm_ranges)
+        lm_bytes += r.len;
+}
+
+static void save_lowmem(std::vector<uint8_t> &buf)
+{
+    buf.resize(lm_bytes);
+    size_t off = 0;
+    for(const lm_range &r : lm_ranges)
+    {
+        memcpy(&buf[off], SYN68K_TO_US(r.addr), r.len);
+        off += r.len;
+    }
+}
+
+static void restore_lowmem(const std::vector<uint8_t> &buf)
+{
+    size_t off = 0;
+    for(const lm_range &r : lm_ranges)
+    {
+        memcpy(SYN68K_TO_US(r.addr), &buf[off], r.len);
+        off += r.len;
+    }
+}
+
+static void save_world(process_info_t *p)
+{
+    save_lowmem(p->lowmem);
+    p->cpu.resize(syn68k_context_size());
+    syn68k_save_context(p->cpu.data());
+    save_traps(p->traps);
+    p->host.clear();
+    for(const host_var &v : host_vars())
+        p->host.insert(p->host.end(), (uint8_t *)v.p, (uint8_t *)v.p + v.n);
+    if(LM(AE_info))
+        p->ae_tables = LM(AE_info)->appl_zone_tables;
+}
+
+static void restore_world(process_info_t *p)
+{
+    restore_lowmem(p->lowmem);
+    syn68k_restore_context(p->cpu.data());
+    restore_traps(p->traps);
+    size_t off = 0;
+    for(const host_var &v : host_vars())
+    {
+        memcpy(v.p, &p->host[off], v.n);
+        off += v.n;
+    }
+    if(LM(AE_info))
+        LM(AE_info)->appl_zone_tables = p->ae_tables;
+}
+
+/* A new process's world: low memory and CPU as the first process had them
+   before its launch, host state cleared. */
+static void fresh_world(process_info_t *p)
+{
+    restore_lowmem(lowmem_template);
+    syn68k_restore_context(cpu_template.data());
+    restore_traps(traps_template);
+    for(const host_var &v : host_vars())
+        memset(v.p, 0, v.n);
+    if(LM(AE_info))
+        LM(AE_info)->appl_zone_tables = nullptr;
+}
+
+void Executor::process_capture_template()
+{
+    process_bootstrap();
+    load_switch_list();
+    if(lowmem_template.empty())
+    {
+        save_lowmem(lowmem_template);
+        cpu_template.resize(syn68k_context_size());
+        syn68k_save_context(cpu_template.data());
+        save_traps(traps_template);
+    }
+}
+
+/* ── The baton ── */
+
+static QMutex pm_mutex;
+static QWaitCondition pm_cv;
+static process_info_t *pm_running;
+static std::vector<process_info_t *> reap_list;
+
+static void hand_baton(process_info_t *to)
+{
+    QMutexLocker lock(&pm_mutex);
+    pm_running = to;
+    pm_cv.wakeAll();
+}
+
+static void wait_for_baton(process_info_t *self)
+{
+    QMutexLocker lock(&pm_mutex);
+    while(pm_running != self)
+        pm_cv.wait(&pm_mutex);
+}
+
+/* ── Process threads ──
+ * A QThread per process.  Guest code is handed pointers into the C++
+ * frames of the Toolbox code it calls (an EventRecord on the stack...), and
+ * guest addresses are host addresses below 4GB: so run() moves onto a stack
+ * from a pool reserved below 4GB once, at startup of the first process, and
+ * the whole process lives there (Executor's own thread does the same). */
+
+static const int stack_slots = 16;
+static const size_t stack_size = 4 * 1024 * 1024;
+static char *stack_pool;
+static bool stack_used[stack_slots];
+
+static int take_stack_slot()
+{
+    if(!stack_pool)
+        stack_pool = (char *)syn68k_alloc_low(stack_slots * stack_size);
+    for(int i = 0; i < stack_slots; i++)
+        if(!stack_used[i])
+        {
+            stack_used[i] = true;
+            return i;
+        }
+    return -1;
+}
+
+static void process_body(process_info_t *p);
+
+class ProcessThread : public QThread
+{
+public:
+    explicit ProcessThread(process_info_t *p)
+        : p(p)
+    {
+        setObjectName(QString::fromLatin1((const char *)p->app.name + 1, p->app.name[0]));
+    }
+
+protected:
+    void run() override
+    {
+        ucontext_t low;
+        getcontext(&low);
+        low.uc_stack.ss_sp = stack_pool + p->stack_slot * stack_size;
+        low.uc_stack.ss_size = stack_size;
+        low.uc_link = &back;
+        current = this;
+        makecontext(&low, &ProcessThread::trampoline, 0);
+        swapcontext(&back, &low);
+    }
+
+private:
+    static void trampoline()
+    {
+        process_body(current->p);
+    }
+
+    process_info_t *p;
+    ucontext_t back;
+    static thread_local ProcessThread *current;
+};
+thread_local ProcessThread *ProcessThread::current;
+
+static void start_thread(process_info_t *p)
+{
+    p->stack_slot = take_stack_slot();
+    if(p->stack_slot < 0)
+        gui_fatal("too many processes");
+    p->thread = new ProcessThread(p);
+    p->thread->start();
+}
+
+/* Threads of processes that quit, collected once someone else runs. */
+static void reap_dead()
+{
+    for(process_info_t *p : reap_list)
+    {
+        p->thread->wait();
+        delete p->thread;
+        stack_used[p->stack_slot] = false;
+        delete p;
+    }
+    reap_list.clear();
+}
+
+std::vector<ROMlib_process_entry> Executor::ROMlib_process_entries()
+{
+    std::vector<ROMlib_process_entry> out;
+    for(process_info_t *p = process_info_list; p; p = p->next)
+    {
+        if(!p->name[0])
+            continue; /* not launched yet */
+        ROMlib_process_entry e;
+        e.psn = p->serial_number;
+        memcpy(e.name, p->name, p->name[0] + 1);
+        e.icon = p->icon;
+        e.current = p == current_process_info;
+        out.push_back(e);
+    }
+    return out;
+}
+
+/* Back on our thread after a switch: our world is in place. */
+static void resumed()
+{
+    reap_dead();
+    process_info_t *me = current_process_info;
+    ROMlib_app_menu_update();
+    DrawMenuBar();
+    if(me->uncovered)
+    {
+        /* What the process that quit covered: the desktop and our windows. */
+        RgnHandle rgn = me->uncovered;
+        me->uncovered = nullptr;
+        if(LM(WindowList))
+        {
+            PaintBehind(LM(WindowList), rgn);
+            CalcVisBehind(LM(WindowList), rgn);
+        }
+        else
+            PaintOne(nullptr, rgn);
+        DisposeRgn(rgn);
+        DrawMenuBar();
+    }
+    if(me->died_pending)
+    {
+        /* 'aevt'/'obit' (kAEApplicationDied), as 7.5.5's Process Manager
+           posts it: the dead process's serial number and its error. */
+        me->died_pending = false;
+        struct
+        {
+            GUEST<OSType> signature;
+            GUEST<int16_t> major, minor;
+            GUEST<OSType> marker;
+            GUEST<OSType> err_key, err_type;
+            GUEST<int32_t> err_size;
+            GUEST<int32_t> err;
+            GUEST<OSType> psn_key, psn_type;
+            GUEST<int32_t> psn_size;
+            GUEST<uint32_t> psn_high, psn_low;
+        } msg = { "aevt"_4, 1, 1, ";;;;"_4,
+                  "errn"_4, "long"_4, 4, 0,
+                  "psn "_4, "psn "_4, 8, me->died.highLongOfPSN, me->died.lowLongOfPSN };
+        static_assert(sizeof msg == 48);
+
+        EventRecord evt = {};
+        evt.what = kHighLevelEvent;
+        evt.message = "aevt"_4;
+        GUEST<uint32_t> id = "obit"_4;
+        memcpy(&evt.where, &id, sizeof id);
+        ProcessSerialNumber to = me->serial_number; /* guest-visible */
+        PostHighLevelEvent(&evt, (Ptr)&to, 0, (Ptr)&msg, sizeof msg,
+                           0x8000 /* receiverIDisPSN */);
+    }
+}
+
+/* Called by the running process, on its own thread. */
+static void switch_to(process_info_t *to)
+{
+    process_info_t *me = current_process_info;
+    if(to == me)
+        return;
+
+    save_world(me);
+    me->state = process_info_t::parked;
+    current_process_info = to;
+    if(to->state == process_info_t::fresh)
+        start_thread(to);
+    else
+    {
+        restore_world(to);
+        to->state = process_info_t::running;
+    }
+    hand_baton(to);
+    wait_for_baton(me);
+    resumed();
+}
+
+/* Remove what a process leaves in system-wide queues: VBL and Time Manager
+   tasks living in its partition. */
+static void remove_tasks_in(Ptr lo, Ptr hi)
+{
+    auto inside = [lo, hi](void *p) { return (Ptr)p >= lo && (Ptr)p < hi; };
+    VBLTaskPtr next_vbl;
+    for(VBLTaskPtr v = (VBLTaskPtr)LM(VBLQueue).qHead; v; v = next_vbl)
+    {
+        next_vbl = (VBLTaskPtr)v->qLink;
+        if(inside(v))
+            VRemove(v);
+    }
+}
+
+/* The current process quits: tidy up, switch to its launcher (or the
+   first process) and let the thread end. */
+static void exit_current()
+{
+    process_info_t *me = current_process_info;
+
+    /* The screen its windows covered. */
+    RgnHandle uncovered;
+    {
+        TheZoneGuard guard(LM(SysZone));
+        uncovered = NewRgn();
+    }
+    for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
+    {
+        if(WINDOW_VISIBLE(w))
+            UnionRgn(WINDOW_STRUCT_REGION(w), uncovered, uncovered);
+        /* Host-side records of its windows (palettes) go with them. */
+        pm_window_closed((WindowPtr)w);
+    }
+    LM(WindowList) = nullptr;
+
+    /* Its resource files: everything above the System file. */
+    while(LM(TopMapHndl) && (*(resmaphand)LM(TopMapHndl))->resfn != LM(SysMap))
+        CloseResFile((*(resmaphand)LM(TopMapHndl))->resfn);
+
+    if(me->partition)
+    {
+        Ptr lo = *me->partition;
+        remove_tasks_in(lo, lo + me->partition_size);
+        TheZoneGuard guard(ROMlib_pm_zone);
+        HUnlock(me->partition);
+        DisposeHandle(me->partition);
+        me->partition = nullptr;
+    }
+
+    if(me->icon)
+        DisposeIconSuite(me->icon, true);
+    me->icon = nullptr;
+    forget_process(me);
+    me->state = process_info_t::dead;
+    reap_list.push_back(me);
+
+    process_info_t *next = nullptr;
+    for(process_info_t *p = process_info_list; p; p = p->next)
+        if(PSN_EQ_P(p->serial_number, me->launcher))
+            next = p;
+    if(!next)
+        next = process_info_list;
+
+    current_process_info = next;
+    restore_world(next);
+    next->state = process_info_t::running;
+    next->uncovered = uncovered;
+    if(next->mode & 0x0100) /* SIZE acceptAppDiedEvents */
+    {
+        next->died_pending = true;
+        next->died = me->serial_number;
+    }
+    hand_baton(next);
+}
+
+/* A process's life, on its low stack. */
+static void process_body(process_info_t *p)
+{
+    wait_for_baton(p);
+    fresh_world(p);
+    p->state = process_info_t::running;
+    try
+    {
+        ROMlib_launch_process(&p->app);
+    }
+    catch(const ExitToShellException &)
+    {
+    }
+    exit_current();
+}
+
+bool Executor::ROMlib_process_has_thread()
+{
+    return current_process_info && current_process_info->own_thread;
+}
+
+/* Every event call: a process just launched gets the processor. */
+void Executor::ROMlib_process_event_hook()
+{
+    if(pending_launch)
+    {
+        process_info_t *p = pending_launch;
+        pending_launch = nullptr;
+        switch_to(p);
+    }
+}
+
+OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
+{
+    process_info_t *p = new_process();
+    p->own_thread = true;
+    p->app = *lpbp->launchAppSpec;
+    p->launcher = current_process_info->serial_number;
+    pending_launch = p;
+    lpbp->launchProcessSN = p->serial_number;
+    return noErr;
+}
+
 /* ── Partitions ─────────────────────────────────────────────────────────
- * Slice 1 of our Process Manager: one process, laid out the way 7.5.5
- * lays out each application (measured on a real boot, see
- * docs/executor/MEMORY_MAP.md):
+ * Laid out the way 7.5.5 lays out each application (measured on a real
+ * boot, see docs/executor/MEMORY_MAP.md):
  *
  *   Process Manager heap: SysZone end .. BufPtr
- *     partition: a locked handle at the top, SIZE preferred size + 16K
+ *     partition: a locked handle, SIZE preferred size + 16K
  *       ApplZone          at the partition start, bkLim = ApplLimit - 24
  *       ApplLimit         = CurStackBase - DefltStack
  *       stack             grows down from CurStackBase
@@ -59,8 +673,6 @@ get_size_resource()
  *   application sees a machine as big as its partition.
  */
 THz Executor::ROMlib_pm_zone;
-static Handle partition;
-static uint32_t partition_size;
 
 /* Measured on 7.5.5: a partition is the SIZE preferred size plus 16K. */
 static const uint32_t partition_extra = 16 * 1024;
@@ -70,8 +682,11 @@ static const uint32_t default_partition = 512 * 1024;
 void Executor::process_reset_heap(THz pm_zone)
 {
     ROMlib_pm_zone = pm_zone;
-    partition = nullptr;
-    partition_size = 0;
+    if(current_process_info)
+    {
+        current_process_info->partition = nullptr;
+        current_process_info->partition_size = 0;
+    }
 }
 
 void Executor::process_layout_partition(ConstStringPtr app_name)
@@ -80,13 +695,16 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
     uint32_t minimum = default_partition;
     int32_t abovea5 = 4, belowa5 = 0; /* no CODE 0 (PowerPC): A5 at the top */
 
+    process_bootstrap();
+    process_info_t *me = current_process_info;
+
     SetZone(ROMlib_pm_zone);
-    if(partition)
+    if(me->partition)
     {
         /* Chain: the old partition goes, the heap stays. */
-        HUnlock(partition);
-        DisposeHandle(partition);
-        partition = nullptr;
+        HUnlock(me->partition);
+        DisposeHandle(me->partition);
+        me->partition = nullptr;
     }
 
     /* Peek at SIZE and CODE 0 before the partition exists, so the
@@ -125,15 +743,15 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
     Ptr below = nullptr;
     if((uint32_t)avail > want + 64)
         below = NewPtr(avail - want - 64);
-    partition = NewHandle(want);
+    me->partition = NewHandle(want);
     if(below)
         DisposePtr(below);
-    if(!partition)
+    if(!me->partition)
         gui_fatal("unable to allocate a %u byte application partition", want);
-    HLock(partition);
-    partition_size = want;
+    HLock(me->partition);
+    me->partition_size = want;
 
-    Ptr p = *partition;
+    Ptr p = *me->partition;
     Ptr top = p + want;
     LM(CurrentA5) = top - abovea5;
     LM(CurStackBase) = LM(CurrentA5) - belowa5;
@@ -145,10 +763,6 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
     InitZone(nullptr, 64, LM(HeapEnd) + 12, (THz)p);
     LM(MemTop) = (Ptr)LM(SysZone)->bkLim + want;
 }
-
-#define PSN_EQ_P(psn0, psn1)                      \
-    ((psn0).highLongOfPSN == (psn1).highLongOfPSN \
-     && (psn0).lowLongOfPSN == (psn1).lowLongOfPSN)
 
 #define PROCESS_INFO_SERIAL_NUMBER(info) ((info)->processNumber)
 #define PROCESS_INFO_LAUNCHER(info) ((info)->processLauncher)
@@ -164,49 +778,16 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
 #define PROCESS_INFO_LAUNCH_DATE(info) ((info)->processLaunchDate)
 #define PROCESS_INFO_ACTIVE_TIME(info) ((info)->processActiveTime)
 
-
-
-typedef struct process_info
-{
-    struct process_info *next;
-
-    uint32_t mode;
-    uint32_t type;
-    uint32_t signature;
-    uint32_t size;
-    uint32_t launch_ticks;
-
-    ProcessSerialNumber serial_number;
-} process_info_t;
-
-static process_info_t *process_info_list;
-static process_info_t *current_process_info;
-
-static const int default_process_mode_flags = 0;
-
-/* ### not currently used */
-static ProcessSerialNumber system_process = { 0, kSystemProcess };
-static ProcessSerialNumber no_process = { 0, kNoProcess };
-static ProcessSerialNumber current_process = { 0, kCurrentProcess };
-
+/* The current process is launching: record what it is. */
 void Executor::process_create(bool desk_accessory_p,
                               uint32_t type, uint32_t signature)
 {
     size_resource_handle size;
     process_info_t *info;
-    static uint32_t next_free_psn = 4;
 
+    process_bootstrap();
+    info = current_process_info;
     size = get_size_resource();
-
-    {
-        TheZoneGuard guard(LM(SysZone));
-
-        info = (process_info_t *)NewPtr(sizeof *info);
-    }
-
-    /* ### we are seriously fucked */
-    if(info == nullptr)
-        gui_fatal("unable to allocate process info record");
 
     info->mode = ((size
                        ? toHost(SIZE_FLAGS(size))
@@ -216,18 +797,12 @@ void Executor::process_create(bool desk_accessory_p,
                          : 0));
     info->type = type;
     info->signature = signature;
-
-    info->size = partition_size ? partition_size : zone_size(LM(ApplZone));
+    info->size = info->partition_size ? info->partition_size : zone_size(LM(ApplZone));
     info->launch_ticks = TickCount();
-
-    info->serial_number.highLongOfPSN = -1;
-    info->serial_number.lowLongOfPSN = next_free_psn++;
-
-    info->next = process_info_list;
-    process_info_list = info;
-
-    /* ### hack */
-    current_process_info = info;
+    memcpy(info->name, LM(CurApName), std::min<int>(LM(CurApName)[0], 31) + 1);
+    info->name[0] = std::min<int>(info->name[0], 31);
+    if(!info->icon)
+        info->icon = ROMlib_app_icon_suite();
 
     /* MacPhoenix: the Process Manager hands every application an initialised
        desk scrap (Finder 7.5.5 dereferences ScrapHandle without checking
@@ -421,6 +996,12 @@ OSErr Executor::C_TakeDesktopLayer(GUEST<WindowPtr> *layer)
     if(layer)
         *layer = desktop_layer;
     return noErr;
+}
+
+void Executor::ROMlib_desktop_layer_invalidate(RgnHandle rgn)
+{
+    if(desktop_layer && WINDOW_UPDATE_REGION(desktop_layer))
+        UnionRgn(rgn, WINDOW_UPDATE_REGION(desktop_layer), WINDOW_UPDATE_REGION(desktop_layer));
 }
 
 struct ProcessCallback

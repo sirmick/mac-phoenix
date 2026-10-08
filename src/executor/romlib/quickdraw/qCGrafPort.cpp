@@ -361,7 +361,9 @@ PixMapHandle Executor::C_NewPixMap()
 
 void Executor::C_DisposePixMap(PixMapHandle pixmap)
 {
-    if(pixmap)
+    /* MacPhoenix: a disposed handle is left alone, as by 7.5.5 (Jigsaw
+       Puzzle disposes a pixel pattern its GWorld's port already took). */
+    if(pixmap && ROMlib_live_handle_p((Handle)pixmap))
     {
         DisposeCTable(PIXMAP_TABLE(pixmap));
         DisposeHandle((Handle)pixmap);
@@ -502,7 +504,7 @@ PixPatHandle Executor::C_GetPixPat(INTEGER pixpat_id)
 
 void Executor::C_DisposePixPat(PixPatHandle pixpat_h)
 {
-    if(pixpat_h)
+    if(pixpat_h && ROMlib_live_handle_p((Handle)pixpat_h))
     {
         /* ##### determine which of these checks are necessary, and which
 	 should be asserts that the handles are non-nullptr */

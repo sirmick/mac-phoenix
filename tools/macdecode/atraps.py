@@ -519,11 +519,11 @@ def result_difference(names, name, ra, cb):
     return None
 
 
-def compare(ref, cand, context=6, more=12, window=None):
+def compare(ref, cand, context=6, more=12, window=None, app="Finder"):
     """Print where the candidate's app call sequence first leaves the reference's
     (or, with window=(start, count), the aligned listing from reference #start)."""
     import difflib
-    a, b = app_sequence(ref), app_sequence(cand)
+    a, b = app_sequence(ref, app), app_sequence(cand, app)
     sm = difflib.SequenceMatcher(a=[x["key"] for x in a], b=[x["key"] for x in b], autojunk=False)
     if window:
         start, count = window
@@ -595,6 +595,7 @@ def main():
     ap.add_argument("--compare-disk", help="disk for the candidate's resources (Executor snapshots have none)")
     ap.add_argument("--window", nargs=2, type=int, metavar=("START", "COUNT"),
                     help="with --compare: the aligned listing from reference #START")
+    ap.add_argument("--app", default="Finder", help="whose calls --compare follows (default Finder)")
     ap.add_argument("--trap", help="every site of one trap word (hex)")
     ap.add_argument("--all", action="store_true", help="every routine with its verdict")
     ap.add_argument("--extensions", action="store_true", help="count extensions as code we run")
@@ -606,7 +607,7 @@ def main():
     if a.compare:
         cand = Analysis(a.compare, a.compare_disk or a.disk or (an.snap.meta.get("disks") or [None])[0],
                         a.extensions)
-        compare(an, cand, window=a.window)
+        compare(an, cand, window=a.window, app=a.app)
         return
     if a.trap:
         k = trap_key(int(a.trap, 16))

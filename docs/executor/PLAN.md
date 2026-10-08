@@ -165,6 +165,42 @@ Manager heap and partitions, tag System heap blocks with resource
 type/ID, disassemble via Retro68 objdump, snapshot the Executor child,
 then `diff-world`.
 
+**M3 shape (decided 2026-10-08): extensions on our own trap tables.**
+
+* **Trap tables.** Executor's C++ builds real tables at `$400`/`$E00`.
+  Every entry is a 68k-callable address (a stub into the C++ trap), so
+  `GetTrapAddress` returns something callable and a head or tail patch
+  can jump to the old entry. Seeding comes first, then
+  `trap_installs.tsv` from a real boot to check each patch history.
+  Come-from patches that test ROM return addresses never fire. That is
+  expected; they patch ROM bugs we don't have.
+* **INITs from a whitelist** (`<data_dir>/init-whitelist.txt`, same
+  style as the resource policy). Extensions and control panels load in
+  the Start Manager's order, through our INIT loader (`INIT` resources,
+  `ShowInitIcon`, `cdev` INITs). Files that aren't listed are skipped,
+  so one bad INIT can't take the boot down. Apple's `ptch`/`lpch`/`gpch`
+  code is still never run.
+* **Component Manager: a C++ rewrite.** On 7.5.5 it isn't in the
+  Quadra ROM. It's `System 'gpch' 667`, entered from the `$A82A` slot
+  that `lpch` 31 installs, so it can't run as is without the
+  linked-patch loader. Executor never had one (`$A82A` hits the fatal
+  unimplemented-trap handler). The manager is a registry and
+  dispatcher (`_ComponentDispatch` selectors: register/unregister,
+  count/find/info, open/close, instance storage/A5/refcon/error,
+  resource files, list seed, `CallComponent`), so it's written in C++.
+  The components (`thng` + code from the System file, `thng` files,
+  QuickTime, Easy Open) run as Apple's 68k code; `CallComponent` calls
+  their entry points with a `ComponentParameters` block. Gestalt `'cpnt'`
+  reports the 7.5.5 version. Until it lands, `$A82A` is a stub with no
+  components (`CountComponents` 0, `FindNextComponent` 0,
+  `OpenComponent` nil), so a stray call fails softly. On a real boot,
+  Finder never calls `$A82A`. The callers are Script Manager `ptch` 27
+  (text services), the System file's own components, and Easy Open,
+  QuickTime, AppleScript, Color Picker, Speech Manager and Color SW Pro.
+* **Whitelist order** (small and self-contained first): Color Picker →
+  Speech Manager + MacinTalk 3 → AppleScript (+ Finder Scripting
+  Extension) → QuickTime → Macintosh Easy Open.
+
 ## Milestones
 
 | | Milestone | Gate | Status |
@@ -174,8 +210,8 @@ then `diff-world`.
 | M0c | Headless app run | built-in Browser reaches its event loop, screenshot | done: `executor.smoke.browser_screenshot` |
 | M0d | Shell integration | `--backend executor` in the web UI shows video, takes input | done: one binary, UI option, `executor.smoke.web_backend` |
 | M1 | Finder desktop | our boot phase, Apple System file as resource root, real Finder draws |
-| M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix |
-| M3 | Borrowed managers | QuickTime 1.6 Component Manager, Thread Manager, AE 1.0.1 |
+| M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix | in progress: Finder launches Jigsaw Puzzle in its own process, it runs and quits back to Finder |
+| M3 | Extensions | real trap tables, whitelisted INITs, Component Manager in C++; Color Picker, Speech, AppleScript, QuickTime load and work |
 | M4 | 7.5.5 + Drag Manager | |
 | P | PPC | KPX behind the PowerCore facade, InterfaceLib to native |
 
@@ -311,6 +347,36 @@ Kept small so upstream fixes can be merged by hand:
   `DisplayDispatch` and `DialogDispatch` select on D0's low byte.
 * `dial/dialDispatch.cpp`: `DialogDispatch` 7 (`IsCancelEvent`, a guess) and
   8 (`CheckEventQueueForUserCancel`).
+* `process.cpp`: the Process Manager runs several processes. Each but the
+  first has a `QThread` whose `run()` moves onto a stack from a pool below
+  4GB (guest code gets pointers into Toolbox C++ frames), so its frames
+  survive while others run; one runs at a time (a baton, `QMutex` +
+  `QWaitCondition`). A switch saves and restores the low memory 7.5.5's
+  Process Manager switches (the System file's `lmem` -16458, plus
+  ApplZone, ApplLimit, WindowList and, because Executor allocates them in
+  the application heap, AuxWinHead, AuxCtlHead, MenuCInfo), the 68k context
+  (`syn68k_save_context`), the trap tables (applications' own patches) and
+  registered host state (HLE queue, palette list, AE handler tables).
+  `LaunchApplication` with `launchContinue` creates the process; it first
+  runs at the launcher's next event call (as on 7.5.5). A process that quits
+  is tidied up (windows, resource files, VBL tasks, partition) and its
+  launcher gets the uncovered screen redrawn and, with SIZE
+  acceptAppDiedEvents, `'aevt'/'obit'` in 7.5.5's wire format. PSNs start at
+  $2000. The Application menu is system-wide and lists the processes.
+* `time/syncint.cpp`: the timer is a Qt thread; it wakes whichever thread
+  is idle in `syncint_wait_interrupt()` (upstream aimed SIGALRM at one).
+* `toolevent.cpp`: `WaitNextEvent` also checks its own deadline (its
+  timeout flag is shared by all processes).
+* `wind/windInit.cpp`: a later process's `InitWindows` leaves the Window
+  Manager ports, desktop pattern, gray region and screen alone.
+* `wind/windMisc.cpp`: painting the desktop is an update for the desktop
+  layer (Finder redraws its icons).
+* `quickdraw/qPaletteMgr.cpp`: the window/palette list is per process;
+  `DisposePixPat`/`DisposePixMap` ignore a dead handle like 7.5.5
+  (`ROMlib_live_handle_p`).
+* `file/fileHighlevel.cpp`, `file/fileUnimplemented.cpp`: `FSpExchangeFiles`
+  and `PBExchangeFiles` swap contents and dates, keeping names and Finder
+  info (upstream only did it for one application).
 * `menu/menu.cpp`, `menu/stdmbdf.cpp`: `MenuDispatch` ($A825, D0 low byte):
   `InsertFontResMenu`, `InsertIntlResMenu`, private -6 (`IsSystemMenu`) and
   -5 (`DrawMenuBarMessage`, names guessed) which, like 7.5.5, has the MBDF
