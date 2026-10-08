@@ -21,6 +21,8 @@
 #include <OSUtil.h>
 #include <FontMgr.h>
 #include <IntlUtil.h>
+#include <AppleEvents.h>
+#include <ProcessMgr.h>
 
 #include <menu/menu.h>
 #include <mman/mman.h>
@@ -379,4 +381,39 @@ Handle Executor::ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item)
        || item - apple_base > (INTEGER)apple_items.size())
         return nullptr;
     return apple_items[item - apple_base - 1].suite;
+}
+
+/* OpenDeskAcc of an Apple Menu Items entry: as 7.5.5's Process Manager
+   does (scod -16463 +9c96), post the item's owner an 'aevt'/'amis'
+   high-level event whose message is the 28-byte Apple event stream
+   'aevt' 1 1 ';;;;' then parameter 'amis' 'long' 4 key. Finder reads the
+   key with its own parser of that stream and opens the object. */
+bool Executor::ROMlib_apple_menu_open(ConstStringPtr name)
+{
+    auto it = std::find_if(apple_items.begin(), apple_items.end(),
+        [name](const AppleItem& i) {
+            return i.text[0] == name[0] && !memcmp(&i.text[1], name + 1, name[0]);
+        });
+    if(it == apple_items.end())
+        return false;
+
+    struct
+    {
+        GUEST<OSType> signature;
+        GUEST<int16_t> major, minor;
+        GUEST<OSType> marker;
+        GUEST<OSType> keyword, type;
+        GUEST<int32_t> size, key;
+    } msg = { "aevt"_4, 1, 1, ";;;;"_4, "amis"_4, "long"_4, 4, it->key };
+    static_assert(sizeof msg == 28);
+
+    EventRecord evt = {};
+    evt.what = kHighLevelEvent;
+    evt.message = "aevt"_4;
+    GUEST<uint32_t> id = "amis"_4;
+    memcpy(&evt.where, &id, sizeof id);
+    ProcessSerialNumber psn;
+    GetCurrentProcess(&psn);
+    PostHighLevelEvent(&evt, (Ptr)&psn, 0, (Ptr)&msg, sizeof msg, 0x8000 /* receiverIDisPSN */);
+    return true;
 }

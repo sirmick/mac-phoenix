@@ -324,6 +324,13 @@ Kept small so upstream fixes can be merged by hand:
   date; `stdmdef.cpp` draws each entry's small icon (18-pixel rows) and
   sizes items as 7.5.5 does (10-pixel margin, command-key room only with a
   key).
+* `menu/sysmenu.cpp`, `desk.cpp`: `OpenDeskAcc` of an Apple Menu Items entry
+  posts its owner the raw 28-byte 'aevt'/'amis' event (key parameter) the
+  7.5.5 Process Manager sends; Finder parses it itself and opens the item.
+* `osevent/hle.cpp`, `process.cpp`: `AcceptHighLevelEvent` fills in the
+  sender (the current process's port, no location; Finder drops events
+  from other machines); `GetProcessSerialNumberFromPortName` and
+  `GetPortNameFromProcessSerialNumber` for the current process.
 * `version.cpp`: with Apple's System file (it has `lpch`), the system
   version comes from its `vers` 1 and its resources are left alone
   (`ROMlib_apple_system_file`); `gestalt.cpp` `mach` 20 as on the

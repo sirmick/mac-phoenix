@@ -7,6 +7,7 @@
 #include <OSEvent.h>
 #include <MemoryMgr.h>
 #include <osevent/osevent.h>
+#include <rsys/process.h>
 #include <base/functions.impl.h>
 
 using namespace Executor;
@@ -83,7 +84,15 @@ OSErr Executor::C_AcceptHighLevelEvent(TargetID *sender_id_return,
     if(current_hle_msg == nullptr)
         return noOutstandingHLE;
 
-    /* #### *sender_id_return = ...; */
+    /* MacPhoenix: the sender is this machine's current process (one
+       process for now); Finder ignores events whose sender has a
+       location, i.e. come from another machine. */
+    if(sender_id_return)
+    {
+        memset(sender_id_return, 0, sizeof *sender_id_return);
+        ROMlib_process_port_name(&sender_id_return->name);
+        sender_id_return->recvrName = sender_id_return->name;
+    }
     *refcon_return = current_hle_msg->userRefCon;
 
     if(*msg_buf_length_return < current_hle_msg->msgLength)

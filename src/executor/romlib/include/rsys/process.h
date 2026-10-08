@@ -2,6 +2,7 @@
 #define __rsys_process_h__
 
 #include <MemoryMgr.h>
+#include <PPC.h>
 
 namespace Executor
 {
@@ -26,5 +27,8 @@ extern void process_reset_heap(THz pm_zone);
    HeapEnd, ApplLimit, CurStackBase, CurrentA5 and MemTop.  The heap is
    left as TheZone, so the application's resource map lands in it. */
 extern void process_layout_partition(ConstStringPtr app_name);
+
+/* The current process's PPC port name (its high-level events' sender). */
+extern void ROMlib_process_port_name(PPCPortRec *port);
 }
 #endif /* !defined (__rsys_process_h__) */

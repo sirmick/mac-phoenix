@@ -3,6 +3,7 @@
  */
 
 #include <rsys/desk.h>
+#include <menu/menu.h>
 
 #include <base/common.h>
 #include <QuickDraw.h>
@@ -55,6 +56,9 @@ INTEGER Executor::C_OpenDeskAcc(ConstStringPtr acc) /* IMI-440 */
     GUEST<INTEGER> retval_s;
     DCtlHandle dctlh;
     WindowPtr wp;
+
+    if(ROMlib_apple_menu_open(acc))
+        return 0;
 
     const auto& entries = appleMenuEntries();
 

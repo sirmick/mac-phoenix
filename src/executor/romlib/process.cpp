@@ -6,6 +6,7 @@
 #include <menu/menu.h>
 
 #include <ProcessMgr.h>
+#include <SegmentLdr.h>
 #include <ResourceMgr.h>
 #include <MemoryMgr.h>
 #include <ToolboxEvent.h>
@@ -353,18 +354,40 @@ OSErr Executor::C_WakeUpProcess(ProcessSerialNumber *serial_number)
     return paramErr;
 }
 
+/* MacPhoenix: a process's PPC port, as the Process Manager registers it:
+   named after the process, by creator and type ('ep01'). */
+void Executor::ROMlib_process_port_name(PPCPortRec *port)
+{
+    memset(port, 0, sizeof *port);
+    port->nameScript = 0; /* smRoman */
+    int len = std::min<int>(LM(CurApName)[0], 32);
+    port->name[0] = len;
+    memcpy(&port->name[1], &LM(CurApName)[1], len);
+    port->portKindsSelector = 1; /* ppcByCreatorAndType */
+    port->u.port.creator = current_process_info ? current_process_info->signature : 0;
+    port->u.port.type = "ep01"_4;
+}
+
 OSErr Executor::C_GetProcessSerialNumberFromPortName(
     PPCPortPtr port_name, ProcessSerialNumber *serial_number)
 {
-    warning_unimplemented("");
-    return paramErr;
+    PPCPortRec ours;
+    ROMlib_process_port_name(&ours);
+    if(!current_process_info
+       || !EqualString(port_name->name, ours.name, true, true))
+        return procNotFound;
+    *serial_number = current_process_info->serial_number;
+    return noErr;
 }
 
 OSErr Executor::C_GetPortNameFromProcessSerialNumber(
     PPCPortPtr port_name, ProcessSerialNumber *serial_number)
 {
-    warning_unimplemented("");
-    return paramErr;
+    if(!current_process_info
+       || !PSN_EQ_P(*serial_number, current_process_info->serial_number))
+        return procNotFound;
+    ROMlib_process_port_name(port_name);
+    return noErr;
 }
 
 /* ### temp memory spew; these go elsewhere */

@@ -60,6 +60,7 @@ extern bool ROMlib_apple_menu_remove(int32_t key);
 extern void ROMlib_apple_menu_attach(MenuHandle mh);
 extern void ROMlib_apple_menu_update();
 extern Handle ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item);
+extern bool ROMlib_apple_menu_open(ConstStringPtr name);
 enum { kSystemMenuTitleWidth = 28, kSystemMenuRightMargin = 11 };
 
 #define mbDraw 0

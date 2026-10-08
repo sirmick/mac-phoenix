@@ -523,19 +523,16 @@ void LocalVolume::updateSpace()
             break;
         }
         boost::system::error_code sec;
-        if(isHidden(*it))
-        {
-            if(fs::is_directory(it->path(), sec))
-                it.disable_recursion_pending();
-            continue;
-        }
+        // Everything takes space (AppleDouble files hold resource forks);
+        // only what the volume shows counts as a file or folder.
+        bool shown = !isHidden(*it);
         if(fs::is_regular_file(it->path(), sec))
         {
             used += blocks(fs::file_size(it->path(), sec));
-            ++files;
+            files += shown;
         }
         else if(fs::is_directory(it->path(), sec))
-            ++dirs;
+            dirs += shown;
     }
     if(complete)
     {
