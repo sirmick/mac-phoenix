@@ -37,11 +37,15 @@ sub report_finish {
     close(RESULTS);
 }
 
-# Run AppleScript; returns (ok, result-or-error).
+# Run AppleScript; returns (ok, result-or-error). The script runs inside
+# try/on error so a failure comes back with AppleScript's number and
+# message. (In MacPerl "\n" is CR, the line break AppleScript wants.)
 sub as {
     my ($src) = @_;
-    my $r = eval { MacPerl::DoAppleScript($src) };
+    my $wrapped = "try\n$src\non error m number n\nreturn \"ERR \" & n & \": \" & m\nend try";
+    my $r = eval { MacPerl::DoAppleScript($wrapped) };
     return (0, $@ || 'error') if $@ || !defined($r);
+    return (0, $1) if $r =~ /^"?ERR (.*?)"?$/s;
     return (1, $r);
 }
 
@@ -183,7 +187,11 @@ my ($ok10, $tn2) = finder('count items of trash');
 # --- Clean up ---
 
 check('delete_folder', qq{delete $F}, sub { !-e $root }, "$root still there");
-finder('empty trash');
+# Emptying a Trash that holds a folder with folders and files inside it.
+my ($ok11, $et2) = finder('empty trash');
+my ($ok12, $tn3) = finder('count items of trash');
+($ok11 && $ok12 && $tn3 == 0) ? report_pass('empty_trash_folder')
+                              : report_fail('empty_trash_folder', "count after: '$tn3' ($et2)");
 unlink "Host:FinderTest b.txt";
 
 report_finish();

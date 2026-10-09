@@ -148,6 +148,8 @@ OSErr Executor::C_AcceptHighLevelEvent(TargetID *sender_id_return,
         if(!ROMlib_process_port_name_of(&current_hle_from, &sender_id_return->name))
             ROMlib_process_port_name(&sender_id_return->name);
         ROMlib_process_port_name(&sender_id_return->recvrName);
+        /* The session to answer on (receiverIDisSessionID): the sender. */
+        sender_id_return->sessionID = current_hle_from.lowLongOfPSN;
     }
     *refcon_return = current_hle_msg->userRefCon;
 
@@ -191,8 +193,19 @@ Boolean Executor::C_GetSpecificHighLevelEvent(
             if(!ROMlib_process_port_name_of(&t->from, &sender->name))
                 ROMlib_process_port_name(&sender->name);
             ROMlib_process_port_name(&sender->recvrName);
+            sender->sessionID = t->from.lowLongOfPSN;
         }
-        if(fn(data, t->hle_msg, sender))
+        /* The filter accepts a message by calling AcceptHighLevelEvent
+           (Apple's Apple Event Manager does, for its replies): that reads
+           the message being offered. */
+        HighLevelEventMsgPtr saved_msg = current_hle_msg;
+        ProcessSerialNumber saved_from = current_hle_from;
+        current_hle_msg = t->hle_msg;
+        current_hle_from = t->from;
+        bool took = fn(data, t->hle_msg, sender);
+        current_hle_msg = saved_msg;
+        current_hle_from = saved_from;
+        if(took)
         {
             *prev = t->next;
             DisposePtr((Ptr)t->hle_msg);
@@ -233,6 +246,15 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
             }
             case 0x7000: /* receiverIDisSignature */
                 ROMlib_process_with_signature(*(GUEST<OSType> *)receiver_id, &to);
+                break;
+            case 0x6000: /* receiverIDisSessionID: receiverID is the
+                            session ID itself (not a pointer to one; real
+                            7.5.5 posts 'ansr' replies with $40000004 there):
+                            the session a message came in on, which
+                            AcceptHighLevelEvent gives as the sender's PSN.
+                            The Apple Event Manager replies this way. */
+                to.highLongOfPSN = 0;
+                to.lowLongOfPSN = US_TO_SYN68K(receiver_id);
                 break;
         }
     }

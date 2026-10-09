@@ -1703,8 +1703,21 @@ OSErr Executor::C_AddProcessCallback(Ptr proc, int32_t refCon)
     return noErr;
 }
 
+/* MacPhoenix: measures the Process Manager heap without disturbing it,
+   as Apple's does (HeapDispatch). TempMaxMem goes through MaxMem, which
+   purges every purgeable block in the heap first, and Finder calls this
+   over and over at idle. */
 OSErr Executor::C_GetTempMemInfo(GUEST<int32_t> *freeBytes, GUEST<int32_t> *maxBlock)
 {
+    if(ROMlib_pm_zone)
+    {
+        TheZoneGuard guard(ROMlib_pm_zone);
+        if(freeBytes)
+            *freeBytes = FreeMem();
+        if(maxBlock)
+            *maxBlock = MaxBlock();
+        return noErr;
+    }
     if(freeBytes)
         *freeBytes = TempFreeMem();
     if(maxBlock)

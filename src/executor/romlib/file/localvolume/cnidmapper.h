@@ -9,6 +9,8 @@ namespace Executor
 
 using CNID = int32_t;
 
+std::optional<fs::path> pathBelow(const fs::path& path, const fs::path& folder);
+
 class CNIDMapper
 {
 public:

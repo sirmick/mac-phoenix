@@ -18,6 +18,7 @@ data directory is left alone.
 import os
 import struct
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -25,7 +26,15 @@ from rsrc import Disk, macbinary_forks  # noqa: E402
 
 AD_MAGIC, AD_VERSION = 0x00051607, 0x00020000
 FINDER_INFO, RESOURCE_FORK = 9, 2
-MAC_TO_UNIX = 2082844800      # seconds from 1904 to 1970 (Executor's epoch, no time zone)
+MAC_TO_UNIX = 2082844800      # seconds from 1904 to 1970
+
+
+def mac_to_host_time(mac):
+    """A Mac date (local wall clock, seconds since 1904) as a host time,
+    with the offset in force at that date: the inverse of Executor's
+    hostToMacTime (romlib/file/localvolume/item.cpp)."""
+    wall = time.gmtime(mac - MAC_TO_UNIX)
+    return int(time.mktime(wall[:8] + (-1,)))
 
 
 def appledouble(finder_info, rsrc):
@@ -91,7 +100,7 @@ def main():
             # Keep the original modification date (MacBinary +95, seconds
             # since 1904): Executor reports the host file's time, and Finder
             # keys its cached segment table on its own file's date.
-            mod = struct.unpack_from(">I", blob, 95)[0] - MAC_TO_UNIX
+            mod = mac_to_host_time(struct.unpack_from(">I", blob, 95)[0])
             for f in (folder / leaf, folder / f"%{leaf}"):
                 os.utime(f, (mod, mod))
             print(f"{name} from {image}: {len(data)} data, {len(rsrc)} resource bytes -> {sysdir}")

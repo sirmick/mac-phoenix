@@ -1,6 +1,10 @@
-- typedef:
+- funptr:
+    return: Boolean
+    args:
+      - type: CInfoPBPtr
+      - type: Boolean*
+      - type: Ptr
     name: AliasFilterUPP
-    type: ProcPtr
 
 # ####
 
@@ -94,6 +98,28 @@
         type: Ptr
     dispatcher: AliasDispatch
     selector: 0x000A
+    executor: C_
+
+# ####
+
+- function:
+    name: GetFolderName
+    comment: |
+      MacPhoenix: private on 7.5.5, name a guess (the later Folder Manager
+      has a GetFolderName with these arguments). Finder Scripting Extension
+      asks it for the Trash's name.
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: folderType
+        type: OSType
+      - name: foundVRefNum
+        type: int16_t*
+      - name: name
+        type: StringPtr
+    dispatcher: AliasDispatch
+    selector: 0x000E
     executor: C_
 
 # ####

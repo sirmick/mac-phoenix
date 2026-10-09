@@ -58,6 +58,7 @@ public:
     void deleteItem(ItemPtr item);
     void renameItem(ItemPtr item, mac_string_view newName);
     void moveItem(ItemPtr item, DirectoryItemPtr newParent);
+    void rebaseDescendants(const fs::path& oldPath, const fs::path& newPath);
 };
 
 }

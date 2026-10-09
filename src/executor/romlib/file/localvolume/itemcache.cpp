@@ -202,8 +202,21 @@ void ItemCache::deleteItem(ItemPtr item)
     flushDirectoryCache(item->parID());
 }
 
+/* A folder moved or was renamed: the items inside it still hold paths
+   into the old place. */
+void ItemCache::rebaseDescendants(const fs::path& oldPath, const fs::path& newPath)
+{
+    if(oldPath == newPath)
+        return;
+    for(auto& [cnid, weak] : items_)
+        if(ItemPtr item = weak.lock())
+            if(auto rest = pathBelow(item->path(), oldPath))
+                item->setPath(newPath / *rest);
+}
+
 void ItemCache::renameItem(ItemPtr item, mac_string_view newName)
 {
+    fs::path oldPath = item->path();
     fs::path newPath = item->path().parent_path() / toUnicodeFilename(newName);
     flushDirectoryCache(item->parID());
     cnidMapper_->moveCNID(item->cnid(), 0, newName, 
@@ -211,17 +224,23 @@ void ItemCache::renameItem(ItemPtr item, mac_string_view newName)
             item->moveItem(newPath, newName);
             return item->path();
         });
-
+    rebaseDescendants(oldPath, item->path());
 }
 
 void ItemCache::moveItem(ItemPtr item, DirectoryItemPtr newParent)
 {
     flushDirectoryCache(item->parID());
     flushDirectoryCache(newParent->cnid());
+    fs::path oldPath = item->path();
     fs::path newPath = newParent->path() / item->path().filename();
     cnidMapper_->moveCNID(item->cnid(), newParent->cnid(), mac_string_view(), 
         [&] {
             item->moveItem(newPath, mac_string_view());
             return item->path();
         });
+    rebaseDescendants(oldPath, item->path());
+    /* MacPhoenix: the item now lives in newParent; it kept reporting its
+       old folder as ioFlParID, and Finder, moving a file into the Trash,
+       then lost the folder it came from. */
+    item->setParID(newParent->cnid());
 }

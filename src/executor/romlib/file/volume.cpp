@@ -17,7 +17,7 @@ void Volume::PBGetVInfo(ParmBlkPtr pb)
         str255assign(pb->volumeParam.ioNamePtr, vcb.vcbVN);
     pb->volumeParam.ioVRefNum = vcb.vcbVRefNum;
     pb->volumeParam.ioVCrDate = vcb.vcbCrDate;
-    pb->volumeParam.ioVLsBkUp = vcb.vcbVolBkUp;
+    pb->volumeParam.ioVLsBkUp = vcb.vcbLsMod;   // HFS: the last-modified date here
     pb->volumeParam.ioVAtrb = vcb.vcbAtrb;
     pb->volumeParam.ioVNmFls = vcb.vcbNmFls;    // FIXME: should refer to WD if vrefnum is a WD
     // ioVDirSt     // FIXME

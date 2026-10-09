@@ -15,6 +15,10 @@ class OpenFile;
 
 using CNID = int32_t;
 
+/* Host file times (UTC) <-> Mac dates (local wall clock); item.cpp. */
+int64_t hostToMacTime(int64_t t);
+int64_t macToHostTime(int64_t t);
+
 class Item;
 class DirectoryItem;
 class FileItem;
@@ -55,6 +59,11 @@ public:
     const fs::path& path() const { return path_; }
 
     CNID parID() const { return parID_; }
+    /* MacPhoenix: after a move (ItemCache::moveItem). */
+    void setParID(CNID parID) { parID_ = parID; }
+    // The folder holding this item moved or was renamed (no file system
+    // operation; ItemCache keeps the paths of what is inside current).
+    void setPath(fs::path p) { path_ = std::move(p); }
     CNID cnid() const { return cnid_; }
 
     const mac_string& name() const { return name_; }
@@ -113,6 +122,7 @@ public:
     int countItems() { return contents_.size(); }
 
     virtual void deleteItem();
+    virtual void moveItem(const fs::path& newPath, mac_string_view newName) override;
     virtual ItemInfo getInfo() override;
     virtual void setInfo(ItemInfo info) override;
 private:

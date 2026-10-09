@@ -89,6 +89,21 @@ std::vector<CNIDMapper::Mapping> SimpleCNIDMapper::mapDirectoryContents(CNID dir
     return dirMappings;
 }
 
+/* The part of path below folder, if path is inside it. */
+std::optional<fs::path> Executor::pathBelow(const fs::path& path, const fs::path& folder)
+{
+    auto p = path.begin(), f = folder.begin();
+    for(; f != folder.end(); ++p, ++f)
+        if(p == path.end() || *p != *f)
+            return {};
+    if(p == path.end())
+        return {};
+    fs::path rest;
+    for(; p != path.end(); ++p)
+        rest /= *p;
+    return rest;
+}
+
 std::optional<CNIDMapper::Mapping> SimpleCNIDMapper::lookupCNID(CNID cnid)
 {
     auto it = mappings_.find(cnid);
@@ -157,9 +172,16 @@ void SimpleCNIDMapper::moveCNID(CNID cnid, CNID newParent, mac_string_view newMa
     if(oldParent == newParent && newMacName.empty())
         return;
 
+    fs::path oldPath = it->second.path;
     fs::path newPath = fsop();
 
     it->second.path = newPath;
+    /* MacPhoenix: a folder takes what is inside it along; their paths
+       pointed into the old place, so a moved folder listed as empty. */
+    if(oldPath != newPath)
+        for(auto& [id, m] : mappings_)
+            if(auto rest = pathBelow(m.path, oldPath))
+                m.path = newPath / *rest;
     it->second.parID = newParent;
     if(!newMacName.empty())
         it->second.macname = newMacName;

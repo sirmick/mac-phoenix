@@ -186,8 +186,15 @@ void DesktopDB::save()
         if(!out)
             return;
     }
+    /* The rename replaces a directory entry in the volume's root, which
+       moves the root's modification date; Finder takes that as the disk's
+       contents changing and drops what it knows of them. Keep it. */
     boost::system::error_code ec;
+    fs::path root = file.parent_path();
+    auto root_time = fs::last_write_time(root, ec);
     fs::rename(tmp, file, ec);
+    if(root_time != (decltype(root_time))-1)
+        fs::last_write_time(root, root_time, ec);
 }
 
 /* The volume named by ioNamePtr/ioVRefNum; opens (or creates) its database. */

@@ -2,6 +2,7 @@
 #include "itemcache.h"
 
 #include <OSUtil.h>
+#include <time.h>
 #include <iostream>
 
 using namespace Executor;
@@ -34,19 +35,43 @@ void Item::moveItem(const fs::path& newPath, mac_string_view newName)
    (and Finder 7.5 rebuilt its segment cache, keyed on its own file date). */
 const int64_t macToUnixEpoch = 86400 * (365 * (1970-1904) + (1970-1904+3)/4);
 
+/* MacPhoenix: Mac dates are local wall-clock time, host file times UTC.
+   Convert each date with the host's offset at that date (as `ls` shows
+   it), or a date the Finder sets on a folder reads back hours off and its
+   cached views of the folder go stale. Per-date rather than today's offset,
+   so a file's Mac date doesn't move when daylight saving starts or ends
+   (Finder rebuilds its segment cache when its own file's date changes).
+   tools/macdecode/sideload_system.py sets host times the same way. */
+int64_t Executor::hostToMacTime(int64_t t)
+{
+    time_t tt = t;
+    struct tm tm;
+    localtime_r(&tt, &tm);
+    return t + tm.tm_gmtoff + macToUnixEpoch;
+}
+
+int64_t Executor::macToHostTime(int64_t t)
+{
+    time_t wall = t - macToUnixEpoch;
+    struct tm tm;
+    gmtime_r(&wall, &tm);
+    tm.tm_isdst = -1;
+    return mktime(&tm);
+}
+
 ItemInfo Item::getInfo()
 {
     ItemInfo info{};
-    info.modTime = fs::last_write_time(path()) + macToUnixEpoch;
+    info.modTime = hostToMacTime(fs::last_write_time(path()));
 
     return info;
 }
 
 void Item::setInfo(ItemInfo info)
 {
-    auto oldModTime = fs::last_write_time(path()) + macToUnixEpoch;
+    auto oldModTime = hostToMacTime(fs::last_write_time(path()));
     if(oldModTime != (int64_t)info.modTime)
-        fs::last_write_time(path(), info.modTime - macToUnixEpoch);
+        fs::last_write_time(path(), macToHostTime(info.modTime));
 }
 
 ItemPtr DirectoryItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
@@ -120,11 +145,22 @@ ItemPtr DirectoryItem::resolve(int index, bool includeDirectories)
     throw OSErrorException(fnfErr);
 }
 
+/* MacPhoenix: a folder is empty when it holds nothing but the sidecars of
+   items that are gone (.finf/.rsrc entries are left by a folder moved or
+   deleted out of it); those go with it, as does its own Finder info in
+   its parent's .finf. Was: busy whenever .finf held anything. */
 void DirectoryItem::deleteItem()
 {
     boost::system::error_code ec;
-    fs::remove(path() / ".rsrc", ec);
-    fs::remove(path() / ".finf", ec);       // TODO: individual ItemFactories should provide this info
+    for(const auto& e : fs::directory_iterator(path(), ec))
+    {
+        auto name = e.path().filename().string();
+        if(name != ".finf" && name != ".rsrc")
+            throw OSErrorException(fBsyErr);
+    }
+    fs::path own = finderInfoPath();
+    fs::remove_all(path() / ".rsrc", ec);
+    fs::remove_all(path() / ".finf", ec);
 
     fs::remove(path(), ec);
 
@@ -135,6 +171,27 @@ void DirectoryItem::deleteItem()
         else
             throw OSErrorException(paramErr);
     }
+    fs::remove(own, ec);
+}
+
+/* MacPhoenix: the folder's Finder info moves with it (from the old
+   parent's .finf to the new one's), keeping both parents' dates. */
+void DirectoryItem::moveItem(const fs::path& newPath, mac_string_view newName)
+{
+    fs::path oldInfo = finderInfoPath();
+    Item::moveItem(newPath, newName);
+    fs::path newInfo = finderInfoPath();
+    boost::system::error_code ec;
+    if(oldInfo == newInfo || !fs::exists(oldInfo, ec))
+        return;
+    fs::path oldHolder = oldInfo.parent_path().parent_path();
+    fs::path newHolder = newInfo.parent_path().parent_path();
+    auto oldTime = fs::last_write_time(oldHolder, ec);
+    auto newTime = fs::last_write_time(newHolder, ec);
+    fs::create_directory(newInfo.parent_path(), ec);
+    fs::rename(oldInfo, newInfo, ec);
+    fs::last_write_time(oldHolder, oldTime, ec);
+    fs::last_write_time(newHolder, newTime, ec);
 }
 
 /* MacPhoenix: a folder's Finder info (DInfo + DXInfo) lives where Basilisk

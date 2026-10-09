@@ -219,6 +219,13 @@ dispatchers:
           descriptions ({type.l, name length.l, name}: 'shdf' Shutdown Items,
           'timf' Timer Items). The patch switches D0 0 -> $A for those types
           and jumps to the saved routine, so traces never show the selector.
+      - value: 0x0E
+        name: GetFolderName
+        status: guess
+        source: Finder Scripting Extension code (disassembly), later Folders.h
+        comment: >
+          (vRefNum, folderType, short *foundVRefNum, StringPtr name) ->
+          OSErr. FSE asks it for the Trash's name when making a folder.
 
 # Tags: entry points below the Toolbox Executor provides. A tagged entry
 # point that only Apple ROM/patch code calls is "not needed" for that

@@ -19,6 +19,9 @@
 #include <rsys/alias.h>
 
 #include <algorithm>
+#include <string>
+#include <vector>
+#include <base/functions.impl.h>
 
 using namespace Executor;
 
@@ -206,6 +209,48 @@ OSErr Executor::C_FindFolderWithTable(int16_t vRefNum, OSType folderType,
     return C_FindFolder(vRefNum, folderType, createFolder, foundVRefNum, foundDirID);
 }
 
+/* MacPhoenix: AliasDispatch $E (name a guess, learned.yaml): the name of a
+   special folder and its volume. The folder's own name when it exists,
+   else the name FindFolder would create it with. */
+OSErr Executor::C_GetFolderName(int16_t vRefNum, OSType folderType,
+                                GUEST<int16_t> *foundVRefNum, StringPtr name)
+{
+    GUEST<int16_t> vref;
+    GUEST<int32_t> dirid;
+    OSErr err = C_FindFolder(vRefNum, folderType, false, &vref, &dirid);
+    if(err == noErr)
+    {
+        CInfoPBRec pb = {};
+        Str63 n;
+        n[0] = 0;
+        pb.dirInfo.ioNamePtr = n;
+        pb.dirInfo.ioVRefNum = vref;
+        pb.dirInfo.ioDrDirID = dirid;
+        pb.dirInfo.ioFDirIndex = -1;
+        err = PBGetCatInfo(&pb, false);
+        if(err == noErr)
+        {
+            if(foundVRefNum)
+                *foundVRefNum = vref;
+            if(name)
+                memcpy(name, n, n[0] + 1);
+            return noErr;
+        }
+    }
+    if(const char *sub = find_sub_dir(folderType))
+    {
+        if(foundVRefNum)
+            *foundVRefNum = vRefNum;
+        if(name)
+        {
+            name[0] = std::min<size_t>(strlen(sub), 31);
+            memcpy(name + 1, sub, name[0]);
+        }
+        return noErr;
+    }
+    return err;
+}
+
 OSErr Executor::C_FindFolder(int16_t vRefNum, OSType folderType,
                              Boolean createFolder,
                              GUEST<int16_t> *foundVRefNum,
@@ -266,23 +311,54 @@ OSErr Executor::C_FindFolder(int16_t vRefNum, OSType folderType,
     return retval;
 }
 
+namespace
+{
+OSErr build_alias(const FSSpec *fromFile, const FSSpec *target, std::vector<uint8_t> &rec);
+}
+
+/* MacPhoenix: a full version 2 record (see the layout below), which the
+   Alias Manager and AppleScript can match back to the file: the parent
+   ID, the file's ID and dates, the relative levels from fromFile and the
+   full path. Was NewAliasMinimal (volume and name only). */
 OSErr Executor::C_NewAlias(FSSpecPtr fromFile, FSSpecPtr target,
                            GUEST<AliasHandle> *alias)
 {
-    OSErr retval;
-
-    *alias = 0;
-    warning_unimplemented("poorly implemented");
-
-    retval = NewAliasMinimal(target, alias);
-    return retval;
+    *alias = nullptr;
+    if(!target)
+        return paramErr;
+    std::vector<uint8_t> rec;
+    OSErr err = build_alias(fromFile, target, rec);
+    if(err != noErr)
+        return err;
+    Handle h = NewHandle(rec.size());
+    if(!h)
+        return MemError();
+    memcpy(*h, rec.data(), rec.size());
+    *alias = (AliasHandle)h;
+    return noErr;
 }
 
 OSErr Executor::C_UpdateAlias(FSSpecPtr fromFile, FSSpecPtr target,
                               AliasHandle alias, Boolean *wasChanged)
 {
-    warning_unimplemented("");
-    return paramErr;
+    if(!alias || !target)
+        return paramErr;
+    std::vector<uint8_t> rec;
+    OSErr err = build_alias(fromFile, target, rec);
+    if(err != noErr)
+        return err;
+    Size old = GetHandleSize((Handle)alias);
+    bool changed = old != (Size)rec.size() || memcmp(*alias, rec.data(), rec.size()) != 0;
+    if(changed)
+    {
+        SetHandleSize((Handle)alias, rec.size());
+        if(MemError() != noErr)
+            return MemError();
+        memcpy(*alias, rec.data(), rec.size());
+    }
+    if(wasChanged)
+        *wasChanged = changed;
+    return noErr;
 }
 
 enum
@@ -417,8 +493,12 @@ bool walk(INTEGER vref, int32_t dir, const AliasInfo &a, int first, FSSpec *out)
 
 bool volume_named(ConstStringPtr name, INTEGER *vref)
 {
+    /* "Vol:" -- without the colon the File Manager takes it for a file
+       name and answers with the default volume. */
     Str255 n;
     memcpy(n, name, name[0] + 1);
+    if(n[0] && n[n[0]] != ':' && n[0] < 255)
+        n[++n[0]] = ':';
     HParamBlockRec pb = {};
     pb.volumeParam.ioNamePtr = n;
     pb.volumeParam.ioVolIndex = -1;
@@ -426,6 +506,117 @@ bool volume_named(ConstStringPtr name, INTEGER *vref)
         return false;
     *vref = pb.volumeParam.ioVRefNum;
     return true;
+}
+
+/* The folders from dir up to the root (dir first), and their names. */
+bool folder_chain(INTEGER vref, int32_t dir, std::vector<int32_t> &ids, std::vector<std::string> &names)
+{
+    for(int guard = 0; dir && guard < 64; guard++)
+    {
+        Str63 n;
+        n[0] = 0;
+        CInfoPBRec pb = {};
+        pb.dirInfo.ioNamePtr = n;
+        pb.dirInfo.ioVRefNum = vref;
+        pb.dirInfo.ioDrDirID = dir;
+        pb.dirInfo.ioFDirIndex = -1;
+        if(PBGetCatInfo(&pb, false) != noErr)
+            return false;
+        ids.push_back(dir);
+        names.emplace_back((const char *)n + 1, n[0]);
+        if(dir == 2)
+            return true;
+        dir = pb.dirInfo.ioDrParID;
+    }
+    return false;
+}
+
+void put16(std::vector<uint8_t> &v, size_t at, uint16_t x) { v[at] = x >> 8; v[at + 1] = x; }
+void put32(std::vector<uint8_t> &v, size_t at, uint32_t x) { put16(v, at, x >> 16); put16(v, at + 2, x); }
+
+OSErr build_alias(const FSSpec *fromFile, const FSSpec *target, std::vector<uint8_t> &rec)
+{
+    Str63 name;
+    memcpy(name, target->name, std::min<int>(target->name[0], 63) + 1);
+    CInfoPBRec fpb = {};
+    fpb.hFileInfo.ioNamePtr = name;
+    fpb.hFileInfo.ioVRefNum = target->vRefNum;
+    fpb.hFileInfo.ioDirID = target->parID;
+    OSErr err = PBGetCatInfo(&fpb, false);
+    if(err != noErr)
+        return err;
+    bool folder = fpb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR;
+
+    Str27 vname;
+    HParamBlockRec vpb = {};
+    vname[0] = 0;
+    vpb.volumeParam.ioNamePtr = vname;
+    vpb.volumeParam.ioVRefNum = target->vRefNum;
+    if((err = PBHGetVInfo(&vpb, false)) != noErr)
+        return err;
+    INTEGER vref = vpb.volumeParam.ioVRefNum;
+
+    std::vector<int32_t> ids;
+    std::vector<std::string> names;
+    if(!folder_chain(vref, target->parID, ids, names))
+        return fnfErr;
+
+    int16_t nlvl_from = -1, nlvl_to = -1;
+    if(fromFile && fromFile->vRefNum == target->vRefNum)
+    {
+        std::vector<int32_t> fids;
+        std::vector<std::string> fnames;
+        if(folder_chain(vref, fromFile->parID, fids, fnames))
+            for(size_t i = 0; i < fids.size() && nlvl_from < 0; i++)
+            {
+                auto it = std::find(ids.begin(), ids.end(), fids[i]);
+                if(it != ids.end())
+                {
+                    nlvl_from = i + 1;
+                    nlvl_to = (it - ids.begin()) + 1;
+                }
+            }
+    }
+
+    rec.assign(150, 0);
+    put16(rec, 6, 2);                 /* version */
+    put16(rec, 8, folder ? 1 : 0);    /* kind */
+    rec[10] = std::min<int>(vname[0], 27);
+    memcpy(&rec[11], vname + 1, rec[10]);
+    put32(rec, 38, vpb.volumeParam.ioVCrDate);
+    put16(rec, 42, vpb.volumeParam.ioVSigWord);
+    put32(rec, 46, target->parID);
+    rec[50] = name[0];
+    memcpy(&rec[51], name + 1, name[0]);
+    put32(rec, 114, folder ? fpb.dirInfo.ioDrDirID : fpb.hFileInfo.ioDirID);
+    put32(rec, 118, folder ? fpb.dirInfo.ioDrCrDat : fpb.hFileInfo.ioFlCrDat);
+    if(!folder)
+    {
+        put32(rec, 122, fpb.hFileInfo.ioFlFndrInfo.fdType);
+        put32(rec, 126, fpb.hFileInfo.ioFlFndrInfo.fdCreator);
+    }
+    put16(rec, 130, nlvl_from);
+    put16(rec, 132, nlvl_to);
+
+    auto tag = [&](int16_t t, const std::string &data) {
+        size_t at = rec.size();
+        rec.resize(at + 4 + ((data.size() + 1) & ~1), 0);
+        put16(rec, at, t);
+        put16(rec, at + 2, data.size());
+        memcpy(&rec[at + 4], data.data(), data.size());
+    };
+    if(!names.empty() && ids.size() > 1)
+        tag(0, names[0]);             /* the parent folder's name */
+    std::string path((const char *)vname + 1, vname[0]);
+    for(size_t i = ids.size() - 1; i-- > 0;)  /* below the root, outermost first */
+        path += ":" + names[i];
+    path += ":" + std::string((const char *)name + 1, name[0]);
+    tag(2, path);                     /* the full path */
+    size_t at = rec.size();
+    rec.resize(at + 4, 0);
+    put16(rec, at, 0xFFFF);
+    put16(rec, 4, rec.size());        /* aliasSize */
+    return noErr;
 }
 
 OSErr resolve(const FSSpec *fromFile, AliasHandle alias, FSSpec *target)
@@ -559,13 +750,63 @@ OSErr Executor::C_ResolveAliasFile(FSSpecPtr theSpec,
     return noErr;
 }
 
+/* MacPhoenix: MatchAlias as ResolveAlias with a candidate list: the alias's
+   target (relative to fromFile when it was made relative) is the one
+   candidate. The caller's filter sees its catalog info and may reject it
+   (AppleScript's keeps applications). No search beyond the recorded
+   location (kARMSearch and friends): fnfErr when it is gone. AppleScript
+   finds the application it addresses with this; without it, it took the
+   running Finder for a file to launch. */
 OSErr Executor::C_MatchAlias(FSSpecPtr fromFile, int32_t rulesMask,
                              AliasHandle alias, GUEST<int16_t> *aliasCount,
                              FSSpecArrayPtr aliasList, Boolean *needsUpdate,
                              AliasFilterUPP aliasFilter, Ptr yourDataPtr)
 {
-    warning_unimplemented("");
-    return paramErr;
+    (void)rulesMask;
+    if(!alias || !aliasCount || !aliasList || *aliasCount < 1)
+        return paramErr;
+
+    FSSpec target;
+    Boolean was_changed = false;
+    OSErr err = C_ResolveAlias(fromFile, alias, &target, &was_changed);
+    if(err != noErr)
+    {
+        *aliasCount = 0;
+        return err;
+    }
+
+    if(aliasFilter)
+    {
+        struct Block
+        {
+            CInfoPBRec cpb;
+            Str63 name;
+            Boolean quit;
+        };
+        Block *b = (Block *)NewPtrSysClear(sizeof(Block));
+        if(b)
+        {
+            memcpy(b->name, target.name, target.name[0] + 1);
+            b->cpb.hFileInfo.ioNamePtr = b->name;
+            b->cpb.hFileInfo.ioVRefNum = target.vRefNum;
+            b->cpb.hFileInfo.ioDirID = target.parID;
+            b->cpb.hFileInfo.ioFDirIndex = 0;
+            bool rejected = PBGetCatInfo(&b->cpb, false) == noErr
+                && aliasFilter(&b->cpb, &b->quit, yourDataPtr);
+            DisposePtr((Ptr)b);
+            if(rejected)
+            {
+                *aliasCount = 0;
+                return fnfErr;
+            }
+        }
+    }
+
+    aliasList[0] = target;
+    *aliasCount = 1;
+    if(needsUpdate)
+        *needsUpdate = was_changed;
+    return noErr;
 }
 
 OSErr Executor::C_GetAliasInfo(AliasHandle alias, AliasTypeInfo index,

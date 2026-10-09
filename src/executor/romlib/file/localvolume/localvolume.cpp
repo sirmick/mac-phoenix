@@ -4,6 +4,8 @@
 #include <base/common.h>
 #include <FileMgr.h>
 #include <MemoryMgr.h>
+#include <rsys/paths.h>
+#include <print/ini.h>
 #include <file/file.h>
 #include <hfs/hfs.h>
 #include "item.h"
@@ -90,6 +92,18 @@ bool LocalVolume::isHidden(const fs::directory_entry& e)
     // "Desktop DB"/"Desktop DF" as invisible files instead.
     if(e.path().filename() == ".desktopdb")
         return true;
+    // Executor's own host files, kept in its data folder (which is also a
+    // volume): its configuration, printer settings, and the cache
+    // sideload_system.py extracts a System from. Not the Mac's to see.
+    if(e.path().filename() == ".sideload-cache")
+        return true;
+    for(const std::string *own : { &ROMlib_ConfigurationFolder, &ROMlib_PrintersIni, &ROMlib_PrintDef })
+    {
+        boost::system::error_code ec;
+        if(!own->empty() && e.path().filename() == fs::path(*own).filename()
+           && fs::equivalent(e.path(), fs::path(*own), ec))
+            return true;
+    }
     for(auto& itemFactory : itemFactories)
     {
         if(itemFactory->isHidden(e))
@@ -515,6 +529,10 @@ void LocalVolume::updateSpace()
     uint64_t used = 0, files = 0, dirs = 0;
     bool complete = true;
     boost::system::error_code ec;
+    /* The newest host time anywhere on the volume is its last-modified
+       date (ioVLsMod): Finder looks at it to know whether to recheck what
+       it has read of the disk. */
+    std::time_t newest = fs::last_write_time(root, ec);
     for(fs::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
     {
         if(clock::now() - now > std::chrono::milliseconds(250))
@@ -523,6 +541,7 @@ void LocalVolume::updateSpace()
             break;
         }
         boost::system::error_code sec;
+        newest = std::max(newest, fs::last_write_time(it->path(), sec));
         // Everything takes space (AppleDouble files hold resource forks);
         // only what the volume shows counts as a file or folder.
         bool shown = !isHidden(*it);
@@ -534,6 +553,8 @@ void LocalVolume::updateSpace()
         else if(fs::is_directory(it->path(), sec))
             dirs += shown;
     }
+    if(newest > 0)
+        vcb.vcbLsMod = std::max<uint32_t>(vcb.vcbLsMod, hostToMacTime(newest));
     if(complete)
     {
         vcb.vcbFilCnt = files;
