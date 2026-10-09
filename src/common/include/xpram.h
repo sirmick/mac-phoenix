@@ -28,6 +28,8 @@ extern uint8 XPRAM[XPRAM_SIZE];
 
 extern void XPRAMInit(const char *vmdir);
 extern void XPRAMExit(void);
+// Standard values unless XPRAM holds the "NuMc" signature
+extern void XPRAMSetDefaults(void);
 
 // System specific and internal functions/data
 extern void LoadXPRAM(const char *vmdir);

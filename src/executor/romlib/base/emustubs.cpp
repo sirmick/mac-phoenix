@@ -21,6 +21,9 @@
 #include <prefs/prefs.h>
 #include <base/emustubs.h>
 #include <file/file.h>
+
+/* core/xpram.cpp's; standalone builds (the Executor tests) get this one. */
+__attribute__((weak)) unsigned char XPRAM[8192];
 #include <MixedMode.h>
 #include <base/cpu.h>
 
@@ -195,6 +198,11 @@ RAW_68K_IMPLEMENTATION(Key2Trans)
     KEYTRANSMACRO();
 }
 
+RAW_68K_IMPLEMENTATION(GNEFilterEnd)
+{
+    RTS();
+}
+
 /* IODone (IMII-195): a driver's Prime, Control or Status jumps here with
    its result in D0; the request completes with that result. */
 RAW_68K_IMPLEMENTATION(IODone)
@@ -352,17 +360,26 @@ RAW_68K_IMPLEMENTATION(Microseconds)
 // The following is documented as ReadLocation by Apple.
 // It fills in a structure pointe to by A0, which contains
 // location info about the Mac. As in, latitude, longitude and time zone.
+/* ReadXPRam / WriteXPRam (IMVI): A0 the buffer, D0 the byte count in the
+   high word and the first address in the low word.  MacPhoenix: the
+   parameter RAM is the Basilisk side's (core/xpram.cpp), 256 bytes. */
 RAW_68K_IMPLEMENTATION(IMVI_ReadXPRam)
 {
-    /* I, ctm, don't have the specifics for ReadXPram, but Bolo suggests that
-     when d0 is the value below that a 12 byte block is filled in, with some
-     sort of time info at offset 8 off of a0. */
+    uint8_t *p = (uint8_t *)SYN68K_TO_US(EM_A0);
+    uint32_t count = EM_D0 >> 16, addr = EM_D0 & 0xFFFF;
+    for(uint32_t i = 0; i < count; i++)
+        p[i] = ::XPRAM[(addr + i) & 0xFF];
+    EM_D0 = noErr;
+    RTS();
+}
 
-    if(EM_D0 == 786660)
-    {
-        /* memset((char *)SYN68K_TO_US(EM_A0), 0, 12); not needed */
-        *(long *)((char *)SYN68K_TO_US(EM_A0) + 8) = 0;
-    }
+RAW_68K_IMPLEMENTATION(IMVI_WriteXPRam)
+{
+    const uint8_t *p = (const uint8_t *)SYN68K_TO_US(EM_A0);
+    uint32_t count = EM_D0 >> 16, addr = EM_D0 & 0xFFFF;
+    for(uint32_t i = 0; i < count; i++)
+        ::XPRAM[(addr + i) & 0xFF] = p[i];
+    EM_D0 = noErr;
     RTS();
 }
 

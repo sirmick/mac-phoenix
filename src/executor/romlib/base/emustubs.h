@@ -88,6 +88,8 @@ RAW_68K_FUNCTION(Key1Trans);
 RAW_68K_FUNCTION(Key2Trans);
 /* MacPhoenix: JIODone, where a driver's Prime/Control/Status end. */
 RAW_68K_FUNCTION(IODone);
+/* MacPhoenix: the end of the jGNEFilter chain. */
+RAW_68K_FUNCTION(GNEFilterEnd);
 RAW_68K_TRAP(Fix2X, 0xA843);
 RAW_68K_TRAP(Frac2X, 0xA845);
 RAW_68K_TRAP(SCSIDispatch, 0xA815);
@@ -99,6 +101,7 @@ RAW_68K_TRAP(SetVideoDefault, 0xA081);
 RAW_68K_TRAP(GetOSDefault, 0xA084);
 RAW_68K_TRAP(SetOSDefault, 0xA083);
 RAW_68K_TRAP(IMVI_ReadXPRam, 0xA051);
+RAW_68K_TRAP(IMVI_WriteXPRam, 0xA052);
 RAW_68K_TRAP(IMVI_PPC, 0xA0DD);
 
 static_assert(sizeof(adbop_t) == 12);

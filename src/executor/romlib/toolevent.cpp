@@ -483,6 +483,21 @@ Boolean Executor::C_GetNextEvent(INTEGER em, EventRecord *evt)
     TRACE(1);
     retval = doevent(em, evt, true);
     TRACE(0);
+
+    /* MacPhoenix: the GetNextEvent filter (Tech Note 85): A1 at the event,
+       the result word at 4(SP); it may change both. */
+    if(LM(jGNEFilter))
+    {
+        uint32_t saved_a1 = EM_A1;
+        EM_A7 -= 2;
+        *(GUEST<int16_t> *)SYN68K_TO_US(EM_A7) = retval ? -1 : 0;
+        EM_A1 = US_TO_SYN68K(evt);
+        EM_D0 = retval ? 0x0100 : 0;
+        execute68K(guest_cast<syn68k_addr_t>(LM(jGNEFilter)));
+        retval = *(GUEST<int16_t> *)SYN68K_TO_US(EM_A7) != 0;
+        EM_A7 += 2;
+        EM_A1 = saved_a1;
+    }
     return retval;
 }
 

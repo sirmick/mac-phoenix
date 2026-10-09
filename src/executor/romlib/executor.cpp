@@ -30,6 +30,9 @@
 #include <prefs/prefs.h>
 #include <rsys/segment.h>
 #include <rsys/executor.h>
+#include <rsys/extensions.h>
+#include <ToolboxEvent.h>
+#include <base/emustubs.h>
 #include <hfs/hfs.h>
 #include <base/trapname.h>
 
@@ -77,6 +80,11 @@ void Executor::executor_main()
     TEInit();
     InitDialogs((ProcPtr)0);
     InitCursor();
+
+    /* MacPhoenix: the System Folder's extensions, before the Finder.
+       They chain onto jGNEFilter, so its end is in place first. */
+    LM(jGNEFilter) = (ProcPtr)&stub_GNEFilterEnd;
+    ROMlib_load_extensions();
 
     /* ROMlib_WriteWhen(WriteInOSEvent); */
 

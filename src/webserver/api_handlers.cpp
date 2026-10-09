@@ -76,6 +76,28 @@ APIRouter::APIRouter(APIContext* context)
     : ctx_(context)
 {}
 
+// Log lines can carry raw Mac Roman bytes (guest file names); JSON must
+// be UTF-8, so anything that isn't valid UTF-8 becomes '?'.
+static std::string utf8_or_question(const std::string& in) {
+    std::string out;
+    out.reserve(in.size());
+    for (size_t i = 0; i < in.size();) {
+        unsigned char c = in[i];
+        size_t n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 0;
+        bool ok = n && i + n <= in.size();
+        for (size_t k = 1; ok && k < n; k++)
+            ok = ((unsigned char)in[i + k] >> 6) == 2;
+        if (ok) {
+            out.append(in, i, n);
+            i += n;
+        } else {
+            out += '?';
+            i++;
+        }
+    }
+    return out;
+}
+
 Response APIRouter::handle(const Request& req, bool* handled) {
     *handled = false;
 
@@ -496,7 +518,7 @@ Response APIRouter::handle_status(const Request& req) {
             }
             json << ", \"log\": [";
             for (size_t i = 0; i < ex.log.size(); i++) {
-                json << (i ? ", " : "") << "\"" << storage::json_escape(ex.log[i]) << "\"";
+                json << (i ? ", " : "") << "\"" << storage::json_escape(utf8_or_question(ex.log[i])) << "\"";
             }
             json << "]}";
         }

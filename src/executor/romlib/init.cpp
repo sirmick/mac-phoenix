@@ -457,6 +457,10 @@ void Executor::InitPerProcessLowMem()
 
     LM(Key1Trans) = (Ptr)&stub_Key1Trans;
     LM(JIODone) = (Ptr)&stub_IODone;
+    /* The end of the GetNextEvent filter chain; extensions put theirs in
+       front at startup, so a launch must keep what is there. */
+    if(!LM(jGNEFilter) || LM(jGNEFilter) == (ProcPtr)-1)
+        LM(jGNEFilter) = (ProcPtr)&stub_GNEFilterEnd;
     LM(Key2Trans) = (Ptr)&stub_Key2Trans;
     LM(JFLUSH) = &FlushCodeCache;
     LM(JResUnknown1) = LM(JFLUSH); /* I don't know what these are supposed to */

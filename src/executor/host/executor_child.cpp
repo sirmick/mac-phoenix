@@ -29,6 +29,24 @@ extern "C++" uint32_t uae_current_pc(void);
 
 #include "video_modes.h"
 
+// Parameter RAM is the Basilisk side's (core/xpram.cpp); Executor's
+// ReadXPRam/WriteXPRam work on it.
+extern unsigned char XPRAM[];
+void XPRAMInit(const char *vmdir);
+void XPRAMSetDefaults(void);
+
+namespace
+{
+void init_xpram(const config::EmulatorConfig& cfg)
+{
+    if (cfg.zappram)
+        memset(XPRAM, 0, 0x100);
+    else
+        XPRAMInit(nullptr);
+    XPRAMSetDefaults();
+}
+}
+
 extern "C" void control_ipc_start(void);
 
 namespace {
@@ -165,6 +183,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
 {
     g_buf = buf;
     buf->boot_start_us = monotonic_us();
+    init_xpram(cfg);
     set_phase("boot globs");
 
     control_ipc_set_input_hooks(&g_hooks);
@@ -210,6 +229,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
 
 int executor_direct_main(const config::EmulatorConfig& cfg)
 {
+    init_xpram(cfg);
     executor_host::Config c;
     c.width = cfg.screen_width;
     c.height = cfg.screen_height;

@@ -66,6 +66,7 @@ cmrc_add_resource_library(resources
         res/about/2_Credits.txt
         res/about/3_Tips.txt
         res/resource-policy.txt
+        res/extension-policy.txt
     )
 
 # --- CPU facade --------------------------------------------------------------

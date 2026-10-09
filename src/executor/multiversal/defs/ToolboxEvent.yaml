@@ -180,3 +180,16 @@
 - function:
     name: GetCaretTime
     return: LONGINT
+
+# ####
+
+- lowmem:
+    name: jGNEFilter
+    type: ProcPtr
+    address: 0x29A
+    comment: |
+      MacPhoenix: GetNextEvent's filter (Tech Note 85): called after every
+      GetNextEvent with A1 at the event record and the Boolean result word
+      at 4(SP).  Extensions chain onto it (WindowShade watches title bar
+      double-clicks here).  Starts at a stub that just returns.
+

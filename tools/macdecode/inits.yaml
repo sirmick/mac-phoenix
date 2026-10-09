@@ -23,7 +23,9 @@ extensions:
   - {file: WindowShade, phase: 1, lacks: []}
   - {file: Mouse, phase: 1, lacks: []}
   - {file: Find File Extension, phase: 1, lacks: [SetGestaltValue]}
-  - {file: Date & Time, phase: 1, lacks: ["MenuDispatch#4FC", ScrnBitMap]}
+  - {file: Date & Time, phase: 1b, lacks: ["MenuDispatch#4FC", ScrnBitMap],
+     note: "menu bar clock: its INIT patches InitWindows, DrawMenuBar and $A971, and Finder then
+       crashes walking the resource chain under the menu bar draw. Not loaded yet."}
   - {file: General Controls, phase: 1, lacks: ["OSDispatch#5E", WriteXPRam]}
   - {file: Apple Menu Options, phase: 1, lacks: [DMRegisterExtendedNotifyProc, FollowFinderAlias],
      note: "Recent Items need aliases (FollowFinderAlias)"}

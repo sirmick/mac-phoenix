@@ -4,7 +4,8 @@
     tools/macdecode/sideload_system.py IMAGE DATA_DIR [FILE...]
 
 Copies ":System Folder:<FILE>" (default: System, Finder and every file in
-Preferences, Fonts and Apple Menu Items, sub-folders included; FILE may be
+Preferences, Fonts, Apple Menu Items, Extensions, Control Panels and
+Startup Items, sub-folders included; FILE may be
 a sub-path like "Preferences:Finder Preferences")
 from the HFS disk IMAGE into DATA_DIR/System Folder/ in the form Executor
 reads (data fork `<FILE>` + AppleDouble `%<FILE>` holding Finder info and
@@ -57,8 +58,12 @@ def main():
 
     try:
         defaults = ["System", "Finder"]
-        for folder in ("Preferences", "Fonts", "Apple Menu Items"):
-            defaults += tree(folder)
+        for folder in ("Preferences", "Fonts", "Apple Menu Items", "Extensions",
+                       "Control Panels", "Startup Items"):
+            try:
+                defaults += tree(folder)
+            except RuntimeError:
+                pass            # not on this disk
     finally:
         d0.close()
     names = sys.argv[3:] or defaults
