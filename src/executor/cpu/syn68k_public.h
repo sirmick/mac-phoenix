@@ -1,19 +1,19 @@
 /*
- * syn68k_public.h - syn68k API facade over the UAE 68k core.
+ * syn68k_public.h - syn68k API facade over a 68k core.
  *
  * Executor was written against syn68k. This header keeps that API so the
- * Toolbox code compiles unchanged, and syn68k_uae.cpp implements it on
- * MacPhoenix's UAE interpreter/JIT.
+ * Toolbox code compiles unchanged. syn68k_common.cpp implements it over an
+ * engine (syn68k_engine.h): MacPhoenix's UAE interpreter or Musashi.
  *
  * Addressing is identity: a guest address IS the host address. Guest RAM
  * is mapped at host 0 and everything the guest can see (the binary's
  * globals, the emulator thread's stack, the framebuffer, the callback
  * page) lives below 4GB. Executor's four 1GB translation windows collapse
- * into one, and UAE runs DIRECT_ADDRESSING with MEMBaseDiff == 0.
+ * into one (UAE runs DIRECT_ADDRESSING with MEMBaseDiff == 0).
  *
  * The register file lives in `cpu_state` while host code runs (inside a
- * callback or between guest calls) and in UAE's `regs` while guest code
- * runs. The facade syncs them at every host/guest boundary.
+ * callback or between guest calls) and in the core while guest code runs.
+ * The facade syncs them at every host/guest boundary.
  */
 #pragma once
 
@@ -290,8 +290,13 @@ void syn68k_free_low(void *p, size_t size);
 /* True if [addr, addr+len) lies inside memory the facade knows the guest
  * can touch: guest RAM, low allocations, and the binary's own image. */
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len);
-/* Turn the UAE JIT on before initialize_68k_emulator(). */
+/* Turn a JIT on before initialize_68k_emulator() (none yet). */
 void syn68k_set_jit(int enabled);
+/* Pick the 68k core, "uae" (default) or "musashi", before
+ * initialize_68k_emulator(). Returns 0 for an unknown name or once the
+ * emulator has started. */
+int syn68k_select_engine(const char *name);
+const char *syn68k_engine_name(void);
 
 #ifdef __cplusplus
 }

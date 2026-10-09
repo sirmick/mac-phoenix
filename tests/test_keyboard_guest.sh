@@ -30,6 +30,7 @@ while [[ $# -gt 0 ]]; do
         --rom)     ROM_OVERRIDE="$2"; shift 2 ;;
         --disk)    DISK_OVERRIDE="$2"; shift 2 ;;
         --backend) BACKEND="$2"; shift 2 ;;   # uae | executor
+        --executor-cpu) EXEC_CPU="$2"; shift 2 ;;   # uae | musashi (executor only)
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -53,6 +54,7 @@ if [[ "$BACKEND" == "executor" ]]; then
     ROM=""
     DISK_FLAGS=()
     EXTRA_FLAGS+=(--executor-system "$(basename "${DISK:-}")" --executor-writable-images)
+    EXTRA_FLAGS+=(--executor-cpu "${EXEC_CPU:-uae}")
 fi
 
 if [[ ! -x "$BINARY" ]];     then echo "SKIP: Binary not found: $BINARY"; exit 77; fi

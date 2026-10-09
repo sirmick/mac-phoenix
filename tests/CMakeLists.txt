@@ -251,6 +251,47 @@ set_tests_properties(guest_suite_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# The same Executor runs on the Musashi 68k core (--executor-cpu musashi).
+add_test(
+  NAME command_bridge_executor_musashi
+  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend executor --executor-cpu musashi --timeout 60 --port 18130
+)
+set_tests_properties(command_bridge_executor_musashi PROPERTIES
+  TIMEOUT 90
+  LABELS "boot;musashi"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME guest_suite_executor_musashi
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --executor-cpu musashi --timeout 150 --port 18132
+)
+set_tests_properties(guest_suite_executor_musashi PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;musashi"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME finder_suite_executor_musashi
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --executor-cpu musashi --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 150 --port 18134
+)
+set_tests_properties(finder_suite_executor_musashi PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;musashi"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME keyboard_guest_executor_musashi
+  COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --backend executor --executor-cpu musashi --timeout 90 --port 18136
+)
+set_tests_properties(keyboard_guest_executor_musashi PROPERTIES
+  TIMEOUT 130
+  LABELS "guest;musashi"
+  SKIP_RETURN_CODE 77
+)
+
 # --- PPC variants of API/boot tests ---
 
 add_test(

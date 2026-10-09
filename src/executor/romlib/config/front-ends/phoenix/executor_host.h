@@ -33,6 +33,7 @@ struct Config
 
     bool logtraps = false;
     bool writable_images = false; // disk images read-write (default: read-only)
+    std::string cpu = "uae";      // 68k core: "uae" or "musashi"
 
     // Application to start instead of Executor's Browser (host path).
     std::string app;

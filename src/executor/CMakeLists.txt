@@ -2,7 +2,7 @@
 # Executor core (Executor 2000, MIT) on MacPhoenix's UAE 68k core.
 # See docs/executor/PLAN.md.
 #
-#   executor_cpu          syn68k API facade over UAE + PowerCore stub
+#   executor_cpu          syn68k API facade over UAE or Musashi + PowerCore stub
 #   romlib                the imported Toolbox
 #   front-end-phoenix     video/cursor front end + executor_host API,
 #                         linked into mac-phoenix (`--backend executor`)
@@ -70,9 +70,20 @@ cmrc_add_resource_library(resources
     )
 
 # --- CPU facade --------------------------------------------------------------
+# syn68k_common.cpp is the facade; the 68k core behind it is an engine,
+# chosen at startup (--executor-cpu): UAE or Musashi. Each engine compiles
+# with its own core's include path (both have an m68k.h).
+add_library(executor_cpu_musashi OBJECT cpu/syn68k_musashi.cpp)
+target_include_directories(executor_cpu_musashi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
+target_link_libraries(executor_cpu_musashi PRIVATE musashi)
+target_compile_options(executor_cpu_musashi PRIVATE ${EXECUTOR_COMMON_FLAGS})
+phoenix_exempt_from_hardening(executor_cpu_musashi)
+
 set(UAE_DIR ${PROJECT_SOURCE_DIR}/src/cpu/uae_cpu)
 add_library(executor_cpu STATIC
+    cpu/syn68k_common.cpp
     cpu/syn68k_uae.cpp
+    $<TARGET_OBJECTS:executor_cpu_musashi>
     cpu/PowerCore.cpp
 )
 target_include_directories(executor_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
@@ -93,7 +104,7 @@ set(_exe_uae_flags
     -DUSE_JIT=${_exe_uae_jit} -DUSE_JIT_FPU=0 -DUSE_PREFETCH_BUFFER=0 -DFPU_IEEE
     -Wno-unused-parameter -Wno-sign-compare)
 target_compile_options(executor_cpu PRIVATE ${_exe_uae_flags} ${EXECUTOR_COMMON_FLAGS})
-target_link_libraries(executor_cpu PUBLIC Threads::Threads)
+target_link_libraries(executor_cpu PUBLIC musashi Threads::Threads)
 phoenix_exempt_from_hardening(executor_cpu)
 
 # --- Toolbox -------------------------------------------------------------------
@@ -122,7 +133,7 @@ target_sources(executor_uae_glue INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpu/uae_g
 target_include_directories(executor_uae_glue INTERFACE ${PROJECT_SOURCE_DIR}/src/common/include)
 target_link_libraries(executor_uae_glue INTERFACE
     -Wl,--whole-archive cpuemu_ff cpustbl_ff -Wl,--no-whole-archive
-    -Wl,--start-group uae_cpu uae_jit vm_alloc executor_cpu -Wl,--end-group
+    -Wl,--start-group uae_cpu uae_jit vm_alloc executor_cpu musashi -Wl,--end-group
     Qt6::Core Threads::Threads)
 
 # --- Tests ---------------------------------------------------------------------

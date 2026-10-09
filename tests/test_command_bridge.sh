@@ -17,6 +17,7 @@ BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --backend) BACKEND="$2"; shift 2 ;;
+        --executor-cpu) EXEC_CPU="$2"; shift 2 ;;   # uae | musashi (executor only)
         --arch) ARCH="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
@@ -51,6 +52,7 @@ if [[ "$BACKEND" == "executor" ]]; then
     ROM=""
     DISK_FLAGS=()
     EXTRA_FLAGS+=(--executor-system "$(basename "$DISK")" --executor-writable-images)
+    EXTRA_FLAGS+=(--executor-cpu "${EXEC_CPU:-uae}")
 elif [[ ! -f "$ROM" ]]; then
     echo "SKIP: ROM not found: $ROM"
     exit 77

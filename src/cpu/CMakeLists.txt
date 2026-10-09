@@ -2,6 +2,7 @@
 
 add_subdirectory(uae_cpu)
 add_subdirectory(kpx)
+add_subdirectory(musashi)
 
 add_library(cpu STATIC
   cpu_uae.c

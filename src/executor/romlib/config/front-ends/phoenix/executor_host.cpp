@@ -75,6 +75,11 @@ int run(const Config& c)
     if(!c.shared_folders.empty())
         ROMlib_local_volume_names[c.shared_folders[0]] = "Host";
     ROMlib_readonly_images = !c.writable_images;
+    if(!syn68k_select_engine(c.cpu.c_str()))
+    {
+        fprintf(stderr, "[Executor] unknown 68k core '%s' (uae | musashi)\n", c.cpu.c_str());
+        return 2;
+    }
     ROMlib_heap_death_dialog = false;
 
     screenW = c.width;
