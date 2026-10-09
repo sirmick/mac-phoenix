@@ -11,6 +11,9 @@
 #include <MemoryMgr.h>
 #include <ToolboxUtil.h>
 #include <OSUtil.h>
+#include <ResourceMgr.h>
+#include <FontMgr.h>
+#include <ToolboxEvent.h>
 
 #include <rsys/hook.h>
 #include <quickdraw/quick.h>
@@ -61,10 +64,78 @@ OSErr Executor::C_SetScriptManagerVariable(INTEGER verb, LONGINT param)
     return smVerbNotFound;
 }
 
+/* MacPhoenix: Roman, the only script installed. The resource IDs come
+   from its 'itlb' (ItlbRecord: itlbNumber, itlbDate, itlbSort, itlbFlags,
+   itlbToken, itlbEncoding, itlbLang, itlbNumRep.b, itlbDateRep.b,
+   itlbKeys, itlbIcon); the rest are Roman's values from Inside Macintosh:
+   Text (status: guess where marked). Verbs past smScriptName use System
+   7's Script.h names. */
 LONGINT Executor::C_GetScriptVariable(INTEGER script, INTEGER verb)
 {
-    warning_unimplemented("");
-    return 0;
+    if(script != smRoman)
+        return 0;
+    auto itlb = [](int offset, bool byte = false) -> LONGINT {
+        Handle h = GetResource("itlb"_4, smRoman);
+        if(!h)
+            return 0;
+        return byte ? *(uint8_t *)(*h + offset) : (LONGINT) * (GUEST<INTEGER> *)(*h + offset);
+    };
+    switch(verb)
+    {
+        case smScriptVersion:
+            return 0x0710; /* status: guess */
+        case smScriptEnabled:
+            return 0xFF; /* the script record's scriptValid byte */
+        case smScriptRight: /* left to right */
+        case smScriptJust:
+        case smScriptRedraw:
+        case smScriptMunged:
+            return 0;
+        case smScriptSysFond:
+            return LM(SysFontFam);
+        case smScriptAppFond:
+            return LM(ApFontID);
+        case smScriptNumber: /* the 'itlb' itself */
+            return smRoman;
+        case smScriptDate:
+            return itlb(2);
+        case smScriptSort:
+            return itlb(4);
+        case 22: /* smScriptFlags */
+            return itlb(6);
+        case 24: /* smScriptToken */
+            return itlb(8);
+        case 26: /* smScriptEncoding */
+            return itlb(10);
+        case 28: /* smScriptLang */
+            return itlb(12);
+        case 30: /* smScriptNumDate: numRep high byte, dateRep low */
+            return itlb(14, true) << 8 | itlb(15, true);
+        case smScriptKeys:
+            return itlb(16);
+        case smScriptIcon:
+            return itlb(18);
+        /* font and size: family in the high word */
+        case 72: /* smScriptMonoFondSize: Monaco 9 */
+            return 4L << 16 | 9;
+        case 74: /* smScriptPrefFondSize: Geneva 12, status: guess */
+            return 3L << 16 | 12;
+        case 76: /* smScriptSmallFondSize: Geneva 9 */
+            return 3L << 16 | 9;
+        case 78: /* smScriptSysFondSize: Chicago 12 */
+            return (LONGINT)LM(SysFontFam) << 16 | 12;
+        case 80: /* smScriptAppFondSize: Geneva 12 */
+            return (LONGINT)LM(ApFontID) << 16 | 12;
+        case 82: /* smScriptHelpFondSize: Geneva 9 */
+            return 3L << 16 | 9;
+        case 84: /* smScriptValidStyles: all of them */
+            return 0x7F;
+        case 86: /* smScriptAliasStyle */
+            return 0;
+        default:
+            warning_unexpected("unhandled selector `%d'", verb);
+            return 0;
+    }
 }
 
 OSErr Executor::C_SetScriptVariable(INTEGER script, INTEGER verb, LONGINT param)
@@ -157,6 +228,23 @@ INTEGER Executor::C_IntlScript()
 {
     warning_unimplemented("");
     return smRoman;
+}
+
+/* MacPhoenix. A key event with Command down whose character is test,
+   either as typed or as the key gives it with Command released (so
+   Command-Shift-period still matches '.'). */
+Boolean Executor::C_IsCmdChar(const EventRecord *event, INTEGER test)
+{
+    if((event->what != keyDown && event->what != autoKey)
+       || !(event->modifiers & cmdKey))
+        return false;
+    if((event->message & charCodeMask) == (uint8_t)test)
+        return true;
+    GUEST<uint32_t> state = 0;
+    uint16_t code = ((event->message & keyCodeMask) >> 8)
+        | (event->modifiers & 0xFF00 & ~cmdKey);
+    uint32_t chars = KeyTranslate(ROMlib_kchr_ptr(), code, &state);
+    return (chars & 0xFF) == (uint8_t)test || ((chars >> 16) & 0xFF) == (uint8_t)test;
 }
 
 void Executor::C_KeyScript(INTEGER scriptcode)

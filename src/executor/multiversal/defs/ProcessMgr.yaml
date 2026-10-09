@@ -422,6 +422,28 @@
 
 # ####
 
+# MacPhoenix: private Process Manager calls (names: status guess). No
+# parameters, OSErr result. Apple's code brackets opening a resource file
+# with them so the file belongs to the system rather than the caller
+# (AppleScript, the Desktop Manager, the Process Manager itself).
+- function:
+    name: BeginSystemMode
+    return: OSErr
+    dispatcher: OSDispatch
+    selector: 0x0040
+    executor: C_
+
+# ####
+
+- function:
+    name: EndSystemMode
+    return: OSErr
+    dispatcher: OSDispatch
+    selector: 0x0041
+    executor: C_
+
+# ####
+
 - function:
     name: GetPortNameFromProcessSerialNumber
     return: OSErr

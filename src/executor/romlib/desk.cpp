@@ -455,7 +455,10 @@ void Executor::ROMlib_run_desk_accessory(const FSSpec *file_arg, ConstStringPtr 
     process_create(true, finfo.fdType, finfo.fdCreator);
 
     EM_A5 = ptr_to_longint(LM(CurrentA5));
-    EM_A7 = ptr_to_longint(LM(CurStackBase)) - 4096;
+    /* MacPhoenix: the stack starts at CurStackBase, as 7.5.5's Process
+       Manager starts it (was 4K below: StackSpace came up short for Script
+       Editor, which wants 20K). */
+    EM_A7 = ptr_to_longint(LM(CurStackBase));
     LM(TheZone) = LM(ApplZone);
     LM(QDExist) = LM(WWExist) = EXIST_NO;
 

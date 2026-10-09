@@ -44,6 +44,44 @@
 
 # ####
 
+# MacPhoenix: Display Manager 2.0's extended notifications (Displays.h).
+# Apple Menu Options registers one at startup.
+- function:
+    name: DMRegisterExtendedNotifyProc
+    return: OSErr
+    args:
+      - name: proc
+        type: ProcPtr
+      - name: userData
+        type: void*
+      - name: flags
+        type: uint16_t
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: DisplayDispatch
+    selector: 0x07EF
+    executor: C_
+
+# ####
+
+- function:
+    name: DMRemoveExtendedNotifyProc
+    return: OSErr
+    args:
+      - name: proc
+        type: ProcPtr
+      - name: userData
+        type: void*
+      - name: psn
+        type: ProcessSerialNumber*
+      - name: flags
+        type: uint16_t
+    dispatcher: DisplayDispatch
+    selector: 0x0726
+    executor: C_
+
+# ####
+
 - function:
     name: DMGetFirstScreenDevice
     return: GDHandle

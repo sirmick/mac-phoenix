@@ -20,7 +20,8 @@
     { 1, 0x022, 1, 0x000000FFu, 0, 0x00000000u },  // ResourceDispatch
     { 1, 0x023, 1, 0x0000FFFFu, 0, 0x00000000u },  // AliasDispatch
     { 1, 0x024, 1, 0x0000FFFFu, 0, 0x00000000u },  // HFSUtilDispatch
-    { 1, 0x025, 1, 0x0000FFFFu, 0, 0x00000000u },  // MenuDispatch
+    { 1, 0x025, 1, 0x000000FFu, 0, 0x00000000u },  // MenuDispatch
+    { 1, 0x029, 1, 0x000000FFu, 0, 0x00000000u },  // LayerDispatch
     { 1, 0x02A, 1, 0x0000FFFFu, 3, 0x00000000u },  // ComponentDispatch
     { 1, 0x02D, 1, 0x0000FFFFu, 0, 0x00000000u },  // Pack11
     { 1, 0x02E, 2, 0x0000FFFFu, 0, 0x00000000u },  // Pack12
@@ -47,7 +48,7 @@
     { 1, 0x256, 1, 0x0000FFFFu, 0, 0x00000000u },  // SpeechRecognitionDispatch
     { 1, 0x259, 1, 0x0000FFFFu, 0, 0x00000000u },  // MixedModeDispatch
     { 1, 0x25A, 2, 0x0000FFFFu, 0, 0x00000000u },  // CodeFragmentDispatch
-    { 1, 0x268, 1, 0x0000FFFFu, 0, 0x00000000u },  // DialogDispatch
+    { 1, 0x268, 1, 0x000000FFu, 0, 0x00000000u },  // DialogDispatch
     { 1, 0x26E, 1, 0x0000FFFFu, 0, 0x00000000u },  // DispatchAA6E
     { 1, 0x272, 1, 0x0000FFFFu, 0, 0x00000000u },  // DispatchAA72
     { 1, 0x273, 1, 0x0000FFFFu, 0, 0x00000000u },  // ControlDispatch
@@ -71,7 +72,7 @@
     { 1, 0x3C9, 1, 0x0000FFFFu, 0, 0x00000000u },  // IconDispatch
     { 1, 0x3E0, 1, 0x0000FFFFu, 0, 0x00000000u },  // QDExtensions2
     { 1, 0x3E9, 1, 0x0000FFFFu, 0, 0x00000000u },  // DispatchABE9
-    { 1, 0x3EB, 1, 0x0000FFFFu, 0, 0x00000000u },  // DisplayDispatch
+    { 1, 0x3EB, 1, 0x000000FFu, 0, 0x00000000u },  // DisplayDispatch
     { 1, 0x3ED, 1, 0x0000FFFFu, 0, 0x00000000u },  // DragDispatch
     { 1, 0x3EE, 1, 0x0000FFFFu, 0, 0x00000000u },  // DispatchABEE
     { 1, 0x3F1, 1, 0x0000FFFFu, 0, 0x00000000u },  // GestaltValueDispatch

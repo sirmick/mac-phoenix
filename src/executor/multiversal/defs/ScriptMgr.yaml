@@ -11,6 +11,22 @@
 
 # ####
 
+# MacPhoenix: GetIntlResourceTable's table codes (Script.h).
+- enum:
+    values:
+      - name: smWordSelectTable
+        value: 0
+      - name: smWordWrapTable
+        value: 1
+      - name: smNumberPartsTable
+        value: 2
+      - name: smUnTokenTable
+        value: 3
+      - name: smWhiteSpaceList
+        value: 4
+
+# ####
+
 - enum:
     values:
       - name: smCharPunct
@@ -559,6 +575,21 @@
     return: INTEGER
     dispatcher: ScriptUtil
     selector: 0x82000002
+    executor: C_
+
+# ####
+
+# MacPhoenix (Events.h, System 7).
+- function:
+    name: IsCmdChar
+    return: Boolean
+    args:
+      - name: event
+        type: const EventRecord*
+      - name: test
+        type: INTEGER
+    dispatcher: ScriptUtil
+    selector: 0x8206FFD0
     executor: C_
 
 # ####

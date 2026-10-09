@@ -682,8 +682,40 @@ void Executor::C_GetIntlResourceTable(ScriptCode script, INTEGER tablecode,
                                GUEST<Handle> *itlhandlep, GUEST<LONGINT> *offsetp,
                                GUEST<LONGINT> *lengthp)
 {
-    warning_unimplemented("");
-    ROMlib_hook(iu_unimplementednumber);
+    /* MacPhoenix. The tables in the script's 'itl4' (its ID is itlbToken,
+       offset 8 of the script's 'itlb'): NItl4Rec keeps each table's offset
+       from the start of the resource and its length. The word break tables
+       in 'itl2' (codes 0 and 1) are not looked up yet: nil. */
+    *itlhandlep = nullptr;
+    *offsetp = 0;
+    *lengthp = 0;
+    int offset_at, length_at;
+    switch(tablecode)
+    {
+        case smNumberPartsTable:
+            offset_at = 36, length_at = 60;
+            break;
+        case smUnTokenTable:
+            offset_at = 32, length_at = 58;
+            break;
+        case smWhiteSpaceList:
+            offset_at = 40, length_at = 62;
+            break;
+        default:
+            return;
+    }
+    INTEGER id = 0;
+    if(Handle itlb = GetResource("itlb"_4, script))
+        id = *(GUEST<INTEGER> *)(*itlb + 8);
+    else if(script != smRoman)
+        return;
+    Handle itl4 = GetResource("itl4"_4, id);
+    if(!itl4)
+        return;
+    LoadResource(itl4);
+    *itlhandlep = itl4;
+    *offsetp = *(GUEST<LONGINT> *)(*itl4 + offset_at);
+    *lengthp = *(GUEST<INTEGER> *)(*itl4 + length_at);
 }
 
 /* ── Type Select (System 7.5; Lists.h in Universal Interfaces 3.x) ──────

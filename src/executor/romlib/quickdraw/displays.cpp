@@ -19,6 +19,19 @@ OSErr Executor::C_DMRemoveNotifyProc(DMNotificationUPP proc, ProcessSerialNumber
     return noErr;
 }
 
+/* The display never changes, so there is nothing to notify. */
+OSErr Executor::C_DMRegisterExtendedNotifyProc(ProcPtr proc, void *userData,
+                                               uint16_t flags, ProcessSerialNumber *psn)
+{
+    return noErr;
+}
+
+OSErr Executor::C_DMRemoveExtendedNotifyProc(ProcPtr proc, void *userData,
+                                             ProcessSerialNumber *psn, uint16_t flags)
+{
+    return noErr;
+}
+
 GDHandle Executor::C_DMGetFirstScreenDevice(Boolean activeOnly)
 {
     return GetDeviceList();

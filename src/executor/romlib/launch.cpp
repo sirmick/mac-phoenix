@@ -350,7 +350,10 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
         memcpy(LM(CurrentA5) + jumpoff, lp, jumplen); /* copy in the
 							 jump table */
     }
-    EM_A7 = ptr_to_longint(LM(CurStackBase)) - 4096;
+    /* MacPhoenix: the stack starts at CurStackBase, as 7.5.5's Process
+       Manager starts it (was 4K below: StackSpace came up short for Script
+       Editor, which wants 20K). */
+    EM_A7 = ptr_to_longint(LM(CurStackBase));
     EM_A5 = ptr_to_longint(LM(CurrentA5));
 
     ROMlib_destroy_blocks(0, ~0, false);

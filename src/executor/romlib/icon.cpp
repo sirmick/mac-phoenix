@@ -449,7 +449,10 @@ Handle usable(Handle h)
 {
     if(!h)
         return nullptr;
-    if(!*h && (HGetState(h) & RSRCBIT))
+    /* An empty handle has no block to keep its flags (HGetState fails),
+       so try reloading it as a resource: a member got with ResLoad off,
+       or purged. */
+    if(!*h)
         LoadResource(h);
     return *h ? h : nullptr;
 }

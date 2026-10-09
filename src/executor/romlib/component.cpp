@@ -193,7 +193,12 @@ bool load_code(Comp *c)
         return false;
     FSSpec spec = c->file; /* guest-visible: on this stack */
     INTEGER saved = CurResFile();
-    INTEGER rn = FSpOpenResFile(&spec, fsRdPerm);
+    INTEGER rn;
+    {
+        /* the map in the System heap, so the code loads there too */
+        TheZoneGuard guard(LM(SysZone));
+        rn = FSpOpenResFile(&spec, fsRdPerm);
+    }
     if(rn == -1)
         return false;
     UseResFile(rn);

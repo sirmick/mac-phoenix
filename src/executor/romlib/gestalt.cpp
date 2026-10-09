@@ -173,6 +173,9 @@ static gestaltentry_t gtable[] = {
     /* The Component Manager's version (component.cpp; on 7.5.5 a Gestalt
        function calling ComponentDispatch $19). 3.0 is a guess. */
     { "cpnt"_4, 0x00030000 },
+    /* Alias Manager present (and bits 1-2), as on 7.5.5; Script Editor
+       won't run without it. */
+    { "alis"_4, 7 },
 
 #if defined(ORIGINAL_QD)
     {
@@ -241,7 +244,7 @@ static gestaltentry_t gtable[] = {
     { gestaltHelpMgrAttr, 1 }, /* must be 1 */
     { gestaltScriptMgrVersion, 0x001 }, /* have gotten away with 0x001 */
     { gestaltEditionMgrAttr, 1 }, /* must be 1 */
-    { gestaltAliasMgrAttr, 1 }, /* must be 1 */
+    /* gestaltAliasMgrAttr: 7, above (MacPhoenix) */
 
 #define SYSTEM_7_EXTRAS 2
 
@@ -310,10 +313,8 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
             if(!ROMlib_pretend_edition)
                 selector = -1;
             break;
-        case gestaltAliasMgrAttr:
-            if(!ROMlib_pretend_alias)
-                selector = -1;
-            break;
+        /* MacPhoenix: the Alias Manager resolves records now (alias.cpp);
+           no longer hidden behind ROMlib_pretend_alias. */
         case gestaltSpeechAttr:
             if(!ROMlib_speech_enabled)
                 selector = -1;

@@ -27,8 +27,8 @@ extensions:
      note: "menu bar clock: its INIT patches InitWindows, DrawMenuBar and $A971, and Finder then
        crashes walking the resource chain under the menu bar draw. Not loaded yet."}
   - {file: General Controls, phase: 1, lacks: ["OSDispatch#5E", WriteXPRam]}
-  - {file: Apple Menu Options, phase: 1, lacks: [DMRegisterExtendedNotifyProc, FollowFinderAlias],
-     note: "Recent Items need aliases (FollowFinderAlias)"}
+  - {file: Apple Menu Options, phase: 1, lacks: [],
+     note: "Recent Items use aliases (FollowFinderAlias); registers a Display Manager extended notify proc"}
   - {file: Extensions Manager, phase: 1, lacks: [], note: "with EM Extension; the startup-time UI"}
   - {file: EM Extension, phase: 1, lacks: []}
   - {file: Launcher, phase: 1, lacks: []}
@@ -37,8 +37,9 @@ extensions:
      note: "Finder's Apple event object model; with AppleScript"}
 
   # ── phase 2: Component Manager ─────────────────────────────────────────
-  - {file: AppleScript™, phase: 2, lacks: [],
-     note: "registers its components ('thng'); the System's Component Manager does the work"}
+  - {file: AppleScript™, phase: 2, lacks: [], loaded: true,
+     note: "registers its components ('thng'); the System's Component Manager does the work.
+       Script Editor compiles and runs scripts (3 + 4 -> 7, 2026-10-08)."}
   - {file: Color Picker, phase: 2, lacks: [RegisterComponentResourceFile]}
   - {file: Speech Manager, phase: 2, lacks: [RegisterComponentResourceFile, "SoundDispatch#40000"],
      note: "7.6.1 also calls CodeFragmentDispatch"}

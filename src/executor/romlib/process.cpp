@@ -1109,6 +1109,25 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
 
 /* 7.5.5: a desk accessory opened from its file gets a process of its own
    (the DA Handler, desk.cpp), created like a launchContinue launch. */
+/* MacPhoenix. System mode is only counted (status: guess): a resource
+   file opened in it still belongs to the calling process and closes when
+   that process quits, where on 7.5.5 it would stay open for the system. */
+static int system_mode_depth;
+
+OSErr Executor::C_BeginSystemMode()
+{
+    system_mode_depth++;
+    return noErr;
+}
+
+OSErr Executor::C_EndSystemMode()
+{
+    if(system_mode_depth == 0)
+        return paramErr;
+    system_mode_depth--;
+    return noErr;
+}
+
 OSErr Executor::C_LaunchDeskAccessory(const FSSpec *spec, ConstStringPtr name)
 {
     process_bootstrap();
@@ -1272,6 +1291,22 @@ void Executor::process_create(bool desk_accessory_p,
     info->name[0] = std::min<int>(info->name[0], 31);
     if(!info->icon)
         info->icon = ROMlib_app_icon_suite();
+    /* The first process was not launched through us: its file is the
+       application's resource file. */
+    if(!info->app.name[0])
+    {
+        FCBPBRec fcb = {};
+        Str255 fname;
+        fcb.ioNamePtr = fname;
+        fcb.ioRefNum = LM(CurApRefNum);
+        if(PBGetFCBInfo(&fcb, false) == noErr)
+        {
+            info->app.vRefNum = fcb.ioFCBVRefNum;
+            info->app.parID = fcb.ioFCBParID;
+            memcpy(info->app.name, fname, std::min<int>(fname[0], 63) + 1);
+            info->app.name[0] = std::min<int>(fname[0], 63);
+        }
+    }
 
     /* MacPhoenix: the Process Manager hands every application an initialised
        desk scrap (Finder 7.5.5 dereferences ScrapHandle without checking
@@ -1353,7 +1388,19 @@ OSErr Executor::C_GetProcessInformation(ProcessSerialNumber *serial_number,
     /* ### set current zone to applzone? */
     PROCESS_INFO_FREE_MEM(process_info) = FreeMem();
 
-    PROCESS_INFO_LAUNCHER(process_info) = no_process;
+    PROCESS_INFO_LAUNCHER(process_info) = info->launcher;
+    /* MacPhoenix: the name and the application's file, when asked for
+       (AppleScript makes an alias to its client application). */
+    if(StringPtr name = PROCESS_INFO_NAME(process_info))
+    {
+        ConstStringPtr from = info == current_process_info || !info->name[0]
+            ? (ConstStringPtr)LM(CurApName) : info->name;
+        int len = std::min<int>(from[0], 31);
+        memcpy(name + 1, from + 1, len);
+        name[0] = len;
+    }
+    if(FSSpecPtr spec = process_info->processAppSpec)
+        *spec = info->app;
 
     PROCESS_INFO_LAUNCH_DATE(process_info) = info->launch_ticks;
     current_ticks = TickCount();

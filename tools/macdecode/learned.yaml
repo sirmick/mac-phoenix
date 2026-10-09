@@ -81,6 +81,20 @@ dispatchers:
           process's entries with that key from the $31 list (key 0: all of
           them), disposing each entry's handles; paramErr if a nonzero key
           matches nothing. Finder calls it with 0 before re-adding.
+      - value: 0x40
+        name: BeginSystemMode
+        status: guess
+        source: 7.5.5 se-real trace + call sites (AppleScript ascr +697e, Desktop Manager, scod +acc4)
+        comment: >
+          No parameters, word result (SUBQ #2,SP; MOVE.W #$40,-(SP);
+          _OSDispatch). Brackets FSpOpenResFile / HOpenResFile with $41 so
+          the file is opened on behalf of the system rather than the
+          calling application.
+      - value: 0x41
+        name: EndSystemMode
+        status: guess
+        source: same call sites as $40
+        comment: No parameters, word result; ends a $40 bracket.
       - value: 0x14
         name: TakeDesktopLayer
         status: guess
