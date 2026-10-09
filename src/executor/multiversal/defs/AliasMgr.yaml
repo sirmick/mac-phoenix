@@ -177,6 +177,26 @@
 # ####
 
 - function:
+    name: FollowFinderAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSSpecPtr
+      - name: alias
+        type: AliasHandle
+      - name: logon
+        type: Boolean
+      - name: target
+        type: FSSpecPtr
+      - name: wasChanged
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x000F
+    executor: C_
+
+# ####
+
+- function:
     name: MatchAlias
     return: OSErr
     args:

@@ -8,6 +8,7 @@
 
 #include <FileMgr.h>
 #include <AliasMgr.h>
+#include <ResourceMgr.h>
 #include <MemoryMgr.h>
 #include <ToolboxUtil.h>
 
@@ -266,13 +267,184 @@ enum
     TAIL_TAG = 0x0009,
 };
 
-/*
- * ResolveAlias is just a stub so we can recover the fsspecs that are stored
- * in the AppleEvent that is constructed as part of the process of launching
- * another application.  This stub doesn't look at fromFile, doesn't consider
- * the fact that the alias may point to an alias.  It won't work if a full-path
- * alias is supplied either.
- */
+/* MacPhoenix: resolve an alias record as the Alias Manager does, by
+ * the means the record carries, in this order:
+ *
+ *   1. relative to fromFile: up nlvlFrom levels from the alias file to the
+ *      folder both share, then down the last nlvlTo names of the path;
+ *   2. the volume by name, then the full path (tag 2);
+ *   3. the volume, then the parent directory ID and the target's name.
+ *
+ * The relative path comes first: Executor runs a copy of a System Folder
+ * whose volume is named after its directory, and an alias in it (the
+ * Apple menu's "Control Panels") means the folder next to it, not the
+ * one on the disk image it was copied from.
+ *
+ * The record: userType.l, size.w, version.w (2), kind.w (0 file, 1
+ * folder), volume name (Str27), volume created.l, signature.w, drive.w,
+ * parent dir ID.l, name (Str63), file/dir ID.l, created.l, type.l,
+ * creator.l, nlvlFrom.w, nlvlTo.w, ... at 150 tagged data (tag.w, len.w,
+ * bytes padded to even; -1 ends): 0 parent name, 1 dir IDs, 2 full path. */
+namespace
+{
+uint16_t be16(const uint8_t *p) { return p[0] << 8 | p[1]; }
+uint32_t be32(const uint8_t *p) { return (uint32_t)be16(p) << 16 | be16(p + 2); }
+
+struct AliasInfo
+{
+    Str27 volume;
+    int32_t parent;
+    Str63 name;
+    int16_t nlvl_from, nlvl_to;
+    /* the full path, split at colons: [0] is the volume */
+    int ncomps = 0;
+    Str63 comps[32];
+};
+
+bool parse_alias(AliasHandle alias, AliasInfo &a)
+{
+    Size size = GetHandleSize((Handle)alias);
+    const uint8_t *p = (const uint8_t *)*alias;
+    if(size < 150 || be16(p + 6) != 2)
+        return false;
+    memcpy(a.volume, p + 10, std::min<int>(p[10], 27) + 1);
+    a.parent = be32(p + 46);
+    memcpy(a.name, p + 50, std::min<int>(p[50], 63) + 1);
+    a.nlvl_from = be16(p + 130);
+    a.nlvl_to = be16(p + 132);
+    Size end = std::min<Size>(size, be16(p + 4));
+    for(Size off = 150; off + 4 <= end;)
+    {
+        int16_t tag = be16(p + off);
+        uint16_t len = be16(p + off + 2);
+        if(tag == -1 || off + 4 + len > end)
+            break;
+        if(tag == 2)
+        {
+            const uint8_t *s = p + off + 4;
+            int start = 0;
+            for(int i = 0; i <= len && a.ncomps < 32; i++)
+                if(i == len || s[i] == ':')
+                {
+                    int n = std::min(i - start, 63);
+                    if(n > 0)
+                    {
+                        a.comps[a.ncomps][0] = n;
+                        memcpy(a.comps[a.ncomps] + 1, s + start, n);
+                        a.ncomps++;
+                    }
+                    start = i + 1;
+                }
+        }
+        off += 4 + ((len + 1) & ~1);
+    }
+    return true;
+}
+
+/* The item named in a directory: its ID if a folder (0 for a file). */
+bool lookup(INTEGER vref, int32_t dir, ConstStringPtr name, int32_t *child)
+{
+    Str63 n;
+    memcpy(n, name, name[0] + 1);
+    CInfoPBRec pb = {};
+    pb.hFileInfo.ioNamePtr = n;
+    pb.hFileInfo.ioVRefNum = vref;
+    pb.hFileInfo.ioDirID = dir;
+    if(PBGetCatInfo(&pb, false) != noErr)
+        return false;
+    *child = (pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR) ? (int32_t)pb.dirInfo.ioDrDirID : 0;
+    return true;
+}
+
+int32_t parent_of(INTEGER vref, int32_t dir)
+{
+    CInfoPBRec pb = {};
+    Str63 n;
+    n[0] = 0;
+    pb.dirInfo.ioNamePtr = n;
+    pb.dirInfo.ioVRefNum = vref;
+    pb.dirInfo.ioDrDirID = dir;
+    pb.dirInfo.ioFDirIndex = -1;
+    if(PBGetCatInfo(&pb, false) != noErr)
+        return 0;
+    return pb.dirInfo.ioDrParID;
+}
+
+/* Down names[first..ncomps) from dir; the last is the target. */
+bool walk(INTEGER vref, int32_t dir, const AliasInfo &a, int first, FSSpec *out)
+{
+    if(first >= a.ncomps)
+        return false;
+    for(int i = first; i < a.ncomps - 1; i++)
+    {
+        int32_t child;
+        if(!lookup(vref, dir, a.comps[i], &child) || !child)
+            return false;
+        dir = child;
+    }
+    int32_t child;
+    if(!lookup(vref, dir, a.comps[a.ncomps - 1], &child))
+        return false;
+    out->vRefNum = vref;
+    out->parID = dir;
+    memcpy(out->name, a.comps[a.ncomps - 1], a.comps[a.ncomps - 1][0] + 1);
+    return true;
+}
+
+bool volume_named(ConstStringPtr name, INTEGER *vref)
+{
+    Str255 n;
+    memcpy(n, name, name[0] + 1);
+    HParamBlockRec pb = {};
+    pb.volumeParam.ioNamePtr = n;
+    pb.volumeParam.ioVolIndex = -1;
+    if(PBHGetVInfo(&pb, false) != noErr)
+        return false;
+    *vref = pb.volumeParam.ioVRefNum;
+    return true;
+}
+
+OSErr resolve(const FSSpec *fromFile, AliasHandle alias, FSSpec *target)
+{
+    AliasInfo a;
+    if(!alias || !*alias || !parse_alias(alias, a))
+        return paramErr;
+
+    FSSpec out;
+    if(fromFile && a.nlvl_from > 0 && a.nlvl_to > 0 && a.nlvl_to < a.ncomps)
+    {
+        int32_t dir = fromFile->parID;
+        for(int i = 1; i < a.nlvl_from && dir; i++)
+            dir = parent_of(fromFile->vRefNum, dir);
+        if(dir && walk(fromFile->vRefNum, dir, a, a.ncomps - a.nlvl_to, &out))
+        {
+            *target = out;
+            return noErr;
+        }
+    }
+
+    INTEGER vref;
+    if(volume_named(a.ncomps ? a.comps[0] : a.volume, &vref)
+       && walk(vref, 2 /* the root */, a, 1, &out))
+    {
+        *target = out;
+        return noErr;
+    }
+    if(volume_named(a.volume, &vref))
+    {
+        int32_t child;
+        if(lookup(vref, a.parent, a.name, &child))
+        {
+            out.vRefNum = vref;
+            out.parID = a.parent;
+            memcpy(out.name, a.name, a.name[0] + 1);
+            *target = out;
+            return noErr;
+        }
+    }
+    return fnfErr;
+}
+}
 
 OSErr Executor::C_ResolveAlias(FSSpecPtr fromFile, AliasHandle alias,
                                FSSpecPtr target, Boolean *wasAliased)
@@ -283,7 +455,14 @@ OSErr Executor::C_ResolveAlias(FSSpecPtr fromFile, AliasHandle alias,
     FSSpec fs;
     HParamBlockRec pb;
 
-    warning_unimplemented("stub for Launch WON'T WORK WITH FULL PATH SPEC");
+    if(resolve(fromFile, alias, target) == noErr)
+    {
+        *wasAliased = false; /* "needs update" */
+        return noErr;
+    }
+
+    /* Executor's own records (NewAliasMinimal, for the Apple events it
+       sends when launching): the volume, parent directory and name. */
     retval = noErr;
     headp = (decltype(headp))*alias;
     str255assign(volname, headp->volumeName);
@@ -304,29 +483,56 @@ OSErr Executor::C_ResolveAlias(FSSpecPtr fromFile, AliasHandle alias,
     return retval;
 }
 
+OSErr Executor::C_FollowFinderAlias(FSSpecPtr fromFile, AliasHandle alias,
+                                    Boolean logon, FSSpecPtr target,
+                                    Boolean *wasChanged)
+{
+    (void)logon;
+    *wasChanged = false;
+    return resolve(fromFile, alias, target);
+}
+
 OSErr Executor::C_ResolveAliasFile(FSSpecPtr theSpec,
                                    Boolean resolveAliasChains,
                                    Boolean *targetIsFolder, Boolean *wasAliased)
 {
-    HParamBlockRec hpb;
-    OSErr retval;
-
-    memset(&hpb, 0, sizeof hpb);
-    hpb.fileParam.ioNamePtr = (StringPtr)theSpec->name;
-    hpb.fileParam.ioDirID = theSpec->parID;
-    hpb.fileParam.ioVRefNum = theSpec->vRefNum;
-    retval = PBHGetFInfo(&hpb, false);
-
-    if(retval == noErr)
+    *wasAliased = false;
+    for(int hops = 0; hops < 10; hops++)
     {
-        *targetIsFolder = !!(hpb.fileParam.ioFlAttrib & ATTRIB_ISADIR);
-        *wasAliased = false;
+        CInfoPBRec pb = {};
+        Str63 name;
+        memcpy(name, theSpec->name, theSpec->name[0] + 1);
+        pb.hFileInfo.ioNamePtr = name;
+        pb.hFileInfo.ioVRefNum = theSpec->vRefNum;
+        pb.hFileInfo.ioDirID = theSpec->parID;
+        OSErr err = PBGetCatInfo(&pb, false);
+        if(err != noErr)
+            return err;
+        *targetIsFolder = !!(pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR);
+        /* A Finder alias file: kIsAlias in its Finder flags, the record
+           in its 'alis' 0. */
+        if(*targetIsFolder || !(pb.hFileInfo.ioFlFndrInfo.fdFlags & 0x8000))
+            return noErr;
+        if(*wasAliased && !resolveAliasChains)
+            return noErr;
+        INTEGER saved = CurResFile();
+        INTEGER rn = FSpOpenResFile(theSpec, fsRdPerm);
+        if(rn == -1)
+            return ResError() ? ResError() : fnfErr;
+        UseResFile(rn);
+        AliasHandle alias = (AliasHandle)Get1Resource("alis"_4, 0);
+        OSErr rerr = fnfErr;
+        FSSpec target;
+        if(alias)
+            rerr = resolve(theSpec, alias, &target);
+        UseResFile(saved);
+        CloseResFile(rn);
+        if(rerr != noErr)
+            return rerr;
+        *theSpec = target;
+        *wasAliased = true;
     }
-
-    warning_unimplemented("'%.*s' retval = %d, isFolder = %d", theSpec->name[0],
-                          theSpec->name + 1, retval, *targetIsFolder);
-
-    return retval;
+    return noErr;
 }
 
 OSErr Executor::C_MatchAlias(FSSpecPtr fromFile, int32_t rulesMask,
