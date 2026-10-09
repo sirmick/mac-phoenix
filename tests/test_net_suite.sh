@@ -159,9 +159,20 @@ done
 
 sleep 3  # Finder + MacTCP DHCP settle.
 
-echo "Launching GuestNetTest.pl..."
-LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/launch" \
-    -d '{"path":"Host:GuestNetTest.pl","open":true}' || echo '{"success":false}')
+# Dispatch via /api/script ('misc'/'dosc'), as test_guest_suite.sh does:
+# /api/launch with open=true sends a generic 'odoc', and MacPerl only
+# opens the script in an editor window. The stub does the \r→\n fix
+# MacPerl needs to install sub defs from a slurped Mac-text-mode file.
+PERL_STUB='open(R,"<Host:GuestNetTest.pl")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
+PAYLOAD=$(python3 -c '
+import json, sys
+print(json.dumps({"creator": "McPL", "script": sys.argv[1]}))
+' "$PERL_STUB")
+
+echo "Dispatching GuestNetTest.pl via MacPerl..."
+LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/script" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD" || echo '{"success":false}')
 echo "$LAUNCH" | grep -q '"success": true' \
     || { echo "FAIL: launch response: $LAUNCH"; exit 1; }
 

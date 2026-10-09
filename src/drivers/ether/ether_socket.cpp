@@ -36,6 +36,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>   // ::send only; sockaddr_un and AF_UNIX gone (Phase 3b-followup)
 #include <poll.h>
+#include <cerrno>
 
 #include <QFileInfo>
 #include <QLocalSocket>
@@ -97,35 +98,65 @@ static std::queue<std::vector<uint8_t>> s_rx_queue;
 
 // ---- Wire protocol helpers ----
 
+// The fd comes from QLocalSocket, which leaves it non-blocking, and the
+// stream carries no message boundaries: a frame can arrive in pieces
+// (the bridge writes header and body separately) and the socket buffer
+// can fill under load. Move exactly `len` bytes, retrying on EINTR and
+// waiting on EAGAIN; give up only on EOF, a real error, or no progress
+// for `timeout_ms`.
+static bool io_full(int fd, uint8_t *buf, size_t len, bool reading, int timeout_ms)
+{
+	size_t done = 0;
+	while (done < len) {
+		ssize_t n = reading ? read(fd, buf + done, len - done)
+		                    : write(fd, buf + done, len - done);
+		if (n > 0) { done += (size_t)n; continue; }
+		if (n == 0) {
+			if (reading) fprintf(stderr, "[Socket] bridge closed the connection\n");
+			return false;
+		}
+		if (errno == EINTR) continue;
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {
+			fprintf(stderr, "[Socket] %s failed: %s\n", reading ? "read" : "write", strerror(errno));
+			return false;
+		}
+		struct pollfd pfd = {fd, (short)(reading ? POLLIN : POLLOUT), 0};
+		int r = poll(&pfd, 1, timeout_ms);
+		if (r == 0) {
+			fprintf(stderr, "[Socket] %s stalled for %d ms (%zu of %zu bytes)\n",
+			        reading ? "read" : "write", timeout_ms, done, len);
+			return false;
+		}
+		if (r < 0 && errno != EINTR) return false;
+	}
+	return true;
+}
+
 static bool send_frame(int fd, const uint8_t *data, int len)
 {
-	uint8_t header[4];
+	// One buffer, so a full socket can never leave a header without its body.
+	uint8_t msg[4 + 1518];
+	if (len <= 0 || len > (int)sizeof(msg) - 4) return false;
 	uint32_t net_len = htonl((uint32_t)len);
-	memcpy(header, &net_len, 4);
-
-	if (write(fd, header, 4) != 4) return false;
-	if (write(fd, data, len) != len) return false;
-	return true;
+	memcpy(msg, &net_len, 4);
+	memcpy(msg + 4, data, len);
+	return io_full(fd, msg, 4 + (size_t)len, false, 1000);
 }
 
 static int recv_frame(int fd, uint8_t *buf, int buf_size)
 {
 	uint8_t header[4];
-	ssize_t n = read(fd, header, 4);
-	if (n != 4) return -1;
+	if (!io_full(fd, header, 4, true, 5000)) return -1;
 
 	uint32_t net_len;
 	memcpy(&net_len, header, 4);
 	int frame_len = (int)ntohl(net_len);
 
-	if (frame_len <= 0 || frame_len > buf_size) return -1;
-
-	int total = 0;
-	while (total < frame_len) {
-		n = read(fd, buf + total, frame_len - total);
-		if (n <= 0) return -1;
-		total += (int)n;
+	if (frame_len <= 0 || frame_len > buf_size) {
+		fprintf(stderr, "[Socket] bad frame length %d from bridge\n", frame_len);
+		return -1;
 	}
+	if (!io_full(fd, buf, (size_t)frame_len, true, 5000)) return -1;
 	return frame_len;
 }
 

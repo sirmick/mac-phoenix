@@ -23,6 +23,10 @@ use smoltcp::wire::{
 const MTU: usize = 1514;
 /// Frame header: 4-byte big-endian length prefix
 const HEADER_LEN: usize = 4;
+/// Unsent bytes a port may hold while its guest isn't reading. Past this,
+/// new frames to that guest are dropped whole (TCP retransmits); the port
+/// itself stays connected.
+const TX_BACKLOG_MAX: usize = 1 << 20;
 /// Gateway MAC — what the bridge looks like to guests.
 pub const GW_MAC: EthernetAddress = EthernetAddress([0x02, 0x50, 0x48, 0x58, 0x00, 0x02]);
 /// Gateway IP (10.0.2.1) — for classifying frames as gateway-bound vs external.
@@ -41,6 +45,9 @@ struct Port {
     assigned_ip: Option<Ipv4Address>,
     /// Frames buffered for transmit (bridge → guest). Drained by `flush_tx`.
     tx: Vec<Vec<u8>>,
+    /// Length-prefixed bytes already taken from `tx` but not yet written:
+    /// the socket is non-blocking and may accept only part of a frame.
+    tx_backlog: Vec<u8>,
     /// Index used for log messages (1-based).
     id: usize,
     /// Per-port frame counter (just for log throttling).
@@ -55,6 +62,7 @@ impl Port {
             learned_mac: None,
             assigned_ip: None,
             tx: Vec::new(),
+            tx_backlog: Vec::new(),
             id,
             rx_count: 0,
         }
@@ -278,21 +286,43 @@ impl SocketDevice {
         log::warn!("send_frame: no port for dst MAC {}", dst);
     }
 
-    /// Flush every port's tx queue to its socket.
+    /// Flush every port's tx queue to its socket. A full socket
+    /// (`WouldBlock`) leaves the rest in the port's backlog for the next
+    /// tick; only a real write error drops the port.
     pub fn flush_tx(&mut self) {
         let mut to_drop: Vec<usize> = Vec::new();
         for port in &mut self.ports {
+            let mut dropped = 0usize;
             for frame in port.tx.drain(..) {
-                let len = frame.len() as u32;
-                let header = len.to_be_bytes();
-                if port.stream.write_all(&header).is_err()
-                    || port.stream.write_all(&frame).is_err()
-                {
-                    log::info!("port#{}: write failed, dropping", port.id);
-                    to_drop.push(port.id);
-                    break;
+                if port.tx_backlog.len() + HEADER_LEN + frame.len() > TX_BACKLOG_MAX {
+                    dropped += 1;
+                    continue;
+                }
+                port.tx_backlog.extend_from_slice(&(frame.len() as u32).to_be_bytes());
+                port.tx_backlog.extend_from_slice(&frame);
+            }
+            if dropped > 0 {
+                log::warn!("port#{}: guest not reading, dropped {} frame(s)", port.id, dropped);
+            }
+            let mut written = 0usize;
+            while written < port.tx_backlog.len() {
+                match port.stream.write(&port.tx_backlog[written..]) {
+                    Ok(0) => {
+                        log::info!("port#{}: write returned 0, dropping", port.id);
+                        to_drop.push(port.id);
+                        break;
+                    }
+                    Ok(n) => written += n,
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        log::info!("port#{}: write failed ({}), dropping", port.id, e);
+                        to_drop.push(port.id);
+                        break;
+                    }
                 }
             }
+            port.tx_backlog.drain(..written);
         }
         if !to_drop.is_empty() {
             self.ports.retain(|p| !to_drop.contains(&p.id));
