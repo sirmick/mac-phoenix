@@ -85,7 +85,6 @@ src/
     adb.cpp                         — ADB mouse/keyboard emulation
     cpu_context.cpp                 — Memory allocation, backend init
   cpu/
-    cpu_uae.c                       — UAE backend (Platform API bridge)
     uae_cpu/                        — UAE interpreter source (newcpu.cpp, cpuemu.cpp)
     kpx/                            — KPX PPC backend (SheepShaver Kheperix interpreter)
     cpu_m68k.cpp                    — The ROM-based 68k Mac on a cpu::Core (EmulOps, InterruptFlags, reset)
