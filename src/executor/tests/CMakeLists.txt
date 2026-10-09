@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.10)
 
+# Configured on its own with Retro68's toolchain file, this builds the
+# same tests as a 68k Mac application ("tests"), to run on a real System
+# (tests/test_toolbox_suite.sh).
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    project(ExecutorToolboxTests C CXX)
+endif()
+
 function(add_compilefail_tests filename)
     configure_file(${filename} ${CMAKE_BINARY_DIR}/${filename}.junk)
     file(READ ${filename} text)
@@ -67,20 +74,25 @@ if(CMAKE_SYSTEM_NAME MATCHES Retro.*)
     #add_subdirectory(googletest)
     #target_link_libraries(tests gtest)
 
-    include_directories("googletest/googletest/include")
-    include_directories("googletest/googletest/")
+    set(GTEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/googletest")
+    include_directories("${GTEST_DIR}/include")
+    include_directories("${GTEST_DIR}")
     add_definitions( -DGTEST_HAS_STREAM_REDIRECTION=0 -DGTEST_HAS_POSIX_RE=0 -DPATH_MAX=256)
 
     add_application(tests
         ${TEST_SOURCES} 
-        main.cpp googletest/googletest/src/gtest-all.cc size.r)
-    set_target_properties(tests PROPERTIES LINK_FLAGS "-Wl,-gc-sections")
+        main.cpp ${GTEST_DIR}/src/gtest-all.cc size.r)
+    # One CODE segment. With Retro68's default segment map the tests land in
+    # a ~1 MB segment that came out of the loader corrupted on both the real
+    # System and Executor. Single-segment builds still crash in a way that
+    # depends on code layout (WIP, see tests/test_toolbox_suite.sh).
+    set_target_properties(tests PROPERTIES LINK_FLAGS "-Wl,-gc-sections -Wl,--mac-single")
 
     # Second application from the same sources, built against RetroConsole so
     # that output goes to the text console instead of being redirected to "out".
     add_application(tests_console CONSOLE
         ${TEST_SOURCES}
-        main.cpp googletest/googletest/src/gtest-all.cc size.r)
+        main.cpp ${GTEST_DIR}/src/gtest-all.cc size.r)
     target_compile_definitions(tests_console PRIVATE -DUSE_CONSOLE)
     set_target_properties(tests_console PROPERTIES LINK_FLAGS "-Wl,-gc-sections")
 else()
@@ -108,6 +120,5 @@ else()
     set_property(DIRECTORY
         APPEND PROPERTY TEST_INCLUDE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/test-properties.cmake"
     )
+    target_compile_features(executor_tests PRIVATE cxx_std_17)
 endif()
-
-target_compile_features(executor_tests PRIVATE cxx_std_17)
