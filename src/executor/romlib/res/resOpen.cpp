@@ -111,6 +111,16 @@ Handle Executor::ROMlib_mgetres(resmaphand map, resref *rr)
 }
 
 using dcmpProcPtr = UPP<void(Ptr source, Ptr dest, Ptr working, Size len)>;
+/* Header version 9 decompressors (7.5.5 PTCH 0): the 'dcmp' starts with
+   three entry offsets -- init(header), decompress(source, dest, header),
+   cleanup(header) -- and decompresses in place: the compressed bytes sit
+   at the end of the destination handle. */
+using dcmp9HeaderProcPtr = UPP<void(Ptr header)>;
+using dcmp9ProcPtr = UPP<INTEGER(Ptr source, Ptr dest, Ptr header)>;
+enum
+{
+    COMPRESSED_FLAGS_V9 = 0x120901,
+};
 
 /* TODO: decompress_setup also has to pass back the decompressed size
    we need to adjust down the size of "dlen" down below where we read
@@ -118,7 +128,7 @@ using dcmpProcPtr = UPP<void(Ptr source, Ptr dest, Ptr working, Size len)>;
 
 static bool
 decompress_setup(INTEGER rn, int32_t *dlenp, int32_t *final_sizep, int32_t *offsetp,
-                 Handle *dcmp_handlep, Ptr *workspacep)
+                 Handle *dcmp_handlep, Ptr *workspacep, Ptr *v9_headerp)
 {
     bool retval;
     OSErr err;
@@ -130,6 +140,7 @@ decompress_setup(INTEGER rn, int32_t *dlenp, int32_t *final_sizep, int32_t *offs
     *offsetp = 0;
     *dcmp_handlep = nullptr;
     *workspacep = nullptr;
+    *v9_headerp = nullptr;
 
     GetFPos(rn, &master_save_pos);
     len = sizeof info;
@@ -148,7 +159,38 @@ decompress_setup(INTEGER rn, int32_t *dlenp, int32_t *final_sizep, int32_t *offs
         /*->*/ return false;
     }
 
-    if(info.typeFlags != COMPRESSED_FLAGS)
+    if(info.typeFlags == COMPRESSED_FLAGS_V9)
+    {
+        /* tag, length, version, attributes, uncompressed size, dcmp ID,
+           then two words for the decompressor; the first is how many
+           bytes beyond the uncompressed size the handle needs. */
+        uint8_t hdr[18];
+        memcpy(hdr, &info, sizeof info);
+        LONGINT more = sizeof hdr - sizeof info;
+        retval = FSReadAll(rn, inout(more), (Ptr)hdr + sizeof info) == noErr;
+        INTEGER id = (hdr[12] << 8) | hdr[13];
+        int32_t slack = (hdr[14] << 8) | hdr[15];
+        if(retval)
+        {
+            GUEST<LONGINT> save_pos;
+            GetFPos(rn, &save_pos);
+            *dcmp_handlep = GetResource("dcmp"_4, id);
+            SetFPos(rn, fsFromStart, save_pos);
+            if(*dcmp_handlep)
+                LoadResource(*dcmp_handlep);
+            retval = *dcmp_handlep && **dcmp_handlep;
+        }
+        if(retval && (*v9_headerp = NewPtr(sizeof hdr)))
+        {
+            memcpy(*v9_headerp, hdr, sizeof hdr);
+            *dlenp -= sizeof hdr;
+            *final_sizep = info.uncompressedSize;
+            *offsetp = slack;
+        }
+        else
+            retval = false;
+    }
+    else if(info.typeFlags != COMPRESSED_FLAGS)
         retval = false;
     else
     {
@@ -217,6 +259,7 @@ static Handle mgetres_helper(resmaphand map, resref *rr, int32_t dlen,
     int32_t dcmp_offset = 0;
     Handle dcmp_handle = nullptr;
     Ptr dcmp_workspace = nullptr;
+    Ptr v9_header = nullptr;
     int32_t uncompressed_size = 0;
     Ptr xxx;
     OSErr err;
@@ -228,7 +271,8 @@ static Handle mgetres_helper(resmaphand map, resref *rr, int32_t dlen,
     if(compressed_p)
     {
         if(!decompress_setup((*map)->resfn, &dlen, &uncompressed_size,
-                             &dcmp_offset, &dcmp_handle, &dcmp_workspace))
+                             &dcmp_offset, &dcmp_handle, &dcmp_workspace,
+                             &v9_header))
         {
             if(LM(ResErr) == noErr)
                 compressed_p = false;
@@ -269,13 +313,31 @@ static Handle mgetres_helper(resmaphand map, resref *rr, int32_t dlen,
         {
             if(dcmp_workspace)
                 DisposePtr(dcmp_workspace);
+            if(v9_header)
+                DisposePtr(v9_header);
             DisposeHandle(rr->rhand);
             rr->rhand = nullptr;
             retval = nullptr;
         }
         else
         {
-            if(dcmp_handle)
+            if(dcmp_handle && v9_header)
+            {
+                SignedByte state = hlock_return_orig_state(dcmp_handle);
+                Ptr code = *dcmp_handle;
+                auto entry = [&](int i) {
+                    return code + ((GUEST<INTEGER> *)code)[i];
+                };
+                HLock(retval);
+                ((dcmp9HeaderProcPtr)entry(0))(v9_header);
+                ((dcmp9ProcPtr)entry(1))(xxx, *retval, v9_header);
+                ((dcmp9HeaderProcPtr)entry(2))(v9_header);
+                HUnlock(retval);
+                SetHandleSize(retval, uncompressed_size);
+                HSetState(dcmp_handle, state);
+                DisposePtr(v9_header);
+            }
+            else if(dcmp_handle)
             {
                 dcmpProcPtr dcmp;
                 SignedByte state;
@@ -638,11 +700,17 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
     LM(TopMapHndl) = (Handle)map;
     LM(CurMap) = f;
 
-    /* check for resprload bits */
-
+    /* The handle fields on disk are junk: clear them all before any
+       preload, which may look up other resources in this map (a
+       compressed one needs its 'dcmp'). */
     WALKTANDR(map, i, tr, j, rr)
     rr->rhand = 0;
     rr->ratr &= ~resChanged;
+    EWALKTANDR(tr, rr)
+
+    /* check for resprload bits */
+
+    WALKTANDR(map, i, tr, j, rr)
     if(rr->ratr & resPreload)
         ROMlib_mgetres(map, rr);
     EWALKTANDR(tr, rr)
