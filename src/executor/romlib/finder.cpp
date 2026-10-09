@@ -15,6 +15,9 @@
 
 #include <Finder.h>
 #include <FileMgr.h>
+#include <MemoryMgr.h>
+#include <ResourceMgr.h>
+#include <mman/mman.h>
 
 #include <file/file.h>
 #include <hfs/hfs.h>
@@ -316,6 +319,87 @@ bool readDesktopDB(DesktopDB& db)
     return true;
 }
 
+/* What Finder's rebuild puts in a desktop database for an application:
+   its bundle's icons. The BNDL maps local IDs to the resource IDs of its
+   FREFs and icon families; each FREF names a file type and the local ID
+   of its icon. Every member of the family goes in, under the Desktop
+   Manager's icon types (kLargeIcon 1 .. kSmall8BitIcon 6). */
+void addBundleIcons(DesktopDB& db, const DTAppl& a)
+{
+    if(std::any_of(db.icons.begin(), db.icons.end(),
+                   [&](const DTIcon& e) { return e.creator == a.creator; }))
+        return;
+    Str255 name;
+    name[0] = std::min<size_t>(a.name.size(), 255);
+    memcpy(name + 1, a.name.data(), name[0]);
+
+    TheZoneGuard guard(LM(SysZone));
+    INTEGER saved = CurResFile();
+    Boolean savedLoad = LM(ResLoad);
+    SetResLoad(true);
+    INTEGER ref = HOpenResFile(db.vRefNum, a.parID, name, fsRdPerm);
+    if(ref != -1)
+    {
+        UseResFile(ref);
+        Handle bndl = nullptr;
+        /* The bundle is the one whose signature is the creator. */
+        for(INTEGER i = 1; !bndl && i <= Count1Resources("BNDL"_4); i++)
+        {
+            Handle h = Get1IndResource("BNDL"_4, i);
+            if(h && GetHandleSize(h) >= 8 && *(GUEST<uint32_t> *)*h == a.creator)
+                bndl = h;
+        }
+        if(bndl)
+        {
+            std::vector<uint8_t> b((uint8_t *)*bndl, (uint8_t *)*bndl + GetHandleSize(bndl));
+            auto be16 = [&](size_t o) -> int { return o + 2 <= b.size() ? int16_t((b[o] << 8) | b[o + 1]) : 0; };
+            auto be32 = [&](size_t o) -> uint32_t { return (uint32_t(uint16_t(be16(o))) << 16) | uint16_t(be16(o + 2)); };
+            std::map<int, int> icnID, frefID; // local ID -> resource ID
+            size_t o = 8;
+            int ntypes = be16(6) + 1;
+            for(int t = 0; t < ntypes && o + 6 <= b.size(); t++)
+            {
+                uint32_t type = be32(o);
+                int n = be16(o + 4) + 1;
+                o += 6;
+                for(int k = 0; k < n && o + 4 <= b.size(); k++, o += 4)
+                {
+                    if(type == "ICN#"_4)
+                        icnID[be16(o)] = be16(o + 2);
+                    else if(type == "FREF"_4)
+                        frefID[be16(o)] = be16(o + 2);
+                }
+            }
+            static const std::pair<uint32_t, int8_t> family[] = {
+                { "ICN#"_4, 1 }, { "icl4"_4, 2 }, { "icl8"_4, 3 },
+                { "ics#"_4, 4 }, { "ics4"_4, 5 }, { "ics8"_4, 6 },
+            };
+            for(auto [local, resID] : frefID)
+            {
+                Handle fref = Get1Resource("FREF"_4, resID);
+                if(!fref || GetHandleSize(fref) < 6)
+                    continue;
+                uint32_t fileType = *(GUEST<uint32_t> *)*fref;
+                int iconLocal = *(GUEST<int16_t> *)(*fref + 4);
+                auto ic = icnID.find(iconLocal);
+                if(ic == icnID.end())
+                    continue;
+                for(auto [resType, iconType] : family)
+                {
+                    Handle h = Get1Resource(resType, ic->second);
+                    if(!h || !*h)
+                        continue;
+                    db.icons.push_back({ a.creator, fileType, 0, iconType,
+                                         std::vector<uint8_t>((uint8_t *)*h, (uint8_t *)*h + GetHandleSize(h)) });
+                }
+            }
+        }
+        CloseResFile(ref);
+    }
+    UseResFile(saved);
+    SetResLoad(savedLoad);
+}
+
 DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
 {
     LONGINT dir;
@@ -336,8 +420,16 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
             db.file = lv->getRoot() / ".desktopdb";
             db.load();
         }
-        else if(!readDesktopDB(db))
-            addApplications(db);
+        else
+        {
+            if(!readDesktopDB(db))
+                addApplications(db);
+            /* MacPhoenix: a Desktop DB's icons live in its "Desktop DF",
+               which isn't read; take them from the applications'
+               bundles instead, as Finder's rebuild does. */
+            for(const auto& a : std::vector<DTAppl>(db.appls))
+                addBundleIcons(db, a);
+        }
     }
     err = noErr;
     return &db;

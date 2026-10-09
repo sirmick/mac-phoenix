@@ -1108,13 +1108,11 @@ OSErr Executor::PBHGetVolParms(HParmBlkPtr pb, Boolean async)
         }
         if(roomfor(infop, vMAttrib, rc))
         {
-            // A host folder is a local volume with a Desktop Manager
-            // (finder.cpp); disk images keep the foreign-volume bits.
-            if(dynamic_cast<LocalVolume *>(((VCBExtra *)vcbp)->volume))
-                infop->vMAttrib = (1L << bLimitFCBs) | (1L << bLocalWList)
-                                  | (1L << bHasDesktopMgr);
-            else
-                infop->vMAttrib = VOL_BITS;
+            // Host folders and HFS disk images are local volumes with a
+            // Desktop Manager (finder.cpp). Without it Finder falls back to
+            // a disk's System 6 "Desktop" file and draws generic icons.
+            infop->vMAttrib = (1L << bLimitFCBs) | (1L << bLocalWList)
+                              | (1L << bHasDesktopMgr);
             nused += sizeof(infop->vMAttrib);
         }
         if(roomfor(infop, vMLocalHand, rc))

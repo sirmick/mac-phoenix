@@ -181,6 +181,29 @@ static OSErr C_hostdisk_status(ParmBlkPtr pbp, DCtlPtr dcp)
     }
 }
 
+/* Disk images' drives (OURHFSDREF) have no driver unit behind them; the
+   File Manager reads them itself. Finder still asks a volume's driver for
+   its icons and drive info: answer those as .Disk does, so an image looks
+   like the same fixed disk (as under Basilisk II). */
+bool Executor::ROMlib_image_drive_control(ParmBlkPtr pbp, OSErr *err)
+{
+    GUEST<int32_t> *param = (GUEST<int32_t> *)pbp->cntrlParam.csParam;
+    switch(pbp->cntrlParam.csCode)
+    {
+        case 21: /* drive icon */
+        case 22: /* media icon */
+            *param = (int32_t)(uintptr_t)drive_icon();
+            break;
+        case 23: /* drive info: unspecified fixed SCSI disk */
+            *param = 0x0601;
+            break;
+        default:
+            return false;
+    }
+    *err = done(pbp, noErr);
+    return true;
+}
+
 void Executor::InitHostDiskDriver()
 {
     RegisterDriver({

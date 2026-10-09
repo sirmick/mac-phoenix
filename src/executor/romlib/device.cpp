@@ -14,6 +14,7 @@
 #include <MenuMgr.h>
 #include <ToolboxEvent.h>
 #include <mman/mman.h>
+#include <hfs/hfs.h>
 #include <rsys/device.h>
 #include <rsys/hostdisk.h>
 #include <file/file.h>
@@ -191,6 +192,8 @@ OSErr Executor::PBControl(ParmBlkPtr pbp, Boolean a) /* IMII-186 */
 {
     OSErr err;
 
+    if(pbp->cntrlParam.ioCRefNum == OURHFSDREF && ROMlib_image_drive_control(pbp, &err))
+        return err;
     err = ROMlib_dispatch(pbp, a, Ctl, 0);
     fs_err_hook(err);
     return err;
