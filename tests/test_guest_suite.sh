@@ -10,6 +10,11 @@
 #   tests/test_guest_suite.sh [--timeout 60] [--port 18094] [--disk path]
 #                             [--rom path] [--os-version 7.5.5|7.6]
 #                             [--network MODE] [--backend uae|kpx|executor]
+#                             [--script NAME.pl] [--results FILE]
+#
+# --script picks another guest script from tests/guest (default
+# MacTestSuite.pl); --results is the file it writes on Host: (default
+# test_results.txt). Same report format: PASS/FAIL/SKIP lines, then "---".
 #
 # --backend executor runs on the System Folder of the test copy
 # <storage>/images/test-macos-<os-version>.img (no ROM; the copy is mounted
@@ -35,6 +40,8 @@ ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 DISMISS=1
 NETWORK="socket"
+SCRIPT_NAME="MacTestSuite.pl"
+RESULTS_NAME="test_results.txt"
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -48,6 +55,8 @@ while [[ $# -gt 0 ]]; do
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) NETWORK="$2"; shift 2 ;;
         --no-dismiss) DISMISS=0; shift ;;
+        --script) SCRIPT_NAME="$2"; shift 2 ;;
+        --results) RESULTS_NAME="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -108,7 +117,7 @@ if [[ ! -f "$DISK" ]]; then
     exit 77
 fi
 
-PERL_SCRIPT="$GUEST_DIR/MacTestSuite.pl"
+PERL_SCRIPT="$GUEST_DIR/$SCRIPT_NAME"
 PERL_INSTALL="$GUEST_DIR/install_perl_test.py"
 
 if [[ ! -f "$PERL_SCRIPT" ]]; then
@@ -119,16 +128,16 @@ fi
 # --- Setup ExtFS shared folder ---
 
 EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
-python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "MacTestSuite.pl"
+python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "$SCRIPT_NAME"
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
         kill "$EMU_PID" 2>/dev/null || true
         wait "$EMU_PID" 2>/dev/null || true
     fi
-    if [[ -f "$EXTFS_DIR/test_results.txt" && ${EXIT_CODE:-1} -ne 0 ]]; then
+    if [[ -f "$EXTFS_DIR/$RESULTS_NAME" && ${EXIT_CODE:-1} -ne 0 ]]; then
         echo "--- guest results ---"
-        cat "$EXTFS_DIR/test_results.txt"
+        cat "$EXTFS_DIR/$RESULTS_NAME"
     fi
     rm -rf "$EXTFS_DIR"
 }
@@ -227,19 +236,19 @@ done
 # The "Perl path" is just the eval-from-file stub composed here — BridgeAgent
 # stays language-agnostic. Stub does the \r→\n fix that MacPerl needs to
 # install sub defs from a slurped Mac-text-mode file.
-PERL_STUB='open(R,"<Host:MacTestSuite.pl")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
+PERL_STUB='open(R,"<Host:'"$SCRIPT_NAME"'")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
 PAYLOAD=$(python3 -c '
 import json, sys
 print(json.dumps({"creator": "McPL", "script": sys.argv[1]}))
 ' "$PERL_STUB")
 
-echo "Dispatching MacTestSuite.pl via MacPerl..."
+echo "Dispatching $SCRIPT_NAME via MacPerl..."
 LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/script" \
     -H "Content-Type: application/json" \
     -d "$PAYLOAD" || echo '{"success":false}')
 
 if ! echo "$LAUNCH" | grep -q '"success": true'; then
-    echo "FAIL: Could not dispatch MacTestSuite.pl to MacPerl"
+    echo "FAIL: Could not dispatch $SCRIPT_NAME to MacPerl"
     echo "  Response: $LAUNCH"
     exit 1
 fi
@@ -251,7 +260,7 @@ TEST_START=$(date +%s)
 TEST_TIMEOUT=$((TIMEOUT - (TEST_START - START_TIME)))
 [[ $TEST_TIMEOUT -lt 10 ]] && TEST_TIMEOUT=10
 
-RESULTS_FILE="$EXTFS_DIR/test_results.txt"
+RESULTS_FILE="$EXTFS_DIR/$RESULTS_NAME"
 while true; do
     ELAPSED=$(( $(date +%s) - TEST_START ))
     if [[ $ELAPSED -ge $TEST_TIMEOUT ]]; then

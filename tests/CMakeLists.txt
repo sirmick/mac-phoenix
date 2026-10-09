@@ -180,6 +180,30 @@ set_tests_properties(guest_suite_761 PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
+# --- Finder test set: AppleScript drives the Finder (make/rename/duplicate/
+# move/copy to another volume/windows/trash), MacPerl checks the disk.
+
+add_test(
+  NAME finder_suite
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 120 --port 18114
+)
+set_tests_properties(finder_suite PROPERTIES
+  TIMEOUT 160
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME finder_suite_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 150 --port 18116
+)
+set_tests_properties(finder_suite_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+)
+
 # --- Executor variants: Apple's 7.5.5 System on Executor's Toolbox, no ROM.
 # Runs on the System Folder of the test copy of macos-7.5.5.img (extracted
 # into <storage>/executor-systems on first use). The guest suite's network

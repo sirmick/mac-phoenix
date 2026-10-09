@@ -59,6 +59,12 @@ void Executor::mman_heap_death(const char *func, const char *where)
     if(!ROMlib_heap_death_dialog)
     {
         fprintf(stderr, "[Executor] %s\n", err_msg);
+        /* The host's fatal hook snapshots guest RAM ("executor-fatal"). */
+        if(auto hook = ROMlib_fatal_hook)
+        {
+            ROMlib_fatal_hook = nullptr;
+            hook(err_msg);
+        }
         fflush(nullptr);
         _exit(70);
     }

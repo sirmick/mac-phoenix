@@ -73,6 +73,32 @@
 # ####
 
 - function:
+    name: FindFolderWithTable
+    comment: |
+      MacPhoenix: private selector, name a guess (learned.yaml). FindFolder
+      plus a list of extra folder descriptions; Finder Scripting Extension
+      calls it from its FindFolder patch.
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: folderType
+        type: OSType
+      - name: createFolder
+        type: Boolean
+      - name: foundVRefNum
+        type: int16_t*
+      - name: foundDirID
+        type: int32_t*
+      - name: table
+        type: Ptr
+    dispatcher: AliasDispatch
+    selector: 0x000A
+    executor: C_
+
+# ####
+
+- function:
     name: NewAlias
     return: OSErr
     args:

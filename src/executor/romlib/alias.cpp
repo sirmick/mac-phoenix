@@ -57,6 +57,14 @@ find_sub_dir(OSType folderType)
         {
             kFontFolderType, "Fonts",
         },
+        /* MacPhoenix: the folders Finder Scripting Extension adds through
+           AliasDispatch $A (FindFolderWithTable, below). */
+        {
+            "shdf"_4, "Shutdown Items",
+        },
+        {
+            "timf"_4, "Timer Items",
+        },
     };
     int i;
     const char *retval;
@@ -180,6 +188,22 @@ find_volume_folder(int16_t vRefNum, OSType folderType, Boolean createFolder,
         *foundDirID = dirid;
     }
     return err;
+}
+
+/* MacPhoenix: AliasDispatch $A (name a guess, learned.yaml). FindFolder
+   with one more argument: a list of folder descriptions to add, {type.l,
+   name length.l, name} entries. Finder Scripting Extension's FindFolder
+   patch calls it for 'shdf' (Shutdown Items) and 'timf' (Timer Items); on
+   7.5.5 it is never reached by a trap instruction (patches jump to it), so
+   no trace shows it. The two names are built in above; the list is not
+   read. */
+OSErr Executor::C_FindFolderWithTable(int16_t vRefNum, OSType folderType,
+                                      Boolean createFolder,
+                                      GUEST<int16_t> *foundVRefNum,
+                                      GUEST<int32_t> *foundDirID, Ptr table)
+{
+    (void)table;
+    return C_FindFolder(vRefNum, folderType, createFolder, foundVRefNum, foundDirID);
 }
 
 OSErr Executor::C_FindFolder(int16_t vRefNum, OSType folderType,

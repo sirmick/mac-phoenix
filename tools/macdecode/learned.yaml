@@ -207,12 +207,26 @@ dispatchers:
         comment: >
           4 bytes of params (long *out), no result: *out = the value $218
           stored (nil without Color QuickDraw).
+  - trap: 0xA823
+    name: AliasDispatch
+    selectors:
+      - value: 0x0A
+        name: FindFolderWithTable
+        status: guess
+        source: Finder Scripting Extension's FindFolder patch (INIT 128, disassembly)
+        comment: >
+          FindFolder's arguments plus a trailing pointer to folder
+          descriptions ({type.l, name length.l, name}: 'shdf' Shutdown Items,
+          'timf' Timer Items). The patch switches D0 0 -> $A for those types
+          and jumps to the saved routine, so traces never show the selector.
 
 # Tags: entry points below the Toolbox Executor provides. A tagged entry
 # point that only Apple ROM/patch code calls is "not needed" for that
 # reason; code we run calling it still makes it needed. Review freely:
 # tag is hardware | boot | debug; selector is optional (whole trap if
 # absent).
+
+
 tags:
   # hardware: Executor talks to the host, not to Mac hardware
   - {trap: 0xA07C, name: ADBOp, tag: hardware, reason: ADB bus transaction; input comes from the host}

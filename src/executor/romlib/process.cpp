@@ -1150,8 +1150,44 @@ bool Executor::ROMlib_process_os_event(EventRecord *evt, bool remove)
     return true;
 }
 
+/* The running process of this application file, if any. */
+static process_info_t *running_process_of(const FSSpec &app)
+{
+    for(process_info_t *q = process_info_list; q; q = q->next)
+        if(q->state != process_info_t::dead && !q->desk_accessory
+           && q->app.vRefNum == app.vRefNum && q->app.parID == app.parID
+           && EqualString(q->app.name, app.name, false, true))
+            return q;
+    return nullptr;
+}
+
 OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
 {
+    /* As 7.5.5's Process Manager: launching an application that is
+       already running launches nothing; it comes to the front (unless
+       launchDontSwitch) and gets the AppParameters event, if any.
+       AppleScript and BridgeAgent launch their targets this way. */
+    if(process_info_t *q = running_process_of(*lpbp->launchAppSpec))
+    {
+        lpbp->launchProcessSN = q->serial_number;
+        if(!(lpbp->launchControlFlags & 0x0400 /* launchDontSwitch */) && q != front_process)
+            pending_front = q;
+        if(Ptr ap = (Ptr)lpbp->launchAppParameters)
+        {
+            const uint8_t *b = (const uint8_t *)ap;
+            if(((b[0] << 8) | b[1]) == kHighLevelEvent)
+            {
+                EventRecord evt = *(EventRecord *)ap;
+                int32_t refcon = *(GUEST<int32_t> *)(ap + 16);
+                int32_t length = *(GUEST<int32_t> *)(ap + 20);
+                ProcessSerialNumber to = q->serial_number;
+                PostHighLevelEvent(&evt, (Ptr)&to, refcon, ap + 24, length,
+                                   0x8000 /* receiverIDisPSN */);
+            }
+        }
+        return noErr;
+    }
+
     process_info_t *p = new_process();
     p->own_thread = true;
     p->app = *lpbp->launchAppSpec;

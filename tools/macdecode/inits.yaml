@@ -33,8 +33,10 @@ extensions:
   - {file: EM Extension, phase: 1, lacks: []}
   - {file: Launcher, phase: 1, lacks: []}
   - {file: Clipping Extension, phase: 1, kind: fext, lacks: []}
-  - {file: Finder Scripting Extension, phase: 2, kind: fext, lacks: [],
-     note: "Finder's Apple event object model; with AppleScript"}
+  - {file: Finder Scripting Extension, phase: 2, kind: fext, lacks: [], loaded: true,
+     note: "Finder's Apple event object model; with AppleScript. Its INIT 128 installs the handlers
+       (the loader runs INITs in fext files too) and patches FindFolder (AliasDispatch $A).
+       Loaded 2026-10-09; AppleScript does not reach Finder yet (target spec comes back empty)."}
 
   # ── phase 2: Component Manager ─────────────────────────────────────────
   - {file: AppleScript™, phase: 2, lacks: [], loaded: true,

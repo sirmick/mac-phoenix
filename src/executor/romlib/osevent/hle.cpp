@@ -5,6 +5,7 @@
 #include <base/common.h>
 
 #include <OSEvent.h>
+#include <ToolboxEvent.h>
 #include <MemoryMgr.h>
 #include <osevent/osevent.h>
 #include <rsys/process.h>
@@ -29,6 +30,15 @@ typedef struct hle_q_elt
 } hle_q_elt_t;
 
 static hle_q_elt_t *hle_q;
+
+/* MacPhoenix: a message is one block, as the Process Manager keeps it: the
+   HighLevelEventMsg header, then msgLength bytes of message. Apple's Apple
+   Event Manager reads the message there from its GetSpecificHighLevelEvent
+   filter (to find the reply to the event it sent). */
+static Ptr hle_data(HighLevelEventMsgPtr m)
+{
+    return (Ptr)m + sizeof(HighLevelEventMsg);
+}
 
 /* event q element currently being processed, and its sender (per process) */
 static HighLevelEventMsgPtr current_hle_msg;
@@ -57,7 +67,6 @@ void Executor::ROMlib_hle_forget(const ProcessSerialNumber *psn)
         if(t->to.highLongOfPSN == psn->highLongOfPSN && t->to.lowLongOfPSN == psn->lowLongOfPSN)
         {
             *pp = t->next;
-            DisposePtr(guest_cast<Ptr>(t->hle_msg->theMsgEvent.when));
             DisposePtr((Ptr)t->hle_msg);
             DisposePtr((Ptr)t);
         }
@@ -86,7 +95,6 @@ void Executor::hle_reset(void)
     if(current_hle_msg == nullptr)
         return;
 
-    DisposePtr(guest_cast<Ptr>(current_hle_msg->theMsgEvent.when));
     DisposePtr((Ptr)current_hle_msg);
 
     current_hle_msg = nullptr;
@@ -151,7 +159,7 @@ OSErr Executor::C_AcceptHighLevelEvent(TargetID *sender_id_return,
         retval = bufferIsSmall;
 
     if(msg_buf)
-        memcpy(msg_buf, guest_cast<Ptr>(current_hle_msg->theMsgEvent.when),
+        memcpy(msg_buf, hle_data(current_hle_msg),
                std::min<uint32_t>(room, current_hle_msg->msgLength));
 
     *msg_buf_length_return = current_hle_msg->msgLength;
@@ -164,22 +172,38 @@ Boolean Executor::C_GetSpecificHighLevelEvent(
 {
     hle_q_elt_t *t, **prev;
 
+    /* MacPhoenix: the filter gets the sender's TargetID (Apple's Apple
+       Event Manager matches replies with it); it lives in the System heap
+       so the filter, guest code, can read it. A message the filter takes
+       leaves the queue. */
+    TargetID *sender = (TargetID *)NewPtrSysClear(sizeof(TargetID));
+    if(err_return)
+        *err_return = noErr;
+    Boolean taken = false;
     for(prev = &hle_q, t = hle_q; t; prev = &t->next, t = t->next)
     {
-        Boolean evt_handled_p;
-
         if(!for_current(t))
             continue;
 
-        evt_handled_p = fn(data, t->hle_msg, /* ##### target id */ nullptr);
-        if(evt_handled_p)
+        if(sender)
+        {
+            memset(sender, 0, sizeof *sender);
+            if(!ROMlib_process_port_name_of(&t->from, &sender->name))
+                ROMlib_process_port_name(&sender->name);
+            ROMlib_process_port_name(&sender->recvrName);
+        }
+        if(fn(data, t->hle_msg, sender))
         {
             *prev = t->next;
-            return true;
+            DisposePtr((Ptr)t->hle_msg);
+            DisposePtr((Ptr)t);
+            taken = true;
+            break;
         }
     }
-
-    return false;
+    if(sender)
+        DisposePtr((Ptr)sender);
+    return taken;
 }
 
 OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
@@ -213,14 +237,14 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
         }
     }
 
-    hle_msg = (HighLevelEventMsgPtr)NewPtr(sizeof *hle_msg);
+    hle_msg = (HighLevelEventMsgPtr)NewPtr(sizeof *hle_msg + std::max<int32_t>(msg_length, 0));
     if(MemError() != noErr)
     {
         retval = MemError();
         goto done;
     }
 
-    hle_msg->HighLevelEventMsgHeaderlength = 0;
+    hle_msg->HighLevelEventMsgHeaderlength = sizeof *hle_msg;
     hle_msg->version = 0;
     hle_msg->reserved1 = -1;
     hle_msg->theMsgEvent = *evt;
@@ -228,16 +252,10 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
        left in 'what' (Apple's AESend leaves it unset). */
     hle_msg->theMsgEvent.what = kHighLevelEvent;
 
-    /* #### copy the message buffer? */
-    msg_buf_copy = NewPtr(msg_length);
-    if(MemError() != noErr)
-    {
-        retval = MemError();
-        DisposePtr((Ptr)hle_msg);
-        goto done;
-    }
-    memcpy(msg_buf_copy, msg_buf, msg_length);
-    hle_msg->theMsgEvent.when = guest_cast<int32_t>(msg_buf_copy);
+    msg_buf_copy = hle_data(hle_msg);
+    if(msg_length > 0)
+        memcpy(msg_buf_copy, msg_buf, msg_length);
+    hle_msg->theMsgEvent.when = TickCount();
     /* MacPhoenix: was -1. Apple's Apple Event Manager (PACK 8) reads
        modifier bits of a high-level event: with bit 3 set it takes the
        message's first long for its size. Plain messages have none. */
@@ -252,7 +270,6 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
     if(MemError() != noErr)
     {
         retval = MemError();
-        DisposePtr(guest_cast<Ptr>(hle_msg->theMsgEvent.when));
         DisposePtr((Ptr)hle_msg);
         goto done;
     }

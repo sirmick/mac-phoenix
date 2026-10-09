@@ -2,7 +2,7 @@
  *
  * 7.5.5's loader (System 'lmgr' 0) goes through Extensions, Control Panels
  * and the System Folder itself in name order, and for every file of type
- * INIT, cdev or RDEV opens its resource fork, grows the System heap by the
+ * INIT, cdev, RDEV or fext opens its resource fork, grows the System heap by the
  * file's 'sysz' request, and calls each 'INIT' resource with the file as
  * the current resource file; then it closes the file (an INIT that wants
  * to stay keeps its code with DetachResource).
@@ -353,7 +353,11 @@ void Executor::ROMlib_load_extensions()
             continue;
         for(const Item &it : folder_files(vref, dirid))
         {
-            if(it.type != "INIT"_4 && it.type != "cdev"_4 && it.type != "RDEV"_4)
+            /* fext too: Finder Scripting Extension's INIT installs the
+               Finder's Apple event handlers (seen on a real 7.5.5 boot);
+               Finder loads the rest of a Finder extension itself. */
+            if(it.type != "INIT"_4 && it.type != "cdev"_4 && it.type != "RDEV"_4
+               && it.type != "fext"_4)
                 continue;
             if(allow.count(to_string(it.name)))
                 run_file(vref, dirid, it);

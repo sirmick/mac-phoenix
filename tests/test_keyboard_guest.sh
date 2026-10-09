@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
         --port)    PORT="$2";    shift 2 ;;
         --rom)     ROM_OVERRIDE="$2"; shift 2 ;;
         --disk)    DISK_OVERRIDE="$2"; shift 2 ;;
-        --backend) BACKEND="$2"; shift 2 ;;
+        --backend) BACKEND="$2"; shift 2 ;;   # uae | executor
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -45,8 +45,18 @@ else
     DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" macos-7.5.5 2>/dev/null || true)}"
 fi
 
+DISK_FLAGS=(--disk "$DISK")
+EXTRA_FLAGS=()
+if [[ "$BACKEND" == "executor" ]]; then
+    # No ROM: Executor runs on the test copy's System Folder and mounts the
+    # copy itself, writable (see test_guest_suite.sh).
+    ROM=""
+    DISK_FLAGS=()
+    EXTRA_FLAGS+=(--executor-system "$(basename "${DISK:-}")" --executor-writable-images)
+fi
+
 if [[ ! -x "$BINARY" ]];     then echo "SKIP: Binary not found: $BINARY"; exit 77; fi
-if [[ ! -f "$ROM" ]];        then echo "SKIP: ROM not found: $ROM"; exit 77; fi
+if [[ "$BACKEND" != "executor" && ! -f "$ROM" ]]; then echo "SKIP: ROM not found: $ROM"; exit 77; fi
 if [[ -z "${DISK:-}" || ! -f "$DISK" ]]; then echo "SKIP: Disk not found: ${DISK:-<unset>}"; exit 77; fi
 
 PERL_SCRIPT="$GUEST_DIR/MacKeyboardTest.pl"
@@ -70,8 +80,8 @@ echo "Backend: $BACKEND  ROM: $ROM  Disk: $DISK  Port: $PORT"
 
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
-    --port "$PORT" --disk "$DISK" --extfs "$EXTFS_DIR" \
-    "$ROM" &>/tmp/mackbtest_$$.log &
+    --port "$PORT" "${DISK_FLAGS[@]}" --extfs "$EXTFS_DIR" \
+    "${EXTRA_FLAGS[@]}" ${ROM:+"$ROM"} &>/tmp/mackbtest_$$.log &
 EMU_PID=$!
 
 # Wait for HTTP
@@ -96,6 +106,14 @@ while true; do
     sleep 1
 done
 sleep 2  # Finder settle
+
+# BridgeAgent writes its heartbeat once it is running (Startup Items); the
+# boot phase can say Finder before that (Executor reports it as Finder
+# starts), so wait for the heartbeat before launching.
+for i in $(seq 1 $((TIMEOUT / 2))); do
+    compgen -G "$EXTFS_DIR/MacPhoenix/*/bridge_heartbeat" >/dev/null && break
+    sleep 1
+done
 
 # Launch the test script — opens MacPerl with our .pl, which becomes front
 # and starts blocking on <STDIN>. ADB keystrokes from /api/keypress will

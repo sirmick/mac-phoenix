@@ -7,6 +7,7 @@
 /* Forward declarations in MemoryMgr.h (DO NOT DELETE THIS LINE) */
 
 #include <base/common.h>
+#include <set>
 #include <MemoryMgr.h>
 #include <SegmentLdr.h>
 #include <QuickDraw.h>
@@ -497,6 +498,16 @@ void print_free(void)
 }
 #endif
 
+/* MacPhoenix: the zones InitZone made (guest addresses), so a stray
+   TheZone can be told from a real zone (HandleZone, below). */
+static std::set<uint32_t> init_zones;
+
+static bool known_zone(THz z)
+{
+    return z && (z == LM(SysZone) || z == LM(ApplZone) || z == ROMlib_pm_zone
+                 || init_zones.count(US_TO_SYN68K(z)));
+}
+
 void InitZone(GrowZoneUPP pGrowZone, int16_t cMoreMasters,
               Ptr limitPtr, THz zone)
 {
@@ -507,6 +518,7 @@ void InitZone(GrowZoneUPP pGrowZone, int16_t cMoreMasters,
      TODO: check mac carefully to see how they handle the final block */
 
     limitPtr = limitPtr - 8;
+    init_zones.insert(US_TO_SYN68K(zone));
 
     last_block = (block_header_t *)((char *)limitPtr - MIN_BLOCK_SIZE);
     first_block = ZONE_HEAP_DATA(zone);
@@ -894,8 +906,12 @@ THz HandleZone(Handle h)
        with ReallocateHandle and TheZone = 0, and the block lands in the PM
        heap. A zone nested in the PM heap (Finder's code heap) still owns
        its own handles, so TheZone wins when it holds the master pointer. */
+    /* TheZone has to be a real zone for that: Finder Scripting Extension
+       runs Finder's segment loader with TheZone set from its own A5 world,
+       which holds a temp handle ($22E0B8 on 7.5.5), not a zone; the master
+       pointers after it are the PM heap's. */
     else if(ROMlib_pm_zone && HANDLE_IN_ZONE_P(h, ROMlib_pm_zone)
-            && !(LM(TheZone) && LM(TheZone) != ROMlib_pm_zone
+            && !(LM(TheZone) && LM(TheZone) != ROMlib_pm_zone && known_zone(LM(TheZone))
                  && HANDLE_IN_ZONE_P(h, LM(TheZone))))
         pmzone_p = true;
     /*
