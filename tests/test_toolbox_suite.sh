@@ -32,10 +32,13 @@
 # app crashes in a way that depends on code layout, not on the test:
 # Files.GetWDInfo / CreateDeleteDir die before their first statement, an
 # identical copy in main.cpp passes, and reordering TEST_SOURCES stops the
-# app starting at all. On Executor, Retro68's startup (ApplyRelocations)
-# hits an F-line trap. Suspect Retro68 relocation of a ~1.6 MB binary;
-# next: debug the startup on Executor (--logtraps, snapshot), or split
-# into smaller apps per test file.
+# app starting at all. On Executor (either --core) the app never gets to
+# main: just before its LoadSeg, a Retro68 app installs LoadSeg/UnloadSeg/
+# Launch/Chain/ExitToShell patches ($A9F0-$A9F4, Retro68's segment loader)
+# pointing outside the test app's heap, and the app then runs into zeroed
+# memory (F-line). Next: find which process installs those (Executor swaps
+# the whole trap table per process; new ones start from traps_template),
+# then the UAE layout-dependent crash; or split into smaller apps.
 #
 #   --trace      record A-traps (--trace-atraps; snapshot on timeout)
 #   --logtraps   Executor's full trap log to the emulator log
@@ -48,6 +51,7 @@ PORT=18124
 BACKEND="uae"
 FILTER=""
 TRACE=()
+CORE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --timeout) TIMEOUT="$2"; shift 2 ;;
@@ -56,6 +60,7 @@ while [[ $# -gt 0 ]]; do
         --filter)  FILTER="$2"; shift 2 ;;
         --trace)   TRACE=(--trace-atraps); shift ;;
         --logtraps) TRACE=(--executor-logtraps); shift ;;
+        --core)    CORE="$2"; shift 2 ;;   # CPU core: uae | musashi
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -114,7 +119,7 @@ FLAGS=(--disk "$DISK")
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
     --port "$PORT" --network none --extfs "$EXTFS_DIR" \
-    "${FLAGS[@]}" "${TRACE[@]}" ${ROM:+"$ROM"} &>"$LOG" &
+    "${FLAGS[@]}" "${TRACE[@]}" ${CORE:+--core "$CORE"} ${ROM:+"$ROM"} &>"$LOG" &
 EMU_PID=$!
 
 for i in $(seq 1 40); do
