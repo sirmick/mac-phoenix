@@ -761,29 +761,39 @@ INTEGER Executor::C_TypeSelectCompare(TypeSelectRecord *tsr, ScriptCode testStri
 }
 
 /* Normal mode: the item whose string sorts first at or after the
-   keystrokes; next/previous mode: the neighbour of the matching item. The
-   callback returns true to stop the scan early. */
+   keystrokes (the last item if none does); next/previous mode: the
+   neighbour of that item. Items count from 1, as the callback takes them
+   (Finder's indexes its list with item - 1), and so does the result; 0
+   means no item. The callback returns true to go on (Finder's always
+   does), false to stop. */
 INTEGER Executor::C_TypeSelectFindItem(TypeSelectRecord *tsr, INTEGER listSize, INTEGER selectMode,
                                        IndexToStringUPP getStringProc, void *getStringRefCon)
 {
-    INTEGER best = -1;
-    Str255 best_str;
-    for(INTEGER item = 0; item < listSize; item++)
+    INTEGER best = 0, last = 0;
+    Str255 best_str, last_str;
+    for(INTEGER item = 1; item <= listSize; item++)
     {
         GUEST<ScriptCode> script = smSystemScript;
         GUEST<StringPtr> str = nullptr;
-        bool stop = getStringProc(item, &script, &str, getStringRefCon);
+        bool more = getStringProc(item, &script, &str, getStringRefCon);
         StringPtr s = str;
         if(s && C_TypeSelectCompare(tsr, script, s) <= 0
-           && (best < 0 || RelString(s, best_str, false, false) < 0))
+           && (best == 0 || RelString(s, best_str, false, false) < 0))
         {
             best = item;
             memcpy(best_str, s, s[0] + 1);
         }
-        if(stop)
+        if(s && (last == 0 || RelString(s, last_str, false, false) > 0))
+        {
+            last = item;
+            memcpy(last_str, s, s[0] + 1);
+        }
+        if(!more)
             break;
     }
-    if(best >= 0 && selectMode != 0)
-        best = std::max<INTEGER>(0, std::min<INTEGER>(listSize - 1, best + selectMode));
+    if(best == 0)
+        best = last;
+    if(best != 0 && selectMode != 0)
+        best = std::max<INTEGER>(1, std::min<INTEGER>(listSize, best + selectMode));
     return best;
 }
