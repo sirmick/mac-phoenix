@@ -2537,6 +2537,14 @@ class MacPhoenixClient {
         };
         window.addEventListener('resize', invalidateMouseCache);
         document.addEventListener('fullscreenchange', invalidateMouseCache);
+        // ... and on any layout change that moves the display without
+        // resizing the window (closing the side panel re-centres it).
+        if (!this._mouseRectObserver && window.ResizeObserver) {
+            this._mouseRectObserver = new ResizeObserver(() => { this.cachedMouseRect = null; });
+            const section = document.getElementById('video-section');
+            if (section) this._mouseRectObserver.observe(section);
+            this._mouseRectObserver.observe(displayElement);
+        }
 
         // Mouse buttons - work in both modes
         const handleMouseDown = (e) => {
@@ -3576,6 +3584,7 @@ function toggleDebugPanel() {
     if (panel) {
         panel.classList.toggle('collapsed');
         if (btn) btn.classList.toggle('active', !panel.classList.contains('collapsed'));
+        if (client) client.cachedMouseRect = null;
     }
 }
 
