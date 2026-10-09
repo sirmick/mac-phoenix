@@ -716,6 +716,17 @@ void WebRTCServer::send_video_frame(const uint8_t* data, size_t size, bool is_ke
 
                 ws->send(frame_with_header);
                 sent_to++;
+
+                // After a (re)start the client's canvas holds the previous
+                // backend's pixels: keep asking for a full frame until one
+                // starts at the top-left and spans the width (a full frame
+                // may arrive as horizontal strips; the first one qualifies).
+                if (peer->needs_first_frame) {
+                    if (dx == 0 && dy == 0 && dw == fw)
+                        peer->needs_first_frame = false;
+                    else
+                        video::g_request_keyframe.store(true, std::memory_order_release);
+                }
             } else {
                 // H.264/VP9: send via RTP video track
                 if (!peer->video_track || !peer->video_track->isOpen()) {

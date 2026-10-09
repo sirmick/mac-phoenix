@@ -301,6 +301,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
     int ipc_notify_fd = -1;
     bool ipc_logged = false;
     bool ipc_was_connected = false;  // Track IPC transitions for reset
+    IPCBuffer* ipc_last_shm = nullptr;  // SHM of the child we last read from
 
     // Initialize encoder with codec from config
     CodecType current_codec = CodecType::PNG;  // Default
@@ -372,18 +373,32 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
         // The atomic pointer check is lock-free. Poll/sleep happens
         // outside the shared lock so disconnect() isn't blocked for 16ms.
         IPCBuffer* ipc_shm = ipc_shm_ptr ? ipc_shm_ptr->load(std::memory_order_acquire) : nullptr;
+        // A new child (restart, backend switch) gets a fresh SHM mapping,
+        // notify fd and frame counter. Forget the old child's last frame so
+        // the next one goes out whole instead of diffed against stale pixels.
+        auto reset_for_new_child = [&](const char* why) {
+            fprintf(stderr, "[VideoEncoder] IPC %s — resetting encoder state\n", why);
+            ipc_last_frame_count = 0;
+            ipc_notify_fd = -1;
+            ipc_logged = false;
+            have_prev_frame = false;
+            encoder_initialized = false;
+            g_request_keyframe.store(true, std::memory_order_release);
+        };
         if (ipc_shm) {
-            // Detect subprocess restart: SHM went away and came back
+            // Detect subprocess restart. The null gap between two children
+            // is short enough to miss, so a changed mapping or notify fd
+            // counts as a restart too.
+            int published_fd = ipc_notify_fd_ptr
+                ? ipc_notify_fd_ptr->load(std::memory_order_acquire) : -1;
             if (!ipc_was_connected) {
-                fprintf(stderr, "[VideoEncoder] IPC (re)connected — resetting encoder state\n");
-                ipc_last_frame_count = 0;
-                ipc_notify_fd = -1;
-                ipc_logged = false;
-                have_prev_frame = false;
-                encoder_initialized = false;
-                ipc_was_connected = true;
-                g_request_keyframe.store(true, std::memory_order_release);
+                reset_for_new_child("(re)connected");
+            } else if (ipc_shm != ipc_last_shm
+                       || (ipc_notify_fd >= 0 && published_fd != ipc_notify_fd)) {
+                reset_for_new_child("child replaced");
             }
+            ipc_was_connected = true;
+            ipc_last_shm = ipc_shm;
 
             // Pick up parent's notify-socket fd on first IPC connection
             if (ipc_notify_fd < 0 && ipc_notify_fd_ptr) {
@@ -423,6 +438,11 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             }
 
             uint64_t fc = IPC_ATOMIC_LOAD(ipc_shm->frame_count);
+            if (fc < ipc_last_frame_count) {
+                // Counter went backwards: a new child reusing the same
+                // mapping address. Its frames are all new.
+                reset_for_new_child("frame counter restarted");
+            }
             if (fc <= ipc_last_frame_count) continue;
             ipc_last_frame_count = fc;
 
