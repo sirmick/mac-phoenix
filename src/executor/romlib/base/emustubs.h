@@ -90,6 +90,8 @@ RAW_68K_FUNCTION(Key2Trans);
 RAW_68K_FUNCTION(IODone);
 /* MacPhoenix: the end of the jGNEFilter chain. */
 RAW_68K_FUNCTION(GNEFilterEnd);
+/* MacPhoenix: the Component Manager (component.cpp). */
+RAW_68K_TRAP(ComponentDispatch, 0xA82A);
 RAW_68K_TRAP(Fix2X, 0xA843);
 RAW_68K_TRAP(Frac2X, 0xA845);
 RAW_68K_TRAP(SCSIDispatch, 0xA815);

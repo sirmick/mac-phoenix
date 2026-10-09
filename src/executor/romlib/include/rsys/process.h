@@ -41,6 +41,8 @@ extern void process_capture_template();
 extern void ROMlib_process_register_state(void *p, size_t n);
 /* Is the current process one that runs on its own thread (not the first)? */
 extern bool ROMlib_process_has_thread();
+/* Did the launcher post the current process's opening Apple event? */
+extern bool ROMlib_process_open_event_posted();
 /* Called on every event call: where processes switch. */
 extern void ROMlib_process_event_hook();
 /* LaunchApplication with launchContinue: create the process. */
@@ -77,5 +79,7 @@ extern void ROMlib_desktop_layer_invalidate(RgnHandle rgn);
 
 /* The current process's PPC port name (its high-level events' sender). */
 extern void ROMlib_process_port_name(PPCPortRec *port);
+/* That process's port; false if there is no such process. */
+extern bool ROMlib_process_port_name_of(const ProcessSerialNumber *psn, PPCPortRec *port);
 }
 #endif /* !defined (__rsys_process_h__) */

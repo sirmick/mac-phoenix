@@ -307,6 +307,35 @@ static Boolean OSEventCommon(INTEGER evmask, EventRecord *eventp,
      * is a good place to check for timer interrupts, etc. */
     syncint_check_interrupt();
 
+    /* MacPhoenix: 'oapp' is a high-level event in Apple's wire format,
+       posted at the first event call as 7.5.5's Process Manager does, so
+       whichever Apple Event Manager the guest runs (Executor's or the
+       PACK 8 AppleScript installs) reads it; it waits in the queue until
+       the application asks for high-level events. */
+    if(send_application_open_aevt_p)
+    {
+        GUEST<int16_t> dummy, count_s;
+        CountAppFiles(&dummy, &count_s);
+        if(count_s == 0)
+        {
+            send_application_open_aevt_p = false;
+            struct
+            {
+                GUEST<OSType> signature;
+                GUEST<int16_t> major, minor;
+                GUEST<OSType> marker;
+            } msg = { "aevt"_4, 1, 1, ";;;;"_4 };
+            EventRecord evt = {};
+            evt.what = kHighLevelEvent;
+            evt.message = "aevt"_4;
+            GUEST<uint32_t> id = "oapp"_4;
+            memcpy(&evt.where, &id, sizeof id);
+            ProcessSerialNumber psn;
+            GetCurrentProcess(&psn);
+            PostHighLevelEvent(&evt, (Ptr)&psn, 0, (Ptr)&msg, sizeof msg,
+                               0x8000 /* receiverIDisPSN */);
+        }
+    }
     if(send_application_open_aevt_p
        && application_accepts_open_app_aevt_p)
     {

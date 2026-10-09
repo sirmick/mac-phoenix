@@ -20,6 +20,8 @@
 #include <file/file.h>
 #include <mman/mman.h>
 #include <rsys/extensions.h>
+#include <rsys/component.h>
+#include <util/macstrings.h>
 
 #include <cmrc/cmrc.hpp>
 
@@ -111,9 +113,21 @@ std::vector<Item> folder_files(INTEGER vref, LONGINT dirid)
     return out;
 }
 
+/* A Mac Roman name as UTF-8, as the allow list is written. */
 std::string to_string(ConstStringPtr p)
 {
-    return std::string((const char *)p + 1, p[0]);
+    std::string out;
+    for(char32_t c : toUnicode(mac_string_view(p)))
+    {
+        if(c < 0x80)
+            out += (char)c;
+        else if(c < 0x800)
+            out += (char)(0xC0 | c >> 6), out += (char)(0x80 | (c & 0x3F));
+        else
+            out += (char)(0xE0 | c >> 12), out += (char)(0x80 | (c >> 6 & 0x3F)),
+                out += (char)(0x80 | (c & 0x3F));
+    }
+    return out;
 }
 
 /* Call one INIT: its code, as the loader does (JSR with A0 at the code). */
@@ -286,12 +300,44 @@ static void sort_out_disabled(const std::set<std::string> &allow)
     }
 }
 
+/* The components of the files of type 'thng' in Extensions, which the
+   System registers itself after the extensions have run (7.5.5: 'gpch'
+   667). Registering runs no code unless a component asks for its
+   register message. */
+static void register_component_files()
+{
+    GUEST<INTEGER> vref;
+    GUEST<LONGINT> dirid;
+    if(FindFolder(-32768 /* kOnSystemDisk */, "extn"_4, false, &vref, &dirid) != noErr)
+        return;
+    for(const Item &it : folder_files(vref, dirid))
+    {
+        if(it.type != "thng"_4)
+            continue;
+        Str63 name;
+        memcpy(name, it.name, it.name[0] + 1);
+        INTEGER rn = HOpenResFile(vref, dirid, name, fsRdPerm);
+        if(rn == -1)
+            continue;
+        int32_t n = ROMlib_register_components(rn, true);
+        fprintf(stderr, "[Executor] components: %s registered %d\n", to_string(it.name).c_str(), n);
+        CloseResFile(rn);
+    }
+}
+
 void Executor::ROMlib_load_extensions()
 {
+    /* The System file's own components first, as its boot code does. */
+    int32_t n = ROMlib_register_components(LM(SysMap), true);
+    fprintf(stderr, "[Executor] components: System registered %d\n", n);
+
     std::set<std::string> allow = load_allow_list();
     sort_out_disabled(allow);
     if(allow.empty())
+    {
+        register_component_files();
         return;
+    }
 
     struct Where
     {
@@ -313,4 +359,5 @@ void Executor::ROMlib_load_extensions()
                 run_file(vref, dirid, it);
         }
     }
+    register_component_files();
 }

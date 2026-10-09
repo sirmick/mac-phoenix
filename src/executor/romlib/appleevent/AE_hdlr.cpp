@@ -15,9 +15,20 @@
 
 using namespace Executor;
 
+/* MacPhoenix: Executor's own handler tables. ExpandMem's Apple event
+   fields (+$154 and +$17C) belong to the guest's Apple Event Manager:
+   AppleScript installs Apple's PACK 8, which keeps its own (differently
+   laid out) tables there and loops forever on Executor's. */
+static AE_info_t *ae_private;
+
+AE_info_t *Executor::ROMlib_ae_private()
+{
+    return ae_private;
+}
+
 inline AE_zone_tables_h get_zone_tables(bool system_p)
 {
-    auto info = LM(AE_info);
+    auto info = ae_private;
     return system_p ? info->system_zone_tables : info->appl_zone_tables;
 }
 #define hdlr_table(system_p, class) (*get_zone_tables(system_p))->class##_hdlr_table
@@ -27,8 +38,18 @@ void Executor::AE_init(void)
     AE_info_t *info;
     OSErr err;
 
+    /* ExpandMem, as a real 7.5.5 boot has it: version $0144, 648 bytes. */
+    enum { expandmem_size = 0x288 };
+    static_assert(sizeof(AE_info_t) <= expandmem_size);
+    AE_info_t *em = (AE_info_t *)NewPtrSysClear(expandmem_size);
+    *(GUEST<uint16_t> *)em = 0x0144;
+    *(GUEST<uint32_t> *)((char *)em + 2) = expandmem_size;
+    em->sys_heap_reserve = 0x10000;
+    /* MacPhoenix: ExpandMem's key cache, as the Script Manager sets it. */
+    em->emKeyCache = ROMlib_kchr_ptr();
+    LM(AE_info) = em;
+
     info = (AE_info_t *)NewPtrSysClear(sizeof *info);
-    info->sys_heap_reserve = 0x10000;
 
     TheZoneGuard guard(LM(SysZone));
 
@@ -50,10 +71,7 @@ void Executor::AE_init(void)
                                false,
                                &(*zone_tables)->special_hdlr_table);
     info->system_zone_tables = zone_tables;
-    /* MacPhoenix: ExpandMem's key cache, as the Script Manager sets it. */
-    info->emKeyCache = ROMlib_kchr_ptr();
-
-    LM(AE_info) = info;
+    ae_private = info;
 }
 
 void Executor::AE_reinit(void)
@@ -61,7 +79,7 @@ void Executor::AE_reinit(void)
     AE_info_t *info;
     OSErr err;
 
-    info = LM(AE_info);
+    info = ae_private;
 
     TheZoneGuard guard(LM(ApplZone));
 

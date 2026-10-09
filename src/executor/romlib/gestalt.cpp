@@ -170,6 +170,9 @@ static gestaltentry_t gtable[] = {
     { "dplv"_4, 0x00020006 },
     { "hdwr"_4, 0x0008489D },
     { "vm  "_4, 0 },
+    /* The Component Manager's version (component.cpp; on 7.5.5 a Gestalt
+       function calling ComponentDispatch $19). 3.0 is a guess. */
+    { "cpnt"_4, 0x00030000 },
 
 #if defined(ORIGINAL_QD)
     {

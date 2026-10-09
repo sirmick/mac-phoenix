@@ -119,6 +119,33 @@ dispatchers:
           current process +0x15C (-600 without a current process). Finder
           passes its drag-hook record when Gestalt 'os  ' bit 10 is set and
           DragDispatch $C301 succeeded.
+  - trap: 0xA82A
+    name: ComponentDispatch
+    comment: >
+      Component Manager. Universal Interfaces names most selectors; these
+      are private ones 7.5.5 code calls.
+    selectors:
+      - value: 0x19
+        name: GetComponentMgrVersion
+        status: guess
+        source: 7.5.5 Gestalt 'cpnt' function (ext-755 RAM $7B24A)
+        comment: >
+          No parameters, returns a long: the version Gestalt 'cpnt'
+          reports. Executor answers $00030000 (a guess).
+      - value: 0x16
+        name: RegisterSystemComponent
+        status: placeholder
+        source: ext-755 trace, System 'boot' 3 (27 calls)
+        comment: >
+          The System's boot code registers its own components with this;
+          Executor registers the System file's 'thng's itself.
+      - value: 0x22
+        name: FinishSystemComponents
+        status: guess
+        source: ext-755 trace, System 'boot' 3 (1 call)
+        comment: >
+          Called once by the System's boot code after its 27 $16 calls,
+          before the extensions load; the name only says where it sits.
   - trap: 0xA829
     name: LayerDispatch
     comment: >

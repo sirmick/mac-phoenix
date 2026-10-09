@@ -401,9 +401,12 @@
 - enum:
     values:
       - name: noOutstandingHLE
-        value: -607
-      - name: bufferIsSmall
         value: -608
+        comment: |
+          MacPhoenix: was -607, swapped with bufferIsSmall (Universal
+          Interfaces MacErrors.h: bufferIsSmall -607, noOutstandingHLE -608).
+      - name: bufferIsSmall
+        value: -607
 
 # ####
 

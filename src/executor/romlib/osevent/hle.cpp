@@ -10,7 +10,10 @@
 #include <rsys/process.h>
 #include <ProcessMgr.h>
 #include <mman/mman.h>
+#include <AppleEvents.h>
 #include <base/functions.impl.h>
+
+#include <algorithm>
 
 using namespace Executor;
 
@@ -22,12 +25,14 @@ typedef struct hle_q_elt
     struct hle_q_elt *next;
     HighLevelEventMsgPtr hle_msg;
     ProcessSerialNumber to;
+    ProcessSerialNumber from;
 } hle_q_elt_t;
 
 static hle_q_elt_t *hle_q;
 
-/* event q element currently being processed (per process) */
+/* event q element currently being processed, and its sender (per process) */
 static HighLevelEventMsgPtr current_hle_msg;
+static ProcessSerialNumber current_hle_from;
 
 static bool for_current(const hle_q_elt_t *t)
 {
@@ -66,6 +71,9 @@ void Executor::hle_init(void)
     hle_q = nullptr;
     current_hle_msg = nullptr;
     ROMlib_process_register_state(&current_hle_msg, sizeof current_hle_msg);
+    ROMlib_process_register_state(&current_hle_from, sizeof current_hle_from);
+    /* Whether this process still has its opening Apple event to get. */
+    ROMlib_process_register_state(&send_application_open_aevt_p, sizeof send_application_open_aevt_p);
 }
 
 void Executor::hle_reinit(void)
@@ -99,6 +107,7 @@ bool Executor::hle_get_event(EventRecord *evt, bool remflag)
         }
 
         current_hle_msg = t->hle_msg;
+        current_hle_from = t->from;
         *evt = current_hle_msg->theMsgEvent;
 
         if(remflag)
@@ -123,23 +132,27 @@ OSErr Executor::C_AcceptHighLevelEvent(TargetID *sender_id_return,
     if(current_hle_msg == nullptr)
         return noOutstandingHLE;
 
-    /* MacPhoenix: the sender is this machine's current process (one
-       process for now); Finder ignores events whose sender has a
-       location, i.e. come from another machine. */
+    /* MacPhoenix: the sender is a process on this machine (no location;
+       Finder ignores events from another machine), the receiver us. */
     if(sender_id_return)
     {
         memset(sender_id_return, 0, sizeof *sender_id_return);
-        ROMlib_process_port_name(&sender_id_return->name);
-        sender_id_return->recvrName = sender_id_return->name;
+        if(!ROMlib_process_port_name_of(&current_hle_from, &sender_id_return->name))
+            ROMlib_process_port_name(&sender_id_return->name);
+        ROMlib_process_port_name(&sender_id_return->recvrName);
     }
     *refcon_return = current_hle_msg->userRefCon;
 
-    if(*msg_buf_length_return < current_hle_msg->msgLength)
+    /* A buffer too small gets as much of the message as fits (Apple's
+       Apple Event Manager reads the 'aevt' signature from a 4-byte one,
+       then asks again with the length) and bufferIsSmall. */
+    uint32_t room = *msg_buf_length_return;
+    if(room < current_hle_msg->msgLength)
         retval = bufferIsSmall;
 
-    if(retval == noErr)
+    if(msg_buf)
         memcpy(msg_buf, guest_cast<Ptr>(current_hle_msg->theMsgEvent.when),
-               current_hle_msg->msgLength);
+               std::min<uint32_t>(room, current_hle_msg->msgLength));
 
     *msg_buf_length_return = current_hle_msg->msgLength;
 
@@ -222,7 +235,10 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
     }
     memcpy(msg_buf_copy, msg_buf, msg_length);
     hle_msg->theMsgEvent.when = guest_cast<int32_t>(msg_buf_copy);
-    hle_msg->theMsgEvent.modifiers = -1;
+    /* MacPhoenix: was -1. Apple's Apple Event Manager (PACK 8) reads
+       modifier bits of a high-level event: with bit 3 set it takes the
+       message's first long for its size. Plain messages have none. */
+    hle_msg->theMsgEvent.modifiers = 0;
 
     hle_msg->userRefCon = refcon;
     hle_msg->postingOptions = post_options;
@@ -249,6 +265,7 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
     elt->next = nullptr;
     elt->hle_msg = hle_msg;
     elt->to = to;
+    GetCurrentProcess(&elt->from);
     retval = noErr;
 
 done:

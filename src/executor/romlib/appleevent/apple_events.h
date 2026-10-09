@@ -5,6 +5,8 @@ namespace Executor
 
 extern void AE_init(void);
 extern void AE_reinit(void);
+/* MacPhoenix: Executor's own handler tables (not in ExpandMem). */
+extern AE_info_t *ROMlib_ae_private();
 
 struct inline_desc_t
 {

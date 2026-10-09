@@ -76,6 +76,54 @@ OSErr Executor::C_AEProcessAppleEvent(EventRecord *evtrec)
     DESC_TYPE(evt) = typeAppleEvent;
     DESC_DATA(evt) = evt_data;
 
+    /* MacPhoenix: a message in Apple's wire format ('aevt', version 1.1,
+       attributes, ';;;;', parameters: keyword, type, size, data) -- what
+       the Process Manager and Finder post (launch parameters, 'amis') and
+       Apple's own PACK 8 sends. Rebuild it as one of ours. Parameters that
+       are lists or records aren't decoded yet. */
+    if(evt_data_size >= 12 && *(GUEST<OSType> *)*evt_data == "aevt"_4)
+    {
+        ProcessSerialNumber self;
+        GetCurrentProcess(&self);
+        AEAddressDesc *target = (AEAddressDesc *)alloca(sizeof *target);
+        AECreateDesc(typeProcessSerialNumber, (Ptr)&self, sizeof self, target);
+        AppleEvent *rebuilt = (AppleEvent *)alloca(sizeof *rebuilt);
+        GUEST<uint32_t> id;
+        memcpy(&id, &evtrec->where, sizeof id);
+        err = AECreateAppleEvent(evtrec->message, (uint32_t)id, target, -1, -1, rebuilt);
+        AEDisposeDesc(target);
+        if(err != noErr)
+        {
+            DisposeHandle(evt_data);
+            AE_RETURN_ERROR(err);
+        }
+        HLockGuard guard(evt_data);
+        const uint8_t *m = (const uint8_t *)*evt_data;
+        int32_t size = evt_data_size, off = 8;
+        bool params = false;
+        while(off + 4 <= size)
+        {
+            uint32_t key = (m[off] << 24) | (m[off + 1] << 16) | (m[off + 2] << 8) | m[off + 3];
+            if(key == ";;;;"_4)
+            {
+                params = true;
+                off += 4;
+                continue;
+            }
+            if(off + 12 > size)
+                break;
+            uint32_t type = (m[off + 4] << 24) | (m[off + 5] << 16) | (m[off + 6] << 8) | m[off + 7];
+            int32_t len = (m[off + 8] << 24) | (m[off + 9] << 16) | (m[off + 10] << 8) | m[off + 11];
+            if(len < 0 || off + 12 + len > size)
+                break;
+            if(params && type != "list"_4 && type != "reco"_4)
+                AEPutParamPtr(rebuilt, key, type, (Ptr)(m + off + 12), len);
+            off += 12 + ((len + 1) & ~1);
+        }
+        DisposeHandle(evt_data);
+        *evt = *rebuilt;
+    }
+
     err = AEGetAttributePtr(evt, keyEventClassAttr,
                             typeType, &dummy_type,
                             (Ptr)&event_class_s, sizeof event_class_s,

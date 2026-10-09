@@ -29,6 +29,8 @@ using namespace Executor;
 #include <VRetraceMgr.h>
 #include <rsys/launch.h>
 #include <rsys/desk.h>
+#include <rsys/component.h>
+#include "appleevent/apple_events.h"
 #include <osevent/osevent.h>
 #include <res/resource.h>
 #include <syn68k_public.h>
@@ -105,7 +107,8 @@ struct process_info
     std::vector<uint8_t> cpu;
     std::vector<uint8_t> host;
     std::vector<syn68k_addr_t> traps;
-    AE_zone_tables_h ae_tables = nullptr;
+    AE_zone_tables_h ae_tables = nullptr;       /* Executor's Apple Event Manager */
+    AE_zone_tables_h guest_ae_tables = nullptr; /* ExpandMem+$154: the guest's */
 
     /* Every process but the first: its thread and what it runs. */
     bool own_thread = false;
@@ -115,6 +118,8 @@ struct process_info
     /* A desk accessory's process (LaunchDeskAccessory): app is its file,
        da_name its DRVR (empty: the file's first). */
     bool desk_accessory = false;
+    /* Its launcher supplied the opening Apple event (see process_launch). */
+    bool posted_open_event = false;
     Str255 da_name = { 0 };
 
     /* Left by the process that quit and switched to us: screen to redraw,
@@ -321,8 +326,10 @@ static void save_world(process_info_t *p)
     p->host.clear();
     for(const host_var &v : host_vars())
         p->host.insert(p->host.end(), (uint8_t *)v.p, (uint8_t *)v.p + v.n);
+    if(ROMlib_ae_private())
+        p->ae_tables = ROMlib_ae_private()->appl_zone_tables;
     if(LM(AE_info))
-        p->ae_tables = LM(AE_info)->appl_zone_tables;
+        p->guest_ae_tables = LM(AE_info)->appl_zone_tables;
 }
 
 static void restore_world(process_info_t *p)
@@ -340,8 +347,10 @@ static void restore_world(process_info_t *p)
             memset(v.p, 0, v.n);
         off += v.n;
     }
+    if(ROMlib_ae_private())
+        ROMlib_ae_private()->appl_zone_tables = p->ae_tables;
     if(LM(AE_info))
-        LM(AE_info)->appl_zone_tables = p->ae_tables;
+        LM(AE_info)->appl_zone_tables = p->guest_ae_tables;
 }
 
 /* A new process's world: low memory and CPU as the first process had them
@@ -353,6 +362,8 @@ static void fresh_world(process_info_t *p)
     restore_traps(traps_template);
     for(const host_var &v : host_vars())
         memset(v.p, 0, v.n);
+    if(ROMlib_ae_private())
+        ROMlib_ae_private()->appl_zone_tables = nullptr;
     if(LM(AE_info))
         LM(AE_info)->appl_zone_tables = nullptr;
 }
@@ -883,6 +894,7 @@ static void exit_current()
         pending_front = nullptr;
     forget_process(me);
     ROMlib_hle_forget(&me->serial_number);
+    ROMlib_components_process_exit(&me->serial_number);
     me->state = process_info_t::dead;
     reap_list.push_back(me);
 
@@ -928,6 +940,11 @@ static void process_body(process_info_t *p)
     {
     }
     exit_current();
+}
+
+bool Executor::ROMlib_process_open_event_posted()
+{
+    return current_process_info && current_process_info->posted_open_event;
 }
 
 bool Executor::ROMlib_process_has_thread()
@@ -1069,6 +1086,24 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     p->launcher = current_process_info->serial_number;
     pending_launch = p;
     lpbp->launchProcessSN = p->serial_number;
+
+    /* As 7.5.5's Process Manager: the launcher's AppParameters (Finder's
+       'oapp'/'odoc', in Apple event wire format) become the new process's
+       first high-level event: {EventRecord, refcon.l, length.l, message}. */
+    if(Ptr ap = (Ptr)lpbp->launchAppParameters)
+    {
+        const uint8_t *b = (const uint8_t *)ap;
+        if(((b[0] << 8) | b[1]) == kHighLevelEvent)
+        {
+            EventRecord evt = *(EventRecord *)ap;
+            int32_t refcon = *(GUEST<int32_t> *)(ap + 16);
+            int32_t length = *(GUEST<int32_t> *)(ap + 20);
+            ProcessSerialNumber to = p->serial_number; /* guest-visible */
+            PostHighLevelEvent(&evt, (Ptr)&to, refcon, ap + 24, length,
+                               0x8000 /* receiverIDisPSN */);
+            p->posted_open_event = true;
+        }
+    }
     return noErr;
 }
 
@@ -1369,38 +1404,60 @@ OSErr Executor::C_WakeUpProcess(ProcessSerialNumber *serial_number)
 
 /* MacPhoenix: a process's PPC port, as the Process Manager registers it:
    named after the process, by creator and type ('ep01'). */
-void Executor::ROMlib_process_port_name(PPCPortRec *port)
+/* A process's PPC port: its name, by creator and type 'ep01'. */
+static void port_name_of(process_info_t *p, PPCPortRec *port)
 {
     memset(port, 0, sizeof *port);
     port->nameScript = 0; /* smRoman */
-    int len = std::min<int>(LM(CurApName)[0], 32);
+    ConstStringPtr name = p == current_process_info || !p->name[0] ? (ConstStringPtr)LM(CurApName) : p->name;
+    int len = std::min<int>(name[0], 32);
     port->name[0] = len;
-    memcpy(&port->name[1], &LM(CurApName)[1], len);
+    memcpy(&port->name[1], &name[1], len);
     port->portKindsSelector = 1; /* ppcByCreatorAndType */
-    port->u.port.creator = current_process_info ? current_process_info->signature : 0;
+    port->u.port.creator = p->signature;
     port->u.port.type = "ep01"_4;
+}
+
+void Executor::ROMlib_process_port_name(PPCPortRec *port)
+{
+    process_bootstrap();
+    port_name_of(current_process_info, port);
+}
+
+bool Executor::ROMlib_process_port_name_of(const ProcessSerialNumber *psn, PPCPortRec *port)
+{
+    for(process_info_t *p = process_info_list; p; p = p->next)
+        if(PSN_EQ_P(*psn, p->serial_number))
+        {
+            port_name_of(p, port);
+            return true;
+        }
+    return false;
 }
 
 OSErr Executor::C_GetProcessSerialNumberFromPortName(
     PPCPortPtr port_name, ProcessSerialNumber *serial_number)
 {
-    PPCPortRec ours;
-    ROMlib_process_port_name(&ours);
-    if(!current_process_info
-       || !EqualString(port_name->name, ours.name, true, true))
-        return procNotFound;
-    *serial_number = current_process_info->serial_number;
-    return noErr;
+    for(process_info_t *p = process_info_list; p; p = p->next)
+    {
+        PPCPortRec theirs;
+        port_name_of(p, &theirs);
+        if(EqualString(port_name->name, theirs.name, true, true))
+        {
+            *serial_number = p->serial_number;
+            return noErr;
+        }
+    }
+    return procNotFound;
 }
 
 OSErr Executor::C_GetPortNameFromProcessSerialNumber(
     PPCPortPtr port_name, ProcessSerialNumber *serial_number)
 {
-    if(!current_process_info
-       || !PSN_EQ_P(*serial_number, current_process_info->serial_number))
-        return procNotFound;
-    ROMlib_process_port_name(port_name);
-    return noErr;
+    ProcessSerialNumber psn = *serial_number;
+    if(psn.highLongOfPSN == 0 && psn.lowLongOfPSN == kCurrentProcess)
+        GetCurrentProcess(&psn);
+    return ROMlib_process_port_name_of(&psn, port_name) ? noErr : procNotFound;
 }
 
 /* ### temp memory spew; these go elsewhere */
