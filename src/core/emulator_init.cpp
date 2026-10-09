@@ -24,6 +24,7 @@
 #include "main.h"
 #include "video.h"
 #include "emulator_config.h"
+#include "cpu_m68k.h"
 #include "machine_profile.h"
 #include "xpram.h"
 #include "timer.h"
@@ -155,7 +156,7 @@ bool init_cpu_subsystem(const char* cpu_backend)
     if (strcmp(cpu_backend, "uae") != 0) {
         fprintf(stderr, "[Init] Unknown m68k backend '%s', using UAE\n", cpu_backend);
     }
-    cpu_uae_install(&g_platform);
+    cpu_m68k_install(&g_platform, cpu_backend, false);
 
     fprintf(stderr, "[Init] CPU Backend: %s\n", g_platform.cpu_name);
 

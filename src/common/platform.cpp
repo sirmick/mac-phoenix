@@ -85,10 +85,8 @@ void platform_init(void)
 	g_platform.sys_cd_scan = platform_unix_sys_cd_scan;
 	g_platform.sys_cd_read_toc = platform_unix_sys_cd_read_toc;
 
-	// EmulOp/Trap handlers (NULL by default - set by CPU backend or main)
-	g_platform.m68k_emulop_handler = nullptr;
+	// PPC EmulOp handler (NULL by default - set by the KPX backend)
 	g_platform.ppc_emulop_handler = nullptr;
-	g_platform.trap_handler = nullptr;
 
 	// Code cache flush (NULL by default - set by JIT backends)
 	g_platform.flush_code_cache = nullptr;

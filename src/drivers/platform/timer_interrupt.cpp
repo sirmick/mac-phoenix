@@ -69,13 +69,10 @@ static void guest_tick(void)
 	// Set 60Hz interrupt flag
 	SetInterruptFlag(INTFLAG_60HZ);
 
-	// Trigger CPU-level interrupt
-	if (g_platform.cpu_trigger_interrupt) {
-		int level = intlev();
-		if (level > 0) {
-			g_platform.cpu_trigger_interrupt(level);
-		}
-	}
+	// Trigger CPU-level interrupt. The level is a hint; the backend reads
+	// InterruptFlags itself (and consumes the NMI flag when it takes it).
+	if (g_platform.cpu_trigger_interrupt)
+		g_platform.cpu_trigger_interrupt((InterruptFlags & INTFLAG_NMI) ? 7 : 1);
 
 	interrupt_count++;
 }
@@ -173,8 +170,6 @@ void setup_timer_interrupt(void)
  */
 uint64_t poll_timer_interrupt(void)
 {
-	if (g_platform.m68k_poll_interrupts)
-		g_platform.m68k_poll_interrupts();
 	return 0;
 }
 

@@ -30,7 +30,8 @@
 #include "main.h"
 #include "emul_op.h"
 #include "platform.h"
-#include "../uae_wrapper.h"	// For intlev(), PendingInterrupt
+#include "../uae_wrapper.h"	// For PendingInterrupt
+#include "uae_host_hooks.h"
 #include "../cpu_trace.h"	// For interrupt logging
 
 #include "m68k.h"
@@ -1261,33 +1262,20 @@ void m68k_emulop_return(void)
 	quit_program = true;
 }
 
+struct UaeHostHooks uae_host_hooks = { nullptr, nullptr, nullptr };
+
 void m68k_emulop(uae_u32 opcode)
 {
-	/* Platform handler overrides UAE built-in EmulOp dispatch.
-	 * NULL is valid for UAE backend (uses built-in EmulOp below).
-	 * Non-UAE backends MUST set this. */
-	if (g_platform.m68k_emulop_handler) {
-		g_platform.m68k_emulop_handler((uint16_t)opcode, true);
-		return;
+	if (!uae_host_hooks.emulop) {
+		fprintf(stderr, "uae: EmulOp %04x with no host\n", (unsigned)opcode);
+		abort();
 	}
+	uae_host_hooks.emulop((uint16_t)opcode);
+}
 
-	/* UAE built-in EmulOp handling (only valid when UAE is the active backend) */
-	struct M68kRegisters r;
-	int i;
-
-	for (i=0; i<8; i++) {
-		r.d[i] = m68k_dreg(regs, i);
-		r.a[i] = m68k_areg(regs, i);
-	}
-	MakeSR();
-	r.sr = regs.sr;
-	m68k::EmulOp(opcode, &r);
-	for (i=0; i<8; i++) {
-		m68k_dreg(regs, i) = r.d[i];
-		m68k_areg(regs, i) = r.a[i];
-	}
-	regs.sr = r.sr;
-	MakeFromSR();
+static inline int host_intlev(void)
+{
+	return uae_host_hooks.intlev ? uae_host_hooks.intlev() : -1;
 }
 
 /* The current PC, for host code that runs inside an instruction (the
@@ -1305,25 +1293,14 @@ void REGPARAM2 op_illg (uae_u32 opcode)
 {
 	uaecptr pc = m68k_getpc ();
 
-	/* Check if platform trap handler is registered (g_platform declared in platform.h) */
-
 	if ((opcode & 0xF000) == 0xA000) {
 		if (uae_atrap_hook)
 			uae_atrap_hook((uint16_t)opcode, pc, m68k_areg(regs, 7), m68k_dreg(regs, 0), m68k_areg(regs, 0), regs.intmask);
-		if (g_platform.trap_handler) {
-			/* Platform handler - pass is_primary=true for UAE */
-			g_platform.trap_handler(0xA, (uint16_t)opcode, true);
-			return;
-		}
 		Exception(0xA,0);
 		return;
 	}
 
 	if ((opcode & 0xF000) == 0xF000) {
-		if (g_platform.trap_handler) {
-			g_platform.trap_handler(0xB, (uint16_t)opcode, true);
-			return;
-		}
 		Exception(0xB,0);
 		return;
 	}
@@ -1424,7 +1401,7 @@ int m68k_do_specialties (void)
 	while (SPCFLAGS_TEST( SPCFLAG_STOP )) {
 		if (SPCFLAGS_TEST( SPCFLAG_INT | SPCFLAG_DOINT )){
 			SPCFLAGS_CLEAR( SPCFLAG_INT | SPCFLAG_DOINT );
-			int intr = intlev ();
+			int intr = host_intlev ();
 			if (intr != -1 && (intr > regs.intmask || intr == 7)) {
 				Interrupt (intr);
 				regs.stopped = 0;
@@ -1437,7 +1414,7 @@ int m68k_do_specialties (void)
 
 	if (SPCFLAGS_TEST( SPCFLAG_DOINT )) {
 		SPCFLAGS_CLEAR( SPCFLAG_DOINT );
-		int intr = intlev ();
+		int intr = host_intlev ();
 		if (intr != -1 && (intr > regs.intmask || intr == 7)) {
 			Interrupt (intr);
 			regs.stopped = 0;
@@ -1448,10 +1425,6 @@ int m68k_do_specialties (void)
 	if (PendingInterrupt) {
 		PendingInterrupt = false;
 		SPCFLAGS_SET( SPCFLAG_INT );
-		int level = intlev();
-		if (level != -1) {
-			cpu_trace_log_interrupt_trigger(level);
-		}
 	}
 
 	if (SPCFLAGS_TEST( SPCFLAG_INT )) {

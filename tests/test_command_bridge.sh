@@ -17,6 +17,7 @@ BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --backend) BACKEND="$2"; shift 2 ;;
+        --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi
         --arch) ARCH="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
@@ -67,6 +68,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Start emulator (headless-http works for both m68k and PPC)
+[[ -n "${CORE:-}" ]] && EXTRA_FLAGS+=(--core "$CORE")
 "$BINARY" --backend "$BACKEND" --timeout "$TIMEOUT" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
     --port "$PORT" "${DISK_FLAGS[@]}" \

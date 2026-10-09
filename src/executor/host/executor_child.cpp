@@ -227,13 +227,14 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
                                                : expand_home(cfg.executor_data_dir);
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
+    c.cpu = cfg.cpu_core;
     c.app = expand_home(cfg.executor_app);
     c.logtraps = cfg.executor_logtraps;
     c.writable_images = cfg.executor_writable_images;
     c.on_frame = publish_frame;
 
-    fprintf(stderr, "[Executor] %dx%d, %d MB, data in %s, %zu disk image(s) read-only\n",
-            c.width, c.height, c.ram_mb, c.data_dir.c_str(), c.disks.size());
+    fprintf(stderr, "[Executor] %dx%d, %d MB, %s 68k core, data in %s, %zu disk image(s)\n",
+            c.width, c.height, c.ram_mb, c.cpu.c_str(), c.data_dir.c_str(), c.disks.size());
 
     int rc = executor_host::run(c);
     fprintf(stderr, "[Executor] guest exited (%d)\n", rc);
@@ -251,5 +252,6 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
                                                : expand_home(cfg.executor_data_dir);
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
+    c.cpu = cfg.cpu_core;
     return executor_host::run(c);
 }

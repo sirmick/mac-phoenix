@@ -197,22 +197,9 @@ typedef struct {
     uint32_t (*mem_host_to_mac)(uint8_t *ptr);
 
     /*
-     *  CPU Special Instruction Handlers
-     *
-     *  EmulOps (0x71xx) and Traps (A-line/F-line) need special handling in dual-CPU mode.
-     *  The handler is called by both CPUs, with is_primary indicating which CPU is calling.
-     *
-     *  is_primary=true:  This CPU should execute the operation and sync to the other CPU
-     *  is_primary=false: This CPU should skip execution (state will be synced from primary)
-     *
-     *  Return value:
-     *    true  = Handler executed and advanced PC (caller should not advance PC)
-     *    false = Handler skipped execution (caller should advance PC)
+     *  PPC special instruction handlers (KPX). 68k cores reach their host
+     *  through cpu::Host (src/cpu/core/cpu_core.h) instead.
      */
-
-    // m68k EmulOp handler (0x71xx illegal instructions used for emulator functions)
-    // Returns true if PC was advanced, false if caller should advance
-    bool (*m68k_emulop_handler)(uint16_t opcode, bool is_primary);
 
     // PPC EmulOp handler (POWERPC_EMUL_OP dispatch from KPX interpreter)
     void (*ppc_emulop_handler)(void *r68k_regs, uint32_t pc, int selector);
@@ -225,10 +212,6 @@ typedef struct {
     // a single flat array works.
     void (*ppc_native_op)(uint32_t selector, uint32_t gprs[32]);
 
-    // Trap handler (A-line and F-line exceptions)
-    // Returns true if PC was advanced, false if caller should advance
-    bool (*trap_handler)(int vector, uint16_t opcode, bool is_primary);
-
     // PPC cursor update (CursorDeviceDispatch via Execute68k + SheepMem)
     // Set by KPX backend. NULL on m68k.  Args: mouse_base, x, y.
     void (*ppc_cursor_move)(uint32_t mouse_base, int x, int y);
@@ -237,13 +220,6 @@ typedef struct {
     // Converts common M68K_EMUL_OP_* values (0x71xx) to backend-specific encoding.
     // NULL = use default logic (passthrough or A-line conversion).
     uint16_t (*make_emulop)(uint16_t common_emulop);
-
-    // UAE interrupt overrides (set by the Executor core's syn68k facade).
-    // NULL = UAE's default InterruptFlags/timer path.
-    // m68k_intlev: level to deliver now, or -1 for none.
-    int (*m68k_intlev)(void);
-    // m68k_poll_interrupts: called from UAE's tick check on the CPU thread.
-    void (*m68k_poll_interrupts)(void);
 } Platform;
 
 /*
@@ -392,7 +368,6 @@ extern bool platform_unix_sys_cd_read_toc(void *fh, uint8_t *toc);
 /*
  *  CPU Backend Installation Functions
  */
-extern void cpu_uae_install(Platform *p);
 extern void cpu_ppc_kpx_install(Platform *p);
 
 #ifdef __cplusplus

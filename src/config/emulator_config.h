@@ -138,6 +138,7 @@ struct EmulatorConfig {
     bool executor_fresh = true;
     bool executor_logtraps = false;    // Executor logs every trap call (args, results) to stderr
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
+    std::string cpu_core = "uae";      // CPU core for the backend's architecture: 68k "uae" or "musashi"
 
     // System
     bool zappram = false;

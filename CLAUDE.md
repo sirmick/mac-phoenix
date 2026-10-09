@@ -64,7 +64,7 @@ further backends.
 
 | Backend | Arch | What | Speed | Use for |
 |---------|------|------|-------|---------|
-| `uae` | m68k | Hand-tuned interpreter (+optional `--jit`) | Fast (~5s boot) | Default, end users |
+| `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`) or `--core musashi` | Fast (~5s boot) | Default, end users |
 | `kpx` | ppc | KPX translator (+optional `--jit`, +optional `--jit68k`) | Medium | Default for PPC |
 | `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM | Fast start | Toolbox reimplementation work (`src/executor/`) |
 
@@ -88,6 +88,10 @@ src/
     cpu_uae.c                       — UAE backend (Platform API bridge)
     uae_cpu/                        — UAE interpreter source (newcpu.cpp, cpuemu.cpp)
     kpx/                            — KPX PPC backend (SheepShaver Kheperix interpreter)
+    cpu_m68k.cpp                    — The ROM-based 68k Mac on a cpu::Core (EmulOps, InterruptFlags, reset)
+    musashi/                        — Musashi 68k core (vendored; one local 68040 line-F patch)
+    core/                           — cpu::Core: one interface for every core (GuestMemory, host ops, run/step, IRQ, contexts); uae + musashi
+    core/platform_cpu.cpp           — g_platform's memory/CPU/Execute68k/interrupt entries on the active core (every machine)
   drivers/
     video/video_output.h            — Lock-free triple buffer for frames
     video/video_webrtc.cpp          — WebRTC video driver
@@ -101,7 +105,7 @@ src/
   webrtc/
     webrtc_server.cpp               — Signaling (/ws), peer connections for H.264/VP9 RTP
   executor/                         — Executor 2000 Toolbox core (MIT), imported; see docs/executor/PLAN.md
-    cpu/                            — syn68k API facade over UAE + PowerCore stub
+    cpu/                            — syn68k API facade (syn68k_common) on a cpu::Core + PowerCore stub
     romlib/                         — the Toolbox (lightly patched upstream source)
     multiversal/                    — API definitions → generated headers/trap glue (Ruby)
     tests/                          — Executor gtest suite (ctest label: executor)
@@ -185,6 +189,8 @@ CPU:
   --backend NAME             uae | kpx | executor
                              (default: uae; backend implies architecture;
                              executor needs no ROM)
+  --core NAME                CPU core for the backend's architecture:
+                             68k uae | musashi (default: uae; ROM machine and Executor)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
   --idlewait / --no-idlewait Pause CPU when guest idle (default: on)

@@ -1,44 +1,34 @@
 /*
- * syn68k_uae.cpp - syn68k API implemented on MacPhoenix's UAE core.
+ * syn68k_common.cpp - the syn68k API on a cpu::Core (src/cpu/core).
  *
  * See syn68k_public.h for the model. In short:
- *   - identity addressing (guest == host, all below 4GB),
- *   - callbacks are EmulOp cells in callback_dummy_address_space,
+ *   - identity addressing (guest == host, all below 4GB): the GuestMemory
+ *     is one window over the whole 32-bit space at host 0,
+ *   - callbacks are 2-byte cells in callback_dummy_address_space holding
+ *     host op $7101; the core hands it to SynHost, which runs the callback
+ *     the cell belongs to,
  *   - exceptions go through real guest vectors (VBR), each pointing at a
  *     forwarding callback, exactly as syn68k's trap.c did,
- *   - CALL_EMULATOR is a nested m68k_execute() that ends when the guest
- *     returns into the exit cell (EMULOP_RETURN, opcode 0x7100).
+ *   - CALL_EMULATOR runs guest code until it returns into the exit cell
+ *     (host op $7100, which stops the core's run()),
+ *   - the core's interrupt line follows cpu_state.interrupt_pending[],
+ *     updated on the core's thread (after callbacks, and from
+ *     Host::attention() when another thread raised a level).
  *
- * Compiled with UAE's flags and include path (DIRECT_ADDRESSING=1).
+ * The core is chosen by name before initialize_68k_emulator: "uae" or
+ * "musashi" (cpu::available).
  */
-#include "sysdeps.h"
-#include "cpu_emulation.h"
-#include "m68k.h"
-#include "memory.h"
-#include "readcpu.h"
-#include "newcpu.h"
-#include "spcflags.h"
-#include "platform.h"
-
 #include <syn68k_public.h>
+#include "cpu_core.h"
+#include "platform_cpu.h"
 
 #include <atomic>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <sys/mman.h>
 #include <unistd.h>
-
-extern bool quit_program;
-extern uintptr MEMBaseDiff;
-
-/* ---------------------------------------------------------------------- */
-/* Opcodes in the callback page                                           */
-/* ---------------------------------------------------------------------- */
-
-static const uint16 OP_EXEC_RETURN = 0x7100;  /* UAE EMULOP_RETURN: leave m68k_execute */
-static const uint16 OP_CALLBACK    = 0x7101;  /* EmulOp: dispatch callback by PC      */
-static const uint16 OP_RTE         = 0x4E73;
 
 #define MAX_CALLBACKS 16384
 
@@ -67,42 +57,53 @@ DebuggerCallbacks syn68k_debugger_callbacks = { nullptr, nullptr };
 int syn68k_track_pc = 0;
 int emulation_depth = 0;
 
-static bool use_jit = false;
+static const uint16 OP_EXEC_RETURN = 0x7100;  /* the exit cell: stop run() */
+static const uint16 OP_CALLBACK    = 0x7101;  /* dispatch callback by PC   */
 
-/* ---------------------------------------------------------------------- */
-/* Register sync                                                          */
-/* ---------------------------------------------------------------------- */
+static cpu::GuestMemory guest_memory;
+/* Never destroyed: the timer thread may still raise interrupts while the
+ * process exits. */
+static cpu::Core *core;
+static std::string engine_name = "uae";
 
-static void uae_to_cpu_state()
+int syn68k_select_engine(const char *name)
 {
-    for(int i = 0; i < 16; i++)
-        cpu_state.regs[i].ul.n = regs.regs[i];
-    MakeSR();
-    cpu_state.sr = regs.sr & ~0x1F;
-    cpu_state.ccc = GET_CFLG;
-    cpu_state.ccv = GET_VFLG;
-    cpu_state.ccn = GET_NFLG;
-    cpu_state.ccx = GET_XFLG;
-    cpu_state.ccnz = !GET_ZFLG;
-    cpu_state.vbr = regs.vbr;
+    std::string n = name && *name ? name : "uae";
+    if(core)
+        return 0;
+    for(const auto &a : cpu::available(cpu::Arch::M68K))
+        if(a == n)
+        {
+            engine_name = n;
+            return 1;
+        }
+    return 0;
 }
 
-static void cpu_state_to_uae()
+const char *syn68k_engine_name(void)
 {
-    for(int i = 0; i < 16; i++)
-        regs.regs[i] = cpu_state.regs[i].ul.n;
-    SET_CFLG(cpu_state.ccc != 0);
-    SET_VFLG(cpu_state.ccv != 0);
-    SET_NFLG(cpu_state.ccn != 0);
-    SET_XFLG(cpu_state.ccx != 0);
-    SET_ZFLG(cpu_state.ccnz == 0);
-    /* Host code may change the interrupt mask or supervisor bits. */
-    MakeSR();
-    if((regs.sr & ~0x1F) != cpu_state.sr)
-    {
-        regs.sr = (regs.sr & 0x1F) | (cpu_state.sr & ~0x1F);
-        MakeFromSR();
-    }
+    return engine_name.c_str();
+}
+
+/* ---------------------------------------------------------------------- */
+/* Status register                                                        */
+/* ---------------------------------------------------------------------- */
+
+static uint16 syn68k_full_sr(void)
+{
+    return cpu_state.sr | (cpu_state.ccc ? 1 : 0) | (cpu_state.ccv ? 2 : 0)
+         | (!cpu_state.ccnz ? 4 : 0) | (cpu_state.ccn ? 8 : 0)
+         | (cpu_state.ccx ? 16 : 0);
+}
+
+static void syn68k_set_full_sr(uint16 sr)
+{
+    cpu_state.sr = sr & ~0x1F;
+    cpu_state.ccc = sr & 1;
+    cpu_state.ccv = sr & 2;
+    cpu_state.ccnz = !(sr & 4);
+    cpu_state.ccn = sr & 8;
+    cpu_state.ccx = sr & 16;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -121,7 +122,7 @@ syn68k_addr_t callback_install(callback_handler_t func, void *arbitrary_argument
     {
         if(num_callback_slots >= MAX_CALLBACKS - FIRST_CALLBACK_CELL)
         {
-            fprintf(stderr, "syn68k-uae: out of callback slots\n");
+            fprintf(stderr, "syn68k: out of callback slots\n");
             abort();
         }
         ++num_callback_slots;
@@ -159,30 +160,22 @@ callback_handler_t callback_function(syn68k_addr_t addr)
     return slot < num_callback_slots ? callbacks[slot].func : nullptr;
 }
 
-/* EmulOp hook: UAE calls this for 0x71xx (xx != 0), then advances PC by 2. */
-static bool facade_emulop(uint16_t opcode, bool /*is_primary*/)
+static syn68k_addr_t dispatch_callback(syn68k_addr_t pc)
 {
-    uaecptr pc = m68k_getpc();
-    if(opcode != OP_CALLBACK)
-    {
-        fprintf(stderr, "syn68k-uae: unexpected EmulOp %04x at %08x\n", opcode, pc);
-        abort();
-    }
     uint32 slot = slot_of(pc);
     if(pc < CALLBACK_STUB_BASE || slot >= num_callback_slots || !callbacks[slot].func)
     {
-        fprintf(stderr, "syn68k-uae: jump to dead callback at %08x\n", pc);
+        fprintf(stderr, "syn68k: jump to dead callback at %08x\n", pc);
         abort();
     }
+    return callbacks[slot].func(pc, callbacks[slot].arg);
+}
 
-    uae_to_cpu_state();
-    syn68k_addr_t next = callbacks[slot].func(pc, callbacks[slot].arg);
-    cpu_state_to_uae();
-
-    /* UAE adds 2 after the EmulOp returns. */
-    m68k_setpc(next - 2);
-    fill_prefetch_0();
-    return true;
+static bool in_callback_page(syn68k_addr_t pc)
+{
+    syn68k_addr_t lo = US_TO_SYN68K(&callback_dummy_address_space[0]);
+    syn68k_addr_t hi = US_TO_SYN68K(&callback_dummy_address_space[MAX_CALLBACKS + CALLBACK_SLOP]);
+    return pc >= lo && pc < hi;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -212,15 +205,24 @@ static const char *trap_description(int n)
 static syn68k_addr_t trap_forwarded(syn68k_addr_t, void *arg)
 {
     const volatile TrapHandlerInfo *thi = (const volatile TrapHandlerInfo *)arg;
+    syn68k_addr_t pc = READUL(EM_A7 + 2);
     if(!thi->func)
     {
         int n = thi - cpu_state.trap_handler_info;
+        /* 68040 cache and ATC maintenance (CINV, CPUSH, PFLUSH): one word,
+         * nothing to do on an emulator. Cores that don't implement them
+         * (Musashi) raise an F-line exception; step over the instruction. */
+        if(n == 11 && (READUW(pc) & 0xFE00) == 0xF400)
+        {
+            WRITEUL(EM_A7 + 2, pc + 2);
+            return MAGIC_RTE_ADDRESS;
+        }
         const char *d = trap_description(n);
         fprintf(stderr, "Unhandled trap %d%s%s%s at pc %08x\n", n,
-                d ? " (" : "", d ? d : "", d ? ")" : "", READUL(EM_A7 + 2));
+                d ? " (" : "", d ? d : "", d ? ")" : "", pc);
         return MAGIC_RTE_ADDRESS;
     }
-    return thi->func(READUL(EM_A7 + 2), thi->arg);
+    return thi->func(pc, thi->arg);
 }
 
 void trap_install_handler(unsigned trap_number, callback_handler_t func,
@@ -246,7 +248,7 @@ void trap_remove_handler(unsigned trap_number)
  * Nothing here clears a byte, so a concurrent interrupt_generate() can never
  * be lost; the status word is only a hint and is re-checked after clearing.
  */
-static int highest_pending()
+static int highest_pending(void)
 {
     std::atomic_thread_fence(std::memory_order_seq_cst);
     for(int l = 7; l >= 1; l--)
@@ -262,47 +264,40 @@ static void settle_interrupt_status()
         SET_INTERRUPT_STATUS(INTERRUPT_STATUS_CHANGED);
 }
 
+/* The level for the core's interrupt line. */
+static int irq_level()
+{
+    int l = highest_pending();
+    return l > 0 ? l : 0;
+}
+
 void interrupt_generate(unsigned priority)
 {
     cpu_state.interrupt_pending[priority] = 1;
     std::atomic_thread_fence(std::memory_order_seq_cst);
     SET_INTERRUPT_STATUS(INTERRUPT_STATUS_CHANGED);
+    /* Other threads never touch the line; the core's thread updates it. */
+    if(cpu::Core *c = core)
+        c->request_attention();
 }
 
 void interrupt_note_if_present(void)
 {
-    if(highest_pending() > 0)
-        SPCFLAGS_SET(SPCFLAG_INT);
-}
-
-/* g_platform.m68k_poll_interrupts: polled from UAE's tick check. A level
- * that is still pending (masked, or not yet acknowledged) re-raises the
- * flag on every poll until a handler clears it. */
-static void facade_poll_interrupts(void)
-{
-    if(highest_pending() > 0)
-        SPCFLAGS_SET(SPCFLAG_INT);
-}
-
-/* g_platform.m68k_intlev: level to deliver, or -1. */
-static int facade_intlev(void)
-{
-    return highest_pending();
+    if(highest_pending() > 0 && core)
+        core->request_attention();
 }
 
 /* syn68k idiom used by host code that polls for interrupts. */
 syn68k_addr_t interrupt_process_any_pending(syn68k_addr_t pc)
 {
-    int level = facade_intlev();
+    int level = highest_pending();
     int mask = (cpu_state.sr >> 8) & 7;
     if(level < 0 || (level <= mask && level != 7))
     {
         settle_interrupt_status();
         return pc;
     }
-    uint16 old_sr = cpu_state.sr | (cpu_state.ccc ? 1 : 0) | (cpu_state.ccv ? 2 : 0)
-                  | (!cpu_state.ccnz ? 4 : 0) | (cpu_state.ccn ? 8 : 0)
-                  | (cpu_state.ccx ? 16 : 0);
+    uint16 old_sr = syn68k_full_sr();
     uint32 vector = 24 + level;
     /* 68040 format-0 frame: SR, PC, format/vector word. */
     PUSHUW(vector * 4);
@@ -313,138 +308,116 @@ syn68k_addr_t interrupt_process_any_pending(syn68k_addr_t pc)
 }
 
 /* ---------------------------------------------------------------------- */
-/* Running guest code                                                     */
+/* The core                                                               */
 /* ---------------------------------------------------------------------- */
 
-static bool in_callback_page(uaecptr pc)
+/* The register file lives in cpu_state while host code runs and in the
+ * core while guest code runs. */
+static void core_to_cpu_state()
 {
-    uaecptr lo = US_TO_SYN68K(&callback_dummy_address_space[0]);
-    uaecptr hi = US_TO_SYN68K(&callback_dummy_address_space[MAX_CALLBACKS + CALLBACK_SLOP]);
-    return pc >= lo && pc < hi;
+    for(int i = 0; i < 16; i++)
+        cpu_state.regs[i].ul.n = core->reg(cpu::m68k::D0 + i);
+    syn68k_set_full_sr(core->reg(cpu::m68k::SR));
+    cpu_state.vbr = core->reg(cpu::m68k::VBR);
 }
 
-/* Instruction-at-a-time loop used while a debugger is attached. Matches
- * syn68k: before each instruction, if getNextBreakpoint(pc) == pc the
- * debugger is entered and returns where to continue. The callback page is
- * never a breakpoint. */
-static void execute_with_debugger()
+static void cpu_state_to_core()
 {
-    for(;;)
+    uint16 sr = syn68k_full_sr();
+    if(core->reg(cpu::m68k::SR) != sr)
+        core->set_reg(cpu::m68k::SR, sr);
+    /* After SR: a supervisor-bit change swaps stack pointers, and A7 must
+     * end up as cpu_state has it. */
+    for(int i = 0; i < 16; i++)
+        core->set_reg(cpu::m68k::D0 + i, cpu_state.regs[i].ul.n);
+}
+
+namespace {
+class SynHost final : public cpu::Host
+{
+public:
+    OpResult host_op(cpu::Core &c, uint32_t opcode, uint32_t op_pc) override
     {
-        if(quit_program)
-            break;
-        uaecptr pc = m68k_getpc();
-        bool skip_check = false;
-        if(!in_callback_page(pc)
-           && syn68k_debugger_callbacks.getNextBreakpoint
-           && syn68k_debugger_callbacks.getNextBreakpoint(pc) == pc)
+        if(opcode == OP_CALLBACK)
         {
-            uae_to_cpu_state();
-            uaecptr next = syn68k_debugger_callbacks.debugger(pc);
-            cpu_state_to_uae();
-            if(next != pc)
-            {
-                m68k_setpc(next);
-                fill_prefetch_0();
-                continue;
-            }
-            skip_check = true;
+            core_to_cpu_state();
+            syn68k_addr_t next = dispatch_callback(op_pc);
+            cpu_state_to_core();
+            c.set_pc(next);
+            /* An interrupt handler is a callback that clears its level. */
+            c.set_irq(irq_level());
+            return OpResult::Continue;
         }
-        (void)skip_check;
-        uae_u32 opcode = GET_OPCODE;
-        (*cpufunctbl[opcode])(opcode);
-        cpu_check_ticks();
-        if(SPCFLAGS_TEST(SPCFLAG_ALL_BUT_EXEC_RETURN))
-            m68k_do_specialties();
+        if(opcode == OP_EXEC_RETURN)
+        {
+            c.set_pc(op_pc);  /* stay on the exit cell */
+            return OpResult::Stop;
+        }
+        fprintf(stderr, "syn68k: unexpected host op %04x at %08x\n", opcode, op_pc);
+        abort();
     }
+
+    void attention(cpu::Core &c) override
+    {
+        c.set_irq(irq_level());
+    }
+};
+SynHost syn_host;
+}
+
+/* Instruction-at-a-time, while a debugger is attached. Matches syn68k:
+ * before each instruction, if getNextBreakpoint(pc) == pc the debugger is
+ * entered and returns where to continue. The callback page is never a
+ * breakpoint. */
+static void step_with_debugger()
+{
+    syn68k_addr_t pc = core->pc();
+    if(!in_callback_page(pc) && syn68k_debugger_callbacks.getNextBreakpoint(pc) == pc)
+    {
+        core_to_cpu_state();
+        syn68k_addr_t next = syn68k_debugger_callbacks.debugger(pc);
+        cpu_state_to_core();
+        if(next != pc)
+        {
+            core->set_pc(next);
+            return;
+        }
+    }
+    core->step();
 }
 
 static void run_until_exit(syn68k_addr_t addr)
 {
     bool outermost = emulation_depth == 0;
-    uaecptr oldpc = outermost ? 0 : m68k_getpc();
+    syn68k_addr_t oldpc = outermost ? 0 : core->pc();
 
-    cpu_state_to_uae();
-    m68k_setpc(addr);
-    fill_prefetch_0();
+    cpu_state_to_core();
+    core->set_pc(addr);
 
     ++emulation_depth;
-    /* UAE services a pending interrupt in the same specialties pass that
-     * honours the exit request, so m68k_execute() can return with the guest
-     * just diverted into an interrupt handler (PC at the handler, a frame on
-     * A7, mask raised). Keep running until the guest is really back at the
-     * exit cell; otherwise the host reads the frame as its result. */
-    const uaecptr exit_pc = MAGIC_EXIT_EMULATOR_ADDRESS;
-    do
+    /* A core can take an interrupt after the exit cell stopped it (UAE
+     * services one in the same pass): run until the guest is really back
+     * at the exit cell, or the host would read an exception frame as its
+     * result. */
+    const syn68k_addr_t exit_pc = MAGIC_EXIT_EMULATOR_ADDRESS;
+    bool debugging = syn68k_debugger_callbacks.debugger && syn68k_debugger_callbacks.getNextBreakpoint;
+    while(core->pc() != exit_pc)
     {
-        quit_program = false;
-        if(syn68k_debugger_callbacks.debugger && syn68k_debugger_callbacks.getNextBreakpoint)
-            execute_with_debugger();
+        if(debugging)
+            step_with_debugger();
         else
-            m68k_execute();
-    } while(m68k_getpc() != exit_pc);
-    quit_program = false;
+            core->run();
+    }
     --emulation_depth;
 
-    uae_to_cpu_state();
+    core_to_cpu_state();
     if(!outermost)
-    {
-        m68k_setpc(oldpc);
-        fill_prefetch_0();
-    }
+        core->set_pc(oldpc);
 }
 
 /* ---------------------------------------------------------------------- */
-/* Process contexts                                                       */
+/* Running guest code                                                     */
 /* ---------------------------------------------------------------------- */
-
-namespace {
-struct Context
-{
-    regstruct uae_regs;
-    flag_struct uae_flags;
-    bool quit;
-    CPUState cpu;
-    int depth;
-};
-}
-
-size_t syn68k_context_size(void)
-{
-    return sizeof(Context);
-}
-
-void syn68k_save_context(void *context)
-{
-    Context *c = (Context *)context;
-    c->uae_regs = regs;
-    c->uae_flags = regflags;
-    c->quit = quit_program;
-    memcpy((void *)&c->cpu, (const void *)&cpu_state, sizeof cpu_state);
-    c->depth = emulation_depth;
-}
-
-void syn68k_restore_context(const void *context)
-{
-    const Context *c = (const Context *)context;
-    regs = c->uae_regs;
-    regflags = c->uae_flags;
-    quit_program = c->quit;
-    /* Everything but the machine's interrupt and trap handler state. */
-    memcpy((void *)cpu_state.regs, (const void *)c->cpu.regs, sizeof cpu_state.regs);
-    cpu_state.ccnz = c->cpu.ccnz;
-    cpu_state.ccn = c->cpu.ccn;
-    cpu_state.ccc = c->cpu.ccc;
-    cpu_state.ccv = c->cpu.ccv;
-    cpu_state.ccx = c->cpu.ccx;
-    cpu_state.amode_p = c->cpu.amode_p;
-    cpu_state.reversed_amode_p = c->cpu.reversed_amode_p;
-    cpu_state.sr = c->cpu.sr;
-    cpu_state.vbr = c->cpu.vbr;
-    emulation_depth = c->depth;
-    /* A pending interrupt raised while another context ran. */
-    interrupt_note_if_present();
-}
 
 void syn68k_call_emulator(syn68k_addr_t addr)
 {
@@ -465,12 +438,12 @@ void interpret_code(const uint16 *code)
 
 syn68k_addr_t syn68k_current_pc(void)
 {
-    return emulation_depth ? m68k_getpc() : 0;
+    return emulation_depth ? core->pc() : 0;
 }
 
 unsigned long destroy_blocks(syn68k_addr_t, uint32)
 {
-    /* Interpreter only for now: nothing cached. The JIT will flush here. */
+    /* Interpreters only for now: nothing cached. A JIT will flush here. */
     return 0;
 }
 
@@ -481,6 +454,52 @@ unsigned long destroy_blocks_with_checksum_mismatch(syn68k_addr_t a, uint32 n)
 
 void dump_profile(const char *) {}
 void m68kaddr(const uint16 *pc) { fprintf(stderr, "%08x\n", US_TO_SYN68K(pc)); }
+
+/* ---------------------------------------------------------------------- */
+/* Process contexts                                                       */
+/* ---------------------------------------------------------------------- */
+
+namespace {
+struct Context
+{
+    CPUState cpu;
+    int depth;
+    /* The core's own state follows. */
+};
+}
+
+size_t syn68k_context_size(void)
+{
+    return sizeof(Context) + core->context_size();
+}
+
+void syn68k_save_context(void *context)
+{
+    Context *c = (Context *)context;
+    memcpy((void *)&c->cpu, (const void *)&cpu_state, sizeof cpu_state);
+    c->depth = emulation_depth;
+    core->save_context(c + 1);
+}
+
+void syn68k_restore_context(const void *context)
+{
+    const Context *c = (const Context *)context;
+    core->restore_context(c + 1);
+    /* Everything but the machine's interrupt and trap handler state. */
+    memcpy((void *)cpu_state.regs, (const void *)c->cpu.regs, sizeof cpu_state.regs);
+    cpu_state.ccnz = c->cpu.ccnz;
+    cpu_state.ccn = c->cpu.ccn;
+    cpu_state.ccc = c->cpu.ccc;
+    cpu_state.ccv = c->cpu.ccv;
+    cpu_state.ccx = c->cpu.ccx;
+    cpu_state.amode_p = c->cpu.amode_p;
+    cpu_state.reversed_amode_p = c->cpu.reversed_amode_p;
+    cpu_state.sr = c->cpu.sr;
+    cpu_state.vbr = c->cpu.vbr;
+    emulation_depth = c->depth;
+    /* A level raised or cleared while another context ran. */
+    core->set_irq(irq_level());
+}
 
 /* ---------------------------------------------------------------------- */
 /* Memory                                                                 */
@@ -525,7 +544,7 @@ int syn68k_is_guest_mapped(uintptr_t addr, size_t len)
 
 void syn68k_bad_host_pointer(const void *p)
 {
-    fprintf(stderr, "syn68k-uae: host pointer %p is above 4GB and not guest-addressable\n", p);
+    fprintf(stderr, "syn68k: host pointer %p is above 4GB and not guest-addressable\n", p);
     abort();
 }
 
@@ -537,7 +556,7 @@ void *syn68k_map_guest_ram(size_t size)
     if(p == MAP_FAILED || p != (void *)0)
     {
         fprintf(stderr,
-                "syn68k-uae: cannot map guest RAM at address 0 (%s).\n"
+                "syn68k: cannot map guest RAM at address 0 (%s).\n"
                 "  Run: sudo sysctl vm.mmap_min_addr=0\n",
                 strerror(errno));
         exit(1);
@@ -553,7 +572,7 @@ void *syn68k_alloc_low(size_t size)
                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
     if(p == MAP_FAILED)
     {
-        fprintf(stderr, "syn68k-uae: low allocation of %zu bytes failed\n", size);
+        fprintf(stderr, "syn68k: low allocation of %zu bytes failed\n", size);
         abort();
     }
     add_region((uintptr_t)p, size);
@@ -566,23 +585,10 @@ void syn68k_free_low(void *p, size_t size)
     munmap(p, (size + 4095) & ~(size_t)4095);
 }
 
-void syn68k_set_jit(int enabled)
+void syn68k_set_jit(int)
 {
-    use_jit = enabled != 0;
+    /* No engine runs a JIT yet. */
 }
-
-/* ---------------------------------------------------------------------- */
-/* UAE memory hooks: identity, big-endian                                 */
-/* ---------------------------------------------------------------------- */
-
-static uint8_t mem_rb(uint32_t a) { return READUB(a); }
-static uint16_t mem_rw(uint32_t a) { return READUW(a); }
-static uint32_t mem_rl(uint32_t a) { return READUL(a); }
-static void mem_wb(uint32_t a, uint8_t v) { WRITEUB(a, v); }
-static void mem_ww(uint32_t a, uint16_t v) { WRITEUW(a, v); }
-static void mem_wl(uint32_t a, uint32_t v) { WRITEUL(a, v); }
-static uint8_t *mem_m2h(uint32_t a) { return (uint8_t *)(uintptr_t)a; }
-static uint32_t mem_h2m(uint8_t *p) { return US_TO_SYN68K(p); }
 
 /* ---------------------------------------------------------------------- */
 /* Init                                                                   */
@@ -590,42 +596,30 @@ static uint32_t mem_h2m(uint8_t *p) { return US_TO_SYN68K(p); }
 
 void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64], uint32)
 {
-    extern int CPUType, FPUType;
-    CPUType = 4;   /* 68040 */
-    FPUType = 0;   /* no FPU: Executor provides SANE natively */
-
-    MEMBaseDiff = 0;
     if((uintptr_t)callback_dummy_address_space >> 32)
         syn68k_bad_host_pointer(callback_dummy_address_space);
+
+    /* Identity: guest address == host address over the whole space. The
+     * Platform's memory and CPU entries follow it, as on every machine. */
+    guest_memory.map(0, 1ull << 32, (uint8_t *)0);
+    cpu::platform_install(&g_platform);
+    cpu::platform_set_memory(&guest_memory);
+    cpu::Config config;
+    config.model = 68040;
+    config.fpu = false;  /* Executor provides SANE natively */
+    core = cpu::create(engine_name, config, guest_memory, syn_host).release();
+    if(!core)
+    {
+        fprintf(stderr, "syn68k: cannot start the %s 68k core\n", engine_name.c_str());
+        abort();
+    }
+    cpu::platform_set_core(core);
 
     /* Fill the callback page. */
     for(int i = 0; i < MAX_CALLBACKS + CALLBACK_SLOP; i++)
         WRITEUW(US_TO_SYN68K(&callback_dummy_address_space[i]), OP_CALLBACK);
     WRITEUW(MAGIC_EXIT_EMULATOR_ADDRESS, OP_EXEC_RETURN);
-    WRITEUW(MAGIC_RTE_ADDRESS, OP_RTE);
-
-    g_platform.mem_read_byte = mem_rb;
-    g_platform.mem_read_word = mem_rw;
-    g_platform.mem_read_long = mem_rl;
-    g_platform.mem_write_byte = mem_wb;
-    g_platform.mem_write_word = mem_ww;
-    g_platform.mem_write_long = mem_wl;
-    g_platform.mem_mac_to_host = mem_m2h;
-    g_platform.mem_host_to_mac = mem_h2m;
-    g_platform.m68k_emulop_handler = facade_emulop;
-    g_platform.m68k_intlev = facade_intlev;
-    g_platform.m68k_poll_interrupts = facade_poll_interrupts;
-    g_platform.trap_handler = nullptr;   /* real A-line/F-line exceptions */
-
-    init_m68k();
-    m68k_reset();
-
-    /* Supervisor mode, interrupts enabled, like the Mac OS runs apps. */
-    regs.s = 1;
-    regs.m = 0;
-    regs.intmask = 0;
-    regs.vbr = US_TO_SYN68K(trap_vector_storage);
-    MakeSR();
+    WRITEUW(MAGIC_RTE_ADDRESS, 0x4E73);  /* RTE */
 
     memset(&cpu_state, 0, sizeof cpu_state);
     for(int i = 63; i >= 0; i--)
@@ -636,7 +630,12 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
         thi->func = nullptr;
         thi->arg = nullptr;
     }
-    uae_to_cpu_state();
+
+    /* Supervisor mode, interrupts enabled, like the Mac OS runs apps. */
+    core->reset();
+    core->set_reg(cpu::m68k::SR, 0x2000);
+    core->set_reg(cpu::m68k::VBR, US_TO_SYN68K(trap_vector_storage));
+    core->set_reg(cpu::m68k::CACR, 0);
+    core_to_cpu_state();
     SET_INTERRUPT_STATUS(INTERRUPT_STATUS_UNCHANGED);
-    (void)use_jit;
 }

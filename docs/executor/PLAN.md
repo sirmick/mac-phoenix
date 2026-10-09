@@ -8,6 +8,9 @@ Source: Executor 2000 (autc04/executor), MIT licence. Imported from
 upstream commit `b2569eb1` into `src/executor/`. The upstream checkout in
 `executor/` stays outside git as the reference and differential oracle.
 
+Longer direction (Musashi with translated addressing, minicoro
+processes, wasm, A/UX user-mode kernel): [DIRECTION.md](DIRECTION.md).
+
 ## Shape
 
 ```

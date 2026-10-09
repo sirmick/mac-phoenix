@@ -430,6 +430,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
+            printf("  --core NAME                CPU core for the backend's architecture:\n");
+            printf("                             68k uae | musashi (default: uae)\n");
             printf("  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)\n");
             printf("  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)\n");
             printf("  --idlewait / --no-idlewait Pause CPU when guest idle (default: on)\n");
@@ -574,6 +576,11 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--executor-writable-images") == 0) {
             config.executor_writable_images = true; argv[i] = nullptr; continue;
+        }
+        // --core <name> (--executor-cpu: older spelling)
+        if ((strcmp(argv[i], "--core") == 0 || strcmp(argv[i], "--executor-cpu") == 0) && i+1 < argc) {
+            config.cpu_core = argv[i+1];
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
         // --executor-app <path>
         if (strcmp(argv[i], "--executor-app") == 0 && i+1 < argc) {
