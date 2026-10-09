@@ -2,8 +2,9 @@
  * syn68k_public.h - syn68k API facade over a 68k core.
  *
  * Executor was written against syn68k. This header keeps that API so the
- * Toolbox code compiles unchanged. syn68k_common.cpp implements it over an
- * engine (syn68k_engine.h): MacPhoenix's UAE interpreter or Musashi.
+ * Toolbox code compiles unchanged. syn68k_common.cpp implements it on a
+ * cpu::Core (src/cpu/core/cpu_core.h): MacPhoenix's UAE interpreter or
+ * Musashi.
  *
  * Addressing is identity: a guest address IS the host address. Guest RAM
  * is mapped at host 0 and everything the guest can see (the binary's

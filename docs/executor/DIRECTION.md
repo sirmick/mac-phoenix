@@ -202,9 +202,15 @@ Mac environment on Executor.
 | D1 | Musashi behind the syn68k facade, four windows restored | `ctest -L executor` and the `_executor` bridge suites match UAE; no `mmap_min_addr` |
 
 **D1 so far.** Musashi (`src/cpu/musashi`, upstream v3.32, unmodified) is a
-second engine behind the facade: `syn68k_common.cpp` holds the syn68k API,
-`syn68k_uae.cpp` and `syn68k_musashi.cpp` the cores, picked at startup by
-`--executor-cpu uae|musashi` (default `uae`). Addressing is still identity.
+second 68k core. Both cores sit behind `cpu::Core` (`src/cpu/core/cpu_core.h`),
+one interface meant for every core MacPhoenix runs, 68k or PowerPC: a
+`GuestMemory` of 1MB pages (windows onto host memory, or an I/O handler),
+host ops (the architecture's reserved host-call opcodes: `$71xx`, PPC primary
+opcode 6), re-entrant `run()`, `step()`, an interrupt line, a thread-safe
+`request_attention()` served at instruction boundaries, registers by id, and
+context save/restore. `syn68k_common.cpp` is a `cpu::Host` on whichever core
+`--executor-cpu uae|musashi` names (default `uae`). Addressing is still
+identity (one window over the whole space).
 On Musashi: the gtest suite matches UAE (`ctest -L musashi`), Apple's
 7.5.5 Finder boots, `command_bridge`, `keyboard_guest` and `finder_suite`
 pass, `guest_suite` matches UAE (the same two network failures). Musashi

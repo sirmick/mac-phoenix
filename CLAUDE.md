@@ -89,6 +89,7 @@ src/
     uae_cpu/                        — UAE interpreter source (newcpu.cpp, cpuemu.cpp)
     kpx/                            — KPX PPC backend (SheepShaver Kheperix interpreter)
     musashi/                        — Musashi 68k core (vendored, unmodified); Executor's alternative core
+    core/                           — cpu::Core: one interface for every core (GuestMemory, host ops, run/step, IRQ, contexts); uae + musashi so far
   drivers/
     video/video_output.h            — Lock-free triple buffer for frames
     video/video_webrtc.cpp          — WebRTC video driver
@@ -102,7 +103,7 @@ src/
   webrtc/
     webrtc_server.cpp               — Signaling (/ws), peer connections for H.264/VP9 RTP
   executor/                         — Executor 2000 Toolbox core (MIT), imported; see docs/executor/PLAN.md
-    cpu/                            — syn68k API facade (syn68k_common) over a UAE or Musashi engine + PowerCore stub
+    cpu/                            — syn68k API facade (syn68k_common) on a cpu::Core + PowerCore stub
     romlib/                         — the Toolbox (lightly patched upstream source)
     multiversal/                    — API definitions → generated headers/trap glue (Ruby)
     tests/                          — Executor gtest suite (ctest label: executor)

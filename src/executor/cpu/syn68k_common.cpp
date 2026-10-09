@@ -1,17 +1,25 @@
 /*
- * syn68k_common.cpp - the syn68k API, independent of the 68k core.
+ * syn68k_common.cpp - the syn68k API on a cpu::Core (src/cpu/core).
  *
- * See syn68k_public.h for the model and syn68k_engine.h for the split. In
- * short:
- *   - identity addressing (guest == host, all below 4GB),
- *   - callbacks are 2-byte cells in callback_dummy_address_space holding an
- *     opcode the engine traps (SYN68K_OP_CALLBACK),
+ * See syn68k_public.h for the model. In short:
+ *   - identity addressing (guest == host, all below 4GB): the GuestMemory
+ *     is one window over the whole 32-bit space at host 0,
+ *   - callbacks are 2-byte cells in callback_dummy_address_space holding
+ *     host op $7101; the core hands it to SynHost, which runs the callback
+ *     the cell belongs to,
  *   - exceptions go through real guest vectors (VBR), each pointing at a
  *     forwarding callback, exactly as syn68k's trap.c did,
  *   - CALL_EMULATOR runs guest code until it returns into the exit cell
- *     (SYN68K_OP_EXEC_RETURN); the engine does the running.
+ *     (host op $7100, which stops the core's run()),
+ *   - the core's interrupt line follows cpu_state.interrupt_pending[],
+ *     updated on the core's thread (after callbacks, and from
+ *     Host::attention() when another thread raised a level).
+ *
+ * The core is chosen by name before initialize_68k_emulator: "uae" or
+ * "musashi" (cpu::available).
  */
-#include "syn68k_engine.h"
+#include <syn68k_public.h>
+#include "cpu_core.h"
 
 #include <atomic>
 #include <cerrno>
@@ -48,39 +56,46 @@ DebuggerCallbacks syn68k_debugger_callbacks = { nullptr, nullptr };
 int syn68k_track_pc = 0;
 int emulation_depth = 0;
 
-static const Syn68kEngine *engine = &syn68k_uae_engine;
-static bool engine_started = false;
+static const uint16 OP_EXEC_RETURN = 0x7100;  /* the exit cell: stop run() */
+static const uint16 OP_CALLBACK    = 0x7101;  /* dispatch callback by PC   */
+
+static cpu::GuestMemory guest_memory;
+/* Never destroyed: the timer thread may still raise interrupts while the
+ * process exits. */
+static cpu::Core *core;
+static std::string engine_name = "uae";
 
 int syn68k_select_engine(const char *name)
 {
-    const Syn68kEngine *e = nullptr;
-    if(!name || !*name || !strcmp(name, "uae"))
-        e = &syn68k_uae_engine;
-    else if(!strcmp(name, "musashi"))
-        e = &syn68k_musashi_engine;
-    if(!e || engine_started)
+    std::string n = name && *name ? name : "uae";
+    if(core)
         return 0;
-    engine = e;
-    return 1;
+    for(const auto &a : cpu::available(cpu::Arch::M68K))
+        if(a == n)
+        {
+            engine_name = n;
+            return 1;
+        }
+    return 0;
 }
 
 const char *syn68k_engine_name(void)
 {
-    return engine->name;
+    return engine_name.c_str();
 }
 
 /* ---------------------------------------------------------------------- */
 /* Status register                                                        */
 /* ---------------------------------------------------------------------- */
 
-uint16 syn68k_full_sr(void)
+static uint16 syn68k_full_sr(void)
 {
     return cpu_state.sr | (cpu_state.ccc ? 1 : 0) | (cpu_state.ccv ? 2 : 0)
          | (!cpu_state.ccnz ? 4 : 0) | (cpu_state.ccn ? 8 : 0)
          | (cpu_state.ccx ? 16 : 0);
 }
 
-void syn68k_set_full_sr(uint16 sr)
+static void syn68k_set_full_sr(uint16 sr)
 {
     cpu_state.sr = sr & ~0x1F;
     cpu_state.ccc = sr & 1;
@@ -144,7 +159,7 @@ callback_handler_t callback_function(syn68k_addr_t addr)
     return slot < num_callback_slots ? callbacks[slot].func : nullptr;
 }
 
-syn68k_addr_t syn68k_dispatch_callback(syn68k_addr_t pc)
+static syn68k_addr_t dispatch_callback(syn68k_addr_t pc)
 {
     uint32 slot = slot_of(pc);
     if(pc < CALLBACK_STUB_BASE || slot >= num_callback_slots || !callbacks[slot].func)
@@ -155,7 +170,7 @@ syn68k_addr_t syn68k_dispatch_callback(syn68k_addr_t pc)
     return callbacks[slot].func(pc, callbacks[slot].arg);
 }
 
-bool syn68k_in_callback_page(syn68k_addr_t pc)
+static bool in_callback_page(syn68k_addr_t pc)
 {
     syn68k_addr_t lo = US_TO_SYN68K(&callback_dummy_address_space[0]);
     syn68k_addr_t hi = US_TO_SYN68K(&callback_dummy_address_space[MAX_CALLBACKS + CALLBACK_SLOP]);
@@ -232,7 +247,7 @@ void trap_remove_handler(unsigned trap_number)
  * Nothing here clears a byte, so a concurrent interrupt_generate() can never
  * be lost; the status word is only a hint and is re-checked after clearing.
  */
-int syn68k_highest_pending(void)
+static int highest_pending(void)
 {
     std::atomic_thread_fence(std::memory_order_seq_cst);
     for(int l = 7; l >= 1; l--)
@@ -244,8 +259,15 @@ int syn68k_highest_pending(void)
 static void settle_interrupt_status()
 {
     SET_INTERRUPT_STATUS(INTERRUPT_STATUS_UNCHANGED);
-    if(syn68k_highest_pending() > 0)
+    if(highest_pending() > 0)
         SET_INTERRUPT_STATUS(INTERRUPT_STATUS_CHANGED);
+}
+
+/* The level for the core's interrupt line. */
+static int irq_level()
+{
+    int l = highest_pending();
+    return l > 0 ? l : 0;
 }
 
 void interrupt_generate(unsigned priority)
@@ -253,18 +275,21 @@ void interrupt_generate(unsigned priority)
     cpu_state.interrupt_pending[priority] = 1;
     std::atomic_thread_fence(std::memory_order_seq_cst);
     SET_INTERRUPT_STATUS(INTERRUPT_STATUS_CHANGED);
+    /* Other threads never touch the line; the core's thread updates it. */
+    if(cpu::Core *c = core)
+        c->request_attention();
 }
 
 void interrupt_note_if_present(void)
 {
-    if(syn68k_highest_pending() > 0)
-        engine->note_interrupt();
+    if(highest_pending() > 0 && core)
+        core->request_attention();
 }
 
 /* syn68k idiom used by host code that polls for interrupts. */
 syn68k_addr_t interrupt_process_any_pending(syn68k_addr_t pc)
 {
-    int level = syn68k_highest_pending();
+    int level = highest_pending();
     int mask = (cpu_state.sr >> 8) & 7;
     if(level < 0 || (level <= mask && level != 7))
     {
@@ -282,13 +307,121 @@ syn68k_addr_t interrupt_process_any_pending(syn68k_addr_t pc)
 }
 
 /* ---------------------------------------------------------------------- */
+/* The core                                                               */
+/* ---------------------------------------------------------------------- */
+
+/* The register file lives in cpu_state while host code runs and in the
+ * core while guest code runs. */
+static void core_to_cpu_state()
+{
+    for(int i = 0; i < 16; i++)
+        cpu_state.regs[i].ul.n = core->reg(cpu::m68k::D0 + i);
+    syn68k_set_full_sr(core->reg(cpu::m68k::SR));
+    cpu_state.vbr = core->reg(cpu::m68k::VBR);
+}
+
+static void cpu_state_to_core()
+{
+    uint16 sr = syn68k_full_sr();
+    if(core->reg(cpu::m68k::SR) != sr)
+        core->set_reg(cpu::m68k::SR, sr);
+    /* After SR: a supervisor-bit change swaps stack pointers, and A7 must
+     * end up as cpu_state has it. */
+    for(int i = 0; i < 16; i++)
+        core->set_reg(cpu::m68k::D0 + i, cpu_state.regs[i].ul.n);
+}
+
+namespace {
+class SynHost final : public cpu::Host
+{
+public:
+    OpResult host_op(cpu::Core &c, uint32_t opcode, uint32_t op_pc) override
+    {
+        if(opcode == OP_CALLBACK)
+        {
+            core_to_cpu_state();
+            syn68k_addr_t next = dispatch_callback(op_pc);
+            cpu_state_to_core();
+            c.set_pc(next);
+            /* An interrupt handler is a callback that clears its level. */
+            c.set_irq(irq_level());
+            return OpResult::Continue;
+        }
+        if(opcode == OP_EXEC_RETURN)
+        {
+            c.set_pc(op_pc);  /* stay on the exit cell */
+            return OpResult::Stop;
+        }
+        fprintf(stderr, "syn68k: unexpected host op %04x at %08x\n", opcode, op_pc);
+        abort();
+    }
+
+    void attention(cpu::Core &c) override
+    {
+        c.set_irq(irq_level());
+    }
+};
+SynHost syn_host;
+}
+
+/* Instruction-at-a-time, while a debugger is attached. Matches syn68k:
+ * before each instruction, if getNextBreakpoint(pc) == pc the debugger is
+ * entered and returns where to continue. The callback page is never a
+ * breakpoint. */
+static void step_with_debugger()
+{
+    syn68k_addr_t pc = core->pc();
+    if(!in_callback_page(pc) && syn68k_debugger_callbacks.getNextBreakpoint(pc) == pc)
+    {
+        core_to_cpu_state();
+        syn68k_addr_t next = syn68k_debugger_callbacks.debugger(pc);
+        cpu_state_to_core();
+        if(next != pc)
+        {
+            core->set_pc(next);
+            return;
+        }
+    }
+    core->step();
+}
+
+static void run_until_exit(syn68k_addr_t addr)
+{
+    bool outermost = emulation_depth == 0;
+    syn68k_addr_t oldpc = outermost ? 0 : core->pc();
+
+    cpu_state_to_core();
+    core->set_pc(addr);
+
+    ++emulation_depth;
+    /* A core can take an interrupt after the exit cell stopped it (UAE
+     * services one in the same pass): run until the guest is really back
+     * at the exit cell, or the host would read an exception frame as its
+     * result. */
+    const syn68k_addr_t exit_pc = MAGIC_EXIT_EMULATOR_ADDRESS;
+    bool debugging = syn68k_debugger_callbacks.debugger && syn68k_debugger_callbacks.getNextBreakpoint;
+    while(core->pc() != exit_pc)
+    {
+        if(debugging)
+            step_with_debugger();
+        else
+            core->run();
+    }
+    --emulation_depth;
+
+    core_to_cpu_state();
+    if(!outermost)
+        core->set_pc(oldpc);
+}
+
+/* ---------------------------------------------------------------------- */
 /* Running guest code                                                     */
 /* ---------------------------------------------------------------------- */
 
 void syn68k_call_emulator(syn68k_addr_t addr)
 {
     PUSHADDR(MAGIC_EXIT_EMULATOR_ADDRESS);
-    engine->run_until_exit(addr);
+    run_until_exit(addr);
 }
 
 /* With identity addressing a "code pointer" is just the guest address. */
@@ -299,12 +432,12 @@ const uint16 *hash_lookup_code_and_create_if_needed(syn68k_addr_t adr)
 
 void interpret_code(const uint16 *code)
 {
-    engine->run_until_exit(US_TO_SYN68K(code));
+    run_until_exit(US_TO_SYN68K(code));
 }
 
 syn68k_addr_t syn68k_current_pc(void)
 {
-    return emulation_depth ? engine->current_pc() : 0;
+    return emulation_depth ? core->pc() : 0;
 }
 
 unsigned long destroy_blocks(syn68k_addr_t, uint32)
@@ -330,13 +463,13 @@ struct Context
 {
     CPUState cpu;
     int depth;
-    /* The engine's own state follows. */
+    /* The core's own state follows. */
 };
 }
 
 size_t syn68k_context_size(void)
 {
-    return sizeof(Context) + engine->context_size();
+    return sizeof(Context) + core->context_size();
 }
 
 void syn68k_save_context(void *context)
@@ -344,13 +477,13 @@ void syn68k_save_context(void *context)
     Context *c = (Context *)context;
     memcpy((void *)&c->cpu, (const void *)&cpu_state, sizeof cpu_state);
     c->depth = emulation_depth;
-    engine->save_context(c + 1);
+    core->save_context(c + 1);
 }
 
 void syn68k_restore_context(const void *context)
 {
     const Context *c = (const Context *)context;
-    engine->restore_context(c + 1);
+    core->restore_context(c + 1);
     /* Everything but the machine's interrupt and trap handler state. */
     memcpy((void *)cpu_state.regs, (const void *)c->cpu.regs, sizeof cpu_state.regs);
     cpu_state.ccnz = c->cpu.ccnz;
@@ -363,8 +496,8 @@ void syn68k_restore_context(const void *context)
     cpu_state.sr = c->cpu.sr;
     cpu_state.vbr = c->cpu.vbr;
     emulation_depth = c->depth;
-    /* A pending interrupt raised while another context ran. */
-    interrupt_note_if_present();
+    /* A level raised or cleared while another context ran. */
+    core->set_irq(irq_level());
 }
 
 /* ---------------------------------------------------------------------- */
@@ -464,12 +597,23 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
 {
     if((uintptr_t)callback_dummy_address_space >> 32)
         syn68k_bad_host_pointer(callback_dummy_address_space);
-    engine_started = true;
+
+    /* Identity: guest address == host address over the whole space. */
+    guest_memory.map(0, 1ull << 32, (uint8_t *)0);
+    cpu::Config config;
+    config.model = 68040;
+    config.fpu = false;  /* Executor provides SANE natively */
+    core = cpu::create(engine_name, config, guest_memory, syn_host).release();
+    if(!core)
+    {
+        fprintf(stderr, "syn68k: cannot start the %s 68k core\n", engine_name.c_str());
+        abort();
+    }
 
     /* Fill the callback page. */
     for(int i = 0; i < MAX_CALLBACKS + CALLBACK_SLOP; i++)
-        WRITEUW(US_TO_SYN68K(&callback_dummy_address_space[i]), SYN68K_OP_CALLBACK);
-    WRITEUW(MAGIC_EXIT_EMULATOR_ADDRESS, SYN68K_OP_EXEC_RETURN);
+        WRITEUW(US_TO_SYN68K(&callback_dummy_address_space[i]), OP_CALLBACK);
+    WRITEUW(MAGIC_EXIT_EMULATOR_ADDRESS, OP_EXEC_RETURN);
     WRITEUW(MAGIC_RTE_ADDRESS, 0x4E73);  /* RTE */
 
     memset(&cpu_state, 0, sizeof cpu_state);
@@ -481,6 +625,12 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
         thi->func = nullptr;
         thi->arg = nullptr;
     }
-    engine->init(US_TO_SYN68K(trap_vector_storage));
+
+    /* Supervisor mode, interrupts enabled, like the Mac OS runs apps. */
+    core->reset();
+    core->set_reg(cpu::m68k::SR, 0x2000);
+    core->set_reg(cpu::m68k::VBR, US_TO_SYN68K(trap_vector_storage));
+    core->set_reg(cpu::m68k::CACR, 0);
+    core_to_cpu_state();
     SET_INTERRUPT_STATUS(INTERRUPT_STATUS_UNCHANGED);
 }
