@@ -1,0 +1,102 @@
+# Which extensions and control panels Executor will load, and when.
+#
+# Built from traced real boots of macos-7.5.5.img and macos-7.6.1.img
+# (snapshots ext-755 / ext-761, 2026-10-08; tools/macdecode/inits.py).
+# "lacks" lists the routines the file's own code called on that boot that
+# Executor does not implement yet (inits.py SNAPSHOT --file NAME for all of
+# them, --nest NAME for the call sequence with enclosing traps).
+#
+# phase:
+#   1  plain Toolbox calls; load first
+#   2  needs the Component Manager (registers or opens components)
+#   3  needs shared libraries / code fragments (Shared Library Manager,
+#      CFM-68K, Open Transport) or the Thread Manager
+#   4  Apple Guide and its additions
+#   later  file systems (File System Manager), printing, Display Manager
+#   deny   hardware, networking, or replaced by MacPhoenix
+#
+# Files of type fext are Finder extensions: Finder loads them itself (they
+# need Finder Scripting / AppleScript), they are not run as INITs.
+
+extensions:
+  # ── phase 1 ────────────────────────────────────────────────────────────
+  - {file: WindowShade, phase: 1, lacks: []}
+  - {file: Mouse, phase: 1, lacks: []}
+  - {file: Find File Extension, phase: 1, lacks: [SetGestaltValue]}
+  - {file: Date & Time, phase: 1, lacks: ["MenuDispatch#4FC", ScrnBitMap]}
+  - {file: General Controls, phase: 1, lacks: ["OSDispatch#5E", WriteXPRam]}
+  - {file: Apple Menu Options, phase: 1, lacks: [DMRegisterExtendedNotifyProc, FollowFinderAlias],
+     note: "Recent Items need aliases (FollowFinderAlias)"}
+  - {file: Extensions Manager, phase: 1, lacks: [], note: "with EM Extension; the startup-time UI"}
+  - {file: EM Extension, phase: 1, lacks: []}
+  - {file: Launcher, phase: 1, lacks: []}
+  - {file: Clipping Extension, phase: 1, kind: fext, lacks: []}
+  - {file: Finder Scripting Extension, phase: 2, kind: fext, lacks: [],
+     note: "Finder's Apple event object model; with AppleScript"}
+
+  # ── phase 2: Component Manager ─────────────────────────────────────────
+  - {file: AppleScript™, phase: 2, lacks: [],
+     note: "registers its components ('thng'); the System's Component Manager does the work"}
+  - {file: Color Picker, phase: 2, lacks: [RegisterComponentResourceFile]}
+  - {file: Speech Manager, phase: 2, lacks: [RegisterComponentResourceFile, "SoundDispatch#40000"],
+     note: "7.6.1 also calls CodeFragmentDispatch"}
+  - {file: Speech, phase: 2, lacks: ["SoundDispatch#64000C", NewGestaltValue]}
+  - {file: MacinTalk 3, phase: 2, lacks: [], note: "not opened on a plain boot"}
+  - {file: Sound, phase: 2, lacks: []}
+  - {file: QuickTime™, phase: 2, lacks: [OpenComponentResFile, CloseComponentResFile,
+       GetComponentListModSeed, GetComponentTypeModSeed, SetComponentInstanceStorage,
+       HeapDispatch, "QuickTime#80E9", _A09D, _ABC0]}
+  - {file: Apple Photo Access, phase: 2, lacks: []}
+  - {file: Audio CD Access, phase: 2, lacks: [], note: "with Foreign File Access"}
+  - {file: Apple Color SW Pro CMM, phase: 2, lacks: [".DSP Control 249/251"], note: "ColorSync"}
+  - {file: Color SW 2000 Series CMM, phase: 2, lacks: []}
+  - {file: Mac OS Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.6.1 name"}
+  - {file: Macintosh Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.5.5 name"}
+
+  # ── phase 3: shared libraries, code fragments, threads ─────────────────
+  - {file: Shared Library Manager, phase: 3, lacks: [".SLM Control 254/255", "ResourceDispatch#6"]}
+  - {file: CFM-68K Runtime Enabler, phase: 3, lacks: ["CodeFragmentDispatch#FFEC/FFF5/FFFE", "ThreadDispatch#0/FE"]}
+  - {file: ObjectSupportLib, phase: 3, lacks: []}
+  - {file: Open Transport 68K Library, phase: 3, lacks: [], note: "OT is networking: deny until net-bridge"}
+  - {file: Open Tpt ATalk 68K Library, phase: 3, lacks: [WriteXPRam]}
+  - {file: Open Tpt Inet 68K Library, phase: 3, lacks: []}
+
+  # ── phase 4: Apple Guide ───────────────────────────────────────────────
+  - {file: Apple Guide, phase: 4, lacks: [GetFrontProcess], note: "GetFrontProcess exists; the status lookup misses it"}
+  - {file: Macintosh Guide, phase: 4, kind: help, lacks: [".MPP Control 248"]}
+  - {file: About Apple Guide, phase: 4, kind: help}
+  - {file: Shortcuts, phase: 4, kind: help}
+  - {file: Finder Help, phase: 4, kind: help}
+  - {file: SimpleText Guide, phase: 4, kind: help}
+
+  # ── later ──────────────────────────────────────────────────────────────
+  - {file: Foreign File Access, phase: later, lacks: [], note: "file system plug-ins: File System Manager"}
+  - {file: ISO 9660 File Access, phase: later, lacks: []}
+  - {file: High Sierra File Access, phase: later, lacks: []}
+  - {file: PC Exchange, phase: later, lacks: [InstallFS, "FSMDispatch#2/5/6"]}
+  - {file: Monitors, phase: later, note: "Display Manager"}
+  - {file: Desktop Printer Extension, phase: later, kind: fext, note: "printing (7.6.1)"}
+  - {file: Desktop Printer Spooler, phase: later, kind: appe}
+  - {file: PrintMonitor, phase: later, kind: APPL}
+  - {file: LaserWriter 8, phase: later, kind: printer driver}
+
+  # ── deny ───────────────────────────────────────────────────────────────
+  - {file: Apple CD-ROM, phase: deny, reason: "SCSI CD driver; host disks instead"}
+  - {file: Apple Built-In Ethernet, phase: deny, reason: hardware}
+  - {file: EtherTalk Phase 2, phase: deny, reason: hardware}
+  - {file: Quadra Monitors Extension, phase: deny, reason: "Quadra video hardware"}
+  - {file: Cache Switch, phase: deny, reason: "68040 cache hardware"}
+  - {file: Serial Switch, phase: deny, reason: hardware}
+  - {file: Memory, phase: deny, reason: "VM and RAM disk; MacPhoenix sizes memory"}
+  - {file: Startup Disk, phase: deny, reason: "boot device selection"}
+  - {file: AppleShare, phase: deny, reason: "AFP client: networking"}
+  - {file: File Sharing Extension, phase: deny, reason: "AFP server: networking"}
+  - {file: File Sharing Monitor, phase: deny, reason: networking}
+  - {file: Sharing Setup, phase: deny, reason: networking}
+  - {file: Users & Groups, phase: deny, reason: networking}
+  - {file: Network Extension, phase: deny, kind: fext, reason: networking}
+  - {file: Printer Share, phase: deny, reason: "AppleTalk printing"}
+  - {file: AppleTalk, phase: deny, reason: networking}
+  - {file: TCP/IP, phase: deny, reason: networking}
+  - {file: MacTCP, phase: deny, reason: networking}
+  - {file: Network, phase: deny, reason: networking}
