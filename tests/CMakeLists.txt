@@ -171,7 +171,7 @@ set_tests_properties(guest_suite PROPERTIES
 
 add_test(
   NAME guest_suite_761
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --timeout 60 --port 18108
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --timeout 60 --port 18118
 )
 set_tests_properties(guest_suite_761 PROPERTIES
   TIMEOUT 90
@@ -200,6 +200,28 @@ add_test(
 )
 set_tests_properties(finder_suite_executor PROPERTIES
   TIMEOUT 200
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+)
+
+# Host keystrokes (/api/keypress) reach a MacPerl script's <STDIN>.
+add_test(
+  NAME keyboard_guest
+  COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --timeout 90 --port 18120
+)
+set_tests_properties(keyboard_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME keyboard_guest_executor
+  COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --backend executor --timeout 90 --port 18122
+)
+set_tests_properties(keyboard_guest_executor PROPERTIES
+  TIMEOUT 130
   LABELS "guest"
   SKIP_RETURN_CODE 77
 )

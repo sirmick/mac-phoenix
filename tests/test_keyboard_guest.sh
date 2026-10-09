@@ -115,12 +115,16 @@ for i in $(seq 1 $((TIMEOUT / 2))); do
     sleep 1
 done
 
-# Launch the test script — opens MacPerl with our .pl, which becomes front
-# and starts blocking on <STDIN>. ADB keystrokes from /api/keypress will
-# land in MacPerl's Sioux input area while it's frontmost.
+# Run the test script in MacPerl, which becomes front and blocks on
+# <STDIN>. ADB keystrokes from /api/keypress land in MacPerl's Sioux input
+# area while it's frontmost. Dispatched as in test_guest_suite.sh: a
+# 'misc'/'dosc' do-script of an eval-from-file stub (opening the .pl as a
+# document only opens it in MacPerl's editor).
 echo "Launching MacKeyboardTest.pl..."
-LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/launch" \
-    -d '{"path":"Host:MacKeyboardTest.pl","open":true}' || echo '{}')
+PERL_STUB='open(R,"<Host:MacKeyboardTest.pl")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
+PAYLOAD=$(python3 -I -c 'import json,sys; print(json.dumps({"creator":"McPL","script":sys.argv[1]}))' "$PERL_STUB")
+LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/script" \
+    -H "Content-Type: application/json" -d "$PAYLOAD" || echo '{}')
 echo "$LAUNCH" | grep -q '"success": true' || { echo "FAIL: launch"; echo "$LAUNCH"; exit 1; }
 
 # Wait for the script to print the "ready" marker file. Until that's
