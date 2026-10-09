@@ -12,9 +12,12 @@
 #include "../config/emulator_config.h"
 #include "../ipc/ipc_client.h"
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <sys/types.h>
+#include <vector>
 
 class QProcess;
 struct IPCBuffer;
@@ -31,6 +34,17 @@ public:
 
     // State
     bool is_running() const;
+
+    // How the child last died on its own (crash or nonzero exit), with
+    // the tail of its stdout/stderr. Cleared by start(); a stop() through
+    // the API is not recorded.
+    struct ChildExit {
+        uint64_t id = 0;        // changes with every exit
+        bool crashed = false;   // killed by a signal
+        int code = 0;           // exit code, or the signal number
+        std::vector<std::string> log;
+    };
+    bool last_exit(ChildExit& out) const;
 
     // IPC access (for API handlers)
     IPCClient* ipc_client() { return &ipc_client_; }
@@ -49,6 +63,15 @@ private:
     std::mutex reap_mutex_;  // is_running() is called from many HTTP threads
 
     IPCClient ipc_client_;
+
+    // The child's stdout/stderr come through a pipe: a reader thread
+    // copies them to our stderr and keeps the last lines (LogTail).
+    struct LogTail;
+    std::shared_ptr<LogTail> log_tail_;  // guarded by exit_mutex_
+    mutable std::mutex exit_mutex_;
+    ChildExit exit_;
+    bool have_exit_ = false;
+    void record_exit(bool crashed, int code);
 
     // Atomic pointers set by encoder thread for zero-copy IPC reads
     std::atomic<IPCBuffer*>* ipc_shm_atom_ = nullptr;

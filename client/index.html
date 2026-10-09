@@ -90,6 +90,17 @@
                     </div>
                 </div>
             </div>
+            <div id="crash-panel" hidden>
+                <div class="crash-head">
+                    <span id="crash-title">Emulator crashed</span>
+                    <span class="crash-actions">
+                        <button class="btn" id="crash-copy">Copy log</button>
+                        <button class="btn primary" id="crash-start">Start again</button>
+                        <button class="btn btn-icon" id="crash-dismiss" title="Dismiss">&times;</button>
+                    </span>
+                </div>
+                <pre id="crash-log"></pre>
+            </div>
         </div>
 
         <div id="debug-panel">

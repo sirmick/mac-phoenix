@@ -5177,6 +5177,55 @@ async function testCodecCycle() {
 }
 window.testCodecCycle = testCodecCycle;
 
+// Crash panel: when the emulator child dies on its own, /api/status carries
+// child_exit {id, crashed, code, signal, log}. Shown until the emulator runs
+// again or the user dismisses that exit.
+let _crashDismissedId = 0;
+let _crashShownId = 0;
+function updateCrashPanel(data) {
+    const panel = document.getElementById('crash-panel');
+    if (!panel) return;
+    const ex = data.child_exit;
+    if (data.emulator_running || !ex || ex.id === _crashDismissedId) {
+        panel.hidden = true;
+        return;
+    }
+    if (ex.id !== _crashShownId) {
+        _crashShownId = ex.id;
+        const title = ex.crashed
+            ? `Emulator crashed: ${ex.signal || 'signal'} (${ex.code})`
+            : `Emulator exited with code ${ex.code}`;
+        document.getElementById('crash-title').textContent = title;
+        // eslint-disable-next-line no-control-regex
+        const text = (ex.log || []).join('\n').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+        const pre = document.getElementById('crash-log');
+        pre.textContent = text || '(no output)';
+        panel.hidden = false;
+        pre.scrollTop = pre.scrollHeight;
+        document.getElementById('crash-dismiss').onclick = () => {
+            _crashDismissedId = ex.id;
+            panel.hidden = true;
+        };
+        document.getElementById('crash-start').onclick = () => {
+            _crashDismissedId = ex.id;
+            panel.hidden = true;
+            startEmulator();
+        };
+        document.getElementById('crash-copy').onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(title + '\n' + text);
+            } catch (e) {
+                const r = document.createRange();
+                r.selectNodeContents(pre);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(r);
+            }
+        };
+    }
+    panel.hidden = false;
+}
+
 // Emulator selection
 // Emulator status polling
 async function pollEmulatorStatus() {
@@ -5201,6 +5250,8 @@ async function pollEmulatorStatus() {
                 });
             }
         }
+
+        updateCrashPanel(data);
 
         const dotRunning = document.getElementById('dot-running');
         const dotConnected = document.getElementById('dot-connected');

@@ -484,6 +484,23 @@ Response APIRouter::handle_status(const Request& req) {
         json << ", \"emulator_running\": " << (running ? "true" : "false");
         json << ", \"cpu_state\": \"" << (running ? "running" : "stopped") << "\"";
 
+        // A child that died on its own: how, and its last output lines.
+        EmulatorSubprocess::ChildExit ex;
+        if (!running && ctx_->subprocess->last_exit(ex)) {
+            json << ", \"child_exit\": {\"id\": " << ex.id
+                 << ", \"crashed\": " << (ex.crashed ? "true" : "false")
+                 << ", \"code\": " << ex.code;
+            if (ex.crashed) {
+                const char* sig = strsignal(ex.code);
+                json << ", \"signal\": \"" << storage::json_escape(sig ? sig : "") << "\"";
+            }
+            json << ", \"log\": [";
+            for (size_t i = 0; i < ex.log.size(); i++) {
+                json << (i ? ", " : "") << "\"" << storage::json_escape(ex.log[i]) << "\"";
+            }
+            json << "]}";
+        }
+
         if (buf) {
             json << ", \"boot_phase\": \"" << buf->boot_phase << "\"";
             json << ", \"checkload_count\": " << IPC_ATOMIC_LOAD(buf->checkload_count);

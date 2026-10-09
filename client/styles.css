@@ -273,6 +273,57 @@ main {
     align-items: center;
     background: #111;
     min-width: 0;
+    position: relative;
+}
+
+/* The last lines a crashed emulator wrote (pollEmulatorStatus). */
+#crash-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(900px, calc(100% - 32px));
+    max-height: calc(100% - 32px);
+    display: flex;
+    flex-direction: column;
+    background: #1b1b1b;
+    border: 1px solid #a33;
+    border-radius: 6px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    z-index: 20;
+}
+
+#crash-panel[hidden] {
+    display: none;
+}
+
+.crash-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #333;
+    color: #f88;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.crash-actions {
+    display: flex;
+    gap: 6px;
+}
+
+#crash-log {
+    margin: 0;
+    padding: 8px 12px;
+    overflow: auto;
+    color: #ccc;
+    font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 120px;
 }
 
 #display-container {

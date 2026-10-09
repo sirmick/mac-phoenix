@@ -11,13 +11,16 @@
 #include "../ipc/ipc_protocol.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <chrono>
+#include <deque>
 #include <string>
 #include <thread>
 #include <unistd.h>
 #ifndef _WIN32
+#include <fcntl.h>
 #include <sys/wait.h>
 #endif
 
@@ -45,6 +48,39 @@ std::string resolve_asset(const char* rel) {
     return "";
 }
 }  // namespace
+
+// The last lines the child wrote. Shared with the detached reader thread,
+// which ends at EOF (when the child and anything it spawned are gone).
+struct EmulatorSubprocess::LogTail {
+    static constexpr size_t kMaxLines = 200;
+    static constexpr size_t kMaxLineBytes = 1000;
+    std::mutex mutex;
+    std::deque<std::string> lines;
+    std::string partial;
+
+    void add(const char* p, size_t n) {
+        std::lock_guard<std::mutex> lk(mutex);
+        for (size_t i = 0; i < n; i++) {
+            if (p[i] == '\n') {
+                push();
+            } else if (partial.size() < kMaxLineBytes) {
+                partial += p[i];
+            }
+        }
+    }
+    void push() {
+        if (!partial.empty() && partial.back() == '\r') partial.pop_back();
+        lines.push_back(std::move(partial));
+        partial.clear();
+        if (lines.size() > kMaxLines) lines.pop_front();
+    }
+    std::vector<std::string> snapshot() {
+        std::lock_guard<std::mutex> lk(mutex);
+        std::vector<std::string> v(lines.begin(), lines.end());
+        if (!partial.empty()) v.push_back(partial);
+        return v;
+    }
+};
 
 EmulatorSubprocess::EmulatorSubprocess(config::EmulatorConfig* config)
     : config_(config)
@@ -261,6 +297,46 @@ bool EmulatorSubprocess::start()
     // fork+execv which inherited file descriptors.
     child_process_ = std::make_unique<QProcess>();
     child_process_->setProcessChannelMode(QProcess::ForwardedChannels);
+    {
+        std::lock_guard<std::mutex> lk(exit_mutex_);
+        have_exit_ = false;
+        log_tail_.reset();
+    }
+#ifndef _WIN32
+    // Forwarded, but through a pipe we read: the child's fds 1 and 2 are
+    // the pipe's write end (set after fork, before exec).
+    int log_pipe[2] = {-1, -1};
+    if (pipe2(log_pipe, O_CLOEXEC) == 0) {
+        const int wfd = log_pipe[1];
+        child_process_->setChildProcessModifier([wfd] {
+            dup2(wfd, STDOUT_FILENO);
+            dup2(wfd, STDERR_FILENO);
+        });
+        auto tail = std::make_shared<LogTail>();
+        {
+            std::lock_guard<std::mutex> lk(exit_mutex_);
+            log_tail_ = tail;
+        }
+        const int rfd = log_pipe[0];
+        std::thread([tail, rfd] {
+            char buf[4096];
+            for (;;) {
+                ssize_t n = read(rfd, buf, sizeof buf);
+                if (n < 0 && errno == EINTR) continue;
+                if (n <= 0) break;
+                ssize_t off = 0;
+                while (off < n) {
+                    ssize_t w = write(STDERR_FILENO, buf + off, n - off);
+                    if (w < 0 && errno == EINTR) continue;
+                    if (w <= 0) break;
+                    off += w;
+                }
+                tail->add(buf, n);
+            }
+            close(rfd);
+        }).detach();
+    }
+#endif
 
     const QString program = QString::fromStdString(args.front());
     QStringList qargs;
@@ -269,6 +345,10 @@ bool EmulatorSubprocess::start()
     }
 
     child_process_->start(program, qargs);
+#ifndef _WIN32
+    // Only the child keeps the write end, so the reader sees EOF when it dies.
+    if (log_pipe[1] >= 0) close(log_pipe[1]);
+#endif
     if (!child_process_->waitForStarted(5000)) {
         fprintf(stderr, "[EmulatorSubprocess] QProcess failed to start: %s\n",
                 child_process_->errorString().toUtf8().constData());
@@ -287,6 +367,8 @@ bool EmulatorSubprocess::start()
         if (child_process_->state() == QProcess::NotRunning) {
             fprintf(stderr, "[EmulatorSubprocess] Child exited before connection (code %d)\n",
                     child_process_->exitCode());
+            record_exit(child_process_->exitStatus() == QProcess::CrashExit,
+                        child_process_->exitCode());
             child_process_.reset();
             child_pid_ = -1;
             return false;
@@ -391,8 +473,10 @@ void EmulatorSubprocess::reap_if_dead()
         const int code = child_process_->exitCode();
         if (es == QProcess::CrashExit) {
             fprintf(stderr, "[EmulatorSubprocess] Child crashed (signal/code %d)\n", code);
+            record_exit(true, code);
         } else if (code != 0) {
             fprintf(stderr, "[EmulatorSubprocess] Child exited with code %d\n", code);
+            record_exit(false, code);
         }
         clear_ipc_shm();
         // No ipc_client_.disconnect() here: callers of is_running() may
@@ -400,6 +484,28 @@ void EmulatorSubprocess::reap_if_dead()
         // exclusively. start()/stop() disconnect.
         child_pid_ = -1;
     }
+}
+
+void EmulatorSubprocess::record_exit(bool crashed, int code)
+{
+    static std::atomic<uint64_t> next_id{1};
+    std::lock_guard<std::mutex> lk(exit_mutex_);
+    exit_.id = next_id++;
+    exit_.crashed = crashed;
+    exit_.code = code;
+    exit_.log.clear();
+    have_exit_ = true;
+}
+
+bool EmulatorSubprocess::last_exit(ChildExit& out) const
+{
+    std::lock_guard<std::mutex> lk(exit_mutex_);
+    if (!have_exit_) return false;
+    out = exit_;
+    // Read the tail now rather than at exit: the reader may still have
+    // been draining the pipe when the child was reaped.
+    if (log_tail_) out.log = log_tail_->snapshot();
+    return true;
 }
 
 bool EmulatorSubprocess::is_running() const
