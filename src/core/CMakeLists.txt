@@ -41,6 +41,7 @@ target_include_directories(core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../config
   ${CMAKE_CURRENT_SOURCE_DIR}/../cpu
   ${CMAKE_CURRENT_SOURCE_DIR}/../cpu/uae_cpu
+  ${CMAKE_CURRENT_SOURCE_DIR}/../cpu/core
   ${CMAKE_CURRENT_SOURCE_DIR}/../drivers/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/../ipc
 )

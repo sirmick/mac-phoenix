@@ -1,7 +1,11 @@
 # Musashi 68k core (Karl Stenerud, MIT), vendored from
-# https://github.com/kstenerud/Musashi at 313ebf1b (v3.32). The sources here
-# are upstream's, unmodified; configuration is by compile definitions
-# (m68kconf.h guards every option with #ifndef).
+# https://github.com/kstenerud/Musashi at 313ebf1b (v3.32). Configuration is
+# by compile definitions (m68kconf.h guards every option with #ifndef).
+# One local change, in m68k_in.c (marked "MacPhoenix"): on a 68040, line F
+# with coprocessor ID 1/2 is the 040's FPU and CINV/CPUSH/PFLUSH/PTEST
+# (cache and MMU instructions are no-ops); upstream lets its 68020/030
+# cpDBcc/cpTRAPcc stubs claim some of those opcodes (CPUSHA skipped 4
+# bytes and Mac OS bombed).
 #
 # m68kmake generates the opcode handlers (m68kops.c/.h) from m68k_in.c.
 #

@@ -287,6 +287,30 @@ extern void m68040_fpu_op0(void);
 extern void m68040_fpu_op1(void);
 extern void m68881_mmu_ops(void);
 
+/* MacPhoenix: on a 68040, line F with coprocessor ID 1 or 2 is the 040's
+ * own FPU ($F2xx, $F3xx) and cache/MMU instructions ($F4xx CINV/CPUSH,
+ * $F5xx PFLUSH/PTEST). The table gives some of those opcodes to the
+ * 68020/030 cpDBcc/cpTRAPcc entries (their masks are more specific), so
+ * those entries ask here first. Nothing is cached and no MMU is
+ * emulated: the cache and MMU instructions are supervisor-only no-ops.
+ * Returns nonzero when it handled REG_IR. */
+static int m68ki_040_line_f(void)
+{
+	if(!CPU_TYPE_IS_040_PLUS(CPU_TYPE))
+		return 0;
+	switch(REG_IR & 0xff00)
+	{
+		case 0xf200: m68040_fpu_op0(); return 1;
+		case 0xf300: m68040_fpu_op1(); return 1;
+		case 0xf400:
+		case 0xf500:
+			if(!FLAG_S)
+				m68ki_exception_privilege_violation();
+			return 1;
+	}
+	return 0;
+}
+
 /* ======================================================================== */
 /* ========================= INSTRUCTION HANDLERS ========================= */
 /* ======================================================================== */
@@ -520,6 +544,8 @@ chk2cmp2  16  .     .     0000001011......  A..DXWL...  . . U U U   .   .  18  1
 chk2cmp2  32  .     pcdi  0000010011111010  ..........  . . U U U   .   .  23  23  23
 chk2cmp2  32  .     pcix  0000010011111011  ..........  . . U U U   .   .  23  23  23
 chk2cmp2  32  .     .     0000010011......  A..DXWL...  . . U U U   .   .  18  18  18
+cinv      32  .     .     11110100........  ..........  . . . . S   .   .   .   .   4   MacPhoenix: CINV/CPUSH
+cinv      32  pm    .     11110101........  ..........  . . . . S   .   .   .   .   4   MacPhoenix: PFLUSH/PTEST
 clr        8  .     d     0100001000000...  ..........  U U U U U   4   4   2   2   2
 clr        8  .     .     0100001000......  A+-DXWL...  U U U U U   8   4   4   4   4
 clr       16  .     d     0100001001000...  ..........  U U U U U   4   4   2   2   2
@@ -4260,6 +4286,8 @@ M68KMAKE_OP(cpbcc, 32, ., .)
 
 M68KMAKE_OP(cpdbcc, 32, ., .)
 {
+	if(m68ki_040_line_f())  /* MacPhoenix */
+		return;
 	if(CPU_TYPE_IS_EC020_PLUS(CPU_TYPE))
 	{
 		M68K_DO_LOG((M68K_LOG_FILEHANDLE "%s at %08x: called unimplemented instruction %04x (%s)\n",
@@ -4299,6 +4327,8 @@ M68KMAKE_OP(cpscc, 32, ., .)
 
 M68KMAKE_OP(cptrapcc, 32, ., .)
 {
+	if(m68ki_040_line_f())  /* MacPhoenix */
+		return;
 	if(CPU_TYPE_IS_EC020_PLUS(CPU_TYPE))
 	{
 		M68K_DO_LOG((M68K_LOG_FILEHANDLE "%s at %08x: called unimplemented instruction %04x (%s)\n",
@@ -8366,6 +8396,24 @@ M68KMAKE_OP(pea, 32, ., .)
 	m68ki_push_32(ea);
 }
 
+/* MacPhoenix: CINV and CPUSH ($F4xx), the 68040's cache maintenance.
+ * Mac OS runs them on every 68040 (HWPriv's cache flush, BlockMove). */
+M68KMAKE_OP(cinv, 32, ., .)
+{
+	if(m68ki_040_line_f())
+		return;
+	m68ki_exception_1111();
+}
+
+/* MacPhoenix: PFLUSH and PTEST ($F5xx) on the 68040; PFLUSHA has its
+ * own entry below. */
+M68KMAKE_OP(cinv, 32, pm, .)
+{
+	if(m68ki_040_line_f())
+		return;
+	m68ki_exception_1111();
+}
+
 M68KMAKE_OP(pflush, 32, ., .)
 {
 	if ((CPU_TYPE_IS_EC020_PLUS(CPU_TYPE)) && (HAS_PMMU))
@@ -8373,6 +8421,9 @@ M68KMAKE_OP(pflush, 32, ., .)
 		fprintf(stderr,"68040: unhandled PFLUSH\n");
 		return;
 	}
+	/* MacPhoenix: with no MMU emulated, a 68040's PFLUSHA flushes nothing. */
+	if(CPU_TYPE_IS_040_PLUS(CPU_TYPE) && FLAG_S)
+		return;
 	m68ki_exception_1111();
 }
 

@@ -1,21 +1,24 @@
 /*
  * uae_core.cpp - cpu::Core on MacPhoenix's UAE interpreter (src/cpu/uae_cpu).
  *
- * UAE reaches the outside world through g_platform; while a UaeCore exists
- * it owns these entries (and puts the previous ones back when destroyed):
+ * UAE reaches its driver through uae_host_hooks (uae_cpu/uae_host_hooks.h),
+ * which a UaeCore fills in:
  *
- *   mem_*                  the GuestMemory, big-endian
- *   m68k_emulop_handler    host ops $7101-$71FF
- *   m68k_intlev            the interrupt line
- *   m68k_poll_interrupts   called from UAE's tick check: serves
- *                          request_attention() and re-raises the line
+ *   emulop   host ops $7101-$71FF
+ *   intlev   the interrupt line; serves request_attention() first
+ *   poll     UAE's tick check: serves request_attention()
  *
  * $7100 is UAE's built-in EMULOP_RETURN: it leaves m68k_execute() with the
  * PC still on it. run() then hands it to the Host like any other host op.
  *
- * UAE fetches instructions through a host pointer (MEMBaseDiff), so the
- * GuestMemory must be one window or several with the same base offset
- * (GuestMemory::uniform); create_uae() returns null otherwise.
+ * Memory: UAE reads and writes data through g_platform.mem_*, which must
+ * be this core's GuestMemory (platform_cpu.h). It fetches instructions
+ * through one host base pointer (MEMBaseDiff), so the GuestMemory must be
+ * one window or several with the same base offset (GuestMemory::uniform);
+ * create_uae() returns null otherwise.
+ *
+ * JIT (Config::jit): the outermost run() runs compiled code; nested runs
+ * (host code calling guest code) interpret, as Basilisk II does.
  *
  * Compiled with UAE's flags and include path (DIRECT_ADDRESSING=1).
  */
@@ -26,9 +29,12 @@
 #include "readcpu.h"
 #include "newcpu.h"
 #include "spcflags.h"
-#include "platform.h"
+#include "uae_host_hooks.h"
+#include "compiler/compemu.h"
+#include "vm_alloc.h"
 
 #include "cpu_core.h"
+#include "platform_cpu.h"
 
 #include <atomic>
 #include <cstdio>
@@ -36,6 +42,7 @@
 extern bool quit_program;
 extern uintptr MEMBaseDiff;
 extern int CPUType, FPUType;
+extern bool UseJIT;
 
 namespace cpu {
 namespace {
@@ -44,21 +51,7 @@ class UaeCore;
 UaeCore *g_core;
 GuestMemory *g_mem;
 
-uint8_t mem_rb(uint32_t a) { return g_mem->read8(a); }
-uint16_t mem_rw(uint32_t a) { return g_mem->read16(a); }
-uint32_t mem_rl(uint32_t a) { return g_mem->read32(a); }
-void mem_wb(uint32_t a, uint8_t v) { g_mem->write8(a, v); }
-void mem_ww(uint32_t a, uint16_t v) { g_mem->write16(a, v); }
-void mem_wl(uint32_t a, uint32_t v) { g_mem->write32(a, v); }
-uint8_t *mem_m2h(uint32_t a) { return g_mem->host(a); }
-uint32_t mem_h2m(uint8_t *p)
-{
-    uint32_t a = 0;
-    g_mem->guest(p, &a);
-    return a;
-}
-
-bool emulop_hook(uint16_t opcode, bool is_primary);
+void emulop_hook(uint16_t opcode);
 int intlev_hook(void);
 void poll_hook(void);
 
@@ -66,45 +59,39 @@ class UaeCore final : public Core
 {
 public:
     UaeCore(const Config &config, intptr_t delta, GuestMemory &memory, Host &host)
-        : host_(host), saved_(g_platform)
+        : host_(host)
     {
         g_core = this;
         g_mem = &memory;
         CPUType = config.model / 10 % 10;  /* 68040 -> 4 */
         FPUType = config.fpu ? 1 : 0;
         MEMBaseDiff = (uintptr)delta;
+        /* A 24-bit CPU ignores the top address byte (Memory Manager
+         * flags); UAE masks in do_get_real_address. */
+        address_reg_mask = config.address_bits == 24 ? 0x00FFFFFFu : 0xFFFFFFFFu;
 
-        g_platform.mem_read_byte = mem_rb;
-        g_platform.mem_read_word = mem_rw;
-        g_platform.mem_read_long = mem_rl;
-        g_platform.mem_write_byte = mem_wb;
-        g_platform.mem_write_word = mem_ww;
-        g_platform.mem_write_long = mem_wl;
-        g_platform.mem_mac_to_host = mem_m2h;
-        g_platform.mem_host_to_mac = mem_h2m;
-        g_platform.m68k_emulop_handler = emulop_hook;
-        g_platform.m68k_intlev = intlev_hook;
-        g_platform.m68k_poll_interrupts = poll_hook;
-        g_platform.trap_handler = nullptr;   /* real A-line/F-line exceptions */
+        uae_host_hooks.emulop = emulop_hook;
+        uae_host_hooks.intlev = intlev_hook;
+        uae_host_hooks.poll = poll_hook;
 
         init_m68k();
+#if USE_JIT
+        UseJIT = false;
+        if(config.jit)
+        {
+            vm_init();
+            UseJIT = compiler_use_jit();
+            if(UseJIT)
+                compiler_init();
+        }
+#endif
     }
 
     ~UaeCore() override
     {
-        Platform &p = g_platform;
-        p.mem_read_byte = saved_.mem_read_byte;
-        p.mem_read_word = saved_.mem_read_word;
-        p.mem_read_long = saved_.mem_read_long;
-        p.mem_write_byte = saved_.mem_write_byte;
-        p.mem_write_word = saved_.mem_write_word;
-        p.mem_write_long = saved_.mem_write_long;
-        p.mem_mac_to_host = saved_.mem_mac_to_host;
-        p.mem_host_to_mac = saved_.mem_host_to_mac;
-        p.m68k_emulop_handler = saved_.m68k_emulop_handler;
-        p.m68k_intlev = saved_.m68k_intlev;
-        p.m68k_poll_interrupts = saved_.m68k_poll_interrupts;
-        p.trap_handler = saved_.trap_handler;
+        uae_host_hooks.emulop = nullptr;
+        uae_host_hooks.intlev = nullptr;
+        uae_host_hooks.poll = nullptr;
         g_core = nullptr;
         g_mem = nullptr;
     }
@@ -124,7 +111,14 @@ public:
         {
             serve_attention();
             quit_program = false;
-            m68k_execute();
+            ++depth_;
+#if USE_JIT
+            if(UseJIT && depth_ == 1)
+                m68k_compile_execute();
+            else
+#endif
+                m68k_execute();
+            --depth_;
             quit_program = false;
             if(stopped)
             {
@@ -176,11 +170,21 @@ public:
         SPCFLAGS_SET(SPCFLAG_BRK);
     }
 
-    void request_attention() override { attention_ = true; }
+    void request_attention() override
+    {
+        attention_ = true;
+        /* Makes UAE look for interrupts at its next check (compiled code
+         * included) and wakes the STOP loop; intlev() serves the
+         * request. */
+        SPCFLAGS_SET(SPCFLAG_INT | SPCFLAG_DOINT);
+    }
 
     void set_irq(int level) override
     {
-        irq_ = level;
+        if(level == 7)
+            nmi_ = true;  /* an edge: the line keeps its level */
+        else
+            irq_ = level;
         if(level > 0)
             SPCFLAGS_SET(SPCFLAG_INT);
     }
@@ -252,8 +256,8 @@ public:
             SPCFLAGS_SET(SPCFLAG_INT);
     }
 
-    /* g_platform hooks. */
-    bool emulop(uint16_t opcode)
+    /* uae_host_hooks. */
+    void emulop(uint16_t opcode)
     {
         /* UAE adds 2 to the PC after this returns; the Host sees the PC of
          * the next instruction, as on every core. */
@@ -264,10 +268,15 @@ public:
         fill_prefetch_0();
         if(r == Host::OpResult::Stop)
             stop_innermost();
-        return true;
     }
 
-    int intlev() const { return irq_ > 0 ? (int)irq_ : -1; }
+    int intlev()
+    {
+        serve_attention();
+        if(nmi_.exchange(false))
+            return 7;
+        return irq_ > 0 ? (int)irq_ : -1;
+    }
 
     void poll()
     {
@@ -307,14 +316,15 @@ private:
     }
 
     Host &host_;
-    Platform saved_;
     std::atomic<int> irq_{0};
+    std::atomic<bool> nmi_{false};
+    int depth_ = 0;
     bool *stop_flag_ = nullptr;  /* the innermost run()'s */
     std::atomic<bool> stop_requested_{false};
     std::atomic<bool> attention_{false};
 };
 
-bool emulop_hook(uint16_t opcode, bool) { return g_core->emulop(opcode); }
+void emulop_hook(uint16_t opcode) { g_core->emulop(opcode); }
 int intlev_hook(void) { return g_core->intlev(); }
 void poll_hook(void) { g_core->poll(); }
 
@@ -323,9 +333,14 @@ void poll_hook(void) { g_core->poll(); }
 std::unique_ptr<Core> create_uae(const Config &config, GuestMemory &memory, Host &host)
 {
     intptr_t delta;
-    if(g_core || config.arch != Arch::M68K || config.address_bits != 32
+    if(g_core || config.arch != Arch::M68K
        || config.model < 68000 || config.model > 68040 || !memory.uniform(&delta))
         return nullptr;
+    if(platform_memory() != &memory)
+    {
+        fprintf(stderr, "uae: g_platform.mem_* must be this core's GuestMemory\n");
+        return nullptr;
+    }
     return std::unique_ptr<Core>(new UaeCore(config, delta, memory, host));
 }
 

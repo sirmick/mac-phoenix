@@ -25,6 +25,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --rom) ROM="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
+        --core) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -56,7 +57,7 @@ echo "Port: $PORT"
 "$BINARY" --backend uae --timeout "$((TIMEOUT + 5))" \
     --config /dev/null --dismiss-shutdown-dialog \
     --port "$PORT" \
-    --ram 4 --screen 512x342 \
+    --ram 4 --screen 512x342 ${CORE:+--core "$CORE"} \
     --disk "$DISK" "$ROM" &>/tmp/macemu_test_se_$$.log &
 EMU_PID=$!
 

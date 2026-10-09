@@ -209,8 +209,17 @@ host ops (the architecture's reserved host-call opcodes: `$71xx`, PPC primary
 opcode 6), re-entrant `run()`, `step()`, an interrupt line, a thread-safe
 `request_attention()` served at instruction boundaries, registers by id, and
 context save/restore. `syn68k_common.cpp` is a `cpu::Host` on whichever core
-`--executor-cpu uae|musashi` names (default `uae`). Addressing is still
-identity (one window over the whole space).
+`--core uae|musashi` names (default `uae`). Addressing is still identity
+(one window over the whole space).
+
+The ROM-based 68k Mac runs on the same interface (`src/cpu/cpu_m68k.cpp`,
+Basilisk's EmulOps as its Host), so `--core musashi` boots the Quadra 650
+and Mac SE ROMs too; every machine fills g_platform's memory and CPU
+entries the same way (`src/cpu/core/platform_cpu.cpp`), and UAE's private
+plumbing left the Platform table. The whole test suite passes on both
+cores (ROM boot, SE, bridge, guest, Finder, keyboard; Executor's guest
+suite has the same two network failures on both). Musashi needed one local
+fix: 68040 line F (CINV/CPUSH/PFLUSH/PTEST, FDBcc/FTRAPcc).
 On Musashi: the gtest suite matches UAE (`ctest -L musashi`), Apple's
 7.5.5 Finder boots, `command_bridge`, `keyboard_guest` and `finder_suite`
 pass, `guest_suite` matches UAE (the same two network failures). Musashi

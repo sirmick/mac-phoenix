@@ -61,10 +61,8 @@ extern uint32 RAMBaseMac;
 extern uint32 ROMBaseMac;
 #endif
 
-// CPU backend install functions
-extern "C" {
-void cpu_uae_install(Platform* platform);
-}
+// The 68k machine on a cpu::Core
+#include "cpu_m68k.h"
 
 // ========================================
 // Constructor / Destructor
@@ -271,6 +269,11 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     fprintf(stderr, "[CPUContext] ScratchMem at %p (Mac: 0x%08x)\n",
             ScratchMem, (uint32)(ScratchMem - RAMBaseHost));
 
+    // The guest address space: the whole block at Mac address 0. Outside it,
+    // reads return 0 and writes are dropped. 24-bit machines mask addresses.
+    cpu_m68k_memory().map(0, total_alloc & ~(size_t)0xFFFF, ram_base);
+    cpu_m68k_memory().set_address_bits(profile.twenty_four_bit ? 24 : 32);
+
     // 4. Check ROM version
     if (!CheckROM()) {
         fprintf(stderr, "[CPUContext] ERROR: Unsupported ROM type\n");
@@ -317,19 +320,10 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
         return false;
     }
 
-    // 7. Initialize UAE memory banking (required for all backends currently)
-#if EMULATED_68K
-    if (!Init680x0()) {
-        fprintf(stderr, "[CPUContext] ERROR: Failed to initialize 680x0\n");
-        return false;
-    }
-#endif
-
-    // 8. Install CPU backend (platform_ should already have function pointers set by caller)
-    // If not set, default to UAE
+    // 8. Install the CPU (platform_ should already have it, set by the caller)
     if (!platform_.cpu_init) {
-        fprintf(stderr, "[CPUContext] No CPU backend set, defaulting to UAE\n");
-        cpu_uae_install(&platform_);
+        fprintf(stderr, "[CPUContext] No CPU backend set, installing the 68k machine\n");
+        cpu_m68k_install(&platform_, config.cpu_core.c_str(), config.jit);
     }
 
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n",

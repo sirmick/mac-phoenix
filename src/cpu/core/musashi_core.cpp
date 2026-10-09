@@ -189,7 +189,18 @@ private:
 int illegal_instruction(int opcode)
 {
     if(!m68k::is_host_op((uint32_t)opcode) || !g_core)
-        return 0;  /* a real illegal instruction: take the exception */
+    {
+        /* A real illegal instruction: take the exception. Logged (the
+         * first few) because it is often an instruction Musashi lacks. */
+        static int logged;
+        if(logged < 20)
+        {
+            logged++;
+            fprintf(stderr, "musashi: illegal instruction %04x at %08x\n", opcode,
+                    m68k_get_reg(nullptr, M68K_REG_PPC));
+        }
+        return 0;
+    }
     return g_core->host_op(opcode);
 }
 

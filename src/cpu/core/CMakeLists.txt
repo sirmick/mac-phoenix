@@ -6,8 +6,11 @@ add_library(cpu_core STATIC
     guest_memory.cpp
     registry.cpp
     musashi_core.cpp
+    platform_cpu.cpp
 )
-target_include_directories(cpu_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(cpu_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/src/common/include)
 target_link_libraries(cpu_core PUBLIC musashi)
 target_compile_features(cpu_core PUBLIC cxx_std_17)
 

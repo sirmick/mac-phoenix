@@ -29,6 +29,7 @@ while [[ $# -gt 0 ]]; do
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --jit) EXTRA_FLAGS+=("--jit"); shift ;;
         --no-jit) EXTRA_FLAGS+=("--no-jit"); shift ;;
+        --core) EXTRA_FLAGS+=(--core "$2"); shift 2 ;;   # CPU core: uae | musashi
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done

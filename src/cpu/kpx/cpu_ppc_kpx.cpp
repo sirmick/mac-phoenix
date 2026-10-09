@@ -1607,10 +1607,8 @@ extern "C" void cpu_ppc_kpx_install(Platform *p)
     p->make_emulop = kpx_make_emulop;
 
     // EmulOp/trap handlers
-    p->m68k_emulop_handler = nullptr;  // PPC doesn't use m68k EmulOp traps
     p->ppc_emulop_handler = kpx_ppc_emulop_handler;
     p->ppc_native_op = kpx_ppc_native_op;
-    p->trap_handler = nullptr;
 
     // PPC cursor (CursorDeviceDispatch via Execute68k + SheepMem)
     p->ppc_cursor_move = kpx_ppc_cursor_move;

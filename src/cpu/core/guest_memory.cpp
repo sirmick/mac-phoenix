@@ -21,34 +21,45 @@ void GuestMemory::map(uint32_t guest, uint64_t size, uint8_t *host)
         fprintf(stderr, "GuestMemory: bad window %08x + %llx\n", guest, (unsigned long long)size);
         abort();
     }
+    unmap(guest, size);
     intptr_t delta = (intptr_t)host - (intptr_t)guest;
     for(uint64_t p = guest >> PAGE_SHIFT; p < ((uint64_t)guest + size) >> PAGE_SHIFT; p++)
         delta_[p] = delta;
+    windows_.push_back({ guest, size, host });
 }
 
 void GuestMemory::unmap(uint32_t guest, uint64_t size)
 {
     for(uint64_t p = guest >> PAGE_SHIFT; p < ((uint64_t)guest + size) >> PAGE_SHIFT; p++)
         delta_[p] = UNMAPPED;
+    /* Drop or trim the windows it overlaps (whole windows in practice). */
+    uint64_t end = (uint64_t)guest + size;
+    std::vector<Window> kept;
+    for(const Window &w : windows_)
+    {
+        uint64_t wend = (uint64_t)w.guest + w.size;
+        if(wend <= guest || w.guest >= end)
+            kept.push_back(w);
+        else
+        {
+            if(w.guest < guest)
+                kept.push_back({ w.guest, guest - w.guest, w.host });
+            if(wend > end)
+                kept.push_back({ (uint32_t)end, wend - end, w.host + (end - w.guest) });
+        }
+    }
+    windows_.swap(kept);
 }
 
 bool GuestMemory::guest(const void *host, uint32_t *addr) const
 {
-    /* Windows are few and large: try each distinct delta. */
-    intptr_t last = UNMAPPED;
-    for(uint32_t p = 0; p < NUM_PAGES; p++)
-    {
-        intptr_t d = delta_[p];
-        if(d == UNMAPPED || d == last)
-            continue;
-        last = d;
-        intptr_t g = (intptr_t)host - d;
-        if(g >= 0 && g <= (intptr_t)0xFFFFFFFF && delta_[(uint32_t)g >> PAGE_SHIFT] == d)
+    const uint8_t *p = (const uint8_t *)host;
+    for(const Window &w : windows_)
+        if(p >= w.host && (uint64_t)(p - w.host) < w.size)
         {
-            *addr = (uint32_t)g;
+            *addr = w.guest + (uint32_t)(p - w.host);
             return true;
         }
-    }
     return false;
 }
 

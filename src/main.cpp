@@ -214,10 +214,8 @@ void video_ipc_unlink(void);
 void control_ipc_unlink(void);
 }
 
-// CPU backend install functions
-extern "C" {
-void cpu_uae_install(Platform* platform);
-}
+// The 68k machine on a cpu::Core
+#include "cpu_m68k.h"
 
 #define DEBUG 1
 #include "debug.h"
@@ -739,7 +737,7 @@ int main(int argc, char **argv)
 			switch (emu_config.backend) {
 				case config::Backend::UAE:
 				default:
-					cpu_uae_install(platform);
+					cpu_m68k_install(platform, emu_config.cpu_core.c_str(), emu_config.jit);
 					break;
 			}
 			g_platform = *platform;
@@ -996,7 +994,7 @@ int main(int argc, char **argv)
 				switch (emu_config.backend) {
 					case config::Backend::UAE:
 					default:
-						cpu_uae_install(platform);
+						cpu_m68k_install(platform, emu_config.cpu_core.c_str(), emu_config.jit);
 						break;
 				}
 

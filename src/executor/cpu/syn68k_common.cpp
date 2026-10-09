@@ -20,6 +20,7 @@
  */
 #include <syn68k_public.h>
 #include "cpu_core.h"
+#include "platform_cpu.h"
 
 #include <atomic>
 #include <cerrno>
@@ -598,8 +599,11 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
     if((uintptr_t)callback_dummy_address_space >> 32)
         syn68k_bad_host_pointer(callback_dummy_address_space);
 
-    /* Identity: guest address == host address over the whole space. */
+    /* Identity: guest address == host address over the whole space. The
+     * Platform's memory and CPU entries follow it, as on every machine. */
     guest_memory.map(0, 1ull << 32, (uint8_t *)0);
+    cpu::platform_install(&g_platform);
+    cpu::platform_set_memory(&guest_memory);
     cpu::Config config;
     config.model = 68040;
     config.fpu = false;  /* Executor provides SANE natively */
@@ -609,6 +613,7 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
         fprintf(stderr, "syn68k: cannot start the %s 68k core\n", engine_name.c_str());
         abort();
     }
+    cpu::platform_set_core(core);
 
     /* Fill the callback page. */
     for(int i = 0; i < MAX_CALLBACKS + CALLBACK_SLOP; i++)

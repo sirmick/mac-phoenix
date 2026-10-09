@@ -64,7 +64,7 @@ further backends.
 
 | Backend | Arch | What | Speed | Use for |
 |---------|------|------|-------|---------|
-| `uae` | m68k | Hand-tuned interpreter (+optional `--jit`) | Fast (~5s boot) | Default, end users |
+| `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`) or `--core musashi` | Fast (~5s boot) | Default, end users |
 | `kpx` | ppc | KPX translator (+optional `--jit`, +optional `--jit68k`) | Medium | Default for PPC |
 | `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM | Fast start | Toolbox reimplementation work (`src/executor/`) |
 
@@ -88,8 +88,10 @@ src/
     cpu_uae.c                       — UAE backend (Platform API bridge)
     uae_cpu/                        — UAE interpreter source (newcpu.cpp, cpuemu.cpp)
     kpx/                            — KPX PPC backend (SheepShaver Kheperix interpreter)
-    musashi/                        — Musashi 68k core (vendored, unmodified); Executor's alternative core
-    core/                           — cpu::Core: one interface for every core (GuestMemory, host ops, run/step, IRQ, contexts); uae + musashi so far
+    cpu_m68k.cpp                    — The ROM-based 68k Mac on a cpu::Core (EmulOps, InterruptFlags, reset)
+    musashi/                        — Musashi 68k core (vendored; one local 68040 line-F patch)
+    core/                           — cpu::Core: one interface for every core (GuestMemory, host ops, run/step, IRQ, contexts); uae + musashi
+    core/platform_cpu.cpp           — g_platform's memory/CPU/Execute68k/interrupt entries on the active core (every machine)
   drivers/
     video/video_output.h            — Lock-free triple buffer for frames
     video/video_webrtc.cpp          — WebRTC video driver
@@ -182,12 +184,13 @@ Machine:
                              (copied out on first use, image mounted too)
   --executor-start WHAT      finder | browser | path in the System (default: finder)
   --[no-]executor-fresh      Restore the System from its clean copy each run (default: on)
-  --executor-cpu NAME        68k core under Executor: uae | musashi (default: uae)
 
 CPU:
   --backend NAME             uae | kpx | executor
                              (default: uae; backend implies architecture;
                              executor needs no ROM)
+  --core NAME                CPU core for the backend's architecture:
+                             68k uae | musashi (default: uae; ROM machine and Executor)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
   --idlewait / --no-idlewait Pause CPU when guest idle (default: on)

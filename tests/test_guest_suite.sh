@@ -51,7 +51,7 @@ while [[ $# -gt 0 ]]; do
         --disk) DISK="$2"; shift 2 ;;
         --rom) ROM_OVERRIDE="$2"; shift 2 ;;
         --backend) BACKEND="$2"; shift 2 ;;
-        --executor-cpu) EXEC_CPU="$2"; shift 2 ;;   # uae | musashi (executor only)
+        --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) NETWORK="$2"; shift 2 ;;
@@ -90,7 +90,6 @@ if [[ "$BACKEND" == "executor" ]]; then
     EXEC_SYSTEM="$(basename "$DISK")"
     ROM=""
     EXTRA_FLAGS+=(--executor-system "$EXEC_SYSTEM" --executor-writable-images)
-    EXTRA_FLAGS+=(--executor-cpu "${EXEC_CPU:-uae}")
 elif [[ -z "${DISK:-}" ]]; then
     if [[ -n "$OS_VERSION" ]]; then
         IMG_BASE="macos-${OS_VERSION}"
@@ -165,6 +164,7 @@ else
     DISMISS_FLAG=(--no-dismiss-shutdown-dialog)
 fi
 
+[[ -n "${CORE:-}" ]] && EXTRA_FLAGS+=(--core "$CORE")
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null "${DISMISS_FLAG[@]}" --headless-http \
     --port "$PORT" \

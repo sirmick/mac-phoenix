@@ -227,7 +227,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
                                                : expand_home(cfg.executor_data_dir);
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
-    c.cpu = cfg.executor_cpu;
+    c.cpu = cfg.cpu_core;
     c.app = expand_home(cfg.executor_app);
     c.logtraps = cfg.executor_logtraps;
     c.writable_images = cfg.executor_writable_images;
@@ -252,6 +252,6 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
                                                : expand_home(cfg.executor_data_dir);
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
-    c.cpu = cfg.executor_cpu;
+    c.cpu = cfg.cpu_core;
     return executor_host::run(c);
 }

@@ -173,7 +173,7 @@ add_executable(mac-phoenix src/main.cpp)
 target_link_libraries(mac-phoenix PRIVATE
   -Wl,--whole-archive cpuemu_ff cpustbl_ff -Wl,--no-whole-archive
   -Wl,--start-group
-  core drivers cpu ipc kpx_shared kpx_interp kpx_dyngen uae_cpu uae_jit vm_alloc
+  core drivers cpu cpu_core musashi ipc kpx_shared kpx_interp kpx_dyngen uae_cpu uae_jit vm_alloc
   webserver webrtc_lib video_encoders audio_encoders config
   -Wl,--end-group
   Threads::Threads
@@ -204,6 +204,7 @@ target_include_directories(mac-phoenix PRIVATE
   src/core
   src/cpu
   src/cpu/uae_cpu
+  src/cpu/core
   src/drivers
   src/drivers/platform
   src/config

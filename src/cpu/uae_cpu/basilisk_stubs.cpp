@@ -6,7 +6,7 @@
 
 #include "sysdeps.h"
 #include "cpu_emulation.h"
-#include "timer_interrupt.h"  // For poll_timer_interrupt()
+#include "uae_host_hooks.h"
 #include "vclock.h"
 #include "m68k.h"
 #include "memory.h"
@@ -98,9 +98,9 @@ void cpu_do_check_ticks(void) {
             vclock_poll_hook();
     }
 
-    // Poll the timerfd-based timer system
-    // This will call one_tick() -> SetInterruptFlag() -> TriggerInterrupt() as needed
-    poll_timer_interrupt();
+    // Whoever drives UAE looks in (cpu::Core: attention, interrupt line).
+    if (uae_host_hooks.poll)
+        uae_host_hooks.poll();
 
     // Reset counter for next quantum
     emulated_ticks += emulated_ticks_quantum;

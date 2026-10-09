@@ -4,7 +4,7 @@
  * A core executes guest instructions; everything else is the host's. The
  * same interface fits an interpreter, a JIT, a 68k or a PowerPC:
  *
- *   GuestMemory  the 32-bit guest address space: 1MB pages, each mapped
+ *   GuestMemory  the 32-bit guest address space: 64KB pages, each mapped
  *                to host memory (host = guest + delta) or sent to an I/O
  *                handler. The host builds it; the core reads through it.
  *   Host         what the core calls back: host_op() for an instruction in
@@ -12,6 +12,10 @@
  *                instruction boundary after request_attention().
  *   Core         reset, run until stopped, step, interrupt line, registers,
  *                context save/restore for process switching.
+ *
+ * Returning to the host: by convention one host op means "return to
+ * host" ($7100 on 68k). Its handler leaves the PC on the op and returns
+ * Stop; run_until() and the Platform glue (platform_cpu.h) rely on that.
  *
  * Re-entrancy: run() may be called again from inside host_op() or
  * attention() (the host calling guest code, e.g. a Toolbox trap running a
@@ -47,7 +51,7 @@ enum class Arch { M68K, PPC };
 class GuestMemory
 {
 public:
-    static constexpr int PAGE_SHIFT = 20;                       /* 1MB pages */
+    static constexpr int PAGE_SHIFT = 16;                       /* 64KB pages */
     static constexpr uint32_t PAGE_SIZE = 1u << PAGE_SHIFT;
     static constexpr uint32_t NUM_PAGES = 1u << (32 - PAGE_SHIFT);
 
@@ -69,10 +73,14 @@ public:
     void map(uint32_t guest, uint64_t size, uint8_t *host);
     void unmap(uint32_t guest, uint64_t size);
     void set_io(Io *io) { io_ = io; }
+    /* A 24-bit 68k ignores the top byte of every address (the Memory
+     * Manager keeps flags there). Applied to every access and lookup. */
+    void set_address_bits(int bits) { mask_ = bits >= 32 ? 0xFFFFFFFFu : (1u << bits) - 1; }
 
     /* Host pointer for a guest address, or nullptr when unmapped. */
     uint8_t *host(uint32_t addr) const
     {
+        addr &= mask_;
         intptr_t d = delta_[addr >> PAGE_SHIFT];
         return d == UNMAPPED ? nullptr : (uint8_t *)(d + (intptr_t)addr);
     }
@@ -86,11 +94,13 @@ public:
      * guest gets its own accessors). */
     uint8_t read8(uint32_t a) const
     {
+        a &= mask_;
         const uint8_t *p = host(a);
         return p ? *p : (uint8_t)io_read(a, 1);
     }
     uint16_t read16(uint32_t a) const
     {
+        a &= mask_;
         const uint8_t *p = host(a);
         if(p && (a & (PAGE_SIZE - 1)) <= PAGE_SIZE - 2)
             return (uint16_t)(p[0] << 8 | p[1]);
@@ -98,6 +108,7 @@ public:
     }
     uint32_t read32(uint32_t a) const
     {
+        a &= mask_;
         const uint8_t *p = host(a);
         if(p && (a & (PAGE_SIZE - 1)) <= PAGE_SIZE - 4)
             return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
@@ -105,6 +116,7 @@ public:
     }
     void write8(uint32_t a, uint8_t v)
     {
+        a &= mask_;
         uint8_t *p = host(a);
         if(p)
             *p = v;
@@ -113,6 +125,7 @@ public:
     }
     void write16(uint32_t a, uint16_t v)
     {
+        a &= mask_;
         uint8_t *p = host(a);
         if(p && (a & (PAGE_SIZE - 1)) <= PAGE_SIZE - 2)
         {
@@ -124,6 +137,7 @@ public:
     }
     void write32(uint32_t a, uint32_t v)
     {
+        a &= mask_;
         uint8_t *p = host(a);
         if(p && (a & (PAGE_SIZE - 1)) <= PAGE_SIZE - 4)
         {
@@ -138,7 +152,10 @@ public:
 
 private:
     static constexpr intptr_t UNMAPPED = INTPTR_MIN;
+    struct Window { uint32_t guest; uint64_t size; uint8_t *host; };
     intptr_t delta_[NUM_PAGES];
+    std::vector<Window> windows_;  /* for guest(): few and large */
+    uint32_t mask_ = 0xFFFFFFFFu;
     Io *io_ = nullptr;
 
     uint32_t io_read(uint32_t a, int size) const;
@@ -169,6 +186,7 @@ enum Reg : int {
  * what each one means. */
 constexpr uint16_t HOST_OP_MASK = 0xFF00;
 constexpr uint16_t HOST_OP_MATCH = 0x7100;
+constexpr uint16_t HOST_OP_RETURN = 0x7100;  /* "return to host" */
 inline bool is_host_op(uint32_t opcode) { return (opcode & HOST_OP_MASK) == HOST_OP_MATCH; }
 }  // namespace m68k
 
@@ -239,7 +257,9 @@ public:
     virtual const char *name() const = 0;
     virtual Arch arch() const = 0;
 
-    /* Power-on reset: 68k loads SSP and PC from its reset vectors. */
+    /* Power-on state: supervisor mode, interrupts masked, caches off.
+     * Whether a 68k core also loads SSP and PC from the reset vectors
+     * differs (Musashi does, UAE does not): set them afterwards. */
     virtual void reset() = 0;
 
     /* Run until a host op stops it, request_stop(), or a halt. */
@@ -254,9 +274,10 @@ public:
      * on the core's thread. Several requests may become one call. */
     virtual void request_attention() = 0;
 
-    /* The interrupt line. m68k: the priority level 0..7 on IPL0-2 (7 is
-     * the non-maskable edge). ppc: nonzero asserts the external interrupt.
-     * Level-sensitive: it stays until the host lowers it. */
+    /* The interrupt line. m68k: the priority level 0..6 on IPL0-2,
+     * level-sensitive (it stays until the host lowers it); 7 is the
+     * non-maskable edge: one NMI, and the line keeps its previous level.
+     * ppc: nonzero asserts the external interrupt. */
     virtual void set_irq(int level) = 0;
 
     virtual uint32_t pc() const = 0;
