@@ -32,6 +32,7 @@ struct Config
     std::vector<std::string> shared_folders;
 
     bool logtraps = false;
+    bool writable_images = false; // disk images read-write (default: read-only)
 
     // Application to start instead of Executor's Browser (host path).
     std::string app;

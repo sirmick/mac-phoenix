@@ -45,6 +45,8 @@ extern bool ROMlib_process_has_thread();
 extern bool ROMlib_process_open_event_posted();
 /* Called on every event call: where processes switch. */
 extern void ROMlib_process_event_hook();
+/* WaitNextEvent: the caller sleeps (ticks) in its event loop. */
+extern void ROMlib_process_idle_hook(int32_t sleep);
 /* LaunchApplication with launchContinue: create the process. */
 extern OSErr process_launch(LaunchParamBlockRec *lpbp);
 /* launch.cpp: start the application in the (new) current process. */

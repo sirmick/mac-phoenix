@@ -501,6 +501,13 @@ void Executor::ROMlib_fileinit() /* INTERNAL */
 #define NWDENTRIES 40
     INTEGER wdlen = NWDENTRIES * sizeof(wdentry) + sizeof(INTEGER);
     LM(WDCBsPtr) = NewPtr((Size)wdlen);
+    /* MacPhoenix: the File System Manager's variables, as 7.5.5 allocates
+       them ($74 bytes, length word first); left zero, there being no File
+       System Manager. Code that looks at them (Apple Menu Options' file
+       trap patches) otherwise reads through $FFFFFFFF. */
+    LM(FSVars) = NewPtrClear(0x74);
+    if(LM(FSVars))
+        *(GUEST<INTEGER> *)LM(FSVars) = 0x74;
     LM(TheZone) = savezone;
     memset(LM(WDCBsPtr), 0, wdlen);
     *(GUEST<INTEGER> *)LM(WDCBsPtr) = wdlen;

@@ -114,6 +114,7 @@ struct EmulatorConfig {
     // Web/Network
     bool enable_webserver = true;
     bool headless_http = false;        // serve HTTP API in headless mode (no WebRTC/video/audio)
+    bool exit_with_guest = false;      // runtime only: the parent exits when its guest powers off
     bool bridge_enabled = false;       // automation bridge (INIT injection + file-based commands)
     std::string bridge_dir;            // temp directory for bridge file I/O (auto-created)
     bool browser_enabled = false;      // MacBrowser: allocate BrowserShm region (host-side spike + guest Browser.app)
@@ -136,6 +137,7 @@ struct EmulatorConfig {
     std::string executor_start = "finder";
     bool executor_fresh = true;
     bool executor_logtraps = false;    // Executor logs every trap call (args, results) to stderr
+    bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
 
     // System
     bool zappram = false;

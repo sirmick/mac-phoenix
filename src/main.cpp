@@ -883,6 +883,22 @@ int main(int argc, char **argv)
 			});
 		}
 
+		// Executor under --headless-http: the run ends when the guest powers
+		// off (ShutDwnPower exits the child with 3), as an in-process
+		// headless run does; a stop from the API does not end it.
+		if (emu_config.exit_with_guest && subprocess_owner) {
+			std::thread([sp = subprocess_owner.get()]() {
+				for (;;) {
+					std::this_thread::sleep_for(std::chrono::milliseconds(250));
+					EmulatorSubprocess::ChildExit ex;
+					if (!sp->is_running() && sp->last_exit(ex) && !ex.crashed && ex.code == 3) {
+						fprintf(stderr, "[Main] Guest powered off; exiting\n");
+						exit(0);
+					}
+				}
+			}).detach();
+		}
+
 		// Launch HTTP server thread (also hosts /ws signaling)
 		std::thread http_server_thread(webserver::http_server_main,
 		                                &emu_config, &api_context, &webrtc_server);

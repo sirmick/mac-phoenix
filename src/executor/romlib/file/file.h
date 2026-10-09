@@ -182,6 +182,8 @@ class Volume;
 void MountLocalVolumes();
 /* MacPhoenix: host folders to mount instead of "/" (empty: mount "/"). */
 extern std::vector<std::string> ROMlib_local_volume_roots;
+/* MacPhoenix: volume names for some of those roots (else the folder name). */
+extern std::map<std::string, std::string> ROMlib_local_volume_names;
 /* MacPhoenix: path settings by variable name (SystemFolder, MacVolumes,
  * ...), consulted before the environment. */
 extern std::map<std::string, std::string> ROMlib_path_overrides;

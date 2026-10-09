@@ -108,9 +108,33 @@ OSErr Executor::C_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id,
         {
             OSErr err;
 
-            cpb.hFileInfo.ioNamePtr = nullptr;
+            /* MacPhoenix: the directory the name is in. A path's is
+               everything before its last colon ("Vol:a:b:file" ->
+               "Vol:a:b", a volume name keeping its colon: "Vol:");
+               a plain name's is dir_id (0: the default directory). */
+            Str255 parent_name;
+            int last = 0;
+            for(int i = 1; i <= file_name[0]; i++)
+                if(file_name[i] == ':' && i < file_name[0])
+                    last = i;
+            if(last > 1)
+            {
+                int first = 0;
+                for(int i = 1; i < last && !first; i++)
+                    if(file_name[i] == ':')
+                        first = i;
+                int len = first ? last - 1 : last; /* "Vol:" keeps its colon */
+                parent_name[0] = len;
+                memcpy(parent_name + 1, file_name + 1, len);
+                cpb.hFileInfo.ioNamePtr = parent_name;
+                cpb.hFileInfo.ioFDirIndex = 0;
+            }
+            else
+            {
+                cpb.hFileInfo.ioNamePtr = nullptr;
+                cpb.hFileInfo.ioFDirIndex = -1;
+            }
             cpb.hFileInfo.ioVRefNum = vRefNum;
-            cpb.hFileInfo.ioFDirIndex = -1;
             cpb.hFileInfo.ioDirID = dir_id;
             err = PBGetCatInfo(&cpb, false);
             if(err == noErr)
@@ -134,6 +158,15 @@ OSErr Executor::C_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id,
         }
     }
     return retval;
+}
+
+/* PBMakeFSSpec (HFSDispatch $1B): FSMakeFSSpec from a parameter block,
+   ioMisc pointing at the FSSpec to fill. MacPerl calls it. */
+OSErr Executor::PBMakeFSSpec(HParmBlkPtr pb, Boolean async)
+{
+    OSErr retval = FSMakeFSSpec(pb->ioParam.ioVRefNum, pb->fileParam.ioDirID,
+                                pb->ioParam.ioNamePtr, (FSSpecPtr)(Ptr)pb->ioParam.ioMisc);
+    FAKEASYNC(pb, async, retval);
 }
 
 /*

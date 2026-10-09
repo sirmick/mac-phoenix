@@ -5,6 +5,10 @@
 
 #include <base/common.h>
 
+#include <cstdio>
+#include <cstdlib>
+#include <unistd.h>
+
 #include <ShutDown.h>
 #include <SegmentLdr.h>
 
@@ -12,10 +16,18 @@
 
 using namespace Executor;
 
+/* MacPhoenix: power off ends the machine, every process with it (with
+   several processes, ExitToShell would only end the caller). Shutdown
+   procs are not run (ShutDwnInstall is unimplemented). */
 void Executor::C_ShutDwnPower()
 {
     ROMlib_exit = true;
-    ExitToShell();
+    fprintf(stderr, "[Executor] ShutDwnPower: powering off\n");
+    fflush(nullptr);
+    /* _exit: atexit handlers would unmap the video buffer under the host's
+       frame loop; the parent clears the IPC state when we are gone. 3 is
+       the host's "guest powered off" (main.cpp, exit_with_guest). */
+    _exit(3);
 }
 
 void Executor::C_ShutDwnStart()

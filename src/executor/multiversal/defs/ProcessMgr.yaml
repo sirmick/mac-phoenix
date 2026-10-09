@@ -91,6 +91,8 @@
     values:
       - name: launchContinue
         value: 0x4000
+      - name: launchNoFileFlags
+        value: 0x0800
 
 # ####
 

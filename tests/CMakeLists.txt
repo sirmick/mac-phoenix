@@ -180,6 +180,31 @@ set_tests_properties(guest_suite_761 PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
+# --- Executor variants: Apple's 7.5.5 System on Executor's Toolbox, no ROM.
+# Runs on the System Folder of the test copy of macos-7.5.5.img (extracted
+# into <storage>/executor-systems on first use). The guest suite's network
+# tests fail until Executor has a TCP/IP stack.
+
+add_test(
+  NAME command_bridge_executor
+  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend executor --timeout 60 --port 18110
+)
+set_tests_properties(command_bridge_executor PROPERTIES
+  TIMEOUT 90
+  LABELS "boot"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME guest_suite_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --timeout 150 --port 18112
+)
+set_tests_properties(guest_suite_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+)
+
 # --- PPC variants of API/boot tests ---
 
 add_test(

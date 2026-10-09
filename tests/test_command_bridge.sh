@@ -42,15 +42,21 @@ if [[ ! -x "$BINARY" ]]; then
     exit 77
 fi
 
-if [[ ! -f "$ROM" ]]; then
+EXTRA_FLAGS=()
+[[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
+DISK_FLAGS=(--disk "$DISK")
+if [[ "$BACKEND" == "executor" ]]; then
+    # No ROM: Executor runs on the test copy's System Folder and mounts the
+    # copy itself, writable (see test_guest_suite.sh).
+    ROM=""
+    DISK_FLAGS=()
+    EXTRA_FLAGS+=(--executor-system "$(basename "$DISK")" --executor-writable-images)
+elif [[ ! -f "$ROM" ]]; then
     echo "SKIP: ROM not found: $ROM"
     exit 77
 fi
 
 echo "=== Command Bridge Test: $BACKEND backend ==="
-
-EXTRA_FLAGS=()
-[[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]]; then
@@ -63,8 +69,8 @@ trap cleanup EXIT
 # Start emulator (headless-http works for both m68k and PPC)
 "$BINARY" --backend "$BACKEND" --timeout "$TIMEOUT" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
-    --port "$PORT" --disk "$DISK" \
-    "${EXTRA_FLAGS[@]}" "$ROM" &>/dev/null &
+    --port "$PORT" "${DISK_FLAGS[@]}" \
+    "${EXTRA_FLAGS[@]}" ${ROM:+"$ROM"} &>/dev/null &
 EMU_PID=$!
 
 # Wait for HTTP server

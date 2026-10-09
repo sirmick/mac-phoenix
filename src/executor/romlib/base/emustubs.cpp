@@ -214,7 +214,13 @@ RAW_68K_IMPLEMENTATION(IODone)
 // PPC.h
 RAW_68K_IMPLEMENTATION(IMVI_PPC)
 {
-    EM_D0 = paramErr; /* this is good enough for NetScape */
+    /* MacPhoenix: D0 is the selector. PPCInit (0) succeeds, as it does on
+       7.5.5 (the PPC Toolbox is always there; MacPerl gives up without
+       it). The rest are not implemented. */
+    if((EM_D0 & 0xFFFF) == 0)
+        EM_D0 = noErr;
+    else
+        EM_D0 = paramErr; /* this is good enough for NetScape */
     RTS();
 }
 

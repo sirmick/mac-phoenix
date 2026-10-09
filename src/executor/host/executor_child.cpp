@@ -20,6 +20,7 @@ extern "C++" uint32_t uae_current_pc(void);
 #include "../../common/include/m68k_registers.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -93,13 +94,14 @@ void publish_frame(const uint32_t *pixels, int w, int h)
     std::string app = executor_host::current_app_name();
     strncpy(g_buf->cur_app_name, app.c_str(), sizeof(g_buf->cur_app_name) - 1);
 
-    // There is no ROM boot. First frame: the shell app is starting
-    // ("Finder"). First event poll: it is idle in its event loop ("desktop").
-    if (g_first_frame) {
+    // There is no ROM boot. The shell app has started ("Finder") once
+    // CurApName names it (before that it holds Executor's own name). First
+    // event poll: it is idle in its event loop ("desktop").
+    if (g_first_frame && !app.empty() && app != "mac-phoenix") {
         set_phase("Finder");
         g_first_frame = false;
     }
-    if (!g_desktop && executor_host::app_idle()) {
+    if (!g_first_frame && !g_desktop && executor_host::app_idle()) {
         set_phase("desktop");
         g_desktop = true;
     }
@@ -121,10 +123,16 @@ std::string expand_home(std::string p)
 // Snapshot guest RAM as "executor-fatal": called on a fatal Executor error and
 // when the host faults on a guest access (Executor maps guest memory 1:1, so a
 // bad guest pointer is a host SIGSEGV).
+// Where fatal snapshots go, copied at startup: at exit the config's strings
+// may already be destroyed when a late fault comes in.
+std::string g_snapshot_root;
+std::atomic<bool> g_exiting{false};
+
 void fatal_snapshot(const char *message)
 {
-    auto& cfg = config::EmulatorConfig::instance();
-    if (snapshot_prepare(expand_home(cfg.storage_dir), "executor-fatal").empty())
+    if (g_exiting || g_snapshot_root.empty())
+        return;
+    if (snapshot_prepare(g_snapshot_root, "executor-fatal").empty())
         return;
     snapshot_request();
     static M68kRegisters regs;
@@ -202,7 +210,11 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
         snapshot_service(mem);
     });
 
-    // A fatal Executor error snapshots guest RAM as "executor-fatal".
+    // A fatal Executor error snapshots guest RAM as "executor-fatal" (not
+    // once the process is exiting: registered after main's IPC cleanup, so
+    // this runs before it).
+    g_snapshot_root = expand_home(cfg.storage_dir);
+    atexit([] { g_exiting = true; });
     executor_host::set_fatal_hook(fatal_snapshot);
     install_crash_snapshot();
 
@@ -217,6 +229,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.shared_folders = cfg.extfs_paths;
     c.app = expand_home(cfg.executor_app);
     c.logtraps = cfg.executor_logtraps;
+    c.writable_images = cfg.executor_writable_images;
     c.on_frame = publish_frame;
 
     fprintf(stderr, "[Executor] %dx%d, %d MB, data in %s, %zu disk image(s) read-only\n",

@@ -23,6 +23,7 @@
     #undef PBSetFPos
     #undef PBFlushFile
     #undef PBCatSearch
+    #undef PBMakeFSSpec
     #undef PBOpenWD
     #undef PBCloseWD
     #undef PBHSetVol
@@ -1030,6 +1031,17 @@
     address: 0x210
     comment: |
       FileMgr IMIV-212 (true);
+
+# ####
+
+- lowmem:
+    name: FSVars
+    type: Ptr
+    address: 0xBB8
+    comment: |
+      MacPhoenix: the File System Manager's variables (System heap, $74
+      bytes on 7.5.5, length word first). Apple Menu Options' _Open patch
+      reads fields 10 and 56 of it.
 
 # ####
 
@@ -2673,6 +2685,28 @@
     variants:
       - PBHOpenDFSync
       - PBHOpenDFAsync
+
+# ####
+
+- function:
+    name: PBMakeFSSpec
+    return: OSErr
+    args:
+      - name: pb
+        type: HParmBlkPtr
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    executor: true
+    file_trap: true
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x1B
+    returnreg: D0
+    variants:
+      - PBMakeFSSpecSync
+      - PBMakeFSSpecAsync
 
 # ####
 

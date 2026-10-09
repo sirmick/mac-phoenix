@@ -14,6 +14,9 @@
 #include <mman/mman.h>
 #include <rsys/process.h>
 #include <ScrapMgr.h>
+#include <FileMgr.h>
+#include <file/file.h>
+#include <AliasMgr.h>
 #include <wind/wind.h>
 #include <quickdraw/cquick.h>
 #include <WindowMgr.h>
@@ -133,6 +136,8 @@ struct process_info
     bool activate_pending = false;
     bool os_event_pending = false;
     int32_t os_event_message = 0;
+    /* Its last WaitNextEvent: when its sleep runs out (ticks). */
+    uint32_t wake_tick = 0;
 };
 typedef struct process_info process_info_t;
 
@@ -186,6 +191,9 @@ static void process_bootstrap()
         return;
     current_process_info = new_process();
     current_process_info->state = process_info_t::running;
+    /* The default directory is per process (its volume is DefVCBPtr, in
+       low memory): a launched application starts in its own folder. */
+    ROMlib_process_register_state(&DefDirID, sizeof DefDirID);
     layer_order.push_back(current_process_info);
     front_process = current_process_info;
 }
@@ -573,7 +581,9 @@ static bool wants_time(process_info_t *p)
     return has_updates(p) || p->os_event_pending
         || ROMlib_hle_pending(&p->serial_number)
         || lowmem_long(p, 0xA64) /* CurActivate */
-        || lowmem_long(p, 0xA68) /* CurDeactive */;
+        || lowmem_long(p, 0xA68) /* CurDeactive */
+        /* SIZE canBackground: a null event once its sleep runs out. */
+        || ((p->mode & 0x1000) && (int32_t)(TickCount() - p->wake_tick) >= 0);
 }
 
 static bool has_updates(process_info_t *p)
@@ -699,7 +709,7 @@ std::vector<ROMlib_process_entry> Executor::ROMlib_process_entries()
     std::vector<ROMlib_process_entry> out;
     for(process_info_t *p = process_info_list; p; p = p->next)
     {
-        if(!p->name[0])
+        if(!p->name[0] || p->state == process_info_t::fresh)
             continue; /* not launched yet */
         ROMlib_process_entry e;
         e.psn = p->serial_number;
@@ -1061,6 +1071,68 @@ void Executor::ROMlib_process_event_hook()
         }
 }
 
+/* MacPhoenix (status: stand-in). On 7.5.5 Finder opens the items in Startup
+   Items once it is up, from an Apple event handler of its own. Under
+   Executor it gets its 'oapp' but never opens them, and what it checks is
+   not found yet; so when Finder is front and idle in its event loop, the
+   applications there (or that aliases there resolve to) are launched for
+   it, one per call, with Finder as their launcher. Documents are left. */
+static bool startup_items_listed;
+static std::vector<FSSpec> startup_items;
+
+static void list_startup_items()
+{
+    startup_items_listed = true;
+    GUEST<INTEGER> vref;
+    GUEST<LONGINT> dirid;
+    if(FindFolder(-32768 /* kOnSystemDisk */, kStartupFolderType, false, &vref, &dirid) != noErr)
+        return;
+    for(INTEGER i = 1;; i++)
+    {
+        Str255 name;
+        CInfoPBRec pb = {};
+        pb.hFileInfo.ioNamePtr = name;
+        pb.hFileInfo.ioVRefNum = vref;
+        pb.hFileInfo.ioDirID = dirid;
+        pb.hFileInfo.ioFDirIndex = i;
+        if(PBGetCatInfo(&pb, false) != noErr)
+            break;
+        if(pb.hFileInfo.ioFlAttrib & 0x10 /* a folder */)
+            continue;
+        FSSpec spec;
+        if(FSMakeFSSpec(vref, dirid, name, &spec) != noErr)
+            continue;
+        Boolean folder, alias;
+        if(ResolveAliasFile(&spec, true, &folder, &alias) != noErr || folder)
+            continue;
+        FInfo fi;
+        if(FSpGetFInfo(&spec, &fi) == noErr && fi.fdType == "APPL"_4)
+            startup_items.push_back(spec);
+    }
+}
+
+void Executor::ROMlib_process_idle_hook(int32_t sleep)
+{
+    process_info_t *me = current_process_info;
+    if(!me)
+        return;
+    me->wake_tick = TickCount() + std::max<int32_t>(sleep, 0);
+    if(sleep <= 0 || me != front_process || me->signature != "MACS"_4 || pending_launch)
+        return;
+    if(!startup_items_listed)
+        list_startup_items();
+    if(startup_items.empty())
+        return;
+    FSSpec spec = startup_items.front();
+    startup_items.erase(startup_items.begin());
+    LaunchParamBlockRec lpb = {};
+    lpb.launchBlockID = extendedBlock;
+    lpb.launchEPBLength = extendedBlockLen;
+    lpb.launchControlFlags = launchContinue | launchNoFileFlags;
+    lpb.launchAppSpec = &spec;
+    LaunchApplication(&lpb);
+}
+
 bool Executor::ROMlib_process_is_front()
 {
     return !current_process_info || current_process_info == front_process;
@@ -1084,6 +1156,20 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     p->own_thread = true;
     p->app = *lpbp->launchAppSpec;
     p->launcher = current_process_info->serial_number;
+    /* Known as soon as LaunchApplication returns, as on 7.5.5, though the
+       process first runs at our next event call: BridgeAgent looks a
+       launched application up by its creator straight away. */
+    {
+        FInfo fi;
+        if(FSpGetFInfo(lpbp->launchAppSpec, &fi) == noErr)
+        {
+            p->type = fi.fdType;
+            p->signature = fi.fdCreator;
+        }
+        int len = std::min<int>(p->app.name[0], 31);
+        p->name[0] = len;
+        memcpy(&p->name[1], &p->app.name[1], len);
+    }
     pending_launch = p;
     lpbp->launchProcessSN = p->serial_number;
 
@@ -1103,6 +1189,28 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
                                0x8000 /* receiverIDisPSN */);
             p->posted_open_event = true;
         }
+    }
+    else
+    {
+        /* No AppParameters: an 'oapp' (Apple event wire format, as
+           osevent.cpp builds it), queued now so that it comes before
+           anything sent to the new process later; BridgeAgent sends its
+           'dosc' while MacPerl is still starting. */
+        struct
+        {
+            GUEST<OSType> signature;
+            GUEST<int16_t> major, minor;
+            GUEST<OSType> marker;
+        } msg = { "aevt"_4, 1, 1, ";;;;"_4 };
+        EventRecord evt = {};
+        evt.what = kHighLevelEvent;
+        evt.message = "aevt"_4;
+        GUEST<uint32_t> id = "oapp"_4;
+        memcpy(&evt.where, &id, sizeof id);
+        ProcessSerialNumber to = p->serial_number;
+        PostHighLevelEvent(&evt, (Ptr)&to, 0, (Ptr)&msg, sizeof msg,
+                           0x8000 /* receiverIDisPSN */);
+        p->posted_open_event = true;
     }
     return noErr;
 }

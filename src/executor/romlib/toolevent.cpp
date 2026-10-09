@@ -521,6 +521,7 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
     /* MacPhoenix: wneTimeout is shared by all processes, and another one may
        run (and clear it) while this one waits; the deadline is this call's. */
     uint32_t deadline = TickCount() + (sleep > 0 ? sleep : 0);
+    ROMlib_process_idle_hook(sleep);
 
     if(sleep > 0)
     {

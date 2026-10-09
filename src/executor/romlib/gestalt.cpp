@@ -64,7 +64,10 @@ static gestaltentry_t gtable[] = {
 
     { gestaltFindFolderAttr, 1 },
 
-    /*  gestaltFontMgrAttr,		0,	*/
+    /* MacPhoenix: 7 on real 7.5.5 (outline fonts, PostScript-font fix,
+       TrueType-in-ROM bits; read with MacPerl's Mac::Gestalt). MacPerl
+       won't start without it ("requires System 7.0 or later"). */
+    { gestaltFontMgrAttr, 7 },
     {
         gestaltFSAttr, gestaltStandardFile58 | gestaltHasFSSpecCalls,
     },

@@ -224,6 +224,9 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
     hle_msg->version = 0;
     hle_msg->reserved1 = -1;
     hle_msg->theMsgEvent = *evt;
+    /* MacPhoenix: it arrives as a high-level event whatever the poster
+       left in 'what' (Apple's AESend leaves it unset). */
+    hle_msg->theMsgEvent.what = kHighLevelEvent;
 
     /* #### copy the message buffer? */
     msg_buf_copy = NewPtr(msg_length);

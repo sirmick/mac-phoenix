@@ -322,6 +322,7 @@ void Executor::InitPerProcessLowMem()
         FSFCBLen,
         FCBSPtr,
         WDCBsPtr,
+        FSVars,
         SFSaveDisk,
         CurDirStore,
         EventQueue,

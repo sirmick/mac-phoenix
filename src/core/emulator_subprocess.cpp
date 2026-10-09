@@ -118,6 +118,9 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     if (config_->executor_logtraps) {
         args.push_back("--executor-logtraps");
     }
+    if (config_->executor_writable_images) {
+        args.push_back("--executor-writable-images");
+    }
     if (config_->backend_string() == "executor") {
         // System, start application and a fresh working copy, resolved
         // here so the child just gets paths (src/core/executor_systems.h).

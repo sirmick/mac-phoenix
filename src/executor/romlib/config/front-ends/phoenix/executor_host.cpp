@@ -65,11 +65,16 @@ int run(const Config& c)
     // root as on a real disk; Finder walks whole volumes (Desktop rebuild),
     // so the host root must never be one.
     ROMlib_local_volume_roots.clear();
+    ROMlib_local_volume_names.clear();
     if(!c.data_dir.empty())
         ROMlib_local_volume_roots.push_back(c.data_dir);
     for(const auto& f : c.shared_folders)
         ROMlib_local_volume_roots.push_back(f);
-    ROMlib_readonly_images = true;
+    // The first shared folder is "Host", as Basilisk's ExtFS names it: the
+    // bridge's paths (Host:MacPhoenix:<pid>) and the guest tests use it.
+    if(!c.shared_folders.empty())
+        ROMlib_local_volume_names[c.shared_folders[0]] = "Host";
+    ROMlib_readonly_images = !c.writable_images;
     ROMlib_heap_death_dialog = false;
 
     screenW = c.width;
@@ -151,7 +156,9 @@ std::string current_app_name()
         return {};
     // CurApName ($910): Pascal string, max 31 chars. Identity addressing.
     const uint8_t *p = (const uint8_t *)(uintptr_t)0x910;
-    int n = std::min<int>(p[0], 31);
+    if(p[0] > 31)
+        return {}; /* not set yet (low memory starts as $FF) */
+    int n = p[0];
     std::string name;
     for(int i = 0; i < n; i++)
     {

@@ -1,5 +1,6 @@
 #include "executor_systems.h"
 #include "emulator_config.h"
+#include "command_bridge.h"
 
 #include <QProcess>
 #include <QStringList>
@@ -90,6 +91,38 @@ static bool prepare(const fs::path& work, bool fresh, std::string& err)
     return true;
 }
 
+// The bridge: BridgeAgent in Startup Items (opened at startup) and the
+// per-run MacPhoenix.cfg naming the bridge dir, as install_bridge_agent.sh
+// writes them into a disk image. The agent is this build's
+// BridgeAgent.bin, copied as it is: Executor reads MacBinary files on a
+// host folder as Mac files.
+static void provision_bridge(const fs::path& work)
+{
+    std::string dir = command_bridge_guest_dir();
+    if (dir.empty())
+        return;
+    std::error_code ec;
+    fs::path sys = work / "System Folder";
+    fs::path items = sys / "Startup Items";
+    std::string bin = command_bridge_agent_bin();
+    if (bin.empty()) {
+        fprintf(stderr, "[Bridge] BridgeAgent.bin not found; keeping the System's own\n");
+    } else {
+        fs::create_directories(items, ec);
+        fs::remove(items / "BridgeAgent", ec);
+        fs::remove(items / "%BridgeAgent", ec); // AppleDouble companion
+        // Executor takes a host file for MacBinary only by its .bin suffix.
+        fs::copy_file(bin, items / "BridgeAgent.bin", fs::copy_options::overwrite_existing, ec);
+        if (ec)
+            fprintf(stderr, "[Bridge] installing BridgeAgent: %s\n", ec.message().c_str());
+    }
+    fs::create_directories(sys / "Preferences", ec);
+    if (FILE *f = fopen((sys / "Preferences" / "MacPhoenix.cfg").c_str(), "wb")) {
+        fprintf(f, "bridge_dir=%s\r", dir.c_str());
+        fclose(f);
+    }
+}
+
 std::string system_image(const config::EmulatorConfig& config)
 {
     if (config.executor_system.empty() || !valid_name(config.executor_system))
@@ -120,8 +153,10 @@ void resolve(const config::EmulatorConfig& config, std::string& data_dir, std::s
         } else {
             fs::path work = fs::path(root(config.storage_dir)) / config.executor_system;
             std::string err;
-            if (prepare(work, config.executor_fresh, err))
+            if (prepare(work, config.executor_fresh, err)) {
                 data_dir = work.string();
+                provision_bridge(work);
+            }
             else
                 fprintf(stderr, "[Executor] system '%s': %s\n", config.executor_system.c_str(), err.c_str());
         }

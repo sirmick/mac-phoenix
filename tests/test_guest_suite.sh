@@ -9,7 +9,11 @@
 # Usage:
 #   tests/test_guest_suite.sh [--timeout 60] [--port 18094] [--disk path]
 #                             [--rom path] [--os-version 7.5.5|7.6]
-#                             [--network MODE]
+#                             [--network MODE] [--backend uae|kpx|executor]
+#
+# --backend executor runs on the System Folder of the test copy
+# <storage>/images/test-macos-<os-version>.img (no ROM; the copy is mounted
+# writable beside it, MacPerl included).
 #
 # Prerequisites:
 #   - Disk image with MacPerl installed and BridgeAgent in Startup Items
@@ -67,7 +71,16 @@ else
     ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [[ -z "${DISK:-}" ]]; then
+if [[ "$BACKEND" == "executor" ]]; then
+    # No ROM: Executor runs on the System Folder of the test copy of the
+    # image (extracted once into <storage>/executor-systems, refreshed each
+    # run) and mounts the copy beside it, writable, as the ROM backends'
+    # boot disk is.
+    [[ -z "${DISK:-}" ]] && DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "macos-${OS_VERSION:-7.5.5}")}"
+    EXEC_SYSTEM="$(basename "$DISK")"
+    ROM=""
+    EXTRA_FLAGS+=(--executor-system "$EXEC_SYSTEM" --executor-writable-images)
+elif [[ -z "${DISK:-}" ]]; then
     if [[ -n "$OS_VERSION" ]]; then
         IMG_BASE="macos-${OS_VERSION}"
     elif [[ "$ARCH" == "ppc" ]]; then
@@ -85,7 +98,7 @@ if [[ ! -x "$BINARY" ]]; then
     exit 77
 fi
 
-if [[ ! -f "$ROM" ]]; then
+if [[ "$BACKEND" != "executor" && ! -f "$ROM" ]]; then
     echo "SKIP: ROM not found: $ROM"
     exit 77
 fi
@@ -131,6 +144,9 @@ echo "Network: ${NETWORK:-none}"
 
 # --- Boot emulator ---
 
+DISK_FLAGS=(--disk "$DISK")
+[[ "$BACKEND" == "executor" ]] && DISK_FLAGS=()  # the System's image is mounted itself
+
 DISMISS_FLAG=()
 if [[ $DISMISS -eq 1 ]]; then
     DISMISS_FLAG=(--dismiss-shutdown-dialog)
@@ -141,8 +157,8 @@ fi
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null "${DISMISS_FLAG[@]}" --headless-http \
     --port "$PORT" \
-    --disk "$DISK" --extfs "$EXTFS_DIR" \
-    "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/mactest_guest_$$.log &
+    "${DISK_FLAGS[@]}" --extfs "$EXTFS_DIR" \
+    "${EXTRA_FLAGS[@]}" ${ROM:+"$ROM"} &>/tmp/mactest_guest_$$.log &
 EMU_PID=$!
 
 # Wait for HTTP server
@@ -189,6 +205,21 @@ while true; do
 done
 
 sleep 2  # Finder settle
+
+# BridgeAgent writes its heartbeat once it is running (Startup Items); the
+# boot phase can say Finder before that (Executor reports it at the first
+# frame), so wait for the heartbeat before dispatching.
+echo -n "Waiting for BridgeAgent..."
+for i in $(seq 1 "$BOOT_TIMEOUT"); do
+    if compgen -G "$EXTFS_DIR/MacPhoenix/*/bridge_heartbeat" >/dev/null; then
+        echo " up (${i}s)"
+        break
+    fi
+    if [[ $i -eq $BOOT_TIMEOUT ]]; then
+        echo " no heartbeat after ${BOOT_TIMEOUT}s (dispatching anyway)"
+    fi
+    sleep 1
+done
 
 # --- Dispatch test script via bridge ---
 #

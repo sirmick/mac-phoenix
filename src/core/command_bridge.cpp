@@ -156,6 +156,23 @@ static std::string resolve_repo_relative(const char* rel) {
     return "";
 }
 
+std::string command_bridge_agent_bin() {
+    return resolve_repo_relative("BridgeAgent/BridgeAgent.bin");
+}
+
+std::string command_bridge_guest_dir() {
+    auto& cfg = config::EmulatorConfig::instance();
+    const auto& roots = cfg.extfs_paths;
+    if (!cfg.bridge_enabled || cfg.bridge_dir.empty() || roots.empty()) return "";
+    const std::string& root = roots[0];
+    if (cfg.bridge_dir.size() <= root.size() + 1 ||
+        cfg.bridge_dir.compare(0, root.size(), root) != 0) return "";
+    std::string tail = cfg.bridge_dir.substr(root.size() + 1);
+    /* Replace '/' with ':' for Mac path syntax. */
+    for (char& c : tail) if (c == '/') c = ':';
+    return "Host:" + tail;
+}
+
 // When the bridge is enabled, install BridgeAgent.bin into
 // :System Folder:Startup Items: on every configured non-CDROM disk that has a
 // System Folder. The script handles HFS / non-system-disk skipping.
@@ -163,6 +180,10 @@ static std::string resolve_repo_relative(const char* rel) {
 static void provision_bridge_agent_disks() {
     auto& cfg = config::EmulatorConfig::instance();
     if (cfg.disk_paths.empty()) return;
+    // Executor boots from a System Folder on the host and mounts images
+    // read-only (executor_systems.cpp provisions the folder): never write
+    // into its images, the System's own among them.
+    if (cfg.backend == config::Backend::EXECUTOR) return;
 
     std::string script = resolve_repo_relative("provisioning/install_bridge_agent.sh");
     if (script.empty()) {
@@ -183,20 +204,7 @@ static void provision_bridge_agent_disks() {
      * at startup and prefix all their bridge file paths with the
      * right pid. Skip the env if bridge_dir is empty — script then
      * falls back to legacy paths. */
-    std::string bridge_bpath;
-    {
-        const auto& roots = cfg.extfs_paths;
-        if (!cfg.bridge_dir.empty() && !roots.empty()) {
-            const std::string& root = roots[0];
-            if (cfg.bridge_dir.size() > root.size() + 1 &&
-                cfg.bridge_dir.compare(0, root.size(), root) == 0) {
-                std::string tail = cfg.bridge_dir.substr(root.size() + 1);
-                /* Replace '/' with ':' for Mac path syntax. */
-                for (char& c : tail) if (c == '/') c = ':';
-                bridge_bpath = "Host:" + tail;
-            }
-        }
-    }
+    std::string bridge_bpath = command_bridge_guest_dir();
 
     std::string cmd;
     if (!bridge_bpath.empty()) {

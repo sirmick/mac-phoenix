@@ -970,7 +970,7 @@ std::optional<FSSpec> LocalVolume::nativePathToFSSpec(const fs::path& inPath)
         return std::nullopt;
 }
 
-static void MountLocalVolume(fs::path root)
+static void MountLocalVolume(fs::path root, std::string name = {})
 {
     VCBExtra *vp;
     GUEST<THz> savezone;
@@ -994,7 +994,7 @@ static void MountLocalVolume(fs::path root)
     --ROMlib_nextvrn;
     vp->vcb.vcbVRefNum = ROMlib_nextvrn;
 
-    std::string rootName = root.root_name().string();
+    std::string rootName = name.empty() ? root.root_name().string() : name.substr(0, 27);
     if(rootName.empty() && root.has_relative_path())
         rootName = root.filename().string().substr(0, 27);
     if(rootName.empty())
@@ -1058,7 +1058,11 @@ void Executor::MountLocalVolumes()
         // MacPhoenix: only the folders the host chose, never the host root.
         for(const auto& root : ROMlib_local_volume_roots)
             if(fs::is_directory(root))
-                MountLocalVolume(fs::canonical(root));
+            {
+                auto name = ROMlib_local_volume_names.find(root);
+                MountLocalVolume(fs::canonical(root),
+                                 name == ROMlib_local_volume_names.end() ? std::string() : name->second);
+            }
         return;
     }
     MountLocalVolume("/");
@@ -1066,6 +1070,7 @@ void Executor::MountLocalVolumes()
 }
 
 std::vector<std::string> Executor::ROMlib_local_volume_roots;
+std::map<std::string, std::string> Executor::ROMlib_local_volume_names;
 
 std::optional<FSSpec> Executor::nativePathToFSSpec(const fs::path& p)
 {

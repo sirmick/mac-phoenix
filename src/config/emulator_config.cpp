@@ -426,6 +426,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --executor-start WHAT      finder | browser | path inside the System (default: finder)\n");
             printf("  --[no-]executor-fresh      Start each run from the System's clean copy (default: on)\n");
             printf("  --executor-logtraps        Executor logs every trap call to stderr\n");
+            printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only)\n");
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
@@ -570,6 +571,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
 
         if (strcmp(argv[i], "--executor-logtraps") == 0) {
             config.executor_logtraps = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-writable-images") == 0) {
+            config.executor_writable_images = true; argv[i] = nullptr; continue;
         }
         // --executor-app <path>
         if (strcmp(argv[i], "--executor-app") == 0 && i+1 < argc) {
@@ -725,6 +729,16 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
     if (config.jit68k && config.backend != Backend::KPX) {
         // jit68k only meaningful for KPX; silently leave value but warn if explicitly set
     }
+    // Executor publishes its status (boot phase, current app) only through
+    // the IPC child's shared memory, so --headless-http runs it as a
+    // subprocess behind the normal web server rather than in-process.
+    // It still ends with its guest, as an in-process headless run does.
+    if (config.backend == Backend::EXECUTOR && config.headless_http && !config.ipc_mode) {
+        config.headless_http = false;
+        config.enable_webserver = true;
+        config.exit_with_guest = true;
+    }
+
     // --bridge: per-instance ExtFS dir for bridge file I/O. Each
     // mac-phoenix gets its own subfolder under <extfs>/MacPhoenix/
     // keyed by host pid, so two concurrent processes don't fight

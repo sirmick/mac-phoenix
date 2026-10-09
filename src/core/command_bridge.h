@@ -38,6 +38,15 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr = 0, uint32_t len 
 // No-op when bridge is disabled. Idempotent.
 void command_bridge_init();
 
+// The bridge dir as the guest sees it ("Host:MacPhoenix:<pid>": the first
+// --extfs root is the Host volume), or "" when the bridge is off or its dir
+// is not under that root.
+std::string command_bridge_guest_dir();
+
+// BridgeAgent.bin (MacBinary) in the source tree or the installed share
+// folder, or "" if neither has it.
+std::string command_bridge_agent_bin();
+
 // Spawn a detached watchdog thread that waits until `finder_reached()`
 // returns true, then waits grace_seconds for the BridgeAgent to write
 // `bridge_heartbeat` into bridge_dir. Logs a warning if the agent never

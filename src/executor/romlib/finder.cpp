@@ -191,6 +191,124 @@ void DesktopDB::save()
 }
 
 /* The volume named by ioNamePtr/ioVRefNum; opens (or creates) its database. */
+std::string pstring(ConstStringPtr p)
+{
+    return p ? std::string((const char *)p + 1, p[0]) : std::string();
+}
+
+/* MacPhoenix (status: stand-in): an HFS volume with no "Desktop DB" (Finder
+   does not rebuild one on a locked volume): its applications are found by
+   walking its catalog, enough for PBDTGetAPPL. */
+void addApplications(DesktopDB& db)
+{
+    std::vector<LONGINT> dirs = { 2 };
+    while(!dirs.empty())
+    {
+        LONGINT dir = dirs.back();
+        dirs.pop_back();
+        for(INTEGER i = 1;; i++)
+        {
+            Str255 name;
+            CInfoPBRec cpb;
+            memset(&cpb, 0, sizeof cpb);
+            cpb.hFileInfo.ioNamePtr = name;
+            cpb.hFileInfo.ioVRefNum = db.vRefNum;
+            cpb.hFileInfo.ioDirID = dir;
+            cpb.hFileInfo.ioFDirIndex = i;
+            if(PBGetCatInfo(&cpb, false) != noErr)
+                break;
+            if(cpb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
+                dirs.push_back(cpb.dirInfo.ioDrDirID);
+            else if(cpb.hFileInfo.ioFlFndrInfo.fdType == "APPL"_4)
+                db.appls.push_back({ cpb.hFileInfo.ioFlFndrInfo.fdCreator,
+                                     cpb.hFileInfo.ioFlCrDat, dir, pstring(name) });
+        }
+    }
+}
+
+/* An HFS volume's own desktop database: the "Desktop DB" B*-tree at its
+   root (type BTFL, creator DMGR), as 7.5.5's Desktop Manager keeps it. Its
+   application records are read: leaf key {type 2, creator, index.w}, data
+   {crDate.l, parID.l, name}; the tree's order is the Desktop Manager's
+   (an application added later gets a lower index, so it comes first).
+   Icons (type 1, bitmaps in "Desktop DF") and comments are not read yet.
+   Returns false if the volume has none. */
+bool readDesktopDB(DesktopDB& db)
+{
+    static const unsigned char kName[] = "\012Desktop DB";
+    HParmBlkPtr pb = (HParmBlkPtr)NewPtrSysClear(sizeof(HParamBlockRec) + sizeof kName);
+    if(!pb)
+        return false;
+    StringPtr name = (StringPtr)pb + sizeof(HParamBlockRec);
+    memcpy(name, kName, sizeof kName);
+    pb->ioParam.ioNamePtr = name;
+    pb->ioParam.ioVRefNum = db.vRefNum;
+    pb->fileParam.ioDirID = 2;
+    pb->ioParam.ioPermssn = fsRdPerm;
+    std::vector<uint8_t> file;
+    if(PBHOpenDF(pb, false) == noErr)
+    {
+        INTEGER ref = pb->ioParam.ioRefNum;
+        const int32_t chunk = 0x4000;
+        Ptr buf = NewPtrSys(chunk);
+        for(int32_t pos = 0; buf; pos += chunk)
+        {
+            memset(pb, 0, sizeof(HParamBlockRec));
+            pb->ioParam.ioRefNum = ref;
+            pb->ioParam.ioBuffer = buf;
+            pb->ioParam.ioReqCount = chunk;
+            pb->ioParam.ioPosMode = fsFromStart;
+            pb->ioParam.ioPosOffset = pos;
+            OSErr err = PBRead((ParmBlkPtr)pb, false);
+            int32_t got = pb->ioParam.ioActCount;
+            file.insert(file.end(), (uint8_t *)buf, (uint8_t *)buf + std::max<int32_t>(got, 0));
+            if(err != noErr || got < chunk)
+                break;
+        }
+        if(buf)
+            DisposePtr(buf);
+        memset(pb, 0, sizeof(HParamBlockRec));
+        pb->ioParam.ioRefNum = ref;
+        PBClose((ParmBlkPtr)pb, false);
+    }
+    DisposePtr((Ptr)pb);
+    if(file.size() < 512)
+        return false;
+
+    auto be16 = [&](size_t o) { return o + 2 <= file.size() ? (file[o] << 8) | file[o + 1] : 0; };
+    auto be32 = [&](size_t o) { return (uint32_t(be16(o)) << 16) | be16(o + 2); };
+    /* Node 0: descriptor (14 bytes), then the header record. */
+    uint32_t node = be32(14 + 10);  /* bthFNode: first leaf */
+    size_t node_size = be16(14 + 18); /* bthNodeSize */
+    if(node_size < 512 || file[8] != 1 /* header node */)
+        return false;
+    for(int guard = 0; node && guard < 65536; guard++)
+    {
+        size_t base = node * node_size;
+        if(base + node_size > file.size() || (int8_t)file[base + 8] != -1 /* leaf */)
+            break;
+        int nrecs = be16(base + 10);
+        for(int i = 0; i < nrecs; i++)
+        {
+            size_t rec = base + be16(base + node_size - 2 * (i + 1));
+            if(rec + 8 > base + node_size)
+                continue;
+            int klen = file[rec];
+            size_t data = rec + ((klen + 2) & ~1);
+            if(klen == 7 && file[rec + 1] == 2 && data + 9 <= base + node_size)
+            {
+                int nlen = file[data + 8];
+                if(data + 9 + nlen > base + node_size)
+                    continue;
+                db.appls.push_back({ be32(rec + 2), be32(data), (int32_t)be32(data + 4),
+                                     std::string((const char *)&file[data + 9], nlen) });
+            }
+        }
+        node = be32(base); /* fLink */
+    }
+    return true;
+}
+
 DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
 {
     LONGINT dir;
@@ -211,6 +329,8 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
             db.file = lv->getRoot() / ".desktopdb";
             db.load();
         }
+        else if(!readDesktopDB(db))
+            addApplications(db);
     }
     err = noErr;
     return &db;
@@ -226,11 +346,6 @@ DesktopDB *findDB(DTPBPtr dtp, OSErr& err)
     }
     err = noErr;
     return &it->second;
-}
-
-std::string pstring(ConstStringPtr p)
-{
-    return p ? std::string((const char *)p + 1, p[0]) : std::string();
 }
 
 /* Catalog info for ioNamePtr in ioDirID (the directory itself if no name). */
