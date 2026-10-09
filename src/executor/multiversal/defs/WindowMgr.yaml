@@ -1170,3 +1170,70 @@
         type: WindowRef
       - name: r
         type: const Rect*
+
+# ####
+
+# MacPhoenix: 7.5.5's Layer Manager / Window Manager extensions. Only the
+# selectors desk accessories call; names are guesses (learned.yaml).
+
+- dispatcher:
+    name: LayerDispatch
+    trap: 0xA829
+    selector-location: D0<0xFF>
+
+# ####
+
+- function:
+    name: AutoPositionWindow
+    comment: |
+      Key Caps calls it with (window, false, 1, 2) when CheckWindow says the
+      window it restored is off screen.  We centre it on the main screen.
+    args:
+      - name: window
+        type: WindowPtr
+      - name: arg1
+        type: Boolean
+      - name: arg2
+        type: SignedByte
+      - name: arg3
+        type: SignedByte
+    dispatcher: LayerDispatch
+    selector: 0x0509
+    executor: C_
+
+# ####
+
+- function:
+    name: CheckWindow
+    comment: |
+      Key Caps calls it with (window, false, 1) on the position it restored
+      from its 'kcwn' resource.  True when the window can be reached: its
+      title bar (entire: the whole window) is on the desktop.
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+      - name: entire
+        type: Boolean
+      - name: kind
+        type: SignedByte
+    dispatcher: LayerDispatch
+    selector: 0x040C
+    executor: C_
+
+# ####
+
+- function:
+    name: GetWindowContentRect
+    comment: |
+      Key Caps saves the result in its 'kcwn' resource and reads it back as
+      the window's global content rectangle.
+    args:
+      - name: window
+        type: WindowPtr
+      - name: r
+        type: Rect*
+    dispatcher: LayerDispatch
+    selector: 0x04F6
+    executor: C_
+

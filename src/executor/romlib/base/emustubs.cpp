@@ -20,6 +20,7 @@
 #include <time/time.h>
 #include <prefs/prefs.h>
 #include <base/emustubs.h>
+#include <file/file.h>
 #include <MixedMode.h>
 #include <base/cpu.h>
 
@@ -192,6 +193,14 @@ RAW_68K_IMPLEMENTATION(Key1Trans)
 RAW_68K_IMPLEMENTATION(Key2Trans)
 {
     KEYTRANSMACRO();
+}
+
+/* IODone (IMII-195): a driver's Prime, Control or Status jumps here with
+   its result in D0; the request completes with that result. */
+RAW_68K_IMPLEMENTATION(IODone)
+{
+    ROMlib_io_done(EM_D0);
+    RTS();
 }
 
 // PPC.h

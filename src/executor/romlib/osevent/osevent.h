@@ -3,6 +3,7 @@
 
 #include <EventMgr.h>
 #include <OSEvent.h>
+#include <ProcessMgr.h>
 
 namespace Executor
 {
@@ -43,5 +44,8 @@ extern bool hle_get_event(EventRecord *evt, bool remflag);
 extern void hle_init(void);
 extern void hle_reinit(void);
 extern void hle_reset(void);
+/* MacPhoenix: high-level events waiting for that process; drop them. */
+extern bool ROMlib_hle_pending(const ProcessSerialNumber *psn);
+extern void ROMlib_hle_forget(const ProcessSerialNumber *psn);
 }
 #endif

@@ -8,33 +8,68 @@
 #include <MemoryMgr.h>
 #include <osevent/osevent.h>
 #include <rsys/process.h>
+#include <ProcessMgr.h>
+#include <mman/mman.h>
 #include <base/functions.impl.h>
 
 using namespace Executor;
 
+/* MacPhoenix: one queue for the machine; each message is for one process
+   (its receiver) and lives in the System heap, so it outlives a sender
+   that quits and reaches a receiver that hasn't run yet. */
 typedef struct hle_q_elt
 {
     struct hle_q_elt *next;
     HighLevelEventMsgPtr hle_msg;
+    ProcessSerialNumber to;
 } hle_q_elt_t;
 
 static hle_q_elt_t *hle_q;
 
-/* event q element currently being processed */
+/* event q element currently being processed (per process) */
 static HighLevelEventMsgPtr current_hle_msg;
+
+static bool for_current(const hle_q_elt_t *t)
+{
+    ProcessSerialNumber me;
+    GetCurrentProcess(&me);
+    return t->to.highLongOfPSN == me.highLongOfPSN && t->to.lowLongOfPSN == me.lowLongOfPSN;
+}
+
+bool Executor::ROMlib_hle_pending(const ProcessSerialNumber *psn)
+{
+    for(hle_q_elt_t *t = hle_q; t; t = t->next)
+        if(t->to.highLongOfPSN == psn->highLongOfPSN && t->to.lowLongOfPSN == psn->lowLongOfPSN)
+            return true;
+    return false;
+}
+
+void Executor::ROMlib_hle_forget(const ProcessSerialNumber *psn)
+{
+    for(hle_q_elt_t **pp = &hle_q; *pp;)
+    {
+        hle_q_elt_t *t = *pp;
+        if(t->to.highLongOfPSN == psn->highLongOfPSN && t->to.lowLongOfPSN == psn->lowLongOfPSN)
+        {
+            *pp = t->next;
+            DisposePtr(guest_cast<Ptr>(t->hle_msg->theMsgEvent.when));
+            DisposePtr((Ptr)t->hle_msg);
+            DisposePtr((Ptr)t);
+        }
+        else
+            pp = &t->next;
+    }
+}
 
 void Executor::hle_init(void)
 {
     hle_q = nullptr;
     current_hle_msg = nullptr;
-    /* Each process has its own queue. */
-    ROMlib_process_register_state(&hle_q, sizeof hle_q);
     ROMlib_process_register_state(&current_hle_msg, sizeof current_hle_msg);
 }
 
 void Executor::hle_reinit(void)
 {
-    hle_q = nullptr;
     current_hle_msg = nullptr;
 }
 
@@ -51,23 +86,24 @@ void Executor::hle_reset(void)
 
 bool Executor::hle_get_event(EventRecord *evt, bool remflag)
 {
-    if(hle_q)
+    for(hle_q_elt_t **pp = &hle_q; *pp; pp = &(*pp)->next)
     {
-        hle_q_elt_t *t;
+        hle_q_elt_t *t = *pp;
+        if(!for_current(t))
+            continue;
 
         if(current_hle_msg != nullptr)
         {
-            warning_unexpected("current_hle_msg != """);
+            warning_unexpected("current_hle_msg != \"\"");
             hle_reset();
         }
 
-        current_hle_msg = hle_q->hle_msg;
+        current_hle_msg = t->hle_msg;
         *evt = current_hle_msg->theMsgEvent;
 
-        t = hle_q;
         if(remflag)
         {
-            hle_q = hle_q->next;
+            *pp = t->next;
             DisposePtr((Ptr)t);
         }
 
@@ -119,6 +155,9 @@ Boolean Executor::C_GetSpecificHighLevelEvent(
     {
         Boolean evt_handled_p;
 
+        if(!for_current(t))
+            continue;
+
         evt_handled_p = fn(data, t->hle_msg, /* ##### target id */ nullptr);
         if(evt_handled_p)
         {
@@ -138,6 +177,28 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
     Ptr msg_buf_copy;
     hle_q_elt_t *t, *elt;
     OSErr retval;
+    TheZoneGuard guard(LM(SysZone));
+
+    /* The receiver: a process serial number or signature (others, and
+       kCurrentProcess, mean the sender). */
+    ProcessSerialNumber to;
+    GetCurrentProcess(&to);
+    if(receiver_id)
+    {
+        switch(post_options & 0xF000)
+        {
+            case 0x8000: /* receiverIDisPSN */
+            {
+                ProcessSerialNumber psn = *(ProcessSerialNumber *)receiver_id;
+                if(!(psn.highLongOfPSN == 0 && psn.lowLongOfPSN == kCurrentProcess))
+                    to = psn;
+                break;
+            }
+            case 0x7000: /* receiverIDisSignature */
+                ROMlib_process_with_signature(*(GUEST<OSType> *)receiver_id, &to);
+                break;
+        }
+    }
 
     hle_msg = (HighLevelEventMsgPtr)NewPtr(sizeof *hle_msg);
     if(MemError() != noErr)
@@ -187,6 +248,7 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
     }
     elt->next = nullptr;
     elt->hle_msg = hle_msg;
+    elt->to = to;
     retval = noErr;
 
 done:

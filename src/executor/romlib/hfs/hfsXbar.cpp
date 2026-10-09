@@ -8,6 +8,7 @@
 #include <FileMgr.h>
 #include <hfs/hfs.h>
 #include <file/file.h>
+#include <DeviceMgr.h>
 #include <hfs/futzwithdosdisks.h>
 #include <commandline/flags.h>
 #include <prefs/prefs.h>
@@ -239,11 +240,29 @@ try_to_reopen(DrvQExtra *dqp)
 #endif
 }
 
+/* MacPhoenix: a negative refnum with a unit installed is a driver: Read,
+   Write and Close go to the Device Manager (desk accessories, drivers in
+   DRVR resources).  ioTrap tells a driver's Prime read from write. */
+static bool to_driver(ParmBlkPtr pb, Boolean async, DriverRoutineType routine,
+                      uint16_t trap, OSErr *err)
+{
+    INTEGER rn = pb->ioParam.ioRefNum;
+    if(rn >= 0 || rn == OURHFSDREF || !GetDCtlEntry(rn))
+        return false;
+    pb->ioParam.ioTrap = trap;
+    *err = ROMlib_dispatch(pb, async, routine, 0);
+    return true;
+}
+
 OSErr Executor::PBRead(ParmBlkPtr pb, Boolean async)
 {
     OSErr retval;
     DrvQExtra *dqp;
 
+    if(to_driver(pb, async, Prime, 0xA002, &retval))
+    {
+        FAKEASYNC(pb, async, retval);
+    }
     switch(pb->ioParam.ioRefNum)
     {
         case OURHFSDREF:
@@ -367,6 +386,10 @@ OSErr Executor::PBWrite(ParmBlkPtr pb, Boolean async)
     HVCB *vcbp;
     DrvQExtra *dqp;
 
+    if(to_driver(pb, async, Prime, 0xA003, &retval))
+    {
+        FAKEASYNC(pb, async, retval);
+    }
     switch(pb->ioParam.ioRefNum)
     {
         case OURHFSDREF:
@@ -424,7 +447,9 @@ OSErr Executor::PBClose(ParmBlkPtr pb, Boolean async)
 {
     OSErr retval;
 
-    if(Volume *v = getFileVolume(pb))
+    if(to_driver(pb, async, Close, 0xA001, &retval))
+        ;
+    else if(Volume *v = getFileVolume(pb))
         retval = handleExceptions(*v, &Volume::PBClose, pb);
     else if(hfsfil((IOParam *)pb))
         retval = hfsPBClose(pb, async);

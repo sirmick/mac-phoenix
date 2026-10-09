@@ -17,10 +17,12 @@
 #include <wind/wind.h>
 #include <rsys/hook.h>
 #include <MemoryMgr.h>
+#include <MenuMgr.h>
 
 #include <rsys/evil.h>
 #include <rsys/executor.h>
 #include <base/functions.impl.h>
+#include <algorithm>
 
 using namespace Executor;
 
@@ -571,4 +573,60 @@ int32_t Executor::ROMlib_windcall(WindowPtr wind, int16_t mess, int32_t param)
     if(mess == wCalcRgns)
         wind->portBits.bounds = saverect;
     return retval;
+}
+
+/* MacPhoenix: LayerDispatch selectors desk accessories call (names are
+   guesses; see the multiversal entries).  A desk accessory asks before
+   showing its window, whose regions are then empty: the geometry comes
+   from the port. */
+
+static Rect content_global(WindowPtr w)
+{
+    Rect r = PORT_RECT(w);
+    Rect b = PORT_BOUNDS(w);
+    OffsetRect(&r, -b.left, -b.top);
+    return r;
+}
+
+static int title_height(WindowPtr w)
+{
+    if(!EmptyRgn(WINDOW_STRUCT_REGION(w)) && !EmptyRgn(WINDOW_CONT_REGION(w)))
+        return (*WINDOW_CONT_REGION(w))->rgnBBox.top - (*WINDOW_STRUCT_REGION(w))->rgnBBox.top;
+    return 19; /* a document window's title bar */
+}
+
+Boolean Executor::C_CheckWindow(WindowPtr w, Boolean entire, SignedByte kind)
+{
+    (void)kind;
+    Rect c = content_global(w);
+    Rect want = c;
+    want.top -= title_height(w);
+    if(!entire)
+        want.bottom = c.top; /* the title bar */
+    RgnHandle rgn = NewRgn(), on = NewRgn();
+    RectRgn(rgn, &want);
+    SectRgn(rgn, LM(GrayRgn), on);
+    bool ok = entire ? EqualRgn(on, rgn) : !EmptyRgn(on);
+    DisposeRgn(on);
+    DisposeRgn(rgn);
+    return ok;
+}
+
+void Executor::C_AutoPositionWindow(WindowPtr w, Boolean arg1, SignedByte arg2,
+                                    SignedByte arg3)
+{
+    (void)arg1, (void)arg2, (void)arg3;
+    /* Centred across the main screen, a third of the way down. */
+    Rect screen = GD_BOUNDS(LM(MainDevice));
+    Rect c = content_global(w);
+    int width = c.right - c.left, height = c.bottom - c.top;
+    int top = LM(MBarHeight) + title_height(w);
+    int left = screen.left + (screen.right - screen.left - width) / 2;
+    top += std::max(0, (screen.bottom - top - height) / 3);
+    MoveWindow(w, left, top, false);
+}
+
+void Executor::C_GetWindowContentRect(WindowPtr w, Rect *r)
+{
+    *r = content_global(w);
 }

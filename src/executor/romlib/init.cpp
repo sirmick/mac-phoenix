@@ -418,7 +418,13 @@ void Executor::InitPerProcessLowMem()
 				 (no fpu,aux or pwrmgr) */
 
     LM(MMUType) = 5;
-    LM(KbdType) = 2;
+    /* MacPhoenix: as a real 7.5.5 boot reports it: Apple Extended Keyboard II
+       (Key Caps draws KCAP KbdType) on ADB address 2. */
+    LM(KbdType) = 5;
+    LM(KbdLast) = 2;
+    /* RGBBlack and RGBWhite, as on a real boot (Key Caps draws with them). */
+    LM(RGBBlack) = ROMlib_black_rgb_color;
+    LM(RGBWhite) = ROMlib_white_rgb_color;
 
     LM(MCLKPCmiss1) = 0; /* &LM(MCLKPCmiss1) = 0x358 + 72 (MacLinkPC starts
 			   adding the 72 byte offset to VCB pointers too
@@ -450,6 +456,7 @@ void Executor::InitPerProcessLowMem()
     LM(JUnknown574) = (ProcPtr)&stub_SwapMMUMode;
 
     LM(Key1Trans) = (Ptr)&stub_Key1Trans;
+    LM(JIODone) = (Ptr)&stub_IODone;
     LM(Key2Trans) = (Ptr)&stub_Key2Trans;
     LM(JFLUSH) = &FlushCodeCache;
     LM(JResUnknown1) = LM(JFLUSH); /* I don't know what these are supposed to */

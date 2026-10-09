@@ -5,6 +5,7 @@
 /* Forward declarations in DeviceMgr.h (DO NOT DELETE THIS LINE) */
 
 #include <base/common.h>
+#include <vector>
 #include <DeviceMgr.h>
 #include <FileMgr.h>
 #include <MemoryMgr.h>
@@ -32,6 +33,15 @@ using namespace Executor;
  *	  incompatible ROM based routines, we still byte swap the pointers
  *	  that get us to the routines.
  */
+
+/* RAM drivers' requests being executed, innermost last (for JIODone). */
+static std::vector<ParmBlkPtr> io_in_progress;
+
+void Executor::ROMlib_io_done(OSErr err)
+{
+    if(!io_in_progress.empty())
+        io_in_progress.back()->ioParam.ioResult = err;
+}
 
 OSErr Executor::ROMlib_dispatch(ParmBlkPtr p, Boolean async,
                                 DriverRoutineType routine,
@@ -84,23 +94,25 @@ OSErr Executor::ROMlib_dispatch(ParmBlkPtr p, Boolean async,
         {
             ramdh = (ramdriverhand)(*h)->dCtlDriver;
             LoadResource((Handle)ramdh);
+            /* MacPhoenix: the routine offsets are in bytes (they were
+               added to a ramdriver pointer, scaled by its size). */
             HLock((Handle)ramdh);
             switch(routine)
             {
                 case Open:
-                    procp = (DriverUPP)(*ramdh + (*ramdh)->drvrOpen);
+                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrOpen);
                     break;
                 case Prime:
-                    procp = (DriverUPP)(*ramdh + (*ramdh)->drvrPrime);
+                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrPrime);
                     break;
                 case Ctl:
-                    procp = (DriverUPP)(*ramdh + (*ramdh)->drvrCtl);
+                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrCtl);
                     break;
                 case Stat:
-                    procp = (DriverUPP)(*ramdh + (*ramdh)->drvrStatus);
+                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrStatus);
                     break;
                 case Close:
-                    procp = (DriverUPP)(*ramdh + (*ramdh)->drvrClose);
+                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrClose);
                     break;
                 default:
                     procp = 0;
@@ -126,7 +138,15 @@ OSErr Executor::ROMlib_dispatch(ParmBlkPtr p, Boolean async,
                 savea4 = EM_A4;
                 savea5 = EM_A5;
                 savea6 = EM_A6;
+                /* Open and Close return their result in D0; Prime,
+                   Control and Status end in JIODone, which sets ioResult
+                   (IMII-193). */
+                p->ioParam.ioResult = 1;
+                io_in_progress.push_back(p);
                 execute68K(US_TO_SYN68K((ProcPtr)procp));
+                io_in_progress.pop_back();
+                if(routine == Open || routine == Close || p->ioParam.ioResult == 1)
+                    p->ioParam.ioResult = (OSErr)EM_D0;
                 EM_D1 = saved1;
                 EM_D2 = saved2;
                 EM_D3 = saved3;

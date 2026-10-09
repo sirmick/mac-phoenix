@@ -28,6 +28,8 @@ using namespace Executor;
 #include <TimeMgr.h>
 #include <VRetraceMgr.h>
 #include <rsys/launch.h>
+#include <rsys/desk.h>
+#include <osevent/osevent.h>
 #include <res/resource.h>
 #include <syn68k_public.h>
 #include <base/trapglue.h>
@@ -110,6 +112,10 @@ struct process_info
     QThread *thread = nullptr;
     int stack_slot = -1;
     FSSpec app = {};
+    /* A desk accessory's process (LaunchDeskAccessory): app is its file,
+       da_name its DRVR (empty: the file's first). */
+    bool desk_accessory = false;
+    Str255 da_name = { 0 };
 
     /* Left by the process that quit and switched to us: screen to redraw,
        and (SIZE acceptAppDiedEvents) whose death to report. */
@@ -554,6 +560,7 @@ static bool has_updates(process_info_t *p);
 static bool wants_time(process_info_t *p)
 {
     return has_updates(p) || p->os_event_pending
+        || ROMlib_hle_pending(&p->serial_number)
         || lowmem_long(p, 0xA64) /* CurActivate */
         || lowmem_long(p, 0xA68) /* CurDeactive */;
 }
@@ -694,6 +701,17 @@ std::vector<ROMlib_process_entry> Executor::ROMlib_process_entries()
         return IUCompString(a.name, b.name) < 0;
     });
     return out;
+}
+
+bool Executor::ROMlib_process_with_signature(OSType sig, ProcessSerialNumber *psn)
+{
+    for(process_info_t *p = process_info_list; p; p = p->next)
+        if(p->signature == sig && p->state != process_info_t::dead)
+        {
+            *psn = p->serial_number;
+            return true;
+        }
+    return false;
 }
 
 /* Back on our thread after a switch: our world is in place. */
@@ -864,6 +882,7 @@ static void exit_current()
     if(pending_front == me)
         pending_front = nullptr;
     forget_process(me);
+    ROMlib_hle_forget(&me->serial_number);
     me->state = process_info_t::dead;
     reap_list.push_back(me);
 
@@ -900,7 +919,10 @@ static void process_body(process_info_t *p)
     p->state = process_info_t::running;
     try
     {
-        ROMlib_launch_process(&p->app);
+        if(p->desk_accessory)
+            ROMlib_run_desk_accessory(&p->app, p->da_name[0] ? p->da_name : nullptr);
+        else
+            ROMlib_launch_process(&p->app);
     }
     catch(const ExitToShellException &)
     {
@@ -1047,6 +1069,25 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     p->launcher = current_process_info->serial_number;
     pending_launch = p;
     lpbp->launchProcessSN = p->serial_number;
+    return noErr;
+}
+
+/* 7.5.5: a desk accessory opened from its file gets a process of its own
+   (the DA Handler, desk.cpp), created like a launchContinue launch. */
+OSErr Executor::C_LaunchDeskAccessory(const FSSpec *spec, ConstStringPtr name)
+{
+    process_bootstrap();
+    process_info_t *p = new_process();
+    p->own_thread = true;
+    p->desk_accessory = true;
+    if(spec)
+        p->app = *spec;
+    if(name)
+        memcpy(p->da_name, name, name[0] + 1);
+    if(!spec && !name)
+        return paramErr;
+    p->launcher = current_process_info->serial_number;
+    pending_launch = p;
     return noErr;
 }
 

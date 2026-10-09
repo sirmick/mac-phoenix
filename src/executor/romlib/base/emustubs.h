@@ -86,6 +86,8 @@ RAW_68K_TRAP(modeswitch, 0xAAFE);
 RAW_68K_TRAP(WackyQD32Trap, 0xAB03);
 RAW_68K_FUNCTION(Key1Trans);
 RAW_68K_FUNCTION(Key2Trans);
+/* MacPhoenix: JIODone, where a driver's Prime/Control/Status end. */
+RAW_68K_FUNCTION(IODone);
 RAW_68K_TRAP(Fix2X, 0xA843);
 RAW_68K_TRAP(Frac2X, 0xA845);
 RAW_68K_TRAP(SCSIDispatch, 0xA815);

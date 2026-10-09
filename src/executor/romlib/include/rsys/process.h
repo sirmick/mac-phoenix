@@ -57,6 +57,8 @@ struct ROMlib_process_entry
     bool current;
 };
 extern std::vector<ROMlib_process_entry> ROMlib_process_entries();
+/* The process whose signature this is; false if none. */
+extern bool ROMlib_process_with_signature(OSType sig, ProcessSerialNumber *psn);
 
 /* Layers (process.cpp): the Window Manager asks about other processes'
    windows -- clip out those in front (and, for the desktop, behind), and

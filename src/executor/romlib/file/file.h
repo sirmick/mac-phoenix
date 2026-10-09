@@ -273,6 +273,8 @@ extern StringPtr ROMlib_exefname;
 extern OSErr ROMlib_maperrno(void);
 
 extern OSErr ROMlib_driveropen(ParmBlkPtr pbp, Boolean a);
+/* JIODone: complete the driver request in progress with this result. */
+extern void ROMlib_io_done(OSErr err);
 extern OSErr ROMlib_dispatch(ParmBlkPtr p, Boolean async,
                              DriverRoutineType routine, INTEGER trap);
 

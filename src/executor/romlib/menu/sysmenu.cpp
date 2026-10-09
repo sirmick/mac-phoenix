@@ -45,6 +45,8 @@ enum
 MenuHandle help_menu;
 MenuHandle app_menu;
 INTEGER app_menu_fixed;  /* items from the resource, divider included */
+/* The processes' icon suites, item by item after the fixed ones. */
+std::vector<Handle> app_item_suites;
 std::vector<std::vector<uint8_t>> app_menu_texts; /* their text, with ^0 */
 INTEGER help_system_items; /* items before the application's own */
 
@@ -256,11 +258,21 @@ void Executor::ROMlib_app_menu_update()
 
     while(CountMItems(app_menu) > app_menu_fixed)
         DeleteMenuItem(app_menu, CountMItems(app_menu));
+    /* Each process: its small icon, then its name (the two placeholder
+       bytes the menu definition draws the icon over, as in the Apple
+       menu). */
+    app_item_suites.clear();
     for(const ROMlib_process_entry &e : procs)
     {
         AppendMenu(app_menu, (StringPtr) "\001 ");
         INTEGER n = CountMItems(app_menu);
-        SetMenuItemText(app_menu, n, e.name);
+        Str255 text;
+        int len = std::min<int>(e.name[0], 253);
+        text[0] = len + 2;
+        text[1] = text[2] = 0;
+        memcpy(text + 3, e.name + 1, len);
+        SetMenuItemText(app_menu, n, text);
+        app_item_suites.push_back(e.icon);
         if(e.current)
             SetItemMark(app_menu, n, checkMark);
     }
@@ -429,6 +441,9 @@ void Executor::ROMlib_apple_menu_update()
 
 Handle Executor::ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item)
 {
+    if(mh == app_menu && app_menu && item > app_menu_fixed
+       && item - app_menu_fixed <= (INTEGER)app_item_suites.size())
+        return app_item_suites[item - app_menu_fixed - 1];
     if(mh != apple_menu || item <= apple_base
        || item - apple_base > (INTEGER)apple_items.size())
         return nullptr;
@@ -464,8 +479,11 @@ bool Executor::ROMlib_apple_menu_open(ConstStringPtr name)
     evt.message = "aevt"_4;
     GUEST<uint32_t> id = "amis"_4;
     memcpy(&evt.where, &id, sizeof id);
+    /* To Finder, which handed over the items (from a desk accessory's
+       process too). */
     ProcessSerialNumber psn;
-    GetCurrentProcess(&psn);
+    if(!ROMlib_process_with_signature("MACS"_4, &psn))
+        GetCurrentProcess(&psn);
     PostHighLevelEvent(&evt, (Ptr)&psn, 0, (Ptr)&msg, sizeof msg, 0x8000 /* receiverIDisPSN */);
     return true;
 }

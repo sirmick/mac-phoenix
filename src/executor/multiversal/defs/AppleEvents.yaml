@@ -463,8 +463,14 @@
 
 - struct:
     members:
+      - name: pad_0
+        type: char[14]
+      - name: emKeyCache
+        type: Ptr
+        comment: |
+          ExpandMem+$0E: the current KCHR's data (Key Caps reads it).
       - name: pad_1
-        type: char[340]
+        type: char[322]
       - name: appl_zone_tables
         type: AE_zone_tables_h
       - name: pad_2

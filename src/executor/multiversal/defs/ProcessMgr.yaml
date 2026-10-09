@@ -409,6 +409,20 @@
 # ####
 
 - function:
+    name: LaunchDeskAccessory
+    return: OSErr
+    args:
+      - name: pFileSpec
+        type: const FSSpec*
+      - name: pDAName
+        type: ConstStringPtr
+    dispatcher: OSDispatch
+    selector: 0x0036
+    executor: C_
+
+# ####
+
+- function:
     name: GetPortNameFromProcessSerialNumber
     return: OSErr
     args:

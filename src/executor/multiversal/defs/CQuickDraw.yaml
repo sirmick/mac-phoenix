@@ -612,6 +612,26 @@
 # ####
 
 - lowmem:
+    name: RGBBlack
+    type: RGBColor
+    address: 0xC10
+    comment: |
+      MacPhoenix: black (0,0,0) on a real 7.5.5 boot; Key Caps passes its
+      address to RGBForeColor.
+
+# ####
+
+- lowmem:
+    name: RGBWhite
+    type: RGBColor
+    address: 0xC16
+    comment: |
+      MacPhoenix: white on a real 7.5.5 boot; Key Caps passes its address
+      to RGBBackColor.
+
+# ####
+
+- lowmem:
     name: TheGDevice
     type: GDHandle
     address: 0xCC8

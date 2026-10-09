@@ -3,6 +3,7 @@
  */
 
 #include <base/common.h>
+#include <osevent/osevent.h>
 
 #include <AppleEvents.h>
 #include <MemoryMgr.h>
@@ -49,6 +50,8 @@ void Executor::AE_init(void)
                                false,
                                &(*zone_tables)->special_hdlr_table);
     info->system_zone_tables = zone_tables;
+    /* MacPhoenix: ExpandMem's key cache, as the Script Manager sets it. */
+    info->emKeyCache = ROMlib_kchr_ptr();
 
     LM(AE_info) = info;
 }

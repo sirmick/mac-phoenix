@@ -21,6 +21,19 @@ lowmem:
       post-128K-ROM globals). Executor reuses this slot for AppleEvents
       state under the name AE_info.
 
+  - address: 0xC10
+    name: RGBBlack
+    type: RGBColor
+    status: known
+    source: Inside Macintosh (low memory), 7.5.5-finder-idle snapshot (0,0,0)
+    comment: >
+      Key Caps uses it with RGBForeColor; Executor left it 0xFF.
+  - address: 0xC16
+    name: RGBWhite
+    type: RGBColor
+    status: known
+    source: Inside Macintosh (low memory), 7.5.5-finder-idle snapshot (FFFF x3)
+
 traps: []
 
 # Dispatch traps: one trap word, many routines picked by a selector
@@ -106,6 +119,34 @@ dispatchers:
           current process +0x15C (-600 without a current process). Finder
           passes its drag-hook record when Gestalt 'os  ' bit 10 is set and
           DragDispatch $C301 succeeded.
+  - trap: 0xA829
+    name: LayerDispatch
+    comment: >
+      Window Manager layers (System 7). D0's low byte selects (moveq).
+    selectors:
+      - value: 0x09
+        name: AutoPositionWindow
+        status: guess
+        source: Key Caps DRVR 14 +3b6
+        comment: >
+          (window, Boolean, byte, byte), no result. Key Caps passes
+          (window, false, 1, 2) after CheckWindow fails on its restored
+          position.
+      - value: 0x0C
+        name: CheckWindow
+        status: guess
+        source: Key Caps DRVR 14 +3a2
+        comment: >
+          (window, Boolean, byte) -> Boolean. Key Caps passes (window,
+          false, 1) on the position it restored from 'kcwn'.
+      - value: 0xF6
+        name: GetWindowContentRect
+        status: guess
+        source: Key Caps DRVR 14 +3fc
+        comment: >
+          (window, Rect *out), no result. Key Caps writes it into its 'kcwn'
+          resource on close and reads it back as the window's global
+          content rectangle (offsetting its WIND bounds by the top-left).
   - trap: 0xABC9
     name: IconDispatch
     selectors:

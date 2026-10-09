@@ -240,6 +240,14 @@ void Executor::C_SetOrigin(INTEGER h, INTEGER v)
 
 void Executor::C_SetClip(RgnHandle r)
 {
+    /* MacPhoenix: Key Caps resets its clip with SetClip(nil) after each
+       key label and draws the next key expecting no clipping: nil is the
+       wide-open clip, as a new port's. */
+    if(!r)
+    {
+        SetRectRgn(PORT_CLIP_REGION(qdGlobals().thePort), -32767, -32767, 32767, 32767);
+        return;
+    }
     CopyRgn(r, PORT_CLIP_REGION(qdGlobals().thePort));
 }
 
