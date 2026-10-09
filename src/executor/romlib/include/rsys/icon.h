@@ -1,7 +1,7 @@
 #if !defined(__rsys_icon_h__)
 #define __rsys_icon_h__
 
-#define N_SUITE_ICONS 6
+#define N_SUITE_ICONS 9
 namespace Executor
 {
 /* One layout for icon suites and icon caches (icon.cpp); a cache sets
@@ -10,7 +10,7 @@ namespace Executor
 struct suite_layout_t
 {
     GUEST_STRUCT;
-    GUEST<Handle> icons[N_SUITE_ICONS]; // ICN#, icl4, icl8, ics#, ics4, ics8
+    GUEST<Handle> icons[N_SUITE_ICONS]; // ICN#, icl4, icl8, ics#, ics4, ics8, icm#, icm4, icm8
     GUEST<INTEGER> label;
     GUEST<INTEGER> flags;
     GUEST<void *> cacheData;

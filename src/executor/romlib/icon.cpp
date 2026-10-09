@@ -414,17 +414,20 @@ namespace
 const ResType restype_for_icon[N_SUITE_ICONS] = {
     large1BitMask, large4BitData, large8BitData,
     small1BitMask, small4BitData, small8BitData,
+    mini1BitMask, mini4BitData, mini8BitData,
 };
 
 const IconSelectorValue mask_for_icon[N_SUITE_ICONS] = {
     svLarge1Bit, svLarge4Bit, svLarge8Bit,
     svSmall1Bit, svSmall4Bit, svSmall8Bit,
+    svMini1Bit, svMini4Bit, svMini8Bit,
 };
 
 enum
 {
     kLargeBase = 0, /* ICN#, icl4, icl8 */
     kSmallBase = 3, /* ics#, ics4, ics8 */
+    kMiniBase = 6,  /* icm#, icm4, icm8: 16 wide, 12 high */
     kSuiteIsCache = 1,
 };
 
@@ -498,15 +501,25 @@ struct MethodSource : IconSource
     }
 };
 
-/* Which member to draw for a rectangle: small icons below 32 pixels; the
-   deepest colour data the port can show; the mask is always the second
-   half of the black-and-white member. */
+/* Which member to draw for a rectangle: mini icons below 16 pixels, small
+   below 32, large otherwise, falling back to the nearest size the family
+   has; the deepest colour data the port can show; the mask is always the
+   second half of the black-and-white member. A mini member may be stored
+   16 rows high (7.5.5 Finder hands over its SICN-shaped ones that way);
+   its middle 12 rows are drawn, as a real boot does. */
 struct Chosen
 {
-    Handle mask = nullptr; /* ICN# / ics# */
-    Handle data = nullptr; /* mask, icl4/8 or ics4/8 */
-    int size = 32;
+    Handle mask = nullptr; /* ICN# / ics# / icm# */
+    Handle data = nullptr; /* mask, or the 4/8-bit member */
+    int w = 32, h = 32;
+    int rows = 32; /* rows stored per plane */
+    int skip = 0;  /* rows above the drawn ones */
     int bpp = 1;
+    int mask_bytes() const { return w * h / 8; }
+    int row_bytes() const { return w / 8; }
+    const uint8_t *bits() const { return (const uint8_t *)*mask + skip * row_bytes(); }
+    const uint8_t *mask_bits() const { return bits() + rows * row_bytes(); }
+    Ptr data_bits() const { return *data + skip * row_bytes() * bpp; }
 };
 
 int port_depth()
@@ -517,17 +530,33 @@ int port_depth()
 
 OSErr choose(IconSource& src, const Rect *rect, Chosen& c, bool needData = true)
 {
-    bool small = RECT_WIDTH(rect) < 32 || RECT_HEIGHT(rect) < 32;
-    int base = small ? kSmallBase : kLargeBase;
-    c.mask = src.get(base);
-    if(!c.mask)
+    static const int order[3][3] = {
+        { kLargeBase, kSmallBase, kMiniBase },
+        { kSmallBase, kLargeBase, kMiniBase },
+        { kMiniBase, kSmallBase, kLargeBase },
+    };
+    int rw = RECT_WIDTH(rect), rh = RECT_HEIGHT(rect);
+    int want = (rw < 16 || rh < 16) ? 2 : (rw < 32 || rh < 32) ? 1 : 0;
+    int base = -1;
+    for(int b : order[want])
     {
-        base = small ? kLargeBase : kSmallBase;
-        c.mask = src.get(base);
+        /* a member too short for its type is ignored */
+        c.mask = src.get(b);
         if(!c.mask)
-            return noMaskFoundErr;
+            continue;
+        c.w = b == kLargeBase ? 32 : 16;
+        c.h = c.rows = b == kLargeBase ? 32 : b == kSmallBase ? 16 : 12;
+        c.skip = 0;
+        if(b == kMiniBase && GetHandleSize(c.mask) >= 16 * 2 * 2)
+            c.rows = 16, c.skip = 2;
+        if(GetHandleSize(c.mask) >= c.rows * c.row_bytes() * 2)
+        {
+            base = b;
+            break;
+        }
     }
-    c.size = base == kSmallBase ? 16 : 32;
+    if(base < 0)
+        return noMaskFoundErr;
     c.data = c.mask;
     c.bpp = 1;
     if(!needData)
@@ -542,45 +571,50 @@ OSErr choose(IconSource& src, const Rect *rect, Chosen& c, bool needData = true)
         c.data = c.mask;
         c.bpp = 1;
     }
-    /* a member too short for its type is ignored */
-    if(GetHandleSize(c.data) < c.size * c.size * c.bpp / 8)
+    if(GetHandleSize(c.data) < c.rows * c.row_bytes() * c.bpp)
     {
         c.data = c.mask;
         c.bpp = 1;
     }
-    if(GetHandleSize(c.mask) < c.size * c.size / 4)
-        return noMaskFoundErr;
     return noErr;
 }
 
 /* Where the icon goes inside rect: atNone fills the rectangle; otherwise
    the icon keeps its size (shrunk proportionally if it doesn't fit) and is
    placed by the alignment. */
-Rect place(const Rect *rect, IconAlignmentType align, int size)
+Rect place(const Rect *rect, IconAlignmentType align, const Chosen& c)
 {
     Rect r = *rect;
     if(align == atNone)
         return r;
     int w = RECT_WIDTH(rect), h = RECT_HEIGHT(rect);
-    int s = std::min({ size, w, h });
+    /* shrink proportionally to fit */
+    int sw = c.w, sh = c.h;
+    if(sw > w || sh > h)
+    {
+        if(w * c.h < h * c.w)
+            sw = w, sh = c.h * w / c.w;
+        else
+            sh = h, sw = c.w * h / c.h;
+    }
     int dx = 0, dy = 0;
     switch(align & 3)
     {
         case atTop: dy = 0; break;
-        case atBottom: dy = h - s; break;
-        case atVerticalCenter: dy = (h - s) / 2; break;
-        default: dy = (h - s) / 2; break; /* no vertical alignment: centre */
+        case atBottom: dy = h - sh; break;
+        case atVerticalCenter: dy = (h - sh) / 2; break;
+        default: dy = (h - sh) / 2; break; /* no vertical alignment: centre */
     }
     switch(align & 12)
     {
         case atLeft: dx = 0; break;
-        case atRight: dx = w - s; break;
-        default: dx = (w - s) / 2; break;
+        case atRight: dx = w - sw; break;
+        default: dx = (w - sw) / 2; break;
     }
     r.left = rect->left + dx;
     r.top = rect->top + dy;
-    r.right = r.left + s;
-    r.bottom = r.top + s;
+    r.right = r.left + sw;
+    r.bottom = r.top + sh;
     return r;
 }
 
@@ -635,13 +669,13 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
     if(labelled)
         GetLabel(label, &label_rgb, nullptr);
 
-    int n = c.size;
-    int mask_bytes = n * n / 8;
+    int w = c.w, h = c.h;
+    int mask_bytes = c.mask_bytes();
     HLockGuard g1(c.mask), g2(c.data);
-    const uint8_t *mask_src = (const uint8_t *)*c.mask + mask_bytes;
+    const uint8_t *mask_src = c.mask_bits();
 
-    Rect icon_rect = { 0, 0, (int16_t)n, (int16_t)n };
-    Rect dst = place(rect, align, n);
+    Rect icon_rect = { 0, 0, (int16_t)h, (int16_t)w };
+    Rect dst = place(rect, align, c);
     GrafPtr port = qdGlobals().thePort;
 
     Ptr mask_p = copy_bits(mask_src, mask_bytes);
@@ -649,13 +683,13 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
         return memFullErr;
     BitMap mask_bm;
     mask_bm.baseAddr = mask_p;
-    mask_bm.rowBytes = n / 8;
+    mask_bm.rowBytes = c.row_bytes();
     mask_bm.bounds = icon_rect;
 
     if(c.bpp == 1 || patterned)
     {
         /* black and white: transforms work on the bits themselves */
-        Ptr data_p = copy_bits(*c.mask, mask_bytes);
+        Ptr data_p = copy_bits(c.bits(), mask_bytes);
         if(!data_p)
         {
             DisposePtr(mask_p);
@@ -664,11 +698,11 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
         uint8_t *d = (uint8_t *)data_p;
         const uint8_t *m = (const uint8_t *)mask_p;
         bool color_port = CGrafPort_p(port);
-        int rb = n / 8;
+        int rb = c.row_bytes();
         auto in_mask = [&](int x, int y) {
-            return x >= 0 && y >= 0 && x < n && y < n && (m[y * rb + x / 8] & (0x80 >> (x & 7)));
+            return x >= 0 && y >= 0 && x < w && y < h && (m[y * rb + x / 8] & (0x80 >> (x & 7)));
         };
-        for(int y = 0; y < n; y++)
+        for(int y = 0; y < h; y++)
             for(int x = 0; x < rb; x++)
             {
                 int i = y * rb + x;
@@ -744,8 +778,8 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
         }
         PixMap pm;
         memset(&pm, 0, sizeof pm);
-        pm.baseAddr = *c.data;
-        pm.rowBytes = (n * c.bpp / 8) | PIXMAP_DEFAULT_ROW_BYTES;
+        pm.baseAddr = c.data_bits();
+        pm.rowBytes = (w * c.bpp / 8) | PIXMAP_DEFAULT_ROW_BYTES;
         pm.bounds = icon_rect;
         pm.pixelSize = pm.cmpSize = c.bpp;
         pm.cmpCount = 1;
@@ -774,21 +808,20 @@ OSErr to_rgn(IconSource& src, RgnHandle rgn, const Rect *rect, IconAlignmentType
     OSErr err = choose(src, rect, c, false);
     if(err != noErr)
         return err;
-    int n = c.size;
     HLockGuard g(c.mask);
-    Ptr mask_p = copy_bits((const uint8_t *)*c.mask + n * n / 8, n * n / 8);
+    Ptr mask_p = copy_bits(c.mask_bits(), c.mask_bytes());
     if(!mask_p)
         return memFullErr;
     BitMap bm;
     bm.baseAddr = mask_p;
-    bm.rowBytes = n / 8;
-    bm.bounds = { 0, 0, (int16_t)n, (int16_t)n };
+    bm.rowBytes = c.row_bytes();
+    bm.bounds = { 0, 0, (int16_t)c.h, (int16_t)c.w };
     err = BitMapToRegion(rgn, &bm);
     DisposePtr(mask_p);
     if(err != noErr)
         return err;
     Rect icon_rect = bm.bounds;
-    Rect dst = place(rect, align, n);
+    Rect dst = place(rect, align, c);
     MapRgn(rgn, &icon_rect, &dst);
     return noErr;
 }
@@ -798,14 +831,13 @@ bool pt_in(IconSource& src, Point pt, const Rect *rect, IconAlignmentType align)
     Chosen c;
     if(choose(src, rect, c, false) != noErr)
         return false;
-    Rect dst = place(rect, align, c.size);
+    Rect dst = place(rect, align, c);
     if(!PtInRect(pt, &dst))
         return false;
-    int n = c.size;
-    int x = (pt.h - dst.left) * n / RECT_WIDTH(&dst);
-    int y = (pt.v - dst.top) * n / RECT_HEIGHT(&dst);
-    const uint8_t *m = (const uint8_t *)*c.mask + n * n / 8;
-    return (m[y * (n / 8) + x / 8] >> (7 - (x & 7))) & 1;
+    int x = (pt.h - dst.left) * c.w / RECT_WIDTH(&dst);
+    int y = (pt.v - dst.top) * c.h / RECT_HEIGHT(&dst);
+    const uint8_t *m = c.mask_bits();
+    return (m[y * c.row_bytes() + x / 8] >> (7 - (x & 7))) & 1;
 }
 
 bool rect_in(IconSource& src, const Rect *test, const Rect *rect, IconAlignmentType align)
