@@ -71,6 +71,21 @@ sub test_disk {
         } else {
             report_fail('disk_read', "err=$!");
         }
+        # HFS won't delete an open file (fBsyErr, -47); SimpleText's save
+        # relies on that. FSpDelete, not unlink: MacPerl's unlink defers
+        # the delete of an open file until it is closed.
+        if (!eval { require Mac::Files; 1 }) {
+            report_skip('disk_delete_open', 'no Mac::Files');
+        } elsif (open(DISKFH, "<$tmp")) {
+            my $gone = Mac::Files::FSpDelete($tmp);
+            my $err = $^E + 0;
+            close(DISKFH);
+            $gone ? report_fail('disk_delete_open', 'deleted while open')
+                  : ($err == -47 ? report_pass('disk_delete_open')
+                                 : report_fail('disk_delete_open', "err=$err, want -47"));
+        } else {
+            report_fail('disk_delete_open', "reopen err=$!");
+        }
     } else {
         report_fail('disk_create', "err=$!");
     }

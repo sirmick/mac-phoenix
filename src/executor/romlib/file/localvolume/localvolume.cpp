@@ -699,6 +699,13 @@ void LocalVolume::PBDirCreate(HParmBlkPtr pb)
 
 void LocalVolume::deleteCommon(ItemPtr item)
 {
+    /* As HFS: an open file can't be deleted. SimpleText relies on it,
+       deleting the file it has just saved -- still open -- so that a
+       failed save leaves nothing behind. */
+    if(auto fileItem = std::dynamic_pointer_cast<FileItem>(item))
+        for(auto& fcbx : fcbExtensions)
+            if(fcbx.file == fileItem)
+                throw OSErrorException(fBsyErr);
     itemCache->deleteItem(item);
 }
 
