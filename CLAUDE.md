@@ -76,15 +76,16 @@ MAME cores (docs/cpu/PLAN.md): MAME's Musashi with PMMU and FPU as the 68k
 core `mame-68k` (C1, done), MAME's PowerPC recompiler as the PPC core
 `mame-ppc` (C2: core, Mac side and the x86-64 back-end done, `--jit`; arm64
 back-end lifted but untested), and the host 68k core replacing the nanokernel's 68k
-emulator on the PPC machine (C3a: `MACEMU_MAMEPPC_68K=1` runs host-initiated
+emulator on the PPC machine (C3a: `--m68k-host 1` runs host-initiated
 68k routines on a `mame-68k` core with handoff to the emulator at the first
-trap; `=2` is an experiment that breaks the bridge; the main 68k thread is
+trap; `2` is an experiment that breaks the bridge; the main 68k thread is
 still the nanokernel's emulator). `--core mame-ppc --jit` boots 7.5.5 to the
 desktop in 1.6 s and Mac OS 9.0.4 in 10 s. Reference checkout:
 `/home/mick/src/mame-src`. Tests: `ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|guest_suite_ppc_mame|executor\.mame68k\.'` (`boot_ppc_mame_jit` is the native back-end;
-`guest_suite_ppc_mame` is the Mac OS 9.0.4 guest suite on it).
-`MACEMU_MAMEPPC_TRACE=1` prints host ops, exceptions and a per-second PC and
-framebuffer sample from the mame-ppc installer. Open items: the Stragglers
+`guest_suite_ppc_mame` is the Mac OS 9.0.4 guest suite on it;
+`command_bridge_ppc_mame_m68k` is C3a). `--debug-mame-ppc` prints host ops,
+exceptions and a per-second PC and framebuffer sample from the mame-ppc
+installer. Open items: the Stragglers
 section of docs/cpu/PLAN.md.
 
 ## Project Structure
@@ -212,6 +213,8 @@ CPU:
                              ppc kpx | mame-ppc (default: kpx)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
+  --m68k-host N              mame-ppc: 1 runs host-initiated 68k routines on a
+                             mame-68k core (C3a); 2 the parked experiment
   --idlewait / --no-idlewait Pause CPU when guest idle (default: on)
 
 Media:
@@ -240,6 +243,7 @@ Logging:
   --debug-mode-switch        Debug video mode switches
   --debug-perf               Debug performance
   --debug-network            Debug net-bridge NAT/DNS/ICMP/TCP/UDP
+  --debug-mame-ppc           mame-ppc: host ops, exceptions, per-second CPU sample
   --trace-atraps             Record (A-trap, caller PC) pairs; snapshots write atraps.tsv
   --executor-logtraps        Executor logs every trap call to stderr
   --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks
@@ -248,14 +252,12 @@ Logging:
 ## Environment Variables
 
 Configuration is CLI flags only; the binary reads no environment variables
-for it. The exceptions are diagnostic switches on the PPC machine, which
-should become flags (docs/cpu/PLAN.md, Stragglers).
+for it. The exceptions are Kheperix-era diagnostic switches on the PPC
+machine.
 
 | Var | Scope | Description |
 |-----|-------|-------------|
 | `MACEMU_ROM` | Test scripts only | Default ROM path (not read by the binary) |
-| `MACEMU_MAMEPPC_68K` | `--core mame-ppc` | `1`: host-initiated 68k routines on a host `mame-68k` core (C3a); `2`: the parked experiment |
-| `MACEMU_MAMEPPC_TRACE` | `--core mame-ppc` | host ops, exceptions, per-second PC/framebuffer sample |
 | `MACEMU_PPC_NO_IRQ`, `MACEMU_PPC_TRACE_TRAP` | `--backend kpx` | Kheperix-era debug switches |
 
 ## Key Architectural Decisions

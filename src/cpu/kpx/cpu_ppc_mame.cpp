@@ -24,6 +24,7 @@
  */
 #include "sysdeps.h"
 #include <sys/mman.h>
+#include <atomic>
 #include <unistd.h>
 #include "kpx_cpu_emulation.h"
 #include "main.h"
@@ -265,7 +266,7 @@ void execute_emul_op(uint32 emul_op)
     }
 }
 
-/* ---- C3a: the 68k side on a host Musashi (MACEMU_MAMEPPC_68K=1) ----
+/* ---- C3a: the 68k side on a host Musashi (--m68k-host 1) ----
  *
  * execute_68k() runs the routine on a mame-68k core over the same guest
  * memory. The ROM's EmulOp words ($FE43+n) and the EXEC_RETURN word
@@ -344,16 +345,12 @@ struct M68kHost final : cpu::Host
     }
 } g_m68k_host;
 
-/* MACEMU_MAMEPPC_68K: 0 off; 1 hand every A-line word to the emulator;
+/* --m68k-host: 0 off; 1 hand every A-line word to the emulator;
  * 2 Musashi takes A-line traps through the 68k vectors ($AAFE still
  * hands off). */
 int use_host_m68k()
 {
-    static const int on = []() {
-        const char *e = std::getenv("MACEMU_MAMEPPC_68K");
-        return (e && *e) ? atoi(e) : 0;
-    }();
-    return on;
+    return g_platform.ppc_m68k_host;
 }
 
 /* The emulator's register convention at a dispatch slot, from Musashi's
@@ -402,10 +399,7 @@ bool execute_68k_musashi(uint32 entry, M68kRegisters *r)
     }
     g_m68k_runs++;
     static int depth;
-    static const bool s_trace = []() {
-        const char *e = std::getenv("MACEMU_MAMEPPC_TRACE");
-        return e && *e && *e != '0';
-    }();
+    const bool s_trace = g_platform.ppc_debug_trace;
 
     /* Both cores' state: this nests (an EmulOp run from here may call
      * Execute68k again), and the outer Musashi instruction must find its
@@ -674,16 +668,62 @@ void handle_interrupt()
     }
 }
 
+/* Why attention() was asked for: an interrupt (TriggerInterrupt) or the
+ * trace sample. */
+std::atomic<bool> g_interrupt_requested{false};
+std::atomic<bool> g_sample_requested{false};
+
+/* --debug-mame-ppc: once a second, on the CPU thread between slices (the
+ * state PC is current there), the PC and its neighbourhood, a framebuffer
+ * checksum and the NativeOp/EmulOp counts. */
+void print_trace_sample()
+{
+    fprintf(stderr, "[mame-ppc] sample: pc=%08x lr=%08x r1=%08x r24=%08x r25=%08x msr=%08x mode=%u nest=%d\n",
+            g_core->pc(), get_lr(), gpr(1), gpr(24), gpr(25), g_core->reg(R::MSR),
+            ReadMacInt32(XLM_RUN_MODE), (int)ReadMacInt32(XLM_IRQ_NEST));
+    uint32 sum = 0, nz = 0;
+    for(uint32 i = 0; i < 640 * 480 * 4; i += 4)
+    {
+        uint32 v = ReadMacInt32(screen_base + i);
+        sum += v;
+        nz += v != 0;
+    }
+    {
+        uint32 pc = g_core->pc();
+        char buf[96];
+        for(uint32 a = pc - 16; a <= pc + 12; a += 4)
+        {
+            g_core->disassemble(a, buf, sizeof buf);
+            fprintf(stderr, "[mame-ppc]   %c %08x: %08x  %s\n", a == pc ? '>' : ' ', a, ReadMacInt32(a), buf);
+        }
+    }
+    fprintf(stderr, "[mame-ppc] sample: fb@%08x sum=%08x nonzero=%u; native:", screen_base, sum, nz);
+    for(int i = 0; i < 64; i++)
+        if(g_native_counts[i])
+            fprintf(stderr, " %d=%u", i, g_native_counts[i]);
+    fprintf(stderr, "; m68k runs=%u handoffs=%u emulops=%u%s; emulop:", g_m68k_runs, g_m68k_handoffs,
+            g_m68k_emulops, g_m68k_active ? " ACTIVE" : "");
+    if(g_m68k_active && g_m68k)
+    {
+        char buf[96];
+        uint32 pc = g_m68k->pc();
+        g_m68k->disassemble(pc, buf, sizeof buf);
+        fprintf(stderr, " [68k pc=%08x sr=%04x a7=%08x: %s] vec28=%08x vec2c=%08x", pc,
+                g_m68k->reg(m68k::SR), g_m68k->reg(m68k::A7), buf, ReadMacInt32(0x28), ReadMacInt32(0x2c));
+    }
+    for(int i = 0; i < 64; i++)
+        if(g_emulop_counts[i])
+            fprintf(stderr, " %d=%u", i, g_emulop_counts[i]);
+    fprintf(stderr, "\n");
+}
+
 /* The core's host. */
 struct MacHost final : cpu::Host
 {
     OpResult host_op(cpu::Core &core, uint32_t opcode, uint32_t op_pc) override
     {
         static int logged;
-        static const bool s_trace = []() {
-            const char *e = std::getenv("MACEMU_MAMEPPC_TRACE");
-            return e && *e && *e != '0';
-        }();
+        const bool s_trace = g_platform.ppc_debug_trace;
         if(s_trace && logged < 200)
         {
             logged++;
@@ -713,7 +753,13 @@ struct MacHost final : cpu::Host
         }
     }
 
-    void attention(cpu::Core &) override { handle_interrupt(); }
+    void attention(cpu::Core &) override
+    {
+        if(g_sample_requested.exchange(false))
+            print_trace_sample();
+        if(g_interrupt_requested.exchange(false))
+            handle_interrupt();
+    }
 };
 
 MacHost g_host;
@@ -749,49 +795,13 @@ void tick_thread_func()
         {
             tick_counter = 0;
             WriteMacInt32(0x20c, (uint32)time(NULL) + 0x7C25B080);
-            static const bool s_trace = []() {
-                const char *e = std::getenv("MACEMU_MAMEPPC_TRACE");
-                return e && *e && *e != '0';
-            }();
-            if(s_trace && g_core)
+            /* The sample is printed on the CPU thread (attention()), where
+             * the core's PC is current; read from here it would be the last
+             * block exit's under the native back-end. */
+            if(g_platform.ppc_debug_trace && g_core)
             {
-                fprintf(stderr, "[mame-ppc] tick: pc=%08x lr=%08x r1=%08x r24=%08x r25=%08x msr=%08x mode=%u nest=%d\n",
-                        g_core->pc(), get_lr(), gpr(1), gpr(24), gpr(25), g_core->reg(R::MSR),
-                        ReadMacInt32(XLM_RUN_MODE), (int)ReadMacInt32(XLM_IRQ_NEST));
-                uint32 sum = 0, nz = 0;
-                for(uint32 i = 0; i < 640 * 480 * 4; i += 4)
-                {
-                    uint32 v = ReadMacInt32(screen_base + i);
-                    sum += v;
-                    nz += v != 0;
-                }
-                {
-                    uint32 pc = g_core->pc();
-                    char buf[96];
-                    for(uint32 a = pc - 16; a <= pc + 12; a += 4)
-                    {
-                        g_core->disassemble(a, buf, sizeof buf);
-                        fprintf(stderr, "[mame-ppc]   %c %08x: %08x  %s\n", a == pc ? '>' : ' ', a, ReadMacInt32(a), buf);
-                    }
-                }
-                fprintf(stderr, "[mame-ppc] tick: fb@%08x sum=%08x nonzero=%u; native:", screen_base, sum, nz);
-                for(int i = 0; i < 64; i++)
-                    if(g_native_counts[i])
-                        fprintf(stderr, " %d=%u", i, g_native_counts[i]);
-                fprintf(stderr, "; m68k runs=%u handoffs=%u emulops=%u%s; emulop:", g_m68k_runs, g_m68k_handoffs,
-                        g_m68k_emulops, g_m68k_active ? " ACTIVE" : "");
-                if(g_m68k_active && g_m68k)
-                {
-                    char buf[96];
-                    uint32 pc = g_m68k->pc();
-                    g_m68k->disassemble(pc, buf, sizeof buf);
-                    fprintf(stderr, " [68k pc=%08x sr=%04x a7=%08x: %s] vec28=%08x vec2c=%08x", pc,
-                            g_m68k->reg(m68k::SR), g_m68k->reg(m68k::A7), buf, ReadMacInt32(0x28), ReadMacInt32(0x2c));
-                }
-                for(int i = 0; i < 64; i++)
-                    if(g_emulop_counts[i])
-                        fprintf(stderr, " %d=%u", i, g_emulop_counts[i]);
-                fprintf(stderr, "\n");
+                g_sample_requested = true;
+                g_core->request_attention();
             }
         }
         if(ReadMacInt32(XLM_IRQ_NEST) == 0)
@@ -840,6 +850,7 @@ bool mame_cpu_init(void)
     config.exceptions = false; /* skip and log, as Kheperix */
     config.clock_hz = (uint32_t)CPUClockSpeed;
     config.jit = g_platform.ppc_jit;   /* --jit: the native back-end */
+    config.trace = g_platform.ppc_debug_trace;
     g_core = cpu::create("mame-ppc", config, g_memory, g_host).release();
     if(!g_core)
     {
@@ -881,10 +892,7 @@ void mame_cpu_execute_fast(void)
     g_tick_running = true;
     std::thread ticker(tick_thread_func);
 
-    static const bool s_trace = []() {
-        const char *e = std::getenv("MACEMU_MAMEPPC_TRACE");
-        return e && *e && *e != '0';
-    }();
+    const bool s_trace = g_platform.ppc_debug_trace;
 
     g_core->set_pc(entry);
     for(unsigned n = 0;; n++)
@@ -921,7 +929,10 @@ void mame_cpu_trigger_interrupt(int)
 {
     idle_resume();
     if(g_core)
+    {
+        g_interrupt_requested = true;
         g_core->request_attention();
+    }
 }
 
 void mame_invoke_debug(void)

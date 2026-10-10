@@ -12,6 +12,7 @@ TIMEOUT=15
 PORT=18106
 SIG_PORT=18107
 BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+PASS_FLAGS=()
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -21,6 +22,8 @@ while [[ $# -gt 0 ]]; do
         --arch) ARCH="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
+        --jit|--no-jit) PASS_FLAGS+=("$1"); shift ;;
+        --m68k-host) PASS_FLAGS+=(--m68k-host "$2"); shift 2 ;;   # mame-ppc: C3a
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -69,6 +72,7 @@ trap cleanup EXIT
 
 # Start emulator (headless-http works for both m68k and PPC)
 [[ -n "${CORE:-}" ]] && EXTRA_FLAGS+=(--core "$CORE")
+EXTRA_FLAGS+=("${PASS_FLAGS[@]}")
 "$BINARY" --backend "$BACKEND" --timeout "$TIMEOUT" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
     --port "$PORT" "${DISK_FLAGS[@]}" \
@@ -114,7 +118,14 @@ check() {
 
 # Test 1: /api/app returns Finder (passive field from shared memory)
 echo "Test 1: GET /api/app"
-APP=$(curl -s "http://localhost:$PORT/api/app" || echo "CURL_FAILED")
+# The desktop milestone can come before the Startup Items run, and
+# BridgeAgent is the current app for a moment while it starts; give the
+# Finder a few seconds to be in front again.
+for i in $(seq 1 10); do
+    APP=$(curl -s "http://localhost:$PORT/api/app" || echo "CURL_FAILED")
+    echo "$APP" | grep -q Finder && break
+    sleep 0.5
+done
 check "/api/app returns JSON" "$APP" '"app"'
 check "/api/app shows Finder" "$APP" 'Finder'
 

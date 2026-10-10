@@ -205,6 +205,13 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     if (config_->deterministic) {
         args.push_back("--deterministic");
     }
+    if (config_->debug_mame_ppc) {
+        args.push_back("--debug-mame-ppc");
+    }
+    if (config_->m68k_host) {
+        args.push_back("--m68k-host");
+        args.push_back(std::to_string(config_->m68k_host));
+    }
     if (!config_->snapshot_at.empty()) {
         args.push_back("--snapshot-at");
         args.push_back(config_->snapshot_at);

@@ -436,6 +436,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             ppc kpx | mame-ppc (default: kpx)\n");
             printf("  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)\n");
             printf("  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)\n");
+            printf("  --m68k-host N              mame-ppc only: 0 off; 1 host-initiated 68k routines on a\n");
+            printf("                             mame-68k core; 2 also A-line traps (experiment, breaks the bridge)\n");
             printf("  --idlewait / --no-idlewait Pause CPU when guest idle (default: on)\n");
             printf("\nMedia:\n");
             printf("  --audio                    Enable audio (default: off)\n");
@@ -465,6 +467,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-mode-switch\n");
             printf("  --debug-perf\n");
             printf("  --debug-network\n");
+            printf("  --debug-mame-ppc           mame-ppc: log host ops, exceptions, a per-second CPU sample\n");
             printf("  --trace-atraps             Record every (A-trap, caller PC); snapshots write atraps.tsv\n");
             printf("  --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait\n");
             printf("  --snapshot-at NAME@SECS    With --deterministic: snapshot SECS virtual seconds after Finder starts\n");
@@ -730,6 +733,13 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--debug-network") == 0) {
             config.debug_network = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--debug-mame-ppc") == 0) {
+            config.debug_mame_ppc = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--m68k-host") == 0 && i+1 < argc) {
+            config.m68k_host = atoi(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
         // Positional: ROM path (last non-flag arg)

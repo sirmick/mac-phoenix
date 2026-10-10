@@ -266,6 +266,8 @@ struct Config
      * through the vectors. Off: skip the instruction and log, as Kheperix
      * does; what SheepShaver's machine side expects. */
     bool exceptions = true;
+    /* Log host ops and exceptions to stderr (mame-ppc: --debug-mame-ppc). */
+    bool trace = false;
 };
 
 enum class StopReason {

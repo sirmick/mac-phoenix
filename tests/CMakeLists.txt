@@ -404,6 +404,19 @@ set_tests_properties(command_bridge_ppc PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
+# C3a: host-initiated 68k routines on a mame-68k core beside mame-ppc
+# (--m68k-host 1; docs/cpu/PLAN.md).
+add_test(
+  NAME command_bridge_ppc_mame_m68k
+  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend kpx --core mame-ppc --jit --m68k-host 1 --timeout 20 --port 18126
+)
+set_tests_properties(command_bridge_ppc_mame_m68k PROPERTIES
+  TIMEOUT 35
+  LABELS "boot"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
 add_test(
   NAME mouse_position_ppc
   COMMAND bash ${TEST_DIR}/test_mouse_position.sh --backend kpx --timeout 20 --port 18102

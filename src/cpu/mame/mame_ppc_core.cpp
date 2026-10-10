@@ -193,7 +193,7 @@ class MamePpcCore final : public Core
 {
 public:
     MamePpcCore(const Config &config, GuestMemory &memory, Host &host)
-        : dev_(config, memory), host_(host), memory_(memory)
+        : dev_(config, memory), host_(host), memory_(memory), trace_(config.trace)
     {
         dev_.core_adapter = this;
         dev_.shim_start();
@@ -327,7 +327,7 @@ private:
     GuestMemory &memory_;
     int depth_ = 0;
     int traced_ = 0;
-    bool trace_ = getenv("MACEMU_MAMEPPC_TRACE") && *getenv("MACEMU_MAMEPPC_TRACE") != '0';
+    bool trace_ = false;   /* Config::trace */
     bool *stop_flag_ = nullptr; /* the innermost run()'s */
     std::atomic<bool> stop_requested_{false};
     std::atomic<bool> attention_{false};

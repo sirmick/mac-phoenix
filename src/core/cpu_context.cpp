@@ -607,6 +607,8 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     else
         cpu_ppc_kpx_install(&platform_);
     platform_.ppc_jit = config.jit;
+    platform_.ppc_m68k_host = config.m68k_host;
+    platform_.ppc_debug_trace = config.debug_mame_ppc;
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n", platform_.cpu_name, config.jit ? "on" : "off");
 
     // 6b. Sync g_platform NOW so core code (disk.cpp, cdrom.cpp, extfs.cpp etc.)

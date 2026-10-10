@@ -117,6 +117,8 @@ typedef struct {
      */
     const char *cpu_name;  // Backend name, e.g. "UAE", "KPX"
     bool ppc_jit;            // true: enable PPC dyngen JIT; false: interpreter only
+    int ppc_m68k_host;       // --m68k-host (mame-ppc): 0 off, 1 68k routines on mame-68k, 2 + A-line traps
+    bool ppc_debug_trace;    // --debug-mame-ppc
 
     // Lifecycle
     bool (*cpu_init)(void);

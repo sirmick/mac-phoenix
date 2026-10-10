@@ -170,6 +170,8 @@ struct EmulatorConfig {
     bool debug_perf = false;
     bool debug_network = false;
     bool trace_atraps = false;         // record (A-trap, caller) pairs; dumped with snapshots
+    bool debug_mame_ppc = false;       // --core mame-ppc: host ops, exceptions, per-second sample
+    int m68k_host = 0;                 // --core mame-ppc: 68k routines on a mame-68k core (C3a); 0 off, 1 on, 2 experiment
     bool deterministic = false;        // virtual clock: time counted in instructions (vclock.h)
     std::string snapshot_at;           // "NAME@SECONDS": snapshot that long after the traced app starts
 
