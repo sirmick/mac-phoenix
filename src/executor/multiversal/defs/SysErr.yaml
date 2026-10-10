@@ -55,5 +55,9 @@
     args:
       - name: errorcode
         type: int16_t
+        register: D0
     trap: 0xA9C9
+    comment: |
+      MacPhoenix: the code comes in D0 (IM II-362: "moveq #n,d0; _SysError"),
+      not on the stack; the Speech Manager's INIT showed 0 for its 98.
     executor: C_

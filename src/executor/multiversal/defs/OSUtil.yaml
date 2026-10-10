@@ -402,6 +402,49 @@
 
 # ####
 
+- struct:
+    name: DeferredTask
+    members:
+      - name: qLink
+        type: QElemPtr
+      - name: qType
+        type: INTEGER
+      - name: dtFlags
+        type: INTEGER
+      - name: dtAddr
+        type: ProcPtr
+      - name: dtParam
+        type: LONGINT
+      - name: dtReserved
+        type: LONGINT
+    size: 20
+
+# ####
+
+- typedef:
+    name: DeferredTaskPtr
+    type: DeferredTask*
+
+# ####
+
+- function:
+    name: DTInstall
+    return: OSErr
+    args:
+      - name: dtTaskPtr
+        type: DeferredTaskPtr
+        register: A0
+    executor: C_
+    trap: 0xA082
+    returnreg: D0
+    comment: |
+      MacPhoenix: the Deferred Task Manager (IM V-466). A task queued from
+      an interrupt runs when the interrupt is over, with A1 = dtParam;
+      here at the next tick, after the VBL tasks (time/vbl.cpp). Apple's
+      Speech Manager queues one from its sound channel callback.
+
+# ####
+
 - function:
     name: HandToHand
     return: OSErr

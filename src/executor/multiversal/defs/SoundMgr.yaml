@@ -1284,3 +1284,41 @@
     dispatcher: SoundDispatch
     selector: 0x001C0004
     executor: C_
+
+# ####
+
+- function:
+    name: SndInstallDispatchGroup
+    return: OSErr
+    args:
+      - name: group
+        type: INTEGER
+      - name: handler
+        type: ProcPtr
+    dispatcher: SoundDispatch
+    selector: 0x00040000
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): SoundDispatch group 0, selector 4, as
+      the Quadra ROM has it ($4043F30). SoundDispatch's low word is a
+      dispatch group, an offset into a table of handlers hanging off the
+      Sound Manager globals (ExpandMem+$110, +$2A); this puts a handler
+      there (group < $24), which then gets every call whose low word is
+      the group with D0 swapped (the selector in the low word). Apple's
+      Speech Manager installs its 68k handler as group $C
+      (sound/snddispatch.cpp emulates the ROM's dispatcher).
+
+# ####
+
+- function:
+    name: SndRemoveDispatchGroup
+    return: OSErr
+    args:
+      - name: group
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00080000
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): group 0, selector 8: the group's slot
+      goes back to the "no such group" handler.

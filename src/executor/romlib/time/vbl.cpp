@@ -127,6 +127,8 @@ static void C_ROMlib_vcatch()
         }
     }
 
+    /* MacPhoenix: the deferred tasks (DTInstall), as at interrupt exit. */
+    ROMlib_run_deferred_tasks();
     memcpy(&cpu_state.regs, saved_regs, sizeof saved_regs);
     cpu_state.ccnz = saved_ccnz;
     cpu_state.ccn = saved_ccn;
@@ -224,4 +226,34 @@ OSErr Executor::VRemove(VBLTaskPtr vtaskp)
 QHdrPtr Executor::GetVBLQHdr()
 {
     return &LM(VBLQueue);
+}
+
+/* MacPhoenix: the Deferred Task Manager. A task runs when the "interrupt"
+   that queued it is over: after a sound channel's callback (sound.cpp),
+   or at the latest at the next tick (ROMlib_vcatch), with A1 = dtParam;
+   the registers around it are the caller's business, as at interrupt
+   exit. Apple's Speech Manager refills its one buffer from the callback's
+   deferred task, so waiting for the tick left gaps in the speech. */
+void Executor::ROMlib_run_deferred_tasks()
+{
+    for(DeferredTaskPtr dp = (DeferredTaskPtr)LM(DTQueue).qHead; dp;
+        dp = (DeferredTaskPtr)LM(DTQueue).qHead)
+    {
+        Dequeue((QElemPtr)dp, &LM(DTQueue));
+        M68kReg saved_regs[16];
+        memcpy(saved_regs, &cpu_state.regs, sizeof saved_regs);
+        EM_A0 = US_TO_SYN68K_CHECK0(dp);
+        EM_A1 = dp->dtParam;
+        execute68K(guest_cast<LONGINT>(dp->dtAddr));
+        memcpy(&cpu_state.regs, saved_regs, sizeof saved_regs);
+    }
+}
+
+OSErr Executor::C_DTInstall(DeferredTaskPtr dtTaskPtr)
+{
+    if(!dtTaskPtr || !dtTaskPtr->dtAddr)
+        return paramErr;
+    dtTaskPtr->qType = 7; /* dtQType */
+    Enqueue((QElemPtr)dtTaskPtr, &LM(DTQueue));
+    return noErr;
 }

@@ -147,7 +147,7 @@ const char *trap_name_array[0x1000] = {
     "DoVBLTask", /* 0xA072 */
     "A073", /* 0xA073 */
     "A074", /* 0xA074 */
-    "DTInstall", /* 0xA075 */
+    "SIntInstall", /* 0xA075 */
     "SIntRemove", /* 0xA076 */
     "CountADBs", /* 0xA077 */
     "GetIndADB", /* 0xA078 */
@@ -160,7 +160,7 @@ const char *trap_name_array[0x1000] = {
     "InternalWait", /* 0xA07F */
     "GetVideoDefault", /* 0xA080 */
     "SetVideoDefault", /* 0xA081 */
-    "SIntInstall", /* 0xA082 */
+    "DTInstall", /* 0xA082 */
     "SetOSDefault", /* 0xA083 */
     "GetOSDefault", /* 0xA084 */
     "IMVI_IdleUpdate", /* 0xA085 */
@@ -403,7 +403,7 @@ const char *trap_name_array[0x1000] = {
     "DoVBLTask", /* 0xA172 */
     "A173", /* 0xA173 */
     "A174", /* 0xA174 */
-    "DTInstall", /* 0xA175 */
+    "SIntInstall", /* 0xA175 */
     "SIntRemove", /* 0xA176 */
     "CountADBs", /* 0xA177 */
     "GetIndADB", /* 0xA178 */
@@ -416,7 +416,7 @@ const char *trap_name_array[0x1000] = {
     "InternalWait", /* 0xA17F */
     "GetVideoDefault", /* 0xA180 */
     "SetVideoDefault", /* 0xA181 */
-    "SIntInstall", /* 0xA182 */
+    "DTInstall", /* 0xA182 */
     "SetOSDefault", /* 0xA183 */
     "GetOSDefault", /* 0xA184 */
     "IMVI_IdleUpdate", /* 0xA185 */
@@ -659,7 +659,7 @@ const char *trap_name_array[0x1000] = {
     "DoVBLTask", /* 0xA272 */
     "A273", /* 0xA273 */
     "A274", /* 0xA274 */
-    "DTInstall", /* 0xA275 */
+    "SIntInstall", /* 0xA275 */
     "SIntRemove", /* 0xA276 */
     "CountADBs", /* 0xA277 */
     "GetIndADB", /* 0xA278 */
@@ -672,7 +672,7 @@ const char *trap_name_array[0x1000] = {
     "InternalWait", /* 0xA27F */
     "GetVideoDefault", /* 0xA280 */
     "SetVideoDefault", /* 0xA281 */
-    "SIntInstall", /* 0xA282 */
+    "DTInstall", /* 0xA282 */
     "SetOSDefault", /* 0xA283 */
     "GetOSDefault", /* 0xA284 */
     "IMVI_IdleUpdate", /* 0xA285 */
@@ -915,7 +915,7 @@ const char *trap_name_array[0x1000] = {
     "DoVBLTask", /* 0xA372 */
     "A373", /* 0xA373 */
     "A374", /* 0xA374 */
-    "DTInstall", /* 0xA375 */
+    "SIntInstall", /* 0xA375 */
     "SIntRemove", /* 0xA376 */
     "CountADBs", /* 0xA377 */
     "GetIndADB", /* 0xA378 */
@@ -928,7 +928,7 @@ const char *trap_name_array[0x1000] = {
     "InternalWait", /* 0xA37F */
     "GetVideoDefault", /* 0xA380 */
     "SetVideoDefault", /* 0xA381 */
-    "SIntInstall", /* 0xA382 */
+    "DTInstall", /* 0xA382 */
     "SetOSDefault", /* 0xA383 */
     "GetOSDefault", /* 0xA384 */
     "IMVI_IdleUpdate", /* 0xA385 */

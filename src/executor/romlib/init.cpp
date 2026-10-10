@@ -3,6 +3,8 @@
 #include <rsys/extensions.h>
 #include <rsys/sysroutines.h>
 #include <rsys/helppkg.h>
+#include <rsys/snddispatch.h>
+#include <rsys/osutil.h>
 #include <rsys/macros.h>
 #include <error/error.h>
 #include <time/time.h>
@@ -250,6 +252,7 @@ void Executor::InitLowMem()
 
     memset(&LM(EventQueue), 0, sizeof(LM(EventQueue)));
     memset(&LM(VBLQueue), 0, sizeof(LM(VBLQueue)));
+    memset(&LM(DTQueue), 0, sizeof(LM(DTQueue))); /* MacPhoenix: deferred tasks */
     //memset(&LM(DrvQHdr), 0, sizeof(LM(DrvQHdr)));     // inited in ROMlib_fileinit
     //memset(&LM(VCBQHdr), 0, sizeof(LM(VCBQHdr)));     // inited in ROMlib_fileinit
     //memset(&LM(FSQHdr), 0, sizeof(LM(FSQHdr)));       // inited in ROMlib_fileinit
@@ -340,6 +343,7 @@ void Executor::InitPerProcessLowMem()
         CurDirStore,
         EventQueue,
         VBLQueue,
+        DTQueue, /* MacPhoenix: deferred tasks */
         DefVCBPtr,
         CurApName,
         CurApRefNum,
@@ -507,9 +511,13 @@ void Executor::InitPerProcessLowMem()
             LM(AppPacks)[i] = 0;
     }
     LM(SavedHandle) = nullptr; /* MacPhoenix: no menu is down */
+    /* MacPhoenix: the pretend ROM from the start, not only from a launch:
+       the Speech Manager's INIT reads the ROM version at ROMBase+8. */
+    LM(ROMBase) = (Ptr)ROMlib_phoneyrom;
     ROMlib_install_app_packs(); /* MacPhoenix: the System's, on Apple's System file */
     ROMlib_install_system_routines(); /* MacPhoenix: $7B0 and $668 */
     ROMlib_install_help_package(); /* MacPhoenix: Apple's PACK 14 on $A830 */
+    ROMlib_install_sound_dispatch(); /* MacPhoenix: $A800's group table */
     LM(SysEvtMask) = ~(1L << keyUp); /* EVERYTHING except keyUp */
     LM(SdVolume) = 7; /* for Beebop 2 */
 }

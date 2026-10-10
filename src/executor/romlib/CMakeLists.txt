@@ -340,7 +340,7 @@ set(sound_sources
     sound/sounddriver.cpp sound/sound.cpp sound/soundIMVI.cpp sound/soundfake.cpp
     sound/snth5.cpp
 
-    SpeechManager.cpp)
+    SpeechManager.cpp sound/snddispatch.cpp)
 if(HOST_OS STREQUAL macosx)
 set(sound_sources ${sound_sources} SpeechManager-MacBridge.mm)
 endif()

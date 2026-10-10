@@ -22,6 +22,7 @@
 #include <mman/mman.h>
 #include <rsys/extensions.h>
 #include <rsys/helppkg.h>
+#include <SegmentLdr.h>
 #include <rsys/component.h>
 #include <rsys/version.h>
 #include <util/macstrings.h>
@@ -385,6 +386,13 @@ void Executor::ROMlib_load_extensions()
 {
     ROMlib_install_app_packs();
     ROMlib_install_help_package(); /* before INITs that patch or ask for it */
+    /* CurApName as a 7.5.5 boot has it before the Finder launches: $FF
+       bytes. Apple's linked-patch loaders (the Speech Manager's INIT, PC
+       Exchange, Macintosh Easy Open, the System's own 'lodr') read the
+       long at $918, CurApName+8, as a hook to call unless negative; the
+       host program's name there sent the Speech Manager into "enix". */
+    memset(LM(CurApName), 0xFF, 32);
+    LM(CurApName)[0] = 0;
 
     /* The System file's own components first, as its boot code does. */
     int32_t n = ROMlib_register_components(LM(SysMap), true);

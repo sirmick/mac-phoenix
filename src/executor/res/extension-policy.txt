@@ -18,3 +18,5 @@ Clipping Extension
 AppleScript™
 Finder Scripting Extension
 Color Picker
+Speech Manager
+Speech

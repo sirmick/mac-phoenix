@@ -12,7 +12,8 @@
 #include "ipc_client.h"
 
 // Start/stop the audio IPC reader thread (parent process)
-void audio_ipc_reader_start(IPCClient* client, AudioOutput* output);
+/* dump_path: append every submitted frame (raw S16LE, as sent) there, or null. */
+void audio_ipc_reader_start(IPCClient* client, AudioOutput* output, const char* dump_path = nullptr);
 void audio_ipc_reader_stop(void);
 
 #endif // AUDIO_IPC_READER_H

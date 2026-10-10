@@ -918,7 +918,8 @@ int main(int argc, char **argv)
 				extern AudioOutput* audio_direct_get_output(void);
 				AudioOutput* audio_out = audio_direct_get_output();
 				if (audio_out) {
-					audio_ipc_reader_start(g_ipc_client, audio_out);
+					audio_ipc_reader_start(g_ipc_client, audio_out,
+					                       emu_config.audio_dump_path.empty() ? nullptr : emu_config.audio_dump_path.c_str());
 				}
 			}
 		}

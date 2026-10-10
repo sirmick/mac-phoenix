@@ -25,6 +25,8 @@
 #include <chrono>
 
 static std::thread g_reader_thread;
+static std::string g_dump_path;
+#include <string>
 static std::atomic<bool> g_reader_running(false);
 
 static void audio_ipc_reader_loop(IPCClient* client, AudioOutput* output)
@@ -35,6 +37,7 @@ static void audio_ipc_reader_loop(IPCClient* client, AudioOutput* output)
     uint64_t frames_consumed = 0;
     uint64_t frames_underrun = 0;
     bool logged_format = false;
+    FILE* dump = g_dump_path.empty() ? nullptr : fopen(g_dump_path.c_str(), "ab");
 
     while (g_reader_running.load(std::memory_order_relaxed)) {
         auto frame_start = std::chrono::steady_clock::now();
@@ -127,6 +130,7 @@ static void audio_ipc_reader_loop(IPCClient* client, AudioOutput* output)
             // Submit to ring buffer
             output->submit_samples(pcm_buffer, total_samples,
                                    frame->sample_rate, frame->channels);
+            if (dump) fwrite(pcm_buffer, sizeof(int16_t), total_samples, dump);
 
             // Advance read index
             uint32_t next_read = (read_idx + 1) % IPC_AUDIO_FRAME_RING_SIZE;
@@ -146,12 +150,14 @@ next_frame:
 
     fprintf(stderr, "[AudioIPCReader] Thread exiting (%" PRIu64 " frames, %" PRIu64 " underruns)\n",
             frames_consumed, frames_underrun);
+    if (dump) fclose(dump);
 }
 
 
-void audio_ipc_reader_start(IPCClient* client, AudioOutput* output)
+void audio_ipc_reader_start(IPCClient* client, AudioOutput* output, const char* dump_path)
 {
     if (g_reader_running.load()) return;
+    g_dump_path = dump_path ? dump_path : "";
 
     g_reader_running.store(true, std::memory_order_release);
     g_reader_thread = std::thread(audio_ipc_reader_loop, client, output);

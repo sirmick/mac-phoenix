@@ -438,6 +438,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --idlewait / --no-idlewait Pause CPU when guest idle (default: on)\n");
             printf("\nMedia:\n");
             printf("  --audio                    Enable audio (default: off)\n");
+            printf("  --audio-dump PATH          Append the audio sent out (raw S16LE 48 kHz stereo) to PATH\n");
             printf("  --zap-pram                 Clear PRAM on startup\n");
             printf("  --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog\n");
             printf("\nNetworking:\n");
@@ -643,6 +644,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         // --audio
         if (strcmp(argv[i], "--audio") == 0) {
             config.audio_enabled = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--audio-dump") == 0 && i + 1 < argc) {
+            config.audio_dump_path = argv[i + 1]; argv[i] = argv[i + 1] = nullptr; i++; continue;
         }
 
         // --headless-http

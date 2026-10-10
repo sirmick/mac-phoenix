@@ -89,6 +89,7 @@ struct EmulatorConfig {
 
     // Audio
     bool audio_enabled = false;        // opt-in via --audio
+    std::string audio_dump_path;       // --audio-dump: raw S16LE 48 kHz stereo of what goes out
 
     // Boot
     int bootdriver = 0;                // 0=any, -62=CDROM

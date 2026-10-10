@@ -7,6 +7,8 @@
 #include <base/common.h>
 #include <cmath>
 #include <algorithm>
+#include <map>
+#include <vector>
 #include <MemoryMgr.h>
 #include <ResourceMgr.h>
 #include <SoundDvr.h>
@@ -16,6 +18,7 @@
 #include <mman/mman.h>
 #include <base/functions.impl.h>
 #include <time/syncint.h>
+#include <time/vbl.h>
 
 using namespace Executor;
 
@@ -614,40 +617,74 @@ do_current_command(SndChannelPtr chanp, HungerInfo info)
     switch(chanp->cmdInProg.cmd)
     {
         case bufferCmd:
+        {
             hp = guest_cast<SoundHeaderPtr>(chanp->cmdInProg.param2);
-
-            if(hp->encode != stdSH)
+            unsigned int insize;
+            if(hp->encode == stdSH)
             {
-                warning_unimplemented("Ignoring unsupported SoundHeader "
-                                      "encoding: %s",
-                                      ((hp->encode == cmpSH)
-                                           ? "compressed"
-                                           : ((hp->encode == extSH)
-                                                  ? "extended"
-                                                  : "<unknown>")));
-                CMD_DONE(chanp);
+                sp = (hp->samplePtr ? (unsigned char *)hp->samplePtr
+                                    : hp->sampleArea);
+                insize = hp->length;
+            }
+            else if(hp->encode == extSH)
+            {
+                /* MacPhoenix: an extended header (MacinTalk 3 speaks in
+                   them): numFrames frames of numChannels samples of
+                   sampleSize bits. 8-bit mono plays as it lies; anything
+                   else is reduced to that in a scratch buffer kept per
+                   channel for as long as the buffer plays. */
+                ExtSoundHeaderPtr xp = (ExtSoundHeaderPtr)hp;
+                unsigned char *data = xp->samplePtr ? (unsigned char *)xp->samplePtr : xp->sampleArea;
+                unsigned frames = xp->numFrames;
+                int channels = std::max<int>(1, xp->numChannels);
+                int bits = (int)xp->sampleSize ? (int)xp->sampleSize : 8;
+                insize = frames;
+                if(channels == 1 && bits == 8)
+                    sp = data;
+                else
+                {
+                    static std::map<SndChannelPtr, std::vector<uint8_t>> scratch;
+                    static std::map<SndChannelPtr, std::pair<unsigned char *, unsigned>> source;
+                    std::vector<uint8_t> &buf = scratch[chanp];
+                    if(source[chanp] != std::make_pair(data, frames) || buf.size() != frames)
+                    {
+                        buf.assign(frames, 0x80);
+                        for(unsigned k = 0; k < frames; k++)
+                        {
+                            unsigned char *f = data + (size_t)k * channels * (bits / 8);
+                            if(bits == 16)
+                                buf[k] = (uint8_t)(((int8_t)f[0]) + 128);
+                            else
+                                buf[k] = f[0];
+                        }
+                        source[chanp] = std::make_pair(data, frames);
+                    }
+                    sp = buf.data();
+                }
             }
             else
             {
-                duration = snd_duration(hp);
+                warning_unimplemented("Ignoring unsupported SoundHeader "
+                                      "encoding: %s",
+                                      hp->encode == cmpSH ? "compressed" : "<unknown>");
+                CMD_DONE(chanp);
+                break;
+            }
+            duration = insize;
+            warning_sound_log("bufferCmd dur %d", (int)duration);
 
-                sp = (hp->samplePtr ? (unsigned char *)hp->samplePtr
-                                    : hp->sampleArea);
-
-                warning_sound_log("bufferCmd dur %d", (int)duration);
-
-                if(resample(sp, info.buf, hp->length,
-                            info.bufsize, hp->sampleRate,
-                            info.rate << 16,
-                            &SND_CHAN_CURRENT_START(chanp),
-                            &SND_CHAN_PREV_SAMP(chanp),
-                            &SND_CHAN_TIME(chanp),
-                            info.t3))
-                {
-                    CMD_DONE(chanp);
-                }
+            if(resample(sp, info.buf, insize,
+                        info.bufsize, hp->sampleRate,
+                        info.rate << 16,
+                        &SND_CHAN_CURRENT_START(chanp),
+                        &SND_CHAN_PREV_SAMP(chanp),
+                        &SND_CHAN_TIME(chanp),
+                        info.t3))
+            {
+                CMD_DONE(chanp);
             }
             break;
+        }
 
         case callBackCmd:
             warning_sound_log("callBackCmd");
@@ -655,6 +692,9 @@ do_current_command(SndChannelPtr chanp, HungerInfo info)
             chanp->callBack
             (chanp, &cmd);
             CMD_DONE(chanp);
+            /* MacPhoenix: a deferred task the callback queued runs now,
+               as at interrupt exit, so a buffer it queues plays on. */
+            ROMlib_run_deferred_tasks();
             break;
 
         case ampCmd:
