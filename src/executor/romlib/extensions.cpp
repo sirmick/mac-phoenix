@@ -341,11 +341,42 @@ void Executor::ROMlib_install_app_packs()
 {
     if(!ROMlib_apple_system_file || !LM(SysMapHndl))
         return;
+    /* The packages the Quadra ROM holds (4, 5, 7: SANE and Binary-Decimal)
+       are not in the System file; a real boot's slots point into ROM. A
+       stand-in with Apple's header (BRA.S; 'PACK'; id; version) whose code
+       is the package's trap stands for those: Date & Time's panel checks
+       AppPacks[7] before every NumToString and shows nothing without it. */
+    static Handle standins[8];
     INTEGER saved = CurResFile();
     UseResFile(LM(SysMap));
     for(int i = 0; i < (int)std::size(LM(AppPacks)); i++)
-        if(!LM(AppPacks)[i])
-            LM(AppPacks)[i] = Get1Resource("PACK"_4, i);
+    {
+        if(LM(AppPacks)[i])
+            continue;
+        Handle h = Get1Resource("PACK"_4, i);
+        if(!h && (i == 4 || i == 5 || i == 7))
+        {
+            if(!standins[i])
+            {
+                TheZoneGuard guard(LM(SysZone));
+                standins[i] = NewHandleSys(16);
+                if(standins[i])
+                {
+                    uint8_t *p = (uint8_t *)*standins[i];
+                    const uint8_t header[12] = { 0x60, 0x0A, 0, 0, 'P', 'A', 'C', 'K',
+                                                 0, (uint8_t)i, 0, 1 };
+                    memcpy(p, header, 12);
+                    uint16_t trap = 0xA9E7 + i; /* _Pack0 .. _Pack7 */
+                    p[12] = trap >> 8;
+                    p[13] = trap & 0xFF;
+                    p[14] = 0x4E; /* RTS */
+                    p[15] = 0x75;
+                }
+            }
+            h = standins[i];
+        }
+        LM(AppPacks)[i] = h;
+    }
     UseResFile(saved);
 }
 

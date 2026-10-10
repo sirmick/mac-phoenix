@@ -570,4 +570,6 @@ Kept small so upstream fixes can be merged by hand:
 * `extensions.cpp`, `init.cpp`: INITs run in the System heap (`NewGestalt`
   takes selector functions from there only); `AppPacks` holds the System
   file's `PACK` 0-7 as `InitAllPacks` leaves them, after every launch's
-  lowmem reset too (Date & Time's clock checks `AppPacks[6]` before `Pack6`).
+  lowmem reset too (Date & Time's clock checks `AppPacks[6]` before `Pack6`);
+  stand-ins for the ROM packages 4, 5 and 7 (Apple's header, code = the
+  package's trap), which Date & Time's panel checks before `NumToString`.

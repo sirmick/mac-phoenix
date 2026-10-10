@@ -20,7 +20,7 @@ networking are punted until later; everything else is in scope.
 | 13 | ctest port 18108 used twice | done — 56200715 |
 | 14 | `command_bridge_executor` flake | open (not seen recently) |
 | 15 | Executor's own host files visible in Finder | done — 07dce3db |
-| 16 | Date & Time control panel: the date fields and the hour draw empty (minutes and seconds, which go through `ExtendedToString`, are right; `LongSecondsToDate` answers the right fields; the hour string is built without any trap) | open |
+| 16 | Date & Time control panel: the date fields and the hour draw empty | done (2026-10-10): the panel checks `AppPacks[7]` before each `NumToString`; PACK 4, 5 and 7 are ROM packages, so Executor fills those slots with stand-ins (Apple's header, code = the package's trap) |
 
 Also fixed along the way: Finder type-to-select crash (61ef0717), host
 file dates in local time, `ioVLsMod`, folder moves keeping their
