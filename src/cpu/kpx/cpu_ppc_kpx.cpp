@@ -1401,6 +1401,7 @@ extern "C" void cpu_ppc_kpx_install(Platform *p)
 
     // Backend identification
     p->cpu_name = "KPX";
+    p->ppc_insn_count = []() -> uint64_t { extern uint64_t ppc_insn_counter; return ppc_insn_counter; };
 
     // Lifecycle
     p->cpu_init = kpx_cpu_init;

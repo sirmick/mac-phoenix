@@ -21,6 +21,7 @@
 #include "sysdeps.h"
 #include "macos_util.h"
 #include "timer.h"
+#include "platform.h"
 #include "../cpu/uae_cpu/vclock.h"
 
 #include <errno.h>
@@ -123,9 +124,8 @@ void timer_current_time(tm_time_t &t)
 		t.tv_nsec = (usec % 1000000) * 1000;
 		return;
 	}
-	if (g_use_ppc_virtual_clock) {
-		extern uint64_t ppc_insn_counter;
-		uint64_t virtual_ns = ppc_insn_counter * 4;
+	if (g_use_ppc_virtual_clock && g_platform.ppc_insn_count) {
+		uint64_t virtual_ns = g_platform.ppc_insn_count() * 4;
 		t.tv_sec = virtual_ns / 1000000000ULL;
 		t.tv_nsec = virtual_ns % 1000000000ULL;
 		return;

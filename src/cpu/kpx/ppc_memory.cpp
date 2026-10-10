@@ -14,6 +14,7 @@
 #include "thunks.h"
 #include "main.h"
 #include "vm_alloc.h"
+#include "platform.h"
 
 #include <cstdio>
 #include <ctime>
@@ -62,12 +63,12 @@ void SheepMem::Exit(void)
 }
 
 // Microseconds — 64-bit microsecond counter, matching legacy SheepShaver.
-// Uses virtual PPC instruction clock (ppc_insn_counter * 4ns) to give
-// time relative to first call, exactly as legacy's host_uptime() does.
+// Uses the virtual PPC instruction clock (instructions * 4ns, from the
+// active core via g_platform.ppc_insn_count) to give time relative to the
+// first call, exactly as legacy's host_uptime() does.
 void Microseconds(uint32 &hi, uint32 &lo) {
-    extern uint64_t ppc_insn_counter;
     static uint64_t epoch_ns = 0;
-    uint64_t virtual_ns = ppc_insn_counter * 4;
+    uint64_t virtual_ns = g_platform.ppc_insn_count ? g_platform.ppc_insn_count() * 4 : 0;
     if (epoch_ns == 0) epoch_ns = virtual_ns;
     uint64 usec = (virtual_ns - epoch_ns) / 1000;
     hi = (uint32)(usec >> 32);
