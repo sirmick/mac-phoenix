@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
         --rom) ROM_OVERRIDE="$2"; shift 2 ;;
         --backend) BACKEND="$2"; shift 2 ;;
         --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi | mame-68k; kpx | mame-ppc
-        --jit|--no-jit) EXTRA_FLAGS+=("$1"); shift ;;
+        --jit|--no-jit|--idlewait|--no-idlewait) EXTRA_FLAGS+=("$1"); shift ;;
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) NETWORK="$2"; shift 2 ;;
