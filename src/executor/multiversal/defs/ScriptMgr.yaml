@@ -228,7 +228,7 @@
 # ####
 
 - struct:
-    name: DateCacheRec
+    name: DateCacheRecord
     members:
       - name: hidden
         type: int16_t[256]
@@ -238,7 +238,7 @@
 
 - typedef:
     name: DateCachePtr
-    type: DateCacheRec*
+    type: DateCacheRecord*
 
 # ####
 

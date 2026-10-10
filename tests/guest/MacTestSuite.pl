@@ -162,6 +162,40 @@ sub test_audio {
 # bundled. We use those directly. Timeouts via 4-arg select() — alarm()
 # is unreliable on classic Mac OS.
 
+# --- AppleScript dates and reals as text (Script Manager + International
+# Utilities: StringToDate/StringToTime, IULDateString, number formats) ---
+
+sub as_result {
+    my ($src) = @_;
+    $src =~ tr/\012/\015/;    # AppleScript wants CR line breaks
+    my $r = eval { MacPerl::DoAppleScript($src) };
+    return defined($r) ? $r : "undef ($@)";
+}
+
+sub test_applescript_dates {
+    my @cases = (
+        ['as_date_string', 'return date string of (date "October 9, 2026")',
+         '"Friday, October 9, 2026"'],
+        ['as_date_time_string', 'return (date "Friday, October 9, 2026 4:11:52 PM") as string',
+         '"Friday, October 9, 2026 4:11:52 PM"'],
+        ['as_date_numeric', 'return (date "10/9/2026") as string',
+         '"Friday, October 9, 2026 12:00:00 AM"'],
+        ['as_date_value', 'return date "October 9, 2026"',
+         'date "Friday, October 9, 2026 12:00:00 AM"'],
+        ['as_date_arithmetic', 'return ((date "October 10, 2026") - (date "October 9, 2026")) / days',
+         '1.0'],
+        # Reals as text: the Script Manager's number formats.
+        ['as_real_plain', 'return 1 / 3', '0.3333333333333'],
+        ['as_real_exponent', 'return 1234567.5', '1.2345675E+6'],
+        ['as_real_small', 'return 1.0E-5', '1.0E-5'],
+    );
+    for my $c (@cases) {
+        my ($name, $src, $want) = @$c;
+        my $got = as_result($src);
+        $got eq $want ? report_pass($name) : report_fail($name, "got '$got' want '$want'");
+    }
+}
+
 sub test_network {
     my $have = eval { require Socket; Socket->import(); 1 };
     if (!$have) {
@@ -272,6 +306,7 @@ report_init();
 test_disk();
 test_extfs();
 test_audio();
+test_applescript_dates();
 test_network();
 test_serial_probe();
 report_finish();

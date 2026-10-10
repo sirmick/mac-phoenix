@@ -26,42 +26,76 @@
 #include <mman/mman.h>
 
 #include <ctype.h>
+#include <string>
+#include <vector>
 
 using namespace Executor;
 
-/*
- * NOTE: these are stubs to help me make FileMaker Pro go.
- */
+/* MacPhoenix: the Script Manager's variables (Inside Macintosh: Text
+ * 6-54..6-58), one Roman script. The settable ones keep what they are set
+ * to; AppleScript, turning a date into text, sets smIntlForce around its
+ * call and gave up (error -1) when that failed. Starting values are
+ * Roman's (status: guess for smVersion and smCharPortion). */
+namespace
+{
+enum
+{
+    smKeySwapV = 28, smGenFlagsV = 30, smOverrideV = 32, smCharPortionV = 34,
+    smDoubleByteV = 36, smRegionCodeV = 40, smKeyDisableStateV = 42,
+    kScriptVars = 44,
+};
+
+LONGINT script_vars[kScriptVars / 2] = {};
+bool script_vars_ready = false;
+
+LONGINT &script_var(INTEGER verb)
+{
+    if(!script_vars_ready)
+    {
+        script_vars_ready = true;
+        script_vars[smVersion / 2] = 0x0750;
+        script_vars[smEnabled / 2] = 1;
+        script_vars[smCharPortionV / 2] = 0x0333;
+        script_vars[smRegionCodeV / 2] = 0; /* verUS */
+    }
+    return script_vars[verb / 2];
+}
+
+/* What SetScriptManagerVariable may change; the rest describe the
+   installed scripts. */
+bool script_var_settable(INTEGER verb)
+{
+    switch(verb)
+    {
+        case smFontForce: case smIntlForce: case smForced: case smDefault:
+        case smSysScript: case smAppScript: case smKeyScript: case smSysRef:
+        case smKeyCache: case smKeySwapV: case smGenFlagsV: case smOverrideV:
+        case smCharPortionV: case smRegionCodeV: case smKeyDisableStateV:
+            return true;
+        default:
+            return false;
+    }
+}
+}
 
 LONGINT Executor::C_GetScriptManagerVariable(INTEGER verb)
 {
-    LONGINT retval;
-
-    switch(verb)
+    if(verb == smKCHRCache)
+        return US_TO_SYN68K(ROMlib_kchr_ptr());
+    if(verb < 0 || verb >= kScriptVars || (verb & 1))
     {
-        case smEnabled:
-            /* powerpoint seems to require that at least one script is
-         present */
-            warning_unimplemented("reporting script manager is enabled");
-            /* we currently only have a single script */
-            retval = 1;
-            break;
-
-        case smKCHRCache:
-            retval = US_TO_SYN68K(ROMlib_kchr_ptr());
-            break;
-
-        default:
-            warning_unexpected("unhandled selector `%d'", verb);
-            retval = 0;
+        warning_unexpected("unhandled selector `%d'", verb);
+        return 0;
     }
-    return retval;
+    return script_var(verb);
 }
 
 OSErr Executor::C_SetScriptManagerVariable(INTEGER verb, LONGINT param)
 {
-    ROMlib_hook(script_notsupported);
-    return smVerbNotFound;
+    if(verb < 0 || verb >= kScriptVars || (verb & 1) || !script_var_settable(verb))
+        return smVerbNotFound;
+    script_var(verb) = param;
+    return noErr;
 }
 
 /* MacPhoenix: Roman, the only script installed. The resource IDs come
@@ -454,111 +488,306 @@ void Executor::C_DrawJust(Ptr textbufp, int16_t length, int16_t slop)
     PORT_SP_EXTRA(qdGlobals().thePort) = save_sp_extra_x;
 }
 
-static int
-snag_date_part(Ptr text, int *offsetp, LONGINT len)
+/* ── StringToDate / StringToTime (Inside Macintosh: Text 5-72..5-80) ────
+ * MacPhoenix. Dates as people and AppleScript write them: month and weekday
+ * names from 'itl1' (English if it has none; a unique prefix of three or
+ * more letters will do), numbers in 'itl0's date order, any of / - . , and
+ * spaces between. Times as h:mm[:ss] with an optional AM/PM ('itl0's
+ * strings or am/pm). The results go into the LongDateRec; the status bits
+ * are Apple's (fatal ones have the high bit). */
+namespace
 {
-    int retval;
-
-    retval = 0;
-
-    while(*offsetp < len && text[*offsetp] != '/')
-    {
-        retval = retval * 10 + text[*offsetp] - '0';
-        ++*offsetp;
-    }
-
-    if(*offsetp < len && text[*offsetp] == '/')
-        ++*offsetp;
-
-    return retval;
-}
-
 enum
 {
     longDateFound = 1,
-    dateTimeNotFound = 0x8400
+    leftOverChars = 2,
+    dateTimeNotFound = 0x8400,
+    dateTimeInvalid = 0x8800,
 };
+
+struct DateToken
+{
+    enum Kind { Number, Word, Colon } kind;
+    int value;          /* Number */
+    std::string word;   /* Word, lower case */
+    int start, end;     /* offsets in the text */
+};
+
+std::vector<DateToken> date_tokens(const char *text, int length)
+{
+    std::vector<DateToken> tokens;
+    for(int i = 0; i < length;)
+    {
+        unsigned char c = text[i];
+        if(isdigit(c))
+        {
+            DateToken t{ DateToken::Number, 0, {}, i, i };
+            while(i < length && isdigit((unsigned char)text[i]))
+                t.value = t.value * 10 + (text[i++] - '0');
+            t.end = i;
+            tokens.push_back(t);
+        }
+        else if(isalpha(c))
+        {
+            DateToken t{ DateToken::Word, 0, {}, i, i };
+            while(i < length && (isalpha((unsigned char)text[i]) || text[i] == '.'))
+            {
+                if(text[i] != '.')
+                    t.word += (char)tolower((unsigned char)text[i]);
+                ++i;
+            }
+            t.end = i;
+            tokens.push_back(t);
+        }
+        else if(c == ':')
+        {
+            tokens.push_back({ DateToken::Colon, 0, {}, i, i + 1 });
+            ++i;
+        }
+        else
+            ++i; /* separators: / - . , space */
+    }
+    return tokens;
+}
+
+std::string lower_pstring(ConstStringPtr p)
+{
+    std::string s((const char *)p + 1, p[0]);
+    for(char &c : s)
+        c = (char)tolower((unsigned char)c);
+    return s;
+}
+
+/* 1..12 for a month name or its abbreviation, 0 if the word isn't one. */
+int month_named(const std::string &w)
+{
+    static const char *const english[12] = {
+        "january", "february", "march", "april", "may", "june", "july",
+        "august", "september", "october", "november", "december"
+    };
+    if(w.size() < 3)
+        return 0;
+    Handle h = GetIntlResource(1);
+    for(int m = 0; m < 12; m++)
+    {
+        std::string name = h ? lower_pstring(((Intl1Ptr)*h)->months[m]) : english[m];
+        if(name.compare(0, w.size(), w) == 0 || std::string(english[m]).compare(0, w.size(), w) == 0)
+            return m + 1;
+    }
+    return 0;
+}
+
+bool weekday_named(const std::string &w)
+{
+    static const char *const english[7] = {
+        "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
+    };
+    if(w.size() < 3)
+        return false;
+    Handle h = GetIntlResource(1);
+    for(int d = 0; d < 7; d++)
+    {
+        std::string name = h ? lower_pstring(((Intl1Ptr)*h)->days[d]) : english[d];
+        if(name.compare(0, w.size(), w) == 0 || std::string(english[d]).compare(0, w.size(), w) == 0)
+            return true;
+    }
+    return false;
+}
+
+int full_year(int year, int digits)
+{
+    if(digits > 2)
+        return year;
+    /* Two digits: the century that puts it nearest today. */
+    GUEST<ULONGINT> now;
+    GetDateTime(&now);
+    DateTimeRec today;
+    SecondsToDate(now, &today);
+    int century = today.year / 100 * 100;
+    int y = century + year;
+    if(y > today.year + 50)
+        y -= 100;
+    else if(y < today.year - 50)
+        y += 100;
+    return y;
+}
+}
+
+String2DateStatus Executor::C_StringToDate(
+    Ptr textp, int32_t length, DateCachePtr cache,
+    GUEST<int32_t> *length_used_ret, LongDatePtr date_time)
+{
+    const char *text = (const char *)textp;
+    std::vector<DateToken> tokens = date_tokens(text, length);
+    int month = 0, used = 0;
+    std::vector<const DateToken *> numbers;
+    for(const DateToken &t : tokens)
+    {
+        if(t.kind == DateToken::Colon)
+            break; /* a time follows */
+        if(t.kind == DateToken::Number)
+        {
+            /* A number right before a colon is the time's hour. */
+            if(&t + 1 < tokens.data() + tokens.size() && (&t + 1)->kind == DateToken::Colon)
+                break;
+            if(numbers.size() == 3)
+                break;
+            numbers.push_back(&t);
+            used = t.end;
+        }
+        else if(int m = month_named(t.word))
+        {
+            if(month)
+                break;
+            month = m;
+            used = t.end;
+        }
+        else if(weekday_named(t.word))
+            used = t.end;
+        else
+            break; /* am, pm or something else: not the date */
+    }
+
+    int day = 0, year = 0, year_digits = 4;
+    bool have_year = false;
+    auto digits = [](const DateToken *t) { return t->end - t->start; };
+    if(month)
+    {
+        /* Named month: the day is the number that can be one. */
+        for(const DateToken *t : numbers)
+            if(!day && t->value >= 1 && t->value <= 31 && digits(t) <= 2 && numbers.size() > 1)
+                day = t->value;
+            else if(!have_year)
+                year = t->value, year_digits = digits(t), have_year = true;
+        if(numbers.size() == 1)
+            day = numbers[0]->value, have_year = false;
+    }
+    else if(numbers.size() >= 2)
+    {
+        int order = mdy;
+        if(Handle h = GetIntlResource(0))
+            order = ((Intl0Ptr)*h)->dateOrder;
+        const DateToken *a = numbers[0], *b = numbers[1];
+        const DateToken *c = numbers.size() > 2 ? numbers[2] : nullptr;
+        const DateToken *y = nullptr;
+        switch(order)
+        {
+            case dmy: day = a->value; month = b->value; y = c; break;
+            case ymd:
+                if(c) { y = a; month = b->value; day = c->value; }
+                else { month = a->value; day = b->value; }
+                break;
+            default: month = a->value; day = b->value; y = c; break;
+        }
+        if(y)
+            year = y->value, year_digits = digits(y), have_year = true;
+    }
+    else
+    {
+        *length_used_ret = 0;
+        return (String2DateStatus)dateTimeNotFound;
+    }
+
+    if(!have_year)
+    {
+        GUEST<ULONGINT> now;
+        GetDateTime(&now);
+        DateTimeRec today;
+        SecondsToDate(now, &today);
+        year = today.year;
+    }
+    else
+        year = full_year(year, year_digits);
+
+    *length_used_ret = used;
+    if(month < 1 || month > 12 || day < 1 || day > 31)
+        return (String2DateStatus)dateTimeInvalid;
+    date_time->year = year;
+    date_time->month = month;
+    date_time->day = day;
+    int status = longDateFound;
+    for(int i = used; i < length; i++)
+        if(!isspace((unsigned char)text[i]) && text[i] != ',')
+        {
+            status |= leftOverChars;
+            break;
+        }
+    return (String2DateStatus)status;
+}
 
 String2DateStatus Executor::C_StringToTime(
     Ptr textp, LONGINT len, Ptr cachep, GUEST<LONGINT> *lenusedp,
     GUEST<Ptr> *datetimep)
 {
-    warning_unimplemented("");
+    const char *text = (const char *)textp;
+    LongDatePtr date_time = (LongDatePtr)datetimep; /* a LongDateRec, as for StringToDate */
+    std::vector<DateToken> tokens = date_tokens(text, len);
+    for(size_t i = 0; i + 2 < tokens.size(); i++)
+    {
+        if(tokens[i].kind != DateToken::Number || tokens[i + 1].kind != DateToken::Colon
+           || tokens[i + 2].kind != DateToken::Number)
+            continue;
+        int hour = tokens[i].value, minute = tokens[i + 2].value, second = 0;
+        size_t next = i + 3;
+        int used = tokens[i + 2].end;
+        if(next + 1 < tokens.size() && tokens[next].kind == DateToken::Colon
+           && tokens[next + 1].kind == DateToken::Number)
+        {
+            second = tokens[next + 1].value;
+            used = tokens[next + 1].end;
+            next += 2;
+        }
+        if(next < tokens.size() && tokens[next].kind == DateToken::Word)
+        {
+            std::string w = tokens[next].word;
+            std::string morn = "am", eve = "pm";
+            if(Handle h = GetIntlResource(0))
+            {
+                Intl0Ptr i0 = (Intl0Ptr)*h;
+                std::string m((const char *)&i0->mornStr, 4), e((const char *)&i0->eveStr, 4);
+                morn.clear();
+                eve.clear();
+                for(char c : m)
+                    if(c && c != ' ')
+                        morn += (char)tolower((unsigned char)c);
+                for(char c : e)
+                    if(c && c != ' ')
+                        eve += (char)tolower((unsigned char)c);
+                if(morn.empty())
+                    morn = "am";
+                if(eve.empty())
+                    eve = "pm";
+            }
+            if(w == morn || w == "am")
+            {
+                if(hour == 12)
+                    hour = 0;
+                used = tokens[next].end;
+            }
+            else if(w == eve || w == "pm")
+            {
+                if(hour < 12)
+                    hour += 12;
+                used = tokens[next].end;
+            }
+        }
+        *lenusedp = used;
+        if(hour > 23 || minute > 59 || second > 59)
+            return (String2DateStatus)dateTimeInvalid;
+        date_time->hour = hour;
+        date_time->minute = minute;
+        date_time->second = second;
+        int status = longDateFound;
+        for(int k = used; k < len; k++)
+            if(!isspace((unsigned char)text[k]))
+            {
+                status |= leftOverChars;
+                break;
+            }
+        return (String2DateStatus)status;
+    }
     *lenusedp = 0;
     return (String2DateStatus)dateTimeNotFound;
-}
-
-static void
-this_date_rec(DateTimeRec *p)
-{
-    GUEST<ULONGINT> now;
-
-    GetDateTime(&now);
-    SecondsToDate(now, p);
-}
-
-static int
-this_century(void)
-{
-    DateTimeRec d;
-    int retval;
-
-    this_date_rec(&d);
-    retval = d.year / 100 * 100;
-    return retval;
-}
-
-static int
-this_millennium(void)
-{
-    int retval;
-
-    retval = this_century() / 1000 * 1000;
-    return retval;
-}
-
-String2DateStatus Executor::C_StringToDate(
-    Ptr text, int32_t length, DateCachePtr cache,
-    GUEST<int32_t> *length_used_ret, LongDatePtr date_time)
-{
-    String2DateStatus retval;
-
-    if(length <= 10 && (text[1] == '/' || text[2] == '/'))
-    {
-        int offset, month, day, year;
-        int offset_save, year_length;
-
-        offset = 0;
-        month = snag_date_part(text, &offset, length);
-        day = snag_date_part(text, &offset, length);
-
-        offset_save = offset;
-        year = snag_date_part(text, &offset, length);
-        year_length = offset - offset_save;
-
-        if(year_length == 3)
-            year += this_millennium();
-        else if(year_length < 3)
-            year += this_century();
-
-        *length_used_ret = offset;
-
-        /* not clear what we should do with other fields, some should probably
-	 be zeroed */
-
-        date_time->year = year;
-        date_time->month = month;
-        date_time->day = day;
-        retval = longDateFound;
-    }
-    else
-    {
-        *length_used_ret = 0;
-        warning_unexpected("");
-        retval = (String2DateStatus)dateTimeNotFound;
-    }
-    warning_unimplemented("");
-    return retval;
 }
 
 StyledLineBreakCode Executor::C_StyledLineBreak(
@@ -674,36 +903,193 @@ FormatStatus Executor::C_StringToExtended(
     return retval;
 }
 
+/* ── Number formats (Inside Macintosh: Text 5-39..5-57) ─────────────────
+ * MacPhoenix. StringToFormatRec keeps the format string itself in the
+ * (opaque to applications) NumFormatStringRec, and ExtendedToString lays a
+ * number out by it: up to three parts (positive;negative;zero), digit
+ * places 0 (always shown) and # (shown when significant), a decimal point,
+ * an exponent (e+ always signs it, e- only when negative; written E+/E-
+ * as on 7.5.5), and literal text around the digits. AppleScript writes its
+ * reals this way: "###0.0############;..." and "0.0#############e+##0;...".
+ * Thousands separators and ^ places aren't laid out yet. */
+namespace
+{
+enum
+{
+    fFormatOK = 0,
+    fEmptyFormatString = 13,
+    kFormatRecVersion = 0x4D, /* ours: the raw format string follows */
+};
+
+struct NumPart
+{
+    std::string prefix, suffix;
+    int intReq = 0, decReq = 0, decOpt = 0, expReq = 0;
+    bool point = false, exp = false, expPlus = false;
+};
+
+NumPart parse_num_part(const std::string &f)
+{
+    NumPart p;
+    enum { Before, Int, Dec, Exp, After } state = Before;
+    for(size_t i = 0; i < f.size(); i++)
+    {
+        char c = f[i];
+        std::string &lit = state == Before ? p.prefix : p.suffix;
+        if(c == '\'')
+        {
+            size_t close = f.find('\'', i + 1);
+            lit += f.substr(i + 1, (close == std::string::npos ? f.size() : close) - i - 1);
+            i = close == std::string::npos ? f.size() : close;
+            if(state != Before)
+                state = After;
+        }
+        else if(c == '#' || c == '0' || c == '^')
+        {
+            if(state == Before || state == Int)
+            {
+                state = Int;
+                if(c == '0')
+                    p.intReq++;
+            }
+            else if(state == Dec)
+                (c == '0' ? p.decReq : p.decOpt)++;
+            else if(state == Exp)
+            {
+                if(c == '0')
+                    p.expReq++;
+            }
+            else
+                lit += c;
+        }
+        else if(c == '.' && (state == Before || state == Int))
+        {
+            p.point = true;
+            state = Dec;
+        }
+        else if((c == 'e' || c == 'E') && i + 1 < f.size() && (f[i + 1] == '+' || f[i + 1] == '-')
+                && state != Before && state != After)
+        {
+            p.exp = true;
+            p.expPlus = f[i + 1] == '+';
+            state = Exp;
+            ++i;
+        }
+        else if(c == ',' && (state == Int || state == Before))
+            ; /* thousands separator */
+        else
+        {
+            if(state != Before)
+                state = After;
+            (state == Before ? p.prefix : p.suffix) += c;
+        }
+    }
+    return p;
+}
+
+/* digits with trailing zeros past the required count taken off */
+void trim_decimals(std::string &digits, int required)
+{
+    while((int)digits.size() > required && digits.back() == '0')
+        digits.pop_back();
+}
+
+std::string format_number(long double v, const NumPart &p)
+{
+    int maxDec = p.decReq + p.decOpt;
+    std::string intDigits, decDigits, expText;
+    char buf[128];
+    if(p.exp)
+    {
+        int e = 0;
+        if(v != 0)
+        {
+            snprintf(buf, sizeof buf, "%.*Le", maxDec, v);
+            char *ep = strchr(buf, 'e');
+            e = atoi(ep + 1);
+            *ep = 0;
+        }
+        else
+            snprintf(buf, sizeof buf, "%.*Lf", maxDec, (long double)0);
+        std::string m = buf;
+        size_t dot = m.find('.');
+        intDigits = m.substr(0, dot);
+        decDigits = dot == std::string::npos ? "" : m.substr(dot + 1);
+        std::string ed = std::to_string(e < 0 ? -e : e);
+        while((int)ed.size() < p.expReq)
+            ed = "0" + ed;
+        expText = std::string("E") + (e < 0 ? "-" : p.expPlus ? "+" : "") + ed;
+    }
+    else
+    {
+        snprintf(buf, sizeof buf, "%.*Lf", maxDec, v);
+        std::string m = buf;
+        size_t dot = m.find('.');
+        intDigits = m.substr(0, dot);
+        decDigits = dot == std::string::npos ? "" : m.substr(dot + 1);
+        if(p.intReq == 0 && intDigits == "0")
+            intDigits.clear();
+        while((int)intDigits.size() < p.intReq)
+            intDigits = "0" + intDigits;
+    }
+    trim_decimals(decDigits, p.decReq);
+    std::string out = p.prefix + intDigits;
+    if(p.point && !decDigits.empty())
+        out += "." + decDigits;
+    return out + expText + p.suffix;
+}
+}
+
 FormatStatus Executor::C_ExtendedToString(
     Extended80 *xp, NumFormatStringRec *formatp, NumberParts *partsp,
-    Str255 string) /* TTS TODO */
+    Str255 string)
 {
-    ieee_t val;
-    FormatStatus retval;
+    long double val = x80_to_ieee(xp);
     char buf[256];
 
-    val = x80_to_ieee(xp);
-#if !defined(CYGWIN32)
-    sprintf(buf, "%Lg", val);
-#else
-    // FIXME: #warning may lose bits of precision here
-    sprintf(buf, "%g", (double)val);
-#endif
-    str255_from_c_string(string, buf);
-    warning_unimplemented("");
-    retval = noErr;
-    return retval;
+    if(!formatp || formatp->fVersion != kFormatRecVersion)
+    {
+        /* Not one of ours: as near as printf gets. */
+        snprintf(buf, sizeof buf, "%Lg", val);
+        str255_from_c_string(string, buf);
+        return fFormatOK;
+    }
+
+    std::string all((const char *)formatp->data, formatp->fLength);
+    std::vector<std::string> parts;
+    for(size_t from = 0;;)
+    {
+        size_t semi = all.find(';', from);
+        parts.push_back(all.substr(from, semi == std::string::npos ? std::string::npos : semi - from));
+        if(semi == std::string::npos)
+            break;
+        from = semi + 1;
+    }
+
+    std::string out;
+    if(val == 0 && parts.size() > 2)
+        out = format_number(0, parse_num_part(parts[2]));
+    else if(val < 0 && parts.size() > 1)
+        out = format_number(-val, parse_num_part(parts[1]));
+    else if(val < 0)
+        out = "-" + format_number(-val, parse_num_part(parts[0]));
+    else
+        out = format_number(val, parse_num_part(parts[0]));
+    str255_from_c_string(string, out.c_str());
+    return fFormatOK;
 }
 
 FormatStatus Executor::C_StringToFormatRec(
     ConstStringPtr in_string, NumberParts *partsp,
-    NumFormatStringRec *out_string) /* TTS TODO */
+    NumFormatStringRec *out_string)
 {
-    FormatStatus retval;
-
-    warning_unimplemented("");
-    retval = 0;
-    return retval;
+    int n = std::min<int>(in_string[0], sizeof out_string->data);
+    if(n == 0)
+        return fEmptyFormatString;
+    out_string->fLength = n;
+    out_string->fVersion = kFormatRecVersion;
+    memcpy(out_string->data, in_string + 1, n);
+    return fFormatOK;
 }
 
 ToggleResults Executor::C_ToggleDate(LongDateTime *lsecsp, LongDateField field,
@@ -767,7 +1153,7 @@ void Executor::C_LongSecondsToDate(GUEST<ULONGINT> *secs_inp, LongDateRec *ldate
                            &ldatep->dayOfWeek, &ldatep->dayOfYear,
                            &ldatep->weekOfYear);
 
-    pm = (ldatep->hour > 12) ? 1 : 0;
+    pm = (ldatep->hour >= 12) ? 1 : 0; /* noon is PM */
     ldatep->pm = pm;
 }
 

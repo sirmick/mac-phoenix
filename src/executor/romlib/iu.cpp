@@ -136,19 +136,18 @@ static void year(INTEGER n, Intl0Ptr int0p, char sep, char **opp)
         *(*opp)++ = sep;
 }
 
-void Executor::C_IUDatePString(LONGINT date, DateForm form, StringPtr p,
-                               Handle h) /* IMI-505 */
+/* A date already split into fields, as IUDatePString formats it (and
+   IULDateString, for dates past 32 bits). */
+static void format_date(const DateTimeRec &dtr, DateForm form, StringPtr p, Handle h)
 {
     Intl1Ptr int1p;
     Intl0Ptr int0p;
     char *op;
-    DateTimeRec dtr;
     int abbrev;
 
     if(!h)
         h = GetIntlResource(form == shortDate ? 0 : 1);
 
-    SecondsToDate(date, &dtr);
     op = (char *)p + 1;
     if(form == shortDate)
     {
@@ -205,6 +204,14 @@ void Executor::C_IUDatePString(LONGINT date, DateForm form, StringPtr p,
     p[0] = op - (char *)p - 1;
 }
 
+void Executor::C_IUDatePString(LONGINT date, DateForm form, StringPtr p,
+                               Handle h) /* IMI-505 */
+{
+    DateTimeRec dtr;
+    SecondsToDate(date, &dtr);
+    format_date(dtr, form, p, h);
+}
+
 Handle Executor::C_GetIntlResource(INTEGER id) /* IMI-505 */
 {
     INTEGER oldres;
@@ -245,12 +252,11 @@ void Executor::C_IUDateString(LONGINT date, DateForm form,
     IUDatePString(date, form, p, GetIntlResource(form == shortDate ? 0 : 1));
 }
 
-void Executor::C_IUTimePString(LONGINT date, Boolean secs, StringPtr p,
-                               Handle h) /* IMI-505 */
+/* A time already split into fields, as IUTimePString formats it. */
+static void format_time(const DateTimeRec &dtr, Boolean secs, StringPtr p, Handle h)
 {
     Intl0Ptr int0p;
     char *op;
-    DateTimeRec dtr;
     char *ip, *ep;
 
     if(!h)
@@ -259,7 +265,6 @@ void Executor::C_IUTimePString(LONGINT date, Boolean secs, StringPtr p,
     op = (char *)p + 1;
     if(h && (int0p = (Intl0Ptr)*h))
     {
-        SecondsToDate(date, &dtr);
         if(int0p->timeCycle)
             outn((dtr.hour % 12) == 0 ? 12 : dtr.hour % 12,
                  int0p->timeFmt & hrLeadingZ, &op);
@@ -289,6 +294,14 @@ void Executor::C_IUTimePString(LONGINT date, Boolean secs, StringPtr p,
             outl(int0p->eveStr, &op);
     }
     p[0] = op - (char *)p - 1;
+}
+
+void Executor::C_IUTimePString(LONGINT date, Boolean secs, StringPtr p,
+                               Handle h) /* IMI-505 */
+{
+    DateTimeRec dtr;
+    SecondsToDate(date, &dtr);
+    format_time(dtr, secs, p, h);
 }
 
 void Executor::C_IUTimeString(LONGINT date, Boolean secs,
@@ -621,18 +634,33 @@ INTEGER Executor::IUEqualString(ConstStringPtr str1, ConstStringPtr str2) /* IMI
 /* NOTE: none of the below are done yet */
 /* #warning A bunch of IU routines are not implemented yet */
 
+/* MacPhoenix: the 64-bit (LongDateTime) forms, formatted as the 32-bit
+   ones are. AppleScript turns its dates into text with these. */
+static DateTimeRec long_date_fields(LongDateTime *datetimep)
+{
+    LongDateRec ldr;
+    LongSecondsToDate((GUEST<ULONGINT> *)datetimep, &ldr);
+    DateTimeRec dtr;
+    dtr.year = ldr.year;
+    dtr.month = ldr.month;
+    dtr.day = ldr.day;
+    dtr.hour = ldr.hour;
+    dtr.minute = ldr.minute;
+    dtr.second = ldr.second;
+    dtr.dayOfWeek = ldr.dayOfWeek;
+    return dtr;
+}
+
 void Executor::C_IULDateString(LongDateTime *datetimep, DateForm longflag,
                                Str255 result, Handle intlhand)
 {
-    warning_unimplemented("");
-    ROMlib_hook(iu_unimplementednumber);
+    format_date(long_date_fields(datetimep), longflag, result, intlhand);
 }
 
 void Executor::C_IULTimeString(LongDateTime *datetimep, Boolean wantseconds,
                                Str255 result, Handle intlhand)
 {
-    warning_unimplemented("");
-    ROMlib_hook(iu_unimplementednumber);
+    format_time(long_date_fields(datetimep), wantseconds, result, intlhand);
 }
 
 void Executor::C_ClearIntlResourceCache()
