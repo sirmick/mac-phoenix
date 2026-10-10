@@ -431,7 +431,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
             printf("  --core NAME                CPU core for the backend's architecture:\n");
-            printf("                             68k uae | musashi (default: uae)\n");
+            printf("                             68k uae | musashi | mame-68k (default: uae)\n");
+            printf("                             ppc kpx | mame-ppc (default: kpx)\n");
             printf("  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)\n");
             printf("  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)\n");
             printf("  --idlewait / --no-idlewait Pause CPU when guest idle (default: on)\n");

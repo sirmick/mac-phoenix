@@ -385,6 +385,7 @@ bool CPUContext::init_mac_subsystems() {
 
 // Externs from KPX bridge (cpu_ppc_kpx.cpp) — ppc:: namespace
 extern "C" void cpu_ppc_kpx_install(Platform *p);
+extern "C" void cpu_ppc_mame_install(Platform *p);   // src/cpu/kpx/cpu_ppc_mame.cpp
 namespace ppc {
     extern uint32_t RAMBase, RAMSize, ROMBase, KernelDataAddr;
     extern uint8_t *RAMBaseHost, *ROMBaseHost;
@@ -599,7 +600,12 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
 
     // 6. Install PPC backend (function pointers only — CPU instance created
     //    later in the child subprocess).
-    cpu_ppc_kpx_install(&platform_);
+    // --core mame-ppc: the same Mac side on MAME's PowerPC core
+    // (docs/cpu/PLAN.md, C2b); otherwise Kheperix.
+    if (config.cpu_core == "mame-ppc")
+        cpu_ppc_mame_install(&platform_);
+    else
+        cpu_ppc_kpx_install(&platform_);
     platform_.ppc_jit = config.jit;
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n", platform_.cpu_name, config.jit ? "on" : "off");
 

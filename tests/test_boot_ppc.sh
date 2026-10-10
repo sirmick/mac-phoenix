@@ -35,6 +35,7 @@ while [[ $# -gt 0 ]]; do
         --jit|--no-jit) EXTRA_FLAGS+=("$1"); shift ;;
         --ppc-jit) EXTRA_FLAGS+=("--jit"); shift ;;
         --no-ppc-jit) EXTRA_FLAGS+=("--no-jit"); shift ;;
+        --core) EXTRA_FLAGS+=(--core "$2"); shift 2 ;;   # PPC core: kpx (default) | mame-ppc
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
