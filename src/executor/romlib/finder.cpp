@@ -236,26 +236,19 @@ void addApplications(DesktopDB& db)
     }
 }
 
-/* An HFS volume's own desktop database: the "Desktop DB" B*-tree at its
-   root (type BTFL, creator DMGR), as 7.5.5's Desktop Manager keeps it. Its
-   application records are read: leaf key {type 2, creator, index.w}, data
-   {crDate.l, parID.l, name}; the tree's order is the Desktop Manager's
-   (an application added later gets a lower index, so it comes first).
-   Icons (type 1, bitmaps in "Desktop DF") and comments are not read yet.
-   Returns false if the volume has none. */
-bool readDesktopDB(DesktopDB& db)
+/* The data fork of a file at a volume's root, whole (empty if none). */
+std::vector<uint8_t> readRootFile(short vRefNum, const unsigned char *pname)
 {
-    static const unsigned char kName[] = "\012Desktop DB";
-    HParmBlkPtr pb = (HParmBlkPtr)NewPtrSysClear(sizeof(HParamBlockRec) + sizeof kName);
+    std::vector<uint8_t> file;
+    HParmBlkPtr pb = (HParmBlkPtr)NewPtrSysClear(sizeof(HParamBlockRec) + 64);
     if(!pb)
-        return false;
+        return file;
     StringPtr name = (StringPtr)pb + sizeof(HParamBlockRec);
-    memcpy(name, kName, sizeof kName);
+    memcpy(name, pname, pname[0] + 1);
     pb->ioParam.ioNamePtr = name;
-    pb->ioParam.ioVRefNum = db.vRefNum;
+    pb->ioParam.ioVRefNum = vRefNum;
     pb->fileParam.ioDirID = 2;
     pb->ioParam.ioPermssn = fsRdPerm;
-    std::vector<uint8_t> file;
     if(PBHOpenDF(pb, false) == noErr)
     {
         INTEGER ref = pb->ioParam.ioRefNum;
@@ -282,6 +275,22 @@ bool readDesktopDB(DesktopDB& db)
         PBClose((ParmBlkPtr)pb, false);
     }
     DisposePtr((Ptr)pb);
+    return file;
+}
+
+/* An HFS volume's own desktop database: the "Desktop DB" B*-tree at its
+   root (type BTFL, creator DMGR), as 7.5.5's Desktop Manager keeps it.
+   Leaf records, by key type:
+     1  icon: key {creator, type, iconType.b, 0}, data {tag.l, offset.l,
+        size.w} into "Desktop DF", which holds the bitmaps;
+     2  application: key {creator, index.w}, data {crDate.l, parID.l,
+        name}; the tree's order is the Desktop Manager's (an application
+        added later gets a lower index, so it comes first);
+     3  comment: key {file or directory ID.l}, data a Pascal string.
+   Returns false if the volume has none. */
+bool readDesktopDB(DesktopDB& db)
+{
+    std::vector<uint8_t> file = readRootFile(db.vRefNum, (const unsigned char *)"\012Desktop DB");
     if(file.size() < 512)
         return false;
 
@@ -292,6 +301,13 @@ bool readDesktopDB(DesktopDB& db)
     size_t node_size = be16(14 + 18); /* bthNodeSize */
     if(node_size < 512 || file[8] != 1 /* header node */)
         return false;
+    struct IconRef
+    {
+        DTIcon icon;
+        uint32_t offset;
+        uint16_t size;
+    };
+    std::vector<IconRef> iconrefs;
     for(int guard = 0; node && guard < 65536; guard++)
     {
         size_t base = node * node_size;
@@ -301,20 +317,61 @@ bool readDesktopDB(DesktopDB& db)
         for(int i = 0; i < nrecs; i++)
         {
             size_t rec = base + be16(base + node_size - 2 * (i + 1));
-            if(rec + 8 > base + node_size)
+            size_t end = base + (i + 1 < nrecs ? be16(base + node_size - 2 * (i + 2))
+                                               : be16(base + node_size - 2 * (nrecs + 1)));
+            if(rec + 8 > base + node_size || end > base + node_size || end < rec)
                 continue;
             int klen = file[rec];
             size_t data = rec + ((klen + 2) & ~1);
-            if(klen == 7 && file[rec + 1] == 2 && data + 9 <= base + node_size)
+            switch(file[rec + 1])
             {
-                int nlen = file[data + 8];
-                if(data + 9 + nlen > base + node_size)
-                    continue;
-                db.appls.push_back({ be32(rec + 2), be32(data), (int32_t)be32(data + 4),
-                                     std::string((const char *)&file[data + 9], nlen) });
+                case 1:
+                    if(klen == 11 && data + 10 <= end)
+                    {
+                        IconRef r;
+                        r.icon.creator = be32(rec + 2);
+                        r.icon.type = be32(rec + 6);
+                        r.icon.iconType = (int8_t)file[rec + 10];
+                        r.icon.tag = be32(data);
+                        r.offset = be32(data + 4);
+                        r.size = be16(data + 8);
+                        iconrefs.push_back(std::move(r));
+                    }
+                    break;
+                case 2:
+                    if(klen == 7 && data + 9 <= end)
+                    {
+                        int nlen = file[data + 8];
+                        if(data + 9 + nlen > end)
+                            continue;
+                        db.appls.push_back({ be32(rec + 2), be32(data), (int32_t)be32(data + 4),
+                                             std::string((const char *)&file[data + 9], nlen) });
+                    }
+                    break;
+                case 3:
+                    if(klen == 5 && data + 1 <= end)
+                    {
+                        int nlen = file[data];
+                        if(data + 1 + nlen > end)
+                            continue;
+                        db.comments[(int32_t)be32(rec + 2)]
+                            = std::string((const char *)&file[data + 1], nlen);
+                    }
+                    break;
             }
         }
         node = be32(base); /* fLink */
+    }
+    if(!iconrefs.empty())
+    {
+        std::vector<uint8_t> df = readRootFile(db.vRefNum, (const unsigned char *)"\012Desktop DF");
+        for(IconRef& r : iconrefs)
+        {
+            if(r.size == 0 || (size_t)r.offset + r.size > df.size())
+                continue;
+            r.icon.data.assign(df.begin() + r.offset, df.begin() + r.offset + r.size);
+            db.icons.push_back(std::move(r.icon));
+        }
     }
     return true;
 }
@@ -424,9 +481,9 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
         {
             if(!readDesktopDB(db))
                 addApplications(db);
-            /* MacPhoenix: a Desktop DB's icons live in its "Desktop DF",
-               which isn't read; take them from the applications'
-               bundles instead, as Finder's rebuild does. */
+            /* MacPhoenix: applications whose icons the database lacks
+               (a database Finder has not rebuilt since they arrived) get
+               them from their bundles, as Finder's rebuild does. */
             for(const auto& a : std::vector<DTAppl>(db.appls))
                 addBundleIcons(db, a);
         }

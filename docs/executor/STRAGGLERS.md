@@ -13,7 +13,7 @@ networking are punted until later; everything else is in scope.
 | 6 | `BeginSystemMode` (only a counter) | open |
 | 7 | Color Picker (`RegisterComponentResourceFile`) | done (2026-10-10): Color Picker 2.0 loads by default and `GetColor` (Color control panel, "Other…") shows Apple's dialog with the HSL picker, as 7.5.5 does. Needed: the System routines at $668 (detached-package call) and $7B0 (selector-table dispatch) as 68k code (`sysroutines.cpp`); `GetResource('PACK')` looked up for real before Executor's ALRT hack; an open resource file answered again for `fsCurPerm`; a file's `thng` resources registered in their order; `ModalDialogMenuSetup` ($AA67) as a no-op. Open: item 17 |
 | 8 | Startup Items: Finder's real rule (Executor's Process Manager stands in) | open |
-| 9 | Desktop DB: icons and rebuild | mostly done — 3fa70c80 (HFS images report a Desktop Manager; icons from bundles); comments (`Desktop DF`) and icons from other volumes' databases open |
+| 9 | Desktop DB: icons and rebuild | done (2026-10-10): an HFS image's "Desktop DB" is read whole: icon records (type 1) with their bitmaps from "Desktop DF", application records (2), comments (3, keyed by catalog ID, a Pascal string in the DB itself); bundles only fill in applications the database lacks. Comments set under Executor on an image stay in memory (no B*-tree writes) |
 | 10 | Apple Event Manager list wire format | open |
 | 11 | System heap growth | open |
 | 12 | DRVR unit clash | open |

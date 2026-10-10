@@ -589,3 +589,6 @@ Kept small so upstream fixes can be merged by hand:
   head insertion keeps their order (Color Picker takes the first `cpkr`
   found: HSL on 7.5.5).
 * `dial/dialHandle.cpp`: `ModalDialogMenuSetup` ($AA67), a no-op.
+* `finder.cpp`: an HFS volume's "Desktop DB" read whole: icons (type 1,
+  bitmaps from "Desktop DF"), applications (2), comments (3); bundle icons
+  only for applications the database lacks.
