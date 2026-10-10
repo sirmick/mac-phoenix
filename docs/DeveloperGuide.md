@@ -147,6 +147,7 @@ Detailed explanation of what changed and why.
   [Testing.md](Testing.md), [TroubleshootingGuide.md](TroubleshootingGuide.md)
 - [deepdive/](deepdive/) — quirks and detailed analyses
 - [ppc/](ppc/) — KPX PPC backend internals
+- [cpu/PLAN.md](cpu/PLAN.md) — MAME cores: Musashi with PMMU (C1), PowerPC recompiler (C2), host 68k on the PPC machine (C3)
 
 ### External
 - Inside Macintosh — https://developer.apple.com/library/archive/documentation/mac/pdf/
