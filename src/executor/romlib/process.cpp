@@ -1477,7 +1477,9 @@ get_process_info(ProcessSerialNumber *serial_number)
 
 OSErr Executor::C_GetCurrentProcess(ProcessSerialNumber *serial_number)
 {
-    *serial_number = current_process_info->serial_number;
+    /* Before the first process (extensions loading at startup), the
+     * system is current, as under 7.5.5's Process Manager at INIT time. */
+    *serial_number = current_process_info ? current_process_info->serial_number : system_process;
     return noErr;
 }
 

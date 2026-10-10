@@ -72,6 +72,11 @@ OSErr Executor::C_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id,
  * and dir_id = a number that isn't a directory id?
  */
 
+    /* A nil name means the directory itself, like an empty one. */
+    static const unsigned char empty_name[1] = { 0 };
+    if(!file_name)
+        file_name = empty_name;
+
     if(pstr_index_after(file_name, ':', 0))
         warning_unexpected("colon found");
 
@@ -165,7 +170,7 @@ OSErr Executor::C_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id,
 OSErr Executor::PBMakeFSSpec(HParmBlkPtr pb, Boolean async)
 {
     OSErr retval = FSMakeFSSpec(pb->ioParam.ioVRefNum, pb->fileParam.ioDirID,
-                                pb->ioParam.ioNamePtr, (FSSpecPtr)(Ptr)pb->ioParam.ioMisc);
+                                pb->ioParam.ioNamePtr, guest_cast<FSSpecPtr>(pb->ioParam.ioMisc));
     FAKEASYNC(pb, async, retval);
 }
 

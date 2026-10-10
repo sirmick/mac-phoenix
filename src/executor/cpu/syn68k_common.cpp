@@ -51,8 +51,9 @@ static uint32 lowest_free_slot = 0;
 /* ---------------------------------------------------------------------- */
 
 CPUState cpu_state;
+/* Identity until the first allocation picks the windows (see Memory). */
 uint64 ROMlib_offsets[OFFSET_TABLE_SIZE] = { 0, 0, 0, 0 };
-uint64 ROMlib_sizes[OFFSET_TABLE_SIZE] = { 0x100000000ULL, 0, 0, 0 };
+uint64 ROMlib_sizes[OFFSET_TABLE_SIZE] = { 1ull << 30, 1ull << 30, 1ull << 30, 1ull << 30 };
 DebuggerCallbacks syn68k_debugger_callbacks = { nullptr, nullptr };
 int syn68k_track_pc = 0;
 int emulation_depth = 0;
@@ -505,10 +506,65 @@ void syn68k_restore_context(const void *context)
 /* Memory                                                                 */
 /* ---------------------------------------------------------------------- */
 
-/* Regions the guest may legitimately touch. Small and append-mostly. */
+/*
+ * Two layouts (syn68k_public.h), fixed at the first allocation:
+ *
+ *   windows   (Musashi) guest RAM, a pool for syn68k_alloc_low and the
+ *             binary's data each get a 1GB window anywhere in the host
+ *             address space;
+ *   identity  (UAE) guest == host: RAM at host 0, allocations below 4GB,
+ *             the binary linked low.
+ */
+static const uint64 WINDOW = 1ull << 30;
+static int layout = -1;  /* -1: not chosen yet, 0: identity, 1: windows */
+
+/* Low allocations: a bump allocator in window 1 (windows), or MAP_32BIT
+ * mappings (identity). Freed blocks are kept for reuse by size. */
+static uint8_t *pool;
+static size_t pool_used;
+struct FreeBlock { void *p; size_t size; };
+static FreeBlock free_blocks[64];
+static int num_free_blocks;
+
+/* Regions the guest may legitimately touch (identity layout). */
 struct GuestRegion { uintptr_t lo, hi; };
 static GuestRegion regions[64];
 static int num_regions = 0;
+
+extern "C" char _etext, _end;  /* the binary's data+bss (and rodata) */
+
+static void set_window(int w, const void *host, uint64 size)
+{
+    ROMlib_offsets[w] = (uint64)(uintptr_t)host - ((uint64)w << 30);
+    ROMlib_sizes[w] = size;
+}
+
+static void choose_layout()
+{
+    if(layout >= 0)
+        return;
+    layout = engine_name == "uae" ? 0 : 1;
+    if(!layout)
+        return;  /* identity: the static defaults */
+
+    for(int w = 0; w < OFFSET_TABLE_SIZE; w++)
+        set_window(w, (void *)(uintptr_t)(~0ull << 40), 0);  /* nothing yet */
+    pool = (uint8_t *)mmap(nullptr, WINDOW, PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if(pool == MAP_FAILED)
+    {
+        fprintf(stderr, "syn68k: cannot reserve the 1GB allocation window (%s)\n", strerror(errno));
+        abort();
+    }
+    set_window(1, pool, WINDOW);
+    uintptr_t data = (uintptr_t)&_etext & ~(uintptr_t)0xFFF;
+    if((uintptr_t)&_end - data > WINDOW)
+    {
+        fprintf(stderr, "syn68k: the binary's data is over 1GB\n");
+        abort();
+    }
+    set_window(3, (void *)data, (uintptr_t)&_end - data);
+}
 
 static void add_region(uintptr_t lo, size_t len)
 {
@@ -529,10 +585,18 @@ static void remove_region(uintptr_t lo)
             regions[i] = { 0, 0 };
 }
 
-extern "C" char _etext, _end;  /* the binary's data+bss (and rodata) */
-
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len)
 {
+    if(layout == 1)
+    {
+        for(int w = 0; w < OFFSET_TABLE_SIZE; w++)
+        {
+            uint64 base = ROMlib_offsets[w] + ((uint64)w << 30);
+            if(addr - base < ROMlib_sizes[w] && addr + len - base <= ROMlib_sizes[w])
+                return 1;
+        }
+        return 0;
+    }
     uintptr_t end = addr + len;
     if(addr >= (uintptr_t)&_etext && end <= (uintptr_t)&_end)
         return 1;
@@ -544,20 +608,42 @@ int syn68k_is_guest_mapped(uintptr_t addr, size_t len)
 
 void syn68k_bad_host_pointer(const void *p)
 {
-    fprintf(stderr, "syn68k: host pointer %p is above 4GB and not guest-addressable\n", p);
+    fprintf(stderr, "syn68k: host pointer %p is not guest-addressable (outside every window)\n", p);
     abort();
 }
 
 void *syn68k_map_guest_ram(size_t size)
 {
+    choose_layout();
     size = (size + 0xFFFF) & ~(size_t)0xFFFF;
+    if(layout == 1)
+    {
+        if(size + 0x10000 > WINDOW)
+        {
+            fprintf(stderr, "syn68k: guest RAM over 1GB\n");
+            abort();
+        }
+        /* 64KB past the end too: the end of RAM (MemTop, the boot stack's
+         * top) converts back to window 0 rather than to whatever window
+         * the host happened to place right after it. */
+        void *p = mmap(nullptr, size + 0x10000, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        if(p == MAP_FAILED)
+        {
+            fprintf(stderr, "syn68k: cannot map %zu bytes of guest RAM (%s)\n", size, strerror(errno));
+            exit(1);
+        }
+        set_window(0, p, size + 0x10000);
+        return p;
+    }
     void *p = mmap((void *)0, size, PROT_READ | PROT_WRITE,
                    MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if(p == MAP_FAILED || p != (void *)0)
     {
         fprintf(stderr,
                 "syn68k: cannot map guest RAM at address 0 (%s).\n"
-                "  Run: sudo sysctl vm.mmap_min_addr=0\n",
+                "  Run: sudo sysctl vm.mmap_min_addr=0\n"
+                "  (or use the musashi core: --core musashi)\n",
                 strerror(errno));
         exit(1);
     }
@@ -567,7 +653,28 @@ void *syn68k_map_guest_ram(size_t size)
 
 void *syn68k_alloc_low(size_t size)
 {
+    choose_layout();
     size = (size + 4095) & ~(size_t)4095;
+    for(int i = 0; i < num_free_blocks; i++)
+        if(free_blocks[i].size == size)
+        {
+            void *p = free_blocks[i].p;
+            free_blocks[i] = free_blocks[--num_free_blocks];
+            if(layout == 0)
+                add_region((uintptr_t)p, size);
+            return p;
+        }
+    if(layout == 1)
+    {
+        if(pool_used + size > WINDOW)
+        {
+            fprintf(stderr, "syn68k: the 1GB allocation window is full\n");
+            abort();
+        }
+        void *p = pool + pool_used;
+        pool_used += size;
+        return p;
+    }
     void *p = mmap(nullptr, size, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
     if(p == MAP_FAILED)
@@ -581,8 +688,13 @@ void *syn68k_alloc_low(size_t size)
 
 void syn68k_free_low(void *p, size_t size)
 {
-    remove_region((uintptr_t)p);
-    munmap(p, (size + 4095) & ~(size_t)4095);
+    size = (size + 4095) & ~(size_t)4095;
+    if(layout == 0)
+        remove_region((uintptr_t)p);
+    if(num_free_blocks < (int)(sizeof free_blocks / sizeof free_blocks[0]))
+        free_blocks[num_free_blocks++] = { p, size };
+    else if(layout == 0)
+        munmap(p, size);
 }
 
 void syn68k_set_jit(int)
@@ -599,9 +711,24 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
     if((uintptr_t)callback_dummy_address_space >> 32)
         syn68k_bad_host_pointer(callback_dummy_address_space);
 
-    /* Identity: guest address == host address over the whole space. The
-     * Platform's memory and CPU entries follow it, as on every machine. */
-    guest_memory.map(0, 1ull << 32, (uint8_t *)0);
+    /* The core sees the same windows as SYN68K_TO_US. The Platform's
+     * memory and CPU entries follow it, as on every machine. */
+    choose_layout();
+    if(layout == 1)
+    {
+        for(int w = 0; w < OFFSET_TABLE_SIZE; w++)
+            if(ROMlib_sizes[w])
+                guest_memory.map((uint32_t)w << 30, (ROMlib_sizes[w] + 0xFFFF) & ~0xFFFFull,
+                                 (uint8_t *)SYN68K_TO_US((uint32_t)w << 30));
+    }
+    else
+        guest_memory.map(0, 1ull << 32, (uint8_t *)0);
+    if(layout == 1)
+        fprintf(stderr, "[syn68k] %s core, windows: RAM %p (%llu MB), alloc %p, data %p\n", engine_name.c_str(),
+                (void *)SYN68K_TO_US(0), (unsigned long long)(ROMlib_sizes[0] >> 20),
+                (void *)SYN68K_TO_US(1u << 30), (void *)SYN68K_TO_US(3u << 30));
+    else
+        fprintf(stderr, "[syn68k] %s core, identity addressing (guest RAM at host 0)\n", engine_name.c_str());
     cpu::platform_install(&g_platform);
     cpu::platform_set_memory(&guest_memory);
     cpu::Config config;

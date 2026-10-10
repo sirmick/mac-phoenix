@@ -159,8 +159,8 @@ std::string current_app_name()
 {
     if(!running)
         return {};
-    // CurApName ($910): Pascal string, max 31 chars. Identity addressing.
-    const uint8_t *p = (const uint8_t *)(uintptr_t)0x910;
+    // CurApName ($910): Pascal string, max 31 chars.
+    const uint8_t *p = (const uint8_t *)SYN68K_TO_US(0x910);
     if(p[0] > 31)
         return {}; /* not set yet (low memory starts as $FF) */
     int n = p[0];
@@ -207,9 +207,15 @@ void set_event_poll_hook(std::function<void()> hook)
     ROMlib_event_poll_hook = poll_hook ? call_poll_hook : nullptr;
 }
 
+const uint8_t *guest_ram()
+{
+    return (const uint8_t *)SYN68K_TO_US(0);
+}
+
 uint32_t guest_ram_size()
 {
-    return (uint32_t)ROMlib_memtop;
+    /* ROMlib_memtop is the host address of MemTop. */
+    return US_TO_SYN68K(ROMlib_memtop);
 }
 
 }  // namespace executor_host
