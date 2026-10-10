@@ -4722,7 +4722,7 @@ function onRomChange() {
 // each run. A built-in tab while the System exists: never written into the
 // saved presets (saving the config sends App.savedPresets whole, so a
 // seeded entry there would replace the user's), unless saved as a preset.
-const EXECUTOR_PROFILE = 'Executor 7.5.5';
+const EXECUTOR_PROFILE = 'exec';
 async function seedExecutorProfile(cfg) {
     App.builtinPresets = {};
     await loadStorage();

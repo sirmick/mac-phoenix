@@ -177,8 +177,8 @@ then `diff-world`.
   `trap_installs.tsv` from a real boot to check each patch history.
   Come-from patches that test ROM return addresses never fire. That is
   expected; they patch ROM bugs we don't have.
-* **INITs from a whitelist** (`<data_dir>/init-whitelist.txt`, same
-  style as the resource policy). Extensions and control panels load in
+* **INITs from a whitelist** (`res/extension-policy.txt`, overridable by
+  `<data_dir>/extension-policy.txt`, same style as the resource policy). Extensions and control panels load in
   the Start Manager's order, through our INIT loader (`INIT` resources,
   `ShowInitIcon`, `cdev` INITs). Files that aren't listed are skipped,
   so one bad INIT can't take the boot down. Apple's `ptch`/`lpch`/`gpch`
@@ -231,6 +231,53 @@ the expensive direction.
 | Come-from patches | nothing to do | they fix ROM bugs we don't have |
 | Apple Guide | as is, last, if ever | patches Help/Menu/Window Managers and drives apps through AEs |
 
+**Gaps to close while building the System world (agreed 2026-10-08).**
+These are boot-time structures or loading decisions, so they go in
+alongside the M1–M3a work, in this order (status as of 2026-10-09):
+
+1. **Device Manager unit table.** `UTableBase`, `UnitNtryCnt` and the
+   boot-time drivers (`.Disk`, `.Sound`, `.IPP`, the System file's
+   DRVRs) laid out as a real boot leaves them, diffed against a
+   snapshot. Today `UnitNtryCnt` stays 0, so `C_SystemTask` never sends
+   `accRun` to any driver; that blocks async MacTCP (see
+   `mactcp/mactcp.cpp`) and every periodic driver. *Open.*
+2. **Shadowing switch** (with M3a). When a whitelisted INIT provides a
+   manager, Executor's built-in version withdraws its Gestalt selector
+   and leaves the trap slot to the INIT: `quicktime.cpp` (stubs),
+   `SpeechManager.cpp` (Mac-host only), `qColorPicker.cpp`. Otherwise
+   the real INIT sees "already installed" and backs off. *Open* (not
+   needed yet: none of the allowed extensions provides one of these).
+3. **DA Handler** (with the M2 Process Manager slices). Opening a desk
+   accessory starts the DA Handler process from the System file;
+   Calculator, Key Caps, Scrapbook and the Chooser need it. *Done*
+   (27e956ba): DAs run in their own processes; Key Caps draws like the
+   real one.
+4. **Alias resolution, boot path.** `ResolveAlias` is a stub
+   (`alias.cpp`). Startup Items and Apple Menu Items are mostly
+   aliases: resolve alias record → FSSpec by volume and directory IDs
+   now; relative-path and cross-volume search later. *Done* (21e95977,
+   c6013824): relative path first, then volume + full path, then volume +
+   directory ID; Finder alias files and chains; file ID references.
+5. **MacTCP resolver as a resource.** Apps load the DNR from a `dnrp`
+   resource; serve a `dnrp` that calls native code, through the
+   resource policy. *Open*: `guest_suite_executor`'s `dns_resolve`
+   fails on it (and `udp_send` on the missing UDP).
+
+Independent, any time: **sound output.** `sound/sounddriver.cpp`
+always picks `SoundFake`, so Executor is silent. A host `SoundDriver`
+feeding MacPhoenix's audio pipeline (from `host/executor_child.cpp`) is
+needed before M3f's QuickTime and Speech gates mean anything.
+
+Later, not loading work: TrueType rendering (the `sfnt` resources are
+already in the Fonts chain; the Font Manager and QuickDraw need a
+FreeType-backed scaler), printing and the Chooser (after the DA
+Handler), AppleTalk (after the unit table), CFM-68K and the Shared
+Library Manager (INITs, after M3b), the rest of MacTCP (UDP, async
+sockets, after the unit table). Open Transport stays parked: for 7.5.5
+MacTCP is the API that matters; if OT is ever needed, its client API
+goes in C++ on host sockets rather than Apple's stack on a fake
+Ethernet driver.
+
 ## Milestones
 
 | | Milestone | Gate | Status |
@@ -239,16 +286,18 @@ the expensive direction.
 | M0b | CPU parity | Executor's gtest suite on UAE matches syn68k | done: same two upstream failures, PPC tests skipped |
 | M0c | Headless app run | built-in Browser reaches its event loop, screenshot | done: `executor.smoke.browser_screenshot` |
 | M0d | Shell integration | `--backend executor` in the web UI shows video, takes input | done: one binary, UI option, `executor.smoke.web_backend` |
-| M1 | Finder desktop | our boot phase, Apple System file as resource root, real Finder draws |
-| M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix | in progress: Finder, Jigsaw Puzzle and Note Pad run side by side; switching by click or Application menu; quit back to the launcher |
-| M3a | Trap tables | real tables at `$400`/`$E00`, every entry 68k-callable; patch histories diff against `trap_installs.tsv`; `$A82A` stub (no components) |
-| M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; Color Picker loads (with M3c) |
-| M3c | Component Manager in C++ | System file components register; Color Picker's `GetColor` matches a real boot |
-| M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs |
-| M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` |
-| M3f | Extension set | Speech Manager + MacinTalk 3, AppleScript + Finder Scripting Extension, QuickTime load and work (QuickTime movie plays in SimpleText) |
-| M4 | 7.5.5 + Drag Manager | Drag Manager in C++; drag between SimpleText and Finder; TSM/Dictionary/Collection stubs |
-| P | PPC | KPX behind the PowerCore facade, InterfaceLib to native |
+| M1 | Finder desktop | our boot phase, Apple System file as resource root, real Finder draws | done: Finder 7.5.5 reaches its desktop on Apple's System file, draws icons, opens windows, Apple/Help/Application menus |
+| M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix; DA Handler opens Calculator and the Chooser; Startup Items and Apple Menu Items aliases resolve | in progress: Finder launches applications (SimpleText, Note Pad, Jigsaw Puzzle, MacPerl, Script Editor) side by side; switching by click or Application menu; quit back to the launcher; desk accessories in DA Handler processes; aliases and Startup Items resolve; `command_bridge_executor` 7/7. Open: Chooser (printing), Kid Pix |
+| M3a | Trap tables | real tables at `$400`/`$E00`, every entry 68k-callable; patch histories diff against `trap_installs.tsv`; `$A82A` stub (no components); unit table matches a real boot and drivers get `accRun` | not started: Executor's own trap tables (`trapglue.h`), `UnitNtryCnt` 0 |
+| M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; shadowing switch withdraws Executor's built-ins; Color Picker loads (with M3c) | in progress: loader runs allowed INITs/cdevs/fext in Start Manager order (`extension-policy.txt`, phase 1 + AppleScript + Finder Scripting); `jGNEFilter` chain. Open: `ShowInitIcon`, shadowing switch, Date & Time (Finder crashes under its patches), Color Picker |
+| M3c | Component Manager in C++ | System file components register; Color Picker's `GetColor` matches a real boot | mostly done: `component.cpp` (5cd8f3e2), System file / extension / `thng` file components register, AppleScript's components run. Open: Color Picker gate |
+| M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs (needs M3h for its network) | not started |
+| M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` | in progress: Apple's `PACK` 8 runs (installed by AppleScript), `oapp`/AppParameters in Apple's wire format. Open: Help Manager balloons |
+| M3f | Extension set | Speech Manager + MacinTalk 3, AppleScript + Finder Scripting Extension, QuickTime load and work (QuickTime movie plays in SimpleText) | in progress: AppleScript loads by default; Script Editor runs `3 + 4 -> 7`; scripting additions run from MacPerl; Finder Scripting Extension loads. Open: `tell application "Finder"` (target spec empty, `finder_suite_executor` fails), Speech, QuickTime |
+| M3g | Sound output | host `SoundDriver` replaces `SoundFake`; `SysBeep` and `SndPlay` audible in the web UI | not started |
+| M3h | MacTCP finished | `dnrp` resolver, UDP, async calls on the `accRun` pump; Fetch connects to a host name | in progress: TCP on host sockets (`executor.MacTCP.*`, `tcp_socket` passes in the guest suite). Open: `dnrp`, UDP, async |
+| M4 | 7.5.5 + Drag Manager | Drag Manager in C++; drag between SimpleText and Finder; TSM/Dictionary/Collection stubs; TrueType via FreeType | not started |
+| P | PPC | KPX behind the PowerCore facade, InterfaceLib to native | not started |
 
 Tools carried alongside:
 
@@ -281,7 +330,7 @@ Tools carried alongside:
   hand-made `NAME.clean`. `--executor-start finder|browser|path`,
   `--[no-]executor-fresh`; resolved by the parent
   (`src/core/executor_systems.cpp`) into `--executor-data/--executor-app`.
-  The web UI offers a built-in "Executor 7.5.5" profile.
+  The web UI offers a built-in "exec" profile.
 * Without a System, Executor's files live in `<storage>/executor/` (System Folder, prefs).
   That folder and the configured shared folder are the only host folders the
   guest sees; Executor's default of mounting `/` is disabled. Disk images
@@ -293,7 +342,10 @@ Tools carried alongside:
   end, since Executor leaves cursors to the host.
 * Executor menus are "sticky": releasing on a menu title leaves the menu
   open for a second click.
-* Tests: `ctest --test-dir build -L executor`.
+* Tests: `ctest --test-dir build -L executor` (unit + smoke). On Apple's
+  7.5.5 System through the bridge: `ctest --test-dir build -R _executor$`
+  (`command_bridge_executor`, `guest_suite_executor`,
+  `finder_suite_executor`).
 * Callbacks redirect PC by setting `next - 2` because UAE advances PC by 2
   after an EmulOp returns.
 * UAE routes every memory access through `g_platform.mem_*` function
@@ -470,3 +522,34 @@ Kept small so upstream fixes can be merged by hand:
   (`ROMlib_apple_system_file`); `gestalt.cpp` `mach` 20 as on the
   reference boot.
 * `tests/`: low-stack test thread, PPC tests skip, fixture path, ctest names.
+* `res/resOpen.cpp`: header version 9 compressed resources
+  (`dcmp` 3 entry offsets, in-place from the end); `HOpenResFile` clears the
+  map's handle fields before preload; the `dcmp` working buffer is sized as
+  7.5.5 sizes it.
+* `desk.cpp`, `device.cpp`, `hfs/hfsXbar.cpp`: desk accessories run in DA Handler processes
+  (`LaunchDeskAccessory`, OSDispatch $36); RAM driver entry points fixed (no
+  DRVR ever ran) and `JIODone` set; `PBClose`/`PBRead`/`PBWrite` route driver
+  refnums to the Device Manager; `LayerDispatch` 9/$C/-10 (guessed names).
+* `osevent/hle.cpp`: high-level events go to their receiver through one
+  System-heap queue, always as `kHighLevelEvent`, in one block (header, then
+  message); `GetSpecificHighLevelEvent`'s filter gets the sender's TargetID;
+  `AcceptHighLevelEvent` copies what fits into a small buffer.
+* `extensions.cpp` (new): `ROMlib_load_extensions` runs allowed INITs, cdevs,
+  RDEVs and `fext` INITs before the Finder (Extensions, Control Panels, System
+  Folder, name order; `sysz` checked); others move to `<folder> (Disabled)`.
+  `jGNEFilter` chain; XPRAM from the Basilisk side.
+* `alias.cpp`: `ResolveAlias`, `FollowFinderAlias`, `ResolveAliasFile`
+  (relative path, then volume + path, then volume + directory ID);
+  `AliasDispatch` $A (`FindFolderWithTable`, a guess).
+* `file/fileUnimplemented.cpp`: file ID references (create, resolve, delete).
+* `component.cpp` (new): the Component Manager (`$A82A`), see M3c.
+* `appleevent/`: Executor's handler tables move out of ExpandMem (Apple's
+  `PACK` 8 owns those fields); ExpandMem has its real header (version $144,
+  $288 bytes); multiversal `bufferIsSmall`/`noOutstandingHLE` were swapped.
+* `process.cpp`: `GetProcessInformation` fills name, spec and launcher;
+  OSDispatch $40/$41 (`Begin`/`EndSystemMode`, guessed); default directory
+  per process; `LaunchApplication` of a running application returns it;
+  Startup Items launch when Finder first idles (stand-in).
+* `mman/mman.cpp`: `HandleZone` uses `TheZone` for an empty handle only when
+  it is a real zone (Finder Scripting runs with `TheZone` set to a temp
+  handle).

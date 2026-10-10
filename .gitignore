@@ -1,10 +1,18 @@
 # Build
 build*/
 toolchain/
+# Stray top-level cmake artifacts (only build*/ should host these)
+/CMakeFiles/
 *.o
 *.a
 *.so
 *.dylib
+
+# Per-user editor / agent state
+.claude/
+
+# Scratch debug artifacts
+/phase*-screenshot.png
 
 # Packaging artifacts
 /dist/
