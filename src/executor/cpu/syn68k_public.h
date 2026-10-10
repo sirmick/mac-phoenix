@@ -6,11 +6,21 @@
  * cpu::Core (src/cpu/core/cpu_core.h): MacPhoenix's UAE interpreter or
  * Musashi.
  *
- * Addressing is identity: a guest address IS the host address. Guest RAM
- * is mapped at host 0 and everything the guest can see (the binary's
- * globals, the emulator thread's stack, the framebuffer, the callback
- * page) lives below 4GB. Executor's four 1GB translation windows collapse
- * into one (UAE runs DIRECT_ADDRESSING with MEMBaseDiff == 0).
+ * Addressing: Executor's four 1GB windows, as upstream. The top two bits
+ * of a guest address pick a window; host = guest + ROMlib_offsets[window].
+ *
+ *   0  guest RAM (InitMemory)
+ *   1  everything else the guest must address: the emulator and process
+ *      stacks, the framebuffer (syn68k_alloc_low)
+ *   2  unused
+ *   3  the binary's own data: the callback page, trap tables, GUEST<>
+ *      globals, string literals (_etext .. _end)
+ *
+ * On the UAE core the windows are identity instead (all offsets 0): UAE
+ * fetches instructions through one base pointer, so guest RAM is mapped
+ * at host 0 (vm.mmap_min_addr=0) and everything else lives below 4GB.
+ * The choice follows the core (syn68k_select_engine) and is fixed at the
+ * first allocation.
  *
  * The register file lives in `cpu_state` while host code runs (inside a
  * callback or between guest calls) and in the core while guest code runs.
@@ -116,7 +126,7 @@ extern CPUState cpu_state;
 extern uint16 callback_dummy_address_space[];
 #define CALLBACK_SLOP 16
 #define MAGIC_ADDRESS_BASE \
-  ((syn68k_addr_t)(uintptr_t)(&callback_dummy_address_space[CALLBACK_SLOP]))
+  (US_TO_SYN68K_FUN((uint64)(uintptr_t)&callback_dummy_address_space[CALLBACK_SLOP]))
 #define MAGIC_EXIT_EMULATOR_ADDRESS (MAGIC_ADDRESS_BASE + 0)
 #define MAGIC_RTE_ADDRESS           (MAGIC_ADDRESS_BASE + 2)
 
@@ -143,27 +153,33 @@ void syn68k_restore_context(const void *context);
 #define CLEAN(addr) ((ptr_sized_uint)(addr))
 #define ADDRESS_MASK 0xFFFFFFFFU
 
-/* Kept for source compatibility. All offsets are 0 (identity mapping);
- * ROMlib_sizes[0] spans the whole 32-bit space. */
+/* ROMlib_offsets[w]: host = guest + offset for guest addresses in window
+ * w (the offset already accounts for w << 30). ROMlib_sizes[w]: how much
+ * of the window is mapped. */
 #define OFFSET_TABLE_BITS 2
 #define OFFSET_TABLE_SIZE (1 << OFFSET_TABLE_BITS)
 extern uint64 ROMlib_offsets[OFFSET_TABLE_SIZE];
 extern uint64 ROMlib_sizes[OFFSET_TABLE_SIZE];
 #define ROMlib_offset (ROMlib_offsets[0])
 
-/* Called when host code hands the guest a pointer above 4GB. Fatal. */
+/* Called when host code hands the guest a pointer outside every window.
+ * Fatal. */
 void syn68k_bad_host_pointer(const void *p) __attribute__((noreturn));
 
 static inline uint16 *SYN68K_TO_US(uint32_t addr)
 {
-    return (uint16 *)(uintptr_t)addr;
+    return (uint16 *)(uintptr_t)((uint64)addr + ROMlib_offsets[addr >> 30]);
 }
 
 static inline uint32_t US_TO_SYN68K_FUN(uint64 addr)
 {
-    if(__builtin_expect(addr >> 32, 0))
-        syn68k_bad_host_pointer((const void *)(uintptr_t)addr);
-    return (uint32_t)addr;
+    for(int i = 0; i < OFFSET_TABLE_SIZE; i++)
+    {
+        uint64 base = ROMlib_offsets[i] + ((uint64)i << 30);
+        if(addr - base < ROMlib_sizes[i])
+            return (uint32_t)(addr - ROMlib_offsets[i]);
+    }
+    syn68k_bad_host_pointer((const void *)(uintptr_t)addr);
 }
 #define US_TO_SYN68K(addr) (US_TO_SYN68K_FUN((uint64)(uintptr_t)(addr)))
 
@@ -282,10 +298,12 @@ void m68kaddr(const uint16 *pc);
 
 /* MacPhoenix additions. */
 
-/* Map SIZE bytes of guest RAM at guest/host address 0. Requires
- * vm.mmap_min_addr=0. Returns the base (always 0) or aborts. */
+/* Map SIZE bytes of guest RAM at guest address 0 (window 0). Returns its
+ * host base or aborts. Identity windows (UAE) map it at host 0, which
+ * needs vm.mmap_min_addr=0. */
 void *syn68k_map_guest_ram(size_t size);
-/* Allocate host memory the guest can address (below 4GB). */
+/* Allocate host memory the guest can address (window 1; below 4GB with
+ * identity windows). */
 void *syn68k_alloc_low(size_t size);
 void syn68k_free_low(void *p, size_t size);
 /* True if [addr, addr+len) lies inside memory the facade knows the guest

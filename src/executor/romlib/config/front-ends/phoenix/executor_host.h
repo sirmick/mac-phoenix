@@ -70,7 +70,9 @@ void set_fatal_hook(std::function<void(const char *)> hook);
 // The 68k registers as Executor last synced them (cpu_state).
 void get_registers(uint32_t d[8], uint32_t a[8]);
 
-// Guest RAM is identity-mapped at address 0; this is its size in bytes.
+// Guest RAM: guest addresses 0 .. guest_ram_size()-1, contiguous on the
+// host from guest_ram() (the host address of guest address 0).
+const uint8_t *guest_ram();
 uint32_t guest_ram_size();
 
 }  // namespace executor_host

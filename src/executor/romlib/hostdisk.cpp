@@ -120,7 +120,7 @@ static OSErr C_hostdisk_ctl(ParmBlkPtr pbp, DCtlPtr dcp)
             return done(pbp, wPrErr);
         case 21: /* drive icon */
         case 22: /* media icon */
-            *param = (int32_t)(uintptr_t)drive_icon();
+            *param = US_TO_SYN68K(drive_icon());
             return done(pbp, noErr);
         case 23: /* drive info: unspecified fixed SCSI disk */
             *param = 0x0601;
@@ -192,7 +192,7 @@ bool Executor::ROMlib_image_drive_control(ParmBlkPtr pbp, OSErr *err)
     {
         case 21: /* drive icon */
         case 22: /* media icon */
-            *param = (int32_t)(uintptr_t)drive_icon();
+            *param = US_TO_SYN68K(drive_icon());
             break;
         case 23: /* drive info: unspecified fixed SCSI disk */
             *param = 0x0601;

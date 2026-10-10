@@ -220,6 +220,20 @@ plumbing left the Platform table. The whole test suite passes on both
 cores (ROM boot, SE, bridge, guest, Finder, keyboard; Executor's guest
 suite has the same two network failures on both). Musashi needed one local
 fix: 68040 line F (CINV/CPUSH/PFLUSH/PTEST, FDBcc/FTRAPcc).
+
+**Four windows (done for Musashi).** On the Musashi core Executor uses
+upstream's four 1GB windows (`syn68k_public.h`): 0 guest RAM (plus a 64KB
+tail so the end of RAM converts unambiguously), 1 a pool for
+`syn68k_alloc_low` (stacks, framebuffer), 3 the binary's data; window 2 is
+spare. No `vm.mmap_min_addr` needed. The UAE core keeps identity (all
+offsets 0), since it fetches through one base pointer. Turning identity
+off flushed out host code that relied on guest == host: a null process
+record at startup, a nil `FSMakeFSSpec` name, the boot stack pointer and
+the `.Disk` drive icon passed as truncated host pointers, `PBMakeFSSpec`
+casting `ioMisc` straight to a pointer. Known issue: on Musashi a MacTCP
+connect that times out (`openFailed` after the 60s ULP timeout) never
+returns to MacPerl; UAE does. Next: drop UAE from Executor (then the low
+link and `MAP_32BIT` go too), minicoro.
 On Musashi: the gtest suite matches UAE (`ctest -L musashi`), Apple's
 7.5.5 Finder boots, `command_bridge`, `keyboard_guest` and `finder_suite`
 pass, `guest_suite` matches UAE (the same two network failures). Musashi

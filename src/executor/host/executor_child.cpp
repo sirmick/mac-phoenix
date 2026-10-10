@@ -138,7 +138,7 @@ void fatal_snapshot(const char *message)
     static M68kRegisters regs;
     executor_host::get_registers(regs.d, regs.a);
     SnapshotMemory mem;
-    mem.ram = (const uint8_t *)(uintptr_t)0;
+    mem.ram = executor_host::guest_ram();
     mem.ram_size = executor_host::guest_ram_size();
     mem.context = message;
     mem.regs = &regs;
@@ -204,7 +204,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
         if (!snapshot_pending())
             return;
         SnapshotMemory mem;
-        mem.ram = (const uint8_t *)(uintptr_t)0;
+        mem.ram = executor_host::guest_ram();
         mem.ram_size = executor_host::guest_ram_size();
         mem.context = "Executor event poll (GetNextEvent/WaitNextEvent)";
         snapshot_service(mem);

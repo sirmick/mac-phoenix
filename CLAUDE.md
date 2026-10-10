@@ -39,9 +39,11 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom
 # Playwright E2E tests (requires running emulator)
 npx playwright test
 
-# Executor backend: no ROM, C++ Toolbox on UAE (docs/executor/PLAN.md).
-# Needs vm.mmap_min_addr=0. Pick "Executor" in the web UI, or:
+# Executor backend: no ROM, C++ Toolbox (docs/executor/PLAN.md). On the UAE
+# core (default) it needs vm.mmap_min_addr=0; --core musashi does not
+# (Executor's four address windows). Pick "Executor" in the web UI, or:
 ./build/mac-phoenix --backend executor
+./build/mac-phoenix --backend executor --core musashi
 # ... on Apple's 7.5.5 System with real Finder (Settings > System disk):
 ./build/mac-phoenix --backend executor --executor-system macos-7.5.5-noext.img
 ctest --test-dir build -L executor

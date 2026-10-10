@@ -54,7 +54,7 @@ INTEGER help_system_items; /* items before the application's own */
 void set_icon_title(MenuHandle mh, Handle suite)
 {
     uint8_t title[6] = { 5, 1 };
-    uint32_t h = (uint32_t)(uintptr_t)suite;
+    uint32_t h = US_TO_SYN68K(suite);
     title[2] = h >> 24;
     title[3] = h >> 16;
     title[4] = h >> 8;
@@ -342,7 +342,7 @@ bool Executor::ROMlib_icon_title_p(MenuHandle mh)
 Handle Executor::ROMlib_icon_title_suite(MenuHandle mh)
 {
     const uint8_t *t = (const uint8_t *)(*mh)->menuData + 2;
-    return (Handle)(uintptr_t)((uint32_t)t[0] << 24 | t[1] << 16 | t[2] << 8 | t[3]);
+    return (Handle)SYN68K_TO_US((uint32_t)t[0] << 24 | t[1] << 16 | t[2] << 8 | t[3]);
 }
 
 /* The Apple menu (Process Manager, System 7). Finder hands over the Apple

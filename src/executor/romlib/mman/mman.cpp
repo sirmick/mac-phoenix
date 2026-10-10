@@ -376,7 +376,7 @@ void ROMlib_InitZones()
     process_reset_heap(LM(ApplZone));
 
     /* The boot stack lives above BufPtr; MemTop is per-process. */
-    EM_A7 = (uint32_t)ROMlib_memtop;
+    EM_A7 = US_TO_SYN68K(ROMlib_memtop);
 
     LM(MemErr) = noErr;
 }
