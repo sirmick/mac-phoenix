@@ -305,6 +305,14 @@ Manager read (the emulator presents a 68LC040), and whether anything reads
   `emu_options::drc_use_c()` on the device's own `running_machine`, so
   `--jit` on the kpx backend picks the native back-end and `--no-jit`
   the UML interpreter.
+* **Microseconds() is a virtual clock.** On the kpx machine it counts
+  Kheperix's `ppc_insn_counter` (4 ns each), which this core never
+  touched, so it stood still: 7.5.5 did not care, Mac OS 9.0.4 waited on
+  it at the "Starting Up" bar forever (a million calls a second, the
+  Time Manager idle). `cpu::Core::cycles()` now exposes the core's
+  cycle count and the EmulOp dispatcher copies it into the counter.
+  9.0.4 boots to the desktop in 10 s; the guest suite on it matches
+  Kheperix (`guest_suite_ppc_mame`).
 
 ## Notes from C2 (core and Mac side on the UML interpreter)
 

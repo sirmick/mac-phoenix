@@ -64,6 +64,7 @@ bool ppc_native_op_pure(uint32 selector, uint32 *gprs);   // native_ops_ppc.cpp
 extern int64 CPUClockSpeed;
 extern void ADBKeyDown(int code);
 extern void ADBKeyUp(int code);
+extern uint64_t ppc_insn_counter;   /* Kheperix's; Microseconds() reads it (ppc_memory.cpp) */
 
 using namespace ppc;
 namespace R = cpu::ppc;
@@ -216,6 +217,11 @@ void execute_emul_op(uint32 emul_op)
     }
     if(emul_op < 64)
         g_emulop_counts[emul_op]++;
+    /* Microseconds() on this machine is a virtual clock off Kheperix's
+     * instruction counter (ppc_memory.cpp); keep it moving from the core's
+     * cycle count, or a guest waiting on Microseconds spins forever (Mac OS
+     * 9.0.4's boot did, at the progress bar). */
+    ppc_insn_counter = g_core->cycles();
     M68kRegisters r68;
     WriteMacInt32(XLM_68K_R25, gpr(25));
     WriteMacInt32(XLM_RUN_MODE, MODE_EMUL_OP);

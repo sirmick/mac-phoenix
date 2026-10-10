@@ -426,4 +426,16 @@ set_tests_properties(guest_suite_ppc PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
+# The same suite (Mac OS 9.0.4) on MAME's PowerPC core, native back-end.
+add_test(
+  NAME guest_suite_ppc_mame
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --core mame-ppc --jit --timeout 120 --port 18105
+)
+set_tests_properties(guest_suite_ppc_mame PROPERTIES
+  TIMEOUT 160
+  LABELS "guest;mame"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
 
