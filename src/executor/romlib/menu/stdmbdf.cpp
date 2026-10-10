@@ -640,6 +640,74 @@ static RgnHandle menurgn(RgnHandle rgn)
     return rgn;
 }
 
+/* MacPhoenix: 7.5.5's MBDF message 14, as its code lays it out (System
+   MBDF 0 +$109c).  The title of the menu at MenuList offset `offset`:
+   one pixel inside the bar top and bottom, from a pixel left of the title
+   to three pixels past the next title's left (lastRight for the last
+   application menu, the bar's right margin for the last system menu).
+   Offset 0 is the whole bar. */
+static bool system_menu_at(INTEGER offset)
+{
+    muelem *mp = (muelem *)((char *)*MENULIST + offset);
+    MenuHandle mh = mp->muhandle;
+    return ROMlib_system_menu_p((*mh)->menuID);
+}
+
+static Rect title_rect(INTEGER offset)
+{
+    menulist *ml = *MENULIST;
+    Rect r = PORT_RECT(wmgr_port);
+    r.bottom = r.top + LM(MBarHeight);
+    if(offset == 0)
+        return r;
+
+    INTEGER lastoff = ml->muoff;
+    muelem *mp = (muelem *)((char *)ml + offset);
+    INTEGER left = r.left;
+    r.top += 1;
+    r.bottom -= 1;
+    r.left = left + mp->muleft - 1;
+    INTEGER right = r.right - 10;
+    if(offset == lastoff)
+        ;
+    else if(!system_menu_at(offset) && system_menu_at(offset + sizeof(muelem)))
+        right = left + ml->muright;
+    else if(left + (mp + 1)->muleft <= right)
+        right = left + (mp + 1)->muleft;
+    r.right = right + 3;
+    return r;
+}
+
+/* Parameter -1: from the first title to lastRight.  -2: the system menus,
+   which sit together at the end of the list.  Beyond the last menu:
+   empty. */
+static void titlerect(INTEGER param, Rect *out)
+{
+    menulist *ml = *MENULIST;
+    INTEGER firstoff = (char *)ml->mulist - (char *)ml;
+    INTEGER lastoff = ml->muoff;
+    Rect r = { 0, 0, 0, 0 };
+    if(param >= 0 && param <= lastoff)
+        r = title_rect(param);
+    else if(lastoff > 0 && param == -1)
+    {
+        r = title_rect(firstoff);
+        r.right = PORT_RECT(wmgr_port).left + ml->muright;
+    }
+    else if(lastoff > 0 && param == -2)
+    {
+        INTEGER off = lastoff;
+        while(off > firstoff && system_menu_at(off - sizeof(muelem)))
+            off -= sizeof(muelem);
+        if(system_menu_at(off))
+        {
+            r = title_rect(off);
+            r.right = title_rect(lastoff).right;
+        }
+    }
+    *out = r;
+}
+
 int32_t Executor::C_mbdf0(int16_t sel, int16_t mess, int16_t param1,
                           int32_t param2)
 {
@@ -698,6 +766,9 @@ int32_t Executor::C_mbdf0(int16_t sel, int16_t mess, int16_t param1,
             break;
         case mbDrawMsg:
             drawmsg(param1, param2);
+            break;
+        case mbTitleRect:
+            titlerect(param1, (Rect *)SYN68K_TO_US(param2));
             break;
         case mbMenuRgn:
             retval = (LONGINT)

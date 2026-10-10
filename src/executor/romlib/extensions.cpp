@@ -17,10 +17,12 @@
 #include <MemoryMgr.h>
 #include <ResourceMgr.h>
 #include <OSUtil.h>
+#include <Package.h>
 #include <file/file.h>
 #include <mman/mman.h>
 #include <rsys/extensions.h>
 #include <rsys/component.h>
+#include <rsys/version.h>
 #include <util/macstrings.h>
 
 #include <cmrc/cmrc.hpp>
@@ -149,6 +151,11 @@ void call_init(Handle h)
 
 void run_file(INTEGER vref, LONGINT dirid, const Item &it)
 {
+    /* In the System heap, as the loader runs them: an INIT's code and
+       what it allocates stay after its file closes, and NewGestalt takes
+       selector functions from the System heap only. */
+    TheZoneGuard guard(LM(SysZone));
+
     /* Guest code sees the name: on this (low) stack, not the host heap. */
     Str63 name;
     memcpy(name, it.name, it.name[0] + 1);
@@ -325,8 +332,27 @@ static void register_component_files()
     }
 }
 
+/* What InitAllPacks leaves: AppPacks holding the System file's PACK 0-7.
+   The packages themselves run in C++ (the Pack traps never call these),
+   but code checks the handles: Date & Time's clock draws nothing unless
+   AppPacks[6] is a resource that starts with the 'PACK' header.  Every
+   launch clears AppPacks (InitPerProcessLowMem), so it runs again then. */
+void Executor::ROMlib_install_app_packs()
+{
+    if(!ROMlib_apple_system_file || !LM(SysMapHndl))
+        return;
+    INTEGER saved = CurResFile();
+    UseResFile(LM(SysMap));
+    for(int i = 0; i < (int)std::size(LM(AppPacks)); i++)
+        if(!LM(AppPacks)[i])
+            LM(AppPacks)[i] = Get1Resource("PACK"_4, i);
+    UseResFile(saved);
+}
+
 void Executor::ROMlib_load_extensions()
 {
+    ROMlib_install_app_packs();
+
     /* The System file's own components first, as its boot code does. */
     int32_t n = ROMlib_register_components(LM(SysMap), true);
     fprintf(stderr, "[Executor] components: System registered %d\n", n);

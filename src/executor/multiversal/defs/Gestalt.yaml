@@ -428,3 +428,81 @@
     dispatcher: GestaltDispatch
     selector: 0x400
     returnreg: D0
+
+# ####
+
+- dispatcher:
+    name: GestaltValueDispatch
+    trap: 0xABF1
+    selector-location: D0<0xFF>
+    comment: |
+      System 7.5's GestaltValue library: a selector that answers with a
+      stored value instead of a function.  D0's low byte selects, its high
+      byte is the parameter size in words (the ROM pops that many).  7.5.5
+      answers paramErr for an unknown selector.
+
+# ####
+
+- function:
+    name: NewGestaltValue
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+      - name: newValue
+        type: int32_t
+    dispatcher: GestaltValueDispatch
+    selector: 0x0401
+    executor: C_
+    comment: >
+      Installs selector answering newValue; gestaltDupSelectorErr if it
+      exists already (as a value, a function or a built-in).
+
+# ####
+
+- function:
+    name: ReplaceGestaltValue
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+      - name: replacementValue
+        type: int32_t
+    dispatcher: GestaltValueDispatch
+    selector: 0x0402
+    executor: C_
+    comment: >
+      Makes an existing selector answer replacementValue;
+      gestaltUndefSelectorErr if there is none.
+
+# ####
+
+- function:
+    name: DeleteGestaltValue
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+    dispatcher: GestaltValueDispatch
+    selector: 0x0203
+    executor: C_
+    comment: >
+      Removes a selector installed by the value calls;
+      gestaltUndefSelectorErr for any other.
+
+# ####
+
+- function:
+    name: SetGestaltValue
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+      - name: newValue
+        type: int32_t
+    dispatcher: GestaltValueDispatch
+    selector: 0x0404
+    executor: C_
+    comment: >
+      Installs or replaces: selector answers newValue whether or not it
+      existed before.  Find File Extension registers 'fndf' with it.

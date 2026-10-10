@@ -1,4 +1,5 @@
 #include <rsys/executor.h>
+#include <rsys/extensions.h>
 #include <rsys/macros.h>
 #include <error/error.h>
 #include <time/time.h>
@@ -496,6 +497,7 @@ void Executor::InitPerProcessLowMem()
         for(i = 0; i < (int)std::size(LM(AppPacks)); ++i)
             LM(AppPacks)[i] = 0;
     }
+    ROMlib_install_app_packs(); /* MacPhoenix: the System's, on Apple's System file */
     LM(SysEvtMask) = ~(1L << keyUp); /* EVERYTHING except keyUp */
     LM(SdVolume) = 7; /* for Beebop 2 */
 }

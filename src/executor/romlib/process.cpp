@@ -1738,6 +1738,17 @@ OSErr Executor::C_SetProcessDragHooks(int32_t hooks)
     return noErr;
 }
 
+/* General Controls' "Show Desktop when in background", stored inverted as
+   Apple's does (scod -16463 +28d2c).  Hiding the desk owner's layer when
+   another process comes to the front is not done yet. */
+static Boolean hide_desktop_in_background;
+
+OSErr Executor::C_SetHideDesktopInBackground(Boolean hide)
+{
+    hide_desktop_in_background = hide;
+    return noErr;
+}
+
 /* The Apple menu's items as Finder hands them over (menu/sysmenu.cpp
    keeps them and builds the Apple menu). */
 OSErr Executor::C_AddAppleMenuItem(StringPtr name, int16_t sortGroup, int16_t flagA,

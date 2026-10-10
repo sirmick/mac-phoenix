@@ -1661,6 +1661,21 @@
 # ####
 
 - function:
+    name: ScrnBitMap
+    args:
+      - name: bm
+        type: BitMap*
+    trap: 0xA833
+    executor: C_
+    comment: |
+      Fills *bm with the main device's pixel map as a bitmap: baseAddr,
+      rowBytes with the pixel-map flag cleared, bounds (14 bytes).  The
+      Quadra ROM's does exactly that; Date & Time points its menu-bar
+      clock port's PixMap at the screen with it.
+
+# ####
+
+- function:
     name: StuffHex
     args:
       - name: p

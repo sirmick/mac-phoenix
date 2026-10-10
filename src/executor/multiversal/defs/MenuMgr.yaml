@@ -812,8 +812,8 @@
     selector-location: D0<0xFF>
     comment: |
       7.5.5's dispatcher (through lowmem $7B0) covers selectors -6..1 and
-      only D0's low byte selects.  -4..-1 (MBDF message 14, menu title
-      rectangles) are not implemented yet.
+      only D0's low byte selects; D0's high byte is the parameter size.
+      -4..-1 are MBDF message 14, menu title rectangles.
 
 # ####
 
@@ -883,4 +883,70 @@
         type: Boolean*
     dispatcher: MenuDispatch
     selector: 0x03FA
+    executor: C_
+
+# ####
+
+- function:
+    name: GetSystemMenuTitlesRect
+    comment: |
+      MenuDispatch -4 on 7.5.5 (name is a guess): MBDF message 14 with
+      parameter -2, the rectangle from the first system menu's title (Help)
+      to the last's (Application); empty when there is none.  The OSErr is
+      written over the rectangle's top word, as Apple's does.  Date & Time
+      ends its menu-bar clock one pixel left of it.
+    return: OSErr
+    args:
+      - name: rect
+        type: Rect*
+    dispatcher: MenuDispatch
+    selector: 0x04FC
+    executor: C_
+
+# ####
+
+- function:
+    name: GetAppMenuTitlesRect
+    comment: |
+      MenuDispatch -3 on 7.5.5 (name is a guess): MBDF message 14 with
+      parameter -1, the rectangle from the first title to lastRight.
+    return: OSErr
+    args:
+      - name: rect
+        type: Rect*
+    dispatcher: MenuDispatch
+    selector: 0x04FD
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuBarRect
+    comment: |
+      MenuDispatch -2 on 7.5.5 (name is a guess): MBDF message 14 with
+      parameter 0, the whole menu bar.
+    return: OSErr
+    args:
+      - name: rect
+        type: Rect*
+    dispatcher: MenuDispatch
+    selector: 0x04FE
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuTitleRect
+    comment: |
+      MenuDispatch -1 on 7.5.5 (name is a guess): MBDF message 14 with the
+      menu's MenuList offset, its title rectangle; paramErr if menuID is
+      not in the bar.
+    return: OSErr
+    args:
+      - name: menuID
+        type: INTEGER
+      - name: rect
+        type: Rect*
+    dispatcher: MenuDispatch
+    selector: 0x06FF
     executor: C_

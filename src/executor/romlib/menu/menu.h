@@ -80,6 +80,7 @@ enum { kSystemMenuTitleWidth = 28, kSystemMenuRightMargin = 11 };
 #define mbSaveAlt 10
 #define mbResetAlt 11
 #define mbMenuRgn 12
+#define mbTitleRect 14 /* 7.5.5 MBDF: a title rectangle (name is a guess) */
 #define mbDrawMsg 15 /* 7.5.5 MBDF: text across the empty bar (name is a guess) */
 
 #define MLMAX 16

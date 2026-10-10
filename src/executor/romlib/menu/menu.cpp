@@ -101,6 +101,42 @@ OSErr Executor::C_IsSystemMenu(INTEGER menuID, Boolean *result)
     return noErr;
 }
 
+/* MenuDispatch -4..-1: title rectangles from the MBDF (message 14). */
+static OSErr title_rect(INTEGER param, Rect *rect)
+{
+    if(!LM(MBDFHndl) || !LM(MenuList))
+        return paramErr;
+    MBDFCALL(mbTitleRect, param, ptr_to_longint(rect));
+    return noErr;
+}
+
+OSErr Executor::C_GetSystemMenuTitlesRect(Rect *rect)
+{
+    return title_rect(-2, rect);
+}
+
+OSErr Executor::C_GetAppMenuTitlesRect(Rect *rect)
+{
+    return title_rect(-1, rect);
+}
+
+OSErr Executor::C_GetMenuBarRect(Rect *rect)
+{
+    return title_rect(0, rect);
+}
+
+OSErr Executor::C_GetMenuTitleRect(INTEGER menuID, Rect *rect)
+{
+    if(!LM(MenuList))
+        return paramErr;
+    muelem *mp = (*MENULIST)->mulist;
+    muelem *mpend = (muelem *)((char *)*MENULIST + (*MENULIST)->muoff) + 1;
+    for(; mp != mpend; mp++)
+        if((*mp->muhandle)->menuID == menuID)
+            return title_rect((char *)mp - (char *)*MENULIST, rect);
+    return paramErr;
+}
+
 void Executor::C_InsertFontResMenu(MenuHandle mh, INTEGER after,
                                    INTEGER scriptFilter)
 {

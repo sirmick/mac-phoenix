@@ -45,6 +45,18 @@ INTEGER Executor::C_Random()
     return retval == -32768 ? 0 : retval;
 }
 
+/* MacPhoenix: as the Quadra ROM's $A833: the main device's PixMap copied
+   as a 14-byte BitMap (rowBytes loses its pixel-map flag).  Callers pass a
+   PixMap record too (Date & Time's clock port) and restore the flag
+   themselves. */
+void Executor::C_ScrnBitMap(BitMap *bm)
+{
+    PixMapHandle pm = GD_PMAP(LM(MainDevice));
+    bm->baseAddr = PIXMAP_BASEADDR(pm);
+    bm->rowBytes = (*pm)->rowBytes & 0x7FFF;
+    bm->bounds = PIXMAP_BOUNDS(pm);
+}
+
 Boolean Executor::C_GetPixel(INTEGER h, INTEGER v)
 {
     BitMap temp_bm;

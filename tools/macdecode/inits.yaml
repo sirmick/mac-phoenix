@@ -22,11 +22,15 @@ extensions:
   # ── phase 1 ────────────────────────────────────────────────────────────
   - {file: WindowShade, phase: 1, lacks: []}
   - {file: Mouse, phase: 1, lacks: []}
-  - {file: Find File Extension, phase: 1, lacks: [SetGestaltValue]}
-  - {file: Date & Time, phase: 1b, lacks: ["MenuDispatch#4FC", ScrnBitMap],
-     note: "menu bar clock: its INIT patches InitWindows, DrawMenuBar and $A971, and Finder then
-       crashes walking the resource chain under the menu bar draw. Not loaded yet."}
-  - {file: General Controls, phase: 1, lacks: ["OSDispatch#5E", WriteXPRam]}
+  - {file: Find File Extension, phase: 1, lacks: [], loaded: true,
+     note: "registers Gestalt 'fndf' with SetGestaltValue ($ABF1), added 2026-10-10"}
+  - {file: Date & Time, phase: 1, lacks: [], loaded: true,
+     note: "menu bar clock: a jGNEFilter, patches on InitWindows and DrawMenuBar ($A971 only
+       with QuickDraw GX). Needs ScrnBitMap, MenuDispatch -4 (the system menus' title rect,
+       MBDF message 14) and AppPacks[6] holding the System's PACK 6; all added 2026-10-10."}
+  - {file: General Controls, phase: 1, lacks: [], loaded: true,
+     note: "its driver sets the Process Manager's hide-desktop flag (OSDispatch $5E, a stored
+       flag on Executor); WriteXPRam is Executor's (emustubs)"}
   - {file: Apple Menu Options, phase: 1, lacks: [],
      note: "Recent Items use aliases (FollowFinderAlias); registers a Display Manager extended notify proc"}
   - {file: Extensions Manager, phase: 1, lacks: [], note: "with EM Extension; the startup-time UI"}
@@ -67,7 +71,7 @@ extensions:
   - {file: Open Tpt Inet 68K Library, phase: 3, lacks: []}
 
   # ── phase 4: Apple Guide ───────────────────────────────────────────────
-  - {file: Apple Guide, phase: 4, lacks: [GetFrontProcess], note: "GetFrontProcess exists; the status lookup misses it"}
+  - {file: Apple Guide, phase: 4, lacks: [], note: "GetFrontProcess was a verbatim multiversal entry the status lookup could not see (fixed 2026-10-10)"}
   - {file: Macintosh Guide, phase: 4, kind: help, lacks: [".MPP Control 248"]}
   - {file: About Apple Guide, phase: 4, kind: help}
   - {file: Shortcuts, phase: 4, kind: help}

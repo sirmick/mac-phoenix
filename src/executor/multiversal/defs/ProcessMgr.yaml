@@ -266,6 +266,23 @@
 # ####
 
 - function:
+    name: SetHideDesktopInBackground
+    return: OSErr
+    args:
+      - name: hide
+        type: Boolean
+    dispatcher: OSDispatch
+    selector: 0x005E
+    executor: C_
+    comment: >
+      General Controls' driver passes its "Show Desktop when in background"
+      setting, inverted (name is a guess; learned.yaml).  Apple's stores the
+      byte in its globals and, when it turns on while another process is in
+      front, hides the desk owner's layer.  Executor only keeps the flag.
+
+# ####
+
+- function:
     name: AddAppleMenuItem
     return: OSErr
     args:
@@ -365,10 +382,20 @@
 
 # ####
 
-- only-for: Executor
-  verbatim: |
-    extern OSErr C_GetFrontProcess(ProcessSerialNumber *serial_number, int32_t dummy = -1);
-    PASCAL_SUBTRAP(GetFrontProcess, 0xA88F, 0x0039, OSDispatch);
+- function:
+    name: GetFrontProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+      - name: dummy
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0039
+    executor: C_
+    comment: >
+      The inline pushes a long -1 after the PSN pointer (Processes.h:
+      moveq #-1,d0; move.l d0,-(sp)); dummy is that long.
 
 # ####
 

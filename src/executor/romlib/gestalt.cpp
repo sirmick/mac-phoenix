@@ -16,6 +16,8 @@
 #include <base/functions.impl.h>
 #include <base/traps.impl.h>
 
+#include <vector>
+
 using namespace Executor;
 
 typedef struct
@@ -292,6 +294,25 @@ find_selector_on_list(OSType selector)
     return gp;
 }
 
+/* MacPhoenix: selectors that answer a stored value (System 7.5's
+   GestaltValue calls, trap $ABF1).  Apple's keeps them as selector
+   functions in the System heap; a host list does the same job, consulted
+   before the function list. */
+struct gestalt_value_t
+{
+    OSType selector;
+    int32_t value;
+};
+static std::vector<gestalt_value_t> gestalt_values;
+
+static gestalt_value_t *find_value(OSType selector)
+{
+    for(auto &v : gestalt_values)
+        if(v.selector == selector)
+            return &v;
+    return nullptr;
+}
+
 static gestaltentry_t *
 find_selector_in_table(OSType selector, gestaltentry_t table[],
                        int table_length)
@@ -376,7 +397,12 @@ gestalt_helper(OSType selector, GUEST<LONGINT> *responsep, Boolean searchlist,
 
     *responsep = 0; /* better safe than sorry */
 
-    if(searchlist && (gp = find_selector_on_list(selector)))
+    if(gestalt_value_t *v = searchlist ? find_value(selector) : nullptr)
+    {
+        *responsep = v->value;
+        retval = noErr;
+    }
+    else if(searchlist && (gp = find_selector_on_list(selector)))
         retval = gp->selectorFunction(selector, responsep);
     else
     {
@@ -548,16 +574,69 @@ new_link(OSType selector, SelectorFunctionUPP selFunc)
     return retval;
 }
 
+/* Whether Gestalt knows selector at all: a value, a function, a table
+   entry or a configured override. */
+static bool selector_defined(OSType selector)
+{
+    if(find_value(selector) || find_selector_on_list(selector)
+       || find_selector_in_table(selector, gtable, std::size(gtable)))
+        return true;
+    gestalt_list_entry_t *p, *ep;
+    for(p = gestalt_listp, ep = (decltype(ep))((char *)p + listp_size);
+        p != ep; ++p)
+        if(p->selector == selector)
+            return true;
+    return false;
+}
+
 OSErr Executor::C_NewGestalt(OSType selector, SelectorFunctionUPP selFunc)
 {
     OSErr retval;
 
-    if(find_selector_on_list(selector)
-       || find_selector_in_table(selector, gtable, std::size(gtable)))
+    if(selector_defined(selector))
         retval = gestaltDupSelectorErr;
     else
         retval = new_link(selector, selFunc);
     return retval;
+}
+
+OSErr Executor::C_NewGestaltValue(OSType selector, int32_t newValue)
+{
+    if(selector_defined(selector))
+        return gestaltDupSelectorErr;
+    gestalt_values.push_back({ selector, newValue });
+    return noErr;
+}
+
+OSErr Executor::C_ReplaceGestaltValue(OSType selector, int32_t replacementValue)
+{
+    if(!selector_defined(selector))
+        return gestaltUndefSelectorErr;
+    if(gestalt_value_t *v = find_value(selector))
+        v->value = replacementValue;
+    else
+        gestalt_values.push_back({ selector, replacementValue });
+    return noErr;
+}
+
+OSErr Executor::C_SetGestaltValue(OSType selector, int32_t newValue)
+{
+    if(gestalt_value_t *v = find_value(selector))
+        v->value = newValue;
+    else
+        gestalt_values.push_back({ selector, newValue });
+    return noErr;
+}
+
+OSErr Executor::C_DeleteGestaltValue(OSType selector)
+{
+    for(auto it = gestalt_values.begin(); it != gestalt_values.end(); ++it)
+        if(it->selector == selector)
+        {
+            gestalt_values.erase(it);
+            return noErr;
+        }
+    return gestaltUndefSelectorErr;
 }
 
 OSErr Executor::C_ReplaceGestalt(OSType selector, SelectorFunctionUPP selFunc,

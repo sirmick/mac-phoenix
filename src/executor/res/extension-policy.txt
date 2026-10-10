@@ -11,6 +11,7 @@ WindowShade
 Mouse
 Find File Extension
 General Controls
+Date & Time
 Apple Menu Options
 Launcher
 Clipping Extension

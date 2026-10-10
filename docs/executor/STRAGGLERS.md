@@ -8,7 +8,7 @@ networking are punted until later; everything else is in scope.
 | 1 | `tell application "Finder"` (aliases, HLE sessions, folder listing) | done — 07dce3db; Finder suite 25/25 on UAE and Executor |
 | 2 | Keyboard test, SimpleText | done — 56200715 (test repaired, in ctest), da6ac62b (save: an open file can't be deleted) |
 | 3 | Dates in Script Editor ("program error") | done — f6793d47: Script Manager variables, IULDate/TimeString, StringToDate/Time, number formats; matches 7.5.5 |
-| 4 | Extension stragglers: Date & Time (menu clock), General Controls (`OSDispatch $5E`, `WriteXPRam`), Find File (`SetGestaltValue`), Apple Guide (`GetFrontProcess`) | **next** |
+| 4 | Extension stragglers: Date & Time (menu clock), General Controls (`OSDispatch $5E`, `WriteXPRam`), Find File (`SetGestaltValue`), Apple Guide (`GetFrontProcess`) | done (2026-10-10): Date & Time loads and draws its menu bar clock (`ScrnBitMap`, MenuDispatch -4..-1 as MBDF message 14, `AppPacks` holding the System's PACKs, INITs in the System heap); `GestaltValueDispatch` ($ABF1: New/Replace/Set/DeleteGestaltValue) for Find File; OSDispatch $5E stored (`SetHideDesktopInBackground`, a guess) for General Controls, whose panel opens; `GetFrontProcess` is a plain multiversal entry now, so the status lookup sees it. Apple Guide: see Parked |
 | 5 | Redraw leftovers behind Script Editor's windows | open |
 | 6 | `BeginSystemMode` (only a counter) | open |
 | 7 | Color Picker (`RegisterComponentResourceFile`) | open |
@@ -20,12 +20,27 @@ networking are punted until later; everything else is in scope.
 | 13 | ctest port 18108 used twice | done — 56200715 |
 | 14 | `command_bridge_executor` flake | open (not seen recently) |
 | 15 | Executor's own host files visible in Finder | done — 07dce3db |
+| 16 | Date & Time control panel: the date fields and the hour draw empty (minutes and seconds, which go through `ExtendedToString`, are right; `LongSecondsToDate` answers the right fields; the hour string is built without any trap) | open |
 
 Also fixed along the way: Finder type-to-select crash (61ef0717), host
 file dates in local time, `ioVLsMod`, folder moves keeping their
 contents' paths (07dce3db).
 
 ## Parked
+
+### Apple Guide
+
+Allowed by a per-system `extension-policy.txt`, its INIT 128 runs without
+harm: `NewGestalt('reno')`, four `GetTrapAddress` probes ($AA6E, which it
+later takes with `SetTrapAddress` $A647 as its own dispatcher; InitGraf;
+Unimplemented; $03CF), the startup icon, and then it returns without
+installing anything (no patches, no `ReplaceGestalt('help')`, no
+`NewGestalt('ag_v')`, which its install code at +$21c2 does). Before the
+install it looks for its own file by type and creator (`INIT`/`reno`, INIT
++$f28) with `PBGetFInfo` over a folder; what that search sees through the
+host-folder System is the first thing to check. The Help menu keeps
+Finder's three items. Phase 4 in `inits.yaml`; "as is, last, if ever" in
+PLAN.md.
 
 ### Heap corruption in the Executor guest suite
 
@@ -66,3 +81,10 @@ script's header. Not in ctest.
 Executor on the UAE core needs `vm.mmap_min_addr=0`; it is kept by
 `/etc/sysctl.d/99-mac-phoenix.conf` (another project's script runs
 `sysctl --system`, which reset it to Ubuntu's 65536).
+
+The reference snapshot `~/storage/snapshots/7.5.5-finder-idle` (UAE,
+`--trace-atraps`, Finder idle on the 7.5.5 test image) was taken again on
+2026-10-10; `tools/macdecode` reads it. The macdecode venv is
+`~/.venvs/macdecode` (capstone, rsrcfork); a linear-sweep 68k
+disassembler over a resource or a snapshot is a few lines on capstone with
+the A-line words named from `base/trapname.cpp`.

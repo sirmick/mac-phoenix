@@ -289,7 +289,7 @@ Ethernet driver.
 | M1 | Finder desktop | our boot phase, Apple System file as resource root, real Finder draws | done: Finder 7.5.5 reaches its desktop on Apple's System file, draws icons, opens windows, Apple/Help/Application menus |
 | M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix; DA Handler opens Calculator and the Chooser; Startup Items and Apple Menu Items aliases resolve | in progress: Finder launches applications (SimpleText, Note Pad, Jigsaw Puzzle, MacPerl, Script Editor) side by side; switching by click or Application menu; quit back to the launcher; desk accessories in DA Handler processes; aliases and Startup Items resolve; `command_bridge_executor` 7/7. Open: Chooser (printing), Kid Pix |
 | M3a | Trap tables | real tables at `$400`/`$E00`, every entry 68k-callable; patch histories diff against `trap_installs.tsv`; `$A82A` stub (no components); unit table matches a real boot and drivers get `accRun` | not started: Executor's own trap tables (`trapglue.h`), `UnitNtryCnt` 0 |
-| M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; shadowing switch withdraws Executor's built-ins; Color Picker loads (with M3c) | in progress: loader runs allowed INITs/cdevs/fext in Start Manager order (`extension-policy.txt`, phase 1 + AppleScript + Finder Scripting); `jGNEFilter` chain. Open: `ShowInitIcon`, shadowing switch, Date & Time (Finder crashes under its patches), Color Picker |
+| M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; shadowing switch withdraws Executor's built-ins; Color Picker loads (with M3c) | in progress: loader runs allowed INITs/cdevs/fext in Start Manager order (`extension-policy.txt`, phase 1 + AppleScript + Finder Scripting); `jGNEFilter` chain. Date & Time's menu bar clock (2026-10-10). Open: `ShowInitIcon`, shadowing switch, Color Picker |
 | M3c | Component Manager in C++ | System file components register; Color Picker's `GetColor` matches a real boot | mostly done: `component.cpp` (5cd8f3e2), System file / extension / `thng` file components register, AppleScript's components run. Open: Color Picker gate |
 | M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs (needs M3h for its network) | not started |
 | M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` | in progress: Apple's `PACK` 8 runs (installed by AppleScript), `oapp`/AppParameters in Apple's wire format. Open: Help Manager balloons |
@@ -553,3 +553,21 @@ Kept small so upstream fixes can be merged by hand:
 * `mman/mman.cpp`: `HandleZone` uses `TheZone` for an empty handle only when
   it is a real zone (Finder Scripting runs with `TheZone` set to a temp
   handle).
+* `gestalt.cpp`: `GestaltValueDispatch` ($ABF1: `NewGestaltValue`,
+  `ReplaceGestaltValue`, `SetGestaltValue`, `DeleteGestaltValue`), values
+  on a host list consulted before the selector functions.
+* `quickdraw/qMisc.cpp`: `ScrnBitMap` ($A833) as the Quadra ROM's: the main
+  device's PixMap copied as a 14-byte BitMap.
+* `menu/stdmbdf.cpp`, `menu/menu.cpp`: MBDF message 14 (`mbTitleRect`, a
+  guess) and MenuDispatch -4..-1 on it (`GetSystemMenuTitlesRect`,
+  `GetAppMenuTitlesRect`, `GetMenuBarRect`, `GetMenuTitleRect`, guesses),
+  laid out as 7.5.5's MBDF 0 does; Date & Time's clock sits left of the
+  system menus' rectangle.
+* `process.cpp`: OSDispatch $5E stored (`SetHideDesktopInBackground`, a
+  guess: General Controls' "Show Desktop when in background", inverted);
+  `GetFrontProcess` is a plain multiversal function (its inline pushes a
+  long -1).
+* `extensions.cpp`, `init.cpp`: INITs run in the System heap (`NewGestalt`
+  takes selector functions from there only); `AppPacks` holds the System
+  file's `PACK` 0-7 as `InitAllPacks` leaves them, after every launch's
+  lowmem reset too (Date & Time's clock checks `AppPacks[6]` before `Pack6`).

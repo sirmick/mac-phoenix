@@ -133,6 +133,60 @@ dispatchers:
           current process +0x15C (-600 without a current process). Finder
           passes its drag-hook record when Gestalt 'os  ' bit 10 is set and
           DragDispatch $C301 succeeded.
+      - value: 0x5E
+        name: SetHideDesktopInBackground
+        status: guess
+        source: 7.5.5 disassembly (scod table entry $5E -> RAM $28d2c; General Controls DRVR 49 +354)
+        comment: >
+          1 byte of params (Boolean), word result. Stores the byte in the
+          Process Manager globals (A5-$620); when it turns on while the
+          front process is not the desk owner (A5-$474), ShowHides that
+          process's layer window (+$70) away. General Controls' driver
+          passes bit 3 of its 'gprf' flags: "Show Desktop when in
+          background" inverted.
+  - trap: 0xA825
+    name: MenuDispatch
+    comment: >
+      7.5.5's selector table at RAM $63896 covers -6..1; D0's low byte
+      selects, its high byte is the parameter size. -4..-2 and -1 call
+      the MBDF with message 14 (a title rectangle into *param2): -4
+      passes -2, -3 passes -1, -2 passes 0, -1 the MenuList offset of
+      the menu whose ID is on the stack.
+    selectors:
+      - value: 0xFC
+        name: GetSystemMenuTitlesRect
+        status: guess
+        source: 7.5.5 disassembly (MenuDispatch -4 -> $6352e; System MBDF 0 +$109c; Date & Time INIT +$6c6)
+        comment: >
+          4 bytes of params (Rect *out), the OSErr written over out->top.
+          MBDF parameter -2: from the first system menu's title to the
+          last's; empty without system menus. Date & Time's clock ends a
+          pixel left of it.
+      - value: 0xFD
+        name: GetAppMenuTitlesRect
+        status: guess
+        source: 7.5.5 disassembly (MenuDispatch -3 -> $63534; MBDF +$1106)
+        comment: >
+          4 bytes of params (Rect *out). MBDF parameter -1: the first
+          title's rectangle widened to lastRight.
+      - value: 0xFE
+        name: GetMenuBarRect
+        status: guess
+        source: 7.5.5 disassembly (MenuDispatch -2 -> $6353a; MBDF +$988)
+        comment: >
+          4 bytes of params (Rect *out). MBDF parameter 0: the whole bar
+          (the menu bar port's rectangle, MBarHeight tall).
+      - value: 0xFF
+        name: GetMenuTitleRect
+        status: guess
+        source: 7.5.5 disassembly (MenuDispatch -1 -> $63572)
+        comment: >
+          6 bytes of params (menuID.w, Rect *out). Looks the menu up in
+          MenuList and asks the MBDF (message 14) for its title rectangle:
+          a pixel inside the bar top and bottom, a pixel left of the title,
+          three past the next title's left (lastRight after the last
+          application menu, the bar's right margin minus 10 for the last
+          system menu). paramErr if the ID is not in the bar.
   - trap: 0xA82A
     name: ComponentDispatch
     comment: >
