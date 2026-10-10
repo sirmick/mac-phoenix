@@ -156,11 +156,21 @@ else
 
     "$BINARY" --config "$TMPCONFIG" --backend kpx \
         --timeout "$TIMEOUT" --no-webserver \
-        "${EXTRA_FLAGS[@]}" 2>&1 | tee "$LOG" &
+        "${EXTRA_FLAGS[@]}" &>"$LOG" &
     EMU_PID=$!
     trap cleanup EXIT SIGTERM SIGINT
 
-    # Wait for emulator to finish (headless mode with --timeout)
+    # Poll the log; stop as soon as the desktop milestone shows up instead
+    # of waiting out the emulator's --timeout.
+    START_TIME=$(date +%s)
+    while kill -0 "$EMU_PID" 2>/dev/null; do
+        if grep -qE "Desktop ready|Finder detected" "$LOG" 2>/dev/null; then
+            echo "Desktop milestone after $(( $(date +%s) - START_TIME ))s"
+            kill "$EMU_PID" 2>/dev/null || true
+            break
+        fi
+        sleep 0.5
+    done
     wait "$EMU_PID" 2>/dev/null || true
 
     # Count milestones (PPC boot emits [Boot +Xs] phase markers, not m68k CHECKLOADs)
