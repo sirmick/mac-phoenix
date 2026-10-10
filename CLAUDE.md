@@ -79,10 +79,13 @@ back-end lifted but untested), and the host 68k core replacing the nanokernel's 
 emulator on the PPC machine (C3a: `MACEMU_MAMEPPC_68K=1` runs host-initiated
 68k routines on a `mame-68k` core with handoff to the emulator at the first
 trap; `=2` is an experiment that breaks the bridge; the main 68k thread is
-still the nanokernel's emulator). Reference checkout:
-`/home/mick/src/mame-src`. Tests: `ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|executor\.mame68k\.'` (`boot_ppc_mame_jit` is the native back-end).
+still the nanokernel's emulator). `--core mame-ppc --jit` boots 7.5.5 to the
+desktop in 1.6 s and Mac OS 9.0.4 in 10 s. Reference checkout:
+`/home/mick/src/mame-src`. Tests: `ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|guest_suite_ppc_mame|executor\.mame68k\.'` (`boot_ppc_mame_jit` is the native back-end;
+`guest_suite_ppc_mame` is the Mac OS 9.0.4 guest suite on it).
 `MACEMU_MAMEPPC_TRACE=1` prints host ops, exceptions and a per-second PC and
-framebuffer sample from the mame-ppc installer.
+framebuffer sample from the mame-ppc installer. Open items: the Stragglers
+section of docs/cpu/PLAN.md.
 
 ## Project Structure
 
@@ -244,11 +247,16 @@ Logging:
 
 ## Environment Variables
 
-The emulator binary does not read environment variables. Use CLI flags instead.
+Configuration is CLI flags only; the binary reads no environment variables
+for it. The exceptions are diagnostic switches on the PPC machine, which
+should become flags (docs/cpu/PLAN.md, Stragglers).
 
 | Var | Scope | Description |
 |-----|-------|-------------|
 | `MACEMU_ROM` | Test scripts only | Default ROM path (not read by the binary) |
+| `MACEMU_MAMEPPC_68K` | `--core mame-ppc` | `1`: host-initiated 68k routines on a host `mame-68k` core (C3a); `2`: the parked experiment |
+| `MACEMU_MAMEPPC_TRACE` | `--core mame-ppc` | host ops, exceptions, per-second PC/framebuffer sample |
+| `MACEMU_PPC_NO_IRQ`, `MACEMU_PPC_TRACE_TRAP` | `--backend kpx` | Kheperix-era debug switches |
 
 ## Key Architectural Decisions
 

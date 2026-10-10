@@ -15,6 +15,16 @@ Agreed 2026-10-10. Three goals, one shared piece of work:
 The longer direction these serve is
 [../executor/DIRECTION.md](../executor/DIRECTION.md), sections 1, 4 and 5.
 
+**Where it stands (2026-10-10, merged to main).** C1a–c, C2a–c and C3a
+are done; the open work is listed under [Stragglers](#stragglers) and the
+milestone table. On this x86-64 host: 7.5.5 to the desktop in 1.6 s on
+`--backend kpx --core mame-ppc --jit` (Kheperix `--jit` 1.1 s), Mac OS
+9.0.4 in 10 s, the guest suite on 9.0.4 the same as on Kheperix; the ROM
+68k machine and Executor on `mame-68k` pass what `musashi` passes. The
+full ctest run on main after the merge: 495 of 502, the seven failures
+all older than this work (`../executor/STRAGGLERS.md` items 20 and 21,
+the parked heap corruption, the `as_real_plain` digit count below).
+
 ## Source
 
 MAME master `a025aba` (2026-10-09), BSD-3-Clause for everything taken.
@@ -117,7 +127,7 @@ nothing more:
 | C2c | x86-64 back-end | `drcbex64` with `drcbe_guestmem` READ/WRITE lowering; asmjit vendored; boot matrix `kpx-jit-*` cells pass as `mame-ppc` cells; boot time at or under KPX `--jit` | done 2026-10-10: `drcbex64` + `x86log` lifted, asmjit vendored (`third_party/asmjit`, zlib); memory accesses call the shim's `address_space` member functions through MAME's own resolved-accessor fallback (no `drcbe_guestmem` inline fast path yet); `--backend kpx --core mame-ppc --jit` boots 7.5.5 to the desktop in 1.6 s (Kheperix JIT 1.1 s, Kheperix interpreter 3.1 s, UML interpreter 13 s); ctest `boot_ppc_mame_jit` |
 | C2d | arm64 back-end | `drcbearm64` builds and boots 7.5.5 on arm64 Linux and Apple Silicon (`MAP_JIT`); the `kpx_stub` is gone | not started: `drcbearm64.cpp` is lifted and in the CMake branch for arm64 hosts, untested (no arm64 host here); needs the execute() re-entrancy fix drcbex64 got, and the x86-only KPX helpers moved to kpx_shared |
 | C2e | Retire Kheperix | `src/cpu/kpx/src`, `dyngen_precompiled`, `regen_dyngen_ops.sh` deleted; `--backend kpx` keeps its name on the new core; PowerCore facade (`src/executor/cpu/PowerCore.*`) implemented on it for Executor's milestone P | not started |
-| C3a | `execute_68k` on Musashi | host-initiated 68k calls run on a `mame-68k` instance sharing the PPC machine's GuestMemory: import the GPR contract, run to the EXEC_RETURN word, export; everything else still on the DR emulator; bridge suites pass | done 2026-10-10 as a hybrid (`MACEMU_MAMEPPC_68K=1| done 2026-10-10 as a hybrid (`MACEMU_MAMEPPC_68K=1` on `--core mame-ppc`): host-initiated 68k routines run on a `mame-68k` core over the PPC machine's memory; the ROM's EmulOp words and EXEC_RETURN are handled in the 68k host; at the first A-line word the registers go into the emulator's convention (through a thunk that sets the CCR) and the nanokernel's emulator finishes the routine. 7.5.5 boots to the desktop in 1.6 s and the command bridge passes 7/7 on it. Mode 2 (Musashi takes A-line traps through the ROM dispatcher at $28) boots too but breaks the bridge: a divergence after the dispatcher hands off at a routine descriptor, not yet understood |
+| C3a | `execute_68k` on Musashi | host-initiated 68k calls run on a `mame-68k` instance sharing the PPC machine's GuestMemory: import the GPR contract, run to the EXEC_RETURN word, export; everything else still on the DR emulator; bridge suites pass | done 2026-10-10 as a hybrid (`MACEMU_MAMEPPC_68K=1` on `--core mame-ppc`): host-initiated 68k routines run on a `mame-68k` core over the PPC machine's memory; the ROM's EmulOp words and EXEC_RETURN are handled in the 68k host; at the first A-line word the registers go into the emulator's convention (through a thunk that sets the CCR) and the nanokernel's emulator finishes the routine. 7.5.5 boots to the desktop in 1.6 s and the command bridge passes 7/7 on it. Mode 2 (Musashi takes A-line traps through the ROM dispatcher at $28) boots too but breaks the bridge: a divergence after the dispatcher hands off at a routine descriptor, not yet understood |
 | C3b | The 68k side on Musashi | the emulator's entry points patched to SHEEP ops that enter Musashi; exits at `$AAFE` (Mixed Mode), EXEC_RETURN, interrupts (Musashi's IRQ line instead of the DR poll word), bus errors as 68k frames; `0xFExx`/`$71xx` EmulOps as host ops; 7.5.5 boots to Finder and passes the bridge suites; `--jit68k` retired | not started |
 | C3c | Numbers | boot time and a 68k-heavy benchmark (MacPerl guest suite section) against the DR emulator on x86-64; the same on arm64 against the interpreter-only PPC | not started |
 | C4 | UML→wasm back-end | after D4: a `drcbe_wasm` emitting modules per hot-block batch, dispatched through a `WebAssembly.Table`; PPC machine in a tab faster than `drcbec` | not started |
@@ -238,6 +248,29 @@ Manager read (the emulator presents a 68LC040), and whether anything reads
   LC040; Musashi has both. Pick by what the exception frames need.
 * **Keep KPX in tree until C2e?** Yes: it is the oracle for the
   differential traces and the boot matrix until the new cells are green.
+
+## Stragglers
+
+Open items from the C1–C3 work, apart from the milestones themselves
+(C1d, C1e, C2d, C2e, C3b, C3c in the table). Numbered so they can be
+referred to; strike them here when done.
+
+| # | What | State |
+|---|------|-------|
+| S1 | **C3a mode 2** (`MACEMU_MAMEPPC_68K=2`: Musashi takes A-line traps through the ROM dispatcher at $28) boots 7.5.5 but BridgeAgent never heartbeats. A per-routine differential against mode 1 shows runs through the dispatcher returning with different D1/A1 and different nested EmulOps, i.e. the emulator continues from the routine descriptor in a state it does not expect. Moot once C3b keeps every trap on Musashi | parked |
+| S2 | **arm64 back-end untested.** `drcbearm64.cpp` is lifted and in the CMake branch for arm64 hosts; no arm64 host here. It needs the same re-entrancy save/restore `drcbex64::execute()` got (near state and memory-resident UML registers), and the x86-only KPX helpers in `kpx_stub.cpp` moved to `kpx_shared` | open (C2d) |
+| S3 | **Memory ops are calls.** Every guest access from native code goes through MAME's resolved-accessor fallback to the shim's `address_space` member functions; the inline GuestMemory page-table path (`drcbe_guestmem`) is not written. Likely the gap between 1.6 s and Kheperix's 1.1 s | open |
+| S4 | **Identity addressing.** Guest memory still sits at its guest addresses, so `vm.mmap_min_addr=0` stays and the SIGSEGV-skip handler is still the bad-access policy. The base offset (`VMBaseDiff` a variable, one offset for the ROM and the KPX machine) is C2e's precondition | open |
+| S5 | **Environment switches.** `MACEMU_MAMEPPC_68K` and `MACEMU_MAMEPPC_TRACE` are read from the environment, against the project's flags-only rule (CLAUDE.md). Make them flags (`--m68k-host`, `--debug-mame-ppc` or the like) before C3b makes the 68k choice user-visible | open |
+| S6 | **Virtual clock sync points.** `Microseconds()` on the kpx machine reads `ppc_insn_counter`, which the mame-ppc installer now copies from `cpu::Core::cycles()` at every EmulOp. Anything reading the counter between EmulOps (Kheperix's `execute_68k` bookkeeping, `g_use_ppc_virtual_clock` if ever turned on) sees the last EmulOp's value. Cleaner: the kpx time functions ask the core directly | open |
+| S7 | **Stale PC in the trace.** The per-second sample from `MACEMU_MAMEPPC_TRACE` prints `g_core->pc()` from the tick thread; with the native back-end the state PC is only written at block exits, so it shows the last exit (always `504ff31c` in the 9.0.4 stall), not the running PC. r24 (the 68k PC) is live. Either sample from the CPU thread or say so in the output | open |
+| S8 | **Interrupt rate to check.** In the 9.0.4 stall log the IRQ EmulOp count grew by ~30 a second against the 60 Hz tick (the tick thread raises `INTFLAG_VIA` only while `XLM_IRQ_NEST` is 0). Whether mame-ppc normally delivers 60 a second, as Kheperix does, was not measured | to check |
+| S9 | **`as_real_plain` on PPC.** The guest suite's `1/3` prints 12 significant digits on the Power Mac (both cores) against 13 on the 68k machines. A property of MacPerl's PPC build or the PPC FPU, older than this work; the PPC guest cells (`guest_suite_ppc`, `guest_suite_ppc_mame`) fail on it alone | open, pre-existing |
+| S10 | **Headless PPC boot cells wait out their timeout.** `boot_ppc_interp`, `boot_ppc_jit` and `boot_ppc_mame` run `test_boot_ppc.sh` without `--webserver`, which reads milestones from the log after the emulator's `--timeout 45` expires, so each takes 45 s whatever the boot took (`boot_ppc_mame_jit` with `--webserver` returns in 2.7 s). Poll the log and stop early, or give them `--webserver` | open |
+| S11 | **No mame-ppc cells in the boot matrix.** `tests/run_boot_matrix.sh` still enumerates the Kheperix cells only; add `mame-ppc` (interpreter and `--jit`) and `mame-68k` cells | open |
+| S12 | **Executor on mame-68k has unit tests only.** `executor.mame68k.*` (150 gtests) pass; there are no `_executor_mame68k` bridge, guest, Finder or keyboard cells. Today the `_executor_musashi` ones abort anyway (STRAGGLERS.md 20), and mame-68k would hit the same host-pointer check | open |
+| S13 | **x86log without the disassembler.** MAME's i386 disassembler was not lifted, so native-code logs show bytes. Logging is off (`emu_options`) | cosmetic |
+| S14 | **PMMU has no workload.** `Config::mmu` picks the PMMU inits but no machine turns it on; the Virtual Memory boot (C1d) is the first real test | open (C1d) |
 
 ## Notes from C3a (68k routines on a host Musashi)
 
