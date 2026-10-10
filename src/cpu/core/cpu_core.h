@@ -225,6 +225,17 @@ public:
      * thread: the place to update the interrupt line or run guest code
      * (SheepShaver-style interrupt dispatch). */
     virtual void attention(Core &core) { (void)core; }
+
+    /* m68k: an A-line or F-line word, before the exception is taken. True
+     * means the host handled it: the word counts as executed and the core
+     * goes on at pc() (just past it), unless the host moved the PC. False:
+     * the normal exception (the Mac's trap dispatcher). Only cores that
+     * implement it call it (mame-68k). */
+    virtual bool trap(Core &core, uint32_t opcode, uint32_t op_pc)
+    {
+        (void)core; (void)opcode; (void)op_pc;
+        return false;
+    }
 };
 
 /* ---------------------------------------------------------------------- */
@@ -238,9 +249,23 @@ struct Config
      * ppc: 601, 603, 604, 750 (G3), 7400 (G4). */
     int model = 68040;
     bool fpu = true;
+    /* m68k: emulate the PMMU (68030/68040); off means MMU instructions
+     * are no-ops and addresses are never translated, as every machine
+     * here has run so far. Only the MAME core honours it. */
+    bool mmu = false;
     /* 24 for a 24-bit 68k Mac; the core masks addresses itself. */
     int address_bits = 32;
     bool jit = false;
+    /* The CPU clock the core's timers run at (ppc: timebase and
+     * decrementer); 0 means the core's default. */
+    uint32_t clock_hz = 0;
+    /* ppc: let the decrementer raise its exception (off: the host paces
+     * the guest itself, as SheepShaver's machine does). */
+    bool timers = true;
+    /* ppc: deliver exceptions (program, DSI, ISI, alignment, system call)
+     * through the vectors. Off: skip the instruction and log, as Kheperix
+     * does; what SheepShaver's machine side expects. */
+    bool exceptions = true;
 };
 
 enum class StopReason {
