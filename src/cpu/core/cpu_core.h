@@ -310,6 +310,12 @@ public:
     virtual uint32_t reg(int id) const = 0;
     virtual void set_reg(int id, uint32_t value) = 0;
 
+    /* Guest cycles (or instructions, for cores that do not count cycles)
+     * executed since the core was made: a monotonic virtual clock for
+     * hosts that time the guest by its own progress. 0 when the core
+     * does not count. */
+    virtual uint64_t cycles() const { return 0; }
+
     /* Everything the core needs to resume later on the same thread or
      * another: registers, FPU, MMU, pending exception state. Not memory,
      * not the interrupt line (the host owns those). */

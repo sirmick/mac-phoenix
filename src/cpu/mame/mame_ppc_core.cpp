@@ -275,6 +275,7 @@ public:
 
     uint32_t pc() const override { return dev_.core().pc; }
     void set_pc(uint32_t pc) override { dev_.core().pc = pc; }
+    uint64_t cycles() const override { return dev_.total_cycles(); }
     uint32_t reg(int id) const override { return dev_.get_reg(id); }
     void set_reg(int id, uint32_t value) override { dev_.set_reg(id, value); }
 
