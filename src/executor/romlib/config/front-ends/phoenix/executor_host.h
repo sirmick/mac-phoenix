@@ -41,6 +41,12 @@ struct Config
     // Rendered frames, 0xAARRGGBB per pixel (BGRA bytes on little-endian),
     // cursor included. Called on the thread that called run().
     std::function<void(const uint32_t *pixels, int width, int height)> on_frame;
+
+    // Sound: one 20 ms frame of 48 kHz 16-bit big-endian stereo (960
+    // frames), from the emulator thread. Returns false when the host cannot
+    // take it now (it is kept and offered again). Unset: no sound output
+    // (Executor only pretends to play).
+    std::function<bool(const uint8_t *s16be, uint32_t samples)> on_audio;
 };
 
 // Runs Executor until the guest application exits. Returns its exit code.

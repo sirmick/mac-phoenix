@@ -5,6 +5,8 @@
 /* Forward declarations in SoundMgr.h (DO NOT DELETE THIS LINE) */
 
 #include <base/common.h>
+#include <cmath>
+#include <algorithm>
 #include <MemoryMgr.h>
 #include <ResourceMgr.h>
 #include <SoundDvr.h>
@@ -425,6 +427,14 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
             chanp->firstMod = (Ptr)NewPtr(sizeof(ModifierStub));
             SND_CHAN_TIME(chanp) = 0;
             SND_CHAN_CURRENT_START(chanp) = 0;
+            {
+                ModifierStub *ms = SND_CHAN_FIRSTMOD(chanp);
+                ms->sq_step = ms->sq_phase = 0;
+                ms->sq_amp = 255;
+                ms->sq_on = false;
+                ms->cmd_started = false;
+                ms->cmd_end = 0;
+            }
             chanp->callBack = userroutinep;
             /*chanp->userInfo = 0;*/
             chanp->wait = 0;
@@ -548,6 +558,51 @@ snd_duration(SoundHeaderPtr hp)
 
 #define CMD_DONE(c) ((c)->flags &= ~CHAN_CMDINPROG_FLAG)
 
+/* MacPhoenix: the square-wave synthesizer (snth 1), for sounds like the
+   System's "Simple Beep": freqCmd/noteCmd choose a MIDI note, ampCmd the
+   amplitude, and the timed commands (waitCmd, restCmd, noteCmd) let the
+   tone sound (or rest) for param1 half-milliseconds. The tone is mixed
+   into the hunger buffer like sampled sound, at the driver's rate. */
+static uint32_t square_step(uint8_t midi_note, int rate)
+{
+    double hz = 440.0 * pow(2.0, (midi_note - 69) / 12.0);
+    return (uint32_t)(hz / rate * 4294967296.0);
+}
+
+static void synth_mix(SndChannelPtr chanp, HungerInfo info, snd_time until, bool rest)
+{
+    ModifierStub *ms = SND_CHAN_FIRSTMOD(chanp);
+    snd_time t = SND_CHAN_TIME(chanp);
+    bool sounding = !rest && ms->sq_on && ms->sq_amp;
+    int amp = ms->sq_amp >> 2; /* a square wave is loud; leave headroom */
+    for(; t < until; t++)
+    {
+        if(sounding && info.buf)
+        {
+            int v = (ms->sq_phase & 0x80000000) ? 0x80 + amp : 0x80 - amp;
+            info.buf[t % info.bufsize] = mix8[(unsigned)v + (unsigned)info.buf[t % info.bufsize]];
+        }
+        ms->sq_phase += ms->sq_step;
+    }
+    SND_CHAN_TIME(chanp) = t;
+    SND_CHAN_CURRENT_START(chanp) = SND_PROMOTE(t);
+}
+
+/* A timed command: true once its time is up. */
+static bool synth_timed(SndChannelPtr chanp, HungerInfo info, bool rest)
+{
+    ModifierStub *ms = SND_CHAN_FIRSTMOD(chanp);
+    if(!ms->cmd_started)
+    {
+        ms->cmd_started = true;
+        uint32_t half_ms = (uint16_t)chanp->cmdInProg.param1;
+        ms->cmd_end = SND_CHAN_TIME(chanp) + (snd_time)half_ms * info.rate / 2000;
+    }
+    snd_time until = std::min<snd_time>(info.t3, ms->cmd_end);
+    synth_mix(chanp, info, until, rest);
+    return SND_CHAN_TIME(chanp) >= ms->cmd_end;
+}
+
 static void
 do_current_command(SndChannelPtr chanp, HungerInfo info)
 {
@@ -603,7 +658,46 @@ do_current_command(SndChannelPtr chanp, HungerInfo info)
             break;
 
         case ampCmd:
-            warning_sound_log("ampCmd (ignored)");
+            SND_CHAN_FIRSTMOD(chanp)->sq_amp = (uint8_t)(uint16_t)chanp->cmdInProg.param1;
+            CMD_DONE(chanp);
+            break;
+
+        case freqCmd: /* a tone until quietCmd */
+            SND_CHAN_FIRSTMOD(chanp)->sq_step = square_step((uint8_t)chanp->cmdInProg.param2, info.rate);
+            SND_CHAN_FIRSTMOD(chanp)->sq_on = true;
+            CMD_DONE(chanp);
+            break;
+
+        case noteCmd: /* a tone for param1 half-milliseconds */
+            if(!SND_CHAN_FIRSTMOD(chanp)->cmd_started)
+            {
+                SND_CHAN_FIRSTMOD(chanp)->sq_step = square_step((uint8_t)chanp->cmdInProg.param2, info.rate);
+                SND_CHAN_FIRSTMOD(chanp)->sq_on = true;
+            }
+            if(synth_timed(chanp, info, false))
+            {
+                SND_CHAN_FIRSTMOD(chanp)->sq_on = false;
+                CMD_DONE(chanp);
+            }
+            break;
+
+        case waitCmd: /* the tone goes on for param1 half-milliseconds */
+            if(synth_timed(chanp, info, false))
+                CMD_DONE(chanp);
+            break;
+
+        case restCmd: /* silence for param1 half-milliseconds */
+            if(synth_timed(chanp, info, true))
+                CMD_DONE(chanp);
+            break;
+
+        case quietCmd:
+            SND_CHAN_FIRSTMOD(chanp)->sq_on = false;
+            CMD_DONE(chanp);
+            break;
+
+        case timbreCmd:
+        case nullCmd:
             CMD_DONE(chanp);
             break;
 
@@ -728,7 +822,7 @@ Executor::sound_callback(syn68k_addr_t interrupt_addr, void *unused)
             else if(!qempty_p(chanp))
             {
                 chanp->cmdInProg = deq(chanp);
-                chanp->flags |= CHAN_CMDINPROG_FLAG;
+                CMD_START(chanp);
                 did_something = true;
             }
             else
@@ -869,7 +963,7 @@ OSErr Executor::C_SndDoImmediate(SndChannelPtr chanp, SndCommand *cmdp)
                     case bufferCmd:
                         warning_sound_log("bufferCmd");
                         chanp->cmdInProg = cmd;
-                        chanp->flags |= CHAN_CMDINPROG_FLAG;
+                        CMD_START(chanp);
                         SND_CHAN_CURRENT_START(chanp) = SND_PROMOTE(SND_CHAN_TIME(chanp));
                         retval = noErr;
                         break;

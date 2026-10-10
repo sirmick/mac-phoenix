@@ -11,6 +11,7 @@
 
 #include "emulator_config.h"
 #include "ipc_protocol.h"
+#include "../../drivers/audio/audio_direct.h"
 
 #include <csignal>
 #include <cstdio>
@@ -232,6 +233,13 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.logtraps = cfg.executor_logtraps;
     c.writable_images = cfg.executor_writable_images;
     c.on_frame = publish_frame;
+    if (cfg.audio_enabled) {
+        /* The parent pulls 20 ms frames from the IPC audio ring (--audio). */
+        audio_direct_set_ipc_buffer(buf);
+        c.on_audio = [](const uint8_t *s16be, uint32_t samples) {
+            return audio_direct_push_frame(s16be, samples, 48000, 2);
+        };
+    }
 
     fprintf(stderr, "[Executor] %dx%d, %d MB, %s 68k core, data in %s, %zu disk image(s)\n",
             c.width, c.height, c.ram_mb, c.cpu.c_str(), c.data_dir.c_str(), c.disks.size());

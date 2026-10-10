@@ -63,7 +63,20 @@ struct ModifierStub
     GUEST<uint8_t> prev_samp;
     SndDoubleBufferHeader *dbhp;
     int current_db;
+    /* MacPhoenix: the square-wave synthesizer's state (sound.cpp): the tone
+       freqCmd/noteCmd set, as a phase step per sample at the driver's rate,
+       its amplitude (ampCmd), whether it sounds, and the timed command in
+       progress (waitCmd, restCmd, noteCmd): when it started and ends. */
+    uint32_t sq_step;
+    uint32_t sq_phase;
+    uint8_t sq_amp;
+    bool sq_on;
+    bool cmd_started;
+    snd_time cmd_end;
 };
+
+/* A command leaves the queue: it has not started yet. */
+#define CMD_START(c) ((c)->flags |= CHAN_CMDINPROG_FLAG, SND_CHAN_FIRSTMOD(c)->cmd_started = false)
 
 #define SND_CHAN_FIRSTMOD(c) ((ModifierStubPtr)c->firstMod)
 #define SND_CHAN_CURRENT_START(c) (SND_CHAN_FIRSTMOD(c)->current_start)

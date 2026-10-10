@@ -46,6 +46,8 @@ npx playwright test
 ./build/mac-phoenix --backend executor --core musashi
 # ... on Apple's 7.5.5 System with real Finder (Settings > System disk):
 ./build/mac-phoenix --backend executor --executor-system macos-7.5.5-noext.img
+# ... with sound (Executor mixes in C++ and feeds the same Opus/WebRTC path):
+./build/mac-phoenix --backend executor --audio
 ctest --test-dir build -L executor
 
 # Boot capacity matrix (all backend × JIT config × OS cells)

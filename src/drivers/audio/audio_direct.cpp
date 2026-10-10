@@ -261,6 +261,35 @@ void SoundMgr_SysBeep(uint16 duration_ticks)
 
 
 /*
+ *  audio_direct_push_frame - Executor's sound driver writes frames itself
+ */
+
+bool audio_direct_push_frame(const uint8_t* s16be, uint32_t samples,
+                             uint32_t sample_rate, uint32_t channels)
+{
+	if (!g_ipc_shm || !samples || !channels)
+		return false;
+	size_t data_len = (size_t)samples * 2 * channels;
+	if (data_len > IPC_AUDIO_MAX_FRAME_BYTES)
+		return false;
+	uint32_t write_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_write_idx) % IPC_AUDIO_FRAME_RING_SIZE;
+	uint32_t read_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_read_idx) % IPC_AUDIO_FRAME_RING_SIZE;
+	uint32_t next_write = (write_idx + 1) % IPC_AUDIO_FRAME_RING_SIZE;
+	if (next_write == read_idx)
+		return false;  // ring full: the parent is behind
+	IPCAudioFrame* frame = &g_ipc_shm->audio_frames[write_idx];
+	frame->sample_rate = sample_rate;
+	frame->channels = channels;
+	frame->samples = samples;
+	frame->format = 1;  // PCM_S16
+	memcpy(frame->data, s16be, data_len);
+	IPC_ATOMIC_STORE(g_ipc_shm->audio_write_idx, next_write);
+	audio_frames_sent++;
+	return true;
+}
+
+
+/*
  *  audio_request_data - Called when parent sends IPC_INPUT_AUDIO_REQUEST
  *  Wakes up the audio thread to produce a frame.
  */

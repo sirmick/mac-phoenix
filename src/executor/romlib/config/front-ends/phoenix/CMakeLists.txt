@@ -4,6 +4,8 @@ add_library(front-end-phoenix
     phoenix.cpp
     executor_host.h
     executor_host.cpp
+    phoenix_sound.h
+    phoenix_sound.cpp
     ../../../main.cpp
 )
 target_include_directories(front-end-phoenix PUBLIC . ../headless)

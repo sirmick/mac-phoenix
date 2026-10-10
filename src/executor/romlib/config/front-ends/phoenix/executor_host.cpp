@@ -1,5 +1,7 @@
 #include "executor_host.h"
 #include "phoenix.h"
+#include "phoenix_sound.h"
+#include <sound/sounddriver.h>
 
 #include <base/common.h>
 #include <mman/mman_private.h>
@@ -87,6 +89,11 @@ int run(const Config& c)
     PhoenixVideoDriver::cursorX = c.width / 2;
     PhoenixVideoDriver::cursorY = c.height / 2;
     PhoenixVideoDriver::frameHook = c.on_frame;
+    if(c.on_audio)
+    {
+        PhoenixSoundDriver::pushHook = c.on_audio;
+        Executor::sound_driver = new PhoenixSoundDriver(); /* sound_init() keeps it */
+    }
 
     // Executor parses its own command line; build one from the config.
     // System heap: 3MB, stack: 256KB, the rest is the application heap.

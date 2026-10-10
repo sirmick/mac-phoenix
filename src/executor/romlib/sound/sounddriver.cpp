@@ -5,6 +5,7 @@
 #include <base/common.h>
 #include <sound/sounddriver.h>
 #include <sound/soundfake.h>
+#include <prefs/prefs.h>
 
 namespace Executor
 {
@@ -22,5 +23,9 @@ void sound_init(void)
         sound_driver = new SoundFake();
 
     sound_driver->sound_init();
+    /* MacPhoenix: a driver that really plays (phoenix_sound.cpp) turns the
+       Sound Manager on; the fake one leaves it pretending, as before. */
+    if(sound_driver->sound_works() && !sound_driver->sound_silent())
+        ROMlib_PretendSound = soundon;
 }
 }

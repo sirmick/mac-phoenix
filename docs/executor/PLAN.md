@@ -269,10 +269,9 @@ alongside the M1–M3a work, in this order (status as of 2026-10-09):
    resource policy. *Open*: `guest_suite_executor`'s `dns_resolve`
    fails on it (and `udp_send` on the missing UDP).
 
-Independent, any time: **sound output.** `sound/sounddriver.cpp`
-always picks `SoundFake`, so Executor is silent. A host `SoundDriver`
-feeding MacPhoenix's audio pipeline (from `host/executor_child.cpp`) is
-needed before M3f's QuickTime and Speech gates mean anything.
+Independent, any time: **sound output.** *Done* (2026-10-10, M3g):
+`PhoenixSoundDriver` feeds MacPhoenix's audio pipeline when the parent
+runs with `--audio`; without it `SoundFake` pretends as before.
 
 Later, not loading work: TrueType rendering (the `sfnt` resources are
 already in the Fonts chain; the Font Manager and QuickDraw need a
@@ -300,7 +299,7 @@ Ethernet driver.
 | M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs (needs M3h for its network) | not started |
 | M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` | in progress: Apple's `PACK` 8 runs (installed by AppleScript), `oapp`/AppParameters in Apple's wire format. Open: Help Manager balloons |
 | M3f | Extension set | Speech Manager + MacinTalk 3, AppleScript + Finder Scripting Extension, QuickTime load and work (QuickTime movie plays in SimpleText) | in progress: AppleScript loads by default; Script Editor runs `3 + 4 -> 7`; scripting additions run from MacPerl; Finder Scripting Extension loads. Open: `tell application "Finder"` (target spec empty, `finder_suite_executor` fails), Speech, QuickTime |
-| M3g | Sound output | host `SoundDriver` replaces `SoundFake`; `SysBeep` and `SndPlay` audible in the web UI | not started |
+| M3g | Sound output | host `SoundDriver` replaces `SoundFake`; `SysBeep` and `SndPlay` audible in the web UI | done (2026-10-10): with `--audio`, `PhoenixSoundDriver` (front-ends/phoenix) mixes at 22255 Hz and hands 48 kHz stereo frames to the IPC audio ring the ROM machines use (Opus, WebRTC); `SysBeep` plays the System's "Simple Beep" through `SndPlay`; the mixer gained the square-wave synthesizer (`freqCmd`, `noteCmd`, `waitCmd`, `restCmd`, `ampCmd`) that sound uses. Open: the Sound control panel's alert choice, `volumeCmd` |
 | M3h | MacTCP finished | `dnrp` resolver, UDP, async calls on the `accRun` pump; Fetch connects to a host name | in progress: TCP on host sockets (`executor.MacTCP.*`, `tcp_socket` passes in the guest suite). Open: `dnrp`, UDP, async |
 | M4 | 7.5.5 + Drag Manager | Drag Manager in C++; drag between SimpleText and Finder; TSM/Dictionary/Collection stubs; TrueType via FreeType | not started |
 | P | PPC | KPX behind the PowerCore facade, InterfaceLib to native | not started |
@@ -595,6 +594,13 @@ Kept small so upstream fixes can be merged by hand:
   head insertion keeps their order (Color Picker takes the first `cpkr`
   found: HSL on 7.5.5).
 * `dial/dialHandle.cpp`: `ModalDialogMenuSetup` ($AA67), a no-op.
+* `config/front-ends/phoenix/phoenix_sound.cpp` (new), `sound/sounddriver.cpp`,
+  `sound/sound.cpp`: a `SoundDriver` that resamples the 22255 Hz mix to
+  48 kHz S16 stereo and pushes 20 ms frames to the IPC audio ring
+  (`audio_direct_push_frame`); `sound_init` turns the Sound Manager on
+  for a driver that plays; `SysBeep` plays `'snd ' 1`; the mixer's
+  square-wave synthesizer (`freqCmd`, `noteCmd`, `waitCmd`, `restCmd`,
+  `ampCmd`, `quietCmd`) with its state in `ModifierStub`.
 * `base/trapglue.h`, `base/traps.cpp`, `base/traps.h`, `init.cpp`: the
   trap tables are in guest memory at `$400` (OS) and `$E00` (Toolbox),
   big-endian guest addresses, so code that reads or patches them directly

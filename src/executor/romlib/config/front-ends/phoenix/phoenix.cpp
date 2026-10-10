@@ -1,5 +1,10 @@
 #include "phoenix.h"
 
+#include <base/common.h>
+#include <ResourceMgr.h>
+#include <SoundMgr.h>
+#include <prefs/prefs.h>
+
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -195,4 +200,24 @@ void PhoenixVideoDriver::runEventLoop()
                 callbacks_->requestQuit();
         }
     }
+}
+
+/* SysBeep (osutil.cpp): with sound on, the alert sound is the System's
+   'snd ' 1, "Simple Beep", played through the Sound Manager; otherwise
+   nothing, as Executor's other front ends do. The Sound control panel's
+   choice of alert sound is not read yet. */
+void PhoenixVideoDriver::beepAtUser()
+{
+    Executor::Handle h = Executor::ROMlib_PretendSound == Executor::soundon
+        ? Executor::GetResource("snd "_4, 1) : nullptr;
+    static bool announced;
+    if(!announced)
+    {
+        announced = true;
+        fprintf(stderr, "[Executor] SysBeep: sound %s, 'snd ' 1 %s\n",
+                Executor::ROMlib_PretendSound == Executor::soundon ? "on" : "pretend/off",
+                h ? "found" : "missing");
+    }
+    if(h)
+        Executor::SndPlay(nullptr, h, false);
 }
