@@ -6,7 +6,7 @@
 #   --se  the Mac SE (System 6.0.8 disk, 4 MB, 512x342) instead of the Quadra
 #   --ppc the Power Mac G3 (kpx backend; --core kpx | mame-ppc)
 set -euo pipefail
-CORE=uae; OUT=/tmp/boot.png; PORT=18116; TIMEOUT=40; LOG=/tmp/boot_screenshot.log; SE=0; PPC=0; EXTRA=()
+CORE=uae; OUT=/tmp/boot.png; PORT=18116; TIMEOUT=40; LOG=/tmp/boot_screenshot.log; SE=0; PPC=0; EXTRA=(); IMAGE=macos-7.5.5
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --core) CORE="$2"; shift 2 ;;
@@ -16,15 +16,16 @@ while [[ $# -gt 0 ]]; do
         --log) LOG="$2"; shift 2 ;;
         --se) SE=1; shift ;;
         --ppc) PPC=1; shift ;;
+        --image) IMAGE="$2"; shift 2 ;;   # test disk image name (lib/refresh_test_disk.sh)
         --jit|--no-jit) EXTRA+=("$1"); shift ;;
-        *) echo "unknown arg $1"; exit 1 ;;
+        *) EXTRA+=("$1"); shift ;;   # anything else goes to the emulator
     esac
 done
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BACKEND=(--backend uae)
 if [[ $PPC == 1 ]]; then
     ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
-    DISK=$(bash "$HERE/lib/refresh_test_disk.sh" macos-7.5.5)
+    DISK=$(bash "$HERE/lib/refresh_test_disk.sh" "$IMAGE")
     MACHINE=(--ram 128)
     BACKEND=(--backend kpx)
 elif [[ $SE == 1 ]]; then
@@ -36,7 +37,7 @@ else
     DISK=$(bash "$HERE/lib/refresh_test_disk.sh" macos-7.5.5)
     MACHINE=()
 fi
-"$HERE/../build/mac-phoenix" "${BACKEND[@]}" --port "$PORT" --core "$CORE" "${MACHINE[@]}" "${EXTRA[@]}" --disk "$DISK" --timeout "$TIMEOUT" --rom "$ROM" > "$LOG" 2>&1 &
+"$HERE/../build/mac-phoenix" "${BACKEND[@]}" --port "$PORT" --core "$CORE" "${MACHINE[@]}" "${EXTRA[@]}" --disk "$DISK" --timeout "$((TIMEOUT + 20))" --rom "$ROM" > "$LOG" 2>&1 &
 PID=$!
 for i in $(seq 1 100); do
     if curl -s "localhost:$PORT/api/status" > /dev/null 2>&1; then break; fi

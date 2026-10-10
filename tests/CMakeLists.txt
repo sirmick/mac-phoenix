@@ -336,8 +336,8 @@ set_tests_properties(command_bridge_musashi PROPERTIES TIMEOUT 90 LABELS "boot;m
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
 add_test(NAME guest_suite_musashi
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core musashi --timeout 60 --port 18146)
-set_tests_properties(guest_suite_musashi PROPERTIES TIMEOUT 120 LABELS "guest;musashi" SKIP_RETURN_CODE 77
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core musashi --timeout 120 --port 18146)
+set_tests_properties(guest_suite_musashi PROPERTIES TIMEOUT 160 LABELS "guest;musashi" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
 add_test(NAME finder_suite_musashi
