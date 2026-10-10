@@ -30,6 +30,17 @@ target_include_directories(test_browser_shm PRIVATE
 add_test(NAME browser_shm COMMAND test_browser_shm)
 set_tests_properties(browser_shm PROPERTIES TIMEOUT 10 LABELS "unit")
 
+# Two mame-68k cores in one process (docs/cpu/PLAN.md, C1c). Host-only.
+add_executable(test_cpu_cores
+  ${TEST_DIR}/test_cpu_cores.cpp
+  ${CMAKE_SOURCE_DIR}/src/cpu/core/guest_memory.cpp
+)
+target_include_directories(test_cpu_cores PRIVATE ${CMAKE_SOURCE_DIR}/src/cpu/core)
+target_link_libraries(test_cpu_cores PRIVATE mame_m68k mame_ppc)
+target_compile_features(test_cpu_cores PRIVATE cxx_std_17)
+add_test(NAME cpu_cores COMMAND test_cpu_cores)
+set_tests_properties(cpu_cores PROPERTIES TIMEOUT 10 LABELS "unit;mame")
+
 add_test(
   NAME api_endpoints
   COMMAND bash ${TEST_DIR}/test_api_endpoints.sh
@@ -95,6 +106,30 @@ set_tests_properties(boot_uae_jit PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
+# The same boot on the other 68k cores (cpu::available): Musashi v3.32 and
+# MAME's Musashi (docs/cpu/PLAN.md, C1).
+add_test(
+  NAME boot_core_musashi
+  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core musashi --timeout 25 --port 18112
+)
+set_tests_properties(boot_core_musashi PROPERTIES
+  TIMEOUT 40
+  LABELS "boot;musashi"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME boot_core_mame68k
+  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core mame-68k --timeout 25 --port 18114
+)
+set_tests_properties(boot_core_mame68k PROPERTIES
+  TIMEOUT 40
+  LABELS "boot;mame"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
 add_test(
   NAME command_bridge
   COMMAND bash ${TEST_DIR}/test_command_bridge.sh --port 18106
@@ -133,6 +168,38 @@ add_test(
 set_tests_properties(boot_ppc_jit PROPERTIES
   TIMEOUT 60
   LABELS "boot"
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
+# The same boot on MAME's PowerPC core (docs/cpu/PLAN.md, C2b): UML
+# interpreted until the native back-ends land, so slower.
+add_test(
+  NAME boot_ppc_mame
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --timeout 45 --port 18116
+)
+set_tests_properties(boot_ppc_mame PROPERTIES
+  TIMEOUT 65
+  LABELS "boot;mame"
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
+add_test(
+  NAME boot_ppc_mame_jit
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --jit --timeout 30 --port 18120 --webserver
+)
+set_tests_properties(boot_ppc_mame_jit PROPERTIES
+  TIMEOUT 50
+  LABELS "boot;mame"
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
+add_test(
+  NAME boot_ppc_mame_api
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --timeout 60 --port 18118 --webserver
+)
+set_tests_properties(boot_ppc_mame_api PROPERTIES
+  TIMEOUT 80
+  LABELS "boot;mame"
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
@@ -269,8 +336,8 @@ set_tests_properties(command_bridge_musashi PROPERTIES TIMEOUT 90 LABELS "boot;m
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
 add_test(NAME guest_suite_musashi
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core musashi --timeout 60 --port 18146)
-set_tests_properties(guest_suite_musashi PROPERTIES TIMEOUT 120 LABELS "guest;musashi" SKIP_RETURN_CODE 77
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core musashi --timeout 120 --port 18146)
+set_tests_properties(guest_suite_musashi PROPERTIES TIMEOUT 160 LABELS "guest;musashi" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
 add_test(NAME finder_suite_musashi

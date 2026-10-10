@@ -26,6 +26,8 @@ set(KPX_SHARED_SOURCES
   serial_ppc.cpp
   compat/vm_alloc.cpp
   compat/ppc_ether.cpp
+  native_ops_ppc.cpp
+  cpu_ppc_mame.cpp
 )
 
 # KPX dyngen-based interpreter. x86-only because dyngen embeds
@@ -58,6 +60,7 @@ set(KPX_INC
 
 set(KPX_COMMON_INC
   ${KPX_INC}
+  ${CMAKE_CURRENT_SOURCE_DIR}/../core
   ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../drivers/video
   ${CMAKE_CURRENT_SOURCE_DIR}/../../config

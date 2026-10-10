@@ -11,7 +11,7 @@ add_library(cpu_core STATIC
 target_include_directories(cpu_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/src/common/include)
-target_link_libraries(cpu_core PUBLIC musashi)
+target_link_libraries(cpu_core PUBLIC musashi mame_m68k mame_ppc)
 target_compile_features(cpu_core PUBLIC cxx_std_17)
 
 # UAE: compiled with UAE's own flags and include path (both cores have an

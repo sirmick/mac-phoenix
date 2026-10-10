@@ -16,6 +16,8 @@ set_tests_properties(
         executor.FileTest.MakeFSSpec
         executor.musashi.FileTest.GetFInfo
         executor.musashi.FileTest.MakeFSSpec
+        executor.mame68k.FileTest.GetFInfo
+        executor.mame68k.FileTest.MakeFSSpec
     APPEND PROPERTIES LABELS xfail)
 
 #### Known failures, same on syn68k upstream (Linux has no creation date, and
@@ -26,4 +28,6 @@ set_tests_properties(
         executor.FileTest.SetFLock
         executor.musashi.FileTest.SetFInfo_CrDat
         executor.musashi.FileTest.SetFLock
+        executor.mame68k.FileTest.SetFInfo_CrDat
+        executor.mame68k.FileTest.SetFLock
     PROPERTIES DISABLED TRUE)

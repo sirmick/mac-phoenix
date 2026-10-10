@@ -68,9 +68,21 @@ further backends.
 
 | Backend | Arch | What | Speed | Use for |
 |---------|------|------|-------|---------|
-| `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`) or `--core musashi` | Fast (~5s boot) | Default, end users |
-| `kpx` | ppc | KPX translator (+optional `--jit`, +optional `--jit68k`) | Medium | Default for PPC |
+| `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`), `--core musashi` (v3.32) or `--core mame-68k` (MAME's Musashi: PMMU, softfloat FPU, several instances per process; `src/cpu/mame/`) | Fast (~5s boot) | Default, end users |
+| `kpx` | ppc | Power Mac G3 machine; CPU core `--core kpx` (Kheperix, +optional `--jit`, +optional `--jit68k`) or `--core mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64 back-end, `--no-jit` UML interpreter; `src/cpu/mame/`, installer `src/cpu/kpx/cpu_ppc_mame.cpp`) | Medium | Default for PPC |
 | `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM | Fast start | Toolbox reimplementation work (`src/executor/`) |
+
+MAME cores (docs/cpu/PLAN.md): MAME's Musashi with PMMU and FPU as the 68k
+core `mame-68k` (C1, done), MAME's PowerPC recompiler as the PPC core
+`mame-ppc` (C2: core, Mac side and the x86-64 back-end done, `--jit`; arm64
+back-end lifted but untested), and the host 68k core replacing the nanokernel's 68k
+emulator on the PPC machine (C3a: `MACEMU_MAMEPPC_68K=1` runs host-initiated
+68k routines on a `mame-68k` core with handoff to the emulator at the first
+trap; `=2` is an experiment that breaks the bridge; the main 68k thread is
+still the nanokernel's emulator). Reference checkout:
+`/home/mick/src/mame-src`. Tests: `ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|executor\.mame68k\.'` (`boot_ppc_mame_jit` is the native back-end).
+`MACEMU_MAMEPPC_TRACE=1` prints host ops, exceptions and a per-second PC and
+framebuffer sample from the mame-ppc installer.
 
 ## Project Structure
 
@@ -193,7 +205,8 @@ CPU:
                              (default: uae; backend implies architecture;
                              executor needs no ROM)
   --core NAME                CPU core for the backend's architecture:
-                             68k uae | musashi (default: uae; ROM machine and Executor)
+                             68k uae | musashi | mame-68k (default: uae; ROM machine and Executor)
+                             ppc kpx | mame-ppc (default: kpx)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
   --idlewait / --no-idlewait Pause CPU when guest idle (default: on)

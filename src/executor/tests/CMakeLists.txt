@@ -120,6 +120,12 @@ else()
         EXTRA_ARGS --cpu=musashi
         PROPERTIES LABELS "executor;musashi"
         DISCOVERY_TIMEOUT 30)
+    # ... and on MAME's Musashi (docs/cpu/PLAN.md, C1).
+    gtest_discover_tests(executor_tests
+        TEST_PREFIX "executor.mame68k."
+        EXTRA_ARGS --cpu=mame-68k
+        PROPERTIES LABELS "executor;mame"
+        DISCOVERY_TIMEOUT 30)
 
     add_compilefail_tests(guestvalues.compfail.cpp)
 

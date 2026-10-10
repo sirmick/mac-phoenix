@@ -171,6 +171,9 @@ typedef struct {
     uint32_t (*cpu_get_lr)(void);         // Get PPC link register
     uint32_t (*cpu_get_ctr)(void);        // Get PPC count register
     void (*cpu_execute_ppc)(uint32_t entry);  // Execute PPC code at entry point
+    // Call a Mac OS routine by TVector with up to 7 arguments; returns r3
+    // (SheepShaver's execute_macos_code). Any PPC core; call_macos* use it.
+    uint32_t (*ppc_execute_macos_code)(uint32_t tvect, int nargs, const uint32_t *args);
 
     // Post-startup patching (called from disk driver accRun after system init).
     // M68K: just calls InstallExtFS. PPC: also calls VideoInstallAccel (NQD hooks).

@@ -440,11 +440,19 @@ static bool video_ipc_m68k_init(bool classic)
     const video_depth default_depth = machine_profile().mono_framebuffer
         ? VDEPTH_1BIT : VDEPTH_32BIT;
     ipc_monitor_desc *monitor = new ipc_monitor_desc(modes, default_depth, default_res_id);
-    // Seed the IPC refresh side with the initial (32-bit) depth + stride
-    // so the first frames render correctly before any explicit mode switch.
-    video_ipc_set_depth(machine_profile().mono_framebuffer ? 1 : 32,
-                        boot_w * (machine_profile().mono_framebuffer ? 1 : 4) /
-                        (machine_profile().mono_framebuffer ? 8 : 1));
+    // Seed the IPC refresh side with the initial depth + stride so the
+    // first frames render correctly before any explicit mode switch.
+    // This is always 32-bit — including on mono compacts (Mac SE): the
+    // guest draws 1-bit into ScrnBase in RAM, and the 60Hz IRQ handler
+    // (emul_op.cpp, mono_framebuffer branch) expands that into 32-bit
+    // ARGB in this arena. The 1-bit mode published above only describes
+    // the guest-visible mode for monitor_desc; the arena the IPC refresh
+    // copies from never holds 1-bit data. Seeding depth=1/bpr=64 here
+    // made video_ipc_refresh read the ARGB bytes as bit-rows through a
+    // never-populated CLUT (no slot video driver on the SE → no
+    // SetEntries), producing an all-black frame for encoder and
+    // screenshot alike.
+    video_ipc_set_depth(32, boot_w * 4);
 
     uint32 mac_fb_addr = Host2MacAddr(g_ipc_m68k_fb);
     if (mac_fb_addr == 0) {
