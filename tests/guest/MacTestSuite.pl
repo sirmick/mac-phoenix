@@ -184,8 +184,11 @@ sub test_applescript_dates {
          'date "Friday, October 9, 2026 12:00:00 AM"'],
         ['as_date_arithmetic', 'return ((date "October 10, 2026") - (date "October 9, 2026")) / days',
          '1.0'],
-        # Reals as text: the Script Manager's number formats.
-        ['as_real_plain', 'return 1 / 3', '0.3333333333333'],
+        # Reals as text: the Script Manager's number formats. AppleScript
+        # on a Power Mac prints 12 significant digits, on a 68k Mac (SANE's
+        # extended) 13; both PPC cores agree (docs/cpu/PLAN.md S9).
+        ['as_real_plain', 'return 1 / 3',
+         ($MacPerl::Architecture =~ /PPC/) ? '0.333333333333' : '0.3333333333333'],
         ['as_real_exponent', 'return 1234567.5', '1.2345675E+6'],
         ['as_real_small', 'return 1.0E-5', '1.0E-5'],
     );
