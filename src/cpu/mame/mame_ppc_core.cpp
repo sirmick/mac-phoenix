@@ -58,6 +58,35 @@ public:
          * 68k emulator recycles its translation buffer), flush the PC
          * before memory accesses, accurate single-precision results. */
         ppcdrc_set_options(PPCDRC_COMPATIBLE_OPTIONS);
+        /* Config::fast_memory as MAME's fastram, in guest byte order. The
+         * memory accessors are generated once, in device_start, so this
+         * comes before shim_start(). */
+        for(const Config::MemoryRange &r : config.fast_memory)
+            add_fast_memory(memory, r);
+    }
+
+    void add_fast_memory(GuestMemory &memory, Config::MemoryRange r)
+    {
+        uint64_t const end = (uint64_t)r.start + r.size;
+        bool ok = r.size != 0 && m_fastram_select < PPC_MAX_FASTRAM && memory.mapped(r.start);
+        intptr_t const d = ok ? memory.delta(r.start) : 0;
+        for(uint64_t a = r.start; ok && a < end; a += GuestMemory::PAGE_SIZE)
+            ok = memory.mapped((uint32_t)a) && memory.delta((uint32_t)a) == d;
+        if(!ok)
+        {
+            fprintf(stderr, "[mame-ppc] fast memory %08x+%x refused (not one window, or no room)\n", r.start, r.size);
+            return;
+        }
+        /* MAME takes a null base for "no range": under identity addressing
+         * guest 0 is host 0, so such a range starts 8 bytes in (the first
+         * eight bytes keep the slow path). */
+        if(d + (intptr_t)r.start == 0)
+        {
+            r.start += 8;
+            r.size -= 8;
+        }
+        ppc_set_fastram_guest_order(true);
+        ppcdrc_add_fastram(r.start, r.start + r.size - 1, r.readonly, (void *)(d + (intptr_t)r.start));
     }
 
     bool ppc_exception_hook(int exception) override

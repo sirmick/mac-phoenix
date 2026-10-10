@@ -672,9 +672,14 @@ std::atomic<bool> g_sample_requested{false};
  * checksum and the NativeOp/EmulOp counts. */
 void print_trace_sample()
 {
-    fprintf(stderr, "[mame-ppc] sample: pc=%08x lr=%08x r1=%08x r24=%08x r25=%08x msr=%08x mode=%u nest=%d\n",
+    static uint64 last_cycles, last_us;
+    uint64 const cycles = g_core->cycles(), now_us = GetTicks_usec();
+    fprintf(stderr, "[mame-ppc] sample: pc=%08x lr=%08x r1=%08x r24=%08x r25=%08x msr=%08x mode=%u nest=%d mips=%.1f\n",
             g_core->pc(), get_lr(), gpr(1), gpr(24), gpr(25), g_core->reg(R::MSR),
-            ReadMacInt32(XLM_RUN_MODE), (int)ReadMacInt32(XLM_IRQ_NEST));
+            ReadMacInt32(XLM_RUN_MODE), (int)ReadMacInt32(XLM_IRQ_NEST),
+            last_us && now_us > last_us ? (double)(cycles - last_cycles) / (double)(now_us - last_us) : 0.0);
+    last_cycles = cycles;
+    last_us = now_us;
     uint32 sum = 0, nz = 0;
     for(uint32 i = 0; i < 640 * 480 * 4; i += 4)
     {
@@ -845,6 +850,10 @@ bool mame_cpu_init(void)
     config.clock_hz = (uint32_t)CPUClockSpeed;
     config.jit = g_platform.ppc_jit;   /* --jit: the native back-end */
     config.trace = g_platform.ppc_debug_trace;
+    /* RAM and ROM loaded and stored inline by native code (docs/cpu/PLAN.md
+     * S3); ROM writes keep the slow path, where the SIGSEGV handler skips
+     * them. */
+    config.fast_memory = { { RAMBase, RAMSize, false }, { ROMBase, ROM_SIZE, true } };
     g_core = cpu::create("mame-ppc", config, g_memory, g_host).release();
     if(!g_core)
     {

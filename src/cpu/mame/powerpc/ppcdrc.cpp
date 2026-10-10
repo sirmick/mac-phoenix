@@ -1345,7 +1345,75 @@ void ppc_device::static_generate_memory_accessor(
 		}
 	}
 
-	if (!debugger_enabled())
+	// MacPhoenix: fastram in guest byte order (cpu::GuestMemory): load or
+	// store, then byte-swap; masked accesses take the slow path.
+	if (!debugger_enabled() && m_fastram_guest_order && !ismasked)
+		for (ramnum = 0; ramnum < PPC_MAX_FASTRAM; ramnum++)
+			if (m_fastram[ramnum].base != nullptr && (!iswrite || !m_fastram[ramnum].readonly))
+			{
+				void *fastbase = (uint8_t *)m_fastram[ramnum].base - m_fastram[ramnum].start;
+				uml::code_label skip = label++;
+
+				if (m_fastram[ramnum].end != 0xffffffff)
+				{
+					UML_CMP(block, I0, m_fastram[ramnum].end);         // cmp     i0,end
+					UML_JMPc(block, COND_A, skip);                     // ja      skip
+				}
+				if (m_fastram[ramnum].start != 0x00000000)
+				{
+					UML_CMP(block, I0, m_fastram[ramnum].start);       // cmp     i0,fastram_start
+					UML_JMPc(block, COND_B, skip);                     // jb      skip
+				}
+
+				if (!iswrite)
+				{
+					if (size == 1)
+						UML_LOAD(block, I0, fastbase, I0, SIZE_BYTE, SCALE_x1);     // load    i0,fastbase,i0,byte
+					else if (size == 2)
+					{
+						UML_LOAD(block, I0, fastbase, I0, SIZE_WORD, SCALE_x1);     // load    i0,fastbase,i0,word_x1
+						UML_BSWAP(block, I0, I0);                                   // bswap   i0,i0
+						UML_SHR(block, I0, I0, 16);                                 // shr     i0,i0,16
+					}
+					else if (size == 4)
+					{
+						UML_LOAD(block, I0, fastbase, I0, SIZE_DWORD, SCALE_x1);    // load    i0,fastbase,i0,dword_x1
+						UML_BSWAP(block, I0, I0);                                   // bswap   i0,i0
+					}
+					else if (size == 8)
+					{
+						UML_DLOAD(block, I0, fastbase, I0, SIZE_QWORD, SCALE_x1);   // dload   i0,fastbase,i0,qword
+						UML_DBSWAP(block, I0, I0);                                  // dbswap  i0,i0
+					}
+					UML_RET(block);                                                 // ret
+				}
+				else
+				{
+					if (size == 1)
+						UML_STORE(block, fastbase, I0, I1, SIZE_BYTE, SCALE_x1);    // store   fastbase,i0,i1,byte
+					else if (size == 2)
+					{
+						UML_SHL(block, I3, I1, 16);                                 // shl     i3,i1,16
+						UML_BSWAP(block, I3, I3);                                   // bswap   i3,i3
+						UML_STORE(block, fastbase, I0, I3, SIZE_WORD, SCALE_x1);    // store   fastbase,i0,i3,word_x1
+					}
+					else if (size == 4)
+					{
+						UML_BSWAP(block, I3, I1);                                   // bswap   i3,i1
+						UML_STORE(block, fastbase, I0, I3, SIZE_DWORD, SCALE_x1);   // store   fastbase,i0,i3,dword_x1
+					}
+					else if (size == 8)
+					{
+						UML_DBSWAP(block, I3, I1);                                  // dbswap  i3,i1
+						UML_DSTORE(block, fastbase, I0, I3, SIZE_QWORD, SCALE_x1);  // dstore  fastbase,i0,i3,qword_x1
+					}
+					UML_RET(block);                                                 // ret
+				}
+
+				UML_LABEL(block, skip);                                             // skip:
+			}
+
+	if (!debugger_enabled() && !m_fastram_guest_order)
 		for (ramnum = 0; ramnum < PPC_MAX_FASTRAM; ramnum++)
 			if (m_fastram[ramnum].base != nullptr && (!iswrite || !m_fastram[ramnum].readonly))
 			{

@@ -80,7 +80,7 @@ emulator on the PPC machine (C3a: `--m68k-host 1` runs host-initiated
 68k routines on a `mame-68k` core with handoff to the emulator at the first
 trap; `2` is an experiment that breaks the bridge; the main 68k thread is
 still the nanokernel's emulator). `--core mame-ppc --jit` boots 7.5.5 to the
-desktop in 1.6 s and Mac OS 9.0.4 in 10 s. Reference checkout:
+desktop in 0.9 s and Mac OS 9.0.4 in 9.7 s. Reference checkout:
 `/home/mick/src/mame-src`. Tests: `ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|guest_suite_ppc_mame|executor\.mame68k\.'` (`boot_ppc_mame_jit` is the native back-end;
 `guest_suite_ppc_mame` is the Mac OS 9.0.4 guest suite on it;
 `command_bridge_ppc_mame_m68k` is C3a). `--debug-mame-ppc` prints host ops,

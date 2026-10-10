@@ -720,8 +720,8 @@ void ppc_device::device_start()
 	m_rtc_zero_cycles = 0;
 
 	m_arg1 = 0;
-	m_fastram_select = 0;
-	memset(m_fastram, 0, sizeof(m_fastram));
+	// MacPhoenix: the fastram table is zeroed at construction (ppc.h), so
+	// ranges added before device_start reach the memory accessors below.
 	m_hotspot_select = 0;
 	memset(m_hotspot, 0, sizeof(m_hotspot));
 

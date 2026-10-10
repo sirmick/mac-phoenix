@@ -84,6 +84,11 @@ public:
         intptr_t d = delta_[addr >> PAGE_SHIFT];
         return d == UNMAPPED ? nullptr : (uint8_t *)(d + (intptr_t)addr);
     }
+    /* True when addr's page is mapped (host() is null for an unmapped page
+     * and for guest 0 under identity addressing alike). */
+    bool mapped(uint32_t addr) const { return delta_[(addr & mask_) >> PAGE_SHIFT] != UNMAPPED; }
+    /* Host address minus guest address for a mapped page. */
+    intptr_t delta(uint32_t addr) const { return delta_[(addr & mask_) >> PAGE_SHIFT]; }
     /* Guest address of a host pointer inside a mapped window, or false. */
     bool guest(const void *host, uint32_t *addr) const;
     /* True when every mapped page has the same delta (one base offset):
@@ -268,6 +273,12 @@ struct Config
     bool exceptions = true;
     /* Log host ops and exceptions to stderr (mame-ppc: --debug-mame-ppc). */
     bool trace = false;
+    /* Guest ranges that are plain mapped memory (one GuestMemory window,
+     * no Io), so a recompiling core may load and store them inline
+     * instead of through GuestMemory; readonly ranges inline reads only.
+     * A hint: cores without a recompiler ignore it (mame-ppc takes four). */
+    struct MemoryRange { uint32_t start; uint32_t size; bool readonly; };
+    std::vector<MemoryRange> fast_memory;
 };
 
 enum class StopReason {

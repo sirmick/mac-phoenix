@@ -17,9 +17,9 @@ The longer direction these serve is
 
 **Where it stands (2026-10-10, merged to main).** C1a–c, C2a–c and C3a
 are done; the open work is listed under [Stragglers](#stragglers) and the
-milestone table. On this x86-64 host: 7.5.5 to the desktop in 1.6 s on
+milestone table. On this x86-64 host: 7.5.5 to the desktop in 0.9 s on
 `--backend kpx --core mame-ppc --jit` (Kheperix `--jit` 1.1 s), Mac OS
-9.0.4 in 10 s, the guest suite on 9.0.4 the same as on Kheperix; the ROM
+9.0.4 in 9.7 s, the guest suite on 9.0.4 the same as on Kheperix; the ROM
 68k machine and Executor on `mame-68k` pass what `musashi` passes. The
 full ctest run on main after the merge: 495 of 502, the seven failures
 all older than this work (`../executor/STRAGGLERS.md` items 20 and 21,
@@ -259,7 +259,7 @@ referred to; strike them here when done.
 |---|------|-------|
 | S1 | **C3a mode 2** (`--m68k-host 2`: Musashi takes A-line traps through the ROM dispatcher at $28) boots 7.5.5 but BridgeAgent never heartbeats. A per-routine differential against mode 1 shows runs through the dispatcher returning with different D1/A1 and different nested EmulOps, i.e. the emulator continues from the routine descriptor in a state it does not expect. Moot once C3b keeps every trap on Musashi | parked |
 | S2 | **arm64 back-end untested.** `drcbearm64.cpp` is lifted and in the CMake branch for arm64 hosts; no arm64 host here. It needs the same re-entrancy save/restore `drcbex64::execute()` got (near state and memory-resident UML registers), and the x86-only KPX helpers in `kpx_stub.cpp` moved to `kpx_shared` | open (C2d) |
-| S3 | **Memory ops are calls.** Every guest access from native code goes through MAME's resolved-accessor fallback to the shim's `address_space` member functions; the inline GuestMemory page-table path (`drcbe_guestmem`) is not written. Likely the gap between 1.6 s and Kheperix's 1.1 s | open |
+| S3 | ~~**Memory ops are calls.** Every guest access from native code goes through MAME's resolved-accessor fallback to the shim's `address_space` member functions; the inline GuestMemory page-table path (`drcbe_guestmem`) is not written. Likely the gap between 1.6 s and Kheperix's 1.1 s~~ | done 2026-10-10: `cpu::Config::fast_memory` lists guest ranges that are plain memory; mame-ppc registers them as MAME fastram in guest byte order (the accessors byte-swap; masked and unaligned pieces keep the slow path); the kpx installer gives RAM and ROM (ROM read-only). Guest throughput on a busy 7.5.5 desktop (`--no-idlewait`): 660 to 785 million instructions a second. Desktop: 7.5.5 0.97 to 0.88 s, 9.0.4 9.9 to 9.7 s (neither boot is bound by memory access; the 1.6 s figure was a cold first run) |
 | S4 | **Identity addressing.** Guest memory still sits at its guest addresses, so `vm.mmap_min_addr=0` stays and the SIGSEGV-skip handler is still the bad-access policy. The base offset (`VMBaseDiff` a variable, one offset for the ROM and the KPX machine) is C2e's precondition | open |
 | S5 | ~~**Environment switches.** `MACEMU_MAMEPPC_68K` and `MACEMU_MAMEPPC_TRACE` are read from the environment, against the project's flags-only rule (CLAUDE.md). Make them flags (`--m68k-host`, `--debug-mame-ppc` or the like) before C3b makes the 68k choice user-visible~~ | done 2026-10-10: `--m68k-host N` and `--debug-mame-ppc` (forwarded to the IPC child, `Platform::ppc_m68k_host`/`ppc_debug_trace`, `cpu::Config::trace` for the core); ctest `command_bridge_ppc_mame_m68k` covers mode 1. The bridge script's first check now waits for the Finder to be in front again (BridgeAgent is the current app for a moment after the desktop milestone; 2 in 8 mode-1 runs failed on it, 0 in 20 after) |
 | S6 | ~~**Virtual clock sync points.** `Microseconds()` on the kpx machine reads `ppc_insn_counter`, which the mame-ppc installer now copies from `cpu::Core::cycles()` at every EmulOp. Anything reading the counter between EmulOps (Kheperix's `execute_68k` bookkeeping, `g_use_ppc_virtual_clock` if ever turned on) sees the last EmulOp's value. Cleaner: the kpx time functions ask the core directly~~ | done 2026-10-10: `Platform::ppc_insn_count` gives the active core's instruction count (Kheperix's counter, or `cpu::Core::cycles()` on mame-ppc); `Microseconds()` and `timer_current_time()` call it, and the copy at every EmulOp is gone |
@@ -325,6 +325,13 @@ referred to; strike them here when done.
   into garbage: the EXEC_RETURN host op looped forever. `drcbe_x64::execute()`
   now saves and restores the near state and the memory-resident UML
   registers around the call. `drcbearm64` will need the same.
+* **Inline memory (S3).** MAME's fastram, adapted to guest byte order,
+  covers RAM and ROM: the static read/write subroutines load or store
+  directly and byte-swap. The subroutines are generated once in
+  `device_start()`, so the ranges come in through `cpu::Config` rather than
+  a call after creation (the first attempt, which silently changed
+  nothing). Everything else, including masked and split unaligned
+  accesses, still takes the call below.
 * **Memory lowering.** The back-end's direct-dispatch path needs MAME's
   handler tables; the shim's `address_space::specific_accessors()` reports
   none, so the back-end takes its own fallback and calls the resolved
@@ -443,6 +450,12 @@ referred to; strike them here when done.
 * `powerpc/ppccom.cpp`: `m_prptr` is the instruction's own address (no
   64-bit swizzle); `m_translation_off` short-circuits
   `ppccom_translate_address_internal`.
+* `powerpc/ppcdrc.cpp`: the memory accessors have a second fastram path
+  for blocks in guest byte order (`m_fastram_guest_order`, set by
+  `ppc_set_fastram_guest_order()` in `ppc.h`): load or store, then BSWAP;
+  masked accesses skip it. `powerpc/ppccom.cpp`/`ppc.h`: the fastram table
+  is zeroed at construction instead of in `device_start()`, so ranges added
+  before start reach the accessors generated there.
 * `cpu/drcbex64.cpp`: `execute()` saves and restores the near state
   (stack pointer, SSE mode) and `m_state` around the call, for nested
   execution.

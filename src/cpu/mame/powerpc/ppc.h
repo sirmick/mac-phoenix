@@ -258,6 +258,13 @@ public:
 	void ppc_set_translation_off(bool off) { m_translation_off = off; }
 	bool m_translation_off = false;
 
+	/* MacPhoenix: fastram blocks hold guest bytes in guest (big-endian)
+	 * order, as cpu::GuestMemory does, not MAME's native-word layout; the
+	 * generated accessors byte-swap and leave masked accesses to the slow
+	 * path. */
+	void ppc_set_fastram_guest_order(bool on) { m_fastram_guest_order = on; }
+	bool m_fastram_guest_order = false;
+
 	/* MacPhoenix: every exception passes through here after SRR0/SRR1 are
 	 * set and before MSR changes and the vector is taken. Return true to
 	 * swallow it: execution resumes at m_core->pc (which the hook sets)
@@ -728,8 +735,8 @@ protected:
 		void *              base;                       // base in memory where the RAM lives
 	};
 
-	uint32_t              m_fastram_select;
-	fast_ram_info       m_fastram[PPC_MAX_FASTRAM];
+	uint32_t              m_fastram_select = 0;     // MacPhoenix: zeroed here, not in device_start
+	fast_ram_info       m_fastram[PPC_MAX_FASTRAM] = {};
 
 	// hotspots
 	// hotspot info
