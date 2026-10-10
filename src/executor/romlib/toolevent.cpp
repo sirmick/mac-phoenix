@@ -480,6 +480,10 @@ Boolean Executor::C_GetNextEvent(INTEGER em, EventRecord *evt)
     if(ROMlib_event_poll_hook)
         ROMlib_event_poll_hook();
 
+    /* MacPhoenix: as on a Mac, GetNextEvent calls SystemTask (IM I-380):
+       device drivers with dNeedTime get their accRun from here. */
+    SystemTask();
+
     TRACE(1);
     retval = doevent(em, evt, true);
     TRACE(0);

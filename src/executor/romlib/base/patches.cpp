@@ -137,8 +137,6 @@ static bool shouldHideTrap(bool tool, int index)
             case 0x7A: /* SetADBInfo */
             case 0x7B: /* ADBReInit */
             case 0x7C: /* ADBOp */
-            case 0x3D: /* DrvrInstall */
-            case 0x3E: /* DrvrRemove */
             case 0x4F: /* RDrvrInstall */
                 return true;
             case 0x8B: /* Communications Toolbox */
@@ -154,7 +152,7 @@ ProcPtr Executor::_GetTrapAddress_flags(uint16_t n, bool newTraps, bool tool)
 {
     int index = getTrapIndex(n, newTraps, tool);
     
-    auto addr = (tool ? tooltraptable : ostraptable)[index];
+    syn68k_addr_t addr = (tool ? tooltraptable : ostraptable)[index];
 
     if(addr == tooltraptable[_Unimplemented & 0x3FF] || shouldHideTrap(tool, index))
     {

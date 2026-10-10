@@ -1,4 +1,5 @@
 #include <vector>
+#include <cstring>
 #include <syn68k_public.h>
 
 #include <base/functions.h>
@@ -12,8 +13,8 @@
 
 using namespace Executor;
 
-syn68k_addr_t Executor::tooltraptable[NTOOLENTRIES]; /* Gets filled in at run time */
-syn68k_addr_t Executor::ostraptable[NOSENTRIES]; /* Gets filled in at run time */
+TrapTableEntry *Executor::tooltraptable; /* at $E00 in guest memory; filled in at run time */
+TrapTableEntry *Executor::ostraptable; /* at $400 */
 
 namespace Executor
 {
@@ -70,6 +71,11 @@ void traps::init(bool log, const std::string& trapFilter)
 {
     logging::setEnabled(log);
     logging::setTrapFilter(trapFilter);
+    /* MacPhoenix: the tables are in guest memory (trapglue.h). */
+    tooltraptable = (TrapTableEntry *)SYN68K_TO_US(TOOLTRAPTABLE_ADDR);
+    ostraptable = (TrapTableEntry *)SYN68K_TO_US(OSTRAPTABLE_ADDR);
+    memset(tooltraptable, 0, NTOOLENTRIES * sizeof *tooltraptable);
+    memset(ostraptable, 0, NOSENTRIES * sizeof *ostraptable);
     ReferenceAllTraps();
     internal::DeferredInit::initAll();
     for(int i = 0; i < NTOOLENTRIES; i++)

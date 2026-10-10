@@ -150,12 +150,17 @@ public:
 
     TrapFunction(const char* name, const char* exportToLib = nullptr) : WrappedFunction<Ret(Args...),fptr,CallConv>(name, exportToLib) {}
 
-    bool isPatched() const { return tableEntry() != originalFunction; }
+    /* MacPhoenix: the tables live in guest memory and exist from
+       traps::init on; InitMemory calls traps (NewPtr) before that. */
+    bool isPatched() const
+    {
+        return tooltraptable && tableEntry() != originalFunction;
+    }
     Ret invokeViaTrapTable(Args...) const;
 private:
     syn68k_addr_t originalFunction;
 
-    syn68k_addr_t& tableEntry() const
+    TrapTableEntry& tableEntry() const
     {
         if(trapno & TOOLBIT)
             return tooltraptable[trapno & 0x3FF];

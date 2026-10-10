@@ -1847,6 +1847,8 @@ static Boolean hide_desktop_in_background;
 
 OSErr Executor::C_SetHideDesktopInBackground(Boolean hide)
 {
+    if(hide != hide_desktop_in_background)
+        fprintf(stderr, "[Executor] hide desktop in background: %s\n", hide ? "on" : "off");
     hide_desktop_in_background = hide;
     return noErr;
 }

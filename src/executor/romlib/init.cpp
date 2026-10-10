@@ -1,4 +1,5 @@
 #include <rsys/executor.h>
+#include <vector>
 #include <rsys/extensions.h>
 #include <rsys/sysroutines.h>
 #include <rsys/macros.h>
@@ -39,7 +40,8 @@
 #include <AppleEvents.h>
 
 #include <quickdraw/cquick.h> /* SET_HILITE_BIT */
-#include <base/emustubs.h>  /* Key1Trans, Key2Trans */
+#include <base/emustubs.h>
+#include <base/trapglue.h>  /* Key1Trans, Key2Trans */
 #include <prefs/prefs.h> /* system_version */
 #include <textedit/tesave.h> /* ROMlib_dotext */
 
@@ -289,11 +291,19 @@ void Executor::InitLowMem()
 
 static void resetAllGlobalsBut(std::byte *base)
 {
+    /* MacPhoenix: the trap tables at $400 and $E00 (trapglue.h) are not a
+       process's globals; they and their patches stay. */
+    std::vector<std::byte> os(base + OSTRAPTABLE_ADDR,
+                              base + OSTRAPTABLE_ADDR + NOSENTRIES * sizeof(TrapTableEntry));
+    std::vector<std::byte> tool(base + TOOLTRAPTABLE_ADDR,
+                                base + TOOLTRAPTABLE_ADDR + NTOOLENTRIES * sizeof(TrapTableEntry));
     /* Set low globals to 0xFF, but don't touch exception vectors. */
     memset((char *)&LM(nilhandle) + 64 * sizeof(ULONGINT),
            0xFF,
            ((char *)&LM(lastlowglobal) - (char *)&LM(nilhandle)
             - 64 * sizeof(ULONGINT)));
+    memcpy(base + OSTRAPTABLE_ADDR, os.data(), os.size());
+    memcpy(base + TOOLTRAPTABLE_ADDR, tool.data(), tool.size());
 }
 
 template<typename A, typename... Args>
@@ -472,7 +482,7 @@ void Executor::InitPerProcessLowMem()
 				   overhead */
 
     LM(CPUFlag) = 4; /* mc68040 */
-    LM(UnitNtryCnt) = 0; /* how many units in the table */
+    LM(UnitNtryCnt) = NDEVICES; /* MacPhoenix: the table's size, as a Mac's (7.5.5: 96); extensions scan it for a free unit */
 
 
 
@@ -484,11 +494,8 @@ void Executor::InitPerProcessLowMem()
     LM(MMU32Bit) = 0x01;
 #endif
     LM(loadtrap) = 0;
-    *(GUEST<LONGINT> *)SYN68K_TO_US(0x1008) = 0x4; /* Quark XPress 3.0 references 0x1008
-					explicitly.  It takes the value
-					found there, subtracts four from
-					it and dereferences that value.
-					Yahoo */
+    /* MacPhoenix: $1008 is a Toolbox trap table entry now (trapglue.h);
+       the stand-in long Quark XPress 3.0 read there is gone with it. */
 
     /* Micro-cap dereferences location one of the LM(AppPacks) locations */
 

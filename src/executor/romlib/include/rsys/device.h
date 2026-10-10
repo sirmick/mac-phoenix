@@ -23,4 +23,11 @@ void RegisterDriver(const driverinfo& di);
  * routine ABI.  Any native driver implementing asynchronous calls
  * needs this, so it lives here rather than in one driver's .cpp. */
 void callcomp(ParmBlkPtr pbp, ProcPtr comp, OSErr err);
+
+/* MacPhoenix: the unit table as a Mac's (device.cpp). */
+int ROMlib_unit_of_driver(ConstStringPtr name);
+int ROMlib_free_unit(int from);
+OSErr ROMlib_drvr_install(Ptr drvr, INTEGER refnum);
+OSErr ROMlib_drvr_remove(INTEGER refnum);
+void ROMlib_drivers_give_time();
 }

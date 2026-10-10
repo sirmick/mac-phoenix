@@ -152,7 +152,8 @@ for the Finder.
 Executor already builds lowmem, a System zone, an app zone and an A5
 world. Missing:
 
-- real-address trap tables that guest code can patch
+- real-address trap tables that guest code can patch (done 2026-10-10:
+  Executor's tables are at `$400`/`$E00`, see `base/trapglue.h`)
 - Apple's System file as the system resource map, with the System heap
   contents a real boot leaves
 - the Process Manager heap and partition layout instead of one app zone

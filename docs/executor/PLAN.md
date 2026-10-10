@@ -240,7 +240,13 @@ alongside the M1–M3a work, in this order (status as of 2026-10-09):
    DRVRs) laid out as a real boot leaves them, diffed against a
    snapshot. Today `UnitNtryCnt` stays 0, so `C_SystemTask` never sends
    `accRun` to any driver; that blocks async MacTCP (see
-   `mactcp/mactcp.cpp`) and every periodic driver. *Open.*
+   `mactcp/mactcp.cpp`) and every periodic driver. *Done* (2026-10-10):
+   `UnitNtryCnt` is the table's size (96), `DrvrInstall`/`DrvrRemove`
+   are real, a `DRVR` whose unit is taken goes to the first free unit
+   from 48, and `GetNextEvent` calls `SystemTask`, which sends `accRun`
+   to every open driver with `dNeedTime` (General Controls' `.GCDriver`
+   runs). The table's layout still differs from a real boot's (Executor
+   makes a DCE when a driver is first opened).
 2. **Shadowing switch** (with M3a). When a whitelisted INIT provides a
    manager, Executor's built-in version withdraws its Gestalt selector
    and leaves the trap slot to the INIT: `quicktime.cpp` (stubs),
@@ -288,7 +294,7 @@ Ethernet driver.
 | M0d | Shell integration | `--backend executor` in the web UI shows video, takes input | done: one binary, UI option, `executor.smoke.web_backend` |
 | M1 | Finder desktop | our boot phase, Apple System file as resource root, real Finder draws | done: Finder 7.5.5 reaches its desktop on Apple's System file, draws icons, opens windows, Apple/Help/Application menus |
 | M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix; DA Handler opens Calculator and the Chooser; Startup Items and Apple Menu Items aliases resolve | in progress: Finder launches applications (SimpleText, Note Pad, Jigsaw Puzzle, MacPerl, Script Editor) side by side; switching by click or Application menu; quit back to the launcher; desk accessories in DA Handler processes; aliases and Startup Items resolve; `command_bridge_executor` 7/7. Open: Chooser (printing), Kid Pix |
-| M3a | Trap tables | real tables at `$400`/`$E00`, every entry 68k-callable; patch histories diff against `trap_installs.tsv`; `$A82A` stub (no components); unit table matches a real boot and drivers get `accRun` | not started: Executor's own trap tables (`trapglue.h`), `UnitNtryCnt` 0 |
+| M3a | Trap tables | real tables at `$400`/`$E00`, every entry 68k-callable; patch histories diff against `trap_installs.tsv`; `$A82A` stub (no components); unit table matches a real boot and drivers get `accRun` | mostly done (2026-10-10): the tables live in guest memory at `$400`/`$E00` (entries are Executor's callback stubs or the patches' 68k code; the diff finds 745 of the reference's 1059 entries, was 5); `UnitNtryCnt` 96, `DrvrInstall`, `SystemTask` from `GetNextEvent` gives drivers `accRun`; `$A82A` is the real Component Manager (M3c). Open: the patch-history diff against `trap_installs.tsv` (tooling), the unit table's boot-time layout (DCEs are made at first open) |
 | M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; shadowing switch withdraws Executor's built-ins; Color Picker loads (with M3c) | in progress: loader runs allowed INITs/cdevs/fext in Start Manager order (`extension-policy.txt`, phase 1 + AppleScript + Finder Scripting); `jGNEFilter` chain. Date & Time's menu bar clock and Color Picker 2.0 (2026-10-10). Open: `ShowInitIcon`, shadowing switch |
 | M3c | Component Manager in C++ | System file components register; Color Picker's `GetColor` matches a real boot | done (2026-10-10): `component.cpp` (5cd8f3e2), System file / extension / `thng` file components register, AppleScript's components run; Color Picker 2.0's `GetColor` shows Apple's dialog with the HSL picker (dialog background: STRAGGLERS.md 17) |
 | M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs (needs M3h for its network) | not started |
@@ -589,6 +595,19 @@ Kept small so upstream fixes can be merged by hand:
   head insertion keeps their order (Color Picker takes the first `cpkr`
   found: HSL on 7.5.5).
 * `dial/dialHandle.cpp`: `ModalDialogMenuSetup` ($AA67), a no-op.
+* `base/trapglue.h`, `base/traps.cpp`, `base/traps.h`, `init.cpp`: the
+  trap tables are in guest memory at `$400` (OS) and `$E00` (Toolbox),
+  big-endian guest addresses, so code that reads or patches them directly
+  sees the real thing (`gestaltToolboxTable`/`gestaltOSTable` point at
+  them); `TrapTableEntry` wraps an entry; the per-process lowmem reset
+  leaves the tables alone; `isPatched` is false until the tables exist
+  (InitMemory calls traps first); the Quark `$1008` stand-in is gone.
+* `device.cpp`, `desk.cpp`, `toolevent.cpp`, `base/emustubs.cpp`: the unit
+  table as a Mac's: `UnitNtryCnt` = its size, `DrvrInstall`/`DrvrRemove`
+  (a DCE on a 68k driver pointer dispatches like a RAM driver), a `DRVR`
+  opened by name finds its existing DCE or a free unit when its ID's is
+  taken, `GetNextEvent` calls `SystemTask`, which gives open drivers with
+  `dNeedTime` their `accRun`.
 * `finder.cpp`: an HFS volume's "Desktop DB" read whole: icons (type 1,
   bitmaps from "Desktop DF"), applications (2), comments (3); bundle icons
   only for applications the database lacks.

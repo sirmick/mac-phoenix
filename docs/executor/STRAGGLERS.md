@@ -16,7 +16,7 @@ networking are punted until later; everything else is in scope.
 | 9 | Desktop DB: icons and rebuild | done (2026-10-10): an HFS image's "Desktop DB" is read whole: icon records (type 1) with their bitmaps from "Desktop DF", application records (2), comments (3, keyed by catalog ID, a Pascal string in the DB itself); bundles only fill in applications the database lacks. Comments set under Executor on an image stay in memory (no B*-tree writes) |
 | 10 | Apple Event Manager list wire format | done for the default setup (2026-10-10): with AppleScript loaded, Apple's PACK 8 is the Apple Event Manager and reads its own wire format; `/api/launch` with `open` (an `'odoc'` whose direct parameter is a list of aliases) opens "About System 7.5" in SimpleText. Executor's own reader (`appleevent/AE.cpp`, used without AppleScript) still skips list and record parameters |
 | 11 | System heap growth | open |
-| 12 | DRVR unit clash | open |
+| 12 | DRVR unit clash | done (2026-10-10): opening a `DRVR` resource first looks for a driver of that name in the unit table, takes the resource ID's unit if free, else the first free unit from 48 on; `UnitNtryCnt` is the table's size (96, as 7.5.5), so extensions find free units themselves (General Controls renumbers and opens `.GCDriver`); `DrvrInstall`/`DrvrRemove` work (a pointer-installed 68k driver dispatches too); `GetNextEvent` calls `SystemTask`, which gives every open driver with `dNeedTime` its `accRun` |
 | 13 | ctest port 18108 used twice | done — 56200715 |
 | 14 | `command_bridge_executor` flake | open (not seen recently) |
 | 15 | Executor's own host files visible in Finder | done — 07dce3db |

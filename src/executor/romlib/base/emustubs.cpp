@@ -4,6 +4,8 @@
 #define INSTANTIATE_TRAPS_base_emustubs
 
 #include <base/common.h>
+#include <DeviceMgr.h>
+#include <rsys/device.h>
 #include <ResourceMgr.h>
 #include <SANE.h>
 #include <MemoryMgr.h>
@@ -111,16 +113,17 @@ RAW_68K_IMPLEMENTATION(ResourceStub)
 }
 
 // DeviceMgr.h
+/* MacPhoenix: A0 the driver, D0 the reference number (IM Devices). */
 RAW_68K_IMPLEMENTATION(DrvrInstall)
 {
-    EM_D0 = -1;
+    EM_D0 = (int16_t)ROMlib_drvr_install((Ptr)SYN68K_TO_US(EM_A0), (INTEGER)EM_D0);
     RTS();
 }
 
 RAW_68K_IMPLEMENTATION(DrvrRemove)
 {
-    EM_D0 = -1;
-    RTS();    
+    EM_D0 = (int16_t)ROMlib_drvr_remove((INTEGER)EM_D0);
+    RTS();
 }
 
 // ADB.h

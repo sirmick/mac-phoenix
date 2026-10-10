@@ -307,6 +307,8 @@ void Executor::C_SystemTask()
                 (*dctlh)->dCtlCurTicks = TickCount() + (*dctlh)->dCtlDelay;
         }
     }
+    /* MacPhoenix: and the device drivers, as a Mac's SystemTask does. */
+    ROMlib_drivers_give_time();
 }
 
 Boolean Executor::C_SystemEvent(EventRecord *evp)

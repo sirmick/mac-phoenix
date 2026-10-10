@@ -7,6 +7,7 @@
 #include <base/common.h>
 #include <vector>
 #include <DeviceMgr.h>
+#include <DeskMgr.h>
 #include <FileMgr.h>
 #include <MemoryMgr.h>
 #include <OSUtil.h>
@@ -22,8 +23,17 @@
 #include <rsys/mactcp.h>
 #include <base/cpu.h>
 #include <base/functions.impl.h>
+#include <set>
+#include <algorithm>
 
 using namespace Executor;
+
+/* MacPhoenix: the drivers Executor implements in C++ (umacdriver records
+   made by ROMlib_driveropen). Any other non-RAM-based DCE holds a pointer
+   to a 68k driver (DrvrInstall). */
+static std::set<void *> native_drivers;
+
+enum { unitTblFullErr = -29 };
 
 /*
  * NOTE:  The device manager now executes "native code" and code read
@@ -67,7 +77,7 @@ OSErr Executor::ROMlib_dispatch(ParmBlkPtr p, Boolean async,
             p->ioParam.ioTrap |= asyncTrpBit;
         else
             p->ioParam.ioTrap |= noQueueBit;
-        if(!((*h)->dCtlFlags & RAMBASEDBIT))
+        if(!((*h)->dCtlFlags & RAMBASEDBIT) && native_drivers.count((*h)->dCtlDriver))
         {
             switch(routine)
             {
@@ -93,27 +103,38 @@ OSErr Executor::ROMlib_dispatch(ParmBlkPtr p, Boolean async,
         }
         else
         {
-            ramdh = (ramdriverhand)(*h)->dCtlDriver;
-            LoadResource((Handle)ramdh);
-            /* MacPhoenix: the routine offsets are in bytes (they were
-               added to a ramdriver pointer, scaled by its size). */
-            HLock((Handle)ramdh);
+            /* A 68k driver: a RAM-based one from its handle, else (MacPhoenix)
+               the pointer DrvrInstall was given. */
+            bool ram_based = ((*h)->dCtlFlags & RAMBASEDBIT) != 0;
+            ramdriverptr drvr;
+            ramdh = nullptr;
+            if(ram_based)
+            {
+                ramdh = (ramdriverhand)(*h)->dCtlDriver;
+                LoadResource((Handle)ramdh);
+                /* MacPhoenix: the routine offsets are in bytes (they were
+                   added to a ramdriver pointer, scaled by its size). */
+                HLock((Handle)ramdh);
+                drvr = *ramdh;
+            }
+            else
+                drvr = (ramdriverptr)(*h)->dCtlDriver;
             switch(routine)
             {
                 case Open:
-                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrOpen);
+                    procp = (DriverUPP)((Ptr)drvr + drvr->drvrOpen);
                     break;
                 case Prime:
-                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrPrime);
+                    procp = (DriverUPP)((Ptr)drvr + drvr->drvrPrime);
                     break;
                 case Ctl:
-                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrCtl);
+                    procp = (DriverUPP)((Ptr)drvr + drvr->drvrCtl);
                     break;
                 case Stat:
-                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrStatus);
+                    procp = (DriverUPP)((Ptr)drvr + drvr->drvrStatus);
                     break;
                 case Close:
-                    procp = (DriverUPP)((Ptr)*ramdh + (*ramdh)->drvrClose);
+                    procp = (DriverUPP)((Ptr)drvr + drvr->drvrClose);
                     break;
                 default:
                     procp = 0;
@@ -170,12 +191,16 @@ OSErr Executor::ROMlib_dispatch(ParmBlkPtr p, Boolean async,
             {
                 (*h)->dCtlFlags &= ~DRIVEROPENBIT;
                 HUnlock((Handle)h);
-                HUnlock((Handle)ramdh);
+                if(ramdh)
+                    HUnlock((Handle)ramdh);
                 LM(MBarEnable) = 0;
                 /* NOTE: It's not clear whether we should zero out this
 		   field or just check for DRIVEROPEN bit up above and never
 		   send messages except open to non-open drivers.  */
-                LM(UTableBase)[devicen] = nullptr;
+                /* MacPhoenix: a DrvrInstall'ed driver keeps its entry
+                   until DrvrRemove, as on a Mac. */
+                if(ram_based)
+                    LM(UTableBase)[devicen] = nullptr;
             }
 
             if(routine < Close)
@@ -329,6 +354,22 @@ OSErr Executor::ROMlib_driveropen(ParmBlkPtr pbp, Boolean a) /* INTERNAL */
         GUEST<INTEGER> resid;
         GetResInfo((Handle)ramdh, &resid, &typ, (StringPtr)0);
         devicen = resid;
+        /* MacPhoenix: a driver of that name already in the table is the
+           one (opened again if closed); otherwise the resource ID is the
+           unit, unless another driver holds it, in which case the first
+           free unit from 48 on (where extensions put theirs). */
+        if(int found = ROMlib_unit_of_driver(pbp->ioParam.ioNamePtr); found >= 0)
+            devicen = found;
+        else if(devicen < 0 || devicen >= NDEVICES
+                || (LM(UTableBase)[devicen] && *LM(UTableBase)[devicen]))
+        {
+            devicen = ROMlib_free_unit(48);
+            if(devicen < 0)
+            {
+                fs_err_hook(unitTblFullErr);
+                return unitTblFullErr; /* -29 */
+            }
+        }
         h = LM(UTableBase)[devicen];
         alreadyopen = h && ((*h)->dCtlFlags & DRIVEROPENBIT);
         if(!h && !(h = LM(UTableBase)[devicen] = (DCtlHandle)NewHandle(sizeof(DCtlEntry))))
@@ -389,6 +430,7 @@ OSErr Executor::ROMlib_driveropen(ParmBlkPtr pbp, Boolean a) /* INTERNAL */
                         err = MemError();
                     else
                     {
+                        native_drivers.insert(up);
                         up->udrvrOpen = dip->open;
                         up->udrvrPrime = dip->prime;
                         up->udrvrCtl = dip->ctl;
@@ -411,6 +453,122 @@ OSErr Executor::ROMlib_driveropen(ParmBlkPtr pbp, Boolean a) /* INTERNAL */
 
     fs_err_hook(err);
     return err;
+}
+
+/* MacPhoenix: a driver's name, wherever its code is. */
+static ConstStringPtr driver_name(DCtlHandle h)
+{
+    if(!h || !*h || !(*h)->dCtlDriver)
+        return nullptr;
+    if((*h)->dCtlFlags & RAMBASEDBIT)
+    {
+        ramdriverhand ramdh = (ramdriverhand)(*h)->dCtlDriver;
+        return *ramdh ? (ConstStringPtr)&(*ramdh)->drvrName : nullptr;
+    }
+    if(native_drivers.count((*h)->dCtlDriver))
+        return (ConstStringPtr)(*h)->dCtlDriver->udrvrName;
+    return (ConstStringPtr)&((ramdriverptr)(*h)->dCtlDriver)->drvrName;
+}
+
+/* The unit holding the driver named name, or -1. */
+int Executor::ROMlib_unit_of_driver(ConstStringPtr name)
+{
+    if(!name || !name[0])
+        return -1;
+    for(int i = 0; i < NDEVICES; i++)
+    {
+        ConstStringPtr n = driver_name(LM(UTableBase)[i]);
+        if(n && EqualString(n, name, false, true))
+            return i;
+    }
+    return -1;
+}
+
+/* The first empty unit from `from` on, or -1 when the table is full. */
+int Executor::ROMlib_free_unit(int from)
+{
+    for(int i = std::max(from, 0); i < NDEVICES; i++)
+        if(!LM(UTableBase)[i])
+            return i;
+    return -1;
+}
+
+/* DrvrInstall ($A03D) / RDrvrInstall ($A04F): a DCE for the 68k driver at
+   drvr (a pointer; an extension that keeps its driver in a handle sets
+   dRAMBased and dCtlDriver itself afterwards, IM Devices 1-62) in the unit
+   of refnum. */
+OSErr Executor::ROMlib_drvr_install(Ptr drvr, INTEGER refnum)
+{
+    int devicen = -refnum - 1;
+    if(!drvr || devicen < 0 || devicen >= NDEVICES)
+        return badUnitErr;
+    TheZoneGuard guard(LM(SysZone));
+    DCtlHandle h = LM(UTableBase)[devicen];
+    if(!h)
+    {
+        h = (DCtlHandle)NewHandleClear(sizeof(DCtlEntry));
+        if(!h)
+            return MemError();
+        LM(UTableBase)[devicen] = h;
+    }
+    else
+        memset((char *)*h, 0, sizeof(DCtlEntry));
+    ramdriverptr dp = (ramdriverptr)drvr;
+    (*h)->dCtlDriver = (umacdriverptr)drvr;
+    (*h)->dCtlFlags = dp->drvrFlags & ~(RAMBASEDBIT | DRIVEROPENBIT);
+    (*h)->dCtlRefNum = refnum;
+    (*h)->dCtlDelay = dp->drvrDelay;
+    (*h)->dCtlEMask = dp->drvrEMask;
+    (*h)->dCtlMenu = dp->drvrMenu;
+    (*h)->dCtlCurTicks = ((*h)->dCtlFlags & NEEDTIMEBIT) ? TickCount() + (*h)->dCtlDelay
+                                                          : 0x7FFFFFFF;
+    return noErr;
+}
+
+OSErr Executor::ROMlib_drvr_remove(INTEGER refnum)
+{
+    int devicen = -refnum - 1;
+    if(devicen < 0 || devicen >= NDEVICES)
+        return badUnitErr;
+    DCtlHandle h = LM(UTableBase)[devicen];
+    if(!h)
+        return badUnitErr;
+    if(*h && ((*h)->dCtlFlags & DRIVEROPENBIT))
+        return qErr; /* IM: can't remove an open driver */
+    if(*h && (*h)->dCtlDriver && native_drivers.count((*h)->dCtlDriver))
+        return badUnitErr;
+    LM(UTableBase)[devicen] = nullptr;
+    DisposeHandle((Handle)h);
+    return noErr;
+}
+
+/* SystemTask's part for device drivers (Executor's desk accessories are
+   their processes' business, desk.cpp): every open driver with dNeedTime
+   whose time has come gets accRun. */
+void Executor::ROMlib_drivers_give_time()
+{
+    LONGINT now = TickCount();
+    for(int i = 0; i < NDEVICES; i++)
+    {
+        DCtlHandle h = LM(UTableBase)[i];
+        if(!h || !*h)
+            continue;
+        INTEGER flags = (*h)->dCtlFlags;
+        if(!(flags & DRIVEROPENBIT) || !(flags & NEEDTIMEBIT) || now < (*h)->dCtlCurTicks)
+            continue;
+        ConstStringPtr name = driver_name(h);
+        if(!name || name[0] == 0 || name[1] != '.')
+            continue; /* a desk accessory */
+        INTEGER rn = (*h)->dCtlRefNum;
+        static std::set<INTEGER> announced;
+        if(announced.insert(rn).second)
+            fprintf(stderr, "[Executor] accRun to %.*s (unit %d) every %d ticks\n",
+                    name[0], (const char *)name + 1, i, (int)(*h)->dCtlDelay);
+        Control(rn, accRun, (Ptr)0);
+        h = LM(UTableBase)[i];
+        if(h && *h)
+            (*h)->dCtlCurTicks = TickCount() + (*h)->dCtlDelay;
+    }
 }
 
 OSErr Executor::OpenDriver(ConstStringPtr name, GUEST<INTEGER> *rnp) /* IMII-178 */
