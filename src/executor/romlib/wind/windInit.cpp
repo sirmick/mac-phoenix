@@ -405,8 +405,9 @@ ROMlib_new_window_common(WindowPeek w,
         CalcVis(w);
         EraseRgn(WINDOW_CONT_REGION(w));
         CopyRgn(WINDOW_CONT_REGION(w), WINDOW_UPDATE_REGION(w));
-        if(WINDOW_NEXT_WINDOW(w))
-            CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
+        /* MacPhoenix: the layers behind too, even with nothing behind in
+           this layer (see CalcVisBehind). */
+        CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
 
         ROMlib_rootless_update();
     }
@@ -600,8 +601,11 @@ void Executor::C_CloseWindow(WindowPtr w)
     SetPort(wmgr_port);
     SetClip(LM(GrayRgn));
     PaintBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
-    if(WINDOW_NEXT_WINDOW(w))
-        CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
+    /* MacPhoenix: with no window behind in this layer, CalcVisBehind still
+       recomputes the layers behind (their windows kept visible regions
+       that excluded this one; Finder's windows under a closed Script
+       Editor window stayed blank). */
+    CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
 
     DisposeRgn(WINDOW_STRUCT_REGION(w));
     DisposeRgn(WINDOW_CONT_REGION(w));

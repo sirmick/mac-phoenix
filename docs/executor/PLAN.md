@@ -573,3 +573,6 @@ Kept small so upstream fixes can be merged by hand:
   lowmem reset too (Date & Time's clock checks `AppPacks[6]` before `Pack6`);
   stand-ins for the ROM packages 4, 5 and 7 (Apple's header, code = the
   package's trap), which Date & Time's panel checks before `NumToString`.
+* `wind/windInit.cpp`: `CloseWindow` and a visible `NewWindow` call
+  `CalcVisBehind` even with no window behind in their layer, so the
+  layers behind get their visible regions recomputed.
