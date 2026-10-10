@@ -882,8 +882,10 @@ static void exit_current()
     }
     LM(WindowList) = nullptr;
 
-    /* Its resource files: everything above the System file. */
-    while(LM(TopMapHndl) && (*(resmaphand)LM(TopMapHndl))->resfn != LM(SysMap))
+    /* Its resource files: everything above the System file and the
+       system-mode files that sit right above it. */
+    while(LM(TopMapHndl) && (*(resmaphand)LM(TopMapHndl))->resfn != LM(SysMap)
+          && !ROMlib_system_resource_file_p((*(resmaphand)LM(TopMapHndl))->resfn))
         CloseResFile((*(resmaphand)LM(TopMapHndl))->resfn);
 
     if(me->partition)
@@ -1253,10 +1255,15 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
 
 /* 7.5.5: a desk accessory opened from its file gets a process of its own
    (the DA Handler, desk.cpp), created like a launchContinue launch. */
-/* MacPhoenix. System mode is only counted (status: guess): a resource
-   file opened in it still belongs to the calling process and closes when
-   that process quits, where on 7.5.5 it would stay open for the system. */
+/* MacPhoenix. System mode (OSDispatch $40/$41, names are guesses): on
+   7.5.5 the system becomes the current process, so a resource file opened
+   in it is the system's. Here HOpenResFile puts such a file just above
+   the System file in the opener's chain (res/resOpen.cpp) and the
+   functions below link it into every other process's chain and the new
+   process template, so all processes share it and it outlives the
+   opener. AppleScript opens scripting additions this way. */
 static int system_mode_depth;
+static std::vector<INTEGER> system_files;
 
 OSErr Executor::C_BeginSystemMode()
 {
@@ -1270,6 +1277,101 @@ OSErr Executor::C_EndSystemMode()
         return paramErr;
     system_mode_depth--;
     return noErr;
+}
+
+bool Executor::ROMlib_in_system_mode()
+{
+    return system_mode_depth > 0;
+}
+
+bool Executor::ROMlib_system_resource_file_p(INTEGER rn)
+{
+    return std::find(system_files.begin(), system_files.end(), rn) != system_files.end();
+}
+
+/* The TopMapHndl slot of a saved low-memory image, if it is switched. */
+static uint8_t *lowmem_slot(std::vector<uint8_t> &buf, uint32_t addr, size_t len)
+{
+    size_t off = 0;
+    for(const lm_range &r : lm_ranges)
+    {
+        if(addr >= r.addr && addr + len <= r.addr + r.len && buf.size() >= off + r.len)
+            return &buf[off + (addr - r.addr)];
+        off += r.len;
+    }
+    return nullptr;
+}
+
+/* Link `map` into the chain whose head is at *head (a guest long), just
+   above the System file's map; or take it out again. */
+static void relink_chain(GUEST<Handle> *head, resmaphand map, resmaphand sysmap, bool in)
+{
+    if(!head || !*head)
+        return;
+    resmaphand pred = nullptr;
+    for(resmaphand m = (resmaphand)(Handle)*head; m; m = (resmaphand)(*m)->nextmap)
+    {
+        if(in && m == sysmap)
+        {
+            if(pred == map)
+                return;
+            if(pred)
+                (*pred)->nextmap = (Handle)map;
+            else
+                *head = (Handle)map;
+            return;
+        }
+        if(!in && m == map)
+        {
+            if(pred)
+                (*pred)->nextmap = (*map)->nextmap;
+            else
+                *head = (*map)->nextmap;
+            return;
+        }
+        pred = m;
+    }
+}
+
+static void relink_everywhere(INTEGER rn, bool in)
+{
+    resmaphand map = ROMlib_rntohandl(rn, nullptr);
+    resmaphand sysmap = ROMlib_rntohandl(LM(SysMap), nullptr);
+    if(!map || !sysmap)
+        return;
+    if(in)
+        (*map)->nextmap = (Handle)sysmap;
+    for(process_info_t *p = process_info_list; p; p = p->next)
+    {
+        if(p == current_process_info || p->state == process_info_t::dead)
+            continue;
+        relink_chain((GUEST<Handle> *)lowmem_slot(p->lowmem, 0xA50 /* TopMapHndl */, 4),
+                     map, sysmap, in);
+    }
+    relink_chain((GUEST<Handle> *)lowmem_slot(lowmem_template, 0xA50, 4), map, sysmap, in);
+}
+
+void Executor::ROMlib_system_resource_file_opened(INTEGER rn)
+{
+    if(!ROMlib_system_resource_file_p(rn))
+    {
+        system_files.push_back(rn);
+        FCBPBRec fcb = {};
+        Str255 name = { 0 };
+        fcb.ioNamePtr = name;
+        fcb.ioRefNum = rn;
+        PBGetFCBInfo(&fcb, false);
+        fprintf(stderr, "[Executor] system mode: resource file %d (%.*s) shared\n",
+                rn, name[0], (const char *)name + 1);
+    }
+    relink_everywhere(rn, true);
+}
+
+void Executor::ROMlib_system_resource_file_closing(INTEGER rn)
+{
+    relink_everywhere(rn, false);
+    system_files.erase(std::remove(system_files.begin(), system_files.end(), rn),
+                       system_files.end());
 }
 
 OSErr Executor::C_LaunchDeskAccessory(const FSSpec *spec, ConstStringPtr name)

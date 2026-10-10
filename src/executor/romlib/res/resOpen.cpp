@@ -14,6 +14,7 @@
 #include <file/file.h>
 #include <osevent/osevent.h>
 #include <prefs/prefs.h>
+#include <rsys/process.h>
 #include <base/functions.impl.h>
 #include <algorithm>
 
@@ -513,6 +514,11 @@ void Executor::C_CloseResFile(INTEGER rn)
         UpdateResFile(rn);
         save_ResErr = LM(ResErr);
 
+        /* MacPhoenix: a system-mode file is in the other processes'
+           chains too; out of those first. */
+        if(ROMlib_system_resource_file_p(rn))
+            ROMlib_system_resource_file_closing(rn);
+
         /* update linked list */
 
         if(map == (resmaphand)LM(TopMapHndl))
@@ -713,6 +719,27 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
     (*map)->resfn = f;
     LM(TopMapHndl) = (Handle)map;
     LM(CurMap) = f;
+    /* MacPhoenix: in system mode (OSDispatch $40) the file is the system's:
+       it goes just above the System file, below the application's maps,
+       in this and every other process's chain. */
+    if(ROMlib_in_system_mode())
+    {
+        resmaphand sysmap = ROMlib_rntohandl(LM(SysMap), nullptr);
+        if(sysmap && sysmap != map)
+        {
+            LM(TopMapHndl) = (*map)->nextmap;
+            resmaphand pred = nullptr;
+            for(resmaphand m = (resmaphand)LM(TopMapHndl); m && m != sysmap;
+                m = (resmaphand)(*m)->nextmap)
+                pred = m;
+            (*map)->nextmap = (Handle)sysmap;
+            if(pred)
+                (*pred)->nextmap = (Handle)map;
+            else
+                LM(TopMapHndl) = (Handle)map;
+        }
+        ROMlib_system_resource_file_opened(f);
+    }
 
     /* The handle fields on disk are junk: clear them all before any
        preload, which may look up other resources in this map (a

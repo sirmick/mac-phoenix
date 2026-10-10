@@ -547,7 +547,7 @@ Kept small so upstream fixes can be merged by hand:
   `PACK` 8 owns those fields); ExpandMem has its real header (version $144,
   $288 bytes); multiversal `bufferIsSmall`/`noOutstandingHLE` were swapped.
 * `process.cpp`: `GetProcessInformation` fills name, spec and launcher;
-  OSDispatch $40/$41 (`Begin`/`EndSystemMode`, guessed); default directory
+  OSDispatch $40/$41 (`Begin`/`EndSystemMode`, guessed; system-mode files shared by every process since 2026-10-10); default directory
   per process; `LaunchApplication` of a running application returns it;
   Startup Items launch when Finder first idles (stand-in).
 * `mman/mman.cpp`: `HandleZone` uses `TheZone` for an empty handle only when
@@ -592,3 +592,8 @@ Kept small so upstream fixes can be merged by hand:
 * `finder.cpp`: an HFS volume's "Desktop DB" read whole: icons (type 1,
   bitmaps from "Desktop DF"), applications (2), comments (3); bundle icons
   only for applications the database lacks.
+* `process.cpp`, `res/resOpen.cpp`, `launch.cpp`: system mode (OSDispatch
+  $40/$41) makes a resource file the system's: `HOpenResFile` puts it
+  just above the System file, the Process Manager links it into every
+  other process's chain and the new-process template, exit and launch
+  leave it open, `CloseResFile` unlinks it everywhere.

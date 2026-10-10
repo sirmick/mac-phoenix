@@ -73,6 +73,15 @@ extern void ROMlib_layers_paint_behind(RgnHandle rgn);
 extern void ROMlib_layers_calcvis_behind(RgnHandle rgn);
 /* Is the current process the front one (gets mouse and keyboard)? */
 extern bool ROMlib_process_is_front();
+
+/* System mode (OSDispatch $40/$41): resource files opened in it belong to
+   the system. They sit just above the System file in every process's
+   resource chain, survive the opener's exit and are seen by processes
+   launched later. */
+extern bool ROMlib_in_system_mode();
+extern bool ROMlib_system_resource_file_p(INTEGER rn);
+extern void ROMlib_system_resource_file_opened(INTEGER rn);
+extern void ROMlib_system_resource_file_closing(INTEGER rn);
 /* A pending suspend/resume event for the current process. */
 extern bool ROMlib_process_os_event(EventRecord *evt, bool remove);
 

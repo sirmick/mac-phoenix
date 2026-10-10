@@ -474,7 +474,8 @@ static void reinitialize_things(void)
     for(map = (resmaphand)LM(TopMapHndl); map; map = nextmap)
     {
         nextmap = (resmaphand)(*map)->nextmap;
-        if((*map)->resfn == LM(SysMap))
+        /* System-mode files sit right above the System file. */
+        if((*map)->resfn == LM(SysMap) || ROMlib_system_resource_file_p((*map)->resfn))
             below_system = true;
         if(below_system)
         {
