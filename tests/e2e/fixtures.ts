@@ -10,7 +10,7 @@ const BINARY = path.join(BUILD_DIR, 'mac-phoenix');
 const REFRESH_SCRIPT = path.resolve(__dirname, '../lib/refresh_test_disk.sh');
 
 function refreshTestDisk(imgBase: string): string {
-  // Copies ~/storage/images/<imgBase>.img.bak → test-<imgBase>.img and echoes
+  // Copies ~/storage/images/<imgBase>.img.orig → test-<imgBase>.img and echoes
   // the destination path. Matches the shell-test refresh behavior.
   const out = execFileSync('bash', [REFRESH_SCRIPT, imgBase], { encoding: 'utf8' });
   return out.trim();

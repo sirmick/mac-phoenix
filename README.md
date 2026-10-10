@@ -572,7 +572,7 @@ ctest --test-dir build
 ctest --test-dir build -V -R api_endpoints
 ```
 
-Tests pick up the ROM and a disk image from `MACEMU_ROM` / `MACEMU_DISK` (or `-DTEST_ROM=...` at `cmake -B build` time). Defaults assume `~/roms/quadra.rom` and the 7.5.5 image; each test run refreshes `~/storage/images/test-macos-7.5.5.img` from `macos-7.5.5.img.bak` (via `tests/lib/refresh_test_disk.sh`) so the pristine image is never mutated.
+Tests pick up the ROM and a disk image from `MACEMU_ROM` / `MACEMU_DISK` (or `-DTEST_ROM=...` at `cmake -B build` time). Defaults assume `~/roms/quadra.rom` and the 7.5.5 image; each test run refreshes `~/storage/images/test-macos-7.5.5.img` from `macos-7.5.5.img.orig` (via `tests/lib/refresh_test_disk.sh`) so the pristine image is never mutated.
 
 ### Guest test suite (standalone)
 

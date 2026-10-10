@@ -49,9 +49,9 @@ DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" macos-7.5.5)}
 [[ -f "$DISK"   ]] || { echo "SKIP: Disk not found: $DISK";     exit 77; }
 
 # Boot test runs mutate the disk image (bridge provisioning writes System
-# Folder:Startup Items). Restore from .bak if one exists.
-if [[ -f "${DISK}.bak" ]]; then
-    cp "${DISK}.bak" "$DISK"
+# Folder:Startup Items). Restore from .orig if one exists.
+if [[ -f "${DISK}.orig" ]]; then
+    cp "${DISK}.orig" "$DISK"
 fi
 
 BRIDGE_DIR="$(mktemp -d /tmp/wne-patch-bridge-XXXXXX)"
