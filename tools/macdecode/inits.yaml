@@ -46,7 +46,11 @@ extensions:
   - {file: AppleScript™, phase: 2, lacks: [], loaded: true,
      note: "registers its components ('thng'); the System's Component Manager does the work.
        Script Editor compiles and runs scripts (3 + 4 -> 7, 2026-10-08)."}
-  - {file: Color Picker, phase: 2, lacks: [RegisterComponentResourceFile]}
+  - {file: Color Picker, phase: 2, lacks: [], loaded: true,
+     note: "Color Picker 2.0: its INIT takes Pack12 ($A82E) and calls Apple's PACK 12 from its own
+       file through the System routines at $668/$7B0 (sysroutines.cpp); the HSL and RGB pickers are
+       components. GetColor shows the HSL picker as on 7.5.5 (2026-10-10); the dialog background
+       takes a palette color instead of white (STRAGGLERS.md 17)."}
   - {file: Speech Manager, phase: 2, lacks: [RegisterComponentResourceFile, "SoundDispatch#40000"],
      note: "7.6.1 also calls CodeFragmentDispatch"}
   - {file: Speech, phase: 2, lacks: ["SoundDispatch#64000C", NewGestaltValue]}

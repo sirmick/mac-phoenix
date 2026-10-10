@@ -289,8 +289,8 @@ Ethernet driver.
 | M1 | Finder desktop | our boot phase, Apple System file as resource root, real Finder draws | done: Finder 7.5.5 reaches its desktop on Apple's System file, draws icons, opens windows, Apple/Help/Application menus |
 | M2 | Launch apps | Process Manager ours; Finder launches SimpleText, Kid Pix; DA Handler opens Calculator and the Chooser; Startup Items and Apple Menu Items aliases resolve | in progress: Finder launches applications (SimpleText, Note Pad, Jigsaw Puzzle, MacPerl, Script Editor) side by side; switching by click or Application menu; quit back to the launcher; desk accessories in DA Handler processes; aliases and Startup Items resolve; `command_bridge_executor` 7/7. Open: Chooser (printing), Kid Pix |
 | M3a | Trap tables | real tables at `$400`/`$E00`, every entry 68k-callable; patch histories diff against `trap_installs.tsv`; `$A82A` stub (no components); unit table matches a real boot and drivers get `accRun` | not started: Executor's own trap tables (`trapglue.h`), `UnitNtryCnt` 0 |
-| M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; shadowing switch withdraws Executor's built-ins; Color Picker loads (with M3c) | in progress: loader runs allowed INITs/cdevs/fext in Start Manager order (`extension-policy.txt`, phase 1 + AppleScript + Finder Scripting); `jGNEFilter` chain. Date & Time's menu bar clock (2026-10-10). Open: `ShowInitIcon`, shadowing switch, Color Picker |
-| M3c | Component Manager in C++ | System file components register; Color Picker's `GetColor` matches a real boot | mostly done: `component.cpp` (5cd8f3e2), System file / extension / `thng` file components register, AppleScript's components run. Open: Color Picker gate |
+| M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; shadowing switch withdraws Executor's built-ins; Color Picker loads (with M3c) | in progress: loader runs allowed INITs/cdevs/fext in Start Manager order (`extension-policy.txt`, phase 1 + AppleScript + Finder Scripting); `jGNEFilter` chain. Date & Time's menu bar clock and Color Picker 2.0 (2026-10-10). Open: `ShowInitIcon`, shadowing switch |
+| M3c | Component Manager in C++ | System file components register; Color Picker's `GetColor` matches a real boot | done (2026-10-10): `component.cpp` (5cd8f3e2), System file / extension / `thng` file components register, AppleScript's components run; Color Picker 2.0's `GetColor` shows Apple's dialog with the HSL picker (dialog background: STRAGGLERS.md 17) |
 | M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs (needs M3h for its network) | not started |
 | M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` | in progress: Apple's `PACK` 8 runs (installed by AppleScript), `oapp`/AppParameters in Apple's wire format. Open: Help Manager balloons |
 | M3f | Extension set | Speech Manager + MacinTalk 3, AppleScript + Finder Scripting Extension, QuickTime load and work (QuickTime movie plays in SimpleText) | in progress: AppleScript loads by default; Script Editor runs `3 + 4 -> 7`; scripting additions run from MacPerl; Finder Scripting Extension loads. Open: `tell application "Finder"` (target spec empty, `finder_suite_executor` fails), Speech, QuickTime |
@@ -576,3 +576,16 @@ Kept small so upstream fixes can be merged by hand:
 * `wind/windInit.cpp`: `CloseWindow` and a visible `NewWindow` call
   `CalcVisBehind` even with no window behind in their layer, so the
   layers behind get their visible regions recomputed.
+* `sysroutines.cpp` (new): the System's low-memory routines $7B0
+  (selector-table dispatch) and $668 (detached-package call) as 68k code
+  copied from a 7.5.5 boot, set at every launch's lowmem reset; Color
+  Picker 2.0 calls its PACK 12 through them (`Package.yaml` names them).
+* `res/resGet.cpp`: `GetResource('PACK', n)` does the real lookup first;
+  the ALRT stand-in (ResEdit on Executor's own System) only when nothing
+  is found. `res/resOpen.cpp`: an open resource file is answered with its
+  reference number for `fsCurPerm` too (`fsRdPerm` keeps a second map:
+  the INIT loader's files).
+* `component.cpp`: a file's `thng` resources register last first, so the
+  head insertion keeps their order (Color Picker takes the first `cpkr`
+  found: HSL on 7.5.5).
+* `dial/dialHandle.cpp`: `ModalDialogMenuSetup` ($AA67), a no-op.

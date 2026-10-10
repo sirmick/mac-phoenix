@@ -395,6 +395,11 @@ int32_t register_file(INTEGER refnum, int16_t global)
     for(INTEGER i = 1; i <= n; i++)
         if(Handle h = Get1IndResource("thng"_4, i))
             things.push_back(h);
+    /* MacPhoenix: last first, so that with each going to the head of the
+       search order the file's resources keep their order: Color Picker
+       2.0 takes the first 'cpkr' that FindNextComponent answers, and on
+       7.5.5 that is its HSL picker (thng 2020), not the RGB one (3020). */
+    std::reverse(things.begin(), things.end());
     for(Handle h : things)
     {
         HLock(h);

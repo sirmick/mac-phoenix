@@ -240,32 +240,32 @@ Handle Executor::C_GetResource(ResType typ, INTEGER id)
         return 0;
 #endif
 
-    // "Icky hack"
-    // Truer words were never spoken.
-    // Instead of looking for 'PACK' resources, which aren't there
-    // in Executor, return a completely unrelated ALRT instead.
-    // For some reason, if this is not done, ResEdit's Pixel editor fails
-    // with memFullErr (-108).
-    // My current theory is that some programs are checking
-    // GetResource('PACK', ...) to check whether some packages can be 
-    // loaded successfully.
-    // The hack had to be disabled for id 1 to support ResEdit's use of PACK 1.
-    // TODO: Verify theory and add some 'PACK' resources to system file instead of this hack.
-    switch(typ)
-    { /* fake out code resources */
-#define ICKYHACK
-#if defined(ICKYHACK)
-        case "PACK"_4:
-            if(id != 1)
-                return GetResource("ALRT"_4, -3995);
-#endif /* ICKYHACK */
-    }
-
     ROMlib_setreserr(ROMlib_typidtop(typ, id, &map, &rr));
     if(LM(ResErr) == resNotFound)
     {
         ROMlib_setreserr(noErr);
         retval = 0; /* IMIV */
+
+        // "Icky hack"
+        // Truer words were never spoken.
+        // Instead of looking for 'PACK' resources, which aren't there
+        // in Executor, return a completely unrelated ALRT instead.
+        // For some reason, if this is not done, ResEdit's Pixel editor fails
+        // with memFullErr (-108).
+        // My current theory is that some programs are checking
+        // GetResource('PACK', ...) to check whether some packages can be
+        // loaded successfully.
+        // The hack had to be disabled for id 1 to support ResEdit's use of PACK 1.
+        // TODO: Verify theory and add some 'PACK' resources to system file instead of this hack.
+        // MacPhoenix: only once the real lookup found nothing. Apple's
+        // System file and extensions carry real 'PACK' resources (Color
+        // Picker 2.0 loads its PACK 12 from its own file), which the hack
+        // used to hide.
+#define ICKYHACK
+#if defined(ICKYHACK)
+        if(typ == "PACK"_4 && id != 1)
+            return GetResource("ALRT"_4, -3995);
+#endif /* ICKYHACK */
     }
     else
     {

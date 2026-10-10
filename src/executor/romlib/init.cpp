@@ -1,5 +1,6 @@
 #include <rsys/executor.h>
 #include <rsys/extensions.h>
+#include <rsys/sysroutines.h>
 #include <rsys/macros.h>
 #include <error/error.h>
 #include <time/time.h>
@@ -498,6 +499,7 @@ void Executor::InitPerProcessLowMem()
             LM(AppPacks)[i] = 0;
     }
     ROMlib_install_app_packs(); /* MacPhoenix: the System's, on Apple's System file */
+    ROMlib_install_system_routines(); /* MacPhoenix: $7B0 and $668 */
     LM(SysEvtMask) = ~(1L << keyUp); /* EVERYTHING except keyUp */
     LM(SdVolume) = 7; /* for Beebop 2 */
 }

@@ -610,8 +610,15 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
         cpb.hFileInfo.ioVRefNum = vref;
         cpb.hFileInfo.ioFDirIndex = 0;
         cpb.hFileInfo.ioDirID = dirid;
+        /* MacPhoenix: with fsCurPerm too, as the Resource Manager does: a
+           resource file this process has open is answered with its
+           reference number (Color Picker 2.0 opens its own file with
+           fsCurPerm for each dialog resource; the second open used to fail
+           on the fork being open already). fsRdPerm still opens a second
+           map: the extension loader's INITs (AppleScript's) depend on
+           having their own. */
         if((ROMlib_setreserr(PBGetCatInfo(&cpb, 0))) == noErr
-           && perm > fsRdPerm)
+           && perm != fsRdPerm)
         {
             INTEGER fref;
 

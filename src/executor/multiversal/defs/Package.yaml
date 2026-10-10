@@ -44,3 +44,34 @@
 - only-for: Executor
   verbatim: |
     RAW_68K_TRAP(Pack1, 0xA9E8);
+
+# ####
+
+- lowmem:
+    name: SelectorTableDispatch
+    type: ProcPtr
+    address: 0x7B0
+    comment: |
+      MacPhoenix (name is a guess): 7.5.5's selector-table dispatcher, which
+      its dispatcher traps and packages reach with `lea table,a0;
+      move.l $7B0,-(sp); rts`. The table: kind.w (0: word offsets from the
+      table, 1: word offsets indexed by selector, 2: long addresses),
+      min.b, max.b, then the entries; D0's low byte selects, its high byte
+      is the parameter size in words (popped, paramErr answered, when the
+      selector is out of range). Executor's copy is sysroutines.cpp.
+
+# ####
+
+- lowmem:
+    name: CallDetachedPackage
+    type: ProcPtr
+    address: 0x668
+    comment: |
+      MacPhoenix (name is a guess): 7.5.5's call into a detached package
+      handle (A0) with a lock count (A1 -> word) and the selector in D0:
+      loads the handle if purged, locks it on the first call, re-stacks
+      the Pascal parameters under a return into its own epilogue (which
+      unlocks and returns the result word), and enters the package's
+      selector table (10 bytes in) through SelectorTableDispatch. Color
+      Picker 2.0's INIT calls its PACK 12 this way. Executor's copy is
+      sysroutines.cpp.

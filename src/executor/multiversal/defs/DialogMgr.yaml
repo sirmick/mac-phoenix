@@ -324,6 +324,21 @@
 # ####
 
 - function:
+    name: ModalDialogMenuSetup
+    args:
+      - name: setup
+        type: Boolean
+    trap: 0xAA67
+    executor: C_
+    comment: |
+      MacPhoenix: System 7's menu bar setup around a modal dialog (true
+      disables the menus but Edit's items, false restores them). Executor's
+      ModalDialog leaves the menu bar alone, so this does nothing. Apple's
+      Color Picker 2.0 (PACK 12) calls it with false when its dialog closes.
+
+# ####
+
+- function:
     name: Alert
     return: INTEGER
     args:

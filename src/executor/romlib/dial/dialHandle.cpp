@@ -106,6 +106,14 @@ inline int _FindWindow(Point pt, WindowPtr *wp)
 #define ALLOW_MOVABLE_MODAL /* we've made so many other changes, we \
                    may as well go whole hog */
 
+/* MacPhoenix: System 7's menu bar setup around a modal dialog ($AA67).
+   Executor's ModalDialog leaves the menu bar alone, so there is nothing to
+   disable or restore. */
+void Executor::C_ModalDialogMenuSetup(Boolean setup)
+{
+    (void)setup;
+}
+
 #if !defined(ALLOW_MOVABLE_MODAL)
 
 /* NOTE: the changes between #if #else and #else #endif should be very

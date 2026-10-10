@@ -11,7 +11,7 @@ networking are punted until later; everything else is in scope.
 | 4 | Extension stragglers: Date & Time (menu clock), General Controls (`OSDispatch $5E`, `WriteXPRam`), Find File (`SetGestaltValue`), Apple Guide (`GetFrontProcess`) | done (2026-10-10): Date & Time loads and draws its menu bar clock (`ScrnBitMap`, MenuDispatch -4..-1 as MBDF message 14, `AppPacks` holding the System's PACKs, INITs in the System heap); `GestaltValueDispatch` ($ABF1: New/Replace/Set/DeleteGestaltValue) for Find File; OSDispatch $5E stored (`SetHideDesktopInBackground`, a guess) for General Controls, whose panel opens; `GetFrontProcess` is a plain multiversal entry now, so the status lookup sees it. Apple Guide: see Parked |
 | 5 | Redraw leftovers behind Script Editor's windows | done (2026-10-10): `CloseWindow` and a visible `NewWindow` skipped `CalcVisBehind` when nothing was behind in their own layer, so the layers behind (Finder's windows) kept visible regions that excluded the closed window and drew nothing there |
 | 6 | `BeginSystemMode` (only a counter) | open |
-| 7 | Color Picker (`RegisterComponentResourceFile`) | open |
+| 7 | Color Picker (`RegisterComponentResourceFile`) | done (2026-10-10): Color Picker 2.0 loads by default and `GetColor` (Color control panel, "Other…") shows Apple's dialog with the HSL picker, as 7.5.5 does. Needed: the System routines at $668 (detached-package call) and $7B0 (selector-table dispatch) as 68k code (`sysroutines.cpp`); `GetResource('PACK')` looked up for real before Executor's ALRT hack; an open resource file answered again for `fsCurPerm`; a file's `thng` resources registered in their order; `ModalDialogMenuSetup` ($AA67) as a no-op. Open: item 17 |
 | 8 | Startup Items: Finder's real rule (Executor's Process Manager stands in) | open |
 | 9 | Desktop DB: icons and rebuild | mostly done — 3fa70c80 (HFS images report a Desktop Manager; icons from bundles); comments (`Desktop DF`) and icons from other volumes' databases open |
 | 10 | Apple Event Manager list wire format | open |
@@ -20,6 +20,7 @@ networking are punted until later; everything else is in scope.
 | 13 | ctest port 18108 used twice | done — 56200715 |
 | 14 | `command_bridge_executor` flake | open (not seen recently) |
 | 15 | Executor's own host files visible in Finder | done — 07dce3db |
+| 17 | Color Picker dialog background: green (RGB picker) or yellow-green (HSL) instead of white. The dialog's `dctb` says white and other white areas stay white, so the dialog was erased with a color-table index that the picker's palette (`pltt` 2660/3660, tolerant and animated entries) later changed; a port's cached `bkColor` index is not re-resolved when the device color table changes (`qColorMgr.cpp`, `qPaletteMgr.cpp`) | open |
 | 16 | Date & Time control panel: the date fields and the hour draw empty | done (2026-10-10): the panel checks `AppPacks[7]` before each `NumToString`; PACK 4, 5 and 7 are ROM packages, so Executor fills those slots with stand-ins (Apple's header, code = the package's trap) |
 
 Also fixed along the way: Finder type-to-select crash (61ef0717), host

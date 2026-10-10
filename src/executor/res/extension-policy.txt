@@ -17,3 +17,4 @@ Launcher
 Clipping Extension
 AppleScript™
 Finder Scripting Extension
+Color Picker
