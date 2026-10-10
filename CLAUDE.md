@@ -146,7 +146,7 @@ tests/
   guest/MacTestSuite.pl             — MacPerl script run inside the guest by the agent
   test_extfs.sh                     — ExtFS config, CLI, backward compat tests (8 checks)
   test_boot_matrix.sh               — Single-cell capacity check ({backend,arch,disk,jit} → Finder)
-  run_boot_matrix.sh                — Orchestrator: 12 cells, serial, CSV + PNG + per-cell log
+  run_boot_matrix.sh                — Orchestrator: 14 cells (uae, mame-68k, kpx, mame-ppc), serial, CSV + PNG + per-cell log
   e2e/                              — Playwright browser tests
 
 client/                             — Browser UI (vanilla JS)

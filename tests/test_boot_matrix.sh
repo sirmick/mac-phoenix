@@ -7,12 +7,12 @@
 # then captures a PNG screenshot as visual confirmation of the end state.
 #
 # Emits one CSV line to stdout (or appends to --csv path):
-#   label,backend,arch,jit,disk,result,phase,elapsed_s,checkloads,screenshot
+#   label,backend,core,jit,disk,result,phase,elapsed_s,checkloads,screenshot
 #
 # Usage:
 #   tests/test_boot_matrix.sh \
 #     --label uae-m68k-nojit-755 \
-#     --backend uae --arch m68k \
+#     --backend uae [--core mame-68k] \
 #     --rom  ~/roms/quadra.rom \
 #     --disk ~/storage/images/macos-7.5.5.img \
 #     --no-jit \
@@ -24,6 +24,7 @@ set -euo pipefail
 
 LABEL=""
 BACKEND="uae"
+CORE=""             # --core NAME; empty = the backend's default core
 ROM=""
 DISK=""
 JIT_FLAG=""          # one of: "", "--jit", "--no-jit"
@@ -40,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --label)           LABEL="$2"; shift 2 ;;
         --backend)         BACKEND="$2"; shift 2 ;;
+        --core)            CORE="$2"; shift 2 ;;
         --rom)             ROM="$2"; shift 2 ;;
         --disk)            DISK="$2"; shift 2 ;;
         --jit)             JIT_FLAG="--jit"; shift ;;
@@ -83,7 +85,7 @@ DISK_TAG="$(basename "$DISK" | sed 's/\.img$//')"
 
 emit_csv() {
     local result="$1" phase="$2" elapsed="$3" checkloads="$4" shot_path="$5"
-    local line="$LABEL,$BACKEND,$JIT_COL,$DISK_TAG,$result,$phase,$elapsed,$checkloads,$shot_path"
+    local line="$LABEL,$BACKEND,${CORE:--},$JIT_COL,$DISK_TAG,$result,$phase,$elapsed,$checkloads,$shot_path"
     echo "$line"
     if [[ -n "$CSV" ]]; then
         echo "$line" >> "$CSV"
@@ -130,7 +132,7 @@ fi
 RAM=32
 if [[ "$ARCH" == "ppc" ]]; then RAM=128; fi
 
-echo "=== [$LABEL] backend=$BACKEND jit=$JIT_COL disk=$DISK_TAG timeout=${TIMEOUT}s port=$PORT ==="
+echo "=== [$LABEL] backend=$BACKEND core=${CORE:--} jit=$JIT_COL disk=$DISK_TAG timeout=${TIMEOUT}s port=$PORT ==="
 
 # --config /dev/null: skip the user's persisted ~/.config/mac-phoenix/config.json so
 # CDROMs/extfs from daily use don't bleed in and break boot (e.g. .AppleCD install stall).
@@ -149,6 +151,9 @@ EMU_ARGS=(
 )
 if [[ -n "$JIT_FLAG" ]]; then
     EMU_ARGS+=("$JIT_FLAG")
+fi
+if [[ -n "$CORE" ]]; then
+    EMU_ARGS+=(--core "$CORE")
 fi
 EMU_ARGS+=("$ROM")
 
