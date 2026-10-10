@@ -20,6 +20,7 @@
 #include <wind/wind.h>
 #include <quickdraw/cquick.h>
 #include <WindowMgr.h>
+#include <ControlMgr.h>
 #include <QuickDraw.h>
 #include <vector>
 #include <algorithm>
@@ -138,6 +139,7 @@ struct process_info
     int32_t os_event_message = 0;
     /* Its last WaitNextEvent: when its sleep runs out (ticks). */
     uint32_t wake_tick = 0;
+    Ptr layer = nullptr; /* its Layer Manager record (System heap) */
 };
 typedef struct process_info process_info_t;
 
@@ -397,81 +399,190 @@ void Executor::process_capture_template()
  * look from another process's layer (LM(WindowList) is that process's
  * list meanwhile). */
 
-static process_info_t *layer_view_p;
-static GUEST<WindowPeek> current_list_stash; /* while a view looks elsewhere */
+/* MacPhoenix: 7.5.5's Layer Manager (LayerDispatch, $A829) sees the layers
+ * as window records -- the current one's window list is WindowList, its
+ * auxiliary window and control lists AuxWinHead and AuxCtlHead -- and lets
+ * code make floating layers of its own: the Help Manager's balloon window
+ * lives in one, in front of every process. A layer record here has what
+ * Apple's has where code looks: +$4A $DEAD marks it, +$82 its parent,
+ * +$86/+$8C its auxiliary lists, +$90 the next layer, +$94 its window
+ * list, +$98 its refCon. Every process has a record too (for the Layer
+ * Manager's answers; its list stays in low memory), and the root is the
+ * parent of all. Floating layers are in front of the processes, in their
+ * own order. The names of the selectors are guesses. */
 
-static process_info_t *viewer()
+enum
 {
-    return layer_view_p ? layer_view_p : current_process_info;
+    layer_size = 0xA0,
+    layer_mark = 0x4A,
+    layer_parent = 0x82,
+    layer_aux_win = 0x86,
+    layer_aux_ctl = 0x8C,
+    layer_next = 0x90,
+    layer_windows = 0x94,
+    layer_refcon = 0x98,
+};
+#define LAYER_FIELD(rec, off, T) (*(GUEST<T> *)((char *)(rec) + (off)))
+
+static Ptr root_layer;
+static std::vector<Ptr> floating_layers; /* front first */
+static Ptr floating_current; /* the current layer, when it is a floating one */
+/* The current process's lists while a floating layer is current. */
+static GUEST<WindowPeek> process_list_stash;
+static GUEST<AuxWinHandle> process_aux_win_stash;
+static GUEST<AuxCtlHandle> process_aux_ctl_stash;
+static bool root_current; /* SetCurLayer(root): FindWindow looks everywhere */
+
+namespace
+{
+struct Layer
+{
+    process_info_t *proc = nullptr;
+    Ptr floating = nullptr;
+    bool operator==(const Layer &o) const { return proc == o.proc && floating == o.floating; }
+    bool operator!=(const Layer &o) const { return !(*this == o); }
+    explicit operator bool() const { return proc || floating; }
+};
 }
 
-/* A process's window list, wherever it is kept right now. */
-static WindowPeek chain_of(process_info_t *p)
+static Ptr new_layer_record(Ptr parent, int32_t refcon)
 {
-    if(p == viewer())
+    TheZoneGuard guard(LM(SysZone));
+    Ptr rec = NewPtrSysClear(layer_size);
+    if(!rec)
+        return nullptr;
+    LAYER_FIELD(rec, layer_mark, uint16_t) = 0xDEAD;
+    LAYER_FIELD(rec, layer_parent, Ptr) = parent;
+    LAYER_FIELD(rec, layer_refcon, int32_t) = refcon;
+    return rec;
+}
+
+static Ptr root_layer_record()
+{
+    if(!root_layer)
+        root_layer = new_layer_record(nullptr, 0);
+    return root_layer;
+}
+
+static Ptr process_layer_record(process_info_t *p)
+{
+    if(!p->layer)
+        p->layer = new_layer_record(root_layer_record(), 0);
+    return p->layer;
+}
+
+static Layer current_layer()
+{
+    if(floating_current)
+        return Layer{ nullptr, floating_current };
+    return Layer{ current_process_info, nullptr };
+}
+
+static bool view_active;
+static Layer view_layer;
+static GUEST<WindowPeek> current_list_stash; /* while a view looks elsewhere */
+
+static Layer viewer()
+{
+    return view_active ? view_layer : current_layer();
+}
+
+/* A layer's window list, wherever it is kept right now. */
+static WindowPeek chain_of(Layer l)
+{
+    if(!l)
+        return nullptr;
+    if(l == viewer())
         return LM(WindowList);
-    if(p == current_process_info)
+    if(l == current_layer())
         return current_list_stash;
-    if(p->lowmem.size() < windowlist_offset + 4)
+    if(l.floating)
+        return LAYER_FIELD(l.floating, layer_windows, WindowPeek);
+    if(l.proc == current_process_info)
+        return process_list_stash; /* a floating layer is current */
+    if(l.proc->lowmem.size() < windowlist_offset + 4)
         return nullptr;
     GUEST<WindowPeek> w;
-    memcpy(&w, &p->lowmem[windowlist_offset], sizeof w);
+    memcpy(&w, &l.proc->lowmem[windowlist_offset], sizeof w);
     return w;
+}
+
+static WindowPeek chain_of(process_info_t *p)
+{
+    return chain_of(Layer{ p, nullptr });
+}
+
+/* Front to back: the floating layers, then the processes. */
+static std::vector<Layer> layer_sequence()
+{
+    std::vector<Layer> out;
+    for(Ptr f : floating_layers)
+        out.push_back(Layer{ nullptr, f });
+    for(process_info_t *p : layer_order)
+        out.push_back(Layer{ p, nullptr });
+    return out;
 }
 
 namespace
 {
 struct LayerView
 {
-    process_info_t *saved_view;
+    bool saved_active;
+    Layer saved_view;
     GUEST<WindowPeek> saved_list;
 
-    explicit LayerView(process_info_t *p)
-        : saved_view(layer_view_p), saved_list(LM(WindowList))
+    explicit LayerView(Layer l)
+        : saved_active(view_active), saved_view(view_layer), saved_list(LM(WindowList))
     {
-        WindowPeek head = chain_of(p);
-        if(!layer_view_p)
+        WindowPeek head = chain_of(l);
+        if(!view_active)
             current_list_stash = LM(WindowList);
-        layer_view_p = p;
+        view_active = true;
+        view_layer = l;
         LM(WindowList) = head;
+    }
+    explicit LayerView(process_info_t *p)
+        : LayerView(Layer{ p, nullptr })
+    {
     }
     ~LayerView()
     {
         LM(WindowList) = saved_list;
-        layer_view_p = saved_view;
+        view_layer = saved_view;
+        view_active = saved_active;
     }
 };
 }
 
-static std::vector<process_info_t *> layers_in_front_of(process_info_t *v)
+static std::vector<Layer> layers_in_front_of(Layer v)
 {
-    std::vector<process_info_t *> out;
-    for(process_info_t *p : layer_order)
+    std::vector<Layer> out;
+    for(Layer l : layer_sequence())
     {
-        if(p == v)
+        if(l == v)
             break;
-        out.push_back(p);
+        out.push_back(l);
     }
     return out;
 }
 
-static std::vector<process_info_t *> layers_behind(process_info_t *v)
+static std::vector<Layer> layers_behind(Layer v)
 {
-    std::vector<process_info_t *> out;
+    std::vector<Layer> out;
     bool behind = false;
-    for(process_info_t *p : layer_order)
+    for(Layer l : layer_sequence())
     {
         if(behind)
-            out.push_back(p);
-        if(p == v)
+            out.push_back(l);
+        if(l == v)
             behind = true;
     }
     return out;
 }
 
-static void subtract_layer(process_info_t *p, RgnHandle rgn)
+static void subtract_layer(Layer l, RgnHandle rgn)
 {
-    for(WindowPeek w = chain_of(p); w; w = WINDOW_NEXT_WINDOW(w))
+    for(WindowPeek w = chain_of(l); w; w = WINDOW_NEXT_WINDOW(w))
         if(WINDOW_VISIBLE(w))
             DiffRgn(rgn, WINDOW_STRUCT_REGION(w), rgn);
 }
@@ -480,27 +591,27 @@ void Executor::ROMlib_layers_clip_above(RgnHandle rgn)
 {
     if(!viewer())
         return;
-    for(process_info_t *p : layers_in_front_of(viewer()))
-        subtract_layer(p, rgn);
+    for(Layer l : layers_in_front_of(viewer()))
+        subtract_layer(l, rgn);
 }
 
 void Executor::ROMlib_layers_clip_below(RgnHandle rgn)
 {
     if(!viewer())
         return;
-    for(process_info_t *p : layers_behind(viewer()))
-        subtract_layer(p, rgn);
+    for(Layer l : layers_behind(viewer()))
+        subtract_layer(l, rgn);
 }
 
 void Executor::ROMlib_layers_paint_behind(RgnHandle rh)
 {
     if(!viewer())
         return;
-    for(process_info_t *p : layers_behind(viewer()))
+    for(Layer l : layers_behind(viewer()))
     {
         if(EmptyRgn(rh))
             return;
-        LayerView view(p);
+        LayerView view(l);
         for(WindowPeek w = LM(WindowList); w && !EmptyRgn(rh); w = WINDOW_NEXT_WINDOW(w))
         {
             if(!WINDOW_VISIBLE(w))
@@ -521,9 +632,9 @@ void Executor::ROMlib_layers_calcvis_behind(RgnHandle rh)
 {
     if(!viewer())
         return;
-    for(process_info_t *p : layers_behind(viewer()))
+    for(Layer l : layers_behind(viewer()))
     {
-        LayerView view(p);
+        LayerView view(l);
         for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
             if(WINDOW_VISIBLE(w))
                 CalcVis(w);
@@ -533,25 +644,219 @@ void Executor::ROMlib_layers_calcvis_behind(RgnHandle rh)
 /* Every window's visible region, after the layers changed order. */
 static void recalc_all_layers()
 {
-    for(process_info_t *p : layer_order)
+    for(Layer l : layer_sequence())
     {
-        LayerView view(p);
+        LayerView view(l);
         for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
             if(WINDOW_VISIBLE(w))
                 CalcVis(w);
     }
 }
 
-/* The process whose layer has a window at pt (front first), else null. */
+/* The process whose layer has a window at pt (front first), else null; a
+   floating layer's window counts as the current process's. */
 static process_info_t *layer_at(Point pt)
 {
-    for(process_info_t *p : layer_order)
+    for(Layer l : layer_sequence())
     {
-        for(WindowPeek w = chain_of(p); w; w = WINDOW_NEXT_WINDOW(w))
+        for(WindowPeek w = chain_of(l); w; w = WINDOW_NEXT_WINDOW(w))
             if(WINDOW_VISIBLE(w) && PtInRgn(pt, WINDOW_STRUCT_REGION(w)))
-                return p;
+                return l.proc ? l.proc : current_process_info;
     }
     return nullptr;
+}
+
+/* The visible window at pt in any layer, front first (FindWindow with the
+   root layer current). */
+WindowPeek Executor::ROMlib_layers_window_at(Point pt)
+{
+    for(Layer l : layer_sequence())
+        for(WindowPeek w = chain_of(l); w; w = WINDOW_NEXT_WINDOW(w))
+            if(WINDOW_VISIBLE(w) && PtInRgn(pt, WINDOW_STRUCT_REGION(w)))
+                return w;
+    return nullptr;
+}
+
+bool Executor::ROMlib_root_layer_current()
+{
+    return root_current;
+}
+
+INTEGER Executor::ROMlib_layers_find_window(Point pt, GUEST<WindowPtr> *window)
+{
+    bool saved = root_current;
+    root_current = true;
+    INTEGER part = FindWindow(pt, window);
+    root_current = saved;
+    return part;
+}
+
+static Layer layer_of_record(Ptr rec)
+{
+    if(!rec || rec == root_layer)
+        return Layer{};
+    for(Ptr f : floating_layers)
+        if(f == rec)
+            return Layer{ nullptr, f };
+    for(process_info_t *p = process_info_list; p; p = p->next)
+        if(p->layer == rec)
+            return Layer{ p, nullptr };
+    return Layer{};
+}
+
+static Ptr record_of(Layer l)
+{
+    if(l.floating)
+        return l.floating;
+    if(l.proc)
+        return process_layer_record(l.proc);
+    return nullptr;
+}
+
+bool Executor::ROMlib_layer_p(WindowPtr w)
+{
+    if(!w || LAYER_FIELD(w, layer_mark, uint16_t) != 0xDEAD)
+        return false;
+    return (Ptr)w == root_layer || (bool)layer_of_record((Ptr)w);
+}
+
+/* SetCurLayer: the Window Manager works on this layer's lists. Only the
+   current process's own layer and floating ones can be current here; the
+   root (or nil) leaves the lists and makes FindWindow look everywhere. */
+static void set_current_layer(Ptr rec)
+{
+    root_current = false;
+    if(!rec || rec == root_layer_record())
+    {
+        root_current = true;
+        return;
+    }
+    Layer l = layer_of_record(rec);
+    if(!l || l == current_layer() || view_active)
+        return;
+    if(floating_current)
+    {
+        LAYER_FIELD(floating_current, layer_windows, WindowPeek) = LM(WindowList);
+        LAYER_FIELD(floating_current, layer_aux_win, AuxWinHandle) = LM(AuxWinHead);
+        LAYER_FIELD(floating_current, layer_aux_ctl, AuxCtlHandle) = LM(AuxCtlHead);
+        LM(WindowList) = process_list_stash;
+        LM(AuxWinHead) = process_aux_win_stash;
+        LM(AuxCtlHead) = process_aux_ctl_stash;
+        floating_current = nullptr;
+    }
+    if(l.floating)
+    {
+        process_list_stash = LM(WindowList);
+        process_aux_win_stash = LM(AuxWinHead);
+        process_aux_ctl_stash = LM(AuxCtlHead);
+        LM(WindowList) = LAYER_FIELD(l.floating, layer_windows, WindowPeek);
+        LM(AuxWinHead) = LAYER_FIELD(l.floating, layer_aux_win, AuxWinHandle);
+        LM(AuxCtlHead) = LAYER_FIELD(l.floating, layer_aux_ctl, AuxCtlHandle);
+        floating_current = l.floating;
+    }
+    else if(l.proc != current_process_info)
+        warning_unexpected("SetCurLayer to another process's layer");
+}
+
+static WindowPtr current_layer_record()
+{
+    if(root_current)
+        return (WindowPtr)root_layer_record();
+    return (WindowPtr)record_of(current_layer());
+}
+
+WindowPtr Executor::C_GetRootLayer()
+{
+    Ptr root = root_layer_record();
+    /* its first child: the front layer */
+    std::vector<Layer> seq = layer_sequence();
+    LAYER_FIELD(root, layer_windows, Ptr) = seq.empty() ? nullptr : record_of(seq[0]);
+    return (WindowPtr)root;
+}
+
+OSErr Executor::C_GetDesktopLayer(GUEST<WindowPtr> *layer)
+{
+    *layer = (WindowPtr)root_layer_record();
+    return noErr;
+}
+
+OSErr Executor::C_NewLayer(GUEST<WindowPtr> *layer, Boolean visible, Boolean flag,
+                           WindowPtr behind, int32_t refcon)
+{
+    (void)visible, (void)flag;
+    Ptr rec = new_layer_record(root_layer_record(), refcon);
+    *layer = (WindowPtr)rec;
+    if(!rec)
+        return memFullErr;
+    auto pos = floating_layers.end(); /* nil: behind the others */
+    if(behind == (WindowPtr)-1)
+        pos = floating_layers.begin();
+    else if(behind)
+    {
+        auto it = std::find(floating_layers.begin(), floating_layers.end(), (Ptr)behind);
+        if(it != floating_layers.end())
+            pos = it + 1;
+    }
+    floating_layers.insert(pos, rec);
+    for(size_t i = 0; i < floating_layers.size(); i++)
+        LAYER_FIELD(floating_layers[i], layer_next, Ptr)
+            = i + 1 < floating_layers.size() ? floating_layers[i + 1] : nullptr;
+    static bool said;
+    if(!said)
+    {
+        said = true;
+        fprintf(stderr, "[Executor] layers: a floating layer (refCon $%X)\n", (unsigned)refcon);
+    }
+    return noErr;
+}
+
+void Executor::ROMlib_dispose_layer(WindowPtr w)
+{
+    Ptr rec = (Ptr)w;
+    if(rec == floating_current)
+        set_current_layer(process_layer_record(current_process_info));
+    floating_layers.erase(std::remove(floating_layers.begin(), floating_layers.end(), rec),
+                          floating_layers.end());
+    for(process_info_t *p = process_info_list; p; p = p->next)
+        if(p->layer == rec)
+            p->layer = nullptr;
+    DisposePtr(rec);
+}
+
+Boolean Executor::C_IsLayer(WindowPtr w)
+{
+    return ROMlib_layer_p(w);
+}
+
+WindowPtr Executor::C_GetCurLayer()
+{
+    return current_layer_record();
+}
+
+void Executor::C_SetCurLayer(WindowPtr layer)
+{
+    set_current_layer((Ptr)layer);
+}
+
+WindowPtr Executor::C_SwapCurLayer(WindowPtr layer)
+{
+    WindowPtr old = current_layer_record();
+    set_current_layer((Ptr)layer);
+    return old;
+}
+
+/* The layer a window is in (a layer's: its parent; nil: the current). */
+WindowPtr Executor::C_GetWindowLayer(WindowPtr w)
+{
+    if(!w)
+        return current_layer_record();
+    if(ROMlib_layer_p(w))
+        return LAYER_FIELD(w, layer_parent, WindowPtr);
+    for(Layer l : layer_sequence())
+        for(WindowPeek wp = chain_of(l); wp; wp = WINDOW_NEXT_WINDOW(wp))
+            if(wp == (WindowPeek)w)
+                return (WindowPtr)record_of(l);
+    return current_layer_record();
 }
 
 /* A long of a process's switched low memory, wherever it is kept. */
@@ -902,6 +1207,9 @@ static void exit_current()
         DisposeIconSuite(me->icon, true);
     me->icon = nullptr;
     layer_order.erase(std::remove(layer_order.begin(), layer_order.end(), me), layer_order.end());
+    if(me->layer)
+        DisposePtr(me->layer);
+    me->layer = nullptr;
     if(pending_front == me)
         pending_front = nullptr;
     forget_process(me);
@@ -992,8 +1300,8 @@ static void bring_to_front(process_info_t *q)
         TheZoneGuard guard(LM(SysZone));
         covered = NewRgn();
     }
-    for(process_info_t *p : layers_in_front_of(q))
-        for(WindowPeek w = chain_of(p); w; w = WINDOW_NEXT_WINDOW(w))
+    for(Layer l : layers_in_front_of(Layer{ q, nullptr }))
+        for(WindowPeek w = chain_of(l); w; w = WINDOW_NEXT_WINDOW(w))
             if(WINDOW_VISIBLE(w))
                 UnionRgn(WINDOW_STRUCT_REGION(w), covered, covered);
     raise_layer(q);

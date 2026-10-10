@@ -32,6 +32,7 @@ struct Config
     std::vector<std::string> shared_folders;
 
     bool logtraps = false;
+    int logtraps_nesting = 1; // --logtraps-nesting: log calls nested this deep
     bool writable_images = false; // disk images read-write (default: read-only)
     std::string cpu = "uae";      // 68k core: "uae" or "musashi"
 

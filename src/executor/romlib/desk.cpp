@@ -38,6 +38,7 @@
 #include <rsys/launch.h>
 #include <SysErr.h>
 #include <LowMem.h>
+#include <rsys/helppkg.h>
 
 #include <algorithm>
 
@@ -309,6 +310,8 @@ void Executor::C_SystemTask()
     }
     /* MacPhoenix: and the device drivers, as a Mac's SystemTask does. */
     ROMlib_drivers_give_time();
+    /* MacPhoenix: 7.5.5's SystemTask patch: the Help Manager's balloons. */
+    ROMlib_help_idle();
 }
 
 Boolean Executor::C_SystemEvent(EventRecord *evp)

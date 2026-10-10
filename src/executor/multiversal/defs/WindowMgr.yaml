@@ -1180,6 +1180,129 @@
     name: LayerDispatch
     trap: 0xA829
     selector-location: D0<0xFF>
+    comment: |
+      MacPhoenix: 7.5.5's Layer Manager (System 'scod' -16463; its table at
+      the trap's address, kind 2, selectors -10..13). A layer is a window
+      record ($4A = $DEAD) whose +$94 is its window list; the current one's
+      lists are WindowList, AuxWinHead and AuxCtlHead (low memory $A90 is
+      the current layer, $9E2 the root). The selectors below are the ones
+      Apple's Help Manager uses for its balloon window's floating layer
+      (process.cpp); their names are guesses.
+
+# ####
+
+- function:
+    name: GetRootLayer
+    return: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x00FF
+    executor: C_
+    comment: |
+      Selector -1: the top of the current layer's parent chain. The Help
+      Manager wants its +$94 (first child) non-nil before it makes its layer.
+
+# ####
+
+- function:
+    name: GetDesktopLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+    dispatcher: LayerDispatch
+    selector: 0x02FB
+    executor: C_
+    comment: |
+      Selector -5: the root layer (low memory $9E2) by reference.
+
+# ####
+
+- function:
+    name: GetWindowLayer
+    return: WindowPtr
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x02F9
+    executor: C_
+    comment: |
+      Selector -7: the layer a window is in; a layer's parent; nil: the
+      current layer.
+
+# ####
+
+- function:
+    name: NewLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+      - name: visible
+        type: Boolean
+      - name: flag
+        type: Boolean
+      - name: behind
+        type: WindowPtr
+      - name: refcon
+        type: int32_t
+    dispatcher: LayerDispatch
+    selector: 0x0801
+    executor: C_
+    comment: |
+      Selector 1. Apple's makes the layer a window of WDEF 127 in the
+      current layer (behind as NewWindow's: -1 in front); the Help Manager
+      makes its balloon layer in the root with refCon $BADFACE. Here a
+      floating layer, in front of every process.
+
+# ####
+
+- function:
+    name: IsLayer
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0202
+    executor: C_
+
+# ####
+
+- function:
+    name: GetCurLayer
+    return: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0003
+    executor: C_
+
+# ####
+
+- function:
+    name: SetCurLayer
+    args:
+      - name: layer
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0204
+    executor: C_
+    comment: |
+      Selector 4: WindowList, AuxWinHead and AuxCtlHead become the layer's
+      (nil: the root).
+
+# ####
+
+- function:
+    name: SwapCurLayer
+    return: WindowPtr
+    args:
+      - name: layer
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0205
+    executor: C_
+    comment: |
+      Selector 5: SetCurLayer, answering the layer that was current.
 
 # ####
 

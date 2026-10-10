@@ -470,7 +470,22 @@
         comment: |
           ExpandMem+$0E: the current KCHR's data (Key Caps reads it).
       - name: pad_1
-        type: char[322]
+        type: char[102]
+      - name: emHelpGlobals
+        type: Ptr
+        comment: |
+          ExpandMem+$78 (name is a guess): the Help Manager's globals, a
+          296-byte System-heap block Apple's PACK 14 and the System's
+          patches around it share (+$11E: balloons on). helppkg.cpp.
+      - name: pad_1b
+        type: char[180]
+      - name: emHelpPackageLock
+        type: int16_t
+        comment: |
+          ExpandMem+$130 (name is a guess): PACK 14's lock count for
+          CallDetachedPackage ($668).
+      - name: pad_1c
+        type: char[34]
       - name: appl_zone_tables
         type: AE_zone_tables_h
       - name: pad_2

@@ -7,6 +7,7 @@
  */
 
 #include <base/common.h>
+#include <base/logging.h>
 
 
 #include <FontMgr.h>
@@ -94,6 +95,7 @@ static bool use_native_code_p = true;
 static bool breakOnProcessStart = false;
 static bool logtraps = false;
 static std::string logTrapFilter;
+static int logTrapsNesting = 1;
 static std::vector<std::string> debugCommands;
 static std::string keyboard;
 static bool list_keyboards_p = false;
@@ -233,6 +235,7 @@ static std::vector<std::string> parseCommandLine(int& argc, char **argv)
     po::options_description debugging("Debugging");
     debugging.add_options()
         ("logtraps", po::bool_switch(&logtraps), "print all operating system and toolbox calls and their arguments")
+        ("logtraps-nesting", po::value(&logTrapsNesting), "with --logtraps, also log calls nested this deep in callbacks from the Toolbox (default 1)")
         ("logtraps-filter", po::value(&logTrapFilter), "with --logtraps, restrict output to trap names matching these comma-separated wildcards (e.g. \"PB*,FS*,HOpen*\")")
         ("break", po::bool_switch(&breakOnProcessStart), "break into debugger at program start")
         ("debug-cmd", po::value(&debugCommands), "run a debugger command at startup (e.g. \"atb \\\"PBGetFInfo/PBHGetFInfo\\\"\"); may be repeated")
@@ -465,6 +468,7 @@ int executor_main_entry(int argc, char **argv)
 
             EM_A7 = ptr_to_longint(LM(CurStackBase));
 
+            Executor::logging::maxNestingLevel = logTrapsNesting;
             Executor::traps::init(logtraps, logTrapFilter);
             InitLowMem();
             syncint_init(); // timer interrupts: must not be inited before cpu & trapvevtors

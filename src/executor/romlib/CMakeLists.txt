@@ -254,7 +254,7 @@ set(qd_sources
     quickdraw/qCRegular.cpp quickdraw/qColor.cpp quickdraw/qColorMgr.cpp
     quickdraw/qColorutil.cpp quickdraw/qCursor.cpp quickdraw/qGrafport.cpp
     quickdraw/qIMIV.cpp quickdraw/qIMV.cpp quickdraw/qIMVxfer.cpp
-    quickdraw/qMisc.cpp quickdraw/qPaletteMgr.cpp quickdraw/qPen.cpp
+    quickdraw/qMisc.cpp quickdraw/qSaveBits.cpp quickdraw/qPaletteMgr.cpp quickdraw/qPen.cpp
     quickdraw/qPicstuff.cpp quickdraw/qPicture.cpp quickdraw/qPixMapConv.cpp
     quickdraw/qPoint.cpp quickdraw/qPoly.cpp quickdraw/qRect.cpp
     quickdraw/qRegion.cpp quickdraw/qRegular.cpp quickdraw/qScale.cpp
@@ -503,7 +503,7 @@ source_group(MPW FILES ${mpw_sources})
 
 
 set(misc_sources
-  desk.cpp extensions.cpp sysroutines.cpp component.cpp device.cpp disk.cpp diskinit.cpp dump.cpp
+  desk.cpp extensions.cpp sysroutines.cpp helppkg.cpp textservices.cpp component.cpp device.cpp disk.cpp diskinit.cpp dump.cpp
   gestalt.cpp iu.cpp launch.cpp  notify.cpp 
    osutil.cpp pack.cpp scrap.cpp script.cpp segment.cpp serial.cpp hostdisk.cpp
   stdfile.cpp romlib_stubs.cpp  toolevent.cpp toolutil.cpp 

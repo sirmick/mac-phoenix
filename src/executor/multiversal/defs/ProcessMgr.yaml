@@ -266,6 +266,26 @@
 # ####
 
 - function:
+    name: FindInputWindow
+    return: INTEGER
+    args:
+      - name: pt
+        type: Point
+      - name: window
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    selector: 0x0064
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): 7.5.5's OSDispatch $64, the window
+      under a point among the Text Services Manager's floating input
+      windows (TextServicesDispatch 23 when the TSM is present, else 0).
+      Apple's Help Manager asks before it shows a window's balloon. None
+      here (textservices.cpp).
+
+# ####
+
+- function:
     name: SetHideDesktopInBackground
     return: OSErr
     args:

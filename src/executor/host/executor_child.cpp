@@ -231,6 +231,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.cpu = cfg.cpu_core;
     c.app = expand_home(cfg.executor_app);
     c.logtraps = cfg.executor_logtraps;
+    c.logtraps_nesting = cfg.executor_logtraps_nesting;
     c.writable_images = cfg.executor_writable_images;
     c.on_frame = publish_frame;
     if (cfg.audio_enabled) {

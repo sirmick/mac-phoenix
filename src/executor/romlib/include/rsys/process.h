@@ -71,6 +71,15 @@ extern void ROMlib_layers_clip_above(RgnHandle rgn);
 extern void ROMlib_layers_clip_below(RgnHandle rgn);
 extern void ROMlib_layers_paint_behind(RgnHandle rgn);
 extern void ROMlib_layers_calcvis_behind(RgnHandle rgn);
+/* 7.5.5's Layer Manager (LayerDispatch), as far as the Help Manager's
+   balloon window needs: a layer is a window record of its own; floating
+   layers are in front of every process. */
+extern bool ROMlib_layer_p(WindowPtr w);
+extern void ROMlib_dispose_layer(WindowPtr w); /* DisposeWindow of one */
+extern bool ROMlib_root_layer_current(); /* SetCurLayer(root) */
+extern WindowPeek ROMlib_layers_window_at(Point pt); /* any layer, front first */
+/* FindWindow over every layer (the root layer current meanwhile). */
+extern INTEGER ROMlib_layers_find_window(Point pt, GUEST<WindowPtr> *window);
 /* Is the current process the front one (gets mouse and keyboard)? */
 extern bool ROMlib_process_is_front();
 

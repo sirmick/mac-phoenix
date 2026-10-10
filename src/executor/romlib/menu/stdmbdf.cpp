@@ -17,6 +17,7 @@
 
 #include <quickdraw/cquick.h>
 #include <menu/menu.h>
+#include <mman/mman.h>
 #include <wind/wind.h>
 #include <quickdraw/image.h>
 #include <rsys/executor.h>
@@ -432,6 +433,11 @@ save(int16_t offset, Rect *rect)
         int height;
         int width;
 
+        /* MacPhoenix: in the System heap, as Apple's SaveRestoreBits takes
+           temporary memory: an application's heap may not have room (the
+           Finder's has ~27K free with Balloon Help on), and the menu
+           would then be repainted over rather than restored. */
+        TheZoneGuard zone_guard(LM(SysZone));
         save_pmh = NewPixMap();
         if(save_pmh == nullptr)
             goto failure;

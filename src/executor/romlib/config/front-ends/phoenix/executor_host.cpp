@@ -106,6 +106,11 @@ int run(const Config& c)
     };
     if(c.logtraps)
         args.push_back("--logtraps");
+    if(c.logtraps_nesting > 1)
+    {
+        args.push_back("--logtraps-nesting");
+        args.push_back(std::to_string(c.logtraps_nesting));
+    }
     if(!c.app.empty())
         args.push_back(c.app);
 

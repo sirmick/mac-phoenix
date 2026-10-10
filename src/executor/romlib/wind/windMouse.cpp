@@ -13,6 +13,7 @@
 
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <rsys/process.h>
 #include <menu/menu.h>
 
 using namespace Executor;
@@ -35,28 +36,28 @@ INTEGER Executor::C_FindWindow(Point p, GUEST<WindowPtr> *wpp)
     *wpp = 0;
     if(MBDFCALL(mbHit, 0, pointaslong) != -1)
         return inMenuBar;
-    for(wp = LM(WindowList); wp; wp = WINDOW_NEXT_WINDOW(wp))
+    /* MacPhoenix: with the root layer current (Layer Manager), every
+       layer's windows, front first. */
+    if(ROMlib_root_layer_current())
+        wp = ROMlib_layers_window_at(p);
+    else
+        for(wp = LM(WindowList); wp; wp = WINDOW_NEXT_WINDOW(wp))
+            if(WINDOW_VISIBLE(wp) && PtInRgn(p, WINDOW_STRUCT_REGION(wp)))
+                break;
+    if(wp)
     {
-        if(WINDOW_VISIBLE(wp) && PtInRgn(p, WINDOW_STRUCT_REGION(wp)))
-        {
-            *wpp = (WindowPtr)wp;
-            if(WINDOW_KIND(wp) < 0)
-            {
-                retval = inSysWindow;
-                goto DONE;
-            }
-            val = WINDCALL((WindowPtr)wp, wHit, pointaslong);
-            if(val == wNoHit)
-                retval = LM(DeskHook) ? inSysWindow : inDesk;
-            else
-                retval = val + 2; /* datadesk showed us that this is how it's
-				   done */
-            goto DONE;
-        }
+        *wpp = (WindowPtr)wp;
+        if(WINDOW_KIND(wp) < 0)
+            return inSysWindow;
+        val = WINDCALL((WindowPtr)wp, wHit, pointaslong);
+        if(val == wNoHit)
+            retval = LM(DeskHook) ? inSysWindow : inDesk;
+        else
+            retval = val + 2; /* datadesk showed us that this is how it's
+                                 done */
+        return retval;
     }
-    retval = inDesk;
-DONE:
-    return retval;
+    return inDesk;
 }
 
 static Boolean xTrackBox(WindowPtr wp, Point pt, INTEGER part) /* IMIV-50 */

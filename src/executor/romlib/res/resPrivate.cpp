@@ -5,6 +5,7 @@
 #include <base/common.h>
 #include <ResourceMgr.h>
 #include <res/resource.h>
+#include <rsys/process.h>
 
 using namespace Executor;
 
@@ -28,4 +29,22 @@ SignedByte Executor::C_GetResourceMapPrivateFlags(Handle map)
     }
     ROMlib_setreserr(noErr);
     return (*(resmaphand)map)->resfatr & 0x1E;
+}
+
+/* Selector -1: does a resource map belong to the system? True of the
+   System file's map and of a file opened in system mode (Apple's tests
+   two longs in the map's header record, through its attribute word);
+   ResErr is resFNotFound for nil. Apple's Help Manager asks of the file a
+   balloon's resource came from. */
+Boolean Executor::C_ResourceMapIsSystem(Handle map)
+{
+    if(!map)
+    {
+        ROMlib_setreserr(resFNotFound);
+        return false;
+    }
+    ROMlib_setreserr(noErr);
+    if(map == LM(SysMapHndl))
+        return true;
+    return ROMlib_system_resource_file_p((*(resmaphand)map)->resfn);
 }

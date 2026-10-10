@@ -224,6 +224,9 @@ Logging:
   --debug-mode-switch        Debug video mode switches
   --debug-perf               Debug performance
   --debug-network            Debug net-bridge NAT/DNS/ICMP/TCP/UDP
+  --trace-atraps             Record (A-trap, caller PC) pairs; snapshots write atraps.tsv
+  --executor-logtraps        Executor logs every trap call to stderr
+  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks
 ```
 
 ## Environment Variables

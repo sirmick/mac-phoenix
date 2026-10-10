@@ -561,6 +561,8 @@ void Executor::C_CloseWindow(WindowPtr w)
     GUEST<AuxWinHandle> *auxhp;
     ControlHandle c, t;
 
+    if(ROMlib_layer_p(w)) /* MacPhoenix: a layer record is not in a list */
+        return;
     if(FrontWindow() == w)
     {
         wptmp = ROMlib_firstvisible((WindowPtr)WINDOW_NEXT_WINDOW(w));
@@ -600,12 +602,18 @@ void Executor::C_CloseWindow(WindowPtr w)
     savgp = qdGlobals().thePort == (GrafPtr)w ? wmgr_port : qdGlobals().thePort;
     SetPort(wmgr_port);
     SetClip(LM(GrayRgn));
-    PaintBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
-    /* MacPhoenix: with no window behind in this layer, CalcVisBehind still
-       recomputes the layers behind (their windows kept visible regions
-       that excluded this one; Finder's windows under a closed Script
-       Editor window stayed blank). */
-    CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
+    /* MacPhoenix: only a visible window uncovers anything; a hidden one's
+       regions are where it last was (Apple's Help Manager closes its
+       hidden balloon window, whose old place would be repainted over the
+       desktop icons there). With no window behind in this layer,
+       CalcVisBehind still recomputes the layers behind (their windows
+       kept visible regions that excluded this one; Finder's windows under
+       a closed Script Editor window stayed blank). */
+    if(WINDOW_VISIBLE(w))
+    {
+        PaintBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
+        CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
+    }
 
     DisposeRgn(WINDOW_STRUCT_REGION(w));
     DisposeRgn(WINDOW_CONT_REGION(w));
@@ -664,6 +672,13 @@ void Executor::C_CloseWindow(WindowPtr w)
 
 void Executor::C_DisposeWindow(WindowPtr w)
 {
+    /* MacPhoenix: a layer record (the Help Manager disposes its balloon
+       layer so). */
+    if(ROMlib_layer_p(w))
+    {
+        ROMlib_dispose_layer(w);
+        return;
+    }
     CloseWindow(w);
     DisposePtr((Ptr)w);
 }

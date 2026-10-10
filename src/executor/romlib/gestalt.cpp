@@ -10,6 +10,7 @@
 
 #include <prefs/prefs.h>
 #include <sound/soundopts.h>
+#include <rsys/helppkg.h>
 #include <mman/mman.h>
 #include <rsys/gestalt.h>
 #include <rsys/version.h>
@@ -326,7 +327,7 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
     switch(selector)
     {
         case gestaltHelpMgrAttr:
-            if(!ROMlib_pretend_help)
+            if(!ROMlib_pretend_help && !ROMlib_help_package_p())
                 selector = -1;
             break;
         case gestaltScriptMgrVersion:

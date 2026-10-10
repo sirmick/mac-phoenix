@@ -27,6 +27,7 @@
 
 #include <menu/menu.h>
 #include <mman/mman.h>
+#include <rsys/helppkg.h>
 
 #include <algorithm>
 #include <cstring>
@@ -44,6 +45,7 @@ enum
 
 MenuHandle help_menu;
 MenuHandle app_menu;
+Handle system_menu_list; /* both, for LM(SystemMenuList) */
 INTEGER app_menu_fixed;  /* items from the resource, divider included */
 /* The processes' icon suites, item by item after the fixed ones. */
 std::vector<Handle> app_item_suites;
@@ -211,6 +213,45 @@ void make_app_menu()
     }
     app_menu = mh;
 }
+
+/* The system menu list as 7.5.5 keeps it at $286, in Executor's layout
+   (menu.cpp): the header, the menus, the title save and the hierarchical
+   offset, which with no hierarchical menus is past the last menu. Apple's
+   Help Manager looks the system's Help menu up in it. */
+void update_system_menu_list()
+{
+    TheZoneGuard guard(LM(SysZone));
+    enum { size = sizeof(menulist) - sizeof(GUEST<muelem[MLMAX]>) + 2 * sizeof(muelem) + 6 };
+    if(!system_menu_list)
+        system_menu_list = NewHandleSysClear(size);
+    if(!system_menu_list)
+        return;
+    menulist *ml = (menulist *)*system_menu_list;
+    int n = 0;
+    for(MenuHandle mh : { help_menu, app_menu })
+        if(mh)
+        {
+            ml->mulist[n].muhandle = mh;
+            ml->mulist[n].muleft = 0;
+            n++;
+        }
+    ml->muoff = n * sizeof(muelem);
+    ml->muright = MENULEFT;
+    ml->mufu = 0;
+    GUEST<INTEGER> *hier = (GUEST<INTEGER> *)((char *)ml + ml->muoff + sizeof(muelem) + 4);
+    *hier = (n + 1) * sizeof(muelem);
+}
+}
+
+Handle Executor::ROMlib_system_menu_list()
+{
+    if(LM(SysMapHndl))
+    {
+        TheZoneGuard guard(LM(SysZone));
+        make_help_menu();
+    }
+    update_system_menu_list();
+    return system_menu_list;
 }
 
 Handle Executor::ROMlib_app_icon_suite()
@@ -307,10 +348,13 @@ void Executor::ROMlib_install_system_menus()
         if(!app_menu && LM(CurApRefNum) > 0)
             make_app_menu();
         ROMlib_app_menu_update();
+        update_system_menu_list();
+        LM(SystemMenuList) = system_menu_list;
     }
     for(MenuHandle mh : { help_menu, app_menu })
         if(mh && ROMlib_mentosix((*mh)->menuID) == -1)
             InsertMenu(mh, 0);
+    ROMlib_help_fix_menu_text();
 }
 
 bool Executor::ROMlib_system_menu_select(INTEGER mid, INTEGER item)
@@ -330,7 +374,18 @@ bool Executor::ROMlib_system_menu_select(INTEGER mid, INTEGER item)
         return true;
     }
     if(mid == kHMHelpMenuID)
-        return item <= help_system_items; /* balloons aren't implemented */
+    {
+        /* The System's MenuSelect patch: with Apple's Help Manager, item 1
+           is About Balloon Help and item 3 toggles the balloons. */
+        if(ROMlib_help_package_p())
+        {
+            if(item == 1)
+                ROMlib_help_about();
+            else if(item == 3)
+                ROMlib_help_toggle_balloons();
+        }
+        return item <= help_system_items;
+    }
     return false;
 }
 

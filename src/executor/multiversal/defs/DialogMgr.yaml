@@ -896,3 +896,68 @@
 - typedef:
     name: DialogItemType
     type: int16_t
+
+# ####
+
+- function:
+    name: GetWindowModalClass
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: modal_class
+        type: INTEGER*
+    dispatcher: DialogDispatch
+    selector: 0x0402
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): 7.5.5's DialogDispatch 2. The window's
+      variant when it is dBoxProc (1) or movableDBoxProc (5) of WDEF 0, else
+      0; Apple's caches a 1 in the window record's spare flag bit 7.
+
+# ####
+
+- function:
+    name: GetFrontWindowModalClass
+    return: OSErr
+    args:
+      - name: modal_class
+        type: INTEGER*
+    dispatcher: DialogDispatch
+    selector: 0x0201
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): DialogDispatch 1, GetWindowModalClass of
+      FrontWindow. The Help Manager takes class 1 as "a modal dialog is up"
+      for its balloons.
+
+# ####
+
+- function:
+    name: DialogMenuState
+    return: int32_t
+    dispatcher: DialogDispatch
+    selector: 0x00FF
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): DialogDispatch -1, which the Help
+      Manager calls with a menu's offset in MenuList pushed, before it
+      shows a menu title's balloon; the routine leaves that long on the
+      stack and pushes its answer above it (the offset of the menu to use,
+      a modal dialog's), and the caller pops both. So no argument here:
+      C_DialogMenuState reads the long and makes room (dialDispatch.cpp).
+
+# ####
+
+- function:
+    name: DialogMenuStateApply
+    args:
+      - name: state
+        type: int32_t
+    dispatcher: DialogDispatch
+    selector: 0x02FE
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): DialogDispatch -2, which pops the state
+      from DialogMenuState and adjusts the menu's enable flags left on the
+      stack under it (a modal dialog's menus). A no-op here.

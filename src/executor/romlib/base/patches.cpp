@@ -7,6 +7,7 @@
 #include <base/debugger.h>
 #include <sound/soundopts.h>
 #include <rsys/executor.h>
+#include <rsys/helppkg.h>
 
 using namespace Executor;
 
@@ -119,8 +120,8 @@ static bool shouldHideTrap(bool tool, int index)
                 return ROMlib_PretendSound == soundoff;
             case 0x8F: /* OSDispatch (Word uses old, undocumented selectors) */
                 return system_version < 0x700;
-            case 0x30: /* Pack14 */
-                return true;
+            case 0x30: /* Pack14: Executor's own is stubs; Apple's shows */
+                return !ROMlib_help_package_p();
             case 0xB5: /* ScriptUtil */
                 return ROMlib_pretend_script ? 0 : 1;
             default:

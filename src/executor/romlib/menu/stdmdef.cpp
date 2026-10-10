@@ -15,6 +15,7 @@
 #include <quickdraw/quick.h>
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <rsys/helppkg.h>
 #include <algorithm>
 
 using namespace Executor;
@@ -699,6 +700,8 @@ void choose_menu(MenuHandle mh, Rect *rp, Point p, GUEST<int16_t> *itemp, tableP
                 nitem = 0;
             if(*itemp != nitem)
             {
+                /* MacPhoenix: the balloon for the item, as Apple's MDEF 0. */
+                ROMlib_help_remove_balloon();
                 if(*itemp)
                     /* redraw this guy normally */
                     draw_item(rp, &tablep->entry[*itemp - 1], 1 << *itemp,
@@ -706,6 +709,15 @@ void choose_menu(MenuHandle mh, Rect *rp, Point p, GUEST<int16_t> *itemp, tableP
                 if(nitem)
                     draw_item(rp, &tablep->entry[nitem - 1], 1 << nitem, nitem, mh, true);
                 *itemp = nitem;
+                if(nitem && StillDown())
+                {
+                    Rect item_rect;
+                    item_rect.left = rp->left;
+                    item_rect.right = rp->right;
+                    item_rect.top = tablep->entry[nitem - 1].top + LM(TopMenuItem);
+                    item_rect.bottom = tablep->entry[nitem].top + LM(TopMenuItem);
+                    ROMlib_help_menu_balloon(mh, nitem, &item_rect);
+                }
             }
             if(nitem)
                 fliprect(rp, nitem, tablep, &(*MBSAVELOC)->mbItemRect);
@@ -713,6 +725,7 @@ void choose_menu(MenuHandle mh, Rect *rp, Point p, GUEST<int16_t> *itemp, tableP
     }
     else if(*itemp)
     {
+        ROMlib_help_remove_balloon();
         nitem = *itemp;
         draw_item(rp, &tablep->entry[nitem - 1], 1 << nitem, nitem, mh, false);
         *itemp = 0;

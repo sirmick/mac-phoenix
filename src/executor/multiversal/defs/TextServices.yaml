@@ -1,0 +1,51 @@
+# MacPhoenix: the Text Services Manager's trap, as far as Apple's Help
+# Manager (helppkg.cpp) needs it. Executor has no TSM.
+
+- dispatcher:
+    name: TextServicesDispatch
+    trap: 0xAA54
+    selector-location: D0W
+    comment: |
+      MacPhoenix: 7.5.5's handler is a table of 26 long addresses
+      (selectors 0-25: NewTSMDocument, DeleteTSMDocument, ...,
+      SetTextServiceLanguage is 14); its globals hang off ExpandMem+$64.
+      Only the two private selectors the Help Manager calls while
+      balloons are on are here; their names are guesses.
+
+# ####
+
+- function:
+    name: TSMFindWindow
+    return: INTEGER
+    args:
+      - name: pt
+        type: Point
+      - name: window
+        type: WindowPtr*
+    dispatcher: TextServicesDispatch
+    selector: 0x0017
+    executor: C_
+    comment: |
+      Selector 23: FindWindow among the TSM's floating input windows
+      (Apple's switches to the layer OSDispatch $48 answers and calls
+      FindWindow there; the Process Manager's OSDispatch $64 is this
+      call). The Help Manager treats a hit as "not mine". No such
+      windows here: 0 and nil.
+
+# ####
+
+- function:
+    name: TSMInputWindowOp
+    return: OSErr
+    args:
+      - name: record
+        type: Ptr
+      - name: op
+        type: INTEGER
+    dispatcher: TextServicesDispatch
+    selector: 0x0016
+    executor: C_
+    comment: |
+      Selector 22: operations (1-6) on the floating input window's state
+      in the TSM globals. paramErr here; the Help Manager takes that as
+      "no input window".

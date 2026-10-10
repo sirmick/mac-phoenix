@@ -48,6 +48,8 @@ models them through `LM()` at the real offsets.
 | Memory | `MemTop $108`, `BufPtr $10C`, `HeapEnd $114`, `TheZone $118`, `ApplLimit $130`, `SysZone $2A6`, `ApplZone $2AA`, `Lo3Bytes $31A`, `MinStack/DefltStack $31E/$322` |
 | Machine | `ROMBase $2AE`, `RAMBase $2B2`, `ROM85 $28E`, `HWCfgFlags $B22`, `MMU32Bit $CB2`, `SysParam $1F8` (in-memory copy of PRAM) |
 | Extended | `ExpandMem $2B6`: pointer to `ExpandMemRec` (Gestalt table, Script Manager, other post-128K-ROM globals) |
+| Help Manager | `HelpPackage $BE0` (detached `PACK` 14 handle; per-process range, same in every process), lock count ExpandMem+$130, globals ExpandMem+$78 (296 bytes; +$11E balloons on, +$10C/+$110 per-process menu and dialog `hmnu`/`hdlg` IDs); names guessed |
+| Layers | `SystemMenuList $286` (Help and Application menus, system-wide), `SavedHandle $A28` (bits under a pulled-down menu; nil here). 7.5.5's `CurLayer $A90` and root layer `$9E2` are not modelled: the Layer Manager's records live in process.cpp |
 | Current process | `CurrentA5 $904`, `CurStackBase $908`, `CurApName $910`, `CurApRefNum $900`, `CurJTOffset $934` |
 | Resources | `TopMapHndl $A50`, `SysMapHndl $A54`, `SysMap $A58`, `CurMap $A5A` |
 | Queues | `EventQueue $14A`, `VBLQueue $160`, `DrvQHdr $308`, `VCBQHdr $356`, `FSQHdr $360` |

@@ -426,6 +426,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --executor-start WHAT      finder | browser | path inside the System (default: finder)\n");
             printf("  --[no-]executor-fresh      Start each run from the System's clean copy (default: on)\n");
             printf("  --executor-logtraps        Executor logs every trap call to stderr\n");
+            printf("  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)\n");
             printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only)\n");
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
@@ -573,6 +574,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
 
         if (strcmp(argv[i], "--executor-logtraps") == 0) {
             config.executor_logtraps = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-logtraps-nesting") == 0 && i + 1 < argc) {
+            config.executor_logtraps_nesting = atoi(argv[i + 1]); argv[i] = argv[i + 1] = nullptr; i++; continue;
         }
         if (strcmp(argv[i], "--executor-writable-images") == 0) {
             config.executor_writable_images = true; argv[i] = nullptr; continue;

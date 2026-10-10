@@ -51,6 +51,8 @@ extern Boolean ROMlib_shouldalarm(void);
 /* System 7 system menus (sysmenu.cpp) */
 extern bool ROMlib_system_menu_p(INTEGER mid);
 extern MenuHandle ROMlib_help_menu();
+/* The system menu list (low memory $286 on 7.5.5): Help and Application. */
+extern Handle ROMlib_system_menu_list();
 extern void ROMlib_install_system_menus();
 extern bool ROMlib_system_menu_select(INTEGER mid, INTEGER item);
 extern bool ROMlib_icon_title_p(MenuHandle mh);

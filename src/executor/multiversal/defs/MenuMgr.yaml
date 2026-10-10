@@ -129,6 +129,19 @@
 # ####
 
 - lowmem:
+    name: SystemMenuList
+    type: Handle
+    address: 0x286
+    comment: |
+      MacPhoenix (name is a guess): 7.5.5's menu list of the system menus,
+      Help and Application, shared by every process (not in the
+      per-process low-memory ranges). Apple's Help Manager looks the
+      system's Help menu up in it to tell it from an application's copy
+      (menu/sysmenu.cpp).
+
+# ####
+
+- lowmem:
     name: MBarEnable
     type: INTEGER
     address: 0xA20
@@ -143,6 +156,17 @@
     address: 0xA24
     comment: |
       MenuMgr IMI-361 (true);
+
+# ####
+
+- lowmem:
+    name: SavedHandle
+    type: Handle
+    address: 0xA28
+    comment: |
+      MacPhoenix: the bits under a pulled-down menu, non-nil while one is
+      down (7.5.5; Executor's own menus keep theirs elsewhere, so it is
+      nil). Apple's Help Manager shows no window balloons while it is set.
 
 # ####
 

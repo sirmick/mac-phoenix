@@ -34,6 +34,40 @@ lowmem:
     status: known
     source: Inside Macintosh (low memory), 7.5.5-finder-idle snapshot (FFFF x3)
 
+  - address: 0xBE0
+    name: HelpPackage
+    type: Handle
+    status: guess
+    source: 7.5.5-finder-idle snapshot; System 'ptch' handler for $A830 at RAM $6DB24
+    comment: >
+      The detached handle to PACK 14 that the Pack14 trap enters through
+      CallDetachedPackage ($668) with the lock count at ExpandMem+$130.
+      Inside the per-process 'lmem' range $BC2-$BFD.
+  - address: 0x286
+    name: SystemMenuList
+    type: Handle
+    status: guess
+    source: 7.5.5-finder-idle snapshot (menu list of -16490 and -16489); PACK 14 +1198
+    comment: >
+      The menu list of the system menus (Help, Application). The Help
+      Manager swaps it into MenuList to tell the system's Help menu from
+      an application's copy.
+  - address: 0xA90
+    name: CurLayer
+    type: Ptr
+    status: guess
+    source: Layer Manager (System 'scod' -16463), SetCurLayer at RAM $A59A6
+    comment: >
+      The current layer; SetCurLayer copies its +$94 into WindowList and
+      its +$86/+$8C into AuxWinHead/AuxCtlHead.
+  - address: 0x9E2
+    name: RootLayer
+    type: Ptr
+    status: guess
+    source: Layer Manager InitLayers at RAM $A58D6 (NewPtr $9C, OpenPort)
+    comment: >
+      The root layer, a window record; LayerDispatch -5 answers it.
+
 traps: []
 
 # Dispatch traps: one trap word, many routines picked by a selector
@@ -214,6 +248,13 @@ dispatchers:
         comment: >
           Called once by the System's boot code after its 27 $16 calls,
           before the extensions load; the name only says where it sits.
+      - value: 0x64
+        name: FindInputWindow
+        status: guess
+        source: RAM $28C80; PACK 14 +1f64
+        comment: >
+          (Point, WindowPtr *out) -> part code: TextServicesDispatch $17
+          when the TSM is present, else 0.
   - trap: 0xA829
     name: LayerDispatch
     comment: >
@@ -242,6 +283,172 @@ dispatchers:
           (window, Rect *out), no result. Key Caps writes it into its 'kcwn'
           resource on close and reads it back as the window's global
           content rectangle (offsetting its WIND bounds by the top-left).
+      - value: 0xFF
+        name: GetRootLayer
+        status: guess
+        source: RAM $A499E (table at the trap's address, kind 2, selectors -10..13)
+        comment: >
+          () -> LayerPtr: the top of the current layer's parent chain
+          (+$82). A layer is a window record with $DEAD at +$4A, its
+          parent at +$82, the next layer at +$90, its window list at +$94.
+      - value: 0xFB
+        name: GetDesktopLayer
+        status: guess
+        source: RAM $A5F00
+        comment: >
+          (LayerPtr *out) -> OSErr: the root layer, low memory $9E2.
+      - value: 0xF9
+        name: GetWindowLayer
+        status: guess
+        source: RAM $A49CA
+        comment: >
+          (window) -> LayerPtr: nil gives the current layer, a layer its
+          parent, a window the layer whose list holds it (iterating
+          with selector -8).
+      - value: 0x01
+        name: NewLayer
+        status: guess
+        source: RAM $A587A; PACK 14 +1e90 (HMSetBalloons)
+        comment: >
+          (LayerPtr *out, Boolean, Boolean, LayerPtr behind, long refCon)
+          -> OSErr: a window of WDEF 127 in the current layer. The Help
+          Manager's balloon layer has refCon $BADFACE.
+      - value: 0x02
+        name: IsLayer
+        status: guess
+        source: RAM $A6084
+        comment: (ptr) -> Boolean, +$4A == $DEAD.
+      - value: 0x03
+        name: GetCurLayer
+        status: guess
+        source: RAM $A60B0
+        comment: () -> LayerPtr, low memory $A90.
+      - value: 0x04
+        name: SetCurLayer
+        status: guess
+        source: RAM $A59A6
+        comment: >
+          (LayerPtr), nil for the root; WindowList, AuxWinHead and
+          AuxCtlHead become the layer's.
+      - value: 0x05
+        name: SwapCurLayer
+        status: guess
+        source: RAM $A5B10
+        comment: (LayerPtr) -> LayerPtr, SetCurLayer answering the old one.
+  - trap: 0xA830
+    name: Pack14
+    comment: >
+      The Help Manager. 7.5.5's trap handler (RAM $6DB24, a System patch)
+      sends the selectors into the System's PACK 14 through
+      CallDetachedPackage ($668) with the handle at $BE0 and the lock
+      count at ExpandMem+$130, except 3 (reads the globals' +$11E) and
+      -3 (the Process Manager's init: loads the Help menu, MENU -16490,
+      gives it its icon title and inserts it in the system menu list).
+      The selector word carries the parameter size in words in its high
+      byte for the package's dispatch; the negative selectors are called
+      as their low byte only (move.w #$FC,d0).
+    selectors:
+      - value: 0xFC
+        name: HMIdle
+        status: guess
+        source: System SystemTask patch RAM $79826, OSEventAvail patch $6DC4A
+        comment: >
+          () -> OSErr, while balloons are on and the current process is
+          the front one: the balloons for windows ('hwin'), dialog items
+          ('hdlg') and menu titles.
+      - value: 0xFB
+        name: HMDialogIdle
+        status: placeholder
+        source: System IsDialogEvent patch RAM $6DC1E
+      - value: 0xFA
+        name: HMLayerCreated
+        status: placeholder
+        source: Layer Manager NewLayer RAM $A58BC (with the new layer)
+  - trap: 0xA81E
+    name: SaveRestoreBits
+    comment: >
+      Private screen-bits save (RAM $6D7B8, table of selectors 1-9). The
+      menu bar definition saves the bits under a menu with it, the Help
+      Manager those under a balloon; a saved record is 12 bytes, the
+      rectangle then a handle to the pixels.
+    selectors:
+      - value: 0x01
+        name: SaveBits
+        status: guess
+        source: RAM $6D336; PACK 14 +1326, MBDF 0 +de8
+        comment: (Rect *bounds, INTEGER purgeable, Handle *out) -> OSErr.
+      - value: 0x02
+        name: RestoreBits
+        status: guess
+        source: RAM $6D45C
+        comment: (Handle) -> OSErr, through the Window Manager port, then DiscardBits.
+      - value: 0x03
+        name: DiscardBits
+        status: guess
+        source: RAM $6D546
+        comment: (Handle) -> OSErr.
+  - trap: 0xAA54
+    name: TextServicesDispatch
+    comment: >
+      The Text Services Manager (RAM $7148C, a table of 26 long
+      addresses; globals off ExpandMem+$64; 14 is SetTextServiceLanguage).
+    selectors:
+      - value: 0x17
+        name: TSMFindWindow
+        status: guess
+        source: RAM $7138C; PACK 14 +3ebc; OSDispatch $64
+        comment: >
+          (Point, WindowPtr *out) -> part code: FindWindow in the layer
+          OSDispatch $48 answers for the current process (the floating
+          input windows).
+      - value: 0x16
+        name: TSMInputWindowOp
+        status: placeholder
+        source: RAM $71262; PACK 14 +3bc
+        comment: (Ptr record, INTEGER op 1-6) -> OSErr, on the TSM globals.
+  - trap: 0xAA68
+    name: DialogDispatch
+    comment: >
+      RAM $6A02C, table kind 2, selectors -5..8.
+    selectors:
+      - value: 0x01
+        name: GetFrontWindowModalClass
+        status: guess
+        source: RAM $69C7E; PACK 14 +8b2, +3f68
+        comment: (INTEGER *class) -> OSErr, GetWindowModalClass of FrontWindow.
+      - value: 0x02
+        name: GetWindowModalClass
+        status: guess
+        source: RAM $69BF4
+        comment: >
+          (window, INTEGER *class) -> OSErr: the variant when the window
+          is dBoxProc (1) or movableDBoxProc (5) of WDEF 0, else 0; a 1 is
+          cached in the window's spare flag bit 7.
+      - value: 0xFF
+        name: DialogMenuState
+        status: guess
+        source: RAM $69BDC; PACK 14 +150
+        comment: >
+          Pushed: a menu's offset in MenuList; the routine pushes its
+          answer (the offset of the menu to use) above it and the caller
+          pops both.
+      - value: 0xFE
+        name: DialogMenuStateApply
+        status: guess
+        source: RAM $69786; PACK 14 +16c
+        comment: >
+          Pops the long from DialogMenuState, adjusting the menu's enable
+          flags left on the stack under it.
+  - trap: 0xA822
+    name: ResourceDispatch
+    selectors:
+      - value: 0xFF
+        name: ResourceMapIsSystem
+        status: guess
+        source: RAM $6CA26; PACK 14 +1426
+        comment: >
+          (Handle map) -> Boolean: the System file's map, or one whose
+          header says the system's; ResErr resFNotFound for nil.
   - trap: 0xABC9
     name: IconDispatch
     selectors:

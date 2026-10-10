@@ -21,6 +21,7 @@
 #include <file/file.h>
 #include <mman/mman.h>
 #include <rsys/extensions.h>
+#include <rsys/helppkg.h>
 #include <rsys/component.h>
 #include <rsys/version.h>
 #include <util/macstrings.h>
@@ -383,6 +384,7 @@ void Executor::ROMlib_install_app_packs()
 void Executor::ROMlib_load_extensions()
 {
     ROMlib_install_app_packs();
+    ROMlib_install_help_package(); /* before INITs that patch or ask for it */
 
     /* The System file's own components first, as its boot code does. */
     int32_t n = ROMlib_register_components(LM(SysMap), true);

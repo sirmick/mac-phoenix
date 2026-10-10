@@ -624,6 +624,10 @@ int32_t Executor::C_TEGetHeight(LONGINT endLine, LONGINT startLine,
 {
     int32_t retval;
 
+    /* MacPhoenix: both ends are pinned to the line count, not only endLine:
+       Apple's Help Manager asks for (endLine 0, startLine 2047) to get the
+       height of all the lines, and sizes its balloons by the answer. */
+    startLine = std::min<LONGINT>(TE_N_LINES(teh), startLine);
     if(startLine > 0)
         startLine--;
     else

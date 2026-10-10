@@ -2150,3 +2150,62 @@
         type: OpenCPicParams*
     trap: 0xAA20
     executor: C_
+
+# ####
+
+- dispatcher:
+    name: SaveRestoreBits
+    trap: 0xA81E
+    selector-location: D0W
+    comment: |
+      MacPhoenix: 7.5.5's private screen-bits save (a table of nine
+      selectors at the trap's address). The System's menu bar definition
+      saves the bits under a menu with it; Apple's Help Manager those
+      under a balloon. The three the Help Manager uses are here, named as
+      Apple's later headers do (quickdraw/qSaveBits.cpp).
+
+# ####
+
+- function:
+    name: SaveBits
+    return: OSErr
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: purgeable
+        type: INTEGER
+      - name: bits
+        type: Handle*
+    dispatcher: SaveRestoreBits
+    selector: 0x0501
+    executor: C_
+    comment: |
+      Selector 1: the screen's pixels in bounds (global) into a new handle,
+      a 12-byte record of the rectangle and a PixMap handle, as Apple's.
+
+# ####
+
+- function:
+    name: RestoreBits
+    return: OSErr
+    args:
+      - name: bits
+        type: Handle
+    dispatcher: SaveRestoreBits
+    selector: 0x0202
+    executor: C_
+    comment: |
+      Selector 2: the pixels back on the screen (through the Window Manager
+      port), then DiscardBits.
+
+# ####
+
+- function:
+    name: DiscardBits
+    return: OSErr
+    args:
+      - name: bits
+        type: Handle
+    dispatcher: SaveRestoreBits
+    selector: 0x0203
+    executor: C_

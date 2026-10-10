@@ -223,7 +223,7 @@ the expensive direction.
 | Component Manager | C++ (M3) | `gpch` 667; dispatcher |
 | Thread Manager | C++ (M3) | ~20 selectors, all stack switching inside our Process Manager |
 | Drag Manager | C++ (M4) | the pre-7.5 extension hooks Window/Process Manager internals |
-| Help Manager | Apple's `PACK` 14 (M3) | 68k calling public traps; resource policy `apple` |
+| Help Manager | Apple's `PACK` 14 (M3e, done) | 68k calling public traps; the System's package, loaded by `helppkg.cpp` |
 | Apple Event Manager | try Apple's `PACK` 8 (M3) | may close Finder's `'aevt'` wire-format gap; depends on HLE delivery matching Apple's (unverified) |
 | TSM, Dictionary, Collection Managers | stub | Gestalt absent, error results, until a real caller shows up |
 | Translation Manager / Easy Open | skip | its own `lpch` |
@@ -297,7 +297,7 @@ Ethernet driver.
 | M3b | Whitelisted INITs | INIT loader in Start Manager order, `ShowInitIcon`, `cdev` INITs; shadowing switch withdraws Executor's built-ins; Color Picker loads (with M3c) | in progress: loader runs allowed INITs/cdevs/fext in Start Manager order (`extension-policy.txt`, phase 1 + AppleScript + Finder Scripting); `jGNEFilter` chain. Date & Time's menu bar clock and Color Picker 2.0 (2026-10-10). Open: `ShowInitIcon`, shadowing switch |
 | M3c | Component Manager in C++ | System file components register; Color Picker's `GetColor` matches a real boot | done (2026-10-10): `component.cpp` (5cd8f3e2), System file / extension / `thng` file components register, AppleScript's components run; Color Picker 2.0's `GetColor` shows Apple's dialog with the HSL picker (dialog background: STRAGGLERS.md 17) |
 | M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs (needs M3h for its network) | not started |
-| M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` | in progress: Apple's `PACK` 8 runs (installed by AppleScript), `oapp`/AppParameters in Apple's wire format. Open: Help Manager balloons |
+| M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` | done (2026-10-10): Apple's `PACK` 8 runs (installed by AppleScript), `oapp`/AppParameters in Apple's wire format; the System's `PACK` 14 is the Help Manager (`helppkg.cpp`: detached handle at `$BE0`, lock count at ExpandMem+$130, its globals at ExpandMem+$78 as the boot code leaves them, the trap entered through `$668`; Executor's `balloon.cpp` stubs answer only without Apple's System file). Show/Hide Balloons and About Balloon Help are the System's MenuSelect patch in `sysmenu.cpp`; balloons for menu items (Executor's MDEF calls `HMShowMenuBalloon` as Apple's MDEF 0 does), windows (`hwin`, through the idle selector -4 from `SystemTask`), Finder's icons (`HMShowBalloon`) draw with Apple's WDEF 126 in a floating layer. Needed: the Layer Manager (`LayerDispatch` -1/-5/-7/1-5, floating layers in front of every process, process.cpp), `SaveRestoreBits` ($A81E 1-3), `DialogDispatch` 1/2/-1/-2, `ResourceDispatch` -1, `TextServicesDispatch` $16/$17, OSDispatch $64, `TEGetHeight` pinning both ends to the line count, `CloseWindow` of a hidden window repainting nothing. Open: STRAGGLERS.md 18, 19 |
 | M3f | Extension set | Speech Manager + MacinTalk 3, AppleScript + Finder Scripting Extension, QuickTime load and work (QuickTime movie plays in SimpleText) | in progress: AppleScript loads by default; Script Editor runs `3 + 4 -> 7`; scripting additions run from MacPerl; Finder Scripting Extension loads. Open: `tell application "Finder"` (target spec empty, `finder_suite_executor` fails), Speech, QuickTime |
 | M3g | Sound output | host `SoundDriver` replaces `SoundFake`; `SysBeep` and `SndPlay` audible in the web UI | done (2026-10-10): with `--audio`, `PhoenixSoundDriver` (front-ends/phoenix) mixes at 22255 Hz and hands 48 kHz stereo frames to the IPC audio ring the ROM machines use (Opus, WebRTC); `SysBeep` plays the System's "Simple Beep" through `SndPlay`; the mixer gained the square-wave synthesizer (`freqCmd`, `noteCmd`, `waitCmd`, `restCmd`, `ampCmd`) that sound uses. Open: the Sound control panel's alert choice, `volumeCmd` |
 | M3h | MacTCP finished | `dnrp` resolver, UDP, async calls on the `accRun` pump; Fetch connects to a host name | in progress: TCP on host sockets (`executor.MacTCP.*`, `tcp_socket` passes in the guest suite). Open: `dnrp`, UDP, async |
@@ -622,3 +622,31 @@ Kept small so upstream fixes can be merged by hand:
   just above the System file, the Process Manager links it into every
   other process's chain and the new-process template, exit and launch
   leave it open, `CloseResFile` unlinks it everywhere.
+* `helppkg.cpp` (new), `textservices.cpp` (new), `quickdraw/qSaveBits.cpp`
+  (new): Apple's Help Manager (`PACK` 14) and the private System pieces
+  it stands on -- `SaveRestoreBits` ($A81E), the Text Services
+  Manager's window lookups ($AA54 $16/$17, OSDispatch $64), DialogDispatch
+  1/2/-1/-2 (`dial/dialDispatch.cpp`), ResourceDispatch -1
+  (`res/resPrivate.cpp`). `patches.cpp` shows the Pack14 trap once the
+  package is in; `gestalt.cpp` answers `'help'` then.
+* `process.cpp` layers: the Layer Manager's view of them (`LayerDispatch`
+  -1, -5, -7, 1-5): every layer is a window record (`$4A` = `$DEAD`, `+$94`
+  its window list), processes have one, and `NewLayer` makes floating
+  layers in front of every process whose lists `SetCurLayer` swaps into
+  `WindowList`/`AuxWinHead`/`AuxCtlHead`; `DisposeWindow` of a layer
+  disposes it; `FindWindow` with the root layer current looks in every
+  layer. `wind/windInit.cpp`: `CloseWindow` repaints behind a window only
+  if it was visible (Apple's balloon window is closed hidden).
+* `menu/stdmdef.cpp`, `menu/menu.cpp`: the menu definition shows and
+  removes item balloons as Apple's MDEF 0 does, and a balloon goes before
+  a menu is pulled down (Apple's MBDF); `menu/sysmenu.cpp` keeps the
+  system menu list at `$286` for the Help Manager's per-application Help
+  menu copies, and handles the Help menu's own items.
+  `SavedHandle` ($A28) is set while a menu is down (the Help Manager shows
+  no window balloons then); `stdmbdf.cpp` keeps a menu's saved bits in
+  the System heap, as Apple's SaveRestoreBits takes temporary memory (the
+  Finder's heap has ~27K free).
+* `textedit/teIMV.cpp`: `TEGetHeight` pins startLine to the line count
+  too; the Help Manager asks (0, 2047) for the height of every line.
+* `base/logging.cpp`: `--logtraps-nesting N` (`--executor-logtraps-nesting`)
+  logs calls nested deeper in callbacks than the default 1.

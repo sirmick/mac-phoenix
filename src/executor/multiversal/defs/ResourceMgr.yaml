@@ -685,6 +685,23 @@
 # ####
 
 - function:
+    name: ResourceMapIsSystem
+    return: Boolean
+    args:
+      - name: map
+        type: Handle
+    dispatcher: ResourceDispatch
+    selector: 0x02FF
+    executor: C_
+    comment: >
+      MacPhoenix. Private in 7.5.5 (selector -1; name is our guess): true
+      of the System file's map and of a map whose file was opened in
+      system mode; ResErr resFNotFound for nil. Apple's Help Manager asks
+      of a balloon resource's home file.
+
+# ####
+
+- function:
     name: GetResourceMapHandle
     return: Handle
     args:

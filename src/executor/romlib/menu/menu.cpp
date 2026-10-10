@@ -24,6 +24,7 @@
 #include <SysErr.h>
 
 #include <menu/menu.h>
+#include <rsys/helppkg.h>
 #include <quickdraw/cquick.h>
 #include <quickdraw/quick.h>
 #include <mman/mman.h>
@@ -1121,6 +1122,9 @@ int32_t Executor::ROMlib_menuhelper(MenuHandle mh, Rect *saverp,
     GetPort(&saveport_swapped);
     saveport = saveport_swapped;
     SetPort(wmgr_port);
+    /* MacPhoenix: a menu is down (7.5.5 keeps the saved bits' handle
+       here); Apple's Help Manager shows no window balloons meanwhile. */
+    LM(SavedHandle) = LM(MBSaveLoc);
 
     olditem = -1;
     item = 0;
@@ -1254,6 +1258,9 @@ int32_t Executor::ROMlib_menuhelper(MenuHandle mh, Rect *saverp,
                     nmenusdisplayed = 0;
                 }
                 whichmenuhit = 0;
+                /* MacPhoenix: a balloon goes before the title hilite
+                   changes, as in Apple's menu bar definition. */
+                ROMlib_help_remove_balloon();
                 if(where == NOTHITINMBAR)
                 {
                     mh = nullptr;
@@ -1314,6 +1321,7 @@ int32_t Executor::ROMlib_menuhelper(MenuHandle mh, Rect *saverp,
                 oldentry->mbReserved = (ULONGINT)item;
                 olditem = item = newentry->mbReserved;
                 changedmenus = true;
+                ROMlib_help_remove_balloon(); /* MacPhoenix: as Apple's MBDF */
                 mh = ((muelem *)((char *)*LM(MenuList) + where))->muhandle;
                 templ = where;
                 if(where > (*MENULIST)->muoff)
@@ -1328,6 +1336,7 @@ int32_t Executor::ROMlib_menuhelper(MenuHandle mh, Rect *saverp,
         }
     }
 
+    ROMlib_help_remove_balloon(); /* MacPhoenix: the item's, if any */
     if(mh)
     {
         if(item)
@@ -1378,6 +1387,7 @@ int32_t Executor::ROMlib_menuhelper(MenuHandle mh, Rect *saverp,
     }
     if(!mid)
         HiliteMenu(0);
+    LM(SavedHandle) = nullptr;
     SetPort(saveport); /* Does SystemMenu() expect the LM(WMgrPort) also? */
 
     /* Illustrator 5.5 behavior suggests that hits on hierarchical menus

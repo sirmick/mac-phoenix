@@ -27,6 +27,7 @@ bool loggingActive();
 void indent();
 
 extern int nestingLevel;
+extern int maxNestingLevel; /* MacPhoenix: calls nested deeper are not logged */
 
 void logUntypedArgs(const char *name);
 void logUntypedReturn(const char *name);

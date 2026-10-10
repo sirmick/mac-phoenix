@@ -72,6 +72,37 @@
     comment: |
       & 0xFF ? ###
 
+      MacPhoenix: on Apple's System file the trap goes to the System's
+      PACK 14 (helppkg.cpp); the C_ functions below answer only without it.
+
+# ####
+
+- lowmem:
+    name: HelpPackage
+    type: Handle
+    address: 0xBE0
+    comment: |
+      MacPhoenix (name is a guess): 7.5.5's detached handle to PACK 14,
+      which its Pack14 trap enters through CallDetachedPackage ($668) with
+      the lock count at ExpandMem+$130. In the per-process low-memory
+      range ($BC2-$BFD), the same in every process.
+
+# ####
+
+- function:
+    name: HMIdle
+    return: OSErr
+    dispatcher: Pack14
+    selector: 0x00FC
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): PACK 14's selector -4, which 7.5.5's
+      SystemTask and OSEventAvail patches call while balloons are on and
+      the current process is the front one; it shows and removes the
+      balloons for windows and dialog items. Selector words put the
+      parameter size in words in the high byte, so the negative selectors
+      are their low byte only.
+
 # ####
 
 - function:

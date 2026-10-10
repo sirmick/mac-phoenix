@@ -5,8 +5,10 @@
 #include <base/common.h>
 
 #include <DialogMgr.h>
+#include <WindowMgr.h>
 #include <dial/dial.h>
 #include <OSEvent.h>
+#include <syn68k_public.h>
 
 using namespace Executor;
 
@@ -76,4 +78,42 @@ Boolean Executor::C_CheckEventQueueForUserCancel(EventRecord *event)
         if(C_IsCancelEvent(event))
             return true;
     return false;
+}
+
+/* MacPhoenix: DialogDispatch 1 and 2 as 7.5.5 implements them (names are
+   guesses): a window's modal class is its variant when it is a dBoxProc or
+   movableDBoxProc window of WDEF 0. Apple's Help Manager asks for the front
+   window's before it shows balloons. */
+
+OSErr Executor::C_GetWindowModalClass(WindowPtr window, GUEST<INTEGER> *modal_class)
+{
+    *modal_class = 0;
+    if(!window)
+        return noErr;
+    INTEGER variant = GetWVariant(window);
+    if(variant == dBoxProc || variant == movableDBoxProc)
+        *modal_class = variant;
+    return noErr;
+}
+
+OSErr Executor::C_GetFrontWindowModalClass(GUEST<INTEGER> *modal_class)
+{
+    return C_GetWindowModalClass(FrontWindow(), modal_class);
+}
+
+/* DialogDispatch -1 and -2: a modal dialog's menu state, for the Help
+   Manager's menu title balloons. Nothing to adjust here. */
+
+int32_t Executor::C_DialogMenuState()
+{
+    /* The caller's long stays; the answer goes in a new slot above it (the
+       Pascal glue writes the result at the stack top on return). */
+    int32_t menu_offset = *ptr_from_longint<GUEST<int32_t> *>(EM_A7);
+    EM_A7 -= 4;
+    return menu_offset;
+}
+
+void Executor::C_DialogMenuStateApply(int32_t state)
+{
+    (void)state;
 }

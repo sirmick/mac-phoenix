@@ -1,4 +1,4 @@
-# Executor stragglers — where we are (2026-10-09)
+# Executor stragglers — where we are (2026-10-10)
 
 The list agreed after the Finder scripting work. Speech, QuickTime and
 networking are punted until later; everything else is in scope.
@@ -21,6 +21,8 @@ networking are punted until later; everything else is in scope.
 | 14 | `command_bridge_executor` flake | open (not seen recently) |
 | 15 | Executor's own host files visible in Finder | done — 07dce3db |
 | 17 | Color Picker dialog background: green (RGB picker) or yellow-green (HSL) instead of white. The dialog's `dctb` says white and other white areas stay white, so the dialog was erased with a color-table index that the picker's palette (`pltt` 2660/3660, tolerant and animated entries) later changed; a port's cached `bkColor` index is not re-resolved when the device color table changes (`qColorMgr.cpp`, `qPaletteMgr.cpp`) | open |
+| 18 | Balloon for another process's window names the front process ("This window belongs to the application "Finder"" over BridgeAgent's window): Apple's Help Manager finds the window's layer (`GetWindowLayer`) and asks the Process Manager whose it is with a selector Executor lacks, then falls back to the current process | open |
+| 19 | After a balloon over a desktop icon goes away, the icon's label is missing its left part until the Finder next redraws the desktop (the next balloon or window change brings it back; 7.5.5 shows it whole at once): the desktop update Executor hands the Finder for the uncovered region is redrawn clipped to it while the Finder erases the label's whole rectangle. Transient | open |
 | 16 | Date & Time control panel: the date fields and the hour draw empty | done (2026-10-10): the panel checks `AppPacks[7]` before each `NumToString`; PACK 4, 5 and 7 are ROM packages, so Executor fills those slots with stand-ins (Apple's header, code = the package's trap) |
 
 Also fixed along the way: Finder type-to-select crash (61ef0717), host
@@ -82,6 +84,14 @@ script's header. Not in ctest.
 Executor on the UAE core needs `vm.mmap_min_addr=0`; it is kept by
 `/etc/sysctl.d/99-mac-phoenix.conf` (another project's script runs
 `sysctl --system`, which reset it to Ubuntu's 65536).
+
+`--trace-atraps` works for the Executor backend too (`/api/snapshot`
+then writes `atraps.tsv` with one row per distinct trap, caller PC and
+parent, first `seq` and a count); `--executor-logtraps-nesting N` makes
+`--executor-logtraps` log calls nested in callbacks (UPP calls from C++
+are not traps, so they show only through what they call). In a UAE
+trace, `A072` (`DoVBLTask`) rows are the VBL interrupt firing inside
+whatever trap is named in their parent column.
 
 The reference snapshot `~/storage/snapshots/7.5.5-finder-idle` (UAE,
 `--trace-atraps`, Finder idle on the 7.5.5 test image) was taken again on

@@ -8,10 +8,17 @@
 
 using namespace Executor;
 
+/* MacPhoenix: these answer only without Apple's PACK 14 (helppkg.cpp). */
+
 Boolean Executor::C_HMGetBalloons()
 {
     warning_unimplemented("");
     return false;
+}
+
+OSErr Executor::C_HMIdle()
+{
+    return hmHelpManagerNotInited;
 }
 
 OSErr Executor::C_HMSetBalloons(Boolean flag)

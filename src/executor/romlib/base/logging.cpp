@@ -6,6 +6,7 @@
 using namespace Executor;
 
 int logging::nestingLevel = 0;
+int logging::maxNestingLevel = 1; /* MacPhoenix: --logtraps-nesting */
 static bool loggingEnabled = false;
 
 void logging::resetNestingLevel()
@@ -82,7 +83,7 @@ bool logging::trapLogEnabled(const char* name)
 
 bool logging::loggingActive()
 {
-    return nestingLevel <= 1;
+    return nestingLevel <= maxNestingLevel;
 }
 
 void logging::logEscapedCharTo(std::ostream& os, unsigned char c)
