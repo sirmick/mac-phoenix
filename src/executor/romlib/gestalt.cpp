@@ -98,21 +98,18 @@ static gestaltentry_t gtable[] = {
 /*  gestaltTermMgrAttr,		0,	*/
 /*  gestaltParityAttr,		0,	*/
 
-/*
- * TODO: instead of casting these to LONGINT, shouldn't we be using something
- *       like US_TO_SYN68K here, or if not, soemthing that takes ROMlib_offset
- *       into account?
- * HALF-DONE: we're using intptr_t now, so it works on 64bit as well.
- */
-
+/* The trap tables live in guest memory at fixed addresses (base/trapglue.h),
+ * so these are guest addresses, not host pointers. The host pointers
+ * tooltraptable/ostraptable are set only once the tables exist, after this
+ * table's static initialization. */
     {
-        gestaltExtToolboxTable, (intptr_t)(tooltraptable + 0x200),
+        gestaltExtToolboxTable, TOOLTRAPTABLE_ADDR + 0x200 * sizeof(TrapTableEntry),
     },
     {
-        gestaltToolboxTable, (intptr_t)tooltraptable,
+        gestaltToolboxTable, TOOLTRAPTABLE_ADDR,
     },
     {
-        gestaltOSTable, (intptr_t)ostraptable,
+        gestaltOSTable, OSTRAPTABLE_ADDR,
     },
 
     {
@@ -268,12 +265,6 @@ static gestaltentry_t gtable[] = {
     { gestaltFontMgrAttr, 7 },
 #endif
 
-};
-
-static OSType gtable_selectors_to_patch[] = {
-    gestaltExtToolboxTable,
-    gestaltToolboxTable,
-    gestaltOSTable,
 };
 
 typedef struct gestalt_link_str
@@ -434,27 +425,6 @@ gestalt_helper(OSType selector, GUEST<LONGINT> *responsep, Boolean searchlist,
     return retval;
 }
 
-static void
-offset_address(gestaltentry_t *gp, int ngp, OSType sel)
-{
-    for(; ngp > 0 && gp->selector != sel; --ngp, ++gp)
-        ;
-    if(ngp > 0)
-        gp->value = US_TO_SYN68K(gp->value);
-}
-
-static void
-offset_addresses(gestaltentry_t *gp, int ngp, OSType *selp, int nsels)
-{
-    while(nsels-- > 0)
-        offset_address(gp, ngp, *selp++);
-}
-
-#define OFFSET_ADDRESSES(table)                  \
-    offset_addresses(table, std::size(table),        \
-                     table##_selectors_to_patch, \
-                     std::size(table##_selectors_to_patch))
-
 /*
  *  This is for gestalt entries that are hard-wired via configuration
  *  files.  They can't be altered by ReplaceGestalt.
@@ -501,8 +471,6 @@ Executor::ROMlib_add_to_gestalt_list(OSType selector, OSErr retval, uint32_t new
 
 OSErr Executor::C_Gestalt(OSType selector, GUEST<LONGINT> *responsep)
 {
-    static bool been_here = false;
-
     warning_trace_info("IN: sel `%c%c%c%c'",
                        (selector >> 24) & 0xFF,
                        (selector >> 16) & 0xFF,
@@ -523,11 +491,6 @@ OSErr Executor::C_Gestalt(OSType selector, GUEST<LONGINT> *responsep)
         }
     }
 
-    if(!been_here)
-    {
-        OFFSET_ADDRESSES(gtable);
-        been_here = true;
-    }
     return gestalt_helper(selector, responsep, true, gtable, std::size(gtable));
 }
 
