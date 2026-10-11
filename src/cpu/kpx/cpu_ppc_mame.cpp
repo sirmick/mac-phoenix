@@ -674,10 +674,11 @@ void print_trace_sample()
 {
     static uint64 last_cycles, last_us;
     uint64 const cycles = g_core->cycles(), now_us = GetTicks_usec();
-    fprintf(stderr, "[mame-ppc] sample: pc=%08x lr=%08x r1=%08x r24=%08x r25=%08x msr=%08x mode=%u nest=%d mips=%.1f\n",
+    fprintf(stderr, "[mame-ppc] sample: pc=%08x lr=%08x r1=%08x r24=%08x r25=%08x msr=%08x mode=%u nest=%d mips=%.1f cycles=%llu\n",
             g_core->pc(), get_lr(), gpr(1), gpr(24), gpr(25), g_core->reg(R::MSR),
             ReadMacInt32(XLM_RUN_MODE), (int)ReadMacInt32(XLM_IRQ_NEST),
-            last_us && now_us > last_us ? (double)(cycles - last_cycles) / (double)(now_us - last_us) : 0.0);
+            last_us && now_us > last_us ? (double)(cycles - last_cycles) / (double)(now_us - last_us) : 0.0,
+            (unsigned long long)cycles);
     last_cycles = cycles;
     last_us = now_us;
     uint32 sum = 0, nz = 0;

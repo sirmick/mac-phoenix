@@ -51,18 +51,24 @@ extern "C" void kpx_ppc_native_op(uint32_t /*selector*/, uint32_t /*gprs*/[32]) 
 // stamping reads zero on non-x86.
 uint64_t ppc_insn_counter = 0;
 
-// call_macos* family — dispatches Mac OS code through the PPC interpreter.
-// Real C++ implementations in cpu_ppc_kpx.cpp on x86; arm64 link sees
-// these no-ops, which is fine because kpx is unreachable at runtime
-// (cpu_ppc_kpx_install above exits before any Mac OS dispatch).
-// Signatures match cpu_ppc_kpx.cpp's `uint32 call_macosN(uint32, ...)`
-// — uint32 is a typedef of uint32_t in compat/sysdeps.h, so the mangled
-// symbol names line up.
-uint32_t call_macos (uint32_t)                                                                                       { return 0; }
-uint32_t call_macos1(uint32_t, uint32_t)                                                                             { return 0; }
-uint32_t call_macos2(uint32_t, uint32_t, uint32_t)                                                                   { return 0; }
-uint32_t call_macos3(uint32_t, uint32_t, uint32_t, uint32_t)                                                         { return 0; }
-uint32_t call_macos4(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)                                               { return 0; }
-uint32_t call_macos5(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)                                     { return 0; }
-uint32_t call_macos6(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)                           { return 0; }
-uint32_t call_macos7(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)                 { return 0; }
+// call_macos* family — run Mac OS code (a TVECT) from the host. Kheperix's
+// versions live in cpu_ppc_kpx.cpp (x86 only); here they go to the PPC core
+// that is installed, as cpu_ppc_kpx.cpp does when Kheperix is absent
+// (mame-ppc's ppc_execute_macos_code). They used to return 0 without
+// running anything, which left the Name Registry, the video driver and the
+// rest of the host-to-Mac calls undone on arm64: the boot stopped early.
+static uint32_t dispatch_macos_code(uint32_t tvect, int nargs, const uint32_t *args)
+{
+    if (g_platform.ppc_execute_macos_code)
+        return g_platform.ppc_execute_macos_code(tvect, nargs, args);
+    fprintf(stderr, "[call_macos] no PPC core for tvect=0x%08x\n", tvect);
+    return 0;
+}
+uint32_t call_macos (uint32_t t)                                                                                   { return dispatch_macos_code(t, 0, nullptr); }
+uint32_t call_macos1(uint32_t t, uint32_t a1)                                                                      { const uint32_t a[] = {a1}; return dispatch_macos_code(t, 1, a); }
+uint32_t call_macos2(uint32_t t, uint32_t a1, uint32_t a2)                                                         { const uint32_t a[] = {a1,a2}; return dispatch_macos_code(t, 2, a); }
+uint32_t call_macos3(uint32_t t, uint32_t a1, uint32_t a2, uint32_t a3)                                            { const uint32_t a[] = {a1,a2,a3}; return dispatch_macos_code(t, 3, a); }
+uint32_t call_macos4(uint32_t t, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4)                               { const uint32_t a[] = {a1,a2,a3,a4}; return dispatch_macos_code(t, 4, a); }
+uint32_t call_macos5(uint32_t t, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)                  { const uint32_t a[] = {a1,a2,a3,a4,a5}; return dispatch_macos_code(t, 5, a); }
+uint32_t call_macos6(uint32_t t, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5, uint32_t a6)     { const uint32_t a[] = {a1,a2,a3,a4,a5,a6}; return dispatch_macos_code(t, 6, a); }
+uint32_t call_macos7(uint32_t t, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5, uint32_t a6, uint32_t a7) { const uint32_t a[] = {a1,a2,a3,a4,a5,a6,a7}; return dispatch_macos_code(t, 7, a); }

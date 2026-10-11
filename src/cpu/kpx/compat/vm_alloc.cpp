@@ -34,6 +34,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -300,15 +301,25 @@ static void *vm_acquire_internal(size_t size, int options)
 #elif defined(HAVE_MMAP_VM)
 	int fd = zero_fd;
 	int the_map_flags = translate_map_flags(options) | map_flags;
-#ifdef __aarch64__
-	if ((addr = mmap((caddr_t)next_address, reserved_buf ? size : size + RESERVED_SIZE, VM_PAGE_DEFAULT, the_map_flags, fd, 0)) == (void *)MAP_FAILED)
-		return VM_MAP_FAILED;
-	if (!reserved_buf)
-		reserved_buf = (char *)addr + size;
-#else
-	if ((addr = mmap((caddr_t)next_address, size, VM_PAGE_DEFAULT, the_map_flags, fd, 0)) == (void *)MAP_FAILED)
-		return VM_MAP_FAILED;
+	/* MacPhoenix: the PPC machine addresses this memory as Mac addresses
+	 * (REAL_ADDRESSING), so it must land at next_address, below 4GB. A
+	 * plain hint can be moved by the kernel (it was, on arm64: upstream's
+	 * aarch64 branch mapped an 80MB reserve after the first block, the
+	 * framebuffer's hint then collided with it and landed at
+	 * 0x7ff4f9000000, Mac address 0xf9000000 by truncation). */
+	addr = MAP_FAILED;
+#ifdef MAP_FIXED_NOREPLACE
+	addr = mmap((caddr_t)next_address, size, VM_PAGE_DEFAULT, the_map_flags | MAP_FIXED_NOREPLACE, fd, 0);
+	if (addr != MAP_FAILED && addr != (void *)next_address) {
+		munmap(addr, size);	/* a kernel that ignores MAP_FIXED_NOREPLACE */
+		addr = MAP_FAILED;
+	}
 #endif
+	if (addr == MAP_FAILED &&
+	    (addr = mmap((caddr_t)next_address, size, VM_PAGE_DEFAULT, the_map_flags, fd, 0)) == (void *)MAP_FAILED)
+		return VM_MAP_FAILED;
+	if (sizeof(void *) == 8 && (uintptr_t)addr + size > 0x100000000ull)
+		fprintf(stderr, "[VM] warning: %zu bytes at %p, above 4GB: not addressable as a Mac address\n", size, addr);
 #if USE_JIT
 	// Sanity checks for 64-bit platforms
 	if (sizeof(void *) == 8 && (options & VM_MAP_32BIT) && !((char *)addr <= (char *)0xffffffff))

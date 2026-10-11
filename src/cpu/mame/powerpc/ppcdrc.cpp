@@ -1120,7 +1120,11 @@ void ppc_device::static_generate_exception(uint8_t exception, int recover, const
 		{
 			uml::code_label take_vector;
 			UML_MOV(block, uml::mem(&m_core->param0), exception);                        // mov     [param0],exception
+			save_fast_iregs(block);                                                     // <save fastregs>
+			save_fast_fregs(block);
 			UML_CALLC(block, cfunc_exception_hook, this);                               // callc   exception_hook,ppc
+			load_fast_iregs(block);                                                     // <load fastregs>
+			load_fast_fregs(block);
 			UML_TEST(block, uml::mem(&m_core->param1), 1);                               // test    [param1],1
 			UML_JMPc(block, COND_Z, take_vector = label++);                             // jmp     take_vector,z
 			UML_HASHJMP(block, uml::mem(&m_core->mode), uml::mem(&m_core->pc), *m_nocode); // hashjmp <mode>,<pc>,nocode
@@ -2863,7 +2867,13 @@ bool ppc_device::generate_opcode(drcuml_block &block, compiler_state *compiler, 
 			UML_MAPVAR(block, MAPVAR_PC, desc->pc + 4);                                 // mapvar  PC,desc->pc+4
 			UML_MOV(block, uml::mem(&m_core->pc), desc->pc + 4);                        // mov     [pc],desc->pc+4
 			UML_MOV(block, uml::mem(&m_core->param0), op);                              // mov     [param0],op
+			// The host reads and writes GPRs/FPRs in m_core; back-ends with
+			// spare host registers (arm64) keep r0-r2 and some FPRs there.
+			save_fast_iregs(block);                                                     // <save fastregs>
+			save_fast_fregs(block);
 			UML_CALLC(block, cfunc_host_op, this);                                      // callc   host_op,ppc
+			load_fast_iregs(block);                                                     // <load fastregs>
+			load_fast_fregs(block);
 			compiler->checkints = true;
 			generate_update_cycles(block, compiler, uml::mem(&m_core->pc), true);      // <subtract cycles>
 			UML_HASHJMP(block, uml::mem(&m_core->mode), uml::mem(&m_core->pc), *m_nocode); // hashjmp <mode>,<pc>,nocode

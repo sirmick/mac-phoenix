@@ -81,7 +81,7 @@ further backends.
 MAME cores (docs/cpu/PLAN.md): MAME's Musashi with PMMU and FPU as the 68k
 core `mame-68k` (C1, done), MAME's PowerPC recompiler as the PPC core
 `mame-ppc` (C2: core, Mac side and the x86-64 back-end done, `--jit`; arm64
-back-end lifted but untested), and the host 68k core replacing the nanokernel's 68k
+back-end boots 7.5.5 on arm64 Linux under qemu, `tools/xarch`), and the host 68k core replacing the nanokernel's 68k
 emulator on the PPC machine (C3a: `--m68k-host 1` runs host-initiated
 68k routines on a `mame-68k` core with handoff to the emulator at the first
 trap; `2` is an experiment that breaks the bridge; the main 68k thread is
