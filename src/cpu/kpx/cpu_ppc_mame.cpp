@@ -208,6 +208,8 @@ void execute_native_op(uint32 selector)
 /* An EmulOp from 68k code: the 68k register file lives in r8-r24 (D0-D7
  * in r8-r15, A0-A6 in r16-r22, A7 in r1, PC in r24), as the nanokernel's
  * emulator keeps it. */
+void c3b_maybe_patch();   /* C3b, below */
+
 void execute_emul_op(uint32 emul_op)
 {
     if(!g_platform.ppc_emulop_handler)
@@ -217,6 +219,10 @@ void execute_emul_op(uint32 emul_op)
     }
     if(emul_op < 64)
         g_emulop_counts[emul_op]++;
+    /* C3b: patch the opcode table once the boot has built it (the 68k
+     * interrupt EmulOp runs on it, well after the nanokernel's init). */
+    if(emul_op == 39)   /* OP_RESET: the 68k boot starts */
+        c3b_maybe_patch();
     M68kRegisters r68;
     WriteMacInt32(XLM_68K_R25, gpr(25));
     WriteMacInt32(XLM_RUN_MODE, MODE_EMUL_OP);
@@ -278,17 +284,60 @@ uint32 g_m68k_handoff_op;  /* ... from its slot for this word */
 bool g_m68k_active;        /* a Musashi run is in progress (tick trace) */
 unsigned g_m68k_runs, g_m68k_handoffs, g_m68k_emulops;
 
+/* C3b (--m68k-host 3): the main 68k thread on Musashi. The emulator's
+ * opcode table slots enter Musashi through this host op (native op 63);
+ * Musashi runs until a word the emulator must handle (A-line, including
+ * $AAFE Mixed Mode, and the EXEC_RETURN/EMUL_RETURN words) or until the
+ * PowerPC side has an interrupt, then hands the state back at the
+ * emulator's dispatch loop. docs/cpu/PLAN.md, C3b. */
+constexpr uint32 C3B_ENTER_OP = 0x18000fc2;
+uint32 g_c3b_table, g_c3b_dispatch;
+bool g_c3b_patched;
+int g_c3b_depth;             /* nested Musashi main runs */
+bool g_c3b_handoff;          /* this level's run stopped at a word for the emulator */
+uint32 g_c3b_stop_pc;
+std::atomic<bool> g_c3b_irq{false};
+unsigned g_c3b_entries, g_c3b_handbacks, g_c3b_irq_stops;
+
+/* C3b: stop Musashi before this word and let the emulator dispatch it. */
+bool c3b_hand_back(cpu::Core &core, uint32_t opcode, uint32_t op_pc)
+{
+    (void)opcode;
+    if(g_c3b_depth <= 0)
+        return false;
+    g_c3b_handoff = true;
+    g_c3b_stop_pc = op_pc;
+    core.request_stop();
+    return true;
+}
+
 struct M68kHost final : cpu::Host
 {
     OpResult host_op(cpu::Core &core, uint32_t opcode, uint32_t op_pc) override
     {
-        (void)core; (void)op_pc;
-        fprintf(stderr, "[mame-ppc] 68k: unexpected host op %04x\n", opcode);
-        return OpResult::Continue;
+        /* The Power Mac has no $71xx host ops. Under C3b the emulator's
+         * illegal-instruction path decides (Mixed Mode builds return stubs
+         * with such words); otherwise they are illegal instructions. */
+        if(c3b_hand_back(core, opcode, op_pc))
+            return OpResult::Stop;
+        return OpResult::Illegal;
+    }
+
+    bool illegal(cpu::Core &core, uint32_t opcode, uint32_t op_pc) override
+    {
+        return c3b_hand_back(core, opcode, op_pc);
     }
 
     bool trap(cpu::Core &core, uint32_t opcode, uint32_t op_pc) override
     {
+        /* C3b: the words the emulator handles itself go back to it: A-line
+         * (its native trap dispatch, $AAFE Mixed Mode) and the $FExx words
+         * other than SheepShaver's EmulOps (the emulator's own operations,
+         * e.g. $FE07 in the exception stubs; EMUL_RETURN, EXEC_RETURN,
+         * EXEC_NATIVE). */
+        bool const emulop = opcode >= M68K_EMUL_BREAK && opcode < M68K_EMUL_BREAK + OP_MAX;
+        if(((opcode & 0xf000) == 0xa000 || ((opcode & 0xff00) == 0xfe00 && !emulop)) && c3b_hand_back(core, opcode, op_pc))
+            return true;
         if(opcode == M68K_EXEC_RETURN)
         {
             g_m68k_exec_return = true;
@@ -373,7 +422,7 @@ void export_m68k_to_emulator(uint32 opcode, uint32 pc)
     set_cr((sr & 0x2000) ? 0x00100000 : 0);
 }
 
-bool execute_68k_musashi(uint32 entry, M68kRegisters *r)
+bool ensure_m68k()
 {
     if(!g_m68k)
     {
@@ -391,6 +440,13 @@ bool execute_68k_musashi(uint32 entry, M68kRegisters *r)
         fprintf(stderr, "[mame-ppc] 68k routines run on %s (mode %d); 68k vectors: $10=%08x $28=%08x $2C=%08x\n",
                 g_m68k->name(), use_host_m68k(), ReadMacInt32(0x10), ReadMacInt32(0x28), ReadMacInt32(0x2c));
     }
+    return true;
+}
+
+bool execute_68k_musashi(uint32 entry, M68kRegisters *r)
+{
+    if(!ensure_m68k())
+        return false;
     g_m68k_runs++;
     static int depth;
     const bool s_trace = g_platform.ppc_debug_trace;
@@ -485,11 +541,167 @@ bool execute_68k_musashi(uint32 entry, M68kRegisters *r)
  * register convention, push the EXEC_RETURN return address, enter the
  * emulator at the dispatch slot of the first opcode. Everything the
  * PowerPC side had is restored from a context afterwards. */
+/* The 68k CCR in the emulator's registers (probed): X is r26 bit 29, N and
+ * Z are CR0 LT and EQ, V and C are XER OV and CA. */
+uint32 emulator_ccr()
+{
+    uint32 const cr = get_cr(), xer = g_core->reg(R::XER);
+    uint32 ccr = 0;
+    if(gpr(26) & 0x20000000) ccr |= 0x10;
+    if(cr & 0x80000000) ccr |= 0x08;
+    if(cr & 0x20000000) ccr |= 0x04;
+    if(xer & 0x40000000) ccr |= 0x02;
+    if(xer & 0x20000000) ccr |= 0x01;
+    return ccr;
+}
+
+void set_emulator_ccr(uint32 ccr, bool supervisor)
+{
+    uint32 cr = get_cr() & ~0xf0000000u;          /* CR0; CR1/CR2 are the emulator's */
+    if(ccr & 0x08) cr |= 0x80000000;
+    if(ccr & 0x04) cr |= 0x20000000;
+    cr = supervisor ? (cr | 0x00100000) : (cr & ~0x00100000u);  /* CR2 SO */
+    set_cr(cr);
+    uint32 xer = g_core->reg(R::XER) & ~0x60000000u;
+    if(ccr & 0x02) xer |= 0x40000000;
+    if(ccr & 0x01) xer |= 0x20000000;
+    g_core->set_reg(R::XER, xer);
+    set_gpr(26, (gpr(26) & ~0x20000000u) | ((ccr & 0x10) ? 0x20000000 : 0));
+}
+
+/* The host op in a patched slot: the emulator dispatched the opcode at
+ * r24 - 2. Run from there on Musashi, then resume the emulator at its
+ * dispatch loop (r24 at the next word, r27 that word) so it checks for
+ * interrupts and dispatches whatever stopped Musashi. */
+void c3b_enter(cpu::Core &core)
+{
+    g_c3b_entries++;
+    uint32 const pc = gpr(24) - 2;
+    /* A Musashi run may be suspended below us (an EmulOp that called back
+     * into the emulator): keep its state. */
+    bool const nested = g_m68k_active;
+    std::vector<uint8_t> outer;
+    if(nested)
+    {
+        outer.resize(g_m68k->context_size());
+        g_m68k->save_context(outer.data());
+    }
+    bool const outer_handoff = g_c3b_handoff;
+    uint32 const outer_stop_pc = g_c3b_stop_pc;
+    bool const outer_active = g_m68k_active;
+
+    for(int i = 0; i < 8; i++)
+        g_m68k->set_reg(m68k::D0 + i, gpr(8 + i));
+    for(int i = 0; i < 7; i++)
+        g_m68k->set_reg(m68k::A0 + i, gpr(16 + i));
+    g_m68k->set_reg(m68k::SR, ((gpr(25) & 0xff) << 8) | emulator_ccr());
+    g_m68k->set_reg(m68k::A7, gpr(1));
+    /* The emulator's VBR is r28 (its exception builder loads the vector
+     * from r28 + offset); it stays 0, and Musashi must not keep a VBR of
+     * its own from a movec it ran earlier. */
+    g_m68k->set_reg(m68k::VBR, gpr(28));
+    g_m68k->set_pc(pc);
+    g_m68k->invalidate(0, 0xffffffffu);   /* the 68k instruction cache */
+
+    g_c3b_handoff = false;
+    g_m68k_active = true;
+    g_c3b_depth++;
+    uint32 next;
+    for(;;)
+    {
+        if(g_c3b_irq.exchange(false))
+        {
+            g_c3b_irq_stops++;
+            next = g_m68k->pc();
+            break;
+        }
+        g_m68k->run();
+        if(g_c3b_handoff)
+        {
+            g_c3b_handbacks++;
+            next = g_c3b_stop_pc;
+            break;
+        }
+    }
+    g_c3b_depth--;
+
+    for(int i = 0; i < 8; i++)
+        set_gpr(8 + i, g_m68k->reg(m68k::D0 + i));
+    for(int i = 0; i < 7; i++)
+        set_gpr(16 + i, g_m68k->reg(m68k::A0 + i));
+    set_gpr(1, g_m68k->reg(m68k::A7));
+    uint32 const sr = g_m68k->reg(m68k::SR);
+    set_gpr(25, (gpr(25) & ~0xffu) | (sr >> 8));
+    set_emulator_ccr(sr & 0x1f, sr & 0x2000);
+    set_gpr(24, next);
+    set_gpr(27, (uint32)(int32)(int16)ReadMacInt16(next));
+    set_gpr(29, g_c3b_table);
+    core.set_pc(g_c3b_dispatch);
+
+    if(nested)
+        g_m68k->restore_context(outer.data());
+    g_c3b_handoff = outer_handoff;
+    g_c3b_stop_pc = outer_stop_pc;
+    g_m68k_active = outer_active;
+}
+
+/* Point the emulator's opcode table at Musashi: every slot but the A-line
+ * and $FExx words (SheepShaver's EmulOps, EXEC_RETURN) starts with the
+ * C3b host op. Done once, after boot has set the table up. */
+void c3b_patch_table()
+{
+    uint32 const table = ReadMacInt32(KERNEL_DATA_BASE + 0x1074);
+    uint32 const dispatch = ReadMacInt32(KERNEL_DATA_BASE + 0x1078) + 0x6084;
+    /* rlwimi r29,r27,3,0x0007FFF8 ; mtlr r29 : the dispatch loop this was
+     * written against (the G3 ROM's emulator). */
+    if(ReadMacInt32(dispatch) != 0x537d1b78 || ReadMacInt32(dispatch + 4) != 0x7fa803a6 || (table & 0x7ffff))
+    {
+        fprintf(stderr, "[mame-ppc] C3b: unknown 68k emulator (table %08x, dispatch %08x: %08x); 68k stays on it\n",
+                table, dispatch, ReadMacInt32(dispatch));
+        g_c3b_patched = true;   /* don't try again */
+        return;
+    }
+    if(!ensure_m68k())
+    {
+        g_c3b_patched = true;
+        return;
+    }
+    uint8 *const host = Mac2HostAddr(table);
+    size_t const size = 0x80000;
+    mprotect(host, size, PROT_READ | PROT_WRITE | PROT_EXEC);
+    unsigned n = 0;
+    for(uint32 op = 0; op < 0x10000; op++)
+    {
+        if((op & 0xf000) == 0xa000 || (op & 0xff00) == 0xfe00)
+            continue;
+        /* The emulator's illegal-instruction path (lwz r5,0x800(r31)):
+         * Mixed Mode's stubs rely on what it does with these words. */
+        if(ReadMacInt32(table + op * 8) == 0x80bf0800)
+            continue;
+        WriteMacInt32(table + op * 8, C3B_ENTER_OP);
+        n++;
+    }
+    mprotect(host, size, PROT_READ | PROT_EXEC);
+    g_core->invalidate(table, size);
+    g_c3b_table = table;
+    g_c3b_dispatch = dispatch;
+    g_c3b_patched = true;
+    fprintf(stderr, "[mame-ppc] C3b: %u opcode slots enter %s (table %08x, dispatch %08x)\n", n, g_m68k->name(), table, dispatch);
+}
+
+void c3b_maybe_patch()
+{
+    if(!g_c3b_patched && use_host_m68k() == 3)
+        c3b_patch_table();
+}
+
 void execute_68k(uint32 entry, M68kRegisters *r)
 {
     if(ReadMacInt32(XLM_RUN_MODE) != MODE_EMUL_OP)
         fprintf(stderr, "FATAL: Execute68k() not called from EMUL_OP mode\n");
-    if(use_host_m68k() && execute_68k_musashi(entry, r))
+    /* Modes 1 and 2 (C3a) run host-initiated routines on Musashi; mode 3
+     * runs them on the emulator, whose patched slots enter Musashi. */
+    if((use_host_m68k() == 1 || use_host_m68k() == 2) && execute_68k_musashi(entry, r))
         return;
 
     std::vector<uint8_t> ctx(g_core->context_size());
@@ -701,8 +913,8 @@ void print_trace_sample()
     for(int i = 0; i < 64; i++)
         if(g_native_counts[i])
             fprintf(stderr, " %d=%u", i, g_native_counts[i]);
-    fprintf(stderr, "; m68k runs=%u handoffs=%u emulops=%u%s; emulop:", g_m68k_runs, g_m68k_handoffs,
-            g_m68k_emulops, g_m68k_active ? " ACTIVE" : "");
+    fprintf(stderr, "; m68k runs=%u handoffs=%u emulops=%u%s; c3b entries=%u handbacks=%u irqstops=%u depth=%d; emulop:", g_m68k_runs, g_m68k_handoffs,
+            g_m68k_emulops, g_m68k_active ? " ACTIVE" : "", g_c3b_entries, g_c3b_handbacks, g_c3b_irq_stops, g_c3b_depth);
     if(g_m68k_active && g_m68k)
     {
         char buf[96];
@@ -740,6 +952,11 @@ struct MacHost final : cpu::Host
                 g_exec_return = true;
                 return OpResult::Stop;
             case 2: /* EXEC_NATIVE */
+                if(opcode == C3B_ENTER_OP)
+                {
+                    c3b_enter(core);
+                    return OpResult::Continue;
+                }
                 execute_native_op(sheep_native_op(opcode));
                 if(sheep_fn(opcode))
                     core.set_pc(get_lr());
@@ -955,6 +1172,13 @@ void mame_cpu_trigger_interrupt(int)
     if(g_core)
     {
         g_interrupt_requested = true;
+        /* C3b: Musashi stops and the emulator, back at its dispatch loop,
+         * takes the interrupt as it does for its own 68k code. */
+        if(g_c3b_depth > 0 && g_m68k)
+        {
+            g_c3b_irq = true;
+            g_m68k->request_stop();
+        }
         g_core->request_attention();
     }
 }

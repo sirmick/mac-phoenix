@@ -220,7 +220,9 @@ CPU:
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
   --m68k-host N              mame-ppc: 1 runs host-initiated 68k routines on a
-                             mame-68k core (C3a); 2 the parked experiment
+                             mame-68k core (C3a); 2 the parked experiment;
+                             3 all 68k code on mame-68k (C3b, experimental:
+                             does not boot yet)
   --idlewait / --no-idlewait Pause CPU when guest idle (default: on)
 
 Media:

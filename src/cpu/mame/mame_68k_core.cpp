@@ -354,6 +354,8 @@ public:
     bool host_op()
     {
         uint32_t opcode = dev_.ir();
+        if(!m68k::is_host_op(opcode) && host_.illegal(*this, opcode, dev_.get_ppc()))
+            return true;
         if(!m68k::is_host_op(opcode))
         {
             static int logged;
@@ -364,7 +366,10 @@ public:
             }
             return false;
         }
-        if(host_.host_op(*this, opcode, dev_.get_ppc()) == Host::OpResult::Stop)
+        Host::OpResult const result = host_.host_op(*this, opcode, dev_.get_ppc());
+        if(result == Host::OpResult::Illegal)
+            return false;   /* the illegal-instruction exception */
+        if(result == Host::OpResult::Stop)
         {
             if(stop_flag_)
                 *stop_flag_ = true;

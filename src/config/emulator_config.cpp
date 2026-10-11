@@ -467,7 +467,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)\n");
             printf("  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)\n");
             printf("  --m68k-host N              mame-ppc only: 0 off; 1 host-initiated 68k routines on a\n");
-            printf("                             mame-68k core; 2 also A-line traps (experiment, breaks the bridge)\n");
+            printf("                             mame-68k core; 2 also A-line traps (experiment, breaks the bridge);\n");
+            printf("                             3 all 68k code on mame-68k (C3b, experimental, does not boot yet)\n");
             printf("  --idlewait / --no-idlewait Pause CPU when guest idle (default: on)\n");
             printf("\nMedia:\n");
             printf("  --audio                    Enable audio (default: off)\n");

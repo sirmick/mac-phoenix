@@ -128,7 +128,7 @@ nothing more:
 | C2d | arm64 back-end | `drcbearm64` builds and boots 7.5.5 on arm64 Linux and Apple Silicon (`MAP_JIT`); the `kpx_stub` is gone | arm64 Linux done 2026-10-11 (under qemu, `tools/xarch/xarch.sh arm64`): 7.5.5 to the desktop in 22 s on `--jit` under emulation (166 s on the UML interpreter); `cpu_cores` passes; the native back-end runs the `test_cpu_cores --bench` loop at 121 MIPS under qemu (x86-64 native: 1500). Apple Silicon not done: needs S4 (no mapping at 0 on macOS) and `MAP_JIT` |
 | C2e | Retire Kheperix | `src/cpu/kpx/src`, `dyngen_precompiled`, `regen_dyngen_ops.sh` deleted; `--backend kpx` keeps its name on the new core; PowerCore facade (`src/executor/cpu/PowerCore.*`) implemented on it for Executor's milestone P | not started |
 | C3a | `execute_68k` on Musashi | host-initiated 68k calls run on a `mame-68k` instance sharing the PPC machine's GuestMemory: import the GPR contract, run to the EXEC_RETURN word, export; everything else still on the DR emulator; bridge suites pass | done 2026-10-10 as a hybrid (`--m68k-host 1` on `--core mame-ppc`): host-initiated 68k routines run on a `mame-68k` core over the PPC machine's memory; the ROM's EmulOp words and EXEC_RETURN are handled in the 68k host; at the first A-line word the registers go into the emulator's convention (through a thunk that sets the CCR) and the nanokernel's emulator finishes the routine. 7.5.5 boots to the desktop in 1.6 s and the command bridge passes 7/7 on it. Mode 2 (Musashi takes A-line traps through the ROM dispatcher at $28) boots too but breaks the bridge: a divergence after the dispatcher hands off at a routine descriptor, not yet understood |
-| C3b | The 68k side on Musashi | the emulator's entry points patched to SHEEP ops that enter Musashi; exits at `$AAFE` (Mixed Mode), EXEC_RETURN, interrupts (Musashi's IRQ line instead of the DR poll word), bus errors as 68k frames; `0xFExx`/`$71xx` EmulOps as host ops; 7.5.5 boots to Finder and passes the bridge suites; `--jit68k` retired | not started |
+| C3b | The 68k side on Musashi | the emulator's entry points patched to SHEEP ops that enter Musashi; exits at `$AAFE` (Mixed Mode), EXEC_RETURN, interrupts (Musashi's IRQ line instead of the DR poll word), bus errors as 68k frames; `0xFExx`/`$71xx` EmulOps as host ops; 7.5.5 boots to Finder and passes the bridge suites; `--jit68k` retired | in progress (experimental `--m68k-host 3`): the opcode table is patched at `OP_RESET` so every ordinary slot enters Musashi through a host op (native op 63); Musashi hands A-line, non-EmulOp `$FExx` and illegal words back to the emulator at its dispatch loop, and stops for interrupts. The boot runs ~2,300 hand-backs and then goes wrong (see Notes from C3b) |
 | C3c | Numbers | boot time and a 68k-heavy benchmark (MacPerl guest suite section) against the DR emulator on x86-64; the same on arm64 against the interpreter-only PPC | not started |
 | C4 | UML→wasm back-end | after D4: a `drcbe_wasm` emitting modules per hot-block batch, dispatched through a `WebAssembly.Table`; PPC machine in a tab faster than `drcbec` | not started |
 
@@ -273,9 +273,56 @@ referred to; strike them here when done.
 | S14 | **PMMU has no workload.** `Config::mmu` picks the PMMU inits but no machine turns it on; the Virtual Memory boot (C1d) is the first real test | open (C1d) |
 | S15 | **`--jit68k` does nothing.** The only reader, the DR-emulator activation in `emul_op_ppc.cpp`, is `if (PrefsFindBool("jit68k") && 0)`, so Apple's DR emulator is never switched on, on either PPC core: the Power Mac's 68k code always runs on the ROM's interpretive 68k emulator. The flag and the web UI's "Enable 68k JIT (DR emulator)" box are no-ops. Make the DR emulator work, or remove both; C3b would replace it anyway | open |
 | S16 | **`--m68k-host` is CLI-only.** C3a's mode is not in the JSON config or the web UI, so it can't be picked from Settings or kept in a profile | open (until C3b decides the default) |
-| S17 | **riscv64 never run.** It builds under `tools/xarch/xarch.sh riscv64` with `-DBUILD_BROWSER=OFF` (no Qt WebEngine there) and MAME's C back-end; no test has run on it. MAME has no RISC-V recompiler back-end and asmjit has no RISC-V assembler, so a native one would be new work | open |
+| S17 | **riscv64 never run.** It builds under `tools/xarch/xarch.sh riscv64` with `-DBUILD_BROWSER=OFF` (no Qt WebEngine there) and MAME's C back-end; no test has run on it. MAME has no RISC-V recompiler back-end and asmjit has no RISC-V assembler, so a native one would be new work | runs 2026-10-11: 7.5.5 boots to the desktop in 509 s under qemu (C back-end); `cpu_cores` passes; `test_cpu_cores --bench` 7-8 MIPS. A native RISC-V back-end would still be new work |
 | S18 | **UAE's 68k `--jit` stalls.** The boot matrix's `uae-jit-755`/`uae-jit-761` cells stop at a grey desktop. Long-standing and not investigated; bears on the open question of whether UAE stays | known |
 | S19 | **arm64 CI red since the MAME merge.** `drcbearm64.cpp` was missing, so the arm64 package jobs failed at CMake configure. The fixes are on main locally (S2), not yet pushed or seen green in CI | open |
+
+## Notes from C3b (in progress, `--m68k-host 3`)
+
+What the nanokernel's 68k emulator turned out to be, measured on the G3
+ROM (probes in `cpu_ppc_mame.cpp`, since removed):
+
+* **Opcode table** at `KD+0x1074` (0x50480000), 8 bytes per 68k opcode:
+  the operation, then a branch back to the dispatch loop.
+  `KD+0x1078` is the emulator code (0x50460000); the dispatch loop is at
+  +0x6084: `rlwimi r29,r27,3,0x7FFF8 ; mtlr r29 ; lhau r27,2(r24) ;
+  bgelr cr2 ; b <interrupt path>`. Entry contract: r27 the opcode
+  (sign-extended), r24 its address; a slot runs with r24 past the opcode
+  and r27 the following word. r29's high bits are the table; an odd PC
+  selects a second table (address errors).
+* **The CCR**: X in r26 bit 29 (0x20000000), N and Z in CR0 LT and EQ, V
+  and C in XER OV and CA; CR2 SO is the supervisor bit and CR2 LT/GT/EQ
+  the pending-interrupt bits `handle_interrupt` sets (KD+0x674 mask
+  0x00e00000). r25's low byte is the SR's high byte. Confirmed both by
+  `move #ccr,ccr` probes and by the emulator's exception builder, which
+  packs the SR from exactly these.
+* **VBR is r28** (the exception builder loads the vector from r28 +
+  offset); it stays 0. The ROM's `movec ...,vbr` at boot would relocate
+  Musashi's vectors, so Musashi takes VBR from r28 at every entry.
+* **The emulator handles some words itself**: A-line goes to its native
+  trap dispatch (`lwz r3,0x720(r31)`), `$AAFE` is Mixed Mode, `$FE00-$FE42`
+  are its own operations (e.g. `$FE07` in exception stubs; EMUL_RETURN,
+  EXEC_RETURN, EXEC_NATIVE), and every undefined opcode (including
+  `$71xx`, MOVEQ with bit 8 set) goes to `r31+0x800`, the exception
+  builder with vector `$10`. Those slots stay unpatched (10,329 of them),
+  and Musashi hands those words back (the new `cpu::Host::illegal()` hook
+  and `OpResult::Illegal`) rather than executing or trapping them.
+* **Interrupts**: TriggerInterrupt stops Musashi; the hand-back at the
+  dispatch loop lets the emulator take the interrupt as for its own code.
+
+**Where it stands.** Patched at `OP_RESET`, the boot runs ~2,300
+hand-backs, then Musashi `rts`es into a stack stub (`0x003ffbb0`, a
+`$71xx` word) after running the ROM's 68k trap dispatcher at `$28`; the
+emulator raises the illegal-instruction exception for it and the system
+lands in the ROM's error path (the VIA polling loop of the debugger nub).
+The divergence is before that: what the emulator would have left on the
+stack differs, the same unexplained divergence mode 2 of C3a met when
+Musashi ran the `$28` dispatcher. Next: a differential trace of the
+`$28` dispatcher run on the emulator against Musashi from one state (the
+emulator can run a routine through `execute_68k` with mode 0 while
+Musashi runs a copy). Patching after the desktop is up runs (~50,000
+entries a second) but leaves Musashi runs nested (depth 69), also not yet
+understood.
 
 ## Notes from C3a (68k routines on a host Musashi)
 

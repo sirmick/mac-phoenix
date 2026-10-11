@@ -219,12 +219,23 @@ class Host
 public:
     virtual ~Host() = default;
 
-    enum class OpResult { Continue, Stop };
+    enum class OpResult { Continue, Stop, Illegal };
     /* An instruction from the architecture's host-op space (m68k:: /
      * ppc::is_host_op) executed at op_pc. On entry pc() is the next
      * instruction; set_pc() to go elsewhere. Stop ends the innermost
-     * run(). */
+     * run(). Illegal: not a host op for this machine; the CPU takes its
+     * illegal-instruction exception as the hardware would (cores that
+     * can't, treat it as Continue). */
     virtual OpResult host_op(Core &core, uint32_t opcode, uint32_t op_pc) = 0;
+
+    /* An illegal instruction outside the host-op space, before the CPU
+     * takes its exception (m68k, mame-68k only so far). Return true when
+     * the host handled it (no exception). */
+    virtual bool illegal(Core &core, uint32_t opcode, uint32_t op_pc)
+    {
+        (void)core; (void)opcode; (void)op_pc;
+        return false;
+    }
 
     /* After request_attention(), at an instruction boundary on the core's
      * thread: the place to update the interrupt line or run guest code
