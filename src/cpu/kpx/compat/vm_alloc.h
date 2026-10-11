@@ -102,6 +102,10 @@ extern void * vm_acquire(size_t size, int options = VM_MAP_DEFAULT);
 extern void * vm_acquire_reserved(size_t size);
 
 extern int vm_init_reserved(void * host_address);
+
+/* MacPhoenix: allocations at next_address inside [base, base+size) map
+   with MAP_FIXED (the guest-memory reservation, docs/cpu/PLAN.md S4). */
+extern void vm_set_reservation(void *base, size_t size);
 extern void vm_set_next_address(void *addr);
 extern void *vm_get_next_address(void);
 

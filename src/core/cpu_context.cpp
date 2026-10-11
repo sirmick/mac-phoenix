@@ -419,6 +419,37 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
 
     architecture_ = config::Architecture::PPC;
 
+    // 0. Guest memory base (docs/cpu/PLAN.md S4). Kheperix runs identity
+    // addressing (host = Mac address; needs vm.mmap_min_addr=0). mame-ppc
+    // gets a 4GB reservation aligned to 4GB, PROT_NONE until regions are
+    // mapped into it: host = base + Mac address, and since the base is
+    // 4GB-aligned, a host pointer inside it truncated to 32 bits is its Mac
+    // address, so SheepShaver's (uint32)(uintptr) conversions stay right.
+    // Holes fault as before, and the SIGSEGV policy skips them.
+    uint8_t *ppc_base = nullptr;
+    if (config.cpu_core == "mame-ppc") {
+        const uint64_t four_gb = 1ull << 32;
+        void *r = mmap(nullptr, 2 * four_gb, PROT_NONE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        if (r == MAP_FAILED) {
+            fprintf(stderr, "[CPUContext] ERROR: cannot reserve 8GB of address space for guest memory\n");
+            return false;
+        }
+        uintptr_t lo = (uintptr_t)r, base = (lo + four_gb - 1) & ~(four_gb - 1);
+        if (base > lo) munmap(r, base - lo);
+        if (lo + 2 * four_gb > base + four_gb) munmap((void *)(base + four_gb), lo + 2 * four_gb - (base + four_gb));
+        ppc_base = (uint8_t *)base;
+        extern void vm_set_reservation(void *base, size_t size);
+        vm_set_reservation(ppc_base, four_gb);
+        fprintf(stderr, "[CPUContext] Guest memory base %p (4GB reserved)\n", ppc_base);
+    }
+    {
+        extern uintptr VMBaseDiff;
+        VMBaseDiff = (uintptr)ppc_base;
+    }
+    auto ppc_host = [ppc_base](uint32_t mac) { return (void *)(ppc_base + mac); };
+    const int fixed = MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED;
+
     // 1. Allocate memory using REAL_ADDRESSING (SheepShaver approach)
     // Mac address == host address, VMBaseDiff = 0.
     // RAM+ROM allocated contiguously, mapped at whatever address the OS gives us.
@@ -438,9 +469,8 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     // offset, KD+0x660 corrupted flags, KD+0x920 page table empty).
     // See docs/ppc/nanokernel_init_divergence.md for full diagnosis.
     const size_t NK_PROBE_PAD = 8 * 1024 * 1024;  // 8MB for nanokernel probing
-    RAMBaseHost = (uint8_t *)mmap((void *)0, ram_size_ + NK_PROBE_PAD,
-                                  PROT_READ | PROT_WRITE,
-                                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    RAMBaseHost = (uint8_t *)mmap(ppc_host(0), ram_size_ + NK_PROBE_PAD,
+                                  PROT_READ | PROT_WRITE, fixed, -1, 0);
     if (RAMBaseHost == MAP_FAILED) {
         fprintf(stderr, "[CPUContext] ERROR: Failed to map RAM at address 0\n");
         fprintf(stderr, "[CPUContext] (Run: sudo sysctl vm.mmap_min_addr=0)\n");
@@ -448,22 +478,21 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     }
 
     // REAL_ADDRESSING: Mac address = host address (VMBaseDiff = 0)
-    RAMBase = (uint32_t)(uintptr_t)RAMBaseHost;
+    RAMBase = 0;
     RAMSize = ram_size_;
 
     // Map ROM separately at a high address (matching SheepShaver layout)
     // SheepShaver puts ROM at ~0x50000000, NOT contiguous with RAM.
     // This ensures all ROM-relative nanokernel addresses match SheepShaver's.
     const uint32_t ROM_BASE_ADDR = 0x50000000;
-    void *rom_area = mmap((void *)ROM_BASE_ADDR, ROM_AREA_SIZE + SIG_STACK_SIZE,
-                          PROT_READ | PROT_WRITE | PROT_EXEC,
-                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    void *rom_area = mmap(ppc_host(ROM_BASE_ADDR), ROM_AREA_SIZE + SIG_STACK_SIZE,
+                          PROT_READ | PROT_WRITE | PROT_EXEC, fixed, -1, 0);
     if (rom_area == MAP_FAILED) {
         fprintf(stderr, "[CPUContext] ERROR: Failed to map ROM at 0x%08x\n", ROM_BASE_ADDR);
         return false;
     }
     ROMBase = ROM_BASE_ADDR;
-    ROMBaseHost = (uint8_t *)(uintptr_t)ROMBase;
+    ROMBaseHost = (uint8_t *)ppc_host(ROMBase);
 
     // Set signal stack at end of ROM area (matching legacy: sig_stack = ROMEnd)
     kpx_set_signal_stack(ROM_BASE_ADDR + ROM_AREA_SIZE);
@@ -479,26 +508,25 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
         int kd_size = 0x2000;
         int kd_shm = shmget(IPC_PRIVATE, kd_size, IPC_CREAT | 0600);
         if (kd_shm != -1) {
-            void *kd1 = shmat(kd_shm, (void *)KERNEL_DATA_BASE, 0);
-            void *kd2 = shmat(kd_shm, (void *)0x5fffe000, 0);
+            // Inside the reservation the target pages exist (PROT_NONE):
+            // SHM_REMAP replaces them.
+            const int shm_flags = ppc_base ? SHM_REMAP : 0;
+            void *kd1 = shmat(kd_shm, ppc_host(KERNEL_DATA_BASE), shm_flags);
+            void *kd2 = shmat(kd_shm, ppc_host(0x5fffe000), shm_flags);
             shmctl(kd_shm, IPC_RMID, NULL);
-            if (kd1 == (void *)KERNEL_DATA_BASE && kd2 == (void *)0x5fffe000) {
+            if (kd1 == ppc_host(KERNEL_DATA_BASE) && kd2 == ppc_host(0x5fffe000)) {
                 fprintf(stderr, "[CPUContext] KernelData shared at 0x68ffe000 and 0x5fffe000\n");
             } else {
                 fprintf(stderr, "[CPUContext] WARNING: KernelData shmat failed, using separate maps\n");
                 if (kd1 != (void *)-1) shmdt(kd1);
                 if (kd2 != (void *)-1) shmdt(kd2);
-                mmap((void *)KERNEL_DATA_BASE, kd_size, PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-                mmap((void *)0x5fffe000, kd_size, PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+                mmap(ppc_host(KERNEL_DATA_BASE), kd_size, PROT_READ | PROT_WRITE, fixed, -1, 0);
+                mmap(ppc_host(0x5fffe000), kd_size, PROT_READ | PROT_WRITE, fixed, -1, 0);
             }
         } else {
             fprintf(stderr, "[CPUContext] WARNING: shmget failed, using mmap for KernelData\n");
-            mmap((void *)KERNEL_DATA_BASE, kd_size, PROT_READ | PROT_WRITE,
-                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-            mmap((void *)0x5fffe000, kd_size, PROT_READ | PROT_WRITE,
-                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+            mmap(ppc_host(KERNEL_DATA_BASE), kd_size, PROT_READ | PROT_WRITE, fixed, -1, 0);
+            mmap(ppc_host(0x5fffe000), kd_size, PROT_READ | PROT_WRITE, fixed, -1, 0);
         }
     }
 
@@ -585,6 +613,11 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     {
         extern int vm_init(void);
         vm_init();
+        // vm_acquire hands out Mac-addressable memory from MAP_BASE up,
+        // inside the reservation when there is one.
+        extern void vm_set_next_address(void *addr);
+        extern void *vm_get_next_address(void);
+        vm_set_next_address(ppc_base + (uintptr_t)vm_get_next_address());
     }
 
     // 5c. Initialize SheepMem (shared memory for Mac/host communication)
@@ -648,10 +681,10 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
         const uintptr_t DR_CACH_BASE = 0x69000000;
         const uint32_t  DR_CACH_SIZE = 0x80000;
 
-        void *dr_emu = mmap((void *)DR_EMUL_BASE, DR_EMUL_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
-                            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-        void *dr_cache = mmap((void *)DR_CACH_BASE, DR_CACH_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
-                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        void *dr_emu = mmap(ppc_host(DR_EMUL_BASE), DR_EMUL_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
+                            fixed, -1, 0);
+        void *dr_cache = mmap(ppc_host(DR_CACH_BASE), DR_CACH_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
+                              fixed, -1, 0);
         if (dr_emu == MAP_FAILED || dr_cache == MAP_FAILED) {
             fprintf(stderr, "[CPUContext] WARNING: Failed to map DR regions (emu=%p, cache=%p)\n",
                     dr_emu, dr_cache);

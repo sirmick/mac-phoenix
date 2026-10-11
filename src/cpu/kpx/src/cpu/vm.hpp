@@ -191,7 +191,14 @@ static inline void vm_do_write_memory_4_reversed(uint32 *a, uint32 v)
 typedef uintptr vm_addr_t;
 
 #if REAL_ADDRESSING
+#ifdef VM_BASE_VARIABLE
+// MacPhoenix: guest memory at one host base (docs/cpu/PLAN.md S4): host =
+// VMBaseDiff + Mac address. 0 on Kheperix (identity, as SheepShaver); the
+// start of a 4GB reservation on mame-ppc. Defined in host_ppc.cpp.
+extern uintptr VMBaseDiff;
+#else
 const uintptr VMBaseDiff = 0;
+#endif
 #elif DIRECT_ADDRESSING
 #ifdef MEM_BULK
 extern uintptr VMBaseDiff;

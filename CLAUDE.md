@@ -269,6 +269,7 @@ machine.
 ## Key Architectural Decisions
 
 - **Platform API**: All backends implement the same `g_platform` function pointer table. Core code never calls backend-specific functions directly.
+- **PPC guest memory**: Kheperix (`--core kpx`) uses identity addressing (Mac address = host address; needs `vm.mmap_min_addr=0`). `--core mame-ppc` puts guest memory in a 4GB-aligned 4GB reservation, host = `VMBaseDiff` + Mac address, so it needs no sysctl.
 - **Memory layout**: RAM(32MB @ 0x0) + ROM(1MB @ 0x02000000) + ScratchMem(64KB @ 0x02100000) + FrameBuffer(4MB @ 0x02110000). Framebuffer is outside RAM to avoid corrupting Mac data structures.
 - **EmulOps**: ROM patches insert trap opcodes (0x71xx) that trigger host-side handlers for I/O, drivers, and system functions.
 - **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. `cpu_core` (`--core`) is in the JSON and the web UI (Settings > Advanced > CPU core) and is reset to the backend's default when it doesn't fit (`normalize_cpu_core()`). The web UI has built-in profiles `68k`, `se`, `ppc` and `exec` (client.js `ROM_PROFILES`), shown when their ROM and disk are in storage. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format; backend token (`uae`/`kpx`) determines architecture; legacy `architecture`+`cpu_backend`+`m68k.*`+`ppc.*` keys are coerced on load for one release of backward compat.

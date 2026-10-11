@@ -821,6 +821,13 @@ void tick_thread_func()
 sigsegv_return_t mame_sigsegv_handler(sigsegv_info_t *sip)
 {
     const uintptr addr = (uintptr)sigsegv_get_fault_address(sip);
+    /* With a base (S4), only faults inside the guest-memory window are the
+     * guest's; anything else is a host bug. */
+    if(VMBaseDiff && (addr - VMBaseDiff) >= (1ull << 32))
+    {
+        fprintf(stderr, "SIGSEGV outside guest memory\n  ea %p\n", (void *)addr);
+        return SIGSEGV_RETURN_FAILURE;
+    }
     if((addr - (uintptr)ROMBaseHost) < ROM_SIZE)
         return SIGSEGV_RETURN_SKIP_INSTRUCTION;
 
@@ -841,7 +848,10 @@ bool mame_cpu_init(void)
 {
     if(g_core)
         return true;
-    g_memory.map(0, 1ull << 32, (uint8_t *)0);   /* identity, as Kheperix */
+    /* One window over the whole Mac space at VMBaseDiff (cpu_context.cpp,
+     * S4): host = base + Mac address. Unmapped pages inside it fault and the
+     * SIGSEGV policy below skips the access, as identity addressing did. */
+    g_memory.map(0, 1ull << 32, (uint8_t *)VMBaseDiff);
     cpu::Config config;
     config.arch = cpu::Arch::PPC;
     config.model = 750;
@@ -886,8 +896,18 @@ void mame_cpu_execute_fast(void)
 
     /* The nanokernel probes these during init and must fault there. They
      * come back with OP_RESET's DR emulator setup. */
-    munmap((void *)DR_EMULATOR_BASE, DR_EMULATOR_SIZE);
-    munmap((void *)DR_CACHE_BASE, DR_CACHE_SIZE);
+    /* Inside the guest-memory reservation: back to PROT_NONE rather than
+     * unmapped, so nothing else is placed there. */
+    if(VMBaseDiff)
+    {
+        mmap(Mac2HostAddr(DR_EMULATOR_BASE), DR_EMULATOR_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        mmap(Mac2HostAddr(DR_CACHE_BASE), DR_CACHE_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    }
+    else
+    {
+        munmap((void *)DR_EMULATOR_BASE, DR_EMULATOR_SIZE);
+        munmap((void *)DR_CACHE_BASE, DR_CACHE_SIZE);
+    }
 
     uint32 entry = ROMBase + 0x310000;
     video_ppc_init_webrtc_null();

@@ -261,6 +261,16 @@ int vm_init_reserved(void *hostAddress) {
     return result;
 }
 
+// MacPhoenix: the 4GB reservation guest memory lives in on mame-ppc
+// (cpu_context.cpp). Allocations at next_address inside it replace part of
+// it (MAP_FIXED): the reservation is ours, and MAP_FIXED_NOREPLACE would
+// refuse.
+static char *vm_reservation_lo, *vm_reservation_hi;
+void vm_set_reservation(void *base, size_t size) {
+    vm_reservation_lo = (char *)base;
+    vm_reservation_hi = (char *)base + size;
+}
+
 // Exposed so SheepMem::Init can align allocations to match legacy layout
 void vm_set_next_address(void *addr) {
     next_address = (char *)addr;
@@ -308,17 +318,24 @@ static void *vm_acquire_internal(size_t size, int options)
 	 * framebuffer's hint then collided with it and landed at
 	 * 0x7ff4f9000000, Mac address 0xf9000000 by truncation). */
 	addr = MAP_FAILED;
+	if (next_address >= vm_reservation_lo && next_address + size <= vm_reservation_hi) {
+		addr = mmap((caddr_t)next_address, size, VM_PAGE_DEFAULT, the_map_flags | MAP_FIXED, fd, 0);
+		if (addr == MAP_FAILED)
+			return VM_MAP_FAILED;
+	}
 #ifdef MAP_FIXED_NOREPLACE
+	if (addr == MAP_FAILED) {
 	addr = mmap((caddr_t)next_address, size, VM_PAGE_DEFAULT, the_map_flags | MAP_FIXED_NOREPLACE, fd, 0);
 	if (addr != MAP_FAILED && addr != (void *)next_address) {
 		munmap(addr, size);	/* a kernel that ignores MAP_FIXED_NOREPLACE */
 		addr = MAP_FAILED;
 	}
+	}
 #endif
 	if (addr == MAP_FAILED &&
 	    (addr = mmap((caddr_t)next_address, size, VM_PAGE_DEFAULT, the_map_flags, fd, 0)) == (void *)MAP_FAILED)
 		return VM_MAP_FAILED;
-	if (sizeof(void *) == 8 && (uintptr_t)addr + size > 0x100000000ull)
+	if (sizeof(void *) == 8 && !vm_reservation_lo && (uintptr_t)addr + size > 0x100000000ull)
 		fprintf(stderr, "[VM] warning: %zu bytes at %p, above 4GB: not addressable as a Mac address\n", size, addr);
 #if USE_JIT
 	// Sanity checks for 64-bit platforms

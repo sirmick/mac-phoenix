@@ -12,6 +12,10 @@
 #include "main.h"
 #include "xlowmem.h"
 
+// Host base of guest memory (vm.hpp, VM_BASE_VARIABLE): 0 for identity
+// addressing (Kheperix), else set by cpu_context.cpp before any allocation.
+uintptr VMBaseDiff = 0;
+
 // FlushCodeCache: Kheperix's, in cpu_ppc_kpx.cpp on x86 and a no-op in
 // kpx_stub.cpp elsewhere. mame-ppc verifies its blocks instead.
 void FlushCodeCache(uintptr start, uintptr end);
