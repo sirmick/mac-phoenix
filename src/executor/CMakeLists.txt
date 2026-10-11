@@ -71,7 +71,7 @@ cmrc_add_resource_library(resources
 
 # --- CPU facade --------------------------------------------------------------
 # syn68k_common.cpp implements the syn68k API on a cpu::Core
-# (src/cpu/core), chosen at startup (--executor-cpu): uae or musashi.
+# (src/cpu/core), chosen at startup (--core): uae or mame-68k.
 add_library(executor_cpu STATIC
     cpu/syn68k_common.cpp
     cpu/PowerCore.cpp
@@ -107,7 +107,7 @@ target_sources(executor_uae_glue INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpu/uae_g
 target_include_directories(executor_uae_glue INTERFACE ${PROJECT_SOURCE_DIR}/src/common/include)
 target_link_libraries(executor_uae_glue INTERFACE
     -Wl,--whole-archive cpuemu_ff cpustbl_ff -Wl,--no-whole-archive
-    -Wl,--start-group uae_cpu uae_jit vm_alloc executor_cpu cpu_core musashi -Wl,--end-group
+    -Wl,--start-group uae_cpu uae_jit vm_alloc executor_cpu cpu_core -Wl,--end-group
     Qt6::Core Threads::Threads)
 
 # --- Tests ---------------------------------------------------------------------

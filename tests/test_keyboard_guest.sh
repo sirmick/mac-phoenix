@@ -30,7 +30,7 @@ while [[ $# -gt 0 ]]; do
         --rom)     ROM_OVERRIDE="$2"; shift 2 ;;
         --disk)    DISK_OVERRIDE="$2"; shift 2 ;;
         --backend) BACKEND="$2"; shift 2 ;;   # uae | executor
-        --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi
+        --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | mame-68k
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done

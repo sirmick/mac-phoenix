@@ -373,7 +373,7 @@ public:
 /* Cores built into this binary for an architecture, best first. */
 std::vector<std::string> available(Arch arch);
 
-/* A core by name ("uae", "musashi", ...), or null if unknown, unsuitable
+/* A core by name ("uae", "mame-68k", ...), or null if unknown, unsuitable
  * for the config, or already in use. memory and host must outlive it. */
 std::unique_ptr<Core> create(const std::string &name, const Config &config,
                              GuestMemory &memory, Host &host);

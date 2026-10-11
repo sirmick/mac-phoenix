@@ -18,7 +18,7 @@ PASS_FLAGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --backend) BACKEND="$2"; shift 2 ;;
-        --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi
+        --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | mame-68k
         --arch) ARCH="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;

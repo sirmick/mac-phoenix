@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
         --disk) DISK="$2"; shift 2 ;;
         --rom) ROM_OVERRIDE="$2"; shift 2 ;;
         --backend) BACKEND="$2"; shift 2 ;;
-        --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi | mame-68k; kpx | mame-ppc
+        --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | mame-68k; kpx | mame-ppc
         --jit|--no-jit|--idlewait|--no-idlewait) EXTRA_FLAGS+=("$1"); shift ;;
         --executor-debug) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;   # Executor's --debug options (memcheck,...)
         --arch) ARCH="$2"; shift 2 ;;

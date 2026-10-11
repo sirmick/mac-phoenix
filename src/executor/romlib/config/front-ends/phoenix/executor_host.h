@@ -35,7 +35,7 @@ struct Config
     int logtraps_nesting = 1; // --logtraps-nesting: log calls nested this deep
     std::string debug_options; // Executor's --debug string ("memcheck,...")
     bool writable_images = false; // disk images read-write (default: read-only)
-    std::string cpu = "uae";      // 68k core: "uae" or "musashi"
+    std::string cpu = "uae";      // 68k core: "uae" or "mame-68k"
 
     // Application to start instead of Executor's Browser (host path).
     std::string app;

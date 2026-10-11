@@ -246,14 +246,14 @@ D2's clean-up of the 68k side; C2 and C3 are independent of D.
 | D5 | Demo features | HiDPI QuickDraw (2×), host files as Mac files, rootless windows; HyperCard from a link |
 | D6 | PPC applications on the C2 core behind the PowerCore facade | a PPC application runs (milestone P) |
 | D7 | A/UX user-mode kernel | the five steps above |
-| C1 | MAME's Musashi (PMMU, softfloat FPU, instanceable) as the 68k core | `--core mame-68k` passes every suite UAE and Musashi pass today; two instances in one process; vendored v3.32 retired. **C1a–c done 2026-10-10** (`src/cpu/mame/`); C1d PMMU gate and C1e retirement open |
+| C1 | MAME's Musashi (PMMU, softfloat FPU, instanceable) as the 68k core | `--core mame-68k` passes every suite UAE and Musashi pass today; two instances in one process; vendored v3.32 retired. **C1a–c done 2026-10-10** (`src/cpu/mame/`); C1d PMMU gate open; **C1e done 2026-10-11** (v3.32 deleted, `musashi` an alias of `mame-68k`) |
 | C2 | MAME's PowerPC recompiler as the PPC core, one base offset | boot matrix PPC cells pass with the UML interpreter, then the x86-64 back-end, then arm64 on Apple Silicon; no `mmap_min_addr`. **C2a–c done 2026-10-10**: `--backend kpx --core mame-ppc` boots 7.5.5 to the Finder, 1.6 s with the x86-64 back-end (`--jit`), and Mac OS 9.0.4 in 10 s with the guest suite passing as on Kheperix; merged to main; arm64 (C2d) and the base offset open |
 | C3 | Host 68k core in place of the nanokernel's 68k emulator | PPC machine boots 7.5.5 to Finder and passes the bridge suites with Musashi running the 68k side; boot and benchmark numbers against the DR emulator. **C3a done 2026-10-10** as a hybrid: host-initiated routines start on Musashi, Apple's 68k dispatcher included, and hand off at routine descriptors; C3b (the main 68k thread) open |
 | C4 | UML→wasm back-end | PPC machine in a tab faster than the interpreter (after D4) |
 
 D1–D3 and C1–C2 also make the native build portable (macOS, Windows).
 
-**D1 so far.** Musashi (`src/cpu/musashi`, upstream v3.32, unmodified) is a
+**D1 so far** (the vendored v3.32 was deleted on 2026-10-11, C1e; MAME's Musashi took its place). Musashi (`src/cpu/musashi`, upstream v3.32, unmodified) is a
 second 68k core. Both cores sit behind `cpu::Core` (`src/cpu/core/cpu_core.h`),
 one interface meant for every core MacPhoenix runs, 68k or PowerPC: a
 `GuestMemory` of 1MB pages (windows onto host memory, or an I/O handler),
@@ -261,11 +261,12 @@ host ops (the architecture's reserved host-call opcodes: `$71xx`, PPC primary
 opcode 6), re-entrant `run()`, `step()`, an interrupt line, a thread-safe
 `request_attention()` served at instruction boundaries, registers by id, and
 context save/restore. `syn68k_common.cpp` is a `cpu::Host` on whichever core
-`--core uae|musashi` names (default `uae`). Addressing is still identity
+`--core uae|mame-68k` names (default `uae`; `musashi` was the vendored v3.32,
+retired 2026-10-11). Addressing is still identity
 (one window over the whole space).
 
 The ROM-based 68k Mac runs on the same interface (`src/cpu/cpu_m68k.cpp`,
-Basilisk's EmulOps as its Host), so `--core musashi` boots the Quadra 650
+Basilisk's EmulOps as its Host), so `--core mame-68k` boots the Quadra 650
 and Mac SE ROMs too; every machine fills g_platform's memory and CPU
 entries the same way (`src/cpu/core/platform_cpu.cpp`), and UAE's private
 plumbing left the Platform table. The whole test suite passes on both

@@ -106,19 +106,7 @@ set_tests_properties(boot_uae_jit PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
-# The same boot on the other 68k cores (cpu::available): Musashi v3.32 and
-# MAME's Musashi (docs/cpu/PLAN.md, C1).
-add_test(
-  NAME boot_core_musashi
-  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core musashi --timeout 25 --port 18112
-)
-set_tests_properties(boot_core_musashi PROPERTIES
-  TIMEOUT 40
-  LABELS "boot;musashi"
-  SKIP_RETURN_CODE 77
-  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
-)
-
+# The same boot on MAME's Musashi (docs/cpu/PLAN.md, C1).
 add_test(
   NAME boot_core_mame68k
   COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core mame-68k --timeout 25 --port 18114
@@ -318,80 +306,39 @@ set_tests_properties(guest_suite_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
-# The ROM-based 68k Mac on the Musashi core (--core musashi).
-add_test(NAME boot_musashi
-  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core musashi --timeout 30 --port 18140)
-set_tests_properties(boot_musashi PROPERTIES TIMEOUT 60 LABELS "boot;musashi" SKIP_RETURN_CODE 77
+# The ROM-based 68k Mac on MAME's Musashi (--core mame-68k).
+add_test(NAME boot_mame68k
+  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core mame-68k --timeout 30 --port 18140)
+set_tests_properties(boot_mame68k PROPERTIES TIMEOUT 60 LABELS "boot;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
-add_test(NAME boot_se_musashi
-  COMMAND ${CMAKE_SOURCE_DIR}/tests/test_boot_se.sh --core musashi --timeout 30 --port 18142
+add_test(NAME boot_se_mame68k
+  COMMAND ${CMAKE_SOURCE_DIR}/tests/test_boot_se.sh --core mame-68k --timeout 30 --port 18142
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-set_tests_properties(boot_se_musashi PROPERTIES TIMEOUT 60 LABELS "boot;musashi" SKIP_RETURN_CODE 77
+set_tests_properties(boot_se_mame68k PROPERTIES TIMEOUT 60 LABELS "boot;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_SE_ROM=${TEST_SE_ROM}")
 
-add_test(NAME command_bridge_musashi
-  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --core musashi --port 18144)
-set_tests_properties(command_bridge_musashi PROPERTIES TIMEOUT 90 LABELS "boot;musashi" SKIP_RETURN_CODE 77
+add_test(NAME command_bridge_mame68k
+  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --core mame-68k --port 18144)
+set_tests_properties(command_bridge_mame68k PROPERTIES TIMEOUT 90 LABELS "boot;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
-add_test(NAME guest_suite_musashi
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core musashi --timeout 120 --port 18146)
-set_tests_properties(guest_suite_musashi PROPERTIES TIMEOUT 160 LABELS "guest;musashi" SKIP_RETURN_CODE 77
+add_test(NAME guest_suite_mame68k
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core mame-68k --timeout 120 --port 18146)
+set_tests_properties(guest_suite_mame68k PROPERTIES TIMEOUT 160 LABELS "guest;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
-add_test(NAME finder_suite_musashi
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core musashi --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 120 --port 18148)
-set_tests_properties(finder_suite_musashi PROPERTIES TIMEOUT 180 LABELS "guest;musashi" SKIP_RETURN_CODE 77
+add_test(NAME finder_suite_mame68k
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core mame-68k --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 120 --port 18148)
+set_tests_properties(finder_suite_mame68k PROPERTIES TIMEOUT 180 LABELS "guest;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
-add_test(NAME keyboard_guest_musashi
-  COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --core musashi --timeout 90 --port 18150)
-set_tests_properties(keyboard_guest_musashi PROPERTIES TIMEOUT 130 LABELS "guest;musashi" SKIP_RETURN_CODE 77
+add_test(NAME keyboard_guest_mame68k
+  COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --core mame-68k --timeout 90 --port 18150)
+set_tests_properties(keyboard_guest_mame68k PROPERTIES TIMEOUT 130 LABELS "guest;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
-# The same Executor runs on the Musashi 68k core (--core musashi).
-add_test(
-  NAME command_bridge_executor_musashi
-  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend executor --core musashi --timeout 60 --port 18130
-)
-set_tests_properties(command_bridge_executor_musashi PROPERTIES
-  TIMEOUT 90
-  LABELS "boot;musashi"
-  SKIP_RETURN_CODE 77
-)
-
-add_test(
-  NAME guest_suite_executor_musashi
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core musashi --timeout 150 --port 18132
-)
-set_tests_properties(guest_suite_executor_musashi PROPERTIES
-  TIMEOUT 200
-  LABELS "guest;musashi"
-  SKIP_RETURN_CODE 77
-)
-
-add_test(
-  NAME finder_suite_executor_musashi
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core musashi --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 150 --port 18134
-)
-set_tests_properties(finder_suite_executor_musashi PROPERTIES
-  TIMEOUT 200
-  LABELS "guest;musashi"
-  SKIP_RETURN_CODE 77
-)
-
-add_test(
-  NAME keyboard_guest_executor_musashi
-  COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --backend executor --core musashi --timeout 90 --port 18136
-)
-set_tests_properties(keyboard_guest_executor_musashi PROPERTIES
-  TIMEOUT 130
-  LABELS "guest;musashi"
-  SKIP_RETURN_CODE 77
-)
-
-# ... and on MAME's Musashi (--core mame-68k; docs/cpu/PLAN.md, S12).
+# The same Executor on MAME's Musashi (--core mame-68k; docs/cpu/PLAN.md, S12).
 add_test(
   NAME command_bridge_executor_mame68k
   COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend executor --core mame-68k --timeout 60 --port 18152

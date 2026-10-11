@@ -311,7 +311,7 @@ void syn68k_free_low(void *p, size_t size);
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len);
 /* Turn a JIT on before initialize_68k_emulator() (none yet). */
 void syn68k_set_jit(int enabled);
-/* Pick the 68k core, "uae" (default) or "musashi", before
+/* Pick the 68k core, "uae" (default) or "mame-68k", before
  * initialize_68k_emulator(). Returns 0 for an unknown name or once the
  * emulator has started. */
 int syn68k_select_engine(const char *name);

@@ -3690,7 +3690,6 @@ function backendIsExecutor(backend) {
 const CPU_CORES = {
     m68k: [
         ['uae',      'UAE (interpreter; JIT on x86)'],
-        ['musashi',  'Musashi 3.32'],
         ['mame-68k', "MAME 68k (Musashi with PMMU and FPU)"],
     ],
     ppc: [

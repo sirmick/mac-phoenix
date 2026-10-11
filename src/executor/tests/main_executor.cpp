@@ -128,7 +128,7 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
 
-    // --cpu=uae|musashi picks the 68k core under the facade.
+    // --cpu=uae|mame-68k picks the 68k core under the facade.
     for(int i = 1; i < argc; i++)
         if(!strncmp(argv[i], "--cpu=", 6) && !syn68k_select_engine(argv[i] + 6))
         {

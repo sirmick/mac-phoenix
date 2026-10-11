@@ -140,7 +140,7 @@ struct EmulatorConfig {
     int executor_logtraps_nesting = 1; // ... and calls nested this deep in Toolbox callbacks
     std::string executor_debug;        // Executor's own --debug options ("memcheck,fslog,..."; romlib/error/error.cpp)
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
-    std::string cpu_core = "uae";      // CPU core for the backend's architecture: 68k "uae", "musashi", "mame-68k"; ppc "kpx", "mame-ppc"
+    std::string cpu_core = "uae";      // CPU core for the backend's architecture: 68k "uae", "mame-68k"; ppc "kpx", "mame-ppc"
 
     // System
     bool zappram = false;

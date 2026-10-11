@@ -4,7 +4,7 @@
  * Basilisk II's machine: guest memory from CPUContext's one host block,
  * EmulOps ($71xx) to m68k::EmulOp, interrupts from InterruptFlags (level 1
  * autovector, NMI on level 7). The core is any 68k cpu::Core ("uae",
- * "musashi").
+ * "mame-68k").
  */
 #pragma once
 

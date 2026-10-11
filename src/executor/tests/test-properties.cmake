@@ -14,8 +14,6 @@ set_tests_properties(
 
             # MakeFSSpec should resolve current directory, Executor stores 0 in FSSpec
         executor.FileTest.MakeFSSpec
-        executor.musashi.FileTest.GetFInfo
-        executor.musashi.FileTest.MakeFSSpec
         executor.mame68k.FileTest.GetFInfo
         executor.mame68k.FileTest.MakeFSSpec
     APPEND PROPERTIES LABELS xfail)
@@ -26,8 +24,6 @@ set_tests_properties(
 set_tests_properties(
         executor.FileTest.SetFInfo_CrDat
         executor.FileTest.SetFLock
-        executor.musashi.FileTest.SetFInfo_CrDat
-        executor.musashi.FileTest.SetFLock
         executor.mame68k.FileTest.SetFInfo_CrDat
         executor.mame68k.FileTest.SetFLock
     PROPERTIES DISABLED TRUE)

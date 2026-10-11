@@ -357,8 +357,14 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
 // cores, as the ROM 68k machine does.
 void EmulatorConfig::normalize_cpu_core() {
     const bool ppc = backend == Backend::KPX;
+    // The vendored Musashi v3.32 was retired (docs/cpu/PLAN.md, C1e): its
+    // name means MAME's Musashi now.
+    if (cpu_core == "musashi") {
+        fprintf(stderr, "[Config] CPU core 'musashi' is retired; using 'mame-68k' (MAME's Musashi)\n");
+        cpu_core = "mame-68k";
+    }
     const bool fits = ppc ? (cpu_core == "kpx" || cpu_core == "mame-ppc")
-                          : (cpu_core == "uae" || cpu_core == "musashi" || cpu_core == "mame-68k");
+                          : (cpu_core == "uae" || cpu_core == "mame-68k");
     if (fits)
         return;
     const char* def = ppc ? "kpx" : "uae";
@@ -465,7 +471,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
             printf("  --core NAME                CPU core for the backend's architecture:\n");
-            printf("                             68k uae | musashi | mame-68k (default: uae)\n");
+            printf("                             68k uae | mame-68k (default: uae; musashi = mame-68k)\n");
             printf("                             ppc kpx | mame-ppc (default: kpx)\n");
             printf("  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)\n");
             printf("  --m68k-host N              mame-ppc only: 0 off; 1 host-initiated 68k routines on a\n");

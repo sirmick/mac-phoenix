@@ -40,10 +40,10 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom
 npx playwright test
 
 # Executor backend: no ROM, C++ Toolbox (docs/executor/PLAN.md). On the UAE
-# core (default) it needs vm.mmap_min_addr=0; --core musashi does not
+# core (default) it needs vm.mmap_min_addr=0; --core mame-68k does not
 # (Executor's four address windows). Pick "Executor" in the web UI, or:
 ./build/mac-phoenix --backend executor
-./build/mac-phoenix --backend executor --core musashi
+./build/mac-phoenix --backend executor --core mame-68k
 # ... on Apple's 7.5.5 System with real Finder (Settings > System disk):
 ./build/mac-phoenix --backend executor --executor-system macos-7.5.5-noext.img
 # ... with sound (Executor mixes in C++ and feeds the same Opus/WebRTC path):
@@ -74,7 +74,7 @@ further backends.
 
 | Backend | Arch | What | Speed | Use for |
 |---------|------|------|-------|---------|
-| `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`), `--core musashi` (v3.32) or `--core mame-68k` (MAME's Musashi: PMMU, softfloat FPU, several instances per process; `src/cpu/mame/`) | Fast (~5s boot) | Default, end users |
+| `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`) or `--core mame-68k` (MAME's Musashi: PMMU, softfloat FPU, several instances per process; `src/cpu/mame/`; `musashi` names it too, the vendored v3.32 is gone) | Fast (~5s boot) | Default, end users |
 | `kpx` | ppc | Power Mac G3 machine; CPU core `--core kpx` (Kheperix, +optional `--jit`) or `--core mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64 back-end, `--no-jit` UML interpreter; `src/cpu/mame/`, installer `src/cpu/kpx/cpu_ppc_mame.cpp`) | Medium | Default for PPC |
 | `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM | Fast start | Toolbox reimplementation work (`src/executor/`) |
 
@@ -114,8 +114,7 @@ src/
     uae_cpu/                        — UAE interpreter source (newcpu.cpp, cpuemu.cpp)
     kpx/                            — KPX PPC backend (SheepShaver Kheperix interpreter)
     cpu_m68k.cpp                    — The ROM-based 68k Mac on a cpu::Core (EmulOps, InterruptFlags, reset)
-    musashi/                        — Musashi 68k core (vendored; one local 68040 line-F patch)
-    core/                           — cpu::Core: one interface for every core (GuestMemory, host ops, run/step, IRQ, contexts); uae + musashi
+    core/                           — cpu::Core: one interface for every core (GuestMemory, host ops, run/step, IRQ, contexts); uae + mame-68k
     core/platform_cpu.cpp           — g_platform's memory/CPU/Execute68k/interrupt entries on the active core (every machine)
   drivers/
     video/video_output.h            — Lock-free triple buffer for frames
@@ -215,7 +214,8 @@ CPU:
                              (default: uae; backend implies architecture;
                              executor needs no ROM)
   --core NAME                CPU core for the backend's architecture:
-                             68k uae | musashi | mame-68k (default: uae; ROM machine and Executor)
+                             68k uae | mame-68k (default: uae; ROM machine and Executor;
+                             musashi = mame-68k since the vendored v3.32 was retired)
                              ppc kpx | mame-ppc (default: kpx)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
   --m68k-host N              mame-ppc: 1 runs host-initiated 68k routines on a

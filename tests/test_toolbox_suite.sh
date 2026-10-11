@@ -60,7 +60,7 @@ while [[ $# -gt 0 ]]; do
         --filter)  FILTER="$2"; shift 2 ;;
         --trace)   TRACE=(--trace-atraps); shift ;;
         --logtraps) TRACE=(--executor-logtraps); shift ;;
-        --core)    CORE="$2"; shift 2 ;;   # CPU core: uae | musashi
+        --core)    CORE="$2"; shift 2 ;;   # CPU core: uae | mame-68k
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done

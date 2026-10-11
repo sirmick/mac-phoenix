@@ -79,7 +79,7 @@ int run(const Config& c)
     ROMlib_readonly_images = !c.writable_images;
     if(!syn68k_select_engine(c.cpu.c_str()))
     {
-        fprintf(stderr, "[Executor] unknown 68k core '%s' (uae | musashi)\n", c.cpu.c_str());
+        fprintf(stderr, "[Executor] unknown 68k core '%s' (uae | mame-68k)\n", c.cpu.c_str());
         return 2;
     }
     ROMlib_heap_death_dialog = false;

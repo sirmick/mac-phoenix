@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --rom) ROM="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
-        --core) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi
+        --core) CORE="$2"; shift 2 ;;   # CPU core: uae | mame-68k
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done

@@ -16,7 +16,8 @@
  *     Host::attention() when another thread raised a level).
  *
  * The core is chosen by name before initialize_68k_emulator: "uae" or
- * "musashi" (cpu::available).
+ * "mame-68k" (cpu::available; "musashi" means mame-68k since the vendored
+ * v3.32 was retired).
  */
 #include <syn68k_public.h>
 #include "cpu_core.h"
@@ -73,6 +74,8 @@ int syn68k_select_engine(const char *name)
     if(core)
         return 0;
     for(const auto &a : cpu::available(cpu::Arch::M68K))
+    if(n == "musashi")   /* the vendored v3.32, retired: MAME's Musashi now */
+        n = "mame-68k";
         if(a == n)
         {
             engine_name = n;
@@ -643,7 +646,7 @@ void *syn68k_map_guest_ram(size_t size)
         fprintf(stderr,
                 "syn68k: cannot map guest RAM at address 0 (%s).\n"
                 "  Run: sudo sysctl vm.mmap_min_addr=0\n"
-                "  (or use the musashi core: --core musashi)\n",
+                "  (or use MAME's Musashi: --core mame-68k)\n",
                 strerror(errno));
         exit(1);
     }

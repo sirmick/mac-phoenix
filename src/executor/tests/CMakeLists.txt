@@ -114,13 +114,7 @@ else()
         TEST_PREFIX "executor."
         PROPERTIES LABELS executor
         DISCOVERY_TIMEOUT 30)
-    # The same suite on the Musashi 68k core.
-    gtest_discover_tests(executor_tests
-        TEST_PREFIX "executor.musashi."
-        EXTRA_ARGS --cpu=musashi
-        PROPERTIES LABELS "executor;musashi"
-        DISCOVERY_TIMEOUT 30)
-    # ... and on MAME's Musashi (docs/cpu/PLAN.md, C1).
+    # The same suite on MAME's Musashi (docs/cpu/PLAN.md, C1).
     gtest_discover_tests(executor_tests
         TEST_PREFIX "executor.mame68k."
         EXTRA_ARGS --cpu=mame-68k
