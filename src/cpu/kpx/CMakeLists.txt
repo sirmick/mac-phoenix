@@ -27,6 +27,7 @@ set(KPX_SHARED_SOURCES
   compat/vm_alloc.cpp
   compat/ppc_ether.cpp
   native_ops_ppc.cpp
+  host_ppc.cpp
   cpu_ppc_mame.cpp
 )
 

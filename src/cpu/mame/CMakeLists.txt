@@ -90,10 +90,8 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$")
     list(APPEND MAME_PPC_SOURCES cpu/drcbex64.cpp cpu/x86log.cpp)
     set(MAME_PPC_NATIVE "")                       # drcuml.cpp picks drcbe_x64
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
-    # C2d: lifted but not yet built or run on an arm64 host (no such host
-    # here). drcbearm64.cpp needs the same execute() re-entrancy treatment
-    # as drcbex64.cpp (saved stack pointer in near state) before it works
-    # with nested runs; see docs/cpu/PLAN.md.
+    # C2d: drcbearm64.cpp with the nested execute() save/restore (as
+    # drcbex64.cpp); built and tested under qemu with tools/xarch/xarch.sh.
     list(APPEND MAME_PPC_SOURCES cpu/drcbearm64.cpp)
     set(MAME_PPC_NATIVE "")                       # drcuml.cpp picks drcbe_arm64
 else()

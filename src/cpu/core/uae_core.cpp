@@ -42,7 +42,9 @@
 extern bool quit_program;
 extern uintptr MEMBaseDiff;
 extern int CPUType, FPUType;
-extern bool UseJIT;
+#if USE_JIT
+extern bool UseJIT;  /* cpu_emulation.h makes it a const false without the JIT */
+#endif
 
 namespace cpu {
 namespace {

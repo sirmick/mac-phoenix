@@ -38,10 +38,6 @@ extern "C" void cpu_ppc_kpx_install(Platform *p) {
 // are unreachable at runtime because cpu_ppc_kpx_install exits before
 // the KPX runtime gets installed.
 
-// Signal stack — set by kpx_set_signal_stack at boot; SignalStackBase
-// returns the upper bound of the interrupt fake stack.
-extern "C" void kpx_set_signal_stack(uintptr_t) {}
-uintptr_t SignalStackBase(void) { return 0; }
 
 // JIT code cache invalidation hook.
 void FlushCodeCache(uintptr_t /*start*/, uintptr_t /*end*/) {}

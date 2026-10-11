@@ -79,23 +79,6 @@ extern "C" {
 
 // HasMacStarted provided by common/include/macos_util.h (static inline)
 extern int dt_seq;
-void MakeExecutable(int dummy, uint32 start, uint32 length)
-{
-	if ((start >= ROMBase) && (start < (ROMBase + ROM_SIZE)))
-		return;
-	FlushCodeCache(start, start + length);
-}
-// Interrupt enable/disable — must match SheepShaver's main_unix.cpp
-// DisableInterrupt increments XLM_IRQ_NEST to block HandleInterrupt
-// EnableInterrupt decrements it to re-allow interrupts
-void DisableInterrupt(void)
-{
-    WriteMacInt32(XLM_IRQ_NEST, int32(ReadMacInt32(XLM_IRQ_NEST)) + 1);
-}
-void EnableInterrupt(void)
-{
-    WriteMacInt32(XLM_IRQ_NEST, int32(ReadMacInt32(XLM_IRQ_NEST)) - 1);
-}
 
 // idle_resume provided by timer_unix.cpp
 
@@ -107,22 +90,8 @@ void EnableInterrupt(void)
 // TimerInterrupt: use core's version (needed for Mac OS Time Manager)
 // ExecuteNative: real implementation in thunks_ppc.cpp
 
-// Signal stack for PPC interrupt handling.
-// Must be in Mac address space. Set to ROMEnd (= ROMBase + ROM_AREA_SIZE)
-// during initialization, matching legacy SheepShaver (main_unix.cpp:2340).
-static uintptr sig_stack = 0;
-static const uint32 SIG_STACK_SIZE = 0x10000;  // 64KB
-
-uintptr SignalStackBase(void)
-{
-    return sig_stack + SIG_STACK_SIZE;
-}
-
-// Called from cpu_context.cpp after ROM area is allocated
-extern "C" void kpx_set_signal_stack(uintptr addr)
-{
-    sig_stack = addr;
-}
+// MakeExecutable, Disable/EnableInterrupt, SignalStackBase: host_ppc.cpp
+// (kpx_shared), shared with mame-ppc on every host.
 
 // ThunksInit/ThunksExit: real implementations in thunks_ppc.cpp
 // NativeOpcode/NativeTVECT/NativeFunction/NativeRoutineDescriptor: in thunks_ppc.cpp

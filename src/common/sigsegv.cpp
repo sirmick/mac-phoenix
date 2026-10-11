@@ -36,6 +36,7 @@
 #endif
 
 #include <list>
+#include <stdint.h>
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
@@ -364,6 +365,12 @@ static void powerpc_decode_instruction(instruction_t *instruction, unsigned int 
 #define SIGSEGV_FAULT_INSTRUCTION		(SIGSEGV_CONTEXT_REGS.pc)
 #define SIGSEGV_REGISTER_FILE			((unsigned long *)&SIGSEGV_CONTEXT_REGS.regs)
 #define SIGSEGV_SKIP_INSTRUCTION		aarch64_skip_instruction
+#elif defined(__riscv) && __riscv_xlen == 64
+/* MacPhoenix: uc_mcontext.__gregs is pc then x1..x31. */
+#define SIGSEGV_CONTEXT_REGS			(((ucontext_t *)scp)->uc_mcontext)
+#define SIGSEGV_FAULT_INSTRUCTION		(SIGSEGV_CONTEXT_REGS.__gregs[0])
+#define SIGSEGV_REGISTER_FILE			((unsigned long *)SIGSEGV_CONTEXT_REGS.__gregs)
+#define SIGSEGV_SKIP_INSTRUCTION		riscv64_skip_instruction
 #elif (defined(mips) || defined(__mips__))
 #define SIGSEGV_CONTEXT_REGS			(((ucontext_t *)scp)->uc_mcontext)
 #define SIGSEGV_FAULT_INSTRUCTION		(SIGSEGV_CONTEXT_REGS.pc)
@@ -2569,10 +2576,55 @@ static bool aarch64_skip_instruction(unsigned long *regs) {
 }
 #endif
 #if defined(__linux__) && defined(__aarch64__)
+/* regs: x0..x30, sp, pc. MacPhoenix: a skipped load reads as 0, as the
+ * x86 skip does (the PowerPC nanokernel probes memory and reads the
+ * result): integer LDR/LDRB/LDRH/LDRS* (single register) and LDP zero
+ * their destinations. Writeback forms are not emulated. */
 static bool aarch64_skip_instruction(unsigned long *regs) {
 	unsigned long long *r = (unsigned long long *)regs;
 	if (!r[32]) return false;
+	uint32_t const insn = *(const uint32_t *)r[32];
+	if ((insn & 0x3c000000) == 0x38000000 && ((insn >> 22) & 3) != 0) {
+		/* load/store register, integer (V=0), opc != 00 (a load or
+		 * prefetch) */
+		unsigned const rt = insn & 31;
+		if (rt != 31) r[rt] = 0;
+	} else if ((insn & 0x3c400000) == 0x28400000) {
+		/* load pair, integer (V=0, L=1) */
+		unsigned const rt = insn & 31, rt2 = (insn >> 10) & 31;
+		if (rt != 31) r[rt] = 0;
+		if (rt2 != 31) r[rt2] = 0;
+	}
 	r[32] += 4;
+	return true;
+}
+#endif
+
+#if defined(__linux__) && defined(__riscv) && __riscv_xlen == 64
+/* regs: pc, x1..x31 (uc_mcontext.__gregs). MacPhoenix: step over the
+ * faulting instruction (2 bytes when compressed) and zero a load's
+ * destination, as the x86 skip does. */
+static bool riscv64_skip_instruction(unsigned long *regs) {
+	if (!regs[0]) return false;
+	const uint16_t *pc = (const uint16_t *)regs[0];
+	uint32_t const lo = pc[0];
+	if ((lo & 3) == 3) {
+		uint32_t const insn = lo | ((uint32_t)pc[1] << 16);
+		if ((insn & 0x7f) == 0x03) {           /* LOAD: lb..ld, lbu..lwu */
+			unsigned const rd = (insn >> 7) & 31;
+			if (rd) regs[rd] = 0;
+		}
+		regs[0] += 4;
+	} else {
+		unsigned const op = lo & 3, funct3 = lo >> 13;
+		if (op == 0 && (funct3 == 2 || funct3 == 3))      /* c.lw, c.ld */
+			regs[8 + ((lo >> 2) & 7)] = 0;
+		else if (op == 2 && (funct3 == 2 || funct3 == 3)) { /* c.lwsp, c.ldsp */
+			unsigned const rd = (lo >> 7) & 31;
+			if (rd) regs[rd] = 0;
+		}
+		regs[0] += 2;
+	}
 	return true;
 }
 #endif

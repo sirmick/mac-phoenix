@@ -675,8 +675,26 @@ void *syn68k_alloc_low(size_t size)
         pool_used += size;
         return p;
     }
+#ifdef MAP_32BIT
     void *p = mmap(nullptr, size, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+#else
+    /* No MAP_32BIT off x86-64: probe for a free spot below 4GB. */
+    void *p = MAP_FAILED;
+    static uintptr_t low_hint = 0x10000000;
+    for(uintptr_t hint = low_hint; p == MAP_FAILED && hint + size <= 0x100000000ull; hint += 0x1000000)
+    {
+        p = mmap((void *)hint, size, PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+        if(p != MAP_FAILED && (uintptr_t)p != hint)
+        {
+            munmap(p, size);   /* a kernel without MAP_FIXED_NOREPLACE */
+            p = MAP_FAILED;
+        }
+    }
+    if(p != MAP_FAILED)
+        low_hint = ((uintptr_t)p + size + 0xFFFFFF) & ~(uintptr_t)0xFFFFFF;
+#endif
     if(p == MAP_FAILED)
     {
         fprintf(stderr, "syn68k: low allocation of %zu bytes failed\n", size);
