@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DISK="${MACEMU_SE_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" system-6.0.8)}"
 PORT=18100        # Use non-default port to avoid conflicts
 SIG_PORT=18101    # WebRTC signaling port
-BINARY="$(dirname "$0")/../build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$(dirname "$0")/../build/mac-phoenix}"
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Resolve binary path
-BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 
 if [[ ! -x "$BINARY" ]]; then
     echo "SKIP: Binary not found: $BINARY (run 'cmake --build build' first)"

@@ -13,7 +13,7 @@ set -euo pipefail
 PORT=18074
 SIG_PORT=18075
 TIMEOUT=15
-BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
 

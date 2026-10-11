@@ -29,7 +29,7 @@ BACKEND="uae"
 TIMEOUT=35
 PORT=18108
 SIG_PORT=18109
-BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

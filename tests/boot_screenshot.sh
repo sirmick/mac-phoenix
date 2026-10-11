@@ -37,7 +37,7 @@ else
     DISK=$(bash "$HERE/lib/refresh_test_disk.sh" macos-7.5.5)
     MACHINE=()
 fi
-"$HERE/../build/mac-phoenix" "${BACKEND[@]}" --port "$PORT" --core "$CORE" "${MACHINE[@]}" "${EXTRA[@]}" --disk "$DISK" --timeout "$((TIMEOUT + 20))" --rom "$ROM" > "$LOG" 2>&1 &
+"${MACEMU_BINARY:-$HERE/../build/mac-phoenix}" "${BACKEND[@]}" --port "$PORT" --core "$CORE" "${MACHINE[@]}" "${EXTRA[@]}" --disk "$DISK" --timeout "$((TIMEOUT + 20))" --rom "$ROM" > "$LOG" 2>&1 &
 PID=$!
 for i in $(seq 1 100); do
     if curl -s "localhost:$PORT/api/status" > /dev/null 2>&1; then break; fi

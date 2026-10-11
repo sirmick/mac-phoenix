@@ -13,7 +13,7 @@ set -euo pipefail
 
 PORT="${1:-18096}"
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
-BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 TMPCONFIG=$(mktemp)
 PASSED=0
 FAILED=0

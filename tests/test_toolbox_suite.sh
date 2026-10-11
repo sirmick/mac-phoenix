@@ -67,7 +67,7 @@ done
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
-BINARY="$PROJECT_ROOT/build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$PROJECT_ROOT/build/mac-phoenix}"
 APP_BUILD="$PROJECT_ROOT/build-m68k-tests"
 TOOLCHAIN="$PROJECT_ROOT/toolchain/retro68/m68k-apple-macos/cmake/retro68.toolchain.cmake"
 EXPECTED="$PROJECT_ROOT/tests/guest/toolbox_expected_${BACKEND}.txt"

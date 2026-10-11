@@ -11,7 +11,7 @@ ARCH=""
 TIMEOUT=15
 PORT=18106
 SIG_PORT=18107
-BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 PASS_FLAGS=()
 
 # Parse args

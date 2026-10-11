@@ -12,6 +12,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include <cstring>
 #include <memory>
 #include <vector>
@@ -62,7 +63,7 @@ struct PpcMachine
     TestHost host;
     std::unique_ptr<cpu::Core> core;
 
-    PpcMachine(const uint32_t *program, size_t words, bool jit) : ram(cpu::GuestMemory::PAGE_SIZE)
+    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false) : ram(cpu::GuestMemory::PAGE_SIZE)
     {
         mem.map(0, ram.size(), ram.data());
         for(size_t i = 0; i < words; i++)
@@ -71,6 +72,8 @@ struct PpcMachine
         config.arch = cpu::Arch::PPC;
         config.model = 750;
         config.jit = jit;
+        if(fast)
+            config.fast_memory = { { 0, (uint32_t)ram.size(), false } };
         core = cpu::create_mame_ppc(config, mem, host);
     }
 };
@@ -122,6 +125,31 @@ static int test_ppc(bool jit)
     return 0;
 }
 
+/* --bench: a million iterations of lwz/addi/stw/addic./bne (5M
+ * instructions) on each back-end, with and without inline memory. Prints
+ * millions of guest instructions a second. */
+static void bench_ppc(bool jit, bool fast)
+{
+    static const uint32_t prog[] = {
+        0x3CA00010,  /* addis r5,r0,0x10   (1M iterations) */
+        0x38802000,  /* addi r4,r0,0x2000 */
+        0x80640000,  /* loop: lwz r3,0(r4) */
+        0x38630001,  /* addi r3,r3,1 */
+        0x90640000,  /* stw r3,0(r4) */
+        0x34A5FFFF,  /* addic. r5,r5,-1 */
+        0x4082FFF0,  /* bne loop */
+        0x18000000,  /* host op: return */
+    };
+    PpcMachine p(prog, sizeof prog / 4, jit, fast);
+    p.core->reset();
+    p.core->set_pc(0x1000);
+    auto t0 = std::chrono::steady_clock::now();
+    p.core->run();
+    double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    printf("bench ppc %-11s %-6s: %u iterations, %.3f s, %.1f MIPS\n", jit ? "native" : "uml-interp",
+           fast ? "inline" : "calls", p.mem.read32(0x2000), s, 5.0 / s);
+}
+
 struct Machine
 {
     std::vector<uint8_t> ram;
@@ -147,8 +175,15 @@ struct Machine
 
 }  // namespace
 
-int main()
+int main(int argc, char **argv)
 {
+    if(argc > 1 && strcmp(argv[1], "--bench") == 0)
+    {
+        for(int jit = 0; jit < 2; jit++)
+            for(int fast = 0; fast < 2; fast++)
+                bench_ppc(jit, fast);
+        return 0;
+    }
     /* A: d0 = 5 + 1; B: d0 = -1, d1 = 0x1234 via memory. */
     static const uint16_t prog_a[] = { 0x7005, 0x5280, 0x7100 };
     static const uint16_t prog_b[] = { 0x70FF, 0x323C, 0x1234, 0x31C1, 0x2000, 0x7100 };

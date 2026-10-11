@@ -97,3 +97,6 @@ BridgeAgent/icons.r
 # Upstream Executor checkouts kept as reference/oracle (the import lives in src/executor/)
 /executor/
 /executor-old/
+
+# qemu-user core dumps (tools/xarch runs)
+qemu_*.core

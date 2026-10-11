@@ -18,7 +18,7 @@ set -euo pipefail
 TIMEOUT=60
 PORT=18096
 BACKEND="uae"
-BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 GUEST_DIR="$(cd "$(dirname "$0")" && pwd)/guest"
 ROM_OVERRIDE=""
 DISK_OVERRIDE=""

@@ -35,7 +35,7 @@ SCREENSHOT_DIR="/tmp/boot_matrix"
 CSV=""
 SUSTAIN_S=5          # seconds to hold at Finder to confirm it isn't the flag lying
 
-BINARY="$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix"
+BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

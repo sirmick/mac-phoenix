@@ -18,7 +18,7 @@ done
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DISK=$(bash "$HERE/lib/refresh_test_disk.sh" macos-7.5.5)
 ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
-"$HERE/../build/mac-phoenix" --backend kpx --core "$CORE" "${EXTRA[@]}" --timeout 120 \
+"${MACEMU_BINARY:-$HERE/../build/mac-phoenix}" --backend kpx --core "$CORE" "${EXTRA[@]}" --timeout 120 \
     --config /dev/null --dismiss-shutdown-dialog --headless-http --port "$PORT" \
     --disk "$DISK" --rom "$ROM" > "$LOG" 2>&1 &
 PID=$!

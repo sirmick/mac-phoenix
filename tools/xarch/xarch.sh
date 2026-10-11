@@ -77,6 +77,6 @@ TTY=()
 [[ -t 0 && -t 1 ]] && TTY=(-it)
 
 exec docker run --rm --init "${TTY[@]}" --platform "linux/$ARCH" \
-    --user "$(id -u):$(id -g)" -e HOME="$HOME" -e MACEMU_XARCH="$ARCH" \
+    --user "$(id -u):$(id -g)" -e HOME="$HOME" -e MACEMU_XARCH="$ARCH" -e MACEMU_BINARY="$BUILD/mac-phoenix" \
     --network host --security-opt seccomp=unconfined \
     "${MOUNTS[@]}" -w "$REPO" "$IMAGE" "$@"
