@@ -275,7 +275,7 @@ referred to; strike them here when done.
 | S16 | **`--m68k-host` is CLI-only.** C3a's mode is not in the JSON config or the web UI, so it can't be picked from Settings or kept in a profile | open (until C3b decides the default) |
 | S17 | **riscv64 never run.** It builds under `tools/xarch/xarch.sh riscv64` with `-DBUILD_BROWSER=OFF` (no Qt WebEngine there) and MAME's C back-end; no test has run on it. MAME has no RISC-V recompiler back-end and asmjit has no RISC-V assembler, so a native one would be new work | runs 2026-10-11: 7.5.5 boots to the desktop in 509 s under qemu (C back-end); `cpu_cores` passes; `test_cpu_cores --bench` 7-8 MIPS. A native RISC-V back-end would still be new work |
 | S18 | **UAE's 68k `--jit` stalls.** The boot matrix's `uae-jit-755`/`uae-jit-761` cells stop at a grey desktop. Long-standing and not investigated; bears on the open question of whether UAE stays | known |
-| S19 | **arm64 CI red since the MAME merge.** `drcbearm64.cpp` was missing, so the arm64 package jobs failed at CMake configure. The fixes are on main locally (S2), not yet pushed or seen green in CI | open |
+| S19 | ~~**arm64 CI red since the MAME merge.** `drcbearm64.cpp` was missing, so the arm64 package jobs failed at CMake configure. The fixes are on main locally (S2), not yet pushed or seen green in CI~~ | done 2026-10-11: the push of the arm64 fixes turned all CI jobs green, both arm64 package builds included |
 
 ## Notes from C3b (in progress, `--m68k-host 3`)
 
