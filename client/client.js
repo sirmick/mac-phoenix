@@ -3695,7 +3695,7 @@ const CPU_CORES = {
     ],
     ppc: [
         ['kpx',      'Kheperix (SheepShaver)'],
-        ['mame-ppc', 'MAME PowerPC (recompiler)'],
+        ['mame-ppc', 'MAME PowerPC (recompiler; JIT = native code)'],
     ],
 };
 
