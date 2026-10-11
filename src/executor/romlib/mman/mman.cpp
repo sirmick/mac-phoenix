@@ -1058,6 +1058,21 @@ void ReallocateHandle(Handle h, Size size)
         }
     }
 
+    if(oldb)
+    {
+        /* Inside Macintosh: a block the handle still has is released
+         * before the new one is made. Executor made the new one first and
+         * freed oldb after it, but the allocation can compact the zone,
+         * moving the old block (which still belongs to h), or purge it;
+         * oldb was stale then: the moved block stayed in the heap naming
+         * h while h was pointed at the new block, and the free hit
+         * whatever had come to the old address. Finder's boot did this
+         * (--executor-debug memcheck: "REL block; bad master pointer"). */
+        ROMlib_freeblock(oldb);
+        SETMASTER(h, nullptr, state);
+        oldb = nullptr;
+    }
+
     if(ROMlib_relalloc(size, &newb))
     {
         LM(TheZone) = save_zone;
@@ -1067,9 +1082,6 @@ void ReallocateHandle(Handle h, Size size)
 
     ROMlib_setupblock(newb, size, REL, h, state);
     SETMASTER(h, BLOCK_DATA(newb), state);
-
-    if(oldb)
-        ROMlib_freeblock(oldb);
 /* fall through */
 done:
     LM(TheZone) = save_zone;
