@@ -130,6 +130,7 @@ struct
             mostrecenttrap, last_ok.count,
             last_ok.fn ? last_ok.fn : "(none)", last_ok.where ? last_ok.where : "",
             last_ok.trap);
+    syn68k_describe_cpu(stderr);
     print_backtrace("memcheck");
     fprintf(stderr, "[memcheck] heap checking off after this first failure\n");
     fflush(stderr);

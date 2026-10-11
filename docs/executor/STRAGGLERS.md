@@ -82,6 +82,13 @@ pc 0). Facts so far:
   ".../System Folder/Finder" --disk IMG`), printing UAE's `regs` (`nm`
   gives its address; D0-D7/A0-A7 are the first 16 longs, `pc` at +64,
   `pc_p`/`pc_oldp` at +72/+80) and the code words around the 68k PC.
+  That recipe is now built in: `--watch ADDR[:LEN]` (any core, the IPC
+  child too; `src/common/guest_watch.cpp` protects the page and
+  single-steps the writer) reports every write with the old and new
+  bytes, the 68k PC, registers, code around the PC (disassembled on
+  mame-68k), the top of the stack, the last 24 A-line traps (a ring the
+  dispatcher always keeps, `base/trap_history.cpp`) and the host stack.
+  The host-signal and memcheck reports print the same 68k context.
 - Its second finding was the checker's own: it walked `TheZone` as a
   zone while Finder had it set to a temp handle ($22E0B8) around
   `ReallocHandle` (HandleZone's comment in `mman.cpp` tells that story;

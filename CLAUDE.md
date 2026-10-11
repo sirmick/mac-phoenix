@@ -256,6 +256,8 @@ Logging:
   --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks
   --executor-debug OPTS      Executor's own debug options: memcheck (heap checks at every
                              Memory Manager call), fslog, trace, trapfailure, unimplemented, ...
+  --watch ADDR[:LEN]         Report every write to guest memory ADDR (Executor, Linux x86-64):
+                             old/new value, 68k PC/registers/code, last traps, host stack
 ```
 
 ## Environment Variables

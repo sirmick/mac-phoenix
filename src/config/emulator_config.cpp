@@ -465,6 +465,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --executor-debug OPTS      Executor's own debug options, comma-separated: memcheck (heap\n");
             printf("                             consistency checks at every Memory Manager call, slow), fslog,\n");
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
+            printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
+            printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
             printf("  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)\n");
             printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only)\n");
             printf("\nCPU:\n");
@@ -620,6 +622,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--executor-logtraps-nesting") == 0 && i + 1 < argc) {
             config.executor_logtraps_nesting = atoi(argv[i + 1]); argv[i] = argv[i + 1] = nullptr; i++; continue;
+        }
+        if (strcmp(argv[i], "--watch") == 0 && i + 1 < argc) {
+            config.watch = argv[i + 1]; argv[i] = argv[i + 1] = nullptr; i++; continue;
         }
         if (strcmp(argv[i], "--executor-debug") == 0 && i + 1 < argc) {
             config.executor_debug = argv[i + 1]; argv[i] = argv[i + 1] = nullptr; i++; continue;

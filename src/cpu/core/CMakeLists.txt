@@ -6,6 +6,7 @@ add_library(cpu_core STATIC
     guest_memory.cpp
     registry.cpp
     platform_cpu.cpp
+    ${PROJECT_SOURCE_DIR}/src/common/guest_watch.cpp   # --watch (guest_watch.h), for every binary with a core
 )
 target_include_directories(cpu_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}

@@ -7,6 +7,7 @@
  * Executor Toolbox on UAE, with no ROM.
  */
 #include "executor_child.h"
+#include <syn68k_public.h>
 #include "executor_host.h"
 
 #include "emulator_config.h"
@@ -154,6 +155,7 @@ void crash_snapshot(int sig, siginfo_t *info, void *uctx)
     snprintf(message, sizeof message, "host signal %d at guest pc $%08x, address %p",
              sig, uae_current_pc(), info->si_addr);
     fprintf(stderr, "[Executor] %s: snapshotting\n", message);
+    syn68k_describe_cpu(stderr);
     fatal_snapshot(message);
     struct sigaction& prev = sig == SIGBUS ? prev_bus : prev_segv;
     sigaction(sig, &prev, nullptr);
@@ -233,6 +235,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.logtraps = cfg.executor_logtraps;
     c.logtraps_nesting = cfg.executor_logtraps_nesting;
     c.debug_options = cfg.executor_debug;
+    c.watch = cfg.watch;
     c.writable_images = cfg.executor_writable_images;
     c.on_frame = publish_frame;
     if (cfg.audio_enabled) {
@@ -267,6 +270,7 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
     c.logtraps = cfg.executor_logtraps;
     c.logtraps_nesting = cfg.executor_logtraps_nesting;
     c.debug_options = cfg.executor_debug;
+    c.watch = cfg.watch;
     c.writable_images = cfg.executor_writable_images;
     return executor_host::run(c);
 }

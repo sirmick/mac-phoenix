@@ -77,6 +77,7 @@ add_library(executor_cpu STATIC
     cpu/PowerCore.cpp
 )
 target_include_directories(executor_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
+target_include_directories(executor_cpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/romlib)   # base/trap_history.h
 target_compile_options(executor_cpu PRIVATE ${EXECUTOR_COMMON_FLAGS})
 target_link_libraries(executor_cpu PUBLIC cpu_core Threads::Threads)
 phoenix_exempt_from_hardening(executor_cpu)

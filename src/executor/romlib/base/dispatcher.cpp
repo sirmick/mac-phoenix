@@ -1,4 +1,5 @@
 #include <base/dispatcher.h>
+#include <base/trap_history.h>
 #include <base/common.h>
 #include <base/trapname.h>
 #include <base/cpu.h>
@@ -233,6 +234,7 @@ syn68k_addr_t Executor::alinehandler(syn68k_addr_t pc, void *ignored)
 #endif
 
     mostrecenttrap = trapword = READUW(pc);
+    trap_history_record(trapword, pc);
     retval = pc + 2;
 
     // Record the exact guest address of the trapping instruction so that the

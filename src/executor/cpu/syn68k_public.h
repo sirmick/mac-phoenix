@@ -30,6 +30,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <setjmp.h>
 
 #ifdef __cplusplus
@@ -165,6 +166,14 @@ extern uint64 ROMlib_sizes[OFFSET_TABLE_SIZE];
 /* Called when host code hands the guest a pointer outside every window.
  * Fatal. */
 void syn68k_bad_host_pointer(const void *p) __attribute__((noreturn));
+
+/* MacPhoenix debugging aids. syn68k_describe_cpu prints the 68k state for
+ * a report: PC, registers, the code around the PC (disassembled when the
+ * core can), the top of the stack and the last A-line traps. syn68k_set_watch
+ * asks for a write watchpoint on guest memory (guest_watch.h), installed
+ * once guest RAM is mapped. */
+void syn68k_describe_cpu(FILE *out);
+void syn68k_set_watch(uint32_t guest_addr, size_t len);
 
 static inline uint16 *SYN68K_TO_US(uint32_t addr)
 {

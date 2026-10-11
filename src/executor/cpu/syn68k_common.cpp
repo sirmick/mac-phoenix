@@ -30,6 +30,9 @@
 #include <cstring>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <guest_watch.h>
+#include <base/trap_history.h>
+#include <base/trapglue.h>
 
 #define MAX_CALLBACKS 16384
 
@@ -71,11 +74,11 @@ static std::string engine_name = "uae";
 int syn68k_select_engine(const char *name)
 {
     std::string n = name && *name ? name : "uae";
+    if(n == "musashi")   /* the vendored v3.32, retired: MAME's Musashi now */
+        n = "mame-68k";
     if(core)
         return 0;
     for(const auto &a : cpu::available(cpu::Arch::M68K))
-    if(n == "musashi")   /* the vendored v3.32, retired: MAME's Musashi now */
-        n = "mame-68k";
         if(a == n)
         {
             engine_name = n;
@@ -609,6 +612,87 @@ int syn68k_is_guest_mapped(uintptr_t addr, size_t len)
     return 0;
 }
 
+/* --watch: a write watchpoint on guest memory (guest_watch.h), asked for
+ * before RAM exists and installed when it is mapped. */
+static uint32_t pending_watch_addr;
+static size_t pending_watch_len;
+
+void syn68k_set_watch(uint32_t guest_addr, size_t len)
+{
+    pending_watch_addr = guest_addr;
+    pending_watch_len = len;
+}
+
+static void install_pending_watch(size_t ram_size)
+{
+    if(!pending_watch_len)
+        return;
+    if(pending_watch_addr + pending_watch_len > ram_size)
+    {
+        fprintf(stderr, "[watch] guest $%08X is past the end of RAM (%zu bytes)\n",
+                pending_watch_addr, ram_size);
+        return;
+    }
+    GuestWatchHooks hooks = { syn68k_describe_cpu };
+    guest_watch_install(SYN68K_TO_US(pending_watch_addr), pending_watch_len,
+                        pending_watch_addr, hooks);
+    pending_watch_len = 0;
+}
+
+void syn68k_describe_cpu(FILE *out)
+{
+    if(!core)
+    {
+        fprintf(out, "68k: no core yet\n");
+        return;
+    }
+    const bool live = emulation_depth > 0;
+    uint32_t pc = core->pc();
+    fprintf(out, "68k pc $%08X%s, depth %d, last A-trap $%04X\n", pc,
+            live ? "" : " (not running: the core's last state)", emulation_depth,
+            (unsigned)Executor::mostrecenttrap);
+    uint32_t r[16];
+    for(int i = 0; i < 16; i++)
+        r[i] = live ? core->reg(cpu::m68k::D0 + i) : cpu_state.regs[i].ul.n;
+    fprintf(out, "  D0-D7");
+    for(int i = 0; i < 8; i++)
+        fprintf(out, " %08X", r[i]);
+    fprintf(out, "\n  A0-A7");
+    for(int i = 8; i < 16; i++)
+        fprintf(out, " %08X", r[i]);
+    fprintf(out, "\n");
+    /* The code around the PC: 12 words before, the instructions from it. */
+    if(syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(pc - 24), 48))
+    {
+        fprintf(out, "  code $%08X:", pc - 24);
+        for(uint32_t a = pc - 24; a < pc; a += 2)
+            fprintf(out, " %04X", (unsigned)READUW(a));
+        fprintf(out, " | pc:");
+        for(uint32_t a = pc; a < pc + 24; a += 2)
+            fprintf(out, " %04X", (unsigned)READUW(a));
+        fprintf(out, "\n");
+        char buf[128];
+        uint32_t a = pc;
+        for(int i = 0; i < 6; i++)
+        {
+            int n = core->disassemble(a, buf, sizeof buf);
+            if(n <= 0)
+                break;
+            fprintf(out, "    %08X: %s\n", a, buf);
+            a += n;
+        }
+    }
+    uint32_t sp = r[15];
+    if(syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(sp), 32))
+    {
+        fprintf(out, "  stack $%08X:", sp);
+        for(uint32_t a = sp; a < sp + 32; a += 4)
+            fprintf(out, " %08X", (unsigned)READUL(a));
+        fprintf(out, "\n");
+    }
+    Executor::trap_history_dump(out, 24);
+}
+
 void syn68k_bad_host_pointer(const void *p)
 {
     fprintf(stderr, "syn68k: host pointer %p is not guest-addressable (outside every window)\n", p);
@@ -637,6 +721,7 @@ void *syn68k_map_guest_ram(size_t size)
             exit(1);
         }
         set_window(0, p, size + 0x10000);
+        install_pending_watch(size);
         return p;
     }
     void *p = mmap((void *)0, size, PROT_READ | PROT_WRITE,
@@ -651,6 +736,7 @@ void *syn68k_map_guest_ram(size_t size)
         exit(1);
     }
     add_region(0, size);
+    install_pending_watch(size);
     return p;
 }
 

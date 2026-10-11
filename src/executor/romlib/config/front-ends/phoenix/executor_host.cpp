@@ -2,6 +2,7 @@
 #include "phoenix.h"
 #include "phoenix_sound.h"
 #include <sound/sounddriver.h>
+#include <guest_watch.h>
 
 #include <base/common.h>
 #include <mman/mman_private.h>
@@ -124,6 +125,15 @@ int run(const Config& c)
         argv.push_back(a.data());
     argv.push_back(nullptr);
 
+    if(!c.watch.empty())
+    {
+        uint32_t addr;
+        size_t len;
+        if(guest_watch_parse(c.watch.c_str(), &addr, &len))
+            syn68k_set_watch(addr, len);
+        else
+            fprintf(stderr, "[watch] bad --watch '%s' (ADDR[:LEN], hex address, 1-16 bytes)\n", c.watch.c_str());
+    }
     running = true;
     int rc = executor_main_entry((int)args.size(), argv.data());
     running = false;

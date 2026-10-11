@@ -378,6 +378,7 @@ set(base_sources
         base/trapname.cpp
         base/traps.cpp
         base/dispatcher.cpp
+        base/trap_history.cpp
         base/emustubs.cpp
         base/logging.cpp
         base/structdump.h
