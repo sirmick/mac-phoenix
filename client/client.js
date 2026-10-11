@@ -4091,7 +4091,6 @@ function configFromServerJson(cfg) {
         backend,
         cpu_core: cfg.cpu_core || '',
         jit: cfg.jit ?? false,
-        jit68k: cfg.jit68k ?? true,
         idlewait: cfg.idlewait ?? true,
         zappram: cfg.zappram ?? false,
         dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
@@ -4218,7 +4217,6 @@ function buildConfigJson() {
         backend,
         cpu_core: document.getElementById('cfg-core')?.value || coresForBackend(backend)[0][0],
         jit:      document.getElementById('cfg-jit')?.checked ?? false,
-        jit68k:   document.getElementById('cfg-jit68k')?.checked ?? true,
         idlewait: document.getElementById('cfg-idlewait')?.checked ?? true,
         rom,
         disks: disksOut,
@@ -4640,7 +4638,6 @@ function updateEmulatorPanelVisibility() {
     populateCoreSelect(backend, coreEl?.value || currentConfig.cpu_core);
     const core = coreEl?.value || coresForBackend(backend)[0][0];
     const supportsJit = coreSupportsJit(backend, core);
-    const isKpx = (backend === 'kpx');
 
     // Executor: its own panel (System, start application, fresh start);
     // the ROM machine's settings don't apply.
@@ -4664,10 +4661,6 @@ function updateEmulatorPanelVisibility() {
     // JIT row: only shown for backends that support a JIT (uae, kpx)
     const jitGroup = document.getElementById('cfg-jit-group');
     if (jitGroup) jitGroup.style.display = supportsJit ? '' : 'none';
-
-    // 68k JIT row: KPX-only
-    const jit68kGroup = document.getElementById('cfg-jit68k-group');
-    if (jit68kGroup) jit68kGroup.style.display = isKpx ? '' : 'none';
 
     // Header logo / title follow the architecture
     const processorLogo = document.getElementById('processor-logo');
@@ -4883,10 +4876,8 @@ function updateConfigUI() {
 
     // CPU feature toggles
     const jitEl = document.getElementById('cfg-jit');
-    const jit68kEl = document.getElementById('cfg-jit68k');
     const idlewaitEl = document.getElementById('cfg-idlewait');
     if (jitEl) jitEl.checked = currentConfig.jit ?? false;
-    if (jit68kEl) jit68kEl.checked = currentConfig.jit68k ?? true;
     if (idlewaitEl) idlewaitEl.checked = currentConfig.idlewait ?? true;
 
     // Keyboard remap dropdowns
@@ -4950,7 +4941,6 @@ async function saveConfig() {
     currentConfig.cpu_core = document.getElementById('cfg-core')?.value
                              || coresForBackend(currentConfig.backend)[0][0];
     currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? false;
-    currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
     currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
     currentConfig.serial_a = (document.getElementById('cfg-serial-a')?.value || '').trim();
     currentConfig.serial_b = (document.getElementById('cfg-serial-b')?.value || '').trim();

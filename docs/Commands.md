@@ -70,7 +70,6 @@ CPU:
   --backend NAME             uae | kpx
                              (default: uae; backend implies architecture)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
-  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx; default on)
   --idlewait / --no-idlewait Pause CPU when guest is idle (default on)
 
 Media / I/O:

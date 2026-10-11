@@ -277,7 +277,6 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
 
     // CPU feature flags
     args.push_back(config_->jit ? "--jit" : "--no-jit");
-    args.push_back(config_->jit68k ? "--jit68k" : "--no-jit68k");
     args.push_back(config_->idlewait ? "--idlewait" : "--no-idlewait");
 
     return args;

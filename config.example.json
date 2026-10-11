@@ -5,7 +5,6 @@
 
   "backend": "uae",
   "jit": false,
-  "jit68k": true,
   "idlewait": true,
 
   "ram_mb": 64,

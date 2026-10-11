@@ -46,7 +46,6 @@ silently dropped on first save).
 |-------|------|---------|-------------|
 | `backend` | string | `"uae"` | `"uae"` (m68k) or `"kpx"` (ppc). Determines architecture; there is no separate `architecture` field. |
 | `jit` | bool | `false` | Enable backend's primary JIT (uae, kpx). |
-| `jit68k` | bool | `true` | Enable 68k-on-PPC DR JIT (kpx only). |
 | `idlewait` | bool | `true` | Pause CPU when guest is idle (m68k rsrc patch + ppc SynchIdleTime). |
 
 ### UAE JIT internals (rarely tuned)

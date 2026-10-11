@@ -1111,8 +1111,9 @@ void mame_cpu_execute_fast(void)
     g_stop_requested = false;
     sigsegv_install_handler(mame_sigsegv_handler);
 
-    /* The nanokernel probes these during init and must fault there. They
-     * come back with OP_RESET's DR emulator setup. */
+    /* The nanokernel probes these during init and must fault there. The
+     * DR emulator is never activated (emul_op_ppc.cpp, OP_RESET), so they
+     * stay this way. */
     /* Inside the guest-memory reservation: back to PROT_NONE rather than
      * unmapped, so nothing else is placed there. */
     if(VMBaseDiff)

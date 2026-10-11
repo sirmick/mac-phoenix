@@ -75,7 +75,7 @@ further backends.
 | Backend | Arch | What | Speed | Use for |
 |---------|------|------|-------|---------|
 | `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`), `--core musashi` (v3.32) or `--core mame-68k` (MAME's Musashi: PMMU, softfloat FPU, several instances per process; `src/cpu/mame/`) | Fast (~5s boot) | Default, end users |
-| `kpx` | ppc | Power Mac G3 machine; CPU core `--core kpx` (Kheperix, +optional `--jit`, +optional `--jit68k`) or `--core mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64 back-end, `--no-jit` UML interpreter; `src/cpu/mame/`, installer `src/cpu/kpx/cpu_ppc_mame.cpp`) | Medium | Default for PPC |
+| `kpx` | ppc | Power Mac G3 machine; CPU core `--core kpx` (Kheperix, +optional `--jit`) or `--core mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64 back-end, `--no-jit` UML interpreter; `src/cpu/mame/`, installer `src/cpu/kpx/cpu_ppc_mame.cpp`) | Medium | Default for PPC |
 | `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM | Fast start | Toolbox reimplementation work (`src/executor/`) |
 
 MAME cores (docs/cpu/PLAN.md): MAME's Musashi with PMMU and FPU as the 68k
@@ -218,7 +218,6 @@ CPU:
                              68k uae | musashi | mame-68k (default: uae; ROM machine and Executor)
                              ppc kpx | mame-ppc (default: kpx)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
-  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
   --m68k-host N              mame-ppc: 1 runs host-initiated 68k routines on a
                              mame-68k core (C3a); 2 the parked experiment;
                              3 all 68k code on mame-68k (C3b, experimental:

@@ -45,7 +45,6 @@ big-endian and accessed through `do_get_mem_*` byte-swap macros — see
 
 PPC interpreter from SheepShaver with the dyngen PPC JIT. Boots Mac OS
 7.5.5 to the Desktop in ~7 s with `--jit`, ~15 s with `--no-jit`.
-`--jit68k` (default on) controls the 68k-on-PPC DR JIT.
 
 Mixed-mode execution — PPC nanokernel runs Mac OS's built-in 68k emulator
 inside the ROM, with mode tracked at `XLM_RUN_MODE`. The boot sequence,

@@ -102,5 +102,6 @@ disagree on. Effort unknown until that point is found.
 ## After C3b
 
 C3c (boot time and a 68k-heavy benchmark, Musashi against the emulator)
-waits on C3b booting. `--jit68k` (straggler S15, already a no-op) would be
-retired by C3b.
+waits on C3b booting. `--jit68k` (straggler S15, a no-op) was removed on
+2026-10-11; the DR emulator activation stays in `emul_op_ppc.cpp` as a
+disabled record.

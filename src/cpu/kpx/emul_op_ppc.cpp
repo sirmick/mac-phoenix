@@ -317,8 +317,12 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 #ifdef USE_SDL_AUDIO
 			PlayStartupSound();
 #endif
-			// Enable DR emulator (disabled for now)
-			if (PrefsFindBool("jit68k") && 0) {
+			// Apple's DR emulator (the nanokernel's recompiling 68k emulator).
+			// Never switched on: SheepShaver disabled it in 2005 as unstable,
+			// and the 68k side moves to a host core instead (docs/cpu/PLAN.md,
+			// C3b). Kept as the record of what activation takes: the
+			// KernelData fields and the copy of the emulator out of the ROM.
+			if (0) {
 				D(bug("DR activated\n"));
 				WriteMacInt32(KernelDataAddr + 0x17a0, 3);		// Prepare for DR emulator activation
 				WriteMacInt32(KernelDataAddr + 0x17c0, DR_CACHE_BASE);

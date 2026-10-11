@@ -29,7 +29,7 @@ enum class Architecture {
 // there is no separate "architecture" axis in the config.
 enum class Backend {
     UAE,           // m68k, hand-tuned interpreter (+optional JIT)
-    KPX,           // ppc,  KPX translator (+optional PPC JIT, +optional 68k JIT)
+    KPX,           // ppc,  Power Mac (Kheperix or mame-ppc core, +optional JIT)
     EXECUTOR       // m68k, no ROM: Executor's C++ Toolbox on the UAE core
 };
 
@@ -56,7 +56,6 @@ struct EmulatorConfig {
     // CPU
     Backend backend = Backend::UAE;
     bool jit = false;        // enable backend's primary JIT (uae, kpx)
-    bool jit68k = true;      // enable 68k-on-PPC DR JIT (kpx only)
     bool idlewait = true;    // pause CPU when guest idle (m68k rsrc patch + ppc SynchIdleTime)
 
     // UAE JIT internals (only consulted when backend=uae && jit=true).

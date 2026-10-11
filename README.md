@@ -262,7 +262,7 @@ implies the CPU architecture — there is no separate `--arch` flag.
 | Backend | Arch | Engine | Boot time | Use case |
 |---------|------|--------|-----------|----------|
 | `uae` (default) | m68k | Hand-tuned interpreter (+ optional `--jit`) | ~5s | General use |
-| `kpx` | ppc | KPX translator (+ optional `--jit`, + optional `--jit68k`) | medium | Default PPC |
+| `kpx` | ppc | KPX translator (+ optional `--jit`) | medium | Default PPC |
 
 ### PowerPC prerequisite: `vm.mmap_min_addr`
 
@@ -318,7 +318,6 @@ Relative paths resolve against `storage_dir` (`roms/` for ROMs, `images/` for di
 |-------|---------|-------|
 | `backend` | `"uae"` | `"uae"` (m68k) or `"kpx"` (ppc) |
 | `jit` | `false` | Enable backend's primary JIT (uae, kpx) |
-| `jit68k` | `true` | Enable 68k-on-PPC DR JIT (kpx only) |
 | `idlewait` | `true` | Pause CPU when guest is idle |
 | `ram_mb` | `64` | |
 | `rom`, `disks`, `cdroms` | — | Absolute or relative to `storage_dir` |
@@ -349,7 +348,6 @@ load with a one-time deprecation warning, then dropped on first save. See
   --backend NAME             uae | kpx
                              (default: uae; backend implies architecture)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
-  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)
   --idlewait / --no-idlewait Pause CPU when guest is idle (default: on)
   --ram MB                   RAM size in megabytes (default: 64)
   --screen WxH               Display resolution (default: 640x480)

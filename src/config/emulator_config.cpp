@@ -122,7 +122,6 @@ QJsonObject EmulatorConfig::to_json() const {
     j["backend"]  = backend_string();
     j["cpu_core"] = qstr(cpu_core);
     j["jit"]      = jit;
-    j["jit68k"]   = jit68k;
     j["idlewait"] = idlewait;
 
     // UAE JIT internals
@@ -221,7 +220,8 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
 
     // ── JIT toggles ──────────────────────────────────────────────
     if (j.contains("jit"))      jit      = json_utils::get_bool(j, "jit");
-    if (j.contains("jit68k"))   jit68k   = json_utils::get_bool(j, "jit68k");
+    // "jit68k" (the Power Mac's DR emulator switch) is gone: it never did
+    // anything (docs/cpu/PLAN.md, S15). Old files still carry it; ignored.
     if (j.contains("idlewait")) idlewait = json_utils::get_bool(j, "idlewait");
 
     // ── UAE JIT internals ───────────────────────────────────────
@@ -465,7 +465,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             68k uae | musashi | mame-68k (default: uae)\n");
             printf("                             ppc kpx | mame-ppc (default: kpx)\n");
             printf("  --jit / --no-jit           Enable backend's primary JIT (uae, kpx)\n");
-            printf("  --jit68k / --no-jit68k     Enable 68k-on-PPC DR JIT (kpx only, default: on)\n");
             printf("  --m68k-host N              mame-ppc only: 0 off; 1 host-initiated 68k routines on a\n");
             printf("                             mame-68k core; 2 also A-line traps (experiment, breaks the bridge);\n");
             printf("                             3 all 68k code on mame-68k (C3b, experimental, does not boot yet)\n");
@@ -560,12 +559,11 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             config.jit = false; argv[i] = nullptr; continue;
         }
 
-        // --jit68k / --no-jit68k (KPX only)
-        if (strcmp(argv[i], "--jit68k") == 0) {
-            config.jit68k = true; argv[i] = nullptr; continue;
-        }
-        if (strcmp(argv[i], "--no-jit68k") == 0) {
-            config.jit68k = false; argv[i] = nullptr; continue;
+        // --jit68k / --no-jit68k: retired (never did anything); accepted so
+        // old command lines and saved launchers keep working.
+        if (strcmp(argv[i], "--jit68k") == 0 || strcmp(argv[i], "--no-jit68k") == 0) {
+            fprintf(stderr, "[Config] %s is retired and ignored (the DR emulator was never enabled)\n", argv[i]);
+            argv[i] = nullptr; continue;
         }
 
         // --idlewait / --no-idlewait
@@ -789,9 +787,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
 
     // Validate flag combinations
     config.normalize_cpu_core();
-    if (config.jit68k && config.backend != Backend::KPX) {
-        // jit68k only meaningful for KPX; silently leave value but warn if explicitly set
-    }
     // Executor publishes its status (boot phase, current app) only through
     // the IPC child's shared memory, so --headless-http runs it as a
     // subprocess behind the normal web server rather than in-process.
@@ -991,8 +986,7 @@ void print_config(const EmulatorConfig& config) {
             config.backend_string(), config.arch_string());
     fprintf(stderr, "[Config] RAM: %u MB\n", config.ram_mb);
     if (config.backend == Backend::UAE || config.backend == Backend::KPX) {
-        fprintf(stderr, "[Config] JIT: %s%s\n", config.jit ? "on" : "off",
-                (config.backend == Backend::KPX && config.jit68k) ? " + 68k JIT" : "");
+        fprintf(stderr, "[Config] JIT: %s\n", config.jit ? "on" : "off");
     }
     fprintf(stderr, "[Config] idlewait: %s\n", config.idlewait ? "on" : "off");
     fprintf(stderr, "[Config] ROM: %s\n",
