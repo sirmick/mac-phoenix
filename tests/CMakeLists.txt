@@ -391,6 +391,47 @@ set_tests_properties(keyboard_guest_executor_musashi PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# ... and on MAME's Musashi (--core mame-68k; docs/cpu/PLAN.md, S12).
+add_test(
+  NAME command_bridge_executor_mame68k
+  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend executor --core mame-68k --timeout 60 --port 18152
+)
+set_tests_properties(command_bridge_executor_mame68k PROPERTIES
+  TIMEOUT 90
+  LABELS "boot;mame"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME guest_suite_executor_mame68k
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core mame-68k --timeout 150 --port 18154
+)
+set_tests_properties(guest_suite_executor_mame68k PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;mame"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME finder_suite_executor_mame68k
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core mame-68k --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 150 --port 18156
+)
+set_tests_properties(finder_suite_executor_mame68k PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;mame"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME keyboard_guest_executor_mame68k
+  COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --backend executor --core mame-68k --timeout 90 --port 18158
+)
+set_tests_properties(keyboard_guest_executor_mame68k PROPERTIES
+  TIMEOUT 130
+  LABELS "guest;mame"
+  SKIP_RETURN_CODE 77
+)
+
 # --- PPC variants of API/boot tests ---
 
 add_test(
