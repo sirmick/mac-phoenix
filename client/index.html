@@ -354,7 +354,7 @@
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="cfg-browser-enabled">
-                        <label for="cfg-browser-enabled">Enable MacBrowser (Firefox via MacBrowser.dsk)</label>
+                        <label for="cfg-browser-enabled">Enable MacBrowser (experimental; Chromium via MacBrowser.dsk)</label>
                     </div>
                 </div>
 
@@ -504,6 +504,10 @@
                             <option value="kpx">KPX</option>
                             <option value="executor">Executor (no ROM)</option>
                         </select>
+                    </div>
+                    <div class="form-group" id="cfg-core-group">
+                        <label for="cfg-core">CPU core</label>
+                        <select id="cfg-core"></select>
                     </div>
                     <!-- JIT toggles (shown only for backends that support them) -->
                     <div class="form-group" id="cfg-jit-group">

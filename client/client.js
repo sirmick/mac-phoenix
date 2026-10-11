@@ -3685,6 +3685,41 @@ function backendIsExecutor(backend) {
     return backend === 'executor';
 }
 
+// CPU cores per architecture (--core / cpu_core). The first is the default.
+// Executor runs on the 68k cores.
+const CPU_CORES = {
+    m68k: [
+        ['uae',      'UAE (interpreter; JIT on x86)'],
+        ['musashi',  'Musashi 3.32'],
+        ['mame-68k', "MAME 68k (Musashi with PMMU and FPU)"],
+    ],
+    ppc: [
+        ['kpx',      'Kheperix (SheepShaver)'],
+        ['mame-ppc', 'MAME PowerPC (recompiler)'],
+    ],
+};
+
+function coresForBackend(backend) {
+    return backendIsPpc(backend) ? CPU_CORES.ppc : CPU_CORES.m68k;
+}
+
+// Fill the core dropdown for a backend, keeping `want` when it fits.
+function populateCoreSelect(backend, want) {
+    const el = document.getElementById('cfg-core');
+    if (!el) return;
+    const cores = coresForBackend(backend);
+    el.innerHTML = cores.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
+    el.value = cores.some(([id]) => id === want) ? want : cores[0][0];
+}
+
+// Which cores have a JIT behind --jit: UAE's (68k, x86 only), and both PPC
+// cores (Kheperix's dyngen; MAME's native back-end).
+function coreSupportsJit(backend, core) {
+    if (backendIsExecutor(backend)) return false;
+    if (backendIsPpc(backend)) return true;
+    return core === 'uae';
+}
+
 function defaultBackendForMode(mode) {
     if (mode === 'ppc') return 'kpx';
     if (mode === 'executor') return 'executor';
@@ -4054,6 +4089,7 @@ function configFromServerJson(cfg) {
         cdroms: (cfg.cdroms || []).map(p => stripPrefix(p, '/images/')),
         extfs: cfg.extfs || [],
         backend,
+        cpu_core: cfg.cpu_core || '',
         jit: cfg.jit ?? false,
         jit68k: cfg.jit68k ?? true,
         idlewait: cfg.idlewait ?? true,
@@ -4180,6 +4216,7 @@ function buildConfigJson() {
 
     return {
         backend,
+        cpu_core: document.getElementById('cfg-core')?.value || coresForBackend(backend)[0][0],
         jit:      document.getElementById('cfg-jit')?.checked ?? false,
         jit68k:   document.getElementById('cfg-jit68k')?.checked ?? true,
         idlewait: document.getElementById('cfg-idlewait')?.checked ?? true,
@@ -4598,7 +4635,11 @@ function updateEmulatorPanelVisibility() {
                     || 'uae';
     const isPpc = backendIsPpc(backend);
     const isExecutor = backendIsExecutor(backend);
-    const supportsJit = (backend === 'uae' || backend === 'kpx');
+    // Core dropdown follows the architecture, keeping the choice when it fits.
+    const coreEl = document.getElementById('cfg-core');
+    populateCoreSelect(backend, coreEl?.value || currentConfig.cpu_core);
+    const core = coreEl?.value || coresForBackend(backend)[0][0];
+    const supportsJit = coreSupportsJit(backend, core);
     const isKpx = (backend === 'kpx');
 
     // Executor: its own panel (System, start application, fresh start);
@@ -4718,22 +4759,55 @@ function onRomChange() {
     updateHeaderTitle();
 }
 
-// The default Executor profile: real Finder on the 7.5.5 System, fresh
-// each run. A built-in tab while the System exists: never written into the
-// saved presets (saving the config sends App.savedPresets whole, so a
-// seeded entry there would replace the user's), unless saved as a preset.
+// Built-in profiles: one per machine, from what is in storage. Tabs only:
+// never written into the saved presets (saving the config sends
+// App.savedPresets whole, so a seeded entry there would replace the user's),
+// unless saved as a preset. Each needs its recommended ROM (rom_database.json)
+// and a disk image, and is left out without them.
 const EXECUTOR_PROFILE = 'exec';
-async function seedExecutorProfile(cfg) {
+const ROM_PROFILES = [
+    // name, persona, backend, core, jit, RAM MB, screen, disks (first found)
+    { name: '68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
+      ram_mb: 64, screen: '1024x768', disks: ['macos-7.5.5.img', 'macos-7.6.1.img'] },
+    { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
+      ram_mb: 4, screen: '512x342', disks: ['system-6.0.8.img'] },
+    { name: 'ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+      ram_mb: 128, screen: '1024x768', disks: ['macos-9.0.4.img', 'macos-7.5.5.img'] },
+];
+
+function recommendedRomFor(mode) {
+    const rom = (storageCache?.roms || []).find(r => {
+        const info = getRomInfo(r.checksum, r.md5);
+        return info?.recommended && info.mode === mode;
+    });
+    return rom ? rom.name : '';
+}
+
+async function seedBuiltinProfiles(cfg) {
     App.builtinPresets = {};
     await loadStorage();
-    const sys = { name: defaultExecutorSystem() };
-    if (!/7\.5\.5/.test(sys.name)) return;
-    App.builtinPresets[EXECUTOR_PROFILE] = {
-        ...cfg, configs: undefined,
-        emulator: 'executor', backend: 'executor', rom: '',
-        ram_mb: 64, screen: '1024x768', audio: false,
-        executor_system: sys.name, executor_start: 'finder', executor_fresh: true,
-    };
+    const images = (storageCache?.disks || []).map(d => d.name || d);
+    for (const p of ROM_PROFILES) {
+        const rom = recommendedRomFor(p.emulator);
+        const disk = p.disks.find(d => images.includes(d));
+        if (!rom || !disk) continue;
+        App.builtinPresets[p.name] = {
+            ...cfg, configs: undefined,
+            emulator: p.emulator, backend: p.backend, cpu_core: p.cpu_core, jit: p.jit,
+            rom, disks: [disk], cdroms: [], bootdriver: 0,
+            ram_mb: p.ram_mb, screen: p.screen,
+        };
+    }
+    // Executor: real Finder on the 7.5.5 System, fresh each run.
+    const sys = defaultExecutorSystem();
+    if (/7\.5\.5/.test(sys)) {
+        App.builtinPresets[EXECUTOR_PROFILE] = {
+            ...cfg, configs: undefined,
+            emulator: 'executor', backend: 'executor', cpu_core: 'uae', rom: '',
+            ram_mb: 64, screen: '1024x768', audio: false,
+            executor_system: sys, executor_start: 'finder', executor_fresh: true,
+        };
+    }
 }
 
 async function loadCurrentConfig() {
@@ -4742,7 +4816,7 @@ async function loadCurrentConfig() {
         const cfg = await res.json();
         currentConfig = configFromServerJson(cfg);
         App.savedPresets = cfg.configs || {};
-        await seedExecutorProfile(cfg);
+        await seedBuiltinProfiles(cfg);
         // Push keyboard remap into the live keystroke pipeline + chip render.
         applyKeyboardConfig(currentConfig.keyboard);
     } catch (e) {
@@ -4772,7 +4846,14 @@ function updateConfigUI() {
     if (zappramEl) zappramEl.checked = currentConfig.zappram;
     if (dismissDialogEl) dismissDialogEl.checked = currentConfig.dismiss_shutdown_dialog;
     if (bridgeEnabledEl) bridgeEnabledEl.checked = currentConfig.bridge_enabled;
-    if (browserEnabledEl) browserEnabledEl.checked = currentConfig.browser_enabled;
+    if (browserEnabledEl) {
+        browserEnabledEl.checked = currentConfig.browser_enabled;
+        // Builds without -DBUILD_BROWSER=ON (the default) can't run it.
+        const available = currentConfig.browser_available !== false;
+        browserEnabledEl.disabled = !available;
+        if (!available) browserEnabledEl.checked = false;
+        browserEnabledEl.title = available ? '' : 'Not in this build (experimental; -DBUILD_BROWSER=ON)';
+    }
 
     const networkEl = document.getElementById('cfg-network');
     if (networkEl) {
@@ -4797,6 +4878,7 @@ function updateConfigUI() {
     // Backend (selecting it also reveals/hides backend-dependent fields)
     const backendEl = document.getElementById('cfg-backend');
     if (backendEl) backendEl.value = currentConfig.backend || 'uae';
+    populateCoreSelect(currentConfig.backend || 'uae', currentConfig.cpu_core);
     updateEmulatorPanelVisibility();
 
     // CPU feature toggles
@@ -4865,6 +4947,8 @@ async function saveConfig() {
     currentConfig.bridge_enabled = document.getElementById('cfg-bridge-enabled')?.checked ?? false;
     currentConfig.backend = document.getElementById('cfg-backend')?.value
                             || defaultBackendForMode(currentConfig.emulator);
+    currentConfig.cpu_core = document.getElementById('cfg-core')?.value
+                             || coresForBackend(currentConfig.backend)[0][0];
     currentConfig.jit = document.getElementById('cfg-jit')?.checked ?? false;
     currentConfig.jit68k = document.getElementById('cfg-jit68k')?.checked ?? true;
     currentConfig.idlewait = document.getElementById('cfg-idlewait')?.checked ?? true;
@@ -5857,6 +5941,8 @@ function setupEventListeners() {
 
     const cfgBackend = document.getElementById('cfg-backend');
     if (cfgBackend) cfgBackend.addEventListener('change', updateEmulatorPanelVisibility);
+    const cfgCore = document.getElementById('cfg-core');
+    if (cfgCore) cfgCore.addEventListener('change', updateEmulatorPanelVisibility);
 
     const cfgRom = document.getElementById('cfg-rom');
     if (cfgRom) cfgRom.addEventListener('change', onRomChange);

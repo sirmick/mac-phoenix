@@ -183,6 +183,8 @@ struct EmulatorConfig {
     QJsonObject to_json() const;
     void merge_json(const QJsonObject& j);      // file/startup → runtime only
     void merge_ui_json(const QJsonObject& j);   // UI changes → runtime + file_config_
+    // cpu_core to one the backend can run (its default when it can't).
+    void normalize_cpu_core();
     bool save() const;
 
     // Helpers

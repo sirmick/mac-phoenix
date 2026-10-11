@@ -120,6 +120,7 @@ QJsonObject EmulatorConfig::to_json() const {
 
     // CPU
     j["backend"]  = backend_string();
+    j["cpu_core"] = qstr(cpu_core);
     j["jit"]      = jit;
     j["jit68k"]   = jit68k;
     j["idlewait"] = idlewait;
@@ -173,6 +174,11 @@ QJsonObject EmulatorConfig::to_json() const {
     j["dismiss_shutdown_dialog"]  = dismiss_shutdown_dialog;
     j["bridge_enabled"]           = bridge_enabled;
     j["browser_enabled"]          = browser_enabled;
+#if MACPHOENIX_BROWSER
+    j["browser_available"]        = true;   // read-only: built with -DBUILD_BROWSER=ON
+#else
+    j["browser_available"]        = false;
+#endif
 
     // Network
     j["network"] = qstr(network_string());
@@ -209,6 +215,9 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
             backend = Backend::UAE;
         }
     }
+
+    if (j.contains("cpu_core")) cpu_core = json_utils::get_string(j, "cpu_core");
+    if (j.contains("backend") || j.contains("cpu_core")) normalize_cpu_core();
 
     // ── JIT toggles ──────────────────────────────────────────────
     if (j.contains("jit"))      jit      = json_utils::get_bool(j, "jit");
@@ -301,8 +310,14 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
         dismiss_shutdown_dialog = json_utils::get_bool(j, "dismiss_shutdown_dialog");
     if (j.contains("bridge_enabled"))
         bridge_enabled = json_utils::get_bool(j, "bridge_enabled");
-    if (j.contains("browser_enabled"))
+    if (j.contains("browser_enabled")) {
         browser_enabled = json_utils::get_bool(j, "browser_enabled");
+#if !MACPHOENIX_BROWSER
+        if (browser_enabled)
+            fprintf(stderr, "[Config] browser_enabled ignored: built without MacBrowser (-DBUILD_BROWSER=ON)\n");
+        browser_enabled = false;
+#endif
+    }
 
     // ── Network ─────────────────────────────────────────────────
     if (j.contains("network")) {
@@ -338,6 +353,21 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
  * Merge JSON into both runtime config AND file_config_ (for UI/API changes).
  * Only values merged here will be persisted on save().
  */
+// The CPU cores each backend runs on (--core). Executor runs on the 68k
+// cores, as the ROM 68k machine does.
+void EmulatorConfig::normalize_cpu_core() {
+    const bool ppc = backend == Backend::KPX;
+    const bool fits = ppc ? (cpu_core == "kpx" || cpu_core == "mame-ppc")
+                          : (cpu_core == "uae" || cpu_core == "musashi" || cpu_core == "mame-68k");
+    if (fits)
+        return;
+    const char* def = ppc ? "kpx" : "uae";
+    if (!cpu_core.empty() && cpu_core != "uae" && cpu_core != "kpx")
+        fprintf(stderr, "[Config] CPU core '%s' does not run the %s backend; using '%s'\n",
+                cpu_core.c_str(), backend_string(), def);
+    cpu_core = def;
+}
+
 void EmulatorConfig::merge_ui_json(const QJsonObject& j) {
     merge_json(j);
     for (auto it = j.constBegin(); it != j.constEnd(); ++it) {
@@ -453,7 +483,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --serial-b PATH            Port B (same syntax as --serial-a)\n");
             printf("\nAutomation:\n");
             printf("  --bridge                   Enable automation bridge\n");
-            printf("  --browser                  Run MacBrowser (Firefox-on-Xvfb pipeline)\n");
+            printf("  --browser                  Run MacBrowser (experimental; needs a -DBUILD_BROWSER=ON build)\n");
             printf("  --headless-http            HTTP API only (no video/audio)\n");
             printf("\nServer:\n");
             printf("  --port N                   HTTP+WS port (default: 11000)\n");
@@ -668,7 +698,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
 
         // --browser
         if (strcmp(argv[i], "--browser") == 0) {
-            config.browser_enabled = true; argv[i] = nullptr; continue;
+#if MACPHOENIX_BROWSER
+            config.browser_enabled = true;
+#else
+            fprintf(stderr, "[Config] --browser ignored: built without MacBrowser (-DBUILD_BROWSER=ON)\n");
+#endif
+            argv[i] = nullptr; continue;
         }
 
         // --ipc (IPC child mode for PPC subprocess)
@@ -752,6 +787,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
     }
 
     // Validate flag combinations
+    config.normalize_cpu_core();
     if (config.jit68k && config.backend != Backend::KPX) {
         // jit68k only meaningful for KPX; silently leave value but warn if explicitly set
     }

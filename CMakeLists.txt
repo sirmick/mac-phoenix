@@ -92,8 +92,14 @@ find_library(M_LIB m)
 
 # MacBrowser host pipeline. Phase 8 migrated from Xvfb + Firefox + xcb
 # to in-process QtWebEngine; the xcb/Xvfb/Firefox path was deleted in 8i.
-option(BUILD_BROWSER "Build the MacBrowser host pipeline" ON)
+#
+# Experimental and heavy (Chromium via Qt6 WebEngine), so off by default:
+# -DBUILD_BROWSER=ON compiles src/drivers/browser/ and defines
+# MACPHOENIX_BROWSER=1; without it --browser is refused with a warning and
+# nothing links WebEngine. Qt has no WebEngine on some hosts (riscv64).
+option(BUILD_BROWSER "Build the experimental MacBrowser host pipeline (Qt6 WebEngine)" OFF)
 if(BUILD_BROWSER)
+  add_compile_definitions(MACPHOENIX_BROWSER=1)
   # Widgets is required by WebEngineWidgets (and by the QApplication
   # switch in main.cpp when BUILD_BROWSER is on — QtWebEngine needs
   # widget infrastructure on the GUI thread, can't run under

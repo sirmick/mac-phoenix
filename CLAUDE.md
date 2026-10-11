@@ -50,6 +50,12 @@ npx playwright test
 ./build/mac-phoenix --backend executor --audio
 ctest --test-dir build -L executor
 
+# arm64 / riscv64 builds on this x86-64 box: Debian containers under qemu
+# (binfmt_misc + docker). Build dirs build-arm64/, build-riscv64/.
+tools/xarch/xarch.sh arm64                     # configure + build
+tools/xarch/xarch.sh arm64 ctest -R cpu_cores  # run tests inside
+tools/xarch/xarch.sh riscv64 shell             # interactive
+
 # Boot capacity matrix (all backend × JIT config × OS cells)
 # Writes CSV + PNG screenshots + per-cell logs to --out dir.
 tests/run_boot_matrix.sh --out /home/mick/mac-phoenix/test-results/boot-matrix
@@ -265,7 +271,7 @@ machine.
 - **Platform API**: All backends implement the same `g_platform` function pointer table. Core code never calls backend-specific functions directly.
 - **Memory layout**: RAM(32MB @ 0x0) + ROM(1MB @ 0x02000000) + ScratchMem(64KB @ 0x02100000) + FrameBuffer(4MB @ 0x02110000). Framebuffer is outside RAM to avoid corrupting Mac data structures.
 - **EmulOps**: ROM patches insert trap opcodes (0x71xx) that trigger host-side handlers for I/O, drivers, and system functions.
-- **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format; backend token (`uae`/`kpx`) determines architecture; legacy `architecture`+`cpu_backend`+`m68k.*`+`ppc.*` keys are coerced on load for one release of backward compat.
+- **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. `cpu_core` (`--core`) is in the JSON and the web UI (Settings > Advanced > CPU core) and is reset to the backend's default when it doesn't fit (`normalize_cpu_core()`). The web UI has built-in profiles `68k`, `se`, `ppc` and `exec` (client.js `ROM_PROFILES`), shown when their ROM and disk are in storage. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format; backend token (`uae`/`kpx`) determines architecture; legacy `architecture`+`cpu_backend`+`m68k.*`+`ppc.*` keys are coerced on load for one release of backward compat.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
 - **Single-port HTTP + WebSocket**: HTTP/1.1 server in `src/webserver/http_server.cpp` is built on `QTcpServer` + `QTcpSocket` (`Qt6::Network`); the accept loop runs on a dedicated `std::thread` using synchronous `waitForX` APIs (no Qt event loop required). On `Upgrade: websocket` the upgrade handshake is written via the QTcpSocket and the underlying fd is `dup()`'d off to a worker thread that owns the WebSocket. Long-poll stream routes (`/api/stream`) use the same fd-handoff pattern. `src/webserver/websocket.cpp` implements RFC 6455 in-process on the dup'd fd. One TCP listener serves static UI, REST API, `/api/frame` long-poll, and `/ws` (signaling + input + PNG/WebP frames). libdatachannel's `rtc::WebSocketServer` is not used. WebRTC RTP (H.264/VP9 media + Opus audio) still rides direct UDP ports negotiated via ICE.
 - **Three transport modes**: PNG/WebP → WebSocket binary on `/ws`; H.264/VP9 → WebRTC RTP track; `httpstream` → `/api/frame` long-poll. Signaling JSON + input events always ride the `/ws` WebSocket regardless of codec.
@@ -298,9 +304,14 @@ PNG encoding (fpng) has no external dependencies and is always available.
 | pkg-config | `pkg-config` | `brew install pkg-config` | Dependency detection |
 | Qt6 (≥6.4) | `qt6-base-dev` | `brew install qt@6` | Core, Network (QLocalSocket / QTcpServer), Widgets, plus QJsonDocument for all JSON parsing. 6.4 minimum is set by MacBrowser's use of `QWebEngineDownloadRequest` + its `receivedBytesChanged`/`isFinishedChanged` signals. See [docs/qt6/PLAN.md](docs/qt6/PLAN.md) for the port history. |
 | Boost, Ruby, Bison, Perl | `libboost-filesystem-dev libboost-program-options-dev ruby bison perl` | `brew install boost ruby bison` | Executor backend only. If missing, the build skips it with a warning; `-DBUILD_EXECUTOR=OFF` disables it. |
-| Qt6 WebEngine (≥6.4) | `qt6-webengine-dev` | included in `brew install qt@6` | In-process Chromium for MacBrowser (replaces the old Xvfb + Firefox + xcb-shm pipeline) |
+| Qt6 WebEngine (≥6.4) | `qt6-webengine-dev` | included in `brew install qt@6` | Only with `-DBUILD_BROWSER=ON` (experimental MacBrowser; off by default). In-process Chromium for MacBrowser |
 
 ## MacBrowser
+
+**Experimental, off by default.** Configure with `-DBUILD_BROWSER=ON` (needs
+Qt6 WebEngine); that defines `MACPHOENIX_BROWSER=1` and compiles
+`src/drivers/browser/`. Without it `--browser` and `browser_enabled` are
+ignored with a warning and `/api/config` reports `browser_available: false`.
 
 `--browser` runs an in-process Chromium via Qt6 WebEngine and pipes
 its rendered pixels into a guest Mac app called **MacBrowser**. The

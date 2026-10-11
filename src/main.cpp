@@ -23,7 +23,6 @@
 #include <csignal>
 
 #include <QCoreApplication>
-#include <QApplication>
 
 #include "sysdeps.h"
 #include "cpu_emulation.h"
@@ -62,8 +61,27 @@ static_assert(IPC_MAX_HEIGHT >= mp::video::kMaxHeight_Ppc,
 #include "core/emulator_init.h"
 #include "crash_handler_init.h"
 #include "sigsegv.h"
+#if MACPHOENIX_BROWSER
 #include "drivers/browser/shm.h"
 #include "drivers/browser/module.h"
+#endif
+
+// MacBrowser (-DBUILD_BROWSER=ON, experimental). Without it the config
+// refuses --browser, so browser_enabled is never set and these do nothing.
+static void browser_start()
+{
+#if MACPHOENIX_BROWSER
+	browser::shm_init();
+	browser::browser_module_start();
+#endif
+}
+
+static void browser_stop()
+{
+#if MACPHOENIX_BROWSER
+	browser::browser_module_stop();
+#endif
+}
 
 // ============================================================================
 // Early Mac address space reservation — runs BEFORE main(), before any threads.
@@ -483,7 +501,9 @@ int main(int argc, char **argv)
 	bool browser_requested = false;
 	bool ipc_subprocess = false;
 	for (int i = 1; i < argc; i++) {
+#if MACPHOENIX_BROWSER
 		if (strcmp(argv[i], "--browser") == 0) browser_requested = true;
+#endif
 		if (strcmp(argv[i], "--ipc") == 0)     ipc_subprocess   = true;
 	}
 	if (browser_requested && ipc_subprocess) {
@@ -723,10 +743,8 @@ int main(int argc, char **argv)
 				g_platform.audio_exit = []() { audio_direct_exit(); };
 			}
 
-			if (emu_config.browser_enabled) {
-				browser::shm_init();
-				browser::browser_module_start();
-			}
+			if (emu_config.browser_enabled)
+				browser_start();
 
 			// Mac subsystems are now up — safe to accept the parent's
 			// IPC connection and start serving input.
@@ -758,10 +776,8 @@ int main(int argc, char **argv)
 				video_ipc_exit();
 				return 1;
 			}
-			if (emu_config.browser_enabled) {
-				browser::shm_init();
-				browser::browser_module_start();
-			}
+			if (emu_config.browser_enabled)
+				browser_start();
 
 			// Mac subsystems are now up — safe to start serving the
 			// parent's IPC commands.
@@ -812,9 +828,8 @@ int main(int argc, char **argv)
 		// thread are left joinable, and `terminate called without an
 		// active exception` fires when their std::thread dtors run during
 		// static teardown.
-		if (emu_config.browser_enabled) {
-			browser::browser_module_stop();
-		}
+		if (emu_config.browser_enabled)
+			browser_stop();
 		control_ipc_exit();
 		video_ipc_exit();
 		return 0;
@@ -995,10 +1010,8 @@ int main(int argc, char **argv)
 					return 1;
 				}
 				g_platform = *platform;
-				if (emu_config.browser_enabled) {
-					browser::shm_init();
-					browser::browser_module_start();
-				}
+				if (emu_config.browser_enabled)
+					browser_start();
 			} else {
 				switch (emu_config.backend) {
 					case config::Backend::UAE:
@@ -1013,10 +1026,8 @@ int main(int argc, char **argv)
 					fprintf(stderr, "Failed to initialize M68K CPU context\n");
 					return 1;
 				}
-				if (emu_config.browser_enabled) {
-					browser::shm_init();
-					browser::browser_module_start();
-				}
+				if (emu_config.browser_enabled)
+					browser_start();
 			}
 
 			// Set up signal stack for SIGSEGV handler (SheepShaver legacy pattern)

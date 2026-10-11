@@ -32,14 +32,6 @@ add_library(drivers STATIC
   platform/platform_null.cpp
   platform/platform_unix.cpp
   platform/timer_interrupt.cpp
-  # MacBrowser (host-side pipeline)
-  browser/ring.cpp
-  browser/shm.cpp
-  browser/module.cpp
-  browser/cmd.cpp
-  browser/mouse_poll.cpp
-  browser/qtwebengine_browser.cpp
-  browser/cdp_client.cpp
   # Consolidated null drivers
   null_drivers.cpp
 )
@@ -59,17 +51,27 @@ target_include_directories(drivers PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/ether
 )
 
-find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
+find_package(Qt6 6.4 COMPONENTS Core Network REQUIRED)
 
 target_link_libraries(drivers PRIVATE
   datachannel-static
   codec_flags
   libyuv::libyuv
   Qt6::Core
+  Qt6::Network          # ether_socket.cpp: QLocalSocket (not only via WebEngine)
 )
 
 # MacBrowser pixel pipeline (Phase 8): in-process QtWebEngine.
 if(BUILD_BROWSER)
+  target_sources(drivers PRIVATE
+    browser/ring.cpp
+    browser/shm.cpp
+    browser/module.cpp
+    browser/cmd.cpp
+    browser/mouse_poll.cpp
+    browser/qtwebengine_browser.cpp
+    browser/cdp_client.cpp
+  )
   target_link_libraries(drivers PUBLIC
     Qt6::Widgets
     Qt6::WebEngineCore
