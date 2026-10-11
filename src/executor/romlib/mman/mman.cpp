@@ -508,6 +508,11 @@ static bool known_zone(THz z)
                  || init_zones.count(US_TO_SYN68K(z)));
 }
 
+bool ROMlib_known_zone(THz z)
+{
+    return known_zone(z);
+}
+
 void InitZone(GrowZoneUPP pGrowZone, int16_t cMoreMasters,
               Ptr limitPtr, THz zone)
 {

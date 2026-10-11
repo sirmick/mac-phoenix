@@ -202,6 +202,11 @@ extern void ROMlib_sledgehammer_zone(THz zone, bool print_p,
                                      const char *fn, const char *file,
                                      int lineno, const char *where,
                                      zone_info_t *infop);
+/* MacPhoenix: a zone InitZone made, or SysZone/ApplZone/the PM heap; a
+   stray TheZone (Finder sets it from a temp handle around ReallocHandle,
+   whose zone is the handle's anyway) is not one. */
+extern bool ROMlib_known_zone(THz z);
+
 extern void ROMlib_sledgehammer_zones(const char *fn,
                                       const char *file, int lineno,
                                       const char *where,

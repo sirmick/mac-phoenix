@@ -15,6 +15,7 @@
 
 #include <mman/mman_private.h>
 #include <rsys/hook.h>
+#include <rsys/process.h>
 #include <error/system_error.h>
 #include <vdriver/vdriver.h>
 #include <base/functions.impl.h>
@@ -561,10 +562,16 @@ void Executor::ROMlib_sledgehammer_zones(const char *fn, const char *file, int l
                                     fn, file, lineno, where,
                                     info_array ? &info_array[1] : nullptr);
     if(LM(TheZone) != LM(SysZone)
-       && LM(TheZone) != LM(ApplZone))
+       && LM(TheZone) != LM(ApplZone)
+       && ROMlib_known_zone(LM(TheZone)))
         ROMlib_sledgehammer_zone(LM(TheZone), false,
                                  fn, file, lineno, where,
                                  info_array ? &info_array[2] : nullptr);
+    /* MacPhoenix: the Process Manager heap too (temp memory, nested
+       application zones as its blocks). */
+    if(!info_array && ROMlib_pm_zone && ROMlib_pm_zone != LM(TheZone)
+       && ROMlib_pm_zone != LM(ApplZone))
+        ROMlib_sledgehammer_zone(ROMlib_pm_zone, false, fn, file, lineno, where, nullptr);
 }
 
 #endif
