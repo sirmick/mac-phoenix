@@ -27,6 +27,9 @@
 #include <rsys/process.h>
 #include <vdriver/vdriver.h>   /* for WeOwnScrapX */
 #include <algorithm>
+#include <mman/whatis.h>
+#include <base/trapglue.h>
+#include <base/cpu.h>
 
 #if defined(__linux__)
 extern char _etext, __data_start, _end; /* boundaries of data+bss sections, supplied by the linker */
@@ -629,6 +632,38 @@ _NewEmptyHandle_flags(bool sys_p)
     return h;
 }
 
+
+/* MacPhoenix: --executor-debug allocs. One line per allocation of 4K or
+   more: what, size, zone, result, and whose code asked (the A-line's PC
+   and the return address in the caller's A6 frame, each named). */
+static void log_alloc(const char *what, Size size, THz zone, void *result)
+{
+    if(!ERROR_ENABLED_P(ERROR_ALLOC_LOG) || size < 4096)
+        return;
+    char at[160], caller[160];
+    uint32_t pc = currentTrapPC;
+    /* Only a guest call has its A-line at currentTrapPC: NewHandle $A122
+       or NewPtr $A11E, with any of the sys/clear bits. From host code the
+       PC is a stale trap's. */
+    uint16_t w = syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(pc), 2) ? READUW(pc) : 0;
+    bool guest_call = (w & 0xF9FF) == 0xA122 || (w & 0xF9FF) == 0xA11E;
+    if(!guest_call)
+    {
+        fprintf(stderr, "[alloc] %s(%d) in zone $%08X -> $%08X; from host code (last trap $%04X)\n",
+                what, (int)size, (unsigned)US_TO_SYN68K(zone),
+                result ? (unsigned)US_TO_SYN68K(result) : 0u, (unsigned)mostrecenttrap);
+        return;
+    }
+    ROMlib_whatis(pc, at, sizeof at);
+    uint32_t a6 = EM_A6, ret = 0;
+    if(a6 && syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(a6), 8))
+        ret = READUL(a6 + 4);
+    ROMlib_whatis(ret, caller, sizeof caller);
+    fprintf(stderr, "[alloc] %s(%d) in zone $%08X -> $%08X; trap at $%08X: %s; A6 caller $%08X: %s\n",
+            what, (int)size, (unsigned)US_TO_SYN68K(zone),
+            result ? (unsigned)US_TO_SYN68K(result) : 0u, pc, at, ret, caller);
+}
+
 Handle
 _NewHandle_flags(Size size, bool sys_p, bool clear_p)
 {
@@ -654,6 +689,7 @@ _NewHandle_flags(Size size, bool sys_p, bool clear_p)
     size += HDRSIZE;
     if(ROMlib_relalloc(size, &block) != noErr)
     {
+        ROMlib_report_alloc_failure(current_zone, size - HDRSIZE, "NewHandle");
         DisposeHandle(newh);
         newh = nullptr;
         SET_MEM_ERR(memFullErr);
@@ -673,6 +709,7 @@ _NewHandle_flags(Size size, bool sys_p, bool clear_p)
 /* fall through */
 done:
 
+    log_alloc("NewHandle", size >= HDRSIZE && newh ? size - HDRSIZE : size, current_zone, newh);
     MM_SLAM("exit");
     LM(TheZone) = save_zone;
     return newh;
@@ -1124,6 +1161,7 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
     ReserveMem(size);
     if(ROMlib_relalloc(size, &b))
     {
+        ROMlib_report_alloc_failure(current_zone, size - HDRSIZE, "NewPtr");
 #if 0
       ZONE_ALLOC_PTR (current_zone) = save_alloc_ptr;
 #endif
@@ -1149,6 +1187,7 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
     if(clear_p)
         memset(p, 0, size - HDRSIZE);
 
+    log_alloc("NewPtr", size - HDRSIZE, current_zone, p);
     LM(TheZone) = save_zone;
     SET_MEM_ERR(noErr);
     MM_SLAM("exit");
@@ -1725,12 +1764,11 @@ void MoveHHi(Handle h)
     if(ROMlib_creator != "MSWD"_4 && ROMlib_creator != "ddOr"_4)
         ROMlib_destroy_blocks(0, ~0, true);
 
-    /* #### there used to be a lot of code here; but it was unused and
-     returned noErr #if !MOVEHIWORKS -- see the rcsfile for details */
-    /* #warning MoveHHi not implemented */
-    /* #### just emits too many unecessary warnings
-     warning_unimplemented (""); */
-    SET_MEM_ERR(noErr);
+    THz zone = HandleZone(h);
+    if(!zone)
+        return;   /* HandleZone set MemErr */
+    SET_MEM_ERR(ROMlib_movehhi(zone, h));
+    MM_SLAM("exit");
 }
 
 void C_HLockHi(Handle h)

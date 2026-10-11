@@ -26,6 +26,8 @@ networking are punted until later; everything else is in scope.
 | 16 | Date & Time control panel: the date fields and the hour draw empty | done (2026-10-10): the panel checks `AppPacks[7]` before each `NumToString`; PACK 4, 5 and 7 are ROM packages, so Executor fills those slots with stand-ins (Apple's header, code = the package's trap) |
 | 20 | Executor on the Musashi core aborts at boot (2026-10-10, main after the Help Manager/Speech Manager commits cb911107, d517963b): right after "Help Manager: the System's PACK 14", `syn68k: host pointer 0x800 is not guest-addressable (outside every window)` and `abort()` from `syn68k_common.cpp`. 0x800 is a guest address handed over as a host pointer; on the UAE core guest and host addresses are the same, so the new code (written after the syn68k facade, assuming UAE addressing) runs there and only the Musashi core's window check catches it. Takes down the four `*_executor_musashi` ctest cells (command bridge, guest suite, Finder suite, keyboard) | done (2026-10-11): `gestalt.cpp`'s static table took `(intptr_t)tooltraptable` and `ostraptable` at static initialization, before `traps::init` had set them (null since 14f6aa98 moved the tables into guest memory), so the first `Gestalt` call ran `US_TO_SYN68K` over the host "pointers" 0, 0 and 0x800 (`tooltraptable + 0x200` entries). On UAE that passed and answered `gestaltOSTable`/`gestaltToolboxTable`/`gestaltExtToolboxTable` as 0/0/0x800; on the window layouts it aborted. The three selectors are the fixed guest addresses now ($400, $E00, $1600) and the patch step is gone. Command bridge, Finder suite and keyboard pass on `--core musashi`; `guest_suite_executor_musashi` stops where the UAE cell does (the parked heap corruption) |
 | 21 | `guest_suite_musashi` (ROM Mac, `--core musashi`) flakes: `/api/script` is acknowledged, but MacPerl never comes to the front (`/api/app` stays Finder) and the results file never appears, so the suite times out. Failed in both full ctest runs on 2026-10-10 and 1 of 6 manual runs (`tests/test_guest_suite.sh --core musashi`, with and without `--no-idlewait`; the passing runs finish in 7–20 s). Not seen on the UAE core. Same shape as item 14 | moot (2026-10-11): the vendored core is retired and the cell is `guest_suite_mame68k` now; reopen if the flake shows there |
+| 22 | Executor on mame-68k: MacPerl dies right after launch with `Fatal error: unhandled trap 11 at pc 0xC0000000 (FPU)`: a line-F word the core traps on (on a 68040, the unimplemented FPU instructions go to the FPSP that the ROM installs; Executor has none), so `guest_suite_executor_mame68k` gets no results. The UAE core implements those instructions. Seen 2026-10-11, older than the MoveHHi fix | open |
+| 23 | `as_date_time_string` in the guest suite: `(date "Friday, October 9, 2026 4:11:52 PM") as string` answers today's date with that time, so a date with a weekday and a time loses its date part. Fails the same way before the 2026-10-11 work | open |
 
 Also fixed along the way: Finder type-to-select crash (61ef0717), host
 file dates in local time, `ioVLsMod`, folder moves keeping their
@@ -47,78 +49,57 @@ host-folder System is the first thing to check. The Help menu keeps
 Finder's three items. Phase 4 in `inits.yaml`; "as is, last, if ever" in
 PLAN.md.
 
-### Heap corruption in the Executor guest suite
+### ~~Heap corruption in the Executor guest suite~~ (fixed 2026-10-11)
 
-`guest_suite_executor` (both cores) crashes at the start of its network
-section: MacPerl's heap is corrupt by the time `require Socket` runs, and
-the CPU ends up executing data (UAE core: guest pc `$03cd74cc`; Musashi:
-pc 0). Facts so far:
+`guest_suite_executor` (every 68k core) crashed after its AppleScript
+section with MacPerl executing data. It was not corruption. Executor's
+`MoveHHi` was a no-op, so the code segments MacPerl moves high and locks
+stayed wherever they were allocated and split its heap: a 64 KB
+`NewHandle` failed with 241 KB free in 32 pieces (largest 52 KB), the
+only failed allocation of the run. MacPerl's out-of-memory exit calls its
+exit hook, which calls exit again once no script is running; that
+recursion ran the stack down through all of memory to address 0, and
+the snapshots taken afterwards looked randomly corrupt (the `$AAAAAAAA`
+longs and the bad exit-path operands were the runaway stack's damage).
+On a real 7.5.5 (`MACTEST_SNAPSHOT=... tests/test_guest_suite.sh` on the
+ROM machine) the same heap keeps its segments together and at the top
+(CODE 4, 15 and 22 in the last 2%), and the 64 KB handle is there.
 
-- It needs the whole suite: disk + shared folder + audio + the AppleScript
-  date/number checks + network. Dropping any one of disk, extfs or audio
-  avoids it; so does dropping the AppleScript block. Not reproduced with
-  smaller scripts.
-- It happens without f6793d47's code too (the AppleScript checks then fail
-  but still run), so it is older than the date work; heavy AppleScript use
-  in MacPerl exposes it. Before the AppleScript checks were added, the
-  suite ran to the end (with the punted network failures only).
-- `--executor-debug memcheck` (Executor's heap checker at every Memory
-  Manager call; `tests/test_guest_suite.sh --executor-debug memcheck`
-  passes it through) reports a failed check once, with the trap being
-  run, the last check that passed (the damage lies between the two) and
-  the host stack, then switches itself off and the run goes on.
-- What it found at tick 14 of boot (2026-10-11) is Finder's own doing,
-  not a bug: Finder keeps a locked 30 KB block in its heap and, in a
-  routine that calls through its jump table, saves that block's master
-  pointer, points it at `SysZone` for a while and restores it (`movea.l
-  $A78,a1; movea.l 4(a1),a1; move.l a0,(a1)`, `a0` = SysZone; ApplScratch
-  holds a pointer to a Finder record whose second long is the handle).
-  The reference 7.5.5 snapshot has the same code at `$1C0FBA` and the
-  same block (handle at Finder zone + $98, 30736 bytes). A locked block
-  can't move, so the Memory Manager never reads that master pointer
-  meanwhile. The checker now says this once as a warning and goes on.
-  Found with a gdb hardware watchpoint on the master pointer in an
-  in-process run (`--no-webserver --executor-data DIR --executor-app
-  ".../System Folder/Finder" --disk IMG`), printing UAE's `regs` (`nm`
-  gives its address; D0-D7/A0-A7 are the first 16 longs, `pc` at +64,
-  `pc_p`/`pc_oldp` at +72/+80) and the code words around the 68k PC.
-  That recipe is now built in: `--watch ADDR[:LEN]` (any core, the IPC
-  child too; `src/common/guest_watch.cpp` protects the page and
-  single-steps the writer) reports every write with the old and new
-  bytes, the 68k PC, registers, code around the PC (disassembled on
-  mame-68k), the top of the stack, the last 24 A-line traps (a ring the
-  dispatcher always keeps, `base/trap_history.cpp`) and the host stack.
-  The host-signal and memcheck reports print the same 68k context.
-- Its second finding was the checker's own: it walked `TheZone` as a
-  zone while Finder had it set to a temp handle ($22E0B8) around
-  `ReallocHandle` (HandleZone's comment in `mman.cpp` tells that story;
-  ReallocHandle uses the handle's zone, so a Mac doesn't care). The
-  checker now walks `TheZone` only when it is a zone InitZone made
-  (`ROMlib_known_zone`), and walks the Process Manager heap too. With
-  that, the boot under memcheck is clean apart from the warning above.
-- Likely class: host code holding a raw pointer into a relocatable block
-  across a call that moves memory.
-- 2026-10-11, with the checker on from boot to the crash (every Memory
-  Manager call, all zones and the PM heap): no finding at all before
-  MacPerl dies. The heap's structure is intact; what breaks is MacPerl's
-  own data. Under memcheck the crash comes right after launch (guest PC
-  `$4E75E8xx`/`$4E75E9xx`, code bytes used as an address), in normal
-  runs after the AppleScript section. In the fatal snapshot the chain is
-  MacPerl's exit path (`tst.b $3CF3978; bsr $393919E; bsr $3953C54; bsr
-  $3953D42`, absolute addresses into its 3.9 MB partition: the code is
-  relocated at load) ending in a call through a global, and in one of
-  the snapshots two operands of that path read `$AAAAAAAA` (`jsr
-  $AAAAAAAA.l` at `$3953D7C`, `pea $AAAAAAAA.l` at `$3953E4E`); in the
-  next one those are fine and three other longs in the code block are
-  `$AAAAAAAA`. Nothing on the host writes that pattern (grep), so it is
-  MacPerl's relocation placeholder, and relocation sites in its code are
-  being reset or never patched, at places that vary between runs. Next:
-  find who writes `$AAAAAAAA` into MacPerl's code (gdb watchpoint on
-  one of the sites in an in-process run, as for the Finder finding
-  above; the launch is deterministic enough that the site addresses
-  repeat within a build), and read MacPerl 5.2.0r4's loader (its source
-  is public) for what the placeholder means. The ReallocateHandle order
-  fix (31ffbc00) came out of this and stays.
+Fixed by `ROMlib_movehhi` (`mman/mmansubr.cpp`): MoveHHi moves the block
+up until a nonrelocatable or locked block or the top of the zone, the
+unlocked relocatable blocks in between sliding down under it; and
+`C_LoadSeg` (`segment.cpp`) moves a segment that isn't locked already
+high before `HLock`, as 7.5.5's Segment Loader does. On the UAE core the
+suite now gets through to the network section, where the punted
+networking fails (MacTCP `dnrp`, UDP send, the TCP connect timeout); one
+64 KB `NewHandle` still fails there (MacPerl copes); at that point
+Executor's heap holds four more nonrelocatable blocks (75, 1.67 MB) than
+the real one does at the end of the run (71, 1.51 MB). On mame-68k the suite stops earlier for another reason
+(item 22).
+Side fixes from the hunt: ReallocateHandle frees before it allocates
+(31ffbc00).
+
+How it was found, for next time:
+
+- `--executor-debug memcheck` checks every zone at every Memory Manager
+  call and reports once (trap, last passing check, master pointer value,
+  68k context, host stack), then switches off. Two Finder habits are
+  known and only warned about: a locked block whose master pointer it
+  points at SysZone for a while (`movea.l $A78,a1; movea.l 4(a1),a1;
+  move.l a0,(a1)`, the real 7.5.5 does the same at `$1C0FBA`), and
+  `TheZone` set to a temp handle around `ReallocHandle`. Clean from boot
+  to the crash, it ruled out heap corruption.
+- `--watch ADDR[:LEN]` (`src/common/guest_watch.cpp`) reports every write
+  to guest memory with the 68k context; it showed MacPerl's
+  script-running flag cleared just before the fatal allocation.
+- A failed `NewHandle`/`NewPtr` prints the zone: free bytes, largest
+  free block, a heap map (`N` nonrelocatable, `L` locked, `R`, `P`, `.`),
+  every locked block and free gap with its owner, and the sizes of the
+  nonrelocatable blocks. `--executor-debug allocs` logs every allocation
+  of 4 KB or more with the code that asked (`mman/whatis.cpp` names a
+  guest address: zone, block, resource type/ID/file).
+- `MACTEST_SNAPSHOT=NAME tests/test_guest_suite.sh` snapshots guest RAM
+  when the results arrive (ROM machine too), for `tools/macdecode`.
 
 ### 68k Toolbox test app (Retro68)
 

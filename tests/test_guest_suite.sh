@@ -55,6 +55,8 @@ while [[ $# -gt 0 ]]; do
         --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | mame-68k; kpx | mame-ppc
         --jit|--no-jit|--idlewait|--no-idlewait) EXTRA_FLAGS+=("$1"); shift ;;
         --executor-debug) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;   # Executor's --debug options (memcheck,...)
+        --watch) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;            # write watchpoint on guest memory (Executor)
+        --executor-logtraps) EXTRA_FLAGS+=("$1"); shift ;;       # Executor logs every trap call
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) NETWORK="$2"; shift 2 ;;
@@ -168,8 +170,15 @@ else
 fi
 
 [[ -n "${CORE:-}" ]] && EXTRA_FLAGS+=(--core "$CORE")
+# --headless-http runs the ROM machine in-process, where /api/snapshot has
+# no child to ask; MACTEST_SNAPSHOT runs it behind the web server instead.
+if [[ -n "${MACTEST_SNAPSHOT:-}" ]]; then
+    MODE_FLAGS=(--bridge)
+else
+    MODE_FLAGS=(--headless-http)
+fi
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
-    --config /dev/null "${DISMISS_FLAG[@]}" --headless-http \
+    --config /dev/null "${DISMISS_FLAG[@]}" "${MODE_FLAGS[@]}" \
     --port "$PORT" \
     "${DISK_FLAGS[@]}" --extfs "$EXTFS_DIR" \
     "${EXTRA_FLAGS[@]}" ${ROM:+"$ROM"} &>/tmp/mactest_guest_$$.log &
@@ -284,6 +293,14 @@ while true; do
 done
 
 # --- Collect & parse results ---
+
+# MACTEST_SNAPSHOT=NAME: dump guest RAM to <storage>/snapshots/NAME while
+# the script's application is still up (tools/macdecode reads it).
+if [[ -n "${MACTEST_SNAPSHOT:-}" ]]; then
+    curl -sf --max-time 30 -X POST -H 'Content-Type: application/json' \
+        -d "{\"name\":\"$MACTEST_SNAPSHOT\"}" "http://localhost:$PORT/api/snapshot" >/dev/null \
+        && echo "Snapshot: $MACTEST_SNAPSHOT"
+fi
 
 echo ""
 echo "--- Results ---"

@@ -463,7 +463,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --[no-]executor-fresh      Start each run from the System's clean copy (default: on)\n");
             printf("  --executor-logtraps        Executor logs every trap call to stderr\n");
             printf("  --executor-debug OPTS      Executor's own debug options, comma-separated: memcheck (heap\n");
-            printf("                             consistency checks at every Memory Manager call, slow), fslog,\n");
+            printf("                             consistency checks at every Memory Manager call, slow), allocs\n");
+            printf("                             (allocations >= 4K and the code that asked), fslog,\n");
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
             printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");

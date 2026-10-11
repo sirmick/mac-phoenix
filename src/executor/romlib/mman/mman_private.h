@@ -160,6 +160,8 @@ extern void ROMlib_freeblock(block_header_t *);
 extern bool ROMlib_makespace(block_header_t **, uint32_t);
 extern bool ROMlib_locked(block_header_t *);
 extern void ROMlib_moveblock(block_header_t *, block_header_t *, uint32_t);
+/* MacPhoenix: MoveHHi's move (mmansubr.cpp). Returns a MemErr value. */
+extern OSErr ROMlib_movehhi(THz zone, Handle h);
 extern int32_t ROMlib_amtfree(block_header_t *);
 extern bool ROMlib_pushblock(block_header_t *, block_header_t *);
 extern void ROMlib_coalesce(block_header_t *blk);
@@ -206,6 +208,11 @@ extern void ROMlib_sledgehammer_zone(THz zone, bool print_p,
    stray TheZone (Finder sets it from a temp handle around ReallocHandle,
    whose zone is the handle's anyway) is not one. */
 extern bool ROMlib_known_zone(THz z);
+
+/* MacPhoenix: an allocation of size bytes in zone failed; describe the
+   zone (free space, largest free block, what holds the rest). The first
+   few failures are reported. */
+extern void ROMlib_report_alloc_failure(THz zone, int32_t size, const char *what);
 
 extern void ROMlib_sledgehammer_zones(const char *fn,
                                       const char *file, int lineno,

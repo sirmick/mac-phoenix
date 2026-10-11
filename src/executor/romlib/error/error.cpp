@@ -38,6 +38,7 @@ static const struct
                | ERROR_BIT_MASK(ERROR_UNIMPLEMENTED)) },
     { "fslog", ERROR_BIT_MASK(ERROR_FILESYSTEM_LOG) },
     { "memcheck", ERROR_BIT_MASK(ERROR_MEMORY_MANAGER_SLAM) },
+    { "allocs", ERROR_BIT_MASK(ERROR_ALLOC_LOG) },
     { "textcheck", ERROR_BIT_MASK(ERROR_TEXT_EDIT_SLAM) },
     { "trace", ERROR_BIT_MASK(ERROR_TRACE_INFO) },
     { "trapfailure", ERROR_BIT_MASK(ERROR_TRAP_FAILURE) },

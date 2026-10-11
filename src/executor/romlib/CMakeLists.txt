@@ -418,7 +418,7 @@ set(mman_sources
     mman/mman_private.h
     mman/tempalloc.h
 
-    mman/mman.cpp mman/mmansubr.cpp
+    mman/mman.cpp mman/mmansubr.cpp mman/whatis.cpp
     mman/tempmem.cpp
 )
 source_group(MMan FILES ${mman_sources})

@@ -9,6 +9,7 @@
 #include <FileMgr.h>
 #include <SegmentLdr.h>
 #include <MemoryMgr.h>
+#include <mman/mman.h>
 #include <ResourceMgr.h>
 #include <StdFilePkg.h>
 #include <SysErr.h>
@@ -295,6 +296,12 @@ void Executor::C_LoadSeg(INTEGER segno)
 
     LM(ResLoad) = -1; /* CricketDraw III's behaviour suggested this */
     newcode = GetResource("CODE"_4, segno);
+    /* MacPhoenix: as 7.5.5's Segment Loader, a segment that isn't locked
+       already (resLocked) goes to the top of the heap before it is locked,
+       so loaded code piles up there instead of splitting the free space
+       (MacPerl's segments sit at the top of its heap on a real 7.5.5). */
+    if(newcode && *newcode && !(HGetState(newcode) & LOCKBIT))
+        MoveHHi(newcode);
     HLock(newcode);
     taboff = ((GUEST<INTEGER> *)*newcode)[0];
     if((uint16_t)taboff == 0xA89F) /* magic compressed resource signature */

@@ -16,11 +16,14 @@
 #include <mman/mman_private.h>
 #include <rsys/hook.h>
 #include <rsys/process.h>
+#include <mman/whatis.h>
 #include <error/system_error.h>
 #include <vdriver/vdriver.h>
 #include <base/functions.impl.h>
 
 #include <stdarg.h>
+#include <algorithm>
+#include <vector>
 
 using namespace Executor;
 
@@ -1105,4 +1108,212 @@ retry:
     /* Give up. */
     GEN_MEM_ERR(memFullErr);
     return memFullErr;
+}
+
+/* MacPhoenix: see mman_private.h. */
+void Executor::ROMlib_report_alloc_failure(THz zone, int32_t size, const char *what)
+{
+    static int reports;
+    if(!zone || reports >= 3)
+        return;
+    reports++;
+    struct Big
+    {
+        block_header_t *b;
+        uint32_t psize;
+    } big[12] = {};
+    uint32_t n[3] = {}, bytes[3] = {}, largest_free = 0, locked_rel = 0, locked_bytes = 0,
+             purgeable = 0, purgeable_bytes = 0, rsrc = 0, rsrc_bytes = 0;
+    uint32_t total = (uint32_t)((char *)ZONE_BK_LIM(zone) - (char *)ZONE_HEAP_DATA(zone));
+    for(block_header_t *b = ZONE_HEAP_DATA(zone); b < ZONE_BK_LIM(zone); b = BLOCK_NEXT(b))
+    {
+        uint32_t ps = PSIZE(b);
+        if(ps < MIN_BLOCK_SIZE)
+            break;
+        int u = USE(b);
+        if(u > 2)
+            break;
+        n[u]++;
+        bytes[u] += ps;
+        if(u == FREE && ps > largest_free)
+            largest_free = ps;
+        if(u == REL)
+        {
+            uint8_t st = BLOCK_STATE(b);
+            if(st & LOCKBIT)
+                locked_rel++, locked_bytes += ps;
+            if(st & PURGEBIT)
+                purgeable++, purgeable_bytes += ps;
+            if(st & RSRCBIT)
+                rsrc++, rsrc_bytes += ps;
+        }
+        if(u != FREE)
+        {
+            int k = 11;
+            if(ps > big[k].psize)
+            {
+                while(k > 0 && ps > big[k - 1].psize)
+                {
+                    big[k] = big[k - 1];
+                    k--;
+                }
+                big[k] = { b, ps };
+            }
+        }
+    }
+    fprintf(stderr, "\n[mm] %s(%d) failed in zone %p%s (A-trap $%04X): zone %u bytes, free %u (zcbFree %d) "
+                    "in %u blocks, largest free %u\n",
+            what, (int)size, zone, zone == LM(SysZone) ? " (SysZone)" : zone == LM(ApplZone) ? " (ApplZone)" : "",
+            (unsigned)mostrecenttrap, total, bytes[FREE], (int)ZONE_ZCB_FREE(zone), n[FREE], largest_free);
+    fprintf(stderr, "[mm]   relocatable %u blocks %u bytes (locked %u/%u bytes, purgeable %u/%u, resources %u/%u); "
+                    "non-relocatable %u blocks %u bytes\n",
+            n[REL], bytes[REL], locked_rel, locked_bytes, purgeable, purgeable_bytes, rsrc, rsrc_bytes,
+            n[NREL], bytes[NREL]);
+    /* A map of the zone, 128 slices: what holds most of each slice.
+     * N non-relocatable, L locked relocatable, R relocatable, P purgeable,
+     * . free. */
+    {
+        constexpr int W = 128;
+        uint32_t share[W][5] = {};
+        const char *lo = (const char *)ZONE_HEAP_DATA(zone);
+        for(block_header_t *b = ZONE_HEAP_DATA(zone); b < ZONE_BK_LIM(zone); b = BLOCK_NEXT(b))
+        {
+            uint32_t ps = PSIZE(b);
+            if(ps < MIN_BLOCK_SIZE || USE(b) > 2)
+                break;
+            int kind = USE(b) == FREE ? 4 : USE(b) == NREL ? 0
+                     : (BLOCK_STATE(b) & LOCKBIT) ? 1 : (BLOCK_STATE(b) & PURGEBIT) ? 3 : 2;
+            uint64_t a = (const char *)b - lo, e = a + ps;
+            while(a < e)
+            {
+                int slot = (int)(a * W / total);
+                if(slot >= W)
+                    break;
+                uint64_t slot_end = ((uint64_t)(slot + 1) * total + W - 1) / W;
+                uint64_t take = std::min<uint64_t>(e, slot_end) - a;
+                if(take == 0)
+                    take = 1;
+                share[slot][kind] += take;
+                a += take;
+            }
+        }
+        char line[W + 1];
+        for(int i = 0; i < W; i++)
+        {
+            int best = 4;
+            for(int k = 0; k < 5; k++)
+                if(share[i][k] > share[i][best])
+                    best = k;
+            line[i] = "NLRP."[best];
+        }
+        line[W] = 0;
+        fprintf(stderr, "[mm]   map (N nonrel, L locked, R rel, P purgeable, . free; %u bytes/char):\n[mm]   %s\n",
+                total / W, line);
+    }
+    fprintf(stderr, "[mm]   non-relocatable block sizes, in heap order:");
+    for(block_header_t *b = ZONE_HEAP_DATA(zone); b < ZONE_BK_LIM(zone); b = BLOCK_NEXT(b))
+    {
+        if(PSIZE(b) < MIN_BLOCK_SIZE || USE(b) > 2)
+            break;
+        if(USE(b) == NREL)
+            fprintf(stderr, " %u", (unsigned)(PSIZE(b) - HDRSIZE - SIZEC(b)));
+    }
+    fprintf(stderr, "\n");
+    fprintf(stderr, "[mm]   locked blocks and free gaps, in heap order:\n");
+    for(block_header_t *b = ZONE_HEAP_DATA(zone); b < ZONE_BK_LIM(zone); b = BLOCK_NEXT(b))
+    {
+        if(PSIZE(b) < MIN_BLOCK_SIZE || USE(b) > 2)
+            break;
+        bool locked = USE(b) == REL && (BLOCK_STATE(b) & LOCKBIT);
+        if(!locked && USE(b) != FREE)
+            continue;
+        char what[200];
+        ROMlib_whatis(US_TO_SYN68K(BLOCK_DATA(b)), what, sizeof what);
+        fprintf(stderr, "[mm]     $%08X %8u %s\n", (unsigned)US_TO_SYN68K(BLOCK_DATA(b)),
+                (unsigned)PSIZE(b), locked ? what : "free");
+    }
+    fprintf(stderr, "[mm]   largest blocks:\n");
+    for(auto &e : big)
+    {
+        if(!e.b)
+            break;
+        const uint8_t *d = (const uint8_t *)BLOCK_DATA(e.b);
+        fprintf(stderr, "[mm]     %p %-4s %8u bytes flags $%02x  data %02x%02x%02x%02x %02x%02x%02x%02x\n",
+                BLOCK_DATA(e.b), USE(e.b) == REL ? "REL" : "NREL", e.psize, (unsigned)BLOCK_STATE(e.b),
+                d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]);
+    }
+    syn68k_describe_cpu(stderr);
+}
+
+/* MacPhoenix: MoveHHi (Inside Macintosh: Memory, 2-56): move the block up
+ * until it reaches a nonrelocatable block, a locked relocatable block or
+ * the top of the zone. The unlocked relocatable blocks in between slide
+ * down below it, as compaction would move them, and the free space in the
+ * stretch ends up as one free block under it. Executor's MoveHHi used to
+ * be a no-op, so blocks an application moved high before HLock stayed
+ * wherever they were allocated, splitting the free space around them
+ * (MacPerl's code segments: a 64K NewHandle failed with 240K free in 32
+ * pieces, and MacPerl's out-of-memory exit recursed off the stack). */
+OSErr Executor::ROMlib_movehhi(THz zone, Handle h)
+{
+    GUEST<THz> save_zone = LM(TheZone);
+    LM(TheZone) = zone;
+    OSErr err = noErr;
+    block_header_t *b = HANDLE_TO_BLOCK(h);
+    if(!b)
+        err = nilHandleErr;
+    else if(USE(b) != REL)
+        err = memWZErr;
+    else if(ROMlib_locked(b))
+        err = memLockedErr;
+    if(err != noErr)
+    {
+        LM(TheZone) = save_zone;
+        return err;
+    }
+
+    /* The stretch above b: free and unlocked relocatable blocks. */
+    std::vector<block_header_t *> movers;
+    uint32_t free_total = 0;
+    block_header_t *top = BLOCK_NEXT(b);
+    for(; top != ZONE_BK_LIM(zone); top = BLOCK_NEXT(top))
+    {
+        if(PSIZE(top) < MIN_BLOCK_SIZE)
+            HEAP_DEATH();
+        if(USE(top) == FREE)
+            free_total += PSIZE(top);
+        else if(USE(top) == REL && !ROMlib_locked(top))
+            movers.push_back(top);
+        else
+            break;
+    }
+    if(free_total == 0)
+    {
+        LM(TheZone) = save_zone;
+        return noErr;   /* as high as it can go */
+    }
+
+    const uint32_t bsize = PSIZE(b);
+    std::vector<uint8_t> saved((const uint8_t *)b, (const uint8_t *)b + bsize);
+    char *dst = (char *)b;
+    for(block_header_t *r : movers)
+    {
+        uint32_t size = PSIZE(r);
+        if((char *)r != dst)
+            memmove(dst, r, size);
+        block_header_t *nr = (block_header_t *)dst;
+        Handle mh = BLOCK_TO_HANDLE(zone, nr);
+        SETMASTER(mh, BLOCK_DATA(nr), HANDLE_STATE(mh, nr));
+        dst += size;
+    }
+    char *nb = (char *)top - bsize;
+    if(nb > dst)
+        mm_set_block_fields_offset((block_header_t *)dst, FREE_BLOCK_STATE, FREE, 0,
+                                   (uint32_t)(nb - dst), 0);
+    memcpy(nb, saved.data(), bsize);
+    block_header_t *moved = (block_header_t *)nb;
+    SETMASTER(h, BLOCK_DATA(moved), HANDLE_STATE(h, moved));
+    ZONE_ALLOC_PTR(zone) = nullptr;
+    LM(TheZone) = save_zone;
+    return noErr;
 }
