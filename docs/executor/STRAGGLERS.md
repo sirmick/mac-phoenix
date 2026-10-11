@@ -62,14 +62,26 @@ pc 0). Facts so far:
   but still run), so it is older than the date work; heavy AppleScript use
   in MacPerl exposes it. Before the AppleScript checks were added, the
   suite ran to the end (with the punted network failures only).
-- `--debug memcheck` (Executor's heap checker; pass it by adding
-  `--debug memcheck` to the args in
-  `romlib/config/front-ends/phoenix/executor_host.cpp`, and make
-  `mm_fatal` in `mman/mmansubr.cpp` report instead of crash) finds an
-  earlier problem: at tick 14 of boot, in Finder's application heap (zone
-  `0x3df7bc4`), REL block `0x3e08398`'s handle `0x3df7c6c` doesn't point
-  back to it. Whether that is the same bug, or Finder doing something the
-  checker doesn't expect, isn't known yet.
+- `--executor-debug memcheck` (Executor's heap checker at every Memory
+  Manager call; `tests/test_guest_suite.sh --executor-debug memcheck`
+  passes it through) reports a failed check once, with the trap being
+  run, the last check that passed (the damage lies between the two) and
+  the host stack, then switches itself off and the run goes on.
+- What it found at tick 14 of boot (2026-10-11) is Finder's own doing,
+  not a bug: Finder keeps a locked 30 KB block in its heap and, in a
+  routine that calls through its jump table, saves that block's master
+  pointer, points it at `SysZone` for a while and restores it (`movea.l
+  $A78,a1; movea.l 4(a1),a1; move.l a0,(a1)`, `a0` = SysZone; ApplScratch
+  holds a pointer to a Finder record whose second long is the handle).
+  The reference 7.5.5 snapshot has the same code at `$1C0FBA` and the
+  same block (handle at Finder zone + $98, 30736 bytes). A locked block
+  can't move, so the Memory Manager never reads that master pointer
+  meanwhile. The checker now says this once as a warning and goes on.
+  Found with a gdb hardware watchpoint on the master pointer in an
+  in-process run (`--no-webserver --executor-data DIR --executor-app
+  ".../System Folder/Finder" --disk IMG`), printing UAE's `regs` (`nm`
+  gives its address; D0-D7/A0-A7 are the first 16 longs, `pc` at +64,
+  `pc_p`/`pc_oldp` at +72/+80) and the code words around the 68k PC.
 - Likely class: host code holding a raw pointer into a relocatable block
   across a call that moves memory.
 

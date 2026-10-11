@@ -5,6 +5,7 @@
 /* Miscellaneous subroutines for memory management */
 
 #include <unistd.h>
+#include <crash_handler.h>
 #include <base/common.h>
 
 #include <MemoryMgr.h>
@@ -99,9 +100,42 @@ mm_slam_hook(void)
                     __PRETTY_FUNCTION__, __FILE__, __LINE__, ##args); \
         }                                                             \
         mm_slam_hook();                                               \
-        /* d'oh! */                                                   \
-        *(volatile uint32_t *)-1;                                     \
+        mm_check_failed();                                            \
     } while(false)
+
+/* MacPhoenix: a failed check reports once, with the trap being run and
+ * the host call stack, then switches heap checking off and unwinds the
+ * walk (the heap may not be walkable past the bad block). The run goes
+ * on, so what happens next tells whether the finding is the crash. */
+namespace
+{
+struct mm_check_failure
+{
+};
+
+/* The last check that passed: the damage happened between it and the
+ * failing one. */
+struct
+{
+    const char *fn = nullptr, *where = nullptr;
+    unsigned trap = 0;
+    unsigned long count = 0;
+} last_ok;
+
+[[noreturn]] void mm_check_failed()
+{
+    fprintf(stderr, "[memcheck] in A-trap $%04X (check %lu); the last check that passed: "
+                    "%s %s in A-trap $%04X\n",
+            mostrecenttrap, last_ok.count,
+            last_ok.fn ? last_ok.fn : "(none)", last_ok.where ? last_ok.where : "",
+            last_ok.trap);
+    print_backtrace("memcheck");
+    fprintf(stderr, "[memcheck] heap checking off after this first failure\n");
+    fflush(stderr);
+    ROMlib_debug_level &= ~ERROR_BIT_MASK(ERROR_MEMORY_MANAGER_SLAM);
+    throw mm_check_failure{};
+}
+}
 #endif
 
 #if ERROR_SUPPORTED_P(ERROR_MEMORY_MANAGER_SLAM)
@@ -331,9 +365,30 @@ handle_addr_info:
     return;
 }
 
+static void sledgehammer_zone(THz zone, bool print_p,
+                              const char *fn, const char *file, int lineno,
+                              const char *where, zone_info_t *infop);
+
 void Executor::ROMlib_sledgehammer_zone(THz zone, bool print_p,
                                         const char *fn, const char *file, int lineno,
                                         const char *where, zone_info_t *infop)
+{
+    try
+    {
+        sledgehammer_zone(zone, print_p, fn, file, lineno, where, infop);
+        last_ok.fn = fn;
+        last_ok.where = where;
+        last_ok.trap = mostrecenttrap;
+        last_ok.count++;
+    }
+    catch(const mm_check_failure &)
+    {
+    }
+}
+
+static void sledgehammer_zone(THz zone, bool print_p,
+                              const char *fn, const char *file, int lineno,
+                              const char *where, zone_info_t *infop)
 {
     block_header_t *block, *zone_start, *zone_end, *alloc_ptr;
     bool found_alloc_ptr_p = false;
@@ -388,8 +443,38 @@ void Executor::ROMlib_sledgehammer_zone(THz zone, bool print_p,
                     ++infop->n_rel;
                 handle = BLOCK_TO_HANDLE(zone, block);
                 if(block != HANDLE_TO_BLOCK(handle))
-                    mm_fatal("REL block `%p'; bad master pointer for handle `%p'",
-                             block, handle);
+                {
+                    if(ROMlib_locked(block))
+                    {
+                        /* Finder does this on purpose: it keeps a locked
+                         * block whose master pointer it points at SysZone
+                         * for a while and restores (the real 7.5.5 boot
+                         * shows the same block and code). The block can't
+                         * move, so the Memory Manager never looks at the
+                         * master pointer meanwhile. Said once per block. */
+                        static block_header_t *said[8];
+                        static int n_said;
+                        bool seen = false;
+                        for(int i = 0; i < n_said; i++)
+                            seen |= said[i] == block;
+                        if(!seen)
+                        {
+                            if(n_said < 8)
+                                said[n_said++] = block;
+                            fprintf(stderr, "[memcheck] locked REL block %p (data %p, psize %u) in zone %p: "
+                                            "its handle %p holds %p (Finder's zone trick?); in A-trap $%04X\n",
+                                    block, BLOCK_DATA(block), (unsigned)PSIZE(block), zone, handle,
+                                    VALID_ADDRESS(handle) ? (void *)*handle : (void *)-1,
+                                    mostrecenttrap);
+                        }
+                    }
+                    else
+                        mm_fatal("REL block `%p' (data %p, psize %u, flags $%02x) in zone %p; "
+                                 "bad master pointer for handle `%p': it holds %p",
+                                 block, BLOCK_DATA(block), (unsigned)PSIZE(block),
+                                 (unsigned)BLOCK_STATE(block), zone, handle,
+                                 VALID_ADDRESS(handle) ? (void *)*handle : (void *)-1);
+                }
 
                 if((BLOCK_STATE(block) & ~STATE_BITS) == FREE_BLOCK_STATE)
                     mm_fatal("bogus unused block state bits `%d'\n",

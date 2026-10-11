@@ -33,6 +33,7 @@ struct Config
 
     bool logtraps = false;
     int logtraps_nesting = 1; // --logtraps-nesting: log calls nested this deep
+    std::string debug_options; // Executor's --debug string ("memcheck,...")
     bool writable_images = false; // disk images read-write (default: read-only)
     std::string cpu = "uae";      // 68k core: "uae" or "musashi"
 

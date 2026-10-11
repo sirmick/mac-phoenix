@@ -254,6 +254,8 @@ Logging:
   --trace-atraps             Record (A-trap, caller PC) pairs; snapshots write atraps.tsv
   --executor-logtraps        Executor logs every trap call to stderr
   --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks
+  --executor-debug OPTS      Executor's own debug options: memcheck (heap checks at every
+                             Memory Manager call), fslog, trace, trapfailure, unimplemented, ...
 ```
 
 ## Environment Variables

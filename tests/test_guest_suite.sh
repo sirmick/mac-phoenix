@@ -11,6 +11,7 @@
 #                             [--rom path] [--os-version 7.5.5|7.6]
 #                             [--network MODE] [--backend uae|kpx|executor]
 #                             [--script NAME.pl] [--results FILE]
+#                             [--executor-debug memcheck,...]
 #
 # --script picks another guest script from tests/guest (default
 # MacTestSuite.pl); --results is the file it writes on Host: (default
@@ -53,6 +54,7 @@ while [[ $# -gt 0 ]]; do
         --backend) BACKEND="$2"; shift 2 ;;
         --core|--executor-cpu) CORE="$2"; shift 2 ;;   # CPU core: uae | musashi | mame-68k; kpx | mame-ppc
         --jit|--no-jit|--idlewait|--no-idlewait) EXTRA_FLAGS+=("$1"); shift ;;
+        --executor-debug) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;   # Executor's --debug options (memcheck,...)
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) NETWORK="$2"; shift 2 ;;
