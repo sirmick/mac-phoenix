@@ -316,7 +316,9 @@ void Executor::callcomp(ParmBlkPtr pbp, ProcPtr comp, OSErr err)
     EM_A0 = US_TO_SYN68K(pbp);
     EM_A1 = US_TO_SYN68K(comp);
     EM_D0 = (unsigned short)err; /* TODO: unsigned short ? */
-    execute68K((syn68k_addr_t)(uintptr_t)comp);
+    /* The routine's guest address, not its host pointer truncated: the
+     * two differ on every layout but UAE's identity one. */
+    execute68K(US_TO_SYN68K(comp));
 }
 
 static void InitBuiltinDrivers()

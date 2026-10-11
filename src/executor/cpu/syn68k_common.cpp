@@ -31,6 +31,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <guest_watch.h>
+#include <crash_handler.h>
 #include <base/trap_history.h>
 #include <base/trapglue.h>
 
@@ -367,6 +368,23 @@ public:
     void attention(cpu::Core &c) override
     {
         c.set_irq(irq_level());
+    }
+
+    /* An illegal word: the exception goes ahead (vector 4, Executor's
+     * unhandled-trap death); describe the state first, while the
+     * registers and the stack below the frame are still those of the
+     * faulting code. */
+    bool illegal(cpu::Core &c, uint32_t opcode, uint32_t op_pc) override
+    {
+        static int reported;
+        if(reported++ < 3)
+        {
+            fprintf(stderr, "syn68k: illegal instruction $%04X at $%08X\n", opcode, op_pc);
+            syn68k_describe_cpu(stderr);
+            print_backtrace("illegal instruction");  /* the C++ that entered the 68k */
+        }
+        (void)c;
+        return false;
     }
 };
 SynHost syn_host;
@@ -840,7 +858,12 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
     cpu::platform_set_memory(&guest_memory);
     cpu::Config config;
     config.model = 68040;
-    config.fpu = false;  /* Executor provides SANE natively */
+    /* A 68040 with its FPU. Executor provides SANE natively and tells
+     * Gestalt there is no FPU, but applications built for one (MacPerl)
+     * execute FPU instructions regardless. UAE's 68040 opcode table
+     * always has them; without this the mame-68k core is an LC040 and
+     * every line-F word is a fatal trap 11 (STRAGGLERS.md 22). */
+    config.fpu = true;
     core = cpu::create(engine_name, config, guest_memory, syn_host).release();
     if(!core)
     {

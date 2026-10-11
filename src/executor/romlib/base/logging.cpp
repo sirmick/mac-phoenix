@@ -179,6 +179,13 @@ namespace
 {
 void logPascalString(std::ostream& os, const unsigned char* p)
 {
+    /* An uninitialised field is not a guest address; converting it back
+     * would abort on the window layouts. */
+    if(!logging::canConvertBack(p))
+    {
+        os << "?";
+        return;
+    }
     os << "0x" << std::hex << US_TO_SYN68K_CHECK0_CHECKNEG1(p) << std::dec;
     if(logging::validAddress(p) && logging::validAddress(p + 256))
     {
