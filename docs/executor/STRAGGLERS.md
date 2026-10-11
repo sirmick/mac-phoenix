@@ -91,6 +91,27 @@ pc 0). Facts so far:
   that, the boot under memcheck is clean apart from the warning above.
 - Likely class: host code holding a raw pointer into a relocatable block
   across a call that moves memory.
+- 2026-10-11, with the checker on from boot to the crash (every Memory
+  Manager call, all zones and the PM heap): no finding at all before
+  MacPerl dies. The heap's structure is intact; what breaks is MacPerl's
+  own data. Under memcheck the crash comes right after launch (guest PC
+  `$4E75E8xx`/`$4E75E9xx`, code bytes used as an address), in normal
+  runs after the AppleScript section. In the fatal snapshot the chain is
+  MacPerl's exit path (`tst.b $3CF3978; bsr $393919E; bsr $3953C54; bsr
+  $3953D42`, absolute addresses into its 3.9 MB partition: the code is
+  relocated at load) ending in a call through a global, and in one of
+  the snapshots two operands of that path read `$AAAAAAAA` (`jsr
+  $AAAAAAAA.l` at `$3953D7C`, `pea $AAAAAAAA.l` at `$3953E4E`); in the
+  next one those are fine and three other longs in the code block are
+  `$AAAAAAAA`. Nothing on the host writes that pattern (grep), so it is
+  MacPerl's relocation placeholder, and relocation sites in its code are
+  being reset or never patched, at places that vary between runs. Next:
+  find who writes `$AAAAAAAA` into MacPerl's code (gdb watchpoint on
+  one of the sites in an in-process run, as for the Finder finding
+  above; the launch is deterministic enough that the site addresses
+  repeat within a build), and read MacPerl 5.2.0r4's loader (its source
+  is public) for what the placeholder means. The ReallocateHandle order
+  fix (31ffbc00) came out of this and stays.
 
 ### 68k Toolbox test app (Retro68)
 
