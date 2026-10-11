@@ -271,6 +271,11 @@ referred to; strike them here when done.
 | S12 | **Executor on mame-68k has unit tests only.** `executor.mame68k.*` (150 gtests) pass; there are no `_executor_mame68k` bridge, guest, Finder or keyboard cells. Today the `_executor_musashi` ones abort anyway (STRAGGLERS.md 20), and mame-68k would hit the same host-pointer check | open |
 | S13 | **x86log without the disassembler.** MAME's i386 disassembler was not lifted, so native-code logs show bytes. Logging is off (`emu_options`) | cosmetic |
 | S14 | **PMMU has no workload.** `Config::mmu` picks the PMMU inits but no machine turns it on; the Virtual Memory boot (C1d) is the first real test | open (C1d) |
+| S15 | **`--jit68k` does nothing.** The only reader, the DR-emulator activation in `emul_op_ppc.cpp`, is `if (PrefsFindBool("jit68k") && 0)`, so Apple's DR emulator is never switched on, on either PPC core: the Power Mac's 68k code always runs on the ROM's interpretive 68k emulator. The flag and the web UI's "Enable 68k JIT (DR emulator)" box are no-ops. Make the DR emulator work, or remove both; C3b would replace it anyway | open |
+| S16 | **`--m68k-host` is CLI-only.** C3a's mode is not in the JSON config or the web UI, so it can't be picked from Settings or kept in a profile | open (until C3b decides the default) |
+| S17 | **riscv64 never run.** It builds under `tools/xarch/xarch.sh riscv64` with `-DBUILD_BROWSER=OFF` (no Qt WebEngine there) and MAME's C back-end; no test has run on it. MAME has no RISC-V recompiler back-end and asmjit has no RISC-V assembler, so a native one would be new work | open |
+| S18 | **UAE's 68k `--jit` stalls.** The boot matrix's `uae-jit-755`/`uae-jit-761` cells stop at a grey desktop. Long-standing and not investigated; bears on the open question of whether UAE stays | known |
+| S19 | **arm64 CI red since the MAME merge.** `drcbearm64.cpp` was missing, so the arm64 package jobs failed at CMake configure. The fixes are on main locally (S2), not yet pushed or seen green in CI | open |
 
 ## Notes from C3a (68k routines on a host Musashi)
 
