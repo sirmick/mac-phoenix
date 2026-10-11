@@ -167,100 +167,47 @@ static void dequeue_tm(uint32 tm)
  */
 
 #ifdef PRECISE_TIMING_POSIX
-const int SIGSUSPEND = SIGRTMIN + 6;
-const int SIGRESUME  = SIGRTMIN + 7;
-static struct sigaction sigsuspend_action;
-static struct sigaction sigresume_action;
-
-static int suspend_count = 0;
-static pthread_mutex_t suspend_count_lock = PTHREAD_MUTEX_INITIALIZER;
-static sem_t suspend_ack_sem;
-static sigset_t suspend_handler_mask;
-
-// Signal handler for suspended thread
-static void sigsuspend_handler(int /*sig*/)
-{
-	sem_post(&suspend_ack_sem);
-	sigsuspend(&suspend_handler_mask);
-}
-
-// Signal handler for resumed thread
-static void sigresume_handler(int /*sig*/)
-{
-	/* simply trigger a signal to stop clock_nanosleep() */
-}
+/*
+ *  MacPhoenix: the timer thread waits on a condition variable (with
+ *  wakeup_time_lock) until wakeup_time, instead of sleeping in
+ *  clock_nanosleep and being suspended and resumed with real-time signals
+ *  (SheepShaver's SIGRTMIN+6/7). The CPU thread already holds
+ *  wakeup_time_lock while it changes the Time Manager queue, which is all
+ *  the suspension did; "resume" wakes the thread to recompute its
+ *  deadline. Signals to a thread blocked in clock_nanosleep reach it late
+ *  under qemu-user, so every InsTime/PrimeTime/RmvTime there waited out the
+ *  thread's sleep (two Time Manager calls a second: the PPC boot crawled).
+ */
+static pthread_cond_t wakeup_time_cond = PTHREAD_COND_INITIALIZER;
+static const int suspend_count = 0;	// asserted by the callers below
 
 // Initialize timer thread
 static bool timer_thread_init(void)
 {
-	// Install suspend signal handler
-	sigemptyset(&sigsuspend_action.sa_mask);
-	sigaddset(&sigsuspend_action.sa_mask, SIGRESUME);
-	sigsuspend_action.sa_handler = sigsuspend_handler;
-	sigsuspend_action.sa_flags = SA_RESTART;
-#ifdef HAVE_SIGNAL_SA_RESTORER
-	sigsuspend_action.sa_restorer = NULL;
-#endif
-	if (sigaction(SIGSUSPEND, &sigsuspend_action, NULL) < 0)
-		return false;
-
-	// Install resume signal handler
-	sigemptyset(&sigresume_action.sa_mask);
-	sigresume_action.sa_handler = sigresume_handler;
-	sigresume_action.sa_flags = SA_RESTART;
-#ifdef HAVE_SIGNAL_SA_RESTORER
-	sigresume_action.sa_restorer = NULL;
-#endif
-	if (sigaction(SIGRESUME, &sigresume_action, NULL) < 0)
-		return false;
-
-	// Initialize semaphore
-	if (sem_init(&suspend_ack_sem, 0, 0) < 0)
-		return false;
-
-	// Initialize suspend_handler_mask, it excludes SIGRESUME
-	if (sigfillset(&suspend_handler_mask) != 0)
-		return false;
-	if (sigdelset(&suspend_handler_mask, SIGRESUME) != 0)
-		return false;
-
-	// Create thread in running state
-	suspend_count = 0;
+	timer_thread_cancel = false;
 	return (pthread_create(&timer_thread, NULL, timer_func, NULL) == 0);
 }
 
 // Kill timer thread
 static void timer_thread_kill(void)
 {
+	pthread_mutex_lock(&wakeup_time_lock);
 	timer_thread_cancel = true;
-#ifdef HAVE_PTHREAD_CANCEL
-	pthread_cancel(timer_thread);
-#endif
+	pthread_cond_signal(&wakeup_time_cond);
+	pthread_mutex_unlock(&wakeup_time_lock);
 	pthread_join(timer_thread, NULL);
 }
 
-// Suspend timer thread
+// Called with wakeup_time_lock held: the timer thread cannot act until it
+// is released.
 static void timer_thread_suspend(void)
 {
-	pthread_mutex_lock(&suspend_count_lock);
-	if (suspend_count == 0) {
-		suspend_count ++;
-		if (pthread_kill(timer_thread, SIGSUSPEND) == 0)
-			sem_wait(&suspend_ack_sem);
-	}
-	pthread_mutex_unlock(&suspend_count_lock);
 }
 
-// Resume timer thread
+// Called after releasing wakeup_time_lock: the deadline may have moved.
 static void timer_thread_resume(void)
 {
-	pthread_mutex_lock(&suspend_count_lock);
-	assert(suspend_count > 0);
-	if (suspend_count == 1) {
-		suspend_count = 0;
-		pthread_kill(timer_thread, SIGRESUME);
-	}
-	pthread_mutex_unlock(&suspend_count_lock);
+	pthread_cond_signal(&wakeup_time_cond);
 }
 #endif
 
@@ -588,28 +535,36 @@ static void *timer_func(void *arg)
 #ifdef PRECISE_TIMING_POSIX
 static void *timer_func(void * /*arg*/)
 {
+	pthread_mutex_lock(&wakeup_time_lock);
 	while (!timer_thread_cancel) {
 		// --deterministic: Time Manager wakeups are checked on the CPU
 		// thread against the virtual clock (TimerVirtualPoll).
 		if (vclock_enabled) {
+			pthread_mutex_unlock(&wakeup_time_lock);
 			usleep(10000);
+			pthread_mutex_lock(&wakeup_time_lock);
 			continue;
 		}
-		// Wait until time specified by wakeup_time
-		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &wakeup_time, NULL);
+		// Wait until wakeup_time (CLOCK_REALTIME, as timer_current_time),
+		// or until the queue changes or the thread is told to quit.
+		tm_time_t deadline = wakeup_time;
+		pthread_cond_timedwait(&wakeup_time_cond, &wakeup_time_lock, &deadline);
+		if (timer_thread_cancel)
+			break;
 
 		tm_time_t system_time;
 		timer_current_time(system_time);
 		if (timer_cmp_time(wakeup_time, system_time) < 0) {
 
 			// Timer expired, trigger interrupt
-			pthread_mutex_lock(&wakeup_time_lock);
 			wakeup_time = wakeup_time_max;
 			pthread_mutex_unlock(&wakeup_time_lock);
 			SetInterruptFlag(INTFLAG_TIMER);
 			TriggerInterrupt();
+			pthread_mutex_lock(&wakeup_time_lock);
 		}
 	}
+	pthread_mutex_unlock(&wakeup_time_lock);
 	return NULL;
 }
 #endif
