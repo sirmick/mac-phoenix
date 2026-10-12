@@ -479,7 +479,9 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
         }
         else
         {
-            if(!readDesktopDB(db))
+            if(readDesktopDB(db))
+                db.existed = true; /* Finder keeps it; without this it rebuilt the volume's desktop every boot */
+            else
                 addApplications(db);
             /* MacPhoenix: applications whose icons the database lacks
                (a database Finder has not rebuilt since they arrived) get
