@@ -494,7 +494,9 @@ void Executor::C_DrawJust(Ptr textbufp, int16_t length, int16_t slop)
  * more letters will do), numbers in 'itl0's date order, any of / - . , and
  * spaces between. Times as h:mm[:ss] with an optional AM/PM ('itl0's
  * strings or am/pm). The results go into the LongDateRec; the status bits
- * are Apple's (fatal ones have the high bit). */
+ * are Apple's (fatal ones have the high bit). Each reports the text on
+ * either side of its part as leftOverChars: AppleScript runs both over a
+ * date literal and takes a time with nothing left over as today's. */
 namespace
 {
 enum
@@ -611,6 +613,92 @@ int full_year(int year, int digits)
         y += 100;
     return y;
 }
+
+/* The 'itl0' AM and PM strings, lower case; am and pm if it has none. */
+void meridian_strings(std::string &morn, std::string &eve)
+{
+    morn = "am";
+    eve = "pm";
+    if(Handle h = GetIntlResource(0))
+    {
+        Intl0Ptr i0 = (Intl0Ptr)*h;
+        std::string m((const char *)&i0->mornStr, 4), e((const char *)&i0->eveStr, 4);
+        morn.clear();
+        eve.clear();
+        for(char c : m)
+            if(c && c != ' ')
+                morn += (char)tolower((unsigned char)c);
+        for(char c : e)
+            if(c && c != ' ')
+                eve += (char)tolower((unsigned char)c);
+        if(morn.empty())
+            morn = "am";
+        if(eve.empty())
+            eve = "pm";
+    }
+}
+
+/* The time in the tokens, h:mm[:ss] with an optional AM/PM: token indices
+ * [first, last] and the hour, minute and second. False if there is none. */
+struct TimeSpan
+{
+    size_t first, last;
+    int hour, minute, second;
+};
+
+bool find_time(const std::vector<DateToken> &tokens, TimeSpan &ts)
+{
+    for(size_t i = 0; i + 2 < tokens.size(); i++)
+    {
+        if(tokens[i].kind != DateToken::Number || tokens[i + 1].kind != DateToken::Colon
+           || tokens[i + 2].kind != DateToken::Number)
+            continue;
+        ts.first = i;
+        ts.last = i + 2;
+        ts.hour = tokens[i].value;
+        ts.minute = tokens[i + 2].value;
+        ts.second = 0;
+        size_t next = i + 3;
+        if(next + 1 < tokens.size() && tokens[next].kind == DateToken::Colon
+           && tokens[next + 1].kind == DateToken::Number)
+        {
+            ts.second = tokens[next + 1].value;
+            ts.last = next + 1;
+            next += 2;
+        }
+        if(next < tokens.size() && tokens[next].kind == DateToken::Word)
+        {
+            std::string morn, eve;
+            meridian_strings(morn, eve);
+            const std::string &w = tokens[next].word;
+            if(w == morn || w == "am")
+            {
+                if(ts.hour == 12)
+                    ts.hour = 0;
+                ts.last = next;
+            }
+            else if(w == eve || w == "pm")
+            {
+                if(ts.hour < 12)
+                    ts.hour += 12;
+                ts.last = next;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+/* Apple's leftOverChars: the text has something besides the part parsed
+ * (offsets [from, to)) and the separators around it, on either side. */
+int left_over(const char *text, int length, int from, int to)
+{
+    for(int i = 0; i < length; i++)
+        if(i < from || i >= to)
+            if(!isspace((unsigned char)text[i]) && text[i] != ',')
+                return leftOverChars;
+    return 0;
+}
 }
 
 String2DateStatus Executor::C_StringToDate(
@@ -619,33 +707,39 @@ String2DateStatus Executor::C_StringToDate(
 {
     const char *text = (const char *)textp;
     std::vector<DateToken> tokens = date_tokens(text, length);
-    int month = 0, used = 0;
+    /* A time anywhere in the text is skipped over, not the date's. */
+    TimeSpan ts;
+    bool have_time = find_time(tokens, ts);
+    int month = 0, used = 0, from = -1;
     std::vector<const DateToken *> numbers;
-    for(const DateToken &t : tokens)
+    for(size_t i = 0; i < tokens.size(); i++)
     {
+        const DateToken &t = tokens[i];
+        if(have_time && i >= ts.first && i <= ts.last)
+        {
+            if(from >= 0 && i == ts.first)
+                break; /* the date ends at the time */
+            continue;
+        }
         if(t.kind == DateToken::Colon)
-            break; /* a time follows */
+            break;
         if(t.kind == DateToken::Number)
         {
-            /* A number right before a colon is the time's hour. */
-            if(&t + 1 < tokens.data() + tokens.size() && (&t + 1)->kind == DateToken::Colon)
-                break;
             if(numbers.size() == 3)
                 break;
             numbers.push_back(&t);
-            used = t.end;
         }
         else if(int m = month_named(t.word))
         {
             if(month)
                 break;
             month = m;
-            used = t.end;
         }
-        else if(weekday_named(t.word))
-            used = t.end;
-        else
-            break; /* am, pm or something else: not the date */
+        else if(!weekday_named(t.word))
+            break; /* something else: not the date */
+        if(from < 0)
+            from = t.start;
+        used = t.end;
     }
 
     int day = 0, year = 0, year_digits = 4;
@@ -705,14 +799,7 @@ String2DateStatus Executor::C_StringToDate(
     date_time->year = year;
     date_time->month = month;
     date_time->day = day;
-    int status = longDateFound;
-    for(int i = used; i < length; i++)
-        if(!isspace((unsigned char)text[i]) && text[i] != ',')
-        {
-            status |= leftOverChars;
-            break;
-        }
-    return (String2DateStatus)status;
+    return (String2DateStatus)(longDateFound | left_over(text, length, from, used));
 }
 
 String2DateStatus Executor::C_StringToTime(
@@ -722,72 +809,22 @@ String2DateStatus Executor::C_StringToTime(
     const char *text = (const char *)textp;
     LongDatePtr date_time = (LongDatePtr)datetimep; /* a LongDateRec, as for StringToDate */
     std::vector<DateToken> tokens = date_tokens(text, len);
-    for(size_t i = 0; i + 2 < tokens.size(); i++)
+    TimeSpan ts;
+    if(!find_time(tokens, ts))
     {
-        if(tokens[i].kind != DateToken::Number || tokens[i + 1].kind != DateToken::Colon
-           || tokens[i + 2].kind != DateToken::Number)
-            continue;
-        int hour = tokens[i].value, minute = tokens[i + 2].value, second = 0;
-        size_t next = i + 3;
-        int used = tokens[i + 2].end;
-        if(next + 1 < tokens.size() && tokens[next].kind == DateToken::Colon
-           && tokens[next + 1].kind == DateToken::Number)
-        {
-            second = tokens[next + 1].value;
-            used = tokens[next + 1].end;
-            next += 2;
-        }
-        if(next < tokens.size() && tokens[next].kind == DateToken::Word)
-        {
-            std::string w = tokens[next].word;
-            std::string morn = "am", eve = "pm";
-            if(Handle h = GetIntlResource(0))
-            {
-                Intl0Ptr i0 = (Intl0Ptr)*h;
-                std::string m((const char *)&i0->mornStr, 4), e((const char *)&i0->eveStr, 4);
-                morn.clear();
-                eve.clear();
-                for(char c : m)
-                    if(c && c != ' ')
-                        morn += (char)tolower((unsigned char)c);
-                for(char c : e)
-                    if(c && c != ' ')
-                        eve += (char)tolower((unsigned char)c);
-                if(morn.empty())
-                    morn = "am";
-                if(eve.empty())
-                    eve = "pm";
-            }
-            if(w == morn || w == "am")
-            {
-                if(hour == 12)
-                    hour = 0;
-                used = tokens[next].end;
-            }
-            else if(w == eve || w == "pm")
-            {
-                if(hour < 12)
-                    hour += 12;
-                used = tokens[next].end;
-            }
-        }
-        *lenusedp = used;
-        if(hour > 23 || minute > 59 || second > 59)
-            return (String2DateStatus)dateTimeInvalid;
-        date_time->hour = hour;
-        date_time->minute = minute;
-        date_time->second = second;
-        int status = longDateFound;
-        for(int k = used; k < len; k++)
-            if(!isspace((unsigned char)text[k]))
-            {
-                status |= leftOverChars;
-                break;
-            }
-        return (String2DateStatus)status;
+        *lenusedp = 0;
+        return (String2DateStatus)dateTimeNotFound;
     }
-    *lenusedp = 0;
-    return (String2DateStatus)dateTimeNotFound;
+    int used = tokens[ts.last].end;
+    *lenusedp = used;
+    if(ts.hour > 23 || ts.minute > 59 || ts.second > 59)
+        return (String2DateStatus)dateTimeInvalid;
+    date_time->hour = ts.hour;
+    date_time->minute = ts.minute;
+    date_time->second = ts.second;
+    /* A date before or after the time is left over for StringToDate;
+     * AppleScript takes a time with nothing left over as today's. */
+    return (String2DateStatus)(longDateFound | left_over(text, len, tokens[ts.first].start, used));
 }
 
 StyledLineBreakCode Executor::C_StyledLineBreak(

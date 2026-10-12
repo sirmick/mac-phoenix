@@ -91,10 +91,38 @@ TEST_F(DateTime, DateThenTime)
     EXPECT_TRUE(status & 2); // leftOverChars: the time
     EXPECT_EQ(2026, rec.year);
     EXPECT_LT(used, (int32_t)strlen(text));
-    EXPECT_EQ(0, time(text) & 0x8000);
+    status = time(text);
+    EXPECT_EQ(0, status & 0x8000);
+    EXPECT_TRUE(status & 2); // leftOverChars: the date before the time
     EXPECT_EQ(16, rec.hour);
     EXPECT_EQ(11, rec.minute);
     EXPECT_EQ(52, rec.second);
+}
+
+/* AppleScript parses a date literal with StringToDate and StringToTime
+   over the whole text, each into its own record, and takes a time with
+   nothing left over as today's; so each must report the other's part. */
+TEST_F(DateTime, TimeAlone)
+{
+    int status = time("4:11:52 PM");
+    EXPECT_EQ(1, status & 0xFFFF); // longDateFound, nothing left over
+    EXPECT_EQ(16, rec.hour);
+    EXPECT_EQ(0x8400, date("4:11:52 PM") & 0xFFFF);
+}
+
+TEST_F(DateTime, TimeThenDate)
+{
+    const char *text = "4:11 PM October 9, 2026";
+    int status = date(text);
+    EXPECT_TRUE(status & 1);
+    EXPECT_TRUE(status & 2);
+    EXPECT_EQ(2026, rec.year);
+    EXPECT_EQ(10, rec.month);
+    EXPECT_EQ(9, rec.day);
+    status = time(text);
+    EXPECT_TRUE(status & 2);
+    EXPECT_EQ(16, rec.hour);
+    EXPECT_EQ(11, rec.minute);
 }
 
 TEST_F(DateTime, TwelveOClock)
