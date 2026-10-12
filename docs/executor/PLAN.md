@@ -367,6 +367,9 @@ Tools carried alongside:
 Kept small so upstream fixes can be merged by hand:
 
 * `mman/mman.cpp`: guest RAM via `syn68k_map_guest_ram()`; window setup removed.
+* `mman/mman.cpp`: the System heap grows on demand into a reserve between it
+  and the Process Manager heap (`ROMlib_grow_syszone`, the zone's grow-zone
+  procedure; `extensions.cpp` grows it by a `sysz` the free space lacks).
 * `vdriver/vdriver.cpp`: framebuffer via `syn68k_alloc_low()`.
 * `base/logging.cpp`: pointer validity via `syn68k_is_guest_mapped()`.
 * `main.cpp`: entry renamed `executor_main_entry`, low-stack emulator

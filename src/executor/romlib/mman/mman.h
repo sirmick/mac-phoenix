@@ -30,6 +30,11 @@ extern void print_mem_full_message(void);
 #define MAX_ZONE_SIZE (2047L * 1024 * 1024)
 
 extern int ROMlib_applzone_size, ROMlib_syszone_size, ROMlib_stack_size;
+/* MacPhoenix: System heap growth into the reserve above it (mman.cpp). */
+extern int ROMlib_sysheap_reserve;
+int32_t ROMlib_grow_syszone(int32_t need);  /* bytes added, 0 if it cannot */
+int32_t ROMlib_syszone_reserve_left();
+void ROMlib_install_syszone_growzone();     /* once the CPU can run callbacks */
 
 extern Handle _NewHandle_copy_ptr_flags(Size size, const void *data_to_copy,
                                         bool sys_p);

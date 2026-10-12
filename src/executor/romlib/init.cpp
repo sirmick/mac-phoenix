@@ -290,6 +290,9 @@ void Executor::InitLowMem()
     InitPerProcessLowMem();
 
     LM(TheZone) = LM(ApplZone);
+
+    /* MacPhoenix: the System heap grows on demand (mman.cpp). */
+    ROMlib_install_syszone_growzone();
 }
 
 

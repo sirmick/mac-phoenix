@@ -176,8 +176,13 @@ void run_file(INTEGER vref, LONGINT dirid, const Item &it)
         int32_t want = *(GUEST<int32_t> *)*sysz;
         int32_t have = FreeMemSys();
         if(have < want)
-            fprintf(stderr, "[Executor] extension %s: asks %d bytes of System heap, %d free\n",
-                    to_string(it.name).c_str(), want, have);
+        {
+            /* The loader grows the System heap by what the request lacks. */
+            ROMlib_grow_syszone(want - have);
+            if(FreeMemSys() < want)
+                fprintf(stderr, "[Executor] extension %s: asks %d bytes of System heap, %d free\n",
+                        to_string(it.name).c_str(), want, FreeMemSys());
+        }
     }
 
     /* 'INIT' resources by ID. */

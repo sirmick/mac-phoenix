@@ -40,6 +40,16 @@ namespace Executor
 
 int ROMlib_applzone_size = DEFAULT_APPLZONE_SIZE;
 int ROMlib_syszone_size = DEFAULT_SYSZONE_SIZE;
+/* MacPhoenix: System heap growth. 7.5.5's System heap grows on demand:
+   the extension loader grows it by each file's 'sysz' and, once the
+   Process Manager is up, its grow-zone procedure takes free space above
+   it. Executor's Process Manager heap begins right above the System heap
+   and holds blocks before the extensions load, so instead a reserve of
+   ROMlib_sysheap_reserve bytes, cut from the Process Manager heap, lies
+   between the two; the System heap extends into it (ROMlib_grow_syszone:
+   the loader's 'sysz' and the zone's grow-zone procedure). */
+int ROMlib_sysheap_reserve;
+static Ptr sysheap_limit; /* InitZone's limitPtr for the grown heap */
 int ROMlib_stack_size = DEFAULT_STACK_SIZE;
 
 /* these two variables define, in ROMlib space, the beginning of mac-memory
@@ -329,6 +339,49 @@ canonicalize_memory_sizes(void)
     pin_and_align(&ROMlib_stack_size, MIN_STACK_SIZE, MAX_STACK_SIZE);
 }
 
+int32_t ROMlib_grow_syszone(int32_t need)
+{
+    THz sys = LM(SysZone);
+    block_header_t *last = ZONE_BK_LIM(sys); /* the trailer block */
+    Ptr end = (Ptr)last + MIN_BLOCK_SIZE;
+    int32_t avail = (sysheap_limit - 8) - end; /* InitZone keeps 8 bytes past the trailer */
+    if(need < 1)
+        need = 1;
+    int32_t delta = (need + (int32_t)HEADER_SIZE + 0xFFFF) & ~0xFFFF; /* 64K steps */
+    if(delta > avail)
+        delta = avail & ~3;
+    if(delta < need + (int32_t)HEADER_SIZE || delta < MIN_BLOCK_SIZE)
+        return 0;
+    block_header_t *newlast = (block_header_t *)((char *)last + delta);
+    /* The old trailer becomes a free block of the growth; the allocator
+       merges it with a free block before it as it scans (ROMlib_coalesce). */
+    mm_set_block_fields_offset(last, FREE_BLOCK_STATE, FREE, 0, delta, 0);
+    mm_set_block_fields_offset(newlast, FREE_BLOCK_STATE, FREE, 0, MIN_BLOCK_SIZE, 0);
+    sys->bkLim = (Ptr)newlast; /* ZONE_BK_LIM is a read-only cast */
+    ZONE_ZCB_FREE(sys) = ZONE_ZCB_FREE(sys) + delta;
+    return delta;
+}
+
+int32_t ROMlib_syszone_reserve_left()
+{
+    return (sysheap_limit - 8) - ((Ptr)ZONE_BK_LIM(LM(SysZone)) + MIN_BLOCK_SIZE);
+}
+
+/* pascal long GrowZone(Size cbNeeded): the System heap's grow-zone
+   procedure, so an allocation the heap cannot satisfy grows it. */
+static syn68k_addr_t syszone_grow_stub(syn68k_addr_t, void *)
+{
+    syn68k_addr_t ret = POPADDR();
+    int32_t need = POPUL();
+    WRITEUL(EM_A7, ROMlib_grow_syszone(need));
+    return ret;
+}
+
+void ROMlib_install_syszone_growzone()
+{
+    LM(SysZone)->gzProc = (GrowZoneUPP)SYN68K_TO_US(callback_install(syszone_grow_stub, nullptr));
+}
+
 void InitApplZone(void)
 {
 /* LM(ApplZone) must already be set before getting here */
@@ -371,7 +424,7 @@ void ROMlib_InitZones()
     /* MacPhoenix: this is the Process Manager heap, from the System heap
        up to BufPtr.  It serves as ApplZone until a launch lays out the
        application's partition inside it (process_layout_partition). */
-    LM(ApplZone) = (THz)((Ptr)LM(SysZone) + ROMlib_syszone_size);
+    LM(ApplZone) = (THz)((Ptr)LM(SysZone) + ROMlib_syszone_size + ROMlib_sysheap_reserve);
 
     Executor::InitApplZone();
 
@@ -399,12 +452,17 @@ void InitMemory(void *thingOnStack)
 {
     canonicalize_memory_sizes();
 
+    /* The System heap's growth reserve comes out of the Process Manager
+       heap: 4 MB, or an eighth of a small one. */
+    ROMlib_sysheap_reserve = std::min(4 * 1024 * 1024, ROMlib_applzone_size / 8) & ~8191;
+    ROMlib_applzone_size -= ROMlib_sysheap_reserve;
+
     /* Determine total allocated memory.  Round up to next 8K
         * since that's the page size we pretend to have.
         */
 
     size_t total_allocated_memory =
-        ((ROMlib_syszone_size + ROMlib_applzone_size + ROMlib_stack_size)
+        ((ROMlib_syszone_size + ROMlib_sysheap_reserve + ROMlib_applzone_size + ROMlib_stack_size)
             + 8191) & ~8191;
         ;
     
@@ -419,8 +477,9 @@ void InitMemory(void *thingOnStack)
 
     memset(memory, ~0, lastlowglobal.address);
     LM(CurStackBase) = LM(MemTop) = memory + total_allocated_memory;
-    LM(BufPtr) = memory + ROMlib_syszone_size + ROMlib_applzone_size;
+    LM(BufPtr) = memory + ROMlib_syszone_size + ROMlib_sysheap_reserve + ROMlib_applzone_size;
     LM(SysZone) = (THz)(memory + lastlowglobal.address);
+    sysheap_limit = memory + ROMlib_syszone_size + ROMlib_sysheap_reserve;
 
     ROMlib_syszone = (uintptr_t)LM(SysZone);
     ROMlib_memtop = (uintptr_t)LM(MemTop);

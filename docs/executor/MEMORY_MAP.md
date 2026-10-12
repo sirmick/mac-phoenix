@@ -20,6 +20,7 @@ $00000800  more low-memory globals
 $00000E00  Toolbox trap table       1024 × 4 bytes
 $00001E00  more low-memory globals / ROM-specific vectors
 $00002000  System heap              (SysZone = RAMBase; verified on 7.5.5)
+           growth reserve           Executor only: 4 MB the System heap extends into (mman.cpp)
            Process Manager heap     the big zone each app's partition is cut from
              └ app partition: [app heap ↑ … ↓ stack][A5 world]
 BufPtr →   boot-time allocations from the top (MacsBug, sound buffers, boot globals)
