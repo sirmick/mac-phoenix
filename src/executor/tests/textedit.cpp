@@ -113,3 +113,49 @@ TEST_F(TextEditWrap, BalloonSizingLoop)
     ClosePort(&port);
     SetPort(window);
 }
+
+/* MacPhoenix: TEGetHiliteRgn (TEDispatch $F, which 7.5.5's Drag Manager
+   patch adds): the selection's rectangles as TextEdit hilites them, in the
+   port's coordinates; empty without a selection. */
+TEST_F(TextEditWrap, HiliteRegion)
+{
+    Rect r = { 10, 10, 100, 300 };
+    te = TENew(&r, &r);
+    const char *text = "hello hello\rsecond line";
+    TESetText((Ptr)text, strlen(text), te);
+    int lineHeight = (*te)->lineHeight;
+    ASSERT_GT(lineHeight, 0);
+    ASSERT_EQ(2, (*te)->nLines);
+
+    RgnHandle rgn = NewRgn();
+    EXPECT_EQ(noErr, TEGetHiliteRgn(rgn, te));
+    EXPECT_TRUE(EmptyRgn(rgn));
+
+    /* The first word: one rectangle, the word's width on the first line. */
+    TESetSelect(0, 5, te);
+    EXPECT_EQ(noErr, TEGetHiliteRgn(rgn, te));
+    Rect box = (*rgn)->rgnBBox;
+    EXPECT_EQ(10, box.top);
+    EXPECT_EQ(10 + lineHeight, box.bottom);
+    EXPECT_EQ(10, box.left);
+    EXPECT_EQ(10 + TextWidth((Ptr)text, 0, 5), box.right);
+    Point in = { 15, 12 }, past = { 15, 200 }, below = { 10 + lineHeight + 2, 12 };
+    EXPECT_TRUE(PtInRgn(in, rgn));
+    EXPECT_FALSE(PtInRgn(past, rgn));
+    EXPECT_FALSE(PtInRgn(below, rgn));
+
+    /* Across the lines: the first line to its end, the second to the
+       selection's end. */
+    TESetSelect(6, 18, te);
+    EXPECT_EQ(noErr, TEGetHiliteRgn(rgn, te));
+    box = (*rgn)->rgnBBox;
+    EXPECT_EQ(10, box.top);
+    EXPECT_EQ(10 + 2 * lineHeight, box.bottom);
+    Point line1_right = { 15, 290 }, line2_left = { 10 + lineHeight + 2, 12 }, line2_right = { 10 + lineHeight + 2, 290 };
+    EXPECT_TRUE(PtInRgn(line1_right, rgn));
+    EXPECT_TRUE(PtInRgn(line2_left, rgn));
+    EXPECT_FALSE(PtInRgn(line2_right, rgn));
+    Point line1_before = { 15, 12 }; /* before "hello " ends: not selected */
+    EXPECT_FALSE(PtInRgn(line1_before, rgn));
+    DisposeRgn(rgn);
+}

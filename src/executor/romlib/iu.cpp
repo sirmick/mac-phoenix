@@ -732,6 +732,11 @@ void Executor::C_GetIntlResourceTable(ScriptCode script, INTEGER tablecode,
         default:
             return;
     }
+    /* smSystemScript and smCurrentScript: the system's (Roman here). The
+       Drag Manager asks for the system script's number parts to name a
+       clipping file. */
+    if(script == smSystemScript || script == -2 /* smCurrentScript */)
+        script = smRoman;
     INTEGER id = 0;
     if(Handle itlb = GetResource("itlb"_4, script))
         id = *(GUEST<INTEGER> *)(*itlb + 8);

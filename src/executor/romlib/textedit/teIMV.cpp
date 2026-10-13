@@ -619,6 +619,71 @@ LONGINT Executor::C_TEGetPoint(INTEGER offset, TEHandle teh)
     return ((int32_t)(p.v + ascent) << 16) + (int32_t)p.h;
 }
 
+/* MacPhoenix: TEDispatch $F, which 7.5.5's Drag Manager patch adds. The
+   selection's rectangles are te_hilite's (teInsert.cpp): the first line
+   from the selection start, whole lines between, the last line to the
+   selection end; the union, clipped to the view rectangle. */
+OSErr Executor::C_TEGetHiliteRgn(RgnHandle region, TEHandle teh)
+{
+    if(!region || !teh)
+        return paramErr;
+    SetEmptyRgn(region);
+    int16_t start = TE_SEL_START(teh), end = TE_SEL_END(teh);
+    if(start >= end)
+        return noErr;
+
+    Point start_pt, end_pt;
+    TE_CHAR_TO_POINT(teh, start, &start_pt);
+    TE_CHAR_TO_POINT(teh, end, &end_pt);
+    HLockGuard guard(teh);
+    TEPtr tep = *teh;
+    int16_t start_lineno = TEP_CHAR_TO_LINENO(tep, start);
+    int16_t end_lineno = TEP_CHAR_TO_LINENO(tep, end);
+    GUEST<int16_t> *line_starts = TEP_LINE_STARTS(tep);
+    int16_t dest_left = TEP_DEST_RECT(tep).left, dest_right = TEP_DEST_RECT(tep).right;
+    int16_t length = TEP_LENGTH(tep);
+    Handle hText = TEP_HTEXT(tep);
+    bool ends_in_return = length > 0 && hText && *hText && (*hText)[length - 1] == '\r';
+
+    RgnHandle piece = NewRgn();
+    Rect r;
+    int16_t left = start == LINE_START(line_starts, start_lineno) ? dest_left : start_pt.h;
+    int16_t right = (start_lineno != end_lineno || end == length) ? dest_right : end_pt.h;
+    int16_t top = start_pt.v;
+    int16_t bottom = top + TEP_HEIGHT_FOR_LINE(tep, start_lineno);
+    SetRect(&r, left, top, right, bottom);
+    RectRgn(region, &r);
+
+    if(start_lineno != end_lineno)
+    {
+        top = bottom;
+        for(int16_t lineno = start_lineno + 1;
+            (end == length && ends_in_return ? lineno <= end_lineno : lineno < end_lineno);
+            lineno++)
+            bottom += TEP_HEIGHT_FOR_LINE(tep, lineno);
+        if(bottom != top)
+        {
+            SetRect(&r, dest_left, top, dest_right, bottom);
+            RectRgn(piece, &r);
+            UnionRgn(region, piece, region);
+        }
+        if(end != LINE_START(line_starts, end_lineno))
+        {
+            top = end_pt.v;
+            right = end == length ? dest_right : end_pt.h;
+            bottom = top + TEP_HEIGHT_FOR_LINE(tep, end_lineno);
+            SetRect(&r, dest_left, top, right, bottom);
+            RectRgn(piece, &r);
+            UnionRgn(region, piece, region);
+        }
+    }
+    Rect view = TEP_VIEW_RECT(tep);
+    RectRgn(piece, &view);
+    SectRgn(region, piece, region);
+    DisposeRgn(piece);
+    return noErr;
+}
+
 int32_t Executor::C_TEGetHeight(LONGINT endLine, LONGINT startLine,
                                 TEHandle teh)
 {

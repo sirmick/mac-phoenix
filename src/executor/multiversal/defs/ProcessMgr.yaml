@@ -415,7 +415,110 @@
     executor: C_
     comment: >
       The inline pushes a long -1 after the PSN pointer (Processes.h:
-      moveq #-1,d0; move.l d0,-(sp)); dummy is that long.
+      moveq #-1,d0; move.l d0,-(sp)); dummy is that long. Apple's (scod
+      -16463, RAM $29E94 on the reference boot) takes anything else as a
+      layer or window and answers the process owning it (procNotFound if
+      none): the Drag Manager finds a drop target's process that way.
+
+# ####
+
+- function:
+    name: GetLayerAtPoint
+    return: WindowPtr
+    args:
+      - name: pt
+        type: Point
+    dispatcher: OSDispatch
+    selector: 0x000F
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $2874A). The layer whose
+      window is under the point, searched from the root (FindWindowInLayer
+      with the root current), nil if none. The Drag Manager's
+      FinderTrackDrag starts from it; the System's GetNextEvent patch
+      routes clicks with it.
+
+# ####
+
+- function:
+    name: HoldProcessSwitching
+    dispatcher: OSDispatch
+    selector: 0x0019
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $2A386 counts up a word
+      in its globals, $1A counts it down). No parameters, no result. The
+      System's StillDown and WaitMouseUp patches bracket every poll with
+      the pair, and the Drag Manager its tracking loop: no process switch
+      while held.
+
+# ####
+
+- function:
+    name: ReleaseProcessSwitching
+    dispatcher: OSDispatch
+    selector: 0x001A
+    executor: C_
+
+# ####
+
+- function:
+    name: CallProcessRoutine
+    return: OSErr
+    args:
+      - name: psn
+        type: ProcessSerialNumber*
+      - name: routine
+        type: ProcPtr
+      - name: params
+        type: int32_t
+      - name: paramSize
+        type: int16_t
+    dispatcher: OSDispatch
+    selector: 0x0053
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $2A78C, the call itself
+      at $2B582). Runs a Pascal routine in another process: its world (A5,
+      low memory, stack) switched in, paramSize bytes of parameters pushed
+      as a stack image, the routine's word result returned. With paramSize
+      of 4 or less, params is the image itself (a long pushed by value);
+      otherwise it points at the image. procNotFound for the current
+      process. The Drag Manager runs a drop target's tracking and receive
+      handlers through it.
+
+# ####
+
+- function:
+    name: GetDesktopProcess
+    return: OSErr
+    args:
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x0056
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $2A2E0). The process
+      that took the desktop layer (TakeDesktopLayer: Finder), -603 if
+      none. The Drag Manager's drop target for a point on the desktop.
+
+# ####
+
+- function:
+    name: GetWindowProcess
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x0062
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $28BB0). The process
+      owning a window, procNotFound if none.
 
 # ####
 

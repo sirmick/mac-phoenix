@@ -40,6 +40,8 @@ INTEGER Executor::C_FindWindow(Point p, GUEST<WindowPtr> *wpp)
        layer's windows, front first. */
     if(ROMlib_root_layer_current())
         wp = ROMlib_layers_window_at(p);
+    else if(ROMlib_layers_foreign_current())
+        wp = ROMlib_layers_foreign_window_at(p);
     else
         for(wp = LM(WindowList); wp; wp = WINDOW_NEXT_WINDOW(wp))
             if(WINDOW_VISIBLE(wp) && PtInRgn(p, WINDOW_STRUCT_REGION(wp)))

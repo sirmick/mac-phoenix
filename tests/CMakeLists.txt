@@ -281,6 +281,16 @@ set_tests_properties(keyboard_guest_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+add_test(
+  NAME drag_executor
+  COMMAND bash ${TEST_DIR}/test_drag_executor.sh --timeout 90 --port 18124
+)
+set_tests_properties(drag_executor PROPERTIES
+  TIMEOUT 130
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # --- Executor variants: Apple's 7.5.5 System on Executor's Toolbox, no ROM.
 # Runs on the System Folder of the test copy of macos-7.5.5.img (extracted
 # into <storage>/executor-systems on first use). The guest suite's network
@@ -376,6 +386,16 @@ add_test(
 set_tests_properties(keyboard_guest_executor_mame68k PROPERTIES
   TIMEOUT 130
   LABELS "guest;mame"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME drag_executor_mame68k
+  COMMAND bash ${TEST_DIR}/test_drag_executor.sh --core mame-68k --timeout 90 --port 18160
+)
+set_tests_properties(drag_executor_mame68k PROPERTIES
+  TIMEOUT 130
+  LABELS "guest;mame;executor"
   SKIP_RETURN_CODE 77
 )
 

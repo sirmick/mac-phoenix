@@ -1,0 +1,41 @@
+# TranslationMgr.yaml — the Translation Manager's dispatcher (Macintosh
+# Easy Open), as far as Executor needs it.
+#
+# MacPhoenix. The Translation Manager is Easy Open's and is not loaded
+# (docs/executor/PLAN.md); without it the trap is Unimplemented, which
+# Executor treats as fatal. Apple's Drag Manager (System 'proc' -16513)
+# asks the dispatcher whether a flavor can be translated ('fmts', and a
+# flavor's data) and goes on without when the answer is an error, so one
+# selector answers "no translation" here. The name and the parameters'
+# meaning are guesses from the call sites.
+
+- dispatcher:
+    name: TranslationDispatch
+    trap: 0xABFC
+    selector-location: D0W
+
+# ####
+
+- function:
+    name: GetFlavorTranslation
+    return: OSErr
+    args:
+      - name: kind
+        type: int16_t
+      - name: data
+        type: Handle
+      - name: theType
+        type: OSType
+      - name: result
+        type: Ptr
+      - name: proc
+        type: ProcPtr
+    dispatcher: TranslationDispatch
+    selector: 0x000E
+    executor: C_
+    comment: |
+      Selector $E, 18 bytes of parameters, word result. kind is -16555
+      ('proc' -16555 is Easy Open's) at both of the Drag Manager's call
+      sites ('proc' -16513 +$EC2 and +$2CF6, the latter with 'fmts').
+      Answers noTranslationPathErr (-3025, our reading of the Translation
+      Manager's errors), which the caller takes as "no translation".

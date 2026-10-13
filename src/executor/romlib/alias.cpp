@@ -1065,55 +1065,13 @@ OSErr Executor::C_NewAliasMinimalFromFullPath(
     return retval;
 }
 
+/* MacPhoenix: the same record as NewAlias, without a relative part. The
+   old one looked the target up with PBHGetFInfo, which fails for a folder
+   (fnfErr): Finder's drop location for the desktop is an alias of the
+   Desktop Folder, and the Drag Manager resolves it back. */
 OSErr Executor::C_NewAliasMinimal(FSSpecPtr fsp, GUEST<AliasHandle> *ahp)
 {
-    HParamBlockRec hpb;
-    OSErr retval;
-    Str27 volName;
-
-    warning_unimplemented("not tested much");
-    memset(&hpb, 0, sizeof hpb);
-    hpb.ioParam.ioNamePtr = &volName[0];
-    hpb.ioParam.ioVRefNum = fsp->vRefNum;
-    retval = PBHGetVInfo(&hpb, false);
-    if(retval == noErr)
-    {
-        alias_head_t head;
-
-        init_head(&head, volName, fsp->name);
-        head.ioVCrDate = hpb.volumeParam.ioVCrDate;
-        head.ioVSigWord = hpb.volumeParam.ioVSigWord;
-        memset(&hpb, 0, sizeof hpb);
-        hpb.ioParam.ioNamePtr = &fsp->name[0];
-        hpb.ioParam.ioVRefNum = fsp->vRefNum;
-        hpb.fileParam.ioDirID = fsp->parID;
-        retval = PBHGetFInfo(&hpb, false);
-        if(retval == noErr)
-        {
-            alias_tail_t tail;
-            Handle h;
-            Str31 serverName;
-
-            head.ioDirID = hpb.fileParam.ioDirID;
-            head.ioFlCrDat = hpb.fileParam.ioFlCrDat;
-            head.type_info = hpb.fileParam.ioFlFndrInfo.fdType;
-            head.creator = hpb.fileParam.ioFlFndrInfo.fdCreator;
-            h = (Handle)GetString(-16413);
-            if(!h)
-                serverName[0] = 0;
-            else
-            {
-                int len;
-
-                len = std::min(GetHandleSize(h), 32);
-                memcpy(serverName, *h, len);
-            }
-            init_tail(&tail, (StringPtr) "\1*", serverName, volName);
-            retval = assemble_pieces(ahp, &head, 1,
-                                     TAIL_TAG, (int)sizeof(tail) - 2,
-                                     (void *)&tail.weird_info);
-        }
-    }
+    OSErr retval = C_NewAlias(nullptr, fsp, ahp);
 
     if(retval != noErr)
         *ahp = nullptr;

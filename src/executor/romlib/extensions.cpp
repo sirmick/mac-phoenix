@@ -22,6 +22,7 @@
 #include <mman/mman.h>
 #include <rsys/extensions.h>
 #include <rsys/helppkg.h>
+#include <rsys/drag.h>
 #include <SegmentLdr.h>
 #include <rsys/component.h>
 #include <rsys/version.h>
@@ -391,6 +392,7 @@ void Executor::ROMlib_load_extensions()
 {
     ROMlib_install_app_packs();
     ROMlib_install_help_package(); /* before INITs that patch or ask for it */
+    ROMlib_install_drag_manager();
     /* CurApName as a 7.5.5 boot has it before the Finder launches: $FF
        bytes. Apple's linked-patch loaders (the Speech Manager's INIT, PC
        Exchange, Macintosh Easy Open, the System's own 'lodr') read the

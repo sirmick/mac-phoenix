@@ -80,6 +80,11 @@ extern bool ROMlib_root_layer_current(); /* SetCurLayer(root) */
 extern WindowPeek ROMlib_layers_window_at(Point pt); /* any layer, front first */
 /* FindWindow over every layer (the root layer current meanwhile). */
 extern INTEGER ROMlib_layers_find_window(Point pt, GUEST<WindowPtr> *window);
+/* SetCurLayer to another process's layer (Apple's Drag Manager descends
+   into the drop target's layer that way): FindWindow looks at that
+   process's windows only. */
+extern bool ROMlib_layers_foreign_current();
+extern WindowPeek ROMlib_layers_foreign_window_at(Point pt);
 /* Is the current process the front one (gets mouse and keyboard)? */
 extern bool ROMlib_process_is_front();
 

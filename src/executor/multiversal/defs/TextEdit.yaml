@@ -1041,3 +1041,23 @@
     dispatcher: TEDispatch
     selector: 0x000E
     executor: C_
+
+# ####
+
+- function:
+    name: TEGetHiliteRgn
+    return: OSErr
+    args:
+      - name: region
+        type: RgnHandle
+      - name: te
+        type: TEHandle
+    dispatcher: TEDispatch
+    selector: 0x000F
+    executor: C_
+    comment: |
+      MacPhoenix. The selection's region, in the port's coordinates, clipped
+      to the view rectangle; empty with no selection. 7.5.5's Drag Manager
+      patch (System 'gpch' 668) adds the selector by drawing the hilite into
+      an open region; applications ask it whether a click is on the selection
+      before starting a drag.

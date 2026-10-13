@@ -472,9 +472,14 @@
     executor: C_
     comment: >
       MacPhoenix. Private in 7.5.5 (name is our guess). Finder registers a
-      7-long record holding two of its routines with the System's Drag
-      Manager core (System 'gpch' 668) at start-up when Gestalt('drag') is
-      absent, install = true, and removes it at quit (install = false).
+      7-long record (its hook routine, a window, ..., a refCon at +$10)
+      with the System's Drag Manager at start-up, install = true, and
+      removes it at quit (install = false). Apple's routine ('proc' -16516
+      routine $80) installs the globals' two trampolines as the window's
+      tracking and receive handlers with the record {hook, refCon}; the
+      trampolines call the hook with (message, globals+4). With Apple's
+      Drag Manager in charge of the trap (drag.cpp) this entry is not
+      reached; the C++ stub stays for Executor's own System.
 
 # ####
 

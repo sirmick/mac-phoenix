@@ -443,6 +443,18 @@
 # ####
 
 - lowmem:
+    name: DeskPort
+    type: GrafPtr
+    address: 0x9E2
+    comment: |
+      MacPhoenix. The desktop's port, which 7.5.5's Layer Manager keeps as
+      the desktop layer's window record (process.cpp, TakeDesktopLayer).
+      Apple's Drag Manager hands it to the drop target's handlers as the
+      window when the drop is on the desktop.
+
+# ####
+
+- lowmem:
     name: GhostWindow
     type: WindowPtr
     address: 0xA84
@@ -1229,6 +1241,43 @@
     comment: |
       Selector -7: the layer a window is in; a layer's parent; nil: the
       current layer.
+
+# ####
+
+- function:
+    name: GetLayerWindowList
+    return: WindowPtr
+    args:
+      - name: layer
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0206
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess). Selector 6: a layer's first child: the
+      root's front layer, a process layer's front window. Apple's Drag
+      Manager walks a layer's windows from it (nextWindow) to find the
+      one under the mouse (System 'proc' -16513 +$4342).
+
+# ####
+
+- function:
+    name: FindWindowInLayer
+    return: int16_t
+    args:
+      - name: pt
+        type: Point
+      - name: window
+        type: GUEST<WindowPtr>*
+    dispatcher: LayerDispatch
+    selector: 0x0407
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess). Selector 7: FindWindow in the current
+      layer. With the root current, Apple's answers the child layer at the
+      point (inContent, 3), and the caller makes it current and asks again
+      to descend (Drag Manager, 'proc' -16513 +$43d2; the Process Manager's
+      own GetLayerAtPoint). Here too.
 
 # ####
 

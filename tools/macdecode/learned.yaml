@@ -178,6 +178,138 @@ dispatchers:
           process's layer window (+$70) away. General Controls' driver
           passes bit 3 of its 'gprf' flags: "Show Desktop when in
           background" inverted.
+      - value: 0x0F
+        name: GetLayerAtPoint
+        status: guess
+        source: 7.5.5 disassembly (scod table entry $F -> RAM $2874a; Drag Manager proc -16516 +3b0; the System's GetNextEvent patch)
+        comment: >
+          (Point) -> LayerPtr. SwapCurLayer(root), FindWindowInLayer
+          (LayerDispatch 7): inContent gives the child layer at the point,
+          else nil; SetCurLayer back.
+      - value: 0x19
+        name: HoldProcessSwitching
+        status: guess
+        source: 7.5.5 disassembly (RAM $2a386; the System's StillDown and WaitMouseUp patches, Drag Manager proc -16513 +740)
+        comment: >
+          No params, no result: counts up a word in the Process Manager
+          globals (A5-$48A); $1A ($2a3a8) counts it down. The Drag
+          Manager brackets its tracking loop with the pair.
+      - value: 0x1A
+        name: ReleaseProcessSwitching
+        status: guess
+        source: 7.5.5 disassembly (RAM $2a3a8)
+      - value: 0x53
+        name: CallProcessRoutine
+        status: guess
+        source: 7.5.5 disassembly (RAM $2a78c, the call at $2b582; Drag Manager proc -16513 +608/+e4c/+249e, gpch 668 +472)
+        comment: >
+          (PSN *, ProcPtr routine, long params, short paramSize) -> OSErr.
+          procNotFound for the current process or an unknown one. Switches
+          to the process (its state saved, layers switched with $A832 -2),
+          runs the routine on its stack with its A5, pushing paramSize/2
+          words: with paramSize <= 4 the words of params itself, else
+          those params points at; the routine's word result is the
+          result. Switches back.
+      - value: 0x56
+        name: GetDesktopProcess
+        status: guess
+        source: 7.5.5 disassembly (RAM $2a2e0; Drag Manager proc -16516 +42e, -16513 +448a)
+        comment: >
+          (PSN *out) -> OSErr: the desk owner's PSN (A5-$474, the process
+          that took the desktop layer), -603 without one.
+      - value: 0x62
+        name: GetWindowProcess
+        status: guess
+        source: 7.5.5 disassembly (RAM $28bb0; Drag Manager proc -16513 +43b0)
+        comment: >
+          (window, PSN *out) -> OSErr: GetFrontProcess with the window in
+          place of -1 (the process owning the layer that holds it), and for
+          a window of the desktop layer (A5-$46C) another lookup;
+          procNotFound otherwise.
+  - trap: 0xABED
+    name: DragDispatch
+    comment: >
+      7.5.5's Drag Manager is five 'proc' resources of the System file
+      (-16512..-16516) behind the 'gpch' 668 patch's dispatcher (RAM
+      $89E04 on the reference boot): D0.w positive is the public selector
+      ($01-$28); negative with bit 12 set (moveq) is -n -> index $27+n;
+      $Cxnn (bit 12 clear) is a private one: x the parameter words, nn
+      through a ten-entry table (1..3 -> -1..-3, 4..8 -> ShowDragHilite..
+      UpdateDragHilite with the first parameter dereferenced, 9 -> -5).
+      The index picks a piece and routine (table at RAM $89DA0), entered
+      through CallDetachedPackage ($668). drag.cpp does the same.
+    selectors:
+      - value: 0xC301
+        name: SetFinderDragHooks
+        status: guess
+        source: 7.5.5 disassembly (proc -16516 routine $80; Finder at start-up and quit)
+        comment: >
+          (Ptr hooks, Boolean install) -> OSErr. Installs the globals'
+          two trampolines (ExpandMem+$118 +$84/+$88) as tracking and
+          receive handlers for hooks[1] (nil: the process) with the
+          two-long record {hooks[0], hooks[4]} as refCon, through -9;
+          removes them through -10.
+      - value: 0xC802
+        name: FinderTrackDrag
+        status: guess
+        source: 7.5.5 disassembly (proc -16516 routine $81; Finder CODE 162 +41e)
+        comment: >
+          (EventRecord *, RgnHandle outline, Handle items, Ptr *globals)
+          -> OSErr. NewDrag, the drag adopts Finder's item list (+$40,
+          attribute $2000), finds the target process and window under the
+          mouse (OSDispatch $F, $56, -7, -8), frames the region and calls
+          TrackDrag; on userCanceledErr calls Finder's hook with $10;
+          DisposeDrag and the region.
+      - value: 0xC603
+        name: ForEachFlavor
+        status: guess
+        source: 7.5.5 disassembly (proc -16516 routine $82; Finder's hook)
+        comment: >
+          (DragRef *drag, long param, ProcPtr proc) -> OSErr: calls
+          proc(items, &itemOffset, &flavorOffset, param, drag) for every
+          flavor, with 'phfs' shown as 'hfs ' and an unsaved flavor's type
+          as 'dave' meanwhile.
+      - value: 0xFFFC
+        name: DragFinderDrop
+        status: guess
+        source: 7.5.5 disassembly (proc -16516 routine $83; gpch 668's receive trampoline)
+        comment: >
+          -4: (DragRef) -> OSErr, in the desk owner's process: the drop
+          location (an alias) to a folder, then for each item a promised
+          HFS flavor's file is made and a clipping file for the others.
+      - value: 0xFFFA
+        name: RemoveProcessDragHandlers
+        status: guess
+        source: 7.5.5 disassembly (proc -16512 routine 4; gpch 668's $AAFB patch)
+        comment: >
+          -6: (PSN * or nil for the current process) -> OSErr: the
+          process's handlers out of the list.
+      - value: 0xFFF9
+        name: GetNextProcessHandler
+        status: guess
+        source: 7.5.5 disassembly (proc -16513 routine $39)
+        comment: >
+          -7: (PSN *, long kind, UPP *handler, Ptr *record) -> OSErr:
+          iterates a process's handlers of a kind (1 tracking, 2 receive).
+      - value: 0xFFF8
+        name: GetNextWindowHandler
+        status: guess
+        source: 7.5.5 disassembly (proc -16513 routine $3A)
+        comment: >
+          -8: (window, long kind, UPP *handler, Ptr *record) -> OSErr.
+      - value: 0xFFF7
+        name: InstallDragHandler
+        status: guess
+        source: 7.5.5 disassembly (proc -16512 routine 5)
+        comment: >
+          -9: (UPP, long kind, window, refCon) -> OSErr; kind $40000001/2
+          marks the refCon a handle to dispose with the handler.
+      - value: 0xFFF6
+        name: RemoveDragHandler
+        status: guess
+        source: 7.5.5 disassembly (proc -16512 routine 6)
+        comment: >
+          -10: (UPP, long kind, window) -> OSErr.
   - trap: 0xA825
     name: MenuDispatch
     comment: >
@@ -305,6 +437,24 @@ dispatchers:
           (window) -> LayerPtr: nil gives the current layer, a layer its
           parent, a window the layer whose list holds it (iterating
           with selector -8).
+      - value: 0x06
+        name: GetLayerWindowList
+        status: guess
+        source: Drag Manager proc -16513 +435a; OSDispatch $39 (RAM $29e94)
+        comment: >
+          (layer) -> WindowPtr: the layer's first child (+$94): the root's
+          front layer, a process layer's front window. The Drag Manager
+          walks a layer's windows from it by nextWindow (+$90) to find the
+          one under the mouse; GetFrontProcess(-1) takes the root's.
+      - value: 0x07
+        name: FindWindowInLayer
+        status: guess
+        source: Drag Manager proc -16513 +442c; OSDispatch $F (RAM $2874a)
+        comment: >
+          (Point, WindowPtr *out) -> part code: FindWindow in the current
+          layer. With the root current the answer is the child layer at
+          the point (a window record with $DEAD at +$4A) as inContent; the
+          caller makes it current and asks again to descend.
       - value: 0x01
         name: NewLayer
         status: guess

@@ -261,7 +261,8 @@ static std::vector<std::string> parseCommandLine(int& argc, char **argv)
             "\"unexpected\" enables warnings for unexpected events, "
             "\"unimplemented\" enables warnings for unimplemented traps, "
             "\"segfault\" reports the guest address (and, with instruction "
-            "tracking, the guest PC) when emulated code faults.  "
+            "tracking, the guest PC) when emulated code faults, "
+            "\"drag\" logs the Drag Manager's dispatch and Finder's hook calls.  "
             "Example: \"executor -debug unimp,trace\""
         )
         ;

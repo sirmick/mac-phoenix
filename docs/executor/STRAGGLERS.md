@@ -33,6 +33,13 @@ Also fixed along the way: Finder type-to-select crash (61ef0717), host
 file dates in local time, `ioVLsMod`, folder moves keeping their
 contents' paths (07dce3db).
 
+| 24 | Finder's first drag killed the machine: `DragDispatch $C802` (FinderTrackDrag) had no routine and an unknown selector is fatal | done (2026-10-13): Apple's Drag Manager runs (PLAN.md M4, `drag.cpp`). Seen once on the way and not again: a boot that died in Finder's start-up with `DisposeMenu` looping over its menus (last traps `$A932` x6) right after `PBOpenWD Startup Items`, on a build whose `NewAliasMinimal` had just started to work for folders; the next boots were fine. Reopen if it shows |
+
+Known blind spot (2026-10-13): `--executor-logtraps` logs nothing inside
+`CallProcessRoutine` beyond its own line unless `--executor-logtraps-nesting`
+is 2 or more (the routine's calls are one level down); the flag now reaches
+the IPC child.
+
 ## Parked
 
 ### Apple Guide

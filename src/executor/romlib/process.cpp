@@ -33,6 +33,7 @@ using namespace Executor;
 #include <VRetraceMgr.h>
 #include <rsys/launch.h>
 #include <rsys/desk.h>
+#include <rsys/drag.h>
 #include <rsys/component.h>
 #include "appleevent/apple_events.h"
 #include <osevent/osevent.h>
@@ -432,6 +433,14 @@ static GUEST<WindowPeek> process_list_stash;
 static GUEST<AuxWinHandle> process_aux_win_stash;
 static GUEST<AuxCtlHandle> process_aux_ctl_stash;
 static bool root_current; /* SetCurLayer(root): FindWindow looks everywhere */
+/* SetCurLayer to another process's layer: FindWindow looks at its windows
+   (Apple's Drag Manager descends into the drop target's layer). */
+static process_info_t *foreign_current;
+/* The desktop layer (TakeDesktopLayer) and the process that took it. */
+static WindowPtr desktop_layer;
+static process_info_t *desktop_owner;
+/* OSDispatch $19/$1A: no process switch at an event call while held. */
+static int switch_hold;
 
 namespace
 {
@@ -726,6 +735,7 @@ bool Executor::ROMlib_layer_p(WindowPtr w)
 static void set_current_layer(Ptr rec)
 {
     root_current = false;
+    foreign_current = nullptr;
     if(!rec || rec == root_layer_record())
     {
         root_current = true;
@@ -755,14 +765,31 @@ static void set_current_layer(Ptr rec)
         floating_current = l.floating;
     }
     else if(l.proc != current_process_info)
-        warning_unexpected("SetCurLayer to another process's layer");
+        foreign_current = l.proc;
 }
 
 static WindowPtr current_layer_record()
 {
     if(root_current)
         return (WindowPtr)root_layer_record();
+    if(foreign_current)
+        return (WindowPtr)process_layer_record(foreign_current);
     return (WindowPtr)record_of(current_layer());
+}
+
+bool Executor::ROMlib_layers_foreign_current()
+{
+    return foreign_current != nullptr;
+}
+
+WindowPeek Executor::ROMlib_layers_foreign_window_at(Point pt)
+{
+    if(!foreign_current)
+        return nullptr;
+    for(WindowPeek w = chain_of(foreign_current); w; w = WINDOW_NEXT_WINDOW(w))
+        if(WINDOW_VISIBLE(w) && PtInRgn(pt, WINDOW_STRUCT_REGION(w)))
+            return w;
+    return nullptr;
 }
 
 WindowPtr Executor::C_GetRootLayer()
@@ -857,6 +884,116 @@ WindowPtr Executor::C_GetWindowLayer(WindowPtr w)
             if(wp == (WindowPeek)w)
                 return (WindowPtr)record_of(l);
     return current_layer_record();
+}
+
+/* The layer with a visible window at pt, front first. */
+static Layer layer_with_window_at(Point pt)
+{
+    for(Layer l : layer_sequence())
+        for(WindowPeek w = chain_of(l); w; w = WINDOW_NEXT_WINDOW(w))
+            if(WINDOW_VISIBLE(w) && PtInRgn(pt, WINDOW_STRUCT_REGION(w)))
+                return l;
+    return Layer{};
+}
+
+/* LayerDispatch 6: a layer's first child. */
+WindowPtr Executor::C_GetLayerWindowList(WindowPtr layer)
+{
+    Ptr rec = (Ptr)layer;
+    if(!rec || rec == root_layer_record())
+    {
+        std::vector<Layer> seq = layer_sequence();
+        return seq.empty() ? nullptr : (WindowPtr)record_of(seq[0]);
+    }
+    Layer l = layer_of_record(rec);
+    if(!l)
+        return nullptr;
+    return (WindowPtr)chain_of(l);
+}
+
+/* LayerDispatch 7: FindWindow in the current layer. With the root current
+   the child layer at the point is the answer (inContent), as Apple's. */
+INTEGER Executor::C_FindWindowInLayer(Point pt, GUEST<WindowPtr> *window)
+{
+    if(!root_current)
+        return FindWindow(pt, window);
+    *window = nullptr;
+    LONGINT pointaslong = ((LONGINT)pt.v << 16) | (unsigned short)pt.h;
+    if(MBDFCALL(mbHit, 0, pointaslong) != -1)
+        return inMenuBar;
+    Layer l = layer_with_window_at(pt);
+    if(!l)
+        return inDesk;
+    *window = (WindowPtr)record_of(l);
+    return inContent;
+}
+
+/* OSDispatch $F: the layer whose window is under the point, nil if none. */
+WindowPtr Executor::C_GetLayerAtPoint(Point pt)
+{
+    LONGINT pointaslong = ((LONGINT)pt.v << 16) | (unsigned short)pt.h;
+    if(MBDFCALL(mbHit, 0, pointaslong) != -1)
+        return nullptr;
+    Layer l = layer_with_window_at(pt);
+    return l ? (WindowPtr)record_of(l) : nullptr;
+}
+
+/* The process owning a layer record or a window; a floating layer's
+   window counts as the current process's; the desktop layer's as its
+   owner's. */
+static process_info_t *process_of_layer_or_window(Ptr x)
+{
+    if(!x)
+        return nullptr;
+    if(desktop_layer && x == (Ptr)desktop_layer)
+        return desktop_owner;
+    if(ROMlib_layer_p((WindowPtr)x))
+    {
+        Layer l = layer_of_record(x);
+        if(!l)
+            return nullptr;
+        return l.proc ? l.proc : current_process_info;
+    }
+    for(Layer l : layer_sequence())
+        for(WindowPeek w = chain_of(l); w; w = WINDOW_NEXT_WINDOW(w))
+            if(w == (WindowPeek)x)
+                return l.proc ? l.proc : current_process_info;
+    return nullptr;
+}
+
+/* OSDispatch $62. */
+OSErr Executor::C_GetWindowProcess(WindowPtr window, ProcessSerialNumber *psn)
+{
+    process_info_t *p = process_of_layer_or_window((Ptr)window);
+    if(!p)
+    {
+        if(psn)
+            *psn = no_process;
+        return procNotFound;
+    }
+    *psn = p->serial_number;
+    return noErr;
+}
+
+/* OSDispatch $56. */
+OSErr Executor::C_GetDesktopProcess(ProcessSerialNumber *psn)
+{
+    if(!desktop_owner)
+        return -603; /* as Apple's: no desk owner */
+    *psn = desktop_owner->serial_number;
+    return noErr;
+}
+
+/* OSDispatch $19/$1A. */
+void Executor::C_HoldProcessSwitching()
+{
+    switch_hold++;
+}
+
+void Executor::C_ReleaseProcessSwitching()
+{
+    if(switch_hold > 0)
+        switch_hold--;
 }
 
 /* A long of a process's switched low memory, wherever it is kept. */
@@ -1172,6 +1309,11 @@ static void exit_current()
 {
     process_info_t *me = current_process_info;
 
+    /* Its drag handlers, while its world is still in place. */
+    ROMlib_drag_process_exit();
+    if(desktop_owner == me)
+        desktop_owner = nullptr;
+
     /* The screen its windows covered. */
     RgnHandle uncovered;
     {
@@ -1317,6 +1459,8 @@ void Executor::ROMlib_process_event_hook()
 {
     process_info_t *me = current_process_info;
     if(!me)
+        return;
+    if(switch_hold > 0)
         return;
 
     if(pending_launch)
@@ -1985,7 +2129,22 @@ OSErr Executor::C_SameProcess(ProcessSerialNumber *serial_number0,
 
 OSErr Executor::C_GetFrontProcess(ProcessSerialNumber *serial_number, int32_t dummy)
 {
-    *serial_number = front_process->serial_number;
+    if(!serial_number || !dummy)
+        return paramErr;
+    if(dummy == -1)
+    {
+        *serial_number = front_process->serial_number;
+        return noErr;
+    }
+    /* Apple's: anything else is a layer or a window, and the answer is
+       the process owning it. */
+    process_info_t *p = process_of_layer_or_window((Ptr)SYN68K_TO_US((uint32_t)dummy));
+    if(!p)
+    {
+        *serial_number = no_process;
+        return procNotFound;
+    }
+    *serial_number = p->serial_number;
     return noErr;
 }
 
@@ -2071,8 +2230,6 @@ OSErr Executor::C_GetPortNameFromProcessSerialNumber(
  * Single process for now: per-process state lives here until the Process
  * Manager keeps real records (slice 2). Names are guesses (learned.yaml). */
 
-static WindowPtr desktop_layer;
-
 OSErr Executor::C_TakeDesktopLayer(GUEST<WindowPtr> *layer)
 {
     if(desktop_layer)
@@ -2091,6 +2248,8 @@ OSErr Executor::C_TakeDesktopLayer(GUEST<WindowPtr> *layer)
         WINDOW_UPDATE_REGION(desktop_layer) = NewRgn();
     }
     qdGlobals().thePort = save_port;
+    desktop_owner = current_process_info;
+    LM(DeskPort) = (GrafPtr)desktop_layer; /* the drop target for the desktop */
     if(layer)
         *layer = desktop_layer;
     return noErr;
@@ -2146,6 +2305,66 @@ OSErr Executor::C_SetProcessDragHooks(int32_t hooks)
 {
     process_drag_hooks = hooks;
     return noErr;
+}
+
+/* OSDispatch $53: a Pascal routine run in another process, with its
+   world switched in. Apple's (scod -16463, $2A78C and $2B582 on the
+   reference boot) runs it on that process's stack with its A5, pushing
+   paramSize bytes as a stack image: with 4 bytes or fewer the params long
+   is the image itself, otherwise it points at the image. The routine's
+   word result comes back; the process's registers stay as they were when
+   it parked. The Drag Manager's tracking loop runs a drop target's
+   handlers this way. */
+OSErr Executor::C_CallProcessRoutine(ProcessSerialNumber *psn, ProcPtr routine,
+                                     int32_t params, int16_t paramSize)
+{
+    process_info_t *me = current_process_info;
+    process_info_t *to = psn ? get_process_info(psn) : nullptr;
+    if(!to || to == me || to->state != process_info_t::parked || !routine)
+        return procNotFound;
+    if(paramSize < 0 || paramSize > 64 || (paramSize & 1))
+        return paramErr;
+
+    uint8_t image[64];
+    size_t n = paramSize;
+    if(n <= 4)
+    {
+        GUEST<int32_t> v = params;
+        memcpy(image, &v, n);
+    }
+    else
+        memcpy(image, SYN68K_TO_US((uint32_t)params), n);
+
+    bool saved_root = root_current;
+    process_info_t *saved_foreign = foreign_current;
+    root_current = false;
+    foreign_current = nullptr;
+
+    save_world(me);
+    me->state = process_info_t::parked;
+    std::vector<uint8_t> parked_cpu = to->cpu;
+    current_process_info = to;
+    restore_world(to);
+    to->state = process_info_t::running;
+
+    EM_A7 -= 2;
+    WRITEUW(EM_A7, 0); /* the result, if the routine leaves one */
+    EM_A7 -= n;
+    memcpy(SYN68K_TO_US(EM_A7), image, n);
+    execute68K(US_TO_SYN68K(routine));
+    OSErr result = READUW(EM_A7);
+    EM_A7 += 2;
+
+    save_world(to); /* what the routine changed in its world */
+    to->cpu = parked_cpu;
+    to->state = process_info_t::parked;
+    current_process_info = me;
+    restore_world(me);
+    me->state = process_info_t::running;
+
+    root_current = saved_root;
+    foreign_current = saved_foreign;
+    return result;
 }
 
 /* General Controls' "Show Desktop when in background", stored inverted as

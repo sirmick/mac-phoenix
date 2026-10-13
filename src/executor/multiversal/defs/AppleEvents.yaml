@@ -478,7 +478,17 @@
           296-byte System-heap block Apple's PACK 14 and the System's
           patches around it share (+$11E: balloons on). helppkg.cpp.
       - name: pad_1b
-        type: char[180]
+        type: char[156]
+      - name: emDragGlobals
+        type: Ptr
+        comment: |
+          ExpandMem+$118 (name is a guess): the Drag Manager's globals, a
+          350-byte System-heap block its five 'proc' resources and the
+          System's patches around them share (+$4: the drag being tracked,
+          +$14: the Gestalt attributes, +$1C: the handler list, +$84/+$88:
+          the Finder's hook trampolines). drag.cpp.
+      - name: pad_1d
+        type: char[20]
       - name: emHelpPackageLock
         type: int16_t
         comment: |
