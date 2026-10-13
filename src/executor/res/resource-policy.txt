@@ -7,13 +7,24 @@
 # directory with <data_dir>/resource-policy.txt (same format; it replaces
 # this table). See docs/executor/PLAN.md.
 #
+# The definition procedures are Executor's as a block (2026-10-07): Apple's
+# MBDF crashed then on $A81E (SaveRestoreBits), which exists since the Help
+# Manager work, and a scan of the 7.5.5 defprocs (2026-10-13) finds them
+# using public traps alone apart from the MBDF's SaveRestoreBits selectors
+# and OSDispatch $3E. They stay Executor's because they plug into the
+# Window, Menu, Control and List Managers we wrote against them (the menu
+# bar's saved bits, the per-process AuxWinHead/AuxCtlHead lists kept in the
+# application heap, WMgrCPort), and they draw the same System 7 look; any
+# of them can be tried as Apple's by changing its line. The balloon
+# window's WDEF 126 is Apple's: the Help Manager depends on its geometry.
+#
 # type  id   source     why
-MBDF    0    executor   # menu bar: Apple's calls traps Executor lacks ($A81E)
-MDEF    0    executor   # standard menu
-WDEF    0    executor   # document windows
-WDEF    1    executor   # rounded windows
-CDEF    0    executor   # buttons
-CDEF    1    executor   # scroll bars
-CDEF    63   executor   # popup menus
-LDEF    0    executor   # lists
-snth    5    executor   # sound synth
+MBDF    0    executor   # menu bar: SaveRestoreBits 1/2/4/5, OSDispatch $3E; untried since
+MDEF    0    executor   # standard menu: untried as Apple's
+WDEF    0    executor   # document windows: untried as Apple's
+WDEF    1    executor   # rounded windows: untried as Apple's
+CDEF    0    executor   # buttons: untried as Apple's
+CDEF    1    executor   # scroll bars: untried as Apple's
+CDEF    63   executor   # popup menus: untried as Apple's
+LDEF    0    executor   # lists: untried as Apple's
+snth    5    executor   # sound synth: Executor's mixer plays it

@@ -205,18 +205,77 @@ then `diff-world`.
   Extension) → QuickTime. Macintosh Easy Open ships its own `lpch` 31
   (linked patch code), so it likely won't load as a plain INIT; skip it.
 
-**Write or borrow (decided 2026-10-08).** Apple's code runs as is when
-it's a self-contained resource (`PACK`, definition procedure,
-component, INIT, a standalone pre-7.5 extension) *and* reaches the rest
-of the system only through public traps; the resource policy and the
-INIT whitelist are the switch. It's written in C++ when it exists only
-as linked patch code (`lpch`/`gpch`: loading it means faking the ROM it
-binds to, so no linked-patch loader), when it's tied to internals we
-own in C++ (Process Manager context switch, Window Manager layers,
-Memory/File Manager internals), or when it's a thin dispatcher on a hot
-path. The trace and diff tools make a C++ rewrite cheap to check against
-a real boot; debugging Apple's 68k against a non-Apple internal state is
-the expensive direction.
+### Apple's code or ours: the rule
+
+Decided 2026-10-08, refined by the Drag Manager on 2026-10-13. Every
+piece of the system software is either Apple's 68k code run as is, or
+Executor's C++; the choice is made per piece, by three tests, and
+recorded in the table below.
+
+1. **Shape.** Apple's code runs as is when it is a self-contained
+   resource: a `PACK`, a `proc` package, a definition procedure, a
+   component, an INIT, a standalone pre-7.5 extension. Code that exists
+   only as linked patch code (`lpch`/`gpch`) is ours: loading it means
+   faking the ROM it binds to, and there is no linked-patch loader.
+   When a patch is small glue around a resource (the Drag Manager's
+   `gpch` 668: dispatcher, globals, trampolines), the glue is rewritten
+   in C++ and the resource runs.
+2. **Reach.** Apple's code runs as is when it reaches the rest of the
+   system through public traps plus private selectors we can supply from
+   what we own (a handful of OSDispatch and LayerDispatch calls so far,
+   named in `tools/macdecode/learned.yaml` as guesses). It is ours when
+   it depends on internal structure we keep differently: the Process
+   Manager's context switch and process records, the Window Manager's
+   layers and lists, the Memory and File Managers' records.
+3. **Cost of being wrong.** The trace and diff tools (snapshots,
+   `atraps.tsv`, macdecode) make a C++ rewrite cheap to check against a
+   real boot, and a C++ piece is debuggable with host tools; Apple's 68k
+   running against a non-Apple internal state is the expensive direction
+   to debug. So a thin dispatcher on a hot path, or a piece whose private
+   protocol we would have to reverse-engineer in full anyway, is ours.
+   A piece whose private protocol is large and co-designed with a client
+   we also run (the Drag Manager and Finder) is Apple's: the protocol
+   comes for free.
+
+**The seam** is the same every time: a trap-table entry we own, which
+enters Apple's code through CallDetachedPackage (`$668`, the System's
+routine in `sysroutines.cpp`) or the extension loader; the globals the
+piece expects, built as the boot code leaves them (ExpandMem fields,
+`AppPacks`, the trap tables at `$400`/`$E00`); and the private selectors
+it calls, implemented in C++ with their names recorded as guesses. The
+switches are `resource-policy.txt` (Apple's or Executor's version of a
+System resource) and `extension-policy.txt` (which files run code at
+startup).
+
+**The inventory.** Apple's, run as is: Finder and its Finder extensions;
+the Drag Manager (`proc` -16512..-16516, `drag.cpp`); the Help Manager
+(`PACK` 14, `helppkg.cpp`); the Apple Event Manager (`PACK` 8, installed
+by AppleScript); the INITs, cdevs and components the extension policy
+lists (AppleScript, Finder Scripting, Speech Manager and MacinTalk, Color
+Picker, Date & Time, General Controls, Find File, WindowShade, Mouse,
+Apple Menu Options, Launcher); desk accessories; the balloon window's
+WDEF 126; the System's `$668`/`$7B0` routines; and every data resource.
+The other `PACK`s sit in `AppPacks` with Apple's header so code that
+checks for them is satisfied, but only 8 and 14 get their traps; SANE and
+Binary-Decimal (ROM packs 4, 5, 7) are stand-ins. Ours: the Memory,
+File, Resource, Device, Segment Loader, Scrap, Shutdown and Gestalt
+managers; QuickDraw with Color QuickDraw, GWorlds, palettes and fonts;
+the Window, Menu, Control, Dialog, List, TextEdit and Event managers with
+Executor's definition procedures (see the policy file); the Process and
+Layer Managers, Component Manager, Alias Manager, Script Manager and
+International Utilities, Standard File, Disk Init, Notification, Time and
+VBL, ADB, Sound, MacTCP, printing; and the fallbacks that only answer
+without Apple's System file (Apple events, balloons). Stubbed: Text
+Services, Dictionary, Collection, Translation, QuickTime, Display
+Manager. Not started: Thread Manager. Disabled by policy: Apple Guide,
+Network Extension, AppleShare, File Sharing, Easy Open, PC Exchange.
+
+**For a new piece**, in this order: find where its code lives
+(`tools/macdecode` resources section of a real-boot snapshot, and the
+trap table entry); list the traps and dispatcher selectors it uses and
+check each against the yaml definitions; trace it on the ROM machine
+(`--trace-atraps`, a snapshot, diff `atraps.tsv`) for the dynamic
+picture; then decide by the three tests and add a row to the table.
 
 | Piece | Decision | Why |
 |---|---|---|
