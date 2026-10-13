@@ -145,6 +145,22 @@
         value: 42
       - name: smScriptName
         value: 44
+      - name: smScriptMonoFondSize
+        value: 78
+      - name: smScriptPrefFondSize
+        value: 80
+      - name: smScriptSmallFondSize
+        value: 82
+      - name: smScriptSysFondSize
+        value: 84
+      - name: smScriptAppFondSize
+        value: 86
+      - name: smScriptHelpFondSize
+        value: 88
+      - name: smScriptValidStyles
+        value: 90
+      - name: smScriptAliasStyle
+        value: 92
 
 # ####
 
@@ -602,6 +618,24 @@
     dispatcher: ScriptUtil
     selector: 0x80020004
     executor: C_
+
+# ####
+
+- function:
+    name: SetKeyScriptState
+    args:
+      - name: verb
+        type: INTEGER
+      - name: param
+        type: Ptr
+    dispatcher: ScriptUtil
+    selector: 0x8006FFAE
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess). Selector -82, 6 bytes of parameters, no
+      result. Apple's Standard File (PACK 3, +$25c) calls it with (2, a
+      pointer to {0, script}) right before KeyScript(script) when it sets
+      up its dialog; a no-op here.
 
 # ####
 

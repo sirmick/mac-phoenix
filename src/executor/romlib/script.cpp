@@ -106,6 +106,10 @@ OSErr Executor::C_SetScriptManagerVariable(INTEGER verb, LONGINT param)
    7's Script.h names. */
 LONGINT Executor::C_GetScriptVariable(INTEGER script, INTEGER verb)
 {
+    /* MacPhoenix: the system and current script are Roman; Apple's
+       Standard File asks with smSystemScript (-1). */
+    if(script == smSystemScript || script == -2 /* smCurrentScript */)
+        script = smRoman;
     if(script != smRoman)
         return 0;
     auto itlb = [](int offset, bool byte = false) -> LONGINT {
@@ -149,22 +153,24 @@ LONGINT Executor::C_GetScriptVariable(INTEGER script, INTEGER verb)
             return itlb(16);
         case smScriptIcon:
             return itlb(18);
-        /* font and size: family in the high word */
-        case 72: /* smScriptMonoFondSize: Monaco 9 */
+        /* font and size: family in the high word (Script.h numbers these
+           78..92; Apple's Standard File sets its dialog's font from
+           smScriptSysFondSize, 84) */
+        case smScriptMonoFondSize: /* Monaco 9 */
             return 4L << 16 | 9;
-        case 74: /* smScriptPrefFondSize: Geneva 12, status: guess */
+        case smScriptPrefFondSize: /* Geneva 12, status: guess */
             return 3L << 16 | 12;
-        case 76: /* smScriptSmallFondSize: Geneva 9 */
+        case smScriptSmallFondSize: /* Geneva 9 */
             return 3L << 16 | 9;
-        case 78: /* smScriptSysFondSize: Chicago 12 */
+        case smScriptSysFondSize: /* Chicago 12 */
             return (LONGINT)LM(SysFontFam) << 16 | 12;
-        case 80: /* smScriptAppFondSize: Geneva 12 */
+        case smScriptAppFondSize: /* Geneva 12 */
             return (LONGINT)LM(ApFontID) << 16 | 12;
-        case 82: /* smScriptHelpFondSize: Geneva 9 */
+        case smScriptHelpFondSize: /* Geneva 9 */
             return 3L << 16 | 9;
-        case 84: /* smScriptValidStyles: all of them */
+        case smScriptValidStyles: /* all of them */
             return 0x7F;
-        case 86: /* smScriptAliasStyle */
+        case smScriptAliasStyle:
             return 0;
         default:
             warning_unexpected("unhandled selector `%d'", verb);
@@ -284,6 +290,13 @@ Boolean Executor::C_IsCmdChar(const EventRecord *event, INTEGER test)
 void Executor::C_KeyScript(INTEGER scriptcode)
 {
     warning_unimplemented("");
+}
+
+/* MacPhoenix: ScriptUtil -82, which Apple's Standard File makes right
+   before KeyScript when it sets up its dialog (ScriptMgr.yaml). */
+void Executor::C_SetKeyScriptState(INTEGER verb, Ptr param)
+{
+    (void)verb, (void)param;
 }
 
 INTEGER Executor::C_CharType(Ptr textbufp, INTEGER offset)

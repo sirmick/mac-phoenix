@@ -249,22 +249,23 @@ startup).
 
 **The inventory.** Apple's, run as is: Finder and its Finder extensions;
 the Drag Manager (`proc` -16512..-16516, `drag.cpp`); the Help Manager
-(`PACK` 14, `helppkg.cpp`); the Apple Event Manager (`PACK` 8, installed
-by AppleScript); the INITs, cdevs and components the extension policy
+(`PACK` 14, `helppkg.cpp`); Standard File (`PACK` 3, `stdfilepkg.cpp`);
+the Apple Event Manager (`PACK` 8, installed by AppleScript); the INITs, cdevs and components the extension policy
 lists (AppleScript, Finder Scripting, Speech Manager and MacinTalk, Color
 Picker, Date & Time, General Controls, Find File, WindowShade, Mouse,
 Apple Menu Options, Launcher); desk accessories; the balloon window's
 WDEF 126; the System's `$668`/`$7B0` routines; and every data resource.
 The other `PACK`s sit in `AppPacks` with Apple's header so code that
-checks for them is satisfied, but only 8 and 14 get their traps; SANE and
+checks for them is satisfied, but only 3, 8 and 14 get their traps; SANE and
 Binary-Decimal (ROM packs 4, 5, 7) are stand-ins. Ours: the Memory,
 File, Resource, Device, Segment Loader, Scrap, Shutdown and Gestalt
 managers; QuickDraw with Color QuickDraw, GWorlds, palettes and fonts;
 the Window, Menu, Control, Dialog, List, TextEdit and Event managers with
 Executor's definition procedures (see the policy file); the Process and
 Layer Managers, Component Manager, Alias Manager, Script Manager and
-International Utilities, Standard File, Disk Init, Notification, Time and
-VBL, ADB, Sound, MacTCP, printing; and the fallbacks that only answer
+International Utilities, Disk Init, Notification, Time and VBL, ADB,
+Sound, MacTCP, printing (Executor's Standard File dialogs stay the
+fallback without Apple's System file); and the fallbacks that only answer
 without Apple's System file (Apple events, balloons). Stubbed: Text
 Services, Dictionary, Collection, Translation, QuickTime, Display
 Manager. Not started: Thread Manager. Disabled by policy: Apple Guide,
@@ -283,6 +284,7 @@ picture; then decide by the three tests and add a row to the table.
 | Thread Manager | C++ (M3) | ~20 selectors, all stack switching inside our Process Manager |
 | Drag Manager | Apple's (M4, done 2026-10-13) | 7.5.5's is five `proc` resources of the System file calling public traps plus a few Process and Layer Manager selectors, so it runs like the packs (`drag.cpp`); the C++ plan was for the pre-7.5 extension, which hooks internals. Finder's private protocol (its own item list, hook messages) comes for free |
 | Help Manager | Apple's `PACK` 14 (M3e, done) | 68k calling public traps; the System's package, loaded by `helppkg.cpp` |
+| Standard File | Apple's `PACK` 3 (done 2026-10-13) | 68k calling public traps plus two private selectors answered in C++ (Pack6 $32 `GetIntlResourceForScript`, ScriptUtil -82 `SetKeyScriptState`); `stdfilepkg.cpp` routes `_Pack3` to the System's package. Executor's dialogs had no desktop level and no folder pop-up. Its pop-up is Executor's CDEF 63 with Apple's record layout, since PACK 3 reaches into it (the menu at 0, the box Rect at $A) |
 | Apple Event Manager | try Apple's `PACK` 8 (M3) | may close Finder's `'aevt'` wire-format gap; depends on HLE delivery matching Apple's (unverified) |
 | TSM, Dictionary, Collection Managers | stub | Gestalt absent, error results, until a real caller shows up |
 | Translation Manager / Easy Open | skip | its own `lpch` |

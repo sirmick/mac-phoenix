@@ -638,6 +638,36 @@ dispatchers:
           (vRefNum, folderType, short *foundVRefNum, StringPtr name) ->
           OSErr. FSE asks it for the Trash's name when making a folder.
 
+  - trap: 0xA9ED
+    name: Pack6
+    comment: >
+      International Utilities. Multiversal's IntlUtil.yaml has the public
+      selectors; Apple's Standard File asks one more.
+    selectors:
+      - value: 0x32
+        name: GetIntlResourceForScript
+        status: guess
+        source: PACK 3 of 7.5.5 +2f16 (disassembly); IntlUtil.yaml
+        comment: >
+          (short theID, ScriptCode script, short flag) -> Handle. Standard
+          File calls it with (2, the item's script, -1) and hands the handle
+          to IUMagPString as its 'itl2' sorting table, caching it per script.
+
+  - trap: 0xA8B5
+    name: ScriptUtil
+    comment: >
+      Script Manager. Multiversal's ScriptMgr.yaml has the public selectors;
+      Apple's Standard File asks one private one.
+    selectors:
+      - value: 0x8006FFAE
+        name: SetKeyScriptState
+        status: guess
+        source: PACK 3 of 7.5.5 +25c (disassembly); ScriptMgr.yaml
+        comment: >
+          Selector -82, 6 bytes of parameters, no result: (short verb, Ptr
+          param). Standard File calls it with (2, a pointer to {0, script})
+          right before KeyScript(script) when it sets up its dialog.
+
 # Tags: entry points below the Toolbox Executor provides. A tagged entry
 # point that only Apple ROM/patch code calls is "not needed" for that
 # reason; code we run calling it still makes it needed. Review freely:

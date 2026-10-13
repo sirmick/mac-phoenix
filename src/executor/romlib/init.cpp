@@ -4,6 +4,7 @@
 #include <rsys/sysroutines.h>
 #include <rsys/helppkg.h>
 #include <rsys/drag.h>
+#include <rsys/stdfilepkg.h>
 #include <rsys/snddispatch.h>
 #include <rsys/osutil.h>
 #include <rsys/macros.h>
@@ -522,6 +523,7 @@ void Executor::InitPerProcessLowMem()
     ROMlib_install_system_routines(); /* MacPhoenix: $7B0 and $668 */
     ROMlib_install_help_package(); /* MacPhoenix: Apple's PACK 14 on $A830 */
     ROMlib_install_drag_manager(); /* MacPhoenix: Apple's 'proc' pieces on $ABED */
+    ROMlib_install_standard_file(); /* MacPhoenix: Apple's PACK 3 on $A9EA */
     ROMlib_install_sound_dispatch(); /* MacPhoenix: $A800's group table */
     LM(SysEvtMask) = ~(1L << keyUp); /* EVERYTHING except keyUp */
     LM(SdVolume) = 7; /* for Beebop 2 */

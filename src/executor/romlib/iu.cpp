@@ -246,6 +246,14 @@ Handle Executor::C_GetIntlResource(INTEGER id) /* IMI-505 */
     return retval;
 }
 
+/* MacPhoenix: Pack6 $32 (IntlUtil.yaml): the resource for a script;
+   one script here. */
+Handle Executor::C_GetIntlResourceForScript(INTEGER theID, ScriptCode script, INTEGER flag)
+{
+    (void)script, (void)flag;
+    return C_GetIntlResource(theID);
+}
+
 void Executor::C_IUDateString(LONGINT date, DateForm form,
                               StringPtr p) /* IMI-504 */
 {

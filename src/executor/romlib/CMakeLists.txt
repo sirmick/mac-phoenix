@@ -507,7 +507,7 @@ set(misc_sources
   desk.cpp extensions.cpp sysroutines.cpp helppkg.cpp textservices.cpp component.cpp device.cpp disk.cpp diskinit.cpp dump.cpp
   gestalt.cpp iu.cpp launch.cpp  notify.cpp 
    osutil.cpp pack.cpp scrap.cpp script.cpp segment.cpp serial.cpp hostdisk.cpp
-  stdfile.cpp romlib_stubs.cpp  toolevent.cpp toolutil.cpp 
+  stdfile.cpp stdfilepkg.cpp romlib_stubs.cpp  toolevent.cpp toolutil.cpp 
    aboutbox.cpp
   version.cpp shutdown.cpp screen-dump.cpp
   process.cpp alias.cpp edition.cpp  balloon.cpp

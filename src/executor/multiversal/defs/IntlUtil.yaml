@@ -579,6 +579,25 @@
     selector: 0x0024
     executor: C_
 
+- function:
+    name: GetIntlResourceForScript
+    return: Handle
+    args:
+      - name: theID
+        type: INTEGER
+      - name: script
+        type: ScriptCode
+      - name: flag
+        type: INTEGER
+    dispatcher: Pack6
+    selector: 0x0032
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess). Apple's Standard File (PACK 3, +$2f16)
+      asks it with (2, the item's script, -1) and hands the handle to
+      IUMagPString as its 'itl2' sorting table, caching it per script. One
+      script here, so GetIntlResource(theID).
+
 # ####
 
 # MacPhoenix: the Type Select routines (System 7.5; Lists.h in Universal

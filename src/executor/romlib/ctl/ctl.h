@@ -93,15 +93,23 @@ public:
 #define POPUP_TITLE_WIDTH(popup) ((*popup)->title_width)
 #define POPUP_FLAGS(popup) ((*popup)->flags)
 
-/* private fields */
+/* private fields.  MacPhoenix: the first 58 bytes are laid out as
+   Apple's pop-up CDEF 63 lays out its record, since applications reach
+   into it: PopupPrivateData's mHandle and mID (Controls.h), and the Rect
+   at $A, the pop-up box, which Apple's Standard File (PACK 3) hit-tests
+   to track its folder pop-up. Executor's own fields follow. */
 struct popup_data
 {
     GUEST_STRUCT;
-    GUEST<MenuHandle> menu;
-    GUEST<int16_t> menu_id;
+    GUEST<MenuHandle> menu; /* 0: mHandle */
+    GUEST<int16_t> menu_id; /* 4: mID */
+    GUEST<int32_t> apple_6;
+    GUEST<Rect> box; /* $A: where the current item is drawn (menu rect) */
+    uint8_t apple_rest[0x3A - 0x12];
     int16_t title_width;
     int flags;
 };
+#define POPUP_BOX(popup) ((*popup)->box)
 
 typedef struct popup_data popup_data_t;
 typedef popup_data_t *popup_data_ptr;
@@ -160,7 +168,7 @@ extern void C_new_draw_scroll(INTEGER depth, INTEGER flags, GDHandle target,
 extern void C_new_pos_ctl(INTEGER depth, INTEGER flags, GDHandle target,
                           LONGINT l);
 
-static_assert(sizeof(popup_data) == 12);
+static_assert(offsetof(popup_data, box) == 0x0A);
 static_assert(sizeof(thumbstr) == 18);
 static_assert(sizeof(contrlrestype) == 24);
 static_assert(sizeof(lsastr) == 18);

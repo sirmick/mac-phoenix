@@ -40,33 +40,62 @@ init(ControlHandle ctl)
     int16_t mid;
     int flags;
 
-    data = (popup_data_handle)NewHandle(sizeof(popup_data_t));
+    data = (popup_data_handle)NewHandleClear(sizeof(popup_data_t));
     /* ### check for nullptr return */
 
+    /* MacPhoenix: a menu already in the menu list (the application's,
+       by id) is used as it is, and the control keeps looking it up by id
+       (menu_of), so a menu made after the control, or replaced, is seen:
+       Apple's Standard File (PACK 3) makes its folder pop-up's menu -4000
+       with NewMenu after NewControl and again at every folder change,
+       DeleteMenu and InsertMenu(-1) each time. Only a 'MENU' resource is
+       loaded and copied here, as before. */
     mid = CTL_MIN(ctl);
-    mh = GetMenu(mid);
-    InsertMenu(mh, -1);
+    flags = CTL_VALUE(ctl);
+    POPUP_MENU_ID(data) = mid;
+    POPUP_MENU(data) = nullptr;
+    mh = GetMenuHandle(mid);
+    if(!mh)
     {
-        GUEST<Handle> hh;
-
-        hh = (Handle)mh;
-        HandToHand(&hh);
-        flags = CTL_VALUE(ctl);
-
-        POPUP_MENU_ID(data) = mid;
-        POPUP_MENU(data) = guest_cast<MenuHandle>(hh);
+        mh = GetMenu(mid);
+        if(mh)
+        {
+            InsertMenu(mh, -1);
+            GUEST<Handle> hh;
+            hh = (Handle)mh;
+            HandToHand(&hh);
+            POPUP_MENU(data) = guest_cast<MenuHandle>(hh);
+            mh = guest_cast<MenuHandle>(hh);
+        }
     }
     /* private fields */
     POPUP_TITLE_WIDTH(data) = CTL_MAX(ctl);
     POPUP_FLAGS(data) = flags;
+    {
+        /* the box, until a draw places it: the control's rect past the title */
+        Rect box = CTL_RECT(ctl);
+        box.left = box.left + CTL_MAX(ctl);
+        POPUP_BOX(data) = box;
+    }
 
     CTL_DATA(ctl) = (Handle)data;
 
     CTL_ACTION(ctl) = guest_cast<ControlActionUPP>(-1);
     CTL_VALUE(ctl) = 1;
     CTL_MIN(ctl) = 1;
-    CTL_MAX(ctl) = CountMItems(mh);
-    CheckItem(mh, 1, true);
+    CTL_MAX(ctl) = mh ? CountMItems(mh) : 0;
+    if(mh)
+        CheckItem(mh, 1, true);
+}
+
+/* The control's menu right now: the one in the menu list under its id,
+   else the copy of the resource made at init. */
+static MenuHandle menu_of(popup_data_handle data)
+{
+    MenuHandle mh = GetMenuHandle(POPUP_MENU_ID(data));
+    if(mh)
+        return mh;
+    return (MenuHandle)POPUP_MENU(data);
 }
 
 static void
@@ -153,7 +182,7 @@ draw(ControlHandle ctl, draw_state_t draw_state,
     data = (popup_data_handle)CTL_DATA(ctl);
     flags = POPUP_FLAGS(data);
 
-    item_info = ROMlib_mitemtop(POPUP_MENU(data), CTL_VALUE(ctl), &item_title);
+    item_info = menu_of(data) ? ROMlib_mitemtop(menu_of(data), CTL_VALUE(ctl), &item_title) : nullptr;
 
     if(item_info == nullptr)
     {
@@ -176,7 +205,10 @@ draw(ControlHandle ctl, draw_state_t draw_state,
     if(window_font_p)
     {
         TextFont(window_font);
-        TextFont(window_size);
+        TextSize(window_size); /* MacPhoenix: was TextFont(window_size), a font
+                                  numbered by the size; Apple's Standard File
+                                  (popupUseWFont) got a stray font's metrics
+                                  and drew its folder pop-up all over the dialog */
     }
     else
     {
@@ -276,7 +308,11 @@ draw(ControlHandle ctl, draw_state_t draw_state,
             MoveTo(left + (title_width - actual_title_width) / 2, baseline);
             break;
     }
-    DrawText((Ptr)title, 1, *title);
+    /* MacPhoenix: no room for a title, none drawn (Apple's Standard File
+       makes its folder pop-up with a title width of 0 and whatever its
+       scratch string holds as the title) */
+    if(title_width > 0)
+        DrawText((Ptr)title, 1, *title);
 
     item_top = center - item_total_height / 2;
     item_left = left + title_width;
@@ -301,6 +337,7 @@ draw(ControlHandle ctl, draw_state_t draw_state,
     t_rect.left = item_left - 1;
     t_rect.bottom = draw_bottom - 1;
     t_rect.right = right - 1;
+    POPUP_BOX(data) = t_rect; /* for Apple's Standard File's hit test */
 
     EraseRect(&t_rect);
 
@@ -475,8 +512,12 @@ int32_t Executor::C_cdef1008(int16_t var, ControlHandle ctl, int16_t message,
 
             data = (popup_data_handle)CTL_DATA(ctl);
 
-            DeleteMenu(POPUP_MENU_ID(data));
-            DisposeHandle((Handle)POPUP_MENU(data));
+            if(POPUP_MENU(data))
+            {
+                /* ours, from the resource; an application's stays its own */
+                DeleteMenu(POPUP_MENU_ID(data));
+                DisposeHandle((Handle)POPUP_MENU(data));
+            }
             DisposeHandle((Handle)data);
             break;
         }
@@ -491,11 +532,12 @@ int32_t Executor::C_cdef1008(int16_t var, ControlHandle ctl, int16_t message,
             int i, count;
 
             data = (popup_data_handle)CTL_DATA(ctl);
-            mh = POPUP_MENU(data);
-            count = CountMItems(mh);
+            mh = menu_of(data);
+            count = mh ? CountMItems(mh) : 0;
 
             if(!count)
                 break;
+            CTL_MAX(ctl) = count;
 
             /* make sure `orig_value' is checked */
             orig_value = CTL_VALUE(ctl);
