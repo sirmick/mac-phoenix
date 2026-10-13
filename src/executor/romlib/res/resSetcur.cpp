@@ -79,9 +79,11 @@ void Executor::C_UseResFile(INTEGER rn)
     if(rn == 0)
         rn = LM(SysMap);
     ROMlib_resTypesChanged();
-    if(ROMlib_rntohandl(rn, &map))
+    if(resmaphand m = ROMlib_rntohandl(rn, &map))
     {
-        LM(CurMap) = rn;
+        /* MacPhoenix: the map's own number (2 finds the System file's,
+           resOpen.cpp) */
+        LM(CurMap) = (*m)->resfn;
         ROMlib_setreserr(noErr);
     }
     else

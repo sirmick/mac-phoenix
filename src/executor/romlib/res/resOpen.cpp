@@ -462,6 +462,13 @@ resmaphand Executor::ROMlib_rntohandl(INTEGER rn, Handle *pph) /* INTERNAL */
     ph = map;
     EWALKMAP()
 
+    /* MacPhoenix: on a Mac the System file's reference number is always
+       2, and code says so (MPW Shell's WDEF does UseResFile(2) to reach
+       the System's WDEF 0, else finds itself and recurses). Ours is
+       another; 2, when no file has it, is the System file. */
+    if(!map && rn == 2 && LM(SysMap) != 2)
+        return ROMlib_rntohandl(LM(SysMap), pph);
+
     if(pph)
         *pph = (Handle)ph;
     return (map);
