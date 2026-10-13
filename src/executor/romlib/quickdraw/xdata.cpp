@@ -457,8 +457,16 @@ Executor::xdata_for_pixpat_with_space(PixPat *pixpat, PixMap *target,
     /* Compute the raw bits for this pixpat. */
     raw_bits_for_pixpat(pixpat, target, raw_bits, &row_bytes, &height);
 
-    /* Crank out the xdata. */
-    xdata_for_raw_data(target, x, raw_bits, row_bytes, height);
+    /* Crank out the xdata.  MacPhoenix: its bits go in the zone of the
+       xdata handle, the pattern's owner, not the current zone: the
+       desktop pattern belongs to the first process, and when another
+       application expanded it (repainting the desktop under a window it
+       moved), the bits lived in that application's partition and turned
+       to garbage once it quit (stripes on the desktop). */
+    {
+        TheZoneGuard zone_guard(HandleZone((Handle)xh));
+        xdata_for_raw_data(target, x, raw_bits, row_bytes, height);
+    }
 
     TEMP_ALLOC_FREE(raw_bits_temp_storage);
 
@@ -479,7 +487,10 @@ Executor::xdata_for_pattern(const Pattern& pattern, PixMap *target)
 
     /* Compute the raw bits for this pixpat and crank out the xdata. */
     raw_bits_for_pattern(pattern, target, raw_bits, &row_bytes);
-    xdata_for_raw_data(target, x, raw_bits, row_bytes, 8);
+    {
+        TheZoneGuard zone_guard(HandleZone((Handle)xh));
+        xdata_for_raw_data(target, x, raw_bits, row_bytes, 8);
+    }
 
     return xh;
 }
