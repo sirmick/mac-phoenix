@@ -213,12 +213,10 @@ Executor may die without warning because of this mismatch",
         || (size_info.size_flags & SZis32BitCompatible) != SZis32BitCompatible)
        && !ROMlib_nowarn32)
     {
-        system_error("This application doesn't claim to be \"32 bit clean\".  "
-                     "It is quite possible that this program will not work "
-                     "under Executor.",
-                     0,
-                     "Continue", "Quit", nullptr,
-                     nullptr, C_ExitToShell, nullptr);
+        /* MacPhoenix: a note in the log, not Executor's alert; 7.5.5 in
+           32-bit mode runs such an application without a word (Kid Pix's
+           SlideShow is one). */
+        fprintf(stderr, "[Executor] the application does not claim to be 32-bit clean\n");
     }
 #endif
 

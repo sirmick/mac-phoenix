@@ -35,11 +35,19 @@ void Executor::C_InvertRect(const Rect *r)
     CALLRECT(invert, r);
 }
 
+/* MacPhoenix: a nil pattern is the 8 bytes at address 0, as the 68k reads
+   them (MR Browser passes one to FillPoly); the trap glue makes guest 0 a
+   null host pointer. */
+static const Pattern &arg_pat(const Pattern *pat)
+{
+    return pat ? *pat : *(const Pattern *)SYN68K_TO_US(0);
+}
+
 void Executor::C_FillRect(const Rect *r, const Pattern *pat)
 {
     if(!EmptyRgn(PORT_VIS_REGION(qdGlobals().thePort)))
     {
-        ROMlib_fill_pat(*pat);
+        ROMlib_fill_pat(arg_pat(pat));
         CALLRECT(fill, r);
     }
 }
@@ -66,7 +74,7 @@ void Executor::C_InvertOval(const Rect *r)
 
 void Executor::C_FillOval(const Rect *r, const Pattern *pat)
 {
-    ROMlib_fill_pat(*pat);
+    ROMlib_fill_pat(arg_pat(pat));
     CALLOVAL(fill, r);
 }
 
@@ -92,7 +100,7 @@ void Executor::C_InvertRoundRect(const Rect *r, INTEGER ow, INTEGER oh)
 
 void Executor::C_FillRoundRect(const Rect *r, INTEGER ow, INTEGER oh, const Pattern *pat)
 {
-    ROMlib_fill_pat(*pat);
+    ROMlib_fill_pat(arg_pat(pat));
     CALLRRECT(fill, r, ow, oh);
 }
 
@@ -118,7 +126,7 @@ void Executor::C_InvertArc(const Rect *r, INTEGER start, INTEGER angle)
 
 void Executor::C_FillArc(const Rect *r, INTEGER start, INTEGER angle, const Pattern *pat)
 {
-    ROMlib_fill_pat(*pat);
+    ROMlib_fill_pat(arg_pat(pat));
     CALLARC(fill, r, start, angle);
 }
 
@@ -144,7 +152,7 @@ void Executor::C_InvertRgn(RgnHandle rh)
 
 void Executor::C_FillRgn(RgnHandle rh, const Pattern *pat)
 {
-    ROMlib_fill_pat(*pat);
+    ROMlib_fill_pat(arg_pat(pat));
     CALLRGN(fill, rh);
 }
 
@@ -170,6 +178,6 @@ void Executor::C_InvertPoly(PolyHandle poly)
 
 void Executor::C_FillPoly(PolyHandle poly, const Pattern *pat)
 {
-    ROMlib_fill_pat(*pat);
+    ROMlib_fill_pat(arg_pat(pat));
     CALLPOLY(fill, poly);
 }

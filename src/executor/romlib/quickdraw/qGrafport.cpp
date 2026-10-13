@@ -269,6 +269,8 @@ void Executor::C_ClipRect(Rect *r)
 
 void Executor::C_BackPat(const Pattern * pp)
 {
+    if(!pp) /* MacPhoenix: the 8 bytes at address 0, as the 68k reads them */
+        pp = (const Pattern *)SYN68K_TO_US(0);
     if(CGrafPort_p(qdGlobals().thePort))
     {
         PixPatHandle old_bk;

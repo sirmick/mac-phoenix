@@ -437,6 +437,10 @@ void Executor::dialog_draw_item(DialogPtr dp, itmp itemp, int itemno)
         Handle icon;
 
         icon = itemp->itmhand;
+        /* MacPhoenix: a purgeable 'ICON' may have gone while the dialog
+           was covered; reload it, as the Dialog Manager does. */
+        if(icon && !*icon)
+            LoadResource(icon);
         if(CICON_P(icon))
             PlotCIcon(&itemp->itmr, (CIconHandle)icon);
         else
@@ -444,6 +448,8 @@ void Executor::dialog_draw_item(DialogPtr dp, itmp itemp, int itemno)
     }
     else if(itemp->itmtype & picItem)
     {
+        if(itemp->itmhand && !*itemp->itmhand)
+            LoadResource(itemp->itmhand);
         DrawPicture((PicHandle)itemp->itmhand, &itemp->itmr);
     }
     else

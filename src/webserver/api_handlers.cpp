@@ -5,6 +5,7 @@
  */
 
 #include "api_handlers.h"
+#include "../core/mac_roman.h"
 #include "file_scanner.h"
 #include "../config/json_utils.h"
 #include "../core/executor_systems.h"
@@ -1610,7 +1611,9 @@ Response APIRouter::handle_launch(const Request& req) {
         r.set_content_type("application/json");
         return r;
     }
-    std::string path = j.value("path").toString().toStdString();
+    // The guest reads the command file's bytes as MacRoman: "AppleScript™",
+    // "MacPerl ƒ" and the like only resolve converted.
+    std::string path = utf8_to_mac_roman(j.value("path").toString().toStdString());
 
     // Write command file to bridge dir — the guest agent reads it via ExtFS
     auto& cfg = config::EmulatorConfig::instance();

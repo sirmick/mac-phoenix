@@ -299,6 +299,14 @@ CIconHandle Executor::C_GetCIcon(short icon_id)
 
 void Executor::C_DisposeCIcon(CIconHandle icon)
 {
+    /* MacPhoenix: nil, or an icon gone, is nothing to do (Kid Pix's
+       SlideShow disposes one it never got). */
+    if(!icon || !*icon)
+    {
+        if(icon)
+            DisposeHandle((Handle)icon);
+        return;
+    }
     DisposeHandle(CICON_DATA(icon));
     DisposeHandle((Handle)CICON_PMAP(icon).pmTable);
     DisposeHandle((Handle)icon);

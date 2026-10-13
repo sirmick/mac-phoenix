@@ -144,6 +144,8 @@ void Executor::C_PenMode(INTEGER m)
 
 void Executor::C_PenPat(const Pattern *pp)
 {
+    if(!pp) /* MacPhoenix: the 8 bytes at address 0, as the 68k reads them */
+        pp = (const Pattern *)SYN68K_TO_US(0);
     if(qdGlobals().thePort)
     {
         if(CGrafPort_p(qdGlobals().thePort))
