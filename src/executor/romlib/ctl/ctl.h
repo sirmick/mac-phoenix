@@ -106,10 +106,13 @@ struct popup_data
     GUEST<int32_t> apple_6;
     GUEST<Rect> box; /* $A: where the current item is drawn (menu rect) */
     uint8_t apple_rest[0x3A - 0x12];
+    GUEST<MenuHandle> own_copy; /* the copy of a 'MENU' resource made at init, ours to dispose;
+                                   an application's menu in mHandle (PACK 3 stores its own there) is its own */
     int16_t title_width;
     int flags;
 };
 #define POPUP_BOX(popup) ((*popup)->box)
+#define POPUP_OWN_COPY(popup) ((*popup)->own_copy)
 
 typedef struct popup_data popup_data_t;
 typedef popup_data_t *popup_data_ptr;

@@ -54,6 +54,7 @@ init(ControlHandle ctl)
     flags = CTL_VALUE(ctl);
     POPUP_MENU_ID(data) = mid;
     POPUP_MENU(data) = nullptr;
+    POPUP_OWN_COPY(data) = nullptr;
     mh = GetMenuHandle(mid);
     if(!mh)
     {
@@ -64,10 +65,11 @@ init(ControlHandle ctl)
             GUEST<Handle> hh;
             hh = (Handle)mh;
             HandToHand(&hh);
-            POPUP_MENU(data) = guest_cast<MenuHandle>(hh);
+            POPUP_OWN_COPY(data) = guest_cast<MenuHandle>(hh);
             mh = guest_cast<MenuHandle>(hh);
         }
     }
+    POPUP_MENU(data) = mh;
     /* private fields */
     POPUP_TITLE_WIDTH(data) = CTL_MAX(ctl);
     POPUP_FLAGS(data) = flags;
@@ -89,13 +91,16 @@ init(ControlHandle ctl)
 }
 
 /* The control's menu right now: the one in the menu list under its id,
-   else the copy of the resource made at init. */
+   else whatever mHandle holds (the application may have stored its own
+   there, as Apple's Standard File does), else the copy made at init. */
 static MenuHandle menu_of(popup_data_handle data)
 {
     MenuHandle mh = GetMenuHandle(POPUP_MENU_ID(data));
     if(mh)
         return mh;
-    return (MenuHandle)POPUP_MENU(data);
+    if(POPUP_MENU(data))
+        return (MenuHandle)POPUP_MENU(data);
+    return (MenuHandle)POPUP_OWN_COPY(data);
 }
 
 static void
@@ -512,11 +517,14 @@ int32_t Executor::C_cdef1008(int16_t var, ControlHandle ctl, int16_t message,
 
             data = (popup_data_handle)CTL_DATA(ctl);
 
-            if(POPUP_MENU(data))
+            if(MenuHandle own = (MenuHandle)POPUP_OWN_COPY(data))
             {
-                /* ours, from the resource; an application's stays its own */
-                DeleteMenu(POPUP_MENU_ID(data));
-                DisposeHandle((Handle)POPUP_MENU(data));
+                /* ours, from the resource; an application's stays its own
+                   (Apple's Standard File disposes the menu it stored in
+                   mHandle itself) */
+                if(GetMenuHandle(POPUP_MENU_ID(data)) == own)
+                    DeleteMenu(POPUP_MENU_ID(data));
+                DisposeHandle((Handle)own);
             }
             DisposeHandle((Handle)data);
             break;
