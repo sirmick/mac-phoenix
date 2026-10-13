@@ -1183,7 +1183,11 @@ static void resumed()
     reap_dead();
     process_info_t *me = current_process_info;
     ROMlib_app_menu_update();
-    DrawMenuBar();
+    /* The menu bar is the front process's: a process given background
+       time must not paint its own over it (Disk Copy's flickered over
+       Finder's at every slice). */
+    if(me == front_process)
+        DrawMenuBar();
     if(me->uncovered)
     {
         /* What the process that quit covered: the desktop and our windows. */
@@ -1197,7 +1201,8 @@ static void resumed()
         else
             PaintOne(nullptr, rgn);
         DisposeRgn(rgn);
-        DrawMenuBar();
+        if(me == front_process)
+            DrawMenuBar();
     }
     if(me->raised)
     {
