@@ -3,6 +3,7 @@
 #include "phoenix_sound.h"
 #include <base/m68kint.h>
 #include <base/cpu.h>
+#include <MemoryMgr.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -126,9 +127,19 @@ void PhoenixSoundDriver::note_sound_interrupt()
 
 void PhoenixSoundDriver::arm_timer()
 {
-    task_.tmAddr = guest_cast<ProcPtr>((uint32_t)callback_);
-    InsTime((QElemPtr)&task_);
-    PrimeTime((QElemPtr)&task_, kMsPerBuf);
+    /* The task lives in the System heap: the Time Manager's queue holds
+       guest addresses, and a member of this host object is not guest
+       memory on a core with address windows (mame-68k aborted on it in
+       Enqueue at the first SysBeep). */
+    if(!task_)
+    {
+        task_ = (TMTask *)NewPtrSysClear(sizeof *task_);
+        if(!task_)
+            return;
+    }
+    task_->tmAddr = guest_cast<ProcPtr>((uint32_t)callback_);
+    InsTime((QElemPtr)task_);
+    PrimeTime((QElemPtr)task_, kMsPerBuf);
 }
 
 /* A buffer's worth of time has passed: it has "played". */
@@ -171,7 +182,8 @@ void PhoenixSoundDriver::sound_stop()
 
 void PhoenixSoundDriver::sound_clear_pending()
 {
-    task_.tmCount = -1;
+    if(task_)
+        task_->tmCount = -1;
     enqueued_ = 0;
     pending_.clear();
 }

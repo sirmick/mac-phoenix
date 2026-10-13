@@ -297,16 +297,9 @@ OSErr Executor::C_AEGetEventHandler(AEEventClass event_class,
     AE_hdlr_selector_t selector;
     OSErr err;
 
-#if 1
-    if(event_class == "go b"_4 && event_id == "ears"_4)
-        system_error("This application appears to be using AppleEvents in "
-                     "a way that is not currently supported under Executor.  "
-                     "You may try to continue, but in all likelihood Executor "
-                     "will soon crash because of this incompatibility.",
-                     0, "Exit", "Continue",
-                     nullptr, C_ExitToShell, dummy, nullptr);
-#endif
-
+    /* MacPhoenix: upstream put up an alert for the 'go b'/'ears' probe
+       (Disk Copy 6.3.3 makes it on launch, and goes on fine when the
+       answer is errAEHandlerNotFound, as a real System gives). */
     table = hdlr_table(system_handler_p, event);
 
     selector.sel0 = event_class;

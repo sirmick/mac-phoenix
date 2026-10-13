@@ -46,7 +46,7 @@ private:
     int enqueued_ = 0;          // buffers mixed but not yet "played"
     syn68k_addr_t callback_ = 0;
     bool shutting_down_ = false;
-    Executor::TMTask task_ = {};
+    Executor::TMTask *task_ = nullptr; // in the System heap (guest memory)
     double resample_pos_ = 0;   // position in the source buffer
     int16_t last_sample_ = 0;   // for interpolation across buffers
     std::vector<uint8_t> pending_;  // S16MSB stereo frames not yet pushed
