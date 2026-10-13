@@ -586,14 +586,15 @@ fail:
     AE_RETURN_ERROR(errAECoercionFail);
 }
 
-OSErr Executor::C_AEManagerInfo(GUEST<LONGINT> *resultp)
+/* MacPhoenix: 7.5.5's PACK 8 has no AEManagerInfo (its routine table ends
+   at $3E), so the call is paramErr on a real System of that age; Disk Copy
+   6.3.3 takes that and gives up on noErr with a version of 0. */
+OSErr Executor::C_AEManagerInfo(AEKeyword keyWord, GUEST<LONGINT> *resultp)
 {
-    OSErr retval;
-
-    *resultp = 0;
-    retval = noErr;
-
-    return retval;
+    (void)keyWord;
+    if(resultp)
+        *resultp = 0;
+    return paramErr;
 }
 
 /* stubs added by Cliff after reading documentation on Apple's web site */

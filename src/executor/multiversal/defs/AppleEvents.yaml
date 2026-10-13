@@ -1560,11 +1560,18 @@
     name: AEManagerInfo
     return: OSErr
     args:
+      - name: keyWord
+        type: AEKeyword
       - name: resultp
         type: LONGINT*
     dispatcher: Pack8
     selector: 0x0441
     executor: C_
+    comment: |
+      MacPhoenix: (keyWord, result *), 8 bytes, as the selector says (was
+      declared with the result alone). 7.5.5's PACK 8 has no routine $41
+      (its table ends at $3E), so the call answers paramErr there; Disk Copy
+      6.3.3 takes that and refuses to run on noErr with a version of 0.
 
 # ####
 
