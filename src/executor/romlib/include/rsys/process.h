@@ -44,7 +44,14 @@ extern bool ROMlib_process_has_thread();
 /* Did the launcher post the current process's opening Apple event? */
 extern bool ROMlib_process_open_event_posted();
 /* Called on every event call: where processes switch. */
-extern void ROMlib_process_event_hook();
+/* A Quit Apple event for a process that cannot take one: the puppet
+   string (a menu-bar click answered with File > Quit). False when the
+   process is high-level-event aware or not found. */
+extern bool ROMlib_process_puppet_quit(const ProcessSerialNumber *psn);
+/* MenuSelect asks whether its answer is the puppet string's. */
+extern bool ROMlib_process_take_puppet_menu();
+/* Every event call, with its event mask. */
+extern void ROMlib_process_event_hook(INTEGER mask);
 /* WaitNextEvent: the caller sleeps (ticks) in its event loop. */
 extern void ROMlib_process_idle_hook(int32_t sleep);
 /* LaunchApplication with launchContinue: create the process. */

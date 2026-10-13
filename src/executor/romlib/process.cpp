@@ -137,6 +137,18 @@ struct process_info
     RgnHandle raised = nullptr;
     bool activate_pending = false;
     bool os_event_pending = false;
+    /* The event mask of the event call it is in (a modal dialog's
+       GetNextEvent takes no Apple events). */
+    INTEGER event_mask = -1;
+    /* A Quit Apple event it cannot take (not SIZE isHighLevelEventAware):
+       the Process Manager's puppet string, a click in the menu bar that
+       MenuSelect answers with File > Quit. */
+    bool puppet_quit = false;
+    bool puppet_menu = false;
+    /* Event calls made in the current background slice. */
+    int background_calls = 0;
+    /* When it last got a background slice (a sequence number). */
+    uint32_t last_slice = 0;
     int32_t os_event_message = 0;
     /* Its last WaitNextEvent: when its sleep runs out (ticks). */
     uint32_t wake_tick = 0;
@@ -1017,14 +1029,41 @@ static uint32_t lowmem_long(process_info_t *p, uint32_t addr)
 
 static bool has_updates(process_info_t *p);
 
-/* Something waits for this process's next event call. */
+/* An activate or deactivate waits for this process: live low memory for
+   the running process (its saved image dates from the last switch, and
+   would show a deactivate it has long handled), the image for the rest. */
+static bool activate_pending(process_info_t *p)
+{
+    if(p == current_process_info)
+        return LM(CurActivate) != nullptr || LM(CurDeactive) != nullptr;
+    return lowmem_long(p, 0xA64) /* CurActivate */
+        || lowmem_long(p, 0xA68); /* CurDeactive */
+}
+
+/* An event waits for this process. With its_call, only one the event
+   call it is making can take (its mask): counting one it cannot take,
+   such as an Apple event while it sits in a modal dialog, would keep it
+   running for good. Without, any: a parked process gets a turn for it,
+   since the call it parked in may be a narrow EventAvail with the
+   WaitNextEvent that takes it next (the Finder, answering an applet). */
+static bool wants_event(process_info_t *p, bool its_call = false)
+{
+    INTEGER m = its_call ? p->event_mask : (INTEGER)-1;
+    return ((m & updateMask) && has_updates(p))
+        || ((m & app4Mask /* osMask */) && p->os_event_pending)
+        || ((m & highLevelEventMask) && ROMlib_hle_pending(&p->serial_number))
+        || ((m & activMask) && activate_pending(p));
+}
+
+/* Something waits for this process's next event call: an event, or the
+   null event a SIZE canBackground process gets once its sleep runs out.
+   This decides whether a process behind is given a slice. How long it
+   keeps one is the event hook's business (only events its call can take,
+   and a few calls at most): a process in a GetNextEvent loop, such as
+   Executor's ModalDialog, never moves its wake tick. */
 static bool wants_time(process_info_t *p)
 {
-    return has_updates(p) || p->os_event_pending
-        || ROMlib_hle_pending(&p->serial_number)
-        || lowmem_long(p, 0xA64) /* CurActivate */
-        || lowmem_long(p, 0xA68) /* CurDeactive */
-        /* SIZE canBackground: a null event once its sleep runs out. */
+    return wants_event(p)
         || ((p->mode & 0x1000) && (int32_t)(TickCount() - p->wake_tick) >= 0);
 }
 
@@ -1460,11 +1499,12 @@ static void bring_to_front(process_info_t *q)
 
 /* Every event call: where processes switch, as 7.5.5's Process Manager
    does in GetNextEvent/WaitNextEvent/EventAvail. */
-void Executor::ROMlib_process_event_hook()
+void Executor::ROMlib_process_event_hook(INTEGER mask)
 {
     process_info_t *me = current_process_info;
     if(!me)
         return;
+    me->event_mask = mask;
     if(switch_hold > 0)
         return;
 
@@ -1482,9 +1522,15 @@ void Executor::ROMlib_process_event_hook()
 
     if(me != front_process)
     {
-        /* Background time: back to the front once we are up to date. */
-        if(!wants_time(me))
+        /* Background time: back to the front once we are up to date, or
+           after a few event calls whatever is left: an event the process
+           never takes (an update for a window its modal dialog ignores)
+           must not keep it running for good. */
+        if(!wants_event(me, true) || ++me->background_calls > 4)
+        {
+            me->background_calls = 0;
             switch_to(front_process);
+        }
         return;
     }
 
@@ -1497,6 +1543,21 @@ void Executor::ROMlib_process_event_hook()
             bring_to_front(q);
             return;
         }
+    }
+
+    /* A puppet-string Quit: the click in the menu bar, once the process
+       asks for mouse downs; its MenuSelect answers File > Quit. */
+    if(me->puppet_quit && (mask & mDownMask))
+    {
+        me->puppet_quit = false;
+        me->puppet_menu = true;
+        GUEST<EvQElPtr> qp;
+        if(PPostEvent(mouseDown, 0, &qp) == noErr && qp)
+        {
+            qp.get()->evtQWhere.v = 1;
+            qp.get()->evtQWhere.h = 2;
+        }
+        return;
     }
 
     /* A click in another process's window (or on the desktop, which is
@@ -1521,13 +1582,20 @@ void Executor::ROMlib_process_event_hook()
         }
     }
 
-    /* Minor switch: a process behind with something waiting gets time. */
+    /* Minor switch: a process behind with something waiting gets time,
+       the one that had it least recently first, so one that always wants
+       time (an event it never takes) cannot starve the others. */
+    process_info_t *next = nullptr;
     for(process_info_t *p : layer_order)
-        if(p != me && p->state == process_info_t::parked && wants_time(p))
-        {
-            switch_to(p);
-            return;
-        }
+        if(p != me && p->state == process_info_t::parked && wants_time(p)
+           && (!next || p->last_slice < next->last_slice))
+            next = p;
+    if(next)
+    {
+        static uint32_t slices;
+        next->last_slice = ++slices;
+        switch_to(next);
+    }
 }
 
 /* MacPhoenix (status: stand-in). On 7.5.5 Finder opens the items in Startup
@@ -1590,6 +1658,34 @@ void Executor::ROMlib_process_idle_hook(int32_t sleep)
     lpb.launchControlFlags = launchContinue | launchNoFileFlags;
     lpb.launchAppSpec = &spec;
     LaunchApplication(&lpb);
+}
+
+/* PostHighLevelEvent: a Quit Apple event for a process that is not
+   high-level-event aware becomes a puppet string, as on 7.5.5. */
+bool Executor::ROMlib_process_puppet_quit(const ProcessSerialNumber *psn)
+{
+    for(process_info_t *q = process_info_list; q; q = q->next)
+        if(PSN_EQ_P(q->serial_number, *psn))
+        {
+            if(q->state == process_info_t::dead || q->desk_accessory
+               || (q->mode & 0x0040) /* SIZE isHighLevelEventAware */)
+                return false;
+            q->puppet_quit = true;
+            if(q != front_process)
+                pending_front = q;
+            return true;
+        }
+    return false;
+}
+
+/* MenuSelect: the puppet string's choice is pending for this process. */
+bool Executor::ROMlib_process_take_puppet_menu()
+{
+    process_info_t *me = current_process_info;
+    if(!me || !me->puppet_menu)
+        return false;
+    me->puppet_menu = false;
+    return true;
 }
 
 bool Executor::ROMlib_process_is_front()

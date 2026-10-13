@@ -472,7 +472,7 @@ void (*Executor::ROMlib_event_poll_hook)(void) = nullptr;
 Boolean Executor::C_GetNextEvent(INTEGER em, EventRecord *evt)
 {
     Boolean retval;
-    ROMlib_process_event_hook();
+    ROMlib_process_event_hook(em);
     /* MacPhoenix: mouse and keyboard go to the front process only. */
     if(!ROMlib_process_is_front())
         em &= ~(mDownMask | mUpMask | keyDownMask | keyUpMask | autoKeyMask);
@@ -573,7 +573,7 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
 
 Boolean Executor::C_EventAvail(INTEGER em, EventRecord *evt)
 {
-    ROMlib_process_event_hook();
+    ROMlib_process_event_hook(em);
     if(!ROMlib_process_is_front())
         em &= ~(mDownMask | mUpMask | keyDownMask | keyUpMask | autoKeyMask);
     return (doevent(em, evt, false));

@@ -259,6 +259,15 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
         }
     }
 
+    /* MacPhoenix: a Quit for a process that takes no Apple events is
+       turned into a puppet string, as 7.5.5's Process Manager does. */
+    if(evt->message == "aevt"_4 && *(GUEST<OSType> *)&evt->where == "quit"_4
+       && ROMlib_process_puppet_quit(&to))
+    {
+        retval = noErr;
+        goto done;
+    }
+
     hle_msg = (HighLevelEventMsgPtr)NewPtr(sizeof *hle_msg + std::max<int32_t>(msg_length, 0));
     if(MemError() != noErr)
     {

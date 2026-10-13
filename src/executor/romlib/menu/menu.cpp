@@ -9,6 +9,7 @@
  */
 
 #include <base/common.h>
+#include <rsys/process.h>
 #include <QuickDraw.h>
 #include <MenuMgr.h>
 #include <WindowMgr.h>
@@ -1417,10 +1418,57 @@ int32_t Executor::ROMlib_menuhelper(MenuHandle mh, Rect *saverp,
         return ((LONGINT)mid << 16) | (unsigned short)item;
 }
 
+/* MacPhoenix: the Process Manager's puppet-string Quit for an application
+   that takes no Apple events. Its 'mstr' 100 and 101 name the menu and
+   item, as on System 7; else "File" and "Quit". */
+static LONGINT puppet_quit_choice()
+{
+    Str255 menu_name, item_name;
+    auto mstr = [](INTEGER id, StringPtr out, const char *dflt) {
+        Handle h = GetResource("mstr"_4, id);
+        if(h && *h && GetHandleSize(h) > 0)
+            memcpy(out, *h, std::min<Size>(GetHandleSize(h), 256));
+        else
+        {
+            out[0] = strlen(dflt);
+            memcpy(out + 1, dflt, out[0]);
+        }
+    };
+    mstr(100, menu_name, "File");
+    mstr(101, item_name, "Quit");
+    if(!LM(MenuList))
+        return 0;
+    muelem *mpend = (*MENULIST)->mulist + (*MENULIST)->muoff / sizeof(muelem);
+    for(muelem *mp = (*MENULIST)->mulist; mp != mpend; mp++)
+    {
+        MenuHandle mh = mp->muhandle;
+        if(!mh || !EqualString((*mh)->menuData, menu_name, false, true))
+            continue;
+        INTEGER n = CountMItems(mh);
+        for(INTEGER i = 1; i <= n; i++)
+        {
+            Str255 text;
+            GetMenuItemText(mh, i, text);
+            if(EqualString(text, item_name, false, true))
+                return ((LONGINT)(*mh)->menuID << 16) | (uint16_t)i;
+        }
+    }
+    return 0;
+}
+
 LONGINT Executor::C_MenuSelect(Point p)
 {
     Rect spooeyr;
     LONGINT retval;
+
+    if(ROMlib_process_take_puppet_menu())
+    {
+        if((retval = puppet_quit_choice()))
+        {
+            HiliteMenu(retval >> 16);
+            return retval;
+        }
+    }
 
     ROMlib_menubar_message_clear();
     ROMlib_apple_menu_update();
