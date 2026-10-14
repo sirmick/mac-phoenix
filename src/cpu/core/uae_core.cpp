@@ -321,7 +321,11 @@ private:
     std::atomic<int> irq_{0};
     std::atomic<bool> nmi_{false};
     int depth_ = 0;
-    bool *stop_flag_ = nullptr;  /* the innermost run()'s */
+    /* The innermost run()'s, per host thread: Executor's processes and
+       Thread Manager threads each run guest code on a host thread of their
+       own and park inside run(); a run on another host thread must not
+       take the parked one's flag (it would never see its exit cell). */
+    static inline thread_local bool *stop_flag_ = nullptr;
     std::atomic<bool> stop_requested_{false};
     std::atomic<bool> attention_{false};
 };

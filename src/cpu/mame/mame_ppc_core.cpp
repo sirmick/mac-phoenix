@@ -357,7 +357,11 @@ private:
     int depth_ = 0;
     int traced_ = 0;
     bool trace_ = false;   /* Config::trace */
-    bool *stop_flag_ = nullptr; /* the innermost run()'s */
+    /* The innermost run()'s, per host thread: Executor's processes and
+       Thread Manager threads each run guest code on a host thread of their
+       own and park inside run(); a run on another host thread must not
+       take the parked one's flag (it would never see its exit cell). */
+    static inline thread_local bool *stop_flag_ = nullptr;
     std::atomic<bool> stop_requested_{false};
     std::atomic<bool> attention_{false};
 };
