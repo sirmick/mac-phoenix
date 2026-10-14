@@ -453,13 +453,20 @@ int32_t Executor::ROMlib_register_components(INTEGER refnum, bool global)
     return register_file(refnum, global ? registerComponentGlobal : 0);
 }
 
-void Executor::ROMlib_components_process_exit(const ProcessSerialNumber *psn)
+void Executor::ROMlib_components_process_exit(const ProcessSerialNumber *psn,
+                                               uint32_t part_lo, uint32_t part_hi)
 {
     for(size_t i = comps.size(); i-- > 0;)
     {
         Comp *c = comps[i].get();
-        if(!c->global && c->owner.highLongOfPSN == psn->highLongOfPSN
-           && c->owner.lowLongOfPSN == psn->lowLongOfPSN)
+        bool owned = !c->global && c->owner.highLongOfPSN == psn->highLongOfPSN
+            && c->owner.lowLongOfPSN == psn->lowLongOfPSN;
+        /* MacPhoenix: a global component whose code was in the partition
+           is gone with it (Frontier's, registered globally from its own
+           heap: NetEvents opened it after Frontier quit and jumped into
+           freed memory). */
+        bool code_gone = part_hi > part_lo && c->entry >= part_lo && c->entry < part_hi;
+        if(owned || code_gone)
         {
             c->instances = 0;
             unregister(c);
