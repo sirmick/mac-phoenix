@@ -154,6 +154,9 @@ static gestaltentry_t gtable[] = {
     {
         gestaltNativeCPUtype, gestaltCPU68040,
     },
+    /* MacPhoenix: the Thread Manager (process.cpp): gestaltThreadMgrPresent
+       and gestaltSpecificMatchSupport, as System 7.5's answers. */
+    { "thds"_4, 3 },
     /* MacPhoenix: was gestaltMacQuadra610; a real 7.5.5 boot under
        Basilisk II reports 20 ('mach' in its Gestalt table). */
     {

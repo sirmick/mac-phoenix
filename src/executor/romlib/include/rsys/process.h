@@ -50,6 +50,9 @@ extern bool ROMlib_process_open_event_posted();
 extern bool ROMlib_process_puppet_quit(const ProcessSerialNumber *psn);
 /* MenuSelect asks whether its answer is the puppet string's. */
 extern bool ROMlib_process_take_puppet_menu();
+/* StackSpace in a Thread Manager thread: the bottom of its stack (guest
+   address); 0 in the main thread. */
+extern uint32_t ROMlib_thread_stack_low();
 /* Every event call, with its event mask. */
 extern void ROMlib_process_event_hook(INTEGER mask);
 /* WaitNextEvent: the caller sleeps (ticks) in its event loop. */

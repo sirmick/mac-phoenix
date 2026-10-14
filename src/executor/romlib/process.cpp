@@ -6,6 +6,7 @@
 #include <menu/menu.h>
 
 #include <ProcessMgr.h>
+#include <ThreadMgr.h>
 #include <SegmentLdr.h>
 #include <ResourceMgr.h>
 #include <MemoryMgr.h>
@@ -45,6 +46,7 @@ using namespace Executor;
 #include <QThread>
 #include <QWaitCondition>
 #include <ucontext.h>
+#include <functional>
 
 
 #define declare_handle_type(type_prefix)        \
@@ -153,6 +155,16 @@ struct process_info
     /* Its last WaitNextEvent: when its sleep runs out (ticks). */
     uint32_t wake_tick = 0;
     Ptr layer = nullptr; /* its Layer Manager record (System heap) */
+
+    /* Thread Manager: its threads (the main one first, made at the first
+       Thread Manager call) and the one running. Null: only the main
+       thread, which never asked. */
+    std::vector<struct pm_thread *> threads;
+    struct pm_thread *running_thread = nullptr;
+    struct pm_thread *main_thread = nullptr;
+    Ptr thread_scheduler = nullptr;
+    int thread_critical = 0;
+    int thread_pool = 0; /* CreateThreadPool's count, for kUsePremadeThread */
 };
 typedef struct process_info process_info_t;
 
@@ -1095,10 +1107,14 @@ static void hand_baton(process_info_t *to)
     pm_cv.wakeAll();
 }
 
+/* A host thread runs when its process has the baton and, inside the
+   process, its 68k thread is the running one (Thread Manager): a process
+   switch hands the baton to whichever thread of the process was running. */
 static void wait_for_baton(process_info_t *self)
 {
     QMutexLocker lock(&pm_mutex);
-    while(pm_running != self)
+    pm_thread *mine = self->running_thread;
+    while(pm_running != self || self->running_thread != mine)
         pm_cv.wait(&pm_mutex);
 }
 
@@ -1109,7 +1125,7 @@ static void wait_for_baton(process_info_t *self)
  * from a pool reserved below 4GB once, at startup of the first process, and
  * the whole process lives there (Executor's own thread does the same). */
 
-static const int stack_slots = 16;
+static const int stack_slots = 48; /* processes and their threads */
 static const size_t stack_size = 4 * 1024 * 1024;
 static char *stack_pool;
 static bool stack_used[stack_slots];
@@ -1129,13 +1145,15 @@ static int take_stack_slot()
 
 static void process_body(process_info_t *p);
 
+/* A host thread on a low stack slot, running body there: a process's
+   life, or a Thread Manager thread's. */
 class ProcessThread : public QThread
 {
 public:
-    explicit ProcessThread(process_info_t *p)
-        : p(p)
+    ProcessThread(int slot, std::function<void()> body, const unsigned char *name)
+        : slot(slot), body(std::move(body))
     {
-        setObjectName(QString::fromLatin1((const char *)p->app.name + 1, p->app.name[0]));
+        setObjectName(QString::fromLatin1((const char *)name + 1, name[0]));
     }
 
 protected:
@@ -1143,7 +1161,7 @@ protected:
     {
         ucontext_t low;
         getcontext(&low);
-        low.uc_stack.ss_sp = stack_pool + p->stack_slot * stack_size;
+        low.uc_stack.ss_sp = stack_pool + slot * stack_size;
         low.uc_stack.ss_size = stack_size;
         low.uc_link = &back;
         current = this;
@@ -1154,10 +1172,11 @@ protected:
 private:
     static void trampoline()
     {
-        process_body(current->p);
+        current->body();
     }
 
-    process_info_t *p;
+    int slot;
+    std::function<void()> body;
     ucontext_t back;
     static thread_local ProcessThread *current;
 };
@@ -1168,7 +1187,7 @@ static void start_thread(process_info_t *p)
     p->stack_slot = take_stack_slot();
     if(p->stack_slot < 0)
         gui_fatal("too many processes");
-    p->thread = new ProcessThread(p);
+    p->thread = new ProcessThread(p->stack_slot, [p]() { process_body(p); }, p->app.name);
     p->thread->start();
 }
 
@@ -1379,9 +1398,12 @@ static void exit_current()
           && !ROMlib_system_resource_file_p((*(resmaphand)LM(TopMapHndl))->resfn))
         CloseResFile((*(resmaphand)LM(TopMapHndl))->resfn);
 
+    uint32_t part_lo = 0, part_hi = 0;
     if(me->partition)
     {
         Ptr lo = *me->partition;
+        part_lo = US_TO_SYN68K(lo);
+        part_hi = part_lo + me->partition_size;
         remove_tasks_in(lo, lo + me->partition_size);
         TheZoneGuard guard(ROMlib_pm_zone);
         HUnlock(me->partition);
@@ -1400,7 +1422,7 @@ static void exit_current()
         pending_front = nullptr;
     forget_process(me);
     ROMlib_hle_forget(&me->serial_number);
-    ROMlib_components_process_exit(&me->serial_number);
+    ROMlib_components_process_exit(&me->serial_number, part_lo, part_hi);
     me->state = process_info_t::dead;
     reap_list.push_back(me);
 
@@ -1429,6 +1451,8 @@ static void exit_current()
     hand_baton(next);
 }
 
+static void threads_shutdown(process_info_t *p);
+
 /* A process's life, on its low stack. */
 static void process_body(process_info_t *p)
 {
@@ -1445,6 +1469,7 @@ static void process_body(process_info_t *p)
     catch(const ExitToShellException &)
     {
     }
+    threads_shutdown(p);
     exit_current();
 }
 
@@ -2499,4 +2524,655 @@ OSErr Executor::C_AddAppleMenuItem(StringPtr name, int16_t sortGroup, int16_t fl
 OSErr Executor::C_RemoveAppleMenuItems(int32_t key)
 {
     return ROMlib_apple_menu_remove(key) ? noErr : paramErr;
+}
+
+/* ── Thread Manager (Threads.h, ThreadMgr.yaml) ──
+ * System 7.5's cooperative threads, inside a process. Each thread runs on
+ * a host thread of its own, from the same low stack pool as the
+ * processes, and the baton says who runs: a host thread runs when its
+ * process has the baton and its thread is the process's running one
+ * (wait_for_baton). So a thread may yield from any depth, even from a
+ * dialog filter that C++ ModalDialog called, and a process switch carries
+ * whichever thread was running. A thread's 68k context is its own: its
+ * registers (saved here when it yields) and a stack in the application
+ * heap. Preemptive threads are scheduled as cooperative ones. Disposing a
+ * parked thread, or the application's quitting, wakes it to unwind with
+ * an exception, as ExitToShell unwinds a process. */
+
+struct pm_thread
+{
+    uint32_t id = 0;
+    process_info_t *proc = nullptr;
+    bool main = false;
+    INTEGER state = kReadyThreadState;
+    uint32_t style = kCooperativeThread;
+    uint32_t entry = 0;       /* ThreadEntryProc, guest */
+    uint32_t param = 0;
+    uint32_t result_addr = 0; /* where NewThread's caller wants the result */
+    Ptr stack = nullptr;      /* its 68k stack, application heap */
+    uint32_t stack_size = 0;
+    std::vector<uint8_t> cpu; /* its 68k context while parked */
+    bool started = false;
+    bool finished = false;
+    bool kill = false;        /* wake up only to unwind */
+    uint32_t exit_result = 0;
+    pm_thread *return_to = nullptr; /* who disposed of it, runs next */
+    int slot = -1;
+    ProcessThread *host = nullptr;
+    uint32_t switch_in = 0, switch_in_param = 0;
+    uint32_t switch_out = 0, switch_out_param = 0;
+    uint32_t terminator = 0, terminator_param = 0;
+};
+
+namespace
+{
+/* Unwinds a thread's host stack to its body: DisposeThread of itself, or
+   of a parked thread woken for it. */
+struct ThreadExit
+{
+};
+}
+
+static uint32_t next_thread_id = 0x00000101;
+static std::vector<pm_thread *> thread_reap_list;
+static const uint32_t default_thread_stack = 32 * 1024;
+
+static void reap_threads()
+{
+    for(pm_thread *t : thread_reap_list)
+    {
+        if(t->host)
+        {
+            t->host->wait();
+            delete t->host;
+        }
+        if(t->slot >= 0)
+            stack_used[t->slot] = false;
+        delete t;
+    }
+    thread_reap_list.clear();
+}
+
+
+/* The main thread's record, made at the process's first Thread Manager
+   call (by its main thread: that one is running). */
+static pm_thread *main_thread_of(process_info_t *p)
+{
+    if(!p->main_thread)
+    {
+        pm_thread *m = new pm_thread;
+        m->id = next_thread_id++;
+        m->proc = p;
+        m->main = true;
+        m->state = kRunningThreadState;
+        m->started = true;
+        p->threads.insert(p->threads.begin(), m);
+        p->main_thread = m;
+        QMutexLocker lock(&pm_mutex);
+        p->running_thread = m;
+    }
+    return p->main_thread;
+}
+
+static pm_thread *current_thread()
+{
+    process_info_t *p = current_process_info;
+    if(!p)
+        return nullptr;
+    main_thread_of(p);
+    return p->running_thread;
+}
+
+static pm_thread *find_thread(process_info_t *p, uint32_t id)
+{
+    if(!p)
+        return nullptr;
+    main_thread_of(p);
+    if(id == kCurrentThreadID)
+        return p->running_thread;
+    if(id == kApplicationThreadID)
+        return p->main_thread;
+    for(pm_thread *t : p->threads)
+        if(t->id == id && !t->finished)
+            return t;
+    return nullptr;
+}
+
+static void wait_for_thread(process_info_t *p, pm_thread *t)
+{
+    QMutexLocker lock(&pm_mutex);
+    while(pm_running != p || p->running_thread != t)
+        pm_cv.wait(&pm_mutex);
+}
+
+/* A Pascal procedure (ThreadID, long), the switcher and terminator kind. */
+static void call_thread_proc(uint32_t proc, uint32_t id, uint32_t param)
+{
+    EM_A7 -= 4;
+    WRITEUL(EM_A7, id);
+    EM_A7 -= 4;
+    WRITEUL(EM_A7, param);
+    execute68K(proc);
+}
+
+/* The next ready thread after from, round-robin, the main one included. */
+static pm_thread *next_ready(process_info_t *p, pm_thread *from)
+{
+    auto &v = p->threads;
+    size_t n = v.size();
+    size_t at = std::find(v.begin(), v.end(), from) - v.begin();
+    for(size_t k = 1; k <= n; k++)
+    {
+        pm_thread *t = v[(at + k) % n];
+        if(t != from && !t->finished && t->state == kReadyThreadState)
+            return t;
+    }
+    return nullptr;
+}
+
+/* The application's scheduler (SetThreadScheduler), if any: a thread ID
+   to run, or kNoThreadID for ours to choose. */
+static pm_thread *ask_scheduler(process_info_t *p, pm_thread *me, uint32_t suggested)
+{
+    if(!p->thread_scheduler)
+        return nullptr;
+    uint32_t saved = EM_A7;
+    EM_A7 -= 16; /* SchedulerInfoRec */
+    uint32_t rec = EM_A7;
+    WRITEUL(rec, 16);
+    WRITEUL(rec + 4, me->id);
+    WRITEUL(rec + 8, suggested);
+    WRITEUL(rec + 12, kNoThreadID);
+    EM_A7 -= 4;
+    WRITEUL(EM_A7, 0);
+    EM_A7 -= 4;
+    WRITEUL(EM_A7, rec);
+    execute68K(US_TO_SYN68K(p->thread_scheduler));
+    uint32_t chosen = READUL(EM_A7);
+    EM_A7 = saved;
+    pm_thread *t = chosen ? find_thread(p, chosen) : nullptr;
+    return t && t->state == kReadyThreadState ? t : nullptr;
+}
+
+static void thread_body(pm_thread *t);
+
+/* Run thread to instead of the running one (ours) and wait for our turn. */
+static void thread_switch_to(process_info_t *p, pm_thread *to)
+{
+    pm_thread *me = p->running_thread;
+    if(to == me)
+        return;
+    if(me->switch_out)
+        call_thread_proc(me->switch_out, me->id, me->switch_out_param);
+    if(me->state == kRunningThreadState)
+        me->state = kReadyThreadState;
+    me->cpu.resize(syn68k_context_size());
+    syn68k_save_context(me->cpu.data());
+    to->state = kRunningThreadState;
+    if(!to->started)
+    {
+        /* Its first context is ours; the body moves it to its stack. */
+        to->started = true;
+        to->cpu = me->cpu;
+        to->slot = take_stack_slot();
+        if(to->slot < 0)
+            gui_fatal("too many threads");
+        {
+            QMutexLocker lock(&pm_mutex);
+            p->running_thread = to;
+        }
+        to->host = new ProcessThread(to->slot, [to]() { thread_body(to); }, p->name);
+        to->host->start();
+    }
+    else
+    {
+        syn68k_restore_context(to->cpu.data());
+        QMutexLocker lock(&pm_mutex);
+        p->running_thread = to;
+        pm_cv.wakeAll();
+    }
+
+    wait_for_thread(p, me);
+    /* Back: whoever switched to us restored our context. */
+    reap_threads();
+    me->state = kRunningThreadState;
+    if(me->kill)
+    {
+        me->kill = false;
+        if(me->main)
+            throw ExitToShellException(); /* another thread quit the application */
+        throw ThreadExit();
+    }
+    if(me->switch_in)
+        call_thread_proc(me->switch_in, me->id, me->switch_in_param);
+}
+
+/* A thread is done (its entry returned, it was disposed of, or it quit
+   the application): tell who asked, and hand on. Runs on its host thread,
+   which ends after. */
+static void thread_finish(pm_thread *t, uint32_t result, bool quit_app)
+{
+    process_info_t *p = t->proc;
+    if(t->result_addr)
+        WRITEUL(t->result_addr, result);
+    if(t->terminator)
+        call_thread_proc(t->terminator, t->id, t->terminator_param);
+    t->finished = true;
+    t->state = kStoppedThreadState;
+    p->threads.erase(std::remove(p->threads.begin(), p->threads.end(), t), p->threads.end());
+    if(t->stack)
+        DisposePtr(t->stack);
+    t->stack = nullptr;
+
+    pm_thread *next;
+    if(quit_app)
+    {
+        next = p->main_thread;
+        next->kill = true;
+    }
+    else if(t->return_to && !t->return_to->finished)
+        next = t->return_to;
+    else
+    {
+        next = next_ready(p, t);
+        if(!next)
+            next = p->main_thread; /* the main thread runs, stopped or not */
+    }
+    next->state = kRunningThreadState;
+    syn68k_restore_context(next->cpu.data());
+    thread_reap_list.push_back(t);
+    QMutexLocker lock(&pm_mutex);
+    p->running_thread = next;
+    pm_cv.wakeAll();
+}
+
+/* A thread's life, on its host thread. */
+static void thread_body(pm_thread *t)
+{
+    process_info_t *p = t->proc;
+    wait_for_thread(p, t);
+    syn68k_restore_context(t->cpu.data());
+    uint32_t result = 0;
+    bool quit_app = false;
+    try
+    {
+        if(t->kill)
+            throw ThreadExit();
+        if(t->switch_in)
+            call_thread_proc(t->switch_in, t->id, t->switch_in_param);
+        EM_A6 = 0;
+        EM_A7 = (US_TO_SYN68K(t->stack) + t->stack_size) & ~3u;
+        EM_A7 -= 4;
+        WRITEUL(EM_A7, 0); /* the result */
+        EM_A7 -= 4;
+        WRITEUL(EM_A7, t->param);
+        execute68K(t->entry);
+        result = READUL(EM_A7);
+    }
+    catch(const ThreadExit &)
+    {
+        result = t->exit_result;
+    }
+    catch(const ExitToShellException &)
+    {
+        quit_app = true;
+    }
+    thread_finish(t, result, quit_app);
+}
+
+/* The application quits: its threads are disposed of, each unwinding on
+   its own host thread (termination procs run), before the process goes. */
+static void threads_shutdown(process_info_t *p)
+{
+    if(!p->main_thread)
+        return;
+    /* One at a time, from the live list: while one unwinds, its
+       termination and switcher procedures run 68k code that may yield, so
+       others can finish (and be reaped) meanwhile. */
+    for(;;)
+    {
+        pm_thread *t = nullptr;
+        for(pm_thread *u : p->threads)
+            if(!u->main && !u->finished)
+            {
+                t = u;
+                break;
+            }
+        if(!t)
+            break;
+        if(t->started)
+        {
+            t->kill = true;
+            t->return_to = p->main_thread;
+            try
+            {
+                thread_switch_to(p, t);
+            }
+            catch(const ExitToShellException &)
+            {
+            }
+        }
+        else
+        {
+            if(t->stack)
+                DisposePtr(t->stack);
+            p->threads.erase(std::remove(p->threads.begin(), p->threads.end(), t), p->threads.end());
+            delete t;
+        }
+    }
+    reap_threads();
+    p->threads.clear();
+    delete p->main_thread;
+    p->main_thread = nullptr;
+    QMutexLocker lock(&pm_mutex);
+    p->running_thread = nullptr;
+}
+
+/* StackSpace in a thread other than the main one: down to its stack's
+   bottom. 0: the main thread's (the application's) stack. */
+uint32_t Executor::ROMlib_thread_stack_low()
+{
+    process_info_t *p = current_process_info;
+    if(!p || !p->running_thread || p->running_thread->main || !p->running_thread->stack)
+        return 0;
+    return US_TO_SYN68K(p->running_thread->stack);
+}
+
+OSErr Executor::C_NewThread(LONGINT threadStyle, ProcPtr threadEntry, LONGINT threadParam,
+                            LONGINT stackSize, LONGINT options, GUEST<LONGINT> *threadResult,
+                            GUEST<LONGINT> *threadMade)
+{
+    process_info_t *p = current_process_info;
+    if(!p || !threadEntry)
+        return paramErr;
+    main_thread_of(p);
+    if(options & kUsePremadeThread)
+    {
+        if(p->thread_pool > 0)
+            p->thread_pool--;
+        else if(!(options & kCreateIfNeeded))
+            return threadTooManyReqsErr;
+    }
+    uint32_t size = stackSize > 0 ? stackSize : default_thread_stack;
+    Ptr stack;
+    {
+        TheZoneGuard guard(LM(ApplZone));
+        stack = NewPtr(size);
+    }
+    if(!stack)
+        return memFullErr;
+    pm_thread *t = new pm_thread;
+    t->id = next_thread_id++;
+    t->proc = p;
+    t->style = threadStyle;
+    t->entry = US_TO_SYN68K(threadEntry);
+    t->param = threadParam;
+    t->result_addr = threadResult ? US_TO_SYN68K(threadResult) : 0;
+    t->stack = stack;
+    t->stack_size = size;
+    t->state = (options & kNewSuspend) ? kStoppedThreadState : kReadyThreadState;
+    p->threads.push_back(t);
+    if(threadMade)
+        *threadMade = t->id;
+    return noErr;
+}
+
+OSErr Executor::C_DisposeThread(LONGINT threadToDump, LONGINT threadResult, Boolean recycleThread)
+{
+    process_info_t *p = current_process_info;
+    pm_thread *t = find_thread(p, threadToDump);
+    if(!t)
+        return threadNotFoundErr;
+    if(t->main)
+        return threadProtocolErr;
+    if(recycleThread)
+        p->thread_pool++;
+    pm_thread *me = p->running_thread;
+    t->exit_result = threadResult;
+    if(t == me)
+        throw ThreadExit(); /* to its body, which finishes it */
+    if(!t->started)
+    {
+        if(t->result_addr)
+            WRITEUL(t->result_addr, threadResult);
+        if(t->terminator)
+            call_thread_proc(t->terminator, t->id, t->terminator_param);
+        if(t->stack)
+            DisposePtr(t->stack);
+        p->threads.erase(std::remove(p->threads.begin(), p->threads.end(), t), p->threads.end());
+        delete t;
+        return noErr;
+    }
+    /* Parked: it wakes to unwind, then hands back to us. */
+    t->kill = true;
+    t->return_to = me;
+    thread_switch_to(p, t);
+    return noErr;
+}
+
+OSErr Executor::C_YieldToThread(LONGINT suggestedThread)
+{
+    process_info_t *p = current_process_info;
+    if(!p || !p->main_thread || p->threads.size() < 2)
+        return noErr; /* nobody else to run */
+    pm_thread *me = p->running_thread;
+    pm_thread *to = nullptr;
+    if(suggestedThread)
+    {
+        to = find_thread(p, suggestedThread);
+        if(to && to->state != kReadyThreadState)
+            to = nullptr;
+    }
+    if(!to)
+        to = ask_scheduler(p, me, suggestedThread);
+    if(!to)
+        to = next_ready(p, me);
+    if(to && to != me)
+        thread_switch_to(p, to);
+    return noErr;
+}
+
+OSErr Executor::C_GetCurrentThread(GUEST<LONGINT> *currentThreadID)
+{
+    pm_thread *me = current_thread();
+    if(!me)
+        return threadProtocolErr;
+    *currentThreadID = me->id;
+    return noErr;
+}
+
+OSErr Executor::C_GetThreadState(LONGINT threadToGet, GUEST<INTEGER> *threadState)
+{
+    pm_thread *t = find_thread(current_process_info, threadToGet);
+    if(!t)
+        return threadNotFoundErr;
+    *threadState = t->state;
+    return noErr;
+}
+
+static OSErr set_thread_state(LONGINT threadToSet, INTEGER newState, LONGINT suggestedThread)
+{
+    process_info_t *p = current_process_info;
+    pm_thread *t = find_thread(p, threadToSet);
+    if(!t)
+        return threadNotFoundErr;
+    pm_thread *me = p->running_thread;
+    if(t != me)
+    {
+        if(newState == kRunningThreadState)
+            return threadProtocolErr;
+        t->state = newState;
+        return noErr;
+    }
+    if(newState == kRunningThreadState)
+        return noErr;
+    /* The running thread steps aside: the suggested one, else the next. */
+    pm_thread *to = nullptr;
+    if(suggestedThread)
+    {
+        to = find_thread(p, suggestedThread);
+        if(to && (to == me || to->state != kReadyThreadState))
+            to = nullptr;
+    }
+    if(!to)
+        to = ask_scheduler(p, me, suggestedThread);
+    if(!to)
+        to = next_ready(p, me);
+    if(!to)
+        return noErr; /* nobody to run instead: it keeps running */
+    me->state = newState;
+    pm_thread *saved = me;
+    thread_switch_to(p, to);
+    (void)saved;
+    return noErr;
+}
+
+OSErr Executor::C_SetThreadState(LONGINT threadToSet, INTEGER newState, LONGINT suggestedThread)
+{
+    return set_thread_state(threadToSet, newState, suggestedThread);
+}
+
+OSErr Executor::C_SetThreadStateEndCritical(LONGINT threadToSet, INTEGER newState,
+                                            LONGINT suggestedThread)
+{
+    if(current_process_info && current_process_info->thread_critical > 0)
+        current_process_info->thread_critical--;
+    return set_thread_state(threadToSet, newState, suggestedThread);
+}
+
+OSErr Executor::C_ThreadBeginCritical()
+{
+    if(current_process_info)
+        current_process_info->thread_critical++;
+    return noErr;
+}
+
+OSErr Executor::C_ThreadEndCritical()
+{
+    if(current_process_info && current_process_info->thread_critical > 0)
+        current_process_info->thread_critical--;
+    return noErr;
+}
+
+OSErr Executor::C_SetThreadScheduler(ProcPtr threadScheduler)
+{
+    if(!current_process_info)
+        return threadProtocolErr;
+    main_thread_of(current_process_info);
+    current_process_info->thread_scheduler = (Ptr)threadScheduler;
+    return noErr;
+}
+
+OSErr Executor::C_SetThreadSwitcher(LONGINT thread, ProcPtr threadSwitcher,
+                                    LONGINT switchProcParam, Boolean inOrOut)
+{
+    pm_thread *t = find_thread(current_process_info, thread);
+    if(!t)
+        return threadNotFoundErr;
+    uint32_t proc = threadSwitcher ? US_TO_SYN68K(threadSwitcher) : 0;
+    if(inOrOut)
+    {
+        t->switch_in = proc;
+        t->switch_in_param = switchProcParam;
+    }
+    else
+    {
+        t->switch_out = proc;
+        t->switch_out_param = switchProcParam;
+    }
+    return noErr;
+}
+
+OSErr Executor::C_SetThreadTerminator(LONGINT thread, ProcPtr threadTerminator,
+                                      LONGINT terminationProcParam)
+{
+    pm_thread *t = find_thread(current_process_info, thread);
+    if(!t)
+        return threadNotFoundErr;
+    t->terminator = threadTerminator ? US_TO_SYN68K(threadTerminator) : 0;
+    t->terminator_param = terminationProcParam;
+    return noErr;
+}
+
+OSErr Executor::C_SetDebuggerNotificationProcs(ProcPtr, ProcPtr, ProcPtr)
+{
+    return noErr;
+}
+
+OSErr Executor::C_CreateThreadPool(LONGINT, INTEGER numToCreate, LONGINT)
+{
+    if(!current_process_info)
+        return threadProtocolErr;
+    current_process_info->thread_pool += std::max<INTEGER>(numToCreate, 0);
+    return noErr;
+}
+
+OSErr Executor::C_GetFreeThreadCount(LONGINT, GUEST<INTEGER> *freeCount)
+{
+    *freeCount = current_process_info ? current_process_info->thread_pool : 0;
+    return noErr;
+}
+
+OSErr Executor::C_GetSpecificFreeThreadCount(LONGINT, LONGINT, GUEST<INTEGER> *freeCount)
+{
+    *freeCount = current_process_info ? current_process_info->thread_pool : 0;
+    return noErr;
+}
+
+OSErr Executor::C_GetDefaultThreadStackSize(LONGINT, GUEST<LONGINT> *stackSize)
+{
+    *stackSize = default_thread_stack;
+    return noErr;
+}
+
+OSErr Executor::C_ThreadCurrentStackSpace(LONGINT thread, GUEST<LONGINT> *freeStack)
+{
+    process_info_t *p = current_process_info;
+    pm_thread *t = find_thread(p, thread);
+    if(!t)
+        return threadNotFoundErr;
+    if(t->main)
+        *freeStack = t == p->running_thread ? StackSpace() : 0;
+    else if(t == p->running_thread)
+        *freeStack = EM_A7 - US_TO_SYN68K(t->stack);
+    else
+        *freeStack = t->stack_size; /* parked: an estimate */
+    return noErr;
+}
+
+/* A task reference is the process (its serial number's low long). */
+static process_info_t *process_of_task_ref(LONGINT ref)
+{
+    for(process_info_t *q = process_info_list; q; q = q->next)
+        if(q->state != process_info_t::dead && (LONGINT)q->serial_number.lowLongOfPSN == ref)
+            return q;
+    return nullptr;
+}
+
+OSErr Executor::C_GetThreadCurrentTaskRef(GUEST<LONGINT> *threadTRef)
+{
+    if(!current_process_info)
+        return threadProtocolErr;
+    *threadTRef = current_process_info->serial_number.lowLongOfPSN;
+    return noErr;
+}
+
+OSErr Executor::C_GetThreadStateGivenTaskRef(LONGINT threadTRef, LONGINT threadToGet,
+                                             GUEST<INTEGER> *threadState)
+{
+    pm_thread *t = find_thread(process_of_task_ref(threadTRef), threadToGet);
+    if(!t)
+        return threadNotFoundErr;
+    *threadState = t->state;
+    return noErr;
+}
+
+OSErr Executor::C_SetThreadReadyGivenTaskRef(LONGINT threadTRef, LONGINT threadToSet)
+{
+    pm_thread *t = find_thread(process_of_task_ref(threadTRef), threadToSet);
+    if(!t)
+        return threadNotFoundErr;
+    if(t->state == kStoppedThreadState)
+        t->state = kReadyThreadState;
+    return noErr;
 }

@@ -1938,6 +1938,10 @@ Size StackSpace(void)
      address) */
 
     SET_MEM_ERR(noErr);
+    /* MacPhoenix: in a Thread Manager thread, down to its own stack's
+       bottom (as 7.5.5's Thread Manager patches StackSpace). */
+    if(uint32_t low = ROMlib_thread_stack_low())
+        return (fp + 8) - (intptr_t)SYN68K_TO_US(low);
     return (fp + 8) - (intptr_t)HEAPEND;
 }
 

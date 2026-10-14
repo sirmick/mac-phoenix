@@ -1,0 +1,329 @@
+# MacPhoenix: the Thread Manager (System 7.5's built-in one), from
+# Universal Interfaces' Threads.h. Implemented in C++ (process.cpp,
+# "Thread Manager"): each thread runs on a host thread of its own, like
+# the processes, so a thread can yield from anywhere, even from inside a
+# callback that C++ Toolbox code made. docs/executor/PLAN.md (M3d).
+
+- dispatcher:
+    name: ThreadDispatch
+    trap: 0xABF2
+    selector-location: D0<0xFF>
+    comment: |
+      D0's low byte selects, its high byte is the parameter size in words
+      (THREEWORDINLINE(0x303C, sel, 0xABF2)).
+
+# ####
+
+- enum:
+    values:
+      - name: kReadyThreadState
+        value: 0
+      - name: kStoppedThreadState
+        value: 1
+      - name: kRunningThreadState
+        value: 2
+
+- enum:
+    values:
+      - name: kCooperativeThread
+        value: 1
+      - name: kPreemptiveThread
+        value: 2
+
+- enum:
+    values:
+      - name: kNoThreadID
+        value: 0
+      - name: kCurrentThreadID
+        value: 1
+      - name: kApplicationThreadID
+        value: 2
+
+- enum:
+    values:
+      - name: kNewSuspend
+        value: 1
+      - name: kUsePremadeThread
+        value: 2
+      - name: kCreateIfNeeded
+        value: 4
+      - name: kFPUNotNeeded
+        value: 8
+      - name: kExactMatchThread
+        value: 16
+
+- enum:
+    values:
+      - name: threadTooManyReqsErr
+        value: -617
+      - name: threadNotFoundErr
+        value: -618
+      - name: threadProtocolErr
+        value: -619
+
+# ####
+
+- function:
+    name: CreateThreadPool
+    return: OSErr
+    args:
+      - name: threadStyle
+        type: LONGINT
+      - name: numToCreate
+        type: INTEGER
+      - name: stackSize
+        type: LONGINT
+    dispatcher: ThreadDispatch
+    selector: 0x0501
+    executor: C_
+
+- function:
+    name: GetFreeThreadCount
+    return: OSErr
+    args:
+      - name: threadStyle
+        type: LONGINT
+      - name: freeCount
+        type: INTEGER*
+    dispatcher: ThreadDispatch
+    selector: 0x0402
+    executor: C_
+
+- function:
+    name: NewThread
+    return: OSErr
+    args:
+      - name: threadStyle
+        type: LONGINT
+      - name: threadEntry
+        type: ProcPtr
+      - name: threadParam
+        type: LONGINT
+      - name: stackSize
+        type: LONGINT
+      - name: options
+        type: LONGINT
+      - name: threadResult
+        type: LONGINT*
+      - name: threadMade
+        type: LONGINT*
+    dispatcher: ThreadDispatch
+    selector: 0x0E03
+    executor: C_
+
+- function:
+    name: DisposeThread
+    return: OSErr
+    args:
+      - name: threadToDump
+        type: LONGINT
+      - name: threadResult
+        type: LONGINT
+      - name: recycleThread
+        type: Boolean
+    dispatcher: ThreadDispatch
+    selector: 0x0504
+    executor: C_
+
+- function:
+    name: YieldToThread
+    return: OSErr
+    args:
+      - name: suggestedThread
+        type: LONGINT
+    dispatcher: ThreadDispatch
+    selector: 0x0205
+    executor: C_
+    comment: YieldToAnyThread is YieldToThread(kNoThreadID).
+
+- function:
+    name: GetCurrentThread
+    return: OSErr
+    args:
+      - name: currentThreadID
+        type: LONGINT*
+    dispatcher: ThreadDispatch
+    selector: 0x0206
+    executor: C_
+
+- function:
+    name: GetThreadState
+    return: OSErr
+    args:
+      - name: threadToGet
+        type: LONGINT
+      - name: threadState
+        type: INTEGER*
+    dispatcher: ThreadDispatch
+    selector: 0x0407
+    executor: C_
+
+- function:
+    name: SetThreadState
+    return: OSErr
+    args:
+      - name: threadToSet
+        type: LONGINT
+      - name: newState
+        type: INTEGER
+      - name: suggestedThread
+        type: LONGINT
+    dispatcher: ThreadDispatch
+    selector: 0x0508
+    executor: C_
+
+- function:
+    name: SetThreadScheduler
+    return: OSErr
+    args:
+      - name: threadScheduler
+        type: ProcPtr
+    dispatcher: ThreadDispatch
+    selector: 0x0209
+    executor: C_
+
+- function:
+    name: SetThreadSwitcher
+    return: OSErr
+    args:
+      - name: thread
+        type: LONGINT
+      - name: threadSwitcher
+        type: ProcPtr
+      - name: switchProcParam
+        type: LONGINT
+      - name: inOrOut
+        type: Boolean
+    dispatcher: ThreadDispatch
+    selector: 0x070A
+    executor: C_
+
+- function:
+    name: ThreadBeginCritical
+    return: OSErr
+    dispatcher: ThreadDispatch
+    selector: 0x000B
+    executor: C_
+
+- function:
+    name: ThreadEndCritical
+    return: OSErr
+    dispatcher: ThreadDispatch
+    selector: 0x000C
+    executor: C_
+
+- function:
+    name: SetDebuggerNotificationProcs
+    return: OSErr
+    args:
+      - name: notifyNewThread
+        type: ProcPtr
+      - name: notifyDisposeThread
+        type: ProcPtr
+      - name: notifyThreadScheduler
+        type: ProcPtr
+    dispatcher: ThreadDispatch
+    selector: 0x060D
+    executor: C_
+
+- function:
+    name: GetThreadCurrentTaskRef
+    return: OSErr
+    args:
+      - name: threadTRef
+        type: LONGINT*
+    dispatcher: ThreadDispatch
+    selector: 0x020E
+    executor: C_
+
+- function:
+    name: GetThreadStateGivenTaskRef
+    return: OSErr
+    args:
+      - name: threadTRef
+        type: LONGINT
+      - name: threadToGet
+        type: LONGINT
+      - name: threadState
+        type: INTEGER*
+    dispatcher: ThreadDispatch
+    selector: 0x060F
+    executor: C_
+
+- function:
+    name: SetThreadReadyGivenTaskRef
+    return: OSErr
+    args:
+      - name: threadTRef
+        type: LONGINT
+      - name: threadToSet
+        type: LONGINT
+    dispatcher: ThreadDispatch
+    selector: 0x0410
+    executor: C_
+
+- function:
+    name: SetThreadTerminator
+    return: OSErr
+    args:
+      - name: thread
+        type: LONGINT
+      - name: threadTerminator
+        type: ProcPtr
+      - name: terminationProcParam
+        type: LONGINT
+    dispatcher: ThreadDispatch
+    selector: 0x0611
+    executor: C_
+
+- function:
+    name: SetThreadStateEndCritical
+    return: OSErr
+    args:
+      - name: threadToSet
+        type: LONGINT
+      - name: newState
+        type: INTEGER
+      - name: suggestedThread
+        type: LONGINT
+    dispatcher: ThreadDispatch
+    selector: 0x0512
+    executor: C_
+
+- function:
+    name: GetDefaultThreadStackSize
+    return: OSErr
+    args:
+      - name: threadStyle
+        type: LONGINT
+      - name: stackSize
+        type: LONGINT*
+    dispatcher: ThreadDispatch
+    selector: 0x0413
+    executor: C_
+
+- function:
+    name: ThreadCurrentStackSpace
+    return: OSErr
+    args:
+      - name: thread
+        type: LONGINT
+      - name: freeStack
+        type: LONGINT*
+    dispatcher: ThreadDispatch
+    selector: 0x0414
+    executor: C_
+
+- function:
+    name: GetSpecificFreeThreadCount
+    return: OSErr
+    args:
+      - name: threadStyle
+        type: LONGINT
+      - name: stackSize
+        type: LONGINT
+      - name: freeCount
+        type: INTEGER*
+    dispatcher: ThreadDispatch
+    selector: 0x0615
+    executor: C_
