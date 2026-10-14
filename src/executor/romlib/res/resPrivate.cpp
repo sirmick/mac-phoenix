@@ -31,6 +31,30 @@ SignedByte Executor::C_GetResourceMapPrivateFlags(Handle map)
     return (*(resmaphand)map)->resfatr & 0x1E;
 }
 
+/* Selector 6: the override maps (attribute bit 1, inserted above their
+   base map by selector 5) that sit directly on top of a map; the topmost
+   of them, or the map itself without any. Apple's walks from TopMapHndl
+   remembering the first override map of the current run. */
+Handle Executor::C_GetOverrideMap(Handle map)
+{
+    ROMlib_setreserr(noErr);
+    Handle run = nullptr;
+    for(Handle h = LM(TopMapHndl); h; h = (*(resmaphand)h)->nextmap)
+    {
+        if(h == map)
+            return run ? run : map;
+        if((*(resmaphand)h)->resfatr & 0x02)
+        {
+            if(!run)
+                run = h;
+        }
+        else
+            run = nullptr;
+    }
+    ROMlib_setreserr(resFNotFound);
+    return nullptr;
+}
+
 /* Selector -1: does a resource map belong to the system? True of the
    System file's map and of a file opened in system mode (Apple's tests
    two longs in the map's header record, through its attribute word);

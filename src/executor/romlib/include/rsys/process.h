@@ -105,7 +105,7 @@ extern bool ROMlib_process_is_front();
 extern bool ROMlib_in_system_mode();
 extern bool ROMlib_system_resource_file_p(INTEGER rn);
 extern void ROMlib_system_resource_file_opened(INTEGER rn);
-extern void ROMlib_system_resource_file_closing(INTEGER rn);
+extern void ROMlib_system_resource_file_closed(INTEGER rn);
 /* A pending suspend/resume event for the current process. */
 extern bool ROMlib_process_os_event(EventRecord *evt, bool remove);
 

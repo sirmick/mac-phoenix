@@ -521,17 +521,18 @@ void Executor::C_CloseResFile(INTEGER rn)
         UpdateResFile(rn);
         save_ResErr = LM(ResErr);
 
-        /* MacPhoenix: a system-mode file is in the other processes'
-           chains too; out of those first. */
-        if(ROMlib_system_resource_file_p(rn))
-            ROMlib_system_resource_file_closing(rn);
-
         /* update linked list */
 
         if(map == (resmaphand)LM(TopMapHndl))
             LM(TopMapHndl) = (*map)->nextmap;
         else
             (*ph)->nextmap = (*map)->nextmap;
+
+        /* MacPhoenix: a system-mode file is in the other processes'
+           chains too; they get the current chain's system part, without
+           it, before the map goes. */
+        if(ROMlib_system_resource_file_p(rn))
+            ROMlib_system_resource_file_closed(rn);
 
         if(LM(CurMap) == rn)
         {
@@ -666,8 +667,15 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
         FSClose(f);
         return (-1);
     }
-    map = (resmaphand)NewHandle(hd.maplen);
-    err = MemError();
+    /* MacPhoenix: a file opened in system mode is in every process's
+       chain (below), so its map goes in the System heap; in the current
+       heap it would go with the process (the Shared Library Manager opens
+       a library while an MPW tool's heap is current). */
+    {
+        TheZoneGuard guard(ROMlib_in_system_mode() ? LM(SysZone) : LM(TheZone));
+        map = (resmaphand)NewHandle(hd.maplen);
+        err = MemError();
+    }
     if(ROMlib_setreserr(err))
     {
         FSClose(f);
@@ -726,27 +734,12 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
     (*map)->resfn = f;
     LM(TopMapHndl) = (Handle)map;
     LM(CurMap) = f;
-    /* MacPhoenix: in system mode (OSDispatch $40) the file is the system's:
-       it goes just above the System file, below the application's maps,
-       in this and every other process's chain. */
+    /* MacPhoenix: in system mode (OSDispatch $40) the file is the system's
+       (process.cpp shares it with every process). It starts on top, as any
+       newly opened file: the Shared Library Manager takes TopMapHndl for
+       the library it just opened. */
     if(ROMlib_in_system_mode())
-    {
-        resmaphand sysmap = ROMlib_rntohandl(LM(SysMap), nullptr);
-        if(sysmap && sysmap != map)
-        {
-            LM(TopMapHndl) = (*map)->nextmap;
-            resmaphand pred = nullptr;
-            for(resmaphand m = (resmaphand)LM(TopMapHndl); m && m != sysmap;
-                m = (resmaphand)(*m)->nextmap)
-                pred = m;
-            (*map)->nextmap = (Handle)sysmap;
-            if(pred)
-                (*pred)->nextmap = (Handle)map;
-            else
-                LM(TopMapHndl) = (Handle)map;
-        }
         ROMlib_system_resource_file_opened(f);
-    }
 
     /* The handle fields on disk are junk: clear them all before any
        preload, which may look up other resources in this map (a

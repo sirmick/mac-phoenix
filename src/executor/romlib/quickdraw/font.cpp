@@ -238,6 +238,28 @@ static Boolean widthlistmatch(FMInput *fmip)
     return false;
 }
 
+/* MacPhoenix: is WidthTabHandle still one of the listed tables (WidthPtr
+   then where it is now)? WidthTabHandle and the last request
+   (ROMlib_myfmi) are switched per process (7.5.5's 'lmem' -16458), but the
+   list is shared, so another process may have disposed of this process's
+   table to make room for one of its own: the request still matches, the
+   handle is gone. */
+static bool width_table_listed()
+{
+    if(!LM(WidthListHand) || !LM(WidthTabHandle))
+        return false;
+    GUEST<WHandle> *whp = *WIDTHLISTHAND;
+    for(int i = 0; i < MAXTABLES; i++)
+        if(whp[i] && whp[i].raw() == LM(WidthTabHandle).raw())
+        {
+            if(!*whp[i])
+                return false;
+            LM(WidthPtr) = *(whp[i]);
+            return true;
+        }
+    return false;
+}
+
 static int countones(unsigned short i)
 {
     int retval;
@@ -867,7 +889,7 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
         fmip->family = LM(SysFontFam);
     }
 
-    if(fmip->family != LM(ROMlib_myfmi).family || fmip->size != LM(ROMlib_myfmi).size || fmip->face != LM(ROMlib_myfmi).face || fmip->device != LM(ROMlib_myfmi).device || fmip->numer.h != LM(ROMlib_myfmi).numer.h || fmip->numer.v != LM(ROMlib_myfmi).numer.v || fmip->denom.h != LM(ROMlib_myfmi).denom.h || fmip->denom.v != LM(ROMlib_myfmi).denom.v || WIDTHPTR->fSize == -1 || WIDTHPTR->fSize == 0 || (fmip->needBits && !LM(ROMlib_myfmi).needBits))
+    if(!width_table_listed() || fmip->family != LM(ROMlib_myfmi).family || fmip->size != LM(ROMlib_myfmi).size || fmip->face != LM(ROMlib_myfmi).face || fmip->device != LM(ROMlib_myfmi).device || fmip->numer.h != LM(ROMlib_myfmi).numer.h || fmip->numer.v != LM(ROMlib_myfmi).numer.v || fmip->denom.h != LM(ROMlib_myfmi).denom.h || fmip->denom.v != LM(ROMlib_myfmi).denom.v || WIDTHPTR->fSize == -1 || WIDTHPTR->fSize == 0 || (fmip->needBits && !LM(ROMlib_myfmi).needBits))
     {
         if((needtobuild = !widthlistmatch(fmip)))
             newwidthtable(fmip);

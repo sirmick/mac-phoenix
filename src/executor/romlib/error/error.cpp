@@ -249,7 +249,10 @@ void _gui_fatal(const char *file, int line, const char *fn,
     {
         auto hook = Executor::ROMlib_fatal_hook;
         Executor::ROMlib_fatal_hook = nullptr;   /* once */
-        hook(errbuf);
+        char where[10340];
+        snprintf(where, sizeof where, "%s (%s:%d, %s)", errbuf, notdir(file), line, fn);
+        fprintf(stderr, "[Executor] fatal: %s\n", where);
+        hook(where);
     }
 
     if(LM(WWExist) == EXIST_YES)

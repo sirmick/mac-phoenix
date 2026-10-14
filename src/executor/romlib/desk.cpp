@@ -300,12 +300,14 @@ void Executor::C_SystemTask()
     for(int i = 0; i < d.count; i++)
     {
         DCtlHandle dctlh = GetDCtlEntry(d.refnum[i]);
-        if(((*dctlh)->dCtlFlags & NEEDTIMEBIT) && TickCount() >= (*dctlh)->dCtlCurTicks)
+        /* dCtlCurTicks is the last accRun (device.cpp). */
+        if(((*dctlh)->dCtlFlags & NEEDTIMEBIT)
+           && TickCount() - (*dctlh)->dCtlCurTicks >= (*dctlh)->dCtlDelay)
         {
             Control(d.refnum[i], accRun, (Ptr)0);
             dctlh = GetDCtlEntry(d.refnum[i]);
             if(dctlh && *dctlh)
-                (*dctlh)->dCtlCurTicks = TickCount() + (*dctlh)->dCtlDelay;
+                (*dctlh)->dCtlCurTicks = TickCount();
         }
     }
     /* MacPhoenix: and the device drivers, as a Mac's SystemTask does. */

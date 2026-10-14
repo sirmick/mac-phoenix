@@ -399,6 +399,29 @@ set_tests_properties(drag_executor_mame68k PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# Apple's Shared Library Manager (started by the System's 'AINI' -32700)
+# through Apple's ASLM test tools in MPW Shell; skips without the ASLM kit
+# in ~/storage/aslm-kit.
+add_test(
+  NAME aslm_executor
+  COMMAND bash ${TEST_DIR}/test_aslm_executor.sh --timeout 300 --port 18164
+)
+set_tests_properties(aslm_executor PROPERTIES
+  TIMEOUT 340
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME aslm_executor_mame68k
+  COMMAND bash ${TEST_DIR}/test_aslm_executor.sh --core mame-68k --timeout 300 --port 18166
+)
+set_tests_properties(aslm_executor_mame68k PROPERTIES
+  TIMEOUT 340
+  LABELS "guest;mame;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp). On the
 # mame-68k core only: Frontier crashes at launch on the UAE core
 # (docs/executor/STRAGGLERS.md, item 28), before any thread runs.

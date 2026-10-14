@@ -48,10 +48,13 @@ enum { unitTblFullErr = -29 };
 /* RAM drivers' requests being executed, innermost last (for JIODone). */
 static std::vector<ParmBlkPtr> io_in_progress;
 
+/* A positive result is noErr, as the ROM's IODone has it (a positive
+   ioResult means "in progress"): the Shared Library Manager's .SLM leaves
+   the csCode in D0 for Control 255. */
 void Executor::ROMlib_io_done(OSErr err)
 {
     if(!io_in_progress.empty())
-        io_in_progress.back()->ioParam.ioResult = err;
+        io_in_progress.back()->ioParam.ioResult = err > 0 ? noErr : err;
 }
 
 OSErr Executor::ROMlib_dispatch(ParmBlkPtr p, Boolean async,
@@ -349,6 +352,23 @@ OSErr Executor::ROMlib_driveropen(ParmBlkPtr pbp, Boolean a) /* INTERNAL */
 
     err = noErr;
 
+    /* MacPhoenix: as _Open does, a 68k driver already in the unit table
+       under that name first. An extension that DrvrInstall'ed its driver
+       opens it by name with the driver's file still open; the DRVR
+       resource there is a copy that goes when the file closes, taking
+       what the open routine set up in it (the Shared Library Manager's
+       .SLM keeps its Time Manager task in its code). */
+    if(int found = ROMlib_unit_of_driver(pbp->ioParam.ioNamePtr);
+       found >= 0 && !native_drivers.count((*LM(UTableBase)[found])->dCtlDriver))
+    {
+        h = LM(UTableBase)[found];
+        pbp->cntrlParam.ioCRefNum = (*h)->dCtlRefNum;
+        if(!((*h)->dCtlFlags & DRIVEROPENBIT))
+            err = ROMlib_dispatch(pbp, a, Open, 0);
+        fs_err_hook(err);
+        return err;
+    }
+
     if((ramdh = (ramdriverhand)GetNamedResource("DRVR"_4,
                                                 pbp->ioParam.ioNamePtr)))
     {
@@ -385,10 +405,8 @@ OSErr Executor::ROMlib_driveropen(ParmBlkPtr pbp, Boolean a) /* INTERNAL */
             (*h)->dCtlDelay = (*ramdh)->drvrDelay;
             (*h)->dCtlEMask = (*ramdh)->drvrEMask;
             (*h)->dCtlMenu = (*ramdh)->drvrMenu;
-            if((*h)->dCtlFlags & NEEDTIMEBIT)
-                (*h)->dCtlCurTicks = TickCount() + (*h)->dCtlDelay;
-            else
-                (*h)->dCtlCurTicks = 0x7FFFFFFF;
+            /* The last accRun (ROMlib_drivers_give_time): none yet. */
+            (*h)->dCtlCurTicks = TickCount();
             /*
 	    * NOTE: this code doesn't check to see if something is already open.
 	    *	 TODO:  fix this
@@ -522,8 +540,7 @@ OSErr Executor::ROMlib_drvr_install(Ptr drvr, INTEGER refnum)
     (*h)->dCtlDelay = dp->drvrDelay;
     (*h)->dCtlEMask = dp->drvrEMask;
     (*h)->dCtlMenu = dp->drvrMenu;
-    (*h)->dCtlCurTicks = ((*h)->dCtlFlags & NEEDTIMEBIT) ? TickCount() + (*h)->dCtlDelay
-                                                          : 0x7FFFFFFF;
+    (*h)->dCtlCurTicks = TickCount();
     return noErr;
 }
 
@@ -546,7 +563,9 @@ OSErr Executor::ROMlib_drvr_remove(INTEGER refnum)
 
 /* SystemTask's part for device drivers (Executor's desk accessories are
    their processes' business, desk.cpp): every open driver with dNeedTime
-   whose time has come gets accRun. */
+   gets accRun once dCtlDelay ticks have passed since dCtlCurTicks, the
+   last one. A driver may set dNeedTime long after it opened (the Shared
+   Library Manager's .SLM does when it has tasks to run). */
 void Executor::ROMlib_drivers_give_time()
 {
     LONGINT now = TickCount();
@@ -556,7 +575,14 @@ void Executor::ROMlib_drivers_give_time()
         if(!h || !*h)
             continue;
         INTEGER flags = (*h)->dCtlFlags;
-        if(!(flags & DRIVEROPENBIT) || !(flags & NEEDTIMEBIT) || now < (*h)->dCtlCurTicks)
+        if(!(flags & DRIVEROPENBIT) || !(flags & NEEDTIMEBIT)
+           || now - (*h)->dCtlCurTicks < (*h)->dCtlDelay)
+            continue;
+        /* Not a driver that is already running: its accRun may come back
+           here through SystemTask (.SLM's runs the Shared Library
+           Manager's tasks, which may call it). */
+        static std::set<int> running;
+        if(running.count(i))
             continue;
         ConstStringPtr name = driver_name(h);
         if(!name || name[0] == 0 || name[1] != '.')
@@ -566,10 +592,19 @@ void Executor::ROMlib_drivers_give_time()
         if(announced.insert(rn).second)
             fprintf(stderr, "[Executor] accRun to %.*s (unit %d) every %d ticks\n",
                     name[0], (const char *)name + 1, i, (int)(*h)->dCtlDelay);
-        Control(rn, accRun, (Ptr)0);
+        {
+            /* Cleared on the way out even when a process unwinds through. */
+            struct Running
+            {
+                int i;
+                Running(int i) : i(i) { running.insert(i); }
+                ~Running() { running.erase(i); }
+            } guard(i);
+            Control(rn, accRun, (Ptr)0);
+        }
         h = LM(UTableBase)[i];
         if(h && *h)
-            (*h)->dCtlCurTicks = TickCount() + (*h)->dCtlDelay;
+            (*h)->dCtlCurTicks = TickCount();
     }
 }
 

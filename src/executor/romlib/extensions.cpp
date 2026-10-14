@@ -136,8 +136,10 @@ std::string to_string(ConstStringPtr p)
     return out;
 }
 
-/* Call one INIT: its code, as the loader does (JSR with A0 at the code). */
-void call_init(Handle h)
+/* Call one INIT: its code, as the loader does (JSR with A0 at the code).
+   An 'AINI' gets D0 = 0 as well, HLock's result in the loader, which the
+   ASLM Loader takes for its install message. */
+void call_init(Handle h, bool aini = false)
 {
     HLock(h);
     LONGINT d[8], a[7];
@@ -145,6 +147,8 @@ void call_init(Handle h)
         d[i] = EM_DREG(i);
     for(int i = 0; i < 7; i++)
         a[i] = EM_AREG(i);
+    if(aini)
+        EM_D0 = 0;
     EM_A0 = US_TO_SYN68K(*h);
     execute68K(US_TO_SYN68K(*h));
     for(int i = 0; i < 8; i++)
@@ -213,16 +217,122 @@ void run_file(INTEGER vref, LONGINT dirid, const Item &it)
     UseResFile(saved);
     CloseResFile(rn);
 }
+
+/* 'AINI' resources, which 7.5.5's loader runs before any INIT ('lmgr' 0):
+   the System file's, then those of the files of type 'AINI' in Extensions
+   and of the control panels in Control Panels. Each list in ID order;
+   the negative IDs of both lists first, the loader's own set-up, then the
+   rest. 29500 never runs. The System's are ASLM Loader (-32700, starts
+   the Shared Library Manager), ROM Ether (30), Flagship (30000) and
+   Responder (32000); they run when the allow list names them as "System
+   AINI <id>". A file's run when the file is allowed. */
+struct Aini
+{
+    INTEGER id;
+    INTEGER vref; /* 0 for the System file */
+    LONGINT dirid;
+    Str63 name;
+};
+
+std::vector<INTEGER> aini_ids(INTEGER rn)
+{
+    std::vector<INTEGER> ids;
+    INTEGER saved = CurResFile();
+    UseResFile(rn);
+    INTEGER n = Count1Resources("AINI"_4);
+    for(INTEGER i = 1; i <= n; i++)
+    {
+        SetResLoad(false);
+        Handle h = Get1IndResource("AINI"_4, i);
+        SetResLoad(true);
+        if(h)
+        {
+            GUEST<INTEGER> id;
+            GUEST<ResType> type;
+            Str255 rname;
+            GetResInfo(h, &id, &type, rname);
+            ids.push_back(id);
+        }
+    }
+    UseResFile(saved);
+    std::sort(ids.begin(), ids.end());
+    return ids;
+}
+
+std::vector<Aini> collect_ainis(OSType folder, OSType file_type, const std::set<std::string> &allow)
+{
+    std::vector<Aini> out;
+    if(file_type == "AINI"_4)
+        for(INTEGER id : aini_ids(LM(SysMap)))
+            if(allow.count("System AINI " + std::to_string(id)))
+                out.push_back({ id, 0, 0, { 0 } });
+    GUEST<INTEGER> vref_g;
+    GUEST<LONGINT> dirid_g;
+    if(FindFolder(-32768 /* kOnSystemDisk */, folder, false, &vref_g, &dirid_g) != noErr)
+        return out;
+    for(const Item &it : folder_files(vref_g, dirid_g))
+    {
+        if(it.type != file_type || !allow.count(to_string(it.name)))
+            continue;
+        Str63 name;
+        memcpy(name, it.name, it.name[0] + 1);
+        INTEGER rn = HOpenResFile(vref_g, dirid_g, name, fsRdPerm);
+        if(rn == -1)
+            continue;
+        for(INTEGER id : aini_ids(rn))
+        {
+            Aini a = { id, vref_g, dirid_g, { 0 } };
+            memcpy(a.name, it.name, it.name[0] + 1);
+            out.push_back(a);
+        }
+        CloseResFile(rn);
+    }
+    std::stable_sort(out.begin(), out.end(), [](const Aini &a, const Aini &b) { return a.id < b.id; });
+    return out;
+}
+
+void run_ainis(const std::vector<Aini> &list, INTEGER lo, INTEGER hi)
+{
+    TheZoneGuard guard(LM(SysZone));
+    for(const Aini &a : list)
+    {
+        if(a.id < lo || a.id > hi || a.id == 29500)
+            continue;
+        INTEGER saved = CurResFile();
+        INTEGER rn = -1;
+        if(a.vref)
+        {
+            Str63 name;
+            memcpy(name, a.name, a.name[0] + 1);
+            rn = HOpenResFile(a.vref, a.dirid, name, fsRdPerm);
+            if(rn == -1)
+                continue;
+        }
+        UseResFile(a.vref ? rn : (INTEGER)LM(SysMap));
+        Handle h = Get1Resource("AINI"_4, a.id);
+        if(h && *h)
+        {
+            fprintf(stderr, "[Executor] extension %s: AINI %d\n",
+                    a.vref ? to_string(a.name).c_str() : "System", a.id);
+            call_init(h, true);
+        }
+        UseResFile(saved);
+        if(rn != -1)
+            CloseResFile(rn);
+    }
+}
 }
 
 namespace
 {
-/* Code that runs at startup: the loader's INITs, Finder's extensions
-   (fext) and background applications (appe). A cdev counts when it has
-   INIT resources; a plain control panel stays where it is. */
+/* Code that runs at startup: the loader's INITs and AINIs, Finder's
+   extensions (fext) and background applications (appe). A cdev counts
+   when it has INIT or AINI resources; a plain control panel stays where it
+   is. */
 bool runs_at_startup(INTEGER vref, LONGINT dirid, const Item &it)
 {
-    if(it.type == "INIT"_4 || it.type == "RDEV"_4 || it.type == "fext"_4 || it.type == "appe"_4)
+    if(it.type == "INIT"_4 || it.type == "RDEV"_4 || it.type == "fext"_4 || it.type == "appe"_4
+       || it.type == "AINI"_4)
         return true;
     if(it.type != "cdev"_4)
         return false;
@@ -233,7 +343,7 @@ bool runs_at_startup(INTEGER vref, LONGINT dirid, const Item &it)
     if(rn == -1)
         return false;
     UseResFile(rn);
-    bool inits = Count1Resources("INIT"_4) > 0;
+    bool inits = Count1Resources("INIT"_4) > 0 || Count1Resources("AINI"_4) > 0;
     UseResFile(saved);
     CloseResFile(rn);
     return inits;
@@ -414,6 +524,13 @@ void Executor::ROMlib_load_extensions()
         register_component_files();
         return;
     }
+
+    std::vector<Aini> extn = collect_ainis("extn"_4, "AINI"_4, allow);
+    std::vector<Aini> ctrl = collect_ainis("ctrl"_4, "cdev"_4, allow);
+    run_ainis(extn, -32768, -1);
+    run_ainis(ctrl, -32768, -1);
+    run_ainis(extn, 0, 32767);
+    run_ainis(ctrl, 0, 32767);
 
     struct Where
     {

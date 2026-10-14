@@ -45,6 +45,7 @@ using namespace Executor;
 #include <QMutex>
 #include <QThread>
 #include <QWaitCondition>
+#include <signal.h>
 #include <ucontext.h>
 #include <functional>
 
@@ -352,8 +353,12 @@ static void restore_lowmem(const std::vector<uint8_t> &buf)
     }
 }
 
+static void share_system_part();
+
 static void save_world(process_info_t *p)
 {
+    if(p == current_process_info)
+        share_system_part();
     save_lowmem(p->lowmem);
     p->cpu.resize(syn68k_context_size());
     syn68k_save_context(p->cpu.data());
@@ -1159,6 +1164,15 @@ public:
 protected:
     void run() override
     {
+        /* Faults are reported on an alternate stack (installFaultHandler
+           gives the main thread one): without it a stack overflow here
+           kills the process without a word. */
+        std::vector<char> alt(256 * 1024);
+        stack_t ss = {};
+        ss.ss_sp = alt.data();
+        ss.ss_size = alt.size();
+        sigaltstack(&ss, nullptr);
+
         ucontext_t low;
         getcontext(&low);
         low.uc_stack.ss_sp = stack_pool + slot * stack_size;
@@ -1835,11 +1849,12 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
    (the DA Handler, desk.cpp), created like a launchContinue launch. */
 /* MacPhoenix. System mode (OSDispatch $40/$41, names are guesses): on
    7.5.5 the system becomes the current process, so a resource file opened
-   in it is the system's. Here HOpenResFile puts such a file just above
-   the System file in the opener's chain (res/resOpen.cpp) and the
-   functions below link it into every other process's chain and the new
-   process template, so all processes share it and it outlives the
-   opener. AppleScript opens scripting additions this way. */
+   in it is the system's. Here HOpenResFile puts its map in the System
+   heap (res/resOpen.cpp); the functions below move it just above the
+   System file in the opener's chain and give every other process's chain
+   and the new-process template the same system part, so all processes
+   share it and it outlives the opener. AppleScript opens scripting
+   additions this way; the Shared Library Manager opens libraries in it. */
 static int system_mode_depth;
 static std::vector<INTEGER> system_files;
 
@@ -1880,53 +1895,63 @@ static uint8_t *lowmem_slot(std::vector<uint8_t> &buf, uint32_t addr, size_t len
     return nullptr;
 }
 
-/* Link `map` into the chain whose head is at *head (a guest long), just
-   above the System file's map; or take it out again. */
-static void relink_chain(GUEST<Handle> *head, resmaphand map, resmaphand sysmap, bool in)
+/* The slot in a chain (its head, or a map's nextmap) holding the first map
+   that belongs to the system: a file opened in system mode, or the System
+   file. Every map above it is the process's own. */
+static GUEST<Handle> *system_part(GUEST<Handle> *slot, resmaphand sysmap)
 {
-    if(!head || !*head)
-        return;
-    resmaphand pred = nullptr;
-    for(resmaphand m = (resmaphand)(Handle)*head; m; m = (resmaphand)(*m)->nextmap)
+    for(int n = 0; slot && *slot && n < 1024; n++)
     {
-        if(in && m == sysmap)
-        {
-            if(pred == map)
-                return;
-            if(pred)
-                (*pred)->nextmap = (Handle)map;
-            else
-                *head = (Handle)map;
-            return;
-        }
-        if(!in && m == map)
-        {
-            if(pred)
-                (*pred)->nextmap = (*map)->nextmap;
-            else
-                *head = (*map)->nextmap;
-            return;
-        }
-        pred = m;
+        resmaphand m = (resmaphand)(Handle)*slot;
+        if(m == sysmap || ROMlib_system_resource_file_p((*m)->resfn))
+            return slot;
+        slot = &(*m)->nextmap;
     }
+    return nullptr;
 }
 
-static void relink_everywhere(INTEGER rn, bool in)
+/* The current chain's system-mode maps, wherever they are above the
+   System file (a file opened in system mode starts on top), go just above
+   it in the order they are in; the process's own maps stay above them. */
+static void gather_system_maps(resmaphand sysmap)
 {
-    resmaphand map = ROMlib_rntohandl(rn, nullptr);
-    resmaphand sysmap = ROMlib_rntohandl(LM(SysMap), nullptr);
-    if(!map || !sysmap)
+    std::vector<resmaphand> own, sys;
+    resmaphand m = (resmaphand)(Handle)LM(TopMapHndl);
+    for(int n = 0; m && m != sysmap && n < 1024; m = (resmaphand)(*m)->nextmap, n++)
+        (ROMlib_system_resource_file_p((*m)->resfn) ? sys : own).push_back(m);
+    if(m != sysmap || sys.empty())
         return;
-    if(in)
-        (*map)->nextmap = (Handle)sysmap;
+    own.insert(own.end(), sys.begin(), sys.end());
+    LM(TopMapHndl) = (Handle)own.front();
+    for(size_t i = 0; i + 1 < own.size(); i++)
+        (*own[i])->nextmap = (Handle)own[i + 1];
+    (*own.back())->nextmap = (Handle)sysmap;
+}
+
+/* Every chain gets the current one's system part: one list of maps that
+   all processes and the new-process template share. Done when a process
+   is switched out and when a system-mode file closes, so what code did to
+   the current chain in between is what every process sees: the Shared
+   Library Manager takes a library's map out of the chain right after
+   opening it, and links it in above the System file while it reads it. */
+static void share_system_part()
+{
+    resmaphand sysmap = ROMlib_rntohandl(LM(SysMap), nullptr);
+    if(!sysmap)
+        return;
+    gather_system_maps(sysmap);
+    GUEST<Handle> *cur = system_part(&LM(TopMapHndl), sysmap);
+    if(!cur)
+        return;
+    Handle top = *cur;
+    auto share = [&](std::vector<uint8_t> &lowmem) {
+        if(GUEST<Handle> *slot = system_part((GUEST<Handle> *)lowmem_slot(lowmem, 0xA50 /* TopMapHndl */, 4), sysmap))
+            *slot = top;
+    };
     for(process_info_t *p = process_info_list; p; p = p->next)
-    {
-        if(p == current_process_info || p->state == process_info_t::dead)
-            continue;
-        relink_chain((GUEST<Handle> *)lowmem_slot(p->lowmem, 0xA50 /* TopMapHndl */, 4),
-                     map, sysmap, in);
-    }
-    relink_chain((GUEST<Handle> *)lowmem_slot(lowmem_template, 0xA50, 4), map, sysmap, in);
+        if(p != current_process_info && p->state != process_info_t::dead)
+            share(p->lowmem);
+    share(lowmem_template);
 }
 
 void Executor::ROMlib_system_resource_file_opened(INTEGER rn)
@@ -1942,12 +1967,12 @@ void Executor::ROMlib_system_resource_file_opened(INTEGER rn)
         fprintf(stderr, "[Executor] system mode: resource file %d (%.*s) shared\n",
                 rn, name[0], (const char *)name + 1);
     }
-    relink_everywhere(rn, true);
 }
 
-void Executor::ROMlib_system_resource_file_closing(INTEGER rn)
+/* After CloseResFile has taken the map out of the current chain. */
+void Executor::ROMlib_system_resource_file_closed(INTEGER rn)
 {
-    relink_everywhere(rn, false);
+    share_system_part();
     system_files.erase(std::remove(system_files.begin(), system_files.end(), rn),
                        system_files.end());
 }

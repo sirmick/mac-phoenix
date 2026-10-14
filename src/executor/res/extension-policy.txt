@@ -2,11 +2,14 @@
 # startup, by file name: the ones whose code works on Executor so far
 # (phase 1, and AppleScript and Finder Scripting from phase 2, of tools/macdecode/inits.yaml, which records why each file is
 # where it is). As Extensions Manager does, any other file that runs code
-# at startup (INIT, RDEV, fext, appe, a cdev with INITs) is moved into
+# at startup (INIT, RDEV, fext, appe, AINI, a cdev with INITs or AINIs) is moved into
 # "Extensions (Disabled)" / "Control Panels (Disabled)" / "System
 # Extensions (Disabled)", and moved back once it is listed. Override per
 # data directory with <data_dir>/extension-policy.txt (same format; it
-# replaces this list).
+# replaces this list). "System AINI <id>" allows one of the System file's
+# 'AINI' resources, which the loader runs before any INIT (-32700 is the
+# ASLM Loader, which starts the Shared Library Manager); a file's own
+# 'AINI' resources run when the file is allowed.
 WindowShade
 Mouse
 Find File Extension
@@ -20,3 +23,5 @@ Finder Scripting Extension
 Color Picker
 Speech Manager
 Speech
+Shared Library Manager
+System AINI -32700

@@ -426,6 +426,14 @@ static void reset_traps(void)
     }
 }
 
+/* MacPhoenix: a task in the System heap belongs to an extension (the Shared
+   Library Manager's .SLM keeps one going) and outlives the application. */
+static bool in_system_heap(void *p)
+{
+    THz sys = LM(SysZone);
+    return (Ptr)p >= (Ptr)sys && (Ptr)p < (Ptr)sys->bkLim;
+}
+
 void Executor::empty_timer_queues(void)
 {
     TMTask *tp, *nexttp;
@@ -436,12 +444,14 @@ void Executor::empty_timer_queues(void)
     for(vp = (VBLTaskPtr)LM(VBLQueue).qHead; vp; vp = nextvp)
     {
         nextvp = (VBLTaskPtr)vp->qLink;
-        VRemove(vp);
+        if(!in_system_heap(vp))
+            VRemove(vp);
     }
     for(tp = (TMTask *)ROMlib_timehead.qHead; tp; tp = nexttp)
     {
         nexttp = (TMTask *)tp->qLink;
-        RmvTime((QElemPtr)tp);
+        if(!in_system_heap(tp))
+            RmvTime((QElemPtr)tp);
     }
 }
 

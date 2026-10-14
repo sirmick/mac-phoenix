@@ -737,6 +737,24 @@
 # ####
 
 - function:
+    name: GetOverrideMap
+    return: Handle
+    args:
+      - name: map
+        type: Handle
+    dispatcher: ResourceDispatch
+    selector: 0x0006
+    executor: C_
+    comment: >
+      MacPhoenix. Private in 7.5.5 (name is a guess): the topmost of the
+      override maps (attribute bit 1) stacked directly above a map in the
+      chain from TopMapHndl, or the map itself when none is; nil and
+      ResErr resFNotFound when the map isn't in the chain. The Shared
+      Library Manager calls it on the files it opens.
+
+# ####
+
+- function:
     name: ReadPartialResource
     args:
       - name: resource

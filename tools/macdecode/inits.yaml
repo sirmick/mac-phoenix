@@ -67,7 +67,10 @@ extensions:
   - {file: Macintosh Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.5.5 name"}
 
   # ── phase 3: shared libraries, code fragments, threads ─────────────────
-  - {file: Shared Library Manager, phase: 3, lacks: [".SLM Control 254/255", "ResourceDispatch#6"]}
+  - {file: Shared Library Manager, phase: 3, lacks: [], loaded: true,
+     note: "no INIT: the System's 'AINI' -32700 (ASLM Loader) starts it from lmgr 0, before
+       the INITs. .SLM Control 254/255 are its own driver's; ResourceDispatch 6 is
+       GetOverrideMap. Added 2026-10-14 (docs/executor/PLAN.md)"}
   - {file: CFM-68K Runtime Enabler, phase: 3, lacks: ["CodeFragmentDispatch#FFEC/FFF5/FFFE", "ThreadDispatch#0/FE"]}
   - {file: ObjectSupportLib, phase: 3, lacks: []}
   - {file: Open Transport 68K Library, phase: 3, lacks: [], note: "OT is networking: deny until net-bridge"}
