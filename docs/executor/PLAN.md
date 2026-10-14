@@ -250,7 +250,8 @@ startup).
 **The inventory.** Apple's, run as is: Finder and its Finder extensions;
 the Drag Manager (`proc` -16512..-16516, `drag.cpp`); the Help Manager
 (`PACK` 14, `helppkg.cpp`); Standard File (`PACK` 3, `stdfilepkg.cpp`);
-the Apple Event Manager (`PACK` 8, installed by AppleScript); the INITs, cdevs and components the extension policy
+the Apple Event Manager (`PACK` 8, installed by AppleScript); the Shared
+Library Manager (the System's `'AINI'` -32700 starts it); the INITs, cdevs and components the extension policy
 lists (AppleScript, Finder Scripting, Speech Manager and MacinTalk, Color
 Picker, Date & Time, General Controls, Find File, WindowShade, Mouse,
 Apple Menu Options, Launcher); desk accessories; the balloon window's
@@ -270,6 +271,19 @@ without Apple's System file (Apple events, balloons). Stubbed: Text
 Services, Dictionary, Collection, Translation, QuickTime, Display
 Manager. Disabled by policy: Apple Guide,
 Network Extension, AppleShare, File Sharing, Easy Open, PC Exchange.
+
+Measured at the Finder on Apple's System file (2026-10-14, snapshot
+`inventory-finder`): of the trap tables' live entries, 244 OS and 998
+Toolbox traps go straight to C++, 12 and 25 to 68k code. Of those 37, the
+packs 3, 8, 12 (Color Picker) and 14 are Apple's managers; the rest are
+patches that end in our C++: the Shared Library Manager's on the File
+Manager, `SetTrapAddress` and window creation, WindowShade's, Date &
+Time's, the Speech Manager's on `SoundDispatch`, Finder's on `LoadSeg`,
+`ExitToShell` and `SysError`. The Drag Manager is Apple's behind a C++
+trap. Our C++ that Apple's System file shadows (Standard File dialogs,
+balloons, most of the Apple Event Manager) still serves Executor's own
+System; the private selectors above are the only C++ reached from
+Apple's code alone.
 
 **For a new piece**, in this order: find where its code lives
 (`tools/macdecode` resources section of a real-boot snapshot, and the
