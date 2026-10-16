@@ -28,7 +28,7 @@ machine (`--backend uae`) and the PowerPC one (`--backend kpx`):
 
 | Image | What |
 |---|---|
-| `Development.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7, THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1, MCL 4.2 (PowerPC only), ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
+| `Development.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7, THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1, ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
 | `dev-7.5.5.img`, `dev-7.6.1.img` | the base Systems (`macos-7.x.img.orig`) plus the System Folder files the installers add: MetroNub, CFM-68K and PowerPC libraries, MacsBug 6.6.3, PythonCore, AppleScriptLib, ... |
 
 ```bash
@@ -111,7 +111,7 @@ where to put it: `take` (an HFS path in a capture or CD image, a folder in
 an archive; `!` steps into a nested container), `to`, `as`, `skip`,
 `disk` (`development` or `boot`), `os` (only for some System versions) and
 `replace` (overwrite what the disk already has; by default a base System's
-own copy wins), `size` (rewrite an app's SIZE: MCL 4.2's asks for 400 MB)
+own copy wins), `size` (rewrite an app's SIZE, for one that asks for more than a guest has)
 and `fat_with` (merge the other architecture's build of a CFM library). It
 reads Disk Copy 4.2 and 6 (NDIF, `provisioning/ndif.py`) images, CD
 images with partition maps and anything `unar` opens; hfsutils runs with a

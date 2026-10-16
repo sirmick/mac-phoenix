@@ -23,8 +23,7 @@ Each step takes something out of the entry's file and puts it on a disk:
   disk   which disk the step is for: "development" (the default) or "boot"
   os     only for these System versions (with --os), e.g. ["7.5.5"]
   size   [preferred K, minimum K]: rewrite the taken app's SIZE resources
-         (an app whose SIZE asks for more than a guest has; "patched" MCL
-         wants 400 MB)
+         (an app whose SIZE asks for more than a guest has)
   fat_with  another list file holding the other architecture's build of
          the taken file (a CFM library or app): the two are merged into
          one fat file (fat_cfm.py), for disks that serve 68k and PowerPC

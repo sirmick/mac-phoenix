@@ -35,10 +35,9 @@ APPS = [
     ("Tools:Disk Copy 6.3.3:Disk Copy", "Disk Copy", "68k ppc"),
     ("Tools:StuffIt Expander™ 5.5:StuffIt Expander™", "StuffIt Expander", "68k ppc"),
     ("Languages:Frontier 5.0.1:UserLand Frontier™", "UserLand Frontier", "68k ppc"),
-    # These don't quit on their own (a modal dialog, a Lisp listener): the
+    # These don't quit on their own (a modal dialog): the
     # emulator is restarted after each.
     ("Tools:ZTerm 1.0.1:ZTerm 1.0.1", "ZTerm", "68k ppc"),          # "Modem Port not available": no serial port
-    ("Languages:MCL 4.2:MCL 4.2 patched", "MCL 4.2", "ppc"),          # MCL 4.2 is PowerPC-only
     ("Tools:Resorcerer 2.0:Resorcerer® 2.0 (Fat)", "Resorcerer", "68k ppc"),   # asks for a serial number
 ]
 
