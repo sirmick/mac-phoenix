@@ -22,6 +22,8 @@
 #include "ipc_protocol.h"
 #include "adb.h"
 #include "command_bridge.h"
+#include "guest_ui.h"
+#include <string>
 #include "../config/emulator_config.h"
 
 /* Boot phases */
@@ -955,6 +957,24 @@ static int g_mac_state_tick = 0;
  */
 void boot_progress_export_mac_state(void)
 {
+	if (g_ipc_buf) {
+		/* The window list belongs to whichever process runs at this tick:
+		 * wait (up to two seconds) for one that holds the front window. */
+		static uint32_t ui_waiting = 0;
+		static int ui_ticks = 0;
+		uint32_t want = IPC_ATOMIC_LOAD(g_ipc_buf->ui_request);
+		if (want != IPC_ATOMIC_LOAD(g_ipc_buf->ui_done)) {
+			if (ui_waiting != want) { ui_waiting = want; ui_ticks = 0; }
+			bool front = false;
+			std::string ui = guest_ui_json(&front);
+			if (!front && ++ui_ticks < 120) goto ui_later;
+			size_t n = ui.size() < sizeof(g_ipc_buf->ui_json) - 1 ? ui.size() : sizeof(g_ipc_buf->ui_json) - 1;
+			memcpy(g_ipc_buf->ui_json, ui.data(), n);
+			g_ipc_buf->ui_json[n] = '\0';
+			IPC_ATOMIC_STORE(g_ipc_buf->ui_done, want);
+		}
+	}
+ui_later:
 	if (++g_mac_state_tick < 30) return;
 	g_mac_state_tick = 0;
 

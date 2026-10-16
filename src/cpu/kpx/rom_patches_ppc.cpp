@@ -2389,6 +2389,7 @@ static bool patch_68k(void)
 void ppc::InstallDrivers(void)
 {
 	fprintf(stderr, "[DRV] InstallDrivers() starting...\n");
+	after_startup_done = false;		// a new boot: PatchAfterStartup_PPC runs again
 	M68kRegisters r;
 	SheepArray<SIZEOF_IOParam> pb_var;
 	const uintptr pb = pb_var.addr();

@@ -32,6 +32,7 @@ namespace ppc {
 	bool PatchROM_PPC(void);
 	void InstallDrivers(void);
 	void PatchAfterStartup_PPC(void);
+	extern bool after_startup_done;	// cleared at each boot
 	void InstallExtFS(void);
 }
 

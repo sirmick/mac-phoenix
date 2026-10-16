@@ -15,6 +15,7 @@
 #include "../core/emulator_subprocess.h"  // For subprocess
 #include "../ipc/ipc_client.h"    // For g_ipc_shm_mutex
 #include "../ipc/ipc_protocol.h"  // For IPC buffer
+#include "../core/guest_ui.h"
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
 #include "../common/include/video_modes.h"
 #include "../core/boot_progress.h"  // For boot phase query
@@ -185,6 +186,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     if (req.path == "/api/app" && req.method == "GET") {
         return handle_app(req);
     }
+    if (req.path == "/api/ui" && req.method == "GET") {
+        return handle_ui(req);
+    }
     if (req.path == "/api/windows" && req.method == "GET") {
         return handle_windows(req);
     }
@@ -196,6 +200,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/exec" && req.method == "POST") {
         return handle_exec(req);
+    }
+    if (req.path == "/api/copy" && req.method == "POST") {
+        return handle_copy(req);
     }
     if (req.path == "/api/quit" && req.method == "POST") {
         return handle_quit(req);
@@ -437,7 +444,10 @@ static bool bridge_agent_is_connected(bool finder_reached) {
 // Send a command to the guest BridgeAgent and poll for a result.
 // Shared by handle_shutdown / handle_restart / handle_quit-style endpoints
 // that go through the guest-OS bridge rather than manipulating the subprocess.
-static Response bridge_command(const char* cmd, int poll_iterations) {
+// wait_result: only the agent's result counts as done. Otherwise the
+// command file vanishing is taken as success too (the agent deletes it
+// before running the command, which is fine for quick commands only).
+static Response bridge_command(const char* cmd, int poll_iterations, bool wait_result = false) {
     auto& cfg = config::EmulatorConfig::instance();
     if (!cfg.bridge_enabled) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled\"}");
@@ -464,8 +474,16 @@ static Response bridge_command(const char* cmd, int poll_iterations) {
             }
             return Response::json("{\"success\": true, \"error_code\": 0}");
         }
-        if (!bridge_has_file(cfg.bridge_dir, "_bridge_cmd")) {
+        bool pending = bridge_has_file(cfg.bridge_dir, "_bridge_cmd");
+        if (!wait_result && !pending) {
             return Response::json("{\"success\": true, \"error_code\": 0}");
+        }
+        // Unclaimed for 15 s and no heartbeat: the agent isn't running (the
+        // guest is restarting, or an installer quit it). Don't hold the
+        // server for the whole wait.
+        if (pending && i >= 150 && !bridge_agent_is_connected(true)) {
+            bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
+            return Response::json("{\"success\": false, \"error\": \"bridge agent not running\"}");
         }
     }
     bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
@@ -1585,6 +1603,29 @@ Response APIRouter::handle_app(const Request& req) {
     return Response::json("{\"app\": \"" + storage::json_escape(result.data) + "\"}");
 }
 
+// GET /api/ui — the guest's windows (screen coordinates), their controls
+// and dialog items with titles and text (guest_ui.cpp). In subprocess mode
+// the CPU process serializes it at its next tick on request.
+Response APIRouter::handle_ui(const Request& req) {
+    (void)req;
+    if (!ctx_->subprocess) {
+        return Response::json(guest_ui_json());
+    }
+    auto* buf = const_cast<IPCBuffer*>(ctx_->subprocess->ipc_client()->shm());
+    if (!buf) {
+        return Response::json("{\"windows\": [], \"error\": \"emulator not running\"}");
+    }
+    uint32_t want = IPC_ATOMIC_LOAD(buf->ui_request) + 1;
+    IPC_ATOMIC_STORE(buf->ui_request, want);
+    for (int i = 0; i < 300; i++) {                 // up to 2 s in the child, at 60 Hz
+        if (IPC_ATOMIC_LOAD(buf->ui_done) == want) {
+            return Response::json(std::string(buf->ui_json));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return Response::json("{\"windows\": [], \"error\": \"no answer from the emulator (paused?)\"}");
+}
+
 Response APIRouter::handle_windows(const Request& req) {
     (void)req;
     if (ctx_->subprocess) {
@@ -1966,6 +2007,24 @@ Response APIRouter::handle_exec(const Request& req) {
         << " \"stdout_b64\": \"" << b64_encode(stdout_bytes) << "\","
         << " \"stderr_b64\": \"" << b64_encode(stderr_bytes) << "\"}";
     return Response::json(out.str());
+}
+
+// POST /api/copy — {"from": "<hfs path>", "to": "<hfs folder path>"}: the
+// guest's BridgeAgent copies a file or folder (both forks, Finder info)
+// into the folder. Used to place software from a mounted image without
+// the Finder. Large trees take a while: up to ten minutes.
+Response APIRouter::handle_copy(const Request& req) {
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req.body));
+    QJsonObject j = doc.object();
+    if (!doc.isObject() || !j.value("from").isString() || !j.value("to").isString()) {
+        Response r; r.set_status(400);
+        r.set_body("{\"error\": \"need 'from' and 'to'\"}");
+        r.set_content_type("application/json");
+        return r;
+    }
+    std::string from = utf8_to_mac_roman(j.value("from").toString().toStdString());
+    std::string to = utf8_to_mac_roman(j.value("to").toString().toStdString());
+    return bridge_command(("COPY " + from + "\r" + to).c_str(), 6000, true);
 }
 
 Response APIRouter::handle_quit(const Request& req) {

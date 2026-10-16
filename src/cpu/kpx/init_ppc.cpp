@@ -373,11 +373,14 @@ void ExitAll_PPC(void)
  *  Patch things after system startup (gets called by disk driver accRun routine)
  */
 
+// Once per boot: InstallDrivers() clears it, so a guest restart gets ExtFS
+// (the Host volume, and with it the bridge) again.
+bool ppc::after_startup_done = false;
+
 void ppc::PatchAfterStartup_PPC(void)
 {
-	static bool done = false;
-	if (done) return;
-	done = true;
+	if (after_startup_done) return;
+	after_startup_done = true;
 	fprintf(stderr, "[PPC] PatchAfterStartup_PPC: installing NQD accel + ExtFS\n");
 	ExecuteNative(NATIVE_VIDEO_INSTALL_ACCEL);
 	InstallExtFS();

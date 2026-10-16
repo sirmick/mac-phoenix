@@ -22,6 +22,8 @@
  *                                        <bridge_dir>:_bridge_reply.
  *                                        Canonical target: ToolServer
  *                                        (creator MPSX).
+ *       COPY    <src>\r<dst folder>    — copy a file or folder (both forks,
+ *                                        Finder info) into a folder
  *       QUIT / SHUTDOWN / RESTART      — Process / Shutdown manager
  *       SET_CLIPBOARD                  — see do_set_clipboard
  *   Agent reads, deletes, executes
@@ -413,6 +415,148 @@ static OSErr send_aevt_psn(const ProcessSerialNumber *psn,
                      kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
     }
     AEDisposeDesc(&evt);
+    return err;
+}
+
+/* ---------- COPY: a file or folder, both forks and Finder info ----------
+ *
+ * COPY <source path>\r<destination folder path>: copies the item into the
+ * folder under its own name, recursively for a folder. Used to place
+ * software from a mounted disk or CD image without the Finder (and without
+ * screen coordinates). An item already there is an error (dupFNErr). */
+
+#define COPY_BUF_SIZE (32L * 1024)
+
+static OSErr copy_fork(const FSSpec *src, const FSSpec *dst, Boolean rsrc, Ptr buf)
+{
+    short in, out;
+    OSErr err = rsrc ? FSpOpenRF(src, fsRdPerm, &in) : FSpOpenDF(src, fsRdPerm, &in);
+    if (err != noErr) return err;
+    err = rsrc ? FSpOpenRF(dst, fsWrPerm, &out) : FSpOpenDF(dst, fsWrPerm, &out);
+    if (err != noErr) { FSClose(in); return err; }
+    for (;;) {
+        long n = COPY_BUF_SIZE;
+        OSErr rerr = FSRead(in, &n, buf);
+        if (n > 0) {
+            long w = n;
+            err = FSWrite(out, &w, buf);
+            if (err != noErr) break;
+        }
+        if (rerr == eofErr || (rerr == noErr && n == 0)) { err = noErr; break; }
+        if (rerr != noErr) { err = rerr; break; }
+    }
+    FSClose(in);
+    FSClose(out);
+    return err;
+}
+
+/* Catalog info of spec into pb (with its own name buffer). */
+static OSErr get_cat_info(const FSSpec *spec, CInfoPBRec *pb, Str63 name)
+{
+    memcpy(name, spec->name, spec->name[0] + 1);
+    memset(pb, 0, sizeof(*pb));
+    pb->hFileInfo.ioNamePtr = name;
+    pb->hFileInfo.ioVRefNum = spec->vRefNum;
+    pb->hFileInfo.ioDirID = spec->parID;
+    pb->hFileInfo.ioFDirIndex = 0;
+    return PBGetCatInfoSync(pb);
+}
+
+static OSErr copy_item(const FSSpec *src, short dstVRef, long dstDirID, Ptr buf)
+{
+    CInfoPBRec pb;
+    Str63 name;
+    OSErr err = get_cat_info(src, &pb, name);
+    if (err != noErr) return err;
+
+    FSSpec dst;
+    err = FSMakeFSSpec(dstVRef, dstDirID, src->name, &dst);
+    if (err == noErr) return dupFNErr;
+    if (err != fnfErr) return err;
+
+    Boolean is_dir = (pb.hFileInfo.ioFlAttrib & ioDirMask) != 0;
+    if (is_dir) {
+        long newDirID;
+        err = FSpDirCreate(&dst, smSystemScript, &newDirID);
+        if (err != noErr) return err;
+        /* Children, by index, before the folder's own info (dates) is set. */
+        long srcDirID = pb.dirInfo.ioDrDirID;
+        for (short i = 1; ; i++) {
+            CInfoPBRec cpb;
+            Str63 cname;
+            memset(&cpb, 0, sizeof(cpb));
+            cname[0] = 0;
+            cpb.hFileInfo.ioNamePtr = cname;
+            cpb.hFileInfo.ioVRefNum = src->vRefNum;
+            cpb.hFileInfo.ioDirID = srcDirID;
+            cpb.hFileInfo.ioFDirIndex = i;
+            if (PBGetCatInfoSync(&cpb) != noErr) break;
+            FSSpec child;
+            err = FSMakeFSSpec(src->vRefNum, srcDirID, cname, &child);
+            if (err != noErr) return err;
+            err = copy_item(&child, dstVRef, newDirID, buf);
+            if (err != noErr) return err;
+        }
+        CInfoPBRec dpb;
+        Str63 dname;
+        err = get_cat_info(&dst, &dpb, dname);
+        if (err != noErr) return err;
+        dpb.dirInfo.ioDrUsrWds = pb.dirInfo.ioDrUsrWds;
+        dpb.dirInfo.ioDrFndrInfo = pb.dirInfo.ioDrFndrInfo;
+        dpb.dirInfo.ioDrCrDat = pb.dirInfo.ioDrCrDat;
+        dpb.dirInfo.ioDrMdDat = pb.dirInfo.ioDrMdDat;
+        dpb.dirInfo.ioDrDirID = dst.parID;
+        dpb.dirInfo.ioNamePtr = dname;
+        return PBSetCatInfoSync(&dpb);
+    }
+
+    err = FSpCreate(&dst, pb.hFileInfo.ioFlFndrInfo.fdCreator,
+                    pb.hFileInfo.ioFlFndrInfo.fdType, smSystemScript);
+    if (err != noErr) return err;
+    if (pb.hFileInfo.ioFlLgLen > 0 && (err = copy_fork(src, &dst, false, buf)) != noErr) return err;
+    if (pb.hFileInfo.ioFlRLgLen > 0 && (err = copy_fork(src, &dst, true, buf)) != noErr) return err;
+    CInfoPBRec fpb;
+    Str63 fname;
+    err = get_cat_info(&dst, &fpb, fname);
+    if (err != noErr) return err;
+    fpb.hFileInfo.ioFlFndrInfo = pb.hFileInfo.ioFlFndrInfo;
+    fpb.hFileInfo.ioFlFndrInfo.fdFlags &= ~kHasBeenInited;
+    fpb.hFileInfo.ioFlXFndrInfo = pb.hFileInfo.ioFlXFndrInfo;
+    fpb.hFileInfo.ioFlCrDat = pb.hFileInfo.ioFlCrDat;
+    fpb.hFileInfo.ioFlMdDat = pb.hFileInfo.ioFlMdDat;
+    fpb.hFileInfo.ioDirID = dst.parID;
+    fpb.hFileInfo.ioNamePtr = fname;
+    return PBSetCatInfoSync(&fpb);
+}
+
+/* "COPY src\rdst": src a file or folder, dst an existing folder. */
+static OSErr do_copy(const char *args)
+{
+    const char *sep = strchr(args, '\r');
+    if (!sep) return paramErr;
+    unsigned char srcPath[256], dstPath[256];
+    int sl = (int)(sep - args), dl = (int)strlen(sep + 1);
+    while (dl > 0 && (sep[dl] == '\r' || sep[dl] == '\n')) dl--;
+    if (sl > 255 || dl > 255) return bdNamErr;
+    srcPath[0] = (unsigned char)sl; memcpy(srcPath + 1, args, sl);
+    dstPath[0] = (unsigned char)dl; memcpy(dstPath + 1, sep + 1, dl);
+
+    FSSpec src, dst;
+    OSErr err = FSMakeFSSpec(0, 0, srcPath, &src);
+    if (err != noErr) return err;
+    err = FSMakeFSSpec(0, 0, dstPath, &dst);
+    if (err != noErr) return err;
+    CInfoPBRec pb;
+    Str63 name;
+    err = get_cat_info(&dst, &pb, name);
+    if (err != noErr) return err;
+    if (!(pb.hFileInfo.ioFlAttrib & ioDirMask)) return dirNFErr;
+
+    Ptr buf = NewPtr(COPY_BUF_SIZE);
+    if (!buf) return memFullErr;
+    err = copy_item(&src, dst.vRefNum, pb.dirInfo.ioDrDirID, buf);
+    DisposePtr(buf);
+    FlushVol(NULL, dst.vRefNum);
     return err;
 }
 
@@ -1068,7 +1212,7 @@ static void poll_bridge(void)
     if (FSpOpenDF(&cmd_spec, fsRdPerm, &refNum) != noErr)
         return;
 
-    char cmd[256];
+    char cmd[640];                       /* COPY carries two full paths */
     long count = sizeof(cmd) - 1;
     memset(cmd, 0, sizeof(cmd));
     OSErr err = FSRead(refNum, &count, cmd);
@@ -1107,6 +1251,8 @@ static void poll_bridge(void)
         path[0] = (unsigned char)len;
         memcpy(path + 1, cmd + 7, len);
         result = do_launch(path);
+    } else if (strncmp(cmd, "COPY ", 5) == 0) {
+        result = do_copy(cmd + 5);
     } else if (strncmp(cmd, "OPEN ", 5) == 0) {
         int len = (int)strlen(cmd + 5);
         while (len > 0 && (cmd[5+len-1] == '\n' || cmd[5+len-1] == '\r'

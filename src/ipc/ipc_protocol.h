@@ -211,6 +211,13 @@ typedef struct IPCBuffer {
      * Updated every ~500ms from the 60Hz tick thread. */
     char mac_state_json[2048];
 
+    /* The guest's UI tree (guest_ui.cpp) on request: the parent bumps
+     * ui_request, the child writes ui_json at its next tick and sets
+     * ui_done = ui_request. */
+    IPC_ATOMIC_UINT32 ui_request;
+    IPC_ATOMIC_UINT32 ui_done;
+    char ui_json[32768];
+
     /* ── Audio ring buffer (child writes, parent reads) ──────────── */
     IPC_ATOMIC_UINT32 audio_write_idx;   /* child increments after writing frame */
     IPC_ATOMIC_UINT32 audio_read_idx;    /* parent increments after reading frame */

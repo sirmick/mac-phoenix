@@ -9,6 +9,7 @@ add_library(core STATIC
   executor_systems.cpp
   disk.cpp
   boot_progress.cpp
+  guest_ui.cpp
   command_bridge.cpp
   snapshot.cpp
   mac_roman.cpp
