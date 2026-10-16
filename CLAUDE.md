@@ -50,6 +50,11 @@ npx playwright test
 ./build/mac-phoenix --backend executor --audio
 ctest --test-dir build -L executor
 
+# MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
+tools/mpw/mpw setup                    # once: MPW disk from data.img's E.T.O. #22
+tools/mpw/mpw build tests/guest/ot     # build.mpw; products -> DIR/build/*.bin
+tools/mpw/mpw run 'SC -help'           # exit code = {Status}; mpw stop when done
+
 # arm64 / riscv64 builds on this x86-64 box: Debian containers under qemu
 # (binfmt_misc + docker). Build dirs build-arm64/, build-riscv64/.
 tools/xarch/xarch.sh arm64                     # configure + build

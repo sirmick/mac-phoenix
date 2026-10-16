@@ -422,6 +422,18 @@ set_tests_properties(aslm_executor_mame68k PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# Apple's MPW (SC, Link, ToolServer) on Executor through tools/mpw/mpw;
+# skips without the MPW disk (tools/mpw/mpw setup).
+add_test(
+  NAME mpw_toolchain_executor
+  COMMAND bash ${TEST_DIR}/test_mpw_toolchain.sh --port 18392
+)
+set_tests_properties(mpw_toolchain_executor PROPERTIES
+  TIMEOUT 300
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp), on
 # both cores.
 add_test(

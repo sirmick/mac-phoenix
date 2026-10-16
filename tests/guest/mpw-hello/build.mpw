@@ -1,0 +1,10 @@
+# build.mpw — hello, a plain MPW tool (SC + Link).
+# products: hello
+SC -b hello.c -o hello.c.o
+Link -c "MPS " -t MPST -d ∂
+	hello.c.o ∂
+	"{CLibraries}StdCLib.o" ∂
+	"{Libraries}MacRuntime.o" ∂
+	"{Libraries}IntEnv.o" ∂
+	"{Libraries}Interface.o" ∂
+	-o hello

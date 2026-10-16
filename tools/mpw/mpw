@@ -1,0 +1,546 @@
+#!/usr/bin/env python3
+"""mpw — Apple's MPW (68k C, Pascal, assembler, Rez, Link) inside Executor.
+
+A headless Executor session runs System 7.5.5 with an MPW disk mounted and
+ToolServer up. Commands go to ToolServer as 'misc'/'dosc' Apple Events
+through BridgeAgent (POST /api/exec); a project directory on the host is
+mirrored into the session's Host volume, and what MPW builds comes back as
+MacBinary.
+
+    mpw setup                     build the MPW disk from E.T.O. #22 (data.img)
+    mpw start | stop | status     the session (other commands start it)
+    mpw run 'COMMAND' [-C DIR]    run an MPW command; exit code = {Status}
+    mpw build DIR [-o OUTDIR]     mirror DIR, run its build.mpw (or MakeFile),
+                                  fetch the products as MacBinary
+
+Sources in DIR are UTF-8 with LF line ends; they reach MPW as MacRoman with
+CR. Compiler and linker messages naming them are repeated in gcc form
+("DIR/file.c:12: ...") after MPW's own.
+
+A build script (build.mpw) runs with {Exit} 1 in DIR's mirror; it names
+its products in a comment line "# products: NAME ...". Without build.mpw,
+"Make -f MakeFile" runs and its commands are executed.
+
+Environment: MPW_STATE (default ~/.cache/mac-phoenix/mpw), MPW_PORT (18390),
+MPW_SYSTEM (mpw-7.5.5.img: the copy of macos-7.5.5.img the session runs on),
+MACPHOENIX_BINARY, MACEMU_STORAGE (~/storage). See docs/MPW.md.
+"""
+import argparse
+import base64
+import fcntl
+import json
+import os
+import re
+import shutil
+import signal
+import struct
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+import uuid
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+STORAGE = os.environ.get("MACEMU_STORAGE", os.path.expanduser("~/storage"))
+STATE = os.environ.get("MPW_STATE", os.path.expanduser("~/.cache/mac-phoenix/mpw"))
+PORT = int(os.environ.get("MPW_PORT", "18390"))
+BINARY = os.environ.get("MACPHOENIX_BINARY", os.path.join(ROOT, "build", "mac-phoenix"))
+
+MPW_DISK = os.path.join(STORAGE, "images", "mpw-eto22.img")
+SYSTEM_SOURCE = os.path.join(STORAGE, "images", "macos-7.5.5.img")
+SYSTEM_NAME = os.environ.get("MPW_SYSTEM", "mpw-7.5.5.img")  # the session's own copy
+HOST = os.path.join(STATE, "host")     # the Host volume
+WORK = os.path.join(HOST, ".mpw")      # per-command scripts, output, status
+SESSION = os.path.join(STATE, "session.json")
+TOOLSERVER = "MPSX"
+
+TEXT_EXT = {".c", ".h", ".cp", ".cpp", ".hpp", ".r", ".a", ".p", ".mpw", ".make",
+            ".exp", ".txt", ".s", ".inc", ".pas"}
+TEXT_NAMES = {"MakeFile", "Makefile", "makefile"}
+
+
+class MPWError(Exception):
+    pass
+
+
+def log(msg):
+    sys.stdout.flush()
+    print("mpw: " + msg, file=sys.stderr)
+
+
+def shown(path):
+    """A path as the user would type it: relative below the current
+    directory, absolute elsewhere."""
+    rel = os.path.relpath(path)
+    return path if rel.startswith("..") else rel
+
+
+# ---- the session --------------------------------------------------------
+
+def api(path, body=None, timeout=10):
+    url = "http://127.0.0.1:%d%s" % (PORT, path)
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data,
+                                 headers={"Content-Type": "application/json"} if data else {})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return {"raw": raw}
+
+
+def session():
+    try:
+        with open(SESSION) as f:
+            s = json.load(f)
+    except (OSError, ValueError):
+        return None
+    try:
+        os.kill(s["pid"], 0)
+    except OSError:
+        return None
+    return s
+
+
+def alive(s):
+    try:
+        os.kill(s["pid"], 0)
+    except OSError:
+        return False
+    try:
+        with open(s["log"], errors="replace") as f:
+            f.seek(max(0, os.path.getsize(s["log"]) - 65536))
+            tail = f.read()
+        # The CPU runs in a child process; the parent outlives its crash.
+        return not re.search(r"host signal|fatal heap error|Fatal error|FATAL CRASH|"
+                             r"terminate called|Emulator process exited", tail)
+    except OSError:
+        return True
+
+
+def ensure_system():
+    """The session's System image: a copy of 7.5.5, so the original is never
+    mounted read-write."""
+    dst = os.path.join(STORAGE, "images", SYSTEM_NAME)
+    if not os.path.exists(dst):
+        if not os.path.exists(SYSTEM_SOURCE):
+            raise MPWError("no %s to copy the System from" % SYSTEM_SOURCE)
+        subprocess.check_call(["cp", "--reflink=auto", SYSTEM_SOURCE, dst])
+    return dst
+
+
+def start(core=None, quiet=False):
+    s = session()
+    if s and alive(s):
+        return s
+    if s:
+        stop()
+    if not os.path.exists(MPW_DISK):
+        raise MPWError("no MPW disk at %s (run: mpw setup)" % MPW_DISK)
+    if not os.access(BINARY, os.X_OK):
+        raise MPWError("no emulator at %s (build it first)" % BINARY)
+    ensure_system()
+    os.makedirs(WORK, exist_ok=True)
+    disk = os.path.join(STATE, "mpw.img")
+    subprocess.check_call(["cp", "--reflink=auto", "-f", MPW_DISK, disk])
+    logpath = os.path.join(STATE, "emulator.log")
+    cmd = [BINARY, "--backend", "executor", "--executor-system", SYSTEM_NAME,
+           "--executor-writable-images", "--disk", disk, "--extfs", HOST,
+           "--config", "/dev/null", "--headless-http", "--dismiss-shutdown-dialog",
+           "--port", str(PORT)]
+    if core:
+        cmd += ["--core", core]
+    with open(logpath, "w") as logf:
+        p = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
+                             stdin=subprocess.DEVNULL, start_new_session=True, cwd=ROOT)
+    s = {"pid": p.pid, "port": PORT, "log": logpath, "host": HOST, "started": time.time()}
+    with open(SESSION, "w") as f:
+        json.dump(s, f)
+    if not quiet:
+        log("starting Executor (pid %d, port %d)..." % (p.pid, PORT))
+    try:
+        boot(s)
+    except Exception:
+        stop()
+        raise
+    if not quiet:
+        log("ready in %.0fs" % (time.time() - s["started"]))
+    return s
+
+
+def boot(s):
+    deadline = time.time() + 120
+    while True:
+        if not alive(s):
+            raise MPWError("emulator exited during boot; see %s" % s["log"])
+        try:
+            api("/api/status")
+            break
+        except (urllib.error.URLError, OSError):
+            if time.time() > deadline:
+                raise MPWError("emulator HTTP API never came up")
+            time.sleep(0.3)
+    api("/api/emulator/start", {})
+    while True:
+        st = api("/api/status")
+        if st.get("bridge_agent_connected"):
+            break
+        if not alive(s) or time.time() > deadline:
+            raise MPWError("BridgeAgent never came up; see %s" % s["log"])
+        time.sleep(0.5)
+    # ToolServer: /api/exec launches it by creator; retry while it starts.
+    for _ in range(10):
+        r = exec_raw("Echo mpw-ready", timeout=60)
+        if r.get("success") and b"mpw-ready" in base64.b64decode(r.get("stdout_b64", "")):
+            return
+        time.sleep(2)
+    raise MPWError("ToolServer did not answer; see %s" % s["log"])
+
+
+def stop():
+    s = None
+    try:
+        with open(SESSION) as f:
+            s = json.load(f)
+    except (OSError, ValueError):
+        pass
+    if s:
+        try:
+            os.killpg(s["pid"], signal.SIGTERM)
+            for _ in range(50):
+                os.kill(s["pid"], 0)
+                time.sleep(0.1)
+            os.killpg(s["pid"], signal.SIGKILL)
+        except OSError:
+            pass
+    try:
+        os.unlink(SESSION)
+    except OSError:
+        pass
+
+
+# ---- running commands ---------------------------------------------------
+
+def exec_raw(command, timeout=90):
+    body = {"creator": TOOLSERVER,
+            "command_b64": base64.b64encode(command.encode("mac_roman")).decode()}
+    try:
+        return api("/api/exec", body, timeout=timeout)
+    except (urllib.error.URLError, OSError) as e:
+        return {"success": False, "error": str(e)}
+
+
+def mac_path(host_path):
+    """Host path inside the Host volume -> Mac path ("Host:a:b:")."""
+    rel = os.path.relpath(os.path.abspath(host_path), HOST)
+    if rel.startswith(".."):
+        raise MPWError("%s is outside the Host volume %s" % (host_path, HOST))
+    parts = [] if rel == "." else rel.split(os.sep)
+    p = "Host:" + ":".join(parts)
+    if os.path.isdir(host_path) and not p.endswith(":"):
+        p += ":"
+    return p
+
+
+def run(script, cwd=None, timeout=600, s=None):
+    """Run MPW commands in ToolServer. Returns (status, output text).
+
+    The commands go in a script file; the wrapper sent over /api/exec runs
+    it with all output to a file and writes {Status} after it, so the
+    outcome is in files even when the Apple Event times out (a minute) on
+    a long build."""
+    s = s or start()
+    os.makedirs(WORK, exist_ok=True)
+    lock = open(os.path.join(STATE, "lock"), "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    try:
+        rid = uuid.uuid4().hex[:8]
+        files = {k: os.path.join(WORK, rid + "." + k) for k in ("script", "out", "status")}
+        body = "Set Exit 1\n"
+        if cwd:
+            body += 'Directory "%s"\n' % cwd
+        body += script.rstrip("\n") + "\n"
+        write_text(files["script"], body)
+        wrapper = ('Set Exit 0\r"%s" ∑ "%s"\rEcho {Status} > "%s"\r'
+                   % (mac_path(files["script"]), mac_path(files["out"]), mac_path(files["status"])))
+        t0 = time.time()
+        r = exec_raw(wrapper, timeout=120)
+        while not os.path.exists(files["status"]) or not read_text(files["status"]).strip():
+            if not alive(s):
+                raise MPWError("emulator died; see %s" % s["log"])
+            if time.time() - t0 > timeout:
+                raise MPWError("timed out after %ds (%s)" % (timeout, r.get("error", "no status")))
+            time.sleep(0.2)
+        status = int(read_text(files["status"]).split()[0])
+        out = read_text(files["out"]) if os.path.exists(files["out"]) else ""
+        for f in files.values():
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
+        return status, out
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        lock.close()
+
+
+# ---- text and files -----------------------------------------------------
+
+def to_mac(text):
+    return text.replace("\r\n", "\n").replace("\n", "\r").encode("mac_roman", errors="replace")
+
+
+def write_text(path, text):
+    with open(path, "wb") as f:
+        f.write(to_mac(text))
+
+
+def read_text(path):
+    with open(path, "rb") as f:
+        return f.read().decode("mac_roman").replace("\r", "\n")
+
+
+def is_text(path):
+    name = os.path.basename(path)
+    return os.path.splitext(name)[1].lower() in TEXT_EXT or name in TEXT_NAMES
+
+
+def mirror(src, dst):
+    """Copy DIR into the Host volume: text converted, the rest as is.
+    Unchanged files are left alone so their dates (and Make) hold."""
+    os.makedirs(dst, exist_ok=True)
+    for dirpath, dirnames, filenames in os.walk(src):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d != "build"]
+        rel = os.path.relpath(dirpath, src)
+        out_dir = os.path.join(dst, rel) if rel != "." else dst
+        os.makedirs(out_dir, exist_ok=True)
+        for name in filenames:
+            if name.startswith("."):
+                continue
+            sp = os.path.join(dirpath, name)
+            dp = os.path.join(out_dir, name)
+            with open(sp, "rb") as f:
+                data = f.read()
+            if is_text(sp):
+                data = to_mac(data.decode("utf-8"))
+            try:
+                with open(dp, "rb") as f:
+                    if f.read() == data:
+                        continue
+            except OSError:
+                pass
+            with open(dp, "wb") as f:
+                f.write(data)
+
+
+def fork_files(host_file):
+    """Executor keeps a Mac file in the Host volume as NAME (data fork) and,
+    once it has a resource fork or non-TEXT type, %NAME (AppleDouble)."""
+    d, n = os.path.split(host_file)
+    return host_file, os.path.join(d, "%" + n)
+
+
+def read_appledouble(path):
+    with open(path, "rb") as f:
+        b = f.read()
+    magic, _ver = struct.unpack(">II", b[:8])
+    if magic not in (0x00051607, 0x00051600):
+        raise MPWError("%s: not AppleDouble" % path)
+    n = struct.unpack(">H", b[24:26])[0]
+    entries = {}
+    for i in range(n):
+        eid, off, ln = struct.unpack(">III", b[26 + 12 * i:38 + 12 * i])
+        entries[eid] = b[off:off + ln]
+    return entries
+
+
+def crc16_xmodem(data):
+    crc = 0
+    for byte in data:
+        crc ^= byte << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) if crc & 0x8000 else (crc << 1)
+            crc &= 0xFFFF
+    return crc
+
+
+def to_macbinary(host_file, out_path):
+    """Host volume file (NAME + %NAME) -> MacBinary II."""
+    data_path, ad_path = fork_files(host_file)
+    data = open(data_path, "rb").read() if os.path.exists(data_path) else b""
+    rsrc, finfo = b"", b"TEXTttxt" + bytes(8)
+    if os.path.exists(ad_path):
+        e = read_appledouble(ad_path)
+        rsrc = e.get(2, b"")
+        if 9 in e:
+            finfo = e[9][:16].ljust(16, b"\0")
+    name = os.path.basename(host_file).encode("mac_roman")[:63]
+    mtime = int(os.path.getmtime(data_path if os.path.exists(data_path) else ad_path))
+    mac_time = mtime + 2082844800 + time.localtime(mtime).tm_gmtoff
+    h = bytearray(128)
+    h[1] = len(name)
+    h[2:2 + len(name)] = name
+    h[65:73] = finfo[0:8]                # type, creator
+    h[73] = finfo[8]                     # Finder flags (high byte)
+    h[75:81] = finfo[10:16]              # location, folder
+    struct.pack_into(">II", h, 83, len(data), len(rsrc))
+    struct.pack_into(">II", h, 91, mac_time, mac_time)
+    h[101] = finfo[9]                    # Finder flags (low byte)
+    h[122] = 129                         # MacBinary II
+    h[123] = 129
+    struct.pack_into(">H", h, 124, crc16_xmodem(bytes(h[:124])))
+    pad = lambda b: b + bytes((-len(b)) % 128)
+    with open(out_path, "wb") as f:
+        f.write(bytes(h) + pad(data) + pad(rsrc))
+
+
+# ---- messages -----------------------------------------------------------
+
+MSG = re.compile(r'^File "([^"]+)"; [Ll]ine (\d+)\s*#?\s*(.*)$')
+
+
+def gcc_messages(out, mac_dir, host_dir):
+    """MPW's 'File "x.c"; line 12 #Error ...' lines again in gcc form, the
+    file named as on the host."""
+    lines = []
+    for line in out.splitlines():
+        m = MSG.match(line.strip())
+        if not m:
+            continue
+        f, ln, msg = m.groups()
+        if f.startswith(mac_dir):
+            f = f[len(mac_dir):]
+        elif f.startswith("Host:"):
+            continue
+        lines.append("%s:%s: %s" % (os.path.join(host_dir, f.replace(":", "/")), ln, msg.strip()))
+    return lines
+
+
+# ---- commands -----------------------------------------------------------
+
+def cmd_setup(args):
+    if os.path.exists(MPW_DISK) and not args.force:
+        log("%s exists (use --force to rebuild)" % MPW_DISK)
+        return 0
+    toast = args.toast or os.path.join(STORAGE, "eto", "eto22.toast")
+    if not os.path.exists(toast):
+        data = os.path.join(STORAGE, "images", "data.img")
+        if not os.path.exists(data):
+            raise MPWError("need E.T.O. #22 (%s or %s)" % (toast, data))
+        os.makedirs(os.path.dirname(toast), exist_ok=True)
+        env = dict(os.environ, HOME=STATE)
+        os.makedirs(STATE, exist_ok=True)
+        log("copying E.T.O. #22 out of %s" % data)
+        subprocess.check_call(["hmount", data], env=env, stdout=subprocess.DEVNULL)
+        try:
+            subprocess.check_call(["hcopy", "-r", ":E.T.O. #22 Nov 96.toast", toast], env=env)
+        finally:
+            subprocess.call(["humount"], env=env)
+    subprocess.check_call([sys.executable, os.path.join(ROOT, "tools", "mpw", "make_mpw_disk.py"),
+                           toast, MPW_DISK])
+    return 0
+
+
+def cmd_start(args):
+    s = start(core=args.core)
+    print("pid %d port %d host %s log %s" % (s["pid"], s["port"], HOST, s["log"]))
+    return 0
+
+
+def cmd_stop(args):
+    stop()
+    return 0
+
+
+def cmd_status(args):
+    s = session()
+    if not s:
+        print("stopped")
+        return 1
+    print("running: pid %d port %d (up %.0fs), host %s, log %s"
+          % (s["pid"], s["port"], time.time() - s["started"], HOST, s["log"]))
+    return 0
+
+
+def cmd_run(args):
+    cwd = mac_path(args.C) if args.C else "Host:"
+    status, out = run(" ".join(args.command), cwd=cwd, timeout=args.timeout)
+    sys.stdout.write(out)
+    return status
+
+
+def cmd_build(args):
+    src = os.path.abspath(args.dir)
+    name = os.path.basename(src.rstrip("/"))
+    dst = os.path.join(HOST, name)
+    start()
+    mirror(src, dst)
+    mac_dir = mac_path(dst)
+    script_path = os.path.join(src, "build.mpw")
+    products = []
+    if os.path.exists(script_path):
+        script = open(script_path, encoding="utf-8").read()
+        for m in re.finditer(r"^#\s*products:\s*(.+)$", script, re.M):
+            products += m.group(1).split()
+    else:
+        script = ('Make -f MakeFile %s > "{TempFolder}"MakeOut\n"{TempFolder}"MakeOut\n'
+                  % " ".join(args.target or []))
+    t0 = time.time()
+    status, out = run(script, cwd=mac_dir, timeout=args.timeout)
+    sys.stdout.write(out)
+    for line in gcc_messages(out, mac_dir, shown(src)):
+        print(line)
+    if status:
+        log("build failed (status %d)" % status)
+        return status
+    outdir = os.path.abspath(args.o or os.path.join(src, "build"))
+    os.makedirs(outdir, exist_ok=True)
+    for p in products + (args.product or []):
+        host_file = os.path.join(dst, p.replace(":", os.sep))
+        if not any(os.path.exists(f) for f in fork_files(host_file)):
+            log("product %s was not built" % p)
+            return 1
+        out_path = os.path.join(outdir, os.path.basename(host_file) + ".bin")
+        to_macbinary(host_file, out_path)
+        log("%s -> %s" % (p, shown(out_path)))
+    log("built in %.1fs" % (time.time() - t0))
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="mpw", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("setup", help="build the MPW disk from E.T.O. #22")
+    p.add_argument("--toast", help="E.T.O. #22 CD image (default: copy it out of data.img)")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(fn=cmd_setup)
+    p = sub.add_parser("start", help="start the session")
+    p.add_argument("--core", help="CPU core (uae, mame-68k)")
+    p.set_defaults(fn=cmd_start)
+    sub.add_parser("stop", help="stop the session").set_defaults(fn=cmd_stop)
+    sub.add_parser("status", help="is the session up").set_defaults(fn=cmd_status)
+    p = sub.add_parser("run", help="run an MPW command")
+    p.add_argument("-C", metavar="DIR", help="directory inside the Host volume to run in")
+    p.add_argument("--timeout", type=int, default=600)
+    p.add_argument("command", nargs="+")
+    p.set_defaults(fn=cmd_run)
+    p = sub.add_parser("build", help="build a project directory")
+    p.add_argument("dir")
+    p.add_argument("-o", metavar="OUTDIR", help="where products go (default DIR/build)")
+    p.add_argument("--product", action="append", help="also fetch this product")
+    p.add_argument("--target", action="append", help="Make target (no build.mpw)")
+    p.add_argument("--timeout", type=int, default=900)
+    p.set_defaults(fn=cmd_build)
+    args = ap.parse_args()
+    try:
+        sys.exit(args.fn(args))
+    except MPWError as e:
+        log(str(e))
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()
