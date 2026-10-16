@@ -1,0 +1,15 @@
+{
+ "note": "ZTerm 1.0.1, expanded by StuffIt Expander. Asks for a serial port the emulator doesn't have yet.",
+ "kind": "expand",
+ "archive": "ZTerm1.0.1.sit",
+ "expect": [
+  "ZTerm_1.0.1"
+ ],
+ "launch": [
+  {
+   "app": "ZTerm_1.0.1:ZTerm 1.0.1",
+   "no_quit": true,
+   "needs_serial_port": true
+  }
+ ]
+}

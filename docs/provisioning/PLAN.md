@@ -37,8 +37,12 @@ hand-made base Systems; this plan replaces those. See
 * **Pinned and hashed.** Media by MD5; snapshots record their bake,
   recipe hash, media pins and base; images record their snapshots. A
   change rebuilds only what depends on it.
-* **Both machines.** Bakes record the OS and architecture they ran on;
-  where an installer's choices differ by machine, both are baked.
+* **One snapshot per product**, for both machines and every 7.x System
+  it targets. Bakes run on the 68k machine; a product whose installer
+  writes machine-specific files is also baked on PPC and the two runs are
+  merged: different files are all kept (each System ignores the other
+  machine's extensions), the same file in two builds becomes one fat file.
+  Other conflicts fail the bake. "More files" over more variants.
 
 ## Terms
 
@@ -46,7 +50,7 @@ hand-made base Systems; this plan replaces those. See
 |---|---|---|---|
 | **media** | a pinned input file: archive, installer, CD or floppy image | `provisioning/media.json` | `media/` |
 | **bake** | a recipe turning media into a snapshot, run in the guest | `provisioning/bakes/<name>.json` | |
-| **snapshot** | what one product adds to a Mac | made by a bake | `baked/<name>@<os>-<arch>.img` |
+| **snapshot** | what one product adds to a Mac | made by a bake | `baked/<name>.img` (machine runs: `baked/parts/<name>@<machine>.img`) |
 | **image** | a disk assembled from snapshots | `provisioning/images/<name>.json` | `images/` |
 
 ### Snapshot layout
@@ -58,7 +62,7 @@ hand-made base Systems; this plan replaces those. See
 :Snapshot Info     manifest: bake, recipe hash, media pins, base snapshot,
                    OS/arch, target volume name, content listing (path,
                    type/creator, flags, MD5 per fork; apps marked, with
-                   facts such as "ppc_only", "needs_serial", "no_quit")
+                   facts such as "needs_serial", "no_quit")
 ```
 
 Two hashes: the image's (pins one bake) and the content's (ignores dates,
@@ -78,11 +82,12 @@ aliases lands on a volume of another name.
 | `install` | a product with its own installer | recipe: launch, clicks, keys, waits; then first-launch steps (licence, registration, personalisation) |
 | `expand` | an archive (`.sit .hqx .bin .zip .sea .cpt`) | StuffIt Expander in the guest; can be followed by first-launch steps |
 | `copy` | folders on a disk or CD image | the image is mounted in the guest; BridgeAgent `COPY` places the items (both forks, Finder info) |
-| `derive` | a snapshot from snapshots | fat CFM merge of 68k and PPC builds, SIZE fix, first launch of something already baked |
+| `derive` | a snapshot from snapshots | a SIZE fix, a first launch of something already baked (merging machine runs is automatic) |
 
-A bake names the bases it runs on (`"on": ["7.6.1-68k", "7.6.1-ppc"]`)
-and gives one snapshot per base. Every bake except `os` runs on an `os`
-snapshot, so "baked on 7.6.1" is exact.
+A bake runs on a System (`"os"`, default 7.6.1) on the 68k machine;
+`"machines": ["68k", "ppc"]` runs it on both and merges the two into the
+product's one snapshot. Every bake except `os` runs on an `os` snapshot,
+so "baked on 7.6.1" is exact.
 
 ### Images
 
@@ -95,7 +100,7 @@ snapshot, so "baked on 7.6.1" is exact.
 
 A data image is a blank volume plus snapshots' `:Items:`; a boot image is
 an `os` snapshot plus snapshots' `:System Folder:` parts (and optionally
-items), each snapshot's variant matched to the base's OS and arch.
+items).
 
 ## Storage and media
 
@@ -133,7 +138,7 @@ mac-phoenix-assets/
     infomac/<path>           Info-Mac paths
     other/                   one-offs with no public source (E.T.O. #22,
                              magazine CDs), named and described in media.json
-  baked/                     snapshots: <name>@<os>-<arch>.img
+  baked/                     snapshots: <name>.img (parts/: per-machine runs)
   storage/images/            built images only (until the switch-over, also
                              the hand-made ones being replaced)
   storage/roms/              unchanged
@@ -174,8 +179,8 @@ repo. `tools/setup.sh` gains the `media` and `baked` links.
 |---|---|---|---|---|
 | System 6.0.8 | Legacy CD `Mac OS:System 6.0.8` (800K / 1440K floppy images) | SE / IIci ROM | 68k (SE, Plus, IIci profiles) | later |
 | **System 7.1** | Legacy CD `Mac OS:System 7.1` + `7.1-C/Q610, C/Q650, Q800 1.1` enabler (the Quadra 650 needs it) | Quadra 650 | 68k | **now** |
-| **System 7.5.5** | Legacy CD `System 7.5, Version 7.5.3` + `System Updates:System 7.5.5 Update` | Quadra 650, G3 | 68k, PPC | **now** |
-| **Mac OS 7.6.1** | Legacy CD `Mac OS 7.6` + `Mac OS 7.6.1` (Retail CD as a second source) | Quadra 650, G3 | 68k, PPC | **now** |
+| **System 7.5.5** | Legacy CD `System 7.5, Version 7.5.3` + `System Updates:System 7.5.5 Update` | Quadra 650 (universal install) | 68k, PPC | **now** |
+| **Mac OS 7.6.1** | Legacy CD `Mac OS 7.6` + `Mac OS 7.6.1` (Retail CD as a second source) | Quadra 650 (universal install) | 68k, PPC | **now** |
 | Mac OS 8.6 | `MacOS8.6.iso` | G3 | PPC | later |
 | Mac OS 9.0.4 | `Apple_MacOS_9.0.4_USA.iso` (9.0 + the 9.0.4 update on the disc) | G3 | PPC | later |
 
@@ -189,8 +194,9 @@ An `os` bake: boot the installer (CD with `--bootdriver -62`, or a boot
 floppy image), Easy Install onto a blank disk from `create_hfs.py`, apply
 updaters, restart, answer first-boot questions (8.6/9: Mac OS Setup
 Assistant), set the defaults we want (no startup sound loops, virtual
-memory off, etc.), shut down. Where Easy Install chooses by machine
-(7.5.5, 7.6.1), there is one base per architecture.
+memory off, etc.), shut down. 7.5.5 and 7.6.1 use Custom Install's "any
+Macintosh" option: one universal System per version that boots on both
+machines.
 
 ### L2: tools (`tools-<family>`)
 
@@ -215,8 +221,8 @@ Today's set, re-baked generically; arrangement is in `images/Development.json`.
 
 | Group | Snapshots |
 |---|---|
-| Compilers / IDEs | MPW 3.4.2 + Interfaces&Libraries (E.T.O. #22, `copy`), CodeWarrior Pro 4 (68k + PPC), THINK C 6, Symantec C++ 7, THINK Pascal 4.5 |
-| Languages / scripting | MacPerl 5.2.0r4, MacPython 1.5.2 (fat `derive`), HyperCard 2.4.1, Frontier 5.0.1 (first launch done) |
+| Compilers / IDEs | MPW 3.4.2 + Interfaces&Libraries (E.T.O. #22, `copy`), CodeWarrior Pro 4 (baked on both machines: the union of their System Folder parts, plus StdCLibInit from the CD for 7.5.5 on PPC), THINK C 6, Symantec C++ 7, THINK Pascal 4.5 |
+| Languages / scripting | MacPerl 5.2.0r4, MacPython 1.5.2 (baked on both machines: one fat PythonCore), HyperCard 2.4.1, Frontier 5.0.1 (first launch done) |
 | Debug / resources | MacsBug 6.6.3 (System Folder), ResEdit 2.1.3, Resorcerer 2.0 (needs a serial) |
 | Comms | ZTerm 1.0.1 (needs a serial port the emulator doesn't have yet) |
 | 8.6 / 9 only (later) | Universal Interfaces 3.4.2 and MPW 3.5 (HFS+), a later CodeWarrior for Carbon (`media/other/CodeWarrior 8 Pro`) |
@@ -230,38 +236,46 @@ Images: `Development.img` (one volume for the 7.x Systems) and
 |---|---|---|
 | `tools/macfetch` | media: find, pin, fetch, verify | exists; paths become source-derived |
 | `provisioning/bake.py` | runs bakes; `--explore` (guest left up), `--record` (writes the recipe from what's done) | `guest_install.py` |
-| `provisioning/build.py` | images from snapshots: overlay, variant matching, alias warnings | `build_disk.py`, much smaller |
-| `provisioning/test_image.py` | boots an image on each architecture its snapshots support, launches every app from the manifests | `test_dev_disks.py` |
+| `provisioning/build.py` | images from snapshots (`provisioning/images/<name>.json`): items placed (`take`/`to`/`as`), System Folder parts over a base, a record beside the image with the apps' paths, alias warnings | `build_disk.py`, much smaller |
+| `provisioning/test_image.py` | boots images on each machine, launches every app their records list (`no_quit` apps by restarting) | `test_dev_disks.py` |
+| `/api/ui` | the guest's windows, controls, dialog items and menus as JSON, read from guest memory: recipes click by name (`{"click": {"button": "Install"}}`, `{"popup": …, "choose": …}`, `{"wait_for": …}`), pixels as the fallback | new |
 | BridgeAgent `COPY src dst` | in-guest copy, both forks and Finder info | new |
-| `ndif.py`, `fat_cfm.py` | NDIF decoding for media prep (floppy sets); fat CFM merge for `derive` | exist |
+| `ndif.py`, `fat_cfm.py` | NDIF decoding for media prep (floppy sets); fat CFM merge of machine runs | exist |
 
 ## Milestones
 
 | | What | Status |
 |---|---|---|
-| **P0** | Groundwork: snapshot layout + manifest + content hash, `bake.py` (generic `{target}`, the five kinds, `--record`), BridgeAgent `COPY`, `build.py`, `test_image.py`, dependency tracking | |
+| **P0** | Groundwork: snapshot layout + manifest + content hash, `bake.py` (generic `{target}`, the five kinds, `--record`), BridgeAgent `COPY`, `build.py`, `test_image.py`, dependency tracking | done 2026-10-16: 16 snapshots; Development + dev-7.5.5/7.6.1 built from them; 15/15 apps on uae and kpx × 7.5.5 and 7.6.1; aliases rewritten and resolved in the guest |
 | **P1** | Storage: `media/` and `baked/` in the assets repo, `media.json`, the sorting-out table above, `setup.sh` links, tests on copies | |
 | **P2** | `os` bakes: 7.1 (68k), 7.5.5 and 7.6.1 (68k + PPC) from the Legacy CD | |
 | **P3** | `tools-7` and the 7.x standard boot images | |
-| **P4** | `dev-*`: today's development set as generic bakes; `Development.img`, `dev-7.5.5/7.6.1.img` rebuilt; the four-cell app matrix as before | first version done (2026-10-16), to be redone generically |
+| **P4** | `dev-*`: the development set re-baked on the `os` snapshots (until then: the first captures of 2026-10-16, rewrapped into the generic layout); `Development.img`, `dev-7.5.5/7.6.1.img`; the four-cell app matrix | rewrapped in P0 |
 | **P5** | Switch-over: tests, the boot matrix and web UI profiles boot baked images; the hand-made `.orig` disks retired | |
 | P6 | System 6.0.8 (`os`, `tools-6`) | later |
 | P7 | Mac OS 8.6 and 9.0.4 (`os`, `tools-8/9`, dev additions) | later |
 | P8 | Collections (apps, games) from the existing collection disks' software | later |
-| P9 | Name-based clicking (`/api/click` from the guest's control lists) | later |
 
 ## Decisions
 
 * Taken: snapshots only; generic layout; 8.1 skipped; 7.x first; MCL
   dropped from the dev set (PowerPC-only).
-* Open: the bake target's default name (`Install` or `Macintosh HD`);
-  ResEdit and MacsBug in tools or dev only; Resorcerer (supply a serial
+* Taken: the bake target stays `Install`: `build.py` rewrites aliases
+  into the snapshot to where their targets land (name, creation date,
+  path, the new catalog IDs), so the name an installer saw doesn't matter.
+* Open: ResEdit and MacsBug in tools or dev only; Resorcerer (supply a serial
   for its first launch, or drop it).
 
 ## Known facts the bakes rely on
 
 * Volume menus list disks in a different order on the PPC machine (the
-  Host volume second); recipe steps can be limited to a backend.
+  Host volume second): choose by name (`popup` + `choose`); steps can
+  also be limited to a backend.
+* Installers that "quit other applications" quit BridgeAgent; it comes
+  back after the restart. On the PPC machine the boot phase stays at
+  desktop through a restart, so `wait_finder` also waits for the agent's
+  heartbeat, and a bridge command the agent doesn't pick up within 15 s
+  fails instead of holding the HTTP server.
 * Installers that install for the running machine: CodeWarrior (MathLib,
   StdCLibInit on PPC; CFM-68K, NuDragLib on 68k), MacPython (PythonCore).
 * Apple Installer and Installer VISE refuse network volumes (Host).

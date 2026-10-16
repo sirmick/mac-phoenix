@@ -1,0 +1,20 @@
+{
+  "files": [
+    {"name": "eto22.toast", "dir": "eto", "size": 681146368, "md5": "50f8c91c5e05d88f3b2890610d93f63a", "local": true, "note": "E.T.O. #22 (Nov 1996) Tools CD, copied from a period Mac magazine cover CD; not on any public archive"},
+    {"name": "CW4MACTOOLS.ISO", "dir": "downloads/dev", "size": 670488576, "md5": "3718ddb28b0463de619af6ad66d71680", "ia": "cwpro4/CW4MACTOOLS.ISO", "note": "CodeWarrior Pro 4 Tools CD: its installer made installed/cw-pro-4.img; ResEdit 2.1.3 comes from it directly; PPC-only extensions (the capture is from a 68k guest) from the CD"},
+    {"name": "Think_C-6.sit", "dir": "downloads/dev", "size": 2968846, "md5": "e76648e9cb2901bdacb3319aa4fd1714", "ia": "Macintosh_Garden_Apps_T_2017/Think_C-6.sit", "garden": "apps/Think_C-6.sit"},
+    {"name": "symantec_c_7.sit", "dir": "downloads/dev", "size": 6440341, "md5": "e238d83ea8dcfc6335cbb908f893c224", "ia": "Macintosh_Garden_Apps_S_2014/symantec_c_7.sit", "garden": "apps/symantec_c_7.sit"},
+    {"name": "THINK_Pascal_4.5d4.sit", "dir": "downloads/dev", "size": 1600358, "md5": "3222a8a2ef28dceaacf0c6c3e6550a41", "ia": "Macintosh_Garden_Apps_T_2014/THINK_Pascal_4.5d4.sit", "garden": "apps/THINK_Pascal_4.5d4.sit"},
+    {"name": "Mac_Perl_520r4_appl.sit", "dir": "downloads/dev", "size": 3545715, "md5": "e830ed2eb655ec8681266c28970dcb72", "garden": "apps/Mac_Perl_520r4_appl.sit"},
+    {"name": "Frontier_5.0.1.sit", "dir": "downloads/dev", "size": 2253761, "md5": "a5747400983d5f5ac1a096aab94e0913", "ia": "Macintosh_Garden_Apps_F_2019/Frontier_5.0.1.sit", "garden": "apps/Frontier_5.0.1.sit"},
+    {"name": "MacPython152.bin", "dir": "downloads/dev", "size": 8617216, "md5": "72f78596de65b7862fb7f40442fd5305", "ia": "Macintosh_Garden_Apps_M_2017/MacPython152.bin", "garden": "apps/MacPython152.bin"},
+    {"name": "HyperCard241.img_.sit", "dir": "downloads/dev", "size": 30066928, "md5": "c68d4fcf2eaa86269aedac0f70615314", "ia": "Macintosh_Garden_Apps_H_2014/HyperCard241.img_.sit", "garden": "apps/HyperCard241.img_.sit", "title": "HyperCard 2.4", "year": 1998, "page": "https://macintoshgarden.org/apps/hypercard-241"},
+    {"name": "bbedit_lite_4.1.sit", "dir": "downloads/dev", "size": 789735, "md5": "ce1baad73ebc814c3607b131d247f9f1", "ia": "Macintosh_Garden_Apps_Collection_B/bbedit_lite_4.1.sit", "garden": "apps/bbedit_lite_4.1.sit"},
+    {"name": "stuffit_expander_5.5.bin", "dir": "downloads/dev", "size": 824704, "md5": "294962952dab2b274686a73d665ebcc3", "ia": "Macintosh_Garden_Apps_S_2014/stuffit_expander_5.5.bin", "garden": "apps/stuffit_expander_5.5.bin"},
+    {"name": "Resorcerer_2.0_iso.zip", "dir": "downloads/dev", "size": 9243275, "md5": "b872137a3af62495e5005b6fc36eee78", "garden": "apps/Resorcerer_2.0_iso.zip", "note": "Resorcerer 2.0 CD (1997): its Fat build runs on 68k and PowerPC under System 7 (2.4 needs the Appearance Manager, Mac OS 8+)"},
+    {"name": "Disk-Copy-633-smi.bin", "dir": "downloads/dev", "size": 771584, "md5": "25d39bd6577ac64e0b0bb75e520898e1", "ia": "Macintosh_Garden_Apps_D_2017/Disk-Copy-633-smi.bin", "garden": "apps/Disk-Copy-633-smi.bin"},
+    {"name": "ZTerm1.0.1.sit", "dir": "downloads/dev", "size": 283914, "md5": "9986dbefe34fc77541c70d0d95a99fed", "ia": "Macintosh_Garden_Apps_X-Y-Z_2014/ZTerm1.0.1.sit", "garden": "apps/ZTerm1.0.1.sit"},
+    {"name": "macsbug663.hqx", "dir": "downloads/dev", "size": 512626, "md5": "179ce9ebc017122111226c984d681d17", "ia": "Macintosh_Garden_Apps_M_2014/macsbug663.hqx", "garden": "apps/macsbug663.hqx"}
+  ],
+  "out": "."
+}

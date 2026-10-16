@@ -1,0 +1,110 @@
+{
+ "note": "Symantec C++ 7, its installer from six DiskDup+ floppy images mounted by Disk Copy in the guest; it installs into a folder named Development",
+ "kind": "install",
+ "media": [
+  {
+   "file": "symantec_c_7.sit",
+   "take": "Symantec C++ 7",
+   "as": "Symantec C++ 7",
+   "dc42": true
+  }
+ ],
+ "expect": [
+  "Development"
+ ],
+ "launch": [
+  "Development:Symantec C++ for Macintosh:THINK Project Manager"
+ ],
+ "steps": [
+  {
+   "open": "{media}:Symantec C++ 7:Disk 1.dsk"
+  },
+  {
+   "wait": 10
+  },
+  {
+   "shot": "1-diskcopy-licence"
+  },
+  {
+   "click": [
+    508,
+    389
+   ]
+  },
+  {
+   "wait": 12
+  },
+  {
+   "open": "{media}:Symantec C++ 7:Disk 2.dsk"
+  },
+  {
+   "wait": 8
+  },
+  {
+   "open": "{media}:Symantec C++ 7:Disk 3.dsk"
+  },
+  {
+   "wait": 8
+  },
+  {
+   "open": "{media}:Symantec C++ 7:Disk 4.dsk"
+  },
+  {
+   "wait": 8
+  },
+  {
+   "open": "{media}:Symantec C++ 7:Disk 5.dsk"
+  },
+  {
+   "wait": 8
+  },
+  {
+   "open": "{media}:Symantec C++ 7:AppleScript Setup.dsk"
+  },
+  {
+   "wait": 8
+  },
+  {
+   "shot": "2-mounted"
+  },
+  {
+   "launch": "Disk 1:Installer"
+  },
+  {
+   "wait": 12
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 5
+  },
+  {
+   "click": [
+    486,
+    307
+   ]
+  },
+  {
+   "wait": 3
+  },
+  {
+   "shot": "3-target"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 120
+  },
+  {
+   "shot": "4-done"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 3
+  }
+ ]
+}

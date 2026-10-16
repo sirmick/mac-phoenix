@@ -1,0 +1,95 @@
+{
+ "note": "CodeWarrior Pro 4 Tools CD, Installer VISE: Custom Install > Full MacOS Install. Run on both machines: the installer adds CFM-68K and NuDragLib on 68k, MathLib on PPC; the merged snapshot has them all. StdCLibInit (PPC before 7.6) is copied from the CD, so one snapshot serves 7.5.5 too. The option list is drawn by VISE (a pixel click); the rest is by name.",
+ "kind": "install",
+ "cdroms": [
+  "CW4MACTOOLS.ISO"
+ ],
+ "expect": [
+  "CodeWarrior Pro 4"
+ ],
+ "launch": [
+  "CodeWarrior Pro 4:Metrowerks CodeWarrior:CodeWarrior IDE 3.2"
+ ],
+ "steps": [
+  {
+   "launch": "CW Pro 4 Tools:CW Pro 4 Tools Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Install"
+   },
+   "timeout": 60
+  },
+  {
+   "shot": "1-installer"
+  },
+  {
+   "click": [
+    121,
+    162
+   ]
+  },
+  {
+   "popup": [
+    270,
+    367
+   ],
+   "choose": "{target}"
+  },
+  {
+   "shot": "2-options"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 30
+  },
+  {
+   "shot": "3-quit-others"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 900
+  },
+  {
+   "shot": "4-done"
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "wait": 20
+  },
+  {
+   "copy": {
+    "from": "CW Pro 4 Tools:System Folder Items:For MacOS Development:for Extensions folder:For Power Macs Only:StdCLibInit",
+    "to": "{system}Extensions:"
+   }
+  }
+ ],
+ "machines": [
+  "68k",
+  "ppc"
+ ],
+ "prefer": {
+  "CodeWarrior Pro 4:Installer Log File": 0
+ }
+}

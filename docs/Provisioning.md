@@ -1,49 +1,129 @@
 # Provisioning
 
 Guest software reaches the emulator's disks in three steps, each scriptable
-and repeatable:
+and repeatable (the plan and its milestones: [provisioning/PLAN.md](provisioning/PLAN.md)):
 
-1. **Fetch**: `tools/macfetch/macfetch.py` finds files on the Macintosh
+1. **Media**: `tools/macfetch/macfetch.py` finds files on the Macintosh
    Garden (its mirror FTP and Internet Archive snapshot), Info-Mac and the
-   Internet Archive, and pins them in a *list*: name, size, MD5 and every
-   place the file can come from. `provision` fetches a list from whichever
-   source works and checks each file against its pin.
-2. **Install**: most classic Mac software only installs through its own
-   installer (Installer VISE, Apple Installer, StuffIt InstallerMaker),
-   which runs on the Mac. `provisioning/guest_install.py` runs it in a
-   scratch guest and *captures* what it installed as a small HFS image.
-   Archives are expanded the same way, by StuffIt Expander in the guest, so
-   nothing passes through a Linux unarchiver on its way to a disk. Captures
-   are pinned in the list too (local only: they are made, not downloaded).
-3. **Build**: `provisioning/build_disk.py` copies a list's captures (and the
-   few host-side items) onto HFS volumes.
+   Internet Archive, and pins them in `provisioning/media.json`: name, size,
+   MD5 and every place the file can come from. A file is fetched from
+   whichever source works and checked against its pin.
+2. **Bake**: classic Mac software installs through its own installer
+   (Installer VISE, Apple Installer, StuffIt InstallerMaker), which runs on
+   the Mac. `provisioning/bake.py` runs a bake (`provisioning/bakes/*.json`)
+   in a scratch guest and captures what it installed as a *snapshot*:
+   `baked/<name>.img`, one per product. Archives are expanded the same way,
+   by StuffIt Expander in the guest, and items on CDs and disk images are
+   copied by the guest (BridgeAgent `COPY`), so nothing passes through a
+   Linux unarchiver on its way to a disk.
+3. **Build**: `provisioning/build.py` assembles images
+   (`provisioning/images/*.json`) from snapshots.
 
-Routine builds never drive a GUI: recipes are only run to make a capture
-again.
+Routine builds never drive a GUI: bakes run again only when their
+definition, media or base System changes.
+
+## Snapshots
+
+An HFS image holding what one product adds to a Mac:
+
+```
+:Items:            the installed items, as they'd sit at the top of a volume
+:System Folder:    files added or changed in the System Folder (new
+                   preferences included; the System's own churn left out)
+:Snapshot Info     JSON: bake, key, base, OS, machines, target volume name,
+                   apps to launch (with facts: no_quit, needs_serial), and a
+                   content listing (type/creator, flags, MD5 per fork)
+```
+
+`provisioning/snapshot.py` reads and writes them. The content hash ignores
+dates and the resource fork's system-reserved bytes, so a re-bake that made
+the same software is recognised as the same.
 
 ## The development disks
 
-`provisioning/lists/dev.json` makes three images that run on both the 68k
-machine (`--backend uae`) and the PowerPC one (`--backend kpx`):
-
 | Image | What |
 |---|---|
-| `Development.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7, THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1, ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
-| `dev-7.5.5.img`, `dev-7.6.1.img` | the base Systems (`macos-7.x.img.orig`) plus the System Folder files the installers add: MetroNub, CFM-68K and PowerPC libraries, MacsBug 6.6.3, PythonCore, AppleScriptLib, ... |
+| `Development.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
+| `dev-7.5.5.img`, `dev-7.6.1.img` | the base Systems (`provisioning/bases.json`) plus the snapshots' System Folder parts: MetroNub, CFM-68K and PowerPC libraries, MacsBug 6.6.3, PythonCore, ... |
+
+All three run on the 68k machine (`--backend uae`) and the PowerPC one
+(`--backend kpx`).
 
 ```bash
-O=~/storage/images
-python3 provisioning/build_disk.py provisioning/lists/dev.json -o $O/Development.img
-python3 provisioning/build_disk.py provisioning/lists/dev.json --no-provision --disk boot \
-    --base $O/macos-7.6.1.img.orig --os 7.6.1 -o $O/dev-7.6.1.img
-./build/mac-phoenix --disk $O/dev-7.6.1.img --disk $O/Development.img ~/roms/quadra.rom
+python3 provisioning/bake.py --list            # bakes and their snapshots
+python3 provisioning/bake.py --all --jobs 3    # every bake not up to date
+python3 provisioning/build.py --all            # images not up to date
+./build/mac-phoenix --disk ~/storage/images/dev-7.6.1.img --disk ~/storage/images/Development.img ~/roms/quadra.rom
 
-# every app launches, on each machine:
-python3 provisioning/test_dev_disks.py --boot $O/dev-7.6.1.img --dev $O/Development.img --backend uae
+# every app the snapshots list launches, on each machine:
+python3 provisioning/test_image.py dev-7.6.1 Development
 ```
 
-The list's E.T.O. #22 disc and the captures are local-only pins: a machine
-without them gets `MISSING ... local-only, put it at ...` from `provision`.
+The E.T.O. #22 disc is a local-only pin: a machine without it gets
+`local-only media missing; put it at ...`.
+
+## bake.py
+
+A bake runs in a guest booted from a copy of a base System, with a blank
+volume (`{target}`, named `Install`) as the install target. Kinds:
+
+| Kind | How |
+|---|---|
+| `install` | the product's installer, driven by `steps` |
+| `expand` | `archive`: StuffIt Expander expands it in the guest (then any `steps`: a first launch) |
+| `copy` | `steps` of `{"copy": {"from": ..., "to": "{target}:"}}` from attached CDs or disk images |
+| `derive` | a snapshot made on the host from other snapshots |
+
+`"machines": ["68k", "ppc"]` runs a bake on both machines
+(`baked/parts/<name>@<machine>.img`) and merges the runs: files only one
+has are kept, CFM code that differs becomes one fat file
+(`provisioning/fat_cfm.py`), aliases keep the first, anything else that
+differs fails unless `"prefer"` says which run's file to keep.
+
+Steps (see `provisioning/guest.py`) click by name where they can: `/api/ui`
+gives the front process's windows, controls, dialog items and open menus
+from guest memory.
+
+```json
+{"launch": "CW Pro 4 Tools:CW Pro 4 Tools Installer"},
+{"wait_for": {"button": "Install"}, "timeout": 60},
+{"popup": [270, 367], "choose": "{target}"},
+{"click": {"button": "Install"}},
+{"click": [121, 162]}
+```
+
+Pixels are the fallback, for what an app draws itself. Working out a new
+bake:
+
+```bash
+python3 provisioning/bake.py NAME --explore --record   # boot with its media, leave the guest up
+python3 provisioning/bake.py --do '{"look": "front"}'   # the UI + a half-size shot of the front window
+python3 provisioning/bake.py --do '{"click": {"button": "Continue"}}'
+python3 provisioning/bake.py --finish                    # capture, and save the steps (--record)
+```
+
+Floppy sets go on a "Media" volume and are mounted through the guest's
+Disk Copy, so installers can eject and ask for them as on real floppies
+(raw floppy images are converted to Disk Copy 4.2 first: `"dc42": true`).
+Several bakes can run at once; scratch space is `$MACEMU_STORAGE/work`.
+
+## build.py
+
+```json
+{"label": "Development", "size_mb": 1024,
+ "place": [{"snapshot": "mpw-3.4.2"},
+           {"snapshot": "frontier-5.0.1", "to": "Languages"},
+           {"snapshot": "think-c-6", "take": "Development", "as": "THINK C 6.0"}]}
+{"base": "7.6.1", "system_from": ["codewarrior-pro-4", "macsbug-6.6.3"]}
+```
+
+A data image is a blank volume with snapshots' `:Items:` placed (`take` an
+item, `to` a folder, `as` a new name); a boot image is a base System with
+snapshots' System Folder parts, later ones replacing earlier ones and the
+System's own files. Two snapshots placing the same file fail the build.
+Beside each image, `<name>.img.json` records its snapshots and the apps to
+launch as paths on the image (what `test_image.py` runs). Aliases point at
+the bake's target volume; the build warns where they land elsewhere.
 
 ## macfetch
 
@@ -63,64 +143,11 @@ Files land under `$MACEMU_STORAGE` (default `~/storage`), at the list's
 Archive, `old.mac.gdn`, oldapplestuff.com, the Garden FTP
 (`ftp.macintosh.garden`, the public mirror account), the Info-Mac mirrors.
 
-## guest_install.py
-
-```bash
-# an installer, driven by a recipe (provisioning/recipes/*.json)
-python3 provisioning/guest_install.py provisioning/recipes/cw-pro-4.json -o ~/storage/installed/cw-pro-4.img
-# an archive, expanded by StuffIt Expander
-python3 provisioning/guest_install.py --expand Frontier_5.0.1.sit -o ~/storage/installed/frontier.img
-# working out a new recipe: boot with its media and leave the guest up
-python3 provisioning/guest_install.py RECIPE --explore -o /dev/null
-tools/macfetch/macfetch.py pin --file ~/storage/installed/X.img --dir installed -m provisioning/lists/dev.json
-```
-
-The guest boots a copy of `macos-7.6.1.img.orig` with an empty volume
-named "Development" as the install target, so paths an installer records
-already point at the right volume. Afterwards the capture holds
-`:Development:` (everything installed there) and `:System Folder:` (files
-added or changed, minus noise such as the bridge's agent and the System's
-own preferences).
-A recipe's steps are bridge launches, document opens (a Disk Copy image:
-mounted), clicks and keys at 640x480 coordinates, and waits; `expect`
-names what must be on Development afterwards, so a click that picked the
-wrong volume fails the run. Floppy sets are put on a "Media" volume and
-mounted through the guest's Disk Copy, so installers can eject and ask for
-them as on real floppies; raw floppy images are converted to Disk Copy 4.2
-first (`"dc42": true`).
-
-**Both architectures.** Installers install for the machine they run on.
-Where that matters, run the recipe on each (`--backend kpx`) and combine:
-CodeWarrior's PowerPC-only extensions come from its CD; MacPython's
-`PythonCore` is merged into one fat library from the two captures
-(`fat_with`, `provisioning/fat_cfm.py`).
-
-**First launch.** Steps after an installer finishes can launch the app and
-answer its one-time questions (Frontier's "personalize your copy", Disk
-Copy's licence), so the disks open cleanly. New preference files are
-captured for this; the System's and the bridge's own are left out. A recipe
-with `"expand": {"file": ...}` expands an archive and then runs its steps.
-
-Several guests can run at once (each `--bridge` instance installs its agent
-with a private hfsutils `HOME`).
-
-## build_disk.py
-
-Each list entry's `"install"` steps say what to take from the file and
-where to put it: `take` (an HFS path in a capture or CD image, a folder in
-an archive; `!` steps into a nested container), `to`, `as`, `skip`,
-`disk` (`development` or `boot`), `os` (only for some System versions) and
-`replace` (overwrite what the disk already has; by default a base System's
-own copy wins), `size` (rewrite an app's SIZE, for one that asks for more than a guest has)
-and `fat_with` (merge the other architecture's build of a CFM library). It
-reads Disk Copy 4.2 and 6 (NDIF, `provisioning/ndif.py`) images, CD
-images with partition maps and anything `unar` opens; hfsutils runs with a
-private `HOME`; scratch space is `$MACEMU_STORAGE/work`.
-
 ## Other tools
 
 | Script | What |
 |---|---|
+| `containers.py`, `ndif.py` | read media: archives (unar), HFS images, CDs with partition maps, Disk Copy 4.2 and 6 (NDIF) |
 | `create_hfs.py`, `create_hfs_plus.py` | blank HFS / HFS+ images |
 | `populate_disk.py` | copy everything in `~/storage/installers` onto an image (unar, MacBinary) |
 | `hfs_bless.py`, `fix_hfs_header.py` | bless a System Folder; repair a volume header |

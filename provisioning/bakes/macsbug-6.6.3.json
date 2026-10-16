@@ -1,0 +1,16 @@
+{
+ "note": "MacsBug 6.6.3, expanded by StuffIt Expander; the guest copies MacsBug into the System Folder",
+ "kind": "expand",
+ "archive": "macsbug663.hqx",
+ "expect": [
+  "MacsBug_6.6.3"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "{target}:MacsBug_6.6.3:into System folder:MacsBug",
+    "to": "{system}"
+   }
+  }
+ ]
+}

@@ -1,0 +1,84 @@
+{
+ "note": "MacPython 1.5.2, Installer VISE Easy Install. It installs the PythonCore for the machine it runs on: run on both, the merge makes one fat PythonCore (and keeps the PPC run's Numerical extension).",
+ "kind": "install",
+ "media": [
+  {
+   "file": "MacPython152.bin",
+   "take": "Python 1.5.2 Installer"
+  }
+ ],
+ "expect": [
+  "Python 1.5.2c1"
+ ],
+ "launch": [
+  "Python 1.5.2c1:PythonInterpreter"
+ ],
+ "steps": [
+  {
+   "launch": "{media}:Python 1.5.2 Installer"
+  },
+  {
+   "wait": 15
+  },
+  {
+   "shot": "1-readme"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 4
+  },
+  {
+   "drag": [
+    [
+     293,
+     329
+    ],
+    [
+     279,
+     344
+    ]
+   ],
+   "backend": "uae"
+  },
+  {
+   "drag": [
+    [
+     293,
+     329
+    ],
+    [
+     279,
+     360
+    ]
+   ],
+   "backend": "kpx"
+  },
+  {
+   "shot": "2-options"
+  },
+  {
+   "click": [
+    478,
+    359
+   ]
+  },
+  {
+   "wait": 40
+  },
+  {
+   "shot": "3-done"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 3
+  }
+ ],
+ "machines": [
+  "68k",
+  "ppc"
+ ]
+}

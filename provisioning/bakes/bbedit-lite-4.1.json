@@ -1,0 +1,11 @@
+{
+ "note": "BBEdit Lite 4.1, expanded by StuffIt Expander",
+ "kind": "expand",
+ "archive": "bbedit_lite_4.1.sit",
+ "expect": [
+  "BBEdit Lite 4.1"
+ ],
+ "launch": [
+  "BBEdit Lite 4.1:BBEdit Lite 4.1"
+ ]
+}

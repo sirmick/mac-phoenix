@@ -1,0 +1,28 @@
+{
+ "note": "Resorcerer 2.0, the Fat build off its CD, copied by the guest. It asks for a name and serial number on first launch.",
+ "kind": "copy",
+ "disks": [
+  {
+   "file": "Resorcerer_2.0_iso.zip",
+   "take": "Resorcerer-2.0.iso"
+  }
+ ],
+ "expect": [
+  "Resorcerer® 2.0 Fat"
+ ],
+ "launch": [
+  {
+   "app": "Resorcerer® 2.0 Fat:Resorcerer® 2.0 (Fat)",
+   "needs_serial": true,
+   "no_quit": true
+  }
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Resorcerer® 2.0:Resorcerer® 2.0 Fat",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

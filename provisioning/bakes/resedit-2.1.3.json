@@ -1,0 +1,12 @@
+{
+ "note": "ResEdit 2.1.3 from the CodeWarrior Pro 4 Tools CD's Apple Development Tools, expanded by StuffIt Expander",
+ "kind": "expand",
+ "archive": "CW4MACTOOLS.ISO",
+ "take": ":Apple Development Tools:ResEdit 2.1.3.sit",
+ "expect": [
+  "ResEdit 2.1.3"
+ ],
+ "launch": [
+  "ResEdit 2.1.3:ResEdit 2.1.3:ResEdit"
+ ]
+}

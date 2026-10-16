@@ -1,0 +1,50 @@
+{
+ "note": "Disk Copy 6.3.3 off its self-mounting image, copied by the guest; first launch accepts the licence (its preferences are captured)",
+ "kind": "copy",
+ "disks": [
+  {
+   "file": "Disk-Copy-633-smi.bin"
+  }
+ ],
+ "expect": [
+  "Disk Copy"
+ ],
+ "launch": [
+  "Disk Copy:Disk Copy"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Disk Copy:",
+    "to": "{target}:"
+   }
+  },
+  {
+   "launch": "{target}:Disk Copy:Disk Copy"
+  },
+  {
+   "wait": 12
+  },
+  {
+   "shot": "1-licence"
+  },
+  {
+   "click": [
+    508,
+    389
+   ]
+  },
+  {
+   "wait": 5
+  },
+  {
+   "shot": "2-agreed"
+  },
+  {
+   "quit": true
+  },
+  {
+   "wait": 5
+  }
+ ]
+}

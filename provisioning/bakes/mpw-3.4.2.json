@@ -1,0 +1,30 @@
+{
+ "note": "MPW 3.4.2b3 and its Interfaces&Libraries from E.T.O. #22 (Nov 1996), copied by the guest",
+ "kind": "copy",
+ "disks": [
+  {
+   "file": "eto22.toast"
+  }
+ ],
+ "expect": [
+  "MPW",
+  "Interfaces&Libraries"
+ ],
+ "launch": [
+  "MPW:MPW Shell"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "E.T.O. #22:MPW",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "E.T.O. #22:Interfaces&Libraries",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

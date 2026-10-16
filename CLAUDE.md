@@ -57,14 +57,14 @@ tools/mpw/mpw setup                    # once: MPW disk from data.img's E.T.O. #
 tools/mpw/mpw build tests/guest/ot     # build.mpw; products -> DIR/build/*.bin
 tools/mpw/mpw run 'SC -help'           # exit code = {Status}; mpw stop when done
 
-# Guest software: fetch (pinned + verified), capture installs in the guest,
-# build disks (docs/Provisioning.md). Dev disks: Development.img (shared
-# volume) + dev-7.5.5.img / dev-7.6.1.img, for both 68k and PPC.
-tools/macfetch/macfetch.py provision provisioning/lists/dev.json
-python3 provisioning/build_disk.py provisioning/lists/dev.json -o ~/storage/images/Development.img
-python3 provisioning/guest_install.py provisioning/recipes/cw-pro-4.json -o CAPTURE.img
-python3 provisioning/test_dev_disks.py --boot ~/storage/images/dev-7.6.1.img \
-    --dev ~/storage/images/Development.img --backend kpx
+# Guest software (docs/Provisioning.md, docs/provisioning/PLAN.md): pinned
+# media (provisioning/media.json) -> bakes run in the guest -> snapshots
+# (~/storage/baked) -> images (provisioning/images/*.json). Dev disks:
+# Development.img + dev-7.5.5.img / dev-7.6.1.img, for both 68k and PPC.
+python3 provisioning/bake.py --all --jobs 3     # snapshots not up to date
+python3 provisioning/build.py --all             # images not up to date
+python3 provisioning/test_image.py dev-7.6.1 Development   # launch every app, 68k + PPC
+python3 provisioning/bake.py NAME --explore --record       # work out a bake; --do/--finish
 
 # arm64 / riscv64 builds on this x86-64 box: Debian containers under qemu
 # (binfmt_misc + docker). Build dirs build-arm64/, build-riscv64/.
@@ -192,9 +192,11 @@ client/                             — Browser UI (vanilla JS)
 | `/api/invoke-debug` | POST | Invoke debugger (Programmer's Key: NMI on 68k, Cmd+Power on PPC) |
 | `/api/app` | GET | Current app name (read command — peek `CurApName`) |
 | `/api/windows` | GET | Window list (read command — walk `WindowList`) |
+| `/api/ui` | GET | Read command: front process's windows (screen rects), controls, dialog items, menus (open popups included) as JSON — click by name, fall back to pixels |
 | `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` |
 | `/api/launch` | POST | Launch app via BridgeAgent: `{"path":"HD:App"}`. With `"open":true`, opens the document via generic `'aevt'/'odoc'` (any registered creator: Frontier `LAND`, MacPerl `McPL`, MPW `MPS `, …) |
 | `/api/script` | POST | Generic do-script via `'misc'/'dosc'`: `{"creator":"McPL","script":"..."}` (or `"script_b64"` for exact MacRoman bytes). Works for MacPerl, Frontier UserLand, MPW Shell, AppleScript editor — any app registered for `dosc`. |
+| `/api/copy` | POST | In-guest File Manager copy via BridgeAgent, both forks + Finder info: `{"from":"Vol:Item","to":"Vol:Folder:"}` |
 | `/api/quit` | POST | Quit front app via BridgeAgent (`kAEQuitApplication`) |
 | `/api/shutdown` | POST | Graceful guest OS shutdown via BridgeAgent (`ShutDwnPower`) |
 | `/api/restart` | POST | Graceful guest OS restart via BridgeAgent (`ShutDwnStart`) |

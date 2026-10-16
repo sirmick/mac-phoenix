@@ -1,0 +1,23 @@
+{
+ "note": "The development tools volume: compilers at the top, interpreters and scripting under Languages, utilities under Tools. Boots with dev-7.5.5 or dev-7.6.1 on 68k and PowerPC.",
+ "label": "Development",
+ "size_mb": 1024,
+ "place": [
+  {"snapshot": "codewarrior-pro-4"},
+  {"snapshot": "mpw-3.4.2"},
+  {"snapshot": "think-c-6", "take": "Development", "as": "THINK C 6.0"},
+  {"snapshot": "symantec-c-7", "take": "Development", "as": "Symantec C++ 7"},
+  {"snapshot": "think-pascal-4.5", "to": "Languages"},
+  {"snapshot": "macperl-5.2.0r4", "to": "Languages"},
+  {"snapshot": "macpython-1.5.2", "to": "Languages"},
+  {"snapshot": "hypercard-2.4.1", "to": "Languages"},
+  {"snapshot": "frontier-5.0.1", "to": "Languages"},
+  {"snapshot": "resedit-2.1.3", "to": "Tools"},
+  {"snapshot": "resorcerer-2.0", "to": "Tools", "take": "Resorcerer® 2.0 Fat", "as": "Resorcerer 2.0"},
+  {"snapshot": "bbedit-lite-4.1", "to": "Tools"},
+  {"snapshot": "disk-copy-6.3.3", "to": "Tools", "take": "Disk Copy", "as": "Disk Copy 6.3.3"},
+  {"snapshot": "stuffit-expander-5.5", "to": "Tools"},
+  {"snapshot": "zterm-1.0.1", "to": "Tools", "take": "ZTerm_1.0.1", "as": "ZTerm 1.0.1"},
+  {"snapshot": "macsbug-6.6.3", "to": "Tools", "take": "MacsBug_6.6.3", "as": "MacsBug 6.6.3"}
+ ]
+}

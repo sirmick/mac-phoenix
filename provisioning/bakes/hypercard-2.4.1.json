@@ -1,0 +1,103 @@
+{
+ "note": "HyperCard 2.4.1, Apple's Mac OS Install from the CD image: HyperCard only (not its AppleScript 1.1.1, Speech 1.5 or QuickTime 3.0 System upgrades), onto the System disk",
+ "kind": "install",
+ "disks": [
+  {
+   "file": "HyperCard241.img_.sit",
+   "take": "HyperCard241.img"
+  }
+ ],
+ "from_boot": true,
+ "expect": [
+  "HyperCard 2.4"
+ ],
+ "launch": [
+  "HyperCard 2.4:HyperCard"
+ ],
+ "steps": [
+  {
+   "launch": "HyperCard:Mac OS Install"
+  },
+  {
+   "wait": 15
+  },
+  {
+   "shot": "1-welcome"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 4
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 4
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 4
+  },
+  {
+   "shot": "2-agree"
+  },
+  {
+   "click": [
+    449,
+    306
+   ]
+  },
+  {
+   "wait": 4
+  },
+  {
+   "shot": "3-destination"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 5
+  },
+  {
+   "click": [
+    94,
+    231
+   ]
+  },
+  {
+   "click": [
+    94,
+    249
+   ]
+  },
+  {
+   "click": [
+    94,
+    286
+   ]
+  },
+  {
+   "shot": "4-options"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 45
+  },
+  {
+   "shot": "5-done"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 3
+  }
+ ]
+}

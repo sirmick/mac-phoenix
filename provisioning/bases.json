@@ -1,0 +1,11 @@
+{
+ "_note": "Base Systems, one per version: bakes run on them and boot images start from them. Until the os bakes (docs/provisioning/PLAN.md P2) these are the hand-made images in images/; 7.5.5 and 7.6.1 boot on both machines.",
+ "7.6.1": {
+  "image": "macos-7.6.1.img.orig",
+  "os": "7.6.1"
+ },
+ "7.5.5": {
+  "image": "macos-7.5.5.img.orig",
+  "os": "7.5.5"
+ }
+}

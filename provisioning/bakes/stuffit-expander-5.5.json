@@ -1,0 +1,100 @@
+{
+ "note": "StuffIt Expander 5.5, StuffIt InstallerMaker: Easy Install into the target (Standard File: Desktop > the target)",
+ "kind": "install",
+ "media": [
+  {
+   "file": "stuffit_expander_5.5.bin",
+   "take": "Aladdin Expander™ 5.5 Installer",
+   "as": "StuffIt Expander Installer"
+  }
+ ],
+ "expect": [
+  "StuffIt Expander™ 5.5"
+ ],
+ "launch": [
+  "StuffIt Expander™ 5.5:StuffIt Expander™"
+ ],
+ "steps": [
+  {
+   "launch": "{media}:StuffIt Expander Installer"
+  },
+  {
+   "wait": 15
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 4
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 4
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 4
+  },
+  {
+   "shot": "1-install"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 5
+  },
+  {
+   "click": [
+    443,
+    138
+   ]
+  },
+  {
+   "wait": 2
+  },
+  {
+   "dclick": [
+    222,
+    88
+   ]
+  },
+  {
+   "wait": 2
+  },
+  {
+   "shot": "2-where"
+  },
+  {
+   "click": [
+    443,
+    239
+   ]
+  },
+  {
+   "wait": 15
+  },
+  {
+   "shot": "3-helper"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 8
+  },
+  {
+   "shot": "4-done"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 3
+  }
+ ]
+}

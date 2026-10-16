@@ -1,0 +1,11 @@
+{
+ "note": "THINK Pascal 4.5d4, expanded by StuffIt Expander",
+ "kind": "expand",
+ "archive": "THINK_Pascal_4.5d4.sit",
+ "expect": [
+  "THINK Pascal 4.5d4"
+ ],
+ "launch": [
+  "THINK Pascal 4.5d4:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5"
+ ]
+}
