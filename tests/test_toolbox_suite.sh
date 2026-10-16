@@ -25,20 +25,11 @@
 #
 # Skips (77) without the Retro68 toolchain, a ROM (uae) or the disk image.
 #
-# STATUS (2026-10-09, work in progress, not in ctest yet): the app builds,
-# installs, launches through the bridge and reports through "out" on both
-# backends. Without the Files tests, 56 of 58 pass on real 7.5.5 (UAE);
-# QuickDraw.Hilite8/32 fail there (their expectations are wrong). But the
-# app crashes in a way that depends on code layout, not on the test:
-# Files.GetWDInfo / CreateDeleteDir die before their first statement, an
-# identical copy in main.cpp passes, and reordering TEST_SOURCES stops the
-# app starting at all. On Executor (either --core) the app never gets to
-# main: just before its LoadSeg, a Retro68 app installs LoadSeg/UnloadSeg/
-# Launch/Chain/ExitToShell patches ($A9F0-$A9F4, Retro68's segment loader)
-# pointing outside the test app's heap, and the app then runs into zeroed
-# memory (F-line). Next: find which process installs those (Executor swaps
-# the whole trap table per process; new ones start from traps_template),
-# then the UAE layout-dependent crash; or split into smaller apps.
+# In ctest as toolbox_suite_{uae,executor,executor_mame68k} (2026-10-16):
+# 94 tests; on Executor (both cores) the two known failures, on 7.5.5 the
+# three whose expectations are wrong (the expected-failure lists). The
+# layout-dependent crashes noted on 2026-10-09 (one CODE segment since) no
+# longer show.
 #
 #   --trace      record A-traps (--trace-atraps; snapshot on timeout)
 #   --logtraps   Executor's full trap log to the emulator log

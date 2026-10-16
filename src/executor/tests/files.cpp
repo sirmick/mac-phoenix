@@ -1669,9 +1669,10 @@ TEST_F(FileTest, MakeFSSpec)
 
 TEST(Files, GetAliasInfo)
 {
-    /* The names an alias record carries: the target (0), its folders
-       going up (1, 2, ...; empty past the volume's root), the volume
-       (-1), and no AppleShare server (-2) or zone (-3). */
+    /* The names a minimal alias from a full path gives back: the target
+       (0) and the volume (-1). No parent folders (1, 2, ...): real 7.5.5
+       doesn't take them from the full path. No AppleShare server (-2) or
+       zone (-3). */
     const char path[] = "Disk:Folder:Sub:File";
     Ptr fullPath = NewPtr(sizeof(path) - 1);
     memcpy(fullPath, path, sizeof(path) - 1);
@@ -1681,7 +1682,7 @@ TEST(Files, GetAliasInfo)
     DisposePtr(fullPath);
 
     struct { int index; const char *want; } cases[] = {
-        { 0, "File" }, { 1, "Sub" }, { 2, "Folder" }, { 3, "" },
+        { 0, "File" }, { 1, "" }, { 2, "" }, { 3, "" },
         { -1, "Disk" }, { -2, "" }, { -3, "" },
     };
     for(auto &c : cases)

@@ -817,9 +817,12 @@ OSErr Executor::C_MatchAlias(FSSpecPtr fromFile, int32_t rulesMask,
     return noErr;
 }
 
-/* MacPhoenix: index 0 the target's name, 1 its parent folder's, 2 the
-   one above, ... (empty past the volume's root); -1 the volume, -2 and
-   -3 the AppleShare server and zone (empty here). The string is always
+/* MacPhoenix: index 0 the target's name, 1 its parent folder's (the
+   record's parent-name field, tag 0), -1 the volume; the folders above,
+   and the AppleShare server and zone (-2, -3), are empty. Real 7.5.5
+   answers the same for an alias NewAliasMinimalFromFullPath made: no
+   parent names out of the full path (tests/test_toolbox_suite.sh on the
+   ROM machine, Files.GetAliasInfo). The string is always
    written: Apple Menu Options appends ':' to the volume name without
    checking the result, and the stub that left the caller's Str63 alone
    had it store the colon at a garbage length, into a saved register
@@ -840,15 +843,10 @@ OSErr Executor::C_GetAliasInfo(AliasHandle alias, AliasTypeInfo index,
         put(a.volume);
     else if(index == -2 || index == -3)
         ;
-    else if(index > 0)
-    {
-        /* comps: the volume, the folders, the target */
-        int i = a.ncomps - 1 - index;
-        if(a.ncomps >= 2 && i >= 1)
-            put(a.comps[i]);
-        else if(a.ncomps < 2 && index == 1)
-            put(a.parent_name);
-    }
+    else if(index == 1)
+        put(a.parent_name);
+    else if(index > 1)
+        ;
     else
         return paramErr;
     return noErr;

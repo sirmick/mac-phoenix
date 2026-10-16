@@ -1,0 +1,6 @@
+# Known failures of the Toolbox suite on Executor (tests/test_toolbox_suite.sh).
+# The same two are disabled in the native run (src/executor/tests/
+# test-properties.cmake): the Host volume keeps no creation date (Linux has
+# none), and FSpSetFLock is unimplemented.
+FileTest.SetFInfo_CrDat
+FileTest.SetFLock

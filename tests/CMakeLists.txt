@@ -422,6 +422,33 @@ set_tests_properties(aslm_executor_mame68k PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# Executor's Toolbox gtests built with Retro68 into a 68k app and run in
+# the guest: on Apple's ROM and System (the ground truth) and on Executor,
+# both cores. Skips without Retro68 (toolchain/retro68). The cells share
+# the app's build directory (build-m68k-tests), hence the lock.
+foreach(cell uae executor executor_mame68k)
+  if(cell STREQUAL "uae")
+    set(args --backend uae --port 18410)
+    set(labels "guest")
+  elseif(cell STREQUAL "executor")
+    set(args --backend executor --port 18412)
+    set(labels "guest;executor")
+  else()
+    set(args --backend executor --core mame-68k --port 18414)
+    set(labels "guest;mame;executor")
+  endif()
+  add_test(
+    NAME toolbox_suite_${cell}
+    COMMAND bash ${TEST_DIR}/test_toolbox_suite.sh ${args} --timeout 180
+  )
+  set_tests_properties(toolbox_suite_${cell} PROPERTIES
+    TIMEOUT 300
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK toolbox_app
+  )
+endforeach()
+
 # Apple's MPW (SC, Link, ToolServer) on Executor through tools/mpw/mpw;
 # skips without the MPW disk (tools/mpw/mpw setup).
 add_test(
