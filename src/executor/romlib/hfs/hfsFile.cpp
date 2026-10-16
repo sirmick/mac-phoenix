@@ -44,6 +44,46 @@ filecontrolblock *Executor::ROMlib_refnumtofcbp(uint16_t refnum)
     return retval;
 }
 
+/* Every access path to a fork shares its length and extents, as on a
+ * Mac: a path opened while another is open starts from that one's, not
+ * from the catalog (written back only at flush or close), and a change
+ * of length or allocation through one path reaches all of them.  MPW
+ * Shell writes a command's output through one path to "MPW.Pipe" and
+ * reads it back through a second (command substitution). */
+static filecontrolblock *other_path(HVCB *vcbp, LONGINT flnum, bool rsrc,
+                                    filecontrolblock *except)
+{
+    short length = *(GUEST<INTEGER> *)LM(FCBSPtr);
+    auto *fcbp = (filecontrolblock *)((GUEST<INTEGER> *)LM(FCBSPtr) + 1);
+    auto *efcbp = (filecontrolblock *)((char *)LM(FCBSPtr) + length);
+    for(; fcbp < efcbp; fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
+        if(fcbp != except && fcbp->fcbFlNum == flnum && fcbp->fcbVPtr == vcbp
+           && !!(fcbp->fcbMdRByt & RESOURCEBIT) == rsrc)
+            return fcbp;
+    return nullptr;
+}
+
+static void share_fork(filecontrolblock *to, const filecontrolblock *from)
+{
+    to->fcbEOF = from->fcbEOF;
+    to->fcbPLen = from->fcbPLen;
+    to->fcbSBlk = from->fcbSBlk;
+    memmove((char *)to->fcbExtRec, (const char *)from->fcbExtRec,
+            sizeof(to->fcbExtRec));
+}
+
+static void update_other_paths(filecontrolblock *fcbp)
+{
+    short length = *(GUEST<INTEGER> *)LM(FCBSPtr);
+    auto *p = (filecontrolblock *)((GUEST<INTEGER> *)LM(FCBSPtr) + 1);
+    auto *e = (filecontrolblock *)((char *)LM(FCBSPtr) + length);
+    bool rsrc = fcbp->fcbMdRByt & RESOURCEBIT;
+    for(; p < e; p = (filecontrolblock *)((char *)p + LM(FSFCBLen)))
+        if(p != fcbp && p->fcbFlNum == fcbp->fcbFlNum
+           && p->fcbVPtr == fcbp->fcbVPtr && !!(p->fcbMdRByt & RESOURCEBIT) == rsrc)
+            share_fork(p, fcbp);
+}
+
 static LONGINT pbabsoffset(IOParam *pb, filecontrolblock *fcbp)
 {
     switch(pb->ioPosMode & 0x3)
@@ -709,6 +749,7 @@ done:
     }
     fcbp->fcbPLen = neweof;
     fcbp->fcbMdRByt |= 0x80;
+    update_other_paths(fcbp);
 
     if(err == noErr)
         err = err1;
@@ -1630,6 +1671,9 @@ static OSErr PBOpenHelper(IOParam *pb, Forktype ft, LONGINT dirid,
         memmove((char *)fcbp->fcbExtRec, (char *)frp->filRExtRec,
                 (LONGINT)sizeof(frp->filRExtRec));
     }
+    if(filecontrolblock *open = other_path(btparamrec.vcbp, frp->filFlNum,
+                                           ft == resourcefork, fcbp))
+        share_fork(fcbp, open);
     fcbp->fcbCrPs = 0;
     fcbp->fcbVPtr = btparamrec.vcbp;
 #if defined(MAC)

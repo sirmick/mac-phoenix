@@ -45,6 +45,7 @@ class LocalVolume : public Volume, private ItemFactory
 
     FCBExtension& getFCBX(short refNum);
     FCBExtension& openFCBX();
+    void stampWritten(FCBExtension& fcbx);
 
     struct NonexistentFile
     {

@@ -265,6 +265,7 @@ struct LocalVolume::FCBExtension
     short refNum;
     std::unique_ptr<OpenFile> access;
     FileItemPtr file;
+    bool written = false; /* the file's date is set at flush or close */
 
     FCBExtension() = default;
     FCBExtension(filecontrolblock *fcb, short refNum)
@@ -819,12 +820,28 @@ void LocalVolume::PBWrite(ParmBlkPtr pb)
     
     pb->ioParam.ioActCount = n;
     pb->ioParam.ioPosOffset = fcbx.fcb->fcbCrPs =  fcbx.fcb->fcbCrPs + n ;
+    fcbx.written = true;
+}
+
+/* As HFS: flushing or closing a path that was written sets the file's
+   modification date to now. The date is the host file's mtime, which a
+   resource fork write (an AppleDouble or MacBinary side file) doesn't
+   touch; MPW's Link zeroes the date of its output while it works ("assumed
+   to be bad") and relies on the close to set it. */
+void LocalVolume::stampWritten(FCBExtension& fcbx)
+{
+    if(!fcbx.written || !fcbx.file)
+        return;
+    fcbx.written = false;
+    boost::system::error_code ec;
+    fs::last_write_time(fcbx.file->path(), std::time(nullptr), ec);
 }
 
 void LocalVolume::PBClose(ParmBlkPtr pb)
 {
     short refNum = pb->ioParam.ioRefNum;
     auto& fcbx = getFCBX(refNum);
+    stampWritten(fcbx);
     fcbx.fcb->fcbFlNum = 0;
 
     if(fcbx.file->resWriteAccessRefNum == refNum)
@@ -910,6 +927,7 @@ void LocalVolume::PBSetEOF(ParmBlkPtr pb)
         upgradeItem(fcbx.file, upgradedItemFactory);
         fcbx.access->setEOF(pb->ioParam.ioMisc);
     }
+    fcbx.written = true;
 }
 
 void LocalVolume::PBCatMove(CMovePBPtr pb)
@@ -931,6 +949,7 @@ void LocalVolume::PBCatMove(CMovePBPtr pb)
 
 void LocalVolume::PBFlushFile(ParmBlkPtr pb)
 {
+    stampWritten(getFCBX(pb->ioParam.ioRefNum));
 }
 void LocalVolume::PBFlushVol(ParmBlkPtr pb)
 {
