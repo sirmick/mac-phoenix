@@ -243,7 +243,7 @@ python3 provisioning/hfs_bless.py ~/storage/images/fresh.img
 
 Drop whatever 68K or PPC software you have into `~/storage/installers/` — subfolders become folders on the target volume — and re-run `populate_disk.py` whenever you add more. The directory is *yours*; no schema is enforced. If the installers directory doesn't exist the script creates an empty one and exits so you know where to put things.
 
-See [docs/Provisioning.md](docs/Provisioning.md) for the full guide (including Retro68, MPW, and `hfsutils` internals).
+See [docs/Provisioning.md](docs/Provisioning.md) for the tools and [docs/provisioning/PLAN.md](docs/provisioning/PLAN.md) for where they are going.
 
 ## CPU backends
 
