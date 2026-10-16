@@ -48,6 +48,14 @@ fi
 
 command -v hmount >/dev/null || { echo "hfsutils not installed (apt install hfsutils)" >&2; exit 1; }
 
+# hfsutils keeps its "current volume" in $HOME/.hcwd. Emulators starting at
+# the same time each run this script: with a shared HOME one's hmount
+# switches the other's volume, and BridgeAgent or MacPhoenix.cfg (whose
+# bridge path names the instance) lands in the wrong image -- that guest's
+# agent then polls another instance's folder. A private HOME per run.
+HFS_HOME="$(mktemp -d)"
+export HOME="$HFS_HOME"
+
 humount_all() { humount >/dev/null 2>&1 || true; }
 # Combined cleanup: unmount any mounted HFS volume and rm the cfg
 # tempfile. Built up incrementally so a partial trap doesn't lose
@@ -55,6 +63,7 @@ humount_all() { humount >/dev/null 2>&1 || true; }
 cleanup() {
     humount_all
     [[ -n "$CFG_TMP" ]] && rm -f "$CFG_TMP"
+    rm -rf "$HFS_HOME"
 }
 trap cleanup EXIT
 

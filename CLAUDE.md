@@ -57,6 +57,15 @@ tools/mpw/mpw setup                    # once: MPW disk from data.img's E.T.O. #
 tools/mpw/mpw build tests/guest/ot     # build.mpw; products -> DIR/build/*.bin
 tools/mpw/mpw run 'SC -help'           # exit code = {Status}; mpw stop when done
 
+# Guest software: fetch (pinned + verified), capture installs in the guest,
+# build disks (docs/Provisioning.md). Dev disks: Development.img (shared
+# volume) + dev-7.5.5.img / dev-7.6.1.img, for both 68k and PPC.
+tools/macfetch/macfetch.py provision provisioning/lists/dev.json
+python3 provisioning/build_disk.py provisioning/lists/dev.json -o ~/storage/images/Development.img
+python3 provisioning/guest_install.py provisioning/recipes/cw-pro-4.json -o CAPTURE.img
+python3 provisioning/test_dev_disks.py --boot ~/storage/images/dev-7.6.1.img \
+    --dev ~/storage/images/Development.img --backend kpx
+
 # arm64 / riscv64 builds on this x86-64 box: Debian containers under qemu
 # (binfmt_misc + docker). Build dirs build-arm64/, build-riscv64/.
 tools/xarch/xarch.sh arm64                     # configure + build

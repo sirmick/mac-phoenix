@@ -1,0 +1,52 @@
+{
+ "note": "Frontier 5.0.1, expanded by StuffIt Expander, then a first launch: OK 'personalize your copy' (initials as offered), No to reading the licence now, quit saving the root",
+ "backend": "uae",
+ "base": "macos-7.6.1.img.orig",
+ "expand": {
+  "file": "Frontier_5.0.1.sit"
+ },
+ "expect": [
+  "Frontier 5.0.1"
+ ],
+ "steps": [
+  {
+   "launch": "Development:Frontier 5.0.1:UserLand Frontier™"
+  },
+  {
+   "wait": 20
+  },
+  {
+   "shot": "1-personalize"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 8
+  },
+  {
+   "shot": "2-licence-prompt"
+  },
+  {
+   "click": [
+    378,
+    242
+   ]
+  },
+  {
+   "wait": 5
+  },
+  {
+   "shot": "3-ready"
+  },
+  {
+   "quit": true
+  },
+  {
+   "wait": 8
+  },
+  {
+   "shot": "4-quitting"
+  }
+ ]
+}

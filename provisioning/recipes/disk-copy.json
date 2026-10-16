@@ -1,0 +1,41 @@
+{
+ "note": "Disk Copy 6.3.3 first launch: accept its licence, so it opens without asking (captures its preferences)",
+ "backend": "uae",
+ "base": "macos-7.6.1.img.orig",
+ "media": [
+  {
+   "file": "Disk-Copy-633-smi.bin",
+   "take": "",
+   "as": "Disk Copy 6.3.3"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Media:Disk Copy 6.3.3:Disk Copy"
+  },
+  {
+   "wait": 12
+  },
+  {
+   "shot": "1-licence"
+  },
+  {
+   "click": [
+    508,
+    389
+   ]
+  },
+  {
+   "wait": 5
+  },
+  {
+   "shot": "2-agreed"
+  },
+  {
+   "quit": true
+  },
+  {
+   "wait": 5
+  }
+ ]
+}

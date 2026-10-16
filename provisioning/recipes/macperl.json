@@ -1,0 +1,103 @@
+{
+ "note": "MacPerl 5.2.0r4, Installer VISE Lite: Custom Install > Fat Binary + Shared Libraries, onto Development",
+ "backend": "uae",
+ "base": "macos-7.6.1.img.orig",
+ "media": [
+  {
+   "file": "Mac_Perl_520r4_appl.sit",
+   "take": "Mac_Perl_520r4_appl",
+   "as": "MacPerl Installer"
+  }
+ ],
+ "expect": [
+  "MacPerl ƒ"
+ ],
+ "steps": [
+  {
+   "launch": "Media:MacPerl Installer"
+  },
+  {
+   "wait": 12
+  },
+  {
+   "shot": "1-readme"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 4
+  },
+  {
+   "drag": [
+    [
+     162,
+     134
+    ],
+    [
+     155,
+     150
+    ]
+   ]
+  },
+  {
+   "click": [
+    101,
+    164
+   ]
+  },
+  {
+   "click": [
+    101,
+    196
+   ]
+  },
+  {
+   "drag": [
+    [
+     293,
+     329
+    ],
+    [
+     279,
+     344
+    ]
+   ],
+   "backend": "uae"
+  },
+  {
+   "drag": [
+    [
+     293,
+     329
+    ],
+    [
+     279,
+     360
+    ]
+   ],
+   "backend": "kpx"
+  },
+  {
+   "shot": "2-options"
+  },
+  {
+   "click": [
+    478,
+    359
+   ]
+  },
+  {
+   "wait": 20
+  },
+  {
+   "shot": "3-done"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 3
+  }
+ ]
+}

@@ -271,6 +271,20 @@ static void open_status_window(void)
 
 static void bridge_step(const char *tag);
 
+
+/* LaunchApplication as the Finder does it: when the preferred partition in
+ * the app's SIZE resource isn't free, launch in what is (down to the
+ * minimum) instead of failing with memFullErr. */
+static OSErr launch_like_finder(LaunchParamBlockRec *pb)
+{
+    OSErr err = LaunchApplication(pb);
+    if (err == memFullErr) {
+        pb->launchControlFlags |= launchUseMinimum;
+        err = LaunchApplication(pb);
+    }
+    return err;
+}
+
 static OSErr do_launch(const unsigned char *path)
 {
     FSSpec spec;
@@ -284,7 +298,7 @@ static OSErr do_launch(const unsigned char *path)
     pb.launchFileFlags    = 0;
     pb.launchControlFlags = launchContinue | launchNoFileFlags;
     pb.launchAppSpec      = &spec;
-    return LaunchApplication(&pb);
+    return launch_like_finder(&pb);
 }
 
 /* Locate the application that owns a given creator code by walking the
@@ -363,7 +377,7 @@ static OSErr launch_app_for_creator(OSType creator, ProcessSerialNumber *outPSN)
     lpb.launchEPBLength    = extendedBlockLen;
     lpb.launchControlFlags = launchContinue | launchNoFileFlags;
     lpb.launchAppSpec      = &appSpec;
-    err = LaunchApplication(&lpb);
+    err = launch_like_finder(&lpb);
     if (err != noErr) return err;
 
     unsigned long finalTicks;
@@ -1139,7 +1153,23 @@ static void poll_bridge(void)
     } else if (strncmp(cmd, "RESTART", 7) == 0) {
         result = do_system_event(kAERestart);
     } else if (strncmp(cmd, "QUIT", 4) == 0) {
-        result = do_quit_target(&prior_front);
+        /* The front process can be the agent itself (it comes forward
+         * to handle commands) or the Finder once an app has gone: quitting
+         * either is never what "quit the front app" means. */
+        ProcessSerialNumber self;
+        ProcessInfoRec info;
+        Str31 front_name;
+        Boolean is_self = false;
+        GetCurrentProcess(&self);
+        SameProcess(&prior_front, &self, &is_self);
+        info.processInfoLength = sizeof(info);
+        info.processName = front_name;
+        info.processAppSpec = NULL;
+        if (is_self || (GetProcessInformation(&prior_front, &info) == noErr &&
+                        info.processSignature == 'MACS'))
+            result = procNotFound;
+        else
+            result = do_quit_target(&prior_front);
     } else if (strncmp(cmd, "SET_CLIPBOARD", 13) == 0) {
         result = do_set_clipboard(&prior_front);
     }
