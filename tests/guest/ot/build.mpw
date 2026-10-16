@@ -1,0 +1,15 @@
+# build.mpw — OTTest, an MPW tool linked with Apple's 68k OT glue.
+#   tools/mpw/mpw build tests/guest/ot -o tests/guest/ot
+# products: OTTest
+# OT's glue makes 32-bit references: both SC and Link need -model far.
+SC -b -mbg off -model far OTTest.c -o OTTest.c.o
+Link -model far -c "MPS " -t MPST -d ∂
+	OTTest.c.o ∂
+	"{Libraries}OpenTransport.o" ∂
+	"{Libraries}OpenTransportApp.o" ∂
+	"{Libraries}OpenTptInet.o" ∂
+	"{CLibraries}StdCLib.o" ∂
+	"{Libraries}MacRuntime.o" ∂
+	"{Libraries}IntEnv.o" ∂
+	"{Libraries}Interface.o" ∂
+	-o OTTest
