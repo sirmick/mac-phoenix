@@ -226,14 +226,32 @@ sub test_network {
         report_fail('dns_resolve', 'gethostbyname failed');
     }
 
-    # Build sockaddr_in(7, 10.0.2.1) by hand: 16 bytes, big-endian.
+    # The echo service: net-bridge's on the gateway (10.0.2.1:7), or the
+    # host's echo server the harness names in Host:net_echo.txt
+    # ("address port"; Executor, whose MacTCP is on host sockets). A
+    # named one must answer, so its silence fails rather than skips.
+    my @echo = (10, 0, 2, 1);
+    my $echo_port = 7;
+    my $echo_named = 0;
+    if (open(ECHOCFG, "Host:net_echo.txt")) {
+        my $line = <ECHOCFG>;
+        close(ECHOCFG);
+        if ($line =~ /^(\d+)\.(\d+)\.(\d+)\.(\d+)\s+(\d+)/) {
+            @echo = ($1, $2, $3, $4);
+            $echo_port = $5;
+            $echo_named = 1;
+        }
+    }
+    my $miss = $echo_named ? \&report_fail : \&report_skip;
+
+    # Build sockaddr_in by hand: 16 bytes, big-endian.
     # Family in byte 1 (Mac is BSD-style: byte0=len, byte1=family). On
     # MacPerl/GUSI both layouts seem to work, but big-endian 16-bit family
     # also works on most stacks. We use Socket::sockaddr_in which knows.
-    my $gw = pack('C4', 10, 0, 2, 1);
-    my $to = pack('n n a4 x8', $AF_INET, 7, $gw);  # family, port, addr, padding
+    my $gw = pack('C4', @echo);
+    my $to = pack('n n a4 x8', $AF_INET, $echo_port, $gw);  # family, port, addr, padding
 
-    # UDP to gateway echo (10.0.2.1:7)
+    # UDP to the echo service
     if (socket(UDP, $AF_INET, $SOCK_DGRAM, $IPPROTO_UDP)) {
         report_pass('udp_socket');
         if (send(UDP, 'ping', 0, $to)) {
@@ -242,13 +260,13 @@ sub test_network {
             my $n = select(my $rout = $rin, undef, undef, 3);
             if ($n && vec($rout, fileno(UDP), 1)) {
                 my $from = recv(UDP, my $buf, 64, 0);
-                if (defined($from) && length($buf) > 0) {
+                if (defined($from) && $buf eq 'ping') {
                     report_pass('udp_echo');
                 } else {
-                    report_skip('udp_echo', "recv err=$!");
+                    &$miss('udp_echo', "recv err=$! got '$buf'");
                 }
             } else {
-                report_skip('udp_echo', 'no response');
+                &$miss('udp_echo', 'no response');
             }
         } else {
             report_fail('udp_send', "err=$!");
@@ -258,7 +276,7 @@ sub test_network {
         report_fail('udp_socket', "err=$!");
     }
 
-    # TCP connect to gateway echo
+    # TCP connect to the echo service
     if (socket(TCP, $AF_INET, $SOCK_STREAM, $IPPROTO_TCP)) {
         report_pass('tcp_socket');
         if (connect(TCP, $to)) {
@@ -266,16 +284,17 @@ sub test_network {
             if (syswrite(TCP, 'ping', 4)) {
                 my $rin = ''; vec($rin, fileno(TCP), 1) = 1;
                 my $n = select(my $rout = $rin, undef, undef, 3);
-                if ($n && sysread(TCP, my $buf, 64)) {
+                my $got = $n ? sysread(TCP, my $buf, 64) : undef;
+                if ($got && $buf eq 'ping') {
                     report_pass('tcp_echo');
                 } else {
-                    report_skip('tcp_echo', 'no response');
+                    &$miss('tcp_echo', $n ? "read " . (defined($got) ? $got : "err=$!") . " got '$buf'" : 'no response');
                 }
             } else {
                 report_fail('tcp_send', "err=$!");
             }
         } else {
-            report_skip('tcp_connect', "err=$!");
+            &$miss('tcp_connect', "err=$!");
         }
         close(TCP);
     } else {

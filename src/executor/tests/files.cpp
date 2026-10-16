@@ -663,6 +663,74 @@ TEST_F(FileTest, Seek)
 
 }
 
+TEST(Files, CreateByFullPathIgnoresDirID)
+{
+    /* "Volume:file" names the volume's root whatever directory the
+       call carries (MPW Shell redirects to "Host:x" from its own). */
+    Str255 volName;
+    HParamBlockRec pb;
+    memset(&pb, 42, sizeof(pb));
+    pb.ioParam.ioCompletion = nullptr;
+    pb.ioParam.ioNamePtr = volName;
+    pb.ioParam.ioVRefNum = 0;
+    pb.volumeParam.ioVolIndex = 0;
+    PBHGetVInfoSync(&pb);
+    ASSERT_EQ(noErr, pb.ioParam.ioResult);
+
+    memset(&pb, 42, sizeof(pb));
+    pb.ioParam.ioCompletion = nullptr;
+    pb.ioParam.ioVRefNum = 0;
+    pb.fileParam.ioDirID = 0;
+    pb.ioParam.ioNamePtr = PSTR("temp-test-dir");
+    PBDirCreateSync(&pb);
+    ASSERT_EQ(noErr, pb.ioParam.ioResult);
+    long subDir = pb.fileParam.ioDirID;
+
+    Str255 full;
+    memcpy(full + 1, volName + 1, volName[0]);
+    const char leaf[] = ":temp-full-path";
+    memcpy(full + 1 + volName[0], leaf, sizeof(leaf) - 1);
+    full[0] = volName[0] + sizeof(leaf) - 1;
+
+    memset(&pb, 42, sizeof(pb));
+    pb.ioParam.ioCompletion = nullptr;
+    pb.ioParam.ioVRefNum = 0;
+    pb.fileParam.ioDirID = subDir;
+    pb.ioParam.ioNamePtr = full;
+    PBHCreateSync(&pb);
+    /* The test volume may be the host's /, whose root a user can't
+       write: then the create must say so (a lock error), and must not
+       have put the file in the directory the call named. */
+    OSErr createErr = pb.ioParam.ioResult;
+    if(createErr != noErr)
+        EXPECT_TRUE(createErr == vLckdErr || createErr == wPrErr) << createErr;
+
+    /* It is in the root, not in the directory the call named. */
+    memset(&pb, 42, sizeof(pb));
+    pb.ioParam.ioCompletion = nullptr;
+    pb.ioParam.ioVRefNum = 0;
+    pb.fileParam.ioDirID = subDir;
+    pb.ioParam.ioNamePtr = PSTR("temp-full-path");
+    PBHDeleteSync(&pb);
+    EXPECT_EQ(fnfErr, pb.ioParam.ioResult);
+
+    memset(&pb, 42, sizeof(pb));
+    pb.ioParam.ioCompletion = nullptr;
+    pb.ioParam.ioVRefNum = 0;
+    pb.fileParam.ioDirID = subDir;
+    pb.ioParam.ioNamePtr = full;
+    PBHDeleteSync(&pb);
+    EXPECT_EQ(createErr == noErr ? noErr : fnfErr, pb.ioParam.ioResult);
+
+    memset(&pb, 42, sizeof(pb));
+    pb.ioParam.ioCompletion = nullptr;
+    pb.ioParam.ioVRefNum = 0;
+    pb.fileParam.ioDirID = 0;
+    pb.ioParam.ioNamePtr = PSTR("temp-test-dir");
+    PBHDeleteSync(&pb);
+    EXPECT_EQ(noErr, pb.ioParam.ioResult);
+}
+
 TEST(Files, DeleteFullDirectory)
 {
     HParamBlockRec pb;
@@ -1591,4 +1659,40 @@ TEST_F(FileTest, MakeFSSpec)
     EXPECT_EQ(noErr, err);
     EXPECT_EQ(dirID, spec.parID);
     EXPECT_EQ(vRefNum, spec.vRefNum);
+}
+
+#ifdef EXECUTOR
+#include <AliasMgr.h>
+#else
+#include <Aliases.h>
+#endif
+
+TEST(Files, GetAliasInfo)
+{
+    /* The names an alias record carries: the target (0), its folders
+       going up (1, 2, ...; empty past the volume's root), the volume
+       (-1), and no AppleShare server (-2) or zone (-3). */
+    const char path[] = "Disk:Folder:Sub:File";
+    Ptr fullPath = NewPtr(sizeof(path) - 1);
+    memcpy(fullPath, path, sizeof(path) - 1);
+    GUEST<AliasHandle> alias;
+    ASSERT_EQ(noErr, NewAliasMinimalFromFullPath(sizeof(path) - 1, fullPath,
+                                                 PSTR(""), PSTR(""), &alias));
+    DisposePtr(fullPath);
+
+    struct { int index; const char *want; } cases[] = {
+        { 0, "File" }, { 1, "Sub" }, { 2, "Folder" }, { 3, "" },
+        { -1, "Disk" }, { -2, "" }, { -3, "" },
+    };
+    for(auto &c : cases)
+    {
+        Str63 s;
+        memset(s, 0xC5, sizeof(s)); /* the garbage a stack buffer holds */
+        EXPECT_EQ(noErr, GetAliasInfo(alias, c.index, s)) << c.index;
+        std::string got;
+        for(int i = 1; i <= s[0]; i++)
+            got += (char)s[i];
+        EXPECT_EQ(c.want, got) << c.index;
+    }
+    DisposeHandle((Handle)alias);
 }

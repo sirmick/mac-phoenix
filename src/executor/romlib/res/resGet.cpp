@@ -11,6 +11,7 @@
 #include <MemoryMgr.h>
 #include <OSUtil.h>
 #include <mman/mman.h>
+#include <rsys/mactcp.h>
 
 #include <ctype.h>
 
@@ -104,6 +105,15 @@ Handle Executor::C_GetIndResource(ResType typ, INTEGER indx)
         /*-->*/ return retval;
     }
     EWALKMAP()
+    /* MacPhoenix: MacTCP's resolver, when no file in the chain (MacTCP's
+       control panel) has one: Apple's DNR glue ends its search with
+       GetIndResource('dnrp', 1). */
+    if(typ == "dnrp"_4 && indx == 1)
+        if((retval = ROMlib_dnr_resource()))
+        {
+            ROMlib_setreserr(noErr);
+            return retval;
+        }
     ROMlib_setreserr(resNotFound);
     return 0;
 }

@@ -1,4 +1,5 @@
 #include "localvolume.h"
+#include <cerrno>
 #include <rsys/hostdisk.h>
 #include <chrono>
 #include <base/common.h>
@@ -653,7 +654,12 @@ LocalVolume::NonexistentFile LocalVolume::resolveForCreate(mac_string_view name,
         parent = resolveDir(vRefNum, dirID);
     else
     {
-        parent = std::dynamic_pointer_cast<DirectoryItem>(resolve(mac_string_view(name.data(), colon), vRefNum, dirID));
+        /* MacPhoenix: the parent's path keeps its colon. "Host:new.txt"
+           has the parent "Host:", the volume's root (a full path, the
+           caller's directory ignored); cut before the colon, "Host" was a
+           name in the caller's directory (MPW Shell's redirections on
+           another volume failed with dirNFErr). */
+        parent = std::dynamic_pointer_cast<DirectoryItem>(resolve(mac_string_view(name.data(), colon + 1), vRefNum, dirID));
         if(!parent)
             throw OSErrorException(dirNFErr);
         name = mac_string_view(name.begin() + colon+1, name.end());
@@ -669,7 +675,21 @@ LocalVolume::NonexistentFile LocalVolume::resolveForCreate(mac_string_view name,
 void LocalVolume::createCommon(NonexistentFile file)
 {
     fs::path parentPath = file.parent->path();
-    defaultItemFactory->createFile(parentPath / toUnicodeFilename(file.name));
+    fs::path path = parentPath / toUnicodeFilename(file.name);
+    errno = 0;
+    defaultItemFactory->createFile(path);
+    int e = errno;
+    /* MacPhoenix: a host that refuses the file is an error, not a file
+       that silently isn't there. */
+    boost::system::error_code ec;
+    if(!fs::exists(path, ec))
+    {
+        throw OSErrorException(e == EROFS ? wPrErr
+                               : e == EACCES || e == EPERM ? vLckdErr
+                               : e == ENOSPC ? dskFulErr
+                               : e == ENAMETOOLONG ? bdNamErr
+                               : ioErr);
+    }
     itemCache->flushDirectoryCache(file.parent);
 }
 void LocalVolume::PBCreate(ParmBlkPtr pb)
@@ -800,6 +820,7 @@ void LocalVolume::PBWrite(ParmBlkPtr pb)
     pb->ioParam.ioActCount = n;
     pb->ioParam.ioPosOffset = fcbx.fcb->fcbCrPs =  fcbx.fcb->fcbCrPs + n ;
 }
+
 void LocalVolume::PBClose(ParmBlkPtr pb)
 {
     short refNum = pb->ioParam.ioRefNum;

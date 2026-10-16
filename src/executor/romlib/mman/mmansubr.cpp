@@ -14,6 +14,7 @@
 #include <ResourceMgr.h>
 
 #include <mman/mman_private.h>
+#include <base/trap_history.h>
 #include <rsys/hook.h>
 #include <rsys/process.h>
 #include <mman/whatis.h>
@@ -772,7 +773,8 @@ void Executor::ROMlib_moveblock(block_header_t *oldl, block_header_t *newl,
 
     auto state = HANDLE_STATE(master, oldl);
     ROMlib_setupblock(newl, newsize, REL, master, state);
-    memcpy(BLOCK_DATA(newl), BLOCK_DATA(oldl), LSIZE(oldl));
+    move_history_record(BLOCK_DATA(newl), BLOCK_DATA(oldl), LSIZE(oldl), "moveblock");
+    memmove(BLOCK_DATA(newl), BLOCK_DATA(oldl), LSIZE(oldl)); /* may overlap */
     ROMlib_destroy_blocks(ptr_to_longint(BLOCK_DATA(newl)), LSIZE(oldl), true);
     SETMASTER(master, BLOCK_DATA(newl), state);
     ROMlib_freeblock(oldl);
@@ -1300,7 +1302,10 @@ OSErr Executor::ROMlib_movehhi(THz zone, Handle h)
     {
         uint32_t size = PSIZE(r);
         if((char *)r != dst)
+        {
+            move_history_record(dst, r, size, "movehhi");
             memmove(dst, r, size);
+        }
         block_header_t *nr = (block_header_t *)dst;
         Handle mh = BLOCK_TO_HANDLE(zone, nr);
         SETMASTER(mh, BLOCK_DATA(nr), HANDLE_STATE(mh, nr));
@@ -1310,6 +1315,7 @@ OSErr Executor::ROMlib_movehhi(THz zone, Handle h)
     if(nb > dst)
         mm_set_block_fields_offset((block_header_t *)dst, FREE_BLOCK_STATE, FREE, 0,
                                    (uint32_t)(nb - dst), 0);
+    move_history_record(nb, b, bsize, "movehhi-top");
     memcpy(nb, saved.data(), bsize);
     block_header_t *moved = (block_header_t *)nb;
     SETMASTER(h, BLOCK_DATA(moved), HANDLE_STATE(h, moved));

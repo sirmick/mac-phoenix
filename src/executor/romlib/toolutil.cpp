@@ -5,6 +5,10 @@
 /* Forward declarations in ToolboxUtil.h (DO NOT DELETE THIS LINE) */
 
 #include <base/common.h>
+#if defined(linux) || defined(__APPLE__)
+#include <pwd.h>
+#include <unistd.h>
+#endif
 #include <ResourceMgr.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
@@ -113,9 +117,18 @@ get_phoney_name_resource(void)
     {
         string name = "";
 #if defined(linux) || defined(__APPLE__)
-        name = string(getlogin());
-        if(!name.length())
-            name = string(getenv("LOGNAME"));
+        /* MacPhoenix: getlogin() is null without a controlling terminal
+           (a headless or test run), and a string can't be made of null. */
+        const char *login = getlogin();
+        if(!login || !*login)
+            login = getenv("LOGNAME");
+        if(!login || !*login)
+        {
+            struct passwd *pw = getpwuid(getuid());
+            login = pw ? pw->pw_name : nullptr;
+        }
+        if(login)
+            name = login;
 #endif
         int len;
 

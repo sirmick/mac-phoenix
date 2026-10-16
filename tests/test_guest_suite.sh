@@ -136,7 +136,20 @@ fi
 EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
 python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "$SCRIPT_NAME"
 
+# Executor's MacTCP is on host sockets, where net-bridge's echo service
+# (10.0.2.1:7) does not exist: a host echo server stands in, and the guest
+# script finds it in Host:net_echo.txt ("address port").
+if [[ "$BACKEND" == "executor" ]]; then
+    ECHO_PORTFILE="$EXTFS_DIR/.echo_port"
+    python3 "$SCRIPT_DIR/lib/echo_server.py" "$ECHO_PORTFILE" &
+    ECHO_PID=$!
+    for i in $(seq 1 20); do [[ -s "$ECHO_PORTFILE" ]] && break; sleep 0.1; done
+    printf '127.0.0.1 %s\r' "$(cat "$ECHO_PORTFILE")" > "$EXTFS_DIR/net_echo.txt"
+    rm -f "$ECHO_PORTFILE"
+fi
+
 cleanup() {
+    [[ -n "${ECHO_PID:-}" ]] && kill "$ECHO_PID" 2>/dev/null || true
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
         kill "$EMU_PID" 2>/dev/null || true
         wait "$EMU_PID" 2>/dev/null || true

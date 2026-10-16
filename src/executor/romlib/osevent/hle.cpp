@@ -229,8 +229,11 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
     OSErr retval;
     TheZoneGuard guard(LM(SysZone));
 
-    /* The receiver: a process serial number or signature (others, and
-       kCurrentProcess, mean the sender). */
+    /* The receiver: a process serial number, signature, session or
+       target (kCurrentProcess, and no receiver, mean the sender).
+       receiverID points at a PSN or a TargetID; a signature or a session
+       ID is the value itself, cast to Ptr (Frontier posts 'WWW½' events
+       to signature 'WWW½' so). */
     ProcessSerialNumber to;
     GetCurrentProcess(&to);
     if(receiver_id)
@@ -245,7 +248,7 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
                 break;
             }
             case 0x7000: /* receiverIDisSignature */
-                ROMlib_process_with_signature(*(GUEST<OSType> *)receiver_id, &to);
+                ROMlib_process_with_signature(US_TO_SYN68K(receiver_id), &to);
                 break;
             case 0x6000: /* receiverIDisSessionID: receiverID is the
                             session ID itself (not a pointer to one; real
@@ -255,6 +258,10 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
                             The Apple Event Manager replies this way. */
                 to.highLongOfPSN = 0;
                 to.lowLongOfPSN = US_TO_SYN68K(receiver_id);
+                break;
+            case 0x5000: /* receiverIDisTargetID: its port name */
+                GetProcessSerialNumberFromPortName(
+                    &((TargetID *)receiver_id)->name, &to);
                 break;
         }
     }

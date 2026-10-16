@@ -556,3 +556,187 @@ TEST(MacTCP, HttpFetch)
     DisposePtr(reqBuff);
     DisposePtr(rcvBuff);
 }
+
+/* ---- UDP ------------------------------------------------------------ */
+
+namespace
+{
+OSErr udpControl(INTEGER refnum, UDPiopb& pb, INTEGER csCode)
+{
+    pb.ioCRefNum = refnum;
+    pb.csCode = csCode;
+    return PBControl((ParmBlkPtr)&pb, false);
+}
+
+/* A host UDP socket on 127.0.0.1 for the driver to talk to. */
+struct HostUdp
+{
+    int fd = -1;
+    uint16_t port = 0;
+    HostUdp()
+    {
+        fd = socket(AF_INET, SOCK_DGRAM, 0);
+        struct sockaddr_in a = {};
+        a.sin_family = AF_INET;
+        a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        EXPECT_EQ(0, bind(fd, (struct sockaddr *)&a, sizeof(a)));
+        socklen_t len = sizeof(a);
+        getsockname(fd, (struct sockaddr *)&a, &len);
+        port = ntohs(a.sin_port);
+    }
+    ~HostUdp() { close(fd); }
+    void sendTo(uint16_t to, const char *data, size_t n)
+    {
+        struct sockaddr_in a = {};
+        a.sin_family = AF_INET;
+        a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        a.sin_port = htons(to);
+        ASSERT_EQ((ssize_t)n, sendto(fd, data, n, 0, (struct sockaddr *)&a, sizeof(a)));
+    }
+};
+}
+
+TEST(MacTCP, UdpRoundTrip)
+{
+    INTEGER refnum = openIPP();
+    HostUdp host;
+
+    const uint32_t kLen = 4096;
+    Ptr area = guestBuffer(kLen);
+    UDPiopb pb;
+    std::memset(&pb, 0, sizeof(pb));
+    pb.csParam.create.rcvBuff = area;
+    pb.csParam.create.rcvBuffLen = kLen;
+    ASSERT_EQ(noErr, udpControl(refnum, pb, udpCreate));
+    auto stream = pb.udpStream;
+    uint16_t port = pb.csParam.create.localPort;
+    ASSERT_NE(0, port) << "UDPCreate did not report the port it got";
+
+    /* Two datagrams in: UDPRead lends each out of the receive area. */
+    host.sendTo(port, "first", 5);
+    host.sendTo(port, "second!", 7);
+    Ptr got[2];
+    const char *want[2] = { "first", "second!" };
+    for(int i = 0; i < 2; i++)
+    {
+        std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+        pb.udpStream = stream;
+        pb.csParam.receive.timeOut = 2;
+        ASSERT_EQ(noErr, udpControl(refnum, pb, udpRead));
+        got[i] = pb.csParam.receive.rcvBuff;
+        ASSERT_EQ(strlen(want[i]), (size_t)(uint16_t)pb.csParam.receive.rcvBuffLen);
+        EXPECT_EQ(0, std::memcmp(got[i], want[i], strlen(want[i])));
+        EXPECT_TRUE(got[i] >= area && got[i] < area + kLen)
+            << "datagram not in the stream's receive area";
+        EXPECT_EQ(0x7F000001u, (uint32_t)pb.csParam.receive.remoteHost);
+        EXPECT_EQ(host.port, (uint16_t)pb.csParam.receive.remotePort);
+    }
+    EXPECT_NE(got[0], got[1]) << "an unreturned buffer was lent twice";
+
+    /* Buffers come back once each. */
+    for(int i = 0; i < 2; i++)
+    {
+        std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+        pb.udpStream = stream;
+        pb.csParam.receive.rcvBuff = got[i];
+        EXPECT_EQ(noErr, udpControl(refnum, pb, udpBfrReturn));
+    }
+    std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+    pb.udpStream = stream;
+    pb.csParam.receive.rcvBuff = got[0];
+    EXPECT_EQ(invalidBufPtr, udpControl(refnum, pb, udpBfrReturn));
+
+    /* Nothing more to read: the timeout. */
+    std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+    pb.udpStream = stream;
+    pb.csParam.receive.timeOut = 1;
+    EXPECT_EQ(commandTimeout, udpControl(refnum, pb, udpRead));
+
+    /* UDPWrite, gathered from a WDS. */
+    Ptr data = guestBuffer(8);
+    std::memcpy(data, "pong", 4);
+    Ptr wdsMem = guestBuffer(sizeof(wdsEntry) * 2);
+    auto *wds = (wdsEntry *)wdsMem;
+    wds[0].length = 4;
+    wds[0].ptr = data;
+    wds[1].length = 0;
+    std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+    pb.udpStream = stream;
+    pb.csParam.send.remoteHost = 0x7F000001;
+    pb.csParam.send.remotePort = host.port;
+    pb.csParam.send.wdsPtr = wdsMem;
+    ASSERT_EQ(noErr, udpControl(refnum, pb, udpWrite));
+    char buf[16] = {};
+    struct sockaddr_in from = {};
+    socklen_t flen = sizeof(from);
+    ASSERT_EQ(4, recvfrom(host.fd, buf, sizeof(buf), 0, (struct sockaddr *)&from, &flen));
+    EXPECT_EQ(0, std::memcmp(buf, "pong", 4));
+    EXPECT_EQ(port, ntohs(from.sin_port));
+
+    /* MTU, release. */
+    std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+    pb.udpStream = stream;
+    pb.csParam.mtu.remoteHost = 0x7F000001;
+    ASSERT_EQ(noErr, udpControl(refnum, pb, udpMaxMTUSize));
+    EXPECT_GT((uint16_t)pb.csParam.mtu.mtuSize, 512);
+
+    std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+    pb.udpStream = stream;
+    ASSERT_EQ(noErr, udpControl(refnum, pb, udpRelease));
+    EXPECT_EQ(area, (Ptr)pb.csParam.create.rcvBuff);
+    EXPECT_EQ(kLen, (uint32_t)pb.csParam.create.rcvBuffLen);
+
+    /* The released stream is gone. */
+    pb.udpStream = stream;
+    EXPECT_EQ(invalidStreamPtr, udpControl(refnum, pb, udpStatus));
+
+    DisposePtr(wdsMem);
+    DisposePtr(data);
+    DisposePtr(area);
+}
+
+TEST(MacTCP, NoCopyRcvLendsFromTheReceiveArea)
+{
+    INTEGER refnum = openIPP();
+    LoopbackListener listener;
+
+    const uint32_t kRcvBuffLen = 8192;
+    Ptr rcvBuff = guestBuffer(kRcvBuffLen);
+    TCPiopb pb;
+    ASSERT_NO_FATAL_FAILURE(
+        createAndConnect(refnum, pb, rcvBuff, kRcvBuffLen, listener.port()));
+    auto stream = pb.tcpStream;
+    int peer = listener.accepted();
+    ASSERT_GE(peer, 0);
+
+    const char msg[] = "no copy, please";
+    ASSERT_EQ((ssize_t)(sizeof(msg) - 1), send(peer, msg, sizeof(msg) - 1, 0));
+
+    Ptr rdsMem = guestBuffer(sizeof(rdsEntry) * 3);
+    auto *rds = (rdsEntry *)rdsMem;
+    std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+    pb.tcpStream = stream;
+    pb.csParam.receive.rdsPtr = rdsMem;
+    pb.csParam.receive.rdsLength = 3;
+    pb.csParam.receive.commandTimeoutValue = 5;
+    ASSERT_EQ(noErr, control(refnum, pb, TCPNoCopyRcv));
+
+    Ptr p = rds[0].ptr;
+    ASSERT_EQ(sizeof(msg) - 1, (size_t)(uint16_t)rds[0].length);
+    EXPECT_EQ(0, (uint16_t)rds[1].length) << "RDS not terminated";
+    EXPECT_TRUE(p >= rcvBuff && p < rcvBuff + kRcvBuffLen);
+    EXPECT_EQ(0, std::memcmp(p, msg, sizeof(msg) - 1));
+
+    std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+    pb.tcpStream = stream;
+    pb.csParam.receive.rdsPtr = rdsMem;
+    EXPECT_EQ(noErr, control(refnum, pb, TCPRcvBfrReturn));
+    EXPECT_EQ(invalidRDS, control(refnum, pb, TCPRcvBfrReturn))
+        << "the same buffers were taken back twice";
+
+    std::memset(&pb.csParam, 0, sizeof(pb.csParam));
+    pb.tcpStream = stream;
+    ASSERT_EQ(noErr, control(refnum, pb, TCPRelease));
+    DisposePtr(rdsMem);
+    DisposePtr(rcvBuff);
+}

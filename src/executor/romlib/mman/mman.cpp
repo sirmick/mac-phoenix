@@ -17,6 +17,7 @@
 #include <LowMem.h>
 
 #include <mman/mman_private.h>
+#include <base/trap_history.h>
 #include <base/cpu.h>
 #include <rsys/hook.h>
 #include <mman/memsize.h>
@@ -1601,7 +1602,10 @@ repeat:
                           BLOCK_DATA(target),
                           HANDLE_STATE(BLOCK_TO_HANDLE(current_zone, src), src));
 
-                memcpy(BLOCK_DATA(target), BLOCK_DATA(src), LSIZE(src));
+                /* The two can overlap (target is below src). */
+                move_history_record(BLOCK_DATA(target), BLOCK_DATA(src),
+                                    LSIZE(src), "CompactMem");
+                memmove(BLOCK_DATA(target), BLOCK_DATA(src), LSIZE(src));
                 ROMlib_destroy_blocks(ptr_to_longint(BLOCK_DATA(target)), LSIZE(src), true);
 
 
@@ -1786,6 +1790,7 @@ void _BlockMove_flags(const void *src, void *dst, Size cnt, bool flush_p)
         if(!src)
             src = SYN68K_TO_US(0);
 
+        move_history_record(dst, src, cnt, "BlockMove");
         memmove(dst, src, cnt);
         if(flush_p)
             ROMlib_destroy_blocks(US_TO_SYN68K(dst), cnt, true);

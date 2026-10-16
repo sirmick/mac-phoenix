@@ -709,6 +709,7 @@ void syn68k_describe_cpu(FILE *out)
         fprintf(out, "\n");
     }
     Executor::trap_history_dump(out, 24);
+    Executor::move_history_dump(out, 24, 64);
 }
 
 void syn68k_bad_host_pointer(const void *p)

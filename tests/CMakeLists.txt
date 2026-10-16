@@ -422,9 +422,17 @@ set_tests_properties(aslm_executor_mame68k PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
-# Thread Manager through Frontier's UserTalk threads (process.cpp). On the
-# mame-68k core only: Frontier crashes at launch on the UAE core
-# (docs/executor/STRAGGLERS.md, item 28), before any thread runs.
+# Thread Manager through Frontier's UserTalk threads (process.cpp), on
+# both cores.
+add_test(
+  NAME threads_executor
+  COMMAND bash ${TEST_DIR}/test_threads_executor.sh --timeout 240 --port 18168
+)
+set_tests_properties(threads_executor PROPERTIES
+  TIMEOUT 280
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
 add_test(
   NAME threads_executor_mame68k
   COMMAND bash ${TEST_DIR}/test_threads_executor.sh --core mame-68k --timeout 240 --port 18162

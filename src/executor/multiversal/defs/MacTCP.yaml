@@ -580,15 +580,177 @@
         type: ip_addr               # 32
     size: 36
 
+# #### UDP
+
+- enum:
+    name: UDPEventCode
+    values:
+      - name: UDPDataArrival
+        value: 1
+      - name: UDPICMPReceived
+        value: 2
+
+- funptr:
+    name: UDPNotifyUPP
+    comment: |
+      UDP notification routine (ASR).  Pascal convention.
+    args:
+      - name: udpStream
+        type: StreamPtr
+      - name: eventCode
+        type: uint16_t
+      - name: userDataPtr
+        type: Ptr
+      - name: icmpMsg
+        type: ICMPReport*
+
+- struct:
+    name: UDPCreatePB
+    comment: |
+      UDPCreate; localPort 0 asks for any free port and is answered in
+      place.  endingPort belongs to udpMultiCreate.
+    members:
+      - name: rcvBuff
+        type: Ptr                   #  0  (abs 32)
+      - name: rcvBuffLen
+        type: ULONGINT              #  4
+      - name: notifyProc
+        type: UDPNotifyUPP          #  8
+      - name: localPort
+        type: ip_port               # 12
+      - name: userDataPtr
+        type: Ptr                   # 14
+      - name: endingPort
+        type: ip_port               # 18
+    size: 20
+
+- struct:
+    name: UDPSendPB
+    members:
+      - name: reserved
+        type: uint16_t              #  0
+      - name: remoteHost
+        type: ip_addr               #  2
+      - name: remotePort
+        type: ip_port               #  6
+      - name: wdsPtr
+        type: Ptr                   #  8  -> wdsEntry list
+      - name: checkSum
+        type: Byte                  # 12
+      - name: sendLength
+        type: INTEGER               # 14
+      - name: userDataPtr
+        type: Ptr                   # 16
+      - name: localPort
+        type: ip_port               # 20
+    size: 22
+
+- struct:
+    name: UDPReceivePB
+    comment: |
+      UDPRead hands back a datagram inside the stream's receive area
+      (rcvBuff/rcvBuffLen out); UDPBfrReturn gives that area back.
+    members:
+      - name: timeOut
+        type: uint16_t              #  0  seconds
+      - name: remoteHost
+        type: ip_addr               #  2
+      - name: remotePort
+        type: ip_port               #  6
+      - name: rcvBuff
+        type: Ptr                   #  8
+      - name: rcvBuffLen
+        type: uint16_t              # 12
+      - name: secondTimeStamp
+        type: uint16_t              # 14
+      - name: userDataPtr
+        type: Ptr                   # 16
+      - name: destHost
+        type: ip_addr               # 20
+      - name: destPort
+        type: ip_port               # 24
+    size: 26
+
+- struct:
+    name: UDPMTUPB
+    members:
+      - name: mtuSize
+        type: uint16_t              #  0
+      - name: remoteHost
+        type: ip_addr               #  2
+      - name: userDataPtr
+        type: Ptr                   #  6
+    size: 10
+
+- union:
+    name: UDPcsParam
+    members:
+      - name: create
+        type: UDPCreatePB
+      - name: send
+        type: UDPSendPB
+      - name: receive
+        type: UDPReceivePB
+      - name: mtu
+        type: UDPMTUPB
+    size: 26
+
+- struct:
+    name: UDPiopb
+    comment: |
+      Same header as TCPiopb; udpStream at 28, csParam at 32.
+    members:
+      - name: qLink
+        type: QElemPtr              #  0
+      - name: qType
+        type: INTEGER               #  4
+      - name: ioTrap
+        type: INTEGER               #  6
+      - name: ioCmdAddr
+        type: Ptr                   #  8
+      - name: ioCompletion
+        type: ProcPtr               # 12
+      - name: ioResult
+        type: OSErr                 # 16
+      - name: ioNamePtr
+        type: StringPtr             # 18
+      - name: ioVRefNum
+        type: INTEGER               # 22
+      - name: ioCRefNum
+        type: INTEGER               # 24
+      - name: csCode
+        type: INTEGER               # 26
+      - name: udpStream
+        type: StreamPtr             # 28
+      - name: csParam
+        type: UDPcsParam            # 32
+    size: 58
+
+# #### The resolver (AddressXlation.h)
+#
+# The DNR is a 'dnrp' code resource applications load and call with C
+# conventions: (*dnr)(long selector, ...).  Executor's is in
+# romlib/mactcp/dnr.cpp.
+
+- struct:
+    name: hostInfo
+    comment: |
+      StrToAddr/AddrToName result; rtnCode is cacheFault while a lookup
+      runs.
+    members:
+      - name: rtnCode
+        type: LONGINT               #   0
+      - name: cname
+        type: char[255]             #   4
+      - name: addr
+        type: ULONGINT[4]           # 260
+    size: 276
+
 # ####
 #
-# Deliberately not yet defined (phase 3):
-#   - UDPiopb and the UDP csParam blocks
+# Deliberately not yet defined:
 #   - TCPGlobalInfoPB / TCPExtendedStat result blocks
-#   - AddressXlation.h material (hostInfo, DNR selectors) — the DNR is
-#     a code resource loaded by applications, not a driver interface,
-#     and will be specified in its own defs file alongside the 'dnrp'
-#     stub resource.
+#   - the multicast UDP blocks
 #
 # Verification: tests/mactcp_abi.cpp asserts every size and offset
 # above.  It is dual-mode, so the same assertions can be rebuilt

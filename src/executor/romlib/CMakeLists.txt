@@ -474,6 +474,7 @@ source_group(Prefs FILES ${prefs_sources})
 
 set(mactcp_sources
     mactcp/mactcp.cpp
+    mactcp/dnr.cpp
 )
 
 source_group(MacTCP FILES ${mactcp_sources})

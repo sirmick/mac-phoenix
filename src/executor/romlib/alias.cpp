@@ -395,6 +395,7 @@ struct AliasInfo
     Str27 volume;
     int32_t parent;
     Str63 name;
+    Str63 parent_name; /* tag 0, if any */
     int16_t nlvl_from, nlvl_to;
     /* the full path, split at colons: [0] is the volume */
     int ncomps = 0;
@@ -403,6 +404,7 @@ struct AliasInfo
 
 bool parse_alias(AliasHandle alias, AliasInfo &a)
 {
+    a.parent_name[0] = 0;
     Size size = GetHandleSize((Handle)alias);
     const uint8_t *p = (const uint8_t *)*alias;
     if(size < 150 || be16(p + 6) != 2)
@@ -419,6 +421,12 @@ bool parse_alias(AliasHandle alias, AliasInfo &a)
         uint16_t len = be16(p + off + 2);
         if(tag == -1 || off + 4 + len > end)
             break;
+        if(tag == 0)
+        {
+            int n = std::min<int>(len, 63);
+            a.parent_name[0] = n;
+            memcpy(a.parent_name + 1, p + off + 4, n);
+        }
         if(tag == 2)
         {
             const uint8_t *s = p + off + 4;
@@ -809,11 +817,41 @@ OSErr Executor::C_MatchAlias(FSSpecPtr fromFile, int32_t rulesMask,
     return noErr;
 }
 
+/* MacPhoenix: index 0 the target's name, 1 its parent folder's, 2 the
+   one above, ... (empty past the volume's root); -1 the volume, -2 and
+   -3 the AppleShare server and zone (empty here). The string is always
+   written: Apple Menu Options appends ':' to the volume name without
+   checking the result, and the stub that left the caller's Str63 alone
+   had it store the colon at a garbage length, into a saved register
+   (straggler 25). */
 OSErr Executor::C_GetAliasInfo(AliasHandle alias, AliasTypeInfo index,
                                Str63 theString)
 {
-    warning_unimplemented("");
-    return paramErr;
+    if(!theString)
+        return paramErr;
+    theString[0] = 0;
+    AliasInfo a;
+    if(!alias || !*alias || !parse_alias(alias, a))
+        return paramErr;
+    auto put = [&](ConstStringPtr s) { memcpy(theString, s, std::min<int>(s[0], 63) + 1); };
+    if(index == 0)
+        put(a.name);
+    else if(index == -1)
+        put(a.volume);
+    else if(index == -2 || index == -3)
+        ;
+    else if(index > 0)
+    {
+        /* comps: the volume, the folders, the target */
+        int i = a.ncomps - 1 - index;
+        if(a.ncomps >= 2 && i >= 1)
+            put(a.comps[i]);
+        else if(a.ncomps < 2 && index == 1)
+            put(a.parent_name);
+    }
+    else
+        return paramErr;
+    return noErr;
 }
 
 static int

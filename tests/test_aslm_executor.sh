@@ -106,9 +106,9 @@ app() { curl -sf "http://localhost:$PORT/api/app" | grep -oP '"app"\s*:\s*"\K[^"
 alive() { kill -0 "$EMU_PID" 2>/dev/null && ! grep -q "host signal\|fatal heap error\|Fatal error" "$LOG"; }
 
 # run_tool NAME 'MPW command' SECONDS -> the tool's output; NAME.status
-# holds MPW's {Status}. MPW Shell can't create files on the Host volume,
-# so they are made here first; "∑" (stdout and stderr) needs MacRoman,
-# hence script_b64.
+# holds MPW's {Status}. Both are emptied first so a previous tool's
+# output can't count; "∑" (stdout and stderr) needs MacRoman, hence
+# script_b64.
 run_tool() {
     local name=$1 cmd=$2 wait=$3
     : >"$EXTFS_DIR/$name.txt"
