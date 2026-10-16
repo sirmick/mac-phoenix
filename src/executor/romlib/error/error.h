@@ -54,6 +54,7 @@ extern "C" {
 #define ERROR_ALLOC_LOG 11 /* MacPhoenix: log allocations >= 4K with the caller (mman.cpp) */
 #define ERROR_DRAG_LOG 12 /* MacPhoenix: log the Drag Manager's dispatch and Finder's hook calls (drag.cpp) */
 #define ERROR_MACTCP_LOG 13 /* MacPhoenix: log MacTCP driver calls and resolver lookups (mactcp/) */
+#define ERROR_OT_LOG 14 /* MacPhoenix: log Open Transport binds and calls (opentransport/) */
 
 /* This is a bit mask for those errors for which we should compile
  * in support.  This way we can conditionally compile in only

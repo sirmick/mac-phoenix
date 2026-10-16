@@ -8,7 +8,8 @@ mirrored into the session's Host volume, and what MPW builds comes back as
 MacBinary.
 
     mpw setup                     build the MPW disk from E.T.O. #22 (data.img)
-    mpw start | stop | status     the session (other commands start it)
+    mpw start | stop | status     the session (other commands start it;
+                                  start --emu=FLAG passes emulator flags)
     mpw run 'COMMAND' [-C DIR]    run an MPW command; exit code = {Status}
     mpw build DIR [-o OUTDIR]     mirror DIR, run its build.mpw (or MakeFile),
                                   fetch the products as MacBinary
@@ -131,7 +132,7 @@ def ensure_system():
     return dst
 
 
-def start(core=None, quiet=False):
+def start(core=None, quiet=False, emu=None):
     s = session()
     if s and alive(s):
         return s
@@ -152,6 +153,7 @@ def start(core=None, quiet=False):
            "--port", str(PORT)]
     if core:
         cmd += ["--core", core]
+    cmd += emu or []
     with open(logpath, "w") as logf:
         p = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
                              stdin=subprocess.DEVNULL, start_new_session=True, cwd=ROOT)
@@ -444,7 +446,7 @@ def cmd_setup(args):
 
 
 def cmd_start(args):
-    s = start(core=args.core)
+    s = start(core=args.core, emu=args.emu)
     print("pid %d port %d host %s log %s" % (s["pid"], s["port"], HOST, s["log"]))
     return 0
 
@@ -519,6 +521,8 @@ def main():
     p.set_defaults(fn=cmd_setup)
     p = sub.add_parser("start", help="start the session")
     p.add_argument("--core", help="CPU core (uae, mame-68k)")
+    p.add_argument("--emu", action="append", metavar="FLAG",
+                   help="extra emulator flag (repeatable), e.g. --emu=--executor-ot")
     p.set_defaults(fn=cmd_start)
     sub.add_parser("stop", help="stop the session").set_defaults(fn=cmd_stop)
     sub.add_parser("status", help="is the session up").set_defaults(fn=cmd_status)

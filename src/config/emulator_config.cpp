@@ -470,6 +470,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
             printf("  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)\n");
             printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only)\n");
+            printf("  --executor-ot              Executor answers Open Transport (in progress; default: off)\n");
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
@@ -629,6 +630,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--executor-debug") == 0 && i + 1 < argc) {
             config.executor_debug = argv[i + 1]; argv[i] = argv[i + 1] = nullptr; i++; continue;
+        }
+        if (strcmp(argv[i], "--executor-ot") == 0) {
+            config.executor_ot = true; argv[i] = nullptr; continue;
         }
         if (strcmp(argv[i], "--executor-writable-images") == 0) {
             config.executor_writable_images = true; argv[i] = nullptr; continue;

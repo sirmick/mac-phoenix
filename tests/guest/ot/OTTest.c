@@ -714,6 +714,20 @@ static void test_tcp_listen(void)
         OTCloseProvider(lis);
         return;
     }
+    /* The client connected asynchronously: T_CONNECT, then OTRcvConnect
+       before it can receive. */
+    until = TickCount() + 300;
+    while(OTLook(cli) != T_CONNECT && TickCount() < until)
+        ;
+    err = OTRcvConnect(cli, nil);
+    if(err)
+    {
+        fail("tcp_listen", "client OTRcvConnect", err);
+        OTCloseProvider(acc);
+        OTCloseProvider(cli);
+        OTCloseProvider(lis);
+        return;
+    }
     r = OTSnd(acc, "accepted", 8, 0);
     until = TickCount() + 300;
     do

@@ -461,6 +461,27 @@ set_tests_properties(mpw_toolchain_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# Executor's native Open Transport through Apple's 68k OT glue (OTTest, an
+# MPW tool run in ToolServer); on both cores. Skips without the MPW disk.
+foreach(core uae mame-68k)
+  if(core STREQUAL "uae")
+    set(name ot_executor)
+    set(port 18396)
+  else()
+    set(name ot_executor_mame68k)
+    set(port 18398)
+  endif()
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_ot_executor.sh --core ${core} --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 300
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+  )
+endforeach()
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp), on
 # both cores.
 add_test(

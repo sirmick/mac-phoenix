@@ -479,6 +479,16 @@ set(mactcp_sources
 
 source_group(MacTCP FILES ${mactcp_sources})
 
+set(opentransport_sources
+    opentransport/ot.cpp
+    opentransport/ot_client.cpp
+    opentransport/ot_provider.cpp
+    opentransport/ot_inet.cpp
+    opentransport/ot_utils.cpp
+)
+
+source_group(OpenTransport FILES ${opentransport_sources})
+
 set(util_sources
     util/macstrings.h
     util/macstrings.cpp
@@ -544,6 +554,7 @@ set(include_sources
                   include/rsys/keyboard.h
                   include/rsys/launch.h
                   include/rsys/mactcp.h
+                  include/rsys/opentransport.h
                   include/rsys/macros.h
                   include/rsys/noreturn.h
                   include/rsys/osutil.h
@@ -577,6 +588,7 @@ set(sources ${base_sources} ${mman_sources} ${vdriver_sources}
     ${file_sources} ${hfs_sources} ${time_sources} ${osevent_sources}
     ${error_sources} ${commandline_sources} ${prefs_sources}
     ${mactcp_sources}
+    ${opentransport_sources}
     ${util_sources}
     ${api_headers} ${trap_instance_sources} ${structdump_sources} ${host_os_sources}
     ${mpw_sources}

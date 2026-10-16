@@ -48,6 +48,8 @@ npx playwright test
 ./build/mac-phoenix --backend executor --executor-system macos-7.5.5-noext.img
 # ... with sound (Executor mixes in C++ and feeds the same Opus/WebRTC path):
 ./build/mac-phoenix --backend executor --audio
+# ... with Open Transport, native C++ (docs/executor/OpenTransport.md; in progress):
+./build/mac-phoenix --backend executor --executor-system macos-7.5.5.img --executor-ot
 ctest --test-dir build -L executor
 
 # MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
@@ -213,6 +215,7 @@ Machine:
                              (copied out on first use, image mounted too)
   --executor-start WHAT      finder | browser | path in the System (default: finder)
   --[no-]executor-fresh      Restore the System from its clean copy each run (default: on)
+  --executor-ot              Executor answers Open Transport (in progress; default: off)
 
 CPU:
   --backend NAME             uae | kpx | executor

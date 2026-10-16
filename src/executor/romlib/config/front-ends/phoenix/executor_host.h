@@ -36,6 +36,7 @@ struct Config
     std::string debug_options; // Executor's --debug string ("memcheck,...")
     std::string watch;         // --watch ADDR[:LEN]: report every write to guest memory
     bool writable_images = false; // disk images read-write (default: read-only)
+    bool open_transport = false;  // answer Open Transport (opentransport/)
     std::string cpu = "uae";      // 68k core: "uae" or "mame-68k"
 
     // Application to start instead of Executor's Browser (host path).

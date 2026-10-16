@@ -11,6 +11,7 @@
 #include <vdriver/vdriver.h>
 #include <rsys/toolevent.h>
 #include <error/error.h>
+#include <rsys/opentransport.h>
 
 #include <algorithm>
 #include <atomic>
@@ -78,6 +79,7 @@ int run(const Config& c)
     if(!c.shared_folders.empty())
         ROMlib_local_volume_names[c.shared_folders[0]] = "Host";
     ROMlib_readonly_images = !c.writable_images;
+    ROMlib_open_transport = c.open_transport;
     if(!syn68k_select_engine(c.cpu.c_str()))
     {
         fprintf(stderr, "[Executor] unknown 68k core '%s' (uae | mame-68k)\n", c.cpu.c_str());

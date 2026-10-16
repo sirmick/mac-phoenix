@@ -13,6 +13,7 @@
 #include <rsys/helppkg.h>
 #include <mman/mman.h>
 #include <rsys/gestalt.h>
+#include <rsys/opentransport.h>
 #include <rsys/version.h>
 #include <base/functions.impl.h>
 #include <base/traps.impl.h>
@@ -479,6 +480,17 @@ OSErr Executor::C_Gestalt(OSType selector, GUEST<LONGINT> *responsep)
                        (selector >> 16) & 0xFF,
                        (selector >> 8) & 0xFF,
                        (selector)&0xFF);
+
+    if(selector == "otan"_4 || selector == "otvr"_4)
+    {
+        /* MacPhoenix: Open Transport, native (opentransport/ot.cpp). */
+        int32_t v;
+        if(ROMlib_ot_gestalt(selector, &v))
+        {
+            *responsep = v;
+            return noErr;
+        }
+    }
 
     {
         gestalt_list_entry_t *p, *ep;
