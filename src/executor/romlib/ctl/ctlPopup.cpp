@@ -189,9 +189,14 @@ draw(ControlHandle ctl, draw_state_t draw_state,
 
     item_info = menu_of(data) ? ROMlib_mitemtop(menu_of(data), CTL_VALUE(ctl), &item_title) : nullptr;
 
+    /* MacPhoenix: writable, not a literal: the title is cut to fit by
+       storing a shorter length byte and putting the old one back, which
+       wrote into read-only memory when the value names no item (a
+       REALbasic pop-up with nothing chosen, narrower than its title). */
+    Str255 no_title = { 0 };
     if(item_info == nullptr)
     {
-        item_title = (StringPtr) "";
+        item_title = no_title;
 
         item_info = (mextp)alloca(sizeof *item_info);
         memset(item_info, '\000', sizeof *item_info);
