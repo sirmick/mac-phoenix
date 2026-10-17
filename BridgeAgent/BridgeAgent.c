@@ -67,58 +67,6 @@
  * window, the heartbeat JSON, and /api/status. */
 #define BRIDGE_AGENT_BUILD __DATE__ " " __TIME__
 
-/* ---------- WNE trap-patch (scheduling proof-of-life) ---------------------
- *
- * Classic Mac apps only run when they get scheduled. If another app hogs the
- * CPU (MacPerl mid-eval, say), BridgeAgent's own WaitNextEvent loop never
- * ticks. To make bridge work *independent* of which app is frontmost, we
- * trap-patch _WaitNextEvent — the patched code then runs in the caller's
- * context on every yield, by every cooperating app.
- *
- * This first cut only measures: it bumps two counters so the host can prove
- * the patch actually installs, fires, and fires from other processes. No
- * real work happens in the patched function yet.
- *
- * Counters live at absolute ScratchMem addresses (host RAM at phys
- * 0x02100000 is guest-visible). Absolute addressing means the patch body
- * touches no A5-relative globals, so it's safe to run with any process's A5
- * current. Offsets picked below the existing bridge-nudge block at +0xFFE0.
- */
-#define SCR_U32(addr) (*(volatile uint32_t *)(addr))
-#define kWNECountTotal 0x0210FFC0u    /* uint32: all patched WNE calls  */
-#define kWNECountOther 0x0210FFC4u    /* uint32: calls where A5 != ours */
-#define kWNEOldProc    0x0210FFC8u    /* uint32: saved old WNE trap ptr */
-#define kWNEBridgeA5   0x0210FFCCu    /* uint32: snapshot of our A5     */
-#define kLMCurrentA5   0x00000904u    /* lowmem CurrentA5                */
-
-typedef pascal Boolean (*WNEProcPtr)(EventMask, EventRecord *, UInt32, RgnHandle);
-
-static pascal Boolean WNEPatch(EventMask mask, EventRecord *evt,
-                               UInt32 sleep, RgnHandle rgn)
-{
-    SCR_U32(kWNECountTotal)++;
-    if (SCR_U32(kLMCurrentA5) != SCR_U32(kWNEBridgeA5))
-        SCR_U32(kWNECountOther)++;
-
-    WNEProcPtr old = (WNEProcPtr)SCR_U32(kWNEOldProc);
-    return old(mask, evt, sleep, rgn);
-}
-
-static void install_wne_patch(void)
-{
-    SCR_U32(kWNECountTotal) = 0;
-    SCR_U32(kWNECountOther) = 0;
-    SCR_U32(kWNEBridgeA5)   = SCR_U32(kLMCurrentA5);
-    SCR_U32(kWNEOldProc)    = (uint32_t)GetToolboxTrapAddress(_WaitNextEvent);
-    SetToolboxTrapAddress((UniversalProcPtr)WNEPatch, _WaitNextEvent);
-}
-
-static void remove_wne_patch(void)
-{
-    uint32_t old = SCR_U32(kWNEOldProc);
-    if (old) SetToolboxTrapAddress((UniversalProcPtr)old, _WaitNextEvent);
-}
-
 /* ---------- Status window state ---------- */
 
 static WindowPtr gStatusWin = NULL;
@@ -1283,12 +1231,9 @@ static void write_heartbeat(void)
         long len = snprintf(buf, sizeof(buf),
             "{\"build\":\"%s\","
             "\"heartbeat\":%d,\"commands\":%d,"
-            "\"last_result\":%d,\"last_cmd\":\"%s\","
-            "\"wne_total\":%lu,\"wne_other\":%lu}\r",
+            "\"last_result\":%d,\"last_cmd\":\"%s\"}\r",
             BRIDGE_AGENT_BUILD,
-            gHeartbeat, gCmdCount, (int)gLastResult, last_cmd,
-            (unsigned long)SCR_U32(kWNECountTotal),
-            (unsigned long)SCR_U32(kWNECountOther));
+            gHeartbeat, gCmdCount, (int)gLastResult, last_cmd);
         SetEOF(ref, 0);
         FSWrite(ref, &len, buf);
         FSClose(ref);
@@ -1595,7 +1540,6 @@ int main(void)
     load_network_config();   /* Read netcfg.txt from the resolved bridge dir */
     open_status_window();
     draw_status();
-    install_wne_patch();
 
     /* Creating a visible window during startup yanked us to front. Hand
      * focus back to Finder so we run as a true background agent; bridge
@@ -1618,6 +1562,5 @@ int main(void)
         commit_pending_clip();
     }
 
-    remove_wne_patch();
     return 0;
 }
