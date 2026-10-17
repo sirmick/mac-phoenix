@@ -211,7 +211,7 @@ set_tests_properties(mouse_position PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
-# --- Guest test suite (requires Retro68-built MacTestSuite binary) ---
+# --- Guest test suite (MacPhoenixSuite, tests/guest/suite: built with tools/mpw/mpw) ---
 
 add_test(
   NAME guest_suite

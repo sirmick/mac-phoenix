@@ -536,15 +536,20 @@ make -C BridgeAgent
 
 The `.bin` is installed into `:System Folder:Startup Items:` of every `--disk` automatically when the bridge is enabled (see [Automation bridge](#automation-bridge)); `provisioning/install_bridge_agent.sh <image>` does the same thing manually.
 
-### MacPerl test script
+### Guest test suite app
+
+`tests/guest/suite` is MacPhoenixSuite, the guest-side test suite: a fat
+application (68k and PowerPC code) in C, built by MPW inside Executor.
 
 ```bash
-# Writes MacTestSuite.pl (+ AppleDouble ._MacTestSuite.pl with the
-# TEXT/McPL type+creator) into the ExtFS mount, so MacPerl can open it.
-python3 tests/guest/install_perl_test.py /path/to/extfs_dir
+tools/mpw/mpw build tests/guest/suite -o tests/guest/suite   # after changing its sources
 ```
 
-Guest-side tests then call `/api/launch` with `open: true` — BridgeAgent sends the `dosc` AppleEvent to MacPerl, which runs the script and writes results back into the shared folder.
+`test_guest_suite.sh` unpacks the committed `MacPhoenixSuite.bin` into the
+ExtFS mount, names the sections to run in `Host:suite.cfg` and launches it
+through `/api/launch`; it writes PASS/FAIL/SKIP lines back into the shared
+folder. MacPerl scripts (`--script FinderScriptTest.pl`) go to MacPerl as
+a `dosc` AppleEvent through `/api/script`.
 
 ## Testing
 
@@ -560,7 +565,7 @@ ctest --test-dir build -L api
 # Boot tests across backends (UAE interpreter, UAE JIT, PPC) (~5 min)
 ctest --test-dir build -L boot
 
-# Guest-side suite (requires MacPerl + BridgeAgent on the disk image)
+# Guest-side suite (BridgeAgent on the disk image; MacPerl for the Finder suite)
 ctest --test-dir build -L guest
 
 # Everything
@@ -577,7 +582,7 @@ Tests pick up the ROM and a disk image from `MACEMU_ROM` / `MACEMU_DISK` (or `-D
 You can run `test_guest_suite.sh` directly for faster iteration:
 
 ```bash
-# Boot the default 7.6 image, dispatch MacTestSuite.pl, collect results
+# Boot the default 7.5.5 image, launch MacPhoenixSuite, collect results
 tests/test_guest_suite.sh --timeout 120
 
 # Against a specific OS version / disk

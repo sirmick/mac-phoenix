@@ -49,6 +49,27 @@ tools/mpw/mpw status | stop
   `MPW_PORT`, `MPW_SYSTEM`); see `tests/test_mpw_toolchain.sh`.
 * `emulator.log` in the state directory has Executor's output; a CPU crash
   ends the command with an error rather than a timeout.
+* **MPW C swaps `'\r'` and `'\n'`** (`'\n'` is 13): compare key codes and
+  bytes from elsewhere by number.
+
+## Fat applications
+
+MPW 3.4.2's PowerPC compiler and linker (`MrC`, `PPCLink`) are fat tools,
+so they run in the 68k session too, and one build makes an application
+with both kinds of code (`tests/guest/suite/build.mpw`, MacPhoenixSuite):
+
+1. `SC` + `Link -t APPL` (`MacRuntime.o IntEnv.o StdCLib.o Interface.o`)
+   make the 68k application, `NAME.68k`.
+2. `MrC` + `PPCLink` (`InterfaceLib StdCLib` from `{SharedLibraries}`,
+   `StdCRuntime.o PPCCRuntime.o`) write the PowerPC fragment into the data
+   fork of `NAME`.
+3. `Rez -a` adds to `NAME`: `include "NAME.68k";` (its CODE and the rest),
+   a `'cfrg' (0)` entry (`kPowerPC, kFullLib, ..., kIsApp, kOnDiskFlat,
+   kZeroOffset, kWholeFork`; this `CodeFragmentTypes.r` wants the entry
+   without `regularEntry`) and a `SIZE`.
+
+A 68k Mac runs the CODE resources, a Power Mac the fragment. Both need
+`QDGlobals qd;` defined by the application.
 
 ## Executor fixes it needed
 

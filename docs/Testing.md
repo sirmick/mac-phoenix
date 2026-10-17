@@ -65,7 +65,7 @@ ctest --test-dir build -L guest    # guest_suite{,_761,_ppc}
 | `command_bridge` | `test_command_bridge.sh` | boot | ~20s | `/api/app`, `/api/windows`, `/api/wait`, `/api/launch` (m68k) |
 | `command_bridge_ppc` | `test_command_bridge.sh` | boot | ~20s | Same, KPX backend |
 | `wne_patch_sanity` | `test_wne_patch_sanity.sh` | bridge | ~60s | Verifies the WaitNextEvent jGNEFilter shim doesn't crash long-running idle |
-| `guest_suite` | `test_guest_suite.sh` | guest | ~60s | Boots 7.5.5, dispatches `MacTestSuite.pl` → MacPerl via `/api/launch`, reads results back from ExtFS |
+| `guest_suite` | `test_guest_suite.sh` | guest | ~60s | Boots 7.5.5, launches MacPhoenixSuite (`tests/guest/suite`) via `/api/launch`, reads results back from ExtFS |
 | `guest_suite_761` | `test_guest_suite.sh` | guest | ~60s | Same, 7.6.1 disk |
 | `guest_suite_ppc` | `test_guest_suite.sh` | guest | ~60s | Same, KPX backend (PPC's 68k emulator running MacPerl) |
 

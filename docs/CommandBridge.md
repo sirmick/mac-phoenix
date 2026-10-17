@@ -158,7 +158,7 @@ A checkbox in Settings → "Enable automation bridge (BridgeAgent + ExtFS)" togg
 | `BridgeAgent/BridgeAgent.bin` | Pre-built MacBinary (committed) |
 | `BridgeAgent/Makefile` | `make` against Retro68 toolchain |
 | `provisioning/install_bridge_agent.sh` | hfsutils install of `BridgeAgent.bin` into `:System Folder:Startup Items:` |
-| `tests/guest/MacTestSuite.pl` | MacPerl test script (runs on m68k & PPC) |
+| `tests/guest/suite/` | MacPhoenixSuite, the guest test suite (fat C app, `tools/mpw/mpw build tests/guest/suite -o tests/guest/suite`) |
 | `tests/guest/install_perl_test.py` | Lay out `.pl` + `.finf` for ExtFS |
 | `tests/test_command_bridge.sh` | Integration test for `/api/app`, `/api/windows`, `/api/wait`, `/api/launch` |
 | `tests/test_guest_suite.sh` | Boot → dispatch script → collect results |

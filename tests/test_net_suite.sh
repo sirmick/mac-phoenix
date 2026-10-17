@@ -6,7 +6,7 @@
 # tests/guest/GuestNetTest.pl to MacPerl, waits for
 # Host:net_results.txt, and asserts on the PASS lines.
 #
-# Targets the data paths that MacTestSuite.pl::test_network doesn't:
+# Targets the data paths that MacPhoenixSuite's network section doesn't:
 # external HTTP with body-length integrity, 20x sequential connects,
 # external UDP DNS, dead-host connect timing, post-stall liveness.
 #

@@ -2,20 +2,24 @@
 #
 # test_guest_suite.sh - Run the guest-side Mac test suite
 #
-# Boots the emulator, dispatches MacTestSuite.pl to MacPerl via the
-# BridgeAgent (Startup Items app), waits for it to finish, then reads
-# results from the shared folder.
+# Boots the emulator, launches the guest test suite through the bridge,
+# waits for it to finish, then reads results from the shared folder. The
+# suite is MacPhoenixSuite (tests/guest/suite: a fat application built with
+# tools/mpw/mpw); --script NAME.pl dispatches a MacPerl script instead.
 #
 # Usage:
 #   tests/test_guest_suite.sh [--timeout 60] [--port 18094] [--disk path]
 #                             [--rom path] [--os-version 7.5.5|7.6]
 #                             [--network MODE] [--backend uae|kpx|executor]
 #                             [--script NAME.pl] [--results FILE]
+#                             [--sections "disk extfs ..."]
 #                             [--executor-debug memcheck,...]
 #
-# --script picks another guest script from tests/guest (default
-# MacTestSuite.pl); --results is the file it writes on Host: (default
-# test_results.txt). Same report format: PASS/FAIL/SKIP lines, then "---".
+# --script runs a MacPerl script from tests/guest instead of the suite;
+# --results is the file either writes on Host: (default test_results.txt).
+# Same report format: PASS/FAIL/SKIP lines, then "---". --sections: the
+# suite's sections to run (default: disk extfs audio applescript network
+# serial).
 #
 # --backend executor runs on the System Folder of the test copy
 # <storage>/images/test-macos-<os-version>.img (no ROM; the copy is mounted
@@ -41,7 +45,8 @@ ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 DISMISS=1
 NETWORK="socket"
-SCRIPT_NAME="MacTestSuite.pl"
+SCRIPT_NAME=""
+SECTIONS="disk extfs audio applescript network serial"
 RESULTS_NAME="test_results.txt"
 
 # Parse args
@@ -63,6 +68,7 @@ while [[ $# -gt 0 ]]; do
         --no-dismiss) DISMISS=0; shift ;;
         --script) SCRIPT_NAME="$2"; shift 2 ;;
         --results) RESULTS_NAME="$2"; shift 2 ;;
+        --sections) SECTIONS="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -125,18 +131,23 @@ if [[ ! -f "$DISK" ]]; then
     exit 77
 fi
 
-PERL_SCRIPT="$GUEST_DIR/$SCRIPT_NAME"
-PERL_INSTALL="$GUEST_DIR/install_perl_test.py"
-
-if [[ ! -f "$PERL_SCRIPT" ]]; then
-    echo "SKIP: Perl test script not found: $PERL_SCRIPT"
-    exit 77
+SUITE_APP="$GUEST_DIR/suite/MacPhoenixSuite.bin"
+if [[ -n "$SCRIPT_NAME" ]]; then
+    PERL_SCRIPT="$GUEST_DIR/$SCRIPT_NAME"
+    [[ -f "$PERL_SCRIPT" ]] || { echo "SKIP: Perl test script not found: $PERL_SCRIPT"; exit 77; }
+else
+    [[ -f "$SUITE_APP" ]] || { echo "SKIP: $SUITE_APP not built (tools/mpw/mpw build tests/guest/suite -o tests/guest/suite)"; exit 77; }
 fi
 
 # --- Setup ExtFS shared folder ---
 
 EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
-python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "$SCRIPT_NAME"
+if [[ -n "$SCRIPT_NAME" ]]; then
+    python3 "$GUEST_DIR/install_perl_test.py" "$PERL_SCRIPT" "$EXTFS_DIR" "$SCRIPT_NAME"
+else
+    python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
+    printf '%s\r%s\r' "$RESULTS_NAME" "$SECTIONS" > "$EXTFS_DIR/suite.cfg"
+fi
 
 # Executor's MacTCP is on host sockets, where net-bridge's echo service
 # (10.0.2.1:7) does not exist: a host echo server stands in, and the guest
@@ -259,27 +270,39 @@ for i in $(seq 1 "$BOOT_TIMEOUT"); do
     sleep 1
 done
 
-# --- Dispatch test script via bridge ---
-#
-# Use /api/script (generic 'misc'/'dosc') instead of /api/launch with open=true.
-# The "Perl path" is just the eval-from-file stub composed here — BridgeAgent
-# stays language-agnostic. Stub does the \r→\n fix that MacPerl needs to
-# install sub defs from a slurped Mac-text-mode file.
-PERL_STUB='open(R,"<Host:'"$SCRIPT_NAME"'")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
-PAYLOAD=$(python3 -c '
+# --- Dispatch the suite (or a MacPerl script) via the bridge ---
+
+if [[ -z "$SCRIPT_NAME" ]]; then
+    echo "Launching MacPhoenixSuite ($SECTIONS)..."
+    LAUNCH=$(curl -sf --max-time 30 -X POST "http://localhost:$PORT/api/launch" \
+        -H "Content-Type: application/json" \
+        -d '{"path":"Host:MacPhoenixSuite"}' || echo '{"success":false}')
+    if ! echo "$LAUNCH" | grep -q '"success": true'; then
+        echo "FAIL: Could not launch MacPhoenixSuite"
+        echo "  Response: $LAUNCH"
+        exit 1
+    fi
+else
+    # /api/script (generic 'misc'/'dosc'): the "Perl path" is just the
+    # eval-from-file stub composed here, so BridgeAgent stays
+    # language-agnostic. The stub does the \r->\n fix MacPerl needs to
+    # install sub defs from a slurped Mac-text-mode file.
+    PERL_STUB='open(R,"<Host:'"$SCRIPT_NAME"'")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
+    PAYLOAD=$(python3 -c '
 import json, sys
 print(json.dumps({"creator": "McPL", "script": sys.argv[1]}))
 ' "$PERL_STUB")
 
-echo "Dispatching $SCRIPT_NAME via MacPerl..."
-LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/script" \
-    -H "Content-Type: application/json" \
-    -d "$PAYLOAD" || echo '{"success":false}')
+    echo "Dispatching $SCRIPT_NAME via MacPerl..."
+    LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/script" \
+        -H "Content-Type: application/json" \
+        -d "$PAYLOAD" || echo '{"success":false}')
 
-if ! echo "$LAUNCH" | grep -q '"success": true'; then
-    echo "FAIL: Could not dispatch $SCRIPT_NAME to MacPerl"
-    echo "  Response: $LAUNCH"
-    exit 1
+    if ! echo "$LAUNCH" | grep -q '"success": true'; then
+        echo "FAIL: Could not dispatch $SCRIPT_NAME to MacPerl"
+        echo "  Response: $LAUNCH"
+        exit 1
+    fi
 fi
 
 # --- Wait for test app to run and finish ---

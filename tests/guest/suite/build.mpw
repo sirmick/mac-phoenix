@@ -1,0 +1,19 @@
+# build.mpw — MacPhoenixSuite, a fat application: 68k (SC, Link) and
+# PowerPC (MrC, PPCLink) code in one file; tools/mpw/mpw build tests/guest/suite
+# products: MacPhoenixSuite
+Set Sources "main files audio ascript net keyboard"
+For f in {Sources}
+	SC -b {f}.c -o {f}.68k.o
+	MrC {f}.c -o {f}.ppc.o
+End
+Link -t APPL -c 'MPhS' -model near ∂
+	main.68k.o files.68k.o audio.68k.o ascript.68k.o net.68k.o keyboard.68k.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o MacPhoenixSuite.68k
+PPCLink -main __start ∂
+	main.ppc.o files.ppc.o audio.ppc.o ascript.ppc.o net.ppc.o keyboard.ppc.o ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" "{SharedLibraries}AppleScriptLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'MPhS' -o MacPhoenixSuite
+Rez -a suite.r -o MacPhoenixSuite
+SetFile -t APPL -c 'MPhS' -a B MacPhoenixSuite

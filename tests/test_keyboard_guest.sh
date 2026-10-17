@@ -2,11 +2,11 @@
 #
 # test_keyboard_guest.sh — host→guest keystroke roundtrip.
 #
-# Boots the emulator, launches MacKeyboardTest.pl in the guest (via
-# BridgeAgent), waits for its "ready" marker, then POSTs Mac ADB
-# scancodes via /api/keypress to type "hello 123\n". The script reads
-# the line from <STDIN> and writes the received ASCII bytes back. We
-# assert host-sent vs guest-received match.
+# Boots the emulator, launches MacPhoenixSuite (tests/guest/suite) with
+# only its keyboard section via BridgeAgent, waits for its "ready" marker,
+# then POSTs Mac ADB scancodes via /api/keypress to type "hello 123\n". The
+# app reads the keyDown events and writes the received character codes
+# back. We assert host-sent vs guest-received match.
 #
 # Usage:
 #   tests/test_keyboard_guest.sh [--timeout N] [--port N] [--rom PATH]
@@ -60,12 +60,12 @@ if [[ ! -x "$BINARY" ]];     then echo "SKIP: Binary not found: $BINARY"; exit 7
 if [[ "$BACKEND" != "executor" && ! -f "$ROM" ]]; then echo "SKIP: ROM not found: $ROM"; exit 77; fi
 if [[ -z "${DISK:-}" || ! -f "$DISK" ]]; then echo "SKIP: Disk not found: ${DISK:-<unset>}"; exit 77; fi
 
-PERL_SCRIPT="$GUEST_DIR/MacKeyboardTest.pl"
-PERL_INSTALL="$GUEST_DIR/install_perl_test.py"
-[[ -f "$PERL_SCRIPT" ]] || { echo "SKIP: Perl script missing"; exit 77; }
+SUITE_APP="$GUEST_DIR/suite/MacPhoenixSuite.bin"
+[[ -f "$SUITE_APP" ]] || { echo "SKIP: $SUITE_APP not built"; exit 77; }
 
 EXTFS_DIR=$(mktemp -d /tmp/mackbtest-extfs.XXXXXX)
-python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "MacKeyboardTest.pl"
+python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
+printf 'test_results.txt\rkeyboard\r' > "$EXTFS_DIR/suite.cfg"
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
@@ -117,20 +117,15 @@ for i in $(seq 1 $((TIMEOUT / 2))); do
     sleep 1
 done
 
-# Run the test script in MacPerl, which becomes front and blocks on
-# <STDIN>. ADB keystrokes from /api/keypress land in MacPerl's Sioux input
-# area while it's frontmost. Dispatched as in test_guest_suite.sh: a
-# 'misc'/'dosc' do-script of an eval-from-file stub (opening the .pl as a
-# document only opens it in MacPerl's editor).
-echo "Launching MacKeyboardTest.pl..."
-PERL_STUB='open(R,"<Host:MacKeyboardTest.pl")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
-PAYLOAD=$(python3 -I -c 'import json,sys; print(json.dumps({"creator":"McPL","script":sys.argv[1]}))' "$PERL_STUB")
-LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/script" \
-    -H "Content-Type: application/json" -d "$PAYLOAD" || echo '{}')
+# Launch the suite (keyboard section only): it opens a window in front and
+# reads keyDown events; ADB keystrokes from /api/keypress land there.
+echo "Launching MacPhoenixSuite (keyboard)..."
+LAUNCH=$(curl -sf --max-time 30 -X POST "http://localhost:$PORT/api/launch" \
+    -H "Content-Type: application/json" -d '{"path":"Host:MacPhoenixSuite"}' || echo '{}')
 echo "$LAUNCH" | grep -q '"success": true' || { echo "FAIL: launch"; echo "$LAUNCH"; exit 1; }
 
-# Wait for the script to print the "ready" marker file. Until that's
-# there, MacPerl is still launching and any keys we send would go to
+# Wait for the app to write the "ready" marker file. Until that's
+# there, the app is still launching and any keys we send would go to
 # the Finder instead.
 echo -n "Waiting for guest ready..."
 READY="$EXTFS_DIR/test_keyboard_ready.txt"

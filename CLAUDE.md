@@ -163,8 +163,8 @@ tests/
   test_boot_to_finder.sh            — Boot-to-Finder test (parameterized by backend)
   test_mouse_position.sh            — Mouse position API test
   test_command_bridge.sh            — Command bridge integration tests (7 checks)
-  test_guest_suite.sh               — Boot → dispatch MacTestSuite.pl via /api/launch → read results
-  guest/MacTestSuite.pl             — MacPerl script run inside the guest by the agent
+  test_guest_suite.sh               — Boot → launch MacPhoenixSuite via /api/launch → read results
+  guest/suite/                      — MacPhoenixSuite: the guest test suite, a fat C app built by tools/mpw/mpw
   test_extfs.sh                     — ExtFS config, CLI, backward compat tests (8 checks)
   test_boot_matrix.sh               — Single-cell capacity check ({backend,arch,disk,jit} → Finder)
   run_boot_matrix.sh                — Orchestrator: 14 cells (uae, mame-68k, kpx, mame-ppc), serial, CSV + PNG + per-cell log
