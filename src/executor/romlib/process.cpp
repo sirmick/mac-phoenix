@@ -155,6 +155,9 @@ struct process_info
     int32_t os_event_message = 0;
     /* Its last WaitNextEvent: when its sleep runs out (ticks). */
     uint32_t wake_tick = 0;
+    /* WakeUpProcess asked (at interrupt time, say): its WaitNextEvent
+       sleep ends at the next look, or the next call returns at once. */
+    volatile bool wake_requested = false;
     Ptr layer = nullptr; /* its Layer Manager record (System heap) */
 
     /* Thread Manager: its threads (the main one first, made at the first
@@ -2310,9 +2313,27 @@ OSErr Executor::C_SetFrontProcess(ProcessSerialNumber *serial_number)
     return noErr;
 }
 
+/* MacPhoenix: ends the process's WaitNextEvent sleep (it was a no-op):
+   a process behind wants time now (wants_time), and the call it sleeps
+   in returns a null event (ROMlib_process_take_wake). Interrupt-safe:
+   two stores. */
 OSErr Executor::C_WakeUpProcess(ProcessSerialNumber *serial_number)
 {
-    return get_process_info(serial_number) ? noErr : procNotFound;
+    process_info_t *p = get_process_info(serial_number);
+    if(!p)
+        return procNotFound;
+    p->wake_tick = TickCount();
+    p->wake_requested = true;
+    return noErr;
+}
+
+bool Executor::ROMlib_process_take_wake()
+{
+    process_info_t *me = current_process_info;
+    if(!me || !me->wake_requested)
+        return false;
+    me->wake_requested = false;
+    return true;
 }
 
 /* MacPhoenix: a process's PPC port, as the Process Manager registers it:

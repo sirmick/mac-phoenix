@@ -57,6 +57,8 @@ extern uint32_t ROMlib_thread_stack_low();
 extern void ROMlib_process_event_hook(INTEGER mask);
 /* WaitNextEvent: the caller sleeps (ticks) in its event loop. */
 extern void ROMlib_process_idle_hook(int32_t sleep);
+/* WakeUpProcess was called for the current process (once). */
+extern bool ROMlib_process_take_wake();
 /* LaunchApplication with launchContinue: create the process. */
 extern OSErr process_launch(LaunchParamBlockRec *lpbp);
 /* launch.cpp: start the application in the (new) current process. */

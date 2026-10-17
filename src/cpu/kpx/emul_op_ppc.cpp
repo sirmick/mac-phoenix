@@ -54,6 +54,7 @@ using namespace ppc;
 
 #include "boot_progress.h"
 #include "text_feed.h"
+#include "guest_bridge.h"
 
 extern bool tick_inhibit;
 
@@ -542,6 +543,11 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 
 		case OP_TEXT_POST:
 			text_feed_post(r->a[7], r->a[5], r->d[0] & 0xFF);
+			break;
+
+		case OP_BRIDGE_COMM:		// the bridge trap (guest_bridge.h)
+			r->d[0] = guest_bridge::call(r->d[0], r->a[0], r->d[1],
+			                             [](uint32 a) { return (uint8)ReadMacInt8(a); });
 			break;
 
 		default:

@@ -88,6 +88,7 @@
 #include "platform.h"
 #include "mac_roman.h"
 #include "text_feed.h"
+#include "guest_bridge.h"
 
 bool text_feed_enabled = true;
 
@@ -923,6 +924,25 @@ void text_feed_install()
         patch(table, 0xA8EC, 22, false, kCopyBits);
         patch(table, 0xA8EF, 12, false, kScrollRect);
     }
+}
+
+void bridge_trap_install()
+{
+    uint16_t trap = guest_bridge::kTrap;
+    uint32_t table = g_table ? g_table : tool_table();
+    uint32_t unimpl = tool_trap(0xA89F);                    /* _Unimplemented */
+    uint32_t cur = tool_trap(trap);
+    if (!table || cur != unimpl) {
+        fprintf(stderr, "[bridge2] trap %04x not installed: table %08x, entry %08x, unimplemented %08x\n",
+                trap, table, cur, unimpl);
+        return;
+    }
+    uint32_t stub = new_ptr_sys(8);
+    if (!stub) return;
+    WriteMacInt16(stub, platform_make_emulop(M68K_EMUL_OP_BRIDGE_COMM));
+    WriteMacInt16(stub + 2, M68K_RTS);
+    WriteMacInt32(table + 4 * (trap & 0x3FF), stub);
+    fprintf(stderr, "[bridge2] trap %04x installed: stub %08x\n", trap, stub);
 }
 
 void text_feed_pre(uint32_t sp, uint32_t a5)

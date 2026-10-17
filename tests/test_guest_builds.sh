@@ -50,6 +50,7 @@ trap cleanup EXIT
 PROJECTS=(
     "tests/guest/suite:MacPhoenixSuite.bin"
     "tests/guest/ot:OTTest.bin"
+    "tests/guest/bridgedemo:BridgeDemo.bin"
 )
 
 FAILS=0

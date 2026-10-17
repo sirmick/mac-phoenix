@@ -554,7 +554,8 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
                 evp->message = mouseMovedMessage << 24;
                 retval = true;
             }
-            else if(!wneTimeout && (int32_t)(TickCount() - deadline) < 0)
+            else if(!wneTimeout && (int32_t)(TickCount() - deadline) < 0
+                    && !ROMlib_process_take_wake())    /* MacPhoenix: WakeUpProcess */
             {
                 syncint_wait_interrupt();
             }

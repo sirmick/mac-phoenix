@@ -1,0 +1,8 @@
+# build.mpw — BridgeDemo, a 68k application (as BridgeAgent is).
+# products: BridgeDemo
+Delete -i BridgeDemo
+SC demo.c -o demo.c.o
+Link -t APPL -c 'MPbd' -model near demo.c.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o BridgeDemo
+Rez -a demo.r -o BridgeDemo

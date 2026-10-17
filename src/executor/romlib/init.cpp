@@ -1,3 +1,4 @@
+#include "guest_bridge.h"
 #include <rsys/executor.h>
 #include <vector>
 #include <rsys/extensions.h>
@@ -59,6 +60,19 @@
 #include <base/traps.impl.h>
 
 using namespace Executor;
+
+/* MacPhoenix: the bridge trap (guest_bridge.h), here a callback: D0, A0 and
+   D1 in, D0 out, like the ROM machines' EmulOp stub. */
+static syn68k_addr_t bridge_trap(syn68k_addr_t, void *)
+{
+    EM_D0 = guest_bridge::call(EM_D0, EM_A0, EM_D1, [](uint32_t a) { return (uint8_t)READUB(a); });
+    return POPADDR();
+}
+
+static void ROMlib_install_bridge_trap()
+{
+    tooltraptable[guest_bridge::kTrap & 0x3FF] = callback_install(bridge_trap, nullptr);
+}
 
 static syn68k_addr_t
 unhandled_trap(syn68k_addr_t callback_address, void *arg)
@@ -523,6 +537,7 @@ void Executor::InitPerProcessLowMem()
     ROMlib_install_system_routines(); /* MacPhoenix: $7B0 and $668 */
     ROMlib_install_help_package(); /* MacPhoenix: Apple's PACK 14 on $A830 */
     ROMlib_install_drag_manager(); /* MacPhoenix: Apple's 'proc' pieces on $ABED */
+    ROMlib_install_bridge_trap(); /* MacPhoenix: the bridge trap, $ABE5 */
     ROMlib_install_standard_file(); /* MacPhoenix: Apple's PACK 3 on $A9EA */
     ROMlib_install_sound_dispatch(); /* MacPhoenix: $A800's group table */
     LM(SysEvtMask) = ~(1L << keyUp); /* EVERYTHING except keyUp */

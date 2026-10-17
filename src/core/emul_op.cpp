@@ -66,6 +66,7 @@ extern uint8 *ScratchMem;  // Platform scratch memory (safe target for hardware 
 extern void command_bridge_drain_from_irq(M68kRegisters *r);
 #include "snapshot.h"
 #include "text_feed.h"
+#include "guest_bridge.h"
 
 void PlayStartupSound();
 
@@ -736,9 +737,13 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 		case M68K_EMUL_OP_INIT_BRIDGE:
 			break;
 
-		case M68K_EMUL_OP_BRIDGE_COMM:
+		case M68K_EMUL_OP_BRIDGE_COMM:	// the bridge trap (guest_bridge.h)
+			r->d[0] = guest_bridge::call(r->d[0], r->a[0], r->d[1],
+			                             [](uint32_t a) { return (uint8_t)ReadMacInt8(a); });
+			break;
+
 		case M68K_EMUL_OP_BRIDGE_HFS:
-			break;  // Unused — bridge files flow through normal ExtFS disk path
+			break;  // Unused
 
 		case M68K_EMUL_OP_SUSPEND: {
 			printf("*** Suspend\n");

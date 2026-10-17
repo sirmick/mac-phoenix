@@ -11,6 +11,11 @@
  * (PatchAfterStartup, once per boot). */
 void text_feed_install();
 
+/* The bridge trap ($ABE5, guest_bridge.h): its trap table entry pointed at
+ * [EmulOp BRIDGE_COMM; rts], if the System leaves it unimplemented. Installed
+ * where the text feed is (after startup, every ROM machine). */
+void bridge_trap_install();
+
 /* The patches' EmulOps: before StdText runs, and after the original of
  * which (D0: 1 StdText, 2 CopyBits, 3 ScrollRect) returned. sp: A7 at the
  * EmulOp (the caller's return address on top), a5: A5. */

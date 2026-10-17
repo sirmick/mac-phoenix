@@ -903,6 +903,7 @@ void m68k::PatchAfterStartup(void)
 	InstallExtFS();
 #endif
 	text_feed_install();
+	bridge_trap_install();
 }
 
 

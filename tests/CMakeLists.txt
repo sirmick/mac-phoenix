@@ -129,17 +129,6 @@ set_tests_properties(command_bridge PROPERTIES
 )
 
 add_test(
-  NAME wne_patch_sanity
-  COMMAND bash ${TEST_DIR}/test_wne_patch_sanity.sh --port 18108
-)
-set_tests_properties(wne_patch_sanity PROPERTIES
-  TIMEOUT 60
-  LABELS "bridge"
-  SKIP_RETURN_CODE 77
-  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
-)
-
-add_test(
   NAME boot_ppc_interp
   COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --no-jit --timeout 45 --port 18086
 )
@@ -280,6 +269,41 @@ add_test(
 set_tests_properties(macperl_smoke_executor PROPERTIES
   TIMEOUT 200
   LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# The bridge trap ($ABE5, guest_bridge.h) and an event-driven wake-up
+# (Time Manager task -> WakeUpProcess), what the next BridgeAgent builds on:
+# tests/guest/bridgedemo. 68k, PowerPC (9.0.4) and Executor.
+add_test(
+  NAME bridge_trap
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --app ${CMAKE_SOURCE_DIR}/tests/guest/bridgedemo/BridgeDemo.bin --results bridge_demo.txt --network none --timeout 90 --port 18134
+)
+set_tests_properties(bridge_trap PROPERTIES
+  TIMEOUT 130
+  LABELS "guest;bridge"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME bridge_trap_ppc
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --app ${CMAKE_SOURCE_DIR}/tests/guest/bridgedemo/BridgeDemo.bin --results bridge_demo.txt --network none --timeout 90 --port 18136
+)
+set_tests_properties(bridge_trap_ppc PROPERTIES
+  TIMEOUT 130
+  LABELS "guest;bridge"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
+add_test(
+  NAME bridge_trap_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/bridgedemo/BridgeDemo.bin --results bridge_demo.txt --network none --timeout 150 --port 18138
+)
+set_tests_properties(bridge_trap_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;bridge;executor"
   SKIP_RETURN_CODE 77
 )
 

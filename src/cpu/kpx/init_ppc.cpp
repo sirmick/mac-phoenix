@@ -386,5 +386,6 @@ void ppc::PatchAfterStartup_PPC(void)
 	ExecuteNative(NATIVE_VIDEO_INSTALL_ACCEL);
 	InstallExtFS();
 	text_feed_install();
+	bridge_trap_install();
 }
 // Called via g_platform.patch_after_startup (set in cpu_ppc_kpx_install).
