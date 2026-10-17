@@ -17,6 +17,11 @@ the bake. Kinds:
            {"copy": {"from": ..., "to": "{target}:"}}
   derive   a snapshot made from other snapshots on the host: "from"
            (their names), merged as machine runs are
+  os       a System: its installer (and updaters) run by "steps" onto the
+           blank target ("Macintosh HD"); then the guest restarts from it
+           alone for "first_boot" steps; the snapshot is the whole volume,
+           bootable ("version": what its System file must say). "os" names
+           the System that runs the installer.
 
 Bake fields: "kind", "os" (the base System, default 7.6.1), "machines"
 (default ["68k"]), "target"
@@ -44,6 +49,9 @@ runs on that machine only.
   bake.py --do '{"look": "front"}'           ... the UI, and a half-size screenshot of the
                                                front window ("screen": all of it; null: none)
   bake.py --finish | --abort                 ... capture (and save the steps), or not
+  bake.py NAME ... --port 18000            the guest's web UI on a fixed port; every run
+                                             prints a "watch:" URL (view only) and the web
+                                             UI shows the step being run
 
 A snapshot is up to date when its key (the bake definition, its media's
 pins and its base's hash, or for a derive its parents' content hashes)
@@ -63,7 +71,8 @@ import tempfile
 import threading
 import time
 import traceback
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import importlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -72,7 +81,8 @@ import fat_cfm  # noqa: E402
 import macfetch  # noqa: E402
 import snapshot  # noqa: E402
 from containers import Volume, macbinary_to_files, mr, named, open_container, take  # noqa: E402
-from guest import Guest  # noqa: E402
+import guest as guest_mod  # noqa: E402
+from guest import Guest, watch_url  # noqa: E402
 from populate_disk import build_macbinary  # noqa: E402
 from snapshot import Hfs  # noqa: E402
 
@@ -105,7 +115,7 @@ PREFS_NOISE = {b"MacPhoenix.cfg", b"ASLM Preferences", b"Apple Menu Options Pref
                b"Finder Preferences", b"Users & Groups Data File", b"File Sharing Folder",
                b"Launcher Preferences", b"Desktop Pictures Prefs", b"Extensions Manager Preferences",
                b"System Preferences", b"Monitors & Sound Prefs", b"StuffIt Expander Preferences",
-               b"Sound Preferences", b"Expansion Manager Prefs"}
+               b"Sound Preferences", b"Expansion Manager Prefs", b"QuickTime Preferences"}
 
 
 def work_root():
@@ -139,9 +149,21 @@ def bases():
 
 
 def base_image(os_name):
+    """The image a base names: hand-made in images/, an os snapshot, or a
+    build.py image (made first if it isn't there)."""
     b = bases().get(os_name)
     if not b:
         sys.exit(f"no base System {os_name} in {BASES}")
+    if "snapshot" in b:
+        path = snapshot_path(b["snapshot"])
+        if not os.path.exists(path):
+            sys.exit(f"base {os_name}: {path} not baked yet (bake.py {b['snapshot']})")
+        return path, b
+    if "built" in b:
+        path = os.path.join(IMAGES, b["built"] + ".img")
+        if not os.path.exists(path):
+            subprocess.run([sys.executable, os.path.join(HERE, "build.py"), b["built"]], check=True)
+        return path, b
     return os.path.join(IMAGES, b["image"]), b
 
 
@@ -294,18 +316,20 @@ def subst(obj, names):
 class Session:
     """A prepared guest for one bake on one base: images, media, steps."""
 
-    def __init__(self, bake, machine, port, log=print):
+    def __init__(self, bake, machine, port, log=print, extra=()):
         self.bake, self.machine, self.log = bake, machine, log
+        self.extra = list(extra)                # more emulator arguments (--no-text-feed ...)
         self.backend = BACKENDS[machine]
         self.os = bake.get("os", DEFAULT_OS)
         self.work = tempfile.mkdtemp(prefix=f"bake.{bake['name']}@{machine}.", dir=work_root())
         self.base_path, self.base = base_image(self.os)
         self.boot = os.path.join(self.work, "boot.img")
         self.target = os.path.join(self.work, "target.img")
-        self.target_name = bake.get("target", DEFAULT_TARGET)
+        is_os = bake.get("kind") == "os"
+        self.target_name = bake.get("target", "Macintosh HD" if is_os else DEFAULT_TARGET)
         shutil.copyfile(self.base_path, self.boot)
         hfs = Hfs(self.work)
-        snapshot.blank(hfs, self.target, self.target_name, bake.get("target_mb", 1024))
+        snapshot.blank(hfs, self.target, self.target_name, bake.get("target_mb", 250 if is_os else 1024))
         self.exclude = set()
         self.disks = [self.boot, self.target]
         self.cdroms = [media_path(n) for n in bake.get("cdroms", [])]
@@ -379,17 +403,94 @@ class Session:
         put(hfs, self.target, [(mr(name), local)])
         self.exclude.add(mr(name))
         self.pre_steps = [{"open": "{target}:" + name}, {"wait_app": "StuffIt Expander", "timeout": 120},
-                          {"wait": 20 + len(data) // 100_000}, {"shot": "expanded"}, {"quit": True}]
+                          {"wait": 5 + len(data) // 200_000}, {"shot": "expanded"}, {"quit": True}]
 
     def boot_guest(self):
-        self.guest = Guest(self.work, self.backend, self.disks, self.cdroms, self.port, STORAGE)
+        self.log(f"  watch: {watch_url(self.port)}")
+        self.guest = Guest(self.work, self.backend, self.disks, self.cdroms, self.port, STORAGE, extra=self.extra)
+        self.guest.annotate(f"{self.bake['name']}@{self.machine}: booting")
         self.guest.wait_finder(240)
-        time.sleep(self.bake.get("settle", 20))
+        time.sleep(self.bake.get("settle", 3))
 
     def run_steps(self):
         for i, step in enumerate(self.steps):
-            self.log(f"  step {i}: {json.dumps(step, ensure_ascii=False)}")
+            line = f"step {i}: {json.dumps(step, ensure_ascii=False)}"
+            self.log("  " + line)
+            self.guest.annotate(f"{self.bake['name']} {line}")
+            self.run_step({k: v for k, v in step.items() if k != "backend"})
+
+    def run_step(self, step):
+        if "reboot" in step:
+            self.reboot()
+        else:
+            self.guest.run(step)
+
+    def reboot(self):
+        """{"reboot": true}: the guest restarted fresh on the same disks: a
+        clean shutdown if the bridge's agent is up, else the emulator
+        stopped. After Apple's Installer has installed a System and quit,
+        BridgeAgent dies (system error 3: PLAN.md, P2 status), so an os
+        bake reboots before it needs the bridge again."""
+        if (self.guest.get("/api/status") or {}).get("bridge_agent_connected"):
+            self.guest.shutdown()
+        self.guest.stop()
+        self.guest = Guest(self.work, self.backend, self.disks, self.cdroms, self.port, STORAGE, extra=self.extra)
+        self.guest.annotate(f"{self.bake['name']}@{self.machine}: rebooting")
+        self.guest.wait_finder(240, agent=True)
+        time.sleep(self.bake.get("settle", 3))
+
+    def first_boot(self):
+        """An os bake: the guest restarted from the new System alone."""
+        self.guest = Guest(self.work, self.backend, [self.target], [], self.port, STORAGE, extra=self.extra)
+        self.guest.annotate(f"{self.bake['name']}: first boot from {self.target_name}")
+        self.guest.wait_finder(300, agent=True)
+        time.sleep(self.bake.get("settle", 3))
+        self.guest.shot("first-boot")
+        names = dict(self.names, boot=self.target_name, system=self.target_name + ":System Folder:")
+        for i, step in enumerate(subst(self.bake.get("first_boot", []), names)):
+            if step.get("backend", self.backend) != self.backend:
+                continue
+            self.log(f"  first boot {i}: {json.dumps(step, ensure_ascii=False)}")
+            self.guest.annotate(f"{self.bake['name']} first boot {i}: {json.dumps(step, ensure_ascii=False)}")
             self.guest.run({k: v for k, v in step.items() if k != "backend"})
+        self.guest.shot("first-boot-done")
+        self.guest.shutdown()
+
+    def capture_os(self, out):
+        """The whole target as the snapshot, minus what the bridge put there."""
+        part = out + ".part"
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        shutil.copyfile(self.target, part)
+        hfs = Hfs(self.work)
+        hfs.mount(part)
+        removed = []
+        try:
+            for p in (b":System Folder:Startup Items:BridgeAgent", b":System Folder:Preferences:MacPhoenix.cfg",
+                      b":System Folder:Apple Menu Items:Recent Applications:BridgeAgent"):
+                if hfs.exists(p):
+                    hfs.run("hdel", p)
+                    removed.append(p.decode("mac_roman"))
+            for need in (b":System Folder:System", b":System Folder:Finder"):
+                if not hfs.exists(need):
+                    raise RuntimeError(f"no {need.decode()} on the new volume")
+            local = os.path.join(tempfile.mkdtemp(dir=self.work), "System.bin")
+            hfs.run("hcopy", "-m", b":System Folder:System", local)
+        finally:
+            hfs.umount()
+        version = system_version(local)
+        want = self.bake.get("version")
+        if want and version != want:
+            raise RuntimeError(f"the System file is version {version}, not {want}")
+        bake = self.bake
+        meta = {"name": bake["name"], "kind": "os", "os": version, "bootstrap": self.os,
+                "machines": [self.machine], "target": self.target_name, "key": bake_key(bake),
+                "recipe_md5": hashlib.md5(json.dumps(bake, sort_keys=True).encode()).hexdigest(),
+                "media": {n: media_entry(n).get("md5") for n in media_names(bake)},
+                "made": time.strftime("%Y-%m-%d %H:%M:%S"), "bridge_removed": removed}
+        meta = snapshot.seal_volume(self.work, part, meta)
+        os.replace(part, out)
+        self.log(f"{out}: System {version}, {len(meta['items'])} items, {os.path.getsize(out) >> 20} MB")
+        return out
 
     # ---- capture
 
@@ -465,6 +566,16 @@ class Session:
         return out
 
 
+def system_version(macbinary):
+    """The short version string of a System file's 'vers' 1."""
+    with open(macbinary, "rb") as f:
+        _, _, rsrc = fat_cfm.macbinary(f.read())
+    for t, i, _, _, payload in fat_cfm.read_rsrc(rsrc):
+        if t == b"vers" and i == 1:
+            return payload[7:7 + payload[6]].decode("mac_roman")
+    return None
+
+
 def sysfolder(hfs, image):
     """{path: hls -l line or None for a folder} for :System Folder, recursively."""
     out = {}
@@ -489,18 +600,24 @@ def sysfolder(hfs, image):
 
 # ---------------------------------------------------------------- baking
 
-def bake_run(bake, machine, out, keep=False, log=print):
+def bake_run(bake, machine, out, keep=False, log=print, port=None, extra=()):
     """One run of a bake on one machine, captured to `out`."""
-    s = Session(bake, machine, free_port(), log)
+    s = Session(bake, machine, port or free_port(), log, extra)
     log(f"{bake['name']}@{machine}: work {s.work}")
     try:
         s.boot_guest()
         s.run_steps()
         s.guest.shot("final")
+        s.guest.annotate(f"{bake['name']}@{machine}: steps done; shutting down and capturing")
         s.guest.shutdown()
-        s.capture(out)
-    except BaseException:
+        if bake.get("kind") == "os":
+            s.first_boot()
+            s.capture_os(out)
+        else:
+            s.capture(out)
+    except BaseException as e:
         if s.guest:
+            s.guest.annotate(f"{bake['name']}@{machine}: FAILED: {e}")
             s.guest.shot("failed")
             s.guest.stop()
         log(f"  failed; work directory kept: {s.work}")
@@ -510,7 +627,7 @@ def bake_run(bake, machine, out, keep=False, log=print):
     return out
 
 
-def bake_one(bake, force=False, keep=False, log=print):
+def bake_one(bake, force=False, keep=False, log=print, port=None, extra=()):
     """The product's snapshot: one run, or a run per machine merged."""
     out = snapshot_path(bake["name"])
     key = bake_key(bake) if bake.get("kind") != "derive" else None
@@ -518,12 +635,12 @@ def bake_one(bake, force=False, keep=False, log=print):
         return merge(bake, [snapshot_path(p) for p in bake["from"]], out, bake_key(bake), log)
     ms = machines(bake)
     if len(ms) == 1:
-        return bake_run(bake, ms[0], out, keep, log)
+        return bake_run(bake, ms[0], out, keep, log, port, extra)
     parts = []
     for m in ms:
         part = part_path(bake["name"], m)
         if force or not current(part, key):
-            bake_run(bake, m, part, keep, log)
+            bake_run(bake, m, part, keep, log, port, extra)
         else:
             log(f"  {os.path.basename(part)} up to date")
         parts.append(part)
@@ -648,17 +765,19 @@ class Explore:
     """A bake's guest left up to be driven step by step (bake.py --do), with
     the steps optionally recorded into the bake; --finish captures."""
 
-    def __init__(self, bake, machine, record):
-        self.port = free_port()
-        self.session = Session(bake, machine, self.port)
+    def __init__(self, bake, machine, record, port=None, extra=()):
+        self.port = port or free_port()
+        self.lock = threading.Lock()            # one step at a time
+        self.session = Session(bake, machine, self.port, extra=extra)
         self.record, self.recorded = record, []
         self.done = threading.Event()
         self.result = None
 
     def serve(self):
+        """The control server first (so --abort works from the start), then
+        the guest booted and the bake's existing steps replayed under the
+        step lock. A replay that fails leaves the guest up to look at."""
         s = self.session
-        s.boot_guest()
-        s.run_steps()
         control = free_port()
         explore = self
 
@@ -678,21 +797,46 @@ class Explore:
                 self.end_headers()
                 self.wfile.write(data)
 
-        server = HTTPServer(("127.0.0.1", control), Handler)
+        server = ThreadingHTTPServer(("127.0.0.1", control), Handler)
         with open(SESSION, "w") as f:
             json.dump({"control": control, "pid": os.getpid(), "bake": s.bake["name"], "machine": s.machine,
-                       "work": s.work, "guest": s.guest.base}, f)
-        print(f"guest up for {s.bake['name']}@{s.machine} at {s.guest.base}; work {s.work}\n"
-              f"drive it with: bake.py --do '<step json>' ... then --finish or --abort", flush=True)
+                       "work": s.work, "guest": f"http://localhost:{s.port}"}, f)
         threading.Thread(target=server.serve_forever, daemon=True).start()
+        print(f"explore {s.bake['name']}@{s.machine}: work {s.work}\nwatch: {watch_url(s.port)}", flush=True)
+        with self.lock:
+            try:
+                s.boot_guest()
+                s.run_steps()
+                print(f"guest up at {s.guest.base}; drive it with: bake.py --do '<step json>' ... "
+                      f"then --finish or --abort", flush=True)
+            except Exception as e:
+                print(f"replay stopped: {type(e).__name__}: {e}\n(the guest is left up: --do to go on, "
+                      f"or --abort)", flush=True)
         self.done.wait()
         server.shutdown()
-        os.unlink(SESSION)
+        if os.path.exists(SESSION):
+            os.unlink(SESSION)
         return self.result
 
     def handle(self, path, body):
         s = self.session
+        if path == "/abort":                    # not behind the lock: stops a step's waits
+            if s.guest:
+                s.guest.cancelled = True
+            with self.lock:
+                if s.guest:
+                    s.guest.stop()
+            self.done.set()
+            return {"ok": True, "work": s.work}
+        with self.lock:
+            return self.handle_locked(path, body)
+
+    def handle_locked(self, path, body):
+        s = self.session
         if path == "/step":
+            importlib.reload(guest_mod)         # guest.py edits apply to the running session
+            s.guest.__class__ = guest_mod.Guest
+            s.guest.cancelled = False
             if "look" in body:                  # just look: the UI, and a screenshot if asked
                 return {"ui": s.guest.summary(),
                         "shot": s.guest.shot(f"look-{len(self.recorded):02d}", front=body["look"] != "screen",
@@ -702,7 +846,8 @@ class Explore:
                 if named:
                     body = {"click": named}
             step = subst(body, s.names)
-            s.guest.run(step)
+            s.guest.annotate(f"{s.bake['name']} explore: {json.dumps(body, ensure_ascii=False)}")
+            s.run_step(step)
             self.recorded.append(body)
             return {"ok": True, "recorded": body, "ui": s.guest.summary()}
         if path == "/finish":
@@ -715,13 +860,13 @@ class Explore:
                     f.write(json.dumps(d, indent=1, ensure_ascii=False) + "\n")
                 s.bake["steps"] = d["steps"]
             out = snapshot_path(s.bake["name"]) if len(machines(s.bake)) == 1 else part_path(s.bake["name"], s.machine)
-            self.result = s.capture(out)
+            if s.bake.get("kind") == "os":
+                s.first_boot()
+                self.result = s.capture_os(out)
+            else:
+                self.result = s.capture(out)
             self.done.set()
             return {"ok": True, "snapshot": self.result, "recorded": len(self.recorded)}
-        if path == "/abort":
-            s.guest.stop()
-            self.done.set()
-            return {"ok": True, "work": s.work}
         return {"error": f"unknown {path}"}
 
 
@@ -752,6 +897,9 @@ def main():
     ap.add_argument("--do", metavar="STEP")
     ap.add_argument("--finish", action="store_true")
     ap.add_argument("--abort", action="store_true")
+    ap.add_argument("--emulator-arg", action="append", default=[], metavar="ARG",
+                    help="pass ARG to the emulator (repeatable; e.g. --emulator-arg=--no-text-feed)")
+    ap.add_argument("--port", type=int, help="the guest's web UI port (watch it there; default: any free one)")
     args = ap.parse_args()
     if args.do:
         return control("/step", json.loads(args.do))
@@ -767,14 +915,14 @@ def main():
         ap.error("name a bake, or --all / --list")
     bake = load_bake(args.name)
     if args.explore:
-        out = Explore(bake, args.machine or machines(bake)[0], args.record).serve()
+        out = Explore(bake, args.machine or machines(bake)[0], args.record, args.port, args.emulator_arg).serve()
         print(out or "aborted")
         return 0
     if not args.force and up_to_date(bake):
         print(f"up to date: {snapshot_path(bake['name'])}")
         return 0
     try:
-        bake_one(bake, args.force, args.keep)
+        bake_one(bake, args.force, args.keep, port=args.port, extra=args.emulator_arg)
     except Exception:
         traceback.print_exc()
         return 1

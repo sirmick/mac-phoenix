@@ -248,13 +248,71 @@ Images: `Development.img` (one volume for the 7.x Systems) and
 |---|---|---|
 | **P0** | Groundwork: snapshot layout + manifest + content hash, `bake.py` (generic `{target}`, the five kinds, `--record`), BridgeAgent `COPY`, `build.py`, `test_image.py`, dependency tracking | done 2026-10-16: 16 snapshots; Development + dev-7.5.5/7.6.1 built from them; 15/15 apps on uae and kpx × 7.5.5 and 7.6.1; aliases rewritten and resolved in the guest |
 | **P1** | Storage: `media/` and `baked/` in the assets repo, `media.json`, the sorting-out table above, `setup.sh` links, tests on copies | |
-| **P2** | `os` bakes: 7.1 (68k), 7.5.5 and 7.6.1 (68k + PPC) from the Legacy CD | |
-| **P3** | `tools-7` and the 7.x standard boot images | |
-| **P4** | `dev-*`: the development set re-baked on the `os` snapshots (until then: the first captures of 2026-10-16, rewrapped into the generic layout); `Development.img`, `dev-7.5.5/7.6.1.img`; the four-cell app matrix | rewrapped in P0 |
+| **P2** | `os` bakes: 7.1 (68k), 7.5.5 and 7.6.1 (68k + PPC) from the Legacy CD | 7.6.1 done 2026-10-17 (boots on uae and kpx); 7.5.5, 7.1 to do: see [P2 status](#p2-status) |
+| **P3** | `tools-7` and the 7.x standard boot images: StuffIt Expander and Disk Copy baked on `os-7.6.1` first (expand and floppy bakes need them in the guest), `tools-7.6.1` = `os-7.6.1` + those, then MacsBug and the rest of the tools on it | 7.6.1: StuffIt Expander, Disk Copy (on `os-7.6.1`), `tools-7.6.1`, MacsBug (on it) baked 2026-10-17 |
+| **P3b** | Backport the driving techniques to the GUI recipes (named clicks, drawn text for app-drawn option lists, `wait_for` instead of fixed waits, no per-machine steps): MacPerl and MacPython first (per-machine drags), then THINK C, Symantec C++, HyperCard, StuffIt Expander, Frontier's and Disk Copy's first launches; replayed with someone watching | |
+| **P4** | `dev-*`: the development set re-baked on the `os` snapshots (the P3b recipes; the rewrapped expand-only snapshots just re-baked) (until then: the first captures of 2026-10-16, rewrapped into the generic layout); `Development.img`, `dev-7.5.5/7.6.1.img`; the four-cell app matrix | rewrapped in P0 |
 | **P5** | Switch-over: tests, the boot matrix and web UI profiles boot baked images; the hand-made `.orig` disks retired | |
 | P6 | System 6.0.8 (`os`, `tools-6`) | later |
 | P7 | Mac OS 8.6 and 9.0.4 (`os`, `tools-8/9`, dev additions) | later |
 | P8 | Collections (apps, games) from the existing collection disks' software | later |
+
+## P2 status
+
+As of 2026-10-16:
+
+* **Done:** the `os` bake kind in `bake.py` (installer from a running
+  bootstrap System onto a blank "Macintosh HD", then a first boot from it
+  alone, `first_boot` steps, the whole volume captured with the bridge's
+  files removed and the System file's `vers` checked; manifest as an
+  invisible `Snapshot Info`). Media pinned (local): the Legacy Recovery CD
+  and the 7.6 Retail CD. BridgeAgent opens a document by launching its app
+  with the `odoc` in the launch parameters (older apps such as Apple's
+  Installer only take startup documents that way). `guest.py`: clicks
+  relative to drawn text (`{"text": ..., "offset": [dx, dy]}`), text
+  limited to the front window (`"front": true`), `"until"` repeats.
+* **7.6.1** (`bakes/os-7.6.1.json`): baked 2026-10-17, unattended, as
+  `baked/os-7.6.1.img` (System file `vers` 7.6.1; boots on the 68k and
+  PPC machines). The System module's own Installer (launched plainly: it
+  finds the script beside it), Custom Install "Universal system for any
+  supported computer", a reboot, the 7.6.1 Update floppies through Disk
+  Copy, first boot. BridgeAgent quits itself while an Installer runs
+  (`agent_exit`) and the guest reboots after (`reboot`).
+* **On top of it:** `disk-copy-6.3.3` and `stuffit-expander-5.5` baked on
+  `os-7.6.1` (StuffIt's Standard File dialog by name: `outside_controls`,
+  `exact` text), `images/tools-7.6.1.json` built (bases.json
+  `tools-7.6.1`), `macsbug-6.6.3` baked on it. BridgeAgent finds an app for
+  a creator by catalog search when the desktop database doesn't know it (a
+  built System's starts empty). `until` retries a click whose target isn't
+  up yet.
+* **Open problem:** after Apple's Installer has installed a System (onto
+  another disk) and quits, BridgeAgent dies: system error 3 (once 10,
+  mid-install). Ruled out by repros: the text feed (crashes with
+  `--no-text-feed`), the launch-with-document path (crashes with the
+  Installer launched plainly), a browser watching, the Installer quitting
+  without installing, other apps quitting. Theory: the Installer opens the
+  new System file as a resource file, System resources the agent calls get
+  loaded from it, and quitting closes it under them. Workaround: the os
+  bake reboots the guest after the install (`{"reboot": true}`). To find
+  the cause: log the faulting PC/opcode and its resource on illegal
+  instruction / F-line in the emulator.
+* **Disk Copy's licence:** on the bootstrap System, Disk Copy stops at its
+  licence on first launch, so the 7.6.1 Update step must click Agree
+  before the floppies mount.
+* **7.5.5, 7.1:** media located on the Legacy CD (`System 7.5, Version
+  7.5.3` 16-floppy set + `System Updates:System 7.5.5 Update`; `System
+  7.1` with `7.1-C/Q610, C/Q650, Q800 1.1`); not started.
+
+### Driving friction
+
+Fixed 2026-10-16: the explore control server is threaded and up before
+the guest boots (`--abort` stops even a replay or a long wait: waits check
+a cancel flag); `--do` reloads `guest.py` into the running session;
+`--port N` fixes the guest's web UI port and every run prints a `watch:`
+URL (LAN address, `?view`: the web UI sends no input); each step is posted
+to `/api/annotate` and shown over the screen; every wait fails at once on a
+system error alert (`bomb.png`). Still open: long waits have no progress
+or idle signal (deferred: the idle signal).
 
 ## Decisions
 

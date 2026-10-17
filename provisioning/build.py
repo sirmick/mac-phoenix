@@ -58,7 +58,7 @@ from containers import Volume, mr  # noqa: E402
 from snapshot import Hfs  # noqa: E402
 
 DEFS = os.path.join(HERE, "images")
-FORMAT = 4                  # bumped when what build.py writes changes: images rebuild
+FORMAT = 5                  # bumped when what build.py writes changes: images rebuild
 
 
 def load_def(name):
@@ -423,6 +423,17 @@ def build(d, force=False, log=print):
                 log(f"  ({s} was baked on {mans[s]['os']})")
             b.system(part, s, mans[s])
         b.alias_ids(part)
+        if d.get("base") and d.get("place"):
+            # Apps put on a System disk aren't in its desktop database (which
+            # is how a document's app is found, the bridge's "open" too):
+            # without one the Finder rebuilds it at the first boot.
+            b.hfs.mount(part)
+            try:
+                for f in (b":Desktop DB", b":Desktop DF"):
+                    if b.hfs.exists(f):
+                        b.hfs.run("hdel", f)
+            finally:
+                b.hfs.umount()
     except BaseException:
         if os.path.exists(part):
             os.unlink(part)

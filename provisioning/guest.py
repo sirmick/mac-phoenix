@@ -9,10 +9,22 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
   {"copy": {"from": PATH, "to": FOLDER}} BridgeAgent COPY: both forks, Finder info
   {"click": {"button": "Install"}}       by name, from /api/ui: a control or dialog
                                          item in the front window ("button", or
-                                         "item" for any item's text)
+                                         "item" for any item's text); else the
+                                         same text as drawn (/api/text)
+  {"click": {"text": "Easy Install"}}    by drawn text alone (/api/text): what an
+                                         app draws itself; exact, else a prefix
+  {"click": {"text": T, "offset": [dx, dy]}}  relative to the drawn text's top
+                                         left: a button an app draws beside its label
   {"popup": [x, y], "choose": "Install"} press a popup menu, release on the named
-                                         item (read from the open menu)
+                                         item (where the open menu drew it)
   {"wait_for": {"button": "Restart"}, "timeout": s}  until it is in the front window
+                                         ({"text": ...}: until it is drawn; with
+                                         "front": true, inside the front window)
+  {STEP..., "until": {...}, "max": n}    repeat a step until a find succeeds
+                                         ("Switch Disk" until the disk shows)
+  {"dclick": {"text": T, "outside_controls": true}}  double-click drawn text that
+                                         isn't a control's label (a Standard File entry);
+                                         "exact": true: no prefix matches
   {"click": [x, y]}, {"dclick": [x, y]}  screen coordinates (640x480): for what an
                                          app draws itself (a VISE option list)
   {"drag": [[x, y], [x2, y2]]}           press, move, release (popup menus)
@@ -26,6 +38,9 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
   {"close": "Name"}                      quit Name and get the Finder back,
                                          past modal dialogs
   {"shot": "name"}                       a screenshot into the work dir
+  {"reboot": true}                       (bake.py) the guest restarted fresh, same disks
+  {"agent_exit": true}                   BridgeAgent quits itself until the next boot
+                                         (out of Apple's Installer's way)
 """
 
 import json
@@ -43,17 +58,36 @@ def roms(storage):
             "kpx": os.path.join(storage, "roms", "g3.rom")}
 
 
+class NotFound(RuntimeError):
+    """A step's control or text isn't on screen (yet): "until" retries these."""
+
+
+def watch_url(port):
+    """Where to watch a guest from another machine: the web UI on this host's
+    LAN address, view only (?view: no input reaches the guest)."""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))            # picks the LAN interface; sends nothing
+            host = s.getsockname()[0]
+    except OSError:
+        host = "localhost"
+    return f"http://{host}:{port}/?view"
+
+
 class Guest:
-    def __init__(self, work, backend, disks, cdroms, port, storage, timeout=3600):
+    def __init__(self, work, backend, disks, cdroms, port, storage, timeout=3600, extra=()):
         self.base = f"http://localhost:{port}"
         self.backend, self.work = backend, work
         args = [os.path.join(ROOT, "build", "mac-phoenix"), "--config", "/dev/null", "--network", "none",
                 "--bridge", "--backend", backend, "--rom", roms(storage)[backend], "--port", str(port),
-                "--timeout", str(timeout), "--dismiss-shutdown-dialog"]
+                "--timeout", str(timeout), "--dismiss-shutdown-dialog", *extra]
         for d in disks:
             args += ["--disk", d]
         for c in cdroms:
             args += ["--cdrom", c]
+        self.cancelled = False              # set from another thread: waits stop
+        self.port = port
         self.log = open(os.path.join(work, "emulator.log"), "a")
         self.proc = subprocess.Popen(args, stdout=self.log, stderr=subprocess.STDOUT, cwd=ROOT)
         for _ in range(80):
@@ -85,6 +119,45 @@ class Guest:
     def post(self, path, body, timeout=30):
         return self.call(path, body, timeout)
 
+    # ---- following along, and stopping
+
+    def watch_url(self):
+        return watch_url(self.port)
+
+    def annotate(self, text):
+        """A line for the web UI's driver banner (what is being done now)."""
+        self.post("/api/annotate", {"text": text}, 5)
+
+    def bomb(self):
+        """The text of a system error alert on screen ("Sorry, a system error
+        occurred", the app, the error type), or None."""
+        found = (self.get("/api/text", 10) or {}).get("text", [])
+        hit = next((t for t in found if "system error" in t["text"]), None)
+        if not hit:
+            return None
+        top = hit["rect"][1]
+        near = sorted((t for t in found if 0 <= t["rect"][1] - top < 60), key=lambda t: t["rect"][1])
+        return " / ".join(t["text"].strip() for t in near)
+
+    def tick(self):
+        """In every wait: stop if cancelled, fail at once on a system error."""
+        if self.cancelled:
+            raise RuntimeError("cancelled")
+        b = self.bomb()
+        if b:
+            self.shot("bomb")
+            raise RuntimeError(f"system error on screen: {b}")
+
+    def pause(self, seconds):
+        """Sleep, checking tick() every couple of seconds."""
+        end = time.time() + seconds
+        while True:
+            self.tick()
+            left = end - time.time()
+            if left <= 0:
+                return
+            time.sleep(min(left, 2))
+
     def app(self):
         return (self.get("/api/app") or {}).get("app", "")
 
@@ -99,7 +172,7 @@ class Guest:
         while agent and not (self.get("/api/status") or {}).get("bridge_agent_connected"):
             if time.time() - start > timeout:
                 raise RuntimeError(f"no bridge agent within {timeout}s")
-            time.sleep(2)
+            self.pause(2)
 
     def shot(self, name, front=False, scale=1.0):
         """A screenshot; front=True crops it to the front window, scale < 1
@@ -130,17 +203,54 @@ class Guest:
 
     def find(self, what, ui=None):
         """(x, y) of the centre of a named control or dialog item in the
-        front window, or None. what: {"button": name} or {"item": text}."""
-        ui = ui or self.ui()
+        front window, or None. what: {"button": name} or {"item": text}; or
+        {"text": text}, drawn text only. A name /api/ui doesn't have is
+        looked for as drawn text too (controls an app draws itself)."""
         name = what.get("button") or what.get("item") or what.get("control")
-        for w in ui["windows"]:
-            if not w.get("front"):
-                continue
-            hits = [c for c in w.get("controls", []) if c["title"] == name and c["visible"]]
-            hits += [i for i in w.get("items", []) if i.get("text") == name and i.get("visible", True)]
-            for h in hits:
-                l, t, r, b = h["rect"]
-                return (l + r) // 2, (t + b) // 2
+        if name:
+            ui = ui or self.ui()
+            for w in ui["windows"]:
+                if not w.get("front"):
+                    continue
+                hits = [c for c in w.get("controls", []) if c["title"] == name and c["visible"]]
+                hits += [i for i in w.get("items", []) if i.get("text") == name and i.get("visible", True)]
+                for h in hits:
+                    l, t, r, b = h["rect"]
+                    return (l + r) // 2, (t + b) // 2
+        within, skip = None, []
+        if what.get("front") or what.get("outside_controls"):
+            ui = ui or self.ui()
+            w = next((w for w in ui["windows"] if w.get("front")), None)
+            if what.get("front"):               # only the front window's own text
+                within = w and w["rect"]
+            if what.get("outside_controls") and w:   # not a button's own label: a list entry
+                skip = [c["rect"] for c in w.get("controls", [])]
+        t = self.drawn(what.get("text") or name, app=ui.get("app") if ui else None, within=within, skip=skip,
+                       exact=what.get("exact", False))
+        if t:
+            l, top, r, b = t["rect"]
+            return (l + r) // 2, (top + b) // 2
+        return None
+
+    def drawn(self, text, app=None, within=None, skip=(), exact=False):
+        """The string on screen that reads text (exactly, else starting with
+        it), from /api/text; the front app's first. within: only inside this
+        screen rect (the front window). None if not there."""
+        if not text:
+            return None
+        found = (self.get("/api/text", 10) or {}).get("text", [])
+        if within:
+            l, t, r, b = within
+            found = [x for x in found if l <= x["rect"][0] and t <= x["rect"][1]
+                     and x["rect"][2] <= r and x["rect"][3] <= b]
+        def inside(x, c):
+            return c[0] <= x["rect"][0] and c[1] <= x["rect"][1] and x["rect"][2] <= c[2] and x["rect"][3] <= c[3]
+        found = [x for x in found if not any(inside(x, c) for c in skip)]
+        for match in (lambda s: s == text, lambda s: not exact and s.startswith(text)):
+            hits = [t for t in found if match(t["text"].strip())]
+            hits.sort(key=lambda t: t.get("app") != app)
+            if hits:
+                return hits[0]
         return None
 
     def at(self, x, y, ui=None):
@@ -172,6 +282,9 @@ class Guest:
                                              if c["visible"] and c["title"]],
                                 "text": [i["text"] for i in w.get("items", [])
                                          if i.get("type") in ("text", "edit") and i.get("text") and i.get("visible", True)]}
+                title = w["title"]
+                drawn = (self.get("/api/text", 10) or {}).get("text", [])
+                out["front"]["drawn"] = [t["text"] for t in drawn if t.get("window") == title]
                 break
         return out
 
@@ -189,10 +302,16 @@ class Guest:
         if menu is None:
             self.mouse(button=0, down=False)
             raise RuntimeError(f"no open menu with {name!r}")
-        texts = [i["text"] for i in menu["items"]]
-        current = next((k for k, i in enumerate(menu["items"]) if i["mark"]), 0)
-        dy = (texts.index(name) - current) * item_height
-        self.mouse(x=x, y=y + dy)
+        # Where the open menu drew the item; else counted from the checked
+        # one, which opens under the pointer.
+        t = self.drawn(name)
+        if t and t.get("port") == "screen":
+            ty = (t["rect"][1] + t["rect"][3]) // 2
+        else:
+            texts = [i["text"] for i in menu["items"]]
+            current = next((k for k, i in enumerate(menu["items"]) if i["mark"]), 0)
+            ty = y + (texts.index(name) - current) * item_height
+        self.mouse(x=x, y=ty)
         time.sleep(0.6)
         self.mouse(button=0, down=False)
         time.sleep(1)
@@ -275,11 +394,11 @@ class Guest:
     def bridge(self, path, body, timeout=240):
         """A bridge command, retried while the agent is still starting."""
         r = {}
-        for _ in range(4):
+        for _ in range(20):
             r = self.post(path, body, timeout) or {}
             if r.get("success") or "bridge agent" not in str(r.get("error", "")):
                 break
-            time.sleep(20)
+            self.pause(3)
         return r
 
     def close_front(self, name, patience=10):
@@ -337,6 +456,19 @@ class Guest:
 
     def run(self, step):
         """Run one recipe step; returns a short result for logs."""
+        if "until" in step:                     # repeat the step until something shows
+            rest = {k: v for k, v in step.items() if k not in ("until", "max")}
+            for _ in range(step.get("max", 10)):
+                if self.find(step["until"]):
+                    return
+                try:
+                    self.run(rest)
+                except NotFound:                # not up yet: look again
+                    pass
+                self.pause(1)
+            if not self.find(step["until"]):
+                raise RuntimeError(f"{rest} never brought {step['until']}")
+            return
         if "launch" in step or "open" in step:
             body = {"path": step["launch"]} if "launch" in step else {"path": step["open"], "open": True}
             r = self.bridge("/api/launch", body)
@@ -347,9 +479,18 @@ class Guest:
             if not r.get("success"):
                 raise RuntimeError(f"copy {step['copy']}: {r}")
         elif "click" in step and isinstance(step["click"], dict):
-            pos = self.find(step["click"])
+            what = step["click"]
+            if "offset" in what:                # relative to a label's top left: an
+                self.mouse(x=0, y=0)            # app-drawn button beside its text
+                time.sleep(0.5)                 # (the cursor off it, so it reads whole)
+                t = self.drawn(what["text"], app=self.app())
+                if not t:
+                    raise NotFound(f"no {what['text']!r} drawn")
+                self.click(t["rect"][0] + what["offset"][0], t["rect"][1] + what["offset"][1])
+                return
+            pos = self.find(what)
             if not pos:
-                raise RuntimeError(f"no {step['click']} in the front window")
+                raise NotFound(f"no {what} in the front window")
             self.click(*pos)
         elif "popup" in step:
             self.choose(*step["popup"], step["choose"])
@@ -358,9 +499,14 @@ class Guest:
             while not self.find(step["wait_for"]):
                 if time.time() > deadline:
                     raise RuntimeError(f"timeout waiting for {step['wait_for']}")
-                time.sleep(2)
+                self.pause(2)
         elif "click" in step:
             self.click(*step["click"])
+        elif "dclick" in step and isinstance(step["dclick"], dict):
+            pos = self.find(step["dclick"])
+            if not pos:
+                raise NotFound(f"no {step['dclick']} in the front window")
+            self.dclick(*pos)
         elif "dclick" in step:
             self.dclick(*step["dclick"])
         elif "drag" in step:
@@ -371,7 +517,7 @@ class Guest:
         elif "cmd_key" in step:
             self.cmd_key(step["cmd_key"])
         elif "wait" in step:
-            time.sleep(step["wait"])
+            self.pause(step["wait"])
         elif "wait_app" in step or "wait_app_not" in step:
             want, gone = step.get("wait_app"), step.get("wait_app_not")
             deadline = time.time() + step.get("timeout", 120)
@@ -379,12 +525,15 @@ class Guest:
                 a = self.app()
                 if (want and want in a) or (gone and gone not in a and a):
                     break
-                time.sleep(2)
+                self.pause(2)
             else:
                 raise RuntimeError(f"timeout: {step} (front app {self.app()!r})")
         elif "wait_finder" in step:
-            time.sleep(15)
+            self.pause(5)                       # the restart under way, not the old Finder
             self.wait_finder(step["wait_finder"], agent=True)
+        elif "agent_exit" in step:              # BridgeAgent quits itself till the next boot
+            self.post("/api/quit", {"agent": True}, 60)
+            self.pause(2)
         elif "quit" in step:
             self.post("/api/quit", {}, 60)
             time.sleep(3)

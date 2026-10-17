@@ -23,19 +23,22 @@
    "launch": "{target}:Disk Copy:Disk Copy"
   },
   {
-   "wait": 12
+   "wait_for": {
+    "button": "Agree"
+   },
+   "timeout": 60
   },
   {
    "shot": "1-licence"
   },
   {
-   "click": [
-    508,
-    389
-   ]
+   "click": {
+    "button": "Agree"
+   }
   },
   {
-   "wait": 5
+   "wait_app": "Disk Copy",
+   "timeout": 30
   },
   {
    "shot": "2-agreed"
@@ -44,7 +47,9 @@
    "quit": true
   },
   {
-   "wait": 5
+   "wait_app_not": "Disk Copy",
+   "timeout": 30
   }
- ]
+ ],
+ "os": "os-7.6.1"
 }

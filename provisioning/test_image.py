@@ -81,7 +81,7 @@ def run(images, machine, port, only, log=print):
     def start():
         g = Guest(work, bake.BACKENDS[machine], disks, [], port, bake.STORAGE)
         g.wait_finder(240)
-        time.sleep(45)                      # first mount: the Finder builds each volume's desktop file
+        time.sleep(10)                      # first mount: the Finder builds each volume's desktop file
         return g
 
     guest = start()

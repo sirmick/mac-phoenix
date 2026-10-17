@@ -193,7 +193,9 @@ client/                             — Browser UI (vanilla JS)
 | `/api/app` | GET | Current app name (read command — peek `CurApName`) |
 | `/api/windows` | GET | Window list (read command — walk `WindowList`) |
 | `/api/ui` | GET | Read command: front process's windows (screen rects), controls, dialog items, menus (open popups included) as JSON — click by name, fall back to pixels |
-| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name` |
+| `/api/text` | GET | Text on screen now, as QuickDraw drew it (`src/core/text_feed.cpp`: `_StdText`/`_CopyBits`/`_ScrollRect` patched in the trap table; ROM machines): strings with screen rects, font, window/app, `inverted` (looks selected). `?since=N`: the draw log (offscreen too). For what `/api/ui` can't name: List Manager lists, self-drawn controls, open popups |
+| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name`, `text=Substring` (drawn on screen) |
+| `/api/annotate` | POST | `{"text": "..."}` — a line from whatever drives the guest (provisioning/bake.py posts each step); the last 6 are in `/api/status` `annotations` and shown over the screen by the web UI. `{"text": ""}` clears. Open the UI with `?view` to watch without sending input |
 | `/api/launch` | POST | Launch app via BridgeAgent: `{"path":"HD:App"}`. With `"open":true`, opens the document via generic `'aevt'/'odoc'` (any registered creator: Frontier `LAND`, MacPerl `McPL`, MPW `MPS `, …) |
 | `/api/script` | POST | Generic do-script via `'misc'/'dosc'`: `{"creator":"McPL","script":"..."}` (or `"script_b64"` for exact MacRoman bytes). Works for MacPerl, Frontier UserLand, MPW Shell, AppleScript editor — any app registered for `dosc`. |
 | `/api/copy` | POST | In-guest File Manager copy via BridgeAgent, both forks + Finder info: `{"from":"Vol:Item","to":"Vol:Folder:"}` |
@@ -271,6 +273,7 @@ Logging:
   --debug-network            Debug net-bridge NAT/DNS/ICMP/TCP/UDP
   --debug-mame-ppc           mame-ppc: host ops, exceptions, per-second CPU sample
   --trace-atraps             Record (A-trap, caller PC) pairs; snapshots write atraps.tsv
+  --no-text-feed             Don't patch _StdText & co. (no /api/text)
   --executor-logtraps        Executor logs every trap call to stderr
   --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks
   --executor-debug OPTS      Executor's own debug options: memcheck (heap checks at every

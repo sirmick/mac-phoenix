@@ -14,7 +14,9 @@
     {"name": "Resorcerer_2.0_iso.zip", "dir": "downloads/dev", "size": 9243275, "md5": "b872137a3af62495e5005b6fc36eee78", "garden": "apps/Resorcerer_2.0_iso.zip", "note": "Resorcerer 2.0 CD (1997): its Fat build runs on 68k and PowerPC under System 7 (2.4 needs the Appearance Manager, Mac OS 8+)"},
     {"name": "Disk-Copy-633-smi.bin", "dir": "downloads/dev", "size": 771584, "md5": "25d39bd6577ac64e0b0bb75e520898e1", "ia": "Macintosh_Garden_Apps_D_2017/Disk-Copy-633-smi.bin", "garden": "apps/Disk-Copy-633-smi.bin"},
     {"name": "ZTerm1.0.1.sit", "dir": "downloads/dev", "size": 283914, "md5": "9986dbefe34fc77541c70d0d95a99fed", "ia": "Macintosh_Garden_Apps_X-Y-Z_2014/ZTerm1.0.1.sit", "garden": "apps/ZTerm1.0.1.sit"},
-    {"name": "macsbug663.hqx", "dir": "downloads/dev", "size": 512626, "md5": "179ce9ebc017122111226c984d681d17", "ia": "Macintosh_Garden_Apps_M_2014/macsbug663.hqx", "garden": "apps/macsbug663.hqx"}
+    {"name": "macsbug663.hqx", "dir": "downloads/dev", "size": 512626, "md5": "179ce9ebc017122111226c984d681d17", "ia": "Macintosh_Garden_Apps_M_2014/macsbug663.hqx", "garden": "apps/macsbug663.hqx"},
+    {"name": "Apple Legacy Recovery.iso", "dir": "images", "size": 679405568, "md5": "4354f0fc58dffdec6e4bd425a514e720", "local": true},
+    {"name": "MacOS 7.6 Retail.iso", "dir": "images", "size": 262455296, "md5": "6eeb5912389aae3990cc4df009f26aaf", "local": true}
   ],
   "out": "."
 }

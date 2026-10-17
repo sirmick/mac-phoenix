@@ -174,6 +174,30 @@ def seal(work, image, meta):
     return meta
 
 
+def seal_volume(work, image, meta):
+    """The manifest of a whole-volume snapshot (an `os` bake: a bootable
+    System), written invisibly at its top: a listing of everything on it."""
+    hfs = Hfs(work)
+    hfs.mount(image)
+    try:
+        if hfs.exists(b":" + INFO):
+            hfs.run("hdel", b":" + INFO)
+        meta = dict(meta, format=FORMAT)
+        meta["items"] = listing(hfs, b"", work)
+        meta["system"] = []
+        meta["content_hash"] = content_hash(meta["items"], [])
+        meta["aliases"] = [e["path"] for e in meta["items"] if not e.get("folder") and e["flags"] & ALIAS_FLAG]
+        info = os.path.join(tempfile.mkdtemp(dir=work), "info")
+        with open(info, "wb") as f:
+            f.write(json.dumps(meta, indent=1, ensure_ascii=False)
+                    .encode("mac_roman", "replace").replace(b"\n", b"\r"))
+        hfs.run("hcopy", "-r", info, b":" + INFO)
+        hfs.run("hattrib", "-t", "TEXT", "-c", "ttxt", "+i", b":" + INFO)
+    finally:
+        hfs.umount()
+    return meta
+
+
 def manifest(path, work=None):
     """The manifest of a snapshot image."""
     hfs = Hfs(work or tempfile.gettempdir())

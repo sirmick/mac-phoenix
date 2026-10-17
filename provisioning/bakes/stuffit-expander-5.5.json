@@ -1,5 +1,5 @@
 {
- "note": "StuffIt Expander 5.5, StuffIt InstallerMaker: Easy Install into the target (Standard File: Desktop > the target)",
+ "note": "StuffIt Expander 5.5, StuffIt InstallerMaker: Easy Install; the Standard File dialog is driven by name (Desktop until the target is listed, the target's entry double-clicked); made the default helper application",
  "kind": "install",
  "media": [
   {
@@ -14,87 +14,93 @@
  "launch": [
   "StuffIt Expander™ 5.5:StuffIt Expander™"
  ],
+ "os": "os-7.6.1",
  "steps": [
   {
    "launch": "{media}:StuffIt Expander Installer"
   },
   {
-   "wait": 15
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Print…"
+   },
+   "max": 10
   },
   {
-   "key": "return"
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Agree"
+   },
+   "max": 10
   },
   {
-   "wait": 4
+   "click": {
+    "button": "Agree"
+   },
+   "until": {
+    "text": "Easy Install"
+   },
+   "max": 10
   },
   {
-   "key": "return"
+   "click": {
+    "button": "Install"
+   },
+   "until": {
+    "button": "Desktop"
+   },
+   "max": 10
   },
   {
-   "wait": 4
+   "click": {
+    "button": "Desktop"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   },
+   "max": 10
   },
   {
-   "key": "return"
+   "dclick": {
+    "text": "{target}",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   }
   },
   {
-   "wait": 4
+   "click": {
+    "button": "Install"
+   }
   },
   {
-   "shot": "1-install"
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 120
   },
   {
-   "key": "return"
+   "click": {
+    "button": "OK"
+   }
   },
   {
-   "wait": 5
+   "wait_for": {
+    "button": "Quit"
+   },
+   "timeout": 60
   },
   {
-   "click": [
-    443,
-    138
-   ]
-  },
-  {
-   "wait": 2
-  },
-  {
-   "dclick": [
-    222,
-    88
-   ]
-  },
-  {
-   "wait": 2
-  },
-  {
-   "shot": "2-where"
-  },
-  {
-   "click": [
-    443,
-    239
-   ]
-  },
-  {
-   "wait": 15
-  },
-  {
-   "shot": "3-helper"
-  },
-  {
-   "key": "return"
-  },
-  {
-   "wait": 8
-  },
-  {
-   "shot": "4-done"
-  },
-  {
-   "key": "return"
-  },
-  {
-   "wait": 3
+   "click": {
+    "button": "Quit"
+   }
   }
  ]
 }

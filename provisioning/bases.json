@@ -1,5 +1,5 @@
 {
- "_note": "Base Systems, one per version: bakes run on them and boot images start from them. Until the os bakes (docs/provisioning/PLAN.md P2) these are the hand-made images in images/; 7.5.5 and 7.6.1 boot on both machines.",
+ "_note": "Base Systems: bakes run on them (a bake's \"os\") and boot images start from them (an image's \"base\"). \"image\": a hand-made image in images/ (until the os bakes replace them, P5); \"snapshot\": an os bake's snapshot in baked/; \"built\": an image build.py makes (images/<name>.img: a System plus the tools layer). 7.5.5 and 7.6.1 boot on both machines.",
  "7.6.1": {
   "image": "macos-7.6.1.img.orig",
   "os": "7.6.1"
@@ -7,5 +7,13 @@
  "7.5.5": {
   "image": "macos-7.5.5.img.orig",
   "os": "7.5.5"
+ },
+ "os-7.6.1": {
+  "snapshot": "os-7.6.1",
+  "os": "7.6.1"
+ },
+ "tools-7.6.1": {
+  "built": "tools-7.6.1",
+  "os": "7.6.1"
  }
 }

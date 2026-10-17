@@ -1,0 +1,197 @@
+{
+ "note": "Mac OS 7.6.1, universal, from Apple's installers: Mac OS 7.6 from its CD (the System module's own Installer, Custom Install 'Universal system for any supported computer'; no OpenDoc, QuickDraw 3D, MacLinkPlus), a reboot, then the 7.6.1 Update floppies from the Legacy CD mounted through Disk Copy; first boot from the new disk alone. BridgeAgent quits itself while each Installer runs (agent_exit): it dies otherwise (PLAN.md, P2 status).",
+ "kind": "os",
+ "version": "7.6.1",
+ "cdroms": [
+  "MacOS 7.6 Retail.iso"
+ ],
+ "media": [
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System Updates:Mac OS 7.6.1 Update:Install 1.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System Updates:Mac OS 7.6.1 Update:Install 2.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System Updates:Mac OS 7.6.1 Update:Install 3.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System Updates:Mac OS 7.6.1 Update:Install 4.img"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Mac OS 7.6:Software Installers:Mac OS 7.6:Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   },
+   "until": {
+    "button": "Agree"
+   },
+   "max": 10
+  },
+  {
+   "agent_exit": true
+  },
+  {
+   "click": {
+    "button": "Agree"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 10
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "shot": "1-destination"
+  },
+  {
+   "popup": [
+    145,
+    132
+   ],
+   "choose": "Custom Install"
+  },
+  {
+   "wait_for": {
+    "text": "Universal system for any supported computer"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "text": "Universal system for any supported computer",
+    "offset": [
+     -12,
+     8
+    ]
+   }
+  },
+  {
+   "shot": "2-universal"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 900
+  },
+  {
+   "shot": "3-installed"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "reboot": true
+  },
+  {
+   "open": "{media}:Install 1.img"
+  },
+  {
+   "wait_for": {
+    "button": "Agree"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Agree"
+   }
+  },
+  {
+   "open": "{media}:Install 2.img"
+  },
+  {
+   "open": "{media}:Install 3.img"
+  },
+  {
+   "open": "{media}:Install 4.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install 4"
+   },
+   "timeout": 60
+  },
+  {
+   "launch": "Install 1:Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Agree"
+   },
+   "timeout": 60
+  },
+  {
+   "agent_exit": true
+  },
+  {
+   "click": {
+    "button": "Agree"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 10
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Quit"
+   },
+   "timeout": 900
+  },
+  {
+   "shot": "4-updated"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}

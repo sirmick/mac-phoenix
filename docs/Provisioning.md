@@ -92,8 +92,17 @@ from guest memory.
 {"click": [121, 162]}
 ```
 
-Pixels are the fallback, for what an app draws itself. Working out a new
-bake:
+Pixels are the fallback, for what an app draws itself.
+
+**Watching.** Every bake and explore session prints a `watch:` URL: the
+guest's web UI on this host's LAN address with `?view` (nothing you do in
+the page reaches the guest). The step being run shows over the screen
+(`/api/annotate`). `--port N` fixes the port, so the URL stays the same
+between sessions. A system error alert on screen fails the step at once
+(with a `bomb.png`), and `--abort` stops a session even mid-wait; edits to
+`guest.py` apply to a running explore session from its next `--do`.
+
+Working out a new bake:
 
 ```bash
 python3 provisioning/bake.py NAME --explore --record   # boot with its media, leave the guest up
