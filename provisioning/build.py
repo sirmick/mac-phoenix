@@ -58,7 +58,7 @@ from containers import Volume, mr  # noqa: E402
 from snapshot import Hfs  # noqa: E402
 
 DEFS = os.path.join(HERE, "images")
-FORMAT = 5                  # bumped when what build.py writes changes: images rebuild
+FORMAT = 6                  # bumped when what build.py writes changes: images rebuild
 
 
 def load_def(name):
@@ -447,13 +447,21 @@ def build(d, force=False, log=print):
         b.warnings.append(f"aliases left pointing outside the image: {', '.join(b.kept)}")
     for w in b.warnings:
         log(f"  warning: {w}")
+    base_info = bake.bases().get(d.get("base") or "", {})
+    if "built" in base_info:                # a built base: its apps and aliases are this image's too
+        try:
+            inherited = bake.load_json(os.path.join(bake.IMAGES, base_info["built"] + ".img.json"))
+            launch = inherited.get("launch", []) + launch
+            b.ids_paths = inherited.get("aliases", [])
+        except (OSError, ValueError):
+            pass
     record = {"name": d["name"], "label": label, "key": key, "base": d.get("base"),
               "made": time.strftime("%Y-%m-%d %H:%M:%S"),
               "snapshots": {s: {"content_hash": m["content_hash"], "os": m.get("os"),
                                 "machines": m.get("machines", [m["arch"]] if m.get("arch") else ["68k"])}
                             for s, m in mans.items()},
               "launch": launch,
-              "aliases": [label + a.decode("mac_roman") for a, _, _ in b.ids],     # rewritten; test_image.py resolves them
+              "aliases": getattr(b, "ids_paths", []) + [label + a.decode("mac_roman") for a, _, _ in b.ids],     # rewritten; test_image.py resolves them
               "warnings": b.warnings}
     with open(record_path(d), "w") as f:
         json.dump(record, f, indent=1, ensure_ascii=False)

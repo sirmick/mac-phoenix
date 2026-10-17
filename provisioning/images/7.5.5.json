@@ -1,0 +1,15 @@
+{
+ "note": "The standard Mac OS 7.5.5 boot disk: tools-7.5.5 plus MacsBug 6.6.3 (in the System Folder; its folder in Utilities). What tests and web UI profiles boot (PLAN.md P3, P5).",
+ "base": "tools-7.5.5",
+ "system_from": [
+  "macsbug-6.6.3"
+ ],
+ "place": [
+  {
+   "snapshot": "macsbug-6.6.3",
+   "take": "MacsBug_6.6.3",
+   "as": "MacsBug 6.6.3",
+   "to": "Utilities"
+  }
+ ]
+}
