@@ -1,8 +1,8 @@
 {
- "note": "The standard System 7.5.5 boot disk: tools-7.5.5 plus Open Transport 1.1.2 (networking, as 7.6.1 has built in) and MacsBug 6.6.3 (in the System Folder; its folder in Utilities). What tests and web UI profiles boot (PLAN.md P3, P5).",
+ "note": "The standard System 7.5.5 boot disk: tools-7.5.5 (with Open Transport 1.1.2) plus TCP/IP active on Ethernet with DHCP (network-dhcp-7.5.5) and MacsBug 6.6.3 (in the System Folder; its folder in Utilities). What tests and web UI profiles boot (PLAN.md P3, P5).",
  "base": "tools-7.5.5",
  "system_from": [
-  "open-transport-1.1.2",
+  "network-dhcp-7.5.5",
   "macsbug-6.6.3"
  ],
  "place": [

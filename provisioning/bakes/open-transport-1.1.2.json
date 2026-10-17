@@ -1,41 +1,8 @@
 {
- "note": "Open Transport 1.1.2 (Legacy CD floppies) for System 7.5.5: Easy Install (Open Transport, AppleTalk, TCP/IP and MacTCP support for all Macintoshes) onto the startup disk, then its restart; the System Folder changes are the snapshot. 7.6.1 has Open Transport built in. The 'all Macintoshes' install puts fat libraries in but leaves System 7.5.3's 1.1 68K libraries behind; with those, 7.5.5 bombs at startup on the PPC machine (illegal instruction), so they are removed (system_remove).",
+ "note": "Open Transport 1.1.2 (Legacy CD floppies, attached as disks) for System 7.5.5, on the bare os-7.5.5 (it's part of tools-7.5.5): Custom Install, both 'for 68K Macintoshes' and 'for all Macintoshes', onto the startup disk, then its restart. Easy Install ('all Macintoshes' only) leaves System 7.5.3's 1.1 68K libraries: on the 68k machine OT then doesn't load, on the PPC machine 7.5.5 bombs at startup (illegal instruction). 7.6.1 has Open Transport built in. It patches the System file and replaces MacTCP DNR and AppleTalk Preferences with its own (without that one OT doesn't load), so those are taken too (system_take): the snapshot is for os-7.5.5 only.",
  "kind": "install",
- "os": "tools-7.5.5",
- "media": [
-  {
-   "file": "Apple Legacy Recovery.iso",
-   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 1.img"
-  },
-  {
-   "file": "Apple Legacy Recovery.iso",
-   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 2.img"
-  },
-  {
-   "file": "Apple Legacy Recovery.iso",
-   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 3.img"
-  },
-  {
-   "file": "Apple Legacy Recovery.iso",
-   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 4.img"
-  }
- ],
+ "os": "os-7.5.5",
  "steps": [
-  {
-   "open": "{media}:Install 1.img"
-  },
-  {
-   "open": "{media}:Install 2.img"
-  },
-  {
-   "open": "{media}:Install 3.img"
-  },
-  {
-   "open": "{media}:Install 4.img"
-  },
-  {
-   "wait": 3
-  },
   {
    "launch": "Install 1:Installer"
   },
@@ -69,7 +36,38 @@
    "max": 8
   },
   {
-   "shot": "1-easy-install"
+   "popup": [
+    145,
+    132
+   ],
+   "choose": "Custom Install"
+  },
+  {
+   "wait_for": {
+    "text": "Open Transport for 68K Macintoshes"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "text": "Open Transport for 68K Macintoshes",
+    "offset": [
+     -12,
+     8
+    ]
+   }
+  },
+  {
+   "click": {
+    "text": "Open Transport for all Macintoshes",
+    "offset": [
+     -12,
+     8
+    ]
+   }
+  },
+  {
+   "shot": "1-custom"
   },
   {
    "click": {
@@ -95,9 +93,27 @@
    "wait_finder": 240
   }
  ],
- "system_remove": [
-  "Extensions:Open Transport 68K Library",
-  "Extensions:Open Tpt ATalk 68K Library",
-  "Extensions:Open Tpt Inet 68K Library"
+ "disks": [
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 1.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 2.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 3.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 4.img"
+  }
+ ],
+ "system_take": [
+  "System",
+  "MacTCP DNR",
+  "Preferences:AppleTalk Preferences"
  ]
 }

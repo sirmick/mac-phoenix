@@ -1,7 +1,8 @@
 {
- "note": "Mac OS 7.5.5 as baked from Apple's installers (os-7.5.5) with the tools every other bake needs in the guest: StuffIt Expander (expand bakes) and Disk Copy (floppy sets, disk images), in Utilities. The base for 7.5.5 bakes (bases.json tools-7.5.5).",
+ "note": "Mac OS 7.5.5 as baked from Apple's installers (os-7.5.5) with the tools every other bake needs in the guest: Open Transport 1.1.2 (networking, as 7.6.1 has built in), StuffIt Expander (expand bakes) and Disk Copy (floppy sets, disk images), in Utilities. The base for 7.5.5 bakes (bases.json tools-7.5.5).",
  "base": "os-7.5.5",
  "system_from": [
+  "open-transport-1.1.2",
   "stuffit-expander-5.5",
   "disk-copy-6.3.3"
  ],

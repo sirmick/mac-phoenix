@@ -1,0 +1,51 @@
+{
+ "note": "As network-dhcp, for System 7.5.5's Open Transport 1.1.2 (its own TCP/IP Preferences)",
+ "kind": "install",
+ "os": "tools-7.5.5",
+ "network": "socket",
+ "system_take": [
+  "Preferences:TCP/IP Preferences"
+ ],
+ "steps": [
+  {
+   "launch": "{system}Control Panels:TCP/IP"
+  },
+  {
+   "wait_for": {
+    "button": "Yes"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Yes"
+   },
+   "until": {
+    "text": "Using DHCP Server",
+    "front": true
+   },
+   "max": 10
+  },
+  {
+   "shot": "1-tcpip"
+  },
+  {
+   "cmd_key": 12
+  },
+  {
+   "wait_for": {
+    "button": "Save"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Save"
+   }
+  },
+  {
+   "wait_app_not": "TCP/IP",
+   "timeout": 30
+  }
+ ]
+}

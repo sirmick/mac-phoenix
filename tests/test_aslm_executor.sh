@@ -48,12 +48,12 @@ done
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
-SOURCE="$STORAGE/images/macos-7.5.5.img"
+SOURCE="$STORAGE/images/tests-7.5.5.img"   # provisioning/images/tests-7.5.5.json
 KIT="$STORAGE/aslm-kit"
 IMAGE_NAME="test-aslm-7.5.5.img"
 IMAGE="$STORAGE/images/$IMAGE_NAME"
-VOLUME="MacOS 7.5.5"
-MPW="$VOLUME:MPW-PR:MPW:MPW Shell"
+VOLUME="Macintosh HD"
+MPW="$VOLUME:MPW:MPW Shell"
 
 if [[ ! -x "$BINARY" ]]; then echo "SKIP: Binary not found: $BINARY"; exit 77; fi
 if [[ ! -f "$SOURCE" ]]; then echo "SKIP: $SOURCE not found"; exit 77; fi
@@ -70,7 +70,7 @@ hfs() { HOME="$HFSHOME" "$@"; }
 cp "$SOURCE" "$IMAGE"
 rm -rf "$STORAGE/executor-systems/$IMAGE_NAME" "$STORAGE/executor-systems/$IMAGE_NAME.clean"
 hfs hmount "$IMAGE" >/dev/null
-if ! hfs hls ":MPW-PR:MPW:MPW Shell" >/dev/null 2>&1; then
+if ! hfs hls ":MPW:MPW Shell" >/dev/null 2>&1; then
     hfs humount >/dev/null 2>&1 || true
     rm -f "$IMAGE"
     echo "SKIP: no MPW Shell on $SOURCE"; exit 77
@@ -210,7 +210,7 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 if alive && [[ "$(app)" != "MPW Shell" ]]; then
-    api launch '{"path":"MacOS 7.5.5:System Folder:Apple Menu Items:Note Pad"}' >/dev/null || true
+    api launch '{"path":"Macintosh HD:System Folder:Apple Menu Items:Note Pad"}' >/dev/null || true
     for _ in $(seq 1 20); do
         [[ "$(app)" == "Note Pad" ]] && break
         sleep 1

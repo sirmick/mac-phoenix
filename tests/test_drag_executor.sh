@@ -43,7 +43,7 @@ STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
 if [[ -n "$DISK_OVERRIDE" ]]; then
     DISK="$DISK_OVERRIDE"
 else
-    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" macos-7.5.5 2>/dev/null || true)}"
+    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.5.5 2>/dev/null || true)}"
 fi
 
 if [[ ! -x "$BINARY" ]]; then echo "SKIP: Binary not found: $BINARY"; exit 77; fi
@@ -119,7 +119,7 @@ sleep 2
 [[ -e "$CLIPPING" ]] && { echo "FAIL: a clipping is there before the drag: $CLIPPING"; exit 1; }
 
 echo "Launching SimpleText..."
-LAUNCH=$(api launch '{"path":"MacOS 7.5.5:SimpleText"}' || echo '{}')
+LAUNCH=$(api launch '{"path":"Macintosh HD:SimpleText"}' || echo '{}')
 echo "$LAUNCH" | grep -q '"success": true' || { echo "FAIL: launch"; echo "$LAUNCH"; exit 1; }
 for i in $(seq 1 30); do
     APP=$(curl -sf "http://localhost:$PORT/api/app" | grep -oP '"app"\s*:\s*"\K[^"]+' || true)

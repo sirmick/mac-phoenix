@@ -4,7 +4,7 @@
 #
 # Usage: tests/launch_probe.sh --core NAME [--jit] [--port N] [--log FILE] [--path "HD:App"]
 set -uo pipefail
-CORE=mame-ppc; PORT=18230; LOG=/tmp/launch_probe.log; EXTRA=(); APPPATH="MacOS 7.5.5:SimpleText"
+CORE=mame-ppc; PORT=18230; LOG=/tmp/launch_probe.log; EXTRA=(); APPPATH="Macintosh HD:SimpleText"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --core) CORE="$2"; shift 2 ;;
@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DISK=$(bash "$HERE/lib/refresh_test_disk.sh" macos-7.5.5)
+DISK=$(bash "$HERE/lib/refresh_test_disk.sh" tests-7.5.5)
 ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
 "${MACEMU_BINARY:-$HERE/../build/mac-phoenix}" --backend kpx --core "$CORE" "${EXTRA[@]}" --timeout 120 \
     --config /dev/null --dismiss-shutdown-dialog --headless-http --port "$PORT" \

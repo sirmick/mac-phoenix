@@ -98,7 +98,7 @@ export async function spawnEmulator(opts?: { timeoutSeconds?: number; extraArgs?
     '--screen', '640x480',
     '--ram', '128',
     '--dismiss-shutdown-dialog',
-    '--disk', process.env.MACEMU_DISK || refreshTestDisk('macos-7.5.5'),
+    '--disk', process.env.MACEMU_DISK || refreshTestDisk('tests-7.5.5'),
   ];
   if (opts?.extraArgs) {
     args.push(...opts.extraArgs);

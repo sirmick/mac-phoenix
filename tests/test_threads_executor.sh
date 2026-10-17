@@ -44,10 +44,11 @@ done
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
-SOURCE="$STORAGE/images/macos-7.5.5.img"
+SOURCE="$STORAGE/images/tests-7.5.5.img"   # provisioning/images/tests-7.5.5.json
 IMAGE_NAME="test-threads-7.5.5.img"
 IMAGE="$STORAGE/images/$IMAGE_NAME"
-FRONTIER="MacOS 7.5.5:Frontier 5.0.1:UserLand Frontier™"
+rm -rf "$STORAGE/executor-systems/$IMAGE_NAME" "$STORAGE/executor-systems/$IMAGE_NAME.clean"   # a new System each run
+FRONTIER="Macintosh HD:Frontier 5.0.1:UserLand Frontier™"
 
 if [[ ! -x "$BINARY" ]]; then echo "SKIP: Binary not found: $BINARY"; exit 77; fi
 if [[ ! -f "$SOURCE" ]]; then echo "SKIP: $SOURCE not found"; exit 77; fi
@@ -165,7 +166,7 @@ for _ in $(seq 1 20); do
     sleep 1
 done
 if alive && [[ "$(app)" != *Frontier* ]]; then
-    api launch '{"path":"MacOS 7.5.5:System Folder:Apple Menu Items:Note Pad"}' >/dev/null || true
+    api launch '{"path":"Macintosh HD:System Folder:Apple Menu Items:Note Pad"}' >/dev/null || true
     for _ in $(seq 1 20); do
         [[ "$(app)" == "Note Pad" ]] && break
         sleep 1

@@ -60,12 +60,14 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -z "$DISK" ]]; then
+    # The baked 7.x test disks (provisioning/images/tests-*.json); 9.0.4 is
+    # still the hand-made baseline.
     if [[ -n "$OS_VERSION" ]]; then
-        IMG_BASE="macos-${OS_VERSION}"
+        case "$OS_VERSION" in 7.5.5|7.6.1) IMG_BASE="tests-${OS_VERSION}" ;; *) IMG_BASE="macos-${OS_VERSION}" ;; esac
     elif [[ "$ARCH" == "ppc" ]]; then
         IMG_BASE="macos-9.0.4"
     else
-        IMG_BASE="macos-7.5.5"
+        IMG_BASE="tests-7.5.5"
     fi
     DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "$IMG_BASE")}"
 fi

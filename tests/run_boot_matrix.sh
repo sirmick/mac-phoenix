@@ -37,8 +37,8 @@ echo "label,backend,core,jit,disk,result,phase,elapsed_s,checkloads,screenshot" 
 
 ROM_M68K="${MACEMU_ROM_M68K:-$HOME/roms/quadra.rom}"
 ROM_PPC="${MACEMU_ROM_PPC:-$HOME/storage/roms/g3.rom}"
-DISK_755="${MACEMU_DISK_755:-$HOME/storage/images/macos-7.5.5.img}"
-DISK_761="${MACEMU_DISK_761:-$HOME/storage/images/macos-7.6.1.img}"
+DISK_755="${MACEMU_DISK_755:-$(bash "$(dirname "$0")/lib/refresh_test_disk.sh" 7.5.5)}"
+DISK_761="${MACEMU_DISK_761:-$(bash "$(dirname "$0")/lib/refresh_test_disk.sh" 7.6.1)}"
 
 # Cells: label|backend|core|jitflag|rom|disk|timeout|port
 # core is a --core name, "" for the backend's default (uae, kpx).

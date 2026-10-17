@@ -1,0 +1,67 @@
+{
+ "note": "MacPerl 5.2.0r4 as a classic 68k application (Installer VISE Lite's Easy Install), for the test disks: the guest tests always ran this build, and Executor on the mame-68k core hangs running the fat one (PLAN.md P5). The dev disks have the fat build (macperl-5.2.0r4).",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "Mac_Perl_520r4_appl.sit",
+   "take": "Mac_Perl_520r4_appl",
+   "as": "MacPerl Installer"
+  }
+ ],
+ "expect": [
+  "MacPerl ƒ"
+ ],
+ "launch": [
+  "MacPerl ƒ:MacPerl"
+ ],
+ "steps": [
+  {
+   "launch": "{media}:MacPerl Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Install",
+    "exact": true
+   },
+   "max": 10
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "The software was successfully installed."
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}

@@ -1,0 +1,18 @@
+{
+ "note": "What the guest tests boot (tests/lib/refresh_test_disk.sh tests-7.6.1: a copy each run): the standard 7.6.1 disk plus the test kit at the top of Macintosh HD: MacPerl as a classic 68k app (the guest suite, Finder and keyboard tests), Frontier (threads), MPW (ASLM).",
+ "base": "standard-7.6.1",
+ "system_from": [
+  "macperl-5.2.0r4-68k"
+ ],
+ "place": [
+  {
+   "snapshot": "macperl-5.2.0r4-68k"
+  },
+  {
+   "snapshot": "frontier-5.0.1"
+  },
+  {
+   "snapshot": "mpw-3.4.2"
+  }
+ ]
+}

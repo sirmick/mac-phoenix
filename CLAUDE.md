@@ -53,7 +53,7 @@ npx playwright test
 ctest --test-dir build -L executor
 
 # MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
-tools/mpw/mpw setup                    # once: MPW disk from data.img's E.T.O. #22
+tools/mpw/mpw setup                    # once: MPW disk + System, built from snapshots
 tools/mpw/mpw build tests/guest/ot     # build.mpw; products -> DIR/build/*.bin
 tools/mpw/mpw run 'SC -help'           # exit code = {Status}; mpw stop when done
 
@@ -309,7 +309,7 @@ machine.
 
 ## ROM
 
-Tests expect a Quadra 650 ROM at `~/roms/quadra.rom` and disk image at `~/storage/images/7.6.img`. Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `cmake -B build -DTEST_ROM=/path/to/rom`. ROMs and disk images are not distributed.
+Tests expect a Quadra 650 ROM at `~/roms/quadra.rom`, a G3 ROM at `~/storage/roms/g3.rom`, and boot copies (`tests/lib/refresh_test_disk.sh`) of the images `provisioning/build.py` makes: `tests-7.5.5`, `tests-7.6.1` (built on demand from the snapshots in `~/storage/baked`); 9.0.4 and 6.0.8 are still the hand-made `.orig` baselines. Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `cmake -B build -DTEST_ROM=/path/to/rom`. ROMs and disk images are not distributed.
 
 ## Optional Codec Dependencies
 

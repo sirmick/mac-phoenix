@@ -72,7 +72,7 @@ if [[ "$BACKEND" != "executor" ]]; then
     ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
     [[ -f "$ROM" ]] || { echo "SKIP: ROM not found: $ROM"; exit 77; }
 fi
-DISK="${MACEMU_DISK:-$(bash tests/lib/refresh_test_disk.sh macos-7.5.5)}"
+DISK="${MACEMU_DISK:-$(bash tests/lib/refresh_test_disk.sh tests-7.5.5)}"
 [[ -f "$DISK" ]] || { echo "SKIP: Disk image not found: $DISK"; exit 77; }
 
 # --- Build the application ---------------------------------------------------

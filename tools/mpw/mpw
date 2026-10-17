@@ -7,7 +7,8 @@ through BridgeAgent (POST /api/exec); a project directory on the host is
 mirrored into the session's Host volume, and what MPW builds comes back as
 MacBinary.
 
-    mpw setup                     build the MPW disk from E.T.O. #22 (data.img)
+    mpw setup                     build the MPW disk and its System from snapshots
+                                  (provisioning/build.py mpw tests-7.5.5; --toast CD: from the CD)
     mpw start | stop | status     the session (other commands start it;
                                   start --emu=FLAG passes emulator flags)
     mpw run 'COMMAND' [-C DIR]    run an MPW command; exit code = {Status}
@@ -23,7 +24,7 @@ its products in a comment line "# products: NAME ...". Without build.mpw,
 "Make -f MakeFile" runs and its commands are executed.
 
 Environment: MPW_STATE (default ~/.cache/mac-phoenix/mpw), MPW_PORT (18390),
-MPW_SYSTEM (mpw-7.5.5.img: the copy of macos-7.5.5.img the session runs on),
+MPW_SYSTEM (mpw-7.5.5.img: the copy of tests-7.5.5.img the session runs on),
 MACPHOENIX_BINARY, MACEMU_STORAGE (~/storage). See docs/MPW.md.
 """
 import argparse
@@ -48,8 +49,10 @@ STATE = os.environ.get("MPW_STATE", os.path.expanduser("~/.cache/mac-phoenix/mpw
 PORT = int(os.environ.get("MPW_PORT", "18390"))
 BINARY = os.environ.get("MACPHOENIX_BINARY", os.path.join(ROOT, "build", "mac-phoenix"))
 
-MPW_DISK = os.path.join(STORAGE, "images", "mpw-eto22.img")
-SYSTEM_SOURCE = os.path.join(STORAGE, "images", "macos-7.5.5.img")
+# Both built from snapshots (provisioning/images/mpw.json, tests-7.5.5.json):
+# `mpw setup` builds them.
+MPW_DISK = os.path.join(STORAGE, "images", "mpw.img")
+SYSTEM_SOURCE = os.path.join(STORAGE, "images", "tests-7.5.5.img")
 SYSTEM_NAME = os.environ.get("MPW_SYSTEM", "mpw-7.5.5.img")  # the session's own copy
 HOST = os.path.join(STATE, "host")     # the Host volume
 WORK = os.path.join(HOST, ".mpw")      # per-command scripts, output, status
@@ -122,13 +125,16 @@ def alive(s):
 
 
 def ensure_system():
-    """The session's System image: a copy of 7.5.5, so the original is never
-    mounted read-write."""
+    """The session's System image: a copy of the 7.5.5 test disk, so the
+    original is never mounted read-write; made again (and Executor's System
+    Folder extracted from it again) when the source is newer."""
     dst = os.path.join(STORAGE, "images", SYSTEM_NAME)
-    if not os.path.exists(dst):
-        if not os.path.exists(SYSTEM_SOURCE):
-            raise MPWError("no %s to copy the System from" % SYSTEM_SOURCE)
+    if not os.path.exists(SYSTEM_SOURCE):
+        raise MPWError("no %s to copy the System from (mpw setup)" % SYSTEM_SOURCE)
+    if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(SYSTEM_SOURCE):
         subprocess.check_call(["cp", "--reflink=auto", SYSTEM_SOURCE, dst])
+        for d in (dst, dst + ".clean"):
+            shutil.rmtree(os.path.join(STORAGE, "executor-systems", os.path.basename(d)), ignore_errors=True)
     return dst
 
 
@@ -423,10 +429,14 @@ def gcc_messages(out, mac_dir, host_dir):
 # ---- commands -----------------------------------------------------------
 
 def cmd_setup(args):
-    if os.path.exists(MPW_DISK) and not args.force:
-        log("%s exists (use --force to rebuild)" % MPW_DISK)
+    """The MPW disk and the System to run it on, built from snapshots
+    (provisioning/build.py; the MPW snapshot comes from E.T.O. #22). With
+    --toast: the old way, the MPW disk straight from the CD."""
+    if not args.toast:
+        subprocess.check_call([sys.executable, os.path.join(ROOT, "provisioning", "build.py"),
+                               "mpw", "tests-7.5.5"] + (["--force"] if args.force else []))
         return 0
-    toast = args.toast or os.path.join(STORAGE, "eto", "eto22.toast")
+    toast = args.toast
     if not os.path.exists(toast):
         data = os.path.join(STORAGE, "images", "data.img")
         if not os.path.exists(data):

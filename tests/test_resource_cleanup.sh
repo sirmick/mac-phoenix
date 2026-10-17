@@ -15,7 +15,7 @@ SIG_PORT=18075
 TIMEOUT=15
 BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
+DISK="${MACEMU_DISK:-$(bash "$(dirname "$0")/lib/refresh_test_disk.sh" tests-7.5.5)}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

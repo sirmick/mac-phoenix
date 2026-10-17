@@ -334,6 +334,30 @@ static OSErr find_app_for_creator(OSType creator, FSSpec *appSpec)
     }
 }
 
+/* Depth-limited walk of one folder for an application with this creator
+ * (PBGetCatInfo works everywhere, PBCatSearch not under Executor). */
+static Boolean walk_for_app(short vref, long dirID, OSType creator, int depth, FSSpec *appSpec)
+{
+    short index;
+    for (index = 1; ; index++) {
+        Str63 name;
+        CInfoPBRec pb;
+        memset(&pb, 0, sizeof(pb));
+        pb.hFileInfo.ioNamePtr = name;
+        pb.hFileInfo.ioVRefNum = vref;
+        pb.hFileInfo.ioDirID = dirID;
+        pb.hFileInfo.ioFDirIndex = index;
+        if (PBGetCatInfoSync(&pb) != noErr) return false;
+        if (pb.hFileInfo.ioFlAttrib & 0x10) {
+            if (depth > 0 && walk_for_app(vref, pb.dirInfo.ioDrDirID, creator, depth - 1, appSpec))
+                return true;
+        } else if (pb.hFileInfo.ioFlFndrInfo.fdType == 'APPL' &&
+                   pb.hFileInfo.ioFlFndrInfo.fdCreator == creator) {
+            return FSMakeFSSpec(vref, dirID, name, appSpec) == noErr;
+        }
+    }
+}
+
 /* An application with this creator, by a catalog search of every volume:
  * for apps the desktop database doesn't know yet (copied onto a disk
  * outside the Finder: a System Folder built from snapshots starts with an
@@ -370,6 +394,9 @@ static OSErr search_app_for_creator(OSType creator, FSSpec *appSpec)
         csp.ioOptBufSize    = sizeof(buffer);
         OSErr err = PBCatSearchSync(&csp);
         if ((err == noErr || err == eofErr) && csp.ioActMatchCount > 0)
+            return noErr;
+        if (walk_for_app(vpb.volumeParam.ioVRefNum, 2 /* root */, creator, 3, appSpec))   /* no catalog
+                                                    search (Executor), or it missed: walk the folders */
             return noErr;
     }
 }

@@ -34,8 +34,8 @@ cd "$PROJECT_ROOT"
 STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
 MPW=tools/mpw/mpw
 TOOL=tests/guest/ot/OTTest.bin
-[[ -f "$STORAGE/images/mpw-eto22.img" ]] || { echo "SKIP: no MPW disk (tools/mpw/mpw setup)"; exit 77; }
-[[ -f "$STORAGE/images/macos-7.5.5.img" ]] || { echo "SKIP: no macos-7.5.5.img"; exit 77; }
+[[ -f "$STORAGE/images/mpw.img" ]] || { echo "SKIP: no MPW disk (tools/mpw/mpw setup)"; exit 77; }
+[[ -f "$STORAGE/images/tests-7.5.5.img" ]] || { echo "SKIP: no tests-7.5.5.img (tools/mpw/mpw setup)"; exit 77; }
 [[ -x build/mac-phoenix ]] || { echo "SKIP: no build/mac-phoenix"; exit 77; }
 [[ -f "$TOOL" ]] || { echo "FAIL: $TOOL missing"; exit 1; }
 

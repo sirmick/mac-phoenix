@@ -58,7 +58,7 @@ from containers import Volume, mr  # noqa: E402
 from snapshot import Hfs  # noqa: E402
 
 DEFS = os.path.join(HERE, "images")
-FORMAT = 6                  # bumped when what build.py writes changes: images rebuild
+FORMAT = 8                  # bumped when what build.py writes changes: images rebuild
 
 
 def load_def(name):
@@ -104,6 +104,7 @@ def image_key(d, mans):
         h.update(bake.file_md5(bake.base_image(d["base"])[0]).encode())
     for s in sorted(mans):
         h.update(mans[s]["content_hash"].encode())
+        h.update(json.dumps(mans[s].get("system_remove", [])).encode())   # not in the content hash
     return h.hexdigest()
 
 
@@ -384,10 +385,11 @@ class Builder:
         if man.get("system_remove"):            # what the product supersedes but leaves behind
             self.hfs.mount(image)
             try:
-                for rel in man["system_remove"]:
+                for rel in sorted(man["system_remove"], key=lambda r: -r.count(":")):   # deepest first
                     path = sysf + b":" + mr(rel)
                     if self.hfs.exists(path):
-                        self.hfs.run("hdel", path)
+                        if self.hfs.run("hdel", path, check=False) == b"" and self.hfs.exists(path):
+                            self.hfs.run("hrmdir", path, check=False)                     # a folder
                         removed.append(rel)
             finally:
                 self.hfs.umount()
@@ -435,17 +437,6 @@ def build(d, force=False, log=print):
                 log(f"  ({s} was baked on {mans[s]['os']})")
             b.system(part, s, mans[s])
         b.alias_ids(part)
-        if d.get("base") and d.get("place"):
-            # Apps put on a System disk aren't in its desktop database (which
-            # is how a document's app is found, the bridge's "open" too):
-            # without one the Finder rebuilds it at the first boot.
-            b.hfs.mount(part)
-            try:
-                for f in (b":Desktop DB", b":Desktop DF"):
-                    if b.hfs.exists(f):
-                        b.hfs.run("hdel", f)
-            finally:
-                b.hfs.umount()
     except BaseException:
         if os.path.exists(part):
             os.unlink(part)

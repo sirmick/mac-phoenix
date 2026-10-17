@@ -35,7 +35,9 @@ disk count as installed), "launch" (the product's apps, relative to the
 snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
 "needs_serial", "machines"), "settle" (seconds after boot), "system_remove"
 (System Folder files the install supersedes but leaves behind: the build
-deletes them where the snapshot's System Folder part goes).
+deletes them where the snapshot's System Folder part goes), "system_take"
+(System Folder files to take even if only changed: a control panel's
+settings), "network" (the guest's --network: "socket" for net-bridge).
 
 Strings in steps may use {target}, {media}, {boot} (volume names) and
 {system} (the boot disk's System Folder path). A step with "backend"
@@ -164,10 +166,10 @@ def base_image(os_name):
         if not os.path.exists(path):
             sys.exit(f"base {os_name}: {path} not baked yet (bake.py {b['snapshot']})")
         return path, b
-    if "built" in b:
+    if "built" in b:                        # built (or rebuilt) if it isn't up to date
         path = os.path.join(IMAGES, b["built"] + ".img")
-        if not os.path.exists(path):
-            subprocess.run([sys.executable, os.path.join(HERE, "build.py"), b["built"]], check=True)
+        subprocess.run([sys.executable, os.path.join(HERE, "build.py"), b["built"]], check=True,
+                       stdout=subprocess.DEVNULL)
         return path, b
     return os.path.join(IMAGES, b["image"]), b
 
@@ -324,6 +326,8 @@ class Session:
     def __init__(self, bake, machine, port, log=print, extra=()):
         self.bake, self.machine, self.log = bake, machine, log
         self.extra = list(extra)                # more emulator arguments (--no-text-feed ...)
+        if bake.get("network"):                 # the guest networked (e.g. "socket": net-bridge, DHCP)
+            self.extra += ["--network", bake["network"]]
         self.backend = BACKENDS[machine]
         self.os = bake.get("os", DEFAULT_OS)
         self.work = tempfile.mkdtemp(prefix=f"bake.{bake['name']}@{machine}.", dir=work_root())
@@ -520,18 +524,26 @@ class Session:
         new or changed System Folder files."""
         work = self.work
         hfs = Hfs(work)
-        before = sysfolder(hfs, self.base_path)
-        after = sysfolder(hfs, self.boot)
+        before = sysfolder_content(hfs, self.base_path, work)
+        take = {mr(t) for t in self.bake.get("system_take", [])}
+        after = sysfolder_content(hfs, self.boot, work)
         added, changed, ignored = [], [], []
         for p, line in sorted(after.items()):
             if line is None or before.get(p) == line:
                 continue
             leaf = p.rsplit(b":", 1)[1]
             prefs = p.startswith(b":System Folder:Preferences:")
-            if leaf in NEVER or any(n in p for n in NOISE) or (prefs and (p in before or leaf in PREFS_NOISE)):
+            if p[len(b":System Folder:"):] in take:          # named by the bake: always taken
+                (added if p not in before else changed).append(p)
+            elif leaf in NEVER or any(n in p for n in NOISE) or (prefs and (p in before or leaf in PREFS_NOISE)):
                 ignored.append(p)
             else:
                 (added if p not in before else changed).append(p)
+        # What the install took out of the System Folder (an installer moving
+        # what it replaces aside: OT's the classic networking): the build
+        # removes it too.
+        removed = sorted(p for p in before
+                         if p not in after and not any(n in p for n in NOISE) and p.rsplit(b":", 1)[1] not in NEVER)
         items = Volume(self.target, work).export(":*", tempfile.mkdtemp(dir=work))
         dropped = TOP_NOISE | self.exclude
         if self.bake.get("archive"):            # an .hqx expands to a .sit and then a folder
@@ -574,11 +586,15 @@ class Session:
                 "recipe_md5": hashlib.md5(json.dumps(bake, sort_keys=True).encode()).hexdigest(),
                 "media": {n: media_entry(n).get("md5") for n in media_names(bake)},
                 "launch": bake.get("launch", []), "made": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "system_remove": bake.get("system_remove", []),
+                "system_remove": bake.get("system_remove", []) + [
+                    r.decode("mac_roman")[len(":System Folder:"):] for r in removed
+                    if r.decode("mac_roman")[len(":System Folder:"):] not in bake.get("system_remove", [])],
                 "excluded": [e.decode("mac_roman") for e in excluded],
                 "system_ignored": [p.decode("mac_roman") for p in ignored]}
         os.makedirs(os.path.dirname(out), exist_ok=True)
         meta = snapshot.write(work, out, bake["name"], items, system, meta)
+        for p in removed:
+            self.log(f"  System Folder removed: {p.decode('mac_roman')}")
         for p in added:
             self.log(f"  System Folder added: {p.decode('mac_roman')}")
         for p in changed:
@@ -596,6 +612,23 @@ def system_version(macbinary):
         if t == b"vers" and i == 1:
             return payload[7:7 + payload[6]].decode("mac_roman")
     return None
+
+
+def sysfolder_content(hfs, image, work):
+    """{path: (type, creator, flags, data MD5, rsrc MD5) or None for a folder}
+    for :System Folder, recursively. By content, not the listing: an installer
+    copies files with their original dates, so a replaced file of the same
+    size (Open Transport's AppleTalk Preferences) looks unchanged there."""
+    hfs.mount(image)
+    try:
+        entries = snapshot.listing(hfs, b":System Folder", work)
+    finally:
+        hfs.umount()
+    out = {}
+    for e in entries:
+        p = b":System Folder:" + e["path"].encode("mac_roman")
+        out[p] = None if e.get("folder") else (e["type"], e["creator"], e["flags"], e["data"], e["rsrc"])
+    return out
 
 
 def sysfolder(hfs, image):

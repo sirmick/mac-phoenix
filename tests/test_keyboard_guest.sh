@@ -43,7 +43,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -n "$DISK_OVERRIDE" ]]; then
     DISK="$DISK_OVERRIDE"
 else
-    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" macos-7.5.5 2>/dev/null || true)}"
+    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.5.5 2>/dev/null || true)}"
 fi
 
 DISK_FLAGS=(--disk "$DISK")

@@ -41,7 +41,7 @@ if [[ -z "${ROM:-}" ]]; then
     fi
 fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" macos-7.5.5)}"
+DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.5.5)}"
 
 if [[ ! -x "$BINARY" ]]; then
     echo "SKIP: Binary not found: $BINARY"
