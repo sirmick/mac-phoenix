@@ -28,6 +28,7 @@ void test_extfs(void);
 void test_audio(void);
 void test_applescript_dates(void);
 void test_network(void);
+void test_network_deep(void);
 void test_keyboard(void);
 
 #endif

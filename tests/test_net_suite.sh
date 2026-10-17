@@ -2,8 +2,8 @@
 #
 # test_net_suite.sh - Run the deeper guest networking test suite.
 #
-# Boots the emulator with --network socket --bridge, dispatches
-# tests/guest/GuestNetTest.pl to MacPerl, waits for
+# Boots the emulator with --network socket --bridge, launches
+# MacPhoenixSuite (tests/guest/suite) with its netdeep section, waits for
 # Host:net_results.txt, and asserts on the PASS lines.
 #
 # Targets the data paths that MacPhoenixSuite's network section doesn't:
@@ -77,9 +77,8 @@ if [[ ! -x "$BINARY" ]]; then echo "SKIP: Binary not found: $BINARY"; exit 77; f
 if [[ ! -f "$ROM" ]]; then     echo "SKIP: ROM not found: $ROM"; exit 77; fi
 if [[ ! -f "$DISK" ]]; then    echo "SKIP: Disk image not found: $DISK"; exit 77; fi
 
-PERL_SCRIPT="$GUEST_DIR/GuestNetTest.pl"
-PERL_INSTALL="$GUEST_DIR/install_perl_test.py"
-[[ -f "$PERL_SCRIPT" ]] || { echo "SKIP: $PERL_SCRIPT not found"; exit 77; }
+SUITE_APP="$GUEST_DIR/suite/MacPhoenixSuite.bin"
+[[ -f "$SUITE_APP" ]] || { echo "SKIP: $SUITE_APP not built"; exit 77; }
 
 # Host must reach the same external hosts the guest will probe.
 if ! getent hosts example.com >/dev/null 2>&1; then
@@ -92,7 +91,8 @@ exec 3>&- 2>/dev/null || true
 
 # --- Setup ---
 EXTFS_DIR=$(mktemp -d /tmp/mactest-net-extfs.XXXXXX)
-python3 "$PERL_INSTALL" "$PERL_SCRIPT" "$EXTFS_DIR" "GuestNetTest.pl"
+python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
+printf 'net_results.txt\rnetdeep\r' > "$EXTFS_DIR/suite.cfg"
 LOG="/tmp/mactest_net_$$.log"
 
 cleanup() {
@@ -161,20 +161,9 @@ done
 
 sleep 3  # Finder + MacTCP DHCP settle.
 
-# Dispatch via /api/script ('misc'/'dosc'), as test_guest_suite.sh does:
-# /api/launch with open=true sends a generic 'odoc', and MacPerl only
-# opens the script in an editor window. The stub does the \r→\n fix
-# MacPerl needs to install sub defs from a slurped Mac-text-mode file.
-PERL_STUB='open(R,"<Host:GuestNetTest.pl")||die "open: $!";local $/;$c=<R>;close R;$c=~tr/\r/\n/;eval $c;die $@ if $@;'
-PAYLOAD=$(python3 -c '
-import json, sys
-print(json.dumps({"creator": "McPL", "script": sys.argv[1]}))
-' "$PERL_STUB")
-
-echo "Dispatching GuestNetTest.pl via MacPerl..."
-LAUNCH=$(curl -sf --max-time 15 -X POST "http://localhost:$PORT/api/script" \
-    -H "Content-Type: application/json" \
-    -d "$PAYLOAD" || echo '{"success":false}')
+echo "Launching MacPhoenixSuite (netdeep)..."
+LAUNCH=$(curl -sf --max-time 30 -X POST "http://localhost:$PORT/api/launch" \
+    -H "Content-Type: application/json" -d '{"path":"Host:MacPhoenixSuite"}' || echo '{"success":false}')
 echo "$LAUNCH" | grep -q '"success": true' \
     || { echo "FAIL: launch response: $LAUNCH"; exit 1; }
 

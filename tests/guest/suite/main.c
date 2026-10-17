@@ -66,6 +66,7 @@ static const struct
     { "audio", test_audio },
     { "applescript", test_applescript_dates },
     { "network", test_network },
+    { "netdeep", test_network_deep },
     { "keyboard", test_keyboard },
 };
 
