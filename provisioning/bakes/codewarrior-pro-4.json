@@ -24,10 +24,20 @@
    "shot": "1-installer"
   },
   {
-   "click": [
-    121,
-    162
-   ]
+   "wait_for": {
+    "text": "Full MacOS Install",
+    "front": true
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "text": "Full MacOS Install",
+    "offset": [
+     -13,
+     7
+    ]
+   }
   },
   {
    "popup": [
@@ -91,5 +101,6 @@
  ],
  "prefer": {
   "CodeWarrior Pro 4:Installer Log File": 0
- }
+ },
+ "os": "tools-7.6.1"
 }

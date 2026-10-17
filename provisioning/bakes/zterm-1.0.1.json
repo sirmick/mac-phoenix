@@ -11,5 +11,6 @@
    "no_quit": true,
    "needs_serial_port": true
   }
- ]
+ ],
+ "os": "tools-7.6.1"
 }

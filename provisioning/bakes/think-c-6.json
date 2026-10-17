@@ -1,5 +1,5 @@
 {
- "note": "THINK C 6.0, Apple Installer from its four floppy images, mounted by Disk Copy in the guest (ejectable, as the installer expects); it installs into a folder named Development",
+ "note": "THINK C 6.0: its four floppies through Disk Copy, Apple's Installer 3.4.3 (Easy Install onto the target), by name; it installs into a folder named Development",
  "kind": "install",
  "media": [
   {
@@ -14,87 +14,74 @@
  "launch": [
   "Development:THINK C:THINK Project Manager"
  ],
+ "os": "tools-7.6.1",
  "steps": [
   {
    "open": "{media}:THINK C 6:disk 1.img"
   },
   {
-   "wait": 8
-  },
-  {
    "open": "{media}:THINK C 6:disk 2.img"
-  },
-  {
-   "wait": 8
   },
   {
    "open": "{media}:THINK C 6:disk 3.img"
   },
   {
-   "wait": 8
-  },
-  {
    "open": "{media}:THINK C 6:disk 4.img"
   },
   {
-   "wait": 8
-  },
-  {
-   "wait": 5
-  },
-  {
-   "shot": "1-diskcopy-licence"
-  },
-  {
-   "click": [
-    508,
-    389
-   ]
-  },
-  {
-   "wait": 15
-  },
-  {
-   "shot": "2-mounted"
+   "wait_for": {
+    "text": "disk 4",
+    "exact": true
+   },
+   "timeout": 60
   },
   {
    "launch": "disk 1:Launch me to install"
   },
   {
-   "wait": 12
+   "agent_exit": true
   },
   {
-   "key": "return"
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 10
   },
   {
-   "wait": 5
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true,
+    "outside_controls": true
+   },
+   "max": 8
   },
   {
-   "click": [
-    486,
-    307
-   ]
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
   },
   {
-   "wait": 3
+   "wait_for": {
+    "text": "Installation",
+    "front": true
+   },
+   "timeout": 600
   },
   {
-   "shot": "3-target"
+   "click": {
+    "button": "Quit"
+   }
   },
   {
-   "key": "return"
-  },
-  {
-   "wait": 75
-  },
-  {
-   "shot": "4-done"
-  },
-  {
-   "key": "return"
-  },
-  {
-   "wait": 3
+   "reboot": true
   }
  ]
 }

@@ -1,5 +1,5 @@
 {
- "note": "Symantec C++ 7, its installer from six DiskDup+ floppy images mounted by Disk Copy in the guest; it installs into a folder named Development",
+ "note": "Symantec C++ 7: its floppies (raw, converted to Disk Copy 4.2) through Disk Copy, Apple's Installer (Easy Install onto the target), by name; it installs into a folder named Development",
  "kind": "install",
  "media": [
   {
@@ -20,91 +20,77 @@
    "open": "{media}:Symantec C++ 7:Disk 1.dsk"
   },
   {
-   "wait": 10
-  },
-  {
-   "shot": "1-diskcopy-licence"
-  },
-  {
-   "click": [
-    508,
-    389
-   ]
-  },
-  {
-   "wait": 12
-  },
-  {
    "open": "{media}:Symantec C++ 7:Disk 2.dsk"
-  },
-  {
-   "wait": 8
   },
   {
    "open": "{media}:Symantec C++ 7:Disk 3.dsk"
   },
   {
-   "wait": 8
-  },
-  {
    "open": "{media}:Symantec C++ 7:Disk 4.dsk"
-  },
-  {
-   "wait": 8
   },
   {
    "open": "{media}:Symantec C++ 7:Disk 5.dsk"
   },
   {
-   "wait": 8
-  },
-  {
    "open": "{media}:Symantec C++ 7:AppleScript Setup.dsk"
-  },
-  {
-   "wait": 8
-  },
-  {
-   "shot": "2-mounted"
-  },
-  {
-   "launch": "Disk 1:Installer"
-  },
-  {
-   "wait": 12
-  },
-  {
-   "key": "return"
   },
   {
    "wait": 5
   },
   {
-   "click": [
-    486,
-    307
-   ]
+   "launch": "Disk 1:Installer"
   },
   {
-   "wait": 3
+   "agent_exit": true
   },
   {
-   "shot": "3-target"
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 10
   },
   {
-   "key": "return"
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true,
+    "outside_controls": true
+   },
+   "max": 8
   },
   {
-   "wait": 120
+   "shot": "1-target"
   },
   {
-   "shot": "4-done"
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
   },
   {
-   "key": "return"
+   "wait_for": {
+    "text": "Installation",
+    "front": true
+   },
+   "timeout": 900
   },
   {
-   "wait": 3
+   "shot": "2-done"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "reboot": true
   }
- ]
+ ],
+ "os": "tools-7.6.1"
 }

@@ -1,12 +1,11 @@
 {
  "note": "System 7.5.5 with what the development tools put in the System Folder (shared libraries, MacsBug, first-launch preferences); the tools themselves are on Development.",
- "base": "7.5.5",
+ "base": "standard-7.5.5",
  "system_from": [
   "codewarrior-pro-4",
   "macperl-5.2.0r4",
   "macpython-1.5.2",
-  "disk-copy-6.3.3",
-  "macsbug-6.6.3"
+  "disk-copy-6.3.3"
  ],
  "aliases_to": "Development"
 }

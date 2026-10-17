@@ -1,5 +1,5 @@
 {
- "note": "HyperCard 2.4.1, Apple's Mac OS Install from the CD image: HyperCard only (not its AppleScript 1.1.1, Speech 1.5 or QuickTime 3.0 System upgrades), onto the System disk",
+ "note": "HyperCard 2.4.1, Apple's Mac OS Install from the CD image: HyperCard only (AppleScript 1.1.1, Speech 1.5 and QuickTime 3.0 unticked by name), onto the System disk",
  "kind": "install",
  "disks": [
   {
@@ -14,90 +14,80 @@
  "launch": [
   "HyperCard 2.4:HyperCard"
  ],
+ "os": "tools-7.6.1",
  "steps": [
   {
    "launch": "HyperCard:Mac OS Install"
   },
   {
-   "wait": 15
+   "agent_exit": true
   },
   {
-   "shot": "1-welcome"
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 90
   },
   {
-   "key": "return"
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Agree"
+   },
+   "max": 8
   },
   {
-   "wait": 4
+   "click": {
+    "button": "Agree"
+   },
+   "until": {
+    "button": "Select"
+   },
+   "max": 5
   },
   {
-   "key": "return"
+   "click": {
+    "button": "Select"
+   },
+   "until": {
+    "button": "Start"
+   },
+   "max": 5
   },
   {
-   "wait": 4
+   "click": {
+    "button": "AppleScript 1.1.1"
+   }
   },
   {
-   "key": "return"
+   "click": {
+    "button": "English Text-To-Speech 1.5"
+   }
   },
   {
-   "wait": 4
+   "click": {
+    "button": "QuickTime™ 3.0"
+   }
   },
   {
-   "shot": "2-agree"
+   "click": {
+    "button": "Start"
+   }
   },
   {
-   "click": [
-    449,
-    306
-   ]
+   "wait_for": {
+    "button": "Quit"
+   },
+   "timeout": 600
   },
   {
-   "wait": 4
+   "click": {
+    "button": "Quit"
+   }
   },
   {
-   "shot": "3-destination"
-  },
-  {
-   "key": "return"
-  },
-  {
-   "wait": 5
-  },
-  {
-   "click": [
-    94,
-    231
-   ]
-  },
-  {
-   "click": [
-    94,
-    249
-   ]
-  },
-  {
-   "click": [
-    94,
-    286
-   ]
-  },
-  {
-   "shot": "4-options"
-  },
-  {
-   "key": "return"
-  },
-  {
-   "wait": 45
-  },
-  {
-   "shot": "5-done"
-  },
-  {
-   "key": "return"
-  },
-  {
-   "wait": 3
+   "reboot": true
   }
  ]
 }

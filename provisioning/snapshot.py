@@ -53,7 +53,7 @@ class Hfs:
     def ls(self, folder):
         """(name, is_dir) of the items in an HFS folder (MacRoman bytes)."""
         out = []
-        for line in self.run("hls", "-l", "-a", folder).splitlines():
+        for line in self.run("hls", "-l", "-a", folder).split(b"\n"):      # not \r: names can hold one
             m = LS.match(line)
             if m:
                 out.append((m.group(2), m.group(1) == b"d"))

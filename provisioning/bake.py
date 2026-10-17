@@ -110,7 +110,8 @@ TOP_NOISE = {b"Desktop Folder", b"Trash", b"Temporary Items", b"Desktop DB", b"D
 NEVER = {b"System", b"Finder", b"Desktop DB", b"Desktop DF", b"Desktop"}
 NOISE = (b":Recent Applications:", b":Recent Documents:", b":Recent Servers:",
          b":Startup Items:BridgeAgent", b":MacTCP DNR", b":Extensions:Printer Share",
-         b":Control Panels:Apple Menu Options", b":Extensions:Apple CD-ROM")
+         b":Control Panels:Apple Menu Options", b":Extensions:Apple CD-ROM",
+         b":Startup Items:\rEnergy Saver")             # the PPC machine's Energy Saver (invisible)
 # Preferences: only new files are taken (an app's first-launch answers live
 # there), minus these, which the System or the bridge write.
 PREFS_NOISE = {b"MacPhoenix.cfg", b"ASLM Preferences", b"Apple Menu Options Prefs",
@@ -406,7 +407,7 @@ class Session:
             f.write(build_macbinary(mr(name), ftype, b"SITx", data, b""))
         put(hfs, self.target, [(mr(name), local)])
         self.exclude.add(mr(name))
-        self.pre_steps = [{"open": "{target}:" + name}, {"wait_app": "StuffIt Expander", "timeout": 120},
+        self.pre_steps = [{"open": "{target}:" + name}, {"wait_app": "StuffIt Expander", "timeout": 30, "optional": True},
                           {"wait": 5 + len(data) // 200_000}, {"shot": "expanded"}, {"quit": True}]
 
     def boot_guest(self):
@@ -603,7 +604,7 @@ def sysfolder(hfs, image):
     hfs.mount(image)
     try:
         def walk(path):
-            for line in hfs.run("hls", "-l", "-a", path + b":").splitlines():
+            for line in hfs.run("hls", "-l", "-a", path + b":").split(b"\n"):    # not \r: names can hold one
                 m = snapshot.LS.match(line)
                 if not m:
                     continue

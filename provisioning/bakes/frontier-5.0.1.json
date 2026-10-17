@@ -1,5 +1,5 @@
 {
- "note": "Frontier 5.0.1, expanded by StuffIt Expander, then a first launch: OK 'personalize your copy' (initials as offered), No to reading the licence now, quit",
+ "note": "Frontier 5.0.1, expanded by StuffIt Expander in the guest, then a first launch that answers its questions by name (personalize: OK with the defaults; read the licence now: No) and quits, so Frontier.root is set up",
  "kind": "expand",
  "archive": "Frontier_5.0.1.sit",
  "expect": [
@@ -8,45 +8,37 @@
  "launch": [
   "Frontier 5.0.1:UserLand Frontier™"
  ],
+ "os": "tools-7.6.1",
  "steps": [
   {
    "launch": "{target}:Frontier 5.0.1:UserLand Frontier™"
   },
   {
-   "wait": 20
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "No"
+   },
+   "max": 10
   },
   {
-   "shot": "1-personalize"
-  },
-  {
-   "key": "return"
-  },
-  {
-   "wait": 8
-  },
-  {
-   "shot": "2-licence-prompt"
-  },
-  {
-   "click": [
-    378,
-    242
-   ]
-  },
-  {
-   "wait": 5
-  },
-  {
-   "shot": "3-ready"
+   "click": {
+    "button": "No"
+   },
+   "until": {
+    "text": "Kind",
+    "exact": true,
+    "front": true
+   },
+   "max": 10
   },
   {
    "quit": true
   },
   {
-   "wait": 8
-  },
-  {
-   "shot": "4-quitting"
+   "wait_app_not": "UserLand Frontier",
+   "timeout": 60
   }
  ]
 }

@@ -225,11 +225,14 @@ class Guest:
                     l, t, r, b = h["rect"]
                     return (l + r) // 2, (t + b) // 2
         within, skip = None, []
-        if what.get("front") or what.get("outside_controls"):
+        if what.get("front") or what.get("outside_controls") or name:
             ui = ui or self.ui()
             w = next((w for w in ui["windows"] if w.get("front")), None)
-            if what.get("front"):               # only the front window's own text
-                within = w and w["rect"]
+            if what.get("front") or name:       # only the front window's own text (a button
+                                                # named in a window behind doesn't count)
+                if not w:
+                    return None                 # no window up yet (a desktop label isn't one)
+                within = w["rect"]
             if what.get("outside_controls") and w:   # not a button's own label: a list entry
                 skip = [c["rect"] for c in w.get("controls", [])]
         t = self.drawn(what.get("text") or name, app=ui.get("app") if ui else None, within=within, skip=skip,
@@ -534,7 +537,8 @@ class Guest:
                     break
                 self.pause(2)
             else:
-                raise RuntimeError(f"timeout: {step} (front app {self.app()!r})")
+                if not step.get("optional"):    # optional: it may have come and gone between looks
+                    raise RuntimeError(f"timeout: {step} (front app {self.app()!r})")
         elif "wait_finder" in step:
             self.pause(5)                       # the restart under way, not the old Finder
             self.wait_finder(step["wait_finder"], agent=True)

@@ -1,5 +1,5 @@
 {
- "note": "MacPerl 5.2.0r4, Installer VISE Lite: Custom Install > Fat Binary + Shared Libraries",
+ "note": "MacPerl 5.2.0r4, Installer VISE Lite: Custom Install > Fat Binary + Shared Libraries onto the target (Switch Disk), by name and drawn text",
  "kind": "install",
  "media": [
   {
@@ -14,92 +14,79 @@
  "launch": [
   "MacPerl ƒ:MacPerl"
  ],
+ "os": "tools-7.6.1",
  "steps": [
   {
    "launch": "{media}:MacPerl Installer"
   },
   {
-   "wait": 12
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
   },
   {
-   "shot": "1-readme"
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Install",
+    "exact": true
+   },
+   "max": 10
   },
   {
-   "key": "return"
-  },
-  {
-   "wait": 4
-  },
-  {
-   "drag": [
-    [
-     162,
-     134
-    ],
-    [
-     155,
-     150
-    ]
-   ]
-  },
-  {
-   "click": [
-    101,
-    164
-   ]
-  },
-  {
-   "click": [
-    101,
-    196
-   ]
-  },
-  {
-   "drag": [
-    [
-     293,
-     329
-    ],
-    [
-     279,
-     344
-    ]
+   "popup": [
+    145,
+    134
    ],
-   "backend": "uae"
+   "choose": "Custom Install"
   },
   {
-   "drag": [
-    [
-     293,
-     329
-    ],
-    [
-     279,
-     360
+   "click": {
+    "text": "Fat Binary",
+    "offset": [
+     -13,
+     6
     ]
-   ],
-   "backend": "kpx"
+   }
   },
   {
-   "shot": "2-options"
+   "click": {
+    "text": "Shared Libraries",
+    "offset": [
+     -13,
+     6
+    ]
+   }
   },
   {
-   "click": [
-    478,
-    359
-   ]
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
   },
   {
-   "wait": 20
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
   },
   {
-   "shot": "3-done"
+   "wait_for": {
+    "text": "The software was successfully installed."
+   },
+   "timeout": 300
   },
   {
-   "key": "return"
-  },
-  {
-   "wait": 3
+   "click": {
+    "button": "Quit"
+   }
   }
  ]
 }

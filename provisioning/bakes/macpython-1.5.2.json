@@ -1,5 +1,5 @@
 {
- "note": "MacPython 1.5.2, Installer VISE Easy Install. It installs the PythonCore for the machine it runs on: run on both, the merge makes one fat PythonCore (and keeps the PPC run's Numerical extension).",
+ "note": "MacPython 1.5.2, Installer VISE Easy Install onto the target (Switch Disk), by name and drawn text. It installs the PythonCore for the machine it runs on: run on both, the merge makes one fat PythonCore (and keeps the PPC run's Numerical extension).",
  "kind": "install",
  "media": [
   {
@@ -18,67 +18,65 @@
    "launch": "{media}:Python 1.5.2 Installer"
   },
   {
-   "wait": 15
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 90
   },
   {
    "shot": "1-readme"
   },
   {
-   "key": "return"
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Install",
+    "exact": true
+   },
+   "max": 10
   },
   {
-   "wait": 4
-  },
-  {
-   "drag": [
-    [
-     293,
-     329
-    ],
-    [
-     279,
-     344
-    ]
-   ],
-   "backend": "uae"
-  },
-  {
-   "drag": [
-    [
-     293,
-     329
-    ],
-    [
-     279,
-     360
-    ]
-   ],
-   "backend": "kpx"
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
   },
   {
    "shot": "2-options"
   },
   {
-   "click": [
-    478,
-    359
-   ]
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
   },
   {
-   "wait": 40
+   "wait_for": {
+    "text": "The software was successfully installed."
+   },
+   "timeout": 600
   },
   {
    "shot": "3-done"
   },
   {
-   "key": "return"
-  },
-  {
-   "wait": 3
+   "click": {
+    "button": "Quit"
+   }
   }
  ],
  "machines": [
   "68k",
   "ppc"
- ]
+ ],
+ "os": "tools-7.6.1",
+ "prefer": {
+  "Preferences:Python:Python 1.5.2c1 Preferences": 0
+ }
 }
