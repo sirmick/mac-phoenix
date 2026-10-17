@@ -285,17 +285,15 @@ As of 2026-10-16:
   a creator by catalog search when the desktop database doesn't know it (a
   built System's starts empty). `until` retries a click whose target isn't
   up yet.
-* **Open problem:** after Apple's Installer has installed a System (onto
-  another disk) and quits, BridgeAgent dies: system error 3 (once 10,
-  mid-install). Ruled out by repros: the text feed (crashes with
-  `--no-text-feed`), the launch-with-document path (crashes with the
-  Installer launched plainly), a browser watching, the Installer quitting
-  without installing, other apps quitting. Theory: the Installer opens the
-  new System file as a resource file, System resources the agent calls get
-  loaded from it, and quitting closes it under them. Workaround: the os
-  bake reboots the guest after the install (`{"reboot": true}`). To find
-  the cause: log the faulting PC/opcode and its resource on illegal
-  instruction / F-line in the emulator.
+* **BridgeAgent dying under Apple's Installer (solved 2026-10-17):**
+  system error 3 / "unimplemented trap" in BridgeAgent while or after an
+  Installer ran. The cause was the agent's own `_WaitNextEvent` patch,
+  whose saved trap address lived at a fixed address in ordinary RAM;
+  removed (docs/CommandBridge.md, Bridge v2). A test bake of os-7.6.1 with
+  no `agent_exit` and no reboot ran through; the same bake with the old
+  agent bombed. The recipes still have their `agent_exit`/`reboot` steps:
+  dropping them changes every bake key (a full re-bake), left for the next
+  cascade.
 * **Disk Copy's licence:** on the bootstrap System, Disk Copy stops at its
   licence on first launch, so the 7.6.1 Update step must click Agree
   before the floppies mount.

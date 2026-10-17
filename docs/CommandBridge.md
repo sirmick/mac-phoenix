@@ -73,6 +73,46 @@ the bridge's. The agent just delivers the source verbatim.
 
 **Why `ShutDwnPower`/`ShutDwnStart` instead of an AppleEvent to Finder?** Inside Macintosh Vol VI shows that Finder only handles the four Required Apple Events (Open App, Open Docs, Print Docs, Quit App). `kAEShutDown`/`kAERestart` are events Finder *sends*, not ones it receives — so an AE-to-Finder shutdown silently no-ops. The Shutdown Manager is the entry point Finder itself uses after quitting apps.
 
+## Bridge v2 (in progress): a trap instead of files
+
+The file mailbox is being replaced. Groundwork, proven on every machine
+(`tests/guest/bridgedemo`, ctest `bridge_trap{,_ppc,_executor}`):
+
+* **The bridge trap, `$ABE5`.** Guest code calls it like a register-based
+  Toolbox trap (D0 selector, A0 pointer, D1 value; D0 back) and lands in
+  the emulator: `guest_bridge::call()` (`src/common/include/guest_bridge.h`),
+  one implementation for every machine. The ROM machines point its trap
+  table entry at a stub `[EmulOp BRIDGE_COMM; rts]` written after startup
+  where the text feed patches (`bridge_trap_install()`, `text_feed.cpp`;
+  `platform_make_emulop` gives each machine its own encoding, so the
+  PowerPC machine's 68k emulator works too); Executor at a callback
+  (`romlib/init.cpp`). `$ABE5` is unimplemented on 7.5.5 and 7.6.1 (68k
+  and PowerPC), 9.0.4 and in Executor; the install checks the entry is
+  still `_Unimplemented` and logs `[bridge2]` either way. (`$AB7E`, the
+  first choice, is a real trap on these Systems.)
+* **Waking the agent without polling.** A Time Manager task in the agent
+  asks the host every 50 ms (`PENDING`) and calls `WakeUpProcess`; the
+  agent sleeps in `WaitNextEvent` meanwhile. Measured from the host asking
+  to the application running: 16 ms on the 68k machine (7.5.5, 7.6.1, both
+  cores), 2-27 ms on the PowerPC machine (7.5.5, 7.6.1, 9.0.4, kpx and
+  mame-ppc), 0-8 ms in Executor (both cores), in front and in the
+  background. Executor's `WakeUpProcess` was a no-op and is now
+  implemented (`romlib/process.cpp`, `toolevent.cpp`).
+* **The WaitNextEvent patch is gone.** BridgeAgent used to patch
+  `_WaitNextEvent` globally, keeping the original trap address at a fixed
+  address (`0x0210FFC0`) that is plain RAM at the default 64 MB, with
+  counters nothing read. That was what killed the agent under Apple's
+  Installer ("BridgeAgent / unimplemented trap"): os-7.6.1 now bakes with
+  the agent running throughout, no `agent_exit` or reboot.
+
+Next: the agent's commands as selectors (`HELLO` with version, `NEXT` for
+the next queued request, `REPLY` with status, stdout, stderr and data,
+`STATE` for the front process), a request queue with IDs on the host (the
+HTTP process to the CPU process through the IPC buffer, as `/api/ui`
+does), the endpoints moved over one at a time, then the files, heartbeat
+and watchdog deleted; and delivering the agent without writing to the
+`--disk` images.
+
 ## Transport
 
 Plain files in `cfg.bridge_dir`, which is mounted into the guest as an ExtFS volume named `Host:`. Both the host parent process and the IPC child see the same directory; `_bridge_cmd` written by the parent is visible to the guest's Filesystem Manager calls in the child.

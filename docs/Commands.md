@@ -121,7 +121,7 @@ ctest --test-dir build
 ctest --test-dir build -L unit       # mac_roman, browser_shm
 ctest --test-dir build -L api        # api_endpoints, config_api, extfs
 ctest --test-dir build -L boot       # boot_*, mouse_position, command_bridge
-ctest --test-dir build -L bridge     # wne_patch_sanity
+ctest --test-dir build -L bridge     # bridge_trap{,_ppc,_executor}
 ctest --test-dir build -L guest      # guest_suite{,_761,_ppc}
 
 # Specific
@@ -145,7 +145,7 @@ The test names registered in `tests/CMakeLists.txt` are
 `mac_roman`, `browser_shm`, `api_endpoints`, `config_api`, `extfs`, `boot_se`,
 `boot_uae_interp`, `boot_uae_jit`, `boot_ppc_interp`,
 `boot_ppc_jit`, `boot_ppc_api`, `mouse_position`, `mouse_position_ppc`,
-`command_bridge`, `command_bridge_ppc`, `wne_patch_sanity`, `guest_suite`,
+`command_bridge`, `command_bridge_ppc`, `bridge_trap`, `guest_suite`,
 `guest_suite_761`, `guest_suite_ppc`.
 
 ## Boot capacity matrix

@@ -41,7 +41,7 @@ ctest --test-dir build -V
 ctest --test-dir build -L unit     # mac_roman, browser_shm — host-only
 ctest --test-dir build -L api      # api_endpoints, config_api, extfs
 ctest --test-dir build -L boot     # boot_*, mouse_position*, command_bridge*
-ctest --test-dir build -L bridge   # wne_patch_sanity
+ctest --test-dir build -L bridge   # bridge_trap{,_ppc,_executor}
 ctest --test-dir build -L guest    # guest_suite{,_761,_ppc}
 ```
 
@@ -64,7 +64,7 @@ ctest --test-dir build -L guest    # guest_suite{,_761,_ppc}
 | `mouse_position_ppc` | `test_mouse_position.sh` | boot | ~20s | Same, KPX backend |
 | `command_bridge` | `test_command_bridge.sh` | boot | ~20s | `/api/app`, `/api/windows`, `/api/wait`, `/api/launch` (m68k) |
 | `command_bridge_ppc` | `test_command_bridge.sh` | boot | ~20s | Same, KPX backend |
-| `wne_patch_sanity` | `test_wne_patch_sanity.sh` | bridge | ~60s | Verifies the WaitNextEvent jGNEFilter shim doesn't crash long-running idle |
+| `bridge_trap{,_ppc,_executor}` | `test_guest_suite.sh --app BridgeDemo.bin` | bridge | ~15s | The bridge trap ($ABE5) answers and a sleeping app is woken by the host within 500 ms (front and background): `tests/guest/bridgedemo` |
 | `guest_suite` | `test_guest_suite.sh` | guest | ~60s | Boots 7.5.5, launches MacPhoenixSuite (`tests/guest/suite`) via `/api/launch`, reads results back from ExtFS |
 | `guest_suite_761` | `test_guest_suite.sh` | guest | ~60s | Same, 7.6.1 disk |
 | `guest_suite_ppc` | `test_guest_suite.sh` | guest | ~60s | Same, KPX backend (PPC's 68k emulator running MacPerl) |
