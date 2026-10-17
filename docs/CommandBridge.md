@@ -105,13 +105,40 @@ The file mailbox is being replaced. Groundwork, proven on every machine
   Installer ("BridgeAgent / unimplemented trap"): os-7.6.1 now bakes with
   the agent running throughout, no `agent_exit` or reboot.
 
-Next: the agent's commands as selectors (`HELLO` with version, `NEXT` for
-the next queued request, `REPLY` with status, stdout, stderr and data,
-`STATE` for the front process), a request queue with IDs on the host (the
-HTTP process to the CPU process through the IPC buffer, as `/api/ui`
-does), the endpoints moved over one at a time, then the files, heartbeat
-and watchdog deleted; and delivering the agent without writing to the
-`--disk` images.
+**EXEC over the trap (done).** `/api/exec` goes through the trap when the
+agent has said `AGENT_HELLO` (protocol 2; `/api/status`
+`bridge_agent_protocol`), else through the files:
+
+* **The slot** (`IPCBridgeSlot`, `ipc_protocol.h`): one request at a time,
+  with ids. In the IPC buffer when the CPU runs in a child process (the
+  ROM machines behind the web server, Executor always), a static one when
+  it runs in-process (`--headless-http` ROM machines). The host side
+  (`guest_bridge::request`) writes the request and waits for it to be taken
+  (15 s) and answered (the request's timeout + 30 s), serialized by a
+  mutex.
+* **The agent** (protocol 2): `AGENT_HELLO` at start-up if the trap is
+  there; a Time Manager task asks `AGENT_PENDING` every 50 ms and wakes it; the
+  main loop takes a request with `NEXT` (a bigger one: `NEXT` answers the
+  size needed, the agent allocates it) and answers with `REPLY`. EXEC is
+  `"EXEC <creator> <seconds>\r<script>"`, answered with the file
+  transport's `STDOUT/STDERR/STATUS` text, or `OSERR n`. The AESend waits
+  the request's seconds, not a fixed minute. The task is removed when the
+  agent's loop ends.
+* **`tools/mpw/mpw`** uses it: one request per command, answered when the
+  script is done; the script's output still goes to a file (`∑`; its
+  diagnostics to `Dev:StdOut` hang ToolServer in a build that runs MrC),
+  its `{Status}` comes in the reply; no polling. A suite build: 3.2 s
+  (6.3 s through files).
+* **Executor's host volume** cached a folder's listing for a second, so a
+  file the host had just written wasn't found by name: a miss now reads
+  the folder again (`ItemCache::lookup`).
+
+Next: the other commands as verbs (LAUNCH, OPEN, SCRIPT, COPY, QUIT, ...),
+`STATE` for the front process, then the files, heartbeat and watchdog
+deleted; delivering the agent without writing to the `--disk` images; and
+the HTTP server, which answers API requests one at a time on its accept
+thread (a long `/api/exec` or `/api/copy` holds every other request,
+the web UI's too).
 
 ## Transport
 

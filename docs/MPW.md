@@ -26,11 +26,13 @@ tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
   (`~/.cache/mac-phoenix/mpw/host`). It is ready when ToolServer answers,
   about 7 s. It stays up until `mpw stop`.
 * **Commands.** ToolServer is MPW's headless command server. A command is
-  written to a script file in `Host:.mpw:`; the wrapper sent to ToolServer
-  as a 'misc'/'dosc' Apple Event (BridgeAgent, `POST /api/exec`) runs that
-  script with its output to a file and writes `{Status}` after it. The files
-  are the result, so a build longer than the Apple Event's one-minute
-  timeout still completes. Commands are serialized with a lock.
+  written to a script file in `Host:.mpw:`; a wrapper sent to ToolServer as
+  a 'misc'/'dosc' Apple Event (BridgeAgent, `POST /api/exec`) runs it as a
+  sub-script (its `Exit` ends only itself) with its output to a file, then
+  echoes `{Status}`. Through the bridge trap (docs/CommandBridge.md, Bridge
+  v2) that is one request, answered when the script is done, however long
+  it takes. With an older agent, through files: the status is written to a
+  file too and polled for. Commands are serialized with a lock.
 * **Projects.** `mpw build DIR` mirrors DIR into `Host:<name>:` (text files
   UTF-8 → MacRoman and LF → CR, by extension; others as they are; unchanged
   files untouched so Make sees the right dates), runs `build.mpw` there with

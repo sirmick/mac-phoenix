@@ -281,9 +281,11 @@ def stop():
 
 # ---- running commands ---------------------------------------------------
 
-def exec_raw(command, timeout=90):
+def exec_raw(command, timeout=90, script_timeout=None):
     body = {"creator": TOOLSERVER,
             "command_b64": base64.b64encode(command.encode("mac_roman")).decode()}
+    if script_timeout:
+        body["timeout"] = script_timeout          # the bridge trap's EXEC waits that long
     try:
         return api("/api/exec", body, timeout=timeout)
     except (urllib.error.URLError, OSError) as e:
@@ -303,7 +305,59 @@ def mac_path(host_path):
 
 
 def run(script, cwd=None, timeout=600, s=None):
-    """Run MPW commands in ToolServer. Returns (status, output text).
+    """Run MPW commands in the command server. Returns (status, output
+    text: stdout and diagnostics, in order).
+
+    The commands go in a script file, run as a sub-script (its Exit ends
+    only itself), its output (both streams, ∑) to a file, then {Status}
+    echoed. Over the bridge trap when the agent speaks it: one request,
+    answered when the script is done (as long as it takes), the status in
+    the reply and the output in its file. Else through files, polled
+    (run_files). (Diagnostics to Dev:StdOut instead of a file hang ToolServer
+    in a build that runs MrC.)"""
+    s = s or start()
+    try:
+        trap = api("/api/status").get("bridge_agent_protocol", 0) >= 2
+    except (urllib.error.URLError, OSError):
+        trap = False
+    if not trap:
+        return run_files(script, cwd, timeout, s)
+    os.makedirs(WORK, exist_ok=True)
+    lock = open(os.path.join(STATE, "lock"), "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    try:
+        rid = uuid.uuid4().hex[:8]
+        files = {k: os.path.join(WORK, rid + "." + k) for k in ("script", "out")}
+        body = PRELUDE + "Set Exit 1\n"
+        if cwd:
+            body += 'Directory "%s"\n' % cwd
+        write_text(files["script"], body + script.rstrip("\n") + "\n")
+        marker = "\u00a7STATUS "
+        wrapper = ('Set Exit 0\r"%s" \u2211 "%s"\rEcho "%s{Status}"\r'
+                   % (mac_path(files["script"]), mac_path(files["out"]), marker))
+        r = exec_raw(wrapper, timeout=timeout + 60, script_timeout=timeout)
+        out = read_text(files["out"]) if os.path.exists(files["out"]) else ""
+        for f in files.values():
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        lock.close()
+    if not alive(s):
+        raise MPWError("emulator died; see %s" % s["log"])
+    if not r.get("success"):
+        raise MPWError("command failed: %s" % r.get("error", r))
+    reply = base64.b64decode(r.get("stdout_b64", "")).decode("mac_roman")
+    _, sep, tail = reply.rpartition(marker)
+    if not sep:
+        raise MPWError("no status in the reply: %r" % reply[-200:])
+    return int(tail.split()[0]), out
+
+
+def run_files(script, cwd=None, timeout=600, s=None):
+    """run() through files: the transport before the bridge trap.
 
     The commands go in a script file; the wrapper sent over /api/exec runs
     it with all output to a file and writes {Status} after it, so the
