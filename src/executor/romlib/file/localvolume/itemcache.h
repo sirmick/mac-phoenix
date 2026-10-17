@@ -51,6 +51,7 @@ public:
 
 
     void cacheDirectory(DirectoryItemPtr item);
+    ItemPtr lookup(DirectoryItemPtr dir, mac_string_view name);
     void flushDirectoryCache(DirectoryItemPtr item);
     void flushDirectoryCache(CNID dirID);
     void flushItem(ItemPtr item);

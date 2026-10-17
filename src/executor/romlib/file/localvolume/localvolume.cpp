@@ -188,8 +188,7 @@ ItemPtr LocalVolume::resolve(mac_string_view name, short vRef, long dirID)
     else
     {
         std::shared_ptr<DirectoryItem> dir = resolveDir(vRef, dirID);
-        itemCache->cacheDirectory(dir);
-        if(auto file = dir->tryResolve(name))
+        if(auto file = itemCache->lookup(dir, name))
             return file;
         else
             throw OSErrorException(fnfErr);
@@ -218,8 +217,7 @@ ItemPtr LocalVolume::resolveRelative(const std::shared_ptr<DirectoryItem>& base,
     }
     else
     {
-        itemCache->cacheDirectory(base);
-        item = base->tryResolve(mac_string_view(p, colon));
+        item = itemCache->lookup(base, mac_string_view(p, colon));
         if(!item)
         {
             if(colon == name.end())

@@ -94,6 +94,20 @@ void ItemCache::cacheDirectory(DirectoryItemPtr dir)
     dir->populateCache(std::move(items));
 }
 
+/* MacPhoenix: an item by name in dir. A folder's listing is cached for
+   up to a second, so a file the host made since (tools/mpw writes a script
+   and has it run at once over the bridge trap) isn't in it: a miss reads
+   the folder again before it counts. */
+ItemPtr ItemCache::lookup(DirectoryItemPtr dir, mac_string_view name)
+{
+    cacheDirectory(dir);
+    if(ItemPtr item = dir->tryResolve(name))
+        return item;
+    flushDirectoryCache(dir);
+    cacheDirectory(dir);
+    return dir->tryResolve(name);
+}
+
 void ItemCache::flushDirectoryCache(DirectoryItemPtr item)
 {
     if(item->isCached())
