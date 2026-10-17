@@ -21,9 +21,11 @@ void Executor::C_PrOpen()
 {
     StringHandle h;
 
-    if(ROMlib_printresfile == -1)
+    /* STR -8192 names the printer driver chosen in the Chooser; a System
+     * that never had one chosen has none (a NULL handle reads guest
+     * address 0, mapped on the UAE core but not on mame-68k). */
+    if(ROMlib_printresfile == -1 && (h = GetString(-8192)) && *h)
     {
-        h = GetString(-8192);
         HLock((Handle)h);
         ROMlib_printresfile = OpenRFPerm(*h, LM(BootDrive), fsCurPerm);
         HUnlock((Handle)h);
