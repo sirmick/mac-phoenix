@@ -1,5 +1,5 @@
 {
- "note": "CodeWarrior Pro 4 Tools CD, Installer VISE: Custom Install > Full MacOS Install. Run on both machines: the installer adds CFM-68K and NuDragLib on 68k, MathLib on PPC; the merged snapshot has them all. StdCLibInit (PPC before 7.6) is copied from the CD, so one snapshot serves 7.5.5 too. The option list is drawn by VISE (a pixel click); the rest is by name.",
+ "note": "CodeWarrior Pro 4 Tools CD, Installer VISE: Custom Install > Full MacOS Install. Run on both machines: the installer adds CFM-68K and NuDragLib on 68k, MathLib on PPC; the merged snapshot has them all. StdCLibInit (PPC before 7.6) is copied from the CD, so one snapshot serves 7.5.5 too. VISE draws its option list itself: the option is clicked by its drawn label and checked by the disk space needed (not an exact size: it differs per machine and target); Install Location is pressed where its current value (the boot disk) is drawn.",
  "kind": "install",
  "cdroms": [
   "CW4MACTOOLS.ISO"
@@ -33,18 +33,26 @@
   {
    "click": {
     "text": "Full MacOS Install",
-    "offset": [
-     -13,
-     7
-    ]
+    "front": true
    }
   },
   {
-   "popup": [
-    270,
-    367
-   ],
+   "check": {
+    "text_not": "Approximate disk space needed: 0K"
+   }
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "exact": true
+   },
    "choose": "{target}"
+  },
+  {
+   "check": {
+    "text": "disk “{target}”",
+    "exact": true
+   }
   },
   {
    "shot": "2-options"

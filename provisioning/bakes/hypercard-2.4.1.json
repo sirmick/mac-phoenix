@@ -61,13 +61,37 @@
    }
   },
   {
+   "check": {
+    "button": "AppleScript 1.1.1",
+    "value": 0
+   }
+  },
+  {
    "click": {
     "button": "English Text-To-Speech 1.5"
    }
   },
   {
+   "check": {
+    "button": "English Text-To-Speech 1.5",
+    "value": 0
+   }
+  },
+  {
    "click": {
     "button": "QuickTime™ 3.0"
+   }
+  },
+  {
+   "check": {
+    "button": "QuickTime™ 3.0",
+    "value": 0
+   }
+  },
+  {
+   "check": {
+    "button": "HyperCard 2.4.1",
+    "value": 1
    }
   },
   {

@@ -181,10 +181,9 @@
    "shot": "1-destination"
   },
   {
-   "popup": [
-    145,
-    132
-   ],
+   "popup": {
+    "text": "Easy Install"
+   },
    "choose": "Custom Install"
   },
   {
@@ -196,12 +195,8 @@
   },
   {
    "click": {
-    "text": "System Software",
-    "exact": true,
-    "offset": [
-     -30,
-     7
-    ]
+    "row": "System Software",
+    "exact": true
    },
    "until": {
     "text": "Universal System for any Macintosh"
@@ -211,10 +206,12 @@
   {
    "click": {
     "text": "Universal System for any Macintosh",
-    "offset": [
-     -12,
-     8
-    ]
+    "front": true
+   }
+  },
+  {
+   "check": {
+    "text": "Selected size: 37,268K"
    }
   },
   {

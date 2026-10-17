@@ -36,10 +36,9 @@
    "max": 8
   },
   {
-   "popup": [
-    145,
-    132
-   ],
+   "popup": {
+    "text": "Easy Install"
+   },
    "choose": "Custom Install"
   },
   {
@@ -51,19 +50,23 @@
   {
    "click": {
     "text": "Open Transport for 68K Macintoshes",
-    "offset": [
-     -12,
-     8
-    ]
+    "front": true
+   }
+  },
+  {
+   "check": {
+    "text": "Selected size: 1,933K"
    }
   },
   {
    "click": {
     "text": "Open Transport for all Macintoshes",
-    "offset": [
-     -12,
-     8
-    ]
+    "front": true
+   }
+  },
+  {
+   "check": {
+    "text": "Selected size: 4,302K"
    }
   },
   {

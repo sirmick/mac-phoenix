@@ -1,5 +1,5 @@
 {
- "note": "MacPerl 5.2.0r4, Installer VISE Lite: Custom Install > Fat Binary + Shared Libraries onto the target (Switch Disk), by name and drawn text",
+ "note": "MacPerl 5.2.0r4, Installer VISE Lite: Custom Install > Fat Binary + Shared Libraries onto the target (Switch Disk), by name and drawn text, each option checked by the disk space needed",
  "kind": "install",
  "media": [
   {
@@ -36,28 +36,31 @@
    "max": 10
   },
   {
-   "popup": [
-    145,
-    134
-   ],
+   "popup": {
+    "text": "Easy Install"
+   },
    "choose": "Custom Install"
   },
   {
    "click": {
     "text": "Fat Binary",
-    "offset": [
-     -13,
-     6
-    ]
+    "front": true
+   }
+  },
+  {
+   "check": {
+    "text": "Approximate disk space needed: 10,352K"
    }
   },
   {
    "click": {
     "text": "Shared Libraries",
-    "offset": [
-     -13,
-     6
-    ]
+    "front": true
+   }
+  },
+  {
+   "check": {
+    "text": "Approximate disk space needed: 10,428K"
    }
   },
   {

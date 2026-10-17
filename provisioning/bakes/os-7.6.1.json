@@ -68,10 +68,9 @@
    "shot": "1-destination"
   },
   {
-   "popup": [
-    145,
-    132
-   ],
+   "popup": {
+    "text": "Easy Install"
+   },
    "choose": "Custom Install"
   },
   {
@@ -83,10 +82,12 @@
   {
    "click": {
     "text": "Universal system for any supported computer",
-    "offset": [
-     -12,
-     8
-    ]
+    "front": true
+   }
+  },
+  {
+   "check": {
+    "text": "Selected size: 40,879K"
    }
   },
   {
