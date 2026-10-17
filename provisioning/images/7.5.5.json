@@ -1,5 +1,5 @@
 {
- "note": "The standard Mac OS 7.5.5 boot disk: tools-7.5.5 plus MacsBug 6.6.3 (in the System Folder; its folder in Utilities). What tests and web UI profiles boot (PLAN.md P3, P5).",
+ "note": "The standard System 7.5.5 boot disk: tools-7.5.5 plus MacsBug 6.6.3 (in the System Folder; its folder in Utilities). Networking is 7.5.5's own MacTCP: Open Transport 1.1.2 (baked: open-transport-1.1.2) bombs at startup on the PPC machine (illegal instruction; PLAN.md P3), so it isn't on this universal disk.",
  "base": "tools-7.5.5",
  "system_from": [
   "macsbug-6.6.3"

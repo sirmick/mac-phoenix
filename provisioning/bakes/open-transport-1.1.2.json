@@ -1,0 +1,98 @@
+{
+ "note": "Open Transport 1.1.2 (Legacy CD floppies) for System 7.5.5: Easy Install (Open Transport, AppleTalk, TCP/IP and MacTCP support for all Macintoshes) onto the startup disk, then its restart; the System Folder changes are the snapshot. 7.6.1 has Open Transport built in.",
+ "kind": "install",
+ "os": "tools-7.5.5",
+ "media": [
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 1.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 2.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 3.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Apple SW (N-Z):Open Transport 1.1.2:Install 4.img"
+  }
+ ],
+ "steps": [
+  {
+   "open": "{media}:Install 1.img"
+  },
+  {
+   "open": "{media}:Install 2.img"
+  },
+  {
+   "open": "{media}:Install 3.img"
+  },
+  {
+   "open": "{media}:Install 4.img"
+  },
+  {
+   "wait": 3
+  },
+  {
+   "launch": "Install 1:Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 90
+  },
+  {
+   "agent_exit": true
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 10
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{boot}",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "shot": "1-easy-install"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful",
+    "front": true
+   },
+   "timeout": 600
+  },
+  {
+   "shot": "2-installed"
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  }
+ ]
+}

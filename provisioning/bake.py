@@ -116,7 +116,8 @@ PREFS_NOISE = {b"MacPhoenix.cfg", b"ASLM Preferences", b"Apple Menu Options Pref
                b"Finder Preferences", b"Users & Groups Data File", b"File Sharing Folder",
                b"Launcher Preferences", b"Desktop Pictures Prefs", b"Extensions Manager Preferences",
                b"System Preferences", b"Monitors & Sound Prefs", b"StuffIt Expander Preferences",
-               b"Sound Preferences", b"Expansion Manager Prefs", b"QuickTime Preferences"}
+               b"Sound Preferences", b"Expansion Manager Prefs", b"QuickTime Preferences",
+               b"Disk Copy Log"}
 
 
 def work_root():
