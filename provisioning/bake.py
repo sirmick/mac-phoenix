@@ -37,7 +37,13 @@ snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
 (System Folder files the install supersedes but leaves behind: the build
 deletes them where the snapshot's System Folder part goes), "system_take"
 (System Folder files to take even if only changed: a control panel's
-settings), "network" (the guest's --network: "socket" for net-bridge).
+settings), "network" (the guest's --network: "socket" for net-bridge),
+"volatile" (snapshot paths a run writes differently every time, compared by
+name only: a first launch's database or preferences).
+
+A re-bake is compared with the snapshot it replaces: "same install" when
+only run noise differs (aliases, installer logs, "volatile" paths; for os
+bakes also the System's own preferences), else the paths that changed.
 
 Strings in steps may use {target}, {media}, {boot} (volume names) and
 {system} (the boot disk's System Folder path). A step with "backend"
@@ -122,7 +128,7 @@ PREFS_NOISE = {b"MacPhoenix.cfg", b"ASLM Preferences", b"Apple Menu Options Pref
                b"Launcher Preferences", b"Desktop Pictures Prefs", b"Extensions Manager Preferences",
                b"System Preferences", b"Monitors & Sound Prefs", b"StuffIt Expander Preferences",
                b"Sound Preferences", b"Expansion Manager Prefs", b"QuickTime Preferences",
-               b"Disk Copy Log"}
+               b"Disk Copy Log", b"Auto Power On/Off Preferences", b"Apple Video Player Prefs"}
 
 
 def work_root():
@@ -495,6 +501,11 @@ class Session:
                 if hfs.exists(p):
                     hfs.run("hdel", p)
                     removed.append(p.decode("mac_roman"))
+            if hfs.exists(b":Trash"):           # agents install_bridge_agent.sh moved aside
+                for name, _ in hfs.ls(b":Trash:"):
+                    if name.startswith(b"Old-BA-"):
+                        hfs.run("hdel", b":Trash:" + name)
+                        removed.append(":Trash:" + name.decode("mac_roman"))
             for need in (b":System Folder:System", b":System Folder:Finder"):
                 if not hfs.exists(need):
                     raise RuntimeError(f"no {need.decode()} on the new volume")
@@ -682,7 +693,30 @@ def bake_run(bake, machine, out, keep=False, log=print, port=None, extra=()):
     return out
 
 
+def volatile(bake):
+    """Paths in the bake's manifest listings compared by name only."""
+    v = set(bake.get("volatile", []))
+    if bake.get("kind") == "os":                # the whole volume: the System's own churn
+        v |= {"System Folder:Preferences:" + n.decode("mac_roman") for n in PREFS_NOISE}
+    return v
+
+
 def bake_one(bake, force=False, keep=False, log=print, port=None, extra=()):
+    """The product's snapshot, compared with the one it replaces."""
+    out = snapshot_path(bake["name"])
+    try:
+        old = snapshot.manifest(out) if os.path.exists(out) else None
+    except (RuntimeError, ValueError, KeyError):
+        old = None
+    result = bake_one_(bake, force, keep, log, port, extra)
+    if old:
+        diff = snapshot.install_diff(old, snapshot.manifest(out), volatile(bake))
+        log(f"{bake['name']}: " + (f"install changed: {', '.join(diff)}" if diff
+                                   else "same install as the snapshot it replaces"))
+    return result
+
+
+def bake_one_(bake, force=False, keep=False, log=print, port=None, extra=()):
     """The product's snapshot: one run, or a run per machine merged."""
     out = snapshot_path(bake["name"])
     key = bake_key(bake) if bake.get("kind") != "derive" else None

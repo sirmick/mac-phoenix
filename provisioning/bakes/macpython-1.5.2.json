@@ -78,5 +78,8 @@
  "os": "tools-7.6.1",
  "prefer": {
   "Preferences:Python:Python 1.5.2c1 Preferences": 0
- }
+ },
+ "volatile": [
+  "Preferences:Python:Python 1.5.2c1 Preferences"
+ ]
 }

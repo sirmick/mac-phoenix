@@ -40,5 +40,8 @@
    "wait_app_not": "UserLand Frontier",
    "timeout": 60
   }
+ ],
+ "volatile": [
+  "Frontier 5.0.1:Frontier.root"
  ]
 }

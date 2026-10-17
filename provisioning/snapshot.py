@@ -117,6 +117,33 @@ def content_hash(items, system):
     return hashlib.md5(json.dumps([items, system], sort_keys=True).encode()).hexdigest()
 
 
+VOLATILE_NAMES = {"Installer Log File"}
+
+
+def install_listing(entries, volatile=()):
+    """A listing as far as the install goes: aliases (they record IDs and
+    dates), installer logs (dated) and the `volatile` paths (state a first
+    launch or a boot writes) by path, type and creator only."""
+    out = []
+    for e in entries:
+        if not e.get("folder") and (e["flags"] & ALIAS_FLAG or e["path"] in volatile
+                                    or e["path"].rsplit(":", 1)[-1] in VOLATILE_NAMES):
+            e = {k: e[k] for k in ("path", "type", "creator")}
+        out.append(e)
+    return out
+
+
+def install_diff(old, new, volatile=()):
+    """The paths whose install differs between two manifests ([] if a
+    re-bake reproduced the install; content hashes also see run noise)."""
+    diff = []
+    for k in ("items", "system"):
+        a = {e["path"]: e for e in install_listing(old.get(k, []), volatile)}
+        b = {e["path"]: e for e in install_listing(new.get(k, []), volatile)}
+        diff += [f"{k}:{p}" for p in sorted(set(a) | set(b)) if a.get(p) != b.get(p)]
+    return diff
+
+
 def blank(hfs, path, label, size_mb):
     with open(path, "wb") as f:
         f.truncate(max(size_mb, 1) << 20)
