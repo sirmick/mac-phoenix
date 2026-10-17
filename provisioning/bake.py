@@ -43,7 +43,9 @@ name only: a first launch's database or preferences).
 
 A re-bake is compared with the snapshot it replaces: "same install" when
 only run noise differs (aliases, installer logs, "volatile" paths; for os
-bakes also the System's own preferences), else the paths that changed.
+bakes also the System's own preferences, and fonts and control panels by
+size: an installer picks fonts' resource IDs afresh, a control panel keeps
+its settings in itself), else the paths that changed.
 
 Strings in steps may use {target}, {media}, {boot} (volume names) and
 {system} (the boot disk's System Folder path). A step with "backend"
@@ -123,7 +125,7 @@ NOISE = (b":Recent Applications:", b":Recent Documents:", b":Recent Servers:",
 # Preferences: only new files are taken (an app's first-launch answers live
 # there), minus these, which the System or the bridge write.
 PREFS_NOISE = {b"MacPhoenix.cfg", b"ASLM Preferences", b"Apple Menu Options Prefs",
-               b"Mac OS Easy Open Preferences", b"WindowShade Preferences", b"Internet Preferences",
+               b"Mac OS Easy Open Preferences", b"Macintosh Easy Open Preferences", b"WindowShade Preferences", b"Internet Preferences",
                b"Finder Preferences", b"Users & Groups Data File", b"File Sharing Folder",
                b"Launcher Preferences", b"Desktop Pictures Prefs", b"Extensions Manager Preferences",
                b"System Preferences", b"Monitors & Sound Prefs", b"StuffIt Expander Preferences",
@@ -710,7 +712,8 @@ def bake_one(bake, force=False, keep=False, log=print, port=None, extra=()):
         old = None
     result = bake_one_(bake, force, keep, log, port, extra)
     if old:
-        diff = snapshot.install_diff(old, snapshot.manifest(out), volatile(bake))
+        sized = ["System Folder:Fonts:", "System Folder:Control Panels:"] if bake.get("kind") == "os" else []
+        diff = snapshot.install_diff(old, snapshot.manifest(out), volatile(bake), sized)
         log(f"{bake['name']}: " + (f"install changed: {', '.join(diff)}" if diff
                                    else "same install as the snapshot it replaces"))
     return result

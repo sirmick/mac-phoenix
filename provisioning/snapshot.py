@@ -120,26 +120,30 @@ def content_hash(items, system):
 VOLATILE_NAMES = {"Installer Log File"}
 
 
-def install_listing(entries, volatile=()):
+def install_listing(entries, volatile=(), sized=()):
     """A listing as far as the install goes: aliases (they record IDs and
     dates), installer logs (dated) and the `volatile` paths (state a first
-    launch or a boot writes) by path, type and creator only."""
+    launch or a boot writes) by path, type and creator only; files under the
+    `sized` folders (fonts, whose resource IDs an installer picks afresh)
+    by their forks' lengths, not their MD5s."""
     out = []
     for e in entries:
         if not e.get("folder") and (e["flags"] & ALIAS_FLAG or e["path"] in volatile
                                     or e["path"].rsplit(":", 1)[-1] in VOLATILE_NAMES):
             e = {k: e[k] for k in ("path", "type", "creator")}
+        elif not e.get("folder") and any(e["path"].startswith(f) for f in sized):
+            e = {k: v for k, v in e.items() if k not in ("data", "rsrc")}
         out.append(e)
     return out
 
 
-def install_diff(old, new, volatile=()):
+def install_diff(old, new, volatile=(), sized=()):
     """The paths whose install differs between two manifests ([] if a
     re-bake reproduced the install; content hashes also see run noise)."""
     diff = []
     for k in ("items", "system"):
-        a = {e["path"]: e for e in install_listing(old.get(k, []), volatile)}
-        b = {e["path"]: e for e in install_listing(new.get(k, []), volatile)}
+        a = {e["path"]: e for e in install_listing(old.get(k, []), volatile, sized)}
+        b = {e["path"]: e for e in install_listing(new.get(k, []), volatile, sized)}
         diff += [f"{k}:{p}" for p in sorted(set(a) | set(b)) if a.get(p) != b.get(p)]
     return diff
 
