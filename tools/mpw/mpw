@@ -25,8 +25,8 @@ its products in a comment line "# products: NAME ...". Without build.mpw,
 "Make -f MakeFile" runs and its commands are executed.
 
 --toolchain cw (or MPW_TOOLCHAIN=cw) uses CodeWarrior Pro 4's MPW instead:
-its compilers (MWC68K, MWCPPC, MWLink68K, MWLinkPPC), commands to its MPW
-Shell, all from public media; a session of its own.
+its compilers (MWC68K, MWCPPC, MWLink68K, MWLinkPPC) and ToolServer, all
+from public media; a session of its own.
 
 Environment: MPW_TOOLCHAIN (apple), MPW_STATE (default ~/.cache/mac-phoenix/mpw
 or mpw-cw), MPW_PORT (18390, cw 18391), MPW_SYSTEM (mpw-7.5.5.img or
@@ -57,17 +57,18 @@ BINARY = os.environ.get("MACPHOENIX_BINARY", os.path.join(ROOT, "build", "mac-ph
 # provisioning/images/<image>.json) and the application that takes the
 # commands. apple: MPW 3.4.2 from E.T.O. #22 (SC, MrC; local-only media),
 # commands to ToolServer. cw: CodeWarrior Pro 4's MPW (MWC68K, MWCPPC; public
-# media), commands to the MPW Shell (it has no ToolServer). Each has its own
-# session: state directory, port and System copy.
+# media) with ToolServer 3.4.1 from the same CD. Each has its own session:
+# state directory, port and System copy.
 TOOLCHAINS = {
     "apple": {"image": "mpw", "creator": "MPSX", "state": "mpw", "port": 18390},
-    "cw": {"image": "mpw-cw", "creator": "MPS ", "state": "mpw-cw", "port": 18391,
-           "app": "MPW:MPW:MPW Shell",      # by path: the System disk has Apple's MPW Shell too
+    "cw": {"image": "mpw-cw", "creator": "MPSX", "state": "mpw-cw", "port": 18391,
+           "app": "MPW:MPW:ToolServer",     # by path: the System disk has Apple's ToolServer too
            # Where Metrowerks' headers and libraries are on the disk (the IDE
            # install keeps them outside its MPW folder; mpw-cw.json puts them
            # under Interfaces&Libraries). {MWCIncludes}, the compilers'
            # default, is Apple's CIncludes.
-           "prelude": ('Set -e MWCIncludes "{CIncludes}"\n'
+           "prelude": ('Set -e HeadersAndLibs "{MPW}:Interfaces&Libraries:"\n'
+                       'Set -e MWCIncludes "{CIncludes}"\n'
                        'Set -e MSLCommonIncludes "{HeadersAndLibs}MSL C:MSL Common:Public Includes:"\n'
                        'Set -e MSLMacIncludes "{HeadersAndLibs}MSL C:MSL Mac:Public Includes:"\n'
                        'Set -e MSLLibraries "{HeadersAndLibs}MSL C:Bin:"\n'
@@ -242,8 +243,7 @@ def boot(s):
         r = api("/api/launch", {"path": APP}, timeout=60)
         if not r.get("success"):
             raise MPWError("could not launch %s: %s" % (APP, r))
-    # The answer comes back in a file: the MPW Shell sends no output in its
-    # reply (it goes to the Worksheet), ToolServer does.
+    # The answer comes back in a file, as every command's does (run()).
     os.makedirs(WORK, exist_ok=True)
     ready = os.path.join(WORK, "ready")
     for _ in range(10):

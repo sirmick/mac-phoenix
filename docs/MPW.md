@@ -77,8 +77,8 @@ A 68k Mac runs the CODE resources, a Power Mac the fragment. Both need
 
 ## CodeWarrior
 
-`--toolchain cw` (or `MPW_TOOLCHAIN=cw`) runs CodeWarrior Pro 4's MPW: the
-MPW Shell 3.4.2, Metrowerks' compilers and linkers as MPW tools (`MWC68K`,
+`--toolchain cw` (or `MPW_TOOLCHAIN=cw`) runs CodeWarrior Pro 4's MPW:
+ToolServer 3.4.1, Metrowerks' compilers and linkers as MPW tools (`MWC68K`,
 `MWCPPC`, `MWLink68K`, `MWLinkPPC`; `MWPascal68K`/`PPC` are PowerPC-only and
 don't run in the 68k session) and Apple's `Link`, `PPCLink`, `Rez` and the
 rest. Everything comes from the CodeWarrior Pro 4 Tools CD, a public pin
@@ -89,13 +89,16 @@ rest. Everything comes from the CodeWarrior Pro 4 Tools CD, a public pin
   Interfaces&Libraries, as on the E.T.O. disk) plus what Metrowerks'
   compilers link with, which the IDE install keeps outside it: MSL C
   (headers and libraries) and MacOS Support's libraries, under
-  Interfaces&Libraries.
+  Interfaces&Libraries; and ToolServer.
 * **The session** is its own (`~/.cache/mac-phoenix/mpw-cw`, port 18391).
-  The CD has no ToolServer, so commands go to the MPW Shell; it is launched
-  by path (the System disk has Apple's MPW Shell too, same creator), and
-  BridgeAgent sends to the running process. Output comes back through
-  files either way (the Shell's own goes to its Worksheet).
-* **Variables** set before every command: `{MWCIncludes}` (the compilers'
+  Commands go to ToolServer 3.4.1, as with Apple's toolchain: the CD's
+  installer doesn't install it, but its `Apple Development Tools` folder has
+  it (`ToolServer 3.4.1.sit`, the `toolserver-3.4.1` snapshot), and the disk
+  has it in the MPW folder. It is launched by path (the System disk has
+  Apple's ToolServer too, same creator), and BridgeAgent sends to the
+  running process.
+* **Variables** set before every command (ToolServer's `StartupTS` sets
+  only Apple's): `{HeadersAndLibs}`; `{MWCIncludes}` (the compilers'
   default include folder) is Apple's `{CIncludes}`; `{MSLCommonIncludes}`,
   `{MSLMacIncludes}`, `{MSLLibraries}`, `{MWMacOS68K}`, `{MWRuntime68K}`,
   `{MWRuntimePPC}` name the Metrowerks folders.

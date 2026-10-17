@@ -1,0 +1,10 @@
+{
+ "note": "ToolServer 3.4.1 (MPW's command server) from the CodeWarrior Pro 4 Tools CD's Apple Development Tools, expanded by StuffIt Expander: for tools/mpw/mpw --toolchain cw, whose MPW comes from the same CD without it",
+ "kind": "expand",
+ "archive": "CW4MACTOOLS.ISO",
+ "take": ":Apple Development Tools:ToolServer 3.4.1.sit",
+ "os": "tools-7.6.1",
+ "expect": [
+  "ToolServer 3.4.1"
+ ]
+}
