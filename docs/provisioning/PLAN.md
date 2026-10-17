@@ -305,8 +305,17 @@ As of 2026-10-16:
   Update only updates the startup disk, so it runs at the first boot from
   the new disk, its floppies attached as disks (`first_boot_disks`), and
   ends in its own Restart.
-* **7.1:** media on the Legacy CD (`System 7.1` with `7.1-C/Q610, C/Q650,
-  Q800 1.1`); not started.
+* **7.1** (`bakes/os-7.1.json`, parked 2026-10-17): the install works,
+  unattended, to "Installation on Macintosh HD was successful" (the
+  `7.1-C/Q610, C/Q650, Q800 1.1` InstallMeFirst disk with the generic 7.1
+  disks, Customize "System Software for any Macintosh"; System Enabler 040
+  lands in the System Folder). But the first boot bombs at the boot-blocks
+  stage (an empty bomb box), and so does the old hand-made
+  `system-7.1.img`: the emulator can't boot 7.1 on the Quadra 650 ROM.
+  Suspects: our ROM/System patches (written against 7.5+) hitting 7.1's
+  resources; 24-bit addressing from PRAM (the ROM and framebuffer sit above
+  16 MB); RAM size. Tests: `--ram 8`, `--zap-pram`, the boot log's last
+  CHECKLOAD before the bomb.
 
 ### Driving friction
 

@@ -1,0 +1,141 @@
+{
+ "note": "System 7.1 for the Quadra 650 from Apple's installers: the '7.1-C/Q610, C/Q650, Q800 1.1' set's InstallMeFirst disk (Installer, System Enabler 040) with the generic System 7.1 disks (Legacy CD), mounted through Disk Copy; Customize 'System Software for any Macintosh'. WIP: the end of the install.",
+ "kind": "os",
+ "version": "7.1",
+ "machines": [
+  "68k"
+ ],
+ "media": [
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.1:7.1-C/Q610, C/Q650, Q800 1.1:InstallMeFirst.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.1: System 7.1:Install.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.1: System 7.1:Install 2.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.1: System 7.1:Fonts.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.1: System 7.1:Printing.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.1: System 7.1:Tidbits.img"
+  }
+ ],
+ "steps": [
+  {
+   "open": "{media}:InstallMeFirst.img"
+  },
+  {
+   "wait_for": {
+    "button": "Agree"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Agree"
+   }
+  },
+  {
+   "open": "{media}:Install.img"
+  },
+  {
+   "open": "{media}:Install 2.img"
+  },
+  {
+   "open": "{media}:Fonts.img"
+  },
+  {
+   "open": "{media}:Printing.img"
+  },
+  {
+   "open": "{media}:Tidbits.img"
+  },
+  {
+   "wait": 3
+  },
+  {
+   "launch": "InstallMeFirst:Installer"
+  },
+  {
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 90
+  },
+  {
+   "agent_exit": true
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 10
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "shot": "1-destination"
+  },
+  {
+   "click": {
+    "button": "Customize"
+   },
+   "until": {
+    "text": "System Software for any Macintosh"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "text": "System Software for any Macintosh",
+    "outside_controls": true
+   }
+  },
+  {
+   "shot": "2-any-macintosh"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation",
+    "front": true
+   },
+   "timeout": 900
+  },
+  {
+   "shot": "3-installed"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}
