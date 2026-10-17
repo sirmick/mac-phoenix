@@ -65,7 +65,7 @@ extern "C" {
 /* ── Constants ───────────────────────────────────────────────────── */
 
 #define IPC_VIDEO_MAGIC 0x4D504850  /* "MPHP" */
-#define IPC_VERSION 1
+#define IPC_VERSION 2
 
 /* Must cover the per-axis max of every mode in
  * src/common/include/video_modes.h (mp::video::kMaxWidth_Ppc /
@@ -158,6 +158,27 @@ typedef struct {
     uint8_t  data[IPC_AUDIO_MAX_FRAME_BYTES];  /* raw S16MSB (big-endian) */
 } IPCAudioFrame;
 
+/* ── The bridge trap's request slot (guest_bridge.h) ─────────────
+ *
+ * One request at a time from the HTTP side to the guest's BridgeAgent,
+ * which takes it through the bridge trap (NEXT) and answers (REPLY). In
+ * the IPC buffer when the CPU runs in a child process; a static one when
+ * it runs in-process. Ids order everything: the host writes req[] then
+ * req_id; the guest copies req[] then sets taken_id; the guest writes
+ * rep[] then rep_id. */
+#define IPC_BRIDGE_REQ_MAX  (1024 * 1024 + 64)
+#define IPC_BRIDGE_REP_MAX  (1024 * 1024)
+typedef struct IPCBridgeSlot {
+    IPC_ATOMIC_UINT32 agent;          /* the agent's protocol after AGENT_HELLO; 0: none */
+    IPC_ATOMIC_UINT32 req_id;         /* host: the request in req[] (0: none) */
+    IPC_ATOMIC_UINT32 taken_id;       /* guest: req_id it took */
+    IPC_ATOMIC_UINT32 rep_id;         /* guest: the request rep[] answers */
+    uint32_t req_len;
+    uint32_t rep_len;
+    char req[IPC_BRIDGE_REQ_MAX];
+    char rep[IPC_BRIDGE_REP_MAX];
+} IPCBridgeSlot;
+
 /* ── Shared memory buffer ────────────────────────────────────────
  *
  * Triple-buffered video frames (packed pixels, no stride padding),
@@ -224,6 +245,9 @@ typedef struct IPCBuffer {
     IPC_ATOMIC_UINT32 text_done;
     char text_query[128];
     char text_json[262144];
+
+    /* The bridge trap's request slot (both sides write their halves). */
+    IPCBridgeSlot bridge;
 
     /* ── Audio ring buffer (child writes, parent reads) ──────────── */
     IPC_ATOMIC_UINT32 audio_write_idx;   /* child increments after writing frame */

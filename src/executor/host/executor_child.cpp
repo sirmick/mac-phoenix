@@ -12,6 +12,7 @@
 
 #include "emulator_config.h"
 #include "ipc_protocol.h"
+#include "guest_bridge.h"
 #include "../../drivers/audio/audio_direct.h"
 
 #include <csignal>
@@ -193,6 +194,7 @@ const IPCInputHooks g_hooks = { hook_key, hook_abs, hook_rel, hook_button };
 int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
 {
     g_buf = buf;
+    guest_bridge::set_slot(&buf->bridge);      /* the bridge trap's requests */
     buf->boot_start_us = monotonic_us();
     init_xpram(cfg);
     set_phase("boot globs");

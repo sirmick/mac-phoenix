@@ -19,6 +19,8 @@
 class VideoOutput;     // Forward declaration
 class EmulatorSubprocess;   // Forward declaration
 
+struct IPCBridgeSlot;   // ipc_protocol.h
+
 namespace http {
 
 /**
@@ -91,6 +93,7 @@ private:
     Response handle_launch(const Request& req);
     Response handle_script(const Request& req);  // POST /api/script — generic 'misc'/'dosc'
     Response handle_exec(const Request& req);    // POST /api/exec — dosc with reply capture (ToolServer)
+    ::IPCBridgeSlot* bridge_slot();          // the bridge trap's request slot (guest_bridge.h)
     Response handle_copy(const Request& req);
     Response handle_ui(const Request& req);
     Response handle_text(const Request& req);

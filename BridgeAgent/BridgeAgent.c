@@ -53,11 +53,13 @@
 #include <ShutDown.h>
 #include <Scrap.h>
 #include <Traps.h>
+#include <Timer.h>
 #include <Video.h>      /* VDSwitchInfoRec, cscSwitchMode */
 #include <Displays.h>   /* GetMainDevice — already pulled by Quickdraw, kept explicit */
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "bridge_cfg.h"
 #include "bridge_paths.h"
@@ -849,41 +851,34 @@ static long extract_status_param(const AppleEvent *ae)
     return 0;
 }
 
-/* EXEC <creator> — like SCRIPT but waits for the AE reply and captures
- * stdout / stderr / exit status into _bridge_reply. The canonical target
- * is ToolServer (creator 'MPSX') which runs commands headlessly and
- * fills the reply with keyDirectObject (stdout), keyErrorString (stderr),
- * and keyErrorNumber ({Status}). MPW Shell doesn't return useful reply
- * payloads; use do_script for that.
- *
- * timeout is the AE wait timeout in ticks (1/60 sec). 60 * 60 = 3600
- * gives the script a minute. AI/host can re-issue for longer compiles. */
-static OSErr do_exec(OSType creator)
+/* Run src through creator's do-script ('misc'/'dosc') and wait for the
+ * reply, timeout ticks at most: stdout (keyDirectObject), stderr
+ * (keyErrorString) and {Status} (keyErrorNumber), as ToolServer ('MPSX')
+ * fills them. The MPW Shell doesn't return useful reply payloads; use
+ * do_script for that. Buffers are NewPtr'd (caller frees); an OSErr if the
+ * app couldn't be reached. */
+static OSErr exec_core(OSType creator, const char *src, long src_len, long timeout,
+                       char **out, long *out_len, char **errs, long *errs_len, long *status)
 {
-    char *src = NULL;
-    long src_len = 0;
-    OSErr err = load_bridge_script(&src, &src_len);
-    if (err != noErr) return err;
+    *out = *errs = NULL;
+    *out_len = *errs_len = *status = 0;
 
     ProcessSerialNumber appPSN;
-    err = launch_app_for_creator(creator, &appPSN);
-    if (err != noErr) { if (src) DisposePtr(src); return err; }
+    OSErr err = launch_app_for_creator(creator, &appPSN);
+    if (err != noErr) return err;
 
     AEAddressDesc target;
-    err = AECreateDesc(typeProcessSerialNumber, &appPSN,
-                       sizeof(appPSN), &target);
-    if (err != noErr) { if (src) DisposePtr(src); return err; }
+    err = AECreateDesc(typeProcessSerialNumber, &appPSN, sizeof(appPSN), &target);
+    if (err != noErr) return err;
 
     AppleEvent evt;
     err = AECreateAppleEvent('misc', 'dosc', &target,
                              kAutoGenerateReturnID, kAnyTransactionID, &evt);
     AEDisposeDesc(&target);
-    if (err != noErr) { if (src) DisposePtr(src); return err; }
+    if (err != noErr) return err;
 
-    if (src && src_len > 0) {
+    if (src && src_len > 0)
         err = AEPutParamPtr(&evt, keyDirectObject, typeChar, src, src_len);
-    }
-    if (src) DisposePtr(src);
     if (err != noErr) { AEDisposeDesc(&evt); return err; }
 
     /* Zero-init: an AEDesc with descriptorType=typeNull (0) and
@@ -892,28 +887,39 @@ static OSErr do_exec(OSType creator)
      * universal headers we build against. */
     AppleEvent reply;
     memset(&reply, 0, sizeof(reply));
-    err = AESend(&evt, &reply,
-                 kAEWaitReply | kAEAlwaysInteract,
-                 kAENormalPriority,
-                 60 * 60 /* 60s in ticks */, NULL, NULL);
+    err = AESend(&evt, &reply, kAEWaitReply | kAEAlwaysInteract,
+                 kAENormalPriority, timeout, NULL, NULL);
     AEDisposeDesc(&evt);
+    if (err != noErr) { AEDisposeDesc(&reply); return err; }
+
+    extract_text_param(&reply, keyDirectObject, out, out_len);
+    extract_text_param(&reply, keyErrorString,  errs, errs_len);
+    *status = extract_status_param(&reply);
+    AEDisposeDesc(&reply);
+    return noErr;
+}
+
+/* EXEC <creator> — like SCRIPT but waits for the AE reply and captures
+ * stdout / stderr / exit status into _bridge_reply (exec_core). A minute
+ * at most; the trap's EXEC (bridge v2) takes a timeout. */
+static OSErr do_exec(OSType creator)
+{
+    char *src = NULL;
+    long src_len = 0;
+    OSErr err = load_bridge_script(&src, &src_len);
+    if (err != noErr) return err;
+
+    char *out, *errs;
+    long out_len, errs_len, status;
+    err = exec_core(creator, src, src_len, 60 * 60, &out, &out_len, &errs, &errs_len, &status);
+    if (src) DisposePtr(src);
     if (err != noErr) {
         write_bridge_reply(NULL, 0, NULL, 0, (long)err);
-        AEDisposeDesc(&reply);
         return err;
     }
-
-    char *stdout_buf = NULL; long stdout_len = 0;
-    char *stderr_buf = NULL; long stderr_len = 0;
-    extract_text_param(&reply, keyDirectObject, &stdout_buf, &stdout_len);
-    extract_text_param(&reply, keyErrorString,  &stderr_buf, &stderr_len);
-    long status = extract_status_param(&reply);
-    AEDisposeDesc(&reply);
-
-    OSErr werr = write_bridge_reply(stdout_buf, stdout_len,
-                                    stderr_buf, stderr_len, status);
-    if (stdout_buf) DisposePtr(stdout_buf);
-    if (stderr_buf) DisposePtr(stderr_buf);
+    OSErr werr = write_bridge_reply(out, out_len, errs, errs_len, status);
+    if (out) DisposePtr(out);
+    if (errs) DisposePtr(errs);
     return werr;
 }
 
@@ -1520,6 +1526,159 @@ static void handle_event(EventRecord *evt)
     }
 }
 
+/* ---------- Bridge v2: the bridge trap ($ABE5, guest_bridge.h) ---------
+ *
+ * Requests come from the emulator through the trap instead of files: a
+ * Time Manager task asks it every 50 ms whether one waits (AGENT_PENDING) and
+ * wakes us (WakeUpProcess); the main loop takes it (NEXT) and answers
+ * (REPLY). The task runs at interrupt time on whatever A5: it touches only
+ * its own record, and is removed before we quit. Commands not moved yet
+ * still come as files (poll_bridge). */
+
+enum { kBridgeTrap = 0xABE5, kBridgeMagic = 0x4D506878, kBridgeProtocol = 2,
+       kSelAgentHello = 0x10, kSelNext = 0x11, kSelReply = 0x12, kSelAgentPending = 0x13 };
+
+static long bridge_call(long selector, const void *ptr, long value)
+{
+    register long d0 __asm__("d0") = selector;
+    register const void *a0 __asm__("a0") = ptr;
+    register long d1 __asm__("d1") = value;
+    __asm__ volatile(".short 0xABE5"
+                     : "+d"(d0), "+a"(a0), "+d"(d1)
+                     :
+                     : "d2", "a1", "memory", "cc");
+    return d0;
+}
+
+typedef struct {
+    TMTask tm;
+    ProcessSerialNumber psn;
+} AgentTask;
+
+static AgentTask gTask;
+static Boolean gV2;
+
+/* The Time Manager calls agent_tm_entry with the task in A1. */
+void agent_tick(AgentTask *t);
+void agent_tick(AgentTask *t)
+{
+    if (bridge_call(kSelAgentPending, NULL, 0) == 1)
+        WakeUpProcess(&t->psn);
+    PrimeTime((QElemPtr)&t->tm, 50);
+}
+
+extern void agent_tm_entry(void);
+__asm__(
+    "    .text\n"
+    "    .globl agent_tm_entry\n"
+    "agent_tm_entry:\n"
+    "    movem.l %d0-%d2/%a0-%a1,-(%sp)\n"
+    "    move.l %a1,-(%sp)\n"
+    "    jsr agent_tick\n"
+    "    addq.l #4,%sp\n"
+    "    movem.l (%sp)+,%d0-%d2/%a0-%a1\n"
+    "    rts\n");
+
+static void bridge_v2_init(void)
+{
+    if (GetToolboxTrapAddress(kBridgeTrap) == GetToolboxTrapAddress(_Unimplemented))
+        return;                                 /* an emulator without it: files only */
+    if (bridge_call(kSelAgentHello, NULL, kBridgeProtocol) != kBridgeMagic)
+        return;
+    GetCurrentProcess(&gTask.psn);
+    gTask.tm.tmAddr = (TimerUPP)agent_tm_entry;
+    InsTime((QElemPtr)&gTask.tm);
+    PrimeTime((QElemPtr)&gTask.tm, 50);
+    gV2 = true;
+}
+
+static void bridge_v2_stop(void)
+{
+    if (gV2)
+        RmvTime((QElemPtr)&gTask.tm);
+    gV2 = false;
+}
+
+static void v2_reply(const char *data, long len)
+{
+    bridge_call(kSelReply, data, len);
+}
+
+static void v2_reply_oserr(OSErr err)
+{
+    char b[32];
+    long n = snprintf(b, sizeof(b), "OSERR %d", (int)err);
+    v2_reply(b, n);
+}
+
+/* "EXEC <creator> <seconds>\r<script>": exec_core, its reply as the
+ * STDOUT/STDERR/STATUS text the file transport uses. */
+static void v2_exec(const char *req, long n)
+{
+    const char *cr = memchr(req, '\r', n);
+    if (!cr || n < 10) { v2_reply_oserr(paramErr); return; }
+    OSType creator;
+    memcpy(&creator, req + 5, 4);
+    long seconds = strtol(req + 10, NULL, 10);
+    if (seconds <= 0) seconds = 60;
+    const char *src = cr + 1;
+    long src_len = n - (src - req);
+
+    char *out, *errs;
+    long out_len, errs_len, status;
+    OSErr err = exec_core(creator, src, src_len, seconds * 60, &out, &out_len, &errs, &errs_len, &status);
+    if (err != noErr) { v2_reply_oserr(err); return; }
+
+    char hdr[3][40];
+    long h0 = snprintf(hdr[0], sizeof hdr[0], "STDOUT %ld\r", out_len);
+    long h1 = snprintf(hdr[1], sizeof hdr[1], "STDERR %ld\r", errs_len);
+    long h2 = snprintf(hdr[2], sizeof hdr[2], "STATUS %ld\r", status);
+    long total = h0 + out_len + h1 + errs_len + h2;
+    char *blob = NewPtr(total);
+    if (!blob) { v2_reply_oserr(memFullErr); }
+    else {
+        char *p = blob;
+        memcpy(p, hdr[0], h0); p += h0;
+        if (out_len) { memcpy(p, out, out_len); p += out_len; }
+        memcpy(p, hdr[1], h1); p += h1;
+        if (errs_len) { memcpy(p, errs, errs_len); p += errs_len; }
+        memcpy(p, hdr[2], h2);
+        v2_reply(blob, total);
+        DisposePtr(blob);
+    }
+    if (out) DisposePtr(out);
+    if (errs) DisposePtr(errs);
+}
+
+/* A request waiting? Take it and answer it. */
+static void poll_v2(void)
+{
+    static char small[256];
+    unsigned long n = (unsigned long)bridge_call(kSelNext, small, sizeof small);
+    if (n == 0xFFFFFFFFUL)
+        return;
+    char *req = small;
+    if (n & 0x80000000UL) {                     /* bigger than small: room for it */
+        n &= 0x7FFFFFFFUL;
+        req = NewPtr(n);
+        if (!req) {
+            bridge_call(kSelNext, small, 0);    /* can't: answer so the host stops waiting */
+            v2_reply_oserr(memFullErr);
+            return;
+        }
+        n = (unsigned long)bridge_call(kSelNext, req, n);
+    }
+    gCmdCount++;
+    if (n >= 5 && memcmp(req, "EXEC ", 5) == 0) {
+        gLastCmd[0] = 7; memcpy(gLastCmd + 1, "EXEC v2", 7);
+        v2_exec(req, (long)n);
+    } else {
+        v2_reply_oserr(-1);                     /* not a verb we know */
+    }
+    if (req != small) DisposePtr(req);
+    draw_status();
+}
+
 int main(void)
 {
     InitGraf(&qd.thePort);
@@ -1539,6 +1698,7 @@ int main(void)
     install_ae_handlers();
     load_network_config();   /* Read netcfg.txt from the resolved bridge dir */
     open_status_window();
+    bridge_v2_init();
     draw_status();
 
     /* Creating a visible window during startup yanked us to front. Hand
@@ -1558,9 +1718,11 @@ int main(void)
     while (gRunning) {
         if (WaitNextEvent(everyEvent, &evt, 6, NULL))
             handle_event(&evt);
+        if (gV2) poll_v2();
         poll_bridge();
         commit_pending_clip();
     }
 
+    bridge_v2_stop();
     return 0;
 }

@@ -24,6 +24,7 @@
 #include "command_bridge.h"
 #include "guest_ui.h"
 #include "text_feed.h"
+#include "guest_bridge.h"
 #include <algorithm>
 #include <string>
 #include "../config/emulator_config.h"
@@ -48,6 +49,8 @@ static IPCBuffer* g_ipc_buf = nullptr;     /* IPC buffer for subprocess mode */
 void boot_progress_set_ipc_buffer(void* buf)
 {
 	g_ipc_buf = static_cast<IPCBuffer*>(buf);
+	if (g_ipc_buf)
+		guest_bridge::set_slot(&g_ipc_buf->bridge);	/* the bridge trap's requests */
 }
 static uint32_t g_checkload_count = 0;
 static bool g_seen_boot_resource = false;

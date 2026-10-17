@@ -9,6 +9,7 @@
 #include "file_scanner.h"
 #include "../config/json_utils.h"
 #include "../core/executor_systems.h"
+#include "guest_bridge.h"
 #include <QJsonArray>
 #include "../common/include/sysdeps.h"  // For uint32 type
 #include "../core/emulator_init.h"  // For deferred initialization
@@ -599,6 +600,10 @@ Response APIRouter::handle_status(const Request& req) {
     json << ", \"annotations\": " << annotations_json();
     json << ", \"bridge_agent_connected\": "
          << (bridge_agent_is_connected(finder_reached) ? "true" : "false");
+    {
+        IPCBridgeSlot *slot = bridge_slot();     /* the agent's bridge trap protocol, 0: files only */
+        json << ", \"bridge_agent_protocol\": " << (slot ? guest_bridge::agent(slot) : 0);
+    }
 
     json << "}";
     return Response::json(json.str());
@@ -1904,6 +1909,15 @@ static bool parse_bridge_reply(const std::string& blob,
     return true;
 }
 
+// The bridge trap's request slot: the child's, in the IPC buffer, when the
+// CPU runs in a subprocess; this process's own otherwise.
+::IPCBridgeSlot *APIRouter::bridge_slot() {
+    if (!ctx_->subprocess)
+        return guest_bridge::slot();
+    auto *buf = const_cast<IPCBuffer *>(ctx_->subprocess->ipc_client()->shm());
+    return buf ? &buf->bridge : nullptr;
+}
+
 // POST /api/exec — synchronous "do script" with reply capture. Canonical
 // target is ToolServer (creator 'MPSX'), which fills the AE reply with
 // stdout / stderr / {Status}. Body:
@@ -1990,6 +2004,37 @@ Response APIRouter::handle_exec(const Request& req) {
     if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
         return Response::json(
             "{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
+    }
+
+    // Bridge v2: through the bridge trap (guest_bridge.h) when the agent
+    // speaks it. "timeout": seconds the script may take (default 60, at
+    // most an hour); the agent waits that long for the reply.
+    int timeout_s = std::clamp(j.value("timeout").toInt(60), 1, 3600);
+    IPCBridgeSlot *slot = bridge_slot();
+    if (slot && guest_bridge::agent(slot) >= 2) {
+        std::string reply, err;
+        std::string request = "EXEC " + creator + " " + std::to_string(timeout_s) + "\r" + command;
+        if (!guest_bridge::request(slot, request, reply, 15000, (timeout_s + 30) * 1000, err)) {
+            return Response::json("{\"success\": false, \"error\": \"" + err +
+                                  " (bridge agent, trap)\"}");
+        }
+        std::string stdout_bytes, stderr_bytes;
+        long exit_status = 0;
+        if (reply.compare(0, 6, "OSERR ") == 0) {
+            int mac_err = std::atoi(reply.c_str() + 6);
+            std::ostringstream e;
+            e << "{\"success\": false, \"error_code\": " << mac_err
+              << ", \"error\": \"AESend failed (Mac OS error " << mac_err << ")\"}";
+            return Response::json(e.str());
+        }
+        if (!parse_bridge_reply(reply, stdout_bytes, stderr_bytes, exit_status))
+            return Response::json("{\"success\": false, \"error\": \"malformed bridge reply\"}");
+        std::ostringstream out;
+        out << "{\"success\": true, \"via\": \"trap\","
+            << " \"exit_status\": " << exit_status << ","
+            << " \"stdout_b64\": \"" << b64_encode(stdout_bytes) << "\","
+            << " \"stderr_b64\": \"" << b64_encode(stderr_bytes) << "\"}";
+        return Response::json(out.str());
     }
 
     // Stale reply from a previous call would otherwise leak into ours.
