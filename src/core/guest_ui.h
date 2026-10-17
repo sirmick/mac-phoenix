@@ -6,4 +6,4 @@
 
 #include <string>
 
-std::string guest_ui_json(bool *has_front = nullptr);
+std::string guest_ui_json(bool *has_front = nullptr, bool *desktop = nullptr);

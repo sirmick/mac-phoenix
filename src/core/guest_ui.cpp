@@ -264,12 +264,12 @@ void dialog_items(uint32_t wp, int dx, int dy, std::string &out)
     out += ']';
 }
 
-void windows(uint32_t wp, int depth, int &n, bool &has_front, std::string &out)
+void windows(uint32_t wp, int depth, int &n, bool &has_front, bool &has_desktop, std::string &out)
 {
     for (int i = 0; wp && valid(wp, 160) && i < 32 && n < 64; i++) {
         int16_t kind = ReadMacInt16(wp + 108);
         if (kind == -32767) {                    /* a Layer Manager layer: its windows */
-            if (depth < 3) windows(ReadMacInt32(wp + 140), depth + 1, n, has_front, out);
+            if (depth < 3) windows(ReadMacInt32(wp + 140), depth + 1, n, has_front, has_desktop, out);
             wp = ReadMacInt32(wp + 144);
             continue;
         }
@@ -277,7 +277,11 @@ void windows(uint32_t wp, int depth, int &n, bool &has_front, std::string &out)
         int dx, dy;
         origin(wp, dx, dy);
         bool visible = ReadMacInt8(wp + 110), hilited = ReadMacInt8(wp + 111);
-        if (visible && hilited) has_front = true;
+        /* The Finder's desktop (kind 20, the whole screen) stays highlighted
+         * while the Finder runs in the background: only a fallback. */
+        Rect pr = rect_at(wp + 16);
+        bool desktop = kind == 20 && pr.right - pr.left >= 512;
+        if (visible && hilited) (desktop ? has_desktop : has_front) = true;
         out += "{\"title\":";
         str(out, pstring(deref(ReadMacInt32(wp + 134))));
         char b[112];
@@ -297,8 +301,10 @@ void windows(uint32_t wp, int depth, int &n, bool &has_front, std::string &out)
 
 /* The current process's windows (System 7's WindowList is per process: the
  * Process Manager switches it with the running application). *has_front:
- * the list holds the highlighted window, i.e. it is the front application's. */
-std::string guest_ui_json(bool *has_front)
+ * the list holds the highlighted window, i.e. it is the front application's;
+ * *desktop: only the Finder's desktop is highlighted (the Finder is in front
+ * with no window open, or just running in the background). */
+std::string guest_ui_json(bool *has_front, bool *desktop)
 {
     char app[33] = "";
     int n = valid(0x910, 32) ? ReadMacInt8(0x910) : 0;     /* CurApName */
@@ -307,12 +313,13 @@ std::string guest_ui_json(bool *has_front)
     std::string out = "{\"app\":";
     str(out, app);
     out += ",\"windows\":[";
-    bool front = false;
+    bool front = false, has_desktop = false;
     int count = 0;
-    windows(valid(0x9D6, 4) ? ReadMacInt32(0x9D6) : 0, 0, count, front, out);
+    windows(valid(0x9D6, 4) ? ReadMacInt32(0x9D6) : 0, 0, count, front, has_desktop, out);
     out += "]";
     menus(out);
     out += "}";
     if (has_front) *has_front = front;
+    if (desktop) *desktop = !front && has_desktop;
     return out;
 }

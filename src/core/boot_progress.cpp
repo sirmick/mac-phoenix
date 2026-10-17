@@ -974,15 +974,24 @@ void boot_progress_export_mac_state(void)
 	}
 	if (g_ipc_buf) {
 		/* The window list belongs to whichever process runs at this tick:
-		 * wait (up to two seconds) for one that holds the front window. */
+		 * wait (up to two seconds) for one that holds the front window. The
+		 * Finder's desktop only counts if no other front window shows up
+		 * within half a second (it looks highlighted to the Finder even when
+		 * the Finder runs in the background). */
 		static uint32_t ui_waiting = 0;
 		static int ui_ticks = 0;
+		static std::string ui_desktop;
 		uint32_t want = IPC_ATOMIC_LOAD(g_ipc_buf->ui_request);
 		if (want != IPC_ATOMIC_LOAD(g_ipc_buf->ui_done)) {
-			if (ui_waiting != want) { ui_waiting = want; ui_ticks = 0; }
-			bool front = false;
-			std::string ui = guest_ui_json(&front);
-			if (!front && ++ui_ticks < 120) goto ui_later;
+			if (ui_waiting != want) { ui_waiting = want; ui_ticks = 0; ui_desktop.clear(); }
+			bool front = false, desktop = false;
+			std::string ui = guest_ui_json(&front, &desktop);
+			if (desktop) ui_desktop = ui;
+			++ui_ticks;
+			if (!front) {
+				if (!ui_desktop.empty() && ui_ticks >= 30) ui = ui_desktop;
+				else if (ui_ticks < 120) goto ui_later;
+			}
 			size_t n = ui.size() < sizeof(g_ipc_buf->ui_json) - 1 ? ui.size() : sizeof(g_ipc_buf->ui_json) - 1;
 			memcpy(g_ipc_buf->ui_json, ui.data(), n);
 			g_ipc_buf->ui_json[n] = '\0';

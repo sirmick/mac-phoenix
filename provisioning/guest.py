@@ -223,18 +223,7 @@ class Guest:
     # ---- the guest's UI (/api/ui)
 
     def ui(self):
-        """/api/ui: the windows of the process running when it was read. The
-        Finder's desktop (a full-screen window, kind 20) counts as front
-        whenever the Finder gets a turn in the background, so a desktop
-        snapshot is only believed when it repeats (else a front-window search
-        would cover the whole screen and find the desktop's icon labels)."""
-        for _ in range(4):
-            ui = self.get("/api/ui", 10) or {"windows": [], "menus": []}
-            front = next((w for w in ui["windows"] if w.get("front")), None)
-            if not front or front.get("kind") != 20:
-                return ui
-            time.sleep(0.3)
-        return ui
+        return self.get("/api/ui", 10) or {"windows": [], "menus": []}
 
     def find(self, what, ui=None):
         """(x, y) of the centre of a named control or dialog item in the
