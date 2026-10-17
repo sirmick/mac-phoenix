@@ -437,7 +437,17 @@ static OSErr psn_for_creator(OSType creator, ProcessSerialNumber *outPSN)
 static OSErr launch_app_for_creator(OSType creator, ProcessSerialNumber *outPSN)
 {
     FSSpec appSpec;
-    OSErr err = find_app_for_creator(creator, &appSpec);
+    OSErr err;
+
+    /* Already running: that process, not whichever copy the lookup finds
+     * (two MPW Shells, Apple's and CodeWarrior's, share a creator; the one
+     * a caller launched by path is the one it means). */
+    if (psn_for_creator(creator, outPSN) == noErr) {
+        SetFrontProcess(outPSN);
+        return noErr;
+    }
+
+    err = find_app_for_creator(creator, &appSpec);
     if (err != noErr) err = search_app_for_creator(creator, &appSpec);
     if (err != noErr) return err;
 
