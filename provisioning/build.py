@@ -380,10 +380,22 @@ class Builder:
                 label = data.get("label", data["name"])
                 alias = (man.get("target"), mapper(p, label), volume_date(label), out_path(data))
         replaced = self.put(image, snap, items, sysf, replace=True, alias=alias)
+        removed = []
+        if man.get("system_remove"):            # what the product supersedes but leaves behind
+            self.hfs.mount(image)
+            try:
+                for rel in man["system_remove"]:
+                    path = sysf + b":" + mr(rel)
+                    if self.hfs.exists(path):
+                        self.hfs.run("hdel", path)
+                        removed.append(rel)
+            finally:
+                self.hfs.umount()
         shutil.rmtree(st)
         files = sum(1 for _, l in items if l)
         self.log(f"  {snap}: System Folder  ({files} files"
-                 + (f"; replaced {', '.join(r.split(':', 2)[-1] for r in replaced)}" if replaced else "") + ")")
+                 + (f"; replaced {', '.join(r.split(':', 2)[-1] for r in replaced)}" if replaced else "")
+                 + (f"; removed {', '.join(removed)}" if removed else "") + ")")
 
 
 def build(d, force=False, log=print):

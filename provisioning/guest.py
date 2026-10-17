@@ -88,6 +88,13 @@ class Guest:
             args += ["--cdrom", c]
         self.cancelled = False              # set from another thread: waits stop
         self.port = port
+        import socket
+        with socket.socket() as probe:          # someone else's emulator there would answer
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)   # TIME_WAIT is fine
+            try:                                # every request in this one's place
+                probe.bind(("", port))
+            except OSError:
+                raise RuntimeError(f"port {port} is already in use (an emulator left running?)")
         self.log = open(os.path.join(work, "emulator.log"), "a")
         self.proc = subprocess.Popen(args, stdout=self.log, stderr=subprocess.STDOUT, cwd=ROOT)
         for _ in range(80):

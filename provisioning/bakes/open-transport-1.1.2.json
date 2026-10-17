@@ -1,5 +1,5 @@
 {
- "note": "Open Transport 1.1.2 (Legacy CD floppies) for System 7.5.5: Easy Install (Open Transport, AppleTalk, TCP/IP and MacTCP support for all Macintoshes) onto the startup disk, then its restart; the System Folder changes are the snapshot. 7.6.1 has Open Transport built in.",
+ "note": "Open Transport 1.1.2 (Legacy CD floppies) for System 7.5.5: Easy Install (Open Transport, AppleTalk, TCP/IP and MacTCP support for all Macintoshes) onto the startup disk, then its restart; the System Folder changes are the snapshot. 7.6.1 has Open Transport built in. The 'all Macintoshes' install puts fat libraries in but leaves System 7.5.3's 1.1 68K libraries behind; with those, 7.5.5 bombs at startup on the PPC machine (illegal instruction), so they are removed (system_remove).",
  "kind": "install",
  "os": "tools-7.5.5",
  "media": [
@@ -94,5 +94,10 @@
   {
    "wait_finder": 240
   }
+ ],
+ "system_remove": [
+  "Extensions:Open Transport 68K Library",
+  "Extensions:Open Tpt ATalk 68K Library",
+  "Extensions:Open Tpt Inet 68K Library"
  ]
 }

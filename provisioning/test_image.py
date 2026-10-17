@@ -80,7 +80,12 @@ def run(images, machine, port, only, log=print):
 
     def start():
         g = Guest(work, bake.BACKENDS[machine], disks, [], port, bake.STORAGE)
-        g.wait_finder(240)
+        try:
+            g.wait_finder(240)
+        except BaseException:
+            g.shot("boot-failed")
+            g.stop()                        # never leave it running (it holds the port)
+            raise
         time.sleep(10)                      # first mount: the Finder builds each volume's desktop file
         return g
 

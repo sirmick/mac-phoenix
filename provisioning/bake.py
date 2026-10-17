@@ -33,7 +33,9 @@ attached: {"file", "take"}), "steps", "expect" (names that must be at
 the top of the result), "from_boot" (new items at the top of the boot
 disk count as installed), "launch" (the product's apps, relative to the
 snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
-"needs_serial", "machines"), "settle" (seconds after boot).
+"needs_serial", "machines"), "settle" (seconds after boot), "system_remove"
+(System Folder files the install supersedes but leaves behind: the build
+deletes them where the snapshot's System Folder part goes).
 
 Strings in steps may use {target}, {media}, {boot} (volume names) and
 {system} (the boot disk's System Folder path). A step with "backend"
@@ -571,6 +573,7 @@ class Session:
                 "recipe_md5": hashlib.md5(json.dumps(bake, sort_keys=True).encode()).hexdigest(),
                 "media": {n: media_entry(n).get("md5") for n in media_names(bake)},
                 "launch": bake.get("launch", []), "made": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "system_remove": bake.get("system_remove", []),
                 "excluded": [e.decode("mac_roman") for e in excluded],
                 "system_ignored": [p.decode("mac_roman") for p in ignored]}
         os.makedirs(os.path.dirname(out), exist_ok=True)
