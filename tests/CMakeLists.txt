@@ -461,6 +461,18 @@ set_tests_properties(mpw_toolchain_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# The committed guest programs (MacPhoenixSuite, OTTest) are their sources'
+# builds: each is built again with tools/mpw/mpw and compared.
+add_test(
+  NAME guest_builds_current
+  COMMAND bash ${TEST_DIR}/test_guest_builds.sh --port 18396
+)
+set_tests_properties(guest_builds_current PROPERTIES
+  TIMEOUT 300
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Executor's native Open Transport through Apple's 68k OT glue (OTTest, an
 # MPW tool run in ToolServer); on both cores. Skips without the MPW disk.
 foreach(core uae mame-68k)

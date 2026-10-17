@@ -2,6 +2,7 @@
 # PowerPC (MrC, PPCLink) code in one file; tools/mpw/mpw build tests/guest/suite
 # products: MacPhoenixSuite
 Set Sources "main files audio ascript tcpip net netdeep keyboard"
+Delete -i MacPhoenixSuite MacPhoenixSuite.68k    # Rez -a would add to the last build
 For f in {Sources}
 	SC -b {f}.c -o {f}.68k.o
 	MrC {f}.c -o {f}.ppc.o
