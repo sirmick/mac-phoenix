@@ -16,6 +16,7 @@
 #include "../ipc/ipc_client.h"    // For g_ipc_shm_mutex
 #include "../ipc/ipc_protocol.h"  // For IPC buffer
 #include "../core/guest_ui.h"
+#include "../core/text_feed.h"
 #include "../drivers/video/video_output.h"  // For snapshot_frame()
 #include "../common/include/video_modes.h"
 #include "../core/boot_progress.h"  // For boot phase query
@@ -59,6 +60,8 @@ namespace webrtc {
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <vector>
+#include <deque>
+
 
 // Globals from main.cpp for checking emulator state
 extern uint32 ROMSize;  // 0 if no ROM loaded
@@ -73,6 +76,8 @@ extern void ADBSetRelMouseMode(bool relative);
 extern "C" void InvokeDebugger(void);
 
 namespace http {
+
+static std::string annotations_json();   // /api/annotate's lines, for /api/status
 
 APIRouter::APIRouter(APIContext* context)
     : ctx_(context)
@@ -188,6 +193,12 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     }
     if (req.path == "/api/ui" && req.method == "GET") {
         return handle_ui(req);
+    }
+    if (req.path == "/api/text" && req.method == "GET") {
+        return handle_text(req);
+    }
+    if (req.path == "/api/annotate" && req.method == "POST") {
+        return handle_annotate(req);
     }
     if (req.path == "/api/windows" && req.method == "GET") {
         return handle_windows(req);
@@ -585,6 +596,7 @@ Response APIRouter::handle_status(const Request& req) {
         }
     }
 
+    json << ", \"annotations\": " << annotations_json();
     json << ", \"bridge_agent_connected\": "
          << (bridge_agent_is_connected(finder_reached) ? "true" : "false");
 
@@ -1626,6 +1638,36 @@ Response APIRouter::handle_ui(const Request& req) {
     return Response::json("{\"windows\": [], \"error\": \"no answer from the emulator (paused?)\"}");
 }
 
+// GET /api/text — the strings QuickDraw drew that are still on screen, with
+// their rectangles (text_feed.cpp). ?since=N: every draw after sequence N,
+// off screen ones too; ?raw=1: one entry per StdText call, unmerged.
+std::string APIRouter::text_json(const std::string& query) {
+    if (!ctx_->subprocess) {
+        return text_feed_json(query);
+    }
+    auto* buf = const_cast<IPCBuffer*>(ctx_->subprocess->ipc_client()->shm());
+    if (!buf || !ctx_->subprocess->is_running()) {
+        return "{\"text\": [], \"error\": \"emulator not running\"}";
+    }
+    // One request at a time: the query travels in shared memory.
+    static std::mutex text_mutex;
+    std::lock_guard<std::mutex> lock(text_mutex);
+    snprintf(buf->text_query, sizeof(buf->text_query), "%s", query.c_str());
+    uint32_t want = IPC_ATOMIC_LOAD(buf->text_request) + 1;
+    IPC_ATOMIC_STORE(buf->text_request, want);
+    for (int i = 0; i < 200; i++) {                 // up to 2 s, the child answers at 60 Hz
+        if (IPC_ATOMIC_LOAD(buf->text_done) == want) {
+            return std::string(buf->text_json);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return "{\"text\": [], \"error\": \"no answer from the emulator (paused?)\"}";
+}
+
+Response APIRouter::handle_text(const Request& req) {
+    return Response::json(text_json(req.query));
+}
+
 Response APIRouter::handle_windows(const Request& req) {
     (void)req;
     if (ctx_->subprocess) {
@@ -2027,8 +2069,43 @@ Response APIRouter::handle_copy(const Request& req) {
     return bridge_command(("COPY " + from + "\r" + to).c_str(), 6000, true);
 }
 
+// POST /api/annotate {"text": "..."} — a line from whatever is driving the
+// guest (provisioning/bake.py: the step it is on), kept with the last few
+// and shown by the web UI over the screen, so someone watching can follow
+// along. {"text": ""} clears them.
+static std::mutex g_annotate_mutex;
+static std::deque<std::string> g_annotations;
+static uint32_t g_annotate_seq = 0;
+
+Response APIRouter::handle_annotate(const Request& req) {
+    QJsonObject j = QJsonDocument::fromJson(QByteArray::fromStdString(req.body)).object();
+    std::string text = j.value("text").toString().toStdString();
+    std::lock_guard<std::mutex> lock(g_annotate_mutex);
+    if (text.empty()) {
+        g_annotations.clear();
+    } else {
+        g_annotations.push_back(text);
+        while (g_annotations.size() > 6) g_annotations.pop_front();
+    }
+    g_annotate_seq++;
+    return Response::json("{\"ok\": true}");
+}
+
+static std::string annotations_json() {
+    std::lock_guard<std::mutex> lock(g_annotate_mutex);
+    std::string out = "{\"seq\": " + std::to_string(g_annotate_seq) + ", \"lines\": [";
+    for (size_t i = 0; i < g_annotations.size(); i++)
+        out += (i ? ", \"" : "\"") + storage::json_escape(g_annotations[i]) + "\"";
+    return out + "]}";
+}
+
+// POST /api/quit — quit the front app; {"agent": true}: BridgeAgent itself
+// (until the next boot: provisioning steps out of an installer's way).
 Response APIRouter::handle_quit(const Request& req) {
-    (void)req;
+    QJsonObject j = QJsonDocument::fromJson(QByteArray::fromStdString(req.body)).object();
+    if (j.value("agent").toBool()) {
+        return bridge_command("EXIT", 30);
+    }
     return bridge_command("QUIT", 30);
 }
 
@@ -2162,6 +2239,16 @@ Response APIRouter::handle_wait(const Request& req) {
             }
             if (reached) {
                 return Response::json("{\"ok\": true, \"boot_phase\": \"" + phase + "\"}");
+            }
+        } else if (cond_type == "text") {
+            // A string on screen containing the value (/api/text).
+            QJsonDocument t = QJsonDocument::fromJson(QByteArray::fromStdString(text_json("")));
+            for (const QJsonValue& v : t.object().value("text").toArray()) {
+                QJsonObject o = v.toObject();
+                if (o.value("text").toString().contains(QString::fromStdString(cond_value))) {
+                    return Response::json(QJsonDocument(QJsonObject{{"ok", true}, {"match", o}})
+                                              .toJson(QJsonDocument::Compact).toStdString());
+                }
             }
         } else {
             Response r; r.set_status(400);

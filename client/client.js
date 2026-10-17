@@ -1779,6 +1779,10 @@ class MacPhoenixClient {
         this.connected = false;
         this._stopHeartbeat();
         this.updateStatus('Disconnected', 'error');
+        // Say so over the screen: otherwise its last frame stays up looking
+        // like a guest that hung (only the local cursor still moves). Hidden
+        // again by the first frame after reconnecting.
+        this.showOverlay('Connection lost', 'The emulator stopped or restarted. Reconnecting…');
         this.scheduleReconnect();
     }
 
@@ -2661,6 +2665,7 @@ class MacPhoenixClient {
     }
 
     sendMouseMove(dx, dy, timestamp) {
+        if (VIEW_ONLY) return;
         if (this._wsIsOpen()) {
             const buffer = new ArrayBuffer(1 + 2 + 2 + 8);
             const view = new DataView(buffer);
@@ -2675,6 +2680,7 @@ class MacPhoenixClient {
     }
 
     sendMouseAbsolute(x, y, timestamp) {
+        if (VIEW_ONLY) return;
         if (this._wsIsOpen()) {
             const buffer = new ArrayBuffer(1 + 2 + 2 + 8);
             const view = new DataView(buffer);
@@ -2689,6 +2695,7 @@ class MacPhoenixClient {
     }
 
     sendMouseButton(button, down, timestamp) {
+        if (VIEW_ONLY) return;
         if (this._wsIsOpen()) {
             const buffer = new ArrayBuffer(1 + 1 + 1 + 8);
             const view = new DataView(buffer);
@@ -2708,6 +2715,7 @@ class MacPhoenixClient {
     }
 
     sendKey(keycode, down, timestamp) {
+        if (VIEW_ONLY) return;
         if (this._wsIsOpen()) {
             const buffer = new ArrayBuffer(1 + 2 + 1 + 8);
             const view = new DataView(buffer);
@@ -5259,6 +5267,25 @@ async function testCodecCycle() {
 }
 window.testCodecCycle = testCodecCycle;
 
+// ?view: watch only. No mouse or keyboard reaches the guest, so following a
+// driver (provisioning/bake.py) can't disturb it.
+const VIEW_ONLY = new URLSearchParams(window.location.search).has('view');
+
+// The driver's annotations (/api/annotate), newest last, over the screen.
+let _annotateSeq = -1;
+function updateDriverBanner(data) {
+    const banner = document.getElementById('driver-banner');
+    const a = data.annotations;
+    if (!banner || !a || a.seq === _annotateSeq) return;
+    _annotateSeq = a.seq;
+    banner.replaceChildren(...(VIEW_ONLY ? ['watching (view only)'] : []).concat(a.lines).map(t => {
+        const d = document.createElement('div');
+        d.textContent = t;
+        return d;
+    }));
+    banner.hidden = a.lines.length === 0 && !VIEW_ONLY;
+}
+
 // Crash panel: when the emulator child dies on its own, /api/status carries
 // child_exit {id, crashed, code, signal, log}. Shown until the emulator runs
 // again or the user dismisses that exit.
@@ -5334,6 +5361,7 @@ async function pollEmulatorStatus() {
         }
 
         updateCrashPanel(data);
+        updateDriverBanner(data);
 
         const dotRunning = document.getElementById('dot-running');
         const dotConnected = document.getElementById('dot-connected');

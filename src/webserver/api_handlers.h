@@ -93,6 +93,9 @@ private:
     Response handle_exec(const Request& req);    // POST /api/exec — dosc with reply capture (ToolServer)
     Response handle_copy(const Request& req);
     Response handle_ui(const Request& req);
+    Response handle_text(const Request& req);
+    Response handle_annotate(const Request& req);
+    std::string text_json(const std::string& query);
     Response handle_quit(const Request& req);
     Response handle_wait(const Request& req);
     Response handle_clipboard_set(const Request& req);  // POST /api/clipboard

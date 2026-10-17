@@ -276,6 +276,31 @@ main {
     position: relative;
 }
 
+/* What is driving the guest says what it is doing (/api/annotate,
+   provisioning/bake.py's steps): the newest line last, bright. */
+#driver-banner {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    max-width: calc(100% - 16px);
+    padding: 6px 10px;
+    background: rgba(20, 20, 20, 0.82);
+    border: 1px solid #3a6;
+    border-radius: 6px;
+    font: 12px/1.45 ui-monospace, Menlo, monospace;
+    color: #9a9;
+    pointer-events: none;
+    z-index: 15;
+}
+
+#driver-banner div:last-child {
+    color: #dfd;
+}
+
+#driver-banner[hidden] {
+    display: none;
+}
+
 /* The last lines a crashed emulator wrote (pollEmulatorStatus). */
 #crash-panel {
     position: absolute;

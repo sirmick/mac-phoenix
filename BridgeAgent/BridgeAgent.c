@@ -334,6 +334,46 @@ static OSErr find_app_for_creator(OSType creator, FSSpec *appSpec)
     }
 }
 
+/* An application with this creator, by a catalog search of every volume:
+ * for apps the desktop database doesn't know yet (copied onto a disk
+ * outside the Finder: a System Folder built from snapshots starts with an
+ * empty desktop database, and the Finder only registers apps it meets). */
+static OSErr search_app_for_creator(OSType creator, FSSpec *appSpec)
+{
+    static char buffer[16384];
+    short vIndex;
+    for (vIndex = 1; ; vIndex++) {
+        HParamBlockRec vpb;
+        memset(&vpb, 0, sizeof(vpb));
+        vpb.volumeParam.ioVolIndex = vIndex;
+        if (PBHGetVInfoSync(&vpb) != noErr) return fnfErr;
+
+        CInfoPBRec spec1, spec2;
+        memset(&spec1, 0, sizeof(spec1));
+        memset(&spec2, 0, sizeof(spec2));
+        spec1.hFileInfo.ioFlFndrInfo.fdType    = 'APPL';
+        spec1.hFileInfo.ioFlFndrInfo.fdCreator = creator;
+        spec2.hFileInfo.ioFlFndrInfo.fdType    = (OSType)0xFFFFFFFF;
+        spec2.hFileInfo.ioFlFndrInfo.fdCreator = (OSType)0xFFFFFFFF;
+        spec2.hFileInfo.ioFlAttrib             = 0x10;      /* files only */
+
+        CSParam csp;
+        memset(&csp, 0, sizeof(csp));
+        csp.ioVRefNum       = vpb.volumeParam.ioVRefNum;
+        csp.ioMatchPtr      = appSpec;
+        csp.ioReqMatchCount = 1;
+        csp.ioSearchBits    = fsSBFlFndrInfo | fsSBFlAttrib;
+        csp.ioSearchInfo1   = &spec1;
+        csp.ioSearchInfo2   = &spec2;
+        csp.ioSearchTime    = 0;
+        csp.ioOptBuffer     = buffer;
+        csp.ioOptBufSize    = sizeof(buffer);
+        OSErr err = PBCatSearchSync(&csp);
+        if ((err == noErr || err == eofErr) && csp.ioActMatchCount > 0)
+            return noErr;
+    }
+}
+
 /* Look up the Process Manager PSN for a process by creator signature.
  * Used after LaunchApplication because the PSN field returned in the
  * LaunchParamBlock is reportedly unreliable, and AECreateDesc with a
@@ -371,6 +411,7 @@ static OSErr launch_app_for_creator(OSType creator, ProcessSerialNumber *outPSN)
 {
     FSSpec appSpec;
     OSErr err = find_app_for_creator(creator, &appSpec);
+    if (err != noErr) err = search_app_for_creator(creator, &appSpec);
     if (err != noErr) return err;
 
     LaunchParamBlockRec lpb;
@@ -560,10 +601,38 @@ static OSErr do_copy(const char *args)
     return err;
 }
 
-/* Open a document via 'aevt'/'odoc' — the AE that Finder sends when the
- * user double-clicks. Generic over MacPerl, Frontier (UserLand), ResEdit,
- * AppleScript editor, or any other app registered for the document's
- * creator. The receiving app handles the file natively. */
+/* An 'aevt'/'odoc' for one document (a list of one alias), to `target`. */
+static OSErr make_odoc(const AEAddressDesc *target, const FSSpec *docSpec, AppleEvent *evt)
+{
+    AliasHandle alias = NULL;
+    OSErr err = NewAlias(NULL, docSpec, &alias);
+    if (err != noErr || alias == NULL) return err ? err : memFullErr;
+
+    err = AECreateAppleEvent(kCoreEventClass, kAEOpenDocuments, target,
+                             kAutoGenerateReturnID, kAnyTransactionID, evt);
+    if (err != noErr) { DisposeHandle((Handle)alias); return err; }
+
+    AEDescList docList;
+    err = AECreateList(NULL, 0, false, &docList);
+    if (err == noErr) {
+        HLock((Handle)alias);
+        err = AEPutPtr(&docList, 1, typeAlias, *alias, GetHandleSize((Handle)alias));
+        HUnlock((Handle)alias);
+        if (err == noErr)
+            err = AEPutParamDesc(evt, keyDirectObject, &docList);
+        AEDisposeDesc(&docList);
+    }
+    DisposeHandle((Handle)alias);
+    if (err != noErr) AEDisposeDesc(evt);
+    return err;
+}
+
+/* Open a document as the Finder does on a double-click. An app that isn't
+ * running is launched with the 'odoc' in its launch parameters: the Process
+ * Manager hands it over as an Apple event, or, to an app that doesn't take
+ * high-level events (Apple's Installer), as classic startup documents. A
+ * running app is sent the 'odoc'. Generic over any creator: MacPerl,
+ * Frontier, ResEdit, Disk Copy, the Installer ... */
 static OSErr do_open_document(const unsigned char *path)
 {
     FSSpec docSpec;
@@ -575,42 +644,52 @@ static OSErr do_open_document(const unsigned char *path)
     if (err != noErr) return err;
 
     ProcessSerialNumber appPSN;
-    err = launch_app_for_creator(fndrInfo.fdCreator, &appPSN);
-    if (err != noErr) return err;
-
-    /* 'odoc' wants typeAEList of typeAlias as the direct parameter. */
-    AliasHandle alias = NULL;
-    err = NewAlias(NULL, &docSpec, &alias);
-    if (err != noErr || alias == NULL) return err ? err : memFullErr;
-
     AEAddressDesc target;
-    err = AECreateDesc(typeProcessSerialNumber, &appPSN, sizeof(appPSN), &target);
-    if (err != noErr) { DisposeHandle((Handle)alias); return err; }
-
     AppleEvent evt;
-    err = AECreateAppleEvent(kCoreEventClass, kAEOpenDocuments, &target,
-                             kAutoGenerateReturnID, kAnyTransactionID, &evt);
+    if (psn_for_creator(fndrInfo.fdCreator, &appPSN) != noErr) {
+        FSSpec appSpec;
+        err = find_app_for_creator(fndrInfo.fdCreator, &appSpec);
+        if (err != noErr) err = search_app_for_creator(fndrInfo.fdCreator, &appSpec);
+        if (err != noErr) return err;
+        OSType sig = fndrInfo.fdCreator;
+        err = AECreateDesc(typeApplSignature, &sig, sizeof(sig), &target);
+        if (err != noErr) return err;
+        err = make_odoc(&target, &docSpec, &evt);
+        AEDisposeDesc(&target);
+        if (err != noErr) return err;
+
+        AEDesc params;
+        err = AECoerceDesc(&evt, typeAppParameters, &params);
+        AEDisposeDesc(&evt);
+        if (err != noErr) return err;
+        /* The parameters go in a block of their own in the system heap,
+         * never freed here: the Process Manager holds on to them, and
+         * disposes of them when the launched app quits. Handed a pointer
+         * into our own heap (the coerced descriptor's data), that dispose
+         * corrupted this heap: BridgeAgent died (system errors 3, 10) as
+         * an Installer it had launched quit. */
+        long size = GetHandleSize(params.dataHandle);
+        Ptr block = NewPtrSys(size);
+        if (block == NULL) { AEDisposeDesc(&params); return memFullErr; }
+        BlockMoveData(*params.dataHandle, block, size);
+        AEDisposeDesc(&params);
+        LaunchParamBlockRec lpb;
+        memset(&lpb, 0, sizeof(lpb));
+        lpb.launchBlockID       = extendedBlock;
+        lpb.launchEPBLength     = extendedBlockLen;
+        lpb.launchControlFlags  = launchContinue | launchNoFileFlags;
+        lpb.launchAppSpec       = &appSpec;
+        lpb.launchAppParameters = (AppParametersPtr)block;
+        return launch_like_finder(&lpb);
+    }
+
+    err = AECreateDesc(typeProcessSerialNumber, &appPSN, sizeof(appPSN), &target);
+    if (err != noErr) return err;
+    err = make_odoc(&target, &docSpec, &evt);
     AEDisposeDesc(&target);
-    if (err != noErr) { DisposeHandle((Handle)alias); return err; }
-
-    AEDescList docList;
-    err = AECreateList(NULL, 0, false, &docList);
-    if (err == noErr) {
-        HLock((Handle)alias);
-        err = AEPutPtr(&docList, 1, typeAlias, *alias,
-                       GetHandleSize((Handle)alias));
-        HUnlock((Handle)alias);
-        if (err == noErr) {
-            err = AEPutParamDesc(&evt, keyDirectObject, &docList);
-        }
-        AEDisposeDesc(&docList);
-    }
-    DisposeHandle((Handle)alias);
-
-    if (err == noErr) {
-        err = AESend(&evt, NULL, kAENoReply | kAEAlwaysInteract,
-                     kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
-    }
+    if (err != noErr) return err;
+    err = AESend(&evt, NULL, kAENoReply | kAEAlwaysInteract,
+                 kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
     AEDisposeDesc(&evt);
     return err;
 }
@@ -1298,6 +1377,11 @@ static void poll_bridge(void)
         result = do_system_event(kAEShutDown);
     } else if (strncmp(cmd, "RESTART", 7) == 0) {
         result = do_system_event(kAERestart);
+    } else if (strncmp(cmd, "EXIT", 4) == 0) {
+        /* The agent itself quits: out of the way while Apple's Installer
+         * installs a System (it dies there otherwise: PLAN.md, P2 status).
+         * It comes back with the next boot. */
+        gRunning = false;
     } else if (strncmp(cmd, "QUIT", 4) == 0) {
         /* The front process can be the agent itself (it comes forward
          * to handle commands) or the Finder once an app has gone: quitting
