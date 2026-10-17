@@ -22,6 +22,7 @@ import re
 import struct
 import subprocess
 import tempfile
+import time
 
 LS = re.compile(rb"^([dfF])\s+(?:\S{4}/\S{4}\s+)?.*?\s\w{3}\s+\d+\s+(?:\d{4}|\d\d:\d\d)\s(.*)$")
 INFO = b"Snapshot Info"
@@ -38,7 +39,11 @@ class Hfs:
 
     def run(self, *args, check=True, input=None):
         args = [a.encode("mac_roman", "replace") if isinstance(a, str) else a for a in args]
-        r = subprocess.run(args, env=self.env, capture_output=True, input=input)
+        for _ in range(20):                     # hfsutils locks an image even to read it: another
+            r = subprocess.run(args, env=self.env, capture_output=True, input=input)   # bake reading
+            if b"unable to obtain lock" not in r.stderr:                              # the same one
+                break
+            time.sleep(0.5)
         if check and r.returncode:
             raise RuntimeError(b" ".join(args).decode("mac_roman") + ": " +
                                r.stderr.decode("mac_roman", "replace").strip())
