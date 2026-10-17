@@ -56,6 +56,7 @@ ctest --test-dir build -L executor
 tools/mpw/mpw setup                    # once: MPW disk + System, built from snapshots
 tools/mpw/mpw build tests/guest/ot     # build.mpw; products -> DIR/build/*.bin
 tools/mpw/mpw run 'Version'            # exit code = {Status}; mpw stop when done
+tools/mpw/mpw --toolchain cw build DIR  # CodeWarrior Pro 4's MPW (MWC68K, MWCPPC; public media)
 
 # Guest software (docs/Provisioning.md, docs/provisioning/PLAN.md): pinned
 # media (provisioning/media.json) -> bakes run in the guest -> snapshots
@@ -164,7 +165,7 @@ tests/
   test_mouse_position.sh            — Mouse position API test
   test_command_bridge.sh            — Command bridge integration tests (7 checks)
   test_guest_suite.sh               — Boot → launch MacPhoenixSuite via /api/launch → read results
-  guest/suite/                      — MacPhoenixSuite: the guest test suite, a fat C app built by tools/mpw/mpw
+  guest/suite/                      — MacPhoenixSuite: the guest test suite (files, audio, AppleScript, network, keyboard, Finder), a fat C app built by tools/mpw/mpw (Apple or CodeWarrior)
   test_extfs.sh                     — ExtFS config, CLI, backward compat tests (8 checks)
   test_boot_matrix.sh               — Single-cell capacity check ({backend,arch,disk,jit} → Finder)
   run_boot_matrix.sh                — Orchestrator: 14 cells (uae, mame-68k, kpx, mame-ppc), serial, CSV + PNG + per-cell log

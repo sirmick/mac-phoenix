@@ -11,6 +11,10 @@ tools/mpw/mpw setup                  # once: the MPW disk, from data.img's E.T.O
 tools/mpw/mpw build tests/guest/ot   # mirror, build.mpw, products as MacBinary
 tools/mpw/mpw run 'Version'          # any MPW command; exit code = {Status}
 tools/mpw/mpw status | stop
+
+# CodeWarrior Pro 4's MPW instead (public media): see "CodeWarrior" below
+tools/mpw/mpw --toolchain cw setup
+tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
 ```
 
 ## How it works
@@ -71,6 +75,45 @@ with both kinds of code (`tests/guest/suite/build.mpw`, MacPhoenixSuite):
 A 68k Mac runs the CODE resources, a Power Mac the fragment. Both need
 `QDGlobals qd;` defined by the application.
 
+## CodeWarrior
+
+`--toolchain cw` (or `MPW_TOOLCHAIN=cw`) runs CodeWarrior Pro 4's MPW: the
+MPW Shell 3.4.2, Metrowerks' compilers and linkers as MPW tools (`MWC68K`,
+`MWCPPC`, `MWLink68K`, `MWLinkPPC`; `MWPascal68K`/`PPC` are PowerPC-only and
+don't run in the 68k session) and Apple's `Link`, `PPCLink`, `Rez` and the
+rest. Everything comes from the CodeWarrior Pro 4 Tools CD, a public pin
+(the `codewarrior-pro-4` snapshot), so it needs no E.T.O. disc.
+
+* **The disk** (`provisioning/images/mpw-cw.json`, built by `mpw --toolchain
+  cw setup`): the CD's `CodeWarrior MPW` folder (MPW and
+  Interfaces&Libraries, as on the E.T.O. disk) plus what Metrowerks'
+  compilers link with, which the IDE install keeps outside it: MSL C
+  (headers and libraries) and MacOS Support's libraries, under
+  Interfaces&Libraries.
+* **The session** is its own (`~/.cache/mac-phoenix/mpw-cw`, port 18391).
+  The CD has no ToolServer, so commands go to the MPW Shell; it is launched
+  by path (the System disk has Apple's MPW Shell too, same creator), and
+  BridgeAgent sends to the running process. Output comes back through
+  files either way (the Shell's own goes to its Worksheet).
+* **Variables** set before every command: `{MWCIncludes}` (the compilers'
+  default include folder) is Apple's `{CIncludes}`; `{MSLCommonIncludes}`,
+  `{MSLMacIncludes}`, `{MSLLibraries}`, `{MWMacOS68K}`, `{MWRuntime68K}`,
+  `{MWRuntimePPC}` name the Metrowerks folders.
+* **A project** can have its own `build.cw.mpw`, used instead of
+  `build.mpw` with this toolchain. MacPhoenixSuite's
+  (`tests/guest/suite/build.cw.mpw`) makes the same fat application:
+  `MWC68K -model far` + `MWLink68K` with `MacOS.lib`, `MSL Runtime68K.Lib`,
+  `MSL C.68K Fa(4i_8d).Lib`, `MSL SIOUX.68K.Lib`, MathLib68K; `MWCPPC` +
+  `MWLinkPPC` (which writes the `cfrg` itself) with InterfaceLib,
+  AppleScriptLib, MathLib and the PPC MSL; `Rez` adds the 68k CODE and DATA
+  (`include "NAME.68k" not 'cfrg';`) and the SIZE. Its build passes the
+  guest suite on the 68k, Executor and PowerPC machines.
+
+Things to know: Metrowerks' objects aren't Apple's (`Link` can't read
+them, `MWLink68K` brings its own runtime module and wants MSL's); quoted
+includes need `-i "`` `Directory` ``"` (the compilers don't search the
+current folder); `'\n'` is 13 here too (`-mapcr`, the default).
+
 ## Executor fixes it needed
 
 * HFS: a second access path to a fork that is already open shares its
@@ -88,3 +131,9 @@ A 68k Mac runs the CODE resources, a Power Mac the fragment. Both need
 
 `ctest -R mpw_toolchain_executor`: startup, run, build, the tool, a compile
 error, a rebuild after host-side deletes. Skips without the MPW disk.
+
+`ctest -R guest_builds_current`: the committed guest programs
+(MacPhoenixSuite, OTTest) are their sources' builds (built again and
+compared by `tests/lib/macbinary_same.py`, which leaves out a PEF's
+timestamp and the resource map's scratch), and projects with a
+`build.cw.mpw` build with CodeWarrior.

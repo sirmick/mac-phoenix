@@ -1,0 +1,28 @@
+{
+ "note": "The MPW disk for tools/mpw/mpw --toolchain cw: CodeWarrior Pro 4's MPW (the MPW Shell, Metrowerks' MWC68K/MWCPPC/MWLink68K/MWLinkPPC and Apple's Link, PPCLink, Rez...) and its Interfaces&Libraries, from the codewarrior-pro-4 snapshot (public media), on a volume named MPW laid out as the E.T.O. disk is; plus what Metrowerks' compilers link with, which the IDE install keeps outside the MPW folder: MSL C (headers and libraries) and MacOS Support's libraries, under Interfaces&Libraries (tools/mpw/mpw names them: {MSLCommonIncludes}, {MSLMacIncludes}, {MSLLibraries}, {MWMacOS68K}, {MWRuntime68K}, {MWRuntimePPC}).",
+ "label": "MPW",
+ "place": [
+  {
+   "snapshot": "codewarrior-pro-4",
+   "take": "CodeWarrior Pro 4:CodeWarrior MPW:MPW",
+   "as": "MPW"
+  },
+  {
+   "snapshot": "codewarrior-pro-4",
+   "take": "CodeWarrior Pro 4:CodeWarrior MPW:Interfaces&Libraries",
+   "as": "Interfaces&Libraries"
+  },
+  {
+   "snapshot": "codewarrior-pro-4",
+   "take": "CodeWarrior Pro 4:Metrowerks CodeWarrior:Metrowerks Standard Library:MSL C",
+   "to": "Interfaces&Libraries",
+   "as": "MSL C"
+  },
+  {
+   "snapshot": "codewarrior-pro-4",
+   "take": "CodeWarrior Pro 4:Metrowerks CodeWarrior:MacOS Support:Libraries",
+   "to": "Interfaces&Libraries",
+   "as": "MacOS Support"
+  }
+ ]
+}

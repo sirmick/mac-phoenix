@@ -19,12 +19,18 @@ Sources in DIR are UTF-8 with LF line ends; they reach MPW as MacRoman with
 CR. Compiler and linker messages naming them are repeated in gcc form
 ("DIR/file.c:12: ...") after MPW's own.
 
-A build script (build.mpw) runs with {Exit} 1 in DIR's mirror; it names
+A build script (build.mpw, or build.cw.mpw for --toolchain cw if there) runs
+with {Exit} 1 in DIR's mirror; it names
 its products in a comment line "# products: NAME ...". Without build.mpw,
 "Make -f MakeFile" runs and its commands are executed.
 
-Environment: MPW_STATE (default ~/.cache/mac-phoenix/mpw), MPW_PORT (18390),
-MPW_SYSTEM (mpw-7.5.5.img: the copy of tests-7.5.5.img the session runs on),
+--toolchain cw (or MPW_TOOLCHAIN=cw) uses CodeWarrior Pro 4's MPW instead:
+its compilers (MWC68K, MWCPPC, MWLink68K, MWLinkPPC), commands to its MPW
+Shell, all from public media; a session of its own.
+
+Environment: MPW_TOOLCHAIN (apple), MPW_STATE (default ~/.cache/mac-phoenix/mpw
+or mpw-cw), MPW_PORT (18390, cw 18391), MPW_SYSTEM (mpw-7.5.5.img or
+mpw-cw-7.5.5.img: the copy of tests-7.5.5.img the session runs on),
 MACPHOENIX_BINARY, MACEMU_STORAGE (~/storage). See docs/MPW.md.
 """
 import argparse
@@ -45,19 +51,50 @@ import uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STORAGE = os.environ.get("MACEMU_STORAGE", os.path.expanduser("~/storage"))
-STATE = os.environ.get("MPW_STATE", os.path.expanduser("~/.cache/mac-phoenix/mpw"))
-PORT = int(os.environ.get("MPW_PORT", "18390"))
 BINARY = os.environ.get("MACPHOENIX_BINARY", os.path.join(ROOT, "build", "mac-phoenix"))
 
-# Both built from snapshots (provisioning/images/mpw.json, tests-7.5.5.json):
-# `mpw setup` builds them.
-MPW_DISK = os.path.join(STORAGE, "images", "mpw.img")
+# The toolchains: an MPW disk (built from snapshots by `mpw setup`:
+# provisioning/images/<image>.json) and the application that takes the
+# commands. apple: MPW 3.4.2 from E.T.O. #22 (SC, MrC; local-only media),
+# commands to ToolServer. cw: CodeWarrior Pro 4's MPW (MWC68K, MWCPPC; public
+# media), commands to the MPW Shell (it has no ToolServer). Each has its own
+# session: state directory, port and System copy.
+TOOLCHAINS = {
+    "apple": {"image": "mpw", "creator": "MPSX", "state": "mpw", "port": 18390},
+    "cw": {"image": "mpw-cw", "creator": "MPS ", "state": "mpw-cw", "port": 18391,
+           "app": "MPW:MPW:MPW Shell",      # by path: the System disk has Apple's MPW Shell too
+           # Where Metrowerks' headers and libraries are on the disk (the IDE
+           # install keeps them outside its MPW folder; mpw-cw.json puts them
+           # under Interfaces&Libraries). {MWCIncludes}, the compilers'
+           # default, is Apple's CIncludes.
+           "prelude": ('Set -e MWCIncludes "{CIncludes}"\n'
+                       'Set -e MSLCommonIncludes "{HeadersAndLibs}MSL C:MSL Common:Public Includes:"\n'
+                       'Set -e MSLMacIncludes "{HeadersAndLibs}MSL C:MSL Mac:Public Includes:"\n'
+                       'Set -e MSLLibraries "{HeadersAndLibs}MSL C:Bin:"\n'
+                       'Set -e MWMacOS68K "{HeadersAndLibs}MacOS Support:MacOS 68K:"\n'
+                       'Set -e MWRuntime68K "{HeadersAndLibs}MacOS Support:Runtime:Runtime 68K:"\n'
+                       'Set -e MWRuntimePPC "{HeadersAndLibs}MacOS Support:Runtime:Runtime PPC:"\n')},
+}
 SYSTEM_SOURCE = os.path.join(STORAGE, "images", "tests-7.5.5.img")
-SYSTEM_NAME = os.environ.get("MPW_SYSTEM", "mpw-7.5.5.img")  # the session's own copy
-HOST = os.path.join(STATE, "host")     # the Host volume
-WORK = os.path.join(HOST, ".mpw")      # per-command scripts, output, status
-SESSION = os.path.join(STATE, "session.json")
-TOOLSERVER = "MPSX"
+
+
+def configure(toolchain):
+    global TOOLCHAIN, MPW_DISK, STATE, PORT, SYSTEM_NAME, HOST, WORK, SESSION, TOOLSERVER, APP, PRELUDE
+    t = TOOLCHAINS[toolchain]
+    TOOLCHAIN = toolchain
+    MPW_DISK = os.path.join(STORAGE, "images", t["image"] + ".img")
+    STATE = os.environ.get("MPW_STATE", os.path.expanduser("~/.cache/mac-phoenix/" + t["state"]))
+    PORT = int(os.environ.get("MPW_PORT", str(t["port"])))
+    SYSTEM_NAME = os.environ.get("MPW_SYSTEM", t["image"] + "-7.5.5.img")   # the session's own copy
+    HOST = os.path.join(STATE, "host")     # the Host volume
+    WORK = os.path.join(HOST, ".mpw")      # per-command scripts, output, status
+    SESSION = os.path.join(STATE, "session.json")
+    TOOLSERVER = t["creator"]
+    APP = t.get("app")
+    PRELUDE = t.get("prelude", "")
+
+
+configure(os.environ.get("MPW_TOOLCHAIN", "apple"))
 
 TEXT_EXT = {".c", ".h", ".cp", ".cpp", ".hpp", ".r", ".a", ".p", ".mpw", ".make",
             ".exp", ".txt", ".s", ".inc", ".pas"}
@@ -198,10 +235,23 @@ def boot(s):
         if not alive(s) or time.time() > deadline:
             raise MPWError("BridgeAgent never came up; see %s" % s["log"])
         time.sleep(0.5)
-    # ToolServer: /api/exec launches it by creator; retry while it starts.
+    # The command server: launched by path where its creator isn't unique
+    # (BridgeAgent then sends to the running process); else /api/exec
+    # launches it by creator. Retry while it starts.
+    if APP:
+        r = api("/api/launch", {"path": APP}, timeout=60)
+        if not r.get("success"):
+            raise MPWError("could not launch %s: %s" % (APP, r))
+    # The answer comes back in a file: the MPW Shell sends no output in its
+    # reply (it goes to the Worksheet), ToolServer does.
+    os.makedirs(WORK, exist_ok=True)
+    ready = os.path.join(WORK, "ready")
     for _ in range(10):
-        r = exec_raw("Echo mpw-ready", timeout=60)
-        if r.get("success") and b"mpw-ready" in base64.b64decode(r.get("stdout_b64", "")):
+        if os.path.exists(ready):
+            os.unlink(ready)
+        r = exec_raw('Echo mpw-ready > "%s"' % mac_path(ready), timeout=60)
+        if r.get("success") and os.path.exists(ready) and "mpw-ready" in read_text(ready):
+            os.unlink(ready)
             return
         time.sleep(2)
     raise MPWError("ToolServer did not answer; see %s" % s["log"])
@@ -266,7 +316,7 @@ def run(script, cwd=None, timeout=600, s=None):
     try:
         rid = uuid.uuid4().hex[:8]
         files = {k: os.path.join(WORK, rid + "." + k) for k in ("script", "out", "status")}
-        body = "Set Exit 1\n"
+        body = PRELUDE + "Set Exit 1\n"
         if cwd:
             body += 'Directory "%s"\n' % cwd
         body += script.rstrip("\n") + "\n"
@@ -434,7 +484,8 @@ def cmd_setup(args):
     --toast: the old way, the MPW disk straight from the CD."""
     if not args.toast:
         subprocess.check_call([sys.executable, os.path.join(ROOT, "provisioning", "build.py"),
-                               "mpw", "tests-7.5.5"] + (["--force"] if args.force else []))
+                               TOOLCHAINS[TOOLCHAIN]["image"], "tests-7.5.5"]
+                              + (["--force"] if args.force else []))
         return 0
     toast = args.toast
     if not os.path.exists(toast):
@@ -490,7 +541,9 @@ def cmd_build(args):
     start()
     mirror(src, dst)
     mac_dir = mac_path(dst)
-    script_path = os.path.join(src, "build.mpw")
+    script_path = os.path.join(src, "build.%s.mpw" % TOOLCHAIN)     # this toolchain's own
+    if not os.path.exists(script_path):
+        script_path = os.path.join(src, "build.mpw")
     products = []
     if os.path.exists(script_path):
         script = open(script_path, encoding="utf-8").read()
@@ -524,6 +577,9 @@ def cmd_build(args):
 def main():
     ap = argparse.ArgumentParser(prog="mpw", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--toolchain", choices=sorted(TOOLCHAINS), default=TOOLCHAIN,
+                    help="apple: MPW 3.4.2 (SC, MrC; default, or MPW_TOOLCHAIN); "
+                         "cw: CodeWarrior Pro 4's MPW (MWC68K, MWCPPC)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("setup", help="build the MPW disk from E.T.O. #22")
     p.add_argument("--toast", help="E.T.O. #22 CD image (default: copy it out of data.img)")
@@ -549,6 +605,7 @@ def main():
     p.add_argument("--timeout", type=int, default=900)
     p.set_defaults(fn=cmd_build)
     args = ap.parse_args()
+    configure(args.toolchain)
     try:
         sys.exit(args.fn(args))
     except MPWError as e:
