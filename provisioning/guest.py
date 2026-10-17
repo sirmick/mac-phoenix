@@ -13,10 +13,26 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
                                          same text as drawn (/api/text)
   {"click": {"text": "Easy Install"}}    by drawn text alone (/api/text): what an
                                          app draws itself; exact, else a prefix
+  {"click": {"row": T}}                  the start of the list row that reads T: the
+                                         left edge of the dialog user item holding
+                                         the text (+ "inset", default 8), at the
+                                         text's height: a disclosure triangle an
+                                         app draws in its own list
   {"click": {"text": T, "offset": [dx, dy]}}  relative to the drawn text's top
-                                         left: a button an app draws beside its label
-  {"popup": [x, y], "choose": "Install"} press a popup menu, release on the named
-                                         item (where the open menu drew it)
+                                         left: the last resort (give the step a
+                                         "note" saying why)
+  {"popup": {"text": "Easy Install"}, "choose": "Custom Install"}  press a popup
+                                         menu where its current value is drawn
+                                         ({"button": name}: a popup control),
+                                         release on the named item (where the open
+                                         menu drew it); front window, "exact" as for
+                                         clicks
+  {"popup": [x, y], "choose": "Install"} ... pressed at a screen point
+  {"check": {"text": "Selected size: 4,302K"}}  fail the bake unless it is drawn
+                                         in the front window (exact, else a prefix);
+                                         {"text_not": T}: nothing there starts with T;
+                                         {"button": name, "value": 1}: a control's
+                                         value; polled for "timeout" s (default 5)
   {"wait_for": {"button": "Restart"}, "timeout": s}  until it is in the front window
                                          ({"text": ...}: until it is drawn; with
                                          "front": true, inside the front window)
@@ -25,8 +41,9 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
   {"dclick": {"text": T, "outside_controls": true}}  double-click drawn text that
                                          isn't a control's label (a Standard File entry);
                                          "exact": true: no prefix matches
-  {"click": [x, y]}, {"dclick": [x, y]}  screen coordinates (640x480): for what an
-                                         app draws itself (a VISE option list)
+  {"click": [x, y]}, {"dclick": [x, y]}  screen coordinates (640x480): exploring
+                                         only (bake.py --do records a name if one
+                                         is there); recipes don't use them
   {"drag": [[x, y], [x2, y2]]}           press, move, release (popup menus)
   {"key": "return"}                      an /api/keypress name or ADB keycode
   {"cmd_key": 12}                        Command + an ADB keycode (12 = Q)
@@ -213,6 +230,15 @@ class Guest:
         front window, or None. what: {"button": name} or {"item": text}; or
         {"text": text}, drawn text only. A name /api/ui doesn't have is
         looked for as drawn text too (controls an app draws itself)."""
+        hit = self.locate(what, ui)
+        if hit:
+            l, t, r, b = hit["rect"]
+            return (l + r) // 2, (t + b) // 2
+        return None
+
+    def locate(self, what, ui=None):
+        """What find() finds: the control, dialog item or drawn string
+        (its "rect" in screen coordinates), or None."""
         name = what.get("button") or what.get("item") or what.get("control")
         if name:
             ui = ui or self.ui()
@@ -221,9 +247,8 @@ class Guest:
                     continue
                 hits = [c for c in w.get("controls", []) if c["title"] == name and c["visible"]]
                 hits += [i for i in w.get("items", []) if i.get("text") == name and i.get("visible", True)]
-                for h in hits:
-                    l, t, r, b = h["rect"]
-                    return (l + r) // 2, (t + b) // 2
+                if hits:
+                    return hits[0]
         within, skip = None, []
         if what.get("front") or what.get("outside_controls") or name:
             ui = ui or self.ui()
@@ -235,12 +260,58 @@ class Guest:
                 within = w["rect"]
             if what.get("outside_controls") and w:   # not a button's own label: a list entry
                 skip = [c["rect"] for c in w.get("controls", [])]
-        t = self.drawn(what.get("text") or name, app=ui.get("app") if ui else None, within=within, skip=skip,
-                       exact=what.get("exact", False))
-        if t:
-            l, top, r, b = t["rect"]
-            return (l + r) // 2, (top + b) // 2
-        return None
+        return self.drawn(what.get("text") or name, app=ui.get("app") if ui else None, within=within, skip=skip,
+                          exact=what.get("exact", False))
+
+    def row_start(self, what):
+        """(x, y) at the start of the list row that reads what["row"]: the
+        left edge (plus "inset", default 8) of the smallest dialog user item
+        holding the drawn text (an app's own list; else the front window),
+        at the text's vertical centre."""
+        self.mouse(x=0, y=0)                    # the cursor off the list, so it reads whole
+        time.sleep(0.5)
+        ui = self.ui()
+        w = next((w for w in ui["windows"] if w.get("front")), None)
+        t = w and self.drawn(what["row"], app=ui.get("app"), within=w["rect"], exact=what.get("exact", False))
+        if not t:
+            raise NotFound(f"no row {what['row']!r} in the front window")
+        tl, tt, tr, tb = t["rect"]
+        boxes = [i["rect"] for i in w.get("items", []) if i["type"] == "user" and i.get("visible", True)
+                 and i["rect"][0] <= tl and i["rect"][1] <= tt and tr <= i["rect"][2] and tb <= i["rect"][3]]
+        l = min(boxes, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]))[0] if boxes else w["rect"][0]
+        return l + what.get("inset", 8), (tt + tb) // 2
+
+    def check(self, what, timeout=5):
+        """Fail unless the guest shows what (polled for `timeout` seconds,
+        while a click's effect is drawn): {"text": T} drawn in the front
+        window (exact, else a prefix; "exact": true for exact only);
+        {"text_not": T}: nothing there starts with T; {"button": name,
+        "value": v}: the control's value (a checkbox's 1 or 0)."""
+        deadline = time.time() + timeout
+        while True:
+            ui = self.ui()
+            if "value" in what:
+                hit = self.locate({k: v for k, v in what.items() if k != "value"}, ui)
+                got = hit.get("value") if hit else None
+                ok = got == what["value"]
+            else:
+                w = next((w for w in ui["windows"] if w.get("front")), None)
+                if "text_not" in what:
+                    drawn = (self.get("/api/text", 10) or {}).get("text", [])
+                    l, t, r, b = w["rect"] if w else (0, 0, 0, 0)
+                    got = [x["text"].strip() for x in drawn if l <= x["rect"][0] and t <= x["rect"][1]
+                           and x["rect"][2] <= r and x["rect"][3] <= b]
+                    ok = bool(w) and not any(s.startswith(what["text_not"]) for s in got)
+                else:
+                    got = self.locate({"front": True, **what}, ui)
+                    ok = bool(got)
+            if ok:
+                return
+            if time.time() > deadline:
+                front = self.summary().get("front") or {}
+                raise RuntimeError(f"check {what} failed (got {got!r}; front window drawn: "
+                                   f"{front.get('drawn')})")
+            self.pause(1)
 
     def drawn(self, text, app=None, within=None, skip=(), exact=False):
         """The string on screen that reads text (exactly, else starting with
@@ -498,10 +569,20 @@ class Guest:
                     raise NotFound(f"no {what['text']!r} drawn")
                 self.click(t["rect"][0] + what["offset"][0], t["rect"][1] + what["offset"][1])
                 return
+            if "row" in what:                   # the start of a list row (a disclosure triangle)
+                self.click(*self.row_start(what))
+                return
             pos = self.find(what)
             if not pos:
                 raise NotFound(f"no {what} in the front window")
             self.click(*pos)
+        elif "check" in step:
+            self.check(step["check"], step.get("timeout", 5))
+        elif "popup" in step and isinstance(step["popup"], dict):
+            pos = self.find({"front": True, **step["popup"]})   # its current value, or the control
+            if not pos:
+                raise NotFound(f"no popup {step['popup']} in the front window")
+            self.choose(*pos, step["choose"])
         elif "popup" in step:
             self.choose(*step["popup"], step["choose"])
         elif "wait_for" in step:

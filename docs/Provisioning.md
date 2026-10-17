@@ -85,14 +85,36 @@ gives the front process's windows, controls, dialog items and open menus
 from guest memory.
 
 ```json
-{"launch": "CW Pro 4 Tools:CW Pro 4 Tools Installer"},
-{"wait_for": {"button": "Install"}, "timeout": 60},
-{"popup": [270, 367], "choose": "{target}"},
-{"click": {"button": "Install"}},
-{"click": [121, 162]}
+{"launch": "Install 1:Installer"},
+{"wait_for": {"button": "Continue…"}, "timeout": 90},
+{"popup": {"text": "Easy Install"}, "choose": "Custom Install"},
+{"click": {"text": "Open Transport for 68K Macintoshes", "front": true}},
+{"check": {"text": "Selected size: 1,933K"}},
+{"click": {"row": "System Software", "exact": true}},
+{"check": {"button": "AppleScript 1.1.1", "value": 0}},
+{"click": {"button": "Install"}}
 ```
 
-Pixels are the fallback, for what an app draws itself.
+What an app draws itself is found by its drawn text (`/api/text`):
+
+* `{"popup": {"text": ...}, "choose": ...}` presses a popup where its
+  current value is drawn (`{"button": ...}` for a popup control) and
+  releases on the named item of the open menu.
+* `{"click": {"text": ...}}` clicks a label; in the Apple and VISE
+  installers' option lists that ticks the row's box.
+* `{"click": {"row": ...}}` clicks at the start of the list row with that
+  text: the left edge of the dialog user item holding it, plus `inset`
+  (default 8). This is for a disclosure triangle, which has no text of
+  its own.
+* `{"check": ...}` makes a click prove itself. It fails the bake at that
+  step unless the front window shows the text (`text`, exact or a
+  prefix), doesn't start any string with `text_not`, or a control has a
+  `value`. Recipes check after every option they set, using the
+  installer's Selected size or the checkbox's value.
+
+`offset` (relative to drawn text) and `[x, y]` points remain for
+exploring. No recipe uses screen coordinates; an `offset` that is still
+needed gets a `note` saying why.
 
 **Watching.** Every bake and explore session prints a `watch:` URL: the
 guest's web UI on this host's LAN address with `?view` (nothing you do in
