@@ -55,7 +55,7 @@ ctest --test-dir build -L executor
 # MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
 tools/mpw/mpw setup                    # once: MPW disk + System, built from snapshots
 tools/mpw/mpw build tests/guest/ot     # build.mpw; products -> DIR/build/*.bin
-tools/mpw/mpw run 'SC -help'           # exit code = {Status}; mpw stop when done
+tools/mpw/mpw run 'Version'            # exit code = {Status}; mpw stop when done
 
 # Guest software (docs/Provisioning.md, docs/provisioning/PLAN.md): pinned
 # media (provisioning/media.json) -> bakes run in the guest -> snapshots

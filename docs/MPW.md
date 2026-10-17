@@ -9,7 +9,7 @@ that drive a Toolbox subsystem and print what they find) are built this way.
 ```bash
 tools/mpw/mpw setup                  # once: the MPW disk, from data.img's E.T.O. #22
 tools/mpw/mpw build tests/guest/ot   # mirror, build.mpw, products as MacBinary
-tools/mpw/mpw run 'SC -help'         # any MPW command; exit code = {Status}
+tools/mpw/mpw run 'Version'          # any MPW command; exit code = {Status}
 tools/mpw/mpw status | stop
 ```
 
