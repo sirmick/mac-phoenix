@@ -739,7 +739,8 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_BRIDGE_COMM:	// the bridge trap (guest_bridge.h)
 			r->d[0] = guest_bridge::call(r->d[0], r->a[0], r->d[1],
-			                             [](uint32_t a) { return (uint8_t)ReadMacInt8(a); });
+			                             [](uint32_t a) { return (uint8_t)ReadMacInt8(a); },
+			                             [](uint32_t a, uint8_t v) { WriteMacInt8(a, v); });
 			break;
 
 		case M68K_EMUL_OP_BRIDGE_HFS:

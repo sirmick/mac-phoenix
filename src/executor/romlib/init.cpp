@@ -65,7 +65,8 @@ using namespace Executor;
    D1 in, D0 out, like the ROM machines' EmulOp stub. */
 static syn68k_addr_t bridge_trap(syn68k_addr_t, void *)
 {
-    EM_D0 = guest_bridge::call(EM_D0, EM_A0, EM_D1, [](uint32_t a) { return (uint8_t)READUB(a); });
+    EM_D0 = guest_bridge::call(EM_D0, EM_A0, EM_D1, [](uint32_t a) { return (uint8_t)READUB(a); },
+                               [](uint32_t a, uint8_t v) { WRITEUB(a, v); });
     return POPADDR();
 }
 

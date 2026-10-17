@@ -547,7 +547,8 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 
 		case OP_BRIDGE_COMM:		// the bridge trap (guest_bridge.h)
 			r->d[0] = guest_bridge::call(r->d[0], r->a[0], r->d[1],
-			                             [](uint32 a) { return (uint8)ReadMacInt8(a); });
+			                             [](uint32 a) { return (uint8)ReadMacInt8(a); },
+			                             [](uint32 a, uint8 v) { WriteMacInt8(a, v); });
 			break;
 
 		default:
