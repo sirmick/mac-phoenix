@@ -184,6 +184,8 @@ extern "C" uint16_t kpx_make_emulop_shared(uint16_t op)
     case 0x7134: return M68K_EMUL_OP_SOUNDIN_STATUS;
     case 0x7135: return M68K_EMUL_OP_SOUNDIN_CLOSE;
     case 0x7137: return M68K_EMUL_OP_IDLE_TIME;
+    case 0x713E: return M68K_EMUL_OP_TEXT_PRE;
+    case 0x713F: return M68K_EMUL_OP_TEXT_POST;
     default:
         fprintf(stderr, "[KPX] WARNING: unmapped common emulop 0x%04x\n", op);
         return op;

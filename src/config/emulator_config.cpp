@@ -512,6 +512,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-network\n");
             printf("  --debug-mame-ppc           mame-ppc: log host ops, exceptions, a per-second CPU sample\n");
             printf("  --trace-atraps             Record every (A-trap, caller PC); snapshots write atraps.tsv\n");
+            printf("  --no-text-feed             Don't patch _StdText (the strings on screen for /api/text)\n");
             printf("  --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait\n");
             printf("  --snapshot-at NAME@SECS    With --deterministic: snapshot SECS virtual seconds after Finder starts\n");
             printf("  -h, --help                 Show this help message\n");
@@ -783,6 +784,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--trace-atraps") == 0) {
             config.trace_atraps = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--no-text-feed") == 0) {
+            config.text_feed = false; argv[i] = nullptr; continue;
         }
         if (strcmp(argv[i], "--debug-perf") == 0) {
             config.debug_perf = true; argv[i] = nullptr; continue;

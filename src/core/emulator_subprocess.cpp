@@ -217,6 +217,9 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     if (config_->trace_atraps) {
         args.push_back("--trace-atraps");
     }
+    if (!config_->text_feed) {
+        args.push_back("--no-text-feed");
+    }
     if (config_->deterministic) {
         args.push_back("--deterministic");
     }

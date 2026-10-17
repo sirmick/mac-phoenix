@@ -100,6 +100,8 @@ enum {
 	M68K_EMUL_OP_BRIDGE_COMM,		// 0x713B: BridgeFS communications proc
 	M68K_EMUL_OP_BRIDGE_HFS,		// 0x713C: BridgeFS HFS dispatch
 	M68K_EMUL_OP_SOUNDMGR_SYSBEEP,	// 0x713D: Classic Sound Manager _SysBeep hook
+	M68K_EMUL_OP_TEXT_PRE,			// 0x713E: _StdText patch, before (text_feed.cpp)
+	M68K_EMUL_OP_TEXT_POST,			// 0x713F: _StdText/_CopyBits/_ScrollRect patches, after
 	M68K_EMUL_OP_MAX				// highest number
 };
 

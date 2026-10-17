@@ -40,6 +40,7 @@
 
 #include "rom_patches.h"
 #include "platform.h"
+#include "text_feed.h"
 
 #define DEBUG 0
 #include "debug.h"
@@ -901,6 +902,7 @@ void m68k::PatchAfterStartup(void)
 	// m68k default: just install ExtFS
 	InstallExtFS();
 #endif
+	text_feed_install();
 }
 
 

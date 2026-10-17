@@ -65,6 +65,7 @@ extern bool tick_inhibit;
 extern uint8 *ScratchMem;  // Platform scratch memory (safe target for hardware base redirect)
 extern void command_bridge_drain_from_irq(M68kRegisters *r);
 #include "snapshot.h"
+#include "text_feed.h"
 
 void PlayStartupSound();
 
@@ -706,6 +707,14 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			WriteMacInt16(r->a[7] + 20, ExtFSHFS(ReadMacInt32(r->a[7] + 16), ReadMacInt16(r->a[7] + 14), ReadMacInt32(r->a[7] + 10), ReadMacInt32(r->a[7] + 6), ReadMacInt16(r->a[7] + 4)));
 			break;
 #endif
+
+		case M68K_EMUL_OP_TEXT_PRE:
+			text_feed_pre(r->a[7], r->a[5]);
+			break;
+
+		case M68K_EMUL_OP_TEXT_POST:
+			text_feed_post(r->a[7], r->a[5], r->d[0] & 0xFF);
+			break;
 
 		case M68K_EMUL_OP_BLOCK_MOVE:		// BlockMove() cache flushing
 			FlushCodeCache(Mac2HostAddr(r->a[0]), r->a[1]);

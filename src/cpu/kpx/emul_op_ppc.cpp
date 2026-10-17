@@ -53,6 +53,7 @@
 using namespace ppc;
 
 #include "boot_progress.h"
+#include "text_feed.h"
 
 extern bool tick_inhibit;
 
@@ -533,6 +534,14 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 			if (ReadMacInt32(0x14c) == 0)
 				idle_wait();
 			r->d[0] = (uint32)-2;
+			break;
+
+		case OP_TEXT_PRE:			// _StdText patch (text_feed.cpp)
+			text_feed_pre(r->a[7], r->a[5]);
+			break;
+
+		case OP_TEXT_POST:
+			text_feed_post(r->a[7], r->a[5], r->d[0] & 0xFF);
 			break;
 
 		default:

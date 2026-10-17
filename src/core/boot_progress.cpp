@@ -23,6 +23,8 @@
 #include "adb.h"
 #include "command_bridge.h"
 #include "guest_ui.h"
+#include "text_feed.h"
+#include <algorithm>
 #include <string>
 #include "../config/emulator_config.h"
 
@@ -957,6 +959,19 @@ static int g_mac_state_tick = 0;
  */
 void boot_progress_export_mac_state(void)
 {
+	if (g_ipc_buf) {
+		uint32_t text_want = IPC_ATOMIC_LOAD(g_ipc_buf->text_request);
+		if (text_want != IPC_ATOMIC_LOAD(g_ipc_buf->text_done)) {
+			char query[sizeof(g_ipc_buf->text_query)];
+			memcpy(query, g_ipc_buf->text_query, sizeof query);
+			query[sizeof query - 1] = '\0';
+			std::string text = text_feed_json(query);
+			size_t n = std::min(text.size(), sizeof(g_ipc_buf->text_json) - 1);
+			memcpy(g_ipc_buf->text_json, text.data(), n);
+			g_ipc_buf->text_json[n] = '\0';
+			IPC_ATOMIC_STORE(g_ipc_buf->text_done, text_want);
+		}
+	}
 	if (g_ipc_buf) {
 		/* The window list belongs to whichever process runs at this tick:
 		 * wait (up to two seconds) for one that holds the front window. */

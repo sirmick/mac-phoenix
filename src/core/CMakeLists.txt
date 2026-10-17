@@ -10,6 +10,7 @@ add_library(core STATIC
   disk.cpp
   boot_progress.cpp
   guest_ui.cpp
+  text_feed.cpp
   command_bridge.cpp
   snapshot.cpp
   mac_roman.cpp

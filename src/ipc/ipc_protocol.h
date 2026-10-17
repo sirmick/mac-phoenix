@@ -218,6 +218,13 @@ typedef struct IPCBuffer {
     IPC_ATOMIC_UINT32 ui_done;
     char ui_json[32768];
 
+    /* The text on screen (text_feed.cpp), the same way: the parent writes
+     * text_query and bumps text_request. */
+    IPC_ATOMIC_UINT32 text_request;
+    IPC_ATOMIC_UINT32 text_done;
+    char text_query[128];
+    char text_json[262144];
+
     /* ── Audio ring buffer (child writes, parent reads) ──────────── */
     IPC_ATOMIC_UINT32 audio_write_idx;   /* child increments after writing frame */
     IPC_ATOMIC_UINT32 audio_read_idx;    /* parent increments after reading frame */

@@ -234,6 +234,7 @@ void control_ipc_unlink(void);
 
 // The 68k machine on a cpu::Core
 #include "cpu_m68k.h"
+#include "text_feed.h"
 
 #define DEBUG 1
 #include "debug.h"
@@ -570,6 +571,7 @@ int main(int argc, char **argv)
 	}
 
 	config::print_config(emu_config);
+	text_feed_enabled = emu_config.text_feed;
 	if (emu_config.trace_atraps)
 		atrap_trace_enable();
 	if (emu_config.deterministic) {
