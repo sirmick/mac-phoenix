@@ -1,0 +1,293 @@
+{
+ "note": "System 7.5.5, universal, from Apple's installers: the System 7.5.3 floppy set (Legacy CD) mounted through Disk Copy, Custom Install 'Universal System for any Macintosh'; then, booted from the new disk (the 7.5.5 Update only updates the startup disk), the System 7.5.5 Update floppies attached as disks. BridgeAgent quits itself while each Installer runs.",
+ "kind": "os",
+ "version": "7.5.5",
+ "media": [
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 1.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 2.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 3.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 4.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 5.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 6.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 7.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 8.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 9.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 10.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 11.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 12.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 13.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 14.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 15.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 7.5, Version 7.5.3: System 7.5 Version 7.5.3:Install Disk 16.img"
+  }
+ ],
+ "first_boot_disks": [
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System Updates:System 7.5.5 Update:System 7.5.5 Update - 1.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System Updates:System 7.5.5 Update:System 7.5.5 Update - 2.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System Updates:System 7.5.5 Update:System 7.5.5 Update - 3.img"
+  }
+ ],
+ "steps": [
+  {
+   "open": "{media}:Install Disk 1.img"
+  },
+  {
+   "wait_for": {
+    "button": "Agree"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Agree"
+   }
+  },
+  {
+   "open": "{media}:Install Disk 2.img"
+  },
+  {
+   "open": "{media}:Install Disk 3.img"
+  },
+  {
+   "open": "{media}:Install Disk 4.img"
+  },
+  {
+   "open": "{media}:Install Disk 5.img"
+  },
+  {
+   "open": "{media}:Install Disk 6.img"
+  },
+  {
+   "open": "{media}:Install Disk 7.img"
+  },
+  {
+   "open": "{media}:Install Disk 8.img"
+  },
+  {
+   "open": "{media}:Install Disk 9.img"
+  },
+  {
+   "open": "{media}:Install Disk 10.img"
+  },
+  {
+   "open": "{media}:Install Disk 11.img"
+  },
+  {
+   "open": "{media}:Install Disk 12.img"
+  },
+  {
+   "open": "{media}:Install Disk 13.img"
+  },
+  {
+   "open": "{media}:Install Disk 14.img"
+  },
+  {
+   "open": "{media}:Install Disk 15.img"
+  },
+  {
+   "open": "{media}:Install Disk 16.img"
+  },
+  {
+   "wait": 3
+  },
+  {
+   "launch": "Install Disk 1:Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 90
+  },
+  {
+   "agent_exit": true
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 10
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "shot": "1-destination"
+  },
+  {
+   "popup": [
+    145,
+    132
+   ],
+   "choose": "Custom Install"
+  },
+  {
+   "wait_for": {
+    "text": "System Software",
+    "exact": true
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "text": "System Software",
+    "exact": true,
+    "offset": [
+     -30,
+     7
+    ]
+   },
+   "until": {
+    "text": "Universal System for any Macintosh"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "text": "Universal System for any Macintosh",
+    "offset": [
+     -12,
+     8
+    ]
+   }
+  },
+  {
+   "shot": "2-universal"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful",
+    "front": true
+   },
+   "timeout": 900
+  },
+  {
+   "shot": "3-installed"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "first_boot": [
+  {
+   "launch": "System 7.5.5 Update - 1:Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Agree"
+   },
+   "timeout": 90
+  },
+  {
+   "agent_exit": true
+  },
+  {
+   "click": {
+    "button": "Agree"
+   },
+   "until": {
+    "button": "Install"
+   },
+   "max": 10
+  },
+  {
+   "shot": "4-update"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful",
+    "front": true
+   },
+   "timeout": 900
+  },
+  {
+   "shot": "5-updated"
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  }
+ ]
+}

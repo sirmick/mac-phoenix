@@ -19,7 +19,8 @@ the bake. Kinds:
            (their names), merged as machine runs are
   os       a System: its installer (and updaters) run by "steps" onto the
            blank target ("Macintosh HD"); then the guest restarts from it
-           alone for "first_boot" steps; the snapshot is the whole volume,
+           alone (plus "first_boot_disks") for "first_boot" steps (an updater
+           that only updates the startup disk); the snapshot is the whole volume,
            bootable ("version": what its System file must say). "os" names
            the System that runs the installer.
 
@@ -203,7 +204,7 @@ def media_path(name):
 def media_names(bake):
     names = [bake["archive"]] if bake.get("archive") else []
     names += bake.get("cdroms", [])
-    names += [m["file"] for m in bake.get("media", []) + bake.get("disks", [])]
+    names += [m["file"] for m in bake.get("media", []) + bake.get("disks", []) + bake.get("first_boot_disks", [])]
     return names
 
 
@@ -439,9 +440,25 @@ class Session:
         self.guest.wait_finder(240, agent=True)
         time.sleep(self.bake.get("settle", 3))
 
+    def first_boot_disks(self):
+        """"first_boot_disks": disk images out of media attached at the first
+        boot ({"file", "take"}, decoded on the host: a floppy set an
+        updater wants while the new System is the startup disk)."""
+        out = []
+        for d in self.bake.get("first_boot_disks", []):
+            stage = tempfile.mkdtemp(dir=self.work)
+            items = take(media_path(d["file"]), d["take"], stage, self.work)
+            item = os.path.join(tempfile.mkdtemp(dir=self.work), "item")
+            macbinary_to_files(items[0][1], item)
+            out.append(open_container(item, self.work).image)
+        return out
+
     def first_boot(self):
-        """An os bake: the guest restarted from the new System alone."""
-        self.guest = Guest(self.work, self.backend, [self.target], [], self.port, STORAGE, extra=self.extra)
+        """An os bake: the guest restarted from the new System (and any
+        "first_boot_disks"), for the "first_boot" steps."""
+        self.disks = [self.target] + self.first_boot_disks()     # what a reboot boots from now
+        self.cdroms = []
+        self.guest = Guest(self.work, self.backend, self.disks, [], self.port, STORAGE, extra=self.extra)
         self.guest.annotate(f"{self.bake['name']}: first boot from {self.target_name}")
         self.guest.wait_finder(300, agent=True)
         time.sleep(self.bake.get("settle", 3))
@@ -452,7 +469,7 @@ class Session:
                 continue
             self.log(f"  first boot {i}: {json.dumps(step, ensure_ascii=False)}")
             self.guest.annotate(f"{self.bake['name']} first boot {i}: {json.dumps(step, ensure_ascii=False)}")
-            self.guest.run({k: v for k, v in step.items() if k != "backend"})
+            self.run_step({k: v for k, v in step.items() if k != "backend"})
         self.guest.shot("first-boot-done")
         self.guest.shutdown()
 

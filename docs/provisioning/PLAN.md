@@ -248,7 +248,7 @@ Images: `Development.img` (one volume for the 7.x Systems) and
 |---|---|---|
 | **P0** | Groundwork: snapshot layout + manifest + content hash, `bake.py` (generic `{target}`, the five kinds, `--record`), BridgeAgent `COPY`, `build.py`, `test_image.py`, dependency tracking | done 2026-10-16: 16 snapshots; Development + dev-7.5.5/7.6.1 built from them; 15/15 apps on uae and kpx × 7.5.5 and 7.6.1; aliases rewritten and resolved in the guest |
 | **P1** | Storage: `media/` and `baked/` in the assets repo, `media.json`, the sorting-out table above, `setup.sh` links, tests on copies | |
-| **P2** | `os` bakes: 7.1 (68k), 7.5.5 and 7.6.1 (68k + PPC) from the Legacy CD | 7.6.1 done 2026-10-17 (boots on uae and kpx); 7.5.5, 7.1 to do: see [P2 status](#p2-status) |
+| **P2** | `os` bakes: 7.1 (68k), 7.5.5 and 7.6.1 (68k + PPC) from the Legacy CD | 7.6.1 and 7.5.5 done 2026-10-17 (both boot on uae and kpx); 7.1 to do: see [P2 status](#p2-status) |
 | **P3** | `tools-7` and the 7.x standard boot images: StuffIt Expander and Disk Copy baked on `os-7.6.1` first (expand and floppy bakes need them in the guest), `tools-7.6.1` = `os-7.6.1` + those, then MacsBug and the rest of the tools on it | 7.6.1: StuffIt Expander, Disk Copy (on `os-7.6.1`), `tools-7.6.1`, MacsBug (on it) baked 2026-10-17 |
 | **P3b** | Backport the driving techniques to the GUI recipes (named clicks, drawn text for app-drawn option lists, `wait_for` instead of fixed waits, no per-machine steps): MacPerl and MacPython first (per-machine drags), then THINK C, Symantec C++, HyperCard, StuffIt Expander, Frontier's and Disk Copy's first launches; replayed with someone watching | |
 | **P4** | `dev-*`: the development set re-baked on the `os` snapshots (the P3b recipes; the rewrapped expand-only snapshots just re-baked) (until then: the first captures of 2026-10-16, rewrapped into the generic layout); `Development.img`, `dev-7.5.5/7.6.1.img`; the four-cell app matrix | rewrapped in P0 |
@@ -299,9 +299,14 @@ As of 2026-10-16:
 * **Disk Copy's licence:** on the bootstrap System, Disk Copy stops at its
   licence on first launch, so the 7.6.1 Update step must click Agree
   before the floppies mount.
-* **7.5.5, 7.1:** media located on the Legacy CD (`System 7.5, Version
-  7.5.3` 16-floppy set + `System Updates:System 7.5.5 Update`; `System
-  7.1` with `7.1-C/Q610, C/Q650, Q800 1.1`); not started.
+* **7.5.5** (`bakes/os-7.5.5.json`): baked 2026-10-17, unattended: the
+  16-floppy System 7.5.3 set through Disk Copy, Custom Install "Universal
+  System for any Macintosh" (inside the System Software group); the 7.5.5
+  Update only updates the startup disk, so it runs at the first boot from
+  the new disk, its floppies attached as disks (`first_boot_disks`), and
+  ends in its own Restart.
+* **7.1:** media on the Legacy CD (`System 7.1` with `7.1-C/Q610, C/Q650,
+  Q800 1.1`); not started.
 
 ### Driving friction
 
