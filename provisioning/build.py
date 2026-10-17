@@ -14,7 +14,8 @@ go where:
 
 A data image is a blank volume ("label", default the name; "size_mb",
 default sized to fit with room to spare) with snapshots' :Items: placed:
-"take" an item at the top of :Items: (default all of them), "to" a folder
+"take" an item of :Items: (default all of them; a path takes one inside a
+folder: "CodeWarrior Pro 4:CodeWarrior MPW:MPW"), "to" a folder
 (default the top), "as" a new name for the taken item. A boot image starts
 from a copy of a base System (provisioning/bases.json) and gets the
 :System Folder: parts of the snapshots in "system_from", replacing the
@@ -151,12 +152,14 @@ def set_mdb_date(image, date):
 def mapper(place, label):
     """Path segments under a snapshot's :Items: -> segments on the image, or None."""
     to = [s for s in place.get("to", "").split(":") if s]
-    take = place.get("take")
+    take = place["take"].split(":") if place.get("take") else []
 
     def m(segs):
-        if not segs or (take and segs[0] != take):
+        if not segs or segs[:len(take)] != take:
             return None
-        return [label] + to + [place.get("as") or segs[0]] + segs[1:]
+        if not take:
+            return [label] + to + segs
+        return [label] + to + [place.get("as") or take[-1]] + segs[len(take):]
     return m
 
 
@@ -248,14 +251,14 @@ def launch_paths(place, man):
     """The snapshot's apps as paths on the image, given where its items went."""
     out = []
     to = [s for s in place.get("to", "").split(":") if s]
-    take = place.get("take")
+    take = place["take"].split(":") if place.get("take") else []
     for entry in man.get("launch", []):
         e = dict(entry) if isinstance(entry, dict) else {"app": entry}
         segs = e["app"].split(":")
         if take:
-            if segs[0] != take:
+            if segs[:len(take)] != take:
                 continue
-            segs[0] = place.get("as") or take
+            segs = [place.get("as") or take[-1]] + segs[len(take):]
         e["app"] = ":".join(to + segs)
         e["snapshot"] = place["snapshot"]
         out.append(e)
