@@ -68,6 +68,7 @@ static const struct
     { "network", test_network },
     { "netdeep", test_network_deep },
     { "keyboard", test_keyboard },
+    { "finder", test_finder },
 };
 
 int main(void)

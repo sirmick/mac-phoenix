@@ -1,0 +1,26 @@
+# build.cw.mpw — MacPhoenixSuite with CodeWarrior Pro 4's compilers
+# (tools/mpw/mpw --toolchain cw build tests/guest/suite): MWC68K and
+# MWLink68K, MWCPPC and MWLinkPPC, with Metrowerks' C library (MSL); the
+# same fat application build.mpw makes with Apple's.
+# products: MacPhoenixSuite
+Set Sources "main files audio ascript tcpip net netdeep keyboard finder"
+Delete -i MacPhoenixSuite MacPhoenixSuite.68k    # Rez -a would add to the last build
+Set Objects68K ""
+Set ObjectsPPC ""
+For f in {Sources}
+	MWC68K -model far -i "`Directory`" -i "{MSLCommonIncludes}" -i "{MSLMacIncludes}" {f}.c -o {f}.68k.o
+	MWCPPC -i "`Directory`" -i "{MSLCommonIncludes}" -i "{MSLMacIncludes}" {f}.c -o {f}.ppc.o
+	Set Objects68K "{Objects68K} {f}.68k.o"
+	Set ObjectsPPC "{ObjectsPPC} {f}.ppc.o"
+End
+MWLink68K -model far -t APPL -c 'MPhS' {Objects68K} ∂
+	"{MWMacOS68K}MacOS.lib" "{MWRuntime68K}MSL Runtime68K.Lib" ∂
+	"{MSLLibraries}MSL C.68K Fa(4i_8d).Lib" "{MSLLibraries}MSL SIOUX.68K.Lib" ∂
+	"{MWMacOS68K}MathLib68K:MathLib68K (Model Far):MathLib68K Fa(4i_8d).Lib" ∂
+	-o MacPhoenixSuite.68k
+MWLinkPPC -t APPL -c 'MPhS' {ObjectsPPC} ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}AppleScriptLib" "{SharedLibraries}MathLib" ∂
+	"{MWRuntimePPC}MSL RuntimePPC.Lib" "{MSLLibraries}MSL C.PPC.Lib" "{MSLLibraries}MSL SIOUX.PPC.Lib" ∂
+	-o MacPhoenixSuite
+Rez -a cw.r -o MacPhoenixSuite
+SetFile -t APPL -c 'MPhS' -a B MacPhoenixSuite

@@ -1,5 +1,5 @@
-/* suite.r — MacPhoenixSuite's resources: the 68k application (CODE and
- * the rest, from Link), the PowerPC fragment's 'cfrg' and the SIZE. */
+/* suite.r — MacPhoenixSuite's resources (build.mpw): the 68k application
+ * (CODE and the rest, from Link), the PowerPC fragment's 'cfrg' and the SIZE. */
 
 #include "CodeFragmentTypes.r"
 #include "Types.r"
@@ -15,9 +15,4 @@ resource 'cfrg' (0) {
     }
 };
 
-resource 'SIZE' (-1) {
-    reserved, acceptSuspendResumeEvents, reserved, canBackground, doesActivateOnFGSwitch,
-    backgroundAndForeground, dontGetFrontClicks, ignoreChildDiedEvents, is32BitCompatible,
-    isHighLevelEventAware, onlyLocalHLEvents, notStationeryAware, dontUseTextEditServices,
-    reserved, reserved, reserved, 1024 * 1024, 768 * 1024
-};
+#include "size.r"

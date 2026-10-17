@@ -9,6 +9,10 @@
 #
 #   tools/mpw/mpw build tests/guest/suite -o tests/guest/suite
 #
+# Projects with a build.cw.mpw are also built with CodeWarrior's compilers
+# (--toolchain cw, its own session) when its disk is there (mpw --toolchain
+# cw setup): that build must succeed; it isn't compared.
+#
 # Skips (exit 77) without the MPW disk (tools/mpw/mpw setup).
 #
 # Usage: tests/test_guest_builds.sh [--port N]
@@ -33,9 +37,11 @@ export MPW_STATE=$(mktemp -d /tmp/mpwbuilds.XXXXXX)
 export MPW_PORT=$PORT
 export MPW_SYSTEM="test-mpwbuilds-7.5.5.img"
 OUT=$(mktemp -d /tmp/mpwbuilds-out.XXXXXX)
+CW_STATE=$(mktemp -d /tmp/mpwbuilds-cw.XXXXXX)
 cleanup() {
     $MPW stop >/dev/null 2>&1
-    rm -rf "$MPW_STATE" "$OUT" "$STORAGE/images/$MPW_SYSTEM" \
+    MPW_STATE=$CW_STATE $MPW --toolchain cw stop >/dev/null 2>&1
+    rm -rf "$MPW_STATE" "$CW_STATE" "$OUT" "$STORAGE/images/$MPW_SYSTEM" \
         "$STORAGE/executor-systems/$MPW_SYSTEM" "$STORAGE/executor-systems/$MPW_SYSTEM.clean"
 }
 trap cleanup EXIT
@@ -62,4 +68,24 @@ for p in "${PROJECTS[@]}"; do
         FAILS=$((FAILS + 1))
     fi
 done
+if [[ -f "$STORAGE/images/mpw-cw.img" ]]; then
+    for p in "${PROJECTS[@]}"; do
+        dir=${p%%:*}
+        [[ -f "$dir/build.cw.mpw" ]] || continue
+        mkdir -p "$OUT/cw/$dir"
+        if MPW_STATE=$CW_STATE MPW_PORT=$((PORT + 1)) MPW_SYSTEM=test-mpwbuilds-cw-7.5.5.img \
+                $MPW --toolchain cw build "$dir" -o "$OUT/cw/$dir" >"$OUT/build-cw.log" 2>&1; then
+            echo "PASS $dir builds with CodeWarrior"
+        else
+            echo "FAIL $dir: CodeWarrior build failed"
+            grep -E "Error|undefined" -A2 "$OUT/build-cw.log" | head -20
+            FAILS=$((FAILS + 1))
+        fi
+    done
+    MPW_STATE=$CW_STATE $MPW --toolchain cw stop >/dev/null 2>&1
+    rm -rf "$STORAGE/images/test-mpwbuilds-cw-7.5.5.img" "$STORAGE/executor-systems/test-mpwbuilds-cw-7.5.5.img" \
+        "$STORAGE/executor-systems/test-mpwbuilds-cw-7.5.5.img.clean"
+else
+    echo "SKIP CodeWarrior builds: no mpw-cw.img (tools/mpw/mpw --toolchain cw setup)"
+fi
 exit $((FAILS > 0))

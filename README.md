@@ -548,7 +548,7 @@ tools/mpw/mpw build tests/guest/suite -o tests/guest/suite   # after changing it
 `test_guest_suite.sh` unpacks the committed `MacPhoenixSuite.bin` into the
 ExtFS mount, names the sections to run in `Host:suite.cfg` and launches it
 through `/api/launch`; it writes PASS/FAIL/SKIP lines back into the shared
-folder. MacPerl scripts (`--script FinderScriptTest.pl`) go to MacPerl as
+folder. MacPerl scripts (`--script MacPerlSmoke.pl`) go to MacPerl as
 a `dosc` AppleEvent through `/api/script`.
 
 ## Testing

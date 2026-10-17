@@ -12,8 +12,10 @@
 #include <stdio.h>
 #include <string.h>
 
+static ComponentInstance as;
+
 /* What AppleScript displays for a script's result, or an error. */
-static void as_result(ComponentInstance as, const char *src, char *out, int size)
+static void as_result(const char *src, char *out, int size)
 {
     AEDesc source, text;
     OSAID result = kOSANullScript;
@@ -48,6 +50,19 @@ static void as_result(ComponentInstance as, const char *src, char *out, int size
     AEDisposeDesc(&text);
 }
 
+int as_run(const char *src, char *out, int size)
+{
+    if(!as)
+        as = OpenDefaultComponent(kOSAComponentType, kAppleScriptSubtype);
+    if(!as)
+    {
+        strcpy(out, "no AppleScript component");
+        return 0;
+    }
+    as_result(src, out, size);
+    return 1;
+}
+
 void test_applescript_dates(void)
 {
     /* AppleScript on a Power Mac prints reals with 12 significant digits,
@@ -69,21 +84,18 @@ void test_applescript_dates(void)
         { "as_real_exponent", "return 1234567.5", "1.2345675E+6" },
         { "as_real_small", "return 1.0E-5", "1.0E-5" },
     };
-    ComponentInstance as;
     char got[256], detail[400];
     const char *want;
     int i;
 
-    as = OpenDefaultComponent(kOSAComponentType, kAppleScriptSubtype);
     for(i = 0; i < sizeof cases / sizeof cases[0]; i++)
     {
-        if(!as)
+        if(!as_run(cases[i][1], got, sizeof got))
         {
-            report_fail(cases[i][0], "no AppleScript component");
+            report_fail(cases[i][0], got);
             continue;
         }
         want = cases[i][2] ? cases[i][2] : on_powerpc() ? "0.333333333333" : "0.3333333333333";
-        as_result(as, cases[i][1], got, sizeof got);
         if(strcmp(got, want) == 0)
             report_pass(cases[i][0]);
         else
@@ -92,6 +104,4 @@ void test_applescript_dates(void)
             report_fail(cases[i][0], detail);
         }
     }
-    if(as)
-        CloseComponent(as);
 }

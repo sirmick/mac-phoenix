@@ -19,6 +19,10 @@ void report_skip(const char *name, const char *reason);
 /* Waits for events (the app stays responsive and in front). */
 void idle_ticks(long ticks);
 
+/* Runs AppleScript source (lines separated by '\n'); out: what AppleScript
+ * displays for the result, or an error. 0 without AppleScript. */
+int as_run(const char *src, char *out, int size);
+
 /* 1 on a PowerPC Mac (whatever this code is compiled for). */
 int on_powerpc(void);
 
@@ -30,5 +34,6 @@ void test_applescript_dates(void);
 void test_network(void);
 void test_network_deep(void);
 void test_keyboard(void);
+void test_finder(void);
 
 #endif

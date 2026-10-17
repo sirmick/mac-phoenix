@@ -236,11 +236,12 @@ set_tests_properties(guest_suite_761 PROPERTIES
 )
 
 # --- Finder test set: AppleScript drives the Finder (make/rename/duplicate/
-# move/copy to another volume/windows/trash), MacPerl checks the disk.
+# move/copy to another volume/windows/trash), the File Manager checks the
+# disk (MacPhoenixSuite's finder section).
 
 add_test(
   NAME finder_suite
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 120 --port 18114
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --sections finder --results finder_results.txt --network none --timeout 120 --port 18114
 )
 set_tests_properties(finder_suite PROPERTIES
   TIMEOUT 160
@@ -251,7 +252,7 @@ set_tests_properties(finder_suite PROPERTIES
 
 add_test(
   NAME finder_suite_executor
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 150 --port 18116
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --sections finder --results finder_results.txt --network none --timeout 150 --port 18116
 )
 set_tests_properties(finder_suite_executor PROPERTIES
   TIMEOUT 200
@@ -259,7 +260,30 @@ set_tests_properties(finder_suite_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
-# Host keystrokes (/api/keypress) reach a MacPerl script's <STDIN>.
+# MacPerl as a third-party application: launched by a do-script Apple Event
+# (/api/script), runs Perl, reaches the Host volume and AppleScript.
+add_test(
+  NAME macperl_smoke
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --script MacPerlSmoke.pl --results macperl_results.txt --network none --timeout 90 --port 18130
+)
+set_tests_properties(macperl_smoke PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME macperl_smoke_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --script MacPerlSmoke.pl --results macperl_results.txt --network none --timeout 150 --port 18132
+)
+set_tests_properties(macperl_smoke_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# Host keystrokes (/api/keypress) reach the front application (the suite).
 add_test(
   NAME keyboard_guest
   COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --timeout 90 --port 18120
@@ -339,7 +363,7 @@ set_tests_properties(guest_suite_mame68k PROPERTIES TIMEOUT 160 LABELS "guest;ma
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
 add_test(NAME finder_suite_mame68k
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core mame-68k --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 120 --port 18148)
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --core mame-68k --sections finder --results finder_results.txt --network none --timeout 120 --port 18148)
 set_tests_properties(finder_suite_mame68k PROPERTIES TIMEOUT 180 LABELS "guest;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
@@ -371,7 +395,7 @@ set_tests_properties(guest_suite_executor_mame68k PROPERTIES
 
 add_test(
   NAME finder_suite_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core mame-68k --script FinderScriptTest.pl --results finder_results.txt --network none --timeout 150 --port 18156
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core mame-68k --sections finder --results finder_results.txt --network none --timeout 150 --port 18156
 )
 set_tests_properties(finder_suite_executor_mame68k PROPERTIES
   TIMEOUT 200

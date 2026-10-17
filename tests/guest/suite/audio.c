@@ -5,6 +5,13 @@
 #include <Gestalt.h>
 #include <OSUtils.h>
 
+#if !GENERATINGCFM
+/* The trap itself: CodeWarrior's interfaces declare SysBeep without its
+ * inline (as glue in a library neither toolchain links). */
+pascal void SuiteSysBeep(short duration) ONEWORDINLINE(0xA9C8);
+#define SysBeep SuiteSysBeep
+#endif
+
 void test_audio(void)
 {
     long attr;

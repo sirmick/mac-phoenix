@@ -12,14 +12,15 @@
 #                             [--rom path] [--os-version 7.5.5|7.6]
 #                             [--network MODE] [--backend uae|kpx|executor]
 #                             [--script NAME.pl] [--results FILE]
-#                             [--sections "disk extfs ..."]
+#                             [--sections "disk extfs ..."] [--app SUITE.bin]
 #                             [--executor-debug memcheck,...]
 #
 # --script runs a MacPerl script from tests/guest instead of the suite;
 # --results is the file either writes on Host: (default test_results.txt).
 # Same report format: PASS/FAIL/SKIP lines, then "---". --sections: the
 # suite's sections to run (default: disk extfs audio applescript network
-# serial).
+# serial). --app: another build of the suite (MacBinary), e.g. the
+# CodeWarrior one (tools/mpw/mpw --toolchain cw build tests/guest/suite -o DIR).
 #
 # --backend executor runs on the System Folder of the test copy
 # <storage>/images/test-macos-<os-version>.img (no ROM; the copy is mounted
@@ -69,6 +70,7 @@ while [[ $# -gt 0 ]]; do
         --script) SCRIPT_NAME="$2"; shift 2 ;;
         --results) RESULTS_NAME="$2"; shift 2 ;;
         --sections) SECTIONS="$2"; shift 2 ;;
+        --app) SUITE_APP="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -131,7 +133,7 @@ if [[ ! -f "$DISK" ]]; then
     exit 77
 fi
 
-SUITE_APP="$GUEST_DIR/suite/MacPhoenixSuite.bin"
+SUITE_APP="${SUITE_APP:-$GUEST_DIR/suite/MacPhoenixSuite.bin}"
 if [[ -n "$SCRIPT_NAME" ]]; then
     PERL_SCRIPT="$GUEST_DIR/$SCRIPT_NAME"
     [[ -f "$PERL_SCRIPT" ]] || { echo "SKIP: Perl test script not found: $PERL_SCRIPT"; exit 77; }
