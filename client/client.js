@@ -4153,7 +4153,7 @@ function defaultExecutorSystem() {
     const ready = (storageCache?.executor_systems || []).find(s => s.finder);
     if (ready) return ready.name;
     const images = (storageCache?.disks || []).map(d => d.name || d);
-    return images.find(n => /7\.5/.test(n)) || '';
+    return images.find(n => n === '7.5.5.img') || images.find(n => /7\.5/.test(n)) || '';
 }
 
 // Without a System (or one without Finder) only the Browser can start.
@@ -4766,13 +4766,16 @@ function onRomChange() {
 // and a disk image, and is left out without them.
 const EXECUTOR_PROFILE = 'exec';
 const ROM_PROFILES = [
-    // name, persona, backend, core, jit, RAM MB, screen, disks (first found)
+    // name, persona, backend, core, jit, RAM MB, screen, disks (first found).
+    // 7.6.1.img / 7.5.5.img: the standard disks provisioning/build.py makes
+    // from Apple's installers (docs/Provisioning.md); the hand-made ones are
+    // fallbacks until they're retired. 9.0.4 and 6.0.8 aren't baked yet.
     { name: '68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 64, screen: '1024x768', disks: ['macos-7.5.5.img', 'macos-7.6.1.img'] },
+      ram_mb: 64, screen: '1024x768', disks: ['7.6.1.img', '7.5.5.img', 'macos-7.5.5.img', 'macos-7.6.1.img'] },
     { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 4, screen: '512x342', disks: ['system-6.0.8.img'] },
     { name: 'ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
-      ram_mb: 128, screen: '1024x768', disks: ['macos-9.0.4.img', 'macos-7.5.5.img'] },
+      ram_mb: 128, screen: '1024x768', disks: ['macos-9.0.4.img', '7.6.1.img', 'macos-7.5.5.img'] },
 ];
 
 function recommendedRomFor(mode) {

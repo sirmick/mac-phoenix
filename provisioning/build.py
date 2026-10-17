@@ -113,8 +113,12 @@ def record_path(d):
 
 
 def up_to_date(d, key):
+    """The record's key matches, and the image is still what was built (a
+    web UI profile or a test booting it in place changes it)."""
     try:
-        return os.path.exists(out_path(d)) and bake.load_json(record_path(d)).get("key") == key
+        rec = bake.load_json(record_path(d))
+        return (os.path.exists(out_path(d)) and rec.get("key") == key
+                and rec.get("md5") in (None, bake.file_md5(out_path(d))))
     except (OSError, ValueError):
         return False
 
@@ -466,6 +470,7 @@ def build(d, force=False, log=print):
               "launch": launch,
               "aliases": getattr(b, "ids_paths", []) + [label + a.decode("mac_roman") for a, _, _ in b.ids],     # rewritten; test_image.py resolves them
               "warnings": b.warnings}
+    record["md5"] = bake.file_md5(out)
     with open(record_path(d), "w") as f:
         json.dump(record, f, indent=1, ensure_ascii=False)
     log(f"{out}: {len(b.placed)} files from {len(mans)} snapshots, {os.path.getsize(out) >> 20} MB")
