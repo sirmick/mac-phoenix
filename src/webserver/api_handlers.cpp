@@ -54,6 +54,7 @@ namespace webrtc {
 #include <fstream>
 #include <chrono>
 #include <shared_mutex>
+#include <mutex>
 #include <thread>
 #include <pwd.h>
 #include <unistd.h>
@@ -453,6 +454,15 @@ static bool bridge_agent_is_connected(bool finder_reached) {
     return (now - st.st_mtime) <= 10;
 }
 
+// The file transport has one slot (_bridge_cmd, _bridge_result, ...): its
+// users take this while they use it. The HTTP server runs bridge routes
+// concurrently (http_server.cpp); recursive because some write a file and
+// then go through bridge_command.
+static std::unique_lock<std::recursive_mutex> bridge_files_lock() {
+    static std::recursive_mutex m;
+    return std::unique_lock<std::recursive_mutex>(m);
+}
+
 // Send a command to the guest BridgeAgent and poll for a result.
 // Shared by handle_shutdown / handle_restart / handle_quit-style endpoints
 // that go through the guest-OS bridge rather than manipulating the subprocess.
@@ -460,6 +470,7 @@ static bool bridge_agent_is_connected(bool finder_reached) {
 // command file vanishing is taken as success too (the agent deletes it
 // before running the command, which is fine for quick commands only).
 static Response bridge_command(const char* cmd, int poll_iterations, bool wait_result = false) {
+    auto lock = bridge_files_lock();
     auto& cfg = config::EmulatorConfig::instance();
     if (!cfg.bridge_enabled) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled\"}");
@@ -924,6 +935,7 @@ Response APIRouter::handle_resolution_post(const Request& req) {
     std::snprintf(cmd, sizeof(cmd), "RESIZE %u %u %u",
                   best->w, best->h, best->apple_id);
 
+    auto lock = bridge_files_lock();
     bridge_remove_file(cfg.bridge_dir, "_bridge_result");
     bridge_write_file(cfg.bridge_dir, "_bridge_cmd", cmd);
 
@@ -1711,6 +1723,7 @@ Response APIRouter::handle_launch(const Request& req) {
 
     bool open_doc = j.value("open").toBool(false);
 
+    auto lock = bridge_files_lock();
     bridge_remove_file(cfg.bridge_dir, "_bridge_result");
     bridge_write_file(cfg.bridge_dir, "_bridge_cmd", (open_doc ? "OPEN " : "LAUNCH ") + path);
 
@@ -1834,6 +1847,7 @@ Response APIRouter::handle_script(const Request& req) {
     // Body in BR_FILE_SCRIPT, command in BR_FILE_CMD. Order matters — the agent
     // can fire as soon as it sees _bridge_cmd, so the script body must be
     // visible first.
+    auto lock = bridge_files_lock();
     bridge_write_file(cfg.bridge_dir, "_bridge_script", script);
     return bridge_command(("SCRIPT " + creator).c_str(), 100);
 }
@@ -2038,6 +2052,7 @@ Response APIRouter::handle_exec(const Request& req) {
     }
 
     // Stale reply from a previous call would otherwise leak into ours.
+    auto lock = bridge_files_lock();
     bridge_remove_file(cfg.bridge_dir, "_bridge_reply");
     bridge_write_file(cfg.bridge_dir, "_bridge_script", command);
 
@@ -2215,6 +2230,7 @@ Response APIRouter::handle_clipboard_set(const Request& req) {
             "{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
     }
 
+    auto lock = bridge_files_lock();
     bridge_write_file(cfg.bridge_dir, "_bridge_clipboard", bytes);
     return bridge_command("SET_CLIPBOARD", 30);
 }

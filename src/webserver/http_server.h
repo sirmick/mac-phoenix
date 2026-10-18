@@ -17,8 +17,14 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <mutex>
+#include <vector>
+#include <condition_variable>
+#include <deque>
+#include <unordered_set>
 
-class QTcpSocket;
+
+class QThread;
 
 namespace http {
 
@@ -106,6 +112,12 @@ public:
     // dispatches to the handler on a new thread.
     void register_websocket_route(const std::string& path, WebSocketHandler handler);
 
+    // A route whose handler runs without the API lock, beside the others:
+    // one that waits on the guest (the bridge's routes, /api/wait) and
+    // serializes what it shares itself. Every other handler runs under the
+    // lock, one at a time, as they always have.
+    void allow_concurrent(const std::string& path);
+
     // Stop server and wait for thread to join
     void stop();
 
@@ -117,9 +129,13 @@ private:
     // success back through the promise so start() can return false on bind
     // failure. Called from HttpServerThread::run().
     void server_loop(std::shared_ptr<std::promise<bool>> listen_result);
-    bool handle_client(QTcpSocket* socket);  // returns true if fd was handed off
+    bool handle_client(int fd);              // returns true if fd was handed off (dup'd)
+    void serve_connection(int conn_fd);       // a worker thread's: read, answer, close
+    void start_workers();
+    void worker_loop();                       // HttpWorkerThread::run
+    friend class HttpWorkerThread;
     bool parse_request(const char* buffer, size_t length, Request& req);
-    bool try_websocket_upgrade(const Request& req, QTcpSocket* socket);  // true = handed off
+    bool try_websocket_upgrade(const Request& req, int fd);  // true = handed off
 
     friend class HttpServerThread;
 
@@ -132,6 +148,16 @@ private:
     std::unordered_map<std::string, StreamHandler> stream_routes_;
     // WebSocket routes: path -> handler
     std::unordered_map<std::string, WebSocketHandler> websocket_routes_;
+    // Routes whose handlers run without api_mutex_ (allow_concurrent)
+    std::unordered_set<std::string> concurrent_routes_;
+    std::mutex api_mutex_;
+    // The worker pool and the connections waiting for it
+    static constexpr int kWorkers = 16;
+    std::vector<std::unique_ptr<QThread>> pool_;
+    std::deque<int> queue_;
+    std::mutex queue_mutex_;
+    std::condition_variable queue_cv_;
+    bool stopping_ = false;
 };
 
 } // namespace http

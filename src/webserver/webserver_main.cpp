@@ -75,6 +75,11 @@ void http_server_main(const config::EmulatorConfig* config,
     };
 
     // Register stream route (before start, since start runs the accept loop)
+    // Routes that wait on the guest run beside the others (http_server.h).
+    for (const char* path : {"/api/exec", "/api/script", "/api/launch", "/api/copy", "/api/quit",
+                             "/api/shutdown", "/api/restart", "/api/wait", "/api/clipboard"})
+        server.allow_concurrent(path);
+
     server.register_stream_route("/api/stream",
         [api_context](const http::Request& req, int fd) {
             http::handle_stream(req, fd, api_context);

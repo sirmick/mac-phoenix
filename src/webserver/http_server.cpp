@@ -1,14 +1,13 @@
 /*
  * HTTP Server Module
  *
- * HTTP/1.1 server backed by QTcpServer/QTcpSocket. The listen accept
- * loop and per-request read/write use Qt's synchronous waitForX APIs,
- * so the server runs on a dedicated std::thread without needing a Qt
- * event loop. For long-poll stream and WebSocket routes the underlying
- * file descriptor is dup'd and handed to a worker thread that keeps
- * using POSIX send/recv on its own copy — the QTcpSocket's fd is then
- * closed by Qt as normal, but the dup'd reference keeps the TCP
- * connection alive.
+ * HTTP/1.1 server. The accept loop (a QThread, plain POSIX accept on the
+ * listening fd) hands each connection to a worker thread, which reads the
+ * request and writes the response on the fd with poll()-bounded recv/send.
+ * API handlers run under one lock, except the routes allowed to run beside
+ * them (allow_concurrent: those that wait on the guest). For long-poll
+ * stream and WebSocket routes the fd is dup'd and handed to the route's own
+ * thread, which keeps using it after the worker closes its copy.
  */
 
 #include "http_server.h"
@@ -16,7 +15,6 @@
 #include <QByteArray>
 #include <QHostAddress>
 #include <QTcpServer>
-#include <QTcpSocket>
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QThread>
@@ -30,6 +28,7 @@
 #include <cctype>
 #include <cstring>
 #include <cstdio>
+#include <thread>
 #include <errno.h>
 
 namespace http {
@@ -208,6 +207,7 @@ void Server::server_loop(std::shared_ptr<std::promise<bool>> listen_result) {
         return;
     }
     listen_result->set_value(true);
+    start_workers();
 
     while (running_.load()) {
         // Poll for accept readiness with a short timeout so we can notice
@@ -231,32 +231,66 @@ void Server::server_loop(std::shared_ptr<std::promise<bool>> listen_result) {
             continue;
         }
 
-        // Handle the connection inline on the accept thread. Serial
-        // dispatch is fine: the work per request is small (build the
-        // response, write it to the kernel buffer, drain). For long-
-        // running paths, handle_client's stream/websocket detection
-        // already spawns its own worker thread + dup-fd hand-off.
-        QTcpSocket sock;
-        sock.setSocketDescriptor(conn_fd, QAbstractSocket::ConnectedState);
-        bool handed_off = handle_client(&sock);
-        if (!handed_off) {
-            constexpr int kFlushBudgetMs = 5000;
-            auto deadline = std::chrono::steady_clock::now() +
-                            std::chrono::milliseconds(kFlushBudgetMs);
-            while (sock.bytesToWrite() > 0) {
-                int rem = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
-                    deadline - std::chrono::steady_clock::now()).count();
-                if (rem <= 0) break;
-                if (!sock.waitForBytesWritten(rem)) break;
-            }
-        } else {
-            // Handed off — the inner handler dup'd the fd. Release Qt's
-            // ownership without closing the dup'd reference.
-            sock.setSocketDescriptor(-1, QAbstractSocket::UnconnectedState,
-                                     QIODevice::NotOpen);
+        // Each connection to a worker: reading a slow client's request
+        // or a handler that waits on the guest (a build through /api/exec,
+        // a COPY) must not hold up every other request.
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            queue_.push_back(conn_fd);
         }
-        // sock dtor closes conn_fd (or no-ops if released above).
+        queue_cv_.notify_one();
     }
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        stopping_ = true;
+    }
+    queue_cv_.notify_all();
+    for (auto& w : pool_)
+        w->wait(5000);
+}
+
+// The workers: QThreads, as the accept loop is, so what a handler makes
+// (the emulator subprocess and its Qt IPC sockets, on /api/emulator/start)
+// lives on a Qt thread that outlasts the request.
+class HttpWorkerThread : public QThread {
+public:
+    explicit HttpWorkerThread(Server* owner) : owner_(owner) {}
+protected:
+    void run() override { owner_->worker_loop(); }
+private:
+    Server* owner_;
+};
+
+void Server::start_workers() {
+    for (int i = 0; i < kWorkers; i++) {
+        pool_.push_back(std::make_unique<HttpWorkerThread>(this));
+        pool_.back()->start();
+    }
+}
+
+void Server::worker_loop() {
+    for (;;) {
+        int fd;
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            queue_cv_.wait(lock, [this] { return stopping_ || !queue_.empty(); });
+            if (queue_.empty())
+                return;
+            fd = queue_.front();
+            queue_.pop_front();
+        }
+        serve_connection(fd);
+    }
+}
+
+void Server::serve_connection(int conn_fd) {
+    // A handed-off route took a dup of the fd; ours is closed either way.
+    handle_client(conn_fd);
+    ::close(conn_fd);
+}
+
+void Server::allow_concurrent(const std::string& path) {
+    concurrent_routes_.insert(path);
 }
 
 void Server::register_stream_route(const std::string& path, StreamHandler handler) {
@@ -277,19 +311,48 @@ static bool iequals(const std::string& a, const char* b) {
     return true;
 }
 
-// Send a short response (error pages, mostly) and flush. Caller is
-// responsible for socket teardown.
-static void send_simple_response(QTcpSocket* socket, int code,
-                                 const char* status, const char* body) {
+// The connection, on its fd: blocking reads and writes with poll()
+// timeouts. Usable on any thread (QTcpSocket's waits need a QThread, and
+// connections are served on plain worker threads).
+static size_t read_some(int fd, char* buf, size_t n, int timeout_ms) {
+    pollfd p{ fd, POLLIN, 0 };
+    int r;
+    do r = ::poll(&p, 1, timeout_ms); while (r < 0 && errno == EINTR);
+    if (r <= 0) return 0;
+    ssize_t got;
+    do got = ::recv(fd, buf, n, 0); while (got < 0 && errno == EINTR);
+    return got > 0 ? (size_t)got : 0;
+}
+
+static bool write_all(int fd, const char* data, size_t n, int timeout_ms) {
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (n > 0) {
+        ssize_t w = ::send(fd, data, n, MSG_NOSIGNAL);
+        if (w > 0) { data += w; n -= (size_t)w; continue; }
+        if (w < 0 && errno == EINTR) continue;
+        if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            int rem = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now()).count();
+            if (rem <= 0) return false;
+            pollfd p{ fd, POLLOUT, 0 };
+            ::poll(&p, 1, rem);
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+// Send a short response (error pages, mostly). Caller closes the fd.
+static void send_simple_response(int fd, int code, const char* status, const char* body) {
     Response resp;
     resp.set_status(code, status);
     resp.set_body(body);
     std::string s = resp.build();
-    socket->write(s.data(), static_cast<qint64>(s.size()));
-    socket->waitForBytesWritten(2000);
+    write_all(fd, s.data(), s.size(), 2000);
 }
 
-bool Server::try_websocket_upgrade(const Request& req, QTcpSocket* socket) {
+bool Server::try_websocket_upgrade(const Request& req, int fd) {
     auto it = websocket_routes_.find(req.path);
     if (it == websocket_routes_.end()) return false;
 
@@ -313,12 +376,9 @@ bool Server::try_websocket_upgrade(const Request& req, QTcpSocket* socket) {
         "Connection: Upgrade\r\n"
         "Sec-WebSocket-Accept: " + accept + "\r\n"
         "\r\n";
-    socket->write(resp.data(), static_cast<qint64>(resp.size()));
-    socket->waitForBytesWritten(2000);
+    write_all(fd, resp.data(), resp.size(), 2000);
 
-    int qt_fd = socket->socketDescriptor();
-    if (qt_fd < 0) return false;
-    int worker_fd = ::fcntl(qt_fd, F_DUPFD_CLOEXEC, 0);
+    int worker_fd = ::fcntl(fd, F_DUPFD_CLOEXEC, 0);
     if (worker_fd < 0) {
         fprintf(stderr, "HTTP: dup() for websocket handoff failed: %s\n", strerror(errno));
         return false;
@@ -346,7 +406,7 @@ bool Server::try_websocket_upgrade(const Request& req, QTcpSocket* socket) {
     return true;
 }
 
-bool Server::handle_client(QTcpSocket* socket) {
+bool Server::handle_client(int fd) {
     std::string request;
     request.reserve(8192);
 
@@ -355,17 +415,15 @@ bool Server::handle_client(QTcpSocket* socket) {
     constexpr int kReadTimeoutMs = 30000;
     constexpr size_t kMaxHeaderBytes = 64 * 1024;
 
+    char chunk[16384];
     size_t header_end = std::string::npos;
     while (header_end == std::string::npos) {
-        if (socket->bytesAvailable() == 0) {
-            if (!socket->waitForReadyRead(kReadTimeoutMs)) return false;
-        }
-        QByteArray data = socket->readAll();
-        if (data.isEmpty()) return false;
-        request.append(data.constData(), data.size());
+        size_t got = read_some(fd, chunk, sizeof chunk, kReadTimeoutMs);
+        if (got == 0) return false;
+        request.append(chunk, got);
         header_end = request.find("\r\n\r\n");
         if (header_end == std::string::npos && request.size() > kMaxHeaderBytes) {
-            send_simple_response(socket, 431, "Request Header Fields Too Large",
+            send_simple_response(fd, 431, "Request Header Fields Too Large",
                                  "Request Header Fields Too Large");
             return false;
         }
@@ -383,12 +441,12 @@ bool Server::handle_client(QTcpSocket* socket) {
         try {
             size_t parsed = std::stoul(request.substr(cl_pos + 16));
             if (parsed > kMaxBodyBytes) {
-                send_simple_response(socket, 413, "Payload Too Large", "Payload Too Large");
+                send_simple_response(fd, 413, "Payload Too Large", "Payload Too Large");
                 return false;
             }
             content_length = parsed;
         } catch (const std::exception &) {
-            send_simple_response(socket, 400, "Bad Request", "Invalid Content-Length");
+            send_simple_response(fd, 400, "Bad Request", "Invalid Content-Length");
             return false;
         }
     }
@@ -396,23 +454,20 @@ bool Server::handle_client(QTcpSocket* socket) {
     size_t body_start = header_end + 4;
     size_t body_received = request.size() - body_start;
     while (body_received < content_length) {
-        if (socket->bytesAvailable() == 0) {
-            if (!socket->waitForReadyRead(kReadTimeoutMs)) break;
-        }
-        QByteArray data = socket->readAll();
-        if (data.isEmpty()) break;
-        request.append(data.constData(), data.size());
-        body_received += data.size();
+        size_t got = read_some(fd, chunk, sizeof chunk, kReadTimeoutMs);
+        if (got == 0) break;
+        request.append(chunk, got);
+        body_received += got;
     }
 
     Request req;
     if (!parse_request(request.c_str(), request.size(), req)) {
-        send_simple_response(socket, 400, "Bad Request", "Bad Request");
+        send_simple_response(fd, 400, "Bad Request", "Bad Request");
         return false;
     }
 
     // WebSocket upgrade takes over the fd entirely.
-    if (req.method == "GET" && try_websocket_upgrade(req, socket)) {
+    if (req.method == "GET" && try_websocket_upgrade(req, fd)) {
         return true;
     }
 
@@ -430,12 +485,9 @@ bool Server::handle_client(QTcpSocket* socket) {
                 "X-Accel-Buffering: no\r\n"
                 "Connection: keep-alive\r\n"
                 "\r\n";
-            socket->write(headers.data(), static_cast<qint64>(headers.size()));
-            socket->waitForBytesWritten(2000);
+            write_all(fd, headers.data(), headers.size(), 2000);
 
-            int qt_fd = socket->socketDescriptor();
-            if (qt_fd < 0) return false;
-            int worker_fd = ::fcntl(qt_fd, F_DUPFD_CLOEXEC, 0);
+            int worker_fd = ::fcntl(fd, F_DUPFD_CLOEXEC, 0);
             if (worker_fd < 0) {
                 fprintf(stderr, "HTTP: dup() for stream handoff failed: %s\n", strerror(errno));
                 return false;
@@ -456,10 +508,17 @@ bool Server::handle_client(QTcpSocket* socket) {
         }
     }
 
-    // Normal request — synchronous response.
-    Response resp = handler_(req);
+    // Normal request — synchronous response, under the API lock unless the
+    // route was allowed to run beside the others.
+    Response resp;
+    if (concurrent_routes_.count(req.path)) {
+        resp = handler_(req);
+    } else {
+        std::lock_guard<std::mutex> lock(api_mutex_);
+        resp = handler_(req);
+    }
     std::string response_str = resp.build();
-    socket->write(response_str.data(), static_cast<qint64>(response_str.size()));
+    write_all(fd, response_str.data(), response_str.size(), 10000);
     return false;
 }
 
