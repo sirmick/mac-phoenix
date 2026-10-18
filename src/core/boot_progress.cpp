@@ -451,6 +451,7 @@ void boot_progress_update(uint16_t opcode, void *regs_ptr)
 	/* Track boot milestones (always, regardless of level) */
 	switch (opcode) {
 		case M68K_EMUL_OP_RESET:
+			guest_bridge::reset();	/* no agent (yet) in the new boot */
 			if (g_current_phase < PHASE_ROM_INIT) {
 				milestone("ROM init started (RESET)");
 				set_phase(PHASE_ROM_INIT);

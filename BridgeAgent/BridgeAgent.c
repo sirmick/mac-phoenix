@@ -2,36 +2,22 @@
  * BridgeAgent - MacPhoenix automation agent
  *
  * A small application installed in System Folder:Startup Items. Finder
- * launches it at desktop time; it runs a WaitNextEvent loop at ~10Hz
- * polling the ExtFS "Host" volume for bridge commands.
- *
- * Protocol (file-based; all files live in a per-instance bridge dir
- * resolved at startup from :System Folder:Preferences:MacPhoenix.cfg
- * — host writes that file when it installs us. See bridge_cfg.h.
- * Resolved paths look like Host:MacPhoenix:<host_pid>:<leaf>):
- *   Host writes <bridge_dir>:_bridge_cmd     - one of:
+ * launches it at desktop time; it takes the emulator's requests through
+ * the bridge trap $ABE5 (guest_bridge.h, docs/CommandBridge.md):
+ *   EXEC <creator> <seconds>\r<script>  — 'misc'/'dosc', waits for the reply:
+ *                                        stdout, stderr and {Status}
+ *   CMD <len>\r<line><payload>          — one of:
  *       LAUNCH  <hfs-path>             — LaunchApplication
  *       OPEN    <hfs-path>             — generic 'aevt'/'odoc' to creator's app
- *       SCRIPT  <4-char creator>       — 'misc'/'dosc' with body from
- *                                        <bridge_dir>:_bridge_script,
- *                                        fire-and-forget. Works for
+ *       SCRIPT  <4-char creator>       — 'misc'/'dosc' with the payload as the
+ *                                        body, fire-and-forget. Works for
  *                                        McPL/LAND/MPS /ToyS/...
- *       EXEC    <4-char creator>       — same as SCRIPT but waits for
- *                                        the AE reply; captures stdout,
- *                                        stderr, and {Status} into
- *                                        <bridge_dir>:_bridge_reply.
- *                                        Canonical target: ToolServer
- *                                        (creator MPSX).
  *       COPY    <src>\r<dst folder>    — copy a file or folder (both forks,
  *                                        Finder info) into a folder
- *       QUIT / SHUTDOWN / RESTART      — Process / Shutdown manager
- *       SET_CLIPBOARD                  — see do_set_clipboard
- *   Agent reads, deletes, executes
- *   Agent writes <bridge_dir>:_bridge_result  - decimal OSErr, CR-terminated
- *
- * Liveness markers:
- *   <bridge_dir>:bridge_loaded       - created once at first poll
- *   <bridge_dir>:bridge_heartbeat    - rewritten every ~2s with a counter
+ *       RESIZE / QUIT / SHUTDOWN / RESTART / EXIT
+ *       SET_CLIPBOARD                  — the payload; see do_set_clipboard
+ * and tells it the front process (STATE). Its bridge dir (bridge_cfg.h)
+ * still carries netcfg.txt.
  */
 #include <Quickdraw.h>
 #include <Fonts.h>
@@ -66,13 +52,13 @@
 
 /* Build stamp — compiler fills in at each build so we can confirm the
  * running BridgeAgent matches the latest source. Surfaced in the status
- * window, the heartbeat JSON, and /api/status. */
+ * window. */
 #define BRIDGE_AGENT_BUILD __DATE__ " " __TIME__
 
 /* ---------- Status window state ---------- */
 
 static WindowPtr gStatusWin = NULL;
-static int       gHeartbeat = 0;
+static Boolean   gV2;          /* the bridge trap answered our hello */
 static int       gCmdCount  = 0;
 static Str255    gLastCmd;
 static OSErr     gLastResult = 0;
@@ -171,7 +157,7 @@ static void draw_status(void)
     DrawString(pbuf);
 
     MoveTo(6, 52);
-    snprintf(buf, sizeof(buf), "HB: %d", gHeartbeat);
+    snprintf(buf, sizeof(buf), "Bridge: %s", gV2 ? "connected" : "no trap");
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
@@ -220,8 +206,6 @@ static void open_status_window(void)
 }
 
 /* ---------- Bridge command handlers ---------- */
-
-static void bridge_step(const char *tag);
 
 
 /* LaunchApplication as the Finder does it: when the preferred partition in
@@ -681,12 +665,8 @@ static OSErr do_open_document(const unsigned char *path)
     return err;
 }
 
-/* Read Host:_bridge_script into a freshly NewPtr'd buffer. Caller frees.
- * Returns noErr + (*outBuf, *outLen) on success; *outBuf is NULL on empty.
- * The file is consumed (deleted) on success — single-shot like _bridge_cmd. */
-/* A command's payload when it came over the bridge trap (CMD): what the
- * file transport carries in _bridge_script or _bridge_clipboard. The
- * loaders take it from here instead of the file. */
+/* A command's payload (SCRIPT's body, SET_CLIPBOARD's bytes), as v2_cmd
+ * took it from the request. */
 static Boolean gHavePayload;
 static char   *gPayload;
 static long    gPayloadLen;
@@ -699,50 +679,14 @@ static void drop_payload(void)
     gHavePayload = false;
 }
 
+/* The payload, ours to free; *outBuf is NULL when empty (a no-op script). */
 static OSErr load_bridge_script(char **outBuf, long *outLen)
 {
-    *outBuf = NULL;
-    *outLen = 0;
-
-    if (gHavePayload) {                 /* over the trap: ours to take */
-        *outBuf = gPayload;
-        *outLen = gPayloadLen;
-        gPayload = NULL;
-        gPayloadLen = 0;
-        gHavePayload = false;
-        return noErr;
-    }
-
-    FSSpec spec;
-    Str255 path; br_cfg_path(path, BR_FILE_SCRIPT);
-    OSErr err = FSMakeFSSpec(0, 0, path, &spec);
-    if (err != noErr) return err;
-
-    short ref;
-    err = FSpOpenDF(&spec, fsRdPerm, &ref);
-    if (err != noErr) return err;
-
-    long size = 0;
-    err = GetEOF(ref, &size);
-    if (err != noErr || size < 0) { FSClose(ref); return err ? err : paramErr; }
-
-    if (size == 0) {
-        FSClose(ref);
-        FSpDelete(&spec);
-        return noErr;  /* empty script is legal, lets host send a no-op */
-    }
-
-    char *buf = (char *)NewPtr(size);
-    if (!buf) { FSClose(ref); return memFullErr; }
-
-    long rlen = size;
-    err = FSRead(ref, &rlen, buf);
-    FSClose(ref);
-    if (err != noErr && err != eofErr) { DisposePtr(buf); return err; }
-
-    FSpDelete(&spec);
-    *outBuf = buf;
-    *outLen = rlen;
+    *outBuf = gPayload;
+    *outLen = gPayloadLen;
+    gPayload = NULL;
+    gPayloadLen = 0;
+    gHavePayload = false;
     return noErr;
 }
 
@@ -769,65 +713,6 @@ static OSErr do_script(OSType creator)
     }
     if (src) DisposePtr(src);
     return err;
-}
-
-/* Write a single AE reply payload file. Format is text with three sections,
- * each preceded by a CR-terminated header line:
- *
- *   STDOUT <decimal-byte-count>\r
- *   <stdout bytes>
- *   STDERR <decimal-byte-count>\r
- *   <stderr bytes>
- *   STATUS <decimal>\r
- *
- * Sections that aren't present are written with count 0. The host parses
- * the header lines and slices out the byte ranges. We chose this over
- * AppleSingle / typeAEList serialisation because the host doesn't link
- * against any AE library; this format is a few lines of C on each side. */
-static OSErr write_bridge_reply(const char *stdout_buf, long stdout_len,
-                                const char *stderr_buf, long stderr_len,
-                                long status)
-{
-    Str255 path; br_cfg_path(path, BR_FILE_REPLY);
-    FSSpec spec;
-    OSErr err = FSMakeFSSpec(0, 0, path, &spec);
-    if (err == fnfErr) {
-        err = FSpCreate(&spec, 'MxBr', 'TEXT', smSystemScript);
-        if (err != noErr) return err;
-    } else if (err != noErr) {
-        return err;
-    } else {
-        FSpDelete(&spec);
-        err = FSpCreate(&spec, 'MxBr', 'TEXT', smSystemScript);
-        if (err != noErr) return err;
-    }
-
-    short ref;
-    err = FSpOpenDF(&spec, fsWrPerm, &ref);
-    if (err != noErr) return err;
-
-    char hdr[64];
-    long n;
-
-    n = snprintf(hdr, sizeof(hdr), "STDOUT %ld\r", stdout_len);
-    FSWrite(ref, &n, hdr);
-    if (stdout_len > 0 && stdout_buf) {
-        long len = stdout_len;
-        FSWrite(ref, &len, stdout_buf);
-    }
-
-    n = snprintf(hdr, sizeof(hdr), "STDERR %ld\r", stderr_len);
-    FSWrite(ref, &n, hdr);
-    if (stderr_len > 0 && stderr_buf) {
-        long len = stderr_len;
-        FSWrite(ref, &len, stderr_buf);
-    }
-
-    n = snprintf(hdr, sizeof(hdr), "STATUS %ld\r", status);
-    FSWrite(ref, &n, hdr);
-
-    FSClose(ref);
-    return noErr;
 }
 
 /* Pull a typeChar parameter out of an AE descriptor, returning a freshly
@@ -923,30 +808,6 @@ static OSErr exec_core(OSType creator, const char *src, long src_len, long timeo
     return noErr;
 }
 
-/* EXEC <creator> — like SCRIPT but waits for the AE reply and captures
- * stdout / stderr / exit status into _bridge_reply (exec_core). A minute
- * at most; the trap's EXEC (bridge v2) takes a timeout. */
-static OSErr do_exec(OSType creator)
-{
-    char *src = NULL;
-    long src_len = 0;
-    OSErr err = load_bridge_script(&src, &src_len);
-    if (err != noErr) return err;
-
-    char *out, *errs;
-    long out_len, errs_len, status;
-    err = exec_core(creator, src, src_len, 60 * 60, &out, &out_len, &errs, &errs_len, &status);
-    if (src) DisposePtr(src);
-    if (err != noErr) {
-        write_bridge_reply(NULL, 0, NULL, 0, (long)err);
-        return err;
-    }
-    OSErr werr = write_bridge_reply(out, out_len, errs, errs_len, status);
-    if (out) DisposePtr(out);
-    if (errs) DisposePtr(errs);
-    return werr;
-}
-
 /* Send kAEQuitApplication to an arbitrary PSN. The caller supplies the
  * target because we self-foreground before dispatching bridge commands, so
  * GetFrontProcess at send-time would return us (the bridge agent), not the
@@ -961,7 +822,7 @@ static OSErr do_exec(OSType creator)
  * activate/deactivate cycle has occurred yet.
  *
  * So we split into two phases:
- *   Phase 1 (do_set_clipboard): read file into handle, request SetFrontProcess,
+ *   Phase 1 (do_set_clipboard): payload into a handle, request SetFrontProcess,
  *     stash pending state, return noErr immediately.
  *   Phase 2 (commit_pending_clip, called each tick from main loop):
  *     GetFrontProcess == self? If yes, we've actually reached foreground.
@@ -998,131 +859,38 @@ static void commit_pending_clip(void)
         return; /* not front yet — try again next tick */
     }
 
-    char dbg[96];
-    long size_before  = *(volatile long  *)0x0960;
-    short count_before = *(volatile short *)0x0968;
-
-    long zret    = ZeroScrap();
-    long put_err = PutScrap(gClipLen, 'TEXT', *gClipData);
-
-    long size_after  = *(volatile long  *)0x0960;
-    short count_after = *(volatile short *)0x0968;
-
-    snprintf(dbg, sizeof(dbg),
-             "commit_clip: len=%ld z=%ld p=%ld sz %ld->%ld cnt %d->%d",
-             gClipLen, zret, put_err,
-             size_before, size_after, (int)count_before, (int)count_after);
-    bridge_step(dbg);
-
+    ZeroScrap();
+    PutScrap(gClipLen, 'TEXT', *gClipData);
     discard_pending_clip();
 }
 
-/* Load Host:_bridge_clipboard into a locked handle, stash as pending, and
- * ask Process Manager to bring BridgeAgent to front. Actual PutScrap happens
+/* Take the payload into a locked handle, stash it as pending, and ask
+ * Process Manager to bring BridgeAgent to front. Actual PutScrap happens
  * later in commit_pending_clip once GetFrontProcess confirms we're foreground.
+ * If we're already front, it fires on the very next tick.
  *
  * prior_front is accepted for signature parity but is unused for now (no
  * switch-back yet). */
 static OSErr do_set_clipboard(const ProcessSerialNumber *prior_front)
 {
     (void)prior_front;
-    char dbg[96];
-
-    if (gHavePayload) {                 /* over the trap: the bytes are here */
-        discard_pending_clip();
-        Handle h = NewHandle(gPayloadLen);
-        if (!h) { drop_payload(); return memFullErr; }
-        HLock(h);
-        if (gPayloadLen) BlockMoveData(gPayload, *h, gPayloadLen);
-        gClipData = h;
-        gClipLen = gPayloadLen;
-        gClipPending = true;
-        drop_payload();
-        ProcessSerialNumber self = {0, kCurrentProcess};
-        SetFrontProcess(&self);
-        return noErr;
-    }
-
-    FSSpec spec;
-    Str255 cb_path; br_cfg_path(cb_path, BR_FILE_CLIPBOARD);
-    OSErr err = FSMakeFSSpec(0, 0, cb_path, &spec);
-    if (err != noErr) {
-        snprintf(dbg, sizeof(dbg), "set_clip: FSMakeFSSpec err=%d", (int)err);
-        bridge_step(dbg);
-        return err;
-    }
-
-    short ref;
-    err = FSpOpenDF(&spec, fsRdPerm, &ref);
-    if (err != noErr) {
-        snprintf(dbg, sizeof(dbg), "set_clip: FSpOpenDF err=%d", (int)err);
-        bridge_step(dbg);
-        return err;
-    }
-
-    long size = 0;
-    err = GetEOF(ref, &size);
-    if (err != noErr || size < 0) {
-        FSClose(ref);
-        snprintf(dbg, sizeof(dbg), "set_clip: GetEOF err=%d size=%ld", (int)err, size);
-        bridge_step(dbg);
-        return (err != noErr) ? err : paramErr;
-    }
-
-    /* Drop any previous pending clip before we load the new one. */
     discard_pending_clip();
-
-    if (size == 0) {
-        FSClose(ref);
-        /* Empty: just request foreground, commit will ZeroScrap with zero len. */
-        gClipData = NewHandle(0);
-        if (!gClipData) {
-            bridge_step("set_clip: NewHandle(0) failed");
-            return memFullErr;
-        }
-        HLock(gClipData);
-        gClipLen = 0;
-        gClipPending = true;
-    } else {
-        Handle h = NewHandle(size);
-        if (!h) {
-            FSClose(ref);
-            bridge_step("set_clip: NewHandle failed");
-            return memFullErr;
-        }
-        HLock(h);
-        long rlen = size;
-        err = FSRead(ref, &rlen, *h);
-        FSClose(ref);
-        if (err != noErr && err != eofErr) {
-            HUnlock(h);
-            DisposeHandle(h);
-            snprintf(dbg, sizeof(dbg), "set_clip: FSRead err=%d", (int)err);
-            bridge_step(dbg);
-            return err;
-        }
-        gClipData = h;
-        gClipLen  = rlen;
-        gClipPending = true;
-    }
-
-    FSpDelete(&spec); /* file is single-shot; bytes are in the pending handle */
-
-    /* Ask Process Manager for the front slot. If we're already front this is
-     * a no-op and commit_pending_clip will fire on the very next tick. */
+    Handle h = NewHandle(gPayloadLen);
+    if (!h) { drop_payload(); return memFullErr; }
+    HLock(h);
+    if (gPayloadLen) BlockMoveData(gPayload, *h, gPayloadLen);
+    gClipData = h;
+    gClipLen = gPayloadLen;
+    gClipPending = true;
+    drop_payload();
     ProcessSerialNumber self = {0, kCurrentProcess};
-    OSErr sfp_err = SetFrontProcess(&self);
-
-    snprintf(dbg, sizeof(dbg), "set_clip: pending len=%ld sfp=%d",
-             gClipLen, (int)sfp_err);
-    bridge_step(dbg);
-
+    SetFrontProcess(&self);
     return noErr;
 }
 
 /* ---------- RESIZE ----------
  *
- * Host writes "RESIZE <w> <h> <appleID>" into _bridge_cmd. We hand the
+ * Host sends "RESIZE <w> <h> <appleID>" (a CMD). We hand the
  * appleID to Display Manager's DMSetDisplayMode — the canonical
  * resolution-switching API on System 7.5+ and Mac OS 9.
  *
@@ -1221,126 +989,8 @@ static OSErr do_system_event(AEEventID eventID)
     return -1;
 }
 
-static void write_result(OSErr result)
-{
-    FSSpec spec;
-    short ref;
-    char buf[16];
-    long len;
-
-    Str255 res_path; br_cfg_path(res_path, BR_FILE_RESULT);
-    FSMakeFSSpec(0, 0, res_path, &spec);
-    FSpDelete(&spec);
-    FSpCreate(&spec, 'ttxt', 'TEXT', smSystemScript);
-    if (FSpOpenDF(&spec, fsWrPerm, &ref) != noErr) return;
-    len = snprintf(buf, sizeof(buf), "%d\r", (int)result);
-    FSWrite(ref, &len, buf);
-    FSClose(ref);
-    FlushVol(NULL, 0);
-}
-
-static void write_marker_once(void)
-{
-    static Boolean written = false;
-    if (written) return;
-    written = true;
-    FSSpec mk;
-    Str255 loaded_path; br_cfg_path(loaded_path, BR_FILE_LOADED);
-    if (FSMakeFSSpec(0, 0, loaded_path, &mk) == fnfErr)
-        FSpCreate(&mk, 'ttxt', 'TEXT', smSystemScript);
-}
-
-static void write_heartbeat(void)
-{
-    static unsigned long last_ticks = 0;
-    unsigned long now = TickCount();
-    if (now - last_ticks < 120) return;
-    last_ticks = now;
-    gHeartbeat++;
-
-    FSSpec hb;
-    short ref;
-    Str255 hb_path; br_cfg_path(hb_path, BR_FILE_HEARTBEAT);
-    if (FSMakeFSSpec(0, 0, hb_path, &hb) == fnfErr)
-        FSpCreate(&hb, 'ttxt', 'TEXT', smSystemScript);
-    if (FSpOpenDF(&hb, fsWrPerm, &ref) == noErr) {
-        /* JSON payload so the host can tail this file for live status. */
-        char last_cmd[96] = {0};
-        int clen = gLastCmd[0];
-        if (clen > 80) clen = 80;
-        memcpy(last_cmd, gLastCmd + 1, clen);
-        /* Minimal JSON-escape: drop backslashes and quotes from last_cmd. */
-        for (int i = 0; i < clen; i++)
-            if (last_cmd[i] == '"' || last_cmd[i] == '\\') last_cmd[i] = '_';
-
-        char buf[384];
-        long len = snprintf(buf, sizeof(buf),
-            "{\"build\":\"%s\","
-            "\"heartbeat\":%d,\"commands\":%d,"
-            "\"last_result\":%d,\"last_cmd\":\"%s\"}\r",
-            BRIDGE_AGENT_BUILD,
-            gHeartbeat, gCmdCount, (int)gLastResult, last_cmd);
-        SetEOF(ref, 0);
-        FSWrite(ref, &len, buf);
-        FSClose(ref);
-        FlushVol(NULL, 0);
-    }
-    draw_status();
-}
-
-/* Debug breadcrumb: leaves a single-step trail file on Host: so we can
- * see which point in do_open_document we reached if the agent hangs. */
-static void bridge_step(const char *tag)
-{
-    FSSpec sp;
-    short ref;
-    Str255 step_path; br_cfg_path(step_path, BR_FILE_STEP);
-    if (FSMakeFSSpec(0, 0, step_path, &sp) == fnfErr)
-        FSpCreate(&sp, 'ttxt', 'TEXT', smSystemScript);
-    if (FSpOpenDF(&sp, fsWrPerm, &ref) != noErr) return;
-    long len = (long)strlen(tag);
-    SetEOF(ref, 0);
-    FSWrite(ref, &len, tag);
-    FSClose(ref);
-    FlushVol(NULL, 0);
-}
-
-static OSErr run_command(char *cmd);
-
-static void poll_bridge(void)
-{
-    write_marker_once();
-    write_heartbeat();
-
-    FSSpec cmd_spec;
-    Str255 cmd_path; br_cfg_path(cmd_path, BR_FILE_CMD);
-    if (FSMakeFSSpec(0, 0, cmd_path, &cmd_spec) != noErr)
-        return;
-
-    short refNum;
-    if (FSpOpenDF(&cmd_spec, fsRdPerm, &refNum) != noErr)
-        return;
-
-    char cmd[640];                       /* COPY carries two full paths */
-    long count = sizeof(cmd) - 1;
-    memset(cmd, 0, sizeof(cmd));
-    OSErr err = FSRead(refNum, &count, cmd);
-    FSClose(refNum);
-    FSpDelete(&cmd_spec);
-
-    if (err != noErr && err != eofErr) return;
-    cmd[count] = '\0';
-
-    OSErr result = run_command(cmd);
-    gCmdCount++;
-    gLastResult = result;
-    write_result(result);
-    draw_status();
-}
-
-/* One command, from either transport: the file's line, or a CMD over the
- * bridge trap. Its payload (SCRIPT, SET_CLIPBOARD) is in the file or in
- * gPayload. */
+/* One command line from a CMD request; its payload (SCRIPT,
+ * SET_CLIPBOARD) is in gPayload. */
 static OSErr run_command(char *cmd)
 {
     /* Stash for the status window (trim to 80 chars). */
@@ -1384,17 +1034,12 @@ static OSErr run_command(char *cmd)
         path[0] = (unsigned char)len;
         memcpy(path + 1, cmd + 5, len);
         result = do_open_document(path);
-    } else if (strncmp(cmd, "SCRIPT ", 7) == 0 ||
-               strncmp(cmd, "EXEC ",   5) == 0) {
-        /* "SCRIPT <4-char creator>" — fire-and-forget 'misc'/'dosc'.
-         * "EXEC   <4-char creator>" — same, but waits for the AE reply
-         * and captures stdout/stderr/{Status} into _bridge_reply.
-         * Body lives in BR_FILE_SCRIPT for both.
-         * Examples: SCRIPT McPL (MacPerl), SCRIPT LAND (Frontier),
-         * SCRIPT MPS  (MPW Shell — trailing space!), EXEC MPSX (ToolServer
-         * — the canonical target for /api/exec). */
-        Boolean exec_mode = (cmd[0] == 'E');
-        const char *cp = cmd + (exec_mode ? 5 : 7);
+    } else if (strncmp(cmd, "SCRIPT ", 7) == 0) {
+        /* "SCRIPT <4-char creator>" — fire-and-forget 'misc'/'dosc', the
+         * payload as the body. Examples: SCRIPT McPL (MacPerl), SCRIPT LAND
+         * (Frontier), SCRIPT MPS  (MPW Shell — trailing space!). EXEC (a
+         * request of its own, v2_exec) waits for the reply. */
+        const char *cp = cmd + 7;
         if ((int)strlen(cp) < 4) {
             result = paramErr;
         } else {
@@ -1402,7 +1047,7 @@ static OSErr run_command(char *cmd)
                            | ((OSType)(unsigned char)cp[1] << 16)
                            | ((OSType)(unsigned char)cp[2] << 8)
                            |  (OSType)(unsigned char)cp[3];
-            result = exec_mode ? do_exec(creator) : do_script(creator);
+            result = do_script(creator);
         }
     } else if (strncmp(cmd, "RESIZE ", 7) == 0) {
         /* "RESIZE <width> <height> <appleID>" — host snaps to a known
@@ -1582,8 +1227,7 @@ static void handle_event(EventRecord *evt)
  * Time Manager task asks it every 50 ms whether one waits (AGENT_PENDING) and
  * wakes us (WakeUpProcess); the main loop takes it (NEXT) and answers
  * (REPLY). The task runs at interrupt time on whatever A5: it touches only
- * its own record, and is removed before we quit. Commands not moved yet
- * still come as files (poll_bridge). */
+ * its own record, and is removed before we quit. */
 
 enum { kBridgeTrap = 0xABE5, kBridgeMagic = 0x4D506878, kBridgeProtocol = 2,
        kSelAgentHello = 0x10, kSelNext = 0x11, kSelReply = 0x12, kSelAgentPending = 0x13,
@@ -1607,8 +1251,6 @@ typedef struct {
 } AgentTask;
 
 static AgentTask gTask;
-static Boolean gV2;
-
 /* The Time Manager calls agent_tm_entry with the task in A1. */
 void agent_tick(AgentTask *t);
 void agent_tick(AgentTask *t)
@@ -1633,7 +1275,7 @@ __asm__(
 static void bridge_v2_init(void)
 {
     if (GetToolboxTrapAddress(kBridgeTrap) == GetToolboxTrapAddress(_Unimplemented))
-        return;                                 /* an emulator without it: files only */
+        return;                                 /* an emulator without it: nothing to do */
     if (bridge_call(kSelAgentHello, NULL, kBridgeProtocol) != kBridgeMagic)
         return;
     GetCurrentProcess(&gTask.psn);
@@ -1664,8 +1306,9 @@ static void v2_reply_oserr(OSErr err)
     v2_reply(b, n);
 }
 
-/* "EXEC <creator> <seconds>\r<script>": exec_core, its reply as the
- * STDOUT/STDERR/STATUS text the file transport uses. */
+/* "EXEC <creator> <seconds>\r<script>": exec_core, answered with the
+ * reply as text, each section after a CR-terminated header:
+ * "STDOUT <n>\r<n bytes>STDERR <n>\r<n bytes>STATUS <status>\r". */
 static void v2_exec(const char *req, long n)
 {
     const char *cr = memchr(req, '\r', n);
@@ -1721,9 +1364,9 @@ static void report_front(void)
     bridge_call(kSelState, name + 1, name[0]);
 }
 
-/* "CMD <length>\r<command line><payload>": a file-transport command (its
- * line has <length> bytes; COPY's holds a CR) with its payload in memory,
- * run as poll_bridge runs it; answered "OSERR <result>". SHUTDOWN and
+/* "CMD <length>\r<command line><payload>": a command (its line has
+ * <length> bytes; COPY's holds a CR) and its payload, run by run_command;
+ * answered "OSERR <result>". SHUTDOWN and
  * RESTART don't come back to answer; the host counts them done once taken. */
 static void v2_cmd(const char *req, long n)
 {
@@ -1822,7 +1465,6 @@ int main(void)
         if (WaitNextEvent(everyEvent, &evt, 6, NULL))
             handle_event(&evt);
         if (gV2) { report_front(); poll_v2(); }
-        poll_bridge();
         commit_pending_clip();
     }
 

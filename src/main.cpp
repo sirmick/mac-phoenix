@@ -895,17 +895,6 @@ int main(int argc, char **argv)
 			webrtc_server.notify_codec_change(codec);
 		};
 
-		// Bridge watchdog — once Finder is reached (read from child's IPC SHM),
-		// warn if BridgeAgent never writes its heartbeat.
-		{
-			auto* ipc = subprocess_owner->ipc_client();
-			command_bridge_start_watchdog([ipc]() {
-				const IPCBuffer* buf = ipc ? ipc->shm() : nullptr;
-				if (!buf) return false;
-				return boot_progress_phase_reached_by_name(buf->boot_phase, "Finder") != 0;
-			});
-		}
-
 		// Executor under --headless-http: the run ends when the guest powers
 		// off (ShutDwnPower exits the child with 3), as an in-process
 		// headless run does; a stop from the API does not end it.
@@ -1070,12 +1059,6 @@ int main(int argc, char **argv)
 
 			printf("Starting CPU execution...\n");
 			printf("Press Ctrl+C to exit.\n\n");
-
-			// Bridge watchdog — same role as in webserver mode, but reads
-			// boot phase from in-process boot_progress (no IPC SHM).
-			command_bridge_start_watchdog([]() {
-				return boot_progress_phase_reached("Finder") != 0;
-			});
 
 			if (platform->cpu_execute_fast) {
 				platform->cpu_execute_fast();

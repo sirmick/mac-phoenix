@@ -195,6 +195,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
 {
     g_buf = buf;
     guest_bridge::set_slot(&buf->bridge);      /* the bridge trap's requests */
+    guest_bridge::reset();                     /* no agent yet in this run */
     buf->boot_start_us = monotonic_us();
     init_xpram(cfg);
     set_phase("boot globs");

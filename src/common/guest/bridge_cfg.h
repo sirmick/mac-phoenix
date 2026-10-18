@@ -27,7 +27,7 @@ void br_cfg_load(void);
 
 /* Write `Host:MacPhoenix:<pid>:<leaf>` (or the legacy fallback
  * `Host:MacPhoenix:<leaf>`) into `out` as a Pascal string. `leaf`
- * is a plain C string (e.g. "bridge_heartbeat"). `out` must have
+ * is a plain C string (e.g. "netcfg.txt"). `out` must have
  * room for 256 bytes. */
 void br_cfg_path(unsigned char *out, const char *leaf);
 

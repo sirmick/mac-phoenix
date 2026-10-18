@@ -24,15 +24,11 @@ the full 50 ms per legacy keypress.
 
 Clients that send discrete `down`/`up` events avoid this path entirely.
 
-### MED — Bridge command result polling at 100 ms
+### ~~MED — Bridge command result polling at 100 ms~~
 
-`src/webserver/api_handlers.cpp:1331–1332`
-
-`bridge_command()` (shutdown, restart, launch, quit) polls the reply file on
-a 100 ms `sleep_for` loop for up to 10 s (30 iters in the helper, 100 iters
-in `handle_launch`). Results become visible in 100 ms quantised steps, so
-even a fast guest-side ack takes ~100 ms to surface. An inotify / file-event
-watch would deliver in ≪ 1 ms.
+Fixed: the bridge no longer goes through files (`CommandBridge.md`); the
+agent is woken within 50 ms by its Time Manager task and answers through
+the bridge trap.
 
 ### MED — `/api/wait` condition poll at 200 ms
 

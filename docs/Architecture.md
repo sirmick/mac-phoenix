@@ -118,16 +118,14 @@ MODE_NATIVE / MODE_EMUL_OP) is covered in `ppc/README.md`.
 In webserver mode there are **two processes**:
 
 - **Parent** (`mac-phoenix`): HTTP server, WebRTC signaling, video encoder
-  thread, video relay thread, BridgeAgent watchdog, MacBrowser supervisor.
+  thread, video relay thread, MacBrowser supervisor.
 - **CPU subprocess** (`--ipc`): runs the actual emulator, writes frames into
   the IPC SHM, reads input over a Unix socket.
 
-Both processes see the same bridge directory on disk, which is how
-`/api/launch` etc. communicate with the in-guest BridgeAgent without an
-in-memory mailbox.
-
-`--no-webserver` runs single-process; the bridge still goes through files
-because the agent inside the guest is a separate Mac OS process.
+`/api/launch` etc. reach the in-guest BridgeAgent through the bridge slot in
+the IPC SHM, which the guest reaches with the bridge trap `$ABE5`
+(`CommandBridge.md`). `--no-webserver` runs single-process, with a static
+slot.
 
 See `ThreadingArchitecture.md` for thread-by-thread roles and ownership rules.
 
@@ -172,7 +170,7 @@ src/core/main.cpp                    — entry point
 src/core/cpu_context.cpp             — RAM/ROM allocation, init_m68k, init_ppc
 src/core/rom_patches.cpp             — m68k ROM patches + EmulOp insertion
 src/core/emul_op.cpp                 — m68k EmulOp dispatcher
-src/core/command_bridge.{cpp,h}      — read commands + watchdog
+src/core/command_bridge.{cpp,h}      — read commands + init
 src/core/boot_progress.{cpp,h}       — boot phase / CHECKLOAD tracking
 
 src/webserver/                       — HTTP server, /ws, API handlers

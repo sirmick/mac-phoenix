@@ -109,11 +109,11 @@ while true; do
 done
 sleep 2  # Finder settle
 
-# BridgeAgent writes its heartbeat once it is running (Startup Items); the
+# BridgeAgent says hello once it is running (Startup Items); the
 # boot phase can say Finder before that (Executor reports it as Finder
-# starts), so wait for the heartbeat before launching.
+# starts), so wait for the agent before launching.
 for i in $(seq 1 $((TIMEOUT / 2))); do
-    compgen -G "$EXTFS_DIR/MacPhoenix/*/bridge_heartbeat" >/dev/null && break
+    curl -sf "http://localhost:$PORT/api/status" | grep -q "\"bridge_agent_connected\": true" && break
     sleep 1
 done
 

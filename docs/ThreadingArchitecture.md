@@ -15,8 +15,6 @@ parent (mac-phoenix)
 │                                 RTP (libdatachannel) or /ws binary;
 │                                 also fans out into VideoOutput triple
 │                                 buffer for screenshots
-├── Bridge watchdog            — waits for Finder + BridgeAgent
-│                                 heartbeat, logs warnings if missing
 ├── (timeout thread if --timeout)
 └── (Qt6 WebEngine main thread + Chromium child processes if --browser —
      in-process; MacBrowser pipes pixels into the guest via SHM ring)
@@ -55,9 +53,9 @@ files because the agent inside the guest is a separate Mac OS process.
 - **QLocalSocket — notify channel (`macemu-notify-<pid>`)** — child
   writes one byte per new frame; the encoder thread polls the fd to wake
   immediately. Replaced the eventfd path in IPC Phase 3b.
-- **Disk files** in `cfg.bridge_dir` — the BridgeAgent transport
-  (`_bridge_cmd`, `_bridge_result`, `bridge_heartbeat`,
-  `_bridge_clipboard`). Both processes see the same path.
+- **The bridge slot** (`IPCBridgeSlot` in the SHM) — the BridgeAgent
+  transport: the parent's HTTP workers write requests, the child's CPU
+  thread hands them to the agent through the bridge trap.
 
 ## Inter-thread channels (parent)
 
@@ -92,9 +90,9 @@ SHM and Unix socket, then enters the per-backend main loop:
 - **Input events** flow `/ws` → web server thread → Unix socket → CPU
   thread. The CPU thread injects them into ADB on the next 60 Hz tick.
 - **Bridge action commands** flow `POST /api/launch` → bridge_command →
-  write `_bridge_cmd` file → BridgeAgent on next WaitNextEvent tick →
-  write `_bridge_result` → poll picks it up. No EmulOp injection, no
-  IPC — just disk files cross the parent/child boundary for free.
+  `guest_bridge::request` (the slot) → BridgeAgent's Time Manager task
+  sees it pending and wakes the agent → `NEXT`, run, `REPLY` → the HTTP
+  worker returns.
 
 ## Latency
 
@@ -112,7 +110,7 @@ Numbers are best-case on a quiet workstation. See
 ## Shutdown
 
 Parent receives SIGINT/SIGTERM, sets the shutdown flag, joins the encoder
-+ relay + watchdog threads, then sends SIGTERM to the CPU child and
++ relay threads, then sends SIGTERM to the CPU child and
 waits for it to exit. The CPU child closes its SHM and socket and
 `return 0`s.
 

@@ -404,159 +404,76 @@ Response APIRouter::handle_create_image(const Request& req) {
     return Response::json(body.str());
 }
 
-// Disk-backed bridge file helpers. Files live in cfg.bridge_dir, which is
-// the same directory the guest sees as the "Host:" ExtFS volume — so the
-// agent reads/writes via standard File Manager calls and the host reads
-// via plain POSIX. This is what makes the bridge work across the parent /
-// IPC-child process split.
-static bool bridge_read_file(const std::string& dir, const char* name, std::string& out) {
-    std::string path = dir + "/" + name;
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) return false;
-    char buf[4096];
-    size_t n;
-    out.clear();
-    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) out.append(buf, n);
-    fclose(f);
+// True iff the bridge is enabled, Finder has launched, and the BridgeAgent
+// has said hello over the bridge trap (guest_bridge.h). Drives the UI's
+// choice between graceful (Shut Down / Restart) and hard (Power Off / Reset)
+// default actions.
+static bool bridge_agent_is_connected(IPCBridgeSlot* slot, bool finder_reached) {
+    auto& cfg = config::EmulatorConfig::instance();
+    if (!cfg.bridge_enabled || !finder_reached) return false;
+    return slot && guest_bridge::agent(slot) >= 2;
+}
+
+// Wait up to ms for the agent to say hello (it starts after the Finder, and
+// again after each restart); false if it doesn't.
+static bool bridge_wait_agent(IPCBridgeSlot* slot, int ms) {
+    if (!slot) return false;
+    for (int waited = 0; guest_bridge::agent(slot) < 2; waited += 100) {
+        if (waited >= ms) return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
     return true;
 }
 
-static void bridge_write_file(const std::string& dir, const char* name, const std::string& data) {
-    std::string path = dir + "/" + name;
-    FILE* f = fopen(path.c_str(), "wb");
-    if (!f) return;
-    fwrite(data.data(), 1, data.size(), f);
-    fclose(f);
-}
-
-static void bridge_remove_file(const std::string& dir, const char* name) {
-    std::string path = dir + "/" + name;
-    unlink(path.c_str());
-}
-
-static bool bridge_has_file(const std::string& dir, const char* name) {
-    std::string path = dir + "/" + name;
-    struct stat st;
-    return stat(path.c_str(), &st) == 0;
-}
-
-// True iff the bridge is enabled, Finder has launched, and the BridgeAgent
-// dropped a heartbeat in the last ~10 seconds. Drives the UI's choice between
-// graceful (Shut Down / Restart) and hard (Power Off / Reset) default actions.
-static bool bridge_agent_is_connected(bool finder_reached) {
-    auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) return false;
-    if (!finder_reached) return false;
-    std::string path = cfg.bridge_dir + "/bridge_heartbeat";
-    struct stat st;
-    if (stat(path.c_str(), &st) != 0) return false;
-    time_t now = time(nullptr);
-    return (now - st.st_mtime) <= 10;
-}
-
-// The file transport has one slot (_bridge_cmd, _bridge_result, ...): its
-// users take this while they use it. The HTTP server runs bridge routes
-// concurrently (http_server.cpp); recursive because some write a file and
-// then go through bridge_command.
-static std::unique_lock<std::recursive_mutex> bridge_files_lock() {
-    static std::recursive_mutex m;
-    return std::unique_lock<std::recursive_mutex>(m);
-}
-
-// A file-transport command over the bridge trap, when the agent speaks it
-// (guest_bridge.h: "CMD <length>\r<line><payload>", answered "OSERR n").
-// False if it doesn't (the caller uses the files). Otherwise *mac_err is the
-// command's result, or err says why there is none. may_not_answer: SHUTDOWN,
+// A command over the bridge trap (guest_bridge.h: "CMD <length>\r<line>
+// <payload>", answered "OSERR n"). True with *mac_err the command's result,
+// or false with err saying why there is none. may_not_answer: SHUTDOWN,
 // RESTART, EXIT, which can end the agent before it answers: done once taken.
 static bool bridge_trap_command(IPCBridgeSlot* slot, const std::string& cmd, const std::string& payload,
                                 int reply_ms, bool may_not_answer, int* mac_err, std::string& err) {
-    if (!slot || guest_bridge::agent(slot) < 2)
+    *mac_err = 0;
+    if (!bridge_wait_agent(slot, 15000)) {
+        err = "bridge agent not running";
         return false;
+    }
     std::string req = "CMD " + std::to_string(cmd.size()) + "\r" + cmd + payload;
     std::string reply;
-    *mac_err = 0;
     if (!guest_bridge::request(slot, req, reply, 15000, may_not_answer ? 3000 : reply_ms, err)) {
-        if (may_not_answer && err == "no reply from the agent")
+        if (may_not_answer && err == "no reply from the agent") {
             err.clear();
-        else
-            err += " (bridge agent)";
-        return true;
+            return true;
+        }
+        err += " (bridge agent)";
+        return false;
     }
     *mac_err = reply.compare(0, 6, "OSERR ") == 0 ? std::atoi(reply.c_str() + 6) : -1;
     return true;
 }
 
-// Send a command to the guest BridgeAgent and poll for a result.
-// Shared by handle_shutdown / handle_restart / handle_quit-style endpoints
-// that go through the guest-OS bridge rather than manipulating the subprocess.
-// wait_result: only the agent's result counts as done. Otherwise the
-// command file vanishing is taken as success too (the agent deletes it
-// before running the command, which is fine for quick commands only).
-// Over the bridge trap when the agent speaks it (the command's real result),
-// else through the files. payload_file/payload: SCRIPT's and SET_CLIPBOARD's
-// body (in the request, or that file).
-static Response bridge_command(IPCBridgeSlot* slot, const std::string& cmd, int poll_iterations,
-                               bool wait_result = false, const char* payload_file = nullptr,
+// Send a command to the guest BridgeAgent and wait for its result, up to
+// reply_ms. Shared by handle_shutdown / handle_restart / handle_quit-style
+// endpoints that go through the guest-OS bridge rather than manipulating
+// the subprocess. payload: SCRIPT's and SET_CLIPBOARD's body.
+static Response bridge_command(IPCBridgeSlot* slot, const std::string& cmd, int reply_ms,
                                const std::string& payload = "") {
     auto& cfg = config::EmulatorConfig::instance();
     if (!cfg.bridge_enabled) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled\"}");
     }
-    if (cfg.bridge_dir.empty()) {
-        return Response::json("{\"success\": false, \"error\": \"bridge_dir not set\"}");
-    }
 
-    int trap_err = 0;
-    std::string terr;
+    int mac_err = 0;
+    std::string err;
     bool may_not_answer = cmd.rfind("SHUTDOWN", 0) == 0 || cmd.rfind("RESTART", 0) == 0
                        || cmd.rfind("EXIT", 0) == 0;
-    if (bridge_trap_command(slot, cmd, payload, poll_iterations * 100, may_not_answer, &trap_err, terr)) {
-        if (!terr.empty())
-            return Response::json("{\"success\": false, \"error\": \"" + terr + "\"}");
-        if (trap_err != 0) {
-            std::ostringstream json;
-            json << "{\"success\": false, \"error_code\": " << trap_err
-                 << ", \"message\": \"bridge command failed (Mac OS error " << trap_err << ")\"}";
-            return Response::json(json.str());
-        }
-        return Response::json("{\"success\": true, \"error_code\": 0}");
+    if (!bridge_trap_command(slot, cmd, payload, reply_ms, may_not_answer, &mac_err, err))
+        return Response::json("{\"success\": false, \"error\": \"" + err + "\"}");
+    if (mac_err != 0) {
+        std::ostringstream json;
+        json << "{\"success\": false, \"error_code\": " << mac_err
+             << ", \"message\": \"bridge command failed (Mac OS error " << mac_err << ")\"}";
+        return Response::json(json.str());
     }
-
-    auto lock = bridge_files_lock();
-    if (payload_file)
-        bridge_write_file(cfg.bridge_dir, payload_file, payload);
-    bridge_remove_file(cfg.bridge_dir, "_bridge_result");
-    bridge_write_file(cfg.bridge_dir, "_bridge_cmd", cmd);
-
-    for (int i = 0; i < poll_iterations; i++) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::string result;
-        if (bridge_read_file(cfg.bridge_dir, "_bridge_result", result)) {
-            bridge_remove_file(cfg.bridge_dir, "_bridge_result");
-            int mac_err = std::atoi(result.c_str());
-            if (mac_err != 0) {
-                std::ostringstream json;
-                json << "{\"success\": false, \"error_code\": " << mac_err
-                     << ", \"message\": \"bridge command failed (Mac OS error "
-                     << mac_err << ")\"}";
-                return Response::json(json.str());
-            }
-            return Response::json("{\"success\": true, \"error_code\": 0}");
-        }
-        bool pending = bridge_has_file(cfg.bridge_dir, "_bridge_cmd");
-        if (!wait_result && !pending) {
-            return Response::json("{\"success\": true, \"error_code\": 0}");
-        }
-        // Unclaimed for 15 s and no heartbeat: the agent isn't running (the
-        // guest is restarting, or an installer quit it). Don't hold the
-        // server for the whole wait.
-        if (pending && i >= 150 && !bridge_agent_is_connected(true)) {
-            bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
-            return Response::json("{\"success\": false, \"error\": \"bridge agent not running\"}");
-        }
-    }
-    bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
-    return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge agent\"}");
+    return Response::json("{\"success\": true, \"error_code\": 0}");
 }
 
 Response APIRouter::handle_restart(const Request& req) {
@@ -564,14 +481,14 @@ Response APIRouter::handle_restart(const Request& req) {
     // Graceful OS restart — the guest agent sends kAERestart to Finder,
     // which quits apps and invokes the Shutdown Manager. The emulator
     // subprocess itself keeps running; the guest OS reboots inside it.
-    return bridge_command(bridge_slot(), "RESTART", 30);
+    return bridge_command(bridge_slot(), "RESTART", 3000);
 }
 
 Response APIRouter::handle_shutdown(const Request& req) {
     (void)req;
     // Graceful OS shutdown — the guest agent sends kAEShutDown to Finder.
     // Same path as Special → Shut Down in the Finder menu.
-    return bridge_command(bridge_slot(), "SHUTDOWN", 30);
+    return bridge_command(bridge_slot(), "SHUTDOWN", 3000);
 }
 
 Response APIRouter::handle_status(const Request& req) {
@@ -655,10 +572,10 @@ Response APIRouter::handle_status(const Request& req) {
     }
 
     json << ", \"annotations\": " << annotations_json();
-    json << ", \"bridge_agent_connected\": "
-         << (bridge_agent_is_connected(finder_reached) ? "true" : "false");
     {
-        IPCBridgeSlot *slot = bridge_slot();     /* the agent's bridge trap protocol, 0: files only */
+        IPCBridgeSlot *slot = bridge_slot();     /* the agent's bridge trap protocol, 0: none */
+        json << ", \"bridge_agent_connected\": "
+             << (bridge_agent_is_connected(slot, finder_reached) ? "true" : "false");
         json << ", \"bridge_agent_protocol\": " << (slot ? guest_bridge::agent(slot) : 0);
     }
 
@@ -970,7 +887,7 @@ Response APIRouter::handle_resolution_post(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"no modes for backend\"}");
     }
 
-    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+    if (!cfg.bridge_enabled) {
         std::ostringstream e;
         e << "{\"success\": false, \"error\": \"bridge not enabled\","
           << "\"snapped\":{\"w\":" << best->w << ",\"h\":" << best->h << "}}";
@@ -982,41 +899,14 @@ Response APIRouter::handle_resolution_post(const Request& req) {
                   best->w, best->h, best->apple_id);
 
     int mac_err = 0;
-    bool got_result = false;
-    bool timed_out = true;
     std::string terr;
-    std::unique_lock<std::recursive_mutex> lock;
-    if (bridge_trap_command(bridge_slot(), cmd, "", 3000, false, &mac_err, terr)) {
-        got_result = terr.empty();
-        timed_out = !got_result;
-    } else {
-        lock = bridge_files_lock();
-        bridge_remove_file(cfg.bridge_dir, "_bridge_result");
-        bridge_write_file(cfg.bridge_dir, "_bridge_cmd", cmd);
-
-        for (int i = 0; i < 30; i++) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            std::string result;
-            if (bridge_read_file(cfg.bridge_dir, "_bridge_result", result)) {
-                bridge_remove_file(cfg.bridge_dir, "_bridge_result");
-                mac_err = std::atoi(result.c_str());
-                got_result = true;
-                timed_out = false;
-                break;
-            }
-            if (!bridge_has_file(cfg.bridge_dir, "_bridge_cmd")) {
-                // Agent picked it up but didn't write a result. Treat as ok.
-                timed_out = false;
-                break;
-            }
-        }
-        if (timed_out) bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
-    }
+    bool got_result = bridge_trap_command(bridge_slot(), cmd, "", 3000, false, &mac_err, terr);
+    bool timed_out = !got_result;
 
     std::ostringstream out;
     out << "{\"success\":" << ((!timed_out && mac_err == 0) ? "true" : "false");
     if (got_result) out << ",\"error_code\":" << mac_err;
-    if (timed_out)  out << ",\"error\":\"timeout waiting for bridge agent\"";
+    if (timed_out)  out << ",\"error\":\"" << terr << "\"";
     out << ",\"requested\":{\"w\":" << want_w << ",\"h\":" << want_h << "},"
         << "\"snapped\":{\"w\":" << best->w << ",\"h\":" << best->h
         << ",\"apple_id\":" << best->apple_id << "}}";
@@ -1774,58 +1664,25 @@ Response APIRouter::handle_launch(const Request& req) {
     // "MacPerl ƒ" and the like only resolve converted.
     std::string path = utf8_to_mac_roman(j.value("path").toString().toStdString());
 
-    // Write command file to bridge dir — the guest agent reads it via ExtFS
     auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+    if (!cfg.bridge_enabled) {
         return Response::json("{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
     }
 
     bool open_doc = j.value("open").toBool(false);
 
-    {
-        int mac_err = 0;
-        std::string terr;
-        if (bridge_trap_command(bridge_slot(), (open_doc ? "OPEN " : "LAUNCH ") + path, "", 30000,
-                                false, &mac_err, terr)) {
-            if (!terr.empty())
-                return Response::json("{\"success\": false, \"error\": \"" + terr + "\"}");
-            if (mac_err != 0) {
-                std::ostringstream json;
-                json << "{\"success\": false, \"error_code\": " << mac_err
-                     << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
-                return Response::json(json.str());
-            }
-            return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
-        }
+    int mac_err = 0;
+    std::string terr;
+    if (!bridge_trap_command(bridge_slot(), (open_doc ? "OPEN " : "LAUNCH ") + path, "", 30000,
+                             false, &mac_err, terr))
+        return Response::json("{\"success\": false, \"error\": \"" + terr + "\"}");
+    if (mac_err != 0) {
+        std::ostringstream json;
+        json << "{\"success\": false, \"error_code\": " << mac_err
+             << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
+        return Response::json(json.str());
     }
-
-    auto lock = bridge_files_lock();
-    bridge_remove_file(cfg.bridge_dir, "_bridge_result");
-    bridge_write_file(cfg.bridge_dir, "_bridge_cmd", (open_doc ? "OPEN " : "LAUNCH ") + path);
-
-    for (int i = 0; i < 100; i++) {  // 10 seconds
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-        std::string result;
-        if (bridge_read_file(cfg.bridge_dir, "_bridge_result", result)) {
-            bridge_remove_file(cfg.bridge_dir, "_bridge_result");
-            int mac_err = std::atoi(result.c_str());
-            if (mac_err != 0) {
-                std::ostringstream json;
-                json << "{\"success\": false, \"error_code\": " << mac_err
-                     << ", \"message\": \"launch failed (Mac OS error " << mac_err << ")\"}";
-                return Response::json(json.str());
-            }
-            return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
-        }
-
-        if (!bridge_has_file(cfg.bridge_dir, "_bridge_cmd")) {
-            return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
-        }
-    }
-
-    bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
-    return Response::json("{\"success\": false, \"error\": \"timeout waiting for bridge agent\"}");
+    return Response::json("{\"success\": true, \"error_code\": 0, \"message\": \"launched\"}");
 }
 
 // POST /api/script — generic 'misc'/'dosc' ("do script") to any classic-Mac
@@ -1915,15 +1772,12 @@ Response APIRouter::handle_script(const Request& req) {
     }
 
     auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+    if (!cfg.bridge_enabled) {
         return Response::json(
             "{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
     }
 
-    // Body in BR_FILE_SCRIPT, command in BR_FILE_CMD. Order matters — the agent
-    // can fire as soon as it sees _bridge_cmd, so the script body must be
-    // visible first.
-    return bridge_command(bridge_slot(), "SCRIPT " + creator, 600, false, "_bridge_script", script);
+    return bridge_command(bridge_slot(), "SCRIPT " + creator, 60000, script);
 }
 
 // Minimal base64 encoder for reply payloads. RFC 4648, with padding.
@@ -1952,7 +1806,7 @@ static std::string b64_encode(const std::string& in) {
     return out;
 }
 
-// Parse the BridgeAgent's _bridge_reply file. Format is three sections:
+// Parse the BridgeAgent's EXEC reply. Format is three sections:
 //   STDOUT <n>\r<n bytes>
 //   STDERR <n>\r<n bytes>
 //   STATUS <n>\r
@@ -2089,94 +1943,35 @@ Response APIRouter::handle_exec(const Request& req) {
     }
 
     auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+    if (!cfg.bridge_enabled) {
         return Response::json(
             "{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
     }
 
-    // Bridge v2: through the bridge trap (guest_bridge.h) when the agent
-    // speaks it. "timeout": seconds the script may take (default 60, at
-    // most an hour); the agent waits that long for the reply.
+    // Through the bridge trap (guest_bridge.h). "timeout": seconds the
+    // script may take (default 60, at most an hour); the agent waits that
+    // long for the reply.
     int timeout_s = std::clamp(j.value("timeout").toInt(60), 1, 3600);
     IPCBridgeSlot *slot = bridge_slot();
-    if (slot && guest_bridge::agent(slot) >= 2) {
-        std::string reply, err;
-        std::string request = "EXEC " + creator + " " + std::to_string(timeout_s) + "\r" + command;
-        if (!guest_bridge::request(slot, request, reply, 15000, (timeout_s + 30) * 1000, err)) {
-            return Response::json("{\"success\": false, \"error\": \"" + err +
-                                  " (bridge agent, trap)\"}");
-        }
-        std::string stdout_bytes, stderr_bytes;
-        long exit_status = 0;
-        if (reply.compare(0, 6, "OSERR ") == 0) {
-            int mac_err = std::atoi(reply.c_str() + 6);
-            std::ostringstream e;
-            e << "{\"success\": false, \"error_code\": " << mac_err
-              << ", \"error\": \"AESend failed (Mac OS error " << mac_err << ")\"}";
-            return Response::json(e.str());
-        }
-        if (!parse_bridge_reply(reply, stdout_bytes, stderr_bytes, exit_status))
-            return Response::json("{\"success\": false, \"error\": \"malformed bridge reply\"}");
-        std::ostringstream out;
-        out << "{\"success\": true, \"via\": \"trap\","
-            << " \"exit_status\": " << exit_status << ","
-            << " \"stdout_b64\": \"" << b64_encode(stdout_bytes) << "\","
-            << " \"stderr_b64\": \"" << b64_encode(stderr_bytes) << "\"}";
-        return Response::json(out.str());
+    if (!bridge_wait_agent(slot, 15000))
+        return Response::json("{\"success\": false, \"error\": \"bridge agent not running\"}");
+    std::string reply, err;
+    std::string request = "EXEC " + creator + " " + std::to_string(timeout_s) + "\r" + command;
+    if (!guest_bridge::request(slot, request, reply, 15000, (timeout_s + 30) * 1000, err)) {
+        return Response::json("{\"success\": false, \"error\": \"" + err +
+                              " (bridge agent)\"}");
     }
-
-    // Stale reply from a previous call would otherwise leak into ours.
-    auto lock = bridge_files_lock();
-    bridge_remove_file(cfg.bridge_dir, "_bridge_reply");
-    bridge_write_file(cfg.bridge_dir, "_bridge_script", command);
-
-    // EXEC needs a longer poll than other commands — the agent is blocked
-    // inside AESend(kAEWaitReply) for up to 60s per script.
-    bridge_remove_file(cfg.bridge_dir, "_bridge_result");
-    bridge_write_file(cfg.bridge_dir, "_bridge_cmd", "EXEC " + creator);
-
-    // 90s host-side budget = 60s AE wait + 30s overhead.
-    const int kPollIters = 900;  // 900 * 100ms
-    int mac_err = 0;
-    bool got_result = false;
-    for (int i = 0; i < kPollIters; i++) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::string result;
-        if (bridge_read_file(cfg.bridge_dir, "_bridge_result", result)) {
-            bridge_remove_file(cfg.bridge_dir, "_bridge_result");
-            mac_err = std::atoi(result.c_str());
-            got_result = true;
-            break;
-        }
-    }
-    if (!got_result) {
-        bridge_remove_file(cfg.bridge_dir, "_bridge_cmd");
-        return Response::json(
-            "{\"success\": false, \"error\": \"timeout waiting for bridge agent\"}");
-    }
-
-    if (mac_err != 0) {
-        std::ostringstream err;
-        err << "{\"success\": false, \"error_code\": " << mac_err
-            << ", \"error\": \"AESend failed (Mac OS error " << mac_err << ")\"}";
-        return Response::json(err.str());
-    }
-
-    // Reply file should be present now.
-    std::string reply;
-    if (!bridge_read_file(cfg.bridge_dir, "_bridge_reply", reply)) {
-        return Response::json(
-            "{\"success\": true, \"exit_status\": 0, \"stdout_b64\": \"\", \"stderr_b64\": \"\", \"warning\": \"no reply file\"}");
-    }
-    bridge_remove_file(cfg.bridge_dir, "_bridge_reply");
-
     std::string stdout_bytes, stderr_bytes;
     long exit_status = 0;
-    if (!parse_bridge_reply(reply, stdout_bytes, stderr_bytes, exit_status)) {
-        return Response::json(
-            "{\"success\": false, \"error\": \"malformed bridge reply\"}");
+    if (reply.compare(0, 6, "OSERR ") == 0) {
+        int mac_err = std::atoi(reply.c_str() + 6);
+        std::ostringstream e;
+        e << "{\"success\": false, \"error_code\": " << mac_err
+          << ", \"error\": \"AESend failed (Mac OS error " << mac_err << ")\"}";
+        return Response::json(e.str());
     }
-
+    if (!parse_bridge_reply(reply, stdout_bytes, stderr_bytes, exit_status))
+        return Response::json("{\"success\": false, \"error\": \"malformed bridge reply\"}");
     std::ostringstream out;
     out << "{\"success\": true,"
         << " \"exit_status\": " << exit_status << ","
@@ -2200,7 +1995,7 @@ Response APIRouter::handle_copy(const Request& req) {
     }
     std::string from = utf8_to_mac_roman(j.value("from").toString().toStdString());
     std::string to = utf8_to_mac_roman(j.value("to").toString().toStdString());
-    return bridge_command(bridge_slot(), "COPY " + from + "\r" + to, 6000, true);
+    return bridge_command(bridge_slot(), "COPY " + from + "\r" + to, 600000);
 }
 
 // POST /api/annotate {"text": "..."} — a line from whatever is driving the
@@ -2238,9 +2033,9 @@ static std::string annotations_json() {
 Response APIRouter::handle_quit(const Request& req) {
     QJsonObject j = QJsonDocument::fromJson(QByteArray::fromStdString(req.body)).object();
     if (j.value("agent").toBool()) {
-        return bridge_command(bridge_slot(), "EXIT", 30);
+        return bridge_command(bridge_slot(), "EXIT", 3000);
     }
-    return bridge_command(bridge_slot(), "QUIT", 30);
+    return bridge_command(bridge_slot(), "QUIT", 3000);
 }
 
 // POST /api/clipboard — write raw MacRoman bytes (base64-encoded in body)
@@ -2299,12 +2094,12 @@ Response APIRouter::handle_clipboard_set(const Request& req) {
     }
 
     auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_enabled || cfg.bridge_dir.empty()) {
+    if (!cfg.bridge_enabled) {
         return Response::json(
             "{\"success\": false, \"error\": \"bridge not enabled (use --bridge)\"}");
     }
 
-    return bridge_command(bridge_slot(), "SET_CLIPBOARD", 30, false, "_bridge_clipboard", bytes);
+    return bridge_command(bridge_slot(), "SET_CLIPBOARD", 3000, bytes);
 }
 
 Response APIRouter::handle_wait(const Request& req) {

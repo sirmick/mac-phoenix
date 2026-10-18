@@ -381,9 +381,9 @@ Launch apps, quit apps, and trigger a graceful guest-OS shutdown or restart — 
 How it works:
 
 - **Read commands** (`/api/app`, `/api/windows`, `/api/wait`) peek Mac low memory (`CurApName`, `WindowList`, `Ticks`) directly from the 60 Hz IRQ — no guest cooperation required.
-- **Action commands** (`/api/launch`, `/api/quit`, `/api/shutdown`, `/api/restart`) write a request file into the bridge directory. A tiny guest-side app (`BridgeAgent`, a Retro68-built m68k binary) installed in `:System Folder:Startup Items:` picks it up in its `WaitNextEvent` loop and drives the Process Manager / Shutdown Manager / Apple Events.
+- **Action commands** (`/api/launch`, `/api/quit`, `/api/shutdown`, `/api/restart`) go to a tiny guest-side app (`BridgeAgent`, a Retro68-built m68k binary) installed in `:System Folder:Startup Items:` through the bridge trap `$ABE5`; it drives the Process Manager / Shutdown Manager / Apple Events and answers the same way.
 
-When `--bridge` is on, a fresh temp directory is created under `/tmp/macemu-bridge-XXXXXX` and auto-mounted as ExtFS volume `Host:` inside the guest. `provisioning/install_bridge_agent.sh` is invoked against every `--disk` to (re)install `BridgeAgent.bin` into the System Folder. A watchdog looks for a `bridge_heartbeat` file once the Finder is up and logs a warning if the agent never reports in.
+When `--bridge` is on, a fresh temp directory is created under `/tmp/macemu-bridge-XXXXXX` and auto-mounted as ExtFS volume `Host:` inside the guest. `provisioning/install_bridge_agent.sh` is invoked against every `--disk` to (re)install `BridgeAgent.bin` into the System Folder. `/api/status` reports `bridge_agent_connected` once the agent has said hello.
 
 ```bash
 # Launch an app and wait for it to come up
@@ -594,7 +594,7 @@ tests/test_guest_suite.sh --disk ~/storage/images/quadra.img
 tests/test_guest_suite.sh --backend kpx
 ```
 
-The script starts a headless emulator on port 18094, waits for `bridge_heartbeat`, calls `/api/launch` with the script path, polls for a result file in the bridge directory, and tears everything down.
+The script starts a headless emulator on port 18094, waits for the agent (`bridge_agent_connected`), calls `/api/launch` with the script path, polls for a result file in the bridge directory, and tears everything down.
 
 ### Playwright E2E tests
 

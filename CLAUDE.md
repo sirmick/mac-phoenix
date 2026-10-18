@@ -122,8 +122,8 @@ src/
     boot_progress.cpp               — Boot milestone tracking (phases, CHECKLOAD counting)
     rom_patches.cpp                 — ROM patching, EmulOp insertion
     emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, CMD_DISPATCH)
-    command_bridge.cpp              — Read commands (peek Mac mem from IRQ); init + heartbeat watchdog
-    command_bridge.h                — CmdType enum, CommandResult, init/watchdog signatures
+    command_bridge.cpp              — Read commands (peek Mac mem from IRQ); init
+    command_bridge.h                — CmdType enum, CommandResult, init signatures
     emulator_subprocess.h           — Subprocess management for m68k and PPC (IPC via SHM+socket)
     adb.cpp                         — ADB mouse/keyboard emulation
     cpu_context.cpp                 — Memory allocation, backend init
@@ -155,7 +155,7 @@ src/
     include/platform.h              — Platform API (g_platform function pointers)
 
 BridgeAgent/
-  BridgeAgent.c                     — BridgeAgent source (Retro68 m68k); polls bridge files in Host: ExtFS
+  BridgeAgent.c                     — BridgeAgent source (Retro68 m68k); takes requests over the bridge trap $ABE5
   BridgeAgent.bin                   — Pre-built MacBinary (committed; rebuilt by CMake when Retro68 present)
   BridgeAgent.r                     — Resource fork: SIZE, BNDL, FREF, creator sig, icons.r include
 
@@ -306,7 +306,7 @@ machine.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
 - **Single-port HTTP + WebSocket**: HTTP/1.1 server in `src/webserver/http_server.cpp`: a QThread accept loop (POSIX `accept` on the listening fd) hands each connection to a pool of 16 QThread workers, which read and answer on the fd with `poll()`-bounded `recv`/`send`. API handlers run one at a time under a lock, except routes registered with `allow_concurrent` (the bridge's, `/api/wait`), so a long `/api/exec` or `/api/copy` doesn't hold up the rest. On `Upgrade: websocket` the handshake is written and the fd is `dup()`'d off to a thread that owns the WebSocket. Long-poll stream routes (`/api/stream`) use the same fd-handoff pattern. `src/webserver/websocket.cpp` implements RFC 6455 in-process on the dup'd fd. One TCP listener serves static UI, REST API, `/api/frame` long-poll, and `/ws` (signaling + input + PNG/WebP frames). libdatachannel's `rtc::WebSocketServer` is not used. WebRTC RTP (H.264/VP9 media + Opus audio) still rides direct UDP ports negotiated via ICE.
 - **Three transport modes**: PNG/WebP → WebSocket binary on `/ws`; H.264/VP9 → WebRTC RTP track; `httpstream` → `/api/frame` long-poll. Signaling JSON + input events always ride the `/ws` WebSocket regardless of codec.
-- **Command bridge**: Two layers. **Read commands** (`/api/app`, `/api/windows`) peek Mac memory directly from the IRQ — no guest cooperation. **Action commands** (`/api/launch`, `/api/shutdown`, `/api/restart`, `/api/quit`) write a request file into `bridge_dir`, which a guest-side `BridgeAgent` app (installed in `:System Folder:Startup Items:`) polls and executes via Process Manager / Shutdown Manager / AppleEvents. Files in `bridge_dir` cross the parent/IPC-child process split for free since both processes see the same disk path. Enable with `--bridge` or `bridge_enabled: true`. See `docs/CommandBridge.md`.
+- **Command bridge**: Two layers. **Read commands** (`/api/app`, `/api/windows`) peek Mac memory directly from the IRQ — no guest cooperation. **Action commands** (`/api/launch`, `/api/exec`, `/api/shutdown`, `/api/restart`, `/api/quit`, …) go to a guest-side `BridgeAgent` app (installed in `:System Folder:Startup Items:`) through the bridge trap `$ABE5` (`guest_bridge.h`; the request slot is in the IPC buffer), which wakes it with a Time Manager task; it executes them via Process Manager / Shutdown Manager / AppleEvents and answers through the trap. `/api/status` `bridge_agent_connected` says it's there. Enable with `--bridge` or `bridge_enabled: true`. See `docs/CommandBridge.md`.
 
 ## ROM
 

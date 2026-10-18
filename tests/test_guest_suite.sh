@@ -257,17 +257,17 @@ done
 
 sleep 2  # Finder settle
 
-# BridgeAgent writes its heartbeat once it is running (Startup Items); the
+# BridgeAgent says hello once it is running (Startup Items); the
 # boot phase can say Finder before that (Executor reports it at the first
-# frame), so wait for the heartbeat before dispatching.
+# frame), so wait for the agent before dispatching.
 echo -n "Waiting for BridgeAgent..."
 for i in $(seq 1 "$BOOT_TIMEOUT"); do
-    if compgen -G "$EXTFS_DIR/MacPhoenix/*/bridge_heartbeat" >/dev/null; then
+    if curl -sf "http://localhost:$PORT/api/status" | grep -q "\"bridge_agent_connected\": true"; then
         echo " up (${i}s)"
         break
     fi
     if [[ $i -eq $BOOT_TIMEOUT ]]; then
-        echo " no heartbeat after ${BOOT_TIMEOUT}s (dispatching anyway)"
+        echo " no BridgeAgent after ${BOOT_TIMEOUT}s (dispatching anyway)"
     fi
     sleep 1
 done

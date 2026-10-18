@@ -8,9 +8,8 @@
  * installed in System Folder:Startup Items. Finder launches it at desktop
  * time; the emulator does not inject anything.
  *
- * Communication is entirely file-based via the ExtFS "Host" volume:
- *   Host writes Host:_bridge_cmd  → agent reads, executes, deletes
- *   agent writes Host:_bridge_result → Host reads, returns to API caller
+ * They go to it over the bridge trap $ABE5 (guest_bridge.h,
+ * docs/CommandBridge.md).
  */
 
 #include "command_bridge.h"
@@ -29,7 +28,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
-#include <thread>
 #include <vector>
 
 // ============================================================================
@@ -128,9 +126,8 @@ CommandResult command_bridge_read(CmdType type, uint32_t addr, uint32_t len) {
 
 // ============================================================================
 // One-shot init — called from main.cpp after EmulatorConfig is finalized.
-// Logs the bridge directory so it's visible in startup output. The actual
-// bridge files (_bridge_cmd, _bridge_result, bridge_heartbeat) live on disk
-// in cfg.bridge_dir and are read/written by both parent and IPC child.
+// Logs the bridge directory so it's visible in startup output. It holds
+// what the guest reads at startup (netcfg.txt, NetworkInfo.txt).
 // ============================================================================
 
 // Resolve a file relative to the executable's grandparent directory
@@ -234,43 +231,6 @@ void command_bridge_init() {
     fprintf(stderr, "[Bridge] Enabled (dir=%s)\n",
             cfg.bridge_dir.empty() ? "<none>" : cfg.bridge_dir.c_str());
     provision_bridge_agent_disks();
-}
-
-void command_bridge_start_watchdog(std::function<bool()> finder_reached, int grace_seconds) {
-    auto& cfg = config::EmulatorConfig::instance();
-    if (!cfg.bridge_enabled || cfg.bridge_dir.empty() || !finder_reached) return;
-
-    std::string heartbeat_path = cfg.bridge_dir + "/bridge_heartbeat";
-    std::thread([finder_reached = std::move(finder_reached), heartbeat_path, grace_seconds]() {
-        // Wait up to ~5 minutes for Finder
-        for (int i = 0; i < 300; i++) {
-            if (finder_reached()) break;
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-        if (!finder_reached()) return;  // never booted; nothing to warn about
-
-        std::this_thread::sleep_for(std::chrono::seconds(grace_seconds));
-
-        struct stat st;
-        if (stat(heartbeat_path.c_str(), &st) != 0) {
-            fprintf(stderr,
-                "[Bridge] WARNING: bridge enabled but no heartbeat at %s "
-                "after %ds past Finder. Is BridgeAgent installed in "
-                ":System Folder:Startup Items: of the boot disk?\n",
-                heartbeat_path.c_str(), grace_seconds);
-            return;
-        }
-        time_t age = time(nullptr) - st.st_mtime;
-        if (age > grace_seconds) {
-            fprintf(stderr,
-                "[Bridge] WARNING: heartbeat at %s is stale (%lds old). "
-                "BridgeAgent may have crashed or quit.\n",
-                heartbeat_path.c_str(), (long)age);
-        } else {
-            fprintf(stderr, "[Bridge] BridgeAgent heartbeat detected (%lds old)\n",
-                    (long)age);
-        }
-    }).detach();
 }
 
 // ============================================================================

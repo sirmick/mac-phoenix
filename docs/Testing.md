@@ -101,8 +101,8 @@ provisioning/install_bridge_agent.sh
 into the image. `cmake --build build` rebuilds it from `BridgeAgent.c`
 when Retro68 is detected (default at `~/Retro68`); opt out with
 `-DBUILD_BRIDGE_AGENT=OFF`. The harness runs the emulator with
-`--bridge --extfs <tmp>` and waits for `bridge_heartbeat` before posting
-to `/api/launch`.
+`--bridge --extfs <tmp>` and waits for `/api/status`
+`bridge_agent_connected` before posting to `/api/launch`.
 
 ## Playwright E2E Tests
 

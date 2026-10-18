@@ -3,9 +3,9 @@
 Host-side automation channel for controlling the running Mac OS. Two layers:
 
 1. **Read commands** — host peeks Mac memory directly from the 60Hz IRQ; no guest cooperation required.
-2. **Action commands** — host writes a request file; a guest-side helper app (BridgeAgent) reads it, executes via Process Manager / Shutdown Manager / AppleEvents, and writes back a result.
+2. **Action commands** — the host hands a request to a guest-side helper app (BridgeAgent) through the bridge trap `$ABE5`; the agent executes it via Process Manager / Shutdown Manager / AppleEvents and answers through the trap.
 
-There is no EmulOp injection, no `jGNEFilter` patch, no SHM command queue. The transport is plain files in a directory shared between host and guest via ExtFS.
+There is no `jGNEFilter` patch and no polling of files: the agent sleeps in `WaitNextEvent` until a request waits.
 
 ## Enabling the Bridge
 
@@ -14,7 +14,7 @@ There is no EmulOp injection, no `jGNEFilter` patch, no SHM command queue. The t
 ./build/mac-phoenix --bridge --extfs /my/dir ...   # uses /my/dir as the bridge dir
 ```
 
-Or via JSON config / UI: `bridge_enabled: true` (Settings → "Enable automation bridge"). The first `--extfs` path is reused as the bridge dir if one is provided; otherwise a temp dir is created.
+Or via JSON config / UI: `bridge_enabled: true` (Settings → "Enable automation bridge"). The first `--extfs` path is reused as the bridge dir if one is provided; otherwise a temp dir is created. The bridge dir (`Host:MacPhoenix:<pid>` in the guest) carries what the guest reads at startup (`netcfg.txt`, `NetworkInfo.txt`, MacBrowser's files), not commands.
 
 `--no-webserver` mode in tests sets `bridge_enabled = true` automatically.
 
@@ -26,46 +26,102 @@ Implemented in `command_bridge_read()` (`src/core/command_bridge.cpp`). Safe to 
 
 | `CmdType` | What it reads | Notes |
 |-----------|--------------|-------|
-| `GET_APP_NAME` | `CurApName` at `0x0910` | Used by `/api/app` |
+| `GET_APP_NAME` | `CurApName` at `0x0910` | `/api/app` when the agent's `STATE` isn't fresh |
 | `GET_WINDOW_LIST` | Walks `WindowList` at `0x09D6` | Up to 50 windows, returns JSON |
 | `GET_TICKS` | `Ticks` at `0x016A` | |
 | `READ_MEMORY` | Arbitrary address | Capped at 1024 bytes, returns hex |
 
 ### 2. Action Commands (BridgeAgent)
 
-A small Retro68 m68k application (`BridgeAgent/BridgeAgent.c`) installed in `:System Folder:Startup Items:` of every test disk image. Finder launches it at desktop time. The same 68k binary runs natively on System 7.x and under Mac OS 9's built-in 68k emulator on PPC.
-
-BridgeAgent runs a `WaitNextEvent` loop. Each tick it:
-
-1. Writes a heartbeat (see below).
-2. Looks for `Host:_bridge_cmd`. If present, reads it, deletes it, dispatches it, then writes the OSErr to `Host:_bridge_result`.
+A small Retro68 m68k application (`BridgeAgent/BridgeAgent.c`) installed in `:System Folder:Startup Items:` of every test disk image. Finder launches it at desktop time. The same 68k binary runs natively on System 7.x, under Mac OS 9's built-in 68k emulator on PPC, and in Executor.
 
 ```
-Host (parent process)              BridgeAgent (guest app)
-─────────────────────              ───────────────────────
-POST /api/shutdown
-  rm   <bridge_dir>/_bridge_result
-  echo SHUTDOWN > _bridge_cmd
-                                   WNE tick:
-                                     read Host:_bridge_cmd
-                                     delete it
-                                     quit other apps via AESend
-                                     ShutDwnPower()
-  poll <bridge_dir>/_bridge_result
+Host (HTTP worker)                     BridgeAgent (guest app)
+──────────────────                     ───────────────────────
+POST /api/launch {"path": "HD:App"}
+  guest_bridge::request(slot,
+    "CMD 11\rLAUNCH HD:App")
+                                       Time Manager task, every 50 ms:
+                                         AGENT_PENDING → 1: WakeUpProcess
+                                       main loop:
+                                         NEXT  → the request
+                                         run_command: LaunchApplication
+                                         REPLY "OSERR 0"
   ← {"success": true, "error_code": 0}
 ```
 
-### Supported commands
+### The bridge trap, `$ABE5`
 
-| Command | Argument | Guest action |
-|---------|----------|--------------|
-| `LAUNCH <path>` | HFS path | `LaunchApplication` on the FSSpec |
-| `OPEN <path>` | HFS path to a doc | Find owning app via Desktop DB, launch it, send generic `'aevt'/'odoc'` with the doc as a typeAlias list — same AE Finder sends on double-click. Works for any registered creator (Frontier `LAND`, MacPerl `McPL`, ResEdit, …) |
-| `SCRIPT <creator>` | 4-char OSType, body in `_bridge_script` | Find app by creator, launch it, send `'misc'/'dosc'` with the body as `typeChar` direct parameter. Generic over any "do script" host — MacPerl, Frontier UserLand 5, MPW Shell, AppleScript editor |
+Guest code calls it like a register-based Toolbox trap (D0 selector, A0
+pointer, D1 value; D0 back) and lands in the emulator:
+`guest_bridge::call()` (`src/common/include/guest_bridge.h`), one
+implementation for every machine. The ROM machines point its trap table
+entry at a stub `[EmulOp BRIDGE_COMM; rts]` written after startup where the
+text feed patches (`bridge_trap_install()`, `text_feed.cpp`;
+`platform_make_emulop` gives each machine its own encoding, so the PowerPC
+machine's 68k emulator works too); Executor at a callback
+(`romlib/init.cpp`). `$ABE5` is unimplemented on 7.5.5 and 7.6.1 (68k and
+PowerPC), 9.0.4 and in Executor; the install checks the entry is still
+`_Unimplemented` and logs `[bridge2]` either way. (`$AB7E`, the first
+choice, is a real trap on these Systems.) `tests/guest/bridgedemo` (ctest
+`bridge_trap{,_ppc,_executor}`) exercises it alone.
+
+| Selector | Who | What |
+|----------|-----|------|
+| `AGENT_HELLO` (0x10) | agent | D1 = protocol (2), 0 = going away; answers a magic |
+| `AGENT_PENDING` (0x13) | agent's Time Manager task | 1 if a request waits |
+| `NEXT` (0x11) | agent | copies the request to A0 (D1 bytes); -1 none, `0x80000000\|len` if it doesn't fit |
+| `REPLY` (0x12) | agent | the answer, A0/D1 |
+| `STATE` (0x14) | agent | the front process's name |
+
+* **The slot** (`IPCBridgeSlot`, `ipc_protocol.h`): one request at a time,
+  with ids. In the IPC buffer when the CPU runs in a child process (the ROM
+  machines behind the web server, Executor always), a static one when it
+  runs in-process (`--headless-http` ROM machines). The host side
+  (`guest_bridge::request`) writes the request and waits for it to be taken
+  (15 s) and answered (the request's timeout), serialized by a mutex. A
+  request made before the agent has said hello waits up to 15 s for it.
+* **Waking the agent without polling.** The Time Manager task asks
+  `AGENT_PENDING` every 50 ms and calls `WakeUpProcess`. Measured from the
+  host asking to the application running: 16 ms on the 68k machine, 2-27 ms
+  on the PowerPC machine, 0-8 ms in Executor, in front and in the
+  background. (Executor's `WakeUpProcess` was a no-op and is now
+  implemented: `romlib/process.cpp`, `toolevent.cpp`.) The task is removed
+  when the agent's loop ends.
+* **Connected** (`/api/status` `bridge_agent_connected`, the UI's choice
+  between graceful and hard Power Off / Reset; `bridge_agent_protocol`)
+  means the agent said hello and hasn't said goodbye since; a guest reset
+  clears it.
+
+### Requests
+
+| Request | Answer |
+|---------|--------|
+| `EXEC <creator> <seconds>\r<script>` | `STDOUT <n>\r<bytes>STDERR <n>\r<bytes>STATUS <n>\r`, or `OSERR n` |
+| `CMD <length>\r<line><payload>` | `OSERR n`, the command's result |
+
+`CMD`'s line (the length because COPY's holds a CR):
+
+| Command | Payload | Guest action |
+|---------|---------|--------------|
+| `LAUNCH <path>` | — | `LaunchApplication` on the FSSpec |
+| `OPEN <path>` | — | Find owning app via Desktop DB, launch it, send generic `'aevt'/'odoc'` with the doc as a typeAlias list — same AE Finder sends on double-click. Works for any registered creator (Frontier `LAND`, MacPerl `McPL`, ResEdit, …) |
+| `SCRIPT <creator>` | the script | Find app by creator (a running process first), launch it, send `'misc'/'dosc'` with the payload as `typeChar` direct parameter, fire-and-forget. Generic over any "do script" host — MacPerl, Frontier UserLand 5, MPW Shell, AppleScript editor |
+| `COPY <src>\r<dst folder>` | — | File Manager copy, both forks and Finder info |
+| `RESIZE <w> <h> <appleID>` | — | `DMSetDisplayMode` |
 | `QUIT` | — | `kAEQuitApplication` to the front process |
+| `EXIT` | — | The agent quits (back at the next boot) |
 | `SHUTDOWN` | — | Best-effort Quit AE to every other app, then `ShutDwnPower()` |
 | `RESTART` | — | Same, but `ShutDwnStart()` |
-| `SET_CLIPBOARD` | body in `_bridge_clipboard` | `ZeroScrap` + `PutScrap('TEXT', …)` after a SetFrontProcess round-trip |
+| `SET_CLIPBOARD` | the bytes | `ZeroScrap` + `PutScrap('TEXT', …)` after a SetFrontProcess round-trip |
+
+SHUTDOWN, RESTART and EXIT may end the agent before it answers: done once
+taken. EXEC waits for the AE reply the request's seconds (`/api/exec`
+`timeout`), stdout from `keyDirectObject`, stderr from `keyErrorString`,
+`{Status}` from `keyErrorNumber`, as ToolServer (`MPSX`) fills them.
+`tools/mpw/mpw` sends one EXEC per command: the script's output goes to a
+file (`∑`; its diagnostics to `Dev:StdOut` hang ToolServer in a build that
+runs MrC), its `{Status}` comes in the reply.
 
 Language-specific quirks (e.g. MacPerl needs `\n`, not Mac-style `\r`, in
 `eval` bodies to install sub defs) are the **host's** responsibility, not
@@ -73,155 +129,71 @@ the bridge's. The agent just delivers the source verbatim.
 
 **Why `ShutDwnPower`/`ShutDwnStart` instead of an AppleEvent to Finder?** Inside Macintosh Vol VI shows that Finder only handles the four Required Apple Events (Open App, Open Docs, Print Docs, Quit App). `kAEShutDown`/`kAERestart` are events Finder *sends*, not ones it receives — so an AE-to-Finder shutdown silently no-ops. The Shutdown Manager is the entry point Finder itself uses after quitting apps.
 
-## Bridge v2 (in progress): a trap instead of files
+### The front process (`STATE`)
 
-The file mailbox is being replaced. Groundwork, proven on every machine
-(`tests/guest/bridgedemo`, ctest `bridge_trap{,_ppc,_executor}`):
+The agent reports the front process's name (`GetFrontProcess`) on every
+pass of its loop; `/api/app` and `/api/wait app=` answer from it while the
+last report is under a second old, else from a peek at `CurApName`, which
+is whichever process runs at that tick (BridgeAgent itself about half the
+time). No recent report means the agent isn't getting time, an application
+in a modal loop that doesn't yield (ZTerm's serial port alert), and then
+the peek knows better. A reset, or the agent quitting (`AGENT_HELLO` 0),
+drops it.
 
-* **The bridge trap, `$ABE5`.** Guest code calls it like a register-based
-  Toolbox trap (D0 selector, A0 pointer, D1 value; D0 back) and lands in
-  the emulator: `guest_bridge::call()` (`src/common/include/guest_bridge.h`),
-  one implementation for every machine. The ROM machines point its trap
-  table entry at a stub `[EmulOp BRIDGE_COMM; rts]` written after startup
-  where the text feed patches (`bridge_trap_install()`, `text_feed.cpp`;
-  `platform_make_emulop` gives each machine its own encoding, so the
-  PowerPC machine's 68k emulator works too); Executor at a callback
-  (`romlib/init.cpp`). `$ABE5` is unimplemented on 7.5.5 and 7.6.1 (68k
-  and PowerPC), 9.0.4 and in Executor; the install checks the entry is
-  still `_Unimplemented` and logs `[bridge2]` either way. (`$AB7E`, the
-  first choice, is a real trap on these Systems.)
-* **Waking the agent without polling.** A Time Manager task in the agent
-  asks the host every 50 ms (`PENDING`) and calls `WakeUpProcess`; the
-  agent sleeps in `WaitNextEvent` meanwhile. Measured from the host asking
-  to the application running: 16 ms on the 68k machine (7.5.5, 7.6.1, both
-  cores), 2-27 ms on the PowerPC machine (7.5.5, 7.6.1, 9.0.4, kpx and
-  mame-ppc), 0-8 ms in Executor (both cores), in front and in the
-  background. Executor's `WakeUpProcess` was a no-op and is now
-  implemented (`romlib/process.cpp`, `toolevent.cpp`).
-* **The WaitNextEvent patch is gone.** BridgeAgent used to patch
-  `_WaitNextEvent` globally, keeping the original trap address at a fixed
-  address (`0x0210FFC0`) that is plain RAM at the default 64 MB, with
-  counters nothing read. That was what killed the agent under Apple's
-  Installer ("BridgeAgent / unimplemented trap"): os-7.6.1 now bakes with
-  the agent running throughout, no `agent_exit` or reboot.
+### History
 
-**EXEC over the trap (done).** `/api/exec` goes through the trap when the
-agent has said `AGENT_HELLO` (protocol 2; `/api/status`
-`bridge_agent_protocol`), else through the files:
+The bridge used to be a file mailbox in the bridge dir (`_bridge_cmd`,
+`_bridge_result`, `_bridge_script`, `_bridge_reply`, `_bridge_clipboard`,
+a `bridge_heartbeat` the agent rewrote every 2 s and a host watchdog that
+looked at it): one slot, no ids, polled at both ends, and "done" when the
+agent had deleted the command file rather than when it had run it. It
+also patched `_WaitNextEvent` globally, keeping the original at a fixed
+address (`0x0210FFC0`) that is plain RAM at the default 64 MB; that was
+what killed the agent under Apple's Installer. Both are gone.
 
-* **The slot** (`IPCBridgeSlot`, `ipc_protocol.h`): one request at a time,
-  with ids. In the IPC buffer when the CPU runs in a child process (the
-  ROM machines behind the web server, Executor always), a static one when
-  it runs in-process (`--headless-http` ROM machines). The host side
-  (`guest_bridge::request`) writes the request and waits for it to be taken
-  (15 s) and answered (the request's timeout + 30 s), serialized by a
-  mutex.
-* **The agent** (protocol 2): `AGENT_HELLO` at start-up if the trap is
-  there; a Time Manager task asks `AGENT_PENDING` every 50 ms and wakes it; the
-  main loop takes a request with `NEXT` (a bigger one: `NEXT` answers the
-  size needed, the agent allocates it) and answers with `REPLY`. EXEC is
-  `"EXEC <creator> <seconds>\r<script>"`, answered with the file
-  transport's `STDOUT/STDERR/STATUS` text, or `OSERR n`. The AESend waits
-  the request's seconds, not a fixed minute. The task is removed when the
-  agent's loop ends.
-* **`tools/mpw/mpw`** uses it: one request per command, answered when the
-  script is done; the script's output still goes to a file (`∑`; its
-  diagnostics to `Dev:StdOut` hang ToolServer in a build that runs MrC),
-  its `{Status}` comes in the reply; no polling. A suite build: 3.2 s
-  (6.3 s through files).
-* **Executor's host volume** cached a folder's listing for a second, so a
-  file the host had just written wasn't found by name: a miss now reads
-  the folder again (`ItemCache::lookup`).
+Next: delivering the agent without writing to the `--disk` images.
 
-**The front process (`STATE`, done).** The agent reports the front
-process's name (`GetFrontProcess`) through the trap on every pass of its
-loop; `/api/app` and `/api/wait app=` answer from it while the last report
-is under a second old, else from a peek at `CurApName`, which is whichever
-process runs at that tick (BridgeAgent itself about half the time: it made
-`command_bridge_mame68k` fail one run in five). No recent report means the
-agent isn't getting time, an application in a modal loop that doesn't
-yield (ZTerm's serial port alert), and then the peek knows better. A
-reset, or the agent quitting (`AGENT_HELLO` 0), drops it.
-
-**Every command over the trap (done).** `CMD <length>\r<line><payload>`
-carries any of the file transport's commands (LAUNCH, OPEN, SCRIPT, COPY,
-QUIT, EXIT, SHUTDOWN, RESTART, RESIZE, SET_CLIPBOARD; the length because
-COPY's line holds a CR), the payload being what `_bridge_script` or
-`_bridge_clipboard` would hold; the agent runs it as it runs a file's
-command (`run_command`) and answers `OSERR n`, the command's real result
-(the files only told that the agent had taken it). SHUTDOWN, RESTART and
-EXIT may end the agent before it answers: done once taken.
-
-Next: the files, heartbeat and watchdog
-deleted; and delivering the agent without writing to the `--disk` images.
-
-The HTTP server no longer holds every request behind a long one: a pool of
-worker threads serves connections, the bridge's routes run concurrently
-(the file transport's users serialize on their own lock), the rest one at a
-time as before.
-
-## Transport
-
-Plain files in `cfg.bridge_dir`, which is mounted into the guest as an ExtFS volume named `Host:`. Both the host parent process and the IPC child see the same directory; `_bridge_cmd` written by the parent is visible to the guest's Filesystem Manager calls in the child.
-
-| File | Direction | Format |
-|------|-----------|--------|
-| `_bridge_cmd` | host → guest | ASCII line: `LAUNCH path` / `OPEN path` / `SCRIPT <creator>` / `QUIT` / `SHUTDOWN` / `RESTART` / `SET_CLIPBOARD` |
-| `_bridge_result` | guest → host | Decimal OSErr, CR-terminated |
-| `_bridge_script` | host → guest | Script source for the `SCRIPT` command (any size up to 1 MiB). Single-shot — agent deletes after dispatch. |
-| `_bridge_clipboard` | host → guest | Raw MacRoman bytes from `POST /api/clipboard` (host pushes, agent applies via `ZeroScrap` + `PutScrap('TEXT', …)`, then deletes the file) |
-| `bridge_heartbeat` | guest → host | JSON: `{"heartbeat":N,"commands":N,"last_result":N,"last_cmd":"..."}` |
-| `bridge_loaded` | guest → host | Empty marker, written once at first poll |
-| `bridge_step` | guest → host | Single-step debug breadcrumb |
-
-The `_` prefix on `_bridge_*` files is cosmetic — there's no ExtFS interception. Heartbeat / loaded / step are unprefixed by historical accident.
+The HTTP server doesn't hold every request behind a long one: a pool of
+worker threads serves connections, the bridge's routes run concurrently,
+the rest one at a time.
 
 ## Lifecycle
 
 ### Init (`command_bridge_init()`)
 
-Called once from `main.cpp` after `EmulatorConfig` is finalized. No-op when `bridge_enabled` is false; otherwise logs the bridge dir to stderr and runs `provisioning/install_bridge_agent.sh` against every entry in `cfg.disk_paths`. The script skips disks without a `:System Folder:` (data disks, CDROM-style images), and (re)installs `BridgeAgent.bin` into `:System Folder:Startup Items:` on the rest. Runs synchronously before the CPU subprocess is spawned, so disk-image writes don't race the emulator. There's no in-process bridge state to allocate — the directory itself is the state.
-
-### Watchdog (`command_bridge_start_watchdog()`)
-
-Spawned from `main.cpp` once for the parent process. Waits up to 5 minutes for `boot_phase >= Finder`, then `grace_seconds` (default 15) for the agent to drop `bridge_heartbeat`. Logs one of:
-
-- `[Bridge] BridgeAgent heartbeat detected (Ns old)` — happy path.
-- `[Bridge] WARNING: bridge enabled but no heartbeat at <path>` — agent missing from `Startup Items`.
-- `[Bridge] WARNING: heartbeat at <path> is stale (Ns old)` — agent crashed or quit.
-
-In webserver mode the parent reads `boot_phase` out of the IPC SHM (the actual CPU runs in the child). In headless mode it reads `boot_progress_phase_reached("Finder")` directly.
+Called once from `main.cpp` after `EmulatorConfig` is finalized. No-op when `bridge_enabled` is false; otherwise logs the bridge dir to stderr and runs `provisioning/install_bridge_agent.sh` against every entry in `cfg.disk_paths`. The script skips disks without a `:System Folder:` (data disks, CDROM-style images), and (re)installs `BridgeAgent.bin` into `:System Folder:Startup Items:` on the rest. Runs synchronously before the CPU subprocess is spawned, so disk-image writes don't race the emulator. Executor's images are never written: it runs on a System Folder on the host (`executor_systems.cpp`).
 
 ### Per-command flow (`bridge_command()` in `api_handlers.cpp`)
 
-1. Delete any stale `_bridge_result`.
-2. Write `_bridge_cmd`.
-3. Poll up to `poll_iterations × 100ms` (default 30 = 3s) for `_bridge_result` or for `_bridge_cmd` to disappear (= agent consumed it but didn't reply yet).
-4. Return `{success: true, error_code: 0}` on OSErr `0`, otherwise the Mac error code.
-5. On timeout, delete `_bridge_cmd` and return `{success: false, error: "timeout waiting for bridge agent"}`.
+1. Wait up to 15 s for the agent (`bridge_agent_protocol` ≥ 2), else `{success: false, error: "bridge agent not running"}`.
+2. `guest_bridge::request()` the `CMD`: taken within 15 s, answered within the route's timeout.
+3. Return `{success: true, error_code: 0}` on `OSERR 0`, otherwise the Mac error code.
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/app` | GET | Current app name (read command, no guest cooperation) |
+| `/api/app` | GET | Current app name (`STATE`, else read command) |
 | `/api/windows` | GET | Window list as JSON (read command) |
-| `/api/wait` | POST | Block on `boot=Finder` or `app=Name` (host-side polling of read commands) |
+| `/api/wait` | POST | Block on `boot=Finder` or `app=Name` (host-side polling) |
 | `/api/launch` | POST | `{"path":"Host:foo","open":true?}` — `LAUNCH` or `OPEN` via the agent. With `open:true`, the file is delivered as a generic `'aevt'/'odoc'` (Frontier `LAND`, MacPerl `McPL`, ResEdit, anything registered for the doc's creator). |
 | `/api/script` | POST | `{"creator":"<4-char>","script":"<utf-8 source>"}` (or `"script_b64"` for exact MacRoman bytes) — `SCRIPT <creator>` via the agent. Generic over MacPerl, Frontier, MPW Shell, AppleScript editor. 1 MiB cap. |
+| `/api/exec` | POST | `{"creator":"MPSX","command":"...","timeout":N}` — `EXEC`: `exit_status`, `stdout_b64`, `stderr_b64` |
+| `/api/copy` | POST | `{"from":"Vol:Item","to":"Vol:Folder:"}` — `COPY` |
 | `/api/quit` | POST | `QUIT` front app via the agent |
 | `/api/shutdown` | POST | `SHUTDOWN` via the agent (`ShutDwnPower`) |
 | `/api/restart` | POST | `RESTART` via the agent (`ShutDwnStart`) |
 | `/api/clipboard` | POST | `{"text_b64":"<base64 macroman>"}` — `SET_CLIPBOARD` via the agent |
 
-`/api/launch`, `/api/script`, `/api/quit`, `/api/shutdown`, `/api/restart`,
-`/api/clipboard` all return:
+`/api/launch`, `/api/script`, `/api/copy`, `/api/quit`, `/api/shutdown`,
+`/api/restart`, `/api/clipboard` all return:
 
 ```json
 { "success": true, "error_code": 0 }
 { "success": false, "error_code": -43, "message": "bridge command failed (Mac OS error -43)" }
 { "success": false, "error": "bridge not enabled" }
-{ "success": false, "error": "timeout waiting for bridge agent" }
+{ "success": false, "error": "bridge agent not running" }
+{ "success": false, "error": "no reply from the agent (bridge agent)" }
 ```
 
 ## UI
@@ -237,21 +209,21 @@ A checkbox in Settings → "Enable automation bridge (BridgeAgent + ExtFS)" togg
 
 | File | Role |
 |------|------|
-| `src/core/command_bridge.{cpp,h}` | Read commands; init + watchdog |
-| `src/webserver/api_handlers.cpp` | HTTP endpoints; disk-backed bridge file helpers |
+| `src/common/include/guest_bridge.h` | The trap's protocol: `call()`, `request()`, the slot |
+| `src/ipc/ipc_protocol.h` | `IPCBridgeSlot` in the IPC buffer |
+| `src/core/text_feed.cpp` | `bridge_trap_install()` (ROM machines) |
+| `src/executor/romlib/init.cpp` | The trap in Executor |
+| `src/core/command_bridge.{cpp,h}` | Read commands; init |
+| `src/webserver/api_handlers.cpp` | HTTP endpoints; `bridge_command()` |
 | `src/config/emulator_config.cpp` | `bridge_enabled`, `bridge_dir`, `--bridge` CLI flag, auto extfs mount |
-| `src/main.cpp` | Calls `command_bridge_init()` and `command_bridge_start_watchdog()` |
 | `BridgeAgent/BridgeAgent.c` | BridgeAgent source (Retro68, m68k) |
 | `BridgeAgent/BridgeAgent.bin` | Pre-built MacBinary (committed) |
-| `BridgeAgent/Makefile` | `make` against Retro68 toolchain |
 | `provisioning/install_bridge_agent.sh` | hfsutils install of `BridgeAgent.bin` into `:System Folder:Startup Items:` |
+| `tests/guest/bridgedemo/` | The trap alone, on every machine |
 | `tests/guest/suite/` | MacPhoenixSuite, the guest test suite (fat C app, `tools/mpw/mpw build tests/guest/suite -o tests/guest/suite`) |
-| `tests/guest/install_perl_test.py` | Lay out `.pl` + `.finf` for ExtFS |
 | `tests/test_command_bridge.sh` | Integration test for `/api/app`, `/api/windows`, `/api/wait`, `/api/launch` |
 | `tests/test_guest_suite.sh` | Boot → dispatch script → collect results |
 
 ## Process Topology
 
-In webserver mode the host runs **two processes**: a parent that owns the HTTP server and a forked child that runs the CPU. They share the IPC SHM region (used for boot phase, mouse position, framebuffer, the passive `cur_app_name` field) and the bridge directory on disk. They do **not** share heap, which is why an in-memory bridge map didn't work and was replaced with files.
-
-In headless mode (`--no-webserver`) there's only one process; the bridge still uses files because the agent inside the guest is a separate Mac OS process from the host emulator.
+In webserver mode the host runs **two processes**: a parent that owns the HTTP server and a forked child that runs the CPU. They share the IPC SHM region (boot phase, mouse position, framebuffer, the bridge slot). In headless mode (`--no-webserver`, `--headless-http`) there's only one process and the slot is a static one.

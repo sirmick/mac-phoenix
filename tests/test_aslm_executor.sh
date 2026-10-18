@@ -149,11 +149,11 @@ curl -sf -X POST "http://localhost:$PORT/api/emulator/start" >/dev/null
 
 echo -n "Booting..."
 for _ in $(seq 1 60); do
-    compgen -G "$EXTFS_DIR/MacPhoenix/*/bridge_heartbeat" >/dev/null && break
+    curl -sf "http://localhost:$PORT/api/status" | grep -q "\"bridge_agent_connected\": true" && break
     alive || { echo " died"; tail -20 "$LOG"; exit 1; }
     sleep 1
 done
-compgen -G "$EXTFS_DIR/MacPhoenix/*/bridge_heartbeat" >/dev/null || { echo " no BridgeAgent"; exit 1; }
+curl -sf "http://localhost:$PORT/api/status" | grep -q "\"bridge_agent_connected\": true" || { echo " no BridgeAgent"; exit 1; }
 echo " ok"
 grep -q "extension System: AINI -32700" "$LOG" || { echo "FAIL: the ASLM Loader did not run"; exit 1; }
 

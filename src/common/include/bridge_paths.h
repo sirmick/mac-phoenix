@@ -36,17 +36,9 @@
  * exactly the cfg the host just wrote. */
 #define BR_CFG_LEAF          "MacPhoenix.cfg"
 
-/* Bridge-protocol files (BridgeAgent ↔ host). All live under the
- * per-instance bridge dir: <bridge_dir>/<leaf> on host,
- * Host:MacPhoenix:<pid>:<leaf> on guest. */
-#define BR_FILE_HEARTBEAT    "bridge_heartbeat"
-#define BR_FILE_LOADED       "bridge_loaded"
-#define BR_FILE_STEP         "bridge_step"
-#define BR_FILE_CMD          "_bridge_cmd"
-#define BR_FILE_RESULT       "_bridge_result"
-#define BR_FILE_CLIPBOARD    "_bridge_clipboard"
-#define BR_FILE_SCRIPT       "_bridge_script"   /* SCRIPT/EXEC command body */
-#define BR_FILE_REPLY        "_bridge_reply"    /* EXEC AE reply payload */
+/* Files in the per-instance bridge dir: <bridge_dir>/<leaf> on host,
+ * Host:MacPhoenix:<pid>:<leaf> on guest. Commands themselves go over the
+ * bridge trap (guest_bridge.h), not files. */
 #define BR_FILE_NETCFG       "netcfg.txt"
 #define BR_FILE_NETWORKINFO  "NetworkInfo.txt"
 

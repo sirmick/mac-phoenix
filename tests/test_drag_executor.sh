@@ -111,7 +111,7 @@ while true; do
     sleep 1
 done
 for i in $(seq 1 $((TIMEOUT / 2))); do
-    compgen -G "$EXTFS_DIR/MacPhoenix/*/bridge_heartbeat" >/dev/null && break
+    curl -sf "http://localhost:$PORT/api/status" | grep -q "\"bridge_agent_connected\": true" && break
     sleep 1
 done
 sleep 2

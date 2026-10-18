@@ -118,10 +118,7 @@ void write_network_info(const config::EmulatorConfig &cfg)
     out << "BridgeAgent:      "
         << (cfg.bridge_enabled ? "active" : "disabled") << "\r";
     if (cfg.bridge_enabled) {
-        out << "  Heartbeat file: Host:MacPhoenix:bridge_heartbeat\r"
-            << "  Command file:   Host:MacPhoenix:_bridge_cmd\r"
-            << "  Result file:    Host:MacPhoenix:_bridge_result\r"
-            << "  Clipboard:      Host:MacPhoenix:_bridge_clipboard\r";
+        out << "  Commands over the bridge trap ($ABE5)\r";
     }
     out << "\r"
         << "ExtFS mount:      "
