@@ -684,10 +684,34 @@ static OSErr do_open_document(const unsigned char *path)
 /* Read Host:_bridge_script into a freshly NewPtr'd buffer. Caller frees.
  * Returns noErr + (*outBuf, *outLen) on success; *outBuf is NULL on empty.
  * The file is consumed (deleted) on success — single-shot like _bridge_cmd. */
+/* A command's payload when it came over the bridge trap (CMD): what the
+ * file transport carries in _bridge_script or _bridge_clipboard. The
+ * loaders take it from here instead of the file. */
+static Boolean gHavePayload;
+static char   *gPayload;
+static long    gPayloadLen;
+
+static void drop_payload(void)
+{
+    if (gPayload) DisposePtr(gPayload);
+    gPayload = NULL;
+    gPayloadLen = 0;
+    gHavePayload = false;
+}
+
 static OSErr load_bridge_script(char **outBuf, long *outLen)
 {
     *outBuf = NULL;
     *outLen = 0;
+
+    if (gHavePayload) {                 /* over the trap: ours to take */
+        *outBuf = gPayload;
+        *outLen = gPayloadLen;
+        gPayload = NULL;
+        gPayloadLen = 0;
+        gHavePayload = false;
+        return noErr;
+    }
 
     FSSpec spec;
     Str255 path; br_cfg_path(path, BR_FILE_SCRIPT);
@@ -1003,6 +1027,22 @@ static OSErr do_set_clipboard(const ProcessSerialNumber *prior_front)
 {
     (void)prior_front;
     char dbg[96];
+
+    if (gHavePayload) {                 /* over the trap: the bytes are here */
+        discard_pending_clip();
+        Handle h = NewHandle(gPayloadLen);
+        if (!h) { drop_payload(); return memFullErr; }
+        HLock(h);
+        if (gPayloadLen) BlockMoveData(gPayload, *h, gPayloadLen);
+        gClipData = h;
+        gClipLen = gPayloadLen;
+        gClipPending = true;
+        drop_payload();
+        ProcessSerialNumber self = {0, kCurrentProcess};
+        SetFrontProcess(&self);
+        return noErr;
+    }
+
     FSSpec spec;
     Str255 cb_path; br_cfg_path(cb_path, BR_FILE_CLIPBOARD);
     OSErr err = FSMakeFSSpec(0, 0, cb_path, &spec);
@@ -1265,6 +1305,8 @@ static void bridge_step(const char *tag)
     FlushVol(NULL, 0);
 }
 
+static OSErr run_command(char *cmd);
+
 static void poll_bridge(void)
 {
     write_marker_once();
@@ -1289,6 +1331,18 @@ static void poll_bridge(void)
     if (err != noErr && err != eofErr) return;
     cmd[count] = '\0';
 
+    OSErr result = run_command(cmd);
+    gCmdCount++;
+    gLastResult = result;
+    write_result(result);
+    draw_status();
+}
+
+/* One command, from either transport: the file's line, or a CMD over the
+ * bridge trap. Its payload (SCRIPT, SET_CLIPBOARD) is in the file or in
+ * gPayload. */
+static OSErr run_command(char *cmd)
+{
     /* Stash for the status window (trim to 80 chars). */
     int vlen = (int)strlen(cmd);
     while (vlen > 0 && (cmd[vlen-1] == '\n' || cmd[vlen-1] == '\r'))
@@ -1391,11 +1445,7 @@ static void poll_bridge(void)
     } else if (strncmp(cmd, "SET_CLIPBOARD", 13) == 0) {
         result = do_set_clipboard(&prior_front);
     }
-
-    gCmdCount++;
-    gLastResult = result;
-    write_result(result);
-    draw_status();
+    return result;
 }
 
 /* ---------- AppleEvent handlers ---------- */
@@ -1653,13 +1703,11 @@ static void v2_exec(const char *req, long n)
     if (errs) DisposePtr(errs);
 }
 
-/* The front process's name to the emulator (STATE), when it changes: the
- * host's /api/app and app= waits use it (a peek at CurApName sees whichever
- * process happens to run, us included). */
+/* The front process's name to the emulator (STATE), on every pass of the
+ * loop: the host's /api/app and app= waits use it while it is recent (a
+ * peek at CurApName sees whichever process happens to run, us included). */
 static void report_front(void)
 {
-    static Str31 last;
-    static Boolean sent;
     ProcessSerialNumber psn;
     ProcessInfoRec info;
     Str31 name;
@@ -1670,11 +1718,37 @@ static void report_front(void)
     info.processAppSpec = NULL;
     if (GetProcessInformation(&psn, &info) != noErr)
         return;
-    if (sent && last[0] == name[0] && memcmp(last + 1, name + 1, name[0]) == 0)
-        return;
-    memcpy(last, name, name[0] + 1);
-    sent = true;
     bridge_call(kSelState, name + 1, name[0]);
+}
+
+/* "CMD <length>\r<command line><payload>": a file-transport command (its
+ * line has <length> bytes; COPY's holds a CR) with its payload in memory,
+ * run as poll_bridge runs it; answered "OSERR <result>". SHUTDOWN and
+ * RESTART don't come back to answer; the host counts them done once taken. */
+static void v2_cmd(const char *req, long n)
+{
+    const char *cr = memchr(req, '\r', n);
+    if (!cr) { v2_reply_oserr(paramErr); return; }
+    long len = strtol(req + 4, NULL, 10);
+    const char *line = cr + 1;
+    long rest = n - (line - req);
+    if (len < 0 || len > rest || len > 639) { v2_reply_oserr(paramErr); return; }
+    char cmd[640];
+    memcpy(cmd, line, len);
+    cmd[len] = '\0';
+
+    long plen = rest - len;
+    drop_payload();
+    gPayload = plen ? NewPtr(plen) : NULL;
+    if (plen && !gPayload) { v2_reply_oserr(memFullErr); return; }
+    if (plen) BlockMoveData(line + len, gPayload, plen);
+    gPayloadLen = plen;
+    gHavePayload = true;
+
+    OSErr result = run_command(cmd);
+    drop_payload();                     /* if the command didn't take it */
+    gLastResult = result;
+    v2_reply_oserr(result);
 }
 
 /* A request waiting? Take it and answer it. */
@@ -1699,6 +1773,8 @@ static void poll_v2(void)
     if (n >= 5 && memcmp(req, "EXEC ", 5) == 0) {
         gLastCmd[0] = 7; memcpy(gLastCmd + 1, "EXEC v2", 7);
         v2_exec(req, (long)n);
+    } else if (n >= 4 && memcmp(req, "CMD ", 4) == 0) {
+        v2_cmd(req, (long)n);
     } else {
         v2_reply_oserr(-1);                     /* not a verb we know */
     }

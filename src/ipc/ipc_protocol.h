@@ -178,6 +178,7 @@ typedef struct IPCBridgeSlot {
     /* STATE: the front process's name as the agent last saw it (it knows
      * the front process; a peek at CurApName sees whichever one runs). */
     IPC_ATOMIC_UINT32 front_seq;     /* bumped on each STATE */
+    IPC_ATOMIC_UINT64 front_ms;      /* when (steady clock, ms: the same in both processes) */
     char front_app[64];
     char req[IPC_BRIDGE_REQ_MAX];
     char rep[IPC_BRIDGE_REP_MAX];

@@ -82,6 +82,14 @@ inline IPCBridgeSlot *local_slot()
 inline void set_slot(IPCBridgeSlot *s) { slot_ptr() = s; }
 inline IPCBridgeSlot *slot() { return slot_ptr() ? slot_ptr() : local_slot(); }
 
+/* Milliseconds on the steady clock (CLOCK_MONOTONIC on Linux: the same in
+ * the HTTP process and the CPU's child process). */
+inline uint64_t now_ms()
+{
+    return (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+        Clock::now().time_since_epoch()).count();
+}
+
 inline long ms_since(Clock::time_point t)
 {
     return (long)std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - t).count();
@@ -117,6 +125,7 @@ uint32_t call(uint32_t selector, uint32_t a0, uint32_t d1, Read8 read8, Write8 w
         for (uint32_t i = 0; i < n; i++)
             b->front_app[i] = (char)read8(a0 + i);
         b->front_app[n] = 0;
+        IPC_ATOMIC_STORE(b->front_ms, now_ms());
         IPC_ATOMIC_STORE(b->front_seq, IPC_ATOMIC_LOAD(b->front_seq) + 1);
         return 0;
     }
@@ -177,11 +186,15 @@ inline void reset()
     IPC_ATOMIC_STORE(b->front_seq, 0u);
 }
 
-/* The front process's name, as the agent reported it (STATE); empty if
- * no agent reports it. */
+/* The front process's name, as the agent reported it (STATE) within the
+ * last second; empty otherwise. The agent reports on every pass of its
+ * loop: no recent report means it isn't getting time (an application in
+ * a modal loop that doesn't yield), and a peek at what runs says more. */
 inline std::string front_app(IPCBridgeSlot *b)
 {
     if (!b || agent(b) < 2 || IPC_ATOMIC_LOAD(b->front_seq) == 0)
+        return {};
+    if (now_ms() - IPC_ATOMIC_LOAD(b->front_ms) > 1000)
         return {};
     return std::string(b->front_app);
 }

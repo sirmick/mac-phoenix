@@ -134,15 +134,25 @@ agent has said `AGENT_HELLO` (protocol 2; `/api/status`
   the folder again (`ItemCache::lookup`).
 
 **The front process (`STATE`, done).** The agent reports the front
-process's name (`GetFrontProcess`) through the trap whenever it changes;
-`/api/app` and `/api/wait app=` answer from it while an agent speaks
-protocol 2, else from a peek at `CurApName`, which is whichever process
-runs at that tick (BridgeAgent itself about half the time: it made
-`command_bridge_mame68k` fail one run in five). A reset, or the agent
-quitting (`AGENT_HELLO` 0), drops it.
+process's name (`GetFrontProcess`) through the trap on every pass of its
+loop; `/api/app` and `/api/wait app=` answer from it while the last report
+is under a second old, else from a peek at `CurApName`, which is whichever
+process runs at that tick (BridgeAgent itself about half the time: it made
+`command_bridge_mame68k` fail one run in five). No recent report means the
+agent isn't getting time, an application in a modal loop that doesn't
+yield (ZTerm's serial port alert), and then the peek knows better. A
+reset, or the agent quitting (`AGENT_HELLO` 0), drops it.
 
-Next: the other commands as verbs (LAUNCH, OPEN, SCRIPT, COPY, QUIT, ...),
-then the files, heartbeat and watchdog
+**Every command over the trap (done).** `CMD <length>\r<line><payload>`
+carries any of the file transport's commands (LAUNCH, OPEN, SCRIPT, COPY,
+QUIT, EXIT, SHUTDOWN, RESTART, RESIZE, SET_CLIPBOARD; the length because
+COPY's line holds a CR), the payload being what `_bridge_script` or
+`_bridge_clipboard` would hold; the agent runs it as it runs a file's
+command (`run_command`) and answers `OSERR n`, the command's real result
+(the files only told that the agent had taken it). SHUTDOWN, RESTART and
+EXIT may end the agent before it answers: done once taken.
+
+Next: the files, heartbeat and watchdog
 deleted; and delivering the agent without writing to the `--disk` images.
 
 The HTTP server no longer holds every request behind a long one: a pool of
