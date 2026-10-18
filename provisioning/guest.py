@@ -98,7 +98,10 @@ class Guest:
         self.backend, self.work = backend, work
         args = [os.path.join(ROOT, "build", "mac-phoenix"), "--config", "/dev/null", "--network", "none",
                 "--bridge", "--backend", backend, "--rom", roms(storage)[backend], "--port", str(port),
-                "--timeout", str(timeout), "--dismiss-shutdown-dialog", *extra]
+                "--timeout", str(timeout), "--dismiss-shutdown-dialog",
+                # what recipes are written for; Mac OS 8.6 and later take the
+                # largest mode the driver offers at their first boot
+                "--max-resolution", "640x480", *extra]
         for d in disks:
             args += ["--disk", d]
         for c in cdroms:
@@ -378,18 +381,18 @@ class Guest:
         time.sleep(1)
         menu = None
         for m in self.ui().get("menus", []):
-            if m["hierarchical"] and any(i["text"] == name for i in m["items"]):
+            if m["hierarchical"] and any(i["text"].strip() == name for i in m["items"]):
                 menu = m
         if menu is None:
             self.mouse(button=0, down=False)
-            raise RuntimeError(f"no open menu with {name!r}")
+            raise NotFound(f"no open menu with {name!r}")     # not open yet: "until" retries
         # Where the open menu drew the item; else counted from the checked
         # one, which opens under the pointer.
         t = self.drawn(name)
         if t and t.get("port") == "screen":
             ty = (t["rect"][1] + t["rect"][3]) // 2
         else:
-            texts = [i["text"] for i in menu["items"]]
+            texts = [i["text"].strip() for i in menu["items"]]   # some pad with a space
             current = next((k for k, i in enumerate(menu["items"]) if i["mark"]), 0)
             ty = y + (texts.index(name) - current) * item_height
         self.mouse(x=x, y=ty)

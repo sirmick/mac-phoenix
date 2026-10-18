@@ -1,5 +1,5 @@
 {
- "_note": "Base Systems: bakes run on them (a bake's \"os\") and boot images start from them (an image's \"base\"). \"image\": a hand-made image in images/ (until the os bakes replace them, P5); \"snapshot\": an os bake's snapshot in baked/; \"built\": an image build.py makes (images/<name>.img: a System plus the tools layer). 7.5.5 and 7.6.1 boot on both machines.",
+ "_note": "Base Systems: bakes run on them (a bake's \"os\") and boot images start from them (an image's \"base\"). \"image\": a hand-made image in images/ (until the os bakes replace them, P5); \"snapshot\": an os bake's snapshot in baked/; \"built\": an image build.py makes (images/<name>.img: a System plus the tools layer). 7.5.5 and 7.6.1 boot on both machines; 8.6 and 9.0.4 on the PowerPC one (\"machines\").",
  "7.6.1": {
   "image": "macos-7.6.1.img.orig",
   "os": "7.6.1"
@@ -31,5 +31,35 @@
  "standard-7.5.5": {
   "built": "7.5.5",
   "os": "7.5.5"
+ },
+ "os-8.6": {
+  "snapshot": "os-8.6",
+  "os": "8.6",
+  "machines": ["ppc"]
+ },
+ "tools-8.6": {
+  "built": "tools-8.6",
+  "os": "8.6",
+  "machines": ["ppc"]
+ },
+ "standard-8.6": {
+  "built": "8.6",
+  "os": "8.6",
+  "machines": ["ppc"]
+ },
+ "os-9.0.4": {
+  "snapshot": "os-9.0.4",
+  "os": "9.0.4",
+  "machines": ["ppc"]
+ },
+ "tools-9.0.4": {
+  "built": "tools-9.0.4",
+  "os": "9.0.4",
+  "machines": ["ppc"]
+ },
+ "standard-9.0.4": {
+  "built": "9.0.4",
+  "os": "9.0.4",
+  "machines": ["ppc"]
  }
 }

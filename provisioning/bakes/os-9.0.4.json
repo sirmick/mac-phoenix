@@ -1,0 +1,241 @@
+{
+ "note": "Mac OS 9.0.4 from the Mac OS 9 retail CD, for the PowerPC machine: Mac OS 9 Install run from 8.6 onto a blank disk (the 8.6 boot disk renamed Bootstrap), the standard install, Apple hard disk driver update off; then the Mac OS 9.0.4 Update from the same CD onto it; first boot from the new disk alone, the Mac OS Setup Assistant quit unanswered.",
+ "kind": "os",
+ "version": "9.0.4",
+ "os": "os-8.6",
+ "machines": [
+  "ppc"
+ ],
+ "target_mb": 500,
+ "cdroms": [
+  "Apple_MacOS_9.0.4_USA.iso"
+ ],
+ "steps": [
+  {
+   "launch": "Mac OS 9:Mac OS 9 Install"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "text": "Select Destination"
+   },
+   "max": 5
+  },
+  {
+   "popup": {
+    "text": "{boot}"
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "None Installed",
+    "exact": true,
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "shot": "1-destination"
+  },
+  {
+   "click": {
+    "button": "Select"
+   },
+   "until": {
+    "text": "Important Information"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "text": "Software License Agreement"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Agree"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Agree"
+   },
+   "until": {
+    "button": "Customize"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Options…"
+   },
+   "until": {
+    "button": "Update Apple Hard Disk Drivers"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Update Apple Hard Disk Drivers"
+   }
+  },
+  {
+   "check": {
+    "button": "Update Apple Hard Disk Drivers",
+    "value": 0
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Customize"
+   },
+   "max": 5
+  },
+  {
+   "shot": "2-start"
+  },
+  {
+   "click": {
+    "button": "Start"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "The installation process has finished."
+   },
+   "timeout": 1800
+  },
+  {
+   "shot": "3-installed"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "launch": "Mac OS 9:Mac OS 9.0.4 Update:Mac OS 9.0.4 Update"
+  },
+  {
+   "wait_for": {
+    "text": "Select Destination"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "{boot}"
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "9.0",
+    "exact": true,
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Select"
+   },
+   "until": {
+    "text": "Software License Agreement"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Agree"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Agree"
+   },
+   "until": {
+    "button": "Start"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Options…"
+   },
+   "until": {
+    "button": "Update Apple Hard Disk Drivers"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Update Apple Hard Disk Drivers"
+   }
+  },
+  {
+   "check": {
+    "button": "Update Apple Hard Disk Drivers",
+    "value": 0
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Start"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Start"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "The installation process has finished."
+   },
+   "timeout": 1800
+  },
+  {
+   "shot": "4-updated"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "first_boot": [
+  {
+   "wait_app": "Mac OS Setup Assistant",
+   "timeout": 60,
+   "optional": true
+  },
+  {
+   "close": "Mac OS Setup Assistant"
+  }
+ ]
+}

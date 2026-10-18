@@ -1,0 +1,24 @@
+{
+ "note": "BBEdit Lite 6.1.2 off its self-mounting image, copied by the guest (its folder, the Mac OS X build in it too)",
+ "kind": "copy",
+ "os": "tools-8.6",
+ "disks": [
+  {
+   "file": "bbedit_lite_612.smi_.bin"
+  }
+ ],
+ "expect": [
+  "BBEdit Lite 6.1"
+ ],
+ "launch": [
+  "BBEdit Lite 6.1:BBEdit Lite 6.1"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "BBEdit Lite 6.1.2:BBEdit Lite 6.1",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

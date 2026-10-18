@@ -1,0 +1,10 @@
+{
+ "note": "Mac OS 8.6 (PowerPC) with what the development tools put in the System Folder (shared libraries, first-launch preferences); the tools themselves are on Development-9. CodeWarrior Pro 4's System Folder part is left out: its shared libraries are older than the System's own.",
+ "base": "standard-8.6",
+ "system_from": [
+  "macperl-5.6.1r2",
+  "macpython-2.3.5",
+  "disk-copy-6.3.3"
+ ],
+ "aliases_to": "Development-9"
+}

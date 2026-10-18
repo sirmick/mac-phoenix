@@ -1,0 +1,26 @@
+{
+ "note": "CarbonLib 1.6 (Apple, 2002) for Mac OS 8.6 and 9: its self-mounting image (HFS+, so mounted by the guest, not the host) opened, Apple SW Install on it run onto the startup disk; it quits every other application (BridgeAgent too) and asks for a restart, which the guest does itself; the launcher brings the agent back",
+ "kind": "install",
+ "os": "os-9.0.4",
+ "media": [
+  {"file": "carbonlib_1.6.smi_.bin", "as_is": true}
+ ],
+ "steps": [
+  {"launch": "{media}:CarbonLib 1.6.smi"},
+  {"wait_for": {"button": "Agree"}, "timeout": 90},
+  {"click": {"button": "Agree"}},
+  {"wait_for": {"text": "CarbonLib", "exact": true}, "timeout": 120},
+  {"launch": "CarbonLib:Apple SW Install"},
+  {"wait_for": {"button": "Continue"}, "timeout": 90},
+  {"click": {"button": "Continue"}, "until": {"button": "Agree"}, "max": 5},
+  {"click": {"button": "Agree"}, "until": {"text": "Select Destination"}, "max": 5},
+  {"check": {"text": "9.0.4"}},
+  {"click": {"button": "Select"}, "until": {"button": "Start"}, "max": 5},
+  {"click": {"button": "Start"}, "until": {"text": "This installation/removal requires a restart"}, "max": 5},
+  {"click": {"button": "Continue"}},
+  {"wait_for": {"button": "Restart"}, "timeout": 600},
+  {"shot": "1-installed"},
+  {"click": {"button": "Restart"}},
+  {"wait_finder": 240}
+ ]
+}

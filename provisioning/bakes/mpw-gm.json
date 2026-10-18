@@ -1,0 +1,14 @@
+{
+ "note": "MPW-GM (MPW Shell 3.5, MrC/SC, Universal Interfaces 3.3.2; Apple, Dec 2000) and its Interfaces&Libraries off the MPW-GM disk image, copied by the guest. For Mac OS 8.6 and 9.",
+ "kind": "copy",
+ "os": "tools-8.6",
+ "disks": [
+  {"file": "mpw-gm.img__0.bin"}
+ ],
+ "expect": ["MPW", "Interfaces&Libraries"],
+ "launch": ["MPW:MPW Shell"],
+ "steps": [
+  {"copy": {"from": "MPW-GM:MPW-GM:MPW", "to": "{target}:"}},
+  {"copy": {"from": "MPW-GM:MPW-GM:Interfaces&Libraries", "to": "{target}:"}}
+ ]
+}

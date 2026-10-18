@@ -1,0 +1,73 @@
+{
+ "note": "MacPerl 5.6.1r2 (2002), the full installer (Installer VISE 8): its shareware splash dismissed by clicking it, Install Location set to the target, Easy Install (application, documentation, library); for Mac OS 8.6 and 9; the installer writes MacPerl and Shuck differently every run (volatile)",
+ "kind": "install",
+ "os": "tools-8.6",
+ "media": [
+  {
+   "file": "MacPerl-5.6.1r2_full.bin",
+   "take": "MacPerl Full Installer"
+  }
+ ],
+ "expect": [
+  "MacPerl ƒ"
+ ],
+ "launch": [
+  "MacPerl ƒ:MacPerl"
+ ],
+ "steps": [
+  {
+   "launch": "{media}:MacPerl Full Installer"
+  },
+  {
+   "wait_for": {
+    "text": "Click on this dialog to dismiss."
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "text": "Click on this dialog to dismiss."
+   },
+   "until": {
+    "text": "Install Location:"
+   },
+   "max": 5
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "front": true
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "\"{target}\"",
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "shot": "1-location"
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "volatile": [
+  "MacPerl ƒ:MacPerl",
+  "MacPerl ƒ:Shuck"
+ ]
+}

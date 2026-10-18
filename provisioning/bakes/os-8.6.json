@@ -1,0 +1,144 @@
+{
+ "note": "Mac OS 8.6 from its retail CD, for the PowerPC machine: the Mac OS Install application run from 7.6.1 onto a blank disk, the standard (recommended) install, Apple hard disk driver update off; first boot from the new disk alone, the Mac OS Setup Assistant quit unanswered.",
+ "kind": "os",
+ "version": "8.6",
+ "os": "7.6.1",
+ "machines": [
+  "ppc"
+ ],
+ "target_mb": 500,
+ "cdroms": [
+  "MacOS8.6.iso"
+ ],
+ "steps": [
+  {
+   "launch": "Mac OS 8.6:Full Install Pieces:Mac OS Install"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "text": "Select Destination"
+   },
+   "max": 5
+  },
+  {
+   "popup": {
+    "text": "MacOS 7.6.1"
+   },
+   "choose": "{target}"
+  },
+  {
+   "check": {
+    "text": "None Installed"
+   }
+  },
+  {
+   "shot": "1-destination"
+  },
+  {
+   "click": {
+    "button": "Select"
+   },
+   "until": {
+    "text": "Important Information"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "text": "Software License Agreement"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Agree"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Agree"
+   },
+   "until": {
+    "button": "Customize"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Options…"
+   },
+   "until": {
+    "button": "Update Apple Hard Disk Drivers"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Update Apple Hard Disk Drivers"
+   }
+  },
+  {
+   "check": {
+    "button": "Update Apple Hard Disk Drivers",
+    "value": 0
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Customize"
+   },
+   "max": 5
+  },
+  {
+   "shot": "2-start"
+  },
+  {
+   "click": {
+    "button": "Start"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "The installation process has finished."
+   },
+   "timeout": 1800
+  },
+  {
+   "shot": "3-installed"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "first_boot": [
+  {
+   "wait_app": "Mac OS Setup Assistant",
+   "timeout": 60,
+   "optional": true
+  },
+  {
+   "close": "Mac OS Setup Assistant"
+  }
+ ]
+}

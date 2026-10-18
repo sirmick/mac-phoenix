@@ -28,7 +28,8 @@ Bake fields: "kind", "os" (the base System, default 7.6.1), "machines"
 (default ["68k"]), "target"
 (install volume name, default Install), "archive"/"take" (expand),
 "cdroms" (media names), "media" (items put on a volume "Media":
-{"file", "take", "as", "dc42"}), "disks" (disk images out of media,
+{"file", "take", "as", "dc42"}; "as_is": the MacBinary file itself, not opened:
+a self-mounting HFS+ image the guest mounts), "disks" (disk images out of media,
 attached: {"file", "take"}), "steps", "expect" (names that must be at
 the top of the result), "from_boot" (new items at the top of the boot
 disk count as installed), "launch" (the product's apps, relative to the
@@ -121,10 +122,11 @@ NEVER = {b"System", b"Finder", b"Desktop DB", b"Desktop DF", b"Desktop"}
 NOISE = (b":Recent Applications:", b":Recent Documents:", b":Recent Servers:",
          b":Startup Items:BridgeAgent", b":MacTCP DNR", b":Extensions:Printer Share",
          b":Control Panels:Apple Menu Options", b":Extensions:Apple CD-ROM",
+         b":Extensions:Apple CD/DVD Driver",                 # 8.6 and later
          b":Startup Items:\rEnergy Saver")             # the PPC machine's Energy Saver (invisible)
 # Preferences: only new files are taken (an app's first-launch answers live
 # there), minus these, which the System or the bridge write.
-PREFS_NOISE = {b"MacPhoenix.cfg", b"ASLM Preferences", b"Apple Menu Options Prefs",
+PREFS_NOISE = {b"MacPhoenix.cfg", b"CarbonLib Preferences (US)", b"ASLM Preferences", b"Apple Menu Options Prefs",
                b"Mac OS Easy Open Preferences", b"Macintosh Easy Open Preferences", b"WindowShade Preferences", b"Internet Preferences",
                b"Finder Preferences", b"Users & Groups Data File", b"File Sharing Folder",
                b"Launcher Preferences", b"Desktop Pictures Prefs", b"Extensions Manager Preferences",
@@ -231,7 +233,11 @@ def part_path(name, machine):
 
 
 def machines(bake):
-    return bake.get("machines", ["68k"])
+    """The bake's "machines"; else its base's (8.6 and 9.0.4: PowerPC only);
+    else the 68k one."""
+    if "machines" in bake:
+        return bake["machines"]
+    return bases().get(bake.get("os", DEFAULT_OS), {}).get("machines", ["68k"])
 
 
 def bake_key(bake):
@@ -356,6 +362,13 @@ class Session:
         if bake.get("archive"):
             self.place_archive(hfs)
         boot_name = volume_name(self.boot)
+        if boot_name == self.target_name:     # an os bake run from a System on "Macintosh HD"
+            hfs.mount(self.boot)
+            try:
+                hfs.run("hrename", mr(boot_name) + b":", b"Bootstrap:")
+            finally:
+                hfs.umount()
+            boot_name = "Bootstrap"
         self.names = {"target": self.target_name, "media": "Media", "boot": boot_name,
                       "system": boot_name + ":System Folder:"}
         self.steps = [s for s in subst(self.pre_steps + bake.get("steps", []), self.names)
@@ -370,6 +383,12 @@ class Session:
         snapshot.blank(hfs, vol, "Media", 512)
         for m in self.bake["media"]:
             stage = tempfile.mkdtemp(dir=self.work)
+            if m.get("as_is"):                  # a MacBinary file put there whole, not opened
+                with open(media_path(m["file"]), "rb") as f:    # (a self-mounting HFS+ image)
+                    head = f.read(128)
+                name = m.get("as") or head[2:2 + head[1]].decode("mac_roman")
+                put(hfs, vol, [(mr(name), media_path(m["file"]))])
+                continue
             items = take(media_path(m["file"]), m.get("take", ""), stage, self.work)
             if m.get("dc42"):
                 for rel, local in items:
@@ -513,9 +532,18 @@ class Session:
                     raise RuntimeError(f"no {need.decode()} on the new volume")
             local = os.path.join(tempfile.mkdtemp(dir=self.work), "System.bin")
             hfs.run("hcopy", "-m", b":System Folder:System", local)
+            enablers = []                       # a System Enabler carries an update's version:
+            for line in hfs.run("hls", "-l", b":System Folder:").split(b"\n"):   # 9.0.4's System says 9.0
+                if line[3:8] == b"gbly/":
+                    e = os.path.join(tempfile.mkdtemp(dir=self.work), "enabler.bin")
+                    hfs.run("hcopy", "-m", b":System Folder:" + enabler_name(line), e)
+                    enablers.append(system_version(e))
         finally:
             hfs.umount()
         version = system_version(local)
+        newer = [v for v in enablers if v and vers_key(v) > vers_key(version or "0")]
+        if newer:
+            version = max(newer, key=vers_key)
         want = self.bake.get("version")
         if want and version != want:
             raise RuntimeError(f"the System file is version {version}, not {want}")
@@ -615,6 +643,17 @@ class Session:
         self.log(f"{out}: {len(meta['items'])} items, {len(meta['system'])} System Folder entries, "
                  f"{os.path.getsize(out) >> 20} MB" + (f"; aliases: {meta['aliases']}" if meta["aliases"] else ""))
         return out
+
+
+def vers_key(v):
+    return tuple(int(x) if x.isdigit() else 0 for x in v.split("."))
+
+
+def enabler_name(line):
+    """The file name in an `hls -l` line (after the date's time or year)."""
+    import re
+    m = re.match(rb"^\S\s+\S+\s+\d+\s+\d+\s+\w{3}\s+\d+\s+[\d:]+\s(.*)$", line)
+    return m.group(1) if m else line.split(b" ")[-1]
 
 
 def system_version(macbinary):

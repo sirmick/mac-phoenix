@@ -130,6 +130,23 @@ def run(images, machine, port, only, log=print):
     return failed == 0
 
 
+def image_machines(name):
+    """The machines a built image boots on: its base System's (bases.json
+    "machines": 8.6 and 9.0.4 the PowerPC one), else both."""
+    seen = set()
+    while name and name not in seen:
+        seen.add(name)
+        try:
+            d = bake.load_json(os.path.join(bake.HERE, "images", name + ".json"))
+        except (OSError, ValueError):
+            break
+        base = bake.bases().get(d.get("base", ""), {})
+        if "machines" in base:
+            return base["machines"]
+        name = base.get("built")
+    return sorted(bake.BACKENDS)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("images", nargs="+", help="built images, the boot image first")
@@ -138,7 +155,7 @@ def main():
     ap.add_argument("--only", help="substring: test only matching apps")
     args = ap.parse_args()
     ok = True
-    for i, m in enumerate(args.machine or sorted(bake.BACKENDS)):
+    for i, m in enumerate(args.machine or image_machines(args.images[0])):
         ok &= run(args.images, m, args.port + i, args.only)
     return 0 if ok else 1
 

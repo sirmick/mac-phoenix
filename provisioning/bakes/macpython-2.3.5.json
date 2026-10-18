@@ -1,0 +1,93 @@
+{
+ "note": "MacPython-OS9 2.3.5 (2005, with PIL, Numerical, img): its Installer VISE, Easy Install; needs CarbonLib (tools-9.0.4 has 1.6). The install location is drawn by PowerPC code the text feed doesn't see, so Switch Disk is pressed three times (Macintosh HD, Host, then the target: the order the volumes mount in) and \"expect\" checks where it went. ConfigurePython copies PythonCore into Extensions (the target isn't the startup disk) and rebuilds the applets; the applets it rebuilds differ every run (volatile)",
+ "kind": "install",
+ "os": "tools-9.0.4",
+ "media": [
+  {
+   "file": "MacPython235full.bin",
+   "take": "MacPython235full"
+  }
+ ],
+ "expect": [
+  "MacPython-OS9 2.3.5"
+ ],
+ "steps": [
+  {
+   "launch": "{media}:MacPython235full"
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   }
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   }
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   }
+  },
+  {
+   "shot": "1-location"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Copy"
+   },
+   "timeout": 1800
+  },
+  {
+   "click": {
+    "button": "Copy"
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Quit"
+   },
+   "max": 120,
+   "note": "the alert that the Finder will be busy: it takes clicks only once the applets are rebuilt"
+  },
+  {
+   "wait_for": {
+    "text": "The software was successfully installed."
+   },
+   "timeout": 600
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "launch": [
+  "MacPython-OS9 2.3.5:PythonInterpreter",
+  "MacPython-OS9 2.3.5:Python IDE"
+ ],
+ "volatile": [
+  "MacPython-OS9 2.3.5:BuildApplet",
+  "MacPython-OS9 2.3.5:BuildApplication",
+  "MacPython-OS9 2.3.5:EditPythonPrefs",
+  "MacPython-OS9 2.3.5:Mac:Tools:CGI:BuildCGIApplet",
+  "MacPython-OS9 2.3.5:Mac:Tools:CGI:PythonCGISlave",
+  "MacPython-OS9 2.3.5:Python IDE",
+  "Preferences:Python:Python 2.3.5 Preferences"
+ ]
+}

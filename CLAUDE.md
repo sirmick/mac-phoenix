@@ -61,7 +61,8 @@ tools/mpw/mpw --toolchain cw build DIR  # CodeWarrior Pro 4's MPW (MWC68K, MWCPP
 # Guest software (docs/Provisioning.md, docs/provisioning/PLAN.md): pinned
 # media (provisioning/media.json) -> bakes run in the guest -> snapshots
 # (~/storage/baked) -> images (provisioning/images/*.json). Dev disks:
-# Development.img + dev-7.5.5.img / dev-7.6.1.img, for both 68k and PPC.
+# Development.img + dev-7.5.5.img / dev-7.6.1.img, for both 68k and PPC;
+# Development-9.img + dev-8.6.img / dev-9.0.4.img, PPC only (G3 ROM).
 python3 provisioning/bake.py --all --jobs 3     # snapshots not up to date
 python3 provisioning/build.py --all             # images not up to date
 python3 provisioning/test_image.py dev-7.6.1 Development   # launch every app, 68k + PPC
@@ -306,7 +307,7 @@ machine.
 - **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
 - **Single-port HTTP + WebSocket**: HTTP/1.1 server in `src/webserver/http_server.cpp`: a QThread accept loop (POSIX `accept` on the listening fd) hands each connection to a pool of 16 QThread workers, which read and answer on the fd with `poll()`-bounded `recv`/`send`. API handlers run one at a time under a lock, except routes registered with `allow_concurrent` (the bridge's, `/api/wait`), so a long `/api/exec` or `/api/copy` doesn't hold up the rest. On `Upgrade: websocket` the handshake is written and the fd is `dup()`'d off to a thread that owns the WebSocket. Long-poll stream routes (`/api/stream`) use the same fd-handoff pattern. `src/webserver/websocket.cpp` implements RFC 6455 in-process on the dup'd fd. One TCP listener serves static UI, REST API, `/api/frame` long-poll, and `/ws` (signaling + input + PNG/WebP frames). libdatachannel's `rtc::WebSocketServer` is not used. WebRTC RTP (H.264/VP9 media + Opus audio) still rides direct UDP ports negotiated via ICE.
 - **Three transport modes**: PNG/WebP → WebSocket binary on `/ws`; H.264/VP9 → WebRTC RTP track; `httpstream` → `/api/frame` long-poll. Signaling JSON + input events always ride the `/ws` WebSocket regardless of codec.
-- **Command bridge**: Two layers. **Read commands** (`/api/app`, `/api/windows`) peek Mac memory directly from the IRQ — no guest cooperation. **Action commands** (`/api/launch`, `/api/exec`, `/api/shutdown`, `/api/restart`, `/api/quit`, …) go to a guest-side `BridgeAgent` app (installed in `:System Folder:Startup Items:`) through the bridge trap `$ABE5` (`guest_bridge.h`; the request slot is in the IPC buffer), which wakes it with a Time Manager task; it executes them via Process Manager / Shutdown Manager / AppleEvents and answers through the trap. `/api/status` `bridge_agent_connected` says it's there. Enable with `--bridge` or `bridge_enabled: true`. See `docs/CommandBridge.md`.
+- **Command bridge**: Two layers. **Read commands** (`/api/app`, `/api/windows`) peek Mac memory directly from the IRQ — no guest cooperation. **Action commands** (`/api/launch`, `/api/exec`, `/api/shutdown`, `/api/restart`, `/api/quit`, …) go to a guest-side `BridgeAgent` app (the emulator launches it from the bridge dir on the Host volume at desktop time; the boot disks aren't written) through the bridge trap `$ABE5` (`guest_bridge.h`; the request slot is in the IPC buffer), which wakes it with a Time Manager task; it executes them via Process Manager / Shutdown Manager / AppleEvents and answers through the trap. `/api/status` `bridge_agent_connected` says it's there. Enable with `--bridge` or `bridge_enabled: true`. See `docs/CommandBridge.md`.
 
 ## ROM
 

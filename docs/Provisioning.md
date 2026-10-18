@@ -45,6 +45,9 @@ the same software is recognised as the same.
 |---|---|
 | `Development.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
 | `dev-7.5.5.img`, `dev-7.6.1.img` | the base Systems (`provisioning/bases.json`) plus the snapshots' System Folder parts: MetroNub, CFM-68K and PowerPC libraries, MacsBug 6.6.3, PythonCore, ... |
+| `8.6.img`, `9.0.4.img` | Mac OS 8.6 and 9.0.4 for the PowerPC machine (G3 ROM): installed from their CDs (`os-8.6`, `os-9.0.4`), with CarbonLib 1.6, StuffIt Expander 6.0.1, Disk Copy 6.3.3, MacsBug, TCP/IP on DHCP |
+| `Development-9.img` | the 8.6 / 9 development volume: MPW-GM, CodeWarrior Pro 4; `Languages`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
+| `dev-8.6.img`, `dev-9.0.4.img` | the 8.6 / 9.0.4 disks plus those tools' System Folder parts; boot with `Development-9.img` |
 
 All three run on the 68k machine (`--backend uae`) and the PowerPC one
 (`--backend kpx`).
@@ -57,6 +60,7 @@ python3 provisioning/build.py --all            # images not up to date
 
 # every app the snapshots list launches, on each machine:
 python3 provisioning/test_image.py dev-7.6.1 Development
+python3 provisioning/test_image.py dev-9.0.4 Development-9      # PowerPC only (the base's "machines")
 ```
 
 The E.T.O. #22 disc is a local-only pin: a machine without it gets
@@ -79,10 +83,20 @@ volume (`{target}`, named `Install`) as the install target. Kinds:
 has are kept, CFM code that differs becomes one fat file
 (`provisioning/fat_cfm.py`), aliases keep the first, anything else that
 differs fails unless `"prefer"` says which run's file to keep.
+A bake without `"machines"` runs on its base's (`bases.json`: 8.6 and
+9.0.4 are PowerPC only), else on the 68k machine. A medium with `"as_is":
+true` goes onto the Media volume as the MacBinary file it is, not opened on
+the host: a self-mounting HFS+ image (CarbonLib 1.6) that only the guest
+can mount. An `os` bake run from a System whose volume has the target's
+name has its boot disk renamed `Bootstrap`. Scripted guests are capped at
+640x480 (`--max-resolution`): 8.6 and later take the driver's largest mode
+at their first boot.
 
 Steps (see `provisioning/guest.py`) click by name where they can: `/api/ui`
 gives the front process's windows, controls, dialog items and open menus
-from guest memory.
+from guest memory (the front process as BridgeAgent reports it). The text
+feed sees 68k code's drawing only: a PowerPC-native installer's text (VISE
+in MacPython-OS9) isn't there, and its recipe works from controls alone.
 
 ```json
 {"launch": "Install 1:Installer"},
@@ -182,6 +196,6 @@ Archive, `old.mac.gdn`, oldapplestuff.com, the Garden FTP
 | `create_hfs.py`, `create_hfs_plus.py` | blank HFS / HFS+ images |
 | `populate_disk.py` | copy everything in `~/storage/installers` onto an image (unar, MacBinary) |
 | `hfs_bless.py`, `fix_hfs_header.py` | bless a System Folder; repair a volume header |
-| `install_bridge_agent.sh` | BridgeAgent into Startup Items (the emulator runs it with `--bridge`) |
+| `install_bridge_agent.sh` | BridgeAgent into an image's Startup Items, by hand (the emulator launches it from the Host volume instead) |
 | `build_retro68.sh` | the Retro68 cross toolchain (host side) |
 | `tools/mpw/mpw` | MPW's 68k tools in a headless Executor session (docs/MPW.md) |
