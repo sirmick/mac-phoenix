@@ -133,12 +133,22 @@ agent has said `AGENT_HELLO` (protocol 2; `/api/status`
   file the host had just written wasn't found by name: a miss now reads
   the folder again (`ItemCache::lookup`).
 
+**The front process (`STATE`, done).** The agent reports the front
+process's name (`GetFrontProcess`) through the trap whenever it changes;
+`/api/app` and `/api/wait app=` answer from it while an agent speaks
+protocol 2, else from a peek at `CurApName`, which is whichever process
+runs at that tick (BridgeAgent itself about half the time: it made
+`command_bridge_mame68k` fail one run in five). A reset, or the agent
+quitting (`AGENT_HELLO` 0), drops it.
+
 Next: the other commands as verbs (LAUNCH, OPEN, SCRIPT, COPY, QUIT, ...),
-`STATE` for the front process, then the files, heartbeat and watchdog
-deleted; delivering the agent without writing to the `--disk` images; and
-the HTTP server, which answers API requests one at a time on its accept
-thread (a long `/api/exec` or `/api/copy` holds every other request,
-the web UI's too).
+then the files, heartbeat and watchdog
+deleted; and delivering the agent without writing to the `--disk` images.
+
+The HTTP server no longer holds every request behind a long one: a pool of
+worker threads serves connections, the bridge's routes run concurrently
+(the file transport's users serialize on their own lock), the rest one at a
+time as before.
 
 ## Transport
 

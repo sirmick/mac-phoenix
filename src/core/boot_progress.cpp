@@ -560,6 +560,7 @@ void boot_progress_report(enum BootEvent event, void *regs_ptr)
 
 	switch (event) {
 		case BOOT_EVENT_RESET:
+			guest_bridge::reset();	/* no agent (yet) in the new boot */
 			if (g_current_phase < PHASE_ROM_INIT) {
 				milestone("ROM init started (RESET)");
 				set_phase(PHASE_ROM_INIT);

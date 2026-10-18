@@ -47,6 +47,7 @@ enum Selector : uint32_t {
                            -1 none, $80000000 | length if the buffer is too small */
     kReply = 0x12,      /* A0/D1 the reply to the request taken last -> 0 */
     kAgentPending = 0x13, /* the agent's timer task: -> 1 if a request waits */
+    kState = 0x14,      /* A0/D1 the front process's name -> 0 */
 };
 
 using Clock = std::chrono::steady_clock;
@@ -105,10 +106,20 @@ uint32_t call(uint32_t selector, uint32_t a0, uint32_t d1, Read8 read8, Write8 w
         s.due = Clock::now() + std::chrono::seconds(2);   /* the demo: wake it in 2 s */
         fprintf(stderr, "[bridge2] HELLO from the demo, protocol %u\n", (unsigned)d1);
         return kMagic;
-    case kAgentHello:
+    case kAgentHello:               /* D1 0: the agent is going (files only again) */
         IPC_ATOMIC_STORE(b->agent, d1);
+        if (d1 == 0)
+            IPC_ATOMIC_STORE(b->front_seq, 0u);
         fprintf(stderr, "[bridge2] BridgeAgent speaks protocol %u\n", (unsigned)d1);
         return kMagic;
+    case kState: {
+        uint32_t n = d1 < sizeof b->front_app - 1 ? d1 : (uint32_t)sizeof b->front_app - 1;
+        for (uint32_t i = 0; i < n; i++)
+            b->front_app[i] = (char)read8(a0 + i);
+        b->front_app[n] = 0;
+        IPC_ATOMIC_STORE(b->front_seq, IPC_ATOMIC_LOAD(b->front_seq) + 1);
+        return 0;
+    }
     case kAgentPending:
         return request_waits(b) ? 1 : 0;
     case kPending:
@@ -157,6 +168,23 @@ uint32_t call(uint32_t selector, uint32_t a0, uint32_t d1, Read8 read8, Write8 w
 
 /* The agent's protocol, 0 if no agent has said AGENT_HELLO. */
 inline uint32_t agent(IPCBridgeSlot *b) { return IPC_ATOMIC_LOAD(b->agent); }
+
+/* A machine reset: the agent and what it reported belong to the last boot. */
+inline void reset()
+{
+    IPCBridgeSlot *b = slot();
+    IPC_ATOMIC_STORE(b->agent, 0u);
+    IPC_ATOMIC_STORE(b->front_seq, 0u);
+}
+
+/* The front process's name, as the agent reported it (STATE); empty if
+ * no agent reports it. */
+inline std::string front_app(IPCBridgeSlot *b)
+{
+    if (!b || agent(b) < 2 || IPC_ATOMIC_LOAD(b->front_seq) == 0)
+        return {};
+    return std::string(b->front_app);
+}
 
 /* The host side: one request, its reply. Serialized (one at a time, in
  * order of arrival); take_ms: how long the agent has to take it; reply_ms:

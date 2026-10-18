@@ -1536,7 +1536,8 @@ static void handle_event(EventRecord *evt)
  * still come as files (poll_bridge). */
 
 enum { kBridgeTrap = 0xABE5, kBridgeMagic = 0x4D506878, kBridgeProtocol = 2,
-       kSelAgentHello = 0x10, kSelNext = 0x11, kSelReply = 0x12, kSelAgentPending = 0x13 };
+       kSelAgentHello = 0x10, kSelNext = 0x11, kSelReply = 0x12, kSelAgentPending = 0x13,
+       kSelState = 0x14 };
 
 static long bridge_call(long selector, const void *ptr, long value)
 {
@@ -1594,8 +1595,10 @@ static void bridge_v2_init(void)
 
 static void bridge_v2_stop(void)
 {
-    if (gV2)
+    if (gV2) {
         RmvTime((QElemPtr)&gTask.tm);
+        bridge_call(kSelAgentHello, NULL, 0);   /* gone: the host stops relying on us */
+    }
     gV2 = false;
 }
 
@@ -1648,6 +1651,30 @@ static void v2_exec(const char *req, long n)
     }
     if (out) DisposePtr(out);
     if (errs) DisposePtr(errs);
+}
+
+/* The front process's name to the emulator (STATE), when it changes: the
+ * host's /api/app and app= waits use it (a peek at CurApName sees whichever
+ * process happens to run, us included). */
+static void report_front(void)
+{
+    static Str31 last;
+    static Boolean sent;
+    ProcessSerialNumber psn;
+    ProcessInfoRec info;
+    Str31 name;
+    if (GetFrontProcess(&psn) != noErr)
+        return;
+    info.processInfoLength = sizeof(info);
+    info.processName = name;
+    info.processAppSpec = NULL;
+    if (GetProcessInformation(&psn, &info) != noErr)
+        return;
+    if (sent && last[0] == name[0] && memcmp(last + 1, name + 1, name[0]) == 0)
+        return;
+    memcpy(last, name, name[0] + 1);
+    sent = true;
+    bridge_call(kSelState, name + 1, name[0]);
 }
 
 /* A request waiting? Take it and answer it. */
@@ -1718,7 +1745,7 @@ int main(void)
     while (gRunning) {
         if (WaitNextEvent(everyEvent, &evt, 6, NULL))
             handle_event(&evt);
-        if (gV2) poll_v2();
+        if (gV2) { report_front(); poll_v2(); }
         poll_bridge();
         commit_pending_clip();
     }

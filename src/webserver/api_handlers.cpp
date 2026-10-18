@@ -1618,6 +1618,12 @@ Response APIRouter::handle_snapshot(const Request& req) {
 Response APIRouter::handle_app(const Request& req) {
     (void)req;
 
+    // The front process, as the agent reports it (bridge trap STATE); a
+    // peek at CurApName sees whichever process runs at that tick.
+    std::string front = guest_bridge::front_app(bridge_slot());
+    if (!front.empty() && (!ctx_->subprocess || ctx_->subprocess->is_running()))
+        return Response::json("{\"app\": \"" + storage::json_escape(front) + "\"}");
+
     if (ctx_->subprocess) {
         if (!ctx_->subprocess->is_running()) {
             return Response::json("{\"app\": \"\", \"error\": \"emulator not running\"}");
@@ -2274,8 +2280,9 @@ Response APIRouter::handle_wait(const Request& req) {
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeout_s);
     while (std::chrono::steady_clock::now() < deadline) {
         if (cond_type == "app") {
-            std::string app;
-            if (ctx_->subprocess) {
+            std::string app = guest_bridge::front_app(bridge_slot());   // the agent's STATE
+            if (!app.empty()) {
+            } else if (ctx_->subprocess) {
                 std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
                 const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
                 app = buf ? buf->cur_app_name : "";

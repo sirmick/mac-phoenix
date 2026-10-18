@@ -175,6 +175,10 @@ typedef struct IPCBridgeSlot {
     IPC_ATOMIC_UINT32 rep_id;         /* guest: the request rep[] answers */
     uint32_t req_len;
     uint32_t rep_len;
+    /* STATE: the front process's name as the agent last saw it (it knows
+     * the front process; a peek at CurApName sees whichever one runs). */
+    IPC_ATOMIC_UINT32 front_seq;     /* bumped on each STATE */
+    char front_app[64];
     char req[IPC_BRIDGE_REQ_MAX];
     char rep[IPC_BRIDGE_REP_MAX];
 } IPCBridgeSlot;
