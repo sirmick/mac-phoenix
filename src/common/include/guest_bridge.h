@@ -48,6 +48,13 @@ enum Selector : uint32_t {
     kReply = 0x12,      /* A0/D1 the reply to the request taken last -> 0 */
     kAgentPending = 0x13, /* the agent's timer task: -> 1 if a request waits */
     kState = 0x14,      /* A0/D1 the front process's name -> 0 */
+    kLaunchCheck = 0x15, /* the launcher's response procedure: -> 1 to launch the
+                            agent now */
+    kLaunched = 0x16,   /* the launcher: D1 the OSErr of FSMakeFSSpec or _Launch */
+    kBridgeDir = 0x17,  /* A0/D1 a buffer -> the bridge dir's guest path copied in
+                           ("Host:MacPhoenix:<pid>"), its length; 0 none */
+    kLaunchPost = 0x18, /* the launcher's timer task: -> 1 to post its notification,
+                           0 not now, -1 stop */
 };
 
 using Clock = std::chrono::steady_clock;
@@ -56,6 +63,12 @@ struct State {
     int rounds = 0;                     /* demo: wake-ups asked for so far */
     Clock::time_point due{};            /* demo: next wake-up the host asks for */
     Clock::time_point woke{};           /* demo: when PENDING last said 1 */
+    std::string guest_dir;              /* the bridge dir as the guest sees it */
+    bool launch_armed = false;          /* a launcher is installed this boot */
+    bool launched = false;              /* ... and has launched (or tried) */
+    bool posted = false;                /* its notification waits */
+    Clock::time_point finder_seen{};    /* the Finder's first event call this boot */
+    uint32_t launch_spec = 0;           /* where the launcher makes the agent's FSSpec */
 };
 
 inline State &state()
@@ -95,6 +108,9 @@ inline long ms_since(Clock::time_point t)
     return (long)std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - t).count();
 }
 
+/* The agent's protocol, 0 if no agent has said AGENT_HELLO. */
+inline uint32_t agent(IPCBridgeSlot *b) { return IPC_ATOMIC_LOAD(b->agent); }
+
 inline bool request_waits(IPCBridgeSlot *b)
 {
     uint32_t id = IPC_ATOMIC_LOAD(b->req_id);
@@ -114,7 +130,11 @@ uint32_t call(uint32_t selector, uint32_t a0, uint32_t d1, Read8 read8, Write8 w
         s.due = Clock::now() + std::chrono::seconds(2);   /* the demo: wake it in 2 s */
         fprintf(stderr, "[bridge2] HELLO from the demo, protocol %u\n", (unsigned)d1);
         return kMagic;
-    case kAgentHello:               /* D1 0: the agent is going (files only again) */
+    case kAgentHello:               /* D1 0: the agent is going */
+        if (d1 != 0 && IPC_ATOMIC_LOAD(b->agent) != 0) {
+            fprintf(stderr, "[bridge2] a second BridgeAgent, protocol %u: refused\n", (unsigned)d1);
+            return 0;               /* one agent: the other goes */
+        }
         IPC_ATOMIC_STORE(b->agent, d1);
         if (d1 == 0)
             IPC_ATOMIC_STORE(b->front_seq, 0u);
@@ -131,6 +151,59 @@ uint32_t call(uint32_t selector, uint32_t a0, uint32_t d1, Read8 read8, Write8 w
     }
     case kAgentPending:
         return request_waits(b) ? 1 : 0;
+    case kLaunchPost:
+    case kLaunchCheck: {
+        /* POST: the timer task asks whether to post the notification;
+         * CHECK: its response procedure (run at event time, in whatever
+         * application is current) whether to launch. Once per boot, on
+         * System 7 or later (no Process Manager before: a launch would
+         * replace the Finder), a second after the Finder was first seen
+         * running (by either: a Setup Assistant can keep it in the back);
+         * not if an agent has said hello (one in Startup Items). */
+        bool post = selector == kLaunchPost;
+        if (!post)
+            s.posted = false;
+        if (!s.launch_armed || s.launched || agent(b) != 0)
+            return post ? (uint32_t)-1 : 0;
+        if (((uint32_t)read8(0x015A) << 8 | read8(0x015B)) < 0x0700)       /* SysVersion */
+            return post ? (uint32_t)-1 : 0;
+        static const char kFinder[] = "\006Finder";
+        bool finder = true;
+        for (int i = 0; i < 7; i++)
+            finder = finder && read8(0x0910 + i) == (uint8_t)kFinder[i];  /* CurApName */
+        if (finder && s.finder_seen == Clock::time_point{})
+            s.finder_seen = Clock::now();
+        if (s.finder_seen == Clock::time_point{} || ms_since(s.finder_seen) < 1000)
+            return 0;
+        if (post) {
+            if (s.posted)
+                return 0;
+            s.posted = true;
+            return 1;
+        }
+        s.launched = true;
+        return 1;
+    }
+    case kLaunched: {
+        uint32_t sp = s.launch_spec;                /* the FSSpec the launcher made */
+        std::string name;
+        for (uint32_t i = 0, n = sp ? read8(sp + 6) : 0; i < n && i < 63; i++)
+            name += (char)read8(sp + 7 + i);
+        fprintf(stderr, "[bridge2] BridgeAgent launched from %s:BridgeAgent: OSErr %d"
+                " (FSSpec %d/%u/%s)\n", s.guest_dir.c_str(), (int)(int16_t)d1,
+                sp ? (int)(int16_t)(read8(sp) << 8 | read8(sp + 1)) : 0,
+                sp ? (unsigned)(read8(sp + 2) << 24 | read8(sp + 3) << 16 | read8(sp + 4) << 8 | read8(sp + 5)) : 0u,
+                name.c_str());
+        return 0;
+    }
+    case kBridgeDir: {
+        uint32_t n = (uint32_t)s.guest_dir.size();
+        if (n == 0 || n > d1)
+            return 0;
+        for (uint32_t i = 0; i < n; i++)
+            write8(a0 + i, (uint8_t)s.guest_dir[i]);
+        return n;
+    }
     case kPending:
         if (s.due != Clock::time_point{} && Clock::now() >= s.due) {
             s.due = Clock::time_point{};
@@ -175,12 +248,13 @@ uint32_t call(uint32_t selector, uint32_t a0, uint32_t d1, Read8 read8, Write8 w
     }
 }
 
-/* The agent's protocol, 0 if no agent has said AGENT_HELLO. */
-inline uint32_t agent(IPCBridgeSlot *b) { return IPC_ATOMIC_LOAD(b->agent); }
+
 
 /* A machine reset: the agent and what it reported belong to the last boot. */
 inline void reset()
 {
+    state().launch_armed = state().launched = state().posted = false;
+    state().finder_seen = Clock::time_point{};
     IPCBridgeSlot *b = slot();
     IPC_ATOMIC_STORE(b->agent, 0u);
     IPC_ATOMIC_STORE(b->front_seq, 0u);

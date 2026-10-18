@@ -979,7 +979,8 @@ void boot_progress_export_mac_state(void)
 	}
 	if (g_ipc_buf) {
 		/* The window list belongs to whichever process runs at this tick:
-		 * wait (up to two seconds) for one that holds the front window. The
+		 * wait (up to two seconds) for one that holds the front window (the
+		 * front process the agent reports, while its report is fresh). The
 		 * Finder's desktop only counts if no other front window shows up
 		 * within half a second (it looks highlighted to the Finder even when
 		 * the Finder runs in the background). */
@@ -991,6 +992,16 @@ void boot_progress_export_mac_state(void)
 			if (ui_waiting != want) { ui_waiting = want; ui_ticks = 0; ui_desktop.clear(); }
 			bool front = false, desktop = false;
 			std::string ui = guest_ui_json(&front, &desktop);
+			/* The front process, as the agent reports it (STATE): a
+			 * background-only one (Control Strip Extension) can look as if
+			 * it held a front window. */
+			std::string front_app = guest_bridge::front_app(guest_bridge::slot());
+			if (!front_app.empty()) {
+				std::string cur;
+				for (int i = 0, n = ReadMacInt8(0x910); i < n && i < 31; i++)
+					cur += static_cast<char>(ReadMacInt8(0x911 + i));
+				if (cur != front_app) front = desktop = false;
+			}
 			if (desktop) ui_desktop = ui;
 			++ui_ticks;
 			if (!front) {

@@ -1,8 +1,9 @@
 /*
  * BridgeAgent - MacPhoenix automation agent
  *
- * A small application installed in System Folder:Startup Items. Finder
- * launches it at desktop time; it takes the emulator's requests through
+ * A small application the emulator launches from its bridge dir on the
+ * Host volume at desktop time (bridge_launcher_install; or Startup Items,
+ * where an older install put it); it takes the emulator's requests through
  * the bridge trap $ABE5 (guest_bridge.h, docs/CommandBridge.md):
  *   EXEC <creator> <seconds>\r<script>  — 'misc'/'dosc', waits for the reply:
  *                                        stdout, stderr and {Status}
@@ -157,7 +158,7 @@ static void draw_status(void)
     DrawString(pbuf);
 
     MoveTo(6, 52);
-    snprintf(buf, sizeof(buf), "Bridge: %s", gV2 ? "connected" : "no trap");
+    snprintf(buf, sizeof(buf), "Bridge: %s", gV2 ? "connected" : "gone");
     pbuf[0] = (unsigned char)strlen(buf);
     memcpy(pbuf + 1, buf, pbuf[0]);
     DrawString(pbuf);
@@ -937,6 +938,26 @@ static OSErr do_quit_target(const ProcessSerialNumber *psn)
     return err;
 }
 
+/* Agents an older install left in Startup Items (they poll files that no
+ * longer come, and the oldest patch _WaitNextEvent): asked to quit. Ours
+ * has the bridge, so any other one is older. */
+static void quit_other_agents(void)
+{
+    ProcessSerialNumber psn = {0, kNoProcess}, self;
+    GetCurrentProcess(&self);
+    while (GetNextProcess(&psn) == noErr) {
+        ProcessInfoRec info;
+        Boolean same = false;
+        info.processInfoLength = sizeof(info);
+        info.processName = NULL;
+        info.processAppSpec = NULL;
+        if (GetProcessInformation(&psn, &info) != noErr || info.processSignature != 'MxBr')
+            continue;
+        if (SameProcess(&psn, &self, &same) == noErr && !same)
+            do_quit_target(&psn);
+    }
+}
+
 /* Quit every running app (skipping ourselves) by sending kAEQuitApplication.
  * Used as a best-effort "ask apps to clean up" pass before the Shutdown
  * Manager kills everything. Returns once we've sent — no waiting; apps
@@ -1272,17 +1293,21 @@ __asm__(
     "    movem.l (%sp)+,%d0-%d2/%a0-%a1\n"
     "    rts\n");
 
-static void bridge_v2_init(void)
+/* False if there's no bridge for us: no trap (not our emulator), or
+ * another agent has it (one launched from the bridge dir and one in
+ * Startup Items). */
+static Boolean bridge_v2_init(void)
 {
     if (GetToolboxTrapAddress(kBridgeTrap) == GetToolboxTrapAddress(_Unimplemented))
-        return;                                 /* an emulator without it: nothing to do */
+        return false;
     if (bridge_call(kSelAgentHello, NULL, kBridgeProtocol) != kBridgeMagic)
-        return;
+        return false;
     GetCurrentProcess(&gTask.psn);
     gTask.tm.tmAddr = (TimerUPP)agent_tm_entry;
     InsTime((QElemPtr)&gTask.tm);
     PrimeTime((QElemPtr)&gTask.tm, 50);
     gV2 = true;
+    return true;
 }
 
 static void bridge_v2_stop(void)
@@ -1436,28 +1461,31 @@ int main(void)
     MaxApplZone();
 
     gLastCmd[0] = 6; memcpy(gLastCmd + 1, "(none)", 6);
-    /* Read :System Folder:Preferences:MacPhoenix.cfg first — every
-     * Host:MacPhoenix path we build below depends on the bridge dir
-     * resolved from cfg (or the legacy "Host:MacPhoenix" fallback). */
+    /* No bridge for us (another agent has it, or no trap): go. */
+    if (!bridge_v2_init())
+        return 0;
+    install_ae_handlers();
+    /* The bridge dir (the trap says; else MacPhoenix.cfg in Preferences):
+     * netcfg.txt is there. */
     br_cfg_load();
     build_menus();
-    install_ae_handlers();
     load_network_config();   /* Read netcfg.txt from the resolved bridge dir */
     open_status_window();
-    bridge_v2_init();
     draw_status();
 
-    /* Creating a visible window during startup yanked us to front. Hand
-     * focus back to Finder so we run as a true background agent; bridge
-     * commands will self-foreground explicitly when they arrive. Give
-     * Finder a tick to register in the process list before we query. */
+    /* Out of the way: launched in the background (the emulator's launcher),
+     * we leave the front as it is; started in front (Startup Items), the
+     * Finder gets it back. Bridge commands self-foreground when they need
+     * to. Give the Finder a tick to register in the process list. */
     {
+        ProcessSerialNumber front, self, finder_psn;
+        Boolean is_self = false;
         unsigned long ticks;
         Delay(6, &ticks);
-        ProcessSerialNumber finder_psn;
-        if (psn_for_creator('MACS', &finder_psn) == noErr) {
+        GetCurrentProcess(&self);
+        if (GetFrontProcess(&front) == noErr && SameProcess(&front, &self, &is_self) == noErr
+            && is_self && psn_for_creator('MACS', &finder_psn) == noErr)
             SetFrontProcess(&finder_psn);
-        }
     }
 
     EventRecord evt;
@@ -1465,6 +1493,10 @@ int main(void)
         if (WaitNextEvent(everyEvent, &evt, 6, NULL))
             handle_event(&evt);
         if (gV2) { report_front(); poll_v2(); }
+        {                                   /* older agents start from Startup Items */
+            static unsigned long last;      /* after us, as the Finder gets to them */
+            if (TickCount() - last > 300) { last = TickCount(); quit_other_agents(); }
+        }
         commit_pending_clip();
     }
 

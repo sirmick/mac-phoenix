@@ -16,6 +16,11 @@ void text_feed_install();
  * where the text feed is (after startup, every ROM machine). */
 void bridge_trap_install();
 
+/* BridgeAgent launched from the bridge dir on the Host volume by a Time
+ * Manager task and a Notification Manager response procedure, once per
+ * boot (bridge_trap_install calls it). */
+void bridge_launcher_install();
+
 /* The patches' EmulOps: before StdText runs, and after the original of
  * which (D0: 1 StdText, 2 CopyBits, 3 ScrollRect) returned. sp: A7 at the
  * EmulOp (the caller's return address on top), a5: A5. */

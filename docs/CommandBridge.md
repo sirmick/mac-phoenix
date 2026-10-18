@@ -33,7 +33,7 @@ Implemented in `command_bridge_read()` (`src/core/command_bridge.cpp`). Safe to 
 
 ### 2. Action Commands (BridgeAgent)
 
-A small Retro68 m68k application (`BridgeAgent/BridgeAgent.c`) installed in `:System Folder:Startup Items:` of every test disk image. Finder launches it at desktop time. The same 68k binary runs natively on System 7.x, under Mac OS 9's built-in 68k emulator on PPC, and in Executor.
+A small Retro68 m68k application (`BridgeAgent/BridgeAgent.c`). The emulator launches it from the bridge dir on the Host volume at desktop time (see Launching the agent); nothing is installed on the boot disk. The same 68k binary runs natively on System 7.x, under Mac OS 9's built-in 68k emulator on PPC, and in Executor.
 
 ```
 Host (HTTP worker)                     BridgeAgent (guest app)
@@ -68,11 +68,13 @@ choice, is a real trap on these Systems.) `tests/guest/bridgedemo` (ctest
 
 | Selector | Who | What |
 |----------|-----|------|
-| `AGENT_HELLO` (0x10) | agent | D1 = protocol (2), 0 = going away; answers a magic |
+| `AGENT_HELLO` (0x10) | agent | D1 = protocol (2), 0 = going away; answers a magic, 0 if another agent has the bridge |
 | `AGENT_PENDING` (0x13) | agent's Time Manager task | 1 if a request waits |
 | `NEXT` (0x11) | agent | copies the request to A0 (D1 bytes); -1 none, `0x80000000\|len` if it doesn't fit |
 | `REPLY` (0x12) | agent | the answer, A0/D1 |
 | `STATE` (0x14) | agent | the front process's name |
+| `LAUNCH_POST` (0x18), `LAUNCH_CHECK` (0x15), `LAUNCHED` (0x16) | the launcher | see Launching the agent |
+| `BRIDGE_DIR` (0x17) | agent, MacBrowser | the bridge dir's guest path |
 
 * **The slot** (`IPCBridgeSlot`, `ipc_protocol.h`): one request at a time,
   with ids. In the IPC buffer when the CPU runs in a child process (the ROM
@@ -151,8 +153,6 @@ also patched `_WaitNextEvent` globally, keeping the original at a fixed
 address (`0x0210FFC0`) that is plain RAM at the default 64 MB; that was
 what killed the agent under Apple's Installer. Both are gone.
 
-Next: delivering the agent without writing to the `--disk` images.
-
 The HTTP server doesn't hold every request behind a long one: a pool of
 worker threads serves connections, the bridge's routes run concurrently,
 the rest one at a time.
@@ -161,7 +161,39 @@ the rest one at a time.
 
 ### Init (`command_bridge_init()`)
 
-Called once from `main.cpp` after `EmulatorConfig` is finalized. No-op when `bridge_enabled` is false; otherwise logs the bridge dir to stderr and runs `provisioning/install_bridge_agent.sh` against every entry in `cfg.disk_paths`. The script skips disks without a `:System Folder:` (data disks, CDROM-style images), and (re)installs `BridgeAgent.bin` into `:System Folder:Startup Items:` on the rest. Runs synchronously before the CPU subprocess is spawned, so disk-image writes don't race the emulator. Executor's images are never written: it runs on a System Folder on the host (`executor_systems.cpp`).
+Called once from `main.cpp` after `EmulatorConfig` is finalized. No-op when `bridge_enabled` is false; otherwise logs the bridge dir and unpacks `BridgeAgent.bin` (MacBinary) into it as the Host volume keeps a Mac file: `BridgeAgent`, `.rsrc/BridgeAgent`, `.finf/BridgeAgent`. Executor runs on a System Folder on the host and puts the agent in its Startup Items (`executor_systems.cpp`).
+
+### Launching the agent (ROM machines)
+
+`bridge_launcher_install()` (`text_feed.cpp`, after startup with the trap)
+puts two pieces of 68k code in the system heap:
+
+* a **Time Manager task**, every 500 ms: asks the trap `LAUNCH_POST`
+  (-1 stop, 0 not now, 1 post) and posts a Notification Manager request
+  (`NMInstall` is interrupt-safe);
+* the request's **response procedure**, which the Notification Manager
+  calls at event time in the current application's context (native ones
+  too: the classic way an INIT launches an application). It removes the
+  request and asks `LAUNCH_CHECK`: yes once per boot, a second after the
+  Finder was first seen running (by the task or the procedure: 8.6's Setup
+  Assistant keeps the Finder in the back), from whatever application is
+  current; then `FSMakeFSSpec` of
+  `Host:MacPhoenix:<pid>:BridgeAgent` and `_Launch` (launchContinue,
+  launchDontSwitch), the result reported with `LAUNCHED`.
+
+Not before System 7 (no Process Manager: a launch would replace the
+Finder), and not if an agent has said hello already (one installed in
+Startup Items by hand or by an older emulator): the trap refuses a second
+agent's `AGENT_HELLO`, and that agent quits; a new agent asks any older
+one (creator `MxBr`) to quit, every 5 s (Startup Items open after it).
+Launched in the background, the agent leaves the front process as it is;
+started in front (from Startup Items) it gives the front to the Finder.
+`/api/ui` answers for the front process the agent reports (`STATE`): on
+8.6 and 9 a background-only one (Control Strip Extension) often runs at
+the sampled tick, its window list looking like a front window. The agent learns the bridge dir with
+`BRIDGE_DIR` (`MacPhoenix.cfg` in Preferences is the fallback,
+`bridge_cfg.c`). A `_WaitNextEvent` patch was tried first: Mac OS 9's
+native Finder doesn't call it through the trap table.
 
 ### Per-command flow (`bridge_command()` in `api_handlers.cpp`)
 
@@ -218,7 +250,7 @@ A checkbox in Settings → "Enable automation bridge (BridgeAgent + ExtFS)" togg
 | `src/config/emulator_config.cpp` | `bridge_enabled`, `bridge_dir`, `--bridge` CLI flag, auto extfs mount |
 | `BridgeAgent/BridgeAgent.c` | BridgeAgent source (Retro68, m68k) |
 | `BridgeAgent/BridgeAgent.bin` | Pre-built MacBinary (committed) |
-| `provisioning/install_bridge_agent.sh` | hfsutils install of `BridgeAgent.bin` into `:System Folder:Startup Items:` |
+| `provisioning/install_bridge_agent.sh` | By hand: hfsutils install of `BridgeAgent.bin` into an image's `:System Folder:Startup Items:` |
 | `tests/guest/bridgedemo/` | The trap alone, on every machine |
 | `tests/guest/suite/` | MacPhoenixSuite, the guest test suite (fat C app, `tools/mpw/mpw build tests/guest/suite -o tests/guest/suite`) |
 | `tests/test_command_bridge.sh` | Integration test for `/api/app`, `/api/windows`, `/api/wait`, `/api/launch` |

@@ -89,6 +89,7 @@
 #include "mac_roman.h"
 #include "text_feed.h"
 #include "guest_bridge.h"
+#include "command_bridge.h"
 
 bool text_feed_enabled = true;
 
@@ -943,6 +944,117 @@ void bridge_trap_install()
     WriteMacInt16(stub + 2, M68K_RTS);
     WriteMacInt32(table + 4 * (trap & 0x3FF), stub);
     fprintf(stderr, "[bridge2] trap %04x installed: stub %08x\n", trap, stub);
+    bridge_launcher_install();
+}
+
+/* BridgeAgent from the Host volume, not the boot disk: the host unpacks it
+ * into the bridge dir (command_bridge_init), and a Time Manager task and a
+ * Notification Manager request launch it from there, once per boot. The
+ * task asks the trap every 500 ms whether to post the request
+ * (LAUNCH_POST: -1 stop, 0 not now, 1 post); the Notification Manager calls
+ * the request's response procedure at event time in the current
+ * application's context, native ones included (the classic way an INIT
+ * launches an application), which removes it and, if the trap says so
+ * (LAUNCH_CHECK: the Finder's time), launches the agent in the background.
+ *
+ * Time Manager task (A1 the task; NMInstall is interrupt-safe):
+ *   movem.l d0-d2/a0-a1,-(sp); moveq #LAUNCH_POST,d0; _Bridge
+ *   tst.l d0; bmi.s out; beq.s again; movea.l #nm,a0; _NMInstall
+ *   again: movea.l #tm,a0; move.l #500,d0; _PrimeTime
+ *   out: movem.l (sp)+,d0-d2/a0-a1; rts
+ * Response procedure (pascal, the NMRec on the stack):
+ *   movea.l 4(sp),a0; _NMRemove
+ *   moveq #LAUNCH_CHECK,d0; _Bridge; tst.l d0; beq.w done
+ *   FSMakeFSSpec(0, 0, path, &spec); tst.w d0; bne.w report
+ *   movea.l #lpb,a0; _Launch
+ *   report: move.l d0,d1; moveq #LAUNCHED,d0; _Bridge
+ *   done: movea.l (sp)+,a0; addq.l #4,sp; jmp (a0) */
+void bridge_launcher_install()
+{
+    std::string dir = command_bridge_guest_dir();
+    guest_bridge::State &st = guest_bridge::state();
+    st.guest_dir = dir;
+    std::string path = dir + ":BridgeAgent";
+    if (dir.empty() || path.size() > 255) return;           /* no bridge */
+    enum { kTask = 0, kResp = 64, kTM = 160, kNM = 192, kSpec = 232, kLPB = 304, kPath = 352,
+           kSize = 616 };
+    uint32_t blk = new_ptr_sys(kSize);
+    if (!blk) return;
+
+    WriteMacInt16(blk + kNM + 4, 8);                        /* qType = nmType */
+    WriteMacInt32(blk + kNM + 28, blk + kResp);             /* nmResp; no mark, icon, sound, text */
+    WriteMacInt16(blk + kLPB + 6, 0x4C43);                  /* launchBlockID = extendedBlock */
+    WriteMacInt32(blk + kLPB + 8, 32);                      /* launchEPBLength = extendedBlockLen */
+    WriteMacInt16(blk + kLPB + 14, 0x4000 | 0x0800 | 0x0200);   /* launchContinue, NoFileFlags,
+                                                                   DontSwitch */
+    WriteMacInt32(blk + kLPB + 16, blk + kSpec);            /* launchAppSpec */
+    WriteMacInt8(blk + kPath, (uint8_t)path.size());
+    for (size_t i = 0; i < path.size(); i++) WriteMacInt8(blk + kPath + 1 + i, (uint8_t)path[i]);
+
+    uint32_t p = blk + kTask;
+    auto w16 = [&](uint16_t v) { WriteMacInt16(p, v); p += 2; };
+    auto w32 = [&](uint32_t v) { w16(v >> 16); w16(v & 0xFFFF); };
+    auto here = [&]() { return p; };
+    auto patch8 = [&](uint32_t at) { WriteMacInt8(at + 1, (uint8_t)(p - (at + 2))); };
+    auto patch16 = [&](uint32_t at) { WriteMacInt16(at, (uint16_t)(p - at)); };
+
+    w16(0x48E7); w16(0xE0C0);                               /* movem.l d0-d2/a0-a1,-(sp) */
+    w16(0x7000 | guest_bridge::kLaunchPost);                /* moveq #LAUNCH_POST,d0 */
+    w16(guest_bridge::kTrap);
+    w16(0x4A80);                                            /* tst.l d0 */
+    uint32_t to_out = here(); w16(0x6B00);                  /* bmi.s out */
+    uint32_t to_again = here(); w16(0x6700);                /* beq.s again */
+    w16(0x207C); w32(blk + kNM);                            /* movea.l #nm,a0 */
+    w16(0xA05E);                                            /* _NMInstall */
+    patch8(to_again);
+    w16(0x207C); w32(blk + kTM);                            /* movea.l #tm,a0 */
+    w16(0x203C); w32(500);                                  /* move.l #500,d0 */
+    w16(0xA05A);                                            /* _PrimeTime */
+    patch8(to_out);
+    w16(0x4CDF); w16(0x0307);                               /* movem.l (sp)+,d0-d2/a0-a1 */
+    w16(M68K_RTS);
+
+    p = blk + kResp;
+    w16(0x206F); w16(4);                                    /* movea.l 4(sp),a0 */
+    w16(0xA05F);                                            /* _NMRemove */
+    w16(0x7000 | guest_bridge::kLaunchCheck);               /* moveq #LAUNCH_CHECK,d0 */
+    w16(guest_bridge::kTrap);
+    w16(0x4A80);                                            /* tst.l d0 */
+    w16(0x6700); uint32_t to_done = here(); w16(0);         /* beq.w done */
+    w16(0x4267);                                            /* clr.w -(sp): the OSErr */
+    w16(0x4267);                                            /* clr.w -(sp): vRefNum */
+    w16(0x42A7);                                            /* clr.l -(sp): dirID */
+    w16(0x4879); w32(blk + kPath);                          /* pea path */
+    w16(0x4879); w32(blk + kSpec);                          /* pea spec */
+    w16(0x7001);                                            /* moveq #1,d0 */
+    w16(0xAA52);                                            /* _HighLevelFSDispatch: FSMakeFSSpec */
+    w16(0x301F);                                            /* move.w (sp)+,d0 */
+    w16(0x4A40);                                            /* tst.w d0 */
+    w16(0x6600); uint32_t to_report = here(); w16(0);       /* bne.w report */
+    w16(0x207C); w32(blk + kLPB);                           /* movea.l #lpb,a0 */
+    w16(0xA9F2);                                            /* _Launch */
+    patch16(to_report);
+    w16(0x2200);                                            /* move.l d0,d1 */
+    w16(0x7000 | guest_bridge::kLaunched);                  /* moveq #LAUNCHED,d0 */
+    w16(guest_bridge::kTrap);
+    patch16(to_done);
+    w16(0x205F);                                            /* movea.l (sp)+,a0 */
+    w16(0x588F);                                            /* addq.l #4,sp */
+    w16(M68K_JMP_A0);
+
+    st.launch_armed = true;
+    st.launch_spec = blk + kSpec;
+    st.launched = st.posted = false;
+    st.finder_seen = guest_bridge::Clock::time_point{};
+    WriteMacInt32(blk + kTM + 6, blk + kTask);              /* tmAddr */
+    M68kRegisters r = {};
+    r.a[0] = blk + kTM;
+    Execute68kTrap(0xA058, &r);                             /* InsTime */
+    r = {};
+    r.a[0] = blk + kTM;
+    r.d[0] = 1000;
+    Execute68kTrap(0xA05A, &r);                             /* PrimeTime */
+    fprintf(stderr, "[bridge2] BridgeAgent launcher: %s\n", path.c_str());
 }
 
 void text_feed_pre(uint32_t sp, uint32_t a5)

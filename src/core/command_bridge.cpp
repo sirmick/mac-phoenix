@@ -21,7 +21,6 @@
 #include "boot_progress.h"
 #include "../config/emulator_config.h"
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #include <chrono>
 #include <cstdio>
@@ -170,59 +169,60 @@ std::string command_bridge_guest_dir() {
     return "Host:" + tail;
 }
 
-// When the bridge is enabled, install BridgeAgent.bin into
-// :System Folder:Startup Items: on every configured non-CDROM disk that has a
-// System Folder. The script handles HFS / non-system-disk skipping.
-// Run before the emulator opens the disks (i.e. from command_bridge_init).
-static void provision_bridge_agent_disks() {
+// BridgeAgent.bin (MacBinary) unpacked into the bridge dir as the Host
+// volume's ExtFS keeps a Mac file: data fork <dir>/BridgeAgent, resource
+// fork .rsrc/BridgeAgent, Finder info .finf/BridgeAgent (FInfo + FXInfo).
+// The ROM machines launch it from there (bridge_launcher_install), so the
+// boot disks are never written. Executor has its own (executor_systems.cpp).
+static void unpack_bridge_agent() {
     auto& cfg = config::EmulatorConfig::instance();
-    if (cfg.disk_paths.empty()) return;
-    // Executor boots from a System Folder on the host and mounts images
-    // read-only (executor_systems.cpp provisions the folder): never write
-    // into its images, the System's own among them.
-    if (cfg.backend == config::Backend::EXECUTOR) return;
-
-    std::string script = resolve_repo_relative("provisioning/install_bridge_agent.sh");
-    if (script.empty()) {
-        fprintf(stderr, "[Bridge] provisioning script not found — "
-                        "skipping BridgeAgent install\n");
+    if (cfg.backend == config::Backend::EXECUTOR || cfg.bridge_dir.empty()) return;
+    std::string bin = command_bridge_agent_bin();
+    FILE* f = bin.empty() ? nullptr : fopen(bin.c_str(), "rb");
+    if (!f) {
+        fprintf(stderr, "[Bridge] BridgeAgent.bin not found — no agent\n");
         return;
     }
-
-    /* Derive the Mac-side colon path for our pid-keyed bridge dir.
-     * cfg.bridge_dir on the host is something like
-     *   /home/mick/storage/MacPhoenix/12345
-     * which the guest sees as
-     *   Host:MacPhoenix:12345
-     * because the first --extfs root surfaces as the "Host" volume.
-     * (See user_strings.cpp STR_EXTFS_VOLUME_NAME.) The install
-     * script writes that string into :System Folder:Preferences:
-     * MacPhoenix.cfg in every disk image so guest apps can read it
-     * at startup and prefix all their bridge file paths with the
-     * right pid. Skip the env if bridge_dir is empty — script then
-     * falls back to legacy paths. */
-    std::string bridge_bpath = command_bridge_guest_dir();
-
-    std::string cmd;
-    if (!bridge_bpath.empty()) {
-        cmd = "BRIDGE_BPATH='" + bridge_bpath + "' ";
+    std::string blob;
+    char buf[65536];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof buf, f)) > 0) blob.append(buf, n);
+    fclose(f);
+    auto u8 = [&](size_t at) { return (uint8_t)blob[at]; };
+    auto u32 = [&](size_t at) {
+        return (uint32_t)u8(at) << 24 | (uint32_t)u8(at + 1) << 16 | (uint32_t)u8(at + 2) << 8 | u8(at + 3);
+    };
+    if (blob.size() < 128 || u8(0) != 0 || u8(74) != 0) {
+        fprintf(stderr, "[Bridge] %s: not MacBinary\n", bin.c_str());
+        return;
     }
-    cmd += "'" + script + "'";
-    for (const auto& p : cfg.disk_paths) {
-        if (p.empty()) continue;
-        cmd += " '" + p + "'";
+    size_t dlen = u32(83), rlen = u32(87);
+    size_t rsrc_at = 128 + ((dlen + 127) & ~(size_t)127);
+    if (rsrc_at + rlen > blob.size()) {
+        fprintf(stderr, "[Bridge] %s: truncated\n", bin.c_str());
+        return;
     }
-
-    fprintf(stderr, "[Bridge] Provisioning BridgeAgent across %zu configured "
-                    "disk(s) (bpath=%s)...\n",
-            cfg.disk_paths.size(),
-            bridge_bpath.empty() ? "<legacy>" : bridge_bpath.c_str());
-    int rc = std::system(cmd.c_str());
-    if (rc != 0) {
-        fprintf(stderr, "[Bridge] WARNING: provisioning script exited with "
-                        "status %d — guest may not auto-launch BridgeAgent\n",
-                        WEXITSTATUS(rc));
+    std::string finf(32, '\0');
+    finf.replace(0, 8, blob, 65, 8);                       // type, creator
+    finf[8] = blob[73];                                     // Finder flags, high byte
+    finf[9] = blob[101];                                    // low byte (MacBinary II)
+    finf.replace(10, 6, blob, 75, 6);                       // location, folder
+    struct Part { const char* sub; std::string bytes; } parts[] = {
+        {"", blob.substr(128, dlen)}, {"/.rsrc", blob.substr(rsrc_at, rlen)}, {"/.finf", finf},
+    };
+    for (const auto& part : parts) {
+        std::string dir = cfg.bridge_dir + part.sub;
+        mkdir(dir.c_str(), 0755);
+        std::string path = dir + "/BridgeAgent";
+        FILE* o = fopen(path.c_str(), "wb");
+        if (!o || fwrite(part.bytes.data(), 1, part.bytes.size(), o) != part.bytes.size()) {
+            fprintf(stderr, "[Bridge] writing %s failed\n", path.c_str());
+            if (o) fclose(o);
+            return;
+        }
+        fclose(o);
     }
+    fprintf(stderr, "[Bridge] BridgeAgent unpacked into %s\n", cfg.bridge_dir.c_str());
 }
 
 void command_bridge_init() {
@@ -230,7 +230,7 @@ void command_bridge_init() {
     if (!cfg.bridge_enabled) return;
     fprintf(stderr, "[Bridge] Enabled (dir=%s)\n",
             cfg.bridge_dir.empty() ? "<none>" : cfg.bridge_dir.c_str());
-    provision_bridge_agent_disks();
+    unpack_bridge_agent();
 }
 
 // ============================================================================

@@ -826,10 +826,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
     // --bridge: per-instance ExtFS dir for bridge file I/O. Each
     // mac-phoenix gets its own subfolder under <extfs>/MacPhoenix/
     // keyed by host pid, so two concurrent processes don't fight
-    // over the same handshake files. The guest learns this pid by
-    // reading :System Folder:Preferences:MacPhoenix.cfg, which the
-    // bridge-agent installer writes alongside BridgeAgent.bin into
-    // each disk image — see provisioning/install_bridge_agent.sh.
+    // over the same files. The guest learns the dir through the bridge
+    // trap (BRIDGE_DIR, guest_bridge.h); BridgeAgent runs from it.
     if (config.bridge_enabled) {
         std::string root;
         if (config.extfs_paths.empty()) {

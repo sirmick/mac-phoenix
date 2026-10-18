@@ -90,8 +90,8 @@ video, input, automation bridge) works fine without it.
 
 #### BridgeAgent (optional — to rebuild the guest helper from source)
 
-The committed `BridgeAgent/BridgeAgent.bin` is what gets
-installed into your Mac OS guest's Startup Items, so most users never
+The committed `BridgeAgent/BridgeAgent.bin` is what the emulator
+launches in your Mac OS guest, so most users never
 need to rebuild it. To rebuild from C source you need the Retro68
 m68k cross-toolchain:
 
@@ -381,9 +381,9 @@ Launch apps, quit apps, and trigger a graceful guest-OS shutdown or restart — 
 How it works:
 
 - **Read commands** (`/api/app`, `/api/windows`, `/api/wait`) peek Mac low memory (`CurApName`, `WindowList`, `Ticks`) directly from the 60 Hz IRQ — no guest cooperation required.
-- **Action commands** (`/api/launch`, `/api/quit`, `/api/shutdown`, `/api/restart`) go to a tiny guest-side app (`BridgeAgent`, a Retro68-built m68k binary) installed in `:System Folder:Startup Items:` through the bridge trap `$ABE5`; it drives the Process Manager / Shutdown Manager / Apple Events and answers the same way.
+- **Action commands** (`/api/launch`, `/api/quit`, `/api/shutdown`, `/api/restart`) go to a tiny guest-side app (`BridgeAgent`, a Retro68-built m68k binary) through the bridge trap `$ABE5`; it drives the Process Manager / Shutdown Manager / Apple Events and answers the same way.
 
-When `--bridge` is on, a fresh temp directory is created under `/tmp/macemu-bridge-XXXXXX` and auto-mounted as ExtFS volume `Host:` inside the guest. `provisioning/install_bridge_agent.sh` is invoked against every `--disk` to (re)install `BridgeAgent.bin` into the System Folder. `/api/status` reports `bridge_agent_connected` once the agent has said hello.
+When `--bridge` is on, a fresh temp directory is created under `/tmp/macemu-bridge-XXXXXX` and auto-mounted as ExtFS volume `Host:` inside the guest. The emulator unpacks `BridgeAgent.bin` into the bridge dir and launches it from there once the Finder is up (System 7 and later); the `--disk` images are never written. `/api/status` reports `bridge_agent_connected` once the agent has said hello.
 
 ```bash
 # Launch an app and wait for it to come up
@@ -534,7 +534,7 @@ export PATH="$PWD/toolchain/retro68/bin:$PATH"
 make -C BridgeAgent
 ```
 
-The `.bin` is installed into `:System Folder:Startup Items:` of every `--disk` automatically when the bridge is enabled (see [Automation bridge](#automation-bridge)); `provisioning/install_bridge_agent.sh <image>` does the same thing manually.
+With the bridge enabled the emulator unpacks the `.bin` into its bridge dir on the Host volume and launches it from there at desktop time (see [Automation bridge](#automation-bridge)); the disk images aren't touched. `provisioning/install_bridge_agent.sh <image>` installs it into an image's Startup Items instead, for an emulator without the launcher.
 
 ### Guest test suite app
 

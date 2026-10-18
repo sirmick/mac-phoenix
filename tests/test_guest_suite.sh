@@ -27,8 +27,8 @@
 # writable beside it, MacPerl included).
 #
 # Prerequisites:
-#   - Disk image with MacPerl installed and BridgeAgent in Startup Items
-#     (provisioning/install_bridge_agent.sh)
+#   - Disk image with MacPerl installed (BridgeAgent: the emulator launches
+#     it from the bridge dir)
 #   - ROM and disk image available
 #
 set -euo pipefail
@@ -257,7 +257,7 @@ done
 
 sleep 2  # Finder settle
 
-# BridgeAgent says hello once it is running (Startup Items); the
+# BridgeAgent says hello once it is running (launched at desktop); the
 # boot phase can say Finder before that (Executor reports it at the first
 # frame), so wait for the agent before dispatching.
 echo -n "Waiting for BridgeAgent..."

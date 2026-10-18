@@ -1,6 +1,9 @@
 /*
  *  bridge_cfg.c — see bridge_cfg.h.
  *
+ *  The bridge dir comes from the emulator through the bridge trap; the
+ *  cfg file is for emulators without it.
+ *
  *  Cfg format (key=value, one per line, CR or LF terminated):
  *    bridge_dir=Host:MacPhoenix:12345
  *
@@ -13,6 +16,8 @@
 #include <Files.h>
 #include <Folders.h>
 #include <Memory.h>
+#include <Traps.h>
+#include <OSUtils.h>
 
 #include <stdint.h>
 #include <string.h>
@@ -49,11 +54,37 @@ static void rtrim(char *s)
     }
 }
 
+/* The emulator's answer through the bridge trap ($ABE5, BRIDGE_DIR):
+ * its length, 0 if there is no trap or no answer. */
+static long bridge_dir_from_trap(char *out, long cap)
+{
+    if (GetToolboxTrapAddress(0xABE5) == GetToolboxTrapAddress(_Unimplemented))
+        return 0;
+    register long d0 __asm__("d0") = 0x17;
+    register char *a0 __asm__("a0") = out;
+    register long d1 __asm__("d1") = cap;
+    __asm__ volatile(".short 0xABE5"
+                     : "+d"(d0), "+a"(a0), "+d"(d1)
+                     :
+                     : "d2", "a1", "memory", "cc");
+    return d0 > 0 && d0 < cap ? d0 : 0;
+}
+
 void br_cfg_load(void)
 {
     if (s_loaded) return;
     s_loaded = 1;
     copy_prefix(kFallbackPrefix);
+
+    /* The emulator knows: the agent runs from the bridge dir, the boot
+     * disk carries no cfg. */
+    {
+        long n = bridge_dir_from_trap(s_prefix, sizeof(s_prefix) - 1);
+        if (n > 0) {
+            s_prefix[n] = '\0';
+            return;
+        }
+    }
 
     /* FindFolder finds the Preferences folder on the BOOT disk
      * regardless of which volume we were launched from. Critical

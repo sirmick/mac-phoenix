@@ -118,7 +118,7 @@ check() {
 
 # Test 1: /api/app returns Finder (passive field from shared memory)
 echo "Test 1: GET /api/app"
-# The desktop milestone can come before the Startup Items run, and
+# The desktop milestone can come before BridgeAgent is launched, and
 # BridgeAgent is the current app for a moment while it starts; give the
 # Finder a few seconds to be in front again.
 for i in $(seq 1 10); do
@@ -148,6 +148,11 @@ check "/api/wait app=Finder" "$WAIT_APP" '"ok": true'
 # returns to Finder. BridgeAgent is transiently front while it processes the
 # request (especially on PPC), so poll for a few seconds.
 echo "Test 5: POST /api/launch (bad path)"
+# The emulator launches BridgeAgent once the Finder is up: wait for its hello.
+for i in $(seq 1 30); do
+    curl -sf "http://localhost:$PORT/api/status" | grep -q '"bridge_agent_connected": true' && break
+    sleep 0.5
+done
 LAUNCH=$(curl -s --max-time 10 -X POST "http://localhost:$PORT/api/launch" -d '{"path": "Macintosh HD:NoSuchApp"}' || echo "CURL_FAILED")
 check "/api/launch returns response" "$LAUNCH" '"success"'
 APP_AFTER=""

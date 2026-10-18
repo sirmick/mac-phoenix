@@ -85,17 +85,12 @@ collide with a running emulator on :11000.
 
 ### Guest Tests (BridgeAgent + MacPerl)
 
-`guest_suite{,_761,_ppc}` (label `guest`) need a disk image with
-**BridgeAgent** installed in `:System Folder:Startup Items:` so Finder
-auto-launches it at desktop time. The agent receives `/api/launch` calls,
+`guest_suite{,_761,_ppc}` (label `guest`) need **BridgeAgent**, which
+the emulator launches from its bridge dir at desktop time (nothing is
+installed on the disk). The agent receives `/api/launch` calls,
 finds MacPerl by creator code, and dispatches the script via a
 `'misc'`/`'dosc'` AppleEvent. MacPerl writes `test_results.txt` back into
 the same ExtFS share the test reads from.
-
-```bash
-# (Re)install BridgeAgent.bin into the test disk images
-provisioning/install_bridge_agent.sh
-```
 
 `BridgeAgent/BridgeAgent.bin` is committed; the install script `hcopy`s it
 into the image. `cmake --build build` rebuilds it from `BridgeAgent.c`
