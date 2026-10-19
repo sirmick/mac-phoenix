@@ -307,7 +307,8 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
 
 bool EmulatorSubprocess::start()
 {
-    if (child_process_ && child_process_->state() != QProcess::NotRunning) {
+    reap_if_dead();     // one that exited on its own (a guest shutdown) is gone
+    if (child_process_ && child_pid_ > 0 && child_process_->state() != QProcess::NotRunning) {
         fprintf(stderr, "[EmulatorSubprocess] Already running (pid %d)\n", child_pid_);
         return false;
     }
@@ -488,21 +489,27 @@ void EmulatorSubprocess::reap_if_dead()
     if (!child_process_ || child_pid_ <= 0) return;
 
     // The parent has no Qt event loop, so QProcess never hears about a
-    // child that dies on its own: state() stays Running and the child
-    // stays a zombie. Ask the kernel without reaping (WNOWAIT), then let
-    // waitForFinished() do the reap so QProcess records the exit status.
+    // child that dies on its own: state() stays Running. Ask the kernel
+    // without reaping (WNOWAIT), then let waitForFinished() collect it so
+    // QProcess records the exit status. ECHILD: already reaped (Qt's own
+    // child handling does that), so it's gone just the same.
+    bool gone = false;
 #ifndef _WIN32
     if (child_process_->state() != QProcess::NotRunning) {
         siginfo_t si;
         memset(&si, 0, sizeof(si));
-        if (waitid(P_PID, child_pid_, &si, WEXITED | WNOHANG | WNOWAIT) != 0 ||
-            si.si_pid == 0)
+        if (waitid(P_PID, child_pid_, &si, WEXITED | WNOHANG | WNOWAIT) == 0) {
+            if (si.si_pid == 0)
+                return;                         // still running
+        } else if (errno != ECHILD) {
             return;
+        }
         child_process_->waitForFinished(1000);
+        gone = true;
     }
 #endif
 
-    if (child_process_->state() == QProcess::NotRunning) {
+    if (gone || child_process_->state() == QProcess::NotRunning) {
         const QProcess::ExitStatus es = child_process_->exitStatus();
         const int code = child_process_->exitCode();
         if (es == QProcess::CrashExit) {
