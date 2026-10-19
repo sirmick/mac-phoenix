@@ -598,7 +598,8 @@ Response APIRouter::handle_emulator_start(const Request& req) {
         }
         fprintf(stderr, "[API] Starting subprocess\n");
         if (!ctx_->subprocess->start()) {
-            return Response::json("{\"success\": false, \"error\": \"Failed to start subprocess\"}");
+            return Response::json("{\"success\": false, \"error\": \"" +
+                                  storage::json_escape(ctx_->subprocess->start_error()) + "\"}");
         }
         // Reset WebRTC peer state so all peers request fresh keyframes
         webrtc::reset_webrtc_peers();

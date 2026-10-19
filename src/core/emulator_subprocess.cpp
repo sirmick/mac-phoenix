@@ -98,10 +98,24 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     char exe_path[4096];
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     if (len <= 0) {
-        fprintf(stderr, "[EmulatorSubprocess] Failed to read /proc/self/exe\n");
+        fail_start("can't read /proc/self/exe");
         return {};
     }
     exe_path[len] = '\0';
+
+    // The child is this binary again. A rebuild while we run replaces the
+    // file: the kernel then reports our old path with " (deleted)", and a
+    // new binary at the path may not speak this one's IPC layout.
+    static const char kDeleted[] = " (deleted)";
+    const size_t kDeletedLen = sizeof(kDeleted) - 1;
+    if (static_cast<size_t>(len) > kDeletedLen &&
+        strcmp(exe_path + len - kDeletedLen, kDeleted) == 0) {
+        exe_path[len - kDeletedLen] = '\0';
+        fail_start(std::string(exe_path) +
+                   " was rebuilt or replaced since this server started; "
+                   "restart the server to run the new build");
+        return {};
+    }
 
     std::vector<std::string> args;
     args.push_back(exe_path);
@@ -305,13 +319,20 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     return args;
 }
 
+bool EmulatorSubprocess::fail_start(std::string why)
+{
+    fprintf(stderr, "[EmulatorSubprocess] Start failed: %s\n", why.c_str());
+    start_error_ = std::move(why);
+    return false;
+}
+
 bool EmulatorSubprocess::start()
 {
     reap_if_dead();     // one that exited on its own (a guest shutdown) is gone
     if (child_process_ && child_pid_ > 0 && child_process_->state() != QProcess::NotRunning) {
-        fprintf(stderr, "[EmulatorSubprocess] Already running (pid %d)\n", child_pid_);
-        return false;
+        return fail_start("already running (pid " + std::to_string(child_pid_) + ")");
     }
+    start_error_.clear();
 
     // Clear stale SHM/eventfd from any previous session so the encoder
     // thread sees nullptr and resets its reconnect state (ipc_was_connected,
@@ -385,10 +406,9 @@ bool EmulatorSubprocess::start()
     if (log_pipe[1] >= 0) close(log_pipe[1]);
 #endif
     if (!child_process_->waitForStarted(5000)) {
-        fprintf(stderr, "[EmulatorSubprocess] QProcess failed to start: %s\n",
-                child_process_->errorString().toUtf8().constData());
+        std::string why = child_process_->errorString().toStdString();
         child_process_.reset();
-        return false;
+        return fail_start("child failed to start: " + why);
     }
 
     child_pid_ = static_cast<pid_t>(child_process_->processId());
@@ -400,13 +420,12 @@ bool EmulatorSubprocess::start()
         std::this_thread::sleep_for(std::chrono::milliseconds(25));
 
         if (child_process_->state() == QProcess::NotRunning) {
-            fprintf(stderr, "[EmulatorSubprocess] Child exited before connection (code %d)\n",
-                    child_process_->exitCode());
-            record_exit(child_process_->exitStatus() == QProcess::CrashExit,
-                        child_process_->exitCode());
+            const int code = child_process_->exitCode();
+            record_exit(child_process_->exitStatus() == QProcess::CrashExit, code);
             child_process_.reset();
             child_pid_ = -1;
-            return false;
+            return fail_start("child exited before connecting (code " +
+                              std::to_string(code) + "); see the server log");
         }
 
         if (ipc_client_.connect(child_pid_)) {
@@ -416,12 +435,11 @@ bool EmulatorSubprocess::start()
     }
 
     if (!connected) {
-        fprintf(stderr, "[EmulatorSubprocess] Failed to connect to child after 10s\n");
         child_process_->kill();
         child_process_->waitForFinished(2000);
         child_process_.reset();
         child_pid_ = -1;
-        return false;
+        return fail_start("no IPC connection from the child after 10 s");
     }
 
     fprintf(stderr, "[EmulatorSubprocess] Connected to child IPC\n");

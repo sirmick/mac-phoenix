@@ -46,6 +46,9 @@ public:
     };
     bool last_exit(ChildExit& out) const;
 
+    // Why the last start() failed ("" after a successful one).
+    const std::string& start_error() const { return start_error_; }
+
     // IPC access (for API handlers)
     IPCClient* ipc_client() { return &ipc_client_; }
     const IPCClient* ipc_client() const { return &ipc_client_; }
@@ -72,6 +75,8 @@ private:
     ChildExit exit_;
     bool have_exit_ = false;
     void record_exit(bool crashed, int code);
+    std::string start_error_;
+    bool fail_start(std::string why);
 
     // Atomic pointers set by encoder thread for zero-copy IPC reads
     std::atomic<IPCBuffer*>* ipc_shm_atom_ = nullptr;

@@ -5121,6 +5121,11 @@ async function startEmulator() {
     try {
         const res = await fetch(getApiUrl('emulator/start'), { method: 'POST' });
         const data = await res.json();
+        if (data.success === false) {
+            logger.error('Failed to start emulator', { error: data.error });
+            alert('Could not start the emulator: ' + (data.error || 'unknown error'));
+            return;
+        }
         logger.info('Start emulator', { message: data.message });
     } catch (e) {
         logger.error('Failed to start emulator', { error: e.message });
