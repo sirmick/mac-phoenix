@@ -1,4 +1,6 @@
 {
+ "title": "Mac OS 7.6.1",
+ "tags": ["68k", "ppc"],
  "note": "The standard Mac OS 7.6.1 boot disk: tools-7.6.1 plus MacsBug 6.6.3 (in the System Folder; its folder in Utilities). TCP/IP active on Ethernet with DHCP (network-dhcp: net-bridge with --network socket). What tests and web UI profiles boot (PLAN.md P3, P5).",
  "base": "tools-7.6.1",
  "system_from": [

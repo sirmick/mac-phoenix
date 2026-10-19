@@ -1,4 +1,6 @@
 {
+ "title": "Development tools (System 7)",
+ "tags": ["dev"],
  "note": "The development tools volume: compilers at the top, interpreters and scripting under Languages, utilities under Tools. Boots with dev-7.5.5 or dev-7.6.1 on 68k and PowerPC.",
  "label": "Development",
  "size_mb": 1024,

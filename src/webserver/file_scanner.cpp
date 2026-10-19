@@ -6,9 +6,11 @@
  */
 
 #include "file_scanner.h"
+#include "../core/mac_roman.h"
 #include <algorithm>
 #include <cstdio>
 #include <cerrno>
+#include <cstring>
 #include <sstream>
 
 #include <QCryptographicHash>
@@ -16,6 +18,9 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QString>
 
 namespace storage {
@@ -55,6 +60,87 @@ static std::string calculate_md5(const std::string& path) {
     if (!hash.addData(&file)) return "";
 
     return hash.result().toHex().toStdString();
+}
+
+static uint16_t be16(const uint8_t* p) { return (uint16_t)(p[0] << 8 | p[1]); }
+static uint32_t be32(const uint8_t* p) { return (uint32_t)be16(p) << 16 | be16(p + 2); }
+
+// What a disk image's volume header says: its name, and whether it has a
+// System to boot (a blessed System Folder on HFS/HFS+; boot blocks on MFS,
+// which has no folders). Raw volumes, Apple partition maps (the first HFS
+// partition) and DiskCopy 4.2 images.
+struct VolumeInfo {
+    bool system = false;
+    std::string name;   // UTF-8; empty on HFS+ (the name is in the catalog)
+};
+
+static VolumeInfo probe_volume(const std::string& path) {
+    VolumeInfo v;
+    QFile f(QString::fromStdString(path));
+    if (!f.open(QIODevice::ReadOnly)) return v;
+    auto read_at = [&](qint64 off, uint8_t* buf, qint64 n) {
+        return f.seek(off) && f.read(reinterpret_cast<char*>(buf), n) == n;
+    };
+    uint8_t blk[512];
+    qint64 base = 0;
+    if (!read_at(0, blk, sizeof(blk))) return v;
+    if (be16(blk) == 0x4552) {                          // 'ER': partition map
+        for (uint32_t i = 1; i < 64; i++) {
+            if (!read_at((qint64)i * 512, blk, sizeof(blk)) || be16(blk) != 0x504D) return v;
+            if (!memcmp(blk + 48, "Apple_HFS", 10)) { base = (qint64)be32(blk + 8) * 512; break; }
+            if (i >= be32(blk + 4)) return v;
+        }
+        if (!base) return v;
+    } else if (blk[0] < 64 && be16(blk + 0x52) == 0x0100) {   // DiskCopy 4.2 header
+        base = 84;
+    }
+    uint8_t boot[2], mdb[512];
+    if (!read_at(base, boot, 2) || !read_at(base + 1024, mdb, sizeof(mdb))) return v;
+    switch (be16(mdb)) {
+    case 0x4244:                                        // 'BD': HFS (drFndrInfo[0], drVN)
+        v.system = be32(mdb + 92) != 0;
+        v.name = mac_roman_to_utf8(std::string_view(reinterpret_cast<char*>(mdb + 37), std::min<int>(mdb[36], 27)));
+        break;
+    case 0x482B: case 0x4858:                           // 'H+' / 'HX': finderInfo[0]
+        v.system = be32(mdb + 80) != 0;
+        break;
+    case 0xD2D7:                                        // MFS (drVN)
+        v.system = be16(boot) == 0x4C4B;                // 'LK'
+        v.name = mac_roman_to_utf8(std::string_view(reinterpret_cast<char*>(mdb + 37), std::min<int>(mdb[36], 27)));
+        break;
+    }
+    return v;
+}
+
+// A disk's entry in the storage inventory: its volume header, and its record
+// beside it (<name>.json: "title", "tags", "note"; provisioning/build.py
+// writes them for the images it makes).
+static std::string disk_json(const std::string& images_path, const FileInfo& fi) {
+    const std::string path = images_path + "/" + fi.name;
+    VolumeInfo vol = probe_volume(path);
+    std::ostringstream json;
+    json << "{\"name\": \"" << json_escape(fi.name) << "\", \"size\": " << fi.size
+         << ", \"system\": " << (vol.system ? "true" : "false");
+    if (!vol.name.empty()) json << ", \"volume\": \"" << json_escape(vol.name) << "\"";
+    QFile rf(QString::fromStdString(path + ".json"));
+    if (rf.open(QIODevice::ReadOnly)) {
+        QJsonObject rec = QJsonDocument::fromJson(rf.readAll()).object();
+        for (const char* key : {"title", "note"}) {
+            QString val = rec.value(key).toString();
+            if (!val.isEmpty()) json << ", \"" << key << "\": \"" << json_escape(val.toStdString()) << "\"";
+        }
+        if (vol.name.empty() && rec.value("label").isString())
+            json << ", \"volume\": \"" << json_escape(rec.value("label").toString().toStdString()) << "\"";
+        QJsonArray tags = rec.value("tags").toArray();
+        if (!tags.isEmpty()) {
+            json << ", \"tags\": [";
+            for (int i = 0; i < tags.size(); i++)
+                json << (i ? ", " : "") << "\"" << json_escape(tags[i].toString().toStdString()) << "\"";
+            json << "]";
+        }
+    }
+    json << "}";
+    return json.str();
 }
 
 // Recursive directory scanning
@@ -178,7 +264,7 @@ std::string get_storage_json(const std::string& roms_path, const std::string& im
     json << "  \"disks\": [";
     for (size_t i = 0; i < disks.size(); i++) {
         if (i > 0) json << ", ";
-        json << "{\"name\": \"" << json_escape(disks[i].name) << "\", \"size\": " << disks[i].size << "}";
+        json << disk_json(images_path, disks[i]);
     }
     json << "],\n";
     json << "  \"cdroms\": [";

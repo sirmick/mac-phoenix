@@ -30,6 +30,12 @@ aliases point into a data image: "aliases_to" names it. Built volumes get a
 creation date from their name, so aliases into them stay valid across
 rebuilds. Aliases to anything else (a CD the product came on) are kept.
 
+"title" (a short name) and "tags" are for the web UI's disk list: copied
+to the record with "note", not part of what decides a rebuild. Tags: the
+machines a boot image is for (68k, ppc), dev (development tools), test
+(what the guest tests boot), build (a layer bakes start from), mpw-service
+(tools/mpw's disks).
+
 Built images go to storage/images/<name>.img with a record beside them
 (<name>.img.json: the snapshots and their content hashes, and the apps to
 launch, as paths on the image); an image is rebuilt when its definition, its
@@ -93,8 +99,11 @@ def manifests(d):
     return out
 
 
+META = ("title", "tags")         # for the web UI's disk list; copied to the record, not in the key
+
+
 def image_key(d, mans):
-    h = hashlib.md5(json.dumps([FORMAT, d], sort_keys=True).encode())
+    h = hashlib.md5(json.dumps([FORMAT, {k: v for k, v in d.items() if k not in META}], sort_keys=True).encode())
     if d.get("aliases_to"):                 # where its System Folder aliases point
         other = load_def(d["aliases_to"])
         try:
@@ -111,6 +120,17 @@ def image_key(d, mans):
 
 def record_path(d):
     return out_path(d) + ".json"
+
+
+def write_record(d, record):
+    """<name>.img.json, with the definition's title, tags and note (the web
+    UI's disk list shows them)."""
+    for k in META + ("note",):
+        record.pop(k, None)
+        if d.get(k):
+            record[k] = d[k]
+    with open(record_path(d), "w") as f:
+        json.dump(record, f, indent=1, ensure_ascii=False)
 
 
 def up_to_date(d, key):
@@ -415,6 +435,9 @@ def build(d, force=False, log=print):
     out = out_path(d)
     if not force and up_to_date(d, key):
         log(f"{d['name']}: up to date ({out})")
+        rec = bake.load_json(record_path(d))
+        if any(rec.get(k) != d.get(k) for k in META + ("note",)):
+            write_record(d, dict(rec))
         return out
     work = tempfile.mkdtemp(prefix="build.", dir=bake.work_root())
     b = Builder(d, work, log)
@@ -474,8 +497,7 @@ def build(d, force=False, log=print):
               "aliases": getattr(b, "ids_paths", []) + [label + a.decode("mac_roman") for a, _, _ in b.ids],     # rewritten; test_image.py resolves them
               "warnings": b.warnings}
     record["md5"] = bake.file_md5(out)
-    with open(record_path(d), "w") as f:
-        json.dump(record, f, indent=1, ensure_ascii=False)
+    write_record(d, record)
     log(f"{out}: {len(b.placed)} files from {len(mans)} snapshots, {os.path.getsize(out) >> 20} MB")
     return out
 

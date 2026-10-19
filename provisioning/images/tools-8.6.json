@@ -1,4 +1,6 @@
 {
+ "title": "Build layer: Mac OS 8.6",
+ "tags": ["build", "ppc"],
  "note": "Mac OS 8.6 as baked from Apple's installer (os-8.6) with the tools every other bake needs in the guest: CarbonLib 1.6 (in the System Folder), StuffIt Expander 6.0.1 (expand bakes; the System's own 5.x stays in Internet Utilities) and Disk Copy (floppy sets, disk images), in Utilities. PowerPC only. The base for 8.6 bakes (bases.json tools-8.6).",
  "base": "os-8.6",
  "system_from": [

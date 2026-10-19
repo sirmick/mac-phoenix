@@ -4490,6 +4490,18 @@ async function loadRomList() {
     }
 }
 
+// A disk with a System to boot (/api/storage "system": a blessed System
+// Folder): a small Happy Mac.
+const SYSTEM_DISK_ICON = `<svg viewBox="0 0 12 16" width="11" height="14" aria-label="System disk"><title>System disk</title>
+<rect x="0.5" y="0.5" width="11" height="15" rx="1.5" fill="#d8d4c8" stroke="#888"/>
+<rect x="2" y="2" width="8" height="6.5" fill="#333"/>
+<path d="M4 4v1M8 4v1M6 4.5v1.5h-.6M4.3 7c1 .6 2.4 .6 3.4 0" stroke="#d8d4c8" stroke-width=".7" fill="none"/>
+<rect x="2" y="12" width="4" height=".8" fill="#888"/></svg>`;
+
+function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
 async function loadDiskList() {
     const container = document.getElementById('disk-list');
     if (!container) return;
@@ -4504,11 +4516,19 @@ async function loadDiskList() {
         if (data.disks && data.disks.length > 0) {
             container.innerHTML = data.disks.map((disk, idx) => {
                 const checked = currentConfig.disks.includes(disk.name) ? 'checked' : '';
-                const sizeStr = disk.size ? ` (${(disk.size / 1024 / 1024).toFixed(1)} MB)` : '';
+                const sizeStr = disk.size ? `${(disk.size / 1024 / 1024).toFixed(0)} MB` : '';
+                const sub = [disk.title ? disk.name : '', disk.volume ? `“${disk.volume}”` : '', sizeStr]
+                    .filter(Boolean).join(' · ');
+                const tags = (disk.tags || []).map(t => `<span class="disk-tag disk-tag-${escHtml(t)}">${escHtml(t)}</span>`).join('');
                 return `
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="disk-${idx}" value="${disk.name}" ${checked} onchange="updateDiskSelection()">
-                        <label for="disk-${idx}">${disk.name}${sizeStr}</label>
+                    <div class="checkbox-group disk-row" title="${escHtml(disk.note || '')}">
+                        <input type="checkbox" id="disk-${idx}" value="${escHtml(disk.name)}" ${checked} onchange="updateDiskSelection()">
+                        <span class="disk-icon">${disk.system ? SYSTEM_DISK_ICON : ''}</span>
+                        <label for="disk-${idx}">
+                            <span class="disk-title">${escHtml(disk.title || disk.name)}</span>
+                            <span class="disk-sub">${escHtml(sub)}</span>
+                        </label>
+                        <span class="disk-tags">${tags}</span>
                     </div>`;
             }).join('');
         } else {

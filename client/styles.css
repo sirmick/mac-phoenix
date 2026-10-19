@@ -1164,6 +1164,50 @@ body.fullscreen #video-section {
     font-weight: normal;
 }
 
+#disk-list {
+    max-height: 300px;
+}
+
+.disk-row .disk-icon {
+    width: 11px;
+    flex: none;
+    display: flex;
+}
+
+.disk-row label {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.disk-row .disk-sub {
+    color: #888;
+    font-size: 0.85em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.disk-tags {
+    display: flex;
+    gap: 3px;
+    flex: none;
+}
+
+.disk-tag {
+    font-size: 0.7em;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: #333;
+    color: #bbb;
+}
+
+.disk-tag-dev { background: #1f3a5a; color: #9cc8ff; }
+.disk-tag-library { background: #4a3a1a; color: #f0c870; }
+.disk-tag-test { background: #3a2a4a; color: #c8a8f0; }
+.disk-tag-build { background: #2a2a2a; color: #999; }
+.disk-tag-mpw-service { background: #1f4a3a; color: #8fe0c0; }
+
 /* Note banner */
 .note-banner {
     background: #2a2a1a;

@@ -1,4 +1,6 @@
 {
+ "title": "Build layer: Mac OS 7.6.1",
+ "tags": ["build", "68k", "ppc"],
  "note": "Mac OS 7.6.1 as baked from Apple's installers (os-7.6.1) with the tools every other bake needs in the guest: StuffIt Expander (expand bakes) and Disk Copy (floppy sets, disk images), in Utilities. The base for 7.6.1 bakes (bases.json tools-7.6.1).",
  "base": "os-7.6.1",
  "system_from": [

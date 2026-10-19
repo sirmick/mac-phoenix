@@ -1,4 +1,6 @@
 {
+ "title": "Mac OS 9.0.4",
+ "tags": ["ppc"],
  "note": "The standard Mac OS 9.0.4 boot disk, PowerPC only: tools-9.0.4 plus MacsBug 6.6.3 (in the System Folder; its folder in Utilities). TCP/IP comes active on Ethernet with DHCP as installed (net-bridge with --network socket), no network bake needed.",
  "base": "tools-9.0.4",
  "system_from": [

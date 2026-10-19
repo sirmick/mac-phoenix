@@ -1,4 +1,6 @@
 {
+ "title": "Mac OS 8.6 for development",
+ "tags": ["dev", "ppc"],
  "note": "Mac OS 8.6 (PowerPC) with what the development tools put in the System Folder (MetroNub, CodeWarrior help, MacPerl and MacPython libraries, first-launch preferences); the tools themselves are on Development-9.",
  "base": "standard-8.6",
  "system_from": [

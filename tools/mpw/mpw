@@ -29,8 +29,8 @@ its compilers (MWC68K, MWCPPC, MWLink68K, MWLinkPPC) and ToolServer, all
 from public media; a session of its own.
 
 Environment: MPW_TOOLCHAIN (apple), MPW_STATE (default ~/.cache/mac-phoenix/mpw
-or mpw-cw), MPW_PORT (18390, cw 18391), MPW_SYSTEM (mpw-7.5.5.img or
-mpw-cw-7.5.5.img: the copy of tests-7.5.5.img the session runs on),
+or mpw-cw), MPW_PORT (18390, cw 18391), MPW_SYSTEM (mpw-service-7.5.5.img or
+mpw-cw-service-7.5.5.img: the copy of tests-7.5.5.img the session runs on),
 MACPHOENIX_BINARY, MACEMU_STORAGE (~/storage). See docs/MPW.md.
 """
 import argparse
@@ -86,7 +86,7 @@ def configure(toolchain):
     MPW_DISK = os.path.join(STORAGE, "images", t["image"] + ".img")
     STATE = os.environ.get("MPW_STATE", os.path.expanduser("~/.cache/mac-phoenix/" + t["state"]))
     PORT = int(os.environ.get("MPW_PORT", str(t["port"])))
-    SYSTEM_NAME = os.environ.get("MPW_SYSTEM", t["image"] + "-7.5.5.img")   # the session's own copy
+    SYSTEM_NAME = os.environ.get("MPW_SYSTEM", t["image"] + "-service-7.5.5.img")   # the session's own copy
     HOST = os.path.join(STATE, "host")     # the Host volume
     WORK = os.path.join(HOST, ".mpw")      # per-command scripts, output, status
     SESSION = os.path.join(STATE, "session.json")
@@ -171,6 +171,9 @@ def ensure_system():
         raise MPWError("no %s to copy the System from (mpw setup)" % SYSTEM_SOURCE)
     if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(SYSTEM_SOURCE):
         subprocess.check_call(["cp", "--reflink=auto", SYSTEM_SOURCE, dst])
+        with open(dst + ".json", "w") as f:      # for the web UI's disk list
+            json.dump({"title": "MPW service System: %s (copy of tests-7.5.5)" % TOOLCHAINS[TOOLCHAIN]["image"],
+                       "tags": ["mpw-service"], "copy_of": "tests-7.5.5"}, f, indent=1)
         for d in (dst, dst + ".clean"):
             shutil.rmtree(os.path.join(STORAGE, "executor-systems", os.path.basename(d)), ignore_errors=True)
     return dst

@@ -20,9 +20,9 @@ tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
 ## How it works
 
 * **The session.** `mpw start` (or the first command that needs it) boots
-  Executor on a copy of the 7.5.5 System (`mpw-7.5.5.img`, so the original
+  Executor on a copy of the 7.5.5 System (`mpw-service-7.5.5.img`, so the original
   image is never mounted read-write) with a scratch copy of the MPW disk
-  (`~/storage/images/mpw-eto22.img`, volume "MPW") and a private Host volume
+  (`~/storage/images/mpw.img`, volume "MPW") and a private Host volume
   (`~/.cache/mac-phoenix/mpw/host`). It is ready when ToolServer answers,
   about 7 s. It stays up until `mpw stop`.
 * **Commands.** ToolServer is MPW's headless command server. A command is

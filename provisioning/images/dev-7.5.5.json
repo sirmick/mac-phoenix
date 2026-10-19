@@ -1,4 +1,6 @@
 {
+ "title": "System 7.5.5 for development",
+ "tags": ["dev", "68k", "ppc"],
  "note": "System 7.5.5 with what the development tools put in the System Folder (shared libraries, MacsBug, first-launch preferences); the tools themselves are on Development.",
  "base": "standard-7.5.5",
  "system_from": [

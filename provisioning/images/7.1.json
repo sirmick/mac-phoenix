@@ -1,4 +1,6 @@
 {
+ "title": "System 7.1 (Quadra, as IIci)",
+ "tags": ["68k"],
  "note": "System 7.1 for the Quadra 650 as Apple's Installer made it (os-7.1: the generic System with System Enabler 040), 68k only. Boots with --model-id 5 (the base's \"args\"; the web UI's 68k-7.1 profile sets it): with the Quadra's model ID 14 it bombs at boot. No BridgeAgent: 7.1 has no File System Manager, so no Host volume.",
  "base": "os-7.1"
 }

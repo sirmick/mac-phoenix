@@ -1,4 +1,6 @@
 {
+ "title": "MPW service: MPW 3.4.2",
+ "tags": ["mpw-service"],
  "note": "The MPW disk tools/mpw/mpw mounts: MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22, the mpw-3.4.2 snapshot) on a volume named MPW, as tools/mpw/make_mpw_disk.py made it from the CD.",
  "label": "MPW",
  "place": [

@@ -1,4 +1,6 @@
 {
+ "title": "Mac OS 8.6",
+ "tags": ["ppc"],
  "note": "The standard Mac OS 8.6 boot disk, PowerPC only: tools-8.6 plus TCP/IP active on Ethernet with DHCP (network-dhcp-8.6) and MacsBug 6.6.3 (in the System Folder; its folder in Utilities).",
  "base": "tools-8.6",
  "system_from": [

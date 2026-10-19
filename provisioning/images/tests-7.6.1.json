@@ -1,4 +1,6 @@
 {
+ "title": "Guest tests, Mac OS 7.6.1",
+ "tags": ["test", "68k", "ppc"],
  "note": "What the guest tests boot (tests/lib/refresh_test_disk.sh tests-7.6.1: a copy each run): the standard 7.6.1 disk plus the test kit at the top of Macintosh HD: MacPerl as a classic 68k app (the guest suite, Finder and keyboard tests), Frontier (threads), MPW (ASLM).",
  "base": "standard-7.6.1",
  "system_from": [

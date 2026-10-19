@@ -10,7 +10,8 @@
 # Systems not baked yet). Executor's System Folder extracted from an earlier
 # copy (executor-systems/test-NAME.img{,.clean}) is removed, so a new image's
 # System is used. Exits 77 (ctest SKIP) if there's no source. --reflink=auto:
-# CoW filesystems avoid a real byte copy.
+# CoW filesystems avoid a real byte copy. The copy's record
+# (test-NAME.img.json) tags it "test" for the web UI's disk list.
 #
 # Usage in a test script:
 #     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -39,4 +40,15 @@ fi
 
 rm -rf "$STORAGE/executor-systems/test-${NAME}.img" "$STORAGE/executor-systems/test-${NAME}.img.clean"
 cp --reflink=auto -f "$SRC" "$DEST"
+python3 - "$IMAGES/$NAME.img.json" "$DEST.json" "$NAME" <<'PY'
+import json, sys
+src, dest, name = sys.argv[1:]
+try:
+    rec = json.load(open(src))
+except (OSError, ValueError):
+    rec = {}
+tags = ["test"] + [t for t in rec.get("tags", []) if t in ("68k", "ppc")]
+json.dump({"title": "Test run copy of " + rec.get("title", name), "tags": tags, "copy_of": name},
+          open(dest, "w"), indent=1, ensure_ascii=False)
+PY
 echo "$DEST"
