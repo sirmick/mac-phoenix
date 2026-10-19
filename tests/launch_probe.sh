@@ -4,7 +4,7 @@
 #
 # Usage: tests/launch_probe.sh --core NAME [--jit] [--port N] [--log FILE] [--path "HD:App"]
 set -uo pipefail
-CORE=mame-ppc; PORT=18230; LOG=/tmp/launch_probe.log; EXTRA=(); APPPATH="Macintosh HD:SimpleText"
+CORE=mame-ppc; PORT=18230; LOG=${TMPDIR:-/tmp}/launch_probe.log; EXTRA=(); APPPATH="Macintosh HD:SimpleText"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --core) CORE="$2"; shift 2 ;;

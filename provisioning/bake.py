@@ -40,7 +40,11 @@ deletes them where the snapshot's System Folder part goes), "system_take"
 (System Folder files to take even if only changed: a control panel's
 settings), "network" (the guest's --network: "socket" for net-bridge),
 "volatile" (snapshot paths a run writes differently every time, compared by
-name only: a first launch's database or preferences).
+name only: a first launch's database or preferences). "wip": a bake still being
+worked out, left out of --all. "args": emulator arguments for every guest
+the bake starts ("--model-id", "5": Systems before 7.5). "first_boot_agent":
+false: the new System has no BridgeAgent (7.1: no File System Manager, so no
+Host volume): its first boot goes through the Finder and the menus.
 
 A re-bake is compared with the snapshot it replaces: "same install" when
 only run noise differs (aliases, installer logs, "volatile" paths; for os
@@ -109,7 +113,8 @@ IMAGES = os.path.join(STORAGE, "images")
 SESSION = os.path.join(STORAGE, "work", "bake-session.json")
 DEFAULT_TARGET = "Install"
 DEFAULT_OS = "7.6.1"
-BACKENDS = {"68k": "uae", "ppc": "kpx"}
+BACKENDS = {"68k": "uae", "ppc": "kpx", "se": "se"}    # machine -> Guest backend (guest.py)
+BOTH = ["68k", "ppc"]                   # what "both machines" means (7.5.5, 7.6.1)
 
 ARCHIVE_TYPES = {".sit": b"SIT!", ".hqx": b"TEXT", ".bin": b"BINA", ".zip": b"ZIP ", ".sea": b"APPL",
                  ".cpt": b"PACT", ".sitx": b"SITX"}
@@ -126,7 +131,7 @@ NOISE = (b":Recent Applications:", b":Recent Documents:", b":Recent Servers:",
          b":Startup Items:\rEnergy Saver")             # the PPC machine's Energy Saver (invisible)
 # Preferences: only new files are taken (an app's first-launch answers live
 # there), minus these, which the System or the bridge write.
-PREFS_NOISE = {b"MacPhoenix.cfg", b"CarbonLib Preferences (US)", b"ASLM Preferences", b"Apple Menu Options Prefs",
+PREFS_NOISE = {b"MacPhoenix.cfg", b"Control Strip Preferences", b"CarbonLib Preferences (US)", b"ASLM Preferences", b"Apple Menu Options Prefs",
                b"Mac OS Easy Open Preferences", b"Macintosh Easy Open Preferences", b"WindowShade Preferences", b"Internet Preferences",
                b"Finder Preferences", b"Users & Groups Data File", b"File Sharing Folder",
                b"Launcher Preferences", b"Desktop Pictures Prefs", b"Extensions Manager Preferences",
@@ -339,19 +344,22 @@ class Session:
 
     def __init__(self, bake, machine, port, log=print, extra=()):
         self.bake, self.machine, self.log = bake, machine, log
-        self.extra = list(extra)                # more emulator arguments (--no-text-feed ...)
+        self.extra = list(extra) + bake.get("args", [])     # more emulator arguments (--no-text-feed,
+                                                            # the bake's "args": --model-id 5 for 7.1)
         if bake.get("network"):                 # the guest networked (e.g. "socket": net-bridge, DHCP)
             self.extra += ["--network", bake["network"]]
         self.backend = BACKENDS[machine]
         self.os = bake.get("os", DEFAULT_OS)
         self.work = tempfile.mkdtemp(prefix=f"bake.{bake['name']}@{machine}.", dir=work_root())
         self.base_path, self.base = base_image(self.os)
+        self.extra += [a for a in self.base.get("args", []) if a not in self.extra]   # (--model-id 5: 7.1)
         self.boot = os.path.join(self.work, "boot.img")
         self.target = os.path.join(self.work, "target.img")
         is_os = bake.get("kind") == "os"
         self.target_name = bake.get("target", "Macintosh HD" if is_os else DEFAULT_TARGET)
         shutil.copyfile(self.base_path, self.boot)
         hfs = Hfs(self.work)
+        self.drop_old_agent(hfs)
         snapshot.blank(hfs, self.target, self.target_name, bake.get("target_mb", 250 if is_os else 1024))
         self.exclude = set()
         self.disks = [self.boot, self.target]
@@ -375,6 +383,19 @@ class Session:
                       if s.get("backend", self.backend) == self.backend]
         self.port = port
         self.guest = None
+
+    def drop_old_agent(self, hfs):
+        """The scratch boot disk without a BridgeAgent of its own: an older
+        install's in Startup Items (the hand-made bases have one, with the
+        _WaitNextEvent patch that bombs under Apple's Installer) would run
+        beside the one the emulator launches."""
+        hfs.mount(self.boot)
+        try:
+            for p in (b":System Folder:Startup Items:BridgeAgent", b":System Folder:Preferences:MacPhoenix.cfg"):
+                if hfs.exists(p):
+                    hfs.run("hdel", p)
+        finally:
+            hfs.umount()
 
     def media_volume(self, hfs):
         if not self.bake.get("media"):
@@ -467,12 +488,13 @@ class Session:
         stopped. After Apple's Installer has installed a System and quit,
         BridgeAgent dies (system error 3: PLAN.md, P2 status), so an os
         bake reboots before it needs the bridge again."""
-        if (self.guest.get("/api/status") or {}).get("bridge_agent_connected"):
+        if (not self.guest.agent
+                or (self.guest.get("/api/status") or {}).get("bridge_agent_connected")):
             self.guest.shutdown()
         self.guest.stop()
         self.guest = Guest(self.work, self.backend, self.disks, self.cdroms, self.port, STORAGE, extra=self.extra)
         self.guest.annotate(f"{self.bake['name']}@{self.machine}: rebooting")
-        self.guest.wait_finder(240, agent=True)
+        self.guest.wait_finder(240, agent=self.guest.agent)
         time.sleep(self.bake.get("settle", 3))
 
     def first_boot_disks(self):
@@ -494,8 +516,9 @@ class Session:
         self.disks = [self.target] + self.first_boot_disks()     # what a reboot boots from now
         self.cdroms = []
         self.guest = Guest(self.work, self.backend, self.disks, [], self.port, STORAGE, extra=self.extra)
+        self.guest.agent = self.guest.agent and self.bake.get("first_boot_agent", True)
         self.guest.annotate(f"{self.bake['name']}: first boot from {self.target_name}")
-        self.guest.wait_finder(300, agent=True)
+        self.guest.wait_finder(300, agent=self.guest.agent)
         time.sleep(self.bake.get("settle", 3))
         self.guest.shot("first-boot")
         names = dict(self.names, boot=self.target_name, system=self.target_name + ":System Folder:")
@@ -854,9 +877,31 @@ def free_port():
         return s.getsockname()[1]
 
 
+def base_deps(os_name, seen=None):
+    """The snapshots a base System is made of: an os bake's, or a built
+    image's (its base's, its System Folder parts', what it places)."""
+    seen = set() if seen is None else seen
+    b = bases().get(os_name, {})
+    if "snapshot" in b:
+        return {b["snapshot"]}
+    if "built" not in b or b["built"] in seen:
+        return set()
+    seen.add(b["built"])
+    try:
+        d = load_json(os.path.join(HERE, "images", b["built"] + ".json"))
+    except (OSError, ValueError):
+        return set()
+    deps = set(d.get("system_from", [])) | {p["snapshot"] for p in d.get("place", [])}
+    if d.get("base"):
+        deps |= base_deps(d["base"], seen)
+    return deps
+
+
 def bake_all(names, jobs, force):
-    """Every bake not up to date, derives after the rest."""
-    todo = [load_bake(n) for n in names]
+    """Every bake not up to date, in waves: a bake runs once every snapshot
+    its base System is made of is done (an os bake before what's baked on
+    it); derives after the rest. "wip" bakes are left out."""
+    todo = [b for b in (load_bake(n) for n in names) if not b.get("wip")]
     failed = []
 
     def run(b):
@@ -870,9 +915,15 @@ def bake_all(names, jobs, force):
             return f"FAILED      {b['name']} (log {logf})"
         return f"baked       {b['name']}"
 
+    rest = [b for b in todo if b.get("kind") != "derive"]
+    deps = {b["name"]: base_deps(b.get("os", DEFAULT_OS)) - {b["name"]} for b in rest}
     with concurrent.futures.ThreadPoolExecutor(jobs) as pool:
-        for line in pool.map(run, [b for b in todo if b.get("kind") != "derive"]):
-            print(line, flush=True)
+        while rest:
+            waiting = {b["name"] for b in rest}
+            wave = [b for b in rest if not deps[b["name"]] & waiting] or rest
+            rest = [b for b in rest if b not in wave]
+            for line in pool.map(run, wave):
+                print(line, flush=True)
     for b in todo:
         if b.get("kind") == "derive":
             print(run(b), flush=True)

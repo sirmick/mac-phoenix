@@ -6,7 +6,7 @@
 #   --se  the Mac SE (System 6.0.8 disk, 4 MB, 512x342) instead of the Quadra
 #   --ppc the Power Mac G3 (kpx backend; --core kpx | mame-ppc)
 set -euo pipefail
-CORE=uae; OUT=/tmp/boot.png; PORT=18116; TIMEOUT=40; LOG=/tmp/boot_screenshot.log; SE=0; PPC=0; EXTRA=(); IMAGE=tests-7.5.5
+CORE=uae; OUT=${TMPDIR:-/tmp}/boot.png; PORT=18116; TIMEOUT=40; LOG=${TMPDIR:-/tmp}/boot_screenshot.log; SE=0; PPC=0; EXTRA=(); IMAGE=tests-7.5.5
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --core) CORE="$2"; shift 2 ;;
@@ -30,7 +30,7 @@ if [[ $PPC == 1 ]]; then
     BACKEND=(--backend kpx)
 elif [[ $SE == 1 ]]; then
     ROM="${MACEMU_SE_ROM:-$HOME/storage/roms/256KB ROMs/1987-03 - B2E362A8 - Mac SE.ROM}"
-    DISK=$(bash "$HERE/lib/refresh_test_disk.sh" system-6.0.8)
+    DISK=$(bash "$HERE/lib/refresh_test_disk.sh" 6.0.8)
     MACHINE=(--ram 4 --screen 512x342)
 else
     ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"

@@ -13,9 +13,6 @@
    "timeout": 90
   },
   {
-   "agent_exit": true
-  },
-  {
    "click": {
     "button": "Continue…"
    },
@@ -75,6 +72,16 @@
   {
    "click": {
     "button": "Install"
+   },
+   "until": {
+    "button": "Continue"
+   },
+   "max": 5,
+   "note": "onto the startup disk with other applications running (BridgeAgent): the Installer offers to quit them"
+  },
+  {
+   "click": {
+    "button": "Continue"
    }
   },
   {

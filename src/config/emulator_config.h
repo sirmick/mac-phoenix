@@ -146,6 +146,8 @@ struct EmulatorConfig {
 
     // System
     bool zappram = false;
+    int model_id = 0;                  // Gestalt machine type reported: 0 = the ROM machine's own
+                                       // (Quadra 14); 5 (IIci) for Systems before 7.5
     bool dismiss_shutdown_dialog = true;
 
     // Networking

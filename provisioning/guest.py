@@ -42,6 +42,8 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
   {"wait_for": {"button": "Restart"}, "timeout": s}  until it is in the front window
                                          ({"text": ...}: until it is drawn; with
                                          "front": true, inside the front window)
+                                         ("logged": true: drawn since boot, the draw
+                                         log: a desktop label a window covers)
   {STEP..., "until": {...}, "max": n}    repeat a step until a find succeeds
                                          ("Switch Disk" until the disk shows)
   {"dclick": {"text": T, "outside_controls": true}}  double-click drawn text that
@@ -53,6 +55,9 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
   {"drag": [[x, y], [x2, y2]]}           press, move, release (popup menus)
   {"key": "return"}                      an /api/keypress name or ADB keycode
   {"cmd_key": 12}                        Command + an ADB keycode (12 = Q)
+  {"menu": ["Special", "Shut Down"]}     a menu item, by the drawn text of both
+  (System 6, no bridge: "launch" and "open" select each name in the Finder
+  and press Command-O; the guest is shut down with Special > Shut Down)
   {"wait": seconds}
   {"wait_app": "Name", "timeout": s}     until the front app is Name
   {"wait_app_not": "Name", "timeout": s} until it isn't
@@ -78,7 +83,19 @@ ROOT = os.path.dirname(HERE)
 
 def roms(storage):
     return {"uae": os.path.expanduser(os.environ.get("MACEMU_ROM", "~/roms/quadra.rom")),
-            "kpx": os.path.join(storage, "roms", "g3.rom")}
+            "kpx": os.path.join(storage, "roms", "g3.rom"),
+            "se": os.path.join(storage, "roms", "256KB ROMs", "1987-03 - B2E362A8 - Mac SE.ROM")}
+
+
+# A guest's "backend" here: the emulator's --backend and the machine's own
+# arguments. "se" is the 68k core with a Mac SE ROM, 4 MB and its screen.
+MACHINE_ARGS = {"uae": ("uae", []), "kpx": ("kpx", []),
+                "se": ("uae", ["--ram", "4", "--screen", "512x342"])}
+
+
+def has_agent(backend):
+    """Whether BridgeAgent runs there (System 7 and later: not the SE's 6.0.8)."""
+    return backend != "se"
 
 
 class NotFound(RuntimeError):
@@ -102,12 +119,19 @@ class Guest:
     def __init__(self, work, backend, disks, cdroms, port, storage, timeout=3600, extra=()):
         self.base = f"http://localhost:{port}"
         self.backend, self.work = backend, work
+        self.agent = has_agent(backend)         # BridgeAgent there (System 7.5+; set False for a 7.1 guest:
+                                                # no File System Manager, no Host volume, no agent)
+        emu_backend, machine_args = MACHINE_ARGS[backend]
         args = [os.path.join(ROOT, "build", "mac-phoenix"), "--config", "/dev/null", "--network", "none",
-                "--bridge", "--backend", backend, "--rom", roms(storage)[backend], "--port", str(port),
+                "--bridge", "--backend", emu_backend, "--rom", roms(storage)[backend], "--port", str(port),
+                *machine_args,
                 "--timeout", str(timeout), "--dismiss-shutdown-dialog",
                 # what recipes are written for; Mac OS 8.6 and later take the
                 # largest mode the driver offers at their first boot
                 "--max-resolution", "640x480", *extra]
+        self.host = os.path.join(work, "host")  # the Host volume (the bridge's ExtFS root): on
+        os.makedirs(self.host, exist_ok=True)   # disk with the rest of the run, not in /tmp
+        args += ["--extfs", self.host]
         for d in disks:
             args += ["--disk", d]
         for c in cdroms:
@@ -239,7 +263,11 @@ class Guest:
         front window, or None. what: {"button": name} or {"item": text}; or
         {"text": text}, drawn text only. A name /api/ui doesn't have is
         looked for as drawn text too (controls an app draws itself)."""
-        hit = self.locate(what, ui)
+        if what.get("logged"):                  # drawn at some point (the draw log), even if
+            draws = (self.get("/api/text?since=0") or {}).get("draws", [])   # covered now
+            hit = next((d for d in reversed(draws) if d["text"].strip() == what["text"]), None)
+        else:
+            hit = self.locate(what, ui)
         if hit:
             l, t, r, b = hit["rect"]
             return (l + r) // 2, (t + b) // 2
@@ -439,6 +467,71 @@ class Guest:
         self.mouse(button=0, down=False)
         time.sleep(1)
 
+    def menu(self, title, item):
+        """Choose `item` in the menu bar's `title` by their drawn text: press
+        on the title, find the item where the open menu drew it, release
+        there. A release the guest missed (the menu still drawn) is clicked
+        again."""
+        self.mouse(x=320, y=240)                # off the menu bar, so titles read whole
+        time.sleep(1)
+        t = next((x for x in (self.get("/api/text") or {}).get("text", [])
+                  if x["text"].strip() == title and x["rect"][1] < 20), None)
+        # Where the title is drawn; else (a menu bar drawn before the text feed
+        # was installed: a first boot) along the bar until the menu that drops
+        # down has the item.
+        xs = [(t["rect"][0] + t["rect"][2]) // 2] if t else list(range(40, 400, 16))
+        ty, hit = 10, None
+        for tx in xs:
+            self.mouse(x=tx, y=ty)
+            time.sleep(0.4)
+            seq = (self.get("/api/text") or {}).get("seq", 0)
+            self.mouse(button=0, down=True)
+            time.sleep(1.2)
+            draws = (self.get(f"/api/text?since={seq}") or {}).get("draws", [])
+            hit = next((d for d in reversed(draws) if d["text"].strip() == item and d["rect"][1] > 20), None)
+            if hit:
+                break
+            self.mouse(button=0, down=False)    # released on the title: nothing chosen
+            time.sleep(0.5)
+        if not hit:
+            raise NotFound(f"no {item!r} in the {title} menu")
+        ix, iy = (hit["rect"][0] + hit["rect"][2]) // 2, (hit["rect"][1] + hit["rect"][3]) // 2
+        self.mouse(x=ix, y=iy)
+        time.sleep(0.6)
+        self.mouse(button=0, down=False)
+        time.sleep(1.5)
+        still = any(x["text"].strip() == item and x["rect"] == hit["rect"]
+                    for x in (self.get("/api/text") or {}).get("text", []))
+        if still:                               # the release didn't reach MenuSelect
+            self.mouse(button=0, down=True)
+            time.sleep(0.1)
+            self.mouse(button=0, down=False)
+            time.sleep(1.5)
+
+    def finder_open(self, path):
+        """Open Vol:Folder:...:Item in the Finder without the bridge (System
+        6): each name selected where it is drawn (the volume on the desktop,
+        the rest in the window the last one opened) and opened with
+        Command-O."""
+        parts = [p for p in path.split(":") if p]
+        for i, name in enumerate(parts):
+            deadline = time.time() + 30
+            while True:
+                self.mouse(x=0, y=479)          # the cursor off the names, so they read whole
+                time.sleep(0.5)
+                ui = self.ui()
+                w = next((w for w in ui["windows"] if w.get("front")), None)
+                within = w["rect"] if i and w else None
+                t = self.drawn(name, within=within, exact=True)
+                if t:
+                    break
+                if time.time() > deadline:
+                    raise NotFound(f"no {name!r} to open in the Finder")
+                self.pause(1)
+            self.click((t["rect"][0] + t["rect"][2]) // 2, (t["rect"][1] + t["rect"][3]) // 2)
+            self.cmd_key(0x1F)                  # O
+            time.sleep(2)
+
     def cmd_key(self, keycode):
         """Command + an ADB keycode (0x0C Q, 0x2F period, 0x0D W)."""
         self.post("/api/keypress", {"key": 0x37, "down": True})
@@ -452,11 +545,7 @@ class Guest:
 
     def host_dir(self):
         """The host folder the guest sees as Host: (the bridge's ExtFS root)."""
-        import glob
-        for d in glob.glob("/tmp/macemu-bridge-*"):
-            if os.path.isdir(os.path.join(d, "MacPhoenix", str(self.proc.pid))):
-                return d
-        return None
+        return self.host
 
     def run_script(self, creator, script, out, wait=30):
         """A do-script that writes Host:<out>; its text once it appears
@@ -526,7 +615,18 @@ class Guest:
         return False
 
     def shutdown(self):
-        """A clean shutdown, so every volume is flushed and marked unmounted."""
+        """A clean shutdown, so every volume is flushed and marked unmounted:
+        the bridge's, or without an agent (System 6) the Finder's Special >
+        Shut Down, then the emulator stopped once the Mac says it's safe."""
+        if not self.agent:
+            try:
+                self.menu("Special", "Shut Down")
+                deadline = time.time() + 60
+                while time.time() < deadline and not self.drawn("You may now switch off your Macintosh safely."):
+                    self.pause(1)
+            finally:
+                self.stop()
+            return
         self.post("/api/shutdown", {}, 60)
         try:
             self.proc.wait(timeout=120)
@@ -559,7 +659,9 @@ class Guest:
             if not self.find(step["until"]):
                 raise RuntimeError(f"{rest} never brought {step['until']}")
             return
-        if "launch" in step or "open" in step:
+        if ("launch" in step or "open" in step) and not self.agent:
+            self.finder_open(step.get("launch") or step["open"])    # no bridge (System 6)
+        elif "launch" in step or "open" in step:
             body = {"path": step["launch"]} if "launch" in step else {"path": step["open"], "open": True}
             r = self.bridge("/api/launch", body)
             if not r.get("success"):
@@ -634,9 +736,11 @@ class Guest:
             else:
                 if not step.get("optional"):    # optional: it may have come and gone between looks
                     raise RuntimeError(f"timeout: {step} (front app {self.app()!r})")
+        elif "menu" in step:
+            self.menu(*step["menu"])
         elif "wait_finder" in step:
             self.pause(5)                       # the restart under way, not the old Finder
-            self.wait_finder(step["wait_finder"], agent=True)
+            self.wait_finder(step["wait_finder"], agent=self.agent)
         elif "agent_exit" in step:              # BridgeAgent quits itself till the next boot
             self.post("/api/quit", {"agent": True}, 60)
             self.pause(2)

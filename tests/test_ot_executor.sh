@@ -39,7 +39,7 @@ TOOL=tests/guest/ot/OTTest.bin
 [[ -x build/mac-phoenix ]] || { echo "SKIP: no build/mac-phoenix"; exit 77; }
 [[ -f "$TOOL" ]] || { echo "FAIL: $TOOL missing"; exit 1; }
 
-export MPW_STATE=$(mktemp -d /tmp/ottest.XXXXXX)
+export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/ottest.XXXXXX)
 export MPW_PORT=$PORT
 export MPW_SYSTEM="test-ot${CORE:+-$CORE}-7.5.5.img"
 cleanup() {

@@ -63,7 +63,7 @@ for f in ExampleLibrary LibraryManagerTest1 TestLibrary TestTool; do
 done
 
 # hfsutils keeps its current volume in $HOME; use a private one.
-HFSHOME=$(mktemp -d /tmp/macaslmtest-hfs.XXXXXX)
+HFSHOME=$(mktemp -d ${TMPDIR:-/tmp}/macaslmtest-hfs.XXXXXX)
 hfs() { HOME="$HFSHOME" "$@"; }
 
 # A scratch copy: the libraries go in Extensions, the tools in a folder.
@@ -84,8 +84,8 @@ for f in LibraryManagerTest1 TestTool; do
 done
 hfs humount >/dev/null
 
-EXTFS_DIR=$(mktemp -d /tmp/macaslmtest-extfs.XXXXXX)
-LOG=/tmp/macaslmtest_$$.log
+EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/macaslmtest-extfs.XXXXXX)
+LOG=${TMPDIR:-/tmp}/macaslmtest_$$.log
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
         kill "$EMU_PID" 2>/dev/null || true

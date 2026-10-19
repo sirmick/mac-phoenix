@@ -32,6 +32,28 @@
   "built": "7.5.5",
   "os": "7.5.5"
  },
+ "6.0.8": {
+  "image": "system-6.0.8.img.orig",
+  "os": "6.0.8",
+  "machines": ["se"]
+ },
+ "os-6.0.8": {
+  "snapshot": "os-6.0.8",
+  "os": "6.0.8",
+  "machines": ["se"]
+ },
+ "os-7.1": {
+  "snapshot": "os-7.1",
+  "os": "7.1",
+  "machines": ["68k"],
+  "args": ["--model-id", "5"]
+ },
+ "standard-7.1": {
+  "built": "7.1",
+  "os": "7.1",
+  "machines": ["68k"],
+  "args": ["--model-id", "5"]
+ },
  "os-8.6": {
   "snapshot": "os-8.6",
   "os": "8.6",

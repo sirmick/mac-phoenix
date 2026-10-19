@@ -20,9 +20,6 @@
    "launch": "HyperCard:Mac OS Install"
   },
   {
-   "agent_exit": true
-  },
-  {
    "wait_for": {
     "button": "Continue"
    },
@@ -109,9 +106,6 @@
    "click": {
     "button": "Quit"
    }
-  },
-  {
-   "reboot": true
   }
  ]
 }

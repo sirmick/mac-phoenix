@@ -63,7 +63,7 @@ if [[ -z "${DISK:-}" || ! -f "$DISK" ]]; then echo "SKIP: Disk not found: ${DISK
 SUITE_APP="$GUEST_DIR/suite/MacPhoenixSuite.bin"
 [[ -f "$SUITE_APP" ]] || { echo "SKIP: $SUITE_APP not built"; exit 77; }
 
-EXTFS_DIR=$(mktemp -d /tmp/mackbtest-extfs.XXXXXX)
+EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/mackbtest-extfs.XXXXXX)
 python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
 printf 'test_results.txt\rkeyboard\r' > "$EXTFS_DIR/suite.cfg"
 
@@ -83,14 +83,14 @@ echo "Backend: $BACKEND  ROM: $ROM  Disk: $DISK  Port: $PORT"
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
     --port "$PORT" "${DISK_FLAGS[@]}" --extfs "$EXTFS_DIR" \
-    "${EXTRA_FLAGS[@]}" ${ROM:+"$ROM"} &>/tmp/mackbtest_$$.log &
+    "${EXTRA_FLAGS[@]}" ${ROM:+"$ROM"} &>${TMPDIR:-/tmp}/mackbtest_$$.log &
 EMU_PID=$!
 
 # Wait for HTTP
 echo -n "HTTP up..."
 for i in $(seq 1 20); do
     curl -sf "http://localhost:$PORT/api/status" >/dev/null 2>&1 && { echo " ok"; break; }
-    kill -0 "$EMU_PID" 2>/dev/null || { echo " emulator died"; tail -20 /tmp/mackbtest_$$.log; exit 1; }
+    kill -0 "$EMU_PID" 2>/dev/null || { echo " emulator died"; tail -20 ${TMPDIR:-/tmp}/mackbtest_$$.log; exit 1; }
     sleep 0.5
 done
 

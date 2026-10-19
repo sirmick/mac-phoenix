@@ -81,17 +81,17 @@ if [[ ! -f "$APP_BUILD/CMakeCache.txt" ]]; then
     cmake -S src/executor/tests -B "$APP_BUILD" \
         -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" >/dev/null
 fi
-if ! cmake --build "$APP_BUILD" -j"$(nproc)" --target tests_APPL >/tmp/toolbox_build_$$.log 2>&1; then
-    echo " FAIL"; tail -20 /tmp/toolbox_build_$$.log; exit 1
+if ! cmake --build "$APP_BUILD" -j"$(nproc)" --target tests_APPL >${TMPDIR:-/tmp}/toolbox_build_$$.log 2>&1; then
+    echo " FAIL"; tail -20 ${TMPDIR:-/tmp}/toolbox_build_$$.log; exit 1
 fi
-rm -f /tmp/toolbox_build_$$.log
+rm -f ${TMPDIR:-/tmp}/toolbox_build_$$.log
 echo " ok"
 
-EXTFS_DIR=$(mktemp -d /tmp/mactoolbox-extfs.XXXXXX)
+EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/mactoolbox-extfs.XXXXXX)
 python3 tests/guest/install_macbinary.py "$APP_BUILD/tests.bin" "$EXTFS_DIR" "$APP_NAME"
 OUT="$EXTFS_DIR/out"
-rm -f "/tmp/mactoolbox_out_${BACKEND}.txt"
-LOG=/tmp/mactoolbox_$$.log
+rm -f "${TMPDIR:-/tmp}/mactoolbox_out_${BACKEND}.txt"
+LOG=${TMPDIR:-/tmp}/mactoolbox_$$.log
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
@@ -163,7 +163,7 @@ if [[ ! -f "$OUT" ]]; then
     exit 1
 fi
 tr '\r' '\n' < "$OUT" > "$OUT.unix"
-cp "$OUT.unix" "/tmp/mactoolbox_out_${BACKEND}.txt"
+cp "$OUT.unix" "${TMPDIR:-/tmp}/mactoolbox_out_${BACKEND}.txt"
 grep -E '^\[ +(FAILED|PASSED|SKIPPED) +\]|^\[==========\]|^MACPHOENIX-DONE' "$OUT.unix" | grep -v "^\[  FAILED  \] .*listed below" || true
 
 # --- Compare with the expected failures ---------------------------------------

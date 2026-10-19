@@ -1,0 +1,81 @@
+{
+ "note": "System 6.0.8 for the Mac SE from the Legacy CD's 800K set, all four floppies attached as disks (the Installer finds each one mounted, no swapping): the Installer on System Tools, opened in the Finder (System 6 has no bridge: names selected, Command-O), Easy Install onto the blank disk (Switch Disk), which installs the SE's System and all printer software; first boot from the new disk alone. Run from the hand-made 6.0.8 disk.",
+ "kind": "os",
+ "version": "6.0.8",
+ "os": "6.0.8",
+ "machines": [
+  "se"
+ ],
+ "target_mb": 40,
+ "disks": [
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 6.0.8:6.0.8 800K:System Tools.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 6.0.8:6.0.8 800K:Utilities 1.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 6.0.8:6.0.8 800K:Utilities 2.img"
+  },
+  {
+   "file": "Apple Legacy Recovery.iso",
+   "take": ":Mac OS:System 6.0.8:6.0.8 800K:Printing Tools.img"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "System Tools:Installer"
+  },
+  {
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "shot": "1-destination"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 1200
+  },
+  {
+   "shot": "2-installed"
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}

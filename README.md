@@ -383,7 +383,7 @@ How it works:
 - **Read commands** (`/api/app`, `/api/windows`, `/api/wait`) peek Mac low memory (`CurApName`, `WindowList`, `Ticks`) directly from the 60 Hz IRQ — no guest cooperation required.
 - **Action commands** (`/api/launch`, `/api/quit`, `/api/shutdown`, `/api/restart`) go to a tiny guest-side app (`BridgeAgent`, a Retro68-built m68k binary) through the bridge trap `$ABE5`; it drives the Process Manager / Shutdown Manager / Apple Events and answers the same way.
 
-When `--bridge` is on, a fresh temp directory is created under `/tmp/macemu-bridge-XXXXXX` and auto-mounted as ExtFS volume `Host:` inside the guest. The emulator unpacks `BridgeAgent.bin` into the bridge dir and launches it from there once the Finder is up (System 7 and later); the `--disk` images are never written. `/api/status` reports `bridge_agent_connected` once the agent has said hello.
+When `--bridge` is on, a fresh temp directory is created under `<storage>/tmp/macemu-bridge-XXXXXX` (on disk, removed at exit) and auto-mounted as ExtFS volume `Host:` inside the guest. The emulator unpacks `BridgeAgent.bin` into the bridge dir and launches it from there once the Finder is up (System 7 and later); the `--disk` images are never written. `/api/status` reports `bridge_agent_connected` once the agent has said hello.
 
 ```bash
 # Launch an app and wait for it to come up

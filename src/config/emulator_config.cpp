@@ -11,6 +11,7 @@
 #include <fstream>
 #include <unistd.h>
 #include <climits>
+#include <vector>
 
 #include <QDir>
 #include <QFileInfo>
@@ -170,6 +171,7 @@ QJsonObject EmulatorConfig::to_json() const {
 
     // System
     j["zappram"]                  = zappram;
+    if (model_id) j["model_id"]   = model_id;
     j["dismiss_shutdown_dialog"]  = dismiss_shutdown_dialog;
     j["bridge_enabled"]           = bridge_enabled;
     j["browser_enabled"]          = browser_enabled;
@@ -306,6 +308,7 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
 
     // ── System ──────────────────────────────────────────────────
     if (j.contains("zappram")) zappram = json_utils::get_bool(j, "zappram");
+    if (j.contains("model_id")) model_id = json_utils::get_int(j, "model_id");
     if (j.contains("dismiss_shutdown_dialog"))
         dismiss_shutdown_dialog = json_utils::get_bool(j, "dismiss_shutdown_dialog");
     if (j.contains("bridge_enabled"))
@@ -486,6 +489,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --audio                    Enable audio (default: off)\n");
             printf("  --audio-dump PATH          Append the audio sent out (raw S16LE 48 kHz stereo) to PATH\n");
             printf("  --zap-pram                 Clear PRAM on startup\n");
+            printf("  --model-id N               Machine type reported to the Mac (default: the ROM\n");
+            printf("                             machine's; 5 = IIci for Systems before 7.5)\n");
             printf("  --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog\n");
             printf("\nNetworking:\n");
             printf("  --network MODE             none | socket[:PATH] (default: none)\n");
@@ -684,6 +689,12 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             config.zappram = true; argv[i] = nullptr; continue;
         }
 
+        // --model-id N
+        if (strcmp(argv[i], "--model-id") == 0 && i+1 < argc) {
+            config.model_id = atoi(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
         // --dismiss-shutdown-dialog / --no-dismiss-shutdown-dialog
         if (strcmp(argv[i], "--dismiss-shutdown-dialog") == 0) {
             config.dismiss_shutdown_dialog = true; argv[i] = nullptr; continue;
@@ -831,11 +842,25 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
     if (config.bridge_enabled) {
         std::string root;
         if (config.extfs_paths.empty()) {
-            char tmp[] = "/tmp/macemu-bridge-XXXXXX";
-            if (mkdtemp(tmp)) {
-                root = tmp;
+            // Scratch under <storage>/tmp (on disk; /tmp may be RAM-backed),
+            // removed when this process exits.
+            std::string base = config.storage_dir;
+            if (base.rfind("~", 0) == 0) {
+                const char* home = getenv("HOME");
+                base = std::string(home ? home : "") + base.substr(1);
+            }
+            base += "/tmp";
+            QDir().mkpath(QString::fromStdString(base));
+            std::string tmpl = base + "/macemu-bridge-XXXXXX";
+            std::vector<char> tmp(tmpl.begin(), tmpl.end());
+            tmp.push_back('\0');
+            if (mkdtemp(tmp.data())) {
+                root = tmp.data();
                 config.extfs_paths.push_back(root);
-                fprintf(stderr, "[Config] Bridge ExtFS: %s\n", tmp);
+                fprintf(stderr, "[Config] Bridge ExtFS: %s\n", root.c_str());
+                static std::string created;
+                created = root;
+                std::atexit([] { QDir(QString::fromStdString(created)).removeRecursively(); });
             }
         } else {
             root = config.extfs_paths[0];

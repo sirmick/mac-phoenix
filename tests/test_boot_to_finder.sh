@@ -55,7 +55,7 @@ echo "Port: $PORT"
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 5))" \
     --config /dev/null --dismiss-shutdown-dialog \
     --port "$PORT" \
-    --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/macemu_test_$$.log &
+    --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>${TMPDIR:-/tmp}/macemu_test_$$.log &
 EMU_PID=$!
 
 cleanup() {
@@ -75,7 +75,7 @@ for i in $(seq 1 20); do
     fi
     if ! kill -0 "$EMU_PID" 2>/dev/null; then
         echo " FAIL: emulator exited early"
-        cat /tmp/macemu_test_$$.log | tail -20
+        cat ${TMPDIR:-/tmp}/macemu_test_$$.log | tail -20
         exit 1
     fi
     echo -n "."
@@ -97,7 +97,7 @@ while true; do
         echo "FAIL: Timeout after ${TIMEOUT}s (last phase: $LAST_PHASE)"
         # Print last few lines of emulator output for diagnosis
         echo "--- emulator log tail ---"
-        tail -10 /tmp/macemu_test_$$.log
+        tail -10 ${TMPDIR:-/tmp}/macemu_test_$$.log
         exit 1
     fi
 

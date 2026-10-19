@@ -1,5 +1,5 @@
 {
- "note": "System 7.5.5, universal, from Apple's installers: the System 7.5.3 floppy set (Legacy CD) mounted through Disk Copy, Custom Install 'Universal System for any Macintosh'; then, booted from the new disk (the 7.5.5 Update only updates the startup disk), the System 7.5.5 Update floppies attached as disks. BridgeAgent quits itself while each Installer runs.",
+ "note": "System 7.5.5, universal, from Apple's installers: the System 7.5.3 floppy set (Legacy CD) mounted through Disk Copy, Custom Install 'Universal System for any Macintosh'; then, booted from the new disk (the 7.5.5 Update only updates the startup disk), the System 7.5.5 Update floppies attached as disks. Each floppy image is opened once the one before it has its desktop icon (drawn: it may sit behind a window) (sixteen opens at once lost one).",
  "kind": "os",
  "version": "7.5.5",
  "media": [
@@ -101,46 +101,151 @@
    "open": "{media}:Install Disk 2.img"
   },
   {
+   "wait_for": {
+    "text": "Install Disk 2",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
    "open": "{media}:Install Disk 3.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 3",
+    "logged": true
+   },
+   "timeout": 60
   },
   {
    "open": "{media}:Install Disk 4.img"
   },
   {
+   "wait_for": {
+    "text": "Install Disk 4",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
    "open": "{media}:Install Disk 5.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 5",
+    "logged": true
+   },
+   "timeout": 60
   },
   {
    "open": "{media}:Install Disk 6.img"
   },
   {
+   "wait_for": {
+    "text": "Install Disk 6",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
    "open": "{media}:Install Disk 7.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 7",
+    "logged": true
+   },
+   "timeout": 60
   },
   {
    "open": "{media}:Install Disk 8.img"
   },
   {
+   "wait_for": {
+    "text": "Install Disk 8",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
    "open": "{media}:Install Disk 9.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 9",
+    "logged": true
+   },
+   "timeout": 60
   },
   {
    "open": "{media}:Install Disk 10.img"
   },
   {
+   "wait_for": {
+    "text": "Install Disk 10",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
    "open": "{media}:Install Disk 11.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 11",
+    "logged": true
+   },
+   "timeout": 60
   },
   {
    "open": "{media}:Install Disk 12.img"
   },
   {
+   "wait_for": {
+    "text": "Install Disk 12",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
    "open": "{media}:Install Disk 13.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 13",
+    "logged": true
+   },
+   "timeout": 60
   },
   {
    "open": "{media}:Install Disk 14.img"
   },
   {
+   "wait_for": {
+    "text": "Install Disk 14",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
    "open": "{media}:Install Disk 15.img"
   },
   {
+   "wait_for": {
+    "text": "Install Disk 15",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
    "open": "{media}:Install Disk 16.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 16",
+    "logged": true
+   },
+   "timeout": 60
   },
   {
    "wait": 3
@@ -153,9 +258,6 @@
     "button": "Continue…"
    },
    "timeout": 90
-  },
-  {
-   "agent_exit": true
   },
   {
    "click": {
@@ -249,9 +351,6 @@
    "timeout": 90
   },
   {
-   "agent_exit": true
-  },
-  {
    "click": {
     "button": "Agree"
    },
@@ -266,6 +365,16 @@
   {
    "click": {
     "button": "Install"
+   },
+   "until": {
+    "button": "Continue"
+   },
+   "max": 5,
+   "note": "onto the startup disk with other applications running (BridgeAgent): the Installer offers to quit them"
+  },
+  {
+   "click": {
+    "button": "Continue"
    }
   },
   {

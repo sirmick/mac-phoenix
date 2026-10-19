@@ -17,8 +17,8 @@
 #     --disk ~/storage/images/macos-7.5.5.img \
 #     --no-jit \
 #     --timeout 60 --port 18200 \
-#     --screenshot-dir /tmp/boot_matrix \
-#     [--csv /tmp/boot_matrix/results.csv]
+#     --screenshot-dir ${TMPDIR:-/tmp}/boot_matrix \
+#     [--csv ${TMPDIR:-/tmp}/boot_matrix/results.csv]
 #
 set -euo pipefail
 
@@ -31,7 +31,7 @@ JIT_FLAG=""          # one of: "", "--jit", "--no-jit"
 TIMEOUT=60
 PORT=18200
 SIG_PORT=""
-SCREENSHOT_DIR="/tmp/boot_matrix"
+SCREENSHOT_DIR="${TMPDIR:-/tmp}/boot_matrix"
 CSV=""
 SUSTAIN_S=5          # seconds to hold at Finder to confirm it isn't the flag lying
 

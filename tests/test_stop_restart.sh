@@ -50,7 +50,7 @@ if [[ ${#BACKENDS[@]} -eq 0 ]]; then
     BACKENDS=(uae-interp uae-jit kpx-interp kpx-jit)
 fi
 
-LOG="/tmp/macemu_stoprestart_$$.log"
+LOG="${TMPDIR:-/tmp}/macemu_stoprestart_$$.log"
 TOTAL_PASS=0
 TOTAL_FAIL=0
 TOTAL_SKIP=0

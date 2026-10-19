@@ -51,7 +51,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Start emulator with clean config
-"$BINARY" --config "$TMPCONFIG" --port "$PORT" "$ROM" &>/tmp/test_config_$$.log &
+"$BINARY" --config "$TMPCONFIG" --port "$PORT" "$ROM" &>${TMPDIR:-/tmp}/test_config_$$.log &
 EMU_PID=$!
 
 # Wait for server

@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include <QDir>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QString>
@@ -51,6 +52,8 @@ extern void audio_request_data(uint32_t requested_samples);
 namespace {
 std::string         g_control_name;
 std::string         g_notify_name;
+std::string         g_control_path;     // where QLocalServer puts them (QDir::tempPath(): TMPDIR)
+std::string         g_notify_path;
 IPCBuffer*          g_video_shm = nullptr;
 
 std::thread         g_worker_thread;
@@ -331,6 +334,8 @@ bool control_ipc_init(IPCBuffer* shm)
     pid_t pid = getpid();
     g_control_name = std::string(IPC_CONTROL_NAME_PREFIX) + std::to_string(pid);
     g_notify_name  = std::string(IPC_NOTIFY_NAME_PREFIX)  + std::to_string(pid);
+    g_control_path = QDir::tempPath().toStdString() + "/" + g_control_name;
+    g_notify_path  = QDir::tempPath().toStdString() + "/" + g_notify_name;
     return true;  // QLocalServer::listen happens on the worker thread
 }
 
@@ -359,14 +364,8 @@ void control_ipc_exit(void)
 // not Qt APIs.
 void control_ipc_unlink(void)
 {
-    if (!g_control_name.empty()) {
-        std::string p = "/tmp/" + g_control_name;
-        unlink(p.c_str());
-    }
-    if (!g_notify_name.empty()) {
-        std::string p = "/tmp/" + g_notify_name;
-        unlink(p.c_str());
-    }
+    if (!g_control_path.empty()) unlink(g_control_path.c_str());
+    if (!g_notify_path.empty()) unlink(g_notify_path.c_str());
 }
 
 } // extern "C"

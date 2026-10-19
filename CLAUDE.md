@@ -250,6 +250,8 @@ CPU:
 Media:
   --audio                    Enable audio emulation (default: off)
   --zap-pram                 Clear PRAM on startup
+  --model-id N               Machine type the Mac sees (default: the ROM machine's;
+                             5 = IIci for Systems before 7.5: 7.1 bombs with the Quadra's 14)
   --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog
 
 Networking:
@@ -311,7 +313,7 @@ machine.
 
 ## ROM
 
-Tests expect a Quadra 650 ROM at `~/roms/quadra.rom`, a G3 ROM at `~/storage/roms/g3.rom`, and boot copies (`tests/lib/refresh_test_disk.sh`) of the images `provisioning/build.py` makes: `tests-7.5.5`, `tests-7.6.1`, `tests-9.0.4` (built on demand from the snapshots in `~/storage/baked`); 6.0.8 is still the hand-made `.orig` baseline. Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `cmake -B build -DTEST_ROM=/path/to/rom`. ROMs and disk images are not distributed.
+Tests expect a Quadra 650 ROM at `~/roms/quadra.rom`, a G3 ROM at `~/storage/roms/g3.rom`, and boot copies (`tests/lib/refresh_test_disk.sh`) of the images `provisioning/build.py` makes: `tests-7.5.5`, `tests-7.6.1`, `tests-9.0.4` and `6.0.8` (the SE; built on demand from the snapshots in `~/storage/baked`). Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `cmake -B build -DTEST_ROM=/path/to/rom`. ROMs and disk images are not distributed.
 
 ## Optional Codec Dependencies
 

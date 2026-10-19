@@ -186,6 +186,11 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
 
     args.push_back("--ram");
     args.push_back(std::to_string(config_->ram_mb));
+    if (config_->zappram) args.push_back("--zap-pram");
+    if (config_->model_id) {
+        args.push_back("--model-id");
+        args.push_back(std::to_string(config_->model_id));
+    }
 
     // Forward Boot From selection (disk reorder already lives in disk_paths;
     // bootdriver carries the -62 CD override). Only forward if non-default.

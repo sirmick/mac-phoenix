@@ -33,11 +33,11 @@ MPW=tools/mpw/mpw
 [[ -f "$STORAGE/images/tests-7.5.5.img" ]] || { echo "SKIP: no tests-7.5.5.img (tools/mpw/mpw setup)"; exit 77; }
 [[ -x build/mac-phoenix ]] || { echo "SKIP: no build/mac-phoenix"; exit 77; }
 
-export MPW_STATE=$(mktemp -d /tmp/mpwbuilds.XXXXXX)
+export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/mpwbuilds.XXXXXX)
 export MPW_PORT=$PORT
 export MPW_SYSTEM="test-mpwbuilds-7.5.5.img"
-OUT=$(mktemp -d /tmp/mpwbuilds-out.XXXXXX)
-CW_STATE=$(mktemp -d /tmp/mpwbuilds-cw.XXXXXX)
+OUT=$(mktemp -d ${TMPDIR:-/tmp}/mpwbuilds-out.XXXXXX)
+CW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/mpwbuilds-cw.XXXXXX)
 cleanup() {
     $MPW stop >/dev/null 2>&1
     MPW_STATE=$CW_STATE $MPW --toolchain cw stop >/dev/null 2>&1

@@ -71,7 +71,7 @@ cat > "$TMPCONFIG" << EOF
 }
 EOF
 
-"$BINARY" --config "$TMPCONFIG" --port "$PORT" "$ROM" &>/tmp/test_extfs_$$.log &
+"$BINARY" --config "$TMPCONFIG" --port "$PORT" "$ROM" &>${TMPDIR:-/tmp}/test_extfs_$$.log &
 EMU_PID=$!
 
 for i in $(seq 1 20); do
@@ -136,7 +136,7 @@ EOF
 
 # Test 5: Single --extfs flag
 "$BINARY" --config "$TMPCONFIG" --port "$PORT" \
-    --extfs "$TMPDIR_EXTFS" "$ROM" &>/tmp/test_extfs_$$.log &
+    --extfs "$TMPDIR_EXTFS" "$ROM" &>${TMPDIR:-/tmp}/test_extfs_$$.log &
 EMU_PID=$!
 
 for i in $(seq 1 20); do
@@ -158,7 +158,7 @@ sleep 0.5
 
 # Test 6: Multiple --extfs flags
 "$BINARY" --config "$TMPCONFIG" --port "$PORT" \
-    --extfs "$TMPDIR_EXTFS" --extfs "/tmp" "$ROM" &>/tmp/test_extfs_$$.log &
+    --extfs "$TMPDIR_EXTFS" --extfs "/tmp" "$ROM" &>${TMPDIR:-/tmp}/test_extfs_$$.log &
 EMU_PID=$!
 
 for i in $(seq 1 20); do
@@ -195,7 +195,7 @@ cat > "$TMPCONFIG" << EOF
 EOF
 
 "$BINARY" --config "$TMPCONFIG" --port "$PORT" \
-    "$ROM" &>/tmp/test_extfs_$$.log &
+    "$ROM" &>${TMPDIR:-/tmp}/test_extfs_$$.log &
 EMU_PID=$!
 
 for i in $(seq 1 20); do
@@ -232,7 +232,7 @@ cat > "$TMPCONFIG" << EOF
 EOF
 
 "$BINARY" --config "$TMPCONFIG" --port "$PORT" \
-    --timeout 5 "$ROM" &>/tmp/test_extfs_$$.log &
+    --timeout 5 "$ROM" &>${TMPDIR:-/tmp}/test_extfs_$$.log &
 EMU_PID=$!
 
 for i in $(seq 1 20); do

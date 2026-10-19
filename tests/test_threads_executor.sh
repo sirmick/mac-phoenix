@@ -63,8 +63,8 @@ fi
 # A scratch copy: Frontier writes its database, the Finder its desktop.
 cp "$SOURCE" "$IMAGE"
 
-EXTFS_DIR=$(mktemp -d /tmp/macthreadtest-extfs.XXXXXX)
-LOG=/tmp/macthreadtest_$$.log
+EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/macthreadtest-extfs.XXXXXX)
+LOG=${TMPDIR:-/tmp}/macthreadtest_$$.log
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
         kill "$EMU_PID" 2>/dev/null || true

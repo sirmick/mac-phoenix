@@ -632,3 +632,12 @@ set_tests_properties(guest_suite_ppc_mame PROPERTIES
 )
 
 
+
+# Every test's scratch (logs, ExtFS folders, mktemp dirs) on the SSD, not in
+# /tmp: /tmp is RAM-backed here, and RAM is what runs out.
+set(TEST_TMPDIR "$ENV{HOME}/storage/tmp" CACHE PATH "TMPDIR for the tests (scratch on disk, not tmpfs)")
+file(MAKE_DIRECTORY "${TEST_TMPDIR}")
+get_property(_all_tests DIRECTORY PROPERTY TESTS)
+foreach(_t IN LISTS _all_tests)
+  set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT "TMPDIR=${TEST_TMPDIR}")
+endforeach()

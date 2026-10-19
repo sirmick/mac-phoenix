@@ -1,0 +1,4 @@
+{
+ "note": "The standard System 6.0.8 boot disk for the Mac SE (SE ROM, 4 MB): os-6.0.8 as Apple's Installer made it (the SE's System, all printer software). What the SE boot tests and the web UI's se profile boot.",
+ "base": "os-6.0.8"
+}

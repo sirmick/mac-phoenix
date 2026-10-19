@@ -18,12 +18,6 @@
    "launch": "{media}:Python 1.5.2 Installer"
   },
   {
-   "wait_for": {
-    "button": "Continue"
-   },
-   "timeout": 90
-  },
-  {
    "shot": "1-readme"
   },
   {
@@ -34,7 +28,8 @@
     "button": "Install",
     "exact": true
    },
-   "max": 10
+   "max": 30,
+   "note": "the readme splash comes first on some runs, not on others"
   },
   {
    "click": {

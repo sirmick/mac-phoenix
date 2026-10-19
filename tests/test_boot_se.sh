@@ -14,7 +14,7 @@ set -euo pipefail
 TIMEOUT=30
 ROM="${MACEMU_SE_ROM:-$HOME/storage/roms/256KB ROMs/1987-03 - B2E362A8 - Mac SE.ROM}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DISK="${MACEMU_SE_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" system-6.0.8)}"
+DISK="${MACEMU_SE_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" 6.0.8)}"
 PORT=18100        # Use non-default port to avoid conflicts
 SIG_PORT=18101    # WebRTC signaling port
 BINARY="${MACEMU_BINARY:-$(dirname "$0")/../build/mac-phoenix}"
@@ -58,7 +58,7 @@ echo "Port: $PORT"
     --config /dev/null --dismiss-shutdown-dialog \
     --port "$PORT" \
     --ram 4 --screen 512x342 ${CORE:+--core "$CORE"} \
-    --disk "$DISK" "$ROM" &>/tmp/macemu_test_se_$$.log &
+    --disk "$DISK" "$ROM" &>${TMPDIR:-/tmp}/macemu_test_se_$$.log &
 EMU_PID=$!
 
 cleanup() {
@@ -78,7 +78,7 @@ for i in $(seq 1 20); do
     fi
     if ! kill -0 "$EMU_PID" 2>/dev/null; then
         echo " FAIL: emulator exited early"
-        tail -20 /tmp/macemu_test_se_$$.log
+        tail -20 ${TMPDIR:-/tmp}/macemu_test_se_$$.log
         exit 1
     fi
     echo -n "."
@@ -99,7 +99,7 @@ while true; do
         echo ""
         echo "FAIL: Timeout after ${TIMEOUT}s (last phase: $LAST_PHASE)"
         echo "--- emulator log tail ---"
-        tail -10 /tmp/macemu_test_se_$$.log
+        tail -10 ${TMPDIR:-/tmp}/macemu_test_se_$$.log
         exit 1
     fi
 

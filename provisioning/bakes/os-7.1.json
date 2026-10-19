@@ -1,5 +1,5 @@
 {
- "note": "System 7.1 for the Quadra 650 from Apple's installers: the '7.1-C/Q610, C/Q650, Q800 1.1' set's InstallMeFirst disk (Installer, System Enabler 040) with the generic System 7.1 disks (Legacy CD), mounted through Disk Copy; Customize 'System Software for any Macintosh'. WIP: the end of the install.",
+ "note": "System 7.1 for the Quadra 650 from Apple's installers: the '7.1-C/Q610, C/Q650, Q800 1.1' set's InstallMeFirst disk (Installer, System Enabler 040) with the generic System 7.1 disks (Legacy CD), mounted through Disk Copy; Customize 'System Software for any Macintosh'. Every guest runs with --model-id 5 (the Mac IIci's Gestalt type, Basilisk II's default): with the Quadra profile's 14 (Quadra 900) 7.1 bombs at the boot-blocks stage, an empty bomb box; Systems before 7.5 need 5. 7.1 has no File System Manager, so no Host volume and no BridgeAgent: its first boot is driven without it (first_boot_agent).",
  "kind": "os",
  "version": "7.1",
  "machines": [
@@ -74,9 +74,6 @@
    "timeout": 90
   },
   {
-   "agent_exit": true
-  },
-  {
    "click": {
     "button": "OK"
    },
@@ -137,5 +134,10 @@
     "button": "Quit"
    }
   }
- ]
+ ],
+ "args": [
+  "--model-id",
+  "5"
+ ],
+ "first_boot_agent": false
 }

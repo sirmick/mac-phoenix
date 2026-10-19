@@ -89,10 +89,10 @@ fi
 exec 3>&- 2>/dev/null || true
 
 # --- Setup ---
-EXTFS_DIR=$(mktemp -d /tmp/mactest-net-extfs.XXXXXX)
+EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/mactest-net-extfs.XXXXXX)
 python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
 printf 'net_results.txt\rnetdeep\r' > "$EXTFS_DIR/suite.cfg"
-LOG="/tmp/mactest_net_$$.log"
+LOG="${TMPDIR:-/tmp}/mactest_net_$$.log"
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then

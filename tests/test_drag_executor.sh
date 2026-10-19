@@ -53,7 +53,7 @@ if [[ -z "${DISK:-}" || ! -f "$DISK" ]]; then echo "SKIP: Disk not found: ${DISK
 DESKTOP="$STORAGE/executor-systems/$(basename "$DISK")/Desktop Folder"
 CLIPPING="$DESKTOP/text clipping"
 
-EXTFS_DIR=$(mktemp -d /tmp/macdragtest-extfs.XXXXXX)
+EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/macdragtest-extfs.XXXXXX)
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
         kill "$EMU_PID" 2>/dev/null || true
@@ -89,13 +89,13 @@ EXTRA_FLAGS=(--executor-system "$(basename "$DISK")" --executor-writable-images)
 [[ -n "$CORE" ]] && EXTRA_FLAGS+=(--core "$CORE")
 "$BINARY" --backend executor --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
-    --port "$PORT" --extfs "$EXTFS_DIR" "${EXTRA_FLAGS[@]}" &>/tmp/macdragtest_$$.log &
+    --port "$PORT" --extfs "$EXTFS_DIR" "${EXTRA_FLAGS[@]}" &>${TMPDIR:-/tmp}/macdragtest_$$.log &
 EMU_PID=$!
 
 echo -n "HTTP up..."
 for i in $(seq 1 20); do
     curl -sf "http://localhost:$PORT/api/status" >/dev/null 2>&1 && { echo " ok"; break; }
-    kill -0 "$EMU_PID" 2>/dev/null || { echo " emulator died"; tail -20 /tmp/macdragtest_$$.log; exit 1; }
+    kill -0 "$EMU_PID" 2>/dev/null || { echo " emulator died"; tail -20 ${TMPDIR:-/tmp}/macdragtest_$$.log; exit 1; }
     sleep 0.5
 done
 curl -sf -X POST "http://localhost:$PORT/api/emulator/start" >/dev/null
@@ -148,7 +148,7 @@ done
 if [[ ! -e "$CLIPPING" ]]; then
     echo " not made"
     ls -la "$DESKTOP" 2>/dev/null || true
-    grep -i "drag\|FATAL" /tmp/macdragtest_$$.log | tail -10
+    grep -i "drag\|FATAL" ${TMPDIR:-/tmp}/macdragtest_$$.log | tail -10
     exit 1
 fi
 
@@ -158,7 +158,7 @@ drag 100 462 300 250
 sleep 4
 STATUS=$(curl -sf "http://localhost:$PORT/api/status" || echo '')
 echo "$STATUS" | grep -q '"emulator_running": true' || { echo "FAIL: emulator not running after the drop"; exit 1; }
-grep -q "FATAL CRASH" /tmp/macdragtest_$$.log && { echo "FAIL: crash"; grep -A3 "FATAL" /tmp/macdragtest_$$.log | head; exit 1; }
+grep -q "FATAL CRASH" ${TMPDIR:-/tmp}/macdragtest_$$.log && { echo "FAIL: crash"; grep -A3 "FATAL" ${TMPDIR:-/tmp}/macdragtest_$$.log | head; exit 1; }
 
 echo "PASS: clipping made on the desktop and dragged back"
 curl -sf --max-time 10 -X POST "http://localhost:$PORT/api/shutdown" -d '{}' >/dev/null 2>&1 || true

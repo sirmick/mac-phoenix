@@ -45,6 +45,8 @@ the same software is recognised as the same.
 |---|---|
 | `Development.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
 | `dev-7.5.5.img`, `dev-7.6.1.img` | the base Systems (`provisioning/bases.json`) plus the snapshots' System Folder parts: MetroNub, CFM-68K and PowerPC libraries, MacsBug 6.6.3, PythonCore, ... |
+| `7.1.img` | System 7.1 for the Quadra 650 (`os-7.1`): boots with `--model-id 5` (bases.json `args`; web UI profile `68k-7.1`); no BridgeAgent (no File System Manager, so no Host volume) |
+| `6.0.8.img` | System 6.0.8 for the Mac SE (SE ROM, 4 MB): installed from the Legacy CD's floppies by Apple's Installer (`os-6.0.8`, machine `se`) |
 | `8.6.img`, `9.0.4.img` | Mac OS 8.6 and 9.0.4 for the PowerPC machine (G3 ROM): installed from their CDs (`os-8.6`, `os-9.0.4`), with CarbonLib 1.6, StuffIt Expander 6.0.1, Disk Copy 6.3.3, MacsBug, TCP/IP on DHCP |
 | `Development-9.img` | the 8.6 / 9 development volume: CodeWarrior Pro 7.2 (7.1 Tools CD + the 7.2 PowerPC plugins; needs CarbonLib 1.3.1+), MPW-GM; `Languages`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
 | `dev-8.6.img`, `dev-9.0.4.img` | the 8.6 / 9.0.4 disks plus those tools' System Folder parts; boot with `Development-9.img` |
@@ -83,7 +85,9 @@ volume (`{target}`, named `Install`) as the install target. Kinds:
 has are kept, CFM code that differs becomes one fat file
 (`provisioning/fat_cfm.py`), aliases keep the first, anything else that
 differs fails unless `"prefer"` says which run's file to keep.
-A bake without `"machines"` runs on its base's (`bases.json`: 8.6 and
+Machines: `68k` (Quadra 650), `ppc` (G3), `se` (Mac SE: System 6, so no
+BridgeAgent; `launch`/`open` go through the Finder by name and Command-O,
+shutdown through Special > Shut Down). A bake without `"machines"` runs on its base's (`bases.json`: 8.6 and
 9.0.4 are PowerPC only), else on the 68k machine. A medium with `"as_is":
 true` goes onto the Media volume as the MacBinary file it is, not opened on
 the host: a self-mounting HFS+ image (CarbonLib 1.6) that only the guest

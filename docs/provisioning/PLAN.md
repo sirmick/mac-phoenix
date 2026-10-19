@@ -253,7 +253,7 @@ Images: `Development.img` (one volume for the 7.x Systems) and
 | **P3b** | Backport the driving techniques to the GUI recipes (named clicks, drawn text for app-drawn option lists, `wait_for` instead of fixed waits, no per-machine steps): MacPerl and MacPython first (per-machine drags), then THINK C, Symantec C++, HyperCard, StuffIt Expander, Frontier's and Disk Copy's first launches; replayed with someone watching | done 2026-10-17: MacPerl, MacPython (one recipe for both machines now), THINK C, Symantec C++, HyperCard (its System upgrades unticked by name), Frontier's first launch, StuffIt Expander, Disk Copy: named controls, drawn text, `until` repeats; no pixels, no per-machine steps. 2026-10-17, later: no screen coordinates in any recipe (step classification: 0 left, from 5 popups at fixed points and 8 clicks offset from drawn text): popups pressed where their value is drawn (`{"popup": {"text": "Easy Install"}}`); the Apple Installer's and VISE's option lists tick a row when its label is clicked; 7.5.5's System Software group opened by `{"click": {"row": ...}}` (the list's user item, left edge); every option click followed by a `check` (Selected size / Approximate disk space needed, HyperCard's checkbox values). Everything re-baked unattended; snapshot content hashes unchanged except run noise (installer log dates, preferences, aliases, Frontier.root; os captures now drop BridgeAgent's `Trash:Old-BA-<time>` copies). bake.py compares every re-bake's install with the snapshot it replaces (`snapshot.install_diff`: aliases, installer logs and a bake's `volatile` paths by name; for os bakes the System's preferences, and fonts and control panels by size); the next full re-bake reported the same install for all 22 |
 | **P4** | `dev-*`: the development set re-baked on the `os` snapshots (the P3b recipes; the rewrapped expand-only snapshots just re-baked) (until then: the first captures of 2026-10-16, rewrapped into the generic layout); `Development.img`, `dev-7.5.5/7.6.1.img`; the four-cell app matrix | done 2026-10-17: every dev snapshot re-baked on `tools-7.6.1` (none rewrapped any more); `dev-7.x` = the standard 7.x disks + the dev System Folder parts; 18/18 (17 apps + aliases) on uae and kpx × 7.5.5 and 7.6.1 |
 | **P5** | Switch-over: tests, the boot matrix and web UI profiles boot baked images; the hand-made `.orig` disks retired | tests switched 2026-10-17: they boot copies (tests/lib/refresh_test_disk.sh) of `tests-7.5.5` / `tests-7.6.1` (standard disk + classic 68k MacPerl, Frontier, MPW), `tools/mpw` uses the built `mpw.img`; 6.0.8 stays hand-made; 9.0.4 switched 2026-10-19 (`tests-9.0.4` = the standard 9.0.4 disk: guest_suite_ppc{,_mame}, bridge_trap_ppc and the network suite pass on it). Of the 48 guest-booting ctests all pass except `boot_uae_jit` (known UAE JIT stalls). The five Executor tests on the mame-68k core that failed on the baked disks (guest/finder/keyboard suites, aslm, threads) were Executor's `PrOpen`: it read STR -8192 (the printer chosen in the Chooser) without checking it, and a baked System has never had a printer chosen; a NULL handle reads guest address 0, mapped on the UAE core, a host null pointer on mame-68k (fixed 2026-10-17). Web UI profiles switched 2026-10-19: `68k` 7.6.1, `ppc` 9.0.4, new `ppc-8.6`, `68k-dev` (dev-7.6.1 + Development), `ppc-dev` (dev-9.0.4 + Development-9); the hand-made disks only as fallbacks |
-| P6 | System 6.0.8 (`os`, `tools-6`) | later |
+| **P6** | System 6.0.8 (`os`, `tools-6`) | `os` done 2026-10-19: `os-6.0.8` on the Mac SE (machine `se`: the SE ROM, 4 MB, 512x342), the Legacy CD's 800K set, all four floppies attached as disks (no swapping), the Installer's Easy Install (the SE System, all printer software) onto a blank 40 MB disk, run from the hand-made 6.0.8 disk. No BridgeAgent before System 7: `launch`/`open` select each name in the Finder and press Command-O, the guest shuts down with Special > Shut Down (`menu` step: titles and items by their drawn text; along the menu bar when it was drawn before the text feed). `6.0.8.img` = os-6.0.8; the SE boot cells and the web UI's `se` profile boot it. `tools-6` (StuffIt Expander 4, Disk Copy 4.2) to do |
 | **P7** | Mac OS 8.6 and 9.0.4 (`os`, `tools-8/9`, dev additions) | done 2026-10-18, PowerPC only: `os-8.6` (the 8.6 CD's Mac OS Install run from 7.6.1) and `os-9.0.4` (Mac OS 9 Install, then the 9.0.4 Update, both from the 9 CD, run from 8.6; its version is the PowerPC Enabler's, the System file says 9.0), standard install, Apple driver update off, the Setup Assistant quit at first boot. `tools-8.6`/`tools-9.0.4` add CarbonLib 1.6 (HFS+ self-mounting image, mounted by the guest: media `as_is`), StuffIt Expander 6.0.1 and Disk Copy 6.3.3; `8.6.img` adds DHCP networking (9.0.4 is on DHCP as installed) and MacsBug. `Development-9.img` (shared by `dev-8.6`/`dev-9.0.4`): MPW-GM, MacPerl 5.6.1r2, MacPython-OS9 2.3.5 (needs CarbonLib 1.5+), BBEdit Lite 6.1.2, pinned with macfetch, plus HyperCard, Frontier, ResEdit, Resorcerer, ZTerm, MacsBug, Disk Copy; CodeWarrior Pro 7.2 (2026-10-19: the newest that runs on 9.0.4, needing CarbonLib 1.3.1+; Pro 8 needs 9.2.2): the 7.1 Tools CD's installer and update, then the 7.2 PowerPC compiler and linker plugins by COPY replace, first launch done. test_image: all apps launch on 8.6 and 9.0.4 (kpx). Not yet: 9.2.2 (and with it CodeWarrior 8) |
 | P8 | Collections (apps, games) from the existing collection disks' software | later |
 
@@ -303,17 +303,16 @@ As of 2026-10-16:
   Update only updates the startup disk, so it runs at the first boot from
   the new disk, its floppies attached as disks (`first_boot_disks`), and
   ends in its own Restart.
-* **7.1** (`bakes/os-7.1.json`, parked 2026-10-17): the install works,
-  unattended, to "Installation on Macintosh HD was successful" (the
-  `7.1-C/Q610, C/Q650, Q800 1.1` InstallMeFirst disk with the generic 7.1
-  disks, Customize "System Software for any Macintosh"; System Enabler 040
-  lands in the System Folder). But the first boot bombs at the boot-blocks
-  stage (an empty bomb box), and so does the old hand-made
-  `system-7.1.img`: the emulator can't boot 7.1 on the Quadra 650 ROM.
-  Suspects: our ROM/System patches (written against 7.5+) hitting 7.1's
-  resources; 24-bit addressing from PRAM (the ROM and framebuffer sit above
-  16 MB); RAM size. Tests: `--ram 8`, `--zap-pram`, the boot log's last
-  CHECKLOAD before the bomb.
+* **7.1** (`bakes/os-7.1.json`): parked 2026-10-17 (the install worked,
+  the first boot bombed at the boot-blocks stage with an empty bomb box);
+  solved 2026-10-19: the model ID. Our Quadra profile reports 14 (Quadra
+  900); Basilisk II's README: Systems before 7.5 may only run with 5 (IIci).
+  With `--model-id 5` the installed 7.1 (System Enabler 040 and all) boots
+  to the Finder. The bake's `"args"` give every guest `--model-id 5`; bases
+  `os-7.1`/`standard-7.1` carry it to what boots them (test_image, bakes on
+  it; the web UI's `68k-7.1` profile sets `model_id`). 7.1 has no File
+  System Manager, so no Host volume and no BridgeAgent: the first boot runs
+  without it (`"first_boot_agent": false`: Finder and menus), as System 6.
 
 ### Driving friction
 

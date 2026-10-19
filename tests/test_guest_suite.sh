@@ -142,7 +142,7 @@ fi
 
 # --- Setup ExtFS shared folder ---
 
-EXTFS_DIR=$(mktemp -d /tmp/mactest-extfs.XXXXXX)
+EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/mactest-extfs.XXXXXX)
 if [[ -n "$SCRIPT_NAME" ]]; then
     python3 "$GUEST_DIR/install_perl_test.py" "$PERL_SCRIPT" "$EXTFS_DIR" "$SCRIPT_NAME"
 else
@@ -208,7 +208,7 @@ fi
     --config /dev/null "${DISMISS_FLAG[@]}" "${MODE_FLAGS[@]}" \
     --port "$PORT" \
     "${DISK_FLAGS[@]}" --extfs "$EXTFS_DIR" \
-    "${EXTRA_FLAGS[@]}" ${ROM:+"$ROM"} &>/tmp/mactest_guest_$$.log &
+    "${EXTRA_FLAGS[@]}" ${ROM:+"$ROM"} &>${TMPDIR:-/tmp}/mactest_guest_$$.log &
 EMU_PID=$!
 
 # Wait for HTTP server
@@ -220,7 +220,7 @@ for i in $(seq 1 20); do
     fi
     if ! kill -0 "$EMU_PID" 2>/dev/null; then
         echo " FAIL: emulator exited early"
-        tail -20 /tmp/mactest_guest_$$.log
+        tail -20 ${TMPDIR:-/tmp}/mactest_guest_$$.log
         exit 1
     fi
     echo -n "."
@@ -239,7 +239,7 @@ while true; do
     if [[ $ELAPSED -ge $BOOT_TIMEOUT ]]; then
         echo ""
         echo "FAIL: Boot timeout after ${BOOT_TIMEOUT}s"
-        tail -10 /tmp/mactest_guest_$$.log
+        tail -10 ${TMPDIR:-/tmp}/mactest_guest_$$.log
         exit 1
     fi
 

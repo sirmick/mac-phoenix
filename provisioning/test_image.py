@@ -79,7 +79,7 @@ def run(images, machine, port, only, log=print):
     apps = [e for e in apps if not only or only.lower() in e["app"].lower()]
 
     def start():
-        g = Guest(work, bake.BACKENDS[machine], disks, [], port, bake.STORAGE)
+        g = Guest(work, bake.BACKENDS[machine], disks, [], port, bake.STORAGE, extra=image_args(images[0]))
         try:
             g.wait_finder(240)
         except BaseException:
@@ -130,6 +130,23 @@ def run(images, machine, port, only, log=print):
     return failed == 0
 
 
+def image_args(name):
+    """Emulator arguments a built image needs: its base System's (bases.json
+    "args": --model-id 5 for 7.1)."""
+    seen = set()
+    while name and name not in seen:
+        seen.add(name)
+        try:
+            d = bake.load_json(os.path.join(bake.HERE, "images", name + ".json"))
+        except (OSError, ValueError):
+            break
+        base = bake.bases().get(d.get("base", ""), {})
+        if "args" in base:
+            return base["args"]
+        name = base.get("built")
+    return []
+
+
 def image_machines(name):
     """The machines a built image boots on: its base System's (bases.json
     "machines": 8.6 and 9.0.4 the PowerPC one), else both."""
@@ -144,7 +161,7 @@ def image_machines(name):
         if "machines" in base:
             return base["machines"]
         name = base.get("built")
-    return sorted(bake.BACKENDS)
+    return bake.BOTH
 
 
 def main():

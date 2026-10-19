@@ -27,7 +27,7 @@ if [[ -f "$ROM" ]]; then
     ARGS+=("$ROM")
 fi
 
-"$BINARY" --backend uae --timeout 20 --port "$PORT" "${ARGS[@]}" &>/tmp/macemu_api_test_$$.log &
+"$BINARY" --backend uae --timeout 20 --port "$PORT" "${ARGS[@]}" &>${TMPDIR:-/tmp}/macemu_api_test_$$.log &
 EMU_PID=$!
 
 cleanup() {
@@ -48,7 +48,7 @@ for i in $(seq 1 20); do
     fi
     if ! kill -0 "$EMU_PID" 2>/dev/null; then
         echo " FAIL: emulator exited"
-        cat /tmp/macemu_api_test_$$.log | tail -20
+        cat ${TMPDIR:-/tmp}/macemu_api_test_$$.log | tail -20
         exit 1
     fi
     echo -n "."
@@ -56,7 +56,7 @@ for i in $(seq 1 20); do
 done
 if [[ "$SERVER_UP" != "true" ]]; then
     echo " FAIL: server did not start"
-    cat /tmp/macemu_api_test_$$.log | tail -20
+    cat ${TMPDIR:-/tmp}/macemu_api_test_$$.log | tail -20
     exit 1
 fi
 

@@ -64,7 +64,7 @@ echo "ROM: $ROM"
 echo "DISK: $DISK"
 
 # Create temp config with ISO as cdrom
-TMPCONFIG=$(mktemp /tmp/macemu_ppc_config_XXXXXX.json)
+TMPCONFIG=$(mktemp ${TMPDIR:-/tmp}/macemu_ppc_config_XXXXXX.json)
 cat > "$TMPCONFIG" << EOJSON
 {
   "rom": "$ROM",
@@ -75,7 +75,7 @@ cat > "$TMPCONFIG" << EOJSON
 }
 EOJSON
 
-LOG="/tmp/macemu_ppc_test_$$.log"
+LOG="${TMPDIR:-/tmp}/macemu_ppc_test_$$.log"
 
 cleanup() {
     if kill -0 "$EMU_PID" 2>/dev/null; then

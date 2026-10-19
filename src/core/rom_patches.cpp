@@ -1656,7 +1656,8 @@ static bool patch_rom_32(void)
 
 	// Set model ID from machine profile
 	bp = ROMBaseHost + UniversalInfo + 18;		// productKind
-	*bp = machine_profile().model_id;
+	*bp = config::EmulatorConfig::instance().model_id ? config::EmulatorConfig::instance().model_id
+	                                                  : machine_profile().model_id;
 
 #if !ROM_IS_WRITE_PROTECTED
 #if defined(USE_SCRATCHMEM_SUBTERFUGE)

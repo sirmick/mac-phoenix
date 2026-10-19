@@ -4100,6 +4100,7 @@ function configFromServerJson(cfg) {
         jit: cfg.jit ?? false,
         idlewait: cfg.idlewait ?? true,
         zappram: cfg.zappram ?? false,
+        model_id: cfg.model_id || 0,   // no control: a profile sets it (5 for System 7.1)
         dismiss_shutdown_dialog: cfg.dismiss_shutdown_dialog ?? true,
         bridge_enabled: cfg.bridge_enabled ?? false,
         browser_enabled: cfg.browser_enabled ?? false,
@@ -4235,6 +4236,7 @@ function buildConfigJson() {
         max_resolution: document.getElementById('cfg-max-resolution')?.value || '',
         audio: document.getElementById('cfg-sound')?.checked ?? true,
         zappram: document.getElementById('cfg-zappram')?.checked ?? false,
+        model_id: currentConfig.model_id || 0,
         dismiss_shutdown_dialog: document.getElementById('cfg-dismiss-shutdown-dialog')?.checked ?? true,
         bridge_enabled: document.getElementById('cfg-bridge-enabled')?.checked ?? false,
         browser_enabled: document.getElementById('cfg-browser-enabled')?.checked ?? false,
@@ -4771,13 +4773,16 @@ const ROM_PROFILES = [
     // image, or a boot disk and the volumes that go with it).
     // The baked disks come first: what provisioning/build.py makes from
     // Apple's installers (docs/Provisioning.md); the hand-made ones are
-    // fallbacks until they're retired. 6.0.8 isn't baked yet.
+    // fallbacks until they're retired.
     { name: '68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 64, screen: '1024x768', disks: ['7.6.1.img', '7.5.5.img', 'macos-7.5.5.img', 'macos-7.6.1.img'] },
+    // 7.1 needs the IIci's model ID (5): with the Quadra's 14 it bombs at boot.
+    { name: '68k-7.1', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false, model_id: 5,
+      ram_mb: 64, screen: '640x480', disks: ['7.1.img'] },
     { name: '68k-dev', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'Development.img']] },
     { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 4, screen: '512x342', disks: ['system-6.0.8.img'] },
+      ram_mb: 4, screen: '512x342', disks: ['6.0.8.img', 'system-6.0.8.img'] },
     { name: 'ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img', 'macos-9.0.4.img', '7.6.1.img', 'macos-7.5.5.img'] },
     { name: 'ppc-8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
@@ -4806,7 +4811,7 @@ async function seedBuiltinProfiles(cfg) {
             ...cfg, configs: undefined,
             emulator: p.emulator, backend: p.backend, cpu_core: p.cpu_core, jit: p.jit,
             rom, disks, cdroms: [], bootdriver: 0,
-            ram_mb: p.ram_mb, screen: p.screen,
+            ram_mb: p.ram_mb, screen: p.screen, model_id: p.model_id || 0,
         };
     }
     // Executor: real Finder on the 7.5.5 System, fresh each run.

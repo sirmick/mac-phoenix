@@ -1,5 +1,5 @@
 {
- "note": "Mac OS 7.6.1, universal, from Apple's installers: Mac OS 7.6 from its CD (the System module's own Installer, Custom Install 'Universal system for any supported computer'; no OpenDoc, QuickDraw 3D, MacLinkPlus), a reboot, then the 7.6.1 Update floppies from the Legacy CD mounted through Disk Copy; first boot from the new disk alone. BridgeAgent quits itself while each Installer runs (agent_exit): it dies otherwise (PLAN.md, P2 status).",
+ "note": "Mac OS 7.6.1, universal, from Apple's installers: Mac OS 7.6 from its CD (the System module's own Installer, Custom Install 'Universal system for any supported computer'; no OpenDoc, QuickDraw 3D, MacLinkPlus) then the 7.6.1 Update floppies from the Legacy CD mounted through Disk Copy; first boot from the new disk alone.",
  "kind": "os",
  "version": "7.6.1",
  "cdroms": [
@@ -41,9 +41,6 @@
     "button": "Agree"
    },
    "max": 10
-  },
-  {
-   "agent_exit": true
   },
   {
    "click": {
@@ -113,9 +110,6 @@
    }
   },
   {
-   "reboot": true
-  },
-  {
    "open": "{media}:Install 1.img"
   },
   {
@@ -152,9 +146,6 @@
     "button": "Agree"
    },
    "timeout": 60
-  },
-  {
-   "agent_exit": true
   },
   {
    "click": {

@@ -41,9 +41,6 @@
    "launch": "Disk 1:Installer"
   },
   {
-   "agent_exit": true
-  },
-  {
    "click": {
     "button": "OK"
    },
@@ -87,9 +84,6 @@
    "click": {
     "button": "Quit"
    }
-  },
-  {
-   "reboot": true
   }
  ],
  "os": "tools-7.6.1"

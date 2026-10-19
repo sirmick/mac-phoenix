@@ -10,7 +10,7 @@ There is no `jGNEFilter` patch and no polling of files: the agent sleeps in `Wai
 ## Enabling the Bridge
 
 ```bash
-./build/mac-phoenix --bridge ...           # auto: creates /tmp/macemu-bridge-XXXXXX, mounts it as ExtFS
+./build/mac-phoenix --bridge ...           # auto: creates <storage>/tmp/macemu-bridge-XXXXXX (removed at exit), mounts it as ExtFS
 ./build/mac-phoenix --bridge --extfs /my/dir ...   # uses /my/dir as the bridge dir
 ```
 

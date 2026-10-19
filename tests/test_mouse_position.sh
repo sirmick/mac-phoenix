@@ -61,7 +61,7 @@ EXTRA_FLAGS=()
 "$BINARY" --backend "$BACKEND" --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog \
     --port "$PORT" \
-    --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>/tmp/macemu_mouse_test_$$.log &
+    --disk "$DISK" "${EXTRA_FLAGS[@]}" "$ROM" &>${TMPDIR:-/tmp}/macemu_mouse_test_$$.log &
 EMU_PID=$!
 
 cleanup() {

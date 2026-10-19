@@ -7,19 +7,19 @@
 #   - record PASS/FAIL/TIMEOUT/CRASH/LIES/NOSHOT with elapsed + checkloads
 #
 # Outputs:
-#   /tmp/boot_matrix/results.csv           — machine-readable one row per cell
-#   /tmp/boot_matrix/<label>.png           — end-state screenshot (on PASS)
-#   /tmp/boot_matrix/<label>.log           — emulator stdout/stderr
+#   ${TMPDIR:-/tmp}/boot_matrix/results.csv           — machine-readable one row per cell
+#   ${TMPDIR:-/tmp}/boot_matrix/<label>.png           — end-state screenshot (on PASS)
+#   ${TMPDIR:-/tmp}/boot_matrix/<label>.log           — emulator stdout/stderr
 #   stdout                                 — human-readable grid summary at the end
 #
 # Usage:
-#   tests/run_boot_matrix.sh [--only label1,label2,...] [--out /tmp/boot_matrix]
+#   tests/run_boot_matrix.sh [--only label1,label2,...] [--out ${TMPDIR:-/tmp}/boot_matrix]
 #
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PER_CELL="$HERE/test_boot_matrix.sh"
-OUT_DIR="/tmp/boot_matrix"
+OUT_DIR="${TMPDIR:-/tmp}/boot_matrix"
 ONLY=""
 
 while [[ $# -gt 0 ]]; do
