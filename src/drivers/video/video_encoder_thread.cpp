@@ -320,6 +320,7 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
     // Previous frame buffer for dirty rect computation (PNG/WebP only)
     std::vector<uint32_t> prev_frame;
     bool have_prev_frame = false;
+    std::vector<uint32_t> ipc_frame;  // this frame, copied out of the SHM
 
     // Dirty rect statistics
     int dirty_rect_frames = 0;
@@ -446,14 +447,29 @@ void video_encoder_main(VideoOutput* video_output, config::EmulatorConfig* confi
             if (fc <= ipc_last_frame_count) continue;
             ipc_last_frame_count = fc;
 
-            uint32_t idx = IPC_ATOMIC_LOAD(ipc_shm->ready_index);
-            if (idx >= IPC_NUM_BUFFERS) continue;
+            // The child takes the three buffers in turn without knowing
+            // which one we read: two frames after this one it writes into
+            // ours. Copy the frame out and keep the copy only if fewer than
+            // two frames were completed meanwhile, else take the newest.
+            // Diffing in place, the saved previous frame could hold pixels
+            // that were never encoded, and later diffs would miss them.
+            bool copied = false;
+            for (int attempt = 0; attempt < 4 && !copied; attempt++) {
+                uint64_t fc0 = IPC_ATOMIC_LOAD(ipc_shm->frame_count);
+                uint32_t idx = IPC_ATOMIC_LOAD(ipc_shm->ready_index);
+                if (idx >= IPC_NUM_BUFFERS) break;
+                w = ipc_shm->width;
+                h = ipc_shm->height;
+                if (w <= 0 || h <= 0) break;
+                ipc_frame.resize((size_t)w * h);
+                memcpy(ipc_frame.data(), ipc_shm->frames[idx], (size_t)w * h * 4);
+                uint64_t fc1 = IPC_ATOMIC_LOAD(ipc_shm->frame_count);
+                copied = fc1 - fc0 < 2;
+                ipc_last_frame_count = fc0;  // a frame finished during the copy is still new
+            }
+            if (!copied) continue;
 
-            w = ipc_shm->width;
-            h = ipc_shm->height;
-            if (w <= 0 || h <= 0) continue;
-
-            pixels = reinterpret_cast<const uint32_t*>(ipc_shm->frames[idx]);
+            pixels = ipc_frame.data();
             format = static_cast<PixelFormat>(ipc_shm->pixel_format);
             from_ipc = true;
 
