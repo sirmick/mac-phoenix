@@ -3727,6 +3727,45 @@ function coreSupportsJit(backend, core) {
     return core === 'uae';
 }
 
+// The machine type the Mac is told it is (config "model_id", --model-id:
+// Gestalt ID minus 6, the ROM's productKind). Only patch_rom_32 machines on
+// the Quadra profile -- the 1MB 68k ROMs -- take one; elsewhere it does
+// nothing, so the control is hidden and the setting cleared. 0 = the
+// profile's own. Add a type here only with an OS that needs it.
+const MACHINE_TYPES = [
+    [0, 'Default (Quadra 900)'],
+    [5, 'Mac IIci (for System 7.0 / 7.1)'],
+];
+
+// The types for this backend and ROM: [] when they don't apply, null when
+// the ROM can't be told yet (storage not loaded, or not in the database).
+function machineTypesFor(backend, romName) {
+    if (backend !== 'uae') return [];
+    const rom = (storageCache?.roms || []).find(r => r.name === romName);
+    const info = rom && getRomInfo(rom.checksum, rom.md5);
+    if (!info) return null;
+    return info.arch === 'm68k' && info.size === 1048576 ? MACHINE_TYPES : [];
+}
+
+// Fill and show/hide the Machine type row for the selected backend and ROM.
+function updateMachineTypeSelect() {
+    const group = document.getElementById('cfg-model-group');
+    const el = document.getElementById('cfg-model-id');
+    if (!group || !el) return;
+    const backend = document.getElementById('cfg-backend')?.value || currentConfig.backend || 'uae';
+    const romName = document.getElementById('cfg-rom')?.value || currentConfig.rom;
+    const types = machineTypesFor(backend, romName);
+    group.hidden = !types?.length;
+    if (group.hidden) {
+        if (types) currentConfig.model_id = 0;   // known not to apply
+        return;
+    }
+    const want = currentConfig.model_id || 0;
+    const options = types.some(([id]) => id === want) ? types : [...types, [want, `Other (model ${want})`]];
+    el.innerHTML = options.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
+    el.value = String(want);
+}
+
 function defaultBackendForMode(mode) {
     if (mode === 'ppc') return 'kpx';
     if (mode === 'executor') return 'executor';
@@ -4655,6 +4694,8 @@ function updateEmulatorPanelVisibility() {
     if (execPanel) execPanel.hidden = !isExecutor;
     if (isExecutor) loadStorage().then(populateExecutorSystems);
 
+    updateMachineTypeSelect();
+
     // Keep the Emulator Mode persona in step with the CPU choice.
     const modeEl = document.getElementById('cfg-emulator');
     if (modeEl) {
@@ -4757,6 +4798,7 @@ async function onEmulatorChange() {
 }
 
 function onRomChange() {
+    updateMachineTypeSelect();
     const romName = document.getElementById('cfg-rom')?.value;
     if (!romName || !storageCache?.roms) return;
 
@@ -5993,6 +6035,9 @@ function setupEventListeners() {
 
     const cfgRom = document.getElementById('cfg-rom');
     if (cfgRom) cfgRom.addEventListener('change', onRomChange);
+    document.getElementById('cfg-model-id')?.addEventListener('change', e => {
+        currentConfig.model_id = parseInt(e.target.value, 10) || 0;
+    });
 
     const advancedToggle = document.getElementById('advanced-toggle');
     if (advancedToggle) advancedToggle.addEventListener('click',

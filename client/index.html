@@ -511,6 +511,11 @@
                         <label for="cfg-core">CPU core</label>
                         <select id="cfg-core"></select>
                     </div>
+                    <!-- Shown only for ROMs that take one (machineTypesFor in client.js) -->
+                    <div class="form-group" id="cfg-model-group" hidden>
+                        <label for="cfg-model-id">Machine type</label>
+                        <select id="cfg-model-id"></select>
+                    </div>
                     <!-- JIT toggles (shown only for backends that support them) -->
                     <div class="form-group" id="cfg-jit-group">
                         <div class="checkbox-group">
