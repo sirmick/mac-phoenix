@@ -1,10 +1,9 @@
 /*
- * PNG Encoder using fpng (fast PNG)
- * fpng is ~10x faster than libpng for encoding
+ * PNG Encoder (zlib, png_write.cpp)
  */
 
 #include "png_encoder.h"
-#include "fpng.h"
+#include "png_write.h"
 #include <cstring>
 #include <cstdio>
 
@@ -15,21 +14,8 @@
 extern bool g_debug_mode_switch;
 extern bool g_debug_png;
 
-// Initialize fpng once
-static bool g_fpng_initialized = false;
-
 bool PNGEncoder::init(int width, int height, int fps) {
     cleanup();
-
-    // Initialize fpng (only once)
-    if (!g_fpng_initialized) {
-        fpng::fpng_init();
-        g_fpng_initialized = true;
-        if (g_debug_png) {
-            fprintf(stderr, "PNG: fpng initialized (SSE4.1: %s)\n",
-                    fpng::fpng_cpu_supports_sse41() ? "yes" : "no");
-        }
-    }
 
     width_ = width;
     height_ = height;
@@ -39,7 +25,7 @@ bool PNGEncoder::init(int width, int height, int fps) {
     rgb_buffer_.resize(width * height * 3);  // RGB24
 
     if (g_debug_png) {
-        fprintf(stderr, "PNG: Encoder initialized %dx%d (using fpng)\n", width, height);
+        fprintf(stderr, "PNG: Encoder initialized %dx%d\n", width, height);
     }
     return true;
 }
@@ -56,7 +42,7 @@ void PNGEncoder::cleanup() {
 void PNGEncoder::i420_to_rgb(const uint8_t* y, const uint8_t* u, const uint8_t* v,
                               int width, int height, int y_stride, int uv_stride) {
     // Use libyuv for fast conversion
-    // fpng expects RGB (R first), so use I420ToRAW
+    // PNG wants RGB (R first), so use I420ToRAW
     libyuv::I420ToRAW(
         y, y_stride,
         u, uv_stride,
@@ -67,27 +53,12 @@ void PNGEncoder::i420_to_rgb(const uint8_t* y, const uint8_t* u, const uint8_t* 
 }
 
 bool PNGEncoder::encode_rgb_to_png(int width, int height) {
-    png_buffer_.clear();
-
-    // fpng_encode_image_to_memory - using default fast mode for lowest latency
-    // FPNG_ENCODE_SLOWER was 40% slower (~104ms) for only 6% size reduction
-    // For localhost/LAN, speed >> compression ratio
-    bool success = fpng::fpng_encode_image_to_memory(
-        rgb_buffer_.data(),
-        width,
-        height,
-        3,  // num_chans: RGB
-        png_buffer_,
-        0  // Default fast mode - much lower latency
-    );
-
-    if (!success) {
+    if (!png_encode_rgb(rgb_buffer_.data(), width, height, png_buffer_)) {
         if (g_debug_png) {
-            fprintf(stderr, "PNG: fpng encode failed\n");
+            fprintf(stderr, "PNG: encode failed\n");
         }
         return false;
     }
-
     return true;
 }
 
@@ -109,7 +80,7 @@ EncodedFrame PNGEncoder::encode_i420(const uint8_t* y, const uint8_t* u, const u
     // Convert I420 to RGB
     i420_to_rgb(y, u, v, width, height, y_stride, uv_stride);
 
-    // Encode to PNG using fpng
+    // Encode to PNG
     if (!encode_rgb_to_png(width, height)) {
         return result;
     }
@@ -154,7 +125,7 @@ EncodedFrame PNGEncoder::encode_bgra(const uint8_t* bgra, int width, int height,
         width, height
     );
 
-    // Encode to PNG using fpng
+    // Encode to PNG
     if (!encode_rgb_to_png(width, height)) {
         return result;
     }
@@ -198,7 +169,7 @@ EncodedFrame PNGEncoder::encode_argb(const uint8_t* argb, int width, int height,
         }
     }
 
-    // Encode to PNG using fpng
+    // Encode to PNG
     if (!encode_rgb_to_png(width, height)) {
         return result;
     }
@@ -237,20 +208,9 @@ EncodedFrame PNGEncoder::encode_bgra_rect(const uint8_t* bgra, int /*frame_width
         }
     }
 
-    // Encode the rectangle to PNG using fast mode
-    png_buffer_.clear();
-    bool success = fpng::fpng_encode_image_to_memory(
-        rect_rgb.data(),
-        rect_width,
-        rect_height,
-        3,  // RGB
-        png_buffer_,
-        0  // Fast mode for low latency
-    );
-
-    if (!success) {
+    if (!png_encode_rgb(rect_rgb.data(), rect_width, rect_height, png_buffer_)) {
         if (g_debug_png) {
-            fprintf(stderr, "PNG: fpng encode_rect failed\n");
+            fprintf(stderr, "PNG: encode_rect failed\n");
         }
         return result;
     }

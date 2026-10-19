@@ -5,7 +5,7 @@ add_library(video_encoders STATIC
   vp9_encoder.cpp
   webp_encoder.cpp
   png_encoder.cpp
-  fpng.cpp
+  png_write.cpp
 )
 
 target_include_directories(video_encoders PUBLIC
@@ -28,11 +28,7 @@ if(WEBP_FOUND)
 endif()
 target_link_libraries(video_encoders PRIVATE libyuv::libyuv)
 
-# fpng needs SSE4.1 + PCLMUL on x86
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i[3-6]86")
-  set_source_files_properties(fpng.cpp PROPERTIES
-    COMPILE_OPTIONS "-msse4.1;-mpclmul"
-  )
-endif()
+find_package(ZLIB REQUIRED)
+target_link_libraries(video_encoders PRIVATE ZLIB::ZLIB)
 
 target_compile_options(video_encoders PRIVATE -Wno-type-limits)

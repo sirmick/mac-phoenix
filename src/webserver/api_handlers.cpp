@@ -32,7 +32,7 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
-#include "../drivers/video/encoders/fpng.h"  // For PNG encoding
+#include "../drivers/video/encoders/png_write.h"  // For PNG encoding
 #include "../drivers/video/encoders/codec.h"  // For codec_available()
 
 // Clear all frame sessions on emulator stop/start (forces full frames on reconnect)
@@ -1015,11 +1015,9 @@ Response APIRouter::handle_screenshot(const Request& req) {
         }
     }
 
-    // Encode to PNG using fpng
-    static bool fpng_inited = []() { fpng::fpng_init(); return true; }();
-    (void)fpng_inited;
+    // Encode to PNG
     std::vector<uint8_t> png_data;
-    if (!fpng::fpng_encode_image_to_memory(rgb.data(), width, height, 3, png_data)) {
+    if (!png_encode_rgb(rgb.data(), width, height, png_data)) {
         Response resp;
         resp.set_status(500, "Internal Server Error");
         resp.set_body("{\"error\": \"PNG encoding failed\"}");
@@ -1208,9 +1206,6 @@ Response APIRouter::handle_frame(const Request& req) {
     memcpy(session->prev_frame.data(), pixels.data(), width * height * 4);
 
     // Encode dirty rect as PNG
-    static bool fpng_inited2 = []() { fpng::fpng_init(); return true; }();
-    (void)fpng_inited2;
-
     // Extract dirty rect and convert to RGB
     std::vector<uint8_t> rgb(dw * dh * 3);
     const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels.data());
@@ -1231,7 +1226,7 @@ Response APIRouter::handle_frame(const Request& req) {
     }
 
     std::vector<uint8_t> png_data;
-    if (!fpng::fpng_encode_image_to_memory(rgb.data(), dw, dh, 3, png_data)) {
+    if (!png_encode_rgb(rgb.data(), dw, dh, png_data)) {
         Response resp;
         resp.set_status(500, "Internal Server Error");
         resp.set_body("{\"error\": \"PNG encoding failed\"}");

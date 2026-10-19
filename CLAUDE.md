@@ -329,7 +329,7 @@ Video/audio codecs are auto-detected at configure time. If a library is missing,
 | Opus | `libopus-dev` | `brew install opus` | Audio |
 | libyuv | `libyuv-dev` | `brew install libyuv` | Color conversion |
 
-PNG encoding (fpng) has no external dependencies and is always available.
+PNG encoding (zlib, which Qt already needs) is always available.
 
 ## Required Dependencies
 

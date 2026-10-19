@@ -85,8 +85,8 @@ C:\vcpkg\vcpkg install openssl openh264 libvpx libwebp opus libyuv --triplet x64
 ```
 
 …then pass `-DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake`
-to CMake. Or skip them entirely on first build — only PNG (built-in
-fpng) is required.
+to CMake. Or skip them entirely on first build — only PNG (zlib,
+which Qt needs anyway) is required.
 
 ## Clone + build (first time)
 

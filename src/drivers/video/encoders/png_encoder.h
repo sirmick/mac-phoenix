@@ -1,7 +1,6 @@
 /*
- * PNG Encoder using fpng (fast PNG)
- * Optimized for real-time encoding of 1-bit dithered Mac content
- * fpng is ~10x faster than libpng for encoding
+ * PNG Encoder, zlib level 1 (png_write.h): small on 1-bit dithered Mac
+ * content, a few ms for a full 1024x768 frame
  */
 
 #ifndef PNG_ENCODER_H
