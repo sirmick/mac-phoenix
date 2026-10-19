@@ -1,0 +1,16 @@
+{
+ "note": "System 6.0.8 for the Mac SE as baked from Apple's Installer (os-6.0.8) with the tools other bakes need: StuffIt Expander 4.0.2 (expand bakes) and Disk Copy 4.2 (floppy images), in Utilities. The base for 6.0.8 bakes (bases.json tools-6.0.8).",
+ "base": "os-6.0.8",
+ "place": [
+  {
+   "snapshot": "stuffit-expander-4.0.2",
+   "to": "Utilities"
+  },
+  {
+   "snapshot": "disk-copy-4.2",
+   "take": "Disk Copy",
+   "as": "Disk Copy 4.2",
+   "to": "Utilities"
+  }
+ ]
+}

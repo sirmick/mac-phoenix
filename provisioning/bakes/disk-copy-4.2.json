@@ -1,0 +1,52 @@
+{
+ "note": "Disk Copy 4.2 (Apple) for System 6: its self-extracting archive (from the .sit) opened in the Finder, the destination chosen with Drive until it is the target, extracted",
+ "kind": "install",
+ "os": "os-6.0.8",
+ "target_mb": 20,
+ "media": [
+  {
+   "file": "Disk-Copy-42.sit",
+   "take": "Disk Copy 4.2/Disk Copy 4.2.sea"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "{media}:Disk Copy 4.2.sea"
+  },
+  {
+   "wait_for": {
+    "button": "Extract"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Drive"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "shot": "1-destination"
+  },
+  {
+   "click": {
+    "button": "Extract"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 120
+  }
+ ],
+ "expect": [
+  "Disk Copy"
+ ],
+ "launch": [
+  "Disk Copy"
+ ]
+}

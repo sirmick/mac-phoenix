@@ -42,6 +42,11 @@
   "os": "6.0.8",
   "machines": ["se"]
  },
+ "tools-6.0.8": {
+  "built": "tools-6.0.8",
+  "os": "6.0.8",
+  "machines": ["se"]
+ },
  "os-7.1": {
   "snapshot": "os-7.1",
   "os": "7.1",

@@ -27,7 +27,9 @@
     {"name": "carbonlib_1.6.smi_.bin", "dir": "downloads/dev", "size": 3141376, "md5": "02aae2b0d7740cbb58e6a7cf03e935f9", "ia": "Macintosh_Garden_Apps_Collection_C/CarbonLib_1.6.smi_.bin", "garden": "apps/carbonlib_1.6.smi_.bin"},
     {"name": "CW_Tools_7.1.toast_.zip", "dir": "downloads/dev", "size": 237306829, "md5": "e25f791d9460968357fe588664959bbc", "ia": "Macintosh_Garden_Apps_Collection_C/CW_Tools_7.1.toast_.zip", "garden": "apps/CW_Tools_7.1.toast_.zip"},
     {"name": "C_MacOS_PPC_Pro7.2.sit", "dir": "downloads/dev", "size": 3970542, "md5": "8dd15c6d04950f725146069879f776b4", "ia": "Macintosh_Garden_Apps_C_2020/C_MacOS_PPC_Pro7.2.sit", "garden": "apps/C_MacOS_PPC_Pro7.2.sit"},
-    {"name": "CW_Pro_7.2_MetroNub.sit", "dir": "downloads/dev", "size": 53591, "md5": "bad4dcd80a645f52a7b183aa526b7dd7", "garden": "apps/CW_Pro_7.2_MetroNub.sit"}
+    {"name": "CW_Pro_7.2_MetroNub.sit", "dir": "downloads/dev", "size": 53591, "md5": "bad4dcd80a645f52a7b183aa526b7dd7", "garden": "apps/CW_Pro_7.2_MetroNub.sit"},
+    {"name": "stuffit_expander_4.0.2.sea_.bin", "dir": "downloads/dev", "size": 138368, "md5": "d62fedcffbe6bcaf9e0045bb98e10e21", "ia": "Macintosh_Garden_Apps_S_2014/stuffit_expander_4.0.2.sea_.bin", "garden": "apps/stuffit_expander_4.0.2.sea_.bin"},
+    {"name": "Disk-Copy-42.sit", "dir": "downloads/dev", "size": 38643, "md5": "658d766664a697d99fabbeacc2f096c0", "ia": "Macintosh_Garden_Apps_D_2017/Disk-Copy-42.sit", "garden": "apps/Disk-Copy-42.sit"}
   ],
   "out": "."
 }

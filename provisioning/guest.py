@@ -467,6 +467,40 @@ class Guest:
         self.mouse(button=0, down=False)
         time.sleep(1)
 
+    def finder_copy(self, src, dst):
+        """Copy without the bridge (System 6): the item's window opened in the
+        Finder, the item dragged onto the destination volume's desktop icon
+        (dst "Vol:"), then until the Finder's copy progress has gone."""
+        parts = [p for p in src.split(":") if p]
+        dvol = [p for p in dst.split(":") if p]
+        if len(dvol) != 1:
+            raise RuntimeError(f"Finder copy: {dst!r}: only to a volume's top level")
+        self.finder_open(":".join(parts[:-1]))
+        self.mouse(x=0, y=479)                  # off the names, so they read whole
+        time.sleep(1)
+        ui = self.ui()
+        w = next((w for w in ui["windows"] if w.get("front")), None)
+        item = self.drawn(parts[-1], within=w["rect"] if w else None, exact=True)
+        if not item:
+            raise NotFound(f"no {parts[-1]!r} in the {parts[-2]} window")
+        target = next((x for x in (self.get("/api/text") or {}).get("text", [])
+                       if x["text"].strip() == dvol[0] and not (w and x["rect"][0] >= w["rect"][0]
+                       and x["rect"][2] <= w["rect"][2] and x["rect"][1] >= w["rect"][1]
+                       and x["rect"][3] <= w["rect"][3])), None)
+        if not target:
+            raise NotFound(f"no {dvol[0]!r} icon on the desktop")
+        centre = lambda r: ((r[0] + r[2]) // 2, (r[1] + r[3]) // 2)
+        ix, iy = centre(item["rect"])
+        tx, ty = centre(target["rect"])
+        self.drag((ix, iy - 16), (tx, ty - 16))   # by the icons, just above their labels
+        quiet = 0
+        deadline = time.time() + 900
+        while quiet < 3 and time.time() < deadline:
+            busy = any("remaining to be copied" in x["text"] or x["text"].strip().startswith("Copying")
+                       for x in (self.get("/api/text") or {}).get("text", []))
+            quiet = 0 if busy else quiet + 1
+            self.pause(1)
+
     def menu(self, title, item):
         """Choose `item` in the menu bar's `title` by their drawn text: press
         on the title, find the item where the open menu drew it, release
@@ -514,6 +548,7 @@ class Guest:
         the rest in the window the last one opened) and opened with
         Command-O."""
         parts = [p for p in path.split(":") if p]
+        redrawn = False
         for i, name in enumerate(parts):
             deadline = time.time() + 30
             while True:
@@ -523,10 +558,25 @@ class Guest:
                 w = next((w for w in ui["windows"] if w.get("front")), None)
                 within = w["rect"] if i and w else None
                 t = self.drawn(name, within=within, exact=True)
+                if not t and within:            # a label the window's edge clips: the draw log
+                    l, tp, r, b = within        # has it whole; its latest draw in the window
+                    draws = (self.get("/api/text?since=0") or {}).get("draws", [])
+                    t = next((d for d in reversed(draws) if d["text"].strip() == name
+                              and d["rect"][2] > l and d["rect"][0] < r
+                              and tp <= d["rect"][1] and d["rect"][3] <= b), None)
+                    if t:                       # its visible part
+                        t = dict(t, rect=[max(t["rect"][0], l + 2), t["rect"][1],
+                                          min(t["rect"][2], r - 2), t["rect"][3]])
                 if t:
                     break
                 if time.time() > deadline:
                     raise NotFound(f"no {name!r} to open in the Finder")
+                if i == 0 and not redrawn:      # a desktop drawn before the text feed (the boot
+                    redrawn = True              # disk's icon): Select All redraws the labels,
+                    self.cmd_key(0x00)          # a click on an empty corner deselects them
+                    scr = (self.get("/api/text") or {}).get("screen", [640, 480])
+                    self.click(4, scr[1] - 4)
+                    continue
                 self.pause(1)
             self.click((t["rect"][0] + t["rect"][2]) // 2, (t["rect"][1] + t["rect"][3]) // 2)
             self.cmd_key(0x1F)                  # O
@@ -595,7 +645,10 @@ class Guest:
                 time.sleep(1)               # BridgeAgent mid-command, or switching
             return False
 
-        self.post("/api/quit", {}, 60)
+        if self.agent:
+            self.post("/api/quit", {}, 60)
+        else:
+            self.cmd_key(0x0C)                  # Command-Q (System 6: no bridge)
         if settle():
             return True
         for keys in ("escape", "return", "cmd-q", "escape", "return", "cmd-q"):
@@ -666,6 +719,8 @@ class Guest:
             r = self.bridge("/api/launch", body)
             if not r.get("success"):
                 raise RuntimeError(f"{body}: {r}")
+        elif "copy" in step and not self.agent:
+            self.finder_copy(step["copy"]["from"], step["copy"]["to"])
         elif "copy" in step:
             r = self.bridge("/api/copy", {"from": step["copy"]["from"], "to": step["copy"]["to"],
                                           "replace": bool(step["copy"].get("replace"))}, 700)
@@ -745,7 +800,10 @@ class Guest:
             self.post("/api/quit", {"agent": True}, 60)
             self.pause(2)
         elif "quit" in step:
-            self.post("/api/quit", {}, 60)
+            if self.agent:
+                self.post("/api/quit", {}, 60)
+            else:
+                self.cmd_key(0x0C)              # Command-Q (System 6: no bridge)
             time.sleep(3)
         elif "close" in step:
             if not self.close_front(step["close"]):

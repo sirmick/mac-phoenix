@@ -1,0 +1,15 @@
+{
+ "note": "StuffIt Expander 4.0.2 (1996; System 6.0.5 and later, 68000) for System 6: its self-extracting archive holds a disk image with the Expander folder; the image attached as a disk, the folder dragged onto the target in the Finder (no bridge on System 6)",
+ "kind": "copy",
+ "os": "os-6.0.8",
+ "target_mb": 20,
+ "disks": [
+  {"file": "stuffit_expander_4.0.2.sea_.bin", "take": "StuffIt Expander 4.0.2.img"}
+ ],
+ "expect": ["StuffIt Expander™ 4.0.2"],
+ "launch": ["StuffIt Expander™ 4.0.2:StuffIt Expander™"],
+ "steps": [
+  {"copy": {"from": "StuffIt Expander 4.0.2:StuffIt Expander™ 4.0.2", "to": "{target}:"}},
+  {"shot": "1-copied"}
+ ]
+}

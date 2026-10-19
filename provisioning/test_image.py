@@ -94,7 +94,14 @@ def run(images, machine, port, only, log=print):
     try:
         for n, e in enumerate(apps):
             path, leaf = e["app"], e["app"].rsplit(":", 1)[-1]
-            r = guest.bridge("/api/launch", {"path": path})
+            if guest.agent:
+                r = guest.bridge("/api/launch", {"path": path})
+            else:                               # System 6: the Finder, by name
+                try:
+                    guest.finder_open(path)
+                    r = {"success": True}
+                except RuntimeError as ex:
+                    r = {"success": False, "error": str(ex)}
             ok, front = False, ""
             if r.get("success"):
                 deadline = time.time() + 90
