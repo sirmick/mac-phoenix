@@ -376,6 +376,14 @@ add_test(NAME boot_se_mame68k
 set_tests_properties(boot_se_mame68k PROPERTIES TIMEOUT 60 LABELS "boot;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_SE_ROM=${TEST_SE_ROM}")
 
+add_test(NAME boot_iici
+  COMMAND bash ${TEST_DIR}/test_boot_iici.sh --timeout 40 --port 18420)
+set_tests_properties(boot_iici PROPERTIES TIMEOUT 70 LABELS "boot" SKIP_RETURN_CODE 77)
+
+add_test(NAME boot_iici_mame68k
+  COMMAND bash ${TEST_DIR}/test_boot_iici.sh --core mame-68k --timeout 40 --port 18422)
+set_tests_properties(boot_iici_mame68k PROPERTIES TIMEOUT 70 LABELS "boot;mame" SKIP_RETURN_CODE 77)
+
 add_test(NAME command_bridge_mame68k
   COMMAND bash ${TEST_DIR}/test_command_bridge.sh --core mame-68k --port 18144)
 set_tests_properties(command_bridge_mame68k PROPERTIES TIMEOUT 90 LABELS "boot;mame" SKIP_RETURN_CODE 77
