@@ -4834,7 +4834,7 @@ const ROM_PROFILES = [
     { name: '68k-7.1', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false, model_id: 5,
       ram_mb: 64, screen: '640x480', disks: ['7.1.img'] },
     { name: '68k-dev', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'Development.img']] },
+      ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'dev-tools-system-7.img']] },
     { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 4, screen: '512x342', disks: ['6.0.8.img'] },
     // The IIci: System 6 in colour (24-bit mode, 8MB; machine_profile.cpp).
@@ -4846,7 +4846,7 @@ const ROM_PROFILES = [
     { name: 'ppc-8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: ['8.6.img'] },
     { name: 'ppc-dev', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
-      ram_mb: 128, screen: '1024x768', disks: [['dev-9.0.4.img', 'Development-9.img']] },
+      ram_mb: 128, screen: '1024x768', disks: [['dev-9.0.4.img', 'dev-tools-macos-8-9.img']] },
 ];
 
 function recommendedRomFor(mode) {

@@ -43,13 +43,13 @@ the same software is recognised as the same.
 
 | Image | What |
 |---|---|
-| `Development.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
+| `dev-tools-system-7.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
 | `dev-7.5.5.img`, `dev-7.6.1.img` | the base Systems (`provisioning/bases.json`) plus the snapshots' System Folder parts: MetroNub, CFM-68K and PowerPC libraries, MacsBug 6.6.3, PythonCore, ... |
 | `7.1.img` | System 7.1 for the Quadra 650 (`os-7.1`): boots with `--model-id 5` (bases.json `args`; web UI profile `68k-7.1`); no BridgeAgent (no File System Manager, so no Host volume) |
 | `6.0.8.img` | System 6.0.8, universal (boots the SE and the IIci: Color, Monitors, AppleShare, AppleTalk Responder, all printer drivers, 32-Bit QuickDraw), installed from the Legacy CD's floppies by Apple's Installer on the IIci (`os-6.0.8`), with the floppies' utilities at the top and StuffIt Expander 4.0.2 and Disk Copy 4.2 in Utilities (`tools-6.0.8`) |
 | `8.6.img`, `9.0.4.img` | Mac OS 8.6 and 9.0.4 for the PowerPC machine (G3 ROM): installed from their CDs (`os-8.6`, `os-9.0.4`), with CarbonLib 1.6, StuffIt Expander 6.0.1, Disk Copy 6.3.3, MacsBug, TCP/IP on DHCP |
-| `Development-9.img` | the 8.6 / 9 development volume: CodeWarrior Pro 7.2 (7.1 Tools CD + the 7.2 PowerPC plugins; needs CarbonLib 1.3.1+), MPW-GM; `Languages`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
-| `dev-8.6.img`, `dev-9.0.4.img` | the 8.6 / 9.0.4 disks plus those tools' System Folder parts; boot with `Development-9.img` |
+| `dev-tools-macos-8-9.img` | the 8.6 / 9 development volume: CodeWarrior Pro 7.2 (7.1 Tools CD + the 7.2 PowerPC plugins; needs CarbonLib 1.3.1+), MPW-GM; `Languages`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
+| `dev-8.6.img`, `dev-9.0.4.img` | the 8.6 / 9.0.4 disks plus those tools' System Folder parts; boot with `dev-tools-macos-8-9.img` |
 
 All three run on the 68k machine (`--backend uae`) and the PowerPC one
 (`--backend kpx`).
@@ -58,11 +58,11 @@ All three run on the 68k machine (`--backend uae`) and the PowerPC one
 python3 provisioning/bake.py --list            # bakes and their snapshots
 python3 provisioning/bake.py --all --jobs 3    # every bake not up to date
 python3 provisioning/build.py --all            # images not up to date
-./build/mac-phoenix --disk ~/storage/images/dev-7.6.1.img --disk ~/storage/images/Development.img ~/roms/quadra.rom
+./build/mac-phoenix --disk ~/storage/images/dev-7.6.1.img --disk ~/storage/images/dev-tools-system-7.img ~/roms/quadra.rom
 
 # every app the snapshots list launches, on each machine:
-python3 provisioning/test_image.py dev-7.6.1 Development
-python3 provisioning/test_image.py dev-9.0.4 Development-9      # PowerPC only (the base's "machines")
+python3 provisioning/test_image.py dev-7.6.1 dev-tools-system-7
+python3 provisioning/test_image.py dev-9.0.4 dev-tools-macos-8-9      # PowerPC only (the base's "machines")
 ```
 
 The E.T.O. #22 disc is a local-only pin: a machine without it gets

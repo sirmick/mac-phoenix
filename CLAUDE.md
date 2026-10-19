@@ -61,11 +61,11 @@ tools/mpw/mpw --toolchain cw build DIR  # CodeWarrior Pro 4's MPW (MWC68K, MWCPP
 # Guest software (docs/Provisioning.md, docs/provisioning/PLAN.md): pinned
 # media (provisioning/media.json) -> bakes run in the guest -> snapshots
 # (~/storage/baked) -> images (provisioning/images/*.json). Dev disks:
-# Development.img + dev-7.5.5.img / dev-7.6.1.img, for both 68k and PPC;
-# Development-9.img + dev-8.6.img / dev-9.0.4.img, PPC only (G3 ROM).
+# dev-tools-system-7.img + dev-7.5.5.img / dev-7.6.1.img, for both 68k and PPC;
+# dev-tools-macos-8-9.img + dev-8.6.img / dev-9.0.4.img, PPC only (G3 ROM).
 python3 provisioning/bake.py --all --jobs 3     # snapshots not up to date
 python3 provisioning/build.py --all             # images not up to date
-python3 provisioning/test_image.py dev-7.6.1 Development   # launch every app, 68k + PPC
+python3 provisioning/test_image.py dev-7.6.1 dev-tools-system-7   # launch every app, 68k + PPC
 python3 provisioning/bake.py NAME --explore --record       # work out a bake; --do/--finish
 
 # arm64 / riscv64 builds on this x86-64 box: Debian containers under qemu

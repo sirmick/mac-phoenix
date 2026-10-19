@@ -4,7 +4,7 @@
 An image definition (provisioning/images/<name>.json) says which snapshots
 go where:
 
-  {"name": "Development", "label": "Development", "size_mb": 1024,
+  {"name": "dev-tools-system-7", "label": "Development", "size_mb": 1024,
    "place": [{"snapshot": "mpw-3.4.2"},
              {"snapshot": "frontier-5.0.1", "to": "Languages"},
              {"snapshot": "think-c-6", "take": "Development", "as": "THINK C 6.0"}]}

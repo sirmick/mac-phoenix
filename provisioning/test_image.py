@@ -11,7 +11,7 @@ Frontier (file.followAlias), when one of the images has it. Copies of the
 images are booted, so the built ones are never
 written. Runs on each machine (68k, ppc) unless --machine says one.
 
-  test_image.py dev-7.6.1 Development [--machine 68k] [--only Perl]
+  test_image.py dev-7.6.1 dev-tools-system-7 [--machine 68k] [--only Perl]
 """
 
 import argparse
