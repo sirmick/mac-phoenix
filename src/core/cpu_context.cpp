@@ -635,10 +635,16 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     //    later in the child subprocess).
     // --core mame-ppc: the same Mac side on MAME's PowerPC core
     // (docs/cpu/PLAN.md, C2b); otherwise Kheperix.
-    if (config.cpu_core == "mame-ppc")
+    if (config.cpu_core == "mame-ppc") {
         cpu_ppc_mame_install(&platform_);
-    else
+        // MAME's core is a 750 (G3) with no AltiVec: say so, rather than
+        // SheepShaver's 7400 (G4), or software would run vector code it
+        // can't execute. PPC_MODEL_740/750 in MAME's ppc.h, which is also
+        // what mfpvr returns there. AltiVec on mame-ppc: docs/cpu/PLAN.md S20.
+        PVR = 0x00080301;
+    } else {
         cpu_ppc_kpx_install(&platform_);
+    }
     platform_.ppc_jit = config.jit;
     platform_.ppc_m68k_host = config.m68k_host;
     platform_.ppc_debug_trace = config.debug_mame_ppc;
