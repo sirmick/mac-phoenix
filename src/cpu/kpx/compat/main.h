@@ -16,6 +16,7 @@ extern "C" {
 
 // KPX code references these but we stub them out
 extern void QuitEmulator(void);
+extern void ShutdownEmulator(void);						// Guest shut down: exit 0
 extern void MakeExecutable(int dummy, uint32 start, uint32 length);
 extern void DisableInterrupt(void);
 extern void EnableInterrupt(void);

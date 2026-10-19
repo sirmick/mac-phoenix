@@ -105,7 +105,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			break;
 
 		case M68K_EMUL_OP_SHUTDOWN:			// Quit emulator
-			QuitEmulator();
+			ShutdownEmulator();
 			break;
 
 		case M68K_EMUL_OP_RESET: {			// MacOS reset

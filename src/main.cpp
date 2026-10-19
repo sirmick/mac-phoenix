@@ -268,13 +268,23 @@ void WarningAlert(const char *text)
 	fprintf(stderr, "WARNING: %s\n", text);
 }
 
-// Quit emulator
+// Quit emulator: on an error (exit status 1)
 void QuitEmulator(void)
 {
 	printf("QuitEmulator() called\n");
 	stop_timer_interrupt();
 	ExitAll();
 	exit(1);
+}
+
+// The guest shut down (Shut Down, ShutDwnPower): a normal exit, status 0, so
+// the web UI doesn't take it for a crash
+void ShutdownEmulator(void)
+{
+	printf("Guest shut down\n");
+	stop_timer_interrupt();
+	ExitAll();
+	exit(0);
 }
 
 // Interrupt control — weak stubs, overridden by KPX for PPC mode
@@ -823,10 +833,8 @@ int main(int argc, char **argv)
 			}
 		}
 
-		// Cleanup (normally reached via _exit or signal). When the guest
-		// shuts down gracefully (POST /api/shutdown → BridgeAgent →
-		// ShutDwnPower), QuitEmulator() returns and we land here. Without
-		// browser_module_stop, the QtWebEngine worker thread + mouse-poll
+		// Cleanup (normally reached via _exit or signal; a guest shutdown
+		// exits in ShutdownEmulator()). Without browser_module_stop, the QtWebEngine worker thread + mouse-poll
 		// thread are left joinable, and `terminate called without an
 		// active exception` fires when their std::thread dtors run during
 		// static teardown.

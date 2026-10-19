@@ -3819,16 +3819,17 @@ const PHASE_COLOR_CLASS = {
     'desktop':     'phase-desktop',
 };
 
-let _lastHeaderPhaseClass = null;
+let _lastHeaderPhase;
 function updateHeaderPhaseColor(phase) {
     // Boot progress is now shown by a small pill chip rather than tinting
     // the whole header — header stays a static dark color, only the chip
-    // takes on the phase-* tint. The chip's text label is the phase name.
+    // takes on the phase-* tint. The chip's text label is the phase name
+    // (several phases share a tint, so it's the phase that's compared).
     const chip = document.getElementById('boot-phase');
     if (!chip) return;
+    if (phase === _lastHeaderPhase) return;
+    _lastHeaderPhase = phase;
     const cls = phase == null ? 'phase-off' : (PHASE_COLOR_CLASS[phase] || 'phase-off');
-    if (cls === _lastHeaderPhaseClass) return;
-    _lastHeaderPhaseClass = cls;
     chip.classList.remove('phase-off', 'phase-red', 'phase-orange', 'phase-yellow', 'phase-finder', 'phase-desktop');
     chip.classList.add(cls);
     chip.textContent = phase || 'offline';

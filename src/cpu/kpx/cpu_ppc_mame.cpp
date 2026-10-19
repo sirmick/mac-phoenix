@@ -344,9 +344,9 @@ struct M68kHost final : cpu::Host
             core.request_stop();
             return true;
         }
-        if(opcode == 0xfe40)   /* EMUL_RETURN */
+        if(opcode == 0xfe40)   /* EMUL_RETURN: the guest shut down */
         {
-            QuitEmulator();
+            ShutdownEmulator();
             return true;
         }
         if(opcode >= M68K_EMUL_BREAK && opcode < 0xff00)
@@ -944,8 +944,8 @@ struct MacHost final : cpu::Host
         }
         switch(sheep_emul_op(opcode))
         {
-            case 0: /* EMUL_RETURN */
-                QuitEmulator();
+            case 0: /* EMUL_RETURN: the guest shut down */
+                ShutdownEmulator();
                 return OpResult::Stop;
             case 1: /* EXEC_RETURN */
                 core.set_pc(op_pc);

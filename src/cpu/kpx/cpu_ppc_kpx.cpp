@@ -261,8 +261,8 @@ void sheepshaver_cpu::execute_sheep(uint32 opcode)
     assert((((opcode >> 26) & 0x3f) == 6) && OP_MAX <= 64 + 3);
 
     switch (opcode & 0x3f) {
-    case 0:     // EMUL_RETURN
-        QuitEmulator();
+    case 0:     // EMUL_RETURN (the guest shut down)
+        ShutdownEmulator();
         break;
 
     case 1:     // EXEC_RETURN
@@ -298,7 +298,7 @@ int sheepshaver_cpu::compile1(codegen_context_t & cg_context)
 
     switch (opcode & 0x3f) {
     case 0:     // EMUL_RETURN
-        dg.gen_invoke(QuitEmulator);
+        dg.gen_invoke(ShutdownEmulator);
         status = COMPILE_CODE_OK;
         break;
 
