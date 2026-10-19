@@ -4850,6 +4850,8 @@ const ROM_PROFILES = [
     // with it). Oldest OS first: the tabs are in this order.
     // The disks are the baked ones provisioning/build.py makes from Apple's
     // installers (docs/Provisioning.md); 7.5.5 and 7.6.1 run on both.
+    // 8.6 and later switch to the largest mode offered on first boot (4K
+    // here), so their profiles cap it.
     { name: '6.0.8-se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 4, screen: '512x342', disks: ['6.0.8.img'] },
     // The IIci: System 6 in colour (24-bit mode, 8MB; machine_profile.cpp).
@@ -4872,11 +4874,11 @@ const ROM_PROFILES = [
     { name: '7.6.1-dev-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: [['dev-7.6.1.img', 'dev-tools-system-7.img']] },
     { name: '8.6-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
-      ram_mb: 128, screen: '1024x768', disks: ['8.6.img'] },
+      ram_mb: 128, screen: '1024x768', max_resolution: '1024x768', disks: ['8.6.img'] },
     { name: '9.0.4-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
-      ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img'] },
+      ram_mb: 128, screen: '1024x768', max_resolution: '1024x768', disks: ['9.0.4.img'] },
     { name: '9.0.4-dev-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
-      ram_mb: 128, screen: '1024x768', disks: [['dev-9.0.4.img', 'dev-tools-macos-8-9.img']] },
+      ram_mb: 128, screen: '1024x768', max_resolution: '1024x768', disks: [['dev-9.0.4.img', 'dev-tools-macos-8-9.img']] },
 ];
 
 function recommendedRomFor(mode) {
@@ -4900,6 +4902,7 @@ async function seedBuiltinProfiles(cfg) {
             emulator: p.emulator, backend: p.backend, cpu_core: p.cpu_core, jit: p.jit,
             rom, disks, cdroms: [], bootdriver: 0,
             ram_mb: p.ram_mb, screen: p.screen, model_id: p.model_id || 0,
+            max_resolution: p.max_resolution || '',
         };
     }
     // Executor: real Finder on the 7.5.5 System, fresh each run.
