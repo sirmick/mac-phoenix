@@ -177,7 +177,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
     uint16_t rom_version_peek = ntohs(*(uint16_t *)(rom_.get() + 8));
 
     // Select machine profile EARLY, before any code uses it
-    set_machine_profile(rom_version_peek);
+    set_machine_profile(rom_version_peek, ntohl(*(uint32_t *)rom_.get()));
     const MachineProfile& profile = machine_profile();
 
     // 2. Determine memory layout based on ROM version

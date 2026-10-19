@@ -419,9 +419,10 @@ std::unique_ptr<Core> create_mame_68k(const Config &config, GuestMemory &memory,
         default:
             return nullptr;
     }
-    /* 24-bit addressing: the 68000/68010 and the EC020 (the 24-bit mask
-     * is the GuestMemory's; Musashi's own masking is per model). */
-    if(config.address_bits == 24 && config.model > 68020)
+    /* 24-bit addressing: the 68000/68010, the EC020, and a 68030 in 24-bit
+     * mode (the IIci; the 24-bit mask is the GuestMemory's, Musashi's own
+     * masking is per model). */
+    if(config.address_bits == 24 && config.model > 68030)
         return nullptr;
     return std::unique_ptr<Core>(new Mame68kCore(config, memory, host));
 }

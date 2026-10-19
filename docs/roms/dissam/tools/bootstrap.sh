@@ -55,5 +55,14 @@ for repo in "${REPOS[@]}"; do
     fi
 done
 
+# PyGhidra for the headless scripts, from the wheels Ghidra ships (offline).
+GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"
+if [ ! -x pyghidra-venv/bin/python ]; then
+    echo "  creating pyghidra-venv..."
+    /usr/bin/python3 -m venv pyghidra-venv
+    pyghidra-venv/bin/pip install -q --no-index \
+        -f "$GHIDRA_INSTALL_DIR/Ghidra/Features/PyGhidra/pypkg/dist" pyghidra
+fi
+
 echo ""
 echo "vendor tools ready at $VENDOR_DIR"

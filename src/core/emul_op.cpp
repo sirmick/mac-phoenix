@@ -163,7 +163,13 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 								r->d[2] &= 0xf8;
 							break;
 						case 0x8a:
-							r->d[2] |= 0x05;	// 32bit mode is always enabled
+							// Addressing mode: whatever the machine has
+							// (24-bit profiles mask addresses; System 6
+							// refuses to start in 32-bit mode).
+							if (TwentyFourBitAddressing)
+								r->d[2] &= ~0x05;
+							else
+								r->d[2] |= 0x05;
 							break;
 						case 0xe0:				// Disable LocalTalk (use EtherTalk instead)
 							if (localtalk)
@@ -230,7 +236,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 
 		case M68K_EMUL_OP_PATCH_BOOT_GLOBS:	// Patch BootGlobs / unit table alloc
 			D(bug("Patch BootGlobs\n"));
-			if (machine_profile().twenty_four_bit) {
+			if (ROMVersion != ROM_VERSION_32) {
 				// Classic/Mac II ROM: called from $776/$DAC (INITCRSRMGR)
 				// replacing _NewPtrSysClear. Return A0 = unit table in
 				// ScratchMem (immune to zone management).
@@ -252,8 +258,17 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			} else {
 				// 32-bit ROM: A4 points to BootGlobs, patch MMU flags
 				WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);	// MemTop
-				WriteMacInt8(r->a[4] - 26, 0);						// No MMU
-				WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) | 1);
+				if (TwentyFourBitAddressing) {
+					// A 24-bit machine (IIci profile): MMU type 1, the Mac
+					// II's HMMU, whose _SwapMMUMode only records the mode in
+					// MMU32Bit (and pokes VIA2, i.e. ScratchMem). Bit 0 at -25
+					// clear: not "32-bit only", so the ROM can go 24-bit.
+					WriteMacInt8(r->a[4] - 26, 1);
+					WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) & ~1);
+				} else {
+					WriteMacInt8(r->a[4] - 26, 0);					// No MMU
+					WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) | 1);	// 32-bit only
+				}
 				r->a[6] = RAMBaseMac + RAMSize;
 			}
 			break;
@@ -297,8 +312,9 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 			// For 24-bit ROMs (SE/Classic): redirect hardware base globals
 			// to ScratchMem so that ROM code reading VIA/SCC/IWM/SCSI
 			// registers hits safe zero-filled memory instead of
-			// triggering SIGSEGV on unmapped I/O addresses.
-			if (machine_profile().twenty_four_bit) {
+			// triggering SIGSEGV on unmapped I/O addresses. ($067C ROMs:
+			// patch_rom_32 already pointed the decoder's bases there.)
+			if (ROMVersion != ROM_VERSION_32) {
 				uint32 sm = Host2MacAddr(ScratchMem);
 				WriteMacInt32(0x1d4, sm);  // VIA1 base
 				WriteMacInt32(0x1d8, sm);  // SCC read base

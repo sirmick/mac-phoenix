@@ -15,7 +15,7 @@
 #
 # Invocation: -postScript export_listing.py <output_path>
 # @category Mac.ROM
-# @runtime Jython
+# @runtime PyGhidra
 
 import sys
 import os
@@ -24,12 +24,11 @@ from ghidra.program.model.listing import (
     Instruction, Data, CodeUnitFormat, CodeUnitFormatOptions
 )
 
-# A-line trap name lookup (inline for Jython compatibility)
+# A-line trap name lookup
 try:
-    import imp
     _script_dir = os.path.dirname(os.path.abspath(sourceFile.getAbsolutePath()))
-    _traps_mod  = imp.load_source("mac_traps", os.path.join(_script_dir, "mac_traps.py"))
-    _trap_mnemonic = _traps_mod.trap_mnemonic
+    sys.path.insert(0, _script_dir)
+    from mac_traps import trap_mnemonic as _trap_mnemonic
 except Exception:
     # Fallback: minimal inline table if mac_traps.py import fails
     _TRAPS = {
@@ -68,27 +67,9 @@ memory  = currentProgram.getMemory()
 fm      = currentProgram.getFunctionManager()
 st      = currentProgram.getSymbolTable()
 
-# Binary-mode write with explicit UTF-8 encoding. rom_patches.cpp contains
-# the occasional non-ASCII character (em-dashes, smart quotes) that gets
-# imported verbatim into EOL comments; Jython default encoding is ASCII.
-_raw_out = open(output_path, "wb")
-
-class _Utf8Writer(object):
-    def __init__(self, fp):
-        self.fp = fp
-    def write(self, s):
-        if isinstance(s, unicode):
-            self.fp.write(s.encode("utf-8"))
-        else:
-            # Bytes string: try as-is, fall back to latin-1 -> utf-8
-            try:
-                self.fp.write(s)
-            except Exception:
-                self.fp.write(s.decode("latin-1").encode("utf-8"))
-    def close(self):
-        self.fp.close()
-
-out = _Utf8Writer(_raw_out)
+# Explicit UTF-8: rom_patches.cpp contains the occasional non-ASCII character
+# (em-dashes, smart quotes) that gets imported verbatim into EOL comments.
+out = open(output_path, "w", encoding="utf-8")
 
 prog = currentProgram
 out.write("; ======================================================\n")

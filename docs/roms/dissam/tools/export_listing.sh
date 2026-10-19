@@ -17,13 +17,26 @@ REPO_ROOT="$(cd "$DISSAM_DIR/../../.." && pwd)"
 
 ROM_ROOT="${ROM_ROOT:-$HOME/storage/roms}"
 PROJECT_ROOT="$DISSAM_DIR/ghidra"
-GHIDRA_HEADLESS="${GHIDRA_HEADLESS:-/snap/ghidra/35/ghidra_12.0_PUBLIC/support/analyzeHeadless}"
+# The scripts are Python 3 (PyGhidra; Ghidra 12 no longer ships Jython), so
+# headless runs go through pyghidraRun -H, which sets up its own venv.
+GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"
+PYGHIDRA_RUN="$GHIDRA_INSTALL_DIR/support/pyghidraRun"
 
-if [ ! -x "$GHIDRA_HEADLESS" ]; then
-    echo "error: analyzeHeadless not found at $GHIDRA_HEADLESS" >&2
-    echo "       set GHIDRA_HEADLESS env var to override" >&2
+if [ ! -x "$PYGHIDRA_RUN" ]; then
+    echo "error: pyghidraRun not found at $PYGHIDRA_RUN" >&2
+    echo "       set GHIDRA_INSTALL_DIR to the Ghidra (>= 11.3) install" >&2
     exit 1
 fi
+
+# A venv of our own (made by bootstrap.sh) so pyghidraRun neither prompts nor
+# installs into whatever venv the caller has active.
+PYGHIDRA_VENV="$SCRIPT_DIR/vendor/pyghidra-venv"
+if [ ! -x "$PYGHIDRA_VENV/bin/python" ]; then
+    echo "error: $PYGHIDRA_VENV missing; run tools/bootstrap.sh" >&2
+    exit 1
+fi
+export VIRTUAL_ENV="$PYGHIDRA_VENV"
+export PATH="$PYGHIDRA_VENV/bin:$PATH"
 
 # Ensure Java is available (Ghidra snap bundles its own JDK)
 if ! command -v java &>/dev/null; then
@@ -84,7 +97,7 @@ process_rom() {
     local staged="$PROJECT_ROOT/_staging_${machine}.rom"
     cp -f "$rom_file" "$staged"
 
-    "$GHIDRA_HEADLESS" \
+    "$PYGHIDRA_RUN" -H \
         "$PROJECT_ROOT" "$machine" \
         -import "$staged" \
         -overwrite \

@@ -18,7 +18,9 @@ struct MachineProfile {
     int screen_row_bytes;
 };
 
-void set_machine_profile(uint16_t rom_version);
+// rom_checksum (the ROM's first long) names the exact ROM; machines that
+// share a ROM version but not a layout (IIci vs Quadra) are told apart by it.
+void set_machine_profile(uint16_t rom_version, uint32_t rom_checksum);
 const MachineProfile& machine_profile();
 
 #endif

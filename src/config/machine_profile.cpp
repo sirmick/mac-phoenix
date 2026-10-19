@@ -33,6 +33,27 @@ static const MachineProfile profile_macii = {
     0               // screen_row_bytes (computed by video driver)
 };
 
+// Mac IIci ($368CADFE): a $067C ROM like the Quadra's, so patch_rom_32, but
+// laid out like the Mac II -- RAM, ROM at $800000, ScratchMem and frame
+// buffer all below 16MB -- so it runs in 24-bit mode (System 6). The ROM's
+// 32-bit addresses ($40800000, $Fsxxxxxx) wrap onto that through the mask,
+// as the real machine's MMU maps them.
+static const MachineProfile profile_iici = {
+    "iici",
+    0x067c,         // rom_version
+    0x800000,       // rom_base_mac ($40800000 masked)
+    0x800000,       // max_ram (8MB limit in 24-bit mode)
+    3,              // cpu_type = 68030
+    true,           // fpu (the optional 68882)
+    true,           // twenty_four_bit
+    5,              // model_id (Gestalt 11 = Mac IIci)
+    -33,            // disk_refnum (a SCSI unit, as System 6's Finder expects)
+    640,            // screen_width
+    480,            // screen_height
+    false,          // mono_framebuffer
+    0               // screen_row_bytes
+};
+
 static const MachineProfile profile_quadra = {
     "quadra",
     0x067c,         // rom_version
@@ -51,9 +72,11 @@ static const MachineProfile profile_quadra = {
 
 static const MachineProfile* g_profile = &profile_quadra;
 
-void set_machine_profile(uint16_t rom_version)
+void set_machine_profile(uint16_t rom_version, uint32_t rom_checksum)
 {
-    if (rom_version == 0x0276) {
+    if (rom_checksum == 0x368CADFE) {
+        g_profile = &profile_iici;
+    } else if (rom_version == 0x0276) {
         g_profile = &profile_se;
     } else if (rom_version == 0x0178) {
         g_profile = &profile_macii;

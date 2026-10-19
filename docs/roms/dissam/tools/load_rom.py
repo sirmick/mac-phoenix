@@ -18,7 +18,7 @@
 #   7. Kicks auto-analysis for another pass.
 #
 # @category Mac.ROM
-# @runtime Jython
+# @runtime PyGhidra
 
 import sys
 import os
