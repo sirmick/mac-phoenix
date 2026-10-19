@@ -14,6 +14,23 @@
 
 namespace http {
 
+namespace {
+// /machines/NAME.png, NAME lowercase letters and digits: the machine
+// pictures shown while the Mac is off (tools/art/machines.py).
+bool is_machine_art(const std::string& path) {
+    const std::string pre = "/machines/", suf = ".png";
+    if (path.size() <= pre.size() + suf.size() ||
+        path.compare(0, pre.size(), pre) != 0 ||
+        path.compare(path.size() - suf.size(), suf.size(), suf) != 0)
+        return false;
+    for (size_t i = pre.size(); i < path.size() - suf.size(); i++) {
+        char c = path[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) return false;
+    }
+    return true;
+}
+}
+
 StaticFileHandler::StaticFileHandler(const std::string& root_dir, const config::EmulatorConfig* config)
     : root_dir_(root_dir), config_(config)
 {}
@@ -30,7 +47,8 @@ bool StaticFileHandler::handles(const std::string& path) const {
            path == "/Apple.svg" ||
            path == "/Motorola.svg" ||
            path == "/PowerPC.svg" ||
-           path == "/rom_database.json";
+           path == "/rom_database.json" ||
+           is_machine_art(path);
 }
 
 Response StaticFileHandler::serve(const std::string& path) {
@@ -89,6 +107,8 @@ std::string StaticFileHandler::map_path_to_file(const std::string& path) const {
         return root_dir_ + "/PowerPC.svg";
     } else if (path == "/rom_database.json") {
         return root_dir_ + "/rom_database.json";
+    } else if (is_machine_art(path)) {
+        return root_dir_ + path;
     }
     return "";
 }

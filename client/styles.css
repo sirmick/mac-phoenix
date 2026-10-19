@@ -91,6 +91,37 @@ header {
 .held-mods.has-option  .mod-option,
 .held-mods.has-cmd     .mod-cmd     { color: #fff; }
 
+/* CPU chip next to the Apple logo: a little IC, pins top and bottom,
+ * the architecture printed on it (68k red, PPC blue). */
+.cpu-chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.5em;
+    min-width: 3.4em;
+    padding: 0 0.5em;
+    margin: 0 0.4em 0 0.1em;
+    border-radius: 3px;
+    background: linear-gradient(#3c3c3c, #1c1c1c);
+    box-shadow: inset 0 0 0 1px #4a4a4a, 0 1px 2px rgba(0, 0, 0, 0.6);
+    font: 700 1em/1 Menlo, Monaco, Consolas, monospace;
+    letter-spacing: 0.04em;
+    user-select: none;
+}
+.cpu-chip::before, .cpu-chip::after {
+    content: '';
+    position: absolute;
+    left: 0.35em;
+    right: 0.35em;
+    height: 0.3em;
+    background: repeating-linear-gradient(90deg, #b8b8b8 0 0.18em, transparent 0.18em 0.42em);
+}
+.cpu-chip::before { top: -0.3em; }
+.cpu-chip::after  { bottom: -0.3em; }
+.cpu-chip.m68k { color: #ff4a3d; text-shadow: 0 0 6px rgba(255, 74, 61, 0.45); }
+.cpu-chip.ppc  { color: #3d9bff; text-shadow: 0 0 6px rgba(61, 155, 255, 0.45); }
+
 .logo h1 {
     font-size: 1em;
     font-weight: 500;
@@ -364,6 +395,11 @@ main {
     filter: grayscale(100%) brightness(0.5);
     opacity: 0.7;
 }
+/* ... but not the machine shown while the Mac is off. */
+#display-container.disconnected:has(.overlay.mac-off) {
+    filter: none;
+    opacity: 1;
+}
 
 .resolution-controls {
     display: flex;
@@ -439,6 +475,37 @@ main {
     text-align: center;
     max-width: 400px;
     padding: 20px;
+}
+
+/* Mac off: the machine under a soft spotlight (its drop shadow is
+ * translucent black, so it needs something lighter than black behind). */
+.overlay.mac-off {
+    background: radial-gradient(ellipse 60% 55% at 50% 45%, #3a3a3a 0%, #222 55%, #111 100%);
+}
+.overlay.mac-off .overlay-content {
+    max-width: none;
+}
+#overlay-machine {
+    display: block;
+    height: min(280px, 42vh);
+    max-width: 80vw;
+    object-fit: contain;
+    margin: 0 auto 18px;
+    cursor: pointer;
+    transition: transform 0.25s ease, filter 0.25s ease;
+}
+#overlay-machine:hover {
+    transform: translateY(-3px) scale(1.02);
+    filter: brightness(1.06);
+}
+#overlay-machine[hidden], #overlay-machine-name[hidden] {
+    display: none;
+}
+.overlay p#overlay-machine-name {
+    color: #ddd;
+    font-size: 0.95em;
+    font-weight: 500;
+    margin-bottom: 6px;
 }
 
 .spinner {

@@ -1377,6 +1377,7 @@ class MacPhoenixClient {
     _onFallbackUiState({ phase, codec, reason }) {
         const overlay = document.getElementById('overlay');
         const spinner = document.getElementById('spinner');
+        showOverlayMachine(phase === 'idle-mac-off');
         if (phase === 'idle-mac-off') {
             if (overlay) overlay.classList.remove('hidden');
             if (spinner) spinner.style.display = 'none';
@@ -3226,11 +3227,14 @@ class MacPhoenixClient {
     }
 
     updateOverlayStatus(text) {
+        // While the Mac is off the stream still connects; keep saying so.
+        if (_overlayMachineShown) text = 'Mac is off — click Start to power on';
         const el = document.getElementById('overlay-status');
         if (el) el.textContent = text;
     }
 
     showOverlay(title, status) {
+        showOverlayMachine(false);
         const overlay = document.getElementById('overlay');
         const titleEl = document.getElementById('overlay-title');
         const statusEl = document.getElementById('overlay-status');
@@ -3790,7 +3794,61 @@ function defaultBackendForMode(mode) {
 }
 
 // Update header title with current model name
+// The machines, by the mode of their ROM (rom_database.json), and
+// Executor: the name in the title bar and the picture shown while the
+// Mac is off (client/machines/, drawn by tools/art/machines.py). The ROM
+// database names ROM files ("Quadra 610/650/800"); this is the one
+// machine we emulate with each. Executor, no ROM, is a 90s PC.
+const MACHINES = {
+    se:       { name: 'Macintosh SE',       art: 'se' },
+    iici:     { name: 'Macintosh IIci',     art: 'iici' },
+    quadra:   { name: 'Quadra 650',         art: 'quadra650' },
+    ppc:      { name: 'Power Macintosh G3', art: 'g3' },
+    executor: { name: 'Executor',           art: 'executor' },
+};
+
+// The machine the config makes, or null (unknown ROM).
+function machineFor(cfg) {
+    if (backendIsExecutor(cfg.backend)) return MACHINES.executor;
+    const rom = storageCache?.roms?.find(r => r.name === cfg.rom);
+    const info = rom && getRomInfo(rom.checksum, rom.md5);
+    return MACHINES[info?.mode] || null;
+}
+
+let _overlayMachineShown = false;
+
+function showOverlayMachine(show) {
+    _overlayMachineShown = show;
+    document.getElementById('overlay')?.classList.toggle('mac-off', show);
+    updateOverlayMachine();
+}
+
+function updateOverlayMachine() {
+    const img = document.getElementById('overlay-machine');
+    const nameEl = document.getElementById('overlay-machine-name');
+    if (!img || !nameEl) return;
+    const machine = machineFor(currentConfig);
+    const show = _overlayMachineShown && !!machine;
+    img.hidden = nameEl.hidden = !show;
+    if (!show) return;
+    const src = `machines/${machine.art}.png`;
+    if (img.getAttribute('src') !== src) img.src = src;
+    img.alt = machine.name;
+    img.title = 'Start';
+    img.onclick = startEmulator;
+    // "Quadra 650 · 7.6.1": the machine and its boot disk; Executor's is
+    // the image it took its System Folder from ("Executor · System 7.5.5").
+    let disk = (currentConfig.disks || [])[0];
+    if (machine === MACHINES.executor) {
+        const sys = currentConfig.executor_system || defaultExecutorSystem() || '';
+        const v = sys.match(/\d+\.\d+(\.\d+)?/);
+        disk = v ? 'System ' + v[0] : sys;
+    }
+    nameEl.textContent = machine.name + (disk ? ' · ' + disk.replace(/\.(img|dsk|hfv)$/i, '') : '');
+}
+
 function updateHeaderTitle() {
+    updateOverlayMachine();
     const titleEl = document.getElementById('emulator-title');
     if (!titleEl) return;
 
@@ -3817,11 +3875,7 @@ function updateHeaderTitle() {
     }
 
     const info = getRomInfo(rom.checksum, rom.md5);
-    if (info?.name) {
-        titleEl.textContent = info.name;
-    } else {
-        titleEl.textContent = 'Macintosh';
-    }
+    titleEl.textContent = MACHINES[info?.mode]?.name || info?.name || 'Macintosh';
 }
 
 const PHASE_COLOR_CLASS = {
@@ -4754,10 +4808,11 @@ function updateEmulatorPanelVisibility() {
     if (jitGroup) jitGroup.style.display = supportsJit ? '' : 'none';
 
     // Header logo / title follow the architecture
-    const processorLogo = document.getElementById('processor-logo');
-    if (processorLogo) {
-        processorLogo.src = isPpc ? 'PowerPC.svg' : 'Motorola.svg';
-        processorLogo.alt = isPpc ? 'PowerPC' : 'Motorola';
+    const chip = document.getElementById('cpu-chip');
+    if (chip) {
+        chip.textContent = isPpc ? 'PPC' : '68k';
+        chip.className = 'cpu-chip ' + (isPpc ? 'ppc' : 'm68k');
+        chip.title = isPpc ? 'PowerPC' : 'Motorola 680x0';
     }
 
     updateHeaderTitle();

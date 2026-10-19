@@ -16,7 +16,7 @@
     <header>
         <div class="logo">
             <img src="Apple.svg" alt="Apple" style="height: 1.6em; margin-right: 0.4em;">
-            <img id="processor-logo" src="Motorola.svg" alt="Processor" style="height: 1.6em; margin-right: 0.4em;">
+            <span id="cpu-chip" class="cpu-chip m68k" title="Motorola 680x0">68k</span>
             <h1 id="emulator-title">Macintosh</h1>
 
             <!-- Boot-phase chip — colorized through boot stages
@@ -85,6 +85,9 @@
                 <canvas id="cursor-overlay" style="position: absolute; top: 0; left: 0; pointer-events: none; display: none;"></canvas>
                 <div class="overlay" id="overlay">
                     <div class="overlay-content">
+                        <!-- The machine, while the Mac is off: tools/art/machines.py -->
+                        <img id="overlay-machine" alt="" hidden>
+                        <p id="overlay-machine-name" hidden></p>
                         <div class="spinner" id="spinner"></div>
                         <p id="overlay-status">Connecting…</p>
                     </div>
@@ -279,10 +282,10 @@
                 <div class="form-group">
                     <label>Emulator Mode</label>
                     <select id="cfg-emulator">
-                        <option value="quadra">Quadra (68040, System 7 - Mac OS 8.1)</option>
-                        <option value="se">Mac SE (68000, System 6)</option>
-                        <option value="iici">Mac IIci (68030, System 6 in colour)</option>
-                        <option value="ppc">PowerPC (PPC, System 7.1.2 - Mac OS 9.0.4)</option>
+                        <option value="quadra">Quadra 650 (68040, System 7 - Mac OS 8.1)</option>
+                        <option value="se">Macintosh SE (68000, System 6)</option>
+                        <option value="iici">Macintosh IIci (68030, System 6 in colour)</option>
+                        <option value="ppc">Power Macintosh G3 (PPC, System 7.1.2 - Mac OS 9.0.4)</option>
                         <option value="executor">Executor (68k, no ROM, reimplemented Toolbox)</option>
                     </select>
                 </div>
