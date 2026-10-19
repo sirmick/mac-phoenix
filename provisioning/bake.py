@@ -113,7 +113,7 @@ IMAGES = os.path.join(STORAGE, "images")
 SESSION = os.path.join(STORAGE, "work", "bake-session.json")
 DEFAULT_TARGET = "Install"
 DEFAULT_OS = "7.6.1"
-BACKENDS = {"68k": "uae", "ppc": "kpx", "se": "se"}    # machine -> Guest backend (guest.py)
+BACKENDS = {"68k": "uae", "ppc": "kpx", "se": "se", "iici": "iici"}    # machine -> Guest backend (guest.py)
 BOTH = ["68k", "ppc"]                   # what "both machines" means (7.5.5, 7.6.1)
 
 ARCHIVE_TYPES = {".sit": b"SIT!", ".hqx": b"TEXT", ".bin": b"BINA", ".zip": b"ZIP ", ".sea": b"APPL",

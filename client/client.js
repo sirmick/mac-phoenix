@@ -4794,10 +4794,9 @@ const ROM_PROFILES = [
     { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 4, screen: '512x342', disks: ['6.0.8.img', 'system-6.0.8.img'] },
     // The IIci: System 6 in colour (24-bit mode, 8MB; machine_profile.cpp).
-    // The hand-made 6.0.8 first: the baked one is an SE install (System 6's
-    // Easy Install leaves out Color and Monitors on a machine without colour).
+    // The baked 6.0.8 is a universal install (Color, Monitors, AppleShare...).
     { name: 'iici', emulator: 'iici', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 8, screen: '640x480', disks: ['system-6.0.8.img', '6.0.8.img'] },
+      ram_mb: 8, screen: '640x480', disks: ['6.0.8.img', 'system-6.0.8.img'] },
     { name: 'ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img', 'macos-9.0.4.img', '7.6.1.img', 'macos-7.5.5.img'] },
     { name: 'ppc-8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,

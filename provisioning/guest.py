@@ -13,6 +13,7 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
                                          item in the front window ("button", or
                                          "item" for any item's text); else the
                                          same text as drawn (/api/text)
+  {"click": {...}, "shift": true}        with Shift held: a multiple selection
   {"click": {"text": "Easy Install"}}    by drawn text alone (/api/text): what an
                                          app draws itself; exact, else a prefix
   {"click": {"row": T}}                  the start of the list row that reads T: the
@@ -84,18 +85,20 @@ ROOT = os.path.dirname(HERE)
 def roms(storage):
     return {"uae": os.path.expanduser(os.environ.get("MACEMU_ROM", "~/roms/quadra.rom")),
             "kpx": os.path.join(storage, "roms", "g3.rom"),
-            "se": os.path.join(storage, "roms", "256KB ROMs", "1987-03 - B2E362A8 - Mac SE.ROM")}
+            "se": os.path.join(storage, "roms", "256KB ROMs", "1987-03 - B2E362A8 - Mac SE.ROM"),
+            "iici": os.path.join(storage, "roms", "iici.rom")}
 
 
 # A guest's "backend" here: the emulator's --backend and the machine's own
 # arguments. "se" is the 68k core with a Mac SE ROM, 4 MB and its screen.
 MACHINE_ARGS = {"uae": ("uae", []), "kpx": ("kpx", []),
-                "se": ("uae", ["--ram", "4", "--screen", "512x342"])}
+                "se": ("uae", ["--ram", "4", "--screen", "512x342"]),
+                "iici": ("uae", ["--ram", "8", "--screen", "640x480"])}   # colour, 68030, 24-bit
 
 
 def has_agent(backend):
     """Whether BridgeAgent runs there (System 7 and later: not the SE's 6.0.8)."""
-    return backend != "se"
+    return backend not in ("se", "iici")
 
 
 class NotFound(RuntimeError):
@@ -476,19 +479,8 @@ class Guest:
         if len(dvol) != 1:
             raise RuntimeError(f"Finder copy: {dst!r}: only to a volume's top level")
         self.finder_open(":".join(parts[:-1]))
-        self.mouse(x=0, y=479)                  # off the names, so they read whole
-        time.sleep(1)
-        ui = self.ui()
-        w = next((w for w in ui["windows"] if w.get("front")), None)
-        item = self.drawn(parts[-1], within=w["rect"] if w else None, exact=True)
-        if not item:
-            raise NotFound(f"no {parts[-1]!r} in the {parts[-2]} window")
-        target = next((x for x in (self.get("/api/text") or {}).get("text", [])
-                       if x["text"].strip() == dvol[0] and not (w and x["rect"][0] >= w["rect"][0]
-                       and x["rect"][2] <= w["rect"][2] and x["rect"][1] >= w["rect"][1]
-                       and x["rect"][3] <= w["rect"][3])), None)
-        if not target:
-            raise NotFound(f"no {dvol[0]!r} icon on the desktop")
+        item, w = self.finder_item(parts[-1], in_window=True)
+        target, _ = self.finder_item(dvol[0], in_window=False)
         centre = lambda r: ((r[0] + r[2]) // 2, (r[1] + r[3]) // 2)
         ix, iy = centre(item["rect"])
         tx, ty = centre(target["rect"])
@@ -542,42 +534,49 @@ class Guest:
             self.mouse(button=0, down=False)
             time.sleep(1.5)
 
+    def finder_item(self, name, in_window, redraw=None):
+        """Where the Finder draws `name`: in the front window (in_window) or on
+        the desktop; waited for (30 s). A label a window's edge clips is
+        found whole in the draw log; `redraw` (a one-element list, False)
+        allows one Select All when it's missing from the desktop (icons drawn
+        before the text feed: the boot disk's)."""
+        deadline = time.time() + 30
+        while True:
+            self.mouse(x=0, y=479)              # the cursor off the names, so they read whole
+            time.sleep(0.5)
+            ui = self.ui()
+            w = next((w for w in ui["windows"] if w.get("front")), None)
+            within = w["rect"] if in_window and w else None
+            t = self.drawn(name, within=within, exact=True)
+            if not t and within:                # a label the window's edge clips: the draw log
+                l, tp, r, b = within            # has it whole; its latest draw in the window
+                draws = (self.get("/api/text?since=0") or {}).get("draws", [])
+                t = next((d for d in reversed(draws) if d["text"].strip() == name
+                          and d["rect"][2] > l and d["rect"][0] < r
+                          and tp <= d["rect"][1] and d["rect"][3] <= b), None)
+                if t:                           # its visible part
+                    t = dict(t, rect=[max(t["rect"][0], l + 2), t["rect"][1],
+                                      min(t["rect"][2], r - 2), t["rect"][3]])
+            if t:
+                return t, w
+            if time.time() > deadline:
+                raise NotFound(f"no {name!r} in the Finder")
+            if not in_window and redraw is not None and not redraw[0]:
+                redraw[0] = True                # Select All redraws the desktop's labels,
+                self.cmd_key(0x00)              # a click on an empty corner deselects them
+                scr = (self.get("/api/text") or {}).get("screen", [640, 480])
+                self.click(4, scr[1] - 4)
+                continue
+            self.pause(1)
+
     def finder_open(self, path):
         """Open Vol:Folder:...:Item in the Finder without the bridge (System
         6): each name selected where it is drawn (the volume on the desktop,
         the rest in the window the last one opened) and opened with
         Command-O."""
-        parts = [p for p in path.split(":") if p]
-        redrawn = False
-        for i, name in enumerate(parts):
-            deadline = time.time() + 30
-            while True:
-                self.mouse(x=0, y=479)          # the cursor off the names, so they read whole
-                time.sleep(0.5)
-                ui = self.ui()
-                w = next((w for w in ui["windows"] if w.get("front")), None)
-                within = w["rect"] if i and w else None
-                t = self.drawn(name, within=within, exact=True)
-                if not t and within:            # a label the window's edge clips: the draw log
-                    l, tp, r, b = within        # has it whole; its latest draw in the window
-                    draws = (self.get("/api/text?since=0") or {}).get("draws", [])
-                    t = next((d for d in reversed(draws) if d["text"].strip() == name
-                              and d["rect"][2] > l and d["rect"][0] < r
-                              and tp <= d["rect"][1] and d["rect"][3] <= b), None)
-                    if t:                       # its visible part
-                        t = dict(t, rect=[max(t["rect"][0], l + 2), t["rect"][1],
-                                          min(t["rect"][2], r - 2), t["rect"][3]])
-                if t:
-                    break
-                if time.time() > deadline:
-                    raise NotFound(f"no {name!r} to open in the Finder")
-                if i == 0 and not redrawn:      # a desktop drawn before the text feed (the boot
-                    redrawn = True              # disk's icon): Select All redraws the labels,
-                    self.cmd_key(0x00)          # a click on an empty corner deselects them
-                    scr = (self.get("/api/text") or {}).get("screen", [640, 480])
-                    self.click(4, scr[1] - 4)
-                    continue
-                self.pause(1)
+        redraw = [False]
+        for i, name in enumerate(p for p in path.split(":") if p):
+            t, _ = self.finder_item(name, in_window=i > 0, redraw=redraw)
             self.click((t["rect"][0] + t["rect"][2]) // 2, (t["rect"][1] + t["rect"][3]) // 2)
             self.cmd_key(0x1F)                  # O
             time.sleep(2)
@@ -739,10 +738,19 @@ class Guest:
             if "row" in what:                   # the start of a list row (a disclosure triangle)
                 self.click(*self.row_start(what))
                 return
+            if what.get("text") and not what.get("logged"):
+                self.mouse(x=0, y=479)          # the cursor off the text, so it reads whole
+                time.sleep(0.5)                 # (it sits where the last click was)
             pos = self.find(what)
             if not pos:
                 raise NotFound(f"no {what} in the front window")
+            if step.get("shift"):               # extend a selection (the Installer's list)
+                self.post("/api/keypress", {"key": 0x38, "down": True})
+                time.sleep(0.2)
             self.click(*pos)
+            if step.get("shift"):
+                self.post("/api/keypress", {"key": 0x38, "down": False})
+                time.sleep(0.5)
         elif "check" in step:
             self.check(step["check"], step.get("timeout", 5))
         elif "popup" in step and isinstance(step["popup"], dict):

@@ -1,10 +1,10 @@
 {
- "note": "System 6.0.8 for the Mac SE from the Legacy CD's 800K set, all four floppies attached as disks (the Installer finds each one mounted, no swapping): the Installer on System Tools, opened in the Finder (System 6 has no bridge: names selected, Command-O), Easy Install onto the blank disk (Switch Disk), which installs the SE's System and all printer software; first boot from the new disk alone. Run from the hand-made 6.0.8 disk.",
+ "note": "System 6.0.8 from the Legacy CD's 800K set, all four floppies attached as disks (the Installer finds each one mounted, no swapping): the Installer on System Tools, opened in the Finder (System 6 has no bridge: names selected, Command-O), Customize onto the blank disk: System software for any Macintosh, software for all Apple printers, AppleShare (workstation), AppleTalk Responder and 32-Bit QuickDraw (Shift-clicked), so the disk carries Color and Monitors and boots the SE and the IIci alike. Then the floppies' own utilities copied to the top of the disk in the Finder: Apple HD SC Setup, Disk First Aid (Utilities 1), Apple File Exchange, Font/DA Mover with its Fonts and Desk Accessories, MacroMaker (Utilities 2), TeachText (System Tools). Run on the IIci (colour, 68030) from the hand-made 6.0.8 disk; first boot from the new disk alone.",
  "kind": "os",
  "version": "6.0.8",
  "os": "6.0.8",
  "machines": [
-  "se"
+  "iici"
  ],
  "target_mb": 40,
  "disks": [
@@ -60,6 +60,64 @@
   },
   {
    "click": {
+    "button": "Customize"
+   },
+   "until": {
+    "text": "System software for any Macintosh",
+    "exact": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "text": "System software for any Macintosh",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "text": "Software for all Apple printers",
+    "exact": true,
+    "front": true
+   },
+   "shift": true
+  },
+  {
+   "click": {
+    "text": "AppleShare (workstation software)",
+    "exact": true,
+    "front": true
+   },
+   "shift": true
+  },
+  {
+   "click": {
+    "text": "Software for AppleTalk Responder",
+    "exact": true,
+    "front": true
+   },
+   "shift": true
+  },
+  {
+   "click": {
+    "text": "32-Bit QuickDraw",
+    "exact": true,
+    "front": true
+   },
+   "shift": true
+  },
+  {
+   "wait_for": {
+    "text": "You have selected:"
+   },
+   "timeout": 10
+  },
+  {
+   "shot": "2-selected"
+  },
+  {
+   "click": {
     "button": "Install"
    }
   },
@@ -70,12 +128,58 @@
    "timeout": 1200
   },
   {
-   "shot": "2-installed"
+   "shot": "3-installed"
   },
   {
    "click": {
     "button": "Quit"
    }
+  },
+  {
+   "copy": {
+    "from": "Utilities 1:Apple HD SC Setup",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Utilities 1:Disk First Aid",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Utilities 2:Apple File Exchange Folder",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Utilities 2:Font/DA Mover Folder",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Utilities 2:MacroMaker Folder",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "System Tools:TeachText",
+    "to": "{target}:"
+   }
+  },
+  {
+   "shot": "4-utilities"
   }
+ ],
+ "expect": [
+  "System Folder",
+  "Apple HD SC Setup",
+  "Disk First Aid",
+  "Font/DA Mover Folder",
+  "TeachText"
  ]
 }

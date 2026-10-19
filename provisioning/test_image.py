@@ -113,14 +113,20 @@ def run(images, machine, port, only, log=print):
                     time.sleep(2)
             if ok:
                 time.sleep(8)               # let it finish starting: some put up an Open dialog late
+                refused = next((t["text"] for t in (guest.get("/api/text") or {}).get("text", [])
+                                if REFUSAL.search(t["text"])), None)
+                if refused:                 # running, but only to say it won't
+                    ok = False
+                    r = {"success": False, "error": f"refused: {refused!r}"}
             guest.shot(f"{n:02d}-" + ("ok-" if ok else "FAIL-") + leaf.replace("/", "_"))
             facts = [k for k in e if k not in ("app", "snapshot", "machines")]
             results.append(ok)
             log(f"{'ok  ' if ok else 'FAIL'} {path}  [{e['snapshot']}]"
                 + (f" {', '.join(facts)}" if facts else "")
                 + ("" if ok else f"  ({r.get('message') or r.get('error')}; front: {front})"))
-            if ok and (e.get("no_quit") or not guest.close_front(front)):
-                if not e.get("no_quit"):
+            launched_but_failed = not ok and r.get("error", "").startswith("refused")
+            if launched_but_failed or (ok and (e.get("no_quit") or not guest.close_front(front))):
+                if ok and not e.get("no_quit"):
                     log(f"     {leaf} would not quit; restarting the emulator")
                 guest.stop()
                 time.sleep(3)
@@ -128,13 +134,21 @@ def run(images, machine, port, only, log=print):
             time.sleep(3)
         if aliases and frontier and not only:
             results.append(check_aliases(guest, aliases, frontier, log))
-        guest.shutdown()
+        try:
+            guest.shutdown()
+        except RuntimeError as ex:              # (a test copy: an unclean stop is fine)
+            log(f"     shutdown: {ex}")
     finally:
         guest.stop()
     failed = results.count(False)
     log(f"{machine}: {len(results) - failed}/{len(results)} passed (apps{', aliases' if len(results) > len(apps) else ''};"
         f" {', '.join(images)}); screenshots in {work}")
     return failed == 0
+
+
+# What an application says when it starts only to refuse to run here.
+import re
+REFUSAL = re.compile(r"will not run|cannot run|can.t run|requires (a|an|system|the)", re.I)
 
 
 def image_args(name):
