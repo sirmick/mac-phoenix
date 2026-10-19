@@ -4078,12 +4078,12 @@ function renderPresetTabs() {
         return tab;
     };
 
-    // Built-in profiles first, oldest OS first (ROM_PROFILES order), under
-    // their labels; one saved over keeps its place and gets a delete button.
-    // Then the user's own presets.
+    // Built-in profiles first, oldest OS first (ROM_PROFILES order); one
+    // saved over keeps its place and gets a delete button. Then the user's
+    // own presets.
     for (const name of Object.keys(App.builtinPresets || {})) {
-        const tab = addTab(name, App.builtinLabels?.[name] || name, !!App.savedPresets[name]);
-        tab.title = App.savedPresets[name] ? `${name} (saved)` : `${name}: built-in profile`;
+        const tab = addTab(name, name, !!App.savedPresets[name]);
+        tab.title = App.savedPresets[name] ? 'Built-in profile, saved over' : 'Built-in profile';
     }
     for (const name of Object.keys(App.savedPresets)) {
         if (!App.builtinPresets?.[name]) addTab(name, name, true);
@@ -4841,32 +4841,40 @@ function onRomChange() {
 // App.savedPresets whole, so a seeded entry there would replace the user's),
 // unless saved as a preset. Each needs its recommended ROM (rom_database.json)
 // and a disk image, and is left out without them.
-const EXECUTOR_PROFILE = 'exec';
+const EXECUTOR_PROFILE = '7.5.5-executor';
 const ROM_PROFILES = [
-    // name, tab label, persona, backend, core, jit, RAM MB, screen, disks:
-    // the first alternative whose images are all in storage (an alternative
-    // is one image, or a boot disk and the volumes that go with it). Oldest
-    // OS first: the tabs are in this order.
+    // name (OS-machine: the tab), persona, backend, core, jit, RAM MB,
+    // screen, disks: the first alternative whose images are all in storage
+    // (an alternative is one image, or a boot disk and the volumes that go
+    // with it). Oldest OS first: the tabs are in this order.
     // The disks are the baked ones provisioning/build.py makes from Apple's
-    // installers (docs/Provisioning.md).
-    { name: 'se', label: 'System 6 (SE)', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
+    // installers (docs/Provisioning.md); 7.5.5 and 7.6.1 run on both.
+    { name: '6.0.8-se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 4, screen: '512x342', disks: ['6.0.8.img'] },
     // The IIci: System 6 in colour (24-bit mode, 8MB; machine_profile.cpp).
     // The baked 6.0.8 is a universal install (Color, Monitors, AppleShare...).
-    { name: 'iici', label: 'System 6 (IIci)', emulator: 'iici', backend: 'uae', cpu_core: 'uae', jit: false,
+    { name: '6.0.8-iici', emulator: 'iici', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 8, screen: '640x480', disks: ['6.0.8.img'] },
     // 7.1 needs the IIci's model ID (5): with the Quadra's 14 it bombs at boot.
-    { name: '68k-7.1', label: 'System 7.1', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false, model_id: 5,
+    { name: '7.1-68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false, model_id: 5,
       ram_mb: 64, screen: '640x480', disks: ['7.1.img'] },
-    { name: '68k', label: 'Mac OS 7.6', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
+    { name: '7.5.5-68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
+      ram_mb: 64, screen: '1024x768', disks: ['7.5.5.img'] },
+    { name: '7.5.5-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+      ram_mb: 128, screen: '1024x768', disks: ['7.5.5.img'] },
+    { name: '7.6.1-68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 64, screen: '1024x768', disks: ['7.6.1.img'] },
-    { name: '68k-dev', label: '7.6 Dev', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
+    { name: '7.6.1-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+      ram_mb: 128, screen: '1024x768', disks: ['7.6.1.img'] },
+    { name: '7.6.1-dev-68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'dev-tools-system-7.img']] },
-    { name: 'ppc-8.6', label: 'Mac OS 8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+    { name: '7.6.1-dev-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+      ram_mb: 128, screen: '1024x768', disks: [['dev-7.6.1.img', 'dev-tools-system-7.img']] },
+    { name: '8.6-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: ['8.6.img'] },
-    { name: 'ppc', label: 'Mac OS 9', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+    { name: '9.0.4-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img'] },
-    { name: 'ppc-dev', label: '9 Dev', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+    { name: '9.0.4-dev-ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: [['dev-9.0.4.img', 'dev-tools-macos-8-9.img']] },
 ];
 
@@ -4880,14 +4888,12 @@ function recommendedRomFor(mode) {
 
 async function seedBuiltinProfiles(cfg) {
     App.builtinPresets = {};
-    App.builtinLabels = { [EXECUTOR_PROFILE]: 'Executor' };
     await loadStorage();
     const images = (storageCache?.disks || []).map(d => d.name || d);
     for (const p of ROM_PROFILES) {
         const rom = recommendedRomFor(p.emulator);
         const disks = p.disks.map(d => [].concat(d)).find(ds => ds.every(d => images.includes(d)));
         if (!rom || !disks) continue;
-        App.builtinLabels[p.name] = p.label;
         App.builtinPresets[p.name] = {
             ...cfg, configs: undefined,
             emulator: p.emulator, backend: p.backend, cpu_core: p.cpu_core, jit: p.jit,

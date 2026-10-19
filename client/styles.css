@@ -844,9 +844,9 @@ body.fullscreen #video-section {
     background: #1e1e1e;
     border-bottom: 1px solid #333;
     padding: 0 12px;
-    overflow-x: auto;
+    flex-wrap: wrap;
     flex-shrink: 0;
-    gap: 2px;
+    gap: 0 2px;
 }
 
 .config-tab {

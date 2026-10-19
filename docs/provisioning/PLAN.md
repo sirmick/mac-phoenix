@@ -311,7 +311,7 @@ As of 2026-10-16:
   With `--model-id 5` the installed 7.1 (System Enabler 040 and all) boots
   to the Finder. The bake's `"args"` give every guest `--model-id 5`; bases
   `os-7.1`/`standard-7.1` carry it to what boots them (test_image, bakes on
-  it; the web UI's `68k-7.1` profile sets `model_id`). 7.1 has no File
+  it; the web UI's `7.1-68k` profile sets `model_id`). 7.1 has no File
   System Manager, so no Host volume and no BridgeAgent: the first boot runs
   without it (`"first_boot_agent": false`: Finder and menus), as System 6.
 
