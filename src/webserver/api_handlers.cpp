@@ -1995,7 +1995,10 @@ Response APIRouter::handle_copy(const Request& req) {
     }
     std::string from = utf8_to_mac_roman(j.value("from").toString().toStdString());
     std::string to = utf8_to_mac_roman(j.value("to").toString().toStdString());
-    return bridge_command(bridge_slot(), "COPY " + from + "\r" + to, 600000);
+    // "replace": true: into a folder of the same name, files replaced.
+    std::string cmd = "COPY " + from + "\r" + to;
+    if (j.value("replace").toBool(false)) cmd += "\rREPLACE";
+    return bridge_command(bridge_slot(), cmd, 600000);
 }
 
 // POST /api/annotate {"text": "..."} — a line from whatever is driving the

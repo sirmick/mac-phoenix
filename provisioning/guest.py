@@ -7,6 +7,8 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
   {"open": "Vol:Folder:Document"}        open with its creator (a Disk Copy
                                          image is mounted)
   {"copy": {"from": PATH, "to": FOLDER}} BridgeAgent COPY: both forks, Finder info
+                                         ("replace": true: into the folder of the same
+                                         name, files replaced: an update's INTO folders)
   {"click": {"button": "Install"}}       by name, from /api/ui: a control or dialog
                                          item in the front window ("button", or
                                          "item" for any item's text); else the
@@ -27,6 +29,10 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
                                          release on the named item (where the open
                                          menu drew it); front window, "exact" as for
                                          clicks
+  {"popup": {"text": "Install Location:", "offset": [126, 5]}, "choose": T}
+                                         ... beside a label, relative to its top left:
+                                         a value drawn by PowerPC code the text feed
+                                         doesn't see (the last resort: a "note" says why)
   {"popup": [x, y], "choose": "Install"} ... pressed at a screen point
   {"check": {"text": "Selected size: 4,302K"}}  fail the bake unless it is drawn
                                          in the front window (exact, else a prefix);
@@ -559,7 +565,8 @@ class Guest:
             if not r.get("success"):
                 raise RuntimeError(f"{body}: {r}")
         elif "copy" in step:
-            r = self.bridge("/api/copy", {"from": step["copy"]["from"], "to": step["copy"]["to"]}, 700)
+            r = self.bridge("/api/copy", {"from": step["copy"]["from"], "to": step["copy"]["to"],
+                                          "replace": bool(step["copy"].get("replace"))}, 700)
             if not r.get("success"):
                 raise RuntimeError(f"copy {step['copy']}: {r}")
         elif "click" in step and isinstance(step["click"], dict):
@@ -582,7 +589,11 @@ class Guest:
         elif "check" in step:
             self.check(step["check"], step.get("timeout", 5))
         elif "popup" in step and isinstance(step["popup"], dict):
-            pos = self.find({"front": True, **step["popup"]})   # its current value, or the control
+            if "offset" in step["popup"]:       # beside its label (a value drawn natively)
+                t = self.drawn(step["popup"]["text"], app=self.app())
+                pos = t and (t["rect"][0] + step["popup"]["offset"][0], t["rect"][1] + step["popup"]["offset"][1])
+            else:
+                pos = self.find({"front": True, **step["popup"]})   # its current value, or the control
             if not pos:
                 raise NotFound(f"no popup {step['popup']} in the front window")
             self.choose(*pos, step["choose"])

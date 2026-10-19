@@ -1,7 +1,8 @@
 {
- "note": "Mac OS 9.0.4 (PowerPC) with what the development tools put in the System Folder (shared libraries, first-launch preferences); the tools themselves are on Development-9. CodeWarrior Pro 4's System Folder part is left out: its shared libraries are older than the System's own.",
+ "note": "Mac OS 9.0.4 (PowerPC) with what the development tools put in the System Folder (MetroNub, CodeWarrior help, MacPerl and MacPython libraries, first-launch preferences); the tools themselves are on Development-9.",
  "base": "standard-9.0.4",
  "system_from": [
+  "codewarrior-pro-7",
   "macperl-5.6.1r2",
   "macpython-2.3.5",
   "disk-copy-6.3.3"

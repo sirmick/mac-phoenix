@@ -1,0 +1,224 @@
+{
+ "note": "CodeWarrior Pro 7 (2001) for Mac OS 8.6 and 9 (needs CarbonLib 1.3.1+: the tools layers have 1.6): Install CodeWarrior 7.0 from the 7.1 Tools CD, Easy Install (C, C++, Java) into the target, registration left for later; the CD's 7.1 update onto it; then the 7.2 PowerPC compiler and linker plugins over 7.1's (the update's INTO folders, by file: COPY replace). The installers quit every other application (BridgeAgent too) and restart: the guest restarts and the launcher brings the agent back. Install Location's value is drawn by PowerPC code the text feed doesn't see: the popup is pressed beside its label (offset). First launch done: \"Where is Mac OS X?\" (for Mach-O targets) answered Continue, so the preferences are captured.",
+ "kind": "install",
+ "os": "tools-9.0.4",
+ "disks": [
+  {
+   "file": "CW_Tools_7.1.toast_.zip",
+   "take": "CW Tools 7.1.toast"
+  }
+ ],
+ "media": [
+  {
+   "file": "C_MacOS_PPC_Pro7.2.sit"
+  }
+ ],
+ "expect": [
+  "Metrowerks CodeWarrior 7.0"
+ ],
+ "launch": [
+  "Metrowerks CodeWarrior 7.0:Metrowerks CodeWarrior:CodeWarrior IDE 4.2.6"
+ ],
+ "steps": [
+  {
+   "launch": "CW Tools 7.1:Install CodeWarrior 7.0"
+  },
+  {
+   "wait_for": {
+    "text": "Install Location:"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "Install Location:",
+    "offset": [
+     126,
+     5
+    ]
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "created on the disk \"{target}\"",
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "shot": "1-location"
+  },
+  {
+   "click": {
+    "button": "Install"
+   },
+   "until": {
+    "text": "No other applications can be running during"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Some Metrowerks Java tools need the Apple"
+   },
+   "timeout": 2400
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Register Later"
+   },
+   "timeout": 600
+  },
+  {
+   "click": {
+    "button": "Register Later"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 600
+  },
+  {
+   "shot": "2-installed"
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 300
+  },
+  {
+   "launch": "CW Tools 7.1:CW Pro 7.1 Update Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "Items will be installed on the disk \"{target}\"",
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   },
+   "until": {
+    "text": "No other applications can be running during"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 1800
+  },
+  {
+   "shot": "3-updated"
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 300
+  },
+  {
+   "copy": {
+    "from": "{media}:C++_MacOS_PPC_Pro7.2:INTO Metrowerks CodeWarrior:INTO CodeWarrior Plugins:INTO Compilers:MW C-C++ PPC",
+    "to": "{target}:Metrowerks CodeWarrior 7.0:Metrowerks CodeWarrior:CodeWarrior Plugins:Compilers:",
+    "replace": true
+   }
+  },
+  {
+   "copy": {
+    "from": "{media}:C++_MacOS_PPC_Pro7.2:INTO Metrowerks CodeWarrior:INTO CodeWarrior Plugins:INTO Compilers:MW C-C++ MachPPC",
+    "to": "{target}:Metrowerks CodeWarrior 7.0:Metrowerks CodeWarrior:CodeWarrior Plugins:Compilers:",
+    "replace": true
+   }
+  },
+  {
+   "copy": {
+    "from": "{media}:C++_MacOS_PPC_Pro7.2:INTO Metrowerks CodeWarrior:INTO CodeWarrior Plugins:INTO Compilers:Rez",
+    "to": "{target}:Metrowerks CodeWarrior 7.0:Metrowerks CodeWarrior:CodeWarrior Plugins:Compilers:",
+    "replace": true
+   }
+  },
+  {
+   "copy": {
+    "from": "{media}:C++_MacOS_PPC_Pro7.2:INTO Metrowerks CodeWarrior:INTO CodeWarrior Plugins:INTO Linkers:MacOS PPC Linker",
+    "to": "{target}:Metrowerks CodeWarrior 7.0:Metrowerks CodeWarrior:CodeWarrior Plugins:Linkers:",
+    "replace": true
+   }
+  },
+  {
+   "copy": {
+    "from": "{media}:C++_MacOS_PPC_Pro7.2:INTO Metrowerks CodeWarrior:INTO CodeWarrior Plugins:INTO Linkers:Mach-O PPC Linker",
+    "to": "{target}:Metrowerks CodeWarrior 7.0:Metrowerks CodeWarrior:CodeWarrior Plugins:Linkers:",
+    "replace": true
+   }
+  },
+  {
+   "copy": {
+    "from": "{media}:C++_MacOS_PPC_Pro7.2:INTO Metrowerks CodeWarrior:INTO CodeWarrior Plugins:INTO Linkers:MacOS Merge",
+    "to": "{target}:Metrowerks CodeWarrior 7.0:Metrowerks CodeWarrior:CodeWarrior Plugins:Linkers:",
+    "replace": true
+   }
+  },
+  {
+   "launch": "{target}:Metrowerks CodeWarrior 7.0:Metrowerks CodeWarrior:CodeWarrior IDE 4.2.6"
+  },
+  {
+   "wait_for": {
+    "button": "Find Mac OS X…"
+   },
+   "timeout": 180
+  },
+  {
+   "shot": "4-first-launch"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_app": "CodeWarrior IDE 4.2.6",
+   "timeout": 60
+  },
+  {
+   "quit": true
+  },
+  {
+   "wait_app_not": "CodeWarrior IDE 4.2.6",
+   "timeout": 60
+  }
+ ]
+}

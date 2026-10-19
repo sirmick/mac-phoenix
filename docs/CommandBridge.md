@@ -109,7 +109,7 @@ choice, is a real trap on these Systems.) `tests/guest/bridgedemo` (ctest
 | `LAUNCH <path>` | — | `LaunchApplication` on the FSSpec |
 | `OPEN <path>` | — | Find owning app via Desktop DB, launch it, send generic `'aevt'/'odoc'` with the doc as a typeAlias list — same AE Finder sends on double-click. Works for any registered creator (Frontier `LAND`, MacPerl `McPL`, ResEdit, …) |
 | `SCRIPT <creator>` | the script | Find app by creator (a running process first), launch it, send `'misc'/'dosc'` with the payload as `typeChar` direct parameter, fire-and-forget. Generic over any "do script" host — MacPerl, Frontier UserLand 5, MPW Shell, AppleScript editor |
-| `COPY <src>\r<dst folder>` | — | File Manager copy, both forks and Finder info |
+| `COPY <src>\r<dst folder>[\rREPLACE]` | — | File Manager copy, both forks and Finder info; REPLACE merges into a folder of the same name, files replaced |
 | `RESIZE <w> <h> <appleID>` | — | `DMSetDisplayMode` |
 | `QUIT` | — | `kAEQuitApplication` to the front process |
 | `EXIT` | — | The agent quits (back at the next boot) |
@@ -211,7 +211,7 @@ native Finder doesn't call it through the trap table.
 | `/api/launch` | POST | `{"path":"Host:foo","open":true?}` — `LAUNCH` or `OPEN` via the agent. With `open:true`, the file is delivered as a generic `'aevt'/'odoc'` (Frontier `LAND`, MacPerl `McPL`, ResEdit, anything registered for the doc's creator). |
 | `/api/script` | POST | `{"creator":"<4-char>","script":"<utf-8 source>"}` (or `"script_b64"` for exact MacRoman bytes) — `SCRIPT <creator>` via the agent. Generic over MacPerl, Frontier, MPW Shell, AppleScript editor. 1 MiB cap. |
 | `/api/exec` | POST | `{"creator":"MPSX","command":"...","timeout":N}` — `EXEC`: `exit_status`, `stdout_b64`, `stderr_b64` |
-| `/api/copy` | POST | `{"from":"Vol:Item","to":"Vol:Folder:"}` — `COPY` |
+| `/api/copy` | POST | `{"from":"Vol:Item","to":"Vol:Folder:"}` — `COPY`; `"replace":true` merges into a folder of the same name, files replaced |
 | `/api/quit` | POST | `QUIT` front app via the agent |
 | `/api/shutdown` | POST | `SHUTDOWN` via the agent (`ShutDwnPower`) |
 | `/api/restart` | POST | `RESTART` via the agent (`ShutDwnStart`) |

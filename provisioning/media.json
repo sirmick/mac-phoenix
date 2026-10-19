@@ -24,7 +24,10 @@
     {"name": "MacPython235full.bin", "dir": "downloads/dev", "size": 7091840, "md5": "e0266de63b0fe3f9d81cf63847c35532", "garden": "apps/MacPython235full.bin"},
     {"name": "bbedit_lite_612.smi_.bin", "dir": "downloads/dev", "size": 4758400, "md5": "3c443182c393894855b1ec02d00dfaf3", "ia": "Macintosh_Garden_Apps_Collection_B/bbedit_lite_612.smi_.bin", "garden": "apps/bbedit_lite_612.smi_.bin"},
     {"name": "Aladdin_Expander_6.0.1.sea_.bin", "dir": "downloads/dev", "size": 2500608, "md5": "6a5f42abc85ff9f7f0ecb1b9f9806f62", "ia": "Macintosh_Garden_Apps_0-A_2020/Aladdin_Expander_6.0.1.sea_.bin", "garden": "apps/Aladdin_Expander_6.0.1.sea_.bin"},
-    {"name": "carbonlib_1.6.smi_.bin", "dir": "downloads/dev", "size": 3141376, "md5": "02aae2b0d7740cbb58e6a7cf03e935f9", "ia": "Macintosh_Garden_Apps_Collection_C/CarbonLib_1.6.smi_.bin", "garden": "apps/carbonlib_1.6.smi_.bin"}
+    {"name": "carbonlib_1.6.smi_.bin", "dir": "downloads/dev", "size": 3141376, "md5": "02aae2b0d7740cbb58e6a7cf03e935f9", "ia": "Macintosh_Garden_Apps_Collection_C/CarbonLib_1.6.smi_.bin", "garden": "apps/carbonlib_1.6.smi_.bin"},
+    {"name": "CW_Tools_7.1.toast_.zip", "dir": "downloads/dev", "size": 237306829, "md5": "e25f791d9460968357fe588664959bbc", "ia": "Macintosh_Garden_Apps_Collection_C/CW_Tools_7.1.toast_.zip", "garden": "apps/CW_Tools_7.1.toast_.zip"},
+    {"name": "C_MacOS_PPC_Pro7.2.sit", "dir": "downloads/dev", "size": 3970542, "md5": "8dd15c6d04950f725146069879f776b4", "ia": "Macintosh_Garden_Apps_C_2020/C_MacOS_PPC_Pro7.2.sit", "garden": "apps/C_MacOS_PPC_Pro7.2.sit"},
+    {"name": "CW_Pro_7.2_MetroNub.sit", "dir": "downloads/dev", "size": 53591, "md5": "bad4dcd80a645f52a7b183aa526b7dd7", "garden": "apps/CW_Pro_7.2_MetroNub.sit"}
   ],
   "out": "."
 }

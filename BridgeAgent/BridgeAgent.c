@@ -475,6 +475,8 @@ static OSErr get_cat_info(const FSSpec *spec, CInfoPBRec *pb, Str63 name)
     return PBGetCatInfoSync(pb);
 }
 
+static Boolean gCopyReplace;       /* COPY ... REPLACE: merge folders, replace files */
+
 static OSErr copy_item(const FSSpec *src, short dstVRef, long dstDirID, Ptr buf)
 {
     CInfoPBRec pb;
@@ -482,16 +484,32 @@ static OSErr copy_item(const FSSpec *src, short dstVRef, long dstDirID, Ptr buf)
     OSErr err = get_cat_info(src, &pb, name);
     if (err != noErr) return err;
 
+    Boolean is_dir = (pb.hFileInfo.ioFlAttrib & ioDirMask) != 0;
+    Boolean merge = false;
+    long newDirID = 0;
     FSSpec dst;
     err = FSMakeFSSpec(dstVRef, dstDirID, src->name, &dst);
-    if (err == noErr) return dupFNErr;
-    if (err != fnfErr) return err;
+    if (err == noErr) {
+        if (!gCopyReplace) return dupFNErr;
+        CInfoPBRec dpb;
+        Str63 dname;
+        if ((err = get_cat_info(&dst, &dpb, dname)) != noErr) return err;
+        Boolean dst_dir = (dpb.hFileInfo.ioFlAttrib & ioDirMask) != 0;
+        if (is_dir && dst_dir) {            /* into the folder that's there */
+            merge = true;
+            newDirID = dpb.dirInfo.ioDrDirID;
+        } else if (!is_dir && !dst_dir) {   /* the file replaced */
+            if ((err = FSpDelete(&dst)) != noErr) return err;
+        } else {
+            return dupFNErr;                /* a file where a folder is, or the reverse */
+        }
+    } else if (err != fnfErr) {
+        return err;
+    }
 
-    Boolean is_dir = (pb.hFileInfo.ioFlAttrib & ioDirMask) != 0;
     if (is_dir) {
-        long newDirID;
-        err = FSpDirCreate(&dst, smSystemScript, &newDirID);
-        if (err != noErr) return err;
+        if (!merge && (err = FSpDirCreate(&dst, smSystemScript, &newDirID)) != noErr)
+            return err;
         /* Children, by index, before the folder's own info (dates) is set. */
         long srcDirID = pb.dirInfo.ioDrDirID;
         for (short i = 1; ; i++) {
@@ -510,6 +528,7 @@ static OSErr copy_item(const FSSpec *src, short dstVRef, long dstDirID, Ptr buf)
             err = copy_item(&child, dstVRef, newDirID, buf);
             if (err != noErr) return err;
         }
+        if (merge) return noErr;            /* the folder keeps its own info */
         CInfoPBRec dpb;
         Str63 dname;
         err = get_cat_info(&dst, &dpb, dname);
@@ -542,13 +561,17 @@ static OSErr copy_item(const FSSpec *src, short dstVRef, long dstDirID, Ptr buf)
     return PBSetCatInfoSync(&fpb);
 }
 
-/* "COPY src\rdst": src a file or folder, dst an existing folder. */
+/* "COPY src\rdst[\rREPLACE]": src a file or folder, dst an existing folder.
+ * REPLACE: into a folder of the same name that's there, files replaced (an
+ * update's "INTO ..." folders). */
 static OSErr do_copy(const char *args)
 {
     const char *sep = strchr(args, '\r');
     if (!sep) return paramErr;
     unsigned char srcPath[256], dstPath[256];
-    int sl = (int)(sep - args), dl = (int)strlen(sep + 1);
+    const char *opt = strchr(sep + 1, '\r');
+    gCopyReplace = opt && strncmp(opt + 1, "REPLACE", 7) == 0;
+    int sl = (int)(sep - args), dl = opt ? (int)(opt - sep - 1) : (int)strlen(sep + 1);
     while (dl > 0 && (sep[dl] == '\r' || sep[dl] == '\n')) dl--;
     if (sl > 255 || dl > 255) return bdNamErr;
     srcPath[0] = (unsigned char)sl; memcpy(srcPath + 1, args, sl);

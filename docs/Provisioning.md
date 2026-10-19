@@ -46,7 +46,7 @@ the same software is recognised as the same.
 | `Development.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
 | `dev-7.5.5.img`, `dev-7.6.1.img` | the base Systems (`provisioning/bases.json`) plus the snapshots' System Folder parts: MetroNub, CFM-68K and PowerPC libraries, MacsBug 6.6.3, PythonCore, ... |
 | `8.6.img`, `9.0.4.img` | Mac OS 8.6 and 9.0.4 for the PowerPC machine (G3 ROM): installed from their CDs (`os-8.6`, `os-9.0.4`), with CarbonLib 1.6, StuffIt Expander 6.0.1, Disk Copy 6.3.3, MacsBug, TCP/IP on DHCP |
-| `Development-9.img` | the 8.6 / 9 development volume: MPW-GM, CodeWarrior Pro 4; `Languages`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
+| `Development-9.img` | the 8.6 / 9 development volume: CodeWarrior Pro 7.2 (7.1 Tools CD + the 7.2 PowerPC plugins; needs CarbonLib 1.3.1+), MPW-GM; `Languages`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
 | `dev-8.6.img`, `dev-9.0.4.img` | the 8.6 / 9.0.4 disks plus those tools' System Folder parts; boot with `Development-9.img` |
 
 All three run on the 68k machine (`--backend uae`) and the PowerPC one

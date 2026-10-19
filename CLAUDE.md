@@ -200,7 +200,7 @@ client/                             — Browser UI (vanilla JS)
 | `/api/annotate` | POST | `{"text": "..."}` — a line from whatever drives the guest (provisioning/bake.py posts each step); the last 6 are in `/api/status` `annotations` and shown over the screen by the web UI. `{"text": ""}` clears. Open the UI with `?view` to watch without sending input |
 | `/api/launch` | POST | Launch app via BridgeAgent: `{"path":"HD:App"}`. With `"open":true`, opens the document via generic `'aevt'/'odoc'` (any registered creator: Frontier `LAND`, MacPerl `McPL`, MPW `MPS `, …) |
 | `/api/script` | POST | Generic do-script via `'misc'/'dosc'`: `{"creator":"McPL","script":"..."}` (or `"script_b64"` for exact MacRoman bytes). Works for MacPerl, Frontier UserLand, MPW Shell, AppleScript editor — any app registered for `dosc`. |
-| `/api/copy` | POST | In-guest File Manager copy via BridgeAgent, both forks + Finder info: `{"from":"Vol:Item","to":"Vol:Folder:"}` |
+| `/api/copy` | POST | In-guest File Manager copy via BridgeAgent, both forks + Finder info: `{"from":"Vol:Item","to":"Vol:Folder:"}` (`"replace":true`: merge into a folder of the same name, files replaced) |
 | `/api/quit` | POST | Quit front app via BridgeAgent (`kAEQuitApplication`) |
 | `/api/shutdown` | POST | Graceful guest OS shutdown via BridgeAgent (`ShutDwnPower`) |
 | `/api/restart` | POST | Graceful guest OS restart via BridgeAgent (`ShutDwnStart`) |
