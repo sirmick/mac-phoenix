@@ -92,14 +92,9 @@ function set's ID as a C string at +16. The function sets and their indices
   `tools/mpw/mpw build tests/guest/ot -o tests/guest/ot`; the binary is
   committed. `tests/test_ot_executor.sh` runs it on a session with
   `--executor-ot` against `tests/lib/echo_server.py`.
-* MR Browser 68K v0.39 (REALbasic, `MacOS 7.5.5:MR Browser 68K v0.39` on the
-  7.5.5 image) signs in to the Macintosh Repository and searches. It needs
-  the network and a user's PIN, so it is a manual check, not a ctest.
 
 ## Open
 
-* MR Browser: downloads (a search's file into the queue) not tried yet;
-  only sign-in and search are.
 * OT stays behind `--executor-ot` until more applications have run on it;
   then on by default with Apple's System (the MacTCP applications are
   unaffected either way).

@@ -36,7 +36,7 @@ void Executor::C_InvertRect(const Rect *r)
 }
 
 /* MacPhoenix: a nil pattern is the 8 bytes at address 0, as the 68k reads
-   them (MR Browser passes one to FillPoly); the trap glue makes guest 0 a
+   them (a REALbasic application passes one to FillPoly); the trap glue makes guest 0 a
    null host pointer. */
 static const Pattern &arg_pat(const Pattern *pat)
 {

@@ -920,7 +920,6 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
                         fprintf(f, "# First entry is the home page.\n");
                         fprintf(f, "Google\thttps://www.google.com/\n");
                         fprintf(f, "YouTube test video\thttps://www.youtube.com/watch?v=y0sF5xhGreA\n");
-                        fprintf(f, "Macintosh Repository\thttps://www.macintoshrepository.org/\n");
                         fprintf(f, "Macintosh Garden\thttps://macintoshgarden.org/\n");
                         fprintf(f, "mac-phoenix on GitHub\thttps://github.com/sirmick/mac-phoenix\n");
                         fclose(f);

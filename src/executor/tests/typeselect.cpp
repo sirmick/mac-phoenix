@@ -83,7 +83,7 @@ protected:
 TEST_F(TypeSelect, FindsFirstAtOrAfterKeys)
 {
     // Not in order: the callback's list is whatever order the caller keeps.
-    items({ "SimpleText", "About System 7.5", "MacPerl", "Apple Extras", "MR Browser" });
+    items({ "SimpleText", "About System 7.5", "MacPerl", "Apple Extras", "MrC" });
     EXPECT_EQ(3, find("m"));    // MacPerl: items count from 1
     EXPECT_EQ(5, find("mr"));
     EXPECT_EQ(1, find("s"));

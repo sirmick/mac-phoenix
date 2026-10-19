@@ -69,8 +69,6 @@ static const BookmarkEntry gBookmarksDefault[] = {
       "https://www.google.com/" },
     { (const unsigned char *)"\pYouTube test video",
       "https://www.youtube.com/watch?v=y0sF5xhGreA" },
-    { (const unsigned char *)"\pMacintosh Repository",
-      "https://www.macintoshrepository.org/" },
     { (const unsigned char *)"\pMacintosh Garden",
       "https://macintoshgarden.org/" },
     { (const unsigned char *)"\pmac-phoenix on GitHub",
