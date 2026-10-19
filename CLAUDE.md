@@ -45,11 +45,11 @@ npx playwright test
 ./build/mac-phoenix --backend executor
 ./build/mac-phoenix --backend executor --core mame-68k
 # ... on Apple's 7.5.5 System with real Finder (Settings > System disk):
-./build/mac-phoenix --backend executor --executor-system macos-7.5.5-noext.img
+./build/mac-phoenix --backend executor --executor-system 7.5.5.img
 # ... with sound (Executor mixes in C++ and feeds the same Opus/WebRTC path):
 ./build/mac-phoenix --backend executor --audio
 # ... with Open Transport, native C++ (docs/executor/OpenTransport.md; in progress):
-./build/mac-phoenix --backend executor --executor-system macos-7.5.5.img --executor-ot
+./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ot
 ctest --test-dir build -L executor
 
 # MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
@@ -79,7 +79,7 @@ tools/xarch/xarch.sh riscv64 shell             # interactive
 tests/run_boot_matrix.sh --out /home/mick/mac-phoenix/test-results/boot-matrix
 # Single cell:
 tests/test_boot_matrix.sh --label uae-755 --backend uae \
-    --rom ~/roms/quadra.rom --disk ~/storage/images/macos-7.5.5.img \
+    --rom ~/roms/quadra.rom --disk ~/storage/images/7.5.5.img \
     --timeout 60 --port 19300 --screenshot-dir /tmp/one-cell
 ```
 

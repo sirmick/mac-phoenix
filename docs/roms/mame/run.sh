@@ -71,15 +71,15 @@ declare -A MACHINE_RAM=(
 
 # default disk image per machine
 declare -A MACHINE_DISK=(
-    [macse]="$HOME/storage/images/macos-7.5.5.img"
-    [macsefd]="$HOME/storage/images/macos-7.5.5.img"
-    [macplus]="$HOME/storage/images/macos-7.5.5.img"
-    [macii]="$HOME/storage/images/macos-7.5.5.img"
-    [maciihmu]="$HOME/storage/images/macos-7.5.5.img"
-    [maciix]="$HOME/storage/images/macos-7.5.5.img"
-    [maciicx]="$HOME/storage/images/macos-7.5.5.img"
-    [macse30]="$HOME/storage/images/macos-7.5.5.img"
-    [maciici]="$HOME/storage/images/macos-7.5.5.img"
+    [macse]="$HOME/storage/images/7.5.5.img"
+    [macsefd]="$HOME/storage/images/7.5.5.img"
+    [macplus]="$HOME/storage/images/7.5.5.img"
+    [macii]="$HOME/storage/images/7.5.5.img"
+    [maciihmu]="$HOME/storage/images/7.5.5.img"
+    [maciix]="$HOME/storage/images/7.5.5.img"
+    [maciicx]="$HOME/storage/images/7.5.5.img"
+    [macse30]="$HOME/storage/images/7.5.5.img"
+    [maciici]="$HOME/storage/images/7.5.5.img"
 )
 
 if [ -z "${MACHINE_BIN[$MACHINE]:-}" ]; then

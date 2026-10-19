@@ -20,7 +20,7 @@
 #
 # Env overrides:
 #   MACEMU_ROM       default: $HOME/quadra.rom
-#   MACEMU_DISK      default: $HOME/storage/images/macos-7.5.5.img
+#   MACEMU_DISK      default: $HOME/storage/images/7.5.5.img
 #   MACEMU_TIMEOUT   default: 60   (seconds inside the container)
 #   MACEMU_TARGETS   default: ubuntu-24.04 debian-12 fedora-40
 #   MACEMU_SKIP_BOOT          skip the boot test (artifact-only run)
@@ -45,7 +45,7 @@ cleanup_docker() {
 trap cleanup_docker EXIT
 
 ROM="${MACEMU_ROM:-$HOME/quadra.rom}"
-DISK="${MACEMU_DISK:-$HOME/storage/images/macos-7.5.5.img}"
+DISK="${MACEMU_DISK:-$HOME/storage/images/7.5.5.img}"
 TIMEOUT="${MACEMU_TIMEOUT:-60}"
 TARGETS="${MACEMU_TARGETS:-ubuntu-24.04 debian-12 fedora-40}"
 

@@ -4190,10 +4190,13 @@ function populateExecutorSystems() {
 
 // An extracted System with a Finder, else a 7.5.x image, else none.
 function defaultExecutorSystem() {
+    // The baked 7.5.5 (extracted on first use), else a System already
+    // extracted, else any 7.5 image.
+    const images = (storageCache?.disks || []).map(d => d.name || d);
+    if (images.includes('7.5.5.img')) return '7.5.5.img';
     const ready = (storageCache?.executor_systems || []).find(s => s.finder);
     if (ready) return ready.name;
-    const images = (storageCache?.disks || []).map(d => d.name || d);
-    return images.find(n => n === '7.5.5.img') || images.find(n => /7\.5/.test(n)) || '';
+    return images.find(n => /7\.5/.test(n)) || '';
 }
 
 // Without a System (or one without Finder) only the Browser can start.
@@ -4823,24 +4826,23 @@ const ROM_PROFILES = [
     // name, persona, backend, core, jit, RAM MB, screen, disks: the first
     // alternative whose images are all in storage (an alternative is one
     // image, or a boot disk and the volumes that go with it).
-    // The baked disks come first: what provisioning/build.py makes from
-    // Apple's installers (docs/Provisioning.md); the hand-made ones are
-    // fallbacks until they're retired.
+    // The disks are the baked ones provisioning/build.py makes from Apple's
+    // installers (docs/Provisioning.md).
     { name: '68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 64, screen: '1024x768', disks: ['7.6.1.img', '7.5.5.img', 'macos-7.5.5.img', 'macos-7.6.1.img'] },
+      ram_mb: 64, screen: '1024x768', disks: ['7.6.1.img'] },
     // 7.1 needs the IIci's model ID (5): with the Quadra's 14 it bombs at boot.
     { name: '68k-7.1', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false, model_id: 5,
       ram_mb: 64, screen: '640x480', disks: ['7.1.img'] },
     { name: '68k-dev', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'Development.img']] },
     { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 4, screen: '512x342', disks: ['6.0.8.img', 'system-6.0.8.img'] },
+      ram_mb: 4, screen: '512x342', disks: ['6.0.8.img'] },
     // The IIci: System 6 in colour (24-bit mode, 8MB; machine_profile.cpp).
     // The baked 6.0.8 is a universal install (Color, Monitors, AppleShare...).
     { name: 'iici', emulator: 'iici', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 8, screen: '640x480', disks: ['6.0.8.img', 'system-6.0.8.img'] },
+      ram_mb: 8, screen: '640x480', disks: ['6.0.8.img'] },
     { name: 'ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
-      ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img', 'macos-9.0.4.img', '7.6.1.img', 'macos-7.5.5.img'] },
+      ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img'] },
     { name: 'ppc-8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: ['8.6.img'] },
     { name: 'ppc-dev', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,

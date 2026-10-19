@@ -14,7 +14,7 @@
 #     --label uae-m68k-nojit-755 \
 #     --backend uae [--core mame-68k] \
 #     --rom  ~/roms/quadra.rom \
-#     --disk ~/storage/images/macos-7.5.5.img \
+#     --disk ~/storage/images/7.5.5.img \
 #     --no-jit \
 #     --timeout 60 --port 18200 \
 #     --screenshot-dir ${TMPDIR:-/tmp}/boot_matrix \

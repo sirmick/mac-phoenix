@@ -11,7 +11,7 @@
 #
 # Requires:
 #   - PPC ROM (4MB G3): set MACEMU_ROM or uses ~/storage/roms/g3.rom
-#   - Disk image:       set MACEMU_DISK or uses ~/storage/images/macos-7.5.5.img
+#   - Disk image:       set MACEMU_DISK or uses ~/storage/images/7.5.5.img
 #
 set -euo pipefail
 

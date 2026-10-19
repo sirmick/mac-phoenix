@@ -4,10 +4,6 @@
   "image": "macos-7.6.1.img.orig",
   "os": "7.6.1"
  },
- "7.5.5": {
-  "image": "macos-7.5.5.img.orig",
-  "os": "7.5.5"
- },
  "os-7.6.1": {
   "snapshot": "os-7.6.1",
   "os": "7.6.1"

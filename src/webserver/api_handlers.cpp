@@ -257,7 +257,7 @@ Response APIRouter::handle_storage(const Request& /*req*/) {
     return Response::json(json_utils::to_string(j));
 }
 
-/* POST /api/executor/system {"image": "macos-7.5.5.img"[, "name": ...]}:
+/* POST /api/executor/system {"image": "7.5.5.img"[, "name": ...]}:
    (re-)extract an Executor System from a disk image in <storage>/images;
    named after the image unless given a name. */
 Response APIRouter::handle_executor_system_create(const Request& req) {

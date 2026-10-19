@@ -340,7 +340,7 @@ set_tests_properties(drag_executor PROPERTIES
 )
 
 # --- Executor variants: Apple's 7.5.5 System on Executor's Toolbox, no ROM.
-# Runs on the System Folder of the test copy of macos-7.5.5.img (extracted
+# Runs on the System Folder of the test copy of tests-7.5.5.img (extracted
 # into <storage>/executor-systems on first use). The guest suite's network
 # tests fail until Executor has a TCP/IP stack.
 

@@ -47,7 +47,7 @@ class MacPhoenix < Formula
       MacPhoenix needs a Mac ROM and (optionally) a disk image to run.
       Neither is distributed with this formula. Place your files at:
         ~/storage/roms/quadra.rom
-        ~/storage/images/macos-7.5.5.img
+        ~/storage/images/7.5.5.img
 
       Then start the emulator:
         mac-phoenix ~/storage/roms/quadra.rom
