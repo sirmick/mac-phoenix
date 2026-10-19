@@ -4057,36 +4057,36 @@ function renderPresetTabs() {
     });
     container.appendChild(currentTab);
 
-    for (const name of Object.keys(App.savedPresets)) {
+    const addTab = (name, text, deletable) => {
         const tab = document.createElement('div');
         tab.className = 'config-tab';
         tab.dataset.preset = name;
-        tab.textContent = name;
-
-        const del = document.createElement('span');
-        del.className = 'preset-delete';
-        del.textContent = '\u00d7';
-        del.title = 'Delete preset';
-        del.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deletePreset(name);
-        });
-        tab.appendChild(del);
-
+        tab.textContent = text;
+        if (deletable) {
+            const del = document.createElement('span');
+            del.className = 'preset-delete';
+            del.textContent = '\u00d7';
+            del.title = 'Delete preset';
+            del.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deletePreset(name);
+            });
+            tab.appendChild(del);
+        }
         tab.addEventListener('click', () => loadPreset(name));
         container.appendChild(tab);
-    }
+        return tab;
+    };
 
-    // Built-in profiles (not saved, no delete button) unless saved over.
+    // Built-in profiles first, oldest OS first (ROM_PROFILES order), under
+    // their labels; one saved over keeps its place and gets a delete button.
+    // Then the user's own presets.
     for (const name of Object.keys(App.builtinPresets || {})) {
-        if (App.savedPresets[name]) continue;
-        const tab = document.createElement('div');
-        tab.className = 'config-tab';
-        tab.dataset.preset = name;
-        tab.textContent = name;
-        tab.title = 'Built-in profile';
-        tab.addEventListener('click', () => loadPreset(name));
-        container.appendChild(tab);
+        const tab = addTab(name, App.builtinLabels?.[name] || name, !!App.savedPresets[name]);
+        tab.title = App.savedPresets[name] ? `${name} (saved)` : `${name}: built-in profile`;
+    }
+    for (const name of Object.keys(App.savedPresets)) {
+        if (!App.builtinPresets?.[name]) addTab(name, name, true);
     }
 }
 
@@ -4843,29 +4843,30 @@ function onRomChange() {
 // and a disk image, and is left out without them.
 const EXECUTOR_PROFILE = 'exec';
 const ROM_PROFILES = [
-    // name, persona, backend, core, jit, RAM MB, screen, disks: the first
-    // alternative whose images are all in storage (an alternative is one
-    // image, or a boot disk and the volumes that go with it).
+    // name, tab label, persona, backend, core, jit, RAM MB, screen, disks:
+    // the first alternative whose images are all in storage (an alternative
+    // is one image, or a boot disk and the volumes that go with it). Oldest
+    // OS first: the tabs are in this order.
     // The disks are the baked ones provisioning/build.py makes from Apple's
     // installers (docs/Provisioning.md).
-    { name: '68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 64, screen: '1024x768', disks: ['7.6.1.img'] },
-    // 7.1 needs the IIci's model ID (5): with the Quadra's 14 it bombs at boot.
-    { name: '68k-7.1', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false, model_id: 5,
-      ram_mb: 64, screen: '640x480', disks: ['7.1.img'] },
-    { name: '68k-dev', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
-      ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'dev-tools-system-7.img']] },
-    { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
+    { name: 'se', label: 'System 6 (SE)', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 4, screen: '512x342', disks: ['6.0.8.img'] },
     // The IIci: System 6 in colour (24-bit mode, 8MB; machine_profile.cpp).
     // The baked 6.0.8 is a universal install (Color, Monitors, AppleShare...).
-    { name: 'iici', emulator: 'iici', backend: 'uae', cpu_core: 'uae', jit: false,
+    { name: 'iici', label: 'System 6 (IIci)', emulator: 'iici', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 8, screen: '640x480', disks: ['6.0.8.img'] },
-    { name: 'ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
-      ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img'] },
-    { name: 'ppc-8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+    // 7.1 needs the IIci's model ID (5): with the Quadra's 14 it bombs at boot.
+    { name: '68k-7.1', label: 'System 7.1', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false, model_id: 5,
+      ram_mb: 64, screen: '640x480', disks: ['7.1.img'] },
+    { name: '68k', label: 'Mac OS 7.6', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
+      ram_mb: 64, screen: '1024x768', disks: ['7.6.1.img'] },
+    { name: '68k-dev', label: '7.6 Dev', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
+      ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'dev-tools-system-7.img']] },
+    { name: 'ppc-8.6', label: 'Mac OS 8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: ['8.6.img'] },
-    { name: 'ppc-dev', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+    { name: 'ppc', label: 'Mac OS 9', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+      ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img'] },
+    { name: 'ppc-dev', label: '9 Dev', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: [['dev-9.0.4.img', 'dev-tools-macos-8-9.img']] },
 ];
 
@@ -4879,12 +4880,14 @@ function recommendedRomFor(mode) {
 
 async function seedBuiltinProfiles(cfg) {
     App.builtinPresets = {};
+    App.builtinLabels = { [EXECUTOR_PROFILE]: 'Executor' };
     await loadStorage();
     const images = (storageCache?.disks || []).map(d => d.name || d);
     for (const p of ROM_PROFILES) {
         const rom = recommendedRomFor(p.emulator);
         const disks = p.disks.map(d => [].concat(d)).find(ds => ds.every(d => images.includes(d)));
         if (!rom || !disks) continue;
+        App.builtinLabels[p.name] = p.label;
         App.builtinPresets[p.name] = {
             ...cfg, configs: undefined,
             emulator: p.emulator, backend: p.backend, cpu_core: p.cpu_core, jit: p.jit,

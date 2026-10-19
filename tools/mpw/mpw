@@ -60,8 +60,8 @@ BINARY = os.environ.get("MACPHOENIX_BINARY", os.path.join(ROOT, "build", "mac-ph
 # media) with ToolServer 3.4.1 from the same CD. Each has its own session:
 # state directory, port and System copy.
 TOOLCHAINS = {
-    "apple": {"image": "mpw", "creator": "MPSX", "state": "mpw", "port": 18390},
-    "cw": {"image": "mpw-cw", "creator": "MPSX", "state": "mpw-cw", "port": 18391,
+    "apple": {"image": "mpw", "product": "MPW 3.4.2", "creator": "MPSX", "state": "mpw", "port": 18390},
+    "cw": {"image": "mpw-cw", "product": "CodeWarrior Pro 4 MPW", "creator": "MPSX", "state": "mpw-cw", "port": 18391,
            "app": "MPW:MPW:ToolServer",     # by path: the System disk has Apple's ToolServer too
            # Where Metrowerks' headers and libraries are on the disk (the IDE
            # install keeps them outside its MPW folder; mpw-cw.json puts them
@@ -172,7 +172,7 @@ def ensure_system():
     if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(SYSTEM_SOURCE):
         subprocess.check_call(["cp", "--reflink=auto", SYSTEM_SOURCE, dst])
         with open(dst + ".json", "w") as f:      # for the web UI's disk list
-            json.dump({"title": "MPW service System: %s (copy of tests-7.5.5)" % TOOLCHAINS[TOOLCHAIN]["image"],
+            json.dump({"title": "MPW service: System 7.5.5 for " + TOOLCHAINS[TOOLCHAIN]["product"],
                        "tags": ["mpw-service"], "copy_of": "tests-7.5.5"}, f, indent=1)
         for d in (dst, dst + ".clean"):
             shutil.rmtree(os.path.join(STORAGE, "executor-systems", os.path.basename(d)), ignore_errors=True)
