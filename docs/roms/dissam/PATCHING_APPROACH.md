@@ -14,10 +14,10 @@ by the `ROMVersion` word at ROM offset `$8`:
 | Function | ROM versions | CPU | Strategy |
 |---|---|---|---|
 | `patch_rom_classic` | `$0276` (Mac Plus, SE, Classic, Mac 128/512) | 68000 | Small, 24-bit ROMs. Entirely fixed-offset patches — these ROMs are too old and too small for `UniversalInfo`-style dispatch. |
-| `patch_rom_32` | `$067C` (Mac II rev B, IIci, IIsi, IIvx, LC III/475, Quadra 605/650/800/900/950, Performa 475/630…) | 68020/030/040 | **Mixed: signature-driven for the bulk of the work, fixed-offset for load-bearing early-boot code.** |
+| `patch_rom_32` | `$067C` (IIci, IIsi, IIvx, LC III/475, Quadra 605/650/800/900/950, Performa 475/630…) | 68020/030/040 | **Mixed: signature-driven for the bulk of the work, fixed-offset for load-bearing early-boot code.** |
 
-Version `$0178` (Mac II original, IIx, IIcx, SE/30) is currently **not
-covered** — see §"The $0178 gap" below.
+Version `$0178` (Mac II rev A and B, II FDHD, IIx, IIcx, SE/30) has a
+WIP `patch_rom_ii` that boots none of them — see §"The $0178 gap" below.
 
 Both functions are derived from upstream Basilisk II
 (`src/rom_patches.cpp`) and are essentially verbatim copies with one
@@ -181,38 +181,16 @@ dropped.
 
 ## The `$0178` gap
 
-There is **no `patch_rom_ii`** in our tree. Version `$0178` ROMs
-(Mac II original, IIx, IIcx, SE/30) therefore cannot boot today.
-Basilisk II upstream also does not ship a `patch_rom_ii` — classic
-Basilisk targets Mac II rev B (`$067C`) and later, not the original
-`$0178` hardware.
+`patch_rom_ii` exists but boots nothing: fixed-offset NOPs written for
+the `97221136` ROM, applied to every `$0178` ROM, with the NuBus slot
+scan and video skipped. The findings and the plan (Apple's Mac II map
+covers all three ROMs; this Slot Manager has no slot 0, so video needs
+a fake NuBus card; MAME references for all four machines) are in
+[`../MacIIFamily.md`](../MacIIFamily.md).
 
-A future `patch_rom_ii` should mirror the structure of `patch_rom_32`:
-
-1. **Locate the `$0178` equivalent of `UniversalInfo` by signature
-   scan.** The `$0178` ROMs have a similar structure but it lives at
-   a different offset with a different byte signature. The
-   `maciix/rom.lst` disassembly (which covers the shared
-   IIx/IIcx/SE30/II-FDHD image) is where to look for the target
-   pattern.
-2. **Walk the equivalent of the `$94A` LMG hw-base table.** Same
-   idea, different location in a `$0178` ROM.
-3. **Reuse the same DRVR/SERD/PACK resource patching,** same trap
-   replacements, same `patch_emulops_for_aline` pass.
-4. **Derive the equivalent fixed-offset early-boot patches** from
-   the `$0178` reset layout. The positions of `STARTINIT1`,
-   `CompBootStack`, `SETUPTIMEK`, and the VIA interrupt handlers
-   will all be different from `$067C`. The `maciix/boot_flow.md`
-   walkthrough names them with their `$0178` offsets.
-
-**Do not** hand-craft a list of address-specific patches for each
-individual init routine by reading the disassembly. The
-signature-driven approach is the one Basilisk II has proved on the
-`$067C` family for 20+ years, and the same discipline should carry
-over to `$0178`: locate ROM data structures by byte signature, patch
-*through* them rather than around them, and keep fixed offsets
-confined to the reset-vector zone where the ROM header layout is
-stable by definition.
+The rule from the IIci carries over: locate sites by routine name
+(Apple's maps) or byte signature, patch *through* the ROM's own data
+rather than around it, and keep fixed offsets to the reset-vector zone.
 
 ## References
 
