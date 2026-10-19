@@ -72,7 +72,7 @@ reference; nothing from them is copied in at runtime, and no Apple
 boot or `ptch`/`lpch` code runs.
 
 **Known incompatibility (test case):** WorldBuilder's *Demo World*
-(games.img, 1987) corrupts its app heap between `LoadSeg` and its first
+(world-builder.img, was games.img; 1987) corrupts its app heap between `LoadSeg` and its first
 `MoreMasters`; Executor then hits a fatal heap error. Same on upstream
 Executor/syn68k, so not the UAE facade. Likely direct heap/lowmem
 pokes by a pre-32-bit-clean app; revisit with the M1 heap work.

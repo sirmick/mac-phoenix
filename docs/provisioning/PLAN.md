@@ -120,8 +120,9 @@ Spread over three places with overlapping content:
   (today's captures), `eto/` (`tools/mpw` expects `eto22.toast` there),
   `aslm-kit/` (copied out of E.T.O. for tests), `work/` (scratch),
   `snapshots/` (the emulator's state snapshots), `executor*/`.
-* **Inside other images**: `data.img` exists only to carry the E.T.O.
-  `.toast` files.
+* **Inside other images**: nothing now. `data.img` carried the E.T.O.
+  `.toast` files; retired 2026-10-19 (its #22 is byte-identical to the
+  pinned `eto/eto22.toast`; the Frameworks CD is in `downloads/cds/`).
 
 ### Target
 
@@ -158,8 +159,8 @@ repo. `tools/setup.sh` gains the `media` and `baked` links.
 
 | Now | Goes to |
 |---|---|
-| `images/Apple Legacy Recovery.iso`, `MacOS 7.6 Retail.iso`, `MacOS8.6.iso`, `Apple_MacOS_9.0.4_USA.iso` | `media/apple/` (the web UI's CD-ROM list scans `media/apple/` too) |
-| `images/data.img` | its two `.toast` files to `media/other/`; retired |
+| `images/apple-legacy-recovery.iso`, `macos-7.6-cd.iso`, `macos-8.6-cd.iso`, `macos-9.0.4-cd.iso` (renamed 2026-10-19; `media.json` keeps the old names as keys, `"as"` the files) | `media/apple/` (the web UI's CD-ROM list scans `media/apple/` too) |
+| `images/data.img` | retired 2026-10-19 (see above) |
 | `downloads/cds/*` (E.T.O. #22 + Frameworks, CodeWarrior 8 Pro, ADC Seed April 2001) | `media/other/` |
 | `downloads/installers/**`, `downloads/dev/**`, loose `downloads/*` | triaged: matched to a public source by MD5 → `media/garden|archive|infomac/`; otherwise `media/other/`; duplicates dropped |
 | `~/storage/downloads/dev/` (macfetch) | `media/` by source |
@@ -168,7 +169,7 @@ repo. `tools/setup.sh` gains the `media` and `baked` links.
 | `images/test-*.img`, `mpw-*.img`, `dtdb-7.5.5.img` | generated locally into `~/storage/work/` |
 | `images/Development.img`, `dev-7.x.img` (built 2026-10-16, untracked) | rebuilt from `provisioning/images/`; built images are not tracked |
 | `images/macos-*.img(.orig)`, `system-*.img(.orig)` | kept until their `os` bakes replace them (P5), then retired |
-| `images/MacPack.img`, `HD20SC.img`, `games.img`, `installers.img`, `68k-`/`ppc-installers.img`, `system-5.1.img`, `macos-8.6.1.img` | out of scope for now: left as they are; their software becomes bakes when collections are tackled |
+| `images/macpack-68k-library.img` (was MacPack.img), `hd20sc-system-4.1-7.5.5.img` (HD20SC, pinned), `world-builder.img` (was games.img) | out of scope for now: left as they are; their software becomes bakes when collections are tackled. (2026-10-19: the installer volumes were removed, their contents being in `downloads/`; `system-5.1.img`, `macos-8.6.1.img` moved to `images/old/`) |
 | tracked images modified by tests (`macos-7.5.5.img` …) | tests boot copies in `work/`, never the tracked file |
 
 ## Layers

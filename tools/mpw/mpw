@@ -488,18 +488,10 @@ def cmd_setup(args):
         return 0
     toast = args.toast
     if not os.path.exists(toast):
-        data = os.path.join(STORAGE, "images", "data.img")
-        if not os.path.exists(data):
-            raise MPWError("need E.T.O. #22 (%s or %s)" % (toast, data))
-        os.makedirs(os.path.dirname(toast), exist_ok=True)
-        env = dict(os.environ, HOME=STATE)
-        os.makedirs(STATE, exist_ok=True)
-        log("copying E.T.O. #22 out of %s" % data)
-        subprocess.check_call(["hmount", data], env=env, stdout=subprocess.DEVNULL)
-        try:
-            subprocess.check_call(["hcopy", "-r", ":E.T.O. #22 Nov 96.toast", toast], env=env)
-        finally:
-            subprocess.call(["humount"], env=env)
+        pinned = os.path.join(STORAGE, "eto", "eto22.toast")   # provisioning/media.json "eto22.toast"
+        if not os.path.exists(pinned):
+            raise MPWError("need E.T.O. #22 (%s or %s)" % (toast, pinned))
+        toast = pinned
     subprocess.check_call([sys.executable, os.path.join(ROOT, "tools", "mpw", "make_mpw_disk.py"),
                            toast, MPW_DISK])
     return 0
@@ -581,7 +573,7 @@ def main():
                          "cw: CodeWarrior Pro 4's MPW (MWC68K, MWCPPC)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("setup", help="build the MPW disk from E.T.O. #22")
-    p.add_argument("--toast", help="E.T.O. #22 CD image (default: copy it out of data.img)")
+    p.add_argument("--toast", help="E.T.O. #22 CD image (default: the pinned <storage>/eto/eto22.toast)")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_setup)
     p = sub.add_parser("start", help="start the session")

@@ -3,13 +3,12 @@
 
 The 7.5.5 image's MPW-PR has MPW Shell and the compilers but no Link and no
 libraries. This copies MPW (Shell, Tools, Scripts) and Interfaces&Libraries
-off the E.T.O. #22 CD image (inside ~/storage/images/data.img, see
-docs/executor/PLAN.md) onto a fresh HFS volume named "MPW", which Executor
+off the E.T.O. #22 CD image (pinned in provisioning/media.json as
+eto22.toast: ~/storage/eto/eto22.toast) onto a fresh HFS volume named "MPW", which Executor
 mounts beside the System's image. tests/guest/ot/ builds OTTest with it.
 
 Usage: tools/mpw/make_mpw_disk.py ETO_TOAST OUT_IMAGE [SIZE_MB]
-       (ETO_TOAST: "E.T.O. #22 Nov 96.toast" copied out of data.img with
-        hcopy -r)
+       (ETO_TOAST: ~/storage/eto/eto22.toast)
 """
 import os
 import re
