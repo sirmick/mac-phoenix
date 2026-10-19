@@ -4766,16 +4766,24 @@ function onRomChange() {
 // and a disk image, and is left out without them.
 const EXECUTOR_PROFILE = 'exec';
 const ROM_PROFILES = [
-    // name, persona, backend, core, jit, RAM MB, screen, disks (first found).
-    // 7.6.1.img / 7.5.5.img: the standard disks provisioning/build.py makes
-    // from Apple's installers (docs/Provisioning.md); the hand-made ones are
-    // fallbacks until they're retired. 9.0.4 and 6.0.8 aren't baked yet.
+    // name, persona, backend, core, jit, RAM MB, screen, disks: the first
+    // alternative whose images are all in storage (an alternative is one
+    // image, or a boot disk and the volumes that go with it).
+    // The baked disks come first: what provisioning/build.py makes from
+    // Apple's installers (docs/Provisioning.md); the hand-made ones are
+    // fallbacks until they're retired. 6.0.8 isn't baked yet.
     { name: '68k', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 64, screen: '1024x768', disks: ['7.6.1.img', '7.5.5.img', 'macos-7.5.5.img', 'macos-7.6.1.img'] },
+    { name: '68k-dev', emulator: 'quadra', backend: 'uae', cpu_core: 'uae', jit: false,
+      ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'Development.img']] },
     { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 4, screen: '512x342', disks: ['system-6.0.8.img'] },
     { name: 'ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
-      ram_mb: 128, screen: '1024x768', disks: ['macos-9.0.4.img', '7.6.1.img', 'macos-7.5.5.img'] },
+      ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img', 'macos-9.0.4.img', '7.6.1.img', 'macos-7.5.5.img'] },
+    { name: 'ppc-8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+      ram_mb: 128, screen: '1024x768', disks: ['8.6.img'] },
+    { name: 'ppc-dev', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
+      ram_mb: 128, screen: '1024x768', disks: [['dev-9.0.4.img', 'Development-9.img']] },
 ];
 
 function recommendedRomFor(mode) {
@@ -4792,12 +4800,12 @@ async function seedBuiltinProfiles(cfg) {
     const images = (storageCache?.disks || []).map(d => d.name || d);
     for (const p of ROM_PROFILES) {
         const rom = recommendedRomFor(p.emulator);
-        const disk = p.disks.find(d => images.includes(d));
-        if (!rom || !disk) continue;
+        const disks = p.disks.map(d => [].concat(d)).find(ds => ds.every(d => images.includes(d)));
+        if (!rom || !disks) continue;
         App.builtinPresets[p.name] = {
             ...cfg, configs: undefined,
             emulator: p.emulator, backend: p.backend, cpu_core: p.cpu_core, jit: p.jit,
-            rom, disks: [disk], cdroms: [], bootdriver: 0,
+            rom, disks, cdroms: [], bootdriver: 0,
             ram_mb: p.ram_mb, screen: p.screen,
         };
     }

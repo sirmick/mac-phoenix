@@ -1,0 +1,4 @@
+{
+ "note": "What the PowerPC guest tests boot (tests/lib/refresh_test_disk.sh tests-9.0.4: a copy each run): the standard Mac OS 9.0.4 disk as is. The guest suite (MacPhoenixSuite) and the bridge demo run from the Host volume; AppleScript and TCP/IP come with the System.",
+ "base": "standard-9.0.4"
+}

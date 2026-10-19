@@ -104,12 +104,11 @@ if [[ "$BACKEND" == "executor" ]]; then
     ROM=""
     EXTRA_FLAGS+=(--executor-system "$EXEC_SYSTEM" --executor-writable-images)
 elif [[ -z "${DISK:-}" ]]; then
-    # The baked 7.x test disks (provisioning/images/tests-*.json); 9.0.4 is
-    # still the hand-made baseline.
+    # The baked test disks (provisioning/images/tests-*.json).
     if [[ -n "$OS_VERSION" ]]; then
-        case "$OS_VERSION" in 7.5.5|7.6.1) IMG_BASE="tests-${OS_VERSION}" ;; *) IMG_BASE="macos-${OS_VERSION}" ;; esac
+        case "$OS_VERSION" in 7.5.5|7.6.1|9.0.4) IMG_BASE="tests-${OS_VERSION}" ;; *) IMG_BASE="macos-${OS_VERSION}" ;; esac
     elif [[ "$ARCH" == "ppc" ]]; then
-        IMG_BASE="macos-9.0.4"
+        IMG_BASE="tests-9.0.4"
     else
         IMG_BASE="tests-7.5.5"
     fi
