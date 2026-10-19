@@ -547,6 +547,7 @@ class PNGDecoder extends VideoDecoder {
 
     cleanup() {
         this.ctx = null;
+        this.drawChain = null;
     }
 
     // Get average video latency in ms
@@ -609,8 +610,21 @@ class PNGDecoder extends VideoDecoder {
         // Create blob from PNG data
         const blob = pngData instanceof Blob ? pngData : new Blob([pngData], { type: 'image/png' });
 
+        // Decode at once, but draw in arrival order: a big frame decodes
+        // slower than a small dirty rect that came after it, and drawing it
+        // second would put back stale pixels (pointer and window ghosts).
+        const decoded = createImageBitmap(blob);
+        decoded.catch(() => {});  // reported when its turn comes
+        const turn = this.drawChain || Promise.resolve();
+        this.drawChain = turn.then(() => this.drawDecoded(decoded, t5_receive, rectX, rectY,
+            frameWidth, frameHeight, cursorX, cursorY, cursorVisible));
+        return this.drawChain;
+    }
+
+    async drawDecoded(decoded, t5_receive, rectX, rectY, frameWidth, frameHeight,
+                      cursorX, cursorY, cursorVisible) {
         try {
-            const bitmap = await createImageBitmap(blob);
+            const bitmap = await decoded;
             // Cleanup may have run during the await (codec stepping, reconnect,
             // or canvas swap). If so, drop the frame quietly — drawing into a
             // null ctx or a transferred canvas throws InvalidStateError, which
@@ -1742,8 +1756,11 @@ class MacPhoenixClient {
     handleFrameBytes(arrayBuffer) {
         // Server sends the same 45-byte header + PNG/WebP bytes that previously
         // rode the data channel. Decoder is format-agnostic.
-        const usesVideoTrack = (this.codecType === CodecType.H264 || this.codecType === CodecType.VP9);
-        if (!this.decoder || usesVideoTrack) return;
+        // Only PNG/WebP take frames from the WebSocket. Once the fallback
+        // steps to httpstream the server may still be sending PNG here, and
+        // HTTPStreamDecoder has no handleData: every frame threw.
+        const takesWsFrames = (this.codecType === CodecType.PNG || this.codecType === CodecType.WEBP);
+        if (!this.decoder || !takesWsFrames) return;
 
         this.decoder.handleData(arrayBuffer);
 
