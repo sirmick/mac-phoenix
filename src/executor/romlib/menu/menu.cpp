@@ -151,9 +151,12 @@ void Executor::C_InsertIntlResMenu(MenuHandle mh, ResType theType,
     InsertResMenu(mh, theType, after);
 }
 
+Handle Executor::ROMlib_menubar_drawn;
+
 void Executor::C_DrawMenuBar()
 {
     ROMlib_menubar_message = false;
+    ROMlib_menubar_drawn = LM(MenuList);
     if(LM(MBDFHndl))
     {
         LM(TheMenu) = 0;

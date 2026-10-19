@@ -1260,8 +1260,10 @@ static void resumed()
     ROMlib_app_menu_update();
     /* The menu bar is the front process's: a process given background
        time must not paint its own over it (Disk Copy's flickered over
-       Finder's at every slice). */
-    if(me == front_process)
+       Finder's at every slice), and the front process back from lending
+       time to one repaints it only if someone else's is up (every slice
+       repainted it, 20 times a second with BridgeAgent in the background). */
+    if(me == front_process && ROMlib_menubar_drawn != LM(MenuList))
         DrawMenuBar();
     if(me->uncovered)
     {

@@ -67,6 +67,9 @@ extern Handle ROMlib_app_icon_suite();
 extern void ROMlib_app_menu_update();
 extern bool ROMlib_menubar_message;
 extern void ROMlib_menubar_message_clear();
+/* The menu list DrawMenuBar last drew: the bar on screen is that
+   process's (each process has its own MenuList). */
+extern Handle ROMlib_menubar_drawn;
 enum { kSystemMenuTitleWidth = 28, kSystemMenuRightMargin = 11 };
 
 #define mbDraw 0
