@@ -3681,7 +3681,7 @@ function getRomInfo(checksum, md5) {
 // when changed but is not part of the wire format. Architecture is derived
 // from the chosen backend.
 function isM68kMode(mode) {
-    return mode === 'quadra' || mode === 'se';
+    return mode === 'quadra' || mode === 'se' || mode === 'iici';
 }
 
 function backendIsPpc(backend) {
@@ -4697,6 +4697,15 @@ function applyModeConstraints(mode) {
             });
             if (parseInt(ramEl.value) > 4) ramEl.value = 4;
         }
+    } else if (mode === 'iici') {
+        // IIci: 24-bit mode (System 6), so at most 8MB of RAM
+        if (screenEl) screenEl.disabled = false;
+        if (ramEl) {
+            [...ramEl.options].forEach(opt => {
+                opt.disabled = parseInt(opt.value) > 8;
+            });
+            if (parseInt(ramEl.value) > 8) ramEl.value = 8;
+        }
     } else {
         // Other modes: restore full access
         if (screenEl) screenEl.disabled = false;
@@ -4718,6 +4727,7 @@ async function onEmulatorChange() {
         ppc:    { ram: 128, screen: '1024x768', backend: 'kpx' },
         quadra: { ram: 32,  screen: '1024x768', backend: 'uae' },
         se:     { ram: 4,   screen: '512x342',  backend: 'uae' },
+        iici:   { ram: 8,   screen: '640x480',  backend: 'uae' },
         executor: { ram: 64, screen: '1024x768', backend: 'executor' }  // System/start: populateExecutorSystems
     };
     const d = defaults[emulatorType] || defaults.quadra;
@@ -4783,6 +4793,9 @@ const ROM_PROFILES = [
       ram_mb: 64, screen: '1024x768', disks: [['dev-7.6.1.img', 'Development.img']] },
     { name: 'se', emulator: 'se', backend: 'uae', cpu_core: 'uae', jit: false,
       ram_mb: 4, screen: '512x342', disks: ['6.0.8.img', 'system-6.0.8.img'] },
+    // The IIci: System 6 in colour (24-bit mode, 8MB; machine_profile.cpp).
+    { name: 'iici', emulator: 'iici', backend: 'uae', cpu_core: 'uae', jit: false,
+      ram_mb: 8, screen: '640x480', disks: ['6.0.8.img', 'system-6.0.8.img'] },
     { name: 'ppc', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,
       ram_mb: 128, screen: '1024x768', disks: ['9.0.4.img', 'macos-9.0.4.img', '7.6.1.img', 'macos-7.5.5.img'] },
     { name: 'ppc-8.6', emulator: 'ppc', backend: 'kpx', cpu_core: 'kpx', jit: true,

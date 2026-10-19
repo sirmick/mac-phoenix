@@ -31,7 +31,7 @@ done
 
 [[ -x "$BINARY" ]] || { echo "SKIP: binary not found: $BINARY"; exit 77; }
 [[ -f "$ROM" ]] || { echo "SKIP: IIci ROM not found: $ROM (set MACEMU_IICI_ROM)"; exit 77; }
-DISK="${MACEMU_IICI_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" system-6.0.8)}" || exit 77
+DISK="${MACEMU_IICI_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" 6.0.8)}" || exit 77
 [[ -f "$DISK" ]] || { echo "SKIP: 6.0.8 disk not found: $DISK"; exit 77; }
 
 LOG="${TMPDIR:-/tmp}/macemu_test_iici_$$.log"
