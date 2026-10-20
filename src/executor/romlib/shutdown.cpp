@@ -25,9 +25,10 @@ void Executor::C_ShutDwnPower()
     fprintf(stderr, "[Executor] ShutDwnPower: powering off\n");
     fflush(nullptr);
     /* _exit: atexit handlers would unmap the video buffer under the host's
-       frame loop; the parent clears the IPC state when we are gone. 3 is
-       the host's "guest powered off" (main.cpp, exit_with_guest). */
-    _exit(3);
+       frame loop; the parent clears the IPC state when we are gone. Status
+       0, as the ROM machines' guest shutdown (ShutdownEmulator): a normal
+       end, not one the web UI reports. */
+    _exit(0);
 }
 
 void Executor::C_ShutDwnStart()

@@ -511,9 +511,10 @@ Response APIRouter::handle_status(const Request& req) {
         json << ", \"emulator_running\": " << (running ? "true" : "false");
         json << ", \"cpu_state\": \"" << (running ? "running" : "stopped") << "\"";
 
-        // A child that died on its own: how, and its last output lines.
+        // A child that died on its own, other than a guest shutdown
+        // (status 0): how, and its last output lines.
         EmulatorSubprocess::ChildExit ex;
-        if (!running && ctx_->subprocess->last_exit(ex)) {
+        if (!running && ctx_->subprocess->last_exit(ex) && (ex.crashed || ex.code != 0)) {
             json << ", \"child_exit\": {\"id\": " << ex.id
                  << ", \"crashed\": " << (ex.crashed ? "true" : "false")
                  << ", \"code\": " << ex.code;

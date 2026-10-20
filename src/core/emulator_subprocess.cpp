@@ -533,9 +533,10 @@ void EmulatorSubprocess::reap_if_dead()
         if (es == QProcess::CrashExit) {
             fprintf(stderr, "[EmulatorSubprocess] Child crashed (signal/code %d)\n", code);
             record_exit(true, code);
-        } else if (code != 0) {
-            fprintf(stderr, "[EmulatorSubprocess] Child exited with code %d\n", code);
-            record_exit(false, code);
+        } else {
+            if (code != 0)
+                fprintf(stderr, "[EmulatorSubprocess] Child exited with code %d\n", code);
+            record_exit(false, code);   // 0 too: the guest shut down (exit_with_guest)
         }
         clear_ipc_shm();
         // No ipc_client_.disconnect() here: callers of is_running() may

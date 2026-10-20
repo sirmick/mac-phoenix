@@ -35,9 +35,9 @@ public:
     // State
     bool is_running() const;
 
-    // How the child last died on its own (crash or nonzero exit), with
-    // the tail of its stdout/stderr. Cleared by start(); a stop() through
-    // the API is not recorded.
+    // How the child last died on its own (crash, error exit, or status 0
+    // for a guest shutdown), with the tail of its stdout/stderr. Cleared
+    // by start(); a stop() through the API is not recorded.
     struct ChildExit {
         uint64_t id = 0;        // changes with every exit
         bool crashed = false;   // killed by a signal
