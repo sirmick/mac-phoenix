@@ -32,6 +32,10 @@ OSErr Executor::NMInstall(NMRecPtr nmptr)
    * really irritating to use.
    */
     SysBeep(5);
+    /* MacPhoenix: the notice's text is not shown yet (Apple's Process
+       Manager puts it in an alert); log it so it isn't lost. */
+    if(StringPtr s = nmptr->nmStr)
+        fprintf(stderr, "[Executor] NMInstall: %.*s\n", (int)s[0], (const char *)s + 1);
     if(nmptr->nmResp)
     {
         if(guest_cast<LONGINT>(nmptr->nmResp) == -1)
