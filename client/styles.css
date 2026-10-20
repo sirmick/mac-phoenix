@@ -480,7 +480,10 @@ main {
 /* Mac off: the machine under a soft spotlight (its drop shadow is
  * translucent black, so it needs something lighter than black behind). */
 .overlay.mac-off {
-    background: radial-gradient(ellipse 60% 55% at 50% 45%, #3a3a3a 0%, #222 55%, #111 100%);
+    /* A pool of light just around the machine, gone to the screen's #111
+     * well before the edges. */
+    background: radial-gradient(ellipse min(380px, 45vw) min(270px, 38vh) at 50% 44%,
+                                #383838 0%, #262626 45%, #161616 80%, #111 100%) #111;
 }
 .overlay.mac-off .overlay-content {
     max-width: none;
