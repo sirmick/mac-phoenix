@@ -325,6 +325,14 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 				WriteMacInt32(0xcc0, sm);  // ASC base (Apple Sound Chip)
 			}
 
+			// SoundActive: the ROM's .Sound _Open ends with CLR.B $27E, and
+			// these hooks stand in for it (SE ROM $36CAA, II ROMs $2F02A) or
+			// skip it ($067C ROMs). Left at its boot value ($FF) it says a
+			// sound is playing forever, and software that waits for the
+			// previous sound before starting one (World Builder games:
+			// Mountain of Mayhem) hangs. Nothing plays this early.
+			WriteMacInt8(0x27e, 0);
+
 			// For 24-bit ROMs: fix TimeDBRA if SETUPTIMEK failed.
 			// SETUPTIMEK reads VIA Timer 2 which we don't emulate;
 			// the SIGSEGV handler silently skips the VIA accesses,
