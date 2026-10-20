@@ -155,6 +155,11 @@ static gestaltentry_t gtable[] = {
     {
         gestaltNativeCPUtype, gestaltCPU68040,
     },
+    /* MacPhoenix: a 68k Mac, as 7.5.5 says on a Quadra. Without it the
+       CFM-68K Runtime Enabler's second INIT spun forever. */
+    {
+        gestaltSysArchitecture, gestalt68k,
+    },
     /* MacPhoenix: the Thread Manager (process.cpp): gestaltThreadMgrPresent
        and gestaltSpecificMatchSupport, as System 7.5's answers. */
     { "thds"_4, 3 },

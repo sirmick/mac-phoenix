@@ -84,6 +84,18 @@ std::set<std::string> load_allow_list()
     return allow;
 }
 
+/* Is a file listed? Names are compared without leading and trailing
+   spaces, as the list is read: " CFM-68K Runtime Enabler" begins with one
+   so that it loads first. */
+bool listed(const std::set<std::string> &allow, const std::string &name)
+{
+    size_t start = name.find_first_not_of(' ');
+    if(start == std::string::npos)
+        return false;
+    size_t end = name.find_last_not_of(' ');
+    return allow.count(name.substr(start, end - start + 1)) != 0;
+}
+
 struct Item
 {
     Str63 name;
@@ -272,7 +284,7 @@ std::vector<Aini> collect_ainis(OSType folder, OSType file_type, const std::set<
         return out;
     for(const Item &it : folder_files(vref_g, dirid_g))
     {
-        if(it.type != file_type || !allow.count(to_string(it.name)))
+        if(it.type != file_type || !listed(allow, to_string(it.name)))
             continue;
         Str63 name;
         memcpy(name, it.name, it.name[0] + 1);
@@ -412,7 +424,7 @@ static void sort_out_disabled(const std::set<std::string> &allow)
             continue;
         LONGINT disabled = sub_folder(vref, sysdir, p.disabled, false);
         for(const Item &it : folder_files(vref, active))
-            if(!allow.count(to_string(it.name)) && runs_at_startup(vref, active, it))
+            if(!listed(allow, to_string(it.name)) && runs_at_startup(vref, active, it))
             {
                 if(!disabled)
                     disabled = sub_folder(vref, sysdir, p.disabled, true);
@@ -421,7 +433,7 @@ static void sort_out_disabled(const std::set<std::string> &allow)
             }
         if(disabled)
             for(const Item &it : folder_files(vref, disabled))
-                if(allow.count(to_string(it.name)))
+                if(listed(allow, to_string(it.name)))
                     move(vref, disabled, it, active, "enabled");
     }
 }
@@ -552,7 +564,7 @@ void Executor::ROMlib_load_extensions()
             if(it.type != "INIT"_4 && it.type != "cdev"_4 && it.type != "RDEV"_4
                && it.type != "fext"_4)
                 continue;
-            if(allow.count(to_string(it.name)))
+            if(listed(allow, to_string(it.name)))
                 run_file(vref, dirid, it);
         }
     }
