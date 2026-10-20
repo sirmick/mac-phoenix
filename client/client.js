@@ -3847,6 +3847,53 @@ function updateOverlayMachine() {
     nameEl.textContent = machine.name + (disk ? ' · ' + disk.replace(/\.(img|dsk|hfv)$/i, '') : '');
 }
 
+// Short names for the header's info box (CPU_CORES has the long ones).
+const CORE_SHORT = { uae: 'UAE', 'mame-68k': 'MAME 68k', kpx: 'Kheperix', 'mame-ppc': 'MAME PPC' };
+
+// What the Mac is told it is (Gestalt), by ROM mode; on the Quadra ROM
+// it follows model_id (MACHINE_TYPES).
+const GESTALT_NAMES = {
+    se: ['Mac SE', 5],
+    iici: ['Mac IIci', 11],
+    quadra: { 0: ['Quadra 900', 20], 5: ['Mac IIci', 11] },
+    ppc: ['Power Mac G3', 510],
+};
+
+// The header's info box: CPU core, JIT, the machine type the Mac sees.
+// Follows the config the title does (loaded, or the draft while Settings
+// is open).
+function updateMachineInfo(backend) {
+    const box = document.getElementById('machine-info');
+    if (!box) return;
+    const cfg = currentConfig;
+    const modalOpen = document.getElementById('config-modal')?.classList.contains('open');
+    const core = (modalOpen && document.getElementById('cfg-core')?.value)
+                 || cfg.cpu_core || coresForBackend(backend)[0][0];
+    const jitEl = document.getElementById('cfg-jit');
+    const jit = coreSupportsJit(backend, core) && (modalOpen && jitEl ? jitEl.checked : !!cfg.jit);
+    const parts = [[CORE_SHORT[core] || core, 'mi-core', 'CPU core: ' + core],
+                   [jit ? 'JIT' : 'no JIT', jit ? 'mi-jit-on' : 'mi-jit-off',
+                    jit ? 'JIT compiler on' : (coreSupportsJit(backend, core) ? 'Interpreter (JIT off)'
+                                                                              : 'Interpreter (no JIT for this core)')]];
+    if (backendIsExecutor(backend)) {
+        parts.push(['Executor Toolbox', '', 'No ROM: Executor\'s C++ Toolbox']);
+    } else {
+        const rom = storageCache?.roms?.find(r => r.name === cfg.rom);
+        const mode = rom && getRomInfo(rom.checksum, rom.md5)?.mode;
+        let type = GESTALT_NAMES[mode];
+        if (type && !Array.isArray(type)) type = type[cfg.model_id || 0] || [`model ID ${cfg.model_id}`, cfg.model_id + 6];
+        if (type) parts.push(['as ' + type[0], '', `The machine type the Mac is told it is (Gestalt ${type[1]})`]);
+    }
+    box.replaceChildren(...parts.map(([text, cls, title]) => {
+        const el = document.createElement('span');
+        el.textContent = text;
+        if (cls) el.className = cls;
+        el.title = title;
+        return el;
+    }));
+    box.hidden = false;
+}
+
 function updateHeaderTitle() {
     updateOverlayMachine();
     const titleEl = document.getElementById('emulator-title');
@@ -3857,6 +3904,7 @@ function updateHeaderTitle() {
     const modalOpen = document.getElementById('config-modal')?.classList.contains('open');
     const backend = (modalOpen && document.getElementById('cfg-backend')?.value)
                     || currentConfig.backend;
+    updateMachineInfo(backend);
     if (backendIsExecutor(backend)) {
         titleEl.textContent = 'Executor';
         return;
@@ -4451,6 +4499,7 @@ function closeConfig() {
     if (modal) {
         modal.classList.remove('open');
     }
+    updateHeaderTitle();   // back to the loaded config from the draft
 }
 
 // Generic collapsible-section toggle. The click handler binds (toggleEl,
@@ -6144,6 +6193,7 @@ function setupEventListeners() {
     if (cfgBackend) cfgBackend.addEventListener('change', updateEmulatorPanelVisibility);
     const cfgCore = document.getElementById('cfg-core');
     if (cfgCore) cfgCore.addEventListener('change', updateEmulatorPanelVisibility);
+    document.getElementById('cfg-jit')?.addEventListener('change', updateHeaderTitle);
 
     const cfgRom = document.getElementById('cfg-rom');
     if (cfgRom) cfgRom.addEventListener('change', onRomChange);

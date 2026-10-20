@@ -18,6 +18,8 @@
             <img src="Apple.svg" alt="Apple" style="height: 1.6em; margin-right: 0.4em;">
             <span id="cpu-chip" class="cpu-chip m68k" title="Motorola 680x0">68k</span>
             <h1 id="emulator-title">Macintosh</h1>
+            <!-- CPU core, JIT, the machine the Mac is told it is: updateMachineInfo() -->
+            <span id="machine-info" class="machine-info" hidden></span>
 
             <!-- Boot-phase chip — colorized through boot stages
                  (pre-reset → ROM init → drivers → … → Finder → desktop).
@@ -34,7 +36,7 @@
         <div class="controls">
             <div class="codec-selector">
                 <label for="codec-select">Codec:</label>
-                <select id="codec-select" disabled>
+                <select id="codec-select" title="Video codec" disabled>
                     <option value="png" {{SELECTED_PNG}}>PNG</option>
                     <option value="webp" {{SELECTED_WEBP}}>WebP</option>
                     <option value="h264" {{SELECTED_H264}}>H.264</option>
@@ -45,7 +47,7 @@
             </div>
             <div class="codec-selector">
                 <label for="mouse-mode-select">Mouse:</label>
-                <select id="mouse-mode-select">
+                <select id="mouse-mode-select" title="Mouse mode">
                     <option value="relative" {{SELECTED_RELATIVE}}>Relative</option>
                     <option value="absolute" {{SELECTED_ABSOLUTE}}>Absolute</option>
                 </select>
