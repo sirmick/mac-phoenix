@@ -677,9 +677,11 @@ Kept small so upstream fixes can be merged by hand:
   `CalcVisBehind` even with no window behind in their layer, so the
   layers behind get their visible regions recomputed.
 * `sysroutines.cpp` (new): the System's low-memory routines $7B0
-  (selector-table dispatch) and $668 (detached-package call) as 68k code
-  copied from a 7.5.5 boot, set at every launch's lowmem reset; Color
-  Picker 2.0 calls its PACK 12 through them (`Package.yaml` names them).
+  (selector-table dispatch) and $668 (detached-package call), set at
+  every launch's lowmem reset; Color Picker 2.0 calls its PACK 12 through
+  them (`Package.yaml` names them). Clean room since 2026-10-21 (the first
+  version held 7.5.5's code copied from a boot): callbacks into C++
+  written from `cleanroom/system-routines.md`, as is `res/resPrivate.cpp`.
 * `res/resGet.cpp`: `GetResource('PACK', n)` does the real lookup first;
   the ALRT stand-in (ResEdit on Executor's own System) only when nothing
   is found. `res/resOpen.cpp`: an open resource file is answered with its

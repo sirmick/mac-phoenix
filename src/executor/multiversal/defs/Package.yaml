@@ -58,7 +58,8 @@
       table, 1: word offsets indexed by selector, 2: long addresses),
       min.b, max.b, then the entries; D0's low byte selects, its high byte
       is the parameter size in words (popped, paramErr answered, when the
-      selector is out of range). Executor's copy is sysroutines.cpp.
+      selector is out of range). Executor implements it in sysroutines.cpp
+      (clean room: docs/executor/cleanroom/system-routines.md).
 
 # ####
 
