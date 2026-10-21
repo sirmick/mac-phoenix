@@ -244,7 +244,7 @@ D2's clean-up of the 68k side; C2 and C3 are independent of D.
 | D3 | Dependencies and host edges | builds with only a C++17 compiler (generated files committed) |
 | D4 | wasm build | built-in Browser, then the Finder, in a browser tab |
 | D5 | Demo features | HiDPI QuickDraw (2×), host files as Mac files, rootless windows; HyperCard from a link |
-| D6 | PPC applications on the C2 core behind the PowerCore facade | a PPC application runs (milestone P) |
+| D6 | PPC applications on the C2 core behind the PowerCore facade | a PPC application runs (milestone P). **Started 2026-10-21**: PowerPC-only applications on InterfaceLib run (`ppc_hello_executor`); StdCLib/MathLib open (PLAN.md, P) |
 | D7 | A/UX user-mode kernel | the five steps above |
 | C1 | MAME's Musashi (PMMU, softfloat FPU, instanceable) as the 68k core | `--core mame-68k` passes every suite UAE and Musashi pass today; two instances in one process; vendored v3.32 retired. **C1a–c done 2026-10-10** (`src/cpu/mame/`); C1d PMMU gate open; **C1e done 2026-10-11** (v3.32 deleted, `musashi` an alias of `mame-68k`) |
 | C2 | MAME's PowerPC recompiler as the PPC core, one base offset | boot matrix PPC cells pass with the UML interpreter, then the x86-64 back-end, then arm64 on Apple Silicon; no `mmap_min_addr`. **C2a–c done 2026-10-10**: `--backend kpx --core mame-ppc` boots 7.5.5 to the Finder, 1.6 s with the x86-64 back-end (`--jit`), and Mac OS 9.0.4 in 10 s with the guest suite passing as on Kheperix; merged to main; arm64 (C2d) and the base offset open |

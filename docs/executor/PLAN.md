@@ -21,7 +21,7 @@ mac-phoenix (child, same binary)
    ├── host/executor_child.cpp   frames → SHM, control socket → input hooks
    ├── romlib                    Executor Toolbox, imported nearly unchanged
    ├── syn68k facade             syn68k_public.h implemented over UAE
-   ├── PowerCore facade          stub now, KPX later
+   ├── PowerCore facade          on the mame-ppc core
    └── front-ends/phoenix        render + cursor composite, executor_host API
 ```
 
@@ -53,9 +53,20 @@ compile with minimal edits:
     EmulOp cell) and re-enters `m68k_execute`, the same path
     BasiliskII's `Execute68k` uses.
   * `destroy_blocks` flushes the JIT cache range.
-* **PowerCore facade**. PowerCore has no licence and does not come
-  across. A stub header keeps the PPC code paths compiling; executing
-  PPC aborts with a clear message. KPX later implements this facade.
+* **PowerCore facade** (`cpu/PowerCore.cpp`). PowerCore has no licence
+  and does not come across; Executor's code keeps its shape (registers in
+  `PowerCoreState`, `execute()`, `syscall`, `handleInterrupt`) and it runs
+  on MAME's PowerPC recompiler (`cpu::Core` "mame-ppc", a 750, translation
+  off, native back-end), made at the first `executePPC()` over the 68k
+  core's `GuestMemory`, so both CPUs see the same addresses with either
+  68k layout. The registers move into the core around guest code and back
+  for host code. Two PowerPC host ops (primary opcode 6) replace upstream's
+  magic: `executePPC()` returns into an exit cell (upstream: LR =
+  `0xFFFFFFFC`), and `builtinlibs`' InterfaceLib entry stubs hold the
+  system-call op where upstream had `sc`. Process switches save
+  `PowerCoreState` with the 68k context. Exceptions are skipped and logged
+  (the vectors at 0 are low memory). Executor's PPC debugger stepping lands
+  on block starts only (mame-ppc's `step()` runs a block).
 
 Dropped from the import: syn68k, PowerCore, cxmon debugger, the
 qt/x/sdl/sdl2/wayland front ends, LMDB (its CNID mapper was already
@@ -381,7 +392,7 @@ C++ can later answer CFM's OpenTransportLib for PPC applications (P).
 | M3h | MacTCP finished | `dnrp` resolver, UDP, async calls on the `accRun` pump; Fetch connects to a host name | mostly done (2026-10-14): TCP and UDP on host sockets; asynchronous calls park on their stream and finish at interrupt time, as MacTCP's did: a watcher thread polls the parked sockets and raises an Executor interrupt (`time/syncint`), whose handler completes the calls (completion routines are pascal, the iopb on the stack, not the Device Manager's A0), delivers the ASRs (TCP data arrival, closing, terminate; UDP data arrival) and the resolver's results. UDPRead and TCPNoCopyRcv lend pieces of the stream's receive area. `TCPPassiveOpen` listens. The resolver is Executor's `'dnrp'` (`mactcp/dnr.cpp`): without MacTCP's control panel, `GetIndResource('dnrp', 1)` hands out a JMP to a callback that answers StrToAddr/AddrToName from the host's resolver on a worker thread (cacheFault, then the result procedure) and AddrToStr at once. `ipctlGetAddr` reports the host's default-route address (GUSI sends 127.0.0.1 there). `--executor-debug mactcp` logs calls, completions, ASRs and lookups. The guest suite resolves `example.com` and round-trips UDP and TCP with a host echo server the harness starts (`tests/lib/echo_server.py`, named to the guest in `Host:net_echo.txt`); gtests `MacTCP.UdpRoundTrip`, `MacTCP.NoCopyRcvLendsFromTheReceiveArea`. Open: Fetch (not on the image), HInfo/MXInfo, the multicast UDP calls, `TCPGlobalInfo`/`TCPExtendedStat`, ICMP reports; the guest sees the host's address, not a 10.0.2.x network |
 | M3i | Open Transport | OT 1.1's 68k client API through Apple's own glue | in progress (2026-10-16), behind `--executor-ot`: `opentransport/` (docs/executor/OpenTransport.md). Executor wraps the Shared Library Manager's binder (SLMGlobal+$88) and the client `TLibraryManager`'s LoadClass, and binds OT's eleven function sets (`ot_names.inc`, read from Apple's glue with MPW DumpObj) to C++: Gestalt `otan`/`otvr`, InitOpenTransport, the utilities, configurations, TCP and UDP endpoints on host sockets in every mode (synchronous blocking and non-blocking, asynchronous with notifiers, called at interrupt time in the client's A5 world), listen/accept, OTAlloc/OTFree, Internet services on the host's resolver (synchronous and asynchronous), interface info. `ot_executor` and `ot_executor_mame68k` run OTTest (`tests/guest/ot`, an MPW tool linked with Apple's glue, built with `tools/mpw/mpw`): 12 cases. Open: options (OTOptionManagement echoes), OTInetSysInfo/MailExchange/Query, mappers, the Ntv* sets, OT on by default, the PPC binding |
 | M4 | 7.5.5 + Drag Manager | Drag Manager; drag between SimpleText and Finder; TSM/Dictionary/Collection stubs; TrueType via FreeType | Drag Manager done (2026-10-13): Apple's, the System's `proc` -16512..-16516 dispatched by `drag.cpp` (the `gpch` 668 patch's job in C++: the selector tables, CallDetachedPackage entry, the globals at ExpandMem+$118, Finder's hook trampolines, Gestalt `drag` and `teat`, the exit-time cleanup `ROMlib_drag_process_exit`). Needed: OSDispatch $F `GetLayerAtPoint`, $19/$1A hold switching, $53 `CallProcessRoutine` (a routine run in another process's world on its stack, process.cpp), $56 `GetDesktopProcess`, $62 `GetWindowProcess`; `GetFrontProcess` with a layer; LayerDispatch 6/7 and SetCurLayer to another process's layer; `TEGetHiliteRgn` (TEDispatch $F); a `TranslationDispatch` stub; `NewAliasMinimal` for folders; `GetIntlResourceTable` for the system script. Finder icons move, files move into folders, to the desktop and the Trash; text dragged out of SimpleText becomes a clipping file on the desktop, and the clipping dragged back lands in the text (cross-process both ways). `drag_executor` and `drag_executor_mame68k` test it; `--executor-debug drag` logs the dispatch. Open: TSM/Dictionary/Collection stubs, TrueType |
-| P | PPC | KPX behind the PowerCore facade, InterfaceLib to native | not started |
+| P | PPC | mame-ppc behind the PowerCore facade, InterfaceLib to native | started (2026-10-21): PowerPC-only applications run (`cfm_launch`); `--executor-ppc` runs fat applications' PowerPC code. `ppc_hello_executor` (and `_mame68k`) run PPCHello (`tests/guest/ppc-hello`, MrC + PPCLink, InterfaceLib only): integer and FP code, Toolbox calls, a PowerPC modal filter called back through a routine descriptor. CFM logs unresolved imports at load (`CFM: unresolved import NAME`; calling one aborts). Added to InterfaceLib: `HDelete`, `HRename`. From upstream `b6290b62` (2026-10-19): `callfromPPC::ParameterPasser` follows the PowerPC conventions (`double`/`float` in FPR1-13, composites word by word across registers and the stack) with its gtests; upstream's generated-marshaller rewrite (Phases 0-5, U1-U5) is not merged. Open: StdCLib and MathLib (not on a 68k System: a Power Mac has them in ROM, the G3 ROM holds them as PEF; or native C++), InterfaceLib gaps (the fat MacPhoenixSuite also wants `InlineGetHandleSize`, `CallComponentUPP`, `OpenDefaultComponent`), Gestalt still says 68k, fast memory for the recompiler, more than one PowerPC process at a time |
 
 Tools carried alongside:
 
@@ -608,7 +619,9 @@ Kept small so upstream fixes can be merged by hand:
   version comes from its `vers` 1 and its resources are left alone
   (`ROMlib_apple_system_file`); `gestalt.cpp` `mach` 20 as on the
   reference boot.
-* `tests/`: low-stack test thread, PPC tests skip, fixture path, ctest names.
+* `tests/`: low-stack test thread, fixture path, ctest names; the PPC tests
+  run (on mame-ppc), `breakpointPPC` skipped (a breakpoint lands on block
+  starts only).
 * `res/resOpen.cpp`: header version 9 compressed resources
   (`dcmp` 3 entry offsets, in-place from the end); `HOpenResFile` clears the
   map's handle fields before preload; the `dcmp` working buffer is sized as
@@ -732,3 +745,12 @@ Kept small so upstream fixes can be merged by hand:
   too; the Help Manager asks (0, 2047) for the height of every line.
 * `base/logging.cpp`: `--logtraps-nesting N` (`--executor-logtraps-nesting`)
   logs calls nested deeper in callbacks than the default 1.
+* PowerPC on mame-ppc (milestone P): `base/cpu.cpp` returns from
+  `executePPC` into `PowerCore::exitAddress()` (upstream: LR =
+  `0xFFFFFFFC`) and gets the PowerCore from `PowerCore::instance()`;
+  `base/builtinlibs.cpp` stubs hold `POWERCORE_OP_SYSCALL` (upstream:
+  `sc`); `cfm.cpp` logs `CFM: unresolved import NAME` at load.
+* `base/functions.impl.h`: `callfromPPC::ParameterPasser` from upstream
+  `b6290b62` (2026-10-19), with its gtests in `tests/cpu.cpp`.
+* `file/fileHighlevel.cpp`, multiversal `FileMgr.yaml`: `HDelete` and
+  `HRename`, exported to InterfaceLib.

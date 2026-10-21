@@ -67,6 +67,7 @@ while [[ $# -gt 0 ]]; do
         --executor-debug) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;   # Executor's --debug options (memcheck,...)
         --watch) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;            # write watchpoint on guest memory (Executor)
         --executor-logtraps) EXTRA_FLAGS+=("$1"); shift ;;       # Executor logs every trap call
+        --executor-ppc) EXTRA_FLAGS+=("$1"); shift ;;            # Executor runs fat apps' PowerPC code
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) NETWORK="$2"; shift 2 ;;

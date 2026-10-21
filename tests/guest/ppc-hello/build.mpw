@@ -1,0 +1,9 @@
+# build.mpw — PPCHello, PowerPC only, InterfaceLib only (MrC, PPCLink);
+# tools/mpw/mpw build tests/guest/ppc-hello
+# products: PPCHello
+Delete -i PPCHello
+MrC hello.c -o hello.ppc.o
+PPCLink -main main hello.ppc.o "{SharedLibraries}InterfaceLib" ∂
+	-t APPL -c 'PPCh' -o PPCHello
+Rez -a hello.r -o PPCHello
+SetFile -t APPL -c 'PPCh' -a B PPCHello

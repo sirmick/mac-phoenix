@@ -56,7 +56,7 @@ void builtinlibs::addPPCEntrypoint(const char *library, const char *function, st
 {
     assert(nCallbacks < std::size(callbacks));
     PPCCallback& callback = callbacks[nCallbacks++];
-    callback.sc = 0x44000002;
+    callback.sc = POWERCORE_OP_SYSCALL;
     callback.codePtr = &callback.sc;
     callback.implementation = code;
     callback.name = function;
@@ -68,7 +68,7 @@ Ptr builtinlibs::makeUndefinedSymbolStub(const char *name)
 {
     assert(nCallbacks < std::size(callbacks));
     PPCCallback& callback = callbacks[nCallbacks++];
-    callback.sc = 0x44000002;
+    callback.sc = POWERCORE_OP_SYSCALL;
     callback.codePtr = &callback.sc;
     callback.implementation = nullptr;
     callback.name = name;

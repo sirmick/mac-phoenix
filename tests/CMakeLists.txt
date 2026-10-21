@@ -307,6 +307,29 @@ set_tests_properties(bridge_trap_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# PowerPC on Executor: a PowerPC-only application (tests/guest/ppc-hello, on
+# InterfaceLib alone) runs on the mame-ppc core behind Executor's PowerCore
+# facade, with each 68k core's memory layout.
+add_test(
+  NAME ppc_hello_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ppc-hello/PPCHello.bin --results ppc_hello.txt --network none --timeout 150 --port 18440
+)
+set_tests_properties(ppc_hello_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+add_test(
+  NAME ppc_hello_executor_mame68k
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core mame-68k --app ${CMAKE_SOURCE_DIR}/tests/guest/ppc-hello/PPCHello.bin --results ppc_hello.txt --network none --timeout 150 --port 18442
+)
+set_tests_properties(ppc_hello_executor_mame68k PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # The Notification Manager from an application in the background: the alert
 # with its text, the response procedure after the alert is dismissed (the
 # host presses Return), nmTypErr: tests/guest/notify. The ROM machine is the

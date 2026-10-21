@@ -569,7 +569,11 @@ symbol_lookup(uint32_t *indexp, GUEST<Ptr> *valp, uint8_t imports[][4],
                     if(flags & 8)   // weak symbol
                         *valp = kUnresolvedCFragSymbolAddress;
                     else
+                    {
+                        /* MacPhoenix: say so at load time; calling it aborts. */
+                        fprintf(stderr, "CFM: unresolved import %s\n", symbol_name);
                         *valp = builtinlibs::makeUndefinedSymbolStub(symbol_name);
+                    }
                 }
                 /*-->*/ break;
             }

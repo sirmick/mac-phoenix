@@ -9,14 +9,9 @@ namespace Executor
     uint32_t currentTrapPC = 0;
 }
 
-namespace
-{
-    PowerCore powerCore;
-}
-
 PowerCore& Executor::getPowerCore()
 {
-    return powerCore;
+    return PowerCore::instance();
 }
 
 void Executor::execute68K(uint32_t addr)
@@ -29,7 +24,7 @@ void Executor::executePPC(uint32_t addr)
     currentCPUMode = CPUMode::ppc;
     auto& cpu = getPowerCore();
     cpu.CIA = addr;
-    cpu.lr = 0xFFFFFFFC;
+    cpu.lr = cpu.exitAddress();
     cpu.execute();
 }
 

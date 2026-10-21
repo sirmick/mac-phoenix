@@ -107,6 +107,8 @@ int run(const Config& c)
         "--bpp", std::to_string(c.bpp),
         "--applzone", std::to_string(applMB) + "M",
     };
+    if(c.prefer_ppc)
+        args.push_back("--ppc");
     if(c.logtraps)
         args.push_back("--logtraps");
     if(c.logtraps_nesting > 1)

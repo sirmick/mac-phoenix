@@ -2,7 +2,7 @@
 # Executor core (Executor 2000, MIT) on MacPhoenix's UAE 68k core.
 # See docs/executor/PLAN.md.
 #
-#   executor_cpu          syn68k API facade over a cpu::Core + PowerCore stub
+#   executor_cpu          syn68k API facade over a cpu::Core + PowerCore on mame-ppc
 #   romlib                the imported Toolbox
 #   front-end-phoenix     video/cursor front end + executor_host API,
 #                         linked into mac-phoenix (`--backend executor`)

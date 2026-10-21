@@ -307,6 +307,13 @@ public:
     uint64_t cycles() const override { return dev_.total_cycles(); }
     uint32_t reg(int id) const override { return dev_.get_reg(id); }
     void set_reg(int id, uint32_t value) override { dev_.set_reg(id, value); }
+    uint64_t fpr(int i) const override
+    {
+        uint64_t bits;
+        memcpy(&bits, &dev_.core().f[i & 31], sizeof bits);
+        return bits;
+    }
+    void set_fpr(int i, uint64_t bits) override { memcpy(&dev_.core().f[i & 31], &bits, sizeof bits); }
 
     size_t context_size() const override { return sizeof(MamePpcDevice::State); }
     void save_context(void *dst) const override { memcpy(dst, &dev_.core(), sizeof(MamePpcDevice::State)); }

@@ -241,6 +241,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.watch = cfg.watch;
     c.writable_images = cfg.executor_writable_images;
     c.open_transport = cfg.executor_ot;
+    c.prefer_ppc = cfg.executor_ppc;
     c.on_frame = publish_frame;
     if (cfg.audio_enabled) {
         /* The parent pulls 20 ms frames from the IPC audio ring (--audio). */
@@ -277,5 +278,6 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
     c.watch = cfg.watch;
     c.writable_images = cfg.executor_writable_images;
     c.open_transport = cfg.executor_ot;
+    c.prefer_ppc = cfg.executor_ppc;
     return executor_host::run(c);
 }

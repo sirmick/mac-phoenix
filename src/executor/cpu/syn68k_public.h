@@ -328,4 +328,10 @@ const char *syn68k_engine_name(void);
 
 #ifdef __cplusplus
 }
+
+/* The guest address space the 68k core runs on; the PowerPC core
+ * (PowerCore.cpp) runs on the same one. Valid after
+ * initialize_68k_emulator(). */
+namespace cpu { class GuestMemory; }
+cpu::GuestMemory &syn68k_guest_memory();
 #endif

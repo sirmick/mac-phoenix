@@ -150,6 +150,9 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     if (config_->executor_ot) {
         args.push_back("--executor-ot");
     }
+    if (config_->executor_ppc) {
+        args.push_back("--executor-ppc");
+    }
     args.push_back("--core");
     args.push_back(config_->cpu_core);
     if (config_->backend_string() == "executor") {

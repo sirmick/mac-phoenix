@@ -3253,6 +3253,7 @@
         type: ConstStringPtr
       - name: dst
         type: ConstStringPtr
+    executor: true
 
 # ####
 
@@ -3266,6 +3267,7 @@
         type: LONGINT
       - name: name
         type: ConstStringPtr
+    executor: true
     comment: |
       NOTRAP_FUNCTION2(HRename);
 

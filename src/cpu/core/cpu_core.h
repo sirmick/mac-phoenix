@@ -175,8 +175,8 @@ private:
 /* ---------------------------------------------------------------------- */
 
 /* Register ids for Core::reg() / set_reg(), per architecture. Integer and
- * control registers, 32 bits. Floating-point state travels with the
- * context (save_context) until something needs it register by register. */
+ * control registers, 32 bits. PowerPC floating-point registers have
+ * Core::fpr(); the 68k FPU travels with the context (save_context). */
 namespace m68k {
 enum Reg : int {
     D0, D1, D2, D3, D4, D5, D6, D7,
@@ -333,6 +333,10 @@ public:
     virtual void set_pc(uint32_t pc) = 0;
     virtual uint32_t reg(int id) const = 0;
     virtual void set_reg(int id, uint32_t value) = 0;
+    /* ppc: floating-point register 0..31 as the bits of its double. Cores
+     * without one ignore it. */
+    virtual uint64_t fpr(int i) const { (void)i; return 0; }
+    virtual void set_fpr(int i, uint64_t bits) { (void)i; (void)bits; }
 
     /* Guest cycles (or instructions, for cores that do not count cycles)
      * executed since the core was made: a monotonic virtual clock for

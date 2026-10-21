@@ -142,6 +142,7 @@ struct EmulatorConfig {
     std::string watch;                 // --watch ADDR[:LEN]: write watchpoint on guest memory (Executor; guest_watch.h)
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
     bool executor_ot = false;              // Executor answers Open Transport (romlib/opentransport)
+    bool executor_ppc = false;             // Executor runs the PowerPC code of fat applications (mame-ppc)
     std::string cpu_core = "uae";      // CPU core for the backend's architecture: 68k "uae", "mame-68k"; ppc "kpx", "mame-ppc"
 
     // System

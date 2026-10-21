@@ -495,6 +495,29 @@ Executor::HCreate(INTEGER vref, LONGINT dirid, ConstStringPtr name, OSType creat
 }
 
 OSErr
+Executor::HDelete(INTEGER vref, LONGINT dirid, ConstStringPtr name)
+{
+    HParamBlockRec hpb;
+
+    hpb.fileParam.ioNamePtr = (StringPtr)name;
+    hpb.fileParam.ioVRefNum = vref;
+    hpb.fileParam.ioDirID = dirid;
+    return PBHDelete(&hpb, false);
+}
+
+OSErr
+Executor::HRename(INTEGER vref, LONGINT dirid, ConstStringPtr src, ConstStringPtr dst)
+{
+    HParamBlockRec hpb;
+
+    hpb.ioParam.ioNamePtr = (StringPtr)src;
+    hpb.ioParam.ioVRefNum = vref;
+    hpb.ioParam.ioMisc = guest_cast<LONGINT>((StringPtr)dst);
+    hpb.fileParam.ioDirID = dirid;
+    return PBHRename(&hpb, false);
+}
+
+OSErr
 Executor::HOpenRF(INTEGER vref, LONGINT dirid, ConstStringPtr name, SignedByte perm,
                   GUEST<INTEGER> *refp)
 {

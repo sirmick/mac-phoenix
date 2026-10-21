@@ -50,6 +50,9 @@ npx playwright test
 ./build/mac-phoenix --backend executor --audio
 # ... with Open Transport, native C++ (docs/executor/OpenTransport.md; in progress):
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ot
+# ... PowerPC code on mame-ppc: PowerPC-only apps always, fat apps' with
+# --executor-ppc (InterfaceLib only so far; no StdCLib/MathLib yet):
+./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc
 ctest --test-dir build -L executor
 
 # MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
@@ -94,7 +97,7 @@ further backends.
 |---------|------|------|-------|---------|
 | `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`) or `--core mame-68k` (MAME's Musashi: PMMU, softfloat FPU, several instances per process; `src/cpu/mame/`; `musashi` names it too, the vendored v3.32 is gone) | Fast (~5s boot) | Default, end users |
 | `kpx` | ppc | Power Mac G3 machine; CPU core `--core kpx` (Kheperix, +optional `--jit`) or `--core mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64 back-end, `--no-jit` UML interpreter; `src/cpu/mame/`, installer `src/cpu/kpx/cpu_ppc_mame.cpp`) | Medium | Default for PPC |
-| `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM | Fast start | Toolbox reimplementation work (`src/executor/`) |
+| `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM; PowerPC applications' code on `mame-ppc` (PowerCore facade) | Fast start | Toolbox reimplementation work (`src/executor/`) |
 
 MAME cores (docs/cpu/PLAN.md): MAME's Musashi with PMMU and FPU as the 68k
 core `mame-68k` (C1, done), MAME's PowerPC recompiler as the PPC core
@@ -147,7 +150,7 @@ src/
   webrtc/
     webrtc_server.cpp               — Signaling (/ws), peer connections for H.264/VP9 RTP
   executor/                         — Executor 2000 Toolbox core (MIT), imported; see docs/executor/PLAN.md
-    cpu/                            — syn68k API facade (syn68k_common) on a cpu::Core + PowerCore stub
+    cpu/                            — syn68k API facade (syn68k_common) on a cpu::Core + PowerCore (PowerPC) on mame-ppc
     romlib/                         — the Toolbox (lightly patched upstream source)
     multiversal/                    — API definitions → generated headers/trap glue (Ruby)
     tests/                          — Executor gtest suite (ctest label: executor)
@@ -233,6 +236,8 @@ Machine:
   --executor-start WHAT      finder | browser | path in the System (default: finder)
   --[no-]executor-fresh      Restore the System from its clean copy each run (default: on)
   --executor-ot              Executor answers Open Transport (in progress; default: off)
+  --executor-ppc             Executor runs fat apps' PowerPC code on mame-ppc (PowerPC-only
+                             apps always do; InterfaceLib only so far; default: off)
 
 CPU:
   --backend NAME             uae | kpx | executor

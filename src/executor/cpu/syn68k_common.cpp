@@ -22,6 +22,7 @@
 #include <syn68k_public.h>
 #include "cpu_core.h"
 #include "platform_cpu.h"
+#include "PowerCore.h"
 
 #include <atomic>
 #include <cerrno>
@@ -71,6 +72,11 @@ static cpu::GuestMemory guest_memory;
  * process exits. */
 static cpu::Core *core;
 static std::string engine_name = "uae";
+
+cpu::GuestMemory &syn68k_guest_memory()
+{
+    return guest_memory;
+}
 
 int syn68k_select_engine(const char *name)
 {
@@ -488,6 +494,7 @@ namespace {
 struct Context
 {
     CPUState cpu;
+    PowerCoreState ppc;  /* a process parked in a PowerPC system call */
     int depth;
     /* The core's own state follows. */
 };
@@ -502,6 +509,7 @@ void syn68k_save_context(void *context)
 {
     Context *c = (Context *)context;
     memcpy((void *)&c->cpu, (const void *)&cpu_state, sizeof cpu_state);
+    c->ppc = PowerCore::instance();
     c->depth = emulation_depth;
     core->save_context(c + 1);
 }
@@ -521,6 +529,7 @@ void syn68k_restore_context(const void *context)
     cpu_state.reversed_amode_p = c->cpu.reversed_amode_p;
     cpu_state.sr = c->cpu.sr;
     cpu_state.vbr = c->cpu.vbr;
+    (PowerCoreState &)PowerCore::instance() = c->ppc;
     emulation_depth = c->depth;
     /* A level raised or cleared while another context ran. */
     core->set_irq(irq_level());
