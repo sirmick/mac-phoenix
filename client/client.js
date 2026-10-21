@@ -5088,7 +5088,7 @@ async function seedBuiltinProfiles(cfg) {
             emulator: p.emulator, backend: p.backend, cpu_core: p.cpu_core, jit: p.jit,
             rom, disks, cdroms: [], bootdriver: 0,
             ram_mb: p.ram_mb, screen: p.screen, model_id: p.model_id || 0,
-            max_resolution: p.max_resolution || '',
+            max_resolution: p.max_resolution || '', audio: true,
         };
     }
     // Executor: real Finder on the 7.5.5 System, fresh each run.
@@ -5097,7 +5097,7 @@ async function seedBuiltinProfiles(cfg) {
         App.builtinPresets[EXECUTOR_PROFILE] = {
             ...cfg, configs: undefined,
             emulator: 'executor', backend: 'executor', cpu_core: 'uae', rom: '',
-            ram_mb: 64, screen: '1024x768', audio: false,
+            ram_mb: 64, screen: '1024x768', audio: true,
             executor_system: sys, executor_start: 'finder', executor_fresh: true,
         };
     }

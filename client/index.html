@@ -325,19 +325,11 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>RAM Size</label>
-                    <select id="cfg-ram">
-                        <option value="1">1 MB</option>
-                        <option value="2">2 MB</option>
-                        <option value="4">4 MB</option>
-                        <option value="8">8 MB</option>
-                        <option value="16">16 MB</option>
-                        <option value="32" selected>32 MB</option>
-                        <option value="64">64 MB</option>
-                        <option value="128">128 MB</option>
-                        <option value="256">256 MB</option>
-                        <option value="512">512 MB</option>
+                <div class="form-group rom-only">
+                    <label>Boot From</label>
+                    <select id="cfg-bootdriver">
+                        <option value="0">Any (first bootable disk)</option>
+                        <option value="-62">CD-ROM</option>
                     </select>
                 </div>
 
@@ -366,6 +358,22 @@
                 </div>
 
                 <div class="form-group">
+                    <label>RAM Size</label>
+                    <select id="cfg-ram">
+                        <option value="1">1 MB</option>
+                        <option value="2">2 MB</option>
+                        <option value="4">4 MB</option>
+                        <option value="8">8 MB</option>
+                        <option value="16">16 MB</option>
+                        <option value="32" selected>32 MB</option>
+                        <option value="64">64 MB</option>
+                        <option value="128">128 MB</option>
+                        <option value="256">256 MB</option>
+                        <option value="512">512 MB</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label title="Resolution the guest defaults to at boot. Mac OS can switch to any other published mode at runtime via Monitors cdev.">Boot Resolution</label>
                     <select id="cfg-screen"></select>
                 </div>
@@ -374,14 +382,6 @@
                     <label title="Cap on what's offered to the guest. Modes larger than this never appear in Monitors cdev or in the API. Empty = no cap.">Max Resolution</label>
                     <select id="cfg-max-resolution">
                         <option value="">No limit</option>
-                    </select>
-                </div>
-
-                <div class="form-group rom-only">
-                    <label>Boot From</label>
-                    <select id="cfg-bootdriver">
-                        <option value="0">Any (first bootable disk)</option>
-                        <option value="-62">CD-ROM</option>
                     </select>
                 </div>
 
