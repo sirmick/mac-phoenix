@@ -11,12 +11,12 @@ There is no `jGNEFilter` patch and no polling of files: the agent sleeps in `Wai
 
 ```bash
 ./build/mac-phoenix --bridge ...           # auto: creates <storage>/tmp/macemu-bridge-XXXXXX (removed at exit), mounts it as ExtFS
-./build/mac-phoenix --bridge --extfs /my/dir ...   # uses /my/dir as the bridge dir
+./build/mac-phoenix --bridge --extfs /my/dir ...   # bridge dir under /my/dir
 ```
 
-Or via JSON config / UI: `bridge_enabled: true` (Settings → "Enable automation bridge"). The first `--extfs` path is reused as the bridge dir if one is provided; otherwise a temp dir is created. The bridge dir (`Host:MacPhoenix:<pid>` in the guest) carries what the guest reads at startup (`netcfg.txt`, `NetworkInfo.txt`, MacBrowser's files), not commands.
+Or via JSON config / UI: `bridge_enabled: true` (Settings → Guest Additions → "Enable bridge agent"). The first `--extfs` path is the ExtFS root (the guest's `Host` volume); without one a temp root is created. The bridge dir is `<root>/MacPhoenix/<pid>` (the parent's pid, shared with the CPU child through `MACPHOENIX_HOST_PID`), `Host:MacPhoenix:<pid>` in the guest (`command_bridge_guest_dir()`). It carries the agent, what the guest reads at startup (`netcfg.txt`, `NetworkInfo.txt`) and MacBrowser's handshake file `browser_shm.txt` (leaf names in `bridge_paths.h`); MacBrowser's persistent data is at the root, `<root>/macbrowser/`. No commands pass through files.
 
-`--no-webserver` mode in tests sets `bridge_enabled = true` automatically.
+`--headless-http` sets `bridge_enabled = true` automatically; `--no-webserver` does not.
 
 ## Architecture
 
@@ -27,7 +27,7 @@ Implemented in `command_bridge_read()` (`src/core/command_bridge.cpp`). Safe to 
 | `CmdType` | What it reads | Notes |
 |-----------|--------------|-------|
 | `GET_APP_NAME` | `CurApName` at `0x0910` | `/api/app` when the agent's `STATE` isn't fresh |
-| `GET_WINDOW_LIST` | Walks `WindowList` at `0x09D6` | Up to 50 windows, returns JSON |
+| `GET_WINDOW_LIST` | Walks `WindowList` at `0x09D6` | Up to 50 windows, returns JSON. In-process only: with the CPU in a child process `/api/windows` answers `"not available in subprocess mode"` (`/api/ui` is the one that works there) |
 | `GET_TICKS` | `Ticks` at `0x016A` | |
 | `READ_MEMORY` | Arbitrary address | Capped at 1024 bytes, returns hex |
 
@@ -110,8 +110,8 @@ choice, is a real trap on these Systems.) `tests/guest/bridgedemo` (ctest
 | `OPEN <path>` | — | Find owning app via Desktop DB, launch it, send generic `'aevt'/'odoc'` with the doc as a typeAlias list — same AE Finder sends on double-click. Works for any registered creator (Frontier `LAND`, MacPerl `McPL`, ResEdit, …) |
 | `SCRIPT <creator>` | the script | Find app by creator (a running process first), launch it, send `'misc'/'dosc'` with the payload as `typeChar` direct parameter, fire-and-forget. Generic over any "do script" host — MacPerl, Frontier UserLand 5, MPW Shell, AppleScript editor |
 | `COPY <src>\r<dst folder>[\rREPLACE]` | — | File Manager copy, both forks and Finder info; REPLACE merges into a folder of the same name, files replaced |
-| `RESIZE <w> <h> <appleID>` | — | `DMSetDisplayMode` |
-| `QUIT` | — | `kAEQuitApplication` to the front process |
+| `RESIZE <w> <h> <appleID>` | — | `DMSetDisplayMode` (`/api/resolution`, which snaps to a known mode first) |
+| `QUIT` | — | `kAEQuitApplication` to the front process (`procNotFound` if that is the agent or the Finder) |
 | `EXIT` | — | The agent quits (back at the next boot) |
 | `SHUTDOWN` | — | Best-effort Quit AE to every other app, then `ShutDwnPower()` |
 | `RESTART` | — | Same, but `ShutDwnStart()` |
@@ -198,24 +198,27 @@ native Finder doesn't call it through the trap table.
 ### Per-command flow (`bridge_command()` in `api_handlers.cpp`)
 
 1. Wait up to 15 s for the agent (`bridge_agent_protocol` ≥ 2), else `{success: false, error: "bridge agent not running"}`.
-2. `guest_bridge::request()` the `CMD`: taken within 15 s, answered within the route's timeout.
+2. `guest_bridge::request()` the `CMD`: taken within 15 s, answered within the route's timeout (launch 30 s, script 60 s, copy 10 min, the rest 3 s; SHUTDOWN, RESTART and EXIT count as done once taken).
 3. Return `{success: true, error_code: 0}` on `OSERR 0`, otherwise the Mac error code.
+
+`/api/exec` sends `EXEC` the same way; it waits for the reply the script's `timeout` plus 30 s.
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/app` | GET | Current app name (`STATE`, else read command) |
-| `/api/windows` | GET | Window list as JSON (read command) |
-| `/api/wait` | POST | Block on `boot=Finder` or `app=Name` (host-side polling) |
-| `/api/launch` | POST | `{"path":"Host:foo","open":true?}` — `LAUNCH` or `OPEN` via the agent. With `open:true`, the file is delivered as a generic `'aevt'/'odoc'` (Frontier `LAND`, MacPerl `McPL`, ResEdit, anything registered for the doc's creator). |
+| `/api/windows` | GET | Window list as JSON (read command; in-process only) |
+| `/api/wait` | POST | `{"condition":"boot=Finder"\|"app=Name"\|"text=Substring","timeout":30}` — host-side polling every 200 ms; `app=` uses `STATE` like `/api/app`; `{"ok":false,"error":"timeout"}` when it runs out |
+| `/api/launch` | POST | `{"path":"Host:foo","open":true?}` — `LAUNCH` or `OPEN` via the agent (path converted to MacRoman). With `open:true`, the file is delivered as a generic `'aevt'/'odoc'` (Frontier `LAND`, MacPerl `McPL`, ResEdit, anything registered for the doc's creator). |
 | `/api/script` | POST | `{"creator":"<4-char>","script":"<utf-8 source>"}` (or `"script_b64"` for exact MacRoman bytes) — `SCRIPT <creator>` via the agent. Generic over MacPerl, Frontier, MPW Shell, AppleScript editor. 1 MiB cap. |
-| `/api/exec` | POST | `{"creator":"MPSX","command":"...","timeout":N}` — `EXEC`: `exit_status`, `stdout_b64`, `stderr_b64` |
+| `/api/exec` | POST | `{"creator":"MPSX","command":"...","timeout":N}` (or `"command_b64"`; `timeout` seconds, default 60, 1–3600; 1 MiB cap) — `EXEC`: `{"success":true,"exit_status":n,"stdout_b64":...,"stderr_b64":...}`; an `OSERR` reply gives `error_code` |
 | `/api/copy` | POST | `{"from":"Vol:Item","to":"Vol:Folder:"}` — `COPY`; `"replace":true` merges into a folder of the same name, files replaced |
-| `/api/quit` | POST | `QUIT` front app via the agent |
+| `/api/quit` | POST | `QUIT` front app via the agent; `{"agent":true}`: `EXIT`, the agent itself quits until the next boot |
 | `/api/shutdown` | POST | `SHUTDOWN` via the agent (`ShutDwnPower`) |
 | `/api/restart` | POST | `RESTART` via the agent (`ShutDwnStart`) |
-| `/api/clipboard` | POST | `{"text_b64":"<base64 macroman>"}` — `SET_CLIPBOARD` via the agent |
+| `/api/clipboard` | POST | `{"text_b64":"<base64 macroman>"}` — `SET_CLIPBOARD` via the agent; 64 KB cap |
+| `/api/resolution` | POST | `{"w":N,"h":N}` — snapped to the nearest mode the machine offers, then `RESIZE` via the agent |
 
 `/api/launch`, `/api/script`, `/api/copy`, `/api/quit`, `/api/shutdown`,
 `/api/restart`, `/api/clipboard` all return:
@@ -225,8 +228,14 @@ native Finder doesn't call it through the trap table.
 { "success": false, "error_code": -43, "message": "bridge command failed (Mac OS error -43)" }
 { "success": false, "error": "bridge not enabled" }
 { "success": false, "error": "bridge agent not running" }
+{ "success": false, "error": "the agent did not take the request (bridge agent)" }
 { "success": false, "error": "no reply from the agent (bridge agent)" }
 ```
+
+`/api/launch` adds `"message": "launched"` on success and says `launch failed
+(Mac OS error n)` on failure; `/api/launch`, `/api/script`, `/api/exec` and
+`/api/clipboard` say `bridge not enabled (use --bridge)`. Malformed bodies
+get a 400 with `{"error": ...}`.
 
 ## UI
 
@@ -235,7 +244,7 @@ The toolbar exposes split buttons:
 - **Power Off ▾** — hard kill (immediate `SIGTERM` to the emulator) / **Shut Down…** (graceful via `/api/shutdown`).
 - **Reset ▾** — hard reset / **Restart…** (graceful via `/api/restart`).
 
-A checkbox in Settings → "Enable automation bridge (BridgeAgent + ExtFS)" toggles `bridge_enabled`. **The toggle takes effect on the next emulator start** because the subprocess `--bridge` flag is set at spawn time.
+A checkbox in Settings → Guest Additions → "Enable bridge agent" toggles `bridge_enabled`. **The toggle takes effect on the next emulator start** because the subprocess `--bridge` flag is set at spawn time.
 
 ## Files
 

@@ -7,7 +7,7 @@ code builds from the host's command line. Guest test programs (MPW tools
 that drive a Toolbox subsystem and print what they find) are built this way.
 
 ```bash
-tools/mpw/mpw setup                  # once: the MPW disk and its System, built from snapshots (E.T.O. #22)
+tools/mpw/mpw setup                  # once: provisioning/build.py mpw tests-7.5.5 (snapshots; MPW from E.T.O. #22)
 tools/mpw/mpw build tests/guest/ot   # mirror, build.mpw, products as MacBinary
 tools/mpw/mpw run 'Version'          # any MPW command; exit code = {Status}
 tools/mpw/mpw status | stop
@@ -20,11 +20,14 @@ tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
 ## How it works
 
 * **The session.** `mpw start` (or the first command that needs it) boots
-  Executor on a copy of the 7.5.5 System (`mpw-service-7.5.5.img`, so the original
-  image is never mounted read-write) with a scratch copy of the MPW disk
-  (`~/storage/images/mpw.img`, volume "MPW") and a private Host volume
-  (`~/.cache/mac-phoenix/mpw/host`). It is ready when ToolServer answers,
-  about 7 s. It stays up until `mpw stop`.
+  Executor (`--headless-http`, port 18390) on a copy of `tests-7.5.5.img`
+  (`mpw-service-7.5.5.img`, so the original image is never mounted
+  read-write; made again when the source is newer) with a scratch copy of
+  the MPW disk (`~/storage/images/mpw.img`, volume "MPW") and a private Host
+  volume (`~/.cache/mac-phoenix/mpw/host`). It is ready when BridgeAgent
+  has said hello and ToolServer answers, about 7 s. It stays up until
+  `mpw stop`. `mpw start --core mame-68k` and `--emu=FLAG` (repeatable,
+  e.g. `--emu=--executor-ot`) pass on to the emulator.
 * **Commands.** ToolServer is MPW's headless command server. A command is
   written to a script file in `Host:.mpw:`; a wrapper sent to ToolServer as
   a 'misc'/'dosc' Apple Event (BridgeAgent, `POST /api/exec`) runs it as a
@@ -91,7 +94,8 @@ rest. Everything comes from the CodeWarrior Pro 4 Tools CD, a public pin
   compilers link with, which the IDE install keeps outside it: MSL C
   (headers and libraries) and MacOS Support's libraries, under
   Interfaces&Libraries; and ToolServer.
-* **The session** is its own (`~/.cache/mac-phoenix/mpw-cw`, port 18391).
+* **The session** is its own (`~/.cache/mac-phoenix/mpw-cw`, port 18391,
+  System copy `mpw-cw-service-7.5.5.img`).
   Commands go to ToolServer 3.4.1, as with Apple's toolchain: the CD's
   installer doesn't install it, but its `Apple Development Tools` folder has
   it (`ToolServer 3.4.1.sit`, the `toolserver-3.4.1` snapshot), and the disk

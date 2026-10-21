@@ -1,5 +1,13 @@
 # Qt6 Port — Next Session Handoff
 
+> **Status (checked 2026-10-21):** obsolete; a record of the port's
+> state on 2026-05-03, before Phase 5. Nothing below is a current
+> instruction. Phase 5 went to `QTcpServer`, not `QHttpServer`
+> (`63ddd652`; no `qt6-httpserver-dev`), JSON moved to `QJsonDocument`
+> after all (Phase 17), Phase 3b and Phase 8 landed, and `qt-port` was
+> merged into `main` on 2026-05-06. See [PLAN.md](PLAN.md) for what was
+> done and CLAUDE.md for the current code.
+
 You're picking up the `qt-port` branch mid-port. Read this, then
 `docs/qt6/PLAN.md` for the full plan. **Don't re-derive what's
 already done.**

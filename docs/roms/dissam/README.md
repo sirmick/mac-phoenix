@@ -3,7 +3,9 @@
 Reverse-engineered, annotated disassembly of classic Mac boot ROMs,
 driven by Ghidra headless analysis. Purpose: understand each ROM well
 enough to patch it via the signature-driven approach in
-`src/core/rom_patches.cpp` (`patch_rom_classic` and `patch_rom_32`).
+`src/core/rom_patches.cpp` (`patch_rom_classic`, `patch_rom_ii` and
+`patch_rom_32`). The Mac II family work that builds on it is in
+[`../MacIIFamily.md`](../MacIIFamily.md).
 
 Read [`PATCHING_APPROACH.md`](PATCHING_APPROACH.md) before making any
 emulator changes — it explains how the Quadra/Basilisk-II strategy
@@ -32,7 +34,10 @@ Notes:
 docs/roms/dissam/
   README.md                 ← you are here
   PATCHING_APPROACH.md      ← the Basilisk-II / Quadra strategy (read first)
-  tools/                    ← Ghidra scripts + headless driver (reproducible)
+  tools/                    ← Ghidra scripts + headless driver (reproducible),
+                               patch_sites.py (where patch_rom_32's sites land
+                               in another ROM); vendor/ (gitignored) from
+                               bootstrap.sh
   common/                   ← shared reference: traps, low-mem globals, HW map
   se/                       ← Mac SE
   macii/                    ← Mac II
@@ -54,13 +59,16 @@ copyrighted code out of this repository while letting anyone with the
 ROMs reproduce the exact same analysis.
 
 Prereq:
-- Ghidra 12+ with `analyzeHeadless` available
+- Ghidra 12+ (the scripts are Python 3 run by PyGhidra's `pyghidraRun`;
+  Ghidra 12 no longer ships Jython), at `/opt/ghidra` or wherever
+  `GHIDRA_INSTALL_DIR` points
 - ROMs under `~/storage/roms/` (or override via `ROM_ROOT` env var)
-- Java 21 in `PATH` (Ghidra snap bundles one under
-  `/snap/ghidra/35/usr/lib/jvm/java-21-openjdk-amd64`)
+- Java 21 in `PATH` (if it isn't, `export_listing.sh` tries the Ghidra
+  snap's JDK under `/snap/ghidra/current/usr/lib/jvm/java-21-openjdk-amd64`)
 
 ```bash
-# One-time: fetch upstream reversing-tool repos (not committed)
+# One-time: fetch upstream reversing-tool repos (not committed) and make
+# the PyGhidra venv (tools/vendor/pyghidra-venv)
 ./docs/roms/dissam/tools/bootstrap.sh
 
 # Generate listings for all ROMs

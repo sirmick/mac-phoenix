@@ -1,7 +1,9 @@
 # C3b: the Power Mac's 68k code on Musashi, where it stands
 
 Status 2026-10-11: **in progress, does not boot.** Experimental behind
-`--core mame-ppc --m68k-host 3`, off by default. The milestone is in
+`--core mame-ppc --m68k-host 3`, off by default. No C3b work since
+(checked 2026-10-21); the Power Mac's 68k code still runs on the ROM's
+emulator. The milestone is in
 [PLAN.md](PLAN.md) (C3b); the code is in `src/cpu/kpx/cpu_ppc_mame.cpp`
 (`c3b_*`).
 

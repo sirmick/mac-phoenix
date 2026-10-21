@@ -4,9 +4,11 @@
  * Read commands (app name, window list, memory) peek Mac memory directly
  * from the 60Hz IRQ — safe because no Toolbox calls are needed.
  *
- * Action commands (launch, quit) are handled by a guest-side agent app
- * installed in System Folder:Startup Items. Finder launches it at desktop
- * time; the emulator does not inject anything.
+ * Action commands (launch, quit, script, copy, ...) are handled by
+ * BridgeAgent, unpacked here into the bridge dir on the Host volume and
+ * launched from there once the Finder is up (a Time Manager task and a
+ * Notification Manager request, text_feed.cpp); the boot disks aren't
+ * written.
  *
  * They go to it over the bridge trap $ABE5 (guest_bridge.h,
  * docs/CommandBridge.md).
@@ -237,8 +239,8 @@ void command_bridge_init() {
 // IRQ entry point — called from 60Hz timer (m68k and PPC)
 //
 // Advances the boot_phase to "Finder" on PPC (where the WindowList heuristic
-// doesn't work). No guest-code injection — the bridge agent lives in
-// System Folder:Startup Items and is launched by Finder.
+// doesn't work). BridgeAgent is launched from the Host volume
+// (text_feed.cpp), not from here.
 // ============================================================================
 
 void command_bridge_drain_from_irq(M68kRegisters* r) {

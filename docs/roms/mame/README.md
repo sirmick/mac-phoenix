@@ -1,6 +1,9 @@
 # MAME Reference Emulation
 
-MAME is our **ground truth** for classic Mac boot behavior. When
+MAME is our **ground truth** for classic Mac boot behavior. (This is a
+full MAME build of whole Mac machines, for reference runs. The MAME CPU
+cores MacPhoenix runs, `mame-68k` and `mame-ppc`, are lifted into
+`src/cpu/mame/` instead: see `docs/cpu/PLAN.md`.) When
 MacPhoenix diverges from a known-good boot trace, the first stop is
 MAME's milestone logger showing what register state the real ROM
 expects at the same PC. This directory holds scripts to build, run,
@@ -12,10 +15,13 @@ and instrument MAME for differential debugging.
 docs/roms/mame/
   README.md              ← you are here
   bootstrap.sh           ← build MAME (or symlink ~/mame) into bin/
-  run.sh                 ← unified runner for all 5 machines
-  bin/                   ← gitignored: MAME binaries
+  run.sh                 ← unified runner for the machines below
+  lowmem.lua             ← autoboot script: snapshot + low-memory globals
+                           after LOWMEM_SECS (default 40) emulated seconds
+  bin/                   ← gitignored: MAME binaries, roms/
   src/                   ← gitignored: MAME source (only if bootstrapping fresh)
   log/                   ← gitignored: console logs (MAME_LOG=1)
+  cfg/, nvram/           ← gitignored: MAME's per-machine state
 ```
 
 ## Quick start
@@ -23,7 +29,7 @@ docs/roms/mame/
 ```bash
 cd docs/roms/mame
 ./bootstrap.sh                   # links ~/mame if present, else clones+builds
-./run.sh macse                   # windowed, throttled, System 7.5.5
+./run.sh macse                   # windowed, throttled, ~/storage/images/7.5.5.img
 ./run.sh maciici                 # Mac IIci
 MAME_DEBUG=1 ./run.sh macii      # launch with debugger
 MAME_THROTTLE=0 ./run.sh maciix  # unthrottled, 30s auto-exit
@@ -31,13 +37,15 @@ MAME_THROTTLE=0 ./run.sh maciix  # unthrottled, 30s auto-exit
 
 ## Covered machines
 
-Three MAME binaries cover all 5 machines we care about:
+Three MAME binaries (subtargets) cover the machines `run.sh` knows:
 
 | Machine | Binary | CPU | Source file | Notes |
 |---------|--------|-----|-------------|-------|
 | `macse`    | `macse`    | 68000 | `src/mame/apple/mac128.cpp` | Mac SE |
 | `macsefd`  | `macse`    | 68000 | `src/mame/apple/mac128.cpp` | Mac SE FDHD |
+| `macplus`  | `macse`    | 68000 | `src/mame/apple/mac128.cpp` | Mac Plus |
 | `macii`    | `macii`    | 68020 | `src/mame/apple/macii.cpp`  | Mac II |
+| `maciihmu` | `macii`    | 68020 | `src/mame/apple/macii.cpp`  | Mac II without the 68851 |
 | `maciix`   | `macii`    | 68030 | `src/mame/apple/macii.cpp`  | Mac IIx |
 | `maciicx`  | `macii`    | 68030 | `src/mame/apple/macii.cpp`  | Mac IIcx |
 | `macse30`  | `macii`    | 68030 | `src/mame/apple/macii.cpp`  | Mac SE/30 |
@@ -52,8 +60,10 @@ earlier Mac II family lacks.
 MAME expects its own named/hashed ROM files under
 `bin/roms/<machine>/`. The standard filenames differ from the ones
 under `~/storage/roms/`. The bootstrap script will symlink
-`bin/roms -> ~/mame/roms/` if that directory exists (it does on this
-machine); otherwise you need to stage ROM files yourself.
+`bin/roms -> ~/mame/roms/` if that directory exists; otherwise you need to
+stage ROM files yourself. On this machine there is no `~/mame`: MAME is
+built in `src/` (only `maciici` so far) and `bin/roms/` is a staged
+directory (`maciici`, `adbmodem`).
 
 Minimum ROM files per machine:
 - `macse`:    `342-0701-a.rom` or similar SE ROM dump
@@ -79,14 +89,17 @@ Check the exact filenames by running:
 
 | Machine | Default disk |
 |---------|-------------|
-| SE / II / IIx / IIcx / SE-30 / IIci | `~/storage/images/macos-7.5.5.img` |
+| all of them | `~/storage/images/7.5.5.img` |
 
-Override with `MAME_DISK=/path/to/image.img ./run.sh macii`.
+Override with `MAME_DISK=/path/to/image.img ./run.sh macii`. Raw images go
+in as `-harddisk1`; on `maciici` a `.chd` goes in as `-harddisk`.
 
-For IIci specifically, the existing setup uses `mac608.chd` (Mac OS
-6.0.8 CHD) — if you have that, pass it with:
+The IIci work compared low memory against MAME's IIci booting System
+6.0.8 (`lowmem.lua`, commit `2c395a4c`); `../MacIIFamily.md` plans the
+same with the 6.0.8 800K floppy exported from the Legacy Recovery CD.
+Pass a disk the same way:
 ```bash
-MAME_DISK=~/storage/images/mac608.chd ./run.sh maciici
+MAME_DISK=/path/to/system-6.0.8.chd ./run.sh maciici
 ```
 
 ## Instrumentation
@@ -151,7 +164,7 @@ if (pc == 0x40801d52 /* MountVol */) {
 }
 ```
 
-**⚠️ MMU caveat for 68030 machines (IIx, SE/30, IIci):** virtual ≠
+**MMU caveat for 68030 machines (IIx, SE/30, IIci):** virtual ≠
 physical addresses during boot. Always use `m68ki_read_32()` which
 goes through the CPU's address translation, not `space.read_dword()`
 which reads raw RAM.
@@ -169,9 +182,8 @@ if (pc >= 0x40800000 && pc < 0x40900000 && m_icount > 0) {
 }
 ```
 
-Compare against MacPhoenix's equivalent trace with
-`tools/diff_pc_traces.py` (see `reference_mame_iici.md` in project
-memory).
+Compare against MacPhoenix's equivalent trace by hand or with a script
+of your own; there is no trace-diff tool in the repo.
 
 ## Debugging tips
 
@@ -187,7 +199,8 @@ memory).
 - **Set watchpoints on low-memory globals**: `wp 0x0d00,4,rw` watches
   `TimeDBRA` for reads/writes. Common globals in
   `docs/roms/dissam/common/hardware_map.md` and
-  `vendor/classic-mac-rom-ghidra-tools/lomem_globals.txt`.
+  `docs/roms/dissam/tools/vendor/classic-mac-rom-ghidra-tools/lomem_globals.txt`
+  (fetched by `docs/roms/dissam/tools/bootstrap.sh`).
 
 - **Dump CPU state at exception**: inside the 68K exception handler in
   `m68kcpu.cpp`, log `m_pc`, `m_dar[]`, and the vector offset to see
@@ -224,10 +237,13 @@ EXTERNAL_MAME=/nonexistent ./bootstrap.sh
 
 The script will clone MAME into `docs/roms/mame/src/` (shallow, ~500
 MB) and build the three subtargets (~15-40 min depending on CPU).
+It builds with `-j$(nproc)`; on this box (20 GB, no swap) that can
+OOM-kill the session, so build a subtarget by hand with `-j4` instead
+(`make SUBTARGET=macii SOURCES=src/mame/apple/macii.cpp -j4` in `src/`).
 
 ## See also
 
 - `docs/roms/dissam/` — disassembly & annotation of the same ROMs
 - `docs/roms/dissam/common/hardware_map.md` — MMIO reference
-- Project memory: `reference_mame_iici.md`, `reference_mame_macii.md`
-- `tools/diff_pc_traces.py` — trace comparison utility
+- `docs/roms/MacIIFamily.md` — the Mac II family plan, which uses these
+  MAME references

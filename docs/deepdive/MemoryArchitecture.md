@@ -1,251 +1,132 @@
-# Memory Layout and Addressing
+# Memory Layout and Addressing (68k ROM machine)
 
 ## Overview
 
-mac-phoenix uses BasiliskII's "direct addressing" mode where Mac virtual addresses map directly to host pointers via a simple offset. This provides excellent performance but requires careful setup.
+The 68k ROM machine keeps all guest memory in one contiguous host block
+and maps it at guest address 0, so a Mac address turns into a host pointer
+by adding one offset (Basilisk II's "direct addressing"). The block is
+registered with the CPU core's `cpu::GuestMemory`
+(`src/cpu/core/cpu_core.h`), which every core and the Platform memory
+entries read through. The PPC machine and Executor lay out memory
+differently; see `../Architecture.md`.
 
 ## Memory Map
 
-### Mac Address Space (32-bit)
+`CPUContext::init_m68k()` (`src/core/cpu_context.cpp`):
 
 ```
-0x00000000 - 0x01ffffff    RAM (32 MB in our test)
-0x02000000 - 0x020fffff    ROM (1 MB Quadra 650 ROM)
-0x40000000 - 0x4fffffff    ROM (alternative mapping, 24-bit compatible)
+Mac address                  Size        Contents
+0                            RAMSize     RAM (--ram, default 64 MB)
+ROMBaseMac                   ROMSize     ROM (file loaded as-is, big-endian; 1 MB reserved)
+ROMBaseMac + ROMSize         64 KB       ScratchMem
+ROMBaseMac + ROMSize + 64 KB 8 MB        Frame buffer
 ```
 
-### Host Memory Layout
+The block reserves 1 MB for the ROM, but ScratchMem and the frame buffer
+follow the ROM file's actual size. `ROMBaseMac` is `RAMSize` on 32-bit
+machines (the Quadra profile), so with 32 MB of RAM and the 1 MB Quadra ROM
+the ROM is at `0x02000000`, ScratchMem at `0x02100000` and the frame buffer
+at `0x02110000`. Machines with a fixed ROM base put it there:
 
-We allocate a single contiguous region using `mmap()`:
+| Profile | ROM base | RAM cap | Addressing |
+|---------|----------|---------|------------|
+| `se` | `0x400000` | 4 MB | 24-bit |
+| `macii`, `iici` | `0x800000` | 8 MB | 24-bit |
+| `quadra` | `RAMSize` | none | 32-bit |
 
-```
-RAMBaseHost = mmap(32 MB + 1 MB)    // Contiguous allocation
-ROMBaseHost = RAMBaseHost + 32 MB   // ROM follows RAM
-```
+On those, the gap between RAM and ROM is part of the block (unused), and
+the Mac II and IIci blocks are at least 32 MB so addresses the CPU forms
+near the top of the 24-bit space stay mapped. Profiles:
+`src/config/machine_profile.cpp`.
 
-Example actual addresses (these will vary per run):
-```
-RAMBaseHost = 0x7ffff5700000
-ROMBaseHost = 0x7ffff7700000 (RAMBaseHost + 0x02000000)
-```
-
-## Direct Addressing
-
-### The Translation
-
-Mac addresses translate to host pointers via `MEMBaseDiff`:
+## Host Allocation
 
 ```c
-MEMBaseDiff = (uintptr)RAMBaseHost;  // e.g., 0x7ffff5700000
+total = rom_offset + 0x100000 /* ROM */ + 0x10000 /* ScratchMem */ + 0x800000 /* FB */;
+block = mmap(NULL, total, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+/* heap fallback (no JIT) if MAP_32BIT fails */
 
-// Mac address 0x00000000 -> Host pointer:
-uint8_t *host_ptr = (uint8_t *)MEMBaseDiff + mac_addr;
-// = 0x7ffff5700000 + 0x00000000 = 0x7ffff5700000 (start of RAM)
+RAMBaseHost = block;
+ROMBaseHost = block + rom_offset;
+MEMBaseDiff = (uintptr)block;
+RAMBaseMac  = 0;
+ROMBaseMac  = rom_offset;
 
-// Mac address 0x02000000 -> Host pointer:
-uint8_t *host_ptr = (uint8_t *)MEMBaseDiff + 0x02000000;
-// = 0x7ffff5700000 + 0x02000000 = 0x7ffff7700000 (start of ROM)
+cpu_m68k_memory().map(0, total & ~0xFFFF, block);           /* one window */
+cpu_m68k_memory().set_address_bits(twenty_four_bit ? 24 : 32);
 ```
 
-### Key Variables
+`MAP_32BIT` keeps `MEMBaseDiff` within a 32-bit displacement, which the
+UAE JIT needs.
+
+## Translation
+
+`GuestMemory` keeps a delta per 64 KB page; with one window every mapped
+page has the same delta, `MEMBaseDiff`:
 
 ```c
-// Host addresses (actual memory pointers)
-uint8_t *RAMBaseHost;   // Points to allocated RAM
-uint8_t *ROMBaseHost;   // Points to allocated ROM
-
-// Mac addresses (as seen by M68K code)
-uint32_t RAMBaseMac;    // Always 0x00000000
-uint32_t ROMBaseMac;    // Calculated: Host2MacAddr(ROMBaseHost)
-
-// Translation offset
-uintptr MEMBaseDiff;    // RAMBaseHost value
+host = MEMBaseDiff + mac_addr          /* mapped pages */
 ```
 
-### Helper Macros
+Addresses beyond the block are unmapped: reads return 0 and writes are
+dropped (no I/O handler is installed on this machine), and
+`g_platform.mem_mac_to_host()` returns a pointer into a dummy page rather
+than NULL.
+
+The helpers code uses:
 
 ```c
-// Convert Mac address to host pointer
-#define Mac2HostAddr(addr) ((uint8_t *)MEMBaseDiff + (addr))
-
-// Convert host pointer to Mac address
-#define Host2MacAddr(ptr) ((uint32_t)((uintptr)(ptr) - MEMBaseDiff))
+/* src/common/include/cpu_emulation.h */
+ReadMacInt32(addr)   -> get_long(addr)   -> g_platform.mem_read_long(addr)
+WriteMacInt16(addr,v)-> put_word(addr,v) -> g_platform.mem_write_word(addr,v)
+Mac2HostAddr(addr)   -> get_real_address(addr)    -> g_platform.mem_mac_to_host
+Host2MacAddr(ptr)    -> get_virtual_address(ptr)  -> g_platform.mem_host_to_mac
 ```
 
-## ROM Offset Calculation
+`g_platform.mem_*` are installed by `cpu::platform_install()`
+(`src/cpu/core/platform_cpu.cpp`) and call `GuestMemory::read32()` and
+friends. The UAE accessors in `src/cpu/uae_cpu/memory.h` abort with a
+message if they run before the Platform table is set up.
 
-The ROM is placed at a specific Mac address. Here's how we calculate it:
+## Endianness
 
-```c
-// After allocating memory:
-ROMBaseHost = RAMBaseHost + RAMSize;
-
-// Calculate what Mac address this corresponds to:
-ROMBaseMac = Host2MacAddr(ROMBaseHost);
-// = (uintptr)ROMBaseHost - MEMBaseDiff
-// = (uintptr)ROMBaseHost - (uintptr)RAMBaseHost
-// = RAMSize
-// For 32 MB RAM: ROMBaseMac = 0x02000000
-```
-
-So with 32 MB of RAM, the ROM naturally ends up at Mac address `0x02000000`.
-
-## CPU Register Setup
-
-### PC (Program Counter)
-
-The M68K CPU's PC register contains a Mac address. UAE's `regs.pc_p` is a host pointer:
-
-```c
-// After m68k_reset(), the UAE CPU sets:
-regs.pc = ROMBaseMac + 0x2a;              // Mac address: 0x0200002a
-regs.pc_p = Mac2HostAddr(regs.pc);        // Host ptr: ROMBaseHost + 0x2a
-```
-
-### Stack Pointer
-
-```c
-// After m68k_reset():
-regs.a[7] = 0x2000;  // A7 (stack) at Mac address 0x2000 (in RAM)
-```
-
-## Instruction Fetch
-
-When the UAE CPU fetches an instruction:
-
-1. **PC** = `0x0200002a` (Mac address)
-2. **regs.pc_p** = `ROMBaseHost + 0x2a` (host pointer, e.g., `0x7ffff770002a`)
-3. **GET_OPCODE** reads from `regs.pc_p`:
-   ```c
-   #define GET_OPCODE (do_get_mem_word_unswapped(regs.pc_p))
-   ```
-4. Reads 2 bytes from host memory at that pointer
-5. Returns little-endian uint16 (e.g., `0xfa4e` for big-endian bytes `4e fa`)
-
-## Memory Access Functions
-
-BasiliskII provides wrappers for Mac memory access:
-
-```c
-// Read from Mac address
-uint32_t get_long(uint32_t mac_addr) {
-    uint32_t *host_ptr = (uint32_t *)Mac2HostAddr(mac_addr);
-    return do_get_mem_long(host_ptr);  // Handles byte-swapping
-}
-
-uint32_t get_word(uint32_t mac_addr) {
-    uint16_t *host_ptr = (uint16_t *)Mac2HostAddr(mac_addr);
-    return do_get_mem_word(host_ptr);  // Handles byte-swapping
-}
-
-uint32_t get_byte(uint32_t mac_addr) {
-    uint8_t *host_ptr = (uint8_t *)Mac2HostAddr(mac_addr);
-    return do_get_mem_byte(host_ptr);  // No swapping needed
-}
-
-// Write to Mac address
-void put_long(uint32_t mac_addr, uint32_t value);
-void put_word(uint32_t mac_addr, uint32_t value);
-void put_byte(uint32_t mac_addr, uint32_t value);
-```
-
-These are defined in `src/cpu/uae_cpu/memory.h`.
-
-## Why Direct Addressing?
-
-**Advantages:**
-- ✅ Very fast - just pointer arithmetic, no table lookups
-- ✅ Simple - easy to understand and debug
-- ✅ Works well with modern OSes that provide large virtual address spaces
-
-**Disadvantages:**
-- ❌ Requires contiguous memory allocation
-- ❌ Assumes 32-bit or 64-bit host (not portable to 16-bit systems)
-- ❌ Memory is always allocated, even if Mac doesn't use it all
-
-**Alternative: Real Addressing**
-BasiliskII also supports "real addressing" where Mac memory is at a fixed host address. This is used on some platforms but requires special OS support.
-
-**Alternative: Banking**
-Some emulators use memory banking where different Mac address ranges map to different host buffers. This is more flexible but slower.
+Guest memory is stored **big-endian**, byte for byte as on a Mac: the ROM is
+copied in unchanged and `GuestMemory` assembles and splits values a byte at
+a time. Host code that reads guest memory through a host pointer must swap
+(`ntohl`, `do_get_mem_long`) or use `ReadMacInt*`. The UAE core fetches
+instructions straight from host memory through `regs.pc_p`; see
+[`cpu/UaeQuirks.md`](cpu/UaeQuirks.md).
 
 ## 24-bit vs 32-bit Addressing
 
-Early Macs used 24-bit addressing (only 16 MB address space). BasiliskII supports this via the `TwentyFourBitAddressing` flag:
+Early Macs used 24-bit addressing: the top byte of an address is ignored
+(the Memory Manager keeps flags there). `GuestMemory::set_address_bits(24)`
+masks every access and lookup with `0x00FFFFFF`, and the cores mask
+themselves too (`cpu::Config::address_bits`; UAE's `address_reg_mask`).
+The IIci ROM's 32-bit addresses (`$40800000`, `$Fsxxxxxx`) wrap onto the
+24-bit layout through that mask.
 
-```c
-// When enabled, Mac addresses are masked to 24 bits:
-#define Mac2HostAddr(addr) ((uint8_t *)MEMBaseDiff + ((addr) & 0xffffff))
-```
+## CPU Reset
 
-Which addressing mode is used depends on the machine profile:
-- **Mac SE** (68000): 24-bit addressing, ROM at 0x400000 (4 MB), max 4 MB RAM
-- **Mac II** (68020): 24-bit addressing, ROM at 0x800000 (8 MB), max 8 MB RAM
-- **Quadra 650** (68040): 32-bit addressing, ROM at RAMSize (typically 0x02000000)
+`m68k_cpu_reset()` (`src/cpu/cpu_m68k.cpp`) does what Basilisk II's
+`m68k_reset()` always did, on any core: SR `$2700`, A7 (SSP) `$2000`, PC
+`ROMBaseMac + $2A`. The ROM's reset vectors are not used.
 
-Machine profiles are auto-detected from the ROM version in `src/config/machine_profile.cpp`.
+## ScratchMem and Frame Buffer
 
-## ScratchMem and Framebuffer
+**ScratchMem** (64 KB right after the ROM image) holds data that must survive Mac OS
+zone management, such as the SE's unit table. The `ScratchMem` pointer
+points into the middle of the block (Basilisk II's convention).
 
-Beyond RAM and ROM, two additional memory regions are allocated at fixed offsets above the ROM:
-
-```
-ScratchMem      0x02100000    64 KB     Emulator scratch area (unit tables, command bridge mailbox)
-FrameBuffer     0x02110000    4 MB      Video framebuffer (outside RAM to avoid corrupting Mac data)
-```
-
-**ScratchMem** is used for data structures that must survive Mac OS zone management (e.g., the SE unit table allocation). The command bridge mailbox also lives here.
-
-**FrameBuffer** is placed outside the Mac RAM region so the CPU writing pixel data cannot corrupt Mac OS heap or stack structures. The triple-buffer video pipeline reads from this region lock-free.
-
-## Practical Example
-
-Let's trace a memory access at Mac address `0x00001000`:
-
-```c
-// 1. Mac code executes: MOVE.L $1000,D0
-// 2. UAE CPU calls: get_long(0x00001000)
-// 3. get_long() translates:
-uint32_t *host_ptr = (uint32_t *)(MEMBaseDiff + 0x00001000);
-//                 = (uint32_t *)(0x7ffff5700000 + 0x1000)
-//                 = (uint32_t *)0x7ffff5701000
-
-// 4. Read and byte-swap:
-uint32_t value = do_get_mem_long(host_ptr);  // Reads 4 bytes, bswaps
-
-// 5. Returns value to D0
-```
-
-The Mac thinks it's accessing address `0x1000`, but we're actually reading from host address `0x7ffff5701000`. The Mac is none the wiser!
-
-## Memory Initialization
-
-From `test_boot.cpp`:
-
-```c
-// 1. Allocate RAM + ROM
-RAMSize = 32 * 1024 * 1024;  // 32 MB
-RAMBaseHost = (uint8_t *)mmap(NULL, RAMSize + 0x100000,
-                               PROT_READ | PROT_WRITE,
-                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-ROMBaseHost = RAMBaseHost + RAMSize;
-
-// 2. Clear RAM
-memset(RAMBaseHost, 0, RAMSize);
-
-// 3. Set up direct addressing
-MEMBaseDiff = (uintptr)RAMBaseHost;
-RAMBaseMac = 0;
-ROMBaseMac = Host2MacAddr(ROMBaseHost);  // = 0x02000000
-
-// 4. Load ROM (kept in big-endian format)
-int rom_fd = open(rom_path, O_RDONLY);
-ROMSize = lseek(rom_fd, 0, SEEK_END);
-lseek(rom_fd, 0, SEEK_SET);
-read(rom_fd, ROMBaseHost, ROMSize);
-close(rom_fd);
-```
+**Frame buffer** (8 MB after ScratchMem) is outside RAM so drawing can't
+corrupt the Mac heap. It is sized for the largest 68k mode, 1920×1080 at
+32 bits. The video driver (`video_ipc_m68k_init()` in `src/main.cpp` for the
+IPC child) places it at `ROMBaseHost + ROMSize + 0x10000`, and the 60 Hz
+tick copies it into the IPC shared memory.
 
 ## See Also
 
-- [cpu/UaeQuirks.md](cpu/UaeQuirks.md) - Byte-swapping details
+- [`cpu/UaeQuirks.md`](cpu/UaeQuirks.md) — UAE's fetch path and byte-swapping
+- [`cpu/CpuBackendApi.md`](cpu/CpuBackendApi.md) — `cpu::Core` and `GuestMemory`
+- [`../executor/MEMORY_MAP.md`](../executor/MEMORY_MAP.md) — Executor's layout

@@ -14,20 +14,23 @@ class MacPhoenix < Formula
 
   head do
     url "https://github.com/sirmick/mac-phoenix.git", branch: "main"
-    # The submodules (libdatachannel, nlohmann_json, lwip) must be
-    # fetched too — Homebrew handles that with :using => :git when the URL
-    # is a git repo. The release-tarball path above bundles them already.
+    # No submodules: libdatachannel and its deps are vendored in
+    # subprojects/. The release tarball adds net-bridge's vendored crates.
   end
 
   depends_on "cmake" => :build
   depends_on "pkg-config" => :build
-  depends_on "rust" => :build      # net-bridge needs >= 1.80; brew rust is current
+  depends_on "rust" => :build      # net-bridge: Cargo.toml rust-version 1.75
   depends_on "libvpx"
-  depends_on "libyuv"
+  depends_on "libyuv"              # required; the other codecs are optional
   depends_on "openh264"
-  depends_on "openssl@3"
+  depends_on "openssl@3"           # libdatachannel (DTLS/SRTP)
   depends_on "opus"
+  depends_on "qt"                  # Qt 6 (>= 6.4): Core, Network
   depends_on "webp"
+  # The Executor backend (Boost, Ruby, Bison, Perl) is skipped with a
+  # CMake warning when those are missing; MacBrowser (-DBUILD_BROWSER)
+  # is off by default.
 
   def install
     args = %W[

@@ -84,14 +84,17 @@ export CFLAGS CXXFLAGS
 # CMake install drops LICENSE under /usr/share/doc/mac-phoenix/, which is
 # fine on Debian but conflicts with Fedora's idiomatic /usr/share/licenses/
 # (handled by %license below). Drop the duplicate.
-rm -f %{buildroot}%{_docdir}/%{name}/LICENSE
+rm -f %{buildroot}%{_docdir}/%{name}/LICENSE %{buildroot}%{_docdir}/%{name}/LICENSE-MIT \
+      %{buildroot}%{_docdir}/%{name}/LICENSE-MAME %{buildroot}%{_docdir}/%{name}/LICENSE-asmjit \
+      %{buildroot}%{_docdir}/%{name}/LICENSE-softfloat
 
 # Validate the .desktop file
 desktop-file-validate %{buildroot}%{_datadir}/applications/mac-phoenix.desktop
 
 %files
-%license LICENSE
-%doc README.md CLAUDE.md
+%license LICENSE LICENSE-MIT src/cpu/mame/LICENSE-MAME src/cpu/mame/LICENSE-asmjit
+%license src/cpu/mame/third_party/softfloat3/COPYING.txt
+%doc README.md CLAUDE.md LICENSING.md
 %{_bindir}/mac-phoenix
 %{_bindir}/net-bridge
 %{_datadir}/mac-phoenix/

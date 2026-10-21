@@ -13,11 +13,11 @@
  *    gpr()/pc()/lr()/cr() references    reg()/set_reg()
  *    register save around Execute68k    save_context()/restore_context()
  *
- *  Addressing is identity, as under Kheperix (REAL_ADDRESSING): the
- *  GuestMemory is one window at host 0, so unmapped guest addresses fault
- *  on the host and the SIGSEGV handler skips the access, which is what the
- *  nanokernel's boot-time probes expect. One base offset comes later
- *  (PLAN.md, C2e).
+ *  Addressing is one base offset (PLAN.md, S4): the GuestMemory is one
+ *  window over the whole Mac space at VMBaseDiff, in a 4GB reservation, so
+ *  no vm.mmap_min_addr is needed. Unmapped guest addresses fault on the host
+ *  and the SIGSEGV handler skips the access, as under Kheperix's identity
+ *  addressing, which is what the nanokernel's boot-time probes expect.
  *
  *  Original machine logic: SheepShaver (C) 1997-2008 Christian Bauer and
  *  Marc Hellwig, GPL v2+.

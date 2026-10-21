@@ -1,110 +1,66 @@
-# mac-phoenix
+# MacPhoenix documentation
 
-Classic Mac emulator with multiple CPU backends and a web-based streaming UI.
-Derived from BasiliskII / SheepShaver but cleanly separated from their legacy
-plumbing.
+Start with the [README](../README.md). [CLAUDE.md](../CLAUDE.md) is the
+compact developer reference: every flag, endpoint and directory on one
+page, kept current with the code.
 
-The canonical project overview lives in [`../CLAUDE.md`](../CLAUDE.md) — flags,
-endpoints, project structure, and a one-glance summary of every subsystem.
-This folder contains the deeper-dive docs.
+## Using it
 
-## What works
+| | |
+|---|---|
+| [Install.md](Install.md) | dependencies, optional parts, macOS, host settings, the guest-side apps' toolchain |
+| [Deployment.md](Deployment.md) | modes (web, headless HTTP, headless), transports, reverse proxy |
+| [Commands.md](Commands.md) | command line: build, run, test, debug |
+| [JsonConfig.md](JsonConfig.md) | the config file |
+| [API.md](API.md) | every HTTP endpoint |
+| [Networking.md](Networking.md) | net-bridge: NAT, DHCP, several guests, AppleTalk |
+| [Provisioning.md](Provisioning.md) | disk images built from pinned installers: media, bakes, snapshots, images |
+| [MPW.md](MPW.md) | MPW and CodeWarrior's tools, headless on Executor |
+| [MacBrowser.md](MacBrowser.md) | the modern web inside System 7 (experimental) |
+| [TroubleshootingGuide.md](TroubleshootingGuide.md) | when it doesn't boot, stream or connect |
 
-- **Mac SE** (68000) boots System 6 to Finder — 512×342 monochrome.
-- **Quadra 650** (68040) boots Mac OS 7.5.5 / 7.6.1 to Finder.
-  - UAE backend: ~5 s (~3 s with `--jit`).
-- **Power Mac G3** (PPC 750) boots Mac OS 7.5.5 / 7.6.1 to Finder under KPX
-  (default for PPC): ~7 s with the dyngen JIT (`--jit`), ~15 s interpreted.
-- **Executor** (`--backend executor`) runs Executor 2000's reimplemented
-  Toolbox on UAE with no ROM — see [executor/PLAN.md](executor/PLAN.md).
-- HTTP API + WebRTC streaming, file-based automation bridge (BridgeAgent),
-  MacBrowser (in-process Chromium via Qt6 WebEngine, piped into a guest
-  Mac app), guest-side networking via the Rust net-bridge.
+## How it works
 
-Audio output is still a stub (`src/drivers/audio/audio_null.cpp` —
-encoder thread infrastructure exists but isn't wired to a real Sound
-Manager hook).
+| | |
+|---|---|
+| [Architecture.md](Architecture.md) | processes, the Platform API, CPU cores, memory, traps and interrupts |
+| [ThreadingArchitecture.md](ThreadingArchitecture.md) | the threads in each process |
+| [CommandBridge.md](CommandBridge.md) | reading guest memory; BridgeAgent and the bridge trap |
+| [LatencyShortcomings.md](LatencyShortcomings.md) | where input and video latency comes from |
+| [DeveloperGuide.md](DeveloperGuide.md) | working on the code: common tasks |
+| [deepdive/](deepdive/README.md) | memory architecture, Platform API details, UAE quirks |
+| [ppc/README.md](ppc/README.md) | the PowerPC machine: memory, execution, ROM patching |
 
-## Why
+## Executor
 
-- **Modern host integration.** WebRTC streaming, HTTP API, browser
-  client. Drive the emulator from any modern stack; no native UI per OS.
-- **Multiple CPU backends behind one Platform API.** UAE (m68k default)
-  and KPX (PPC default). New backends don't touch core code.
-- **Programmable.** BridgeAgent for automation, MacBrowser for the modern
-  web inside System 7, ExtFS for host filesystem access without restarting.
+[executor/README.md](executor/README.md) is the entry point: where it came
+from, what MacPhoenix changed, the licence. Then
+[PLAN.md](executor/PLAN.md) (design, milestones, every change to imported
+code), [DIRECTION.md](executor/DIRECTION.md),
+[STRAGGLERS.md](executor/STRAGGLERS.md),
+[MEMORY_MAP.md](executor/MEMORY_MAP.md),
+[OpenTransport.md](executor/OpenTransport.md).
 
-We are explicitly **not** chasing cycle accuracy, every Mac model
-(focus is SE, Quadra 650, Beige G3), or replacing BasiliskII /
-SheepShaver for end users — this is a research + preservation project.
+## Testing and releases
 
-## Quick start
+| | |
+|---|---|
+| [Testing.md](Testing.md) | ctest labels, guest suites, Playwright, the boot matrix |
+| [Packaging.md](Packaging.md) | .deb / .rpm, CI, Homebrew |
 
-```bash
-cmake -B build && cmake --build build -j$(nproc)
+## Plans and records
 
-# Quadra 650, UAE backend (default), web UI on :11000
-./build/mac-phoenix ~/storage/roms/quadra.rom
+Plans with their milestones and status; the finished ones are kept as the
+record of why things are the way they are.
 
-# Power Mac G3, KPX backend
-./build/mac-phoenix --backend kpx --rom ~/storage/roms/g3.rom \
-                    --disk ~/storage/images/macos-7.6.1.img --ram 128
+| | |
+|---|---|
+| [cpu/PLAN.md](cpu/PLAN.md) | moving to MAME's CPU cores ([C1d-PMMU](cpu/C1d-PMMU.md), [C3b-STATUS](cpu/C3b-STATUS.md)) |
+| [provisioning/PLAN.md](provisioning/PLAN.md) | the provisioning pipeline |
+| [qt6/](qt6/PLAN.md) | the Qt 6 port (done, May 2026); [Windows.md](qt6/Windows.md) is a port that wasn't started |
+| [roms/](roms/MacIIFamily.md) | ROM research: the Mac II family, disassembly notes ([dissam/](roms/dissam/README.md)), MAME's Mac drivers |
 
-# Mac SE
-./build/mac-phoenix ~/storage/roms/mac-se.rom --disk ~/storage/images/system6.img
-```
+## Licensing
 
-There is no `--arch` flag — the `--backend` token determines the CPU
-architecture (`uae` → m68k, `kpx` → ppc, `executor` → m68k without a ROM).
-
-## Documentation
-
-### Reference
-- [Architecture.md](Architecture.md) — Platform API, backends, memory, traps, IRQs.
-- [Commands.md](Commands.md) — Build, run, test, debug commands.
-- [JsonConfig.md](JsonConfig.md) — Config file schema.
-- [DeveloperGuide.md](DeveloperGuide.md) — Backend internals, common dev tasks.
-- [Testing.md](Testing.md) — CTest + Playwright suites.
-- [TroubleshootingGuide.md](TroubleshootingGuide.md) — Quick diagnostics.
-
-### Subsystems
-- [CommandBridge.md](CommandBridge.md) — Read commands (peek Mac mem) +
-  action commands (BridgeAgent file-based dispatch).
-- [ThreadingArchitecture.md](ThreadingArchitecture.md) — Process + thread model.
-- [LatencyShortcomings.md](LatencyShortcomings.md) — Known latency cliffs in
-  the input/video paths.
-
-### PowerPC
-- [ppc/README.md](ppc/README.md) — Backends, memory layout, execution model,
-  ROM patching, networking, file map.
-
-- [MacBrowser.md](MacBrowser.md) — MacBrowser host pipeline + guest
-  app architecture.
-
-### Deep dives
-- [deepdive/README.md](deepdive/README.md) — Index.
-
-## Project layout
-
-```
-mac-phoenix/
-├── src/
-│   ├── common/include/    # Shared headers (platform.h, MacBrowser.h, ...)
-│   ├── core/              # Mac managers, command_bridge, rom_patches, etc.
-│   ├── cpu/               # uae_cpu/, cpu_uae.c, kpx/, cpu_trace
-│   ├── drivers/           # video, audio, browser, ether, serial, scsi, platform
-│   ├── webrtc/            # WebRTC server (signaling + RTP)
-│   ├── webserver/         # HTTP server, /ws WebSocket, API handlers
-│   └── config/            # EmulatorConfig, machine profiles
-├── client/                # Browser UI (vanilla JS)
-├── BridgeAgent/           # Guest m68k automation agent (Retro68 source + .bin)
-├── MacBrowser/            # Guest m68k browser app (Retro68 source + .bin)
-├── tests/                 # Shell + Playwright + unit tests
-├── provisioning/          # Disk image creation/population scripts
-├── subprojects/           # libdatachannel (vendored)
-└── docs/
-```
-
-## License
-
-GPL v2 (based on BasiliskII / SheepShaver).
+[LICENSING.md](../LICENSING.md): GPL-2.0-or-later as a whole; MacPhoenix's
+own code also MIT; Executor MIT; MAME BSD-3.

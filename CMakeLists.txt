@@ -37,10 +37,8 @@ set(ENABLE_OPUS "AUTO" CACHE STRING "Opus audio (AUTO/ON/OFF)")
 
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
-# Qt6 — see docs/qt6/PLAN.md. Phase 0 links Core only; later phases add
-# Network (Phase 5), WebSockets (Phase 6), WebEngineCore (Phase 8),
-# Multimedia + Quick (Phase 9). Qt 6.4 minimum.
-# WebEngine + Widgets are pulled in below under if(BUILD_BROWSER).
+# Qt6 (docs/qt6/PLAN.md), 6.4 minimum: Core here, Network in src/ipc and
+# src/drivers; WebEngine + Widgets below, only with BUILD_BROWSER.
 find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
 # tools/png2icn.py turns the PNG icon sources into Rez data blocks;
 # called from the MacBrowser/BridgeAgent build commands. Pillow is
@@ -540,8 +538,16 @@ install(FILES packaging/mac-phoenix.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
         OPTIONAL)
 
-install(FILES README.md CLAUDE.md LICENSE
+# Licences: the whole (LICENSE), MacPhoenix's own code (LICENSE-MIT), the
+# map (LICENSING.md), and the third-party notices the binary needs
+# (MAME and SoftFloat BSD-3, asmjit zlib).
+install(FILES README.md CLAUDE.md LICENSE LICENSE-MIT LICENSING.md
+              src/cpu/mame/LICENSE-MAME src/cpu/mame/LICENSE-asmjit
         DESTINATION ${CMAKE_INSTALL_DOCDIR}
+        OPTIONAL)
+install(FILES src/cpu/mame/third_party/softfloat3/COPYING.txt
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}
+        RENAME LICENSE-softfloat
         OPTIONAL)
 
 # =============================================================================

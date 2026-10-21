@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-# test_boot_ppc.sh - Verify PPC Mac OS 9 boots with KPX backend
+# test_boot_ppc.sh - Verify the PowerPC machine boots System 7.5.5 (tests-7.5.5)
+#                    to the Finder, on Kheperix or --core mame-ppc
 #
 # Usage:
 #   tests/test_boot_ppc.sh [--timeout 45] [--port 18095] [--webserver]

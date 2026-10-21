@@ -1,10 +1,18 @@
 # Phase 8 handoff — MacBrowser host pipeline → QtWebEngine
 
-> **STATUS: COMPLETE** (2026-05-04). 8a..8j shipped on `qt-port`.
+> **STATUS: COMPLETE** (2026-05-04). 8a..8j shipped on `qt-port`
+> (`baeb69df`..`2d15db07`), merged into `main` 2026-05-06.
 > See [`docs/MacBrowser.md`](../MacBrowser.md) for the current
 > architecture and [`PLAN.md`](PLAN.md) for the Phase 8 commit list.
-> One follow-up tracked: **8c-2** (event-driven capture via
-> `QQuickWebEngineView` + `afterRendering()`).
+> The follow-up **8c-2** (event-driven capture via
+> `QQuickWebEngineView` + `afterRendering()`) was never done; capture is
+> still the `capture_tick` poll.
+>
+> One plan item below was reversed later: "drops the `BUILD_BROWSER`
+> cmake flag ... becomes a default cross-platform feature". Since
+> `985ac3bc` (2026-10-11) MacBrowser is experimental and off by default:
+> `-DBUILD_BROWSER=ON` builds it, and only then does the build need Qt6
+> WebEngine/Widgets and a `QApplication`.
 >
 > The rest of this doc is the original handoff plan, kept for
 > historical context. Read `docs/MacBrowser.md` for what landed.

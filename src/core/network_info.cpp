@@ -6,10 +6,8 @@
  *  Creates <extfs>/MacPhoenix/ subfolder and writes:
  *    NetworkInfo.txt      - Human-readable summary
  *
- *  The legacy BridgeAgent heartbeat/command files continue to live at the
- *  top of the ExtFS root because their paths are hardcoded in the
- *  pre-built BridgeAgent.bin; moving them would require a Retro68 rebuild.
- *  NetworkInfo.txt documents where they are.
+ *  BridgeAgent exchanges no files any more (bridge trap $ABE5,
+ *  docs/CommandBridge.md); NetworkInfo.txt reports its status.
  */
 
 #include "network_info.h"

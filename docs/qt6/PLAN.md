@@ -1,13 +1,26 @@
 # Qt6 Port Plan
 
-> **Status (2026-05-06):** all phases complete; `qt-port` fast-forwarded
-> into `main`. Qt 6.4 minimum (set by `QWebEngineDownloadRequest` in
-> MacBrowser). The session log at the bottom of this file records the
-> finishing commits — IPC Phase 3b dropped the last `eventfd`/`AF_UNIX`
-> path in favour of `QLocalSocket`/`QLocalServer`, and a packaging pass
-> retired `qt6-tools-dev`/`qt6-qttools-devel` (never used) plus the
-> `ubuntu-22.04` build cell (jammy ships Qt 6.2). Doc kept as-is for
-> historical reference; the design notes still describe today's code.
+> **Status (checked 2026-10-21):** a historical record. The Linux port
+> is done: `qt-port` (2026-05-03 to 2026-05-06, `faed9de9`..`a0901284`)
+> was fast-forwarded into `main`. Done: phases 0, 1, 1.5, 2, 3a, 3b
+> (`5a8dac81`, `2de18725`), 5, 7, 8 (8a..8j), 12–17. Never done:
+> 6 (WebSocket is still the in-process RFC 6455 code in
+> `src/webserver/websocket.cpp`), 8c-2 (capture is still the
+> `capture_tick` poll), 9 (native head), 10 (Windows; see
+> [Windows.md](Windows.md)) and 11 (macOS `.app`); there is no Windows
+> or macOS build. Phase 4 was not done as a separate phase; 3b landed
+> without it. The status table below predates 3b and the merge.
+>
+> Changed since: the HTTP server no longer accepts through
+> `QTcpServer`/`QTcpSocket` as the Phase 5 notes say. Accept is a raw
+> POSIX `accept()` on the listening fd since `2c4d1aca` (2026-05-04;
+> Qt's accept loop hung after about 5 parallel connections), and since
+> `6bc91b6b` (2026-10-18) a pool of `QThread` workers answers each
+> connection on the fd with `poll()`-bounded `recv`/`send`. MacBrowser
+> (Phase 8) is now optional and off by default (`-DBUILD_BROWSER=ON`,
+> `985ac3bc`, 2026-10-11), so the default build links only Qt Core and
+> Network. OpenSSL is still a build dependency for libdatachannel.
+> CLAUDE.md describes the current code.
 
 Branch: `qt-port` (merged). Hard-switched POSIX/X11 subsystems to Qt6 to
 enable a proper Windows port and easier macOS distribution. Each phase
@@ -790,5 +803,3 @@ Recommended sub-decomposition:
 pre-migration (compare via `diff` against captured baseline JSON).
 ctest 20/20.
 
-5a alone is ~70% of the user-facing API surface.
-| 11 | macOS port + signed `.app` + DMG | pending |

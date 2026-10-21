@@ -61,7 +61,7 @@ it.
 
 ## Apple's map
 
-`tools/vendor/68k-mac-rom-maps/rom-maps/MacIIROM.lst.txt` (fetched by
+`docs/roms/dissam/tools/vendor/68k-mac-rom-maps/rom-maps/MacIIROM.lst.txt` (fetched by
 `docs/roms/dissam/tools/bootstrap.sh`) has 1,503 names. It fits all
 three ROMs; `load_rom.py` verifies 1,489 of them on `97221136`. 1,370
 of the 1,503 names also appear in the IIci map, so knowledge carries

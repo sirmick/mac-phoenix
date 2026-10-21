@@ -456,12 +456,13 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --screen WxH               Display resolution (default: 640x480)\n");
             printf("  --disk PATH                Disk image (repeatable)\n");
             printf("  --cdrom PATH               CD-ROM image (repeatable)\n");
-            printf("  --extfs PATH               Shared folder (only first is mounted; ExtFS is single-volume)\n");
+            printf("  --extfs PATH               Shared folder (repeatable; the ROM machines mount only the first)\n");
             printf("  --bootdriver N             0=any, -62=CD-ROM (default: 0)\n");
             printf("  --storage-dir PATH         Default storage root (default: ~/storage)\n");
             printf("  --executor-data PATH       Executor data dir (default: <storage>/executor)\n");
             printf("  --executor-app PATH        App Executor starts instead of Browser (host path)\n");
-            printf("  --executor-system NAME     System under <storage>/executor-systems to run on\n");
+            printf("  --executor-system IMAGE    Run on the System Folder of <storage>/images/IMAGE (copied\n");
+            printf("                             to <storage>/executor-systems on first use; image mounted too)\n");
             printf("  --executor-start WHAT      finder | browser | path inside the System (default: finder)\n");
             printf("  --[no-]executor-fresh      Start each run from the System's clean copy (default: on)\n");
             printf("  --executor-logtraps        Executor logs every trap call to stderr\n");

@@ -1,6 +1,19 @@
 # UAE CPU Core Quirks and Gotchas
 
-The UAE (Unix Amiga Emulator) M68K CPU core has several non-obvious behaviors that can cause bugs if you don't understand them. This document explains the quirks we've encountered.
+The `uae` core (`--core uae`, the default 68k core) is Basilisk II's UAE
+interpreter in `src/cpu/uae_cpu/`, wrapped as a `cpu::Core` by
+`src/cpu/core/uae_core.cpp`. It has several non-obvious behaviours that can
+cause bugs if you don't understand them. The other 68k core, `mame-68k`,
+shares none of this: it reads everything through `GuestMemory`.
+
+Where UAE touches memory:
+
+- **Data** (`get_long`, `put_word`, …, `src/cpu/uae_cpu/memory.h`) goes
+  through `g_platform.mem_*`, i.e. the core's `GuestMemory`, which reads and
+  writes big-endian bytes.
+- **Instruction fetch** goes through the host pointer `regs.pc_p` with the
+  `do_get_mem_*` macros below. That needs one host base for the whole guest
+  space (`MEMBaseDiff`); `create_uae()` refuses a `GuestMemory` without one.
 
 ## Byte-Swapping and HAVE_GET_WORD_UNSWAPPED
 
@@ -20,10 +33,17 @@ BasiliskII stores ROM/RAM in **big-endian format** (as if it's on a real Mac), a
 
 #### The Macro
 
+In `src/common/include/sysdeps.h`, x86 branch:
+
 ```c
 #define HAVE_GET_WORD_UNSWAPPED
 #define do_get_mem_word_unswapped(a) ((uae_u32)*((uae_u16 *)(a)))
 ```
+
+(`src/cpu/uae_cpu/config.h` `#undef`s it, but `sysdeps.h` includes
+`config.h` first and defines it afterwards, so on x86 it is defined. On
+other little-endian hosts — arm64, riscv64 — it is not, and `cft_map()` is
+the identity.)
 
 When `HAVE_GET_WORD_UNSWAPPED` is defined:
 ```c
@@ -43,14 +63,16 @@ When NOT defined:
 1. `do_get_mem_word_unswapped()` reads raw uint16: `0xfa4e` (little-endian interpretation)
 2. This "wrong" value is used to index `cpufunctbl[0xfa4e]`
 3. But the table was built with `cft_map()` which byte-swaps indices!
-4. So the handler is stored at `cpufunctbl[cft_map(0x4efa)] = cpufunctbl[0xfa4e]` ✅
+4. So the handler is stored at `cpufunctbl[cft_map(0x4efa)] = cpufunctbl[0xfa4e]`
 
-**Without HAVE_GET_WORD_UNSWAPPED** (doesn't work for BasiliskII):
+**Without HAVE_GET_WORD_UNSWAPPED** (non-x86 little-endian hosts):
 1. `do_get_mem_word()` reads and byte-swaps: `0x4efa` (correct opcode)
 2. Looks up `cpufunctbl[0x4efa]`
-3. But `cft_map()` is identity function (returns unchanged)
-4. Handler is stored at `cpufunctbl[0x4efa]`
-5. Seems right? **But it's not!** Because `cft_map()` changes behavior based on `#ifdef HAVE_GET_WORD_UNSWAPPED`!
+3. `cft_map()` is the identity, so the handler is stored at `cpufunctbl[0x4efa]`
+4. Also correct, at the cost of a swap per fetch.
+
+What breaks is mixing the two: a fetch path and a table built under
+different settings of the macro.
 
 ### The cft_map() Function
 
@@ -87,16 +109,16 @@ uint32_t opcode = do_get_mem_word((uint16_t *)regs.pc_p);
 // Inside: movzwl, shll, bswapl (3 instructions)
 ```
 
-The table indices are byte-swapped **once** at startup in `build_cpufunctbl()`, so we avoid byte-swapping on every opcode fetch!
+The table indices are byte-swapped **once** at startup in `build_cpufunctbl()` (`src/cpu/uae_cpu/newcpu.cpp`), so we avoid byte-swapping on every opcode fetch. The JIT has its own copy of `cft_map()` in `compiler/compemu_support.cpp`.
 
 ## WORDS_BIGENDIAN Must Be UNDEFINED
 
 ### The Bug
 
-In `src/cpu/uae_cpu/config.h`, we initially had:
+In `src/cpu/uae_cpu/config.h`, we once had:
 
 ```c
-#define WORDS_BIGENDIAN 0  // ❌ WRONG!
+#define WORDS_BIGENDIAN 0  // WRONG
 ```
 
 This caused the code to take the big-endian path even on little-endian systems!
@@ -144,39 +166,39 @@ On big-endian systems (if we ever support them), define it as 1:
 
 ## regs.pc vs regs.pc_p
 
-The UAE CPU maintains **two** program counters:
+`struct regstruct` (`src/cpu/uae_cpu/newcpu.h`) has both a Mac address and
+a host pointer for the PC:
 
 ```c
 struct regstruct {
-    uint32_t regs[16];  // D0-D7, A0-A7
-    uint32_t pc;        // Mac address (e.g., 0x0200002a)
-    uint8_t *pc_p;      // Host pointer (e.g., 0x7ffff770002a)
-    // ... more fields ...
+    uae_u32  regs[16];  // D0-D7, A0-A7
+    uae_u32  pc;        // Mac address: only used without direct addressing
+    uae_u8  *pc_p;      // host pointer: the real PC here
+    uae_u8  *pc_oldp;
+    /* ... */
 };
 ```
 
-### When To Use Each
-
-**regs.pc** (Mac address):
-- Use when Mac code needs to see the address (for PC-relative addressing, etc.)
-- Use in `m68k_getpc()` to return current Mac address
-- Updated when PC changes
-
-**regs.pc_p** (host pointer):
-- Use for fast opcode fetching (`GET_OPCODE` reads from here)
-- Use for fast operand fetching (`get_iword()`, etc.)
-- Must stay in sync with `regs.pc`!
-
-### Keeping Them In Sync
+MacPhoenix builds UAE with `DIRECT_ADDRESSING=1`, and then **`regs.pc_p` is
+the only PC**: `regs.pc` is not kept up to date.
 
 ```c
-void m68k_setpc(uint32_t mac_addr) {
-    regs.pc = mac_addr;
-    regs.pc_p = Mac2HostAddr(mac_addr);  // Translate to host pointer
+static __inline__ uaecptr m68k_getpc (void)
+{
+    return get_virtual_address(regs.pc_p);   // host pointer -> Mac address
+}
+
+static __inline__ void m68k_setpc (uaecptr newpc)
+{
+    regs.pc_p = get_real_address(newpc);      // Mac address -> host pointer
 }
 ```
 
-If you only update one, the CPU will use the wrong memory location for instruction fetch!
+`get_real_address()` / `get_virtual_address()` go through
+`g_platform.mem_mac_to_host` / `mem_host_to_mac`. Always use
+`m68k_getpc()` / `m68k_setpc()` (or `Core::pc()` / `set_pc()`); never read
+`regs.pc`. Code that writes `regs.pc_p` directly must keep it inside the
+mapped block.
 
 ## Prefetch Buffer (Disabled in Our Build)
 
@@ -186,11 +208,11 @@ The real M68K has a prefetch buffer that reads ahead. UAE can simulate this with
 #define USE_PREFETCH_BUFFER 0
 ```
 
-With prefetch disabled, instructions are fetched directly from `regs.pc_p` without buffering.
+With prefetch disabled (`src/cpu/uae_cpu/config.h`), instructions are fetched directly from `regs.pc_p` without buffering, and `fill_prefetch_0()` is a no-op.
 
 ## Inline Assembly Optimizations
 
-UAE uses inline assembly for byte-swapping on x86:
+UAE uses inline assembly for byte-swapping on x86 (`sysdeps.h`):
 
 ```c
 static inline uae_u32 do_get_mem_word(uae_u16 *a) {
@@ -241,11 +263,14 @@ UAE assumes unaligned access is OK on x86:
 #endif
 ```
 
-On x86, we can safely cast any byte pointer to `uint32_t*` and read. On ARM or other CPUs, this might cause a fault!
+On x86, we can safely cast any byte pointer to `uint32_t*` and read. Other hosts take the `CPU_CAN_ACCESS_UNALIGNED` or byte-by-byte path.
 
 ## CPU Level Selection
 
-UAE supports different M68K CPU models (68000, 68010, 68020, 68030, 68040):
+UAE supports different M68K CPU models (68000, 68010, 68020, 68030, 68040).
+`UaeCore` sets `CPUType` from `cpu::Config::model` (68040 → 4) and
+`FPUType` from `Config::fpu`; the model comes from the machine profile
+(see `CpuModelConfiguration.md`).
 
 ```c
 // In build_cpufunctbl():
@@ -264,10 +289,9 @@ else {
 
 The opcode table (`cpufunctbl`) is built from different `op_smalltbl_X_ff` tables depending on CPU level. Higher CPU levels include more instructions.
 
-For Quadra ROMs, we use CPU level 2 (68020 without FPU) even though real Quadras have 68040. This is because:
-1. Most ROM code doesn't use 68040-specific instructions
-2. The 68020 instruction set is a good baseline
-3. FPU emulation can be added later if needed
+The Quadra profile is a 68040 with FPU, so it gets level 4. The IIci (68030
++ FPU) gets level 3: UAE has no separate 68030 table, so it runs as a
+68020 with FPU. The SE gets level 0.
 
 ## Register Naming
 
@@ -296,60 +320,42 @@ The STOP instruction (`0x4E72`) **does not terminate execution** - it puts the C
 
 ### Execution Loop Behavior
 
-In `m68k_do_execute()` ([newcpu.cpp:1376-1386](newcpu.cpp#L1376-L1386)):
+In `m68k_do_specialties()` (`src/cpu/uae_cpu/newcpu.cpp`), which
+`m68k_do_execute()` calls when a special flag is set:
 
 ```c
 while (SPCFLAGS_TEST( SPCFLAG_STOP )) {
     if (SPCFLAGS_TEST( SPCFLAG_INT | SPCFLAG_DOINT )){
-        int intr = intlev();
-        if (intr != -1 && intr > regs.intmask) {
-            Interrupt(intr);
+        SPCFLAGS_CLEAR( SPCFLAG_INT | SPCFLAG_DOINT );
+        int intr = host_intlev ();
+        if (intr != -1 && (intr > regs.intmask || intr == 7)) {
+            Interrupt (intr);
             regs.stopped = 0;
-            SPCFLAG_CLEAR( SPCFLAG_STOP );
+            SPCFLAGS_CLEAR( SPCFLAG_STOP );
         }
     }
 }
 ```
 
-**The CPU loops forever** waiting for `SPCFLAG_INT` or `SPCFLAG_DOINT` to be set with an interrupt level higher than `regs.intmask`.
+**The CPU spins** until `SPCFLAG_INT` or `SPCFLAG_DOINT` is set and the
+host's interrupt level (`host_intlev()`, `UaeCore`'s `intlev` hook) is above
+`regs.intmask`, or is 7 (NMI).
 
 ### How To Exit STOP
 
-Three options:
+Only an interrupt does: inside that loop nothing else is checked, so
+`quit_program` and `request_stop()` wait for the next interrupt too. In
+practice the tick thread calls `cpu_trigger_interrupt()` 60 times a second;
+`UaeCore::request_attention()` sets `SPCFLAG_INT | SPCFLAG_DOINT`, the
+`intlev` hook serves the attention request (`RomHost::attention()` raises
+the line to level 1 while `InterruptFlags` is non-zero) and returns the
+level, and the CPU takes the interrupt and leaves STOP.
 
-1. **Generate an interrupt** - Set `SPCFLAG_INT` and ensure interrupt level > `regs.intmask`
-2. **Check regs.stopped** - External code can check `regs.stopped` flag and break out of `m68k_execute()`
-3. **Set quit_program** - The outer `m68k_execute()` loop checks this flag
-
-### For Testing: Detecting STOP
-
-To test a minimal ROM that ends with STOP:
-
-```c
-// Execute ROM
-Start680x0();  // Runs forever!
-
-// Better approach - check if stopped
-Init680x0();
-m68k_reset();
-
-// Run until STOP
-while (!regs.stopped && !quit_program) {
-    m68k_do_execute();
-}
-
-printf("CPU stopped: %d\n", regs.stopped);
-```
-
-### Real-World Usage
-
-In BasiliskII, STOP is used when the Mac OS has nothing to do. The main loop:
-1. Calls `m68k_execute()` which runs until STOP
-2. Waits for host timer interrupts
-3. Triggers M68K interrupt via `TriggerInterrupt()`
-4. CPU wakes from STOP and handles the interrupt
+A host that wants a stopped CPU to return must raise the line (or an NMI,
+level 7), not just set a flag.
 
 ## See Also
 
-- [Memory Layout](Memory.md) - How Mac addresses map to host pointers
-- [CPU Emulation](CPU.md) - Overall CPU architecture
+- [`../MemoryArchitecture.md`](../MemoryArchitecture.md) — how Mac addresses map to host pointers
+- [`CpuBackendApi.md`](CpuBackendApi.md) — `cpu::Core` and the Platform CPU entries
+- [`CpuModelConfiguration.md`](CpuModelConfiguration.md) — where the CPU model comes from

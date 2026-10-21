@@ -26,9 +26,9 @@
 # PATTERN, for an app that waits on the user (tests/guest/notify: Return on
 # the Notification Manager's alert).
 #
-# --backend executor runs on the System Folder of the test copy
-# <storage>/images/test-macos-<os-version>.img (no ROM; the copy is mounted
-# writable beside it, MacPerl included).
+# --backend executor runs on the System Folder of the run's copy of
+# tests-<os-version> (<storage>/images/test-tests-<ver>-<pid>.img; no ROM;
+# the copy is mounted writable beside it, MacPerl included).
 #
 # Prerequisites:
 #   - Disk image with MacPerl installed (BridgeAgent: the emulator launches

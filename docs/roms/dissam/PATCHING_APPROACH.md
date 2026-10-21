@@ -44,8 +44,8 @@ UniversalInfo = base - 0x10;
 Consequences:
 - **One function handles many ROMs.** The signature is identical
   across every `$067C` ROM Apple shipped, so the same patch function
-  covers Mac II rev B, IIci, IIsi, IIvx, Quadra variants, LC III/475,
-  and Performa 475/630.
+  covers the IIci, IIsi, IIvx, Quadra variants, LC III/475, and
+  Performa 475/630. (The Mac II's ROMs are `$0178`; see below.)
 - **ROM revisions are transparent.** If Apple moved a structure a
   few bytes to add a field, the hardcoded offset breaks but the
   signature scan still finds it.
@@ -56,7 +56,7 @@ Everything downstream works off `UniversalInfo` offsets:
 |---|---|---|
 | `decoderInfoPtr` | `+0`  | walk the hardware-base LMG table at `$94A` and point every base at `ScratchMem` |
 | `nuBusInfoPtr`   | `+12` | mark all NuBus slots as empty (first byte `0x03`, rest `0x08`) |
-| `productKind`    | `+18` | write the configured model ID (`m68k.modelid`) |
+| `productKind`    | `+18` | write the model ID: `model_id` (`--model-id`) if set, else the machine profile's |
 | `defaultRSRCs`   | `+22` | set to `4` ("FPU optional") when `FPUType == 0` |
 
 Additional signature scans in `patch_rom_32` locate:
@@ -173,8 +173,8 @@ Our `patch_rom_32` has exactly one non-Basilisk addition beyond the
 since-removed CPU backend. This is a fixed offset, derived from one
 specific ROM revision, and is the single patch in the file that
 *should* be revisited when restarting the effort. See
-`src/core/rom_patches.cpp` line ~1390 and the TODO note in the
-surrounding comment. The right fix is either a signature scan for
+`src/core/rom_patches.cpp` (`ROM+0x1256` in `patch_rom_32`, around line
+2028) and the comment there. The right fix is either a signature scan for
 the `.netBOOT` pascal string + `_GetNamedResource` pattern, or
 confirming the open no longer hangs under UAE so the patch can be
 dropped.

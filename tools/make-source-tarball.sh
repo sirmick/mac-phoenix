@@ -5,7 +5,8 @@
 #
 # What goes in:
 #   - Tracked files from HEAD (git archive)
-#   - All git submodules (subprojects/{unicorn,libdatachannel,nlohmann_json,lwip})
+#   - Git submodules, if any are registered (none today: libdatachannel is
+#     vendored in subprojects/ and comes with the tracked files)
 #   - Vendored cargo crates for net-bridge/ (cargo vendor → net-bridge/vendor/cargo)
 #   - net-bridge/.cargo/config.toml so `cargo build --offline` resolves vendored
 #
@@ -102,15 +103,10 @@ rm -rf "$STAGE/test_roms" "$STAGE/private" "$STAGE/test-results"
 rm -rf "$STAGE/node_modules" "$STAGE/build"
 rm -rf "$STAGE/toolchain"                         # Retro68 — not needed for distro builds
 rm -rf "$STAGE/legacy"                            # BasiliskII reference source, not compiled
-# Submodule fat: examples / docs / tests not needed for the actual library build
+# libdatachannel's examples / docs / tests aren't needed for the library build
 rm -rf "$STAGE/subprojects/libdatachannel/examples"
 rm -rf "$STAGE/subprojects/libdatachannel/pages"
 rm -rf "$STAGE/subprojects/libdatachannel/test"
-rm -rf "$STAGE/subprojects/nlohmann_json/docs"
-rm -rf "$STAGE/subprojects/nlohmann_json/tests"
-rm -rf "$STAGE/subprojects/nlohmann_json/tools"
-rm -rf "$STAGE/subprojects/nlohmann_json/benchmarks"
-rm -rf "$STAGE/subprojects/unicorn/qemu/tests"
 
 # 5. Pack
 echo "[tarball] packing → $TARBALL"

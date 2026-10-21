@@ -1,125 +1,222 @@
 # Testing
 
-MacPhoenix has two test suites: **CTest integration tests** (shell scripts that exercise the emulator binary via curl) and **Playwright E2E tests** (browser-based tests that verify the full UI and WebRTC pipeline).
+MacPhoenix has three kinds of tests: **CTest tests** (host unit tests, shell
+scripts that drive the emulator binary over its HTTP API with curl, and
+Executor's Toolbox gtests), **Playwright E2E tests** (browser tests of the
+web UI and the video pipeline) and a few **node unit tests** for the web
+client.
 
-Both require a built binary (`cmake --build build -j$(nproc)`) and a Quadra 650 ROM.
+All of them need a built tree (`cmake --build build -j4`). The ROM-machine
+tests need the ROMs and the provisioned test images described under
+[Configuration](#configuration); a test whose ROM, image or tool is missing
+exits 77, which ctest reports as skipped.
 
 ## Quick Reference
 
 ```bash
-# Fast suite (unit + api, ~15s)
+# Host-only and API tests
 ctest --test-dir build -L "unit|api"
 
-# Boot + bridge (excludes guest_suite, ~3 min)
-ctest --test-dir build -L "boot|bridge"
+# Boot tests (every backend and core)
+ctest --test-dir build -L boot
 
-# Full ctest (including guest_suite — needs BridgeAgent + MacPerl, ~5 min)
-ctest --test-dir build
+# Guest tests (apps running in the guest), in parallel
+ctest --test-dir build -L guest -j4
 
-# Playwright E2E (~2 min)
-npx playwright test
+# Executor: guest cells plus the native Toolbox gtests
+ctest --test-dir build -L executor -j4
 
 # Everything
-ctest --test-dir build && npx playwright test
+ctest --test-dir build -j4
+
+# Playwright E2E
+npx playwright test
+
+# Web client unit tests (node:test)
+npm run test:unit
 ```
 
-## CTest Integration Tests
-
-These are shell scripts in `tests/` that start the emulator, hit HTTP API endpoints with curl, and check responses. They run without a browser.
+## CTest
 
 ```bash
-# Run all
-ctest --test-dir build
-
-# Run specific test
-ctest --test-dir build -R boot_uae
-
-# Verbose output
-ctest --test-dir build -V
-
-# Run by label
-ctest --test-dir build -L unit     # mac_roman, browser_shm — host-only
-ctest --test-dir build -L api      # api_endpoints, config_api, extfs
-ctest --test-dir build -L boot     # boot_*, mouse_position*, command_bridge*
-ctest --test-dir build -L bridge   # bridge_trap{,_ppc,_executor}
-ctest --test-dir build -L guest    # guest_suite{,_761,_ppc}
+ctest --test-dir build -N              # list the tests
+ctest --test-dir build -N -L guest     # list one label
+ctest --test-dir build -R boot_uae     # by name (regex)
+ctest --test-dir build -L "boot|bridge"
+ctest --test-dir build -V              # verbose
 ```
+
+`tests/CMakeLists.txt` registers 65 named tests;
+`src/executor/tests/CMakeLists.txt` adds 343 more named `executor.*`
+(408 in all).
+
+### Labels
+
+A test can carry several labels.
+
+| Label | Tests |
+|-------|-------|
+| `unit` | `mac_roman`, `browser_shm`, `cpu_cores`: host-only, no emulator |
+| `api` | `api_endpoints`, `config_api`, `extfs` |
+| `boot` | The `boot_*` tests, `command_bridge*` and `mouse_position*` (22) |
+| `bridge` | `bridge_trap`, `bridge_trap_ppc`, `bridge_trap_executor` |
+| `guest` | Tests that run an application in the guest: the suites, `bridge_trap*`, `notify_*`, `keyboard_guest*`, `drag_executor*`, `aslm_executor*`, `toolbox_suite_*`, `mpw_toolchain_executor`, `guest_builds_current`, `ot_executor*`, `threads_executor*`, `ppc_hello_executor*` (37) |
+| `mame` | Tests on the MAME cores (`--core mame-68k`, `--core mame-ppc`), plus `cpu_cores` and the `executor.mame68k.*` gtests |
+| `executor` | The `--backend executor` guest cells and all `executor.*` gtests |
+| `xfail` | Executor gtests that are expected to fail (`src/executor/tests/test-properties.cmake`). Two of them on each core are also disabled |
 
 ### Test List
 
-| Name | File | Label | Time | What it tests |
-|------|------|-------|------|---------------|
-| `mac_roman` | `test_mac_roman.cpp` | unit | ~1s | MacRoman ↔ UTF-8 codec round-trip |
-| `browser_shm` | `test_browser_shm.cpp` | unit | ~1s | BrowserShm SPSC ring (10 cases / 47 assertions) |
-| `api_endpoints` | `test_api_endpoints.sh` | api | ~5s | All `/api/*` endpoints return expected status + JSON |
-| `config_api` | `test_config_api.sh` | api | ~5s | Config round-trip, CD-ROM config, boot driver |
-| `extfs` | `test_extfs.sh` | api | ~30s | ExtFS config, CLI, backward compat (8 checks) |
-| `boot_se` | `test_boot_se.sh` | boot | ~30s | Mac SE boot to Finder (System 6) — needs SE ROM |
-| `boot_uae_interp` | `test_boot_to_finder.sh` | boot | ~10s | UAE backend, no JIT, boots to Finder |
-| `boot_uae_jit` | `test_boot_to_finder.sh` | boot | ~10s | UAE backend, JIT, boots to Finder |
-| `boot_ppc_interp` | `test_boot_ppc.sh` | boot | ~45s | KPX interpreter boots Mac OS 7.5.5 to Finder |
-| `boot_ppc_jit` | `test_boot_ppc.sh` | boot | ~45s | KPX dyngen JIT boots Mac OS 7.5.5 to Finder |
-| `boot_ppc_api` | `test_boot_ppc.sh` | boot | ~45s | PPC + webserver, status API + boot phase tracking |
-| `mouse_position` | `test_mouse_position.sh` | boot | ~15s | Absolute + relative mouse via POST /api/mouse (m68k) |
-| `mouse_position_ppc` | `test_mouse_position.sh` | boot | ~20s | Same, KPX backend |
-| `command_bridge` | `test_command_bridge.sh` | boot | ~20s | `/api/app`, `/api/windows`, `/api/wait`, `/api/launch` (m68k) |
-| `command_bridge_ppc` | `test_command_bridge.sh` | boot | ~20s | Same, KPX backend |
-| `bridge_trap{,_ppc,_executor}` | `test_guest_suite.sh --app BridgeDemo.bin` | bridge | ~15s | The bridge trap ($ABE5) answers and a sleeping app is woken by the host within 500 ms (front and background): `tests/guest/bridgedemo` |
-| `guest_suite` | `test_guest_suite.sh` | guest | ~60s | Boots 7.5.5, launches MacPhoenixSuite (`tests/guest/suite`) via `/api/launch`, reads results back from ExtFS |
-| `guest_suite_761` | `test_guest_suite.sh` | guest | ~60s | Same, 7.6.1 disk |
-| `guest_suite_ppc` | `test_guest_suite.sh` | guest | ~60s | Same, KPX backend (PPC's 68k emulator running MacPerl) |
+Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
+
+**Host-only and API**
+
+| Name | Script / source | Labels | Timeout | What it tests |
+|------|-----------------|--------|---------|---------------|
+| `mac_roman` | `test_mac_roman.cpp` | unit | 5 s | MacRoman to UTF-8 conversion |
+| `browser_shm` | `test_browser_shm.cpp` | unit | 10 s | The BrowserShm SPSC ring (`src/drivers/browser/ring.cpp`) |
+| `cpu_cores` | `test_cpu_cores.cpp` | unit, mame | 10 s | Two mame-68k cores in one process |
+| `api_endpoints` | `test_api_endpoints.sh` | api | 30 s | The `/api/*` endpoints return the expected status and JSON |
+| `config_api` | `test_config_api.sh` | api | 30 s | Config round trip through `/api/config`, CD-ROM paths, boot driver |
+| `extfs` | `test_extfs.sh` | api | 60 s | ExtFS config, CLI and backward compatibility (8 checks) |
+
+**Boot** (label `boot`; the `mame` ones also `mame`)
+
+| Name | Script | What it tests |
+|------|--------|---------------|
+| `boot_uae_interp`, `boot_uae_jit` | `test_boot_to_finder.sh` | Quadra 650, UAE core without and with JIT, boots 7.5.5 to the Finder |
+| `boot_core_mame68k`, `boot_mame68k` | `test_boot_to_finder.sh` | The same on `--core mame-68k` |
+| `boot_se`, `boot_se_mame68k` | `test_boot_se.sh` | Mac SE boots System 6.0.8 (UAE, mame-68k) |
+| `boot_iici`, `boot_iici_mame68k` | `test_boot_iici.sh` | Mac IIci boots System 6.0.8 and the Finder draws its desktop (checked with `/api/text`) |
+| `boot_ppc_interp`, `boot_ppc_jit` | `test_boot_ppc.sh` | Power Mac G3, Kheperix core without and with JIT, boots 7.5.5 (headless, log milestones) |
+| `boot_ppc_api` | `test_boot_ppc.sh --webserver` | The same with the web server, boot phases through `/api/status` |
+| `boot_ppc_mame` | `test_boot_ppc.sh --core mame-ppc` | 7.5.5 on mame-ppc, UML interpreter (headless) |
+| `boot_ppc_mame_jit` | `test_boot_ppc.sh --core mame-ppc --jit --webserver` | 7.5.5 on mame-ppc's native x86-64 back-end |
+| `boot_ppc_mame_api` | `test_boot_ppc.sh --core mame-ppc --webserver` | mame-ppc interpreter with the web server |
+| `mouse_position`, `mouse_position_ppc` | `test_mouse_position.sh` | Absolute and relative `POST /api/mouse`, checked against the Mac's low-memory globals (Quadra, G3) |
+| `command_bridge` | `test_command_bridge.sh` | `/api/app`, `/api/windows`, `/api/wait`, `/api/launch`, `/api/quit` on the Quadra |
+| `command_bridge_mame68k` | `test_command_bridge.sh --core mame-68k` | The same on mame-68k |
+| `command_bridge_ppc` | `test_command_bridge.sh --backend kpx` | The same on the G3 (Kheperix) |
+| `command_bridge_ppc_mame_m68k` | `test_command_bridge.sh --backend kpx --core mame-ppc --jit --m68k-host 1` | The same on mame-ppc with host-initiated 68k routines on a mame-68k core (C3a) |
+| `command_bridge_executor`, `command_bridge_executor_mame68k` | `test_command_bridge.sh --backend executor` | The same on Executor (UAE, mame-68k) |
+
+**Guest** (label `guest`; plus `executor`, `mame`, `bridge` as noted in
+`ctest -N -L`)
+
+| Name | Script | What it tests |
+|------|--------|---------------|
+| `guest_suite` | `test_guest_suite.sh` | MacPhoenixSuite (`tests/guest/suite`) on the Quadra, 7.5.5: disk, ExtFS, audio, AppleScript, network and serial sections |
+| `guest_suite_761` | `test_guest_suite.sh --os-version 7.6.1` | The same on 7.6.1 |
+| `guest_suite_mame68k` | `test_guest_suite.sh --core mame-68k` | The same on mame-68k |
+| `guest_suite_ppc` | `test_guest_suite.sh --backend kpx` | The same on the G3 (Kheperix), Mac OS 9.0.4 |
+| `guest_suite_ppc_mame` | `test_guest_suite.sh --backend kpx --core mame-ppc --jit` | The same on mame-ppc's native back-end |
+| `guest_suite_executor`, `guest_suite_executor_mame68k` | `test_guest_suite.sh --backend executor` | The same on Executor (its network tests use a host echo server) |
+| `finder_suite`, `finder_suite_mame68k`, `finder_suite_executor`, `finder_suite_executor_mame68k` | `test_guest_suite.sh --sections finder` | The suite's Finder section: AppleScript drives the Finder (make, rename, duplicate, move, copy to another volume, windows, Trash) and the File Manager checks the disk |
+| `macperl_smoke`, `macperl_smoke_executor` | `test_guest_suite.sh --script MacPerlSmoke.pl` | MacPerl launched by a do-script Apple Event (`/api/script`), runs Perl, reaches the Host volume and AppleScript |
+| `bridge_trap`, `bridge_trap_ppc`, `bridge_trap_executor` | `test_guest_suite.sh --app BridgeDemo.bin` | The bridge trap `$ABE5` answers and a sleeping app is woken by the host (Time Manager task, `WakeUpProcess`): `tests/guest/bridgedemo`. 68k, PowerPC (9.0.4) and Executor. Also label `bridge` |
+| `ppc_hello_executor`, `ppc_hello_executor_mame68k` | `test_guest_suite.sh --backend executor --app PPCHello.bin` | A PowerPC-only application (`tests/guest/ppc-hello`) runs on Executor on the mame-ppc core |
+| `notify_guest`, `notify_executor` | `test_guest_suite.sh --app NotifyTest.bin` | The Notification Manager from a background application (`tests/guest/notify`); the ROM machine is the reference |
+| `keyboard_guest`, `keyboard_guest_mame68k`, `keyboard_guest_executor`, `keyboard_guest_executor_mame68k` | `test_keyboard_guest.sh` | Keystrokes sent with `/api/keypress` reach the front application |
+| `drag_executor`, `drag_executor_mame68k` | `test_drag_executor.sh` | Drag and drop between SimpleText and the Finder on Executor (a clipping file on the desktop and back) |
+| `aslm_executor`, `aslm_executor_mame68k` | `test_aslm_executor.sh` | Apple's Shared Library Manager on Executor through Apple's ASLM test tools in MPW Shell; skips without `~/storage/aslm-kit` |
+| `toolbox_suite_uae`, `toolbox_suite_executor`, `toolbox_suite_executor_mame68k` | `test_toolbox_suite.sh` | Executor's Toolbox gtests built with Retro68 into a 68k application and run in the guest: on Apple's ROM and System (the ground truth) and on Executor. Expected failures in `tests/guest/toolbox_expected_<backend>.txt`. Skips without Retro68; the three share a build directory (`RESOURCE_LOCK toolbox_app`) |
+| `mpw_toolchain_executor` | `test_mpw_toolchain.sh` | Apple's MPW (SC, Link, ToolServer) on Executor through `tools/mpw/mpw`; skips without the MPW disk (`tools/mpw/mpw setup`) |
+| `guest_builds_current` | `test_guest_builds.sh` | The committed guest programs (MacPhoenixSuite, OTTest) are their sources' builds: rebuilt with `tools/mpw/mpw` and compared |
+| `ot_executor`, `ot_executor_mame68k` | `test_ot_executor.sh` | Executor's native Open Transport through Apple's 68k OT glue (`tests/guest/ot`, an MPW tool run in ToolServer) against a host echo server |
+| `threads_executor`, `threads_executor_mame68k` | `test_threads_executor.sh` | The Thread Manager on Executor through UserLand Frontier's UserTalk threads (`/api/script`) |
+
+**Executor gtests** (label `executor`)
+
+`executor.<Suite>.<Test>`: Executor's Toolbox gtests (`src/executor/tests`)
+built natively and run on the UAE core; `executor.mame68k.<Suite>.<Test>`:
+the same on mame-68k (also label `mame`); `executor.compilefail.*`: checks
+that misuse of the guest value types fails to compile.
 
 ### Configuration
 
-Tests pick up paths from CMake cache or environment variables:
+Paths come from the CMake cache (passed to the scripts as environment
+variables) or from the environment directly:
 
 | Setting | Default | Override |
 |---------|---------|----------|
-| m68k ROM | `~/roms/quadra.rom` | `cmake -B build -DTEST_ROM=...` or `MACEMU_ROM` |
-| PPC ROM | `~/storage/roms/g3.rom` | `cmake -B build -DTEST_PPC_ROM=...` or `MACEMU_ROM` |
-| Mac SE ROM | (unset; `boot_se` skips) | `cmake -B build -DTEST_SE_ROM=...` or `MACEMU_SE_ROM` |
-| Disk image | `~/storage/images/macos-7.5.5.img` | `MACEMU_DISK`; `tests/lib/refresh_test_disk.sh NAME $$` clones a fresh copy per test run (`test-NAME-PID.img`, with its own Executor System; removed when the test exits), so tests run in parallel don't share one |
+| Quadra 650 ROM | `~/roms/quadra.rom` | `cmake -B build -DTEST_ROM=...` or `MACEMU_ROM` |
+| G3 ROM | `~/storage/roms/g3.rom` | `cmake -B build -DTEST_PPC_ROM=...` or `MACEMU_ROM` |
+| Mac SE ROM | `~/storage/roms/256KB ROMs/1987-03 - B2E362A8 - Mac SE.ROM` | `cmake -B build -DTEST_SE_ROM=...` or `MACEMU_SE_ROM` |
+| Mac IIci ROM | `~/storage/roms/iici.rom` | `MACEMU_IICI_ROM` |
+| Disk image | a copy of `tests-7.5.5` (see below) | `MACEMU_DISK`; `MACEMU_SE_DISK`, `MACEMU_IICI_DISK` for the System 6 tests |
+| Binary | `build/mac-phoenix` | `MACEMU_BINARY` |
+| Storage root | `~/storage` | `MACEMU_STORAGE` (scripts that look for images and kits) |
+| Scratch | `~/storage/tmp` | `cmake -B build -DTEST_TMPDIR=...` (every test's `TMPDIR`; `/tmp` is RAM-backed here) |
 
-Tests pick non-overlapping ports in the 18080–18108 range so they don't
-collide with a running emulator on :11000.
+The disk images are the ones `provisioning/build.py` makes:
+`tests-7.5.5` (most tests), `tests-7.6.1` (`guest_suite_761`),
+`tests-9.0.4` (the PowerPC guest tests) and `6.0.8` (the SE and the IIci).
+`tests/lib/refresh_test_disk.sh NAME $$` builds the image if it is missing
+or out of date, then gives the test its own copy,
+`~/storage/images/test-NAME-PID.img` (with its own extracted Executor
+System); the copy is removed when the test exits, and copies left by killed
+tests are swept on the next call. Without a PID it makes the fixed
+`test-NAME.img`, kept, for runs by hand.
 
-Tests are safe to run in parallel (`ctest -j4`): each has its own port,
-disk copy and, with `--network socket`, its own net-bridge
+Some guest tests also need software that is not on every machine: the MPW
+disk (`tools/mpw/mpw setup`) for `mpw_toolchain_executor`,
+`guest_builds_current` and `ot_executor*`; the Retro68 toolchain
+(`toolchain/retro68`) for `toolbox_suite_*`; the ASLM kit for
+`aslm_executor*`. Without them they skip.
+
+### Running in parallel
+
+Tests run in parallel (`ctest -j4`) with their own disk copies (above) and,
+with `--network socket`, their own net-bridge
 (`socket:$TMPDIR/mac-ether-test-PID.sock`; plain `socket` would join the
-shared `/tmp/mac-ether.sock` every running MacPhoenix uses).
+shared `/tmp/mac-ether.sock` every running MacPhoenix uses). Each test
+has its own fixed port in the 18080-18442 range (`guest_builds_current`
+also uses the next one), away from a running emulator on :11000 and from
+Playwright's 18094. A new test needs a port no other uses:
+`ctest --show-only=json-v1` lists the commands.
 
-### Guest Tests (BridgeAgent + MacPerl)
+### Guest tests and the bridge
 
-`guest_suite{,_761,_ppc}` (label `guest`) need **BridgeAgent**, which
-the emulator launches from its bridge dir at desktop time (nothing is
-installed on the disk). The agent receives `/api/launch` calls,
-finds MacPerl by creator code, and dispatches the script via a
-`'misc'`/`'dosc'` AppleEvent. MacPerl writes `test_results.txt` back into
-the same ExtFS share the test reads from.
+The guest tests run with `--bridge` (or `--headless-http`, which implies it)
+and `--extfs <tmp>`. The emulator launches **BridgeAgent** from its bridge
+directory on the Host volume once the desktop is up; nothing is installed on
+the disk image. The script waits for `/api/status` `bridge_agent_connected`,
+copies the application it tests into the shared folder (for
+MacPhoenixSuite, with a `suite.cfg` naming the results file and sections),
+and starts it with `/api/launch` (or `/api/script` for MacPerl and Frontier
+scripts). Requests reach the agent through the bridge trap `$ABE5`
+([CommandBridge.md](CommandBridge.md)). The application writes PASS/FAIL/SKIP
+lines to a results file on the Host volume, which the script reads.
 
-`BridgeAgent/BridgeAgent.bin` is committed; the install script `hcopy`s it
-into the image. `cmake --build build` rebuilds it from `BridgeAgent.c`
-when Retro68 is detected (default at `~/Retro68`); opt out with
-`-DBUILD_BRIDGE_AGENT=OFF`. The harness runs the emulator with
-`--bridge --extfs <tmp>` and waits for `/api/status`
-`bridge_agent_connected` before posting to `/api/launch`.
+MacPhoenixSuite is built with `tools/mpw/mpw build tests/guest/suite -o
+tests/guest/suite` ([MPW.md](MPW.md)); the built `.bin` is committed.
+`BridgeAgent/BridgeAgent.bin` is committed too and rebuilt by `cmake --build`
+when Retro68 is found (`toolchain/retro68/bin`, else `PATH`); opt out with
+`-DBUILD_BRIDGE_AGENT=OFF`.
+
+### Scripts not in ctest
+
+| Script | What it does |
+|--------|--------------|
+| `tests/test_net_suite.sh` | MacPhoenixSuite's deeper networking section (`netdeep`) with `--network socket` |
+| `tests/test_stop_restart.sh` | Stop, start and restart cycles through the API |
+| `tests/test_resource_cleanup.sh` | No SHM files, sockets or processes left after exit (graceful and killed) |
+| `tests/test_boot_matrix.sh`, `tests/run_boot_matrix.sh` | Boot capacity matrix ([Commands.md](Commands.md#boot-capacity-matrix)) |
+| `tests/boot_screenshot.sh` | Boot a machine on a given core and save a screenshot |
+| `tests/launch_probe.sh` | Boot the Power Mac headless with the bridge and `POST /api/launch`, keeping the log |
 
 ## Playwright E2E Tests
 
-Browser-based tests in `tests/e2e/` that verify the full stack: UI controls, WebRTC video streaming, mouse input latency, and config persistence. Playwright auto-spawns the emulator for each test worker.
+Browser tests in `tests/e2e/` covering the UI controls, video streaming,
+mouse input and config persistence. The fixture (`tests/e2e/fixtures.ts`)
+spawns the emulator itself (`--config /dev/null --backend uae`, a copy of
+`tests-7.5.5` from `refresh_test_disk.sh`).
 
 ```bash
-# Run all
-npx playwright test
-
-# Run specific spec
-npx playwright test tests/e2e/mouse-input.spec.ts
-
-# Headed mode (visible browser)
-npx playwright test --headed
-
-# UI mode (interactive)
-npx playwright test --ui
+npx playwright test                                  # all
+npx playwright test tests/e2e/mouse-input.spec.ts    # one spec
+npx playwright test --headed                         # visible browser
+npx playwright test --ui                             # interactive
 ```
 
 ### Test Specs
@@ -132,32 +229,54 @@ npx playwright test --ui
 | `screenshot.spec.ts` | `/api/screenshot` 503 when stopped, valid PNG when running |
 | `mouse-input.spec.ts` | Absolute/relative mouse via HTTP API + readback |
 | `config-modal.spec.ts` | Config modal open/close, persistence |
-| `settings-dialog.spec.ts` | Boot priority, disk/CD-ROM checkboxes, ROM dropdown, round-trip |
+| `settings-dialog.spec.ts` | Boot priority, disk/CD-ROM checkboxes, ROM dropdown, round trip |
 | `codec.spec.ts` | Mouse-mode dropdown has options |
-| `codec-fullstack.spec.ts` | Codec switching (h264/vp9/png/webp/httpstream) end-to-end |
-| `stall-detection.spec.ts` | WebRTC mouse latency, pixel verification, 60s soak (stall rate <2%) |
+| `codec-fullstack.spec.ts` | Codec switching (h264/vp9/png/webp/httpstream) end to end |
+| `codec-fallback.spec.ts` | The client's codec auto-fallback controller against a running emulator |
+| `stall-detection.spec.ts` | WebRTC mouse latency, pixel verification, 60 s soak (stall rate < 2%) |
 
 ### Architecture
 
-- **Fixtures** (`fixtures.ts`): Auto-spawns the emulator as a child process per test worker on port 18094. Provides `emulatorPort` and `hasRom` fixtures. Tests skip if ROM is missing.
-- **Single worker**: Tests run serially (`workers: 1` in `playwright.config.ts`) — one emulator instance shared across all specs.
-- **No retries**: `retries: 0` — failures are real.
-- **60s timeout**: Per-test timeout. The soak test in `stall-detection.spec.ts` can run longer (configurable via `SOAK_DURATION_S` env var, default 60s).
+- **Fixtures** (`fixtures.ts`): one emulator per worker on port 18094
+  (`MACEMU_HTTP_PORT` overrides; ROM from `MACEMU_ROM` or
+  `~/roms/quadra.rom`). Provides `emulatorPort` and `hasRom`; tests skip
+  without the ROM. No ctest test uses 18094, so Playwright and ctest can
+  run at the same time.
+- **Single worker**: `workers: 1` in `playwright.config.ts`.
+- **No retries**: `retries: 0`.
+- **60 s timeout** per test. The soak test in `stall-detection.spec.ts` can run
+  longer (`SOAK_DURATION_S`, default 60).
 
 ### Stall Detection & Soak Testing
 
-The `stall-detection.spec.ts` suite is the most comprehensive — it validates the full input-to-output pipeline:
+`stall-detection.spec.ts` checks the input-to-output pipeline:
 
-1. **Mouse round-trip**: Sends absolute/relative mouse positions via the `/ws` WebSocket, polls `/api/mouse` to confirm Mac OS reflects the change, measures latency.
-2. **Pixel verification**: Takes screenshots via `/api/screenshot`, decodes PNG in the browser, checks for non-black pixels in key regions (menu bar, center).
-3. **Soak test**: Runs sustained mouse movement for 60s, alternating between 8 positions. Tracks latency percentiles (avg, p95, p99, max) and stall count. Passes if stall rate < 2%.
+1. **Mouse round trip**: sends absolute/relative mouse positions over the
+   `/ws` WebSocket, polls `/api/mouse` until Mac OS reflects the change, and
+   measures the latency.
+2. **Pixel verification**: takes screenshots with `/api/screenshot`, decodes
+   the PNG in the browser and checks for non-black pixels in the menu bar and
+   centre.
+3. **Soak test**: moves the mouse between 8 positions for 60 s, tracks
+   latency percentiles (avg, p95, p99, max) and stalls. Passes if the stall
+   rate is under 2%.
+
+## Web client unit tests
+
+`tests/unit/codec-fallback.test.js` tests the codec fallback controller
+(`client/codec-fallback.js`) with `node:test`, no emulator:
+
+```bash
+npm run test:unit
+```
 
 ## Screenshot Utility
 
-A standalone script (not a test) for capturing screenshots of the running emulator:
+A standalone script (not a test) that boots the emulator and saves a
+screenshot:
 
 ```bash
-# Default: boot with quadra.rom, wait 15s, save to /tmp/screenshot.png
+# Default: quadra.rom, wait 15 s, save to /tmp/screenshot.png
 npx tsx tests/e2e/take-screenshot.ts
 
 # Custom ROM and disk image
@@ -175,14 +294,14 @@ npm run screenshot -- --disk /path/to/hd.img --output ~/screenshot.png
 
 ## Shell Boot Tests
 
-Two additional shell scripts in `tests/e2e/` test the dirty-shutdown dialog scenario (not part of the regular test suite):
+Two scripts in `tests/e2e/` test the dirty-shutdown dialog (not part of the
+regular suite):
 
 | File | What it does |
 |------|--------------|
-| `boot-to-dialog.sh` | Two-pass test: boot → hard kill → reboot, expects "not shut down cleanly" dialog |
-| `boot-to-dialog-headless.sh` | Same but headless with `--no-webserver`, uses PPM→PNG screenshot conversion |
+| `boot-to-dialog.sh` | Two passes: boot, hard kill, boot again; expects the "not shut down cleanly" dialog |
+| `boot-to-dialog-headless.sh` | The same headless with `--no-webserver`, PPM to PNG screenshot conversion |
 
-Run manually:
 ```bash
 tests/e2e/boot-to-dialog.sh uae
 tests/e2e/boot-to-dialog-headless.sh uae

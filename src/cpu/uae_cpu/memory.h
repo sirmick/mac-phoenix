@@ -20,16 +20,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * ============================================================================
- * ENDIANNESS WARNING:
+ * ENDIANNESS:
  * ============================================================================
- * UAE stores memory in LITTLE-ENDIAN format on x86 hosts:
- *   - RAMBaseHost: Contains RAM in little-endian byte order
- *   - get_long/put_long: Automatically byte-swap between LE storage and BE M68K view
- *   - ROM is an exception: Stored in big-endian as loaded from file
- *
- * When interfacing with another M68K emulator that expects big-endian
- * memory (M68K native byte order): DO NOT copy RAMBaseHost directly,
- * byte-swap first.
+ * Guest RAM and ROM are stored big-endian, in the Mac's own byte order, on
+ * every host: get_long/put_long (do_get_mem_long etc.) byte-swap to and from
+ * host values on a little-endian host. So RAMBaseHost can be read and
+ * copied as it is (cpu::GuestMemory, snapshots, the other cores all do).
  * ============================================================================
  */
 

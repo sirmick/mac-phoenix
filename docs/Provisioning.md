@@ -39,20 +39,29 @@ An HFS image holding what one product adds to a Mac:
 dates and the resource fork's system-reserved bytes, so a re-bake that made
 the same software is recognised as the same.
 
-## The development disks
+## The System and development disks
+
+Boot images start from a base in `provisioning/bases.json`: an `os` bake's
+snapshot (`os-7.5.5`), a build layer made from it (`tools-7.5.5`: StuffIt
+Expander and Disk Copy, what bakes start from) or a standard image
+(`standard-7.5.5` = `7.5.5.img`).
 
 | Image | What |
 |---|---|
+| `7.5.5.img`, `7.6.1.img` | the standard boot disks, 68k and PowerPC: `tools-7.5.5` (Open Transport 1.1.2) / `tools-7.6.1` plus TCP/IP on DHCP (`network-dhcp-7.5.5`, `network-dhcp`) and MacsBug 6.6.3 |
+| `tests-7.5.5.img`, `tests-7.6.1.img`, `tests-9.0.4.img` | what the guest tests boot (a copy each run, `tests/lib/refresh_test_disk.sh`): the standard disks, on 7.x plus MacPerl 5.2.0r4 (68k), Frontier 5.0.1 and MPW 3.4.2 |
 | `dev-tools-system-7.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
-| `dev-7.5.5.img`, `dev-7.6.1.img` | the base Systems (`provisioning/bases.json`) plus the snapshots' System Folder parts: MetroNub, CFM-68K and PowerPC libraries, MacsBug 6.6.3, PythonCore, ... |
+| `dev-7.5.5.img`, `dev-7.6.1.img` | the standard disks (`standard-7.5.5`, `standard-7.6.1`) plus the System Folder parts of CodeWarrior Pro 4, MacPerl, MacPython and Disk Copy: MetroNub, CFM-68K and PowerPC libraries, PythonCore, ... |
 | `7.1.img` | System 7.1 for the Quadra 650 (`os-7.1`): boots with `--model-id 5` (bases.json `args`; web UI profile `7.1-68k`); no BridgeAgent (no File System Manager, so no Host volume) |
 | `6.0.8.img` | System 6.0.8, universal (boots the SE and the IIci: Color, Monitors, AppleShare, AppleTalk Responder, all printer drivers, 32-Bit QuickDraw), installed from the Legacy CD's floppies by Apple's Installer on the IIci (`os-6.0.8`), with the floppies' utilities at the top and StuffIt Expander 4.0.2 and Disk Copy 4.2 in Utilities (`tools-6.0.8`) |
-| `8.6.img`, `9.0.4.img` | Mac OS 8.6 and 9.0.4 for the PowerPC machine (G3 ROM): installed from their CDs (`os-8.6`, `os-9.0.4`), with CarbonLib 1.6, StuffIt Expander 6.0.1, Disk Copy 6.3.3, MacsBug, TCP/IP on DHCP |
+| `8.6.img`, `9.0.4.img` | Mac OS 8.6 and 9.0.4 for the PowerPC machine (G3 ROM): installed from their CDs (`os-8.6`, `os-9.0.4`), with CarbonLib 1.6, StuffIt Expander 6.0.1, Disk Copy 6.3.3, MacsBug, TCP/IP on DHCP (8.6 by `network-dhcp-8.6`, 9.0.4 as installed) |
 | `dev-tools-macos-8-9.img` | the 8.6 / 9 development volume: CodeWarrior Pro 7.2 (7.1 Tools CD + the 7.2 PowerPC plugins; needs CarbonLib 1.3.1+), MPW-GM; `Languages`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
 | `dev-8.6.img`, `dev-9.0.4.img` | the 8.6 / 9.0.4 disks plus those tools' System Folder parts; boot with `dev-tools-macos-8-9.img` |
+| `mpw.img`, `mpw-cw.img` | the MPW service disks `tools/mpw/mpw` runs (docs/MPW.md) |
 
-All three run on the 68k machine (`--backend uae`) and the PowerPC one
-(`--backend kpx`).
+The 7.5.5 and 7.6.1 disks run on the 68k machine (`--backend uae`) and the
+PowerPC one (`--backend kpx`); 8.6 and 9.0.4 on the PowerPC one only; 7.1
+and 6.0.8 on 68k only.
 
 ```bash
 python3 provisioning/bake.py --list            # bakes and their snapshots
@@ -109,7 +118,8 @@ volume (`{target}`, named `Install`) as the install target. Kinds:
 | `install` | the product's installer, driven by `steps` |
 | `expand` | `archive`: StuffIt Expander expands it in the guest (then any `steps`: a first launch) |
 | `copy` | `steps` of `{"copy": {"from": ..., "to": "{target}:"}}` from attached CDs or disk images |
-| `derive` | a snapshot made on the host from other snapshots |
+| `derive` | a snapshot made on the host from other snapshots (`from`) |
+| `os` | a System: its installer (and updaters) run by `steps` onto a blank target (`Macintosh HD`), then the guest restarts from it for any `first_boot` steps; the snapshot is the whole bootable volume |
 
 `"machines": ["68k", "ppc"]` runs a bake on both machines
 (`baked/parts/<name>@<machine>.img`) and merges the runs: files only one
@@ -192,7 +202,8 @@ python3 provisioning/bake.py --finish                    # capture, and save the
 Floppy sets go on a "Media" volume and are mounted through the guest's
 Disk Copy, so installers can eject and ask for them as on real floppies
 (raw floppy images are converted to Disk Copy 4.2 first: `"dc42": true`).
-Several bakes can run at once; scratch space is `$MACEMU_STORAGE/work`.
+Several bakes can run at once (`--jobs`, default 3); scratch space is
+`$MACEMU_STORAGE/work`. A bake marked `"wip"` is left out of `--all`.
 
 ## build.py
 
@@ -201,7 +212,8 @@ Several bakes can run at once; scratch space is `$MACEMU_STORAGE/work`.
  "place": [{"snapshot": "mpw-3.4.2"},
            {"snapshot": "frontier-5.0.1", "to": "Languages"},
            {"snapshot": "think-c-6", "take": "Development", "as": "THINK C 6.0"}]}
-{"base": "7.6.1", "system_from": ["codewarrior-pro-4", "macsbug-6.6.3"]}
+{"base": "standard-7.6.1", "system_from": ["codewarrior-pro-4", "macperl-5.2.0r4"],
+ "aliases_to": "dev-tools-system-7"}
 ```
 
 A data image is a blank volume with snapshots' `:Items:` placed (`take` an
@@ -209,8 +221,12 @@ item, `to` a folder, `as` a new name); a boot image is a base System with
 snapshots' System Folder parts, later ones replacing earlier ones and the
 System's own files. Two snapshots placing the same file fail the build.
 Beside each image, `<name>.img.json` records its snapshots and the apps to
-launch as paths on the image (what `test_image.py` runs). Aliases point at
-the bake's target volume; the build warns where they land elsewhere.
+launch as paths on the image (what `test_image.py` runs), plus the
+definition's `title`, `tags` and `note` for the web UI's disk list.
+Aliases point at the bake's target volume; those whose target is placed
+are rewritten to where it landed, a boot image's System Folder aliases to
+the data image named by `aliases_to`. `build.py --list` shows each
+definition's state.
 
 ## macfetch
 

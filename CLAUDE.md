@@ -181,6 +181,8 @@ client/                             — Browser UI (vanilla JS)
 
 ## API Endpoints
 
+The main ones; every endpoint with its parameters: `docs/API.md`.
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/status` | GET | `{emulator_running, boot_phase, checkload_count, boot_elapsed}` |
@@ -227,13 +229,16 @@ Machine:
   --cdrom PATH               CD-ROM image (repeatable)
   --model-id N               Machine type the Mac is told (Gestalt ID - 6; default: the
                              profile's). Quadra-family ROMs only: 5 = IIci, for System 7.0/7.1
-  --extfs PATH               Shared folder (repeatable)
+                             (7.1 bombs with the Quadra's 14)
+  --extfs PATH               Shared folder (repeatable; the ROM machines mount only the first)
   --bootdriver N             0=any, -62=CD-ROM (default: 0)
   --storage-dir PATH         Default storage root (default: ~/storage)
   --executor-data PATH       Executor data dir (default: <storage>/executor)
   --executor-system IMAGE    Run on the System Folder of <storage>/images/IMAGE
                              (copied out on first use, image mounted too)
   --executor-start WHAT      finder | browser | path in the System (default: finder)
+  --executor-app PATH        Application Executor starts instead (host path)
+  --executor-writable-images Executor mounts disk images read-write (default: read-only)
   --[no-]executor-fresh      Restore the System from its clean copy each run (default: on)
   --executor-ot              Executor answers Open Transport (in progress; default: off)
   --executor-ppc             Executor runs fat apps' PowerPC code on mame-ppc (PowerPC-only
@@ -257,13 +262,17 @@ CPU:
 Media:
   --audio                    Send sound to the browser (default: off; the Mac has its
                              sound hardware either way: games refuse to start without it)
+  --audio-dump PATH          Append the sound sent out (S16LE 48 kHz stereo) to PATH
   --zap-pram                 Clear PRAM on startup
-  --model-id N               Machine type the Mac sees (default: the ROM machine's;
-                             5 = IIci for Systems before 7.5: 7.1 bombs with the Quadra's 14)
   --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog
+                             (--no-dismiss-shutdown-dialog to see it)
 
 Networking:
-  --network MODE             none | socket[:PATH] (default: none)
+  --network MODE             none | socket[:PATH] (default: none; docs/Networking.md)
+
+Serial:
+  --serial-a PATH            Port A: pty (allocate one), a device path, or none
+  --serial-b PATH            Port B, the same
 
 Automation:
   --bridge                   Enable automation bridge (BridgeAgent + auto ExtFS mount)
@@ -286,6 +295,8 @@ Logging:
   --debug-mame-ppc           mame-ppc: host ops, exceptions, per-second CPU sample
   --trace-atraps             Record (A-trap, caller PC) pairs; snapshots write atraps.tsv
   --no-text-feed             Don't patch _StdText & co. (no /api/text)
+  --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait
+  --snapshot-at NAME@SECS    With --deterministic: snapshot SECS virtual seconds after the Finder starts
   --executor-logtraps        Executor logs every trap call to stderr
   --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks
   --executor-debug OPTS      Executor's own debug options: memcheck (heap checks at every
@@ -369,9 +380,9 @@ ignored with a warning and `/api/config` reports `browser_available: false`.
 `--browser` runs an in-process Chromium via Qt6 WebEngine and pipes
 its rendered pixels into a guest Mac app called **MacBrowser**. The
 guest app provides a native Mac chrome (toolbar, URL bar, V/H
-scrollbars) over a 1:1 pixel viewport; clicks/keys/scroll are
-forwarded as synthesized `QMouseEvent` / `QKeyEvent` / `QWheelEvent`
-posted into the hidden `QWebEngineView`. See
+scrollbars) over a 1:1 pixel viewport; clicks/keys/scroll reach the
+hidden `QWebEngineView` through the Chrome DevTools Protocol
+(`cdp_client.cpp`, `Input.dispatch*Event`). See
 [`docs/MacBrowser.md`](docs/MacBrowser.md) for the architecture
 deep-dive (memory layout, ring protocol, capture pipeline).
 
@@ -408,7 +419,7 @@ BrowserShm):
 | Event (h2g) | Description |
 |---|---|
 | `BR_EV_STATUS` | Loading / Ready / Error + URL — drives URL bar |
-| `BR_EV_FRAME` | Framebuffer updated — guest re-blits |
+| `BR_EV_FRAME` | defined, not sent: the guest polls `fb.seq` and re-blits the dirty rects |
 | `BR_EV_SELECTION` | Reply to GET_SELECTION → write to TEScrap |
 | `BR_EV_PAGE_METRICS` | page_w/h, scroll_x/y, viewport_w/h — drives V/H scrollbar thumb + active state |
-| `BR_EV_DOWNLOAD` | (M7, planned) download start/progress/done |
+| `BR_EV_DOWNLOAD` | download start/progress/done (to `Host:macbrowser:Downloads`) |

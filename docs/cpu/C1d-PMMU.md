@@ -1,6 +1,7 @@
 # C1d: Virtual Memory on the 68k machine (PMMU), where it stands
 
-Status 2026-10-11: **assessed, not started.** The `mame-68k` core can
+Status 2026-10-11: **assessed, not started** (still the case 2026-10-21:
+no machine sets `cpu::Config::mmu`). The `mame-68k` core can
 emulate a 68040 PMMU (C1c: `cpu::Config::mmu` selects MAME's PMMU
 initialisation), but nothing turns it on, and the 68k ROM machine is built
 in a way that keeps Mac OS from ever using it. This document records why,

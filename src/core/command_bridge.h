@@ -4,9 +4,11 @@
  * Read commands (app name, window list) peek Mac memory directly from
  * the 60Hz IRQ — no Toolbox calls needed.
  *
- * Action commands (launch, quit) are handled by a guest-side agent app
- * installed in System Folder:Startup Items. It communicates via file I/O
- * on the ExtFS volume — no EmulOps, no hand-coded 68k.
+ * Action commands (launch, quit, script, copy, shutdown, ...) are handled
+ * by BridgeAgent, a guest-side app the emulator launches from the bridge
+ * dir on the Host volume at desktop time. Requests and answers go through
+ * the bridge trap $ABE5 (guest_bridge.h), the request slot in the IPC
+ * buffer. docs/CommandBridge.md.
  */
 
 #ifndef COMMAND_BRIDGE_H
@@ -48,8 +50,8 @@ std::string command_bridge_guest_dir();
 std::string command_bridge_agent_bin();
 
 // Called from the 60Hz IRQ handler — advances PPC boot phase to Finder.
-// The guest-side bridge agent is launched by Finder from Startup Items;
-// the emulator does not inject anything.
+// BridgeAgent itself is launched by the emulator at desktop time
+// (command_bridge.cpp), not from the boot disk's Startup Items.
 void command_bridge_drain_from_irq(M68kRegisters* r);
 void command_bridge_drain_from_irq_ppc(M68kRegisters* r);
 

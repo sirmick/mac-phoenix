@@ -1,5 +1,11 @@
 # MAME cores in MacPhoenix
 
+Status 2026-10-21: C1a–c, C1e, C2a–c, C2d (arm64 Linux) and C3a done;
+`mame-68k` and `mame-ppc` are the `--core` choices beside `uae` and `kpx`,
+and Executor's PowerPC runs on `mame-ppc` (C2e's PowerCore part). Open:
+C1d (parked), C2d on Apple Silicon, the rest of C2e (Kheperix still in
+tree), C3b (does not boot), C3c, C4, and the open Stragglers (S20 AltiVec).
+
 Agreed 2026-10-10. Three goals, one shared piece of work:
 
 * **C1** MAME's Musashi (68020–68040 with PMMU and softfloat FPU, several
@@ -24,6 +30,14 @@ milestone table. On this x86-64 host: 7.5.5 to the desktop in 0.9 s on
 full ctest run on main after the merge: 495 of 502, the seven failures
 all older than this work (`../executor/STRAGGLERS.md` items 20 and 21,
 the parked heap corruption, the `as_real_plain` digit count below).
+
+**Since (to 2026-10-21).** C1e retired the vendored v3.32 (`musashi` is
+now an alias of `mame-68k`); C1d was assessed and parked; C2d boots on
+arm64 Linux under qemu; S4 gave mame-ppc a guest-memory base offset, so it
+needs no `vm.mmap_min_addr`; mame-ppc reports a 750 PVR (S20); Executor's
+PowerPC code runs on mame-ppc behind the PowerCore facade
+(`src/executor/cpu/PowerCore.cpp`, ../executor/README.md). The PPC
+machine boots 7.5.5, 7.6.1, 8.6 and 9.0.4.
 
 ## Source
 
@@ -75,21 +89,28 @@ What each number hides:
 
 ```
 src/cpu/mame/
-  shim/emu.h, logmacro.h   stand-ins for the MAME framework (see below)
+  shim/            emu.h, logmacro.h, emuopts.h, osdlib.cpp, ...: stand-ins
+                   for the MAME framework (see below)
   m68000/          m68kcpu, m68kops (generated, committed), m68kfpu, m68kmmu,
                    m68kmusashi.h, m68kcommon, m68kdasm; m68kmake.py +
                    m68k_in.lst kept (the per-model m680x0.cpp files are not
                    lifted: the adapter is the device)
   mame_68k_core.cpp   cpu::Core on m68000_musashi_device   ("mame-68k")
   powerpc/         ppccom, ppcdrc, ppcfe, ppc_dasm                   (C2)
-  drc/             uml, drcuml, drccache, drcfe, drcbeut, drcbec,
-                   drcbex64, drcbearm64, drcbe_guestmem (our READ/WRITE) (C2)
+  cpu/             uml, drcuml, drccache, drcfe, drcbeut, drcbec,
+                   drcbex64, drcbearm64, x86log                       (C2)
+  emu/             divtlb                                            (C2)
   mame_ppc_core.cpp   cpu::Core on ppc750_device           ("mame-ppc") (C2)
   third_party/     softfloat3 (+ softfloat3_sources.cmake, MAME's list);
-                   asmjit, mfpresolve (C2)
-  LICENSE-MAME
-  CMakeLists.txt   mame_softfloat3, mame_m68k (C++20; cpu_core links it)
+                   asmjit, util (mfpresolve, strformat, ...)          (C2)
+  LICENSE-MAME, LICENSE-asmjit
+  CMakeLists.txt   mame_shim, mame_softfloat3, mame_m68k, mame_asmjit,
+                   mame_ppc (C++20)
 ```
+
+(As planned this had a `drc/` directory and a `drcbe_guestmem` lowering;
+the DRC files went to `cpu/`, MAME's layout, and the inline memory path
+became MAME's fastram in guest byte order, S3.)
 
 Imported files keep MAME's copyright headers and are edited as little as
 possible, as `src/executor/romlib` is; a "Changes to imported MAME code"
@@ -123,10 +144,10 @@ nothing more:
 | C1d | PMMU | 7.5.5 with Virtual Memory on in the Memory control panel boots and runs on `mame-68k` (Basilisk II could never) | assessed 2026-10-11, not started: the ROM machine patches the ROM's MMU setup out (`InitMMU`, PTEST, the no-MMU paths in `rom_patches.cpp`) and its memory map is not the Quadra's (ROM, I/O and RAM banks elsewhere). System 7.5.5's VM builds on the ROM's MMU tables made from the real map, so the PMMU alone cannot boot it: it needs either a hardware-accurate Quadra memory map (as QEMU's q800 has) or synthetic MMU tables matching this layout plus the Gestalt answers VM checks. A project of its own. Write-up: [C1d-PMMU.md](C1d-PMMU.md) |
 | C1e | Retire v3.32 | `src/cpu/musashi` deleted, `--core musashi` becomes an alias of `mame-68k`; UAE dropped from Executor (low link, `MAP_32BIT` go) | v3.32 retired 2026-10-11: `src/cpu/musashi` and `musashi_core.cpp` deleted, `--core musashi` (CLI, JSON, `--cpu=` in the gtests) is `mame-68k` with a warning, the ROM-machine `*_musashi` cells are `*_mame68k` now, the Executor ones had mame-68k twins already (S12). UAE stays in Executor (the user keeps the old cores otherwise) |
 | C2a | PPC core on the C back-end | shim + `drc/` + `powerpc/` compile with `drcbec` (UML interpreted); `mame_ppc_core.cpp` as `Arch::PPC`; differential trace against KPX (`PPC_FLIGHT_RECORDER` / `MACEMU_PPC_CR2_TRACE`) matches over the nanokernel boot | done 2026-10-10: `mame_ppc` (powerpc + the UML core + `drcbec`, `divtlb`, strformat/vecstream/mfpresolve lifted) builds everywhere; `mame_ppc_core.cpp` is `Arch::PPC` "mame-ppc"; `tests/test_cpu_cores.cpp` runs a program with host ops, code invalidation, context and the disassembler. Differential trace against KPX not done (the boot itself was the oracle) |
-| C2b | Mac side on the new core | the KPX machine's ROM patches, EmulOps (primary opcode 6 as a UML op calling the Host), `HandleInterrupt`, `execute_68k` run on `mame-ppc`; guest memory at one base offset, `VMBaseDiff` a variable; 7.5.5 boots to Finder (`tests/test_boot_ppc.sh`); no `mmap_min_addr` | done 2026-10-10 except the base offset: `src/cpu/kpx/cpu_ppc_mame.cpp` installs the SheepShaver machine side on the core (`--backend kpx --core mame-ppc`); 7.5.5 boots to the Finder desktop, BridgeAgent up, identical screen to Kheperix; ctest `boot_ppc_mame`, `boot_ppc_mame_api`. 13 s to desktop on the UML interpreter against 3 s on Kheperix. Addressing is still identity (so `mmap_min_addr` stays), the base offset moves to C2e |
+| C2b | Mac side on the new core | the KPX machine's ROM patches, EmulOps (primary opcode 6 as a UML op calling the Host), `HandleInterrupt`, `execute_68k` run on `mame-ppc`; guest memory at one base offset, `VMBaseDiff` a variable; 7.5.5 boots to Finder (`tests/test_boot_ppc.sh`); no `mmap_min_addr` | done 2026-10-10 except the base offset: `src/cpu/kpx/cpu_ppc_mame.cpp` installs the SheepShaver machine side on the core (`--backend kpx --core mame-ppc`); 7.5.5 boots to the Finder desktop, BridgeAgent up, identical screen to Kheperix; ctest `boot_ppc_mame`, `boot_ppc_mame_api`. 13 s to desktop on the UML interpreter against 3 s on Kheperix. Addressing is still identity (so `mmap_min_addr` stays), the base offset moves to C2e (done since as S4, 2026-10-11) |
 | C2c | x86-64 back-end | `drcbex64` with `drcbe_guestmem` READ/WRITE lowering; asmjit vendored; boot matrix `kpx-jit-*` cells pass as `mame-ppc` cells; boot time at or under KPX `--jit` | done 2026-10-10: `drcbex64` + `x86log` lifted, asmjit vendored (`third_party/asmjit`, zlib); memory accesses call the shim's `address_space` member functions through MAME's own resolved-accessor fallback (no `drcbe_guestmem` inline fast path yet); `--backend kpx --core mame-ppc --jit` boots 7.5.5 to the desktop in 1.6 s (Kheperix JIT 1.1 s, Kheperix interpreter 3.1 s, UML interpreter 13 s); ctest `boot_ppc_mame_jit` |
-| C2d | arm64 back-end | `drcbearm64` builds and boots 7.5.5 on arm64 Linux and Apple Silicon (`MAP_JIT`); the `kpx_stub` is gone | arm64 Linux done 2026-10-11 (under qemu, `tools/xarch/xarch.sh arm64`): 7.5.5 to the desktop in 22 s on `--jit` under emulation (166 s on the UML interpreter); `cpu_cores` passes; the native back-end runs the `test_cpu_cores --bench` loop at 121 MIPS under qemu (x86-64 native: 1500). Apple Silicon not done: needs S4 (no mapping at 0 on macOS) and `MAP_JIT` |
-| C2e | Retire Kheperix | `src/cpu/kpx/src`, `dyngen_precompiled`, `regen_dyngen_ops.sh` deleted; `--backend kpx` keeps its name on the new core; PowerCore facade (`src/executor/cpu/PowerCore.*`) implemented on it for Executor's milestone P | not started |
+| C2d | arm64 back-end | `drcbearm64` builds and boots 7.5.5 on arm64 Linux and Apple Silicon (`MAP_JIT`); the `kpx_stub` is gone | arm64 Linux done 2026-10-11 (under qemu, `tools/xarch/xarch.sh arm64`): 7.5.5 to the desktop in 22 s on `--jit` under emulation (166 s on the UML interpreter); `cpu_cores` passes; the native back-end runs the `test_cpu_cores --bench` loop at 121 MIPS under qemu (x86-64 native: 1500). Apple Silicon not done: it needed S4 (no mapping at 0 on macOS; done for mame-ppc 2026-10-11) and still needs `MAP_JIT` (`shim/osdlib.cpp` is plain `mmap`); `kpx_stub.cpp` is still there, standing in for Kheperix on non-x86 hosts |
+| C2e | Retire Kheperix | `src/cpu/kpx/src`, `dyngen_precompiled`, `regen_dyngen_ops.sh` deleted; `--backend kpx` keeps its name on the new core; PowerCore facade (`src/executor/cpu/PowerCore.*`) implemented on it for Executor's milestone P | PowerCore part done 2026-10-21: the facade runs on mame-ppc (a 750, translation off, native back-end) over the 68k core's GuestMemory; ctest `ppc_hello_executor`, `ppc_hello_executor_mame68k` and the PowerPC `executor.CPU.*` gtests (`executePPC`, `ppcArguments*`). Kheperix not retired: still the default PPC core (`--core kpx`) and the web UI profiles' core, and it keeps the AltiVec mame-ppc lacks (S20) |
 | C3a | `execute_68k` on Musashi | host-initiated 68k calls run on a `mame-68k` instance sharing the PPC machine's GuestMemory: import the GPR contract, run to the EXEC_RETURN word, export; everything else still on the DR emulator; bridge suites pass | done 2026-10-10 as a hybrid (`--m68k-host 1` on `--core mame-ppc`): host-initiated 68k routines run on a `mame-68k` core over the PPC machine's memory; the ROM's EmulOp words and EXEC_RETURN are handled in the 68k host; at the first A-line word the registers go into the emulator's convention (through a thunk that sets the CCR) and the nanokernel's emulator finishes the routine. 7.5.5 boots to the desktop in 1.6 s and the command bridge passes 7/7 on it. Mode 2 (Musashi takes A-line traps through the ROM dispatcher at $28) boots too but breaks the bridge: a divergence after the dispatcher hands off at a routine descriptor, not yet understood |
 | C3b | The 68k side on Musashi | the emulator's entry points patched to SHEEP ops that enter Musashi; exits at `$AAFE` (Mixed Mode), EXEC_RETURN, interrupts (Musashi's IRQ line instead of the DR poll word), bus errors as 68k frames; `0xFExx`/`$71xx` EmulOps as host ops; 7.5.5 boots to Finder and passes the bridge suites | in progress (experimental `--m68k-host 3`): the opcode table is patched at `OP_RESET` so every ordinary slot enters Musashi through a host op (native op 63); Musashi hands A-line, non-EmulOp `$FExx` and illegal words back to the emulator at its dispatch loop, and stops for interrupts. The boot runs ~2,300 hand-backs and then goes wrong (see Notes from C3b). Write-up: [C3b-STATUS.md](C3b-STATUS.md) |
 | C3c | Numbers | boot time and a 68k-heavy benchmark (MacPerl guest suite section) against the DR emulator on x86-64; the same on arm64 against the interpreter-only PPC | not started: needs C3b booting |
@@ -159,6 +180,10 @@ The ROM machines and Executor already give each core a `GuestMemory`
 whose mapped pages share one base offset (`GuestMemory::uniform`), so a
 guest address is host `base + addr`. `drcbe_guestmem` is the lowering for
 `OP_READ`/`OP_READM`/`OP_WRITE`/`OP_WRITEM` on both native back-ends:
+
+(Not built as such: S3 did the fast path with MAME's fastram over RAM and
+ROM in guest byte order; the slow path is MAME's accessor fallback into
+the shim's `address_space`.)
 
 * fast path: `base + addr` load or store of the right width, big-endian
   byte swap, when the page table says the page is mapped;
@@ -380,7 +405,8 @@ understood.
   so the outer block's next HASHJMP ran on the dead inner frame and exited
   into garbage: the EXEC_RETURN host op looped forever. `drcbe_x64::execute()`
   now saves and restores the near state and the memory-resident UML
-  registers around the call. `drcbearm64` will need the same.
+  registers around the call. `drcbearm64` will need the same (done with
+  C2d, S2).
 * **Inline memory (S3).** MAME's fastram, adapted to guest byte order,
   covers RAM and ROM: the static read/write subroutines load or store
   directly and byte-swap. The subroutines are generated once in
@@ -454,7 +480,9 @@ understood.
 * Not yet on arm64 as a whole: `SignalStackBase`, `DisableInterrupt`,
   `MakeExecutable`, `FlushCodeCache` still live in `cpu_ppc_kpx.cpp`
   (x86-only) with no-op stubs on other hosts; they move to kpx_shared
-  with C2d.
+  with C2d. (Done: `host_ppc.cpp` has all but `FlushCodeCache`, which
+  stays Kheperix's, a no-op in `kpx_stub.cpp`; mame-ppc verifies its
+  blocks instead.)
 
 ## Notes from C1
 

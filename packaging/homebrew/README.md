@@ -2,6 +2,21 @@
 
 Standalone formula for installing MacPhoenix on macOS via Homebrew.
 
+Status (checked 2026-10-21): a draft (`92c75d19`, 2026-04-25), never
+published. MacPhoenix has not been built on macOS as far as git history
+shows: CI (`.github/workflows/build.yml`) builds Linux packages only,
+there is no tap repo, and there is no release or git tag yet, so only
+`--HEAD` installs are possible. The formula's dependencies follow
+`CMakeLists.txt` and `debian/control`: Qt 6 (>= 6.4, Core and Network),
+OpenSSL (for libdatachannel), libyuv (required), OpenH264, libvpx,
+libwebp and Opus (optional codecs), and Rust for `net-bridge`. It
+builds with the defaults otherwise, except `-DBUILD_TESTS=OFF` and
+`-DBUILD_BRIDGE_AGENT=OFF` (no Retro68; the committed `BridgeAgent.bin`
+and `MacBrowser.bin` are installed instead). The Executor backend needs
+Boost, Ruby, Bison and Perl and is skipped with a warning without them;
+the formula does not pull them in. Version 1.0.0 comes from `project()`
+in `CMakeLists.txt`.
+
 ## Publishing the tap
 
 Homebrew taps are separate GitHub repos with the naming convention
@@ -57,7 +72,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-        with: { submodules: recursive }
       - run: brew audit --strict --new-formula packaging/homebrew/Formula/mac-phoenix.rb
       - run: brew install --build-from-source --HEAD packaging/homebrew/Formula/mac-phoenix.rb
       - run: brew test mac-phoenix
@@ -87,5 +101,6 @@ shasum -a 256 dist/mac-phoenix_1.0.0.tar.xz
 #       sha256 "<the sha from step 3>"
 ```
 
-The tarball already bundles git submodules and vendored cargo crates, so
-Homebrew builds offline once it's downloaded.
+The tarball carries the vendored `subprojects/` (there are no git
+submodules any more) and net-bridge's vendored cargo crates, so Homebrew
+builds offline once it's downloaded.

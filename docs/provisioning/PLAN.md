@@ -9,10 +9,18 @@ replayable, and building a disk is copying snapshots. The messy work
 done once, up front, and kept.
 
 Full intent: System 6.0.8, the System 7 range, Mac OS 8.6 and 9.0.4.
-**Current scope: the 7.x range (7.1, 7.5.5, 7.6.1).** Mac OS 8.1 is
-skipped.
+Scope at the start: the 7.x range (7.1, 7.5.5, 7.6.1); 6.0.8, 8.6 and
+9.0.4 followed (P6, P7). Mac OS 8.1 is skipped.
 
-**Where it stands (2026-10-16, branch `provisioning-dev-disks`).** A
+**Where it stands (2026-10-21).** P0 and P2–P7 are done: every System
+from 6.0.8 to 9.0.4 is an `os` bake, the standard, test and development
+disks are built from snapshots by `provisioning/bake.py` and
+`provisioning/build.py`, and `provisioning/test_image.py` launches their
+apps. Collections have started (P8: games, productivity). P1 (storage)
+is not done. The tools named below in "From" (`guest_install.py`,
+`build_disk.py`, `test_dev_disks.py`) are gone.
+
+**Where it stood (2026-10-16, branch `provisioning-dev-disks`).** A
 first version works end to end for development disks: `tools/macfetch`
 (pinned media), `provisioning/guest_install.py` (installers and StuffIt
 Expander in the guest, captured), `provisioning/build_disk.py`,
@@ -100,7 +108,11 @@ so "baked on 7.6.1" is exact.
 
 A data image is a blank volume plus snapshots' `:Items:`; a boot image is
 an `os` snapshot plus snapshots' `:System Folder:` parts (and optionally
-items).
+items). As built, a boot image's `base` names an entry in
+`provisioning/bases.json`: an `os` snapshot (`os-7.6.1`), a built layer
+(`tools-7.6.1`) or a standard image (`standard-7.6.1` = `7.6.1.img`);
+`dev-7.6.1` is `standard-7.6.1` plus the dev snapshots' System Folder
+parts, and `"aliases_to"` names the data image its aliases point into.
 
 ## Storage and media
 
@@ -178,12 +190,12 @@ repo. `tools/setup.sh` gains the `media` and `baked` links.
 
 | System | Source | Baked on | Runs on | Scope |
 |---|---|---|---|---|
-| System 6.0.8 | Legacy CD `Mac OS:System 6.0.8` (800K / 1440K floppy images) | SE / IIci ROM | 68k (SE, Plus, IIci profiles) | later |
-| **System 7.1** | Legacy CD `Mac OS:System 7.1` + `7.1-C/Q610, C/Q650, Q800 1.1` enabler (the Quadra 650 needs it) | Quadra 650 | 68k | **now** |
-| **System 7.5.5** | Legacy CD `System 7.5, Version 7.5.3` + `System Updates:System 7.5.5 Update` | Quadra 650 (universal install) | 68k, PPC | **now** |
-| **Mac OS 7.6.1** | Legacy CD `Mac OS 7.6` + `Mac OS 7.6.1` (Retail CD as a second source) | Quadra 650 (universal install) | 68k, PPC | **now** |
-| Mac OS 8.6 | `MacOS8.6.iso` | G3 | PPC | later |
-| Mac OS 9.0.4 | `Apple_MacOS_9.0.4_USA.iso` (9.0 + the 9.0.4 update on the disc) | G3 | PPC | later |
+| System 6.0.8 | Legacy CD `Mac OS:System 6.0.8` (800K / 1440K floppy images) | SE / IIci ROM | 68k (SE, Plus, IIci profiles) | done (P6; baked on the IIci) |
+| **System 7.1** | Legacy CD `Mac OS:System 7.1` + `7.1-C/Q610, C/Q650, Q800 1.1` enabler (the Quadra 650 needs it) | Quadra 650 | 68k | done (P2; `--model-id 5`) |
+| **System 7.5.5** | Legacy CD `System 7.5, Version 7.5.3` + `System Updates:System 7.5.5 Update` | Quadra 650 (universal install) | 68k, PPC | done (P2) |
+| **Mac OS 7.6.1** | Legacy CD `Mac OS 7.6` + `Mac OS 7.6.1` (Retail CD as a second source) | Quadra 650 (universal install) | 68k, PPC | done (P2) |
+| Mac OS 8.6 | `MacOS8.6.iso` | G3 | PPC | done (P7; installed from 7.6.1) |
+| Mac OS 9.0.4 | `Apple_MacOS_9.0.4_USA.iso` (9.0 + the 9.0.4 update on the disc) | G3 | PPC | done (P7; installed from 8.6) |
 
 Legacy CD = the Apple Legacy Software Recovery CD, `media/apple/legacy-recovery.iso`:
 every System from 1.0 to Mac OS 8.1 with updaters, machine enablers
@@ -216,6 +228,15 @@ and networked. Standard boot images are `os-<ver>` + `tools-<family>`
 | Internet Config 1.4 | | ✓ | ✓ | ✓ | Garden |
 | BBEdit Lite | | 4.1 | 4.1 | 4.1 / 6.1 | Garden |
 
+As built (`provisioning/images/tools-*.json`), the layers are smaller
+than this table: `tools-6.0.8` StuffIt Expander 4.0.2 and Disk Copy 4.2;
+`tools-7.5.5` Open Transport 1.1.2, StuffIt Expander 5.5, Disk Copy 6.3.3;
+`tools-7.6.1` StuffIt Expander 5.5, Disk Copy 6.3.3; `tools-8.6` /
+`tools-9.0.4` StuffIt Expander 6.0.1, Disk Copy 6.3.3, CarbonLib 1.6. The
+standard images add MacsBug 6.6.3 and DHCP networking (not 6.0.8 or 7.1);
+BBEdit Lite is on the development volumes only. There is no `tools-7.1`:
+`7.1.img` is `os-7.1` as installed.
+
 ### L3: development (`dev-*`)
 
 Today's set, re-baked generically; arrangement is in `images/dev-tools-system-7.json`.
@@ -226,10 +247,12 @@ Today's set, re-baked generically; arrangement is in `images/dev-tools-system-7.
 | Languages / scripting | MacPerl 5.2.0r4, MacPython 1.5.2 (baked on both machines: one fat PythonCore), HyperCard 2.4.1, Frontier 5.0.1 (first launch done) |
 | Debug / resources | MacsBug 6.6.3 (System Folder), ResEdit 2.1.3, Resorcerer 2.0 (needs a serial) |
 | Comms | ZTerm 1.0.1 (needs a serial port the emulator doesn't have yet) |
-| 8.6 / 9 only (later) | Universal Interfaces 3.4.2 and MPW 3.5 (HFS+), a later CodeWarrior for Carbon (`media/other/CodeWarrior 8 Pro`) |
+| 8.6 / 9 only | planned: Universal Interfaces 3.4.2 and MPW 3.5 (HFS+), a later CodeWarrior for Carbon (`media/other/CodeWarrior 8 Pro`). Done (P7): CodeWarrior Pro 7.2 (Pro 8 needs 9.2.2), MPW-GM, MacPerl 5.6.1r2, MacPython-OS9 2.3.5, BBEdit Lite 6.1.2, StuffIt Expander 6.0.1 |
 
-Images: `dev-tools-system-7.img` (one volume for the 7.x Systems) and
-`dev-<ver>.img` = `<ver>.img` + the dev snapshots' System Folder parts.
+Images: `dev-tools-system-7.img` (one volume for the 7.x Systems),
+`dev-tools-macos-8-9.img` (8.6 and 9.0.4) and `dev-<ver>.img` =
+`<ver>.img` + the dev snapshots' System Folder parts (7.5.5, 7.6.1, 8.6,
+9.0.4).
 
 ## Tools
 
@@ -248,15 +271,15 @@ Images: `dev-tools-system-7.img` (one volume for the 7.x Systems) and
 | | What | Status |
 |---|---|---|
 | **P0** | Groundwork: snapshot layout + manifest + content hash, `bake.py` (generic `{target}`, the five kinds, `--record`), BridgeAgent `COPY`, `build.py`, `test_image.py`, dependency tracking | done 2026-10-16: 16 snapshots; Development + dev-7.5.5/7.6.1 built from them; 15/15 apps on uae and kpx × 7.5.5 and 7.6.1; aliases rewritten and resolved in the guest |
-| **P1** | Storage: `media/` and `baked/` in the assets repo, `media.json`, the sorting-out table above, `setup.sh` links, tests on copies | |
-| **P2** | `os` bakes: 7.1 (68k), 7.5.5 and 7.6.1 (68k + PPC) from the Legacy CD | 7.6.1 and 7.5.5 done 2026-10-17 (both boot on uae and kpx); 7.1 to do: see [P2 status](#p2-status) |
+| **P1** | Storage: `media/` and `baked/` in the assets repo, `media.json`, the sorting-out table above, `setup.sh` links, tests on copies | partly (as of 2026-10-21): `media.json` pins every input and tests boot copies (P5), but there is no `media/` tree: pins live under `downloads/`, `images/` (the Apple CDs) and `eto/` per their `"dir"`; `baked/` is a local `~/storage/baked`, not in the assets repo; no `tools/setup.sh` |
+| **P2** | `os` bakes: 7.1 (68k), 7.5.5 and 7.6.1 (68k + PPC) from the Legacy CD | 7.6.1 and 7.5.5 done 2026-10-17 (both boot on uae and kpx); 7.1 done 2026-10-19 (boots with `--model-id 5`): see [P2 status](#p2-status) |
 | **P3** | `tools-7` and the 7.x standard boot images: StuffIt Expander and Disk Copy baked on `os-7.6.1` first (expand and floppy bakes need them in the guest), `tools-7.6.1` = `os-7.6.1` + those, then MacsBug and the rest of the tools on it | done for 7.6.1 and 7.5.5 2026-10-17: StuffIt Expander, Disk Copy (baked on `os-7.6.1`) → `tools-7.x` (bake bases) → MacsBug (baked on `tools-7.6.1`) → standard boot disks `7.6.1.img`, `7.5.5.img` (apps launch on uae and kpx; MacsBug loads). 7.6.1 already has Open Transport, AppleScript, ASLM and QuickTime; 7.5.5 has AppleScript, ASLM and QuickTime, and gets Open Transport 1.1.2 (`open-transport-1.1.2`, baked on `tools-7.5.5`). Its "all Macintoshes" install adds fat libraries but leaves 7.5.3's 1.1 68K libraries behind, and with those 7.5.5 bombs at startup on the PPC machine (illegal instruction, both cores); the bake lists them in `system_remove` and the build deletes them. `7.5.5.img` (OT 1.1.2) passes on uae and kpx |
 | **P3b** | Backport the driving techniques to the GUI recipes (named clicks, drawn text for app-drawn option lists, `wait_for` instead of fixed waits, no per-machine steps): MacPerl and MacPython first (per-machine drags), then THINK C, Symantec C++, HyperCard, StuffIt Expander, Frontier's and Disk Copy's first launches; replayed with someone watching | done 2026-10-17: MacPerl, MacPython (one recipe for both machines now), THINK C, Symantec C++, HyperCard (its System upgrades unticked by name), Frontier's first launch, StuffIt Expander, Disk Copy: named controls, drawn text, `until` repeats; no pixels, no per-machine steps. 2026-10-17, later: no screen coordinates in any recipe (step classification: 0 left, from 5 popups at fixed points and 8 clicks offset from drawn text): popups pressed where their value is drawn (`{"popup": {"text": "Easy Install"}}`); the Apple Installer's and VISE's option lists tick a row when its label is clicked; 7.5.5's System Software group opened by `{"click": {"row": ...}}` (the list's user item, left edge); every option click followed by a `check` (Selected size / Approximate disk space needed, HyperCard's checkbox values). Everything re-baked unattended; snapshot content hashes unchanged except run noise (installer log dates, preferences, aliases, Frontier.root; os captures now drop BridgeAgent's `Trash:Old-BA-<time>` copies). bake.py compares every re-bake's install with the snapshot it replaces (`snapshot.install_diff`: aliases, installer logs and a bake's `volatile` paths by name; for os bakes the System's preferences, and fonts and control panels by size); the next full re-bake reported the same install for all 22 |
 | **P4** | `dev-*`: the development set re-baked on the `os` snapshots (the P3b recipes; the rewrapped expand-only snapshots just re-baked) (until then: the first captures of 2026-10-16, rewrapped into the generic layout); `dev-tools-system-7.img`, `dev-7.5.5/7.6.1.img`; the four-cell app matrix | done 2026-10-17: every dev snapshot re-baked on `tools-7.6.1` (none rewrapped any more); `dev-7.x` = the standard 7.x disks + the dev System Folder parts; 18/18 (17 apps + aliases) on uae and kpx × 7.5.5 and 7.6.1 |
-| **P5** | Switch-over: tests, the boot matrix and web UI profiles boot baked images; the hand-made `.orig` disks retired | tests switched 2026-10-17: they boot copies (tests/lib/refresh_test_disk.sh) of `tests-7.5.5` / `tests-7.6.1` (standard disk + classic 68k MacPerl, Frontier, MPW), `tools/mpw` uses the built `mpw.img`; 6.0.8 stays hand-made; 9.0.4 switched 2026-10-19 (`tests-9.0.4` = the standard 9.0.4 disk: guest_suite_ppc{,_mame}, bridge_trap_ppc and the network suite pass on it). Of the 48 guest-booting ctests all pass except `boot_uae_jit` (known UAE JIT stalls). The five Executor tests on the mame-68k core that failed on the baked disks (guest/finder/keyboard suites, aslm, threads) were Executor's `PrOpen`: it read STR -8192 (the printer chosen in the Chooser) without checking it, and a baked System has never had a printer chosen; a NULL handle reads guest address 0, mapped on the UAE core, a host null pointer on mame-68k (fixed 2026-10-17). Web UI profiles switched 2026-10-19: `68k` 7.6.1, `ppc` 9.0.4, new `ppc-8.6`, `68k-dev` (dev-7.6.1 + dev-tools-system-7), `ppc-dev` (dev-9.0.4 + dev-tools-macos-8-9); the hand-made disks only as fallbacks |
+| **P5** | Switch-over: tests, the boot matrix and web UI profiles boot baked images; the hand-made `.orig` disks retired | tests switched 2026-10-17: they boot copies (tests/lib/refresh_test_disk.sh) of `tests-7.5.5` / `tests-7.6.1` (standard disk + classic 68k MacPerl, Frontier, MPW), `tools/mpw` uses the built `mpw.img`; 6.0.8 stays hand-made; 9.0.4 switched 2026-10-19 (`tests-9.0.4` = the standard 9.0.4 disk: guest_suite_ppc{,_mame}, bridge_trap_ppc and the network suite pass on it). Of the 48 guest-booting ctests all pass except `boot_uae_jit` (known UAE JIT stalls). The five Executor tests on the mame-68k core that failed on the baked disks (guest/finder/keyboard suites, aslm, threads) were Executor's `PrOpen`: it read STR -8192 (the printer chosen in the Chooser) without checking it, and a baked System has never had a printer chosen; a NULL handle reads guest address 0, mapped on the UAE core, a host null pointer on mame-68k (fixed 2026-10-17). Web UI profiles switched 2026-10-19: `68k` 7.6.1, `ppc` 9.0.4, new `ppc-8.6`, `68k-dev` (dev-7.6.1 + dev-tools-system-7), `ppc-dev` (dev-9.0.4 + dev-tools-macos-8-9); the hand-made disks only as fallbacks. Profiles renamed OS-machine later on 2026-10-19 (`7.6.1-68k`, `9.0.4-ppc`, `8.6-ppc`, `7.6.1-dev-68k`, `9.0.4-dev-ppc`, `6.0.8-se`, ...; client.js `ROM_PROFILES`) |
 | **P6** | System 6.0.8 (`os`, `tools-6`) | done 2026-10-19: `os-6.0.8` baked on the IIci (machine `iici`: colour, 68030, 24-bit; `se` is the SE) from the Legacy CD's 800K set, all four floppies attached as disks: the Installer's Customize, Shift-clicked: System software for any Macintosh, software for all Apple printers, AppleShare (workstation), AppleTalk Responder, 32-Bit QuickDraw (the rest of the list is per-machine and Minimal variants the universal System covers), so Color, Monitors, Portable and the printer drivers are in and the disk boots the SE and the IIci; then the floppies' utilities copied in the Finder to the top of the disk (Apple HD SC Setup, Disk First Aid, Apple File Exchange, Font/DA Mover with Fonts and Desk Accessories, MacroMaker, TeachText; CloseView and Map, System Folder additions, not yet). No BridgeAgent before System 7: `launch`/`open` go through the Finder (names, Command-O), `copy` drags onto the target's icon, a `menu` step picks items by drawn text, shutdown is Special > Shut Down. `tools-6.0.8`: StuffIt Expander 4.0.2 and Disk Copy 4.2 in Utilities; `6.0.8.img` is built on it (the SE and IIci boot cells, the web UI's `se` and `iici` profiles). test_image: both apps on the SE; on the IIci Disk Copy 4.2 says it "will not run on this kind of Macintosh" (test_image now fails apps that refuse) |
 | **P7** | Mac OS 8.6 and 9.0.4 (`os`, `tools-8/9`, dev additions) | done 2026-10-18, PowerPC only: `os-8.6` (the 8.6 CD's Mac OS Install run from 7.6.1) and `os-9.0.4` (Mac OS 9 Install, then the 9.0.4 Update, both from the 9 CD, run from 8.6; its version is the PowerPC Enabler's, the System file says 9.0), standard install, Apple driver update off, the Setup Assistant quit at first boot. `tools-8.6`/`tools-9.0.4` add CarbonLib 1.6 (HFS+ self-mounting image, mounted by the guest: media `as_is`), StuffIt Expander 6.0.1 and Disk Copy 6.3.3; `8.6.img` adds DHCP networking (9.0.4 is on DHCP as installed) and MacsBug. `dev-tools-macos-8-9.img` (shared by `dev-8.6`/`dev-9.0.4`): MPW-GM, MacPerl 5.6.1r2, MacPython-OS9 2.3.5 (needs CarbonLib 1.5+), BBEdit Lite 6.1.2, pinned with macfetch, plus HyperCard, Frontier, ResEdit, Resorcerer, ZTerm, MacsBug, Disk Copy; CodeWarrior Pro 7.2 (2026-10-19: the newest that runs on 9.0.4, needing CarbonLib 1.3.1+; Pro 8 needs 9.2.2): the 7.1 Tools CD's installer and update, then the 7.2 PowerPC compiler and linker plugins by COPY replace, first launch done. test_image: all apps launch on 8.6 and 9.0.4 (kpx). Not yet: 9.2.2 (and with it CodeWarrior 8) |
-| P8 | Collections (apps, games) from the existing collection disks' software | later |
+| P8 | Collections (apps, games) from the existing collection disks' software | started (as of 2026-10-21): one bake per title; images `games-classic` (System 6), `games` (System 7), `games-ppc` (8.6 / 9), `world-builder-1.2`, `productivity-system-7` / `productivity-macos-9` with boot disks `productivity-7.6.1` / `-9.0.4` (docs/Provisioning.md). Word 5.1a is `wip` (its installer reports the script locked); `macpack-68k-library.img` and `hd20sc-system-4.1-7.5.5.img` not yet |
 
 ## P2 status
 
@@ -292,9 +315,9 @@ As of 2026-10-16:
   whose saved trap address lived at a fixed address in ordinary RAM;
   removed (docs/CommandBridge.md, Bridge v2). A test bake of os-7.6.1 with
   no `agent_exit` and no reboot ran through; the same bake with the old
-  agent bombed. The recipes still have their `agent_exit`/`reboot` steps:
-  dropping them changes every bake key (a full re-bake), left for the next
-  cascade.
+  agent bombed. The recipes kept their `agent_exit`/`reboot` steps until
+  a later re-bake; as of 2026-10-21 no bake has them (`agent_exit` is
+  still a step `guest.py` knows).
 * **Disk Copy's licence:** on the bootstrap System, Disk Copy stops at its
   licence on first launch, so the 7.6.1 Update step must click Agree
   before the floppies mount.
@@ -343,9 +366,10 @@ or idle signal (deferred: the idle signal).
   also be limited to a backend.
 * Installers that "quit other applications" quit BridgeAgent; it comes
   back after the restart. On the PPC machine the boot phase stays at
-  desktop through a restart, so `wait_finder` also waits for the agent's
-  heartbeat, and a bridge command the agent doesn't pick up within 15 s
-  fails instead of holding the HTTP server.
+  desktop through a restart, so `wait_finder` also waits for the agent
+  (`/api/status` `bridge_agent_connected`, its hello over the bridge
+  trap), and a bridge command the agent doesn't take within 15 s fails
+  instead of holding the HTTP server.
 * Installers that install for the running machine: CodeWarrior (MathLib,
   StdCLibInit on PPC; CFM-68K, NuDragLib on 68k), MacPython (PythonCore).
 * Apple Installer and Installer VISE refuse network volumes (Host).
@@ -356,5 +380,7 @@ or idle signal (deferred: the idle signal).
   Finder's desktop (kind 20, full screen) reports hilited even in the
   background, so `guest.py` only believes a desktop "front window" when it
   repeats.
-* Several emulators can bake at once (BridgeAgent installed with a
-  private hfsutils `HOME` since 2026-10-16).
+* Several emulators can bake at once (hfsutils run with a private `HOME`
+  since 2026-10-16, `snapshot.Hfs`). BridgeAgent is no longer installed
+  on the boot disks: the emulator launches it from the Host volume, and
+  bakes remove any copy an older install left in Startup Items.

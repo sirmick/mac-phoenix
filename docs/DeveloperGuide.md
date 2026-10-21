@@ -4,94 +4,126 @@ Backend internals, common dev tasks, and contribution rules. The
 high-level architecture lives in [Architecture.md](Architecture.md);
 this doc covers the parts a contributor needs to actually change code.
 
-## Backends
+## Backends and cores
 
-| Backend | Arch | File | `--backend` token |
-|---------|------|------|-------------------|
-| UAE | m68k | `src/cpu/cpu_uae.c`, `src/cpu/uae_cpu/` | `uae` (default) |
-| KPX | ppc | `src/cpu/kpx/cpu_ppc_kpx.cpp` + `src/cpu/kpx/src/` | `kpx` |
-| Executor | m68k | `src/executor/` (Toolbox in C++ on UAE, no ROM) | `executor` |
+`--backend` picks the machine (and architecture), `--core` the CPU core
+that runs it:
 
-Backend installers all write into the same `g_platform` table
-(`src/common/include/platform.h`). Core code never references a backend
-directly; the `Backend` enum and `--backend` flag are the extension point
-for adding new backends.
+| Backend | Arch | Cores (`--core`) | Machine side |
+|---------|------|------------------|--------------|
+| `uae` (default) | m68k | `uae` (default), `mame-68k` | `src/cpu/cpu_m68k.cpp`, `src/core/` |
+| `kpx` | ppc | `kpx` (default), `mame-ppc` | `src/cpu/kpx/cpu_ppc_kpx.cpp` / `cpu_ppc_mame.cpp` + shared SheepShaver code in `src/cpu/kpx/` |
+| `executor` | m68k | `uae` (default), `mame-68k` | `src/executor/` (Toolbox in C++, no ROM) |
+
+Cores other than Kheperix implement `cpu::Core`
+(`src/cpu/core/cpu_core.h`): `uae` in `src/cpu/core/uae_core.cpp` over
+`src/cpu/uae_cpu/`, `mame-68k` and `mame-ppc` in `src/cpu/mame/`. The
+installers fill the same `g_platform` table
+(`src/common/include/platform.h`); core code never references a backend
+or core directly. A new core goes behind `cpu::Core` and into
+`cpu::create()` (`src/cpu/core/registry.cpp`); a 68k one then runs the ROM
+machine as is, a PPC one also needs the PPC machine to pick it
+(`CPUContext::init_ppc()` chooses between `cpu_ppc_kpx_install()` and
+`cpu_ppc_mame_install()` by name). See
+[`deepdive/cpu/CpuBackendApi.md`](deepdive/cpu/CpuBackendApi.md).
 
 ## Machine Profiles
 
-Profiles auto-detect from the ROM at startup via `set_machine_profile()` in
-`src/config/machine_profile.cpp`. Each profile sets CPU type, RAM caps,
-display size, and addressing mode.
+The 68k machine profile is picked from the ROM's version and checksum by
+`set_machine_profile()` in `src/config/machine_profile.cpp`. Each sets the
+CPU, FPU, RAM cap, ROM base, addressing mode, Gestalt machine type and
+default display.
 
-| Profile | ROM ver | CPU | RAM | Display | Addr |
-|---------|---------|-----|-----|---------|------|
-| `se` | `0x0276` | 68000 | 4 MB | 512×342 mono | 24-bit |
-| `quadra` | `0x067c` | 68040 | unlimited | 640×480 color | 32-bit |
-| PPC | (4 MB ROM) | PPC 750 (G3) | configurable | up to 1600×1200 | 32-bit |
+| Profile | ROM | CPU | RAM cap | ROM base | Display | Addr |
+|---------|-----|-----|---------|----------|---------|------|
+| `se` | ver `0x0276` | 68000 | 4 MB | `0x400000` | 512×342 mono | 24-bit |
+| `macii` | ver `0x0178` | 68020 | 8 MB | `0x800000` | 640×480 colour | 24-bit |
+| `iici` | checksum `0x368CADFE` | 68030 + FPU | 8 MB | `0x800000` | 640×480 colour | 24-bit |
+| `quadra` | anything else (`0x067c`) | 68040 + FPU | none | after RAM | 640×480 colour | 32-bit |
 
-Add a new profile by appending a `MachineProfile` struct in
-`machine_profile.cpp` and a ROM-version branch in `set_machine_profile()`.
+`--model-id` overrides the Gestalt machine type the Mac is told. The PPC
+machine is not a profile: a G3 (PVR of a 750 on `mame-ppc`), RAM from
+`--ram` (at least 16 MB), screen modes up to 3840×2160 (68k: 1920×1080).
+
+Add a profile by appending a `MachineProfile` in `machine_profile.cpp` and
+a branch in `set_machine_profile()`.
 
 ## Backend internals (the parts you'd touch)
 
-### UAE
+### 68k ROM machine
 
-Default m68k. Hand-tuned interpreter from BasiliskII; `--jit` enables the
-WinUAE JIT compiler. ~5 s boot interpreter, ~3 s with JIT. Memory is
-big-endian and accessed through `do_get_mem_*` byte-swap macros — see
-[`deepdive/cpu/UaeQuirks.md`](deepdive/cpu/UaeQuirks.md).
+`cpu_m68k.cpp` is Basilisk II's machine on any 68k `cpu::Core`: it makes the
+core from the profile's CPU type, sends `$71xx` EmulOps to
+`m68k::EmulOp()` and drives the interrupt line from `InterruptFlags`. On
+`uae`, `--jit` turns on the UAE JIT (x86 only); `mame-68k` brings MAME's
+Musashi with a softfloat FPU. Guest memory is big-endian; see
+[`deepdive/cpu/UaeQuirks.md`](deepdive/cpu/UaeQuirks.md) for UAE's fetch
+path.
 
-### KPX
+### PPC machine
 
-PPC interpreter from SheepShaver with the dyngen PPC JIT. Boots Mac OS
-7.5.5 to the Desktop in ~7 s with `--jit`, ~15 s with `--no-jit`.
-
-Mixed-mode execution — PPC nanokernel runs Mac OS's built-in 68k emulator
-inside the ROM, with mode tracked at `XLM_RUN_MODE`. The boot sequence,
-KernelData layout, IRQ delivery, and ROM patching are documented in
-[`ppc/README.md`](ppc/README.md).
+SheepShaver's machine on Kheperix (`kpx`, `--jit` for its dyngen JIT) or on
+MAME's PowerPC recompiler (`mame-ppc`, `--jit` for the native back-end).
+Mixed-mode execution: the PPC nanokernel runs Mac OS's 68k emulator inside
+the ROM, with the mode at `XLM_RUN_MODE`. Boot sequence, KernelData,
+interrupt delivery and ROM patching: [`ppc/README.md`](ppc/README.md); the
+MAME cores: [`cpu/PLAN.md`](cpu/PLAN.md).
 
 ### Executor
 
-No ROM: the Executor 2000 Toolbox (C++) runs in the IPC child on top of
-UAE through a syn68k-compatible facade (`src/executor/cpu/`). Guest
-addresses are host addresses, so it needs `vm.mmap_min_addr=0`. Plan,
-milestones and gotchas: [`executor/PLAN.md`](executor/PLAN.md).
+No ROM: the Executor 2000 Toolbox (C++) runs in the IPC child (or in-process
+with `--no-webserver`) on a 68k core through a syn68k-compatible facade
+(`src/executor/cpu/`); PowerPC code goes through `PowerCore` on `mame-ppc`.
+On the `uae` core guest addresses are host addresses, so it needs
+`vm.mmap_min_addr=0`; `--core mame-68k` does not. Plan, milestones and
+gotchas: [`executor/PLAN.md`](executor/PLAN.md).
 
 ## Common Development Tasks
 
 ### Adding a New EmulOp
 
-1. Define in `src/common/include/emul_op.h`:
+1. Add it to the enum in `src/common/include/emul_op.h`, before
+   `M68K_EMUL_OP_MAX` (the next free number is `$7140`):
    ```c
-   M68K_EMUL_OP_NEW_FEATURE = 0x7140,
+   M68K_EMUL_OP_NEW_FEATURE,       // 0x7140
    ```
 
-2. Implement handler in `src/core/emul_op.cpp`:
+2. Implement the handler in `m68k::EmulOp()`, `src/core/emul_op.cpp`:
    ```c
    case M68K_EMUL_OP_NEW_FEATURE:
-       // Your implementation
+       // r->d[], r->a[] are the guest registers
        break;
    ```
 
-3. Patch ROM if needed in `src/core/rom_patches.cpp`:
+3. Write it where it's needed (`src/core/rom_patches.cpp`, or a trap
+   patch like `text_feed.cpp`), always through `platform_make_emulop()`:
    ```c
-   *wp++ = htons(0x7140);  // Direct encoding
+   *wp++ = htons(platform_make_emulop(M68K_EMUL_OP_NEW_FEATURE));
    ```
+
+4. If the PPC machine uses it too: add it to `src/cpu/kpx/compat/emul_op.h`
+   and to `kpx_make_emulop_shared()` in `src/cpu/kpx/native_ops_ppc.cpp`.
 
 ### Debugging CPU Execution
 
 ```bash
-# Enable tracing
-CPU_TRACE=0-1000 ./build/mac-phoenix
+# Every A-trap with its caller's PC (snapshots write atraps.tsv)
+./build/mac-phoenix --trace-atraps ...
 
-# GDB breakpoints
-break m68k_do_execute          # UAE interpreter inner loop (uae_cpu/newcpu.cpp)
-break handle_emulop_immediate
+# Guest memory snapshot from a running emulator (src/core/snapshot.h) into
+# <storage>/snapshots/NAME; tools/macdecode reads them
+curl -X POST -d '{"name":"hang1"}' localhost:11000/api/snapshot
 
-# EmulOp frequency
-grep "EmulOp" logfile | sort | uniq -c
+# Programmer's Key: NMI on 68k, Cmd+Power on PPC
+curl -X POST localhost:11000/api/invoke-debug
+
+# GDB: the CPU runs on the IPC child's main thread
+break m68k::EmulOp             # every 68k EmulOp
+break m68k_do_execute          # UAE interpreter loop (uae_cpu/newcpu.cpp)
 ```
+
+Executor has its own switches (`--executor-logtraps`, `--executor-debug`,
+`--watch`); `--debug-mame-ppc` traces the mame-ppc installer.
 
 ## Testing
 
@@ -99,11 +131,14 @@ grep "EmulOp" logfile | sort | uniq -c
 # Unit + API
 ctest --test-dir build -L "unit|api"
 
-# Boot tests (~3 min total)
+# Boot tests
 ctest --test-dir build -L boot
 
-# PPC only
+# PPC only (Kheperix and mame-ppc)
 ctest --test-dir build -R boot_ppc
+
+# Executor
+ctest --test-dir build -L executor
 
 # Verbose
 ctest --test-dir build -V
@@ -123,8 +158,10 @@ perf report
 ## Contributing
 
 ### Code Style
-- C: K&R style, 4-space indent
-- C++: Similar to C, avoid STL in hot paths
+- Match the file you're in: imported code (Basilisk II, SheepShaver, UAE,
+  MAME, Executor) keeps its own style, tabs included; new code uses 4-space
+  indent
+- Avoid allocation and STL containers in CPU hot paths
 - Comments: Explain WHY, not WHAT
 
 ### Commit Messages
@@ -145,7 +182,8 @@ Detailed explanation of what changed and why.
 - [Architecture.md](Architecture.md), [Commands.md](Commands.md),
   [Testing.md](Testing.md), [TroubleshootingGuide.md](TroubleshootingGuide.md)
 - [deepdive/](deepdive/) — quirks and detailed analyses
-- [ppc/](ppc/) — KPX PPC backend internals
+- [ppc/](ppc/) — the PPC machine
+- [executor/](executor/) — the Executor backend
 - [cpu/PLAN.md](cpu/PLAN.md) — MAME cores: Musashi with PMMU (C1), PowerPC recompiler (C2), host 68k on the PPC machine (C3)
 
 ### External
@@ -156,6 +194,10 @@ Detailed explanation of what changed and why.
   (m68k `0x71xx`; PPC `0x18000000`+ family).
 - **IPL** — m68k interrupt priority level (0–7).
 - **VBR** — m68k vector base register.
-- **KPX** — Kheperix; the SheepShaver-derived PPC interpreter.
-- **NativeOp** — PPC native operation thunk (38 selectors).
+- **KPX** — Kheperix; SheepShaver's PPC interpreter and dyngen JIT, the
+  `kpx` core.
+- **cpu::Core** — the interface every other core implements
+  (`src/cpu/core/cpu_core.h`).
+- **NativeOp** — PPC native operation thunk (`NATIVE_*` selectors in
+  `src/cpu/kpx/compat/thunks.h`).
 - **DR Emulator** — the 68k emulator inside Mac OS's PPC ROM.

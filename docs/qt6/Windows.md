@@ -1,5 +1,19 @@
 # Windows build environment
 
+> **Status (checked 2026-10-21):** a plan that was never carried out.
+> There is no Windows build: no commit since the Qt port (merged
+> 2026-05-06) has worked on Windows, there is no Windows CI job, and
+> git history shows no MSVC build of the tree. The only Windows-specific code is
+> Phase 7's `HAVE_WIN32_EXCEPTIONS` define (`src/core/CMakeLists.txt`,
+> `e80f314f`), never exercised. Since this was written the tree has
+> gained a lot that was never looked at with Windows in mind: the MAME
+> CPU cores, the Executor backend (Boost, Ruby, Bison, Perl; a
+> low-address link layout), PPC identity addressing for `--core kpx`,
+> `net-bridge` listening on a Unix socket, and about 36 non-vendored
+> sources outside `src/executor` that include `<sys/mman.h>`,
+> `<sys/socket.h>`, `<poll.h>` or `<unistd.h>`. Treat the steps below
+> as an untested starting point.
+
 Setup notes for a Windows VM/host that can build MacPhoenix as part of
 the Qt6 port (PLAN Phase 10). **Phase 10 is not done yet** — this doc
 exists so a Windows VM can be provisioned in parallel with the
@@ -8,9 +22,8 @@ they surface.
 
 What's already in place: `sigsegv.cpp`'s Windows SEH path was activated
 in Phase 7 (commit `e80f314f`) but has never been exercised on real
-Windows. Phases 0–3a + 7 of the Qt port should compile on Windows once
-the deps below are in place; the remaining POSIX surface (see "Known
-gaps" at the end) needs porting before a full boot will work.
+Windows. The remaining POSIX surface (see "Known gaps" at the end)
+needs porting before the build will link, let alone boot.
 
 ## Pre-canned VM options
 
@@ -56,7 +69,7 @@ Install in this order so PATH ends up sane.
 | Tool | Version | Source | Notes |
 |---|---|---|---|
 | Visual Studio 2022 Community | latest | https://visualstudio.microsoft.com/downloads/ | Workloads: **"Desktop development with C++"**. Components: MSVC v143, Windows 11 SDK (latest), C++ CMake tools, Git for Windows |
-| Qt 6 (≥ 6.4, prefer 6.7+) | 6.7.x LTS | https://www.qt.io/download-qt-installer-oss | Open-source online installer. Select MSVC 2022 64-bit; modules: **Qt Base** + **Qt HTTP Server** (deferred — only if Phase 5 lands on QHttpServer; current Phase 5 path uses `Qt6::Network` from Qt Base only) |
+| Qt 6 (≥ 6.4, prefer 6.7+) | 6.7.x LTS | https://www.qt.io/download-qt-installer-oss | Open-source online installer. Select MSVC 2022 64-bit; modules: **Qt Base** (Core + Network; Phase 5 went to `QTcpServer`, so Qt HTTP Server is not needed). Qt WebEngine only for `-DBUILD_BROWSER=ON` |
 | Rust | stable | https://www.rust-lang.org/tools/install | `rustup-init.exe`, default profile, x86_64-pc-windows-msvc toolchain |
 | Git | latest | bundled with VS 2022, or https://git-scm.com/download/win | Configure long-paths: `git config --global core.longpaths true` |
 | Python 3 | 3.11+ | Microsoft Store or https://www.python.org/downloads/ | Used by some build scripts (boot tests, ROM patching) |
@@ -67,15 +80,18 @@ These are the Linux deps from `debian/control`. Windows mapping:
 
 | Linux dep | Windows source | Notes |
 |---|---|---|
-| `libssl-dev` (OpenSSL) | vcpkg `openssl`, or via Qt's bundled OpenSSL | Used by webserver (WebSocket SHA1, file scanner MD5). **Candidate for Qt simplification — see below.** |
+| `libssl-dev` (OpenSSL) | vcpkg `openssl`, or via Qt's bundled OpenSSL | Needed by libdatachannel (DTLS/SRTP). Our own SHA1/MD5 use moved to `QCryptographicHash` in Phase 12. |
 | `libopenh264-dev` | vcpkg `openh264` | Optional codec — disabled at configure if missing |
 | `libvpx-dev` | vcpkg `libvpx` | Optional codec |
 | `libwebp-dev` | vcpkg `libwebp` | Optional codec |
 | `libopus-dev` | vcpkg `opus` | Optional codec (audio) |
 | `libyuv-dev` | vcpkg `libyuv` | Optional codec helper |
-| `libxcb*-dev` | **N/A** | Linux-only (MacBrowser host pipeline) — Phase 8 will remove via QtWebEngine |
+| `qt6-base-dev` (≥ 6.4) | Qt installer (above) | Required |
 | `cmake` | bundled with VS 2022 | ≥ 3.16 |
-| `cargo` / `rustc` | rustup (above) | net-bridge subproject |
+| `cargo` / `rustc` | rustup (above) | net-bridge subproject (uses a Unix socket: `std::os::unix`) |
+| Boost, Ruby, Bison, Perl | not worked out | Executor backend only; `-DBUILD_EXECUTOR=OFF` skips it |
+
+(The `libxcb*` deps this table used to list went away with Phase 8.)
 
 Easiest path for the optional codecs: install [vcpkg](https://github.com/microsoft/vcpkg)
 in `C:\vcpkg` and run:
@@ -96,15 +112,16 @@ Windows SDK are in PATH. Then:
 ```powershell
 git clone https://github.com/sirmick/mac-phoenix.git
 cd mac-phoenix
-git checkout qt-port
+REM qt-port was merged into main in 2026-05; build main.
 
 REM Tell CMake where Qt is. Adjust path to your Qt install.
 set CMAKE_PREFIX_PATH=C:\Qt\6.7.0\msvc2022_64
 
-REM Configure. -DBUILD_NET_BRIDGE=OFF skips Rust if rustup isn't ready.
+REM Configure. -DBUILD_NET_BRIDGE=OFF skips Rust (net-bridge is Unix-only
+REM today); -DBUILD_EXECUTOR=OFF skips the Executor backend.
 cmake -B build -G "Visual Studio 17 2022" -A x64 ^
       -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
-      -DBUILD_NET_BRIDGE=OFF
+      -DBUILD_NET_BRIDGE=OFF -DBUILD_EXECUTOR=OFF
 
 REM Build (parallel over all cores).
 cmake --build build --config RelWithDebInfo -j
@@ -156,17 +173,19 @@ info" → "Run anyway."
 
 ## Known gaps (Phase 10 work-in-progress)
 
-These are the POSIX surfaces that still need Windows treatment before
-the build will link/run cleanly:
+The table as written in 2026-05 listed six gaps. Five were closed on
+Linux by later Qt-port phases: serial `pthread`/`sem_t` (Phase 15,
+`ed8f47fe`), `nanosleep`/`clock_gettime` (Phase 13, `440bb808`),
+leftover `fork`/`execvp` (Phase 14, `3f1079dc`), direct OpenSSL SHA1/MD5
+(Phase 12, `4d273997`; OpenSSL is still needed by libdatachannel) and
+the `xcb-*` MacBrowser pipeline (Phase 8). The one left:
 
 | Symbol | File | Phase | Replacement |
 |---|---|---|---|
-| `pthread_*`, `sem_t` | `src/drivers/serial/serial_unix.cpp` | 10 | `QThread`/`QSemaphore`, or `#ifdef WIN32` to a `serial_win.cpp` |
-| `nanosleep`, `clock_gettime` | `src/drivers/platform/timer_interrupt.cpp` | 10 | `QThread::usleep`, `QElapsedTimer` (cross-platform, no headers needed) |
-| `fork`/`execvp` | `src/webserver/api_handlers.cpp::handle_create_image`, `src/drivers/ether/ether_socket.cpp` | 10 | `QProcess` (Phase 2 already did the big subprocess fork; these are the leftovers) |
 | `mmap`/`mprotect` JIT pages | UAE JIT cache (search `MAP_ANON\|MAP_JIT\|mprotect`) | 10 | `VirtualAlloc(PAGE_EXECUTE_READWRITE)` + `FlushInstructionCache` |
-| Optional: `OpenSSL` SHA1/MD5 | `src/webserver/websocket.cpp`, `src/webserver/file_scanner.cpp` | post-5 | `QCryptographicHash` — drops the OpenSSL dep entirely |
-| `xcb-*` MacBrowser pipeline | `src/drivers/browser/*.cpp` | 8 | `QWebEnginePage` — Linux-only today; deletes the whole subsystem |
+
+This is not a complete list for today's tree; see the status note at
+the top. No one has audited it for Windows.
 
 Track Phase 10 progress against `docs/qt6/PLAN.md` Phase 10 section.
 

@@ -6,21 +6,22 @@ quirks and design decisions that aren't obvious from reading the code.
 
 ## CPU
 
-- [`cpu/UaeQuirks.md`](cpu/UaeQuirks.md) — UAE byte-swap dance, `regs.pc`
-  vs `regs.pc_p`, `HAVE_GET_WORD_UNSWAPPED`, STOP semantics, prefetch.
-- [`cpu/CpuBackendApi.md`](cpu/CpuBackendApi.md) — backend interface as
-  Platform pointers (`cpu_execute_one` / `cpu_execute_fast`).
-- [`cpu/CpuModelConfiguration.md`](cpu/CpuModelConfiguration.md) — UAE
-  CPU level selection (now driven by machine profiles).
+- [`cpu/UaeQuirks.md`](cpu/UaeQuirks.md) — the `uae` core: byte-swapped
+  opcode fetch (`HAVE_GET_WORD_UNSWAPPED`, `cft_map`), `regs.pc_p`, STOP
+  semantics, CPU level selection.
+- [`cpu/CpuBackendApi.md`](cpu/CpuBackendApi.md) — how a CPU core plugs in:
+  `cpu::Core` and the Platform CPU entries.
+- [`cpu/CpuModelConfiguration.md`](cpu/CpuModelConfiguration.md) — how the
+  68k model (68000–68040, FPU, 24/32-bit) is chosen from the machine
+  profile.
 
 ## Architecture
 
-- [`MemoryArchitecture.md`](MemoryArchitecture.md) — direct addressing,
-  endianness, the m68k Quadra layout (RAM / ROM / ScratchMem /
-  framebuffer).
+- [`MemoryArchitecture.md`](MemoryArchitecture.md) — the 68k ROM machine's
+  guest memory: the host block, `GuestMemory`, endianness, 24-bit
+  machines, ScratchMem and frame buffer.
 - [`PlatformAdapterImplementation.md`](PlatformAdapterImplementation.md) —
-  null-driver-default + adapter pattern for video / audio / scsi /
+  adapters, default drivers and real drivers for video / audio / scsi /
   serial / ether / disk / platform.
-- [`PlatformAPIInterrupts.md`](PlatformAPIInterrupts.md) — why
-  `cpu_trigger_interrupt(level)` is a Platform pointer and how UAE
-  delivers it.
+- [`PlatformAPIInterrupts.md`](PlatformAPIInterrupts.md) — how the 60 Hz
+  tick reaches a core through `cpu_trigger_interrupt`.

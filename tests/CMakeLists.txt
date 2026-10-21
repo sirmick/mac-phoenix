@@ -53,7 +53,7 @@ set_tests_properties(api_endpoints PROPERTIES
 
 add_test(
   NAME config_api
-  COMMAND bash ${TEST_DIR}/test_config_api.sh 18092
+  COMMAND bash ${TEST_DIR}/test_config_api.sh 18178
 )
 set_tests_properties(config_api PROPERTIES
   TIMEOUT 30
@@ -76,7 +76,7 @@ set_tests_properties(extfs PROPERTIES
 set(TEST_SE_ROM "" CACHE STRING "Path to Mac SE ROM for boot tests")
 
 add_test(NAME boot_se
-    COMMAND ${CMAKE_SOURCE_DIR}/tests/test_boot_se.sh --timeout 30
+    COMMAND ${CMAKE_SOURCE_DIR}/tests/test_boot_se.sh --timeout 30 --port 18180
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(boot_se PROPERTIES
     TIMEOUT 45
@@ -109,7 +109,7 @@ set_tests_properties(boot_uae_jit PROPERTIES
 # The same boot on MAME's Musashi (docs/cpu/PLAN.md, C1).
 add_test(
   NAME boot_core_mame68k
-  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core mame-68k --timeout 25 --port 18114
+  COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core mame-68k --timeout 25 --port 18170
 )
 set_tests_properties(boot_core_mame68k PROPERTIES
   TIMEOUT 40
@@ -152,7 +152,7 @@ set_tests_properties(boot_ppc_jit PROPERTIES
 # interpreted until the native back-ends land, so slower.
 add_test(
   NAME boot_ppc_mame
-  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --timeout 45 --port 18116
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --timeout 45 --port 18172
 )
 set_tests_properties(boot_ppc_mame PROPERTIES
   TIMEOUT 65
@@ -162,7 +162,7 @@ set_tests_properties(boot_ppc_mame PROPERTIES
 
 add_test(
   NAME boot_ppc_mame_jit
-  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --jit --timeout 30 --port 18120 --webserver
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --jit --timeout 30 --port 18176 --webserver
 )
 set_tests_properties(boot_ppc_mame_jit PROPERTIES
   TIMEOUT 50
@@ -172,7 +172,7 @@ set_tests_properties(boot_ppc_mame_jit PROPERTIES
 
 add_test(
   NAME boot_ppc_mame_api
-  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --timeout 60 --port 18118 --webserver
+  COMMAND bash ${TEST_DIR}/test_boot_ppc.sh --core mame-ppc --timeout 60 --port 18174 --webserver
 )
 set_tests_properties(boot_ppc_mame_api PROPERTIES
   TIMEOUT 80
@@ -204,7 +204,7 @@ set_tests_properties(mouse_position PROPERTIES
 
 add_test(
   NAME guest_suite
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --timeout 60 --port 18094
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --timeout 60 --port 18182
 )
 set_tests_properties(guest_suite PROPERTIES
   TIMEOUT 90
@@ -582,7 +582,7 @@ set_tests_properties(guest_builds_current PROPERTIES
 foreach(core uae mame-68k)
   if(core STREQUAL "uae")
     set(name ot_executor)
-    set(port 18396)
+    set(port 18394)
   else()
     set(name ot_executor_mame68k)
     set(port 18398)
