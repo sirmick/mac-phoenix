@@ -1153,13 +1153,62 @@ ToggleResults Executor::C_ToggleDate(LongDateTime *lsecsp, LongDateField field,
     return retval;
 }
 
-INTEGER Executor::C_TruncString(INTEGER width, Str255 string,
-                                TruncCode code) /* TTS TODO */
+/* MacPhoenix: TruncText and TruncString (Inside Macintosh: Text 5-?):
+   text wider than width (in the current port's font) loses characters at
+   the end, or in the middle (truncMiddle, $4000), for an ellipsis.
+   TruncString was a stub that claimed to truncate and didn't; TruncText
+   was missing (Marathon's preferences). Single-byte scripts only. */
+static INTEGER trunc_text(INTEGER width, unsigned char *text, int *length, TruncCode code)
 {
-    warning_unimplemented("");
+    int len = *length;
+    if(len <= 0 || TextWidth((Ptr)text, 0, len) <= width)
+        return NotTruncated;
 
-    /* ### claim we didn't have to truncate the string */
+    static unsigned char ellipsis = 0xC9;       /* "…" */
+    int ewidth = TextWidth((Ptr)&ellipsis, 0, 1);
+    if(ewidth > width)
+    {
+        *length = 0;
+        return TruncErr;
+    }
+    std::vector<unsigned char> orig(text, text + len);
+    bool middle = (code & 0x4000) != 0;
+    int best = 0;                               /* characters kept */
+    for(int keep = len - 1; keep >= 0; keep--)
+    {
+        int head = middle ? (keep + 1) / 2 : keep, tail = keep - head;
+        int w = TextWidth((Ptr)orig.data(), 0, head) + ewidth
+            + (tail ? TextWidth((Ptr)orig.data(), len - tail, tail) : 0);
+        if(w <= width)
+        {
+            best = keep;
+            break;
+        }
+    }
+    int head = middle ? (best + 1) / 2 : best, tail = best - head;
+    memcpy(text, orig.data(), head);
+    text[head] = ellipsis;
+    memcpy(text + head + 1, orig.data() + len - tail, tail);
+    *length = best + 1;
     return Truncated;
+}
+
+INTEGER Executor::C_TruncText(INTEGER width, Ptr textPtr, GUEST<INTEGER> *length,
+                              TruncCode code)
+{
+    int len = *length;
+    INTEGER result = trunc_text(width, (unsigned char *)textPtr, &len, code);
+    *length = len;
+    return result;
+}
+
+INTEGER Executor::C_TruncString(INTEGER width, Str255 string,
+                                TruncCode code)
+{
+    int len = string[0];
+    INTEGER result = trunc_text(width, string + 1, &len, code);
+    string[0] = len;
+    return result;
 }
 
 LONGINT Executor::C_VisibleLength(Ptr textp, LONGINT len)

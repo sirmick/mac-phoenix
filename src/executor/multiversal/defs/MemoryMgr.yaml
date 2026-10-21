@@ -1087,3 +1087,104 @@
     dispatcher: OSDispatch
     selector: 0x0020
     executor: C_
+
+# ####
+
+- dispatcher:
+    name: MemoryDispatch
+    trap: 0xA05C
+    selector-location: D0W
+    comment: |
+      MacPhoenix: the virtual memory calls. There is no virtual memory, so
+      holding and locking succeed and do nothing, as on a Mac with it off
+      (Warcraft II holds its sound buffers).
+
+# ####
+
+- function:
+    name: HoldMemory
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    trap: 0xA05C
+    dispatcher: MemoryDispatch
+    selector: 0x0000
+    returnreg: D0
+    executor: C_
+
+# ####
+
+- function:
+    name: UnholdMemory
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    trap: 0xA05C
+    dispatcher: MemoryDispatch
+    selector: 0x0001
+    returnreg: D0
+    executor: C_
+
+# ####
+
+- function:
+    name: LockMemory
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    trap: 0xA05C
+    dispatcher: MemoryDispatch
+    selector: 0x0002
+    returnreg: D0
+    executor: C_
+
+# ####
+
+- function:
+    name: UnlockMemory
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    trap: 0xA05C
+    dispatcher: MemoryDispatch
+    selector: 0x0003
+    returnreg: D0
+    executor: C_
+
+# ####
+
+- function:
+    name: LockMemoryContiguous
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    trap: 0xA05C
+    dispatcher: MemoryDispatch
+    selector: 0x0004
+    returnreg: D0
+    executor: C_

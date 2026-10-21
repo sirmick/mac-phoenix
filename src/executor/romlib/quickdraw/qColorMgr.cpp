@@ -920,6 +920,21 @@ void Executor::C_SetEntries(INTEGER start, INTEGER count, ColorSpec *atable)
     ctab_table = CTAB_TABLE(ctab);
     ctab_changed_p = false;
 
+    /* MacPhoenix: entries beyond the device's table are a range error,
+       not writes past it into the next heap block. */
+    {
+        int size = CTAB_SIZE(ctab);
+        bool in_range = count >= 0 && (start >= 0 ? start + count <= size : true);
+        for(i = 0; start < 0 && in_range && i <= count; i++)
+            in_range = atable[i].value >= 0 && atable[i].value <= size;
+        if(!in_range)
+        {
+            ROMlib_qd_error = cRangeErr;
+            return;
+        }
+        ROMlib_qd_error = noErr;
+    }
+
     if(start >= 0)
     {
         for(i = 0; i <= count; i++)

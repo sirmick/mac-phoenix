@@ -26,29 +26,23 @@ static void C_handle_refresh()
 {
     static bool busy_p = false;
 
-    /* If refresh is off, see if we need to turn it on. */
-    if(!ROMlib_refresh && do_autorefresh_p && autodetect_refresh())
-        set_refresh_rate(10);
+    /* MacPhoenix: the screen is compared with its shadow every other tick
+       whether refresh is on or not; the comparison stops at the first
+       difference from each end, so an unchanged screen costs one pass.
+       Autodetection only noticed a strip that changed between two checks:
+       a game that wrote its view to the screen once, after a palette
+       change had reset the checksums (Marathon), was never shown. */
+    bool old_busy_p;
 
-    if(!ROMlib_refresh)
-    {
-        /* No need for refresh, so check for autorefresh later. */
-        PrimeTime((QElemPtr)&refresh_tm_task, AUTOREFRESH_CHECK_MSECS);
-    }
-    else
-    {
-        bool old_busy_p;
+    /* Make sure we aren't called recursively. */
+    old_busy_p = busy_p;
+    busy_p = true;
 
-        /* Make sure we aren't called recursively. */
-        old_busy_p = busy_p;
-        busy_p = true;
+    PrimeTime((QElemPtr)&refresh_tm_task, (ROMlib_refresh ? ROMlib_refresh : 2) * 1000 / 60);
 
-        PrimeTime((QElemPtr)&refresh_tm_task, ROMlib_refresh * 1000 / 60);
-
-        if(!old_busy_p)
-            flush_shadow_screen();
-        busy_p = old_busy_p;
-    }
+    if(!old_busy_p)
+        flush_shadow_screen();
+    busy_p = old_busy_p;
 }
 PASCAL_FUNCTION_PTR(handle_refresh);
 

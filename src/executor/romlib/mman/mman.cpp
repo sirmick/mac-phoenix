@@ -1192,7 +1192,6 @@ done:
 }
 
 #if 1 && !defined(NDEBUG)
-int do_save_alloc = 0;
 #endif
 
 Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
@@ -1212,9 +1211,7 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
 
     size += HDRSIZE;
 
-#if 1
     auto save_alloc_ptr = ZONE_ALLOC_PTR(current_zone);
-#endif
 
     ZONE_ALLOC_PTR(current_zone) = nullptr;
 
@@ -1231,17 +1228,27 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
         return nullptr;
     }
 
-#if 1 && !defined(NDEBUG)
-    if(do_save_alloc)
-        ZONE_ALLOC_PTR(current_zone)
-            = save_alloc_ptr;
-    else
-        checkallocptr();
-#endif
-
     gui_assert(b < ZONE_BK_LIM(current_zone));
 
     ROMlib_setupblock(b, size, NREL, 0);
+
+    /* MacPhoenix: a nonrelocatable block doesn't move the rover that
+       relocatable blocks are allocated from; it was left just past the new
+       pointer, so the next handle went in among the pointers and left a
+       hole there when freed. Maelstrom (a NewPtr per sprite, each copied
+       from a resource handle) fragmented its 2300K partition that way and
+       ran out of memory; on the ROM machine its pointers are packed with
+       the free space above them. The old rover is kept only if it is still
+       a block above the new one (ReserveMem may have merged blocks). */
+    for(block_header_t *r = BLOCK_NEXT(b);
+        save_alloc_ptr && (block_header_t *)save_alloc_ptr > b && r < ZONE_BK_LIM(current_zone)
+        && r <= (block_header_t *)save_alloc_ptr && PSIZE(r) >= MIN_BLOCK_SIZE;
+        r = BLOCK_NEXT(r))
+        if(r == (block_header_t *)save_alloc_ptr)
+        {
+            ZONE_ALLOC_PTR(current_zone) = save_alloc_ptr;
+            break;
+        }
     p = BLOCK_DATA(b);
 
     if(clear_p)
@@ -2170,3 +2177,11 @@ Ptr _NewPtr_copy_handle_flags(Size size, Handle data_to_copy, bool sys_p)
     return p;
 }
 }
+
+/* MacPhoenix: the virtual memory calls (_MemoryDispatch). No virtual
+   memory: every page is resident, so these succeed and do nothing. */
+Executor::OSErr Executor::C_HoldMemory(void *address, uint32_t count) { return Executor::noErr; }
+Executor::OSErr Executor::C_UnholdMemory(void *address, uint32_t count) { return Executor::noErr; }
+Executor::OSErr Executor::C_LockMemory(void *address, uint32_t count) { return Executor::noErr; }
+Executor::OSErr Executor::C_UnlockMemory(void *address, uint32_t count) { return Executor::noErr; }
+Executor::OSErr Executor::C_LockMemoryContiguous(void *address, uint32_t count) { return Executor::noErr; }

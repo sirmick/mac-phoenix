@@ -109,6 +109,182 @@
 # ####
 
 - function:
+    name: DMGetDisplayIDByGDevice
+    return: OSErr
+    args:
+      - name: displayDevice
+        type: GDHandle
+      - name: displayID
+        type: uint32_t*
+      - name: failToMain
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x051F
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetGDeviceByDisplayID
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: displayDevice
+        type: GDHandle*
+      - name: failToMain
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0520
+    executor: C_
+
+# ####
+
+- funptr:
+    name: DMDisplayModeListIteratorUPP
+    args:
+      - name: userData
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: displaymodeInfo
+        type: Ptr
+
+# ####
+
+- function:
+    name: DMNewDisplayModeList
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: modeListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: thePanelCount
+        type: uint32_t*
+      - name: thePanelList
+        type: Ptr*
+    dispatcher: DisplayDispatch
+    selector: 0x0A36
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetIndexedDisplayModeFromList
+    return: OSErr
+    args:
+      - name: panelList
+        type: Ptr
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: DMDisplayModeListIteratorUPP
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A37
+    executor: C_
+
+# ####
+
+- function:
+    name: DMDisposeList
+    return: OSErr
+    args:
+      - name: panelList
+        type: Ptr
+    dispatcher: DisplayDispatch
+    selector: 0x022C
+    executor: C_
+
+# ####
+
+- function:
+    name: DMBeginConfigureDisplays
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle*
+    dispatcher: DisplayDispatch
+    selector: 0x0206
+    executor: C_
+
+# ####
+
+- function:
+    name: DMEndConfigureDisplays
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0207
+    executor: C_
+
+# ####
+
+- function:
+    name: DMSetDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: mode
+        type: uint32_t
+      - name: depthMode
+        type: uint32_t*
+      - name: reserved
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0A11
+    executor: C_
+
+# ####
+
+- function:
+    name: DMCheckDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: mode
+        type: uint32_t
+      - name: depthMode
+        type: uint32_t
+      - name: switchFlags
+        type: uint32_t*
+      - name: reserved
+        type: uint32_t
+      - name: modeOk
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0C12
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: switchInfo
+        type: Ptr
+    dispatcher: DisplayDispatch
+    selector: 0x043E
+    executor: C_
+
+# ####
+
+- function:
     name: DMDrawDesktopRect
     args:
       - name: globalRect

@@ -35,8 +35,17 @@ using namespace Executor;
     (((entry)->ciPrivate >> 16) & 0xFF)
 #define CI_USAGE(entry) ((entry)->ciUsage)
 #define CI_TOLERANCE(entry) ((entry)->ciTolerance)
+/* The entry's kind on an indexed device: explicit or not, animated or
+   tolerant. MacPhoenix: pmAnimated wins over pmTolerant there and
+   pmDithered doesn't count; this was the low nibble exactly, so Warcraft
+   II's pmTolerant + pmAnimated + pmExplicit palette was never allocated
+   and AnimatePalette did nothing. */
+#define CI_USAGE_KIND(entry)                                              \
+    ((CI_USAGE(entry) & pmAnimated)                                       \
+         ? (CI_USAGE(entry) & (pmAnimated | pmExplicit))                  \
+         : (CI_USAGE(entry) & (pmTolerant | pmExplicit)))
 #define CI_USAGE_HAS_BITS_P(entry, bits) \
-    ((CI_USAGE(entry) & 0xF) == (bits))
+    (CI_USAGE_KIND(entry) == (bits))
 #define CI_RGB(entry) ((entry)->ciRGB)
 
 #define PALETTE_MODIFIED_BIT (0x8000)
@@ -618,6 +627,9 @@ void Executor::C_ActivatePalette(WindowPtr src_window)
     cached_front_window = FrontWindow();
     if(src_window != cached_front_window)
         return;
+
+    /* MacPhoenix: the screen's table, not a GWorld's (see AnimatePalette). */
+    TheGDeviceGuard guard(LM(MainDevice));
 
     entries = PALETTE_ENTRIES(palette);
     palette_info = PALETTE_INFO(palette);
@@ -1314,11 +1326,12 @@ void Executor::C_AnimateEntry(WindowPtr dst_window, INTEGER dst_entry,
         CTabHandle gd_ctab;
 
         /* FIXME - this should really loop over all devices which
-       * use this window's palette.  It's not obvious to me how to do
-       * this, so for now we'll assume the window's palette is
-       * used by LM(TheGDevice).  This is fairly reasonable.
+       * use this window's palette. MacPhoenix: the main device, the one
+       * screen (TheGDevice may be a GWorld's, as AnimatePalette's caller
+       * is drawing offscreen).
        */
-        gdev = LM(TheGDevice);
+        gdev = LM(MainDevice);
+        TheGDeviceGuard guard(gdev);            /* for gd_update_colors */
         gd_ctab = PIXMAP_TABLE(GD_PMAP(gdev));
         ctab_index = CI_ENTRY_INDEX(entry);
 
@@ -1360,6 +1373,11 @@ void Executor::C_AnimatePalette(WindowPtr dst_window, CTabHandle src_ctab,
     dst_length = std::min<INTEGER>(palette->pmEntries - dst_entry, dst_length);
 
     src_cspec = &CTAB_TABLE(src_ctab)[src_index];
+
+    /* MacPhoenix: the screen's colours, whatever device is current: a
+       game drawing into its GWorld animated the GWorld's table instead
+       (Warcraft II's colours were the system palette's). */
+    TheGDeviceGuard guard(LM(MainDevice));
 
     /* Animate all of the entries. */
     save_update = update_host_colors_p;

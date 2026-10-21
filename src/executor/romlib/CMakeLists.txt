@@ -400,6 +400,7 @@ source_group(Base FILES ${base_sources})
 set(vdriver_sources
         vdriver/vdriver.cpp
         vdriver/refresh.cpp
+        vdriver/videodrvr.cpp
         vdriver/autorefresh.cpp 
         vdriver/dirtyrect.cpp
         vdriver/dirtyrect.h

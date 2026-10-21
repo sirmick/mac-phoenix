@@ -15,6 +15,7 @@
 #include <vdriver/vdriver.h>
 #include <commandline/flags.h>
 #include <vdriver/autorefresh.h>
+#include <vdriver/videodrvr.h>
 #include <rsys/redrawscreen.h>
 #include <rsys/executor.h>
 #include <base/functions.impl.h>
@@ -119,7 +120,8 @@ static void gd_allocate_main_device(void)
     SET_HILITE_BIT();
     LM(TheGDevice) = LM(MainDevice) = LM(DeviceList) = nullptr;
 
-    GDHandle graphics_device = NewGDevice(/* no driver */ 0,
+    /* MacPhoenix: the screen's video driver (videodrvr.cpp). */
+    GDHandle graphics_device = NewGDevice(ROMlib_install_video_driver(),
                                  mode_from_bpp(vdriver->bpp()));
 
     /* we are the main device, since there are currently no others */
@@ -231,7 +233,7 @@ void Executor::gd_update_colors()
         colors[i] = { ctab[i].rgb.red, ctab[i].rgb.green, ctab[i].rgb.blue };
     }
 
-    vdriver->setColors(n, colors);
+    ROMlib_video_set_colors(n, colors);
 }
 /* it seems that `gd_ref_num' describes which device to initialize,
    and `mode' tells it what mode to start it in */
@@ -383,6 +385,35 @@ void Executor::C_ScreenRes(GUEST<INTEGER> *h_res, GUEST<INTEGER> *v_res)
     *v_res = PIXMAP_VRES(GD_PMAP(LM(MainDevice))) >> 16;
 }
 
+/* MacPhoenix: a device's modes are numbered from 0x80 over the depths it
+   has, shallowest first (as the Mac's video drivers number them). HasDepth
+   answers the mode, and SetDepth takes one as well as a depth: Marathon
+   passes HasDepth's answer on, and got 1 bit for 8 when HasDepth said 1. */
+enum { firstVidMode = 0x80 };
+static const int mode_depths[] = { 1, 2, 4, 8, 16, 32 };
+
+static INTEGER mode_for_depth(int bpp, bool grayscale_p)
+{
+    INTEGER mode = firstVidMode;
+    for(int d : mode_depths)
+        if(vdriver->isAcceptableMode(0, 0, d, grayscale_p))
+        {
+            if(d == bpp)
+                return mode;
+            mode++;
+        }
+    return 0;
+}
+
+static int depth_for_mode(INTEGER mode, bool grayscale_p)
+{
+    INTEGER m = firstVidMode;
+    for(int d : mode_depths)
+        if(vdriver->isAcceptableMode(0, 0, d, grayscale_p) && m++ == mode)
+            return d;
+    return 0;
+}
+
 INTEGER Executor::C_HasDepth(GDHandle gdh, INTEGER bpp, INTEGER which_flags,
                              INTEGER flags)
 {
@@ -391,11 +422,11 @@ INTEGER Executor::C_HasDepth(GDHandle gdh, INTEGER bpp, INTEGER which_flags,
 
     if(gdh != LM(MainDevice)
        || bpp == 0)
-        return false;
+        return 0;
 
-    return (vdriver->isAcceptableMode(0, 0, bpp, ((which_flags & (1 << gdDevType))
-                                                      ? (flags & (1 << gdDevType)) == (1 << gdDevType)
-                                                      : vdriver->isGrayscale())));
+    return mode_for_depth(bpp, ((which_flags & (1 << gdDevType))
+                                    ? (flags & (1 << gdDevType)) == (1 << gdDevType)
+                                    : vdriver->isGrayscale()));
 }
 
 static void gd_update_all_ports(GDHandle gdh, GUEST<Ptr> oldBaseAddr, Rect oldGDRect)
@@ -505,6 +536,10 @@ OSErr Executor::C_SetDepth(GDHandle gdh, INTEGER bpp, INTEGER which_flags,
     }
 
     PixMapHandle gd_pixmap = GD_PMAP(gdh);
+    bool grayscale_p = (which_flags & (1 << gdDevType)) ? !(flags & (1 << gdDevType)) : vdriver->isGrayscale();
+
+    if(bpp >= firstVidMode)
+        bpp = depth_for_mode(bpp, grayscale_p);
 
     if(bpp == PIXMAP_PIXEL_SIZE(gd_pixmap))
         return noErr;
@@ -513,7 +548,7 @@ OSErr Executor::C_SetDepth(GDHandle gdh, INTEGER bpp, INTEGER which_flags,
 
     HideCursor();
 
-    if(bpp == 0 || !vdriver->setMode(0, 0, bpp, ((which_flags & (1 << gdDevType)) ? !(flags & (1 << gdDevType)) : vdriver->isGrayscale())))
+    if(bpp == 0 || !vdriver->setMode(0, 0, bpp, grayscale_p))
     {
         /* IMV says this returns non-zero in error case; not positive
 	 cDepthErr is correct; need to verify */

@@ -933,6 +933,24 @@
 # ####
 
 - function:
+    name: TruncText
+    return: INTEGER
+    args:
+      - name: width
+        type: INTEGER
+      - name: textPtr
+        type: Ptr
+      - name: length
+        type: INTEGER*
+      - name: code
+        type: TruncCode
+    dispatcher: ScriptUtil
+    selector: 0x820CFFDE
+    executor: C_
+
+# ####
+
+- function:
     name: TruncString
     return: INTEGER
     args:

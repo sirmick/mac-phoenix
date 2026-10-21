@@ -14,6 +14,7 @@
 #include <FileMgr.h>
 #include <sound/sounddriver.h>
 #include <prefs/prefs.h>
+#include <cmath>
 #include <sound/soundopts.h>
 #include <base/functions.impl.h>
 #include <base/traps.impl.h>
@@ -368,14 +369,117 @@ OSErr Executor::C_SPBSetDeviceInfo(LONGINT refnum, OSType info, Ptr infop)
     return ROMlib_PretendSound == soundpretend ? noErr : notEnoughHardware;
 }
 
+/* MacPhoenix: SetupSndHeader (Inside Macintosh: Sound 2-118) writes a
+   format 1 'snd ' header, one bufferCmd to the sound header after it, into
+   sndhandle and says how long it is; the caller puts its samples there.
+   It was a stub that left *headerlenp alone, and Warcraft II wrote 8K of
+   samples at whatever its stack held (1840) into an 8448-byte handle. A
+   handle too small for the header gets only the length. */
+namespace
+{
+struct BigEndianWriter
+{
+    uint8_t *p;
+    void u8(uint8_t v) { *p++ = v; }
+    void u16(uint16_t v) { u8(v >> 8); u8(v); }
+    void u32(uint32_t v) { u16(v >> 16); u16(v); }
+    void x80(double v)          /* IEEE 754 80-bit extended */
+    {
+        if(v <= 0)
+        {
+            for(int i = 0; i < 10; i++)
+                u8(0);
+            return;
+        }
+        int e;
+        double m = std::frexp(v, &e);                /* v = m * 2^e, 0.5 <= m < 1 */
+        uint64_t mant = (uint64_t)std::ldexp(m, 64);
+        u16(e - 1 + 16383);
+        u32(mant >> 32);
+        u32((uint32_t)mant);
+    }
+};
+}
+
 OSErr Executor::C_SetupSndHeader(Handle sndhandle, INTEGER numchannels,
                                  Fixed rate, INTEGER size, OSType compresion,
                                  INTEGER basefreq, LONGINT numbytes,
                                  GUEST<INTEGER> *headerlenp)
 {
-    /* #warning SetupSndHeader not implemented */
-    warning_sound_log("");
-    return ROMlib_PretendSound == soundpretend ? noErr : notEnoughHardware;
+    bool compressed = compresion != "NONE"_4 && compresion != 0;
+    bool standard = !compressed && numchannels == 1 && size == 8;
+    int header_len = 20 + (standard ? 22 : 64);
+
+    *headerlenp = header_len;
+    if(!sndhandle || GetHandleSize(sndhandle) < header_len)
+        return noErr;
+
+    BigEndianWriter w { (uint8_t *)*sndhandle };
+    w.u16(1);                                   /* format 1 */
+    w.u16(1);                                   /* one synthesizer: */
+    w.u16(sampledSynth);
+    w.u32(numchannels == 2 ? 0xC0 : 0x80);      /* initStereo / initMono */
+    w.u16(1);                                   /* one command: */
+    w.u16(0x8000 | bufferCmd);                  /* dataOffsetFlag | bufferCmd */
+    w.u16(0);
+    w.u32(20);                                  /* the sound header, next */
+
+    double hz = (uint32_t)rate / 65536.0;
+    int channels = std::max<int>(numchannels, 1);
+    w.u32(0);                                   /* samplePtr: the samples follow */
+    if(standard)
+    {
+        w.u32(numbytes);
+        w.u32(rate);
+        w.u32(0);                               /* loopStart */
+        w.u32(0);                               /* loopEnd */
+        w.u8(stdSH);
+        w.u8(basefreq);
+        return noErr;
+    }
+
+    uint32_t frames;
+    INTEGER compression_id = 0;                 /* notCompressed */
+    if(compresion == "MAC3"_4)
+        frames = numbytes * 3 / channels, compression_id = 3;
+    else if(compresion == "MAC6"_4)
+        frames = numbytes * 6 / channels, compression_id = 4;
+    else if(compresion == "ima4"_4)
+        frames = numbytes / 34 * 64 / channels, compression_id = -1;
+    else
+        frames = numbytes / channels / std::max(size / 8, 1), compression_id = compressed ? -1 : 0;
+
+    w.u32(numchannels);
+    w.u32(rate);
+    w.u32(0);                                   /* loopStart */
+    w.u32(0);                                   /* loopEnd */
+    w.u8(compressed ? cmpSH : extSH);
+    w.u8(basefreq);
+    w.u32(frames);
+    w.x80(hz);                                  /* AIFFSampleRate */
+    w.u32(0);                                   /* markerChunk */
+    if(compressed)
+    {
+        w.u32(compresion);                      /* format */
+        w.u32(0);                               /* futureUse2 */
+        w.u32(0);                               /* stateVars */
+        w.u32(0);                               /* leftOverSamples */
+        w.u16(compression_id);
+        w.u16(0);                               /* packetSize */
+        w.u16(0);                               /* snthID */
+        w.u16(size);
+    }
+    else
+    {
+        w.u32(0);                               /* instrumentChunks */
+        w.u32(0);                               /* AESRecording */
+        w.u16(size);
+        w.u16(0);                               /* futureUse1 */
+        w.u32(0);
+        w.u32(0);
+        w.u32(0);                               /* futureUse2..4 */
+    }
+    return noErr;
 }
 
 OSErr Executor::C_SetupAIFFHeader(INTEGER refnum, INTEGER numchannels,

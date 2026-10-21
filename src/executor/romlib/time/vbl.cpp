@@ -75,9 +75,15 @@ static void C_ROMlib_vcatch()
 
     EM_A7 = (EM_A7 - 32) & ~3; /* Might as well long-align it. */
 
-    /* Save the old LM(Ticks) value & compute new value. */
-    old_ticks = LM(Ticks);
+    /* The ticks since the last interrupt. MacPhoenix: counted from the
+       last interrupt's, not from LM(Ticks): TickCount sets that too, so
+       an application calling TickCount in a loop (Marathon, waiting for
+       its vertical-sync task) left no ticks elapsed here, and no VBL
+       task's count ever went down. */
+    static ULONGINT last_vbl_ticks;
     new_ticks = C_TickCount();
+    old_ticks = last_vbl_ticks ? last_vbl_ticks : new_ticks - 1;
+    last_vbl_ticks = new_ticks;
     ticks_elapsed = new_ticks - old_ticks;
 
     /* Compute the milliseconds until LM(Ticks) changes again.
