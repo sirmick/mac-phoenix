@@ -218,6 +218,7 @@ using mbdfprocp = UPP<LONGINT(INTEGER variant, INTEGER msg,
 extern void ROMlib_menucall(INTEGER mess, MenuHandle themenu, Rect *menrect,
                             Point hit, GUEST<INTEGER> *which);
 extern LONGINT ROMlib_mbdfcall(INTEGER msg, INTEGER param1, LONGINT param2);
+extern INTEGER ROMlib_mbdf_id;
 
 #define MENUCALL ROMlib_menucall
 #define MBDFCALL ROMlib_mbdfcall

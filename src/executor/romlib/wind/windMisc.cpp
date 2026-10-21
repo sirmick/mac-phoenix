@@ -386,7 +386,15 @@ void Executor::C_CalcVis(WindowPeek w)
 
     if(w && WINDOW_VISIBLE(w))
     {
-        SectRgn(LM(GrayRgn), WINDOW_CONT_REGION(w), PORT_VIS_REGION(w));
+        /* MacPhoenix: Finder's desktop window shares the desktop layer's
+           visRgn as its visRgn and contRgn (TakeDesktopLayer). Its content
+           is the whole desktop: intersecting with itself would only ever
+           shrink it, and a full-screen application left it empty for good
+           (no desktop icons after Escape Velocity quit). */
+        if(ROMlib_desktop_layer_region_p(PORT_VIS_REGION(w)))
+            CopyRgn(LM(GrayRgn), PORT_VIS_REGION(w));
+        else
+            SectRgn(LM(GrayRgn), WINDOW_CONT_REGION(w), PORT_VIS_REGION(w));
         ROMlib_layers_clip_above(PORT_VIS_REGION(w));
         for(wp = LM(WindowList); wp != w; wp = WINDOW_NEXT_WINDOW(wp))
             if(WINDOW_VISIBLE(wp))

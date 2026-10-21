@@ -25,6 +25,7 @@
 #include <prefs/prefs.h>
 #include <rsys/hook.h>
 #include <osevent/osevent.h>
+#include <rsys/process.h>
 #include <base/functions.impl.h>
 #include <base/traps.impl.h>
 
@@ -193,8 +194,28 @@ void Executor::C_ModalDialog(ModalFilterUPP fp, GUEST<INTEGER> *item) /* IMI-415
 
 #else /* defined (ALLOW_MOVABLE_MODAL) */
 
+/* MacPhoenix: how deep the current process is in ModalDialog (Quit All
+   tells a save dialog from the application's own event loop). */
+static int modal_depth;
+
+bool Executor::ROMlib_in_modal_dialog()
+{
+    return modal_depth > 0;
+}
+
 void Executor::C_ModalDialog(ModalFilterUPP fp, GUEST<INTEGER> *item) /* IMI-415 */
 {
+    static bool registered;
+    if(!registered)
+    {
+        registered = true;
+        ROMlib_process_register_state(&modal_depth, sizeof modal_depth);
+    }
+    struct Depth
+    {
+        Depth() { ++modal_depth; }
+        ~Depth() { --modal_depth; }
+    } depth;
     /*
    * The code used to save qdGlobals().thePort and restore it at the end of the
    * function, but CALLMODALPROC expects qdGlobals().thePort to be unchanged which

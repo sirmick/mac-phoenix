@@ -113,7 +113,7 @@ INTEGER Executor::C_Alert(INTEGER id, ModalFilterUPP fp) /* IMI-418 */
         {
             ThePortGuard portGuard;
             SetWinColor(DIALOG_WINDOW(dp),
-                        (CTabHandle)alert_ctab_res_h);
+                        ROMlib_window_ctab_copy(alert_ctab_res_h));
         }
 
         if(item_ctab_res_h)

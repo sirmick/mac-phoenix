@@ -572,6 +572,9 @@ extern const uint32_t ROMlib_pixel_size_mask[];
 extern CTabHandle default_w_ctab;
 extern AuxWinHandle default_aux_win;
 extern GUEST<AuxWinHandle> *lookup_aux_win(WindowPtr w);
+/* A window's copy of a colour table resource (windColor.cpp), and its end. */
+extern CTabHandle ROMlib_window_ctab_copy(Handle res);
+extern void ROMlib_window_ctab_release(CTabHandle ctab);
 
 extern void ROMlib_color_init();
 

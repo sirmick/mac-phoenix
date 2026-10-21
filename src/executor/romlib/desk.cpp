@@ -545,6 +545,12 @@ void Executor::ROMlib_run_desk_accessory(const FSSpec *file_arg, ConstStringPtr 
                     HiliteMenu(0);
                 }
                 break;
+            case kHighLevelEvent:
+                /* Quit (the Process Manager's Quit All for a restart or
+                   shut down): the DAs close and the process ends. */
+                if(evt.message == "aevt"_4 && *(GUEST<OSType> *)&evt.where == "quit"_4)
+                    da_quit = true;
+                break;
         }
     }
 

@@ -396,7 +396,7 @@ DialogPtr Executor::C_GetNewDialog(INTEGER id, void* dst,
 	  dialog */
     retval
         = ROMlib_new_dialog_common((DialogPtr)dst, color_p,
-                                   (CTabHandle)dialog_ctab_res_h,
+                                   ROMlib_window_ctab_copy(dialog_ctab_res_h),
                                    item_ctab_res_h,
                                    &adjusted_rect,
                                    (StringPtr)(&(*dialog_res_h)->dlglen),

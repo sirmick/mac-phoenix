@@ -514,7 +514,7 @@ WindowPtr Executor::C_GetNewCWindow(INTEGER window_id, void* window_storage,
     if(win_ctab_res != nullptr)
     {
         ThePortGuard guard(qdGlobals().thePort);
-        SetWinColor(new_cwin, (CTabHandle)win_ctab_res);
+        SetWinColor(new_cwin, ROMlib_window_ctab_copy(win_ctab_res));
     }
 
     /* if this is a color window we must check if a palette
@@ -625,6 +625,7 @@ void Executor::C_CloseWindow(WindowPtr w)
     {
         saveauxh = *auxhp;
         *auxhp = (**auxhp)->awNext;
+        ROMlib_window_ctab_release((*saveauxh)->awCTable);
         DisposeHandle((Handle)saveauxh);
     }
 

@@ -261,6 +261,46 @@ OSErr Executor::C_DMEndConfigureDisplays(Handle displayState)
     return noErr;
 }
 
+OSErr Executor::C_DMNewAVIDByPortComponent(Component thePortComponent, OSType portKind,
+                                            uint32_t reserved, GUEST<uint32_t> *newID)
+{
+    if(newID)
+        *newID = 0;
+    return -6220; /* kDMGenErr: no display ports */
+}
+
+/* No AV ports or devices: nothing has an AVID. */
+OSErr Executor::C_DMNewAVIDByDeviceComponent(Component theDeviceComponent, OSType portKind,
+                                              uint32_t reserved, GUEST<uint32_t> *newID)
+{
+    if(newID)
+        *newID = 0;
+    return -6220; /* kDMGenErr */
+}
+
+OSErr Executor::C_DMGetPortComponentByAVID(uint32_t displayID, GUEST<Component> *portComponent,
+                                            Ptr portDesc, GUEST<OSType> *portKind)
+{
+    return -6220;
+}
+
+OSErr Executor::C_DMGetDeviceComponentByAVID(uint32_t displayID, GUEST<Component> *theDeviceComponent,
+                                              Ptr theDesc, GUEST<OSType> *theKind)
+{
+    return -6220;
+}
+
+OSErr Executor::C_DMGetDeviceAVIDByPortAVID(uint32_t portAVID, GUEST<uint32_t> *deviceAVID)
+{
+    return -6220;
+}
+
+OSErr Executor::C_DMSendDependentNotification(OSType notifyType, OSType notifyClass,
+                                               uint32_t displayID, ComponentInstance notifyComponent)
+{
+    return noErr;
+}
+
 OSErr Executor::C_DMDisposeList(Ptr panelList)
 {
     if(panelList)

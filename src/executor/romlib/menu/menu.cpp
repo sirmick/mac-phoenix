@@ -1220,6 +1220,11 @@ int32_t Executor::ROMlib_menuhelper(MenuHandle mh, Rect *saverp,
 
                         r2 = *ptr_from_longint<Rect *>(MBDFCALL(mbRect, 0,
                                                                 tempi | HIERRECTBIT));
+                        /* MacPhoenix: the submenu is whatever the menu
+                           list holds after mbRect, as in Apple's Menu
+                           Manager: Apple Menu Options' MBDF hook swaps its
+                           filled-in folder menu for the placeholder there. */
+                        newmh = ((muelem *)((char *)*LM(MenuList) + tempi))->muhandle;
                         MBDFCALL(mbSave, tempi, ptr_to_longint(&r2));
                         if(LM(MBarHook))
                         {
@@ -1809,6 +1814,9 @@ void Executor::ROMlib_menucall(INTEGER mess, MenuHandle themenu, Rect *menrect, 
     }
 }
 
+/* The mbResID MBDFHndl was loaded for. */
+INTEGER Executor::ROMlib_mbdf_id;
+
 LONGINT
 Executor::ROMlib_mbdfcall(INTEGER msg, INTEGER param1, LONGINT param2)
 {
@@ -1816,6 +1824,20 @@ Executor::ROMlib_mbdfcall(INTEGER msg, INTEGER param1, LONGINT param2)
     LONGINT retval;
     mbdfprocp mp;
 
+    /* MacPhoenix: as Apple's Menu Manager, the MBDF is the one mbResID
+       names now. Apple Menu Options' MenuSelect patch points mbResID at an
+       ID its GetResource patch answers with its own MBDF ('proc' -4048),
+       which runs its hooks around the real one: they put its MDEF on the
+       Apple menu while it is down and the saved one back after. */
+    INTEGER id = (*MENULIST)->mufu;
+    if(id != ROMlib_mbdf_id || !LM(MBDFHndl))
+    {
+        if(Handle h = GetResource("MBDF"_4, id))
+        {
+            LM(MBDFHndl) = h;
+            ROMlib_mbdf_id = id;
+        }
+    }
     defproc = LM(MBDFHndl);
 
     if(*defproc == nullptr)

@@ -81,6 +81,10 @@ extern "C" {
 #define IPC_STATE_STOPPED   0
 #define IPC_STATE_RUNNING   1
 
+/* Child exit status for a guest restart (Executor's ShutDwnStart, which
+   can't reboot in place): the parent starts the child again. */
+#define IPC_EXIT_GUEST_RESTART 75
+
 #define IPC_PIXFMT_ARGB     0   /* Mac native: bytes A,R,G,B */
 #define IPC_PIXFMT_BGRA     1   /* Converted: bytes B,G,R,A  */
 

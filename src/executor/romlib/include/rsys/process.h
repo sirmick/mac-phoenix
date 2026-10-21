@@ -113,6 +113,20 @@ extern bool ROMlib_process_os_event(EventRecord *evt, bool remove);
 
 /* The desktop was repainted there: an update for the desktop layer. */
 extern void ROMlib_desktop_layer_invalidate(RgnHandle rgn);
+/* The desktop layer's visRgn (Finder's desktop window shares it). */
+extern bool ROMlib_desktop_layer_region_p(RgnHandle rgn);
+/* Quit All (Finder's Restart and Shut Down, refcon 'rest' or 'shut'), and
+   the applications' answers to its Quit events. */
+extern void ROMlib_process_quit_all(int32_t refcon);
+extern void ROMlib_process_system_reply(int32_t return_id, Ptr msg, int32_t len);
+/* While held, no other process comes to the front (background time goes
+   on): the Notification Manager's alert. */
+extern void ROMlib_process_hold_front(bool hold);
+/* Notification Manager requests waiting for the front process's event
+   call (notify.cpp). */
+extern void ROMlib_notify_poll();
+/* The current process is in ModalDialog (dialHandle.cpp). */
+extern bool ROMlib_in_modal_dialog();
 
 /* The current process's PPC port name (its high-level events' sender). */
 extern void ROMlib_process_port_name(PPCPortRec *port);

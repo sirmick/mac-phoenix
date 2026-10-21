@@ -31,9 +31,15 @@ void Executor::C_ShutDwnPower()
     _exit(0);
 }
 
+/* MacPhoenix: restart ends the machine as power off does, with the status
+   the parent takes for a restart (IPC_EXIT_GUEST_RESTART, ipc_protocol.h):
+   it starts the child again, as a ROM machine reboots. */
 void Executor::C_ShutDwnStart()
 {
-    ExitToShell();
+    ROMlib_exit = true;
+    fprintf(stderr, "[Executor] ShutDwnStart: restarting\n");
+    fflush(nullptr);
+    _exit(75);
 }
 
 void Executor::C_ShutDwnInstall(ProcPtr shutdown_proc, int16_t flags)

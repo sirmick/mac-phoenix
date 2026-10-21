@@ -14,6 +14,7 @@
 #                             [--script NAME.pl] [--results FILE]
 #                             [--sections "disk extfs ..."] [--app SUITE.bin]
 #                             [--executor-debug memcheck,...]
+#                             [--key-on PATTERN:KEYCODE]
 #
 # --script runs a MacPerl script from tests/guest instead of the suite;
 # --results is the file either writes on Host: (default test_results.txt).
@@ -21,6 +22,9 @@
 # suite's sections to run (default: disk extfs audio applescript network
 # serial). --app: another build of the suite (MacBinary), e.g. the
 # CodeWarrior one (tools/mpw/mpw --toolchain cw build tests/guest/suite -o DIR).
+# --key-on: press a key (Mac keycode) once the results file has a line with
+# PATTERN, for an app that waits on the user (tests/guest/notify: Return on
+# the Notification Manager's alert).
 #
 # --backend executor runs on the System Folder of the test copy
 # <storage>/images/test-macos-<os-version>.img (no ROM; the copy is mounted
@@ -71,6 +75,7 @@ while [[ $# -gt 0 ]]; do
         --results) RESULTS_NAME="$2"; shift 2 ;;
         --sections) SECTIONS="$2"; shift 2 ;;
         --app) SUITE_APP="$2"; shift 2 ;;
+        --key-on) KEY_ON="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -325,6 +330,15 @@ while true; do
     if [[ -f "$RESULTS_FILE" ]] && grep -q '\-\-\-' "$RESULTS_FILE" 2>/dev/null; then
         echo " done (${ELAPSED}s)"
         break
+    fi
+
+    if [[ -n "${KEY_ON:-}" && -f "$RESULTS_FILE" ]] && tr '\r' '\n' < "$RESULTS_FILE" | grep -q "${KEY_ON%:*}"; then
+        for down in true false; do
+            curl -s --max-time 5 -X POST "http://localhost:$PORT/api/keypress" \
+                -H 'Content-Type: application/json' -d "{\"key\": ${KEY_ON##*:}, \"down\": $down}" >/dev/null
+            sleep 0.1
+        done
+        KEY_ON=""
     fi
 
     echo -n "."

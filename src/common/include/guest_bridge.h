@@ -22,6 +22,7 @@
  */
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -91,6 +92,22 @@ inline IPCBridgeSlot *local_slot()
     static IPCBridgeSlot *s = new IPCBridgeSlot();      /* 2 MB: not static storage in every user */
     return s;
 }
+
+/* Host-side commands in progress. They poll the slot in the child's IPC
+ * buffer, which must stay mapped until they are done: the guest-restart
+ * watcher (main.cpp) waits for them before it starts a new child. */
+inline std::atomic<int> &in_flight()
+{
+    static std::atomic<int> n{0};
+    return n;
+}
+
+struct InFlight {
+    InFlight() { in_flight()++; }
+    ~InFlight() { in_flight()--; }
+    InFlight(const InFlight &) = delete;
+    InFlight &operator=(const InFlight &) = delete;
+};
 
 inline void set_slot(IPCBridgeSlot *s) { slot_ptr() = s; }
 inline IPCBridgeSlot *slot() { return slot_ptr() ? slot_ptr() : local_slot(); }

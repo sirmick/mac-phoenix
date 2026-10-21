@@ -193,6 +193,116 @@
 # ####
 
 - function:
+    name: DMNewAVIDByPortComponent
+    return: OSErr
+    args:
+      - name: thePortComponent
+        type: Component
+      - name: portKind
+        type: OSType
+      - name: reserved
+        type: uint32_t
+      - name: newID
+        type: GUEST<uint32_t>*
+    dispatcher: DisplayDispatch
+    selector: 0x082E
+    executor: C_
+    comment: >
+      MacPhoenix: a display port component (7.6.1's PowerBook ZoomedVideo
+      and the like) asks for an AVID as it registers. No AV ports here:
+      kDMGenErr, and the component stays unregistered.
+
+# ####
+
+- function:
+    name: DMGetPortComponentByAVID
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: portComponent
+        type: GUEST<Component>*
+      - name: portDesc
+        type: Ptr
+      - name: portKind
+        type: GUEST<OSType>*
+    dispatcher: DisplayDispatch
+    selector: 0x082F
+    executor: C_
+
+# ####
+
+- function:
+    name: DMSendDependentNotification
+    return: OSErr
+    args:
+      - name: notifyType
+        type: OSType
+      - name: notifyClass
+        type: OSType
+      - name: displayID
+        type: uint32_t
+      - name: notifyComponent
+        type: ComponentInstance
+    dispatcher: DisplayDispatch
+    selector: 0x0830
+    executor: C_
+
+# ####
+
+- function:
+    name: DMNewAVIDByDeviceComponent
+    return: OSErr
+    args:
+      - name: theDeviceComponent
+        type: Component
+      - name: portKind
+        type: OSType
+      - name: reserved
+        type: uint32_t
+      - name: newID
+        type: GUEST<uint32_t>*
+    dispatcher: DisplayDispatch
+    selector: 0x0833
+    executor: C_
+    comment: >
+      MacPhoenix: as DMNewAVIDByPortComponent, for a display device component: kDMGenErr.
+
+# ####
+
+- function:
+    name: DMGetDeviceComponentByAVID
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: theDeviceComponent
+        type: GUEST<Component>*
+      - name: theDesc
+        type: Ptr
+      - name: theKind
+        type: GUEST<OSType>*
+    dispatcher: DisplayDispatch
+    selector: 0x0835
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetDeviceAVIDByPortAVID
+    return: OSErr
+    args:
+      - name: portAVID
+        type: uint32_t
+      - name: deviceAVID
+        type: GUEST<uint32_t>*
+    dispatcher: DisplayDispatch
+    selector: 0x043B
+    executor: C_
+
+# ####
+
+- function:
     name: DMDisposeList
     return: OSErr
     args:

@@ -36,6 +36,7 @@ void Executor::C_InitProcMenu(INTEGER mbid)
      * the bits are not masked off.
      */
     LM(MBDFHndl) = GetResource("MBDF"_4, mbid);
+    ROMlib_mbdf_id = mbid;
     (*MENULIST)->mufu = mbid;
     MBDFCALL(mbInit, 0, 0L);
 }

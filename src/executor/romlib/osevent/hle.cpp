@@ -31,6 +31,9 @@ typedef struct hle_q_elt
 
 static hle_q_elt_t *hle_q;
 
+/* ROMlib_hle_post_from_system: the message's sender is the system process. */
+static bool posting_as_system;
+
 /* MacPhoenix: a message is one block, as the Process Manager keeps it: the
    HighLevelEventMsg header, then msgLength bytes of message. Apple's Apple
    Event Manager reads the message there from its GetSpecificHighLevelEvent
@@ -266,6 +269,19 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
         }
     }
 
+    /* MacPhoenix: the system process (kSystemProcess) is the Process
+       Manager: Finder's Restart and Shut Down ask it to Quit All, and the
+       applications answer its Quit events. Nothing is queued for it. */
+    if(to.highLongOfPSN == 0 && to.lowLongOfPSN == kSystemProcess)
+    {
+        if(evt->message == "aevt"_4 && *(GUEST<OSType> *)&evt->where == "quia"_4)
+            ROMlib_process_quit_all(refcon);
+        else if(evt->message == "aevt"_4 && *(GUEST<OSType> *)&evt->where == "ansr"_4)
+            ROMlib_process_system_reply(refcon, msg_buf, msg_length);
+        retval = noErr;
+        goto done;
+    }
+
     /* MacPhoenix: a Quit for a process that takes no Apple events is
        turned into a puppet string, as 7.5.5's Process Manager does. */
     if(evt->message == "aevt"_4 && *(GUEST<OSType> *)&evt->where == "quit"_4
@@ -323,9 +339,30 @@ OSErr Executor::C_PostHighLevelEvent(EventRecord *evt, Ptr receiver_id,
     elt->next = nullptr;
     elt->hle_msg = hle_msg;
     elt->to = to;
-    GetCurrentProcess(&elt->from);
+    if(posting_as_system)
+        elt->from = { 0, kSystemProcess };
+    else
+        GetCurrentProcess(&elt->from);
     retval = noErr;
 
 done:
     return retval;
+}
+
+/* MacPhoenix: an Apple event from the Process Manager (the system
+   process), so the receiver's answer comes back to it. */
+OSErr Executor::ROMlib_hle_post_from_system(const ProcessSerialNumber *to,
+                                            OSType event_class, OSType event_id,
+                                            int32_t refcon, Ptr msg, int32_t len)
+{
+    EventRecord evt = {};
+    evt.what = kHighLevelEvent;
+    evt.message = event_class;
+    GUEST<OSType> id = event_id;
+    memcpy(&evt.where, &id, sizeof id);
+    ProcessSerialNumber psn = *to;
+    posting_as_system = true;
+    OSErr err = PostHighLevelEvent(&evt, (Ptr)&psn, refcon, msg, len, 0x8000 /* receiverIDisPSN */);
+    posting_as_system = false;
+    return err;
 }

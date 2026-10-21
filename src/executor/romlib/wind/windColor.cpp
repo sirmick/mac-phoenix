@@ -13,6 +13,8 @@
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
 
+#include <set>
+
 using namespace Executor;
 
 /* return a pointer to the auxilary window record
@@ -107,6 +109,33 @@ Executor::lookup_aux_win(WindowPtr w)
     return t;
 }
 
+/* MacPhoenix: the colour tables the Window and Dialog Managers take from
+   'wctb', 'dctb' and 'actb' resources are copies the window owns: an
+   application may release the resource once the window is up (7.5.5's
+   Color Picker releases its 'dctb'), and the window went on reading a freed
+   handle, garbage for its content colour (the picker's background came out
+   green, blue or teal). */
+static std::set<CTabHandle> owned_ctabs;
+
+CTabHandle Executor::ROMlib_window_ctab_copy(Handle res)
+{
+    if(!res)
+        return nullptr;
+    if(!*res)
+        LoadResource(res);
+    Handle copy = res;
+    if(HandToHand(inout(copy)) != noErr)
+        return (CTabHandle)res;
+    owned_ctabs.insert((CTabHandle)copy);
+    return (CTabHandle)copy;
+}
+
+void Executor::ROMlib_window_ctab_release(CTabHandle ctab)
+{
+    if(ctab && owned_ctabs.erase(ctab))
+        DisposeHandle((Handle)ctab);
+}
+
 void Executor::C_SetWinColor(WindowPtr w, CTabHandle new_w_ctab)
 {
     if(w)
@@ -132,7 +161,12 @@ void Executor::C_SetWinColor(WindowPtr w, CTabHandle new_w_ctab)
             (*aux_w)->awRefCon = 0;
         }
         else
+        {
+            CTabHandle old = (*aux_w)->awCTable;
             (*aux_w)->awCTable = new_w_ctab;
+            if(old != new_w_ctab)
+                ROMlib_window_ctab_release(old);
+        }
 
         if(CGrafPort_p(w))
         {

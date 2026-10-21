@@ -328,6 +328,7 @@ bool EmulatorSubprocess::fail_start(std::string why)
 
 bool EmulatorSubprocess::start()
 {
+    std::lock_guard<std::mutex> lifecycle(lifecycle_mutex_);
     reap_if_dead();     // one that exited on its own (a guest shutdown) is gone
     if (child_process_ && child_pid_ > 0 && child_process_->state() != QProcess::NotRunning) {
         return fail_start("already running (pid " + std::to_string(child_pid_) + ")");
@@ -457,6 +458,7 @@ bool EmulatorSubprocess::start()
 
 bool EmulatorSubprocess::stop()
 {
+    std::lock_guard<std::mutex> lifecycle(lifecycle_mutex_);
     std::lock_guard<std::mutex> lk(reap_mutex_);
     if (!child_process_ || child_process_->state() == QProcess::NotRunning) {
         child_process_.reset();

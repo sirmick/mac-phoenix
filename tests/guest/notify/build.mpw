@@ -1,0 +1,8 @@
+# build.mpw — NotifyTest, a 68k application: the Notification Manager.
+# products: NotifyTest
+Delete -i NotifyTest
+SC notify.c -o notify.c.o
+Link -t APPL -c 'MPnt' -model near notify.c.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o NotifyTest
+Rez -a notify.r -o NotifyTest

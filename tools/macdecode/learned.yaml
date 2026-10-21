@@ -150,6 +150,13 @@ dispatchers:
           8 bytes of params (proc, refCon), returns OSErr. Links a 20-byte
           {next, proc, refCon, current PSN} record into a list at PM
           A5-0x136; memFullErr if the PM heap is full.
+      - value: 0x43
+        name: RemoveProcessCallback
+        status: guess
+        source: Executor snapshot at restart (Finder, the same PEA A5+$642 / 0L as its $42 calls)
+        comment: >
+          8 bytes of params (proc, refCon), returns OSErr. Finder calls it
+          with what it gave $42 when it quits; unlinks the record.
       - value: 0x47
         name: GetTempMemInfo
         status: guess

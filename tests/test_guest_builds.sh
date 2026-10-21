@@ -51,6 +51,7 @@ PROJECTS=(
     "tests/guest/suite:MacPhoenixSuite.bin"
     "tests/guest/ot:OTTest.bin"
     "tests/guest/bridgedemo:BridgeDemo.bin"
+    "tests/guest/notify:NotifyTest.bin"
 )
 
 FAILS=0

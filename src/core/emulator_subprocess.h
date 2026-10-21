@@ -64,6 +64,9 @@ private:
     std::unique_ptr<QProcess> child_process_;
     pid_t child_pid_ = -1;
     std::mutex reap_mutex_;  // is_running() is called from many HTTP threads
+    // start()/stop() one at a time: the API and the guest-restart watcher
+    // (main.cpp) both call them.
+    std::mutex lifecycle_mutex_;
 
     IPCClient ipc_client_;
 

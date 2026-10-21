@@ -140,6 +140,7 @@ static void reserve_mac_address_space_early()
 #include "executor_child.h"
 #endif
 #include "ipc/ipc_protocol.h"
+#include "guest_bridge.h"
 #include "drivers/video/video_webrtc.h"
 #include "drivers/video/video_screenshot.h"
 #include "drivers/video/video_output.h"
@@ -915,6 +916,30 @@ int main(int argc, char **argv)
 					if (!sp->is_running() && sp->last_exit(ex) && !ex.crashed && ex.code == 0) {
 						fprintf(stderr, "[Main] Guest powered off; exiting\n");
 						exit(0);
+					}
+				}
+			}).detach();
+		}
+
+		// A guest restart the child can't do in place (Executor's
+		// ShutDwnStart) ends it with IPC_EXIT_GUEST_RESTART: start it again.
+		if (subprocess_owner) {
+			std::thread([sp = subprocess_owner.get()]() {
+				uint64_t handled = 0;
+				for (;;) {
+					std::this_thread::sleep_for(std::chrono::milliseconds(250));
+					EmulatorSubprocess::ChildExit ex;
+					if (!sp->is_running() && sp->last_exit(ex) && ex.id != handled
+					    && !ex.crashed && ex.code == IPC_EXIT_GUEST_RESTART) {
+						handled = ex.id;
+						// A bridge command (the /api/restart that asked for
+						// this) may still poll the old child's IPC buffer,
+						// which start() unmaps: let it time out first.
+						for (int i = 0; i < 200 && guest_bridge::in_flight() > 0; i++)
+							std::this_thread::sleep_for(std::chrono::milliseconds(100));
+						fprintf(stderr, "[Main] Guest restart; starting the emulator again\n");
+						if (!sp->start())
+							fprintf(stderr, "[Main] Restart failed: %s\n", sp->start_error().c_str());
 					}
 				}
 			}).detach();

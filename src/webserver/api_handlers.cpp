@@ -431,6 +431,7 @@ static bool bridge_wait_agent(IPCBridgeSlot* slot, int ms) {
 // RESTART, EXIT, which can end the agent before it answers: done once taken.
 static bool bridge_trap_command(IPCBridgeSlot* slot, const std::string& cmd, const std::string& payload,
                                 int reply_ms, bool may_not_answer, int* mac_err, std::string& err) {
+    guest_bridge::InFlight in_flight;
     *mac_err = 0;
     if (!bridge_wait_agent(slot, 15000)) {
         err = "bridge agent not running";
@@ -1950,6 +1951,7 @@ Response APIRouter::handle_exec(const Request& req) {
     // long for the reply.
     int timeout_s = std::clamp(j.value("timeout").toInt(60), 1, 3600);
     IPCBridgeSlot *slot = bridge_slot();
+    guest_bridge::InFlight in_flight;
     if (!bridge_wait_agent(slot, 15000))
         return Response::json("{\"success\": false, \"error\": \"bridge agent not running\"}");
     std::string reply, err;

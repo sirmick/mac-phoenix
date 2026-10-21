@@ -233,6 +233,23 @@
 # ####
 
 - function:
+    name: RemoveProcessCallback
+    return: OSErr
+    args:
+      - name: proc
+        type: Ptr
+      - name: refCon
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0043
+    executor: C_
+    comment: >
+      Undoes AddProcessCallback (name is a guess): Finder passes the same
+      proc and refCon as it did to $42 when it quits (restart, shut down).
+
+# ####
+
+- function:
     name: GetTempMemInfo
     return: OSErr
     args:

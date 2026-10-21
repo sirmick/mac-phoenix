@@ -307,6 +307,31 @@ set_tests_properties(bridge_trap_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# The Notification Manager from an application in the background: the alert
+# with its text, the response procedure after the alert is dismissed (the
+# host presses Return), nmTypErr: tests/guest/notify. The ROM machine is the
+# reference.
+add_test(
+  NAME notify_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --app ${CMAKE_SOURCE_DIR}/tests/guest/notify/NotifyTest.bin --results notify_test.txt --key-on waits_for_alert:36 --network none --timeout 90 --port 18430
+)
+set_tests_properties(notify_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME notify_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/notify/NotifyTest.bin --results notify_test.txt --key-on waits_for_alert:36 --network none --timeout 150 --port 18432
+)
+set_tests_properties(notify_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Host keystrokes (/api/keypress) reach the front application (the suite).
 add_test(
   NAME keyboard_guest

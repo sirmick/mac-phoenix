@@ -47,5 +47,8 @@ extern void hle_reset(void);
 /* MacPhoenix: high-level events waiting for that process; drop them. */
 extern bool ROMlib_hle_pending(const ProcessSerialNumber *psn);
 extern void ROMlib_hle_forget(const ProcessSerialNumber *psn);
+extern OSErr ROMlib_hle_post_from_system(const ProcessSerialNumber *to,
+                                         OSType event_class, OSType event_id,
+                                         int32_t refcon, Ptr msg, int32_t len);
 }
 #endif

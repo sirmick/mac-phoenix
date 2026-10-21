@@ -30,6 +30,7 @@ using namespace Executor;
 #include <AppleEvents.h>
 #include <IntlUtil.h>
 #include <OSEvent.h>
+#include <ShutDown.h>
 #include <TimeMgr.h>
 #include <VRetraceMgr.h>
 #include <rsys/launch.h>
@@ -473,6 +474,9 @@ static WindowPtr desktop_layer;
 static process_info_t *desktop_owner;
 /* OSDispatch $19/$1A: no process switch at an event call while held. */
 static int switch_hold;
+/* No other process comes to the front while held (the Notification
+   Manager's alert is up); background time goes on. */
+static int front_hold;
 
 namespace
 {
@@ -1022,6 +1026,14 @@ void Executor::C_HoldProcessSwitching()
     switch_hold++;
 }
 
+void Executor::ROMlib_process_hold_front(bool hold)
+{
+    if(hold)
+        front_hold++;
+    else if(front_hold > 0)
+        front_hold--;
+}
+
 void Executor::C_ReleaseProcessSwitching()
 {
     if(switch_hold > 0)
@@ -1541,6 +1553,8 @@ static void bring_to_front(process_info_t *q)
     switch_to(q);
 }
 
+static void quit_all_step();
+
 /* Every event call: where processes switch, as 7.5.5's Process Manager
    does in GetNextEvent/WaitNextEvent/EventAvail. */
 void Executor::ROMlib_process_event_hook(INTEGER mask)
@@ -1551,8 +1565,11 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
     me->event_mask = mask;
     if(switch_hold > 0)
         return;
+    quit_all_step();
+    if(me == front_process && (mask & (mDownMask | keyDownMask)))
+        ROMlib_notify_poll();
 
-    if(pending_launch)
+    if(pending_launch && !front_hold)
     {
         /* A process just launched comes to the front. */
         process_info_t *p = pending_launch;
@@ -1578,7 +1595,7 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
         return;
     }
 
-    if(pending_front)
+    if(pending_front && !front_hold)
     {
         process_info_t *q = pending_front;
         pending_front = nullptr;
@@ -1608,7 +1625,7 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
        Finder's) brings that process to the front.  It keeps the click if
        its SIZE says getFrontClicks. */
     EventRecord evt;
-    if(OSEventAvail(mDownMask, &evt))
+    if(!front_hold && OSEventAvail(mDownMask, &evt))
     {
         Point pt = evt.where.get();
         if(pt.v >= LM(MBarHeight))
@@ -1720,6 +1737,159 @@ bool Executor::ROMlib_process_puppet_quit(const ProcessSerialNumber *psn)
             return true;
         }
     return false;
+}
+
+/* MacPhoenix: Quit All, as 7.5.5's Process Manager does it for Finder's
+   Restart and Shut Down ('aevt'/'quia' to the system process, refcon
+   'rest' or 'shut'): every other process gets a Quit Apple event in turn,
+   brought to the front so it can ask about unsaved documents, and once it
+   is gone the next one does. An answer with an error (Cancel in a save
+   dialog: userCanceledErr) ends it; when only the asker is left, the
+   machine restarts or powers off. */
+namespace
+{
+struct QuitAll
+{
+    bool active;
+    bool restart;
+    process_info_t *asker;
+    bool waiting; /* for target to go */
+    bool answered; /* target answered its Quit without an error */
+    ProcessSerialNumber target;
+    int32_t return_id;
+};
+QuitAll quit_all;
+}
+
+static bool live_process(const ProcessSerialNumber &psn)
+{
+    for(process_info_t *p = process_info_list; p; p = p->next)
+        if(PSN_EQ_P(p->serial_number, psn) && p->state != process_info_t::dead)
+            return true;
+    return false;
+}
+
+void Executor::ROMlib_process_quit_all(int32_t refcon)
+{
+    if(quit_all.active)
+        return;
+    quit_all = {};
+    quit_all.active = true;
+    quit_all.restart = refcon == "rest"_4;
+    quit_all.asker = current_process_info;
+    fprintf(stderr, "[Executor] Quit All, then %s\n",
+            quit_all.restart ? "restart" : "shut down");
+}
+
+/* At every event call: the next process to quit, or the end. */
+static void quit_all_step()
+{
+    if(!quit_all.active)
+        return;
+    if(quit_all.waiting)
+    {
+        if(live_process(quit_all.target))
+        {
+            /* An application that took its Quit and asked about unsaved
+               documents, and is back taking clicks and keys outside a
+               dialog, was cancelled (SimpleText answers noErr at once and
+               asks afterwards, from its event loop). */
+            process_info_t *me = current_process_info;
+            EventRecord evt;
+            if(quit_all.answered && me && me == front_process
+               && PSN_EQ_P(me->serial_number, quit_all.target)
+               && !ROMlib_in_modal_dialog()
+               && OSEventAvail(mDownMask | keyDownMask, &evt))
+            {
+                fprintf(stderr, "[Executor] Quit All cancelled in %.*s\n",
+                        LM(CurApName)[0], (char *)LM(CurApName) + 1);
+                quit_all.active = false;
+            }
+            return;
+        }
+        quit_all.waiting = false;
+    }
+
+    process_info_t *next = nullptr;
+    if(front_process && front_process != quit_all.asker
+       && front_process->state != process_info_t::dead)
+        next = front_process;
+    for(process_info_t *p = process_info_list; !next && p; p = p->next)
+        if(p != quit_all.asker && p->state != process_info_t::dead)
+            next = p;
+    if(!next)
+    {
+        quit_all.active = false;
+        if(quit_all.restart)
+            C_ShutDwnStart();
+        else
+            C_ShutDwnPower();
+        return;
+    }
+
+    /* The Apple event stream: header, the attributes up to ';;;;' (it may
+       interact with the user; a timeout, which makes the receiver's Apple
+       Event Manager answer), no parameters. */
+    struct
+    {
+        GUEST<OSType> signature;
+        GUEST<int16_t> major, minor;
+        GUEST<OSType> inte_key, inte_type;
+        GUEST<int32_t> inte_size;
+        GUEST<OSType> inte;
+        GUEST<OSType> timo_key, timo_type;
+        GUEST<int32_t> timo_size, timo;
+        GUEST<OSType> marker;
+    } msg = { "aevt"_4, 1, 1, "inte"_4, "enum"_4, 4, "alwi"_4,
+              "timo"_4, "long"_4, 4, 60 * 60, ";;;;"_4 };
+    static_assert(sizeof msg == 44);
+    static int32_t return_ids = 0x51A0000;
+    quit_all.return_id = ++return_ids;
+    quit_all.target = next->serial_number;
+    quit_all.waiting = true;
+    quit_all.answered = false;
+    ROMlib_hle_post_from_system(&next->serial_number, "aevt"_4, "quit"_4,
+                                quit_all.return_id, (Ptr)&msg, sizeof msg);
+    if(next != front_process)
+        pending_front = next;
+}
+
+/* An answer to one of Quit All's Quit events: an 'errn' parameter that
+   isn't 0 means the application stays. */
+void Executor::ROMlib_process_system_reply(int32_t return_id, Ptr msg, int32_t len)
+{
+    if(!quit_all.active || !quit_all.waiting || return_id != quit_all.return_id)
+        return;
+    const uint8_t *p = (const uint8_t *)msg, *end = p + std::max<int32_t>(len, 0);
+    auto be32 = [](const uint8_t *q) {
+        return (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3];
+    };
+    const uint8_t *q = p + 8;
+    while(q + 4 <= end && be32(q) != ";;;;"_4)
+        q += 2;
+    int32_t err = 0;
+    for(q += 4; q + 12 <= end;)
+    {
+        uint32_t key = be32(q), type = be32(q + 4), size = be32(q + 8);
+        const uint8_t *data = q + 12;
+        if(data + size > end)
+            break;
+        if(key == "errn"_4)
+        {
+            if(type == "shor"_4 && size == 2)
+                err = (int16_t)(data[0] << 8 | data[1]);
+            else if(type == "long"_4 && size == 4)
+                err = (int32_t)be32(data);
+        }
+        q = data + ((size + 1) & ~1u);
+    }
+    if(err)
+    {
+        fprintf(stderr, "[Executor] Quit All cancelled (%d)\n", (int)err);
+        quit_all.active = false;
+    }
+    else
+        quit_all.answered = true;
 }
 
 /* MenuSelect: the puppet string's choice is pending for this process. */
@@ -2429,6 +2599,11 @@ OSErr Executor::C_TakeDesktopLayer(GUEST<WindowPtr> *layer)
     return noErr;
 }
 
+bool Executor::ROMlib_desktop_layer_region_p(RgnHandle rgn)
+{
+    return desktop_layer && rgn && rgn == PORT_VIS_REGION(desktop_layer);
+}
+
 void Executor::ROMlib_desktop_layer_invalidate(RgnHandle rgn)
 {
     if(desktop_layer && WINDOW_UPDATE_REGION(desktop_layer))
@@ -2445,6 +2620,17 @@ static std::vector<ProcessCallback> process_callbacks;
 OSErr Executor::C_AddProcessCallback(Ptr proc, int32_t refCon)
 {
     process_callbacks.push_back({ proc, refCon });
+    return noErr;
+}
+
+OSErr Executor::C_RemoveProcessCallback(Ptr proc, int32_t refCon)
+{
+    process_callbacks.erase(
+        std::remove_if(process_callbacks.begin(), process_callbacks.end(),
+                       [&](const ProcessCallback &cb) {
+                           return cb.proc == proc && cb.refCon == refCon;
+                       }),
+        process_callbacks.end());
     return noErr;
 }
 
