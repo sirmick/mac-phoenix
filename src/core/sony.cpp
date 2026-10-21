@@ -476,6 +476,14 @@ int16 SonyStatus(uint32 pb, uint32 dce)
 	uint16 code = ReadMacInt16(pb + csCode);
 	D(bug("SonyStatus %d\n", code));
 
+	// The duplicator version ('DV') is the driver's, not a drive's: Disk Copy
+	// 4.2 asks it of drive 1 (the internal drive a real Mac always has) and,
+	// on a ROM it doesn't know (the IIci's $067C), won't run without $0410.
+	if (code == 0x4456) {
+		WriteMacInt16(pb + csParam, 0x0410);	// Version 4.1 and later
+		return set_dsk_err(noErr);
+	}
+
 	// Drive valid?
 	drive_vec::iterator info = get_drive_info(ReadMacInt16(pb + ioVRefNum));
 	if (info == drives.end())
