@@ -29,10 +29,15 @@ So MAME references can be run for all four machines.
 How alike the three ROMs are, byte for byte:
 
 - **Rev A vs rev B:** 99.0% identical bytes; 6 of 64 4 KB blocks differ.
-- **Rev B vs `97221136`:** 95.8% identical. They differ only in early
-  init (`$0000`–`$6FFF`: hardware probing for the 68030 machines and
-  the SE/30), the floppy and sound driver area (`$2D000`–`$32FFF`: the
-  SuperDrive) and the CPU setup at `$3F000`.
+- **Rev B vs `97221136`:** 95.8% identical. They differ in early init
+  (`$0000`–`$6FFF`: machine identification, the 68030 and its MMU, RAM
+  over 8 MB), the `.Sony` driver (`$2D735`–`$2F007`, the SuperDrive,
+  spilling into `MDEF` 0's space at `$31B21`–`$32325`) and the patch
+  area at the top of the ROM (`$3F594`–).
+- No routine moved in any of the three: the differences are in-place
+  patches, many of them jumps into the patch area. Rev A → B is all
+  Slot Manager (32-bit slot addressing). The diff by routine is in
+  `docs/roms/dissam/macii/boot_flow.md` §1.
 
 All three share the trap table layout: 7 of 8 sampled trap addresses
 equal Apple's Mac II map. **One patcher can cover all three.**
@@ -54,16 +59,20 @@ On the current code, booting the hand-made `system-6.0.8` disk with
 `FUN_40802A14`, and so on. It applies them to whichever `$0178` ROM it
 gets, which is why both Mac II revisions die at once.
 
-It also **skips the NuBus slot scan** (the `bsr` at `$186`) and NOPs the
-video globals at `$1CC`–`$1F3`. No video driver is ever installed, so
-it could never show a picture. Treat it as notes, not a base: rewrite
+It also **skips the NuBus slot scan** (the `bsr` at `$186`) and NOPs
+`FROVIDEO` (`$DD0`, in `INITIOMGR`), the call that opens the video
+driver, along with `INITCRSRMGR` and the heap setup at `$1CC`–`$1F3`. No
+video driver is ever installed, so it could never show a picture. Its
+other faults (a mis-encoded block at `$118`, sites that are a different
+instruction in rev A/B) are listed in `docs/roms/dissam/macii/boot_flow.md` §13. Treat it as notes, not a base: rewrite
 it.
 
 ## Apple's map
 
 `docs/roms/dissam/tools/vendor/68k-mac-rom-maps/rom-maps/MacIIROM.lst.txt` (fetched by
-`docs/roms/dissam/tools/bootstrap.sh`) has 1,503 names. It fits all
-three ROMs; `load_rom.py` verifies 1,489 of them on `97221136`. 1,370
+`docs/roms/dissam/tools/bootstrap.sh`) has 1,503 names. It was made from
+rev A and fits all three ROMs; `load_rom.py` verifies 1,498 of them on
+rev B and 1,489 on `97221136`. 1,370
 of the 1,503 names also appear in the IIci map, so knowledge carries
 over by name.
 
@@ -81,9 +90,9 @@ InsTime/RmvTime/PrimeTime, SCSIDispatch, PowerOff, Get/PutScrap,
 ClkNoMem) and 1 byte for byte (`VBLINT`). The rest need finding in this
 ROM. 20 of the 32 routines they live in exist under the same name.
 
-Listings: `docs/roms/dissam/tools/export_listing.sh macii` and
-`... maciix` write `macii/rom.lst` and `maciix/rom.lst` (gitignored,
-about 2 minutes each).
+Listings: `docs/roms/dissam/tools/export_listing.sh macii`, `... maciib`
+and `... maciix` write `macii/rom.lst` (rev A), `maciib/rom.lst` (rev B)
+and `maciix/rom.lst` (gitignored, about 2 minutes each).
 
 ## Video: no slot 0, so a NuBus card
 
@@ -92,9 +101,13 @@ the top of the main ROM and the Slot Manager finds it as slot 0. **The
 `$0178` Slot Manager has no slot 0.** `INITSLOTS` (`$E32`) →
 `STARTSDECLMGR` → `INITSDECLMGR` (`$436A`) loops slots 9 to `$E` only
 (`moveq #9,D3` … `cmpi.w #$E,D3`). For each slot it probes the top of
-the slot's space (`$F9FFFFFF`, `$FAFFFFFF`, …; `$s FFFFF` in 24-bit
-mode) on 4 byte lanes. It reads under a temporary bus-error vector and
-wants Apple's test pattern `$5A932BC7`.
+the slot's space on 4 byte lanes, reading under a temporary bus-error
+vector, and wants Apple's test pattern `$5A932BC7`. Rev A scans in
+24-bit mode at `$F99FFFFF`, `$FAAFFFFF`, … (`$sFFFFF` under the mask).
+Rev B and `97221136` switch to 32-bit mode for the scan and probe
+`$F9FFFFFF`, `$FAFFFFFF`, …, which under a fixed 24-bit mask all read
+`$FFFFFF`: for those two ROMs the card is only found with real 32-bit
+addressing, or with the scan's address arithmetic put back to rev A's.
 
 So these machines need a **fake NuBus video card**:
 
@@ -136,16 +149,19 @@ third-party colour cards real SE/30s took.
 | Video | NuBus card | NuBus card | NuBus card | Built-in, slot `$E` |
 | ROM | rev A or B | `97221136` | `97221136` | `97221136` |
 
-The `97221136` ROM tells these apart by probing hardware (VIA2 ID bits
-and the like) in its early init. That code is in the region where it
-differs from the Mac II ROM; we'd answer it per profile.
+The `97221136` ROM tells these apart in `WHICHCPU`'s patch (`$3F74A`):
+a CACR test for the 68030, then VIA1 PA6 and VIA2 PB3 give `BoxFlag`
+(`$CB3`): 0 II FDHD (PA6 0, PB3 1), 1 IIx (0, 0), 2 IIcx (1, 1),
+3 SE/30 (1, 0); MAME reads exactly these. We'd answer it per profile
+(`docs/roms/dissam/maciix/boot_flow.md` §3, §10).
 
 All are 24-bit machines with these ROMs (not 32-bit clean; System 7
 would need MODE32), so the flat 24-bit layout the IIci uses fits them:
 RAM up to 8 MB, ROM at `$800000`, the card's space in `$9xxxxx`–`$Exxxxx`.
-The current `profile_macii` puts ScratchMem and the framebuffer at
-`$900000`, which is slot 9's space. That's fine if the card lives in
-slot `$E`.
+With `profile_macii`, ScratchMem is at `$848000` and the IPC frame
+buffer at `$850000`, just above the 256 KB ROM; a 640×480 frame buffer
+at 32 bits per pixel runs into slot 9's space (`$900000`–). That's fine
+if the card lives in slot `$E`.
 
 ## Plan
 

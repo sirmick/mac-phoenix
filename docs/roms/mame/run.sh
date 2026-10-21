@@ -21,6 +21,7 @@
 #   MAME_SECONDS   seconds to run when unthrottled (default 30)
 #   MAME_BIOS      ROM revision bios selector (e.g. 'default', 'original')
 #   MAME_DEBUG     1 = launch with -debug (attaches MAME's built-in debugger)
+#   MAME_NOCARDS   1 = empty NuBus slots (Mac II family; default keeps nb9 mdc824)
 #   MAME_LOG       1 = redirect console output to log/<machine>-<ts>.log
 #
 # Examples:
@@ -50,6 +51,7 @@ declare -A MACHINE_BIN=(
     [macplus]=macse
     [macii]=macii
     [maciihmu]=macii
+    [mac2fdhd]=macii
     [maciix]=macii
     [maciicx]=macii
     [macse30]=macii
@@ -58,15 +60,16 @@ declare -A MACHINE_BIN=(
 
 # default RAM size per machine (largest supported)
 declare -A MACHINE_RAM=(
-    [macse]=4M
-    [macsefd]=4M
-    [macplus]=4M
-    [macii]=8M
-    [maciihmu]=8M
-    [maciix]=8M
-    [maciicx]=8M
-    [macse30]=8M
-    [maciici]=8M
+    [macse]=4m
+    [macsefd]=4m
+    [macplus]=4m
+    [macii]=8m
+    [maciihmu]=8m
+    [mac2fdhd]=8m
+    [maciix]=8m
+    [maciicx]=8m
+    [macse30]=8m
+    [maciici]=8m
 )
 
 # default disk image per machine
@@ -76,6 +79,7 @@ declare -A MACHINE_DISK=(
     [macplus]="$HOME/storage/images/7.5.5.img"
     [macii]="$HOME/storage/images/7.5.5.img"
     [maciihmu]="$HOME/storage/images/7.5.5.img"
+    [mac2fdhd]="$HOME/storage/images/7.5.5.img"
     [maciix]="$HOME/storage/images/7.5.5.img"
     [maciicx]="$HOME/storage/images/7.5.5.img"
     [macse30]="$HOME/storage/images/7.5.5.img"
@@ -90,6 +94,8 @@ fi
 
 bin="${MACHINE_BIN[$MACHINE]}"
 bin_path="$BIN_DIR/$bin"
+# boottrace/'s combined build (macii.cpp + maciici.cpp) serves both
+[ -x "$bin_path" ] || { [ "$bin" != macse ] && [ -x "$BIN_DIR/mactrace" ] && bin_path="$BIN_DIR/mactrace"; } || true
 
 if [ ! -x "$bin_path" ]; then
     echo "error: $bin_path not found or not executable" >&2
@@ -128,13 +134,16 @@ else
     echo "(no disk at $disk; booting to ROM)"
 fi
 
-# Suppress NuBus cards on Mac II family (we want a minimal config for
-# differential debugging; NuBus video varies per-card and complicates things)
-case "$MACHINE" in
-    macii|maciihmu|maciix|maciicx|macse30)
-        args+=(-nb9 "" -nba "" -nbb "" -nbc "" -nbd "" -nbe "")
-        ;;
-esac
+# Mac II family: keep MAME's default slot 9 card (the Display Card 8*24,
+# mdc824): with no card there is no video driver and no picture. MAME_NOCARDS=1
+# empties every slot.
+if [ "${MAME_NOCARDS:-0}" = "1" ]; then
+    case "$MACHINE" in
+        macii|maciihmu|mac2fdhd|maciix|maciicx)
+            args+=(-nb9 "" -nba "" -nbb "" -nbc "" -nbd "" -nbe "")
+            ;;
+    esac
+fi
 
 # Window mode
 if [ "${MAME_WINDOW:-1}" = "1" ]; then

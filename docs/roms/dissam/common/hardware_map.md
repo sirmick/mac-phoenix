@@ -54,8 +54,8 @@ block (for 32-bit-clean ROMs), NuBus slots at `$Fx000000`:
 
 The **`$50F00000` hardware range** is the key region on 32-bit
 machines. It's decoded into device banks at fixed offsets, and is
-different between Mac II and IIci (Mac IIci uses "RBV" / IOP
-architecture).
+different between Mac II and IIci (the IIci has an RBV in place of
+VIA2; the IOPs are the IIfx's).
 
 ---
 
@@ -67,36 +67,44 @@ architecture).
 |------|------|--------|
 | 00 | `$50F00000` | VIA1 (sysinfo: ADB, PRAM, 60 Hz tick source) |
 | 02 | `$50F02000` | VIA2 (NuBus interrupts, slot status) |
-| 04 | `$50F04000` | SCC read (Z8530 ch A/B read) |
-| 06 | `$50F06000` | SCC write (Z8530 ch A/B write) |
+| 04 | `$50F04000` | SCC, read and write (`SCCRd` and `SCCWr` both point here) |
+| 06 | `$50F06000` | SCSI handshake (`SCSIHsk`) |
 | 10 | `$50F10000` | SCSI base (NCR 5380) |
-| 12 | `$50F12000` | SCSI pseudo-DMA channel |
-| 14 | `$50F14000` | ASC (Apple Sound Chip) — IIx onwards; Mac II has this too on rev B |
-| 16 | `$50F16000` | IWM (Mac II) / SWIM (IIx+) floppy |
-| 18 | `$50F18000` | IWM rev 8 probe (Mac II uses this to detect controller type) |
+| 12 | `$50F12000` | SCSI pseudo-DMA channel (`SCSIDMA`) |
+| 14 | `$50F14000` | ASC (Apple Sound Chip), all `$0178` machines |
+| 16 | `$50F16000` | IWM (Mac II) / SWIM (II FDHD, IIx, IIcx, SE/30) floppy |
+
+Rev A and B also know a "rev 8" layout, chosen when VIA1 PA6 reads 1:
+SCSI handshake `$50F08000`, SCSI DMA `$50F14000`, ASC `$50F18000`, IWM
+`$50F1C000`. `$97221136` uses PA6 as a machine-ID bit and always takes
+the layout above (`macii/boot_flow.md` §5).
 
 ### Mac IIci (version `$067C` ROM)
 
-IIci adds on-board video (RBV) and changes some bases:
+The IIci's decoder table (ROM `$348C`, `BasesValid` `$773F`; checked
+against MAME's IIci at the Finder; full table in `../iici/boot_flow.md` §4):
 
 | Bank | Base | Device |
 |------|------|--------|
 | 00 | `$50F00000` | VIA1 |
-| 02 | `$50F02000` | VIA2 |
-| 04 | `$50F04000` | SCC read |
-| 06 | `$50F06000` | SCC write |
+| 04 | `$50F04000` | SCC, read and write (`SCCRd` and `SCCWr` both point here) |
+| 06 | `$50F06000` | SCSI handshake (`SCSIHsk`) |
 | 10 | `$50F10000` | SCSI base |
-| 12 | `$50F12000` | SCSI pseudo-DMA |
+| 12 | `$50F12000` | SCSI pseudo-DMA (`SCSIDMA`) |
 | 14 | `$50F14000` | ASC |
 | 16 | `$50F16000` | SWIM (IIci is IWM-free) |
-| 24 | `$50F24000` | **RBV** — on-board video/memory controller |
-| 26 | `$50F26000` | **OSS** — Nubus interrupt controller (some revisions) |
+| 24 | `$50F24000` | VDAC (video palette) |
+| 26 | `$50F26000` | **RBV**: VIA2's interrupts and slot status, plus on-board video; the `VIA2` global `$CEC` points here |
 
-The **RBV** ("RAM-based Video") is IIci's integrated video controller.
-It lives in the same decoded-space region the Slot Manager would scan,
-but it's not on a real slot — it's hardwired on the motherboard and
-responds to pseudo-slot `$E`. The IIci ROM knows about this and calls
-`TESTRBV` (`$40843782`) + `U_TESTRBV` to initialize it.
+There is no VIA2 at `$50F02000` on the IIci (its decoder entry isn't
+valid) and no OSS (that's the IIfx's, which this ROM also supports).
+
+The **RBV** ("RAM-based Video") is IIci's integrated video controller;
+the frame buffer is taken from RAM bank A (`GETRBVSIZE`, `$4080037E`)
+and seen at `$FBB08000`. The built-in video is **slot 0**: its
+declaration data is the last `$13E6` bytes of the main ROM. The
+diagnostics test it with `TESTRBV` (`$40845264`; `U_TESTRBV`
+`$40841E2C`).
 
 ---
 
@@ -108,7 +116,7 @@ the VIA base. For Mac II/IIci at `$50F00000`:
 
 | Offset | Register | Common uses |
 |--------|----------|-------------|
-| `$0000` | vBufB   | bit 0=rTCCLK, 1=rTCData, 2=rTCEnb, 3=SCCReset, 4=Mode32 (IIci) |
+| `$0000` | vBufB   | bit 0=rTCCLK, 1=rTCData, 2=rTCEnb, 3=SCCReset (the IIci switches address modes with its PMMU, not a VIA bit) |
 | `$0200` | vBufA   | bit 7=SCCWReq, 6-4=Volume, 3=SndPg2, 2-0=Video |
 | `$0400` | vDIRB   | data direction B |
 | `$0600` | vDIRA   | data direction A |
@@ -125,6 +133,11 @@ the VIA base. For Mac II/IIci at `$50F00000`:
 | `$1C00` | vIER    | interrupt enable register (bit 7=enable, bits 6-0=source mask) |
 | `$1E00` | vBufANH | Port A, no handshake |
 
+On the `$0178` machines (MAME `macii.cpp`): port A bit 4 is the ROM
+overlay, bit 5 the floppy head select, bit 6 the "rev 8" bit on the Mac
+II and a machine-ID bit on the IIcx and SE/30; port B bits 0–2 are the
+RTC, bit 3 the ADB interrupt (input), bits 4–5 the ADB state lines.
+
 The Mac SE uses the same layout but at base `$EFE1FE`. (Yes, `$EFE1FE`
 is the full byte address — VIA registers are at `$EFE1FE` +
 `(offset*$200) + 1` on 24-bit machines due to byte-addressing
@@ -133,7 +146,7 @@ peculiarities of the Mac I/O bus.)
 **Critical for emulation**: writes to `$1200` (vT2CH) disable timer 2
 interrupts on real hardware. An emulator that silently ignores these
 writes will see Timer 2 fire during `SETUPTIMEK`'s calibration loop
-(see `se/boot_flow.md` §3 and `macii/boot_flow.md` §3) — the VIA
+(see `se/boot_flow.md` §3 and `macii/boot_flow.md` §4.1) — the VIA
 model either needs to honor T2 counter writes or the emulator's
 timer source must observe the CPU's current interrupt mask.
 
@@ -162,10 +175,10 @@ pathway, then later `$82` to finalize it.
 Serial controller, two channels (A=modem, B=printer). Mapped with a
 **read / write split**:
 
-| Access | Mac II/IIci | SE |
-|--------|-------------|-----|
-| Read  | `$50F04000` | `$9FFFF8` |
-| Write | `$50F06000` | `$BFFFF9` |
+| Access | Mac II family (`$0178`) | IIci | SE |
+|--------|-------------|------|-----|
+| Read  | `$50F04000` | `$50F04000` | `$9FFFF8` |
+| Write | `$50F04000` | `$50F04000` | `$BFFFF9` |
 
 Channel A and B are interleaved at different byte offsets within each
 base. The SE ROM polls SCC Read Register 0 (status) bit 0 (Rx
@@ -182,8 +195,8 @@ skip the probe. The `$067C` family goes through `init_scc_dat`
 | Machine | Base | Chip |
 |---------|------|------|
 | SE | `$DFE1FF` | IWM |
-| Mac II | `$50F16000` | IWM rev 1 or IWM rev 8 (see `$50F18000` probe) |
-| IIx, IIcx, SE/30 | `$50F16000` | SWIM (Sander-Woz Integrated Machine) |
+| Mac II | `$50F16000` | IWM (`$50F1C000` in the "rev 8" layout) |
+| II FDHD, IIx, IIcx, SE/30 | `$50F16000` | SWIM (Sander-Woz Integrated Machine) |
 | IIci | `$50F16000` | SWIM |
 
 The IWM's register map is complex (16 "state" registers addressed via
@@ -199,7 +212,7 @@ I/O during the boot path.
 |---------|------|-------|
 | SE | `$5FF000` | direct-mapped |
 | Mac II | `$50F10000` | direct |
-| IIci | `$50F10000` + pseudo-DMA at `$50F12060` | |
+| IIci | `$50F10000` | pseudo-DMA `$50F12000`, handshake `$50F06000` |
 
 Registers at `$10`, `$20`, `$30`, `$40` within base (the Mac ROM
 writes zeros to all four in `INITSCSI` to reset the chip — see SE's
@@ -212,12 +225,13 @@ writes zeros to all four in `INITSCSI` to reset the chip — see SE's
 | Machine | Base | Notes |
 |---------|------|-------|
 | SE | `$E80000` | |
-| Mac II (rev B+), IIx, IIci | `$50F14000` | |
-| IIci | `$50F14000` | |
+| Mac II (rev A and B), IIx, IIcx, SE/30 | `$50F14000` | |
+| IIci | `$50F14000` | `patch_rom_32` leaves this base; `INSTALL_DRIVERS` replaces it with a fake register block |
 
 The ASC is mostly safe to ignore during early boot — its only boot
 touch is `BOOTBEEP`, which we NOP on all four ROMs (see §2 of each
-`boot_flow.md`).
+`boot_flow.md`). (On the IIci the chime is played by the diagnostics,
+`ROMCHK` → `BOOTBEEP6`, which the reset shim skips.)
 
 ---
 

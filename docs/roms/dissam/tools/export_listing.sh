@@ -55,18 +55,21 @@ mkdir -p "$PROJECT_ROOT"
 declare -A ROM_FILE=(
     [se]="256KB ROMs/1987-03 - B2E362A8 - Mac SE.ROM"
     [macii]="256KB ROMs/1987-03 - 97851DB6 - MacII (800k v1).ROM"
+    [maciib]="256KB ROMs/1987-12 - 9779D2C4 - MacII (800k v2).ROM"
     [maciix]="256KB ROMs/1988-09 - 97221136 - Mac II FDHD & IIx & IIcx.ROM"
     [iici]="512KB ROMs/1989-09 - 368CADFE - Mac IIci.ROM"
 )
 declare -A ROM_BASE=(
     [se]="0x00400000"
     [macii]="0x40800000"
+    [maciib]="0x40800000"
     [maciix]="0x40800000"
     [iici]="0x40800000"
 )
 declare -A ROM_PROC=(
     [se]="68000:BE:32:default"
     [macii]="68000:BE:32:MC68020"
+    [maciib]="68000:BE:32:MC68020"
     [maciix]="68000:BE:32:MC68030"
     [iici]="68000:BE:32:MC68030"
 )
@@ -130,7 +133,7 @@ if [ $# -gt 0 ]; then
         process_rom "$m"
     done
 else
-    for m in se macii maciix iici; do
+    for m in se macii maciib maciix iici; do
         process_rom "$m"
     done
 fi

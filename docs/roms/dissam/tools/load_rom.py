@@ -43,23 +43,30 @@ script_dir = os.path.dirname(os.path.abspath(sourceFile.getAbsolutePath()))
 ROM_BASES = {
     "se":     0x00400000,
     "macii":  0x40800000,
+    "maciib": 0x40800000,
     "maciix": 0x40800000,
     "iici":   0x40800000,
 }
 ROM_SIZES = {
     "se":     0x40000,   # 256K
     "macii":  0x40000,
+    "maciib": 0x40000,
     "maciix": 0x40000,
     "iici":   0x80000,   # 512K
 }
 # cy384/68k-mac-rom-maps filenames. None = no map available for this ROM.
 ROM_MAP_FILES = {
     "se":     "MacSEROM.lst.txt",
+    # Apple's Mac II map was made from the rev A ROM ($97851DB6): it names
+    # rev A's SMACBOOT at $408E, which rev B and $97221136 replaced with a
+    # jump table into their patch area at the top of the ROM.
     "macii":  "MacIIROM.lst.txt",
-    # IIx/SE30/IIcx shared ROM ($97221136) has no upstream map. Both ROMs
-    # are version $0178 and the two images are ~95.7% byte-identical, so
-    # we reuse MacII's map and verify-per-symbol at import time
-    # (see REFERENCE_ROM_FOR_MAP below).
+    # Rev B ($9779D2C4) and the IIx/IIcx/SE30 ROM ($97221136) have no map
+    # of their own. All three $0178 ROMs keep every routine at the same
+    # offset (they differ by in-place patches, not insertions), so we reuse
+    # rev A's map and verify each symbol against rev A at import time
+    # (see REFERENCE_ROM_PATHS below).
+    "maciib": "MacIIROM.lst.txt",
     "maciix": "MacIIROM.lst.txt",
     "iici":   "MacIIciROM.lst.txt",
 }
@@ -69,10 +76,12 @@ ROM_MAP_FILES = {
 # same code sequence. Paths are relative to tools/vendor/ROM_STAGING/ or
 # absolute, resolved by resolve_reference_rom() below.
 REFERENCE_ROM_PATHS = {
-    # maciix map is borrowed from MacII; verify against the MacII image.
+    # The map is rev A's; verify the borrowed names against the rev A image.
+    "maciib": [
+        "~/storage/roms/256KB ROMs/1987-03 - 97851DB6 - MacII (800k v1).ROM",
+    ],
     "maciix": [
         "~/storage/roms/256KB ROMs/1987-03 - 97851DB6 - MacII (800k v1).ROM",
-        "~/storage/roms/256KB ROMs/1987-03 - 9779D2C4 - MacII (800k v2).ROM",
     ],
 }
 # How many bytes must match between the two ROMs at each symbol address

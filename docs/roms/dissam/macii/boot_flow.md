@@ -1,343 +1,662 @@
-# Mac II Boot Flow
+# Mac II boot flow (the `$0178` ROMs)
 
-Factual walk of the Mac II ROM (`$97851DB6`, 256 KB, version `$0178`)
-from reset through driver install, using the labels imported from
-`cy384/68k-mac-rom-maps/MacIIROM.lst.txt`. All addresses are physical
-post-overlay (`$40800000 + offset`). Companion listing:
-`docs/roms/dissam/macii/rom.lst`.
+Reset to Finder on the Mac II ROMs, rev A (`$97851DB6`) and rev B
+(`$9779D2C4`), with the Mac II FDHD / IIx / IIcx / SE/30 ROM
+(`$97221136`) alongside, because all three run the same code at the same
+offsets apart from a short list of patches. What only `$97221136` does
+(machine identification, the 68030 MMU, the SuperDrive, the SE/30's
+screen) is in [`../maciix/boot_flow.md`](../maciix/boot_flow.md). The
+plan this serves is [`../../MacIIFamily.md`](../../MacIIFamily.md).
 
-> **Also applies to Mac IIx, IIcx, and SE/30** — those machines share
-> the same version-`$0178` ROM image (`$97221136`, covered separately
-> at `docs/roms/dissam/maciix/`). The early boot flow and init
-> sequence are identical down to the addresses because version `$0178`
-> means "same code"; hardware differences are dispatched at runtime
-> via `WHICHCPU` / `WHICHBOARD` tests.
+Addresses are ROM offsets; the ROM runs at `$40800000` (`$800000` in
+24-bit mode). Labels are Apple's, from `MacIIROM.lst.txt` (MPW 3.5 ROM
+maps), which was made from **rev A** (see "Apple's map" below). Listings:
+`macii/rom.lst` (rev A), `maciib/rom.lst` (rev B), `maciix/rom.lst`
+(`$97221136`), all from `tools/export_listing.sh`.
 
-Patching strategy: version `$0178` will use fixed-offset patches
-like `patch_rom_classic` ($0276), not the signature-driven approach
-from `patch_rom_32` ($067C). Both $0276 and $0178 lack UniversalInfo,
-so the approach is the same: fixed-offset patches in the reset-vector
-zone plus trap/resource-based lookups for everything else.
+How the facts were checked: byte diffs of the three ROMs, disassembly
+(Ghidra listings, cross-checked with capstone and `m68k-linux-gnu-objdump`
+for the PMMU instructions), and MAME traces of System 6.0.8 booting to
+the Finder (`~/storage/tmp/boottrace/`: `macii` = rev B, `macii -bios
+original` = rev A, `mac2fdhd`, `maciix`, `maciicx`, `macse30`). MAME's
+`macii` and `mac2fdhd` have a 68851 (`MMUType` 3); its `maciihmu` has
+the HMMU. The routine order in §3–§12 is the order the rev B trace
+executes them in; what was only read in the code is marked
+*(static)*.
 
 ---
 
-## 1. Reset + dispatch header
+## 1. The three ROMs
 
-| Offset | Content | Purpose |
+| | Rev A | Rev B | `$97221136` |
+|---|---|---|---|
+| File (`~/storage/roms/256KB ROMs/`) | `1987-03 - 97851DB6 - MacII (800k v1).ROM` | `1987-12 - 9779D2C4 - MacII (800k v2).ROM` | `1988-09 - 97221136 - Mac II FDHD & IIx & IIcx.ROM` |
+| Machines | Mac II | Mac II | Mac II FDHD, IIx, IIcx, SE/30 |
+| MAME | `macii -bios original` | `macii`, `maciihmu` | `mac2fdhd`, `maciix`, `maciicx`, `macse30` |
+| Version word (`$08`) | `$0178` | `$0178` | `$0178` |
+| Date in ROM | "Sat, Feb 21, 1987" (`$3FFEE`) | "September 1, 1987" (board sResource) | "15-Jul-88" (board sResource) |
+| Patch area (top of ROM) | none (filler) | `$3F600`–`$3F735` | `$3F5A0`–`$3FEA7` |
+| Board declaration data (top `$C8`/`$BA` bytes) | none | "Macintosh II", "Rev 1.2" | "Macintosh II", "Rev 1.3" |
+
+**No routine moved.** The three images differ by in-place patches only:
+each changed routine keeps its address and either has instructions
+rewritten or jumps into a patch area at the top of the ROM. Every Apple
+label therefore names the same routine in all three (1,498 of the map's
+1,503 names verify byte for byte on rev B, 1,489 on `$97221136`; the
+rest sit next to a patch).
+
+Byte agreement: rev A vs rev B 98.98%; rev B vs `$97221136` 95.78%.
+
+### Rev A → rev B (all Slot Manager and 32-bit slot addressing)
+
+| Offset | Routine | Change in rev B |
 |---|---|---|
-| `$0000` | `97 85 1D B6` | Apple checksum (also initial SSP) |
-| `$0004` | `40 80 00 2A` | Initial PC |
-| `$0008` | `01 78`       | ROM version word |
-| `$002A` | `jmp thunk` → `$90` | Reset entry (jumps to thunk at $90) |
-| `$0090` | `jmp thunk_FUN_4083F856` | Thunk to reset code in high ROM |
-| `$0096` | `jmp FUN_40802A14` | SYSERRINIT thunk (not used at reset) |
-| `$009A` | `bsr INITVIA` | STARTINIT1 entry |
+| `$0000`–`$003F` | header | checksum, and the longs at `$2E`–`$3F` |
+| `$07FC`–`$0819` | `RDVIDPARAM` | screen base from `_SlotManager` `sFindDevBase` (`$1B`) instead of computing `(spsBaseOffset & $FFF00000) + slot base` |
+| `$3D32` | `SREADSTRUCT` | address passed through `_StripAddress` (patch `$3F6E0`) |
+| `$3E53`–`$3E6B` | `SREADFHEADER` | format block address `$FsFFFF00` (was `$F00FFF00` + slot nibbles, a 24-bit-compatible form) |
+| `$408E`–`$40FB` | `SMACBOOT` | removed; the space holds stubs that switch to 32-bit mode before `sGetcString`, `sReadStruct`, `sOffsetData`, `sReadPBSize`, `InitsRsrcTable`, and the entry for new selector `$1C` |
+| `$42A1` | CRC check (`$428E`) | mask `$FFFFFF` (was `$0FFFFF`) |
+| `$439A`–`$43D9`, `$4499` | `INITSDECLMGR` body (`$436A`) | runs in 32-bit mode; probes `$FsFFFFFF` (was `$FssFFFFF`), steps `$1000000` (was `$1100000`) |
+| `$49CA`–`$49DB` | `INITSRSRCTABLE` | 24-bit mode around `_DisposePtr` / `_NewPtrSysClear` |
+| `$4E06` | `SGETDRIVER` | `_StripAddress` |
+| `$4F56`–`$4FAF` | `SLOTMANAGER`, `SDMJUMPTABLE` | dispatcher wrapped (§8); selector `$1A` (`sMacBoot`) dropped, `$1C` added |
+| `$6A84` | `OPEN` | slot driver's `dCtlDevBase` via `_SlotManager` (patch `$3F6AA`) |
+| `$19006`–`$1901F` | after `GETDEVPIXMAP` | device base from the slot parameter block instead of recomputed |
+| `$3F594`– | top of ROM | patch area, board declaration data |
 
-The reset flow is: `$002A` → `$0090` (thunk) → `$83F856`
-(high-ROM init: sets SR=$2700, configures VBR/CACR) → falls through
-to **`STARTINIT1`** at `$009A`.  This is shorter than IIci's because
-Mac II has no UniversalInfo, no IOP manager, and defers NuBus/Slot
-Manager init to BOOTRETRY.
+### Rev B → `$97221136`
 
----
+| Offset | Routine | Change |
+|---|---|---|
+| `$0000`–`$0095` | header, `NUMAP`, reset | checksum; `NUMAP` ROM entry `$40800019` (was `$40000019`), I/O `$50F00059` (was `$50000059`); `$90` jumps to the patch area |
+| `$0110`–`$0123` | `STARTINIT1` | stores `BoxFlag`; calls `MMU_INIT` at its new address `$3AA8` |
+| `$0166`–`$01AD` | `BOOTRETRY` | 68030 cache handler for `_HWPriv`; `RAMTEST` in 32-bit mode |
+| `$0230`, `$02DE` | `COMPBOOTSTACK`, `INITHIMEMGLOBALS` | `MemTop` capped at 8 MB |
+| `$0544` | `WHICHCPU` | 68030 test and machine identification |
+| `$0744` | `REV8CHK` | always "not rev 8" |
+| `$10F6` | `BOOTME` | system heap fraction from `MemTop` capped at 8 MB |
+| `$1E10`, `$2ACE`, `$2AF4`, `$2C58`, `$2CB4`, `$2CE2`, `$2EB2` | `CRITERR`, `STARTTEST1`, test manager | each inline `btst #6` of VIA1 port A now branches as if clear |
+| `$2B0C`–`$2B19` | `STARTTEST1` | RAM bank configuration before the memory test |
+| `$3A8A`–`$3BA9` | `SWAPMMUMODE`, `MMU_INIT`, `COMPMMUTYPE` | rewritten for four MMU types (HMMU, 68851, 68030) |
+| `$3D37`, `$4092`–`$40C5`, `$439E`, `$49CE`, `$4E0A`, `$4F5A`, `$6A88` | Slot Manager | same patches as rev B, patch area moved by `-$14` |
+| `$2D735`–`$2F007` | `.Sony` (`DRVR` 4) | SWIM driver for the SuperDrive |
+| `$31B21`–`$32325` | `MDEF` 0's slot | more `.Sony` code (the map still lists `MDEF` 0 here) |
+| `$3F594`– | top of ROM | 32-bit MMU table, patch area, board declaration data |
 
-## 2. STARTINIT1 (`$4080009A`)
+The resource map (`$2765C`, located through the long at `$1A`) lists the
+same 41 resources at the same offsets in all three.
 
-```
-STARTINIT1 ($4080009A):
-  $009A: bsr  FUN_408006F2   ; INITVIA — VIA1 at $50F00000
-  $009E: bsr  FUN_408007B4   ; INITSCC — Z8530 at $50F04000 (R) / $50F06000 (W)
-  $00A2: bsr  FUN_408006AA   ; INITIWM — IWM at $50F16000 (Mac II); SWIM on IIx
-  $00A6: bsr  FUN_4080066C   ; INITSCSI — NCR 5380 at $50F10000
-  $00AA: bsr  FUN_40800532   ; WHICHCPU — probe 68020 (II) / 68030 (IIx/SE30)
-  $00AE: movea.l A6,A1       ; A1 = MemTop estimate
-  $00B0: movea.l A6,A0
-  $00B2: suba.w  #$300,A0
-  $00B6: jsr  RAMTEST        ; walking-ones RAM sizing
-  $00BA: movea.l #$50F18000,A3  ; IWM rev-check probe base
-  $00C0: bsr  REV8CHK        ; Rev-8 IWM / ASC hardware detection
-  $00C4: bne  LAB_408000CC
-  $00C8: movea.l #$50F14000,A3  ; ASC base (Apple Sound Chip)
-  $00CC: move.l  D7,-(SP)
-  $00CE: moveq   #$28,D0
-  $00D0: bsr  BOOTBEEP       ; startup chime
-  ...
-  $00E0: cmpi.l  #'WLSC',($CFC).w  ; warm-start magic
-  $00E8: beq  LAB_408000F2
-  $00EA: jsr  RAMTEST        ; RAMTEST #2 — full walk if cold boot
-  $00F2: movea.l A1,SP       ; install boot stack
-  $00F4: lea  ($100),A0
-  $00F8: lea  ($1E00),A1
-  $00FC: bsr  FILLWITHONES   ; clear low-mem globals $100..$1DFF
-  $0100: move.b  D7,(CPUFlag)   ; $12F = CPU type from WHICHCPU
-  $0104: move.l  A6,(MemTop)    ; $108 = RAMTEST result
-  $0108: lea  (6,PC),A6
-  $010C: jmp  SYSERRINIT     ; install error stub table
-  $0110: bsr  SETUPTIMEK     ; VIA T2 calibration — see §3
-  $0114: bsr  VIATIMERENABLES
-  $0118: jsr  MMU_INIT       ; simpler than IIci's INITMMU
-  ...
-  $013E: bsr  INITHIMEMGLOBALS
-  ; fall through to BOOTRETRY
-```
+### Apple's map
+
+`MacIIROM.lst.txt` is rev A's: it puts `SMACBOOT` at `$408E`, where rev
+A has `movem.l d3/a2-a4,-(a7)` and rev B and `$97221136` have a table of
+`jsr`/`jmp` stubs. Names that do not hold outside rev A: `SMACBOOT`
+(gone), `SDMJUMPTABLE` contents (§8), `MMU_INIT` (moved to `$3AA8` in
+`$97221136`), `SWAPMMUMODE`/`COMPMMUTYPE` (rewritten in place in
+`$97221136`), `_DRVR_4_.Sony` and `_MDEF_0_` (different code in
+`$97221136`). `load_rom.py` borrows the map for `maciib` and `maciix`
+and drops any name whose 16 bytes differ from rev A.
 
 ---
 
-## 3. SETUPTIMEK (`$40800526`)
+## 2. Header and reset
 
-Same role as SE's timer calibration — counts DBF iterations against
-VIA1 T2 timeout to populate `TimeDBRA` (`$0D00`). The Mac II version
-lives at a different offset from SE because VIA1 base is different
-(`$50F00000` vs `$EFE1FE`), but the algorithmic structure is
-identical: disable T2 IRQ via `$1200` write, arm T2 via `$1C00`
-write, drop interrupt mask, count DBF iterations.
+| Offset | Bytes | Meaning |
+|---|---|---|
+| `$00` | checksum | `$97851DB6` / `$9779D2C4` / `$97221136`; also the reset SSP |
+| `$04` | `$4080002A` | reset PC |
+| `$08` | `$0178` | ROM version |
+| `$0A`, `$0E` | `jmp $90` | the other two header entry points both go to the reset code |
+| `$1A` | `$00027658` | locates the ROM resource map |
+| `$1E` | `jmp GOOFYDOEJECT` (`$E92`) | |
+| `$22` `DISPOFF` | `$00026EE2` | offset of the packed trap table `INITDISPATCHER` unpacks |
+| `$26` `CRITICAL` | `jmp CRITERR` (`$1DF8`) | the sad Mac |
+| `$2A` | `jmp $90` | reset entry |
+| `$40`–`$4B` | `$D0A`, `$64FA`, `$D98` | the offsets of `INITDISPATCHER`, `EMT1010` and `BADTRAP` *(static; no boot code reads them)* |
+| `$50` `NUMAP` | 16 longs | the 24-bit page table for the 68851 / 68030 (§5) |
 
----
+Reset path:
 
-## 4. BOOTRETRY (`$40800142`) — restartable OS init
+| Step | Rev A, rev B | `$97221136` |
+|---|---|---|
+| `$2A` | `jmp $90` | `jmp $90` |
+| `$90` | `move.w #$2700,sr` / `reset` | `jmp $4083F61C` → `bra $3F856`: `move.w #$2700,sr`, `reset`, write `$2000` to CACR and read it back; non-zero (68030) → `pmove` 0 to TC (MMU off); `jmp $40800096` |
+| `$96` | `jmp STARTTEST1` (`$2A14`) | same |
 
-```
-BOOTRETRY ($40800142):
-  $0142: move    #$2700,SR          ; mask interrupts
-  $0146: moveq   #1,D0
-  $0148: movea.l (DAT_DBC),A0       ; indirect init pointer
-  $014C: jsr     (A0)               ; dispatches to ROM-resident init vector
-  $014E: movea.l #$50F02000,A0      ; VIA2 base
-  $0154: move.b  #$02,($1C00,A0)    ; VIA2 IER — enable slot interrupts
-  $015A: bsr     FUN_40800300       ; INITGLOBALVARS
-  $015E: bsr     FUN_408004B6       ; INITCPUVARS
-  $0162: bsr     FUN_40800D0A       ; INITXVECTTABLES — exception vectors
-  $0166: jsr     thunk_FUN_4083F7B4 ; INITDISPATCHER — trap dispatcher install
-  $016C: nop
-  $016E: bsr     FUN_40800E04       ; GETPRAM — read PRAM via VIA
-  $0172: bsr     FUN_4080023E       ; INITMEMMGR — _InitZone at $40800242
-  $0176: bsr     FUN_40800464       ; SETUPSYSAPPZONE
-  $017A: bsr     FUN_40800E22       ; INITRSRCMGR — _InitResources at $40800E2C
-  $017E: bsr     FUN_40800E80       ; INITTIMERMGR — _NewPtrSysClear at $40800E82
-  $0182: bsr     FUN_408002CA       ; INITADBVARS — _NewPtrSysClear at $408002CE
-  $0186: bsr     FUN_40800E32       ; INITSLOTS — NuBus $9..$E scan
-  $018A: move    #$2000,SR          ; drop to level 2
-  $018E: jsr     FUN_40806D80       ; INITIOMGR — driver install (see §7)
-  $0192: bsr     FUN_408007E6       ; INITCRSRMGR
-  ...
-  $01B8: _SetApplLimit               ; application heap limit
-  ...
-  $01DA: _SetApplBase                ; application base address
-  ...
-  $01F4: movea.l #$50F02000,A0
-  $01FA: move.b  #$82,($1C00,A0)    ; VIA2 IER final state
-  $0200: bsr     DRAWBEEPSCREEN     ; blank screen via slot manager
-  $0204: move.l  #'WLSC',($CFC).w  ; warm-start flag
-  $020C: bra     BOOTME             ; → $40800E96
-```
-
-**A-line traps called during BOOTRETRY init sequence:**
-
-| Address | Trap | Called from |
-|---------|------|------------|
-| `$40800242` | `_InitZone` | INITMEMMGR — creates SysZone |
-| `$408001B8` | `_SetApplLimit` | after INITCRSRMGR |
-| `$408001DA` | `_SetApplBase` | zone expansion ($4000 offset) |
-| `$40800E2C` | `_InitResources` | INITRSRCMGR — ROM resources |
-| `$40800E82` | `_NewPtrSysClear` | INITTIMERMGR ($12 bytes) |
-| `$408002CE` | `_NewPtrSysClear` | INITADBVARS ($172 bytes) |
-
-Key milestones inside BOOTRETRY:
-
-- **`INITDISPATCHER`** (`$0166`) — after this returns, A-line traps
-  route to the real ROM dispatcher. Earliest point any Toolbox call
-  can be issued.
-- **`INITMEMMGR`** (`$0172`) — calls `_InitZone` to create SysZone.
-  Zone starts small; expanded later by `_SetApplBase` at `$01DA`.
-- **`INITSLOTS`** (`$0186`) — walks NuBus slots `$9..$E` reading
-  declaration ROMs. Must be NOP'd or short-circuited in the emulator
-  (no real NuBus cards).
-- **`INITIOMGR`** (`$018E`) — at `$40806D80`, installs the I/O
-  dispatcher and opens ROM DRVR resources. This is the hook point
-  for host disk driver installation via EmulOp.
-- **`DRAWBEEPSCREEN`** (`$0200`) — issues slot manager traps to
-  locate video memory on a NuBus card and clear it.
+The CPU starts with the ROM overlaid at 0 (VIA1 PA4 high); `STARTTEST1`
+runs from `$4080xxxx` and turns the overlay off.
 
 ---
 
-## 5. BOOTME (`$40800E96`) — boot device and startup
+## 3. STARTTEST1 (`$2A14`): diagnostics and RAM sizing
 
-```
-BOOTME ($40800E96):
-  $0E96: bsr  FUN_4080151C       ; FINDSTARTUPDEVICE — find boot device
-  $0E9A: movea.l ($2A6).w,A0     ; ApplZone
-  $0E9E: move.l A0,($118).w      ; store in ApplBase
-  $0EA2: move.l A0,($2AA).w      ; BufPtr
-  $0EA6: move.l (A0),($114).w
-  ...
-  $0ED8: _MountVol               ; mount boot volume
-  $0EDA: bne  LAB_408011AE       ; error → retry
-  ...
-  $0F00: _BlockMove              ; copy boot block to low mem
-  $0F08: _InitResources          ; open System file resources
-  $0F0A: tst.w (SP)+
-  $0F0C: bpl  LAB_40800F1C       ; success → continue boot
-  $0F0E: ...
-  $0F16: _UnmountVol             ; error → unmount, retry
-  $0F18: jmp  LAB_408011AE
-  ; --- success path ---
-  $0F1C: ...
-  $0F30: _InitFonts              ; font manager
-  $0F38: _OpenResFile            ; open boot resource fork
-  ...
-  $0F7E: _DrawPicture            ; boot screen (welcome / happy Mac)
-  $0F84: _CloseResFile
-  ; ... execute startup document, launch Finder
-```
+The power-on test owns the machine until it jumps to `STARTINIT1`.
 
-**A-line traps called during BOOTME:**
+1. `SP = $2000`, `VBR = $2806` (the vector table that starts the
+   diagnostics module, labelled `MEMTEST`; its reset PC is
+   `$40802A14`).
+2. `$58000000` holds `$AAAA5555`? Then a test box is attached: jump
+   through `$58000004` *(static)*.
+3. VIA1 (`$50F00000`): DDRA (`+$600`) = `$3D`; port A (`+$1E00`) bits
+   3 and 4 cleared (bit 4 is the ROM overlay). PA0 is toggled and PA1
+   read back; if they follow each other, bit `$1A` of D7 is set
+   ("test mode": a failure then enters the test manager instead of
+   the sad Mac) *(static)*.
+4. ROM checksum, `$36EC`: sums the words from `$40800004` for
+   `$1FFFE` words and compares with the long at `$0`. `CKSUMBR`
+   (`$370C`) is the `beq` that decides; a mismatch sets D6 =
+   `$FFFF`, and `$2AB6` sends the boot to the failure path.
+5. Reads of the SCSI (`$50F10010`) and IWM (`$50F16000`+`$1C00`,
+   `+$1A00`) registers. On rev A/B, VIA1 PA6 set selects the "rev 8"
+   addresses (`$50F1C000` for the IWM, §5); `$97221136` always takes
+   the normal ones.
+6. Memory tests and sizing, each returning through A6 with D6 = 0 on
+   success:
+   - `$36CA` with D7 = `$E`: data-line test at 0. In `$97221136` this
+     call goes through `$3F8C8` first, which sets VIA2 PA6/PA7 (`$C0`,
+     "bank B at 32 MB"), reads one long in each of the first 128 MB,
+     restores DDRA and continues to `$36CA`.
+   - `$3714`: memory test of `$0`–`$3FF`.
+   - `$35A4`: RAM sizing. Tries the bank configurations in the table
+     at `$3664` (`$20`/`$C0`, `$08`/`$80`, `$02`/`$40`, `$01`/`$00`:
+     bank-B address in MB / VIA2 PA7–6) until a pattern written at
+     the bank-B address doesn't alias address 0, then probes the sizes
+     listed at `$366E` (1, 2, 4, 5, 8, 16, 17, 20, 32, 64, 65, 68, 80,
+     128 MB). Returns D6 = top of RAM.
+   - `SP = D6`; `$36CA` again just below it; `$3944`.
+7. Success, and not in test mode: copy 64 vectors from `$2806` to `$0`,
+   `VBR = 0`, `SR = $2500`, `A6 = SP` (= top of RAM),
+   `jmp STARTINIT1`.
 
-| Address | Trap | Purpose |
-|---------|------|---------|
-| `$40800ED8` | `_MountVol` | mount boot volume (reads MDB) |
-| `$40800F00` | `_BlockMove` | copy boot block to low memory |
-| `$40800F08` | `_InitResources` | open System file on boot volume |
-| `$40800F16` | `_UnmountVol` | error path: unmount and retry |
-| `$40800F30` | `_InitFonts` | font manager init |
-| `$40800F38` | `_OpenResFile` | open boot resource fork |
-| `$40800F4E` | `_HLock` | lock resource handle |
-| `$40800F7E` | `_DrawPicture` | draw welcome screen |
-| `$40800F84` | `_CloseResFile` | close resource file |
+Failure path `$2C3C` *(static)*: play an error chime (`ERRORBEEP1`), then
+`TMRESTART` (`$2E96`): `ERRORBEEP4`, `VBR = $2806`, and the serial test
+manager loop (SCC init at `$33FA`, polls at `$3296` for `*` commands).
+It does not return.
 
-FINDSTARTUPDEVICE at `$4080151C` walks the drive queue, checks each
-drive's status/driver, reads boot blocks, and validates the "LK"
-signature. Same structure as the SE version — rejects drives whose
-refnum is outside the accepted range.
-
----
-
-## 7. Hardware base addresses (Mac II)
-
-Unlike IIci (which has a `SETUPHWBASES` routine that reads a
-decoder-info table), Mac II bakes hardware base addresses directly
-into the early init code:
-
-| Register | Address | Init function |
-|----------|---------|---------------|
-| VIA1 | `$50F00000` | `INITVIA` at `$408006F2` |
-| VIA2 | `$50F02000` | BOOTRETRY at `$014E`, `$01F4` |
-| SCC Read | `$50F04000` | `INITSCC` at `$408007B4` |
-| SCC Write | `$50F06000` | `INITSCC` |
-| IWM | `$50F16000` | `INITIWM` at `$408006AA` |
-| IWM rev-check | `$50F18000` | STARTINIT1 at `$00BA` |
-| SCSI | `$50F10000` | `INITSCSI` at `$4080066C` |
-| ASC | `$50F14000` | STARTINIT1 at `$00C8` (after rev-8 check) |
-
-The direct-baked nature means `patch_rom_ii` needs to redirect these
-low-memory globals (`$01D4`-`$0C04`) to ScratchMem via an EmulOp,
-same approach as the SE patcher's hardware base redirect.
+Today's `patch_rom_ii` gets to `STARTINIT1` through this failure path:
+its patched ROM fails the checksum, `$2C64` is redirected to `$2E96`,
+the chime at `$2EBE` is NOPed and `$2ECE` jumps to `$9A` (§13). The
+memory tests, the sizing and the vector copy never run.
 
 ---
 
-## 8. NuBus slot manager — `INITSLOTS` (`$40800186`)
+## 4. STARTINIT1 (`$9A`)
 
-Mac II has slots `$9..$E` (slots `$0..$8` are reserved). `INITSLOTS`
-walks them looking for cards with declaration ROMs at each slot's
-base address (`$F9000000`, `$FA000000`, …, `$FE000000`).
+| Offset | Code | |
+|---|---|---|
+| `$9A` | `bsr INITVIA` (`$6F2`) | VIA1: ORA `$01`, DDRA `$3F`, ORB `$07`, DDRB `$87`, IER `$7F`. VIA2 (`$50F02000`): DDRA `$C0`, ORB `$05`, DDRB `$80` (PB3 an input), IER `$7F` |
+| `$9E` | `bsr INITSCC` (`$7B4`) | reset both channels from the table at `$796` |
+| `$A2` | `bsr INITIWM` (`$6AA`) | IWM mode register to `$17` |
+| `$A6` | `bsr INITSCSI` (`$66C`) | clear the 5380's registers |
+| `$AA` | `bsr WHICHCPU` (`$532`) | D7.b = CPU; `$97221136` also identifies the machine (§5) |
+| `$AE` | `RAMTEST` (`$2BBC`) | A0 = A6 − `$300` .. A1 = A6: the top `$300` bytes |
+| `$BA` | ASC base | A3 = `$50F14000`, or `$50F18000` if `REV8CHK` says rev 8 |
+| `$D0` | `bsr BOOTBEEP` (`$5E4A`) | the startup chime, D0 = `$28` |
+| `$D6` | boot stack | A1 = `$40000`, or A6 if RAM is smaller; cold boot (`$CFC` ≠ `'WLSC'`) runs `RAMTEST` from SP to A1 |
+| `$F2` | `SP = A1` | |
+| `$100` | `FILLWITHONES` (`$220`) | `$100`–`$1DFF` = `$FF`, keeping `$CFC` |
+| `$108` | `CPUFlag` (`$12F`) = D7.b; `MemTop` (`$108`) = A6 | |
+| `$110` | `SYSERRINIT` (`$201C`) | exception vectors `$08`–`$FC`, clears `$C2C`–`$CAF` and `$120`. Rev A/B: `lea $118(pc),a6; jmp`. `$97221136`: `swap d7; jsr $3F624` stores `BoxFlag` first (§5) |
+| `$118` | `bsr SETUPTIMEK` (`$560`) | §4.1 |
+| `$11C` | `bsr VIATIMERENABLES` (`$74C`) | VIA2 T1 free-running, latch `$196E`, PB7 output (the 60.15 Hz tick that reaches VIA1 CA1); VIA1 PCR low nibble cleared, IER = `$83` (CA1 and CA2) |
+| `$120` | `jsr MMU_INIT` | `$3AA2` in rev A/B, `$3AA8` in `$97221136` (§5) |
+| `$124` | diagnostic hook *(static)* | `$F80080` = `~$AA5555AA`? Then `jmp ($F80084)` with A1 = `$142` |
+| `$13E` | `bsr INITHIMEMGLOBALS` (`$2DE`) | `BufPtr` (`$10C`) = `MemTop` − `$300` (and `$266`, `$312`, `$B0A`); `$97221136` caps `MemTop` at 8 MB here |
+| | falls into `BOOTRETRY` | |
 
-On a real Mac II you need at least one NuBus video card for any
-visual output (the machine has no on-board video). MAME's reference
-environment typically uses `-nbe mdc48` (Apple Display Card 4/8) or
-`mdc824` (Display Card 8/24). In an emulator the slot scan must be
-short-circuited — either by emulating a video card, or by patching
-the equivalent of `nuBusInfoPtr` (if the `$0178` ROM has one; this
-is one of the things to verify when porting `patch_rom_ii` from
-Basilisk II upstream).
+There is no `WHICHBOARD` routine in these ROMs; `$97221136`
+identifies the machine inside `WHICHCPU` (§5).
 
----
+### 4.1 SETUPTIMEK (`$560`)
 
-## 9. Driver install — `INITIOMGR` (`$40806D80`)
+Counts `dbra` iterations until VIA1 Timer 2 interrupts (one-shot
+mode, T2 = `$030F`, IER = `$A0`, the level-1 vector `$64` pointed at
+a local handler), three times:
 
-Lives at `$40806D80` (offset `$6D80`). Installs the I/O dispatcher
-and opens ROM DRVR resources (.Sony, .Sound, .AIn, .AOut, .ATalk).
+| Loop body | Result |
+|---|---|
+| plain `dbra` | `TimeDBRA` (`$D00`) |
+| `btst #0` of the SCC (`$50F04000`) | `TimeSCCDB` (`$D02`) |
+| `btst #0` of SCSI `+$40` (`$50F10040`) | `TimeSCSIDB` (`$DA6`) |
 
-```
-INITIOMGR ($40806D80):
-  $6D80: clr.b  ($21E).w          ; clear flag
-  $6D84: bsr    FUN_4080795A      ; setup
-  $6D8C: movea.l ($CF8).w,A3      ; driver queue head
-  $6D90: lea    ($272,PC),A0      ; dispatcher address
-  $6D94: move.l A0,($21A).w      ; install dispatcher
-  ...
-  $6DCC: bset.b #5,($15D,A3)     ; enable dispatcher
-  $6DD2: bsr    FUN_40806DEA      ; init dispatcher tables
-  $6DE0: jsr    FUN_408077F4      ; scan ROM DRVRs, _Open each
-  $6DE4: jsr    FUN_40807834      ; finalize driver queue
-```
-
-This is the hook point for providing a host-backed `.Sony` / `.Disk`
-driver via an `INSTALL_DRIVERS` EmulOp at `.Sony _Open` or similar.
-
----
-
-## 10. Mac IIx / IIcx / SE-30 divergence
-
-The shared `$0178` ROM image (`$97221136`) is loaded by the Mac IIx,
-IIcx, II FDHD, and SE/30. Differences from the stock Mac II ROM
-(`$97851DB6`):
-
-1. **SWIM floppy controller** instead of IWM → `INITIWM` probes
-   differently
-2. **68030 CPU** → `WHICHCPU` returns 2 instead of 1; the 68030 PMMU
-   is available
-3. **SE/30 has a PDS slot** instead of NuBus slots (IIx has NuBus,
-   IIcx has 3 NuBus slots, SE/30 has a single PDS slot)
-4. **SE/30 has built-in video** (compact Mac display) via
-   `se30vrom.uk6`
-5. **Box ID** via `WHICHBOARD` returns different values; the ROM
-   dispatches to different init paths based on this
-
-All of these are resolved at runtime inside the same ROM code — the
-hardware probes in `STARTINIT1` select different code paths. A
-future `patch_rom_ii` can use the same signature scan regardless of
-which machine is actually running, because the signature targets
-shared code, not machine-specific branches.
+MAME: `TimeDBRA` 2616, `TimeSCCDB` 1121, `TimeSCSIDB` 1046 on the
+68020 machines (1207 and 1121 on the 68030 ones). The loops are bounded
+by `dbra` (65,536 passes); with no interrupt each ends with the value
+0. `INSTALL_DRIVERS` (`emul_op.cpp`) already puts 10000 in `$D00` and
+`$D02` when they are 0 on 24-bit machines; `$DA6` is not set.
 
 ---
 
-## 11. Emulator patches (`patch_rom_ii`)
+## 5. Machine type, CPU and MMU
 
-The emulator's `patch_rom_ii()` in `src/core/rom_patches.cpp` applies
-fixed-offset patches to bypass hardware that isn't emulated. Key patches:
+### WHICHCPU (`$532`)
 
-**Reset + FUN_40802A14** (hardware probe at `$2A14`):
-- NOP pmove at `$3F872` (no PMMU on 68020)
-- NOP all `movec VBR` writes (`$2A20,$2BD2,$2C30,$2D08,$2ECA`) — keep
-  VBR=0 so SYSERRINIT handlers at `$08-$FC` dispatch A-line traps
-- NOP sub-function calls (`$2B14,$2B36,$2B4E,$2B62,$2B76`) that probe
-  I/O at `$50F0xxxx` (maps to RAM zeros in 24-bit mode)
-- Skip BOOTBEEP (`$2EBE`, `$2C64`) and ADB scan (`$2ECE` → JMP `$9A`)
+Points the illegal-instruction vector (`$10`) at `$54C`, then
+`movec d0,cacr`:
 
-**STARTINIT1** (`$9A`):
-- NOP VIA/SCC/IWM/SCSI BSR calls (`$9A,$9E,$A2,$A6`)
-- Fix A6=RAMSize at `$AE` (FUN_40802A14 sets A6 to old SP, not MemTop)
-- Clear `$CB1`/`$CB2` at `$118` after FILLWITHONES (MMU mode flags)
+| CPU | Result |
+|---|---|
+| 68000 | illegal → D1 = 0 |
+| 68010 | illegal, exception frame vector offset `$10` → D1 = 1 |
+| 68020 | executes → D1 = 2 |
 
-**BOOTRETRY** (`$142`):
-- NOP INITSLOTS (`$186`), ADB init (`$1A0`), VIA2 writes (`$146-$14E`)
-- NOP IOP polling in INITIOMGR (`$6DCC`)
-- INSTALL_DRIVERS EmulOp hooked at .Sound `_Open` (`$2F02A`)
-- PATCH_BOOT_GLOBS EmulOp at `$DAC` (unit table → ScratchMem)
-- SwapMMUMode always 24-bit path (`$3B24,$3B62`)
-- _SetTrapAddress skip 32-bit thunk (`$4F54`)
+D7.b = D1 → `CPUFlag`. In `$97221136` the `movec` is replaced by a jump
+to `$3F74A`, which adds the 68030 test (CACR bit 8 sticks → 3) and the
+machine identification; see [`../maciix/boot_flow.md`](../maciix/boot_flow.md) §3.
 
-**Drivers**: .Sony replaced at `$2D72C`, serial _Open NOP'd, SERD
-patched at `$2AB5C+12`, all via fixed offsets (find_rom_resource
-doesn't work on 256KB ROMs). Trap-based patches use find_rom_trap.
+`BoxFlag` (`$CB3`, Gestalt machine type − 6): rev A/B clear it in
+`MMU_INIT` (`clr.b $CB3`), so it is 0, "Mac II". `$97221136` sets it
+from VIA1 PA6 and VIA2 PB3 (0 = II / II FDHD, 1 = IIx, 2 = IIcx,
+3 = SE/30).
+
+### REV8CHK (`$73E`)
+
+`btst #6` of VIA1 port A (`$50F01E00`). In rev A/B, PA6 set means a
+"rev 8" board with a different I/O layout *(static; MAME reads PA6 = 0)*:
+
+| Global | Normal (PA6 = 0) | Rev 8 (PA6 = 1) |
+|---|---|---|
+| `IWM` (`$1E0`) | `$50F16000` | `$50F1C000` |
+| `SCSIDMA` (`$C04`) | `$50F12000` | `$50F14000` |
+| `SCSIHsk` (`$C08`) | `$50F06000` | `$50F08000` |
+| `ASCBase` (`$CC0`) | `$50F14000` | `$50F18000` |
+
+`$97221136` uses PA6 as a machine-ID bit instead, so its `REV8CHK` is
+`ori #4,ccr; rts` (always "normal"), and every inline PA6 test
+(`$1E10`, `$2ACE`, `$2AF4`, `$2C58`, `$2CB4`, `$2CE2`, `$2EB2`) branches
+the same way.
+
+### MMU_INIT and SWAPMMUMODE
+
+Rev A/B (`$3AA2`):
+
+1. Clear `MMUFlags` (`$CB0`), `MMU32Bit` (`$CB2`), `BoxFlag`
+   (`$CB3`), `$CB4`, `$CB8`; `jSwapMMU` (`$DBC`) = `SWAPMMUMODE`
+   (`$3A8A`).
+2. `COMPMMUTYPE` (`$3ADE`): VIA2 PB3 = 0 and made an output; execute a
+   `pmove` with the F-line vector caught. It traps → `MMUType`
+   (`$CB1`) = 1 (the HMMU); it runs → 3 (a 68851).
+3. 68851: `$CB4` = `NUMAP` (`$40800050`), `$CB8` = `$40`.
+4. `SwapMMUMode(1)`: the rest of `STARTINIT1` runs in **32-bit mode**.
+
+`SWAPMMUMODE` (D0 = 0 → 24-bit, else 32-bit; returns the old mode):
+
+| `MMUType` | 32-bit | 24-bit |
+|---|---|---|
+| 1, HMMU | VIA2 PB3 = 1 | VIA2 PB3 = 0 |
+| 3, 68851 | `pmove` 0 → TC (no translation) | CRP = `$7FFF0202`:`NUMAP`, TC = `$80F84500` |
+
+`MMU32Bit` (`$CB2`) records the mode. With the HMMU, 24-bit mode maps
+`$000000`–`$7FFFFF` to RAM, `$800000`–`$8FFFFF` to `$40800000`,
+`$s00000`–`$sFFFFF` (s = 9..E) to `$Fs000000`–`$Fs0FFFFF`, and `$Fxxxxx`
+to `$50Fxxxxx` (MAME `hmmu_translate_addr`). `NUMAP` gives the 68851
+the same map (16 entries of 1 MB: RAM, ROM, slots `$F9000000`..
+`$FE000000`, I/O).
+
+`$97221136` rewrote all three for a fourth type, 4 = 68030 PMMU, with
+CRP/TC pairs for each mode at `$3B7A`; see the IIx doc §4.
+
+Mode changes during boot (MAME `macii`):
+
+| Where | Mode |
+|---|---|
+| `MMU_INIT` (`STARTINIT1` `$120`) | 32-bit |
+| `BOOTRETRY` `$148`: `jsr ($DBC)` with D0 = 1 | 32-bit (for retries) |
+| `BOOTRETRY` `$166` (rev A/B: `moveq #0,d0; _SwapMMUMode`) | 24-bit, from here on |
+| Rev B / `$97221136`: `INITSDECLMGR` and the Slot Manager routines that read card ROMs | 32-bit while they run |
+| `LVL1INT` (`$607C`) | 24-bit for the handler, then back |
 
 ---
 
-## 12. See also
+## 6. Hardware bases
 
-- `docs/roms/dissam/macii/rom.lst` — build artifact, the annotated listing
-- `docs/roms/dissam/maciix/rom.lst` — the shared Mac IIx/IIcx/SE30 ROM
-- `docs/roms/dissam/PATCHING_APPROACH.md` — signature-driven strategy
-- `docs/roms/dissam/common/hardware_map.md` — MMIO reference
-- `docs/roms/dissam/se/boot_flow.md` — simpler, more primitive cousin
-- `docs/roms/dissam/iici/boot_flow.md` — more complex, 32-bit clean cousin
-- Basilisk II upstream — reference implementation of `patch_rom_ii`
+None of these ROMs has a decoder table: the bases are constants in the
+code. Low-memory globals are filled by `INITGLOBALVARS` and its helpers;
+much of the early code (STARTTEST1, `SETUPTIMEK`, `INITVIA`,
+`VIATIMERENABLES`, `SWAPMMUMODE`, `BOOTRETRY`) uses the constants
+directly.
+
+| Device | Address | Global | Set by |
+|---|---|---|---|
+| VIA1 | `$50F00000` | `VIA` `$1D4` | `INITVIAGLOBALS` `$6E8` |
+| VIA2 | `$50F02000` | none | constants only |
+| SCC | `$50F04000` | `SCCRd` `$1D8`, `SCCWr` `$1DC` (both the same) | `INITSCCGLOBALS` `$780` |
+| SCSI 5380 | `$50F10000` | `SCSIBase` `$C00` | `INITSCSIGLOBALS` `$634` |
+| SCSI DMA | `$50F12000` | `SCSIDMA` `$C04` | " |
+| SCSI handshake | `$50F06000` | `SCSIHsk` `$C08` | " |
+| ASC (sound) | `$50F14000` | `ASCBase` `$CC0` | `INITGLOBALVARS` `$300` |
+| IWM / SWIM | `$50F16000` | `IWM` `$1E0` | `INITIWMGLOBALS` `$692` |
+| ROM | `$40800000` | `ROMBase` `$2AE` | `INITGLOBALVARS` |
+
+(Rev 8 alternatives in §5.) In 24-bit mode the I/O block is `$F00000`–
+`$FFFFFF`. Registers are `$200` apart: VIA register n at `n × $200`.
+
+In our emulator the 24-bit mask turns `$50Fxxxxx` into `$Fxxxxx`, which
+is ordinary memory in the 32 MB allocation (reads return what was last
+written). So nothing faults; the ROM's hardware probes read back their
+own writes or zeros.
+
+---
+
+## 7. BOOTRETRY (`$142`)
+
+Restartable: `BOOTME` branches back here when a boot fails.
+
+| Offset | Code | |
+|---|---|---|
+| `$142` | `SR = $2700` | |
+| `$146` | `moveq #1,d0; jsr ($DBC)` | 32-bit mode |
+| `$14E` | VIA2 IER = `$02` | |
+| `$15A` | `INITGLOBALVARS` (`$300`) | `ROMBase`, `ASCBase`, `ROM85` (`$28E` byte `$3F`), `HWCfgFlags` (`$B22`) = `$DC00`, the device-base helpers above, `JMPTBLINIT` for the I/O jump table at `$8F4`, queues, `INITCRSRVARS`, `GNEFILTER` |
+| `$15E` | `INITXVECTTABLES` (`$4B6`) | interrupt dispatch tables (`$192` level 1, `$1B2`, `$2BE`, `$D70`), autovectors `$64` `INTHND`, `$68`/`$6C` `VIA2INT`, `$70` `LVL2INT` (SCC), `$74` `SPURIOUS`, `$78` `POWEROFF` |
+| `$162` | `INITDISPATCHER` (`$D0A`) | §7.1 |
+| `$166` | rev A/B: `moveq #0,d0; _SwapMMUMode; bsr GETPRAM` | 24-bit mode. `$97221136`: `jsr $3F608` (68030 `_HWPriv`, then the same) |
+| `$16A` | `GETPRAM` (`$478`) | `_InitUtil` (PRAM via the VIA1 RTC lines), then key repeat, caret and double-click times from `SysParam` |
+| `$16E` | `INITMEMMGR` (`$E04`) | `Lo3Bytes` (`$31A`) = `$FFFFFF`, `MinStack` `$400`, `DefltStack` `$6000` |
+| `$172` | `SETUPSYSAPPZONE` (`$23E`) | `_InitZone` `$1E00`..`$3600`, 64 master pointers; `SysZone` = `ApplZone` = `TheZone`; `ApplLimit` from `COMPBOOTSTACK` (`MemTop`/2 − `$400`, `$97221136` caps `MemTop` at 8 MB) |
+| `$176` | `INITSWITCHERTABLE` (`$464`) | |
+| `$17A` | `INITRSRCMGR` (`$E22`) | `_InitResources` for the ROM map |
+| `$17E` | `INITTIMERMGR` (`$E80`) | Time Manager queue |
+| `$182` | `INITADBVARS` (`$2CA`) | ADB globals (`$CF8`), shift-register handler `FDBSHIFTINT` |
+| `$186` | `INITSLOTS` (`$E32`) | §8 |
+| `$18A` | `SR = $2000` | interrupts on |
+| `$18E` | `INITADB` (`$6D80`, also labelled `KBDMNGR`) | §10 |
+| `$192` | `INITVIDGLOBALS` (`$7E6`) | just `rts` |
+| `$1A0` | cold boot: `RAMTEST` | `$97221136`: `jsr $3F620`, the same in 32-bit mode |
+| `$1AE` | `COMPBOOTSTACK` | SP; `_SetApplLimit` |
+| `$1BA` | `INITQUEUE` (`$6072`) on `DrvQHdr` (`$308`) | |
+| `$1C2` | `jsr SCSISTUFF` (`$26636`) | SCSI Manager |
+| `$1C8` | `INITIOMGR` (`$D9E`) | §9 |
+| `$1CC` | `INITCRSRMGR` (`$BB8`) | cursor globals, `CRSRVBLTASK`, `CRSRCORE` |
+| `$1D0` | `_SetApplBase` (system heap end + 16 KB) | |
+| `$1F4` | VIA2 IER = `$82` | |
+| `$200` | `DRAWBEEPSCREEN` (`$27C`) | `_InitGraf`, `_OpenCPort`, paints the grey screen |
+| `$204` | `$CFC` = `'WLSC'` | warm-start flag |
+| `$20C` | `bra BOOTME` (`$E96`) | §11 |
+
+### 7.1 INITDISPATCHER (`$D0A`)
+
+Fills the Toolbox table (`$E00`–`$1DFF`, 1024 entries) and the OS table
+(`$400`–`$7FF`, 256 entries) with `BADTRAP` (`$D98`), then unpacks the
+compressed table at `ROMBase + DISPOFF` (`$26EE2`) into them. The A-line
+vector (`$28`) is `ATRAP68010` (`$64F2`) for a 68010, `EMT1010`
+(`$64FA`) for a 68000 and `DSPATCH` (`$64BA`, also `ATRAP68020`) for a
+68020 or 68030. From here A-traps work.
+
+---
+
+## 8. Slot Manager (`INITSLOTS`, `$E32`)
+
+`INITSLOTS`: `SINTCORE` (slot interrupt queues), `INITVBLQS`,
+`INITSPTBL`, `INITQUEUE` (`$D92`), `$D9C` = `DTCORE`, then
+`STARTSDECLMGR` (`$4152`) with D0 bit 2 set on a warm start. A non-zero
+result goes to `CRITICAL` with D7 = `$1F` (sad Mac).
+
+`STARTSDECLMGR`: allocates `$D0` bytes for the `_SlotManager` jump
+table (`$DB8`) from `SDMJUMPTABLE` (`$4F5C`, `$34` word offsets), then
+calls, in order:
+
+| `_SlotManager` | Routine | Error on failure |
+|---|---|---|
+| `$20` | `INITSDECLMGR` (`$41DC` → `$436A`) | `$B` |
+| `$29` | `INITSRSRCTABLE` (`$48D6`) | `$C` |
+| `$25` | `INITPRAMRECS` (`$4A78`) | `$D` |
+| `$21` | `SPRIMARYINIT` (`$44B4`) | `$E` |
+
+`SLOTMANAGER` (`$4F44`, the `$A06E` trap): `cmpi.w #$34,d0`, look up
+`($DB8)`, jump. Rev B and `$97221136` jump instead to a wrapper (`$3F644`
+/ `$3F658`): save `MMU32Bit`, switch to 24-bit, `_StripAddress` A0,
+call, restore the caller's mode. The routines that read card ROMs switch
+themselves to 32-bit (the stubs at `$408E`–`$40BF`).
+
+### 8.1 INITSDECLMGR (`$436A`): the slot scan
+
+1. Free any old `sInfo` array, allocate `$80` bytes
+   (`_NewPtrSysClear`), `SInfoPtr` (`$CBC`) = it. Rev B/`$97221136`:
+   then switch to 32-bit mode (`$3F66E` / `$3F682`).
+2. A bus-error handler (`SBUSERRPROC`, `$4F28`) is installed through
+   the record at the head of the array; each slot's record (16 bytes)
+   gets a timeout word `$64` at `+$C`.
+3. For slot D3 = 9 to `$E`, A5 = the slot's last byte:
+
+   | | Slot 9 | Step | Slot `$E` |
+   |---|---|---|---|
+   | Rev A | `$F99FFFFF` | `+$1100000` | `$FEEFFFFF` |
+   | Rev B, `$97221136` | `$F9FFFFFF` | `+$1000000` | `$FEFFFFFF` |
+
+   Rev A scans in 24-bit mode (`BOOTRETRY` `$166` switched before
+   `INITSLOTS`), so its address is `$sFFFFF`, the top of the slot's
+   1 MB, which the MMU sends to `$Fs0FFFFF`: MAME rev A reads
+   `$F90FFFFC`..`$FE0FFFFC` (68851, `NUMAP`). Rev B and `$97221136`
+   switch to 32-bit mode for the scan and read `$F9FFFFFC`..
+   `$FEFFFFFC`.
+4. Read `(A5)` with the bus-error vector (`$08`) swapped; a bus error
+   → status `-300` (`smEmptySlot`, `$FED4`).
+5. Byte lanes: for D2 = 3 down to 0, `$41E0` reads `(A5)`; the byte
+   must have its low nibble equal to the complement of its high
+   nibble, and bit D2 of the lane mask; then `+$9` = lanes, `+$A` =
+   low byte of A5. Then `_SlotManager $13` (`sReadFHeader`) and the
+   test pattern `$5A932BC7` at `+$E` of the header. A5 − 1 on a miss;
+   after four misses `-309` (`smBLFieldBad`).
+6. Header checks (`$4244`): format `1`, ROM revision ≤ 9, reserved 0,
+   directory offset non-zero in the low 24 bits with a zero top byte.
+   Then CRC (`$428E`) over the length; mismatch `-301`.
+7. `_SlotManager $2C` (`sCalcsPointer`) twice: the directory → the
+   record's `+$0`. Errors `-304`.
+
+The SE/30's built-in video is found here, as slot `$E` (IIx doc §6).
+
+Empty slots: with all slots empty `INITSDECLMGR` still succeeds; the
+rest of the boot runs without a screen (§9.1). MAME's Display Card 8•24
+answers only at the top of its 16 MB, so rev A sees slot 9 empty.
+
+---
+
+## 9. INITIOMGR (`$D9E`) and the drivers
+
+| Offset | Code |
+|---|---|
+| `$D9E` | `UnitNtryCnt` (`$1D2`) = `$40`; `_NewPtrSysClear($200)` (at `$DAC`) → `UTableBase` (`$11C`) |
+| `$DC4` | `_Open` `.Sony` (`DRVR` 4, `$2D72C`) |
+| `$DCE` | `_Open` `.Sound` (`DRVR` 3, `$2F010`) |
+| `$DD0` | `FROVIDEO` (`$B58`), §9.1 |
+| `$DD8` | `ROMMapInsert` (`$B9E`) = `$FFFF`, `_GetResource('SERD', 0)`, call it (`$2AB58`: installs the serial drivers) |
+
+The `.Sony` driver is the IWM driver in rev A/B and the SWIM driver in
+`$97221136` (same resource offset; its code spills into `MDEF` 0's
+space). `.Sound` drives the ASC. AppleTalk (`.MPP`, `.ATP`, `.XPP`) is
+opened later by the System.
+
+### 9.1 Video: FROVIDEO (`$B58`)
+
+1. `OPNVIDDEFLT` (`$928`): `_GetVideoDefault` (PRAM slot and
+   sResource), `sRsrcInfo` (`$16`); it must be category/type
+   `$0003`/`$0001` (display, video) with driver software `$0001`
+   (Apple). Then `RDVIDPARAM` (`$7E8`), `OPENSDRVR` (`$8D0`),
+   `INITVIDDEFLT` (`$974`).
+2. Otherwise walk `sNextTypesRsrc` (`$15`) for the first such sResource
+   and do the same.
+3. None: `INITDUMMYSCREEN` (`$AA0`): a 32×32 one-bit "screen" in a
+   `_NewPtr` block, a GDevice for it, and the boot carries on blind.
+   MAME rev A with the 8•24 in slot 9 does this (`ScrnBase` = `$2FE4`,
+   `ScreenRow` = 4) and still reaches the Finder; rev B finds the card
+   (`ScrnBase` = `$F9900A00`, `ScreenRow` = 80).
+
+`RDVIDPARAM`: the default mode, its parameter block (`sGetBlock`),
+`ScrnBase` (`$824`), `ScreenRow` (`$106`), the screen size (`$C20`,
+`$C22`, `ScrVRes`/`ScrHRes` at `$102`/`$104`), `CrsrBase` (`$898`),
+`_AttachVBL` for the slot. Rev A computes the base itself; rev B and
+`$97221136` ask `sFindDevBase`.
+`OPENSDRVR`: `sReadDrvrName` (`$19`), then `_Open` with the slot
+parameters (`$A200`). `INITVIDDEFLT`: `_NewGDevice`, `MainDevice`
+(`$8A4`), `DeviceList` (`$8A8`), `TheGDevice` (`$CC8`), gamma.
+Other video cards are opened later by `OPENSLOTS` (§11).
+
+---
+
+## 10. ADB, PRAM, clock
+
+`INITADB` (`$6D80`): VIA1 PCR = 0, IER = `$84` (shift register),
+DDRB |= `$30` (ADB state lines ST0/ST1), sets bit 5 of `$15D(ADBBase)`,
+starts the bus probe and waits at `$6DD8` with interrupts on until the
+shift-register interrupts (`FDBSHIFTINT`, `$7002`) clear the bit. Then
+`$77F4` and `$7834` build the device table. `INITADBDRVR` (`$7724`) and
+`MOUSEINIT` run later from `BOOTME`. `_ADBOp` is `ADBOP` (`$72FA`).
+
+PRAM and clock: `INITUTIL` (`$DBE8`) through `CLKNOMEM` (`$DDD6`),
+`READXPRAM`/`WRITEXPRAM`, bit-banged on VIA1 port B (PB0 data, PB1
+clock, PB2 enable).
+
+---
+
+## 11. Boot device and boot blocks
+
+`BOOTME` (`$E96`) starts with `FINDSTARTUPDEVICE` (`$151C`):
+
+1. `EMBARKONSEARCH`: `_GetDefaultStartup`, `_GetOSDefault`; default
+   device or "any".
+2. `LOADSLOTDRVRS` (`$166C`): a slot boot device: `sFindsRsrcPtr`,
+   `sExec` its boot record.
+3. `LOADDRIVERS` → `SCSILOAD` (`$7AD4`): load drivers from SCSI
+   disks' partition maps.
+4. `WAITFORINTERNAL` (`$15EA`): wait up to 20 s (`_InternalWait`) for
+   the internal SCSI disk (ID from `$C2F`), whose driver refnum is
+   `-33 − ID`.
+5. Walk the drive queue (`$308`) with `ISITFLOPORDEF` / `ISITANYTHING`;
+   `GETSTARTUPINFO` reads 1 KB of boot blocks (`_Read`) and wants
+   `'LK'`; `REACTTOFAILURE`, `VISUALUPDATE` (the disk icons) on
+   failure; `SHOWSUCCESS` (happy Mac).
+
+The rest of `BOOTME` uses the boot blocks (A6):
+
+| Offset | Code |
+|---|---|
+| `$EBE` | executable boot blocks: `jsr 2(a6)` |
+| `$EC2` | `_InitEvents` (`bbCntEvts` `$7C`), `_InitFS` (`bbCntFCBs` `$7A`) |
+| `$ED8` | `_MountVol`; failure → `$11AE` (eject, `BOOTRETRY`) |
+| `$F00` | `SysResName` (`$AD8`) = `bbSysName`; `_InitResources` (opens the System file) |
+| `$F30` | `_InitFonts`; startup screen: `_OpenResFile(bbScreenName)`, `_GetPicture`, `_DrawPicture`; else `_SysError(40)`, "Welcome to Macintosh" |
+| `$FF4` | debuggers (`bbDbg1Name`, `bbDbg2Name`) |
+| `$1038` | `INITADBDRVR`, `MOUSEINIT`, `OPENSLOTS` (`$1370`: every slot driver, video ones added with `ADDVIDDEVICE`) |
+| `$1056` | `DSAT` 2 → `DSAlertTab`; `.Sony` track cache on |
+| `$1074` | `_InitApplZone`, `_RDrvrInstall` |
+| `$107C` | `INIT` resources 0..35 from the System file (INIT 31 runs the INITs) |
+| `$10D4` | system heap size from `bbSysHeapSize` or, for newer boot blocks, `MemTop` × `bbSysHeapFract` + `bbSysHeapExtra` (`$97221136`: `MemTop` capped at 8 MB); `_SetApplBase`, `_InitApplZone` |
+| `$1154` | scrap name, `FinderName` (`$2E0`) = `bbShellName` |
+| `$117C` | `_GetVol` → `BootDrive` (`$210`); working directory |
+| `$118A` | `bbHelloName` if present, else the Finder: `_GetFileInfo`, `_Launch`; neither → `_SysError(41)` |
+
+MAME `macii` (rev B) with 6.0.8: `CurApName` = "Finder" at 38 s.
+
+---
+
+## 12. Interrupts in the running system
+
+| Level | Source | Vector | Handler |
+|---|---|---|---|
+| 1 | VIA1 (60.15 Hz on CA1, one-second CA2, ADB shift register) | `$64` | `LVL1INT` (`$607C`), table at `$192` |
+| 2 | VIA2 (slot IRQs, SCSI) | `$68` | `VIA2INT` (`$622E`), `SLOTINT` (`$6284`) |
+| 4 | SCC | `$70` | `LVL2INT` (`$60D0`) |
+| 6 | power switch | `$78` | `POWEROFF` (`$62E6`) |
+| 7 | NMI | `$7C` | `NMIEXCP` (`$2114`) |
+
+`LVL1INT` switches to 24-bit mode first if `MMU32Bit` is set.
+
+---
+
+## 13. `patch_rom_ii` today, and what each stage needs
+
+`patch_rom_ii` (`src/core/rom_patches.cpp`) was written against
+`$97221136` and applied unchanged to all three ROMs. Trial runs
+(`--config /dev/null --ram 8`, 6.0.8 disk, 2026-10-21): rev A and rev B
+stay in phase "pre-reset"; A6 holds `$00800118`, the return address
+`STARTINIT1` gave `SYSERRINIT`, and the CPU is running wild. `$97221136`
+reaches phase "drivers" (the `INSTALL_DRIVERS` EmulOp) and then runs
+wild too; the screen stays black.
+
+Since no routine moved, one fixed offset per site is right for all
+three ROMs, provided the patcher checks the bytes it expects there
+first: the contents differ wherever the ROMs differ (§1). Apple's names
+say what each site is.
+
+What it does, and what is wrong with it:
+
+| Patch | Comment says | What the site is |
+|---|---|---|
+| `$3F872` NOP | `pmove` clearing TC at reset | right for `$97221136`; filler text in rev A/B, never executed |
+| `$2C64` jmp `$2E96`, `$2EBE` NOP, `$2ECE` jmp `$9A` | skip BOOTBEEP / "ADB scan" | the checksum-failure path and the serial test manager; it reaches `STARTINIT1` without the vector copy and `VBR = 0` |
+| VBR writes `$2A20`, `$2BD2`, `$2C30`, `$2D08`, `$2ECA` NOP | keep VBR = 0 | `STARTTEST1` (`$2A20`), `RAMTEST` (`$2BD2` and its restore at `$2C30`), `TESTMANAGER` (`$2D08`), `TMRESTART` (`$2ECA`) |
+| `$2B14` 3 NOPs, `$2B36`/`$2B4E`/`$2B62`/`$2B76` NOPs | "hardware probes" | `$2B14` is `$97221136`'s bank-config call (in rev A/B: the end of `lea $2B1A(pc),a6` and half of `jmp $36CA`); the rest are the memory tests and **RAM sizing** (`$35A4`). All are after the checksum, so on the failure path they never run anyway, and A6 is never the RAM size |
+| `$9A`,`$9E`,`$A2`,`$A6`,`$C0`,`$D0` NOP | hardware init | `INITVIA`/`SCC`/`IWM`/`SCSI`, `REV8CHK`, `BOOTBEEP` |
+| `$AE` `movea.l #RAMSize,a6`, then `$2246` | fix A6, "movea.l A6,A1" | stands in for the skipped sizing. `$2246` is `movea.l d6,a1`, not `a6`, and A0 (`A6 − $300`) is no longer set, so the first `RAMTEST` gets the wrong range |
+| `$118`–`$13B` block | `clr.w ($CB1).w`, `move.l #ScratchMem,($1D4).w` … | **mis-encoded**: `$4279`/`$23FC` are the absolute-*long* forms, so each 2-byte address swallows the next instruction. It also replaces `SETUPTIMEK`, `VIATIMERENABLES`, `MMU_INIT` and the diagnostic hook |
+| `$13E` NOP | | `INITHIMEMGLOBALS` (`BufPtr` never set) |
+| `$3F7C4` NOP | `_SwapMMUMode` "in INITDISPATCHER" | in `$97221136`'s `$3F7B4` (after `INITDISPATCHER`); filler in rev A/B |
+| `$3B24`, `$3B62` NOP | SwapMMUMode always via VIA2 | right for `$97221136`'s `SWAPMMUMODE`; in rev A/B each is the low word of `lea $50F02000,a0` in the HMMU path, so PB3 is written at `$50F04E71` |
+| `$146`–`$14C` NOP | "uninitialised ($DBC)" | `jsr jSwapMMU`, unset because `MMU_INIT` was skipped |
+| `$14E` NOP ×5 | VIA2 IER | the two instructions are 12 bytes; the last word, `$1C00`, is left and runs as `move.b d0,d6` |
+| `$4F54` `beq` → `bra` | "`_SetTrapAddress` handler" | `SLOTMANAGER`: every `_SlotManager` call now fails |
+| SERD `_Open`s `$2ABF2`, `$2ABFA`, `$2AC56`, `$2AC84` → `rts` | | inside `SERD` 0 |
+| `$2F02A` `INSTALL_DRIVERS` | `.Sound` `_Open` | right (`.Sound` header `+$1A`) |
+| `$1F4`–`$203` `INSTALL_DRIVERS` | | replaces VIA2 IER and `DRAWBEEPSCREEN` |
+| `$186` NOP | skip slot scan | `INITSLOTS` |
+| `$1A0` 3 NOPs (twice) | "ADB init" | the warm-start `RAMTEST` test; in rev A/B it cuts an 8-byte `cmpi.l` in half |
+| `$1CC`–`$1F3` NOP | "video globals" | `INITCRSRMGR`, `_SetApplBase`, `ApplZone`/`HeapEnd` setup |
+| `$DC4`, `$DCE` NOP | | `_Open .Sony`, `_Open .Sound` in `INITIOMGR` (not "INITCRSRMGR") |
+| `$DD0` NOP | "cursor manager" | `FROVIDEO`: no video at all, not even the dummy screen |
+| `$DD8`–`$DF3` NOP | SERD | right |
+| `$6DCC` NOP ×3 | "IOP polling in INITIOMGR" | `INITADB`'s bus-probe flag; the Mac II has no IOP |
+| `$DAC` `PATCH_BOOT_GLOBS` | "INITCRSRMGR" | `INITIOMGR`'s `_NewPtrSysClear` for the unit table |
+| `serd_offset` = `$2AB5C` | `SERD` | `SERD` 0 starts at `$2AB58`; `+12` lands on its second `pea` (the SE patcher's `+12` is the first) |
+| `.Sony` at `$2D72C`, `vCheckLoad` `$13078`, `LVL1INT` `$608E`, trap-located patches | | right in all three |
+
+### Stage by stage
+
+| Stage | Needs |
+|---|---|
+| Reset | `$97221136`: keep `$3F856` if the core has a 68030 MMU (`mame-68k`), else NOP the `pmove` |
+| STARTTEST1 | `CKSUMBR` (`$370C`) `beq` → `bra` so the patched ROM passes; RAM sizing either emulated (VIA2 PA6/PA7 bank placement, aliasing above the RAM) or `$35A4` replaced by an EmulOp returning D6 = RAM top. Keep the vector copy and `VBR = 0` at `$2B8A`–`$2BAA`. VIA1 PA0→PA1 must not loop back (test mode) |
+| STARTINIT1 | the device inits can run against plain memory; `BOOTBEEP` NOP; `REV8CHK` must say "normal" (VIA1 PA6 = 0 on rev A/B) |
+| WHICHCPU / `BoxFlag` | rev A/B: nothing; `$97221136`: VIA1 PA6 and VIA2 PB3 per profile (IIx doc) |
+| SETUPTIMEK | supply `TimeDBRA`/`TimeSCCDB`/`TimeSCSIDB` (`$D00`, `$D02`, `$DA6`) |
+| MMU_INIT | let it run; `MMUType` 1 (HMMU) on the Mac II and II FDHD |
+| `SWAPMMUMODE` | 24-bit only is enough until the slot scan (below) |
+| INITSLOTS | run it, with a card: see below |
+| INITADB | the existing NOP of the flag at `$6DCC`, or a VIA1 shift register that answers |
+| INITIOMGR | `.Sony` replaced; `.Sound` hook; `SERD` patch at `$2AB64` (`$2AB58 + 12`) |
+| FROVIDEO | let it run: it finds the card's video sResource and opens its driver |
+| BOOTME | as for the SE: our disk drivers in the drive queue, refnum `-33` |
+
+### The slot scan and the fake card
+
+- **Rev A** probes `$FssFFFFF`. Under our 24-bit mask that is `$sFFFFF`,
+  so a declaration ROM placed with its format block ending at
+  `$EFFFFF` (slot `$E`) is found as it is.
+- **Rev B and `$97221136`** probe `$FsFFFFFF` in 32-bit mode. Under a
+  fixed 24-bit mask every slot reads `$FFFFFF`, the same byte. Either
+  the CPU really switches to 32-bit addressing when `MMU32Bit` / VIA2
+  PB3 says so (the HMMU emulation in MacIIFamily.md), with the card's
+  ROM at `$FEFFFFxx` and its frame buffer in `$FExxxxxx`, or the
+  address arithmetic is put back to rev A's form: `SREADFHEADER`
+  `$3E50`, the CRC mask at `$429E`, `INITSDECLMGR` `$43CA`/`$43D6`/
+  `$4496`, and the device-base code for selector `$1C` in the patch
+  area (rev B `$3F720`, `$97221136` `$3F734`).
+- The scan reads with the bus-error vector swapped; empty slots read 0
+  in our memory and fail the byte-lane check without a bus error.
+- `slot_rom.cpp` writes its block at the top of the main ROM. In rev B
+  and `$97221136` that space holds the board's declaration data, which
+  no ROM code reads.
+
+---
+
+## 14. See also
+
+- [`../maciix/boot_flow.md`](../maciix/boot_flow.md): `$97221136`'s own
+  code (IIx, IIcx, SE/30, II FDHD)
+- [`../../MacIIFamily.md`](../../MacIIFamily.md): the plan
+- [`../iici/boot_flow.md`](../iici/boot_flow.md),
+  [`../se/boot_flow.md`](../se/boot_flow.md)
+- [`../common/hardware_map.md`](../common/hardware_map.md)
+- MAME `src/mame/apple/macii.cpp` (VIA port wiring, RAM banks),
+  `src/devices/cpu/m68000/m68kmmu.h` (`hmmu_translate_addr`)

@@ -17,7 +17,8 @@ fighting them with hardcoded address patches.
 | Dir       | Machines                                    | File                                                            | Size | CPU   | Base         |
 |-----------|---------------------------------------------|-----------------------------------------------------------------|------|-------|--------------|
 | `se/`     | Mac SE                                      | `256KB ROMs/1987-03 - B2E362A8 - Mac SE.ROM`                    | 256K | 68000 | `$00400000`  |
-| `macii/`  | Mac II (800k v1)                            | `256KB ROMs/1987-03 - 97851DB6 - MacII (800k v1).ROM`           | 256K | 68020 | `$40800000`  |
+| `macii/`  | Mac II, rev A (800k v1)                     | `256KB ROMs/1987-03 - 97851DB6 - MacII (800k v1).ROM`           | 256K | 68020 | `$40800000`  |
+| `maciib/` | Mac II, rev B (800k v2)                     | `256KB ROMs/1987-12 - 9779D2C4 - MacII (800k v2).ROM`           | 256K | 68020 | `$40800000`  |
 | `maciix/` | Mac II FDHD, IIx, IIcx, **SE/30**           | `256KB ROMs/1988-09 - 97221136 - Mac II FDHD & IIx & IIcx.ROM`  | 256K | 68030 | `$40800000`  |
 | `iici/`   | Mac IIci (Universal 32-bit-clean)           | `512KB ROMs/1989-09 - 368CADFE - Mac IIci.ROM`                  | 512K | 68030 | `$40800000`  |
 
@@ -25,6 +26,12 @@ Notes:
 - SE/30, Mac IIx, Mac IIcx, and Mac II FDHD **share the same ROM**
   (`$97221136`). Annotated once under `maciix/`, with machine-specific
   branches called out in the boot-flow walkthroughs.
+- The three `$0178` ROMs keep every routine at the same offset. One boot
+  walk covers both Mac II revisions (and `$97221136` alongside):
+  `macii/boot_flow.md`. `maciib/` holds only rev B's listing.
+- Apple's `MacIIROM.lst.txt` was made from rev A. `load_rom.py` applies
+  it to `maciib` and `maciix` too, keeping only names whose bytes match
+  rev A.
 - First 4 bytes of every Mac ROM are a checksum (matches the filename
   hex). Bytes 4–7 are the initial PC, which reveals the ROM base.
 
@@ -40,7 +47,8 @@ docs/roms/dissam/
                                bootstrap.sh
   common/                   ← shared reference: traps, low-mem globals, HW map
   se/                       ← Mac SE
-  macii/                    ← Mac II
+  macii/                    ← Mac II (rev A listing; boot flow for rev A and B)
+  maciib/                   ← Mac II rev B (listing only)
   maciix/                   ← Mac IIx / IIcx / II FDHD / SE-30
   iici/                     ← Mac IIci
   ghidra/                   ← Ghidra projects (gitignored, rebuild from tools/)

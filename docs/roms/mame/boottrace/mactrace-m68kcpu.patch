@@ -1,0 +1,162 @@
+diff --git a/src/devices/cpu/m68000/m68kcpu.cpp b/src/devices/cpu/m68000/m68kcpu.cpp
+index b48ee42a..c590d928 100644
+--- a/src/devices/cpu/m68000/m68kcpu.cpp
++++ b/src/devices/cpu/m68000/m68kcpu.cpp
+@@ -832,8 +832,114 @@ bool m68000_musashi_device::memory_translate(int spacenum, int intention, offs_t
+ 
+ 
+ 
++/* ---- MacPhoenix boot tracer (docs/roms/mame): MACTRACE=<file> --------
++   Logs, in execution order, the first execution of every PC (ROM: 'R',
++   elsewhere: 'M'), with the previous PC, instruction count and cycles;
++   A-line traps ('A': every one up to MACTRACE_TRAPS, then only first
++   per trap word); bus errors ('B'). Only the first CPU that runs uses it. */
++namespace {
++struct mactrace_t {
++	int enabled = -1;
++	FILE *f = nullptr;
++	const void *owner = nullptr;
++	std::vector<uint8_t> hit;      // bit per (region<<24|a24)
++	std::vector<uint32_t> trapcnt;
++	uint64_t icount = 0, trapseq = 0, trapmax = 20000, becount = 0;
++	uint32_t lastpc = 0;
++	std::vector<std::pair<uint32_t, std::string>> snaps;   // a24 -> name
++	std::string base;
++	~mactrace_t() { finish(); }
++	void finish() {
++		if (!f) return;
++		for (unsigned i = 0; i < trapcnt.size(); i++)
++			if (trapcnt[i]) fprintf(f, "T\t%04x\t%u\n", 0xa000 | i, trapcnt[i]);
++		fprintf(f, "E\t%llu\n", (unsigned long long)icount);
++		fclose(f); f = nullptr;
++	}
++	bool init(const void *who, uint32_t clk) {
++		const char *p = getenv("MACTRACE");
++		if (!p) { enabled = 0; return false; }
++		f = fopen(p, "w");
++		if (!f) { enabled = 0; return false; }
++		setvbuf(f, nullptr, _IOFBF, 1 << 20);
++		if (const char *t = getenv("MACTRACE_TRAPS")) trapmax = strtoull(t, nullptr, 0);
++		hit.assign((size_t(17) << 24) / 8, 0);
++		trapcnt.assign(0x1000, 0);
++		owner = who;
++		base = p;
++		if (const char *sn = getenv("MACTRACE_SNAP")) {     // "addr=name,addr=name"
++			std::string all(sn);
++			size_t pos = 0;
++			while (pos < all.size()) {
++				size_t e = all.find(',', pos); if (e == std::string::npos) e = all.size();
++				std::string it = all.substr(pos, e - pos);
++				size_t eq = it.find('=');
++				if (eq != std::string::npos)
++					snaps.emplace_back(uint32_t(strtoul(it.substr(0, eq).c_str(), nullptr, 16)) & 0xffffff, it.substr(eq + 1));
++				pos = e + 1;
++			}
++		}
++		fprintf(f, "# clock\t%u\n", clk);
++		enabled = 1;
++		return true;
++	}
++	static uint32_t key(uint32_t pc) {
++		uint32_t top = pc >> 24, a24 = pc & 0xffffff;
++		uint32_t reg = (top >= 0xf0) ? (top & 0xf) + 1 : 0;
++		return (reg << 24) | a24;
++	}
++	static bool is_rom(uint32_t pc) {
++		uint32_t top = pc >> 24;
++		return (pc & 0x00f00000) == 0x00800000 && top < 0xf0 && top != 0x50;
++	}
++	inline const char *pc_hook(const void *who, uint32_t pc, uint64_t cyc) {
++		if (who != owner) return nullptr;
++		icount++;
++		uint32_t k = key(pc);
++		uint8_t &b = hit[k >> 3];
++		uint8_t m = 1 << (k & 7);
++		if (!(b & m)) {
++			b |= m;
++			fprintf(f, "%c\t%08x\t%08x\t%llu\t%llu\n", is_rom(pc) ? 'R' : 'M', pc, lastpc,
++					(unsigned long long)icount, (unsigned long long)cyc);
++			lastpc = pc;
++			for (auto &sp : snaps)
++				if (sp.first == (pc & 0xffffff)) {
++					fprintf(f, "S\t%08x\t%s\t%llu\t%llu\n", pc, sp.second.c_str(), (unsigned long long)icount, (unsigned long long)cyc);
++					return sp.second.c_str();
++				}
++			return nullptr;
++		}
++		lastpc = pc;
++		return nullptr;
++	}
++	template <typename F> void dump(const char *name, F rd) {
++		std::string fn = base + ".lowmem-" + name + ".bin";
++		FILE *o = fopen(fn.c_str(), "wb");
++		if (!o) return;
++		for (uint32_t a = 0; a < 0x3000; a++) { uint8_t v = rd(a); fwrite(&v, 1, 1, o); }
++		fclose(o);
++	}
++	inline void trap_hook(const void *who, uint32_t pc, uint16_t ir, uint64_t cyc) {
++		if (who != owner) return;
++		uint32_t &c = trapcnt[ir & 0xfff];
++		if (trapseq < trapmax || c == 0)
++			fprintf(f, "A\t%08x\t%04x\t%llu\t%llu\n", pc, ir, (unsigned long long)icount, (unsigned long long)cyc);
++		c++; trapseq++;
++	}
++	inline void be_hook(const void *who, uint32_t pc, uint32_t addr, uint64_t cyc) {
++		if (who != owner) return;
++		if (becount++ < 5000)
++			fprintf(f, "B\t%08x\t%08x\t%llu\t%llu\n", pc, addr, (unsigned long long)icount, (unsigned long long)cyc);
++	}
++};
++mactrace_t g_mactrace;
++}
++#define MACTRACE_ON() (g_mactrace.enabled == 1 || (g_mactrace.enabled < 0 && g_mactrace.init(this, clock())))
++
+ void m68000_musashi_device::execute_run()
+ {
++	const bool mt_on = MACTRACE_ON();
+ 	// Softfloat's rounding mode and precision are globals shared across all
+ 	// users in MAME, so save/restore them.  execute_run() has multiple return
+ 	// paths and can exit via throw, so we use an RAII helper.
+@@ -926,6 +1032,18 @@ void m68000_musashi_device::execute_run()
+ 			/* Call external hook to peek at CPU */
+ 			debugger_instruction_hook(m_pc);
+ 
++			if (mt_on) {
++				if (const char *sn = g_mactrace.pc_hook(this, m_pc, total_cycles()))
++					g_mactrace.dump(sn, [this](uint32_t a) -> uint8_t {
++						// logical address, through the MMU (the IIci maps low memory elsewhere)
++						offs_t pa = a;
++						address_space *ts = m_program;
++						if (!memory_translate(AS_PROGRAM, device_memory_interface::TR_READ, pa, ts))
++							return 0xee;
++						return ts->read_byte(pa);
++					});
++			}
++
+ 			try
+ 			{
+ 			if (!m_can_instruction_restart)
+@@ -933,6 +1051,7 @@ void m68000_musashi_device::execute_run()
+ 				m_run_mode = RUN_MODE_NORMAL;
+ 				/* Read an instruction and call its handler */
+ 				m_ir = m68ki_read_imm_16();
++				if (mt_on && (m_ir & 0xf000) == 0xa000) g_mactrace.trap_hook(this, m_ppc, m_ir, total_cycles());
+ 				u16 state = m_state_table[m_ir];
+ 				(this->*m68k_handler_table[state])();
+ 				m_icount -= m_cyc_instruction[m_ir];
+@@ -956,6 +1075,7 @@ void m68000_musashi_device::execute_run()
+ 
+ 				if (!m_mmu_tmp_buserror_occurred)
+ 				{
++					if (mt_on && (m_ir & 0xf000) == 0xa000) g_mactrace.trap_hook(this, m_ppc, m_ir, total_cycles());
+ 					u16 state = m_state_table[m_ir];
+ 					(this->*m68k_handler_table[state])();
+ 					m_icount -= m_cyc_instruction[m_ir];
+@@ -986,6 +1106,7 @@ void m68000_musashi_device::execute_run()
+ 					}
+ 					else
+ 					{
++						if (mt_on) g_mactrace.be_hook(this, m_ppc, m_mmu_tmp_buserror_address, total_cycles());
+ 						sr = m68ki_init_exception(EXCEPTION_BUS_ERROR);
+ 
+ 						m_run_mode = RUN_MODE_BERR_AERR_RESET;
