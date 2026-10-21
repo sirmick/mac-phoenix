@@ -22,8 +22,8 @@ The spec and a record of who did what stay here.
 
 | Item | Spec | Removed | Reimplemented |
 |---|---|---|---|
-| System routines `$7B0` / `$668` (`romlib/sysroutines.cpp`): Apple's 68k code had been copied from a 7.5.5 boot | [system-routines.md](system-routines.md) | | |
-| Private `ResourceDispatch` selectors (`romlib/res/resPrivate.cpp`): written partly from a disassembly | [resource-private-selectors.md](resource-private-selectors.md) | | |
+| System routines `$7B0` / `$668` (`romlib/sysroutines.cpp`): Apple's 68k code had been copied from a 7.5.5 boot | [system-routines.md](system-routines.md) | 532b2411, 2026-10-21 | 6132b7cb, 2026-10-21, by a fresh agent from the spec, without the old code |
+| Private `ResourceDispatch` selectors (`romlib/res/resPrivate.cpp`): written partly from a disassembly | [resource-private-selectors.md](resource-private-selectors.md) | 532b2411, 2026-10-21 | 6132b7cb, 2026-10-21, by a fresh agent from the spec, without the old code |
 
 Other Apple-derived data, handled without a clean room:
 
