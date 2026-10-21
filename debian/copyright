@@ -1,43 +1,79 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: mac-phoenix
 Source: https://github.com/sirmick/mac-phoenix
+Comment: The combined work is distributed under GPL-2+. Code written for
+ MacPhoenix is also MIT (Expat), Executor is MIT, the MAME cores are
+ BSD-3-clause; LICENSING.md maps every path.
 
 Files: *
 Copyright: 2024-2026 Mick <sirmick@gmail.com>
-           1997-2008 Christian Bauer (BasiliskII / SheepShaver derivatives)
-           1995-2007 Bernd Schmidt and contributors (UAE m68k core)
-License: GPL-2+
+License: Expat or GPL-2+
 
-Files: src/cpu/uae_cpu/*
+Files: src/cpu/uae_cpu/* src/cpu/uae_wrapper.* src/cpu/core/uae_core.cpp
 Copyright: 1995-2007 Bernd Schmidt and the UAE contributors
-License: GPL-2+
-
-Files: src/core/emul_op.cpp src/core/rom_patches.cpp src/core/adb.cpp
-Copyright: 1997-2008 Christian Bauer
            2024-2026 Mick <sirmick@gmail.com>
 License: GPL-2+
 
-Files: net-bridge/*
-Copyright: 2024-2026 Mick <sirmick@gmail.com>
+Files: src/cpu/kpx/*
+Copyright: 1997-2008 Christian Bauer and Marc Hellwig (SheepShaver)
+           2003-2005 Gwenole Beauchesne (Kheperix)
+           2024-2026 Mick <sirmick@gmail.com>
 License: GPL-2+
+
+Files: src/core/adb.cpp src/core/audio.cpp src/core/cdrom.cpp
+ src/core/disk.cpp src/core/emul_op.cpp src/core/ether.cpp
+ src/core/extfs.cpp src/core/macos_util.cpp src/core/main.cpp
+ src/core/rom_patches.cpp src/core/rsrc_patches.cpp src/core/scsi.cpp
+ src/core/serial.cpp src/core/slot_rom.cpp src/core/sony.cpp
+ src/core/timer.cpp src/core/timer_unix.cpp src/core/user_strings.cpp
+ src/core/video.cpp src/core/xpram.cpp src/common/sigsegv.cpp
+ src/drivers/platform/platform_unix.cpp src/drivers/platform/disk_unix.h
+ src/drivers/null_drivers.cpp src/drivers/serial/serial_unix.cpp
+ src/drivers/video/video_null.cpp ldscripts/*
+Copyright: 1997-2008 Christian Bauer and the Basilisk II contributors
+           2024-2026 Mick <sirmick@gmail.com>
+License: GPL-2+
+Comment: and the headers in src/common/include/ that carry Christian
+ Bauer's notice.
+
+Files: src/executor/*
+Copyright: 1986-2004 Abacus Research & Development, Inc.
+           2018-2026 Wolfgang Thaller
+           2026 Mick <sirmick@gmail.com>
+License: Expat
+
+Files: src/executor/third_party/googletest/*
+Copyright: 2008 Google Inc.
+License: BSD-3-clause
+
+Files: src/cpu/mame/m68000/* src/cpu/mame/powerpc/* src/cpu/mame/cpu/*
+ src/cpu/mame/emu/* src/cpu/mame/third_party/util/*
+Copyright: 1997-2026 MAMEdev and contributors
+License: BSD-3-clause
+
+Files: src/cpu/mame/third_party/softfloat3/*
+Copyright: 2011-2018 The Regents of the University of California
+License: BSD-3-clause
+
+Files: src/cpu/mame/third_party/asmjit/*
+Copyright: 2008-2025 Petr Kobalicek
+License: Zlib
 
 Files: subprojects/libdatachannel/*
 Copyright: 2019-2024 Paul-Louis Ageneau <paul-louis@ageneau.net>
 License: MPL-2.0
+Comment: deps/: libjuice MPL-2.0; libsrtp, usrsctp BSD-3-clause;
+ plog, nlohmann/json Expat.
 
-Files: subprojects/nlohmann_json/*
-Copyright: 2013-2026 Niels Lohmann
-License: Expat
-
-Files: subprojects/lwip/*
-Copyright: 2001-2004 Swedish Institute of Computer Science
-License: BSD-3-clause
+Files: tools/icons/*.png
+Copyright: GNOME Project (HighContrast icon theme)
+License: LGPL-2.1+
 
 Files: net-bridge/vendor/cargo/*
-Copyright: Various — see each crate's LICENSE / Cargo.toml
+Copyright: Various; see each crate's LICENSE / Cargo.toml
 License: Various
- Vendored Rust crates retain their upstream licenses (predominantly
- Apache-2.0 / MIT dual). The combined work is distributed under GPL-2+.
+ Vendored Rust crates keep their upstream licences: smoltcp 0BSD; log,
+ env_logger, libc and their dependencies MIT / Apache-2.0.
 
 License: GPL-2+
  This program is free software; you can redistribute it and/or modify
@@ -53,13 +89,9 @@ License: GPL-2+
  On Debian systems, the complete text of the GNU General Public License
  version 2 can be found in /usr/share/common-licenses/GPL-2.
 
-License: GPL-2
- This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License version 2 as
- published by the Free Software Foundation.
- .
- On Debian systems, the complete text of the GNU General Public License
- version 2 can be found in /usr/share/common-licenses/GPL-2.
+License: LGPL-2.1+
+ On Debian systems, the complete text of the GNU Lesser General Public
+ License version 2.1 can be found in /usr/share/common-licenses/LGPL-2.1.
 
 License: MPL-2.0
  On Debian systems, the complete text of the Mozilla Public License
@@ -77,16 +109,53 @@ License: Expat
  The above copyright notice and this permission notice shall be
  included in all copies or substantial portions of the Software.
  .
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 License: BSD-3-clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
- are met: 1. Redistributions of source code must retain the above
- copyright notice, this list of conditions and the following
- disclaimer. 2. Redistributions in binary form must reproduce the above
- copyright notice, this list of conditions and the following disclaimer
- in the documentation and/or other materials provided with the
- distribution. 3. The name of the author may not be used to endorse or
- promote products derived from this software without specific prior
- written permission.
+ are met:
+ 1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+ 3. Neither the name of the copyright holder nor the names of its
+    contributors may be used to endorse or promote products derived from
+    this software without specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: Zlib
+ This software is provided 'as-is', without any express or implied
+ warranty. In no event will the authors be held liable for any damages
+ arising from the use of this software.
+ .
+ Permission is granted to anyone to use this software for any purpose,
+ including commercial applications, and to alter it and redistribute it
+ freely, subject to the following restrictions:
+ .
+ 1. The origin of this software must not be misrepresented; you must not
+    claim that you wrote the original software. If you use this software
+    in a product, an acknowledgment in the product documentation would
+    be appreciated but is not required.
+ 2. Altered source versions must be plainly marked as such, and must not
+    be misrepresented as being the original software.
+ 3. This notice may not be removed or altered from any source
+    distribution.

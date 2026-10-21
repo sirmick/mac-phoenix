@@ -2,6 +2,7 @@
 name = "net-bridge"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Standalone network bridge for Mac emulator - smoltcp TCP/IP + NAT"
 # Pinned at the floor of distro rust on Ubuntu 22.04+/Fedora 40+/Debian 12-bpo
 # so packaging builds don't need rustup. Bump only if a dep we actually need

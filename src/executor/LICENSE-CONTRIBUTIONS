@@ -1,0 +1,49 @@
+MacPhoenix's changes to Executor, and its CPU glue: MIT
+
+MacPhoenix as a whole is distributed under the GNU GPL, version 2, because
+it links GPL code (the UAE 68k core, SheepShaver's PowerPC machine). The
+files listed below don't depend on that code, and their MacPhoenix
+authorship is additionally licensed under the MIT licence below, so they
+can go back into Executor (https://github.com/autc04/executor) or anywhere
+else on Executor's own terms.
+
+Covered (the MacPhoenix changes and additions in):
+
+  src/executor/            everything, including romlib/, multiversal/,
+                           cpu/ (the syn68k facade, PowerCore on mame-ppc),
+                           host/ and tests/; third_party/ keeps its own
+                           licences
+  src/cpu/core/            the cpu::Core interface and its glue, except
+                           uae_core.cpp (glue to the GPL UAE core)
+  src/cpu/mame/            mame_68k_core.cpp, mame_ppc_core.cpp and shim/
+                           (MacPhoenix's stand-in for MAME's framework)
+
+Not covered: the MAME CPU cores themselves (src/cpu/mame/m68000, powerpc,
+cpu, emu, and the MAME utility headers lifted into shim/) are MAME's, under
+BSD-3-Clause (src/cpu/mame/LICENSE-MAME, and each file's header); asmjit is
+under the zlib licence (src/cpu/mame/LICENSE-asmjit). Executor's own code
+stays under its MIT licence (COPYING). The whole repository's licensing:
+LICENSING.md at the top; what MacPhoenix changed in Executor:
+docs/executor/README.md.
+
+-------------------------------------------------------------------------
+
+Copyright (c) 2026 Mick <sirmick@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.

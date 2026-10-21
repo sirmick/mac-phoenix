@@ -307,6 +307,17 @@ machine.
 | `MACEMU_ROM` | Test scripts only | Default ROM path (not read by the binary) |
 | `MACEMU_PPC_NO_IRQ`, `MACEMU_PPC_TRACE_TRAP` | `--backend kpx` | Kheperix-era debug switches |
 
+## Licensing
+
+The whole is GPL-2.0-or-later (UAE, Basilisk II, SheepShaver code); code
+written for MacPhoenix is also MIT (`LICENSE-MIT`), Executor and our
+changes to it are MIT (`src/executor/LICENSE-CONTRIBUTIONS`), MAME cores
+BSD-3. Path-by-path map: `LICENSING.md`. New code is written from
+documentation and behaviour, never adapted from GPL source; code adapted
+from a GPL file keeps its GPL header and goes in LICENSING.md's GPL table.
+Executor's origin and what we changed: `docs/executor/README.md`
+(`tools/executor-upstream-diff.sh` compares with upstream).
+
 ## Key Architectural Decisions
 
 - **Platform API**: All backends implement the same `g_platform` function pointer table. Core code never calls backend-specific functions directly.

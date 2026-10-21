@@ -2,6 +2,7 @@
   "name": "mac-phoenix",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "test": "npx playwright test",
     "test:unit": "node --test 'tests/unit/**/*.test.js'",

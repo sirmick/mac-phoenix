@@ -2,7 +2,7 @@
 
 A classic Macintosh emulator that runs in your browser. Boot System 6 through Mac OS 9 and interact with it over WebRTC — no native GUI needed.
 
-![License](https://img.shields.io/badge/license-GPL--2.0-blue)
+![License](https://img.shields.io/badge/license-GPL--2.0--or--later%20(whole)%20%7C%20MIT%20(most%20code)-blue)
 
 ![Mac OS 7.5.5 running in MacPhoenix — browser UI](docs/images/browser-desktop.png)
 
@@ -788,7 +788,17 @@ to test it locally on macOS, audit it with `brew audit`, and run it on
 ## Heritage
 
 MacPhoenix descends from the BasiliskII/SheepShaver emulator family originally created by Christian Bauer.
+Its Executor backend is [Executor 2000](https://github.com/autc04/executor)
+(Abacus Research & Development, Wolfgang Thaller); its MAME cores come from
+[MAME](https://www.mamedev.org/).
 
 ## License
 
-GPL-2.0 — see [LICENSE](LICENSE).
+MacPhoenix as a whole is **GPL-2.0-or-later** ([LICENSE](LICENSE)): it
+contains GPL code from UAE, Basilisk II and SheepShaver. Everything written
+for MacPhoenix — the web server, WebRTC, browser UI, encoders, config,
+CPU-core interface, net-bridge, BridgeAgent, provisioning, tools and tests —
+is also **MIT** ([LICENSE-MIT](LICENSE-MIT)). The Executor core is MIT,
+including MacPhoenix's changes to it ([docs/executor/README.md](docs/executor/README.md)),
+and the MAME CPU cores are BSD-3-Clause. File-by-file:
+[LICENSING.md](LICENSING.md).
