@@ -45,7 +45,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
 SOURCE="$STORAGE/images/tests-7.5.5.img"   # provisioning/images/tests-7.5.5.json
-IMAGE_NAME="test-threads-7.5.5.img"
+IMAGE_NAME="test-threads-7.5.5-$$.img"   # per run: the two core cells run in parallel
 IMAGE="$STORAGE/images/$IMAGE_NAME"
 rm -rf "$STORAGE/executor-systems/$IMAGE_NAME" "$STORAGE/executor-systems/$IMAGE_NAME.clean"   # a new System each run
 FRONTIER="Macintosh HD:Frontier 5.0.1:UserLand Frontier™"
@@ -53,15 +53,19 @@ FRONTIER="Macintosh HD:Frontier 5.0.1:UserLand Frontier™"
 if [[ ! -x "$BINARY" ]]; then echo "SKIP: Binary not found: $BINARY"; exit 77; fi
 if [[ ! -f "$SOURCE" ]]; then echo "SKIP: $SOURCE not found"; exit 77; fi
 if command -v hls >/dev/null 2>&1; then
-    if ! (hmount "$SOURCE" >/dev/null 2>&1 && hls ":Frontier 5.0.1" >/dev/null 2>&1); then
-        humount >/dev/null 2>&1 || true
+    # hfsutils keeps its current volume in $HOME; use a private one.
+    HFSHOME=$(mktemp -d ${TMPDIR:-/tmp}/macthreadtest-hfs.XXXXXX)
+    if ! (HOME="$HFSHOME" hmount "$SOURCE" >/dev/null 2>&1 && HOME="$HFSHOME" hls ":Frontier 5.0.1" >/dev/null 2>&1); then
+        HOME="$HFSHOME" humount >/dev/null 2>&1 || true
+        rm -rf "$HFSHOME"
         echo "SKIP: no Frontier 5.0.1 on $SOURCE"; exit 77
     fi
-    humount >/dev/null 2>&1 || true
+    HOME="$HFSHOME" humount >/dev/null 2>&1 || true
+    rm -rf "$HFSHOME"
 fi
 
 # A scratch copy: Frontier writes its database, the Finder its desktop.
-cp "$SOURCE" "$IMAGE"
+flock "$STORAGE/images/.test-tests-7.5.5.lock" cp "$SOURCE" "$IMAGE"   # not mid-rebuild (lib/refresh_test_disk.sh)
 
 EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/macthreadtest-extfs.XXXXXX)
 LOG=${TMPDIR:-/tmp}/macthreadtest_$$.log
@@ -72,6 +76,7 @@ cleanup() {
     fi
     rm -rf "$EXTFS_DIR"
     rm -f "$IMAGE"
+    rm -rf "$STORAGE/executor-systems/$IMAGE_NAME" "$STORAGE/executor-systems/$IMAGE_NAME.clean"
 }
 trap cleanup EXIT SIGTERM SIGINT
 

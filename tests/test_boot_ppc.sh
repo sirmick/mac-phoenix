@@ -22,7 +22,7 @@ WEBSERVER=false
 BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.5.5)}"
+DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.5.5 $$)}"
 MIN_CHECKLOADS=200
 EXTRA_FLAGS=()
 

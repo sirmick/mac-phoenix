@@ -14,7 +14,7 @@ set -euo pipefail
 TIMEOUT=30
 ROM="${MACEMU_SE_ROM:-$HOME/storage/roms/256KB ROMs/1987-03 - B2E362A8 - Mac SE.ROM}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DISK="${MACEMU_SE_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" 6.0.8)}"
+DISK="${MACEMU_SE_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" 6.0.8 $$)}"
 PORT=18100        # Use non-default port to avoid conflicts
 SIG_PORT=18101    # WebRTC signaling port
 BINARY="${MACEMU_BINARY:-$(dirname "$0")/../build/mac-phoenix}"

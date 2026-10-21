@@ -43,7 +43,7 @@ STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
 if [[ -n "$DISK_OVERRIDE" ]]; then
     DISK="$DISK_OVERRIDE"
 else
-    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.5.5 2>/dev/null || true)}"
+    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.5.5 $$ 2>/dev/null || true)}"
 fi
 
 if [[ ! -x "$BINARY" ]]; then echo "SKIP: Binary not found: $BINARY"; exit 77; fi

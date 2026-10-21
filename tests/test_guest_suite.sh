@@ -85,6 +85,15 @@ done
 # the ROM/RAM/disk selection logic only (not passed to the binary).
 [[ -z "$ARCH" && "$BACKEND" == "kpx" ]] && ARCH=ppc
 [[ "$ARCH" == "ppc" ]] && EXTRA_FLAGS+=(--ram 128)
+# Plain "socket" joins the shared bridge at /tmp/mac-ether.sock, which
+# every running MacPhoenix shares, so tests run in parallel would share one
+# net-bridge (and lose it when the test that started it exits): each run
+# gets its own.
+ETHER_SOCK=""
+if [[ "$NETWORK" == "socket" ]]; then
+    ETHER_SOCK="${TMPDIR:-/tmp}/mac-ether-test-$$.sock"
+    NETWORK="socket:$ETHER_SOCK"
+fi
 [[ -n "$NETWORK" && "$NETWORK" != "none" ]] && EXTRA_FLAGS+=(--network "$NETWORK")
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -105,7 +114,7 @@ if [[ "$BACKEND" == "executor" ]]; then
     # image (extracted once into <storage>/executor-systems, refreshed each
     # run) and mounts the copy beside it, writable, as the ROM backends'
     # boot disk is.
-    [[ -z "${DISK:-}" ]] && DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "tests-${OS_VERSION:-7.5.5}")}"
+    [[ -z "${DISK:-}" ]] && DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "tests-${OS_VERSION:-7.5.5}" $$)}"
     EXEC_SYSTEM="$(basename "$DISK")"
     ROM=""
     EXTRA_FLAGS+=(--executor-system "$EXEC_SYSTEM" --executor-writable-images)
@@ -118,7 +127,7 @@ elif [[ -z "${DISK:-}" ]]; then
     else
         IMG_BASE="tests-7.5.5"
     fi
-    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "$IMG_BASE")}"
+    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "$IMG_BASE" $$)}"
 fi
 
 # --- Preflight checks ---
@@ -179,6 +188,7 @@ cleanup() {
         cat "$EXTFS_DIR/$RESULTS_NAME"
     fi
     rm -rf "$EXTFS_DIR"
+    if [[ -n "$ETHER_SOCK" ]]; then rm -f "$ETHER_SOCK"; fi
 }
 trap cleanup EXIT SIGTERM SIGINT
 

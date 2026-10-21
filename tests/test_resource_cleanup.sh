@@ -15,7 +15,7 @@ SIG_PORT=18075
 TIMEOUT=15
 BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
-DISK="${MACEMU_DISK:-$(bash "$(dirname "$0")/lib/refresh_test_disk.sh" tests-7.5.5)}"
+DISK="${MACEMU_DISK:-$(bash "$(dirname "$0")/lib/refresh_test_disk.sh" tests-7.5.5 $$)}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -62,7 +62,6 @@ cleanup_emu() {
 # Snapshot existing resources before test (so we only check what we create)
 shm_before=$(ls /dev/shm/macemu-video-* 2>/dev/null | sort || true)
 sock_before=$(ls /tmp/macemu-*.sock 2>/dev/null | sort || true)
-bridge_before=$(pgrep -f "net-bridge" 2>/dev/null | sort || true)
 
 wait_for_server() {
     for i in $(seq 1 20); do
@@ -339,9 +338,11 @@ echo ""
 echo "=== Test 5: net-bridge cleanup ==="
 # ============================================================
 
-# Only test if network=socket is functional
+# Only test if network=socket is functional. Our own socket, so the bridge
+# found below is ours and not a parallel test's.
+ETHER_SOCK="${TMPDIR:-/tmp}/mac-ether-test-$$.sock"
 setsid "$BINARY" --config /dev/null --backend uae --timeout 3 \
-    --network socket --port "$PORT" \
+    --network "socket:$ETHER_SOCK" --port "$PORT" \
     --disk "$DISK" --dismiss-shutdown-dialog \
     "$ROM" &>${TMPDIR:-/tmp}/cleanup_test_bridge_$$.log &
 EMU_PID=$!
@@ -352,7 +353,7 @@ else
     curl -sf -X POST "http://localhost:$PORT/api/emulator/start" >/dev/null 2>&1 || true
     sleep 2
 
-    BRIDGE_PID=$(pgrep -f "net-bridge" 2>/dev/null | grep -v -F "$bridge_before" | head -1 || true)
+    BRIDGE_PID=$(pgrep -f "net-bridge --socket $ETHER_SOCK" 2>/dev/null | head -1 || true)
 
     # Wait for timeout exit
     wait "$EMU_PID" 2>/dev/null || true
@@ -370,8 +371,8 @@ else
         echo "  (no net-bridge detected — skipping)"
     fi
 
-    if [[ -e "/tmp/mac-ether.sock" ]]; then
-        # Socket may be from a pre-existing bridge — only fail if we saw our bridge
+    if [[ -e "$ETHER_SOCK" ]]; then
+        rm -f "$ETHER_SOCK"
         if [[ -n "$BRIDGE_PID" ]]; then
             check "net-bridge socket cleaned up" "fail"
         fi

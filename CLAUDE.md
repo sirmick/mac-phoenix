@@ -332,7 +332,7 @@ Executor's origin and what we changed: `docs/executor/README.md`
 
 ## ROM
 
-Tests expect a Quadra 650 ROM at `~/roms/quadra.rom`, a G3 ROM at `~/storage/roms/g3.rom`, and boot copies (`tests/lib/refresh_test_disk.sh`) of the images `provisioning/build.py` makes: `tests-7.5.5`, `tests-7.6.1`, `tests-9.0.4` and `6.0.8` (the SE and the IIci, whose ROM is `~/storage/roms/iici.rom`; built on demand from the snapshots in `~/storage/baked`). Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `cmake -B build -DTEST_ROM=/path/to/rom`. ROMs and disk images are not distributed.
+Tests expect a Quadra 650 ROM at `~/roms/quadra.rom`, a G3 ROM at `~/storage/roms/g3.rom`, and boot copies (`tests/lib/refresh_test_disk.sh NAME $$`: one per test run, `test-NAME-PID.img`, removed when the test exits, so `ctest -j` is safe) of the images `provisioning/build.py` makes: `tests-7.5.5`, `tests-7.6.1`, `tests-9.0.4` and `6.0.8` (the SE and the IIci, whose ROM is `~/storage/roms/iici.rom`; built on demand from the snapshots in `~/storage/baked`). Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `cmake -B build -DTEST_ROM=/path/to/rom`. ROMs and disk images are not distributed.
 
 ## Optional Codec Dependencies
 

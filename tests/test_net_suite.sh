@@ -68,7 +68,7 @@ if [[ -z "$DISK" ]]; then
     else
         IMG_BASE="tests-7.5.5"
     fi
-    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "$IMG_BASE")}"
+    DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "$IMG_BASE" $$)}"
 fi
 
 # --- Preflight ---
@@ -93,6 +93,9 @@ EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/mactest-net-extfs.XXXXXX)
 python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
 printf 'net_results.txt\rnetdeep\r' > "$EXTFS_DIR/suite.cfg"
 LOG="${TMPDIR:-/tmp}/mactest_net_$$.log"
+# Our own net-bridge, not the shared /tmp/mac-ether.sock: tests run in
+# parallel would otherwise share one (and lose it with the first to exit).
+ETHER_SOCK="${TMPDIR:-/tmp}/mac-ether-test-$$.sock"
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]] && kill -0 "$EMU_PID" 2>/dev/null; then
@@ -106,7 +109,7 @@ cleanup() {
     if [[ ${EXIT_CODE:-1} -ne 0 ]]; then
         echo "--- emulator log (tail) ---"; tail -80 "$LOG" 2>/dev/null || true
     fi
-    rm -rf "$EXTFS_DIR" "$LOG"
+    rm -rf "$EXTFS_DIR" "$LOG" "$ETHER_SOCK"
 }
 trap cleanup EXIT SIGTERM SIGINT
 
@@ -128,7 +131,7 @@ fi
     --config /dev/null "${DISMISS_FLAG[@]}" --headless-http \
     --port "$PORT" \
     --disk "$DISK" --extfs "$EXTFS_DIR" \
-    --network socket \
+    --network "socket:$ETHER_SOCK" \
     "${EXTRA_FLAGS[@]}" "$ROM" &>"$LOG" &
 EMU_PID=$!
 

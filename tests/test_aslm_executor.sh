@@ -50,7 +50,7 @@ cd "$PROJECT_ROOT"
 STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
 SOURCE="$STORAGE/images/tests-7.5.5.img"   # provisioning/images/tests-7.5.5.json
 KIT="$STORAGE/aslm-kit"
-IMAGE_NAME="test-aslm-7.5.5.img"
+IMAGE_NAME="test-aslm-7.5.5-$$.img"   # per run: the two core cells run in parallel
 IMAGE="$STORAGE/images/$IMAGE_NAME"
 VOLUME="Macintosh HD"
 MPW="$VOLUME:MPW:MPW Shell"
@@ -67,7 +67,7 @@ HFSHOME=$(mktemp -d ${TMPDIR:-/tmp}/macaslmtest-hfs.XXXXXX)
 hfs() { HOME="$HFSHOME" "$@"; }
 
 # A scratch copy: the libraries go in Extensions, the tools in a folder.
-cp "$SOURCE" "$IMAGE"
+flock "$STORAGE/images/.test-tests-7.5.5.lock" cp "$SOURCE" "$IMAGE"   # not mid-rebuild (lib/refresh_test_disk.sh)
 rm -rf "$STORAGE/executor-systems/$IMAGE_NAME" "$STORAGE/executor-systems/$IMAGE_NAME.clean"
 hfs hmount "$IMAGE" >/dev/null
 if ! hfs hls ":MPW:MPW Shell" >/dev/null 2>&1; then

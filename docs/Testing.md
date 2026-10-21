@@ -78,10 +78,15 @@ Tests pick up paths from CMake cache or environment variables:
 | m68k ROM | `~/roms/quadra.rom` | `cmake -B build -DTEST_ROM=...` or `MACEMU_ROM` |
 | PPC ROM | `~/storage/roms/g3.rom` | `cmake -B build -DTEST_PPC_ROM=...` or `MACEMU_ROM` |
 | Mac SE ROM | (unset; `boot_se` skips) | `cmake -B build -DTEST_SE_ROM=...` or `MACEMU_SE_ROM` |
-| Disk image | `~/storage/images/macos-7.5.5.img` | `MACEMU_DISK`; `tests/lib/refresh_test_disk.sh` clones a fresh copy per run |
+| Disk image | `~/storage/images/macos-7.5.5.img` | `MACEMU_DISK`; `tests/lib/refresh_test_disk.sh NAME $$` clones a fresh copy per test run (`test-NAME-PID.img`, with its own Executor System; removed when the test exits), so tests run in parallel don't share one |
 
 Tests pick non-overlapping ports in the 18080–18108 range so they don't
 collide with a running emulator on :11000.
+
+Tests are safe to run in parallel (`ctest -j4`): each has its own port,
+disk copy and, with `--network socket`, its own net-bridge
+(`socket:$TMPDIR/mac-ether-test-PID.sock`; plain `socket` would join the
+shared `/tmp/mac-ether.sock` every running MacPhoenix uses).
 
 ### Guest Tests (BridgeAgent + MacPerl)
 

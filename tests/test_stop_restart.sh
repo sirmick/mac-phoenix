@@ -21,7 +21,7 @@ BACKENDS=()
 BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 PPC_ROM="${MACEMU_PPC_ROM:-$HOME/storage/roms/g3.rom}"
-DISK="${MACEMU_DISK:-$(bash "$(dirname "$0")/lib/refresh_test_disk.sh" tests-7.5.5)}"
+DISK="${MACEMU_DISK:-$(bash "$(dirname "$0")/lib/refresh_test_disk.sh" tests-7.5.5 $$)}"
 EXTRA_FLAGS=()
 VERBOSE=false
 
