@@ -1,0 +1,162 @@
+{
+ "note": "AppleWorks 5.0.4 (Apple, 1999), for Mac OS 9: the 5.0.3 Installer VISE installer run in the guest off the disk image (as appleworks-5.0.3), then the disk's AppleWorks 5.0.4 Updater (it wants Mac OS 9) updates the app in place; a first launch personalises it (a name)",
+ "kind": "install",
+ "os": "tools-9.0.4",
+ "disks": [
+  {
+   "file": "AppleWorks5.0.4.sit_.bin",
+   "take": "AppleWorks.img"
+  }
+ ],
+ "expect": [
+  "AppleWorks 5"
+ ],
+ "steps": [
+  {
+   "launch": "AppleWorks:Install AppleWorks"
+  },
+  {
+   "wait_for": {
+    "text": "Install Location:"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "front": true
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "“{target}”",
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "quit all other running applications"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "AppleWorks:AppleWorks Updater 5.0.4.smi"
+  },
+  {
+   "launch": "AppleWorks 5.0.4 Updater:AppleWorks 5.0.4 Updater",
+   "until": {
+    "button": "Update"
+   },
+   "max": 30,
+   "note": "the updater's disk image mounts in a moment; the Finder (PowerPC) draws its label where the text feed doesn't see it"
+  },
+  {
+   "check": {
+    "text": "the disk “{target}”"
+   }
+  },
+  {
+   "click": {
+    "button": "Update"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "automatically quit all other running"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  },
+  {
+   "menu": [
+    "Special",
+    "Restart"
+   ],
+   "note": "the updater quit every other app, BridgeAgent too: a restart brings it back"
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{target}:AppleWorks 5:AppleWorks"
+  },
+  {
+   "wait_for": {
+    "text": "Please personalize this copy:"
+   },
+   "timeout": 90
+  },
+  {
+   "type": "Mac Phoenix"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Create New Document"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "close": "AppleWorks"
+  }
+ ],
+ "launch": [
+  "AppleWorks 5:AppleWorks"
+ ],
+ "prefer": {
+  "AppleWorks 5:AppleWorks Install Log": 0
+ }
+}

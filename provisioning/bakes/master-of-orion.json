@@ -1,0 +1,9 @@
+{
+ "note": "Master of Orion (MicroProse/SimTex, 1993), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "Master_Of_Orion.SIT",
+ "expect": [
+  "Master of Orion"
+ ],
+ "os": "tools-7.6.1"
+}

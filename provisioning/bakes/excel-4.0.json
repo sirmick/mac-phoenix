@@ -1,0 +1,147 @@
+{
+ "note": "Microsoft Excel 4.0 (Microsoft, 1992): Microsoft Setup run in the guest off the seven floppies, all attached as writable disks (the set was personalised by whoever imaged it: Setup shows that registration and asks nothing), Complete install into a new folder on the target (Command-D in Setup's folder picker gets the volume list: its Desktop button doesn't), then a first launch. Its first launch rewrites its resource fork (same resources, another layout) and preferences on each machine (\"prefer\")",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "machines": [
+  "68k",
+  "ppc"
+ ],
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "excel_4.0_e_1992.sit",
+   "take": "Excel 4.0 E 1992/Disk 1-Setup.image"
+  },
+  {
+   "file": "excel_4.0_e_1992.sit",
+   "take": "Excel 4.0 E 1992/Disk 2.image"
+  },
+  {
+   "file": "excel_4.0_e_1992.sit",
+   "take": "Excel 4.0 E 1992/Disk 3.image"
+  },
+  {
+   "file": "excel_4.0_e_1992.sit",
+   "take": "Excel 4.0 E 1992/Disk 4.image"
+  },
+  {
+   "file": "excel_4.0_e_1992.sit",
+   "take": "Excel 4.0 E 1992/Disk 5.image"
+  },
+  {
+   "file": "excel_4.0_e_1992.sit",
+   "take": "Excel 4.0 E 1992/Disk 6.image"
+  },
+  {
+   "file": "excel_4.0_e_1992.sit",
+   "take": "Excel 4.0 E 1992/Disk 7.image"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Disk 1-Setup:Microsoft Excel Setup"
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Complete"
+   },
+   "max": 60,
+   "note": "the welcome (the registration the set carries) is not always up by then: on the G3 it has gone"
+  },
+  {
+   "click": {
+    "button": "Complete"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Select Disk and Folder:"
+   },
+   "timeout": 30
+  },
+  {
+   "cmd_key": 2
+  },
+  {
+   "type": "{target}"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "check": {
+    "text": "Installation folder: {target}"
+   }
+  },
+  {
+   "click": {
+    "button": "New Folder"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "New Folder:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "Microsoft Excel 4.0"
+  },
+  {
+   "click": {
+    "button": "Create"
+   }
+  },
+  {
+   "check": {
+    "text": "Installation folder: Microsoft Excel 4.0"
+   }
+  },
+  {
+   "click": {
+    "button": "Setup"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Microsoft Excel 4.0 Setup complete."
+   },
+   "timeout": 600
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  },
+  {
+   "launch": "{target}:Microsoft Excel 4.0:Microsoft Excel"
+  },
+  {
+   "wait_for": {
+    "text": "Worksheet1"
+   },
+   "timeout": 60
+  },
+  {
+   "close": "Microsoft Excel"
+  }
+ ],
+ "expect": [
+  "Microsoft Excel 4.0"
+ ],
+ "launch": [
+  "Microsoft Excel 4.0:Microsoft Excel"
+ ],
+ "prefer": {
+  "Microsoft Excel 4.0:Microsoft Excel": 0,
+  "Preferences:Embedding Preferences": 0,
+  "Preferences:Excel Settings (4)": 0
+ }
+}

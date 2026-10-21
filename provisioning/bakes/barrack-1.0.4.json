@@ -1,0 +1,54 @@
+{
+ "note": "Barrack 1.0.4 (Ambrosia, 1996), its Installer VISE installer run in the guest (Install Location set to the target, Easy Install), its Installer VISE installer run in the guest (Install Location set to the target, Easy Install)",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "Barrack_1.0.4.bin",
+   "take": "Barrack Installer"
+  }
+ ],
+ "expect": [],
+ "steps": [
+  {
+   "launch": "{media}:Barrack Installer"
+  },
+  {
+   "wait_for": {
+    "text": "Install Location:"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "front": true
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "target": "Games"
+}

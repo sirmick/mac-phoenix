@@ -1,0 +1,22 @@
+{
+ "note": "Enchanted Scepters (Silicon Beach Software, 1984), copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "Enchanted_Scepters.img_.sit",
+   "take": "Enchanted Scepters.img"
+  }
+ ],
+ "expect": [
+  "Enchanted Scepters ƒ"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Enchanted Scepters:Enchanted Scepters ƒ",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

@@ -1,0 +1,142 @@
+{
+ "note": "Pathways into Darkness 1.1 (Bungie, 1993): its installer run in the guest off the three floppies (Disk Copy 4.2 images, all mounted first): Pathways Only (no Sound Manager 3.0, which would go back from 7.6.1's), saved as \"Pathways ƒ\" on the target",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "pathways-i-d-11.sit",
+   "take": "Pathways-ID/Pathways 1.image",
+   "as": "Pathways 1.img",
+   "dc42": true
+  },
+  {
+   "file": "pathways-i-d-11.sit",
+   "take": "Pathways-ID/Pathways 2.image",
+   "as": "Pathways 2.img",
+   "dc42": true
+  },
+  {
+   "file": "pathways-i-d-11.sit",
+   "take": "Pathways-ID/Pathways 3.image",
+   "as": "Pathways 3.img",
+   "dc42": true
+  }
+ ],
+ "expect": [
+  "Pathways ƒ"
+ ],
+ "steps": [
+  {
+   "open": "{media}:Pathways 1.img"
+  },
+  {
+   "wait_for": {
+    "text": "Pathways 1",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
+   "open": "{media}:Pathways 2.img"
+  },
+  {
+   "wait_for": {
+    "text": "Pathways 2",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
+   "open": "{media}:Pathways 3.img"
+  },
+  {
+   "wait_for": {
+    "text": "Pathways 3",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
+   "launch": "Pathways 1:Pathways Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "text": "Welcome To Pathways Into Darkness!"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "text": "Pathways Only"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "text": "Pathways Only"
+   }
+  },
+  {
+   "check": {
+    "text": "This installs only the Pathways Into Darkness Software"
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   },
+   "until": {
+    "button": "Desktop"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Desktop"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   },
+   "max": 10
+  },
+  {
+   "dclick": {
+    "text": "{target}",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "button": "Save"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}

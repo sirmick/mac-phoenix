@@ -1,0 +1,71 @@
+{
+ "note": "Master of Orion II (MicroProse, 1997), its Installer VISE 4.1 installer run in the guest off the CD: Custom Install > Large Install (about 349 MB; the CD image can still be attached for what stays on it)",
+ "kind": "install",
+ "os": "tools-8.6",
+ "cdroms": [
+  "Master_of_Orion_II_MAC.iso"
+ ],
+ "expect": [],
+ "steps": [
+  {
+   "launch": "Master of Orion II:MOO II Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 5
+  },
+  {
+   "popup": {
+    "text": "Easy Install"
+   },
+   "choose": "Custom Install"
+  },
+  {
+   "click": {
+    "text": "Large Install"
+   }
+  },
+  {
+   "check": {
+    "text": "Approximate disk space needed: 348,840K"
+   }
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful"
+   },
+   "timeout": 1200
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}

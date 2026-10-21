@@ -1,0 +1,76 @@
+{
+ "note": "Civilization 1.0.6 (MicroProse, 1992): the game and its data files copied by the guest off the four floppies (Disk Copy 6 images); no installer",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "Civilization.sit",
+   "take": "Civilization/Civilization™ Disk 1.img"
+  },
+  {
+   "file": "Civilization.sit",
+   "take": "Civilization/Civilization™ Disk 2.img"
+  },
+  {
+   "file": "Civilization.sit",
+   "take": "Civilization/Civilization™ Disk 3.img"
+  },
+  {
+   "file": "Civilization.sit",
+   "take": "Civilization/Civilization™ Disk 4.img"
+  }
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Civilization™ Disk 1:Civilization™",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Civilization™ Disk 1:Civ Data 1",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Civilization™ Disk 2:Civ Data 2",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Civilization™ Disk 2:Civ Data B/W",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Civilization™ Disk 3:Civ Data 3",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Civilization™ Disk 4:Civ Data 4",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Civilization™ Disk 4:Civ Sounds",
+    "to": "{target}:"
+   }
+  }
+ ],
+ "expect": [
+  "Civilization™",
+  "Civ Data 1",
+  "Civ Data 2",
+  "Civ Data B/W",
+  "Civ Data 3",
+  "Civ Data 4",
+  "Civ Sounds"
+ ]
+}

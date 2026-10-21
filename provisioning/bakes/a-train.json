@@ -1,0 +1,69 @@
+{
+ "note": "A-Train (Artdink/Maxis) and its Construction Set: the B&W and colour resources, the set and the editor, copied by the guest off the four disks",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "a-train-and-cs.sit",
+   "take": "a-train-and-cs/A-Train Install set/BW.dsk"
+  },
+  {
+   "file": "a-train-and-cs.sit",
+   "take": "a-train-and-cs/A-Train Install set/Color.dsk"
+  },
+  {
+   "file": "a-train-and-cs.sit",
+   "take": "a-train-and-cs/A-Train Install set/ConstructionSet.dsk"
+  },
+  {
+   "file": "a-train-and-cs.sit",
+   "take": "a-train-and-cs/A-Train Install set/Editor.dsk"
+  }
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Atrain:A-Train",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Atrain:ATrainB&W.res",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Atrain:Late Notes",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "A-train:ATrainColor.res",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "AT Construction Set Disk:AT Construction Set",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "ATrain Editor Folder:ATrain Editor 1.0Beta",
+    "to": "{target}:"
+   }
+  }
+ ],
+ "expect": [
+  "A-Train",
+  "ATrainB&W.res",
+  "Late Notes",
+  "ATrainColor.res",
+  "AT Construction Set",
+  "ATrain Editor 1.0Beta"
+ ]
+}

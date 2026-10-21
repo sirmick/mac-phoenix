@@ -1,0 +1,57 @@
+{
+ "note": "Afterlife 1.0 (LucasArts, 1996), copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "Afterlife1.0.sit_.bin",
+   "take": "Afterlife/Afterlife(1.0).img"
+  }
+ ],
+ "expect": [
+  "Afterlife",
+  "Afterlife Data",
+  "Afterlife Read Me",
+  "Afterlife Scenarios",
+  "Optional Afterlife Installs",
+  "Items for your System Folder"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Afterlife:Afterlife",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Afterlife:Afterlife Data",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Afterlife:Afterlife Read Me",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Afterlife:Afterlife Scenarios",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Afterlife:Optional Afterlife Installs",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Afterlife:Items for your System Folder",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

@@ -16,7 +16,8 @@ A data image is a blank volume ("label", default the name; "size_mb",
 default sized to fit with room to spare) with snapshots' :Items: placed:
 "take" an item of :Items: (default all of them; a path takes one inside a
 folder: "CodeWarrior Pro 4:CodeWarrior MPW:MPW"), "to" a folder
-(default the top), "as" a new name for the taken item. A boot image starts
+(default the top), "as" a new name for the taken item, "launch" the apps to
+launch (paths in the snapshot, for one baked without a "launch"). A boot image starts
 from a copy of a base System (provisioning/bases.json) and gets the
 :System Folder: parts of the snapshots in "system_from", replacing the
 System's own files (later snapshots win over earlier ones); it can "place"
@@ -268,11 +269,13 @@ def is_alias(local):
 
 
 def launch_paths(place, man):
-    """The snapshot's apps as paths on the image, given where its items went."""
+    """The snapshot's apps as paths on the image, given where its items went.
+    A place's own "launch" (paths in the snapshot, as a bake's) stands in for
+    a snapshot made without one."""
     out = []
     to = [s for s in place.get("to", "").split(":") if s]
     take = place["take"].split(":") if place.get("take") else []
-    for entry in man.get("launch", []):
+    for entry in man.get("launch") or place.get("launch", []):
         e = dict(entry) if isinstance(entry, dict) else {"app": entry}
         segs = e["app"].split(":")
         if take:

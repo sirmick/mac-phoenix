@@ -1,0 +1,43 @@
+{
+ "note": "Populous II (Bullfrog), with its 256-colour patch, hints and level codes, copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "Populous_II_image.sit",
+   "take": "Populous II image"
+  }
+ ],
+ "expect": [
+  "MacPopulousII",
+  "MacPopulousII 256 colors patch",
+  "Hints",
+  "level codes"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Populous II:MacPopulousII",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Populous II:MacPopulousII 256 colors patch",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Populous II:Hints",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Populous II:level codes",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

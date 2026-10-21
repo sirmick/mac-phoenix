@@ -1,0 +1,9 @@
+{
+ "note": "SimCity 2000 1.2 and the Urban Renewal Kit (Maxis), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "simcity2000.sit",
+ "expect": [
+  "SimCity 2000® Collection"
+ ],
+ "os": "tools-7.6.1"
+}

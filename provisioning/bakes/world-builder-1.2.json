@@ -1,0 +1,13 @@
+{
+ "note": "World Builder 1.2, Bill Appleton's adventure game builder as he released it into the public domain (Info-Mac game/adv, 1997): World Builder, Sound Converter, Sound Library #1, the World and Ray's templates, Ray's demo world and the documentation. Expanded by StuffIt Expander in the guest. It opens worlds made by later versions that 1.1 shows without their scenes (Mountain of Mayhem)",
+ "kind": "expand",
+ "archive": "world-builder-12.hqx",
+ "expect": [
+  "World Builder 1.2"
+ ],
+ "launch": [
+  "World Builder 1.2:World Builder",
+  "World Builder 1.2:Sound Converter"
+ ],
+ "os": "tools-7.6.1"
+}

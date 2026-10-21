@@ -1,0 +1,43 @@
+{
+ "note": "Apache Strike 1.2 (Silicon Beach Software, 1987), copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "apachestrike_1_2.zip",
+   "take": "apachestrike_1_2/ApacheStrike_1_2.dsk"
+  }
+ ],
+ "expect": [
+  "Apache Strike",
+  "Data A",
+  "Data B",
+  "Apache Scores"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Apache Strike:Apache Strike",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Apache Strike:Data A",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Apache Strike:Data B",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Apache Strike:Apache Scores",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "note": "Glider 4.0.4 (John Calhoun), the paper-airplane game, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "Glider_4.04.sit",
+ "expect": [
+  "Glider 4.0.4 ƒ"
+ ],
+ "os": "tools-7.6.1"
+}

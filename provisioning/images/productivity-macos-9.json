@@ -1,0 +1,21 @@
+{
+ "title": "Productivity (Mac OS 9)",
+ "tags": [
+  "productivity",
+  "ppc"
+ ],
+ "note": "Office software for the Mac OS 9.0.4 profile: AppleWorks 5.0.4 (word processing, drawing, painting, spreadsheet, database), Corel WordPerfect 3.5e, Microsoft Excel 4.0. Boots with productivity-9.0.4.",
+ "label": "Productivity",
+ "size_mb": 512,
+ "place": [
+  {
+   "snapshot": "appleworks-5.0.4"
+  },
+  {
+   "snapshot": "wordperfect-3.5e"
+  },
+  {
+   "snapshot": "excel-4.0"
+  }
+ ]
+}

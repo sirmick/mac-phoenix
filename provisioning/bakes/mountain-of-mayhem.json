@@ -1,0 +1,25 @@
+{
+ "note": "Mountain of Mayhem (Curtis Marsden, 1987, shareware), a World Builder game: copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "Mountain_of_Mayhem.img_.sit",
+   "take": "Mountain of Mayhem.img"
+  }
+ ],
+ "expect": [
+  "Mountain of Mayhem"
+ ],
+ "launch": [
+  "Mountain of Mayhem"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Mountain of Mayhem:Mountain of Mayhem",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

@@ -1,0 +1,135 @@
+{
+ "note": "SimLife 1.0.1 (Maxis, 1992): the Compact Pro self-extracting archives on its three floppies (files, colour, monochrome), each copied to the target and expanded there (its destination dialog defaults to the volume it runs from); the archives are left out of the capture",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "SimLife_1_0_1.zip",
+   "take": "SimLife_1_0_1/SimLifeDataDisk.dsk",
+   "as": "SimLife Data.img",
+   "dc42": true
+  },
+  {
+   "file": "SimLife_1_0_1.zip",
+   "take": "SimLife_1_0_1/SimLifeColorDisk.dsk",
+   "as": "SimLife Color.img",
+   "dc42": true
+  },
+  {
+   "file": "SimLife_1_0_1.zip",
+   "take": "SimLife_1_0_1/SimLifeMonochromeDisk.dsk",
+   "as": "SimLife Monochrome.img",
+   "dc42": true
+  }
+ ],
+ "expect": [],
+ "steps": [
+  {
+   "open": "{media}:SimLife Data.img"
+  },
+  {
+   "wait_for": {
+    "text": "SimLife™ Data Disk",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
+   "copy": {
+    "from": "SimLife™ Data Disk:SimLife™ Files.sea",
+    "to": "{target}:"
+   }
+  },
+  {
+   "launch": "{target}:SimLife™ Files.sea"
+  },
+  {
+   "wait_for": {
+    "button": "Extract"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Extract"
+   }
+  },
+  {
+   "wait_app_not": "SimLife™ Files.sea",
+   "timeout": 180
+  },
+  {
+   "open": "{media}:SimLife Color.img"
+  },
+  {
+   "wait_for": {
+    "text": "SimLife™ Color Disk",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
+   "copy": {
+    "from": "SimLife™ Color Disk:SimLife™ Color.sea",
+    "to": "{target}:"
+   }
+  },
+  {
+   "launch": "{target}:SimLife™ Color.sea"
+  },
+  {
+   "wait_for": {
+    "button": "Extract"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Extract"
+   }
+  },
+  {
+   "wait_app_not": "SimLife™ Color.sea",
+   "timeout": 180
+  },
+  {
+   "open": "{media}:SimLife Monochrome.img"
+  },
+  {
+   "wait_for": {
+    "text": "SimLife™ Monochrome Disk",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
+   "copy": {
+    "from": "SimLife™ Monochrome Disk:SimLife™ Monochrome.sea",
+    "to": "{target}:"
+   }
+  },
+  {
+   "launch": "{target}:SimLife™ Monochrome.sea"
+  },
+  {
+   "wait_for": {
+    "button": "Extract"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Extract"
+   }
+  },
+  {
+   "wait_app_not": "SimLife™ Monochrome.sea",
+   "timeout": 180
+  }
+ ],
+ "exclude": [
+  "SimLife™ Files.sea",
+  "SimLife™ Color.sea",
+  "SimLife™ Monochrome.sea"
+ ]
+}

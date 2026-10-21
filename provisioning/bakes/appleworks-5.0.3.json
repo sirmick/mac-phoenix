@@ -1,0 +1,116 @@
+{
+ "note": "AppleWorks 5.0.3 (Apple, 1998; ClarisWorks 5 renamed): its Installer VISE installer run in the guest off the disk image (Easy Install, Install Location set to the target), then a first launch personalises it (a name; the serial field keeps its \"See registration card\"). The disk's 5.0.4 updater wants Mac OS 9: appleworks-5.0.4. The installer puts the 68k build on the 68k machine and the PowerPC one on the G3: the merge makes the app and the two AppleScript applets fat; the rest that differs is install dates, file IDs and font resource numbers (\"prefer\")",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "machines": [
+  "68k",
+  "ppc"
+ ],
+ "disks": [
+  {
+   "file": "AppleWorks5.0.4.sit_.bin",
+   "take": "AppleWorks.img"
+  }
+ ],
+ "expect": [
+  "AppleWorks 5"
+ ],
+ "steps": [
+  {
+   "launch": "AppleWorks:Install AppleWorks"
+  },
+  {
+   "wait_for": {
+    "text": "Install Location:"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "front": true
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "“{target}”",
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "quit all other running applications"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{target}:AppleWorks 5:AppleWorks"
+  },
+  {
+   "wait_for": {
+    "text": "Please personalize this copy:"
+   },
+   "timeout": 90
+  },
+  {
+   "type": "Mac Phoenix"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Create New Document"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "close": "AppleWorks"
+  }
+ ],
+ "launch": [
+  "AppleWorks 5:AppleWorks"
+ ],
+ "prefer": {
+  "AppleWorks 5:AppleWorks Install Log": 0,
+  "Application Support:AppleWorks:MacLink Export Translators": 0,
+  "Application Support:AppleWorks:MacLink Import Translators": 0,
+  "Fonts:Equation Editor Fonts": 0,
+  "Fonts:VT102Font": 0,
+  "Preferences:AppleWorks:AppleWorks 5 Assistants Cache": 0,
+  "Preferences:AppleWorks:AppleWorks 5 Stationery Prefs": 0,
+  "Preferences:XTND Translator List": 0
+ }
+}

@@ -1,0 +1,54 @@
+{
+ "note": "Mars Rising (Ambrosia, 1997; PowerPC only), its Installer VISE installer run in the guest (Install Location set to the target, Easy Install), its Installer VISE installer run in the guest (Install Location set to the target, Easy Install)",
+ "kind": "install",
+ "os": "tools-8.6",
+ "media": [
+  {
+   "file": "MarsRising.bin",
+   "take": "Mars Rising Installer"
+  }
+ ],
+ "expect": [],
+ "steps": [
+  {
+   "launch": "{media}:Mars Rising Installer"
+  },
+  {
+   "wait_for": {
+    "text": "Install Location:"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "front": true
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "target": "Games"
+}

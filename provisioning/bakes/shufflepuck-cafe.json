@@ -1,0 +1,9 @@
+{
+ "note": "Shufflepuck Café (Brøderbund, 1988), black and white, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "shufflepuck_cafe.sit",
+ "expect": [
+  "Shufflepuck (N&B)"
+ ],
+ "os": "tools-7.6.1"
+}

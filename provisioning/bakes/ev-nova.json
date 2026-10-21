@@ -1,0 +1,9 @@
+{
+ "note": "EV Nova 1.0.10 (Ambrosia, 2002), Mac OS 9 and later, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "EV_Nova_1.0.10.sit",
+ "expect": [
+  "EV Nova 1.0.10"
+ ],
+ "os": "tools-8.6"
+}

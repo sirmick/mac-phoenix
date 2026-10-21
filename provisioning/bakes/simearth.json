@@ -1,0 +1,9 @@
+{
+ "note": "SimEarth 2.0 (Maxis), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "SimEarth_2.0.sit",
+ "expect": [
+  "SimEarth"
+ ],
+ "os": "tools-7.6.1"
+}

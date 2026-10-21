@@ -1,0 +1,22 @@
+{
+ "note": "Crystal Quest 2.2.5 (Casady & Greene), the whole disk copied by the guest",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "crystalquest_2_2_5m.zip",
+   "take": "crystalquest_2_2_5m/CrystalQuest_2_2_5M.dsk"
+  }
+ ],
+ "expect": [
+  "Crystal Quest"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Crystal Quest:",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

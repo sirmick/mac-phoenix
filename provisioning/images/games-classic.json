@@ -1,0 +1,93 @@
+{
+ "title": "Classic games (System 6)",
+ "tags": [
+  "games",
+  "68k"
+ ],
+ "note": "Black-and-white and early colour classics for the SE and IIci profiles on System 6.0.8: Silicon Beach's Airborne!, Enchanted Scepters, Dark Castle, Beyond Dark Castle and Apache Strike; Rescue!, the original SimCity, Shufflepuck Café, Glider 4, Crystal Quest, Oregon Trail, Spaceward Ho!",
+ "label": "Classic Games",
+ "place": [
+  {
+   "snapshot": "airborne",
+   "launch": [
+    "Airborne! ƒ:Airborne!"
+   ]
+  },
+  {
+   "snapshot": "enchanted-scepters",
+   "launch": [
+    "Enchanted Scepters ƒ:Scepters"
+   ]
+  },
+  {
+   "snapshot": "dark-castle",
+   "launch": [
+    "Dark Castle:Dark Castle"
+   ]
+  },
+  {
+   "snapshot": "beyond-dark-castle",
+   "to": "Beyond Dark Castle",
+   "launch": [
+    "Behind Dark Castle",
+    "Beyond Dark Castle",
+    "Beyond Dark Castle Editor "
+   ]
+  },
+  {
+   "snapshot": "apache-strike",
+   "to": "Apache Strike",
+   "launch": [
+    "Apache Strike"
+   ]
+  },
+  {
+   "snapshot": "rescue-2.0.4",
+   "launch": [
+    "Rescue! 2.0.4 ƒ:Rescue! 2.0.4"
+   ]
+  },
+  {
+   "snapshot": "simcity-1.3c",
+   "launch": [
+    "SimCity 1.3c:SimCity 1.3c",
+    "SimCity 1.3c:SimCity Editor",
+    "SimCity 1.3c:TerrainEdit1.1"
+   ]
+  },
+  {
+   "snapshot": "shufflepuck-cafe",
+   "launch": [
+    "Shufflepuck (N&B):Shufflepuck"
+   ]
+  },
+  {
+   "snapshot": "glider-4.0.4",
+   "launch": [
+    "Glider 4.0.4 ƒ:Editor 1.01",
+    "Glider 4.0.4 ƒ:Glider™"
+   ]
+  },
+  {
+   "snapshot": "crystal-quest",
+   "launch": [
+    "Crystal Quest:CritterEditor 1.0.4M",
+    "Crystal Quest:Crystal Quest",
+    "Crystal Quest:Crystal Quest Sample"
+   ]
+  },
+  {
+   "snapshot": "oregon-trail",
+   "launch": [
+    "Oregon Trail:Oregon Trail"
+   ]
+  },
+  {
+   "snapshot": "spaceward-ho-3.0.1",
+   "to": "Spaceward Ho! 3.0.1",
+   "launch": [
+    "Spaceward Ho! 3.0.1"
+   ]
+  }
+ ]
+}

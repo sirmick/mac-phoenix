@@ -1,0 +1,51 @@
+{
+ "note": "Escape Velocity 1.0.5 (Ambrosia, 1996), its installer run in the guest (Drive until the target, Install, OK)",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "escape-velocity-105.hqx",
+   "take": "Escape Velocity Installer"
+  }
+ ],
+ "expect": [],
+ "steps": [
+  {
+   "launch": "{media}:Escape Velocity Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Drive"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Drive"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  }
+ ],
+ "target": "Games"
+}

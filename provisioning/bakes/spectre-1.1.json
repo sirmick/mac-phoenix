@@ -1,0 +1,9 @@
+{
+ "note": "Spectre 1.1 (Velocity), the vector-tank game, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "Spectre_1.1.sit",
+ "expect": [
+  "Spectre 1.1"
+ ],
+ "os": "tools-7.6.1"
+}

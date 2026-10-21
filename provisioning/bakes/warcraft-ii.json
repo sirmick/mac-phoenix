@@ -1,0 +1,71 @@
+{
+ "note": "Warcraft II 1.22 (Blizzard, 1996), the game and its editors; the image's crack tool and junk files are left out, copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "WarcraftII.sit",
+   "take": "Warcraft II.img"
+  }
+ ],
+ "expect": [
+  "Warcraft II v.1.22",
+  "Data",
+  "Editors",
+  "Custom PUDs",
+  "More Information!",
+  "Multi Player Games",
+  "Saved Games",
+  "Warcraft II v1.2 Read Me"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Warcraft II:Warcraft II v.1.22",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Warcraft II:Data",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Warcraft II:Editors",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Warcraft II:Custom PUDs",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Warcraft II:More Information!",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Warcraft II:Multi Player Games",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Warcraft II:Saved Games",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Warcraft II:Warcraft II v1.2 Read Me",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

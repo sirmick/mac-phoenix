@@ -1,0 +1,28 @@
+{
+ "note": "Spaceward Ho! 3.0.1 (Delta Tao), copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "SpacewardHo301_0.img"
+  }
+ ],
+ "expect": [
+  "Spaceward Ho! 3.0.1",
+  "Last Minute Notes"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Spaceward Ho! 3.0.1:Spaceward Ho! 3.0.1",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Spaceward Ho! 3.0.1:Last Minute Notes",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

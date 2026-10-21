@@ -1,0 +1,95 @@
+{
+ "note": "SimTower 1.2 (Maxis/OPeNBooK, 1994), its Installer VISE installer run in the guest; Maxis Electronic Registration, which it opens afterwards, cancelled",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "SimTower_1.2_Install.sit",
+   "take": "SimTower Install"
+  }
+ ],
+ "expect": [
+  "SimTower"
+ ],
+ "steps": [
+  {
+   "launch": "{media}:SimTower Install"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   },
+   "until": {
+    "button": "Continue"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Cancel"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_app_not": "Electronic Registration",
+   "timeout": 30
+  }
+ ]
+}

@@ -31,7 +31,7 @@ Bake fields: "kind", "os" (the base System, default 7.6.1), "machines"
 {"file", "take", "as", "dc42"}; "as_is": the MacBinary file itself, not opened:
 a self-mounting HFS+ image the guest mounts), "disks" (disk images out of media,
 attached: {"file", "take"}), "steps", "expect" (names that must be at
-the top of the result), "from_boot" (new items at the top of the boot
+the top of the result; [] : at least one item, whatever its name), "from_boot" (new items at the top of the boot
 disk count as installed), "launch" (the product's apps, relative to the
 snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
 "needs_serial", "machines"), "settle" (seconds after boot), "system_remove"
@@ -39,7 +39,8 @@ snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
 deletes them where the snapshot's System Folder part goes), "system_take"
 (System Folder files to take even if only changed: a control panel's
 settings), "network" (the guest's --network: "socket" for net-bridge),
-"volatile" (snapshot paths a run writes differently every time, compared by
+"exclude" (names at the top of the target left out of the capture: a self-extracting
+archive copied there to expand in place), "volatile" (snapshot paths a run writes differently every time, compared by
 name only: a first launch's database or preferences). "wip": a bake still being
 worked out, left out of --all. "args": emulator arguments for every guest
 the bake starts ("--model-id", "5": Systems before 7.5). "first_boot_agent":
@@ -299,11 +300,17 @@ def dc42_checksum(data):
 
 def to_dc42(macbinary, name):
     """A raw floppy image in a MacBinary file, rewritten as a Disk Copy 4.2
-    image (type dImg, creator ddsk: Disk Copy 6 in the guest mounts it)."""
+    image (type dImg, creator ddsk: Disk Copy 6 in the guest mounts it); one
+    that is a Disk Copy 4.2 image already is only typed."""
     with open(macbinary, "rb") as f:
         blob = f.read()
     dlen = struct.unpack(">I", blob[83:87])[0]
     data = blob[128:128 + dlen]
+    if (len(data) > 84 and data[0] < 64 and data[82:84] == b"\x01\x00"
+            and 84 + struct.unpack(">I", data[64:68])[0] <= len(data)):    # already Disk Copy 4.2:
+        with open(macbinary, "wb") as f:                                    # only typed for Disk Copy
+            f.write(build_macbinary(mr(name)[:31], b"dImg", b"ddsk", data, b""))
+        return
     size, fmt = next(((s, f) for s, f in ((409600, 0), (819200, 1), (1474560, 3)) if len(data) <= s),
                      ((len(data) + 511) // 512 * 512, 3))
     data = data.ljust(size, b"\0")
@@ -361,7 +368,7 @@ class Session:
         hfs = Hfs(self.work)
         self.drop_old_agent(hfs)
         snapshot.blank(hfs, self.target, self.target_name, bake.get("target_mb", 250 if is_os else 1024))
-        self.exclude = set()
+        self.exclude = {mr(n) for n in bake.get("exclude", [])}   # e.g. an archive copied in to expand
         self.disks = [self.boot, self.target]
         self.cdroms = [media_path(n) for n in bake.get("cdroms", [])]
         self.pre_steps = []
@@ -642,6 +649,8 @@ class Session:
         missing = [n for n in self.bake.get("expect", []) if n not in top]
         if missing:
             raise RuntimeError(f"the bake didn't produce {missing} (it made {sorted(top)})")
+        if self.bake.get("expect") == [] and not top:     # "expect": []: something, named or not
+            raise RuntimeError("nothing was installed on the target")
         if not items and not system:
             raise RuntimeError("nothing was installed")
         bake = self.bake
@@ -817,10 +826,16 @@ def is_cfm(local):
     return any(t == b"cfrg" for t, *_ in fat_cfm.read_rsrc(rsrc)) if rsrc else False
 
 
+def is_classic(local):
+    """A classic 68k build (CODE resources, no data fork): fat with a PowerPC one."""
+    _, _, _, data, rsrc = forks_of(local)
+    return fat_cfm.is_classic(fat_cfm.read_rsrc(rsrc), data) if rsrc else False
+
+
 def merge(bake, parts, out, key, log=print):
     """One snapshot from several (machine runs, or a derive's parents): every
     file any has; a file they have in different builds made fat when it is
-    CFM code. Anything else that differs fails, unless the bake says which
+    CFM code (or a classic 68k build and a PowerPC one). Anything else that differs fails, unless the bake says which
     to keep ("prefer": {path: index into parts})."""
     work = tempfile.mkdtemp(prefix=f"merge.{bake['name']}.", dir=work_root())
     trees = [{f: dict(Volume(p, work).export(f":{f}:*", tempfile.mkdtemp(dir=work)))
@@ -843,7 +858,8 @@ def merge(bake, parts, out, key, log=print):
                 path = (folder + ":").encode() + rel
                 if rel in prefer:
                     merged[rel] = trees[prefer[rel]][folder][rel]
-                elif is_cfm(merged[rel]) and is_cfm(local):
+                elif (is_cfm(merged[rel]) or is_classic(merged[rel])) and (is_cfm(local) or is_classic(local)) \
+                        and not (is_classic(merged[rel]) and is_classic(local)):
                     with open(merged[rel], "rb") as a, open(local, "rb") as b:
                         data = fat_cfm.merge(a.read(), b.read())
                     fat_local = os.path.join(tempfile.mkdtemp(dir=work), "fat.bin")

@@ -1,0 +1,72 @@
+{
+ "note": "Beyond Dark Castle 1.1 (Silicon Beach Software, 1987): its two disks and the extras (editor, maps, Behind Dark Castle), copied by the guest",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "beyonddarkcastle_1_1.zip",
+   "take": "beyonddarkcastle_1_1/BDC_1.dsk"
+  },
+  {
+   "file": "beyonddarkcastle_1_1.zip",
+   "take": "beyonddarkcastle_1_1/BDC_2.dsk"
+  },
+  {
+   "file": "beyonddarkcastle_1_1.zip",
+   "take": "beyonddarkcastle_1_1/Extras.dsk"
+  }
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "BDC 1:Beyond Dark Castle",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "BDC 1:BDC Data A",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "BDC 1:BDC Prefs",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "BDC 2:BDC Data B",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Extras:Behind Dark Castle",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Extras:Beyond Dark Castle Editor ",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Extras:Beyond Dark Castle Maps",
+    "to": "{target}:"
+   }
+  }
+ ],
+ "expect": [
+  "Beyond Dark Castle",
+  "BDC Data A",
+  "BDC Prefs",
+  "BDC Data B",
+  "Behind Dark Castle",
+  "Beyond Dark Castle Editor ",
+  "Beyond Dark Castle Maps"
+ ]
+}

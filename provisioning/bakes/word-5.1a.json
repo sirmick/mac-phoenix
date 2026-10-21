@@ -1,0 +1,38 @@
+{
+ "note": "Microsoft Word 5.1a (Microsoft, 1992-93). Not working yet: the Install floppy's Installer 3.3 (the script demands 3.3; 3.4.3 refuses it) opens the Word Installer script read-only (fsRdPerm) and its Easy Install dialog says \"The Word Installer document or the disk on which it is located is locked\" with every floppy attached writable, the file and volume unlocked and the drives ejectable; Installer 4.0 says the same. Launched through the bridge, Installer 3.3 parks its window off screen and never shows it; launched from the Finder (select, Command-O) it does",
+ "wip": true,
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "machines": [
+  "68k",
+  "ppc"
+ ],
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "Word5.1a.sit",
+   "take": "Word5.1a/Install.image"
+  },
+  {
+   "file": "Word5.1a.sit",
+   "take": "Word5.1a/Program.image"
+  },
+  {
+   "file": "Word5.1a.sit",
+   "take": "Word5.1a/Commands.image"
+  },
+  {
+   "file": "Word5.1a.sit",
+   "take": "Word5.1a/More Commands.image"
+  },
+  {
+   "file": "Word5.1a.sit",
+   "take": "Word5.1a/Converters.image"
+  },
+  {
+   "file": "Word5.1a.sit",
+   "take": "Word5.1a/Proofing Tools.image"
+  }
+ ],
+ "steps": []
+}

@@ -1,0 +1,81 @@
+{
+ "note": "Ferazel's Wand 1.0.3 (Ambrosia, 2000): its Installer VISE installer run in the guest off the 1.0.2 CD (Easy Install: the game and InputSprocket 1.4.1; Install Location set to the target), then the 1.0.3 update's three files copied over the installed ones",
+ "kind": "install",
+ "os": "tools-8.6",
+ "disks": [
+  {
+   "file": "ferazels_wand.zip",
+   "take": "Ferazel's Wand/Ferazel's Wand 1.0.2.ISO"
+  }
+ ],
+ "media": [
+  {
+   "file": "ferazels_wand.zip",
+   "take": "Ferazel's Wand/Ferazel's Wand 1.0.3 update.sit!:Ferazel's Wand 1.0.3 update ƒ"
+  }
+ ],
+ "expect": [
+  "Ferazel's Wand 1.0.2 ƒ"
+ ],
+ "steps": [
+  {
+   "launch": "Ferazel's Wand:Ferazel's Wand Installer"
+  },
+  {
+   "wait_for": {
+    "text": "Install Location:"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "front": true
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "the disk “{target}”",
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "copy": {
+    "from": "Media:Ferazel's Wand 1.0.3 update ƒ:Ferazel's Wand",
+    "to": "{target}:Ferazel's Wand 1.0.2 ƒ:",
+    "replace": true
+   }
+  },
+  {
+   "copy": {
+    "from": "Media:Ferazel's Wand 1.0.3 update ƒ:Ferazel's Wand Sprites",
+    "to": "{target}:Ferazel's Wand 1.0.2 ƒ:",
+    "replace": true
+   }
+  },
+  {
+   "copy": {
+    "from": "Media:Ferazel's Wand 1.0.3 update ƒ:Ferazel's Wand World Data",
+    "to": "{target}:Ferazel's Wand 1.0.2 ƒ:",
+    "replace": true
+   }
+  }
+ ]
+}

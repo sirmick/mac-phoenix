@@ -1,0 +1,50 @@
+{
+ "note": "Lemmings 1.5.2 (Psygnosis), copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "lemmings_1_5_2.zip",
+   "take": "lemmings_1_5_2/Lemmings_1_5_2.dsk"
+  }
+ ],
+ "expect": [
+  "Lemmings",
+  "Graphics",
+  "BW Graphics",
+  "Levels",
+  "Music"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Lemmings:Lemmings",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Lemmings:Graphics",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Lemmings:BW Graphics",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Lemmings:Levels",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Lemmings:Music",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

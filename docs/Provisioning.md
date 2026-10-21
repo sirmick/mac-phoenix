@@ -68,6 +68,37 @@ python3 provisioning/test_image.py dev-9.0.4 dev-tools-macos-8-9      # PowerPC 
 The E.T.O. #22 disc is a local-only pin: a machine without it gets
 `local-only media missing; put it at ...`.
 
+## The game disks
+
+| Image | What | Boot with |
+|---|---|---|
+| `games-classic.img` | Silicon Beach's Airborne!, Enchanted Scepters, Dark Castle, Beyond Dark Castle, Apache Strike; Rescue! 2.0.4, SimCity 1.3c, Shufflepuck Café, Glider 4.0.4, Crystal Quest, Oregon Trail, Spaceward Ho! 3.0.1 | `6.0.8` on the SE or IIci |
+| `games.img` | Ambrosia (Maelstrom, Escape Velocity, EV Override, Apeiron, Barrack, Swoop, Chiral, Bubble Trouble, Ares, Avara, Cythera), Digital Messiah, Maxis (SimCity 2000, SimAnt, SimEarth, SimLife, SimTower, SimFarm, A-Train), Civilization I and II, Marathon 1/2/Infinity, Pathways into Darkness, Spectre, Bolo, Glider PRO, Master of Orion, Warcraft II, Lemmings, Populous II, Afterlife | `7.5.5` / `7.6.1`, 68k or PowerPC |
+| `games-ppc.img` | EV Nova, Ferazel's Wand 1.0.3, Mars Rising, Slithereens, Master of Orion II (Large Install; its CD image can be attached too) | `8.6` / `9.0.4` |
+| `world-builder-1.2.img` | World Builder 1.2 and Mountain of Mayhem | any 68k |
+
+One bake per game (`provisioning/bakes/`, the media pinned in `media.json`):
+archives expanded, floppies and CD images copied from, installers run.
+Ambrosia's own installers are driven by Drive and Install; Installer VISE
+ones by Switch Disk, or by the Install Location popup, set to the target.
+The installer bakes name their target volume `Games` (`"target"`), so a
+check for the target's name can't match the Install button. An image's
+`place` can carry `launch` for a snapshot baked without one.
+
+## The productivity disks
+
+| Image | What | Boot with |
+|---|---|---|
+| `productivity-system-7.img` | AppleWorks 5.0.3, Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0 | `productivity-7.6.1`, 68k or PowerPC |
+| `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0 | `productivity-9.0.4` |
+
+The boot disks are the standard ones plus the apps' System Folder parts
+(AppleWorks' translators, dictionaries and libraries). AppleWorks' 5.0.4
+updater won't run before Mac OS 9, so System 7 gets 5.0.3. The installers
+put each machine's own build on it; the merge makes them fat. First-launch
+personalisation is typed (`{"type": "Mac Phoenix"}`). Word 5.1a
+(`word-5.1a`, `"wip"`) doesn't install yet: see its note.
+
 ## bake.py
 
 A bake runs in a guest booted from a copy of a base System, with a blank
@@ -83,7 +114,9 @@ volume (`{target}`, named `Install`) as the install target. Kinds:
 `"machines": ["68k", "ppc"]` runs a bake on both machines
 (`baked/parts/<name>@<machine>.img`) and merges the runs: files only one
 has are kept, CFM code that differs becomes one fat file
-(`provisioning/fat_cfm.py`), aliases keep the first, anything else that
+(`provisioning/fat_cfm.py`; a classic 68k app and a PowerPC one too: the
+68k build's resources plus the `cfrg`, the PowerPC code as the data
+fork), aliases keep the first, anything else that
 differs fails unless `"prefer"` says which run's file to keep.
 Machines: `68k` (Quadra 650), `ppc` (G3), `se` (Mac SE) and `iici` (Mac IIci, colour; both System 6, so no
 BridgeAgent; `launch`/`open` go through the Finder by name and Command-O,
@@ -127,6 +160,8 @@ What an app draws itself is found by its drawn text (`/api/text`):
   text: the left edge of the dialog user item holding it, plus `inset`
   (default 8). This is for a disclosure triangle, which has no text of
   its own.
+* `{"type": "Mac Phoenix"}` types ASCII on a US keyboard into the field
+  with the focus: a name, a serial number.
 * `{"check": ...}` makes a click prove itself. It fails the bake at that
   step unless the front window shows the text (`text`, exact or a
   prefix), doesn't start any string with `text_not`, or a control has a

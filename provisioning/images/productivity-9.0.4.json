@@ -1,0 +1,15 @@
+{
+ "title": "Mac OS 9.0.4 for productivity",
+ "tags": [
+  "productivity",
+  "ppc"
+ ],
+ "note": "Mac OS 9.0.4 (PowerPC) with what the productivity apps put in the System Folder (AppleWorks' translators, dictionaries and libraries, WordPerfect's and Excel's preferences); the apps themselves are on Productivity.",
+ "base": "standard-9.0.4",
+ "system_from": [
+  "appleworks-5.0.4",
+  "wordperfect-3.5e",
+  "excel-4.0"
+ ],
+ "aliases_to": "productivity-macos-9"
+}

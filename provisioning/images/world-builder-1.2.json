@@ -1,0 +1,11 @@
+{
+ "title": "World Builder 1.2 + Mountain of Mayhem",
+ "tags": ["library", "68k"],
+ "note": "World Builder 1.2 (the 1997 public-domain release) and Mountain of Mayhem, which it opens with its scenes. System 6 or 7, any 68k profile.",
+ "label": "World Builder",
+ "size_mb": 20,
+ "place": [
+  {"snapshot": "world-builder-1.2"},
+  {"snapshot": "mountain-of-mayhem"}
+ ]
+}

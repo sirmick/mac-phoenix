@@ -1,0 +1,9 @@
+{
+ "note": "Marathon Infinity 1.5 (Bungie, 1996; freely released), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "marathon_infinity.sit",
+ "expect": [
+  "Marathon Infinity"
+ ],
+ "os": "tools-7.6.1"
+}

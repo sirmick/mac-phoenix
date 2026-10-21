@@ -1,0 +1,20 @@
+{
+ "title": "Productivity (System 7)",
+ "tags": [
+  "productivity"
+ ],
+ "note": "Office software for the 7.5.5 / 7.6.1 profiles, 68k and PowerPC: AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), Corel WordPerfect 3.5e, Microsoft Excel 4.0. Boots with productivity-7.6.1.",
+ "label": "Productivity",
+ "size_mb": 512,
+ "place": [
+  {
+   "snapshot": "appleworks-5.0.3"
+  },
+  {
+   "snapshot": "wordperfect-3.5e"
+  },
+  {
+   "snapshot": "excel-4.0"
+  }
+ ]
+}

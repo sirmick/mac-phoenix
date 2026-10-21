@@ -1,0 +1,151 @@
+{
+ "note": "Corel WordPerfect 3.5e (Corel, 1999; freeware since 2000): its Installer VISE installer run in the guest (Easy Install: WordPerfect and OrgChart Builder, US English; personalised with a name, no license number), then the 3.5e2 updater (fixes: grey Styles and Window menus, scroll arrows on PowerPC, a macro memory corruption) and the Outlining Fix document beside the app",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "machines": [
+  "68k",
+  "ppc"
+ ],
+ "media": [
+  {
+   "file": "WordPerfect_3.5e.sit",
+   "take": "WordPerfect 3.5e"
+  }
+ ],
+ "expect": [
+  "Corel WordPerfect 3.5 Enhanced"
+ ],
+ "steps": [
+  {
+   "launch": "{media}:WordPerfect 3.5e:Install Corel WordPerfect 3.5e"
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "United States"
+   },
+   "timeout": 30
+  },
+  {
+   "check": {
+    "button": "United States",
+    "value": 1
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Please personalize your copy of Corel"
+   },
+   "timeout": 600
+  },
+  {
+   "type": "Mac Phoenix"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{media}:WordPerfect 3.5e:WP 3.5e Updater"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Corel WordPerfect 3.5 Enhanced",
+    "front": true
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Update"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "The file has been successfully updated."
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  },
+  {
+   "copy": {
+    "from": "{media}:WordPerfect 3.5e:WP Outlining Fix",
+    "to": "{target}:Corel WordPerfect 3.5 Enhanced:"
+   }
+  }
+ ],
+ "launch": [
+  "Corel WordPerfect 3.5 Enhanced:Corel WordPerfect"
+ ],
+ "exclude": [
+  "Installer Log File"
+ ],
+ "prefer": {
+  "Preferences:WordPerfect:Library (USA)": 0,
+  "Preferences:WordPerfect:Preferences (USA)": 0
+ }
+}

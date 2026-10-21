@@ -1,0 +1,9 @@
+{
+ "note": "SimAnt (Maxis, 1991), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "SimAnt_Macintosh.sit",
+ "expect": [
+  "SimAnt Macintosh"
+ ],
+ "os": "tools-7.6.1"
+}

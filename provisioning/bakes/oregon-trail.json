@@ -1,0 +1,22 @@
+{
+ "note": "The Oregon Trail (MECC, 1990), copied by the guest off its disk image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "Oregon_Trail.img_.sit",
+   "take": "Oregon Trail.img"
+  }
+ ],
+ "expect": [
+  "Oregon Trail"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Oregon Trail:Oregon Trail",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

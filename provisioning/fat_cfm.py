@@ -6,7 +6,9 @@ Installers often install only the build for the machine they run on (MacPython's
 PythonCore, say). A fat file holds both: the data fork is the two code
 fragments one after the other, and the 'cfrg' 0 resource lists each with its
 architecture and its offset and length in the data fork. The Code Fragment
-Manager on each machine picks its own.
+Manager on each machine picks its own. A classic 68k build ('CODE'
+resources) and a PowerPC one make the older kind of fat file: the 68k
+build's resources plus the 'cfrg', the PowerPC fragment as the data fork.
 
   fat_cfm.py A.bin B.bin OUT.bin      (MacBinary in and out; A's other
                                        resources and Finder info are kept)
@@ -90,11 +92,41 @@ def members(cfrg):
     return out
 
 
+def is_classic(res, data):
+    """A classic 68k build: 'CODE' resources, no 'cfrg', no data fork."""
+    return not data and any(r[0] == b"CODE" for r in res) and not any(r[0] == b"cfrg" for r in res)
+
+
+def merge_classic(classic, cfm):
+    """Fat MacBinary from a classic 68k build and a PowerPC one: the 68k
+    build's resources (its Finder info) plus the other's 'cfrg', and the
+    PowerPC fragment as the data fork. Where both have a resource the 68k
+    build's is kept: a PowerPC build's own 'CODE' is a stub that says it
+    needs a PowerPC, its 'SIZE' asks for less (no code in the heap)."""
+    ha, _, ra = macbinary(classic)
+    _, db, rb = macbinary(cfm)
+    res_a, res_b = read_rsrc(ra), read_rsrc(rb)
+    have = {(t, i) for t, i, *_ in res_a}
+    resources = res_a + [r for r in res_b if (r[0], r[1]) not in have]
+    rsrc = write_rsrc(resources)
+    header = bytearray(ha)
+    struct.pack_into(">II", header, 83, len(db), len(rsrc))
+    header[124:126] = struct.pack(">H", crc(bytes(header[:124])))
+
+    def pad(x):
+        return x + bytes((-len(x)) % 128)
+    return bytes(header) + pad(db) + pad(rsrc)
+
+
 def merge(a, b):
     """Fat MacBinary from two single-architecture ones."""
     ha, da, ra = macbinary(a)
     _, db, rb = macbinary(b)
     res_a, res_b = read_rsrc(ra), read_rsrc(rb)
+    if is_classic(res_a, da):
+        return merge_classic(a, b)
+    if is_classic(res_b, db):
+        return merge_classic(b, a)
     cfrg_a = next(r[4] for r in res_a if r[0] == b"cfrg" and r[1] == 0)
     cfrg_b = next(r[4] for r in res_b if r[0] == b"cfrg" and r[1] == 0)
     ma, mb = members(cfrg_a), members(cfrg_b)

@@ -1,0 +1,53 @@
+{
+ "note": "Avara (Ambrosia, 1996), its Installer VISE installer run in the guest (Install Location set to the target, Easy Install)",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "Avara.bin",
+   "take": "Avara Installer"
+  }
+ ],
+ "expect": [],
+ "steps": [
+  {
+   "launch": "{media}:Avara Installer"
+  },
+  {
+   "wait_for": {
+    "text": "Install Location:"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "front": true
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "\"{target}\"",
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "target": "Games"
+}

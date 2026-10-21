@@ -1,0 +1,50 @@
+{
+ "note": "Glider PRO 1.1.2 (John Calhoun, 1994-96; freeware since), the game, its houses, the user-designed houses, utilities and documentation copied by the guest off the CD image",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "glider_pro_1_1_2.zip",
+   "take": "glider_pro_1_1_2/GliderPRO_1_1_2.toast"
+  }
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "GliderPRO:Glider PRO™",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "GliderPRO:Houses",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "GliderPRO:User-designed",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "GliderPRO:Utilities",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "GliderPRO:Documentation",
+    "to": "{target}:"
+   }
+  }
+ ],
+ "expect": [
+  "Glider PRO™",
+  "Houses",
+  "User-designed",
+  "Utilities",
+  "Documentation"
+ ]
+}

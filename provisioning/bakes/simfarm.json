@@ -1,0 +1,88 @@
+{
+ "note": "SimFarm (Maxis, 1993), its installer run in the guest off the two floppies (both mounted by Disk Copy first)",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "SimFarm_Disks.sit",
+   "take": "SimFarm Disks/Install Disk 1",
+   "as": "SimFarm Disk 1.img",
+   "dc42": true
+  },
+  {
+   "file": "SimFarm_Disks.sit",
+   "take": "SimFarm Disks/Install Disk 2",
+   "as": "SimFarm Disk 2.img",
+   "dc42": true
+  }
+ ],
+ "expect": [
+  "Maxis"
+ ],
+ "steps": [
+  {
+   "open": "{media}:SimFarm Disk 1.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 1",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
+   "open": "{media}:SimFarm Disk 2.img"
+  },
+  {
+   "wait_for": {
+    "text": "Install Disk 2",
+    "logged": true
+   },
+   "timeout": 60
+  },
+  {
+   "launch": "Install Disk 1:SimFarm Install"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "note": "SimCity 1.3c (Maxis), the original SimCity, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "SimCity1.3c.sit",
+ "expect": [
+  "SimCity 1.3c"
+ ],
+ "os": "tools-7.6.1"
+}

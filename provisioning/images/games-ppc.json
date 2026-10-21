@@ -1,0 +1,47 @@
+{
+ "title": "Games (PowerPC)",
+ "tags": [
+  "games",
+  "ppc"
+ ],
+ "note": "PowerPC games for the Mac OS 8.6 and 9 profiles: EV Nova, Ferazel's Wand, Mars Rising, Slithereens, Master of Orion II",
+ "label": "Games PPC",
+ "place": [
+  {
+   "snapshot": "ev-nova",
+   "launch": [
+    "EV Nova 1.0.10:EV Nova"
+   ]
+  },
+  {
+   "snapshot": "ferazels-wand",
+   "take": "Ferazel's Wand 1.0.2 ƒ",
+   "launch": [
+    "Ferazel's Wand 1.0.2 ƒ:Documentation ƒ:Ferazel's Wand Documentation",
+    "Ferazel's Wand 1.0.2 ƒ:Ferazel's Wand"
+   ],
+   "as": "Ferazel's Wand 1.0.3 ƒ"
+  },
+  {
+   "snapshot": "mars-rising",
+   "take": "Mars Rising 1.0.2 ƒ",
+   "launch": [
+    "Mars Rising 1.0.2 ƒ:Mars Rising"
+   ]
+  },
+  {
+   "snapshot": "slithereens-1.0.1",
+   "take": "Slithereens 1.0.1 ƒ",
+   "launch": [
+    "Slithereens 1.0.1 ƒ:Slithereens"
+   ]
+  },
+  {
+   "snapshot": "master-of-orion-ii",
+   "to": "Master of Orion II",
+   "launch": [
+    "Master of Orion II:MOO II"
+   ]
+  }
+ ]
+}

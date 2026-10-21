@@ -1,0 +1,9 @@
+{
+ "note": "Civilization II (MicroProse, 1997), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "civilization_ii_1997.sit",
+ "expect": [
+  "Civilization II"
+ ],
+ "os": "tools-7.6.1"
+}

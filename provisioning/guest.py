@@ -56,6 +56,8 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
   {"drag": [[x, y], [x2, y2]]}           press, move, release (popup menus)
   {"key": "return"}                      an /api/keypress name or ADB keycode
   {"cmd_key": 12}                        Command + an ADB keycode (12 = Q)
+  {"type": "Mac Phoenix"}                ASCII typed on a US keyboard (into the
+                                         field with the focus; "tab" moves on)
   {"menu": ["Special", "Shut Down"]}     a menu item, by the drawn text of both
   (System 6, no bridge: "launch" and "open" select each name in the Finder
   and press Command-O; the guest is shut down with Special > Shut Down)
@@ -94,6 +96,20 @@ def roms(storage):
 MACHINE_ARGS = {"uae": ("uae", []), "kpx": ("kpx", []),
                 "se": ("uae", ["--ram", "4", "--screen", "512x342"]),
                 "iici": ("uae", ["--ram", "8", "--screen", "640x480"])}   # colour, 68030, 24-bit
+
+
+# ASCII -> (ADB keycode, shift) on a US keyboard, for "type".
+TYPE_KEYS = {}
+for _keys, _shifted, _codes in (
+        ("asdfhgzxcv", "ASDFHGZXCV", range(0x00, 0x0A)),
+        ("bqweryt123465=97-80]ou[ip", "BQWERYT!@#$^%+(&_*)}OU{IP",
+         [0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+          0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23]),
+        ("lj'k;\\,/nm.\t `", 'LJ"K:|<?NM>\t ~',
+         [0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32])):
+    for _k, _s, _c in zip(_keys, _shifted, _codes):
+        TYPE_KEYS.setdefault(_k, (_c, False))
+        TYPE_KEYS.setdefault(_s, (_c, True))
 
 
 def has_agent(backend):
@@ -232,6 +248,17 @@ class Guest:
         while agent and not (self.get("/api/status") or {}).get("bridge_agent_connected"):
             if time.time() - start > timeout:
                 raise RuntimeError(f"no bridge agent within {timeout}s")
+            self.pause(2)
+
+    def close_energy_saver(self, timeout=20):
+        """Energy Saver's startup message closed, if it comes up within timeout s."""
+        start = time.time()
+        while time.time() - start < timeout:
+            at = self.find({"button": "Close Message"})
+            if at:
+                self.click(*at)
+                self.pause(1)
+                return
             self.pause(2)
 
     def shot(self, name, front=False, scale=1.0):
@@ -590,6 +617,18 @@ class Guest:
         self.post("/api/keypress", {"key": 0x37, "down": False})
         time.sleep(1)
 
+    def type_text(self, text):
+        """ASCII typed as ADB key events on a US keyboard (a name, a serial)."""
+        for ch in text:
+            keycode, shift = TYPE_KEYS[ch]
+            if shift:
+                self.post("/api/keypress", {"key": 0x38, "down": True})
+            self.post("/api/keypress", {"key": keycode})
+            if shift:
+                self.post("/api/keypress", {"key": 0x38, "down": False})
+            time.sleep(0.05)
+        time.sleep(0.5)
+
     # ---- apps
 
     def host_dir(self):
@@ -786,6 +825,8 @@ class Guest:
             time.sleep(1)
         elif "cmd_key" in step:
             self.cmd_key(step["cmd_key"])
+        elif "type" in step:
+            self.type_text(step["type"])
         elif "wait" in step:
             self.pause(step["wait"])
         elif "wait_app" in step or "wait_app_not" in step:
@@ -804,6 +845,8 @@ class Guest:
         elif "wait_finder" in step:
             self.pause(5)                       # the restart under way, not the old Finder
             self.wait_finder(step["wait_finder"], agent=self.agent)
+            if self.backend == "kpx":           # the G3's Energy Saver: "This computer is set to go
+                self.close_energy_saver()       # into sleep" at every startup but the first
         elif "agent_exit" in step:              # BridgeAgent quits itself till the next boot
             self.post("/api/quit", {"agent": True}, 60)
             self.pause(2)

@@ -1,0 +1,9 @@
+{
+ "note": "Dark Castle (Silicon Beach Software, 1986), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "Dark_Castle_0.sit",
+ "expect": [
+  "Dark Castle"
+ ],
+ "os": "tools-7.6.1"
+}

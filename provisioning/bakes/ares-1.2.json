@@ -1,0 +1,66 @@
+{
+ "note": "Ares 1.2 (Changeling Software, published by Ambrosia, 1996), its Installer VISE installer run in the guest (Install Location set to the target, Easy Install), its Installer VISE installer run in the guest (Install Location set to the target, Easy Install); it asks to quit the other applications (BridgeAgent too) and to restart, both accepted",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "Ares_1.2_Installer.bin",
+   "take": "Ares Installer"
+  }
+ ],
+ "expect": [],
+ "steps": [
+  {
+   "launch": "{media}:Ares Installer"
+  },
+  {
+   "wait_for": {
+    "text": "Install Location:"
+   },
+   "timeout": 90
+  },
+  {
+   "popup": {
+    "text": "{boot}",
+    "front": true
+   },
+   "choose": "{target}",
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Install",
+    "exact": true
+   },
+   "until": {
+    "button": "Continue"
+   },
+   "max": 5
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 300
+  }
+ ],
+ "target": "Games"
+}

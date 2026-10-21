@@ -1,0 +1,9 @@
+{
+ "note": "Marathon 1.2 (Bungie, 1994; freely released), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "marathon.sit",
+ "expect": [
+  "Marathon"
+ ],
+ "os": "tools-7.6.1"
+}

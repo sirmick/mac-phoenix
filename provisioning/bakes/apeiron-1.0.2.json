@@ -1,0 +1,51 @@
+{
+ "note": "Apeiron 1.0.2 (Ambrosia, 1995), its installer run in the guest (Drive until the target, Install, OK)",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "apeiron-102.hqx",
+   "take": "Apeiron 1.0.2 Installer"
+  }
+ ],
+ "expect": [],
+ "steps": [
+  {
+   "launch": "{media}:Apeiron 1.0.2 Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Drive"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Drive"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  }
+ ],
+ "target": "Games"
+}

@@ -1,0 +1,283 @@
+{
+ "title": "Games (System 7)",
+ "tags": [
+  "games",
+  "68k"
+ ],
+ "note": "System 7 era games for the 68k and PowerPC profiles: Ambrosia (Maelstrom, Escape Velocity, EV Override, Apeiron, Barrack, Swoop, Chiral, Bubble Trouble, Ares, Avara, Cythera), Digital Messiah, Maxis (SimCity 2000, SimAnt, SimEarth, SimLife, SimTower, SimFarm, A-Train), Civilization I and II, Bungie (Marathon 1, 2, Infinity; Pathways into Darkness), Spectre, Bolo, Glider PRO, Master of Orion, Warcraft II, Lemmings, Populous II, Afterlife",
+ "label": "Games",
+ "place": [
+  {
+   "snapshot": "maelstrom-1.4.2",
+   "launch": [
+    "Maelstrom 1.4.2 ƒ:Maelstrom"
+   ]
+  },
+  {
+   "snapshot": "escape-velocity-1.0.5",
+   "launch": [
+    "Escape Velocity 1.0.5 ƒ:Escape Velocity",
+    "Escape Velocity 1.0.5 ƒ:Escape Velocity Documentation"
+   ]
+  },
+  {
+   "snapshot": "ev-override-1.0.2",
+   "take": "EV Override 1.0.2 ƒ",
+   "launch": [
+    "EV Override 1.0.2 ƒ:Documentation ƒ:Override Documentation",
+    "EV Override 1.0.2 ƒ:EV Override"
+   ]
+  },
+  {
+   "snapshot": "apeiron-1.0.2",
+   "launch": [
+    "Apeiron 1.0.2 ƒ:Apeiron"
+   ]
+  },
+  {
+   "snapshot": "barrack-1.0.4",
+   "take": "Barrack 1.0.4 ƒ",
+   "launch": [
+    "Barrack 1.0.4 ƒ:Barrack"
+   ]
+  },
+  {
+   "snapshot": "swoop-1.0.2",
+   "take": "Swoop 1.0.2 ƒ",
+   "launch": [
+    "Swoop 1.0.2 ƒ:Swoop"
+   ]
+  },
+  {
+   "snapshot": "chiral-1.0.4",
+   "launch": [
+    "Chiral 1.0.4 ƒ:Chiral",
+    "Chiral 1.0.4 ƒ:Chiral Basics"
+   ]
+  },
+  {
+   "snapshot": "bubble-trouble-1.0.1",
+   "take": "Bubble Trouble 1.0.1 ƒ",
+   "launch": [
+    "Bubble Trouble 1.0.1 ƒ:Bubble Trouble"
+   ]
+  },
+  {
+   "snapshot": "ares-1.2",
+   "take": "Ares 1.2.0 ƒ",
+   "launch": [
+    "Ares 1.2.0 ƒ:Ares",
+    "Ares 1.2.0 ƒ:Documentation ƒ:The Earthling’s Guide to Ares",
+    {
+     "app": "Ares 1.2.0 ƒ:GameRanger Folder:GameRanger",
+     "machines": [
+      "ppc"
+     ]
+    },
+    {
+     "app": "Ares 1.2.0 ƒ:Hera 1.0.0 ƒ:Hera",
+     "machines": [
+      "ppc"
+     ]
+    },
+    "Ares 1.2.0 ƒ:Your Ares Net Portrait"
+   ]
+  },
+  {
+   "snapshot": "avara",
+   "take": "Avara 1.0.2 ƒ",
+   "launch": [
+    "Avara 1.0.2 ƒ:Avara",
+    "Avara 1.0.2 ƒ:Documentation ƒ:Avara Documentation",
+    "Avara 1.0.2 ƒ:Extras ƒ:Avara Commuter",
+    "Avara 1.0.2 ƒ:Extras ƒ:Avara MicroTracker",
+    "Avara 1.0.2 ƒ:Extras ƒ:Mission Editing/Creating ƒ:BSPSplitter 0.6.4FAT",
+    "Avara 1.0.2 ƒ:Extras ƒ:Mission Editing/Creating ƒ:BSPSplitter 0.6.4LC",
+    "Avara 1.0.2 ƒ:Extras ƒ:Mission Editing/Creating ƒ:BSPViewer",
+    "Avara 1.0.2 ƒ:Extras ƒ:Mission Editing/Creating ƒ:SoundComp 0.8.4(v2)"
+   ]
+  },
+  {
+   "snapshot": "cythera",
+   "take": "Cythera 1.0.4 ƒ",
+   "launch": [
+    "Cythera 1.0.4 ƒ:Cythera",
+    "Cythera 1.0.4 ƒ:Documentation ƒ:Cythera Documentation"
+   ]
+  },
+  {
+   "snapshot": "digital-messiah",
+   "launch": [
+    "Digital Messiah ƒ:Digital Messiah 2.0"
+   ]
+  },
+  {
+   "snapshot": "simcity-2000",
+   "launch": [
+    "SimCity 2000® Collection:SimCity 2000® 1.2",
+    "SimCity 2000® Collection:Sound Manager:TeachText",
+    "SimCity 2000® Collection:Urban Renewal Kit"
+   ]
+  },
+  {
+   "snapshot": "simant",
+   "launch": [
+    "SimAnt Macintosh:E-Doc 1.0.20",
+    "SimAnt Macintosh:E-Reg",
+    "SimAnt Macintosh:SimAnt™ Color"
+   ]
+  },
+  {
+   "snapshot": "simearth",
+   "launch": [
+    "SimEarth:SimEarth Black & White",
+    "SimEarth:SimEarth Color"
+   ]
+  },
+  {
+   "snapshot": "simlife-1.0.1",
+   "to": "SimLife",
+   "launch": [
+    "SimLife™ Color",
+    "SimLife™ Monochrome"
+   ]
+  },
+  {
+   "snapshot": "simtower-1.2",
+   "launch": [
+    "SimTower:SimTower"
+   ]
+  },
+  {
+   "snapshot": "simfarm",
+   "take": "Maxis:SimFarm",
+   "launch": [
+    "Maxis:SimFarm:SimFarm"
+   ]
+  },
+  {
+   "snapshot": "a-train",
+   "to": "A-Train",
+   "launch": [
+    "A-Train",
+    "AT Construction Set",
+    "ATrain Editor 1.0Beta"
+   ]
+  },
+  {
+   "snapshot": "civilization",
+   "to": "Civilization",
+   "launch": [
+    "Civilization™"
+   ]
+  },
+  {
+   "snapshot": "civilization-ii",
+   "launch": [
+    "Civilization II:Civ II Map Editor",
+    "Civilization II:Civilization II",
+    "Civilization II:Civilization II Files:Civilopedia:Civilopedia"
+   ]
+  },
+  {
+   "snapshot": "marathon",
+   "launch": [
+    "Marathon:Marathon Manual",
+    "Marathon:Marathon v1.2"
+   ]
+  },
+  {
+   "snapshot": "marathon-2",
+   "launch": [
+    "Marathon 2 ƒ:Marathon 2"
+   ]
+  },
+  {
+   "snapshot": "marathon-infinity",
+   "launch": [
+    "Marathon Infinity:Marathon ∞ 1.5"
+   ]
+  },
+  {
+   "snapshot": "pathways-into-darkness",
+   "launch": [
+    "Pathways ƒ:Pathways ƒ:Pathways Into Darkness"
+   ]
+  },
+  {
+   "snapshot": "spectre-1.1",
+   "launch": [
+    "Spectre 1.1"
+   ]
+  },
+  {
+   "snapshot": "bolo-0.99.7",
+   "launch": [
+    "Bolo:Bolo 0.99.7"
+   ]
+  },
+  {
+   "snapshot": "glider-pro-1.1.2",
+   "to": "Glider PRO",
+   "launch": [
+    "Documentation:Foundation Mover Read Me",
+    "Documentation:Glider Folding Instructions",
+    "Documentation:Libraries Read Me",
+    "Documentation:Moving Van Read Me",
+    "Documentation:The Houses Read Me",
+    "Glider PRO™",
+    "User-designed:Assorted Authors:SeaCaves folder:Glider SC patch",
+    "User-designed:Assorted Authors:SeaCaves folder:SeaCaves cheat book",
+    "User-designed:Gary Zimmer:Sahara Desert:Sahara Desert Read Me",
+    "User-designed:Gary Zimmer:Starlight:Starlight Readme",
+    "User-designed:Matthew Hershberger:Glider PRO™ Christmas patch ƒ:Glider PRO™ Christmas patch",
+    "Utilities:Foundation Mover",
+    "Utilities:Glider Edit 1.1.1",
+    "Utilities:Moving Van"
+   ]
+  },
+  {
+   "snapshot": "master-of-orion",
+   "launch": [
+    "Master of Orion:Master of Orion"
+   ]
+  },
+  {
+   "snapshot": "warcraft-ii",
+   "to": "Warcraft II",
+   "launch": [
+    "Data:Microsoft Help",
+    "Data:Microsoft Help Run Time",
+    "Editors:Warcraft II Map Editor",
+    "Editors:Warcraft II Sound Editor",
+    "Warcraft II v.1.22"
+   ]
+  },
+  {
+   "snapshot": "lemmings-1.5.2",
+   "to": "Lemmings",
+   "launch": [
+    "Lemmings"
+   ]
+  },
+  {
+   "snapshot": "populous-ii",
+   "to": "Populous II",
+   "launch": [
+    "MacPopulousII 256 colors patch",
+    "MacPopulousII:MacPopulousII",
+    "MacPopulousII:MacPopulousII (Mono)",
+    "MacPopulousII:MacPopulousII (SC)"
+   ]
+  },
+  {
+   "snapshot": "afterlife",
+   "to": "Afterlife",
+   "launch": [
+    "Afterlife",
+    "Items for your System Folder:CD ROM Software 5.1.1:CD-ROM Software:AppleCD Audio Player",
+    "Items for your System Folder:CD ROM Software 5.1.1:SimpleText"
+   ]
+  }
+ ]
+}

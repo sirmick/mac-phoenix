@@ -117,7 +117,7 @@ class Archive:
         return os.path.join(self.root, path.rstrip("/*").rstrip("/"))
 
     def export(self, path, stage):
-        top = self.local(path)
+        top = self.local(path.lstrip(":"))     # ":X" after a nested "!:" is X at the top
         if not os.path.exists(top) and not os.path.exists(top + ".rsrc"):
             raise RuntimeError(f"archive has no {path}")
         items = []
@@ -223,10 +223,12 @@ def disk_image(data, rsrc):
 
 
 def take(path, spec, stage, work):
-    """Export spec ("A/B!:C:D") from the file at path; a "!" opens the item
-    before it as a nested container."""
+    """Export spec ("A/B!:C:D") from the file at path; a "!:" opens the item
+    before it as a nested container (a lone "!" is part of a name:
+    "Airborne!.img")."""
     container = open_container(path, work)
-    parts = spec.split("!")
+    parts = spec.split("!:")
+    parts = parts[:1] + [":" + p for p in parts[1:]]     # as split("!") gave them
     for inner in parts[:-1]:
         items = container.export(inner, stage)
         if len(items) != 1 or items[0][1] is None:

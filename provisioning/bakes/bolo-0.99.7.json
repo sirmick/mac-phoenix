@@ -1,0 +1,9 @@
+{
+ "note": "Bolo 0.99.7 (Stuart Cheshire), the networked tank game, from Info-Mac, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "bolo-0997.hqx",
+ "expect": [
+  "Bolo"
+ ],
+ "os": "tools-7.6.1"
+}

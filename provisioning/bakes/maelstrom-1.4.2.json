@@ -1,0 +1,53 @@
+{
+ "note": "Maelstrom 1.4.2 (Ambrosia, Andrew Welch), its installer run in the guest",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "maelstrom-142.hqx",
+   "take": "Maelstrom Installer"
+  }
+ ],
+ "expect": [
+  "Maelstrom 1.4.2 ƒ"
+ ],
+ "steps": [
+  {
+   "launch": "{media}:Maelstrom Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Drive"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Drive"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 180
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  }
+ ],
+ "target": "Games"
+}
