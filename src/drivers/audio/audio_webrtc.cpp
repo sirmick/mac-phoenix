@@ -33,14 +33,14 @@ AudioOutput* audio_direct_get_output(void)
 /*
  *  Initialization
  */
-void audio_webrtc_init(void)
+void audio_webrtc_init(const config::EmulatorConfig* config)
 {
 	// Create AudioOutput ring buffer (48kHz stereo)
 	g_audio_output = new AudioOutput(48000, 2);
 
 	// Launch audio encoder thread
 	audio::g_running.store(true, std::memory_order_release);
-	g_encoder_thread = new std::thread(audio::audio_encoder_main, g_audio_output);
+	g_encoder_thread = new std::thread(audio::audio_encoder_main, g_audio_output, config);
 }
 
 /*

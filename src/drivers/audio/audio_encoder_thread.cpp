@@ -14,6 +14,7 @@
 #include "encoders/opus_encoder.h"
 #include "encoders/audio_config.h"
 #include "../../webrtc/webrtc_server.h"
+#include "../../config/emulator_config.h"
 #include <thread>
 
 #include <memory>
@@ -49,8 +50,9 @@ static void send_encoded_audio(const std::vector<uint8_t>& packet) {
  * Reads 20ms chunks of audio at 48kHz, encodes to Opus, sends via WebRTC.
  *
  * @param audio_output Ring buffer to read samples from
+ * @param config       Live config: sound off drains the ring and sends nothing
  */
-void audio_encoder_main(AudioOutput* audio_output) {
+void audio_encoder_main(AudioOutput* audio_output, const config::EmulatorConfig* config) {
     fprintf(stderr, "[AudioEncoder] Thread starting\n");
 
     // Create Opus encoder (48kHz stereo, 20ms frames)
@@ -89,6 +91,13 @@ void audio_encoder_main(AudioOutput* audio_output) {
             // Partial read - pad with silence
             memset(&samples[samples_read], 0,
                    (samples.size() - samples_read) * sizeof(int16_t));
+        }
+
+        // Sound off: the Mac still has its sound hardware (games give up
+        // without it), nothing goes to the browser.
+        if (config && !config->audio_enabled) {
+            std::this_thread::sleep_until(frame_start + std::chrono::milliseconds(20));
+            continue;
         }
 
         // Encode to Opus

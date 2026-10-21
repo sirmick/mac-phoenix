@@ -486,7 +486,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             3 all 68k code on mame-68k (C3b, experimental, does not boot yet)\n");
             printf("  --idlewait / --no-idlewait Pause CPU when guest idle (default: on)\n");
             printf("\nMedia:\n");
-            printf("  --audio                    Enable audio (default: off)\n");
+            printf("  --audio                    Send sound to the browser (default: off; the Mac has sound hardware either way)\n");
             printf("  --audio-dump PATH          Append the audio sent out (raw S16LE 48 kHz stereo) to PATH\n");
             printf("  --zap-pram                 Clear PRAM on startup\n");
             printf("  --model-id N               Machine type reported to the Mac (default: the ROM\n");

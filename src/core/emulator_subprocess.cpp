@@ -229,9 +229,9 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back("--dismiss-shutdown-dialog");
     }
 
-    if (config_->audio_enabled) {
-        args.push_back("--audio");
-    }
+    // The Mac always has its sound hardware (the parent pulls it whether or
+    // not sound goes to the browser): games refuse to start without it.
+    args.push_back("--audio");
 
     if (config_->trace_atraps) {
         args.push_back("--trace-atraps");

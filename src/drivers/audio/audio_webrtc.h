@@ -6,7 +6,8 @@
 #define AUDIO_WEBRTC_H
 
 // WebRTC audio driver functions (compatible with platform API)
-void audio_webrtc_init(void);
+namespace config { struct EmulatorConfig; }
+void audio_webrtc_init(const config::EmulatorConfig* config);
 void audio_webrtc_exit(void);
 
 #endif // AUDIO_WEBRTC_H

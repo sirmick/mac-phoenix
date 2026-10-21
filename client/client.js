@@ -825,6 +825,64 @@ async function renderFrameToCanvas(data, ctx, canvas, state, onFrame) {
 }
 
 /**
+ * Sound for the PNG/WebP codecs, which have no WebRTC peer: the server sends
+ * each 20 ms Opus packet (48 kHz stereo) on /ws as "OPUS" + packet. Decoded
+ * with WebCodecs, played back-to-back ~60 ms ahead of the AudioContext clock.
+ */
+class WsAudioPlayer {
+    static LEAD = 0.06;      // s of buffering ahead of the clock
+    static MAX_LEAD = 0.3;   // further ahead than this: drop the backlog
+
+    constructor() {
+        this.ctx = null;
+        this.decoder = null;
+        this.nextTime = 0;
+        this.timestamp = 0;
+        this.unsupported = typeof AudioDecoder === 'undefined';
+        if (this.unsupported) {
+            logger.warn('No WebCodecs AudioDecoder: no sound with PNG/WebP');
+            return;
+        }
+        // Browsers start an AudioContext suspended until the user does something.
+        const resume = () => this.ctx?.state === 'suspended' && this.ctx.resume();
+        document.addEventListener('pointerdown', resume, true);
+        document.addEventListener('keydown', resume, true);
+    }
+
+    _init() {
+        this.ctx = new AudioContext({ sampleRate: 48000 });
+        this.decoder = new AudioDecoder({
+            output: (data) => this._play(data),
+            error: (e) => { logger.warn('Opus decode failed', { error: e.message }); this.decoder = null; },
+        });
+        this.decoder.configure({ codec: 'opus', sampleRate: 48000, numberOfChannels: 2 });
+    }
+
+    handlePacket(packet) {
+        if (this.unsupported) return;
+        if (!this.decoder) this._init();
+        this.decoder.decode(new EncodedAudioChunk({ type: 'key', timestamp: this.timestamp, data: packet }));
+        this.timestamp += 20000;
+    }
+
+    _play(data) {
+        const buffer = this.ctx.createBuffer(data.numberOfChannels, data.numberOfFrames, data.sampleRate);
+        for (let ch = 0; ch < data.numberOfChannels; ch++)
+            data.copyTo(buffer.getChannelData(ch), { planeIndex: ch, format: 'f32-planar' });
+        data.close();
+        if (this.ctx.state !== 'running') return;
+        const now = this.ctx.currentTime;
+        if (this.nextTime < now || this.nextTime > now + WsAudioPlayer.MAX_LEAD)
+            this.nextTime = now + WsAudioPlayer.LEAD;
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.ctx.destination);
+        source.start(this.nextTime);
+        this.nextTime += buffer.duration;
+    }
+}
+
+/**
  * HTTP Stream Decoder — proxy-friendly video over plain HTTP chunked transfer.
  *
  * Uses fetch() + ReadableStream to receive length-prefixed frames from
@@ -1755,6 +1813,13 @@ class MacPhoenixClient {
     }
 
     handleFrameBytes(arrayBuffer) {
+        // "OPUS" + packet: sound for the PNG/WebP codecs (WsAudioPlayer).
+        const head = new Uint8Array(arrayBuffer, 0, Math.min(4, arrayBuffer.byteLength));
+        if (head.length === 4 && head[0] === 0x4F && head[1] === 0x50 && head[2] === 0x55 && head[3] === 0x53) {
+            this.wsAudio ??= new WsAudioPlayer();
+            this.wsAudio.handlePacket(new Uint8Array(arrayBuffer, 4));
+            return;
+        }
         // Server sends the same 45-byte header + PNG/WebP bytes that previously
         // rode the data channel. Decoder is format-agnostic.
         // Only PNG/WebP take frames from the WebSocket. Once the fallback

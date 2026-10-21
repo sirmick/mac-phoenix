@@ -791,10 +791,25 @@ void WebRTCServer::send_audio_frame(const uint8_t* data, size_t size) {
     rtc::FrameInfo frameInfo(elapsed);
     audio_frame_count++;
 
+    // PNG/WebP peers have no RTP track: the Opus packet rides the WebSocket,
+    // behind a "OPUS" magic (video frames there start with 8 zero bytes).
+    std::vector<std::byte> ws_packet;
+
     std::lock_guard<std::mutex> lock(peers_mutex_);
     for (const auto& [peer_id, peer] : peers_) {
-        if (!peer->ready || !peer->audio_track) continue;
-        if (!peer->audio_track->isOpen()) continue;
+        if (!peer->ready) continue;
+        if (!peer->is_webrtc) {
+            auto ws = peer->ws.lock();
+            if (!ws || !ws->is_open()) continue;
+            if (ws_packet.empty()) {
+                ws_packet.resize(4 + size);
+                std::memcpy(ws_packet.data(), "OPUS", 4);
+                std::memcpy(ws_packet.data() + 4, data, size);
+            }
+            ws->send(ws_packet);
+            continue;
+        }
+        if (!peer->audio_track || !peer->audio_track->isOpen()) continue;
 
         try {
             peer->audio_track->sendFrame(

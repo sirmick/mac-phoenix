@@ -934,16 +934,15 @@ int main(int argc, char **argv)
 		                            video::g_video_output, &emu_config,
 		                            &video::g_ipc_shm, &video::g_ipc_notify_fd);
 
-		// Launch audio pipeline (parent side) — only if --audio was passed
-		if (emu_config.audio_enabled) {
-			audio_webrtc_init();
-			if (g_ipc_client) {
-				extern AudioOutput* audio_direct_get_output(void);
-				AudioOutput* audio_out = audio_direct_get_output();
-				if (audio_out) {
-					audio_ipc_reader_start(g_ipc_client, audio_out,
-					                       emu_config.audio_dump_path.empty() ? nullptr : emu_config.audio_dump_path.c_str());
-				}
+		// Launch audio pipeline (parent side). Always: the guest's sound
+		// hardware runs on our pulls; audio_enabled only gates sending.
+		audio_webrtc_init(&emu_config);
+		if (g_ipc_client) {
+			extern AudioOutput* audio_direct_get_output(void);
+			AudioOutput* audio_out = audio_direct_get_output();
+			if (audio_out) {
+				audio_ipc_reader_start(g_ipc_client, audio_out,
+				                       emu_config.audio_dump_path.empty() ? nullptr : emu_config.audio_dump_path.c_str());
 			}
 		}
 
@@ -957,11 +956,9 @@ int main(int argc, char **argv)
 
 		// Shutdown
 		if (subprocess_owner) subprocess_owner->stop();
-		if (emu_config.audio_enabled) {
-			audio_ipc_reader_stop();
-			audio::g_running.store(false, std::memory_order_release);
-			audio_webrtc_exit();
-		}
+		audio_ipc_reader_stop();
+		audio::g_running.store(false, std::memory_order_release);
+		audio_webrtc_exit();
 		video::g_running.store(false, std::memory_order_release);
 		video::g_video_output->shutdown();
 		encoder_thread.join();
