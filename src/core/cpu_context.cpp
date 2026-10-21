@@ -299,7 +299,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
 
     fprintf(stderr, "[CPUContext] ROM Version: 0x%08x\n", ROMVersion);
     fprintf(stderr, "[CPUContext] CPU Type: 680%02d\n",
-            (cpu_type_ == 0) ? 0 : (cpu_type_ * 10 + 20));
+            cpu_type_ * 10);
     fprintf(stderr, "[CPUContext] FPU: %s\n", fpu_type_ ? "Yes" : "No");
     fprintf(stderr, "[CPUContext] 24-bit addressing: %s\n", twenty_four_bit_ ? "Yes" : "No");
 

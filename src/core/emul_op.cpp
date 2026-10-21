@@ -155,40 +155,43 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 				// XPRAM
 				uint8 reg = ((r->d[1] << 5) & 0xe0) | ((r->d[1] >> 10) & 0x1f);
 				if (is_read) {
-					r->d[2] = XPRAM[reg];
+					// The byte replaces D2's low byte only: VALIDATEPRAM
+					// builds the 'NuMc' signature in D2 a byte at a time.
+					uint8 b = XPRAM[reg];
 					bool localtalk = !(XPRAM[0xe0] || XPRAM[0xe1]);	// LocalTalk enabled?
 					switch (reg) {
 						case 0x08:
 							if (ROMVersion != ROM_VERSION_32)
-								r->d[2] &= 0xf8;
+								b &= 0xf8;
 							break;
 						case 0x8a:
 							// Addressing mode: whatever the machine has
 							// (24-bit profiles mask addresses; System 6
 							// refuses to start in 32-bit mode).
 							if (TwentyFourBitAddressing)
-								r->d[2] &= ~0x05;
+								b &= ~0x05;
 							else
-								r->d[2] |= 0x05;
+								b |= 0x05;
 							break;
 						case 0xe0:				// Disable LocalTalk (use EtherTalk instead)
 							if (localtalk)
-								r->d[2] = 0x00;
+								b = 0x00;
 							break;
 						case 0xe1:
 							if (localtalk)
-								r->d[2] = 0xf1;
+								b = 0xf1;
 							break;
 						case 0xe2:
 							if (localtalk)
-								r->d[2] = 0x00;
+								b = 0x00;
 							break;
 						case 0xe3:
 							if (localtalk)
-								r->d[2] = 0x0a;
+								b = 0x0a;
 							break;
 					}
-					D(bug("Read XPRAM %02x->%02lx\n", reg, r->d[2]));
+					r->d[2] = (r->d[2] & ~0xffu) | b;
+					D(bug("Read XPRAM %02x->%02x\n", reg, b));
 				} else {
 					D(bug("Write XPRAM %02x<-%02lx\n", reg, r->d[2] & 0xff));
 					if (reg == 0x8a && !TwentyFourBitAddressing)
@@ -200,7 +203,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 				uint8 reg = (r->d[1] >> 2) & 0x1f;
 				if (reg >= 0x10 || (reg >= 0x08 && reg < 0x0c)) {
 					if (is_read) {
-						r->d[2] = XPRAM[reg];
+						r->d[2] = (r->d[2] & ~0xffu) | XPRAM[reg];
 						D(bug("Read XPRAM %02x->%02x\n", reg, XPRAM[reg]));
 					} else {
 						D(bug("Write PRAM %02x<-%02lx\n", reg, r->d[2]));
@@ -214,7 +217,7 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 						case 2: b = t >> 16; break;
 						case 3: b = t >> 24; break;
 					}
-					r->d[2] = b;
+					r->d[2] = (r->d[2] & ~0xffu) | b;
 				} else {
 					D(bug("RTC %s op %d, d1 %08lx d2 %08lx\n", is_read ? "read" : "write", reg, r->d[1], r->d[2]));
 				}
@@ -260,14 +263,17 @@ void m68k::EmulOp(uint16 opcode, M68kRegisters *r)
 				WriteMacInt32(r->a[4] - 20, RAMBaseMac + RAMSize);	// MemTop
 				if (TwentyFourBitAddressing) {
 					// A 24-bit machine (IIci profile): MMU type 1, the Mac
-					// II's HMMU, whose _SwapMMUMode only records the mode in
-					// MMU32Bit (and pokes VIA2, i.e. ScratchMem). Bit 0 at -25
-					// clear: not "32-bit only", so the ROM can go 24-bit.
+					// II's HMMU, whose _SwapMMUMode records the mode in
+					// MMU32Bit, pokes VIA2 (i.e. ScratchMem) and flushes the
+					// caches. (A real IIci is type 4, a 68030 PMMU, which
+					// needs MMU tables we don't build.) Bit 0 at -25 clear:
+					// don't start in 32-bit mode, whatever PRAM $8A says
+					// (INITMMU reads it raw).
 					WriteMacInt8(r->a[4] - 26, 1);
 					WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) & ~1);
 				} else {
 					WriteMacInt8(r->a[4] - 26, 0);					// No MMU
-					WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) | 1);	// 32-bit only
+					WriteMacInt8(r->a[4] - 25, ReadMacInt8(r->a[4] - 25) | 1);	// start in 32-bit mode
 				}
 				r->a[6] = RAMBaseMac + RAMSize;
 			}

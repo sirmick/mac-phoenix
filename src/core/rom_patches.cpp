@@ -767,10 +767,10 @@ void m68k::InstallDrivers(uint32 pb)
 	Execute68kTrap(0xa247, &r);		// SetOSTrapAddress()
 
 	// Install .Sony driver
-	// On Quadra ROMs, the ROM normally opens .Sony via a subroutine at ROM+0x1250
-	// (called from ROM+0x1134). That subroutine also opens .netBOOT, which we do
-	// not emulate. The JSR at ROM+0x1134 is NOPed to skip it, so we must install
-	// .Sony explicitly here.
+	// On the Quadra the ROM opens .Sony from a subroutine at ROM+0x1250 (called
+	// from ROM+0x1134), cut short by the RTS patched at ROM+0x1256 so that it
+	// doesn't go on to open .netBOOT. Other 32-bit ROMs (the IIci) have no such
+	// subroutine there, so install .Sony here if it isn't installed yet.
 	{
 		uint32 utab = ReadMacInt32(0x11c);
 		uint32 sony_slot = ~SonyRefNum * 4;
