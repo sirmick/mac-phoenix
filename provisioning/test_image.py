@@ -11,7 +11,7 @@ Frontier (file.followAlias), when one of the images has it. Copies of the
 images are booted, so the built ones are never
 written. Runs on each machine (68k, ppc) unless --machine says one.
 
-  test_image.py dev-7.6.1 dev-tools-system-7 [--machine 68k] [--only Perl]
+  test_image.py dev-7.6.1 dev-tools-system-7 [--machine 68k] [--only Perl ...]
 """
 
 import argparse
@@ -76,7 +76,7 @@ def run(images, machine, port, only, log=print):
         apps += [e for e in rec["launch"] if machine in e.get("machines", bake.BACKENDS)]
         aliases += rec.get("aliases", [])
     frontier = next((e["app"] for e in apps if e["snapshot"].startswith("frontier")), None)
-    apps = [e for e in apps if not only or only.lower() in e["app"].lower()]
+    apps = [e for e in apps if not only or any(o.lower() in e["app"].lower() for o in only)]
 
     def start():
         g = Guest(work, bake.BACKENDS[machine], disks, [], port, bake.STORAGE, extra=image_args(images[0]))
@@ -148,7 +148,9 @@ def run(images, machine, port, only, log=print):
 
 # What an application says when it starts only to refuse to run here.
 import re
-REFUSAL = re.compile(r"will not run|cannot run|can.t run|requires (a|an|system|the)", re.I)
+REFUSAL = re.compile(r"will not run|cannot run|can.t run|requires (a|an|system|the)|only runs in|will only run"
+                     r"|must be set to|could not be opened|couldn.t (be initiali[sz]ed|create)"
+                     r"|insert the .*CD|unable to find the .*CD|must have the .*CD", re.I)
 
 
 def image_args(name):
@@ -190,7 +192,7 @@ def main():
     ap.add_argument("images", nargs="+", help="built images, the boot image first")
     ap.add_argument("--machine", choices=sorted(bake.BACKENDS), action="append")
     ap.add_argument("--port", type=int, default=19470)
-    ap.add_argument("--only", help="substring: test only matching apps")
+    ap.add_argument("--only", action="append", help="substring: test only matching apps (repeatable)")
     args = ap.parse_args()
     ok = True
     for i, m in enumerate(args.machine or image_machines(args.images[0])):
