@@ -65,7 +65,7 @@ extern "C" {
 /* ── Constants ───────────────────────────────────────────────────── */
 
 #define IPC_VIDEO_MAGIC 0x4D504850  /* "MPHP" */
-#define IPC_VERSION 2
+#define IPC_VERSION 3
 
 /* Must cover the per-axis max of every mode in
  * src/common/include/video_modes.h (mp::video::kMaxWidth_Ppc /
@@ -235,6 +235,18 @@ typedef struct IPCBuffer {
     IPC_ATOMIC_UINT32 shm_raw_x,    shm_raw_y;
     IPC_ATOMIC_UINT32 shm_mtemp_x,  shm_mtemp_y;
     IPC_ATOMIC_UINT32 shm_crsr_new,  shm_crsr_couple, shm_crsr_busy;
+
+    /* The cursor's image, for the page to draw itself (a CSS cursor,
+     * client/cursor.js) instead of its being in the frames: Executor.
+     * 16x16, 1 bit a pixel, rows MSB first: data the black pixels, mask
+     * where it is opaque. The child writes the fields, then bumps
+     * cursor_seq; the parent reads cursor_seq, the fields, and cursor_seq
+     * again (a different one: read again). 0: the frames hold the cursor
+     * (the ROM machines). */
+    IPC_ATOMIC_UINT32 cursor_seq;
+    uint8_t cursor_data[32], cursor_mask[32];
+    int16_t cursor_hot_x, cursor_hot_y;
+    uint8_t cursor_visible;
 
     /* Mac OS state snapshot (child writes, parent reads for /api/status).
      * Pre-serialized JSON with windows, ticks, menu_bar.

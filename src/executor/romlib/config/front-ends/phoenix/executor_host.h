@@ -47,6 +47,13 @@ struct Config
     // cursor included. Called on the thread that called run().
     std::function<void(const uint32_t *pixels, int width, int height)> on_frame;
 
+    // The cursor, for the host to draw itself (set: it is never in the
+    // frames): 16x16, 1 bit a pixel, rows MSB first; data the black
+    // pixels, mask where it is opaque; the hot spot; shown. On every change,
+    // from the emulator thread.
+    std::function<void(const uint8_t data[32], const uint8_t mask[32], int hot_x, int hot_y,
+                       bool visible)> on_cursor;
+
     // Sound: one 20 ms frame of 48 kHz 16-bit big-endian stereo (960
     // frames), from the emulator thread. Returns false when the host cannot
     // take it now (it is kept and offered again). Unset: no sound output

@@ -243,6 +243,17 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.open_transport = cfg.executor_ot;
     c.prefer_ppc = cfg.executor_ppc;
     c.on_frame = publish_frame;
+    // The cursor is the page's to draw (client/cursor.js): never in the
+    // frames; its image goes to the parent through the IPC buffer.
+    c.on_cursor = [](const uint8_t data[32], const uint8_t mask[32], int hot_x, int hot_y,
+                     bool visible) {
+        memcpy(g_buf->cursor_data, data, 32);
+        memcpy(g_buf->cursor_mask, mask, 32);
+        g_buf->cursor_hot_x = (int16_t)hot_x;
+        g_buf->cursor_hot_y = (int16_t)hot_y;
+        g_buf->cursor_visible = visible ? 1 : 0;
+        IPC_ATOMIC_STORE(g_buf->cursor_seq, IPC_ATOMIC_LOAD(g_buf->cursor_seq) + 1);
+    };
     if (cfg.audio_enabled) {
         /* The parent pulls 20 ms frames from the IPC audio ring (--audio). */
         audio_direct_set_ipc_buffer(buf);

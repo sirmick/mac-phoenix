@@ -92,6 +92,10 @@ int run(const Config& c)
     PhoenixVideoDriver::cursorX = c.width / 2;
     PhoenixVideoDriver::cursorY = c.height / 2;
     PhoenixVideoDriver::frameHook = c.on_frame;
+    if(c.on_cursor)
+        PhoenixVideoDriver::cursorHook = [f = c.on_cursor](const PhoenixVideoDriver::Cursor &k) {
+            f(k.data, k.mask, k.hotX, k.hotY, k.visible);
+        };
     if(c.on_audio)
     {
         PhoenixSoundDriver::pushHook = c.on_audio;

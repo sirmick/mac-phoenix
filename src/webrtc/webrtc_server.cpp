@@ -9,6 +9,7 @@
 #include "../drivers/audio/encoders/audio_config.h"
 #include <QByteArray>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
@@ -822,6 +823,72 @@ void WebRTCServer::send_audio_frame(const uint8_t* data, size_t size) {
     }
 }
 
+void WebRTCServer::send_cursor_image() {
+    if (!initialized_ || peer_count_ == 0 || !g_ipc_client)
+        return;
+    // Read cursor_seq, the image, cursor_seq again: the child may be
+    // writing it. 0: no image, the frames hold the cursor.
+    uint32_t seq = 0;
+    uint8_t data[32] = {}, mask[32] = {};
+    int hot_x = 0, hot_y = 0;
+    bool visible = false;
+    {
+        std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
+        if (!g_ipc_client->is_connected() || !g_ipc_client->shm())
+            return;
+        const IPCBuffer* buf = g_ipc_client->shm();
+        for (int tries = 0;; tries++) {
+            seq = IPC_ATOMIC_LOAD(buf->cursor_seq);
+            if (!seq)
+                break;
+            std::memcpy(data, buf->cursor_data, 32);
+            std::memcpy(mask, buf->cursor_mask, 32);
+            hot_x = buf->cursor_hot_x;
+            hot_y = buf->cursor_hot_y;
+            visible = buf->cursor_visible != 0;
+            if (IPC_ATOMIC_LOAD(buf->cursor_seq) == seq)
+                break;
+            if (tries == 3)
+                return;  // still changing: next time
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    std::string msg_str;
+    for (const auto& [peer_id, peer] : peers_) {
+        if (peer->cursor_seq == seq)
+            continue;
+        auto ws = peer->ws.lock();
+        if (!ws || !ws->is_open())
+            continue;
+        if (msg_str.empty()) {
+            QJsonObject msg{{"type", "cursor_image"}};
+            if (seq) {
+                QJsonArray d, m;
+                for (int i = 0; i < 32; i++) {
+                    d.append(data[i]);
+                    m.append(mask[i]);
+                }
+                msg["data"] = d;
+                msg["mask"] = m;
+                msg["hotX"] = hot_x;
+                msg["hotY"] = hot_y;
+                msg["visible"] = visible;
+            } else {
+                msg["none"] = true;  // the frames hold the cursor again
+            }
+            msg_str = QJsonDocument(msg).toJson(QJsonDocument::Compact).toStdString();
+        }
+        try {
+            ws->send(msg_str);
+            peer->cursor_seq = seq;
+        } catch (const std::exception& e) {
+            fprintf(stderr, "[WebRTC] Error sending the cursor to peer %s: %s\n",
+                    peer_id.c_str(), e.what());
+        }
+    }
+}
+
 void reset_webrtc_peers() {
     if (g_server) {
         g_server->reset_peer_state();
@@ -833,6 +900,7 @@ void WebRTCServer::reset_peer_state() {
     for (const auto& [peer_id, peer] : peers_) {
         peer->needs_keyframe = true;
         peer->needs_first_frame = true;
+        peer->cursor_seq = ~0u;  // a new child counts afresh: send it again
     }
     fprintf(stderr, "[WebRTC] Reset peer state for %zu peers (will request keyframe)\n", peers_.size());
 }
@@ -870,13 +938,16 @@ void WebRTCServer::notify_codec_change(CodecType new_codec) {
 // WebRTC Server Thread Main
 //
 
-void webrtc_server_main(WebRTCServer* /*server*/, std::atomic<bool>* running) {
+void webrtc_server_main(WebRTCServer* server, std::atomic<bool>* running) {
     fprintf(stderr, "[WebRTC] Server thread starting\n");
 
-    // Server is already initialized by main thread before launching this thread
-    // Just keep thread alive until shutdown signal
+    // Server is already initialized by main thread before launching this
+    // thread. It keeps the peers' cursor image current (a change shows
+    // within 20 ms) until shutdown.
     while (running->load(std::memory_order_acquire)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        if (server)
+            server->send_cursor_image();
     }
 
     fprintf(stderr, "[WebRTC] Server thread shutting down\n");

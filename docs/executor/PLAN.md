@@ -433,8 +433,13 @@ Tools carried alongside:
 * Status: `boot_phase` goes `Finder` at the first frame and `desktop` once
   the application first polls for events. `/api/app` reads `CurApName`.
 * Input arrives on the IPC control socket and goes to Executor's EventSink
-  through `IPCInputHooks`; the cursor is drawn into the frame by the front
-  end, since Executor leaves cursors to the host.
+  through `IPCInputHooks`. The cursor is the page's own (since 2026-10-23):
+  Executor leaves cursors to the host, so the front end never draws it into
+  frames; its image goes through the IPC buffer (`cursor_seq`) and the
+  parent's `cursor_image` message to `client/cursor.js`, which makes it the
+  display's CSS cursor (the tab: the same file, from the Worker). The
+  pointer moves at the browser's speed. Pointer Lock (relative mouse) still
+  draws the client's generic arrow; screenshots have no pointer.
 * Executor menus are "sticky": releasing on a menu title leaves the menu
   open for a second click.
 * Tests: `ctest --test-dir build -L executor` (unit + smoke). On Apple's

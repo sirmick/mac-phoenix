@@ -1894,6 +1894,13 @@ class MacPhoenixClient {
                 this.cursorVisible = !!msg.visible;
                 break;
 
+            case 'cursor_image':
+                // The guest's cursor (Executor) as the page's own: never in
+                // the frames, moved by the browser (cursor.js). 'none': the
+                // frames hold it again (the ROM machines).
+                this.applyCursorImage(msg);
+                break;
+
             case 'capture':
                 logger.info('[Capture] Triggered by server!');
                 this.startAudioCapture();
@@ -2942,6 +2949,27 @@ class MacPhoenixClient {
         this.currentCursorY = y;
         this.cursorVisible = (visible !== 0);
         // In absolute mode, we use the browser's native cursor, not the overlay
+    }
+
+    // The guest's cursor image (server 'cursor_image') on the display
+    // elements, the video and the canvas, whichever shows.
+    applyCursorImage(msg) {
+        if (!this.macCursors) {
+            if (msg.none)
+                return;
+            const guestWidth = (el) => () => this.currentScreenWidth
+                || (el.videoWidth || el.width || 640);
+            this.macCursors = [this.video, this.canvas].filter(Boolean)
+                .map((el) => new MacCursor(el, guestWidth(el)));
+        }
+        for (const c of this.macCursors) {
+            if (msg.none)
+                c.release();
+            else
+                c.set({ data: msg.data, mask: msg.mask, hotX: msg.hotX, hotY: msg.hotY,
+                        visible: msg.visible });
+        }
+        window.macCursor = msg.none ? null : msg;   // for tests
     }
 
     // Render cursor on overlay canvas

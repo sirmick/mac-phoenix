@@ -1,7 +1,8 @@
 // The Mac's cursor as the page's own (a CSS cursor), so the pointer moves
 // at the browser's speed and is never part of the frames: the guest only
-// says what it looks like. Shared by Executor's tab (main.js) and
-// mac-phoenix's client (client.js).
+// says what it looks like. Shared by mac-phoenix's client (client.js, the
+// Executor backend) and Executor's tab (web/executor; the wasm build
+// copies this file there).
 //
 //   const cursor = new MacCursor(element, guestWidth);
 //   cursor.set({ data, mask, hotX, hotY, visible });   // on every change
@@ -27,6 +28,13 @@ class MacCursor {
     set(cursor) {
         this.cursor = cursor;
         this.apply();
+    }
+
+    // The frames hold the cursor again (a ROM machine): the element's
+    // stylesheet cursor back.
+    release() {
+        this.cursor = null;
+        this.element.style.cursor = '';
     }
 
     apply() {

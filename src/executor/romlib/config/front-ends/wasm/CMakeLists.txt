@@ -11,7 +11,9 @@ target_link_options(executor-web PRIVATE
 # The page: web/executor next to the module.
 add_custom_command(TARGET executor-web POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${PROJECT_SOURCE_DIR}/web/executor $<TARGET_FILE_DIR:executor-web>)
+            ${PROJECT_SOURCE_DIR}/web/executor $<TARGET_FILE_DIR:executor-web>
+    COMMAND ${CMAKE_COMMAND} -E copy   # shared with mac-phoenix's client
+            ${PROJECT_SOURCE_DIR}/client/cursor.js $<TARGET_FILE_DIR:executor-web>)
 
 # The tab under headless Chromium (web/tests/tab_smoke.mjs). Skips without
 # the playwright package: EXECUTOR_WEB_NODE_PATH is a node_modules holding

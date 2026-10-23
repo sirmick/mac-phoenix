@@ -42,6 +42,7 @@ bool StaticFileHandler::handles(const std::string& path) const {
            path == "/client.js" ||
            path == "/codec-fallback.js" ||
            path == "/upscaler.js" ||
+           path == "/cursor.js" ||
            path == "/styles.css" ||
            path == "/favicon.png" ||
            path == "/Apple.svg" ||
@@ -95,6 +96,8 @@ std::string StaticFileHandler::map_path_to_file(const std::string& path) const {
         return root_dir_ + "/codec-fallback.js";
     } else if (path == "/upscaler.js") {
         return root_dir_ + "/upscaler.js";
+    } else if (path == "/cursor.js") {
+        return root_dir_ + "/cursor.js";
     } else if (path == "/styles.css") {
         return root_dir_ + "/styles.css";
     } else if (path == "/favicon.png") {

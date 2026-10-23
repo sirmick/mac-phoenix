@@ -490,6 +490,25 @@ set_tests_properties(aslm_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# The Executor backend's cursor is the page's (client/cursor.js), on both
+# transports. Headless Chromium through playwright: PLAYWRIGHT_NODE_PATH, a
+# node_modules holding it (and PLAYWRIGHT_CHROMIUM, a browser other than its
+# own); skips without.
+set(PLAYWRIGHT_NODE_PATH "" CACHE PATH "node_modules with playwright, for the page tests")
+set(PLAYWRIGHT_CHROMIUM "" CACHE FILEPATH "Chromium for the page tests (default: playwright's)")
+foreach(codec png h264)
+  if(codec STREQUAL "png")
+    set(port 18444)
+  else()
+    set(port 18446)
+  endif()
+  add_test(NAME cursor_executor_${codec}
+    COMMAND bash ${TEST_DIR}/test_cursor_executor.sh --codec ${codec} --port ${port})
+  set_tests_properties(cursor_executor_${codec} PROPERTIES
+    TIMEOUT 120 LABELS "executor" SKIP_RETURN_CODE 77
+    ENVIRONMENT "NODE_PATH=${PLAYWRIGHT_NODE_PATH};CHROMIUM=${PLAYWRIGHT_CHROMIUM}")
+endforeach()
+
 # Executor's Toolbox gtests built with Retro68 into a 68k app and run in
 # the guest: on Apple's ROM and System (the ground truth) and on Executor.
 # Skips without Retro68 (toolchain/retro68). The cells share the app's

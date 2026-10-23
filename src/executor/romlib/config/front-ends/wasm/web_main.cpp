@@ -298,8 +298,8 @@ int main(int argc, char **argv)
     c.shared_folders.push_back("/host");
     c.open_transport = true;  /* answers with errors: no network yet */
     PhoenixVideoDriver::rectsHook = on_rects;
-    PhoenixVideoDriver::cursorHook = [](const PhoenixVideoDriver::Cursor &k) {
-        js_cursor(k.data, k.mask, k.hotX, k.hotY, k.visible);
+    c.on_cursor = [](const uint8_t data[32], const uint8_t mask[32], int hot_x, int hot_y, bool visible) {
+        js_cursor(data, mask, hot_x, hot_y, visible);
     };
     /* Sound: always taken; the page's AudioWorklet keeps a short buffer
        and drops what falls behind (the Sound Manager runs on the clock). */
