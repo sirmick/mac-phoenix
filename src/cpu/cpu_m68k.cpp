@@ -21,6 +21,7 @@
 #include "cpu_m68k.h"
 #include "platform_cpu.h"
 #include "m68k_registers.h"
+#include "vclock.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -33,7 +34,7 @@
 namespace m68k {
 void EmulOp(uint16_t opcode, struct M68kRegisters *r);
 }
-extern uint32_t ROMBaseMac;
+extern uint32_t ROMBaseMac, RAMBaseMac, RAMSize;
 extern int CPUType, FPUType;
 extern bool TwentyFourBitAddressing;
 
@@ -103,6 +104,9 @@ bool m68k_cpu_init(void)
     config.address_bits = TwentyFourBitAddressing ? 24 : 32;
     config.jit = use_jit;
     memory.set_address_bits(config.address_bits);
+    if(RAMSize)
+        vclock_ram_top = RAMBaseMac + RAMSize;
+    cpu::register_uae();
     core = cpu::create(core_name, config, memory, rom_host).release();
     if(!core)
     {

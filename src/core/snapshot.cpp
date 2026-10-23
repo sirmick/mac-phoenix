@@ -15,7 +15,7 @@
 #include "../config/emulator_config.h"
 #include "boot_progress.h"
 #include "../common/include/platform.h"
-#include "../cpu/uae_cpu/vclock.h"
+#include "vclock.h"
 
 #include <atomic>
 #include <cerrno>

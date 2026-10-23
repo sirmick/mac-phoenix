@@ -38,7 +38,7 @@ struct Config
     bool writable_images = false; // disk images read-write (default: read-only)
     bool open_transport = true;   // answer Open Transport (opentransport/)
     bool prefer_ppc = false;      // run fat applications' PowerPC code (mame-ppc)
-    std::string cpu = "uae";      // 68k core: "uae" or "mame-68k"
+    std::string cpu = "mame-68k"; // 68k core (the only one since UAE left)
 
     // Application to start instead of Executor's Browser (host path).
     std::string app;

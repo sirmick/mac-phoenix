@@ -26,6 +26,7 @@
 #include "emu.h"
 #include "m68kmusashi.h"
 #include "m68kdasm.h"
+#include "vclock.h"
 
 #include <atomic>
 #include <cstdio>
@@ -37,6 +38,11 @@ namespace {
 /* Cycles per execute_run(): the worst-case latency of an interrupt,
  * request_stop() or request_attention(). */
 const int SLICE_CYCLES = 4000;
+
+/* --deterministic (vclock.h): one clock, so one core's memory to read. */
+void count_instruction(offs_t pc) { vclock_count(pc); }
+const GuestMemory *vclock_memory;
+const uint8_t *vclock_host(uint32_t a) { return vclock_memory->host(a); }
 
 const device_type_impl MAME68K_TYPE{"mame-68k", "Motorola 680x0 (MAME Musashi)"};
 
@@ -266,8 +272,16 @@ public:
                 why = StopReason::Requested;
                 break;
             }
+            /* --deterministic (vclock.h): count instructions, and let the
+             * machine fire what came due after each slice. */
+            dev_.shim_instruction_hook = vclock_enabled ? count_instruction : nullptr;
             dev_.icount() = SLICE_CYCLES;
             dev_.run_slice();
+            if(vclock_enabled)
+            {
+                vclock_memory = &memory_;
+                vclock_quantum(vclock_host);
+            }
             if(stopped)
             {
                 why = StopReason::HostOp;

@@ -7,7 +7,7 @@
 #include <chrono>
 #include <array>
 #include <optional>
-#include "../../../cpu/uae_cpu/vclock.h"
+#include "vclock.h"
 
 /* MacPhoenix: the timer is a Qt thread sleeping until the next deadline.
    It raises the interrupt and wakes whichever host thread is idle in

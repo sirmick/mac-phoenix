@@ -8,11 +8,6 @@ OUT="$2"
 # A free port per run (a previous run's socket may still be closing).
 PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
 
-if [[ "$(cat /proc/sys/vm/mmap_min_addr 2>/dev/null)" != "0" ]]; then
-    echo "SKIP: needs vm.mmap_min_addr=0 (Executor maps guest RAM at address 0)"
-    exit 77
-fi
-
 rm -rf "$OUT" && mkdir -p "$OUT/storage"
 cat > "$OUT/cfg.json" <<JSON
 { "backend": "executor", "codec": "png", "screen": "640x480", "ram_mb": 32,

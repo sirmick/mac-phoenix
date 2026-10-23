@@ -14,8 +14,6 @@ set_tests_properties(
 
             # MakeFSSpec should resolve current directory, Executor stores 0 in FSSpec
         executor.FileTest.MakeFSSpec
-        executor.mame68k.FileTest.GetFInfo
-        executor.mame68k.FileTest.MakeFSSpec
     APPEND PROPERTIES LABELS xfail)
 
 #### Known failures, same on syn68k upstream (Linux has no creation date, and
@@ -24,6 +22,4 @@ set_tests_properties(
 set_tests_properties(
         executor.FileTest.SetFInfo_CrDat
         executor.FileTest.SetFLock
-        executor.mame68k.FileTest.SetFInfo_CrDat
-        executor.mame68k.FileTest.SetFLock
     PROPERTIES DISABLED TRUE)

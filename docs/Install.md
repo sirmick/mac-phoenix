@@ -62,8 +62,8 @@ system's older ones. A Homebrew formula draft is in `packaging/homebrew/`
 ## Host settings
 
 * **`vm.mmap_min_addr=0`** for the cores that map guest memory at host
-  address 0: `uae` (the 68k default), `kpx` (the PowerPC default) and
-  Executor on `uae`. The MAME cores (`--core mame-68k`, `--core mame-ppc`)
+  address 0: `uae` (the 68k default) and `kpx` (the PowerPC default).
+  Executor and the MAME cores (`--core mame-68k`, `--core mame-ppc`)
   don't need it.
 
   ```bash

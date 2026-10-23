@@ -61,7 +61,7 @@ A test can carry several labels.
 | `boot` | The `boot_*` tests, `command_bridge*` and `mouse_position*` (22) |
 | `bridge` | `bridge_trap`, `bridge_trap_ppc`, `bridge_trap_executor` |
 | `guest` | Tests that run an application in the guest: the suites, `bridge_trap*`, `notify_*`, `keyboard_guest*`, `drag_executor*`, `aslm_executor*`, `toolbox_suite_*`, `mpw_toolchain_executor`, `guest_builds_current`, `ot_executor*`, `threads_executor*`, `ppc_hello_executor*` (37) |
-| `mame` | Tests on the MAME cores (`--core mame-68k`, `--core mame-ppc`), plus `cpu_cores` and the `executor.mame68k.*` gtests |
+| `mame` | Tests on the MAME cores (`--core mame-68k`, `--core mame-ppc`), plus `cpu_cores` |
 | `executor` | The `--backend executor` guest cells and all `executor.*` gtests |
 | `xfail` | Executor gtests that are expected to fail (`src/executor/tests/test-properties.cmake`). Two of them on each core are also disabled |
 
@@ -98,7 +98,7 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 | `command_bridge_mame68k` | `test_command_bridge.sh --core mame-68k` | The same on mame-68k |
 | `command_bridge_ppc` | `test_command_bridge.sh --backend kpx` | The same on the G3 (Kheperix) |
 | `command_bridge_ppc_mame_m68k` | `test_command_bridge.sh --backend kpx --core mame-ppc --jit --m68k-host 1` | The same on mame-ppc with host-initiated 68k routines on a mame-68k core (C3a) |
-| `command_bridge_executor`, `command_bridge_executor_mame68k` | `test_command_bridge.sh --backend executor` | The same on Executor (UAE, mame-68k) |
+| `command_bridge_executor` | `test_command_bridge.sh --backend executor` | The same on Executor |
 
 **Guest** (label `guest`; plus `executor`, `mame`, `bridge` as noted in
 `ctest -N -L`)
@@ -110,26 +110,25 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 | `guest_suite_mame68k` | `test_guest_suite.sh --core mame-68k` | The same on mame-68k |
 | `guest_suite_ppc` | `test_guest_suite.sh --backend kpx` | The same on the G3 (Kheperix), Mac OS 9.0.4 |
 | `guest_suite_ppc_mame` | `test_guest_suite.sh --backend kpx --core mame-ppc --jit` | The same on mame-ppc's native back-end |
-| `guest_suite_executor`, `guest_suite_executor_mame68k` | `test_guest_suite.sh --backend executor` | The same on Executor (its network tests use a host echo server) |
-| `finder_suite`, `finder_suite_mame68k`, `finder_suite_executor`, `finder_suite_executor_mame68k` | `test_guest_suite.sh --sections finder` | The suite's Finder section: AppleScript drives the Finder (make, rename, duplicate, move, copy to another volume, windows, Trash) and the File Manager checks the disk |
+| `guest_suite_executor` | `test_guest_suite.sh --backend executor` | The same on Executor (its network tests use a host echo server) |
+| `finder_suite`, `finder_suite_mame68k`, `finder_suite_executor` | `test_guest_suite.sh --sections finder` | The suite's Finder section: AppleScript drives the Finder (make, rename, duplicate, move, copy to another volume, windows, Trash) and the File Manager checks the disk |
 | `macperl_smoke`, `macperl_smoke_executor` | `test_guest_suite.sh --script MacPerlSmoke.pl` | MacPerl launched by a do-script Apple Event (`/api/script`), runs Perl, reaches the Host volume and AppleScript |
 | `bridge_trap`, `bridge_trap_ppc`, `bridge_trap_executor` | `test_guest_suite.sh --app BridgeDemo.bin` | The bridge trap `$ABE5` answers and a sleeping app is woken by the host (Time Manager task, `WakeUpProcess`): `tests/guest/bridgedemo`. 68k, PowerPC (9.0.4) and Executor. Also label `bridge` |
-| `ppc_hello_executor`, `ppc_hello_executor_mame68k` | `test_guest_suite.sh --backend executor --app PPCHello.bin` | A PowerPC-only application (`tests/guest/ppc-hello`) runs on Executor on the mame-ppc core |
+| `ppc_hello_executor` | `test_guest_suite.sh --backend executor --app PPCHello.bin` | A PowerPC-only application (`tests/guest/ppc-hello`) runs on Executor on the mame-ppc core |
 | `notify_guest`, `notify_executor` | `test_guest_suite.sh --app NotifyTest.bin` | The Notification Manager from a background application (`tests/guest/notify`); the ROM machine is the reference |
-| `keyboard_guest`, `keyboard_guest_mame68k`, `keyboard_guest_executor`, `keyboard_guest_executor_mame68k` | `test_keyboard_guest.sh` | Keystrokes sent with `/api/keypress` reach the front application |
-| `drag_executor`, `drag_executor_mame68k` | `test_drag_executor.sh` | Drag and drop between SimpleText and the Finder on Executor (a clipping file on the desktop and back) |
-| `aslm_executor`, `aslm_executor_mame68k` | `test_aslm_executor.sh` | Apple's Shared Library Manager on Executor through Apple's ASLM test tools in MPW Shell; skips without `~/storage/aslm-kit` |
-| `toolbox_suite_uae`, `toolbox_suite_executor`, `toolbox_suite_executor_mame68k` | `test_toolbox_suite.sh` | Executor's Toolbox gtests built with Retro68 into a 68k application and run in the guest: on Apple's ROM and System (the ground truth) and on Executor. Expected failures in `tests/guest/toolbox_expected_<backend>.txt`. Skips without Retro68; the three share a build directory (`RESOURCE_LOCK toolbox_app`) |
+| `keyboard_guest`, `keyboard_guest_mame68k`, `keyboard_guest_executor` | `test_keyboard_guest.sh` | Keystrokes sent with `/api/keypress` reach the front application |
+| `drag_executor` | `test_drag_executor.sh` | Drag and drop between SimpleText and the Finder on Executor (a clipping file on the desktop and back) |
+| `aslm_executor` | `test_aslm_executor.sh` | Apple's Shared Library Manager on Executor through Apple's ASLM test tools in MPW Shell; skips without `~/storage/aslm-kit` |
+| `toolbox_suite_uae`, `toolbox_suite_executor` | `test_toolbox_suite.sh` | Executor's Toolbox gtests built with Retro68 into a 68k application and run in the guest: on Apple's ROM and System (the ground truth) and on Executor. Expected failures in `tests/guest/toolbox_expected_<backend>.txt`. Skips without Retro68; the two share a build directory (`RESOURCE_LOCK toolbox_app`) |
 | `mpw_toolchain_executor` | `test_mpw_toolchain.sh` | Apple's MPW (SC, Link, ToolServer) on Executor through `tools/mpw/mpw`; skips without the MPW disk (`tools/mpw/mpw setup`) |
 | `guest_builds_current` | `test_guest_builds.sh` | The committed guest programs (MacPhoenixSuite, OTTest) are their sources' builds: rebuilt with `tools/mpw/mpw` and compared |
-| `ot_executor`, `ot_executor_mame68k` | `test_ot_executor.sh` | Executor's native Open Transport through Apple's 68k OT glue (`tests/guest/ot`, an MPW tool run in ToolServer) against a host echo server |
-| `threads_executor`, `threads_executor_mame68k` | `test_threads_executor.sh` | The Thread Manager on Executor through UserLand Frontier's UserTalk threads (`/api/script`) |
+| `ot_executor` | `test_ot_executor.sh` | Executor's native Open Transport through Apple's 68k OT glue (`tests/guest/ot`, an MPW tool run in ToolServer) against a host echo server |
+| `threads_executor` | `test_threads_executor.sh` | The Thread Manager on Executor through UserLand Frontier's UserTalk threads (`/api/script`) |
 
 **Executor gtests** (label `executor`)
 
 `executor.<Suite>.<Test>`: Executor's Toolbox gtests (`src/executor/tests`)
-built natively and run on the UAE core; `executor.mame68k.<Suite>.<Test>`:
-the same on mame-68k (also label `mame`); `executor.compilefail.*`: checks
+built natively and run on mame-68k; `executor.compilefail.*`: checks
 that misuse of the guest value types fails to compile.
 
 ### Configuration

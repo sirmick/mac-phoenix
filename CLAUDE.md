@@ -39,11 +39,10 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom
 # Playwright E2E tests (requires running emulator)
 npx playwright test
 
-# Executor backend: no ROM, C++ Toolbox (docs/executor/PLAN.md). On the UAE
-# core (default) it needs vm.mmap_min_addr=0; --core mame-68k does not
-# (Executor's four address windows). Pick "Executor" in the web UI, or:
+# Executor backend: no ROM, C++ Toolbox (docs/executor/PLAN.md), on the
+# mame-68k core only (Executor's four address windows, no sysctl). Pick
+# "Executor" in the web UI, or:
 ./build/mac-phoenix --backend executor
-./build/mac-phoenix --backend executor --core mame-68k
 # ... on Apple's 7.5.5 System with real Finder (Settings > System disk):
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img
 # ... with sound (Executor mixes in C++ and feeds the same Opus/WebRTC path):
@@ -98,7 +97,7 @@ further backends.
 |---------|------|------|-------|---------|
 | `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`) or `--core mame-68k` (MAME's Musashi: PMMU, softfloat FPU, several instances per process; `src/cpu/mame/`; `musashi` names it too, the vendored v3.32 is gone) | Fast (~5s boot) | Default, end users |
 | `kpx` | ppc | Power Mac G3 machine; CPU core `--core kpx` (Kheperix, +optional `--jit`) or `--core mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64 back-end, `--no-jit` UML interpreter; `src/cpu/mame/`, installer `src/cpu/kpx/cpu_ppc_mame.cpp`) | Medium | Default for PPC |
-| `executor` | m68k | Executor 2000 Toolbox in C++ on UAE; no ROM; PowerPC applications' code on `mame-ppc` (PowerCore facade) | Fast start | Toolbox reimplementation work (`src/executor/`) |
+| `executor` | m68k | Executor 2000 Toolbox in C++ on `mame-68k`; no ROM; PowerPC applications' code on `mame-ppc` (PowerCore facade) | Fast start | Toolbox reimplementation work (`src/executor/`) |
 
 MAME cores (docs/cpu/PLAN.md): MAME's Musashi with PMMU and FPU as the 68k
 core `mame-68k` (C1, done), MAME's PowerPC recompiler as the PPC core
@@ -109,7 +108,7 @@ emulator on the PPC machine (C3a: `--m68k-host 1` runs host-initiated
 trap; `2` is an experiment that breaks the bridge; the main 68k thread is
 still the nanokernel's emulator). `--core mame-ppc --jit` boots 7.5.5 to the
 desktop in 0.9 s and Mac OS 9.0.4 in 9.7 s. Reference checkout:
-`/home/mick/src/mame-src`. Tests: `ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|guest_suite_ppc_mame|executor\.mame68k\.'` (`boot_ppc_mame_jit` is the native back-end;
+`/home/mick/src/mame-src`. Tests: `ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|guest_suite_ppc_mame'` (and `-L executor`: Executor runs only on mame-68k) (`boot_ppc_mame_jit` is the native back-end;
 `guest_suite_ppc_mame` is the Mac OS 9.0.4 guest suite on it;
 `command_bridge_ppc_mame_m68k` is C3a). `--debug-mame-ppc` prints host ops,
 exceptions and a per-second PC and framebuffer sample from the mame-ppc
@@ -250,7 +249,7 @@ CPU:
                              (default: uae; backend implies architecture;
                              executor needs no ROM)
   --core NAME                CPU core for the backend's architecture:
-                             68k uae | mame-68k (default: uae; ROM machine and Executor;
+                             68k uae | mame-68k (default: uae; Executor: mame-68k only;
                              musashi = mame-68k since the vendored v3.32 was retired)
                              ppc kpx | mame-ppc (default: kpx)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)

@@ -3,8 +3,7 @@
  *
  * Executor was written against syn68k. This header keeps that API so the
  * Toolbox code compiles unchanged. syn68k_common.cpp implements it on a
- * cpu::Core (src/cpu/core/cpu_core.h): MacPhoenix's UAE interpreter or
- * Musashi.
+ * cpu::Core (src/cpu/core/cpu_core.h): MAME's Musashi (mame-68k).
  *
  * Addressing: Executor's four 1GB windows, as upstream. The top two bits
  * of a guest address pick a window; host = guest + ROMlib_offsets[window].
@@ -16,11 +15,8 @@
  *   3  the binary's own data: the callback page, trap tables, GUEST<>
  *      globals, string literals (_etext .. _end)
  *
- * On the UAE core the windows are identity instead (all offsets 0): UAE
- * fetches instructions through one base pointer, so guest RAM is mapped
- * at host 0 (vm.mmap_min_addr=0) and everything else lives below 4GB.
- * The choice follows the core (syn68k_select_engine) and is fixed at the
- * first allocation.
+ * The windows are placed at the first allocation, anywhere in the host
+ * address space.
  *
  * The register file lives in `cpu_state` while host code runs (inside a
  * callback or between guest calls) and in the core while guest code runs.
@@ -308,11 +304,9 @@ void m68kaddr(const uint16 *pc);
 /* MacPhoenix additions. */
 
 /* Map SIZE bytes of guest RAM at guest address 0 (window 0). Returns its
- * host base or aborts. Identity windows (UAE) map it at host 0, which
- * needs vm.mmap_min_addr=0. */
+ * host base or aborts. */
 void *syn68k_map_guest_ram(size_t size);
-/* Allocate host memory the guest can address (window 1; below 4GB with
- * identity windows). */
+/* Allocate host memory the guest can address (window 1). */
 void *syn68k_alloc_low(size_t size);
 void syn68k_free_low(void *p, size_t size);
 /* True if [addr, addr+len) lies inside memory the facade knows the guest
@@ -320,7 +314,7 @@ void syn68k_free_low(void *p, size_t size);
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len);
 /* Turn a JIT on before initialize_68k_emulator() (none yet). */
 void syn68k_set_jit(int enabled);
-/* Pick the 68k core, "uae" (default) or "mame-68k", before
+/* Pick the 68k core, "mame-68k" (the default and only one), before
  * initialize_68k_emulator(). Returns 0 for an unknown name or once the
  * emulator has started. */
 int syn68k_select_engine(const char *name);

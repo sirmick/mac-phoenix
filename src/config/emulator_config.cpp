@@ -356,10 +356,12 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
  * Merge JSON into both runtime config AND file_config_ (for UI/API changes).
  * Only values merged here will be persisted on save().
  */
-// The CPU cores each backend runs on (--core). Executor runs on the 68k
-// cores, as the ROM 68k machine does.
+// The CPU cores each backend runs on (--core). Executor runs on mame-68k
+// only (UAE left it, docs/executor/DIRECTION.md W0); the ROM 68k machine
+// on either 68k core.
 void EmulatorConfig::normalize_cpu_core() {
     const bool ppc = backend == Backend::KPX;
+    const bool executor = backend == Backend::EXECUTOR;
     // The vendored Musashi v3.32 was retired (docs/cpu/PLAN.md, C1e): its
     // name means MAME's Musashi now.
     if (cpu_core == "musashi") {
@@ -367,10 +369,13 @@ void EmulatorConfig::normalize_cpu_core() {
         cpu_core = "mame-68k";
     }
     const bool fits = ppc ? (cpu_core == "kpx" || cpu_core == "mame-ppc")
-                          : (cpu_core == "uae" || cpu_core == "mame-68k");
+                    : executor ? cpu_core == "mame-68k"
+                    : (cpu_core == "uae" || cpu_core == "mame-68k");
     if (fits)
         return;
-    const char* def = ppc ? "kpx" : "uae";
+    const char* def = ppc ? "kpx" : executor ? "mame-68k" : "uae";
+    // "uae" is the default core, and what older Executor configs say: no
+    // message for that.
     if (!cpu_core.empty() && cpu_core != "uae" && cpu_core != "kpx")
         fprintf(stderr, "[Config] CPU core '%s' does not run the %s backend; using '%s'\n",
                 cpu_core.c_str(), backend_string(), def);

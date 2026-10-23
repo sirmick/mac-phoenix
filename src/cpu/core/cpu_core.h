@@ -382,4 +382,11 @@ std::vector<std::string> available(Arch arch);
 std::unique_ptr<Core> create(const std::string &name, const Config &config,
                              GuestMemory &memory, Host &host);
 
+using CoreFactory = std::unique_ptr<Core> (*)(const Config &, GuestMemory &, Host &);
+
+/* UAE is in its own library (cpu_core_uae), linked only where the ROM
+ * machine is: register_uae() (uae_core.cpp) adds it through add_uae(). */
+void add_uae(CoreFactory factory);
+void register_uae();
+
 }  // namespace cpu

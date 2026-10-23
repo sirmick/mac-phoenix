@@ -25,8 +25,8 @@
 #
 # Skips (77) without the Retro68 toolchain, a ROM (uae) or the disk image.
 #
-# In ctest as toolbox_suite_{uae,executor,executor_mame68k} (2026-10-16):
-# 94 tests; on Executor (both cores) the two known failures, on 7.5.5 the
+# In ctest as toolbox_suite_{uae,executor} (2026-10-16):
+# 94 tests; on Executor the two known failures, on 7.5.5 the
 # three whose expectations are wrong (the expected-failure lists). The
 # layout-dependent crashes noted on 2026-10-09 (one CODE segment since) no
 # longer show.

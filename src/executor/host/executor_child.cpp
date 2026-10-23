@@ -4,7 +4,7 @@
  * Same contract as the ROM backends (see src/ipc/ipc_protocol.h): frames go
  * into the SHM triple buffer, input arrives on the control socket, status
  * fields drive /api/status and /api/app. The difference is what runs: the
- * Executor Toolbox on UAE, with no ROM.
+ * Executor Toolbox on MAME's Musashi, with no ROM.
  */
 #include "executor_child.h"
 #include <syn68k_public.h>
@@ -18,7 +18,6 @@
 #include <csignal>
 #include <cstdio>
 
-extern "C++" uint32_t uae_current_pc(void);
 #include "../../core/snapshot.h"
 #include "../../common/include/m68k_registers.h"
 
@@ -154,7 +153,7 @@ void crash_snapshot(int sig, siginfo_t *info, void *uctx)
 {
     static char message[96];
     snprintf(message, sizeof message, "host signal %d at guest pc $%08x, address %p",
-             sig, uae_current_pc(), info->si_addr);
+             sig, (unsigned)syn68k_current_pc(), info->si_addr);
     fprintf(stderr, "[Executor] %s: snapshotting\n", message);
     syn68k_describe_cpu(stderr);
     fatal_snapshot(message);
@@ -204,7 +203,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     control_ipc_start();
     buf->state = IPC_STATE_RUNNING;
 
-    // POST /api/snapshot: dump guest RAM (identity-mapped at 0) when the
+    // POST /api/snapshot: dump guest RAM (guest address 0 up) when the
     // app next asks for events, where the heap is consistent.
     executor_host::set_event_poll_hook([] {
         if (!snapshot_pending())

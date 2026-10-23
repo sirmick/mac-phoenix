@@ -51,7 +51,7 @@ Big parallel builds can run out of memory on a small box; `-j4` is safe.
 
 # Executor (no ROM), on the System Folder of a disk image in <storage>/images
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img
-./build/mac-phoenix --backend executor --core mame-68k --executor-system 7.5.5.img
+./build/mac-phoenix --backend executor --executor-system 7.5.5.img
 
 # Custom port + screen
 ./build/mac-phoenix --port 9000 --screen 1024x768 ~/roms/quadra.rom
@@ -64,8 +64,7 @@ Big parallel builds can run out of memory on a small box; `-j4` is safe.
 ./build/mac-phoenix --screenshots --no-webserver ~/roms/quadra.rom
 ```
 
-Executor on the UAE core needs `vm.mmap_min_addr=0`; on `--core mame-68k`
-it does not. `--executor-system` takes a disk image in `<storage>/images`
+Executor runs on `mame-68k` and needs no `vm.mmap_min_addr`. `--executor-system` takes a disk image in `<storage>/images`
 (its System Folder is extracted into `<storage>/executor-systems` on first
 use and the image is mounted read-only beside it) or the name of a prepared
 System there. Without it Executor runs on its own data folder

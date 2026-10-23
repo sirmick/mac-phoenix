@@ -59,7 +59,7 @@ Two separate choices:
 |---------|------|------------------|-----------|
 | `uae` (default) | m68k | `uae` (default; `--jit` for the UAE JIT on x86), `mame-68k` (MAME's Musashi; `musashi` is an alias) | `cpu_m68k_install()` (`src/cpu/cpu_m68k.cpp`) |
 | `kpx` | ppc | `kpx` (default; Kheperix, `--jit` for its dyngen JIT), `mame-ppc` (MAME's PowerPC recompiler; `--jit` native x86-64/arm64 back-end, `--no-jit` UML interpreter) | `cpu_ppc_kpx_install()` (`src/cpu/kpx/cpu_ppc_kpx.cpp`) or `cpu_ppc_mame_install()` (`src/cpu/kpx/cpu_ppc_mame.cpp`) |
-| `executor` | m68k | `uae` (default) or `mame-68k` | `src/executor/` (`executor_child_main()`, `executor_direct_main()`) |
+| `executor` | m68k | `mame-68k` | `src/executor/` (`executor_child_main()`, `executor_direct_main()`) |
 
 `cpu::Core` (`src/cpu/core/cpu_core.h`) is the one interface for the cores
 `uae`, `mame-68k` and `mame-ppc`: `GuestMemory` (the 32-bit guest address
@@ -120,9 +120,8 @@ Mac address, and no sysctl is needed.
 
 ### Executor
 
-No ROM. On the `uae` core guest addresses are host addresses (needs
-`vm.mmap_min_addr=0`); `--core mame-68k` uses four address windows and does
-not. See `executor/MEMORY_MAP.md`.
+No ROM. Runs on `mame-68k` in four address windows (no
+`vm.mmap_min_addr`). See `executor/MEMORY_MAP.md`.
 
 ## EmulOps and traps
 

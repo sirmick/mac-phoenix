@@ -24,7 +24,7 @@ namespace {
 
 namespace R = cpu::ppc;
 
-/* Static so it links below 4GB (identity) or in the data window. */
+/* Static: in the data window (3). */
 uint32_t exit_cell;
 
 std::atomic<cpu::Core *> the_core{nullptr};

@@ -15,7 +15,7 @@ extern "C" {
 #include "uae_cpu/cpu_emulation.h"  // C++ linkage for Init680x0/Exit680x0
 #include "uae_cpu/m68k.h"
 #include "uae_cpu/newcpu.h"
-#include "uae_cpu/vclock.h"
+#include "vclock.h"
 #include "uae_cpu/memory.h"
 
 #include <cstdlib>

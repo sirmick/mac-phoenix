@@ -22,7 +22,7 @@
 #
 # KEEP_LOG=PATH keeps the emulator's log.
 #
-# Usage: tests/test_ot_executor.sh [--port N] [--core uae|mame-68k] [--no-aslm]
+# Usage: tests/test_ot_executor.sh [--port N] [--core mame-68k] [--no-aslm]
 set -uo pipefail
 
 PORT=18394

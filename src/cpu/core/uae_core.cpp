@@ -350,4 +350,9 @@ std::unique_ptr<Core> create_uae(const Config &config, GuestMemory &memory, Host
     return std::unique_ptr<Core>(new UaeCore(config, delta, memory, host));
 }
 
+void register_uae()
+{
+    add_uae(create_uae);
+}
+
 }  // namespace cpu

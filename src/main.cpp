@@ -153,7 +153,7 @@ static void reserve_mac_address_space_early()
 #include "webrtc/webrtc_server.h"
 #include "drivers/video/encoders/codec.h"
 #include "core/snapshot.h"
-#include "cpu/uae_cpu/vclock.h"
+#include "vclock.h"
 
 // WebRTC globals
 namespace webrtc {

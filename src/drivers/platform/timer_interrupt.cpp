@@ -16,7 +16,7 @@
 #include "uae_wrapper.h"   // For intlev()
 #include "macos_util.h"    // For HasMacStarted()
 #include "timer.h"         // TimerVirtualPoll()
-#include "../../cpu/uae_cpu/vclock.h"
+#include "vclock.h"
 
 #include <QElapsedTimer>
 #include <QThread>

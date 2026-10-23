@@ -102,10 +102,9 @@ the CPU emulator.
 |---|---|---|---|
 | `uae` (default) | 68k | `uae` (default), `mame-68k` | `--jit` for UAE's JIT |
 | `kpx` | PowerPC | `kpx` (default), `mame-ppc` | `--jit`: Kheperix's dyngen, or MAME's native x86-64/arm64 back-end |
-| `executor` | 68k (+ PowerPC applications) | `uae` (default), `mame-68k` | no ROM; PowerPC code always on `mame-ppc` |
+| `executor` | 68k (+ PowerPC applications) | `mame-68k` | no ROM; PowerPC code always on `mame-ppc` |
 
-The `uae` and `kpx` cores (and Executor on `uae`) map guest memory at host
-address 0, which needs `sudo sysctl vm.mmap_min_addr=0`; the MAME cores
+The `uae` and `kpx` cores map guest memory at host address 0, which needs `sudo sysctl vm.mmap_min_addr=0`; the MAME cores
 don't. Plans and status: [docs/cpu/PLAN.md](docs/cpu/PLAN.md).
 
 ## Using it

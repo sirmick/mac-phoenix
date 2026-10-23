@@ -580,7 +580,7 @@ def main():
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_setup)
     p = sub.add_parser("start", help="start the session")
-    p.add_argument("--core", help="CPU core (uae, mame-68k)")
+    p.add_argument("--core", help="CPU core (mame-68k)")
     p.add_argument("--emu", action="append", metavar="FLAG",
                    help="extra emulator flag (repeatable), e.g. --emu=--executor-ot")
     p.set_defaults(fn=cmd_start)

@@ -55,11 +55,6 @@ Pick a different `--port`. There is no separate signaling port: `/ws`
 rides the same TCP listener. Tests use fixed ports in 18080-18442
 ([Testing.md](Testing.md#running-in-parallel)).
 
-### Executor won't start on the UAE core
-
-Executor on `--core uae` needs `sysctl vm.mmap_min_addr=0`.
-`--core mame-68k` doesn't.
-
 ### Log says `Desktop ready` but the screen is hourglass-only or black
 
 The `Desktop ready (Finder idle, no modal)` milestone comes from the Finder

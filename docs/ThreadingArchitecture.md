@@ -67,8 +67,7 @@ through the SHM).
   reset is stop + start; the guest's memory and every global in the
   emulator start fresh each time.
 - **Separate address spaces.** The child maps the guest memory (up to a
-  4 GB reservation for `mame-ppc`, fixed low addresses for Kheperix and
-  Executor on UAE); the parent stays small.
+  4 GB reservation for `mame-ppc`, fixed low addresses for Kheperix); the parent stays small.
 
 ## IPC
 

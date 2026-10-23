@@ -1,12 +1,12 @@
 # =============================================================================
-# Executor core (Executor 2000, MIT) on MacPhoenix's UAE 68k core.
+# Executor core (Executor 2000, MIT) on MAME's Musashi (mame-68k).
 # See docs/executor/PLAN.md.
 #
 #   executor_cpu          syn68k API facade over a cpu::Core + PowerCore on mame-ppc
 #   romlib                the imported Toolbox
 #   front-end-phoenix     video/cursor front end + executor_host API,
 #                         linked into mac-phoenix (`--backend executor`)
-#   executor_tests        Executor's gtest suite, now on UAE
+#   executor_tests        Executor's gtest suite, on mame-68k
 # =============================================================================
 
 # Build tools and libraries Executor needs. Missing ones skip the Executor
@@ -35,20 +35,10 @@ endif()
 find_package(Threads REQUIRED)
 add_compile_definitions(BOOST_ALL_NO_LIB)
 
-# Guest RAM lives at host 0 and the guest dereferences low addresses as
-# ordinary data. Never let the compiler treat those as UB.
+# Guest address 0 is ordinary data to the Toolbox (low memory globals,
+# nil handles dereferenced on purpose). Never let the compiler treat a
+# guest-to-host conversion of 0 as UB.
 set(EXECUTOR_COMMON_FLAGS -fno-delete-null-pointer-checks)
-
-# Everything the guest can address must be below 4GB, which includes the
-# binary's own data (callback page, trap tables, GUEST<> globals).
-function(executor_link_low target)
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-        target_link_options(${target} PRIVATE
-            "-T${PROJECT_SOURCE_DIR}/ldscripts/linux-x86_64.ld")
-    else()
-        message(WARNING "${target}: no low-address link layout for this platform")
-    endif()
-endfunction()
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMakeRC.cmake)
 cmrc_add_resource_library(resources
@@ -71,7 +61,7 @@ cmrc_add_resource_library(resources
 
 # --- CPU facade --------------------------------------------------------------
 # syn68k_common.cpp implements the syn68k API on a cpu::Core
-# (src/cpu/core), chosen at startup (--core): uae or mame-68k.
+# (src/cpu/core), chosen at startup (--core): mame-68k.
 add_library(executor_cpu STATIC
     cpu/syn68k_common.cpp
     cpu/PowerCore.cpp
@@ -91,8 +81,7 @@ phoenix_exempt_from_hardening(romlib)
 phoenix_exempt_from_hardening(front-end-phoenix)
 target_compile_options(front-end-phoenix PRIVATE ${EXECUTOR_COMMON_FLAGS})
 
-# Into the one binary. mac-phoenix already links UAE (and gets its
-# g_platform, CPUType, intlev, ... from src/core and src/cpu).
+# Into the one binary (its g_platform comes from src/core).
 target_sources(mac-phoenix PRIVATE host/executor_child.cpp)
 target_link_libraries(mac-phoenix PRIVATE front-end-phoenix)
 target_compile_definitions(mac-phoenix PRIVATE HAVE_EXECUTOR=1)
@@ -100,16 +89,12 @@ target_include_directories(mac-phoenix PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/host
     ${CMAKE_CURRENT_SOURCE_DIR}/romlib/config/front-ends/phoenix)
 
-# Stand-ins for the mac-phoenix symbols UAE needs, for the test binary.
-# Compiled into each consumer (an archive would sit before the UAE libs
-# that reference it on the link line).
-add_library(executor_uae_glue INTERFACE)
-target_sources(executor_uae_glue INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpu/uae_glue.cpp)
-target_include_directories(executor_uae_glue INTERFACE ${PROJECT_SOURCE_DIR}/src/common/include)
-target_link_libraries(executor_uae_glue INTERFACE
-    -Wl,--whole-archive cpuemu_ff cpustbl_ff -Wl,--no-whole-archive
-    -Wl,--start-group uae_cpu uae_jit vm_alloc executor_cpu cpu_core -Wl,--end-group
-    Qt6::Core Threads::Threads)
+# g_platform for the test binaries, which have no src/core. Compiled into
+# each consumer (an archive would sit before the libraries that use it).
+add_library(executor_platform_glue INTERFACE)
+target_sources(executor_platform_glue INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpu/platform_glue.cpp)
+target_include_directories(executor_platform_glue INTERFACE ${PROJECT_SOURCE_DIR}/src/common/include)
+target_link_libraries(executor_platform_glue INTERFACE executor_cpu cpu_core Qt6::Core Threads::Threads)
 
 # --- Tests ---------------------------------------------------------------------
 if(BUILD_TESTS)

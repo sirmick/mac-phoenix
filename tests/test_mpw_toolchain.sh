@@ -19,7 +19,7 @@
 # Skips (exit 77) without the MPW disk (tools/mpw/mpw setup) or the 7.5.5
 # image.
 #
-# Usage: tests/test_mpw_toolchain.sh [--port N] [--core uae|mame-68k]
+# Usage: tests/test_mpw_toolchain.sh [--port N] [--core mame-68k]
 set -uo pipefail
 
 PORT=18392

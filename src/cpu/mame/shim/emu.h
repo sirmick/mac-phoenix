@@ -1066,8 +1066,11 @@ public:
     u64 attotime_to_cycles(const attotime &t) const { return t.as_ticks(device_.clock()); }
     attotime local_time() const { return cycles_to_attotime(total_cycles()); }
 
-    /* Debugger hooks: there is no MAME debugger here. */
-    void debugger_instruction_hook(offs_t) {}
+    /* Debugger hooks: there is no MAME debugger here. The instruction
+     * hook is the adapter's when it sets one (mame-68k: the virtual
+     * clock's per-instruction count, vclock.h). */
+    void (*shim_instruction_hook)(offs_t) = nullptr;
+    void debugger_instruction_hook(offs_t pc) { if(shim_instruction_hook) shim_instruction_hook(pc); }
     void debugger_exception_hook(int) {}
     void debugger_privilege_hook() {}
     void debugger_wait_hook() {}

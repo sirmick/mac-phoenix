@@ -14,7 +14,7 @@
 #
 # Usage:
 #   tests/test_drag_executor.sh [--timeout N] [--port N] [--disk PATH]
-#                               [--core uae|mame-68k]
+#                               [--core mame-68k]
 #
 # Skips (exit 77) if the disk image isn't available.
 set -euo pipefail

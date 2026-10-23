@@ -50,7 +50,7 @@
 
 #include <algorithm>
 
-#include "../../cpu/uae_cpu/vclock.h"
+#include "vclock.h"
 using namespace Executor;
 
 /* #define	EVENTTRACE */

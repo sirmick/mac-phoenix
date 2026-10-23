@@ -20,7 +20,7 @@
 
 #include "sysdeps.h"
 #include "timer.h"
-#include "../cpu/uae_cpu/vclock.h"
+#include "vclock.h"
 #include "macos_util.h"
 #include "main.h"
 #include "cpu_emulation.h"

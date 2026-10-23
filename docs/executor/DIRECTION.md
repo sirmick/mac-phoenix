@@ -249,7 +249,7 @@ to use (RAM + 64KB tail, a 16–32MB pool) behind the memory host edge.
 | | Step | Gate |
 |---|---|---|
 | W-spike | minicoro on Emscripten fibers + `emscripten_sleep` under Asyncify, in a Worker | two coroutines switching, each yielding to the browser, a C++→callback→yield stack resumed. **Passed 2026-10-23** (Emscripten 5.0.7, node 22 and a headless-Chromium Worker): yield from C++ → indirect call → `std::function` → `mco_yield`, coroutine stacks from our allocator (`alloc_cb`), one coroutine writing into another's frame, `emscripten_sleep` inside a coroutine; the page's main thread kept ticking. A hot switch-and-indirect-call loop: native 246 ms, wasm 245 ms, wasm with Asyncify instrumenting the loop 350 ms (≈1.4×). minicoro's header includes `<emscripten/fiber.h>` inside its `extern "C"`, which Emscripten 5's C++ templates reject: include `<emscripten.h>` and `<emscripten/fiber.h>` first. Yield to the browser at idle and per frame, not on a counter: each `emscripten_sleep(0)` is a `setTimeout` (≈0.7 ms) |
-| W0 | Native clean-up: UAE out of Executor, minicoro (D2), Boost → `std`, generated files committed, host edges (files, clock, sockets, faults, windows) as interfaces (D3) | the native suites pass as today |
+| W0 | Native clean-up: UAE out of Executor, minicoro (D2), Boost → `std`, generated files committed, host edges (files, clock, sockets, faults, windows) as interfaces (D3) | the native suites pass as today. **UAE out 2026-10-23**: the facade has only the four windows (no identity layout, `MAP_32BIT` pool or low link for `executor_tests`), `--core` for Executor is `mame-68k` (a saved `uae` is replaced), the `_mame68k` twin cells merged into the plain ones; UAE is its own library (`cpu_core_uae`, `cpu::register_uae()` from the ROM machine), so `executor_tests` links no UAE. `--deterministic` moved with it: the virtual clock is core-independent (`src/common/vclock.cpp`), mame-68k counts instructions through the shim's instruction hook |
 | W1 | wasm under node | `ctest --test-dir build-wasm -L executor` |
 | W2 | A tab: Worker, `OffscreenCanvas`, DOM input, Executor's own System | the built-in Browser app in a tab |
 | W3 | A usable site: Finder, OPFS, disk image upload, WebAudio, JS automation (`/api/ui`/`/api/text` on the Worker) | Playwright drives an uploaded application |
@@ -323,7 +323,7 @@ D2's clean-up of the 68k side; C2 and C3 are independent of D.
 
 | | Step | Gate |
 |---|---|---|
-| D1 | Musashi behind the syn68k facade, four windows restored | done except dropping UAE from Executor: `ctest -L executor` and the `_executor` bridge suites match UAE; no `mmap_min_addr` on Musashi |
+| D1 | Musashi behind the syn68k facade, four windows restored | done 2026-10-23: `ctest -L executor` and the `_executor` bridge suites match UAE; no `mmap_min_addr`; UAE out of Executor (W0) |
 | D2 | minicoro Process Manager; timer at yield points | Finder + several applications switching as today; Qt gone from `romlib` |
 | D3 | Dependencies and host edges | builds with only a C++17 compiler (generated files committed) |
 | D4 | wasm build (W steps in section 4; decided 2026-10-23) | built-in Browser, then the Finder, in a browser tab |
@@ -356,7 +356,8 @@ entries the same way (`src/cpu/core/platform_cpu.cpp`), and UAE's private
 plumbing left the Platform table. The whole test suite passes on both
 cores (ROM boot, SE, bridge, guest, Finder, keyboard; Executor's guest
 suite has the same two network failures on both). Musashi needed one local
-fix: 68040 line F (CINV/CPUSH/PFLUSH/PTEST, FDBcc/FTRAPcc).
+fix: 68040 line F (CINV/CPUSH/PFLUSH/PTEST, FDBcc/FTRAPcc). Since
+2026-10-23 Executor runs on `mame-68k` alone (W0).
 
 **Four windows (done for Musashi).** On the Musashi core Executor uses
 upstream's four 1GB windows (`syn68k_public.h`): 0 guest RAM (plus a 64KB
@@ -372,8 +373,9 @@ connect that times out (`openFailed` after the 60s ULP timeout) never
 returns to MacPerl; UAE does. On Musashi the gtest suite matches UAE
 (`ctest -L musashi`), Apple's 7.5.5 Finder boots, `command_bridge`,
 `keyboard_guest` and `finder_suite` pass, `guest_suite` matches UAE (the
-same two network failures). Next: drop UAE from Executor (then the low
-link and `MAP_32BIT` go too), which C1 makes the natural moment.
+same two network failures). UAE left Executor on 2026-10-23 (W0), and
+the identity layout, the `MAP_32BIT` pool and the test binary's low link
+with it. (mac-phoenix itself stays linked low for Kheperix.)
 
 ## Open questions
 

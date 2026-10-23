@@ -20,7 +20,7 @@
 #include <PowerCore.h>
 #include <base/debugger.h>
 #include <chrono>
-#include "../../../cpu/uae_cpu/vclock.h"
+#include "vclock.h"
 
 using namespace Executor;
 

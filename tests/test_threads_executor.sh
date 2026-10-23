@@ -22,7 +22,7 @@
 #              unwind at ExitToShell) and another application launches
 #
 # Usage:
-#   tests/test_threads_executor.sh [--timeout N] [--port N] [--core uae|mame-68k]
+#   tests/test_threads_executor.sh [--timeout N] [--port N] [--core mame-68k]
 #
 # Skips (exit 77) if the 7.5.5 image with Frontier isn't available.
 set -euo pipefail

@@ -25,7 +25,7 @@ changed, its licence, and where the rest is documented.
 | `src/` | `src/executor/romlib/` |
 | `multiversal/` (submodule) | `src/executor/multiversal/` (vendored) |
 | `tests/` | `src/executor/tests/` |
-| `syn68k/` (submodule): the 68k CPU | `src/executor/cpu/syn68k_common.cpp`: the syn68k API on a `cpu::Core` (UAE or MAME's 68000) |
+| `syn68k/` (submodule): the 68k CPU | `src/executor/cpu/syn68k_common.cpp`: the syn68k API on a `cpu::Core` (MAME's 68000) |
 | `PowerCore/` (submodule): the PowerPC CPU | `src/executor/cpu/PowerCore.*`: the same interface on MAME's PowerPC recompiler |
 | `src/config/front-ends/{qt,x,sdl,sdl2,wayland,...}` | `romlib/config/front-ends/phoenix/` (video, cursor, sound to the web UI) and `src/executor/host/executor_child.cpp` |
 | `cxmon/`, `lmdb/` | not imported |
@@ -58,9 +58,9 @@ to upstream files are described in
 ### The CPU side (not in upstream's tree)
 
 * **68k:** the syn68k API (`cpu_state`, callbacks, A-line traps,
-  interrupts, `CALL_EMULATOR`) implemented over a `cpu::Core`: UAE
-  (`--core uae`: identity addressing, needs `vm.mmap_min_addr=0`) or MAME's
-  68000 (`--core mame-68k`: Executor's four address windows). See PLAN.md,
+  interrupts, `CALL_EMULATOR`) implemented over a `cpu::Core`, MAME's
+  68000 (`mame-68k`), in Executor's four address windows. UAE ran it until
+  2026-10-23 (identity addressing, `vm.mmap_min_addr=0`). See PLAN.md,
   "Shape".
 * **PowerPC:** `PowerCore` keeps upstream's interface (`PowerCoreState`,
   `execute()`, `syscall`, `handleInterrupt`) and runs on MAME's PowerPC

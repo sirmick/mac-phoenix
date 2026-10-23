@@ -28,7 +28,7 @@ endif()
 # Don't link uae_all/kpx here - let top-level CMakeLists handle link order
 # with --start-group to resolve circular deps with core
 find_package(Qt6 6.4 COMPONENTS Core REQUIRED)
-target_link_libraries(cpu PRIVATE Qt6::Core cpu_core)
+target_link_libraries(cpu PRIVATE Qt6::Core cpu_core cpu_core_uae)
 
 target_include_directories(cpu PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/uae_cpu

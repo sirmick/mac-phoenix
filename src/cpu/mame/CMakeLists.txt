@@ -48,6 +48,10 @@ target_compile_features(mame_softfloat3 PRIVATE cxx_std_20)
 # others) and its cpu::Core adapter. m68kops.cpp is generated from
 # m68k_in.lst by m68kmake.py and committed; the generator is not a build
 # requirement.
+# The --deterministic virtual clock (vclock.h), which the 68k cores drive.
+add_library(vclock STATIC ${PROJECT_SOURCE_DIR}/src/common/vclock.cpp)
+target_include_directories(vclock PUBLIC ${PROJECT_SOURCE_DIR}/src/common/include)
+
 add_library(mame_m68k STATIC
     m68000/m68kcpu.cpp
     m68000/m68kops.cpp
@@ -59,7 +63,7 @@ target_include_directories(mame_m68k PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/m68000
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/softfloat3/build/MAME)
 target_compile_options(mame_m68k PRIVATE -O2 ${MAME_WARNINGS})
-target_link_libraries(mame_m68k PUBLIC mame_shim PRIVATE mame_softfloat3)
+target_link_libraries(mame_m68k PUBLIC mame_shim vclock PRIVATE mame_softfloat3)
 
 # asmjit (zlib licence; LICENSE-asmjit), the native back-ends' assembler.
 # MAME's copy, all targets compiled; the back-end picks x86 or a64.

@@ -22,7 +22,7 @@
 #include "macos_util.h"
 #include "timer.h"
 #include "platform.h"
-#include "../cpu/uae_cpu/vclock.h"
+#include "vclock.h"
 
 #include <errno.h>
 

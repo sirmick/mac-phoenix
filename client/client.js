@@ -3774,13 +3774,13 @@ function backendIsPpc(backend) {
     return backend === 'kpx';
 }
 
-// Executor: Toolbox reimplemented in C++ on the UAE 68k core. No ROM.
+// Executor: Toolbox reimplemented in C++ on MAME's 68k core. No ROM.
 function backendIsExecutor(backend) {
     return backend === 'executor';
 }
 
 // CPU cores per architecture (--core / cpu_core). The first is the default.
-// Executor runs on the 68k cores.
+// Executor runs on mame-68k only.
 const CPU_CORES = {
     m68k: [
         ['uae',      'UAE (interpreter; JIT on x86)'],
@@ -3793,6 +3793,8 @@ const CPU_CORES = {
 };
 
 function coresForBackend(backend) {
+    if (backendIsExecutor(backend))
+        return CPU_CORES.m68k.filter(([id]) => id === 'mame-68k');
     return backendIsPpc(backend) ? CPU_CORES.ppc : CPU_CORES.m68k;
 }
 
@@ -5096,7 +5098,7 @@ async function seedBuiltinProfiles(cfg) {
     if (/7\.5\.5/.test(sys)) {
         App.builtinPresets[EXECUTOR_PROFILE] = {
             ...cfg, configs: undefined,
-            emulator: 'executor', backend: 'executor', cpu_core: 'uae', rom: '',
+            emulator: 'executor', backend: 'executor', cpu_core: 'mame-68k', rom: '',
             ram_mb: 64, screen: '1024x768', audio: true,
             executor_system: sys, executor_start: 'finder', executor_fresh: true,
         };

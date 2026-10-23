@@ -21,7 +21,7 @@ function(add_compilefail_tests filename)
         add_library(${target} EXCLUDE_FROM_ALL ${filename})
         target_compile_definitions(${target} PRIVATE -DCOMPILEFAIL -DCOMPILEFAIL_${testcase})
 
-        target_link_libraries(${target} gtest romlib executor_uae_glue)
+        target_link_libraries(${target} gtest romlib executor_platform_glue)
         target_compile_definitions(${target} PRIVATE -DEXECUTOR)
     
         add_test(NAME executor.compilefail.${base}.${testcase}
@@ -34,7 +34,7 @@ function(add_compilefail_tests filename)
     add_library(${target} EXCLUDE_FROM_ALL ${filename})
     target_compile_definitions(${target} PRIVATE -DCOMPILEFAIL)
 
-    target_link_libraries(${target} gtest romlib executor_uae_glue)
+    target_link_libraries(${target} gtest romlib executor_platform_glue)
     target_compile_definitions(${target} PRIVATE -DEXECUTOR)
 
     add_test(NAME executor.compilefail.${base}_preamble
@@ -104,22 +104,15 @@ else()
         ${NATIVE_TEST_SOURCES}
         main_executor.cpp)
 
-    target_link_libraries(executor_tests gtest romlib executor_uae_glue)
+    target_link_libraries(executor_tests gtest romlib executor_platform_glue)
     target_compile_definitions(executor_tests PRIVATE -DEXECUTOR)
     target_compile_definitions(executor_tests PRIVATE EXECUTOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
     target_compile_options(executor_tests PRIVATE -Wno-multichar -fno-delete-null-pointer-checks)
-    executor_link_low(executor_tests)
     phoenix_exempt_from_hardening(executor_tests)
 
     gtest_discover_tests(executor_tests
         TEST_PREFIX "executor."
         PROPERTIES LABELS executor
-        DISCOVERY_TIMEOUT 30)
-    # The same suite on MAME's Musashi (docs/cpu/PLAN.md, C1).
-    gtest_discover_tests(executor_tests
-        TEST_PREFIX "executor.mame68k."
-        EXTRA_ARGS --cpu=mame-68k
-        PROPERTIES LABELS "executor;mame"
         DISCOVERY_TIMEOUT 30)
 
     add_compilefail_tests(guestvalues.compfail.cpp)

@@ -309,22 +309,12 @@ set_tests_properties(bridge_trap_executor PROPERTIES
 
 # PowerPC on Executor: a PowerPC-only application (tests/guest/ppc-hello, on
 # InterfaceLib alone) runs on the mame-ppc core behind Executor's PowerCore
-# facade, with each 68k core's memory layout.
+# facade.
 add_test(
   NAME ppc_hello_executor
   COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ppc-hello/PPCHello.bin --results ppc_hello.txt --network none --timeout 150 --port 18440
 )
 set_tests_properties(ppc_hello_executor PROPERTIES
-  TIMEOUT 200
-  LABELS "guest;executor"
-  SKIP_RETURN_CODE 77
-)
-
-add_test(
-  NAME ppc_hello_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core mame-68k --app ${CMAKE_SOURCE_DIR}/tests/guest/ppc-hello/PPCHello.bin --results ppc_hello.txt --network none --timeout 150 --port 18442
-)
-set_tests_properties(ppc_hello_executor_mame68k PROPERTIES
   TIMEOUT 200
   LABELS "guest;executor"
   SKIP_RETURN_CODE 77
@@ -414,27 +404,18 @@ set_tests_properties(guest_suite_executor PROPERTIES
 
 # MacTCP in depth (MacPhoenixSuite's mactcp section, after network): async
 # calls, ASRs, no-copy receive, passive open, timeouts, UDP, TCPGlobalInfo,
-# the resolver's other calls. On Executor (both cores) against a host echo
-# server; on the ROM machine (Open Transport's MacTCP, net-bridge's echo) as
-# the reference: what OT's MacTCP doesn't do there is a skip.
-foreach(core uae mame-68k)
-  if(core STREQUAL "uae")
-    set(name mactcp_executor)
-    set(port 18530)
-  else()
-    set(name mactcp_executor_mame68k)
-    set(port 18532)
-  endif()
-  add_test(
-    NAME ${name}
-    COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core ${core} --sections "network mactcp" --results mactcp_results.txt --network none --timeout 150 --port ${port}
-  )
-  set_tests_properties(${name} PROPERTIES
-    TIMEOUT 200
-    LABELS "guest;executor"
-    SKIP_RETURN_CODE 77
-  )
-endforeach()
+# the resolver's other calls. On Executor against a host echo server; on
+# the ROM machine (Open Transport's MacTCP, net-bridge's echo) as the
+# reference: what OT's MacTCP doesn't do there is a skip.
+add_test(
+  NAME mactcp_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --sections "network mactcp" --results mactcp_results.txt --network none --timeout 150 --port 18530
+)
+set_tests_properties(mactcp_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
 add_test(
   NAME mactcp_rom
   COMMAND bash ${TEST_DIR}/test_guest_suite.sh --sections "network mactcp" --results mactcp_results.txt --timeout 120 --port 18534
@@ -495,57 +476,6 @@ add_test(NAME keyboard_guest_mame68k
 set_tests_properties(keyboard_guest_mame68k PROPERTIES TIMEOUT 130 LABELS "guest;mame" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
 
-# The same Executor on MAME's Musashi (--core mame-68k; docs/cpu/PLAN.md, S12).
-add_test(
-  NAME command_bridge_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend executor --core mame-68k --timeout 60 --port 18152
-)
-set_tests_properties(command_bridge_executor_mame68k PROPERTIES
-  TIMEOUT 90
-  LABELS "boot;mame"
-  SKIP_RETURN_CODE 77
-)
-
-add_test(
-  NAME guest_suite_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core mame-68k --timeout 150 --port 18154
-)
-set_tests_properties(guest_suite_executor_mame68k PROPERTIES
-  TIMEOUT 200
-  LABELS "guest;mame"
-  SKIP_RETURN_CODE 77
-)
-
-add_test(
-  NAME finder_suite_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core mame-68k --sections finder --results finder_results.txt --network none --timeout 150 --port 18156
-)
-set_tests_properties(finder_suite_executor_mame68k PROPERTIES
-  TIMEOUT 200
-  LABELS "guest;mame"
-  SKIP_RETURN_CODE 77
-)
-
-add_test(
-  NAME keyboard_guest_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_keyboard_guest.sh --backend executor --core mame-68k --timeout 90 --port 18158
-)
-set_tests_properties(keyboard_guest_executor_mame68k PROPERTIES
-  TIMEOUT 130
-  LABELS "guest;mame"
-  SKIP_RETURN_CODE 77
-)
-
-add_test(
-  NAME drag_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_drag_executor.sh --core mame-68k --timeout 90 --port 18160
-)
-set_tests_properties(drag_executor_mame68k PROPERTIES
-  TIMEOUT 130
-  LABELS "guest;mame;executor"
-  SKIP_RETURN_CODE 77
-)
-
 # Apple's Shared Library Manager (started by the System's 'AINI' -32700)
 # through Apple's ASLM test tools in MPW Shell; skips without the ASLM kit
 # in ~/storage/aslm-kit.
@@ -559,30 +489,17 @@ set_tests_properties(aslm_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
-add_test(
-  NAME aslm_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_aslm_executor.sh --core mame-68k --timeout 300 --port 18166
-)
-set_tests_properties(aslm_executor_mame68k PROPERTIES
-  TIMEOUT 340
-  LABELS "guest;mame;executor"
-  SKIP_RETURN_CODE 77
-)
-
 # Executor's Toolbox gtests built with Retro68 into a 68k app and run in
-# the guest: on Apple's ROM and System (the ground truth) and on Executor,
-# both cores. Skips without Retro68 (toolchain/retro68). The cells share
-# the app's build directory (build-m68k-tests), hence the lock.
-foreach(cell uae executor executor_mame68k)
+# the guest: on Apple's ROM and System (the ground truth) and on Executor.
+# Skips without Retro68 (toolchain/retro68). The cells share the app's
+# build directory (build-m68k-tests), hence the lock.
+foreach(cell uae executor)
   if(cell STREQUAL "uae")
     set(args --backend uae --port 18410)
     set(labels "guest")
-  elseif(cell STREQUAL "executor")
+  else()
     set(args --backend executor --port 18412)
     set(labels "guest;executor")
-  else()
-    set(args --backend executor --core mame-68k --port 18414)
-    set(labels "guest;mame;executor")
   endif()
   add_test(
     NAME toolbox_suite_${cell}
@@ -621,25 +538,16 @@ set_tests_properties(guest_builds_current PROPERTIES
 )
 
 # Executor's native Open Transport through Apple's 68k OT glue (OTTest, an
-# MPW tool run in ToolServer); on both cores. Skips without the MPW disk.
-foreach(core uae mame-68k)
-  if(core STREQUAL "uae")
-    set(name ot_executor)
-    set(port 18394)
-  else()
-    set(name ot_executor_mame68k)
-    set(port 18398)
-  endif()
-  add_test(
-    NAME ${name}
-    COMMAND bash ${TEST_DIR}/test_ot_executor.sh --core ${core} --port ${port}
-  )
-  set_tests_properties(${name} PROPERTIES
-    TIMEOUT 300
-    LABELS "guest;executor"
-    SKIP_RETURN_CODE 77
-  )
-endforeach()
+# MPW tool run in ToolServer). Skips without the MPW disk.
+add_test(
+  NAME ot_executor
+  COMMAND bash ${TEST_DIR}/test_ot_executor.sh --port 18394
+)
+set_tests_properties(ot_executor PROPERTIES
+  TIMEOUT 300
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
 # ... and without Apple's Shared Library Manager: OT's glue binds through
 # Executor's own.
 add_test(
@@ -652,8 +560,7 @@ set_tests_properties(ot_executor_noaslm PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
-# Thread Manager through Frontier's UserTalk threads (process.cpp), on
-# both cores.
+# Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor
   COMMAND bash ${TEST_DIR}/test_threads_executor.sh --timeout 240 --port 18168
@@ -661,15 +568,6 @@ add_test(
 set_tests_properties(threads_executor PROPERTIES
   TIMEOUT 280
   LABELS "guest;executor"
-  SKIP_RETURN_CODE 77
-)
-add_test(
-  NAME threads_executor_mame68k
-  COMMAND bash ${TEST_DIR}/test_threads_executor.sh --core mame-68k --timeout 240 --port 18162
-)
-set_tests_properties(threads_executor_mame68k PROPERTIES
-  TIMEOUT 280
-  LABELS "guest;mame;executor"
   SKIP_RETURN_CODE 77
 )
 

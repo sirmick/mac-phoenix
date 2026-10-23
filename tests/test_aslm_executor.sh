@@ -28,7 +28,7 @@
 # TestTool. Skips (exit 77) without the kit, hfsutils or MPW on the image.
 #
 # Usage:
-#   tests/test_aslm_executor.sh [--timeout N] [--port N] [--core uae|mame-68k]
+#   tests/test_aslm_executor.sh [--timeout N] [--port N] [--core mame-68k]
 set -euo pipefail
 
 TIMEOUT=300

@@ -14,10 +14,13 @@ target_include_directories(cpu_core PUBLIC
 target_link_libraries(cpu_core PUBLIC mame_m68k mame_ppc)
 target_compile_features(cpu_core PUBLIC cxx_std_17)
 
-# UAE: compiled with UAE's own flags and include path (both cores have an
+# UAE: a library of its own, for the ROM machine only (registry.cpp,
+# register_uae()); Executor and the test binaries link cpu_core without it.
+# Compiled with UAE's own flags and include path (both cores have an
 # m68k.h). Its symbols (regs, init_m68k, g_platform) come from the UAE
 # libraries and src/core at the final link.
-add_library(cpu_core_uae OBJECT uae_core.cpp)
+add_library(cpu_core_uae STATIC uae_core.cpp)
+target_link_libraries(cpu_core_uae PUBLIC cpu_core)
 target_include_directories(cpu_core_uae PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../uae_cpu
@@ -35,5 +38,3 @@ target_compile_options(cpu_core_uae PRIVATE
     -DUSE_JIT=${_core_uae_jit} -DUSE_JIT_FPU=0 -DUSE_PREFETCH_BUFFER=0 -DFPU_IEEE
     -Wno-unused-parameter -Wno-sign-compare)
 target_compile_features(cpu_core_uae PRIVATE cxx_std_17)
-target_sources(cpu_core PRIVATE $<TARGET_OBJECTS:cpu_core_uae>)
-target_compile_definitions(cpu_core PRIVATE CPU_CORE_HAVE_UAE)

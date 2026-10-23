@@ -47,7 +47,7 @@ changes.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `backend` | string | `"uae"` | `"uae"` (68k Mac, ROM), `"kpx"` (Power Mac, ROM) or `"executor"` (68k, Executor's Toolbox, no ROM). Determines the architecture; there is no separate `architecture` field. An unknown value falls back to `"uae"`. |
-| `cpu_core` | string | `"uae"` | CPU core for the backend's architecture: `"uae"` or `"mame-68k"` for `uae` and `executor`, `"kpx"` or `"mame-ppc"` for `kpx`. A core that doesn't fit the backend is replaced by the backend's default (`uae` / `kpx`); `"musashi"` is read as `"mame-68k"`. |
+| `cpu_core` | string | `"uae"` | CPU core for the backend's architecture: `"uae"` or `"mame-68k"` for `uae`, `"mame-68k"` for `executor`, `"kpx"` or `"mame-ppc"` for `kpx`. A core that doesn't fit the backend is replaced by the backend's default (`uae` / `mame-68k` / `kpx`); `"musashi"` is read as `"mame-68k"`. |
 | `jit` | bool | `false` | Enable the core's JIT (uae; kpx; mame-ppc's native back-end). |
 | `idlewait` | bool | `true` | Pause CPU when guest is idle (m68k rsrc patch + ppc SynchIdleTime). |
 

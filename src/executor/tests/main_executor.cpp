@@ -128,7 +128,7 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
 
-    // --cpu=uae|mame-68k picks the 68k core under the facade.
+    // --cpu=NAME picks the 68k core under the facade (mame-68k, the default).
     for(int i = 1; i < argc; i++)
         if(!strncmp(argv[i], "--cpu=", 6) && !syn68k_select_engine(argv[i] + 6))
         {
@@ -136,7 +136,8 @@ int main(int argc, char **argv)
             return 2;
         }
 
-    // Run on a stack below 4GB: tests hand host locals to the guest.
+    // Run on a stack the guest can address (window 1): tests hand host
+    // locals to the guest.
     static int result;
     const size_t stackSize = 16 * 1024 * 1024;
     pthread_attr_t attr;

@@ -4,9 +4,10 @@
  *  Time counted in executed 68k instructions instead of wall-clock time, so
  *  two runs of the same guest code see the same ticks, Microseconds, Time
  *  Manager firings and dates. Shared by the real-ROM and Executor backends
- *  (both run on this UAE core): cpu_do_check_ticks() advances it every
- *  quantum of instructions and calls vclock_poll_hook, where each backend
- *  fires its due interrupts on the CPU thread.
+ *  and by both 68k cores (uae, mame-68k): the core calls vclock_count() per
+ *  instruction and vclock_quantum() every slice of instructions, which
+ *  refreshes the application region and calls vclock_poll_hook, where each
+ *  backend fires its due interrupts on the CPU thread. src/common/vclock.cpp.
  *
  *  Before the traced application starts, every instruction counts. After
  *  that only application instructions count: those whose PC lies above the
@@ -47,8 +48,12 @@ extern int vclock_rebased;
 extern int vclock_idle_depth;   /* idle traps active (WaitNextEvent, ...): count every instruction */
 
 uint64_t vclock_usec(void);                     /* virtual microseconds since start */
+extern uint32_t vclock_ram_top;  /* end of guest RAM (the ROM machine sets it; Executor: 1GB) */
+
 void vclock_skip_to(uint64_t usec);             /* jump forward (idle) */
-void vclock_advance_insns(uint64_t n);          /* called by the CPU loop */
+/* Per slice, from the CPU loop. host maps a guest address to its bytes
+ * (null if unmapped): the core's own memory, read without side effects. */
+void vclock_quantum(const uint8_t *(*host)(uint32_t addr));
 static inline void vclock_count(uint32_t pc)    /* per instruction */
 {
     /* Until the app starts every instruction counts (the ROM boot waits on
