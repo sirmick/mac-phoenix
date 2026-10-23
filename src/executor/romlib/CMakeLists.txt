@@ -111,6 +111,9 @@ endif()
 
 add_subdirectory(config/front-ends/headless)
 add_subdirectory(config/front-ends/phoenix)
+if(EMSCRIPTEN)
+    add_subdirectory(config/front-ends/wasm)
+endif()
 
 function(linkheader from to variant)
     if(DEFINED ARGV3)
@@ -634,6 +637,7 @@ add_library(romlib ${sources}
         ${GENERATED_FILES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minicoro/minicoro.c
         host/${EXECUTOR_NET}/net.cpp
+        $<IF:$<BOOL:${EMSCRIPTEN}>,host/wasm/idle.cpp,host/posix/idle.cpp>
     )
 
 target_include_directories(romlib PUBLIC . include/ ${GEN_DIR}/api/ ${GEN_DIR})

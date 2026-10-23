@@ -30,7 +30,6 @@ add_link_options(
     -sALLOW_MEMORY_GROWTH=1
     -sMAXIMUM_MEMORY=4GB
     -sSTACK_SIZE=8MB          # the 68k emulator's host frames go deep
-    -sNODERAWFS=1             # under node: the host's files, as natively
     -sEXIT_RUNTIME=1
     --profiling-funcs)        # function names in traces
 

@@ -6,17 +6,18 @@
 
 #include <chrono>
 #include <array>
-#include <condition_variable>
-#include <mutex>
 #include <optional>
+#include <rsys/hostidle.h>
 #include "vclock.h"
 
 /* MacPhoenix: no timer thread (upstream's was SIGALRM). post() records the
    next deadline; the emulator thread looks at the clock between the CPU
    cores' time slices (syn68k_slice_hook), whenever host code checks for
-   interrupts, and while idle in syncint_wait_interrupt(), which sleeps
-   until the deadline. Other host threads (sockets, the resolver) still
-   raise interrupts with Interrupt::trigger(), which wakes the idle wait. */
+   interrupts, and while idle in syncint_wait_interrupt(), which waits
+   until the deadline (rsys/hostidle.h: natively a condition variable, in
+   wasm a yield to the browser). Other host threads (sockets, the
+   resolver) still raise interrupts with Interrupt::trigger(), which wakes
+   the idle wait. */
 
 using namespace Executor;
 
@@ -32,10 +33,6 @@ namespace
 
 
     Interrupt timerInterrupt;
-
-    /* The emulator thread waits here, idle, for an interrupt. */
-    std::mutex wake_mutex;
-    std::condition_variable wake_cond;
 
     /* Emulator thread only. Armed while scheduled_interrupt is after
        last_interrupt. */
@@ -91,8 +88,7 @@ void Interrupt::trigger()
     interrupt_generate(M68K_TIMER_PRIORITY);
     getPowerCore().requestInterrupt();
 
-    std::lock_guard<std::mutex> lock(wake_mutex);
-    wake_cond.notify_all();
+    hostidle::wake();
 }
 
 void Interrupt::handleCommon()
@@ -185,7 +181,10 @@ void SyncintTimer::start()
     if(vclock_enabled)
         vclock_poll_hook = vclockPoll;
     else
-        syn68k_slice_hook = [] { timer.poll(); };
+        syn68k_slice_hook = [] {
+            timer.poll();
+            hostidle::tick();
+        };
 }
 
 void SyncintTimer::post(std::chrono::microseconds usecs, bool fromLast)
@@ -227,14 +226,11 @@ void SyncintTimer::wait()
     for(;;)
     {
         poll();
-        /* Checked under the lock trigger() takes, so no wake-up is lost. */
-        std::unique_lock<std::mutex> lock(wake_mutex);
         if(INTERRUPT_PENDING())
             return;
-        if(scheduled_interrupt > last_interrupt)
-            wake_cond.wait_until(lock, scheduled_interrupt);
-        else
-            wake_cond.wait(lock);
+        hostidle::wait(scheduled_interrupt > last_interrupt ? scheduled_interrupt
+                                                            : clock::time_point::max(),
+                       [] { return (bool)INTERRUPT_PENDING(); });
     }
 }
 

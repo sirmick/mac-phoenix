@@ -14,7 +14,7 @@ Framebuffer::Framebuffer(int w, int h, int d)
     : width(w), height(h), bpp(d)
 {
     rowBytes = ((width * bpp + 31) & ~31) / 8;
-    // Guest-visible: must live below 4GB (identity addressing).
+    // Guest-visible: in window 1.
     size_t size = (size_t)rowBytes * height;
     data = std::shared_ptr<uint8_t>((uint8_t *)syn68k_alloc_low(size),
                                     [size](uint8_t* p) { syn68k_free_low(p, size); });
@@ -38,7 +38,11 @@ public:
     {
         int nThreads = std::thread::hardware_concurrency() ? std::max(0, (int)std::thread::hardware_concurrency() - 2) : 4;
         
+        /* MacPhoenix: where threads can't start (wasm), none: run() then
+           does the work on the caller's. */
         for(int i = 0; i < nThreads; i++)
+        try
+        {
             threads_.emplace_back([this]() {
                 std::unique_lock lk(mutex_);
                 for(int round = 1;;round++)
@@ -59,6 +63,11 @@ public:
                         doneCond_.notify_one();
                 }
             });
+        }
+        catch(const std::system_error &)
+        {
+            break;
+        }
     }
     
     ~ThreadPool()

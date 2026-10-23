@@ -46,6 +46,10 @@ public:
     void runEventLoop() override;
     void endEventLoop() override;
 
+    // For front ends without a render thread (wasm, at its idle yields):
+    // render what changed, or the moved cursor, and publish it.
+    void pump() { render(false); }
+
 protected:
     void requestUpdate() override;
 

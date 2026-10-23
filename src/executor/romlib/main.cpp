@@ -534,6 +534,21 @@ int executor_main_entry(int argc, char **argv)
 
     const size_t stackSize = 16 * 1024 * 1024;
     void *stack = syn68k_alloc_low(stackSize);
+
+    /* MacPhoenix: where this thread's stack is guest-addressable already
+       (wasm: window 3 holds the static data and the stack), Executor runs
+       right here, with no thread of its own and no event loop beside it:
+       the front end renders and takes input at the idle yields
+       (host/idle.h). */
+    char here;
+    if(syn68k_is_guest_mapped((uintptr_t)&here, 1))
+    {
+        syn68k_free_low(stack, stackSize);
+        executorBody();
+        vdriver.reset();
+        return 0;
+    }
+
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setstack(&attr, stack, stackSize);

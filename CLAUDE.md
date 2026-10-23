@@ -60,7 +60,11 @@ ctest --test-dir build -L executor
 # Executor as WebAssembly (docs/executor/DIRECTION.md, W1): emsdk in ~/emsdk
 source ~/emsdk/emsdk_env.sh
 emcmake cmake -B build-wasm && cmake --build build-wasm -j4
-ctest --test-dir build-wasm -L executor    # the gtests under node
+ctest --test-dir build-wasm -L executor    # the gtests under node, + executor.web.tab
+# The tab (W2): serve build-wasm/src/executor/romlib/config/front-ends/wasm
+# (python3 -m http.server) and open index.html; ?size=WxH.
+# executor.web.tab needs -DEXECUTOR_WEB_NODE_PATH=<node_modules with playwright>
+# (and -DEXECUTOR_WEB_CHROMIUM=<browser> if not playwright's own).
 
 # MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
 tools/mpw/mpw setup                    # once: MPW disk + System, built from snapshots

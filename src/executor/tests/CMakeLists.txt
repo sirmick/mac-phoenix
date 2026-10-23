@@ -105,6 +105,10 @@ else()
         main_executor.cpp)
 
     target_link_libraries(executor_tests gtest romlib executor_platform_glue)
+    if(EMSCRIPTEN)
+        # Under node: the host's files, as natively.
+        target_link_options(executor_tests PRIVATE -sNODERAWFS=1)
+    endif()
     target_compile_definitions(executor_tests PRIVATE -DEXECUTOR)
     target_compile_definitions(executor_tests PRIVATE EXECUTOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
     target_compile_options(executor_tests PRIVATE -Wno-multichar -fno-delete-null-pointer-checks)
