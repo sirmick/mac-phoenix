@@ -17,9 +17,12 @@
 #include <Events.h>
 #include <OSUtils.h>
 #include <Gestalt.h>
+#include <Timer.h>
 #include <OpenTransport.h>
 #include <OpenTptInternet.h>
+#include <OpenTptLinks.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -812,6 +815,787 @@ static void test_udp(void)
     pass("udp");
 }
 
+/* ---- atomics and queues ---------------------------------------------- */
+
+typedef struct QItem
+{
+    long value;
+    struct QItem *next; /* OTEnqueue's link, at offset 4 */
+    OTLink link;        /* for the OTList calls */
+} QItem;
+
+static Boolean match_value(const void *ref, OTLink *link)
+{
+    QItem *q = (QItem *)((char *)link - offsetof(QItem, link));
+    return q->value == *(const long *)ref;
+}
+
+static void test_atomics(void)
+{
+    UInt8 bits = 0;
+    UInt32 word = 5;
+    void *ptr = nil;
+    SInt16 w16 = 10;
+    SInt8 w8 = 100;
+    SInt32 w32 = 1;
+    QItem items[3];
+    void *head = nil;
+    QItem *q;
+    OTList list;
+    long want;
+    int i;
+
+    /* SC compiles these inline: BSET, BCLR, BTST, CAS. */
+    if(OTAtomicSetBit(&bits, 3) != 0 || bits != 0x08 || OTAtomicSetBit(&bits, 3) != 1)
+    {
+        fail("atomics", "OTAtomicSetBit", bits);
+        return;
+    }
+    if(!OTAtomicTestBit(&bits, 3) || OTAtomicTestBit(&bits, 2))
+    {
+        fail("atomics", "OTAtomicTestBit", bits);
+        return;
+    }
+    if(OTAtomicClearBit(&bits, 3) != 1 || bits != 0)
+    {
+        fail("atomics", "OTAtomicClearBit", bits);
+        return;
+    }
+    if(OTCompareAndSwap32(4, 9, &word) || word != 5 || !OTCompareAndSwap32(5, 9, &word)
+       || word != 9)
+    {
+        fail("atomics", "OTCompareAndSwap32", word);
+        return;
+    }
+    if(!OTCompareAndSwapPtr(nil, &word, &ptr) || ptr != &word)
+    {
+        fail("atomics", "OTCompareAndSwapPtr", 0);
+        return;
+    }
+    if(OTAtomicAdd32(41, &w32) != 42 || w32 != 42)
+    {
+        fail("atomics", "OTAtomicAdd32", w32);
+        return;
+    }
+    /* These two are calls (OTClnt$CmnShared). */
+    if(OTAtomicAdd16(-3, &w16) != 7 || w16 != 7)
+    {
+        fail("atomics", "OTAtomicAdd16", w16);
+        return;
+    }
+    if(OTAtomicAdd8(27, &w8) != 127 || w8 != 127)
+    {
+        fail("atomics", "OTAtomicAdd8", w8);
+        return;
+    }
+
+    /* OTEnqueue / OTDequeue with the link at offset 4: last in, first out. */
+    for(i = 0; i < 3; i++)
+    {
+        items[i].value = i + 1;
+        OTEnqueue(&head, &items[i], offsetof(QItem, next));
+    }
+    q = (QItem *)OTDequeue(&head, offsetof(QItem, next));
+    if(q != &items[2] || OTDequeue(&head, offsetof(QItem, next)) != &items[1])
+    {
+        fail("atomics", "OTEnqueue/OTDequeue order", q ? q->value : 0);
+        return;
+    }
+
+    /* OTFindLink / OTFindAndRemoveLink with a search procedure. */
+    list.fHead = nil;
+    for(i = 0; i < 3; i++)
+        OTAddLast(&list, &items[i].link);
+    want = 2;
+    if(OTFindLink(&list, match_value, &want) != &items[1].link)
+    {
+        fail("atomics", "OTFindLink", 0);
+        return;
+    }
+    if(OTFindAndRemoveLink(&list, match_value, &want) != &items[1].link
+       || OTIsInList(&list, &items[1].link) || OTGetIndexedLink(&list, 1) != &items[2].link)
+    {
+        fail("atomics", "OTFindAndRemoveLink", 0);
+        return;
+    }
+    want = 7;
+    if(OTFindLink(&list, match_value, &want) != nil)
+    {
+        fail("atomics", "OTFindLink found a missing value", 0);
+        return;
+    }
+    pass("atomics");
+}
+
+/* ---- deferred and system tasks ---------------------------------------- */
+
+static volatile long dt_runs, dt_could_sync, st_runs;
+static long dt_cookie;
+
+static pascal void deferred_proc(void *arg)
+{
+    dt_runs += (long)arg;
+    dt_could_sync = OTCanMakeSyncCall();
+}
+
+static pascal void system_proc(void *arg)
+{
+    st_runs += (long)arg;
+}
+
+static void test_tasks(void)
+{
+    long st;
+    unsigned long until;
+
+    dt_runs = st_runs = 0;
+    dt_could_sync = -1;
+    if(!OTCanMakeSyncCall())
+    {
+        fail("tasks", "OTCanMakeSyncCall at application time", 0);
+        return;
+    }
+    dt_cookie = OTCreateDeferredTask(deferred_proc, (void *)5);
+    if(!dt_cookie)
+    {
+        fail("tasks", "OTCreateDeferredTask", 0);
+        return;
+    }
+    if(!OTScheduleDeferredTask(dt_cookie))
+    {
+        fail("tasks", "OTScheduleDeferredTask", 0);
+        OTDestroyDeferredTask(dt_cookie);
+        return;
+    }
+    if(!wait_for(&dt_runs, 5) || dt_runs != 5)
+    {
+        fail("tasks", "deferred task did not run once", dt_runs);
+        OTDestroyDeferredTask(dt_cookie);
+        return;
+    }
+    if(dt_could_sync != 0)
+    {
+        fail("tasks", "OTCanMakeSyncCall in a deferred task", dt_could_sync);
+        OTDestroyDeferredTask(dt_cookie);
+        return;
+    }
+    OTScheduleDeferredTask(dt_cookie);
+    until = TickCount() + 300;
+    while(dt_runs != 10 && TickCount() < until)
+        ;
+    if(dt_runs != 10)
+    {
+        fail("tasks", "deferred task scheduled again", dt_runs);
+        OTDestroyDeferredTask(dt_cookie);
+        return;
+    }
+    if(OTDestroyDeferredTask(dt_cookie))
+    {
+        fail("tasks", "OTDestroyDeferredTask", 0);
+        return;
+    }
+
+    st = OTCreateSystemTask(system_proc, (void *)3);
+    if(!st || !OTScheduleSystemTask(st))
+    {
+        fail("tasks", "OTCreateSystemTask/OTScheduleSystemTask", st);
+        return;
+    }
+    if(OTScheduleSystemTask(st))
+    {
+        fail("tasks", "scheduling a scheduled system task", 0);
+        OTDestroySystemTask(st);
+        return;
+    }
+    /* System task time: SystemTask, as WaitNextEvent calls it. */
+    until = TickCount() + 300;
+    while(!st_runs && TickCount() < until)
+        SystemTask();
+    if(st_runs != 3)
+    {
+        fail("tasks", "system task did not run once", st_runs);
+        OTDestroySystemTask(st);
+        return;
+    }
+    OTScheduleSystemTask(st);
+    if(!OTCancelSystemTask(st))
+    {
+        fail("tasks", "OTCancelSystemTask", 0);
+        OTDestroySystemTask(st);
+        return;
+    }
+    SystemTask();
+    if(st_runs != 3)
+    {
+        fail("tasks", "a cancelled system task ran", st_runs);
+        OTDestroySystemTask(st);
+        return;
+    }
+    OTDestroySystemTask(st);
+    pass("tasks");
+}
+
+/* ---- options ----------------------------------------------------------- */
+
+typedef struct
+{
+    UInt32 len;
+    OTXTILevel level;
+    OTXTIName name;
+    UInt32 status;
+    UInt32 value;
+} Opt4;
+
+/* One 4-byte option, negotiated or asked for; its status and value. */
+static OSStatus one_option(EndpointRef ep, OTFlags flags, OTXTILevel level, OTXTIName name,
+                           UInt32 *value, UInt32 *status, OTFlags *result)
+{
+    Opt4 in, out;
+    TOptMgmt req, ret;
+    OSStatus err;
+
+    in.len = kOTFourByteOptionSize;
+    in.level = level;
+    in.name = name;
+    in.status = 0;
+    in.value = *value;
+    req.opt.buf = (UInt8 *)&in;
+    req.opt.len = sizeof in;
+    req.opt.maxlen = sizeof in;
+    req.flags = flags;
+    OTMemzero(&out, sizeof out);
+    ret.opt.buf = (UInt8 *)&out;
+    ret.opt.maxlen = sizeof out;
+    ret.opt.len = 0;
+    ret.flags = 0;
+    err = OTOptionManagement(ep, &req, &ret);
+    *value = out.value;
+    *status = out.status;
+    if(result)
+        *result = ret.flags;
+    return err;
+}
+
+static void test_options(void)
+{
+    OSStatus err;
+    EndpointRef ep = open_tcp(&err);
+    UInt32 v, st;
+    OTFlags flags;
+    UInt8 buf[64];
+    TOption *opt;
+    TOption *first, *second;
+    Opt4 *o;
+
+    if(err)
+    {
+        fail("options", "OTOpenEndpoint", err);
+        return;
+    }
+    OTSetSynchronous(ep);
+    OTSetBlocking(ep);
+    /* Before there is a connection: kept, then applied. */
+    v = T_NO;
+    err = one_option(ep, T_NEGOTIATE, INET_TCP, TCP_NODELAY, &v, &st, &flags);
+    if(err || st != T_SUCCESS || v != T_NO)
+    {
+        fail("options", "TCP_NODELAY T_NO before bind", err ? err : st);
+        OTCloseProvider(ep);
+        return;
+    }
+    v = 16384;
+    err = one_option(ep, T_NEGOTIATE, XTI_GENERIC, XTI_SNDBUF, &v, &st, nil);
+    if(err || st != T_SUCCESS)
+    {
+        fail("options", "XTI_SNDBUF", err ? err : st);
+        OTCloseProvider(ep);
+        return;
+    }
+    if(OTBind(ep, nil, nil) || connect_echo(ep))
+    {
+        fail("options", "bind/connect", 0);
+        OTCloseProvider(ep);
+        return;
+    }
+    v = 0;
+    err = one_option(ep, T_CURRENT, INET_TCP, TCP_NODELAY, &v, &st, nil);
+    if(err || st != T_SUCCESS || v != T_NO)
+    {
+        fail("options", "TCP_NODELAY current after connect", err ? err : (long)v);
+        close_orderly(ep);
+        return;
+    }
+    v = 0;
+    err = one_option(ep, T_CURRENT, XTI_GENERIC, XTI_SNDBUF, &v, &st, nil);
+    if(err || v < 16384)
+    {
+        fail("options", "XTI_SNDBUF current", err ? err : (long)v);
+        close_orderly(ep);
+        return;
+    }
+    v = T_YES;
+    err = one_option(ep, T_NEGOTIATE, INET_TCP, TCP_NODELAY, &v, &st, nil);
+    if(err || st != T_SUCCESS || v != T_YES)
+    {
+        fail("options", "TCP_NODELAY T_YES on a connection", err ? err : st);
+        close_orderly(ep);
+        return;
+    }
+    v = 1;
+    err = one_option(ep, T_NEGOTIATE, 0x4242, 0x4242, &v, &st, &flags);
+    if(err || st != T_NOTSUPPORT || flags != T_NOTSUPPORT)
+    {
+        fail("options", "an unknown option should be T_NOTSUPPORT", err ? err : st);
+        close_orderly(ep);
+        return;
+    }
+    v = 0;
+    err = one_option(ep, T_DEFAULT, INET_IP, IP_TTL, &v, &st, nil);
+    if(err || st != T_SUCCESS || v == 0)
+    {
+        fail("options", "IP_TTL default", err ? err : st);
+        close_orderly(ep);
+        return;
+    }
+    if(echo_sync(ep, "options") < 0)
+    {
+        close_orderly(ep);
+        return;
+    }
+    close_orderly(ep);
+
+    /* OTNextOption / OTFindOption over a buffer of two options. */
+    OTMemzero(buf, sizeof buf);
+    o = (Opt4 *)buf;
+    o->len = kOTFourByteOptionSize;
+    o->level = INET_IP;
+    o->name = IP_TTL;
+    o->value = 32;
+    o = (Opt4 *)(buf + 20);
+    o->len = kOTFourByteOptionSize;
+    o->level = INET_TCP;
+    o->name = TCP_NODELAY;
+    o->value = T_YES;
+    first = nil;
+    if(OTNextOption(buf, 40, &first) || first != (TOption *)buf)
+    {
+        fail("options", "OTNextOption first", 0);
+        return;
+    }
+    second = first;
+    if(OTNextOption(buf, 40, &second) || second != (TOption *)(buf + 20))
+    {
+        fail("options", "OTNextOption second", 0);
+        return;
+    }
+    if(OTNextOption(buf, 40, &second) || second != nil)
+    {
+        fail("options", "OTNextOption after the last", 0);
+        return;
+    }
+    opt = OTFindOption(buf, 40, INET_TCP, TCP_NODELAY);
+    if(opt != (TOption *)(buf + 20) || OTFindOption(buf, 40, INET_TCP, TCP_MAXSEG) != nil)
+    {
+        fail("options", "OTFindOption", 0);
+        return;
+    }
+    pass("options");
+}
+
+/* ---- a datagram bigger than the buffer ----------------------------------- */
+
+static void test_udp_more(void)
+{
+    OSStatus err;
+    EndpointRef ep = OTOpenEndpoint(OTCreateConfiguration(kUDPName), 0, nil, &err);
+    InetAddress to, from;
+    TUnitData ud;
+    static char out[200], in[200];
+    char piece[64];
+    OTFlags flags;
+    unsigned long until;
+    long got = 0, pieces = 0, mores = 0;
+    UInt32 v, st;
+
+    if(err)
+    {
+        fail("udp_more", "OTOpenEndpoint udp", err);
+        return;
+    }
+    /* An option on a UDP endpoint before it is bound. */
+    v = T_YES;
+    if(one_option(ep, T_NEGOTIATE, INET_IP, IP_REUSEADDR, &v, &st, nil) || st != T_SUCCESS)
+    {
+        fail("udp_more", "IP_REUSEADDR", st);
+        OTCloseProvider(ep);
+        return;
+    }
+    OTSetBlocking(ep);
+    if((err = OTBind(ep, nil, nil)) != noErr)
+    {
+        fail("udp_more", "OTBind", err);
+        OTCloseProvider(ep);
+        return;
+    }
+    fill_pattern(out, sizeof out, 5);
+    OTInitInetAddress(&to, echo_port, echo_host);
+    OTMemzero(&ud, sizeof ud);
+    ud.addr.buf = (UInt8 *)&to;
+    ud.addr.len = sizeof to;
+    ud.udata.buf = (UInt8 *)out;
+    ud.udata.len = sizeof out;
+    if((err = OTSndUData(ep, &ud)) != noErr)
+    {
+        fail("udp_more", "OTSndUData", err);
+        OTCloseProvider(ep);
+        return;
+    }
+    OTSetNonBlocking(ep);
+    until = TickCount() + 300;
+    while(got < (long)sizeof out && TickCount() < until)
+    {
+        OTMemzero(&ud, sizeof ud);
+        ud.addr.buf = (UInt8 *)&from;
+        ud.addr.maxlen = sizeof from;
+        ud.udata.buf = (UInt8 *)piece;
+        ud.udata.maxlen = sizeof piece;
+        flags = 0;
+        err = OTRcvUData(ep, &ud, &flags);
+        if(err == kOTNoDataErr)
+            continue;
+        if(err)
+            break;
+        memcpy(in + got, piece, ud.udata.len);
+        got += ud.udata.len;
+        pieces++;
+        if(flags & T_MORE)
+            mores++;
+        else
+            break;
+    }
+    if(err || got != sizeof out || memcmp(in, out, sizeof out))
+    {
+        fail("udp_more", "datagram in pieces", err ? err : got);
+        OTCloseProvider(ep);
+        return;
+    }
+    if(pieces != 4 || mores != 3)
+    {
+        fail("udp_more", "pieces / T_MORE flags", pieces * 10 + mores);
+        OTCloseProvider(ep);
+        return;
+    }
+    OTUnbind(ep);
+    OTCloseProvider(ep);
+    pass("udp_more");
+}
+
+/* ---- a blocking call cancelled from a Time Manager task ----------------- */
+
+typedef struct
+{
+    TMTask tm;
+    long a5;
+    EndpointRef ep;
+    long fired;
+} CancelTask;
+
+#pragma parameter __D0 GetA1
+long GetA1(void) = 0x2009; /* MOVE.L A1,D0 */
+
+static pascal void cancel_proc(void)
+{
+    CancelTask *t = (CancelTask *)GetA1();
+    long old = SetA5(t->a5);
+    OTCancelSynchronousCalls(t->ep, kOTCanceledErr);
+    t->fired = 1;
+    SetA5(old);
+}
+
+static void test_cancel(void)
+{
+    OSStatus err;
+    EndpointRef ep = open_tcp(&err);
+    CancelTask t;
+    OTResult r;
+    OTFlags flags;
+    char c;
+    unsigned long start;
+
+    if(err)
+    {
+        fail("cancel", "OTOpenEndpoint", err);
+        return;
+    }
+    OTSetSynchronous(ep);
+    OTSetBlocking(ep);
+    if(OTBind(ep, nil, nil) || connect_echo(ep))
+    {
+        fail("cancel", "bind/connect", 0);
+        OTCloseProvider(ep);
+        return;
+    }
+    OTMemzero(&t, sizeof t);
+    t.tm.tmAddr = (TimerUPP)cancel_proc;
+    t.a5 = SetCurrentA5();
+    t.ep = ep;
+    InsTime((QElemPtr)&t.tm);
+    PrimeTime((QElemPtr)&t.tm, 300); /* 0.3 s */
+    start = TickCount();
+    r = OTRcv(ep, &c, 1, &flags); /* the echo server sends nothing */
+    RmvTime((QElemPtr)&t.tm);
+    if(r != kOTCanceledErr || !t.fired)
+    {
+        fail("cancel", "blocking OTRcv should return kOTCanceledErr", r);
+        close_orderly(ep);
+        return;
+    }
+    if(TickCount() - start > 5 * 60)
+    {
+        fail("cancel", "cancelled late (ticks)", TickCount() - start);
+        close_orderly(ep);
+        return;
+    }
+    /* The endpoint still works. */
+    if(echo_sync(ep, "cancel") < 0)
+    {
+        close_orderly(ep);
+        return;
+    }
+    close_orderly(ep);
+    pass("cancel");
+}
+
+/* ---- DNSAddress: connect and resolve by name ----------------------------- */
+
+static void test_dns_addr(void)
+{
+    OSStatus err;
+    EndpointRef ep;
+    DNSAddress dns;
+    InetAddress got;
+    TCall call;
+    TBind req, ret;
+    char name[64];
+    unsigned long until;
+
+    sprintf(name, "localhost:%u", echo_port);
+    /* OTResolveAddress: DNSAddress in, InetAddress out. */
+    ep = open_tcp(&err);
+    if(err)
+    {
+        fail("dns_addr", "OTOpenEndpoint", err);
+        return;
+    }
+    OTSetSynchronous(ep);
+    OTSetBlocking(ep);
+    OTMemzero(&req, sizeof req);
+    req.addr.buf = (UInt8 *)&dns;
+    req.addr.len = OTInitDNSAddress(&dns, name);
+    OTMemzero(&ret, sizeof ret);
+    ret.addr.buf = (UInt8 *)&got;
+    ret.addr.maxlen = sizeof got;
+    err = OTResolveAddress(ep, &req, &ret, 10000);
+    if(err || got.fAddressType != AF_INET || got.fPort != echo_port || got.fHost == 0)
+    {
+        fail("dns_addr", "OTResolveAddress", err ? err : (long)got.fPort);
+        OTCloseProvider(ep);
+        return;
+    }
+    /* A blocking connect to a DNSAddress. */
+    OTBind(ep, nil, nil);
+    OTMemzero(&call, sizeof call);
+    call.addr.buf = (UInt8 *)&dns;
+    call.addr.len = OTInitDNSAddress(&dns, name);
+    err = OTConnect(ep, &call, nil);
+    if(err)
+    {
+        fail("dns_addr", "blocking OTConnect to localhost:port", err);
+        OTCloseProvider(ep);
+        return;
+    }
+    if(echo_sync(ep, "dns_addr") < 0)
+    {
+        close_orderly(ep);
+        return;
+    }
+    close_orderly(ep);
+
+    /* Asynchronous: the name looked up, then T_CONNECT. */
+    memset((void *)&as, 0, sizeof as);
+    err = OTAsyncOpenEndpoint(OTCreateConfiguration(kTCPName), 0, nil, tcp_notifier, nil);
+    if(err || !wait_for(&as.opened, 10))
+    {
+        fail("dns_addr", "OTAsyncOpenEndpoint", err);
+        return;
+    }
+    OTBind(as.ep, nil, nil);
+    if(!wait_for(&as.bound, 10))
+    {
+        fail("dns_addr", "T_BINDCOMPLETE", 0);
+        OTCloseProvider(as.ep);
+        return;
+    }
+    OTMemzero(&call, sizeof call);
+    call.addr.buf = (UInt8 *)&dns;
+    call.addr.len = OTInitDNSAddress(&dns, name);
+    err = OTConnect(as.ep, &call, nil);
+    if(err != kOTNoDataErr)
+    {
+        fail("dns_addr", "async OTConnect should answer kOTNoDataErr", err);
+        OTCloseProvider(as.ep);
+        return;
+    }
+    until = TickCount() + 600;
+    while(!as.connected && !as.disconnected && TickCount() < until)
+        ;
+    if(!as.connected || OTRcvConnect(as.ep, nil))
+    {
+        fail("dns_addr", "async connect to a name: no T_CONNECT", as.disconnected);
+        OTCloseProvider(as.ep);
+        return;
+    }
+    OTSndDisconnect(as.ep, nil);
+    OTCloseProvider(as.ep);
+    pass("dns_addr");
+}
+
+/* ---- odds and ends: ports, OTSync, OTRcvUDErr, OTIoctl ------------------- */
+
+static void test_misc(void)
+{
+    OTPortRecord port, byname, byref;
+    OSStatus err;
+    EndpointRef ep;
+    UInt16 other = 99;
+    OTPortRef ref;
+    TUDErr uderr;
+
+    if(!OTGetIndexedPort(&port, 0) || OTGetIndexedPort(&byname, 1))
+    {
+        fail("misc", "OTGetIndexedPort", 0);
+        return;
+    }
+    printf("# port 0: %s ref %08lx\n", port.fPortName, (long)port.fRef);
+    if(OTGetDeviceTypeFromPortRef(port.fRef) != kOTEthernetDevice)
+    {
+        fail("misc", "port 0 is not Ethernet", OTGetDeviceTypeFromPortRef(port.fRef));
+        return;
+    }
+    if(!OTFindPort(&byname, port.fPortName) || byname.fRef != port.fRef
+       || !OTFindPortByRef(&byref, port.fRef) || strcmp(byref.fPortName, port.fPortName)
+       || OTFindPort(&byname, "nosuchport"))
+    {
+        fail("misc", "OTFindPort / OTFindPortByRef", 0);
+        return;
+    }
+    ref = OTCreatePortRef(kOTPCIBus, kOTSerialDevice, 3, 7);
+    if(OTGetBusTypeFromPortRef(ref) != kOTPCIBus || OTGetDeviceTypeFromPortRef(ref) != kOTSerialDevice
+       || OTGetSlotFromPortRef(ref, &other) != 3 || other != 7)
+    {
+        fail("misc", "OTCreatePortRef round trip", ref);
+        return;
+    }
+
+    ep = OTOpenEndpoint(OTCreateConfiguration(kUDPName), 0, nil, &err);
+    if(err)
+    {
+        fail("misc", "OTOpenEndpoint udp", err);
+        return;
+    }
+    if(OTGetProviderPortRef(ep) != port.fRef)
+    {
+        fail("misc", "OTGetProviderPortRef", OTGetProviderPortRef(ep));
+        OTCloseProvider(ep);
+        return;
+    }
+    if(OTSync(ep) != T_UNBND)
+    {
+        fail("misc", "OTSync before bind", OTSync(ep));
+        OTCloseProvider(ep);
+        return;
+    }
+    OTBind(ep, nil, nil);
+    if(OTSync(ep) != T_IDLE)
+    {
+        fail("misc", "OTSync after bind", OTSync(ep));
+        OTCloseProvider(ep);
+        return;
+    }
+    OTMemzero(&uderr, sizeof uderr);
+    if(OTRcvUDErr(ep, &uderr) != kOTNoUDErrErr)
+    {
+        fail("misc", "OTRcvUDErr with no error", 0);
+        OTCloseProvider(ep);
+        return;
+    }
+    if(OTIoctl(ep, I_OTGetMiscellaneousEvents, nil) != noErr)
+    {
+        fail("misc", "OTIoctl I_OTGetMiscellaneousEvents", 0);
+        OTCloseProvider(ep);
+        return;
+    }
+    OTUnbind(ep);
+    OTCloseProvider(ep);
+    pass("misc");
+}
+
+/* ---- the rest of the Internet services ------------------------------------ */
+
+static void test_inet_misc(void)
+{
+    OSStatus err;
+    InetSvcRef svc = OTOpenInternetServices(kDefaultInternetServicesPath, 0, &err);
+    InetDomainName name;
+    InetMailExchange mx[4];
+    InetSysInfo sys;
+    UInt16 num = 4;
+    static char buf[2048];
+    void *argv[8];
+
+    if(err)
+    {
+        fail("inet_misc", "OTOpenInternetServices", err);
+        return;
+    }
+    err = OTInetAddressToName(svc, 0x7F000001, name);
+    if(err || !name[0])
+    {
+        fail("inet_misc", "OTInetAddressToName 127.0.0.1", err);
+        OTCloseProvider(svc);
+        return;
+    }
+    printf("# 127.0.0.1 -> %s\n", name);
+    /* These go to the host's name servers; whatever they answer, the calls
+       come back with a result and leave the buffers sane. */
+    err = OTInetMailExchange(svc, "no-such-host.invalid", &num, mx);
+    printf("# MX no-such-host.invalid: %ld (%u)\n", (long)err, num);
+    if(err == noErr && num > 4)
+    {
+        fail("inet_misc", "OTInetMailExchange count", num);
+        OTCloseProvider(svc);
+        return;
+    }
+    err = OTInetSysInfo(svc, "no-such-host.invalid", &sys);
+    printf("# HINFO no-such-host.invalid: %ld\n", (long)err);
+    if(err == noErr)
+    {
+        fail("inet_misc", "OTInetSysInfo answered for a name that isn't there", 0);
+        OTCloseProvider(svc);
+        return;
+    }
+    err = OTInetQuery(svc, "no-such-host.invalid", 1, 1, buf, sizeof buf, argv, 8, 0);
+    printf("# query no-such-host.invalid A: %ld\n", (long)err);
+    if(err == noErr)
+    {
+        fail("inet_misc", "OTInetQuery answered for a name that isn't there", 0);
+        OTCloseProvider(svc);
+        return;
+    }
+    OTCloseProvider(svc);
+    pass("inet_misc");
+}
+
 /* ---- main ------------------------------------------------------------ */
 
 typedef void (*TestFn)(void);
@@ -831,6 +1615,14 @@ static const struct
     { "tcp_refused", test_tcp_refused, false },
     { "tcp_listen", test_tcp_listen, false },
     { "udp", test_udp, true },
+    { "atomics", test_atomics, false },
+    { "tasks", test_tasks, false },
+    { "options", test_options, true },
+    { "udp_more", test_udp_more, true },
+    { "cancel", test_cancel, true },
+    { "dns_addr", test_dns_addr, true },
+    { "misc", test_misc, false },
+    { "inet_misc", test_inet_misc, false },
 };
 
 static Boolean wanted(int argc, char **argv, const char *name)

@@ -8,7 +8,9 @@
 
 #include <deque>
 #include <functional>
+#include <map>
 #include <string>
+#include <vector>
 
 namespace Executor
 {
@@ -33,8 +35,20 @@ enum : uint32_t
     T_DISCONNECTCOMPLETE = 0x20000005,
     T_OPTMGMTCOMPLETE = 0x20000006,
     T_OPENCOMPLETE = 0x20000007,
+    T_GETPROTADDRCOMPLETE = 0x20000008,
+    T_RESOLVEADDRCOMPLETE = 0x20000009,
+    T_SYNCCOMPLETE = 0x2000000B,
     T_DNRSTRINGTOADDRCOMPLETE = 0x10000001,
     T_DNRADDRTONAMECOMPLETE = 0x10000002,
+    T_DNRSYSINFOCOMPLETE = 0x10000003,
+    T_DNRMAILEXCHANGECOMPLETE = 0x10000004,
+    T_DNRQUERYCOMPLETE = 0x10000005,
+};
+
+/* OTFlags. */
+enum : uint32_t
+{
+    T_MORE = 0x001,
 };
 
 /* Endpoint states. */
@@ -92,6 +106,26 @@ struct Provider
     };
     std::deque<Pending> incoming; /* connections OTListen has handed out */
     uint32_t next_seq = 1;
+
+    /* A blocking call waiting, and what OTCancelSynchronousCalls made it
+       answer. */
+    bool in_sync_wait = false;
+    int32_t cancel_err = 0;
+
+    /* A connect to a DNSAddress, its name being looked up. */
+    bool resolving = false;
+
+    /* The rest of a datagram bigger than OTRcvUData's buffer, handed out
+       by the next calls (T_MORE until the last piece). */
+    std::vector<uint8_t> udata_rest;
+    size_t udata_rest_off = 0;
+    uint32_t udata_rest_host = 0;
+    uint16_t udata_rest_port = 0;
+
+    /* Options set with OTOptionManagement before there was a socket (a TCP
+       endpoint makes it at bind or connect): (level << 16 | name) ->
+       value, applied when it is made. */
+    std::map<uint32_t, std::vector<uint8_t>> pending_opts;
 };
 
 Provider *find_provider(uint32_t ref);
@@ -106,6 +140,22 @@ void post(Provider &p, uint32_t code, int32_t result, uint32_t cookie);
 void wake();
 /* Work for the interrupt from other parts (the resolver's results). */
 void add_pump_hook(std::function<void()> hook);
+
+/* A host name's first IPv4 address, from the host's resolver (ot_inet.cpp):
+   kOTNoError, or OT's error for the lookup. */
+int32_t inet_resolve(const std::string &name, uint32_t &ip);
+
+/* The one port there is: built-in Ethernet ("enet", ot_ports in ot_inet.cpp). */
+uint32_t enet_port_ref();
+
+/* Options (ot_options.cpp): OTOptionManagement's work; the options kept
+   for a socket not made yet, applied once it is; whether the client set
+   one; OTNextOption and OTFindOption. */
+uint32_t option_management(Provider &p, uint32_t req, uint32_t ret);
+void apply_pending_options(Provider &p);
+bool option_was_set(const Provider &p, uint32_t level, uint32_t name);
+uint32_t next_option(const Call &c);
+uint32_t find_option(const Call &c);
 
 /* The A5 world the client is running in now. */
 uint32_t current_a5();

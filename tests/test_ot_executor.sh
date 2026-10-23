@@ -85,7 +85,8 @@ echo "$out" | sed 's/^/    /'
 
 FAILS=0
 for c in gestalt init utils dns_sync dns_async iface tcp_blocking tcp_nonblocking \
-         tcp_async tcp_refused tcp_listen udp; do
+         tcp_async tcp_refused tcp_listen udp atomics tasks options udp_more cancel \
+         dns_addr misc inet_misc; do
     if grep -qx "PASS $c" <<<"$out"; then
         echo "PASS $c"
     else

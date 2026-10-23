@@ -2,6 +2,7 @@
  * Development, Inc.  All rights reserved.
  */
 
+#include <rsys/opentransport.h>
 #include <rsys/desk.h>
 #include <menu/menu.h>
 
@@ -314,6 +315,8 @@ void Executor::C_SystemTask()
     ROMlib_drivers_give_time();
     /* MacPhoenix: 7.5.5's SystemTask patch: the Help Manager's balloons. */
     ROMlib_help_idle();
+    /* MacPhoenix: Open Transport's system tasks. */
+    ROMlib_ot_system_task();
 }
 
 Boolean Executor::C_SystemEvent(EventRecord *evp)

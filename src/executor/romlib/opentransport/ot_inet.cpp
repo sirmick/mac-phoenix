@@ -7,18 +7,23 @@
  * one answers noErr at once and looks it up on a host thread; the result
  * goes into the caller's InetHostInfo and T_DNRSTRINGTOADDRCOMPLETE (or
  * T_DNRADDRTONAMECOMPLETE) reaches its notifier at interrupt time, the
- * cookie the caller's buffer, as OT's. */
+ * cookie the caller's buffer, as OT's. The other queries (OTInetSysInfo's
+ * HINFO, OTInetMailExchange's MX, OTInetQuery's any) go to the host's
+ * name servers with res_query, and are answered the same two ways. */
 
 #include "ot_provider.h"
 
 #include <arpa/inet.h>
+#include <arpa/nameser.h>
 #include <ifaddrs.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <resolv.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <functional>
 #include <cstring>
 #include <fstream>
 #include <memory>
@@ -129,13 +134,143 @@ void fill_name(uint32_t buf, const std::string &s)
         WRITEUB(buf + i, i < name.size() ? name[i] : 0);
 }
 
-/* Lookups finished on host threads, for the pump. */
+/* ---- DNS queries ----------------------------------------------------------
+   res_query's answer parsed here (RFC 1035): the header, the questions
+   skipped, then the resource records of the three sections. */
+
+struct RR
+{
+    std::string name;
+    uint16_t type = 0, cls = 0;
+    uint32_t ttl = 0;
+    int section = 0; /* 1 answer, 2 authority, 3 additional */
+    std::vector<uint8_t> rdata; /* names in it expanded (CNAME, NS, PTR, MX) */
+};
+
+/* A (possibly compressed) name at off; off moves past it. */
+bool read_dns_name(const std::vector<uint8_t> &m, size_t &off, std::string &out)
+{
+    out.clear();
+    size_t at = off;
+    bool jumped = false;
+    for(int guard = 0; guard < 128; guard++)
+    {
+        if(at >= m.size())
+            return false;
+        uint8_t len = m[at];
+        if((len & 0xC0) == 0xC0)
+        {
+            if(at + 1 >= m.size())
+                return false;
+            if(!jumped)
+                off = at + 2;
+            jumped = true;
+            at = ((len & 0x3F) << 8) | m[at + 1];
+            continue;
+        }
+        if(len == 0)
+        {
+            if(!jumped)
+                off = at + 1;
+            return true;
+        }
+        if(at + 1 + len > m.size())
+            return false;
+        if(!out.empty())
+            out += '.';
+        out.append((const char *)&m[at + 1], len);
+        at += 1 + len;
+    }
+    return false;
+}
+
+void put_name(std::vector<uint8_t> &v, const std::string &name)
+{
+    v.insert(v.end(), name.begin(), name.end());
+    v.push_back(0);
+}
+
+int32_t dns_query(const std::string &name, int cls, int type, std::vector<RR> &rrs)
+{
+    std::vector<uint8_t> m(8192);
+    int n = res_query(name.c_str(), cls, type, m.data(), m.size());
+    if(n < 0)
+    {
+        switch(h_errno)
+        {
+            case HOST_NOT_FOUND:
+                return kOTBadNameErr;
+            case NO_DATA:
+                return kOTNoError; /* the name is there, no such records */
+            case TRY_AGAIN:
+                return kETIMEDOUTErr;
+            default:
+                return kOTBadNameErr;
+        }
+    }
+    m.resize(std::min<int>(n, m.size()));
+    if(m.size() < 12)
+        return kOTSysErrorErr;
+    unsigned counts[4];
+    for(int i = 0; i < 4; i++)
+        counts[i] = (m[4 + 2 * i] << 8) | m[5 + 2 * i];
+    size_t off = 12;
+    std::string qname;
+    for(unsigned i = 0; i < counts[0]; i++)
+        if(!read_dns_name(m, off, qname) || (off += 4) > m.size())
+            return kOTSysErrorErr;
+    for(int section = 1; section <= 3; section++)
+        for(unsigned i = 0; i < counts[section]; i++)
+        {
+            RR rr;
+            rr.section = section;
+            if(!read_dns_name(m, off, rr.name) || off + 10 > m.size())
+                return kOTSysErrorErr;
+            rr.type = (m[off] << 8) | m[off + 1];
+            rr.cls = (m[off + 2] << 8) | m[off + 3];
+            rr.ttl = ((uint32_t)m[off + 4] << 24) | (m[off + 5] << 16) | (m[off + 6] << 8) | m[off + 7];
+            size_t len = (m[off + 8] << 8) | m[off + 9];
+            off += 10;
+            if(off + len > m.size())
+                return kOTSysErrorErr;
+            size_t r = off;
+            std::string target;
+            switch(rr.type)
+            {
+                case ns_t_cname:
+                case ns_t_ns:
+                case ns_t_ptr:
+                    if(read_dns_name(m, r, target))
+                        put_name(rr.rdata, target);
+                    break;
+                case ns_t_mx:
+                    if(len >= 2)
+                    {
+                        rr.rdata = { m[off], m[off + 1] };
+                        r += 2;
+                        if(read_dns_name(m, r, target))
+                            put_name(rr.rdata, target);
+                    }
+                    break;
+                default:
+                    rr.rdata.assign(m.begin() + off, m.begin() + off + len);
+            }
+            off += len;
+            rrs.push_back(std::move(rr));
+        }
+    return kOTNoError;
+}
+
+/* ---- answers delivered later ---------------------------------------------
+   An asynchronous provider's lookup runs on a host thread; its answer is
+   written into the caller's memory at interrupt time and the completion
+   event (cookie: the caller's buffer) goes to the notifier. */
 struct Done
 {
     uint32_t ref;
-    bool reverse;
-    uint32_t buf; /* InetHostInfo, or the InetDomainName */
-    Answer answer;
+    uint32_t code;
+    uint32_t cookie;
+    std::function<int32_t()> fill; /* writes the answer; returns the result */
 };
 std::mutex done_mutex;
 std::vector<Done> done;
@@ -152,24 +287,18 @@ void deliver()
         Provider *p = find_provider(d.ref);
         if(!p)
             continue; /* closed before it answered */
-        OT_LOG("lookup done for %08x: %d \"%s\" (%zu addresses)\n", d.ref, d.answer.err,
-               d.answer.name.c_str(), d.answer.addrs.size());
-        if(d.reverse)
-        {
-            fill_name(d.buf, d.answer.name);
-            post(*p, T_DNRADDRTONAMECOMPLETE, d.answer.err, d.buf);
-        }
-        else
-        {
-            fill_hostinfo(d.buf, d.answer);
-            post(*p, T_DNRSTRINGTOADDRCOMPLETE, d.answer.err, d.buf);
-        }
+        int32_t err = d.fill();
+        OT_LOG("lookup done for %08x: event $%08x result %d\n", d.ref, d.code, err);
+        post(*p, d.code, err, d.cookie);
     }
 }
 
 bool hooked = false;
 
-void start_lookup(Provider &p, bool rev, std::string name, uint32_t ip, uint32_t buf)
+/* Run work on a host thread; it returns the filler to run at interrupt
+   time. */
+void later(Provider &p, uint32_t code, uint32_t cookie,
+           std::function<std::function<int32_t()>()> work)
 {
     if(!hooked)
     {
@@ -178,13 +307,28 @@ void start_lookup(Provider &p, bool rev, std::string name, uint32_t ip, uint32_t
     }
     uint32_t ref = p.ref;
     std::thread([=]() {
-        Done d{ ref, rev, buf, rev ? reverse(ip) : resolve(name) };
+        Done d{ ref, code, cookie, work() };
         {
             std::lock_guard<std::mutex> lock(done_mutex);
             done.push_back(std::move(d));
         }
         wake();
     }).detach();
+}
+
+void start_lookup(Provider &p, bool rev, std::string name, uint32_t ip, uint32_t buf)
+{
+    later(p, rev ? T_DNRADDRTONAMECOMPLETE : T_DNRSTRINGTOADDRCOMPLETE, buf,
+          [=]() -> std::function<int32_t()> {
+              Answer a = rev ? reverse(ip) : resolve(name);
+              return [=]() {
+                  if(rev)
+                      fill_name(buf, a.name);
+                  else
+                      fill_hostinfo(buf, a);
+                  return a.err;
+              };
+          });
 }
 
 /* ---- the provider ----------------------------------------------------- */
@@ -259,6 +403,197 @@ uint32_t address_to_name(const Call &c)
     Answer a = reverse(c.l(1));
     fill_name(c.l(2), a.name);
     return a.err;
+}
+
+/* The answer for OTInetSysInfo: HINFO's two character strings. */
+int32_t sysinfo_answer(const std::string &name, std::string &cpu, std::string &os)
+{
+    std::vector<RR> rrs;
+    int32_t err = dns_query(name, ns_c_in, ns_t_hinfo, rrs);
+    if(err)
+        return err;
+    for(auto &rr : rrs)
+        if(rr.section == 1 && rr.type == ns_t_hinfo && !rr.rdata.empty())
+        {
+            const auto &d = rr.rdata;
+            size_t l1 = d[0];
+            if(1 + l1 >= d.size())
+                break;
+            cpu.assign((const char *)&d[1], l1);
+            size_t l2 = d[1 + l1];
+            if(2 + l1 + l2 > d.size())
+                break;
+            os.assign((const char *)&d[2 + l1], l2);
+            return kOTNoError;
+        }
+    return kOTBadNameErr;
+}
+
+void fill_sysinfo(uint32_t info, const std::string &cpu, const std::string &os)
+{
+    if(!info)
+        return;
+    for(uint32_t i = 0; i < 32; i++)
+    {
+        WRITEUB(info + i, i < 31 && i < cpu.size() ? cpu[i] : 0);
+        WRITEUB(info + 32 + i, i < 31 && i < os.size() ? os[i] : 0);
+    }
+}
+
+/* pascal OSStatus OTInetSysInfo(ref, char *name, InetSysInfo *) */
+uint32_t sys_info(const Call &c)
+{
+    Provider *p = find_provider(c.l(0));
+    if(!p || p->kind != Kind::Inet)
+        return kOTBadReferenceErr;
+    std::string name = guest_cstring(c.l(1));
+    uint32_t info = c.l(2);
+    OT_LOG("OTInetSysInfo \"%s\"%s\n", name.c_str(), p->async ? " async" : "");
+    if(p->async)
+    {
+        later(*p, T_DNRSYSINFOCOMPLETE, info, [=]() -> std::function<int32_t()> {
+            std::string cpu, os;
+            int32_t err = sysinfo_answer(name, cpu, os);
+            return [=]() {
+                if(!err)
+                    fill_sysinfo(info, cpu, os);
+                return err;
+            };
+        });
+        return kOTNoError;
+    }
+    std::string cpu, os;
+    int32_t err = sysinfo_answer(name, cpu, os);
+    if(!err)
+        fill_sysinfo(info, cpu, os);
+    return err;
+}
+
+/* MX records, lowest preference first. */
+using MXList = std::vector<std::pair<uint16_t, std::string>>;
+
+int32_t mx_answer(const std::string &name, MXList &mx)
+{
+    std::vector<RR> rrs;
+    int32_t err = dns_query(name, ns_c_in, ns_t_mx, rrs);
+    if(err)
+        return err;
+    for(auto &rr : rrs)
+        if(rr.section == 1 && rr.type == ns_t_mx && rr.rdata.size() >= 3)
+            mx.emplace_back((rr.rdata[0] << 8) | rr.rdata[1],
+                            std::string((const char *)&rr.rdata[2]));
+    std::stable_sort(mx.begin(), mx.end(),
+                     [](auto &a, auto &b) { return a.first < b.first; });
+    return kOTNoError;
+}
+
+/* InetMailExchange: UInt16 preference, InetDomainName exchange (258 bytes). */
+void fill_mx(uint32_t nump, uint32_t out, const MXList &mx)
+{
+    unsigned room = nump ? READUW(nump) : 0;
+    unsigned n = std::min<size_t>(room, mx.size());
+    for(unsigned i = 0; i < n && out; i++)
+    {
+        WRITEUW(out + 258 * i, mx[i].first);
+        fill_name(out + 258 * i + 2, mx[i].second);
+    }
+    if(nump)
+        WRITEUW(nump, n);
+}
+
+/* pascal OSStatus OTInetMailExchange(ref, char *name, UInt16 *num,
+   InetMailExchange *) */
+uint32_t mail_exchange(const Call &c)
+{
+    Provider *p = find_provider(c.l(0));
+    if(!p || p->kind != Kind::Inet)
+        return kOTBadReferenceErr;
+    std::string name = guest_cstring(c.l(1));
+    uint32_t nump = c.l(2), out = c.l(3);
+    OT_LOG("OTInetMailExchange \"%s\"%s\n", name.c_str(), p->async ? " async" : "");
+    if(p->async)
+    {
+        later(*p, T_DNRMAILEXCHANGECOMPLETE, out, [=]() -> std::function<int32_t()> {
+            MXList mx;
+            int32_t err = mx_answer(name, mx);
+            return [=]() {
+                if(!err)
+                    fill_mx(nump, out, mx);
+                else if(nump)
+                    WRITEUW(nump, 0);
+                return err;
+            };
+        });
+        return kOTNoError;
+    }
+    MXList mx;
+    int32_t err = mx_answer(name, mx);
+    if(!err)
+        fill_mx(nump, out, mx);
+    else if(nump)
+        WRITEUW(nump, 0);
+    return err;
+}
+
+/* OTInetQuery's records into buf as DNSQueryInfo (qType, qClass, ttl,
+   InetDomainName name, responseType: 1 answer, 2 authority, 3 additional,
+   resourceLen, resourceData), each on a 4-byte boundary, and pointers to
+   them in argv, nil after the last if there is room. Records that don't
+   fit are left out. */
+int32_t fill_query(const std::vector<RR> &rrs, uint32_t buf, uint32_t buflen, uint32_t argv,
+                   uint32_t argvlen)
+{
+    uint32_t at = 0, n = 0;
+    for(auto &rr : rrs)
+    {
+        uint32_t size = (268 + rr.rdata.size() + 3) & ~3u;
+        if(at + size > buflen || n >= argvlen)
+            break;
+        uint32_t q = buf + at;
+        WRITEUW(q, rr.type);
+        WRITEUW(q + 2, rr.cls);
+        WRITEUL(q + 4, rr.ttl);
+        for(uint32_t i = 0; i < 256; i++)
+            WRITEUB(q + 8 + i, i < 255 && i < rr.name.size() ? rr.name[i] : 0);
+        WRITEUW(q + 264, rr.section);
+        WRITEUW(q + 266, rr.rdata.size());
+        for(size_t i = 0; i < rr.rdata.size(); i++)
+            WRITEUB(q + 268 + i, rr.rdata[i]);
+        WRITEUL(argv + 4 * n, q);
+        n++;
+        at += size;
+    }
+    if(n < argvlen)
+        WRITEUL(argv + 4 * n, 0);
+    return rrs.empty() ? kOTBadNameErr : kOTNoError;
+}
+
+/* pascal OSStatus OTInetQuery(ref, char *name, UInt16 qClass, UInt16 qType,
+   char *buf, size_t buflen, void **argv, size_t argvlen, OTFlags) */
+uint32_t query(const Call &c)
+{
+    Provider *p = find_provider(c.l(0));
+    if(!p || p->kind != Kind::Inet)
+        return kOTBadReferenceErr;
+    std::string name = guest_cstring(c.l(1));
+    int cls = c.w(2), type = c.w(3);
+    uint32_t buf = c.l(4), buflen = c.l(5), argv = c.l(6), argvlen = c.l(7);
+    OT_LOG("OTInetQuery \"%s\" class %d type %d%s\n", name.c_str(), cls, type,
+           p->async ? " async" : "");
+    if(!buf || !argv)
+        return kOTBadReferenceErr;
+    if(p->async)
+    {
+        later(*p, T_DNRQUERYCOMPLETE, buf, [=]() -> std::function<int32_t()> {
+            auto rrs = std::make_shared<std::vector<RR>>();
+            int32_t err = dns_query(name, cls, type, *rrs);
+            return [=]() { return err ? err : fill_query(*rrs, buf, buflen, argv, argvlen); };
+        });
+        return kOTNoError;
+    }
+    std::vector<RR> rrs;
+    int32_t err = dns_query(name, cls, type, rrs);
+    return err ? err : fill_query(rrs, buf, buflen, argv, argvlen);
 }
 
 /* ---- address helpers -------------------------------------------------- */
@@ -400,9 +735,19 @@ const Def table[] = {
     { inet, "OTINETSTRINGTOHOST", Conv::Pascal, "LL", 'L', string_to_host },
     { inet, "OTINETHOSTTOSTRING", Conv::Pascal, "LL", 'V', host_to_string },
     { inet, "OTINETGETINTERFACEINFO", Conv::Pascal, "LL", 'L', get_interface_info },
+    { inet, "OTINETSYSINFO", Conv::Pascal, "LLL", 'L', sys_info },
+    { inet, "OTINETMAILEXCHANGE", Conv::Pascal, "LLLL", 'L', mail_exchange },
+    { inet, "OTINETQUERY", Conv::Pascal, "LLWWLLLLL", 'L', query },
 };
 
 } // anonymous namespace
+
+int32_t Executor::ot::inet_resolve(const std::string &name, uint32_t &ip)
+{
+    Answer a = resolve(name);
+    ip = a.addrs.empty() ? 0 : a.addrs[0];
+    return a.err ? a.err : a.addrs.empty() ? kOTBadNameErr : kOTNoError;
+}
 
 void Executor::ot::register_inet()
 {

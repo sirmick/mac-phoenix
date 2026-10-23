@@ -83,8 +83,12 @@ function set's ID as a C string at +16. The function sets and their indices
   The `…Priv` entries are C and take the glue's client record last. A
   function no part implements is a fatal error naming it when it is bound.
 * **Providers** (`ot_provider.cpp`): a ProviderRef is a cookie. Endpoints
-  are non-blocking host sockets. Blocking-mode calls wait in poll(2);
-  non-blocking ones answer kOTNoDataErr / kOTFlowErr. A watcher thread polls
+  are non-blocking host sockets. A blocking-mode call waits for its socket
+  in 20 ms slices and runs the interrupts that came due in between (Time
+  Manager, VBL, OT's own pump: notifiers, deferred tasks), as a Mac's
+  interrupts go on while an application spins in a blocking call; one of
+  them may end the wait with OTCancelSynchronousCalls. Non-blocking calls
+  answer kOTNoDataErr / kOTFlowErr. A watcher thread polls
   the sockets that wait for something and raises an Executor interrupt; at
   interrupt time the pump sets what OTLook reports (T_CONNECT, T_DATA,
   T_ORDREL, T_DISCONNECT, T_LISTEN, T_GODATA) and calls the notifiers.
@@ -92,12 +96,41 @@ function set's ID as a C string at +16. The function sets and their indices
   are queued and delivered the same way, after the call returned; a
   notifier is never re-entered. Notifiers run in the A5 world the client had
   when it installed them. T_DATA is sent once for what is waiting and again
-  only after OTRcv answered kOTNoDataErr.
+  only after OTRcv answered kOTNoDataErr. A datagram bigger than
+  OTRcvUData's buffer comes in pieces, T_MORE on all but the last. Addresses
+  may be DNSAddresses (`"name:port"`): OTConnect (looked up on a host thread
+  for an asynchronous or non-blocking endpoint, then T_CONNECT as usual),
+  OTSndUData, OTResolveAddress. OTRcvUDErr never has an error to report
+  (ICMP isn't seen); OTIoctl accepts I_OTGetMiscellaneousEvents and nothing
+  else.
+* **Options** (`ot_options.cpp`): OTOptionManagement on host socket
+  options: T_NEGOTIATE, T_CHECK, T_DEFAULT, T_CURRENT (T_ALLOPT for a
+  level), per-option status and the worst in the answer's flags.
+  XTI_GENERIC: XTI_LINGER, XTI_SNDBUF, XTI_RCVBUF, XTI_SNDLOWAT,
+  XTI_RCVLOWAT, XTI_DEBUG; INET_TCP: TCP_NODELAY (on unless the client sets
+  it), TCP_MAXSEG, TCP_KEEPALIVE; INET_IP: IP_TOS, IP_TTL, IP_REUSEADDR,
+  IP_DONTROUTE, IP_BROADCAST, multicast TTL, loop, join and leave;
+  UDP_CHECKSUM. Options set before a TCP endpoint has its socket (made at
+  OTBind or OTConnect) are applied when it is made. OTNextOption and
+  OTFindOption walk option buffers.
+* **Tasks** (`ot_tasks.cpp`): deferred tasks run from the pump (deferred
+  task time), system tasks from SystemTask in their own process, both in
+  their creator's A5 world. OTCanMakeSyncCall and OTIsAtInterruptLevel
+  follow the pump, deferred tasks and OTEnterInterrupt brackets. Atomic
+  operations, OTEnqueue/OTDequeue, OTFindLink and the list calls are in
+  `ot_utils.cpp` (SC compiles the atomic ones inline as BSET/CAS).
+* **Ports**: one, built-in Ethernet (`"enet"`, kOTEthernetDevice on the
+  motherboard bus): OTGetIndexedPort, OTFindPort, OTFindPortByRef,
+  OTGetProviderPortRef, and the OTPortRef packing calls.
 * **Internet services** (`ot_inet.cpp`): the host's resolver, synchronous
   in place or on a host thread for an asynchronous provider
   (T_DNRSTRINGTOADDRCOMPLETE with the caller's InetHostInfo as cookie);
   OTInetGetInterfaceInfo reports the host's default-route address, its mask,
-  the first name server in /etc/resolv.conf.
+  the first name server in /etc/resolv.conf. OTInetSysInfo (HINFO),
+  OTInetMailExchange (MX, lowest preference first) and OTInetQuery (any
+  class and type, as DNSQueryInfo records with names in the data expanded)
+  ask the host's name servers with res_query, synchronous or asynchronous
+  (T_DNRSYSINFOCOMPLETE, T_DNRMAILEXCHANGECOMPLETE, T_DNRQUERYCOMPLETE).
 * **Defaults.** A new provider is synchronous and non-blocking.
 
 ## Tests and tools
@@ -106,20 +139,23 @@ function set's ID as a C string at +16. The function sets and their indices
   far` on SC and Link: the glue makes 32-bit references), built with
   `tools/mpw/mpw build tests/guest/ot -o tests/guest/ot`; the binary is
   committed. `tests/test_ot_executor.sh` runs it on a session with
-  `--executor-ot` against `tests/lib/echo_server.py`.
+  `--executor-ot` against `tests/lib/echo_server.py`: 20 cases (Gestalt and
+  init, utilities, atomics and queues, deferred and system tasks, the
+  resolver both ways, interface info, TCP blocking, non-blocking,
+  asynchronous, refused and listening, UDP and a datagram in pieces,
+  options, a blocking call cancelled from a Time Manager task, DNSAddresses,
+  ports and the odd calls, the other Internet services).
 
 ## Open
 
-* OT stays behind `--executor-ot` until more applications have run on it;
-  then on by default with Apple's System (the MacTCP applications are
-  unaffected either way).
-* A datagram bigger than OTRcvUData's buffer loses the rest (T_MORE is set;
-  OT would hand the rest out in further calls).
-* Blocking calls wait in poll(2) with no timeout but OTConnect's (75 s), so
-  a blocking OTRcv on a silent peer holds the 68k thread, as on a Mac
-  without threads.
-
-Options (OTOptionManagement echoes the request), OTInetSysInfo,
-OTInetMailExchange, OTInetQuery, mappers and name registration, the `Ntv*`
-sets, transfer of ownership, OT on by default, and the PPC binding (CFM's
-OpenTransportLib, OTInetClientLib, OTUtilityLib onto the same C++).
+* OT is behind `--executor-ot`; on by default with Apple's System is the
+  next decision (a MacTCP application is unaffected either way, but one
+  that asks Gestalt `'otan'` then picks OT over MacTCP).
+* Datagram errors (T_UDERR, OTRcvUDErr) and the ICMP reports behind them.
+* Not written: mappers and name registration (AppleTalk's NBP), the
+  transaction calls (OTSndRequest and friends: ATP, ADSP), OTCreateOptions /
+  OTCreateOptionString, no-copy receive (OTReleaseBuffer, OTReadBuffer),
+  transfer of ownership, the `Ntv*` and configuration-database sets, and
+  the PPC binding (CFM's OpenTransportLib, OTInetClientLib, OTUtilityLib
+  onto the same C++). Timer tasks and most port calls have no 68k glue in
+  OT 1.1 (native only), so 68k clients can't reach them.

@@ -173,6 +173,90 @@ hosting):
 First gate: the built-in Browser app headless to a canvas, then the
 Finder.
 
+**Decided 2026-10-23** (planning still open; layout below is being
+discussed):
+
+* **Processes: minicoro, Asyncify in the browser.** Plain static hosting,
+  no COOP/COEP headers, no `SharedArrayBuffer`. Emscripten pthreads
+  keeping today's thread baton was the alternative (no instrumentation,
+  but cross-origin isolation); rejected. Asyncify's cost (code size,
+  instrumented run loops) is measured early and trimmed with
+  `ASYNCIFY_ONLY`/`ASYNCIFY_REMOVE` lists; JSPI when it can carry fibers.
+* **CPU: `mame-68k` and `mame-ppc` only.** UAE leaves Executor first
+  (D1's last step). On `mame-ppc` the portable C back-end (`drcbec`):
+  PowerCore already sits on Executor's own windows
+  (`syn68k_guest_memory()`), so the ROM machine's 4GB reservation never
+  comes into it; `drccache`'s RWX allocation becomes plain memory, the
+  asmjit/x64/arm64 back-ends are left out. wasm32, not memory64.
+* **The module runs in a dedicated Worker.** Frames to an
+  `OffscreenCanvas`, input and uploads by `postMessage`, audio to an
+  AudioWorklet; the page stays responsive through long traps. No
+  `SharedArrayBuffer` needed, so static hosting holds.
+* **No Apple software on the site.** It boots Executor's own System; users
+  upload a disk image (theirs: an Apple System, applications), kept in
+  OPFS.
+* **Networking: none at first; the socket layer becomes a host
+  interface.** A page can't open TCP/UDP, only fetch, WebSocket, WebRTC,
+  WebTransport. Executor's MacTCP and OT are C++ over host sockets, so the
+  browser backend is a socket-level relay (connect/send/recv/DNS over one
+  WebSocket; no TCP/IP stack, no NAT): self-hostable, a small Rust
+  service or a Cloudflare Worker (`connect()`, DNS over HTTPS; no UDP),
+  port-restricted since a public relay is an open proxy. TLS stripping
+  belongs there too: period software can't speak modern TLS. Later,
+  WebRTC data channels between tabs for AppleTalk (multiplayer, file
+  sharing), which needs only a signalling server.
+
+**Layout: one source tree, two builds** (agreed 2026-10-23).
+`cmake -B build` is mac-phoenix with Executor inside, as today;
+`emcmake cmake -B build-wasm` builds `executor.wasm` + `.js` and nothing
+else, with `CMAKE_CROSSCOMPILING_EMULATOR=node` so `ctest -L executor`
+runs the gtest suite under node.
+
+| Layer | Native | wasm |
+|---|---|---|
+| `romlib/` | the same | the same |
+| Front end | `config/front-ends/phoenix/` (`executor_host.h`) | `config/front-ends/wasm/`: the same `executor_host` contract, exported to the Worker |
+| Host process | `host/executor_child.cpp` (IPC to the parent) | not built |
+| CPU | `cpu/` + cpu_core: `mame-68k`, `mame-ppc` with every back-end | the same; `drcbec` only |
+| Host edges | POSIX implementation | Emscripten implementation |
+| Page | `client/` (mac-phoenix's UI) | `web/executor/`: static HTML/JS, Worker, upload |
+
+Not in the wasm build: the mac-phoenix parent (Qt, webserver, WebRTC),
+net-bridge, the ROM machines, UAE, asmjit.
+
+Rules:
+
+1. No `__EMSCRIPTEN__` in `romlib/`. A host edge is one interface header
+   and one `.cpp` per platform (`host/posix/`, `host/wasm/`), picked by
+   CMake. `#ifdef __EMSCRIPTEN__` only in the wasm front end and wasm host
+   files.
+2. Optional modules always compile, with a stub backend (MacTCP/OT on a
+   "no network" socket backend), not behind a define. CMake options only
+   where code drags in a dependency (`MAME_PPC_BACKENDS=c;x64;arm64`).
+3. minicoro hides its own backend: one `process.cpp`.
+4. Upstream's dead platform conditionals (`CYGWIN32`, `MSDOS`,
+   `OLD_BROKEN_NEXTSTEP_SOUND`, most `__APPLE__`/`_WIN32`) go in D3.
+
+Two things in today's code to fix on the way: the generated sources
+(8 custom commands, `map_to_c`/`mkseed*` build tools, the Ruby/Perl/Bison
+generators) must be committed before the wasm build, since `emcmake` would
+compile the tools to wasm; and `syn68k_common.cpp` reserves each 1GB
+window with `mmap`, which Emscripten commits, so window backing is sized
+to use (RAM + 64KB tail, a 16–32MB pool) behind the memory host edge.
+
+**The W steps (D4 in detail):**
+
+| | Step | Gate |
+|---|---|---|
+| W-spike | minicoro on Emscripten fibers + `emscripten_sleep` under Asyncify, in a Worker | two coroutines switching, each yielding to the browser, a C++→callback→yield stack resumed |
+| W0 | Native clean-up: UAE out of Executor, minicoro (D2), Boost → `std`, generated files committed, host edges (files, clock, sockets, faults, windows) as interfaces (D3) | the native suites pass as today |
+| W1 | wasm under node | `ctest --test-dir build-wasm -L executor` |
+| W2 | A tab: Worker, `OffscreenCanvas`, DOM input, Executor's own System | the built-in Browser app in a tab |
+| W3 | A usable site: Finder, OPFS, disk image upload, WebAudio, JS automation (`/api/ui`/`/api/text` on the Worker) | Playwright drives an uploaded application |
+| W4 | PPC applications on `mame-ppc` + `drcbec` | after native D6 (StdCLib/MathLib): a PPC application in a tab |
+
+Then networking (the relay, WebRTC AppleTalk), HiDPI, C4.
+
 ### 5. PPC: MAME's PowerPC recompiler
 
 Decided 2026-10-10. Upstream Executor's PowerCore has no licence and did
@@ -242,7 +326,7 @@ D2's clean-up of the 68k side; C2 and C3 are independent of D.
 | D1 | Musashi behind the syn68k facade, four windows restored | done except dropping UAE from Executor: `ctest -L executor` and the `_executor` bridge suites match UAE; no `mmap_min_addr` on Musashi |
 | D2 | minicoro Process Manager; timer at yield points | Finder + several applications switching as today; Qt gone from `romlib` |
 | D3 | Dependencies and host edges | builds with only a C++17 compiler (generated files committed) |
-| D4 | wasm build | built-in Browser, then the Finder, in a browser tab |
+| D4 | wasm build (W steps in section 4; decided 2026-10-23) | built-in Browser, then the Finder, in a browser tab |
 | D5 | Demo features | HiDPI QuickDraw (2×), host files as Mac files, rootless windows; HyperCard from a link |
 | D6 | PPC applications on the C2 core behind the PowerCore facade | a PPC application runs (milestone P). **Started 2026-10-21**: PowerPC-only applications on InterfaceLib run (`ppc_hello_executor`); StdCLib/MathLib open (PLAN.md, P) |
 | D7 | A/UX user-mode kernel | the five steps above |

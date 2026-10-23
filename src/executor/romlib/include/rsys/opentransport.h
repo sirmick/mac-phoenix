@@ -17,4 +17,7 @@ bool ROMlib_ot_gestalt(OSType selector, int32_t *value);
 /* A process quits: its OT clients' providers closed, the Shared Library
    Manager records its clients kept in [part_lo, part_hi) freed. */
 void ROMlib_ot_process_exit(uint32_t part_lo, uint32_t part_hi);
+
+/* SystemTask: the current process's scheduled OT system tasks run. */
+void ROMlib_ot_system_task();
 }

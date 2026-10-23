@@ -26,6 +26,7 @@
 
 #include <MemoryMgr.h>
 #include <time/syncint.h>
+#include <rsys/opentransport.h>
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -347,6 +348,7 @@ void pump()
     if(pumping)
         return;
     pumping = true;
+    interrupt_level++; /* deferred task time */
     for(auto &hook : pump_hooks)
         hook();
     std::vector<uint32_t> refs;
@@ -370,6 +372,7 @@ void pump()
         }
         call_notifier(*p, e.code, e.result, e.cookie);
     }
+    interrupt_level--;
     pumping = false;
     rewatch();
 }
@@ -416,6 +419,50 @@ void write_inet(Netbuf nb, const struct sockaddr_in &sin)
     WRITEUL(a + 8, 0);
     WRITEUL(a + 12, 0);
     nb.set_len(16);
+}
+
+/* A DNSAddress (AF_DNS, "name" or "name:port") or an InetAddress, from a
+   netbuf, as a socket address; the name looked up on the host's resolver
+   (blocking: OT's providers do the same for a synchronous endpoint). */
+bool dns_name(Netbuf nb, std::string &name, uint16_t &port)
+{
+    if(!nb.buf() || nb.len() < 3 || READUW(nb.buf()) != 42) /* AF_DNS */
+        return false;
+    std::string s;
+    for(uint32_t i = 2; i < nb.len() && i < 2 + 256; i++)
+    {
+        char ch = READUB(nb.buf() + i);
+        if(!ch)
+            break;
+        s += ch;
+    }
+    port = 0;
+    auto colon = s.rfind(':');
+    if(colon != std::string::npos)
+    {
+        port = (uint16_t)atoi(s.c_str() + colon + 1);
+        s.resize(colon);
+    }
+    name = s;
+    return true;
+}
+
+int32_t read_address(Netbuf nb, struct sockaddr_in &sin)
+{
+    std::string name;
+    uint16_t port;
+    if(dns_name(nb, name, port))
+    {
+        std::memset(&sin, 0, sizeof sin);
+        sin.sin_family = AF_INET;
+        sin.sin_port = htons(port);
+        uint32_t ip;
+        if(int32_t e = inet_resolve(name, ip))
+            return e;
+        sin.sin_addr.s_addr = htonl(ip);
+        return kOTNoError;
+    }
+    return read_inet(nb, sin) ? kOTNoError : kOTBadAddressErr;
 }
 
 /* ---- opening and closing ---------------------------------------------- */
@@ -615,6 +662,8 @@ uint32_t look(const Call &c)
     if(!p)
         return kOTBadReferenceErr;
     service(*p); /* what the socket says now, not only at the last pump */
+    if(!p->look && !p->udata_rest.empty())
+        return T_DATA;
     if(!p->look && p->fd >= 0 && !p->listener && receiving(*p) && ready_now(p->fd, POLLIN))
         return T_DATA;
     return p->look;
@@ -668,6 +717,8 @@ uint32_t get_prot_address(const Call &c)
         sin.sin_family = AF_INET;
         write_inet({ c.l(2) }, sin);
     }
+    if(p->async)
+        post(*p, T_GETPROTADDRCOMPLETE, kOTNoError, c.l(1));
     return kOTNoError;
 }
 
@@ -718,6 +769,7 @@ uint32_t bind_(const Call &c)
         p->qlen = qlen;
     }
     p->fd = fd;
+    apply_pending_options(*p);
     p->state = T_IDLE;
     if(ret)
     {
@@ -775,19 +827,58 @@ int32_t ensure_socket(Provider &p)
     if(p.fd < 0)
         return ot_errno(errno);
     set_nonblocking(p.fd);
+    apply_pending_options(p);
     return kOTNoError;
 }
 
-/* Wait (blocking mode) for fd to be ready; false on timeout. */
-bool wait_fd(int fd, short events, int timeout_ms)
+/* A blocking call's wait for its socket: in slices, with the interrupts
+   that came due run in between (Time Manager and VBL tasks, OT's own pump
+   and so notifiers, deferred tasks), as a Mac's interrupts go on while an
+   application spins in a blocking call. A notifier may cancel the call
+   (OTCancelSynchronousCalls) or close the provider. kOTNoError and ready
+   set, or kOTNoError on timeout (timeout_ms; -1 never), or the cancel's
+   error, or kOTBadReferenceErr if the provider went. */
+int32_t block_wait(uint32_t ref, short events, int timeout_ms, bool &ready)
 {
-    struct pollfd pf = { fd, events, 0 };
+    ready = false;
+    auto until = Clock::now() + std::chrono::milliseconds(timeout_ms < 0 ? 0 : timeout_ms);
+    Provider *p = find_provider(ref);
+    if(p)
+        p->in_sync_wait = true;
+    int32_t err = kOTNoError;
     for(;;)
     {
-        int r = poll(&pf, 1, timeout_ms);
-        if(r >= 0 || errno != EINTR)
-            return r > 0;
+        p = find_provider(ref);
+        if(!p || p->fd < 0)
+        {
+            err = p ? kOTLookErr : kOTBadReferenceErr;
+            break;
+        }
+        if(p->cancel_err)
+        {
+            err = p->cancel_err;
+            p->cancel_err = 0;
+            break;
+        }
+        int slice = 20;
+        if(timeout_ms >= 0)
+        {
+            auto left = std::chrono::duration_cast<std::chrono::milliseconds>(until - Clock::now()).count();
+            if(left <= 0)
+                break;
+            slice = std::min<int>(slice, left);
+        }
+        struct pollfd pf = { p->fd, events, 0 };
+        if(poll(&pf, 1, slice) > 0)
+        {
+            ready = true;
+            break;
+        }
+        syncint_check_interrupt();
     }
+    if((p = find_provider(ref)))
+        p->in_sync_wait = false;
+    return err;
 }
 
 int32_t connect_done(Provider &p)
@@ -806,9 +897,78 @@ int32_t connect_done(Provider &p)
     }
     p.state = T_DATAXFER;
     p.data_armed = true;
+    /* TCP_NODELAY on unless the client set it (T_DEFAULT says so too). */
     int one = 1;
-    setsockopt(p.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
+    if(!option_was_set(p, 0x06, 0x01)) /* INET_TCP, TCP_NODELAY */
+        setsockopt(p.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
     return kOTNoError;
+}
+
+/* Connects to a DNSAddress on an asynchronous or non-blocking endpoint:
+   the name looked up on a host thread, then the connect made from the
+   pump, its outcome T_CONNECT or T_DISCONNECT as for an address. */
+struct Looked
+{
+    uint32_t ref;
+    int32_t err;
+    uint32_t ip;
+    uint16_t port;
+};
+std::mutex looked_mutex;
+std::vector<Looked> looked;
+bool lookup_hooked = false;
+
+void finish_connect_lookups()
+{
+    std::vector<Looked> ready;
+    {
+        std::lock_guard<std::mutex> lock(looked_mutex);
+        ready.swap(looked);
+    }
+    for(auto &l : ready)
+    {
+        Provider *p = find_provider(l.ref);
+        if(!p || !p->resolving)
+            continue;
+        p->resolving = false;
+        int err = 0;
+        if(!l.err)
+        {
+            struct sockaddr_in sin = {};
+            sin.sin_family = AF_INET;
+            sin.sin_port = htons(l.port);
+            sin.sin_addr.s_addr = htonl(l.ip);
+            OT_LOG("connect %08x to %s:%u\n", p->ref, inet_ntoa(sin.sin_addr), l.port);
+            if(::connect(p->fd, (struct sockaddr *)&sin, sizeof sin) == 0 || errno == EINPROGRESS)
+            {
+                p->connecting = true;
+                continue;
+            }
+            err = errno;
+        }
+        close(p->fd);
+        p->fd = -1;
+        p->look = T_DISCONNECT;
+        post(*p, T_DISCONNECT, l.err ? l.err : ot_errno(err), 0);
+    }
+}
+
+void start_connect_lookup(uint32_t ref, const std::string &name, uint16_t port)
+{
+    if(!lookup_hooked)
+    {
+        add_pump_hook(finish_connect_lookups);
+        lookup_hooked = true;
+    }
+    std::thread([=]() {
+        uint32_t ip = 0;
+        int32_t err = inet_resolve(name, ip);
+        {
+            std::lock_guard<std::mutex> lock(looked_mutex);
+            looked.push_back({ ref, err, ip, port });
+        }
+        wake();
+    }).detach();
 }
 
 /* OSStatus OTConnect(ref, TCall *snd, TCall *rcv) */
@@ -823,8 +983,24 @@ uint32_t connect_(const Call &c)
         return kOTOutStateErr;
     uint32_t snd = c.l(1), rcv = c.l(2);
     struct sockaddr_in sin;
-    if(!snd || !read_inet({ snd }, sin))
+    if(!snd)
         return kOTBadAddressErr;
+    std::string name;
+    uint16_t port;
+    if((p->async || !p->blocking) && dns_name({ snd }, name, port))
+    {
+        /* Looked up on a host thread; the connect goes on from the pump. */
+        if(int32_t e = ensure_socket(*p))
+            return e;
+        OT_LOG("connect %08x to \"%s\" port %u: looking it up\n", p->ref, name.c_str(), port);
+        p->state = T_OUTCON;
+        p->resolving = true;
+        p->look = 0;
+        start_connect_lookup(p->ref, name, port);
+        return kOTNoDataErr;
+    }
+    if(int32_t e = read_address({ snd }, sin))
+        return e;
     if(int32_t e = ensure_socket(*p))
         return e;
     OT_LOG("connect %08x to %s:%u%s%s\n", p->ref, inet_ntoa(sin.sin_addr),
@@ -849,13 +1025,18 @@ uint32_t connect_(const Call &c)
     p->connecting = true;
     if(!p->async && p->blocking)
     {
-        if(!wait_fd(p->fd, POLLOUT, 75000))
+        uint32_t ref = p->ref;
+        bool ready;
+        int32_t werr = block_wait(ref, POLLOUT, 75000, ready);
+        if(!(p = find_provider(ref)))
+            return kOTBadReferenceErr;
+        if(werr || !ready)
         {
             close(p->fd);
             p->fd = -1;
             p->connecting = false;
             p->state = T_IDLE;
-            return kETIMEDOUTErr;
+            return werr ? werr : kETIMEDOUTErr;
         }
         int32_t e = connect_done(*p);
         if(e)
@@ -888,6 +1069,8 @@ uint32_t rcv_connect(const Call &c)
         return kOTBadReferenceErr;
     if(p->state != T_OUTCON)
         return kOTOutStateErr;
+    if(p->resolving)
+        return kOTNoDataErr;
     if(p->connecting)
     {
         if(!p->blocking || p->async)
@@ -896,7 +1079,15 @@ uint32_t rcv_connect(const Call &c)
                 return kOTNoDataErr;
         }
         else
-            wait_fd(p->fd, POLLOUT, 75000);
+        {
+            uint32_t ref = p->ref;
+            bool ready;
+            int32_t werr = block_wait(ref, POLLOUT, 75000, ready);
+            if(!(p = find_provider(ref)))
+                return kOTBadReferenceErr;
+            if(werr)
+                return werr;
+        }
     }
     if(p->look == T_DISCONNECT)
         return kOTLookErr;
@@ -934,7 +1125,13 @@ uint32_t listen_(const Call &c)
     int fd = accept(p->fd, (struct sockaddr *)&peer, &len);
     if(fd < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && p->blocking && !p->async)
     {
-        wait_fd(p->fd, POLLIN, -1);
+        uint32_t ref = p->ref;
+        bool ready;
+        int32_t werr = block_wait(ref, POLLIN, -1, ready);
+        if(!(p = find_provider(ref)))
+            return kOTBadReferenceErr;
+        if(werr)
+            return werr;
         len = sizeof peer;
         fd = accept(p->fd, (struct sockaddr *)&peer, &len);
     }
@@ -1000,6 +1197,7 @@ uint32_t accept_(const Call &c)
         lis->listener = false;
     }
     acc->fd = in.fd;
+    apply_pending_options(*acc);
     acc->state = T_DATAXFER;
     acc->data_armed = true;
     acc->look = 0;
@@ -1136,7 +1334,13 @@ uint32_t snd(const Call &c)
         {
             if(p->blocking && !p->async)
             {
-                wait_fd(p->fd, POLLOUT, -1);
+                uint32_t ref = p->ref;
+                bool ready;
+                int32_t werr = block_wait(ref, POLLOUT, -1, ready);
+                if(!(p = find_provider(ref)))
+                    return kOTBadReferenceErr;
+                if(werr)
+                    return sent ? sent : (uint32_t)werr;
                 continue;
             }
             break;
@@ -1197,7 +1401,13 @@ uint32_t rcv(const Call &c)
         {
             if(p->blocking && !p->async)
             {
-                wait_fd(p->fd, POLLIN, -1);
+                uint32_t ref = p->ref;
+                bool ready;
+                int32_t werr = block_wait(ref, POLLIN, -1, ready);
+                if(!(p = find_provider(ref)))
+                    return kOTBadReferenceErr;
+                if(werr)
+                    return werr;
                 continue;
             }
             OT_LOG("rcv %08x: no data\n", p->ref);
@@ -1222,8 +1432,8 @@ uint32_t snd_udata(const Call &c)
         return kOTOutStateErr;
     uint32_t ud = c.l(1);
     struct sockaddr_in to;
-    if(!read_inet({ ud }, to))
-        return kOTBadAddressErr;
+    if(int32_t e = read_address({ ud }, to))
+        return e;
     Netbuf data{ ud + 24 };
     ssize_t r = sendto(p->fd, data.buf() ? SYN68K_TO_US(data.buf()) : nullptr, data.len(),
                        MSG_DONTWAIT, (struct sockaddr *)&to, sizeof to);
@@ -1232,7 +1442,37 @@ uint32_t snd_udata(const Call &c)
     return kOTNoError;
 }
 
-/* OSStatus OTRcvUData(ref, TUnitData *, OTFlags *flags) */
+/* Hand out (the next piece of) a datagram kept in udata_rest. */
+uint32_t give_udata_rest(Provider &p, uint32_t ud, uint32_t flagsp)
+{
+    Netbuf data{ ud + 24 };
+    struct sockaddr_in from = {};
+    from.sin_family = AF_INET;
+    from.sin_addr.s_addr = htonl(p.udata_rest_host);
+    from.sin_port = htons(p.udata_rest_port);
+    write_inet({ ud }, from);
+    WRITEUL(ud + 12 + 4, 0); /* opt.len */
+    size_t left = p.udata_rest.size() - p.udata_rest_off;
+    uint32_t n = std::min<size_t>(left, data.maxlen());
+    if(n && data.buf())
+        std::memcpy(SYN68K_TO_US(data.buf()), p.udata_rest.data() + p.udata_rest_off, n);
+    data.set_len(n);
+    p.udata_rest_off += n;
+    bool more = p.udata_rest_off < p.udata_rest.size();
+    if(flagsp)
+        WRITEUL(flagsp, more ? T_MORE : 0);
+    if(!more)
+    {
+        p.udata_rest.clear();
+        p.udata_rest_off = 0;
+    }
+    OT_LOG("rcvudata %08x: %u bytes%s\n", p.ref, n, more ? " (T_MORE)" : "");
+    return kOTNoError;
+}
+
+/* OSStatus OTRcvUData(ref, TUnitData *, OTFlags *flags): a datagram bigger
+   than the buffer comes in pieces, T_MORE set on all but the last, as
+   OT's. */
 uint32_t rcv_udata(const Call &c)
 {
     Provider *p = lookup(c);
@@ -1240,29 +1480,35 @@ uint32_t rcv_udata(const Call &c)
         return kOTBadReferenceErr;
     if(p->kind != Kind::UDP)
         return kOTNotSupportedErr;
-    uint32_t ud = c.l(1);
-    if(c.l(2))
-        WRITEUL(c.l(2), 0);
-    Netbuf data{ ud + 24 };
+    uint32_t ud = c.l(1), flagsp = c.l(2);
+    if(flagsp)
+        WRITEUL(flagsp, 0);
+    if(!p->udata_rest.empty())
+        return give_udata_rest(*p, ud, flagsp);
+    if(p->fd < 0)
+        return kOTOutStateErr;
     for(;;)
     {
-        struct sockaddr_in from = {};
-        socklen_t len = sizeof from;
-        ssize_t r = recvfrom(p->fd, data.buf() ? SYN68K_TO_US(data.buf()) : nullptr,
-                             data.maxlen(), MSG_DONTWAIT | MSG_TRUNC,
-                             (struct sockaddr *)&from, &len);
-        if(r >= 0)
+        /* How big the next datagram is, without taking it. */
+        char probe;
+        ssize_t size = recv(p->fd, &probe, 1, MSG_PEEK | MSG_TRUNC | MSG_DONTWAIT);
+        if(size >= 0)
         {
-            from.sin_family = AF_INET;
-            write_inet({ ud }, from);
-            WRITEUL(ud + 12 + 4, 0); /* opt.len */
-            uint32_t got = std::min<uint32_t>(r, data.maxlen());
-            data.set_len(got);
-            /* A datagram bigger than the buffer: what fit, T_MORE (the
-               rest is gone; OT would hand it out in further calls). */
-            if((uint32_t)r > data.maxlen() && c.l(2))
-                WRITEUL(c.l(2), 0x001);
-            return kOTNoError;
+            std::vector<uint8_t> dgram(std::max<ssize_t>(size, 1));
+            struct sockaddr_in from = {};
+            socklen_t len = sizeof from;
+            ssize_t r = recvfrom(p->fd, dgram.data(), dgram.size(), MSG_DONTWAIT,
+                                 (struct sockaddr *)&from, &len);
+            if(r < 0)
+                return ot_errno(errno);
+            dgram.resize(r);
+            p->udata_rest = std::move(dgram);
+            p->udata_rest_off = 0;
+            p->udata_rest_host = ntohl(from.sin_addr.s_addr);
+            p->udata_rest_port = ntohs(from.sin_port);
+            uint32_t res = give_udata_rest(*p, ud, flagsp);
+            p->data_armed = true;
+            return res;
         }
         if(errno == EINTR)
             continue;
@@ -1270,7 +1516,13 @@ uint32_t rcv_udata(const Call &c)
         {
             if(p->blocking && !p->async)
             {
-                wait_fd(p->fd, POLLIN, -1);
+                uint32_t ref = p->ref;
+                bool ready;
+                int32_t werr = block_wait(ref, POLLIN, -1, ready);
+                if(!(p = find_provider(ref)))
+                    return kOTBadReferenceErr;
+                if(werr)
+                    return werr;
                 continue;
             }
             p->data_armed = true;
@@ -1281,28 +1533,98 @@ uint32_t rcv_udata(const Call &c)
     }
 }
 
-/* ---- options ------------------------------------------------------------
-   Accepted and answered as set; the host's TCP and UDP keep their own
-   defaults. */
-uint32_t option_management(const Call &c)
+/* OSStatus OTRcvUDErr(ref, TUDErr *): datagram errors (ICMP) aren't
+   reported here, so there never is one. */
+uint32_t rcv_uderr(const Call &c)
+{
+    Provider *p = lookup(c);
+    if(!p)
+        return kOTBadReferenceErr;
+    if(p->kind != Kind::UDP)
+        return kOTNotSupportedErr;
+    return kOTNoUDErrErr;
+}
+
+/* OTResult OTSync(ref): the endpoint's state, after a look at its socket
+   (OT's brings its own idea of the state up to date). */
+uint32_t sync_(const Call &c)
+{
+    Provider *p = lookup(c);
+    if(!p)
+        return kOTBadReferenceErr;
+    service(*p);
+    if(p->async)
+        post(*p, T_SYNCCOMPLETE, kOTNoError, 0);
+    return p->state;
+}
+
+/* OSStatus OTCancelSynchronousCalls(ref, OSStatus err): a blocking call
+   waiting on the provider returns err (from a notifier, a deferred task, a
+   Time Manager task). Nothing waiting: nothing to do. */
+uint32_t cancel_sync_calls(const Call &c)
+{
+    Provider *p = lookup(c);
+    if(!p)
+        return kOTBadReferenceErr;
+    if(p->in_sync_wait)
+    {
+        p->cancel_err = (int32_t)c.l(1);
+        OT_LOG("%08x: synchronous call cancelled (%d)\n", p->ref, p->cancel_err);
+    }
+    return kOTNoError;
+}
+
+/* OSStatus OTResolveAddress(ref, TBind *req, TBind *ret, OTTimeout): an
+   InetAddress as it is, a DNSAddress ("name[:port]") looked up. */
+uint32_t resolve_address(const Call &c)
 {
     Provider *p = lookup(c);
     if(!p)
         return kOTBadReferenceErr;
     uint32_t req = c.l(1), ret = c.l(2);
-    /* TOptMgmt: TNetbuf opt; OTFlags flags. Echo the request back. */
-    if(req && ret)
-    {
-        Netbuf in{ req }, out{ ret };
-        uint32_t n = std::min(in.len(), out.maxlen());
-        if(n && in.buf() && out.buf())
-            std::memcpy(SYN68K_TO_US(out.buf()), SYN68K_TO_US(in.buf()), n);
-        out.set_len(n);
-        WRITEUL(ret + 12, READUL(req + 12));
-    }
+    struct sockaddr_in sin;
+    if(!req)
+        return kOTBadAddressErr;
+    if(int32_t e = read_address({ req }, sin))
+        return e;
+    if(ret)
+        write_inet({ ret }, sin);
     if(p->async)
-        post(*p, T_OPTMGMTCOMPLETE, kOTNoError, ret);
+        post(*p, T_RESOLVEADDRCOMPLETE, kOTNoError, ret);
     return kOTNoError;
+}
+
+/* OTPortRef OTGetProviderPortRef(ref) */
+uint32_t get_provider_port_ref(const Call &c)
+{
+    return lookup(c) ? enet_port_ref() : 0;
+}
+
+/* SInt32 OTIoctl(ref, UInt32 cmd, void *data): the STREAMS module stack
+   isn't there to talk to; signing up for miscellaneous events is accepted
+   (there are none). */
+uint32_t ioctl_(const Call &c)
+{
+    if(!lookup(c))
+        return kOTBadReferenceErr;
+    uint32_t cmd = c.l(1);
+    OT_LOG("OTIoctl %08x cmd $%04x\n", c.l(0), cmd);
+    if(cmd == 0x4F01) /* I_OTGetMiscellaneousEvents */
+        return kOTNoError;
+    return (uint32_t)kEINVALErr;
+}
+
+/* ---- options (ot_options.cpp) -------------------------------------------- */
+
+uint32_t option_management_(const Call &c)
+{
+    Provider *p = lookup(c);
+    if(!p)
+        return kOTBadReferenceErr;
+    uint32_t err = option_management(*p, c.l(1), c.l(2));
+    if(p->async)
+        post(*p, T_OPTMGMTCOMPLETE, err, c.l(2));
+    return err;
 }
 
 /* ---- OTAlloc and OTFree -------------------------------------------------
@@ -1441,7 +1763,15 @@ const Def table[] = {
     { clnt, "OTRCV", Conv::Pascal, "LLLL", 'L', rcv },
     { clnt, "OTSNDUDATA", Conv::Pascal, "LL", 'L', snd_udata },
     { clnt, "OTRCVUDATA", Conv::Pascal, "LLL", 'L', rcv_udata },
-    { clnt, "OTOPTIONMANAGEMENT", Conv::Pascal, "LLL", 'L', option_management },
+    { clnt, "OTOPTIONMANAGEMENT", Conv::Pascal, "LLL", 'L', option_management_ },
+    { clnt, "OTNEXTOPTION", Conv::Pascal, "LLL", 'L', next_option },
+    { clnt, "OTFINDOPTION", Conv::Pascal, "LLLL", 'L', find_option },
+    { clnt, "OTRCVUDERR", Conv::Pascal, "LL", 'L', rcv_uderr },
+    { clnt, "OTSYNC", Conv::Pascal, "L", 'L', sync_ },
+    { clnt, "OTCANCELSYNCHRONOUSCALLS", Conv::Pascal, "LL", 'L', cancel_sync_calls },
+    { clnt, "OTRESOLVEADDRESS", Conv::Pascal, "LLLL", 'L', resolve_address },
+    { clnt, "OTGETPROVIDERPORTREF", Conv::Pascal, "L", 'L', get_provider_port_ref },
+    { clnt, "OTIOCTL", Conv::Pascal, "LLL", 'L', ioctl_ },
     { clnt, "OTAllocPriv", Conv::C, "LLLLL", 'L', alloc_priv },
     { clnt, "OTFREE", Conv::Pascal, "LL", 'L', free_ },
     { clnt, "OTIDLE", Conv::Pascal, "", 'V', idle },

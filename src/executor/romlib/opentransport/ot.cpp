@@ -193,6 +193,7 @@ void Executor::ot::register_ot_functions()
     register_utils();
     register_providers();
     register_inet();
+    register_tasks();
 }
 
 bool Executor::ot::is_ot_set(const std::string &id)
@@ -313,5 +314,6 @@ void Executor::ROMlib_ot_process_exit(uint32_t part_lo, uint32_t part_hi)
     if(!ROMlib_open_transport)
         return;
     close_clients_in(part_lo, part_hi);
+    tasks_process_exit(part_lo, part_hi);
     slm_process_exit(part_lo, part_hi);
 }

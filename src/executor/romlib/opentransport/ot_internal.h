@@ -92,6 +92,7 @@ void register_client();
 void register_utils();
 void register_providers();
 void register_inet();
+void register_tasks();
 void register_ot_functions(); /* all of the above, once */
 
 /* The function sets (ot.cpp): is this ID one of OT's, and bind a stub of
@@ -117,6 +118,14 @@ void close_clients_in(uint32_t lo, uint32_t hi);
    (ot_utils.cpp). */
 bool config_path(uint32_t cfg, std::string &path);
 void dispose_config(uint32_t cfg);
+
+/* An OTPortRef (ot_utils.cpp). */
+uint32_t make_port_ref(unsigned bus, unsigned device, unsigned slot, unsigned other);
+
+/* Deferred and system tasks (ot_tasks.cpp); OT's interrupt level: the
+   pump, deferred tasks, and OTEnterInterrupt brackets. */
+extern int interrupt_level;
+void tasks_process_exit(uint32_t lo, uint32_t hi);
 
 /* Guest memory helpers. */
 std::string guest_cstring(uint32_t addr, size_t max = 255);

@@ -487,6 +487,8 @@ set(opentransport_sources
     opentransport/ot_inet.cpp
     opentransport/ot_utils.cpp
     opentransport/ot_slm.cpp
+    opentransport/ot_tasks.cpp
+    opentransport/ot_options.cpp
 )
 
 source_group(OpenTransport FILES ${opentransport_sources})
@@ -616,6 +618,10 @@ if(WIN32 AND NOT MSVC)
 endif()
 
 target_link_libraries(romlib resources)
+find_library(RESOLV_LIBRARY resolv)
+if(RESOLV_LIBRARY)
+    target_link_libraries(romlib ${RESOLV_LIBRARY})  # MacPhoenix: res_query (OT's DNS queries)
+endif()
 target_link_libraries(romlib ${host_os_libs})
 
 if(APPLE)
