@@ -104,6 +104,117 @@ Module.instantiateWasm = (imports, receive) => {
 };
 importScripts('executor-web.js');
 
+// ---- Executor's own volume (/executor), kept in OPFS ----
+// volumes/KEY/ (KEY: the System choice) holds a manifest.json (every
+// folder, and every file's blob, size and time) and the blobs. Restored
+// into memory before main; changes saved every couple of seconds while
+// Executor runs (and when the page is hidden): new blobs first, the
+// manifest last, the old blobs deleted after, so a tab closed mid-save
+// leaves the previous state whole.
+const VOLUME = '/executor';
+// Not kept: uploads (kept as uploads already), and System 7.5's "Shutdown
+// Check", which it makes at startup and deletes at Shut Down; a tab never
+// shuts down, and restored it would bring up the improper-shutdown alert.
+const NOT_KEPT = new Set([`${VOLUME}/Uploads`, `${VOLUME}/Shutdown Check`, `${VOLUME}/%Shutdown Check`]);
+let volumeDir = null, saved = { dirs: [], files: {} }, nextBlob = 1, saving = false;
+
+async function openVolume(key) {
+    try {
+        const root = await navigator.storage.getDirectory();
+        const volumes = await root.getDirectoryHandle('volumes', { create: true });
+        volumeDir = await volumes.getDirectoryHandle(key, { create: true });
+    } catch {
+        volumeDir = null;                        // no OPFS: not kept
+    }
+}
+
+async function restoreVolume() {
+    if (!volumeDir)
+        return 0;
+    try {
+        const text = await (await (await volumeDir.getFileHandle('manifest.json')).getFile()).text();
+        saved = JSON.parse(text);
+    } catch {
+        return 0;                                // nothing saved yet
+    }
+    for (const d of saved.dirs)
+        FS.mkdirTree(d);
+    let n = 0;
+    for (const [path, f] of Object.entries(saved.files)) {
+        const data = new Uint8Array(await (await (await volumeDir.getFileHandle(f.blob)).getFile()).arrayBuffer());
+        FS.writeFile(path, data);
+        FS.utime(path, f.mtime, f.mtime);
+        nextBlob = Math.max(nextBlob, Number(f.blob.slice(1)) + 1);
+        n++;
+    }
+    return n;
+}
+
+function scanVolume() {
+    const dirs = [], files = {};
+    const walk = (dir) => {
+        dirs.push(dir);
+        for (const name of FS.readdir(dir)) {
+            if (name === '.' || name === '..')
+                continue;
+            const path = `${dir}/${name}`;
+            if (NOT_KEPT.has(path))
+                continue;
+            const st = FS.stat(path);
+            if (FS.isDir(st.mode))
+                walk(path);
+            else if (FS.isFile(st.mode))
+                files[path] = { size: st.size, mtime: st.mtime.getTime() };
+        }
+    };
+    try { walk(VOLUME); } catch { }
+    return { dirs, files };
+}
+
+async function saveVolume() {
+    if (!volumeDir || saving)
+        return;
+    saving = true;
+    try {
+        const now = scanVolume();
+        const files = {}, stale = [];
+        let changed = now.dirs.length !== saved.dirs.length;
+        for (const [path, f] of Object.entries(now.files)) {
+            const old = saved.files[path];
+            if (old && old.size === f.size && old.mtime === f.mtime) {
+                files[path] = old;
+                continue;
+            }
+            const blob = `b${nextBlob++}`;
+            const w = await (await volumeDir.getFileHandle(blob, { create: true })).createWritable();
+            await w.write(FS.readFile(path));
+            await w.close();
+            files[path] = { ...f, blob };
+            if (old)
+                stale.push(old.blob);
+            changed = true;
+        }
+        for (const [path, old] of Object.entries(saved.files))
+            if (!(path in now.files)) {
+                stale.push(old.blob);
+                changed = true;
+            }
+        if (!changed)
+            return;
+        const manifest = { dirs: now.dirs, files };
+        const w = await (await volumeDir.getFileHandle('manifest.json', { create: true })).createWritable();
+        await w.write(JSON.stringify(manifest));
+        await w.close();
+        saved = manifest;
+        for (const blob of stale)
+            await volumeDir.removeEntry(blob).catch(() => {});
+    } catch (e) {
+        console.log(`[web] saving the volume: ${e}`);
+    } finally {
+        saving = false;
+    }
+}
+
 async function start(m) {
     canvas = m.canvas;
     ctx = canvas.getContext('2d');
@@ -114,31 +225,46 @@ async function start(m) {
     if (m.system && images.some((f) => f.name === m.system))
         args.push('--system', `/uploads/${m.system}`);
     await runtimeReady;
+    if (m.volumeKey) {
+        await openVolume(m.volumeKey);
+        const n = await restoreVolume();
+        if (n)
+            console.log(`[web] restored ${n} files of the saved volume`);
+    }
     FS.mkdir('/host');              // Executor's "Host" volume
     if (images.length) {
         FS.mkdir('/uploads');
         FS.mount(WORKERFS, { files: images }, '/uploads');
     }
     if (others.length) {
-        FS.mkdirTree('/executor/Uploads');
+        FS.mkdirTree(`${VOLUME}/Uploads`);
         const reader = new FileReaderSync();
         for (const f of others)
             FS.writeFile(`/executor/Uploads/${f.name}`,
                          new Uint8Array(reader.readAsArrayBuffer(f)));
     }
     Module.callMain(args);
+    // Runs while Executor yields to the browser (about every frame).
+    setInterval(saveVolume, 2000);
 }
 
 self.onmessage = (e) => {
     const m = e.data;
     if (m.type === 'start') {
         start(m);
+    } else if (m.type === 'save') {
+        // The page is going away, or restarting (it waits for the reply).
+        saveVolume().then(() => postMessage({ type: 'saved' }));
     } else if (m.type === 'input') {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {
         // Files are the Worker's: answered at once, Executor running or not.
         if (m.op === 'stats') {
             postMessage({ type: 'reply', id: m.id, result: { ...Module.stats } });
+        } else if (m.op === 'list') {
+            let names = null;
+            try { names = FS.readdir(m.arg).filter((n) => n !== '.' && n !== '..'); } catch { }
+            postMessage({ type: 'reply', id: m.id, result: names });
         } else if (m.op === 'read') {
             let text = null;
             try { text = FS.readFile(m.arg, { encoding: 'utf8' }); } catch { }

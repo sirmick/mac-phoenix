@@ -34,6 +34,7 @@
 #include <emscripten.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -282,7 +283,18 @@ int main(int argc, char **argv)
     {
         bool finder = false;
         std::string err;
-        if(executor_host::sideload_system(system_image, c.data_dir, &finder, &err))
+        /* A System Folder already there is the one the page restored (its
+           saved volume, worker.js): the user's, preferences and all. */
+        std::string sys = c.data_dir + "/System Folder";
+        if(std::filesystem::exists(sys + "/System"))
+        {
+            finder = std::filesystem::exists(sys + "/Finder");
+            fprintf(stderr, "[web] the saved System Folder%s\n", finder ? ", starting the Finder" : "");
+            if(finder && c.app.empty())
+                c.app = sys + "/Finder";
+            c.ram_mb = 64;
+        }
+        else if(executor_host::sideload_system(system_image, c.data_dir, &finder, &err))
         {
             fprintf(stderr, "[web] System Folder from %s%s\n", system_image.c_str(),
                     finder ? ", starting the Finder" : "");

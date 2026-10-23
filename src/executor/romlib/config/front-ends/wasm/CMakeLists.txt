@@ -41,6 +41,16 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
+# Executor's own volume kept in OPFS across reloads, and Reset.
+if(NODE_COMMAND)
+    add_test(NAME executor.web.persist
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_persist.mjs
+                $<TARGET_FILE_DIR:executor-web>)
+    set_tests_properties(executor.web.persist PROPERTIES
+        LABELS "executor;web" TIMEOUT 120 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+endif()
+
 # W3: Apple's System and Finder from an uploaded image (EXECUTOR_WEB_SYSTEM:
 # an HFS image with a blessed System Folder and a Finder, only read; the
 # tests' tests-7.5.5.img by default). Skips without it.

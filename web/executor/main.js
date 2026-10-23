@@ -11,7 +11,8 @@
 // Automation: window.executor.request(op, arg) -> Promise. At the running
 // application's next event call (web_main.cpp): 'app', 'windows', 'launch'
 // "Volume:Folder:App". At once, by the Worker: 'read' PATH (text or null),
-// 'write' [PATH, TEXT]; Executor's "Host" volume is /host.
+// 'write' [PATH, TEXT], 'list' PATH (names or null); Executor's own volume
+// is /executor, its "Host" volume /host.
 // window.executor.frames counts frames.
 'use strict';
 
@@ -21,12 +22,17 @@ const params = new URLSearchParams(location.search);
 const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
 
 let worker = null, canvas = null, cursor = null, nextId = 1;
+// Bumped when a restart begins: messages from an older Worker (still
+// drawing while it saves) no longer count.
+let generation = 0;
 const pending = new Map();
 window.executor = {
     frames: 0,
     audioFrames: 0,     // 20 ms frames of sound received
     cursor: null,       // the guest's last cursor message
     request(op, arg = '') {
+        if (!worker)
+            return Promise.resolve({ error: 'not running' });   // between Workers
         const id = nextId++;
         return new Promise((resolve) => {
             pending.set(id, resolve);
@@ -183,12 +189,40 @@ async function showFiles(files) {
 }
 
 document.getElementById('add').addEventListener('change', async (e) => {
+    generation++;                   // restarting (once the files are stored)
+    window.executor.frames = 0;
     for (const f of e.target.files)
         await store(f);
     e.target.value = '';
     start();
 });
 document.getElementById('restart').addEventListener('click', () => start());
+
+// Executor's own volume is kept per System choice (worker.js, volumes/KEY):
+// Executor's own, or a disk image's by name and size.
+function volumeKey(files) {
+    const sys = files.find((f) => f.name === systemSelect.value);
+    return sys ? `${sys.name}-${sys.size}`.replace(/[^\w.-]/g, '_') : 'own';
+}
+
+document.getElementById('reset').addEventListener('click', async () => {
+    if (!confirm("Forget everything saved on Executor's disk for this System?"))
+        return;
+    if (worker)
+        worker.terminate();
+    worker = null;
+    if (opfs) {
+        const volumes = await (await uploads()).getDirectoryHandle('volumes', { create: true });
+        await volumes.removeEntry(volumeKey(await storedFiles()), { recursive: true }).catch(() => {});
+    }
+    start();
+});
+
+// Leaving or hiding the page: the Worker saves what changed now.
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && worker)
+        worker.postMessage({ type: 'save' });
+});
 
 // The System to run on: Executor's own (''), or a disk image's (its name),
 // remembered across visits.
@@ -207,9 +241,33 @@ function showSystems(files) {
 }
 
 // ---- the Worker ----
+// What changed on Executor's disk, saved before the Worker goes (at most
+// a few seconds).
+async function saveAndStop() {
+    if (!worker)
+        return;
+    const w = worker;               // answers requests until it stops
+    await new Promise((resolve) => {
+        const timer = setTimeout(resolve, 3000);
+        w.addEventListener('message', (e) => {
+            if (e.data.type === 'saved') {
+                clearTimeout(timer);
+                resolve();
+            }
+        });
+        w.postMessage({ type: 'save' });
+    });
+    w.terminate();
+    if (worker === w)
+        worker = null;
+}
+
 async function start() {
-    if (worker)
-        worker.terminate();
+    const mine = ++generation;
+    window.executor.frames = 0;     // "running" means the new Worker's frames
+    await saveAndStop();
+    if (mine !== generation)
+        return;                     // another restart began meanwhile
     for (const resolve of pending.values())
         resolve({ error: 'restarted' });
     pending.clear();
@@ -236,8 +294,10 @@ async function start() {
 
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, files,
-                         system: systemSelect.value }, [offscreen]);
+                         system: systemSelect.value, volumeKey: volumeKey(files) }, [offscreen]);
     worker.onmessage = (e) => {
+        if (mine !== generation)
+            return;
         const m = e.data;
         if (m.type === 'frame') {
             if (window.executor.frames++ === 0)
