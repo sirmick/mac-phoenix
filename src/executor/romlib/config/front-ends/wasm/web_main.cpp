@@ -6,8 +6,8 @@
  * this thread: there is no other. Executor's idle waits and a tick about
  * once a frame yield to the browser (rsys/hostidle.h); on the way back the
  * yield hook takes the input the page queued (Module.input) and renders
- * what changed, which arrives in on_frame and goes to Module.onFrame as
- * RGBA for the page's canvas.
+ * what changed, which arrives in on_rects and goes to Module.onRects: the
+ * changed rectangles only, as RGBA, for the page's canvas.
  *
  * Automation (W3): the page's requests (Module.requests: [id, op, arg]) are
  * answered at the next event call of the running application
@@ -79,26 +79,59 @@ EM_JS(void, js_audio, (const uint8_t *s16be, int frames), {
         Module.onAudio(HEAPU8.subarray(s16be, s16be + frames * 4));
 });
 
-EM_JS(void, js_frame, (const uint8_t *rgba, int width, int height), {
-    if (Module.onFrame)
-        Module.onFrame(HEAPU8.subarray(rgba, rgba + width * height * 4), width, height);
+/* The screen's size, and n rectangles (top, left, bottom, right in rects)
+ * whose RGBA pixels follow one another in pixels, row by row. */
+EM_JS(void, js_rects, (int width, int height, const int32_t *rects, int n, const uint8_t *pixels, int bytes), {
+    if (Module.onRects)
+        Module.onRects(width, height, HEAP32.subarray(rects >> 2, (rects >> 2) + 4 * n),
+                       HEAPU8.subarray(pixels, pixels + bytes));
+});
+
+/* Time the front end spent producing frames (rendering, converting). */
+EM_JS(void, js_frame_time, (double ms), {
+    if (Module.stats)
+        Module.stats.hostMs += ms;
 });
 
 namespace {
 
 std::vector<uint32_t> rgba;
+std::vector<int32_t> rect_list;
 
-/* 0xAARRGGBB to the canvas's R, G, B, A bytes (0xAABBGGRR, little-endian). */
-void on_frame(const uint32_t *argb, int width, int height)
+PhoenixVideoDriver *driver()
 {
-    size_t n = (size_t)width * height;
-    rgba.resize(n);
-    for(size_t i = 0; i < n; i++)
+    return dynamic_cast<PhoenixVideoDriver *>(Executor::vdriver.get());
+}
+
+/* What changed, as RGBA (0xAARRGGBB to R, G, B, A bytes: 0xAABBGGRR on
+   little-endian), the cursor drawn into the rectangles it is in. */
+void on_rects(const uint32_t *argb, int width, int height,
+              const std::vector<PhoenixVideoDriver::Rect> &rects)
+{
+    size_t total = 0;
+    for(const auto &r : rects)
+        total += (size_t)(r.bottom - r.top) * (r.right - r.left);
+    rgba.resize(total);
+    rect_list.clear();
+    uint32_t *out = rgba.data();
+    for(const auto &r : rects)
     {
-        uint32_t p = argb[i];
-        rgba[i] = (p & 0xFF00FF00) | (p >> 16 & 0xFF) | (p & 0xFF) << 16;
+        rect_list.insert(rect_list.end(), { r.top, r.left, r.bottom, r.right });
+        uint32_t *start = out;
+        for(int y = r.top; y < r.bottom; y++)
+        {
+            const uint32_t *row = argb + (size_t)y * width;
+            for(int x = r.left; x < r.right; x++)
+            {
+                uint32_t p = row[x];
+                *out++ = (p & 0xFF00FF00) | (p >> 16 & 0xFF) | (p & 0xFF) << 16;
+            }
+        }
+        if(auto *v = driver())
+            v->drawCursor(start, r);
     }
-    js_frame((const uint8_t *)rgba.data(), width, height);
+    js_rects(width, height, rect_list.data(), (int)rects.size(),
+             (const uint8_t *)rgba.data(), (int)(total * 4));
 }
 
 using namespace Executor;
@@ -204,8 +237,12 @@ void on_yield()
                     break;
             }
         }
-    if(auto *v = dynamic_cast<PhoenixVideoDriver *>(Executor::vdriver.get()))
+    if(auto *v = driver())
+    {
+        double t0 = emscripten_get_now();
         v->pump();
+        js_frame_time(emscripten_get_now() - t0);
+    }
 }
 
 }
@@ -253,7 +290,7 @@ int main(int argc, char **argv)
        reads and writes (worker.js 'read', 'write'). */
     c.shared_folders.push_back("/host");
     c.open_transport = true;  /* answers with errors: no network yet */
-    c.on_frame = on_frame;
+    PhoenixVideoDriver::rectsHook = on_rects;
     /* Sound: always taken; the page's AudioWorklet keeps a short buffer
        and drops what falls behind (the Sound Manager runs on the clock). */
     c.on_audio = [](const uint8_t *s16be, uint32_t frames) {

@@ -7,25 +7,38 @@
 // "executor:Uploads".
 'use strict';
 
-let canvas = null, ctx = null, image = null;
+let canvas = null, ctx = null;
 const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
 
 self.Module = {
+    // Drawing: frames, pixels drawn, ms in the front end (web_main.cpp)
+    // and here; the page's 'stats' request.
+    stats: { frames: 0, pixels: 0, hostMs: 0, drawMs: 0 },
     arguments: [],
     input: [],          // [kind, a, b] events; web_main.cpp takes them
     requests: [],       // [id, op, arg]; answered at the next event call
     print: (t) => console.log(t),
     printErr: (t) => console.log(t),
-    onFrame(rgba, width, height) {
+    // What changed: rects [top, left, bottom, right]..., their RGBA pixels
+    // one after another (web_main.cpp).
+    onRects(width, height, rects, rgba) {
+        const t0 = performance.now();
         if (canvas.width !== width || canvas.height !== height) {
             canvas.width = width;
             canvas.height = height;
-            image = null;
         }
-        if (!image)
-            image = new ImageData(width, height);
-        image.data.set(rgba);
-        ctx.putImageData(image, 0, 0);
+        let at = 0, pixels = 0;
+        for (let i = 0; i < rects.length; i += 4) {
+            const [top, left, bottom, right] = rects.subarray(i, i + 4);
+            const w = right - left, h = bottom - top, n = w * h * 4;
+            const image = new ImageData(new Uint8ClampedArray(rgba.subarray(at, at + n)), w, h);
+            ctx.putImageData(image, left, top);
+            at += n;
+            pixels += w * h;
+        }
+        Module.stats.frames++;
+        Module.stats.pixels += pixels;
+        Module.stats.drawMs += performance.now() - t0;
         postMessage({ type: 'frame' });
     },
     // 48 kHz big-endian 16-bit stereo -> interleaved floats for the page.
@@ -76,7 +89,9 @@ self.onmessage = (e) => {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {
         // Files are the Worker's: answered at once, Executor running or not.
-        if (m.op === 'read') {
+        if (m.op === 'stats') {
+            postMessage({ type: 'reply', id: m.id, result: { ...Module.stats } });
+        } else if (m.op === 'read') {
             let text = null;
             try { text = FS.readFile(m.arg, { encoding: 'utf8' }); } catch { }
             postMessage({ type: 'reply', id: m.id, result: text });

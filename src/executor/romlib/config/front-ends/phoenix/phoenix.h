@@ -35,6 +35,22 @@ public:
     // cursor composited in. Pixels are 0xAARRGGBB (BGRA bytes on LE).
     static std::function<void(const uint32_t *argb, int width, int height)> frameHook;
 
+    // Instead (wasm): only what changed. The frame without the cursor, and
+    // the rectangles that changed since the last call, the cursor's old and
+    // new boxes among them (a resize: the whole frame); drawCursor() puts
+    // the cursor into a copy of one.
+    struct Rect
+    {
+        int top, left, bottom, right;
+    };
+    static std::function<void(const uint32_t *argb, int width, int height,
+                              const std::vector<Rect>& rects)> rectsHook;
+
+    // The cursor into buf, a copy of rectangle r of the frame (rows of
+    // r.right - r.left pixels). Black and white are 0xFF000000 and
+    // 0xFFFFFFFF, the same as ARGB and as RGBA bytes.
+    void drawCursor(uint32_t *buf, const Rect& r);
+
     // Host-side pointer position (guest pixels), used to draw the cursor.
     static std::atomic<int> cursorX, cursorY;
 
@@ -56,6 +72,8 @@ protected:
 private:
     void render(bool full);
     void publish();
+    void publishRects(const Executor::DirtyRects::Rects& changed, bool full);
+    Rect cursorBox(int x, int y) const;  // its 16x16 box at a pointer position
     void writePPM(const std::string& path);
 
     std::mutex frameMutex_;          // guards argb_ and its size
@@ -76,5 +94,9 @@ private:
     bool cursorVisible_ = true;
     std::vector<uint32_t> composed_;
     int lastCursorX_ = -1, lastCursorY_ = -1;
+    int publishedWidth_ = 0, publishedHeight_ = 0;  // rectsHook: the size last sent
+    bool cursorShown_ = false;                       // rectsHook: drawn in the last call,
+    Rect cursorShownBox_{};                          // there
+    bool cursorChanged_ = false;                     // its shape or hot spot since
     std::chrono::steady_clock::time_point lastPublish_{};
 };

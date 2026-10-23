@@ -6,6 +6,7 @@
 #include <MemoryMgr.h>
 #include <prefs/prefs.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -14,6 +15,8 @@ using namespace Executor;
 
 PhoenixVideoDriver::Options PhoenixVideoDriver::options;
 std::function<void(const uint32_t *, int, int)> PhoenixVideoDriver::frameHook;
+std::function<void(const uint32_t *, int, int, const std::vector<PhoenixVideoDriver::Rect>&)>
+    PhoenixVideoDriver::rectsHook;
 std::atomic<int> PhoenixVideoDriver::cursorX{0}, PhoenixVideoDriver::cursorY{0};
 
 void PhoenixVideoDriver::setCursor(char *cursor_data, uint16_t cursor_mask[16],
@@ -29,14 +32,92 @@ void PhoenixVideoDriver::setCursor(char *cursor_data, uint16_t cursor_mask[16],
         hotX_ = hotspot_x;
         hotY_ = hotspot_y;
         cursorValid_ = true;
+        cursorChanged_ = true;
     }
+    if(!cursorVisible_)
+        cursorChanged_ = true;
     cursorVisible_ = true;
 }
 
 void PhoenixVideoDriver::setCursorVisible(bool show_p)
 {
     std::lock_guard lk(cursorMutex_);
+    if(cursorVisible_ != show_p)
+        cursorChanged_ = true;
     cursorVisible_ = show_p;
+}
+
+PhoenixVideoDriver::Rect PhoenixVideoDriver::cursorBox(int x, int y) const
+{
+    Rect r{ y - hotY_, x - hotX_, y - hotY_ + 16, x - hotX_ + 16 };
+    r.top = std::max(r.top, 0);
+    r.left = std::max(r.left, 0);
+    r.bottom = std::min(r.bottom, argbHeight_);
+    r.right = std::min(r.right, argbWidth_);
+    return r;
+}
+
+void PhoenixVideoDriver::drawCursor(uint32_t *buf, const Rect& r)
+{
+    std::lock_guard lk(cursorMutex_);
+    if(!cursorValid_ || !cursorVisible_)
+        return;
+    int cx = cursorX.load(), cy = cursorY.load(), w = r.right - r.left;
+    for(int y = 0; y < 16; y++)
+    {
+        int py = cy - hotY_ + y;
+        if(py < r.top || py >= r.bottom)
+            continue;
+        uint16_t d = (cursorData_[2 * y] << 8) | cursorData_[2 * y + 1];
+        uint16_t m = (cursorMask_[2 * y] << 8) | cursorMask_[2 * y + 1];
+        for(int x = 0; x < 16; x++)
+        {
+            int px = cx - hotX_ + x;
+            if(px < r.left || px >= r.right)
+                continue;
+            uint16_t bit = 0x8000 >> x;
+            if(m & bit)
+                buf[(size_t)(py - r.top) * w + (px - r.left)] = (d & bit) ? 0xFF000000 : 0xFFFFFFFF;
+        }
+    }
+}
+
+/* rectsHook: what changed, the cursor's old and new boxes added. */
+void PhoenixVideoDriver::publishRects(const Executor::DirtyRects::Rects& changed, bool full)
+{
+    std::vector<Rect> rects;
+    if(full || argbWidth_ != publishedWidth_ || argbHeight_ != publishedHeight_)
+        rects.push_back({ 0, 0, argbHeight_, argbWidth_ });
+    else
+    {
+        for(const auto& c : changed)
+            rects.push_back({ c.top, c.left, c.bottom, c.right });
+        std::lock_guard lk(cursorMutex_);
+        bool shown = cursorValid_ && cursorVisible_;
+        Rect box = cursorBox(cursorX.load(), cursorY.load());
+        bool moved = box.top != cursorShownBox_.top || box.left != cursorShownBox_.left
+                     || box.bottom != cursorShownBox_.bottom || box.right != cursorShownBox_.right;
+        if(cursorShown_ && (moved || !shown || cursorChanged_))
+            rects.push_back(cursorShownBox_);
+        if(shown && (moved || !cursorShown_ || cursorChanged_))
+            rects.push_back(box);
+        rects.erase(std::remove_if(rects.begin(), rects.end(), [](const Rect& r) {
+                        return r.bottom <= r.top || r.right <= r.left;
+                    }),
+                    rects.end());
+        if(rects.empty())
+            return;
+    }
+    {
+        std::lock_guard lk(cursorMutex_);
+        cursorShown_ = cursorValid_ && cursorVisible_;
+        cursorShownBox_ = cursorBox(cursorX.load(), cursorY.load());
+        cursorChanged_ = false;
+    }
+    publishedWidth_ = argbWidth_;
+    publishedHeight_ = argbHeight_;
+    lastPublish_ = std::chrono::steady_clock::now();
+    rectsHook(argb_.data(), argbWidth_, argbHeight_, rects);
 }
 
 // Copy the frame, draw the cursor on top, hand it to the host.
@@ -124,6 +205,13 @@ void PhoenixVideoDriver::render(bool full)
     {
         rects.clear();
         rects.push_back({ 0, 0, argbHeight_, argbWidth_ });
+    }
+    if(rectsHook)
+    {
+        if(!rects.empty())
+            updateBuffer(framebuffer_, argb_.data(), argbWidth_, argbHeight_, rects);
+        publishRects(rects, full);
+        return;
     }
     if(rects.empty())
     {
