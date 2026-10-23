@@ -46,6 +46,7 @@ private:
     int enqueued_ = 0;          // buffers mixed but not yet "played"
     syn68k_addr_t callback_ = 0;
     bool shutting_down_ = false;
+    bool mixing_ = false;       // in sound_callback: no mix inside a mix
     Executor::TMTask *task_ = nullptr; // in the System heap (guest memory)
     double resample_pos_ = 0;   // position in the source buffer
     int16_t last_sample_ = 0;   // for interpolation across buffers

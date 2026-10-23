@@ -116,13 +116,22 @@ void PhoenixSoundDriver::HungerFinish()
     ++enqueued_;
     if(enqueued_ == 1)
         arm_timer();
-    note_sound_interrupt(); /* mix ahead, as SoundFake does */
 }
 
+/* Mixes until two buffers are ahead. A channel's callBackCmd runs the
+   application's 68k code in the middle of a mix, and that code often
+   queues more with SndDoCommand, which calls sound_go: a mix started there
+   would see this one's buffer not yet counted, start another, and so on
+   until the host stack ran out (Glider PRO, in the browser build). */
 void PhoenixSoundDriver::note_sound_interrupt()
 {
-    if(!shutting_down_ && enqueued_ < 2)
+    if(mixing_)
+        return;
+    mixing_ = true;
+    /* Each mix counts a buffer; the timer may take one meanwhile. */
+    for(int n = 0; n < 4 && !shutting_down_ && enqueued_ < 2; n++)
         sound_callback(0, nullptr);
+    mixing_ = false;
 }
 
 void PhoenixSoundDriver::arm_timer()

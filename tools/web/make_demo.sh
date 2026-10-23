@@ -15,7 +15,7 @@ WASM="${3:-$ROOT/build-wasm}/src/executor/romlib/config/front-ends/wasm"
 [[ -f "$WASM/executor-web.wasm" ]] || { echo "no $WASM/executor-web.wasm: build build-wasm first"; exit 1; }
 
 mkdir -p "$OUT"
-cp "$WASM"/{index.html,main.js,worker.js,keys.js,cursor.js,audio.js,executor-web.js,executor-web.wasm} "$OUT/"
+cp "$WASM"/{index.html,main.js,worker.js,overlay.js,keys.js,cursor.js,audio.js,executor-web.js,executor-web.wasm} "$OUT/"
 DISK="boot-$(basename "$SRC")"
 python3 "$ROOT/tools/web/make_boot_disk.py" "$SRC" "$OUT/$DISK"
 for f in executor-web.wasm executor-web.js "$DISK"; do

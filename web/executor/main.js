@@ -5,6 +5,9 @@
 //                    OPFS (disk-cache/) and revalidated on later visits
 //                    with its ETag, so it downloads once
 //   ?system=NAME     run on that image's System and Finder
+// library.json beside the page (optional) offers more disks: [{ title,
+// url, note }]; the ones picked are remembered (localStorage) and loaded
+// like ?disk=.
 // Outside a secure context (plain http to another host) there is no OPFS
 // and no AudioWorklet: uploads last the visit, sound is off.
 //
@@ -164,8 +167,61 @@ async function fetchDisk(url) {
     return cached();
 }
 
+// ---- the library: disks the site offers (library.json), picked by the user
+const libraryBox = document.getElementById('library-box');
+const librarySelect = document.getElementById('library');
+let library = [];
+const picked = () => JSON.parse(localStorage.getItem('executor-library') || '[]');
+
+async function loadLibrary() {
+    try {
+        const res = await fetch('library.json', { cache: 'no-store' });
+        library = res.ok ? await res.json() : [];
+    } catch {
+        library = [];
+    }
+    showLibrary();
+}
+
+function showLibrary() {
+    const have = new Set([...params.getAll('disk'), ...picked()].map((u) => new URL(u, location.href).href));
+    const offer = library.filter((d) => !have.has(new URL(d.url, location.href).href));
+    librarySelect.replaceChildren(new Option('Add a disk…', ''),
+        ...offer.map((d) => {
+            const o = new Option(d.title, d.url);
+            o.title = d.note || '';
+            return o;
+        }));
+    libraryBox.hidden = offer.length === 0;
+}
+
+librarySelect.addEventListener('change', async () => {
+    const url = librarySelect.value;
+    if (!url)
+        return;
+    localStorage.setItem('executor-library', JSON.stringify([...picked(), url]));
+    showLibrary();
+    generation++;                   // restarting, once it is downloaded
+    window.executor.frames = 0;
+    try {
+        const file = await fetchDisk(url);
+        sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+    } catch (e) {
+        status.textContent = `Cannot load ${url}: ${e.message}`;
+    }
+    start();
+});
+
+// A library disk the user removes is forgotten too.
+function forgetLibraryDisk(name) {
+    const keep = picked().filter((u) => decodeURIComponent(new URL(u, location.href).pathname.split('/').pop()) !== name);
+    localStorage.setItem('executor-library', JSON.stringify(keep));
+    showLibrary();
+}
+
 async function fetchDisks() {
-    for (const url of params.getAll('disk')) {
+    loadLibrary();
+    for (const url of [...params.getAll('disk'), ...picked()]) {
         try {
             const file = await fetchDisk(url);
             sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
@@ -206,6 +262,7 @@ async function showFiles(files) {
         }
         s.append(link('✕', 'Remove', async () => {
             await remove(f.name);
+            forgetLibraryDisk(f.name);
             start();
         }));
         return s;

@@ -29,7 +29,9 @@
 #include <base/common.h>
 #include <FileMgr.h>
 #include <ProcessMgr.h>
+#include <SegmentLdr.h>
 #include <wind/wind.h>
+#include <util/macstrings.h>
 
 #include <emscripten.h>
 
@@ -144,21 +146,22 @@ void on_rects(const uint32_t *argb, int width, int height,
 
 using namespace Executor;
 
+/* A Mac string (MacRoman) as a JSON string. */
 std::string json_string(const std::string &s)
 {
     std::string out = "\"";
-    for(unsigned char c : s)
+    for(char32_t c : toUnicode(mac_string_view((const unsigned char *)s.data(), s.size())))
     {
         if(c == '"' || c == '\\')
-            out += '\\', out += c;
+            out += '\\', out += (char)c;
         else if(c < 0x20 || c >= 0x7F)
         {
             char b[8];
-            snprintf(b, sizeof b, "\\u%04x", c);
+            snprintf(b, sizeof b, "\\u%04x", (unsigned)c);    // MacRoman is all in the BMP
             out += b;
         }
         else
-            out += c;
+            out += (char)c;
     }
     return out + "\"";
 }
@@ -185,8 +188,26 @@ std::string windows_json()
     return out + "]";
 }
 
-OSErr launch(const std::string &path)
+/* The page's UTF-8 as the Mac's MacRoman (file names: "ƒ", "™", ...). */
+mac_string macRoman(const std::string &utf8)
 {
+    std::u32string u;
+    for(size_t i = 0; i < utf8.size();)
+    {
+        unsigned char c = utf8[i];
+        int n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : 4;
+        char32_t cp = n == 1 ? c : c & (0x7F >> n);
+        for(int k = 1; k < n && i + k < utf8.size(); k++)
+            cp = cp << 6 | (utf8[i + k] & 0x3F);
+        u.push_back(cp);
+        i += n;
+    }
+    return toMacRoman(u);
+}
+
+OSErr launch(const std::string &utf8)
+{
+    mac_string path = macRoman(utf8);
     Str255 name;
     if(path.size() > 255)
         return bdNamErr;
@@ -213,7 +234,7 @@ void on_event_poll()
         std::string op = buf, arg = buf + op.size() + 1;
         std::string reply;
         if(op == "app")
-            reply = json_string(executor_host::current_app_name());
+            reply = json_string(LM(CurApName)[0] <= 31 ? pstring(LM(CurApName)) : "");
         else if(op == "windows")
             reply = windows_json();
         else if(op == "launch")
