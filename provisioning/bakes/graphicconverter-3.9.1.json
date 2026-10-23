@@ -1,0 +1,47 @@
+{
+ "note": "GraphicConverter 3.9.1 (Thorsten Lemke, 1999; shareware): the 68k and PowerPC builds, each off its self-mounting image, copied by the guest",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "graphicconverter_3.91_68k.sit",
+   "take": "GraphicConverter 3.9.1US 68.smi"
+  },
+  {
+   "file": "graphicconverter_3.91_ppc.sit",
+   "take": "GraphicConverter 3.9.1US.smi"
+  }
+ ],
+ "expect": [
+  "GraphicConverter 3.9.1US 68K",
+  "GraphicConverter 3.9.1US PPC"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "GraphicConverter US 68K:GraphicConverter 3.9.1US 68K",
+    "to": "{target}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "GraphicConverter US PPC:GraphicConverter 3.9.1US PPC",
+    "to": "{target}:"
+   }
+  }
+ ],
+ "launch": [
+  {
+   "app": "GraphicConverter 3.9.1US 68K:GraphicConverter 68k",
+   "machines": [
+    "68k"
+   ]
+  },
+  {
+   "app": "GraphicConverter 3.9.1US PPC:GraphicConverter",
+   "machines": [
+    "ppc"
+   ]
+  }
+ ]
+}

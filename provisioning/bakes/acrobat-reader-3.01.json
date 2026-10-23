@@ -1,0 +1,96 @@
+{
+ "note": "Adobe Acrobat Reader 3.01 (Adobe, 1997; free): its Installer VISE installer run in the guest off the Adobe PageMaker 6.5 CD (licence accepted, Easy Install onto the target), then the restart it asks for",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "Adobe_Pagemaker_6.5_CD.iso_.sit",
+   "take": "Adobe Pagemaker 6.5 CD.iso"
+  }
+ ],
+ "expect": [
+  "Adobe Acrobat 3.0"
+ ],
+ "target": "Productivity",
+ "steps": [
+  {
+   "launch": "Adobe® PageMaker® 6.5:Adobe Acrobat Reader 3.01:Reader 3.01 Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Accept"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Accept"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "quit all other running applications",
+    "front": true
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 600
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  }
+ ],
+ "launch": [
+  "Adobe Acrobat 3.0:Acrobat™ Reader 3.01"
+ ],
+ "machines": [
+  "68k",
+  "ppc"
+ ]
+}

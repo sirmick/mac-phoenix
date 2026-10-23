@@ -1,0 +1,16 @@
+{
+ "note": "QuarkXPress 4.0 upgrade (Quark, 1997): the upgrade installer and its CD, staged only: installing it takes the product's serial number (an upgrade: the QuarkXPress 3 serial it upgrades)",
+ "kind": "stage",
+ "media": [
+  {
+   "file": "QuarkXPress_4_Upgrade.zip",
+   "take": "QuarkXPress_4_Upgrade/QuarkXPress 4.0 Upgrade.sit"
+  }
+ ],
+ "disks": [
+  {
+   "file": "QuarkXPress_4_Upgrade.zip",
+   "take": "QuarkXPress_4_Upgrade/XPRESS.ISO"
+  }
+ ]
+}

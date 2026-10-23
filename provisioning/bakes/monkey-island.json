@@ -1,0 +1,12 @@
+{
+ "note": "The Secret of Monkey Island (LucasArts, 1990), the Mac floppy release installed, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "Secret_Of_Monkey_Island.SIT",
+ "expect": [
+  "Monkey Island 1"
+ ],
+ "os": "tools-7.6.1",
+ "launch": [
+  "Monkey Island 1:Monkey Island"
+ ]
+}

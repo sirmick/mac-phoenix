@@ -1,0 +1,137 @@
+{
+ "note": "ClarisWorks 4.0v4 (Claris, 1996): its installer (Developer VISE) run in the guest off the six floppies, Easy Install onto the target, then a first launch personalises it (a name; the serial field keeps its \"See registration card\") and declines the Registration Assistant. Baked on the 68k machine only: its 68k build runs on both, while the installer gives the PowerPC one a PowerPC-only build that keeps the personalisation elsewhere, so the two can't be made one fat app",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "ClarisWorks_4.0.sit",
+   "take": "ClarisWorks 4.0/Disk 1.img"
+  },
+  {
+   "file": "ClarisWorks_4.0.sit",
+   "take": "ClarisWorks 4.0/Disk 2.img"
+  },
+  {
+   "file": "ClarisWorks_4.0.sit",
+   "take": "ClarisWorks 4.0/Disk 3.img"
+  },
+  {
+   "file": "ClarisWorks_4.0.sit",
+   "take": "ClarisWorks 4.0/Disk 4.img"
+  },
+  {
+   "file": "ClarisWorks_4.0.sit",
+   "take": "ClarisWorks 4.0/Disk 5.img"
+  },
+  {
+   "file": "ClarisWorks_4.0.sit",
+   "take": "ClarisWorks 4.0/Disk 6.img"
+  }
+ ],
+ "expect": [
+  "ClarisWorks 4.0 Folder"
+ ],
+ "target": "Productivity",
+ "steps": [
+  {
+   "launch": "Disk 1:Install ClarisWorks"
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 30,
+   "note": "the 68k machine shows a splash first (OK), the PowerPC one doesn't"
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "quit all other running applications",
+    "front": true
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{target}:ClarisWorks 4.0 Folder:ClarisWorks"
+  },
+  {
+   "wait_for": {
+    "text": "Please personalize this copy:"
+   },
+   "timeout": 90
+  },
+  {
+   "type": "Mac Phoenix"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Never"
+   },
+   "timeout": 90
+  },
+  {
+   "click": {
+    "button": "Never"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Use Assistant or Stationery"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "close": "ClarisWorks"
+  }
+ ],
+ "launch": [
+  "ClarisWorks 4.0 Folder:ClarisWorks"
+ ]
+}

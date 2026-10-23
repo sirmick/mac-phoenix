@@ -1,0 +1,13 @@
+{
+ "title": "Installers (development, Mac OS 8–9)",
+ "tags": ["installers", "dev"],
+ "note": "The installers and archives the Mac OS 8–9 development bakes used (dev-tools-macos-8-9), a folder per product: CodeWarrior Pro 7.2 (the 7.1 Tools CD's installer folder and the 7.2 plugins), MPW-GM, MacPerl 5.6.1r2, MacPython-OS9 2.3.5, BBEdit Lite 6.1.2.",
+ "label": "Development Installers 8–9",
+ "installers": [
+  {"as": "CodeWarrior Pro 7.2 ƒ", "bakes": ["codewarrior-pro-7"]},
+  {"as": "MPW-GM ƒ", "bakes": ["mpw-gm"]},
+  {"as": "MacPerl 5.6.1r2 ƒ", "bakes": ["macperl-5.6.1r2"]},
+  {"as": "MacPython-OS9 2.3.5 ƒ", "bakes": ["macpython-2.3.5"]},
+  {"as": "BBEdit Lite 6.1.2 ƒ", "bakes": ["bbedit-lite-6.1.2"]}
+ ]
+}

@@ -1,0 +1,15 @@
+{
+ "note": "Adobe PageMaker 6.5 (Adobe, 1996): the CD's installer folder, staged only: installing it takes the product's serial number. Acrobat Reader 3.01, on the same CD, is its own product (acrobat-reader-3.01)",
+ "kind": "stage",
+ "disks": [
+  {
+   "file": "Adobe_Pagemaker_6.5_CD.iso_.sit",
+   "take": "Adobe Pagemaker 6.5 CD.iso"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Adobe® PageMaker® 6.5:Adobe PageMaker 6.5:Install Adobe® PageMaker® 6.5"
+  }
+ ]
+}

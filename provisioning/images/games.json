@@ -4,7 +4,7 @@
   "games",
   "68k"
  ],
- "note": "System 7 era games for the 68k and PowerPC profiles: Ambrosia (Maelstrom, Escape Velocity, EV Override, Apeiron, Barrack, Swoop, Chiral, Bubble Trouble, Ares, Avara, Cythera), Digital Messiah, Maxis (SimCity 2000, SimAnt, SimEarth, SimLife, SimTower, SimFarm, A-Train), Civilization I and II, Bungie (Marathon 1, 2, Infinity; Pathways into Darkness), Spectre, Bolo, Glider PRO, Master of Orion, Warcraft II, Lemmings, Populous II, Afterlife",
+ "note": "System 7 era games for the 68k and PowerPC profiles: Ambrosia (Maelstrom, Escape Velocity, EV Override, Apeiron, Barrack, Swoop, Chiral, Bubble Trouble, Ares, Avara, Cythera), Digital Messiah, Maxis (SimCity 2000, SimAnt, SimEarth, SimLife, SimTower, SimFarm, A-Train), Civilization I and II, Bungie (Marathon 1, 2, Infinity; Pathways into Darkness), Spectre, Bolo, Glider PRO, Master of Orion, Warcraft II, Lemmings, Populous II, Afterlife; Prince of Persia 1 and 2, Monkey Island 1 and 2, Wolfenstein 3D, Flashback, Spiderweb's Exile I–III, Oids, Pararena 2",
  "label": "Games",
  "place": [
   {
@@ -113,6 +113,8 @@
   },
   {
    "snapshot": "simcity-2000",
+   "take": "SimCity 2000® Collection",
+   "as": "SimCity 2000® Collection ƒ",
    "launch": [
     "SimCity 2000® Collection:SimCity 2000® 1.2",
     "SimCity 2000® Collection:Sound Manager:TeachText",
@@ -121,6 +123,8 @@
   },
   {
    "snapshot": "simant",
+   "take": "SimAnt Macintosh",
+   "as": "SimAnt ƒ",
    "launch": [
     "SimAnt Macintosh:E-Doc 1.0.20",
     "SimAnt Macintosh:E-Reg",
@@ -129,6 +133,8 @@
   },
   {
    "snapshot": "simearth",
+   "take": "SimEarth",
+   "as": "SimEarth 2.0 ƒ",
    "launch": [
     "SimEarth:SimEarth Black & White",
     "SimEarth:SimEarth Color"
@@ -136,7 +142,7 @@
   },
   {
    "snapshot": "simlife-1.0.1",
-   "to": "SimLife",
+   "to": "SimLife 1.0.1 ƒ",
    "launch": [
     "SimLife™ Color",
     "SimLife™ Monochrome"
@@ -144,6 +150,8 @@
   },
   {
    "snapshot": "simtower-1.2",
+   "take": "SimTower",
+   "as": "SimTower 1.2 ƒ",
    "launch": [
     "SimTower:SimTower"
    ]
@@ -151,13 +159,14 @@
   {
    "snapshot": "simfarm",
    "take": "Maxis:SimFarm",
+   "as": "SimFarm ƒ",
    "launch": [
     "Maxis:SimFarm:SimFarm"
    ]
   },
   {
    "snapshot": "a-train",
-   "to": "A-Train",
+   "to": "A-Train ƒ",
    "launch": [
     "A-Train",
     "AT Construction Set",
@@ -166,13 +175,15 @@
   },
   {
    "snapshot": "civilization",
-   "to": "Civilization",
+   "to": "Civilization 1.0.6 ƒ",
    "launch": [
     "Civilization™"
    ]
   },
   {
    "snapshot": "civilization-ii",
+   "take": "Civilization II",
+   "as": "Civilization II ƒ",
    "launch": [
     "Civilization II:Civ II Map Editor",
     "Civilization II:Civilization II",
@@ -181,6 +192,8 @@
   },
   {
    "snapshot": "marathon",
+   "take": "Marathon",
+   "as": "Marathon 1.2 ƒ",
    "launch": [
     "Marathon:Marathon Manual",
     "Marathon:Marathon v1.2"
@@ -194,31 +207,38 @@
   },
   {
    "snapshot": "marathon-infinity",
+   "take": "Marathon Infinity",
+   "as": "Marathon Infinity 1.5 ƒ",
    "launch": [
     "Marathon Infinity:Marathon ∞ 1.5"
    ]
   },
   {
    "snapshot": "pathways-into-darkness",
+   "take": "Pathways ƒ",
+   "as": "Pathways into Darkness 1.1 ƒ",
    "launch": [
     "Pathways ƒ:Pathways ƒ:Pathways Into Darkness"
    ]
   },
   {
    "snapshot": "spectre-1.1",
+   "to": "Spectre 1.1 ƒ",
    "launch": [
     "Spectre 1.1"
    ]
   },
   {
    "snapshot": "bolo-0.99.7",
+   "take": "Bolo",
+   "as": "Bolo 0.99.7 ƒ",
    "launch": [
     "Bolo:Bolo 0.99.7"
    ]
   },
   {
    "snapshot": "glider-pro-1.1.2",
-   "to": "Glider PRO",
+   "to": "Glider PRO 1.1.2 ƒ",
    "launch": [
     "Documentation:Foundation Mover Read Me",
     "Documentation:Glider Folding Instructions",
@@ -238,13 +258,15 @@
   },
   {
    "snapshot": "master-of-orion",
+   "take": "Master of Orion",
+   "as": "Master of Orion ƒ",
    "launch": [
     "Master of Orion:Master of Orion"
    ]
   },
   {
    "snapshot": "warcraft-ii",
-   "to": "Warcraft II",
+   "to": "Warcraft II 1.22 ƒ",
    "launch": [
     "Data:Microsoft Help",
     "Data:Microsoft Help Run Time",
@@ -255,14 +277,14 @@
   },
   {
    "snapshot": "lemmings-1.5.2",
-   "to": "Lemmings",
+   "to": "Lemmings 1.5.2 ƒ",
    "launch": [
     "Lemmings"
    ]
   },
   {
    "snapshot": "populous-ii",
-   "to": "Populous II",
+   "to": "Populous II ƒ",
    "launch": [
     "MacPopulousII 256 colors patch",
     "MacPopulousII:MacPopulousII",
@@ -272,11 +294,77 @@
   },
   {
    "snapshot": "afterlife",
-   "to": "Afterlife",
+   "to": "Afterlife 1.0 ƒ",
    "launch": [
     "Afterlife",
     "Items for your System Folder:CD ROM Software 5.1.1:CD-ROM Software:AppleCD Audio Player",
     "Items for your System Folder:CD ROM Software 5.1.1:SimpleText"
+   ]
+  },
+  {
+   "snapshot": "prince-of-persia",
+   "take": "Prince of Persia",
+   "as": "Prince of Persia ƒ"
+  },
+  {
+   "snapshot": "prince-of-persia-2",
+   "take": "Prince of Persia 2",
+   "as": "Prince of Persia 2 ƒ"
+  },
+  {
+   "snapshot": "monkey-island",
+   "take": "Monkey Island 1",
+   "as": "The Secret of Monkey Island ƒ"
+  },
+  {
+   "snapshot": "exile-1",
+   "take": "Exile folder:Exile 2.0.1 ƒ",
+   "as": "Exile 2.0.1 ƒ"
+  },
+  {
+   "snapshot": "exile-2",
+   "take": "Exile II ƒ:Exile II - Crystal Souls ƒ",
+   "as": "Exile II 2.0.3 ƒ",
+   "launch": [
+    "Exile II ƒ:Exile II - Crystal Souls ƒ:Exile II v2.0.3",
+    "Exile II ƒ:Exile II - Crystal Souls ƒ:Exile II Editor v2.0.1"
+   ]
+  },
+  {
+   "snapshot": "exile-3",
+   "take": "Exile III v1.0.3 ƒ",
+   "as": "Exile III 1.0.3 ƒ",
+   "launch": [
+    "Exile III v1.0.3 ƒ:Exile III (fat) v1.0.3",
+    "Exile III v1.0.3 ƒ:Exile III Editor v1.0.2"
+   ]
+  },
+  {
+   "snapshot": "oids-2.0.1",
+   "take": "OIDS_2.0",
+   "as": "Oids 2.0.1 ƒ"
+  },
+  {
+   "snapshot": "pararena-2",
+   "take": "Pararena 2",
+   "as": "Pararena 2.06 ƒ"
+  },
+  {
+   "snapshot": "monkey-island-2",
+   "take": "Monkey2 Folder",
+   "as": "Monkey Island 2 ƒ"
+  },
+  {
+   "snapshot": "wolfenstein-3d-1.0.2",
+   "take": "Wolfenstein 3D™ folder",
+   "as": "Wolfenstein 3D 1.0.2 ƒ"
+  },
+  {
+   "snapshot": "flashback-1.0",
+   "take": "Flashback™ folder",
+   "as": "Flashback 1.0 ƒ",
+   "launch": [
+    "Flashback™ folder:Flashback"
    ]
   }
  ]

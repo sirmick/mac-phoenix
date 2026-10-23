@@ -7,7 +7,8 @@
  "label": "MPW",
  "place": [
   {
-   "snapshot": "mpw-3.4.2"
+   "snapshot": "mpw-3.4.2",
+   "external_aliases": "drop"
   },
   {
    "snapshot": "aslm-sdk-2.0",

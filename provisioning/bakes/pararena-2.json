@@ -1,0 +1,12 @@
+{
+ "note": "Pararena 2.06 (John Calhoun, 1992), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "Pararena2.SIT",
+ "expect": [
+  "Pararena 2"
+ ],
+ "os": "tools-7.6.1",
+ "launch": [
+  "Pararena 2:Pararena 2.06M"
+ ]
+}

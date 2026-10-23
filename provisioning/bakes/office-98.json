@@ -1,0 +1,55 @@
+{
+ "note": "Microsoft Office 98 (Microsoft, 1998), PowerPC only: its folder (the CD's drag-install folder) copied by the guest. Word, Excel and PowerPoint's first launch runs Office First Run, which asks for a name and then the CD key (10 digits, the CD sleeve's sticker): left for the user (no key is typed here), so the shared libraries First Run puts in the System Folder come then",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "machines": [
+  "ppc"
+ ],
+ "media": [
+  {
+   "file": "Microsoft_Office_98.sit",
+   "take": "Microsoft Office 98"
+  }
+ ],
+ "expect": [
+  "Microsoft Office 98"
+ ],
+ "target": "Productivity",
+ "steps": [
+  {
+   "copy": {
+    "from": "{media}:Microsoft Office 98",
+    "to": "{target}:"
+   }
+  }
+ ],
+ "launch": [
+  {
+   "app": "Microsoft Office 98:Microsoft Word",
+   "needs_serial": true,
+   "no_quit": true,
+   "machines": [
+    "ppc"
+   ],
+   "front": "Microsoft Office First Run"
+  },
+  {
+   "app": "Microsoft Office 98:Microsoft Excel",
+   "needs_serial": true,
+   "no_quit": true,
+   "machines": [
+    "ppc"
+   ],
+   "front": "Microsoft Office First Run"
+  },
+  {
+   "app": "Microsoft Office 98:Microsoft PowerPoint",
+   "needs_serial": true,
+   "no_quit": true,
+   "machines": [
+    "ppc"
+   ],
+   "front": "Microsoft Office First Run"
+  }
+ ]
+}

@@ -1,0 +1,86 @@
+{
+ "note": "Monkey Island 2: LeChuck's Revenge (LucasArts, 1992): the self-extracting archive on its five original floppies, run in the guest (the archive's crack and patched disks are left alone)",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "monkeyisland2.zip",
+   "take": "monkeyisland2/M2_Disk_1.dsk"
+  },
+  {
+   "file": "monkeyisland2.zip",
+   "take": "monkeyisland2/M2_Disk_2.dsk"
+  },
+  {
+   "file": "monkeyisland2.zip",
+   "take": "monkeyisland2/M2_Disk_3.dsk"
+  },
+  {
+   "file": "monkeyisland2.zip",
+   "take": "monkeyisland2/M2_Disk_4.dsk"
+  },
+  {
+   "file": "monkeyisland2.zip",
+   "take": "monkeyisland2/M2_Disk_5.dsk"
+  }
+ ],
+ "expect": [
+  "Monkey2 Folder"
+ ],
+ "target": "Games",
+ "steps": [
+  {
+   "launch": "M2 Disk1:Monkey2"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "click": {
+    "button": "Desktop"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   },
+   "max": 10
+  },
+  {
+   "dclick": {
+    "text": "{target}",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "button": "Save"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful!"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "launch": [
+  "Monkey2 Folder:LeChuck's Revenge"
+ ]
+}

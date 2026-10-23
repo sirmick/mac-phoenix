@@ -21,24 +21,35 @@
   },
   {
    "snapshot": "dark-castle",
+   "take": "Dark Castle",
+   "as": "Dark Castle ƒ",
    "launch": [
-    "Dark Castle:Dark Castle"
+    {
+     "app": "Dark Castle:Dark Castle",
+     "front": "Data A"
+    }
    ]
   },
   {
    "snapshot": "beyond-dark-castle",
-   "to": "Beyond Dark Castle",
+   "to": "Beyond Dark Castle 1.1 ƒ",
    "launch": [
     "Behind Dark Castle",
-    "Beyond Dark Castle",
+    {
+     "app": "Beyond Dark Castle",
+     "front": "BDC Data A"
+    },
     "Beyond Dark Castle Editor "
    ]
   },
   {
    "snapshot": "apache-strike",
-   "to": "Apache Strike",
+   "to": "Apache Strike 1.2 ƒ",
    "launch": [
-    "Apache Strike"
+    {
+     "app": "Apache Strike",
+     "front": "Data A"
+    }
    ]
   },
   {
@@ -49,6 +60,8 @@
   },
   {
    "snapshot": "simcity-1.3c",
+   "take": "SimCity 1.3c",
+   "as": "SimCity 1.3c ƒ",
    "launch": [
     "SimCity 1.3c:SimCity 1.3c",
     "SimCity 1.3c:SimCity Editor",
@@ -57,6 +70,8 @@
   },
   {
    "snapshot": "shufflepuck-cafe",
+   "take": "Shufflepuck (N&B)",
+   "as": "Shufflepuck Café ƒ",
    "launch": [
     "Shufflepuck (N&B):Shufflepuck"
    ]
@@ -70,6 +85,8 @@
   },
   {
    "snapshot": "crystal-quest",
+   "take": "Crystal Quest",
+   "as": "Crystal Quest 2.2.5 ƒ",
    "launch": [
     "Crystal Quest:CritterEditor 1.0.4M",
     "Crystal Quest:Crystal Quest",
@@ -78,13 +95,15 @@
   },
   {
    "snapshot": "oregon-trail",
+   "take": "Oregon Trail",
+   "as": "Oregon Trail ƒ",
    "launch": [
     "Oregon Trail:Oregon Trail"
    ]
   },
   {
    "snapshot": "spaceward-ho-3.0.1",
-   "to": "Spaceward Ho! 3.0.1",
+   "to": "Spaceward Ho! 3.0.1 ƒ",
    "launch": [
     "Spaceward Ho! 3.0.1"
    ]

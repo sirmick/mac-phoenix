@@ -1,0 +1,51 @@
+{
+ "note": "Exile III (Spiderweb Software, shareware), its StuffIt InstallerMaker installer run in the guest off the disk image",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "exile_3.sit",
+   "take": "Exile III.dsk"
+  }
+ ],
+ "expect": [],
+ "target": "Games",
+ "steps": [
+  {
+   "launch": "Exile III:Exile III Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Drive"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Drive"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation is done."
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}

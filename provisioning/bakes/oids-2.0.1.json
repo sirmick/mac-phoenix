@@ -1,0 +1,17 @@
+{
+ "note": "Oids 2.0.1 (FTL Games, 1987; Dan Hewitt's later Mac release), with its galaxies, music and manual, expanded by StuffIt Expander in the guest; PowerPC only (on 68k: error -192, no 'CODE')",
+ "kind": "expand",
+ "archive": "OIDS_2.0.1.sit",
+ "expect": [
+  "OIDS_2.0"
+ ],
+ "os": "tools-7.6.1",
+ "launch": [
+  {
+   "app": "OIDS_2.0:OIDS",
+   "machines": [
+    "ppc"
+   ]
+  }
+ ]
+}

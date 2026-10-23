@@ -1,0 +1,23 @@
+{
+ "title": "Installers (productivity)",
+ "tags": ["installers", "productivity"],
+ "note": "The installers the productivity bakes used, a folder per product: floppies as Disk Copy images, installer folders from CDs. Installed elsewhere too: AppleWorks, ClarisWorks, WordPerfect, Excel, Office 98, GraphicConverter, Acrobat Reader. Only here (installing takes the product's serial number): Photoshop 4.0, Illustrator 6.0, PageMaker 6.5, FreeHand 8, the QuarkXPress 4.0 upgrade, Persuasion 3.0, FileMaker Pro 4.0, and Word 5.1a (its bake doesn't get through it yet).",
+ "label": "Productivity Installers",
+ "installers": [
+  {"as": "AppleWorks 5.0.3 & 5.0.4 ƒ", "bakes": ["appleworks-5.0.3", "appleworks-5.0.4"]},
+  {"as": "Corel WordPerfect 3.5e ƒ", "bakes": ["wordperfect-3.5e"]},
+  {"as": "Microsoft Excel 4.0 ƒ", "bakes": ["excel-4.0"]},
+  {"as": "Microsoft Word 5.1a ƒ", "bakes": ["word-5.1a"]},
+  {"as": "ClarisWorks 4.0v4 ƒ", "bakes": ["clarisworks-4.0"]},
+  {"as": "GraphicConverter 3.9.1 ƒ", "bakes": ["graphicconverter-3.9.1"]},
+  {"as": "Microsoft Office 98 ƒ", "bakes": ["office-98"]},
+  {"as": "Acrobat Reader 3.01 ƒ", "bakes": ["acrobat-reader-3.01"]},
+  {"as": "Adobe Photoshop 4.0 ƒ", "bakes": ["photoshop-4.0"]},
+  {"as": "Adobe Illustrator 6.0 ƒ", "bakes": ["illustrator-6.0"]},
+  {"as": "Adobe PageMaker 6.5 ƒ", "bakes": ["pagemaker-6.5"]},
+  {"as": "Macromedia FreeHand 8 ƒ", "bakes": ["freehand-8"]},
+  {"as": "QuarkXPress 4.0 Upgrade ƒ", "bakes": ["quarkxpress-4.0-upgrade"]},
+  {"as": "Aldus Persuasion 3.0 ƒ", "bakes": ["persuasion-3.0"]},
+  {"as": "FileMaker Pro 4.0 ƒ", "bakes": ["filemaker-pro-4.0"]}
+ ]
+}

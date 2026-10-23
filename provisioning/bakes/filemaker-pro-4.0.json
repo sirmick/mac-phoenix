@@ -1,0 +1,14 @@
+{
+ "note": "FileMaker Pro 4.0 (FileMaker, 1997): its installer (Start Here) and Read Me, staged only: installing it takes the product's serial number. The archive's Personalization Info (an earlier owner's) is left out",
+ "kind": "stage",
+ "media": [
+  {
+   "file": "filemaker_pro_4.0.sit",
+   "take": "FileMaker Pro 4.0/Start Here"
+  },
+  {
+   "file": "filemaker_pro_4.0.sit",
+   "take": "FileMaker Pro 4.0/Read Me"
+  }
+ ]
+}

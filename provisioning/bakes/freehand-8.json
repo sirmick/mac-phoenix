@@ -1,0 +1,10 @@
+{
+ "note": "Macromedia FreeHand 8 (Macromedia, 1998): its installer folder, staged only: installing it takes the product's serial number. The archive's file of its original owner's serial is left out",
+ "kind": "stage",
+ "media": [
+  {
+   "file": "freehand_8.hqx",
+   "take": "Freehand 8/FreeHand 8"
+  }
+ ]
+}

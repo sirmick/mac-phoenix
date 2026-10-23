@@ -1,0 +1,44 @@
+{
+ "note": "Adobe Illustrator 6.0 (Adobe, 1996), the 68k floppy set (Install-Disk 1, Disks 2–7, ATM's Program Disk), staged only: installing it takes the product's serial number. The archive's folder named after its original owner's serial is left out",
+ "kind": "stage",
+ "disks": [
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/Install-Disk 1.img"
+  },
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/Disk 2.img"
+  },
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/Disk 3.img"
+  },
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/Disk 4.img"
+  },
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/Disk 5.img"
+  },
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/Disk 6.img"
+  },
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/Disk 7.img"
+  },
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/ATM™ Program Disk.img"
+  }
+ ],
+ "media": [
+  {
+   "file": "adobe_illustrator_6.0_68k.sit",
+   "take": "Adobe Illustrator 6.0 (68k)/Read Me First!"
+  }
+ ]
+}

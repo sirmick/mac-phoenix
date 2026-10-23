@@ -1,0 +1,115 @@
+{
+ "note": "Flashback 1.0 (Delphine/U.S. Gold, 1994), its installer run in the guest off the five original floppies",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "Flashback_v10_dsk.zip",
+   "take": "Flashback v1.0/Flashback 1.0 Disk 1.dsk"
+  },
+  {
+   "file": "Flashback_v10_dsk.zip",
+   "take": "Flashback v1.0/Flashback 1.0 Disk 2.dsk"
+  },
+  {
+   "file": "Flashback_v10_dsk.zip",
+   "take": "Flashback v1.0/Flashback 1.0 Disk 3.dsk"
+  },
+  {
+   "file": "Flashback_v10_dsk.zip",
+   "take": "Flashback v1.0/Flashback 1.0 Disk 4.dsk"
+  },
+  {
+   "file": "Flashback_v10_dsk.zip",
+   "take": "Flashback v1.0/Flashback 1.0 Disk 5.dsk"
+  }
+ ],
+ "expect": [],
+ "target": "Games",
+ "steps": [
+  {
+   "launch": "Flashback 1:Flashback Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Install Flashback Only"
+   },
+   "timeout": 30
+  },
+  {
+   "check": {
+    "text": "Performs a complete installation of Flashback"
+   },
+   "note": "Install Flashback Only, selected: 7.5 and later have Sound Manager 3"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "click": {
+    "button": "Desktop"
+   },
+   "until": {
+    "text": "Flashback 1",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   },
+   "max": 10
+  },
+  {
+   "key": "tab",
+   "note": "the list gets the keyboard (the name field has it)"
+  },
+  {
+   "type": "{target}",
+   "note": "type-select: the desktop list (five floppies) holds more than shows"
+  },
+  {
+   "key": "return",
+   "note": "Open: into the selected volume"
+  },
+  {
+   "wait_for": {
+    "button": "Install"
+   },
+   "timeout": 10
+  },
+  {
+   "check": {
+    "text": "{target}",
+    "exact": true
+   },
+   "note": "the popup names the target"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ]
+}

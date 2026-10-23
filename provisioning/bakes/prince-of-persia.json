@@ -1,0 +1,12 @@
+{
+ "note": "Prince of Persia (Brøderbund, 1990; Jordan Mechner), black-and-white, colour and LC builds, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "Prince_Of_Persia.SIT",
+ "expect": [
+  "Prince of Persia"
+ ],
+ "os": "tools-7.6.1",
+ "launch": [
+  "Prince of Persia:Prince of Persia"
+ ]
+}

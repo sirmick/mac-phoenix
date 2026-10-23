@@ -1,0 +1,21 @@
+{
+ "title": "Installers (system)",
+ "tags": ["installers"],
+ "note": "The System installers the os bakes used (6.0.8 to 9.0.4: floppies as Disk Copy images, from the CDs the installer's folder), Open Transport 1.1.2, CarbonLib 1.6 and the utilities every tools layer has: Disk Copy, StuffIt Expander.",
+ "label": "System Installers",
+ "installers": [
+  {"as": "System 6.0.8 ƒ", "bakes": ["os-6.0.8"]},
+  {"as": "System 7.1 ƒ", "bakes": ["os-7.1"]},
+  {"as": "System 7.5.5 ƒ", "bakes": ["os-7.5.5"]},
+  {"as": "Mac OS 7.6.1 ƒ", "bakes": ["os-7.6.1"]},
+  {"as": "Mac OS 8.6 ƒ", "bakes": ["os-8.6"]},
+  {"as": "Mac OS 9.0.4 ƒ", "bakes": ["os-9.0.4"]},
+  {"as": "Open Transport 1.1.2 ƒ", "bakes": ["open-transport-1.1.2"]},
+  {"as": "CarbonLib 1.6 ƒ", "bakes": ["carbonlib-1.6"]},
+  {"as": "Disk Copy 4.2 ƒ", "bakes": ["disk-copy-4.2"]},
+  {"as": "Disk Copy 6.3.3 ƒ", "bakes": ["disk-copy-6.3.3"]},
+  {"as": "StuffIt Expander 4.0.2 ƒ", "bakes": ["stuffit-expander-4.0.2"]},
+  {"as": "StuffIt Expander 5.5 ƒ", "bakes": ["stuffit-expander-5.5"]},
+  {"as": "StuffIt Expander 6.0.1 ƒ", "bakes": ["stuffit-expander-6.0.1"]}
+ ]
+}

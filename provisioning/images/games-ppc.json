@@ -9,6 +9,8 @@
  "place": [
   {
    "snapshot": "ev-nova",
+   "take": "EV Nova 1.0.10",
+   "as": "EV Nova 1.0.10 ƒ",
    "launch": [
     "EV Nova 1.0.10:EV Nova"
    ]
@@ -16,11 +18,11 @@
   {
    "snapshot": "ferazels-wand",
    "take": "Ferazel's Wand 1.0.2 ƒ",
+   "as": "Ferazel's Wand 1.0.3 ƒ",
    "launch": [
     "Ferazel's Wand 1.0.2 ƒ:Documentation ƒ:Ferazel's Wand Documentation",
     "Ferazel's Wand 1.0.2 ƒ:Ferazel's Wand"
-   ],
-   "as": "Ferazel's Wand 1.0.3 ƒ"
+   ]
   },
   {
    "snapshot": "mars-rising",
@@ -38,7 +40,7 @@
   },
   {
    "snapshot": "master-of-orion-ii",
-   "to": "Master of Orion II",
+   "to": "Master of Orion II ƒ",
    "launch": [
     "Master of Orion II:MOO II"
    ]

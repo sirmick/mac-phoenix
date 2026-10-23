@@ -3,18 +3,49 @@
  "tags": [
   "productivity"
  ],
- "note": "Office software for the 7.5.5 / 7.6.1 profiles, 68k and PowerPC: AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), Corel WordPerfect 3.5e, Microsoft Excel 4.0. Boots with productivity-7.6.1.",
+ "note": "Office software for the 7.5.5 / 7.6.1 profiles, 68k and PowerPC: AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), ClarisWorks 4.0v4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98 (PowerPC; asks for its CD key at first launch), GraphicConverter 3.9.1 (68k and PowerPC builds), Acrobat Reader 3.01. Boots with productivity-7.6.1.",
  "label": "Productivity",
  "size_mb": 512,
  "place": [
   {
-   "snapshot": "appleworks-5.0.3"
+   "snapshot": "appleworks-5.0.3",
+   "take": "AppleWorks 5",
+   "as": "AppleWorks 5.0.3 ƒ"
   },
   {
-   "snapshot": "wordperfect-3.5e"
+   "snapshot": "wordperfect-3.5e",
+   "take": "Corel WordPerfect 3.5 Enhanced",
+   "as": "Corel WordPerfect 3.5e ƒ"
   },
   {
-   "snapshot": "excel-4.0"
+   "snapshot": "excel-4.0",
+   "take": "Microsoft Excel 4.0",
+   "as": "Microsoft Excel 4.0 ƒ"
+  },
+  {
+   "snapshot": "clarisworks-4.0",
+   "take": "ClarisWorks 4.0 Folder",
+   "as": "ClarisWorks 4.0v4 ƒ"
+  },
+  {
+   "snapshot": "graphicconverter-3.9.1",
+   "take": "GraphicConverter 3.9.1US 68K",
+   "to": "GraphicConverter 3.9.1 ƒ"
+  },
+  {
+   "snapshot": "graphicconverter-3.9.1",
+   "take": "GraphicConverter 3.9.1US PPC",
+   "to": "GraphicConverter 3.9.1 ƒ"
+  },
+  {
+   "snapshot": "office-98",
+   "take": "Microsoft Office 98",
+   "as": "Microsoft Office 98 ƒ"
+  },
+  {
+   "snapshot": "acrobat-reader-3.01",
+   "take": "Adobe Acrobat 3.0",
+   "as": "Acrobat Reader 3.01 ƒ"
   }
  ]
 }

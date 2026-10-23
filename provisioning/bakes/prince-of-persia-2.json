@@ -1,0 +1,12 @@
+{
+ "note": "Prince of Persia 2: The Shadow and the Flame (Brøderbund, 1993), expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "Prince_Of_Persia2.SIT",
+ "expect": [
+  "Prince of Persia 2"
+ ],
+ "os": "tools-7.6.1",
+ "launch": [
+  "Prince of Persia 2:Prince of Persia 2"
+ ]
+}

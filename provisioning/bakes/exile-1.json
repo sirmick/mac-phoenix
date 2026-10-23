@@ -1,0 +1,57 @@
+{
+ "note": "Exile I (Spiderweb Software, shareware), its StuffIt InstallerMaker installer run in the guest off the disk image",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "exile_1.sit",
+   "take": "Exile I.dsk"
+  }
+ ],
+ "expect": [
+  "Exile folder"
+ ],
+ "target": "Games",
+ "steps": [
+  {
+   "launch": "Exile I:Exile Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Drive"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Drive"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 6
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation is done."
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "launch": [
+  "Exile folder:Exile 2.0.1 ƒ:Exile v2.0.1",
+  "Exile folder:Exile 2.0.1 ƒ:Exile Editor v1.1.2:Exile.editor v1.1.2"
+ ]
+}

@@ -1,0 +1,98 @@
+{
+ "note": "Adobe Photoshop 4.0 (Adobe, 1996), 68k and PowerPC: its installer floppies (Install-Disk 1, Disks 2–21, the two Program Disks), staged only: installing it takes the product's serial number",
+ "kind": "stage",
+ "disks": [
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Install-Disk 1.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 2.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 3.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 4.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 5.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 6.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 7.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 8.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 9.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 10.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 11.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 12.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 13.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 14.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 15.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 16.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 17.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 18.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 19.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 20.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 21.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Program Disk.img"
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Program Disk 2.img"
+  }
+ ]
+}

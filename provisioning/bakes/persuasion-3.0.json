@@ -1,0 +1,42 @@
+{
+ "note": "Aldus Persuasion 3.0 (Aldus, 1993): its nine installer floppies, staged only: installing it takes the product's serial number",
+ "kind": "stage",
+ "disks": [
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D1.dsk"
+  },
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D2.dsk"
+  },
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D3.dsk"
+  },
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D4.dsk"
+  },
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D5.dsk"
+  },
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D6.dsk"
+  },
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D7.dsk"
+  },
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D8.dsk"
+  },
+  {
+   "file": "Persuasion3_0.zip",
+   "take": "Persuasion3_0/Persuasion3_0_D9.dsk"
+  }
+ ]
+}

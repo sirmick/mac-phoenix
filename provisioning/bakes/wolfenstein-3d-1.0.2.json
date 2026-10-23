@@ -1,0 +1,81 @@
+{
+ "note": "Wolfenstein 3D 1.0.2 (MacPlay/id Software, 1994), its two-part installer run in the guest",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "media": [
+  {
+   "file": "Wolfenstein_3D_1.0.2.zip",
+   "take": "Wolfenstein 3D 1.0.2"
+  }
+ ],
+ "expect": [
+  "Wolfenstein 3D™ folder"
+ ],
+ "target": "Games",
+ "steps": [
+  {
+   "launch": "{media}:Wolfenstein 3D 1.0.2:Wolfenstein 3D™ Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Custom"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "click": {
+    "button": "Desktop"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   },
+   "max": 10
+  },
+  {
+   "dclick": {
+    "text": "{target}",
+    "exact": true,
+    "outside_controls": true,
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  }
+ ],
+ "launch": [
+  "Wolfenstein 3D™ folder:Wolfenstein 3D™"
+ ]
+}

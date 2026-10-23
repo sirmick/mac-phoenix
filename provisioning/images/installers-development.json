@@ -1,0 +1,24 @@
+{
+ "title": "Installers (development, System 7)",
+ "tags": ["installers", "dev"],
+ "note": "The installers and archives the System 7 development bakes used (dev-tools-system-7), a folder per product; from CDs (CodeWarrior Pro 4, E.T.O. #22) only what the bake used. Mac OS 8–9's are on installers-development-macos-8-9 (one HFS volume can't hold both CodeWarrior CDs).",
+ "label": "Development Installers",
+ "installers": [
+  {"as": "CodeWarrior Pro 4 ƒ", "bakes": ["codewarrior-pro-4"]},
+  {"as": "MPW 3.4.2 ƒ", "bakes": ["mpw-3.4.2"]},
+  {"as": "ToolServer 3.4.1 ƒ", "bakes": ["toolserver-3.4.1"]},
+  {"as": "ASLM SDK 2.0 ƒ", "bakes": ["aslm-sdk-2.0"]},
+  {"as": "THINK C 6.0 ƒ", "bakes": ["think-c-6"]},
+  {"as": "Symantec C++ 7 ƒ", "bakes": ["symantec-c-7"]},
+  {"as": "THINK Pascal 4.5d4 ƒ", "bakes": ["think-pascal-4.5"]},
+  {"as": "MacPerl 5.2.0r4 ƒ", "bakes": ["macperl-5.2.0r4", "macperl-5.2.0r4-68k"]},
+  {"as": "MacPython 1.5.2 ƒ", "bakes": ["macpython-1.5.2"]},
+  {"as": "HyperCard 2.4.1 ƒ", "bakes": ["hypercard-2.4.1"]},
+  {"as": "Frontier 5.0.1 ƒ", "bakes": ["frontier-5.0.1"]},
+  {"as": "ResEdit 2.1.3 ƒ", "bakes": ["resedit-2.1.3"]},
+  {"as": "Resorcerer 2.0 ƒ", "bakes": ["resorcerer-2.0"]},
+  {"as": "BBEdit Lite 4.1 ƒ", "bakes": ["bbedit-lite-4.1"]},
+  {"as": "ZTerm 1.0.1 ƒ", "bakes": ["zterm-1.0.1"]},
+  {"as": "MacsBug 6.6.3 ƒ", "bakes": ["macsbug-6.6.3"]}
+ ]
+}
