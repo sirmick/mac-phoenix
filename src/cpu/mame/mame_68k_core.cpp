@@ -39,10 +39,7 @@ namespace {
  * request_stop() or request_attention(). */
 const int SLICE_CYCLES = 4000;
 
-/* --deterministic (vclock.h): one clock, so one core's memory to read. */
-void count_instruction(offs_t pc) { vclock_count(pc); }
-const GuestMemory *vclock_memory;
-const uint8_t *vclock_host(uint32_t a) { return vclock_memory->host(a); }
+void count_instruction(offs_t pc) { vclock_count(pc); }  /* --deterministic (vclock.h) */
 
 const device_type_impl MAME68K_TYPE{"mame-68k", "Motorola 680x0 (MAME Musashi)"};
 
@@ -279,10 +276,7 @@ public:
             dev_.run_slice();
             host_.slice_end(*this);
             if(vclock_enabled)
-            {
-                vclock_memory = &memory_;
-                vclock_quantum(vclock_host);
-            }
+                vclock_quantum();
             if(stopped)
             {
                 why = StopReason::HostOp;

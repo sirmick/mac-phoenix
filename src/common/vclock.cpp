@@ -5,6 +5,7 @@
  *  call vclock_quantum() every slice.
  */
 #include "vclock.h"
+#include "platform.h"
 
 #include <cstdio>
 
@@ -20,11 +21,11 @@ static uint64_t vclock_skipped = 0;
 
 uint64_t vclock_usec(void) { return vclock_app_insns / VCLOCK_INSNS_PER_USEC + vclock_skipped; }
 
-/* Guest reads that bypass the platform accessors (and so the A-trap
- * trace's low-memory watch). */
-static uint32_t vclock_peek(const uint8_t *(*host)(uint32_t), uint32_t a)
+/* Through the Platform's address translation, not its accessors (those
+ * feed the A-trap trace's low-memory watch). */
+static uint32_t vclock_peek(uint32_t a)
 {
-    const uint8_t *p = host(a);
+    const uint8_t *p = g_platform.mem_mac_to_host(a);
     return p ? (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3] : 0;
 }
 
@@ -32,11 +33,11 @@ static uint32_t vclock_peek(const uint8_t *(*host)(uint32_t), uint32_t a)
  * whatever became due. The region starts where the System heap ends
  * (SysZone's bkLim, the zone header's first long, SysZone at $2A6) and
  * runs to the top of RAM. */
-void vclock_quantum(const uint8_t *(*host)(uint32_t))
+void vclock_quantum(void)
 {
     uint32_t top = vclock_ram_top;
-    uint32_t sys = vclock_peek(host, 0x2A6);
-    uint32_t lo = (sys >= 0x2000 && sys < top) ? vclock_peek(host, sys) : 0;
+    uint32_t sys = vclock_peek(0x2A6);
+    uint32_t lo = (sys >= 0x2000 && sys < top) ? vclock_peek(sys) : 0;
     if (lo > 0x2000 && lo < top) {
         vclock_app_lo = lo;
         vclock_app_hi = top;

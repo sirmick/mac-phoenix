@@ -9,6 +9,7 @@
 #include "executor_child.h"
 #include <syn68k_public.h>
 #include "executor_host.h"
+#include "platform.h"
 
 #include "emulator_config.h"
 #include "ipc_protocol.h"
@@ -153,7 +154,7 @@ void crash_snapshot(int sig, siginfo_t *info, void *uctx)
 {
     static char message[96];
     snprintf(message, sizeof message, "host signal %d at guest pc $%08x, address %p",
-             sig, (unsigned)syn68k_current_pc(), info->si_addr);
+             sig, (unsigned)g_platform.cpu_get_pc(), info->si_addr);
     fprintf(stderr, "[Executor] %s: snapshotting\n", message);
     syn68k_describe_cpu(stderr);
     fatal_snapshot(message);

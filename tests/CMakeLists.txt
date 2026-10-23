@@ -34,6 +34,7 @@ set_tests_properties(browser_shm PROPERTIES TIMEOUT 10 LABELS "unit")
 add_executable(test_cpu_cores
   ${TEST_DIR}/test_cpu_cores.cpp
   ${CMAKE_SOURCE_DIR}/src/cpu/core/guest_memory.cpp
+  ${CMAKE_SOURCE_DIR}/src/common/platform_glue.cpp   # g_platform (vclock reads through it)
 )
 target_include_directories(test_cpu_cores PRIVATE ${CMAKE_SOURCE_DIR}/src/cpu/core)
 target_link_libraries(test_cpu_cores PRIVATE mame_m68k mame_ppc)

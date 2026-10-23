@@ -51,9 +51,9 @@ uint64_t vclock_usec(void);                     /* virtual microseconds since st
 extern uint32_t vclock_ram_top;  /* end of guest RAM (the ROM machine sets it; Executor: 1GB) */
 
 void vclock_skip_to(uint64_t usec);             /* jump forward (idle) */
-/* Per slice, from the CPU loop. host maps a guest address to its bytes
- * (null if unmapped): the core's own memory, read without side effects. */
-void vclock_quantum(const uint8_t *(*host)(uint32_t addr));
+/* Per slice, from the CPU loop. Reads guest memory through
+ * g_platform.mem_mac_to_host. */
+void vclock_quantum(void);
 static inline void vclock_count(uint32_t pc)    /* per instruction */
 {
     /* Until the app starts every instruction counts (the ROM boot waits on

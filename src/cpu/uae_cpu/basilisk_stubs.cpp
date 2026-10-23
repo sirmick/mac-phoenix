@@ -46,7 +46,7 @@ void cpu_do_check_ticks(void) {
     // Deterministic mode: advance the virtual clock and let the backend fire
     // whatever became due, on this (the CPU) thread.
     if (vclock_enabled)
-        vclock_quantum([](uint32_t a) -> const uint8_t * { return (const uint8_t *)get_real_address(a); });
+        vclock_quantum();
 
     // Whoever drives UAE looks in (cpu::Core: attention, interrupt line).
     if (uae_host_hooks.poll)
