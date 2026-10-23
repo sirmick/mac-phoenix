@@ -1,5 +1,11 @@
 // The page side: keep uploads in OPFS, start the Worker with them, hand it
-// a canvas, send it input. Query string: ?size=WxH (default 640x480).
+// a canvas, send it input. Query string:
+//   ?size=WxH        the screen (default 640x480)
+//   ?disk=URL        a disk image to fetch and mount for this visit (not
+//                    kept; repeatable)
+//   ?system=NAME     run on that image's System and Finder
+// Outside a secure context (plain http to another host) there is no OPFS
+// and no AudioWorklet: uploads last the visit, sound is off.
 //
 // Automation: window.executor.request(op, arg) -> Promise. At the running
 // application's next event call (web_main.cpp): 'app', 'windows', 'launch'
@@ -28,26 +34,68 @@ window.executor = {
     },
 };
 
-// ---- uploads, kept in OPFS ----
+// ---- uploads, kept in OPFS (or for this visit, where there is none) ----
+const opfs = window.isSecureContext && navigator.storage && navigator.storage.getDirectory;
+let sessionFiles = [];          // without OPFS; and ?disk= fetches
+
 async function uploads() {
     return navigator.storage.getDirectory();
 }
 
 async function storedFiles() {
-    const dir = await uploads();
-    const files = [];
-    for await (const [, handle] of dir.entries())
-        if (handle.kind === 'file')
-            files.push(await handle.getFile());
+    const files = [...sessionFiles];
+    if (opfs) {
+        const dir = await uploads();
+        for await (const [, handle] of dir.entries())
+            if (handle.kind === 'file' && !files.some((f) => f.name === handle.name))
+                files.push(await handle.getFile());
+    }
     return files.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function store(file) {
+    if (!opfs) {
+        sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+        return;
+    }
     const dir = await uploads();
     const handle = await dir.getFileHandle(file.name, { create: true });
     const w = await handle.createWritable();
     await w.write(file);
     await w.close();
+}
+
+async function remove(name) {
+    sessionFiles = sessionFiles.filter((f) => f.name !== name);
+    if (opfs)
+        await (await uploads()).removeEntry(name).catch(() => {});
+}
+
+// ?disk=URL: fetched once per visit, with progress in the status line.
+async function fetchDisks() {
+    for (const url of params.getAll('disk')) {
+        const name = decodeURIComponent(new URL(url, location.href).pathname.split('/').pop());
+        const res = await fetch(url);
+        if (!res.ok) {
+            status.textContent = `Cannot fetch ${name} (${res.status})`;
+            continue;
+        }
+        const total = Number(res.headers.get('Content-Length')) || 0;
+        const reader = res.body.getReader();
+        const chunks = [];
+        let got = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done)
+                break;
+            chunks.push(value);
+            got += value.length;
+            status.textContent = total ? `Loading ${name}… ${Math.floor(got * 100 / total)}%`
+                                       : `Loading ${name}… ${(got / 1e6).toFixed(0)} MB`;
+        }
+        sessionFiles = sessionFiles.filter((f) => f.name !== name)
+            .concat(new File(chunks, name));
+    }
 }
 
 async function showFiles(files) {
@@ -59,7 +107,7 @@ async function showFiles(files) {
         x.textContent = '✕';
         x.title = 'Remove';
         x.onclick = async () => {
-            await (await uploads()).removeEntry(f.name);
+            await remove(f.name);
             start();
         };
         s.append(x);
@@ -85,7 +133,7 @@ systemSelect.addEventListener('change', () => {
 });
 
 function showSystems(files) {
-    const want = localStorage.getItem('executor-system') || '';
+    const want = params.get('system') || localStorage.getItem('executor-system') || '';
     systemSelect.replaceChildren(new Option("Executor's own", ''),
         ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
@@ -146,8 +194,8 @@ async function start() {
 // Browsers start an AudioContext only after a click or key press.
 let audio = null;
 async function startAudio() {
-    if (audio)
-        return;
+    if (audio || !window.isSecureContext || typeof AudioWorkletNode === 'undefined')
+        return;     // AudioWorklet: secure contexts only
     const ctx = new AudioContext({ sampleRate: 48000 });
     await ctx.audioWorklet.addModule('audio.js');
     audio = new AudioWorkletNode(ctx, 'executor-audio', { outputChannelCount: [2] });
@@ -192,4 +240,4 @@ function attachInput(canvas) {
     canvas.addEventListener('keyup', (e) => onKey(false, e));
 }
 
-start();
+fetchDisks().then(start);

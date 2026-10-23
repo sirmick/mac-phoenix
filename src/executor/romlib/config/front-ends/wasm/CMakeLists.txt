@@ -8,12 +8,15 @@ target_link_options(executor-web PRIVATE
     -sINITIAL_MEMORY=256MB
     -lworkerfs.js                         # uploaded disk images, not copied
     -sEXPORTED_RUNTIME_METHODS=FS)
-# The page: web/executor next to the module.
-add_custom_command(TARGET executor-web POST_BUILD
+# The page: web/executor next to the module, copied on every build (it
+# changes without the module relinking).
+add_custom_target(executor-web-page ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${PROJECT_SOURCE_DIR}/web/executor $<TARGET_FILE_DIR:executor-web>
     COMMAND ${CMAKE_COMMAND} -E copy   # shared with mac-phoenix's client
-            ${PROJECT_SOURCE_DIR}/client/cursor.js $<TARGET_FILE_DIR:executor-web>)
+            ${PROJECT_SOURCE_DIR}/client/cursor.js $<TARGET_FILE_DIR:executor-web>
+    COMMENT "Executor's page")
+add_dependencies(executor-web-page executor-web)
 
 # The tab under headless Chromium (web/tests/tab_smoke.mjs). Skips without
 # the playwright package: EXECUTOR_WEB_NODE_PATH is a node_modules holding
