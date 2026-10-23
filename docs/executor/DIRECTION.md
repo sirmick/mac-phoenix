@@ -248,7 +248,7 @@ to use (RAM + 64KB tail, a 16–32MB pool) behind the memory host edge.
 
 | | Step | Gate |
 |---|---|---|
-| W-spike | minicoro on Emscripten fibers + `emscripten_sleep` under Asyncify, in a Worker | two coroutines switching, each yielding to the browser, a C++→callback→yield stack resumed |
+| W-spike | minicoro on Emscripten fibers + `emscripten_sleep` under Asyncify, in a Worker | two coroutines switching, each yielding to the browser, a C++→callback→yield stack resumed. **Passed 2026-10-23** (Emscripten 5.0.7, node 22 and a headless-Chromium Worker): yield from C++ → indirect call → `std::function` → `mco_yield`, coroutine stacks from our allocator (`alloc_cb`), one coroutine writing into another's frame, `emscripten_sleep` inside a coroutine; the page's main thread kept ticking. A hot switch-and-indirect-call loop: native 246 ms, wasm 245 ms, wasm with Asyncify instrumenting the loop 350 ms (≈1.4×). minicoro's header includes `<emscripten/fiber.h>` inside its `extern "C"`, which Emscripten 5's C++ templates reject: include `<emscripten.h>` and `<emscripten/fiber.h>` first. Yield to the browser at idle and per frame, not on a counter: each `emscripten_sleep(0)` is a `setTimeout` (≈0.7 ms) |
 | W0 | Native clean-up: UAE out of Executor, minicoro (D2), Boost → `std`, generated files committed, host edges (files, clock, sockets, faults, windows) as interfaces (D3) | the native suites pass as today |
 | W1 | wasm under node | `ctest --test-dir build-wasm -L executor` |
 | W2 | A tab: Worker, `OffscreenCanvas`, DOM input, Executor's own System | the built-in Browser app in a tab |
