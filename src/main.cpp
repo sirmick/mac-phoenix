@@ -469,8 +469,13 @@ static bool video_ipc_m68k_init(bool classic)
     // et al.) — must match what the modes vector actually published, or
     // monitor_desc::find_mode() returns null and get_current_mode() derefs
     // a wild pointer in init_mac_subsystems.
+    // A colour machine starts in --depth (default 32; 8 for games that run
+    // only in 256 colours); the guest can still switch in Monitors.
+    const uint32_t bits = cfg.screen_depth;
+    const video_depth colour_depth = bits == 1 ? VDEPTH_1BIT : bits == 2 ? VDEPTH_2BIT : bits == 4 ? VDEPTH_4BIT
+                                   : bits == 8 ? VDEPTH_8BIT : bits == 16 ? VDEPTH_16BIT : VDEPTH_32BIT;
     const video_depth default_depth = machine_profile().mono_framebuffer
-        ? VDEPTH_1BIT : VDEPTH_32BIT;
+        ? VDEPTH_1BIT : colour_depth;
     ipc_monitor_desc *monitor = new ipc_monitor_desc(modes, default_depth, default_res_id);
     // Seed the IPC refresh side with the initial depth + stride so the
     // first frames render correctly before any explicit mode switch.
@@ -484,7 +489,10 @@ static bool video_ipc_m68k_init(bool classic)
     // never-populated CLUT (no slot video driver on the SE → no
     // SetEntries), producing an all-black frame for encoder and
     // screenshot alike.
-    video_ipc_set_depth(32, boot_w * 4);
+    if (machine_profile().mono_framebuffer || default_depth == VDEPTH_32BIT)
+        video_ipc_set_depth(32, boot_w * 4);
+    else                                    // the depth the guest starts drawing in
+        video_ipc_set_depth((int)bits, (int)TrivialBytesPerRow(boot_w, default_depth));
 
     uint32 mac_fb_addr = Host2MacAddr(g_ipc_m68k_fb);
     if (mac_fb_addr == 0) {

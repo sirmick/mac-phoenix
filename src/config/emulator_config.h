@@ -84,6 +84,10 @@ struct EmulatorConfig {
     // them in Monitors cdev / can't switch up to them). 0 = unlimited.
     uint32_t max_screen_width = 0;
     uint32_t max_screen_height = 0;
+    // Colour depth (bits: 1, 2, 4, 8, 16, 32) the 68k Mac's screen starts
+    // in; the guest can still switch in Monitors. Games that only run in
+    // 256 colours want 8.
+    uint32_t screen_depth = 32;
     bool screenshots = false;          // CLI-only: dump PPM frames to /tmp
 
     // Audio

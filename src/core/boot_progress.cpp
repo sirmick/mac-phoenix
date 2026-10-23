@@ -970,7 +970,7 @@ void boot_progress_export_mac_state(void)
 			char query[sizeof(g_ipc_buf->text_query)];
 			memcpy(query, g_ipc_buf->text_query, sizeof query);
 			query[sizeof query - 1] = '\0';
-			std::string text = text_feed_json(query);
+			std::string text = text_feed_json(query, sizeof(g_ipc_buf->text_json) - 1);
 			size_t n = std::min(text.size(), sizeof(g_ipc_buf->text_json) - 1);
 			memcpy(g_ipc_buf->text_json, text.data(), n);
 			g_ipc_buf->text_json[n] = '\0';

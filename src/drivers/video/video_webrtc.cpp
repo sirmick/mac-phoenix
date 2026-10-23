@@ -122,7 +122,10 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 	// in the picker?" surprise pre-refactor).
 	const int cfg_width = config ? config->screen_width : 1024;
 	const int cfg_height = config ? config->screen_height : 768;
-	const video_depth default_depth = VDEPTH_32BIT;
+	// The depth the screen starts in (--depth; the guest can switch in Monitors)
+	const uint32_t bits = config ? config->screen_depth : 32;
+	const video_depth default_depth = bits == 1 ? VDEPTH_1BIT : bits == 2 ? VDEPTH_2BIT : bits == 4 ? VDEPTH_4BIT
+	                                : bits == 8 ? VDEPTH_8BIT : bits == 16 ? VDEPTH_16BIT : VDEPTH_32BIT;
 	fprintf(stderr, "[Video] Default mode from config: %dx%d\n", cfg_width, cfg_height);
 
 	// Allocate framebuffer at max supported size (8MB area in cpu_context.cpp)
@@ -180,7 +183,7 @@ bool video_webrtc_init(bool /*classic*/, config::EmulatorConfig* config)
 		default_res_id = modes.front().resolution_id;
 	}
 
-	// Create monitor descriptor; default to 32-bit at the configured resolution.
+	// Create monitor descriptor: the configured depth at the configured resolution.
 	webrtc_monitor_desc *monitor = new webrtc_monitor_desc(modes, default_depth, default_res_id);
 
 	// Set Mac frame buffer address (now it's in Mac RAM!)

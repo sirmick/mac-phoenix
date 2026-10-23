@@ -58,7 +58,7 @@ guest memory directly and need nothing in the guest. How both work:
 | `/api/app` | GET | the front application's name |
 | `/api/windows` | GET | the window list (in-process runs only, e.g. `--headless-http`; with the emulator in a child process it answers empty: use `/api/ui`) |
 | `/api/ui` | GET | the front process's windows (screen rectangles), controls, dialog items and menus, open pop-ups included: click by name, not pixels |
-| `/api/text` | GET | the text on screen as QuickDraw drew it, with rectangles, font, window and application; `?since=N`: every draw since sequence N, off screen too; `?raw=1`: unmerged |
+| `/api/text` | GET | the text on screen as QuickDraw drew it, with rectangles, font, window and application; `?since=N`: every draw since sequence N, off screen too (when they'd pass 256 KiB the oldest go, counted in `dropped`); `?raw=1`: unmerged |
 | `/api/wait` | POST | `{"condition": "boot=Finder" \| "app=Name" \| "text=Substring", "timeout": 30}`: wait until it holds |
 
 ## Commands in the guest (bridge)

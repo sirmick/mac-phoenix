@@ -219,6 +219,11 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     args.push_back("--screen");
     args.push_back(config_->screen_string());
 
+    if (config_->screen_depth != 32) {
+        args.push_back("--depth");
+        args.push_back(std::to_string(config_->screen_depth));
+    }
+
     if (config_->max_screen_width && config_->max_screen_height) {
         args.push_back("--max-resolution");
         args.push_back(std::to_string(config_->max_screen_width) + "x" +

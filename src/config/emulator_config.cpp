@@ -50,6 +50,11 @@ static bool parse_screen(const std::string& s, uint32_t& w, uint32_t& h) {
     return w > 0 && h > 0;
 }
 
+// Helper: a colour depth the 68k video driver publishes (bits)
+static bool valid_depth(int d) {
+    return d == 1 || d == 2 || d == 4 || d == 8 || d == 16 || d == 32;
+}
+
 // Helper: Ensure parent directory exists
 static void ensure_parent_dir(const std::string& path) {
     size_t slash = path.rfind('/');
@@ -139,6 +144,7 @@ QJsonObject EmulatorConfig::to_json() const {
     j["max_resolution"] = (max_screen_width && max_screen_height)
         ? qstr(std::to_string(max_screen_width) + "x" + std::to_string(max_screen_height))
         : QString();
+    j["depth"]       = (int)screen_depth;
     j["audio"]       = audio_enabled;
     j["rom"]         = qstr(strip_roms(rom_path));
     j["disks"]       = str_array(strip_images(disk_paths));
@@ -251,6 +257,10 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
             max_screen_width = w;
             max_screen_height = h;
         }
+    }
+    if (j.contains("depth")) {
+        int d = json_utils::get_int(j, "depth");
+        if (valid_depth(d)) screen_depth = (uint32_t)d;
     }
     if (j.contains("audio")) audio_enabled = json_utils::get_bool(j, "audio");
     if (j.contains("rom")) {
@@ -459,6 +469,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --rom PATH                 ROM file (or positional arg)\n");
             printf("  --ram MB                   RAM size in megabytes (default: 64)\n");
             printf("  --screen WxH               Display resolution (default: 640x480)\n");
+            printf("  --depth N                  68k: colour depth the screen starts in, bits\n");
+            printf("                             (1 2 4 8 16 32; default 32; 8 for 256-colour games)\n");
             printf("  --disk PATH                Disk image (repeatable)\n");
             printf("  --cdrom PATH               CD-ROM image (repeatable)\n");
             printf("  --extfs PATH               Shared folder (repeatable; the ROM machines mount only the first)\n");
@@ -618,6 +630,14 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
                 config.max_screen_width = w;
                 config.max_screen_height = h;
             }
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
+        }
+
+        // --depth <bits>  (the 68k Mac's starting colour depth)
+        if (strcmp(argv[i], "--depth") == 0 && i+1 < argc) {
+            int d = atoi(argv[i+1]);
+            if (valid_depth(d)) config.screen_depth = (uint32_t)d;
+            else fprintf(stderr, "[Config] --depth %s: not 1, 2, 4, 8, 16 or 32\n", argv[i+1]);
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 

@@ -30,6 +30,8 @@ void text_feed_post(uint32_t sp, uint32_t a5, int which);
 /* For /api/text. query "" (or "raw=1", unmerged): the text on screen now,
  * top to bottom; "since=N": every draw after sequence number N, on screen
  * or not. */
-std::string text_feed_json(const std::string &query);
+/* max_bytes (0: none): the draw log (since=) drops its oldest draws to fit,
+ * saying how many ("dropped"). */
+std::string text_feed_json(const std::string &query, size_t max_bytes = 0);
 
 extern bool text_feed_enabled;

@@ -1126,7 +1126,7 @@ void text_feed_post(uint32_t sp, uint32_t a5, int which)
     }
 }
 
-std::string text_feed_json(const std::string &query)
+std::string text_feed_json(const std::string &query, size_t max_bytes)
 {
     auto param = [&](const char *key) -> std::string {
         std::string k = std::string(key) + "=";
@@ -1154,21 +1154,36 @@ std::string text_feed_json(const std::string &query)
     std::string since = param("since");
     if (!since.empty()) {
         uint32_t after = (uint32_t)strtoul(since.c_str(), nullptr, 10);
-        out += ",\"draws\":[";
-        bool first = true;
+        std::vector<std::string> draws;
+        size_t total = 0;
         for (auto &e : g_log) {
             if (e.seq <= after) continue;
-            if (!first) out += ',';
-            first = false;
+            std::string d;
             snprintf(b, sizeof b, "{\"seq\":%u,\"onscreen\":%s,\"font\":%d,\"size\":%d,\"face\":%d,\"text\":",
                      e.seq, e.onscreen ? "true" : "false", e.font, e.size, e.face);
+            d += b;
+            json_str(d, e.text);
+            d += ",\"app\":";
+            json_str(d, e.app);
+            d += ",\"rect\":";
+            json_box(d, e.rect);
+            d += '}';
+            total += d.size() + 1;
+            draws.push_back(std::move(d));
+        }
+        /* What doesn't fit max_bytes goes, oldest first: callers want the
+         * latest draws, and a cut reply would be no JSON at all. */
+        size_t skip = 0;
+        while (max_bytes && skip < draws.size() && out.size() + total + 64 > max_bytes)
+            total -= draws[skip++].size() + 1;
+        if (skip) {
+            snprintf(b, sizeof b, ",\"dropped\":%zu", skip);
             out += b;
-            json_str(out, e.text);
-            out += ",\"app\":";
-            json_str(out, e.app);
-            out += ",\"rect\":";
-            json_box(out, e.rect);
-            out += '}';
+        }
+        out += ",\"draws\":[";
+        for (size_t i = skip; i < draws.size(); i++) {
+            if (i > skip) out += ',';
+            out += draws[i];
         }
         out += "]}";
         return out;
