@@ -146,14 +146,14 @@ private:
     {
         std::vector<uint8_t> out(length);
         uint32_t got = 0, fileBlock = 0;
+        // An extent is contiguous: one read each (in the browser every read
+        // is a FileReader slice of the image, so per-block reads cost
+        // seconds).
         auto take = [&](const Extent& e) {
-            for(uint32_t b = 0; b < e.count && got < length; b++)
-            {
-                uint32_t n = std::min<uint32_t>(blockSize_, length - got);
-                if(!readAt(blockOffset(e.start + b), out.data() + got, n))
-                    return false;
-                got += n;
-            }
+            uint32_t n = (uint32_t)std::min<uint64_t>((uint64_t)e.count * blockSize_, length - got);
+            if(n && !readAt(blockOffset(e.start), out.data() + got, n))
+                return false;
+            got += n;
             fileBlock += e.count;
             return true;
         };

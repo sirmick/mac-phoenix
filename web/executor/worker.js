@@ -1,6 +1,9 @@
 // The Worker side: runs executor-web.js (web_main.cpp) and draws its
 // frames on the page's OffscreenCanvas.
 //
+// The module loads as soon as the Worker exists (noInitialRun), while the
+// page is still fetching disks; 'start' mounts them and calls main.
+//
 // Uploads: disk images are mounted from the page's Files without copying
 // (WORKERFS, /uploads) and handed to Executor read-only; anything else (an
 // application in MacBinary) is copied into Executor's own volume, in
@@ -62,32 +65,39 @@ self.Module = {
     },
 };
 
+Module.noInitialRun = true;
+const runtimeReady = new Promise((resolve) => { Module.onRuntimeInitialized = resolve; });
+importScripts('executor-web.js');
+
+async function start(m) {
+    canvas = m.canvas;
+    ctx = canvas.getContext('2d');
+    const images = m.files.filter((f) => IMAGE.test(f.name));
+    const others = m.files.filter((f) => !IMAGE.test(f.name));
+    const args = ['--size', `${m.width}x${m.height}`,
+                  ...images.flatMap((f) => ['--disk', `/uploads/${f.name}`])];
+    if (m.system && images.some((f) => f.name === m.system))
+        args.push('--system', `/uploads/${m.system}`);
+    await runtimeReady;
+    FS.mkdir('/host');              // Executor's "Host" volume
+    if (images.length) {
+        FS.mkdir('/uploads');
+        FS.mount(WORKERFS, { files: images }, '/uploads');
+    }
+    if (others.length) {
+        FS.mkdirTree('/executor/Uploads');
+        const reader = new FileReaderSync();
+        for (const f of others)
+            FS.writeFile(`/executor/Uploads/${f.name}`,
+                         new Uint8Array(reader.readAsArrayBuffer(f)));
+    }
+    Module.callMain(args);
+}
+
 self.onmessage = (e) => {
     const m = e.data;
     if (m.type === 'start') {
-        canvas = m.canvas;
-        ctx = canvas.getContext('2d');
-        const images = m.files.filter((f) => IMAGE.test(f.name));
-        const others = m.files.filter((f) => !IMAGE.test(f.name));
-        Module.arguments = ['--size', `${m.width}x${m.height}`,
-                            ...images.flatMap((f) => ['--disk', `/uploads/${f.name}`])];
-        if (m.system && images.some((f) => f.name === m.system))
-            Module.arguments.push('--system', `/uploads/${m.system}`);
-        Module.preRun = [() => {
-            FS.mkdir('/host');              // Executor's "Host" volume
-            if (images.length) {
-                FS.mkdir('/uploads');
-                FS.mount(WORKERFS, { files: images }, '/uploads');
-            }
-            if (others.length) {
-                FS.mkdirTree('/executor/Uploads');
-                const reader = new FileReaderSync();
-                for (const f of others)
-                    FS.writeFile(`/executor/Uploads/${f.name}`,
-                                 new Uint8Array(reader.readAsArrayBuffer(f)));
-            }
-        }];
-        importScripts('executor-web.js');
+        start(m);
     } else if (m.type === 'input') {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {

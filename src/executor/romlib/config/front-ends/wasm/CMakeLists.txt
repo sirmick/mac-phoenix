@@ -7,7 +7,7 @@ target_link_options(executor-web PRIVATE
     -sEXIT_RUNTIME=0
     -sINITIAL_MEMORY=256MB
     -lworkerfs.js                         # uploaded disk images, not copied
-    -sEXPORTED_RUNTIME_METHODS=FS)
+    -sEXPORTED_RUNTIME_METHODS=FS,callMain)
 # The page: web/executor next to the module, copied on every build (it
 # changes without the module relinking).
 add_custom_target(executor-web-page ALL

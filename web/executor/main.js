@@ -80,7 +80,10 @@ async function fetchDisks() {
             status.textContent = `Cannot fetch ${name} (${res.status})`;
             continue;
         }
-        const total = Number(res.headers.get('Content-Length')) || 0;
+        // Compressed in transit, Content-Length is the compressed size;
+        // tools/web/serve.py says the real one.
+        const total = Number(res.headers.get('X-Decoded-Length'))
+            || (res.headers.get('Content-Encoding') ? 0 : Number(res.headers.get('Content-Length')) || 0);
         const reader = res.body.getReader();
         const chunks = [];
         let got = 0;
@@ -149,6 +152,9 @@ async function start() {
     window.executor.frames = 0;
     status.textContent = 'Loading Executor…';
 
+    // The Worker loads the module while the disks still download.
+    worker = new Worker('worker.js');
+    await disksFetched;
     const files = await storedFiles();
     showFiles(files);
     showSystems(files);
@@ -164,7 +170,6 @@ async function start() {
     attachInput(canvas);
     cursor = new MacCursor(canvas, () => canvas.width);
 
-    worker = new Worker('worker.js');
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, files,
                          system: systemSelect.value }, [offscreen]);
@@ -261,4 +266,5 @@ function attachInput(canvas) {
     canvas.addEventListener('keyup', (e) => onKey(false, e));
 }
 
-fetchDisks().then(start);
+const disksFetched = fetchDisks();
+start();
