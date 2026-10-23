@@ -3,6 +3,7 @@
 #include <base/common.h>
 #include <ResourceMgr.h>
 #include <SoundMgr.h>
+#include <MemoryMgr.h>
 #include <prefs/prefs.h>
 
 #include <chrono>
@@ -202,22 +203,46 @@ void PhoenixVideoDriver::runEventLoop()
     }
 }
 
+/* A beep where the System has no 'snd ' 1 (Executor's own): a format 1
+   'snd ' on the square-wave synthesizer, an amplitude and one 150 ms note
+   at 880 Hz, as a Mac with no beep sound beeps a square wave. */
+static Executor::Handle square_beep()
+{
+    static const uint8_t snd[] = {
+        0x00, 0x01,                         /* format 1 */
+        0x00, 0x01,                         /* one synthesizer: */
+        0x00, 0x01, 0x00, 0x00, 0x00, 0x00, /* squareWaveSynth, no options */
+        0x00, 0x02,                         /* two commands: */
+        0x00, 0x2B, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, /* ampCmd 192 */
+        0x00, 0x28, 0x01, 0x2C, 0x00, 0x00, 0x00, 0x51, /* noteCmd 300 half-ms, note 81 */
+    };
+    Executor::Handle h = Executor::NewHandle(sizeof snd);
+    if(h)
+        memcpy(*h, snd, sizeof snd);
+    return h;
+}
+
 /* SysBeep (osutil.cpp): with sound on, the alert sound is the System's
-   'snd ' 1, "Simple Beep", played through the Sound Manager; otherwise
-   nothing, as Executor's other front ends do. The Sound control panel's
-   choice of alert sound is not read yet. */
+   'snd ' 1, "Simple Beep", played through the Sound Manager, or a square
+   wave where there is none; otherwise nothing, as Executor's other front
+   ends do. The Sound control panel's choice of alert sound is not read
+   yet. */
 void PhoenixVideoDriver::beepAtUser()
 {
-    Executor::Handle h = Executor::ROMlib_PretendSound == Executor::soundon
-        ? Executor::GetResource("snd "_4, 1) : nullptr;
+    bool on = Executor::ROMlib_PretendSound == Executor::soundon;
+    Executor::Handle h = on ? Executor::GetResource("snd "_4, 1) : nullptr;
     static bool announced;
     if(!announced)
     {
         announced = true;
         fprintf(stderr, "[Executor] SysBeep: sound %s, 'snd ' 1 %s\n",
-                Executor::ROMlib_PretendSound == Executor::soundon ? "on" : "pretend/off",
-                h ? "found" : "missing");
+                on ? "on" : "pretend/off", h ? "found" : "missing (a square wave)");
     }
     if(h)
         Executor::SndPlay(nullptr, h, false);
+    else if(on && (h = square_beep()))
+    {
+        Executor::SndPlay(nullptr, h, false);
+        Executor::DisposeHandle(h);
+    }
 }
