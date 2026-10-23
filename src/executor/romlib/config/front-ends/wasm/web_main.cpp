@@ -279,6 +279,9 @@ int main(int argc, char **argv)
     c.bpp = 8;
     c.ram_mb = 32;
     c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
+    /* Disk images are writable: the page keeps their changes in an overlay
+       (web/executor/overlay.js); the images themselves are never written. */
+    c.writable_images = true;
     if(!system_image.empty())
     {
         bool finder = false;

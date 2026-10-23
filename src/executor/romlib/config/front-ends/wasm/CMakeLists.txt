@@ -60,6 +60,13 @@ if(NODE_COMMAND)
     add_test(NAME executor.web.finder
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_finder.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
+    # Writable images: a change kept, downloaded, reverted (overlay.js).
+    add_test(NAME executor.web.write
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_write.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
+    set_tests_properties(executor.web.write PROPERTIES
+        LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
     set_tests_properties(executor.web.finder PROPERTIES
         LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")

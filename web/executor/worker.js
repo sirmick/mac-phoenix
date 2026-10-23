@@ -4,8 +4,9 @@
 // The module loads as soon as the Worker exists (noInitialRun), while the
 // page is still fetching disks; 'start' mounts them and calls main.
 //
-// Uploads: disk images are mounted from the page's Files without copying
-// (WORKERFS, /uploads) and handed to Executor read-only; anything else (an
+// Uploads: disk images are mounted from the page's Files without copying,
+// writable through a copy-on-write overlay in OPFS (overlay.js: OVERLAYFS
+// at /uploads; the images themselves are never written); anything else (an
 // application in MacBinary) is copied into Executor's own volume, in
 // "executor:Uploads".
 'use strict';
@@ -64,6 +65,15 @@ self.Module = {
         postMessage({ type: 'exit', code });
     },
 };
+
+importScripts('overlay.js');
+
+// An image's overlay is for exactly this version of it (main.js computes
+// the same, for Revert).
+function imageKey(f) {
+    return `${f.name}-${f.size}-${f.lastModified}`.replace(/[^\w.-]/g, '_');
+}
+let overlays = [];
 
 Module.noInitialRun = true;
 const runtimeReady = new Promise((resolve) => { Module.onRuntimeInitialized = resolve; });
@@ -171,7 +181,18 @@ function scanVolume() {
     return { dirs, files };
 }
 
+// Which images have changes (the page marks them, offers their download).
+function reportImages() {
+    postMessage({ type: 'images', images: overlays.map((o) => ({
+        name: o.name, modified: o.modified, writable: o.writable })) });
+}
+
 async function saveVolume() {
+    for (const o of overlays) {
+        try { o.save(); } catch (e) { console.log(`[web] saving ${o.name}'s changes: ${e}`); }
+    }
+    if (overlays.length)
+        reportImages();
     if (!volumeDir || saving)
         return;
     saving = true;
@@ -233,8 +254,14 @@ async function start(m) {
     }
     FS.mkdir('/host');              // Executor's "Host" volume
     if (images.length) {
+        let root = null;
+        try { root = await navigator.storage.getDirectory(); } catch { }
+        overlays = await Promise.all(images.map((f) => root
+            ? Overlay.open(root, f.name, f, imageKey(f))
+            : new Overlay(f.name, f, imageKey(f))));      // no OPFS: read-only
         FS.mkdir('/uploads');
-        FS.mount(WORKERFS, { files: images }, '/uploads');
+        FS.mount(OVERLAYFS, { overlays }, '/uploads');
+        reportImages();
     }
     if (others.length) {
         FS.mkdirTree(`${VOLUME}/Uploads`);
@@ -259,7 +286,13 @@ self.onmessage = (e) => {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {
         // Files are the Worker's: answered at once, Executor running or not.
-        if (m.op === 'stats') {
+        if (m.op === 'download') {
+            // The image as changed: the original's slices and the changed blocks.
+            const o = overlays.find((x) => x.name === m.arg);
+            if (o)
+                o.save();
+            postMessage({ type: 'reply', id: m.id, result: o ? o.blob() : null });
+        } else if (m.op === 'stats') {
             postMessage({ type: 'reply', id: m.id, result: { ...Module.stats } });
         } else if (m.op === 'list') {
             let names = null;

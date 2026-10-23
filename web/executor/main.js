@@ -110,7 +110,11 @@ async function fetchDisk(url) {
     const dir = opfs ? await diskCache() : null;
     const key = dir ? await cacheKey(absolute) : null;
     const meta = dir ? await readJson(dir, `${key}.json`) : null;
-    const cached = async () => new File([await (await dir.getFileHandle(`${key}.img`)).getFile()], name);
+    // Its OPFS time kept: an image's overlay (overlay.js) is for this version.
+    const cached = async () => {
+        const f = await (await dir.getFileHandle(`${key}.img`)).getFile();
+        return new File([f], name, { lastModified: f.lastModified });
+    };
 
     let res;
     try {
@@ -171,21 +175,76 @@ async function fetchDisks() {
     }
 }
 
+// Disk images are writable through an overlay in OPFS (overlay.js), per
+// exact version of the image (the Worker computes the same key).
+function imageKey(f) {
+    return `${f.name}-${f.size}-${f.lastModified}`.replace(/[^\w.-]/g, '_');
+}
+let imageState = {};                // name -> { modified, writable }, from the Worker
+
+function link(text, title, onclick) {
+    const a = document.createElement('a');
+    a.textContent = text;
+    a.title = title;
+    a.onclick = onclick;
+    return a;
+}
+
 async function showFiles(files) {
     const list = document.getElementById('files');
     list.replaceChildren(...files.map((f) => {
         const s = document.createElement('span');
-        s.textContent = f.name;
-        const x = document.createElement('a');
-        x.textContent = '✕';
-        x.title = 'Remove';
-        x.onclick = async () => {
+        const st = imageState[f.name];
+        s.textContent = f.name + (st && st.modified ? ' •' : '');
+        if (st)
+            s.title = st.modified ? 'changed (kept in this browser; the original is untouched)'
+                    : st.writable ? 'writable' : 'read-only (open in another tab?)';
+        if (IMAGE.test(f.name)) {
+            s.append(link('⤓', 'Download the image as it is now', () => download(f.name)));
+            if (st && st.modified)
+                s.append(link('↺', 'Revert: forget the changes to this image', () => revert(f)));
+        }
+        s.append(link('✕', 'Remove', async () => {
             await remove(f.name);
             start();
-        };
-        s.append(x);
+        }));
         return s;
     }));
+}
+
+async function download(name) {
+    const blob = await window.executor.request('download', name);
+    if (!(blob instanceof Blob))
+        return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+// The Worker goes without saving (its overlay handles with it), then the
+// overlay is deleted and Executor starts again on the original.
+async function revert(f) {
+    if (!confirm(`Forget all changes to ${f.name}?`))
+        return;
+    generation++;
+    if (worker)
+        worker.terminate();
+    worker = null;
+    const overlays = await (await uploads()).getDirectoryHandle('overlays', { create: true });
+    for (let i = 0; i < 20; i++) {                  // until the old Worker lets go
+        try {
+            await overlays.removeEntry(imageKey(f), { recursive: true });
+            break;
+        } catch (e) {
+            if (e.name === 'NotFoundError')
+                break;
+            await new Promise((r) => setTimeout(r, 100));
+        }
+    }
+    delete imageState[f.name];
+    start();
 }
 
 document.getElementById('add').addEventListener('change', async (e) => {
@@ -302,6 +361,12 @@ async function start() {
         if (m.type === 'frame') {
             if (window.executor.frames++ === 0)
                 status.textContent = 'Executor';
+        } else if (m.type === 'images') {
+            const before = JSON.stringify(imageState);
+            for (const i of m.images)
+                imageState[i.name] = { modified: i.modified, writable: i.writable };
+            if (JSON.stringify(imageState) !== before)
+                storedFiles().then(showFiles);
         } else if (m.type === 'cursor') {
             window.executor.cursor = m;
             cursor.set(m);
