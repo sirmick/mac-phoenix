@@ -63,7 +63,7 @@ struct PpcMachine
     TestHost host;
     std::unique_ptr<cpu::Core> core;
 
-    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false) : ram(cpu::GuestMemory::PAGE_SIZE)
+    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false) : ram(cpu::GuestMemory::PAGE_BYTES)
     {
         mem.map(0, ram.size(), ram.data());
         for(size_t i = 0; i < words; i++)
@@ -158,7 +158,7 @@ struct Machine
     std::unique_ptr<cpu::Core> core;
 
     explicit Machine(const uint16_t *program, size_t words)
-        : ram(cpu::GuestMemory::PAGE_SIZE)
+        : ram(cpu::GuestMemory::PAGE_BYTES)
     {
         mem.map(0, ram.size(), ram.data());
         mem.write32(0, 0x8000);  /* reset SSP */

@@ -470,6 +470,14 @@ Kept small so upstream fixes can be merged by hand:
 * `process.cpp`, `time/syncint.cpp`: processes and Thread Manager
   threads are minicoro coroutines, the timer is polled (no Qt threads;
   DIRECTION.md, D2).
+* For the wasm build (W1) and libc++: `util/macstrings.h` (`mac_char_traits`),
+  `file/localvolume/localvolume.*` (out-of-line destructor), `finder.cpp`
+  and tests (narrowing casts), `sane/floatconv.h` (x80 by value unless
+  `long double` is x87), `quickdraw/rawpatblt.cpp`/`rawsrcblt.cpp` (blitters
+  called through their real type), `serial.cpp` (termios on every POSIX
+  host but macOS), `osutil.cpp` (`SetDateTime` never sets the host clock),
+  `tests/main_executor.cpp` (tests on the main stack where it is
+  guest-addressable), `tests/mactcp.cpp` (network tests skip without one).
 * `mactcp/`, `opentransport/`, `net/hostdns.cpp` (all ours): the host's
   network only through `rsys/hostnet.h` (DIRECTION.md, D3); the two socket
   watchers are its one `Watcher`.

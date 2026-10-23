@@ -194,8 +194,10 @@ fetch_next_y:
     /* Compute the number of rows to blt. */
     num_rows = next_y - y;
 
-    /* Call the blitter function. */
-    ((void (*)(const blt_section_t *, uint8_t *, long, long))
+    /* Call the blitter function (MacPhoenix: through its real type, which
+       returns its label table; wasm checks the signature of every
+       indirect call). */
+    ((const void *const *(*)(const blt_section_t *, uint8_t *, long, long))
          xdblt_stub_table[FUNC_PTR])(section,
                                      ((uint8_t *)xdblt_dst_baseaddr
                                       + (y * (int)xdblt_dst_row_bytes)),

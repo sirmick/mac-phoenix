@@ -57,6 +57,11 @@ npx playwright test
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc
 ctest --test-dir build -L executor
 
+# Executor as WebAssembly (docs/executor/DIRECTION.md, W1): emsdk in ~/emsdk
+source ~/emsdk/emsdk_env.sh
+emcmake cmake -B build-wasm && cmake --build build-wasm -j4
+ctest --test-dir build-wasm -L executor    # the gtests under node
+
 # MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
 tools/mpw/mpw setup                    # once: MPW disk + System, built from snapshots
 tools/mpw/mpw build tests/guest/ot     # build.mpw; products -> DIR/build/*.bin

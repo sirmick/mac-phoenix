@@ -139,7 +139,7 @@ TEST_F(TextEditWrap, HiliteRegion)
     EXPECT_EQ(10 + lineHeight, box.bottom);
     EXPECT_EQ(10, box.left);
     EXPECT_EQ(10 + TextWidth((Ptr)text, 0, 5), box.right);
-    Point in = { 15, 12 }, past = { 15, 200 }, below = { 10 + lineHeight + 2, 12 };
+    Point in = { 15, 12 }, past = { 15, 200 }, below = { (int16_t)(10 + lineHeight + 2), 12 };
     EXPECT_TRUE(PtInRgn(in, rgn));
     EXPECT_FALSE(PtInRgn(past, rgn));
     EXPECT_FALSE(PtInRgn(below, rgn));
@@ -151,7 +151,7 @@ TEST_F(TextEditWrap, HiliteRegion)
     box = (*rgn)->rgnBBox;
     EXPECT_EQ(10, box.top);
     EXPECT_EQ(10 + 2 * lineHeight, box.bottom);
-    Point line1_right = { 15, 290 }, line2_left = { 10 + lineHeight + 2, 12 }, line2_right = { 10 + lineHeight + 2, 290 };
+    Point line1_right = { 15, 290 }, line2_left = { (int16_t)(10 + lineHeight + 2), 12 }, line2_right = { (int16_t)(10 + lineHeight + 2), 290 };
     EXPECT_TRUE(PtInRgn(line1_right, rgn));
     EXPECT_TRUE(PtInRgn(line2_left, rgn));
     EXPECT_FALSE(PtInRgn(line2_right, rgn));

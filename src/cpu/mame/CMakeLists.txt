@@ -67,13 +67,16 @@ target_link_libraries(mame_m68k PUBLIC mame_shim vclock PRIVATE mame_softfloat3)
 
 # asmjit (zlib licence; LICENSE-asmjit), the native back-ends' assembler.
 # MAME's copy, all targets compiled; the back-end picks x86 or a64.
-file(GLOB_RECURSE ASMJIT_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asmjit/asmjit/*.cpp)
-add_library(mame_asmjit STATIC ${ASMJIT_SOURCES})
-target_include_directories(mame_asmjit PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asmjit)
-target_compile_definitions(mame_asmjit PUBLIC ASMJIT_STATIC)
-target_compile_options(mame_asmjit PRIVATE -w -O2)
-target_compile_features(mame_asmjit PRIVATE cxx_std_20)
+# Not in the wasm build (no native back-end there).
+if(NOT EMSCRIPTEN)
+    file(GLOB_RECURSE ASMJIT_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asmjit/asmjit/*.cpp)
+    add_library(mame_asmjit STATIC ${ASMJIT_SOURCES})
+    target_include_directories(mame_asmjit PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asmjit)
+    target_compile_definitions(mame_asmjit PUBLIC ASMJIT_STATIC)
+    target_compile_options(mame_asmjit PRIVATE -w -O2)
+    target_compile_features(mame_asmjit PRIVATE cxx_std_20)
+endif()
 
 # The PowerPC core (ppccom/ppcdrc/ppcfe) on MAME's UML recompiler: the
 # UML core, the C back-end (drcbec) everywhere, the x86-64 back-end on
@@ -90,7 +93,11 @@ set(MAME_PPC_SOURCES
     cpu/drcbec.cpp
     emu/divtlb.cpp
     mame_ppc_core.cpp)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$")
+if(EMSCRIPTEN)
+    # wasm: the C back-end only (no executable memory; Emscripten reports
+    # its processor as x86). A UML->wasm back-end is C4.
+    set(MAME_PPC_NATIVE NATIVE_DRC=drcbe_c)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$")
     list(APPEND MAME_PPC_SOURCES cpu/drcbex64.cpp cpu/x86log.cpp)
     set(MAME_PPC_NATIVE "")                       # drcuml.cpp picks drcbe_x64
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
@@ -109,4 +116,8 @@ target_include_directories(mame_ppc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/powerpc)
 target_compile_definitions(mame_ppc PRIVATE ${MAME_PPC_NATIVE})
 target_compile_options(mame_ppc PRIVATE -O2 ${MAME_WARNINGS})
-target_link_libraries(mame_ppc PUBLIC mame_shim PRIVATE mame_asmjit)
+if(EMSCRIPTEN)
+    target_link_libraries(mame_ppc PUBLIC mame_shim)
+else()
+    target_link_libraries(mame_ppc PUBLIC mame_shim PRIVATE mame_asmjit)
+endif()

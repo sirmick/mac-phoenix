@@ -13,7 +13,11 @@
 #define CRASH_HANDLER_H
 
 #include <signal.h>
+/* MacPhoenix: no execinfo (WebAssembly, musl): no backtrace. */
+#if __has_include(<execinfo.h>)
 #include <execinfo.h>
+#define CRASH_HANDLER_BACKTRACE 1
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -27,6 +31,12 @@ extern "C" {
 /*
  *  Print a backtrace to stderr using execinfo
  */
+#ifndef CRASH_HANDLER_BACKTRACE
+static inline void print_backtrace(const char *prefix)
+{
+	fprintf(stderr, "\n=== %s (no backtrace on this host) ===\n", prefix);
+}
+#else
 static inline void print_backtrace(const char *prefix)
 {
 	void *array[64];
@@ -127,6 +137,7 @@ static inline void print_backtrace(const char *prefix)
 		fprintf(stderr, "=== END BACKTRACE ===\n\n");
 	}
 }
+#endif
 
 /*
  *  Print register state from ucontext (x86-64 specific)

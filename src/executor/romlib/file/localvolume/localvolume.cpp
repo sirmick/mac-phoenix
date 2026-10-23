@@ -58,6 +58,22 @@ void ExtensionItemFactory::createFile(const fs::path& newPath)
     PlainDataFork data(newPath, PlainDataFork::create);
 }
 
+struct LocalVolume::FCBExtension
+{
+    filecontrolblock *fcb;
+    short refNum;
+    std::unique_ptr<OpenFile> access;
+    FileItemPtr file;
+    bool written = false; /* the file's date is set at flush or close */
+
+    FCBExtension() = default;
+    FCBExtension(filecontrolblock *fcb, short refNum)
+        : fcb(fcb), refNum(refNum)
+    {}
+};
+
+LocalVolume::~LocalVolume() = default;
+
 LocalVolume::LocalVolume(VCB& vcb, fs::path root)
     : Volume(vcb), root(root)
 {
@@ -257,19 +273,6 @@ mac_string LocalVolume::getVolumeName() const
 }
 
 
-struct LocalVolume::FCBExtension
-{
-    filecontrolblock *fcb;
-    short refNum;
-    std::unique_ptr<OpenFile> access;
-    FileItemPtr file;
-    bool written = false; /* the file's date is set at flush or close */
-
-    FCBExtension() = default;
-    FCBExtension(filecontrolblock *fcb, short refNum)
-        : fcb(fcb), refNum(refNum)
-    {}
-};
 
 LocalVolume::FCBExtension& LocalVolume::getFCBX(short refNum)
 {

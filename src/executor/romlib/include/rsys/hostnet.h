@@ -29,6 +29,9 @@ class Interrupt;
 
 namespace hostnet
 {
+/* False for the none backend: no socket will ever open. */
+bool available();
+
 int socket(int domain, int type, int protocol);
 int close(int fd);
 int connect(int fd, const struct sockaddr *addr, socklen_t len);

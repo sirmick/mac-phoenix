@@ -16,7 +16,7 @@ GuestMemory::GuestMemory()
 
 void GuestMemory::map(uint32_t guest, uint64_t size, uint8_t *host)
 {
-    if((guest & (PAGE_SIZE - 1)) || (size & (PAGE_SIZE - 1)) || (uint64_t)guest + size > (1ull << 32))
+    if((guest & (PAGE_BYTES - 1)) || (size & (PAGE_BYTES - 1)) || (uint64_t)guest + size > (1ull << 32))
     {
         fprintf(stderr, "GuestMemory: bad window %08x + %llx\n", guest, (unsigned long long)size);
         abort();

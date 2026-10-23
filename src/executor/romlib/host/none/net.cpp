@@ -17,6 +17,7 @@ int down()
 }
 }
 
+bool hostnet::available() { return false; }
 int hostnet::socket(int, int, int) { return down(); }
 int hostnet::close(int) { errno = EBADF; return -1; }
 int hostnet::connect(int, const struct sockaddr *, socklen_t) { return down(); }

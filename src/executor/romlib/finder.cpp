@@ -230,8 +230,8 @@ void addApplications(DesktopDB& db)
             if(cpb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
                 dirs.push_back(cpb.dirInfo.ioDrDirID);
             else if(cpb.hFileInfo.ioFlFndrInfo.fdType == "APPL"_4)
-                db.appls.push_back({ cpb.hFileInfo.ioFlFndrInfo.fdCreator,
-                                     cpb.hFileInfo.ioFlCrDat, dir, pstring(name) });
+                db.appls.push_back({ (uint32_t)cpb.hFileInfo.ioFlFndrInfo.fdCreator,
+                                     (uint32_t)cpb.hFileInfo.ioFlCrDat, dir, pstring(name) });
         }
     }
 }

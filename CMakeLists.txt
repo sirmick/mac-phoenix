@@ -13,6 +13,13 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
 
+# WebAssembly (emcmake cmake -B build-wasm): Executor alone, nothing else
+# below (cmake/ExecutorWasm.cmake).
+if(EMSCRIPTEN)
+  include(ExecutorWasm)
+  return()
+endif()
+
 # Mirror debian/rules hardening flags so a plain `cmake -B build`
 # fails the same way the .deb build would (LTO undefined refs,
 # format-string regressions, missing frame pointers). Opt-out for

@@ -46,7 +46,7 @@
 #include <termios.h>
 #endif
 
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
 #include <sys/ioctl.h>
 #endif
 
@@ -61,8 +61,8 @@ using namespace Executor;
  * list is narrow only because the sgtty fallback has never been retested,
  * not because anything here is Linux-specific.  See the __APPLE__ block
  * at the top of the file. */
-#if defined(__alpha) || defined(__linux__)
-#define USE_TERMIOS
+#if !defined(_WIN32) && !defined(__APPLE__)
+#define USE_TERMIOS /* MacPhoenix: every POSIX host but macOS (was alpha, Linux) */
 #endif
 
 /*
@@ -257,7 +257,7 @@ static DCtlPtr otherdctl(ParmBlkPtr pbp)
     return h ? *h : 0;
 }
 
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
 
 /*
  * NOTE:  Currently we're using cufa and cufb; we really should
@@ -379,7 +379,7 @@ static OSErr C_ROMlib_serialopen(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
     OSErr err;
     DCtlPtr otherp;
     hiddenh h;
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
     const char *devname;
 #endif
 
@@ -396,7 +396,7 @@ static OSErr C_ROMlib_serialopen(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
         }
         else
         {
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
             err = permErr;
             if((devname = specialname(pbp)))
             {
@@ -405,7 +405,7 @@ static OSErr C_ROMlib_serialopen(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
 #endif
             if(err == noErr)
             {
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
                 (*h)->fd = open(devname, O_RDWR, 0);
                 if((*h)->fd < 0)
                     err = ROMlib_maperrno();
@@ -423,7 +423,7 @@ static OSErr C_ROMlib_serialopen(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
                     dcp->dCtlFlags |= OPENBIT;
                     SerReset(pbp->cntrlParam.ioCRefNum,
                              (pbp->cntrlParam.ioCRefNum == AINREFNUM || pbp->cntrlParam.ioCRefNum == AOUTREFNUM) ? LM(SPPortA) : LM(SPPortB));
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
                 }
 #endif
             }
@@ -463,7 +463,7 @@ static OSErr C_ROMlib_serialprime(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
                 {
 /* this may have to be changed since we aren't looking for
 		   parity and framing errors */
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
                     pbp->ioParam.ioActCount = read((*h)->fd, buf, req_count);
 #elif defined(_WIN32)
                     pbp->ioParam.ioActCount = serial_bios_read((*h)->fd, buf,
@@ -488,7 +488,7 @@ static OSErr C_ROMlib_serialprime(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
                                        (LONGINT)req_count,
                                        (LONGINT)(unsigned char)buf[0]);
 #endif
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
                     pbp->ioParam.ioActCount = write((*h)->fd,
                                                        buf, req_count);
 #elif defined(_WIN32)
@@ -971,7 +971,7 @@ static OSErr C_ROMlib_serialctl(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
             case kSERDSendXOn:
                 err = controlErr; /* not supported */
                 break;
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
             case kSERDSendXOnOut:
             {
                 char c = XONC;
@@ -982,7 +982,7 @@ static OSErr C_ROMlib_serialctl(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
             case kSERDSendXOff:
                 err = controlErr; /* not supported */
                 break;
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
             case kSERDSendXOffOut:
             {
                 char c = XOFFC;
@@ -1025,7 +1025,7 @@ static OSErr C_ROMlib_serialstatus(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
         switch(pbp->cntrlParam.csCode)
         {
             case kSERDInputCount:
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
                 if(ioctl((*h)->fd, FIONREAD, &n) < 0)
 #else
                 if(serial_bios_fionread((*h)->fd, &n) < 0)
@@ -1041,7 +1041,7 @@ static OSErr C_ROMlib_serialstatus(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
                 }
                 break;
             case kSERDStatus:
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
                 if(ioctl((*h)->fd, FIONREAD, &n) < 0)
 #else
                 if(serial_bios_fionread((*h)->fd, &n) < 0)
@@ -1071,7 +1071,7 @@ static OSErr C_ROMlib_serialstatus(ParmBlkPtr pbp, DCtlPtr dcp) /* INTERNAL */
 
 static void restorecloseanddispose(hiddenh h)
 {
-#if defined(__linux__) || defined(__APPLE__)
+#if !defined(_WIN32) /* MacPhoenix: every POSIX host (was Linux, macOS; else DOS) */
 #if defined(USE_TERMIOS)
     tcsetattr((*h)->fd, TCSADRAIN, &(*h)->state);
 #else

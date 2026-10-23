@@ -14,6 +14,10 @@ target_include_directories(cpu_core PUBLIC
 target_link_libraries(cpu_core PUBLIC mame_m68k mame_ppc)
 target_compile_features(cpu_core PUBLIC cxx_std_17)
 
+if(EMSCRIPTEN)
+    return()  # no ROM machine, no UAE
+endif()
+
 # UAE: a library of its own, for the ROM machine only (registry.cpp,
 # register_uae()); Executor and the test binaries link cpu_core without it.
 # Compiled with UAE's own flags and include path (both cores have an

@@ -55,8 +55,13 @@ bool virtual_memory_allocation::do_set_access(void *start, std::size_t size, uns
 
 bool invalidate_instruction_cache(void const *start, std::size_t size) noexcept
 {
+#if defined(__EMSCRIPTEN__)
+    (void)start; /* wasm: no machine code in memory (the C back-end only) */
+    (void)size;
+#else
     char *s = const_cast<char *>(static_cast<char const *>(start));
     __builtin___clear_cache(s, s + size);
+#endif
     return true;
 }
 

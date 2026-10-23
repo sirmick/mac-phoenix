@@ -18,6 +18,7 @@
 #include <FileMgr.h>
 #include <MacTCP.h>
 #include <MemoryMgr.h>
+#include <rsys/hostnet.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -64,6 +65,14 @@ OSErr control(INTEGER refnum, TCPiopb& pb, INTEGER csCode)
 }
 
 /* A host-side listening socket for the driver to connect to. */
+/* The tests that need the host's network (sockets on the loopback). */
+#define NEEDS_NETWORK()                                          \
+    do                                                           \
+    {                                                            \
+        if(!Executor::hostnet::available())                      \
+            GTEST_SKIP() << "no network (EXECUTOR_NET=none)";    \
+    } while(0)
+
 class LoopbackListener
 {
 public:
@@ -154,6 +163,7 @@ TEST(MacTCP, OpenDriverIsCaseInsensitive)
 
 TEST(MacTCP, GetAddrReportsAnInterface)
 {
+    NEEDS_NETWORK();
     INTEGER refnum = openIPP();
 
     GetAddrParamBlock pb;
@@ -229,6 +239,7 @@ TEST(MacTCP, OperationsOnAnUnknownStreamFail)
 
 TEST(MacTCP, LoopbackRoundTrip)
 {
+    NEEDS_NETWORK();
     INTEGER refnum = openIPP();
     LoopbackListener listener;
 
@@ -334,6 +345,7 @@ TEST(MacTCP, LoopbackRoundTrip)
 
 TEST(MacTCP, PeerCloseIsReportedAsConnectionClosing)
 {
+    NEEDS_NETWORK();
     INTEGER refnum = openIPP();
     LoopbackListener listener;
 
@@ -419,6 +431,7 @@ OSErr drainStream(INTEGER refnum, TCPiopb& pb, GUEST<StreamPtr> stream,
 
 TEST(MacTCP, HttpFetch)
 {
+    NEEDS_NETWORK();
     INTEGER refnum = openIPP();
 
     /* A body deliberately larger than the receive buffer below, so the
@@ -598,6 +611,7 @@ struct HostUdp
 
 TEST(MacTCP, UdpRoundTrip)
 {
+    NEEDS_NETWORK();
     INTEGER refnum = openIPP();
     HostUdp host;
 
@@ -697,6 +711,7 @@ TEST(MacTCP, UdpRoundTrip)
 
 TEST(MacTCP, NoCopyRcvLendsFromTheReceiveArea)
 {
+    NEEDS_NETWORK();
     INTEGER refnum = openIPP();
     LoopbackListener listener;
 

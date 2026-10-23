@@ -93,6 +93,7 @@ public:
     const fs::path& getRoot() const { return root; }
 
     LocalVolume(VCB& vcb, fs::path root);
+    ~LocalVolume() override; /* where FCBExtension is complete */
 
     virtual void PBGetVInfo(ParmBlkPtr pb) override;
     virtual void PBGetCatInfo(CInfoPBPtr pb) override;

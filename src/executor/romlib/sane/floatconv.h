@@ -12,22 +12,23 @@
  *
  * These routines will only work on machines that support IEEE floating point.
  * 
- * FIXME: The current code assumes that ieee_t is a long double implemented as IEEE
- *        80 bit floating point (possibly padded at the end).
- *        This will not work on PowerPC or ARM, and not on MSVC either.
- *
- *          Possible solutions:
- *          * Use IEEE 64 bit double and live with the loss of precision.
- *          * Use whatever "long double" is and use frexp/ldexp for conversion
- *          * Use __float128 where available
- *          * Use boost multiprecision to do it with the right precision. 
+ * ieee_t is long double: the x87's 80-bit format on x86 (bits copied),
+ * whatever else elsewhere (converted by value; ieee_is_x87).
  */
 
+#include <cmath>
+#include <limits>
 #include <string.h>
 #include <sane/float.h>
 
 namespace Executor
 {
+/* MacPhoenix: where long double is the x87's 80-bit format (64 mantissa
+ * digits) the bits are copied, as upstream did; elsewhere (wasm and arm64
+ * Linux: IEEE quad; macOS arm64: double) by value, rounding to nearest. */
+constexpr bool ieee_is_x87 = std::numeric_limits<ieee_t>::digits == 64
+                             && std::numeric_limits<ieee_t>::max_exponent == 16384;
+
 inline ieee_t x80_to_ieee(const x80_t *x)
 {
     ieee_t retval;
@@ -42,17 +43,23 @@ inline ieee_t x80_to_ieee(const x80_t *x)
     if((exp & 0x7FFF) == 0x7FFF)
         mant |= 1LL<<63;
 
-    if constexpr(sizeof(ieee_t) >= 10) // ASSUME for now that this is the right kind of extended FP
+    if constexpr(ieee_is_x87)
     {
         memcpy(&retval, &mant, 8);
         memcpy((char *)&retval + 8, &exp, 2);
     }
-    else if constexpr(sizeof(ieee_t) == 8)
+    else
     {
-        uint64_t bits = 0;
-        bits |= uint64_t(exp >> 4ULL) << 52ULL;
-        bits |= (mant & ~(1ULL << 63ULL)) >> 11;
-        std::memcpy(&retval, &bits, 8);
+        bool neg = exp & 0x8000;
+        int e = exp & 0x7FFF;
+        if(e == 0x7FFF)
+            retval = (mant << 1) ? std::numeric_limits<ieee_t>::quiet_NaN()
+                                 : std::numeric_limits<ieee_t>::infinity();
+        else
+            /* value = mant * 2^(e - 16383 - 63); a denormal's e is 1. */
+            retval = std::ldexp((ieee_t)mant, (e ? e : 1) - 16383 - 63);
+        if(neg)
+            retval = -retval;
     }
     return retval;
 }
@@ -62,23 +69,57 @@ inline void ieee_to_x80(ieee_t n, x80_t *x)
     uint64_t mant;
     uint16_t exp;
 
-    if constexpr(sizeof(ieee_t) >= 10) // ASSUME for now that this is the right kind of extended FP
+    if constexpr(ieee_is_x87)
     {
         memcpy(&mant, &n, 8);
         memcpy(&exp, (char *)&n + 8, 2);
     }
-    else if constexpr(sizeof(ieee_t) == 8)
+    else
     {
-        uint64_t bits;
-        memcpy(&bits, &n, 8);
-
-        exp = (bits >> 52ULL) << 4ULL;
-        mant = (bits & ((1ULL << 52ULL) - 1)) << 11;
-
-        if((exp & 0x7FFF) == 0)
-            ;
+        uint16_t sign = std::signbit(n) ? 0x8000 : 0;
+        if(std::isnan(n))
+        {
+            exp = 0x7FFF;
+            mant = 0xC000000000000000ULL;
+        }
+        else if(std::isinf(n))
+        {
+            exp = 0x7FFF;
+            mant = 0x8000000000000000ULL;
+        }
+        else if(n == 0)
+        {
+            exp = 0;
+            mant = 0;
+        }
         else
-            mant |= 1ULL << 63;
+        {
+            /* |n| = m * 2^e, m in [0.5, 1): mant = m * 2^64, rounded. */
+            int e;
+            ieee_t m = std::frexp(std::fabs(n), &e);
+            ieee_t r = std::nearbyint(std::ldexp(m, 64));
+            if(r >= std::ldexp((ieee_t)1, 64))
+            {
+                r = std::ldexp(r, -1);
+                e++;
+            }
+            mant = (uint64_t)r;
+            int biased = e + 16382;
+            if(biased >= 0x7FFF)
+            {
+                biased = 0x7FFF;
+                mant = 0x8000000000000000ULL;
+            }
+            else if(biased <= 0)
+            {
+                /* A denormal: the exponent field 0 means 2^(1 - 16383). */
+                int shift = 1 - biased;
+                mant = shift < 64 ? mant >> shift : 0;
+                biased = 0;
+            }
+            exp = (uint16_t)biased;
+        }
+        exp |= sign;
     }
 
     x->mantissa = mant;

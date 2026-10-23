@@ -136,13 +136,22 @@ int main(int argc, char **argv)
             return 2;
         }
 
-    // Run on a stack the guest can address (window 1): tests hand host
-    // locals to the guest.
+    // Run on a stack the guest can address: tests hand host locals to the
+    // guest. Where the C stack already is (wasm: window 3 holds the static
+    // data and the stack), right here; else on a stack from window 1.
     static int result;
     const size_t stackSize = 16 * 1024 * 1024;
+    void *stack = syn68k_alloc_low(stackSize);
+    char here;
+    if(syn68k_is_guest_mapped((uintptr_t)&here, 1))
+    {
+        syn68k_free_low(stack, stackSize);
+        testing::AddGlobalTestEnvironment(new ExecutorTestEnvironment(&here));
+        return RUN_ALL_TESTS();
+    }
     pthread_attr_t attr;
     pthread_attr_init(&attr);
-    pthread_attr_setstack(&attr, syn68k_alloc_low(stackSize), stackSize);
+    pthread_attr_setstack(&attr, stack, stackSize);
     pthread_t t;
     pthread_create(&t, &attr, [](void *) -> void * {
         char thingOnStack;

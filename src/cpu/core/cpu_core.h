@@ -52,7 +52,7 @@ class GuestMemory
 {
 public:
     static constexpr int PAGE_SHIFT = 16;                       /* 64KB pages */
-    static constexpr uint32_t PAGE_SIZE = 1u << PAGE_SHIFT;
+    static constexpr uint32_t PAGE_BYTES = 1u << PAGE_SHIFT;
     static constexpr uint32_t NUM_PAGES = 1u << (32 - PAGE_SHIFT);
 
     /* Accesses to unmapped pages. Without one, reads return 0 and writes
@@ -107,7 +107,7 @@ public:
     {
         a &= mask_;
         const uint8_t *p = host(a);
-        if(p && (a & (PAGE_SIZE - 1)) <= PAGE_SIZE - 2)
+        if(p && (a & (PAGE_BYTES - 1)) <= PAGE_BYTES - 2)
             return (uint16_t)(p[0] << 8 | p[1]);
         return (uint16_t)slow_read(a, 2);
     }
@@ -115,7 +115,7 @@ public:
     {
         a &= mask_;
         const uint8_t *p = host(a);
-        if(p && (a & (PAGE_SIZE - 1)) <= PAGE_SIZE - 4)
+        if(p && (a & (PAGE_BYTES - 1)) <= PAGE_BYTES - 4)
             return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
         return slow_read(a, 4);
     }
@@ -132,7 +132,7 @@ public:
     {
         a &= mask_;
         uint8_t *p = host(a);
-        if(p && (a & (PAGE_SIZE - 1)) <= PAGE_SIZE - 2)
+        if(p && (a & (PAGE_BYTES - 1)) <= PAGE_BYTES - 2)
         {
             p[0] = v >> 8;
             p[1] = (uint8_t)v;
@@ -144,7 +144,7 @@ public:
     {
         a &= mask_;
         uint8_t *p = host(a);
-        if(p && (a & (PAGE_SIZE - 1)) <= PAGE_SIZE - 4)
+        if(p && (a & (PAGE_BYTES - 1)) <= PAGE_BYTES - 4)
         {
             p[0] = v >> 24;
             p[1] = (uint8_t)(v >> 16);

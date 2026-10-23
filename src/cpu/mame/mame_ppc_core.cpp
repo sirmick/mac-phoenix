@@ -70,7 +70,7 @@ public:
         uint64_t const end = (uint64_t)r.start + r.size;
         bool ok = r.size != 0 && m_fastram_select < PPC_MAX_FASTRAM && memory.mapped(r.start);
         intptr_t const d = ok ? memory.delta(r.start) : 0;
-        for(uint64_t a = r.start; ok && a < end; a += GuestMemory::PAGE_SIZE)
+        for(uint64_t a = r.start; ok && a < end; a += GuestMemory::PAGE_BYTES)
             ok = memory.mapped((uint32_t)a) && memory.delta((uint32_t)a) == d;
         if(!ok)
         {

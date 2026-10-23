@@ -338,22 +338,13 @@ OSErr Executor::ReadDateTime(GUEST<ULONGINT> *secs)
     return (noErr);
 }
 
+/* MacPhoenix: the guest never sets the host's clock. Upstream called
+   settimeofday, which fails (clkWrErr) unless Executor runs as root, and
+   then changed the host's time. */
 OSErr Executor::SetDateTime(ULONGINT mactime)
 {
-#if !defined(_WIN32)
-    struct timeval thetime;
-
-    thetime.tv_sec = MACTIMETOGUNIXTIME(mactime);
-    thetime.tv_usec = 0;
-
-    if(settimeofday(&thetime, 0) < 0)
-        return (clkWrErr);
-    else
-        return (noErr);
-#else /* defined(SYSV) */
-    // FIXME: #warning "SetDateTime not implemented"
+    (void)mactime;
     return clkWrErr;
-#endif /* defined(SYSV) */
 }
 
 /* beginning of code to test */

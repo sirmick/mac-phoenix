@@ -15,6 +15,7 @@
 
 using namespace Executor;
 
+bool hostnet::available() { return true; }
 int hostnet::socket(int domain, int type, int protocol) { return ::socket(domain, type, protocol); }
 int hostnet::close(int fd) { return ::close(fd); }
 int hostnet::connect(int fd, const struct sockaddr *a, socklen_t n) { return ::connect(fd, a, n); }
