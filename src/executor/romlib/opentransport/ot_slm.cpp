@@ -2,8 +2,12 @@
  * Transport's clients reach, in C++, so OT needs none of Apple's code.
  *
  * A 68k OT application links Apple's static glue, which talks to ASLM
- * through a handful of entries (named here from what the glue calls;
- * the classes and errors are the ASLM SDK's, LibraryManager.h):
+ * through a handful of entries. Which ones (SLMGlobal's offsets, the root
+ * manager's two slots, their arguments) was identified with MPW DumpObj of
+ * the glue (OpenTransportApp.o: InitLibraryManagerPriv,
+ * CleanupLibraryManagerPriv, __SLM11FuncDispatch); ASLM's own code was not
+ * read. The classes, fields and errors are the ASLM SDK's (LibraryManager.h,
+ * E.T.O. #22):
  *
  *   ExpandMem+$10C   SLMGlobal, ASLM's globals.
  *   SLMGlobal+$10    the root manager: an object whose vtable's
