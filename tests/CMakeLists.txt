@@ -412,6 +412,49 @@ set_tests_properties(guest_suite_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# MacTCP in depth (MacPhoenixSuite's mactcp section, after network): async
+# calls, ASRs, no-copy receive, passive open, timeouts, UDP, TCPGlobalInfo,
+# the resolver's other calls. On Executor (both cores) against a host echo
+# server; on the ROM machine (Open Transport's MacTCP, net-bridge's echo) as
+# the reference: what OT's MacTCP doesn't do there is a skip.
+foreach(core uae mame-68k)
+  if(core STREQUAL "uae")
+    set(name mactcp_executor)
+    set(port 18530)
+  else()
+    set(name mactcp_executor_mame68k)
+    set(port 18532)
+  endif()
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --core ${core} --sections "network mactcp" --results mactcp_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 200
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+  )
+endforeach()
+add_test(
+  NAME mactcp_rom
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --sections "network mactcp" --results mactcp_results.txt --timeout 120 --port 18534
+)
+set_tests_properties(mactcp_rom PROPERTIES
+  TIMEOUT 160
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+add_test(
+  NAME mactcp_rom_ppc
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --sections "network mactcp" --results mactcp_results.txt --timeout 150 --port 18536
+)
+set_tests_properties(mactcp_rom_ppc PROPERTIES
+  TIMEOUT 200
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+)
+
 # The ROM-based 68k Mac on MAME's Musashi (--core mame-68k).
 add_test(NAME boot_mame68k
   COMMAND bash ${TEST_DIR}/test_boot_to_finder.sh --backend uae --core mame-68k --timeout 30 --port 18140)

@@ -14,7 +14,8 @@
  * runs at interrupt time (the network interrupt, mactcp.cpp), as
  * MacTCP's did from its UDP completion.  Answers are cached for the
  * session, and a cached name is answered at once, without the result
- * procedure, as MacTCP did.
+ * procedure, as MacTCP did.  HInfo and MXInfo ask the host's name servers
+ * (net/hostdns.cpp) the same way.
  */
 
 #include <base/common.h>
@@ -22,7 +23,10 @@
 #include <MacTCP.h>
 #include <MemoryMgr.h>
 #include <error/error.h>
+#include <rsys/hostdns.h>
 #include <rsys/mactcp.h>
+
+#include <arpa/nameser.h>
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -60,11 +64,26 @@ enum : int32_t
     MXINFO = 8,
 };
 
+/* What a lookup answers: addresses (StrToAddr, AddrToName), or a host
+   information or mail exchanger record (HInfo, MXInfo), which go in the
+   returnRec's rdata where hostInfo has its addresses (MacTCP Programmer's
+   Guide: HInfoRec cpuType[30], osType[30]; MXRec preference, exchange[255]). */
+enum class Kind : uint8_t
+{
+    Addrs,
+    HInfo,
+    MX,
+};
+
 struct Answer
 {
     OSErr err = noErr;
+    Kind kind = Kind::Addrs;
     std::string cname;
     std::vector<uint32_t> addrs;
+    std::string cpu, os;  /* HInfo */
+    uint16_t preference = 0; /* MX */
+    std::string exchange;
 };
 
 struct Lookup
@@ -149,14 +168,84 @@ Answer reverse(uint32_t ip)
     return a;
 }
 
+void put_string(uint32_t at, const std::string &str, uint32_t size)
+{
+    for(uint32_t i = 0; i < size; i++)
+        WRITEUB(at + i, i + 1 < size && i < str.size() ? str[i] : 0);
+}
+
 void fill(uint32_t info_addr, const Answer &a)
 {
     hostInfo *info = (hostInfo *)SYN68K_TO_US(info_addr);
     info->rtnCode = a.err;
     std::memset(info->cname, 0, sizeof info->cname);
     std::strncpy((char *)info->cname, a.cname.c_str(), sizeof info->cname - 1);
-    for(int i = 0; i < 4; i++)
-        info->addr[i] = i < (int)a.addrs.size() ? a.addrs[i] : 0;
+    switch(a.kind)
+    {
+        case Kind::Addrs:
+            for(int i = 0; i < 4; i++)
+                info->addr[i] = i < (int)a.addrs.size() ? a.addrs[i] : 0;
+            break;
+        case Kind::HInfo:
+            put_string(info_addr + 260, a.cpu, 30);
+            put_string(info_addr + 290, a.os, 30);
+            break;
+        case Kind::MX:
+            WRITEUW(info_addr + 260, a.preference);
+            put_string(info_addr + 262, a.exchange, 255);
+            break;
+    }
+}
+
+/* HInfo and MXInfo: one record from the host's name servers. */
+Answer records(const std::string &name, Kind kind)
+{
+    Answer a;
+    a.kind = kind;
+    a.cname = name;
+    std::vector<HostRR> rrs;
+    int type = kind == Kind::HInfo ? ns_t_hinfo : ns_t_mx;
+    switch(host_dns_query(name, ns_c_in, type, rrs))
+    {
+        case HostDNSOk:
+            break;
+        case HostDNSNoName:
+            a.err = authNameErr;
+            return a;
+        default:
+            a.err = noAnsErr;
+            return a;
+    }
+    bool found = false;
+    for(auto &rr : rrs)
+    {
+        if(rr.section != 1 || rr.type != type)
+            continue;
+        const auto &d = rr.rdata;
+        if(kind == Kind::HInfo && !d.empty() && 1u + d[0] < d.size())
+        {
+            size_t l1 = d[0], l2 = d[1 + l1];
+            if(2 + l1 + l2 > d.size())
+                continue;
+            a.cpu.assign((const char *)&d[1], l1);
+            a.os.assign((const char *)&d[2 + l1], l2);
+            found = true;
+            break;
+        }
+        if(kind == Kind::MX && d.size() >= 3)
+        {
+            uint16_t pref = (d[0] << 8) | d[1];
+            if(!found || pref < a.preference)
+            {
+                a.preference = pref;
+                a.exchange = (const char *)&d[2];
+            }
+            found = true;
+        }
+    }
+    if(!found)
+        a.err = noAnsErr;
+    return a;
 }
 
 std::string guest_cstring(uint32_t addr)
@@ -173,7 +262,7 @@ std::string guest_cstring(uint32_t addr)
 /* Start a lookup on a host thread, or answer it now from the cache.
  * The answer is filled in and noErr returned when it is known at once;
  * else the hostInfo says cacheFault until the result procedure runs. */
-OSErr start(std::unique_ptr<Lookup> l, bool is_reverse, uint32_t ip)
+OSErr start(std::unique_ptr<Lookup> l, bool is_reverse, uint32_t ip, Kind kind = Kind::Addrs)
 {
     auto hit = cache.find(l->key);
     if(hit != cache.end())
@@ -184,9 +273,11 @@ OSErr start(std::unique_ptr<Lookup> l, bool is_reverse, uint32_t ip)
     if(!l->proc)
         return noResultProc;
     ((hostInfo *)SYN68K_TO_US(l->info))->rtnCode = cacheFault;
-    std::string name = l->key;
-    std::thread([l = std::move(l), is_reverse, ip, name]() mutable {
-        l->answer = is_reverse ? reverse(ip) : resolve(name);
+    std::string name = l->key.substr(l->key.find(':') + 1);
+    std::thread([l = std::move(l), is_reverse, ip, name, kind]() mutable {
+        l->answer = kind != Kind::Addrs ? records(name, kind)
+                    : is_reverse      ? reverse(ip)
+                                      : resolve(name);
         {
             std::lock_guard<std::mutex> lock(done_mutex);
             done.push_back(std::move(l));
@@ -243,6 +334,29 @@ OSErr addr_to_name(uint32_t ip, uint32_t info, uint32_t proc, uint32_t user)
     return start(std::move(l), true, ip);
 }
 
+/* OSErr HInfo / MXInfo(char *hostName, struct returnRec *, ResultProc2Ptr,
+   char *userDataPtr): as StrToAddr, the record in the returnRec. */
+OSErr record_lookup(Kind kind, uint32_t name_addr, uint32_t info, uint32_t proc, uint32_t user)
+{
+    std::string name = guest_cstring(name_addr);
+    while(!name.empty() && (name.back() == '.' || isspace((unsigned char)name.back())))
+        name.pop_back();
+    if(log_enabled())
+        fprintf(stderr, "[dnr] %s \"%s\"\n", kind == Kind::HInfo ? "HInfo" : "MXInfo", name.c_str());
+    if(!info)
+        return paramErr;
+    if(name.empty())
+        return nameSyntaxErr;
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    auto l = std::make_unique<Lookup>();
+    l->info = info;
+    l->proc = proc;
+    l->user = user;
+    l->key = (kind == Kind::HInfo ? "hinfo:" : "mx:") + name;
+    return start(std::move(l), false, 0, kind);
+}
+
 /* The 'dnrp' entry: C conventions, the caller pops the arguments. */
 syn68k_addr_t dnr_entry(syn68k_addr_t, void *)
 {
@@ -274,9 +388,10 @@ syn68k_addr_t dnr_entry(syn68k_addr_t, void *)
             err = addr_to_name(arg(1), arg(2), arg(3), arg(4));
             break;
         case HINFO:
+            err = record_lookup(Kind::HInfo, arg(1), arg(2), arg(3), arg(4));
+            break;
         case MXINFO:
-            /* Host and mail-exchanger records: not answered. */
-            err = noAnsErr;
+            err = record_lookup(Kind::MX, arg(1), arg(2), arg(3), arg(4));
             break;
         default:
             err = paramErr;

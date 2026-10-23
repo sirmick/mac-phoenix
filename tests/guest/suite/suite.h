@@ -33,6 +33,7 @@ void test_audio(void);
 void test_applescript_dates(void);
 void test_network(void);
 void test_network_deep(void);
+void test_mactcp(void);
 void test_keyboard(void);
 void test_finder(void);
 

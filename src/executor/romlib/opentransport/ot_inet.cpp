@@ -13,12 +13,13 @@
 
 #include "ot_provider.h"
 
+#include <rsys/hostdns.h>
+
 #include <arpa/inet.h>
 #include <arpa/nameser.h>
 #include <ifaddrs.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <resolv.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -134,131 +135,20 @@ void fill_name(uint32_t buf, const std::string &s)
         WRITEUB(buf + i, i < name.size() ? name[i] : 0);
 }
 
-/* ---- DNS queries ----------------------------------------------------------
-   res_query's answer parsed here (RFC 1035): the header, the questions
-   skipped, then the resource records of the three sections. */
-
-struct RR
+/* A DNS query on the host's resolver, its outcome as OT's error. */
+int32_t ot_dns_query(const std::string &name, int cls, int type, std::vector<HostRR> &rrs)
 {
-    std::string name;
-    uint16_t type = 0, cls = 0;
-    uint32_t ttl = 0;
-    int section = 0; /* 1 answer, 2 authority, 3 additional */
-    std::vector<uint8_t> rdata; /* names in it expanded (CNAME, NS, PTR, MX) */
-};
-
-/* A (possibly compressed) name at off; off moves past it. */
-bool read_dns_name(const std::vector<uint8_t> &m, size_t &off, std::string &out)
-{
-    out.clear();
-    size_t at = off;
-    bool jumped = false;
-    for(int guard = 0; guard < 128; guard++)
+    switch(host_dns_query(name, cls, type, rrs))
     {
-        if(at >= m.size())
-            return false;
-        uint8_t len = m[at];
-        if((len & 0xC0) == 0xC0)
-        {
-            if(at + 1 >= m.size())
-                return false;
-            if(!jumped)
-                off = at + 2;
-            jumped = true;
-            at = ((len & 0x3F) << 8) | m[at + 1];
-            continue;
-        }
-        if(len == 0)
-        {
-            if(!jumped)
-                off = at + 1;
-            return true;
-        }
-        if(at + 1 + len > m.size())
-            return false;
-        if(!out.empty())
-            out += '.';
-        out.append((const char *)&m[at + 1], len);
-        at += 1 + len;
-    }
-    return false;
-}
-
-void put_name(std::vector<uint8_t> &v, const std::string &name)
-{
-    v.insert(v.end(), name.begin(), name.end());
-    v.push_back(0);
-}
-
-int32_t dns_query(const std::string &name, int cls, int type, std::vector<RR> &rrs)
-{
-    std::vector<uint8_t> m(8192);
-    int n = res_query(name.c_str(), cls, type, m.data(), m.size());
-    if(n < 0)
-    {
-        switch(h_errno)
-        {
-            case HOST_NOT_FOUND:
-                return kOTBadNameErr;
-            case NO_DATA:
-                return kOTNoError; /* the name is there, no such records */
-            case TRY_AGAIN:
-                return kETIMEDOUTErr;
-            default:
-                return kOTBadNameErr;
-        }
-    }
-    m.resize(std::min<int>(n, m.size()));
-    if(m.size() < 12)
-        return kOTSysErrorErr;
-    unsigned counts[4];
-    for(int i = 0; i < 4; i++)
-        counts[i] = (m[4 + 2 * i] << 8) | m[5 + 2 * i];
-    size_t off = 12;
-    std::string qname;
-    for(unsigned i = 0; i < counts[0]; i++)
-        if(!read_dns_name(m, off, qname) || (off += 4) > m.size())
+        case HostDNSOk:
+            return kOTNoError;
+        case HostDNSNoName:
+            return kOTBadNameErr;
+        case HostDNSTimeout:
+            return kETIMEDOUTErr;
+        default:
             return kOTSysErrorErr;
-    for(int section = 1; section <= 3; section++)
-        for(unsigned i = 0; i < counts[section]; i++)
-        {
-            RR rr;
-            rr.section = section;
-            if(!read_dns_name(m, off, rr.name) || off + 10 > m.size())
-                return kOTSysErrorErr;
-            rr.type = (m[off] << 8) | m[off + 1];
-            rr.cls = (m[off + 2] << 8) | m[off + 3];
-            rr.ttl = ((uint32_t)m[off + 4] << 24) | (m[off + 5] << 16) | (m[off + 6] << 8) | m[off + 7];
-            size_t len = (m[off + 8] << 8) | m[off + 9];
-            off += 10;
-            if(off + len > m.size())
-                return kOTSysErrorErr;
-            size_t r = off;
-            std::string target;
-            switch(rr.type)
-            {
-                case ns_t_cname:
-                case ns_t_ns:
-                case ns_t_ptr:
-                    if(read_dns_name(m, r, target))
-                        put_name(rr.rdata, target);
-                    break;
-                case ns_t_mx:
-                    if(len >= 2)
-                    {
-                        rr.rdata = { m[off], m[off + 1] };
-                        r += 2;
-                        if(read_dns_name(m, r, target))
-                            put_name(rr.rdata, target);
-                    }
-                    break;
-                default:
-                    rr.rdata.assign(m.begin() + off, m.begin() + off + len);
-            }
-            off += len;
-            rrs.push_back(std::move(rr));
-        }
-    return kOTNoError;
+    }
 }
 
 /* ---- answers delivered later ---------------------------------------------
@@ -408,8 +298,8 @@ uint32_t address_to_name(const Call &c)
 /* The answer for OTInetSysInfo: HINFO's two character strings. */
 int32_t sysinfo_answer(const std::string &name, std::string &cpu, std::string &os)
 {
-    std::vector<RR> rrs;
-    int32_t err = dns_query(name, ns_c_in, ns_t_hinfo, rrs);
+    std::vector<HostRR> rrs;
+    int32_t err = ot_dns_query(name, ns_c_in, ns_t_hinfo, rrs);
     if(err)
         return err;
     for(auto &rr : rrs)
@@ -474,8 +364,8 @@ using MXList = std::vector<std::pair<uint16_t, std::string>>;
 
 int32_t mx_answer(const std::string &name, MXList &mx)
 {
-    std::vector<RR> rrs;
-    int32_t err = dns_query(name, ns_c_in, ns_t_mx, rrs);
+    std::vector<HostRR> rrs;
+    int32_t err = ot_dns_query(name, ns_c_in, ns_t_mx, rrs);
     if(err)
         return err;
     for(auto &rr : rrs)
@@ -540,7 +430,7 @@ uint32_t mail_exchange(const Call &c)
    resourceLen, resourceData), each on a 4-byte boundary, and pointers to
    them in argv, nil after the last if there is room. Records that don't
    fit are left out. */
-int32_t fill_query(const std::vector<RR> &rrs, uint32_t buf, uint32_t buflen, uint32_t argv,
+int32_t fill_query(const std::vector<HostRR> &rrs, uint32_t buf, uint32_t buflen, uint32_t argv,
                    uint32_t argvlen)
 {
     uint32_t at = 0, n = 0;
@@ -585,14 +475,14 @@ uint32_t query(const Call &c)
     if(p->async)
     {
         later(*p, T_DNRQUERYCOMPLETE, buf, [=]() -> std::function<int32_t()> {
-            auto rrs = std::make_shared<std::vector<RR>>();
-            int32_t err = dns_query(name, cls, type, *rrs);
+            auto rrs = std::make_shared<std::vector<HostRR>>();
+            int32_t err = ot_dns_query(name, cls, type, *rrs);
             return [=]() { return err ? err : fill_query(*rrs, buf, buflen, argv, argvlen); };
         });
         return kOTNoError;
     }
-    std::vector<RR> rrs;
-    int32_t err = dns_query(name, cls, type, rrs);
+    std::vector<HostRR> rrs;
+    int32_t err = ot_dns_query(name, cls, type, rrs);
     return err ? err : fill_query(rrs, buf, buflen, argv, argvlen);
 }
 

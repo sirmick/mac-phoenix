@@ -14,9 +14,12 @@
  *     (data arrival, closing, terminate).  MacTCP did all of that from
  *     its network interrupts too, so completion routines and ASRs are
  *     written for it.
- *   - Synchronous calls block the 68k thread in poll(2), with their
- *     timeout; sends always complete before the call returns (host
- *     socket buffers are large).
+ *   - Synchronous calls wait for their socket in 20 ms slices and run the
+ *     interrupts that came due in between (completion routines and ASRs
+ *     of other calls, Time Manager, VBL), as a Mac's interrupts went on
+ *     while PBControlSync spun; the stream is looked up again after each
+ *     slice, since that code may release it.  Sends complete before the
+ *     call returns (host socket buffers are large).
  *   - Receive areas: UDPRead and TCPNoCopyRcv lend out pieces of the
  *     area the application gave UDPCreate/TCPCreate; UDPBfrReturn and
  *     TCPRcvBfrReturn give them back.  Data stays in the host socket
@@ -310,20 +313,53 @@ int set_nonblocking(int fd)
     return fl < 0 ? fl : fcntl(fd, F_SETFL, fl | O_NONBLOCK);
 }
 
-/* Wait for fd readiness with a MacTCP-style timeout (0 = default). */
-int poll_one(int fd, short events, uint8_t timeout_secs,
-             uint8_t default_secs)
-{
-    struct pollfd p = { fd, events, 0 };
-    int secs = timeout_secs ? timeout_secs : default_secs;
-    return poll(&p, 1, secs * 1000);
-}
-
 bool ready_now(int fd, short events)
 {
     struct pollfd p = { fd, events, 0 };
     return fd >= 0 && poll(&p, 1, 0) > 0;
 }
+
+/* A synchronous call's wait: 1 when the stream's socket (its listening
+   one with listening) is ready, 0 when the deadline passed, -1 when the
+   stream or its socket went while interrupts ran. */
+int sync_wait(uint32_t cookie, bool listening, short events, Clock::time_point deadline)
+{
+    for(;;)
+    {
+        MacTCPStream *s = find(cookie);
+        if(!s)
+            return -1;
+        int fd = listening ? s->listen_fd : s->fd;
+        if(fd < 0)
+            return -1;
+        int slice = 20;
+        if(deadline != never)
+        {
+            auto left = std::chrono::ceil<std::chrono::milliseconds>(deadline - Clock::now()).count();
+            if(left <= 0)
+                return 0;
+            slice = (int)std::min<long long>(slice, left);
+        }
+        struct pollfd p = { fd, events, 0 };
+        if(poll(&p, 1, slice) > 0)
+            return 1;
+        syncint_check_interrupt();
+    }
+}
+
+Clock::time_point deadline_secs(unsigned secs, unsigned dflt)
+{
+    unsigned t = secs ? secs : dflt;
+    return t ? Clock::now() + std::chrono::seconds(t) : never;
+}
+
+/* TCPGlobalInfo's records (MacTCP.h: TCPParam, TCPStats), in the system
+   heap, the statistics kept as connections come and go. */
+struct GlobalStats
+{
+    uint32_t attempts = 0, opened = 0, accepted = 0, closed = 0, aborted = 0;
+    uint32_t octets_in = 0, octets_out = 0;
+} stats;
 
 /* Gather a WDS (zero-length entry terminates it) into an iovec list. */
 OSErr gather(Ptr wdsPtr, std::vector<struct iovec> &iov, uint32_t &total)
@@ -617,6 +653,7 @@ OSErr finish_connect(MacTCPStream &s, TCPiopb *pb)
     }
     report_endpoints(s.fd, pb->csParam.open);
     s.state = StreamState::established;
+    stats.opened++;
     return noErr;
 }
 
@@ -666,6 +703,7 @@ OSErr do_tcp_active_open(TCPiopb *pb)
     }
     s->fd = fd;
     s->state = StreamState::connecting;
+    stats.attempts++;
 
     if(is_async(pb) && !ready_now(fd, POLLOUT))
     {
@@ -676,14 +714,16 @@ OSErr do_tcp_active_open(TCPiopb *pb)
         return inProgress;
     }
 
-    int r = poll_one(fd, POLLOUT, open.ulpTimeoutValue, 60);
-    if(r <= 0)
+    uint32_t cookie = cookie_of(pb->tcpStream);
+    int r = sync_wait(cookie, false, POLLOUT, deadline_secs(open.ulpTimeoutValue, 60));
+    if(!(s = find(cookie)) || r < 0)
+        return connectionTerminated;
+    if(r == 0)
     {
-        err = r == 0 ? openFailed : map_socket_errno(errno);
-        close(fd);
+        close(s->fd);
         s->fd = -1;
         s->state = StreamState::created;
-        return err;
+        return openFailed;
     }
     return finish_connect(*s, pb);
 }
@@ -702,6 +742,7 @@ OSErr try_accept(MacTCPStream &s, TCPiopb *pb)
     s.fd = fd;
     s.state = StreamState::established;
     report_endpoints(fd, pb->csParam.open);
+    stats.accepted++;
     return noErr;
 }
 
@@ -746,11 +787,13 @@ OSErr do_tcp_passive_open(TCPiopb *pb)
                               deadline_after(open.commandTimeoutValue) };
         return err;
     }
-    int timeout = open.commandTimeoutValue ? open.commandTimeoutValue * 1000 : -1;
-    struct pollfd p = { fd, POLLIN, 0 };
-    if(poll(&p, 1, timeout) <= 0)
+    uint32_t cookie = cookie_of(pb->tcpStream);
+    int r = sync_wait(cookie, true, POLLIN, deadline_secs(open.commandTimeoutValue, 0));
+    if(!(s = find(cookie)) || r < 0)
+        return connectionTerminated;
+    if(r == 0)
     {
-        close(fd);
+        close(s->listen_fd);
         s->listen_fd = -1;
         s->state = StreamState::created;
         return commandTimeout;
@@ -782,15 +825,19 @@ OSErr do_tcp_send(TCPiopb *pb)
         {
             if(errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                if(poll_one(s->fd, POLLOUT,
-                            pb->csParam.send.ulpTimeoutValue, 60)
-                   <= 0)
+                uint32_t cookie = cookie_of(pb->tcpStream);
+                int w = sync_wait(cookie, false, POLLOUT,
+                                  deadline_secs(pb->csParam.send.ulpTimeoutValue, 60));
+                if(!(s = find(cookie)) || w < 0)
+                    return connectionTerminated;
+                if(w == 0)
                     return commandTimeout;
                 continue;
             }
             return map_socket_errno(errno);
         }
         written += r;
+        stats.octets_out += r;
         /* Advance iov past what was written. */
         while(r > 0 && first < iov.size())
         {
@@ -832,7 +879,7 @@ OSErr try_tcp_rcv(MacTCPStream &s, TCPiopb *pb)
             if(r == 0)
             {
                 s.remoteClosed = true;
-                return connectionClosing;
+                return s.state == StreamState::closing ? connectionDoesntExist : connectionClosing;
             }
             if(r < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
                 return map_socket_errno(errno);
@@ -852,6 +899,7 @@ OSErr try_tcp_rcv(MacTCPStream &s, TCPiopb *pb)
             return r == 0 ? connectionClosing : map_socket_errno(errno);
         }
         s.lent.back().second = r;
+        stats.octets_in += r;
         rds[0].length = r;
         rds[0].ptr = s.rcvBuff + *off;
         rds[1].length = 0;
@@ -871,15 +919,17 @@ OSErr try_tcp_rcv(MacTCPStream &s, TCPiopb *pb)
                    : map_socket_errno(errno);
     if(r == 0)
     {
-        /* Peer FIN: report closing; further reads after drain
-         * report connectionTerminated per MacTCP semantics. */
+        /* The peer's FIN with everything read: connectionClosing while
+         * our side is open; once we closed too (TCPClose) the connection
+         * is gone, connectionDoesntExist (as OT's MacTCP answers). */
         s.remoteClosed = true;
         rcv.rcvBuffLen = 0;
-        return connectionClosing;
+        return s.state == StreamState::closing ? connectionDoesntExist : connectionClosing;
     }
     rcv.rcvBuffLen = (uint16_t)r;
     rcv.urgentFlag = 0;
     rcv.markFlag = 0;
+    stats.octets_in += r;
     return noErr;
 }
 
@@ -907,17 +957,15 @@ OSErr do_tcp_rcv(TCPiopb *pb)
         return inProgress;
     }
     /* Synchronous: wait here; commandTimeoutValue 0 is the default. */
-    auto deadline = deadline_after(rcv.commandTimeoutValue
-                                       ? rcv.commandTimeoutValue
-                                       : 60);
+    uint32_t cookie = cookie_of(pb->tcpStream);
+    auto deadline = deadline_secs(rcv.commandTimeoutValue, 60);
     while((err = try_tcp_rcv(*s, pb)) == inProgress)
     {
-        auto left = std::chrono::ceil<std::chrono::milliseconds>(
-            deadline - Clock::now()).count();
-        if(left <= 0)
+        int w = sync_wait(cookie, false, POLLIN, deadline);
+        if(!(s = find(cookie)) || w < 0)
+            return connectionTerminated;
+        if(w == 0)
             return commandTimeout;
-        struct pollfd p = { s->fd, POLLIN, 0 };
-        poll(&p, 1, (int)left);
     }
     return err;
 }
@@ -967,6 +1015,7 @@ OSErr do_tcp_close(TCPiopb *pb)
         return connectionDoesntExist;
     shutdown(s->fd, SHUT_WR); /* half-close; stream stays readable */
     s->state = StreamState::closing;
+    stats.closed++;
     return noErr;
 }
 
@@ -982,6 +1031,7 @@ OSErr do_tcp_abort(TCPiopb *pb, std::vector<std::pair<uint32_t, OSErr>> &done)
         setsockopt(s->fd, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
         close(s->fd);
         s->fd = -1;
+        stats.aborted++;
     }
     if(s->listen_fd >= 0)
     {
@@ -1185,21 +1235,16 @@ OSErr do_udp_read(UDPiopb *pb)
         s->reads.push_back({ pb_addr(pb), deadline });
         return inProgress;
     }
+    uint32_t cookie = cookie_of(pb->udpStream);
     while((err = try_udp_read(*s, pb)) == inProgress)
     {
-        int timeout = -1;
-        if(deadline != never)
-        {
-            auto left = std::chrono::ceil<std::chrono::milliseconds>(
-                deadline - Clock::now()).count();
-            if(left <= 0)
-                return commandTimeout;
-            timeout = (int)left;
-        }
         if(s->areaFull)
             return insufficientResources; /* nothing can give it back */
-        struct pollfd p = { s->fd, POLLIN, 0 };
-        poll(&p, 1, timeout);
+        int w = sync_wait(cookie, false, POLLIN, deadline);
+        if(!(s = find(cookie)) || w < 0)
+            return connectionTerminated;
+        if(w == 0)
+            return commandTimeout;
     }
     return err;
 }
@@ -1245,7 +1290,11 @@ OSErr do_udp_write(UDPiopb *pb)
             break;
         if(errno == EAGAIN || errno == EWOULDBLOCK)
         {
-            if(poll_one(s->fd, POLLOUT, 0, 10) <= 0)
+            uint32_t cookie = cookie_of(pb->udpStream);
+            int w = sync_wait(cookie, false, POLLOUT, deadline_secs(0, 10));
+            if(!(s = find(cookie)) || w < 0)
+                return connectionTerminated;
+            if(w == 0)
                 return commandTimeout;
             continue;
         }
@@ -1398,6 +1447,46 @@ void pump()
     rewatch();
 }
 
+/* TCPGlobalInfo: pointers to TCPParam and TCPStats (MacTCP.h), a table of
+   the open TCP streams, the most connections there may be. The
+   parameters are the host TCP's in spirit: 1460-byte segments, a 64K
+   window; the retransmission timer is the host's business. */
+OSErr do_tcp_global_info(TCPiopb *pb)
+{
+    static uint32_t param, statsp, table;
+    constexpr int kMaxConnections = 64;
+    if(!param)
+    {
+        param = US_TO_SYN68K(NewPtrSysClear(6 * 4));
+        statsp = US_TO_SYN68K(NewPtrSysClear(13 * 4));
+        table = US_TO_SYN68K(NewPtrSysClear(kMaxConnections * 4));
+        if(!param || !statsp || !table)
+            return insufficientResources;
+        WRITEUL(param + 0, 0);     /* tcpRtoA */
+        WRITEUL(param + 4, 0);     /* tcpRtoMin */
+        WRITEUL(param + 8, 0);     /* tcpRtoMax */
+        WRITEUL(param + 12, 1460); /* tcpMaxSegSize */
+        WRITEUL(param + 16, kMaxConnections);
+        WRITEUL(param + 20, 65535); /* tcpMaxWindow */
+    }
+    const uint32_t vals[13] = { stats.attempts, stats.opened, stats.accepted, stats.closed,
+                                stats.aborted, stats.octets_in, stats.octets_out, 0, 0, 0, 0, 0, 0 };
+    for(int i = 0; i < 13; i++)
+        WRITEUL(statsp + 4 * i, vals[i]);
+    int n = 0;
+    for(auto &[cookie, st] : streams)
+        if(!st.udp && n < kMaxConnections)
+            WRITEUL(table + 4 * n++, cookie);
+    for(int i = n; i < kMaxConnections; i++)
+        WRITEUL(table + 4 * i, 0);
+    uint32_t gi = US_TO_SYN68K(&pb->csParam);
+    WRITEUL(gi + 0, param);
+    WRITEUL(gi + 4, statsp);
+    WRITEUL(gi + 8, table);
+    WRITEUW(gi + 16, kMaxConnections);
+    return noErr;
+}
+
 const char *cs_name(int cs)
 {
     switch(cs)
@@ -1421,6 +1510,7 @@ const char *cs_name(int cs)
         case TCPAbort: return "TCPAbort";
         case TCPStatus: return "TCPStatus";
         case TCPRelease: return "TCPRelease";
+        case TCPGlobalInfo: return "TCPGlobalInfo";
         default: return "?";
     }
 }
@@ -1549,11 +1639,14 @@ static OSErr C_ROMlib_ippctl(ParmBlkPtr pbp, DCtlPtr dce)
             break;
         }
 
+        case TCPGlobalInfo:
+            err = do_tcp_global_info(pb);
+            break;
+
         case udpMultiCreate:
         case udpMultiSend:
         case udpMultiRead:
         case TCPExtendedStat:
-        case TCPGlobalInfo:
             warning_unimplemented("MacTCP csCode %d", (int)pb->csCode);
             err = invalidLength; /* TODO: most fitting stub error? */
             break;

@@ -489,6 +489,7 @@ set(opentransport_sources
     opentransport/ot_slm.cpp
     opentransport/ot_tasks.cpp
     opentransport/ot_options.cpp
+    net/hostdns.cpp
 )
 
 source_group(OpenTransport FILES ${opentransport_sources})

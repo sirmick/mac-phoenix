@@ -11,6 +11,7 @@
 #include <Memory.h>
 #include <MixedMode.h>
 #include <Resources.h>
+#include <stdio.h>
 #include <string.h>
 
 static short ipp;
@@ -22,9 +23,35 @@ OSErr ip_open(void)
     return ipp ? noErr : OpenDriver(name, &ipp);
 }
 
+short ip_refnum(void)
+{
+    return ipp;
+}
+
+void echo_service(unsigned long *host, unsigned short *port, int *named)
+{
+    unsigned int a, b, c, d, p;
+    FILE *cfg;
+
+    *host = 10UL << 24 | 2 << 8 | 1;
+    *port = 7;
+    *named = 0;
+    if((cfg = fopen("Host:net_echo.txt", "r")) != NULL)
+    {
+        if(fscanf(cfg, "%u.%u.%u.%u %u", &a, &b, &c, &d, &p) == 5)
+        {
+            *host = (unsigned long)a << 24 | (unsigned long)b << 16 | c << 8 | d;
+            *port = p;
+            *named = 1;
+        }
+        fclose(cfg);
+    }
+}
+
 /* ---- the resolver (what Apple's dnr.c glue does) */
 
-enum { kOpenResolver = 1, kCloseResolver = 2, kStrToAddr = 3 };
+enum { kOpenResolver = 1, kCloseResolver = 2, kStrToAddr = 3, kAddrToStr = 4, kAddrToName = 6,
+       kHInfo = 7, kMXInfo = 8 };
 
 #if PRAGMA_ALIGN_SUPPORTED
 #pragma options align=mac68k
@@ -35,6 +62,28 @@ typedef struct
     char cname[255];
     unsigned long addr[4];
 } HostInfo;
+
+/* HInfo's and MXInfo's (MacTCP Programmer's Guide, returnRec): the record
+ * where HostInfo has its addresses. */
+typedef struct
+{
+    long rtnCode;
+    char cname[255];
+    union
+    {
+        unsigned long addr[4];
+        struct
+        {
+            char cpuType[30];
+            char osType[30];
+        } hinfo;
+        struct
+        {
+            unsigned short preference;
+            char exchange[255];
+        } mx;
+    } rdata;
+} ReturnRec;
 #if PRAGMA_ALIGN_SUPPORTED
 #pragma options align=reset
 #endif
@@ -53,12 +102,16 @@ enum
         | STACK_ROUTINE_PARAMETER(3, kFourByteCode) | STACK_ROUTINE_PARAMETER(4, kFourByteCode)
         | STACK_ROUTINE_PARAMETER(5, kFourByteCode),
     kResultProcInfo = kPascalStackBased
+        | STACK_ROUTINE_PARAMETER(1, kFourByteCode) | STACK_ROUTINE_PARAMETER(2, kFourByteCode),
+    kAddrToStrProcInfo = kCStackBased | RESULT_SIZE(kTwoByteCode)
         | STACK_ROUTINE_PARAMETER(1, kFourByteCode) | STACK_ROUTINE_PARAMETER(2, kFourByteCode)
+        | STACK_ROUTINE_PARAMETER(3, kFourByteCode)
 };
 #else
 typedef OSErr (*OpenFn)(long selector, char *file);
 typedef OSErr (*CloseFn)(long selector);
 typedef OSErr (*StrToAddrFn)(long selector, char *name, HostInfo *info, ProcPtr done, Ptr user);
+typedef OSErr (*AddrToStrFn)(long selector, unsigned long addr, char *str);
 #endif
 
 /* The DNR calls this when a lookup it couldn't answer from its cache ends. */
@@ -166,6 +219,102 @@ OSErr dns_resolve(char *name, unsigned long *addr)
     }
     if(err == noErr)
         *addr = info.addr[0];
+    return err;
+}
+
+static UniversalProcPtr result_proc(void)
+{
+#if GENERATINGCFM
+    static UniversalProcPtr done_upp;
+
+    if(!done_upp)
+        done_upp = NewRoutineDescriptor((ProcPtr)lookup_done, kResultProcInfo, GetCurrentArchitecture());
+    return done_upp;
+#else
+    return (UniversalProcPtr)lookup_done;
+#endif
+}
+
+/* A lookup that answered cacheFault: wait for the result procedure. */
+static OSErr wait_lookup(OSErr err, volatile short *done, long *rtn, int timeout)
+{
+    unsigned long until;
+
+    if(err != cacheFault)
+        return err;
+    for(until = TickCount() + timeout * 60L; !*done && TickCount() < until;)
+        idle_ticks(1);
+    return *done ? (OSErr)*rtn : commandTimeout;
+}
+
+/* Selectors 3, 6, 7, 8 take (selector, name or address, record, result
+   procedure, user data). */
+static OSErr dnr_lookup(long selector, long what, void *rec, volatile short *done)
+{
+#if GENERATINGCFM
+    return CallUniversalProc((UniversalProcPtr)*dnr_code, kStrToAddrProcInfo, selector, what, rec,
+                             result_proc(), (Ptr)done);
+#else
+    return ((StrToAddrFn)*dnr_code)(selector, (char *)what, (HostInfo *)rec,
+                                    (ProcPtr)result_proc(), (Ptr)done);
+#endif
+}
+
+OSErr dns_addr_to_name(unsigned long addr, char *name, int timeout)
+{
+    static HostInfo info;
+    volatile short done = 0;
+    OSErr err;
+
+    if((err = dns_open()) != noErr)
+        return err;
+    err = wait_lookup(dnr_lookup(kAddrToName, (long)addr, &info, &done), &done, &info.rtnCode, timeout);
+    if(err == noErr)
+    {
+        memcpy(name, info.cname, 254);
+        name[254] = 0;
+    }
+    return err;
+}
+
+OSErr dns_addr_to_str(unsigned long addr, char *str)
+{
+    OSErr err;
+
+    if((err = dns_open()) != noErr)
+        return err;
+#if GENERATINGCFM
+    return CallUniversalProc((UniversalProcPtr)*dnr_code, kAddrToStrProcInfo, (long)kAddrToStr, addr, str);
+#else
+    return ((AddrToStrFn)*dnr_code)(kAddrToStr, addr, str);
+#endif
+}
+
+OSErr dns_hinfo(char *name, char *out, int timeout)
+{
+    static ReturnRec rec;
+    volatile short done = 0;
+    OSErr err;
+
+    if((err = dns_open()) != noErr)
+        return err;
+    err = wait_lookup(dnr_lookup(kHInfo, (long)name, &rec, &done), &done, &rec.rtnCode, timeout);
+    if(err == noErr)
+        sprintf(out, "%.30s/%.30s", rec.rdata.hinfo.cpuType, rec.rdata.hinfo.osType);
+    return err;
+}
+
+OSErr dns_mx(char *name, char *out, int timeout)
+{
+    static ReturnRec rec;
+    volatile short done = 0;
+    OSErr err;
+
+    if((err = dns_open()) != noErr)
+        return err;
+    err = wait_lookup(dnr_lookup(kMXInfo, (long)name, &rec, &done), &done, &rec.rtnCode, timeout);
+    if(err == noErr)
+        sprintf(out, "%u %.200s", rec.rdata.mx.preference, rec.rdata.mx.exchange);
     return err;
 }
 

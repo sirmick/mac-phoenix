@@ -72,6 +72,11 @@ impl EchoServer {
                 }
             }
         }
+        // The client closed its side and everything is echoed: close ours
+        // too, as an RFC 862 server does (the guest then sees the FIN).
+        if tcp_sock.state() == tcp::State::CloseWait && !tcp_sock.can_recv() {
+            tcp_sock.close();
+        }
         if !tcp_sock.is_open() {
             let _ = tcp_sock.listen(ECHO_PORT);
         }

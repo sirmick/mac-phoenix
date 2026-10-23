@@ -67,6 +67,7 @@ static const struct
     { "applescript", test_applescript_dates },
     { "network", test_network },
     { "netdeep", test_network_deep },
+    { "mactcp", test_mactcp },
     { "keyboard", test_keyboard },
     { "finder", test_finder },
 };

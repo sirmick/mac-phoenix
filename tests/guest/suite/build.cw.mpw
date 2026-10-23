@@ -3,7 +3,7 @@
 # MWLink68K, MWCPPC and MWLinkPPC, with Metrowerks' C library (MSL); the
 # same fat application build.mpw makes with Apple's.
 # products: MacPhoenixSuite
-Set Sources "main files audio ascript tcpip net netdeep keyboard finder"
+Set Sources "main files audio ascript tcpip net netdeep mactcp keyboard finder"
 Delete -i MacPhoenixSuite MacPhoenixSuite.68k    # Rez -a would add to the last build
 Set Objects68K ""
 Set ObjectsPPC ""
