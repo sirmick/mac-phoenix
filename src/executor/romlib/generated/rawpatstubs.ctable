@@ -1,0 +1,1126 @@
+/* This file is machine-generated; DO NOT EDIT! */
+
+#define JUMP_TO_NEXT                        \
+do {                                        \
+  const void *next = s[1].label;            \
+  NEXT_ROW;				    \
+  arg = s[1].arg;                           \
+  s = (const blt_section_t *) ((const uint8_t *) s + sec_size); \
+  goto *next;                               \
+} while (0)
+
+/* Maximum number of times we'll unwrap any blitter loops. */
+#define MAX_LOOP_UNWRAP	8U
+#define REPEAT_MOD_0_STUB	0U
+#define MASK_STUB		(REPEAT_MOD_0_STUB + MAX_LOOP_UNWRAP)
+#define DONE_STUB		(MASK_STUB + 1)
+#define FUNC_PTR		(DONE_STUB + 1)
+
+
+extern const void *_func_0_labels[77] asm ("__func_0_labels");
+
+const void * const *
+xdblt_func_0 (const blt_section_t *section,
+uint8_t *row_base, long num_rows, long y)
+{
+static const void *labels[] asm ("__func_0_labels") = {
+&&copy_short_narrow_many_8,
+&&copy_short_narrow_many_1,
+&&copy_short_narrow_many_2,
+&&copy_short_narrow_many_3,
+&&copy_short_narrow_many_4,
+&&copy_short_narrow_many_5,
+&&copy_short_narrow_many_6,
+&&copy_short_narrow_many_7,
+   &&copy_short_narrow_mask,
+   &&done,
+  (void*) xdblt_func_0,
+#define xdblt_copy_short_narrow_labels (&_func_0_labels[0])
+&&copy_short_narrow_many_8,
+&&copy_short_narrow_many_1,
+&&copy_short_narrow_many_2,
+&&copy_short_narrow_many_3,
+&&copy_short_narrow_many_4,
+&&copy_short_narrow_many_5,
+&&copy_short_narrow_many_6,
+&&copy_short_narrow_many_7,
+   &&copy_short_narrow_ones_mask,
+   &&done,
+  (void*) xdblt_func_0,
+#define xdblt_copy_short_narrow_ones_labels (&_func_0_labels[11])
+&&copy_short_narrow_many_8,
+&&copy_short_narrow_many_1,
+&&copy_short_narrow_many_2,
+&&copy_short_narrow_many_3,
+&&copy_short_narrow_many_4,
+&&copy_short_narrow_many_5,
+&&copy_short_narrow_many_6,
+&&copy_short_narrow_many_7,
+   &&copy_short_narrow_zeros_mask,
+   &&done,
+  (void*) xdblt_func_0,
+#define xdblt_copy_short_narrow_zeros_labels (&_func_0_labels[22])
+&&or_short_narrow_many_8,
+&&or_short_narrow_many_1,
+&&or_short_narrow_many_2,
+&&or_short_narrow_many_3,
+&&or_short_narrow_many_4,
+&&or_short_narrow_many_5,
+&&or_short_narrow_many_6,
+&&or_short_narrow_many_7,
+   &&or_short_narrow_mask,
+   &&done,
+  (void*) xdblt_func_0,
+#define xdblt_or_short_narrow_labels (&_func_0_labels[33])
+&&and_short_narrow_many_8,
+&&and_short_narrow_many_1,
+&&and_short_narrow_many_2,
+&&and_short_narrow_many_3,
+&&and_short_narrow_many_4,
+&&and_short_narrow_many_5,
+&&and_short_narrow_many_6,
+&&and_short_narrow_many_7,
+   &&and_short_narrow_mask,
+   &&done,
+  (void*) xdblt_func_0,
+#define xdblt_and_short_narrow_labels (&_func_0_labels[44])
+&&xor_short_narrow_many_8,
+&&xor_short_narrow_many_1,
+&&xor_short_narrow_many_2,
+&&xor_short_narrow_many_3,
+&&xor_short_narrow_many_4,
+&&xor_short_narrow_many_5,
+&&xor_short_narrow_many_6,
+&&xor_short_narrow_many_7,
+   &&xor_short_narrow_mask,
+   &&done,
+  (void*) xdblt_func_0,
+#define xdblt_xor_short_narrow_labels (&_func_0_labels[55])
+&&xor_short_narrow_many_8,
+&&xor_short_narrow_many_1,
+&&xor_short_narrow_many_2,
+&&xor_short_narrow_many_3,
+&&xor_short_narrow_many_4,
+&&xor_short_narrow_many_5,
+&&xor_short_narrow_many_6,
+&&xor_short_narrow_many_7,
+   &&xor_short_narrow_ones_mask,
+   &&done,
+  (void*) xdblt_func_0,
+#define xdblt_xor_short_narrow_ones_labels (&_func_0_labels[66])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+uint32_t v = xdblt_pattern_value;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+uint32_t *dst = (uint32_t *) &row_base[s->offset];
+  goto *(s->label);
+
+copy_short_narrow_mask:
+*dst = (*dst & ~arg) | (v & arg);
+JUMP_TO_NEXT;
+ copy_short_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+copy_short_narrow_many_8:
+  dst[0] = v;
+copy_short_narrow_many_7:
+  dst[1] = v;
+copy_short_narrow_many_6:
+  dst[2] = v;
+copy_short_narrow_many_5:
+  dst[3] = v;
+copy_short_narrow_many_4:
+  dst[4] = v;
+copy_short_narrow_many_3:
+  dst[5] = v;
+copy_short_narrow_many_2:
+  dst[6] = v;
+copy_short_narrow_many_1:
+  dst[7] = v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto copy_short_narrow_many_loop;
+  JUMP_TO_NEXT;
+copy_short_narrow_ones_mask:
+*dst |= arg;
+JUMP_TO_NEXT;
+copy_short_narrow_zeros_mask:
+*dst &= ~arg;
+JUMP_TO_NEXT;
+or_short_narrow_mask:
+*dst |= (v & arg);
+JUMP_TO_NEXT;
+ or_short_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+or_short_narrow_many_8:
+  dst[0] |= v;
+or_short_narrow_many_7:
+  dst[1] |= v;
+or_short_narrow_many_6:
+  dst[2] |= v;
+or_short_narrow_many_5:
+  dst[3] |= v;
+or_short_narrow_many_4:
+  dst[4] |= v;
+or_short_narrow_many_3:
+  dst[5] |= v;
+or_short_narrow_many_2:
+  dst[6] |= v;
+or_short_narrow_many_1:
+  dst[7] |= v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto or_short_narrow_many_loop;
+  JUMP_TO_NEXT;
+and_short_narrow_mask:
+*dst &= (v | ~arg);
+JUMP_TO_NEXT;
+ and_short_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+and_short_narrow_many_8:
+  dst[0] &= v;
+and_short_narrow_many_7:
+  dst[1] &= v;
+and_short_narrow_many_6:
+  dst[2] &= v;
+and_short_narrow_many_5:
+  dst[3] &= v;
+and_short_narrow_many_4:
+  dst[4] &= v;
+and_short_narrow_many_3:
+  dst[5] &= v;
+and_short_narrow_many_2:
+  dst[6] &= v;
+and_short_narrow_many_1:
+  dst[7] &= v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto and_short_narrow_many_loop;
+  JUMP_TO_NEXT;
+xor_short_narrow_mask:
+*dst ^= (v & arg);
+JUMP_TO_NEXT;
+ xor_short_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+xor_short_narrow_many_8:
+  dst[0] ^= v;
+xor_short_narrow_many_7:
+  dst[1] ^= v;
+xor_short_narrow_many_6:
+  dst[2] ^= v;
+xor_short_narrow_many_5:
+  dst[3] ^= v;
+xor_short_narrow_many_4:
+  dst[4] ^= v;
+xor_short_narrow_many_3:
+  dst[5] ^= v;
+xor_short_narrow_many_2:
+  dst[6] ^= v;
+xor_short_narrow_many_1:
+  dst[7] ^= v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto xor_short_narrow_many_loop;
+  JUMP_TO_NEXT;
+xor_short_narrow_ones_mask:
+*dst ^= arg;
+JUMP_TO_NEXT;
+ done:
+  row_base += xdblt_dst_row_bytes;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *xdblt_func_1_labels[11] asm ("_xdblt_func_1_labels");
+
+const void * const *
+xdblt_func_1 (const blt_section_t *section,
+uint8_t *row_base, long num_rows, long y)
+{
+static const void *labels[] asm ("_xdblt_func_1_labels") = {
+&&insert_short_narrow_many_8,
+&&insert_short_narrow_many_1,
+&&insert_short_narrow_many_2,
+&&insert_short_narrow_many_3,
+&&insert_short_narrow_many_4,
+&&insert_short_narrow_many_5,
+&&insert_short_narrow_many_6,
+&&insert_short_narrow_many_7,
+   &&insert_short_narrow_mask,
+   &&done,
+  (void*) xdblt_func_1,
+#define xdblt_insert_short_narrow_labels (&xdblt_func_1_labels[0])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+uint32_t not_insert_bits = xdblt_insert_bits;
+uint32_t v = xdblt_pattern_value & not_insert_bits;
+not_insert_bits ^= ~0;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+uint32_t *dst = (uint32_t *) &row_base[s->offset];
+  goto *(s->label);
+
+insert_short_narrow_mask:
+*dst = (*dst & (not_insert_bits | ~arg)) | (v & arg);
+JUMP_TO_NEXT;
+ insert_short_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+insert_short_narrow_many_8:
+  dst[0] = (dst[0] & not_insert_bits) | v;
+insert_short_narrow_many_7:
+  dst[1] = (dst[1] & not_insert_bits) | v;
+insert_short_narrow_many_6:
+  dst[2] = (dst[2] & not_insert_bits) | v;
+insert_short_narrow_many_5:
+  dst[3] = (dst[3] & not_insert_bits) | v;
+insert_short_narrow_many_4:
+  dst[4] = (dst[4] & not_insert_bits) | v;
+insert_short_narrow_many_3:
+  dst[5] = (dst[5] & not_insert_bits) | v;
+insert_short_narrow_many_2:
+  dst[6] = (dst[6] & not_insert_bits) | v;
+insert_short_narrow_many_1:
+  dst[7] = (dst[7] & not_insert_bits) | v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto insert_short_narrow_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  row_base += xdblt_dst_row_bytes;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *xdblt_func_2_labels[44] asm ("_xdblt_func_2_labels");
+
+const void * const *
+xdblt_func_2 (const blt_section_t *section,
+uint8_t *row_base, long num_rows, long y)
+{
+static const void *labels[] asm ("_xdblt_func_2_labels") = {
+&&copy_tall_narrow_many_8,
+&&copy_tall_narrow_many_1,
+&&copy_tall_narrow_many_2,
+&&copy_tall_narrow_many_3,
+&&copy_tall_narrow_many_4,
+&&copy_tall_narrow_many_5,
+&&copy_tall_narrow_many_6,
+&&copy_tall_narrow_many_7,
+   &&copy_tall_narrow_mask,
+   &&done,
+  (void*) xdblt_func_2,
+#define xdblt_copy_tall_narrow_labels (&xdblt_func_2_labels[0])
+&&or_tall_narrow_many_8,
+&&or_tall_narrow_many_1,
+&&or_tall_narrow_many_2,
+&&or_tall_narrow_many_3,
+&&or_tall_narrow_many_4,
+&&or_tall_narrow_many_5,
+&&or_tall_narrow_many_6,
+&&or_tall_narrow_many_7,
+   &&or_tall_narrow_mask,
+   &&done,
+  (void*) xdblt_func_2,
+#define xdblt_or_tall_narrow_labels (&xdblt_func_2_labels[11])
+&&and_tall_narrow_many_8,
+&&and_tall_narrow_many_1,
+&&and_tall_narrow_many_2,
+&&and_tall_narrow_many_3,
+&&and_tall_narrow_many_4,
+&&and_tall_narrow_many_5,
+&&and_tall_narrow_many_6,
+&&and_tall_narrow_many_7,
+   &&and_tall_narrow_mask,
+   &&done,
+  (void*) xdblt_func_2,
+#define xdblt_and_tall_narrow_labels (&xdblt_func_2_labels[22])
+&&xor_tall_narrow_many_8,
+&&xor_tall_narrow_many_1,
+&&xor_tall_narrow_many_2,
+&&xor_tall_narrow_many_3,
+&&xor_tall_narrow_many_4,
+&&xor_tall_narrow_many_5,
+&&xor_tall_narrow_many_6,
+&&xor_tall_narrow_many_7,
+   &&xor_tall_narrow_mask,
+   &&done,
+  (void*) xdblt_func_2,
+#define xdblt_xor_tall_narrow_labels (&xdblt_func_2_labels[33])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+y += xdblt_pattern_row_0;
+  do {
+uint32_t v = xdblt_pattern_baseaddr[y++ & xdblt_pattern_height_minus_1];
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+uint32_t *dst = (uint32_t *) &row_base[s->offset];
+  goto *(s->label);
+
+copy_tall_narrow_mask:
+*dst = (*dst & ~arg) | (v & arg);
+JUMP_TO_NEXT;
+ copy_tall_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+copy_tall_narrow_many_8:
+  dst[0] = v;
+copy_tall_narrow_many_7:
+  dst[1] = v;
+copy_tall_narrow_many_6:
+  dst[2] = v;
+copy_tall_narrow_many_5:
+  dst[3] = v;
+copy_tall_narrow_many_4:
+  dst[4] = v;
+copy_tall_narrow_many_3:
+  dst[5] = v;
+copy_tall_narrow_many_2:
+  dst[6] = v;
+copy_tall_narrow_many_1:
+  dst[7] = v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto copy_tall_narrow_many_loop;
+  JUMP_TO_NEXT;
+or_tall_narrow_mask:
+*dst |= (v & arg);
+JUMP_TO_NEXT;
+ or_tall_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+or_tall_narrow_many_8:
+  dst[0] |= v;
+or_tall_narrow_many_7:
+  dst[1] |= v;
+or_tall_narrow_many_6:
+  dst[2] |= v;
+or_tall_narrow_many_5:
+  dst[3] |= v;
+or_tall_narrow_many_4:
+  dst[4] |= v;
+or_tall_narrow_many_3:
+  dst[5] |= v;
+or_tall_narrow_many_2:
+  dst[6] |= v;
+or_tall_narrow_many_1:
+  dst[7] |= v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto or_tall_narrow_many_loop;
+  JUMP_TO_NEXT;
+and_tall_narrow_mask:
+*dst &= (v | ~arg);
+JUMP_TO_NEXT;
+ and_tall_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+and_tall_narrow_many_8:
+  dst[0] &= v;
+and_tall_narrow_many_7:
+  dst[1] &= v;
+and_tall_narrow_many_6:
+  dst[2] &= v;
+and_tall_narrow_many_5:
+  dst[3] &= v;
+and_tall_narrow_many_4:
+  dst[4] &= v;
+and_tall_narrow_many_3:
+  dst[5] &= v;
+and_tall_narrow_many_2:
+  dst[6] &= v;
+and_tall_narrow_many_1:
+  dst[7] &= v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto and_tall_narrow_many_loop;
+  JUMP_TO_NEXT;
+xor_tall_narrow_mask:
+*dst ^= (v & arg);
+JUMP_TO_NEXT;
+ xor_tall_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+xor_tall_narrow_many_8:
+  dst[0] ^= v;
+xor_tall_narrow_many_7:
+  dst[1] ^= v;
+xor_tall_narrow_many_6:
+  dst[2] ^= v;
+xor_tall_narrow_many_5:
+  dst[3] ^= v;
+xor_tall_narrow_many_4:
+  dst[4] ^= v;
+xor_tall_narrow_many_3:
+  dst[5] ^= v;
+xor_tall_narrow_many_2:
+  dst[6] ^= v;
+xor_tall_narrow_many_1:
+  dst[7] ^= v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto xor_tall_narrow_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  row_base += xdblt_dst_row_bytes;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *xdblt_func_3_labels[11] asm ("_xdblt_func_3_labels");
+
+const void * const *
+xdblt_func_3 (const blt_section_t *section,
+uint8_t *row_base, long num_rows, long y)
+{
+static const void *labels[] asm ("_xdblt_func_3_labels") = {
+&&insert_tall_narrow_many_8,
+&&insert_tall_narrow_many_1,
+&&insert_tall_narrow_many_2,
+&&insert_tall_narrow_many_3,
+&&insert_tall_narrow_many_4,
+&&insert_tall_narrow_many_5,
+&&insert_tall_narrow_many_6,
+&&insert_tall_narrow_many_7,
+   &&insert_tall_narrow_mask,
+   &&done,
+  (void*) xdblt_func_3,
+#define xdblt_insert_tall_narrow_labels (&xdblt_func_3_labels[0])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+uint32_t insert_bits = xdblt_insert_bits;
+uint32_t not_insert_bits = ~insert_bits;
+y += xdblt_pattern_row_0;
+  do {
+uint32_t v = xdblt_pattern_baseaddr[y++ & xdblt_pattern_height_minus_1] & insert_bits;
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+uint32_t *dst = (uint32_t *) &row_base[s->offset];
+  goto *(s->label);
+
+insert_tall_narrow_mask:
+*dst = (*dst & (not_insert_bits | ~arg)) | (v & arg);
+JUMP_TO_NEXT;
+ insert_tall_narrow_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+insert_tall_narrow_many_8:
+  dst[0] = (dst[0] & not_insert_bits) | v;
+insert_tall_narrow_many_7:
+  dst[1] = (dst[1] & not_insert_bits) | v;
+insert_tall_narrow_many_6:
+  dst[2] = (dst[2] & not_insert_bits) | v;
+insert_tall_narrow_many_5:
+  dst[3] = (dst[3] & not_insert_bits) | v;
+insert_tall_narrow_many_4:
+  dst[4] = (dst[4] & not_insert_bits) | v;
+insert_tall_narrow_many_3:
+  dst[5] = (dst[5] & not_insert_bits) | v;
+insert_tall_narrow_many_2:
+  dst[6] = (dst[6] & not_insert_bits) | v;
+insert_tall_narrow_many_1:
+  dst[7] = (dst[7] & not_insert_bits) | v;
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto insert_tall_narrow_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  row_base += xdblt_dst_row_bytes;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *xdblt_func_4_labels[44] asm ("_xdblt_func_4_labels");
+
+const void * const *
+xdblt_func_4 (const blt_section_t *section,
+uint8_t *row_base, long num_rows, long y)
+{
+static const void *labels[] asm ("_xdblt_func_4_labels") = {
+&&copy_short_wide_many_8,
+&&copy_short_wide_many_1,
+&&copy_short_wide_many_2,
+&&copy_short_wide_many_3,
+&&copy_short_wide_many_4,
+&&copy_short_wide_many_5,
+&&copy_short_wide_many_6,
+&&copy_short_wide_many_7,
+   &&copy_short_wide_mask,
+   &&done,
+  (void*) xdblt_func_4,
+#define xdblt_copy_short_wide_labels (&xdblt_func_4_labels[0])
+&&or_short_wide_many_8,
+&&or_short_wide_many_1,
+&&or_short_wide_many_2,
+&&or_short_wide_many_3,
+&&or_short_wide_many_4,
+&&or_short_wide_many_5,
+&&or_short_wide_many_6,
+&&or_short_wide_many_7,
+   &&or_short_wide_mask,
+   &&done,
+  (void*) xdblt_func_4,
+#define xdblt_or_short_wide_labels (&xdblt_func_4_labels[11])
+&&xor_short_wide_many_8,
+&&xor_short_wide_many_1,
+&&xor_short_wide_many_2,
+&&xor_short_wide_many_3,
+&&xor_short_wide_many_4,
+&&xor_short_wide_many_5,
+&&xor_short_wide_many_6,
+&&xor_short_wide_many_7,
+   &&xor_short_wide_mask,
+   &&done,
+  (void*) xdblt_func_4,
+#define xdblt_xor_short_wide_labels (&xdblt_func_4_labels[22])
+&&and_short_wide_many_8,
+&&and_short_wide_many_1,
+&&and_short_wide_many_2,
+&&and_short_wide_many_3,
+&&and_short_wide_many_4,
+&&and_short_wide_many_5,
+&&and_short_wide_many_6,
+&&and_short_wide_many_7,
+   &&and_short_wide_mask,
+   &&done,
+  (void*) xdblt_func_4,
+#define xdblt_and_short_wide_labels (&xdblt_func_4_labels[33])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+uint32_t pattern_row_bytes_minus_1 = (1 << xdblt_log2_pattern_row_bytes) - 1;
+  do {
+intptr_t x_offset = -((intptr_t) row_base);
+const uint8_t *base = (const uint8_t *) xdblt_pattern_baseaddr;
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+uint32_t *dst = (uint32_t *) &row_base[s->offset];
+  goto *(s->label);
+
+copy_short_wide_mask:
+*dst = (*dst & ~arg) | ((*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])) & arg);
+JUMP_TO_NEXT;
+ copy_short_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+copy_short_wide_many_8:
+  dst[0] = *(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_short_wide_many_7:
+  dst[1] = *(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_short_wide_many_6:
+  dst[2] = *(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_short_wide_many_5:
+  dst[3] = *(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_short_wide_many_4:
+  dst[4] = *(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_short_wide_many_3:
+  dst[5] = *(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_short_wide_many_2:
+  dst[6] = *(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_short_wide_many_1:
+  dst[7] = *(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto copy_short_wide_many_loop;
+  JUMP_TO_NEXT;
+or_short_wide_mask:
+*dst |= (arg & (*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])));
+JUMP_TO_NEXT;
+ or_short_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+or_short_wide_many_8:
+  dst[0] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]);
+or_short_wide_many_7:
+  dst[1] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]);
+or_short_wide_many_6:
+  dst[2] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]);
+or_short_wide_many_5:
+  dst[3] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]);
+or_short_wide_many_4:
+  dst[4] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]);
+or_short_wide_many_3:
+  dst[5] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]);
+or_short_wide_many_2:
+  dst[6] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]);
+or_short_wide_many_1:
+  dst[7] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto or_short_wide_many_loop;
+  JUMP_TO_NEXT;
+xor_short_wide_mask:
+*dst ^= (arg & (*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])));
+JUMP_TO_NEXT;
+ xor_short_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+xor_short_wide_many_8:
+  dst[0] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_short_wide_many_7:
+  dst[1] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_short_wide_many_6:
+  dst[2] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_short_wide_many_5:
+  dst[3] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_short_wide_many_4:
+  dst[4] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_short_wide_many_3:
+  dst[5] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_short_wide_many_2:
+  dst[6] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_short_wide_many_1:
+  dst[7] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto xor_short_wide_many_loop;
+  JUMP_TO_NEXT;
+and_short_wide_mask:
+*dst &= ((~arg) | (*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])));
+JUMP_TO_NEXT;
+ and_short_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+and_short_wide_many_8:
+  dst[0] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]);
+and_short_wide_many_7:
+  dst[1] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]);
+and_short_wide_many_6:
+  dst[2] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]);
+and_short_wide_many_5:
+  dst[3] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]);
+and_short_wide_many_4:
+  dst[4] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]);
+and_short_wide_many_3:
+  dst[5] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]);
+and_short_wide_many_2:
+  dst[6] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]);
+and_short_wide_many_1:
+  dst[7] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto and_short_wide_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  row_base += xdblt_dst_row_bytes;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *xdblt_func_5_labels[11] asm ("_xdblt_func_5_labels");
+
+const void * const *
+xdblt_func_5 (const blt_section_t *section,
+uint8_t *row_base, long num_rows, long y)
+{
+static const void *labels[] asm ("_xdblt_func_5_labels") = {
+&&insert_short_wide_many_8,
+&&insert_short_wide_many_1,
+&&insert_short_wide_many_2,
+&&insert_short_wide_many_3,
+&&insert_short_wide_many_4,
+&&insert_short_wide_many_5,
+&&insert_short_wide_many_6,
+&&insert_short_wide_many_7,
+   &&insert_short_wide_mask,
+   &&done,
+  (void*) xdblt_func_5,
+#define xdblt_insert_short_wide_labels (&xdblt_func_5_labels[0])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+uint32_t insert_bits = xdblt_insert_bits;
+uint32_t not_insert_bits = ~insert_bits;
+uint32_t pattern_row_bytes_minus_1 = (1 << xdblt_log2_pattern_row_bytes) - 1;
+  do {
+intptr_t x_offset = -((intptr_t) row_base);
+const uint8_t *base = (const uint8_t *) xdblt_pattern_baseaddr;
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+uint32_t *dst = (uint32_t *) &row_base[s->offset];
+  goto *(s->label);
+
+insert_short_wide_mask:
+*dst = (*dst & ~(insert_bits & arg)) | ((*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])) & arg & insert_bits);
+JUMP_TO_NEXT;
+ insert_short_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+insert_short_wide_many_8:
+  dst[0] = (dst[0] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_short_wide_many_7:
+  dst[1] = (dst[1] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_short_wide_many_6:
+  dst[2] = (dst[2] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_short_wide_many_5:
+  dst[3] = (dst[3] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_short_wide_many_4:
+  dst[4] = (dst[4] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_short_wide_many_3:
+  dst[5] = (dst[5] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_short_wide_many_2:
+  dst[6] = (dst[6] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_short_wide_many_1:
+  dst[7] = (dst[7] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto insert_short_wide_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  row_base += xdblt_dst_row_bytes;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *xdblt_func_6_labels[44] asm ("_xdblt_func_6_labels");
+
+const void * const *
+xdblt_func_6 (const blt_section_t *section,
+uint8_t *row_base, long num_rows, long y)
+{
+static const void *labels[] asm ("_xdblt_func_6_labels") = {
+&&copy_tall_wide_many_8,
+&&copy_tall_wide_many_1,
+&&copy_tall_wide_many_2,
+&&copy_tall_wide_many_3,
+&&copy_tall_wide_many_4,
+&&copy_tall_wide_many_5,
+&&copy_tall_wide_many_6,
+&&copy_tall_wide_many_7,
+   &&copy_tall_wide_mask,
+   &&done,
+  (void*) xdblt_func_6,
+#define xdblt_copy_tall_wide_labels (&xdblt_func_6_labels[0])
+&&or_tall_wide_many_8,
+&&or_tall_wide_many_1,
+&&or_tall_wide_many_2,
+&&or_tall_wide_many_3,
+&&or_tall_wide_many_4,
+&&or_tall_wide_many_5,
+&&or_tall_wide_many_6,
+&&or_tall_wide_many_7,
+   &&or_tall_wide_mask,
+   &&done,
+  (void*) xdblt_func_6,
+#define xdblt_or_tall_wide_labels (&xdblt_func_6_labels[11])
+&&xor_tall_wide_many_8,
+&&xor_tall_wide_many_1,
+&&xor_tall_wide_many_2,
+&&xor_tall_wide_many_3,
+&&xor_tall_wide_many_4,
+&&xor_tall_wide_many_5,
+&&xor_tall_wide_many_6,
+&&xor_tall_wide_many_7,
+   &&xor_tall_wide_mask,
+   &&done,
+  (void*) xdblt_func_6,
+#define xdblt_xor_tall_wide_labels (&xdblt_func_6_labels[22])
+&&and_tall_wide_many_8,
+&&and_tall_wide_many_1,
+&&and_tall_wide_many_2,
+&&and_tall_wide_many_3,
+&&and_tall_wide_many_4,
+&&and_tall_wide_many_5,
+&&and_tall_wide_many_6,
+&&and_tall_wide_many_7,
+   &&and_tall_wide_mask,
+   &&done,
+  (void*) xdblt_func_6,
+#define xdblt_and_tall_wide_labels (&xdblt_func_6_labels[33])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+uint32_t pattern_row_bytes_minus_1 = (1 << xdblt_log2_pattern_row_bytes) - 1;
+y += xdblt_pattern_row_0;
+  do {
+intptr_t x_offset = -((intptr_t) row_base);
+const uint8_t *base = ((const uint8_t *) xdblt_pattern_baseaddr) + ((y++ & xdblt_pattern_height_minus_1) << xdblt_log2_pattern_row_bytes);
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+uint32_t *dst = (uint32_t *) &row_base[s->offset];
+  goto *(s->label);
+
+copy_tall_wide_mask:
+*dst = (*dst & ~arg) | ((*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])) & arg);
+JUMP_TO_NEXT;
+ copy_tall_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+copy_tall_wide_many_8:
+  dst[0] = *(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_tall_wide_many_7:
+  dst[1] = *(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_tall_wide_many_6:
+  dst[2] = *(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_tall_wide_many_5:
+  dst[3] = *(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_tall_wide_many_4:
+  dst[4] = *(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_tall_wide_many_3:
+  dst[5] = *(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_tall_wide_many_2:
+  dst[6] = *(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]);
+copy_tall_wide_many_1:
+  dst[7] = *(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto copy_tall_wide_many_loop;
+  JUMP_TO_NEXT;
+or_tall_wide_mask:
+*dst |= (arg & (*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])));
+JUMP_TO_NEXT;
+ or_tall_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+or_tall_wide_many_8:
+  dst[0] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]);
+or_tall_wide_many_7:
+  dst[1] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]);
+or_tall_wide_many_6:
+  dst[2] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]);
+or_tall_wide_many_5:
+  dst[3] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]);
+or_tall_wide_many_4:
+  dst[4] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]);
+or_tall_wide_many_3:
+  dst[5] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]);
+or_tall_wide_many_2:
+  dst[6] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]);
+or_tall_wide_many_1:
+  dst[7] |= *(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto or_tall_wide_many_loop;
+  JUMP_TO_NEXT;
+xor_tall_wide_mask:
+*dst ^= (arg & (*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])));
+JUMP_TO_NEXT;
+ xor_tall_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+xor_tall_wide_many_8:
+  dst[0] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_tall_wide_many_7:
+  dst[1] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_tall_wide_many_6:
+  dst[2] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_tall_wide_many_5:
+  dst[3] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_tall_wide_many_4:
+  dst[4] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_tall_wide_many_3:
+  dst[5] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_tall_wide_many_2:
+  dst[6] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]);
+xor_tall_wide_many_1:
+  dst[7] ^= *(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto xor_tall_wide_many_loop;
+  JUMP_TO_NEXT;
+and_tall_wide_mask:
+*dst &= ((~arg) | (*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])));
+JUMP_TO_NEXT;
+ and_tall_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+and_tall_wide_many_8:
+  dst[0] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]);
+and_tall_wide_many_7:
+  dst[1] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]);
+and_tall_wide_many_6:
+  dst[2] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]);
+and_tall_wide_many_5:
+  dst[3] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]);
+and_tall_wide_many_4:
+  dst[4] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]);
+and_tall_wide_many_3:
+  dst[5] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]);
+and_tall_wide_many_2:
+  dst[6] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]);
+and_tall_wide_many_1:
+  dst[7] &= *(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto and_tall_wide_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  row_base += xdblt_dst_row_bytes;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *xdblt_func_7_labels[11] asm ("_xdblt_func_7_labels");
+
+const void * const *
+xdblt_func_7 (const blt_section_t *section,
+uint8_t *row_base, long num_rows, long y)
+{
+static const void *labels[] asm ("_xdblt_func_7_labels") = {
+&&insert_tall_wide_many_8,
+&&insert_tall_wide_many_1,
+&&insert_tall_wide_many_2,
+&&insert_tall_wide_many_3,
+&&insert_tall_wide_many_4,
+&&insert_tall_wide_many_5,
+&&insert_tall_wide_many_6,
+&&insert_tall_wide_many_7,
+   &&insert_tall_wide_mask,
+   &&done,
+  (void*) xdblt_func_7,
+#define xdblt_insert_tall_wide_labels (&xdblt_func_7_labels[0])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+uint32_t insert_bits = xdblt_insert_bits;
+uint32_t not_insert_bits = ~insert_bits;
+uint32_t pattern_row_bytes_minus_1 = (1 << xdblt_log2_pattern_row_bytes) - 1;
+y += xdblt_pattern_row_0;
+  do {
+intptr_t x_offset = -((intptr_t) row_base);
+const uint8_t *base = ((const uint8_t *) xdblt_pattern_baseaddr) + ((y++ & xdblt_pattern_height_minus_1) << xdblt_log2_pattern_row_bytes);
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+uint32_t *dst = (uint32_t *) &row_base[s->offset];
+  goto *(s->label);
+
+insert_tall_wide_mask:
+*dst = (*dst & (not_insert_bits | ~arg)) | ((*(const uint32_t *) (&base[(((intptr_t) &(*dst)) + x_offset) & pattern_row_bytes_minus_1])) & arg & insert_bits);
+JUMP_TO_NEXT;
+ insert_tall_wide_many_loop:
+#if !defined (i386)
+  dst += 8;
+#endif
+insert_tall_wide_many_8:
+  dst[0] = (dst[0] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[0])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_tall_wide_many_7:
+  dst[1] = (dst[1] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[1])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_tall_wide_many_6:
+  dst[2] = (dst[2] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[2])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_tall_wide_many_5:
+  dst[3] = (dst[3] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[3])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_tall_wide_many_4:
+  dst[4] = (dst[4] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[4])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_tall_wide_many_3:
+  dst[5] = (dst[5] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[5])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_tall_wide_many_2:
+  dst[6] = (dst[6] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[6])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+insert_tall_wide_many_1:
+  dst[7] = (dst[7] & not_insert_bits) | (*(const uint32_t *) (&base[(((intptr_t) &(dst[7])) + x_offset) & pattern_row_bytes_minus_1]) & insert_bits);
+#if defined (i386)
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto insert_tall_wide_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  row_base += xdblt_dst_row_bytes;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}

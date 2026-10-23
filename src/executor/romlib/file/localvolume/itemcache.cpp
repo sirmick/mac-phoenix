@@ -55,7 +55,7 @@ void ItemCache::cacheDirectory(DirectoryItemPtr dir)
                 entries.push_back(e);
         }
     }
-    catch(const boost::filesystem::filesystem_error& exc)
+    catch(const fs::filesystem_error& exc)
     {
         std::cerr << exc.what() << std::endl;
         //throw OSErrorException(ioErr);

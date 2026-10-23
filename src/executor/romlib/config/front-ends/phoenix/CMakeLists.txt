@@ -10,4 +10,4 @@ add_library(front-end-phoenix
 )
 target_include_directories(front-end-phoenix PUBLIC . ../headless)
 target_compile_definitions(front-end-phoenix PRIVATE PHOENIX_EMBEDDED HEADLESS_ONLY PHOENIX_FRONT_END)
-target_link_libraries(front-end-phoenix PUBLIC romlib front-end-headless Boost::program_options)
+target_link_libraries(front-end-phoenix PUBLIC romlib front-end-headless)

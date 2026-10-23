@@ -51,7 +51,6 @@ On Ubuntu 24.04 (other distributions and macOS: [docs/Install.md](docs/Install.m
 ```bash
 sudo apt install build-essential cmake pkg-config git libssl-dev libyuv-dev qt6-base-dev \
     libopenh264-dev libvpx-dev libwebp-dev libopus-dev \
-    libboost-filesystem-dev libboost-program-options-dev ruby bison perl \
     cargo rustc hfsutils python3
 
 git clone https://github.com/sirmick/mac-phoenix.git

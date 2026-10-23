@@ -95,7 +95,7 @@ void AppleDoubleFileItem::deleteItem()
 {
     fs::remove(path());
     fs::path adpath = makeADPath(scheme, path());
-    boost::system::error_code ec;
+    std::error_code ec;
     fs::remove(adpath, ec);
 }
 
@@ -106,7 +106,7 @@ void AppleDoubleFileItem::moveItem(const fs::path& newPath, mac_string_view newN
 
     fs::rename(path(), newPath);
 
-    boost::system::error_code ec;
+    std::error_code ec;
     fs::rename(adpathOld, adpathNew, ec);
 
     path_ = newPath;

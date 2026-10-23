@@ -9,6 +9,7 @@
 #include <hfs/hfs.h>
 #include <file/file.h>
 #include <hfs/hfs_plus.h>
+#include <unistd.h>
 
 
 using namespace Executor;

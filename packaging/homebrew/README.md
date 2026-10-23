@@ -13,8 +13,7 @@ libwebp and Opus (optional codecs), and Rust for `net-bridge`. It
 builds with the defaults otherwise, except `-DBUILD_TESTS=OFF` and
 `-DBUILD_BRIDGE_AGENT=OFF` (no Retro68; the committed `BridgeAgent.bin`
 and `MacBrowser.bin` are installed instead). The Executor backend needs
-Boost, Ruby, Bison and Perl and is skipped with a warning without them;
-the formula does not pull them in. Version 1.0.0 comes from `project()`
+nothing more (its generated sources are committed). Version 1.0.0 comes from `project()`
 in `CMakeLists.txt`.
 
 ## Publishing the tap

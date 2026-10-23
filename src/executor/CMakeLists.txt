@@ -9,31 +9,10 @@
 #   executor_tests        Executor's gtest suite, on mame-68k
 # =============================================================================
 
-# Build tools and libraries Executor needs. Missing ones skip the Executor
-# targets instead of breaking the whole mac-phoenix build.
-find_package(Boost QUIET CONFIG COMPONENTS filesystem program_options)
-find_package(Ruby 2.1 QUIET)
-find_program(PERL_COMMAND perl)
-find_program(BISON_COMMAND bison)
-set(_executor_missing)
-if(NOT Boost_FOUND)
-    list(APPEND _executor_missing "Boost (filesystem, program_options)")
-endif()
-if(NOT RUBY_EXECUTABLE)
-    list(APPEND _executor_missing "ruby")
-endif()
-if(NOT PERL_COMMAND)
-    list(APPEND _executor_missing "perl")
-endif()
-if(NOT BISON_COMMAND)
-    list(APPEND _executor_missing "bison")
-endif()
-if(_executor_missing)
-    message(WARNING "Skipping mac-phoenix-executor; missing: ${_executor_missing}")
-    return()
-endif()
+# A C++17 compiler is all Executor needs: its generated sources are
+# committed (romlib/generated; -DEXECUTOR_REGENERATE=ON remakes them with
+# ruby, perl and bison).
 find_package(Threads REQUIRED)
-add_compile_definitions(BOOST_ALL_NO_LIB)
 
 # Guest address 0 is ordinary data to the Toolbox (low memory globals,
 # nil handles dereferenced on purpose). Never let the compiler treat a

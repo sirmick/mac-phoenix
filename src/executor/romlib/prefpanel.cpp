@@ -16,7 +16,7 @@
 #include <CQuickDraw.h>
 #include <BinaryDecimal.h>
 
-#include <boost/lexical_cast.hpp>
+#include <sstream>
 
 using namespace Executor;
 
@@ -280,15 +280,13 @@ void readprefvalues(DialogPtr dp)
     ROMlib_pretend_script = getvalue(dp, PREF_PRETEND_SCRIPT);
     ROMlib_pretend_alias = getvalue(dp, PREF_PRETEND_ALIAS);
 
-    try
     {
         std::string system_string;
         update_string_from_edit_text(system_string, dp, PREF_SYSTEM);
-        auto vn = boost::lexical_cast<VersionNumber>(system_string);
-        system_version = CREATE_SYSTEM_VERSION(vn.major, vn.minor, vn.patch);
-    }
-    catch(boost::bad_lexical_cast&)
-    {
+        std::istringstream in(system_string);
+        VersionNumber vn;
+        if(in >> vn && (in >> std::ws).eof())
+            system_version = CREATE_SYSTEM_VERSION(vn.major, vn.minor, vn.patch);
     }
 }
 

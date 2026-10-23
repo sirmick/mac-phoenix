@@ -152,7 +152,7 @@ src/
   executor/                         — Executor 2000 Toolbox core (MIT), imported; see docs/executor/PLAN.md
     cpu/                            — syn68k API facade (syn68k_common) on a cpu::Core + PowerCore (PowerPC) on mame-ppc
     romlib/                         — the Toolbox (lightly patched upstream source)
-    multiversal/                    — API definitions → generated headers/trap glue (Ruby)
+    multiversal/                    — API definitions → generated headers/trap glue (Ruby; output committed in romlib/generated)
     tests/                          — Executor gtest suite (ctest label: executor)
   common/
     sigsegv.cpp                     — SIGSEGV handler (skips bad accesses)
@@ -367,7 +367,7 @@ PNG encoding (zlib, which Qt already needs) is always available.
 | OpenSSL | `libssl-dev` | `brew install openssl` | DTLS/SRTP for libdatachannel (WebRTC). Our code no longer uses it directly — `QCryptographicHash` handles SHA1/MD5. |
 | pkg-config | `pkg-config` | `brew install pkg-config` | Dependency detection |
 | Qt6 (≥6.4) | `qt6-base-dev` | `brew install qt@6` | Core, Network (QLocalSocket / QTcpServer), Widgets, plus QJsonDocument for all JSON parsing. 6.4 minimum is set by MacBrowser's use of `QWebEngineDownloadRequest` + its `receivedBytesChanged`/`isFinishedChanged` signals. See [docs/qt6/PLAN.md](docs/qt6/PLAN.md) for the port history. |
-| Boost, Ruby, Bison, Perl | `libboost-filesystem-dev libboost-program-options-dev ruby bison perl` | `brew install boost ruby bison` | Executor backend only. If missing, the build skips it with a warning; `-DBUILD_EXECUTOR=OFF` disables it. |
+| Ruby, Bison, Perl | `ruby bison perl` | `brew install ruby bison` | Only to regenerate Executor's committed generated sources (`src/executor/romlib/generated`, `-DEXECUTOR_REGENERATE=ON`, after editing multiversal YAML, `.map` files, `prefs/parse.ypp` or the blitter templates). Executor needs no other dependency; `-DBUILD_EXECUTOR=OFF` disables it. |
 | Qt6 WebEngine (≥6.4) | `qt6-webengine-dev` | included in `brew install qt@6` | Only with `-DBUILD_BROWSER=ON` (experimental MacBrowser; off by default). In-process Chromium for MacBrowser |
 
 ## MacBrowser

@@ -151,7 +151,7 @@ ItemPtr DirectoryItem::resolve(int index, bool includeDirectories)
    its parent's .finf. Was: busy whenever .finf held anything. */
 void DirectoryItem::deleteItem()
 {
-    boost::system::error_code ec;
+    std::error_code ec;
     for(const auto& e : fs::directory_iterator(path(), ec))
     {
         auto name = e.path().filename().string();
@@ -166,7 +166,7 @@ void DirectoryItem::deleteItem()
 
     if(ec)
     {
-        if(ec == boost::system::errc::directory_not_empty)
+        if(ec == std::errc::directory_not_empty)
             throw OSErrorException(fBsyErr);
         else
             throw OSErrorException(paramErr);
@@ -181,7 +181,7 @@ void DirectoryItem::moveItem(const fs::path& newPath, mac_string_view newName)
     fs::path oldInfo = finderInfoPath();
     Item::moveItem(newPath, newName);
     fs::path newInfo = finderInfoPath();
-    boost::system::error_code ec;
+    std::error_code ec;
     if(oldInfo == newInfo || !fs::exists(oldInfo, ec))
         return;
     fs::path oldHolder = oldInfo.parent_path().parent_path();

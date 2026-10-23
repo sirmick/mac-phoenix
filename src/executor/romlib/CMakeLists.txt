@@ -1,20 +1,24 @@
 
-find_program(PERL_COMMAND perl)
-if(NOT PERL_COMMAND)
-    message(FATAL_ERROR "Cannot find command: 'perl' (needed for building!)")
+# MacPhoenix: the generated sources are committed in generated/, so a C++
+# compiler is all the build needs (docs/executor/DIRECTION.md, D3):
+# multiversal's API headers, trap glue and struct dumps (Ruby, from
+# ../multiversal/defs/*.yaml), the window and control bitmaps (map_to_c,
+# *.map), the preferences parser (Bison, prefs/parse.ypp), QuickDraw's
+# tables (mkseedtables, mkultable, mksspairtable) and blitters (Perl,
+# quickdraw/makerawblt.pl). After editing any of those, configure with
+# -DEXECUTOR_REGENERATE=ON (needs ruby, perl and bison): the build (or
+# just --target executor-generated) writes them into generated/ again;
+# commit the result.
+option(EXECUTOR_REGENERATE "Regenerate src/executor/romlib/generated (needs ruby, perl, bison)" OFF)
+set(GEN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated)
+if(EXECUTOR_REGENERATE)
+    find_program(PERL_COMMAND perl)
+    find_program(BISON_COMMAND bison)
+    find_package(Ruby 2.1)
+    if(NOT PERL_COMMAND OR NOT BISON_COMMAND OR NOT RUBY_EXECUTABLE)
+        message(FATAL_ERROR "EXECUTOR_REGENERATE needs ruby, perl and bison")
+    endif()
 endif()
-
-find_program(BISON_COMMAND bison)
-if(NOT BISON_COMMAND)
-    message(FATAL_ERROR "Cannot find command: 'bison' (needed for building!)")
-endif()
-
-find_package(Ruby 2.1)
-if(NOT RUBY_EXECUTABLE)
-    message(FATAL_ERROR "Cannot find command: 'ruby' (needed for building!)")
-endif()
-
-find_package(Boost REQUIRED CONFIG COMPONENTS filesystem program_options)
 
 find_package(Threads REQUIRED)
 
@@ -38,9 +42,9 @@ file(GLOB multiversal_ruby_sources
     ${CMAKE_CURRENT_SOURCE_DIR}/../multiversal/*.rb)
 
 
-set(trap_instance_sources ${CMAKE_CURRENT_BINARY_DIR}/trap_instances/ReferenceAllTraps.cpp)
+set(trap_instance_sources ${GEN_DIR}/trap_instances/ReferenceAllTraps.cpp)
 set(api_headers)
-set(structdump_sources ${CMAKE_CURRENT_BINARY_DIR}/structdump/ReferenceAllStructDumps.cpp)
+set(structdump_sources ${GEN_DIR}/structdump/ReferenceAllStructDumps.cpp)
 foreach(interfaceModule ${api_yaml_files})
     get_filename_component(base ${interfaceModule} NAME_WE)
 
@@ -49,19 +53,24 @@ foreach(interfaceModule ${api_yaml_files})
     if(${base} STREQUAL MacTypes)
         set(base ExMacTypes)
     endif()
-    list(APPEND trap_instance_sources ${CMAKE_CURRENT_BINARY_DIR}/trap_instances/${base}.cpp)
-    list(APPEND api_headers ${CMAKE_CURRENT_BINARY_DIR}/api/${base}.h)
-    list(APPEND structdump_sources ${CMAKE_CURRENT_BINARY_DIR}/structdump/${base}.cpp)
+    list(APPEND trap_instance_sources ${GEN_DIR}/trap_instances/${base}.cpp)
+    list(APPEND api_headers ${GEN_DIR}/api/${base}.h)
+    list(APPEND structdump_sources ${GEN_DIR}/structdump/${base}.cpp)
 endforeach()
 
-add_custom_command(
-    OUTPUT ${api_headers} ${trap_instance_sources} ${structdump_sources}
-    DEPENDS
-        ${api_yaml_files}
-        ${multiversal_ruby_sources}
-    COMMAND ${RUBY_EXECUTABLE} make-multiverse.rb -G Executor -o "${CMAKE_CURRENT_BINARY_DIR}/"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../multiversal
-)
+if(EXECUTOR_REGENERATE)
+    # trap_instances.cmake, a listing with this machine's paths, is not
+    # used: the list above comes from the YAML files.
+    add_custom_command(
+        OUTPUT ${api_headers} ${trap_instance_sources} ${structdump_sources}
+        DEPENDS
+            ${api_yaml_files}
+            ${multiversal_ruby_sources}
+        COMMAND ${RUBY_EXECUTABLE} make-multiverse.rb -G Executor -o "${GEN_DIR}/"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "${GEN_DIR}/trap_instances/trap_instances.cmake"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../multiversal
+    )
+endif()
 
 if(WIN32)
     set(HOST_OS "win32")
@@ -113,8 +122,10 @@ function(linkheader from to variant)
     configure_file(${from}/${variant}/${input} ${to} COPYONLY)
 endfunction()
 
-add_executable(map_to_c map_to_c/map_to_c.cpp)
-target_include_directories(map_to_c PRIVATE .)
+if(EXECUTOR_REGENERATE)
+    add_executable(map_to_c map_to_c/map_to_c.cpp)
+    target_include_directories(map_to_c PRIVATE .)
+endif()
 
 set(MAP_FILES
         wind/active.map                 ctl/arrow_down_inactive.map
@@ -129,18 +140,23 @@ set(MAP_FILES
 set(GENERATED_FILES)
 foreach(mapfile ${MAP_FILES})
     get_filename_component(base ${mapfile} NAME_WE)
-    add_custom_command(
-        OUTPUT ${base}.cmap
-        DEPENDS ${mapfile}
-        COMMAND map_to_c < ${CMAKE_CURRENT_SOURCE_DIR}/${mapfile} > ${base}.cmap
-        )
+    if(EXECUTOR_REGENERATE)
+        add_custom_command(
+            OUTPUT ${GEN_DIR}/${base}.cmap
+            DEPENDS ${mapfile}
+            COMMAND map_to_c < ${CMAKE_CURRENT_SOURCE_DIR}/${mapfile} > ${GEN_DIR}/${base}.cmap
+            )
+    endif()
     list(APPEND GENERATED_FILES ${base}.cmap)
 endforeach()
 
-
-add_custom_command(OUTPUT parse.tab.cpp
-        DEPENDS prefs/parse.ypp
-        COMMAND ${BISON_COMMAND} ${CMAKE_CURRENT_SOURCE_DIR}/prefs/parse.ypp)
+if(EXECUTOR_REGENERATE)
+    # No #line directives: they would name this checkout.
+    add_custom_command(OUTPUT ${GEN_DIR}/parse.tab.cpp
+            DEPENDS prefs/parse.ypp
+            COMMAND ${BISON_COMMAND} --no-lines -o ${GEN_DIR}/parse.tab.cpp
+                    ${CMAKE_CURRENT_SOURCE_DIR}/prefs/parse.ypp)
+endif()
 list(APPEND GENERATED_FILES parse.tab.cpp)
 
 
@@ -274,28 +290,35 @@ set(qd_sources
 
 source_group(QuickDraw FILES ${qd_sources})
 
-add_executable(mkseedtables quickdraw/mkseedtables/mkseedtables.c)
-add_executable(mkultable quickdraw/mkultable/mkultable.c)
-add_executable(mksspairtable quickdraw/mksspairtable/mksspairtable.c)
-add_custom_command(OUTPUT seedtables.ctable COMMAND mkseedtables > seedtables.ctable)
-add_custom_command(OUTPUT ultable.ctable COMMAND mkultable > ultable.ctable)
-add_custom_command(OUTPUT sspairtable.ctable COMMAND mksspairtable > sspairtable.ctable)
+if(EXECUTOR_REGENERATE)
+    add_executable(mkseedtables quickdraw/mkseedtables/mkseedtables.c)
+    add_executable(mkultable quickdraw/mkultable/mkultable.c)
+    add_executable(mksspairtable quickdraw/mksspairtable/mksspairtable.c)
+    add_custom_command(OUTPUT ${GEN_DIR}/seedtables.ctable COMMAND mkseedtables > ${GEN_DIR}/seedtables.ctable)
+    add_custom_command(OUTPUT ${GEN_DIR}/ultable.ctable COMMAND mkultable > ${GEN_DIR}/ultable.ctable)
+    add_custom_command(OUTPUT ${GEN_DIR}/sspairtable.ctable COMMAND mksspairtable > ${GEN_DIR}/sspairtable.ctable)
+
+    add_custom_command(OUTPUT ${GEN_DIR}/rawpatstubs.ctable
+        DEPENDS quickdraw/makerawblt.pl quickdraw/pat-blitters.tmpl
+        COMMAND ${PERL_COMMAND} ${CMAKE_CURRENT_SOURCE_DIR}/quickdraw/makerawblt.pl
+            < ${CMAKE_CURRENT_SOURCE_DIR}/quickdraw/pat-blitters.tmpl
+            > ${GEN_DIR}/rawpatstubs.ctable)
+
+    add_custom_command(OUTPUT ${GEN_DIR}/rawsrcstubs.ctable
+        DEPENDS quickdraw/makerawblt.pl quickdraw/src-blitters.tmpl
+        COMMAND ${PERL_COMMAND} ${CMAKE_CURRENT_SOURCE_DIR}/quickdraw/makerawblt.pl
+            < ${CMAKE_CURRENT_SOURCE_DIR}/quickdraw/src-blitters.tmpl
+            > ${GEN_DIR}/rawsrcstubs.ctable)
+endif()
 list(APPEND GENERATED_FILES seedtables.ctable ultable.ctable sspairtable.ctable)
-
-add_custom_command(OUTPUT rawpatstubs.ctable
-    DEPENDS quickdraw/makerawblt.pl quickdraw/pat-blitters.tmpl
-    COMMAND ${PERL_COMMAND} ${CMAKE_CURRENT_SOURCE_DIR}/quickdraw/makerawblt.pl
-        < ${CMAKE_CURRENT_SOURCE_DIR}/quickdraw/pat-blitters.tmpl
-        > rawpatstubs.ctable)
-
-add_custom_command(OUTPUT rawsrcstubs.ctable
-    DEPENDS quickdraw/makerawblt.pl quickdraw/src-blitters.tmpl
-    COMMAND ${PERL_COMMAND} ${CMAKE_CURRENT_SOURCE_DIR}/quickdraw/makerawblt.pl
-        < ${CMAKE_CURRENT_SOURCE_DIR}/quickdraw/src-blitters.tmpl
-        > rawsrcstubs.ctable)
 list(APPEND GENERATED_FILES rawpatstubs.ctable rawsrcstubs.ctable)
 
-list(TRANSFORM GENERATED_FILES PREPEND ${CMAKE_CURRENT_BINARY_DIR}/)
+list(TRANSFORM GENERATED_FILES PREPEND ${GEN_DIR}/)
+if(EXECUTOR_REGENERATE)
+    # cmake --build BUILD --target executor-generated: just the files.
+    add_custom_target(executor-generated DEPENDS
+        ${GENERATED_FILES} ${api_headers} ${trap_instance_sources} ${structdump_sources})
+endif()
 source_group(Generated FILES ${GENERATED_FILES})
 
 set(res_sources
@@ -451,8 +474,8 @@ set(error_sources
 source_group(Error FILES ${error_sources})
 
 set(commandline_sources
-    commandline/program_options_extended.h
-    commandline/program_options_extended.cpp
+    commandline/options.h
+    commandline/options.cpp
     commandline/option_arguments.h
     commandline/flags.h
     )
@@ -604,7 +627,7 @@ add_library(romlib ${sources}
         ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minicoro/minicoro.c
     )
 
-target_include_directories(romlib PUBLIC . include/ ${CMAKE_CURRENT_BINARY_DIR}/api/ ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(romlib PUBLIC . include/ ${GEN_DIR}/api/ ${GEN_DIR})
 target_include_directories(romlib PUBLIC config/os/${HOST_OS})
 
 
@@ -613,13 +636,6 @@ target_include_directories(romlib PUBLIC config/os/${HOST_OS})
 target_include_directories(romlib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minicoro)
 target_link_libraries(romlib Threads::Threads executor_cpu)
 
-target_link_libraries(romlib Boost::filesystem)  # mxe doesn't like this
-if(WIN32 AND NOT MSVC)
-    # mingw build.
-    # Boost's 'superior' build system doesn't manage library dependencies correctly
-    # but relies on MSVC's autolink feature, which doesn't exist on mingw.
-    target_link_libraries(romlib bcrypt)
-endif()
 
 target_link_libraries(romlib resources)
 find_library(RESOLV_LIBRARY resolv)

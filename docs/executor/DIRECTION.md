@@ -341,7 +341,7 @@ D2's clean-up of the 68k side; C2 and C3 are independent of D.
 |---|---|---|
 | D1 | Musashi behind the syn68k facade, four windows restored | done 2026-10-23: `ctest -L executor` and the `_executor` bridge suites match UAE; no `mmap_min_addr`; UAE out of Executor (W0) |
 | D2 | minicoro Process Manager; timer at yield points | Finder + several applications switching as today; Qt gone from `romlib`. **Done 2026-10-23** (section 2) |
-| D3 | Dependencies and host edges | builds with only a C++17 compiler (generated files committed) |
+| D3 | Dependencies and host edges | builds with only a C++17 compiler (generated files committed). **Compiler-only build done 2026-10-23**: Boost → `std` (`rsys/filesystem.h`: `fs` over `std::filesystem` with `time_t` modification times and `unique_path`; `commandline/options.h` for program_options), generated sources in `romlib/generated` (`-DEXECUTOR_REGENERATE=ON`, target `executor-generated`) |
 | D4 | wasm build (W steps in section 4; decided 2026-10-23) | built-in Browser, then the Finder, in a browser tab |
 | D5 | Demo features | HiDPI QuickDraw (2×), host files as Mac files, rootless windows; HyperCard from a link |
 | D6 | PPC applications on the C2 core behind the PowerCore facade | a PPC application runs (milestone P). **Started 2026-10-21**: PowerPC-only applications on InterfaceLib run (`ppc_hello_executor`); StdCLib/MathLib open (PLAN.md, P) |

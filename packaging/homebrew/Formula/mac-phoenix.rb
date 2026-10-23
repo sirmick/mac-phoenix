@@ -28,8 +28,7 @@ class MacPhoenix < Formula
   depends_on "opus"
   depends_on "qt"                  # Qt 6 (>= 6.4): Core, Network
   depends_on "webp"
-  # The Executor backend (Boost, Ruby, Bison, Perl) is skipped with a
-  # CMake warning when those are missing; MacBrowser (-DBUILD_BROWSER)
+  # The Executor backend needs nothing more; MacBrowser (-DBUILD_BROWSER)
   # is off by default.
 
   def install

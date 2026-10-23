@@ -58,7 +58,7 @@
 #include <pthread.h>
 #include <PowerCore.h>
 #include <vdriver/eventrecorder.h>
-#include <commandline/program_options_extended.h>
+#include <commandline/options.h>
 #include <commandline/option_arguments.h>
 
 #ifndef HEADLESS_ONLY
@@ -87,8 +87,8 @@
 using namespace Executor;
 using namespace std;
 
-namespace po = boost::program_options;
-namespace pox = program_options_extended;
+namespace po = cmdline;  /* MacPhoenix: Boost.program_options before */
+namespace pox = cmdline;
 
 
 static bool use_native_code_p = true;
@@ -347,20 +347,12 @@ static std::vector<std::string> parseCommandLine(int& argc, char **argv)
 
     try
     {
-        auto parsed = po::command_line_parser(argc, argv)
-            .options(desc)
-            .allow_unregistered()
-            .run();
-        po::variables_map vm;
-        po::store(parsed, vm);
-        po::notify(vm);
-
         std::cout << argc << ":";
         for(int i = 0; i < argc; i++)
             std::cout << " " << argv[i];
         std::cout << std::endl;
 
-        unrecognized = po::collect_unrecognized(parsed.options, po::include_positional);
+        unrecognized = desc.parse(argc, argv);
     }
     catch (const po::error& err)
     {

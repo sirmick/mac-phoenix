@@ -100,7 +100,7 @@ bool LocalVolume::isHidden(const fs::directory_entry& e)
         return true;
     for(const std::string *own : { &ROMlib_ConfigurationFolder, &ROMlib_PrintersIni, &ROMlib_PrintDef })
     {
-        boost::system::error_code ec;
+        std::error_code ec;
         if(!own->empty() && e.path().filename() == fs::path(*own).filename()
            && fs::equivalent(e.path(), fs::path(*own), ec))
             return true;
@@ -528,7 +528,7 @@ void LocalVolume::updateSpace()
     auto blocks = [block](uint64_t n) { return (n + block - 1) / block; };
     uint64_t used = 0, files = 0, dirs = 0;
     bool complete = true;
-    boost::system::error_code ec;
+    std::error_code ec;
     /* The newest host time anywhere on the volume is its last-modified
        date (ioVLsMod): Finder looks at it to know whether to recheck what
        it has read of the disk. */
@@ -540,7 +540,7 @@ void LocalVolume::updateSpace()
             complete = false;
             break;
         }
-        boost::system::error_code sec;
+        std::error_code sec;
         newest = std::max(newest, fs::last_write_time(it->path(), sec));
         // Everything takes space (AppleDouble files hold resource forks);
         // only what the volume shows counts as a file or folder.
@@ -680,7 +680,7 @@ void LocalVolume::createCommon(NonexistentFile file)
     int e = errno;
     /* MacPhoenix: a host that refuses the file is an error, not a file
        that silently isn't there. */
-    boost::system::error_code ec;
+    std::error_code ec;
     if(!fs::exists(path, ec))
     {
         throw OSErrorException(e == EROFS ? wPrErr
@@ -831,7 +831,7 @@ void LocalVolume::stampWritten(FCBExtension& fcbx)
     if(!fcbx.written || !fcbx.file)
         return;
     fcbx.written = false;
-    boost::system::error_code ec;
+    std::error_code ec;
     fs::last_write_time(fcbx.file->path(), std::time(nullptr), ec);
 }
 
@@ -1012,7 +1012,7 @@ void LocalVolume::PBOffLine(ParmBlkPtr pb)
 
 std::optional<FSSpec> LocalVolume::nativePathToFSSpec(const fs::path& inPath)
 {
-    boost::system::error_code ec;
+    std::error_code ec;
 
     if(!fs::exists(inPath))
         return std::nullopt;
@@ -1100,7 +1100,7 @@ static void MountLocalVolume(fs::path root, std::string name = {})
     // MacPhoenix: bless the System Folder as HFS does (vcbFndrInfo[0] is
     // its dirID). Finder gives a volume's special folders their icons only
     // when it has one.
-    boost::system::error_code ec;
+    std::error_code ec;
     if(fs::is_regular_file(root / "System Folder" / "System", ec))
         if(auto spec = volume->nativePathToFSSpec(root / "System Folder" / "System"))
             vp->vcb.vcbFndrInfo[0] = spec->parID;
@@ -1113,7 +1113,7 @@ void Executor::MountLocalVolumes()
     for(int i = 0; i < 26; i++)
         if(drives & (1 << i))
         {
-            boost::system::error_code ec;
+            std::error_code ec;
             fs::path path = fs::canonical(std::string(1, 'A' + i) + ":/", ec);
             if(!ec)
                 MountLocalVolume(path);

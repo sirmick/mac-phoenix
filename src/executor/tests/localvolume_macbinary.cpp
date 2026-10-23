@@ -91,7 +91,7 @@ struct TempFile
 
     ~TempFile()
     {
-        boost::system::error_code ec;
+        std::error_code ec;
         fs::remove(path, ec);
     }
 

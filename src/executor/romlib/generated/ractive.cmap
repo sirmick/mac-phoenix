@@ -1,0 +1,54 @@
+unsigned char ractive_1_bits[] =
+{
+  0, 0, 
+  0, 0, 
+  2, 0, 
+  18, 64, 
+  10, 128, 
+  0, 0, 
+  29, 192, 
+  0, 0, 
+  10, 128, 
+  18, 64, 
+  2, 0, 
+  0, 0, 
+  0, 0, 
+};
+unsigned char ractive_2_bits[] =
+{
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+  0, 0, 0, 0, 
+};
+pixel_image_desc_t ractive_desc =
+{
+  { 0, 0, 13, 13 },
+  {
+    {
+      ractive_1_bits,
+      2,
+      1,
+    },
+    {
+      ractive_2_bits,
+      4,
+      2,
+    },
+  }
+};
+pixel_image_t *ractive;
+void
+image_ractive_init ()
+{
+  ractive = image_init (&ractive_desc);
+}

@@ -1,0 +1,1473 @@
+/* This file is machine-generated; DO NOT EDIT! */
+
+#define JUMP_TO_NEXT                        \
+do {                                        \
+  const void *next = s[1].label;            \
+  NEXT_ROW;				    \
+  arg = s[1].arg;                           \
+  s = (const blt_section_t *) ((const uint8_t *) s + sec_size); \
+  goto *next;                               \
+} while (0)
+
+/* Maximum number of times we'll unwrap any blitter loops. */
+#define MAX_LOOP_UNWRAP	8U
+#define REPEAT_MOD_0_STUB	0U
+#define MASK_STUB		(REPEAT_MOD_0_STUB + MAX_LOOP_UNWRAP)
+#define DONE_STUB		(MASK_STUB + 1)
+#define FUNC_PTR		(DONE_STUB + 1)
+
+
+extern const void *_func_0_labels[88] asm ("__func_0_labels");
+
+const void * const *
+srcblt_func_0 (const blt_section_t *section,
+const uint8_t *src_row_base, uint8_t *dst_row_base, long num_rows)
+{
+static const void *labels[] asm ("__func_0_labels") = {
+&&copy_noshift_many_8,
+&&copy_noshift_many_1,
+&&copy_noshift_many_2,
+&&copy_noshift_many_3,
+&&copy_noshift_many_4,
+&&copy_noshift_many_5,
+&&copy_noshift_many_6,
+&&copy_noshift_many_7,
+   &&copy_noshift_mask,
+   &&done,
+  (void*) srcblt_func_0,
+#define srcblt_copy_noshift_labels (&_func_0_labels[0])
+&&or_noshift_many_8,
+&&or_noshift_many_1,
+&&or_noshift_many_2,
+&&or_noshift_many_3,
+&&or_noshift_many_4,
+&&or_noshift_many_5,
+&&or_noshift_many_6,
+&&or_noshift_many_7,
+   &&or_noshift_mask,
+   &&done,
+  (void*) srcblt_func_0,
+#define srcblt_or_noshift_labels (&_func_0_labels[11])
+&&xor_noshift_many_8,
+&&xor_noshift_many_1,
+&&xor_noshift_many_2,
+&&xor_noshift_many_3,
+&&xor_noshift_many_4,
+&&xor_noshift_many_5,
+&&xor_noshift_many_6,
+&&xor_noshift_many_7,
+   &&xor_noshift_mask,
+   &&done,
+  (void*) srcblt_func_0,
+#define srcblt_xor_noshift_labels (&_func_0_labels[22])
+#define srcblt_xor_noshift_fgbk_labels (&_func_0_labels[22])
+&&and_noshift_many_8,
+&&and_noshift_many_1,
+&&and_noshift_many_2,
+&&and_noshift_many_3,
+&&and_noshift_many_4,
+&&and_noshift_many_5,
+&&and_noshift_many_6,
+&&and_noshift_many_7,
+   &&and_noshift_mask,
+   &&done,
+  (void*) srcblt_func_0,
+#define srcblt_and_noshift_labels (&_func_0_labels[33])
+&&notcopy_noshift_many_8,
+&&notcopy_noshift_many_1,
+&&notcopy_noshift_many_2,
+&&notcopy_noshift_many_3,
+&&notcopy_noshift_many_4,
+&&notcopy_noshift_many_5,
+&&notcopy_noshift_many_6,
+&&notcopy_noshift_many_7,
+   &&notcopy_noshift_mask,
+   &&done,
+  (void*) srcblt_func_0,
+#define srcblt_notcopy_noshift_labels (&_func_0_labels[44])
+&&notor_noshift_many_8,
+&&notor_noshift_many_1,
+&&notor_noshift_many_2,
+&&notor_noshift_many_3,
+&&notor_noshift_many_4,
+&&notor_noshift_many_5,
+&&notor_noshift_many_6,
+&&notor_noshift_many_7,
+   &&notor_noshift_mask,
+   &&done,
+  (void*) srcblt_func_0,
+#define srcblt_notor_noshift_labels (&_func_0_labels[55])
+&&notxor_noshift_many_8,
+&&notxor_noshift_many_1,
+&&notxor_noshift_many_2,
+&&notxor_noshift_many_3,
+&&notxor_noshift_many_4,
+&&notxor_noshift_many_5,
+&&notxor_noshift_many_6,
+&&notxor_noshift_many_7,
+   &&notxor_noshift_mask,
+   &&done,
+  (void*) srcblt_func_0,
+#define srcblt_notxor_noshift_labels (&_func_0_labels[66])
+#define srcblt_notxor_noshift_fgbk_labels (&_func_0_labels[66])
+&&notand_noshift_many_8,
+&&notand_noshift_many_1,
+&&notand_noshift_many_2,
+&&notand_noshift_many_3,
+&&notand_noshift_many_4,
+&&notand_noshift_many_5,
+&&notand_noshift_many_6,
+&&notand_noshift_many_7,
+   &&notand_noshift_mask,
+   &&done,
+  (void*) srcblt_func_0,
+#define srcblt_notand_noshift_labels (&_func_0_labels[77])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+const uint32_t *src = (const uint32_t *) &src_row_base[s->offset];
+uint32_t *dst = (uint32_t *) &dst_row_base[s->offset];
+  goto *(s->label);
+
+copy_noshift_mask:
+*dst = (*dst & ~arg) | (*src & arg);
+JUMP_TO_NEXT;
+ copy_noshift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+copy_noshift_many_8:
+  dst[0] = src[0];
+copy_noshift_many_7:
+  dst[1] = src[1];
+copy_noshift_many_6:
+  dst[2] = src[2];
+copy_noshift_many_5:
+  dst[3] = src[3];
+copy_noshift_many_4:
+  dst[4] = src[4];
+copy_noshift_many_3:
+  dst[5] = src[5];
+copy_noshift_many_2:
+  dst[6] = src[6];
+copy_noshift_many_1:
+  dst[7] = src[7];
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto copy_noshift_many_loop;
+  JUMP_TO_NEXT;
+or_noshift_mask:
+*dst |= (*src & arg);
+JUMP_TO_NEXT;
+ or_noshift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+or_noshift_many_8:
+  dst[0] |= src[0];
+or_noshift_many_7:
+  dst[1] |= src[1];
+or_noshift_many_6:
+  dst[2] |= src[2];
+or_noshift_many_5:
+  dst[3] |= src[3];
+or_noshift_many_4:
+  dst[4] |= src[4];
+or_noshift_many_3:
+  dst[5] |= src[5];
+or_noshift_many_2:
+  dst[6] |= src[6];
+or_noshift_many_1:
+  dst[7] |= src[7];
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto or_noshift_many_loop;
+  JUMP_TO_NEXT;
+xor_noshift_mask:
+*dst ^= (*src & arg);
+JUMP_TO_NEXT;
+ xor_noshift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+xor_noshift_many_8:
+  dst[0] ^= src[0];
+xor_noshift_many_7:
+  dst[1] ^= src[1];
+xor_noshift_many_6:
+  dst[2] ^= src[2];
+xor_noshift_many_5:
+  dst[3] ^= src[3];
+xor_noshift_many_4:
+  dst[4] ^= src[4];
+xor_noshift_many_3:
+  dst[5] ^= src[5];
+xor_noshift_many_2:
+  dst[6] ^= src[6];
+xor_noshift_many_1:
+  dst[7] ^= src[7];
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto xor_noshift_many_loop;
+  JUMP_TO_NEXT;
+and_noshift_mask:
+*dst &= (*src | ~arg);
+JUMP_TO_NEXT;
+ and_noshift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+and_noshift_many_8:
+  dst[0] &= src[0];
+and_noshift_many_7:
+  dst[1] &= src[1];
+and_noshift_many_6:
+  dst[2] &= src[2];
+and_noshift_many_5:
+  dst[3] &= src[3];
+and_noshift_many_4:
+  dst[4] &= src[4];
+and_noshift_many_3:
+  dst[5] &= src[5];
+and_noshift_many_2:
+  dst[6] &= src[6];
+and_noshift_many_1:
+  dst[7] &= src[7];
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto and_noshift_many_loop;
+  JUMP_TO_NEXT;
+notcopy_noshift_mask:
+*dst = (*dst & ~arg) | (~*src & arg);
+JUMP_TO_NEXT;
+ notcopy_noshift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notcopy_noshift_many_8:
+  dst[0] = ~src[0];
+notcopy_noshift_many_7:
+  dst[1] = ~src[1];
+notcopy_noshift_many_6:
+  dst[2] = ~src[2];
+notcopy_noshift_many_5:
+  dst[3] = ~src[3];
+notcopy_noshift_many_4:
+  dst[4] = ~src[4];
+notcopy_noshift_many_3:
+  dst[5] = ~src[5];
+notcopy_noshift_many_2:
+  dst[6] = ~src[6];
+notcopy_noshift_many_1:
+  dst[7] = ~src[7];
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notcopy_noshift_many_loop;
+  JUMP_TO_NEXT;
+notor_noshift_mask:
+*dst |= (~*src & arg);
+JUMP_TO_NEXT;
+ notor_noshift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notor_noshift_many_8:
+  dst[0] |= ~src[0];
+notor_noshift_many_7:
+  dst[1] |= ~src[1];
+notor_noshift_many_6:
+  dst[2] |= ~src[2];
+notor_noshift_many_5:
+  dst[3] |= ~src[3];
+notor_noshift_many_4:
+  dst[4] |= ~src[4];
+notor_noshift_many_3:
+  dst[5] |= ~src[5];
+notor_noshift_many_2:
+  dst[6] |= ~src[6];
+notor_noshift_many_1:
+  dst[7] |= ~src[7];
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notor_noshift_many_loop;
+  JUMP_TO_NEXT;
+notxor_noshift_mask:
+*dst ^= (~*src & arg);
+JUMP_TO_NEXT;
+ notxor_noshift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notxor_noshift_many_8:
+  dst[0] ^= ~src[0];
+notxor_noshift_many_7:
+  dst[1] ^= ~src[1];
+notxor_noshift_many_6:
+  dst[2] ^= ~src[2];
+notxor_noshift_many_5:
+  dst[3] ^= ~src[3];
+notxor_noshift_many_4:
+  dst[4] ^= ~src[4];
+notxor_noshift_many_3:
+  dst[5] ^= ~src[5];
+notxor_noshift_many_2:
+  dst[6] ^= ~src[6];
+notxor_noshift_many_1:
+  dst[7] ^= ~src[7];
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notxor_noshift_many_loop;
+  JUMP_TO_NEXT;
+notand_noshift_mask:
+*dst &= ~(*src & arg);
+JUMP_TO_NEXT;
+ notand_noshift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notand_noshift_many_8:
+  dst[0] &= ~src[0];
+notand_noshift_many_7:
+  dst[1] &= ~src[1];
+notand_noshift_many_6:
+  dst[2] &= ~src[2];
+notand_noshift_many_5:
+  dst[3] &= ~src[3];
+notand_noshift_many_4:
+  dst[4] &= ~src[4];
+notand_noshift_many_3:
+  dst[5] &= ~src[5];
+notand_noshift_many_2:
+  dst[6] &= ~src[6];
+notand_noshift_many_1:
+  dst[7] &= ~src[7];
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notand_noshift_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  src_row_base += srcblt_src_row_stride;
+  dst_row_base += srcblt_dst_row_stride;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *srcblt_func_1_labels[88] asm ("_srcblt_func_1_labels");
+
+const void * const *
+srcblt_func_1 (const blt_section_t *section,
+const uint8_t *src_row_base, uint8_t *dst_row_base, long num_rows)
+{
+static const void *labels[] asm ("_srcblt_func_1_labels") = {
+&&copy_shift_many_8,
+&&copy_shift_many_1,
+&&copy_shift_many_2,
+&&copy_shift_many_3,
+&&copy_shift_many_4,
+&&copy_shift_many_5,
+&&copy_shift_many_6,
+&&copy_shift_many_7,
+   &&copy_shift_mask,
+   &&done,
+  (void*) srcblt_func_1,
+#define srcblt_copy_shift_labels (&srcblt_func_1_labels[0])
+&&or_shift_many_8,
+&&or_shift_many_1,
+&&or_shift_many_2,
+&&or_shift_many_3,
+&&or_shift_many_4,
+&&or_shift_many_5,
+&&or_shift_many_6,
+&&or_shift_many_7,
+   &&or_shift_mask,
+   &&done,
+  (void*) srcblt_func_1,
+#define srcblt_or_shift_labels (&srcblt_func_1_labels[11])
+&&xor_shift_many_8,
+&&xor_shift_many_1,
+&&xor_shift_many_2,
+&&xor_shift_many_3,
+&&xor_shift_many_4,
+&&xor_shift_many_5,
+&&xor_shift_many_6,
+&&xor_shift_many_7,
+   &&xor_shift_mask,
+   &&done,
+  (void*) srcblt_func_1,
+#define srcblt_xor_shift_labels (&srcblt_func_1_labels[22])
+#define srcblt_xor_shift_fgbk_labels (&srcblt_func_1_labels[22])
+&&and_shift_many_8,
+&&and_shift_many_1,
+&&and_shift_many_2,
+&&and_shift_many_3,
+&&and_shift_many_4,
+&&and_shift_many_5,
+&&and_shift_many_6,
+&&and_shift_many_7,
+   &&and_shift_mask,
+   &&done,
+  (void*) srcblt_func_1,
+#define srcblt_and_shift_labels (&srcblt_func_1_labels[33])
+&&notcopy_shift_many_8,
+&&notcopy_shift_many_1,
+&&notcopy_shift_many_2,
+&&notcopy_shift_many_3,
+&&notcopy_shift_many_4,
+&&notcopy_shift_many_5,
+&&notcopy_shift_many_6,
+&&notcopy_shift_many_7,
+   &&notcopy_shift_mask,
+   &&done,
+  (void*) srcblt_func_1,
+#define srcblt_notcopy_shift_labels (&srcblt_func_1_labels[44])
+&&notor_shift_many_8,
+&&notor_shift_many_1,
+&&notor_shift_many_2,
+&&notor_shift_many_3,
+&&notor_shift_many_4,
+&&notor_shift_many_5,
+&&notor_shift_many_6,
+&&notor_shift_many_7,
+   &&notor_shift_mask,
+   &&done,
+  (void*) srcblt_func_1,
+#define srcblt_notor_shift_labels (&srcblt_func_1_labels[55])
+&&notxor_shift_many_8,
+&&notxor_shift_many_1,
+&&notxor_shift_many_2,
+&&notxor_shift_many_3,
+&&notxor_shift_many_4,
+&&notxor_shift_many_5,
+&&notxor_shift_many_6,
+&&notxor_shift_many_7,
+   &&notxor_shift_mask,
+   &&done,
+  (void*) srcblt_func_1,
+#define srcblt_notxor_shift_labels (&srcblt_func_1_labels[66])
+#define srcblt_notxor_shift_fgbk_labels (&srcblt_func_1_labels[66])
+&&notand_shift_many_8,
+&&notand_shift_many_1,
+&&notand_shift_many_2,
+&&notand_shift_many_3,
+&&notand_shift_many_4,
+&&notand_shift_many_5,
+&&notand_shift_many_6,
+&&notand_shift_many_7,
+   &&notand_shift_mask,
+   &&done,
+  (void*) srcblt_func_1,
+#define srcblt_notand_shift_labels (&srcblt_func_1_labels[77])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+const long left_shift = srcblt_shift_offset;
+const long right_shift = 32 - left_shift;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+const uint32_t *src = (const uint32_t *) &src_row_base[s->offset];
+uint32_t *dst = (uint32_t *) &dst_row_base[s->offset];
+  goto *(s->label);
+
+copy_shift_mask:
+*dst = (*dst & ~arg) | (CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) & arg);
+JUMP_TO_NEXT;
+ copy_shift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+copy_shift_many_8:
+  dst[0] = CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift));
+copy_shift_many_7:
+  dst[1] = CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift));
+copy_shift_many_6:
+  dst[2] = CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift));
+copy_shift_many_5:
+  dst[3] = CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift));
+copy_shift_many_4:
+  dst[4] = CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift));
+copy_shift_many_3:
+  dst[5] = CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift));
+copy_shift_many_2:
+  dst[6] = CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift));
+copy_shift_many_1:
+  dst[7] = CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift));
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto copy_shift_many_loop;
+  JUMP_TO_NEXT;
+or_shift_mask:
+*dst |= CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) & arg;
+JUMP_TO_NEXT;
+ or_shift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+or_shift_many_8:
+  dst[0] |= CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift));
+or_shift_many_7:
+  dst[1] |= CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift));
+or_shift_many_6:
+  dst[2] |= CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift));
+or_shift_many_5:
+  dst[3] |= CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift));
+or_shift_many_4:
+  dst[4] |= CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift));
+or_shift_many_3:
+  dst[5] |= CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift));
+or_shift_many_2:
+  dst[6] |= CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift));
+or_shift_many_1:
+  dst[7] |= CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift));
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto or_shift_many_loop;
+  JUMP_TO_NEXT;
+xor_shift_mask:
+*dst ^= CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) & arg;
+JUMP_TO_NEXT;
+ xor_shift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+xor_shift_many_8:
+  dst[0] ^= CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift));
+xor_shift_many_7:
+  dst[1] ^= CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift));
+xor_shift_many_6:
+  dst[2] ^= CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift));
+xor_shift_many_5:
+  dst[3] ^= CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift));
+xor_shift_many_4:
+  dst[4] ^= CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift));
+xor_shift_many_3:
+  dst[5] ^= CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift));
+xor_shift_many_2:
+  dst[6] ^= CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift));
+xor_shift_many_1:
+  dst[7] ^= CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift));
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto xor_shift_many_loop;
+  JUMP_TO_NEXT;
+and_shift_mask:
+*dst &= CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) | ~arg;
+JUMP_TO_NEXT;
+ and_shift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+and_shift_many_8:
+  dst[0] &= CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift));
+and_shift_many_7:
+  dst[1] &= CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift));
+and_shift_many_6:
+  dst[2] &= CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift));
+and_shift_many_5:
+  dst[3] &= CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift));
+and_shift_many_4:
+  dst[4] &= CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift));
+and_shift_many_3:
+  dst[5] &= CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift));
+and_shift_many_2:
+  dst[6] &= CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift));
+and_shift_many_1:
+  dst[7] &= CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift));
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto and_shift_many_loop;
+  JUMP_TO_NEXT;
+notcopy_shift_mask:
+*dst = (*dst & ~arg) | (~(CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift))) & arg);
+JUMP_TO_NEXT;
+ notcopy_shift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notcopy_shift_many_8:
+  dst[0] = ~(CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)));
+notcopy_shift_many_7:
+  dst[1] = ~(CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)));
+notcopy_shift_many_6:
+  dst[2] = ~(CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)));
+notcopy_shift_many_5:
+  dst[3] = ~(CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)));
+notcopy_shift_many_4:
+  dst[4] = ~(CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)));
+notcopy_shift_many_3:
+  dst[5] = ~(CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)));
+notcopy_shift_many_2:
+  dst[6] = ~(CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)));
+notcopy_shift_many_1:
+  dst[7] = ~(CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)));
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notcopy_shift_many_loop;
+  JUMP_TO_NEXT;
+notor_shift_mask:
+*dst |= (~(CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)))) & arg;
+JUMP_TO_NEXT;
+ notor_shift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notor_shift_many_8:
+  dst[0] |= ~(CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)));
+notor_shift_many_7:
+  dst[1] |= ~(CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)));
+notor_shift_many_6:
+  dst[2] |= ~(CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)));
+notor_shift_many_5:
+  dst[3] |= ~(CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)));
+notor_shift_many_4:
+  dst[4] |= ~(CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)));
+notor_shift_many_3:
+  dst[5] |= ~(CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)));
+notor_shift_many_2:
+  dst[6] |= ~(CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)));
+notor_shift_many_1:
+  dst[7] |= ~(CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)));
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notor_shift_many_loop;
+  JUMP_TO_NEXT;
+notxor_shift_mask:
+*dst ^= (~(CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)))) & arg;
+JUMP_TO_NEXT;
+ notxor_shift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notxor_shift_many_8:
+  dst[0] ^= ~(CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)));
+notxor_shift_many_7:
+  dst[1] ^= ~(CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)));
+notxor_shift_many_6:
+  dst[2] ^= ~(CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)));
+notxor_shift_many_5:
+  dst[3] ^= ~(CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)));
+notxor_shift_many_4:
+  dst[4] ^= ~(CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)));
+notxor_shift_many_3:
+  dst[5] ^= ~(CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)));
+notxor_shift_many_2:
+  dst[6] ^= ~(CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)));
+notxor_shift_many_1:
+  dst[7] ^= ~(CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)));
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notxor_shift_many_loop;
+  JUMP_TO_NEXT;
+notand_shift_mask:
+*dst &= ~((CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift))) & arg);
+JUMP_TO_NEXT;
+ notand_shift_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notand_shift_many_8:
+  dst[0] &= ~(CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)));
+notand_shift_many_7:
+  dst[1] &= ~(CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)));
+notand_shift_many_6:
+  dst[2] &= ~(CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)));
+notand_shift_many_5:
+  dst[3] &= ~(CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)));
+notand_shift_many_4:
+  dst[4] &= ~(CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)));
+notand_shift_many_3:
+  dst[5] &= ~(CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)));
+notand_shift_many_2:
+  dst[6] &= ~(CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)));
+notand_shift_many_1:
+  dst[7] &= ~(CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)));
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notand_shift_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  src_row_base += srcblt_src_row_stride;
+  dst_row_base += srcblt_dst_row_stride;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *srcblt_func_2_labels[22] asm ("_srcblt_func_2_labels");
+
+const void * const *
+srcblt_func_2 (const blt_section_t *section,
+const uint8_t *src_row_base, uint8_t *dst_row_base, long num_rows)
+{
+static const void *labels[] asm ("_srcblt_func_2_labels") = {
+&&copy_noshift_fgbk_many_8,
+&&copy_noshift_fgbk_many_1,
+&&copy_noshift_fgbk_many_2,
+&&copy_noshift_fgbk_many_3,
+&&copy_noshift_fgbk_many_4,
+&&copy_noshift_fgbk_many_5,
+&&copy_noshift_fgbk_many_6,
+&&copy_noshift_fgbk_many_7,
+   &&copy_noshift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_2,
+#define srcblt_copy_noshift_fgbk_labels (&srcblt_func_2_labels[0])
+&&notcopy_noshift_fgbk_many_8,
+&&notcopy_noshift_fgbk_many_1,
+&&notcopy_noshift_fgbk_many_2,
+&&notcopy_noshift_fgbk_many_3,
+&&notcopy_noshift_fgbk_many_4,
+&&notcopy_noshift_fgbk_many_5,
+&&notcopy_noshift_fgbk_many_6,
+&&notcopy_noshift_fgbk_many_7,
+   &&notcopy_noshift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_2,
+#define srcblt_notcopy_noshift_fgbk_labels (&srcblt_func_2_labels[11])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+const uint32_t fg_bits = srcblt_fg_color;
+const uint32_t bk_bits = srcblt_bk_color;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+const uint32_t *src = (const uint32_t *) &src_row_base[s->offset];
+uint32_t *dst = (uint32_t *) &dst_row_base[s->offset];
+  goto *(s->label);
+
+copy_noshift_fgbk_mask:
+{ const uint32_t s = *src; *dst = (*dst & ~arg) | (((s & fg_bits) | (~s & bk_bits)) & arg); }
+JUMP_TO_NEXT;
+ copy_noshift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+copy_noshift_fgbk_many_8:
+  { const uint32_t s = src[0]; dst[0] = (s & fg_bits) | (~s & bk_bits); }
+copy_noshift_fgbk_many_7:
+  { const uint32_t s = src[1]; dst[1] = (s & fg_bits) | (~s & bk_bits); }
+copy_noshift_fgbk_many_6:
+  { const uint32_t s = src[2]; dst[2] = (s & fg_bits) | (~s & bk_bits); }
+copy_noshift_fgbk_many_5:
+  { const uint32_t s = src[3]; dst[3] = (s & fg_bits) | (~s & bk_bits); }
+copy_noshift_fgbk_many_4:
+  { const uint32_t s = src[4]; dst[4] = (s & fg_bits) | (~s & bk_bits); }
+copy_noshift_fgbk_many_3:
+  { const uint32_t s = src[5]; dst[5] = (s & fg_bits) | (~s & bk_bits); }
+copy_noshift_fgbk_many_2:
+  { const uint32_t s = src[6]; dst[6] = (s & fg_bits) | (~s & bk_bits); }
+copy_noshift_fgbk_many_1:
+  { const uint32_t s = src[7]; dst[7] = (s & fg_bits) | (~s & bk_bits); }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto copy_noshift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+notcopy_noshift_fgbk_mask:
+{ const uint32_t s = *src; *dst = (*dst & ~arg) | (((~s & fg_bits) | (s & bk_bits)) & arg); }
+JUMP_TO_NEXT;
+ notcopy_noshift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notcopy_noshift_fgbk_many_8:
+  { const uint32_t s = src[0]; dst[0] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_noshift_fgbk_many_7:
+  { const uint32_t s = src[1]; dst[1] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_noshift_fgbk_many_6:
+  { const uint32_t s = src[2]; dst[2] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_noshift_fgbk_many_5:
+  { const uint32_t s = src[3]; dst[3] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_noshift_fgbk_many_4:
+  { const uint32_t s = src[4]; dst[4] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_noshift_fgbk_many_3:
+  { const uint32_t s = src[5]; dst[5] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_noshift_fgbk_many_2:
+  { const uint32_t s = src[6]; dst[6] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_noshift_fgbk_many_1:
+  { const uint32_t s = src[7]; dst[7] = (~s & fg_bits) | (s & bk_bits); }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notcopy_noshift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  src_row_base += srcblt_src_row_stride;
+  dst_row_base += srcblt_dst_row_stride;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *srcblt_func_3_labels[22] asm ("_srcblt_func_3_labels");
+
+const void * const *
+srcblt_func_3 (const blt_section_t *section,
+const uint8_t *src_row_base, uint8_t *dst_row_base, long num_rows)
+{
+static const void *labels[] asm ("_srcblt_func_3_labels") = {
+&&or_noshift_fgbk_many_8,
+&&or_noshift_fgbk_many_1,
+&&or_noshift_fgbk_many_2,
+&&or_noshift_fgbk_many_3,
+&&or_noshift_fgbk_many_4,
+&&or_noshift_fgbk_many_5,
+&&or_noshift_fgbk_many_6,
+&&or_noshift_fgbk_many_7,
+   &&or_noshift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_3,
+#define srcblt_or_noshift_fgbk_labels (&srcblt_func_3_labels[0])
+&&notor_noshift_fgbk_many_8,
+&&notor_noshift_fgbk_many_1,
+&&notor_noshift_fgbk_many_2,
+&&notor_noshift_fgbk_many_3,
+&&notor_noshift_fgbk_many_4,
+&&notor_noshift_fgbk_many_5,
+&&notor_noshift_fgbk_many_6,
+&&notor_noshift_fgbk_many_7,
+   &&notor_noshift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_3,
+#define srcblt_notor_noshift_fgbk_labels (&srcblt_func_3_labels[11])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+const uint32_t fg_bits = srcblt_fg_color;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+const uint32_t *src = (const uint32_t *) &src_row_base[s->offset];
+uint32_t *dst = (uint32_t *) &dst_row_base[s->offset];
+  goto *(s->label);
+
+or_noshift_fgbk_mask:
+{ uint32_t s = *src & arg, d; d = *dst & ~s; d |= (s & fg_bits); *dst = d; }
+JUMP_TO_NEXT;
+ or_noshift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+or_noshift_fgbk_many_8:
+  { uint32_t s = src[0], d; d = dst[0] & ~s; d |= (s & fg_bits); dst[0] = d; }
+or_noshift_fgbk_many_7:
+  { uint32_t s = src[1], d; d = dst[1] & ~s; d |= (s & fg_bits); dst[1] = d; }
+or_noshift_fgbk_many_6:
+  { uint32_t s = src[2], d; d = dst[2] & ~s; d |= (s & fg_bits); dst[2] = d; }
+or_noshift_fgbk_many_5:
+  { uint32_t s = src[3], d; d = dst[3] & ~s; d |= (s & fg_bits); dst[3] = d; }
+or_noshift_fgbk_many_4:
+  { uint32_t s = src[4], d; d = dst[4] & ~s; d |= (s & fg_bits); dst[4] = d; }
+or_noshift_fgbk_many_3:
+  { uint32_t s = src[5], d; d = dst[5] & ~s; d |= (s & fg_bits); dst[5] = d; }
+or_noshift_fgbk_many_2:
+  { uint32_t s = src[6], d; d = dst[6] & ~s; d |= (s & fg_bits); dst[6] = d; }
+or_noshift_fgbk_many_1:
+  { uint32_t s = src[7], d; d = dst[7] & ~s; d |= (s & fg_bits); dst[7] = d; }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto or_noshift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+notor_noshift_fgbk_mask:
+{ uint32_t s = ~*src & arg, d; d = *dst & ~s; d |= (s & fg_bits); *dst = d; }
+JUMP_TO_NEXT;
+ notor_noshift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notor_noshift_fgbk_many_8:
+  { uint32_t s = src[0], d; d = dst[0] & s; d |= (~s & fg_bits); dst[0] = d; }
+notor_noshift_fgbk_many_7:
+  { uint32_t s = src[1], d; d = dst[1] & s; d |= (~s & fg_bits); dst[1] = d; }
+notor_noshift_fgbk_many_6:
+  { uint32_t s = src[2], d; d = dst[2] & s; d |= (~s & fg_bits); dst[2] = d; }
+notor_noshift_fgbk_many_5:
+  { uint32_t s = src[3], d; d = dst[3] & s; d |= (~s & fg_bits); dst[3] = d; }
+notor_noshift_fgbk_many_4:
+  { uint32_t s = src[4], d; d = dst[4] & s; d |= (~s & fg_bits); dst[4] = d; }
+notor_noshift_fgbk_many_3:
+  { uint32_t s = src[5], d; d = dst[5] & s; d |= (~s & fg_bits); dst[5] = d; }
+notor_noshift_fgbk_many_2:
+  { uint32_t s = src[6], d; d = dst[6] & s; d |= (~s & fg_bits); dst[6] = d; }
+notor_noshift_fgbk_many_1:
+  { uint32_t s = src[7], d; d = dst[7] & s; d |= (~s & fg_bits); dst[7] = d; }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notor_noshift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  src_row_base += srcblt_src_row_stride;
+  dst_row_base += srcblt_dst_row_stride;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *srcblt_func_4_labels[22] asm ("_srcblt_func_4_labels");
+
+const void * const *
+srcblt_func_4 (const blt_section_t *section,
+const uint8_t *src_row_base, uint8_t *dst_row_base, long num_rows)
+{
+static const void *labels[] asm ("_srcblt_func_4_labels") = {
+&&and_noshift_fgbk_many_8,
+&&and_noshift_fgbk_many_1,
+&&and_noshift_fgbk_many_2,
+&&and_noshift_fgbk_many_3,
+&&and_noshift_fgbk_many_4,
+&&and_noshift_fgbk_many_5,
+&&and_noshift_fgbk_many_6,
+&&and_noshift_fgbk_many_7,
+   &&and_noshift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_4,
+#define srcblt_and_noshift_fgbk_labels (&srcblt_func_4_labels[0])
+&&notand_noshift_fgbk_many_8,
+&&notand_noshift_fgbk_many_1,
+&&notand_noshift_fgbk_many_2,
+&&notand_noshift_fgbk_many_3,
+&&notand_noshift_fgbk_many_4,
+&&notand_noshift_fgbk_many_5,
+&&notand_noshift_fgbk_many_6,
+&&notand_noshift_fgbk_many_7,
+   &&notand_noshift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_4,
+#define srcblt_notand_noshift_fgbk_labels (&srcblt_func_4_labels[11])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+const uint32_t bk_bits = srcblt_bk_color;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+const uint32_t *src = (const uint32_t *) &src_row_base[s->offset];
+uint32_t *dst = (uint32_t *) &dst_row_base[s->offset];
+  goto *(s->label);
+
+and_noshift_fgbk_mask:
+{ uint32_t s = *src | ~arg, d; d = *dst & s; d |= (~s & bk_bits); *dst = d; }
+JUMP_TO_NEXT;
+ and_noshift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+and_noshift_fgbk_many_8:
+  { uint32_t s = src[0], d; d = dst[0] & s; d |= (~s & bk_bits); dst[0] = d; }
+and_noshift_fgbk_many_7:
+  { uint32_t s = src[1], d; d = dst[1] & s; d |= (~s & bk_bits); dst[1] = d; }
+and_noshift_fgbk_many_6:
+  { uint32_t s = src[2], d; d = dst[2] & s; d |= (~s & bk_bits); dst[2] = d; }
+and_noshift_fgbk_many_5:
+  { uint32_t s = src[3], d; d = dst[3] & s; d |= (~s & bk_bits); dst[3] = d; }
+and_noshift_fgbk_many_4:
+  { uint32_t s = src[4], d; d = dst[4] & s; d |= (~s & bk_bits); dst[4] = d; }
+and_noshift_fgbk_many_3:
+  { uint32_t s = src[5], d; d = dst[5] & s; d |= (~s & bk_bits); dst[5] = d; }
+and_noshift_fgbk_many_2:
+  { uint32_t s = src[6], d; d = dst[6] & s; d |= (~s & bk_bits); dst[6] = d; }
+and_noshift_fgbk_many_1:
+  { uint32_t s = src[7], d; d = dst[7] & s; d |= (~s & bk_bits); dst[7] = d; }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto and_noshift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+notand_noshift_fgbk_mask:
+{ uint32_t s = *src & arg, d; d = *dst & ~s; d |= (s & bk_bits); *dst = d; }
+JUMP_TO_NEXT;
+ notand_noshift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notand_noshift_fgbk_many_8:
+  { uint32_t s = src[0], d; d = dst[0] & ~s; d |= (s & bk_bits); dst[0] = d; }
+notand_noshift_fgbk_many_7:
+  { uint32_t s = src[1], d; d = dst[1] & ~s; d |= (s & bk_bits); dst[1] = d; }
+notand_noshift_fgbk_many_6:
+  { uint32_t s = src[2], d; d = dst[2] & ~s; d |= (s & bk_bits); dst[2] = d; }
+notand_noshift_fgbk_many_5:
+  { uint32_t s = src[3], d; d = dst[3] & ~s; d |= (s & bk_bits); dst[3] = d; }
+notand_noshift_fgbk_many_4:
+  { uint32_t s = src[4], d; d = dst[4] & ~s; d |= (s & bk_bits); dst[4] = d; }
+notand_noshift_fgbk_many_3:
+  { uint32_t s = src[5], d; d = dst[5] & ~s; d |= (s & bk_bits); dst[5] = d; }
+notand_noshift_fgbk_many_2:
+  { uint32_t s = src[6], d; d = dst[6] & ~s; d |= (s & bk_bits); dst[6] = d; }
+notand_noshift_fgbk_many_1:
+  { uint32_t s = src[7], d; d = dst[7] & ~s; d |= (s & bk_bits); dst[7] = d; }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notand_noshift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  src_row_base += srcblt_src_row_stride;
+  dst_row_base += srcblt_dst_row_stride;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *srcblt_func_5_labels[22] asm ("_srcblt_func_5_labels");
+
+const void * const *
+srcblt_func_5 (const blt_section_t *section,
+const uint8_t *src_row_base, uint8_t *dst_row_base, long num_rows)
+{
+static const void *labels[] asm ("_srcblt_func_5_labels") = {
+&&copy_shift_fgbk_many_8,
+&&copy_shift_fgbk_many_1,
+&&copy_shift_fgbk_many_2,
+&&copy_shift_fgbk_many_3,
+&&copy_shift_fgbk_many_4,
+&&copy_shift_fgbk_many_5,
+&&copy_shift_fgbk_many_6,
+&&copy_shift_fgbk_many_7,
+   &&copy_shift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_5,
+#define srcblt_copy_shift_fgbk_labels (&srcblt_func_5_labels[0])
+&&notcopy_shift_fgbk_many_8,
+&&notcopy_shift_fgbk_many_1,
+&&notcopy_shift_fgbk_many_2,
+&&notcopy_shift_fgbk_many_3,
+&&notcopy_shift_fgbk_many_4,
+&&notcopy_shift_fgbk_many_5,
+&&notcopy_shift_fgbk_many_6,
+&&notcopy_shift_fgbk_many_7,
+   &&notcopy_shift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_5,
+#define srcblt_notcopy_shift_fgbk_labels (&srcblt_func_5_labels[11])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+const long left_shift = srcblt_shift_offset;
+const long right_shift = 32 - left_shift;
+const uint32_t fg_bits = srcblt_fg_color;
+const uint32_t bk_bits = srcblt_bk_color;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+const uint32_t *src = (const uint32_t *) &src_row_base[s->offset];
+uint32_t *dst = (uint32_t *) &dst_row_base[s->offset];
+  goto *(s->label);
+
+copy_shift_fgbk_mask:
+{ const uint32_t s = (CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) & arg); uint32_t d = *dst & ~arg; d |= ((s & fg_bits) | (~s & bk_bits)) & arg; *dst = d; }
+JUMP_TO_NEXT;
+ copy_shift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+copy_shift_fgbk_many_8:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)); dst[0] = (s & fg_bits) | (~s & bk_bits); }
+copy_shift_fgbk_many_7:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)); dst[1] = (s & fg_bits) | (~s & bk_bits); }
+copy_shift_fgbk_many_6:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)); dst[2] = (s & fg_bits) | (~s & bk_bits); }
+copy_shift_fgbk_many_5:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)); dst[3] = (s & fg_bits) | (~s & bk_bits); }
+copy_shift_fgbk_many_4:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)); dst[4] = (s & fg_bits) | (~s & bk_bits); }
+copy_shift_fgbk_many_3:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)); dst[5] = (s & fg_bits) | (~s & bk_bits); }
+copy_shift_fgbk_many_2:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)); dst[6] = (s & fg_bits) | (~s & bk_bits); }
+copy_shift_fgbk_many_1:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)); dst[7] = (s & fg_bits) | (~s & bk_bits); }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto copy_shift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+notcopy_shift_fgbk_mask:
+{ const uint32_t s = (CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) & arg); uint32_t d = *dst & ~arg; d |= ((~s & fg_bits) | (s & bk_bits)) & arg; *dst = d; }
+JUMP_TO_NEXT;
+ notcopy_shift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notcopy_shift_fgbk_many_8:
+  { const uint32_t s = (CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift))); dst[0] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_shift_fgbk_many_7:
+  { const uint32_t s = (CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift))); dst[1] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_shift_fgbk_many_6:
+  { const uint32_t s = (CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift))); dst[2] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_shift_fgbk_many_5:
+  { const uint32_t s = (CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift))); dst[3] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_shift_fgbk_many_4:
+  { const uint32_t s = (CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift))); dst[4] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_shift_fgbk_many_3:
+  { const uint32_t s = (CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift))); dst[5] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_shift_fgbk_many_2:
+  { const uint32_t s = (CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift))); dst[6] = (~s & fg_bits) | (s & bk_bits); }
+notcopy_shift_fgbk_many_1:
+  { const uint32_t s = (CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift))); dst[7] = (~s & fg_bits) | (s & bk_bits); }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notcopy_shift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  src_row_base += srcblt_src_row_stride;
+  dst_row_base += srcblt_dst_row_stride;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *srcblt_func_6_labels[22] asm ("_srcblt_func_6_labels");
+
+const void * const *
+srcblt_func_6 (const blt_section_t *section,
+const uint8_t *src_row_base, uint8_t *dst_row_base, long num_rows)
+{
+static const void *labels[] asm ("_srcblt_func_6_labels") = {
+&&or_shift_fgbk_many_8,
+&&or_shift_fgbk_many_1,
+&&or_shift_fgbk_many_2,
+&&or_shift_fgbk_many_3,
+&&or_shift_fgbk_many_4,
+&&or_shift_fgbk_many_5,
+&&or_shift_fgbk_many_6,
+&&or_shift_fgbk_many_7,
+   &&or_shift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_6,
+#define srcblt_or_shift_fgbk_labels (&srcblt_func_6_labels[0])
+&&notor_shift_fgbk_many_8,
+&&notor_shift_fgbk_many_1,
+&&notor_shift_fgbk_many_2,
+&&notor_shift_fgbk_many_3,
+&&notor_shift_fgbk_many_4,
+&&notor_shift_fgbk_many_5,
+&&notor_shift_fgbk_many_6,
+&&notor_shift_fgbk_many_7,
+   &&notor_shift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_6,
+#define srcblt_notor_shift_fgbk_labels (&srcblt_func_6_labels[11])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+const long left_shift = srcblt_shift_offset;
+const long right_shift = 32 - left_shift;
+const uint32_t fg_bits = srcblt_fg_color;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+const uint32_t *src = (const uint32_t *) &src_row_base[s->offset];
+uint32_t *dst = (uint32_t *) &dst_row_base[s->offset];
+  goto *(s->label);
+
+or_shift_fgbk_mask:
+{ const uint32_t s = CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) & arg; uint32_t d = *dst & ~s; d |= (s & fg_bits); *dst = d; }
+JUMP_TO_NEXT;
+ or_shift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+or_shift_fgbk_many_8:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)); uint32_t d = dst[0] & ~s; d |= (s & fg_bits); dst[0] = d; }
+or_shift_fgbk_many_7:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)); uint32_t d = dst[1] & ~s; d |= (s & fg_bits); dst[1] = d; }
+or_shift_fgbk_many_6:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)); uint32_t d = dst[2] & ~s; d |= (s & fg_bits); dst[2] = d; }
+or_shift_fgbk_many_5:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)); uint32_t d = dst[3] & ~s; d |= (s & fg_bits); dst[3] = d; }
+or_shift_fgbk_many_4:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)); uint32_t d = dst[4] & ~s; d |= (s & fg_bits); dst[4] = d; }
+or_shift_fgbk_many_3:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)); uint32_t d = dst[5] & ~s; d |= (s & fg_bits); dst[5] = d; }
+or_shift_fgbk_many_2:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)); uint32_t d = dst[6] & ~s; d |= (s & fg_bits); dst[6] = d; }
+or_shift_fgbk_many_1:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)); uint32_t d = dst[7] & ~s; d |= (s & fg_bits); dst[7] = d; }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto or_shift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+notor_shift_fgbk_mask:
+{ const uint32_t s = ~(CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift))) & arg; uint32_t d = *dst & ~s; d |= (s & fg_bits); *dst = d; }
+JUMP_TO_NEXT;
+ notor_shift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notor_shift_fgbk_many_8:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)); uint32_t d = dst[0] & s; d |= (~s & fg_bits); dst[0] = d; }
+notor_shift_fgbk_many_7:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)); uint32_t d = dst[1] & s; d |= (~s & fg_bits); dst[1] = d; }
+notor_shift_fgbk_many_6:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)); uint32_t d = dst[2] & s; d |= (~s & fg_bits); dst[2] = d; }
+notor_shift_fgbk_many_5:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)); uint32_t d = dst[3] & s; d |= (~s & fg_bits); dst[3] = d; }
+notor_shift_fgbk_many_4:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)); uint32_t d = dst[4] & s; d |= (~s & fg_bits); dst[4] = d; }
+notor_shift_fgbk_many_3:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)); uint32_t d = dst[5] & s; d |= (~s & fg_bits); dst[5] = d; }
+notor_shift_fgbk_many_2:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)); uint32_t d = dst[6] & s; d |= (~s & fg_bits); dst[6] = d; }
+notor_shift_fgbk_many_1:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)); uint32_t d = dst[7] & s; d |= (~s & fg_bits); dst[7] = d; }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notor_shift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  src_row_base += srcblt_src_row_stride;
+  dst_row_base += srcblt_dst_row_stride;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}
+
+
+extern const void *srcblt_func_7_labels[22] asm ("_srcblt_func_7_labels");
+
+const void * const *
+srcblt_func_7 (const blt_section_t *section,
+const uint8_t *src_row_base, uint8_t *dst_row_base, long num_rows)
+{
+static const void *labels[] asm ("_srcblt_func_7_labels") = {
+&&and_shift_fgbk_many_8,
+&&and_shift_fgbk_many_1,
+&&and_shift_fgbk_many_2,
+&&and_shift_fgbk_many_3,
+&&and_shift_fgbk_many_4,
+&&and_shift_fgbk_many_5,
+&&and_shift_fgbk_many_6,
+&&and_shift_fgbk_many_7,
+   &&and_shift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_7,
+#define srcblt_and_shift_fgbk_labels (&srcblt_func_7_labels[0])
+&&notand_shift_fgbk_many_8,
+&&notand_shift_fgbk_many_1,
+&&notand_shift_fgbk_many_2,
+&&notand_shift_fgbk_many_3,
+&&notand_shift_fgbk_many_4,
+&&notand_shift_fgbk_many_5,
+&&notand_shift_fgbk_many_6,
+&&notand_shift_fgbk_many_7,
+   &&notand_shift_fgbk_mask,
+   &&done,
+  (void*) srcblt_func_7,
+#define srcblt_notand_shift_fgbk_labels (&srcblt_func_7_labels[11])
+};
+#if defined (mc68000)
+/* Convince gcc to use one register addl, not two addqw's */
+register uint32_t sec_size = sizeof (section[0]);
+#elif !defined (sec_size)
+#define sec_size (sizeof (section[0]))
+#endif
+const long left_shift = srcblt_shift_offset;
+const long right_shift = 32 - left_shift;
+const uint32_t bk_bits = srcblt_bk_color;
+  do {
+  const blt_section_t *s = section;
+  int32_t arg = s->arg;
+const uint32_t *src = (const uint32_t *) &src_row_base[s->offset];
+uint32_t *dst = (uint32_t *) &dst_row_base[s->offset];
+  goto *(s->label);
+
+and_shift_fgbk_mask:
+{ const uint32_t s = CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) | ~arg; uint32_t d = *dst & s; d |= (~s & bk_bits); *dst = d; }
+JUMP_TO_NEXT;
+ and_shift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+and_shift_fgbk_many_8:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)); uint32_t d = dst[0] & s; d |= (~s & bk_bits); dst[0] = d; }
+and_shift_fgbk_many_7:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)); uint32_t d = dst[1] & s; d |= (~s & bk_bits); dst[1] = d; }
+and_shift_fgbk_many_6:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)); uint32_t d = dst[2] & s; d |= (~s & bk_bits); dst[2] = d; }
+and_shift_fgbk_many_5:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)); uint32_t d = dst[3] & s; d |= (~s & bk_bits); dst[3] = d; }
+and_shift_fgbk_many_4:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)); uint32_t d = dst[4] & s; d |= (~s & bk_bits); dst[4] = d; }
+and_shift_fgbk_many_3:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)); uint32_t d = dst[5] & s; d |= (~s & bk_bits); dst[5] = d; }
+and_shift_fgbk_many_2:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)); uint32_t d = dst[6] & s; d |= (~s & bk_bits); dst[6] = d; }
+and_shift_fgbk_many_1:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)); uint32_t d = dst[7] & s; d |= (~s & bk_bits); dst[7] = d; }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto and_shift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+notand_shift_fgbk_mask:
+{ const uint32_t s = CL_RAW ((CL_RAW (*src) << left_shift) | (CL_RAW (src[1]) >> right_shift)) & arg; uint32_t d = *dst & ~s; d |= (s & bk_bits); *dst = d; }
+JUMP_TO_NEXT;
+ notand_shift_fgbk_many_loop:
+#if !defined (i386)
+src += 8;
+  dst += 8;
+#endif
+notand_shift_fgbk_many_8:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[0]) << left_shift) | (CL_RAW (src[1]) >> right_shift)); uint32_t d = dst[0] & ~s; d |= (s & bk_bits); dst[0] = d; }
+notand_shift_fgbk_many_7:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[1]) << left_shift) | (CL_RAW (src[2]) >> right_shift)); uint32_t d = dst[1] & ~s; d |= (s & bk_bits); dst[1] = d; }
+notand_shift_fgbk_many_6:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[2]) << left_shift) | (CL_RAW (src[3]) >> right_shift)); uint32_t d = dst[2] & ~s; d |= (s & bk_bits); dst[2] = d; }
+notand_shift_fgbk_many_5:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[3]) << left_shift) | (CL_RAW (src[4]) >> right_shift)); uint32_t d = dst[3] & ~s; d |= (s & bk_bits); dst[3] = d; }
+notand_shift_fgbk_many_4:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[4]) << left_shift) | (CL_RAW (src[5]) >> right_shift)); uint32_t d = dst[4] & ~s; d |= (s & bk_bits); dst[4] = d; }
+notand_shift_fgbk_many_3:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[5]) << left_shift) | (CL_RAW (src[6]) >> right_shift)); uint32_t d = dst[5] & ~s; d |= (s & bk_bits); dst[5] = d; }
+notand_shift_fgbk_many_2:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[6]) << left_shift) | (CL_RAW (src[7]) >> right_shift)); uint32_t d = dst[6] & ~s; d |= (s & bk_bits); dst[6] = d; }
+notand_shift_fgbk_many_1:
+  { const uint32_t s = CL_RAW ((CL_RAW (src[7]) << left_shift) | (CL_RAW (src[8]) >> right_shift)); uint32_t d = dst[7] & ~s; d |= (s & bk_bits); dst[7] = d; }
+#if defined (i386)
+src += 8; /* Avoids AGI stall here. */
+  dst += 8; /* Avoids AGI stall here. */
+#endif
+  if ((arg -= 8) > 0)
+    goto notand_shift_fgbk_many_loop;
+  JUMP_TO_NEXT;
+ done:
+  src_row_base += srcblt_src_row_stride;
+  dst_row_base += srcblt_dst_row_stride;
+  } while (--num_rows > 0);
+  return labels;  /* Let gcc know labels are used. */
+}

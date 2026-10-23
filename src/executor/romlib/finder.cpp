@@ -192,7 +192,7 @@ void DesktopDB::save()
     /* The rename replaces a directory entry in the volume's root, which
        moves the root's modification date; Finder takes that as the disk's
        contents changing and drops what it knows of them. Keep it. */
-    boost::system::error_code ec;
+    std::error_code ec;
     fs::path root = file.parent_path();
     auto root_time = fs::last_write_time(root, ec);
     fs::rename(tmp, file, ec);
@@ -822,7 +822,7 @@ Executor::PBDTGetInfo(DTPBPtr dtp, Boolean async)
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
-        boost::system::error_code ec;
+        std::error_code ec;
         auto size = db->file.empty() ? 0 : fs::file_size(db->file, ec);
         if(ec)
             size = 0;
@@ -861,7 +861,7 @@ Executor::PBDTDelete(DTPBPtr dtp, Boolean async)
         err = noErr;
         if(auto *lv = dynamic_cast<LocalVolume *>(((VCBExtra *)vcbp)->volume))
         {
-            boost::system::error_code ec;
+            std::error_code ec;
             fs::remove(lv->getRoot() / ".desktopdb", ec);
         }
     }

@@ -219,7 +219,7 @@ mac_string Executor::toMacRomanFilename(const fs::path& p, int index)
     {
         ws = p.wstring();
     }
-    catch(const boost::system::system_error&)
+    catch(const std::system_error&)
     {
         // conversion error:
         // incorrectly-encoded filename on a unix system

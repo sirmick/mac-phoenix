@@ -26,7 +26,7 @@ Optional, each found by `cmake -B build`:
 | VP9 (WebRTC) | `libvpx-dev` | codec hidden | — |
 | WebP (WebSocket) | `libwebp-dev` | codec hidden; PNG always works | — |
 | Opus (sound) | `libopus-dev` | no sound in the browser | — |
-| Executor backend | `libboost-filesystem-dev libboost-program-options-dev ruby bison perl` | `--backend executor` unavailable | `-DBUILD_EXECUTOR=OFF` |
+| Executor backend | nothing more (its generated sources are committed; `ruby bison perl` only to regenerate them, `-DEXECUTOR_REGENERATE=ON`) | — | `-DBUILD_EXECUTOR=OFF` |
 | net-bridge (guest networking) | `cargo rustc` (rustc ≥ 1.75) | `--network socket` unavailable | `-DBUILD_NET_BRIDGE=OFF` |
 | MacBrowser host side (experimental) | `qt6-webengine-dev` | `--browser` ignored | off by default; `-DBUILD_BROWSER=ON` |
 | Tests, provisioning | `hfsutils python3`, plus `unar` for `populate_disk.py` | disk-image tests skip | `-DBUILD_TESTS=OFF` |
@@ -51,12 +51,10 @@ MAME cores and Executor are big translation units); `-j4` is safe.
 
 ```bash
 brew install cmake pkg-config qt@6 openssl libyuv openh264 libvpx webp opus \
-             boost ruby bison rust hfsutils
+             rust hfsutils
 ```
 
-Homebrew's `bison` and `ruby` are keg-only: put them first on `PATH` (or
-point CMake at them) so the Executor build finds them instead of the
-system's older ones. A Homebrew formula draft is in `packaging/homebrew/`
+A Homebrew formula draft is in `packaging/homebrew/`
 ([docs/Packaging.md](Packaging.md)).
 
 ## Host settings

@@ -75,7 +75,7 @@ void BasiliskFileItem::deleteItem()
     fs::remove(path());
     fs::path rsrc = path().parent_path() / ".rsrc" / path().filename();
     fs::path finf = path().parent_path() / ".finf" / path().filename();
-    boost::system::error_code ec;
+    std::error_code ec;
     fs::remove(rsrc, ec);
     fs::remove(finf, ec);
 }
@@ -89,7 +89,7 @@ void BasiliskFileItem::moveItem(const fs::path& newPath, mac_string_view newName
 
     fs::rename(path(), newPath);
 
-    boost::system::error_code ec;
+    std::error_code ec;
     fs::rename(rsrcOld, rsrcNew, ec);
     fs::rename(finfOld, finfNew, ec);
 

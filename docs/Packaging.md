@@ -7,9 +7,9 @@ guest applications are never rebuilt in a package build
 (`BUILD_BRIDGE_AGENT=OFF`, `BUILD_MAC_BROWSER=OFF`).
 
 Build dependencies come from `debian/control` (`apt-get build-dep .`),
-for local builds and CI alike. It doesn't list the Executor backend's
-dependencies (Boost, Ruby, Bison, Perl), so packages are built without
-`--backend executor`.
+for local builds and CI alike. The Executor backend needs nothing beyond
+the C++ compiler (its generated sources are committed), so packages
+include `--backend executor`.
 
 ## Locally: `packaging/run_matrix.sh`
 

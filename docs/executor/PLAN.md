@@ -458,7 +458,18 @@ Kept small so upstream fixes can be merged by hand:
 * `vdriver/vdriver.cpp`: framebuffer via `syn68k_alloc_low()`.
 * `base/logging.cpp`: pointer validity via `syn68k_is_guest_mapped()`.
 * `main.cpp`: entry renamed `executor_main_entry`, low-stack emulator
-  thread, no cxmon, phoenix front end.
+  thread, no cxmon, phoenix front end; the command line through
+  `commandline/options.h` (ours) instead of Boost.program_options.
+* No Boost (2026-10-23): `rsys/filesystem.h` is `fs` over
+  `std::filesystem` plus `time_t` modification times, the path fstreams
+  and `unique_path`; `boost::system` error codes are `std::error_code`;
+  `prefpanel.cpp` parses the System version with `operator>>`.
+* Generated sources committed in `romlib/generated` (2026-10-23), built
+  from there; `-DEXECUTOR_REGENERATE=ON` runs the generators (Ruby, Perl,
+  Bison, the table tools) into it again. Bison runs with `--no-lines`.
+* `process.cpp`, `time/syncint.cpp`: processes and Thread Manager
+  threads are minicoro coroutines, the timer is polled (no Qt threads;
+  DIRECTION.md, D2).
 * `file/fileMisc.cpp`: `ROMlib_path_overrides` before `getenv`.
 * `file/localvolume/localvolume.cpp`: `ROMlib_local_volume_roots` instead of `/`.
 * `hfs/hfsHelper.cpp`: `ROMlib_readonly_images`.

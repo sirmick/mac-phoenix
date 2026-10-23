@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/cdrom.h>
+#include <unistd.h>
 #endif
 
 using namespace Executor;
