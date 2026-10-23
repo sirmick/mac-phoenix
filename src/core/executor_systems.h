@@ -46,8 +46,12 @@ void resolve(const config::EmulatorConfig& config, std::string& data_dir, std::s
 // The image to mount beside the System (empty if the System is not one).
 std::string system_image(const config::EmulatorConfig& config);
 
-// Build <name>.clean from a disk image with tools/macdecode/sideload_system.py
-// (replacing an existing one when refresh is set).
+// Build <name>.clean from a disk image (replacing an existing one when
+// refresh is set): with sideload_hook, Executor's own HFS reader
+// (executor_host::sideload_system, set by main when Executor is built in),
+// else tools/macdecode/sideload_system.py.
+extern bool (*sideload_hook)(const std::string& image, const std::string& data_dir,
+                             std::string& err);
 bool create_from_image(const std::string& storage_dir, const std::string& name,
                        const std::string& image_path, std::string& err,
                        bool refresh = false);

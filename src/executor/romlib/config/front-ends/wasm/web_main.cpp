@@ -22,6 +22,7 @@
  */
 #include "executor_host.h"
 #include "phoenix.h"
+#include "hfs_sideload.h"
 #include <rsys/hostidle.h>
 
 #include <base/common.h>
@@ -209,12 +210,15 @@ void on_yield()
 
 }
 
-/* web_main [--size WxH] [--disk IMAGE]... [APP]: the screen size, disk
- * images to mount (read-only), and an application to start instead of
- * Executor's Browser (paths in the module's filesystem). */
+/* web_main [--size WxH] [--disk IMAGE]... [--system IMAGE] [APP]: the
+ * screen size, disk images to mount (read-only), the image whose System
+ * Folder to run on (Apple's System and Finder: copied into Executor's
+ * volume, and the Finder started), and an application to start instead of
+ * Executor's Browser or the Finder (paths in the module's filesystem). */
 int main(int argc, char **argv)
 {
     executor_host::Config c;
+    std::string system_image;
     for(int i = 1; i < argc; i++)
     {
         std::string a = argv[i];
@@ -222,12 +226,29 @@ int main(int argc, char **argv)
             sscanf(argv[++i], "%dx%d", &c.width, &c.height);
         else if(a == "--disk" && i + 1 < argc)
             c.disks.push_back(argv[++i]);
+        else if(a == "--system" && i + 1 < argc)
+            system_image = argv[++i];
         else
             c.app = a;
     }
     c.bpp = 8;
     c.ram_mb = 32;
     c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
+    if(!system_image.empty())
+    {
+        bool finder = false;
+        std::string err;
+        if(executor_host::sideload_system(system_image, c.data_dir, &finder, &err))
+        {
+            fprintf(stderr, "[web] System Folder from %s%s\n", system_image.c_str(),
+                    finder ? ", starting the Finder" : "");
+            if(finder && c.app.empty())
+                c.app = c.data_dir + "/System Folder/Finder";
+            c.ram_mb = 64;
+        }
+        else
+            fprintf(stderr, "[web] no System Folder from %s: %s\n", system_image.c_str(), err.c_str());
+    }
     /* "Host", as mac-phoenix names its first shared folder: files the page
        reads and writes (worker.js 'read', 'write'). */
     c.shared_folders.push_back("/host");

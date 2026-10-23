@@ -415,7 +415,7 @@ Tools carried alongside:
   `./build/mac-phoenix --backend executor`. No ROM. Runs on `mame-68k`.
 * System disk: `--executor-system IMAGE` (Settings > System disk) names a
   disk image in `<storage>/images`. On first use its System Folder is
-  copied out (`sideload_system.py`) into
+  copied out (Executor's HFS reader, `hfs_sideload.cpp`; `sideload_system.py` without Executor) into
   `<storage>/executor-systems/IMAGE.clean/`, and the image is mounted
   read-only beside it so its applications are there. `IMAGE/` is the
   working copy the run uses, restored from `.clean` each run unless "start

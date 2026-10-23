@@ -15,6 +15,8 @@ namespace fs = std::filesystem;
 
 namespace executor_systems {
 
+bool (*sideload_hook)(const std::string&, const std::string&, std::string&) = nullptr;
+
 std::string root(const std::string& storage_dir)
 {
     return storage_dir + "/executor-systems";
@@ -197,6 +199,15 @@ bool create_from_image(const std::string& storage_dir, const std::string& name,
     if (fs::exists(clean, ec)) {
         err = name + " already exists";
         return false;
+    }
+
+    if (sideload_hook) {
+        fs::create_directories(clean, ec);
+        if (!sideload_hook(image_path, clean.string(), err)) {
+            fs::remove_all(clean, ec);
+            return false;
+        }
+        return true;
     }
 
     // The tool sits next to the build directory: <repo>/build/mac-phoenix.

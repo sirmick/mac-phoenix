@@ -55,6 +55,8 @@ self.onmessage = (e) => {
         const others = m.files.filter((f) => !IMAGE.test(f.name));
         Module.arguments = ['--size', `${m.width}x${m.height}`,
                             ...images.flatMap((f) => ['--disk', `/uploads/${f.name}`])];
+        if (m.system && images.some((f) => f.name === m.system))
+            Module.arguments.push('--system', `/uploads/${m.system}`);
         Module.preRun = [() => {
             FS.mkdir('/host');              // Executor's "Host" volume
             if (images.length) {

@@ -74,6 +74,22 @@ document.getElementById('add').addEventListener('change', async (e) => {
 });
 document.getElementById('restart').addEventListener('click', () => start());
 
+// The System to run on: Executor's own (''), or a disk image's (its name),
+// remembered across visits.
+const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
+const systemSelect = document.getElementById('system');
+systemSelect.addEventListener('change', () => {
+    localStorage.setItem('executor-system', systemSelect.value);
+    start();
+});
+
+function showSystems(files) {
+    const want = localStorage.getItem('executor-system') || '';
+    systemSelect.replaceChildren(new Option("Executor's own", ''),
+        ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
+    systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
+}
+
 // ---- the Worker ----
 async function start() {
     if (worker)
@@ -86,6 +102,7 @@ async function start() {
 
     const files = await storedFiles();
     showFiles(files);
+    showSystems(files);
 
     // A canvas hands its control over once: a fresh one per start.
     canvas = document.createElement('canvas');
@@ -98,7 +115,8 @@ async function start() {
 
     worker = new Worker('worker.js');
     const offscreen = canvas.transferControlToOffscreen();
-    worker.postMessage({ type: 'start', canvas: offscreen, width, height, files }, [offscreen]);
+    worker.postMessage({ type: 'start', canvas: offscreen, width, height, files,
+                         system: systemSelect.value }, [offscreen]);
     worker.onmessage = (e) => {
         const m = e.data;
         if (m.type === 'frame') {

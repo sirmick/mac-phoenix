@@ -138,6 +138,8 @@ static void reserve_mac_address_space_early()
 #include "core/boot_progress.h"
 #ifdef HAVE_EXECUTOR
 #include "executor_child.h"
+#include "hfs_sideload.h"
+#include "core/executor_systems.h"
 #endif
 #include "ipc/ipc_protocol.h"
 #include "guest_bridge.h"
@@ -500,6 +502,15 @@ static bool video_ipc_m68k_init(bool classic)
 
 int main(int argc, char **argv)
 {
+#ifdef HAVE_EXECUTOR
+	// Executor's System Folders come out of disk images with its own HFS
+	// reader (no python3 needed).
+	executor_systems::sideload_hook = [](const std::string& image, const std::string& dir,
+	                                     std::string& err) {
+		return executor_host::sideload_system(image, dir, nullptr, &err);
+	};
+#endif
+
 	printf("=== mac-phoenix ===\n\n");
 
 	// Mac address space guards: constructor(101) already reserved 0x08000000-0x70000000
