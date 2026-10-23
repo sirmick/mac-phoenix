@@ -74,6 +74,7 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
                                          (out of Apple's Installer's way)
 """
 
+import base64
 import json
 import os
 import subprocess
@@ -82,6 +83,9 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+# The emulator; MACPHOENIX_EMULATOR names another (a copy kept apart from a
+# build that relinks build/mac-phoenix during a long run).
+EMULATOR = os.environ.get("MACPHOENIX_EMULATOR") or os.path.join(ROOT, "build", "mac-phoenix")
 
 
 def roms(storage):
@@ -138,10 +142,11 @@ class Guest:
     def __init__(self, work, backend, disks, cdroms, port, storage, timeout=3600, extra=()):
         self.base = f"http://localhost:{port}"
         self.backend, self.work = backend, work
+        self.draw_floor = 0                     # finder_item's draw log: only draws after this
         self.agent = has_agent(backend)         # BridgeAgent there (System 7.5+; set False for a 7.1 guest:
                                                 # no File System Manager, no Host volume, no agent)
         emu_backend, machine_args = MACHINE_ARGS[backend]
-        args = [os.path.join(ROOT, "build", "mac-phoenix"), "--config", "/dev/null", "--network", "none",
+        args = [EMULATOR, "--config", "/dev/null", "--network", "none",
                 "--bridge", "--backend", emu_backend, "--rom", roms(storage)[backend], "--port", str(port),
                 *machine_args,
                 "--timeout", str(timeout), "--dismiss-shutdown-dialog",
@@ -186,7 +191,7 @@ class Guest:
                     return json.loads(data)
                 except UnicodeDecodeError:          # app names come back in MacRoman
                     return json.loads(data.decode("mac_roman"))
-        except OSError:
+        except (OSError, ValueError):               # ValueError: JSON the emulator got wrong
             return None
 
     def get(self, path, timeout=30):
@@ -248,6 +253,10 @@ class Guest:
         while agent and not (self.get("/api/status") or {}).get("bridge_agent_connected"):
             if time.time() - start > timeout:
                 raise RuntimeError(f"no bridge agent within {timeout}s")
+            if self.backend == "kpx":           # the G3's Energy Saver message, modal, can be
+                at = self.find({"button": "Close Message"})     # up before the agent starts
+                if at:
+                    self.click(*at)
             self.pause(2)
 
     def close_energy_saver(self, timeout=20):
@@ -561,13 +570,14 @@ class Guest:
             self.mouse(button=0, down=False)
             time.sleep(1.5)
 
-    def finder_item(self, name, in_window, redraw=None):
+    def finder_item(self, name, in_window, redraw=None, timeout=30):
         """Where the Finder draws `name`: in the front window (in_window) or on
         the desktop; waited for (30 s). A label a window's edge clips is
         found whole in the draw log; `redraw` (a one-element list, False)
         allows one Select All when it's missing from the desktop (icons drawn
         before the text feed: the boot disk's)."""
-        deadline = time.time() + 30
+        deadline = time.time() + timeout
+        name = name.strip()                     # drawn labels carry no trailing space
         while True:
             self.mouse(x=0, y=479)              # the cursor off the names, so they read whole
             time.sleep(0.5)
@@ -577,7 +587,7 @@ class Guest:
             t = self.drawn(name, within=within, exact=True)
             if not t and within:                # a label the window's edge clips: the draw log
                 l, tp, r, b = within            # has it whole; its latest draw in the window
-                draws = (self.get("/api/text?since=0") or {}).get("draws", [])
+                draws = (self.get(f"/api/text?since={self.draw_floor}") or {}).get("draws", [])
                 t = next((d for d in reversed(draws) if d["text"].strip() == name
                           and d["rect"][2] > l and d["rect"][0] < r
                           and tp <= d["rect"][1] and d["rect"][3] <= b), None)
@@ -596,17 +606,44 @@ class Guest:
                 continue
             self.pause(1)
 
+    def text_seq(self):
+        """The text feed's latest draw number."""
+        return (self.get("/api/text") or {}).get("seq", 0)
+
     def finder_open(self, path):
         """Open Vol:Folder:...:Item in the Finder without the bridge (System
         6): each name selected where it is drawn (the volume on the desktop,
         the rest in the window the last one opened) and opened with
         Command-O."""
         redraw = [False]
-        for i, name in enumerate(p for p in path.split(":") if p):
+        names = [p for p in path.split(":") if p]
+        for _ in range(12):                     # from the desktop: windows a launch before left
+            if not [w for w in self.ui().get("windows", []) if w.get("visible")]:
+                break                           # open (the Finder reopens them after a restart)
+            self.cmd_key(0x0D)                  # W: close the front one
+            time.sleep(0.5)
+        for i, name in enumerate(names):
             t, _ = self.finder_item(name, in_window=i > 0, redraw=redraw)
             self.click((t["rect"][0] + t["rect"][2]) // 2, (t["rect"][1] + t["rect"][3]) // 2)
+            self.draw_floor = self.text_seq()   # what the window opened draws comes after this
             self.cmd_key(0x1F)                  # O
             time.sleep(2)
+            if i < len(names) - 1:              # a window: by Name, so long names (an SE's
+                for _ in range(20):             # (once it is the front one)
+                    w = next((w for w in self.ui().get("windows", []) if w.get("front")), None)
+                    if w and w.get("title", "").strip() == name.strip():
+                        break
+                    time.sleep(0.5)
+                try:                            # 512-pixel screen clips icon labels) read whole,
+                    self.menu("View", "by Name")
+                    time.sleep(1)
+                    w = next((w for w in self.ui().get("windows", []) if w.get("front")), None)
+                    if w and w["rect"][3] - w["rect"][1] < 220:     # and zoomed (its zoom box,
+                        self.draw_floor = self.text_seq()
+                        self.click(w["rect"][2] - 13, w["rect"][1] - 10)    # in the title bar),
+                        time.sleep(1)           # so a folder's rows fit without scrolling
+                except (NotFound, RuntimeError):
+                    pass
 
     def cmd_key(self, keycode):
         """Command + an ADB keycode (0x0C Q, 0x2F period, 0x0D W)."""
@@ -641,7 +678,8 @@ class Guest:
         path = os.path.join(self.host_dir(), out)
         if os.path.exists(path):
             os.unlink(path)
-        self.post("/api/script", {"creator": creator, "script": script}, 60)
+        self.post("/api/script", {"creator": creator,                # MacRoman: paths hold ƒ
+                                  "script_b64": base64.b64encode(script.encode("mac_roman")).decode()}, 60)
         for _ in range(wait):
             if os.path.exists(path) and os.path.getsize(path):
                 time.sleep(0.5)

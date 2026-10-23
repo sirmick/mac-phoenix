@@ -8,7 +8,8 @@ Exported items are (relative path as MacRoman bytes, MacBinary file or None
 for a folder).
 
 Only media preparation uses this: what goes onto a guest's Media volume or
-is attached as a disk for a bake. Software reaches disks through snapshots,
+is attached as a disk for a bake, and the Installers disks (installers.py),
+which hold the same. Software reaches disks through snapshots,
 which the Mac makes.
 """
 
@@ -84,8 +85,14 @@ class Volume:
 
     def _copy_out(self, hpath, stage):
         local = os.path.join(stage, f"{len(os.listdir(stage))}.bin")
-        self.hfs.run("hcopy", "-m", hpath, local)
+        self.hfs.run("hcopy", "-m", glob_quote(hpath), local)
         return local
+
+
+def glob_quote(path):
+    """An HFS path hcopy takes literally: it globs its arguments, so a name
+    holding \\ * ? [ ] (AppleScript's "Edit the Current Page\\E") needs them escaped."""
+    return re.sub(rb"([\\*?\[\]])", rb"\\\1", path)
 
 
 class Archive:

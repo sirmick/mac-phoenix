@@ -234,6 +234,26 @@ def seal_volume(work, image, meta):
     return meta
 
 
+def set_key(path, key, work=None):
+    """Rewrite a snapshot's manifest with another key (its content as it was)."""
+    hfs = Hfs(work or tempfile.gettempdir())
+    hfs.mount(path)
+    try:
+        raw = hfs.run("hcopy", "-r", b":" + INFO, "-")
+        hidden = b"i" in (hfs.run("hls", "-l", "-a", b":").split(INFO)[0].rsplit(b"\n", 1)[-1][:3])
+        meta = json.loads(raw.replace(b"\r", b"\n").decode("mac_roman"))
+        meta["key"] = key
+        info = os.path.join(tempfile.mkdtemp(dir=work), "info")
+        with open(info, "wb") as f:
+            f.write(json.dumps(meta, indent=1, ensure_ascii=False)
+                    .encode("mac_roman", "replace").replace(b"\n", b"\r"))
+        hfs.run("hdel", b":" + INFO)
+        hfs.run("hcopy", "-r", info, b":" + INFO)
+        hfs.run("hattrib", "-t", "TEXT", "-c", "ttxt", *(["+i"] if hidden else []), b":" + INFO)
+    finally:
+        hfs.umount()
+
+
 def manifest(path, work=None):
     """The manifest of a snapshot image."""
     hfs = Hfs(work or tempfile.gettempdir())

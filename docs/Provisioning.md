@@ -50,12 +50,12 @@ Expander and Disk Copy, what bakes start from) or a standard image
 |---|---|
 | `7.5.5.img`, `7.6.1.img` | the standard boot disks, 68k and PowerPC: `tools-7.5.5` (Open Transport 1.1.2) / `tools-7.6.1` plus TCP/IP on DHCP (`network-dhcp-7.5.5`, `network-dhcp`) and MacsBug 6.6.3 |
 | `tests-7.5.5.img`, `tests-7.6.1.img`, `tests-9.0.4.img` | what the guest tests boot (a copy each run, `tests/lib/refresh_test_disk.sh`): the standard disks, on 7.x plus MacPerl 5.2.0r4 (68k), Frontier 5.0.1 and MPW 3.4.2 |
-| `dev-tools-system-7.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
+| `dev-tools-system-7.img` | 1 GB HFS volume "Development": MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22), CodeWarrior Pro 4, THINK C 6, Symantec C++ 7; under `Languages ƒ`: THINK Pascal 4.5, MacPerl 5.2, MacPython 1.5.2, HyperCard 2.4.1, Frontier 5.0.1; under `Tools ƒ`: ResEdit 2.1.3, Resorcerer 2.0, BBEdit Lite 4.1, Disk Copy 6.3.3, StuffIt Expander 5.5, ZTerm, MacsBug 6.6.3 |
 | `dev-7.5.5.img`, `dev-7.6.1.img` | the standard disks (`standard-7.5.5`, `standard-7.6.1`) plus the System Folder parts of CodeWarrior Pro 4, MacPerl, MacPython and Disk Copy: MetroNub, CFM-68K and PowerPC libraries, PythonCore, ... |
 | `7.1.img` | System 7.1 for the Quadra 650 (`os-7.1`): boots with `--model-id 5` (bases.json `args`; web UI profile `7.1-68k`); no BridgeAgent (no File System Manager, so no Host volume) |
-| `6.0.8.img` | System 6.0.8, universal (boots the SE and the IIci: Color, Monitors, AppleShare, AppleTalk Responder, all printer drivers, 32-Bit QuickDraw), installed from the Legacy CD's floppies by Apple's Installer on the IIci (`os-6.0.8`), with the floppies' utilities at the top and StuffIt Expander 4.0.2 and Disk Copy 4.2 in Utilities (`tools-6.0.8`) |
+| `6.0.8.img` | System 6.0.8, universal (boots the SE and the IIci: Color, Monitors, AppleShare, AppleTalk Responder, all printer drivers, 32-Bit QuickDraw), installed from the Legacy CD's floppies by Apple's Installer on the IIci (`os-6.0.8`), with the floppies' utilities at the top and StuffIt Expander 4.0.2 and Disk Copy 4.2 in Utilities (`tools-6.0.8`); AppleShare set aside in Disabled Items (`"disable"`: its INIT takes the high memory Silicon Beach's games need on the SE) |
 | `8.6.img`, `9.0.4.img` | Mac OS 8.6 and 9.0.4 for the PowerPC machine (G3 ROM): installed from their CDs (`os-8.6`, `os-9.0.4`), with CarbonLib 1.6, StuffIt Expander 6.0.1, Disk Copy 6.3.3, MacsBug, TCP/IP on DHCP (8.6 by `network-dhcp-8.6`, 9.0.4 as installed) |
-| `dev-tools-macos-8-9.img` | the 8.6 / 9 development volume: CodeWarrior Pro 7.2 (7.1 Tools CD + the 7.2 PowerPC plugins; needs CarbonLib 1.3.1+), MPW-GM; `Languages`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
+| `dev-tools-macos-8-9.img` | the 8.6 / 9 development volume: CodeWarrior Pro 7.2 (7.1 Tools CD + the 7.2 PowerPC plugins; needs CarbonLib 1.3.1+), MPW-GM; `Languages ƒ`: MacPerl 5.6.1r2, MacPython-OS9 2.3.5, HyperCard 2.4.1, Frontier 5.0.1; `Tools ƒ`: ResEdit, Resorcerer, BBEdit Lite 6.1.2, Disk Copy, StuffIt Expander 6.0.1, ZTerm, MacsBug |
 | `dev-8.6.img`, `dev-9.0.4.img` | the 8.6 / 9.0.4 disks plus those tools' System Folder parts; boot with `dev-tools-macos-8-9.img` |
 | `mpw.img`, `mpw-cw.img` | the MPW service disks `tools/mpw/mpw` runs (docs/MPW.md) |
 
@@ -82,7 +82,7 @@ The E.T.O. #22 disc is a local-only pin: a machine without it gets
 | Image | What | Boot with |
 |---|---|---|
 | `games-classic.img` | Silicon Beach's Airborne!, Enchanted Scepters, Dark Castle, Beyond Dark Castle, Apache Strike; Rescue! 2.0.4, SimCity 1.3c, Shufflepuck Café, Glider 4.0.4, Crystal Quest, Oregon Trail, Spaceward Ho! 3.0.1 | `6.0.8` on the SE or IIci |
-| `games.img` | Ambrosia (Maelstrom, Escape Velocity, EV Override, Apeiron, Barrack, Swoop, Chiral, Bubble Trouble, Ares, Avara, Cythera), Digital Messiah, Maxis (SimCity 2000, SimAnt, SimEarth, SimLife, SimTower, SimFarm, A-Train), Civilization I and II, Marathon 1/2/Infinity, Pathways into Darkness, Spectre, Bolo, Glider PRO, Master of Orion, Warcraft II, Lemmings, Populous II, Afterlife | `7.5.5` / `7.6.1`, 68k or PowerPC |
+| `games.img` | Ambrosia (Maelstrom, Escape Velocity, EV Override, Apeiron, Barrack, Swoop, Chiral, Bubble Trouble, Ares, Avara, Cythera), Digital Messiah, Maxis (SimCity 2000, SimAnt, SimEarth, SimLife, SimTower, SimFarm, A-Train), Civilization I and II, Marathon 1/2/Infinity, Pathways into Darkness, Spectre, Bolo, Glider PRO, Master of Orion, Warcraft II, Lemmings, Populous II, Afterlife; Prince of Persia 1 and 2, Monkey Island 1 and 2, Wolfenstein 3D, Flashback, Spiderweb's Exile I–III, Oids, Pararena 2 | `7.5.5` / `7.6.1`, 68k or PowerPC |
 | `games-ppc.img` | EV Nova, Ferazel's Wand 1.0.3, Mars Rising, Slithereens, Master of Orion II (Large Install; its CD image can be attached too) | `8.6` / `9.0.4` |
 | `world-builder-1.2.img` | World Builder 1.2 and Mountain of Mayhem | any 68k |
 
@@ -90,7 +90,10 @@ One bake per game (`provisioning/bakes/`, the media pinned in `media.json`):
 archives expanded, floppies and CD images copied from, installers run.
 Ambrosia's own installers are driven by Drive and Install; Installer VISE
 ones by Switch Disk, or by the Install Location popup, set to the target.
-The installer bakes name their target volume `Games` (`"target"`), so a
+Many of these games run only in 256 colours: the 68k machine starts in a
+chosen depth with `--depth 8` (`test_image.py 7.6.1 games --depth 8`); the
+PowerPC machine offers 32-bit only so far. Afterlife and Warcraft II's map
+editor want their CD. The installer bakes name their target volume `Games` (`"target"`), so a
 check for the target's name can't match the Install button. An image's
 `place` can carry `launch` for a snapshot baked without one.
 
@@ -98,15 +101,53 @@ check for the target's name can't match the Install button. An image's
 
 | Image | What | Boot with |
 |---|---|---|
-| `productivity-system-7.img` | AppleWorks 5.0.3, Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0 | `productivity-7.6.1`, 68k or PowerPC |
-| `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0 | `productivity-9.0.4` |
+| `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-7.6.1`, 68k or PowerPC |
+| `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98, GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-9.0.4` |
 
 The boot disks are the standard ones plus the apps' System Folder parts
 (AppleWorks' translators, dictionaries and libraries). AppleWorks' 5.0.4
 updater won't run before Mac OS 9, so System 7 gets 5.0.3. The installers
 put each machine's own build on it; the merge makes them fat. First-launch
 personalisation is typed (`{"type": "Mac Phoenix"}`). Word 5.1a
-(`word-5.1a`, `"wip"`) doesn't install yet: see its note.
+(`word-5.1a`, `"wip"`) doesn't install yet: see its note. Office 98 is its CD's
+drag-install folder; its first launch asks for the CD key, which is left to
+the user (`needs_serial`). Products whose installer takes a serial number
+are `"kind": "stage"` bakes: pinned media, no snapshot, only on the
+Installers disk (Photoshop 4.0, Illustrator 6.0, PageMaker 6.5, FreeHand 8,
+the QuarkXPress 4.0 upgrade, Persuasion 3.0, FileMaker Pro 4.0). No serial
+is typed for them, and serials that came inside an archive are left out of it.
+
+## The Installers disks
+
+| Image | What |
+|---|---|
+| `installers-games.img` | every game bake's installer or archive |
+| `installers-productivity.img` | the productivity bakes' installers, and those only staged: Photoshop 4.0, Illustrator 6.0, PageMaker 6.5, FreeHand 8, QuarkXPress 4.0 upgrade, Persuasion 3.0, FileMaker Pro 4.0, Word 5.1a |
+| `installers-development.img` | System 7's: CodeWarrior Pro 4, MPW 3.4.2, ToolServer, the ASLM SDK, THINK C/Pascal, Symantec C++, MacPerl 5.2, MacPython 1.5.2, HyperCard, Frontier, ResEdit, Resorcerer, BBEdit Lite 4.1, ZTerm, MacsBug |
+| `installers-development-macos-8-9.img` | Mac OS 8–9's: CodeWarrior Pro 7.2, MPW-GM, MacPerl 5.6.1, MacPython 2.3.5, BBEdit Lite 6.1.2 (one HFS volume can't hold both CodeWarrior CDs) |
+| `installers-system.img` | System 6.0.8 to Mac OS 9.0.4, Open Transport 1.1.2, CarbonLib 1.6, Disk Copy, StuffIt Expander |
+
+One per category (development in two), a folder per product (`"installers"` in
+`provisioning/images/installers-*.json`), holding what its bakes gave the
+guest in the form it got it (`installers.py`): Media volume items as
+they were, an expand bake's archive typed for StuffIt Expander, floppies
+as Disk Copy 4.2 images, and from a CD or another big volume a folder named
+after it with only what the steps used (an installer's folder, the items
+copied). They are the one kind of disk the host fills with software
+itself, the same preparation a bake's Media volume gets: installers to
+run, not installed software. Mount one beside any boot disk to run an installer by hand: one
+that stops at a serial number, say. Every bake with media must be on one
+(the build warns of any that isn't); `--list` shows when one is stale
+(a bake or its media changed).
+
+## Folder names
+
+At the top of a data image there are only folders, each
+`<Product> <version> ƒ` (`Marathon 1.2 ƒ`, `Microsoft Excel 4.0 ƒ`, and the
+categories `Languages ƒ`, `Tools ƒ`), placed with `take` + `as` or with
+`to`; the build fails otherwise. Snapshots keep the names installers gave
+them. Not renamed: `MPW` and `Interfaces&Libraries`, which MPW finds by
+name, and the boot disks' System layout.
 
 ## bake.py
 
@@ -202,6 +243,12 @@ python3 provisioning/bake.py --finish                    # capture, and save the
 Floppy sets go on a "Media" volume and are mounted through the guest's
 Disk Copy, so installers can eject and ask for them as on real floppies
 (raw floppy images are converted to Disk Copy 4.2 first: `"dc42": true`).
+A bake's key holds what its base *is* (`base_identity`: an os snapshot's
+content hash, a built image's content: `build.content_identity`, its
+definition and its snapshots' contents, not `FORMAT`), not the base
+file's bytes: a rebuilt image differs in its dates alone, and neither that
+nor a `FORMAT` bump may make every bake stale. An os bake leaves the Apple menu's Recent folders empty.
+
 Several bakes can run at once (`--jobs`, default 3); scratch space is
 `$MACEMU_STORAGE/work`. A bake marked `"wip"` is left out of `--all`.
 
@@ -210,8 +257,8 @@ Several bakes can run at once (`--jobs`, default 3); scratch space is
 ```json
 {"label": "Development", "size_mb": 1024,
  "place": [{"snapshot": "mpw-3.4.2"},
-           {"snapshot": "frontier-5.0.1", "to": "Languages"},
-           {"snapshot": "think-c-6", "take": "Development", "as": "THINK C 6.0"}]}
+           {"snapshot": "frontier-5.0.1", "take": "Frontier 5.0.1", "to": "Languages ƒ", "as": "Frontier 5.0.1 ƒ"},
+           {"snapshot": "think-c-6", "take": "Development", "as": "THINK C 6.0 ƒ"}]}
 {"base": "standard-7.6.1", "system_from": ["codewarrior-pro-4", "macperl-5.2.0r4"],
  "aliases_to": "dev-tools-system-7"}
 ```
@@ -225,7 +272,12 @@ launch as paths on the image (what `test_image.py` runs), plus the
 definition's `title`, `tags` and `note` for the web UI's disk list.
 Aliases point at the bake's target volume; those whose target is placed
 are rewritten to where it landed, a boot image's System Folder aliases to
-the data image named by `aliases_to`. `build.py --list` shows each
+the data image named by `aliases_to`; a place's `"redirect"` ({old: new}
+paths in the snapshot) follows a target an updater renamed after the alias
+was made (CodeWarrior 7.2's IDE), and `"external_aliases": "drop"` leaves
+out aliases to anything not placed (E.T.O. #22's documentation). On an
+Installers disk, aliases into a CD staged as a folder point at the folder.
+`build.py --list` shows each
 definition's state.
 
 ## macfetch
@@ -251,6 +303,7 @@ Archive, `old.mac.gdn`, oldapplestuff.com, the Garden FTP
 | Script | What |
 |---|---|
 | `containers.py`, `ndif.py` | read media: archives (unar), HFS images, CDs with partition maps, Disk Copy 4.2 and 6 (NDIF) |
+| `aliases.py` | broken aliases on images, read from the HFS catalog on the host: `aliases.py dev-7.6.1 dev-tools-system-7`, `--all` (every image, looked up together); states ok, by-id, missing, external |
 | `create_hfs.py`, `create_hfs_plus.py` | blank HFS / HFS+ images |
 | `populate_disk.py` | copy everything in `~/storage/installers` onto an image (unar, MacBinary) |
 | `hfs_bless.py`, `fix_hfs_header.py` | bless a System Folder; repair a volume header |

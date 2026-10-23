@@ -6,12 +6,15 @@ each snapshot's "launch" list as paths on the image). Each app is launched
 through the bridge, counts as running when it is the front process, and is
 quit before the next; an app marked "no_quit" (a modal dialog it can't get
 past here: a serial number, a missing serial port) is left by restarting the
-emulator. The aliases build.py rewrote are then resolved in the guest by
-Frontier (file.followAlias), when one of the images has it. Copies of the
-images are booted, so the built ones are never
-written. Runs on each machine (68k, ppc) unless --machine says one.
+emulator, as is one that failed. "front" names the process it brings to the
+front when that isn't itself (Office 98's: Microsoft Office First Run). The
+aliases build.py rewrote are then resolved in the guest by Frontier
+(file.followAlias), when one of the images has it. Copies of the images are
+booted, so the built ones are never written. Runs on each machine (68k,
+ppc) unless --machine says one.
 
   test_image.py dev-7.6.1 dev-tools-system-7 [--machine 68k] [--only Perl ...]
+  test_image.py 7.6.1 games --depth 8             the 68k screen in 256 colours
 """
 
 import argparse
@@ -65,7 +68,37 @@ def check_aliases(guest, aliases, frontier, log=print):
     return ok
 
 
-def run(images, machine, port, only, log=print):
+def try_launch(guest, e):
+    """Launch an app; (it came to the front and stayed, the front app, the result)."""
+    path = e["app"]
+    if guest.agent:
+        r = guest.bridge("/api/launch", {"path": path})
+    else:                                       # System 6: the Finder, by name
+        try:
+            guest.finder_open(path)
+            r = {"success": True}
+        except RuntimeError as ex:
+            r = {"success": False, "error": str(ex)}
+    ok, front = False, ""
+    if r.get("success"):
+        deadline = time.time() + 90
+        while time.time() < deadline:
+            front = guest.app()
+            if is_front(front, e.get("front") or path):     # "front": the process it brings up
+                ok = True
+                break
+            time.sleep(2)
+    if ok:
+        time.sleep(8)                           # let it finish starting: some put up an Open dialog late
+        refused = next((t["text"] for t in (guest.get("/api/text") or {}).get("text", [])
+                        if REFUSAL.search(t["text"])), None)
+        if refused:                             # running, but only to say it won't
+            ok = False
+            r = {"success": False, "error": f"refused: {refused!r}"}
+    return ok, front, r
+
+
+def run(images, machine, port, only, log=print, extra=()):
     work = tempfile.mkdtemp(prefix=f"test_image.{machine}.", dir=bake.work_root())
     disks, apps, aliases = [], [], []
     for name in images:
@@ -79,7 +112,7 @@ def run(images, machine, port, only, log=print):
     apps = [e for e in apps if not only or any(o.lower() in e["app"].lower() for o in only)]
 
     def start():
-        g = Guest(work, bake.BACKENDS[machine], disks, [], port, bake.STORAGE, extra=image_args(images[0]))
+        g = Guest(work, bake.BACKENDS[machine], disks, [], port, bake.STORAGE, extra=image_args(images[0]) + list(extra))
         try:
             g.wait_finder(240)
         except BaseException:
@@ -94,38 +127,23 @@ def run(images, machine, port, only, log=print):
     try:
         for n, e in enumerate(apps):
             path, leaf = e["app"], e["app"].rsplit(":", 1)[-1]
-            if guest.agent:
-                r = guest.bridge("/api/launch", {"path": path})
-            else:                               # System 6: the Finder, by name
-                try:
-                    guest.finder_open(path)
-                    r = {"success": True}
-                except RuntimeError as ex:
-                    r = {"success": False, "error": str(ex)}
-            ok, front = False, ""
-            if r.get("success"):
-                deadline = time.time() + 90
-                while time.time() < deadline:
-                    front = guest.app()
-                    if is_front(front, path):
-                        ok = True
-                        break
-                    time.sleep(2)
-            if ok:
-                time.sleep(8)               # let it finish starting: some put up an Open dialog late
-                refused = next((t["text"] for t in (guest.get("/api/text") or {}).get("text", [])
-                                if REFUSAL.search(t["text"])), None)
-                if refused:                 # running, but only to say it won't
-                    ok = False
-                    r = {"success": False, "error": f"refused: {refused!r}"}
+            for attempt in (1, 2):              # a launch that didn't come up gets a second
+                ok, front, r = try_launch(guest, e)     # go on a fresh guest: driving the
+                if ok or attempt == 2 or r.get("error", "").startswith("refused"):   # Finder (System
+                    break                       # 6) depends on timing; a refusal is the app's answer
+                log(f"     {leaf}: {r.get('message') or r.get('error')}; once more, on a fresh guest")
+                guest.stop()
+                time.sleep(3)
+                guest = start()
             guest.shot(f"{n:02d}-" + ("ok-" if ok else "FAIL-") + leaf.replace("/", "_"))
             facts = [k for k in e if k not in ("app", "snapshot", "machines")]
             results.append(ok)
             log(f"{'ok  ' if ok else 'FAIL'} {path}  [{e['snapshot']}]"
                 + (f" {', '.join(facts)}" if facts else "")
                 + ("" if ok else f"  ({r.get('message') or r.get('error')}; front: {front})"))
-            launched_but_failed = not ok and r.get("error", "").startswith("refused")
-            if launched_but_failed or (ok and (e.get("no_quit") or not guest.close_front(front))):
+            # A failure can leave the guest anywhere (a refusal, a system-modal
+            # alert: Dark Castle's on an SE): start afresh, so it fails alone.
+            if not ok or e.get("no_quit") or not guest.close_front(front):
                 if ok and not e.get("no_quit"):
                     log(f"     {leaf} would not quit; restarting the emulator")
                 guest.stop()
@@ -193,10 +211,11 @@ def main():
     ap.add_argument("--machine", choices=sorted(bake.BACKENDS), action="append")
     ap.add_argument("--port", type=int, default=19470)
     ap.add_argument("--only", action="append", help="substring: test only matching apps (repeatable)")
+    ap.add_argument("--depth", type=int, help="the screen's colour depth to start in (68k): 8 for 256-colour games")
     args = ap.parse_args()
     ok = True
     for i, m in enumerate(args.machine or image_machines(args.images[0])):
-        ok &= run(args.images, m, args.port + i, args.only)
+        ok &= run(args.images, m, args.port + i, args.only, extra=["--depth", str(args.depth)] if args.depth else [])
     return 0 if ok else 1
 
 

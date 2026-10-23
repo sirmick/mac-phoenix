@@ -15,6 +15,8 @@ the bake. Kinds:
            (then any "steps": a first launch, say)
   copy     items copied by the guest from attached media: "steps" with
            {"copy": {"from": ..., "to": "{target}:"}}
+  stage    no snapshot: media only, put on an Installers disk (installers.py)
+           for a product whose installer stops at a serial number
   derive   a snapshot made from other snapshots on the host: "from"
            (their names), merged as machine runs are
   os       a System: its installer (and updaters) run by "steps" onto the
@@ -73,8 +75,8 @@ runs on that machine only.
                                              UI shows the step being run
 
 A snapshot is up to date when its key (the bake definition, its media's
-pins and its base's hash, or for a derive its parents' content hashes)
-matches; so is a machine run.
+pins and what its base is: base_identity; or for a derive its parents'
+content hashes) matches; so is a machine run.
 """
 
 import argparse
@@ -99,7 +101,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "tools", "macfetch"))
 import fat_cfm  # noqa: E402
 import macfetch  # noqa: E402
 import snapshot  # noqa: E402
-from containers import Volume, macbinary_to_files, mr, named, open_container, take  # noqa: E402
+from containers import MAC_EPOCH, Volume, macbinary_to_files, mr, named, open_container, take  # noqa: E402
 import guest as guest_mod  # noqa: E402
 from guest import Guest, watch_url  # noqa: E402
 from populate_disk import build_macbinary  # noqa: E402
@@ -190,6 +192,20 @@ def base_image(os_name):
     return os.path.join(IMAGES, b["image"]), b
 
 
+def base_identity(os_name):
+    """What a base System is, for keys: an os snapshot's content hash, a
+    built image's content (build.content_identity: its definition and its
+    snapshots' contents), a hand-made image's MD5. Not a built file's bytes: rebuilt, the same
+    content differs in its dates."""
+    path, b = base_image(os_name)
+    if "snapshot" in b:
+        return snapshot.manifest(path)["content_hash"]
+    if "built" in b:
+        import build                        # (build imports this module)
+        return build.content_identity(build.load_def(b["built"]))
+    return file_md5(path)
+
+
 _hash_cache = {}
 
 
@@ -255,7 +271,7 @@ def bake_key(bake):
         for p in bake["from"]:
             h.update(snapshot.manifest(snapshot_path(p))["content_hash"].encode())
     else:
-        h.update(file_md5(base_image(bake.get("os", DEFAULT_OS))[0]).encode())
+        h.update(base_identity(bake.get("os", DEFAULT_OS)).encode())
         for n in media_names(bake):
             h.update(media_entry(n).get("md5", "").encode())
     return h.hexdigest()
@@ -298,10 +314,10 @@ def dc42_checksum(data):
     return s
 
 
-def to_dc42(macbinary, name):
+def to_dc42(macbinary, name, stamp=0):
     """A raw floppy image in a MacBinary file, rewritten as a Disk Copy 4.2
     image (type dImg, creator ddsk: Disk Copy 6 in the guest mounts it); one
-    that is a Disk Copy 4.2 image already is only typed."""
+    that is a Disk Copy 4.2 image already is only typed. stamp: its dates."""
     with open(macbinary, "rb") as f:
         blob = f.read()
     dlen = struct.unpack(">I", blob[83:87])[0]
@@ -309,7 +325,7 @@ def to_dc42(macbinary, name):
     if (len(data) > 84 and data[0] < 64 and data[82:84] == b"\x01\x00"
             and 84 + struct.unpack(">I", data[64:68])[0] <= len(data)):    # already Disk Copy 4.2:
         with open(macbinary, "wb") as f:                                    # only typed for Disk Copy
-            f.write(build_macbinary(mr(name)[:31], b"dImg", b"ddsk", data, b""))
+            f.write(build_macbinary(mr(name)[:31], b"dImg", b"ddsk", data, b"", stamp, stamp))
         return
     size, fmt = next(((s, f) for s, f in ((409600, 0), (819200, 1), (1474560, 3)) if len(data) <= s),
                      ((len(data) + 511) // 512 * 512, 3))
@@ -318,7 +334,72 @@ def to_dc42(macbinary, name):
     header = bytes([len(label)]) + label.ljust(63, b"\0") + struct.pack(
         ">IIIIBBH", size, 0, dc42_checksum(data), 0, fmt, 0x22 if fmt else 0x02, 0x0100)
     with open(macbinary, "wb") as f:
-        f.write(build_macbinary(mr(name)[:31], b"dImg", b"ddsk", header + data, b""))
+        f.write(build_macbinary(mr(name)[:31], b"dImg", b"ddsk", header + data, b"", stamp, stamp))
+
+
+RECENT = (b"Recent Applications", b"Recent Documents", b"Recent Servers")
+
+
+def clear_recent(hfs):
+    """Empty the Apple menu's Recent folders on the mounted volume: aliases to
+    what the install ran (its installer on a floppy, the agent), not the
+    System's. Their paths, removed."""
+    removed = []
+    for folder in RECENT:
+        path = b":System Folder:Apple Menu Items:" + folder
+        if hfs.exists(path):
+            for name, is_dir in hfs.ls(path + b":"):
+                if not is_dir:
+                    hfs.run("hdel", path + b":" + name)
+                    removed.append((path + b":" + name).decode("mac_roman"))
+    return removed
+
+
+def media_items(m, work):
+    """A bake's "media" entry as the items put on its Media volume."""
+    if m.get("as_is"):                      # a MacBinary file put there whole, not opened
+        with open(media_path(m["file"]), "rb") as f:    # (a self-mounting HFS+ image)
+            head = f.read(128)
+        name = m.get("as") or head[2:2 + head[1]].decode("mac_roman")
+        return [(mr(name), media_path(m["file"]))]
+    stage = tempfile.mkdtemp(dir=work)
+    items = take(media_path(m["file"]), m.get("take", ""), stage, work)
+    if m.get("dc42"):
+        stamp = int(os.path.getmtime(media_path(m["file"]))) + MAC_EPOCH
+        for rel, local in items:
+            if local:
+                to_dc42(local, rel.rsplit(b":", 1)[-1].decode("mac_roman"), stamp)
+    items, rename = named(items, m.get("take", ""), m.get("as"))
+    if rename:
+        items = [(mr(rename) + r[r.find(b":"):] if b":" in r else mr(rename), l) for r, l in items]
+    return items
+
+
+def archive_item(bake, work):
+    """An expand bake's "archive" as a MacBinary file typed so StuffIt
+    Expander knows it, creator Expander's: (name, file, data size)."""
+    stage = tempfile.mkdtemp(dir=work)
+    src = media_path(bake["archive"])
+    if bake.get("take"):
+        rel, local = take(src, bake["take"], stage, work)[0]
+        name = rel.rsplit(b":", 1)[-1].decode("mac_roman")
+        plain = os.path.join(stage, "archive")
+        macbinary_to_files(local, plain)
+        with open(local, "rb") as f:
+            ftype = f.read(128)[65:69]
+        with open(plain, "rb") as f:
+            data = f.read()
+    else:
+        name = bake["archive"]
+        ftype = ARCHIVE_TYPES.get(os.path.splitext(name)[1].lower(), b"????")
+        with open(src, "rb") as f:
+            data = f.read()
+    name = name[:31]
+    local = os.path.join(stage, "archive.bin")
+    with open(local, "wb") as f:
+        stamp = int(os.path.getmtime(src)) + MAC_EPOCH
+        f.write(build_macbinary(mr(name), ftype, b"SITx", data, b"", stamp, stamp))
+    return name, local, len(data)
 
 
 def volume_name(image):
@@ -410,22 +491,7 @@ class Session:
         vol = os.path.join(self.work, "media.img")
         snapshot.blank(hfs, vol, "Media", 512)
         for m in self.bake["media"]:
-            stage = tempfile.mkdtemp(dir=self.work)
-            if m.get("as_is"):                  # a MacBinary file put there whole, not opened
-                with open(media_path(m["file"]), "rb") as f:    # (a self-mounting HFS+ image)
-                    head = f.read(128)
-                name = m.get("as") or head[2:2 + head[1]].decode("mac_roman")
-                put(hfs, vol, [(mr(name), media_path(m["file"]))])
-                continue
-            items = take(media_path(m["file"]), m.get("take", ""), stage, self.work)
-            if m.get("dc42"):
-                for rel, local in items:
-                    if local:
-                        to_dc42(local, rel.rsplit(b":", 1)[-1].decode("mac_roman"))
-            items, rename = named(items, m.get("take", ""), m.get("as"))
-            if rename:
-                items = [(mr(rename) + r[r.find(b":"):] if b":" in r else mr(rename), l) for r, l in items]
-            put(hfs, vol, items)
+            put(hfs, vol, media_items(m, self.work))
         self.disks.append(vol)
 
     def disk_images(self):
@@ -444,30 +510,11 @@ class Session:
     def place_archive(self, hfs):
         """The archive on the target, typed so StuffIt Expander knows it,
         creator Expander's; opened, expanded, left out of the capture."""
-        stage = tempfile.mkdtemp(dir=self.work)
-        src = media_path(self.bake["archive"])
-        if self.bake.get("take"):
-            rel, local = take(src, self.bake["take"], stage, self.work)[0]
-            name = rel.rsplit(b":", 1)[-1].decode("mac_roman")
-            plain = os.path.join(stage, "archive")
-            macbinary_to_files(local, plain)
-            with open(local, "rb") as f:
-                ftype = f.read(128)[65:69]
-            with open(plain, "rb") as f:
-                data = f.read()
-        else:
-            name = self.bake["archive"]
-            ftype = ARCHIVE_TYPES.get(os.path.splitext(name)[1].lower(), b"????")
-            with open(src, "rb") as f:
-                data = f.read()
-        name = name[:31]
-        local = os.path.join(stage, "archive.bin")
-        with open(local, "wb") as f:
-            f.write(build_macbinary(mr(name), ftype, b"SITx", data, b""))
+        name, local, size = archive_item(self.bake, self.work)
         put(hfs, self.target, [(mr(name), local)])
         self.exclude.add(mr(name))
         self.pre_steps = [{"open": "{target}:" + name}, {"wait_app": "StuffIt Expander", "timeout": 30, "optional": True},
-                          {"wait": 5 + len(data) // 200_000}, {"shot": "expanded"}, {"quit": True}]
+                          {"wait": 5 + size // 200_000}, {"shot": "expanded"}, {"quit": True}]
 
     def boot_guest(self):
         self.log(f"  watch: {watch_url(self.port)}")
@@ -547,11 +594,11 @@ class Session:
         hfs.mount(part)
         removed = []
         try:
-            for p in (b":System Folder:Startup Items:BridgeAgent", b":System Folder:Preferences:MacPhoenix.cfg",
-                      b":System Folder:Apple Menu Items:Recent Applications:BridgeAgent"):
+            for p in (b":System Folder:Startup Items:BridgeAgent", b":System Folder:Preferences:MacPhoenix.cfg"):
                 if hfs.exists(p):
                     hfs.run("hdel", p)
                     removed.append(p.decode("mac_roman"))
+            removed += clear_recent(hfs)
             if hfs.exists(b":Trash"):           # agents install_bridge_agent.sh moved aside
                 for name, _ in hfs.ls(b":Trash:"):
                     if name.startswith(b"Old-BA-"):
@@ -792,6 +839,8 @@ def bake_one(bake, force=False, keep=False, log=print, port=None, extra=()):
 
 def bake_one_(bake, force=False, keep=False, log=print, port=None, extra=()):
     """The product's snapshot: one run, or a run per machine merged."""
+    if bake.get("kind") == "stage":
+        sys.exit(f"{bake['name']}: a stage-only product (no snapshot); build.py puts it on an Installers disk")
     out = snapshot_path(bake["name"])
     key = bake_key(bake) if bake.get("kind") != "derive" else None
     if bake.get("kind") == "derive":
@@ -917,7 +966,7 @@ def bake_all(names, jobs, force):
     """Every bake not up to date, in waves: a bake runs once every snapshot
     its base System is made of is done (an os bake before what's baked on
     it); derives after the rest. "wip" bakes are left out."""
-    todo = [b for b in (load_bake(n) for n in names) if not b.get("wip")]
+    todo = [b for b in (load_bake(n) for n in names) if not b.get("wip") and b.get("kind") != "stage"]
     failed = []
 
     def run(b):
@@ -950,6 +999,9 @@ def list_bakes():
     for n in all_bakes():
         b = load_bake(n)
         path = snapshot_path(n)
+        if b.get("kind") == "stage":
+            print(f"{'staged':11} {n}  [stage: on an Installers disk only]")
+            continue
         try:
             state = "up to date" if up_to_date(b) else ("stale" if os.path.exists(path) else "missing")
         except SystemExit as e:

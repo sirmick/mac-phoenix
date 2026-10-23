@@ -17,11 +17,24 @@ default sized to fit with room to spare) with snapshots' :Items: placed:
 "take" an item of :Items: (default all of them; a path takes one inside a
 folder: "CodeWarrior Pro 4:CodeWarrior MPW:MPW"), "to" a folder
 (default the top), "as" a new name for the taken item, "launch" the apps to
-launch (paths in the snapshot, for one baked without a "launch"). A boot image starts
+launch (paths in the snapshot, for one baked without a "launch"),
+"redirect" ({old: new}, paths in the snapshot: an alias target an updater
+renamed after the alias was made), "external_aliases": "drop" (aliases to
+anything not placed are left out: a CD's documentation). At a data
+image's top there are only folders, each named "<Product> <version> ƒ"
+(categories too: "Tools ƒ"), but for MPW and Interfaces&Libraries, which MPW
+finds by name; the build fails otherwise. An Installers image (one per
+category: installers-games, -productivity, -development, -system) holds
+no snapshots but the installers bakes used, a folder per product:
+"installers": [{"as": "Excel 4.0 ƒ", "bakes": ["excel-4.0"]}] (installers.py
+says what goes in); every bake with media must be on one. A boot image starts
 from a copy of a base System (provisioning/bases.json) and gets the
 :System Folder: parts of the snapshots in "system_from", replacing the
 System's own files (later snapshots win over earlier ones); it can "place"
-items too. Two snapshots placing the same file fail the build.
+items too, and "disable" System Folder items: moved to a "Disabled Items"
+folder at its top, to put back by hand (6.0.8's AppleShare, whose INIT takes
+high memory Silicon Beach's games won't share). Two snapshots placing the
+same file fail the build.
 
 Aliases a snapshot holds point at its bake's target volume. Those whose
 target is among the items placed are rewritten to where it landed (volume
@@ -61,12 +74,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import bake  # noqa: E402
 import fat_cfm  # noqa: E402
+import installers  # noqa: E402
 import snapshot  # noqa: E402
 from containers import Volume, mr  # noqa: E402
 from snapshot import Hfs  # noqa: E402
 
 DEFS = os.path.join(HERE, "images")
-FORMAT = 8                  # bumped when what build.py writes changes: images rebuild
+FORMAT = 9                  # bumped when what build.py writes changes: images rebuild
 
 
 def load_def(name):
@@ -112,10 +126,31 @@ def image_key(d, mans):
         except (OSError, ValueError):
             pass
     if d.get("base"):
-        h.update(bake.file_md5(bake.base_image(d["base"])[0]).encode())
+        h.update(bake.base_identity(d["base"]).encode())
     for s in sorted(mans):
         h.update(mans[s]["content_hash"].encode())
         h.update(json.dumps(mans[s].get("system_remove", [])).encode())   # not in the content hash
+    for p in d.get("installers", []):                # what the bakes gave the guest
+        for n in p["bakes"]:
+            b = bake.load_bake(n)
+            h.update(json.dumps(b, sort_keys=True).encode())
+            for m in bake.media_names(b):
+                h.update(bake.media_entry(m).get("md5", "").encode())
+    return h.hexdigest()
+
+
+def content_identity(d):
+    """What a built image holds, for keys that must survive a rebuild (a
+    bake's base): its definition but the descriptive fields, its snapshots'
+    contents, its base's identity. Not FORMAT: how build.py writes an image
+    doesn't change what is on it."""
+    mans = manifests(d)
+    h = hashlib.md5(json.dumps({k: v for k, v in d.items() if k not in META + ("note",)}, sort_keys=True).encode())
+    if d.get("base"):
+        h.update(bake.base_identity(d["base"]).encode())
+    for s in sorted(mans):
+        h.update(mans[s]["content_hash"].encode())
+        h.update(json.dumps(mans[s].get("system_remove", [])).encode())
     return h.hexdigest()
 
 
@@ -182,6 +217,21 @@ def mapper(place, label):
             return [label] + to + segs
         return [label] + to + [place.get("as") or take[-1]] + segs[len(take):]
     return m
+
+
+def redirected(place, where):
+    """`where` after the place's "redirect": alias targets (paths in the
+    snapshot) that moved after the alias was made (an updater renamed them)."""
+    moves = place.get("redirect", {})
+
+    def m(segs):
+        path = ":".join(segs)
+        for old, new in moves.items():
+            if path == old or path.startswith(old + ":"):
+                segs = (new + path[len(old):]).split(":")
+                break
+        return where(segs)
+    return m if moves else where
 
 
 def rewrite_alias(rec, target, where, date):
@@ -294,17 +344,18 @@ class Builder:
         self.hfs = Hfs(work)
         self.placed = {}            # path on the image -> snapshot that put it there
         self.warnings = []
-        self.fixed, self.kept = [], []      # aliases rewritten, and left alone
+        self.fixed, self.kept, self.dropped = [], [], []    # aliases rewritten, left alone, left out
         self.ids = []               # (alias on the image, image its target is on, target segments)
 
     def stage(self, snap, path):
         st = tempfile.mkdtemp(prefix="stage.", dir=self.work)
         return Volume(bake.snapshot_path(snap), self.work).export(path, st), st
 
-    def put(self, image, snap, items, dest, rename=None, replace=False, alias=None):
+    def put(self, image, snap, items, dest, rename=None, replace=False, alias=None, drop_external=False):
         """Copy staged items into folder dest (b":A:B" or b"") of image.
-        alias: (target volume, where, date) for rewriting aliases."""
-        replaced = []
+        alias: (target volume, where, date) for rewriting aliases; with
+        drop_external, aliases pointing anywhere else are left out."""
+        replaced, dropped = [], set()
         for rel, local in items:
             if local and alias and is_alias(local):
                 path = rel.decode("mac_roman")
@@ -315,8 +366,12 @@ class Builder:
                         segs[0] = mr(rename)
                     self.ids.append((dest + b":" + b":".join(segs), alias[3], new))
                     self.fixed.append(f"{snap}: {path}")
+                elif drop_external:
+                    dropped.add(rel)
+                    self.dropped.append(f"{snap}: {path}")
                 else:
                     self.kept.append(f"{snap}: {path}")
+        items = [(r, l) for r, l in items if r not in dropped]
         self.hfs.mount(image)
         try:
             listed = {}
@@ -361,7 +416,8 @@ class Builder:
             sys.exit(f"{self.d['name']}: {snap}: \"as\" needs \"take\"")
         items, st = self.stage(snap, ":Items:" + take if take else ":Items:*")
         to = b":" + mr(p.get("to", "")).strip(b":") if p.get("to") else b""
-        self.put(image, snap, items, to, as_, alias=(man.get("target"), mapper(p, label), self.date, image))
+        self.put(image, snap, items, to, as_, alias=(man.get("target"), redirected(p, mapper(p, label)), self.date, image),
+                 drop_external=p.get("external_aliases") == "drop")
         shutil.rmtree(st)
         files = sum(1 for _, l in items if l)
         where = ":".join(s for s in (p.get("to", "").strip(":"), as_) if s)
@@ -430,6 +486,38 @@ class Builder:
                  + (f"; removed {', '.join(removed)}" if removed else "") + ")")
 
 
+PLAIN = {b"MPW", b"Interfaces&Libraries"}      # folders found by name: MPW looks for {MPW}::Interfaces&Libraries:
+
+
+def check_names(hfs, image, name):
+    """A data image's top level: one folder per product, its name ending in
+    " ƒ" (the Finder convention), but for the folders software finds by name."""
+    hfs.mount(image)
+    try:
+        bad = [n.decode("mac_roman") for n, is_dir in hfs.ls(b":")
+               if n not in PLAIN and not (is_dir and n.endswith(mr(" ƒ")))]
+    finally:
+        hfs.umount()
+    if bad:
+        raise SystemExit(f"{name}: at the top, not a folder named \"... ƒ\": {', '.join(bad)}"
+                         " (place with \"take\" + \"as\", or \"to\")")
+
+
+def record_launch(d, mans, label):
+    """The apps to launch, as paths on the image: its snapshots', and a built
+    base's (its record's)."""
+    launch = []
+    base_info = bake.bases().get(d.get("base") or "", {})
+    if "built" in base_info:
+        try:
+            launch = bake.load_json(os.path.join(bake.IMAGES, base_info["built"] + ".img.json")).get("launch", [])
+        except (OSError, ValueError):
+            pass
+    for p in d.get("place", []):
+        launch += [dict(e, app=f"{label}:{e['app']}") for e in launch_paths(p, mans[p["snapshot"]])]
+    return launch
+
+
 def build(d, force=False, log=print):
     if d.get("aliases_to"):
         build(load_def(d["aliases_to"]), log=log)       # its aliases need the IDs there
@@ -439,8 +527,9 @@ def build(d, force=False, log=print):
     if not force and up_to_date(d, key):
         log(f"{d['name']}: up to date ({out})")
         rec = bake.load_json(record_path(d))
-        if any(rec.get(k) != d.get(k) for k in META + ("note",)):
-            write_record(d, dict(rec))
+        launch = record_launch(d, mans, rec["label"])     # launch facts: not in the key
+        if any(rec.get(k) != d.get(k) for k in META + ("note",)) or launch != rec.get("launch"):
+            write_record(d, dict(rec, launch=launch))
         return out
     work = tempfile.mkdtemp(prefix="build.", dir=bake.work_root())
     b = Builder(d, work, log)
@@ -455,21 +544,60 @@ def build(d, force=False, log=print):
         else:
             label = d.get("label", d["name"])
             size = d.get("size_mb")
+            products = []
+            for p in d.get("installers", []):
+                vols = set()
+                products.append((p, installers.product_items(p, work, vols), vols))
+            if not size and products:
+                size = installers.volume_mb([i for _, items, _ in products for i in [(None, None)] + items])
             if not size:
                 total = sum(os.path.getsize(bake.snapshot_path(s)) for s in mans)
                 size = int(total * 1.5 / (1 << 20)) + 64
+            if size > 2047:
+                raise SystemExit(f"{d['name']}: {size} MB, over HFS's 2 GB: split it")
             snapshot.blank(b.hfs, part, label, size)
             b.date = volume_date(label)
             set_mdb_date(part, b.date)
-        launch = []
+            for p, items, vols in products:
+                staged = {r for r, _ in items}
+                for vol in vols:                    # a CD staged as a folder: its aliases into it
+                    def where(segs, vol=vol, p=p):
+                        rel = mr(":".join([vol] + segs))
+                        return [label, p["as"], vol] + segs if rel in staged else None
+                    for rel, local in items:
+                        if local and is_alias(local):
+                            new = fix_alias(local, vol, where, b.date)
+                            if new:
+                                b.ids.append((b":" + mr(p["as"]) + b":" + rel, part, new))
+                                b.fixed.append(f"{p['as']}: {rel.decode('mac_roman')}")
+                bake.put(b.hfs, part, [(mr(p["as"]), None)] + [(mr(p["as"]) + b":" + r, l) for r, l in items])
+                log(f"  {p['as']}: {', '.join(p['bakes'])}  ({sum(1 for _, l in items if l)} files, "
+                    f"{installers.staged_size(items) >> 20} MB)")
+            if products:
+                missing = installers.unlisted([load_def(n) for n in all_defs()])
+                if missing:
+                    b.warnings.append(f"bakes with media on no Installers disk: {', '.join(missing)}")
         for p in d.get("place", []):
             b.place(part, label, p, mans[p["snapshot"]])
-            launch += [dict(e, app=f"{label}:{e['app']}") for e in launch_paths(p, mans[p["snapshot"]])]
         for s in d.get("system_from", []):
             if d.get("base") and mans[s].get("os") and mans[s]["os"] != d["base"]:
                 log(f"  ({s} was baked on {mans[s]['os']})")
             b.system(part, s, mans[s])
+        if d.get("disable"):                    # System Folder items set aside, restorable
+            b.hfs.mount(part)
+            try:
+                b.hfs.run("hmkdir", b":Disabled Items", check=False)
+                for name in d["disable"]:
+                    src = b":System Folder:" + mr(name)
+                    if not b.hfs.exists(src):
+                        raise SystemExit(f"{d['name']}: no {name} in the System Folder to disable")
+                    b.hfs.run("hrename", src, b":Disabled Items:" + mr(name))
+                    log(f"  disabled: {name} (now in :Disabled Items)")
+            finally:
+                b.hfs.umount()
         b.alias_ids(part)
+        if not d.get("base"):
+            check_names(b.hfs, part, d["name"])
     except BaseException:
         if os.path.exists(part):
             os.unlink(part)
@@ -481,14 +609,15 @@ def build(d, force=False, log=print):
         log(f"  aliases rewritten: {', '.join(b.fixed)}")
     if b.kept:
         b.warnings.append(f"aliases left pointing outside the image: {', '.join(b.kept)}")
+    if b.dropped:
+        log(f"  aliases pointing outside the image, left out: {', '.join(b.dropped)}")
     for w in b.warnings:
         log(f"  warning: {w}")
+    launch = record_launch(d, mans, label)
     base_info = bake.bases().get(d.get("base") or "", {})
-    if "built" in base_info:                # a built base: its apps and aliases are this image's too
+    if "built" in base_info:                # a built base: its aliases are this image's too
         try:
-            inherited = bake.load_json(os.path.join(bake.IMAGES, base_info["built"] + ".img.json"))
-            launch = inherited.get("launch", []) + launch
-            b.ids_paths = inherited.get("aliases", [])
+            b.ids_paths = bake.load_json(os.path.join(bake.IMAGES, base_info["built"] + ".img.json")).get("aliases", [])
         except (OSError, ValueError):
             pass
     record = {"name": d["name"], "label": label, "key": key, "base": d.get("base"),
