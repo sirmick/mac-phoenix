@@ -18,33 +18,59 @@ std::function<void(const uint32_t *, int, int)> PhoenixVideoDriver::frameHook;
 std::function<void(const uint32_t *, int, int, const std::vector<PhoenixVideoDriver::Rect>&)>
     PhoenixVideoDriver::rectsHook;
 std::atomic<int> PhoenixVideoDriver::cursorX{0}, PhoenixVideoDriver::cursorY{0};
+std::function<void(const PhoenixVideoDriver::Cursor&)> PhoenixVideoDriver::cursorHook;
+
+void PhoenixVideoDriver::cursorChanged()
+{
+    if(!cursorHook)
+        return;
+    Cursor c;
+    {
+        std::lock_guard lk(cursorMutex_);
+        if(!cursorValid_)
+            return;
+        memcpy(c.data, cursorData_, 32);
+        memcpy(c.mask, cursorMask_, 32);
+        c.hotX = hotX_;
+        c.hotY = hotY_;
+        c.visible = cursorVisible_;
+    }
+    cursorHook(c);
+}
 
 void PhoenixVideoDriver::setCursor(char *cursor_data, uint16_t cursor_mask[16],
                                    int hotspot_x, int hotspot_y)
 {
-    std::lock_guard lk(cursorMutex_);
-    if(cursor_data)
     {
-        memcpy(cursorData_, cursor_data, 32);
-        memcpy(cursorMask_, cursor_mask, 32);
-        for(int i = 0; i < 32; i++)
-            cursorMask_[i] |= cursorData_[i];
-        hotX_ = hotspot_x;
-        hotY_ = hotspot_y;
-        cursorValid_ = true;
-        cursorChanged_ = true;
+        std::lock_guard lk(cursorMutex_);
+        if(cursor_data)
+        {
+            memcpy(cursorData_, cursor_data, 32);
+            memcpy(cursorMask_, cursor_mask, 32);
+            for(int i = 0; i < 32; i++)
+                cursorMask_[i] |= cursorData_[i];
+            hotX_ = hotspot_x;
+            hotY_ = hotspot_y;
+            cursorValid_ = true;
+            cursorChanged_ = true;
+        }
+        if(!cursorVisible_)
+            cursorChanged_ = true;
+        cursorVisible_ = true;
     }
-    if(!cursorVisible_)
-        cursorChanged_ = true;
-    cursorVisible_ = true;
+    cursorChanged();
 }
 
 void PhoenixVideoDriver::setCursorVisible(bool show_p)
 {
-    std::lock_guard lk(cursorMutex_);
-    if(cursorVisible_ != show_p)
+    {
+        std::lock_guard lk(cursorMutex_);
+        if(cursorVisible_ == show_p)
+            return;
         cursorChanged_ = true;
-    cursorVisible_ = show_p;
+        cursorVisible_ = show_p;
+    }
+    cursorChanged();
 }
 
 PhoenixVideoDriver::Rect PhoenixVideoDriver::cursorBox(int x, int y) const
@@ -60,7 +86,7 @@ PhoenixVideoDriver::Rect PhoenixVideoDriver::cursorBox(int x, int y) const
 void PhoenixVideoDriver::drawCursor(uint32_t *buf, const Rect& r)
 {
     std::lock_guard lk(cursorMutex_);
-    if(!cursorValid_ || !cursorVisible_)
+    if(!cursorValid_ || !cursorVisible_ || cursorHook)
         return;
     int cx = cursorX.load(), cy = cursorY.load(), w = r.right - r.left;
     for(int y = 0; y < 16; y++)
@@ -93,7 +119,7 @@ void PhoenixVideoDriver::publishRects(const Executor::DirtyRects::Rects& changed
         for(const auto& c : changed)
             rects.push_back({ c.top, c.left, c.bottom, c.right });
         std::lock_guard lk(cursorMutex_);
-        bool shown = cursorValid_ && cursorVisible_;
+        bool shown = cursorValid_ && cursorVisible_ && !cursorHook;
         Rect box = cursorBox(cursorX.load(), cursorY.load());
         bool moved = box.top != cursorShownBox_.top || box.left != cursorShownBox_.left
                      || box.bottom != cursorShownBox_.bottom || box.right != cursorShownBox_.right;
@@ -110,7 +136,7 @@ void PhoenixVideoDriver::publishRects(const Executor::DirtyRects::Rects& changed
     }
     {
         std::lock_guard lk(cursorMutex_);
-        cursorShown_ = cursorValid_ && cursorVisible_;
+        cursorShown_ = cursorValid_ && cursorVisible_ && !cursorHook;
         cursorShownBox_ = cursorBox(cursorX.load(), cursorY.load());
         cursorChanged_ = false;
     }
@@ -129,7 +155,7 @@ void PhoenixVideoDriver::publish()
     int cx = cursorX.load(), cy = cursorY.load();
     {
         std::lock_guard lk(cursorMutex_);
-        if(cursorValid_ && cursorVisible_)
+        if(cursorValid_ && cursorVisible_ && !cursorHook)
         {
             for(int y = 0; y < 16; y++)
             {
@@ -215,8 +241,8 @@ void PhoenixVideoDriver::render(bool full)
     }
     if(rects.empty())
     {
-        // Nothing drew, but the pointer may have moved.
-        if(cursorX.load() != lastCursorX_ || cursorY.load() != lastCursorY_)
+        // Nothing drew, but the pointer may have moved (if it is ours to draw).
+        if(!cursorHook && (cursorX.load() != lastCursorX_ || cursorY.load() != lastCursorY_))
             publish();
         return;
     }

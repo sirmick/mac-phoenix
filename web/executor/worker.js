@@ -41,6 +41,9 @@ self.Module = {
         Module.stats.drawMs += performance.now() - t0;
         postMessage({ type: 'frame' });
     },
+    onCursor(data, mask, hotX, hotY, visible) {
+        postMessage({ type: 'cursor', data, mask, hotX, hotY, visible });
+    },
     // 48 kHz big-endian 16-bit stereo -> interleaved floats for the page.
     onAudio(bytes) {
         const n = bytes.length >> 1;

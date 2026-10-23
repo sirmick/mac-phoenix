@@ -46,6 +46,20 @@ public:
     static std::function<void(const uint32_t *argb, int width, int height,
                               const std::vector<Rect>& rects)> rectsHook;
 
+    // The cursor for the front end to draw itself (a CSS cursor), instead
+    // of its being drawn into frames: 16x16, 1 bit a pixel, rows MSB
+    // first; data the black pixels, mask where it is opaque (data's pixels
+    // included: the inverting ones draw black), the hot spot, whether it
+    // shows. Set, the frames never hold the cursor; called on every
+    // change, from the emulator thread.
+    struct Cursor
+    {
+        uint8_t data[32], mask[32];
+        int hotX, hotY;
+        bool visible;
+    };
+    static std::function<void(const Cursor&)> cursorHook;
+
     // The cursor into buf, a copy of rectangle r of the frame (rows of
     // r.right - r.left pixels). Black and white are 0xFF000000 and
     // 0xFFFFFFFF, the same as ARGB and as RGBA bytes.
@@ -74,6 +88,7 @@ private:
     void publish();
     void publishRects(const Executor::DirtyRects::Rects& changed, bool full);
     Rect cursorBox(int x, int y) const;  // its 16x16 box at a pointer position
+    void cursorChanged();                // cursorHook, if set (lock not held)
     void writePPM(const std::string& path);
 
     std::mutex frameMutex_;          // guards argb_ and its size

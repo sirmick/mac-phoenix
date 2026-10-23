@@ -7,7 +7,8 @@
  * once a frame yield to the browser (rsys/hostidle.h); on the way back the
  * yield hook takes the input the page queued (Module.input) and renders
  * what changed, which arrives in on_rects and goes to Module.onRects: the
- * changed rectangles only, as RGBA, for the page's canvas.
+ * changed rectangles only, as RGBA, for the page's canvas. The cursor is
+ * never in them: the page draws it (Module.onCursor, a CSS cursor).
  *
  * Automation (W3): the page's requests (Module.requests: [id, op, arg]) are
  * answered at the next event call of the running application
@@ -85,6 +86,12 @@ EM_JS(void, js_rects, (int width, int height, const int32_t *rects, int n, const
     if (Module.onRects)
         Module.onRects(width, height, HEAP32.subarray(rects >> 2, (rects >> 2) + 4 * n),
                        HEAPU8.subarray(pixels, pixels + bytes));
+});
+
+/* The cursor, for the page to draw (a CSS cursor; web/executor/cursor.js). */
+EM_JS(void, js_cursor, (const uint8_t *data, const uint8_t *mask, int hotX, int hotY, int visible), {
+    if (Module.onCursor)
+        Module.onCursor(HEAPU8.slice(data, data + 32), HEAPU8.slice(mask, mask + 32), hotX, hotY, !!visible);
 });
 
 /* Time the front end spent producing frames (rendering, converting). */
@@ -291,6 +298,9 @@ int main(int argc, char **argv)
     c.shared_folders.push_back("/host");
     c.open_transport = true;  /* answers with errors: no network yet */
     PhoenixVideoDriver::rectsHook = on_rects;
+    PhoenixVideoDriver::cursorHook = [](const PhoenixVideoDriver::Cursor &k) {
+        js_cursor(k.data, k.mask, k.hotX, k.hotY, k.visible);
+    };
     /* Sound: always taken; the page's AudioWorklet keeps a short buffer
        and drops what falls behind (the Sound Manager runs on the clock). */
     c.on_audio = [](const uint8_t *s16be, uint32_t frames) {

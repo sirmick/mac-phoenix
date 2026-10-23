@@ -13,11 +13,12 @@ const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
 const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
 
-let worker = null, canvas = null, nextId = 1;
+let worker = null, canvas = null, cursor = null, nextId = 1;
 const pending = new Map();
 window.executor = {
     frames: 0,
     audioFrames: 0,     // 20 ms frames of sound received
+    cursor: null,       // the guest's last cursor message
     request(op, arg = '') {
         const id = nextId++;
         return new Promise((resolve) => {
@@ -112,6 +113,7 @@ async function start() {
     canvas.tabIndex = 0;
     box.replaceChildren(canvas);
     attachInput(canvas);
+    cursor = new MacCursor(canvas, () => canvas.width);
 
     worker = new Worker('worker.js');
     const offscreen = canvas.transferControlToOffscreen();
@@ -122,6 +124,9 @@ async function start() {
         if (m.type === 'frame') {
             if (window.executor.frames++ === 0)
                 status.textContent = 'Executor';
+        } else if (m.type === 'cursor') {
+            window.executor.cursor = m;
+            cursor.set(m);
         } else if (m.type === 'audio') {
             window.executor.audioFrames++;
             if (audio)
