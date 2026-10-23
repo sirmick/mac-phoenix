@@ -17,6 +17,7 @@
  * before then are kept and applied when the socket is made.
  */
 
+#include <rsys/hostnet.h>
 #include "ot_provider.h"
 
 #include <netinet/in.h>
@@ -175,22 +176,22 @@ bool set_on_socket(int fd, const Opt &o, const std::vector<uint8_t> &v)
         case Shape::Int:
         {
             int x = (int)read_int(v);
-            return setsockopt(fd, o.sol, o.so, &x, sizeof x) == 0;
+            return hostnet::setsockopt(fd, o.sol, o.so, &x, sizeof x) == 0;
         }
         case Shape::Linger:
         {
             struct linger lg = { be32(v, 0) == T_YES, (int)be32(v, 4) };
-            return setsockopt(fd, o.sol, o.so, &lg, sizeof lg) == 0;
+            return hostnet::setsockopt(fd, o.sol, o.so, &lg, sizeof lg) == 0;
         }
         case Shape::KeepAlive:
         {
             int on = be32(v, 0) == T_YES;
-            if(setsockopt(fd, o.sol, o.so, &on, sizeof on) != 0)
+            if(hostnet::setsockopt(fd, o.sol, o.so, &on, sizeof on) != 0)
                 return false;
 #ifdef TCP_KEEPIDLE
             int secs = (int)be32(v, 4) * 60;
             if(on && secs > 0)
-                setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &secs, sizeof secs);
+                hostnet::setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &secs, sizeof secs);
 #endif
             return true;
         }
@@ -199,7 +200,7 @@ bool set_on_socket(int fd, const Opt &o, const std::vector<uint8_t> &v)
             struct ip_mreq mr = {};
             mr.imr_multiaddr.s_addr = htonl(be32(v, 0));
             mr.imr_interface.s_addr = htonl(be32(v, 4));
-            return setsockopt(fd, o.sol, o.so, &mr, sizeof mr) == 0;
+            return hostnet::setsockopt(fd, o.sol, o.so, &mr, sizeof mr) == 0;
         }
     }
     return false;
@@ -226,7 +227,7 @@ void current(const Provider &p, const Opt &o, std::vector<uint8_t> &v)
         {
             int x = 0;
             socklen_t len = sizeof x;
-            getsockopt(p.fd, o.sol, o.so, &x, &len);
+            hostnet::getsockopt(p.fd, o.sol, o.so, &x, &len);
 #ifdef __linux__
             if(o.so == SO_SNDBUF || o.so == SO_RCVBUF)
                 x /= 2; /* Linux reports twice what was set */
@@ -241,7 +242,7 @@ void current(const Provider &p, const Opt &o, std::vector<uint8_t> &v)
         {
             struct linger lg = {};
             socklen_t len = sizeof lg;
-            getsockopt(p.fd, o.sol, o.so, &lg, &len);
+            hostnet::getsockopt(p.fd, o.sol, o.so, &lg, &len);
             v.assign(8, 0);
             put32(v, 0, lg.l_onoff ? T_YES : T_NO);
             put32(v, 4, lg.l_linger);
@@ -251,14 +252,14 @@ void current(const Provider &p, const Opt &o, std::vector<uint8_t> &v)
         {
             int on = 0;
             socklen_t len = sizeof on;
-            getsockopt(p.fd, o.sol, o.so, &on, &len);
+            hostnet::getsockopt(p.fd, o.sol, o.so, &on, &len);
             v.assign(8, 0);
             put32(v, 0, on ? T_YES : T_NO);
             uint32_t mins = kept != p.pending_opts.end() ? be32(kept->second, 4) : 120;
 #ifdef TCP_KEEPIDLE
             int secs = 0;
             len = sizeof secs;
-            if(getsockopt(p.fd, IPPROTO_TCP, TCP_KEEPIDLE, &secs, &len) == 0 && secs)
+            if(hostnet::getsockopt(p.fd, IPPROTO_TCP, TCP_KEEPIDLE, &secs, &len) == 0 && secs)
                 mins = secs / 60;
 #endif
             put32(v, 4, mins);

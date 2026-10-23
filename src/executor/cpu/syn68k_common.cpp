@@ -25,13 +25,14 @@
 #include "cpu_core.h"
 #include "platform_cpu.h"
 #include "PowerCore.h"
+#include "syn68k_host.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <sys/mman.h>
 #include <unistd.h>
 #include <guest_watch.h>
 #include <crash_handler.h>
@@ -556,15 +557,14 @@ void syn68k_restore_context(const void *context)
 static const uint64 WINDOW = 1ull << 30;
 static bool windows_placed;
 
-/* Low allocations: a bump allocator in window 1. Freed blocks are kept for
- * reuse by size. */
+/* Low allocations: a bump allocator in window 1, over as much of it as the
+ * host reserves (syn68k_host::pool_size). Freed blocks are kept for reuse
+ * by size. */
 static uint8_t *pool;
-static size_t pool_used;
+static size_t pool_size, pool_used;
 struct FreeBlock { void *p; size_t size; };
 static FreeBlock free_blocks[64];
 static int num_free_blocks;
-
-extern "C" char _etext, _end;  /* the binary's data+bss (and rodata) */
 
 static void set_window(int w, const void *host, uint64 size)
 {
@@ -580,21 +580,23 @@ static void place_windows()
 
     for(int w = 0; w < OFFSET_TABLE_SIZE; w++)
         set_window(w, (void *)(uintptr_t)(~0ull << 40), 0);  /* nothing yet */
-    pool = (uint8_t *)mmap(nullptr, WINDOW, PROT_READ | PROT_WRITE,
-                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if(pool == MAP_FAILED)
+    pool_size = std::min<size_t>(syn68k_host::pool_size(), WINDOW);
+    pool = (uint8_t *)syn68k_host::reserve(pool_size);
+    if(!pool)
     {
-        fprintf(stderr, "syn68k: cannot reserve the 1GB allocation window (%s)\n", strerror(errno));
+        fprintf(stderr, "syn68k: cannot reserve the %zu MB allocation window (%s)\n",
+                pool_size >> 20, strerror(errno));
         abort();
     }
-    set_window(1, pool, WINDOW);
-    uintptr_t data = (uintptr_t)&_etext & ~(uintptr_t)0xFFF;
-    if((uintptr_t)&_end - data > WINDOW)
+    set_window(1, pool, pool_size);
+    uintptr_t data, data_end;
+    syn68k_host::data_range(&data, &data_end);
+    if(data_end - data > WINDOW)
     {
         fprintf(stderr, "syn68k: the binary's data is over 1GB\n");
         abort();
     }
-    set_window(3, (void *)data, (uintptr_t)&_end - data);
+    set_window(3, (void *)data, data_end - data);
 }
 
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len)
@@ -708,9 +710,8 @@ void *syn68k_map_guest_ram(size_t size)
     /* 64KB past the end too: the end of RAM (MemTop, the boot stack's
      * top) converts back to window 0 rather than to whatever window the
      * host happened to place right after it. */
-    void *p = mmap(nullptr, size + 0x10000, PROT_READ | PROT_WRITE,
-                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if(p == MAP_FAILED)
+    void *p = syn68k_host::reserve(size + 0x10000);
+    if(!p)
     {
         fprintf(stderr, "syn68k: cannot map %zu bytes of guest RAM (%s)\n", size, strerror(errno));
         exit(1);
@@ -731,9 +732,9 @@ void *syn68k_alloc_low(size_t size)
             free_blocks[i] = free_blocks[--num_free_blocks];
             return p;
         }
-    if(pool_used + size > WINDOW)
+    if(pool_used + size > pool_size)
     {
-        fprintf(stderr, "syn68k: the 1GB allocation window is full\n");
+        fprintf(stderr, "syn68k: the %zu MB allocation window is full\n", pool_size >> 20);
         abort();
     }
     void *p = pool + pool_used;

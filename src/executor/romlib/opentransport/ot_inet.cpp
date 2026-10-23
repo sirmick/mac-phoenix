@@ -11,6 +11,7 @@
  * HINFO, OTInetMailExchange's MX, OTInetQuery's any) go to the host's
  * name servers with res_query, and are answered the same two ways. */
 
+#include <rsys/hostnet.h>
 #include "ot_provider.h"
 
 #include <rsys/hostdns.h>
@@ -30,7 +31,6 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
-#include <thread>
 #include <vector>
 
 using namespace Executor;
@@ -87,7 +87,7 @@ Answer resolve(std::string name)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_CANONNAME;
     struct addrinfo *res = nullptr;
-    a.err = map_gai(getaddrinfo(name.c_str(), nullptr, &hints, &res));
+    a.err = map_gai(hostnet::getaddrinfo(name.c_str(), nullptr, &hints, &res));
     if(a.err)
         return a;
     a.name = res->ai_canonname ? res->ai_canonname : name;
@@ -97,7 +97,7 @@ Answer resolve(std::string name)
         if(std::find(a.addrs.begin(), a.addrs.end(), ip) == a.addrs.end())
             a.addrs.push_back(ip);
     }
-    freeaddrinfo(res);
+    hostnet::freeaddrinfo(res);
     return a;
 }
 
@@ -108,7 +108,7 @@ Answer reverse(uint32_t ip)
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = htonl(ip);
     char host[NI_MAXHOST];
-    a.err = map_gai(getnameinfo((struct sockaddr *)&sin, sizeof sin, host, sizeof host,
+    a.err = map_gai(hostnet::getnameinfo((struct sockaddr *)&sin, sizeof sin, host, sizeof host,
                                 nullptr, 0, NI_NAMEREQD));
     if(!a.err)
         a.name = host;
@@ -185,8 +185,8 @@ void deliver()
 
 bool hooked = false;
 
-/* Run work on a host thread; it returns the filler to run at interrupt
-   time. */
+/* Run work off the emulator thread (hostnet::run_detached); it returns
+   the filler to run at interrupt time. */
 void later(Provider &p, uint32_t code, uint32_t cookie,
            std::function<std::function<int32_t()>()> work)
 {
@@ -196,14 +196,14 @@ void later(Provider &p, uint32_t code, uint32_t cookie,
         hooked = true;
     }
     uint32_t ref = p.ref;
-    std::thread([=]() {
+    hostnet::run_detached([=]() {
         Done d{ ref, code, cookie, work() };
         {
             std::lock_guard<std::mutex> lock(done_mutex);
             done.push_back(std::move(d));
         }
         wake();
-    }).detach();
+    });
 }
 
 void start_lookup(Provider &p, bool rev, std::string name, uint32_t ip, uint32_t buf)
@@ -542,7 +542,7 @@ uint32_t host_to_string(const Call &c)
 
 uint32_t primary_address()
 {
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int fd = hostnet::socket(AF_INET, SOCK_DGRAM, 0);
     if(fd < 0)
         return 0;
     struct sockaddr_in a = {};
@@ -550,13 +550,13 @@ uint32_t primary_address()
     a.sin_port = htons(53);
     inet_pton(AF_INET, "192.0.2.1", &a.sin_addr); /* TEST-NET: nothing is sent */
     uint32_t ip = 0;
-    if(connect(fd, (struct sockaddr *)&a, sizeof a) == 0)
+    if(hostnet::connect(fd, (struct sockaddr *)&a, sizeof a) == 0)
     {
         socklen_t len = sizeof a;
-        if(getsockname(fd, (struct sockaddr *)&a, &len) == 0)
+        if(hostnet::getsockname(fd, (struct sockaddr *)&a, &len) == 0)
             ip = ntohl(a.sin_addr.s_addr);
     }
-    close(fd);
+    hostnet::close(fd);
     return ip;
 }
 
@@ -572,7 +572,7 @@ uint32_t get_interface_info(const Call &c)
         ip = 0x7F000001;
     uint32_t mask = 0xFFFFFF00, bcast = (ip & mask) | ~mask;
     struct ifaddrs *ifs = nullptr;
-    if(getifaddrs(&ifs) == 0)
+    if(hostnet::getifaddrs(&ifs) == 0)
     {
         for(auto *i = ifs; i; i = i->ifa_next)
             if(i->ifa_addr && i->ifa_addr->sa_family == AF_INET
@@ -582,7 +582,7 @@ uint32_t get_interface_info(const Call &c)
                     mask = ntohl(((struct sockaddr_in *)i->ifa_netmask)->sin_addr.s_addr);
                 bcast = (ip & mask) | ~mask;
             }
-        freeifaddrs(ifs);
+        hostnet::freeifaddrs(ifs);
     }
     uint32_t dns = 0;
     std::string domain;

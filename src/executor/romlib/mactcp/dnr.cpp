@@ -18,6 +18,7 @@
  * (net/hostdns.cpp) the same way.
  */
 
+#include <rsys/hostnet.h>
 #include <base/common.h>
 #include <base/cpu.h>
 #include <MacTCP.h>
@@ -40,7 +41,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 using namespace Executor;
@@ -139,7 +139,7 @@ Answer resolve(const std::string &name)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_CANONNAME;
     struct addrinfo *res = nullptr;
-    a.err = map_gai(getaddrinfo(name.c_str(), nullptr, &hints, &res));
+    a.err = map_gai(hostnet::getaddrinfo(name.c_str(), nullptr, &hints, &res));
     if(a.err)
         return a;
     a.cname = res->ai_canonname ? res->ai_canonname : name;
@@ -149,7 +149,7 @@ Answer resolve(const std::string &name)
         if(std::find(a.addrs.begin(), a.addrs.end(), ip) == a.addrs.end())
             a.addrs.push_back(ip);
     }
-    freeaddrinfo(res);
+    hostnet::freeaddrinfo(res);
     return a;
 }
 
@@ -160,7 +160,7 @@ Answer reverse(uint32_t ip)
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = htonl(ip);
     char host[NI_MAXHOST];
-    a.err = map_gai(getnameinfo((struct sockaddr *)&sin, sizeof sin, host,
+    a.err = map_gai(hostnet::getnameinfo((struct sockaddr *)&sin, sizeof sin, host,
                                 sizeof host, nullptr, 0, NI_NAMEREQD));
     if(!a.err)
         a.cname = host;
@@ -259,7 +259,7 @@ std::string guest_cstring(uint32_t addr)
     return s;
 }
 
-/* Start a lookup on a host thread, or answer it now from the cache.
+/* Start a lookup off the emulator thread, or answer it now from the cache.
  * The answer is filled in and noErr returned when it is known at once;
  * else the hostInfo says cacheFault until the result procedure runs. */
 OSErr start(std::unique_ptr<Lookup> l, bool is_reverse, uint32_t ip, Kind kind = Kind::Addrs)
@@ -274,7 +274,9 @@ OSErr start(std::unique_ptr<Lookup> l, bool is_reverse, uint32_t ip, Kind kind =
         return noResultProc;
     ((hostInfo *)SYN68K_TO_US(l->info))->rtnCode = cacheFault;
     std::string name = l->key.substr(l->key.find(':') + 1);
-    std::thread([l = std::move(l), is_reverse, ip, name, kind]() mutable {
+    Lookup *raw = l.release(); /* std::function wants a copyable callable */
+    hostnet::run_detached([raw, is_reverse, ip, name, kind]() {
+        std::unique_ptr<Lookup> l(raw);
         l->answer = kind != Kind::Addrs ? records(name, kind)
                     : is_reverse      ? reverse(ip)
                                       : resolve(name);
@@ -283,7 +285,7 @@ OSErr start(std::unique_ptr<Lookup> l, bool is_reverse, uint32_t ip, Kind kind =
             done.push_back(std::move(l));
         }
         ROMlib_mactcp_wake();
-    }).detach();
+    });
     return cacheFault;
 }
 

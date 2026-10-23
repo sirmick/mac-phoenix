@@ -3,7 +3,7 @@
  *
  * Model, as MacTCP's (mactcp/mactcp.cpp):
  *   - A ProviderRef is a cookie ('OT' and a number), never a pointer.
- *   - Sockets are non-blocking. A blocking-mode call waits in poll(2) on
+ *   - Sockets are non-blocking. A blocking-mode call waits in hostnet::poll(2) on
  *     the 68k thread; a non-blocking one answers kOTNoDataErr (or
  *     kOTFlowErr) when it would wait.
  *   - What happens later (a connect completes, data or the peer's FIN
@@ -28,23 +28,18 @@
 #include <time/syncint.h>
 #include <rsys/opentransport.h>
 
+#include <rsys/hostnet.h>
+
 #include <arpa/inet.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include <algorithm>
 #include <chrono>
-#include <condition_variable>
 #include <cstring>
 #include <map>
 #include <mutex>
-#include <thread>
+#include <thread> /* OTDelay */
 #include <vector>
 
 using namespace Executor;
@@ -75,8 +70,7 @@ void peer_closed(Provider &p);
 
 int set_nonblocking(int fd)
 {
-    int fl = fcntl(fd, F_GETFL, 0);
-    return fl < 0 ? fl : fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+    return hostnet::set_nonblocking(fd);
 }
 
 /* The start of what went over a socket, for --executor-debug ot. */
@@ -125,66 +119,15 @@ int32_t ot_errno(int e)
     }
 }
 
-/* ---- the watcher ------------------------------------------------------ */
+/* ---- the watcher ------------------------------------------------------
+   The host network edge's (rsys/hostnet.h): it raises the OT interrupt
+   when a socket in the set is ready; the pump ends in rewatch(). */
 
 using Clock = std::chrono::steady_clock;
 
-std::mutex watch_mutex;
-std::condition_variable watch_cv;
-std::vector<struct pollfd> watch_fds;
-uint64_t watch_gen = 0, handled_gen = 0;
-int wake_pipe[2] = { -1, -1 };
-bool watcher_started = false;
-
 void pump();
 Interrupt ot_interrupt{ [] { pump(); } };
-
-void watcher_main()
-{
-    for(;;)
-    {
-        std::vector<struct pollfd> fds;
-        uint64_t gen;
-        {
-            std::unique_lock<std::mutex> lock(watch_mutex);
-            watch_cv.wait(lock, [] { return watch_gen != handled_gen; });
-            fds = watch_fds;
-            gen = watch_gen;
-        }
-        fds.push_back({ wake_pipe[0], POLLIN, 0 });
-        poll(fds.data(), fds.size(), -1);
-        if(fds.back().revents)
-        {
-            /* rewatch(): a new set to wait for. */
-            char buf[64];
-            while(read(wake_pipe[0], buf, sizeof buf) > 0)
-                ;
-        }
-        bool fire = false;
-        for(size_t i = 0; i + 1 < fds.size(); i++)
-            fire |= fds[i].revents != 0;
-        if(fire)
-        {
-            {
-                std::lock_guard<std::mutex> lock(watch_mutex);
-                handled_gen = gen;
-            }
-            ot_interrupt.trigger();
-        }
-    }
-}
-
-void start_watcher()
-{
-    if(watcher_started)
-        return;
-    if(pipe(wake_pipe) < 0)
-        return;
-    set_nonblocking(wake_pipe[0]);
-    set_nonblocking(wake_pipe[1]);
-    std::thread(watcher_main).detach();
-    watcher_started = true;
-}
+hostnet::Watcher watcher{ ot_interrupt };
 
 /* What the watcher waits for, after every call and every pump. */
 void rewatch()
@@ -212,21 +155,13 @@ void rewatch()
         if(ev)
             fds.push_back({ p.fd, ev, 0 });
     }
-    start_watcher();
-    {
-        std::lock_guard<std::mutex> lock(watch_mutex);
-        watch_fds = std::move(fds);
-        watch_gen++;
-    }
-    watch_cv.notify_all();
-    char c = 0;
-    (void)!write(wake_pipe[1], &c, 1); /* out of a poll on the old set */
+    watcher.set(std::move(fds));
 }
 
 bool ready_now(int fd, short events)
 {
     struct pollfd pf = { fd, events, 0 };
-    return fd >= 0 && poll(&pf, 1, 0) > 0;
+    return fd >= 0 && hostnet::poll(&pf, 1, 0) > 0;
 }
 
 /* ---- notifiers -------------------------------------------------------- */
@@ -281,12 +216,12 @@ void service(Provider &p)
             return;
         int err = 0;
         socklen_t len = sizeof err;
-        getsockopt(p.fd, SOL_SOCKET, SO_ERROR, &err, &len);
+        hostnet::getsockopt(p.fd, SOL_SOCKET, SO_ERROR, &err, &len);
         p.connecting = false;
         if(err)
         {
             OT_LOG("connect %08x failed: %s\n", p.ref, strerror(err));
-            close(p.fd);
+            hostnet::close(p.fd);
             p.fd = -1;
             p.look = T_DISCONNECT;
             post(p, T_DISCONNECT, ot_errno(err), 0);
@@ -322,7 +257,7 @@ void service(Provider &p)
     if(p.kind == Kind::TCP)
     {
         char c;
-        ssize_t n = recv(p.fd, &c, 1, MSG_PEEK | MSG_DONTWAIT);
+        ssize_t n = hostnet::recv(p.fd, &c, 1, MSG_PEEK | MSG_DONTWAIT);
         if(n == 0)
         {
             peer_closed(p);
@@ -684,8 +619,8 @@ uint32_t count_data_bytes(const Call &c)
     Provider *p = lookup(c);
     if(!p)
         return kOTBadReferenceErr;
-    int n = 0;
-    if(p->fd < 0 || ioctl(p->fd, FIONREAD, &n) < 0 || n == 0)
+    int n = p->fd < 0 ? -1 : hostnet::bytes_available(p->fd);
+    if(n <= 0)
         return kOTNoDataErr;
     if(c.l(1))
         WRITEUL(c.l(1), n);
@@ -704,7 +639,7 @@ uint32_t get_prot_address(const Call &c)
     {
         sin = {};
         if(p->fd >= 0)
-            getsockname(p->fd, (struct sockaddr *)&sin, &len);
+            hostnet::getsockname(p->fd, (struct sockaddr *)&sin, &len);
         sin.sin_family = AF_INET;
         write_inet({ c.l(1) }, sin);
     }
@@ -713,7 +648,7 @@ uint32_t get_prot_address(const Call &c)
         sin = {};
         len = sizeof sin;
         if(p->fd >= 0 && !p->listener)
-            getpeername(p->fd, (struct sockaddr *)&sin, &len);
+            hostnet::getpeername(p->fd, (struct sockaddr *)&sin, &len);
         sin.sin_family = AF_INET;
         write_inet({ c.l(2) }, sin);
     }
@@ -738,13 +673,13 @@ uint32_t bind_(const Call &c)
     bool have_addr = req && read_inet({ req }, sin);
     uint32_t qlen = req ? READUL(req + 12) : 0;
 
-    int fd = socket(AF_INET, p->kind == Kind::UDP ? SOCK_DGRAM : SOCK_STREAM, 0);
+    int fd = hostnet::socket(AF_INET, p->kind == Kind::UDP ? SOCK_DGRAM : SOCK_STREAM, 0);
     if(fd < 0)
         return ot_errno(errno);
     set_nonblocking(fd);
     int one = 1;
     if(p->kind == Kind::TCP)
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+        hostnet::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
     /* A connecting endpoint binds where its connect goes; one that names
        an address or listens binds now. */
     if((have_addr && (sin.sin_port || sin.sin_addr.s_addr)) || qlen || p->kind == Kind::UDP)
@@ -752,17 +687,17 @@ uint32_t bind_(const Call &c)
         if(::bind(fd, (struct sockaddr *)&sin, sizeof sin) < 0)
         {
             int e = errno;
-            close(fd);
+            hostnet::close(fd);
             OT_LOG("bind %08x port %u: %s\n", p->ref, ntohs(sin.sin_port), strerror(e));
             return e == EADDRINUSE ? kOTAddressBusyErr : ot_errno(e);
         }
     }
     if(qlen && p->kind == Kind::TCP)
     {
-        if(listen(fd, std::max<int>(qlen, 1)) < 0)
+        if(hostnet::listen(fd, std::max<int>(qlen, 1)) < 0)
         {
             int e = errno;
-            close(fd);
+            hostnet::close(fd);
             return ot_errno(e);
         }
         p->listener = true;
@@ -775,7 +710,7 @@ uint32_t bind_(const Call &c)
     {
         struct sockaddr_in got = {};
         socklen_t len = sizeof got;
-        getsockname(fd, (struct sockaddr *)&got, &len);
+        hostnet::getsockname(fd, (struct sockaddr *)&got, &len);
         got.sin_family = AF_INET;
         write_inet({ ret }, got);
         WRITEUL(ret + 12, qlen);
@@ -790,10 +725,10 @@ uint32_t bind_(const Call &c)
 void drop_socket(Provider &p)
 {
     if(p.fd >= 0)
-        close(p.fd);
+        hostnet::close(p.fd);
     p.fd = -1;
     for(auto &in : p.incoming)
-        close(in.fd);
+        hostnet::close(in.fd);
     p.incoming.clear();
     p.connecting = p.listener = p.eof_seen = p.flow_blocked = false;
     p.look = 0;
@@ -823,7 +758,7 @@ int32_t ensure_socket(Provider &p)
 {
     if(p.fd >= 0)
         return kOTNoError;
-    p.fd = socket(AF_INET, SOCK_STREAM, 0);
+    p.fd = hostnet::socket(AF_INET, SOCK_STREAM, 0);
     if(p.fd < 0)
         return ot_errno(errno);
     set_nonblocking(p.fd);
@@ -869,7 +804,7 @@ int32_t block_wait(uint32_t ref, short events, int timeout_ms, bool &ready)
             slice = std::min<int>(slice, left);
         }
         struct pollfd pf = { p->fd, events, 0 };
-        if(poll(&pf, 1, slice) > 0)
+        if(hostnet::poll(&pf, 1, slice) > 0)
         {
             ready = true;
             break;
@@ -885,11 +820,11 @@ int32_t connect_done(Provider &p)
 {
     int err = 0;
     socklen_t len = sizeof err;
-    getsockopt(p.fd, SOL_SOCKET, SO_ERROR, &err, &len);
+    hostnet::getsockopt(p.fd, SOL_SOCKET, SO_ERROR, &err, &len);
     p.connecting = false;
     if(err)
     {
-        close(p.fd);
+        hostnet::close(p.fd);
         p.fd = -1;
         p.look = T_DISCONNECT;
         OT_LOG("connect %08x: %s\n", p.ref, strerror(err));
@@ -900,7 +835,7 @@ int32_t connect_done(Provider &p)
     /* TCP_NODELAY on unless the client set it (T_DEFAULT says so too). */
     int one = 1;
     if(!option_was_set(p, 0x06, 0x01)) /* INET_TCP, TCP_NODELAY */
-        setsockopt(p.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
+        hostnet::setsockopt(p.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
     return kOTNoError;
 }
 
@@ -946,7 +881,7 @@ void finish_connect_lookups()
             }
             err = errno;
         }
-        close(p->fd);
+        hostnet::close(p->fd);
         p->fd = -1;
         p->look = T_DISCONNECT;
         post(*p, T_DISCONNECT, l.err ? l.err : ot_errno(err), 0);
@@ -960,7 +895,7 @@ void start_connect_lookup(uint32_t ref, const std::string &name, uint16_t port)
         add_pump_hook(finish_connect_lookups);
         lookup_hooked = true;
     }
-    std::thread([=]() {
+    hostnet::run_detached([=]() {
         uint32_t ip = 0;
         int32_t err = inet_resolve(name, ip);
         {
@@ -968,7 +903,7 @@ void start_connect_lookup(uint32_t ref, const std::string &name, uint16_t port)
             looked.push_back({ ref, err, ip, port });
         }
         wake();
-    }).detach();
+    });
 }
 
 /* OSStatus OTConnect(ref, TCall *snd, TCall *rcv) */
@@ -1010,7 +945,7 @@ uint32_t connect_(const Call &c)
     if(r < 0 && errno != EINPROGRESS)
     {
         int e = errno;
-        close(p->fd);
+        hostnet::close(p->fd);
         p->fd = -1;
         if(p->async)
         {
@@ -1032,7 +967,7 @@ uint32_t connect_(const Call &c)
             return kOTBadReferenceErr;
         if(werr || !ready)
         {
-            close(p->fd);
+            hostnet::close(p->fd);
             p->fd = -1;
             p->connecting = false;
             p->state = T_IDLE;
@@ -1048,7 +983,7 @@ uint32_t connect_(const Call &c)
         {
             struct sockaddr_in peer = {};
             socklen_t len = sizeof peer;
-            getpeername(p->fd, (struct sockaddr *)&peer, &len);
+            hostnet::getpeername(p->fd, (struct sockaddr *)&peer, &len);
             peer.sin_family = AF_INET;
             write_inet({ rcv }, peer);
         }
@@ -1103,7 +1038,7 @@ uint32_t rcv_connect(const Call &c)
     {
         struct sockaddr_in peer = {};
         socklen_t len = sizeof peer;
-        getpeername(p->fd, (struct sockaddr *)&peer, &len);
+        hostnet::getpeername(p->fd, (struct sockaddr *)&peer, &len);
         peer.sin_family = AF_INET;
         write_inet({ call }, peer);
     }
@@ -1122,7 +1057,7 @@ uint32_t listen_(const Call &c)
         return kOTOutStateErr;
     struct sockaddr_in peer = {};
     socklen_t len = sizeof peer;
-    int fd = accept(p->fd, (struct sockaddr *)&peer, &len);
+    int fd = hostnet::accept(p->fd, (struct sockaddr *)&peer, &len);
     if(fd < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && p->blocking && !p->async)
     {
         uint32_t ref = p->ref;
@@ -1133,7 +1068,7 @@ uint32_t listen_(const Call &c)
         if(werr)
             return werr;
         len = sizeof peer;
-        fd = accept(p->fd, (struct sockaddr *)&peer, &len);
+        fd = hostnet::accept(p->fd, (struct sockaddr *)&peer, &len);
     }
     if(fd < 0)
     {
@@ -1189,11 +1124,11 @@ uint32_t accept_(const Call &c)
             return kOTOutStateErr;
         }
         if(acc->fd >= 0)
-            close(acc->fd);
+            hostnet::close(acc->fd);
     }
     else
     {
-        close(lis->fd);
+        hostnet::close(lis->fd);
         lis->listener = false;
     }
     acc->fd = in.fd;
@@ -1219,7 +1154,7 @@ uint32_t snd_disconnect(const Call &c)
     if(p->state == T_INCON && !p->incoming.empty())
     {
         /* Refuse a connection OTListen handed out. */
-        close(p->incoming.front().fd);
+        hostnet::close(p->incoming.front().fd);
         p->incoming.pop_front();
         if(p->incoming.empty())
             p->state = T_IDLE;
@@ -1230,7 +1165,7 @@ uint32_t snd_disconnect(const Call &c)
     if(p->fd >= 0)
     {
         struct linger lg = { 1, 0 }; /* RST, as a disconnect sends */
-        setsockopt(p->fd, SOL_SOCKET, SO_LINGER, &lg, sizeof lg);
+        hostnet::setsockopt(p->fd, SOL_SOCKET, SO_LINGER, &lg, sizeof lg);
     }
     drop_socket(*p);
     p->state = T_IDLE;
@@ -1268,7 +1203,7 @@ uint32_t snd_orderly(const Call &c)
         return kOTBadReferenceErr;
     if(p->state != T_DATAXFER && p->state != T_INREL)
         return kOTOutStateErr;
-    shutdown(p->fd, SHUT_WR);
+    hostnet::shutdown(p->fd, SHUT_WR);
     if(p->state == T_INREL)
     {
         drop_socket(*p);
@@ -1290,7 +1225,7 @@ uint32_t rcv_orderly(const Call &c)
     {
         /* Not seen yet: look now. */
         char ch;
-        if(p->fd >= 0 && recv(p->fd, &ch, 1, MSG_PEEK | MSG_DONTWAIT) == 0)
+        if(p->fd >= 0 && hostnet::recv(p->fd, &ch, 1, MSG_PEEK | MSG_DONTWAIT) == 0)
             p->eof_seen = true;
         else
             return kOTNoReleaseErr;
@@ -1324,7 +1259,7 @@ uint32_t snd(const Call &c)
     uint32_t n = c.l(2), sent = 0;
     while(sent < n)
     {
-        ssize_t r = send(p->fd, buf + sent, n - sent, MSG_NOSIGNAL | MSG_DONTWAIT);
+        ssize_t r = hostnet::send(p->fd, buf + sent, n - sent, MSG_NOSIGNAL | MSG_DONTWAIT);
         if(r > 0)
         {
             sent += r;
@@ -1380,7 +1315,7 @@ uint32_t rcv(const Call &c)
     uint32_t n = c.l(2);
     for(;;)
     {
-        ssize_t r = recv(p->fd, buf, n, MSG_DONTWAIT);
+        ssize_t r = hostnet::recv(p->fd, buf, n, MSG_DONTWAIT);
         if(r > 0)
         {
             OT_LOG("rcv %08x %zd bytes\n", p->ref, r);
@@ -1435,7 +1370,7 @@ uint32_t snd_udata(const Call &c)
     if(int32_t e = read_address({ ud }, to))
         return e;
     Netbuf data{ ud + 24 };
-    ssize_t r = sendto(p->fd, data.buf() ? SYN68K_TO_US(data.buf()) : nullptr, data.len(),
+    ssize_t r = hostnet::sendto(p->fd, data.buf() ? SYN68K_TO_US(data.buf()) : nullptr, data.len(),
                        MSG_DONTWAIT, (struct sockaddr *)&to, sizeof to);
     if(r < 0)
         return errno == EAGAIN ? kOTFlowErr : ot_errno(errno);
@@ -1491,13 +1426,13 @@ uint32_t rcv_udata(const Call &c)
     {
         /* How big the next datagram is, without taking it. */
         char probe;
-        ssize_t size = recv(p->fd, &probe, 1, MSG_PEEK | MSG_TRUNC | MSG_DONTWAIT);
+        ssize_t size = hostnet::recv(p->fd, &probe, 1, MSG_PEEK | MSG_TRUNC | MSG_DONTWAIT);
         if(size >= 0)
         {
             std::vector<uint8_t> dgram(std::max<ssize_t>(size, 1));
             struct sockaddr_in from = {};
             socklen_t len = sizeof from;
-            ssize_t r = recvfrom(p->fd, dgram.data(), dgram.size(), MSG_DONTWAIT,
+            ssize_t r = hostnet::recvfrom(p->fd, dgram.data(), dgram.size(), MSG_DONTWAIT,
                                  (struct sockaddr *)&from, &len);
             if(r < 0)
                 return ot_errno(errno);

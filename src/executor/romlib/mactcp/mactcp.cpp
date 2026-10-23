@@ -52,26 +52,18 @@
  * reason. */
 #include <base/traps.impl.h>
 
+#include <rsys/hostnet.h>
+
 #include <arpa/inet.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <ifaddrs.h>
-#include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <sys/uio.h> /* writev, struct iovec */
-#include <unistd.h>
 
 #include <algorithm>
 #include <chrono>
-#include <condition_variable>
 #include <cstring>
 #include <deque>
 #include <mutex>
 #include <optional>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -307,16 +299,10 @@ void call_asr(uint32_t cookie, const MacTCPStream &s, uint16_t event,
 
 /* ---- helpers ------------------------------------------------------- */
 
-int set_nonblocking(int fd)
-{
-    int fl = fcntl(fd, F_GETFL, 0);
-    return fl < 0 ? fl : fcntl(fd, F_SETFL, fl | O_NONBLOCK);
-}
-
 bool ready_now(int fd, short events)
 {
     struct pollfd p = { fd, events, 0 };
-    return fd >= 0 && poll(&p, 1, 0) > 0;
+    return fd >= 0 && hostnet::poll(&p, 1, 0) > 0;
 }
 
 /* A synchronous call's wait: 1 when the stream's socket (its listening
@@ -341,7 +327,7 @@ int sync_wait(uint32_t cookie, bool listening, short events, Clock::time_point d
             slice = (int)std::min<long long>(slice, left);
         }
         struct pollfd p = { fd, events, 0 };
-        if(poll(&p, 1, slice) > 0)
+        if(hostnet::poll(&p, 1, slice) > 0)
             return 1;
         syncint_check_interrupt();
     }
@@ -425,77 +411,24 @@ bool give_back(MacTCPStream &s, uint32_t off)
 }
 
 /* ---- the watcher ----------------------------------------------------
- * A host thread that polls the sockets parked calls and ASRs wait on,
- * and raises the network interrupt when one is ready or the earliest
- * deadline passes.  After raising it, it waits for the interrupt's
- * service (which ends in rewatch()) before polling again, so a ready
- * socket that nobody reads is not a busy loop.
+ * The host network edge's watcher (rsys/hostnet.h) waits on the sockets
+ * parked calls and ASRs wait on, and raises the network interrupt when one
+ * is ready or the earliest deadline passes; the interrupt's service ends
+ * in rewatch().
  */
-struct Watch
-{
-    std::vector<struct pollfd> fds;
-    Clock::time_point deadline = never;
-    uint64_t gen = 0;
-};
-
-std::mutex watch_mutex;
-std::condition_variable watch_cv;
-Watch watch;
-uint64_t handled_gen = 0;
-int wake_pipe[2] = { -1, -1 };
-bool watcher_started = false;
-
 void pump();
 Interrupt net_interrupt{ [] { pump(); } };
-
-void watcher_main()
-{
-    for(;;)
-    {
-        std::vector<struct pollfd> fds;
-        Clock::time_point deadline;
-        uint64_t gen;
-        {
-            std::unique_lock<std::mutex> lock(watch_mutex);
-            watch_cv.wait(lock, [] { return watch.gen != handled_gen; });
-            fds = watch.fds;
-            deadline = watch.deadline;
-            gen = watch.gen;
-        }
-        fds.push_back({ wake_pipe[0], POLLIN, 0 });
-        int timeout = -1;
-        if(deadline != never)
-        {
-            auto left = std::chrono::ceil<std::chrono::milliseconds>(
-                deadline - Clock::now());
-            timeout = std::max<int64_t>(0, left.count());
-        }
-        int r = poll(fds.data(), fds.size(), timeout);
-        if(fds.back().revents)
-        {
-            char buf[64];
-            while(read(wake_pipe[0], buf, sizeof buf) > 0)
-                ;
-        }
-        bool fire = r == 0;
-        for(size_t i = 0; i + 1 < fds.size(); i++)
-            fire |= fds[i].revents != 0;
-        if(fire)
-        {
-            {
-                std::lock_guard<std::mutex> lock(watch_mutex);
-                handled_gen = gen;
-            }
-            net_interrupt.trigger();
-        }
-    }
-}
+hostnet::Watcher watcher{ net_interrupt };
 
 /* Recompute what the watcher waits for, after every call and every
  * service pass. */
 void rewatch()
 {
-    Watch w;
+    struct
+    {
+        std::vector<struct pollfd> fds;
+        Clock::time_point deadline = never;
+    } w;
     for(auto &[cookie, s] : streams)
     {
         short events = 0;
@@ -522,25 +455,7 @@ void rewatch()
         if(events && fd >= 0)
             w.fds.push_back({ fd, events, 0 });
     }
-    if(w.fds.empty() && w.deadline == never && !watcher_started)
-        return;
-    if(!watcher_started)
-    {
-        if(pipe(wake_pipe) < 0)
-            return;
-        set_nonblocking(wake_pipe[0]);
-        set_nonblocking(wake_pipe[1]);
-        std::thread(watcher_main).detach();
-        watcher_started = true;
-    }
-    {
-        std::lock_guard<std::mutex> lock(watch_mutex);
-        w.gen = watch.gen + 1;
-        watch = std::move(w);
-    }
-    watch_cv.notify_all();
-    char c = 0;
-    (void)!write(wake_pipe[1], &c, 1);
+    watcher.set(std::move(w.fds), w.deadline);
 }
 
 /* ---- csCode implementations ---------------------------------------- */
@@ -550,7 +465,7 @@ void rewatch()
  * 0 without a default route. */
 uint32_t primary_address()
 {
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int fd = hostnet::socket(AF_INET, SOCK_DGRAM, 0);
     if(fd < 0)
         return 0;
     struct sockaddr_in a = {};
@@ -559,10 +474,10 @@ uint32_t primary_address()
     a.sin_addr.s_addr = htonl(0xC0000201); /* 192.0.2.1, TEST-NET-1 */
     uint32_t result = 0;
     socklen_t alen = sizeof a;
-    if(connect(fd, (struct sockaddr *)&a, sizeof a) == 0
-       && getsockname(fd, (struct sockaddr *)&a, &alen) == 0)
+    if(hostnet::connect(fd, (struct sockaddr *)&a, sizeof a) == 0
+       && hostnet::getsockname(fd, (struct sockaddr *)&a, &alen) == 0)
         result = ntohl(a.sin_addr.s_addr);
-    close(fd);
+    hostnet::close(fd);
     return result;
 }
 
@@ -577,7 +492,7 @@ OSErr do_getaddr(GetAddrParamBlock *pb)
 
     pb->ourAddress = 0;
     pb->ourNetMask = 0;
-    if(getifaddrs(&ifa0) == 0)
+    if(hostnet::getifaddrs(&ifa0) == 0)
     {
         for(int pass = primary ? 0 : 1; pass < 2 && err; pass++)
         for(struct ifaddrs *ifa = ifa0; ifa; ifa = ifa->ifa_next)
@@ -596,7 +511,7 @@ OSErr do_getaddr(GetAddrParamBlock *pb)
             err = noErr;
             break;
         }
-        freeifaddrs(ifa0);
+        hostnet::freeifaddrs(ifa0);
     }
     return err;
 }
@@ -625,13 +540,13 @@ void report_endpoints(int fd, TCPOpenPB &open)
 {
     struct sockaddr_in a = {};
     socklen_t alen = sizeof(a);
-    if(getsockname(fd, (struct sockaddr *)&a, &alen) == 0)
+    if(hostnet::getsockname(fd, (struct sockaddr *)&a, &alen) == 0)
     {
         open.localHost = ntohl(a.sin_addr.s_addr);
         open.localPort = ntohs(a.sin_port);
     }
     alen = sizeof(a);
-    if(getpeername(fd, (struct sockaddr *)&a, &alen) == 0)
+    if(hostnet::getpeername(fd, (struct sockaddr *)&a, &alen) == 0)
     {
         open.remoteHost = ntohl(a.sin_addr.s_addr);
         open.remotePort = ntohs(a.sin_port);
@@ -643,10 +558,10 @@ OSErr finish_connect(MacTCPStream &s, TCPiopb *pb)
 {
     int soerr = 0;
     socklen_t slen = sizeof(soerr);
-    getsockopt(s.fd, SOL_SOCKET, SO_ERROR, &soerr, &slen);
+    hostnet::getsockopt(s.fd, SOL_SOCKET, SO_ERROR, &soerr, &slen);
     if(soerr)
     {
-        close(s.fd);
+        hostnet::close(s.fd);
         s.fd = -1;
         s.state = StreamState::created;
         return map_socket_errno(soerr);
@@ -668,10 +583,10 @@ OSErr do_tcp_active_open(TCPiopb *pb)
 
     auto &open = pb->csParam.open;
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = hostnet::socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0)
         return insufficientResources;
-    set_nonblocking(fd);
+    hostnet::set_nonblocking(fd);
 
     if(open.localPort)
     {
@@ -680,11 +595,11 @@ OSErr do_tcp_active_open(TCPiopb *pb)
         la.sin_port = htons(open.localPort);
         la.sin_addr.s_addr = htonl(open.localHost);
         int one = 1;
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-        if(bind(fd, (struct sockaddr *)&la, sizeof(la)) < 0)
+        hostnet::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+        if(hostnet::bind(fd, (struct sockaddr *)&la, sizeof(la)) < 0)
         {
             err = map_socket_errno(errno);
-            close(fd);
+            hostnet::close(fd);
             return err;
         }
     }
@@ -694,11 +609,11 @@ OSErr do_tcp_active_open(TCPiopb *pb)
     ra.sin_port = htons(open.remotePort);
     ra.sin_addr.s_addr = htonl(open.remoteHost);
 
-    if(connect(fd, (struct sockaddr *)&ra, sizeof(ra)) < 0
+    if(hostnet::connect(fd, (struct sockaddr *)&ra, sizeof(ra)) < 0
        && errno != EINPROGRESS)
     {
         err = map_socket_errno(errno);
-        close(fd);
+        hostnet::close(fd);
         return err;
     }
     s->fd = fd;
@@ -720,7 +635,7 @@ OSErr do_tcp_active_open(TCPiopb *pb)
         return connectionTerminated;
     if(r == 0)
     {
-        close(s->fd);
+        hostnet::close(s->fd);
         s->fd = -1;
         s->state = StreamState::created;
         return openFailed;
@@ -731,14 +646,14 @@ OSErr do_tcp_active_open(TCPiopb *pb)
 /* A peer for a passive open: noErr, or inProgress while none came. */
 OSErr try_accept(MacTCPStream &s, TCPiopb *pb)
 {
-    int fd = accept(s.listen_fd, nullptr, nullptr);
+    int fd = hostnet::accept(s.listen_fd, nullptr, nullptr);
     if(fd < 0)
         return errno == EAGAIN || errno == EWOULDBLOCK
                    ? inProgress
                    : map_socket_errno(errno);
-    close(s.listen_fd);
+    hostnet::close(s.listen_fd);
     s.listen_fd = -1;
-    set_nonblocking(fd);
+    hostnet::set_nonblocking(fd);
     s.fd = fd;
     s.state = StreamState::established;
     report_endpoints(fd, pb->csParam.open);
@@ -756,24 +671,24 @@ OSErr do_tcp_passive_open(TCPiopb *pb)
         return connectionExists;
 
     auto &open = pb->csParam.open;
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = hostnet::socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0)
         return insufficientResources;
-    set_nonblocking(fd);
+    hostnet::set_nonblocking(fd);
     int one = 1;
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    hostnet::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
     struct sockaddr_in la = {};
     la.sin_family = AF_INET;
     la.sin_port = htons(open.localPort);
     la.sin_addr.s_addr = htonl(INADDR_ANY);
-    if(bind(fd, (struct sockaddr *)&la, sizeof(la)) < 0 || listen(fd, 1) < 0)
+    if(hostnet::bind(fd, (struct sockaddr *)&la, sizeof(la)) < 0 || hostnet::listen(fd, 1) < 0)
     {
         err = map_socket_errno(errno);
-        close(fd);
+        hostnet::close(fd);
         return err;
     }
     socklen_t alen = sizeof(la);
-    if(getsockname(fd, (struct sockaddr *)&la, &alen) == 0)
+    if(hostnet::getsockname(fd, (struct sockaddr *)&la, &alen) == 0)
         open.localPort = ntohs(la.sin_port);
     s->listen_fd = fd;
     s->state = StreamState::listening;
@@ -793,7 +708,7 @@ OSErr do_tcp_passive_open(TCPiopb *pb)
         return connectionTerminated;
     if(r == 0)
     {
-        close(s->listen_fd);
+        hostnet::close(s->listen_fd);
         s->listen_fd = -1;
         s->state = StreamState::created;
         return commandTimeout;
@@ -820,7 +735,7 @@ OSErr do_tcp_send(TCPiopb *pb)
     size_t first = 0;
     while(written < total)
     {
-        ssize_t r = writev(s->fd, iov.data() + first, iov.size() - first);
+        ssize_t r = hostnet::writev(s->fd, iov.data() + first, iov.size() - first);
         if(r < 0)
         {
             if(errno == EAGAIN || errno == EWOULDBLOCK)
@@ -854,7 +769,7 @@ OSErr do_tcp_send(TCPiopb *pb)
     if(pb->csParam.send.pushFlag)
     {
         int one = 1;
-        setsockopt(s->fd, IPPROTO_TCP, TCP_NODELAY, &one,
+        hostnet::setsockopt(s->fd, IPPROTO_TCP, TCP_NODELAY, &one,
                    sizeof(one));
     }
     return noErr;
@@ -871,11 +786,11 @@ OSErr try_tcp_rcv(MacTCPStream &s, TCPiopb *pb)
         rdsEntry *rds = guest_cast<rdsEntry *>(rcv.rdsPtr);
         if(!rds || rcv.rdsLength < 2)
             return invalidRDS;
-        int avail = 0;
-        if(ioctl(s.fd, FIONREAD, &avail) < 0 || avail <= 0)
+        int avail = hostnet::bytes_available(s.fd);
+        if(avail <= 0)
         {
             char c;
-            ssize_t r = recv(s.fd, &c, 1, MSG_PEEK | MSG_DONTWAIT);
+            ssize_t r = hostnet::recv(s.fd, &c, 1, MSG_PEEK | MSG_DONTWAIT);
             if(r == 0)
             {
                 s.remoteClosed = true;
@@ -892,7 +807,7 @@ OSErr try_tcp_rcv(MacTCPStream &s, TCPiopb *pb)
             s.areaFull = true;
             return inProgress;
         }
-        ssize_t r = recv(s.fd, (void *)(s.rcvBuff + *off), n, MSG_DONTWAIT);
+        ssize_t r = hostnet::recv(s.fd, (void *)(s.rcvBuff + *off), n, MSG_DONTWAIT);
         if(r <= 0)
         {
             give_back(s, *off);
@@ -912,7 +827,7 @@ OSErr try_tcp_rcv(MacTCPStream &s, TCPiopb *pb)
     uint16_t want = rcv.rcvBuffLen;
     if(!buf || !want)
         return invalidBufPtr;
-    ssize_t r = recv(s.fd, (void *)buf, want, MSG_DONTWAIT);
+    ssize_t r = hostnet::recv(s.fd, (void *)buf, want, MSG_DONTWAIT);
     if(r < 0)
         return errno == EAGAIN || errno == EWOULDBLOCK
                    ? inProgress
@@ -1013,7 +928,7 @@ OSErr do_tcp_close(TCPiopb *pb)
         return err;
     if(s->fd < 0)
         return connectionDoesntExist;
-    shutdown(s->fd, SHUT_WR); /* half-close; stream stays readable */
+    hostnet::shutdown(s->fd, SHUT_WR); /* half-close; stream stays readable */
     s->state = StreamState::closing;
     stats.closed++;
     return noErr;
@@ -1028,14 +943,14 @@ OSErr do_tcp_abort(TCPiopb *pb, std::vector<std::pair<uint32_t, OSErr>> &done)
     if(s->fd >= 0)
     {
         struct linger lg = { 1, 0 }; /* RST on close */
-        setsockopt(s->fd, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
-        close(s->fd);
+        hostnet::setsockopt(s->fd, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
+        hostnet::close(s->fd);
         s->fd = -1;
         stats.aborted++;
     }
     if(s->listen_fd >= 0)
     {
-        close(s->listen_fd);
+        hostnet::close(s->listen_fd);
         s->listen_fd = -1;
     }
     s->state = StreamState::terminated;
@@ -1077,19 +992,19 @@ OSErr do_tcp_status(TCPiopb *pb)
     }
     if(s->fd >= 0)
     {
-        int avail = 0;
-        if(ioctl(s->fd, FIONREAD, &avail) == 0)
+        int avail = hostnet::bytes_available(s->fd);
+        if(avail >= 0)
             st.amtUnreadData = (uint16_t)std::min(avail, 0xffff);
 
         struct sockaddr_in a = {};
         socklen_t alen = sizeof(a);
-        if(getpeername(s->fd, (struct sockaddr *)&a, &alen) == 0)
+        if(hostnet::getpeername(s->fd, (struct sockaddr *)&a, &alen) == 0)
         {
             st.remoteHost = ntohl(a.sin_addr.s_addr);
             st.remotePort = ntohs(a.sin_port);
         }
         alen = sizeof(a);
-        if(getsockname(s->fd, (struct sockaddr *)&a, &alen) == 0)
+        if(hostnet::getsockname(s->fd, (struct sockaddr *)&a, &alen) == 0)
         {
             st.localHost = ntohl(a.sin_addr.s_addr);
             st.localPort = ntohs(a.sin_port);
@@ -1104,9 +1019,9 @@ void release(uint32_t cookie, std::vector<std::pair<uint32_t, OSErr>> &done)
 {
     MacTCPStream &s = streams[cookie];
     if(s.fd >= 0)
-        close(s.fd);
+        hostnet::close(s.fd);
     if(s.listen_fd >= 0)
-        close(s.listen_fd);
+        hostnet::close(s.listen_fd);
     fail_parked(s, connectionTerminated, done);
     streams.erase(cookie);
 }
@@ -1132,24 +1047,24 @@ OSErr do_udp_create(UDPiopb *pb)
     if(!create.rcvBuff || create.rcvBuffLen < 2048)
         return invalidBufPtr; /* MacTCP demanded >= 2K */
 
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int fd = hostnet::socket(AF_INET, SOCK_DGRAM, 0);
     if(fd < 0)
         return insufficientResources;
-    set_nonblocking(fd);
+    hostnet::set_nonblocking(fd);
     int one = 1;
-    setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &one, sizeof(one));
+    hostnet::setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &one, sizeof(one));
     struct sockaddr_in la = {};
     la.sin_family = AF_INET;
     la.sin_port = htons(create.localPort);
     la.sin_addr.s_addr = htonl(INADDR_ANY);
-    if(bind(fd, (struct sockaddr *)&la, sizeof(la)) < 0)
+    if(hostnet::bind(fd, (struct sockaddr *)&la, sizeof(la)) < 0)
     {
         OSErr err = map_socket_errno(errno);
-        close(fd);
+        hostnet::close(fd);
         return err;
     }
     socklen_t alen = sizeof(la);
-    if(getsockname(fd, (struct sockaddr *)&la, &alen) == 0)
+    if(hostnet::getsockname(fd, (struct sockaddr *)&la, &alen) == 0)
         create.localPort = ntohs(la.sin_port);
 
     uint32_t cookie = STREAM_COOKIE_BASE + next_stream_id++;
@@ -1168,15 +1083,7 @@ OSErr do_udp_create(UDPiopb *pb)
 /* The size of the next datagram, or -1 if there is none. */
 ssize_t next_datagram_size(int fd)
 {
-#if defined(__APPLE__)
-    if(!ready_now(fd, POLLIN))
-        return -1;
-    int n = 0;
-    socklen_t len = sizeof n;
-    return getsockopt(fd, SOL_SOCKET, SO_NREAD, &n, &len) == 0 ? n : -1;
-#else
-    return recv(fd, nullptr, 0, MSG_PEEK | MSG_TRUNC | MSG_DONTWAIT);
-#endif
+    return hostnet::next_datagram_size(fd);
 }
 
 /* One UDPRead attempt: inProgress if no datagram (or no room) yet. */
@@ -1198,7 +1105,7 @@ OSErr try_udp_read(MacTCPStream &s, UDPiopb *pb)
     }
     struct sockaddr_in from = {};
     socklen_t flen = sizeof from;
-    ssize_t r = recvfrom(s.fd, (void *)(s.rcvBuff + *off), n, MSG_DONTWAIT,
+    ssize_t r = hostnet::recvfrom(s.fd, (void *)(s.rcvBuff + *off), n, MSG_DONTWAIT,
                          (struct sockaddr *)&from, &flen);
     if(r < 0)
     {
@@ -1286,7 +1193,7 @@ OSErr do_udp_write(UDPiopb *pb)
     msg.msg_iovlen = iov.size();
     for(;;)
     {
-        if(sendmsg(s->fd, &msg, 0) >= 0)
+        if(hostnet::sendmsg(s->fd, &msg, 0) >= 0)
             break;
         if(errno == EAGAIN || errno == EWOULDBLOCK)
         {
@@ -1344,7 +1251,7 @@ void service(uint32_t cookie)
                 err = finish_connect(*s, pb);
             else if(now >= p.deadline)
             {
-                close(s->fd);
+                hostnet::close(s->fd);
                 s->fd = -1;
                 s->state = StreamState::created;
                 err = openFailed;
@@ -1355,7 +1262,7 @@ void service(uint32_t cookie)
             err = try_accept(*s, pb);
             if(err == inProgress && now >= p.deadline)
             {
-                close(s->listen_fd);
+                hostnet::close(s->listen_fd);
                 s->listen_fd = -1;
                 s->state = StreamState::created;
                 err = commandTimeout;
@@ -1401,7 +1308,7 @@ void service(uint32_t cookie)
             return;
         }
         char c;
-        ssize_t r = recv(s->fd, &c, 1, MSG_PEEK | MSG_DONTWAIT);
+        ssize_t r = hostnet::recv(s->fd, &c, 1, MSG_PEEK | MSG_DONTWAIT);
         if(r > 0)
         {
             s->arrivalNotified = true;

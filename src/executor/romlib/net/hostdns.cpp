@@ -5,6 +5,7 @@
  * here (RFC 1035): the header, the questions skipped, then the resource
  * records of the three sections, names in record data expanded. */
 
+#include <rsys/hostnet.h>
 #include <rsys/hostdns.h>
 
 #include <arpa/nameser.h>
@@ -67,7 +68,7 @@ void put_name(std::vector<uint8_t> &v, const std::string &name)
 int Executor::host_dns_query(const std::string &name, int cls, int type, std::vector<HostRR> &rrs)
 {
     std::vector<uint8_t> m(8192);
-    int n = res_query(name.c_str(), cls, type, m.data(), m.size());
+    int n = hostnet::res_query(name.c_str(), cls, type, m.data(), m.size());
     if(n < 0)
     {
         switch(h_errno)

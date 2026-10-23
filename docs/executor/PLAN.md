@@ -470,6 +470,9 @@ Kept small so upstream fixes can be merged by hand:
 * `process.cpp`, `time/syncint.cpp`: processes and Thread Manager
   threads are minicoro coroutines, the timer is polled (no Qt threads;
   DIRECTION.md, D2).
+* `mactcp/`, `opentransport/`, `net/hostdns.cpp` (all ours): the host's
+  network only through `rsys/hostnet.h` (DIRECTION.md, D3); the two socket
+  watchers are its one `Watcher`.
 * `file/fileMisc.cpp`: `ROMlib_path_overrides` before `getenv`.
 * `file/localvolume/localvolume.cpp`: `ROMlib_local_volume_roots` instead of `/`.
 * `hfs/hfsHelper.cpp`: `ROMlib_readonly_images`.

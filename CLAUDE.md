@@ -47,6 +47,8 @@ npx playwright test
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img
 # ... with sound (Executor mixes in C++ and feeds the same Opus/WebRTC path):
 ./build/mac-phoenix --backend executor --audio
+# MacTCP/OT reach the host through rsys/hostnet.h: -DEXECUTOR_NET=none builds them
+# with no network (the wasm build's default until the relay exists).
 # Open Transport is native C++ and on by default (docs/executor/OpenTransport.md);
 # --no-executor-ot leaves applications to MacTCP:
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --no-executor-ot

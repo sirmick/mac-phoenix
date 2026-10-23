@@ -44,6 +44,7 @@ cmrc_add_resource_library(resources
 add_library(executor_cpu STATIC
     cpu/syn68k_common.cpp
     cpu/PowerCore.cpp
+    cpu/host/posix/memory.cpp   # syn68k_host.h: the guest windows' memory
 )
 target_include_directories(executor_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
 target_include_directories(executor_cpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/romlib)   # base/trap_history.h

@@ -622,9 +622,18 @@ set(sources ${base_sources} ${mman_sources} ${vdriver_sources}
     ${mpw_sources}
     ${include_sources})
 
+# MacPhoenix: the host network edge (include/rsys/hostnet.h): host sockets,
+# or none (MacTCP and Open Transport answer with errors; no host threads).
+set(EXECUTOR_NET posix CACHE STRING "Executor's network backend: posix | none")
+set_property(CACHE EXECUTOR_NET PROPERTY STRINGS posix none)
+if(NOT EXECUTOR_NET MATCHES "^(posix|none)$")
+    message(FATAL_ERROR "EXECUTOR_NET must be posix or none, not ${EXECUTOR_NET}")
+endif()
+
 add_library(romlib ${sources}
         ${GENERATED_FILES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minicoro/minicoro.c
+        host/${EXECUTOR_NET}/net.cpp
     )
 
 target_include_directories(romlib PUBLIC . include/ ${GEN_DIR}/api/ ${GEN_DIR})
