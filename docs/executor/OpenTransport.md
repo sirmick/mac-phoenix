@@ -2,11 +2,12 @@
 
 Executor answers Open Transport 1.1's 68k client API in C++
 (`src/executor/romlib/opentransport/`), on host sockets, so 68k applications
-built with Apple's OT glue run unchanged. Behind `--executor-ot` while it
-grows (milestone M3i in PLAN.md).
+built with Apple's OT glue run unchanged. On by default since 2026-10-23
+(`--no-executor-ot` leaves it out: Gestalt then has no `'otan'` and
+applications fall back to MacTCP); milestone M3i in PLAN.md.
 
 ```bash
-./build/mac-phoenix --backend executor --executor-system macos-7.5.5.img --executor-ot
+./build/mac-phoenix --backend executor --executor-system macos-7.5.5.img
 #   --executor-debug ot   logs binds, calls, notifier events, the bytes on sockets
 ctest -R ot_executor      # OTTest through Apple's glue, both 68k cores, and
                           # without Apple's ASLM (ot_executor_noaslm)
@@ -148,9 +149,9 @@ function set's ID as a C string at +16. The function sets and their indices
 
 ## Open
 
-* OT is behind `--executor-ot`; on by default with Apple's System is the
-  next decision (a MacTCP application is unaffected either way, but one
-  that asks Gestalt `'otan'` then picks OT over MacTCP).
+* OT is on by default (with Apple's System and Executor's own): an
+  application that asks Gestalt `'otan'` picks OT over MacTCP; MacTCP
+  applications are unaffected.
 * Datagram errors (T_UDERR, OTRcvUDErr) and the ICMP reports behind them.
 * Not written: mappers and name registration (AppleTalk's NBP), the
   transaction calls (OTSndRequest and friends: ATP, ADSP), OTCreateOptions /

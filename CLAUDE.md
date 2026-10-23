@@ -48,8 +48,9 @@ npx playwright test
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img
 # ... with sound (Executor mixes in C++ and feeds the same Opus/WebRTC path):
 ./build/mac-phoenix --backend executor --audio
-# ... with Open Transport, native C++ (docs/executor/OpenTransport.md; in progress):
-./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ot
+# Open Transport is native C++ and on by default (docs/executor/OpenTransport.md);
+# --no-executor-ot leaves applications to MacTCP:
+./build/mac-phoenix --backend executor --executor-system 7.5.5.img --no-executor-ot
 # ... PowerPC code on mame-ppc: PowerPC-only apps always, fat apps' with
 # --executor-ppc (InterfaceLib only so far; no StdCLib/MathLib yet):
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc
@@ -240,7 +241,7 @@ Machine:
   --executor-app PATH        Application Executor starts instead (host path)
   --executor-writable-images Executor mounts disk images read-write (default: read-only)
   --[no-]executor-fresh      Restore the System from its clean copy each run (default: on)
-  --executor-ot              Executor answers Open Transport (in progress; default: off)
+  --[no-]executor-ot         Executor answers Open Transport (default: on)
   --executor-ppc             Executor runs fat apps' PowerPC code on mame-ppc (PowerPC-only
                              apps always do; InterfaceLib only so far; default: off)
 

@@ -6,7 +6,7 @@
 
 namespace Executor
 {
-/* --executor-ot: answer Open Transport (Gestalt 'otan'). */
+/* Answer Open Transport (Gestalt 'otan'); on unless --no-executor-ot. */
 extern bool ROMlib_open_transport;
 
 /* Gestalt 'otan' and 'otvr': true with the answer when OT is on; asking

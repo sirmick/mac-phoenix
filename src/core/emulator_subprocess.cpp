@@ -147,8 +147,8 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     if (config_->executor_writable_images) {
         args.push_back("--executor-writable-images");
     }
-    if (config_->executor_ot) {
-        args.push_back("--executor-ot");
+    if (!config_->executor_ot) {
+        args.push_back("--no-executor-ot");
     }
     if (config_->executor_ppc) {
         args.push_back("--executor-ppc");

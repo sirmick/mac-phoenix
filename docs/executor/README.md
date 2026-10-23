@@ -78,7 +78,7 @@ to upstream files are described in
 | Apple's packages in place of Executor's | `drag.cpp`, `helppkg.cpp`, `stdfilepkg.cpp`, `textservices.cpp`, `quickdraw/qSaveBits.cpp` | the Drag Manager, Help Manager, Standard File and Text Services from the System file, with the private calls they need |
 | Component Manager | `component.cpp` | `$A82A`; System file, extension and `thng` components |
 | Finder | `finder.cpp`, `menu/sysmenu.cpp`, `alias.cpp`, `icon.cpp`, `quickdraw/displays.cpp`, `desk.cpp` | the Desktop Manager, Apple/Help/Application menus, alias resolution, Icon Utilities and the Display Manager calls Finder makes |
-| Networking | `mactcp/mactcp.cpp`, `mactcp/dnr.cpp`, `opentransport/` | MacTCP on host sockets (async calls, the resolver); Open Transport 1.1's 68k client API in C++ (behind `--executor-ot`; [OpenTransport.md](OpenTransport.md)) |
+| Networking | `mactcp/mactcp.cpp`, `mactcp/dnr.cpp`, `opentransport/` | MacTCP on host sockets (async calls, the resolver); Open Transport 1.1's 68k client API in C++ (on by default, `--no-executor-ot` to leave it out; [OpenTransport.md](OpenTransport.md)) |
 | Devices | `hostdisk.cpp`, `vdriver/videodrvr.cpp`, `sound/snddispatch.cpp`, `config/front-ends/phoenix/phoenix_sound.cpp` | `.Disk` for host-folder volumes, `.Display`, the Sound Manager's dispatch groups and sound output |
 | Debugging | `base/trap_history.*`, `mman/whatis.*` | the last traps and host memory moves for crash reports; what lives at a guest address |
 | PowerPC | `cfm.cpp`, `base/builtinlibs.cpp`, `base/functions.impl.h`, `base/cpu.cpp` | the PowerCore wiring, unresolved-import logging, upstream's PPC parameter passing |

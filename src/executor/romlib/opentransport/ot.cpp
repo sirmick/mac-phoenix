@@ -44,7 +44,7 @@
 using namespace Executor;
 using namespace Executor::ot;
 
-bool Executor::ROMlib_open_transport = false;
+bool Executor::ROMlib_open_transport = true;
 
 namespace
 {

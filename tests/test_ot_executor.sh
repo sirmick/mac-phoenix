@@ -3,7 +3,7 @@
 # test_ot_executor.sh — Executor's native Open Transport (romlib/opentransport)
 # through Apple's own 68k OT glue: tests/guest/ot/OTTest.bin, an MPW tool
 # linked with OpenTransport.o / OpenTransportApp.o / OpenTptInet.o, run in
-# ToolServer on an MPW session (tools/mpw/mpw) with --executor-ot.
+# ToolServer on an MPW session (tools/mpw/mpw); OT is on by default.
 #
 # Cases (one PASS/FAIL line each from the tool): gestalt, init, utils,
 # dns_sync, dns_async, iface, tcp_blocking, tcp_nonblocking, tcp_async,
@@ -77,7 +77,7 @@ if [[ -n "$NO_ASLM" ]]; then
     grep -v -e "^Shared Library Manager" -e "AINI -32700" src/executor/res/extension-policy.txt \
         >"$STORAGE/executor-systems/$MPW_SYSTEM.clean/extension-policy.txt"
 fi
-$MPW start ${CORE:+--core $CORE} --emu=--executor-ot --emu=--executor-debug --emu=ot \
+$MPW start ${CORE:+--core $CORE} --emu=--executor-debug --emu=ot \
     || { echo "FAIL: session did not start"; exit 1; }
 
 out=$($MPW run --timeout 240 -C "$HOST/ot" 'OTTest.bin')

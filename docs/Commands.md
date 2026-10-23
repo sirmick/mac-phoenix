@@ -102,7 +102,7 @@ Machine:
                              old/new value, 68k PC and registers, last traps, host stack (Executor)
   --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)
   --executor-writable-images Executor mounts disk images read-write (default: read-only)
-  --executor-ot              Executor answers Open Transport (in progress; default: off)
+  --[no-]executor-ot         Executor answers Open Transport (default: on)
   --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only
                              applications always run it; default: off)
 

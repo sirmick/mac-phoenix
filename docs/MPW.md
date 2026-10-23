@@ -27,7 +27,7 @@ tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
   volume (`~/.cache/mac-phoenix/mpw/host`). It is ready when BridgeAgent
   has said hello and ToolServer answers, about 7 s. It stays up until
   `mpw stop`. `mpw start --core mame-68k` and `--emu=FLAG` (repeatable,
-  e.g. `--emu=--executor-ot`) pass on to the emulator.
+  e.g. `--emu=--no-executor-ot`) pass on to the emulator.
 * **Commands.** ToolServer is MPW's headless command server. A command is
   written to a script file in `Host:.mpw:`; a wrapper sent to ToolServer as
   a 'misc'/'dosc' Apple Event (BridgeAgent, `POST /api/exec`) runs it as a

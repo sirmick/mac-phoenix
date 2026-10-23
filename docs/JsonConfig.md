@@ -123,7 +123,7 @@ Used with `"backend": "executor"`.
 | `executor_data_dir` | string | `""` | Executor's data folder; overrides `executor_system`. Empty: `storage_dir/executor` |
 | `executor_app` | string | `""` | Host path of the application to start; overrides `executor_start` |
 
-The other Executor options (`--executor-ot`, `--executor-ppc`,
+The other Executor options (`--no-executor-ot`, `--executor-ppc`,
 `--executor-writable-images`, `--executor-logtraps`, `--executor-debug`,
 `--watch`) are CLI-only.
 
