@@ -601,6 +601,7 @@ set(sources ${base_sources} ${mman_sources} ${vdriver_sources}
 
 add_library(romlib ${sources}
         ${GENERATED_FILES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minicoro/minicoro.c
     )
 
 target_include_directories(romlib PUBLIC . include/ ${CMAKE_CURRENT_BINARY_DIR}/api/ ${CMAKE_CURRENT_BINARY_DIR})
@@ -608,7 +609,9 @@ target_include_directories(romlib PUBLIC config/os/${HOST_OS})
 
 
 
-target_link_libraries(romlib Threads::Threads executor_cpu Qt6::Core)  # MacPhoenix: Qt threads (timer, processes)
+# MacPhoenix: processes and Thread Manager threads are minicoro coroutines.
+target_include_directories(romlib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minicoro)
+target_link_libraries(romlib Threads::Threads executor_cpu)
 
 target_link_libraries(romlib Boost::filesystem)  # mxe doesn't like this
 if(WIN32 AND NOT MSVC)

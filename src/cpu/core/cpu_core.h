@@ -242,6 +242,11 @@ public:
      * (SheepShaver-style interrupt dispatch). */
     virtual void attention(Core &core) { (void)core; }
 
+    /* After each time slice of run() (a few thousand cycles), on the
+     * core's thread: where a host without a timer thread looks at the
+     * clock (Executor). Only the MAME cores call it. */
+    virtual void slice_end(Core &core) { (void)core; }
+
     /* m68k: an A-line or F-line word, before the exception is taken. True
      * means the host handled it: the word counts as executed and the core
      * goes on at pc() (just past it), unless the host moved the PC. False:

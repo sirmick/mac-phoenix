@@ -257,6 +257,7 @@ public:
             dev_.run_slice();
             depth_--;
             dev_.shim_end_slice();
+            host_.slice_end(*this);
             if(trace_ && traced_ < 400)
             {
                 traced_++;

@@ -277,6 +277,7 @@ public:
             dev_.shim_instruction_hook = vclock_enabled ? count_instruction : nullptr;
             dev_.icount() = SLICE_CYCLES;
             dev_.run_slice();
+            host_.slice_end(*this);
             if(vclock_enabled)
             {
                 vclock_memory = &memory_;
@@ -327,11 +328,17 @@ public:
     uint32_t reg(int id) const override { return dev_.get_reg(id); }
     void set_reg(int id, uint32_t value) override { dev_.set_reg(id, value); }
 
-    size_t context_size() const override { return dev_.context_size(); }
-    void save_context(void *dst) const override { dev_.save_context(dst); }
+    /* The device's fields, then the innermost run()'s stop flag. */
+    size_t context_size() const override { return dev_.context_size() + sizeof stop_flag_; }
+    void save_context(void *dst) const override
+    {
+        dev_.save_context(dst);
+        memcpy((char *)dst + dev_.context_size(), &stop_flag_, sizeof stop_flag_);
+    }
     void restore_context(const void *src) override
     {
         dev_.restore_context(src);
+        memcpy(&stop_flag_, (const char *)src + dev_.context_size(), sizeof stop_flag_);
         dev_.set_line(irq_); /* the saved line is stale */
     }
 
@@ -397,11 +404,11 @@ private:
     Host &host_;
     GuestMemory &memory_;
     int irq_ = 0;
-    /* The innermost run()'s, per host thread: Executor's processes and
-       Thread Manager threads each run guest code on a host thread of their
-       own and park inside run(); a run on another host thread must not
-       take the parked one's flag (it would never see its exit cell). */
-    static inline thread_local bool *stop_flag_ = nullptr;
+    /* The innermost run()'s. Part of the context: Executor's processes
+       and Thread Manager threads are coroutines that park inside run() and
+       switch contexts, and a run on one must not take a parked one's flag
+       (it would never see its exit cell). */
+    bool *stop_flag_ = nullptr;
     std::atomic<bool> stop_requested_{false};
     std::atomic<bool> attention_{false};
 };

@@ -319,6 +319,10 @@ void syn68k_set_jit(int enabled);
  * emulator has started. */
 int syn68k_select_engine(const char *name);
 const char *syn68k_engine_name(void);
+/* Called between time slices of the 68k and PowerPC cores (cpu::Host::
+ * slice_end), on the emulator thread: the timer looks at the clock here
+ * (time/syncint.cpp), as there is no timer thread. */
+extern void (*syn68k_slice_hook)(void);
 
 #ifdef __cplusplus
 }

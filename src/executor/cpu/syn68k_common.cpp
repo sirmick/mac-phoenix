@@ -65,6 +65,7 @@ uint64 ROMlib_sizes[OFFSET_TABLE_SIZE] = { 1ull << 30, 1ull << 30, 1ull << 30, 1
 DebuggerCallbacks syn68k_debugger_callbacks = { nullptr, nullptr };
 int syn68k_track_pc = 0;
 int emulation_depth = 0;
+void (*syn68k_slice_hook)(void) = nullptr;
 
 static const uint16 OP_EXEC_RETURN = 0x7100;  /* the exit cell: stop run() */
 static const uint16 OP_CALLBACK    = 0x7101;  /* dispatch callback by PC   */
@@ -376,6 +377,12 @@ public:
     void attention(cpu::Core &c) override
     {
         c.set_irq(irq_level());
+    }
+
+    void slice_end(cpu::Core &) override
+    {
+        if(syn68k_slice_hook)
+            syn68k_slice_hook();
     }
 
     /* An illegal word: the exception goes ahead (vector 4, Executor's

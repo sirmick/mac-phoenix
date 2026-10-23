@@ -92,6 +92,12 @@ public:
         p.handleInterrupt(p);
         to_core(p, c);
     }
+
+    void slice_end(cpu::Core &) override
+    {
+        if(syn68k_slice_hook)
+            syn68k_slice_hook();
+    }
 };
 PpcHost ppc_host;
 

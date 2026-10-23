@@ -44,11 +44,7 @@ using namespace Executor;
 #include <syn68k_public.h>
 #include <base/trapglue.h>
 
-#include <QMutex>
-#include <QThread>
-#include <QWaitCondition>
-#include <signal.h>
-#include <ucontext.h>
+#include <minicoro.h>
 #include <functional>
 
 
@@ -73,11 +69,11 @@ get_size_resource()
 
 /* ── Processes ──────────────────────────────────────────────────────────
  * Our Process Manager.  Every process but the first (the one Executor
- * boots, normally Finder) runs on its own host thread, so its C++ frames
- * (a trap that called back into guest code that called WaitNextEvent...)
- * stay on its own stack while others run.  Only one thread runs at a time:
- * the one holding the baton (pm_running).  A switch saves the outgoing
- * process's world and installs the incoming one's:
+ * boots, normally Finder) runs on a coroutine of its own (minicoro), so its
+ * C++ frames (a trap that called back into guest code that called
+ * WaitNextEvent...) stay on its own stack while others run.  Only one runs
+ * at a time: the one holding the baton (pm_running).  A switch saves the
+ * outgoing process's world and installs the incoming one's:
  *
  *   - the low memory 7.5.5's Process Manager switches: its list is the
  *     System file's 'lmem' -16458 (length.w, address.l pairs), plus
@@ -120,10 +116,9 @@ struct process_info
     AE_zone_tables_h ae_tables = nullptr;       /* Executor's Apple Event Manager */
     AE_zone_tables_h guest_ae_tables = nullptr; /* ExpandMem+$154: the guest's */
 
-    /* Every process but the first: its thread and what it runs. */
+    /* Every process but the first: its coroutine and what it runs. */
     bool own_thread = false;
-    QThread *thread = nullptr;
-    int stack_slot = -1;
+    mco_coro *co = nullptr;
     FSSpec app = {};
     /* A desk accessory's process (LaunchDeskAccessory): app is its file,
        da_name its DRVR (empty: the file's first). */
@@ -1114,121 +1109,115 @@ static void raise_layer(process_info_t *p)
     layer_order.insert(layer_order.begin(), p);
 }
 
-/* ── The baton ── */
+/* ── The baton ──
+ * Processes and Thread Manager threads are coroutines on the one host
+ * thread Executor runs on; the first process's main thread is that
+ * thread's own stack (the root). Exactly one context runs: pm_running's
+ * running thread (turn()). A context that is not it waits by yielding, and
+ * only the root resumes: waiting, it runs whoever's turn it is until its
+ * own comes back. So a context may hand over from any depth, even from a
+ * dialog filter that C++ ModalDialog called, and its C++ and 68k frames
+ * stay on its stack meanwhile. The 68k core's state is switched with the
+ * process's world or the thread's context (syn68k_save_context). */
 
-static QMutex pm_mutex;
-static QWaitCondition pm_cv;
 static process_info_t *pm_running;
 static std::vector<process_info_t *> reap_list;
+static mco_coro *running_thread_coro(struct pm_thread *t);
+
+/* The coroutine whose turn it is; null for the root. */
+static mco_coro *turn()
+{
+    process_info_t *p = pm_running;
+    if(p->running_thread && p->running_thread != p->main_thread)
+        return running_thread_coro(p->running_thread);
+    return p->co;
+}
 
 static void hand_baton(process_info_t *to)
 {
-    QMutexLocker lock(&pm_mutex);
     pm_running = to;
-    pm_cv.wakeAll();
 }
 
-/* A host thread runs when its process has the baton and, inside the
-   process, its 68k thread is the running one (Thread Manager): a process
-   switch hands the baton to whichever thread of the process was running. */
-static void wait_for_baton(process_info_t *self)
+/* Until it is the calling context's turn: the running context's own
+   (mco_running(), null for the root). */
+static void wait_turn()
 {
-    QMutexLocker lock(&pm_mutex);
-    pm_thread *mine = self->running_thread;
-    while(pm_running != self || self->running_thread != mine)
-        pm_cv.wait(&pm_mutex);
-}
-
-/* ── Process threads ──
- * A QThread per process.  Guest code is handed pointers into the C++
- * frames of the Toolbox code it calls (an EventRecord on the stack...), and
- * guest addresses are host addresses below 4GB: so run() moves onto a stack
- * from a pool reserved below 4GB once, at startup of the first process, and
- * the whole process lives there (Executor's own thread does the same). */
-
-static const int stack_slots = 48; /* processes and their threads */
-static const size_t stack_size = 4 * 1024 * 1024;
-static char *stack_pool;
-static bool stack_used[stack_slots];
-
-static int take_stack_slot()
-{
-    if(!stack_pool)
-        stack_pool = (char *)syn68k_alloc_low(stack_slots * stack_size);
-    for(int i = 0; i < stack_slots; i++)
-        if(!stack_used[i])
+    mco_coro *me = mco_running();
+    if(me)
+    {
+        while(turn() != me)
+            mco_yield(me);
+        return;
+    }
+    for(mco_coro *next; (next = turn()) != nullptr;)
+    {
+        mco_result r = mco_resume(next);
+        if(r != MCO_SUCCESS)
         {
-            stack_used[i] = true;
-            return i;
+            fprintf(stderr, "[Process Manager] cannot resume a %s coroutine: %s\n",
+                    mco_status(next) == MCO_DEAD ? "finished" : "running",
+                    mco_result_description(r));
+            gui_fatal("process switch to a context that cannot run");
         }
-    return -1;
+    }
+}
+
+/* ── Process coroutines ──
+ * Guest code is handed pointers into the C++ frames of the Toolbox code it
+ * calls (an EventRecord on the stack...), so the stacks come from memory
+ * the guest can address (syn68k_alloc_low, window 1), as Executor's own
+ * thread's does. */
+
+static const size_t stack_size = 4 * 1024 * 1024;
+
+static void *coro_alloc(size_t size, void *)
+{
+    void *p = syn68k_alloc_low(size);
+    memset(p, 0, size);
+    return p;
+}
+
+static void coro_free(void *p, size_t size, void *)
+{
+    syn68k_free_low(p, size);
+}
+
+/* A coroutine running body: a process's life, or a Thread Manager
+   thread's. It first runs when the root resumes it. */
+static mco_coro *new_coro(std::function<void()> *body)
+{
+    mco_desc desc = mco_desc_init([](mco_coro *co) {
+        (*(std::function<void()> *)mco_get_user_data(co))();
+    }, stack_size);
+    desc.user_data = body;
+    desc.alloc_cb = coro_alloc;
+    desc.dealloc_cb = coro_free;
+    mco_coro *co;
+    if(mco_create(&co, &desc) != MCO_SUCCESS)
+        gui_fatal("cannot make a coroutine for a process or thread");
+    return co;
+}
+
+static void free_coro(mco_coro *co)
+{
+    auto *body = (std::function<void()> *)mco_get_user_data(co);
+    mco_destroy(co);
+    delete body;
 }
 
 static void process_body(process_info_t *p);
 
-/* A host thread on a low stack slot, running body there: a process's
-   life, or a Thread Manager thread's. */
-class ProcessThread : public QThread
+static void start_coro(process_info_t *p)
 {
-public:
-    ProcessThread(int slot, std::function<void()> body, const unsigned char *name)
-        : slot(slot), body(std::move(body))
-    {
-        setObjectName(QString::fromLatin1((const char *)name + 1, name[0]));
-    }
-
-protected:
-    void run() override
-    {
-        /* Faults are reported on an alternate stack (installFaultHandler
-           gives the main thread one): without it a stack overflow here
-           kills the process without a word. */
-        std::vector<char> alt(256 * 1024);
-        stack_t ss = {};
-        ss.ss_sp = alt.data();
-        ss.ss_size = alt.size();
-        sigaltstack(&ss, nullptr);
-
-        ucontext_t low;
-        getcontext(&low);
-        low.uc_stack.ss_sp = stack_pool + slot * stack_size;
-        low.uc_stack.ss_size = stack_size;
-        low.uc_link = &back;
-        current = this;
-        makecontext(&low, &ProcessThread::trampoline, 0);
-        swapcontext(&back, &low);
-    }
-
-private:
-    static void trampoline()
-    {
-        current->body();
-    }
-
-    int slot;
-    std::function<void()> body;
-    ucontext_t back;
-    static thread_local ProcessThread *current;
-};
-thread_local ProcessThread *ProcessThread::current;
-
-static void start_thread(process_info_t *p)
-{
-    p->stack_slot = take_stack_slot();
-    if(p->stack_slot < 0)
-        gui_fatal("too many processes");
-    p->thread = new ProcessThread(p->stack_slot, [p]() { process_body(p); }, p->app.name);
-    p->thread->start();
+    p->co = new_coro(new std::function<void()>([p]() { process_body(p); }));
 }
 
-/* Threads of processes that quit, collected once someone else runs. */
+/* Coroutines of processes that quit, collected once someone else runs. */
 static void reap_dead()
 {
     for(process_info_t *p : reap_list)
     {
-        p->thread->wait();
-        delete p->thread;
-        stack_used[p->stack_slot] = false;
+        free_coro(p->co);
         delete p;
     }
     reap_list.clear();
@@ -1373,14 +1362,14 @@ static void switch_to(process_info_t *to)
     me->state = process_info_t::parked;
     current_process_info = to;
     if(to->state == process_info_t::fresh)
-        start_thread(to);
+        start_coro(to);
     else
     {
         restore_world(to);
         to->state = process_info_t::running;
     }
     hand_baton(to);
-    wait_for_baton(me);
+    wait_turn();
     resumed();
 }
 
@@ -1399,7 +1388,7 @@ static void remove_tasks_in(Ptr lo, Ptr hi)
 }
 
 /* The current process quits: tidy up, switch to its launcher (or the
-   first process) and let the thread end. */
+   first process) and let the coroutine end. */
 static void exit_current()
 {
     process_info_t *me = current_process_info;
@@ -1486,10 +1475,10 @@ static void exit_current()
 
 static void threads_shutdown(process_info_t *p);
 
-/* A process's life, on its low stack. */
+/* A process's life, on its coroutine. */
 static void process_body(process_info_t *p)
 {
-    wait_for_baton(p);
+    wait_turn();
     fresh_world(p);
     p->state = process_info_t::running;
     try
@@ -2763,13 +2752,12 @@ OSErr Executor::C_RemoveAppleMenuItems(int32_t key)
 }
 
 /* ── Thread Manager (Threads.h, ThreadMgr.yaml) ──
- * System 7.5's cooperative threads, inside a process. Each thread runs on
- * a host thread of its own, from the same low stack pool as the
- * processes, and the baton says who runs: a host thread runs when its
- * process has the baton and its thread is the process's running one
- * (wait_for_baton). So a thread may yield from any depth, even from a
- * dialog filter that C++ ModalDialog called, and a process switch carries
- * whichever thread was running. A thread's 68k context is its own: its
+ * System 7.5's cooperative threads, inside a process. Each thread but the
+ * main one runs on a coroutine of its own, as the processes do, and the
+ * baton says who runs: a coroutine runs when its process has the baton and
+ * its thread is the process's running one (turn, wait_turn). So a thread
+ * may yield from any depth, even from a dialog filter that C++ ModalDialog
+ * called, and a process switch carries whichever thread was running. A thread's 68k context is its own: its
  * registers (saved here when it yields) and a stack in the application
  * heap. Preemptive threads are scheduled as cooperative ones. Disposing a
  * parked thread, or the application's quitting, wakes it to unwind with
@@ -2793,8 +2781,7 @@ struct pm_thread
     bool kill = false;        /* wake up only to unwind */
     uint32_t exit_result = 0;
     pm_thread *return_to = nullptr; /* who disposed of it, runs next */
-    int slot = -1;
-    ProcessThread *host = nullptr;
+    mco_coro *co = nullptr;
     uint32_t switch_in = 0, switch_in_param = 0;
     uint32_t switch_out = 0, switch_out_param = 0;
     uint32_t terminator = 0, terminator_param = 0;
@@ -2817,16 +2804,16 @@ static void reap_threads()
 {
     for(pm_thread *t : thread_reap_list)
     {
-        if(t->host)
-        {
-            t->host->wait();
-            delete t->host;
-        }
-        if(t->slot >= 0)
-            stack_used[t->slot] = false;
+        if(t->co)
+            free_coro(t->co);
         delete t;
     }
     thread_reap_list.clear();
+}
+
+static mco_coro *running_thread_coro(pm_thread *t)
+{
+    return t->co;
 }
 
 
@@ -2844,7 +2831,6 @@ static pm_thread *main_thread_of(process_info_t *p)
         m->started = true;
         p->threads.insert(p->threads.begin(), m);
         p->main_thread = m;
-        QMutexLocker lock(&pm_mutex);
         p->running_thread = m;
     }
     return p->main_thread;
@@ -2872,13 +2858,6 @@ static pm_thread *find_thread(process_info_t *p, uint32_t id)
         if(t->id == id && !t->finished)
             return t;
     return nullptr;
-}
-
-static void wait_for_thread(process_info_t *p, pm_thread *t)
-{
-    QMutexLocker lock(&pm_mutex);
-    while(pm_running != p || p->running_thread != t)
-        pm_cv.wait(&pm_mutex);
 }
 
 /* A Pascal procedure (ThreadID, long), the switcher and terminator kind. */
@@ -2950,25 +2929,16 @@ static void thread_switch_to(process_info_t *p, pm_thread *to)
         /* Its first context is ours; the body moves it to its stack. */
         to->started = true;
         to->cpu = me->cpu;
-        to->slot = take_stack_slot();
-        if(to->slot < 0)
-            gui_fatal("too many threads");
-        {
-            QMutexLocker lock(&pm_mutex);
-            p->running_thread = to;
-        }
-        to->host = new ProcessThread(to->slot, [to]() { thread_body(to); }, p->name);
-        to->host->start();
+        p->running_thread = to;
+        to->co = new_coro(new std::function<void()>([to]() { thread_body(to); }));
     }
     else
     {
         syn68k_restore_context(to->cpu.data());
-        QMutexLocker lock(&pm_mutex);
         p->running_thread = to;
-        pm_cv.wakeAll();
     }
 
-    wait_for_thread(p, me);
+    wait_turn();
     /* Back: whoever switched to us restored our context. */
     reap_threads();
     me->state = kRunningThreadState;
@@ -2984,7 +2954,7 @@ static void thread_switch_to(process_info_t *p, pm_thread *to)
 }
 
 /* A thread is done (its entry returned, it was disposed of, or it quit
-   the application): tell who asked, and hand on. Runs on its host thread,
+   the application): tell who asked, and hand on. Runs on its coroutine,
    which ends after. */
 static void thread_finish(pm_thread *t, uint32_t result, bool quit_app)
 {
@@ -3017,16 +2987,13 @@ static void thread_finish(pm_thread *t, uint32_t result, bool quit_app)
     next->state = kRunningThreadState;
     syn68k_restore_context(next->cpu.data());
     thread_reap_list.push_back(t);
-    QMutexLocker lock(&pm_mutex);
     p->running_thread = next;
-    pm_cv.wakeAll();
 }
 
-/* A thread's life, on its host thread. */
+/* A thread's life, on its coroutine. */
 static void thread_body(pm_thread *t)
 {
-    process_info_t *p = t->proc;
-    wait_for_thread(p, t);
+    wait_turn();
     syn68k_restore_context(t->cpu.data());
     uint32_t result = 0;
     bool quit_app = false;
@@ -3057,7 +3024,7 @@ static void thread_body(pm_thread *t)
 }
 
 /* The application quits: its threads are disposed of, each unwinding on
-   its own host thread (termination procs run), before the process goes. */
+   its own coroutine (termination procs run), before the process goes. */
 static void threads_shutdown(process_info_t *p)
 {
     if(!p->main_thread)
@@ -3100,7 +3067,6 @@ static void threads_shutdown(process_info_t *p)
     p->threads.clear();
     delete p->main_thread;
     p->main_thread = nullptr;
-    QMutexLocker lock(&pm_mutex);
     p->running_thread = nullptr;
 }
 

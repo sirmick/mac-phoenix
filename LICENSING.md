@@ -51,6 +51,7 @@ are MIT too, so they can go back upstream.
 | `src/cpu/mame/third_party/asmjit/` | zlib ([LICENSE-asmjit](src/cpu/mame/LICENSE-asmjit)) |
 | `subprojects/libdatachannel/` | MPL-2.0; its `deps/`: libjuice MPL-2.0, libsrtp and usrsctp BSD-3-Clause, plog and nlohmann/json MIT |
 | `src/executor/third_party/googletest/` | BSD-3-Clause |
+| `src/executor/third_party/minicoro/` | Unlicense or MIT-0 (minicoro 0.2.0, Eduardo Bart; the end of `minicoro.h`) |
 | `tools/macdecode/dcmp0_ext.py` | MIT (adapted from rsrcfork) |
 
 ### GPL-2.0-or-later: UAE, Basilisk II, SheepShaver and code adapted from them

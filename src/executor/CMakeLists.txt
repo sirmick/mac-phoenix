@@ -94,7 +94,7 @@ target_include_directories(mac-phoenix PRIVATE
 add_library(executor_platform_glue INTERFACE)
 target_sources(executor_platform_glue INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpu/platform_glue.cpp)
 target_include_directories(executor_platform_glue INTERFACE ${PROJECT_SOURCE_DIR}/src/common/include)
-target_link_libraries(executor_platform_glue INTERFACE executor_cpu cpu_core Qt6::Core Threads::Threads)
+target_link_libraries(executor_platform_glue INTERFACE executor_cpu cpu_core Threads::Threads)
 
 # --- Tests ---------------------------------------------------------------------
 if(BUILD_TESTS)

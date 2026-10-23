@@ -6,18 +6,17 @@
 
 #include <chrono>
 #include <array>
+#include <condition_variable>
+#include <mutex>
 #include <optional>
 #include "vclock.h"
 
-/* MacPhoenix: the timer is a Qt thread sleeping until the next deadline.
-   It raises the interrupt and wakes whichever host thread is idle in
-   syncint_wait_interrupt() -- under the Process Manager that is the thread
-   of whatever process holds the baton, not a fixed one (upstream's SIGALRM
-   was aimed at a single thread). */
-#include <QDeadlineTimer>
-#include <QMutex>
-#include <QThread>
-#include <QWaitCondition>
+/* MacPhoenix: no timer thread (upstream's was SIGALRM). post() records the
+   next deadline; the emulator thread looks at the clock between the CPU
+   cores' time slices (syn68k_slice_hook), whenever host code checks for
+   interrupts, and while idle in syncint_wait_interrupt(), which sleeps
+   until the deadline. Other host threads (sockets, the resolver) still
+   raise interrupts with Interrupt::trigger(), which wakes the idle wait. */
 
 using namespace Executor;
 
@@ -34,25 +33,23 @@ namespace
 
     Interrupt timerInterrupt;
 
-    /* Idle guest-running threads wait here for an interrupt. */
-    QMutex wake_mutex;
-    QWaitCondition wake_cond;
+    /* The emulator thread waits here, idle, for an interrupt. */
+    std::mutex wake_mutex;
+    std::condition_variable wake_cond;
 
+    /* Emulator thread only. Armed while scheduled_interrupt is after
+       last_interrupt. */
     struct SyncintTimer
     {
         using clock = std::chrono::steady_clock;
-        QThread *thread = nullptr;
-        QMutex mutex;
-        QWaitCondition cond;
-        bool terminate = false;
         clock::time_point last_interrupt;
         clock::time_point scheduled_interrupt;
 
         SyncintTimer();
-        ~SyncintTimer();
 
         void start();
         void post(std::chrono::microseconds usecs, bool fromLast);
+        void poll();
         void wait();
     };
 
@@ -94,9 +91,8 @@ void Interrupt::trigger()
     interrupt_generate(M68K_TIMER_PRIORITY);
     getPowerCore().requestInterrupt();
 
-
-    QMutexLocker lock(&wake_mutex);
-    wake_cond.wakeAll();
+    std::lock_guard<std::mutex> lock(wake_mutex);
+    wake_cond.notify_all();
 }
 
 void Interrupt::handleCommon()
@@ -166,6 +162,7 @@ void Interrupt::handlePowerPC(PowerCore& cpu)
 
 void Executor::syncint_check_interrupt()
 {
+    timer.poll();
     if(INTERRUPT_PENDING())
     {
         syn68k_addr_t pc;
@@ -187,46 +184,8 @@ void SyncintTimer::start()
 {
     if(vclock_enabled)
         vclock_poll_hook = vclockPoll;
-    thread = QThread::create([this] {
-        QMutexLocker lock(&mutex);
-        while(!terminate)
-        {
-            if(scheduled_interrupt > last_interrupt)
-            {
-                auto left = scheduled_interrupt - clock::now();
-                if(left <= clock::duration::zero()
-                   || !cond.wait(&mutex, QDeadlineTimer(
-                          std::chrono::duration_cast<std::chrono::nanoseconds>(left),
-                          Qt::PreciseTimer)))
-                {
-                    /* Not woken by a new post: the deadline passed. */
-                    if(clock::now() >= scheduled_interrupt)
-                    {
-                        last_interrupt = scheduled_interrupt;
-                        timerInterrupt.trigger();
-                    }
-                }
-            }
-            else
-                cond.wait(&mutex);
-        }
-    });
-    thread->setObjectName("syncint timer");
-    thread->start(QThread::TimeCriticalPriority);
-}
-
-SyncintTimer::~SyncintTimer()
-{
-    if(thread)
-    {
-        {
-            QMutexLocker lock(&mutex);
-            terminate = true;
-            cond.wakeAll();
-        }
-        thread->wait();
-        delete thread;
-    }
+    else
+        syn68k_slice_hook = [] { timer.poll(); };
 }
 
 void SyncintTimer::post(std::chrono::microseconds usecs, bool fromLast)
@@ -236,16 +195,24 @@ void SyncintTimer::post(std::chrono::microseconds usecs, bool fromLast)
         vDeadline = (fromLast ? vLast : vclock_usec()) + usecs.count();
         return;
     }
-    QMutexLocker lock(&mutex);
-
     auto time = (fromLast ? last_interrupt : clock::now()) + usecs;
 
     if(time <= last_interrupt)
         last_interrupt = clock::time_point();
     if(scheduled_interrupt <= last_interrupt || time < scheduled_interrupt)
         scheduled_interrupt = time;
+}
 
-    cond.wakeAll();
+/* The deadline passed: the timer interrupt. */
+void SyncintTimer::poll()
+{
+    if(vclock_enabled || scheduled_interrupt <= last_interrupt)
+        return;
+    if(clock::now() >= scheduled_interrupt)
+    {
+        last_interrupt = scheduled_interrupt;
+        timerInterrupt.trigger();
+    }
 }
 
 void SyncintTimer::wait()
@@ -257,10 +224,18 @@ void SyncintTimer::wait()
         vclockPoll();
         return;
     }
-    /* Checked under the lock trigger() takes, so no wake-up is lost. */
-    QMutexLocker lock(&wake_mutex);
-    while(!INTERRUPT_PENDING())
-        wake_cond.wait(&wake_mutex);
+    for(;;)
+    {
+        poll();
+        /* Checked under the lock trigger() takes, so no wake-up is lost. */
+        std::unique_lock<std::mutex> lock(wake_mutex);
+        if(INTERRUPT_PENDING())
+            return;
+        if(scheduled_interrupt > last_interrupt)
+            wake_cond.wait_until(lock, scheduled_interrupt);
+        else
+            wake_cond.wait(lock);
+    }
 }
 
 void Executor::syncint_init()
