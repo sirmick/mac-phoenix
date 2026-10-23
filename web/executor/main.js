@@ -1,8 +1,9 @@
 // The page side: keep uploads in OPFS, start the Worker with them, hand it
 // a canvas, send it input. Query string:
 //   ?size=WxH        the screen (default 640x480)
-//   ?disk=URL        a disk image to fetch and mount for this visit (not
-//                    kept; repeatable)
+//   ?disk=URL        a disk image to fetch and mount (repeatable); kept in
+//                    OPFS (disk-cache/) and revalidated on later visits
+//                    with its ETag, so it downloads once
 //   ?system=NAME     run on that image's System and Finder
 // Outside a secure context (plain http to another host) there is no OPFS
 // and no AudioWorklet: uploads last the visit, sound is off.
@@ -71,33 +72,96 @@ async function remove(name) {
         await (await uploads()).removeEntry(name).catch(() => {});
 }
 
-// ?disk=URL: fetched once per visit, with progress in the status line.
+// ?disk=URL: downloaded once into OPFS (disk-cache/: the image and a .json
+// with its URL and ETag), revalidated on later visits (304: the copy is
+// current), mounted from there: disk-backed, never whole in memory. If the
+// server can't be reached, the cached copy. Without OPFS: into memory, per
+// visit.
+async function diskCache() {
+    return (await uploads()).getDirectoryHandle('disk-cache', { create: true });
+}
+
+async function cacheKey(url) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(url));
+    return Array.from(new Uint8Array(digest).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function readJson(dir, name) {
+    try {
+        return JSON.parse(await (await (await dir.getFileHandle(name)).getFile()).text());
+    } catch {
+        return null;
+    }
+}
+
+async function fetchDisk(url) {
+    const absolute = new URL(url, location.href).href;
+    const name = decodeURIComponent(new URL(absolute).pathname.split('/').pop());
+    const progress = (got, total) => {
+        status.textContent = total ? `Loading ${name}… ${Math.floor(got * 100 / total)}%`
+                                   : `Loading ${name}… ${(got / 1e6).toFixed(0)} MB`;
+    };
+    const dir = opfs ? await diskCache() : null;
+    const key = dir ? await cacheKey(absolute) : null;
+    const meta = dir ? await readJson(dir, `${key}.json`) : null;
+    const cached = async () => new File([await (await dir.getFileHandle(`${key}.img`)).getFile()], name);
+
+    let res;
+    try {
+        // no-store: the browser's HTTP cache would keep a second copy.
+        res = await fetch(absolute, { cache: 'no-store',
+                                      headers: meta && meta.etag ? { 'If-None-Match': meta.etag } : {} });
+    } catch (e) {
+        if (meta)
+            return cached();            // offline: what we have
+        throw e;
+    }
+    if (res.status === 304 && meta)
+        return cached();
+    if (!res.ok)
+        throw new Error(`${name}: ${res.status}`);
+    // Compressed in transit, Content-Length is the compressed size;
+    // tools/web/serve.py says the real one.
+    const total = Number(res.headers.get('X-Decoded-Length'))
+        || (res.headers.get('Content-Encoding') ? 0 : Number(res.headers.get('Content-Length')) || 0);
+    const reader = res.body.getReader();
+    let got = 0;
+    if (!dir) {
+        const chunks = [];
+        for (let r; !(r = await reader.read()).done;) {
+            chunks.push(r.value);
+            progress(got += r.value.length, total);
+        }
+        return new File(chunks, name);
+    }
+    // Into OPFS as it arrives; the file is replaced only when complete
+    // (createWritable writes a swap file and commits at close).
+    const out = await (await dir.getFileHandle(`${key}.img`, { create: true })).createWritable();
+    try {
+        for (let r; !(r = await reader.read()).done;) {
+            await out.write(r.value);
+            progress(got += r.value.length, total);
+        }
+        await out.close();
+    } catch (e) {
+        await out.abort();
+        throw e;
+    }
+    const w = await (await dir.getFileHandle(`${key}.json`, { create: true })).createWritable();
+    await w.write(JSON.stringify({ url: absolute, name, etag: res.headers.get('ETag'),
+                                   lastModified: res.headers.get('Last-Modified'), size: got }));
+    await w.close();
+    return cached();
+}
+
 async function fetchDisks() {
     for (const url of params.getAll('disk')) {
-        const name = decodeURIComponent(new URL(url, location.href).pathname.split('/').pop());
-        const res = await fetch(url);
-        if (!res.ok) {
-            status.textContent = `Cannot fetch ${name} (${res.status})`;
-            continue;
+        try {
+            const file = await fetchDisk(url);
+            sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+        } catch (e) {
+            status.textContent = `Cannot load ${url}: ${e.message}`;
         }
-        // Compressed in transit, Content-Length is the compressed size;
-        // tools/web/serve.py says the real one.
-        const total = Number(res.headers.get('X-Decoded-Length'))
-            || (res.headers.get('Content-Encoding') ? 0 : Number(res.headers.get('Content-Length')) || 0);
-        const reader = res.body.getReader();
-        const chunks = [];
-        let got = 0;
-        for (;;) {
-            const { done, value } = await reader.read();
-            if (done)
-                break;
-            chunks.push(value);
-            got += value.length;
-            status.textContent = total ? `Loading ${name}… ${Math.floor(got * 100 / total)}%`
-                                       : `Loading ${name}… ${(got / 1e6).toFixed(0)} MB`;
-        }
-        sessionFiles = sessionFiles.filter((f) => f.name !== name)
-            .concat(new File(chunks, name));
     }
 }
 

@@ -67,6 +67,41 @@ self.Module = {
 
 Module.noInitialRun = true;
 const runtimeReady = new Promise((resolve) => { Module.onRuntimeInitialized = resolve; });
+
+// The module, from Cache Storage when it is current: revalidated with its
+// ETag (a 304 costs nothing), downloaded again only when it changed. Not
+// left to the browser's HTTP cache, which a proxy's headers can defeat.
+const WASM = 'executor-web.wasm';
+async function wasmResponse() {
+    const url = new URL(WASM, location.href).href;
+    let cache = null, cached = null;
+    try {
+        cache = await caches.open('executor');
+        cached = await cache.match(url);
+    } catch { }                                  // no Cache Storage: no cache
+    const etag = cached && cached.headers.get('ETag');
+    let res;
+    try {
+        res = await fetch(url, { cache: 'no-store', credentials: 'same-origin',
+                                 headers: etag ? { 'If-None-Match': etag } : {} });
+    } catch (e) {
+        if (cached)
+            return cached;                       // offline: what we have
+        throw e;
+    }
+    if (res.status === 304 && cached)
+        return cached;
+    if (cache && res.ok && res.headers.get('ETag'))
+        await cache.put(url, res.clone());
+    return res;
+}
+Module.instantiateWasm = (imports, receive) => {
+    wasmResponse()
+        .then((res) => WebAssembly.instantiateStreaming(res, imports))
+        .then((r) => receive(r.instance, r.module))
+        .catch((e) => console.log(`[web] cannot load ${WASM}: ${e}`));
+    return {};                                   // asynchronous
+};
 importScripts('executor-web.js');
 
 async function start(m) {
