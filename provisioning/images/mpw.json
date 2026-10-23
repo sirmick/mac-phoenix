@@ -1,11 +1,63 @@
 {
  "title": "MPW service: MPW 3.4.2",
- "tags": ["mpw-service"],
- "note": "The MPW disk tools/mpw/mpw mounts: MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22, the mpw-3.4.2 snapshot) on a volume named MPW, as tools/mpw/make_mpw_disk.py made it from the CD.",
+ "tags": [
+  "mpw-service"
+ ],
+ "note": "The MPW disk tools/mpw/mpw mounts: MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22, the mpw-3.4.2 snapshot) on a volume named MPW, as tools/mpw/make_mpw_disk.py made it from the CD. Plus the Apple Shared Library Manager SDK (the aslm-sdk-2.0 snapshot, E.T.O. #22): whole under Interfaces&Libraries:ASLM 2.0, and merged where MPW looks: LibraryManager.h & co. in {CIncludes}, {PInterfaces}, {RIncludes}; the SC glue (LibraryManager.o, MPWLibs.cl.o...) in {Libraries}, the MrC glue in {PPCLibraries}; LibraryBuilder, BuildSharedLibrary and the other ASLM tools in MPW:Tools.",
  "label": "MPW",
  "place": [
   {
    "snapshot": "mpw-3.4.2"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager",
+   "to": "Interfaces&Libraries",
+   "as": "ASLM 2.0"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Interfaces:CIncludes",
+   "to": "Interfaces&Libraries:Interfaces"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Interfaces:PInterfaces",
+   "to": "Interfaces&Libraries:Interfaces"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Interfaces:RIncludes",
+   "to": "Interfaces&Libraries:Interfaces"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:MPW Libraries Support:Interfaces",
+   "to": "Interfaces&Libraries:Interfaces",
+   "as": "CIncludes"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Libraries:SCLibraries",
+   "to": "Interfaces&Libraries:Libraries",
+   "as": "Libraries"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:MPW Libraries Support:Libraries",
+   "to": "Interfaces&Libraries:Libraries",
+   "as": "Libraries"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Libraries:MrCLibraries",
+   "to": "Interfaces&Libraries:Libraries",
+   "as": "PPCLibraries"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Tools",
+   "to": "MPW"
   }
  ]
 }

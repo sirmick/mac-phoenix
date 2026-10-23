@@ -50,6 +50,18 @@ tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
 
 ## Things to know
 
+* **The Apple Shared Library Manager SDK** (ASLM 2.0, E.T.O. #22's
+  Past&Future:Archive; the `aslm-sdk-2.0` snapshot) is on both MPW disks and
+  on dev-tools-system-7: `LibraryManager.h`, `LibraryManagerClasses.h`,
+  `LibraryManagerUtilities.h`, `MPWSharedLibs.h` in `{CIncludes}` (the Pascal
+  and Rez ones in `{PInterfaces}`, `{RIncludes}`), the SC glue
+  (`LibraryManager.o`, `.n.o`, debug builds, `MPWLibs.cl.o`...) in
+  `{Libraries}`, `LibraryManagerPPC.o` in `{PPCLibraries}`, LibraryBuilder,
+  BuildSharedLibrary and the other ASLM tools in `MPW:Tools`; the whole SDK
+  (Developer's Guide, 2.0 Supplement, examples, debugging tools) under
+  `{MPW}:Interfaces&Libraries:ASLM 2.0:`. Read a header from the host with
+  `mpw run 'Catenate "{CIncludes}LibraryManager.h"'`.
+
 * **`-model far`** for anything linked with Apple's OT glue (32-bit
   references), on both SC and Link.
 * **Library order:** `Stubs.o` last, if at all (`IntEnv.o` covers it).

@@ -1,7 +1,9 @@
 {
  "title": "MPW service: CodeWarrior Pro 4 MPW",
- "tags": ["mpw-service"],
- "note": "The MPW disk for tools/mpw/mpw --toolchain cw: CodeWarrior Pro 4's MPW (the MPW Shell, Metrowerks' MWC68K/MWCPPC/MWLink68K/MWLinkPPC and Apple's Link, PPCLink, Rez...) and its Interfaces&Libraries, from the codewarrior-pro-4 snapshot (public media), on a volume named MPW laid out as the E.T.O. disk is; plus what Metrowerks' compilers link with, which the IDE install keeps outside the MPW folder: MSL C (headers and libraries) and MacOS Support's libraries, under Interfaces&Libraries; and ToolServer 3.4.1 (the toolserver-3.4.1 snapshot, from the same CD) in the MPW folder, as on the E.T.O. disk (tools/mpw/mpw names them: {MSLCommonIncludes}, {MSLMacIncludes}, {MSLLibraries}, {MWMacOS68K}, {MWRuntime68K}, {MWRuntimePPC}).",
+ "tags": [
+  "mpw-service"
+ ],
+ "note": "The MPW disk for tools/mpw/mpw --toolchain cw: CodeWarrior Pro 4's MPW (the MPW Shell, Metrowerks' MWC68K/MWCPPC/MWLink68K/MWLinkPPC and Apple's Link, PPCLink, Rez...) and its Interfaces&Libraries, from the codewarrior-pro-4 snapshot (public media), on a volume named MPW laid out as the E.T.O. disk is; plus what Metrowerks' compilers link with, which the IDE install keeps outside the MPW folder: MSL C (headers and libraries) and MacOS Support's libraries, under Interfaces&Libraries; and ToolServer 3.4.1 (the toolserver-3.4.1 snapshot, from the same CD) in the MPW folder, as on the E.T.O. disk (tools/mpw/mpw names them: {MSLCommonIncludes}, {MSLMacIncludes}, {MSLLibraries}, {MWMacOS68K}, {MWRuntime68K}, {MWRuntimePPC}). Plus the Apple Shared Library Manager SDK (the aslm-sdk-2.0 snapshot, E.T.O. #22): whole under Interfaces&Libraries:ASLM 2.0, and merged where MPW looks: LibraryManager.h & co. in {CIncludes}, {PInterfaces}, {RIncludes}; the SC glue (LibraryManager.o, MPWLibs.cl.o...) in {Libraries}, the MrC glue in {PPCLibraries}; LibraryBuilder, BuildSharedLibrary and the other ASLM tools in MPW:Tools.",
  "label": "MPW",
  "place": [
   {
@@ -54,6 +56,56 @@
   {
    "snapshot": "toolserver-3.4.1",
    "take": "ToolServer 3.4.1:TS Quit Items",
+   "to": "MPW"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager",
+   "to": "Interfaces&Libraries",
+   "as": "ASLM 2.0"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Interfaces:CIncludes",
+   "to": "Interfaces&Libraries:Interfaces"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Interfaces:PInterfaces",
+   "to": "Interfaces&Libraries:Interfaces"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Interfaces:RIncludes",
+   "to": "Interfaces&Libraries:Interfaces"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:MPW Libraries Support:Interfaces",
+   "to": "Interfaces&Libraries:Interfaces",
+   "as": "CIncludes"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Libraries:SCLibraries",
+   "to": "Interfaces&Libraries:Libraries",
+   "as": "Libraries"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:MPW Libraries Support:Libraries",
+   "to": "Interfaces&Libraries:Libraries",
+   "as": "Libraries"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Libraries:MrCLibraries",
+   "to": "Interfaces&Libraries:Libraries",
+   "as": "PPCLibraries"
+  },
+  {
+   "snapshot": "aslm-sdk-2.0",
+   "take": "Apple Shared Library Manager:ASLM Developer Tools:Tools",
    "to": "MPW"
   }
  ]

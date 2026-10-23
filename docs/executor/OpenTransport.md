@@ -75,7 +75,7 @@ function set's ID as a C string at +16. The function sets and their indices
   libraries stay registered with ASLM (when it runs) and are never loaded.
   The root manager's slots and SLMGlobal's offsets were identified from
   the glue's calls (MPW DumpObj of `OpenTransportApp.o`); the classes and
-  errors are the ASLM SDK's (E.T.O. #22, Past&Future:Archive:Apple Shared
+  errors are the ASLM SDK's (on the MPW disks, docs/MPW.md; E.T.O. #22, Past&Future:Archive:Apple Shared
   Library Manager).
 * **Conventions.** Each C++ function is declared with its convention and
   argument sizes from Apple's header (`ot_internal.h`, `Def`): pascal (pushed
