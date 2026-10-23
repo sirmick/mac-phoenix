@@ -92,6 +92,25 @@ void register_client();
 void register_utils();
 void register_providers();
 void register_inet();
+void register_ot_functions(); /* all of the above, once */
+
+/* The function sets (ot.cpp): is this ID one of OT's, and bind a stub of
+   one (0 for another set). */
+bool is_ot_set(const std::string &id);
+syn68k_addr_t bind_ot_stub(uint32_t stub);
+
+/* A fatal error: logged, the front end told, the emulator stopped. */
+[[noreturn]] void fatal(const std::string &msg);
+
+/* The Shared Library Manager's entries OT's glue uses (ot_slm.cpp):
+   ready (ours made, or Apple's wrapped); a client asked Gestalt 'otan' and
+   is about to make its manager; a process's managers go with it. */
+bool slm_ready();
+void slm_expect_ot_client();
+void slm_process_exit(uint32_t lo, uint32_t hi);
+
+/* Clients whose record is in [lo, hi): their providers closed (ot_client.cpp). */
+void close_clients_in(uint32_t lo, uint32_t hi);
 
 /* A configuration's path ("tcp", "udp", "dnr" for
    kDefaultInternetServicesPath), and its disposal once a provider took it

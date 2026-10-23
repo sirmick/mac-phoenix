@@ -8,7 +8,8 @@ grows (milestone M3i in PLAN.md).
 ```bash
 ./build/mac-phoenix --backend executor --executor-system macos-7.5.5.img --executor-ot
 #   --executor-debug ot   logs binds, calls, notifier events, the bytes on sockets
-ctest -R ot_executor      # OTTest through Apple's glue, both 68k cores
+ctest -R ot_executor      # OTTest through Apple's glue, both 68k cores, and
+                          # without Apple's ASLM (ot_executor_noaslm)
 ```
 
 ## How applications reach OT
@@ -49,18 +50,32 @@ function set's ID as a C string at +16. The function sets and their indices
 ## What Executor does
 
 * **Gestalt** `'otan'` (present, loaded, TCP present, loaded) and `'otvr'`
-  (1.1) come from `ROMlib_ot_gestalt`. The first call puts three wrappers in
-  place:
-  1. SLMGlobal+$88: a stub of one of OT's function sets is bound to a C++
-     entry (written into the stub record, then jumped to); any other goes on
-     to Apple's binder with every register as it came.
-  2. The root manager's slot 39 (`$9C`, SLMGlobal+$10), which makes a
-     client's `TLibraryManager`: Apple's runs, then the new manager's vtable
-     gets…
-  3. …a LoadClass that answers noErr for OT's function sets and goes on to
-     Apple's for the rest.
+  (1.1) come from `ROMlib_ot_gestalt`. The first call puts the Shared
+  Library Manager entries the glue uses in place (`ot_slm.cpp`). No Apple
+  code runs on the way to OT:
+  * **Without Apple's ASLM** (Executor's own System, or the ASLM Loader not
+    allowed by the extension policy) Executor makes SLMGlobal
+    (ExpandMem+$10C) itself: a root manager whose vtable +$9C makes a
+    client's `TLibraryManager` and +$A0 frees it, and the binder at +$88.
+  * **With Apple's ASLM running**, its binder and the root manager's two
+    slots are wrapped. A client that asked Gestalt `'otan'` just before
+    making its manager (the OT glue does) gets a manager of Executor's;
+    other clients, and other function sets, go on to Apple's with every
+    register as it came. A manager of Apple's still answers LoadClass for
+    OT's sets here.
 
-  Apple's OT libraries stay registered with ASLM and are never loaded.
+  Executor's `TLibraryManager` is the SDK's layout (LibraryManager.h: the
+  vtable, then fPool, fLibraryFile, fDefaultPool, fGlobalWorld, all nil):
+  LoadClass (slot 16, `$40`) answers noErr for OT's function sets and
+  kNotFound (-3120) for others, GetLibrary (slot 28, `$70`) nil; any other
+  slot is logged and answers 0. The glue patches `ExitToShell` to free its
+  manager; a process that quits otherwise has its managers freed and its
+  clients' providers closed by `ROMlib_ot_process_exit`. Apple's OT
+  libraries stay registered with ASLM (when it runs) and are never loaded.
+  The root manager's slots and SLMGlobal's offsets were identified from
+  the glue's calls (MPW DumpObj of `OpenTransportApp.o`); the classes and
+  errors are the ASLM SDK's (E.T.O. #22, Past&Future:Archive:Apple Shared
+  Library Manager).
 * **Conventions.** Each C++ function is declared with its convention and
   argument sizes from Apple's header (`ot_internal.h`, `Def`): pascal (pushed
   left to right, words and longs, the result in a slot above them, the

@@ -153,158 +153,7 @@ struct Missing
 syn68k_addr_t missing(syn68k_addr_t, void *arg)
 {
     const Missing *m = (const Missing *)arg;
-    char msg[160];
-    snprintf(msg, sizeof msg, "Open Transport: %s (%s) is not implemented",
-             m->name.c_str(), m->set.c_str());
-    fprintf(stderr, "[ot] %s\n", msg);
-    if(ROMlib_fatal_hook)
-    {
-        auto hook = ROMlib_fatal_hook;
-        ROMlib_fatal_hook = nullptr;
-        hook(msg);
-    }
-    std::abort();
-}
-
-/* ---- the binder ------------------------------------------------------- */
-
-uint32_t apple_binder;     /* what SLMGlobal+$88 held */
-syn68k_addr_t our_binder;  /* the callback in its place */
-
-uint32_t slm_global()
-{
-    uint32_t em = READUL(0x2B6);
-    return em ? READUL(em + 0x10C) : 0;
-}
-
-syn68k_addr_t bind(syn68k_addr_t, void *)
-{
-    uint32_t stub = EM_A0;
-    uint32_t cvr = READUL(stub + 4);
-    std::string id = guest_cstring(cvr + 16, 63);
-    const SetNames *s = find_set(id);
-    if(!s)
-        return apple_binder;
-
-    unsigned index = READUW(stub + 12);
-    const char *name = name_of(s, index);
-    syn68k_addr_t addr;
-    auto it = defs().find(id + "/" + name);
-    if(it != defs().end())
-    {
-        addr = entry_for(it->second);
-        OT_LOG("bind %s #%u %s\n", id.c_str(), index, name);
-    }
-    else
-    {
-        fprintf(stderr, "[ot] bind %s #%u %s: not implemented\n", id.c_str(),
-                index, name);
-        addr = callback_install(missing, new Missing{ id, name });
-    }
-    WRITEUL(stub, addr);
-    return addr;
-}
-
-/* ---- LoadClass ---------------------------------------------------------
-   InitOpenTransport's glue loads "OTClnt$LclUtils" before it binds
-   anything: gLibraryManager->LoadClass(id, true), slot 16 ($40) of a
-   TLibraryManager's vtable (LibraryManager.h: 9 TDynamic slots, the first
-   ASLM_COMPATIBLE's dummy, then the manager's). Apple's would load Apple's
-   OT library. A client's TLibraryManager comes from the root manager
-   (SLMGlobal+$10), slot 39 ($9C), when its glue calls InitLibraryManager;
-   that call is wrapped, and each new manager's vtable gets a LoadClass
-   that answers noErr for OT's function sets and goes on to Apple's for
-   the rest. */
-
-std::map<uint32_t, uint32_t> apple_load_class; /* by vtable */
-syn68k_addr_t our_load_class, our_factory;
-uint32_t apple_factory;
-
-/* OSErr LoadClass(TLibraryManager *this, const TClassID &id, Boolean) */
-syn68k_addr_t load_class(syn68k_addr_t, void *)
-{
-    uint32_t sp = EM_A7;
-    uint32_t self = READUL(sp + 4);
-    std::string id = guest_cstring(READUL(sp + 8), 63);
-    if(find_set(id))
-    {
-        OT_LOG("LoadClass \"%s\": Executor's\n", id.c_str());
-        EM_D0 = 0;
-        EM_A7 = sp + 4;
-        return READUL(sp);
-    }
-    auto it = apple_load_class.find(READUL(self));
-    return it != apple_load_class.end() ? it->second : apple_load_class.begin()->second;
-}
-
-/* The root manager's slot 39: (this, TLibraryManager **out, frame, 4 more),
-   C. Apple's makes the manager; then its vtable is patched. */
-syn68k_addr_t make_manager(syn68k_addr_t, void *)
-{
-    uint32_t sp = EM_A7;
-    uint32_t ret = READUL(sp);
-    uint32_t args[7];
-    for(int i = 0; i < 7; i++)
-        args[i] = READUL(sp + 4 + 4 * i);
-    EM_A7 = sp - 28;
-    for(int i = 0; i < 7; i++)
-        WRITEUL(EM_A7 + 4 * i, args[i]);
-    execute68K(apple_factory);
-    uint32_t result = EM_D0;
-    EM_A7 = sp;
-    uint32_t manager = args[1] ? READUL(args[1]) : 0;
-    if(manager)
-    {
-        uint32_t vt = READUL(manager);
-        uint32_t slot = READUL(vt + 0x40);
-        if(slot != our_load_class)
-        {
-            apple_load_class[vt] = slot;
-            WRITEUL(vt + 0x40, our_load_class);
-            OT_LOG("TLibraryManager vtable $%08x: LoadClass wrapped\n", vt);
-        }
-    }
-    EM_D0 = result;
-    EM_A7 = sp + 4;
-    return ret;
-}
-
-/* Put the wrappers in place, or back after ASLM rewrote a slot. */
-bool hook_binder()
-{
-    uint32_t slm = slm_global();
-    if(!slm)
-        return false;
-    if(!our_binder)
-    {
-        register_client();
-        register_utils();
-        register_providers();
-        register_inet();
-        our_binder = callback_install(bind, nullptr);
-        our_load_class = callback_install(load_class, nullptr);
-        our_factory = callback_install(make_manager, nullptr);
-    }
-    uint32_t cur = READUL(slm + 0x88);
-    if(cur != our_binder)
-    {
-        apple_binder = cur;
-        WRITEUL(slm + 0x88, our_binder);
-        OT_LOG("binder wrapped (SLMGlobal $%08x, Apple's binder $%08x)\n", slm,
-               apple_binder);
-    }
-    uint32_t root = READUL(slm + 0x10);
-    if(root)
-    {
-        uint32_t slot = READUL(root) + 0x9C;
-        if(READUL(slot) != our_factory)
-        {
-            apple_factory = READUL(slot);
-            WRITEUL(slot, our_factory);
-            OT_LOG("root manager $%08x: manager factory wrapped\n", root);
-        }
-    }
-    return true;
+    fatal("Open Transport: " + m->name + " (" + m->set + ") is not implemented");
 }
 
 } // anonymous namespace
@@ -320,6 +169,62 @@ void Executor::ot::register_defs(const Def *d, size_t n)
 {
     for(size_t i = 0; i < n; i++)
         defs()[std::string(d[i].set) + "/" + d[i].name] = &d[i];
+}
+
+void Executor::ot::fatal(const std::string &msg)
+{
+    fprintf(stderr, "[ot] %s\n", msg.c_str());
+    if(ROMlib_fatal_hook)
+    {
+        auto hook = ROMlib_fatal_hook;
+        ROMlib_fatal_hook = nullptr;
+        hook(msg.c_str());
+    }
+    std::abort();
+}
+
+void Executor::ot::register_ot_functions()
+{
+    static bool done;
+    if(done)
+        return;
+    done = true;
+    register_client();
+    register_utils();
+    register_providers();
+    register_inet();
+}
+
+bool Executor::ot::is_ot_set(const std::string &id)
+{
+    return find_set(id) != nullptr;
+}
+
+/* The binder's work for a stub of one of OT's function sets: the
+   function's entry, written into the stub record; 0 for another set. */
+syn68k_addr_t Executor::ot::bind_ot_stub(uint32_t stub)
+{
+    uint32_t cvr = READUL(stub + 4);
+    std::string id = guest_cstring(cvr + 16, 63);
+    const SetNames *s = find_set(id);
+    if(!s)
+        return 0;
+    unsigned index = READUW(stub + 12);
+    const char *name = name_of(s, index);
+    syn68k_addr_t addr;
+    auto it = defs().find(id + "/" + name);
+    if(it != defs().end())
+    {
+        addr = entry_for(it->second);
+        OT_LOG("bind %s #%u %s\n", id.c_str(), index, name);
+    }
+    else
+    {
+        fprintf(stderr, "[ot] bind %s #%u %s: not implemented\n", id.c_str(), index, name);
+        addr = callback_install(missing, new Missing{ id, name });
+    }
+    WRITEUL(stub, addr);
+    return addr;
 }
 
 std::string Executor::ot::guest_cstring(uint32_t addr, size_t max)
@@ -387,17 +292,26 @@ bool Call::b(int i) const
 
 bool Executor::ROMlib_ot_gestalt(OSType selector, int32_t *value)
 {
-    if(!ROMlib_open_transport || !hook_binder())
+    if(!ROMlib_open_transport || !slm_ready())
         return false;
     switch(selector)
     {
         case "otan"_4:
             /* gestaltOpenTptPresent | Loaded | TCPPresent | TCPLoaded */
             *value = 0x00000033;
+            slm_expect_ot_client();
             return true;
         case "otvr"_4:
             *value = 0x01108000; /* 1.1 final, the glue's generation */
             return true;
     }
     return false;
+}
+
+void Executor::ROMlib_ot_process_exit(uint32_t part_lo, uint32_t part_hi)
+{
+    if(!ROMlib_open_transport)
+        return;
+    close_clients_in(part_lo, part_hi);
+    slm_process_exit(part_lo, part_hi);
 }

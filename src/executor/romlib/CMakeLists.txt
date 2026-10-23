@@ -486,6 +486,7 @@ set(opentransport_sources
     opentransport/ot_provider.cpp
     opentransport/ot_inet.cpp
     opentransport/ot_utils.cpp
+    opentransport/ot_slm.cpp
 )
 
 source_group(OpenTransport FILES ${opentransport_sources})

@@ -99,6 +99,21 @@ void Executor::ot::register_client()
     register_table(table);
 }
 
+void Executor::ot::close_clients_in(uint32_t lo, uint32_t hi)
+{
+    for(auto it = clients.begin(); it != clients.end();)
+    {
+        if(it->first >= lo && it->first < hi)
+        {
+            OT_LOG("client $%08x: its process quit\n", it->first);
+            close_client_providers(it->first);
+            it = clients.erase(it);
+        }
+        else
+            ++it;
+    }
+}
+
 Client *Executor::ot::find_client(uint32_t record)
 {
     auto it = clients.find(record);

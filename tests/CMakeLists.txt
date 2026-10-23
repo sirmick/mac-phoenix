@@ -597,6 +597,17 @@ foreach(core uae mame-68k)
     SKIP_RETURN_CODE 77
   )
 endforeach()
+# ... and without Apple's Shared Library Manager: OT's glue binds through
+# Executor's own.
+add_test(
+  NAME ot_executor_noaslm
+  COMMAND bash ${TEST_DIR}/test_ot_executor.sh --no-aslm --port 18400
+)
+set_tests_properties(ot_executor_noaslm PROPERTIES
+  TIMEOUT 300
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
 
 # Thread Manager through Frontier's UserTalk threads (process.cpp), on
 # both cores.
