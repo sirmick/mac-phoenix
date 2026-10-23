@@ -160,6 +160,7 @@ async function start() {
     canvas.height = height;
     canvas.tabIndex = 0;
     box.replaceChildren(canvas);
+    fitCanvas();
     attachInput(canvas);
     cursor = new MacCursor(canvas, () => canvas.width);
 
@@ -202,6 +203,26 @@ async function startAudio() {
     audio.connect(ctx.destination);
     await ctx.resume();
 }
+
+// ---- the canvas's size: the largest whole number of device pixels a guest
+// pixel that fits the window, so every pixel is the same size (a
+// fractional scale makes some one device pixel and some two).
+function fitCanvas() {
+    if (!canvas)
+        return;
+    const dpr = window.devicePixelRatio || 1;
+    const bar = document.getElementById('bar').offsetHeight + document.getElementById('status').offsetHeight + 32;
+    const fit = Math.min(window.innerWidth * dpr / width, (window.innerHeight - bar) * dpr / height);
+    const scale = Math.max(1, Math.floor(fit));     // device pixels a guest pixel
+    canvas.style.width = `${width * scale / dpr}px`;
+    canvas.style.height = `${height * scale / dpr}px`;
+}
+window.addEventListener('resize', fitCanvas);
+// The device-pixel ratio changes with the browser's zoom and between screens.
+(function watchDpr() {
+    matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+        .addEventListener('change', () => { fitCanvas(); watchDpr(); }, { once: true });
+})();
 
 // ---- input: [kind, a, b] events (web_main.cpp) ----
 function send(...events) {
