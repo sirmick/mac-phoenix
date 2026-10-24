@@ -33,6 +33,7 @@
  */
 
 #include "ot_internal.h"
+#include <base/traps.h>
 
 #include <rsys/opentransport.h>
 
@@ -165,9 +166,13 @@ syn68k_addr_t missing(syn68k_addr_t, void *arg)
 {
     const Missing *m = (const Missing *)arg;
     if(pascal_name(m->name))
+    {
+        traps::log_unimplemented("Open Transport " + m->name + " (" + m->set
+                                 + "), Pascal: session stopped");
         fatal("Open Transport: " + m->name + " (" + m->set + ") is not implemented");
-    fprintf(stderr, "[ot] %s (%s) is not implemented: kOTNotSupportedErr\n",
-            m->name.c_str(), m->set.c_str());
+    }
+    traps::log_unimplemented("Open Transport " + m->name + " (" + m->set
+                             + "): answered kOTNotSupportedErr");
     uint32_t sp = EM_A7;
     EM_D0 = (uint32_t)(int32_t)kOTNotSupportedErr;
     EM_A7 = sp + 4;

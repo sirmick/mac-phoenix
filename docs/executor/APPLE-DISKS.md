@@ -26,9 +26,17 @@ Same result on 7.5.5 and 7.6.1 unless marked.
 | 4 | ~~**TCP/IP** control panel (policy-disabled; opened by hand)~~ | `[ot] Open Transport: OTOpenConfigurationsDB (OTLib$CfigLib) is not implemented` | **Fails cleanly** (7.6.1): see below. On 7.5.5 (no OT installed) it says it needs Open Transport |
 | 5 | **Password Security** control panel, intermittent | `host signal 11 at guest pc $c0cc9bf4`, last A-trap `$A949` | Seen once, opened right after **Numbers** had been opened and closed. Opened alone it correctly says "cannot be used with this Macintosh". The PC is in the host stub area (`7101` words). Try Numbers then Password Security repeatedly |
 
-The unknown-selector path is `romlib/base/traps.impl.h` (~line 212): it is
-fatal by design. Each missing selector needs implementing, or at least an
-error return that the caller handles.
+Unknown selectors (`romlib/base/traps.cpp`, `unknown_selector_68k`): each
+one a session meets is logged once as `[unimplemented] ...` and appended,
+with the date and the application, to `<storage>/executor/unimplemented.log`,
+the list to consider implementing from. Where the selector says how many
+argument bytes the caller pushed, the call is then answered as the Mac's
+dispatcher answers a selector it has no routine for: Apple's common
+dispatcher (Palette, Menu, Thread, Layer, Display, GestaltValue, Dialog;
+D0's high byte the parameter size) pops them and returns paramErr;
+ScriptUtil (sizes in its selector long) answers 0. Every other dispatcher
+still stops the session. Open Transport's missing functions are logged the
+same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 
 ## 2. Opens but wrong
 
@@ -53,6 +61,9 @@ error return that the caller handles.
 | 17 | `/api/launch` of a control panel (`cdev`) | Returns `launched`; nothing opens. From the Finder (double-click) control panels open fine |
 
 ## 4. Blocked by Executor's extension policy (decide first)
+
+Plan (2026-10-24): next session, turn these on one at a time in the policy
+and tackle what each runs into.
 
 These work on a real Mac, but Executor's `src/executor/res/extension-policy.txt`
 turns off what they need. Each is a policy decision before it is a fix:

@@ -5,6 +5,7 @@
 #include <guest_watch.h>
 
 #include <base/common.h>
+#include <base/traps.h>
 #include <mman/mman_private.h>
 #include <hfs/hfs.h>
 #include <file/file.h>
@@ -46,6 +47,7 @@ int run(const Config& c)
     // setenv() would race getenv() on the host's IPC thread.
     auto& paths = ROMlib_path_overrides;
     paths.clear();
+    Executor::traps::unimplemented_log_path = c.unimplemented_log;
     if(!c.data_dir.empty())
     {
         fs::path d = c.data_dir;
