@@ -1,6 +1,7 @@
 /* phoenix_sound.cpp - see phoenix_sound.h. */
 #include <base/common.h>
 #include "phoenix_sound.h"
+#include <sound/sounddriver.h>
 #include <base/m68kint.h>
 #include <base/cpu.h>
 #include <MemoryMgr.h>
@@ -76,11 +77,14 @@ void PhoenixSoundDriver::convert_and_queue()
         int16_t s = (int16_t)(a + (b - a) * frac);
         if(s)
             audible = true;
-        uint8_t hi = (uint8_t)(s >> 8), lo = (uint8_t)s;
-        pending_.push_back(hi);
-        pending_.push_back(lo);
-        pending_.push_back(hi);
-        pending_.push_back(lo);
+        /* the output's volume and mute (Sound Manager scale, $100 full) */
+        uint32_t vol = ROMlib_sound_output_muted ? 0 : ROMlib_sound_output_volume;
+        int left = std::min<uint32_t>(vol & 0xFFFF, 0x100), right = std::min<uint32_t>(vol >> 16, 0x100);
+        int16_t l = (int16_t)(s * left / 0x100), r = (int16_t)(s * right / 0x100);
+        pending_.push_back((uint8_t)(l >> 8));
+        pending_.push_back((uint8_t)l);
+        pending_.push_back((uint8_t)(r >> 8));
+        pending_.push_back((uint8_t)r);
         resample_pos_ += step;
     }
     resample_pos_ -= kBufBytes;

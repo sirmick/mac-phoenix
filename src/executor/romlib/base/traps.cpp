@@ -132,7 +132,7 @@ std::string Executor::traps::unimplemented_log_path;
 
 namespace
 {
-/* Apple's common dispatcher (the routine at $7B0 on 7.5.5): D0's high byte
+/* Apple's common dispatcher (the routine at $7B0 on 7.5.5): a byte of D0
    is the size of the parameters (in words for most managers, in bytes for
    the Palette Manager's), and a selector outside its table gets them
    popped and paramErr in the word on top: the result, for the functions
@@ -141,12 +141,16 @@ namespace
 struct D0SizedDispatcher
 {
     const char *name;
-    int unit;
+    int unit;  /* bytes per count */
+    int shift; /* where in D0 the count byte is */
 };
 const D0SizedDispatcher d0_sized[] = {
-    { "PaletteDispatch", 1 }, { "MenuDispatch", 2 },   { "ThreadDispatch", 2 },
-    { "LayerDispatch", 2 },   { "DisplayDispatch", 2 }, { "GestaltValueDispatch", 2 },
-    { "DialogDispatch", 2 },
+    { "PaletteDispatch", 1, 8 }, { "MenuDispatch", 2, 8 },   { "ThreadDispatch", 2, 8 },
+    { "LayerDispatch", 2, 8 },   { "DisplayDispatch", 2, 8 }, { "GestaltValueDispatch", 2, 8 },
+    { "DialogDispatch", 2, 8 },
+    /* the Sound Manager's: $ssccgggg, ss the parameter words, cc the
+       selector, gggg the part (GetSysBeepVolume $02240018) */
+    { "SoundDispatch", 2, 24 },
 };
 }
 
@@ -157,10 +161,10 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
         if(strcmp(d.name, trap_name) == 0)
         {
             uint32_t d0 = EM_D0;
-            unsigned bytes = ((d0 >> 8) & 0xFF) * d.unit;
+            unsigned bytes = ((d0 >> d.shift) & 0xFF) * d.unit;
             snprintf(what, sizeof what,
-                     "%s selector $%02x (D0 $%04x, %u parameter bytes): answered paramErr",
-                     trap_name, (unsigned)(d0 & 0xFF), (unsigned)(d0 & 0xFFFF), bytes);
+                     "%s selector $%x (D0 $%08x, %u parameter bytes): answered paramErr",
+                     trap_name, (unsigned)sel, (unsigned)d0, bytes);
             log_unimplemented(what);
             syn68k_addr_t ret = POPADDR();
             EM_A7 += bytes;

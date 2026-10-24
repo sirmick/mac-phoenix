@@ -990,6 +990,23 @@
 # ####
 
 - function:
+    name: GetSoundOutputDevice
+    comment: |
+      MacPhoenix. Private (name and meaning a guess): the Sound control
+      panel's Sound Out page calls it with a pointer before it selects the
+      current device in its list; answered with the output device
+      component's ID (Executor's 'sdev').
+    return: OSErr
+    args:
+      - name: outputDevice
+        type: uint32_t*
+    dispatcher: SoundDispatch
+    selector: 0x021C0018
+    executor: C_
+
+# ####
+
+- function:
     name: SetSysBeepVolume
     return: OSErr
     args:
