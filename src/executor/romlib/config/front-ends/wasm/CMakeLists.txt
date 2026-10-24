@@ -53,6 +53,18 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
+# HFS+ written in the tab (the overlay): VolWrite and VolDump against Mac OS
+# 9.0.4's, fsck.hfsplus on the image downloaded from the page (docker).
+if(NODE_COMMAND)
+    add_test(NAME executor.web.hfsplus_write
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_hfsplus_write.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest
+                ${PROJECT_SOURCE_DIR}/src/executor/tests/fixtures/hfsplus/blank-long-64m.img.gz)
+    set_tests_properties(executor.web.hfsplus_write PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+endif()
+
 # Executor's own volume kept in OPFS across reloads, and Reset.
 if(NODE_COMMAND)
     add_test(NAME executor.web.persist

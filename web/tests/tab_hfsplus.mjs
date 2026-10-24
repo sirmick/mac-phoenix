@@ -17,10 +17,15 @@ const image = path.join(scratch, 'longnames.img');
 fs.writeFileSync(image, zlib.gunzipSync(fs.readFileSync(fixture)));
 const oracle = fs.readFileSync(path.join(guest, 'hfsplus/oracle-9.0.4/voldump-longnames.txt'), 'latin1');
 
-/* tests/test_hfsplus_volume.py's normalize(): what depends on the machine */
+/* tests/test_hfsplus_volume.py's normalize(): what depends on the machine;
+   and on the volume's being locked (9.0.4's was; the tab's uploads are
+   writable): the lock bit, and VolDump's write probes, made only on a
+   locked volume */
 function normalize(text) {
-    const lines = text.replace(/\r/g, '\n').split('\n').filter((l) => l.length).map((l) => l
-        .replace(/^(VOLUME .* attrib )([0-9A-F]{4})/, (m, a, b) => a + (parseInt(b, 16) & ~0x60).toString(16).toUpperCase().padStart(4, '0'))
+    const lines = text.replace(/\r/g, '\n').split('\n').filter((l) => l.length)
+        .filter((l) => !/^(CREATE|DIRCREATE) /.test(l)).map((l) => l
+        .replace(/ (write|rdwr) .*$/, '')
+        .replace(/^(VOLUME .* attrib )([0-9A-F]{4})/, (m, a, b) => a + (parseInt(b, 16) & ~0x80E0).toString(16).toUpperCase().padStart(4, '0'))
         .replace(/^(FILE \S+ id \d+ par \d+ attrib )([0-9A-F]{2})/, (m, a, b) => a + (parseInt(b, 16) & ~0x8C).toString(16).toUpperCase().padStart(2, '0'))
         .replace(/ write (-?\d+)\/-?\d+/g, ' write $1'));
     return lines;

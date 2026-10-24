@@ -3,13 +3,14 @@
 
 VolWrite (this folder) on a writable HFS+ volume, an application copied
 onto it (/api/copy), then VolDump on the result: on Mac OS 9.0.4 (the G3 machine on mame-ppc) for the oracle, or on
-Executor to compare (tests/test_hfsplus_write.py). The volume: the blank
-fixture (mkfs.hfsplus, "Blank") with a folder "Long" of long-named files
-made by hfsplus_dump's script mode (names the classic calls can't make).
+Executor to compare (tests/test_hfsplus_write.py, web/tests/tab_hfsplus_write.mjs).
+The volume: src/executor/tests/fixtures/hfsplus/blank-long-64m.img.gz, the
+blank fixture (mkfs.hfsplus, "Blank") with a folder "Long" of long-named
+files made by hfsplus_dump's script mode (names the classic calls can't
+make).
 
 DIR gets volwrite.txt, voldump.txt and the volume after (written.img).
-MACPHOENIX_EMULATOR names the emulator (default build/mac-phoenix); --dump
-the build's hfsplus_dump.
+MACPHOENIX_EMULATOR names the emulator (default build/mac-phoenix).
 """
 import argparse
 import gzip
@@ -27,14 +28,12 @@ import guest          # noqa: E402
 import install_macbinary  # noqa: E402
 
 STORAGE = os.environ.get("MACEMU_STORAGE", os.path.expanduser("~/storage"))
-FIXTURE = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus", "blank-64m.img.gz")
-PREPARE = """mkdir Long
-create "Long/A file whose name is longer than thirty-one.txt" TEXT ttxt
-write "Long/A file whose name is longer than thirty-one.txt" data 0 1500 1
-create "Long/Another long name, to be deleted.txt" TEXT ttxt
-write "Long/Another long name, to be deleted.txt" data 0 70000 2
-write "Long/Another long name, to be deleted.txt" rsrc 0 300 3
-"""
+# the blank fixture (mkfs.hfsplus, "Blank") with a folder "Long" of
+# long-named files, made by hfsplus_dump's script mode:
+#   mkdir Long
+#   create "Long/A file whose name is longer than thirty-one.txt" TEXT ttxt  (1500 bytes)
+#   create "Long/Another long name, to be deleted.txt" TEXT ttxt  (70000, 300 in the resource fork)
+FIXTURE = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus", "blank-long-64m.img.gz")
 
 
 def run(g, host, app, cfg_name, cfg, out_name):
@@ -71,9 +70,6 @@ def main():
     volume = os.path.join(work, "Blank.img")
     with gzip.open(FIXTURE) as src, open(volume, "wb") as dst:
         shutil.copyfileobj(src, dst)
-    script = os.path.join(work, "prepare.script")
-    open(script, "w").write(PREPARE)
-    subprocess.check_call([args.dump, volume, "script", script])
 
     if args.machine == "9.0.4":
         rom = guest.roms(STORAGE)["kpx"]

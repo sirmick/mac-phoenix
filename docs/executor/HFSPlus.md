@@ -1,8 +1,9 @@
 # HFS+ in Executor
 
-Read-only HFS Plus volumes for Executor: disk images holding an HFS+
-volume (bare `H+`/`HX`, inside an HFS wrapper, inside an Apple partition
-map or not) mount, and their files open as on Mac OS 8.1–9.
+HFS Plus volumes for Executor: disk images holding an HFS+ volume (bare
+`H+`/`HX`, inside an HFS wrapper, inside an Apple partition map or not)
+mount, their files open as on Mac OS 8.1–9, and on a writable image the
+File Manager changes them as Mac OS 9.0.4 does.
 
 ## Status
 
@@ -12,7 +13,8 @@ map or not) mount, and their files open as on Mac OS 8.1–9.
 | File Manager volume (`file/hfsplusvolume.cpp`) | done: VolDump on Executor = VolDump on 9.0.4, 4 images |
 | Mounting (`try_to_mount_disk`) | done: bare, HFS wrapper, Apple partition map |
 | System sideload (`hfs_sideload.cpp`) | done: an HFS+ image's blessed System Folder |
-| Web tab | done: an uploaded HFS+ image (WORKERFS) gives VolDump 9.0.4's dump (`executor.web.hfsplus`) |
+| Web tab | done: an uploaded HFS+ image gives VolDump 9.0.4's dump (`executor.web.hfsplus`) |
+| Writing (`hfs/plus/writer.cpp`, `btree.cpp`) | done: fsck.hfsplus-clean; VolWrite on Executor = VolWrite on 9.0.4, natively and in the tab |
 
 ## The reader
 
@@ -120,6 +122,63 @@ The System sideload (`front-ends/phoenix/hfs_sideload.cpp`,
 volume with a blessed folder goes through the reader (short names, local
 dates), else HFS as before.
 
+## Writing
+
+On a writable image (natively `--executor-writable-images`; the tab's
+uploads always, through its overlay) and a volume that is clean
+(`kHFSVolumeUnmountedBit` set), not journaled and not locked, the volume
+mounts read-write; otherwise read-only, as above.
+
+The volume layer (`hfs/plus/`, from TN1150):
+
+- `btree.cpp`: insert, remove, replace; a full node splits (a new root
+  when it was the root), an empty node is freed and unlinked, an index
+  root with one child collapses, index keys stay their children's first
+  keys; nodes come from the header node's map (map nodes aren't added: a
+  tree stops growing at what the header's map covers, ~30000 nodes of
+  4 KB); with none free the tree's file grows through the volume (the
+  catalog's extents past 8 go to the extents overflow file).
+- `writer.cpp`: the allocation file (a free run from the last allocation
+  on, else pieces); forks grown (new blocks zeroed) and cut, their extents
+  past the first 8 as extents overflow records; files and folders made
+  (thread records, valences, counts, the next CNID; MacRoman text
+  encoding), removed, renamed, moved; Finder info, dates, the lock bit;
+  the volume's name and Finder info. Everything is written through; the
+  volume is marked in use only while a change is being made (a process
+  killed between changes leaves it clean), the header's copy at the end
+  of the volume kept. Extended attributes (an attributes file, as
+  mkfs.hfsplus makes) are left alone, as Mac OS 9 leaves them.
+
+The File Manager (`file/hfsplusvolume.cpp`) on top, pinned to what Mac OS
+9.0.4 does on the same volume (`tests/guest/hfsplus/VolWrite`, a fixed
+script of classic calls logging every result; `oracle-9.0.4/volwrite.txt`,
+`voldump-written.txt`):
+
+- New names: 1–31 MacRoman characters without `:` (else bdNamErr), stored
+  decomposed; dupFNErr for a name taken in any case.
+- Allocation in whole blocks: SetEOF sets the fork's allocation to its
+  length rounded up to a block, both ways; Allocate adds the request so
+  rounded; a write past the end adds the blocks it needs and never takes
+  any away. Positioning past the end is eofErr.
+- Paths: one exclusive writer per fork (opWrErr, with its refNum), shared
+  writers with fsRdWrShPerm; a locked file opens for reading only
+  (permErr for writing); writing through a read path is wrPermErr.
+- fBsyErr deleting an open file or a folder with items, fLckdErr renaming
+  or deleting a locked file, badMovErr moving a folder into itself.
+- A path that wrote sets its file's modification date when flushed or
+  closed.
+
+Found on the way and fixed outside HFS+: `HCreateResFile` leaves type and
+creator 0 (9.0.4), not `????`; `HOpenResFile` answers mapReadErr for a
+fork whose header puts the map outside it, before that length reaches
+`NewHandle`; `ROMlib_grow_syszone` rounds in 64 bits (a request near
+2 GB wrapped and the System heap's trailer went past its end).
+
+Not done: the Desktop DB (Executor's Desktop Manager keeps an HFS+
+volume's in memory, as an HFS one's), map nodes, hard links made, HFSX
+volumes written (their binary order is used for lookups, not tested for
+inserts), files over 2 GB.
+
 ## Tests
 
 - `executor.hfsplus_reader` (`tests/test_hfsplus_reader.py`): `hfsplus_dump`
@@ -154,17 +213,38 @@ dates), else HFS as before.
 - `executor.web.hfsplus` (`web/tests/tab_hfsplus.mjs`, wasm build): the
   fixture uploaded in the tab and VolDump run there; its dump equals
   9.0.4's (the same machine differences set aside).
+- `executor.hfsplus_writer` (`tests/test_hfsplus_writer.py`): seeded
+  scripts (`hfsplus_dump IMAGE script`) on the bare and wrapped blanks:
+  1600 files (the catalog three levels deep, its file grown), forks
+  written in turns (extents overflow), renames, moves, truncations, mass
+  deletion; fsck.hfsplus -n -f (hfsprogs in docker, image
+  macphoenix-hfsprogs) finds each volume OK and hfsdump reads every folder
+  and fork as a model of the script predicts.
+- `executor.hfsplus_write` (`tests/test_hfsplus_write.py`): VolWrite, an
+  application copied in (`/api/copy`) and VolDump on Executor against the
+  9.0.4 oracle (but for what 9.0.4's Finder makes when the volume mounts,
+  dates, and bytes neither machine defines: past an EOF SetEOF extended,
+  the Resource Manager's reserved header bytes); fsck on the result. By
+  hand: 9.0.4 reading the volume Executor wrote gives VolDump's dump of it
+  on Executor exactly.
+- `executor.HFSPlusWriteTest.*`: a blank volume written in the gtest
+  binary (natively and under node).
+- `executor.web.hfsplus_write` (`web/tests/tab_hfsplus_write.mjs`, wasm
+  build): the same in the tab, through the overlay; fsck on the image
+  downloaded from the page.
 - `executor.hfsplus_sideload` (`tests/test_hfsplus_sideload.py`):
   `--executor-system` on the long-name fixture copies its blessed System
   Folder (made on 9.0.4) byte for byte.
 
 Not covered by any image yet: hard links (none of the images has one),
 HFSX, journaled volumes, files over 2 GB, `ioVNmAlBlks` of a wrapped
-volume over 65535 blocks.
+volume over 65535 blocks. fsck.hfsplus reports "Illegal name" on
+`longnames.img`: MakeLongNames passed 9.0.4 a precomposed `ά` (and a
+`:`), which 9.0.4 stored as given.
 
 ## Making fixtures
 
-`tests/guest/hfsplus/`: `MakeLongNames` (68k, built with
+`tests/guest/hfsplus/`: `MakeLongNames`, `VolDump`, `VolWrite` (68k, built with
 `tools/mpw/mpw build tests/guest/hfsplus -o tests/guest/hfsplus` against
 Universal Interfaces 3.3.2, docs/MPW.md) and `make_fixture.py`, which runs
 it on Mac OS 9.0.4 (mame-ppc) against a blank volume and opens the result
