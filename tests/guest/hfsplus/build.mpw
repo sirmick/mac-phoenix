@@ -1,0 +1,12 @@
+# build.mpw — the HFS+ guest apps (68k: SC, Link), against Universal
+# Interfaces 3.3.2 for the HFS Plus calls; tools/mpw/mpw build tests/guest/hfsplus -o tests/guest/hfsplus
+# interfaces: 3.3.2
+# products: MakeLongNames
+Delete -i MakeLongNames
+SC -b MakeLongNames.c -o MakeLongNames.68k.o
+Link -t APPL -c 'MkLN' -model near ∂
+	MakeLongNames.68k.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o MakeLongNames
+Rez -a size.r -o MakeLongNames
+SetFile -t APPL -c 'MkLN' -a B MakeLongNames

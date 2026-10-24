@@ -3,7 +3,7 @@
  "tags": [
   "mpw-service"
  ],
- "note": "The MPW disk tools/mpw/mpw mounts: MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22, the mpw-3.4.2 snapshot) on a volume named MPW, as tools/mpw/make_mpw_disk.py made it from the CD. Plus the Apple Shared Library Manager SDK (the aslm-sdk-2.0 snapshot, E.T.O. #22): whole under Interfaces&Libraries:ASLM 2.0, and merged where MPW looks: LibraryManager.h & co. in {CIncludes}, {PInterfaces}, {RIncludes}; the SC glue (LibraryManager.o, MPWLibs.cl.o...) in {Libraries}, the MrC glue in {PPCLibraries}; LibraryBuilder, BuildSharedLibrary and the other ASLM tools in MPW:Tools.",
+ "note": "The MPW disk tools/mpw/mpw mounts: MPW 3.4.2 and Interfaces&Libraries (E.T.O. #22, the mpw-3.4.2 snapshot) on a volume named MPW, as tools/mpw/make_mpw_disk.py made it from the CD. Plus the Apple Shared Library Manager SDK (the aslm-sdk-2.0 snapshot, E.T.O. #22): whole under Interfaces&Libraries:ASLM 2.0, and merged where MPW looks: LibraryManager.h & co. in {CIncludes}, {PInterfaces}, {RIncludes}; the SC glue (LibraryManager.o, MPWLibs.cl.o...) in {Libraries}, the MrC glue in {PPCLibraries}; LibraryBuilder, BuildSharedLibrary and the other ASLM tools in MPW:Tools. Plus Universal Interfaces 3.3.2 (the mpw-gm snapshot: MPW-GM's Interfaces&Libraries, public media) beside the disk's own, as Interfaces&Libraries:Universal Interfaces 3.3.2, for code that needs Mac OS 9's interfaces (the HFS Plus calls: FSRef, FSCreateFileUnicode...); a build.mpw line \"# interfaces: 3.3.2\" (or mpw --interfaces 3.3.2) points {CIncludes}, {SharedLibraries} & co. there. MPW-GM's own tools are PowerPC-only and don't run in the 68k session.",
  "label": "MPW",
  "place": [
   {
@@ -59,6 +59,12 @@
    "snapshot": "aslm-sdk-2.0",
    "take": "Apple Shared Library Manager:ASLM Developer Tools:Tools",
    "to": "MPW"
+  },
+  {
+   "snapshot": "mpw-gm",
+   "take": "Interfaces&Libraries",
+   "to": "Interfaces&Libraries",
+   "as": "Universal Interfaces 3.3.2"
   }
  ]
 }

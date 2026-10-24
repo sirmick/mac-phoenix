@@ -91,6 +91,21 @@ with both kinds of code (`tests/guest/suite/build.mpw`, MacPhoenixSuite):
 A 68k Mac runs the CODE resources, a Power Mac the fragment. Both need
 `QDGlobals qd;` defined by the application.
 
+## Mac OS 9's interfaces
+
+Both MPW disks carry Universal Interfaces 3.3.2 too, in
+`MPW:Interfaces&Libraries:Universal Interfaces 3.3.2` (MPW-GM's, Dec 2000:
+the `mpw-gm` snapshot, public media; `provisioning/images/mpw.json`,
+`mpw-cw.json`). They have what the disk's own (E.T.O. #22's, 1996) lack:
+Mac OS 8.5–9's calls, the HFS Plus ones among them (`FSRef`,
+`FSCreateFileUnicode`, `FSOpenFork`...; 68k glue through `_HFSDispatch`,
+InterfaceLib stubs for PowerPC). A line `# interfaces: 3.3.2` in
+`build.mpw` (or `mpw build|run --interfaces 3.3.2`) points `{CIncludes}`,
+`{RIncludes}`, `{PInterfaces}`, `{Libraries}`, `{CLibraries}`,
+`{PPCLibraries}`, `{SharedLibraries}` & co. there for that build; the tools
+stay MPW 3.4.2's (MPW-GM's own are PowerPC-only). SC has no `long long`:
+the `SInt64` arguments are structs (`tests/guest/hfsplus/MakeLongNames.c`).
+
 ## CodeWarrior
 
 `--toolchain cw` (or `MPW_TOOLCHAIN=cw`) runs CodeWarrior Pro 4's MPW:

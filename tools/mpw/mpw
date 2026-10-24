@@ -21,7 +21,9 @@ CR. Compiler and linker messages naming them are repeated in gcc form
 
 A build script (build.mpw, or build.cw.mpw for --toolchain cw if there) runs
 with {Exit} 1 in DIR's mirror; it names
-its products in a comment line "# products: NAME ...". Without build.mpw,
+its products in a comment line "# products: NAME ...", and "# interfaces: 3.3.2"
+builds against Universal Interfaces 3.3.2 (MPW-GM's: Mac OS 9's calls) in
+place of the toolchain's own (--interfaces does it too). Without build.mpw,
 "Make -f MakeFile" runs and its commands are executed.
 
 --toolchain cw (or MPW_TOOLCHAIN=cw) uses CodeWarrior Pro 4's MPW instead:
@@ -77,6 +79,28 @@ TOOLCHAINS = {
                        'Set -e MWRuntimePPC "{HeadersAndLibs}MacOS Support:Runtime:Runtime PPC:"\n')},
 }
 SYSTEM_SOURCE = os.path.join(STORAGE, "images", "tests-7.5.5.img")
+
+# Other Universal Interfaces on the MPW disks, beside the toolchain's own
+# (provisioning/images/mpw.json, mpw-cw.json): version -> its folder. A line
+# "# interfaces: 3.3.2" in build.mpw, or --interfaces,
+# points MPW's variables there, as MPW's Startup sets them for its own.
+INTERFACES = {"3.3.2": "MPW:Interfaces&Libraries:Universal Interfaces 3.3.2:"}    # MPW-GM's: Mac OS 9's calls
+INTERFACE_VARS = [("AIncludes", "Interfaces:AIncludes:"), ("CIncludes", "Interfaces:CIncludes:"),
+                  ("SCIncludes", "Interfaces:CIncludes:"), ("PPCCIncludes", "Interfaces:CIncludes:"),
+                  ("MWCIncludes", "Interfaces:CIncludes:"), ("PInterfaces", "Interfaces:PInterfaces:"),
+                  ("RIncludes", "Interfaces:RIncludes:"), ("Libraries", "Libraries:Libraries:"),
+                  ("CLibraries", "Libraries:CLibraries:"), ("PLibraries", "Libraries:PLibraries:"),
+                  ("PPCLibraries", "Libraries:PPCLibraries:"), ("CFM68KLibraries", "Libraries:CFM68KLibraries:"),
+                  ("SharedLibraries", "Libraries:SharedLibraries:")]
+
+
+def interfaces_prelude(version):
+    if not version:
+        return ""
+    if version not in INTERFACES:
+        raise MPWError("no Universal Interfaces %s on the MPW disk (have: %s)"
+                       % (version, ", ".join(sorted(INTERFACES))))
+    return "".join('Set -e %s "%s%s"\n' % (var, INTERFACES[version], sub) for var, sub in INTERFACE_VARS)
 
 
 def configure(toolchain):
@@ -301,7 +325,7 @@ def mac_path(host_path):
     return p
 
 
-def run(script, cwd=None, timeout=600, s=None):
+def run(script, cwd=None, timeout=600, s=None, interfaces=None):
     """Run MPW commands in the command server. Returns (status, output
     text: stdout and diagnostics, in order).
 
@@ -311,6 +335,7 @@ def run(script, cwd=None, timeout=600, s=None):
     done (as long as it takes): the status in the reply, the output in its
     file. (Diagnostics to Dev:StdOut instead of a file hang ToolServer in a
     build that runs MrC.)"""
+    prelude = PRELUDE + interfaces_prelude(interfaces)
     s = s or start()
     os.makedirs(WORK, exist_ok=True)
     lock = open(os.path.join(STATE, "lock"), "w")
@@ -318,7 +343,7 @@ def run(script, cwd=None, timeout=600, s=None):
     try:
         rid = uuid.uuid4().hex[:8]
         files = {k: os.path.join(WORK, rid + "." + k) for k in ("script", "out")}
-        body = PRELUDE + "Set Exit 1\n"
+        body = prelude + "Set Exit 1\n"
         if cwd:
             body += 'Directory "%s"\n' % cwd
         write_text(files["script"], body + script.rstrip("\n") + "\n")
@@ -523,7 +548,7 @@ def cmd_status(args):
 
 def cmd_run(args):
     cwd = mac_path(args.C) if args.C else "Host:"
-    status, out = run(" ".join(args.command), cwd=cwd, timeout=args.timeout)
+    status, out = run(" ".join(args.command), cwd=cwd, timeout=args.timeout, interfaces=args.interfaces)
     sys.stdout.write(out)
     return status
 
@@ -539,15 +564,19 @@ def cmd_build(args):
     if not os.path.exists(script_path):
         script_path = os.path.join(src, "build.mpw")
     products = []
+    interfaces = args.interfaces
     if os.path.exists(script_path):
         script = open(script_path, encoding="utf-8").read()
         for m in re.finditer(r"^#\s*products:\s*(.+)$", script, re.M):
             products += m.group(1).split()
+        m = re.search(r"^#\s*interfaces:\s*(\S+)", script, re.M)
+        if m and not interfaces:
+            interfaces = m.group(1)
     else:
         script = ('Make -f MakeFile %s > "{TempFolder}"MakeOut\n"{TempFolder}"MakeOut\n'
                   % " ".join(args.target or []))
     t0 = time.time()
-    status, out = run(script, cwd=mac_dir, timeout=args.timeout)
+    status, out = run(script, cwd=mac_dir, timeout=args.timeout, interfaces=interfaces)
     sys.stdout.write(out)
     for line in gcc_messages(out, mac_dir, shown(src)):
         print(line)
@@ -589,6 +618,8 @@ def main():
     p = sub.add_parser("run", help="run an MPW command")
     p.add_argument("-C", metavar="DIR", help="directory inside the Host volume to run in")
     p.add_argument("--timeout", type=int, default=600)
+    p.add_argument("--interfaces", choices=sorted(INTERFACES),
+                   help="Universal Interfaces to use instead of the toolchain's own")
     p.add_argument("command", nargs="+")
     p.set_defaults(fn=cmd_run)
     p = sub.add_parser("build", help="build a project directory")
@@ -597,6 +628,9 @@ def main():
     p.add_argument("--product", action="append", help="also fetch this product")
     p.add_argument("--target", action="append", help="Make target (no build.mpw)")
     p.add_argument("--timeout", type=int, default=900)
+    p.add_argument("--interfaces", choices=sorted(INTERFACES),
+                   help="Universal Interfaces to use instead of the toolchain's own "
+                        "(default: build.mpw's \"# interfaces:\" line)")
     p.set_defaults(fn=cmd_build)
     args = ap.parse_args()
     configure(args.toolchain)
