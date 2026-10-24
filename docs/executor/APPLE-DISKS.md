@@ -37,7 +37,7 @@ error return that the caller handles.
 | 6 | **Sound** control panel | Window opens with empty content: no alert-sound list, no volume | Alert sounds list (from the System's `'snd '`), volume slider |
 | 7 | ~~**Text** control panel~~ | "The control panel "Text" cannot be used now, because not enough memory is available." | **Fixed**: ScriptUtil no longer hidden from `GetTrapAddress`; popups from a `'MENU'` resource draw the menu the cdev fills |
 | 8 | **Launcher** control panel | Window opens empty (blue) | Buttons for `Launcher Items` (Script Editor, SimpleText) |
-| 9 | **Labels** control panel | Colour swatches all black (last one brown) | The seven label colours |
+| 9 | ~~**Labels** control panel~~ | Colour swatches all black (last one brown); names upside down | **Fixed**: see below |
 | 10 | **Speech** control panel (7.6.1) | Partly drawn; voice popup empty | Voice name, rate slider |
 | 11 | **SimpleSound** | "Sorry, this program requires Sound Manager 3.0 or later." | Runs. Check `SndSoundManagerVersion` (`romlib/sound/soundIMVI.cpp`) and `gestaltSoundAttr` (`romlib/gestalt.cpp`) |
 | 12 | ~~**AppleTalk** control panel (an application)~~ | Says it needs AppleTalk from Open Transport; `/api/quit` while that alert is up leaves it running | **Not a bug** (checked 2026-10-24): Executor's OT has no AppleTalk ('otan' $33: TCP only), so the alert is right; a modal alert doesn't take the Quit Apple Event (nor on a Mac), and `/api/quit` only reports the event delivered. OK (Return) and it quits by itself |
@@ -123,6 +123,15 @@ turns off what they need. Each is a policy decision before it is a fix:
   The triage's chain started with Share a Folder: after its first dialog
   the Finder puts up a second ("Check the Sharing Setup control panel..."),
   which the sweep's single Escape/Return didn't reach.
+
+- **9 Labels**: the window is the Finder's. It colours each swatch with
+  PmForeColor from a palette it fills with SetEntryColor, entry -1 (label 0,
+  none) included; Executor wrote that entry into the palette's header,
+  zeroing its entry count, so every swatch but entry 0 stayed black. The
+  palette calls now ignore entries outside the palette. GetLabel numbered
+  the labels backwards (Essential is label 7) from a table of its own; it
+  reads the System's 'lstr' and 'rgb ' -16392 + label now, which the
+  Labels panel edits.
 
 ## Works (no action)
 

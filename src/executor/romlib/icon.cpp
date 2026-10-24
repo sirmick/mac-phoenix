@@ -312,102 +312,60 @@ void Executor::C_DisposeCIcon(CIconHandle icon)
     DisposeHandle((Handle)icon);
 }
 
-typedef struct
+/* MacPhoenix: labels 0 (none) to 7, as the System keeps them: 'lstr' and
+   'rgb ' -16392 + label, the name and colour the Labels control panel
+   edits. Label 7 is Essential, 1 Project 2: the Finder lists them 7 first
+   (the table here had them the other way round, and the Labels window
+   came out upside down). Without them (Executor's own System), the names
+   and Color QuickDraw's nearest standard colours. */
+static const struct
 {
-    RGBColor rgb_color;
-    Str255 string;
-} label_info_t;
-
-static label_info_t labels[7] = {
-    {
-        {
-            0, 0, 0,
-        },
-        "\011Essential",
-    },
-    {
-        {
-            0, 0, 0,
-        },
-        "\03Hot",
-    },
-    {
-        {
-            0, 0, 0,
-        },
-        "\013In Progress",
-    },
-    {
-        {
-            0, 0, 0,
-        },
-        "\04Cool",
-    },
-    {
-        {
-            0, 0, 0,
-        },
-        "\010Personal",
-    },
-    {
-        {
-            0, 0, 0,
-        },
-        "\011Project 1",
-    },
-    {
-        {
-            0, 0, 0,
-        },
-        "\011Project 2",
-    },
+    const char *name;
+    int qd_color; /* ROMlib_QDColors index */
+} default_labels[8] = {
+    { "\004None", 0 },          /* black */
+    { "\011Project 2", 0 },     /* brown: black */
+    { "\011Project 1", 5 },     /* green */
+    { "\010Personal", 6 },      /* blue */
+    { "\004Cool", 4 },          /* cyan */
+    { "\013In Progress", 2 },   /* magenta */
+    { "\003Hot", 3 },           /* red */
+    { "\011Essential", 1 },     /* orange: yellow */
 };
 
 OSErr Executor::C_GetLabel(short label, RGBColor *label_color,
                            Str255 label_string)
 {
-    unsigned int index;
-    OSErr retval;
-    static bool been_here = false;
+    if(label < 0 || label > 7)
+        ICON_RETURN_ERROR(paramErr);
 
-    if(!been_here)
-    {
-        /* icky */
-        labels[0].rgb_color = ROMlib_QDColors[1].rgb; /* orange->yellow */
-        labels[1].rgb_color = ROMlib_QDColors[3].rgb; /* red */
-        labels[2].rgb_color = ROMlib_QDColors[2].rgb; /* magenta */
-        labels[3].rgb_color = ROMlib_QDColors[4].rgb; /* cyan */
-        labels[4].rgb_color = ROMlib_QDColors[6].rgb; /* blue */
-        labels[5].rgb_color = ROMlib_QDColors[5].rgb; /* green */
-        labels[6].rgb_color = ROMlib_QDColors[0].rgb; /* brown->black */
-        been_here = true;
-    }
+    /* the System file's, whatever the application's files hold */
+    auto system_resource = [](ResType type, INTEGER id) {
+        INTEGER save = CurResFile();
+        UseResFile(LM(SysMap));
+        Handle h = Get1Resource(type, id);
+        UseResFile(save);
+        return h;
+    };
 
-    index = label - 1;
-    if(label == 0)
+    /* Either output may be nil (Finder asks for colours only). */
+    if(label_color)
     {
-        /* No label: 7.5.5 accepts it (Finder asks at start-up); black and
-           an empty name are a guess. */
-        if(label_color)
-            *label_color = ROMlib_QDColors[0].rgb;
-        if(label_string)
-            label_string[0] = 0;
-        retval = noErr;
+        Handle h = system_resource("rgb "_4, -16392 + label);
+        if(h && *h && GetHandleSize(h) >= (Size)sizeof(RGBColor))
+            *label_color = *(RGBColor *)*h;
+        else
+            *label_color = ROMlib_QDColors[default_labels[label].qd_color].rgb;
     }
-    else if(index > 6)
-        retval = paramErr;
-    else
+    if(label_string)
     {
-        // Either output may be nil (Finder asks for colours only).
-        if(label_color)
-            *label_color = labels[index].rgb_color;
-        if(label_string)
-            str255assign((StringPtr)label_string,
-                         (StringPtr)labels[index].string);
-        retval = noErr;
+        Handle h = system_resource("lstr"_4, -16392 + label);
+        if(h && *h && GetHandleSize(h) >= 1 && GetHandleSize(h) > *(uint8_t *)*h)
+            str255assign(label_string, (StringPtr)*h);
+        else
+            str255assign(label_string, (StringPtr)default_labels[label].name);
     }
-
-    ICON_RETURN_ERROR(retval);
+    ICON_RETURN_ERROR(noErr);
 }
 
 /* Icon families (IM More Macintosh Toolbox ch. 5, Icon Utilities).
@@ -953,6 +911,15 @@ OSErr Executor::C_SetSuiteLabel(Handle suite, short label)
 {
     if(label < 0 || label > 7)
         ICON_RETURN_ERROR(paramErr);
+
+    /* the System file's, whatever the application's files hold */
+    auto system_resource = [](ResType type, INTEGER id) {
+        INTEGER save = CurResFile();
+        UseResFile(LM(SysMap));
+        Handle h = Get1Resource(type, id);
+        UseResFile(save);
+        return h;
+    };
     layout(suite)->label = label;
     return noErr;
 }
