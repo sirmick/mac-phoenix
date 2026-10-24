@@ -76,11 +76,20 @@ NumVersion Executor::C_MACEVersion()
     return ROMlib_PretendSound == soundpretend ? 0x2000000 : 0;
 }
 
+/* MacPhoenix: the Sound Input Manager is there (Gestalt 'snd ' bit 3: Apple's
+   SimpleSound wants it) but the machine has no sound input device (bit 5
+   clear), so the calls that would find or open one answer as a Mac without
+   input hardware. */
+enum
+{
+    siNoSoundInHardware = -220,
+    siBadSoundInDevice = -221,
+};
+
 NumVersion Executor::C_SPBVersion()
 {
-    /* #warning SPBVersion not implemented */
     warning_sound_log("");
-    return ROMlib_PretendSound == soundpretend ? 0x1000000 : 0;
+    return ROMlib_PretendSound == soundoff ? 0 : 0x1000000;
 }
 
 OSErr Executor::C_SndStartFilePlay(SndChannelPtr chanp, INTEGER refnum,
@@ -280,25 +289,22 @@ void Executor::C_Exp1to6(Ptr inp, Ptr outp, LONGINT cnt, Ptr instatep,
 OSErr Executor::C_SndRecord(ProcPtr filterp, Point corner, OSType quality,
                             GUEST<Handle> *sndhandlep)
 {
-    /* #warning SPBRecord not implemented */
     warning_sound_log("");
-    return ROMlib_PretendSound == soundpretend ? noErr : notEnoughHardware;
+    return siNoSoundInHardware;
 }
 
 OSErr Executor::C_SndRecordToFile(ProcPtr filterp, Point corner,
                                   OSType quality, INTEGER refnum)
 {
-    /* #warning SPBRecordToFile not implemented */
     warning_sound_log("");
-    return ROMlib_PretendSound == soundpretend ? noErr : notEnoughHardware;
+    return siNoSoundInHardware;
 }
 
 OSErr Executor::C_SPBOpenDevice(ConstStringPtr name, INTEGER permission,
                                 GUEST<LONGINT> *inrefnump)
 {
-    /* #warning SPBOpenDevice not implemented */
     warning_sound_log("");
-    return ROMlib_PretendSound == soundpretend ? noErr : notEnoughHardware;
+    return siBadSoundInDevice;
 }
 
 OSErr Executor::C_SPBCloseDevice(LONGINT inrefnum)
@@ -511,9 +517,8 @@ OSErr Executor::C_SPBSignOutDevice(INTEGER refnum)
 OSErr Executor::C_SPBGetIndexedDevice(INTEGER count, ConstStringPtr name,
                                       GUEST<Handle> *deviceiconhandlep)
 {
-    /* #warning SPBGetIndexedDevice not implemented */
     warning_sound_log("");
-    return ROMlib_PretendSound == soundpretend ? noErr : notEnoughHardware;
+    return siBadSoundInDevice;
 }
 
 OSErr Executor::C_SPBMillisecondsToBytes(LONGINT refnum, GUEST<LONGINT> *millip)

@@ -47,7 +47,7 @@ same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 | 8 | ~~**Launcher** control panel~~ | Window opens empty (blue) | **Fixed**: see below. Its background is dithered at 256 colours (the ROM machine compared ran at millions) |
 | 9 | ~~**Labels** control panel~~ | Colour swatches all black (last one brown); names upside down | **Fixed**: see below |
 | 10 | **Speech** control panel (7.6.1) | Partly drawn; voice popup empty | Voice name, rate slider |
-| 11 | **SimpleSound** | "Sorry, this program requires Sound Manager 3.0 or later." | Runs. Check `SndSoundManagerVersion` (`romlib/sound/soundIMVI.cpp`) and `gestaltSoundAttr` (`romlib/gestalt.cpp`) |
+| 11 | ~~**SimpleSound**~~ (**Fixed**, STRAGGLERS 45) | "Sorry, this program requires Sound Manager 3.0 or later." | Runs. Check `SndSoundManagerVersion` (`romlib/sound/soundIMVI.cpp`) and `gestaltSoundAttr` (`romlib/gestalt.cpp`) |
 | 12 | ~~**AppleTalk** control panel (an application)~~ | Says it needs AppleTalk from Open Transport; `/api/quit` while that alert is up leaves it running | **Not a bug** (checked 2026-10-24): Executor's OT has no AppleTalk ('otan' $33: TCP only), so the alert is right; a modal alert doesn't take the Quit Apple Event (nor on a Mac), and `/api/quit` only reports the event delivered. OK (Return) and it quits by itself |
 | 13 | **Finder**, first open of a folder window | Icons drawn twice, overlapping (old and new positions), until the window is closed and reopened | Clean layout |
 
