@@ -487,6 +487,11 @@ Boolean Executor::C_GetNextEvent(INTEGER em, EventRecord *evt)
     TRACE(1);
     retval = doevent(em, evt, true);
     TRACE(0);
+    if(retval && ROMlib_process_click_taken(evt))
+    {
+        evt->what = nullEvent;
+        retval = false;
+    }
 
     /* MacPhoenix: the GetNextEvent filter (Tech Note 85): A1 at the event,
        the result word at 4(SP); it may change both. */

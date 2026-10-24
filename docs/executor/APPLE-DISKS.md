@@ -47,7 +47,7 @@ error return that the caller handles.
 
 | # | Problem | Repro |
 |---|---------|-------|
-| 14 | Clicking a background process's modal dialog doesn't bring that process forward | Have the Finder put up an alert (open File Sharing Monitor), then bring another app forward (`/api/launch` anything, or BridgeAgent comes to the front after a bridge command). Clicking the Finder's alert does nothing. The Finder then stays blocked: applets get "AppleEvent timed out" |
+| 14 | ~~Clicking a background process's modal dialog doesn't bring that process forward~~ | **Fixed**: see below |
 | 15 | Escape doesn't cancel the "Choose a folder" Standard File dialog | Run **Synchronize Folders** or **Alert When Folder Changes**, press Escape |
 | 16 | `/api/launch` of a desk accessory (`dfil`) | `{"path":"Macintosh HD:System Folder:Apple Menu Items:Calculator"}` puts up "That application appears damaged (lacks CODE and cfrg)" (`romlib/wind/windInit.cpp:183`). The same DA opens fine from the Apple menu |
 | 17 | `/api/launch` of a control panel (`cdev`) | Returns `launched`; nothing opens. From the Finder (double-click) control panels open fine |
@@ -113,6 +113,16 @@ turns off what they need. Each is a policy decision before it is a fix:
   **Open:** the configuration database (`OTLib$CfigLib`, 27 private
   functions: OTOpenConfigurationsDB, OTGetActiveConfigID,
   OTGetAttributeValue, ...) for the panel to show and change settings.
+
+- **14 Background dialog clicks**: the check for a click in another
+  process's window ran at the start of GetNextEvent, but the click could
+  reach the queue during the call (the host posts input meanwhile), and
+  the front process got it: BridgeAgent ignored clicks on the Finder's
+  alert, which stayed up and blocked every applet after it ("AppleEvent
+  timed out"). GetNextEvent now checks the mouse-down it hands out as well.
+  The triage's chain started with Share a Folder: after its first dialog
+  the Finder puts up a second ("Check the Sharing Setup control panel..."),
+  which the sweep's single Escape/Return didn't reach.
 
 ## Works (no action)
 
