@@ -44,7 +44,7 @@ same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 |---|------|--------------|----------|
 | 6 | ~~**Sound** control panel~~ | Window opens with empty content: no alert-sound list, no volume | **Fixed**: see below |
 | 7 | ~~**Text** control panel~~ | "The control panel "Text" cannot be used now, because not enough memory is available." | **Fixed**: ScriptUtil no longer hidden from `GetTrapAddress`; popups from a `'MENU'` resource draw the menu the cdev fills |
-| 8 | **Launcher** control panel | Window opens empty (blue) | Buttons for `Launcher Items` (Script Editor, SimpleText) |
+| 8 | ~~**Launcher** control panel~~ | Window opens empty (blue) | **Fixed**: see below. Its background is dithered at 256 colours (the ROM machine compared ran at millions) |
 | 9 | ~~**Labels** control panel~~ | Colour swatches all black (last one brown); names upside down | **Fixed**: see below |
 | 10 | **Speech** control panel (7.6.1) | Partly drawn; voice popup empty | Voice name, rate slider |
 | 11 | **SimpleSound** | "Sorry, this program requires Sound Manager 3.0 or later." | Runs. Check `SndSoundManagerVersion` (`romlib/sound/soundIMVI.cpp`) and `gestaltSoundAttr` (`romlib/gestalt.cpp`) |
@@ -160,6 +160,17 @@ turns off what they need. Each is a policy decision before it is a fix:
   SoundDispatch $021C0018 (name a guess, GetSoundOutputDevice) answers the
   current device. Plus: a maskless 'ICON' passed as 'ICN#' draws. All four
   pages match the ROM machine (8-bit and mono are off: one format).
+
+- **8 Launcher**: the System Folder copy (`hfs_sideload.cpp`) took a fixed
+  list of folders without Launcher Items (aliases to the applications);
+  it takes Launcher Items and Shutdown Items now. Copies made before keep
+  the old contents: delete `<storage>/executor-systems/<image>*` to redo.
+  Found on the way, worse: **the Finder unblessed the System Folder of
+  every disk image Executor mounted writable** (the image then no longer
+  boots on the ROM machines). It checks a volume's blessed folder for files
+  named by FinderName and SysResName: FinderName said "Browser" (Executor's
+  shell) and SysResName had been reset to $FF bytes per launch. FinderName
+  is the Finder's own name when Apple's Finder runs; SysResName is kept.
 
 ## Works (no action)
 

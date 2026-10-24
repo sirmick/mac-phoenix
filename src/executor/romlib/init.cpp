@@ -371,6 +371,9 @@ void Executor::InitPerProcessLowMem()
         TopMapHndl,
         SysMapHndl,
         SysMap,
+        SysResName, /* MacPhoenix: the System file's name; reset to $FF, the
+                       Finder took every mounted System Folder for one without
+                       a System file and unblessed it */
         ScrapSize,
         ScrapHandle,
         ScrapCount,

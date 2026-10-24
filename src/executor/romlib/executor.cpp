@@ -104,6 +104,12 @@ void Executor::executor_main()
                 (LONGINT)sizeof(AppFile), (Ptr) "", 0L);
 
             fName = thefile.fName;
+            /* MacPhoenix: Apple's Finder is the Finder: FinderName names it,
+               as on a Mac. The Finder checks each volume's blessed folder
+               for a file of that name, and with "Browser" there it unblessed
+               the System Folder of every writable disk image. */
+            if(thefile.fType == "FNDR"_4)
+                str255assign(LM(FinderName), thefile.fName);
         }
         else
         {
