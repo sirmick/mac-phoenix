@@ -49,6 +49,7 @@ set(NATIVE_TEST_SOURCES
         localvolume_macbinary.cpp
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp
         sysroutines.cpp resprivate.cpp
+        hfsplus_unicode.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
         # The dual-mode ABI comparison against Apple's headers belongs in
         # TEST_SOURCES later, once the Retro68 side has MacTCP.h.
@@ -125,4 +126,15 @@ else()
         APPEND PROPERTY TEST_INCLUDE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/test-properties.cmake"
     )
     target_compile_features(executor_tests PRIVATE cxx_std_17)
+
+    # The HFS+ reader against hfsfuse's hfsdump, and the short names
+    # against Mac OS 9.0.4's (docs/executor/HFSPlus.md); 77 without hfsdump.
+    if(TARGET hfsplus_dump)
+        find_package(Python3 COMPONENTS Interpreter)
+        add_test(NAME executor.hfsplus_reader
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_hfsplus_reader.py
+                    --dump $<TARGET_FILE:hfsplus_dump>)
+        set_tests_properties(executor.hfsplus_reader PROPERTIES
+            LABELS executor TIMEOUT 300 SKIP_RETURN_CODE 77)
+    endif()
 endif()

@@ -276,6 +276,20 @@ int main(void)
         check_classic_open(&item);
     }
     make_fragmented(&root);
+    /* How much of an extension the short name keeps; names with no usable
+       extension; ':' and '/' (Mac OS X stores its '/' as ':'); case */
+    make_file(&root, "A long name with a six char extension.abcde", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, "A long name with a seven char extension.abcdef", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, "A long name whose extension is quite long.backup-copy", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, "A long name that ends with a dot, nothing after.", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, "NoSpacesAndNoDotsInThisRatherLongFileName", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, ".A leading dot and a name long enough to cut", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, "%0395%03BB%03BB%03B7%03BD%03B9%03BA%03AC and a long name that runs on.txt", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, "Colon:in a name", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, "Slash/in a name", 'TEXT', 'ttxt', false, &item);
+    check_classic_open(&item);
+    make_file(&root, "Case Test FILE.txt", 'TEXT', 'ttxt', false, &item);
+    make_file(&root, "case test file.txt", 'TEXT', 'ttxt', false, &item);     /* dupFNErr: case-insensitive */
     FlushVol(NULL, vref);
 
 done:

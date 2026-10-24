@@ -651,6 +651,22 @@ target_link_libraries(romlib Threads::Threads executor_cpu)
 
 
 target_link_libraries(romlib resources)
+
+# MacPhoenix: the HFS+ reader (docs/executor/HFSPlus.md): host code, no
+# guest types; the File Manager, the System sideload and hfsplus_dump use it.
+add_library(executor_hfsplus STATIC
+    hfs/plus/image.h hfs/plus/image.cpp
+    hfs/plus/unicode.h hfs/plus/unicode.cpp hfs/plus/unicode_tables.h
+    hfs/plus/reader.h hfs/plus/reader.cpp)
+target_include_directories(executor_hfsplus PUBLIC .)
+target_compile_features(executor_hfsplus PUBLIC cxx_std_17)
+target_link_libraries(romlib executor_hfsplus)
+if(NOT EMSCRIPTEN)
+    # An HFS+ image's tree and forks, for tests/test_hfsplus_reader.py.
+    add_executable(hfsplus_dump hfs/plus/hfsplus_dump.cpp)
+    target_link_libraries(hfsplus_dump executor_hfsplus)
+endif()
+
 find_library(RESOLV_LIBRARY resolv)
 if(RESOLV_LIBRARY)
     target_link_libraries(romlib ${RESOLV_LIBRARY})  # MacPhoenix: res_query (OT's DNS queries)
