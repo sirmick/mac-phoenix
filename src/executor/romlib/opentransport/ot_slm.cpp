@@ -306,6 +306,13 @@ bool Executor::ot::slm_ready()
     return true;
 }
 
+/* Apple's ASLM has put its SLMGlobal in place (and it isn't ours). */
+bool Executor::ot::slm_apple_running()
+{
+    uint32_t em = READUL(0x2B6);
+    return em && READUL(em + 0x10C) && !own_slm;
+}
+
 void Executor::ot::slm_expect_ot_client()
 {
     ot_pending_a5 = current_a5_world();

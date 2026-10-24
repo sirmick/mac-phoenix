@@ -108,6 +108,7 @@ syn68k_addr_t bind_ot_stub(uint32_t stub);
    is about to make its manager; a process's managers go with it. */
 bool slm_ready();
 void slm_expect_ot_client();
+bool slm_apple_running();
 void slm_process_exit(uint32_t lo, uint32_t hi);
 
 /* Clients whose record is in [lo, hi): their providers closed (ot_client.cpp). */

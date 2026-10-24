@@ -3,6 +3,7 @@
  */
 
 #include <base/common.h>
+#include <rsys/opentransport.h>
 #include <base/debugger.h>
 
 #include <QuickDraw.h>
@@ -384,6 +385,8 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
 
     if(finfo.fdType == "MPST"_4)
         mpw::SetupTool();
+
+    ROMlib_ot_process_start();
 
     if(code0)
         beginexecutingat(guest_cast<LONGINT>(LM(CurrentA5)) + LM(CurJTOffset) + 2);

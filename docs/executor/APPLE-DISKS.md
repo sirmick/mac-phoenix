@@ -23,7 +23,7 @@ Same result on 7.5.5 and 7.6.1 unless marked.
 | 1 | ~~**Keyboard** control panel~~ | `Unknown selector 0x30 for trap Pack6` | **Fixed**: `0x30` is a private TextOrder (`IUTextOrderPrivate`, `romlib/iu.cpp`) |
 | 2 | ~~**Monitors** control panel; **Change Monitor to 256** applet (More Automated Tasks)~~ | `Unknown selector 0xf3 for trap DisplayDispatch` | **Fixed**: see below |
 | 3 | ~~**Apple System Profiler** (7.6.1, Apple Menu Items)~~ | `Unknown selector 0x12 for trap FSDispatch` | **Fixed**: see below |
-| 4 | **TCP/IP** control panel (policy-disabled; opened by hand) | `[ot] Open Transport: OTOpenConfigurationsDB (OTLib$CfigLib) is not implemented` | Should at least fail without killing Executor; see `docs/executor/OpenTransport.md` |
+| 4 | ~~**TCP/IP** control panel (policy-disabled; opened by hand)~~ | `[ot] Open Transport: OTOpenConfigurationsDB (OTLib$CfigLib) is not implemented` | **Fails cleanly** (7.6.1): see below. On 7.5.5 (no OT installed) it says it needs Open Transport |
 | 5 | **Password Security** control panel, intermittent | `host signal 11 at guest pc $c0cc9bf4`, last A-trap `$A949` | Seen once, opened right after **Numbers** had been opened and closed. Opened alone it correctly says "cannot be used with this Macintosh". The PC is in the host stub area (`7101` words). Try Numbers then Password Security repeatedly |
 
 The unknown-selector path is `romlib/base/traps.impl.h` (~line 212): it is
@@ -102,6 +102,17 @@ turns off what they need. Each is a policy decision before it is a fix:
   which the Profiler retried forever. It now answers as an empty bus does
   (SCSIGet succeeds, a selection gets scCommErr). All six reports work;
   the disk image's "Where" says External Floppy Drive.
+
+- **4 TCP/IP** (fails cleanly; not working): a missing OT function with a C
+  name (OT's sets name Pascal ones in capitals) now answers
+  kOTNotSupportedErr instead of ending the session. The panel then says
+  "TCP/IP Preferences" could not be opened and quits. Whether its calls
+  reached Executor's OT or Apple's depended on whether anything had asked
+  Gestalt 'otan' before the panel made its library manager: Apple's ASLM
+  now gets Executor's wrappers before each application starts.
+  **Open:** the configuration database (`OTLib$CfigLib`, 27 private
+  functions: OTOpenConfigurationsDB, OTGetActiveConfigID,
+  OTGetAttributeValue, ...) for the panel to show and change settings.
 
 ## Works (no action)
 

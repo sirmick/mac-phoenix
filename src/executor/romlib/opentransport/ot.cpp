@@ -143,17 +143,35 @@ syn68k_addr_t enter(syn68k_addr_t, void *arg)
     return ret_pc;
 }
 
-/* A function no part implements: a fatal error naming it (its arguments'
-   size isn't known, so it can't even return an error to a pascal
-   caller). */
+/* A function no part implements. MacPhoenix: a C one (OT's sets name
+   their Pascal functions in capitals, MPW Pascal's way, and the rest are C)
+   answers kOTNotSupportedErr in D0, logged: its caller pops the
+   arguments, so their size needn't be known. The TCP/IP control panel's
+   first configuration-database call (OTOpenConfigurationsDB) ended the
+   session. A Pascal one is still a fatal error naming it: without its
+   arguments' size it can't even return an error. */
 struct Missing
 {
     std::string set, name;
 };
+bool pascal_name(const std::string &name)
+{
+    for(char c : name)
+        if(c >= 'a' && c <= 'z')
+            return false;
+    return true;
+}
 syn68k_addr_t missing(syn68k_addr_t, void *arg)
 {
     const Missing *m = (const Missing *)arg;
-    fatal("Open Transport: " + m->name + " (" + m->set + ") is not implemented");
+    if(pascal_name(m->name))
+        fatal("Open Transport: " + m->name + " (" + m->set + ") is not implemented");
+    fprintf(stderr, "[ot] %s (%s) is not implemented: kOTNotSupportedErr\n",
+            m->name.c_str(), m->set.c_str());
+    uint32_t sp = EM_A7;
+    EM_D0 = (uint32_t)(int32_t)kOTNotSupportedErr;
+    EM_A7 = sp + 4;
+    return READUL(sp);
 }
 
 } // anonymous namespace
@@ -307,6 +325,12 @@ bool Executor::ROMlib_ot_gestalt(OSType selector, int32_t *value)
             return true;
     }
     return false;
+}
+
+void Executor::ROMlib_ot_process_start()
+{
+    if(ROMlib_open_transport && slm_apple_running())
+        slm_ready();
 }
 
 void Executor::ROMlib_ot_process_exit(uint32_t part_lo, uint32_t part_hi)
