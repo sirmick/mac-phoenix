@@ -147,6 +147,13 @@ else()
                     --dump $<TARGET_FILE:hfsplus_dump>)
         set_tests_properties(executor.hfsplus_reader PROPERTIES
             LABELS executor TIMEOUT 300 SKIP_RETURN_CODE 77)
+        # The HFS+ writer: scripted changes on blank volumes, then
+        # fsck.hfsplus (docker) and hfsdump against a model; 77 without them.
+        add_test(NAME executor.hfsplus_writer
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_hfsplus_writer.py
+                    --dump $<TARGET_FILE:hfsplus_dump>)
+        set_tests_properties(executor.hfsplus_writer PROPERTIES
+            LABELS executor TIMEOUT 1200 SKIP_RETURN_CODE 77)
         # The File Manager on HFS+ volumes: VolDump's dumps on Executor
         # against Mac OS 9.0.4's; 77 without tests-7.5.5.
         if(TARGET mac-phoenix)

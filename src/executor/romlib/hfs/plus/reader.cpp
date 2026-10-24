@@ -1,4 +1,5 @@
 #include "reader.h"
+#include "btree.h"
 #include "unicode.h"
 
 #include <algorithm>
@@ -6,21 +7,8 @@
 
 using namespace Executor::hfsplus;
 
-/* ---- the B-trees (TN1150 "B-Trees") ---------------------------------- */
-
 namespace
 {
-enum : int8_t
-{
-    kLeafNode = -1,
-    kIndexNode = 0,
-    kHeaderNode = 1,
-};
-enum : uint32_t
-{
-    kBTBigKeys = 1u << 1,
-    kBTVariableIndexKeys = 1u << 2,
-};
 enum : int16_t
 {
     kFolderRecord = 1,
@@ -29,153 +17,6 @@ enum : int16_t
     kFileThreadRecord = 4,
 };
 }
-
-class Reader::BTree
-{
-public:
-    using Node = std::shared_ptr<const std::vector<uint8_t>>;
-    /* <0, 0, >0: the key sought against a node's key */
-    using Compare = std::function<int(const uint8_t *key)>;
-
-    struct Position
-    {
-        uint32_t node = 0;
-        uint16_t record = 0;
-    };
-
-    BTree(Fork& file) : file_(file) {}
-
-    bool open()
-    {
-        uint8_t h[512];
-        if(file_.read(0, h, sizeof h) != sizeof h || int8_t(h[8]) != kHeaderNode)
-            return false;
-        const uint8_t *r = h + 14;
-        depth_ = be16(r);
-        root_ = be32(r + 2);
-        firstLeaf_ = be32(r + 10);
-        nodeSize_ = be16(r + 18);
-        maxKeyLength_ = be16(r + 20);
-        keyCompareType_ = r[37];
-        attributes_ = be32(r + 38);
-        return nodeSize_ >= 512 && (nodeSize_ & (nodeSize_ - 1)) == 0;
-    }
-
-    uint8_t keyCompareType() const { return keyCompareType_; }
-
-    Node node(uint32_t n)
-    {
-        auto it = index_.find(n);
-        if(it != index_.end())
-        {
-            lru_.splice(lru_.begin(), lru_, it->second);
-            return it->second->second;
-        }
-        auto buf = std::make_shared<std::vector<uint8_t>>(nodeSize_);
-        if(file_.read(uint64_t(n) * nodeSize_, buf->data(), nodeSize_) != nodeSize_)
-            return nullptr;
-        lru_.emplace_front(n, buf);
-        index_[n] = lru_.begin();
-        if(lru_.size() > 64)
-        {
-            index_.erase(lru_.back().first);
-            lru_.pop_back();
-        }
-        return buf;
-    }
-
-    static int8_t kind(const Node& n) { return int8_t((*n)[8]); }
-    static uint16_t count(const Node& n) { return be16(n->data() + 10); }
-    static uint32_t next(const Node& n) { return be32(n->data()); }
-
-    /* A record's key and data, and the bytes from the data to the node's end. */
-    bool record(const Node& n, uint16_t i, const uint8_t **key, const uint8_t **data, size_t *room)
-    {
-        if(i >= count(n))
-            return false;
-        const uint8_t *base = n->data();
-        uint16_t off = be16(base + nodeSize_ - 2 * (i + 1));
-        if(off < 14 || off + 2 > nodeSize_)
-            return false;
-        size_t keyBytes = 2 + be16(base + off);
-        if(kind(n) == kIndexNode && !(attributes_ & kBTVariableIndexKeys))
-            keyBytes = 2 + maxKeyLength_;
-        keyBytes = (keyBytes + 1) & ~size_t(1);
-        if(off + keyBytes > nodeSize_)
-            return false;
-        *key = base + off;
-        *data = base + off + keyBytes;
-        *room = nodeSize_ - (off + keyBytes);
-        return true;
-    }
-
-    /* The first leaf record whose key is >= the one sought. */
-    bool seek(const Compare& cmp, Position *pos)
-    {
-        uint32_t n = root_;
-        for(int guard = 0; n && guard < 32; guard++)
-        {
-            Node nd = node(n);
-            if(!nd)
-                return false;
-            const uint8_t *key, *data;
-            size_t room;
-            if(kind(nd) == kLeafNode)
-            {
-                uint16_t i = 0;
-                for(; i < count(nd); i++)
-                    if(record(nd, i, &key, &data, &room) && cmp(key) <= 0)
-                        break;
-                pos->node = n;
-                pos->record = i;
-                return true;
-            }
-            if(kind(nd) != kIndexNode)
-                return false;
-            /* the last record whose key is <= the one sought (or the first) */
-            uint32_t child = 0;
-            for(uint16_t i = 0; i < count(nd); i++)
-            {
-                if(!record(nd, i, &key, &data, &room) || room < 4)
-                    return false;
-                if(i > 0 && cmp(key) < 0)
-                    break;
-                child = be32(data);
-            }
-            n = child;
-        }
-        return false;
-    }
-
-    /* The record at pos (moved on to the next leaf at a leaf's end). */
-    bool at(Position *pos, const uint8_t **key, const uint8_t **data, size_t *room, Node *keep)
-    {
-        for(int guard = 0; guard < 1 << 20; guard++)
-        {
-            if(!pos->node)
-                return false;
-            Node nd = node(pos->node);
-            if(!nd || kind(nd) != kLeafNode)
-                return false;
-            if(pos->record < count(nd))
-            {
-                *keep = nd;
-                return record(nd, pos->record, key, data, room);
-            }
-            pos->node = next(nd);
-            pos->record = 0;
-        }
-        return false;
-    }
-
-private:
-    Fork& file_;
-    uint16_t depth_ = 0, nodeSize_ = 0, maxKeyLength_ = 0;
-    uint32_t root_ = 0, firstLeaf_ = 0, attributes_ = 0;
-    uint8_t keyCompareType_ = 0;
-    std::list<std::pair<uint32_t, Node>> lru_;
-    std::unordered_map<uint32_t, std::list<std::pair<uint32_t, Node>>::iterator> index_;
-};
 
 Reader::~Reader() = default;
 
@@ -190,6 +31,18 @@ ForkData ForkData::parse(const uint8_t *p)
     for(int i = 0; i < 8; i++)
         f.extents[i] = { be32(p + 16 + 8 * i), be32(p + 20 + 8 * i) };
     return f;
+}
+
+void ForkData::store(uint8_t *p) const
+{
+    put64(p, logicalSize);
+    put32(p + 8, clumpSize);
+    put32(p + 12, totalBlocks);
+    for(int i = 0; i < 8; i++)
+    {
+        put32(p + 16 + 8 * i, extents[i].start);
+        put32(p + 20 + 8 * i, extents[i].count);
+    }
 }
 
 static std::u16string readUniStr(const uint8_t *p, size_t room)
@@ -232,6 +85,7 @@ std::optional<CatalogEntry> Reader::parseRecord(const uint8_t *key, const uint8_
         e.dataFork = ForkData::parse(data + 88);
         e.resourceFork = ForkData::parse(data + 168);
     }
+    e.raw.assign(data, data + (e.folder ? 88 : 248));
     return e;
 }
 
@@ -300,6 +154,7 @@ std::unique_ptr<Reader> Reader::open(std::shared_ptr<ImageReader> image, uint64_
             return fail("can't read the embedded volume's header");
     }
     VolumeHeader& h = r->header_;
+    memcpy(h.raw, m, sizeof h.raw);
     h.signature = be16(m);
     h.version = be16(m + 2);
     if(h.signature != 0x482B && h.signature != 0x4858)
@@ -333,24 +188,54 @@ std::unique_ptr<Reader> Reader::open(std::shared_ptr<ImageReader> image, uint64_
         return fail("bad allocation block size");
 
     /* The extents file's own extents are all in the header; the catalog's
-       can go on in the extents file. */
+       and the allocation file's can go on in the extents file. */
+    auto extentOrder = [](const uint8_t *a, const uint8_t *b) {
+        uint32_t fa = be32(a + 4), fb = be32(b + 4), sa = be32(a + 8), sb = be32(b + 8);
+        if(fa != fb)
+            return fa < fb ? -1 : 1;
+        if(a[2] != b[2])
+            return a[2] < b[2] ? -1 : 1;
+        if(sa != sb)
+            return sa < sb ? -1 : 1;
+        return 0;
+    };
+    Reader *self = r.get();
+    auto catalogOrder = [self](const uint8_t *a, const uint8_t *b) {
+        uint32_t pa = be32(a + 2), pb = be32(b + 2);
+        if(pa != pb)
+            return pa < pb ? -1 : 1;
+        size_t la = be16(a), lb = be16(b);
+        return self->compareNames(readUniStr(a + 6, la >= 4 ? la - 4 : 0), readUniStr(b + 6, lb >= 4 ? lb - 4 : 0));
+    };
     r->extentsFork_.reset(new Fork);
     r->extentsFork_->reader_ = r.get();
     r->extentsFork_->size_ = h.extentsFile.logicalSize;
     for(const Extent& e : h.extentsFile.extents)
         if(e.count)
             r->extentsFork_->extents_.push_back(e);
-    r->extents_.reset(new BTree(*r->extentsFork_));
+    r->extents_.reset(new BTree(*r, *r->extentsFork_, kExtentsFileID, extentOrder));
     if(!r->extents_->open())
         return fail("bad extents overflow file");
     r->catalogFork_.reset(new Fork);
     r->catalogFork_->reader_ = r.get();
     r->catalogFork_->size_ = h.catalogFile.logicalSize;
     r->fillExtents(*r->catalogFork_, kCatalogFileID, 0, h.catalogFile);
-    r->catalog_.reset(new BTree(*r->catalogFork_));
+    r->catalog_.reset(new BTree(*r, *r->catalogFork_, kCatalogFileID, catalogOrder));
     if(!r->catalog_->open())
         return fail("bad catalog file");
     r->binaryOrder_ = r->isHFSX() && r->catalog_->keyCompareType() == 0xBC;
+    r->allocationFork_.reset(new Fork);
+    r->allocationFork_->reader_ = r.get();
+    r->allocationFork_->size_ = h.allocationFile.logicalSize;
+    r->fillExtents(*r->allocationFork_, kAllocationFileID, 0, h.allocationFile);
+
+    /* Changes only to a clean, unjournaled, unlocked volume, all its
+       special files whole. Extended attributes (an attributes file, as
+       mkfs.hfsplus makes) are left alone, as Mac OS 9 leaves them. */
+    r->writable_ = image->writable() && !(h.attributes & (VolumeHeader::kJournaled | VolumeHeader::kSoftwareLock
+                                                           | VolumeHeader::kHardwareLock))
+                   && (h.attributes & VolumeHeader::kUnmounted) && !(h.attributes & VolumeHeader::kInconsistent)
+                   && r->catalogFork_->complete_ && r->allocationFork_->complete_;
     return r;
 }
 
@@ -434,6 +319,39 @@ size_t Fork::read(uint64_t offset, void *buf, size_t n)
         extentStart += len;
     }
     return done;
+}
+
+uint64_t Fork::allocatedBytes() const
+{
+    uint64_t blocks = 0;
+    for(const Extent& e : extents_)
+        blocks += e.count;
+    return blocks * reader_->header_.blockSize;
+}
+
+bool Fork::write(uint64_t offset, const void *buf, size_t n)
+{
+    const uint64_t bs = reader_->header_.blockSize;
+    auto *in = static_cast<const uint8_t *>(buf);
+    size_t done = 0;
+    uint64_t extentStart = 0;
+    for(const Extent& e : extents_)
+    {
+        if(done == n)
+            break;
+        uint64_t len = uint64_t(e.count) * bs;
+        uint64_t pos = offset + done;
+        if(pos < extentStart + len)
+        {
+            uint64_t within = pos - extentStart;
+            size_t put = size_t(std::min<uint64_t>(n - done, len - within));
+            if(!reader_->writeAt(uint64_t(e.start) * bs + within, in + done, put))
+                return false;
+            done += put;
+        }
+        extentStart += len;
+    }
+    return done == n;
 }
 
 std::unique_ptr<Fork> Reader::openFork(const CatalogEntry& file, bool resource)
@@ -595,4 +513,25 @@ CatalogEntry Reader::resolveLink(const CatalogEntry& e)
     out.parentID = e.parentID;
     out.name = e.name;
     return out;
+}
+
+std::vector<uint8_t> Executor::hfsplus::catalogKey(uint32_t parentID, const std::u16string& name)
+{
+    std::vector<uint8_t> k(8 + 2 * name.size());
+    put16(k.data(), uint16_t(6 + 2 * name.size()));
+    put32(k.data() + 2, parentID);
+    put16(k.data() + 6, uint16_t(name.size()));
+    for(size_t i = 0; i < name.size(); i++)
+        put16(k.data() + 8 + 2 * i, name[i]);
+    return k;
+}
+
+std::vector<uint8_t> Executor::hfsplus::extentKey(uint8_t forkType, uint32_t fileID, uint32_t startBlock)
+{
+    std::vector<uint8_t> k(12, 0);
+    put16(k.data(), 10);
+    k[2] = forkType;
+    put32(k.data() + 4, fileID);
+    put32(k.data() + 8, startBlock);
+    return k;
 }
