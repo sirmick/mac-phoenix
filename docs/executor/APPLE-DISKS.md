@@ -56,9 +56,9 @@ same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 | # | Problem | Repro |
 |---|---------|-------|
 | 14 | ~~Clicking a background process's modal dialog doesn't bring that process forward~~ | **Fixed**: see below |
-| 15 | Escape doesn't cancel the "Choose a folder" Standard File dialog | Run **Synchronize Folders** or **Alert When Folder Changes**, press Escape |
-| 16 | `/api/launch` of a desk accessory (`dfil`) | `{"path":"Macintosh HD:System Folder:Apple Menu Items:Calculator"}` puts up "That application appears damaged (lacks CODE and cfrg)" (`romlib/wind/windInit.cpp:183`). The same DA opens fine from the Apple menu |
-| 17 | `/api/launch` of a control panel (`cdev`) | Returns `launched`; nothing opens. From the Finder (double-click) control panels open fine |
+| 15 | ~~Escape doesn't cancel the "Choose a folder" Standard File dialog~~ | **Fixed** (STRAGGLERS 48). Run **Synchronize Folders** or **Alert When Folder Changes**, press Escape |
+| 16 | ~~`/api/launch` of a desk accessory (`dfil`)~~ | **Fixed** (STRAGGLERS 49: BridgeAgent asks the Finder to open what isn't an application). Was: `{"path":"Macintosh HD:System Folder:Apple Menu Items:Calculator"}` puts up "That application appears damaged (lacks CODE and cfrg)" (`romlib/wind/windInit.cpp:183`). The same DA opens fine from the Apple menu |
+| 17 | ~~`/api/launch` of a control panel (`cdev`)~~ | **Fixed** (STRAGGLERS 49). Was: Returns `launched`; nothing opens. From the Finder (double-click) control panels open fine |
 
 ## 4. Blocked by Executor's extension policy (decide first)
 
@@ -214,7 +214,7 @@ curl -X POST localhost:18760/api/emulator/start
 - **Policy-disabled panels**: with Executor running, move
   `executor-systems/<image>/System Folder/Control Panels (Disabled)` to the
   volume root and open it from the Executor volume's window.
-- **Desk accessories**: Apple menu (not `/api/launch`, item 16); `/api/quit`
+- **Desk accessories**: Apple menu or `/api/launch`; `/api/quit`
   closes them through the DA Handler.
 - **Applets** act on the Finder's selection: click empty desktop first. Their
   dialogs belong to the Finder, so answer them while the Finder is in front
