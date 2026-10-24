@@ -1,12 +1,14 @@
 #pragma once
-/* hfsplusvolume.h -- a read-only HFS+ volume for the File Manager
- * (docs/executor/HFSPlus.md): the classic (HFS) calls over the HFS+ reader
- * in hfs/plus/, with names, IDs and dates as Mac OS 8.1-9 give them. */
+/* hfsplusvolume.h -- an HFS+ volume for the File Manager
+ * (docs/executor/HFSPlus.md): the classic (HFS) calls over hfs/plus/, with
+ * names, IDs and dates as Mac OS 8.1-9 give them; read-write on a writable
+ * image, else locked. */
 #include <file/volume.h>
 #include <file/file.h>
 #include <hfs/drive_flags.h>
 #include <hfs/plus/reader.h>
 
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -77,6 +79,7 @@ private:
         CatInfo
     };
     struct OpenFork;
+    struct ForkState;
 
     Entry root();
     Entry resolveDir(short vRef, long dirID);
@@ -89,11 +92,29 @@ private:
     void getInfoCommon(CInfoPBPtr pb, InfoKind kind);
     void openCommon(GUEST<short>& refNum, const Entry& item, bool resource, int8_t permission);
     OpenFork& openFork(short refNum);
-    void setFPosCommon(ParmBlkPtr pb);
+    void setFPosCommon(ParmBlkPtr pb, bool checkEOF);
     void updateVCB();
+
+    /* writing */
+    bool writable() const { return reader_->writable(); }
+    void check(hfsplus::Error e, OSErr notFound = fnfErr);
+    void refresh(ForkState& s);
+    void refreshFile(uint32_t cnid);
+    uint32_t gmtDate(uint32_t local) const;
+    std::u16string newName(ConstStringPtr name, size_t max = 31);
+    std::pair<Entry, std::string> resolveForCreate(StringPtr name, short vRef, long dirID);
+    bool isOpen(uint32_t cnid);
+    void createCommon(StringPtr name, short vRef, long dirID, bool folder, GUEST<LONGINT> *newDirID);
+    void deleteCommon(StringPtr name, short vRef, long dirID);
+    void renameCommon(StringPtr name, short vRef, long dirID, ConstStringPtr newName);
+    void setInfoCommon(CInfoPBPtr pb, long dirID, InfoKind kind);
+    void lockCommon(StringPtr name, short vRef, long dirID, bool lock);
+    void refuseWrite(OpenFork& f);
+    void stampWritten(OpenFork& f);
 
     std::unique_ptr<hfsplus::Reader> reader_;
     std::vector<std::unique_ptr<OpenFork>> forks_;     /* by FCB index */
+    std::map<uint64_t, std::weak_ptr<ForkState>> states_;   /* (CNID, fork): what its paths share */
     unsigned blockScale_ = 1;                           /* reported blocks: this many of the volume's */
 };
 

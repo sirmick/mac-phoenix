@@ -114,9 +114,17 @@ else()
         COMMAND ${CMAKE_COMMAND} -DIN=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/longnames.img.gz
                 -DOUT=${HFSPLUS_FIXTURE} -P ${CMAKE_CURRENT_SOURCE_DIR}/gunzip.cmake
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/longnames.img.gz)
-    add_custom_target(executor_hfsplus_fixtures DEPENDS ${HFSPLUS_FIXTURE})
+    # ... and writes to a copy of the blank one (mkfs.hfsplus)
+    set(HFSPLUS_BLANK ${CMAKE_CURRENT_BINARY_DIR}/fixtures/blank-64m.img)
+    add_custom_command(OUTPUT ${HFSPLUS_BLANK}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/fixtures
+        COMMAND ${CMAKE_COMMAND} -DIN=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/blank-64m.img.gz
+                -DOUT=${HFSPLUS_BLANK} -P ${CMAKE_CURRENT_SOURCE_DIR}/gunzip.cmake
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/blank-64m.img.gz)
+    add_custom_target(executor_hfsplus_fixtures DEPENDS ${HFSPLUS_FIXTURE} ${HFSPLUS_BLANK})
     add_dependencies(executor_tests executor_hfsplus_fixtures)
-    target_compile_definitions(executor_tests PRIVATE EXECUTOR_HFSPLUS_FIXTURE="${HFSPLUS_FIXTURE}")
+    target_compile_definitions(executor_tests PRIVATE EXECUTOR_HFSPLUS_FIXTURE="${HFSPLUS_FIXTURE}"
+                                                      EXECUTOR_HFSPLUS_BLANK="${HFSPLUS_BLANK}")
     if(EMSCRIPTEN)
         # Under node: the host's files, as natively.
         target_link_options(executor_tests PRIVATE -sNODERAWFS=1)
@@ -162,6 +170,14 @@ else()
                         --dump $<TARGET_FILE:hfsplus_dump>)
             set_tests_properties(executor.hfsplus_volume PROPERTIES
                 LABELS "executor;guest" TIMEOUT 300 SKIP_RETURN_CODE 77
+                ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
+            # The File Manager writing to an HFS+ volume: VolWrite and VolDump
+            # on Executor against Mac OS 9.0.4's; fsck.hfsplus on the result.
+            add_test(NAME executor.hfsplus_write
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_hfsplus_write.py
+                        --dump $<TARGET_FILE:hfsplus_dump>)
+            set_tests_properties(executor.hfsplus_write PROPERTIES
+                LABELS "executor;guest" TIMEOUT 400 SKIP_RETURN_CODE 77
                 ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
             # Executor's System from an HFS+ image (hfs_sideload.cpp)
             add_test(NAME executor.hfsplus_sideload

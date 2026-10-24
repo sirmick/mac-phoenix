@@ -6,6 +6,8 @@
  * and through "::"; each fork opened read-only and read to the end
  * (Adler-32), and opened for writing (the error a locked volume gives);
  * the files-only enumeration of PBHGetFInfo. Names are hex (MacRoman).
+ * The probes that write (create, open for writing) only on a locked
+ * volume: a writable one is left as it was.
  *
  * Host:voldump.cfg names the volume (first line); the dump goes to
  * Host:voldump.txt, "---" its last line. 68k: runs on Executor and any
@@ -27,6 +29,7 @@ QDGlobals qd;
 
 static FILE *out;
 static short vref;
+static Boolean locked;      /* the volume: write probes only then */
 static unsigned char volName[64];
 static char *buf;
 enum { kBuf = 32768 };
@@ -110,10 +113,18 @@ static void fork(long dirID, StringPtr name, Boolean rsrc)
             err = SetFPos(ref, fsFromStart, eof + 1);
             fprintf(out, " seekpast %d", (int)err);
             n = 4;
-            err = FSWrite(ref, &n, buf);
-            fprintf(out, " write %d", (int)err);
+            if(locked)
+            {
+                err = FSWrite(ref, &n, buf);
+                fprintf(out, " write %d", (int)err);
+            }
         }
         FSClose(ref);
+    }
+    if(!locked)                 /* on a writable volume the probes would change it */
+    {
+        fprintf(out, "\n");
+        return;
     }
     pb.ioParam.ioPermssn = fsRdWrPerm;
     err = rsrc ? PBHOpenRFSync(&pb) : PBHOpenDFSync(&pb);
@@ -338,6 +349,7 @@ int main(void)
     if(err == noErr)
     {
         vref = pb.volumeParam.ioVRefNum;
+        locked = (pb.volumeParam.ioVAtrb & 0x8080) != 0;
         fprintf(out, " sig %04X attrib %04X nmfls %u alblksiz %ld nmalblks %u frblk %u clpsiz %ld"
                 " filcnt %ld dircnt %ld nxtcnid %ld cr %lu md %lu bk %lu fndr ",
                 (unsigned)pb.volumeParam.ioVSigWord, (unsigned)pb.volumeParam.ioVAtrb,
@@ -350,12 +362,15 @@ int main(void)
         fprintf(out, "\n");
 
         /* a file there: created? (wPrErr: locked) */
-        err = HCreate(vref, fsRtDirID, "\pVolDump probe", 'TEXT', 'ttxt');
-        fprintf(out, "CREATE %d\n", (int)err);
-        if(err == noErr)
-            HDelete(vref, fsRtDirID, "\pVolDump probe");
-        err = DirCreate(vref, fsRtDirID, "\pVolDump folder", (long *)&n);
-        fprintf(out, "DIRCREATE %d\n", (int)err);
+        if(locked)
+        {
+            err = HCreate(vref, fsRtDirID, "\pVolDump probe", 'TEXT', 'ttxt');
+            fprintf(out, "CREATE %d\n", (int)err);
+            if(err == noErr)
+                HDelete(vref, fsRtDirID, "\pVolDump probe");
+            err = DirCreate(vref, fsRtDirID, "\pVolDump folder", (long *)&n);
+            fprintf(out, "DIRCREATE %d\n", (int)err);
+        }
 
         memcpy(path, volName, volName[0] + 1);
         walk(fsRtDirID, path);

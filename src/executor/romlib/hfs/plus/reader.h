@@ -174,9 +174,10 @@ public:
     Error move(uint32_t cnid, uint32_t newParentID);
     /* An item's flags, dates, Finder info and text encoding, as in e. */
     Error update(const CatalogEntry& e);
-    /* A fork's length, its allocation grown (clumps, zeroed) or shrunk to
-       cover it; at least `reserve` bytes allocated. */
-    Error setForkSize(uint32_t cnid, bool resource, uint64_t size, uint64_t reserve = 0);
+    /* A fork's length, its allocation grown (new blocks zeroed) or shrunk
+       to cover it, at least `reserve` bytes allocated: in whole blocks, or
+       (clump) grown a clump at a time. */
+    Error setForkSize(uint32_t cnid, bool resource, uint64_t size, uint64_t reserve = 0, bool clump = false);
     /* The volume's name (the root folder's) */
     Error renameVolume(const std::u16string& name);
     /* The header's Finder info (the blessed folder...) */

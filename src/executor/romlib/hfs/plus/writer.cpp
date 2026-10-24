@@ -553,7 +553,7 @@ Error Reader::update(const CatalogEntry& in)
     return end(putEntry(*c));
 }
 
-Error Reader::setForkSize(uint32_t cnid, bool resource, uint64_t size, uint64_t reserve)
+Error Reader::setForkSize(uint32_t cnid, bool resource, uint64_t size, uint64_t reserve, bool clumped)
 {
     Error e = begin();
     if(e != Error::none)
@@ -566,7 +566,7 @@ Error Reader::setForkSize(uint32_t cnid, bool resource, uint64_t size, uint64_t 
     uint64_t want = std::max(size, reserve);
     uint32_t blocks = uint32_t((want + bs - 1) / bs);
     std::vector<Extent> extents = openFork(*c, resource)->extents();
-    uint32_t clump = fd.clumpSize ? fd.clumpSize : resource ? header_.rsrcClumpSize : header_.dataClumpSize;
+    uint32_t clump = !clumped ? bs : fd.clumpSize ? fd.clumpSize : resource ? header_.rsrcClumpSize : header_.dataClumpSize;
     if(blocks != blocksIn(extents))
     {
         if((e = resizeExtents(cnid, resource ? 0xFF : 0x00, extents, blocks, clump)) != Error::none)

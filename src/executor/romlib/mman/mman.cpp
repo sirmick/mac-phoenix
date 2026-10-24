@@ -348,11 +348,14 @@ int32_t ROMlib_grow_syszone(int32_t need)
     int32_t avail = (sysheap_limit - 8) - end; /* InitZone keeps 8 bytes past the trailer */
     if(need < 1)
         need = 1;
-    int32_t delta = (need + (int32_t)HEADER_SIZE + 0xFFFF) & ~0xFFFF; /* 64K steps */
-    if(delta > avail)
-        delta = avail & ~3;
-    if(delta < need + (int32_t)HEADER_SIZE || delta < MIN_BLOCK_SIZE)
+    /* 64K steps; in 64 bits: a request near 2 GB (a resource map length
+       read from a fork that holds no resource file) wrapped round in 32 */
+    int64_t want = ((int64_t)need + (int64_t)HEADER_SIZE + 0xFFFF) & ~int64_t(0xFFFF);
+    if(want > avail)
+        want = avail & ~3;
+    if(want < (int64_t)need + (int64_t)HEADER_SIZE || want < (int64_t)MIN_BLOCK_SIZE)
         return 0;
+    int32_t delta = (int32_t)want;
     block_header_t *newlast = (block_header_t *)((char *)last + delta);
     /* The old trailer becomes a free block of the growth; the allocator
        merges it with a free block before it as it scans (ROMlib_coalesce). */

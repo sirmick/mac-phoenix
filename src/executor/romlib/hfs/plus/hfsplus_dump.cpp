@@ -6,7 +6,7 @@
  *   hfsplus_dump IMAGE read CNID [rsrc] a file's data (or resource) fork to stdout
  *   hfsplus_dump IMAGE script FILE      changes, a line each (paths UTF-8, '/' between names;
  *                                       data bytes: (seed + 7 * offset + offset / 251) & 0xFF):
- *       mkdir PATH | create PATH | write PATH data|rsrc OFFSET LENGTH SEED
+ *       mkdir PATH | create PATH [TYPE CREATOR] | write PATH data|rsrc OFFSET LENGTH SEED
  *       truncate PATH data|rsrc LENGTH | rename PATH NEWNAME | move PATH FOLDER | delete PATH
  *
  * --volume N picks the Nth HFS+ volume of a partitioned image (default 0). */
@@ -139,7 +139,11 @@ static bool runLine(Reader& r, const std::string& line)
     if(op == "mkdir" || op == "create")
     {
         auto parent = resolvePath(r, dir);
-        e = parent ? r.create(parent->cnid, fromUTF8(leaf), op == "mkdir", nullptr, nullptr) : Error::notFound;
+        uint8_t info[16] = {};
+        std::string type = arg(), creator = arg();      /* create's optional type and creator */
+        memcpy(info, type.data(), std::min<size_t>(4, type.size()));
+        memcpy(info + 4, creator.data(), std::min<size_t>(4, creator.size()));
+        e = parent ? r.create(parent->cnid, fromUTF8(leaf), op == "mkdir", info, nullptr) : Error::notFound;
     }
     else
     {
@@ -152,7 +156,7 @@ static bool runLine(Reader& r, const std::string& line)
             uint64_t off = std::stoull(arg()), len = std::stoull(arg());
             unsigned seed = (unsigned)std::stoul(arg());
             uint64_t size = (rsrc ? item->resourceFork : item->dataFork).logicalSize;
-            e = r.setForkSize(item->cnid, rsrc, std::max(size, off + len));
+            e = r.setForkSize(item->cnid, rsrc, std::max(size, off + len), 0, true);
             if(e == Error::none)
             {
                 auto f = r.openFork(*r.byID(item->cnid), rsrc);
@@ -204,6 +208,7 @@ static void tree(Reader& r, uint32_t dir, const std::string& path)
         else
         {
             auto d = r.openFork(e, false), rs = r.openFork(e, true);
+            printf(", \"data_blocks\": %u, \"rsrc_blocks\": %u", e.dataFork.totalBlocks, e.resourceFork.totalBlocks);
             printf(", \"data\": %llu, \"rsrc\": %llu, \"data_extents\": %zu, \"rsrc_extents\": %zu"
                    ", \"type\": %s, \"creator\": %s, \"link\": %s",
                    (unsigned long long)d->size(), (unsigned long long)rs->size(),
