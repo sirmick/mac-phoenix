@@ -429,6 +429,112 @@
 # ####
 
 - function:
+    name: DMEnableDisplay
+    comment: |
+      MacPhoenix, as the rest below: Apple's Monitors control panel calls these.
+    return: OSErr
+    args:
+      - name: enableDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x040B
+    executor: C_
+
+# ####
+
+- function:
+    name: DMSetMainDisplay
+    return: OSErr
+    args:
+      - name: newMainDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0410
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetNextMirroredDevice
+    return: OSErr
+    args:
+      - name: gDevice
+        type: GDHandle
+      - name: mirroredDevice
+        type: GDHandle*
+    dispatcher: DisplayDispatch
+    selector: 0x041B
+    executor: C_
+
+# ####
+
+- function:
+    name: DMMoveDisplay
+    return: OSErr
+    args:
+      - name: moveDevice
+        type: GDHandle
+      - name: x
+        type: INTEGER
+      - name: y
+        type: INTEGER
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0609
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetNameByAVID
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: nameFlags
+        type: uint32_t
+      - name: name
+        type: StringPtr
+    dispatcher: DisplayDispatch
+    selector: 0x062D
+    executor: C_
+
+# ####
+
+- function:
+    name: DMSaveScreenPrefs
+    return: OSErr
+    args:
+      - name: reserved1
+        type: uint32_t
+      - name: saveFlags
+        type: uint32_t
+      - name: reserved2
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0632
+    executor: C_
+
+# ####
+
+- function:
+    name: DMIsMirroringOn
+    return: OSErr
+    args:
+      - name: isMirroringOn
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0218
+    executor: C_
+
+# ####
+
+- function:
     name: DMKeepWindowOnScreen
     comment: |
       Private (selector -6). Name and meaning are a guess: on 7.5.5 it takes
@@ -458,6 +564,33 @@
         type: WindowPtr
     dispatcher: DisplayDispatch
     selector: 0xFFF6
+    executor: C_
+
+# ####
+
+- function:
+    name: DMGetModeBounds
+    comment: |
+      Private (selector -13). Name is a guess. Apple's Monitors control
+      panel calls it with a screen's GDHandle, a VDSwitchInfoRec, a depth
+      mode and two result buffers; the second gets the screen's bounds in
+      that mode, the Rect the panel draws the screen from in its arrangement
+      (0,0,480,640 on the ROM machine at 640x480). The first (4 bytes) is
+      not read by the panel; left alone.
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: switchInfo
+        type: Ptr
+      - name: depthMode
+        type: uint32_t
+      - name: result1
+        type: Ptr
+      - name: bounds
+        type: Rect*
+    dispatcher: DisplayDispatch
+    selector: 0x0AF3
     executor: C_
 
 # ####

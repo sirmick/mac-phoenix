@@ -44,10 +44,13 @@ void Executor::C_InitGraf(GUEST<GrafPtr> *gp)
     patinit(qdGlobals().ltGray, 0x88228822);
     patinit(qdGlobals().dkGray, 0x77dd77dd);
 
-        // list of all open ports.
-        // On MacOS, this might be kept in the system heap
-        // and initialized earlier.
-    LM(PortList) = NewHandleClear(2);
+    /* The list of all open ports, every process's (system heap). MacPhoenix:
+       made once, not at every InitGraf: a new list at each application's
+       start lost the ports opened before it, and a depth change left them
+       on the old framebuffer (Finder's desktop icons vanished). A process's
+       ports leave with it (ROMlib_forget_ports_in). */
+    if(!LM(PortList))
+        LM(PortList) = NewHandleClear(2);
 
     LM(WMgrPort) = (WindowPtr)NewPtr(sizeof(GrafPort));
     OpenPort(LM(WMgrPort));
@@ -148,6 +151,21 @@ void Executor::C_OpenPort(GrafPtr p)
  * That used to kill us, but checking LM(MemErr) gets around that problem.
  * I'm not sure how the Mac gets around it.
  */
+
+/* MacPhoenix: the ports in [lo, hi), a quitting process's partition. */
+void Executor::ROMlib_forget_ports_in(uint32_t lo, uint32_t hi)
+{
+    if(!LM(PortList))
+        return;
+    handle_vector<GrafPtr, Handle, 2, true> portList(LM(PortList));
+    portList.erase(std::remove_if(portList.begin(), portList.end(),
+                                  [lo, hi](GrafPtr p) {
+                                      uint32_t a = US_TO_SYN68K(p);
+                                      return a >= lo && a < hi;
+                                  }),
+                   portList.end());
+    *(GUEST<int16_t>*) *LM(PortList) = portList.size();
+}
 
 void Executor::C_ClosePort(GrafPtr p)
 {

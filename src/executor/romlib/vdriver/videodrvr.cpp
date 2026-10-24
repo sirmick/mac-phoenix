@@ -44,7 +44,10 @@ enum
     /* Status */
     cscGetMode = 2, cscGetEntries = 3, cscGetPages = 4, cscGetBaseAddr = 5, cscGetGray = 6,
     cscGetInterrupt = 7, cscGetGamma = 8, cscGetDefaultMode = 9, cscGetCurMode = 10,
+    cscGetConnection = 12, cscGetModeBaseAddress = 14, cscGetPreferredConfiguration = 16,
 };
+
+enum { kFixedModeCRTConnect = 3, kAllModesValid = 0, kAllModesSafe = 1 };
 
 enum { firstVidMode = 0x80 };
 
@@ -60,6 +63,16 @@ struct VDSwitchInfoRec { GUEST_STRUCT;
     GUEST<uint16_t> csMode; GUEST<uint32_t> csData; GUEST<uint16_t> csPage;
     GUEST<Ptr> csBaseAddr; GUEST<uint32_t> csReserved; };
 static_assert(sizeof(VDSwitchInfoRec) == 16);
+
+struct VDDisplayConnectInfoRec { GUEST_STRUCT;
+    GUEST<uint16_t> csDisplayType; GUEST<uint8_t> csConnectTaggedType, csConnectTaggedData;
+    GUEST<uint32_t> csConnectFlags, csDisplayComponent, csConnectReserved; };
+static_assert(sizeof(VDDisplayConnectInfoRec) == 16);
+
+struct VDBaseAddressInfoRec { GUEST_STRUCT;
+    GUEST<int32_t> csDevData; GUEST<Ptr> csDevBase; GUEST<int16_t> csModeReserved;
+    GUEST<int32_t> csModeBase; };
+static_assert(sizeof(VDBaseAddressInfoRec) == 14);
 
 struct GammaTblHeader { GUEST_STRUCT;
     GUEST<int16_t> gVersion, gType, gFormulaSize, gChanCnt, gDataCnt, gDataWidth; };
@@ -272,6 +285,10 @@ static OSErr C_ROMlib_videostatus(ParmBlkPtr pb, DCtlPtr dce)
         case cscGetDefaultMode:
             *(uint8_t *)param<uint8_t>(pb) = current_mode();
             return noErr;
+        /* the preferred configuration is the one it is in: Apple's
+           Monitors control panel leaves a screen out of its arrangement
+           when the driver has none */
+        case cscGetPreferredConfiguration:
         case cscGetCurMode:
         {
             VDSwitchInfoRec *s = param<VDSwitchInfoRec>(pb);
@@ -279,6 +296,25 @@ static OSErr C_ROMlib_videostatus(ParmBlkPtr pb, DCtlPtr dce)
             s->csData = 0x80;                       /* the one resolution (displays.cpp) */
             s->csPage = 0;
             s->csBaseAddr = screen_base();
+            return noErr;
+        }
+        case cscGetConnection:              /* a screen with one mode */
+        {
+            VDDisplayConnectInfoRec *c = param<VDDisplayConnectInfoRec>(pb);
+            c->csDisplayType = kFixedModeCRTConnect;
+            c->csConnectTaggedType = 0;
+            c->csConnectTaggedData = 0;
+            c->csConnectFlags = (1 << kAllModesValid) | (1 << kAllModesSafe);
+            c->csDisplayComponent = 0;
+            c->csConnectReserved = 0;
+            return noErr;
+        }
+        case cscGetModeBaseAddress:
+        {
+            VDBaseAddressInfoRec *b = param<VDBaseAddressInfoRec>(pb);
+            if(b->csDevData != 0x80)
+                return statusErr;
+            b->csDevBase = screen_base();
             return noErr;
         }
         default:

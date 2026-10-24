@@ -452,6 +452,7 @@ void Executor::InitPerProcessLowMem()
     LM(TEDoText) = (ProcPtr)&ROMlib_dotext; /* where should this go ? */
 
     LM(WWExist) = LM(QDExist) = EXIST_NO;
+    LM(PortList) = nullptr; /* made by the first InitGraf (qGrafport.cpp) */
     LM(SCSIFlags) = 0xEC00; /* scsi+clock+xparam+mmu+adb
 				 (no fpu,aux or pwrmgr) */
 

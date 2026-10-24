@@ -433,9 +433,11 @@ static void gd_update_all_ports(GDHandle gdh, GUEST<Ptr> oldBaseAddr, Rect oldGD
 {
     PixMapHandle gd_pixmap = GD_PMAP(gdh);
 
-    /* FIXME: assuming (1) all windows are on the current
-     graphics device, and (2) the rowbytes and baseaddr
-     of the gdevice cannot change */
+    /* FIXME: assuming all windows are on the current graphics device.
+       MacPhoenix: the base address can change (vdriver allocates a new
+       framebuffer for a new depth), so the screen's ports move to it:
+       left on the old one, the first redraw at 16 bits wrote past its end
+       over the next process's stack (Apple's Monitors control panel). */
     /* set the pixel size, rowbytes, etc
      of windows and the window manager color graphics port */
 
@@ -474,6 +476,7 @@ static void gd_update_all_ports(GDHandle gdh, GUEST<Ptr> oldBaseAddr, Rect oldGD
                 if(PIXMAP_BASEADDR(port_pixmap) != oldBaseAddr)
                     continue;
 
+                PIXMAP_BASEADDR(port_pixmap) = PIXMAP_BASEADDR(gd_pixmap);
                 pixmap_set_pixel_fields(*port_pixmap, PIXMAP_PIXEL_SIZE(gd_pixmap));
                 PIXMAP_SET_ROWBYTES(port_pixmap, PIXMAP_ROWBYTES(gd_pixmap));
                 
@@ -489,6 +492,7 @@ static void gd_update_all_ports(GDHandle gdh, GUEST<Ptr> oldBaseAddr, Rect oldGD
             {
                 if(PORT_BITS(gp).baseAddr != oldBaseAddr)
                     continue;
+                PORT_BITS(gp).baseAddr = PIXMAP_BASEADDR(gd_pixmap);
                 BITMAP_SET_ROWBYTES(&PORT_BITS(gp),
                                       PIXMAP_ROWBYTES(gd_pixmap));
             }

@@ -21,7 +21,7 @@ Same result on 7.5.5 and 7.6.1 unless marked.
 | # | Item | Log | Notes |
 |---|------|-----|-------|
 | 1 | ~~**Keyboard** control panel~~ | `Unknown selector 0x30 for trap Pack6` | **Fixed**: `0x30` is a private TextOrder (`IUTextOrderPrivate`, `romlib/iu.cpp`) |
-| 2 | **Monitors** control panel; **Change Monitor to 256** applet (More Automated Tasks) | `Unknown selector 0xf3 for trap DisplayDispatch` | Display Manager; API in `multiversal/defs/Displays.yaml`. Find which call `0xf3` is (Display Manager selectors are documented in Display Manager 2.0 docs/`Displays.h`) |
+| 2 | ~~**Monitors** control panel; **Change Monitor to 256** applet (More Automated Tasks)~~ | `Unknown selector 0xf3 for trap DisplayDispatch` | **Fixed**: see below |
 | 3 | **Apple System Profiler** (7.6.1, Apple Menu Items) | `Unknown selector 0x12 for trap FSDispatch` | Crashes right after launch |
 | 4 | **TCP/IP** control panel (policy-disabled; opened by hand) | `[ot] Open Transport: OTOpenConfigurationsDB (OTLib$CfigLib) is not implemented` | Should at least fail without killing Executor; see `docs/executor/OpenTransport.md` |
 | 5 | **Password Security** control panel, intermittent | `host signal 11 at guest pc $c0cc9bf4`, last A-trap `$A949` | Seen once, opened right after **Numbers** had been opened and closed. Opened alone it correctly says "cannot be used with this Macintosh". The PC is in the host stub area (`7101` words). Try Numbers then Password Security repeatedly |
@@ -79,6 +79,21 @@ turns off what they need. Each is a policy decision before it is a fix:
   `0x0750` like `smVersion`. Then its popups drew empty: the popup CDEF put
   the `'MENU'` resource in the menu list but gave the control a copy, which
   the panel filled. The copy is what goes in the list now.
+
+- **2 Monitors**: DisplayDispatch -13 (`DMGetModeBounds`, name a guess:
+  the screen's bounds in a mode, which the panel draws its arrangement
+  from) and the public calls the panel makes (DMEnableDisplay,
+  DMSetMainDisplay, DMGetNextMirroredDevice, DMMoveDisplay, DMGetNameByAVID,
+  DMSaveScreenPrefs, DMIsMirroringOn), for one screen. The video driver
+  answers Status 12, 14 and 16 (connection, mode base address, preferred
+  configuration). Choosing a depth then crashed in three ways, all fixed:
+  GetCPixel had no 16/32-bit case; the screen's ports kept the old
+  framebuffer's address after SetDepth allocated a new one, so the first
+  redraw at Thousands wrote past its end over the next process's stack;
+  and every InitGraf made a new, empty PortList, so the ports opened before
+  the last application started (Finder's desktop window) were never moved
+  (desktop icons vanished). The PortList is now made once; a quitting
+  process's ports leave it.
 
 ## Works (no action)
 

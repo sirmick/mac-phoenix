@@ -1445,6 +1445,7 @@ static void exit_current()
     ROMlib_hle_forget(&me->serial_number);
     ROMlib_components_process_exit(&me->serial_number, part_lo, part_hi);
     ROMlib_ot_process_exit(part_lo, part_hi);
+    ROMlib_forget_ports_in(part_lo, part_hi);
     me->state = process_info_t::dead;
     reap_list.push_back(me);
 

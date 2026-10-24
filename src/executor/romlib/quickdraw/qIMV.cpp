@@ -91,7 +91,23 @@ void Executor::C_GetCPixel(INTEGER h, INTEGER v, RGBColor *pixelp)
 
     if(bpp > 8)
     {
-        gui_fatal("> 8bpp unimplemented");
+        /* MacPhoenix: direct pixels carry their colour: 16 bits are
+           x:1 r:5 g:5 b:5, 32 bits x:8 r:8 g:8 b:8 (big-endian, as copied).
+           Apple's Monitors control panel reads pixels back at Thousands. */
+        if(bpp == 16)
+        {
+            unsigned pix = temp_fbuf[0] << 8 | temp_fbuf[1];
+            auto widen = [](unsigned c5) { return (uint16_t)(c5 << 11 | c5 << 6 | c5 << 1 | c5 >> 4); };
+            pixelp->red = widen(pix >> 10 & 0x1F);
+            pixelp->green = widen(pix >> 5 & 0x1F);
+            pixelp->blue = widen(pix & 0x1F);
+        }
+        else
+        {
+            pixelp->red = temp_fbuf[1] * 0x101;
+            pixelp->green = temp_fbuf[2] * 0x101;
+            pixelp->blue = temp_fbuf[3] * 0x101;
+        }
     }
     else
     {

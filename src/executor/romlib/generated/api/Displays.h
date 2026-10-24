@@ -5,7 +5,8 @@
  *                                                                           *
  * Needs:                                                                    *
  *     AppleEvents.h    AppleEvent                                           *
- *     MacTypes.h       OSErr, Boolean, Ptr, OSType, Handle, Rect            *
+ *     MacTypes.h       OSErr, Boolean, Ptr, OSType, Handle, Rect,           *
+ *                      INTEGER, StringPtr                                   *
  *     ProcessMgr.h     ProcessSerialNumber                                  *
  *     CQuickDraw.h     GDHandle                                             *
  *     Components.h     Component, ComponentInstance                         *
@@ -123,6 +124,28 @@ void C_DMDrawDesktopRegion(RgnHandle globalRgn);PASCAL_SUBTRAP(DMDrawDesktopRegi
 OSErr C_DMGetDeskRegion(GUEST<GUEST<RgnHandle>> *desktopRegion);PASCAL_SUBTRAP(DMGetDeskRegion, 0xABEB, 0x0213, DisplayDispatch);
 
 
+// MacPhoenix, as the rest below: Apple's Monitors control panel calls these.
+OSErr C_DMEnableDisplay(GDHandle enableDevice, Handle displayState);PASCAL_SUBTRAP(DMEnableDisplay, 0xABEB, 0x040B, DisplayDispatch);
+
+
+OSErr C_DMSetMainDisplay(GDHandle newMainDevice, Handle displayState);PASCAL_SUBTRAP(DMSetMainDisplay, 0xABEB, 0x0410, DisplayDispatch);
+
+
+OSErr C_DMGetNextMirroredDevice(GDHandle gDevice, GUEST<GDHandle> *mirroredDevice);PASCAL_SUBTRAP(DMGetNextMirroredDevice, 0xABEB, 0x041B, DisplayDispatch);
+
+
+OSErr C_DMMoveDisplay(GDHandle moveDevice, INTEGER x, INTEGER y, Handle displayState);PASCAL_SUBTRAP(DMMoveDisplay, 0xABEB, 0x0609, DisplayDispatch);
+
+
+OSErr C_DMGetNameByAVID(uint32_t theID, uint32_t nameFlags, StringPtr name);PASCAL_SUBTRAP(DMGetNameByAVID, 0xABEB, 0x062D, DisplayDispatch);
+
+
+OSErr C_DMSaveScreenPrefs(uint32_t reserved1, uint32_t saveFlags, uint32_t reserved2);PASCAL_SUBTRAP(DMSaveScreenPrefs, 0xABEB, 0x0632, DisplayDispatch);
+
+
+OSErr C_DMIsMirroringOn(Boolean *isMirroringOn);PASCAL_SUBTRAP(DMIsMirroringOn, 0xABEB, 0x0218, DisplayDispatch);
+
+
 // Private (selector -6). Name and meaning are a guess: on 7.5.5 it takes
 // a window and a region and fits the window against the screen devices.
 // Finder calls it for each of its windows (CODE 12 +60), ignoring the
@@ -133,6 +156,15 @@ OSErr C_DMKeepWindowOnScreen(WindowPtr window, RgnHandle rgn);PASCAL_SUBTRAP(DMK
 // Private (selector -10). Name is a guess. On 7.5.5 it always returns
 // false, and Finder (CODE 152 +6f4) then does its own placement.
 Boolean C_DMPlacesWindow(WindowPtr window);PASCAL_SUBTRAP(DMPlacesWindow, 0xABEB, 0xFFF6, DisplayDispatch);
+
+
+// Private (selector -13). Name is a guess. Apple's Monitors control
+// panel calls it with a screen's GDHandle, a VDSwitchInfoRec, a depth
+// mode and two result buffers; the second gets the screen's bounds in
+// that mode, the Rect the panel draws the screen from in its arrangement
+// (0,0,480,640 on the ROM machine at 640x480). The first (4 bytes) is
+// not read by the panel; left alone.
+OSErr C_DMGetModeBounds(GDHandle theDevice, Ptr switchInfo, uint32_t depthMode, Ptr result1, Rect *bounds);PASCAL_SUBTRAP(DMGetModeBounds, 0xABEB, 0x0AF3, DisplayDispatch);
 
 
 // Private (selector -9). Name is a guess. Finder calls it after editing

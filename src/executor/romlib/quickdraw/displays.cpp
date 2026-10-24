@@ -261,6 +261,53 @@ OSErr Executor::C_DMEndConfigureDisplays(Handle displayState)
     return noErr;
 }
 
+/* One screen: always enabled and main, at (0, 0), mirroring nothing.
+   Moving it would move the desktop's origin, which nothing does here. */
+OSErr Executor::C_DMEnableDisplay(GDHandle enableDevice, Handle displayState)
+{
+    return enableDevice == LM(MainDevice) ? noErr : paramErr;
+}
+
+OSErr Executor::C_DMSetMainDisplay(GDHandle newMainDevice, Handle displayState)
+{
+    return newMainDevice == LM(MainDevice) ? noErr : paramErr;
+}
+
+OSErr Executor::C_DMGetNextMirroredDevice(GDHandle gDevice, GUEST<GDHandle> *mirroredDevice)
+{
+    *mirroredDevice = nullptr;
+    return noErr;
+}
+
+OSErr Executor::C_DMMoveDisplay(GDHandle moveDevice, INTEGER x, INTEGER y, Handle displayState)
+{
+    return moveDevice == LM(MainDevice) ? noErr : paramErr;
+}
+
+OSErr Executor::C_DMIsMirroringOn(Boolean *isMirroringOn)
+{
+    *isMirroringOn = false;
+    return noErr;
+}
+
+/* The screen's name for display ID 1; with kDMForceNumbersMask (2) numbered
+   as when there are several. */
+OSErr Executor::C_DMGetNameByAVID(uint32_t theID, uint32_t nameFlags, StringPtr name)
+{
+    if(theID != mainDisplayID)
+        return kDMNotFoundErr;
+    const char *s = (nameFlags & 2) ? "Display 1" : "Display";
+    name[0] = strlen(s);
+    memcpy(name + 1, s, name[0]);
+    return noErr;
+}
+
+/* The screen's settings are never changed, so there is nothing to save. */
+OSErr Executor::C_DMSaveScreenPrefs(uint32_t reserved1, uint32_t saveFlags, uint32_t reserved2)
+{
+    return noErr;
+}
+
 OSErr Executor::C_DMNewAVIDByPortComponent(Component thePortComponent, OSType portKind,
                                             uint32_t reserved, GUEST<uint32_t> *newID)
 {
@@ -349,4 +396,14 @@ Boolean Executor::C_DMPlacesWindow(WindowPtr window)
 
 void Executor::C_DMDesktopIconRgnChanged()
 {
+}
+
+/* One resolution: a screen's bounds are the same in every mode. */
+OSErr Executor::C_DMGetModeBounds(GDHandle theDevice, Ptr switchInfo, uint32_t depthMode,
+                                  Ptr result1, Rect *bounds)
+{
+    if(theDevice != LM(MainDevice))
+        return kDMNotFoundErr;
+    *bounds = GD_RECT(theDevice);
+    return noErr;
 }

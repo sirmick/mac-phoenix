@@ -478,6 +478,8 @@ inline bool CICON_P(Handle _icon)
 
 
 extern void cursor_reset_current_cursor(void);
+/* MacPhoenix: drop the ports in [lo, hi) from the port list */
+extern void ROMlib_forget_ports_in(uint32_t lo, uint32_t hi);
 
 #define IMV_XFER_MODE_P(mode) ((mode) >= blend && (mode) <= adMin)
 #define active_screen_addr_p(bitmap) \
