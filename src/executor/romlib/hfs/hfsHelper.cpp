@@ -13,6 +13,7 @@
 #include <ResourceMgr.h>
 
 #include <hfs/hfs.h>
+#include <file/hfsplusvolume.h>
 #include <file/file.h>
 #include <hfs/partition.h>
 #include <algorithm>
@@ -389,6 +390,23 @@ Executor::ROMlib_addtodq(ULONGINT drvsize, const char *devicename, INTEGER parti
     return dqp;
 }
 
+/* MacPhoenix: the volume at offset: HFS+ (bare, or in an HFS wrapper) goes
+   to HFSPlusVolume (docs/executor/HFSPlus.md), the rest to the HFS mount.
+   The offset is 64-bit: an HFS+ partition can start past 2 GB. */
+static OSErr mount_volume(ParmBlkPtr pb, LONGINT fd, uint64_t offset, LONGINT bsize,
+                          LONGINT maxbytes, drive_flags_t flags, DrvQExtra *dqp)
+{
+    if(isHFSPlusVolume(fd, offset))
+    {
+        OSErr err = hfsPlusMountVol(pb, fd, offset, flags, dqp);
+        if(err != noMacDskErr)
+            return err;
+        /* an HFS+ volume the reader can't open: a wrapped one still mounts
+           as its HFS wrapper, as on a Mac before 8.1 */
+    }
+    return hfsPBMountVol(pb, fd, (LONGINT)offset, bsize, maxbytes, flags, dqp);
+}
+
 void
 Executor::try_to_mount_disk(const char *dname, LONGINT floppyfd, GUEST<LONGINT> *messp,
                             LONGINT bsize, LONGINT maxbytes, drive_flags_t flags,
@@ -462,10 +480,11 @@ Executor::try_to_mount_disk(const char *dname, LONGINT floppyfd, GUEST<LONGINT> 
                         drivenum = dqp->dq.dQDrive;
                         pb.ioParam.ioVRefNum = drivenum;
                     }
-                    dqp->hfs.offset = hfs.offset + (partp->pmPyPartStart
-                                                    * driver_block_size);
-                    err = hfsPBMountVol(&pb, floppyfd, dqp->hfs.offset, bsize,
-                                        maxbytes, flags, dqp);
+                    uint64_t start = (uint64_t)hfs.offset + (uint64_t)partp->pmPyPartStart
+                                                              * driver_block_size;
+                    dqp->hfs.offset = (LONGINT)start;
+                    err = mount_volume(&pb, floppyfd, start, bsize,
+                                       maxbytes, flags, dqp);
                     mess = ((LONGINT)err << 16) | drivenum;
                     if(first)
                     {
@@ -500,8 +519,8 @@ Executor::try_to_mount_disk(const char *dname, LONGINT floppyfd, GUEST<LONGINT> 
                 }
                 dqp->hfs.offset = hfs.offset + (oldmapp->oldmapentry[i].pdStart
                                                 * driver_block_size);
-                err = hfsPBMountVol(&pb, floppyfd, dqp->hfs.offset,
-                                    bsize, maxbytes, flags, dqp);
+                err = mount_volume(&pb, floppyfd, (uint32_t)dqp->hfs.offset,
+                                   bsize, maxbytes, flags, dqp);
                 mess = ((LONGINT)err << 16) | drivenum;
                 if(first)
                 {
@@ -545,10 +564,13 @@ Executor::try_to_mount_disk(const char *dname, LONGINT floppyfd, GUEST<LONGINT> 
                 foundmap = true;
                 /*-->*/ break;
             }
-            else if(buf[0] == 'H' && buf[1] == '+')
+            else if(buf[0] == 'H' && (buf[1] == '+' || buf[1] == 'X'))
             {
                 warning_fs_log("Found HFS+ volume on 0x%x %d", floppyfd,
                                offset);
+                offset -= VOLUMEINFOBLOCKNO * PHYSBSIZE;
+                foundmap = true;
+                /*-->*/ break;
             }
             else
             {
@@ -559,8 +581,8 @@ Executor::try_to_mount_disk(const char *dname, LONGINT floppyfd, GUEST<LONGINT> 
         if(foundmap)
         {
             dqp->hfs.offset = offset;
-            err = hfsPBMountVol(&pb, floppyfd, offset, bsize, maxbytes,
-                                flags, dqp);
+            err = mount_volume(&pb, floppyfd, (uint32_t)offset, bsize, maxbytes,
+                               flags, dqp);
             *messp = ((LONGINT)err << 16) | drivenum;
         }
     }

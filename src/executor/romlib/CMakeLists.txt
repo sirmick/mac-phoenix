@@ -190,6 +190,9 @@ set(file_sources
     file/localvolume/localvolume.h 
     file/localvolume/localvolume.cpp 
 
+    file/hfsplusvolume.h
+    file/hfsplusvolume.cpp
+
     file/localvolume/openfile.h
 
     file/localvolume/item.h 

@@ -49,7 +49,7 @@ set(NATIVE_TEST_SOURCES
         localvolume_macbinary.cpp
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp
         sysroutines.cpp resprivate.cpp
-        hfsplus_unicode.cpp
+        hfsplus_unicode.cpp hfsplus_volume.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
         # The dual-mode ABI comparison against Apple's headers belongs in
         # TEST_SOURCES later, once the Retro68 side has MacTCP.h.
@@ -106,6 +106,17 @@ else()
         main_executor.cpp)
 
     target_link_libraries(executor_tests gtest romlib executor_platform_glue)
+
+    # hfsplus_volume.cpp mounts the long-name fixture (made on Mac OS 9.0.4)
+    set(HFSPLUS_FIXTURE ${CMAKE_CURRENT_BINARY_DIR}/fixtures/longnames.img)
+    add_custom_command(OUTPUT ${HFSPLUS_FIXTURE}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/fixtures
+        COMMAND ${CMAKE_COMMAND} -DIN=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/longnames.img.gz
+                -DOUT=${HFSPLUS_FIXTURE} -P ${CMAKE_CURRENT_SOURCE_DIR}/gunzip.cmake
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/longnames.img.gz)
+    add_custom_target(executor_hfsplus_fixtures DEPENDS ${HFSPLUS_FIXTURE})
+    add_dependencies(executor_tests executor_hfsplus_fixtures)
+    target_compile_definitions(executor_tests PRIVATE EXECUTOR_HFSPLUS_FIXTURE="${HFSPLUS_FIXTURE}")
     if(EMSCRIPTEN)
         # Under node: the host's files, as natively.
         target_link_options(executor_tests PRIVATE -sNODERAWFS=1)
@@ -136,5 +147,21 @@ else()
                     --dump $<TARGET_FILE:hfsplus_dump>)
         set_tests_properties(executor.hfsplus_reader PROPERTIES
             LABELS executor TIMEOUT 300 SKIP_RETURN_CODE 77)
+        # The File Manager on HFS+ volumes: VolDump's dumps on Executor
+        # against Mac OS 9.0.4's; 77 without tests-7.5.5.
+        if(TARGET mac-phoenix)
+            add_test(NAME executor.hfsplus_volume
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_hfsplus_volume.py
+                        --dump $<TARGET_FILE:hfsplus_dump>)
+            set_tests_properties(executor.hfsplus_volume PROPERTIES
+                LABELS "executor;guest" TIMEOUT 300 SKIP_RETURN_CODE 77
+                ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
+            # Executor's System from an HFS+ image (hfs_sideload.cpp)
+            add_test(NAME executor.hfsplus_sideload
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_hfsplus_sideload.py
+                        --emulator $<TARGET_FILE:mac-phoenix> --dump $<TARGET_FILE:hfsplus_dump>)
+            set_tests_properties(executor.hfsplus_sideload PROPERTIES
+                LABELS executor TIMEOUT 120)
+        endif()
     endif()
 endif()

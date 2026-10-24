@@ -2,9 +2,13 @@
  * hfs_sideload.cpp - see hfs_sideload.h. The HFS reader follows Inside
  * Macintosh: Files, chapter 2 ("Data Organization on Volumes"): the master
  * directory block, the catalog and extents overflow B-trees, allocation
- * blocks.
+ * blocks. HFS+ volumes go through Executor's HFS+ reader (hfs/plus,
+ * docs/executor/HFSPlus.md).
  */
 #include "hfs_sideload.h"
+
+#include <hfs/plus/reader.h>
+#include <hfs/plus/unicode.h>
 
 #include <util/macstrings.h>
 #include <file/localvolume/item.h>
@@ -41,7 +45,19 @@ struct Entry
     Extent dataExt[3] = {}, rsrcExt[3] = {};
 };
 
-class HfsVolume
+/* A volume the System Folder is copied from: HFS or HFS+. */
+class Source
+{
+public:
+    virtual ~Source() = default;
+    virtual uint32_t blessed() const = 0;
+    /* The entries in a folder. */
+    virtual const std::vector<Entry>& children(uint32_t dirID) = 0;
+    virtual std::vector<uint8_t> dataFork(const Entry& e) = 0;
+    virtual std::vector<uint8_t> rsrcFork(const Entry& e) = 0;
+};
+
+class HfsVolume : public Source
 {
 public:
     explicit HfsVolume(const std::string& path) : f_(fopen(path.c_str(), "rb")) {}
@@ -72,13 +88,12 @@ public:
         return true;
     }
 
-    uint32_t blessed() const { return blessed_; }
+    uint32_t blessed() const override { return blessed_; }
 
-    // The entries in a folder.
-    const std::vector<Entry>& children(uint32_t dirID) { return tree_[dirID]; }
+    const std::vector<Entry>& children(uint32_t dirID) override { return tree_[dirID]; }
 
-    std::vector<uint8_t> dataFork(const Entry& e) { return fork(e.dataExt, e.dataLen, e.id, 0x00); }
-    std::vector<uint8_t> rsrcFork(const Entry& e) { return fork(e.rsrcExt, e.rsrcLen, e.id, 0xFF); }
+    std::vector<uint8_t> dataFork(const Entry& e) override { return fork(e.dataExt, e.dataLen, e.id, 0x00); }
+    std::vector<uint8_t> rsrcFork(const Entry& e) override { return fork(e.rsrcExt, e.rsrcLen, e.id, 0xFF); }
 
 private:
     static bool fail(std::string *error, const char *why)
@@ -103,8 +118,8 @@ private:
                 continue;
             if(be16(mdb_) != 0x4244)  // 'BD'
                 continue;
-            if(be16(mdb_ + 124) == 0x482B)  // 'H+' embedded: HFS+
-                return fail(error, "an HFS+ volume (only HFS so far)");
+            if(be16(mdb_ + 124) == 0x482B)  // 'H+' embedded: HfsPlusVolume's
+                continue;
             volume_ = base;
             return true;
         }
@@ -260,6 +275,77 @@ private:
     std::map<uint32_t, std::vector<Entry>> tree_;
 };
 
+/* An HFS+ volume (bare, wrapped, or a partition): the names as the
+   classic File Manager gives them (a System Folder's are all short), the
+   dates in local time. */
+class HfsPlusVolume : public Source
+{
+public:
+    explicit HfsPlusVolume(std::unique_ptr<hfsplus::Reader> r) : r_(std::move(r)) {}
+
+    uint32_t blessed() const override { return r_->header().finderInfo[0]; }
+
+    const std::vector<Entry>& children(uint32_t dirID) override
+    {
+        auto it = tree_.find(dirID);
+        if(it != tree_.end())
+            return it->second;
+        std::vector<Entry>& out = tree_[dirID];
+        for(const hfsplus::CatalogEntry& raw : r_->children(dirID))
+        {
+            hfsplus::CatalogEntry c = r_->resolveLink(raw);
+            Entry e;
+            e.name = hfsplus::classicName(raw.name, raw.cnid);
+            e.folder = c.folder;
+            e.id = raw.cnid;
+            memcpy(e.finfo, c.userInfo, 16);
+            memcpy(e.fxinfo, c.finderInfo, 16);
+            e.dataLen = (uint32_t)std::min<uint64_t>(c.dataFork.logicalSize, 0x7FFFFFFF);
+            e.rsrcLen = (uint32_t)std::min<uint64_t>(c.resourceFork.logicalSize, 0x7FFFFFFF);
+            /* GMT -> the local Mac time the HFS side has */
+            e.modDate = c.contentModDate ? (uint32_t)hostToMacTime(int64_t(c.contentModDate) - 2082844800) : 0;
+            entries_[e.id] = c;
+            out.push_back(std::move(e));
+        }
+        return out;
+    }
+
+    std::vector<uint8_t> dataFork(const Entry& e) override { return fork(e, false); }
+    std::vector<uint8_t> rsrcFork(const Entry& e) override { return fork(e, true); }
+
+private:
+    std::vector<uint8_t> fork(const Entry& e, bool rsrc)
+    {
+        auto it = entries_.find(e.id);
+        if(it == entries_.end())
+            return {};
+        auto f = r_->openFork(it->second, rsrc);
+        std::vector<uint8_t> out((size_t)std::min<uint64_t>(f->size(), 0x7FFFFFFF));
+        out.resize(f->read(0, out.data(), out.size()));
+        return out;
+    }
+
+    std::unique_ptr<hfsplus::Reader> r_;
+    std::map<uint32_t, std::vector<Entry>> tree_;
+    std::map<uint32_t, hfsplus::CatalogEntry> entries_;
+};
+
+/* The image's volume with a System Folder: an HFS+ one (as Mac OS 8.1+
+   boots from), else HFS. */
+std::unique_ptr<Source> openSource(const std::string& image, std::string *error)
+{
+    if(auto file = hfsplus::FdImageReader::open(image))
+        for(uint64_t start : hfsplus::volumeStarts(*file))
+            if(hfsplus::isHFSPlus(*file, start))
+                if(auto r = hfsplus::Reader::open(file, start))
+                    if(r->header().finderInfo[0])
+                        return std::make_unique<HfsPlusVolume>(std::move(r));
+    auto hfs = std::make_unique<HfsVolume>(image);
+    if(!hfs->open(error))
+        return nullptr;
+    return hfs;
+}
+
 // AppleDouble version 2 with the Finder info (9) and resource fork (2), as
 // Executor's local volume reads "%NAME".
 std::vector<uint8_t> appledouble(const Entry& e, const std::vector<uint8_t>& rsrc)
@@ -314,7 +400,7 @@ void write(const fs::path& p, const std::vector<uint8_t>& bytes, std::time_t mod
 }
 
 // One file into folder: its data fork and "%NAME".
-void copyFile(HfsVolume& v, const Entry& e, const fs::path& folder)
+void copyFile(Source& v, const Entry& e, const fs::path& folder)
 {
     fs::path leaf = hostName(e.name);
     std::time_t mod = (std::time_t)macToHostTime(e.modDate);
@@ -322,7 +408,7 @@ void copyFile(HfsVolume& v, const Entry& e, const fs::path& folder)
     write(folder / ("%" + leaf.string()), appledouble(e, v.rsrcFork(e)), mod);
 }
 
-void copyTree(HfsVolume& v, uint32_t dirID, const fs::path& folder)
+void copyTree(Source& v, uint32_t dirID, const fs::path& folder)
 {
     fs::create_directories(folder);
     for(const Entry& e : v.children(dirID))
@@ -339,9 +425,10 @@ namespace executor_host {
 bool sideload_system(const std::string& image, const std::string& data_dir,
                      bool *has_finder, std::string *error)
 {
-    HfsVolume v(image);
-    if(!v.open(error))
+    std::unique_ptr<Source> source = openSource(image, error);
+    if(!source)
         return false;
+    Source& v = *source;
     if(!v.blessed())
     {
         if(error)

@@ -195,6 +195,35 @@ static void make_fragmented(const FSRef *parent)
     fprintf(out, "FRAGMENTED 2 files x 24 x 65536 bytes\n");
 }
 
+/* A System Folder, blessed (the volume header's finderInfo[0]), with stand-in
+   System and Finder files (both forks) and a Preferences folder: what
+   Executor's System sideload copies from an HFS+ image. */
+static void make_system_folder(const FSRef *parent)
+{
+    FSRef folder, prefs, item;
+    FSCatalogInfo ci;
+    HParamBlockRec pb;
+    OSErr err;
+
+    if(make_folder(parent, "System Folder", &folder) != noErr)
+        return;
+    make_file(&folder, "System", 'zsys', 'MACS', true, &item);
+    make_file(&folder, "Finder", 'FNDR', 'MACS', true, &item);
+    if(make_folder(&folder, "Preferences", &prefs) == noErr)
+        make_file(&prefs, "A preferences file with a long name.prefs", 'pref', 'MACS', true, &item);
+    if(FSGetCatalogInfo(&folder, kFSCatInfoNodeID, &ci, NULL, NULL, NULL) != noErr)
+        return;
+    memset(&pb, 0, sizeof pb);
+    pb.volumeParam.ioVRefNum = vref;
+    err = PBHGetVInfoSync(&pb);
+    if(err == noErr)
+    {
+        pb.volumeParam.ioVFndrInfo[0] = (long)ci.nodeID;
+        err = PBSetVInfoSync(&pb);
+    }
+    fprintf(out, "BLESS %ld err %d\n", (long)ci.nodeID, (int)err);
+}
+
 /* The classic File Manager given an item's short FSSpec name: can it open
    it? (Mac OS 9 resolves the "#<CNID>" form.) */
 static void check_classic_open(const FSRef *ref)
@@ -290,6 +319,7 @@ int main(void)
     check_classic_open(&item);
     make_file(&root, "Case Test FILE.txt", 'TEXT', 'ttxt', false, &item);
     make_file(&root, "case test file.txt", 'TEXT', 'ttxt', false, &item);     /* dupFNErr: case-insensitive */
+    make_system_folder(&root);
     FlushVol(NULL, vref);
 
 done:
