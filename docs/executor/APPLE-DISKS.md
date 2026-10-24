@@ -1,0 +1,135 @@
+# Apple's own items on Executor: fix list
+
+Triage of 2026-10-24: every application, control panel, desk accessory and
+AppleScript applet on the stock `7.5.5.img` and `7.6.1.img` was opened and
+closed under `--backend executor --executor-system <image>`, with a SimpleText
+launch and quit between each. SimpleText never failed, so nothing below leaves
+the system unusable unless it crashes Executor.
+
+This file lists what **should work** (a Quadra 650 with the same disk runs
+it) and doesn't. Out of scope: items that need hardware the machine doesn't
+have (Energy Saver, Token Ring, Brightness, Trackpad, PowerBook panels, Serial
+Switch, Apple Video Player, AppleCD Audio Player, Battery Recondition, ...) and
+PowerPC-only Graphing Calculator. When in doubt about an item, compare with
+the ROM machine on the same disk (`--backend uae`, `~/roms/quadra.rom`, a boot
+*copy* of the image).
+
+Same result on 7.5.5 and 7.6.1 unless marked.
+
+## 1. Crashes (fatal: Executor stops)
+
+| # | Item | Log | Notes |
+|---|------|-----|-------|
+| 1 | ~~**Keyboard** control panel~~ | `Unknown selector 0x30 for trap Pack6` | **Fixed**: `0x30` is a private TextOrder (`IUTextOrderPrivate`, `romlib/iu.cpp`) |
+| 2 | **Monitors** control panel; **Change Monitor to 256** applet (More Automated Tasks) | `Unknown selector 0xf3 for trap DisplayDispatch` | Display Manager; API in `multiversal/defs/Displays.yaml`. Find which call `0xf3` is (Display Manager selectors are documented in Display Manager 2.0 docs/`Displays.h`) |
+| 3 | **Apple System Profiler** (7.6.1, Apple Menu Items) | `Unknown selector 0x12 for trap FSDispatch` | Crashes right after launch |
+| 4 | **TCP/IP** control panel (policy-disabled; opened by hand) | `[ot] Open Transport: OTOpenConfigurationsDB (OTLib$CfigLib) is not implemented` | Should at least fail without killing Executor; see `docs/executor/OpenTransport.md` |
+| 5 | **Password Security** control panel, intermittent | `host signal 11 at guest pc $c0cc9bf4`, last A-trap `$A949` | Seen once, opened right after **Numbers** had been opened and closed. Opened alone it correctly says "cannot be used with this Macintosh". The PC is in the host stub area (`7101` words). Try Numbers then Password Security repeatedly |
+
+The unknown-selector path is `romlib/base/traps.impl.h` (~line 212): it is
+fatal by design. Each missing selector needs implementing, or at least an
+error return that the caller handles.
+
+## 2. Opens but wrong
+
+| # | Item | What happens | Expected |
+|---|------|--------------|----------|
+| 6 | **Sound** control panel | Window opens with empty content: no alert-sound list, no volume | Alert sounds list (from the System's `'snd '`), volume slider |
+| 7 | ~~**Text** control panel~~ | "The control panel "Text" cannot be used now, because not enough memory is available." | **Fixed**: ScriptUtil no longer hidden from `GetTrapAddress`; popups from a `'MENU'` resource draw the menu the cdev fills |
+| 8 | **Launcher** control panel | Window opens empty (blue) | Buttons for `Launcher Items` (Script Editor, SimpleText) |
+| 9 | **Labels** control panel | Colour swatches all black (last one brown) | The seven label colours |
+| 10 | **Speech** control panel (7.6.1) | Partly drawn; voice popup empty | Voice name, rate slider |
+| 11 | **SimpleSound** | "Sorry, this program requires Sound Manager 3.0 or later." | Runs. Check `SndSoundManagerVersion` (`romlib/sound/soundIMVI.cpp`) and `gestaltSoundAttr` (`romlib/gestalt.cpp`) |
+| 12 | **AppleTalk** control panel (an application) | Says it needs AppleTalk from Open Transport; then **won't quit**: after `/api/quit` the process and its window stay | At minimum quits cleanly |
+| 13 | **Finder**, first open of a folder window | Icons drawn twice, overlapping (old and new positions), until the window is closed and reopened | Clean layout |
+
+## 3. Interaction
+
+| # | Problem | Repro |
+|---|---------|-------|
+| 14 | Clicking a background process's modal dialog doesn't bring that process forward | Have the Finder put up an alert (open File Sharing Monitor), then bring another app forward (`/api/launch` anything, or BridgeAgent comes to the front after a bridge command). Clicking the Finder's alert does nothing. The Finder then stays blocked: applets get "AppleEvent timed out" |
+| 15 | Escape doesn't cancel the "Choose a folder" Standard File dialog | Run **Synchronize Folders** or **Alert When Folder Changes**, press Escape |
+| 16 | `/api/launch` of a desk accessory (`dfil`) | `{"path":"Macintosh HD:System Folder:Apple Menu Items:Calculator"}` puts up "That application appears damaged (lacks CODE and cfrg)" (`romlib/wind/windInit.cpp:183`). The same DA opens fine from the Apple menu |
+| 17 | `/api/launch` of a control panel (`cdev`) | Returns `launched`; nothing opens. From the Finder (double-click) control panels open fine |
+
+## 4. Blocked by Executor's extension policy (decide first)
+
+These work on a real Mac, but Executor's `src/executor/res/extension-policy.txt`
+turns off what they need. Each is a policy decision before it is a fix:
+
+- **Network Extension** (denied: it aborts on `$A08E`, see STRAGGLERS #8):
+  File Sharing Monitor, Sharing Setup, Users & Groups, and the owner-name
+  prompt in Apple IR File Exchange
+- **QuickTime**: QuickTime™ Settings (7.6.1), MoviePlayer (7.6.1)
+- **AutoRemounter, Control Strip, Easy Open, PC Exchange, CloseView** (7.6.1):
+  say "not installed" when opened by hand
+- **Network Software Selector** (7.5.5): "Could not get information on the
+  currently running networking code"
+
+## Fixed
+
+- **1 Keyboard**: Pack6 `0x30` takes IUTextOrder's arguments (two texts,
+  lengths, scripts, languages; word result). The System's sorting code
+  (`'ptch'` 27, `'lpch'` 31, `'scod'` -16463) and the Keyboard and Text panels
+  call it. Implemented with IUMagString's comparison, as are IUTextOrder,
+  IUMagPString and IUMagIDPString (they returned 0: "equal").
+- **7 Text**: the panel checks `GetTrapAddress($B5)` against Unimplemented;
+  Executor hid ScriptUtil (and `gestaltScriptMgrVersion`) unless the
+  PretendScript preference was set. Both are visible now, Gestalt saying
+  `0x0750` like `smVersion`. Then its popups drew empty: the popup CDEF put
+  the `'MENU'` resource in the menu list but gave the control a copy, which
+  the panel filled. The copy is what goes in the list now.
+
+## Works (no action)
+
+Control panels: Apple Menu Options, Color, ColorSync System Profile, Date &
+Time, Desktop Patterns, Extensions Manager, General Controls, Map, Mouse,
+Numbers, Power Macintosh Card, Startup Disk, Views, WindowShade, Cache Switch,
+Memory, Easy Access (7.6.1). Desk accessories from the Apple menu: Calculator,
+Chooser, Key Caps; Apple menu Shut Down powers off cleanly. Applications:
+SimpleText, Find File, Jigsaw Puzzle, Note Pad, Scrapbook, Stickies, Script
+Editor, File Assistant, Disk Copy, StuffIt Expander. Applets: Add Alias to
+Apple Menu, Find Original from Alias, Share a Folder, Start File Sharing, Turn
+Sound Off/On, Alert When Folder Changes, Hide/Show Folder Sizes, Synchronize
+Folders.
+
+## How the triage was run
+
+Use a private copy of each image, so the built images and other people's runs
+aren't touched:
+
+```bash
+cp --reflink=auto ~/storage/images/7.5.5.img ~/storage/images/triage-7.5.5.img
+./build/mac-phoenix --backend executor --executor-system triage-7.5.5.img \
+    --executor-writable-images --config /dev/null --bridge --network none \
+    --port 18760 --extfs <host dir>
+curl -X POST localhost:18760/api/emulator/start
+# when done: rm ~/storage/images/triage-7.5.5.img; rm -rf ~/storage/executor-systems/triage-7.5.5.img*
+```
+
+- On the desktop, **"Macintosh HD" is the disk image**. The volume named after
+  the image file (`triage-7.5.5.img`) is Executor's own System volume (a host
+  directory under `~/storage/executor-systems/`). Bridge paths therefore start
+  with `Macintosh HD:`; `™` in paths (`AppleScript™`, `StuffIt Expander™`)
+  goes through as UTF-8 in the JSON.
+- `/api/text`, `/api/ui` and `/api/windows` don't answer under Executor:
+  drive by screenshots, `/api/app`, `/api/mouse` and `/api/keypress`.
+- **Control panels**: Apple menu → Control Panels (y=150 on 7.5.5, 168 on
+  7.6.1), click the zoom box (397,36), double-click icons, Cmd-W to close. If
+  Cmd-W changes nothing, an alert is up: press Return. Some control panels
+  are applications (AppleTalk, Desktop Patterns, Energy Saver, Extensions
+  Manager on 7.6.1): quit them with `/api/quit`.
+- **Policy-disabled panels**: with Executor running, move
+  `executor-systems/<image>/System Folder/Control Panels (Disabled)` to the
+  volume root and open it from the Executor volume's window.
+- **Desk accessories**: Apple menu (not `/api/launch`, item 16); `/api/quit`
+  closes them through the DA Handler.
+- **Applets** act on the Finder's selection: click empty desktop first. Their
+  dialogs belong to the Finder, so answer them while the Finder is in front
+  (item 14).
+- Crash cause: `/api/status` → `child_exit.log`, or the emulator log; each
+  fatal error also writes `~/storage/snapshots/executor-fatal`.
+
+The driver scripts used (`tri.py`, `cpsweep.py`, `appsweep.py`,
+`dasweep.py`) and every screenshot are in `~/storage/tmp/triage/` (scratch,
+not in the repo).

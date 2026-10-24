@@ -122,8 +122,9 @@ static bool shouldHideTrap(bool tool, int index)
                 return system_version < 0x700;
             case 0x30: /* Pack14: Executor's own is stubs; Apple's shows */
                 return !ROMlib_help_package_p();
-            case 0xB5: /* ScriptUtil */
-                return ROMlib_pretend_script ? 0 : 1;
+            /* MacPhoenix: ScriptUtil ($B5) is no longer hidden behind
+               ROMlib_pretend_script: every System 7 has a Script Manager, and
+               Apple's Text control panel won't open without it. */
             default:
                 return false;
         }   

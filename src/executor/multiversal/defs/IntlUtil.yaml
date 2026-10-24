@@ -600,6 +600,36 @@
 
 # ####
 
+- function:
+    name: IUTextOrderPrivate
+    return: INTEGER
+    args:
+      - name: ptra
+        type: Ptr
+      - name: ptrb
+        type: Ptr
+      - name: lena
+        type: INTEGER
+      - name: lenb
+        type: INTEGER
+      - name: scripta
+        type: ScriptCode
+      - name: scriptb
+        type: ScriptCode
+      - name: langa
+        type: LangCode
+      - name: langb
+        type: LangCode
+    dispatcher: Pack6
+    selector: 0x0030
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess). IUTextOrder's arguments and result; the
+      System's sorting code ('ptch' 27, 'lpch' 31) and the Keyboard and Text
+      control panels call it, with -7 for both languages.
+
+# ####
+
 # MacPhoenix: the Type Select routines (System 7.5; Lists.h in Universal
 # Interfaces 3.x), keyboard "type to select" for lists. Finder 7.5.5 uses them.
 

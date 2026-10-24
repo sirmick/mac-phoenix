@@ -61,12 +61,15 @@ init(ControlHandle ctl)
         mh = GetMenu(mid);
         if(mh)
         {
-            InsertMenu(mh, -1);
+            /* the copy goes in the menu list: it is the menu the
+               application gets from the control (popupMenuHandle) and fills,
+               as Apple's Text control panel does, and the one drawn */
             GUEST<Handle> hh;
             hh = (Handle)mh;
             HandToHand(&hh);
             POPUP_OWN_COPY(data) = guest_cast<MenuHandle>(hh);
             mh = guest_cast<MenuHandle>(hh);
+            InsertMenu(mh, -1);
         }
     }
     POPUP_MENU(data) = mh;

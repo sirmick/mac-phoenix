@@ -675,20 +675,19 @@ void Executor::C_ClearIntlResourceCache()
 {
 }
 
+/* MacPhoenix: the 'itl2' forms and the TextOrder family compare as
+   IUMagString/IUMagIDString do: one script and one language here, so the
+   sorting table, scripts and languages change nothing. */
 INTEGER Executor::C_IUMagPString(Ptr ptra, Ptr ptrb, INTEGER lena,
                                  INTEGER lenb, Handle itl2hand)
 {
-    warning_unimplemented("");
-    ROMlib_hook(iu_unimplementednumber);
-    return 0;
+    return iuhelper(ptra, ptrb, lena, lenb, false);
 }
 
 INTEGER Executor::C_IUMagIDPString(Ptr ptra, Ptr ptrb, INTEGER lena,
                                    INTEGER lenb, Handle itl2hand)
 {
-    warning_unimplemented("");
-    ROMlib_hook(iu_unimplementednumber);
-    return 0;
+    return iuhelper(ptra, ptrb, lena, lenb, true);
 }
 
 INTEGER Executor::C_IUScriptOrder(ScriptCode script1, ScriptCode script2)
@@ -709,9 +708,14 @@ INTEGER Executor::C_IUTextOrder(Ptr ptra, Ptr ptrb, INTEGER lena, INTEGER lenb,
                                 ScriptCode scripta, ScriptCode bscript,
                                 LangCode langa, LangCode langb)
 {
-    warning_unimplemented("");
-    ROMlib_hook(iu_unimplementednumber);
-    return 0;
+    return iuhelper(ptra, ptrb, lena, lenb, false);
+}
+
+INTEGER Executor::C_IUTextOrderPrivate(Ptr ptra, Ptr ptrb, INTEGER lena, INTEGER lenb,
+                                       ScriptCode scripta, ScriptCode scriptb,
+                                       LangCode langa, LangCode langb)
+{
+    return iuhelper(ptra, ptrb, lena, lenb, false);
 }
 
 void Executor::C_GetIntlResourceTable(ScriptCode script, INTEGER tablecode,

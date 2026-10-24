@@ -250,11 +250,12 @@ static gestaltentry_t gtable[] = {
   { T ('d', 'r', 'a', 'g'),	0, },
 #endif
 
-    /* The following four will be ignored unless they are specifically enabled
+    /* The following will be ignored unless they are specifically enabled
    by the corresponding ROMlib_pretend_xxx flags */
 
     { gestaltHelpMgrAttr, 1 }, /* must be 1 */
-    { gestaltScriptMgrVersion, 0x001 }, /* have gotten away with 0x001 */
+    /* MacPhoenix: smVersion's value (script.cpp); always answered */
+    { gestaltScriptMgrVersion, 0x0750 },
     { gestaltEditionMgrAttr, 1 }, /* must be 1 */
     /* gestaltAliasMgrAttr: 7, above (MacPhoenix) */
 
@@ -330,10 +331,8 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
             if(!ROMlib_pretend_help && !ROMlib_help_package_p())
                 selector = -1;
             break;
-        case gestaltScriptMgrVersion:
-            if(!ROMlib_pretend_script)
-                selector = -1;
-            break;
+        /* MacPhoenix: the Script Manager (script.cpp) is no longer hidden
+           behind ROMlib_pretend_script; see patches.cpp's ScriptUtil. */
         case gestaltEditionMgrAttr:
             if(!ROMlib_pretend_edition)
                 selector = -1;

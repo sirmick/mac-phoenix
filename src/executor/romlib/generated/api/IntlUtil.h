@@ -172,6 +172,12 @@ void C_GetIntlResourceTable(ScriptCode script, INTEGER tablecode, GUEST<Handle> 
 Handle C_GetIntlResourceForScript(INTEGER theID, ScriptCode script, INTEGER flag);PASCAL_SUBTRAP(GetIntlResourceForScript, 0xA9ED, 0x0032, Pack6);
 
 
+// MacPhoenix (name is a guess). IUTextOrder's arguments and result; the
+// System's sorting code ('ptch' 27, 'lpch' 31) and the Keyboard and Text
+// control panels call it, with -7 for both languages.
+INTEGER C_IUTextOrderPrivate(Ptr ptra, Ptr ptrb, INTEGER lena, INTEGER lenb, ScriptCode scripta, ScriptCode scriptb, LangCode langa, LangCode langb);PASCAL_SUBTRAP(IUTextOrderPrivate, 0xA9ED, 0x0030, Pack6);
+
+
 struct TypeSelectRecord{GUEST_STRUCT;GUEST<uint32_t> tsrLastKeyTime;GUEST<ScriptCode> tsrScript;GUEST<Str63> tsrKeyStrokes;};void describeStruct(const TypeSelectRecord&, std::ostream&);
 
 using IndexToStringUPP = UPP<Boolean(INTEGER item, GUEST<ScriptCode> *itemsScript, GUEST<StringPtr> *itemsStringPtr, void *yourDataPtr)>;
