@@ -209,6 +209,8 @@ syn68k_addr_t DispatcherTrap<SelectorConvention>::invokeFrom68K(syn68k_addr_t ad
     }
     else
     {
+        if(syn68k_addr_t ret = unknown_selector_68k(self->name, sel))
+            return ret;
         std::cerr << "Unknown selector 0x" << std::hex << sel << " for trap " << self->name << std::endl;
         if(base::Debugger::instance)
         {

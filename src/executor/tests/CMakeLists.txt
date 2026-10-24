@@ -48,7 +48,7 @@ set(NATIVE_TEST_SOURCES
         sane.cpp
         localvolume_macbinary.cpp
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp
-        sysroutines.cpp resprivate.cpp
+        sysroutines.cpp resprivate.cpp unknownselectors.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
         # The dual-mode ABI comparison against Apple's headers belongs in

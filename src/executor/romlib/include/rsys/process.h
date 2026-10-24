@@ -99,6 +99,10 @@ extern bool ROMlib_layers_foreign_current();
 extern WindowPeek ROMlib_layers_foreign_window_at(Point pt);
 /* Is the current process the front one (gets mouse and keyboard)? */
 extern bool ROMlib_process_is_front();
+/* GetNextEvent's mouse-down was in another process's window: that process
+   comes to the front (the click is re-posted for it if it wants front
+   clicks); true if so. */
+extern bool ROMlib_process_click_taken(EventRecord *evt);
 
 /* System mode (OSDispatch $40/$41): resource files opened in it belong to
    the system. They sit just above the System file in every process's

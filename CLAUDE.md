@@ -56,6 +56,8 @@ npx playwright test
 # --executor-ppc (InterfaceLib only so far; no StdCLib/MathLib yet):
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc
 ctest --test-dir build -L executor
+# Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
+# in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 
 # Executor as WebAssembly (docs/executor/DIRECTION.md, W1): emsdk in ~/emsdk
 source ~/emsdk/emsdk_env.sh

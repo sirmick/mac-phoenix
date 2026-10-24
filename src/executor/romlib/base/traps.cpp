@@ -1,6 +1,8 @@
 #include <vector>
 #include <cstring>
 #include <syn68k_public.h>
+#include <base/common.h>
+#include <SegmentLdr.h>
 
 #include <base/functions.h>
 #include <base/mactype.h>
@@ -10,6 +12,10 @@
 #include <base/debugger.h>
 
 #include <assert.h>
+#include <set>
+#include <filesystem>
+#include <ctime>
+#include <string>
 
 using namespace Executor;
 
@@ -98,4 +104,90 @@ void traps::init(bool log, const std::string& trapFilter)
     tooltraptable[0xAA5A & 0x3FF] = US_TO_SYN68K((void*)&stub_Unimplemented);
 
     trap_install_handler(0xA, &alinehandler, (void *)0);
+}
+
+/* ---- MacPhoenix: selectors no routine answers --------------------------- */
+
+void Executor::traps::log_unimplemented(const std::string &what)
+{
+    static std::set<std::string> logged;
+    if(!logged.insert(what).second)
+        return;
+    fprintf(stderr, "[unimplemented] %s\n", what.c_str());
+    if(unimplemented_log_path.empty())
+        return;
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(unimplemented_log_path).parent_path(), ec);
+    if(FILE *f = fopen(unimplemented_log_path.c_str(), "a"))
+    {
+        char date[32];
+        time_t now = time(nullptr);
+        strftime(date, sizeof date, "%Y-%m-%d %H:%M", localtime(&now));
+        fprintf(f, "%s\t%s\t%s\n", date, LM(CurApName)[0] ? std::string((char *)LM(CurApName) + 1, LM(CurApName)[0]).c_str() : "-", what.c_str());
+        fclose(f);
+    }
+}
+
+std::string Executor::traps::unimplemented_log_path;
+
+namespace
+{
+/* Apple's common dispatcher (the routine at $7B0 on 7.5.5): D0's high byte
+   is the size of the parameters (in words for most managers, in bytes for
+   the Palette Manager's), and a selector outside its table gets them
+   popped and paramErr in the word on top: the result, for the functions
+   that have one. ResourceDispatch's older selectors carry no size, so it
+   isn't here. */
+struct D0SizedDispatcher
+{
+    const char *name;
+    int unit;
+};
+const D0SizedDispatcher d0_sized[] = {
+    { "PaletteDispatch", 1 }, { "MenuDispatch", 2 },   { "ThreadDispatch", 2 },
+    { "LayerDispatch", 2 },   { "DisplayDispatch", 2 }, { "GestaltValueDispatch", 2 },
+    { "DialogDispatch", 2 },
+};
+}
+
+uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t sel)
+{
+    char what[160];
+    for(const D0SizedDispatcher &d : d0_sized)
+        if(strcmp(d.name, trap_name) == 0)
+        {
+            uint32_t d0 = EM_D0;
+            unsigned bytes = ((d0 >> 8) & 0xFF) * d.unit;
+            snprintf(what, sizeof what,
+                     "%s selector $%02x (D0 $%04x, %u parameter bytes): answered paramErr",
+                     trap_name, (unsigned)(d0 & 0xFF), (unsigned)(d0 & 0xFFFF), bytes);
+            log_unimplemented(what);
+            syn68k_addr_t ret = POPADDR();
+            EM_A7 += bytes;
+            WRITEUW(EM_A7, (uint16_t)-50); /* paramErr */
+            EM_D0 = (uint32_t)-50;
+            return ret;
+        }
+    if(strcmp(trap_name, "ScriptUtil") == 0)
+    {
+        /* The selector long: argument bytes in its second byte, the
+           result's size in the low six bits of the first (Script.h). What
+           7.5.5 answers a selector it lacks isn't known; the result is 0. */
+        unsigned arg_bytes = (sel >> 16) & 0xFF, result_bytes = (sel >> 24) & 0x3F;
+        snprintf(what, sizeof what,
+                 "ScriptUtil selector $%08x (%u argument bytes, %u-byte result): answered 0",
+                 (unsigned)sel, arg_bytes, result_bytes);
+        log_unimplemented(what);
+        syn68k_addr_t ret = POPADDR();
+        EM_A7 += 4 + arg_bytes;
+        if(result_bytes == 2)
+            WRITEUW(EM_A7, 0);
+        else if(result_bytes == 4)
+            WRITEUL(EM_A7, 0);
+        return ret;
+    }
+    snprintf(what, sizeof what, "%s selector $%x: no size in the selector, session stopped",
+             trap_name, (unsigned)sel);
+    log_unimplemented(what);
+    return 0;
 }

@@ -26,9 +26,17 @@ Same result on 7.5.5 and 7.6.1 unless marked.
 | 4 | ~~**TCP/IP** control panel (policy-disabled; opened by hand)~~ | `[ot] Open Transport: OTOpenConfigurationsDB (OTLib$CfigLib) is not implemented` | **Fails cleanly** (7.6.1): see below. On 7.5.5 (no OT installed) it says it needs Open Transport |
 | 5 | **Password Security** control panel, intermittent | `host signal 11 at guest pc $c0cc9bf4`, last A-trap `$A949` | Seen once, opened right after **Numbers** had been opened and closed. Opened alone it correctly says "cannot be used with this Macintosh". The PC is in the host stub area (`7101` words). Try Numbers then Password Security repeatedly |
 
-The unknown-selector path is `romlib/base/traps.impl.h` (~line 212): it is
-fatal by design. Each missing selector needs implementing, or at least an
-error return that the caller handles.
+Unknown selectors (`romlib/base/traps.cpp`, `unknown_selector_68k`): each
+one a session meets is logged once as `[unimplemented] ...` and appended,
+with the date and the application, to `<storage>/executor/unimplemented.log`,
+the list to consider implementing from. Where the selector says how many
+argument bytes the caller pushed, the call is then answered as the Mac's
+dispatcher answers a selector it has no routine for: Apple's common
+dispatcher (Palette, Menu, Thread, Layer, Display, GestaltValue, Dialog;
+D0's high byte the parameter size) pops them and returns paramErr;
+ScriptUtil (sizes in its selector long) answers 0. Every other dispatcher
+still stops the session. Open Transport's missing functions are logged the
+same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 
 ## 2. Opens but wrong
 
@@ -37,7 +45,7 @@ error return that the caller handles.
 | 6 | **Sound** control panel | Window opens with empty content: no alert-sound list, no volume | Alert sounds list (from the System's `'snd '`), volume slider |
 | 7 | ~~**Text** control panel~~ | "The control panel "Text" cannot be used now, because not enough memory is available." | **Fixed**: ScriptUtil no longer hidden from `GetTrapAddress`; popups from a `'MENU'` resource draw the menu the cdev fills |
 | 8 | **Launcher** control panel | Window opens empty (blue) | Buttons for `Launcher Items` (Script Editor, SimpleText) |
-| 9 | **Labels** control panel | Colour swatches all black (last one brown) | The seven label colours |
+| 9 | ~~**Labels** control panel~~ | Colour swatches all black (last one brown); names upside down | **Fixed**: see below |
 | 10 | **Speech** control panel (7.6.1) | Partly drawn; voice popup empty | Voice name, rate slider |
 | 11 | **SimpleSound** | "Sorry, this program requires Sound Manager 3.0 or later." | Runs. Check `SndSoundManagerVersion` (`romlib/sound/soundIMVI.cpp`) and `gestaltSoundAttr` (`romlib/gestalt.cpp`) |
 | 12 | ~~**AppleTalk** control panel (an application)~~ | Says it needs AppleTalk from Open Transport; `/api/quit` while that alert is up leaves it running | **Not a bug** (checked 2026-10-24): Executor's OT has no AppleTalk ('otan' $33: TCP only), so the alert is right; a modal alert doesn't take the Quit Apple Event (nor on a Mac), and `/api/quit` only reports the event delivered. OK (Return) and it quits by itself |
@@ -47,12 +55,15 @@ error return that the caller handles.
 
 | # | Problem | Repro |
 |---|---------|-------|
-| 14 | Clicking a background process's modal dialog doesn't bring that process forward | Have the Finder put up an alert (open File Sharing Monitor), then bring another app forward (`/api/launch` anything, or BridgeAgent comes to the front after a bridge command). Clicking the Finder's alert does nothing. The Finder then stays blocked: applets get "AppleEvent timed out" |
+| 14 | ~~Clicking a background process's modal dialog doesn't bring that process forward~~ | **Fixed**: see below |
 | 15 | Escape doesn't cancel the "Choose a folder" Standard File dialog | Run **Synchronize Folders** or **Alert When Folder Changes**, press Escape |
 | 16 | `/api/launch` of a desk accessory (`dfil`) | `{"path":"Macintosh HD:System Folder:Apple Menu Items:Calculator"}` puts up "That application appears damaged (lacks CODE and cfrg)" (`romlib/wind/windInit.cpp:183`). The same DA opens fine from the Apple menu |
 | 17 | `/api/launch` of a control panel (`cdev`) | Returns `launched`; nothing opens. From the Finder (double-click) control panels open fine |
 
 ## 4. Blocked by Executor's extension policy (decide first)
+
+Plan (2026-10-24): next session, turn these on one at a time in the policy
+and tackle what each runs into.
 
 These work on a real Mac, but Executor's `src/executor/res/extension-policy.txt`
 turns off what they need. Each is a policy decision before it is a fix:
@@ -113,6 +124,25 @@ turns off what they need. Each is a policy decision before it is a fix:
   **Open:** the configuration database (`OTLib$CfigLib`, 27 private
   functions: OTOpenConfigurationsDB, OTGetActiveConfigID,
   OTGetAttributeValue, ...) for the panel to show and change settings.
+
+- **14 Background dialog clicks**: the check for a click in another
+  process's window ran at the start of GetNextEvent, but the click could
+  reach the queue during the call (the host posts input meanwhile), and
+  the front process got it: BridgeAgent ignored clicks on the Finder's
+  alert, which stayed up and blocked every applet after it ("AppleEvent
+  timed out"). GetNextEvent now checks the mouse-down it hands out as well.
+  The triage's chain started with Share a Folder: after its first dialog
+  the Finder puts up a second ("Check the Sharing Setup control panel..."),
+  which the sweep's single Escape/Return didn't reach.
+
+- **9 Labels**: the window is the Finder's. It colours each swatch with
+  PmForeColor from a palette it fills with SetEntryColor, entry -1 (label 0,
+  none) included; Executor wrote that entry into the palette's header,
+  zeroing its entry count, so every swatch but entry 0 stayed black. The
+  palette calls now ignore entries outside the palette. GetLabel numbered
+  the labels backwards (Essential is label 7) from a table of its own; it
+  reads the System's 'lstr' and 'rgb ' -16392 + label now, which the
+  Labels panel edits.
 
 ## Works (no action)
 

@@ -23,6 +23,10 @@ struct Config
 
     // Executor's own files (System Folder, Configuration, cnid map).
     std::string data_dir;
+    // Selectors and functions a session called that Executor lacks: each
+    // "[unimplemented]" log line is also appended here, with the date, so
+    // the list grows across sessions. Empty: the log only.
+    std::string unimplemented_log;
     // HFS disk images to mount. Always read-only: they are shared with
     // the ROM-based backends.
     std::vector<std::string> disks;

@@ -1186,7 +1186,7 @@ PaletteHandle Executor::C_GetPalette(WindowPtr src_window)
         palette = get_current_palette();                                               \
         if(!palette)                                                                   \
             palette = GetPalette((WindowPtr)-1);                                       \
-        if((entry) < 0 || (entry) > PALETTE_ENTRIES(palette))                          \
+        if((entry) < 0 || (entry) >= PALETTE_ENTRIES(palette))                         \
         {                                                                              \
             warning_unexpected("Out of bounds palette entry %d.", (entry));            \
             return;                                                                    \
@@ -1395,6 +1395,8 @@ void Executor::C_GetEntryColor(PaletteHandle src_palette, INTEGER entry_index,
 {
     ColorInfo *entry;
 
+    if(entry_index < 0 || entry_index >= PALETTE_ENTRIES(src_palette))
+        return; /* MacPhoenix: outside the palette */
     entry = &PALETTE_INFO(src_palette)[entry_index];
     *dst_rgb_color = entry->ciRGB;
 }
@@ -1404,9 +1406,13 @@ void Executor::C_SetEntryColor(PaletteHandle dst_palette, INTEGER entry_index,
 {
     ColorInfo *entry;
 
-    if(entry_index >= PALETTE_ENTRIES(dst_palette))
+    /* MacPhoenix: below the first entry too: the Finder sets entry -1 (label
+       0, none) of its labels palette, and writing it overwrote the
+       palette's header, its entry count first (the Labels window's swatches
+       came out black) */
+    if(entry_index < 0 || entry_index >= PALETTE_ENTRIES(dst_palette))
     {
-        warning_unexpected("attempt to set entry beyond end of palette");
+        warning_unexpected("attempt to set entry outside the palette");
         return;
     }
     entry = &PALETTE_INFO(dst_palette)[entry_index];
@@ -1423,6 +1429,8 @@ void Executor::C_GetEntryUsage(PaletteHandle src_palette, INTEGER entry_index,
 {
     ColorInfo *entry;
 
+    if(entry_index < 0 || entry_index >= PALETTE_ENTRIES(src_palette))
+        return; /* MacPhoenix: outside the palette */
     entry = &PALETTE_INFO(src_palette)[entry_index];
     *dst_usage = entry->ciUsage;
     *dst_tolerance = entry->ciTolerance;
@@ -1433,9 +1441,13 @@ void Executor::C_SetEntryUsage(PaletteHandle dst_palette, INTEGER entry_index,
 {
     ColorInfo *entry;
 
-    if(entry_index >= PALETTE_ENTRIES(dst_palette))
+    /* MacPhoenix: below the first entry too: the Finder sets entry -1 (label
+       0, none) of its labels palette, and writing it overwrote the
+       palette's header, its entry count first (the Labels window's swatches
+       came out black) */
+    if(entry_index < 0 || entry_index >= PALETTE_ENTRIES(dst_palette))
     {
-        warning_unexpected("attempt to set entry beyond end of palette");
+        warning_unexpected("attempt to set entry outside the palette");
         return;
     }
     entry = &PALETTE_INFO(dst_palette)[entry_index];

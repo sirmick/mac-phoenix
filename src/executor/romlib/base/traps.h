@@ -45,6 +45,17 @@ namespace internal
     };
 }
 
+/* MacPhoenix: a selector no Executor routine answers. Logged once per
+   trap and selector, tagged "[unimplemented]" (log_unimplemented) so the
+   gaps a session ran into can be found and considered for implementing.
+   Where the selector says how many argument bytes the caller pushed, the
+   call is answered as the Mac's own dispatcher answers a selector it has
+   no routine for (unknown_selector_68k returns where to continue);
+   elsewhere 0, and the caller stops the session. */
+uint32_t unknown_selector_68k(const char *trap_name, uint32_t sel);
+void log_unimplemented(const std::string &what);
+extern std::string unimplemented_log_path; /* also appended to; empty: not */
+
 class Entrypoint : public internal::DeferredInit
 {
 public:

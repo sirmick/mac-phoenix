@@ -231,6 +231,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.ram_mb = (int)cfg.ram_mb;
     c.data_dir = cfg.executor_data_dir.empty() ? expand_home(cfg.storage_dir) + "/executor"
                                                : expand_home(cfg.executor_data_dir);
+    c.unimplemented_log = expand_home(cfg.storage_dir) + "/executor/unimplemented.log";
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
     c.cpu = cfg.cpu_core;
@@ -279,6 +280,7 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
     c.ram_mb = (int)cfg.ram_mb;
     c.data_dir = cfg.executor_data_dir.empty() ? expand_home(cfg.storage_dir) + "/executor"
                                                : expand_home(cfg.executor_data_dir);
+    c.unimplemented_log = expand_home(cfg.storage_dir) + "/executor/unimplemented.log";
     c.disks = cfg.disk_paths;
     c.shared_folders = cfg.extfs_paths;
     c.cpu = cfg.cpu_core;

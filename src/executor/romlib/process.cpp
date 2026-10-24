@@ -1547,6 +1547,20 @@ static void bring_to_front(process_info_t *q)
 
 static void quit_all_step();
 
+/* The process whose window (or the desktop, Finder's) is under a click at
+   pt, if it is another one that is parked; null otherwise. */
+static process_info_t *click_elsewhere(process_info_t *me, Point pt)
+{
+    if(pt.v < LM(MBarHeight))
+        return nullptr;
+    process_info_t *hit = layer_at(pt);
+    if(!hit)
+        hit = process_info_list; /* the desktop */
+    if(hit && hit != me && hit->state == process_info_t::parked)
+        return hit;
+    return nullptr;
+}
+
 /* Every event call: where processes switch, as 7.5.5's Process Manager
    does in GetNextEvent/WaitNextEvent/EventAvail. */
 void Executor::ROMlib_process_event_hook(INTEGER mask)
@@ -1619,19 +1633,12 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
     EventRecord evt;
     if(!front_hold && OSEventAvail(mDownMask, &evt))
     {
-        Point pt = evt.where.get();
-        if(pt.v >= LM(MBarHeight))
+        if(process_info_t *hit = click_elsewhere(me, evt.where.get()))
         {
-            process_info_t *hit = layer_at(pt);
-            if(!hit)
-                hit = process_info_list; /* the desktop */
-            if(hit && hit != me && hit->state == process_info_t::parked)
-            {
-                if(!(hit->mode & 0x0200))
-                    GetOSEvent(mDownMask, &evt);
-                bring_to_front(hit);
-                return;
-            }
+            if(!(hit->mode & 0x0200))
+                GetOSEvent(mDownMask, &evt);
+            bring_to_front(hit);
+            return;
         }
     }
 
@@ -1649,6 +1656,34 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
         next->last_slice = ++slices;
         switch_to(next);
     }
+}
+
+/* GetNextEvent took a mouse-down for the front process: the click may have
+   reached the queue after ROMlib_process_event_hook looked (the host posts
+   input while the call runs), so it is checked again here. A click in
+   another process's window brings that process to the front, which gets
+   the click only if its SIZE says getFrontClicks; true: the caller's
+   event is no longer its own. A click in the Finder's background alert
+   went to BridgeAgent, which ignored it, and the Finder stayed blocked. */
+bool Executor::ROMlib_process_click_taken(EventRecord *evt)
+{
+    process_info_t *me = current_process_info;
+    if(!me || me != front_process || front_hold || switch_hold > 0 || evt->what != mouseDown)
+        return false;
+    process_info_t *hit = click_elsewhere(me, evt->where.get());
+    if(!hit)
+        return false;
+    if(hit->mode & 0x0200)
+    {
+        GUEST<EvQElPtr> qp;
+        if(PPostEvent(mouseDown, evt->message, &qp) == noErr && qp)
+        {
+            qp.get()->evtQWhere = evt->where;
+            qp.get()->evtQModifiers = evt->modifiers;
+        }
+    }
+    bring_to_front(hit);
+    return true;
 }
 
 /* MacPhoenix (status: stand-in). On 7.5.5 Finder opens the items in Startup
