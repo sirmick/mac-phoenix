@@ -42,7 +42,7 @@ same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 
 | # | Item | What happens | Expected |
 |---|------|--------------|----------|
-| 6 | **Sound** control panel | Window opens with empty content: no alert-sound list, no volume | Alert sounds list (from the System's `'snd '`), volume slider |
+| 6 | ~~**Sound** control panel~~ | Window opens with empty content: no alert-sound list, no volume | **Fixed**: see below |
 | 7 | ~~**Text** control panel~~ | "The control panel "Text" cannot be used now, because not enough memory is available." | **Fixed**: ScriptUtil no longer hidden from `GetTrapAddress`; popups from a `'MENU'` resource draw the menu the cdev fills |
 | 8 | **Launcher** control panel | Window opens empty (blue) | Buttons for `Launcher Items` (Script Editor, SimpleText) |
 | 9 | ~~**Labels** control panel~~ | Colour swatches all black (last one brown); names upside down | **Fixed**: see below |
@@ -143,6 +143,23 @@ turns off what they need. Each is a policy decision before it is a fix:
   the labels backwards (Essential is label 7) from a table of its own; it
   reads the System's 'lstr' and 'rgb ' -16392 + label now, which the
   Labels panel edits.
+
+- **6 Sound**: four parts. (a) AppendDITL put items relative to (0,0), not
+  the dialog's top-left: the Control Panel's window has its origin at
+  (89,1), so every page was drawn 89 pixels left (fixed for all three
+  methods, and the window growth). (b) The pages ask a sound output device
+  component ('sdev'); the System's stand for sound hardware Executor never
+  drives. Executor registers its own, native (component.cpp can now host C++
+  components: ROMlib_register_native_component), named and iconed after the
+  System's first, answering volume/mute ('hvol' 'svol' 'hmut' 'smut'
+  'hstp') and the format sent out (48 kHz 16-bit stereo, 'srat' 'ssiz'
+  'chan' and their lists). The volume and mute apply to what Executor sends
+  out; Get/SetDefaultOutputVolume and Get/SetSysBeepVolume keep their values
+  (were fixed stubs). (c) The pages call the device by its Component ID:
+  CallComponent now takes one, going to its open instance. (d) Private
+  SoundDispatch $021C0018 (name a guess, GetSoundOutputDevice) answers the
+  current device. Plus: a maskless 'ICON' passed as 'ICN#' draws. All four
+  pages match the ROM machine (8-bit and mono are off: one format).
 
 ## Works (no action)
 

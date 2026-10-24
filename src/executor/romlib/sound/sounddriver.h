@@ -37,6 +37,17 @@ public:
 extern SoundDriver *sound_driver;
 
 extern void sound_init(void);
+
+/* MacPhoenix: the output's volume, right << 16 | left, each 0 to $100 (the
+   Sound Manager's scale), and its mute; the front-end applies them to what
+   it sends out. Set by SetDefaultOutputVolume and the output device
+   component (Sound control panel, Volumes). */
+extern uint32_t ROMlib_sound_output_volume;
+extern bool ROMlib_sound_output_muted;
+
+/* The output device component ('sdev' "Built-in", native): registered
+   before the System's components, which then leave theirs out. */
+extern void ROMlib_install_sound_output_component();
 }
 
 #endif /* !_RSYS_SOUNDDRIVER_H_ */

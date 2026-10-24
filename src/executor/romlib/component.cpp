@@ -91,6 +91,11 @@ struct Inst
 };
 
 std::vector<std::unique_ptr<Comp>> comps; /* search order */
+/* MacPhoenix: components Executor implements itself, by type; a 'thng' of
+   the same type is not registered (it stands for something Executor does
+   in C++, as Apple's 'sdev' components stand for sound hardware), and the
+   first one lends the native one its name, info and icon. */
+std::map<uint32_t, Comp *> native_by_type;
 std::map<uint32_t, Inst> insts;
 uint32_t next_comp = 1, next_inst = 1;
 int32_t list_seed = 1;
@@ -318,6 +323,8 @@ Handle spec_resource(uint32_t type, int16_t id)
     return c;
 }
 
+void dispose(Handle h);
+
 /* Register one 'thng' (ComponentResource, maybe extended) of the current
    resource file, which is file. */
 Comp *register_thng(uint32_t tr, int16_t global, const FSSpec &file)
@@ -335,6 +342,21 @@ Comp *register_thng(uint32_t tr, int16_t global, const FSSpec &file)
     c->icon = spec_resource(rd32(tr + 38), rd16(tr + 42));
     c->from_file = true;
     c->file = file;
+    auto native = native_by_type.find(c->type);
+    if(native != native_by_type.end())
+    {
+        Comp *n = native->second;
+        if(!n->icon && c->icon)
+        {
+            std::swap(n->name, c->name);
+            std::swap(n->info, c->info);
+            std::swap(n->icon, c->icon);
+        }
+        dispose(c->name);
+        dispose(c->info);
+        dispose(c->icon);
+        return nullptr;
+    }
     bool auto_version = false;
     Handle h = RecoverHandle(guest_cast<Ptr>(tr));
     Size size = h ? GetHandleSize(h) : 44;
@@ -448,6 +470,51 @@ void copy_into(Handle from, uint32_t to)
 }
 }
 
+namespace
+{
+/* A native component's entry point, called as a component's code is
+   (call_entry): pascal ComponentResult (ComponentParameters *, Handle). */
+syn68k_addr_t native_entry(syn68k_addr_t, void *arg)
+{
+    auto fn = (ROMlib_native_component_fn)arg;
+    syn68k_addr_t ret = POPADDR();
+    uint32_t storage = POPUL();
+    uint32_t params = POPUL();
+    WRITEUL(EM_A7, (uint32_t)fn(params, storage));
+    return ret;
+}
+
+Handle sys_pstring(const char *s)
+{
+    TheZoneGuard guard(LM(SysZone));
+    size_t n = strlen(s);
+    Handle h = NewHandle(n + 1);
+    if(h)
+    {
+        **h = n;
+        memcpy(*h + 1, s, n);
+    }
+    return h;
+}
+}
+
+uint32_t Executor::ROMlib_register_native_component(uint32_t type, uint32_t subtype,
+                                                    uint32_t manufacturer, const char *name,
+                                                    ROMlib_native_component_fn fn)
+{
+    auto c = std::make_unique<Comp>();
+    c->type = type;
+    c->subtype = subtype;
+    c->manufacturer = manufacturer;
+    c->entry = callback_install(native_entry, (void *)fn);
+    c->name = sys_pstring(name);
+    Comp *p = add(std::move(c), registerComponentGlobal, false);
+    if(!p)
+        return 0;
+    native_by_type[type] = p;
+    return p->id;
+}
+
 int32_t Executor::ROMlib_register_components(INTEGER refnum, bool global)
 {
     return register_file(refnum, global ? registerComponentGlobal : 0);
@@ -491,6 +558,26 @@ RAW_68K_IMPLEMENTATION(ComponentDispatch)
             int32_t r;
             if(Inst *in = inst_of(ci))
                 r = call_entry(in->comp, in, params);
+            else if(Comp *c = comp_of(ci))
+            {
+                /* MacPhoenix: a component's ID where an instance is due:
+                   its open instance, as the Sound control panel calls the
+                   output device the Sound Manager keeps open; a native
+                   component needs none. */
+                Inst *open = nullptr;
+                for(auto &[id, i] : insts)
+                    if(i.comp == c)
+                    {
+                        open = &i;
+                        break;
+                    }
+                if(open)
+                    r = call_entry(c, open, params);
+                else if(native_by_type.count(c->type) && native_by_type[c->type] == c)
+                    r = call_entry(c, nullptr, params);
+                else
+                    r = badComponentInstance;
+            }
             else
                 r = badComponentInstance;
             EM_A7 += 4 + size + 4;

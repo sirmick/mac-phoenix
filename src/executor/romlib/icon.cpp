@@ -484,10 +484,11 @@ struct Chosen
     int rows = 32; /* rows stored per plane */
     int skip = 0;  /* rows above the drawn ones */
     int bpp = 1;
+    bool no_mask = false; /* the member holds the bitmap only */
     int mask_bytes() const { return w * h / 8; }
     int row_bytes() const { return w / 8; }
     const uint8_t *bits() const { return (const uint8_t *)*mask + skip * row_bytes(); }
-    const uint8_t *mask_bits() const { return bits() + rows * row_bytes(); }
+    const uint8_t *mask_bits() const { return no_mask ? bits() : bits() + rows * row_bytes(); }
     Ptr data_bits() const { return *data + skip * row_bytes() * bpp; }
 };
 
@@ -518,8 +519,19 @@ OSErr choose(IconSource& src, const Rect *rect, Chosen& c, bool needData = true)
         c.skip = 0;
         if(b == kMiniBase && GetHandleSize(c.mask) >= 16 * 2 * 2)
             c.rows = 16, c.skip = 2;
+        c.no_mask = false;
         if(GetHandleSize(c.mask) >= c.rows * c.row_bytes() * 2)
         {
+            base = b;
+            break;
+        }
+        /* MacPhoenix: the bitmap without its mask, an 'ICON' handed over
+           as the 'ICN#' (the Sound control panel's output device list does
+           so with the component's icon, which a real Mac draws): its bits
+           stand for the mask */
+        if(GetHandleSize(c.mask) >= c.rows * c.row_bytes())
+        {
+            c.no_mask = true;
             base = b;
             break;
         }

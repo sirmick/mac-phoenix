@@ -47,22 +47,27 @@ void Executor::AppendDITL(DialogPtr dp, Handle new_items_h, DITLMethod method)
     {
         switch(method)
         {
+            /* MacPhoenix: relative to the dialog's upper-left corner, its
+               portRect's top-left, not (0,0): the Control Panel's window
+               has its origin at (89,1), and the Sound panel's pages
+               (AppendDITL'd) came out 89 pixels to the left. */
             default:
             case overlayDITL:
                 resize_p = false;
-                base_pt.h = base_pt.v = 0;
+                base_pt.h = dp_port_rect->left;
+                base_pt.v = dp_port_rect->top;
                 break;
 
             case appendDITLRight:
                 resize_p = true;
-                base_pt.v = 0;
+                base_pt.v = dp_port_rect->top;
                 base_pt.h = dp_port_rect->right;
                 break;
 
             case appendDITLBottom:
                 resize_p = true;
                 base_pt.v = dp_port_rect->bottom;
-                base_pt.h = 0;
+                base_pt.h = dp_port_rect->left;
                 break;
         }
     }
@@ -135,8 +140,11 @@ void Executor::AppendDITL(DialogPtr dp, Handle new_items_h, DITLMethod method)
 
             InvalRect(&itemp->itmr);
 
-            width = std::max<int>(width, itemp->itmr.left);
-            height = std::max<int>(height, itemp->itmr.bottom);
+            /* the window's new size: room for the item, from the
+               portRect's top-left (MacPhoenix: was the item's left edge,
+               from 0) */
+            width = std::max<int>(width, itemp->itmr.right - dp_port_rect->left);
+            height = std::max<int>(height, itemp->itmr.bottom - dp_port_rect->top);
 
             BUMPIP(new_itemp);
         }

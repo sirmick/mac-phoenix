@@ -259,6 +259,13 @@ OSErr C_SPBBytesToMilliseconds(LONGINT refnum, GUEST<LONGINT> *bytecountp);PASCA
 OSErr C_GetSysBeepVolume(GUEST<LONGINT> *levelp);PASCAL_SUBTRAP(GetSysBeepVolume, 0xA800, 0x2240018, SoundDispatch);
 
 
+// MacPhoenix. Private (name and meaning a guess): the Sound control
+// panel's Sound Out page calls it with a pointer before it selects the
+// current device in its list; answered with the output device
+// component's ID (Executor's 'sdev').
+OSErr C_GetSoundOutputDevice(GUEST<uint32_t> *outputDevice);PASCAL_SUBTRAP(GetSoundOutputDevice, 0xA800, 0x21C0018, SoundDispatch);
+
+
 OSErr C_SetSysBeepVolume(LONGINT level);PASCAL_SUBTRAP(SetSysBeepVolume, 0xA800, 0x2280018, SoundDispatch);
 
 
