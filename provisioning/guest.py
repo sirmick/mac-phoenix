@@ -97,7 +97,7 @@ def roms(storage):
 
 # A guest's "backend" here: the emulator's --backend and the machine's own
 # arguments. "se" is the 68k core with a Mac SE ROM, 4 MB and its screen.
-MACHINE_ARGS = {"uae": ("uae", []), "kpx": ("kpx", []),
+MACHINE_ARGS = {"uae": ("uae", []), "kpx": ("kpx", []), "executor": ("executor", []),   # executor: no ROM
                 "se": ("uae", ["--ram", "4", "--screen", "512x342"]),
                 "iici": ("uae", ["--ram", "8", "--screen", "640x480"])}   # colour, 68030, 24-bit
 
@@ -146,8 +146,9 @@ class Guest:
         self.agent = has_agent(backend)         # BridgeAgent there (System 7.5+; set False for a 7.1 guest:
                                                 # no File System Manager, no Host volume, no agent)
         emu_backend, machine_args = MACHINE_ARGS[backend]
+        rom = [] if backend == "executor" else ["--rom", roms(storage)[backend]]
         args = [EMULATOR, "--config", "/dev/null", "--network", "none",
-                "--bridge", "--backend", emu_backend, "--rom", roms(storage)[backend], "--port", str(port),
+                "--bridge", "--backend", emu_backend, *rom, "--port", str(port),
                 *machine_args,
                 "--timeout", str(timeout), "--dismiss-shutdown-dialog",
                 # what recipes are written for; Mac OS 8.6 and later take the

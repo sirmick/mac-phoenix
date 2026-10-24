@@ -41,6 +41,18 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
+# HFS+ in the tab: the long-name fixture mounted from the page (WORKERFS),
+# VolDump's dump against Mac OS 9.0.4's (docs/executor/HFSPlus.md).
+if(NODE_COMMAND)
+    add_test(NAME executor.web.hfsplus
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_hfsplus.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest
+                ${PROJECT_SOURCE_DIR}/src/executor/tests/fixtures/hfsplus/longnames.img.gz)
+    set_tests_properties(executor.web.hfsplus PROPERTIES
+        LABELS "executor;web" TIMEOUT 180 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+endif()
+
 # Executor's own volume kept in OPFS across reloads, and Reset.
 if(NODE_COMMAND)
     add_test(NAME executor.web.persist

@@ -1,0 +1,15 @@
+# build.mpw — the HFS+ guest apps (68k: SC, Link), against Universal
+# Interfaces 3.3.2 for the HFS Plus calls; tools/mpw/mpw build tests/guest/hfsplus -o tests/guest/hfsplus
+# interfaces: 3.3.2
+# products: MakeLongNames VolDump
+Delete -i MakeLongNames VolDump
+For app in MakeLongNames VolDump
+	SC -b {app}.c -o {app}.68k.o
+	Link -t APPL -c '????' -model near ∂
+		{app}.68k.o ∂
+		"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+		-o {app}
+	Rez -a size.r -o {app}
+End
+SetFile -t APPL -c 'MkLN' -a B MakeLongNames
+SetFile -t APPL -c 'VDmp' -a B VolDump

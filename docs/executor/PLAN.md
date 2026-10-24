@@ -415,7 +415,7 @@ Tools carried alongside:
   `./build/mac-phoenix --backend executor`. No ROM. Runs on `mame-68k`.
 * System disk: `--executor-system IMAGE` (Settings > System disk) names a
   disk image in `<storage>/images`. On first use its System Folder is
-  copied out (Executor's HFS reader, `hfs_sideload.cpp`; `sideload_system.py` without Executor) into
+  copied out (Executor's HFS and HFS+ readers, `hfs_sideload.cpp`; `sideload_system.py` without Executor) into
   `<storage>/executor-systems/IMAGE.clean/`, and the image is mounted
   read-only beside it so its applications are there. `IMAGE/` is the
   working copy the run uses, restored from `.clean` each run unless "start
@@ -429,7 +429,9 @@ Tools carried alongside:
 * Without a System, Executor's files live in `<storage>/executor/` (System Folder, prefs).
   That folder and the configured shared folder are the only host folders the
   guest sees; Executor's default of mounting `/` is disabled. Disk images
-  from the config mount read-only.
+  from the config mount read-only: HFS through the old code, HFS+ (bare,
+  wrapped, partitioned; long names shortened as Mac OS 9 does) through
+  `file/hfsplusvolume.cpp`, docs/executor/HFSPlus.md.
 * Status: `boot_phase` goes `Finder` at the first frame and `desktop` once
   the application first polls for events. `/api/app` reads `CurApName`.
 * Input arrives on the IPC control socket and goes to Executor's EventSink

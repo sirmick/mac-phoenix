@@ -1,11 +1,12 @@
 #pragma once
 /*
- * hfs_sideload.h - Apple's System Folder from an HFS disk image, for
- * Executor to run on (docs/executor/DIRECTION.md, W3).
+ * hfs_sideload.h - Apple's System Folder from an HFS or HFS+ disk image,
+ * for Executor to run on (docs/executor/DIRECTION.md, W3).
  *
  * What tools/macdecode/sideload_system.py does with hfsutils, in C++ so
  * the browser build can do it: a read-only HFS reader (a bare volume, or
- * the first HFS partition of an Apple partition map; not HFS+), and a copy
+ * the first HFS partition of an Apple partition map; HFS+ volumes, bare,
+ * wrapped or partitioned, through hfs/plus: docs/executor/HFSPlus.md), and a copy
  * of the System Folder's System, Finder and every file in Preferences,
  * Fonts, Apple Menu Items, Extensions, Control Panels and Startup Items
  * into DATA_DIR/System Folder in the form Executor's local volume reads:
