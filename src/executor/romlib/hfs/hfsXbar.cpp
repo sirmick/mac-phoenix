@@ -1067,6 +1067,26 @@ OSErr Executor::PBHGetVInfo(HParmBlkPtr pb, Boolean async)
     FAKEASYNC(pb, async, retval);
 }
 
+/* MacPhoenix: PBHGetVInfo, then the volume's size and free space in bytes
+   (64 bits, big-endian, at offset 122). */
+OSErr Executor::PBXGetVolInfo(HParmBlkPtr pb, Boolean async)
+{
+    GUEST<LONGINT> version = pb->volumeParam.pfiller2;     /* ioXVersion */
+    OSErr retval = PBHGetVInfo(pb, false);
+    pb->volumeParam.pfiller2 = version;
+    if(retval == noErr)
+    {
+        uint64_t block = (uint32_t)pb->volumeParam.ioVAlBlkSiz;
+        uint64_t sizes[2] = { block * pb->volumeParam.ioVNmAlBlks,
+                              block * pb->volumeParam.ioVFrBlk };
+        uint8_t *out = (uint8_t *)pb + sizeof(HVolumeParam);
+        for(int i = 0; i < 2; i++)
+            for(int b = 0; b < 8; b++)
+                out[8 * i + b] = sizes[i] >> (56 - 8 * b);
+    }
+    FAKEASYNC(pb, async, retval);
+}
+
 /* Smaller Installer wants to see bit 17 set.  We're guessing the other
  * bits will keep programs from messing with us */
 

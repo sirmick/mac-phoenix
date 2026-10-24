@@ -22,7 +22,7 @@ Same result on 7.5.5 and 7.6.1 unless marked.
 |---|------|-----|-------|
 | 1 | ~~**Keyboard** control panel~~ | `Unknown selector 0x30 for trap Pack6` | **Fixed**: `0x30` is a private TextOrder (`IUTextOrderPrivate`, `romlib/iu.cpp`) |
 | 2 | ~~**Monitors** control panel; **Change Monitor to 256** applet (More Automated Tasks)~~ | `Unknown selector 0xf3 for trap DisplayDispatch` | **Fixed**: see below |
-| 3 | **Apple System Profiler** (7.6.1, Apple Menu Items) | `Unknown selector 0x12 for trap FSDispatch` | Crashes right after launch |
+| 3 | ~~**Apple System Profiler** (7.6.1, Apple Menu Items)~~ | `Unknown selector 0x12 for trap FSDispatch` | **Fixed**: see below |
 | 4 | **TCP/IP** control panel (policy-disabled; opened by hand) | `[ot] Open Transport: OTOpenConfigurationsDB (OTLib$CfigLib) is not implemented` | Should at least fail without killing Executor; see `docs/executor/OpenTransport.md` |
 | 5 | **Password Security** control panel, intermittent | `host signal 11 at guest pc $c0cc9bf4`, last A-trap `$A949` | Seen once, opened right after **Numbers** had been opened and closed. Opened alone it correctly says "cannot be used with this Macintosh". The PC is in the host stub area (`7101` words). Try Numbers then Password Security repeatedly |
 
@@ -94,6 +94,14 @@ turns off what they need. Each is a policy decision before it is a fix:
   the last application started (Finder's desktop window) were never moved
   (desktop icons vanished). The PortList is now made once; a quitting
   process's ports leave it.
+
+- **3 Apple System Profiler**: FSDispatch `$12` is PBXGetVolInfo
+  (System 7.5.2): PBHGetVInfo's record plus 64-bit size and free bytes. Its
+  volume report then hung on "Gathering Volume Info...": the SCSI Manager
+  stub answered "busy" to every call (and popped 2 bytes whatever the call),
+  which the Profiler retried forever. It now answers as an empty bus does
+  (SCSIGet succeeds, a selection gets scCommErr). All six reports work;
+  the disk image's "Where" says External Floppy Drive.
 
 ## Works (no action)
 

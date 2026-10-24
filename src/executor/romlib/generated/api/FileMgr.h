@@ -640,6 +640,11 @@ OSErr PBMakeFSSpec(HParmBlkPtr pb, Boolean async);FILE_SUBTRAP(PBMakeFSSpec, HPa
 
 OSErr PBHGetVolParms(HParmBlkPtr pb, Boolean async);FILE_SUBTRAP(PBHGetVolParms, HParmBlkPtr, 0xA260, 0x0030, FSDispatch);
 
+// MacPhoenix. System 7.5.2's: PBHGetVInfo's record (ioXVersion where
+// HVolumeParam has its filler) followed by ioVTotalBytes and ioVFreeBytes
+// (UInt64, offset 122). Apple System Profiler (7.6.1) calls it.
+OSErr PBXGetVolInfo(HParmBlkPtr pb, Boolean async);FILE_SUBTRAP(PBXGetVolInfo, HParmBlkPtr, 0xA260, 0x0012, FSDispatch);
+
 OSErr PBHGetLogInInfo(HParmBlkPtr pb, Boolean a);FILE_SUBTRAP(PBHGetLogInInfo, HParmBlkPtr, 0xA260, 0x0031, FSDispatch);
 
 OSErr PBHGetDirAccess(HParmBlkPtr pb, Boolean a);FILE_SUBTRAP(PBHGetDirAccess, HParmBlkPtr, 0xA260, 0x0032, FSDispatch);

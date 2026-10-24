@@ -2733,6 +2733,32 @@
 # ####
 
 - function:
+    name: PBXGetVolInfo
+    comment: |
+      MacPhoenix. System 7.5.2's: PBHGetVInfo's record (ioXVersion where
+      HVolumeParam has its filler) followed by ioVTotalBytes and ioVFreeBytes
+      (UInt64, offset 122). Apple System Profiler (7.6.1) calls it.
+    return: OSErr
+    args:
+      - name: pb
+        type: HParmBlkPtr
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    executor: true
+    file_trap: true
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x12
+    returnreg: D0
+    variants:
+      - PBXGetVolInfoSync
+      - PBXGetVolInfoAsync
+
+# ####
+
+- function:
     name: PBHGetLogInInfo
     return: OSErr
     args:

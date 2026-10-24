@@ -4,6 +4,7 @@
 #define INSTANTIATE_TRAPS_base_emustubs
 
 #include <base/common.h>
+#include <iterator>
 #include <DeviceMgr.h>
 #include <rsys/device.h>
 #include <ResourceMgr.h>
@@ -73,14 +74,41 @@ RAW_68K_IMPLEMENTATION(SetOSDefault)
 }
 
 // SCSI.h - no header file
+/* MacPhoenix: the SCSI Manager of a machine with no SCSI devices, as each
+   call answers on an empty bus (Inside Macintosh: Devices, ch. 3): the bus
+   is free (SCSIGet), nothing answers a selection, so every later phase is
+   a communication error, and SCSIStat reads no signals. Each call's own
+   arguments are popped; it used to pop two bytes whatever the call and
+   answer "busy", which Apple System Profiler's volume report retried
+   forever. */
 RAW_68K_IMPLEMENTATION(SCSIDispatch)
 {
-    syn68k_addr_t retaddr;
+    enum { scCommErr = 2, scBadParmsErr = 4 };
+    /* argument bytes of selectors 0..13 (SCSIReset .. SCSIMsgOut) */
+    static const int arg_bytes[] = { 0, 0, 2, 6, 12, 4, 4, 0, 4, 4, 0, 2, 4, 2 };
 
-    retaddr = POPADDR();
-    EM_A7 += 4; /* get rid of selector and location for errorvalue */
-#define scMgrBusyErr 7
-    PUSHUW(scMgrBusyErr);
+    syn68k_addr_t retaddr = POPADDR();
+    uint16_t selector = POPUW();
+    INTEGER result;
+    if(selector < std::size(arg_bytes))
+    {
+        EM_A7 += arg_bytes[selector];
+        switch(selector)
+        {
+            case 0:                             /* SCSIReset */
+            case 1:                             /* SCSIGet */
+            case 10:                            /* SCSIStat: no signals */
+                result = 0;
+                break;
+            default:
+                result = scCommErr;
+                break;
+        }
+    }
+    else
+        result = scBadParmsErr;
+    POPUW();                                    /* the result's space */
+    PUSHUW(result);
     PUSHADDR(retaddr);
     RTS();
 }
