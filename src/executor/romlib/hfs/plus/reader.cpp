@@ -493,17 +493,16 @@ std::optional<CatalogEntry> Reader::childAt(uint32_t parentID, uint32_t index)
     return std::nullopt;
 }
 
+const std::u16string Executor::hfsplus::kMetadataFolderName = std::u16string(4, u'\0') + u"HFS+ Private Data";
+
+bool Reader::isLink(const CatalogEntry& e)
+{
+    return !e.folder && !memcmp(e.userInfo, "hlnk", 4) && !memcmp(e.userInfo + 4, "hfs+", 4);
+}
+
 CatalogEntry Reader::resolveLink(const CatalogEntry& e)
 {
-    if(e.folder || memcmp(e.userInfo, "hlnk", 4) || memcmp(e.userInfo + 4, "hfs+", 4))
-        return e;
-    if(!privateFolder_)
-    {
-        static const std::u16string name = std::u16string(4, u'\0') + u"HFS+ Private Data";
-        auto f = lookup(kRootFolderID, name);
-        privateFolder_ = f && f->folder ? f->cnid : 0;
-    }
-    if(!*privateFolder_)
+    if(!isLink(e) || !metadataFolder())
         return e;
     std::string n = "iNode" + std::to_string(e.special);
     auto target = lookup(*privateFolder_, std::u16string(n.begin(), n.end()));

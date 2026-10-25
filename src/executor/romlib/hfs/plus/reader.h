@@ -158,6 +158,9 @@ public:
 
     /* A hard link's file (TN1150 "Hard Links"); the entry itself otherwise. */
     CatalogEntry resolveLink(const CatalogEntry& e);
+    static bool isLink(const CatalogEntry& e);
+    /* The folder of hard links' files (indirect node files), if there's one */
+    std::optional<uint32_t> metadataFolder();
 
     std::unique_ptr<Fork> openFork(const CatalogEntry& file, bool resource);
 
@@ -178,6 +181,10 @@ public:
        to cover it, at least `reserve` bytes allocated: in whole blocks, or
        (clump) grown a clump at a time. */
     Error setForkSize(uint32_t cnid, bool resource, uint64_t size, uint64_t reserve = 0, bool clump = false);
+    /* A hard link to a file, name in parentID: a file not yet linked
+       becomes the indirect node file, a link left where it was (Mac OS
+       makes none; for tests) */
+    Error makeLink(uint32_t targetID, uint32_t parentID, const std::u16string& name);
     /* The volume's name (the root folder's) */
     Error renameVolume(const std::u16string& name);
     /* The header's Finder info (the blessed folder...) */
@@ -234,6 +241,9 @@ private:
     } cursor_;
     std::optional<uint32_t> privateFolder_;   /* the hard links' folder */
 };
+
+/* "\0\0\0\0HFS+ Private Data", the metadata folder's name */
+extern const std::u16string kMetadataFolderName;
 
 /* Catalog and extents keys in their on-disk form (keyLength first). */
 std::vector<uint8_t> catalogKey(uint32_t parentID, const std::u16string& name);

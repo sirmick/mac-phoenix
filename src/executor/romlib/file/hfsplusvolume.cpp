@@ -159,17 +159,19 @@ CatalogEntry HFSPlusVolume::resolveDir(short vRef, long dirID)
 }
 
 /* An item in a folder by its classic name: its MacRoman name, or the short
-   "#<CNID>" form 9.0.4 gives a long or unconvertible one. */
+   "#<CNID>" form 9.0.4 gives a long or unconvertible one. Hard links are
+   not followed: 9.0.4 shows a link as its empty 'hlnk' file and the
+   metadata folder as a folder (oracle-9.0.4/voldump-hardlinks.txt). */
 std::optional<CatalogEntry> HFSPlusVolume::child(uint32_t dirID, const std::string& macName)
 {
     if(macName.empty() || macName.size() > 255)
         return std::nullopt;
     if(auto e = reader_->lookup(dirID, macRomanToUnicode(macName)))
-        return reader_->resolveLink(*e);
+        return *e;
     if(auto cnid = cnidInClassicName(macName))
         if(auto e = reader_->byID(*cnid))
             if(e->parentID == dirID && classicName(*e) == macName)    /* exactly, as 9.0.4 */
-                return reader_->resolveLink(*e);
+                return *e;
     return std::nullopt;
 }
 
@@ -243,7 +245,7 @@ CatalogEntry HFSPlusVolume::resolveForInfo(StringPtr name, short vRef, long dirI
         if(includeDirectories)
         {
             if(auto e = reader_->childAt(dir.cnid, (uint32_t)index))
-                return reader_->resolveLink(*e);
+                return *e;
             throw OSErrorException(fnfErr);
         }
         std::optional<CatalogEntry> found;       /* files only */
@@ -255,7 +257,7 @@ CatalogEntry HFSPlusVolume::resolveForInfo(StringPtr name, short vRef, long dirI
         });
         if(!found)
             throw OSErrorException(fnfErr);
-        return reader_->resolveLink(*found);
+        return *found;
     }
     if(index == 0 && name && name[0])
         return resolve(name, vRef, dirID);

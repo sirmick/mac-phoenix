@@ -91,7 +91,7 @@ def check_image(dump, hfsdump, image, sample=1):
             parts.insert(0, shown(by_cnid[cnid]["name"]))
             cnid = by_cnid[cnid]["parent"]
         return "/" + "/".join(parts)
-    for parent in [2] + [it["cnid"] for it in items if it["kind"] == "folder"]:
+    for parent in [2] + [it["cnid"] for it in items if it["kind"] == "folder" and not hidden(it["name"])]:
         mine = sorted(shown(it["name"]) for it in by_parent.get(parent, []) if not hidden(it["name"]))
         listed = theirs.listing(hpath(parent))
         checked["folders"] += 1
@@ -106,7 +106,9 @@ def check_image(dump, hfsdump, image, sample=1):
     for n, it in enumerate(items):
         if hidden(it["name"]) or n % sample:
             continue
-        st = theirs.stat(it["cnid"])
+        # a hard link: hfsdump follows it by path, not by CNID
+        what = hpath(it["cnid"]) if it.get("link") else str(it["cnid"])
+        st = theirs.stat(what)
         checked["items"] += 1
         where = "%s (%d)" % (it["path"], it["cnid"])
         if not st:
@@ -127,7 +129,9 @@ def check_image(dump, hfsdump, image, sample=1):
                                   capture_output=True).stdout
             if len(mine) != size:
                 fails.append("%s: %s fork %d bytes read, %d long" % (where, fork or "data", len(mine), size))
-            rc, theirs_bytes = theirs.run("read", hpath(it["cnid"]) + "/rsrc" if fork else str(it["cnid"]))
+            if fork and "\u0000" in hpath(it["cnid"]):
+                continue                        # in the hard links' folder: no path to give hfsdump
+            rc, theirs_bytes = theirs.run("read", hpath(it["cnid"]) + "/rsrc" if fork else what)
             if rc != 0 and not size:
                 continue
             if rc != 0:

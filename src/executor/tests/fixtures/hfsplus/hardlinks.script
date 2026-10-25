@@ -1,0 +1,13 @@
+rename "" "Links"
+mkdir "Docs"
+mkdir "Other"
+create "Docs/Original" TEXT ttxt
+write "Docs/Original" data 0 10000 5
+write "Docs/Original" rsrc 0 600 9
+link "Docs/Original" "Other/Second name"
+link "Other/Second name" "Third"
+create "Pair A" BINA ????
+write "Pair A" data 0 3000 2
+link "Pair A" "Other/Pair B"
+create "Plain" TEXT ttxt
+write "Plain" data 0 100 1

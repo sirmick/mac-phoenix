@@ -13,7 +13,8 @@ The scripts (random, seeded) fill folders with 1600 files (the catalog
 B-tree splits to three levels and its file grows), write forks in turns (files past
 their 8 extents: extents overflow records), rename, move, truncate and
 delete (nodes freed, the tree shrinking); names differing only in case
-are refused (or, on an HFSX volume, binary order, are different names).
+are refused (or, on an HFSX volume, binary order, are different names);
+hard links made at the end (fsck checks their counts, hfsdump follows them).
 One more volume, made here
 with 4 KB catalog nodes, takes 150000 files with long names: the catalog
 outgrows what its header node's map covers twice (two map nodes made and
@@ -105,6 +106,10 @@ class Model:
         self.lines.append("move %s %s" % (self.q(p), self.q(d)))
         self._repath(p, (d + "/" if d else "") + p.rsplit("/", 1)[-1])
 
+    def link(self, p, new):
+        self.lines.append("link %s %s" % (self.q(p), self.q(new)))
+        self.files[new] = self.files[p]        # one file, two names
+
     def delete(self, p):
         self.lines.append("delete %s" % self.q(p))
         self.files.pop(p, None)
@@ -187,6 +192,11 @@ def script(seed, hfsx=False):
     m.delete(frag[0])
     for p in sorted(p for p in m.files if p.startswith("More/"))[::2]:
         m.delete(p)
+    # hard links (TN1150): the file becomes the metadata folder's iNode<n>
+    m.mkdir("Linked")
+    m.link(frag[1], "Linked/Frag")
+    m.link("Linked/Frag", "Linked/Frag again")
+    m.link("Tree/Frag 2", "Frag 2 here too")
     return m
 
 

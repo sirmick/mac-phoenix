@@ -8,6 +8,7 @@
  *                                       data bytes: (seed + 7 * offset + offset / 251) & 0xFF):
  *       mkdir PATH | create PATH [TYPE CREATOR] | write PATH data|rsrc OFFSET LENGTH SEED
  *       truncate PATH data|rsrc LENGTH | rename PATH NEWNAME | move PATH FOLDER | delete PATH
+ *       link PATH NEWPATH (a hard link)
  *
  * --volume N picks the Nth HFS+ volume of a partitioned image (default 0). */
 #include "reader.h"
@@ -180,6 +181,13 @@ static bool runLine(Reader& r, const std::string& line)
         {
             auto to = resolvePath(r, arg());
             e = to ? r.move(item->cnid, to->cnid) : Error::notFound;
+        }
+        else if(op == "link")
+        {
+            std::string to = arg();
+            size_t at = to.rfind('/');
+            auto dirOf = resolvePath(r, at == std::string::npos ? "" : to.substr(0, at));
+            e = dirOf ? r.makeLink(item->cnid, dirOf->cnid, fromUTF8(to.substr(at + 1))) : Error::notFound;
         }
         else if(op == "delete")
             e = r.remove(item->cnid);

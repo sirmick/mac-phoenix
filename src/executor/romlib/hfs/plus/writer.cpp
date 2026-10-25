@@ -379,6 +379,7 @@ std::vector<uint8_t> Reader::encode(const CatalogEntry& e)
     put32(d.data() + 28, e.backupDate);
     memcpy(d.data() + 48, e.userInfo, 16);
     memcpy(d.data() + 64, e.finderInfo, 16);
+    put32(d.data() + 44, e.special);
     put32(d.data() + 80, e.textEncoding);
     if(!e.folder)
     {
@@ -495,6 +496,89 @@ Error Reader::rename(uint32_t cnid, const std::u16string& name)
     if(cnid != kRootFolderID && (e = adjustFolder(c->parentID, 0)) != Error::none)
         return end(e);
     return end(Error::none);
+}
+
+/* TN1150 "Hard Links": the metadata folder holds each linked file's
+   content as "iNode<link reference>"; a link is a file of type 'hlnk',
+   creator 'hfs+', its permissions' special field the reference. */
+std::optional<uint32_t> Reader::metadataFolder()
+{
+    if(!privateFolder_)
+    {
+        auto f = lookup(kRootFolderID, kMetadataFolderName);
+        privateFolder_ = f && f->folder ? f->cnid : 0;
+    }
+    return *privateFolder_ ? privateFolder_ : std::nullopt;
+}
+
+static std::u16string inodeName(uint32_t ref)
+{
+    std::string n = "iNode" + std::to_string(ref);
+    return std::u16string(n.begin(), n.end());
+}
+
+Error Reader::makeLink(uint32_t targetID, uint32_t parentID, const std::u16string& name)
+{
+    auto t = byID(targetID);
+    if(!t || t->folder)
+        return Error::notFound;
+    if(lookup(parentID, name))
+        return Error::exists;
+    Error e;
+    if(!metadataFolder())
+    {
+        /* invisible, name locked, out of the way (22460, 22460); dated as the root */
+        uint8_t info[16] = {};
+        put16(info + 8, 0x5000);
+        put16(info + 10, 22460);
+        put16(info + 12, 22460);
+        CatalogEntry made;
+        if((e = create(kRootFolderID, kMetadataFolderName, true, info, &made)) != Error::none)
+            return e;
+        made.createDate = byID(kRootFolderID)->createDate;
+        if((e = update(made)) != Error::none)
+            return e;
+        privateFolder_ = made.cnid;
+    }
+    uint32_t meta = *privateFolder_;
+    uint32_t ref;
+    std::optional<CatalogEntry> inode;
+    std::vector<std::pair<uint32_t, std::u16string>> links = { { parentID, name } };
+    if(isLink(*t))
+    {
+        ref = t->special;
+        if(!(inode = lookup(meta, inodeName(ref))))
+            return Error::notFound;
+    }
+    else
+    {
+        /* a new link reference, in 100..1073741923 */
+        for(ref = 100 + (t->cnid * 2654435761u) % 1073741824u; lookup(meta, inodeName(ref));)
+            ref = 100 + (ref * 2654435761u + 1) % 1073741824u;
+        links.insert(links.begin(), { t->parentID, t->name });
+        if((e = move(t->cnid, meta)) != Error::none || (e = rename(t->cnid, inodeName(ref))) != Error::none)
+            return e;
+        inode = byID(t->cnid);
+        inode->special = 0;
+    }
+    uint32_t created = byID(meta)->createDate;
+    for(const auto& [dir, n] : links)
+    {
+        uint8_t info[16] = {};
+        memcpy(info, "hlnkhfs+", 8);
+        put16(info + 8, 0x0100);                /* kHasBeenInited */
+        CatalogEntry made;
+        if((e = create(dir, n, false, info, &made)) != Error::none)
+            return e;
+        made.createDate = created;
+        made.special = ref;
+        inode->special++;                       /* the link count */
+        if((e = begin()) != Error::none || (e = end(putEntry(made))) != Error::none)
+            return e;
+    }
+    if((e = begin()) != Error::none)
+        return e;
+    return end(putEntry(*inode));
 }
 
 Error Reader::renameVolume(const std::u16string& name)

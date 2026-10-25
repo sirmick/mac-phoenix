@@ -33,8 +33,9 @@ TN1189 (partitions). The File Manager's volume, the System sideload and
   64-node cache; catalog lookups by (parent, name) and by CNID (thread
   records); `childAt` keeps a cursor so indexed enumeration (PBGetCatInfo's
   `ioFDirIndex` 1, 2, 3...) costs a step per call; forks through their 8
-  extents and then the extents overflow B-tree; hard links (`hlnk`/`hfs+`)
-  resolved to `HFS+ Private Data:iNode<n>`. HFSX's binary order when the
+  extents and then the extents overflow B-tree; `resolveLink` follows a
+  hard link (`hlnk`/`hfs+`) to `HFS+ Private Data:iNode<n>` (hfsplus_dump
+  does; the File Manager doesn't, below). HFSX's binary order when the
   catalog says so (`keyCompareType` 0xBC). The journal is not replayed
   (classic volumes have none; a journaled volume mounts read-only as
   written).
@@ -110,6 +111,12 @@ the images read-only on the host):
   SetFInfo, locks, SetVInfo: wPrErr. Forks over 2 GB end at 2 GB - 1.
 - Unmounting closes nothing: open files make it fBsyErr; Eject and OffLine
   take the drive off line.
+- Hard links aren't followed (`voldump-hardlinks.txt`): 9.0.4 shows a link
+  as the empty file it is (type `hlnk`, creator `hfs+`), and the metadata
+  folder `\0\0\0\0HFS+ Private Data` with its `iNode<n>` files as any
+  folder (the root's valence counts it). Deleting a link deletes that
+  file, the iNode stays and its link count is left as it was (TN1150
+  allows for that: "traditional Mac OS" doesn't know them).
 
 Mounting: `try_to_mount_disk` (`hfs/hfsHelper.cpp`) looks at every
 volume it finds (partition map entries, the bare probe of block 2) and
@@ -180,7 +187,12 @@ fork whose header puts the map outside it, before that length reaches
 2 GB wrapped and the System heap's trailer went past its end).
 
 Not done: the Desktop DB (Executor's Desktop Manager keeps an HFS+
-volume's in memory, as an HFS one's), hard links made, files over 2 GB.
+volume's in memory, as an HFS one's), files over 2 GB. Hard links are
+made only by `hfsplus_dump`'s script (`link`, `Reader::makeLink`, as
+TN1150 lays them out: the file moved into the metadata folder, made
+first, as `iNode<reference>`; links typed `hlnk`/`hfs+`, `kHasBeenInited`,
+dated as the folder; fsck.hfsplus calls them "pre-Leopard"), for tests;
+the File Manager has no call that makes one.
 
 ## Tests
 
@@ -190,8 +202,10 @@ volume's in memory, as an HFS one's), hard links made, files over 2 GB.
   creator, fork sizes and bytes; the long-name fixture's short names
   against 9.0.4's. Images: the fixtures in
   `src/executor/tests/fixtures/hfsplus` (gzipped: `longnames.img`, made on
-  9.0.4; `blank-64m.img`, `blank-wrapped-64m.img` from `mkfs.hfsplus`) and,
-  where present, `~/storage/hfsplus-recon/images/{carbonlib-1.6,guest-written}.img`.
+  9.0.4; `blank-64m.img`, `blank-wrapped-64m.img`, `blank-hfsx-64m.img`
+  from `mkfs.hfsplus`; `hardlinks.img`, a blank with hard links made by
+  `hfsplus_dump`: hfsdump follows them by path) and, where present,
+  `~/storage/hfsplus-recon/images/{carbonlib-1.6,guest-written}.img`.
   By hand, with `--sample`, the two partitioned HFS+ CDs in the assets
   repo (ADC Seed CD April 2001: partition map + HFS wrapper, 7920 items;
   CodeWarrior 8 Pro: partition map, Mac OS X-written, 8270 items) matched
@@ -244,8 +258,9 @@ volume's in memory, as an HFS one's), hard links made, files over 2 GB.
   `--executor-system` on the long-name fixture copies its blessed System
   Folder (made on 9.0.4) byte for byte.
 
-Not covered by any image yet: hard links (none of the images has one),
-journaled volumes, files over 2 GB, `ioVNmAlBlks` of a wrapped
+Not covered by any image yet: hard links written by Mac OS X (none of
+the images has one: `hardlinks.img` is made by `hfsplus_dump`,
+`fixtures/hfsplus/hardlinks.script`, fsck-clean), journaled volumes, files over 2 GB, `ioVNmAlBlks` of a wrapped
 volume over 65535 blocks. fsck.hfsplus reports "Illegal name" on
 `longnames.img`: MakeLongNames passed 9.0.4 a precomposed `ά` (and a
 `:`), which 9.0.4 stored as given.
