@@ -106,9 +106,10 @@ uint32_t HFSPlusVolume::localDate(uint32_t gmt) const
    blocks in those; ioVNmFls the root folder's valence (files and
    folders); and a total that only fits 16 bits: the volume's 512-byte
    sectors divided by the smallest k that brings them under 65536 (32 MB
-   of 4 KB blocks: 32768; 64 MB: 43690), or, in an HFS wrapper, the
-   embedded volume's block count; the total and the free blocks no more
-   than make 2 GB. */
+   of 4 KB blocks: 32768; 64 MB: 43690). In an HFS wrapper the wrapper's
+   view: its block size, the embedded volume's extent in its blocks, the
+   free bytes in its blocks (voldump-wrapped-*.txt, 256 MB to 12 GB). The
+   total and the free blocks no more than make 2 GB. */
 void HFSPlusVolume::updateVCB()
 {
     const VolumeHeader& h = reader_->header();
@@ -118,10 +119,13 @@ void HFSPlusVolume::updateVCB()
     vcb.vcbVolBkUp = localDate(h.backupDate);
     blockScale_ = std::max<unsigned>(1, (h.totalBlocks + 0xFFFE) / 0xFFFF);
     uint64_t blockSize = uint64_t(blockScale_) * h.blockSize;
-    vcb.vcbAlBlkSiz = (LONGINT)blockSize;
-    uint64_t total;
-    if(reader_->wrapped())
-        total = std::min<uint32_t>(h.totalBlocks, 0xFFFF);
+    uint64_t total, free = h.freeBlocks / blockScale_;
+    if(reader_->wrapped() && reader_->wrapperBlockSize())
+    {
+        blockSize = reader_->wrapperBlockSize();
+        total = reader_->wrapperEmbedBlocks();
+        free = uint64_t(h.freeBlocks) * h.blockSize / blockSize;
+    }
     else
     {
         uint64_t sectors = uint64_t(h.totalBlocks) * h.blockSize / 512;
@@ -129,8 +133,9 @@ void HFSPlusVolume::updateVCB()
         total = k ? sectors / k : 0;
     }
     total = std::min(total, kMaxEOF / blockSize);
+    vcb.vcbAlBlkSiz = (LONGINT)blockSize;
     vcb.vcbNmAlBlks = (uint16_t)total;
-    vcb.vcbFreeBks = (uint16_t)std::min<uint64_t>(h.freeBlocks / blockScale_, total);
+    vcb.vcbFreeBks = (uint16_t)std::min(free, total);
     vcb.vcbClpSiz = h.dataClumpSize;
     vcb.vcbNxtCNID = h.nextCatalogID;
     vcb.vcbFilCnt = h.fileCount;

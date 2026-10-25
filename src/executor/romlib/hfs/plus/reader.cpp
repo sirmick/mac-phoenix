@@ -150,6 +150,8 @@ std::unique_ptr<Reader> Reader::open(std::shared_ptr<ImageReader> image, uint64_
         uint16_t embedStart = be16(m + 126);
         r->offset_ = start + uint64_t(alBlSt) * 512 + uint64_t(embedStart) * alBlkSiz;
         r->wrapped_ = true;
+        r->wrapperBlockSize_ = alBlkSiz;
+        r->wrapperEmbedBlocks_ = be16(m + 128);
         if(!image->read(r->offset_ + 1024, m, sizeof m))
             return fail("can't read the embedded volume's header");
     }

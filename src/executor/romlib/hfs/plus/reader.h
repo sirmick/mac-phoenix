@@ -143,6 +143,10 @@ public:
     const VolumeHeader& header() const { return header_; }
     bool isHFSX() const { return header_.signature == 0x4858; }
     bool wrapped() const { return wrapped_; }
+    /* In an HFS wrapper: its allocation block size, and the embedded
+       volume's length in those blocks (drEmbedExtent) */
+    uint32_t wrapperBlockSize() const { return wrapperBlockSize_; }
+    uint16_t wrapperEmbedBlocks() const { return wrapperEmbedBlocks_; }
     bool writable() const { return writable_; }
     uint64_t volumeOffset() const { return offset_; }
     std::u16string volumeName();
@@ -227,6 +231,8 @@ private:
     std::shared_ptr<ImageReader> image_;
     uint64_t offset_ = 0;
     bool wrapped_ = false, writable_ = false, dirty_ = false;
+    uint32_t wrapperBlockSize_ = 0;
+    uint16_t wrapperEmbedBlocks_ = 0;
     VolumeHeader header_;
     std::unique_ptr<Fork> extentsFork_, catalogFork_, allocationFork_;
     std::unique_ptr<BTree> extents_, catalog_;

@@ -10,7 +10,7 @@ File Manager changes them as Mac OS 9.0.4 does.
 | Piece | State |
 |-------|-------|
 | Reader (`src/executor/romlib/hfs/plus/`) | done: matches hfsdump on 8 images and 2 CDs (below) |
-| File Manager volume (`file/hfsplusvolume.cpp`) | done: VolDump on Executor = VolDump on 9.0.4, 14 images (32 MB to 20 GB, hard links, forks near 2 GB) |
+| File Manager volume (`file/hfsplusvolume.cpp`) | done: VolDump on Executor = VolDump on 9.0.4, 20 images (32 MB to 20 GB, bare and wrapped, hard links, forks near 2 GB) |
 | Mounting (`try_to_mount_disk`) | done: bare, HFS wrapper, Apple partition map |
 | System sideload (`hfs_sideload.cpp`) | done: an HFS+ image's blessed System Folder |
 | Web tab | done: an uploaded HFS+ image gives VolDump 9.0.4's dump (`executor.web.hfsplus`) |
@@ -105,10 +105,13 @@ the images read-only on the host):
   4 KB blocks, 200704; `ioVFrBlk` the free blocks / k); `ioVNmAlBlks`
   9.0.4's odd figure: the volume's 512-byte sectors divided by the
   smallest k that fits them in 16 bits (32 MB: 32768; 64 MB: 43690; 1 GB:
-  63550), the embedded volume's block count when wrapped; and the total
-  and the free blocks no more than 2 GB - 1 of them (2 GB: 58254 blocks
-  of 36864). Pinned on volumes of 32 MB to 20 GB, blocks of 512 bytes to
-  8 KB (`voldump-size-*.txt`, `-forks-*`, `-big-12g`).
+  63550); in an HFS wrapper the wrapper's view instead: `ioVAlBlkSiz` its
+  `drAlBlkSiz`, `ioVNmAlBlks` the embedded volume's extent in those
+  blocks, `ioVFrBlk` the free bytes in them (`voldump-wrapped-*.txt`,
+  256 MB to 12 GB); and the total and the free blocks no more than
+  2 GB - 1 of them (2 GB: 58254 blocks of 36864). Pinned on volumes of
+  32 MB to 20 GB, blocks of 512 bytes to 8 KB (`voldump-size-*.txt`,
+  `-wrapped-*`, `-forks-*`, `-big-12g`).
   `vcbAtrb` hardware-locked, bit 6 while files are open.
 - Opening succeeds whatever the permission; writing through a path opened
   for writing fails with wPrErr, through a read-only one with wrPermErr
@@ -290,8 +293,7 @@ the File Manager has no call that makes one.
 Not covered by any image yet: hard links written by Mac OS X (none of
 the images has one: `hardlinks.img` is made by `hfsplus_dump`,
 `fixtures/hfsplus/hardlinks.script`, fsck-clean), journaled volumes,
-`ioVNmAlBlks` of a wrapped volume over 65535 blocks, writing a fork
-near 2 GB on 9.0.4. fsck.hfsplus reports "Illegal name" on
+writing a fork near 2 GB on 9.0.4. fsck.hfsplus reports "Illegal name" on
 `longnames.img`: MakeLongNames passed 9.0.4 a precomposed `ά` (and a
 `:`), which 9.0.4 stored as given.
 
