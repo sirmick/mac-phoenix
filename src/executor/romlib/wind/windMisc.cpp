@@ -232,9 +232,19 @@ void Executor::C_ClipAbove(WindowPeek w)
 {
     WindowPeek wp;
 
+    /* MacPhoenix: a window of another layer (Control Strip's, in a floating
+       layer, painted while an application is current): clip in its own. */
+    if(w)
+    {
+        for(wp = LM(WindowList); wp && wp != w; wp = WINDOW_NEXT_WINDOW(wp))
+            ;
+        if(!wp && ROMlib_layers_with_window(w, [w] { C_ClipAbove(w); }))
+            return;
+    }
+
     SectRgn(PORT_CLIP_REGION(wmgr_port), LM(GrayRgn),
             PORT_CLIP_REGION(wmgr_port));
-    for(wp = LM(WindowList); wp != w; wp = WINDOW_NEXT_WINDOW(wp))
+    for(wp = LM(WindowList); wp && wp != w; wp = WINDOW_NEXT_WINDOW(wp))
         if(WINDOW_VISIBLE(wp))
             DiffRgn(PORT_CLIP_REGION(wmgr_port), WINDOW_STRUCT_REGION(wp),
                     PORT_CLIP_REGION(wmgr_port));

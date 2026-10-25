@@ -17,6 +17,7 @@ General Controls
 Date & Time
 Apple Menu Options
 Launcher
+Control Strip
 Clipping Extension
 AppleScript™
 Finder Scripting Extension

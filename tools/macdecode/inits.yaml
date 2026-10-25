@@ -36,6 +36,11 @@ extensions:
   - {file: Extensions Manager, phase: 1, lacks: [], note: "with EM Extension; the startup-time UI"}
   - {file: EM Extension, phase: 1, lacks: []}
   - {file: Launcher, phase: 1, lacks: []}
+  - {file: Control Strip, phase: 1, lacks: [], loaded: true,
+     note: "keeps its patches by detaching the handle the loader passes in A0 (Executor passed the
+       code pointer until 2026-10-25: the code was freed and SetCursor jumped into whatever was
+       loaded there); its modules are found with FindFolder('sdev'). File Sharing and Printer
+       Selector modules need networking/printing"}
   - {file: Clipping Extension, phase: 1, kind: fext, lacks: []}
   - {file: Finder Scripting Extension, phase: 2, kind: fext, lacks: [], loaded: true,
      note: "Finder's Apple event object model; with AppleScript. Its INIT 128 installs the handlers

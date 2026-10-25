@@ -72,7 +72,8 @@ turns off what they need. Each is a policy decision before it is a fix:
   File Sharing Monitor, Sharing Setup, Users & Groups, and the owner-name
   prompt in Apple IR File Exchange
 - **QuickTime**: QuickTime™ Settings (7.6.1), MoviePlayer (7.6.1)
-- **AutoRemounter, Control Strip, Easy Open, PC Exchange, CloseView** (7.6.1):
+- ~~**Control Strip**~~: on since 2026-10-25 (STRAGGLERS 52)
+- **AutoRemounter, Easy Open, PC Exchange, CloseView** (7.6.1):
   say "not installed" when opened by hand
 - **Network Software Selector** (7.5.5): "Could not get information on the
   currently running networking code"

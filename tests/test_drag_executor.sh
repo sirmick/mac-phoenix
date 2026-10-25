@@ -137,9 +137,10 @@ mouse '{"button":0,"down":true}'; sleep 0.08; mouse '{"button":0,"down":false}';
 mouse '{"button":0,"down":true}'; sleep 0.08; mouse '{"button":0,"down":false}'
 sleep 2
 
-# The selection to the desktop: the strip below SimpleText's window.
+# The selection to the desktop: the strip below SimpleText's window, right
+# of the Control Strip (bottom left, to x 215).
 echo "Dragging the selection to the desktop..."
-drag 20 52 100 470
+drag 20 52 300 470
 echo -n "Waiting for the clipping..."
 for i in $(seq 1 15); do
     [[ -e "$CLIPPING" ]] && { echo " there (${i}s)"; break; }
@@ -154,7 +155,7 @@ fi
 
 # And back: Finder's drag of the clipping into SimpleText's window.
 echo "Dragging the clipping back into SimpleText..."
-drag 100 462 300 250
+drag 300 462 300 250
 sleep 4
 STATUS=$(curl -sf "http://localhost:$PORT/api/status" || echo '')
 echo "$STATUS" | grep -q '"emulator_running": true' || { echo "FAIL: emulator not running after the drop"; exit 1; }
