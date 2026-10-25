@@ -184,7 +184,7 @@ set(file_sources
     file/volume.h
 
     file/fileMisc.cpp
-    file/fileHighlevel.cpp  file/fileUnimplemented.cpp
+    file/fileHighlevel.cpp  file/fileUnimplemented.cpp file/fsref.cpp
     file/volume.cpp
     
     file/localvolume/localvolume.h 

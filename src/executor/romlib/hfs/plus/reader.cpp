@@ -450,6 +450,24 @@ void Reader::forEachChild(uint32_t parentID, const std::function<bool(const Cata
     }
 }
 
+void Reader::forEachLeafRecord(const std::function<void(const CatalogEntry&)>& f)
+{
+    for(uint32_t n = 1; n < catalog_->totalNodes_; n++)
+    {
+        BTree::Node nd = catalog_->node(n);
+        if(!nd || BTree::kind(nd) != -1)
+            continue;
+        for(uint16_t i = 0; i < BTree::count(nd); i++)
+        {
+            const uint8_t *key, *data;
+            size_t room;
+            if(catalog_->record(nd, i, &key, &data, &room))
+                if(auto e = parseRecord(key, data, room))
+                    f(*e);
+        }
+    }
+}
+
 std::vector<CatalogEntry> Reader::children(uint32_t parentID)
 {
     std::vector<CatalogEntry> out;

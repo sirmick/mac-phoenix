@@ -662,7 +662,9 @@ OSErr PBHMoveRename(HParmBlkPtr pb, Boolean a);FILE_SUBTRAP(PBHMoveRename, HParm
 OSErr PBHOpenDeny(HParmBlkPtr pb, Boolean a);FILE_SUBTRAP(PBHOpenDeny, HParmBlkPtr, 0xA260, 0x0038, FSDispatch);
 
 // prototypes for the high level filesystem dispatch traps
-DISPATCHER_TRAP(HighLevelFSDispatch, 0xAA52, D0<0xF>);
+// (MacPhoenix: the low byte, as Mac OS 9.0's HFS Plus calls go to $38;
+// the glue loads the selector with MOVE.W, the parameter words above)
+DISPATCHER_TRAP(HighLevelFSDispatch, 0xAA52, D0<0xFF>);
 
 
 OSErr C_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id, ConstStringPtr file_name, FSSpecPtr spec);PASCAL_SUBTRAP(FSMakeFSSpec, 0xAA52, 0x0001, HighLevelFSDispatch);
@@ -740,6 +742,270 @@ OSErr GetWDInfo(INTEGER wd, GUEST<INTEGER> *vrefp, GUEST<LONGINT> *dirp, GUEST<L
 
 
 
+
+
+typedef uint16_t UniChar;
+
+typedef uint32_t UniCharCount;
+
+typedef uint32_t ItemCount;
+
+typedef uint32_t ByteCount;
+
+typedef uint32_t OptionBits;
+
+typedef uint32_t TextEncoding;
+
+typedef int16_t FSVolumeRefNum;
+
+typedef uint32_t FSCatalogInfoBitmap;
+
+typedef uint32_t FSVolumeInfoBitmap;
+
+typedef uint32_t FSIteratorFlags;
+
+typedef uint16_t FSAllocationFlags;
+
+typedef Ptr FSIterator;
+
+struct wide{GUEST_STRUCT;GUEST<int32_t> hi;GUEST<uint32_t> lo;};static_assert(sizeof(wide) == 8);void describeStruct(const wide&, std::ostream&);
+
+struct UTCDateTime{GUEST_STRUCT;GUEST<uint16_t> highSeconds;GUEST<uint32_t> lowSeconds;GUEST<uint16_t> fraction;};static_assert(sizeof(UTCDateTime) == 8);void describeStruct(const UTCDateTime&, std::ostream&);
+
+struct HFSUniStr255{GUEST_STRUCT;GUEST<uint16_t> length;GUEST<UniChar> unicode[255];};static_assert(sizeof(HFSUniStr255) == 512);void describeStruct(const HFSUniStr255&, std::ostream&);
+
+typedef HFSUniStr255 *HFSUniStr255Ptr;
+
+struct FSRef{GUEST_STRUCT;uint8_t hidden[80];};static_assert(sizeof(FSRef) == 80);void describeStruct(const FSRef&, std::ostream&);
+
+typedef FSRef *FSRefPtr;
+
+struct CatPositionRec{GUEST_STRUCT;GUEST<int32_t> initialize;GUEST<int16_t> priv[6];};static_assert(sizeof(CatPositionRec) == 16);void describeStruct(const CatPositionRec&, std::ostream&);
+
+struct FSCatalogInfo{GUEST_STRUCT;GUEST<uint16_t> nodeFlags;GUEST<FSVolumeRefNum> volume;GUEST<uint32_t> parentDirID;GUEST<uint32_t> nodeID;uint8_t sharingFlags;uint8_t userPrivileges;uint8_t reserved1;uint8_t reserved2;UTCDateTime createDate;UTCDateTime contentModDate;UTCDateTime attributeModDate;UTCDateTime accessDate;UTCDateTime backupDate;GUEST<uint32_t> permissions[4];uint8_t finderInfo[16];uint8_t extFinderInfo[16];GUEST<uint64_t> dataLogicalSize;GUEST<uint64_t> dataPhysicalSize;GUEST<uint64_t> rsrcLogicalSize;GUEST<uint64_t> rsrcPhysicalSize;GUEST<uint32_t> valence;GUEST<TextEncoding> textEncodingHint;};static_assert(sizeof(FSCatalogInfo) == 144);void describeStruct(const FSCatalogInfo&, std::ostream&);
+
+typedef FSCatalogInfo *FSCatalogInfoPtr;
+
+struct FSRefParam{GUEST_STRUCT;COMMONFSQUEUEDEFS;GUEST<int16_t> reserved1;uint8_t reserved2;uint8_t reserved3;GUEST<FSRefPtr> ref;GUEST<FSCatalogInfoBitmap> whichInfo;GUEST<FSCatalogInfoPtr> catInfo;GUEST<UniCharCount> nameLength;GUEST<GUEST<UniChar>*> name;GUEST<int32_t> ioDirID;GUEST<FSSpecPtr> spec;GUEST<FSRefPtr> parentRef;GUEST<FSRefPtr> newRef;GUEST<TextEncoding> textEncodingHint;GUEST<HFSUniStr255Ptr> outName;};static_assert(sizeof(FSRefParam) == 72);void describeStruct(const FSRefParam&, std::ostream&);
+
+typedef FSRefParam *FSRefParamPtr;
+
+struct FSSearchParams{GUEST_STRUCT;GUEST<int32_t> searchTime;GUEST<OptionBits> searchBits;GUEST<UniCharCount> searchNameLength;GUEST<GUEST<UniChar>*> searchName;GUEST<FSCatalogInfoPtr> searchInfo1;GUEST<FSCatalogInfoPtr> searchInfo2;};static_assert(sizeof(FSSearchParams) == 24);void describeStruct(const FSSearchParams&, std::ostream&);
+
+typedef FSSearchParams *FSSearchParamsPtr;
+
+struct FSCatalogBulkParam{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<ProcPtr> ioCompletion;GUEST<OSErr> ioResult;Boolean containerChanged;uint8_t reserved;GUEST<FSIteratorFlags> iteratorFlags;GUEST<FSIterator> iterator;GUEST<FSRefPtr> container;GUEST<ItemCount> maximumItems;GUEST<ItemCount> actualItems;GUEST<FSCatalogInfoBitmap> whichInfo;GUEST<FSCatalogInfoPtr> catalogInfo;GUEST<FSRefPtr> refs;GUEST<FSSpecPtr> specs;GUEST<HFSUniStr255Ptr> names;GUEST<FSSearchParamsPtr> searchParams;};static_assert(sizeof(FSCatalogBulkParam) == 64);void describeStruct(const FSCatalogBulkParam&, std::ostream&);
+
+typedef FSCatalogBulkParam *FSCatalogBulkParamPtr;
+
+struct FSForkIOParam{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<ProcPtr> ioCompletion;GUEST<OSErr> ioResult;GUEST<Ptr> reserved1;GUEST<int16_t> reserved2;GUEST<int16_t> forkRefNum;uint8_t reserved3;int8_t permissions;GUEST<FSRefPtr> ref;GUEST<Ptr> buffer;GUEST<uint32_t> requestCount;GUEST<uint32_t> actualCount;GUEST<uint16_t> positionMode;GUEST<int64_t> positionOffset;GUEST<FSAllocationFlags> allocationFlags;GUEST<uint64_t> allocationAmount;GUEST<UniCharCount> forkNameLength;GUEST<GUEST<UniChar>*> forkName;CatPositionRec forkIterator;GUEST<HFSUniStr255Ptr> outForkName;};static_assert(sizeof(FSForkIOParam) == 92);void describeStruct(const FSForkIOParam&, std::ostream&);
+
+typedef FSForkIOParam *FSForkIOParamPtr;
+
+struct FSForkInfo{GUEST_STRUCT;int8_t flags;int8_t permissions;GUEST<FSVolumeRefNum> volume;GUEST<uint32_t> reserved2;GUEST<uint32_t> nodeID;GUEST<uint32_t> forkID;GUEST<uint64_t> currentPosition;GUEST<uint64_t> logicalEOF;GUEST<uint64_t> physicalEOF;GUEST<uint64_t> process;};static_assert(sizeof(FSForkInfo) == 48);void describeStruct(const FSForkInfo&, std::ostream&);
+
+typedef FSForkInfo *FSForkInfoPtr;
+
+struct FSForkCBInfoParam{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<ProcPtr> ioCompletion;GUEST<OSErr> ioResult;GUEST<int16_t> desiredRefNum;GUEST<int16_t> volumeRefNum;GUEST<int16_t> iterator;GUEST<int16_t> actualRefNum;GUEST<FSRefPtr> ref;GUEST<FSForkInfoPtr> forkInfo;GUEST<HFSUniStr255Ptr> forkName;};static_assert(sizeof(FSForkCBInfoParam) == 38);void describeStruct(const FSForkCBInfoParam&, std::ostream&);
+
+typedef FSForkCBInfoParam *FSForkCBInfoParamPtr;
+
+struct FSVolumeInfo{GUEST_STRUCT;UTCDateTime createDate;UTCDateTime modifyDate;UTCDateTime backupDate;UTCDateTime checkedDate;GUEST<uint32_t> fileCount;GUEST<uint32_t> folderCount;GUEST<uint64_t> totalBytes;GUEST<uint64_t> freeBytes;GUEST<uint32_t> blockSize;GUEST<uint32_t> totalBlocks;GUEST<uint32_t> freeBlocks;GUEST<uint32_t> nextAllocation;GUEST<uint32_t> rsrcClumpSize;GUEST<uint32_t> dataClumpSize;GUEST<uint32_t> nextCatalogID;uint8_t finderInfo[32];GUEST<uint16_t> flags;GUEST<uint16_t> filesystemID;GUEST<uint16_t> signature;GUEST<uint16_t> driveNumber;GUEST<int16_t> driverRefNum;};static_assert(sizeof(FSVolumeInfo) == 126);void describeStruct(const FSVolumeInfo&, std::ostream&);
+
+typedef FSVolumeInfo *FSVolumeInfoPtr;
+
+struct FSVolumeInfoParam{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<ProcPtr> ioCompletion;GUEST<OSErr> ioResult;GUEST<StringPtr> ioNamePtr;GUEST<FSVolumeRefNum> ioVRefNum;GUEST<uint32_t> volumeIndex;GUEST<FSVolumeInfoBitmap> whichInfo;GUEST<FSVolumeInfoPtr> volumeInfo;GUEST<HFSUniStr255Ptr> volumeName;GUEST<FSRefPtr> ref;};static_assert(sizeof(FSVolumeInfoParam) == 44);void describeStruct(const FSVolumeInfoParam&, std::ostream&);
+
+typedef FSVolumeInfoParam *FSVolumeInfoParamPtr;
+
+// PBReadFork and PBWriteFork (Mac OS 9.0): trap $A2A8 (HFS bit set), the selector in D0.
+DISPATCHER_TRAP(FSForkDispatch, 0xA0A8, D0W);
+
+
+OSErr PBMakeFSRef(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBMakeFSRef, FSRefParamPtr, 0xA260, 0x006E, FSDispatch);
+
+OSErr PBMakeFSRefUnicode(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBMakeFSRefUnicode, FSRefParamPtr, 0xA260, 0x007A, FSDispatch);
+
+OSErr PBCompareFSRefs(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBCompareFSRefs, FSRefParamPtr, 0xA260, 0x007C, FSDispatch);
+
+OSErr PBCreateFileUnicode(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBCreateFileUnicode, FSRefParamPtr, 0xA260, 0x0070, FSDispatch);
+
+OSErr PBCreateDirectoryUnicode(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBCreateDirectoryUnicode, FSRefParamPtr, 0xA260, 0x0071, FSDispatch);
+
+OSErr PBDeleteObject(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBDeleteObject, FSRefParamPtr, 0xA260, 0x0072, FSDispatch);
+
+OSErr PBMoveObject(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBMoveObject, FSRefParamPtr, 0xA260, 0x0073, FSDispatch);
+
+OSErr PBRenameUnicode(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBRenameUnicode, FSRefParamPtr, 0xA260, 0x0074, FSDispatch);
+
+OSErr PBExchangeObjects(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBExchangeObjects, FSRefParamPtr, 0xA260, 0x0075, FSDispatch);
+
+OSErr PBGetCatalogInfo(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBGetCatalogInfo, FSRefParamPtr, 0xA260, 0x0076, FSDispatch);
+
+OSErr PBSetCatalogInfo(FSRefParamPtr pb, Boolean async);FILE_SUBTRAP(PBSetCatalogInfo, FSRefParamPtr, 0xA260, 0x0077, FSDispatch);
+
+OSErr PBOpenIterator(FSCatalogBulkParamPtr pb, Boolean async);FILE_SUBTRAP(PBOpenIterator, FSCatalogBulkParamPtr, 0xA260, 0x0078, FSDispatch);
+
+OSErr PBCloseIterator(FSCatalogBulkParamPtr pb, Boolean async);FILE_SUBTRAP(PBCloseIterator, FSCatalogBulkParamPtr, 0xA260, 0x005B, FSDispatch);
+
+OSErr PBGetCatalogInfoBulk(FSCatalogBulkParamPtr pb, Boolean async);FILE_SUBTRAP(PBGetCatalogInfoBulk, FSCatalogBulkParamPtr, 0xA260, 0x005C, FSDispatch);
+
+OSErr PBCatalogSearch(FSCatalogBulkParamPtr pb, Boolean async);FILE_SUBTRAP(PBCatalogSearch, FSCatalogBulkParamPtr, 0xA260, 0x005D, FSDispatch);
+
+OSErr PBOpenFork(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBOpenFork, FSForkIOParamPtr, 0xA260, 0x0079, FSDispatch);
+
+OSErr PBCreateFork(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBCreateFork, FSForkIOParamPtr, 0xA260, 0x007D, FSDispatch);
+
+OSErr PBDeleteFork(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBDeleteFork, FSForkIOParamPtr, 0xA260, 0x007E, FSDispatch);
+
+OSErr PBIterateForks(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBIterateForks, FSForkIOParamPtr, 0xA260, 0x007F, FSDispatch);
+
+OSErr PBGetForkPosition(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBGetForkPosition, FSForkIOParamPtr, 0xA260, 0x0053, FSDispatch);
+
+OSErr PBSetForkPosition(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBSetForkPosition, FSForkIOParamPtr, 0xA260, 0x0054, FSDispatch);
+
+OSErr PBGetForkSize(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBGetForkSize, FSForkIOParamPtr, 0xA260, 0x0055, FSDispatch);
+
+OSErr PBSetForkSize(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBSetForkSize, FSForkIOParamPtr, 0xA260, 0x0056, FSDispatch);
+
+OSErr PBAllocateFork(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBAllocateFork, FSForkIOParamPtr, 0xA260, 0x0057, FSDispatch);
+
+OSErr PBFlushFork(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBFlushFork, FSForkIOParamPtr, 0xA260, 0x0058, FSDispatch);
+
+OSErr PBCloseFork(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBCloseFork, FSForkIOParamPtr, 0xA260, 0x0059, FSDispatch);
+
+OSErr PBGetForkCBInfo(FSForkCBInfoParamPtr pb, Boolean async);FILE_SUBTRAP(PBGetForkCBInfo, FSForkCBInfoParamPtr, 0xA260, 0x005A, FSDispatch);
+
+OSErr PBGetVolumeInfo(FSVolumeInfoParamPtr pb, Boolean async);FILE_SUBTRAP(PBGetVolumeInfo, FSVolumeInfoParamPtr, 0xA260, 0x001D, FSDispatch);
+
+OSErr PBSetVolumeInfo(FSVolumeInfoParamPtr pb, Boolean async);FILE_SUBTRAP(PBSetVolumeInfo, FSVolumeInfoParamPtr, 0xA260, 0x001E, FSDispatch);
+
+OSErr PBReadFork(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBReadFork, FSForkIOParamPtr, 0xA2A8, 0x0051, FSForkDispatch);
+
+OSErr PBWriteFork(FSForkIOParamPtr pb, Boolean async);FILE_SUBTRAP(PBWriteFork, FSForkIOParamPtr, 0xA2A8, 0x0052, FSForkDispatch);
+
+OSErr C_FSpMakeFSRef(FSSpecPtr source, FSRefPtr newRef);PASCAL_SUBTRAP(FSpMakeFSRef, 0xAA52, 0x001A, HighLevelFSDispatch);
+
+
+OSErr C_FSMakeFSRefUnicode(FSRefPtr parentRef, UniCharCount nameLength, GUEST<UniChar> *name, TextEncoding textEncodingHint, FSRefPtr newRef);PASCAL_SUBTRAP(FSMakeFSRefUnicode, 0xAA52, 0x001B, HighLevelFSDispatch);
+
+
+OSErr C_FSCompareFSRefs(FSRefPtr ref1, FSRefPtr ref2);PASCAL_SUBTRAP(FSCompareFSRefs, 0xAA52, 0x0035, HighLevelFSDispatch);
+
+
+OSErr C_FSCreateFileUnicode(FSRefPtr parentRef, UniCharCount nameLength, GUEST<UniChar> *name, FSCatalogInfoBitmap whichInfo, FSCatalogInfoPtr catalogInfo, FSRefPtr newRef, FSSpecPtr newSpec);PASCAL_SUBTRAP(FSCreateFileUnicode, 0xAA52, 0x001C, HighLevelFSDispatch);
+
+
+OSErr C_FSCreateDirectoryUnicode(FSRefPtr parentRef, UniCharCount nameLength, GUEST<UniChar> *name, FSCatalogInfoBitmap whichInfo, FSCatalogInfoPtr catalogInfo, FSRefPtr newRef, FSSpecPtr newSpec, GUEST<uint32_t> *newDirID);PASCAL_SUBTRAP(FSCreateDirectoryUnicode, 0xAA52, 0x001D, HighLevelFSDispatch);
+
+
+OSErr C_FSDeleteObject(FSRefPtr ref);PASCAL_SUBTRAP(FSDeleteObject, 0xAA52, 0x001E, HighLevelFSDispatch);
+
+
+OSErr C_FSMoveObject(FSRefPtr ref, FSRefPtr destDirectory, FSRefPtr newRef);PASCAL_SUBTRAP(FSMoveObject, 0xAA52, 0x001F, HighLevelFSDispatch);
+
+
+OSErr C_FSRenameUnicode(FSRefPtr ref, UniCharCount nameLength, GUEST<UniChar> *name, TextEncoding textEncodingHint, FSRefPtr newRef);PASCAL_SUBTRAP(FSRenameUnicode, 0xAA52, 0x0020, HighLevelFSDispatch);
+
+
+OSErr C_FSExchangeObjects(FSRefPtr ref, FSRefPtr destRef);PASCAL_SUBTRAP(FSExchangeObjects, 0xAA52, 0x0021, HighLevelFSDispatch);
+
+
+OSErr C_FSGetCatalogInfo(FSRefPtr ref, FSCatalogInfoBitmap whichInfo, FSCatalogInfoPtr catalogInfo, HFSUniStr255Ptr outName, FSSpecPtr fsSpec, FSRefPtr parentRef);PASCAL_SUBTRAP(FSGetCatalogInfo, 0xAA52, 0x0022, HighLevelFSDispatch);
+
+
+OSErr C_FSSetCatalogInfo(FSRefPtr ref, FSCatalogInfoBitmap whichInfo, FSCatalogInfoPtr catalogInfo);PASCAL_SUBTRAP(FSSetCatalogInfo, 0xAA52, 0x0023, HighLevelFSDispatch);
+
+
+OSErr C_FSOpenIterator(FSRefPtr container, FSIteratorFlags iteratorFlags, GUEST<FSIterator> *iterator);PASCAL_SUBTRAP(FSOpenIterator, 0xAA52, 0x0024, HighLevelFSDispatch);
+
+
+OSErr C_FSCloseIterator(FSIterator iterator);PASCAL_SUBTRAP(FSCloseIterator, 0xAA52, 0x0025, HighLevelFSDispatch);
+
+
+OSErr C_FSGetCatalogInfoBulk(FSIterator iterator, ItemCount maximumObjects, GUEST<ItemCount> *actualObjects, Boolean *containerChanged, FSCatalogInfoBitmap whichInfo, FSCatalogInfoPtr catalogInfos, FSRefPtr refs, FSSpecPtr specs, HFSUniStr255Ptr names);PASCAL_SUBTRAP(FSGetCatalogInfoBulk, 0xAA52, 0x0026, HighLevelFSDispatch);
+
+
+OSErr C_FSCatalogSearch(FSIterator iterator, FSSearchParamsPtr searchCriteria, ItemCount maximumObjects, GUEST<ItemCount> *actualObjects, Boolean *containerChanged, FSCatalogInfoBitmap whichInfo, FSCatalogInfoPtr catalogInfos, FSRefPtr refs, FSSpecPtr specs, HFSUniStr255Ptr names);PASCAL_SUBTRAP(FSCatalogSearch, 0xAA52, 0x0027, HighLevelFSDispatch);
+
+
+OSErr C_FSCreateFork(FSRefPtr ref, UniCharCount forkNameLength, GUEST<UniChar> *forkName);PASCAL_SUBTRAP(FSCreateFork, 0xAA52, 0x0036, HighLevelFSDispatch);
+
+
+OSErr C_FSDeleteFork(FSRefPtr ref, UniCharCount forkNameLength, GUEST<UniChar> *forkName);PASCAL_SUBTRAP(FSDeleteFork, 0xAA52, 0x0037, HighLevelFSDispatch);
+
+
+OSErr C_FSIterateForks(FSRefPtr ref, CatPositionRec *forkIterator, HFSUniStr255Ptr forkName, GUEST<int64_t> *forkSize, GUEST<uint64_t> *forkPhysicalSize);PASCAL_SUBTRAP(FSIterateForks, 0xAA52, 0x0038, HighLevelFSDispatch);
+
+
+OSErr C_FSOpenFork(FSRefPtr ref, UniCharCount forkNameLength, GUEST<UniChar> *forkName, int8_t permissions, GUEST<int16_t> *forkRefNum);PASCAL_SUBTRAP(FSOpenFork, 0xAA52, 0x0028, HighLevelFSDispatch);
+
+
+// 68K glue: a Pascal value parameter over 4 bytes (SInt64) comes as a
+// pointer to it; PowerPC passes the value (FSReadFork, InterfaceLib only).
+OSErr C_FSReadFork68K(int16_t forkRefNum, uint16_t positionMode, wide *positionOffset, ByteCount requestCount, Ptr buffer, GUEST<ByteCount> *actualCount);PASCAL_SUBTRAP(FSReadFork68K, 0xAA52, 0x0029, HighLevelFSDispatch);
+
+
+OSErr C_FSReadFork(int16_t forkRefNum, uint16_t positionMode, wide positionOffset, ByteCount requestCount, Ptr buffer, GUEST<ByteCount> *actualCount);NOTRAP_FUNCTION(FSReadFork);
+
+
+// 68K glue: a Pascal value parameter over 4 bytes (SInt64) comes as a
+// pointer to it; PowerPC passes the value (FSWriteFork, InterfaceLib only).
+OSErr C_FSWriteFork68K(int16_t forkRefNum, uint16_t positionMode, wide *positionOffset, ByteCount requestCount, Ptr buffer, GUEST<ByteCount> *actualCount);PASCAL_SUBTRAP(FSWriteFork68K, 0xAA52, 0x002A, HighLevelFSDispatch);
+
+
+OSErr C_FSWriteFork(int16_t forkRefNum, uint16_t positionMode, wide positionOffset, ByteCount requestCount, Ptr buffer, GUEST<ByteCount> *actualCount);NOTRAP_FUNCTION(FSWriteFork);
+
+
+OSErr C_FSGetForkPosition(int16_t forkRefNum, GUEST<int64_t> *position);PASCAL_SUBTRAP(FSGetForkPosition, 0xAA52, 0x002B, HighLevelFSDispatch);
+
+
+// 68K glue: a Pascal value parameter over 4 bytes (SInt64) comes as a
+// pointer to it; PowerPC passes the value (FSSetForkPosition, InterfaceLib only).
+OSErr C_FSSetForkPosition68K(int16_t forkRefNum, uint16_t positionMode, wide *positionOffset);PASCAL_SUBTRAP(FSSetForkPosition68K, 0xAA52, 0x002C, HighLevelFSDispatch);
+
+
+OSErr C_FSSetForkPosition(int16_t forkRefNum, uint16_t positionMode, wide positionOffset);NOTRAP_FUNCTION(FSSetForkPosition);
+
+
+OSErr C_FSGetForkSize(int16_t forkRefNum, GUEST<int64_t> *forkSize);PASCAL_SUBTRAP(FSGetForkSize, 0xAA52, 0x002D, HighLevelFSDispatch);
+
+
+// 68K glue: a Pascal value parameter over 4 bytes (SInt64) comes as a
+// pointer to it; PowerPC passes the value (FSSetForkSize, InterfaceLib only).
+OSErr C_FSSetForkSize68K(int16_t forkRefNum, uint16_t positionMode, wide *positionOffset);PASCAL_SUBTRAP(FSSetForkSize68K, 0xAA52, 0x002E, HighLevelFSDispatch);
+
+
+OSErr C_FSSetForkSize(int16_t forkRefNum, uint16_t positionMode, wide positionOffset);NOTRAP_FUNCTION(FSSetForkSize);
+
+
+// 68K glue: a Pascal value parameter over 4 bytes (SInt64) comes as a
+// pointer to it; PowerPC passes the value (FSAllocateFork, InterfaceLib only).
+OSErr C_FSAllocateFork68K(int16_t forkRefNum, FSAllocationFlags flags, uint16_t positionMode, wide *positionOffset, wide *requestCount, GUEST<uint64_t> *actualCount);PASCAL_SUBTRAP(FSAllocateFork68K, 0xAA52, 0x002F, HighLevelFSDispatch);
+
+
+OSErr C_FSAllocateFork(int16_t forkRefNum, FSAllocationFlags flags, uint16_t positionMode, wide positionOffset, wide requestCount, GUEST<uint64_t> *actualCount);NOTRAP_FUNCTION(FSAllocateFork);
+
+
+OSErr C_FSFlushFork(int16_t forkRefNum);PASCAL_SUBTRAP(FSFlushFork, 0xAA52, 0x0030, HighLevelFSDispatch);
+
+
+OSErr C_FSCloseFork(int16_t forkRefNum);PASCAL_SUBTRAP(FSCloseFork, 0xAA52, 0x0031, HighLevelFSDispatch);
+
+
+OSErr C_FSGetForkCBInfo(int16_t desiredRefNum, FSVolumeRefNum volume, GUEST<int16_t> *iterator, GUEST<int16_t> *actualRefNum, FSForkInfoPtr forkInfo, FSRefPtr ref, HFSUniStr255Ptr outForkName);PASCAL_SUBTRAP(FSGetForkCBInfo, 0xAA52, 0x0032, HighLevelFSDispatch);
+
+
+OSErr C_FSGetVolumeInfo(FSVolumeRefNum volume, ItemCount volumeIndex, GUEST<FSVolumeRefNum> *actualVolume, FSVolumeInfoBitmap whichInfo, FSVolumeInfoPtr info, HFSUniStr255Ptr volumeName, FSRefPtr rootDirectory);PASCAL_SUBTRAP(FSGetVolumeInfo, 0xAA52, 0x0033, HighLevelFSDispatch);
+
+
+OSErr C_FSSetVolumeInfo(FSVolumeRefNum volume, FSVolumeInfoBitmap whichInfo, FSVolumeInfoPtr info);PASCAL_SUBTRAP(FSSetVolumeInfo, 0xAA52, 0x0034, HighLevelFSDispatch);
+
+
+OSErr C_FSGetDataForkName(HFSUniStr255Ptr dataForkName);PASCAL_SUBTRAP(FSGetDataForkName, 0xAA52, 0x0018, HighLevelFSDispatch);
+
+
+OSErr C_FSGetResourceForkName(HFSUniStr255Ptr resourceForkName);PASCAL_SUBTRAP(FSGetResourceForkName, 0xAA52, 0x0019, HighLevelFSDispatch);
 
 
 } /* namespace Executor */

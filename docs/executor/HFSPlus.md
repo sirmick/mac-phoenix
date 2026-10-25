@@ -14,6 +14,7 @@ File Manager changes them as Mac OS 9.0.4 does.
 | Mounting (`try_to_mount_disk`) | done: bare, HFS wrapper, Apple partition map |
 | System sideload (`hfs_sideload.cpp`) | done: an HFS+ image's blessed System Folder |
 | Web tab | done: an uploaded HFS+ image gives VolDump 9.0.4's dump (`executor.web.hfsplus`) |
+| HFS Plus APIs (`file/fsref.cpp`) | done: FSRefTest on Executor = on 9.0.4 (HFS+, HFS, forks past 4 GB) |
 | Writing (`hfs/plus/writer.cpp`, `btree.cpp`) | done: fsck.hfsplus-clean (HFS+, HFSX, trees past their header's map); VolWrite on Executor = VolWrite on 9.0.4, natively and in the tab |
 
 ## The reader
@@ -232,6 +233,67 @@ first, as `iNode<reference>`; links typed `hlnk`/`hfs+`, `kHasBeenInited`,
 dated as the folder; fsck.hfsplus calls them "pre-Leopard"), for tests;
 the File Manager has no call that makes one.
 
+## The HFS Plus APIs (Mac OS 9.0)
+
+`file/fsref.cpp`: FSRefs, Unicode names, catalog info, iterators and
+FSCatalogSearch, the fork calls with 64-bit positions, FSGetVolumeInfo:
+the `PB…` calls on `_FSDispatch` (selectors $1D–$7F; PBReadFork and
+PBWriteFork on $A2A8), the `FS…` calls on `_HighLevelFSDispatch` ($18–$38,
+the dispatcher's selector mask widened to 0xFF), all exported to
+InterfaceLib; definitions in `multiversal/defs/FileMgr.yaml` (layouts and
+selectors as Universal Interfaces 3.3.2 declares them; their sizes
+checked on 9.0.4 by FSRefTest). A 68K Pascal value parameter over 4 bytes
+comes as a pointer: FSReadFork, FSWriteFork, FSSetForkPosition,
+FSSetForkSize and FSAllocateFork have a `…68K` entry for the 68K glue's
+selector and take the SInt64 by value from PowerPC.
+
+On an HFS+ volume items are found by CNID and named in Unicode (an
+application's name decomposed for MacRoman's accents, as HFS+ stores
+them), forks of any length open; elsewhere (HFS, host folders) the calls
+go through the classic File Manager. An FSRef is ours: the volume and the
+CNID, or (classic volumes) the parent, the name and the ID, the name first
+and then the ID, so a ref finds its item after a rename or move, as
+9.0.4's do.
+
+Pinned on 9.0.4 (`tests/guest/hfsplus/FSRefTest.c`, `fsreftest.py`,
+`oracle-9.0.4/fsreftest.txt`; on the long-name fixture, a blank HFS+ and a
+blank HFS volume, and the 12 GB volume of big forks), among others:
+
+- FSGetVolumeInfo: volume 0 is nsvErr (no default volume); the signature
+  `H+`, not `BD`; the header's counts and real block size.
+- An FSRef of zeros: errFSBadFSRef; any other nonsense: fnfErr. The
+  root's parent ref: zeros. FSMakeFSRefUnicode with no name: the parent.
+  A composed and a decomposed é find the same item.
+- Iteration: the last batch comes with errFSNoMoreItems; a subtree
+  iterator only on a volume's root (errFSBadIteratorFlags), and only for
+  FSCatalogSearch (errFSIteratorNotSupported for the bulk call), which
+  needs both search infos (errFSBadSearchParams) and returns the catalog's
+  records in the file's node order.
+- Creating: 255 UTF-16 units at most (errFSNameTooLong), none is
+  errFSMissingName, a name in any case taken is dupFNErr; on HFS more than
+  31 MacRoman characters is errFSNameTooLong, a character MacRoman lacks
+  bdNamErr. Renaming to nothing: dupFNErr. Moving into a file:
+  errFSNotAFolder. Valence and sizes can't be set (errFSBadInfoBitmap).
+- Forks: the data fork's name is empty, the resource fork's
+  `RESOURCE_FORK`; both always exist (FSCreateFork: errFSForkExists;
+  FSDeleteFork empties one); another name is errFSBadForkName, a folder's
+  fork errFSForkNotFound. A path FSOpenFork opened refuses the classic
+  calls (GetEOF, FSRead...: fsDataTooBigErr), on any volume. Newline mode
+  is errFSBadPosMode; a read from past the end is eofErr, the mark
+  unmoved; FSAllocateFork covers the position plus the request and says
+  what it added. FSGetForkCBInfo's flags are the FCB's (write, resource,
+  large file 0x08, modified).
+- FSExchangeObjects: with a folder notAFileErr, with itself sameFileErr
+  (where ExchangeFiles with a folder says noErr).
+
+Executor's HFS code differs where the FSRef layer can't make up for it:
+it takes ':' in a name for a path separator (9.0.4 makes such an HFS
+name; Executor answers bdNamErr), and it allocates by the clump where
+9.0.4's fork calls allocate blocks (physical lengths). Not done: the
+search criteria past names (`fsSBPartialName`, `fsSBFullName`,
+`fsSBNegate`: dates, sizes, Finder info are ignored); permissions are
+the catalog's bytes (Mac OS X's), read-only.
+
 ## Tests
 
 - `executor.hfsplus_reader` (`tests/test_hfsplus_reader.py`): `hfsplus_dump`
@@ -300,6 +362,10 @@ the File Manager has no call that makes one.
   with `/api/launch` `open`, it takes more text and is saved. On the host
   the data fork is the text, the resource fork a resource file with its
   `styl`, and fsck.hfsplus finds the volume OK.
+- `executor.hfsplus_fsref` (`tests/test_hfsplus_fsref.py`): FSRefTest on
+  Executor against 9.0.4's output (`fsreftest.py --machine 9.0.4` remakes
+  it): but for the machine's Finder (its Desktop files open, its items on
+  the writable volumes) and the two HFS-code differences above.
 - `executor.HFSPlusWriteTest.*`, `executor.HFSXWriteTest.*`: a blank
   volume (HFS+, HFSX) written in the gtest binary (natively and under
   node).

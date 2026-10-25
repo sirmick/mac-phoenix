@@ -39,6 +39,9 @@ std::string classicName(const std::u16string& name, uint32_t cnid);
 /* If macRoman is such a shortened name, the CNID in it. */
 std::optional<uint32_t> cnidInClassicName(const std::string& macRoman);
 
+/* A MacRoman byte's character, precomposed (Apple's ROMAN.TXT). */
+char16_t macRomanCharacter(uint8_t b);
+
 /* UTF-8, for tools and logs. */
 std::string toUTF8(const std::u16string& s);
 

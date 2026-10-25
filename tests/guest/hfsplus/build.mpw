@@ -1,9 +1,9 @@
 # build.mpw — the HFS+ guest apps (68k: SC, Link), against Universal
 # Interfaces 3.3.2 for the HFS Plus calls; tools/mpw/mpw build tests/guest/hfsplus -o tests/guest/hfsplus
 # interfaces: 3.3.2
-# products: MakeLongNames VolDump VolWrite
-Delete -i MakeLongNames VolDump VolWrite
-For app in MakeLongNames VolDump VolWrite
+# products: MakeLongNames VolDump VolWrite FSRefTest
+Delete -i MakeLongNames VolDump VolWrite FSRefTest
+For app in MakeLongNames VolDump VolWrite FSRefTest
 	SC -b {app}.c -o {app}.68k.o
 	Link -t APPL -c '????' -model near ∂
 		{app}.68k.o ∂
@@ -14,3 +14,4 @@ End
 SetFile -t APPL -c 'MkLN' -a B MakeLongNames
 SetFile -t APPL -c 'VDmp' -a B VolDump
 SetFile -t APPL -c 'VWrt' -a B VolWrite
+SetFile -t APPL -c 'FSRt' -a B FSRefTest

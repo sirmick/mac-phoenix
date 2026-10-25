@@ -1,0 +1,334 @@
+SIZES FSRef 80 FSCatalogInfo 144 FSRefParam 72 FSForkIOParam 92 FSCatalogBulkParam 64 FSForkInfo 48 FSForkCBInfoParam 38 FSVolumeInfo 126 FSVolumeInfoParam 44 FSSearchParams 24
+VOLUME LongNames find 0
+  getvolumeinfo -> 0 same 1 u"LongNames" sig 482B fsid 0 flags 0080 files 33 folders 6 total 33554432 free 29335552 blk 4096/8192/7162 clumps 65536/65536 nextid 55 cr 3875717766
+  root -> 0 u"LongNames" dir id 2 par 1
+  getvolumeinfo bad bitmap -> -1405
+  getvolumeinfo default -> -35
+  getvolumeinfo nsv -> -35
+REFS
+  fspmakefsref System Folder -> 0 u"System Folder" dir id 49 par 2
+  makefsrefunicode -> 0 compare 0
+  makefsrefunicode other case -> 0 compare 0
+  compare root/System Folder -> -1420
+  makefsrefunicode long -> 0 u"This is a file with a rather long name.txt" file id 22 par 2
+  makefsrefunicode composed e-acute -> 0
+  makefsrefunicode decomposed e-acute -> 0 compare 0
+  makefsrefunicode missing -> -43
+  makefsrefunicode empty -> 0 -> 0 u"LongNames" dir id 2 par 1
+  makefsrefunicode in a file -> -120
+  pbmakefsref short-name path -> 0 u"inner.txt" file id 35 par 34
+  pbmakefsref missing -> -43
+  pbmakefsref dirID 34, no name -> 0 u"A folder whose name is longer than 31 characters" dir id 34 par 2
+  pbmakefsref root, empty name -> 0 u"LongNames" dir id 2 par 1
+  zero ref getcataloginfo -> -1401
+  ones ref getcataloginfo -> -43
+INFO
+  System Folder -> 0
+    all -> 0 u"System Folder" flags 0010 par 2 id 49 enc 0 cr 3875721851 md 3875721912 amd - bk - perm 00000000/00000000/00000000/00000000 fndr 000000000000000003E003C001010107 xfndr 00000000C34000000000000000000000 valence 4 data 0 / 0 rsrc 0 / 0 share 00 privs 00 vol-same 1
+    spec par 2 "System Folder" parent -> 0 u"LongNames" dir id 2 par 1
+  This is a file with a rather long name.txt -> 0
+    all -> 0 u"This is a file with a rather long name.txt" flags 0000 par 2 id 22 enc 0 cr 3875721851 md 3875721851 amd - bk - perm 00000000/00000000/00000000/00000000 fndr 54455854747478740100040000010000 xfndr 00000000000000000000000000000000 valence 0 data 48 / 4096 rsrc 0 / 0 share 00 privs 00 vol-same 1
+    spec par 2 "This is a file with a ra#16.txt" parent -> 0 u"LongNames" dir id 2 par 1
+  Long named document with both forks.rsrc -> 0
+    all -> 0 u"Long named document with both forks.rsrc" flags 0000 par 2 id 33 enc 0 cr 3875721851 md 3875721851 amd - bk - perm 00000000/00000000/00000000/00000000 fndr 72737263525345440100034000010000 xfndr 00000000000000000000000000000000 valence 0 data 46 / 4096 rsrc 55 / 4096 share 00 privs 00 vol-same 1
+    spec par 2 "Long named document wit#21.rsrc" parent -> 0 u"LongNames" dir id 2 par 1
+  Fragmented A.bin -> 0
+    all -> 0 u"Fragmented A.bin" flags 0000 par 2 id 37 enc 0 cr 3875721851 md 3875721851 amd - bk - perm 00000000/00000000/00000000/00000000 fndr 42494E416866732B010002C001010000 xfndr 00000000000000000000000000000000 valence 0 data 1572886 / 1576960 rsrc 0 / 0 share 00 privs 00 vol-same 1
+    spec par 2 "Fragmented A.bin" parent -> 0 u"LongNames" dir id 2 par 1
+  Colon:in a name -> 0
+    all -> 0 u"Colon:in a name" flags 0000 par 2 id 46 enc 0 cr 3875721851 md 3875721851 amd - bk - perm 00000000/00000000/00000000/00000000 fndr 54455854747478740100024000010000 xfndr 00000000000000000000000000000000 valence 0 data 21 / 4096 rsrc 0 / 0 share 00 privs 00 vol-same 1
+    spec par 2 "Colon?in a name#2E" parent -> 0 u"LongNames" dir id 2 par 1
+  Slash/in a name -> 0
+    all -> 0 u"Slash/in a name" flags 0000 par 2 id 47 enc 0 cr 3875721851 md 3875721851 amd - bk - perm 00000000/00000000/00000000/00000000 fndr 5445585474747874010003C000810000 xfndr 00000000000000000000000000000000 valence 0 data 21 / 4096 rsrc 0 / 0 share 00 privs 00 vol-same 1
+    spec par 2 "Slash/in a name" parent -> 0 u"LongNames" dir id 2 par 1
+  null catinfo -> 0
+  reserved bit -> -1405
+  root -> 0 u"LongNames" flags 0010 par 1 id 2 valence 31 parent -> -1401
+ITERATE root open -> 0
+  bulk -> 0 got 3 changed 0
+    u".A leading dot and a name long enough to cut" flags 0000 data 50 / 4096 id 44 spec ".A leading dot and a name lo#2C" ref -> 0 u".A leading dot and a name long enough to cut" file
+    u"A folder whose name is longer than 31 characters" flags 0010 data 0 / 0 id 34 spec "A folder whose name is longe#22" ref -> 0 u"A folder whose name is longer than 31 characters" dir
+    u"A long name that ends with a dot, nothing after." flags 0000 data 54 / 4096 id 42 spec "A long name that ends with a#2A" ref -> 0 u"A long name that ends with a dot, nothing after." file
+  bulk -> 0 got 3 changed 0
+    u"A long name whose extension is quite long.backup-copy" flags 0000 data 59 / 4096 id 41 spec "A long name whose extension #29" ref -> 0 u"A long name whose extension is quite long.backup-copy" file
+    u"A long name with a seven char extension.abcdef" flags 0000 data 52 / 4096 id 40 spec "A long name with a seven cha#28" ref -> 0 u"A long name with a seven char extension.abcdef" file
+    u"A long name with a six char extension.abcde" flags 0000 data 49 / 4096 id 39 spec "A long name with a six#27.abcde" ref -> 0 u"A long name with a six char extension.abcde" file
+  bulk -> 0 got 3 changed 0
+    u"A long name with no extension at all here" flags 0000 data 47 / 4096 id 23 spec "A long name with no extensio#17" ref -> 0 u"A long name with no extension at all here" file
+    u"Archive.with.many.dots.and.a.long.name.tar.gz" flags 0000 data 51 / 4096 id 32 spec "Archive.with.many.dots.an#20.gz" ref -> 0 u"Archive.with.many.dots.and.a.long.name.tar.gz" file
+    u"Cafe\u0301 cre\u0300me \u2014 accented and long name.txt" flags 0000 data 59 / 4096 id 26 spec "Caf\x8E cr\x8Fme \xD1 accented an#1A.txt" ref -> 0 u"Cafe\u0301 cre\u0300me \u2014 accented and long name.txt" file
+  bulk -> 0 got 3 changed 0
+    u"Case Test FILE.txt" flags 0000 data 24 / 4096 id 48 spec "Case Test FILE.txt" ref -> 0 u"Case Test FILE.txt" file
+    u"Colon:in a name" flags 0000 data 21 / 4096 id 46 spec "Colon?in a name#2E" ref -> 0 u"Colon:in a name" file
+    u"Desktop DB" flags 0088 data 65536 / 65536 id 18 spec "Desktop DB" ref -> 0 u"Desktop DB" file
+  bulk -> 0 got 3 changed 0
+    u"Desktop DF" flags 0088 data 2 / 65536 id 17 spec "Desktop DF" ref -> 0 u"Desktop DF" file
+    u"Desktop Folder" flags 0010 data 0 / 0 id 20 spec "Desktop Folder" ref -> 0 u"Desktop Folder" dir
+    u"Exactly thirty-one characters!!" flags 0000 data 37 / 4096 id 24 spec "Exactly thirty-one characters!!" ref -> 0 u"Exactly thirty-one characters!!" file
+  bulk -> 0 got 3 changed 0
+    u"Exactly thirty-two characters!!!" flags 0000 data 38 / 4096 id 25 spec "Exactly thirty-two character#19" ref -> 0 u"Exactly thirty-two characters!!!" file
+    u"Fragmented A.bin" flags 0000 data 1572886 / 1576960 id 37 spec "Fragmented A.bin" ref -> 0 u"Fragmented A.bin" file
+    u"Fragmented B.bin" flags 0000 data 1572886 / 1576960 id 38 spec "Fragmented B.bin" ref -> 0 u"Fragmented B.bin" file
+  bulk -> 0 got 3 changed 0
+    u"Greek \u03B1\u03B2\u03B3.txt" flags 0000 data 31 / 4096 id 28 spec "Greek ???#1C.txt" ref -> 0 u"Greek \u03B1\u03B2\u03B3.txt" file
+    u"Long named document with both forks.rsrc" flags 0000 data 46 / 4096 id 33 spec "Long named document wit#21.rsrc" ref -> 0 u"Long named document with both forks.rsrc" file
+    u"NoSpacesAndNoDotsInThisRatherLongFileName" flags 0000 data 47 / 4096 id 43 spec "NoSpacesAndNoDotsInThisRathe#2B" ref -> 0 u"NoSpacesAndNoDotsInThisRatherLongFileName" file
+  bulk -> 0 got 3 changed 0
+    u"Short Cafe\u0301.txt" flags 0000 data 25 / 4096 id 27 spec "Short Caf\x8E.txt" ref -> 0 u"Short Cafe\u0301.txt" file
+    u"Slash/in a name" flags 0000 data 21 / 4096 id 47 spec "Slash/in a name" ref -> 0 u"Slash/in a name" file
+    u"System Folder" flags 0010 data 0 / 0 id 49 spec "System Folder" ref -> 0 u"System Folder" dir
+  bulk -> 0 got 3 changed 0
+    u"TheVolumeSettingsFolder" flags 0010 data 0 / 0 id 16 spec "TheVolumeSettingsFolder" ref -> 0 u"TheVolumeSettingsFolder" dir
+    u"This is a file with a rather long name.txt" flags 0000 data 48 / 4096 id 22 spec "This is a file with a ra#16.txt" ref -> 0 u"This is a file with a rather long name.txt" file
+    u"Trash" flags 0010 data 0 / 0 id 21 spec "Trash" ref -> 0 u"Trash" dir
+  bulk -> 0 got 3 changed 0
+    u"Twins with the same long prefix - one.txt" flags 0000 data 47 / 4096 id 30 spec "Twins with the same long#1E.txt" ref -> 0 u"Twins with the same long prefix - one.txt" file
+    u"Twins with the same long prefix - two.txt" flags 0000 data 47 / 4096 id 31 spec "Twins with the same long#1F.txt" ref -> 0 u"Twins with the same long prefix - two.txt" file
+    u"\u0395\u03BB\u03BB\u03B7\u03BD\u03B9\u03BA\u03B1\u030D and a long name that runs on.txt" flags 0000 data 79 / 4096 id 45 spec "????????? and a long nam#2D.txt" ref -> 0 u"\u0395\u03BB\u03BB\u03B7\u03BD\u03B9\u03BA\u03B1\u030D and a long name that runs on.txt" file
+  bulk -> -1417 got 1 changed 0
+    u"\u65E5\u672C\u8A9E long Japanese name.txt" flags 0000 data 44 / 4096 id 29 spec "??? long Japanese name#1D.txt" ref -> 0 u"\u65E5\u672C\u8A9E long Japanese name.txt" file
+  total 31
+  bulk again -> -1417 got 0
+  bulk zero -> -1418
+  close -> 0
+  close again -> -38
+  open subtree -> 0 bulk -> -1424
+  open bad flags -> -1422
+FORKS read
+  data fork name u"" resource fork name u"RESOURCE_FORK"
+  both data open -> 0 size -> 0  46 read16 -> 0 (16) 4C6F6E67 rest -> -39 (30) at 46 setpos eof-4 -> 0 read -> -39 (4) setpos past -> -39 newline mode -> -1412 geteof -> -1310 write -> -61 close -> 0 close again -> -38
+  both rsrc open -> 0 size -> 0  55 read16 -> 0 (16) 4C6F6E67 rest -> -39 (39) at 55 setpos eof-4 -> 0 read -> -39 (4) setpos past -> -39 newline mode -> -1412 geteof -> -1310 write -> -61 close -> 0 close again -> -38
+  iterateforks -> 0 u"" size 46 phys 4096
+  iterateforks -> 0 u"RESOURCE_FORK" size 55 phys 4096
+  iterateforks -> -1417
+  open named fork -> -1402
+  fragmented open -> 0 size -> 0  1572886 read16 -> 0 (16) 46726167 rest -> 0 (32768) at 32784 setpos eof-4 -> 0 read -> -39 (4) setpos past -> -39 newline mode -> -1412 geteof -> -1310 write -> -61 close -> 0 close again -> -38
+  open a folder's fork -> -1409
+SEARCH
+  open subtree -> 0
+  search -> 0 got 4
+    u"A preferences file with a long name.prefs"
+    u"Long named document with both forks.rsrc"
+    u"NoSpacesAndNoDotsInThisRatherLongFileName"
+    u"This is a file with a rather long name.txt"
+  search -> 0 got 4
+    u"Twins with the same long prefix - one.txt"
+    u"Twins with the same long prefix - two.txt"
+    u"\u0395\u03BB\u03BB\u03B7\u03BD\u03B9\u03BA\u03B1\u030D and a long name that runs on.txt"
+    u"\u65E5\u672C\u8A9E long Japanese name.txt"
+  search -> 0 got 4
+    u"A long name with no extension at all here"
+    u"Archive.with.many.dots.and.a.long.name.tar.gz"
+    u"Cafe\u0301 cre\u0300me \u2014 accented and long name.txt"
+    u"LongNames"
+  search -> 0 got 4
+    u".A leading dot and a name long enough to cut"
+    u"A folder whose name is longer than 31 characters"
+    u"A long name that ends with a dot, nothing after."
+    u"A long name whose extension is quite long.backup-copy"
+  search -> -1417 got 3
+    u"A long name with a seven char extension.abcdef"
+    u"A long name with a six char extension.abcde"
+    u"Another long file name inside the long folder.txt"
+  search flat -> -1424
+VOLUME Blank find 0
+  getvolumeinfo -> 0 same 1 u"Blank" sig 482B fsid 0 flags 0000 files 3 folders 3 total 67108864 free 65388544 blk 4096/16384/15964 clumps 65536/65536 nextid 22 cr now
+  root -> 0 u"Blank" dir id 2 par 1
+  getvolumeinfo bad bitmap -> -1405
+  getvolumeinfo default -> -35
+  getvolumeinfo nsv -> -35
+WRITE
+  create work folder -> 0 spec "FSRef work" -> 0 u"FSRef work" dir
+  create long -> 0 spec "A file with a name longe#17.txt" -> 0 u"A file with a name longer than thirty-one characters.txt" file
+  create long other case -> -48
+  create short -> 0 spec "Short" -> 0 u"Short" file
+  create dir -> 0 spec "Sub folder" -> 0 u"Sub folder" dir
+  create colon slash -> 0 spec "Colon? and slash/ in it#1A" -> 0 u"Colon: and slash/ in it" file
+  create 255 -> 0 spec "abcdefghijklmnopqrstuvwxyzab#1B" -> 0 u"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu" file
+  create 256 -> -1410
+  create empty name -> -1411
+  create greek -> 0 spec "??? Greek#1C" -> 0 u"\u03B1\u03B2\u03B3 Greek" file
+  create with info -> 0 flags 0000 cr 3000000000 md 3000000100 fndr 54455854747478740000000000000000
+  create with nodeflags -> -48
+  setcataloginfo -> 0 cr 3100000000 bk 3100000200 fndr 4150504C73696D700000000000000000
+  lock -> 0 flags 0001 delete locked -> -45 unlock -> 0 flags 0000
+  set valence -> -1405
+  set sizes -> -1405
+  rename long -> 0 -> 0 u"Renamed with a much longer Unicode name than HFS allows.txt" file old ref -> 0 u"Renamed with a much longer Unicode name than HFS allows.txt" file
+  rename case only -> 0 -> 0 u"SHORT" file
+  rename onto existing -> -48
+  rename empty -> -48
+  move into folder -> 0 -> 0 u"SHORT" file old ref -> 0 u"SHORT" file
+  move folder into itself -> -122
+  move into a file -> -1407
+  create sub sub -> 0 spec "Sub sub" -> 0 u"Sub sub" dir
+  move folder into its child -> -122
+FORKS write
+  open rdwr -> 0
+  open rdwr again -> -49
+  open rd while written -> 0
+  write 1000 -> 0 (1000) at 1000 size 1000
+  write past eof -> 0 (10) size 1110
+  write from mark -20 -> 0 (5) at 1095
+  write newline mode -> -1412
+  read by the other path -> -39 (1110)
+  setforksize 500 -> 0 size 500 at 500 other path 500
+  setforksize +4000 -> 0 size 4500
+  allocate 100000 -> 0 got 98304 data 4500 / 106496
+  allocate bad flags -> -1413
+  allocate all-or-nothing huge -> -34
+  flush -> 0
+  forkcbinfo -> 0 same 1 flags 09 perm 3 vol-same 1 pos 500 eof 4500 peof 106496 fork u"" owner -> 0 u"Renamed with a much longer Unicode name than HFS allows.txt" file
+  forkcbinfo iterate: two or more
+  forkcbinfo bad refnum -> -51
+  classic geteof -> -1310 fsread -> -1310
+  close -> 0
+  open rsrc -> 0 write -> 0
+  createfork rsrc -> -1421
+  createfork data -> -1421
+  deletefork rsrc -> 0 rsrc 0 / 0
+  deletefork data -> 0 data 0 / 0
+  createfork named -> -1402
+  create swap one -> 0 spec "Swap one" -> 0 u"Swap one" file
+  create swap two -> 0 spec "Swap two" -> 0 u"Swap two" file
+  exchangeobjects -> 0 one u"Swap one" data 0 / 0 two u"Swap two" data 111 / 4096
+  exchangeobjects with folder -> -1302
+  exchangeobjects itself -> -1306
+ITERATE work before deletes open -> 0
+  bulk -> 0 got 3 changed 0
+    u"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu" flags 0000 data 0 / 0 spec "abcdefghijklmnopqrstuvwxyzab#1B" ref -> 0 u"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu" file
+    u"Colon: and slash/ in it" flags 0000 data 0 / 0 spec "Colon? and slash/ in it#1A" ref -> 0 u"Colon: and slash/ in it" file
+    u"Renamed with a much longer Unicode name than HFS allows.txt" flags 0000 data 0 / 0 spec "Renamed with a much long#17.txt" ref -> 0 u"Renamed with a much longer Unicode name than HFS allows.txt" file
+  bulk -> 0 got 3 changed 0
+    u"Sub folder" flags 0010 data 0 / 0 spec "Sub folder" ref -> 0 u"Sub folder" dir
+    u"Swap one" flags 0000 data 0 / 0 spec "Swap one" ref -> 0 u"Swap one" file
+    u"Swap two" flags 0000 data 111 / 4096 spec "Swap two" ref -> 0 u"Swap two" file
+  bulk -> -1417 got 1 changed 0
+    u"With info" flags 0000 data 0 / 0 spec "With info" ref -> 0 u"With info" file
+  total 7
+  bulk again -> -1417 got 0
+  bulk zero -> -1418
+  close -> 0
+  close again -> -38
+  open subtree -> -1422
+  open bad flags -> -1422
+DELETE
+  folder with items -> -47
+ITERATE work after deletes open -> 0
+  bulk -> -1417 got 0 changed 0
+  total 0
+  bulk again -> -1417 got 0
+  bulk zero -> -1418
+  close -> 0
+  close again -> -38
+  open subtree -> -1422
+  open bad flags -> -1422
+  work folder -> 0
+  deleted ref -> -43
+VOLUME untitled find 0
+  getvolumeinfo -> 0 same 1 u"untitled" sig 4244 fsid 0 flags 0000 files 3 folders 3 total 33547264 free 32952320 blk 1024/32761/32180 clumps 4096/4096 nextid 22 cr now
+  root -> 0 u"untitled" dir id 2 par 1
+  getvolumeinfo bad bitmap -> -1405
+  getvolumeinfo default -> -35
+  getvolumeinfo nsv -> -35
+WRITE
+  create work folder -> 0 spec "FSRef work" -> 0 u"FSRef work" dir
+  create long -> -1410
+  create fork file -> 0 spec "Fork file" -> 0 u"Fork file" file
+  create long other case -> -1410
+  create short -> 0 spec "Short" -> 0 u"Short" file
+  create dir -> 0 spec "Sub folder" -> 0 u"Sub folder" dir
+  create colon slash -> 0 spec "Colon: and slash/ in it" -> 0 u"Colon: and slash/ in it" file
+  create 255 -> -1410
+  create 256 -> -1410
+  create empty name -> -1411
+  create greek -> -37
+  create with info -> 0 flags 0000 cr 3000000000 md 3000000100 fndr 54455854747478740000000000000000
+  create with nodeflags -> -48
+  setcataloginfo -> 0 cr 3100000000 bk 3100000200 fndr 4150504C73696D700000000000000000
+  lock -> 0 flags 0001 delete locked -> -45 unlock -> 0 flags 0000
+  set valence -> -1405
+  set sizes -> -1405
+  rename long -> -1410 old ref -> 0 u"Fork file" file
+  rename case only -> 0 -> 0 u"SHORT" file
+  rename onto existing -> -48
+  rename empty -> -48
+  move into folder -> 0 -> 0 u"SHORT" file old ref -> 0 u"SHORT" file
+  move folder into itself -> -122
+  move into a file -> -1407
+  create sub sub -> 0 spec "Sub sub" -> 0 u"Sub sub" dir
+  move folder into its child -> -122
+FORKS write
+  open rdwr -> 0
+  open rdwr again -> -49
+  open rd while written -> 0
+  write 1000 -> 0 (1000) at 1000 size 1000
+  write past eof -> 0 (10) size 1110
+  write from mark -20 -> 0 (5) at 1095
+  write newline mode -> -1412
+  read by the other path -> -39 (1110)
+  setforksize 500 -> 0 size 500 at 500 other path 500
+  setforksize +4000 -> 0 size 4500
+  allocate 100000 -> 0 got 100352 data 4500 / 105472
+  allocate bad flags -> -1413
+  allocate all-or-nothing huge -> -1309
+  flush -> 0
+  forkcbinfo -> 0 same 1 flags 09 perm 3 vol-same 1 pos 500 eof 4500 peof 105472 fork u"" owner -> 0 u"Fork file" file
+  forkcbinfo iterate: two or more
+  forkcbinfo bad refnum -> -51
+  classic geteof -> -1310 fsread -> -1310
+  close -> 0
+  open rsrc -> 0 write -> 0
+  createfork rsrc -> -1421
+  createfork data -> -1421
+  deletefork rsrc -> 0 rsrc 0 / 0
+  deletefork data -> 0 data 0 / 0
+  createfork named -> -1402
+  create swap one -> 0 spec "Swap one" -> 0 u"Swap one" file
+  create swap two -> 0 spec "Swap two" -> 0 u"Swap two" file
+  exchangeobjects -> 0 one u"Swap one" data 0 / 0 two u"Swap two" data 111 / 1024
+  exchangeobjects with folder -> -1302
+  exchangeobjects itself -> -1306
+ITERATE work before deletes open -> 0
+  bulk -> 0 got 3 changed 0
+    u"Colon: and slash/ in it" flags 0000 data 0 / 0 spec "Colon: and slash/ in it" ref -> 0 u"Colon: and slash/ in it" file
+    u"Fork file" flags 0000 data 0 / 0 spec "Fork file" ref -> 0 u"Fork file" file
+    u"Sub folder" flags 0010 data 0 / 0 spec "Sub folder" ref -> 0 u"Sub folder" dir
+  bulk -> 0 got 3 changed 0
+    u"Swap one" flags 0000 data 0 / 0 spec "Swap one" ref -> 0 u"Swap one" file
+    u"Swap two" flags 0000 data 111 / 1024 spec "Swap two" ref -> 0 u"Swap two" file
+    u"With info" flags 0000 data 0 / 0 spec "With info" ref -> 0 u"With info" file
+  bulk -> -1417 got 0 changed 0
+  total 6
+  bulk again -> -1417 got 0
+  bulk zero -> -1418
+  close -> 0
+  close again -> -38
+  open subtree -> -1422
+  open bad flags -> -1422
+DELETE
+  folder with items -> -47
+ITERATE work after deletes open -> 0
+  bulk -> -1417 got 0 changed 0
+  total 0
+  bulk again -> -1417 got 0
+  bulk zero -> -1418
+  close -> 0
+  close again -> -38
+  open subtree -> -1422
+  open bad flags -> -1422
+  work folder -> 0
+  deleted ref -> -43
+VOLUME BigFork find 0
+  getvolumeinfo -> 0 same 1 u"BigFork" sig 482B fsid 0 flags 0080 files 5 folders 0 total 3:0 free 1044766720 blk 4096/3145728/255070 clumps 65536/65536 nextid 21 cr now
+  root -> 0 u"BigFork" dir id 2 par 1
+  getvolumeinfo bad bitmap -> -1405
+  getvolumeinfo default -> -35
+  getvolumeinfo nsv -> -35
+BIG
+  u"Exactly 2G-1" data 2147483647 / 2147483648 open -> 0 size 2147483647 read@2G-8 -> -39 (7) 16E01C3D at 2147483647 tail -> -39 (16) 6C297938 at 2147483647 pastend -> -39
+  u"Just over 2G" data 2147487744 / 2147549184 open -> 0 size 2147487744 read@2G-8 -> 0 (16) 4B71B938 at 2147483656 tail -> -39 (16) AF61B238 at 2147487744 pastend -> -39
+  u"Over 4G" data 1:150 / 1:65536 open -> 0 size 1:150 read@2G-8 -> 0 (16) 00000000 at 2147483656 tail -> -39 (16) 89F6FE38 at 1:150 pastend -> -39
+  u"Small" data 100 / 65536 open -> 0 size 100 read@2G-8 -> -39 (0) 00000000 at 0 tail -> -39 (16) E8128138 at 100 pastend -> -39
+  u"Three GB" data 3221225472 / 3221225472 open -> 0 size 3221225472 read@2G-8 -> 0 (16) 00000000 at 2147483656 tail -> -39 (16) 8603C238 at 3221225472 pastend -> -39
+---

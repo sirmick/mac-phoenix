@@ -187,6 +187,12 @@ else()
             set_tests_properties(executor.hfsplus_write PROPERTIES
                 LABELS "executor;guest" TIMEOUT 400 SKIP_RETURN_CODE 77
                 ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
+            # Mac OS 9.0's HFS Plus APIs (fsref.cpp): FSRefTest against 9.0.4's
+            add_test(NAME executor.hfsplus_fsref
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_hfsplus_fsref.py)
+            set_tests_properties(executor.hfsplus_fsref PROPERTIES
+                LABELS "executor;guest" TIMEOUT 400 SKIP_RETURN_CODE 77
+                ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
             # A real application on an HFS+ volume: SimpleText saves, opens
             # and saves again a note; its forks and fsck.hfsplus checked.
             add_test(NAME executor.hfsplus_app

@@ -156,6 +156,9 @@ public:
     /* A folder's items in catalog order; f returns false to stop. */
     void forEachChild(uint32_t parentID, const std::function<bool(const CatalogEntry&)>& f);
     std::vector<CatalogEntry> children(uint32_t parentID);
+    /* Every file and folder record in the catalog file's order on disk
+       (leaf nodes by number), as a catalog search goes through them. */
+    void forEachLeafRecord(const std::function<void(const CatalogEntry&)>& f);
     /* The index-th item (1-based) in a folder, as PBGetCatInfo's ioFDirIndex;
        sequential indexes cost one step each. */
     std::optional<CatalogEntry> childAt(uint32_t parentID, uint32_t index);

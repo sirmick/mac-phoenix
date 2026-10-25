@@ -256,6 +256,11 @@ static bool to_driver(ParmBlkPtr pb, Boolean async, DriverRoutineType routine,
 
 OSErr Executor::PBRead(ParmBlkPtr pb, Boolean async)
 {
+    if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
+    {
+        OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
+        FAKEASYNC(pb, async, refused);
+    }
     OSErr retval;
     DrvQExtra *dqp;
 
@@ -382,6 +387,11 @@ OSErr Executor::PBRead(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBWrite(ParmBlkPtr pb, Boolean async)
 {
+    if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
+    {
+        OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
+        FAKEASYNC(pb, async, refused);
+    }
     OSErr retval;
     HVCB *vcbp;
     DrvQExtra *dqp;
@@ -445,6 +455,7 @@ OSErr Executor::PBWrite(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBClose(ParmBlkPtr pb, Boolean async)
 {
+    ROMlib_forkAPIClosed(pb->ioParam.ioRefNum);
     OSErr retval;
 
     if(to_driver(pb, async, Close, 0xA001, &retval))
@@ -630,6 +641,11 @@ OSErr Executor::PBEject(ParmBlkPtr pb)
 
 OSErr Executor::PBAllocate(ParmBlkPtr pb, Boolean async)
 {
+    if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
+    {
+        OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
+        FAKEASYNC(pb, async, refused);
+    }
     OSErr retval;
 
     if(Volume *v = getFileVolume(pb))
@@ -643,6 +659,11 @@ OSErr Executor::PBAllocate(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBAllocContig(ParmBlkPtr pb, Boolean async)
 {
+    if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
+    {
+        OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
+        FAKEASYNC(pb, async, refused);
+    }
     OSErr retval;
 
     if(Volume *v = getFileVolume(pb))
@@ -678,6 +699,11 @@ OSErr Executor::PBHGetFInfo(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBSetEOF(ParmBlkPtr pb, Boolean async)
 {
+    if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
+    {
+        OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
+        FAKEASYNC(pb, async, refused);
+    }
     OSErr retval;
 
     if(Volume *v = getFileVolume(pb))
@@ -782,6 +808,11 @@ OSErr Executor::PBUnlockRange(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBGetFPos(ParmBlkPtr pb, Boolean async)
 {
+    if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
+    {
+        OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
+        FAKEASYNC(pb, async, refused);
+    }
     OSErr retval;
 
     if(Volume *v = getFileVolume(pb))
@@ -795,6 +826,11 @@ OSErr Executor::PBGetFPos(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBSetFPos(ParmBlkPtr pb, Boolean async)
 {
+    if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
+    {
+        OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
+        FAKEASYNC(pb, async, refused);
+    }
     OSErr retval;
 
     if(Volume *v = getFileVolume(pb))
@@ -808,6 +844,11 @@ OSErr Executor::PBSetFPos(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBGetEOF(ParmBlkPtr pb, Boolean async)
 {
+    if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
+    {
+        OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
+        FAKEASYNC(pb, async, refused);
+    }
     OSErr retval;
 
     if(Volume *v = getFileVolume(pb))

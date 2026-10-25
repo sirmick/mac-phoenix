@@ -79,6 +79,9 @@ struct HFSPlusVolume::OpenFork
     bool canWrite;              /* ... and may (a writable volume, not locked) */
     bool shared;                /* fsRdWrShPerm */
     bool written = false;       /* the file's date is set at close or flush */
+    bool api = false;           /* opened by FSOpenFork: any length, mark below */
+    int8_t permission = 0;
+    uint64_t mark = 0;
     uint64_t eof() const { return std::min(state->size, kMaxEOF); }     /* (opened: no more than forkLimit) */
 };
 
@@ -468,12 +471,12 @@ void HFSPlusVolume::refreshFile(uint32_t cnid)
 
 /* ---- open files ---------------------------------------------------------- */
 
-void HFSPlusVolume::openCommon(GUEST<short>& refNum, const Entry& item, bool resource, int8_t permission)
+void HFSPlusVolume::openCommon(GUEST<short>& refNum, const Entry& item, bool resource, int8_t permission, bool large)
 {
     refNum = 0;
     if(item.folder)
         throw OSErrorException(fnfErr);
-    if((resource ? item.resourceFork : item.dataFork).logicalSize > forkLimit())
+    if(!large && (resource ? item.resourceFork : item.dataFork).logicalSize > forkLimit())
         throw OSErrorException(kFSDataTooBigErr);
     bool locked = item.flags & CatalogEntry::kLocked;
     bool wantsWrite = permission == fsWrPerm || permission == fsRdWrPerm || permission == fsRdWrShPerm;
@@ -543,6 +546,201 @@ HFSPlusVolume::OpenFork& HFSPlusVolume::openFork(short refNum)
     if(refNum < 0 || refNum % 94 != 2 || i >= forks_.size() || !forks_[i])
         throw OSErrorException(rfNumErr);
     return *forks_[i];
+}
+
+/* ---- Mac OS 9.0's HFS Plus APIs (fsref.cpp) ------------------------------- */
+
+std::optional<CatalogEntry> HFSPlusVolume::lookup(uint32_t parent, const std::u16string& name)
+{
+    return reader_->lookup(parent, name);
+}
+
+uint16_t HFSPlusVolume::openFlags(uint32_t cnid)
+{
+    uint16_t flags = 0;
+    for(auto& f : forks_)
+        if(f && f->state->cnid == cnid)
+            flags |= (f->state->resource ? 0x04 : 0x08) | 0x80;
+    return flags;
+}
+
+uint32_t HFSPlusVolume::createUnicode(uint32_t parent, const std::u16string& name, bool folder)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    CatalogEntry made;
+    check(reader_->create(parent, name, folder, nullptr, &made), dirNFErr);
+    updateVCB();
+    return made.cnid;
+}
+
+void HFSPlusVolume::deleteID(uint32_t cnid)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    auto e = reader_->byID(cnid);
+    if(!e)
+        throw OSErrorException(fnfErr);
+    if(cnid == kRootFolderID)
+        throw OSErrorException(bdNamErr);
+    if(!e->folder && isOpen(cnid))
+        throw OSErrorException(fBsyErr);
+    if(!e->folder && (e->flags & CatalogEntry::kLocked))
+        throw OSErrorException(fLckdErr);
+    check(reader_->remove(cnid));
+    updateVCB();
+}
+
+void HFSPlusVolume::renameUnicode(uint32_t cnid, const std::u16string& name)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    auto e = reader_->byID(cnid);
+    if(!e)
+        throw OSErrorException(fnfErr);
+    if(!e->folder && (e->flags & CatalogEntry::kLocked))
+        throw OSErrorException(fLckdErr);
+    check(cnid == kRootFolderID ? reader_->renameVolume(name) : reader_->rename(cnid, name));
+    refreshFile(cnid);
+    updateVCB();
+}
+
+void HFSPlusVolume::moveID(uint32_t cnid, uint32_t to)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    if(cnid == kRootFolderID)
+        throw OSErrorException(badMovErr);
+    check(reader_->move(cnid, to), dirNFErr);
+    refreshFile(cnid);
+}
+
+void HFSPlusVolume::setInfo(const CatalogEntry& e)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    check(reader_->update(e));
+}
+
+void HFSPlusVolume::setLock(uint32_t cnid, bool lock)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    auto e = reader_->byID(cnid);
+    if(!e)
+        throw OSErrorException(fnfErr);
+    e->flags = lock ? e->flags | CatalogEntry::kLocked : e->flags & ~CatalogEntry::kLocked;
+    check(reader_->update(*e));
+}
+
+short HFSPlusVolume::openForkAPI(uint32_t cnid, bool resource, int8_t permission)
+{
+    auto e = reader_->byID(cnid);
+    if(!e)
+        throw OSErrorException(fnfErr);
+    GUEST<short> ref;
+    openCommon(ref, *e, resource, permission, true);
+    OpenFork& f = openFork(ref);
+    f.api = true;
+    f.permission = permission;
+    f.fcb->fcbMdRByt |= 0x08;                   /* "large file" (FSForkInfo.flags, 9.0.4) */
+    return ref;
+}
+
+bool HFSPlusVolume::isForkAPI(short refNum)
+{
+    size_t i = fcbIndex(refNum);
+    return refNum > 0 && refNum % 94 == 2 && i < forks_.size() && forks_[i] && forks_[i]->api;
+}
+
+HFSPlusVolume::ForkStatus HFSPlusVolume::forkStatus(short refNum)
+{
+    OpenFork& f = openFork(refNum);
+    return { f.state->cnid, f.state->resource, f.canWrite, f.written, f.permission,
+             f.api ? f.mark : (uint32_t)f.fcb->fcbCrPs, f.state->size, f.state->allocated };
+}
+
+void HFSPlusVolume::setForkMark(short refNum, uint64_t mark)
+{
+    OpenFork& f = openFork(refNum);
+    f.mark = mark;
+    f.fcb->fcbCrPs = (LONGINT)std::min(mark, kMaxEOF);
+}
+
+uint32_t HFSPlusVolume::readFork(short refNum, uint64_t pos, uint32_t n, void *buf)
+{
+    OpenFork& f = openFork(refNum);
+    uint64_t room = pos < f.state->size ? std::min<uint64_t>(n, f.state->size - pos) : 0;
+    size_t got = room ? f.state->fork->read(pos, buf, (size_t)room) : 0;
+    setForkMark(refNum, pos + got);
+    if(got < room)
+        throw OSErrorException(ioErr);
+    return (uint32_t)got;
+}
+
+void HFSPlusVolume::writeFork(short refNum, uint64_t pos, uint32_t n, const void *buf)
+{
+    OpenFork& f = openFork(refNum);
+    if(!f.canWrite)
+        refuseWrite(f);
+    if(pos + n > f.state->size)
+    {
+        check(reader_->setForkSize(f.state->cnid, f.state->resource, pos + n, f.state->allocated));
+        refreshFile(f.state->cnid);
+    }
+    if(n && !f.state->fork->write(pos, buf, n))
+        throw OSErrorException(ioErr);
+    f.written = true;
+    setForkMark(refNum, pos + n);
+}
+
+void HFSPlusVolume::setForkSize(short refNum, uint64_t size)
+{
+    OpenFork& f = openFork(refNum);
+    if(!f.canWrite)
+        refuseWrite(f);
+    check(reader_->setForkSize(f.state->cnid, f.state->resource, size));
+    refreshFile(f.state->cnid);
+    for(auto& g : forks_)
+        if(g && g->state == f.state && (g->api ? g->mark : (uint32_t)g->fcb->fcbCrPs) > size)
+            setForkMark(g->refNum, size);
+    f.written = true;
+}
+
+uint64_t HFSPlusVolume::allocateFork(short refNum, uint64_t end, bool allOrNothing)
+{
+    OpenFork& f = openFork(refNum);
+    if(!f.canWrite)
+        refuseWrite(f);
+    uint64_t before = f.state->allocated;
+    if(end <= before)
+        return 0;
+    uint64_t bs = reader_->header().blockSize;
+    uint64_t free = uint64_t(reader_->header().freeBlocks) * bs;
+    if(end - before > free)
+    {
+        if(allOrNothing)
+            throw OSErrorException(dskFulErr);
+        end = before + free / bs * bs;
+    }
+    check(reader_->setForkSize(f.state->cnid, f.state->resource, f.state->size, end));
+    refreshFile(f.state->cnid);
+    updateVCB();
+    return f.state->allocated - before;
+}
+
+void HFSPlusVolume::flushFork(short refNum)
+{
+    stampWritten(openFork(refNum));
+    check(reader_->flush());
+}
+
+void HFSPlusVolume::closeFork(short refNum)
+{
+    OpenFork& f = openFork(refNum);
+    stampWritten(f);
+    f.fcb->fcbFlNum = 0;
+    forks_[fcbIndex(f.refNum)].reset();
 }
 
 void HFSPlusVolume::PBHOpenDF(HParmBlkPtr pb)
@@ -725,33 +923,38 @@ OSErr HFSPlusVolume::exchangeFiles(FSSpecPtr src, FSSpecPtr dst)
             return -1306;                       /* sameFileErr */
         if(a.folder || b.folder)
             return noErr;
-        if(!writable())
-            return wPrErr;
-        check(reader_->exchange(a.cnid, b.cnid));
-        std::vector<std::shared_ptr<ForkState>> moved;
-        for(auto& f : forks_)
-            if(f && (f->state->cnid == a.cnid || f->state->cnid == b.cnid)
-               && std::find(moved.begin(), moved.end(), f->state) == moved.end())
-                moved.push_back(f->state);
-        for(uint32_t id : { a.cnid, b.cnid })
-            for(bool rsrc : { false, true })
-                states_.erase(uint64_t(id) << 1 | rsrc);
-        for(auto& st : moved)
-        {
-            st->cnid = st->cnid == a.cnid ? b.cnid : a.cnid;
-            states_[uint64_t(st->cnid) << 1 | st->resource] = st;
-            for(auto& f : forks_)
-                if(f && f->state == st)
-                    f->fcb->fcbFlNum = st->cnid;
-            refresh(*st);
-        }
-        updateVCB();
+        exchangeIDs(a.cnid, b.cnid);
         return noErr;
     }
     catch(OSErrorException& e)
     {
         return e.code;
     }
+}
+
+void HFSPlusVolume::exchangeIDs(uint32_t ida, uint32_t idb)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    check(reader_->exchange(ida, idb));
+    std::vector<std::shared_ptr<ForkState>> moved;
+    for(auto& f : forks_)
+        if(f && (f->state->cnid == ida || f->state->cnid == idb)
+           && std::find(moved.begin(), moved.end(), f->state) == moved.end())
+            moved.push_back(f->state);
+    for(uint32_t id : { ida, idb })
+        for(bool rsrc : { false, true })
+            states_.erase(uint64_t(id) << 1 | rsrc);
+    for(auto& st : moved)
+    {
+        st->cnid = st->cnid == ida ? idb : ida;
+        states_[uint64_t(st->cnid) << 1 | st->resource] = st;
+        for(auto& f : forks_)
+            if(f && f->state == st)
+                f->fcb->fcbFlNum = st->cnid;
+        refresh(*st);
+    }
+    updateVCB();
 }
 
 void HFSPlusVolume::PBAllocContig(ParmBlkPtr pb)
