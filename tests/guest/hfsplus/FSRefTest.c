@@ -606,6 +606,273 @@ static void search(void)
     }
 }
 
+/* FSCatalogSearch by the other criteria: info and info2 set by the caller,
+   the IDs found (the fixture's) on one line, in the order they come */
+static FSCatalogInfo *info2;
+static Boolean searchNames;     /* names, not IDs: a volume whose IDs it chose */
+static void searchBy(const char *label, OptionBits bits, const char *name)
+{
+    FSIterator it;
+    FSSearchParams sp;
+    UniChar u[64];
+    ItemCount got, total = 0;
+    OSErr err;
+    int rounds = 0;
+    FSCatalogInfo *found = (FSCatalogInfo *)NewPtr(sizeof(FSCatalogInfo) * 16);
+    HFSUniStr255 *nm = (HFSUniStr255 *)NewPtr(sizeof(HFSUniStr255) * 16);
+
+    fprintf(out, "  %s ->", label);
+    err = FSOpenIterator(&root, kFSIterateSubtree, &it);
+    if(err || !found || !nm)
+    {
+        fprintf(out, " open %d\n", (int)err);
+        return;
+    }
+    memset(&sp, 0, sizeof sp);
+    sp.searchInfo1 = info;
+    sp.searchInfo2 = info2;
+    sp.searchBits = bits;
+    if(name)
+    {
+        sp.searchNameLength = U(name, u);
+        sp.searchName = u;
+    }
+    do
+    {
+        ItemCount i;
+        got = 0;
+        err = FSCatalogSearch(it, &sp, 16, &got, NULL, kFSCatInfoNodeID, found, NULL, NULL, nm);
+        for(i = 0; i < got; i++)
+            if(searchNames)
+            {
+                fprintf(out, " ");
+                ustr(&nm[i]);
+            }
+            else
+                fprintf(out, " %lu", found[i].nodeID);
+        total += got;
+    } while(err == noErr && ++rounds < 20);
+    fprintf(out, " : %d n %lu\n", (int)err, total);
+    FSCloseIterator(it);
+    DisposePtr((Ptr)found);
+    DisposePtr((Ptr)nm);
+}
+
+static void clearInfos(void)
+{
+    memset(info, 0, sizeof *info);
+    memset(info2, 0, sizeof *info2);
+}
+
+static void dateRange(UTCDateTime *a, UTCDateTime *b, UInt32 lo, UInt32 hi)
+{
+    a->lowSeconds = lo;
+    b->lowSeconds = hi;
+}
+
+static void searchCriteria1(void)
+{
+    clearInfos();
+    searchBy("none", 0, NULL);
+    info->nodeFlags = kFSNodeIsDirectoryMask;
+    info2->nodeFlags = kFSNodeIsDirectoryMask;
+    searchBy("folders", fsSBFlAttrib, NULL);
+    searchBy("folders negated", fsSBFlAttrib | fsSBNegate, NULL);
+    searchBy("folders named Trash", fsSBFlAttrib | fsSBFullName, "trash");
+    searchBy("folders named Trash negated", fsSBFlAttrib | fsSBFullName | fsSBNegate, "trash");
+    searchBy("folders with long", fsSBFlAttrib | fsSBPartialName, "long");
+    info->nodeFlags = 0;
+    searchBy("files", fsSBFlAttrib, NULL);
+    searchBy("files with long", fsSBFlAttrib | fsSBPartialName, "long");
+    info2->nodeFlags = 0;
+    searchBy("attrib mask 0", fsSBFlAttrib, NULL);
+    info->nodeFlags = kFSNodeLockedMask;
+    info2->nodeFlags = kFSNodeLockedMask;
+    searchBy("locked", fsSBFlAttrib, NULL);
+}
+
+static void searchCriteria2(void)
+{
+    clearInfos();
+    memcpy(info->finderInfo, "TEXT", 4);
+    memset(info2->finderInfo, 0xFF, 4);
+    searchBy("type TEXT", fsSBFlFndrInfo, NULL);
+    searchBy("type TEXT negated", fsSBFlFndrInfo | fsSBNegate, NULL);
+    memcpy(info->finderInfo, "TEXTttxt", 8);
+    memset(info2->finderInfo, 0xFF, 8);
+    searchBy("TEXT/ttxt", fsSBFlFndrInfo, NULL);
+    memset(info2->finderInfo, 0, 16);
+    searchBy("fndr mask 0", fsSBFlFndrInfo, NULL);
+}
+
+static void searchCriteria3(void)
+{
+    clearInfos();
+    info->finderInfo[8] = 0x01;
+    info2->finderInfo[8] = 0xFF;
+    searchBy("fndr flags byte 01", fsSBFlFndrInfo, NULL);
+}
+
+static void searchCriteria4(void)
+{
+    clearInfos();
+    info->extFinderInfo[4] = 0xC3;
+    info->extFinderInfo[5] = 0x40;
+    info2->extFinderInfo[4] = 0xFF;
+    info2->extFinderInfo[5] = 0xFF;
+    searchBy("xfndr C340", fsSBFlXFndrInfo, NULL);
+    memset(info2->extFinderInfo, 0, 16);
+    searchBy("xfndr mask 0", fsSBFlXFndrInfo, NULL);
+}
+
+static void searchCriteria5(void)
+{
+    clearInfos();
+    SET64(info->dataLogicalSize, 0, 1000000UL);
+    SET64(info2->dataLogicalSize, 0, 2000000UL);
+    searchBy("data 1M-2M", fsSBFlLgLen, NULL);
+    searchBy("data 1M-2M negated", fsSBFlLgLen | fsSBNegate, NULL);
+    SET64(info->dataLogicalSize, 0, 2000000UL);
+    SET64(info2->dataLogicalSize, 0, 1000000UL);
+    searchBy("data 2M-1M", fsSBFlLgLen, NULL);
+    SET64(info->dataLogicalSize, 0, 0);
+    SET64(info2->dataLogicalSize, 0, 0);
+    searchBy("data 0", fsSBFlLgLen, NULL);
+    SET64(info->dataLogicalSize, 0, 46);
+    SET64(info2->dataLogicalSize, 0, 50);
+    searchBy("data 46-50", fsSBFlLgLen, NULL);
+    SET64(info->dataLogicalSize, 0, 0);
+    SET64(info2->dataLogicalSize, 0, 0);
+    SET64(info->dataPhysicalSize, 0, 4096);
+    SET64(info2->dataPhysicalSize, 0, 4096);
+    searchBy("data phys 4096", fsSBFlPyLen, NULL);
+    SET64(info->rsrcLogicalSize, 0, 1);
+    SET64(info2->rsrcLogicalSize, 0x7FFFFFFFUL, 0xFFFFFFFFUL);
+    searchBy("rsrc 1-", fsSBFlRLgLen, NULL);
+    searchBy("rsrc 1- and data phys 4096", fsSBFlRLgLen | fsSBFlPyLen, NULL);
+    SET64(info->rsrcPhysicalSize, 0, 0);
+    SET64(info2->rsrcPhysicalSize, 0, 0);
+    searchBy("rsrc phys 0", fsSBFlRPyLen, NULL);
+    SET64(info->rsrcLogicalSize, 0, 50);
+    SET64(info2->rsrcLogicalSize, 0, 60);
+    searchBy("rsrc 50-60", fsSBFlRLgLen, NULL);
+    SET64(info->rsrcLogicalSize, 0, 0);
+    SET64(info2->rsrcLogicalSize, 0, 0);
+    searchBy("rsrc 0", fsSBFlRLgLen, NULL);
+    SET64(info->rsrcLogicalSize, 0, 1);
+    SET64(info2->rsrcLogicalSize, 0, 0xFFFFFFFFUL);
+    searchBy("rsrc 1-4G", fsSBFlRLgLen, NULL);
+    SET64(info->rsrcLogicalSize, 0, 1);
+    SET64(info2->rsrcLogicalSize, 1, 0);
+    searchBy("rsrc 1-4G+1", fsSBFlRLgLen, NULL);
+}
+
+static void searchCriteria6(void)
+{
+    clearInfos();
+    SET64(info->dataLogicalSize, 0, 1000000UL);
+    SET64(info2->dataLogicalSize, 0x7FFFFFFFUL, 0xFFFFFFFFUL);
+    searchBy("data 1M-", fsSBFlLgLen, NULL);
+    SET64(info2->dataLogicalSize, 0xFFFFFFFFUL, 0xFFFFFFFFUL);
+    searchBy("data 1M-2^64", fsSBFlLgLen, NULL);
+    SET64(info->dataLogicalSize, 1, 0);
+    SET64(info2->dataLogicalSize, 2, 0);
+    searchBy("data 4G-8G", fsSBFlLgLen, NULL);
+    SET64(info->dataPhysicalSize, 0, 8192);
+    SET64(info2->dataPhysicalSize, 0x7FFFFFFFUL, 0xFFFFFFFFUL);
+    searchBy("data phys 8192-", fsSBFlPyLen, NULL);
+    SET64(info->rsrcPhysicalSize, 0, 1);
+    SET64(info2->rsrcPhysicalSize, 0x7FFFFFFFUL, 0xFFFFFFFFUL);
+    searchBy("rsrc phys 1-", fsSBFlRPyLen, NULL);
+}
+
+static void searchCriteria7(void)
+{
+    clearInfos();
+    info->nodeFlags = kFSNodeIsDirectoryMask | kFSNodeLockedMask;
+    info2->nodeFlags = kFSNodeIsDirectoryMask;
+    searchBy("attrib 0011/0010", fsSBFlAttrib, NULL);
+    memcpy(info->finderInfo, "TEXT", 4);
+    info2->finderInfo[0] = 0xFF;
+    searchBy("type T???", fsSBFlFndrInfo, NULL);
+    info2->finderInfo[0] = 0;
+    searchBy("type TEXT mask 0", fsSBFlFndrInfo, NULL);
+}
+
+static void searchCriteria8(void)
+{
+    clearInfos();
+    info->nodeID = 30;
+    info2->nodeID = 35;
+    searchBy("node 30-35", fsSBNodeID, NULL);
+    info->parentDirID = 34;
+    info2->parentDirID = 34;
+    searchBy("parent 34", fsSBFlParID, NULL);
+    info->parentDirID = 1;
+    info2->parentDirID = 1;
+    searchBy("parent 1", fsSBFlParID, NULL);
+    info->valence = 1;
+    info2->valence = 10;
+    searchBy("valence 1-10", fsSBDrNmFls, NULL);
+    info->valence = 0;
+    info2->valence = 0;
+    searchBy("valence 0", fsSBDrNmFls, NULL);
+    info->valence = 20;
+    info2->valence = 100;
+    searchBy("valence 20-100", fsSBDrNmFls, NULL);
+}
+
+static void searchCriteria9(void)
+{
+    clearInfos();
+    dateRange(&info->createDate, &info2->createDate, 3875721851UL, 3875721851UL);
+    searchBy("created 3875721851", fsSBFlCrDat, NULL);
+    dateRange(&info->contentModDate, &info2->contentModDate, 3875721852UL, 0xFFFFFFFFUL);
+    searchBy("modified after 3875721851", fsSBFlMdDat, NULL);
+    searchBy("created and modified", fsSBFlCrDat | fsSBFlMdDat, NULL);
+    dateRange(&info->backupDate, &info2->backupDate, 0, 0);
+    searchBy("backup 0", fsSBFlBkDat, NULL);
+    dateRange(&info->attributeModDate, &info2->attributeModDate, 0, 0);
+    searchBy("attrmod 0", fsSBAttributeModDate, NULL);
+    dateRange(&info->accessDate, &info2->accessDate, 0, 0);
+    searchBy("access 0", fsSBAccessDate, NULL);
+}
+
+static void searchCriteria10(void)
+{
+    clearInfos();
+    searchBy("permissions mask 0", fsSBPermissions, NULL);
+    info2->permissions[0] = 0xFFFFFFFFUL;
+    info->permissions[0] = 1;
+    searchBy("permissions[0] 1", fsSBPermissions, NULL);
+}
+
+static void searchCriteria11(void)
+{
+    clearInfos();
+    searchBy("partial and full", fsSBPartialName | fsSBFullName, "trash");
+    searchBy("negate alone", fsSBNegate, NULL);
+    searchBy("bit 19", 0x00080000UL, NULL);
+    searchBy("bit 4", 0x00000010UL, NULL);
+}
+
+/* in pieces: SC runs out of stack on one function this long */
+static void searchCriteria(void)
+{
+    fprintf(out, "SEARCH criteria\n");
+    searchCriteria1();
+    searchCriteria2();
+    searchCriteria3();
+    searchCriteria4();
+    searchCriteria5();
+    searchCriteria6();
+    searchCriteria7();
+    searchCriteria8();
+    searchCriteria9();
+    searchCriteria10();
+    searchCriteria11();
+}
+
 /* ---- write ---------------------------------------------------------------- */
 
 static FSRef work;
@@ -1002,6 +1269,42 @@ static void writes(void)
 
 /* "big NAME": every file in the volume's root through the fork calls, at
    positions a long can't hold */
+/* size ranges past 4 GB ("Over 4G" is 4 GB + 150 bytes) */
+static void searchBig(void)
+{
+    static const struct
+    {
+        const char *label;
+        UInt32 lohi, lolo, hihi, hilo;
+    } r[] = {
+        { "data 0-4G", 0, 0, 1, 0 },
+        { "data 4G-8G", 1, 0, 2, 0 },
+        { "data 4G+100-4G+200", 1, 100, 1, 200 },
+        { "data 4G+200-4G+300", 1, 200, 1, 300 },
+        { "data 4G+200-8G", 1, 200, 2, 0 },
+        { "data 3000000000-4G+100", 0, 3000000000UL, 1, 100 },
+        { "data 100", 0, 100, 0, 100 },
+        { "data 0-4G-1", 0, 0, 0, 0xFFFFFFFFUL },
+        { "data 2G-4G+200", 0, 0x80000000UL, 1, 200 },
+    };
+    int i;
+
+    fprintf(out, "SEARCH big\n");
+    searchNames = true;
+    for(i = 0; i < sizeof r / sizeof r[0]; i++)
+    {
+        clearInfos();
+        SET64(info->dataLogicalSize, r[i].lohi, r[i].lolo);
+        SET64(info2->dataLogicalSize, r[i].hihi, r[i].hilo);
+        searchBy(r[i].label, fsSBFlLgLen, NULL);
+    }
+    clearInfos();
+    SET64(info->dataPhysicalSize, 1, 0);
+    SET64(info2->dataPhysicalSize, 1, 0x10000UL);
+    searchBy("data phys 4G-4G+64K", fsSBFlPyLen, NULL);
+    searchNames = false;
+}
+
 static void big(void)
 {
     FSIterator it;
@@ -1084,9 +1387,10 @@ int main(void)
     buf = NewPtr(kBuf);
     uname = (HFSUniStr255 *)NewPtr(sizeof(HFSUniStr255));
     info = (FSCatalogInfo *)NewPtr(sizeof(FSCatalogInfo));
+    info2 = (FSCatalogInfo *)NewPtr(sizeof(FSCatalogInfo));
     out = fopen("Host:fsreftest.txt", "w");
     cfg = fopen("Host:fsreftest.cfg", "r");
-    if(!out || !buf || !cfg || !uname || !info)
+    if(!out || !buf || !cfg || !uname || !info || !info2)
         return 1;
     fprintf(out, "SIZES FSRef %d FSCatalogInfo %d FSRefParam %d FSForkIOParam %d FSCatalogBulkParam %d"
                  " FSForkInfo %d FSForkCBInfoParam %d FSVolumeInfo %d FSVolumeInfoParam %d FSSearchParams %d\n",
@@ -1107,12 +1411,16 @@ int main(void)
             iterate(&root, "root", true);
             forksRead();
             search();
+            searchCriteria();
         }
         else if(!strncmp(line, "big ", 4))
         {
             volume(line + 4);
             if(vref)
+            {
                 big();
+                searchBig();
+            }
         }
         else if(!strncmp(line, "write ", 6))
         {

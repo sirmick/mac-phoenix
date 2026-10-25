@@ -14,7 +14,7 @@ File Manager changes them as Mac OS 9.0.4 does.
 | Mounting (`try_to_mount_disk`) | done: bare, HFS wrapper, Apple partition map |
 | System sideload (`hfs_sideload.cpp`) | done: an HFS+ image's blessed System Folder |
 | Web tab | done: an uploaded HFS+ image gives VolDump 9.0.4's dump (`executor.web.hfsplus`) |
-| HFS Plus APIs (`file/fsref.cpp`) | done: FSRefTest on Executor = on 9.0.4 (HFS+, HFS, forks past 4 GB) |
+| HFS Plus APIs (`file/fsref.cpp`) | done: FSRefTest on Executor = on 9.0.4 (HFS+, HFS, forks past 4 GB, FSCatalogSearch's criteria) |
 | Writing (`hfs/plus/writer.cpp`, `btree.cpp`) | done: fsck.hfsplus-clean (HFS+, HFSX, trees past their header's map); VolWrite on Executor = VolWrite on 9.0.4, natively and in the tab |
 
 ## The reader
@@ -289,10 +289,31 @@ blank HFS volume, and the 12 GB volume of big forks), among others:
 Executor's HFS code differs where the FSRef layer can't make up for it:
 it takes ':' in a name for a path separator (9.0.4 makes such an HFS
 name; Executor answers bdNamErr), and it allocates by the clump where
-9.0.4's fork calls allocate blocks (physical lengths). Not done: the
-search criteria past names (`fsSBPartialName`, `fsSBFullName`,
-`fsSBNegate`: dates, sizes, Finder info are ignored); permissions are
+9.0.4's fork calls allocate blocks (physical lengths). Permissions are
 the catalog's bytes (Mac OS X's), read-only.
+
+FSCatalogSearch's criteria (FSRefTest's `SEARCH criteria`, 57 searches
+on the long-name fixture, and `SEARCH big`, size ranges past 4 GB on the
+12 GB volume):
+
+- Every bit set must hold (names, flags, Finder info, sizes, dates, IDs,
+  valence, permissions); `fsSBNegate` inverts the whole: everything else,
+  folders and files alike. No criteria: every item; negated: none. A bit
+  above `fsSBPermissions` (bit 18): errFSBadSearchParams.
+- The values are what FSGetCatalogInfo reports: a folder's sizes are 0, a
+  file's valence 0, so a size range from 0 takes the folders and a valence
+  range from 0 the files.
+- Masks (`nodeFlags`, Finder info, extended Finder info, permissions):
+  the mask's bits of the item and of the value compare; the value's other
+  bits don't count. Ranges (IDs, valence, dates) include their bounds; a
+  range whose low bound is above its high one takes nothing.
+- Sizes (the four fork lengths) as 9.0.4 checks them: when the bounds'
+  high words differ only the item's high word is compared with theirs
+  (`[1 MB, 2^63 - 1]` takes an empty file, `[4 GB + 200, 8 GB]` one of
+  4 GB + 150 bytes); with the same high word, the item needs that high word
+  and a low word between theirs.
+- Dates compare by `highSeconds` and `lowSeconds` (not pinned past
+  `highSeconds` 0, nor the fraction).
 
 ## Tests
 

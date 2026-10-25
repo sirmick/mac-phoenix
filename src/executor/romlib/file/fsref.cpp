@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -1280,6 +1281,105 @@ static bool partialMatch(const std::u16string& name, const std::u16string& part)
     return false;
 }
 
+/* FSCatalogSearch's searchBits (Universal Interfaces 3.3.2) */
+enum : uint32_t
+{
+    fsSBPartialName = 1u << 0,
+    fsSBFullName = 1u << 1,
+    fsSBFlAttrib = 1u << 2,
+    fsSBFlFndrInfo = 1u << 3,
+    fsSBDrNmFls = 1u << 4,
+    fsSBFlLgLen = 1u << 5,
+    fsSBFlPyLen = 1u << 6,
+    fsSBFlRLgLen = 1u << 7,
+    fsSBFlRPyLen = 1u << 8,
+    fsSBFlCrDat = 1u << 9,
+    fsSBFlMdDat = 1u << 10,
+    fsSBFlBkDat = 1u << 11,
+    fsSBFlXFndrInfo = 1u << 12,
+    fsSBFlParID = 1u << 13,
+    fsSBNegate = 1u << 14,
+    fsSBNodeID = 1u << 15,
+    fsSBAttributeModDate = 1u << 16,
+    fsSBAccessDate = 1u << 17,
+    fsSBPermissions = 1u << 18,
+    kSearchBits = (1u << 19) - 1,       /* more: errFSBadSearchParams (9.0.4) */
+    kInfoBits = kSearchBits & ~(fsSBPartialName | fsSBFullName | fsSBNegate),
+};
+
+/* A size range as 9.0.4 checks one: bounds whose high words differ compare
+   the item's high word only ([1 MB, 2^63-1] takes an empty file, [4 GB +
+   200, 8 GB] one of 4 GB + 150); bounds with the same high word take the
+   items with that high word and a low word between theirs. */
+static bool sizeInRange(uint64_t v, uint64_t lo, uint64_t hi)
+{
+    uint32_t vh = v >> 32, lh = lo >> 32, hh = hi >> 32;
+    if(lh != hh)
+        return lh <= vh && vh <= hh;
+    return vh == lh && (uint32_t)lo <= (uint32_t)v && (uint32_t)v <= (uint32_t)hi;
+}
+
+static uint64_t seconds(const UTCDateTime& d)
+{
+    return (uint64_t)(uint16_t)d.highSeconds << 32 | (uint32_t)d.lowSeconds;
+}
+
+static bool dateInRange(const UTCDateTime& v, const UTCDateTime& lo, const UTCDateTime& hi)
+{
+    return seconds(lo) <= seconds(v) && seconds(v) <= seconds(hi);
+}
+
+static bool bytesMatch(const uint8_t *v, const uint8_t *value, const uint8_t *mask, size_t n)
+{
+    for(size_t i = 0; i < n; i++)
+        if((v[i] & mask[i]) != (value[i] & mask[i]))
+            return false;
+    return true;
+}
+
+/* FSCatalogSearch's criteria past the name (9.0.4, FSRefTest's "SEARCH
+   criteria"): all of them, on what FSGetCatalogInfo reports (a folder's
+   sizes are 0, a file's valence 0); a mask takes the bits it has of both
+   the item and the value; a range includes its bounds. */
+static bool infoMatches(uint32_t bits, const FSCatalogInfo& c, const FSCatalogInfo& v, const FSCatalogInfo& m)
+{
+    if((bits & fsSBFlAttrib) && (((uint16_t)c.nodeFlags ^ (uint16_t)v.nodeFlags) & (uint16_t)m.nodeFlags))
+        return false;
+    if((bits & fsSBFlFndrInfo) && !bytesMatch(c.finderInfo, v.finderInfo, m.finderInfo, 16))
+        return false;
+    if((bits & fsSBFlXFndrInfo) && !bytesMatch(c.extFinderInfo, v.extFinderInfo, m.extFinderInfo, 16))
+        return false;
+    if((bits & fsSBDrNmFls) && !((uint32_t)v.valence <= (uint32_t)c.valence && (uint32_t)c.valence <= (uint32_t)m.valence))
+        return false;
+    if((bits & fsSBFlLgLen) && !sizeInRange((uint64_t)c.dataLogicalSize, (uint64_t)v.dataLogicalSize, (uint64_t)m.dataLogicalSize))
+        return false;
+    if((bits & fsSBFlPyLen) && !sizeInRange((uint64_t)c.dataPhysicalSize, (uint64_t)v.dataPhysicalSize, (uint64_t)m.dataPhysicalSize))
+        return false;
+    if((bits & fsSBFlRLgLen) && !sizeInRange((uint64_t)c.rsrcLogicalSize, (uint64_t)v.rsrcLogicalSize, (uint64_t)m.rsrcLogicalSize))
+        return false;
+    if((bits & fsSBFlRPyLen) && !sizeInRange((uint64_t)c.rsrcPhysicalSize, (uint64_t)v.rsrcPhysicalSize, (uint64_t)m.rsrcPhysicalSize))
+        return false;
+    if((bits & fsSBFlCrDat) && !dateInRange(c.createDate, v.createDate, m.createDate))
+        return false;
+    if((bits & fsSBFlMdDat) && !dateInRange(c.contentModDate, v.contentModDate, m.contentModDate))
+        return false;
+    if((bits & fsSBFlBkDat) && !dateInRange(c.backupDate, v.backupDate, m.backupDate))
+        return false;
+    if((bits & fsSBAttributeModDate) && !dateInRange(c.attributeModDate, v.attributeModDate, m.attributeModDate))
+        return false;
+    if((bits & fsSBAccessDate) && !dateInRange(c.accessDate, v.accessDate, m.accessDate))
+        return false;
+    if((bits & fsSBFlParID) && !((uint32_t)v.parentDirID <= (uint32_t)c.parentDirID && (uint32_t)c.parentDirID <= (uint32_t)m.parentDirID))
+        return false;
+    if((bits & fsSBNodeID) && !((uint32_t)v.nodeID <= (uint32_t)c.nodeID && (uint32_t)c.nodeID <= (uint32_t)m.nodeID))
+        return false;
+    if(bits & fsSBPermissions)
+        for(int i = 0; i < 4; i++)
+            if(((uint32_t)c.permissions[i] ^ (uint32_t)v.permissions[i]) & (uint32_t)m.permissions[i])
+                return false;
+    return true;
+}
+
 OSErr Executor::PBCatalogSearch(FSCatalogBulkParamPtr pb, Boolean async)
 {
     OSErr err = noErr;
@@ -1288,14 +1388,13 @@ OSErr Executor::PBCatalogSearch(FSCatalogBulkParamPtr pb, Boolean async)
     FSSearchParamsPtr sp = pb->searchParams;
     pb->actualItems = 0;
     pb->containerChanged = false;
-    const uint32_t kPartialName = 1u << 0, kFullName = 1u << 1, kNegate = 1u << 14;
     if(found == iterators.end())
         err = errFSIteratorNotFound;
     else if(!found->second.subtree)
         err = errFSIteratorNotSupported;
     else if(pb->maximumItems == 0)
         err = errFSBadItemCount;
-    else if(!sp || !sp->searchInfo1 || !sp->searchInfo2)
+    else if(!sp || !sp->searchInfo1 || !sp->searchInfo2 || (sp->searchBits & ~kSearchBits))
         err = errFSBadSearchParams;
     else
     {
@@ -1306,23 +1405,31 @@ OSErr Executor::PBCatalogSearch(FSCatalogBulkParamPtr pb, Boolean async)
             it.searched = true;
             uint32_t bits = sp->searchBits;
             std::u16string want = decomposed(fromGuest(sp->searchName, sp->searchName ? (uint32_t)sp->searchNameLength : 0u));
-            auto matches = [&](const std::u16string& name) {
+            FSCatalogInfo value = *sp->searchInfo1, mask = *sp->searchInfo2;
+            /* info: the item's catalog info, filled only when asked for */
+            auto matches = [&](const std::u16string& name, const std::function<void(FSCatalogInfo&)>& info) {
                 bool m = true;
-                if(bits & kPartialName)
+                if(bits & fsSBPartialName)
                     m = partialMatch(name, want);
-                else if(bits & kFullName)
+                else if(bits & fsSBFullName)
                     m = hfsplus::fastUnicodeCompare(name, want) == 0;
-                return (bits & kNegate) ? !m : m;
+                if(m && (bits & kInfoBits))
+                {
+                    FSCatalogInfo ci;
+                    memset(&ci, 0, sizeof ci);
+                    info(ci);
+                    m = infoMatches(bits, ci, value, mask);
+                }
+                return (bits & fsSBNegate) ? !m : m;
             };
             const Node& c = it.container;
             if(c.hp)
                 c.hp->reader().forEachLeafRecord([&](const CatalogEntry& e) {
-                    if(matches(e.cnid == hfsplus::kRootFolderID ? c.hp->reader().volumeName() : e.name))
-                    {
-                        Node n = c;
-                        fillPlus(n, e);
+                    Node n = c;
+                    fillPlus(n, e);
+                    if(matches(e.cnid == hfsplus::kRootFolderID ? c.hp->reader().volumeName() : e.name,
+                               [&](FSCatalogInfo& ci) { infoFromPlus(n, e, kGettable, &ci); }))
                         it.found.push_back(n);
-                    }
                 });
             else
             {
@@ -1347,7 +1454,7 @@ OSErr Executor::PBCatalogSearch(FSCatalogBulkParamPtr pb, Boolean async)
                         fillClassic(n, ci, nm);
                         if(n.dir)
                             dirs.push_back(n.id);
-                        if(matches(n.name))
+                        if(matches(n.name, [&](FSCatalogInfo& info) { infoFromClassic(n, ci, kGettable, &info); }))
                             it.found.push_back(n);
                     }
             }
