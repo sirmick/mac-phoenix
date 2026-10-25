@@ -19,6 +19,10 @@ Set aside, as they depend on the machine rather than the calls:
     (physical lengths), and it takes ':' in a name for a path separator,
     so the one name with a ':' isn't made (bdNamErr) and isn't listed.
 
+Then the 68K build's write script on Executor's Host volume, a host folder,
+against executor-host-folder.txt (Executor's own output: 9.0.4 has no such
+volume; docs/executor/HFSPlus.md lists how it differs from 9.0.4's HFS).
+
     test_hfsplus_fsref.py
 Needs docker (mkfs.hfsplus makes the HFS volume); exit 77 (skip) without
 it or tests-7.5.5.
@@ -34,6 +38,10 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ORACLE = os.path.join(ROOT, "tests", "guest", "hfsplus", "oracle-9.0.4", "fsreftest.txt")
+# FSRefTest's write script on Executor's Host volume, a host folder
+# (LocalVolume): Executor's own output, no 9.0.4 to compare (HFSPlus.md
+# says how it differs from 9.0.4's HFS volume).
+HOST_EXPECTED = os.path.join(ROOT, "tests", "guest", "hfsplus", "executor-host-folder.txt")
 
 
 def normalize(text):
@@ -56,6 +64,19 @@ def normalize(text):
             line = re.sub(r" peof \d+", " peof -", line)
             line = re.sub(r"(allocate 100000 -> 0) got \d+", r"\1 got -", line)
         out.append(line)
+    return out
+
+
+def normalize_host(text):
+    """the host volume's section; its size and free space are the host disk's"""
+    out, on = [], False
+    for line in text.splitlines():
+        if line.startswith("VOLUME "):
+            on = line.startswith("VOLUME Host ")
+        elif line == "---":
+            on = False
+        if on:
+            out.append(re.sub(r" files \d+ folders \d+ total .* nextid \d+", " (sizes)", line))
     return out
 
 
@@ -91,6 +112,20 @@ def main():
             failed = True
             print("FAIL FSRefTest %s:" % label)
             for line in list(difflib.unified_diff(want, got, "9.0.4", "executor", lineterm="", n=0))[:60]:
+                print("    " + line[:240])
+        out = os.path.join(work, "host")
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tests", "guest", "hfsplus", "fsreftest.py"),
+                            "--machine", "executor", "--out", out],
+                           env=dict(os.environ, FSREFTEST_CFG="write Host"))
+        got = normalize_host(open(os.path.join(out, "fsreftest.txt")).read()) \
+            if not r.returncode and os.path.exists(os.path.join(out, "fsreftest.txt")) else []
+        want = open(HOST_EXPECTED).read().splitlines()
+        if got == want:
+            print("PASS FSRefTest on a host folder: %d lines as expected" % len(want))
+        else:
+            failed = True
+            print("FAIL FSRefTest on a host folder (exit %d):" % r.returncode)
+            for line in list(difflib.unified_diff(want, got, "expected", "executor", lineterm="", n=0))[:60]:
                 print("    " + line[:240])
         return 1 if failed else 0
     finally:

@@ -939,6 +939,15 @@ void LocalVolume::PBCatMove(CMovePBPtr pb)
     if(!newParent)
         throw OSErrorException(dirNFErr);   // check this?
 
+    /* MacPhoenix: a folder into itself or one of its own is badMovErr, as
+       on HFS (the host's rename failed: ioErr). */
+    if(std::dynamic_pointer_cast<DirectoryItem>(item))
+    {
+        const fs::path &from = item->path(), &to = newParent->path();
+        if(std::mismatch(from.begin(), from.end(), to.begin(), to.end()).first == from.end())
+            throw OSErrorException(badMovErr);
+    }
+
     auto name = item->name();
 
     itemCache->cacheDirectory(newParent);

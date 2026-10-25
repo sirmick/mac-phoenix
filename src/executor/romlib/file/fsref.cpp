@@ -654,14 +654,22 @@ OSErr forkPath(short ref, ForkPath *p)
     return noErr;
 }
 
-/* classic forks: what the FCB says (mark, EOF, allocation) */
+/* classic forks: mark and EOF as the File Manager answers them (a host
+   folder's files keep theirs out of the FCB), the allocation from the FCB
+   but no less than the EOF (a host file has no blocks) */
 void classicFork(short ref, int64_t *mark, int64_t *eof, int64_t *phys)
 {
+    Bypass b;
+    ParamBlockRec pb;
+    memset(&pb, 0, sizeof pb);
+    pb.ioParam.ioRefNum = ref;
+    *mark = PBGetFPos(&pb, false) == noErr ? (uint32_t)(LONGINT)pb.ioParam.ioPosOffset : 0;
+    memset(&pb, 0, sizeof pb);
+    pb.ioParam.ioRefNum = ref;
+    *eof = PBGetEOF(&pb, false) == noErr ? (uint32_t)(LONGINT)pb.ioParam.ioMisc : 0;
     OSErr err;
     fcbrec *f = PRNTOFPERR(ref, &err);
-    *mark = f ? (uint32_t)(LONGINT)f->fcbCrPs : 0;
-    *eof = f ? (uint32_t)(LONGINT)f->fcleof : 0;
-    *phys = f ? (uint32_t)(LONGINT)f->fcPLen : 0;
+    *phys = std::max<int64_t>(f ? (uint32_t)(LONGINT)f->fcPLen : 0, *eof);
 }
 
 OSErr classicSetMark(short ref, int64_t pos)
@@ -1945,6 +1953,14 @@ OSErr Executor::PBGetForkCBInfo(FSForkCBInfoParamPtr pb, Boolean async)
             catch(OSErrorException&)
             {
             }
+        else
+        {
+            int64_t m, e, p;
+            classicFork(ref, &m, &e, &p);
+            pos = m;
+            eof = e;
+            peof = p;
+        }
         if(FSForkInfoPtr fi = pb->forkInfo)
         {
             fi->flags = flags;

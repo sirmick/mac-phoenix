@@ -289,8 +289,18 @@ blank HFS volume, and the 12 GB volume of big forks), among others:
 Executor's HFS code differs where the FSRef layer can't make up for it:
 it takes ':' in a name for a path separator (9.0.4 makes such an HFS
 name; Executor answers bdNamErr), and it allocates by the clump where
-9.0.4's fork calls allocate blocks (physical lengths). Permissions are
-the catalog's bytes (Mac OS X's), read-only.
+9.0.4's fork calls allocate blocks (physical lengths). Both left so, by
+decision: the first needs a way past the classic path's name parsing
+(`ROMlib_findvcbandfile`) for one kind of name only the Unicode calls can
+make, the second changes nothing an application reads but the physical
+lengths. Permissions are the catalog's bytes (Mac OS X's), read-only.
+
+No real application in the corpus uses these calls without CarbonLib
+(searched: PEF imports of `FSGetCatalogInfo`, `FSOpenFork`,
+`FSMakeFSRefUnicode` on the dev, tools, productivity, games-ppc and Mac OS
+8–9 development images, 2026-10-25): StuffIt Expander 6.0.1, BBEdit Lite
+6.1 for OS X and MacPython's modules import them from CarbonLib, which
+Executor doesn't have. FSRefTest is the test until one turns up.
 
 FSCatalogSearch's criteria (FSRefTest's `SEARCH criteria`, 57 searches
 on the long-name fixture, and `SEARCH big`, size ranges past 4 GB on the
@@ -314,6 +324,19 @@ on the long-name fixture, and `SEARCH big`, size ranges past 4 GB on the
   and a low word between theirs.
 - Dates compare by `highSeconds` and `lowSeconds` (not pinned past
   `highSeconds` 0, nor the fraction).
+
+On a host folder (`LocalVolume`: the Host volume, Executor's own System
+volume) the calls go through the classic path as on HFS, and FSRefTest's
+write script there (Executor only: 9.0.4 has no such volume) gives what
+9.0.4 gives on its HFS volume but for what the host folder can't keep:
+no physical lengths (a fork's allocation is its length), no creation or
+backup dates on a plain file (only a MacBinary one keeps them), no
+locks (SetFLock: paramErr; the script's "delete locked" then deletes the
+file, so the renames and moves after it find nothing, fnfErr), and a
+name with a `:` (bdNamErr). Fixed for it: the fork calls take the mark
+and EOF from the File Manager, not the FCB (LocalVolume keeps them in its
+open file), and a folder moved into itself or a folder of its own is
+badMovErr (it was ioErr).
 
 ## Tests
 
@@ -391,7 +414,9 @@ on the long-name fixture, and `SEARCH big`, size ranges past 4 GB on the
   `build.cw.mpw`: CodeWarrior's MWCPPC and MWLinkPPC, as MPW 3.4.2's
   PPCLink reads no PEF of Universal Interfaces 3.3.2's InterfaceLib stub),
   which Executor runs on mame-ppc through InterfaceLib; on 9.0.4 the
-  PowerPC build's output is the 68K build's, byte for byte.
+  PowerPC build's output is the 68K build's, byte for byte. Then the
+  write script on Executor's Host volume, a host folder, against
+  `executor-host-folder.txt` (Executor's own output, above).
 - `executor.HFSPlusWriteTest.*`, `executor.HFSXWriteTest.*`: a blank
   volume (HFS+, HFSX) written in the gtest binary (natively and under
   node).
