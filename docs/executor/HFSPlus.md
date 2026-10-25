@@ -120,11 +120,13 @@ the images read-only on the host):
 - Big forks (`voldump-forks-4k.txt`, `-forks-8k`, `-big-12g`): the
   longest a classic path opens is the last whole allocation block under
   2 GB (4 KB blocks: 0x7FFFF000; 8 KB: 0x7FFFE000); one longer doesn't
-  open (fileBoundsErr, -1310, for reading and writing alike) and
+  open (fsDataTooBigErr, -1310, for reading and writing alike) and
   PBGetCatInfo gives it that length, logical and physical. A fork that
   opens reads to its end as any; its physical length, at 2 GB or more,
-  is reported as 0x80000000. Writing a fork past that length: dskFulErr
-  (not seen on 9.0.4).
+  is reported as 0x80000000. Growing one (`volwrite-big.txt`): SetEOF
+  to the limit works, past it is fileBoundsErr (-1309), the EOF as it
+  was; a write that would cross it is fileBoundsErr with nothing
+  written; Allocate past it dskFulErr, none allocated.
 - Unmounting closes nothing: open files make it fBsyErr; Eject and OffLine
   take the drive off line.
 - Hard links aren't followed (`voldump-hardlinks.txt`): 9.0.4 shows a link
@@ -280,6 +282,9 @@ the File Manager has no call that makes one.
   the Resource Manager's reserved header bytes); fsck on the result. By
   hand: 9.0.4 reading the volume Executor wrote gives VolDump's dump of it
   on Executor exactly.
+  Then `volwrite.py --big` (VolWrite's "big" script, a fork grown to the
+  2 GB limit and past it, on a blank 8 GB volume made with mkfs.hfsplus)
+  against `volwrite-big.txt`, and fsck on that volume.
 - `executor.HFSPlusWriteTest.*`, `executor.HFSXWriteTest.*`: a blank
   volume (HFS+, HFSX) written in the gtest binary (natively and under
   node).
@@ -292,8 +297,7 @@ the File Manager has no call that makes one.
 
 Not covered by any image yet: hard links written by Mac OS X (none of
 the images has one: `hardlinks.img` is made by `hfsplus_dump`,
-`fixtures/hfsplus/hardlinks.script`, fsck-clean), journaled volumes,
-writing a fork near 2 GB on 9.0.4. fsck.hfsplus reports "Illegal name" on
+`fixtures/hfsplus/hardlinks.script`, fsck-clean), journaled volumes. fsck.hfsplus reports "Illegal name" on
 `longnames.img`: MakeLongNames passed 9.0.4 a precomposed `ά` (and a
 `:`), which 9.0.4 stored as given.
 

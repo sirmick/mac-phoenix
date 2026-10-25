@@ -10,6 +10,9 @@ files made by hfsplus_dump's script mode (names the classic calls can't
 make).
 
 DIR gets volwrite.txt, voldump.txt and the volume after (written.img).
+With --big: VolWrite's "big" script (a fork near 2 GB) on a blank 8 GB
+volume made here (sparse; mkfs.hfsplus in docker image macphoenix-hfsprogs,
+"BigWrite"); DIR gets volwrite-big.txt and big-written.img.
 MACPHOENIX_EMULATOR names the emulator (default build/mac-phoenix).
 """
 import argparse
@@ -61,15 +64,23 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
     ap.add_argument("--port", type=int, default=19500 + os.getpid() % 400)
+    ap.add_argument("--big", action="store_true")
     args = ap.parse_args()
 
     out = os.path.abspath(args.out)
     work = os.path.join(out, "work-" + args.machine)
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work)
-    volume = os.path.join(work, "Blank.img")
-    with gzip.open(FIXTURE) as src, open(volume, "wb") as dst:
-        shutil.copyfileobj(src, dst)
+    if args.big:
+        volume = os.path.join(work, "BigWrite.img")
+        with open(volume, "wb") as f:
+            f.truncate(8 << 30)
+        subprocess.run(["docker", "run", "--rm", "-v", work + ":/w", "macphoenix-hfsprogs", "mkfs.hfsplus",
+                        "-v", "BigWrite", "/w/BigWrite.img"], check=True, capture_output=True)
+    else:
+        volume = os.path.join(work, "Blank.img")
+        with gzip.open(FIXTURE) as src, open(volume, "wb") as dst:
+            shutil.copyfileobj(src, dst)
 
     if args.machine == "9.0.4":
         rom = guest.roms(STORAGE)["kpx"]
@@ -98,6 +109,12 @@ def main():
                 if time.time() > deadline:
                     raise RuntimeError("no bridge agent")
                 time.sleep(1)
+        if args.big:
+            log = run(g, g.host_dir(), "VolWrite", "volwrite.cfg", "BigWrite\rbig", "volwrite.txt")
+            open(os.path.join(out, "volwrite-big.txt"), "w").write(log)
+            print("  VolWrite big: %d lines" % log.count("\n"))
+            g.shutdown()
+            return 0
         log = run(g, g.host_dir(), "VolWrite", "volwrite.cfg", "Blank", "volwrite.txt")
         # an application copied in through the File Manager (BridgeAgent's
         # copy: both forks, Finder info), as the Finder would
@@ -110,6 +127,8 @@ def main():
         g.shutdown()                            # the volume unmounted cleanly
     finally:
         g.stop()
+        if args.big:
+            subprocess.run(["cp", "--sparse=always", volume, os.path.join(out, "big-written.img")])
     shutil.copyfile(volume, os.path.join(out, "written.img"))
     return 0
 

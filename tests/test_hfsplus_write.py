@@ -7,6 +7,9 @@ Both outputs must equal what 9.0.4 wrote for the same run
 (tests/guest/hfsplus/oracle-9.0.4/volwrite.txt, voldump-written.txt;
 remade with tests/guest/hfsplus/volwrite.py --machine 9.0.4), and the
 volume Executor leaves must pass fsck.hfsplus (docker; not checked without).
+Then VolWrite's "big" script on a blank 8 GB volume (volwrite.py --big:
+made with mkfs.hfsplus in docker, so not run without): a fork grown to
+the 2 GB limit and past it, against volwrite-big.txt; fsck on it.
 
 Set aside, as 9.0.4's Finder makes them when the volume mounts and Executor
 has no such Finder: its own files (Desktop DB and DF, Desktop Folder,
@@ -87,6 +90,14 @@ def compare(name, want, got):
     return False
 
 
+def fsck(folder, image):
+    f = subprocess.run(["docker", "run", "--rm", "-v", folder + ":/w", "macphoenix-hfsprogs", "fsck.hfsplus",
+                        "-n", "-f", "/w/" + image], capture_output=True, text=True)
+    print("%s fsck.hfsplus on %s%s" % ("PASS" if f.returncode == 0 else "FAIL", image,
+          "" if f.returncode == 0 else ": " + f.stdout.strip()[-400:]))
+    return f.returncode == 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
@@ -109,13 +120,18 @@ def main():
                       normalize_dump(open(os.path.join(work, "voldump.txt")).read()))
         if shutil.which("docker") and not subprocess.run(["docker", "image", "inspect", "macphoenix-hfsprogs"],
                                                          capture_output=True).returncode:
-            f = subprocess.run(["docker", "run", "--rm", "-v", work + ":/w", "macphoenix-hfsprogs", "fsck.hfsplus",
-                                "-n", "-f", "/w/written.img"], capture_output=True, text=True)
-            print("%s fsck.hfsplus on the volume Executor wrote%s" % ("PASS" if f.returncode == 0 else "FAIL",
-                  "" if f.returncode == 0 else ": " + f.stdout.strip()[-400:]))
-            ok &= f.returncode == 0
+            ok &= fsck(work, "written.img")
+            big = os.path.join(work, "big")
+            r = subprocess.run([sys.executable, os.path.join(ROOT, "tests", "guest", "hfsplus", "volwrite.py"),
+                                "--big", "--machine", "executor", "--out", big, "--dump", args.dump])
+            if r.returncode:
+                print("FAIL: volwrite.py --big exited %d" % r.returncode)
+                return 1
+            ok &= compare("VolWrite big", normalize_log(open(os.path.join(ORACLE, "volwrite-big.txt")).read()),
+                          normalize_log(open(os.path.join(big, "volwrite-big.txt")).read()))
+            ok &= fsck(big, "big-written.img")
         else:
-            print("(no fsck: docker or the macphoenix-hfsprogs image missing)")
+            print("(no fsck nor big volume: docker or the macphoenix-hfsprogs image missing)")
         return 0 if ok else 1
     finally:
         if not args.keep:

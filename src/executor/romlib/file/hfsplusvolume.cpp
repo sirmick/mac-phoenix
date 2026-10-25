@@ -27,12 +27,14 @@ namespace
 {
 /* The classic File Manager's lengths are LONGINTs (Mac OS 9.0.4,
    oracle-9.0.4/voldump-Forks*.txt): a fork longer than the last whole
-   allocation block under 2 GB doesn't open (fileBoundsErr) and is
+   allocation block under 2 GB doesn't open (fsDataTooBigErr) and is
    reported that long; an allocation of 2 GB or more is reported as
-   0x80000000. */
+   0x80000000. Growing a fork past that length is fileBoundsErr, its
+   allocation past it dskFulErr (oracle-9.0.4/volwrite-big.txt). */
 const uint64_t kMaxEOF = 0x7FFFFFFF;
 const uint64_t kMaxPhysical = 0x80000000;
-const OSErr kFileBoundsErr = -1310;
+const OSErr kFileBoundsErr = -1309;
+const OSErr kFSDataTooBigErr = -1310;
 
 std::string pstr(ConstStringPtr p)
 {
@@ -472,7 +474,7 @@ void HFSPlusVolume::openCommon(GUEST<short>& refNum, const Entry& item, bool res
     if(item.folder)
         throw OSErrorException(fnfErr);
     if((resource ? item.resourceFork : item.dataFork).logicalSize > forkLimit())
-        throw OSErrorException(kFileBoundsErr);
+        throw OSErrorException(kFSDataTooBigErr);
     bool locked = item.flags & CatalogEntry::kLocked;
     bool wantsWrite = permission == fsWrPerm || permission == fsRdWrPerm || permission == fsRdWrShPerm;
     bool shared = permission == fsRdWrShPerm;
@@ -660,7 +662,7 @@ void HFSPlusVolume::PBWrite(ParmBlkPtr pb)
     uint64_t pos = (uint32_t)f.fcb->fcbCrPs;
     LONGINT n = std::max<LONGINT>(pb->ioParam.ioReqCount, 0);
     if(pos + uint64_t(n) > forkLimit())
-        throw OSErrorException(dskFulErr);      /* (not seen on 9.0.4) */
+        throw OSErrorException(kFileBoundsErr); /* nothing written */
     if(pos + n > f.state->size)
     {
         /* whole blocks as needed (9.0.4: no clumps), never fewer than it has */
@@ -683,7 +685,7 @@ void HFSPlusVolume::PBSetEOF(ParmBlkPtr pb)
     if(eof < 0)
         throw OSErrorException(paramErr);
     if(uint64_t(eof) > forkLimit())
-        throw OSErrorException(dskFulErr);      /* (not seen on 9.0.4) */
+        throw OSErrorException(kFileBoundsErr);
     check(reader_->setForkSize(f.state->cnid, f.state->resource, (uint64_t)eof));
     refreshFile(f.state->cnid);
     for(auto& g : forks_)
@@ -702,6 +704,8 @@ void HFSPlusVolume::PBAllocate(ParmBlkPtr pb)
         refuseWrite(f);
     uint64_t before = f.state->allocated;
     LONGINT want = std::max<LONGINT>(pb->ioParam.ioReqCount, 0);
+    if(before + want > forkLimit())
+        throw OSErrorException(dskFulErr);      /* none of it */
     check(reader_->setForkSize(f.state->cnid, f.state->resource, f.state->size, before + want));
     refreshFile(f.state->cnid);
     pb->ioParam.ioActCount = (LONGINT)std::min<uint64_t>(f.state->allocated - before, kMaxEOF);

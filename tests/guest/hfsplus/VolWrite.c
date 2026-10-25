@@ -8,6 +8,7 @@
  * may hold, made beforehand, a folder "Long" with long-named files:
  *   "A file whose name is longer than thirty-one.txt" (opened, written and
  *   renamed by its short name) and "Another long name, to be deleted.txt".
+ * A second line "big" runs big() instead: a fork near 2 GB.
  * Results: "OP ... -> err [values]" a line each, "---" last. 68k. */
 #include <Types.h>
 #include <Memory.h>
@@ -353,11 +354,102 @@ static void many(long root)
     }
 }
 
+/* "big" (the config's second line), on a volume of 4 KB blocks with room
+   for 2 GB: a fork grown to the longest a classic path may have (L, the
+   last whole block under 2 GB) and past it, written across it, allocated
+   past it, cut back. */
+#define kL 0x7FFFF000L
+static void eofOf(short ref)
+{
+    long eof = 0, pos = 0;
+    OSErr err = GetEOF(ref, &eof);
+    GetFPos(ref, &pos);
+    fprintf(out, "  eof -> %d %ld at %ld\n", (int)err, eof, pos);
+}
+
+static void seteof(short ref, long eof)
+{
+    fprintf(out, "SETEOF %ld -> %d\n", eof, (int)SetEOF(ref, eof));
+    eofOf(ref);
+}
+
+static void big(long root)
+{
+    short ref, ref2;
+    long n;
+    OSErr err;
+
+    fprintf(out, "CREATE grow -> %d\n", (int)HCreate(vref, root, P("Grow"), 'BINA', 'ttxt'));
+    err = HOpenDF(vref, root, P("Grow"), fsRdWrPerm, &ref);
+    fprintf(out, "OPEN grow -> %d\n", (int)err);
+    if(err)
+        return;
+    seteof(ref, kL - 4096);
+    lengths(root, "Grow");
+    seteof(ref, kL);
+    lengths(root, "Grow");
+    seteof(ref, kL + 1);
+    seteof(ref, 0x7FFFFFFFL);
+    lengths(root, "Grow");
+    writeAt(ref, kL - 100, 100, 1);
+    writeAt(ref, kL - 50, 100, 2);
+    eofOf(ref);
+    writeAt(ref, kL, 1, 3);
+    writeAt(ref, kL, 0, 4);
+    fprintf(out, "SETFPOS L+10 -> %d\n", (int)SetFPos(ref, fsFromStart, kL + 10));
+    fprintf(out, "SETFPOS L -> %d\n", (int)SetFPos(ref, fsFromStart, kL));
+    n = 1024L * 1024;
+    err = Allocate(ref, &n);
+    fprintf(out, "ALLOCATE 1M -> %d (%ld)\n", (int)err, n);
+    lengths(root, "Grow");
+    /* the end read back */
+    {
+        long count = 200, i, bad = 0;
+        SetFPos(ref, fsFromStart, kL - 200);
+        err = FSRead(ref, &count, buf);
+        for(i = 0; i < 50; i++)
+            bad += buf[100 + i] != (char)(1 + i * 13 + i / 97);
+        fprintf(out, "READ end -> %d (%ld) first-write-bytes-bad %ld\n", (int)err, count, bad);
+    }
+    /* a second path sees it */
+    err = HOpenDF(vref, root, P("Grow"), fsRdPerm, &ref2);
+    fprintf(out, "OPEN again -> %d\n", (int)err);
+    if(!err)
+    {
+        eofOf(ref2);
+        FSClose(ref2);
+    }
+    seteof(ref, 1000);
+    lengths(root, "Grow");
+    n = 0x10000000L;
+    err = Allocate(ref, &n);
+    fprintf(out, "ALLOCATE 256M -> %d (%ld)\n", (int)err, n);
+    lengths(root, "Grow");
+    fprintf(out, "CLOSE -> %d\n", (int)FSClose(ref));
+    /* grown to L, closed, opened again */
+    fprintf(out, "CREATE full -> %d\n", (int)HCreate(vref, root, P("Full"), 'BINA', 'ttxt'));
+    if(HOpenDF(vref, root, P("Full"), fsRdWrPerm, &ref) == noErr)
+    {
+        seteof(ref, kL);
+        FSClose(ref);
+    }
+    err = HOpenDF(vref, root, P("Full"), fsRdPerm, &ref);
+    fprintf(out, "OPEN full -> %d\n", (int)err);
+    if(!err)
+    {
+        eofOf(ref);
+        FSClose(ref);
+    }
+    lengths(root, "Full");
+    fprintf(out, "DELETE full -> %d\n", (int)HDelete(vref, root, P("Full")));
+}
+
 int main(void)
 {
     HParamBlockRec pb;
     FILE *cfg;
-    char line[64];
+    char line[64], mode[16];
+    Boolean bigMode;
     unsigned char vname[66];
     OSErr err;
     int n;
@@ -375,6 +467,7 @@ int main(void)
     cfg = fopen("Host:volwrite.cfg", "r");
     if(!out || !buf || !cfg || !fgets(line, sizeof line, cfg))
         return 1;
+    bigMode = fgets(mode, sizeof mode, cfg) && !strncmp(mode, "big", 3);
     fclose(cfg);
     n = strcspn(line, "\r\n");
     vname[0] = n + 1;
@@ -389,10 +482,15 @@ int main(void)
     {
         vref = pb.volumeParam.ioVRefNum;
         volume("before");
-        files(fsRtDirID);
-        volume("after files");
-        longNames(fsRtDirID);
-        many(fsRtDirID);
+        if(bigMode)
+            big(fsRtDirID);
+        else
+        {
+            files(fsRtDirID);
+            volume("after files");
+            longNames(fsRtDirID);
+            many(fsRtDirID);
+        }
         fprintf(out, "FLUSHVOL -> %d\n", (int)FlushVol(NULL, vref));
         volume("at the end");
     }
