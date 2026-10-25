@@ -2,9 +2,6 @@
 # (tests/test_toolbox_suite.sh --backend uae): the ground truth, so each of
 # these is a test that expects something real 7.5.5 doesn't do.
 #
-# Their expectations are Executor's, not Apple's (noted 2026-10-09).
-QuickDraw.Hilite8
-QuickDraw.Hilite32
 # xfail in the native run too (src/executor/tests/test-properties.cmake):
 # on 7.5.5 the spec's parID is not the test folder and the second lookup
 # answers fnfErr.

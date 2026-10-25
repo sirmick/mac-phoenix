@@ -18,6 +18,7 @@
 #include <base/functions.impl.h>
 
 #include <algorithm>
+#include <vector>
 #include <cstring>
 
 using namespace Executor;
@@ -609,6 +610,38 @@ Ptr copy_bits(const void *bits, int bytes)
     return p;
 }
 
+/* The mask of an icon that has none (an 'ICON'): the bits with the white
+   inside the outline filled, everything not reached from the edges through
+   white pixels, as CalcMask makes it. A selected 'ICON' is darkened inside
+   its outline that way on 7.5.5 (the Sound control panel's output device). */
+void fill_outline(uint8_t *bits, int w, int h, int rb)
+{
+    std::vector<uint8_t> outside(w * h, 0);
+    std::vector<int> todo;
+    auto set = [&](int x, int y) { return bits[y * rb + x / 8] & (0x80 >> (x & 7)); };
+    auto visit = [&](int x, int y) {
+        if(x < 0 || y < 0 || x >= w || y >= h || outside[y * w + x] || set(x, y))
+            return;
+        outside[y * w + x] = 1;
+        todo.push_back(y * w + x);
+    };
+    for(int x = 0; x < w; x++)
+        visit(x, 0), visit(x, h - 1);
+    for(int y = 0; y < h; y++)
+        visit(0, y), visit(w - 1, y);
+    while(!todo.empty())
+    {
+        int i = todo.back();
+        todo.pop_back();
+        int x = i % w, y = i / w;
+        visit(x - 1, y), visit(x + 1, y), visit(x, y - 1), visit(x, y + 1);
+    }
+    for(int y = 0; y < h; y++)
+        for(int x = 0; x < w; x++)
+            if(!outside[y * w + x])
+                bits[y * rb + x / 8] |= 0x80 >> (x & 7);
+}
+
 const uint8_t gray_rows[2] = { 0xAA, 0x55 };     /* 50% */
 const uint8_t ltgray_rows[4] = { 0x88, 0x00, 0x22, 0x00 }; /* 12.5% */
 
@@ -662,6 +695,8 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
     Ptr mask_p = copy_bits(mask_src, mask_bytes);
     if(!mask_p)
         return memFullErr;
+    if(c.no_mask)
+        fill_outline((uint8_t *)mask_p, w, h, c.row_bytes());
     BitMap mask_bm;
     mask_bm.baseAddr = mask_p;
     mask_bm.rowBytes = c.row_bytes();

@@ -387,6 +387,11 @@ TEST(QuickDraw, Hilite8)
 {
     if(!hasDeepGWorlds())
         return;
+    /* a highlight colour that is neither black nor white (a Mac's
+       default is black); a port takes it when it is opened */
+    RGBColor save_hilite, hilite = { 0x9999, 0xCCCC, 0xCCCC };
+    LMGetHiliteRGB(&save_hilite);
+    LMSetHiliteRGB(&hilite);
     OffscreenWorld world(8);
 
     Rect upper = world.r;
@@ -415,6 +420,8 @@ TEST(QuickDraw, Hilite8)
     EXPECT_EQ(0x00, world.data(0,1));
     EXPECT_EQ(0xFF, world.data(1,0));
     EXPECT_EQ(0xFF, world.data(1,1));
+
+    LMSetHiliteRGB(&save_hilite);
 }
 
 
@@ -422,6 +429,11 @@ TEST(QuickDraw, Hilite32)
 {
     if(!hasDeepGWorlds())
         return;
+    /* a highlight colour that is neither black nor white (a Mac's
+       default is black); a port takes it when it is opened */
+    RGBColor save_hilite, hilite = { 0x9999, 0xCCCC, 0xCCCC };
+    LMGetHiliteRGB(&save_hilite);
+    LMSetHiliteRGB(&hilite);
     OffscreenWorld world(32);
 
     Rect upper = world.r;
@@ -450,6 +462,8 @@ TEST(QuickDraw, Hilite32)
     EXPECT_EQ(0x00FFFFFF, world.data32(0,1));
     EXPECT_EQ(0x00000000, world.data32(1,0));
     EXPECT_EQ(0x00000000, world.data32(1,1));
+
+    LMSetHiliteRGB(&save_hilite);
 }
 
 

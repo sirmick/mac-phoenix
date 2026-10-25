@@ -10,6 +10,7 @@
 #include <ResourceMgr.h>
 #include <MemoryMgr.h>
 #include <OSUtil.h>
+#include <CQuickDraw.h>
 
 using namespace Executor;
 
@@ -63,6 +64,8 @@ const char *ROMlib_executor_full_name = "Executor 2000 " EXECUTOR_VERSION;
 
 bool ROMlib_apple_system_file;
 
+extern unsigned char XPRAM[]; /* core/xpram.cpp's (base/emustubs.cpp) */
+
 void
 ROMlib_set_system_version(uint32_t version)
 {
@@ -88,6 +91,14 @@ ROMlib_set_system_version(uint32_t version)
             system_version = version;
             LM(SysVersion) = version;
             gestalt_set_system_version(version);
+
+            /* The highlight colour is the one the Color control panel
+               saved in extended parameter RAM ($82, 6 bytes; zero, black,
+               when it never has), not Executor's own light blue. */
+            const uint8_t *x = &::XPRAM[0x82];
+            LM(HiliteRGB).red = (unsigned short)(x[0] << 8 | x[1]);
+            LM(HiliteRGB).green = (unsigned short)(x[2] << 8 | x[3]);
+            LM(HiliteRGB).blue = (unsigned short)(x[4] << 8 | x[5]);
             return;
         }
     }

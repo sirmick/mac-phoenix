@@ -445,7 +445,12 @@ void Executor::C_ShowDialogItem(DialogPtr dp, INTEGER item) /* IMIV-59 */
     SignedByte flags;
 
     ip = ROMlib_dpnotoip((DialogPeek)dp, item, &flags);
-    if(ip && ip->itmr.left > 8192)
+    if(!ip) /* MacPhoenix: no such item, nothing to show */
+    {
+        HSetState(DIALOG_ITEMS(dp), flags);
+        return;
+    }
+    if(ip->itmr.left > 8192)
     {
         ip->itmr.left = ip->itmr.left - 16384;
         ip->itmr.right = ip->itmr.right - 16384;

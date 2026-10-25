@@ -285,10 +285,17 @@ Comp *add(std::unique_ptr<Comp> c, int16_t global, bool auto_version)
     GetCurrentProcess(&c->owner);
     c->id = kCompBase + next_comp++;
     Comp *p = c.get();
-    if(global & registerComponentAfterExisting)
-        comps.push_back(std::move(c));
-    else
-        comps.insert(comps.begin(), std::move(c));
+    /* MacPhoenix: in front of the components of the same type and
+       subtype (unless registerComponentAfterExisting), otherwise last: a
+       Mac finds components of one type in the order they were registered
+       (the Sound control panel registers its four 'sndP' pages one by one
+       and lists them as FindNextComponent answers: Alert Sounds first). */
+    auto pos = comps.end();
+    if(!(global & registerComponentAfterExisting))
+        pos = std::find_if(comps.begin(), comps.end(), [&](const auto &o) {
+            return o->type == p->type && o->subtype == p->subtype;
+        });
+    comps.insert(pos, std::move(c));
     changed(p->type);
     if(p->flags & cmpWantsRegisterMessage)
     {
@@ -417,11 +424,10 @@ int32_t register_file(INTEGER refnum, int16_t global)
     for(INTEGER i = 1; i <= n; i++)
         if(Handle h = Get1IndResource("thng"_4, i))
             things.push_back(h);
-    /* MacPhoenix: last first, so that with each going to the head of the
-       search order the file's resources keep their order: Color Picker
-       2.0 takes the first 'cpkr' that FindNextComponent answers, and on
-       7.5.5 that is its HSL picker (thng 2020), not the RGB one (3020). */
-    std::reverse(things.begin(), things.end());
+    /* in the file's order, which is the search order (see add): Color
+       Picker 2.0 takes the first 'cpkr' that FindNextComponent answers,
+       and on 7.5.5 that is its HSL picker (thng 2020), not the RGB one
+       (3020). */
     for(Handle h : things)
     {
         HLock(h);
