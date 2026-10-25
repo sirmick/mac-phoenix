@@ -25,12 +25,7 @@ typedef uint16_t UniChar;
 typedef UInt32 HFSCatalogNodeID;
 #endif
 
-struct HFSUniStr255
-{
-    GUEST_STRUCT;
-    GUEST<UInt16> length;
-    GUEST<UniChar[255]> unicode;
-};
+/* HFSUniStr255: FileMgr.h (multiversal) */
 
 typedef const HFSUniStr255 *ConstHFSUniStr255Param;
 

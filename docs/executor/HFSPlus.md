@@ -1,18 +1,21 @@
 # HFS+ in Executor
 
-Read-only HFS Plus volumes for Executor: disk images holding an HFS+
-volume (bare `H+`/`HX`, inside an HFS wrapper, inside an Apple partition
-map or not) mount, and their files open as on Mac OS 8.1–9.
+HFS Plus volumes for Executor: disk images holding an HFS+ volume (bare
+`H+`/`HX`, inside an HFS wrapper, inside an Apple partition map or not)
+mount, their files open as on Mac OS 8.1–9, and on a writable image the
+File Manager changes them as Mac OS 9.0.4 does.
 
 ## Status
 
 | Piece | State |
 |-------|-------|
-| Reader (`src/executor/romlib/hfs/plus/`) | done: matches hfsdump on 7 images (below) |
-| File Manager volume (`file/hfsplusvolume.cpp`) | done: VolDump on Executor = VolDump on 9.0.4, 4 images |
+| Reader (`src/executor/romlib/hfs/plus/`) | done: matches hfsdump on 8 images and 2 CDs (below) |
+| File Manager volume (`file/hfsplusvolume.cpp`) | done: VolDump on Executor = VolDump on 9.0.4, 20 images (32 MB to 20 GB, bare and wrapped, hard links, forks near 2 GB) |
 | Mounting (`try_to_mount_disk`) | done: bare, HFS wrapper, Apple partition map |
 | System sideload (`hfs_sideload.cpp`) | done: an HFS+ image's blessed System Folder |
-| Web tab | done: an uploaded HFS+ image (WORKERFS) gives VolDump 9.0.4's dump (`executor.web.hfsplus`) |
+| Web tab | done: an uploaded HFS+ image gives VolDump 9.0.4's dump (`executor.web.hfsplus`) |
+| HFS Plus APIs (`file/fsref.cpp`) | done: FSRefTest on Executor = on 9.0.4 (HFS+, HFS, forks past 4 GB, FSCatalogSearch's criteria) |
+| Writing (`hfs/plus/writer.cpp`, `btree.cpp`) | done: fsck.hfsplus-clean (HFS+, HFSX, trees past their header's map); VolWrite on Executor = VolWrite on 9.0.4, natively and in the tab |
 
 ## The reader
 
@@ -31,8 +34,9 @@ TN1189 (partitions). The File Manager's volume, the System sideload and
   64-node cache; catalog lookups by (parent, name) and by CNID (thread
   records); `childAt` keeps a cursor so indexed enumeration (PBGetCatInfo's
   `ioFDirIndex` 1, 2, 3...) costs a step per call; forks through their 8
-  extents and then the extents overflow B-tree; hard links (`hlnk`/`hfs+`)
-  resolved to `HFS+ Private Data:iNode<n>`. HFSX's binary order when the
+  extents and then the extents overflow B-tree; `resolveLink` follows a
+  hard link (`hlnk`/`hfs+`) to `HFS+ Private Data:iNode<n>` (hfsplus_dump
+  does; the File Manager doesn't, below). HFSX's binary order when the
   catalog says so (`keyCompareType` 0xBC). The journal is not replayed
   (classic volumes have none; a journaled volume mounts read-only as
   written).
@@ -96,18 +100,42 @@ the images read-only on the host):
   "thread exists": 9.0.4 reports 0x02 for every file) and the open bits.
 - Dates: HFS+ stores GMT (but the volume's creation date, local); the File
   Manager reports local time.
-- The volume: `ioVSigWord` `'BD'`; `ioVAlBlkSiz` the real block size;
-  `ioVFrBlk` the free blocks; `ioVNmFls` the root's valence (files and
-  folders); `ioVNmAlBlks` 9.0.4's odd figure: the volume's 512-byte
-  sectors divided by the smallest k that fits them in 16 bits (32 MB:
-  32768; 64 MB: 43690), the embedded volume's block count when wrapped.
+- The volume: `ioVSigWord` `'BD'`; `ioVNmFls` the root's valence (files
+  and folders); blocks of k of the volume's, k the smallest that brings
+  their count under 65536 (`ioVAlBlkSiz` k × the block size: 12 GB of
+  4 KB blocks, 200704; `ioVFrBlk` the free blocks / k); `ioVNmAlBlks`
+  9.0.4's odd figure: the volume's 512-byte sectors divided by the
+  smallest k that fits them in 16 bits (32 MB: 32768; 64 MB: 43690; 1 GB:
+  63550); in an HFS wrapper the wrapper's view instead: `ioVAlBlkSiz` its
+  `drAlBlkSiz`, `ioVNmAlBlks` the embedded volume's extent in those
+  blocks, `ioVFrBlk` the free bytes in them (`voldump-wrapped-*.txt`,
+  256 MB to 12 GB); and the total and the free blocks no more than
+  2 GB - 1 of them (2 GB: 58254 blocks of 36864). Pinned on volumes of
+  32 MB to 20 GB, blocks of 512 bytes to 8 KB (`voldump-size-*.txt`,
+  `-wrapped-*`, `-forks-*`, `-big-12g`).
   `vcbAtrb` hardware-locked, bit 6 while files are open.
 - Opening succeeds whatever the permission; writing through a path opened
   for writing fails with wPrErr, through a read-only one with wrPermErr
   (FSWrite, SetEOF, Allocate). Create, delete, rename, SetCatInfo,
-  SetFInfo, locks, SetVInfo: wPrErr. Forks over 2 GB end at 2 GB - 1.
+  SetFInfo, locks, SetVInfo: wPrErr.
+- Big forks (`voldump-forks-4k.txt`, `-forks-8k`, `-big-12g`): the
+  longest a classic path opens is the last whole allocation block under
+  2 GB (4 KB blocks: 0x7FFFF000; 8 KB: 0x7FFFE000); one longer doesn't
+  open (fsDataTooBigErr, -1310, for reading and writing alike) and
+  PBGetCatInfo gives it that length, logical and physical. A fork that
+  opens reads to its end as any; its physical length, at 2 GB or more,
+  is reported as 0x80000000. Growing one (`volwrite-big.txt`): SetEOF
+  to the limit works, past it is fileBoundsErr (-1309), the EOF as it
+  was; a write that would cross it is fileBoundsErr with nothing
+  written; Allocate past it dskFulErr, none allocated.
 - Unmounting closes nothing: open files make it fBsyErr; Eject and OffLine
   take the drive off line.
+- Hard links aren't followed (`voldump-hardlinks.txt`): 9.0.4 shows a link
+  as the empty file it is (type `hlnk`, creator `hfs+`), and the metadata
+  folder `\0\0\0\0HFS+ Private Data` with its `iNode<n>` files as any
+  folder (the root's valence counts it). Deleting a link deletes that
+  file, the iNode stays and its link count is left as it was (TN1150
+  allows for that: "traditional Mac OS" doesn't know them).
 
 Mounting: `try_to_mount_disk` (`hfs/hfsHelper.cpp`) looks at every
 volume it finds (partition map entries, the bare probe of block 2) and
@@ -120,6 +148,196 @@ The System sideload (`front-ends/phoenix/hfs_sideload.cpp`,
 volume with a blessed folder goes through the reader (short names, local
 dates), else HFS as before.
 
+## Writing
+
+On a writable image (natively `--executor-writable-images`; the tab's
+uploads always, through its overlay) and a volume that is clean
+(`kHFSVolumeUnmountedBit` set), not journaled and not locked, the volume
+mounts read-write; otherwise read-only, as above.
+
+The volume layer (`hfs/plus/`, from TN1150):
+
+- `btree.cpp`: insert, remove, replace; a full node splits (a new root
+  when it was the root), an empty node is freed and unlinked, an index
+  root with one child collapses, index keys stay their children's first
+  keys; nodes come from the map (the header node's map record, then map
+  nodes'), lowest first; with none free the tree's file grows through the
+  volume (the catalog's extents past 8 go to the extents overflow file),
+  and past what the map covers map nodes are made from the first new
+  nodes, chained from the last one's fLink, laid out as mkfs.hfsplus
+  makes them (kind 2, height 0, one record of the node less 20 bytes).
+- `writer.cpp`: the allocation file (a free run from the last allocation
+  on, else pieces); forks grown (new blocks zeroed: a hole punched in a
+  sparse image where the host can) and cut, their extents past the first
+  8 as extents overflow records; files and folders made
+  (thread records, valences, counts, the next CNID; MacRoman text
+  encoding), removed, renamed, moved; Finder info, dates, the lock bit;
+  the volume's name and Finder info. Everything is written through; the
+  volume is marked in use only while a change is being made (a process
+  killed between changes leaves it clean), the header's copy at the end
+  of the volume kept. Extended attributes (an attributes file, as
+  mkfs.hfsplus makes) are left alone, as Mac OS 9 leaves them.
+
+The File Manager (`file/hfsplusvolume.cpp`) on top, pinned to what Mac OS
+9.0.4 does on the same volume (`tests/guest/hfsplus/VolWrite`, a fixed
+script of classic calls logging every result; `oracle-9.0.4/volwrite.txt`,
+`voldump-written.txt`):
+
+- New names: 1–31 MacRoman characters without `:` (else bdNamErr), stored
+  decomposed; dupFNErr for a name taken in any case. On an HFSX volume
+  (`HX`, binary order: Mac OS 9 doesn't mount one, so this follows the
+  format, not 9.0.4) names differing only in case are different names,
+  for lookups, dupFNErr and renames alike.
+- Allocation in whole blocks: SetEOF sets the fork's allocation to its
+  length rounded up to a block, both ways; Allocate adds the request so
+  rounded; a write past the end adds the blocks it needs and never takes
+  any away. Positioning past the end is eofErr.
+- Paths: one exclusive writer per fork (opWrErr, with its refNum), shared
+  writers with fsRdWrShPerm; a locked file opens for reading only
+  (permErr for writing); writing through a read path is wrPermErr.
+- fBsyErr deleting an open file or a folder with items, fLckdErr renaming
+  or deleting a locked file, badMovErr moving a folder into itself.
+- A path that wrote sets its file's modification date when flushed or
+  closed.
+- FSpExchangeFiles / PBExchangeFiles (natively, `Reader::exchange`): the
+  contents swap, both forks (their extents overflow records rekeyed) and
+  the modification date; file IDs, names, Finder info and creation dates
+  stay with the names; open paths go with the contents (their FCBs take
+  the other file's number and name). A file with itself: sameFileErr; a
+  file with a folder: noErr, nothing changed (9.0.4). Elsewhere (HFS,
+  host folders) Executor's exchange is still renames, IDs going with the
+  contents; it now refuses a file with itself too (it lost the file).
+
+Found on the way and fixed outside HFS+: `HCreateResFile` leaves type and
+creator 0 (9.0.4), not `????`; `HOpenResFile` answers mapReadErr for a
+fork whose header puts the map outside it, before that length reaches
+`NewHandle`; `ROMlib_grow_syszone` rounds in 64 bits (a request near
+2 GB wrapped and the System heap's trailer went past its end).
+
+The Desktop DB is not written, by decision: 9.0.4 makes "Desktop DB"
+and "Desktop DF" when it mounts a volume, but Executor's Desktop Manager
+(`finder.cpp`) keeps a disk image's database in memory, HFS+ as HFS: it
+reads a volume's own Desktop DB through the File Manager when there is
+one (a volume 9.0.4 has had), else walks the catalog for applications
+and their bundles, and Apple's Finder reaches the database only through
+the Desktop Manager's calls. Writing the files would mean writing a
+format known only from reading it, for a Mac OS that rebuilds it anyway
+when it's missing.
+
+Journaled volumes mount read-only, their journal not replayed (a volume
+whose journal has transactions in it may read stale); left so.
+
+Hard links are made only by `hfsplus_dump`'s script (`link`, `Reader::makeLink`, as
+TN1150 lays them out: the file moved into the metadata folder, made
+first, as `iNode<reference>`; links typed `hlnk`/`hfs+`, `kHasBeenInited`,
+dated as the folder; fsck.hfsplus calls them "pre-Leopard"), for tests;
+the File Manager has no call that makes one.
+
+## The HFS Plus APIs (Mac OS 9.0)
+
+`file/fsref.cpp`: FSRefs, Unicode names, catalog info, iterators and
+FSCatalogSearch, the fork calls with 64-bit positions, FSGetVolumeInfo:
+the `PB…` calls on `_FSDispatch` (selectors $1D–$7F; PBReadFork and
+PBWriteFork on $A2A8), the `FS…` calls on `_HighLevelFSDispatch` ($18–$38,
+the dispatcher's selector mask widened to 0xFF), all exported to
+InterfaceLib; definitions in `multiversal/defs/FileMgr.yaml` (layouts and
+selectors as Universal Interfaces 3.3.2 declares them; their sizes
+checked on 9.0.4 by FSRefTest). A 68K Pascal value parameter over 4 bytes
+comes as a pointer: FSReadFork, FSWriteFork, FSSetForkPosition,
+FSSetForkSize and FSAllocateFork have a `…68K` entry for the 68K glue's
+selector and take the SInt64 by value from PowerPC.
+
+On an HFS+ volume items are found by CNID and named in Unicode (an
+application's name decomposed for MacRoman's accents, as HFS+ stores
+them), forks of any length open; elsewhere (HFS, host folders) the calls
+go through the classic File Manager. An FSRef is ours: the volume and the
+CNID, or (classic volumes) the parent, the name and the ID, the name first
+and then the ID, so a ref finds its item after a rename or move, as
+9.0.4's do.
+
+Pinned on 9.0.4 (`tests/guest/hfsplus/FSRefTest.c`, `fsreftest.py`,
+`oracle-9.0.4/fsreftest.txt`; on the long-name fixture, a blank HFS+ and a
+blank HFS volume, and the 12 GB volume of big forks), among others:
+
+- FSGetVolumeInfo: volume 0 is nsvErr (no default volume); the signature
+  `H+`, not `BD`; the header's counts and real block size.
+- An FSRef of zeros: errFSBadFSRef; any other nonsense: fnfErr. The
+  root's parent ref: zeros. FSMakeFSRefUnicode with no name: the parent.
+  A composed and a decomposed é find the same item.
+- Iteration: the last batch comes with errFSNoMoreItems; a subtree
+  iterator only on a volume's root (errFSBadIteratorFlags), and only for
+  FSCatalogSearch (errFSIteratorNotSupported for the bulk call), which
+  needs both search infos (errFSBadSearchParams) and returns the catalog's
+  records in the file's node order.
+- Creating: 255 UTF-16 units at most (errFSNameTooLong), none is
+  errFSMissingName, a name in any case taken is dupFNErr; on HFS more than
+  31 MacRoman characters is errFSNameTooLong, a character MacRoman lacks
+  bdNamErr. Renaming to nothing: dupFNErr. Moving into a file:
+  errFSNotAFolder. Valence and sizes can't be set (errFSBadInfoBitmap).
+- Forks: the data fork's name is empty, the resource fork's
+  `RESOURCE_FORK`; both always exist (FSCreateFork: errFSForkExists;
+  FSDeleteFork empties one); another name is errFSBadForkName, a folder's
+  fork errFSForkNotFound. A path FSOpenFork opened refuses the classic
+  calls (GetEOF, FSRead...: fsDataTooBigErr), on any volume. Newline mode
+  is errFSBadPosMode; a read from past the end is eofErr, the mark
+  unmoved; FSAllocateFork covers the position plus the request and says
+  what it added. FSGetForkCBInfo's flags are the FCB's (write, resource,
+  large file 0x08, modified).
+- FSExchangeObjects: with a folder notAFileErr, with itself sameFileErr
+  (where ExchangeFiles with a folder says noErr).
+
+Executor's HFS code differs where the FSRef layer can't make up for it:
+it takes ':' in a name for a path separator (9.0.4 makes such an HFS
+name; Executor answers bdNamErr), and it allocates by the clump where
+9.0.4's fork calls allocate blocks (physical lengths). Both left so, by
+decision: the first needs a way past the classic path's name parsing
+(`ROMlib_findvcbandfile`) for one kind of name only the Unicode calls can
+make, the second changes nothing an application reads but the physical
+lengths. Permissions are the catalog's bytes (Mac OS X's), read-only.
+
+No real application in the corpus uses these calls without CarbonLib
+(searched: PEF imports of `FSGetCatalogInfo`, `FSOpenFork`,
+`FSMakeFSRefUnicode` on the dev, tools, productivity, games-ppc and Mac OS
+8–9 development images, 2026-10-25): StuffIt Expander 6.0.1, BBEdit Lite
+6.1 for OS X and MacPython's modules import them from CarbonLib, which
+Executor doesn't have. FSRefTest is the test until one turns up.
+
+FSCatalogSearch's criteria (FSRefTest's `SEARCH criteria`, 57 searches
+on the long-name fixture, and `SEARCH big`, size ranges past 4 GB on the
+12 GB volume):
+
+- Every bit set must hold (names, flags, Finder info, sizes, dates, IDs,
+  valence, permissions); `fsSBNegate` inverts the whole: everything else,
+  folders and files alike. No criteria: every item; negated: none. A bit
+  above `fsSBPermissions` (bit 18): errFSBadSearchParams.
+- The values are what FSGetCatalogInfo reports: a folder's sizes are 0, a
+  file's valence 0, so a size range from 0 takes the folders and a valence
+  range from 0 the files.
+- Masks (`nodeFlags`, Finder info, extended Finder info, permissions):
+  the mask's bits of the item and of the value compare; the value's other
+  bits don't count. Ranges (IDs, valence, dates) include their bounds; a
+  range whose low bound is above its high one takes nothing.
+- Sizes (the four fork lengths) as 9.0.4 checks them: when the bounds'
+  high words differ only the item's high word is compared with theirs
+  (`[1 MB, 2^63 - 1]` takes an empty file, `[4 GB + 200, 8 GB]` one of
+  4 GB + 150 bytes); with the same high word, the item needs that high word
+  and a low word between theirs.
+- Dates compare by `highSeconds` and `lowSeconds` (not pinned past
+  `highSeconds` 0, nor the fraction).
+
+On a host folder (`LocalVolume`: the Host volume, Executor's own System
+volume) the calls go through the classic path as on HFS, and FSRefTest's
+write script there (Executor only: 9.0.4 has no such volume) gives what
+9.0.4 gives on its HFS volume but for what the host folder can't keep:
+no physical lengths (a fork's allocation is its length), no creation or
+backup dates on a plain file (only a MacBinary one keeps them), no
+locks (SetFLock: paramErr; the script's "delete locked" then deletes the
+file, so the renames and moves after it find nothing, fnfErr), and a
+name with a `:` (bdNamErr). Fixed for it: the fork calls take the mark
+and EOF from the File Manager, not the FCB (LocalVolume keeps them in its
+open file), and a folder moved into itself or a folder of its own is
+badMovErr (it was ioErr).
+
 ## Tests
 
 - `executor.hfsplus_reader` (`tests/test_hfsplus_reader.py`): `hfsplus_dump`
@@ -128,8 +346,10 @@ dates), else HFS as before.
   creator, fork sizes and bytes; the long-name fixture's short names
   against 9.0.4's. Images: the fixtures in
   `src/executor/tests/fixtures/hfsplus` (gzipped: `longnames.img`, made on
-  9.0.4; `blank-64m.img`, `blank-wrapped-64m.img` from `mkfs.hfsplus`) and,
-  where present, `~/storage/hfsplus-recon/images/{carbonlib-1.6,guest-written}.img`.
+  9.0.4; `blank-64m.img`, `blank-wrapped-64m.img`, `blank-hfsx-64m.img`
+  from `mkfs.hfsplus`; `hardlinks.img`, a blank with hard links made by
+  `hfsplus_dump`: hfsdump follows them by path) and, where present,
+  `~/storage/hfsplus-recon/images/{carbonlib-1.6,guest-written}.img`.
   By hand, with `--sample`, the two partitioned HFS+ CDs in the assets
   repo (ADC Seed CD April 2001: partition map + HFS wrapper, 7920 items;
   CodeWarrior 8 Pro: partition map, Mac OS X-written, 8270 items) matched
@@ -141,11 +361,15 @@ dates), else HFS as before.
 - `executor.hfsplus_volume` (`tests/test_hfsplus_volume.py`): VolDump
   (`tests/guest/hfsplus/VolDump.c`: every item's PBGetCatInfo by index, by
   name, by full path, upper-cased, `::`, ioFDirIndex -1, PBHGetFInfo,
-  FSMakeFSSpec, both forks read to the end, past the end, written, opened
+  FSMakeFSSpec, both forks read to the end (from 256 MB on, probed: the
+  head, the last bytes, the 2 GB - 1 cap), past the end, written, opened
   for writing, Create/DirCreate) on Executor (Apple's 7.5.5) against its
   dumps on 9.0.4 (`tests/guest/hfsplus/voldump.py --machine 9.0.4`
   remakes them): identical but for what depends on the machine (the
-  disk's ejectable bit, files 9.0.4's Finder holds open).
+  disk's ejectable bit, files 9.0.4's Finder holds open). The volumes of
+  1 to 20 GB are made by the test (`fixtures/hfsplus/generated.json`:
+  sparse, `mkfs.hfsplus` in docker, a script of `hfsplus_dump`'s; not
+  compared without docker, nor their dates and volume ID).
 - `executor.HFSPlusVolumeTest.*` (`src/executor/tests/hfsplus_volume.cpp`):
   the long-name fixture mounted with `ROMlib_openharddisk` in the gtest
   binary: names, folders, paths, a fork past its 8 extents, a resource
@@ -154,17 +378,64 @@ dates), else HFS as before.
 - `executor.web.hfsplus` (`web/tests/tab_hfsplus.mjs`, wasm build): the
   fixture uploaded in the tab and VolDump run there; its dump equals
   9.0.4's (the same machine differences set aside).
+- `executor.hfsplus_writer` (`tests/test_hfsplus_writer.py`): seeded
+  scripts (`hfsplus_dump IMAGE script`) on the bare, wrapped and HFSX
+  (`blank-hfsx-64m.img`, `mkfs.hfsplus -s`) blanks:
+  1600 files (the catalog three levels deep, its file grown), forks
+  written in turns (extents overflow), renames, moves, truncations, mass
+  deletion, names differing only in case (refused, or on HFSX 800 of them
+  side by side and renamed into each other's case); and on a volume made with 4 KB catalog nodes, 150000 files of
+  200-character names (two map nodes made), two thirds deleted, 5000 more;
+  fsck.hfsplus -n -f (hfsprogs in docker, image macphoenix-hfsprogs) finds
+  each volume OK and hfsdump reads every folder and fork as a model of the
+  script predicts.
+- `executor.hfsplus_write` (`tests/test_hfsplus_write.py`): VolWrite, an
+  application copied in (`/api/copy`) and VolDump on Executor against the
+  9.0.4 oracle (but for what 9.0.4's Finder makes when the volume mounts,
+  dates, and bytes neither machine defines: past an EOF SetEOF extended,
+  the Resource Manager's reserved header bytes); fsck on the result. By
+  hand: 9.0.4 reading the volume Executor wrote gives VolDump's dump of it
+  on Executor exactly.
+  Then `volwrite.py --big` (VolWrite's "big" script, a fork grown to the
+  2 GB limit and past it, on a blank 8 GB volume made with mkfs.hfsplus)
+  against `volwrite-big.txt`, and fsck on that volume.
+- `executor.hfsplus_app` (`tests/test_hfsplus_app.py`): Apple's SimpleText
+  on Executor (the tests-7.5.5 System) types a note and saves it onto a
+  writable blank through Standard File (driven from the keyboard:
+  Command-D, the volume typed, the name), saves again, quits; opened again
+  with `/api/launch` `open`, it takes more text and is saved. On the host
+  the data fork is the text, the resource fork a resource file with its
+  `styl`, and fsck.hfsplus finds the volume OK.
+- `executor.hfsplus_fsref` (`tests/test_hfsplus_fsref.py`): FSRefTest on
+  Executor against 9.0.4's output (`fsreftest.py --machine 9.0.4` remakes
+  it): but for the machine's Finder (its Desktop files open, its items on
+  the writable volumes) and the two HFS-code differences above. Twice: the
+  68K build (`build.mpw`, SC) and a PowerPC one (`FSRefTestPPC.bin`,
+  `build.cw.mpw`: CodeWarrior's MWCPPC and MWLinkPPC, as MPW 3.4.2's
+  PPCLink reads no PEF of Universal Interfaces 3.3.2's InterfaceLib stub),
+  which Executor runs on mame-ppc through InterfaceLib; on 9.0.4 the
+  PowerPC build's output is the 68K build's, byte for byte. Then the
+  write script on Executor's Host volume, a host folder, against
+  `executor-host-folder.txt` (Executor's own output, above).
+- `executor.HFSPlusWriteTest.*`, `executor.HFSXWriteTest.*`: a blank
+  volume (HFS+, HFSX) written in the gtest binary (natively and under
+  node).
+- `executor.web.hfsplus_write` (`web/tests/tab_hfsplus_write.mjs`, wasm
+  build): the same in the tab, through the overlay; fsck on the image
+  downloaded from the page.
 - `executor.hfsplus_sideload` (`tests/test_hfsplus_sideload.py`):
   `--executor-system` on the long-name fixture copies its blessed System
   Folder (made on 9.0.4) byte for byte.
 
-Not covered by any image yet: hard links (none of the images has one),
-HFSX, journaled volumes, files over 2 GB, `ioVNmAlBlks` of a wrapped
-volume over 65535 blocks.
+Not covered by any image yet: hard links written by Mac OS X (none of
+the images has one: `hardlinks.img` is made by `hfsplus_dump`,
+`fixtures/hfsplus/hardlinks.script`, fsck-clean), journaled volumes. fsck.hfsplus reports "Illegal name" on
+`longnames.img`: MakeLongNames passed 9.0.4 a precomposed `ά` (and a
+`:`), which 9.0.4 stored as given.
 
 ## Making fixtures
 
-`tests/guest/hfsplus/`: `MakeLongNames` (68k, built with
+`tests/guest/hfsplus/`: `MakeLongNames`, `VolDump`, `VolWrite` (68k, built with
 `tools/mpw/mpw build tests/guest/hfsplus -o tests/guest/hfsplus` against
 Universal Interfaces 3.3.2, docs/MPW.md) and `make_fixture.py`, which runs
 it on Mac OS 9.0.4 (mame-ppc) against a blank volume and opens the result

@@ -172,6 +172,11 @@ typedef struct
 
 extern fcbrec *PRNTOFPERR(INTEGER prn, OSErr *errp);
 
+/* fsref.cpp: a path FSOpenFork opened, refused to the classic calls
+   (fsDataTooBigErr, as Mac OS 9.0.4); one closed by PBClose */
+extern bool ROMlib_forkAPIRefused(short refNum);
+extern void ROMlib_forkAPIClosed(short refNum);
+
 #define ATTRIB_ISLOCKED (1 << 0)
 #define ATTRIB_RESOPEN (1 << 2)
 #define ATTRIB_DATAOPEN (1 << 3)

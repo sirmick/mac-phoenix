@@ -1,9 +1,10 @@
 /* hfsplusvolume.cpp -- see hfsplusvolume.h. The File Manager's classic
- * calls on an HFS+ volume, read-only, as Mac OS 9.0.4 answers them
+ * calls on an HFS+ volume as Mac OS 9.0.4 answers them
  * (docs/executor/HFSPlus.md): CNIDs are the dirIDs and file numbers;
  * names longer than 31 characters, or with characters MacRoman lacks, are
- * the short "#<CNID>" form; HFS+ dates (GMT) are reported in local time;
- * writes fail with wPrErr, the volume being locked. */
+ * the short "#<CNID>" form; HFS+ dates (GMT) are reported in local time.
+ * On a writable image the changes go to hfs/plus/writer.cpp; else the
+ * volume is locked and writes fail with wPrErr. */
 #include <file/hfsplusvolume.h>
 
 #include <base/common.h>
@@ -24,9 +25,16 @@ using namespace Executor::hfsplus;
 
 namespace
 {
-/* The classic File Manager's lengths are LONGINTs: forks over 2 GB are
-   cut there. */
+/* The classic File Manager's lengths are LONGINTs (Mac OS 9.0.4,
+   oracle-9.0.4/voldump-Forks*.txt): a fork longer than the last whole
+   allocation block under 2 GB doesn't open (fsDataTooBigErr) and is
+   reported that long; an allocation of 2 GB or more is reported as
+   0x80000000. Growing a fork past that length is fileBoundsErr, its
+   allocation past it dskFulErr (oracle-9.0.4/volwrite-big.txt). */
 const uint64_t kMaxEOF = 0x7FFFFFFF;
+const uint64_t kMaxPhysical = 0x80000000;
+const OSErr kFileBoundsErr = -1309;
+const OSErr kFSDataTooBigErr = -1310;
 
 std::string pstr(ConstStringPtr p)
 {
@@ -53,13 +61,28 @@ int fcbIndex(short refNum)
 }
 } // namespace
 
+/* A fork as all its open paths see it */
+struct HFSPlusVolume::ForkState
+{
+    uint32_t cnid;
+    bool resource;
+    std::unique_ptr<Fork> fork;
+    uint64_t size = 0, allocated = 0;
+};
+
 struct HFSPlusVolume::OpenFork
 {
     filecontrolblock *fcb;
     short refNum;
-    std::unique_ptr<Fork> fork;
-    uint64_t eof;
-    bool forWriting;            /* opened with a write permission: the volume refuses */
+    std::shared_ptr<ForkState> state;
+    bool forWriting;            /* opened with a write permission */
+    bool canWrite;              /* ... and may (a writable volume, not locked) */
+    bool shared;                /* fsRdWrShPerm */
+    bool written = false;       /* the file's date is set at close or flush */
+    bool api = false;           /* opened by FSOpenFork: any length, mark below */
+    int8_t permission = 0;
+    uint64_t mark = 0;
+    uint64_t eof() const { return std::min(state->size, kMaxEOF); }     /* (opened: no more than forkLimit) */
 };
 
 HFSPlusVolume::HFSPlusVolume(VCB& vcb, std::unique_ptr<Reader> reader)
@@ -70,18 +93,28 @@ HFSPlusVolume::HFSPlusVolume(VCB& vcb, std::unique_ptr<Reader> reader)
 
 HFSPlusVolume::~HFSPlusVolume() = default;
 
+uint64_t HFSPlusVolume::forkLimit() const
+{
+    uint64_t bs = reader_->header().blockSize;
+    return bs ? kMaxEOF / bs * bs : kMaxEOF;
+}
+
 uint32_t HFSPlusVolume::localDate(uint32_t gmt) const
 {
     return gmt ? (uint32_t)hostToMacTime(int64_t(gmt) - 2082844800) : 0;
 }
 
 /* The VCB's classic fields as Mac OS 9.0.4 reports them for an HFS+ volume
-   (tests/guest/hfsplus/oracle-9.0.4/voldump-*.txt): signature 'BD'; the
-   real allocation block size; free blocks as they are; ioVNmFls the root
-   folder's valence (files and folders); and a total that only fits 16
-   bits: the volume's 512-byte sectors divided by the smallest k that
-   brings them under 65536 (32 MB of 4 KB blocks: 32768; 64 MB: 43690),
-   or, in an HFS wrapper, the embedded volume's block count. */
+   (tests/guest/hfsplus/oracle-9.0.4/voldump-*.txt, from 32 MB to 20 GB,
+   blocks of 512 bytes to 8 KB): signature 'BD'; blocks of k of the
+   volume's, the smallest k that brings their count under 65536; free
+   blocks in those; ioVNmFls the root folder's valence (files and
+   folders); and a total that only fits 16 bits: the volume's 512-byte
+   sectors divided by the smallest k that brings them under 65536 (32 MB
+   of 4 KB blocks: 32768; 64 MB: 43690). In an HFS wrapper the wrapper's
+   view: its block size, the embedded volume's extent in its blocks, the
+   free bytes in its blocks (voldump-wrapped-*.txt, 256 MB to 12 GB). The
+   total and the free blocks no more than make 2 GB. */
 void HFSPlusVolume::updateVCB()
 {
     const VolumeHeader& h = reader_->header();
@@ -89,16 +122,25 @@ void HFSPlusVolume::updateVCB()
     vcb.vcbCrDate = h.createDate;               /* local time already */
     vcb.vcbLsMod = localDate(h.modifyDate);
     vcb.vcbVolBkUp = localDate(h.backupDate);
-    vcb.vcbAlBlkSiz = h.blockSize;
-    if(reader_->wrapped())
-        vcb.vcbNmAlBlks = (uint16_t)std::min<uint32_t>(h.totalBlocks, 0xFFFF);
+    blockScale_ = std::max<unsigned>(1, (h.totalBlocks + 0xFFFE) / 0xFFFF);
+    uint64_t blockSize = uint64_t(blockScale_) * h.blockSize;
+    uint64_t total, free = h.freeBlocks / blockScale_;
+    if(reader_->wrapped() && reader_->wrapperBlockSize())
+    {
+        blockSize = reader_->wrapperBlockSize();
+        total = reader_->wrapperEmbedBlocks();
+        free = uint64_t(h.freeBlocks) * h.blockSize / blockSize;
+    }
     else
     {
         uint64_t sectors = uint64_t(h.totalBlocks) * h.blockSize / 512;
         uint64_t k = (sectors + 0xFFFE) / 0xFFFF;
-        vcb.vcbNmAlBlks = (uint16_t)(k ? sectors / k : 0);
+        total = k ? sectors / k : 0;
     }
-    vcb.vcbFreeBks = (uint16_t)std::min<uint32_t>(h.freeBlocks, 0xFFFF);
+    total = std::min(total, kMaxEOF / blockSize);
+    vcb.vcbAlBlkSiz = (LONGINT)blockSize;
+    vcb.vcbNmAlBlks = (uint16_t)total;
+    vcb.vcbFreeBks = (uint16_t)std::min(free, total);
     vcb.vcbClpSiz = h.dataClumpSize;
     vcb.vcbNxtCNID = h.nextCatalogID;
     vcb.vcbFilCnt = h.fileCount;
@@ -146,17 +188,19 @@ CatalogEntry HFSPlusVolume::resolveDir(short vRef, long dirID)
 }
 
 /* An item in a folder by its classic name: its MacRoman name, or the short
-   "#<CNID>" form 9.0.4 gives a long or unconvertible one. */
+   "#<CNID>" form 9.0.4 gives a long or unconvertible one. Hard links are
+   not followed: 9.0.4 shows a link as its empty 'hlnk' file and the
+   metadata folder as a folder (oracle-9.0.4/voldump-hardlinks.txt). */
 std::optional<CatalogEntry> HFSPlusVolume::child(uint32_t dirID, const std::string& macName)
 {
     if(macName.empty() || macName.size() > 255)
         return std::nullopt;
     if(auto e = reader_->lookup(dirID, macRomanToUnicode(macName)))
-        return reader_->resolveLink(*e);
+        return *e;
     if(auto cnid = cnidInClassicName(macName))
         if(auto e = reader_->byID(*cnid))
             if(e->parentID == dirID && classicName(*e) == macName)    /* exactly, as 9.0.4 */
-                return reader_->resolveLink(*e);
+                return *e;
     return std::nullopt;
 }
 
@@ -230,7 +274,7 @@ CatalogEntry HFSPlusVolume::resolveForInfo(StringPtr name, short vRef, long dirI
         if(includeDirectories)
         {
             if(auto e = reader_->childAt(dir.cnid, (uint32_t)index))
-                return reader_->resolveLink(*e);
+                return *e;
             throw OSErrorException(fnfErr);
         }
         std::optional<CatalogEntry> found;       /* files only */
@@ -242,7 +286,7 @@ CatalogEntry HFSPlusVolume::resolveForInfo(StringPtr name, short vRef, long dirI
         });
         if(!found)
             throw OSErrorException(fnfErr);
-        return reader_->resolveLink(*found);
+        return *found;
     }
     if(index == 0 && name && name[0])
         return resolve(name, vRef, dirID);
@@ -254,6 +298,8 @@ CatalogEntry HFSPlusVolume::resolveForInfo(StringPtr name, short vRef, long dirI
 /* vcbAtrb bit 6: files are open on the volume */
 void HFSPlusVolume::PBGetVInfo(ParmBlkPtr pb)
 {
+    if(writable())
+        updateVCB();                            /* free blocks, counts, name */
     bool open = std::any_of(forks_.begin(), forks_.end(), [](const auto& f) { return bool(f); });
     vcb.vcbAtrb = (vcb.vcbAtrb & ~kFilesOpen) | (open ? kFilesOpen : 0);
     Volume::PBGetVInfo(pb);
@@ -296,8 +342,13 @@ void HFSPlusVolume::getInfoCommon(CInfoPBPtr pb, InfoKind kind)
     const uint64_t bs = reader_->header().blockSize;
     auto lengths = [&](const ForkData& f, GUEST<INTEGER>& stBlk, GUEST<LONGINT>& lg, GUEST<LONGINT>& py) {
         stBlk = (INTEGER)(f.extents[0].count ? f.extents[0].start / blockScale_ : 0);
-        lg = (LONGINT)std::min(f.logicalSize, kMaxEOF);
-        py = (LONGINT)std::min(uint64_t(f.totalBlocks) * bs, kMaxEOF);
+        if(f.logicalSize > forkLimit())
+            lg = py = (LONGINT)forkLimit();
+        else
+        {
+            lg = (LONGINT)f.logicalSize;
+            py = (LONGINT)(uint32_t)std::min(uint64_t(f.totalBlocks) * bs, kMaxPhysical);
+        }
     };
     lengths(e.dataFork, pb->hFileInfo.ioFlStBlk, pb->hFileInfo.ioFlLgLen, pb->hFileInfo.ioFlPyLen);
     lengths(e.resourceFork, pb->hFileInfo.ioFlRStBlk, pb->hFileInfo.ioFlRLgLen, pb->hFileInfo.ioFlRPyLen);
@@ -324,16 +375,134 @@ void HFSPlusVolume::PBGetFInfo(ParmBlkPtr pb)
     getInfoCommon(reinterpret_cast<CInfoPBPtr>(pb), InfoKind::FInfo);
 }
 
+/* ---- writing: helpers ---------------------------------------------------- */
+
+uint32_t HFSPlusVolume::gmtDate(uint32_t local) const
+{
+    return local ? (uint32_t)(macToHostTime(local) + 2082844800) : 0;
+}
+
+void HFSPlusVolume::check(hfsplus::Error e, OSErr notFound)
+{
+    switch(e)
+    {
+        case hfsplus::Error::none:
+            return;
+        case hfsplus::Error::readOnly:
+            throw OSErrorException(wPrErr);
+        case hfsplus::Error::diskFull:
+            throw OSErrorException(dskFulErr);
+        case hfsplus::Error::exists:
+            throw OSErrorException(dupFNErr);
+        case hfsplus::Error::notFound:
+            throw OSErrorException(notFound);
+        case hfsplus::Error::notEmpty:
+            throw OSErrorException(fBsyErr);
+        case hfsplus::Error::badMove:
+            throw OSErrorException(badMovErr);
+        case hfsplus::Error::io:
+            throw OSErrorException(ioErr);
+    }
+}
+
+/* a new classic name: 1 to max MacRoman characters, no ':' */
+std::u16string HFSPlusVolume::newName(ConstStringPtr p, size_t max)
+{
+    std::string name = pstr(p);
+    if(name.empty() || name.size() > max || name.find(':') != std::string::npos)
+        throw OSErrorException(bdNamErr);
+    return macRomanToUnicode(name);
+}
+
+/* the folder a new item goes in, and its name ("Vol:Folder:Name" or "Name") */
+std::pair<CatalogEntry, std::string> HFSPlusVolume::resolveForCreate(StringPtr namePtr, short vRef, long dirID)
+{
+    std::string name = pstr(namePtr);
+    size_t colon = name.rfind(':');
+    if(colon == std::string::npos)
+        return { resolveDir(vRef, dirID), name };
+    Str255 dir;
+    putName(dir, name.substr(0, colon + 1));
+    CatalogEntry parent = resolve(dir, vRef, dirID);
+    if(!parent.folder)
+        throw OSErrorException(dirNFErr);
+    return { parent, name.substr(colon + 1) };
+}
+
+bool HFSPlusVolume::isOpen(uint32_t cnid)
+{
+    for(auto& f : forks_)
+        if(f && f->state->cnid == cnid)
+            return true;
+    return false;
+}
+
+/* a fork's state again from the catalog, and its paths' FCBs */
+void HFSPlusVolume::refresh(ForkState& st)
+{
+    auto e = reader_->byID(st.cnid);
+    if(!e)
+        return;
+    st.fork = reader_->openFork(*e, st.resource);
+    st.size = st.fork->size();
+    st.allocated = st.fork->allocatedBytes();
+    for(auto& f : forks_)
+        if(f && f->state.get() == &st)
+        {
+            f->fcb->fcbEOF = (LONGINT)f->eof();
+            f->fcb->fcbPLen = (LONGINT)(uint32_t)std::min(st.allocated, kMaxPhysical);
+            f->fcb->fcbDirID = e->parentID;
+            std::string name = classicName(*e).substr(0, 31);
+            f->fcb->fcbCName[0] = (uint8_t)name.size();
+            memcpy(&f->fcb->fcbCName[1], name.data(), name.size());
+        }
+}
+
+void HFSPlusVolume::refreshFile(uint32_t cnid)
+{
+    for(bool rsrc : { false, true })
+    {
+        auto it = states_.find(uint64_t(cnid) << 1 | rsrc);
+        if(it != states_.end())
+            if(auto st = it->second.lock())
+                refresh(*st);
+    }
+}
+
 /* ---- open files ---------------------------------------------------------- */
 
-void HFSPlusVolume::openCommon(GUEST<short>& refNum, const Entry& item, bool resource, int8_t permission)
+void HFSPlusVolume::openCommon(GUEST<short>& refNum, const Entry& item, bool resource, int8_t permission, bool large)
 {
     refNum = 0;
     if(item.folder)
         throw OSErrorException(fnfErr);
-    /* As 9.0.4 on a locked volume: any permission opens; writing through a
-       path opened for it fails with wPrErr, through a read-only one with
-       wrPermErr */
+    if(!large && (resource ? item.resourceFork : item.dataFork).logicalSize > forkLimit())
+        throw OSErrorException(kFSDataTooBigErr);
+    bool locked = item.flags & CatalogEntry::kLocked;
+    bool wantsWrite = permission == fsWrPerm || permission == fsRdWrPerm || permission == fsRdWrShPerm;
+    bool shared = permission == fsRdWrShPerm;
+    bool canWrite = false;
+    if(writable())
+    {
+        /* as HFS: a locked file opens for reading only; one exclusive
+           writer per fork (fsCurPerm takes writing when it can) */
+        short writer = 0;
+        bool sharedWriters = false;
+        for(auto& f : forks_)
+            if(f && f->state->cnid == item.cnid && f->state->resource == resource && f->canWrite)
+            {
+                writer = f->refNum;
+                sharedWriters = f->shared;
+            }
+        if(wantsWrite && locked)
+            throw OSErrorException(permErr);
+        if(wantsWrite && writer && !(shared && sharedWriters))
+        {
+            refNum = writer;
+            throw OSErrorException(opWrErr);
+        }
+        canWrite = wantsWrite || (permission == fsCurPerm && !locked && !writer);
+    }
 
     filecontrolblock *fcb = ROMlib_getfreefcbp();
     if(!fcb)
@@ -343,26 +512,31 @@ void HFSPlusVolume::openCommon(GUEST<short>& refNum, const Entry& item, bool res
     auto f = std::make_unique<OpenFork>();
     f->fcb = fcb;
     f->refNum = ref;
-    f->fork = reader_->openFork(item, resource);
-    f->eof = std::min(f->fork->size(), kMaxEOF);
-    f->forWriting = permission != fsCurPerm && permission != fsRdPerm;
+    uint64_t key = uint64_t(item.cnid) << 1 | resource;
+    f->state = states_[key].lock();
+    if(!f->state)
+    {
+        f->state = std::make_shared<ForkState>();
+        f->state->cnid = item.cnid;
+        f->state->resource = resource;
+        states_[key] = f->state;
+    }
+    f->forWriting = wantsWrite;
+    f->canWrite = canWrite;
+    f->shared = shared;
 
     fcb->fcbFlNum = item.cnid;
-    fcb->fcbMdRByt = (resource ? RESOURCEBIT : 0) | ((item.flags & CatalogEntry::kLocked) ? FLOCKEDBIT : 0);
-    fcb->fcbEOF = (LONGINT)f->eof;
+    fcb->fcbMdRByt = (resource ? RESOURCEBIT : 0) | (locked ? FLOCKEDBIT : 0) | (canWrite ? WRITEBIT : 0)
+                     | (canWrite && shared ? SHAREDBIT : 0);
     const ForkData& fd = resource ? item.resourceFork : item.dataFork;
-    fcb->fcbPLen = (LONGINT)std::min(uint64_t(fd.totalBlocks) * reader_->header().blockSize, kMaxEOF);
     fcb->fcbClmpSize = fd.clumpSize;
     fcb->fcbVPtr = &vcb;
-    fcb->fcbDirID = item.parentID;
-    std::string name = classicName(item).substr(0, 31);
-    fcb->fcbCName[0] = (uint8_t)name.size();
-    memcpy(&fcb->fcbCName[1], name.data(), name.size());
 
     size_t i = fcbIndex(ref);
     if(forks_.size() <= i)
         forks_.resize(i + 1);
     forks_[i] = std::move(f);
+    refresh(*forks_[i]->state);
     refNum = ref;
 }
 
@@ -372,6 +546,201 @@ HFSPlusVolume::OpenFork& HFSPlusVolume::openFork(short refNum)
     if(refNum < 0 || refNum % 94 != 2 || i >= forks_.size() || !forks_[i])
         throw OSErrorException(rfNumErr);
     return *forks_[i];
+}
+
+/* ---- Mac OS 9.0's HFS Plus APIs (fsref.cpp) ------------------------------- */
+
+std::optional<CatalogEntry> HFSPlusVolume::lookup(uint32_t parent, const std::u16string& name)
+{
+    return reader_->lookup(parent, name);
+}
+
+uint16_t HFSPlusVolume::openFlags(uint32_t cnid)
+{
+    uint16_t flags = 0;
+    for(auto& f : forks_)
+        if(f && f->state->cnid == cnid)
+            flags |= (f->state->resource ? 0x04 : 0x08) | 0x80;
+    return flags;
+}
+
+uint32_t HFSPlusVolume::createUnicode(uint32_t parent, const std::u16string& name, bool folder)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    CatalogEntry made;
+    check(reader_->create(parent, name, folder, nullptr, &made), dirNFErr);
+    updateVCB();
+    return made.cnid;
+}
+
+void HFSPlusVolume::deleteID(uint32_t cnid)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    auto e = reader_->byID(cnid);
+    if(!e)
+        throw OSErrorException(fnfErr);
+    if(cnid == kRootFolderID)
+        throw OSErrorException(bdNamErr);
+    if(!e->folder && isOpen(cnid))
+        throw OSErrorException(fBsyErr);
+    if(!e->folder && (e->flags & CatalogEntry::kLocked))
+        throw OSErrorException(fLckdErr);
+    check(reader_->remove(cnid));
+    updateVCB();
+}
+
+void HFSPlusVolume::renameUnicode(uint32_t cnid, const std::u16string& name)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    auto e = reader_->byID(cnid);
+    if(!e)
+        throw OSErrorException(fnfErr);
+    if(!e->folder && (e->flags & CatalogEntry::kLocked))
+        throw OSErrorException(fLckdErr);
+    check(cnid == kRootFolderID ? reader_->renameVolume(name) : reader_->rename(cnid, name));
+    refreshFile(cnid);
+    updateVCB();
+}
+
+void HFSPlusVolume::moveID(uint32_t cnid, uint32_t to)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    if(cnid == kRootFolderID)
+        throw OSErrorException(badMovErr);
+    check(reader_->move(cnid, to), dirNFErr);
+    refreshFile(cnid);
+}
+
+void HFSPlusVolume::setInfo(const CatalogEntry& e)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    check(reader_->update(e));
+}
+
+void HFSPlusVolume::setLock(uint32_t cnid, bool lock)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    auto e = reader_->byID(cnid);
+    if(!e)
+        throw OSErrorException(fnfErr);
+    e->flags = lock ? e->flags | CatalogEntry::kLocked : e->flags & ~CatalogEntry::kLocked;
+    check(reader_->update(*e));
+}
+
+short HFSPlusVolume::openForkAPI(uint32_t cnid, bool resource, int8_t permission)
+{
+    auto e = reader_->byID(cnid);
+    if(!e)
+        throw OSErrorException(fnfErr);
+    GUEST<short> ref;
+    openCommon(ref, *e, resource, permission, true);
+    OpenFork& f = openFork(ref);
+    f.api = true;
+    f.permission = permission;
+    f.fcb->fcbMdRByt |= 0x08;                   /* "large file" (FSForkInfo.flags, 9.0.4) */
+    return ref;
+}
+
+bool HFSPlusVolume::isForkAPI(short refNum)
+{
+    size_t i = fcbIndex(refNum);
+    return refNum > 0 && refNum % 94 == 2 && i < forks_.size() && forks_[i] && forks_[i]->api;
+}
+
+HFSPlusVolume::ForkStatus HFSPlusVolume::forkStatus(short refNum)
+{
+    OpenFork& f = openFork(refNum);
+    return { f.state->cnid, f.state->resource, f.canWrite, f.written, f.permission,
+             f.api ? f.mark : (uint32_t)f.fcb->fcbCrPs, f.state->size, f.state->allocated };
+}
+
+void HFSPlusVolume::setForkMark(short refNum, uint64_t mark)
+{
+    OpenFork& f = openFork(refNum);
+    f.mark = mark;
+    f.fcb->fcbCrPs = (LONGINT)std::min(mark, kMaxEOF);
+}
+
+uint32_t HFSPlusVolume::readFork(short refNum, uint64_t pos, uint32_t n, void *buf)
+{
+    OpenFork& f = openFork(refNum);
+    uint64_t room = pos < f.state->size ? std::min<uint64_t>(n, f.state->size - pos) : 0;
+    size_t got = room ? f.state->fork->read(pos, buf, (size_t)room) : 0;
+    setForkMark(refNum, pos + got);
+    if(got < room)
+        throw OSErrorException(ioErr);
+    return (uint32_t)got;
+}
+
+void HFSPlusVolume::writeFork(short refNum, uint64_t pos, uint32_t n, const void *buf)
+{
+    OpenFork& f = openFork(refNum);
+    if(!f.canWrite)
+        refuseWrite(f);
+    if(pos + n > f.state->size)
+    {
+        check(reader_->setForkSize(f.state->cnid, f.state->resource, pos + n, f.state->allocated));
+        refreshFile(f.state->cnid);
+    }
+    if(n && !f.state->fork->write(pos, buf, n))
+        throw OSErrorException(ioErr);
+    f.written = true;
+    setForkMark(refNum, pos + n);
+}
+
+void HFSPlusVolume::setForkSize(short refNum, uint64_t size)
+{
+    OpenFork& f = openFork(refNum);
+    if(!f.canWrite)
+        refuseWrite(f);
+    check(reader_->setForkSize(f.state->cnid, f.state->resource, size));
+    refreshFile(f.state->cnid);
+    for(auto& g : forks_)
+        if(g && g->state == f.state && (g->api ? g->mark : (uint32_t)g->fcb->fcbCrPs) > size)
+            setForkMark(g->refNum, size);
+    f.written = true;
+}
+
+uint64_t HFSPlusVolume::allocateFork(short refNum, uint64_t end, bool allOrNothing)
+{
+    OpenFork& f = openFork(refNum);
+    if(!f.canWrite)
+        refuseWrite(f);
+    uint64_t before = f.state->allocated;
+    if(end <= before)
+        return 0;
+    uint64_t bs = reader_->header().blockSize;
+    uint64_t free = uint64_t(reader_->header().freeBlocks) * bs;
+    if(end - before > free)
+    {
+        if(allOrNothing)
+            throw OSErrorException(dskFulErr);
+        end = before + free / bs * bs;
+    }
+    check(reader_->setForkSize(f.state->cnid, f.state->resource, f.state->size, end));
+    refreshFile(f.state->cnid);
+    updateVCB();
+    return f.state->allocated - before;
+}
+
+void HFSPlusVolume::flushFork(short refNum)
+{
+    stampWritten(openFork(refNum));
+    check(reader_->flush());
+}
+
+void HFSPlusVolume::closeFork(short refNum)
+{
+    OpenFork& f = openFork(refNum);
+    stampWritten(f);
+    f.fcb->fcbFlNum = 0;
+    forks_[fcbIndex(f.refNum)].reset();
 }
 
 void HFSPlusVolume::PBHOpenDF(HParmBlkPtr pb)
@@ -403,10 +772,10 @@ void HFSPlusVolume::PBOpenWD(WDPBPtr pb)
         throw OSErrorException(err);
 }
 
-void HFSPlusVolume::setFPosCommon(ParmBlkPtr pb)
+void HFSPlusVolume::setFPosCommon(ParmBlkPtr pb, bool checkEOF)
 {
     OpenFork& f = openFork(pb->ioParam.ioRefNum);
-    int64_t eof = (int64_t)f.eof;
+    int64_t eof = (int64_t)f.eof();
     int64_t pos = f.fcb->fcbCrPs;
     switch(pb->ioParam.ioPosMode & 0x3)       /* the rest: noCacheBit, newline mode */
     {
@@ -423,7 +792,7 @@ void HFSPlusVolume::setFPosCommon(ParmBlkPtr pb)
             break;
     }
     OSErr err = noErr;
-    if(pos > eof)
+    if(pos > eof && checkEOF)
     {
         pos = eof;
         err = eofErr;
@@ -440,7 +809,7 @@ void HFSPlusVolume::setFPosCommon(ParmBlkPtr pb)
 
 void HFSPlusVolume::PBSetFPos(ParmBlkPtr pb)
 {
-    setFPosCommon(pb);
+    setFPosCommon(pb, true);
 }
 
 void HFSPlusVolume::PBGetFPos(ParmBlkPtr pb)
@@ -455,12 +824,12 @@ void HFSPlusVolume::PBGetFPos(ParmBlkPtr pb)
 void HFSPlusVolume::PBRead(ParmBlkPtr pb)
 {
     pb->ioParam.ioActCount = 0;
-    setFPosCommon(pb);
+    setFPosCommon(pb, true);
     OpenFork& f = openFork(pb->ioParam.ioRefNum);
     uint64_t pos = (uint32_t)f.fcb->fcbCrPs;
     size_t want = (size_t)std::max<LONGINT>(pb->ioParam.ioReqCount, 0);
-    size_t room = (size_t)std::min<uint64_t>(want, f.eof - pos);
-    size_t got = room ? f.fork->read(pos, pb->ioParam.ioBuffer, room) : 0;
+    size_t room = (size_t)std::min<uint64_t>(want, f.eof() - pos);
+    size_t got = room ? f.state->fork->read(pos, pb->ioParam.ioBuffer, room) : 0;
     pb->ioParam.ioActCount = (LONGINT)got;
     pb->ioParam.ioPosOffset = f.fcb->fcbCrPs = (LONGINT)(pos + got);
     if(got < room)
@@ -471,68 +840,340 @@ void HFSPlusVolume::PBRead(ParmBlkPtr pb)
 
 void HFSPlusVolume::PBGetEOF(ParmBlkPtr pb)
 {
-    pb->ioParam.ioMisc = (LONGINT)openFork(pb->ioParam.ioRefNum).eof;
+    pb->ioParam.ioMisc = (LONGINT)openFork(pb->ioParam.ioRefNum).eof();
+}
+
+/* Writing through a path that can't: wPrErr where it was opened for
+   writing on a locked volume, wrPermErr where read-only (9.0.4). */
+void HFSPlusVolume::refuseWrite(OpenFork& f)
+{
+    throw OSErrorException(f.forWriting && !writable() ? wPrErr : wrPermErr);
+}
+
+void HFSPlusVolume::PBWrite(ParmBlkPtr pb)
+{
+    pb->ioParam.ioActCount = 0;
+    OpenFork& f = openFork(pb->ioParam.ioRefNum);
+    if(!f.canWrite)
+        refuseWrite(f);
+    setFPosCommon(pb, false);                   /* past the end: the fork grows */
+    uint64_t pos = (uint32_t)f.fcb->fcbCrPs;
+    LONGINT n = std::max<LONGINT>(pb->ioParam.ioReqCount, 0);
+    if(pos + uint64_t(n) > forkLimit())
+        throw OSErrorException(kFileBoundsErr); /* nothing written */
+    if(pos + n > f.state->size)
+    {
+        /* whole blocks as needed (9.0.4: no clumps), never fewer than it has */
+        check(reader_->setForkSize(f.state->cnid, f.state->resource, pos + n, f.state->allocated));
+        refreshFile(f.state->cnid);
+    }
+    if(n && !f.state->fork->write(pos, pb->ioParam.ioBuffer, (size_t)n))
+        throw OSErrorException(ioErr);
+    f.written = true;
+    pb->ioParam.ioActCount = n;
+    pb->ioParam.ioPosOffset = f.fcb->fcbCrPs = (LONGINT)(pos + n);
+}
+
+void HFSPlusVolume::PBSetEOF(ParmBlkPtr pb)
+{
+    OpenFork& f = openFork(pb->ioParam.ioRefNum);
+    if(!f.canWrite)
+        refuseWrite(f);
+    LONGINT eof = pb->ioParam.ioMisc;
+    if(eof < 0)
+        throw OSErrorException(paramErr);
+    if(uint64_t(eof) > forkLimit())
+        throw OSErrorException(kFileBoundsErr);
+    check(reader_->setForkSize(f.state->cnid, f.state->resource, (uint64_t)eof));
+    refreshFile(f.state->cnid);
+    for(auto& g : forks_)
+        if(g && g->state == f.state && (uint32_t)g->fcb->fcbCrPs > (uint32_t)eof)
+            g->fcb->fcbCrPs = eof;
+    f.written = true;
+}
+
+/* Allocate, AllocContig: ioReqCount bytes more allocated to the fork (its
+   length unchanged); ioActCount what was. */
+void HFSPlusVolume::PBAllocate(ParmBlkPtr pb)
+{
+    OpenFork& f = openFork(pb->ioParam.ioRefNum);
+    pb->ioParam.ioActCount = 0;
+    if(!f.canWrite)
+        refuseWrite(f);
+    uint64_t before = f.state->allocated;
+    LONGINT want = std::max<LONGINT>(pb->ioParam.ioReqCount, 0);
+    if(before + want > forkLimit())
+        throw OSErrorException(dskFulErr);      /* none of it */
+    check(reader_->setForkSize(f.state->cnid, f.state->resource, f.state->size, before + want));
+    refreshFile(f.state->cnid);
+    pb->ioParam.ioActCount = (LONGINT)std::min<uint64_t>(f.state->allocated - before, kMaxEOF);
+}
+/* ExchangeFiles (oracle-9.0.4/volwrite.txt): the contents swap, both
+   forks and the modification date; IDs, names, Finder info and creation
+   dates stay. Open paths go with the contents: their FCBs take the other
+   file's number and name. A file with itself is sameFileErr; with a
+   folder 9.0.4 says noErr and nothing changes. */
+OSErr HFSPlusVolume::exchangeFiles(FSSpecPtr src, FSSpecPtr dst)
+{
+    try
+    {
+        Entry a = resolve(src->name, src->vRefNum, src->parID);
+        Entry b = resolve(dst->name, dst->vRefNum, dst->parID);
+        if(a.cnid == b.cnid)
+            return -1306;                       /* sameFileErr */
+        if(a.folder || b.folder)
+            return noErr;
+        exchangeIDs(a.cnid, b.cnid);
+        return noErr;
+    }
+    catch(OSErrorException& e)
+    {
+        return e.code;
+    }
+}
+
+void HFSPlusVolume::exchangeIDs(uint32_t ida, uint32_t idb)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    check(reader_->exchange(ida, idb));
+    std::vector<std::shared_ptr<ForkState>> moved;
+    for(auto& f : forks_)
+        if(f && (f->state->cnid == ida || f->state->cnid == idb)
+           && std::find(moved.begin(), moved.end(), f->state) == moved.end())
+            moved.push_back(f->state);
+    for(uint32_t id : { ida, idb })
+        for(bool rsrc : { false, true })
+            states_.erase(uint64_t(id) << 1 | rsrc);
+    for(auto& st : moved)
+    {
+        st->cnid = st->cnid == ida ? idb : ida;
+        states_[uint64_t(st->cnid) << 1 | st->resource] = st;
+        for(auto& f : forks_)
+            if(f && f->state == st)
+                f->fcb->fcbFlNum = st->cnid;
+        refresh(*st);
+    }
+    updateVCB();
+}
+
+void HFSPlusVolume::PBAllocContig(ParmBlkPtr pb)
+{
+    PBAllocate(pb);
+}
+
+/* As HFS: a path that wrote sets its file's modification date when
+   flushed or closed. */
+void HFSPlusVolume::stampWritten(OpenFork& f)
+{
+    if(!f.written || !writable())
+        return;
+    f.written = false;
+    if(auto e = reader_->byID(f.state->cnid))
+    {
+        e->contentModDate = Reader::now();
+        reader_->update(*e);
+    }
 }
 
 void HFSPlusVolume::PBClose(ParmBlkPtr pb)
 {
     OpenFork& f = openFork(pb->ioParam.ioRefNum);
+    stampWritten(f);
     f.fcb->fcbFlNum = 0;
     forks_[fcbIndex(f.refNum)].reset();
 }
 
 void HFSPlusVolume::PBFlushFile(ParmBlkPtr pb)
 {
-    openFork(pb->ioParam.ioRefNum);
+    stampWritten(openFork(pb->ioParam.ioRefNum));
 }
 
 void HFSPlusVolume::PBFlushVol(ParmBlkPtr)
 {
+    for(auto& f : forks_)
+        if(f)
+            stampWritten(*f);
+    check(reader_->flush());
 }
 
-/* ---- refused: the volume is locked --------------------------------------- */
+/* ---- the catalog ---------------------------------------------------------- */
 
-void HFSPlusVolume::PBHRename(HParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBHCreate(HParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBDirCreate(HParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBHDelete(HParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBSetCatInfo(CInfoPBPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBCatMove(CMovePBPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBCreate(ParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBDelete(ParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBSetFInfo(ParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBHSetFInfo(HParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBSetFLock(ParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBHSetFLock(HParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBRstFLock(ParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBHRstFLock(HParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBSetFVers(ParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBRename(ParmBlkPtr) { throw OSErrorException(wPrErr); }
-void HFSPlusVolume::PBSetVInfo(HParmBlkPtr) { throw OSErrorException(wPrErr); }
-/* Writing through a path: wPrErr where it was opened for writing (the
-   volume is locked), wrPermErr where read-only, as 9.0.4. */
-static void refuseWrite(bool forWriting)
+void HFSPlusVolume::createCommon(StringPtr name, short vRef, long dirID, bool folder, GUEST<LONGINT> *newDirID)
 {
-    throw OSErrorException(forWriting ? wPrErr : wrPermErr);
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    auto [parent, leaf] = resolveForCreate(name, vRef, dirID);
+    Str255 p;
+    putName(p, leaf);
+    std::u16string uname = newName(p);
+    CatalogEntry made;
+    check(reader_->create(parent.cnid, uname, folder, nullptr, &made), dirNFErr);
+    if(newDirID)
+        *newDirID = made.cnid;
+    updateVCB();
 }
-void HFSPlusVolume::PBWrite(ParmBlkPtr pb)
+
+void HFSPlusVolume::PBHCreate(HParmBlkPtr pb)
 {
-    pb->ioParam.ioActCount = 0;
-    refuseWrite(openFork(pb->ioParam.ioRefNum).forWriting);
+    createCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, pb->fileParam.ioDirID, false, nullptr);
 }
-void HFSPlusVolume::PBAllocate(ParmBlkPtr pb)
+void HFSPlusVolume::PBCreate(ParmBlkPtr pb)
 {
-    pb->ioParam.ioActCount = 0;
-    refuseWrite(openFork(pb->ioParam.ioRefNum).forWriting);
+    createCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, 0, false, nullptr);
 }
-void HFSPlusVolume::PBAllocContig(ParmBlkPtr pb)
+void HFSPlusVolume::PBDirCreate(HParmBlkPtr pb)
 {
-    PBAllocate(pb);
+    createCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, pb->fileParam.ioDirID, true, &pb->fileParam.ioDirID);
 }
-void HFSPlusVolume::PBSetEOF(ParmBlkPtr pb)
+
+void HFSPlusVolume::deleteCommon(StringPtr name, short vRef, long dirID)
 {
-    refuseWrite(openFork(pb->ioParam.ioRefNum).forWriting);
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    CatalogEntry e = resolve(name, vRef, dirID);
+    if(e.cnid == kRootFolderID)
+        throw OSErrorException(bdNamErr);
+    if(!e.folder && isOpen(e.cnid))
+        throw OSErrorException(fBsyErr);
+    if(!e.folder && (e.flags & CatalogEntry::kLocked))
+        throw OSErrorException(fLckdErr);
+    check(reader_->remove(e.cnid));
+    updateVCB();
 }
+
+void HFSPlusVolume::PBHDelete(HParmBlkPtr pb)
+{
+    deleteCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, pb->fileParam.ioDirID);
+}
+void HFSPlusVolume::PBDelete(ParmBlkPtr pb)
+{
+    deleteCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, 0);
+}
+
+void HFSPlusVolume::renameCommon(StringPtr name, short vRef, long dirID, ConstStringPtr to)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    CatalogEntry e = resolve(name, vRef, dirID);
+    if(e.cnid == kRootFolderID)
+    {
+        check(reader_->renameVolume(newName(to, 27)));
+        updateVCB();
+        return;
+    }
+    std::u16string uname = newName(to);
+    if(!e.folder && (e.flags & CatalogEntry::kLocked))
+        throw OSErrorException(fLckdErr);
+    check(reader_->rename(e.cnid, uname));
+    refreshFile(e.cnid);
+}
+
+void HFSPlusVolume::PBHRename(HParmBlkPtr pb)
+{
+    renameCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, pb->fileParam.ioDirID,
+                 guest_cast<StringPtr>(pb->ioParam.ioMisc));
+}
+void HFSPlusVolume::PBRename(ParmBlkPtr pb)
+{
+    renameCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, 0, guest_cast<StringPtr>(pb->ioParam.ioMisc));
+}
+
+void HFSPlusVolume::PBCatMove(CMovePBPtr pb)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    CatalogEntry e = resolve(pb->ioNamePtr, pb->ioVRefNum, pb->ioDirID);
+    CatalogEntry to = resolve(pb->ioNewName, pb->ioVRefNum, pb->ioNewDirID);
+    if(!to.folder)
+        throw OSErrorException(dirNFErr);
+    if(e.cnid == kRootFolderID)
+        throw OSErrorException(badMovErr);
+    check(reader_->move(e.cnid, to.cnid), dirNFErr);
+    refreshFile(e.cnid);
+}
+
+/* SetCatInfo, SetFInfo: Finder info and dates (local, stored GMT) */
+void HFSPlusVolume::setInfoCommon(CInfoPBPtr pb, long dirID, InfoKind kind)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    CatalogEntry e = resolve(pb->hFileInfo.ioNamePtr, pb->hFileInfo.ioVRefNum, dirID);
+    if(e.folder)
+    {
+        if(kind != InfoKind::CatInfo)
+            throw OSErrorException(fnfErr);
+        memcpy(e.userInfo, &pb->dirInfo.ioDrUsrWds, 16);
+        memcpy(e.finderInfo, &pb->dirInfo.ioDrFndrInfo, 16);
+        e.createDate = gmtDate(pb->dirInfo.ioDrCrDat);
+        e.contentModDate = gmtDate(pb->dirInfo.ioDrMdDat);
+        e.backupDate = gmtDate(pb->dirInfo.ioDrBkDat);
+    }
+    else
+    {
+        memcpy(e.userInfo, &pb->hFileInfo.ioFlFndrInfo, 16);
+        e.createDate = gmtDate(pb->hFileInfo.ioFlCrDat);
+        e.contentModDate = gmtDate(pb->hFileInfo.ioFlMdDat);
+        if(kind == InfoKind::CatInfo)
+        {
+            memcpy(e.finderInfo, &pb->hFileInfo.ioFlXFndrInfo, 16);
+            e.backupDate = gmtDate(pb->hFileInfo.ioFlBkDat);
+        }
+    }
+    check(reader_->update(e));
+}
+
+void HFSPlusVolume::PBSetCatInfo(CInfoPBPtr pb)
+{
+    setInfoCommon(pb, pb->hFileInfo.ioDirID, InfoKind::CatInfo);
+}
+void HFSPlusVolume::PBHSetFInfo(HParmBlkPtr pb)
+{
+    setInfoCommon(reinterpret_cast<CInfoPBPtr>(pb), pb->fileParam.ioDirID, InfoKind::HFInfo);
+}
+void HFSPlusVolume::PBSetFInfo(ParmBlkPtr pb)
+{
+    setInfoCommon(reinterpret_cast<CInfoPBPtr>(pb), 0, InfoKind::FInfo);
+}
+
+void HFSPlusVolume::lockCommon(StringPtr name, short vRef, long dirID, bool lock)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    CatalogEntry e = resolve(name, vRef, dirID);
+    if(e.folder)
+        throw OSErrorException(fnfErr);
+    e.flags = lock ? (e.flags | CatalogEntry::kLocked) : (e.flags & ~CatalogEntry::kLocked);
+    check(reader_->update(e));
+}
+
+void HFSPlusVolume::PBSetFLock(ParmBlkPtr pb) { lockCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, 0, true); }
+void HFSPlusVolume::PBHSetFLock(HParmBlkPtr pb)
+{
+    lockCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, pb->fileParam.ioDirID, true);
+}
+void HFSPlusVolume::PBRstFLock(ParmBlkPtr pb) { lockCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, 0, false); }
+void HFSPlusVolume::PBHRstFLock(HParmBlkPtr pb)
+{
+    lockCommon(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, pb->fileParam.ioDirID, false);
+}
+void HFSPlusVolume::PBSetFVers(ParmBlkPtr) { throw OSErrorException(writable() ? paramErr : wPrErr); }
+
+/* SetVInfo: the volume's name and Finder info (the blessed folder) */
+void HFSPlusVolume::PBSetVInfo(HParmBlkPtr pb)
+{
+    if(!writable())
+        throw OSErrorException(wPrErr);
+    if(pb->volumeParam.ioNamePtr && pb->volumeParam.ioNamePtr[0]
+       && pstr(pb->volumeParam.ioNamePtr) != pstr((ConstStringPtr)vcb.vcbVN))
+        check(reader_->renameVolume(newName(pb->volumeParam.ioNamePtr, 27)));
+    uint32_t info[8];
+    for(int i = 0; i < 8; i++)
+        info[i] = (uint32_t)(LONGINT)pb->volumeParam.ioVFndrInfo[i];
+    check(reader_->setFinderInfo(info));
+    updateVCB();
+}
+
 void HFSPlusVolume::PBLockRange(ParmBlkPtr) { throw OSErrorException(paramErr); }
 void HFSPlusVolume::PBUnlockRange(ParmBlkPtr) { throw OSErrorException(paramErr); }
 
@@ -543,6 +1184,7 @@ void HFSPlusVolume::PBUnmountVol(ParmBlkPtr)
     for(auto& f : forks_)
         if(f)
             throw OSErrorException(fBsyErr);
+    reader_->flush();
     VCBExtra *vp = (VCBExtra *)&vcb;
     Dequeue((QElemPtr)vp, &LM(VCBQHdr));
     if(LM(DefVCBPtr) == (VCB *)vp)
@@ -591,9 +1233,10 @@ OSErr Executor::hfsPlusMountVol(ParmBlkPtr pb, int fd, uint64_t offset, drive_fl
         err = volOnLinErr;
     std::string why;
     std::unique_ptr<Reader> reader;
+    bool canWrite = !(flags & DRIVE_FLAGS_LOCKED);
     if(err == noErr)
     {
-        reader = Reader::open(std::make_shared<FdImageReader>(fd, false), offset, &why);
+        reader = Reader::open(std::make_shared<FdImageReader>(fd, false, canWrite), offset, &why);
         if(!reader)
         {
             warning_fs_log("no HFS+ volume at %llu: %s", (unsigned long long)offset, why.c_str());
@@ -604,6 +1247,8 @@ OSErr Executor::hfsPlusMountVol(ParmBlkPtr pb, int fd, uint64_t offset, drive_fl
     {
         if(reader->header().attributes & VolumeHeader::kJournaled)
             fprintf(stderr, "HFS+ volume journaled: mounted read-only, the journal not replayed\n");
+        else if(canWrite && !reader->writable())
+            fprintf(stderr, "HFS+ volume not cleanly unmounted (or locked): mounted read-only\n");
 
         GUEST<THz> saveZone = LM(TheZone);
         LM(TheZone) = LM(SysZone);
@@ -618,7 +1263,7 @@ OSErr Executor::hfsPlusMountVol(ParmBlkPtr pb, int fd, uint64_t offset, drive_fl
             vp->vcb.vcbDrvNum = pb->volumeParam.ioVRefNum;
             vp->vcb.vcbDRefNum = OURHFSDREF;
             vp->vcb.vcbVRefNum = --ROMlib_nextvrn;
-            vp->vcb.vcbAtrb = VHARDLOCKBIT | ((flags & DRIVE_FLAGS_FIXED) ? VNONEJECTABLEBIT : 0);
+            vp->vcb.vcbAtrb = (reader->writable() ? 0 : VHARDLOCKBIT) | ((flags & DRIVE_FLAGS_FIXED) ? VNONEJECTABLEBIT : 0);
             bool wrapped = reader->wrapped();
             uint64_t bytes = uint64_t(reader->header().totalBlocks) * reader->header().blockSize;
             auto *volume = new HFSPlusVolume(vp->vcb, std::move(reader));
@@ -637,9 +1282,9 @@ OSErr Executor::hfsPlusMountVol(ParmBlkPtr pb, int fd, uint64_t offset, drive_fl
                 LM(DefVRefNum) = vp->vcb.vcbVRefNum;
                 DefDirID = 2;
             }
-            fprintf(stderr, "HFS+ volume %.*s mounted%s, read-only, vref %d\n", vp->vcb.vcbVN[0],
+            fprintf(stderr, "HFS+ volume %.*s mounted%s, %s, vref %d\n", vp->vcb.vcbVN[0],
                     (const char *)vp->vcb.vcbVN + 1, wrapped ? " (in an HFS wrapper)" : "",
-                    int(vp->vcb.vcbVRefNum));
+                    volume->reader().writable() ? "read-write" : "read-only", int(vp->vcb.vcbVRefNum));
         }
     }
     pb->ioParam.ioResult = err;

@@ -4,8 +4,11 @@
  * (PBGetCatInfo ioFDirIndex 1, 2...): its name, IDs, attributes, Finder
  * info, lengths, dates; the same item found again by name, by full path
  * and through "::"; each fork opened read-only and read to the end
- * (Adler-32), and opened for writing (the error a locked volume gives);
+ * (Adler-32; one of 256 MB or more only probed: its head, its end, the
+ * 2 GB - 1 cap), and opened for writing (the error a locked volume gives);
  * the files-only enumeration of PBHGetFInfo. Names are hex (MacRoman).
+ * The probes that write (create, open for writing) only on a locked
+ * volume: a writable one is left as it was.
  *
  * Host:voldump.cfg names the volume (first line); the dump goes to
  * Host:voldump.txt, "---" its last line. 68k: runs on Executor and any
@@ -27,9 +30,11 @@ QDGlobals qd;
 
 static FILE *out;
 static short vref;
+static Boolean locked;      /* the volume: write probes only then */
 static unsigned char volName[64];
 static char *buf;
 enum { kBuf = 32768 };
+#define kBig 0x10000000L    /* a fork this long is probed, not read through */
 
 static void hex(const unsigned char *p, int n)
 {
@@ -90,17 +95,42 @@ static void fork(long dirID, StringPtr name, Boolean rsrc)
     if(err == noErr)
     {
         ref = pb.ioParam.ioRefNum;
-        GetEOF(ref, &eof);
-        for(;;)
+        err = GetEOF(ref, &eof);
+        if(eof >= kBig || eof < 0 || err)
         {
-            long n = kBuf;
+            /* a big fork: its head, its last 5000 bytes, the 2 GB - 1 cap */
+            long n = kBuf, pos = 0;
+            fprintf(out, " geteof %d eof %ld", (int)err, eof);
             err = FSRead(ref, &n, buf);
-            sum = adler(sum, (unsigned char *)buf, n);
-            total += n;
-            if(err != noErr)
-                break;
+            fprintf(out, " head %d/%ld %08lX", (int)err, n, adler(1, (unsigned char *)buf, n));
+            err = SetFPos(ref, fsFromStart, eof - 5000);
+            n = kBuf;
+            fprintf(out, " tailpos %d", (int)err);
+            err = FSRead(ref, &n, buf);
+            GetFPos(ref, &pos);
+            fprintf(out, " tail %d/%ld %08lX at %ld", (int)err, n, adler(1, (unsigned char *)buf, n), pos);
+            err = SetFPos(ref, fsFromStart, 0x7FFFFFFF);
+            n = 16;
+            fprintf(out, " cap %d", (int)err);
+            err = FSRead(ref, &n, buf);
+            fprintf(out, " capread %d/%ld", (int)err, n);
+            err = SetFPos(ref, fsFromLEOF, 0);
+            GetFPos(ref, &pos);
+            fprintf(out, " leof %d at %ld", (int)err, pos);
         }
-        fprintf(out, " eof %ld read %ld end %d adler %08lX", eof, total, (int)err, sum);
+        else
+        {
+            for(;;)
+            {
+                long n = kBuf;
+                err = FSRead(ref, &n, buf);
+                sum = adler(sum, (unsigned char *)buf, n);
+                total += n;
+                if(err != noErr)
+                    break;
+            }
+            fprintf(out, " eof %ld read %ld end %d adler %08lX", eof, total, (int)err, sum);
+        }
         /* a second path while this one is open, and past the end */
         {
             long n = 16;
@@ -110,10 +140,18 @@ static void fork(long dirID, StringPtr name, Boolean rsrc)
             err = SetFPos(ref, fsFromStart, eof + 1);
             fprintf(out, " seekpast %d", (int)err);
             n = 4;
-            err = FSWrite(ref, &n, buf);
-            fprintf(out, " write %d", (int)err);
+            if(locked)
+            {
+                err = FSWrite(ref, &n, buf);
+                fprintf(out, " write %d", (int)err);
+            }
         }
         FSClose(ref);
+    }
+    if(!locked)                 /* on a writable volume the probes would change it */
+    {
+        fprintf(out, "\n");
+        return;
     }
     pb.ioParam.ioPermssn = fsRdWrPerm;
     err = rsrc ? PBHOpenRFSync(&pb) : PBHOpenDFSync(&pb);
@@ -338,6 +376,7 @@ int main(void)
     if(err == noErr)
     {
         vref = pb.volumeParam.ioVRefNum;
+        locked = (pb.volumeParam.ioVAtrb & 0x8080) != 0;
         fprintf(out, " sig %04X attrib %04X nmfls %u alblksiz %ld nmalblks %u frblk %u clpsiz %ld"
                 " filcnt %ld dircnt %ld nxtcnid %ld cr %lu md %lu bk %lu fndr ",
                 (unsigned)pb.volumeParam.ioVSigWord, (unsigned)pb.volumeParam.ioVAtrb,
@@ -350,12 +389,15 @@ int main(void)
         fprintf(out, "\n");
 
         /* a file there: created? (wPrErr: locked) */
-        err = HCreate(vref, fsRtDirID, "\pVolDump probe", 'TEXT', 'ttxt');
-        fprintf(out, "CREATE %d\n", (int)err);
-        if(err == noErr)
-            HDelete(vref, fsRtDirID, "\pVolDump probe");
-        err = DirCreate(vref, fsRtDirID, "\pVolDump folder", (long *)&n);
-        fprintf(out, "DIRCREATE %d\n", (int)err);
+        if(locked)
+        {
+            err = HCreate(vref, fsRtDirID, "\pVolDump probe", 'TEXT', 'ttxt');
+            fprintf(out, "CREATE %d\n", (int)err);
+            if(err == noErr)
+                HDelete(vref, fsRtDirID, "\pVolDump probe");
+            err = DirCreate(vref, fsRtDirID, "\pVolDump folder", (long *)&n);
+            fprintf(out, "DIRCREATE %d\n", (int)err);
+        }
 
         memcpy(path, volName, volName[0] + 1);
         walk(fsRtDirID, path);

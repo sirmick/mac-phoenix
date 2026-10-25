@@ -298,7 +298,8 @@ void ROMlib_UprString(StringPtr s, Boolean diac, INTEGER len);
 
 void UpperString(StringPtr s, Boolean diac);
 
-void GetDateTime(GUEST<ULONGINT> *mactimepointer);
+void GetDateTime(GUEST<ULONGINT> *mactimepointer);NOTRAP_FUNCTION2(GetDateTime);
+
 
 OSErr ReadDateTime(GUEST<ULONGINT> *secs);REGISTER_TRAP2(ReadDateTime, 0xA039, D0(A0));
 

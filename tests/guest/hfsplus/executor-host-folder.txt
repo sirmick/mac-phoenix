@@ -1,0 +1,92 @@
+VOLUME Host find 0
+  getvolumeinfo -> 0 same 1 u"Host" sig 4244 fsid 0 flags 0000 (sizes) cr -
+  root -> 0 u"Host" dir id 2 par 1
+  getvolumeinfo bad bitmap -> -1405
+  getvolumeinfo default -> -35
+  getvolumeinfo nsv -> -35
+WRITE
+  create work folder -> 0 spec "FSRef work" -> 0 u"FSRef work" dir
+  create long -> -1410
+  create fork file -> 0 spec "Fork file" -> 0 u"Fork file" file
+  create long other case -> -1410
+  create short -> 0 spec "Short" -> 0 u"Short" file
+  create dir -> 0 spec "Sub folder" -> 0 u"Sub folder" dir
+  create colon slash -> -37
+  create 255 -> -1410
+  create 256 -> -1410
+  create empty name -> -1411
+  create greek -> -37
+  create with info -> 0 flags 0000 cr - md 3000000100 fndr 54455854747478740000000000000000
+  create with nodeflags -> -48
+  setcataloginfo -> 0 cr - bk - fndr 4150504C73696D700000000000000000
+  lock -> -50 flags 0000 delete locked -> 0 unlock -> -43 flags 0000
+  set valence -> -43
+  set sizes -> -43
+  rename long -> -1410 old ref -> 0 u"Fork file" file
+  rename case only -> -43
+  rename onto existing -> -43
+  rename empty -> -43
+  move into folder -> -43 old ref -> -43
+  move folder into itself -> -122
+  move into a file -> -43
+  create sub sub -> 0 spec "Sub sub" -> 0 u"Sub sub" dir
+  move folder into its child -> -122
+FORKS write
+  open rdwr -> 0
+  open rdwr again -> -49
+  open rd while written -> 0
+  write 1000 -> 0 (1000) at 1000 size 1000
+  write past eof -> 0 (10) size 1110
+  write from mark -20 -> 0 (5) at 1095
+  write newline mode -> -1412
+  read by the other path -> -39 (1110)
+  setforksize 500 -> 0 size 500 at 500 other path 500
+  setforksize +4000 -> 0 size 4500
+  allocate 100000 -> 0 got 100352 data 4500 / 4500
+  allocate bad flags -> -1413
+  allocate all-or-nothing huge -> -1309
+  flush -> 0
+  forkcbinfo -> 0 same 1 flags 09 perm 3 vol-same 1 pos 500 eof 4500 peof 4500 fork u"" owner -> 0 u"Fork file" file
+  forkcbinfo iterate: two or more
+  forkcbinfo bad refnum -> -51
+  classic geteof -> -1310 fsread -> -1310
+  close -> 0
+  open rsrc -> 0 write -> 0
+  createfork rsrc -> -1421
+  createfork data -> -1421
+  deletefork rsrc -> 0 rsrc 0 / 0
+  deletefork data -> 0 data 0 / 0
+  createfork named -> -1402
+  create swap one -> 0 spec "Swap one" -> 0 u"Swap one" file
+  create swap two -> 0 spec "Swap two" -> 0 u"Swap two" file
+  exchangeobjects -> 0 one u"Swap one" data 0 / 0 two u"Swap two" data 111 / 111
+  exchangeobjects with folder -> -1302
+  exchangeobjects itself -> -1306
+ITERATE work before deletes open -> 0
+  bulk -> 0 got 3 changed 0
+    u"Fork file" flags 0000 data 0 / 0 spec "Fork file" ref -> 0 u"Fork file" file
+    u"Sub folder" flags 0010 data 0 / 0 spec "Sub folder" ref -> 0 u"Sub folder" dir
+    u"Swap one" flags 0000 data 0 / 0 spec "Swap one" ref -> 0 u"Swap one" file
+  bulk -> -1417 got 2 changed 0
+    u"Swap two" flags 0000 data 111 / 111 spec "Swap two" ref -> 0 u"Swap two" file
+    u"With info" flags 0000 data 0 / 0 spec "With info" ref -> 0 u"With info" file
+  total 5
+  bulk again -> -1417 got 0
+  bulk zero -> -1418
+  close -> 0
+  close again -> -38
+  open subtree -> -1422
+  open bad flags -> -1422
+DELETE
+  folder with items -> -47
+ITERATE work after deletes open -> 0
+  bulk -> -1417 got 0 changed 0
+  total 0
+  bulk again -> -1417 got 0
+  bulk zero -> -1418
+  close -> 0
+  close again -> -38
+  open subtree -> -1422
+  open bad flags -> -1422
+  work folder -> 0
+  deleted ref -> -43

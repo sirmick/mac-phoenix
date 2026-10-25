@@ -7,7 +7,8 @@ machine on mame-ppc; the images read-only on the host, so the Mac sees
 locked disks, as Executor mounts HFS+) to make the oracle, or on Executor
 to check it (tests/test_hfsplus_volume.py compares the two).
 
-Each image's volume needs a name of its own. MACPHOENIX_EMULATOR names the
+Each image's volume needs a name of its own; images are copied sparse
+(the big ones of test_hfsplus_volume.py are mostly holes). MACPHOENIX_EMULATOR names the
 emulator (default build/mac-phoenix); --dump the build's hfsplus_dump
 (default build/src/executor/romlib/hfsplus_dump), which reads the names.
 """
@@ -81,7 +82,8 @@ def main():
     disks = []
     for image in args.images:
         copy = os.path.join(work, os.path.basename(image))
-        shutil.copyfile(image, copy)
+        if subprocess.run(["cp", "--sparse=always", image, copy]).returncode:    # sparse: a 12 GB image stays small
+            shutil.copyfile(image, copy)
         os.chmod(copy, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
         disks.append(copy)
 

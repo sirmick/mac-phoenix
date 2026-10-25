@@ -1,0 +1,2 @@
+create "Small" TEXT ttxt
+write "Small" data 0 100 5

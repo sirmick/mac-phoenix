@@ -184,7 +184,7 @@ set(file_sources
     file/volume.h
 
     file/fileMisc.cpp
-    file/fileHighlevel.cpp  file/fileUnimplemented.cpp
+    file/fileHighlevel.cpp  file/fileUnimplemented.cpp file/fsref.cpp
     file/volume.cpp
     
     file/localvolume/localvolume.h 
@@ -660,7 +660,8 @@ target_link_libraries(romlib resources)
 add_library(executor_hfsplus STATIC
     hfs/plus/image.h hfs/plus/image.cpp
     hfs/plus/unicode.h hfs/plus/unicode.cpp hfs/plus/unicode_tables.h
-    hfs/plus/reader.h hfs/plus/reader.cpp)
+    hfs/plus/reader.h hfs/plus/reader.cpp
+    hfs/plus/btree.h hfs/plus/btree.cpp hfs/plus/writer.cpp)
 target_include_directories(executor_hfsplus PUBLIC .)
 target_compile_features(executor_hfsplus PUBLIC cxx_std_17)
 target_link_libraries(romlib executor_hfsplus)

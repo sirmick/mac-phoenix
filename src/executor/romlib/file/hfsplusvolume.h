@@ -1,12 +1,15 @@
 #pragma once
-/* hfsplusvolume.h -- a read-only HFS+ volume for the File Manager
- * (docs/executor/HFSPlus.md): the classic (HFS) calls over the HFS+ reader
- * in hfs/plus/, with names, IDs and dates as Mac OS 8.1-9 give them. */
+/* hfsplusvolume.h -- an HFS+ volume for the File Manager
+ * (docs/executor/HFSPlus.md): the classic (HFS) calls over hfs/plus/, with
+ * names, IDs and dates as Mac OS 8.1-9 give them; read-write on a writable
+ * image, else locked. */
 #include <file/volume.h>
 #include <file/file.h>
 #include <hfs/drive_flags.h>
 #include <hfs/plus/reader.h>
 
+#include <map>
+#include <optional>
 #include <memory>
 #include <vector>
 
@@ -19,6 +22,53 @@ public:
     ~HFSPlusVolume() override;
 
     hfsplus::Reader& reader() { return *reader_; }
+
+    /* FSpExchangeFiles on this volume, as Mac OS 9.0.4 does it */
+    OSErr exchangeFiles(FSSpecPtr src, FSSpecPtr dst);
+
+    /* ---- Mac OS 9.0's HFS Plus APIs (fsref.cpp): items by CNID, Unicode
+       names, forks of any length; these throw OSErrorException ---- */
+    std::optional<hfsplus::CatalogEntry> byID(uint32_t cnid) { return reader_->byID(cnid); }
+    std::optional<hfsplus::CatalogEntry> lookup(uint32_t parent, const std::u16string& name);
+    std::optional<hfsplus::CatalogEntry> childAt(uint32_t parent, uint32_t index)
+    {
+        return reader_->childAt(parent, index);
+    }
+    /* the classic File Manager's name for an item */
+    std::string shortName(const hfsplus::CatalogEntry& e) { return classicName(e); }
+    /* an item by a classic name, path and directory (PBMakeFSRef) */
+    uint32_t resolveClassic(StringPtr name, short vRef, long dirID) { return resolve(name, vRef, dirID).cnid; }
+    /* nodeFlags' open bits: data fork open (3), resource fork (2), any (7) */
+    uint16_t openFlags(uint32_t cnid);
+    uint32_t createUnicode(uint32_t parent, const std::u16string& name, bool folder);
+    void deleteID(uint32_t cnid);
+    void renameUnicode(uint32_t cnid, const std::u16string& name);
+    void moveID(uint32_t cnid, uint32_t to);
+    void exchangeIDs(uint32_t a, uint32_t b);
+    /* flags (the lock), dates, Finder info, text encoding as in e */
+    void setInfo(const hfsplus::CatalogEntry& e);
+    void setLock(uint32_t cnid, bool lock);
+    /* the fork calls' paths: any length, a 64-bit mark; the classic calls
+       on one answer fsDataTooBigErr (9.0.4) */
+    short openForkAPI(uint32_t cnid, bool resource, int8_t permission);
+    bool isForkAPI(short refNum);
+    struct ForkStatus
+    {
+        uint32_t cnid;
+        bool resource, canWrite, dirty;
+        int8_t permission;
+        uint64_t mark, size, physical;
+    };
+    ForkStatus forkStatus(short refNum);
+    void setForkMark(short refNum, uint64_t mark);
+    /* bytes read at pos (eofErr past the end), the mark after them */
+    uint32_t readFork(short refNum, uint64_t pos, uint32_t n, void *buf);
+    void writeFork(short refNum, uint64_t pos, uint32_t n, const void *buf);
+    void setForkSize(short refNum, uint64_t size);
+    /* the fork's allocation made to cover `end`: what was added */
+    uint64_t allocateFork(short refNum, uint64_t end, bool allOrNothing);
+    void flushFork(short refNum);
+    void closeFork(short refNum);
 
     void PBGetVInfo(ParmBlkPtr pb) override;
     void PBGetCatInfo(CInfoPBPtr pb) override;
@@ -77,6 +127,7 @@ private:
         CatInfo
     };
     struct OpenFork;
+    struct ForkState;
 
     Entry root();
     Entry resolveDir(short vRef, long dirID);
@@ -86,14 +137,34 @@ private:
     Entry resolveForInfo(StringPtr name, short vRef, long dirID, short index, bool includeDirectories);
     std::string classicName(const Entry& e);
     uint32_t localDate(uint32_t gmt) const;
+    /* the longest fork the classic calls open: whole blocks under 2 GB */
+    uint64_t forkLimit() const;
     void getInfoCommon(CInfoPBPtr pb, InfoKind kind);
-    void openCommon(GUEST<short>& refNum, const Entry& item, bool resource, int8_t permission);
+    void openCommon(GUEST<short>& refNum, const Entry& item, bool resource, int8_t permission, bool large = false);
     OpenFork& openFork(short refNum);
-    void setFPosCommon(ParmBlkPtr pb);
+    void setFPosCommon(ParmBlkPtr pb, bool checkEOF);
     void updateVCB();
+
+    /* writing */
+    bool writable() const { return reader_->writable(); }
+    void check(hfsplus::Error e, OSErr notFound = fnfErr);
+    void refresh(ForkState& s);
+    void refreshFile(uint32_t cnid);
+    uint32_t gmtDate(uint32_t local) const;
+    std::u16string newName(ConstStringPtr name, size_t max = 31);
+    std::pair<Entry, std::string> resolveForCreate(StringPtr name, short vRef, long dirID);
+    bool isOpen(uint32_t cnid);
+    void createCommon(StringPtr name, short vRef, long dirID, bool folder, GUEST<LONGINT> *newDirID);
+    void deleteCommon(StringPtr name, short vRef, long dirID);
+    void renameCommon(StringPtr name, short vRef, long dirID, ConstStringPtr newName);
+    void setInfoCommon(CInfoPBPtr pb, long dirID, InfoKind kind);
+    void lockCommon(StringPtr name, short vRef, long dirID, bool lock);
+    void refuseWrite(OpenFork& f);
+    void stampWritten(OpenFork& f);
 
     std::unique_ptr<hfsplus::Reader> reader_;
     std::vector<std::unique_ptr<OpenFork>> forks_;     /* by FCB index */
+    std::map<uint64_t, std::weak_ptr<ForkState>> states_;   /* (CNID, fork): what its paths share */
     unsigned blockScale_ = 1;                           /* reported blocks: this many of the volume's */
 };
 

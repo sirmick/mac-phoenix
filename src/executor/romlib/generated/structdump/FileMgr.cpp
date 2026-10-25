@@ -466,6 +466,249 @@ void describeStruct(const FSSpec& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const wide& x, std::ostream& os)
+{
+    os << "wide{";
+    logging::logField(os, "hi", x.hi);
+    logging::logField(os, "lo", x.lo);
+    os << "}";
+}
+
+void describeStruct(const UTCDateTime& x, std::ostream& os)
+{
+    os << "UTCDateTime{";
+    logging::logField(os, "highSeconds", x.highSeconds);
+    logging::logField(os, "lowSeconds", x.lowSeconds);
+    logging::logField(os, "fraction", x.fraction);
+    os << "}";
+}
+
+void describeStruct(const HFSUniStr255& x, std::ostream& os)
+{
+    os << "HFSUniStr255{";
+    logging::logField(os, "length", x.length);
+    logging::logField(os, "unicode", x.unicode);
+    os << "}";
+}
+
+void describeStruct(const FSRef& x, std::ostream& os)
+{
+    os << "FSRef{";
+    logging::logField(os, "hidden", x.hidden);
+    os << "}";
+}
+
+void describeStruct(const CatPositionRec& x, std::ostream& os)
+{
+    os << "CatPositionRec{";
+    logging::logField(os, "initialize", x.initialize);
+    logging::logField(os, "priv", x.priv);
+    os << "}";
+}
+
+void describeStruct(const FSCatalogInfo& x, std::ostream& os)
+{
+    os << "FSCatalogInfo{";
+    logging::logField(os, "nodeFlags", x.nodeFlags);
+    logging::logField(os, "volume", x.volume);
+    logging::logField(os, "parentDirID", x.parentDirID);
+    logging::logField(os, "nodeID", x.nodeID);
+    logging::logField(os, "sharingFlags", x.sharingFlags);
+    logging::logField(os, "userPrivileges", x.userPrivileges);
+    logging::logField(os, "reserved1", x.reserved1);
+    logging::logField(os, "reserved2", x.reserved2);
+    logging::logField(os, "createDate", x.createDate);
+    logging::logField(os, "contentModDate", x.contentModDate);
+    logging::logField(os, "attributeModDate", x.attributeModDate);
+    logging::logField(os, "accessDate", x.accessDate);
+    logging::logField(os, "backupDate", x.backupDate);
+    logging::logField(os, "permissions", x.permissions);
+    logging::logField(os, "finderInfo", x.finderInfo);
+    logging::logField(os, "extFinderInfo", x.extFinderInfo);
+    logging::logField(os, "dataLogicalSize", x.dataLogicalSize);
+    logging::logField(os, "dataPhysicalSize", x.dataPhysicalSize);
+    logging::logField(os, "rsrcLogicalSize", x.rsrcLogicalSize);
+    logging::logField(os, "rsrcPhysicalSize", x.rsrcPhysicalSize);
+    logging::logField(os, "valence", x.valence);
+    logging::logField(os, "textEncodingHint", x.textEncodingHint);
+    os << "}";
+}
+
+void describeStruct(const FSRefParam& x, std::ostream& os)
+{
+    os << "FSRefParam{";
+    logging::logField(os, "qLink", x.qLink);
+    logging::logField(os, "qType", x.qType);
+    logging::logField(os, "ioTrap", x.ioTrap);
+    logging::logField(os, "ioCmdAddr", x.ioCmdAddr);
+    logging::logField(os, "ioCompletion", x.ioCompletion);
+    logging::logField(os, "ioResult", x.ioResult);
+    logging::logField(os, "ioNamePtr", x.ioNamePtr);
+    logging::logField(os, "ioVRefNum", x.ioVRefNum);
+    logging::logField(os, "reserved1", x.reserved1);
+    logging::logField(os, "reserved2", x.reserved2);
+    logging::logField(os, "reserved3", x.reserved3);
+    logging::logField(os, "ref", x.ref);
+    logging::logField(os, "whichInfo", x.whichInfo);
+    logging::logField(os, "catInfo", x.catInfo);
+    logging::logField(os, "nameLength", x.nameLength);
+    logging::logField(os, "name", x.name);
+    logging::logField(os, "ioDirID", x.ioDirID);
+    logging::logField(os, "spec", x.spec);
+    logging::logField(os, "parentRef", x.parentRef);
+    logging::logField(os, "newRef", x.newRef);
+    logging::logField(os, "textEncodingHint", x.textEncodingHint);
+    logging::logField(os, "outName", x.outName);
+    os << "}";
+}
+
+void describeStruct(const FSSearchParams& x, std::ostream& os)
+{
+    os << "FSSearchParams{";
+    logging::logField(os, "searchTime", x.searchTime);
+    logging::logField(os, "searchBits", x.searchBits);
+    logging::logField(os, "searchNameLength", x.searchNameLength);
+    logging::logField(os, "searchName", x.searchName);
+    logging::logField(os, "searchInfo1", x.searchInfo1);
+    logging::logField(os, "searchInfo2", x.searchInfo2);
+    os << "}";
+}
+
+void describeStruct(const FSCatalogBulkParam& x, std::ostream& os)
+{
+    os << "FSCatalogBulkParam{";
+    logging::logField(os, "qLink", x.qLink);
+    logging::logField(os, "qType", x.qType);
+    logging::logField(os, "ioTrap", x.ioTrap);
+    logging::logField(os, "ioCmdAddr", x.ioCmdAddr);
+    logging::logField(os, "ioCompletion", x.ioCompletion);
+    logging::logField(os, "ioResult", x.ioResult);
+    logging::logField(os, "containerChanged", x.containerChanged);
+    logging::logField(os, "reserved", x.reserved);
+    logging::logField(os, "iteratorFlags", x.iteratorFlags);
+    logging::logField(os, "iterator", x.iterator);
+    logging::logField(os, "container", x.container);
+    logging::logField(os, "maximumItems", x.maximumItems);
+    logging::logField(os, "actualItems", x.actualItems);
+    logging::logField(os, "whichInfo", x.whichInfo);
+    logging::logField(os, "catalogInfo", x.catalogInfo);
+    logging::logField(os, "refs", x.refs);
+    logging::logField(os, "specs", x.specs);
+    logging::logField(os, "names", x.names);
+    logging::logField(os, "searchParams", x.searchParams);
+    os << "}";
+}
+
+void describeStruct(const FSForkIOParam& x, std::ostream& os)
+{
+    os << "FSForkIOParam{";
+    logging::logField(os, "qLink", x.qLink);
+    logging::logField(os, "qType", x.qType);
+    logging::logField(os, "ioTrap", x.ioTrap);
+    logging::logField(os, "ioCmdAddr", x.ioCmdAddr);
+    logging::logField(os, "ioCompletion", x.ioCompletion);
+    logging::logField(os, "ioResult", x.ioResult);
+    logging::logField(os, "reserved1", x.reserved1);
+    logging::logField(os, "reserved2", x.reserved2);
+    logging::logField(os, "forkRefNum", x.forkRefNum);
+    logging::logField(os, "reserved3", x.reserved3);
+    logging::logField(os, "permissions", x.permissions);
+    logging::logField(os, "ref", x.ref);
+    logging::logField(os, "buffer", x.buffer);
+    logging::logField(os, "requestCount", x.requestCount);
+    logging::logField(os, "actualCount", x.actualCount);
+    logging::logField(os, "positionMode", x.positionMode);
+    logging::logField(os, "positionOffset", x.positionOffset);
+    logging::logField(os, "allocationFlags", x.allocationFlags);
+    logging::logField(os, "allocationAmount", x.allocationAmount);
+    logging::logField(os, "forkNameLength", x.forkNameLength);
+    logging::logField(os, "forkName", x.forkName);
+    logging::logField(os, "forkIterator", x.forkIterator);
+    logging::logField(os, "outForkName", x.outForkName);
+    os << "}";
+}
+
+void describeStruct(const FSForkInfo& x, std::ostream& os)
+{
+    os << "FSForkInfo{";
+    logging::logField(os, "flags", x.flags);
+    logging::logField(os, "permissions", x.permissions);
+    logging::logField(os, "volume", x.volume);
+    logging::logField(os, "reserved2", x.reserved2);
+    logging::logField(os, "nodeID", x.nodeID);
+    logging::logField(os, "forkID", x.forkID);
+    logging::logField(os, "currentPosition", x.currentPosition);
+    logging::logField(os, "logicalEOF", x.logicalEOF);
+    logging::logField(os, "physicalEOF", x.physicalEOF);
+    logging::logField(os, "process", x.process);
+    os << "}";
+}
+
+void describeStruct(const FSForkCBInfoParam& x, std::ostream& os)
+{
+    os << "FSForkCBInfoParam{";
+    logging::logField(os, "qLink", x.qLink);
+    logging::logField(os, "qType", x.qType);
+    logging::logField(os, "ioTrap", x.ioTrap);
+    logging::logField(os, "ioCmdAddr", x.ioCmdAddr);
+    logging::logField(os, "ioCompletion", x.ioCompletion);
+    logging::logField(os, "ioResult", x.ioResult);
+    logging::logField(os, "desiredRefNum", x.desiredRefNum);
+    logging::logField(os, "volumeRefNum", x.volumeRefNum);
+    logging::logField(os, "iterator", x.iterator);
+    logging::logField(os, "actualRefNum", x.actualRefNum);
+    logging::logField(os, "ref", x.ref);
+    logging::logField(os, "forkInfo", x.forkInfo);
+    logging::logField(os, "forkName", x.forkName);
+    os << "}";
+}
+
+void describeStruct(const FSVolumeInfo& x, std::ostream& os)
+{
+    os << "FSVolumeInfo{";
+    logging::logField(os, "createDate", x.createDate);
+    logging::logField(os, "modifyDate", x.modifyDate);
+    logging::logField(os, "backupDate", x.backupDate);
+    logging::logField(os, "checkedDate", x.checkedDate);
+    logging::logField(os, "fileCount", x.fileCount);
+    logging::logField(os, "folderCount", x.folderCount);
+    logging::logField(os, "totalBytes", x.totalBytes);
+    logging::logField(os, "freeBytes", x.freeBytes);
+    logging::logField(os, "blockSize", x.blockSize);
+    logging::logField(os, "totalBlocks", x.totalBlocks);
+    logging::logField(os, "freeBlocks", x.freeBlocks);
+    logging::logField(os, "nextAllocation", x.nextAllocation);
+    logging::logField(os, "rsrcClumpSize", x.rsrcClumpSize);
+    logging::logField(os, "dataClumpSize", x.dataClumpSize);
+    logging::logField(os, "nextCatalogID", x.nextCatalogID);
+    logging::logField(os, "finderInfo", x.finderInfo);
+    logging::logField(os, "flags", x.flags);
+    logging::logField(os, "filesystemID", x.filesystemID);
+    logging::logField(os, "signature", x.signature);
+    logging::logField(os, "driveNumber", x.driveNumber);
+    logging::logField(os, "driverRefNum", x.driverRefNum);
+    os << "}";
+}
+
+void describeStruct(const FSVolumeInfoParam& x, std::ostream& os)
+{
+    os << "FSVolumeInfoParam{";
+    logging::logField(os, "qLink", x.qLink);
+    logging::logField(os, "qType", x.qType);
+    logging::logField(os, "ioTrap", x.ioTrap);
+    logging::logField(os, "ioCmdAddr", x.ioCmdAddr);
+    logging::logField(os, "ioCompletion", x.ioCompletion);
+    logging::logField(os, "ioResult", x.ioResult);
+    logging::logField(os, "ioNamePtr", x.ioNamePtr);
+    logging::logField(os, "ioVRefNum", x.ioVRefNum);
+    logging::logField(os, "volumeIndex", x.volumeIndex);
+    logging::logField(os, "whichInfo", x.whichInfo);
+    logging::logField(os, "volumeInfo", x.volumeInfo);
+    logging::logField(os, "volumeName", x.volumeName);
+    logging::logField(os, "ref", x.ref);
+    os << "}";
+}
+
 } // namespace Executor
 
 namespace Executor { namespace structdump {
@@ -559,6 +802,62 @@ void dump_FSSpec(std::ostream& os, const void* p)
 {
     describeStruct(*(const FSSpec*)p, os);
 }
+void dump_wide(std::ostream& os, const void* p)
+{
+    describeStruct(*(const wide*)p, os);
+}
+void dump_UTCDateTime(std::ostream& os, const void* p)
+{
+    describeStruct(*(const UTCDateTime*)p, os);
+}
+void dump_HFSUniStr255(std::ostream& os, const void* p)
+{
+    describeStruct(*(const HFSUniStr255*)p, os);
+}
+void dump_FSRef(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSRef*)p, os);
+}
+void dump_CatPositionRec(std::ostream& os, const void* p)
+{
+    describeStruct(*(const CatPositionRec*)p, os);
+}
+void dump_FSCatalogInfo(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSCatalogInfo*)p, os);
+}
+void dump_FSRefParam(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSRefParam*)p, os);
+}
+void dump_FSSearchParams(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSSearchParams*)p, os);
+}
+void dump_FSCatalogBulkParam(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSCatalogBulkParam*)p, os);
+}
+void dump_FSForkIOParam(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSForkIOParam*)p, os);
+}
+void dump_FSForkInfo(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSForkInfo*)p, os);
+}
+void dump_FSForkCBInfoParam(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSForkCBInfoParam*)p, os);
+}
+void dump_FSVolumeInfo(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSVolumeInfo*)p, os);
+}
+void dump_FSVolumeInfoParam(std::ostream& os, const void* p)
+{
+    describeStruct(*(const FSVolumeInfoParam*)p, os);
+}
 }
 
 void registerStructDumps_FileMgr()
@@ -586,6 +885,20 @@ void registerStructDumps_FileMgr()
         { "VCB", sizeof(VCB), &dump_VCB },
         { "DrvQEl", sizeof(DrvQEl), &dump_DrvQEl },
         { "FSSpec", sizeof(FSSpec), &dump_FSSpec },
+        { "wide", sizeof(wide), &dump_wide },
+        { "UTCDateTime", sizeof(UTCDateTime), &dump_UTCDateTime },
+        { "HFSUniStr255", sizeof(HFSUniStr255), &dump_HFSUniStr255 },
+        { "FSRef", sizeof(FSRef), &dump_FSRef },
+        { "CatPositionRec", sizeof(CatPositionRec), &dump_CatPositionRec },
+        { "FSCatalogInfo", sizeof(FSCatalogInfo), &dump_FSCatalogInfo },
+        { "FSRefParam", sizeof(FSRefParam), &dump_FSRefParam },
+        { "FSSearchParams", sizeof(FSSearchParams), &dump_FSSearchParams },
+        { "FSCatalogBulkParam", sizeof(FSCatalogBulkParam), &dump_FSCatalogBulkParam },
+        { "FSForkIOParam", sizeof(FSForkIOParam), &dump_FSForkIOParam },
+        { "FSForkInfo", sizeof(FSForkInfo), &dump_FSForkInfo },
+        { "FSForkCBInfoParam", sizeof(FSForkCBInfoParam), &dump_FSForkCBInfoParam },
+        { "FSVolumeInfo", sizeof(FSVolumeInfo), &dump_FSVolumeInfo },
+        { "FSVolumeInfoParam", sizeof(FSVolumeInfoParam), &dump_FSVolumeInfoParam },
     };
     registerTypes(types, sizeof(types) / sizeof(types[0]));
 }

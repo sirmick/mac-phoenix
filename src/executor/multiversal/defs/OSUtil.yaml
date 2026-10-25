@@ -610,7 +610,9 @@
     args:
       - name: mactimepointer
         type: ULONGINT*
+    executor: true
     inline: "*(mactimepointer) = *(ULONGINT*)0x020C"
+    noinline: carbon, ppc
 
 # ####
 

@@ -92,6 +92,11 @@ std::u16string Executor::hfsplus::macRomanToUnicode(const std::string& macRoman)
     return out;
 }
 
+char16_t Executor::hfsplus::macRomanCharacter(uint8_t b)
+{
+    return char16_t(tables::kMacRomanUnicode[b]);
+}
+
 std::string Executor::hfsplus::unicodeToMacRoman(const std::u16string& name, bool *lossy)
 {
     const Reverse& r = reverse();

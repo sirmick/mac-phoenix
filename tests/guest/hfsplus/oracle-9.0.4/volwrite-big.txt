@@ -1,0 +1,43 @@
+VOLUME find -> 0
+VOLUME before attrib 0040 nmfls 2 frblk 15887 filcnt 3 dircnt 3
+CREATE grow -> 0
+OPEN grow -> 0
+SETEOF 2147475456 -> 0
+  eof -> 0 2147475456 at 0
+  info Grow -> 0 attrib 8A data 2147475456/2147475456 rsrc 0/0
+SETEOF 2147479552 -> 0
+  eof -> 0 2147479552 at 0
+  info Grow -> 0 attrib 8A data 2147479552/2147479552 rsrc 0/0
+SETEOF 2147479553 -> -1309
+  eof -> 0 2147479552 at 0
+SETEOF 2147483647 -> -1309
+  eof -> 0 2147479552 at 0
+  info Grow -> 0 attrib 8A data 2147479552/2147479552 rsrc 0/0
+  write 2147479452+100 -> 0 (100)
+  write 2147479502+100 -> -1309 (0)
+  eof -> 0 2147479552 at 2147479502
+  write 2147479552+1 -> -1309 (0)
+  write 2147479552+0 -> 0 (0)
+SETFPOS L+10 -> -39
+SETFPOS L -> 0
+ALLOCATE 1M -> -34 (0)
+  info Grow -> 0 attrib 8A data 2147479552/2147479552 rsrc 0/0
+READ end -> 0 (200) first-write-bytes-bad 0
+OPEN again -> 0
+  eof -> 0 2147479552 at 0
+SETEOF 1000 -> 0
+  eof -> 0 1000 at 1000
+  info Grow -> 0 attrib 8A data 1000/4096 rsrc 0/0
+ALLOCATE 256M -> 0 (268435456)
+  info Grow -> 0 attrib 8A data 1000/268439552 rsrc 0/0
+CLOSE -> 0
+CREATE full -> 0
+SETEOF 2147479552 -> 0
+  eof -> 0 2147479552 at 0
+OPEN full -> 0
+  eof -> 0 2147479552 at 0
+  info Full -> 0 attrib 02 data 2147479552/2147479552 rsrc 0/0
+DELETE full -> 0
+FLUSHVOL -> 0
+VOLUME at the end attrib 0040 nmfls 3 frblk 15887 filcnt 4 dircnt 3
+---

@@ -1,0 +1,9 @@
+VOLUME 0 573235364D sig 4244 attrib 0080 nmfls 1 alblksiz 8192 nmalblks 32759 frblk 31983 clpsiz 65536 filcnt 1 dircnt 0 nxtcnid 17 cr 3875738100 md 3875738101 bk 0 fndr 0000000000000000000000000000000000000000000000001481E862C19C3FD5
+CREATE -44
+DIRCREATE -44
+FILE 536D616C6C id 16 par 2 attrib 02 finfo 54455854747478740000000000000000 fxinfo 00000000000000000000000000000000 data 100/65536 rsrc 0/0 cr 3875738101 md 3875738101 bk 0 clp 0
+  byname 0 id 16 bypath 0 id 16 upper 0 id 16 hgetfinfo 0 fsspec 0 par 2 536D616C6C
+  data open 0 eof 100 read 100 end -39 adler 96542E4F pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-70384815 seteof -44 allocate -44
+  rsrc open 0 eof 0 read 0 end -39 adler 00000001 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-70384815 seteof -44 allocate -44
+FOLDER 2 catinfo-files 1 finfo-files 1
+---

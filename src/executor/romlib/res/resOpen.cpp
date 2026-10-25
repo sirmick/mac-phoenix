@@ -64,14 +64,17 @@ Executor::HCreateResFile_helper(INTEGER vrefnum, LONGINT parid, ConstStringPtr n
     ROMlib_setreserr(FSClose(f));
 }
 
+/* MacPhoenix: a new file's type and creator stay 0, as Mac OS 9.0.4 leaves
+   them (tests/guest/hfsplus/oracle-9.0.4/voldump-written.txt, "Resource
+   file"); not '????'. */
 void Executor::C_CreateResFile(ConstStringPtr fn)
 {
-    HCreateResFile_helper(0, 0, fn, "????"_4, "????"_4, 0);
+    HCreateResFile_helper(0, 0, fn, 0, 0, 0);
 }
 
 void Executor::C_HCreateResFile(INTEGER vrefnum, LONGINT parid, ConstStringPtr name)
 {
-    HCreateResFile_helper(vrefnum, parid, name, "????"_4, "????"_4, 0);
+    HCreateResFile_helper(vrefnum, parid, name, 0, 0, 0);
 }
 
 
@@ -680,6 +683,21 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
     {
         FSClose(f);
         return (-1);
+    }
+    /* MacPhoenix: a fork that holds no resource file (its header's map
+       outside the fork) is mapReadErr, as on a Mac, before its map length
+       goes to NewHandle. */
+    {
+        GUEST<LONGINT> eof;
+        GetEOF(f, &eof);
+        uint32_t mapoff = hd.rmapoff, maplen = hd.maplen, datoff = hd.rdatoff, datlen = hd.datlen;
+        if(maplen < sizeof(resmap) || (uint64_t)mapoff + maplen > (uint32_t)(LONGINT)eof
+           || (uint64_t)datoff + datlen > (uint32_t)(LONGINT)eof)
+        {
+            FSClose(f);
+            ROMlib_setreserr(mapReadErr);
+            return -1;
+        }
     }
     /* MacPhoenix: a file opened in system mode is in every process's
        chain (below), so its map goes in the System heap; in the current
