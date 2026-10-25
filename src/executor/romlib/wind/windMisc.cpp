@@ -463,8 +463,17 @@ void Executor::C_DrawNew(WindowPeek w, Boolean flag)
     WINDCALL((WindowPtr)w, wDraw, 0);
     PaintBehind(w, r2);
     CalcVisBehind(w, r2);
+    /* MacPhoenix: only the newly exposed part of the content is added
+       (PaintBehind erased it), as on a Mac.  The whole content made the
+       Finder skip its ScrollRect after a zoom (it scrolls only what isn't
+       about to be updated anyway) and redraw over unerased pixels. */
     if(flag)
-        CopyRgn(WINDOW_CONT_REGION(w), WINDOW_UPDATE_REGION(w));
+    {
+        RgnHandle exposed = NewRgn();
+        DiffRgn(WINDOW_CONT_REGION(w), LM(OldContent), exposed);
+        UnionRgn(exposed, WINDOW_UPDATE_REGION(w), WINDOW_UPDATE_REGION(w));
+        DisposeRgn(exposed);
+    }
 
     DisposeRgn(r1);
     DisposeRgn(r2);
