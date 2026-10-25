@@ -657,6 +657,28 @@ void Executor::ROMlib_layers_clip_below(RgnHandle rgn)
         subtract_layer(l, rgn);
 }
 
+static Layer layer_of_record(Ptr rec);
+
+/* PaintOne for each of a layer's windows that rh touches, front to back,
+   taking their structures out of rh. */
+static void paint_layer(Layer l, RgnHandle rh)
+{
+    LayerView view(l);
+    for(WindowPeek w = LM(WindowList); w && !EmptyRgn(rh); w = WINDOW_NEXT_WINDOW(w))
+    {
+        if(!WINDOW_VISIBLE(w))
+            continue;
+        RgnHandle t = NewRgn();
+        SectRgn(rh, WINDOW_STRUCT_REGION(w), t);
+        if(!EmptyRgn(t))
+        {
+            PaintOne(w, rh);
+            DiffRgn(rh, WINDOW_STRUCT_REGION(w), rh);
+        }
+        DisposeRgn(t);
+    }
+}
+
 void Executor::ROMlib_layers_paint_behind(RgnHandle rh)
 {
     if(!viewer())
@@ -665,20 +687,23 @@ void Executor::ROMlib_layers_paint_behind(RgnHandle rh)
     {
         if(EmptyRgn(rh))
             return;
-        LayerView view(l);
-        for(WindowPeek w = LM(WindowList); w && !EmptyRgn(rh); w = WINDOW_NEXT_WINDOW(w))
-        {
-            if(!WINDOW_VISIBLE(w))
-                continue;
-            RgnHandle t = NewRgn();
-            SectRgn(rh, WINDOW_STRUCT_REGION(w), t);
-            if(!EmptyRgn(t))
-            {
-                PaintOne(w, rh);
-                DiffRgn(rh, WINDOW_STRUCT_REGION(w), rh);
-            }
-            DisposeRgn(t);
-        }
+        paint_layer(l, rh);
+    }
+}
+
+void Executor::ROMlib_layers_paint_from(WindowPtr layer, RgnHandle rh)
+{
+    Layer from = layer_of_record((Ptr)layer); /* none: the root, every layer */
+    bool started = !from;
+    for(Layer l : layer_sequence())
+    {
+        if(l == from)
+            started = true;
+        if(!started)
+            continue;
+        if(EmptyRgn(rh))
+            return;
+        paint_layer(l, rh);
     }
 }
 

@@ -73,7 +73,7 @@ turns off what they need. Each is a policy decision before it is a fix:
   prompt in Apple IR File Exchange
 - **QuickTime**: QuickTime™ Settings (7.6.1), MoviePlayer (7.6.1)
 - ~~**Control Strip**~~: on since 2026-10-25 (STRAGGLERS 52)
-- ~~**CloseView**~~: on since 2026-10-25 (magnification draws wrong, STRAGGLERS 52)
+- ~~**CloseView**~~: on since 2026-10-25; magnification draws as on the ROM machine (STRAGGLERS 52; the panel's radio after a click is open)
 - ~~**Easy Open**~~: on since 2026-10-25 (STRAGGLERS 52); documents of unknown
   applications open through its Translation Choices dialog
 - **AutoRemounter, PC Exchange** (7.6.1), see STRAGGLERS 52 for what each needs:

@@ -83,6 +83,9 @@ extern bool ROMlib_process_with_signature(OSType sig, ProcessSerialNumber *psn);
 extern void ROMlib_layers_clip_above(RgnHandle rgn);
 extern void ROMlib_layers_clip_below(RgnHandle rgn);
 extern void ROMlib_layers_paint_behind(RgnHandle rgn);
+/* PaintBehind of a layer record: that layer's windows and those of every
+   layer behind it (the root layer: all of them). */
+extern void ROMlib_layers_paint_from(WindowPtr layer, RgnHandle rgn);
 extern void ROMlib_layers_calcvis_behind(RgnHandle rgn);
 /* Runs f with the layer that holds w as the one looked at (its windows in
    WindowList); false if w is in no layer's list. */

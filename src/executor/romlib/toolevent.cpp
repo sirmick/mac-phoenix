@@ -335,10 +335,13 @@ static Boolean doevent(INTEGER em, EventRecord *evt,
  *	 around with things just before releasing Executor/DOS 1.0.
  */
 
+    /* MacPhoenix: through the trap table, as GetNextEvent and EventAvail
+       call them on a Mac: extensions patch both to see the events first
+       (CloseView takes its Command-Option keys there). */
     if(remflag)
     {
         TRACE(16);
-        retval = GetOSEvent(em, evt);
+        retval = stub_GetOSEvent(em, evt);
         TRACE(17);
 
         short fkeyModifiers = shiftKey | cmdKey;
@@ -380,7 +383,7 @@ static Boolean doevent(INTEGER em, EventRecord *evt,
     else
     {
         TRACE(24);
-        retval = OSEventAvail(em, evt);
+        retval = stub_OSEventAvail(em, evt);
         TRACE(25);
     }
     /*

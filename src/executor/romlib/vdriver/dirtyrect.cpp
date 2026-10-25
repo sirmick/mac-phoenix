@@ -11,6 +11,8 @@
 #include <commandline/flags.h>
 #include <vdriver/autorefresh.h>
 #include <OSEvent.h>
+#include <base/emustubs.h>
+#include <base/functions.impl.h>
 #include <algorithm>
 
 
@@ -204,10 +206,29 @@ DirtyRects::Rects DirtyRects::getAndClear()
 }
 
 
+/* MacPhoenix: what QuickDraw draws to the screen goes to JShieldCursor
+   first, as two global points, as Color QuickDraw does before it draws.
+   Executor's own routine there does nothing (the host draws the cursor);
+   an extension's hook learns what changed: CloseView, which redirects the
+   screen into a buffer of its own, copies those rectangles to the real
+   one (without this, nothing it drew got there once it was switched on). */
+static void call_shield_hook(int top, int left, int bottom, int right)
+{
+    ProcPtr p = LM(JShieldCursor);
+    if(!p || p == (ProcPtr)&stub_ShieldCursorEnd || p == (ProcPtr)-1)
+        return;
+    const Rect &b = PIXMAP_BOUNDS(GD_PMAP(LM(MainDevice)));
+    auto pt = [](int v, int h) { return (int32_t)((uint32_t)(uint16_t)v << 16 | (uint16_t)h); };
+    UPP<void(int32_t, int32_t)> shield(p);
+    shield(pt(bottom + b.top, right + b.left), pt(top + b.top, left + b.left));
+}
+
 void Executor::dirty_rect_accrue(int top, int left, int bottom, int right)
 {
-    if(bottom <= top || right <= left
-       || ROMlib_refresh)
+    if(bottom <= top || right <= left)
+        return;
+    call_shield_hook(top, left, bottom, right);
+    if(ROMlib_refresh)
         return;
 
     /* Note that Executor has touched the screen. */

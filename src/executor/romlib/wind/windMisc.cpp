@@ -367,6 +367,15 @@ void Executor::C_PaintBehind(WindowPeek w, RgnHandle clobbered)
     CopyRgn(clobbered, rh);
     LM(PaintWhite) = -1;
     LM(SaveUpdate) = -1;
+    /* MacPhoenix: a layer (7.5's Layer Manager makes them window records)
+       stands for its windows and the layers behind it; CloseView repaints
+       the whole screen into its buffer with PaintBehind(GetRootLayer(),
+       the screen) when it is switched on, and only the desktop came. */
+    if(ROMlib_layer_p((WindowPtr)w))
+    {
+        ROMlib_layers_paint_from((WindowPtr)w, rh);
+        w = nullptr;
+    }
     for(wp = w; wp; wp = WINDOW_NEXT_WINDOW(wp))
     {
         if(WINDOW_VISIBLE(wp))
@@ -382,7 +391,7 @@ void Executor::C_PaintBehind(WindowPeek w, RgnHandle clobbered)
         }
     }
     /* MacPhoenix: then the layers behind, then the desktop. */
-    if(!EmptyRgn(rh))
+    if(w && !EmptyRgn(rh))
         ROMlib_layers_paint_behind(rh);
     if(!EmptyRgn(rh))
         PaintOne((WindowPeek)0, rh);

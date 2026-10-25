@@ -411,6 +411,12 @@ void Executor::InitPerProcessLowMem()
         FinderName,
         WMgrCPort,
         JCrsrTask,
+        JInitCrsr,
+        JHideCursor,
+        JShowCursor,
+        JShieldCursor,
+        JSetCrsr,
+        JCrsrObscure,
         AE_info,
         KeyMap
         
@@ -487,13 +493,21 @@ void Executor::InitPerProcessLowMem()
     LM(IAZNotify) = 0;
     LM(CurPitch) = 0;
     LM(JSwapFont) = (ProcPtr)&FMSwapFont;
-    LM(JInitCrsr) = (ProcPtr)&InitCursor;
 
-    LM(JHideCursor) = (ProcPtr)&HideCursor;
-    LM(JShowCursor) = (ProcPtr)&ShowCursor;
-    LM(JShieldCursor) = (ProcPtr)&ShieldCursor;
-    LM(JSetCrsr) = (ProcPtr)&SetCursor;
-    LM(JCrsrObscure) = (ProcPtr)&ObscureCursor;
+    /* MacPhoenix: the cursor vectors are the system's, not a process's:
+       extensions hook them at startup (CloseView, JShieldCursor to learn
+       what QuickDraw draws to the screen), so a launch keeps what is
+       there. */
+    auto keep = [](GUEST<ProcPtr> &v, ProcPtr dflt) {
+        if(!v || v == (ProcPtr)-1)
+            v = dflt;
+    };
+    keep(LM(JInitCrsr), (ProcPtr)&InitCursor);
+    keep(LM(JHideCursor), (ProcPtr)&HideCursor);
+    keep(LM(JShowCursor), (ProcPtr)&ShowCursor);
+    keep(LM(JShieldCursor), (ProcPtr)&stub_ShieldCursorEnd);
+    keep(LM(JSetCrsr), (ProcPtr)&SetCursor);
+    keep(LM(JCrsrObscure), (ProcPtr)&ObscureCursor);
 
     LM(JUnknown574) = (ProcPtr)&stub_SwapMMUMode;
 

@@ -23,6 +23,7 @@
 #include <time/time.h>
 #include <prefs/prefs.h>
 #include <base/emustubs.h>
+#include <osevent/osevent.h>
 #include <file/file.h>
 
 /* core/xpram.cpp's; standalone builds (the Executor tests) get this one. */
@@ -213,9 +214,12 @@ RAW_68K_IMPLEMENTATION(Frac2X)
                                                              \
     uw = EM_D1 << 8;                                         \
     uw |= cpu_state.regs[2].uw.n;                            \
-    EM_D0 = (KeyTranslate(nullptr, uw, (GUEST<uint32_t> *)0) >> 16) & 0xFF; \
+    EM_D0 = KeyTranslate(ROMlib_kchr_ptr(), uw, (GUEST<uint32_t> *)0) & 0xFF; \
     RTS();
 
+/* MacPhoenix: with the current KCHR (KeyTranslate takes no nil map) and
+   the character from the result's low byte, where KeyTranslate puts it;
+   CloseView finds its Command-Option keys through Key1Trans. */
 RAW_68K_IMPLEMENTATION(Key1Trans);
 RAW_68K_IMPLEMENTATION(Key2Trans);
 
@@ -232,6 +236,17 @@ RAW_68K_IMPLEMENTATION(Key2Trans)
 RAW_68K_IMPLEMENTATION(GNEFilterEnd)
 {
     RTS();
+}
+
+/* JShieldCursor as QuickDraw calls it: the rectangle drawn to the screen
+   as two global points on the stack, popped by the callee. Executor draws
+   the cursor on the host, so there is nothing to shield it from; the
+   vector is there for extensions that hook it (CloseView). */
+RAW_68K_IMPLEMENTATION(ShieldCursorEnd)
+{
+    syn68k_addr_t ret = POPADDR();
+    EM_A7 += 8;
+    return ret;
 }
 
 /* IODone (IMII-195): a driver's Prime, Control or Status jumps here with
