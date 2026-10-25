@@ -181,7 +181,9 @@ turns off what they need. Each is a policy decision before it is a fix:
 Control panels: Apple Menu Options, Color, ColorSync System Profile, Date &
 Time, Desktop Patterns, Extensions Manager, General Controls, Map, Mouse,
 Numbers, Power Macintosh Card, Startup Disk, Views, WindowShade, Cache Switch,
-Memory, Easy Access (7.6.1). Desk accessories from the Apple menu: Calculator,
+Memory, Easy Access (7.6.1); the Color Picker ("Other..." in Color),
+More Choices included (2026-10-25, STRAGGLERS 42). Balloon Help: window
+balloons name the window's application (2026-10-25, STRAGGLERS 18). Desk accessories from the Apple menu: Calculator,
 Chooser, Key Caps; Apple menu Shut Down powers off cleanly. Applications:
 SimpleText, Find File, Jigsaw Puzzle, Note Pad, Scrapbook, Stickies, Script
 Editor, File Assistant, Disk Copy, StuffIt Expander. Applets: Add Alias to
