@@ -80,8 +80,17 @@ private:
     Error allocNode(uint32_t *n);
     Error freeNode(uint32_t n);
     Error writeHeader();
+    /* the map: the header node's map record, then each map node's */
+    struct MapRecord
+    {
+        uint32_t node;
+        uint16_t offset, bytes;
+        uint32_t first;                         /* the node its first bit is for */
+    };
+    bool mapRecords(std::vector<MapRecord> *out);
     /* the map's bit for a node: where it is in the file */
     bool mapBit(uint32_t n, uint64_t *fileByte, uint8_t *mask);
+    Error setMapBit(uint32_t n, bool used);
 
     Reader& volume_;
     Fork& file_;

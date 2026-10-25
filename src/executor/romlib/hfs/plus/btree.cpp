@@ -491,9 +491,10 @@ Error BTree::replace(const std::vector<uint8_t>& key, const std::vector<uint8_t>
 
 /* ---- the node map and the header ---------------------------------------- */
 
-bool BTree::mapBit(uint32_t n, uint64_t *fileByte, uint8_t *mask)
+bool BTree::mapRecords(std::vector<MapRecord> *out)
 {
     /* the header node's map record (record 2), then map nodes' record 0 */
+    out->clear();
     uint32_t nodeNum = 0;
     uint32_t covered = 0;
     for(int guard = 0; guard < 4096; guard++)
@@ -502,48 +503,85 @@ bool BTree::mapBit(uint32_t n, uint64_t *fileByte, uint8_t *mask)
         if(!nd)
             return false;
         int rec = kind(nd) == kHeaderNode ? 2 : 0;
+        if(nodeNum && kind(nd) != kMapNode)
+            return false;
         const uint8_t *base = nd->data();
         if(count(nd) <= rec)
             return false;
         uint16_t a = be16(base + nodeSize_ - 2 * (rec + 1)), b = be16(base + nodeSize_ - 2 * (rec + 2));
-        uint32_t bits = uint32_t(b - a) * 8;
-        if(n < covered + bits)
+        if(b < a || b > nodeSize_)
+            return false;
+        out->push_back({ nodeNum, a, uint16_t(b - a), covered });
+        covered += uint32_t(b - a) * 8;
+        nodeNum = next(nd);
+        if(!nodeNum)
+            return true;
+    }
+    return false;
+}
+
+bool BTree::mapBit(uint32_t n, uint64_t *fileByte, uint8_t *mask)
+{
+    std::vector<MapRecord> map;
+    if(!mapRecords(&map))
+        return false;
+    for(const MapRecord& m : map)
+        if(n < m.first + m.bytes * 8u)
         {
-            uint32_t bit = n - covered;
-            *fileByte = uint64_t(nodeNum) * nodeSize_ + a + bit / 8;
+            uint32_t bit = n - m.first;
+            *fileByte = uint64_t(m.node) * nodeSize_ + m.offset + bit / 8;
             *mask = uint8_t(0x80 >> (bit % 8));
             return true;
         }
-        covered += bits;
-        nodeNum = next(nd);
-        if(!nodeNum)
-            return false;
-    }
     return false;
+}
+
+Error BTree::setMapBit(uint32_t n, bool used)
+{
+    uint64_t at;
+    uint8_t mask;
+    Node nd;
+    if(!mapBit(n, &at, &mask) || !(nd = node(uint32_t(at / nodeSize_))))
+        return Error::io;
+    uint8_t byte = (*nd)[at % nodeSize_];
+    byte = used ? byte | mask : byte & uint8_t(~mask);
+    if(!file_.write(at, &byte, 1))
+        return Error::io;
+    (*nd)[at % nodeSize_] = byte;
+    return Error::none;
 }
 
 Error BTree::allocNode(uint32_t *out)
 {
     for(int attempt = 0; attempt < 2; attempt++)
     {
+        std::vector<MapRecord> map;
+        if(!mapRecords(&map))
+            return Error::io;
         if(freeNodes_)
-            for(uint32_t n = 1; n < totalNodes_; n++)
+            for(const MapRecord& m : map)
             {
-                uint64_t at;
-                uint8_t mask, byte;
-                if(!mapBit(n, &at, &mask) || file_.read(at, &byte, 1) != 1)
+                Node nd = node(m.node);
+                if(!nd)
                     return Error::io;
-                if(byte & mask)
-                    continue;
-                byte |= mask;
-                if(!file_.write(at, &byte, 1))
-                    return Error::io;
-                auto it = index_.find(uint32_t(at / nodeSize_));
-                if(it != index_.end())
-                    (*it->second->second)[at % nodeSize_] = byte;
-                freeNodes_--;
-                *out = n;
-                return writeHeader();
+                for(uint32_t i = 0; i < m.bytes && m.first + i * 8 < totalNodes_; i++)
+                {
+                    uint8_t byte = (*nd)[m.offset + i];
+                    if(byte == 0xFF)
+                        continue;
+                    int bit = 0;
+                    while(byte & (0x80 >> bit))
+                        bit++;
+                    uint32_t n = m.first + i * 8 + bit;
+                    if(n >= totalNodes_)
+                        break;
+                    Error e = setMapBit(n, true);
+                    if(e != Error::none)
+                        return e;
+                    freeNodes_--;
+                    *out = n;
+                    return writeHeader();
+                }
             }
         /* none free: the file grows (at least a clump, at least 4 nodes) */
         uint32_t want = std::max<uint32_t>(4, clumpSize_ / nodeSize_);
@@ -556,16 +594,9 @@ Error BTree::allocNode(uint32_t *out)
 
 Error BTree::freeNode(uint32_t n)
 {
-    uint64_t at;
-    uint8_t mask, byte;
-    if(!mapBit(n, &at, &mask) || file_.read(at, &byte, 1) != 1)
-        return Error::io;
-    byte &= uint8_t(~mask);
-    if(!file_.write(at, &byte, 1))
-        return Error::io;
-    auto it = index_.find(uint32_t(at / nodeSize_));
-    if(it != index_.end())
-        (*it->second->second)[at % nodeSize_] = byte;
+    Error e = setMapBit(n, false);
+    if(e != Error::none)
+        return e;
     std::vector<uint8_t> zero(nodeSize_, 0);
     if(!file_.write(uint64_t(n) * nodeSize_, zero.data(), nodeSize_))
         return Error::io;
@@ -579,14 +610,34 @@ Error BTree::freeNode(uint32_t n)
     return Error::none;
 }
 
+/* Past what the map covers, map nodes are made from the first of the new
+   nodes, each chained from the last map record's node, a record of the
+   node less its descriptor, two offsets and two bytes (as mkfs.hfsplus
+   makes them). */
 Error BTree::added(uint32_t nodes)
 {
-    uint64_t at;
-    uint8_t mask;
-    if(!mapBit(totalNodes_ + nodes - 1, &at, &mask))
-        return Error::diskFull;                 /* past what the map covers: no map nodes added */
+    uint32_t spare = totalNodes_;
     totalNodes_ += nodes;
     freeNodes_ += nodes;
+    for(;;)
+    {
+        std::vector<MapRecord> map;
+        if(!mapRecords(&map))
+            return Error::io;
+        const MapRecord& last = map.back();
+        if(last.first + last.bytes * 8u >= totalNodes_)
+            break;
+        if(spare >= totalNodes_)
+            return Error::diskFull;
+        uint32_t m = spare++;
+        Record bits(nodeSize_ - kDescriptor - 6, 0);
+        Error e;
+        if((e = writeNode(m, kMapNode, 0, 0, 0, { bits })) != Error::none
+           || (e = setLinks(last.node, m, std::nullopt)) != Error::none
+           || (e = setMapBit(m, true)) != Error::none)
+            return e;
+        freeNodes_--;
+    }
     return writeHeader();
 }
 

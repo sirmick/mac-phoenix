@@ -134,10 +134,12 @@ The volume layer (`hfs/plus/`, from TN1150):
 - `btree.cpp`: insert, remove, replace; a full node splits (a new root
   when it was the root), an empty node is freed and unlinked, an index
   root with one child collapses, index keys stay their children's first
-  keys; nodes come from the header node's map (map nodes aren't added: a
-  tree stops growing at what the header's map covers, ~30000 nodes of
-  4 KB); with none free the tree's file grows through the volume (the
-  catalog's extents past 8 go to the extents overflow file).
+  keys; nodes come from the map (the header node's map record, then map
+  nodes'), lowest first; with none free the tree's file grows through the
+  volume (the catalog's extents past 8 go to the extents overflow file),
+  and past what the map covers map nodes are made from the first new
+  nodes, chained from the last one's fLink, laid out as mkfs.hfsplus
+  makes them (kind 2, height 0, one record of the node less 20 bytes).
 - `writer.cpp`: the allocation file (a free run from the last allocation
   on, else pieces); forks grown (new blocks zeroed) and cut, their extents
   past the first 8 as extents overflow records; files and folders made
@@ -175,7 +177,7 @@ fork whose header puts the map outside it, before that length reaches
 2 GB wrapped and the System heap's trailer went past its end).
 
 Not done: the Desktop DB (Executor's Desktop Manager keeps an HFS+
-volume's in memory, as an HFS one's), map nodes, hard links made, HFSX
+volume's in memory, as an HFS one's), hard links made, HFSX
 volumes written (their binary order is used for lookups, not tested for
 inserts), files over 2 GB.
 
@@ -217,9 +219,11 @@ inserts), files over 2 GB.
   scripts (`hfsplus_dump IMAGE script`) on the bare and wrapped blanks:
   1600 files (the catalog three levels deep, its file grown), forks
   written in turns (extents overflow), renames, moves, truncations, mass
-  deletion; fsck.hfsplus -n -f (hfsprogs in docker, image
-  macphoenix-hfsprogs) finds each volume OK and hfsdump reads every folder
-  and fork as a model of the script predicts.
+  deletion; and on a volume made with 4 KB catalog nodes, 150000 files of
+  200-character names (two map nodes made), two thirds deleted, 5000 more;
+  fsck.hfsplus -n -f (hfsprogs in docker, image macphoenix-hfsprogs) finds
+  each volume OK and hfsdump reads every folder and fork as a model of the
+  script predicts.
 - `executor.hfsplus_write` (`tests/test_hfsplus_write.py`): VolWrite, an
   application copied in (`/api/copy`) and VolDump on Executor against the
   9.0.4 oracle (but for what 9.0.4's Finder makes when the volume mounts,

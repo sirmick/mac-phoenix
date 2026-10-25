@@ -12,7 +12,10 @@ tools that share nothing with it:
 The scripts (random, seeded) fill folders with 1600 files (the catalog
 B-tree splits to three levels and its file grows), write forks in turns (files past
 their 8 extents: extents overflow records), rename, move, truncate and
-delete (nodes freed, the tree shrinking).
+delete (nodes freed, the tree shrinking). One more volume, made here
+with 4 KB catalog nodes, takes 150000 files with long names: the catalog
+outgrows what its header node's map covers twice (two map nodes made and
+chained), loses two thirds of them and takes more.
 
     test_hfsplus_writer.py --dump BUILD/hfsplus_dump [--seeds N] [--hfsdump PATH]
 
@@ -24,6 +27,7 @@ import hashlib
 import os
 import random
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -157,6 +161,43 @@ def script(seed):
     return m
 
 
+def map_script(seed):
+    """Past the header node's map: 150000 files of 200-character names."""
+    rnd = random.Random(seed)
+    m = Model()
+    m.mkdir("A")
+    m.mkdir("B")
+    names = ["%s/%07d %s" % ("AB"[i % 2], i * 7919 % 10 ** 7, "n" * 200) for i in range(150000)]
+    for p in names:
+        m.create(p)
+    for p in rnd.sample(names, 100000):
+        m.delete(p)
+    for i in range(5000):
+        m.create("A/again %d %s" % (i, "m" * 200))
+    return m
+
+
+def map_nodes(image):
+    """The catalog B-tree's map nodes, by following the header node's fLink."""
+    with open(image, "rb") as f:
+        f.seek(1024)
+        h = f.read(512)
+        block = struct.unpack(">I", h[40:44])[0]
+        start = struct.unpack(">I", h[0x120:0x124])[0] * block      # the catalog's first extent
+        f.seek(start)
+        head = f.read(512)
+        size = struct.unpack(">H", head[32:34])[0]
+        nodes, n = [], struct.unpack(">I", head[0:4])[0]
+        while n and len(nodes) < 100:
+            f.seek(start + n * size)
+            d = f.read(14)
+            if d[8] != 2:
+                return None
+            nodes.append(n)
+            n = struct.unpack(">I", d[0:4])[0]
+        return nodes
+
+
 def hfsdump(exe, image, *args, timeout=30):
     try:
         r = subprocess.run([exe, image, *args], capture_output=True, timeout=timeout)
@@ -165,7 +206,7 @@ def hfsdump(exe, image, *args, timeout=30):
         return None, b""
 
 
-def check(m, image, hfsdump_exe):
+def check(m, image, hfsdump_exe, forks=True):
     fails = []
     for d in sorted(m.folders):
         want = sorted(c.rsplit("/", 1)[-1] for c in m.children(d))
@@ -178,7 +219,7 @@ def check(m, image, hfsdump_exe):
         if got is None or [unicodedata.normalize("NFC", n) for n in got] != \
                 [unicodedata.normalize("NFC", n) for n in want]:
             fails.append("folder /%s: hfsdump %s, model %d items" % (d, "fails" if got is None else len(got), len(want)))
-    for p, forks in sorted(m.files.items()):
+    for p, forks in sorted(m.files.items()) if forks else ():
         for fork in ("data", "rsrc"):
             rc, out = hfsdump(hfsdump_exe, image, "read", "/" + p + ("/rsrc" if fork == "rsrc" else ""))
             if rc != 0 and not forks[fork]:
@@ -193,6 +234,26 @@ def fsck(image):
     r = subprocess.run(["docker", "run", "--rm", "-v", d + ":/w", IMAGE, "fsck.hfsplus", "-n", "-f", "/w/" + f],
                        capture_output=True, text=True)
     return r.returncode, r.stdout
+
+
+def run(args, image, m, label, forks=True, extra=lambda: []):
+    path = image + ".script"
+    open(path, "w", encoding="utf-8").write("\n".join(m.lines) + "\n")
+    r = subprocess.run([args.dump, image, "script", path], capture_output=True, text=True)
+    fails = []
+    if r.returncode or r.stdout.strip():
+        fails.append("script: rc %d %s" % (r.returncode, (r.stdout + r.stderr).strip()[:400]))
+    rc, out = fsck(image)
+    if rc:
+        fails.append("fsck.hfsplus %d: %s" % (rc, " / ".join(l.strip() for l in out.splitlines()
+                                                           if not l.startswith("**"))[:600]))
+    fails += extra()
+    fails += check(m, image, args.hfsdump, forks)
+    print("%s %s: %d lines, %d files, %d folders" % ("FAIL" if fails else "PASS", label,
+          len(m.lines), len(m.files), len(m.folders) - 1))
+    for f in fails[:20]:
+        print("    " + f)
+    return bool(fails)
 
 
 def main():
@@ -220,23 +281,18 @@ def main():
                 image = os.path.join(work, "%s-%d.img" % (fixture, seed))
                 with gzip.open(os.path.join(FIXTURES, fixture + ".img.gz")) as src, open(image, "wb") as dst:
                     shutil.copyfileobj(src, dst)
-                m = script(seed)
-                path = image + ".script"
-                open(path, "w", encoding="utf-8").write("\n".join(m.lines) + "\n")
-                r = subprocess.run([args.dump, image, "script", path], capture_output=True, text=True)
-                fails = []
-                if r.returncode or r.stdout.strip():
-                    fails.append("script: rc %d %s" % (r.returncode, (r.stdout + r.stderr).strip()[:400]))
-                rc, out = fsck(image)
-                if rc:
-                    fails.append("fsck.hfsplus %d: %s" % (rc, " / ".join(l.strip() for l in out.splitlines()
-                                                                       if not l.startswith("**"))[:600]))
-                fails += check(m, image, args.hfsdump)
-                print("%s %s seed %d: %d lines, %d files, %d folders" % ("FAIL" if fails else "PASS", fixture, seed,
-                      len(m.lines), len(m.files), len(m.folders) - 1))
-                for f in fails[:20]:
-                    print("    " + f)
-                failed |= bool(fails)
+                failed |= run(args, image, script(seed), "%s seed %d" % (fixture, seed))
+        image = os.path.join(work, "catalog-4k.img")
+        with open(image, "wb") as f:
+            f.truncate(1 << 30)
+        r = subprocess.run(["docker", "run", "--rm", "-v", work + ":/w", IMAGE, "mkfs.hfsplus", "-v", "Map",
+                            "-n", "c=4096,e=1024", "/w/catalog-4k.img"], capture_output=True, text=True)
+        if r.returncode:
+            print("FAIL mkfs.hfsplus: " + (r.stdout + r.stderr).strip()[:400])
+            return 1
+        failed |= run(args, image, map_script(1), "map nodes", forks=False,
+                      extra=lambda: [] if len(map_nodes(image) or []) >= 2 else
+                      ["the catalog's map nodes: %s, two expected" % map_nodes(image)])
         return 1 if failed else 0
     finally:
         if not args.keep:
