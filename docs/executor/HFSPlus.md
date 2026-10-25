@@ -200,9 +200,20 @@ fork whose header puts the map outside it, before that length reaches
 `NewHandle`; `ROMlib_grow_syszone` rounds in 64 bits (a request near
 2 GB wrapped and the System heap's trailer went past its end).
 
-Not done: the Desktop DB (Executor's Desktop Manager keeps an HFS+
-volume's in memory, as an HFS one's). Hard links are
-made only by `hfsplus_dump`'s script (`link`, `Reader::makeLink`, as
+The Desktop DB is not written, by decision: 9.0.4 makes "Desktop DB"
+and "Desktop DF" when it mounts a volume, but Executor's Desktop Manager
+(`finder.cpp`) keeps a disk image's database in memory, HFS+ as HFS: it
+reads a volume's own Desktop DB through the File Manager when there is
+one (a volume 9.0.4 has had), else walks the catalog for applications
+and their bundles, and Apple's Finder reaches the database only through
+the Desktop Manager's calls. Writing the files would mean writing a
+format known only from reading it, for a Mac OS that rebuilds it anyway
+when it's missing.
+
+Journaled volumes mount read-only, their journal not replayed (a volume
+whose journal has transactions in it may read stale); left so.
+
+Hard links are made only by `hfsplus_dump`'s script (`link`, `Reader::makeLink`, as
 TN1150 lays them out: the file moved into the metadata folder, made
 first, as `iNode<reference>`; links typed `hlnk`/`hfs+`, `kHasBeenInited`,
 dated as the folder; fsck.hfsplus calls them "pre-Leopard"), for tests;
