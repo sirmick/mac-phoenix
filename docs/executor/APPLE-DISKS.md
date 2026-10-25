@@ -73,7 +73,8 @@ turns off what they need. Each is a policy decision before it is a fix:
   prompt in Apple IR File Exchange
 - **QuickTime**: QuickTime™ Settings (7.6.1), MoviePlayer (7.6.1)
 - ~~**Control Strip**~~: on since 2026-10-25 (STRAGGLERS 52)
-- **AutoRemounter, Easy Open, PC Exchange, CloseView** (7.6.1):
+- ~~**CloseView**~~: on since 2026-10-25 (magnification draws wrong, STRAGGLERS 52)
+- **AutoRemounter, Easy Open, PC Exchange** (7.6.1), see STRAGGLERS 52 for what each needs:
   say "not installed" when opened by hand
 - **Network Software Selector** (7.5.5): "Could not get information on the
   currently running networking code"

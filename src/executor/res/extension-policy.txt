@@ -18,6 +18,7 @@ Date & Time
 Apple Menu Options
 Launcher
 Control Strip
+CloseView
 Clipping Extension
 AppleScript™
 Finder Scripting Extension

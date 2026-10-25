@@ -363,6 +363,40 @@ int32_t ROMlib_grow_syszone(int32_t need)
     return delta;
 }
 
+/* MacPhoenix: an INIT may take memory from the top of RAM by lowering
+   BufPtr (CloseView keeps its code there); the Process Manager heap, which
+   ends at BufPtr, then ends lower. Its top must be free: the trailer moves
+   down into the free block before it. False if it isn't. */
+bool ROMlib_shrink_pm_zone(Ptr top)
+{
+    THz zone = ROMlib_pm_zone;
+    if(!zone)
+        return false;
+    block_header_t *last = ZONE_BK_LIM(zone);
+    block_header_t *newlast = (block_header_t *)(((uintptr_t)top - 8 - MIN_BLOCK_SIZE) & ~(uintptr_t)3);
+    if(newlast >= last)
+        return true;
+    /* The free run that ends at the trailer. */
+    block_header_t *run = nullptr;
+    for(block_header_t *b = ZONE_HEAP_DATA(zone); b != last; b = BLOCK_NEXT(b))
+        if(USE(b) != FREE)
+            run = nullptr;
+        else if(!run)
+            run = b;
+    if(!run || (char *)newlast - (char *)run < MIN_BLOCK_SIZE)
+        return false;
+    int32_t cut = (char *)last - (char *)newlast;
+    SETPSIZE(run, (char *)newlast - (char *)run);
+    mm_set_block_fields_offset(newlast, FREE_BLOCK_STATE, FREE, 0, MIN_BLOCK_SIZE, 0);
+    zone->bkLim = (Ptr)newlast;
+    ZONE_ZCB_FREE(zone) = ZONE_ZCB_FREE(zone) - cut;
+    if(ZONE_ALLOC_PTR(zone) > run)
+        ZONE_ALLOC_PTR(zone) = run;
+    if((Ptr)LM(ApplLimit) > (Ptr)newlast)
+        LM(ApplLimit) = (Ptr)newlast;
+    return true;
+}
+
 int32_t ROMlib_syszone_reserve_left()
 {
     return (sysheap_limit - 8) - ((Ptr)ZONE_BK_LIM(LM(SysZone)) + MIN_BLOCK_SIZE);
@@ -381,6 +415,14 @@ static syn68k_addr_t syszone_grow_stub(syn68k_addr_t, void *)
 void ROMlib_install_syszone_growzone()
 {
     LM(SysZone)->gzProc = (GrowZoneUPP)SYN68K_TO_US(callback_install(syszone_grow_stub, nullptr));
+}
+
+/* MacPhoenix: the Process Manager heap ends at BufPtr, which INITs may
+   have lowered to keep code at the top of RAM (CloseView). */
+static int32_t applzone_size()
+{
+    int32_t to_bufptr = (Ptr)LM(BufPtr) - (Ptr)LM(ApplZone);
+    return std::min<int32_t>(ROMlib_applzone_size, to_bufptr);
 }
 
 void InitApplZone(void)
@@ -403,7 +445,7 @@ void InitApplZone(void)
     canonicalize_memory_sizes();
 
     LM(HeapEnd) = (Ptr)LM(ApplZone)
-                 + ROMlib_applzone_size
+                 + applzone_size()
                  - MIN_BLOCK_SIZE
                  - APPLZONE_SLOP;
 
@@ -429,7 +471,7 @@ void ROMlib_InitZones()
 
     Executor::InitApplZone();
 
-    LM(ApplLimit) = ((Ptr)LM(ApplZone) + ROMlib_applzone_size);
+    LM(ApplLimit) = ((Ptr)LM(ApplZone) + applzone_size());
     process_reset_heap(LM(ApplZone));
 
     /* The boot stack lives above BufPtr; MemTop is per-process. */

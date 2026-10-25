@@ -575,5 +575,9 @@ void Executor::ROMlib_load_extensions()
                 run_file(vref, dirid, it);
         }
     }
+    /* What the INITs took from the top of RAM (BufPtr lowered: CloseView
+       keeps its code there) is no longer the Process Manager's. */
+    if(!ROMlib_shrink_pm_zone(LM(BufPtr)))
+        fprintf(stderr, "[Executor] extensions: BufPtr lowered into a used Process Manager heap\n");
     register_component_files();
 }

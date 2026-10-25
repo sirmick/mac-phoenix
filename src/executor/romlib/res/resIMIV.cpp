@@ -9,6 +9,7 @@
 #include <FileMgr.h>
 #include <MemoryMgr.h>
 #include <res/resource.h>
+#include <CQuickDraw.h>
 
 using namespace Executor;
 
@@ -53,5 +54,11 @@ LONGINT Executor::C_RsrcMapEntry(Handle h) /* IMIV-16 */
 
 Handle Executor::C_RGetResource(ResType typ, INTEGER id)
 {
-    return GetResource(typ, id);
+    Handle h = GetResource(typ, id);
+    /* MacPhoenix: the standard color tables are ROM resources (PC
+       Exchange's start-up icon asks for 'clut' 8); a clut resource is laid
+       out as a color table. */
+    if(!h && typ == "clut"_4 && (id == 1 || id == 2 || id == 4 || id == 8))
+        h = (Handle)GetCTable(id);
+    return h;
 }

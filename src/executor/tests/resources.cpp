@@ -179,3 +179,15 @@ TEST_F(ResourceTest, Modify1)
     ASSERT_EQ(0xABABABAB, *(GUEST<uint32_t>*)*h1);
     ASSERT_EQ(0xFEEDFACE, *(GUEST<uint32_t>*)*h2);
 }
+/* The standard color tables are ROM resources: RGetResource finds them
+   (PC Exchange's start-up icon asks for 'clut' 8). */
+TEST(Resources, RGetResourceROMClut)
+{
+    for(short id : { 1, 2, 4, 8 })
+    {
+        Handle h = RGetResource('clut', id);
+        ASSERT_NE(nullptr, h) << id;
+        CTabHandle ct = (CTabHandle)h;
+        EXPECT_EQ((1 << id) - 1, (*ct)->ctSize) << id;
+    }
+}

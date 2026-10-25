@@ -33,6 +33,9 @@ extern int ROMlib_applzone_size, ROMlib_syszone_size, ROMlib_stack_size;
 /* MacPhoenix: System heap growth into the reserve above it (mman.cpp). */
 extern int ROMlib_sysheap_reserve;
 int32_t ROMlib_grow_syszone(int32_t need);  /* bytes added, 0 if it cannot */
+/* The Process Manager heap ends at top (an INIT lowered BufPtr); false if
+   its top is not free. */
+bool ROMlib_shrink_pm_zone(Ptr top);
 int32_t ROMlib_syszone_reserve_left();
 void ROMlib_install_syszone_growzone();     /* once the CPU can run callbacks */
 

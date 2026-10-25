@@ -68,7 +68,9 @@ extensions:
   - {file: Audio CD Access, phase: 2, lacks: [], note: "with Foreign File Access"}
   - {file: Apple Color SW Pro CMM, phase: 2, lacks: [".DSP Control 249/251"], note: "ColorSync"}
   - {file: Color SW 2000 Series CMM, phase: 2, lacks: []}
-  - {file: Mac OS Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.6.1 name"}
+  - {file: Mac OS Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.6.1 name;
+       its 'proc' -16549..-16555 need the System's Translation Manager dispatcher ($ABFC),
+       Executor answers selector 3 with a stop (2026-10-25)"}
   - {file: Macintosh Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.5.5 name"}
 
   # ── phase 3: shared libraries, code fragments, threads ─────────────────
@@ -94,7 +96,13 @@ extensions:
   - {file: Foreign File Access, phase: later, lacks: [], note: "file system plug-ins: File System Manager"}
   - {file: ISO 9660 File Access, phase: later, lacks: []}
   - {file: High Sierra File Access, phase: later, lacks: []}
-  - {file: PC Exchange, phase: later, lacks: [InstallFS, "FSMDispatch#2/5/6"]}
+  - {file: PC Exchange, phase: later, lacks: [InstallFS, "FSMDispatch#2/5/6"],
+     note: "runs to the end since RGetResource answers the ROM's 'clut' 8 (2026-10-25), then
+       declines to install without the File System Manager"}
+  - {file: CloseView, phase: 1, lacks: [], loaded: true,
+     note: "keeps its code below a lowered BufPtr (the Process Manager heap ends there since
+       2026-10-25); magnification draws only part of the screen, inverted"}
+  - {file: AutoRemounter, phase: deny, reason: "networking: its panel calls the LAP Manager ($B18)"}
   - {file: Monitors, phase: later, note: "Display Manager"}
   - {file: Desktop Printer Extension, phase: later, kind: fext, note: "printing (7.6.1)"}
   - {file: Desktop Printer Spooler, phase: later, kind: appe}
