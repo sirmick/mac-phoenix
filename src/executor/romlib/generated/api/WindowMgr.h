@@ -471,7 +471,10 @@ DISPATCHER_TRAP(LayerDispatch, 0xA829, D0<0xFF>);
 WindowPtr C_GetRootLayer();PASCAL_SUBTRAP(GetRootLayer, 0xA829, 0x00FF, LayerDispatch);
 
 
-// Selector -5: the root layer (low memory $9E2) by reference.
+// Selector -5: the desktop layer, low memory $9E2 (the record
+// TakeDesktopLayer gave the Finder, whose desktop window shares its
+// visRgn and updateRgn), by reference. The Help Manager tells the
+// desktop window by that updateRgn.
 OSErr C_GetDesktopLayer(GUEST<WindowPtr> *layer);PASCAL_SUBTRAP(GetDesktopLayer, 0xA829, 0x02FB, LayerDispatch);
 
 

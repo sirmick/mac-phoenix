@@ -371,7 +371,8 @@ void Executor::C_PaintBehind(WindowPeek w, RgnHandle clobbered)
        stands for its windows and the layers behind it; CloseView repaints
        the whole screen into its buffer with PaintBehind(GetRootLayer(),
        the screen) when it is switched on, and only the desktop came. */
-    if(ROMlib_layer_p((WindowPtr)w))
+    bool layers_done = ROMlib_layer_p((WindowPtr)w);
+    if(layers_done)
     {
         ROMlib_layers_paint_from((WindowPtr)w, rh);
         w = nullptr;
@@ -390,8 +391,9 @@ void Executor::C_PaintBehind(WindowPeek w, RgnHandle clobbered)
             }
         }
     }
-    /* MacPhoenix: then the layers behind, then the desktop. */
-    if(w && !EmptyRgn(rh))
+    /* MacPhoenix: then the layers behind (also for a nil w: the last window
+       of a layer hidden, a balloon), then the desktop. */
+    if(!layers_done && !EmptyRgn(rh))
         ROMlib_layers_paint_behind(rh);
     if(!EmptyRgn(rh))
         PaintOne((WindowPeek)0, rh);

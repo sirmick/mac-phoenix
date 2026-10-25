@@ -1225,7 +1225,10 @@
     selector: 0x02FB
     executor: C_
     comment: |
-      Selector -5: the root layer (low memory $9E2) by reference.
+      Selector -5: the desktop layer, low memory $9E2 (the record
+      TakeDesktopLayer gave the Finder, whose desktop window shares its
+      visRgn and updateRgn), by reference. The Help Manager tells the
+      desktop window by that updateRgn.
 
 # ####
 

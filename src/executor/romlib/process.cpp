@@ -871,9 +871,10 @@ WindowPtr Executor::C_GetRootLayer()
     return (WindowPtr)root;
 }
 
+/* A 7.6.1 Quadra answers $9E2: the layer TakeDesktopLayer made. */
 OSErr Executor::C_GetDesktopLayer(GUEST<WindowPtr> *layer)
 {
-    *layer = (WindowPtr)root_layer_record();
+    *layer = desktop_layer ? desktop_layer : (WindowPtr)root_layer_record();
     return noErr;
 }
 
