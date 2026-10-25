@@ -405,6 +405,8 @@ void Executor::InitPerProcessLowMem()
         DeviceList,
         DAStrings,
         MemTop,
+        BufPtr, /* MacPhoenix: the Process Manager heap's end, lowered by
+                   INITs that keep code at the top of RAM (CloseView) */
         UTableBase,
         MouseLocation,
         DABeeper,
