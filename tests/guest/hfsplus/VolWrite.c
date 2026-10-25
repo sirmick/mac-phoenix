@@ -4,7 +4,7 @@
  * creating files and folders (bad names, duplicates in any case), writing
  * forks (positions, SetEOF both ways, Allocate, a second path, the
  * Resource Manager), Finder info and locks, renames, moves, deletes,
- * hundreds of files. The volume is the one named in Host:volwrite.cfg; it
+ * hundreds of files, FSpExchangeFiles. The volume is the one named in Host:volwrite.cfg; it
  * may hold, made beforehand, a folder "Long" with long-named files:
  *   "A file whose name is longer than thirty-one.txt" (opened, written and
  *   renamed by its short name) and "Another long name, to be deleted.txt".
@@ -354,6 +354,150 @@ static void many(long root)
     }
 }
 
+/* a file as the exchange left it: its ID, type, lengths, first bytes */
+static void swapped(long root, const char *name, long idA, long idB)
+{
+    CInfoPBRec c;
+    short ref;
+    long n = 4;
+    OSErr err;
+    memset(&c, 0, sizeof c);
+    c.hFileInfo.ioNamePtr = P(name);
+    c.hFileInfo.ioVRefNum = vref;
+    c.hFileInfo.ioDirID = root;
+    err = PBGetCatInfoSync(&c);
+    fprintf(out, "  %s -> %d", name, (int)err);
+    if(err)
+    {
+        fprintf(out, "\n");
+        return;
+    }
+    fprintf(out, " id %s type %.4s creator %.4s data %ld/%ld rsrc %ld/%ld", c.hFileInfo.ioDirID == idA ? "A's" :
+            c.hFileInfo.ioDirID == idB ? "B's" : "new", (char *)&c.hFileInfo.ioFlFndrInfo.fdType,
+            (char *)&c.hFileInfo.ioFlFndrInfo.fdCreator, c.hFileInfo.ioFlLgLen, c.hFileInfo.ioFlPyLen,
+            c.hFileInfo.ioFlRLgLen, c.hFileInfo.ioFlRPyLen);
+    if(HOpenDF(vref, root, P(name), fsRdPerm, &ref) == noErr)
+    {
+        FSRead(ref, &n, buf);
+        FSClose(ref);
+        fprintf(out, " starts %02X%02X%02X%02X", (unsigned char)buf[0], (unsigned char)buf[1],
+                (unsigned char)buf[2], (unsigned char)buf[3]);
+    }
+    fprintf(out, "\n");
+}
+
+static void makeSwap(long root, const char *name, OSType type, long data, long rsrc, int seed, long *id)
+{
+    short ref;
+    CInfoPBRec c;
+    HCreate(vref, root, P(name), type, type);
+    if(HOpenDF(vref, root, P(name), fsRdWrPerm, &ref) == noErr)
+    {
+        writeAt(ref, 0, data, seed);
+        FSClose(ref);
+    }
+    if(rsrc && HOpenRF(vref, root, P(name), fsRdWrPerm, &ref) == noErr)
+    {
+        writeAt(ref, 0, rsrc, seed + 1);
+        FSClose(ref);
+    }
+    memset(&c, 0, sizeof c);
+    c.hFileInfo.ioNamePtr = P(name);
+    c.hFileInfo.ioVRefNum = vref;
+    c.hFileInfo.ioDirID = root;
+    PBGetCatInfoSync(&c);
+    *id = c.hFileInfo.ioDirID;
+}
+
+/* FSpExchangeFiles, as safe saves use it: what moves with the contents and
+   what stays with the names (IDs, Finder info, dates), and a path open
+   on one of them across the exchange */
+static void exchange(long root)
+{
+    FSSpec a, b, d;
+    long idA, idB, dir, n;
+    short ref;
+    OSErr err;
+    FCBPBRec f;
+    unsigned char fname[64];
+    CInfoPBRec ca, cb;
+
+    makeSwap(root, "Swap A", 'AAAA', 1000, 300, 1, &idA);
+    makeSwap(root, "Swap B", 'BBBB', 5000, 0, 9, &idB);
+    memset(&ca, 0, sizeof ca);
+    ca.hFileInfo.ioNamePtr = P("Swap A");
+    ca.hFileInfo.ioVRefNum = vref;
+    ca.hFileInfo.ioDirID = root;
+    PBGetCatInfoSync(&ca);
+    /* dates of their own, to see which way they go */
+    ca.hFileInfo.ioFlCrDat = 1000000;
+    ca.hFileInfo.ioFlMdDat = 2000000;
+    ca.hFileInfo.ioDirID = root;
+    PBSetCatInfoSync(&ca);
+    memset(&cb, 0, sizeof cb);
+    cb.hFileInfo.ioNamePtr = P("Swap B");
+    cb.hFileInfo.ioVRefNum = vref;
+    cb.hFileInfo.ioDirID = root;
+    PBGetCatInfoSync(&cb);
+    cb.hFileInfo.ioFlCrDat = 3000000;
+    cb.hFileInfo.ioFlMdDat = 4000000;
+    cb.hFileInfo.ioDirID = root;
+    PBSetCatInfoSync(&cb);
+
+    FSMakeFSSpec(vref, root, P("Swap A"), &a);
+    FSMakeFSSpec(vref, root, P("Swap B"), &b);
+    err = HOpenDF(vref, root, P("Swap A"), fsRdPerm, &ref);
+    fprintf(out, "EXCHANGE open A -> %d\n", (int)err);
+    err = FSpExchangeFiles(&a, &b);
+    fprintf(out, "EXCHANGE A B -> %d\n", (int)err);
+    swapped(root, "Swap A", idA, idB);
+    swapped(root, "Swap B", idA, idB);
+    {
+        CInfoPBRec c;
+        int i;
+        for(i = 0; i < 2; i++)
+        {
+            memset(&c, 0, sizeof c);
+            c.hFileInfo.ioNamePtr = P(i ? "Swap B" : "Swap A");
+            c.hFileInfo.ioVRefNum = vref;
+            c.hFileInfo.ioDirID = root;
+            PBGetCatInfoSync(&c);
+            fprintf(out, "  %s dates cr %lu md %lu\n", i ? "Swap B" : "Swap A", c.hFileInfo.ioFlCrDat,
+                    c.hFileInfo.ioFlMdDat);
+        }
+    }
+    /* the path opened on A before */
+    {
+        long eof = 0;
+        n = 4;
+        GetEOF(ref, &eof);
+        SetFPos(ref, fsFromStart, 0);
+        FSRead(ref, &n, buf);
+        memset(&f, 0, sizeof f);
+        f.ioNamePtr = fname;
+        f.ioRefNum = ref;
+        f.ioFCBIndx = 0;
+        err = PBGetFCBInfoSync(&f);
+        fname[fname[0] + 1] = 0;
+        fprintf(out, "  open path -> eof %ld starts %02X%02X%02X%02X fcbinfo %d name %s file %s\n", eof,
+                (unsigned char)buf[0], (unsigned char)buf[1], (unsigned char)buf[2], (unsigned char)buf[3],
+                (int)err, (char *)fname + 1, f.ioFCBFlNm == idA ? "A's" : f.ioFCBFlNm == idB ? "B's" : "other");
+        FSClose(ref);
+    }
+    /* back again, a folder, a missing file, itself */
+    fprintf(out, "EXCHANGE B A -> %d\n", (int)FSpExchangeFiles(&b, &a));
+    swapped(root, "Swap A", idA, idB);
+    DirCreate(vref, root, P("Swap folder"), &dir);
+    FSMakeFSSpec(vref, root, P("Swap folder"), &d);
+    fprintf(out, "EXCHANGE A folder -> %d\n", (int)FSpExchangeFiles(&a, &d));
+    FSMakeFSSpec(vref, root, P("Swap missing"), &d);
+    fprintf(out, "EXCHANGE A missing -> %d\n", (int)FSpExchangeFiles(&a, &d));
+    fprintf(out, "EXCHANGE A A -> %d\n", (int)FSpExchangeFiles(&a, &a));
+    swapped(root, "Swap A", idA, idB);
+    HDelete(vref, root, P("Swap folder"));
+    fprintf(out, "DELETE swaps -> %d %d\n", (int)HDelete(vref, root, P("Swap A")), (int)HDelete(vref, root, P("Swap B")));
+}
+
 /* "big" (the config's second line), on a volume of 4 KB blocks with room
    for 2 GB: a fork grown to the longest a classic path may have (L, the
    last whole block under 2 GB) and past it, written across it, allocated
@@ -490,6 +634,7 @@ int main(void)
             volume("after files");
             longNames(fsRtDirID);
             many(fsRtDirID);
+            exchange(fsRtDirID);
         }
         fprintf(out, "FLUSHVOL -> %d\n", (int)FlushVol(NULL, vref));
         volume("at the end");

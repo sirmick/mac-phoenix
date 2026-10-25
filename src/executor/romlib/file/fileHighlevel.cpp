@@ -17,6 +17,7 @@
 #include <file/file.h>
 #include <util/string.h>
 #include <hfs/hfs.h>
+#include <file/hfsplusvolume.h>
 #include <rsys/executor.h>
 
 using namespace Executor;
@@ -250,9 +251,15 @@ OSErr Executor::C_FSpExchangeFiles(FSSpecPtr src, FSSpecPtr dst)
 
     if(src->vRefNum != dst->vRefNum)
         return diffVolErr;
+    LONGINT dir;
+    if(HVCB *vcbp = ROMlib_findvcb(src->vRefNum, nullptr, &dir, false))
+        if(auto *hp = dynamic_cast<HFSPlusVolume *>(((VCBExtra *)vcbp)->volume))
+            return hp->exchangeFiles(src, dst);
     if((err = file_cat_info(src, &src_info)) != noErr
        || (err = file_cat_info(dst, &dst_info)) != noErr)
         return err;
+    if(src_info.hFileInfo.ioDirID == dst_info.hFileInfo.ioDirID)
+        return -1306; /* sameFileErr: renaming one onto itself would lose it */
 
     /* dst's contents step aside under a temporary name. */
     FSSpec tmp = *dst;

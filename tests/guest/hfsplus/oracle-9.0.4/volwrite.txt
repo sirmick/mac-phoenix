@@ -82,6 +82,23 @@ LONG delete -> 0
 MANY create -> 0 (400)
 MANY delete half -> 0 failed
 MANY valence 200
+  write 0+1000 -> 0 (1000)
+  write 0+300 -> 0 (300)
+  write 0+5000 -> 0 (5000)
+EXCHANGE open A -> 0
+EXCHANGE A B -> 0
+  Swap A -> 0 id A's type AAAA creator AAAA data 5000/8192 rsrc 0/0 starts 09162330
+  Swap B -> 0 id B's type BBBB creator BBBB data 1000/4096 rsrc 300/4096 starts 010E1B28
+  Swap A dates cr 1000000 md 4000000
+  Swap B dates cr 3000000 md 2000000
+  open path -> eof 1000 starts 010E1B28 fcbinfo 0 name Swap B file B's
+EXCHANGE B A -> 0
+  Swap A -> 0 id A's type AAAA creator AAAA data 1000/4096 rsrc 300/4096 starts 010E1B28
+EXCHANGE A folder -> 0
+EXCHANGE A missing -> -43
+EXCHANGE A A -> -1306
+  Swap A -> 0 id A's type AAAA creator AAAA data 1000/4096 rsrc 300/4096 starts 010E1B28
+DELETE swaps -> 0 0
 FLUSHVOL -> 0
 VOLUME at the end attrib 0040 nmfls 7 frblk 15734 filcnt 210 dircnt 7
 ---

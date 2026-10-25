@@ -22,6 +22,9 @@ public:
 
     hfsplus::Reader& reader() { return *reader_; }
 
+    /* FSpExchangeFiles on this volume, as Mac OS 9.0.4 does it */
+    OSErr exchangeFiles(FSSpecPtr src, FSSpecPtr dst);
+
     void PBGetVInfo(ParmBlkPtr pb) override;
     void PBGetCatInfo(CInfoPBPtr pb) override;
     void PBGetFInfo(ParmBlkPtr pb) override;

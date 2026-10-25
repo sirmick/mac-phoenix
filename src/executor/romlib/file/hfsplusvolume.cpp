@@ -710,6 +710,50 @@ void HFSPlusVolume::PBAllocate(ParmBlkPtr pb)
     refreshFile(f.state->cnid);
     pb->ioParam.ioActCount = (LONGINT)std::min<uint64_t>(f.state->allocated - before, kMaxEOF);
 }
+/* ExchangeFiles (oracle-9.0.4/volwrite.txt): the contents swap, both
+   forks and the modification date; IDs, names, Finder info and creation
+   dates stay. Open paths go with the contents: their FCBs take the other
+   file's number and name. A file with itself is sameFileErr; with a
+   folder 9.0.4 says noErr and nothing changes. */
+OSErr HFSPlusVolume::exchangeFiles(FSSpecPtr src, FSSpecPtr dst)
+{
+    try
+    {
+        Entry a = resolve(src->name, src->vRefNum, src->parID);
+        Entry b = resolve(dst->name, dst->vRefNum, dst->parID);
+        if(a.cnid == b.cnid)
+            return -1306;                       /* sameFileErr */
+        if(a.folder || b.folder)
+            return noErr;
+        if(!writable())
+            return wPrErr;
+        check(reader_->exchange(a.cnid, b.cnid));
+        std::vector<std::shared_ptr<ForkState>> moved;
+        for(auto& f : forks_)
+            if(f && (f->state->cnid == a.cnid || f->state->cnid == b.cnid)
+               && std::find(moved.begin(), moved.end(), f->state) == moved.end())
+                moved.push_back(f->state);
+        for(uint32_t id : { a.cnid, b.cnid })
+            for(bool rsrc : { false, true })
+                states_.erase(uint64_t(id) << 1 | rsrc);
+        for(auto& st : moved)
+        {
+            st->cnid = st->cnid == a.cnid ? b.cnid : a.cnid;
+            states_[uint64_t(st->cnid) << 1 | st->resource] = st;
+            for(auto& f : forks_)
+                if(f && f->state == st)
+                    f->fcb->fcbFlNum = st->cnid;
+            refresh(*st);
+        }
+        updateVCB();
+        return noErr;
+    }
+    catch(OSErrorException& e)
+    {
+        return e.code;
+    }
+}
+
 void HFSPlusVolume::PBAllocContig(ParmBlkPtr pb)
 {
     PBAllocate(pb);

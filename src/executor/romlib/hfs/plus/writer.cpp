@@ -494,6 +494,31 @@ Error Reader::rename(uint32_t cnid, const std::u16string& name)
     return end(Error::none);
 }
 
+Error Reader::exchange(uint32_t idA, uint32_t idB)
+{
+    Error e = begin();
+    if(e != Error::none)
+        return e;
+    auto a = byID(idA), b = byID(idB);
+    if(!a || !b || a->folder || b->folder)
+        return end(Error::notFound);
+    for(bool rsrc : { false, true })
+    {
+        /* the extent lists first: the overflow records are keyed by the file's ID */
+        std::vector<Extent> xa = openFork(*a, rsrc)->extents(), xb = openFork(*b, rsrc)->extents();
+        ForkData& fa = rsrc ? a->resourceFork : a->dataFork;
+        ForkData& fb = rsrc ? b->resourceFork : b->dataFork;
+        std::swap(fa, fb);
+        uint8_t type = rsrc ? 0xFF : 0x00;
+        if((e = storeExtents(idA, type, xb, &fa)) != Error::none || (e = storeExtents(idB, type, xa, &fb)) != Error::none)
+            return end(e);
+    }
+    std::swap(a->contentModDate, b->contentModDate);
+    if((e = putEntry(*a)) != Error::none || (e = putEntry(*b)) != Error::none)
+        return end(e);
+    return end(Error::none);
+}
+
 /* TN1150 "Hard Links": the metadata folder holds each linked file's
    content as "iNode<link reference>"; a link is a file of type 'hlnk',
    creator 'hfs+', its permissions' special field the reference. */

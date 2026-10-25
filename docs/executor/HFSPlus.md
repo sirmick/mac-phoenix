@@ -198,6 +198,14 @@ script of classic calls logging every result; `oracle-9.0.4/volwrite.txt`,
   or deleting a locked file, badMovErr moving a folder into itself.
 - A path that wrote sets its file's modification date when flushed or
   closed.
+- FSpExchangeFiles / PBExchangeFiles (natively, `Reader::exchange`): the
+  contents swap, both forks (their extents overflow records rekeyed) and
+  the modification date; file IDs, names, Finder info and creation dates
+  stay with the names; open paths go with the contents (their FCBs take
+  the other file's number and name). A file with itself: sameFileErr; a
+  file with a folder: noErr, nothing changed (9.0.4). Elsewhere (HFS,
+  host folders) Executor's exchange is still renames, IDs going with the
+  contents; it now refuses a file with itself too (it lost the file).
 
 Found on the way and fixed outside HFS+: `HCreateResFile` leaves type and
 creator 0 (9.0.4), not `????`; `HOpenResFile` answers mapReadErr for a

@@ -179,6 +179,9 @@ public:
     Error remove(uint32_t cnid);
     Error rename(uint32_t cnid, const std::u16string& name);
     Error move(uint32_t cnid, uint32_t newParentID);
+    /* Two files' contents swapped (ExchangeFiles): both forks and the
+       modification date; IDs, names, Finder info and creation dates stay. */
+    Error exchange(uint32_t a, uint32_t b);
     /* An item's flags, dates, Finder info and text encoding, as in e. */
     Error update(const CatalogEntry& e);
     /* A fork's length, its allocation grown (new blocks zeroed) or shrunk
