@@ -12,7 +12,9 @@ tools that share nothing with it:
 The scripts (random, seeded) fill folders with 1600 files (the catalog
 B-tree splits to three levels and its file grows), write forks in turns (files past
 their 8 extents: extents overflow records), rename, move, truncate and
-delete (nodes freed, the tree shrinking). One more volume, made here
+delete (nodes freed, the tree shrinking); names differing only in case
+are refused (or, on an HFSX volume, binary order, are different names).
+One more volume, made here
 with 4 KB catalog nodes, takes 150000 files with long names: the catalog
 outgrows what its header node's map covers twice (two map nodes made and
 chained), loses two thirds of them and takes more.
@@ -49,6 +51,11 @@ class Model:
         self.folders = {""}
         self.files = {}            # path -> {"data": bytearray, "rsrc": bytearray}
         self.lines = []
+        self.refused = []          # lines the writer must refuse: hfsplus_dump's report of each
+
+    def refuse(self, line, why):
+        self.lines.append(line)
+        self.refused.append("%s: %s" % (line, why))
 
     def parent(self, p):
         return p.rsplit("/", 1)[0] if "/" in p else ""
@@ -104,12 +111,34 @@ class Model:
         self.folders.discard(p)
 
 
-def script(seed):
+def script(seed, hfsx=False):
     rnd = random.Random(seed)
     m = Model()
     m.mkdir("Many")
     m.mkdir("Tree")
     m.mkdir("Tree/Deeper")
+    if hfsx:
+        # HFSX's binary order: names differing only in case are different names
+        m.mkdir("Case")
+        for i in range(200):
+            base = "case %03d %s" % (i, "q" * rnd.randrange(30))
+            for v in (base, base.upper(), base.title(), base.capitalize()):
+                if "Case/" + v not in m.files:
+                    m.create("Case/" + v)
+        m.mkdir("Case/Folder")
+        m.mkdir("Case/FOLDER")
+        m.create("Case/FOLDER/inside")
+        for p in sorted(p for p in m.files if p.startswith("Case/case 01"))[:5]:
+            if "Case/" + p[5:].replace("case", "cAsE") not in m.files:
+                m.rename(p, p[5:].replace("case", "cAsE"))
+        for p in sorted(p for p in m.files if p.startswith("Case/CASE 1"))[::3]:
+            m.delete(p)
+    else:
+        # HFS+'s order: names differing only in case are the same name
+        m.create("Tree/Case Test")
+        m.refuse('create "Tree/case test"', "exists")
+        m.refuse('mkdir "Tree/CASE TEST"', "exists")
+        m.rename("Tree/Case Test", "CASE test")
     # hundreds of files in one folder, names that sort apart
     for i in range(700):
         p = "Many/File %04d %s" % (rnd.randrange(10000), "x" * rnd.randrange(0, 40))
@@ -241,7 +270,7 @@ def run(args, image, m, label, forks=True, extra=lambda: []):
     open(path, "w", encoding="utf-8").write("\n".join(m.lines) + "\n")
     r = subprocess.run([args.dump, image, "script", path], capture_output=True, text=True)
     fails = []
-    if r.returncode or r.stdout.strip():
+    if r.returncode or r.stdout.splitlines() != m.refused:
         fails.append("script: rc %d %s" % (r.returncode, (r.stdout + r.stderr).strip()[:400]))
     rc, out = fsck(image)
     if rc:
@@ -276,12 +305,12 @@ def main():
     os.makedirs(work, exist_ok=True)
     failed = False
     try:
-        for fixture in ("blank-64m", "blank-wrapped-64m"):
+        for fixture in ("blank-64m", "blank-wrapped-64m", "blank-hfsx-64m"):
             for seed in range(1, args.seeds + 1):
                 image = os.path.join(work, "%s-%d.img" % (fixture, seed))
                 with gzip.open(os.path.join(FIXTURES, fixture + ".img.gz")) as src, open(image, "wb") as dst:
                     shutil.copyfileobj(src, dst)
-                failed |= run(args, image, script(seed), "%s seed %d" % (fixture, seed))
+                failed |= run(args, image, script(seed, hfsx="hfsx" in fixture), "%s seed %d" % (fixture, seed))
         image = os.path.join(work, "catalog-4k.img")
         with open(image, "wb") as f:
             f.truncate(1 << 30)

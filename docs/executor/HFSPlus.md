@@ -157,7 +157,10 @@ script of classic calls logging every result; `oracle-9.0.4/volwrite.txt`,
 `voldump-written.txt`):
 
 - New names: 1–31 MacRoman characters without `:` (else bdNamErr), stored
-  decomposed; dupFNErr for a name taken in any case.
+  decomposed; dupFNErr for a name taken in any case. On an HFSX volume
+  (`HX`, binary order: Mac OS 9 doesn't mount one, so this follows the
+  format, not 9.0.4) names differing only in case are different names,
+  for lookups, dupFNErr and renames alike.
 - Allocation in whole blocks: SetEOF sets the fork's allocation to its
   length rounded up to a block, both ways; Allocate adds the request so
   rounded; a write past the end adds the blocks it needs and never takes
@@ -177,9 +180,7 @@ fork whose header puts the map outside it, before that length reaches
 2 GB wrapped and the System heap's trailer went past its end).
 
 Not done: the Desktop DB (Executor's Desktop Manager keeps an HFS+
-volume's in memory, as an HFS one's), hard links made, HFSX
-volumes written (their binary order is used for lookups, not tested for
-inserts), files over 2 GB.
+volume's in memory, as an HFS one's), hard links made, files over 2 GB.
 
 ## Tests
 
@@ -216,10 +217,12 @@ inserts), files over 2 GB.
   fixture uploaded in the tab and VolDump run there; its dump equals
   9.0.4's (the same machine differences set aside).
 - `executor.hfsplus_writer` (`tests/test_hfsplus_writer.py`): seeded
-  scripts (`hfsplus_dump IMAGE script`) on the bare and wrapped blanks:
+  scripts (`hfsplus_dump IMAGE script`) on the bare, wrapped and HFSX
+  (`blank-hfsx-64m.img`, `mkfs.hfsplus -s`) blanks:
   1600 files (the catalog three levels deep, its file grown), forks
   written in turns (extents overflow), renames, moves, truncations, mass
-  deletion; and on a volume made with 4 KB catalog nodes, 150000 files of
+  deletion, names differing only in case (refused, or on HFSX 800 of them
+  side by side and renamed into each other's case); and on a volume made with 4 KB catalog nodes, 150000 files of
   200-character names (two map nodes made), two thirds deleted, 5000 more;
   fsck.hfsplus -n -f (hfsprogs in docker, image macphoenix-hfsprogs) finds
   each volume OK and hfsdump reads every folder and fork as a model of the
@@ -231,8 +234,9 @@ inserts), files over 2 GB.
   the Resource Manager's reserved header bytes); fsck on the result. By
   hand: 9.0.4 reading the volume Executor wrote gives VolDump's dump of it
   on Executor exactly.
-- `executor.HFSPlusWriteTest.*`: a blank volume written in the gtest
-  binary (natively and under node).
+- `executor.HFSPlusWriteTest.*`, `executor.HFSXWriteTest.*`: a blank
+  volume (HFS+, HFSX) written in the gtest binary (natively and under
+  node).
 - `executor.web.hfsplus_write` (`web/tests/tab_hfsplus_write.mjs`, wasm
   build): the same in the tab, through the overlay; fsck on the image
   downloaded from the page.
@@ -241,7 +245,7 @@ inserts), files over 2 GB.
   Folder (made on 9.0.4) byte for byte.
 
 Not covered by any image yet: hard links (none of the images has one),
-HFSX, journaled volumes, files over 2 GB, `ioVNmAlBlks` of a wrapped
+journaled volumes, files over 2 GB, `ioVNmAlBlks` of a wrapped
 volume over 65535 blocks. fsck.hfsplus reports "Illegal name" on
 `longnames.img`: MakeLongNames passed 9.0.4 a precomposed `ά` (and a
 `:`), which 9.0.4 stored as given.

@@ -121,10 +121,18 @@ else()
         COMMAND ${CMAKE_COMMAND} -DIN=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/blank-64m.img.gz
                 -DOUT=${HFSPLUS_BLANK} -P ${CMAKE_CURRENT_SOURCE_DIR}/gunzip.cmake
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/blank-64m.img.gz)
-    add_custom_target(executor_hfsplus_fixtures DEPENDS ${HFSPLUS_FIXTURE} ${HFSPLUS_BLANK})
+    # ... and an HFSX one (mkfs.hfsplus -s)
+    set(HFSX_BLANK ${CMAKE_CURRENT_BINARY_DIR}/fixtures/blank-hfsx-64m.img)
+    add_custom_command(OUTPUT ${HFSX_BLANK}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/fixtures
+        COMMAND ${CMAKE_COMMAND} -DIN=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/blank-hfsx-64m.img.gz
+                -DOUT=${HFSX_BLANK} -P ${CMAKE_CURRENT_SOURCE_DIR}/gunzip.cmake
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hfsplus/blank-hfsx-64m.img.gz)
+    add_custom_target(executor_hfsplus_fixtures DEPENDS ${HFSPLUS_FIXTURE} ${HFSPLUS_BLANK} ${HFSX_BLANK})
     add_dependencies(executor_tests executor_hfsplus_fixtures)
     target_compile_definitions(executor_tests PRIVATE EXECUTOR_HFSPLUS_FIXTURE="${HFSPLUS_FIXTURE}"
-                                                      EXECUTOR_HFSPLUS_BLANK="${HFSPLUS_BLANK}")
+                                                      EXECUTOR_HFSPLUS_BLANK="${HFSPLUS_BLANK}"
+                                                      EXECUTOR_HFSX_BLANK="${HFSX_BLANK}")
     if(EMSCRIPTEN)
         # Under node: the host's files, as natively.
         target_link_options(executor_tests PRIVATE -sNODERAWFS=1)

@@ -228,12 +228,14 @@ protected:
 
     static std::string copy;
 
-    static void SetUpTestSuite()
+    static void SetUpTestSuite() { mount(EXECUTOR_HFSPLUS_BLANK); }
+
+    static void mount(const char *image)
     {
         /* a fresh copy each run */
         copy = (fs::temp_directory_path() / fs::unique_path("hfsplus-blank-%%%%-%%%%.img")).string();
         std::error_code ec;
-        fs::copy_file(EXECUTOR_HFSPLUS_BLANK, copy, ec);
+        fs::copy_file(image, copy, ec);
         GUEST<LONGINT> mess;
         ROMlib_openharddisk(copy.c_str(), &mess);
         HParamBlockRec pb;
@@ -424,6 +426,54 @@ TEST_F(HFSPlusWriteTest, ManyFilesPastTheirExtents)
     EXPECT_EQ(152, (uint16_t)c.dirInfo.ioDrNmFls);
     EXPECT_EQ(noErr, FlushVol(nullptr, vref));
 }
+
+/* An HFSX volume (mkfs.hfsplus -s): names in binary order, so names
+   differing only in case are different names. */
+#ifdef EXECUTOR_HFSX_BLANK
+namespace
+{
+class HFSXWriteTest : public HFSPlusWriteTest
+{
+protected:
+    static void SetUpTestSuite() { mount(EXECUTOR_HFSX_BLANK); }
+};
+} // namespace
+
+TEST_F(HFSXWriteTest, NamesAreCaseSensitive)
+{
+    ASSERT_EQ(noErr, HCreate(vref, 2, name("Written"), "TEXT"_4, "ttxt"_4));
+    ASSERT_EQ(noErr, HCreate(vref, 2, name("WRITTEN"), "TEXT"_4, "ttxt"_4));
+    EXPECT_EQ(dupFNErr, HCreate(vref, 2, name("Written"), "TEXT"_4, "ttxt"_4));
+    ASSERT_EQ(noErr, writeFile(2, "Written", 1000, 1));
+    ASSERT_EQ(noErr, writeFile(2, "WRITTEN", 2000, 2));
+    GUEST<INTEGER> ref;
+    EXPECT_EQ(fnfErr, HOpenDF(vref, 2, name("written"), fsRdPerm, &ref));
+    ASSERT_EQ(noErr, HOpenDF(vref, 2, name("WRITTEN"), fsRdPerm, &ref));
+    GUEST<LONGINT> eof;
+    GetEOF(ref, &eof);
+    EXPECT_EQ(2000, (LONGINT)eof);
+    FSClose(ref);
+    /* a rename changing only case; then it's free again */
+    ASSERT_EQ(noErr, HRename(vref, 2, name("Written"), name("written")));
+    EXPECT_EQ(dupFNErr, HRename(vref, 2, name("written"), name("WRITTEN")));
+    ASSERT_EQ(noErr, HCreate(vref, 2, name("Written"), "TEXT"_4, "ttxt"_4));
+    GUEST<LONGINT> dir;
+    ASSERT_EQ(noErr, DirCreate(vref, 2, name("folder"), &dir));
+    ASSERT_EQ(noErr, DirCreate(vref, 2, name("Folder"), &dir));
+    CInfoPBRec c;
+    memset(&c, 0, sizeof c);
+    c.dirInfo.ioVRefNum = vref;
+    c.dirInfo.ioDrDirID = 2;
+    c.dirInfo.ioFDirIndex = -1;
+    ASSERT_EQ(noErr, PBGetCatInfo(&c, false));
+    EXPECT_EQ(5, (uint16_t)c.dirInfo.ioDrNmFls);
+    for(const char *n : { "Written", "written", "WRITTEN" })
+        EXPECT_EQ(noErr, HDelete(vref, 2, name(n))) << n;
+    EXPECT_EQ(noErr, HDelete(vref, 2, name("Folder")));
+    EXPECT_EQ(noErr, HDelete(vref, 2, name("folder")));
+    EXPECT_EQ(noErr, FlushVol(nullptr, vref));
+}
+#endif
 #endif
 
 #endif
