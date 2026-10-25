@@ -197,6 +197,16 @@ int32_t Executor::ROMlib_ctlcall(ControlHandle c, int16_t i, int32_t l)
     ROMlib_hook(ctl_cdefnumber);
     HLockGuard guard(defproc);
     retval = cp(VAR(c), c, i, l);
-    
+
+    /* MacPhoenix: a CDEF that knows only the 24-bit calcCRgns (the
+       Speech panel's sliders) leaves the region empty for calcCntlRgn and
+       calcThumbRgn, and a Mac still erases such a control when it is
+       hidden or disposed of. Ask again with calcCRgns, the high bit of
+       the handle asking for the indicator. */
+    if((i == calcCntlRgn || i == calcThumbRgn) && l
+       && EmptyRgn(ptr_from_longint<RgnHandle>(l)))
+        retval = cp(VAR(c), c, calcCRgns,
+                    i == calcThumbRgn ? (l | 0x80000000) : l);
+
     return retval;
 }

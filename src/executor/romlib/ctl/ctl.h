@@ -68,6 +68,8 @@ extern void sb_ctl_init(void);
 using ctlfuncp = UPP<LONGINT (INTEGER var, ControlHandle ctl, INTEGER mess, LONGINT param)>;
 
 extern LONGINT ROMlib_ctlcall(ControlHandle c, INTEGER i, LONGINT l);
+extern ControlHandle ROMlib_new_control_at(INTEGER cid, WindowPtr wst,
+                                           const Point *topleft);
 #define CTLCALL(c, i, l) ROMlib_ctlcall((c), (i), (l))
 
 class CtlCallGuard : private ThePortGuard

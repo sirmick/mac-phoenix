@@ -59,19 +59,12 @@ void Executor::dialog_create_item(DialogPeek dp, itmp dst, itmp src,
 
         if((dst->itmtype & resCtrl) == resCtrl)
         {
-            Rect *ctl_rect;
-            GUEST<INTEGER> top, left;
+            Point topleft;
 
             /* ### is visibility correct here? */
-            ctl = GetNewControl(res_id, (WindowPtr)dp);
-            if(ctl)
-            {
-                ctl_rect = &CTL_RECT(ctl);
-                top = ctl_rect->top;
-                left = ctl_rect->left;
-                if(r.top != top || r.left != left)
-                    MoveControl(ctl, r.left, r.top);
-            }
+            topleft.h = r.left;
+            topleft.v = r.top;
+            ctl = ROMlib_new_control_at(res_id, (WindowPtr)dp, &topleft);
         }
         else
         {

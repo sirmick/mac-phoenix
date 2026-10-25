@@ -342,8 +342,11 @@ draw(ControlHandle ctl, draw_state_t draw_state,
     if(title_only_p)
         return;
 
-    /* draw box */
-    RGBForeColor(&ROMlib_black_rgb_color);
+    /* draw box; MacPhoenix: an inactive pop-up (hilite 255) has its box,
+       item and arrow in grey, its title black, as 7.5.5's */
+    static RGBColor inactive_gray = { 0x8080, 0x8080, 0x8080 };
+    RGBForeColor(CTL_HILITE(ctl) == 255 ? &inactive_gray
+                                        : &ROMlib_black_rgb_color);
     RGBBackColor(&ROMlib_white_rgb_color);
 
     t_rect.top = draw_top;

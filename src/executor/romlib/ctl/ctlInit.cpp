@@ -89,11 +89,24 @@ ControlHandle Executor::C_NewControl(WindowPtr wst, const Rect *r, ConstStringPt
 
 ControlHandle Executor::C_GetNewControl(INTEGER cid, WindowPtr wst) /* IMI-321 */
 {
+    return ROMlib_new_control_at(cid, wst, nullptr);
+}
+
+/* MacPhoenix: GetNewControl with the control's top-left at *topleft
+   (the CNTL's size kept), placed before the CDEF's initCntl. A dialog's
+   control item is made this way: some CDEFs keep the rectangle they are
+   initialised with (the Speech panel's sliders draw where the CNTL said,
+   not where the item is), so creating at the CNTL's place and then
+   MoveControl isn't the same. */
+ControlHandle Executor::ROMlib_new_control_at(INTEGER cid, WindowPtr wst,
+                                              const Point *topleft)
+{
     typedef contrlrestype *wp;
 
     GUEST<wp> *wh;
     ControlHandle retval;
     Handle ctab_res_h;
+    Rect r;
 
     wh = (GUEST<wp> *)GetResource("CNTL"_4, cid);
     if(!wh)
@@ -101,7 +114,10 @@ ControlHandle Executor::C_GetNewControl(INTEGER cid, WindowPtr wst) /* IMI-321 *
     if(!(*wh))
         LoadResource((Handle)wh);
     ctab_res_h = ROMlib_getrestid("cctb"_4, cid);
-    retval = NewControl(wst, &((*wh)->_crect),
+    r = (*wh)->_crect;
+    if(topleft)
+        OffsetRect(&r, topleft->h - r.left, topleft->v - r.top);
+    retval = NewControl(wst, &r,
                         (StringPtr)((char *)&(*wh)->_crect + 22), /* _ctitle */
                         (*wh)->_cvisible != 0, (*wh)->_cvalue, (*wh)->_cmin,
                         (*wh)->_cmax, (*wh)->_cprocid,
