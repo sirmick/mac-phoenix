@@ -9,12 +9,12 @@ File Manager changes them as Mac OS 9.0.4 does.
 
 | Piece | State |
 |-------|-------|
-| Reader (`src/executor/romlib/hfs/plus/`) | done: matches hfsdump on 7 images (below) |
-| File Manager volume (`file/hfsplusvolume.cpp`) | done: VolDump on Executor = VolDump on 9.0.4, 4 images |
+| Reader (`src/executor/romlib/hfs/plus/`) | done: matches hfsdump on 8 images and 2 CDs (below) |
+| File Manager volume (`file/hfsplusvolume.cpp`) | done: VolDump on Executor = VolDump on 9.0.4, 14 images (32 MB to 20 GB, hard links, forks near 2 GB) |
 | Mounting (`try_to_mount_disk`) | done: bare, HFS wrapper, Apple partition map |
 | System sideload (`hfs_sideload.cpp`) | done: an HFS+ image's blessed System Folder |
 | Web tab | done: an uploaded HFS+ image gives VolDump 9.0.4's dump (`executor.web.hfsplus`) |
-| Writing (`hfs/plus/writer.cpp`, `btree.cpp`) | done: fsck.hfsplus-clean; VolWrite on Executor = VolWrite on 9.0.4, natively and in the tab |
+| Writing (`hfs/plus/writer.cpp`, `btree.cpp`) | done: fsck.hfsplus-clean (HFS+, HFSX, trees past their header's map); VolWrite on Executor = VolWrite on 9.0.4, natively and in the tab |
 
 ## The reader
 
