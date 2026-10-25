@@ -1097,7 +1097,7 @@ OSErr Executor::PBRenameUnicode(FSRefParamPtr pb, Boolean async)
                 /* only the case changes: Executor's HFS code would call the
                    name taken, so through a name of its own */
                 Str255 tmp;
-                putPStr(tmp, "\xA5fsref rename");
+                putPStr(tmp, "\xA5" "fsref rename");
                 h.ioParam.ioMisc = guest_cast<LONGINT>((StringPtr)tmp);
                 if((err = PBHRename(&h, false)) == noErr)
                     h.fileParam.ioNamePtr = tmp;
