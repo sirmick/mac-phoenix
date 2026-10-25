@@ -22,6 +22,7 @@
 #include <quickdraw/cquick.h>
 #include <WindowMgr.h>
 #include <ControlMgr.h>
+#include <DialogMgr.h>
 #include <QuickDraw.h>
 #include <vector>
 #include <algorithm>
@@ -135,6 +136,10 @@ struct process_info
     /* Brought to the front: what of its windows the layers that were in
        front covered, and suspend/resume to deliver (osEvt message). */
     RgnHandle raised = nullptr;
+    /* Its front window was a modal dialog at its last event call (no
+       process comes to the front meanwhile). */
+    bool modal_front = false;
+    int front_waits = 0; /* event calls a pending switch waited for it */
     bool activate_pending = false;
     bool os_event_pending = false;
     /* The event mask of the event call it is in (a modal dialog's
@@ -1499,6 +1504,7 @@ static void exit_current()
     {
         raise_layer(next);
         front_process = next;
+        next->modal_front = false; /* known again at its next event call */
         next->activate_pending = true;
     }
     current_process_info = next;
@@ -1579,6 +1585,7 @@ static void bring_to_front(process_info_t *q)
                 UnionRgn(WINDOW_STRUCT_REGION(w), covered, covered);
     raise_layer(q);
     front_process = q;
+    q->modal_front = false;
     q->raised = covered;
     q->activate_pending = true;
     switch_to(q);
@@ -1600,6 +1607,17 @@ static process_info_t *click_elsewhere(process_info_t *me, Point pt)
     return nullptr;
 }
 
+/* The current process's front window is a modal dialog (DialogDispatch
+   1's class dBoxProc); movable modal ones let the user switch. Asked in
+   the process's own world: a window's variant is in its auxiliary record,
+   and those are per process. */
+static bool front_window_modal()
+{
+    GUEST<INTEGER> modal_class;
+    C_GetWindowModalClass(FrontWindow(), &modal_class);
+    return modal_class == dBoxProc;
+}
+
 /* Every event call: where processes switch, as 7.5.5's Process Manager
    does in GetNextEvent/WaitNextEvent/EventAvail. */
 void Executor::ROMlib_process_event_hook(INTEGER mask)
@@ -1614,11 +1632,27 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
     if(me == front_process && (mask & (mDownMask | keyDownMask)))
         ROMlib_notify_poll();
 
+    /* As a 7.6.1 Quadra: no process comes to the front over a modal
+       dialog (dBoxProc: an alert, SimpleText's "Save changes?"); one
+       launched meanwhile starts behind the front process and comes
+       forward once the dialog is gone. */
+    if(me == front_process)
+        me->modal_front = front_window_modal();
+    bool modal = front_process && front_process->modal_front;
+
     if(pending_launch && !front_hold)
     {
         /* A process just launched comes to the front. */
         process_info_t *p = pending_launch;
         pending_launch = nullptr;
+        if(modal)
+        {
+            auto it = std::find(layer_order.begin(), layer_order.end(), me);
+            layer_order.insert(it == layer_order.end() ? it : it + 1, p);
+            pending_front = p;
+            switch_to(p);
+            return;
+        }
         step_back(me);
         raise_layer(p);
         front_process = p;
@@ -1640,8 +1674,14 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
         return;
     }
 
-    if(pending_front && !front_hold)
+    /* ... and at a call with nothing waiting for the front process, a few
+       calls at most (an update its modal loop never takes): SimpleText,
+       its "Save changes?" cancelled, takes the Quit waiting for it and
+       asks again before the process launched behind it comes forward. */
+    if(pending_front && !front_hold && !modal
+       && (!wants_event(me, true) || ++me->front_waits > 4))
     {
+        me->front_waits = 0;
         process_info_t *q = pending_front;
         pending_front = nullptr;
         if(q != me)
@@ -1670,7 +1710,7 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
        Finder's) brings that process to the front.  It keeps the click if
        its SIZE says getFrontClicks. */
     EventRecord evt;
-    if(!front_hold && OSEventAvail(mDownMask, &evt))
+    if(!front_hold && !modal && OSEventAvail(mDownMask, &evt))
     {
         if(process_info_t *hit = click_elsewhere(me, evt.where.get()))
         {
