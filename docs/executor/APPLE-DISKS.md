@@ -24,7 +24,7 @@ Same result on 7.5.5 and 7.6.1 unless marked.
 | 2 | ~~**Monitors** control panel; **Change Monitor to 256** applet (More Automated Tasks)~~ | `Unknown selector 0xf3 for trap DisplayDispatch` | **Fixed**: see below |
 | 3 | ~~**Apple System Profiler** (7.6.1, Apple Menu Items)~~ | `Unknown selector 0x12 for trap FSDispatch` | **Fixed**: see below |
 | 4 | ~~**TCP/IP** control panel (policy-disabled; opened by hand)~~ | `[ot] Open Transport: OTOpenConfigurationsDB (OTLib$CfigLib) is not implemented` | **Fails cleanly** (7.6.1): see below. On 7.5.5 (no OT installed) it says it needs Open Transport |
-| 5 | **Password Security** control panel, intermittent | `host signal 11 at guest pc $c0cc9bf4`, last A-trap `$A949` | Seen once, opened right after **Numbers** had been opened and closed. Opened alone it correctly says "cannot be used with this Macintosh". The PC is in the host stub area (`7101` words). Try Numbers then Password Security repeatedly |
+| 5 | **Password Security** control panel, intermittent (not reproduced, STRAGGLERS 50) | `host signal 11 at guest pc $c0cc9bf4`, last A-trap `$A949` | Seen once, opened right after **Numbers** had been opened and closed. Opened alone it correctly says "cannot be used with this Macintosh". The PC is in the host stub area (`7101` words). Try Numbers then Password Security repeatedly |
 
 Unknown selectors (`romlib/base/traps.cpp`, `unknown_selector_68k`): each
 one a session meets is logged once as `[unimplemented] ...` and appended,

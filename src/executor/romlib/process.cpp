@@ -1752,13 +1752,26 @@ void Executor::ROMlib_process_idle_hook(int32_t sleep)
     if(startup_items.empty())
         return;
     FSSpec spec = startup_items.front();
-    startup_items.erase(startup_items.begin());
     LaunchParamBlockRec lpb = {};
     lpb.launchBlockID = extendedBlock;
     lpb.launchEPBLength = extendedBlockLen;
     lpb.launchControlFlags = launchContinue | launchNoFileFlags;
     lpb.launchAppSpec = &spec;
-    LaunchApplication(&lpb);
+    OSErr err = LaunchApplication(&lpb);
+    /* a failed launch is said and tried again at the next idle call, a
+       few times: BridgeAgent, there, is how the host reaches the guest */
+    static int failures;
+    if(err != noErr)
+    {
+        ++failures;
+        fprintf(stderr, "[Executor] startup item %.*s: LaunchApplication answered %d%s\n",
+                spec.name[0], (const char *)spec.name + 1, err,
+                failures < 5 ? ", trying again" : ", giving up");
+        if(failures < 5)
+            return;
+    }
+    failures = 0;
+    startup_items.erase(startup_items.begin());
 }
 
 /* PostHighLevelEvent: a Quit Apple event for a process that is not
