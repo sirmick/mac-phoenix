@@ -89,6 +89,8 @@ private:
     Entry resolveForInfo(StringPtr name, short vRef, long dirID, short index, bool includeDirectories);
     std::string classicName(const Entry& e);
     uint32_t localDate(uint32_t gmt) const;
+    /* the longest fork the classic calls open: whole blocks under 2 GB */
+    uint64_t forkLimit() const;
     void getInfoCommon(CInfoPBPtr pb, InfoKind kind);
     void openCommon(GUEST<short>& refNum, const Entry& item, bool resource, int8_t permission);
     OpenFork& openFork(short refNum);

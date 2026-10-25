@@ -4,7 +4,8 @@
  * (PBGetCatInfo ioFDirIndex 1, 2...): its name, IDs, attributes, Finder
  * info, lengths, dates; the same item found again by name, by full path
  * and through "::"; each fork opened read-only and read to the end
- * (Adler-32), and opened for writing (the error a locked volume gives);
+ * (Adler-32; one of 256 MB or more only probed: its head, its end, the
+ * 2 GB - 1 cap), and opened for writing (the error a locked volume gives);
  * the files-only enumeration of PBHGetFInfo. Names are hex (MacRoman).
  * The probes that write (create, open for writing) only on a locked
  * volume: a writable one is left as it was.
@@ -33,6 +34,7 @@ static Boolean locked;      /* the volume: write probes only then */
 static unsigned char volName[64];
 static char *buf;
 enum { kBuf = 32768 };
+#define kBig 0x10000000L    /* a fork this long is probed, not read through */
 
 static void hex(const unsigned char *p, int n)
 {
@@ -93,17 +95,42 @@ static void fork(long dirID, StringPtr name, Boolean rsrc)
     if(err == noErr)
     {
         ref = pb.ioParam.ioRefNum;
-        GetEOF(ref, &eof);
-        for(;;)
+        err = GetEOF(ref, &eof);
+        if(eof >= kBig || eof < 0 || err)
         {
-            long n = kBuf;
+            /* a big fork: its head, its last 5000 bytes, the 2 GB - 1 cap */
+            long n = kBuf, pos = 0;
+            fprintf(out, " geteof %d eof %ld", (int)err, eof);
             err = FSRead(ref, &n, buf);
-            sum = adler(sum, (unsigned char *)buf, n);
-            total += n;
-            if(err != noErr)
-                break;
+            fprintf(out, " head %d/%ld %08lX", (int)err, n, adler(1, (unsigned char *)buf, n));
+            err = SetFPos(ref, fsFromStart, eof - 5000);
+            n = kBuf;
+            fprintf(out, " tailpos %d", (int)err);
+            err = FSRead(ref, &n, buf);
+            GetFPos(ref, &pos);
+            fprintf(out, " tail %d/%ld %08lX at %ld", (int)err, n, adler(1, (unsigned char *)buf, n), pos);
+            err = SetFPos(ref, fsFromStart, 0x7FFFFFFF);
+            n = 16;
+            fprintf(out, " cap %d", (int)err);
+            err = FSRead(ref, &n, buf);
+            fprintf(out, " capread %d/%ld", (int)err, n);
+            err = SetFPos(ref, fsFromLEOF, 0);
+            GetFPos(ref, &pos);
+            fprintf(out, " leof %d at %ld", (int)err, pos);
         }
-        fprintf(out, " eof %ld read %ld end %d adler %08lX", eof, total, (int)err, sum);
+        else
+        {
+            for(;;)
+            {
+                long n = kBuf;
+                err = FSRead(ref, &n, buf);
+                sum = adler(sum, (unsigned char *)buf, n);
+                total += n;
+                if(err != noErr)
+                    break;
+            }
+            fprintf(out, " eof %ld read %ld end %d adler %08lX", eof, total, (int)err, sum);
+        }
         /* a second path while this one is open, and past the end */
         {
             long n = 16;

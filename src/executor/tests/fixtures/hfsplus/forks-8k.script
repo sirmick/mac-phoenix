@@ -1,0 +1,14 @@
+create "Size 2147479551" BINA ????
+write "Size 2147479551" data 2147478551 1000 3
+create "Size 2147479552" BINA ????
+write "Size 2147479552" data 2147478552 1000 3
+create "Size 2147479553" BINA ????
+write "Size 2147479553" data 2147478553 1000 3
+create "Size 2147483646" BINA ????
+write "Size 2147483646" data 2147482646 1000 3
+create "Size 2147483648" BINA ????
+write "Size 2147483648" data 2147482648 1000 3
+create "Size 2147475456" BINA ????
+write "Size 2147475456" data 2147474456 1000 3
+create "Size 2147475457" BINA ????
+write "Size 2147475457" data 2147474457 1000 3

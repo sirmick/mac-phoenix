@@ -19,6 +19,8 @@ public:
     virtual bool read(uint64_t offset, void *buf, size_t n) = 0;
     /* All n bytes written at offset, or false (always, read-only). */
     virtual bool write(uint64_t offset, const void *buf, size_t n) { return false; }
+    /* n zero bytes written at offset (image.cpp: zeros written) */
+    virtual bool zero(uint64_t offset, uint64_t n);
     virtual bool writable() const { return false; }
     virtual void sync() {}
     virtual uint64_t size() const = 0;
@@ -35,6 +37,8 @@ public:
 
     bool read(uint64_t offset, void *buf, size_t n) override;
     bool write(uint64_t offset, const void *buf, size_t n) override;
+    /* a hole punched where the file system can (a sparse image stays sparse) */
+    bool zero(uint64_t offset, uint64_t n) override;
     bool writable() const override { return writable_; }
     void sync() override;
     uint64_t size() const override { return size_; }

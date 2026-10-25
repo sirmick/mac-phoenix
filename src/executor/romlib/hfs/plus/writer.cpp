@@ -240,12 +240,8 @@ Error Reader::release(const Extent& x)
 
 Error Reader::zero(const Extent& x)
 {
-    static const std::vector<uint8_t> zeros(64 * 1024, 0);
-    uint64_t at = uint64_t(x.start) * header_.blockSize, end = at + uint64_t(x.count) * header_.blockSize;
-    for(; at < end; at += zeros.size())
-        if(!writeAt(at, zeros.data(), size_t(std::min<uint64_t>(zeros.size(), end - at))))
-            return Error::io;
-    return Error::none;
+    uint64_t at = uint64_t(x.start) * header_.blockSize;
+    return image_->zero(offset_ + at, uint64_t(x.count) * header_.blockSize) ? Error::none : Error::io;
 }
 
 /* ---- extents -------------------------------------------------------------- */

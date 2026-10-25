@@ -1,5 +1,6 @@
 #include "image.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -11,6 +12,15 @@
 #endif
 
 using namespace Executor::hfsplus;
+
+bool ImageReader::zero(uint64_t offset, uint64_t n)
+{
+    static const uint8_t zeros[64 * 1024] = {};
+    for(uint64_t end = offset + n; offset < end; offset += sizeof zeros)
+        if(!write(offset, zeros, size_t(std::min<uint64_t>(sizeof zeros, end - offset))))
+            return false;
+    return true;
+}
 
 FdImageReader::FdImageReader(int fd, bool owns, bool writable)
     : fd_(fd), owns_(owns), writable_(writable)
@@ -78,6 +88,18 @@ bool FdImageReader::write(uint64_t offset, const void *buf, size_t n)
         n -= (size_t)put;
     }
     return true;
+}
+
+bool FdImageReader::zero(uint64_t offset, uint64_t n)
+{
+    if(!writable_)
+        return false;
+#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+    if(offset + n <= size_
+       && fallocate(fd_, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, (off_t)offset, (off_t)n) == 0)
+        return true;
+#endif
+    return ImageReader::zero(offset, n);
 }
 
 void FdImageReader::sync()

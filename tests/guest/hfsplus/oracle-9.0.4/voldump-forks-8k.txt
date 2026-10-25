@@ -1,0 +1,33 @@
+VOLUME 0 466F726B73384B sig 4244 attrib 0080 nmfls 7 alblksiz 335872 nmalblks 6393 frblk 6393 clpsiz 65536 filcnt 7 dircnt 0 nxtcnid 23 cr 3875735721 md 3875735721 bk 0 fndr 0000000000000000000000000000000000000000000000006A901A7073FB277F
+CREATE -44
+DIRCREATE -44
+FILE 53697A652032313437343735343536 id 21 par 2 attrib 02 finfo 42494E413F3F3F3F0000000000000000 fxinfo 00000000000000000000000000000000 data 2147475456/-2147483648 rsrc 0/0 cr 3875735721 md 3875735721 bk 0 clp 0
+  byname 0 id 21 bypath 0 id 21 upper 0 id 21 hgetfinfo 0 fsspec 0 par 2 53697A652032313437343735343536
+  data open 0 geteof 0 eof 2147475456 head 0/32768 80000001 tailpos 0 tail -39/5000 8AB9F202 at 2147475456 cap -39 capread -39/0 leof 0 at 2147475456 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-1823603888 seteof -44 allocate -44
+  rsrc open 0 eof 0 read 0 end -39 adler 00000001 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-1823603888 seteof -44 allocate -44
+FILE 53697A652032313437343735343537 id 22 par 2 attrib 02 finfo 42494E413F3F3F3F0000000000000000 fxinfo 00000000000000000000000000000000 data 2147475456/2147475456 rsrc 0/0 cr 3875735721 md 3875735721 bk 0 clp 0
+  byname 0 id 22 bypath 0 id 22 upper 0 id 22 hgetfinfo 0 fsspec 0 par 2 53697A652032313437343735343537
+  data open -1310 rdwr -1310
+  rsrc open 0 eof 0 read 0 end -39 adler 00000001 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-1823603888 seteof -44 allocate -44
+FILE 53697A652032313437343739353531 id 16 par 2 attrib 02 finfo 42494E413F3F3F3F0000000000000000 fxinfo 00000000000000000000000000000000 data 2147475456/2147475456 rsrc 0/0 cr 3875735721 md 3875735721 bk 0 clp 0
+  byname 0 id 16 bypath 0 id 16 upper 0 id 16 hgetfinfo 0 fsspec 0 par 2 53697A652032313437343739353531
+  data open -1310 rdwr -1310
+  rsrc open 0 eof 0 read 0 end -39 adler 00000001 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-1823603888 seteof -44 allocate -44
+FILE 53697A652032313437343739353532 id 17 par 2 attrib 02 finfo 42494E413F3F3F3F0000000000000000 fxinfo 00000000000000000000000000000000 data 2147475456/2147475456 rsrc 0/0 cr 3875735721 md 3875735721 bk 0 clp 0
+  byname 0 id 17 bypath 0 id 17 upper 0 id 17 hgetfinfo 0 fsspec 0 par 2 53697A652032313437343739353532
+  data open -1310 rdwr -1310
+  rsrc open 0 eof 0 read 0 end -39 adler 00000001 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-1823603888 seteof -44 allocate -44
+FILE 53697A652032313437343739353533 id 18 par 2 attrib 02 finfo 42494E413F3F3F3F0000000000000000 fxinfo 00000000000000000000000000000000 data 2147475456/2147475456 rsrc 0/0 cr 3875735721 md 3875735721 bk 0 clp 0
+  byname 0 id 18 bypath 0 id 18 upper 0 id 18 hgetfinfo 0 fsspec 0 par 2 53697A652032313437343739353533
+  data open -1310 rdwr -1310
+  rsrc open 0 eof 0 read 0 end -39 adler 00000001 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-1823603888 seteof -44 allocate -44
+FILE 53697A652032313437343833363436 id 19 par 2 attrib 02 finfo 42494E413F3F3F3F0000000000000000 fxinfo 00000000000000000000000000000000 data 2147475456/2147475456 rsrc 0/0 cr 3875735721 md 3875735721 bk 0 clp 0
+  byname 0 id 19 bypath 0 id 19 upper 0 id 19 hgetfinfo 0 fsspec 0 par 2 53697A652032313437343833363436
+  data open -1310 rdwr -1310
+  rsrc open 0 eof 0 read 0 end -39 adler 00000001 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-1823603888 seteof -44 allocate -44
+FILE 53697A652032313437343833363438 id 20 par 2 attrib 02 finfo 42494E413F3F3F3F0000000000000000 fxinfo 00000000000000000000000000000000 data 2147475456/2147475456 rsrc 0/0 cr 3875735721 md 3875735721 bk 0 clp 0
+  byname 0 id 20 bypath 0 id 20 upper 0 id 20 hgetfinfo 0 fsspec 0 par 2 53697A652032313437343833363438
+  data open -1310 rdwr -1310
+  rsrc open 0 eof 0 read 0 end -39 adler 00000001 pastend -39/0 seekpast -39 write -61 rdwr 0 write -44/-1823603888 seteof -44 allocate -44
+FOLDER 2 catinfo-files 7 finfo-files 7
+---

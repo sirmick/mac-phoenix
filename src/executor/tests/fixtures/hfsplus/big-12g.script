@@ -1,0 +1,11 @@
+create "Exactly 2G-1" BINA ????
+write "Exactly 2G-1" data 2147478647 5000 1
+create "Just over 2G" BINA ????
+write "Just over 2G" data 2147479552 8192 2
+create "Three GB" BINA ????
+write "Three GB" data 3221224472 1000 3
+write "Three GB" rsrc 0 100 7
+create "Over 4G" BINA ????
+write "Over 4G" data 4294967346 100 4
+create "Small" TEXT ttxt
+write "Small" data 0 100 5

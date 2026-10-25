@@ -99,16 +99,29 @@ the images read-only on the host):
   "thread exists": 9.0.4 reports 0x02 for every file) and the open bits.
 - Dates: HFS+ stores GMT (but the volume's creation date, local); the File
   Manager reports local time.
-- The volume: `ioVSigWord` `'BD'`; `ioVAlBlkSiz` the real block size;
-  `ioVFrBlk` the free blocks; `ioVNmFls` the root's valence (files and
-  folders); `ioVNmAlBlks` 9.0.4's odd figure: the volume's 512-byte
-  sectors divided by the smallest k that fits them in 16 bits (32 MB:
-  32768; 64 MB: 43690), the embedded volume's block count when wrapped.
+- The volume: `ioVSigWord` `'BD'`; `ioVNmFls` the root's valence (files
+  and folders); blocks of k of the volume's, k the smallest that brings
+  their count under 65536 (`ioVAlBlkSiz` k × the block size: 12 GB of
+  4 KB blocks, 200704; `ioVFrBlk` the free blocks / k); `ioVNmAlBlks`
+  9.0.4's odd figure: the volume's 512-byte sectors divided by the
+  smallest k that fits them in 16 bits (32 MB: 32768; 64 MB: 43690; 1 GB:
+  63550), the embedded volume's block count when wrapped; and the total
+  and the free blocks no more than 2 GB - 1 of them (2 GB: 58254 blocks
+  of 36864). Pinned on volumes of 32 MB to 20 GB, blocks of 512 bytes to
+  8 KB (`voldump-size-*.txt`, `-forks-*`, `-big-12g`).
   `vcbAtrb` hardware-locked, bit 6 while files are open.
 - Opening succeeds whatever the permission; writing through a path opened
   for writing fails with wPrErr, through a read-only one with wrPermErr
   (FSWrite, SetEOF, Allocate). Create, delete, rename, SetCatInfo,
-  SetFInfo, locks, SetVInfo: wPrErr. Forks over 2 GB end at 2 GB - 1.
+  SetFInfo, locks, SetVInfo: wPrErr.
+- Big forks (`voldump-forks-4k.txt`, `-forks-8k`, `-big-12g`): the
+  longest a classic path opens is the last whole allocation block under
+  2 GB (4 KB blocks: 0x7FFFF000; 8 KB: 0x7FFFE000); one longer doesn't
+  open (fileBoundsErr, -1310, for reading and writing alike) and
+  PBGetCatInfo gives it that length, logical and physical. A fork that
+  opens reads to its end as any; its physical length, at 2 GB or more,
+  is reported as 0x80000000. Writing a fork past that length: dskFulErr
+  (not seen on 9.0.4).
 - Unmounting closes nothing: open files make it fBsyErr; Eject and OffLine
   take the drive off line.
 - Hard links aren't followed (`voldump-hardlinks.txt`): 9.0.4 shows a link
@@ -148,8 +161,9 @@ The volume layer (`hfs/plus/`, from TN1150):
   nodes, chained from the last one's fLink, laid out as mkfs.hfsplus
   makes them (kind 2, height 0, one record of the node less 20 bytes).
 - `writer.cpp`: the allocation file (a free run from the last allocation
-  on, else pieces); forks grown (new blocks zeroed) and cut, their extents
-  past the first 8 as extents overflow records; files and folders made
+  on, else pieces); forks grown (new blocks zeroed: a hole punched in a
+  sparse image where the host can) and cut, their extents past the first
+  8 as extents overflow records; files and folders made
   (thread records, valences, counts, the next CNID; MacRoman text
   encoding), removed, renamed, moved; Finder info, dates, the lock bit;
   the volume's name and Finder info. Everything is written through; the
@@ -187,7 +201,7 @@ fork whose header puts the map outside it, before that length reaches
 2 GB wrapped and the System heap's trailer went past its end).
 
 Not done: the Desktop DB (Executor's Desktop Manager keeps an HFS+
-volume's in memory, as an HFS one's), files over 2 GB. Hard links are
+volume's in memory, as an HFS one's). Hard links are
 made only by `hfsplus_dump`'s script (`link`, `Reader::makeLink`, as
 TN1150 lays them out: the file moved into the metadata folder, made
 first, as `iNode<reference>`; links typed `hlnk`/`hfs+`, `kHasBeenInited`,
@@ -217,11 +231,15 @@ the File Manager has no call that makes one.
 - `executor.hfsplus_volume` (`tests/test_hfsplus_volume.py`): VolDump
   (`tests/guest/hfsplus/VolDump.c`: every item's PBGetCatInfo by index, by
   name, by full path, upper-cased, `::`, ioFDirIndex -1, PBHGetFInfo,
-  FSMakeFSSpec, both forks read to the end, past the end, written, opened
+  FSMakeFSSpec, both forks read to the end (from 256 MB on, probed: the
+  head, the last bytes, the 2 GB - 1 cap), past the end, written, opened
   for writing, Create/DirCreate) on Executor (Apple's 7.5.5) against its
   dumps on 9.0.4 (`tests/guest/hfsplus/voldump.py --machine 9.0.4`
   remakes them): identical but for what depends on the machine (the
-  disk's ejectable bit, files 9.0.4's Finder holds open).
+  disk's ejectable bit, files 9.0.4's Finder holds open). The volumes of
+  1 to 20 GB are made by the test (`fixtures/hfsplus/generated.json`:
+  sparse, `mkfs.hfsplus` in docker, a script of `hfsplus_dump`'s; not
+  compared without docker, nor their dates and volume ID).
 - `executor.HFSPlusVolumeTest.*` (`src/executor/tests/hfsplus_volume.cpp`):
   the long-name fixture mounted with `ROMlib_openharddisk` in the gtest
   binary: names, folders, paths, a fork past its 8 extents, a resource
@@ -260,8 +278,9 @@ the File Manager has no call that makes one.
 
 Not covered by any image yet: hard links written by Mac OS X (none of
 the images has one: `hardlinks.img` is made by `hfsplus_dump`,
-`fixtures/hfsplus/hardlinks.script`, fsck-clean), journaled volumes, files over 2 GB, `ioVNmAlBlks` of a wrapped
-volume over 65535 blocks. fsck.hfsplus reports "Illegal name" on
+`fixtures/hfsplus/hardlinks.script`, fsck-clean), journaled volumes,
+`ioVNmAlBlks` of a wrapped volume over 65535 blocks, writing a fork
+near 2 GB on 9.0.4. fsck.hfsplus reports "Illegal name" on
 `longnames.img`: MakeLongNames passed 9.0.4 a precomposed `ά` (and a
 `:`), which 9.0.4 stored as given.
 

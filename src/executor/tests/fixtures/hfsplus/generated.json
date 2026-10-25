@@ -1,0 +1,12 @@
+{
+    "_": "Images made when a test needs them (sparse; too big to keep): a file of `size`, mkfs.hfsplus -v `volume` `mkfs` (docker image macphoenix-hfsprogs), then hfsplus_dump IMAGE script <name>.script",
+    "big-12g": {"size": "12G", "volume": "BigFork", "mkfs": []},
+    "forks-4k": {"size": "16G", "volume": "Forks4K", "mkfs": []},
+    "forks-8k": {"size": "20G", "volume": "Forks8K", "mkfs": ["-b", "8192"]},
+    "size-1g": {"size": "1G", "volume": "V1G", "mkfs": []},
+    "size-1g-512": {"size": "1G", "volume": "V1G512", "mkfs": ["-b", "512"]},
+    "size-2g": {"size": "2G", "volume": "V2G", "mkfs": []},
+    "size-2047m": {"size": "2047M", "volume": "V2Gm", "mkfs": []},
+    "size-2049m": {"size": "2049M", "volume": "V2Gp", "mkfs": []},
+    "size-5g": {"size": "5G", "volume": "V5G", "mkfs": []}
+}

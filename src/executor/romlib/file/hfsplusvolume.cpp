@@ -25,9 +25,14 @@ using namespace Executor::hfsplus;
 
 namespace
 {
-/* The classic File Manager's lengths are LONGINTs: forks over 2 GB are
-   cut there. */
+/* The classic File Manager's lengths are LONGINTs (Mac OS 9.0.4,
+   oracle-9.0.4/voldump-Forks*.txt): a fork longer than the last whole
+   allocation block under 2 GB doesn't open (fileBoundsErr) and is
+   reported that long; an allocation of 2 GB or more is reported as
+   0x80000000. */
 const uint64_t kMaxEOF = 0x7FFFFFFF;
+const uint64_t kMaxPhysical = 0x80000000;
+const OSErr kFileBoundsErr = -1310;
 
 std::string pstr(ConstStringPtr p)
 {
@@ -72,7 +77,7 @@ struct HFSPlusVolume::OpenFork
     bool canWrite;              /* ... and may (a writable volume, not locked) */
     bool shared;                /* fsRdWrShPerm */
     bool written = false;       /* the file's date is set at close or flush */
-    uint64_t eof() const { return std::min(state->size, kMaxEOF); }
+    uint64_t eof() const { return std::min(state->size, kMaxEOF); }     /* (opened: no more than forkLimit) */
 };
 
 HFSPlusVolume::HFSPlusVolume(VCB& vcb, std::unique_ptr<Reader> reader)
@@ -83,18 +88,27 @@ HFSPlusVolume::HFSPlusVolume(VCB& vcb, std::unique_ptr<Reader> reader)
 
 HFSPlusVolume::~HFSPlusVolume() = default;
 
+uint64_t HFSPlusVolume::forkLimit() const
+{
+    uint64_t bs = reader_->header().blockSize;
+    return bs ? kMaxEOF / bs * bs : kMaxEOF;
+}
+
 uint32_t HFSPlusVolume::localDate(uint32_t gmt) const
 {
     return gmt ? (uint32_t)hostToMacTime(int64_t(gmt) - 2082844800) : 0;
 }
 
 /* The VCB's classic fields as Mac OS 9.0.4 reports them for an HFS+ volume
-   (tests/guest/hfsplus/oracle-9.0.4/voldump-*.txt): signature 'BD'; the
-   real allocation block size; free blocks as they are; ioVNmFls the root
-   folder's valence (files and folders); and a total that only fits 16
-   bits: the volume's 512-byte sectors divided by the smallest k that
-   brings them under 65536 (32 MB of 4 KB blocks: 32768; 64 MB: 43690),
-   or, in an HFS wrapper, the embedded volume's block count. */
+   (tests/guest/hfsplus/oracle-9.0.4/voldump-*.txt, from 32 MB to 20 GB,
+   blocks of 512 bytes to 8 KB): signature 'BD'; blocks of k of the
+   volume's, the smallest k that brings their count under 65536; free
+   blocks in those; ioVNmFls the root folder's valence (files and
+   folders); and a total that only fits 16 bits: the volume's 512-byte
+   sectors divided by the smallest k that brings them under 65536 (32 MB
+   of 4 KB blocks: 32768; 64 MB: 43690), or, in an HFS wrapper, the
+   embedded volume's block count; the total and the free blocks no more
+   than make 2 GB. */
 void HFSPlusVolume::updateVCB()
 {
     const VolumeHeader& h = reader_->header();
@@ -102,16 +116,21 @@ void HFSPlusVolume::updateVCB()
     vcb.vcbCrDate = h.createDate;               /* local time already */
     vcb.vcbLsMod = localDate(h.modifyDate);
     vcb.vcbVolBkUp = localDate(h.backupDate);
-    vcb.vcbAlBlkSiz = h.blockSize;
+    blockScale_ = std::max<unsigned>(1, (h.totalBlocks + 0xFFFE) / 0xFFFF);
+    uint64_t blockSize = uint64_t(blockScale_) * h.blockSize;
+    vcb.vcbAlBlkSiz = (LONGINT)blockSize;
+    uint64_t total;
     if(reader_->wrapped())
-        vcb.vcbNmAlBlks = (uint16_t)std::min<uint32_t>(h.totalBlocks, 0xFFFF);
+        total = std::min<uint32_t>(h.totalBlocks, 0xFFFF);
     else
     {
         uint64_t sectors = uint64_t(h.totalBlocks) * h.blockSize / 512;
         uint64_t k = (sectors + 0xFFFE) / 0xFFFF;
-        vcb.vcbNmAlBlks = (uint16_t)(k ? sectors / k : 0);
+        total = k ? sectors / k : 0;
     }
-    vcb.vcbFreeBks = (uint16_t)std::min<uint32_t>(h.freeBlocks, 0xFFFF);
+    total = std::min(total, kMaxEOF / blockSize);
+    vcb.vcbNmAlBlks = (uint16_t)total;
+    vcb.vcbFreeBks = (uint16_t)std::min<uint64_t>(h.freeBlocks / blockScale_, total);
     vcb.vcbClpSiz = h.dataClumpSize;
     vcb.vcbNxtCNID = h.nextCatalogID;
     vcb.vcbFilCnt = h.fileCount;
@@ -313,8 +332,13 @@ void HFSPlusVolume::getInfoCommon(CInfoPBPtr pb, InfoKind kind)
     const uint64_t bs = reader_->header().blockSize;
     auto lengths = [&](const ForkData& f, GUEST<INTEGER>& stBlk, GUEST<LONGINT>& lg, GUEST<LONGINT>& py) {
         stBlk = (INTEGER)(f.extents[0].count ? f.extents[0].start / blockScale_ : 0);
-        lg = (LONGINT)std::min(f.logicalSize, kMaxEOF);
-        py = (LONGINT)std::min(uint64_t(f.totalBlocks) * bs, kMaxEOF);
+        if(f.logicalSize > forkLimit())
+            lg = py = (LONGINT)forkLimit();
+        else
+        {
+            lg = (LONGINT)f.logicalSize;
+            py = (LONGINT)(uint32_t)std::min(uint64_t(f.totalBlocks) * bs, kMaxPhysical);
+        }
     };
     lengths(e.dataFork, pb->hFileInfo.ioFlStBlk, pb->hFileInfo.ioFlLgLen, pb->hFileInfo.ioFlPyLen);
     lengths(e.resourceFork, pb->hFileInfo.ioFlRStBlk, pb->hFileInfo.ioFlRLgLen, pb->hFileInfo.ioFlRPyLen);
@@ -416,7 +440,7 @@ void HFSPlusVolume::refresh(ForkState& st)
         if(f && f->state.get() == &st)
         {
             f->fcb->fcbEOF = (LONGINT)f->eof();
-            f->fcb->fcbPLen = (LONGINT)std::min(st.allocated, kMaxEOF);
+            f->fcb->fcbPLen = (LONGINT)(uint32_t)std::min(st.allocated, kMaxPhysical);
             f->fcb->fcbDirID = e->parentID;
             std::string name = classicName(*e).substr(0, 31);
             f->fcb->fcbCName[0] = (uint8_t)name.size();
@@ -442,6 +466,8 @@ void HFSPlusVolume::openCommon(GUEST<short>& refNum, const Entry& item, bool res
     refNum = 0;
     if(item.folder)
         throw OSErrorException(fnfErr);
+    if((resource ? item.resourceFork : item.dataFork).logicalSize > forkLimit())
+        throw OSErrorException(kFileBoundsErr);
     bool locked = item.flags & CatalogEntry::kLocked;
     bool wantsWrite = permission == fsWrPerm || permission == fsRdWrPerm || permission == fsRdWrShPerm;
     bool shared = permission == fsRdWrShPerm;
@@ -628,8 +654,8 @@ void HFSPlusVolume::PBWrite(ParmBlkPtr pb)
     setFPosCommon(pb, false);                   /* past the end: the fork grows */
     uint64_t pos = (uint32_t)f.fcb->fcbCrPs;
     LONGINT n = std::max<LONGINT>(pb->ioParam.ioReqCount, 0);
-    if(pos + uint64_t(n) > kMaxEOF)
-        throw OSErrorException(dskFulErr);
+    if(pos + uint64_t(n) > forkLimit())
+        throw OSErrorException(dskFulErr);      /* (not seen on 9.0.4) */
     if(pos + n > f.state->size)
     {
         /* whole blocks as needed (9.0.4: no clumps), never fewer than it has */
@@ -651,6 +677,8 @@ void HFSPlusVolume::PBSetEOF(ParmBlkPtr pb)
     LONGINT eof = pb->ioParam.ioMisc;
     if(eof < 0)
         throw OSErrorException(paramErr);
+    if(uint64_t(eof) > forkLimit())
+        throw OSErrorException(dskFulErr);      /* (not seen on 9.0.4) */
     check(reader_->setForkSize(f.state->cnid, f.state->resource, (uint64_t)eof));
     refreshFile(f.state->cnid);
     for(auto& g : forks_)

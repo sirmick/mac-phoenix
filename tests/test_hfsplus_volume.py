@@ -12,14 +12,18 @@ file's open bits, and writing to a fork 9.0.4's Finder holds open (opWrErr).
 
     test_hfsplus_volume.py [--dump BUILD/hfsplus_dump]
 
-Images: the fixtures (src/executor/tests/fixtures/hfsplus) and, where
-present, ~/storage/hfsplus-recon/images/{carbonlib-1.6,guest-written}.img.
+Images: the fixtures (src/executor/tests/fixtures/hfsplus), the big ones
+made here as generated.json says (sparse, 1 to 20 GB: mkfs.hfsplus in
+docker, then a script of hfsplus_dump's; their dates and volume ID are
+not compared) and, where present,
+~/storage/hfsplus-recon/images/{carbonlib-1.6,guest-written}.img.
 Exit 77 (skip) without tests-7.5.5.
 """
 import argparse
 import difflib
 import glob
 import gzip
+import json
 import os
 import re
 import shutil
@@ -33,9 +37,12 @@ ORACLE = os.path.join(ROOT, "tests", "guest", "hfsplus", "oracle-9.0.4")
 RECON = os.path.expanduser("~/storage/hfsplus-recon/images")
 
 
-def normalize(text):
+def normalize(text, generated=False):
     out = []
     for line in text.splitlines():
+        if generated:                           # made today: mkfs's dates and volume ID
+            line = re.sub(r" (cr|md|bk) \d+", r" \1 -", line)
+            line = re.sub(r"^(VOLUME .* fndr [0-9A-F]{48})[0-9A-F]{16}", r"\1-", line)
         line = re.sub(r"^(VOLUME .* attrib )([0-9A-F]{4})",
                       lambda m: m.group(1) + "%04X" % (int(m.group(2), 16) & ~0x60), line)
         line = re.sub(r"^(FILE \S+ id \d+ par \d+ attrib )([0-9A-F]{2})",
@@ -44,6 +51,24 @@ def normalize(text):
         line = re.sub(r" write (-?\d+)/-?\d+", r" write \1", line)
         out.append(line)
     return out
+
+
+HFSPROGS = "macphoenix-hfsprogs"
+
+
+def make_image(dump, work, stem, spec):
+    """A generated.json image: sparse, mkfs.hfsplus, the script; None without docker."""
+    if not shutil.which("docker") or subprocess.run(["docker", "image", "inspect", HFSPROGS],
+                                                    capture_output=True).returncode:
+        return None
+    path = os.path.join(work, stem + ".img")
+    subprocess.run(["truncate", "-s", spec["size"], path], check=True)
+    subprocess.run(["docker", "run", "--rm", "-v", work + ":/w", HFSPROGS, "mkfs.hfsplus", "-v", spec["volume"]]
+                   + spec["mkfs"] + ["/w/" + stem + ".img"], check=True, capture_output=True)
+    r = subprocess.run([dump, path, "script", os.path.join(FIXTURES, stem + ".script")], capture_output=True, text=True)
+    if r.returncode or r.stdout.strip():
+        raise RuntimeError("%s: %s" % (stem, r.stdout + r.stderr))
+    return path
 
 
 def main():
@@ -57,10 +82,17 @@ def main():
     work = tempfile.mkdtemp(prefix="hfsplus-volume-", dir=home_tmp if os.path.isdir(home_tmp) else None)
     try:
         images = []
+        generated = json.load(open(os.path.join(FIXTURES, "generated.json")))
         for oracle in sorted(glob.glob(os.path.join(ORACLE, "voldump-*.txt"))):
             stem = os.path.basename(oracle)[len("voldump-"):-len(".txt")]
             gz = os.path.join(FIXTURES, stem + ".img.gz")
-            if os.path.exists(gz):
+            if stem in generated:
+                path = make_image(args.dump, work, stem, generated[stem])
+                if path:
+                    images.append(path)
+                else:
+                    print("(no docker image %s: %s not compared)" % (HFSPROGS, stem))
+            elif os.path.exists(gz):
                 path = os.path.join(work, stem + ".img")
                 with gzip.open(gz) as src, open(path, "wb") as dst:
                     shutil.copyfileobj(src, dst)
@@ -78,8 +110,8 @@ def main():
         failed = False
         for image in images:
             stem = os.path.splitext(os.path.basename(image))[0]
-            want = normalize(open(os.path.join(ORACLE, "voldump-%s.txt" % stem)).read())
-            got = normalize(open(os.path.join(out, "voldump-%s.txt" % stem)).read())
+            want = normalize(open(os.path.join(ORACLE, "voldump-%s.txt" % stem)).read(), stem in generated)
+            got = normalize(open(os.path.join(out, "voldump-%s.txt" % stem)).read(), stem in generated)
             # a fork 9.0.4's Finder had open for writing (the Desktop DB):
             # opWrErr there; the rest of the line isn't comparable
             for i, line in enumerate(want):
