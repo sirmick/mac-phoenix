@@ -365,7 +365,12 @@ the catalog's bytes (Mac OS X's), read-only.
 - `executor.hfsplus_fsref` (`tests/test_hfsplus_fsref.py`): FSRefTest on
   Executor against 9.0.4's output (`fsreftest.py --machine 9.0.4` remakes
   it): but for the machine's Finder (its Desktop files open, its items on
-  the writable volumes) and the two HFS-code differences above.
+  the writable volumes) and the two HFS-code differences above. Twice: the
+  68K build (`build.mpw`, SC) and a PowerPC one (`FSRefTestPPC.bin`,
+  `build.cw.mpw`: CodeWarrior's MWCPPC and MWLinkPPC, as MPW 3.4.2's
+  PPCLink reads no PEF of Universal Interfaces 3.3.2's InterfaceLib stub),
+  which Executor runs on mame-ppc through InterfaceLib; on 9.0.4 the
+  PowerPC build's output is the 68K build's, byte for byte.
 - `executor.HFSPlusWriteTest.*`, `executor.HFSXWriteTest.*`: a blank
   volume (HFS+, HFSX) written in the gtest binary (natively and under
   node).

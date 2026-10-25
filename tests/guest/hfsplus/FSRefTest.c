@@ -27,6 +27,17 @@
 
 QDGlobals qd;
 
+/* SInt64: a struct to SC (68K), a long long to MrC (PowerPC) */
+#if TYPE_LONGLONG
+#define HI(x) ((UInt32)((UInt64)(x) >> 32))
+#define LO(x) ((UInt32)(x))
+#define SET64(x, h, l) ((x) = (SInt64)(((UInt64)(UInt32)(h) << 32) | (UInt32)(l)))
+#else
+#define HI(x) ((x).hi)
+#define LO(x) ((x).lo)
+#define SET64(x, h, l) ((x).hi = (h), (x).lo = (l))
+#endif
+
 static FILE *out;
 static char *buf;
 enum { kBuf = 32768 };
@@ -140,13 +151,13 @@ static void catinfo(FSCatalogInfoBitmap which, const FSCatalogInfo *c, Boolean i
         fprintf(out, " valence %lu", c->valence);
     if(which & kFSCatInfoDataSizes)
     {
-        wide64("data", c->dataLogicalSize.hi, c->dataLogicalSize.lo);
-        wide64("/", c->dataPhysicalSize.hi, c->dataPhysicalSize.lo);
+        wide64("data", HI(c->dataLogicalSize), LO(c->dataLogicalSize));
+        wide64("/", HI(c->dataPhysicalSize), LO(c->dataPhysicalSize));
     }
     if(which & kFSCatInfoRsrcSizes)
     {
-        wide64("rsrc", c->rsrcLogicalSize.hi, c->rsrcLogicalSize.lo);
-        wide64("/", c->rsrcPhysicalSize.hi, c->rsrcPhysicalSize.lo);
+        wide64("rsrc", HI(c->rsrcLogicalSize), LO(c->rsrcLogicalSize));
+        wide64("/", HI(c->rsrcPhysicalSize), LO(c->rsrcPhysicalSize));
     }
     if(which & kFSCatInfoSharingFlags)
         fprintf(out, " share %02X", (unsigned)c->sharingFlags);
@@ -199,8 +210,8 @@ static void volume(const char *name)
     onHFSPlus = vi.signature == 'H+';
     fprintf(out, " sig %04X fsid %u flags %04X files %lu folders %lu", (unsigned)vi.signature,
             (unsigned)vi.filesystemID, (unsigned)vi.flags & ~0x0060, vi.fileCount, vi.folderCount);
-    wide64("total", vi.totalBytes.hi, vi.totalBytes.lo);
-    wide64("free", vi.freeBytes.hi, vi.freeBytes.lo);
+    wide64("total", HI(vi.totalBytes), LO(vi.totalBytes));
+    wide64("free", HI(vi.freeBytes), LO(vi.freeBytes));
     fprintf(out, " blk %lu/%lu/%lu clumps %lu/%lu nextid %lu", vi.blockSize, vi.totalBlocks, vi.freeBlocks,
             vi.rsrcClumpSize, vi.dataClumpSize, vi.nextCatalogID);
     date("cr", &vi.createDate);
@@ -446,31 +457,29 @@ static void readFork(const FSRef *ref, Boolean rsrc, const char *label)
     }
     err = FSGetForkSize(refNum, &size);
     fprintf(out, " size -> %d", (int)err);
-    wide64("", size.hi, size.lo);
-    err = FSReadFork(refNum, fsFromStart, (pos.hi = 0, pos.lo = 0, pos), 16, buf, &got);
+    wide64("", HI(size), LO(size));
+    err = FSReadFork(refNum, fsFromStart, (SET64(pos, 0, 0), pos), 16, buf, &got);
     fprintf(out, " read16 -> %d (%lu) %02X%02X%02X%02X", (int)err, got, (unsigned char)buf[0],
             (unsigned char)buf[1], (unsigned char)buf[2], (unsigned char)buf[3]);
-    err = FSReadFork(refNum, fsAtMark, (pos.hi = 0, pos.lo = 0, pos), kBuf, buf, &got);
+    err = FSReadFork(refNum, fsAtMark, (SET64(pos, 0, 0), pos), kBuf, buf, &got);
     fprintf(out, " rest -> %d (%lu)", (int)err, got);
     err = FSGetForkPosition(refNum, &pos);
-    wide64("at", pos.hi, pos.lo);
-    pos.hi = -1;
-    pos.lo = (UInt32)-4;
+    wide64("at", HI(pos), LO(pos));
+    SET64(pos, -1, (UInt32)-4);
     err = FSSetForkPosition(refNum, fsFromLEOF, pos);
     fprintf(out, " setpos eof-4 -> %d", (int)err);
-    err = FSReadFork(refNum, fsAtMark, (pos.hi = 0, pos.lo = 0, pos), 16, buf, &got);
+    err = FSReadFork(refNum, fsAtMark, (SET64(pos, 0, 0), pos), 16, buf, &got);
     fprintf(out, " read -> %d (%lu)", (int)err, got);
-    pos.hi = 0;
-    pos.lo = 1;
+    SET64(pos, 0, 1);
     err = FSSetForkPosition(refNum, fsFromLEOF, pos);
     fprintf(out, " setpos past -> %d", (int)err);
-    err = FSReadFork(refNum, fsFromStart | 0x80, (pos.hi = 0, pos.lo = 0, pos), 4, buf, &got);
+    err = FSReadFork(refNum, fsFromStart | 0x80, (SET64(pos, 0, 0), pos), 4, buf, &got);
     fprintf(out, " newline mode -> %d", (int)err);
     err = GetEOF(refNum, &eof);
     fprintf(out, " geteof -> %d", (int)err);
     if(!err)
         fprintf(out, " %ld", eof);
-    err = FSWriteFork(refNum, fsFromStart, (pos.hi = 0, pos.lo = 0, pos), 1, buf, &got);
+    err = FSWriteFork(refNum, fsFromStart, (SET64(pos, 0, 0), pos), 1, buf, &got);
     fprintf(out, " write -> %d", (int)err);
     fprintf(out, " close -> %d", (int)FSCloseFork(refNum));
     fprintf(out, " close again -> %d\n", (int)FSCloseFork(refNum));
@@ -510,8 +519,8 @@ static void forksRead(void)
             break;
         fprintf(out, " ");
         ustr(uname);
-        wide64("size", size.hi, size.lo);
-        wide64("phys", phys.hi, phys.lo);
+        wide64("size", HI(size), LO(size));
+        wide64("phys", HI(phys), LO(phys));
         fprintf(out, "\n");
     }
     fprintf(out, "\n");
@@ -789,58 +798,55 @@ static void writes(void)
             b = t;
         for(i = 0; i < 1000; i++)
             buf[i] = (char)(i * 7 + 3);
-        err = FSWriteFork(a, fsFromStart, (pos.hi = 0, pos.lo = 0, pos), 1000, buf, &got);
+        err = FSWriteFork(a, fsFromStart, (SET64(pos, 0, 0), pos), 1000, buf, &got);
         fprintf(out, "  write 1000 -> %d (%lu)", (int)err, err ? 0 : got);
         if(FSGetForkPosition(a, &pos) == noErr)
-            wide64("at", pos.hi, pos.lo);
+            wide64("at", HI(pos), LO(pos));
         if(FSGetForkSize(a, &size) == noErr)
-            wide64("size", size.hi, size.lo);
+            wide64("size", HI(size), LO(size));
         fprintf(out, "\n");
-        err = FSWriteFork(a, fsFromLEOF, (pos.hi = 0, pos.lo = 100, pos), 10, buf, &got);
+        err = FSWriteFork(a, fsFromLEOF, (SET64(pos, 0, 100), pos), 10, buf, &got);
         fprintf(out, "  write past eof -> %d (%lu)", (int)err, err ? 0 : got);
         if(FSGetForkSize(a, &size) == noErr)
-            wide64("size", size.hi, size.lo);
+            wide64("size", HI(size), LO(size));
         fprintf(out, "\n");
-        err = FSWriteFork(a, fsFromMark, (pos.hi = -1, pos.lo = (UInt32)-20, pos), 5, buf, &got);
+        err = FSWriteFork(a, fsFromMark, (SET64(pos, -1, (UInt32)-20), pos), 5, buf, &got);
         fprintf(out, "  write from mark -20 -> %d (%lu)", (int)err, err ? 0 : got);
         if(FSGetForkPosition(a, &pos) == noErr)
-            wide64("at", pos.hi, pos.lo);
+            wide64("at", HI(pos), LO(pos));
         fprintf(out, "\n");
-        err = FSWriteFork(a, fsFromStart | 0x80, (pos.hi = 0, pos.lo = 0, pos), 5, buf, &got);
+        err = FSWriteFork(a, fsFromStart | 0x80, (SET64(pos, 0, 0), pos), 5, buf, &got);
         fprintf(out, "  write newline mode -> %d\n", (int)err);
-        err = b ? FSReadFork(b, fsFromStart, (pos.hi = 0, pos.lo = 0, pos), kBuf, buf, &got) : -1;
+        err = b ? FSReadFork(b, fsFromStart, (SET64(pos, 0, 0), pos), kBuf, buf, &got) : -1;
         fprintf(out, "  read by the other path -> %d (%lu)\n", (int)err, b ? got : 0);
-        err = FSSetForkSize(a, fsFromStart, (pos.hi = 0, pos.lo = 500, pos));
+        err = FSSetForkSize(a, fsFromStart, (SET64(pos, 0, 500), pos));
         fprintf(out, "  setforksize 500 -> %d", (int)err);
         if(FSGetForkSize(a, &size) == noErr)
-            wide64("size", size.hi, size.lo);
+            wide64("size", HI(size), LO(size));
         if(FSGetForkPosition(a, &pos) == noErr)
-            wide64("at", pos.hi, pos.lo);
+            wide64("at", HI(pos), LO(pos));
         if(b && FSGetForkSize(b, &size) == noErr)
-            wide64("other path", size.hi, size.lo);
+            wide64("other path", HI(size), LO(size));
         fprintf(out, "\n");
-        err = FSSetForkSize(a, fsFromLEOF, (pos.hi = 0, pos.lo = 4000, pos));
+        err = FSSetForkSize(a, fsFromLEOF, (SET64(pos, 0, 4000), pos));
         fprintf(out, "  setforksize +4000 -> %d", (int)err);
         if(FSGetForkSize(a, &size) == noErr)
-            wide64("size", size.hi, size.lo);
+            wide64("size", HI(size), LO(size));
         fprintf(out, "\n");
         {
             SInt64 off, req;
-            off.hi = 0;
-            off.lo = 0;
-            req.hi = 0;
-            req.lo = 100000;
+            SET64(off, 0, 0);
+            SET64(req, 0, 100000);
             err = FSAllocateFork(a, kFSAllocDefaultFlags, fsFromLEOF, off, *(UInt64 *)&req, &amount);
             fprintf(out, "  allocate 100000 -> %d", (int)err);
             if(!err)
-                wide64("got", amount.hi, amount.lo);
+                wide64("got", HI(amount), LO(amount));
             FSGetCatalogInfo(&f, kFSCatInfoDataSizes, info, NULL, NULL, NULL);
             catinfo(kFSCatInfoDataSizes, info, false);
             fprintf(out, "\n");
             err = FSAllocateFork(a, 8, fsFromLEOF, off, *(UInt64 *)&req, &amount);
             fprintf(out, "  allocate bad flags -> %d\n", (int)err);
-            req.lo = 0x7FFFFFFF;
-            req.hi = 4;
+            SET64(req, 4, 0x7FFFFFFF);
             err = FSAllocateFork(a, kFSAllocAllOrNothingMask, fsFromLEOF, off, *(UInt64 *)&req, &amount);
             fprintf(out, "  allocate all-or-nothing huge -> %d", (int)err);
             fprintf(out, "\n");
@@ -854,9 +860,9 @@ static void writes(void)
         {
             fprintf(out, " same %d flags %02X perm %d vol-same %d", actual == a, (unsigned)(unsigned char)fi.flags,
                     (int)fi.permissions, fi.volume == vref);
-            wide64("pos", fi.currentPosition.hi, fi.currentPosition.lo);
-            wide64("eof", fi.logicalEOF.hi, fi.logicalEOF.lo);
-            wide64("peof", fi.physicalEOF.hi, fi.physicalEOF.lo);
+            wide64("pos", HI(fi.currentPosition), LO(fi.currentPosition));
+            wide64("eof", HI(fi.logicalEOF), LO(fi.logicalEOF));
+            wide64("peof", HI(fi.physicalEOF), LO(fi.physicalEOF));
             fprintf(out, " fork ");
             ustr(uname);
             fprintf(out, " owner");
@@ -883,7 +889,7 @@ static void writes(void)
         fprintf(out, "  open rsrc -> %d", (int)err);
         if(!err)
         {
-            err = FSWriteFork(a, fsFromStart, (pos.hi = 0, pos.lo = 0, pos), 300, buf, &got);
+            err = FSWriteFork(a, fsFromStart, (SET64(pos, 0, 0), pos), 300, buf, &got);
             fprintf(out, " write -> %d", (int)err);
             FSCloseFork(a);
         }
@@ -915,7 +921,7 @@ static void writes(void)
         createU(&work, "Swap two", false, &q, "create swap two");
         if(FSOpenFork(&p, data.length, data.unicode, fsRdWrPerm, &r) == noErr)
         {
-            FSWriteFork(r, fsFromStart, (pos.hi = 0, pos.lo = 0, pos), 111, buf, &got);
+            FSWriteFork(r, fsFromStart, (SET64(pos, 0, 0), pos), 111, buf, &got);
             FSCloseFork(r);
         }
         err = FSExchangeObjects(&p, &q);
@@ -1036,27 +1042,24 @@ static void big(void)
             continue;
         }
         FSGetForkSize(ref, &size);
-        wide64("size", size.hi, size.lo);
+        wide64("size", HI(size), LO(size));
         /* across 2 GB */
-        pos.hi = 0;
-        pos.lo = 0x7FFFFFF8UL;
+        SET64(pos, 0, 0x7FFFFFF8UL);
         err = FSReadFork(ref, fsFromStart, pos, 16, buf, &n);
         for(sum = 0, k = 0; k < n; k++)
             sum = sum * 31 + (unsigned char)buf[k];
         fprintf(out, " read@2G-8 -> %d (%lu) %08lX", (int)err, err && err != eofErr ? 0 : n, sum);
         FSGetForkPosition(ref, &pos);
-        wide64("at", pos.hi, pos.lo);
+        wide64("at", HI(pos), LO(pos));
         /* the last 16 bytes */
-        pos.hi = -1;
-        pos.lo = (UInt32)-16;
+        SET64(pos, -1, (UInt32)-16);
         err = FSReadFork(ref, fsFromLEOF, pos, 64, buf, &n);
         for(sum = 0, k = 0; k < n; k++)
             sum = sum * 31 + (unsigned char)buf[k];
         fprintf(out, " tail -> %d (%lu) %08lX", (int)err, n, sum);
         FSGetForkPosition(ref, &pos);
-        wide64("at", pos.hi, pos.lo);
-        pos.hi = 0;
-        pos.lo = 1;
+        wide64("at", HI(pos), LO(pos));
+        SET64(pos, 0, 1);
         fprintf(out, " pastend -> %d", (int)FSSetForkPosition(ref, fsFromLEOF, pos));
         FSCloseFork(ref);
         fprintf(out, "\n");

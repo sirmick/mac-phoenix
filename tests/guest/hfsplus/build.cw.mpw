@@ -1,0 +1,13 @@
+# build.cw.mpw — FSRefTestPPC, FSRefTest for PowerPC alone, with CodeWarrior
+# Pro 4's MWCPPC and MWLinkPPC (tools/mpw/mpw --toolchain cw build
+# tests/guest/hfsplus -o tests/guest/hfsplus): MPW 3.4.2's PPCLink reads no
+# PEF of Universal Interfaces 3.3.2's InterfaceLib stub, MWLinkPPC does.
+# interfaces: 3.3.2
+# products: FSRefTestPPC
+Delete -i FSRefTestPPC
+MWCPPC -i "`Directory`" -i "{CIncludes}" -i "{MSLCommonIncludes}" -i "{MSLMacIncludes}" FSRefTest.c -o FSRefTest.ppc.o
+MWLinkPPC -t APPL -c 'FSRt' FSRefTest.ppc.o ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}MathLib" ∂
+	"{MWRuntimePPC}MSL RuntimePPC.Lib" "{MSLLibraries}MSL C.PPC.Lib" "{MSLLibraries}MSL SIOUX.PPC.Lib" ∂
+	-o FSRefTestPPC
+Rez -a size.r -o FSRefTestPPC

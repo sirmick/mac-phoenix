@@ -16,6 +16,7 @@ MACPHOENIX_EMULATOR names the emulator (default build/mac-phoenix).
 import argparse
 import gzip
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -40,6 +41,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--port", type=int, default=19500 + os.getpid() % 400)
     ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
+    ap.add_argument("--bin", default=os.path.join(HERE, "FSRefTest.bin"),
+                    help="the FSRefTest to run (FSRefTestPPC.bin: the PowerPC one)")
     args = ap.parse_args()
 
     out = os.path.abspath(args.out)
@@ -87,7 +90,7 @@ def main():
                         extra=("--executor-system", os.path.basename(system), "--executor-writable-images")
                         + tuple(os.environ.get("FSREFTEST_EXTRA", "").split()))
     try:
-        install_macbinary.install(os.path.join(HERE, "FSRefTest.bin"), g.host_dir(), "FSRefTest")
+        install_macbinary.install(args.bin, g.host_dir(), "FSRefTest")
         print("booting %s..." % args.machine)
         if args.machine == "9.0.4":
             g.wait_finder(240, agent=True)
@@ -106,13 +109,14 @@ def main():
         if not r.get("success"):
             raise RuntimeError("launch: %s" % r)
         for _ in range(600):
-            if os.path.exists(report) and b"\r---" in open(report, "rb").read():
+            if os.path.exists(report) and re.search(rb"[\r\n]---[\r\n]", open(report, "rb").read()):    # (CodeWarrior's C: LF)
                 break
             g.pause(1)
         else:
             print("FSRefTest did not finish")
             g.shot("unfinished")
-        text = open(report, "rb").read().decode("mac_roman").replace("\r", "\n") if os.path.exists(report) else ""
+        text = open(report, "rb").read().decode("mac_roman").replace("\r\n", "\n").replace("\r", "\n") \
+            if os.path.exists(report) else ""
         open(os.path.join(out, "fsreftest.txt"), "w").write(text)
         print("  FSRefTest: %d lines" % text.count("\n"))
         g.pause(2)

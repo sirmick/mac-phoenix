@@ -4,7 +4,10 @@ names, catalog info, iterators and search, the fork calls) on Executor
 against Mac OS 9.0.4: FSRefTest (tests/guest/hfsplus) on the long-name
 fixture (read-only), a blank HFS+ volume and a blank HFS one (writable),
 its output equal to 9.0.4's (oracle-9.0.4/fsreftest.txt; remade with
-tests/guest/hfsplus/fsreftest.py --machine 9.0.4).
+tests/guest/hfsplus/fsreftest.py --machine 9.0.4). Twice: the 68K build
+(MPW's SC) and the PowerPC one (FSRefTestPPC.bin: CodeWarrior's MWCPPC
+and MWLinkPPC against Universal Interfaces 3.3.2's InterfaceLib, run on
+mame-ppc through InterfaceLib; on 9.0.4 its output is the 68K one's).
 
 Set aside, as they depend on the machine rather than the calls:
   - the Desktop DB and DF are open on 9.0.4 (its Finder holds them);
@@ -70,20 +73,26 @@ def main():
     home_tmp = os.path.expanduser("~/storage/tmp")      # not /tmp: tmpfs
     work = args.keep or tempfile.mkdtemp(prefix="hfsplus-fsref-", dir=home_tmp if os.path.isdir(home_tmp) else None)
     try:
-        r = subprocess.run([sys.executable, os.path.join(ROOT, "tests", "guest", "hfsplus", "fsreftest.py"),
-                            "--machine", "executor", "--out", work])
-        if r.returncode:
-            print("FAIL: fsreftest.py exited %d" % r.returncode)
-            return 1
         want = normalize(open(ORACLE).read())
-        got = normalize(open(os.path.join(work, "fsreftest.txt")).read())
-        if want == got:
-            print("PASS FSRefTest: %d lines as 9.0.4's" % len(want))
-            return 0
-        print("FAIL FSRefTest:")
-        for line in list(difflib.unified_diff(want, got, "9.0.4", "executor", lineterm="", n=0))[:60]:
-            print("    " + line[:240])
-        return 1
+        failed = False
+        for label, binary in (("68K", "FSRefTest.bin"), ("PowerPC", "FSRefTestPPC.bin")):
+            out = os.path.join(work, label)
+            r = subprocess.run([sys.executable, os.path.join(ROOT, "tests", "guest", "hfsplus", "fsreftest.py"),
+                                "--machine", "executor", "--out", out,
+                                "--bin", os.path.join(ROOT, "tests", "guest", "hfsplus", binary)])
+            if r.returncode or not os.path.exists(os.path.join(out, "fsreftest.txt")):
+                print("FAIL %s: fsreftest.py exited %d" % (label, r.returncode))
+                failed = True
+                continue
+            got = normalize(open(os.path.join(out, "fsreftest.txt")).read())
+            if want == got:
+                print("PASS FSRefTest %s: %d lines as 9.0.4's" % (label, len(want)))
+                continue
+            failed = True
+            print("FAIL FSRefTest %s:" % label)
+            for line in list(difflib.unified_diff(want, got, "9.0.4", "executor", lineterm="", n=0))[:60]:
+                print("    " + line[:240])
+        return 1 if failed else 0
     finally:
         if not args.keep:
             shutil.rmtree(work, ignore_errors=True)
