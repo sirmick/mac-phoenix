@@ -285,6 +285,8 @@ extern DrvQExtra *ROMlib_addtodq(ULONGINT drvsize, const char *devicename,
                                  drive_flags_t flags, hfs_access_t *hfsp);
 
 extern Byte open_attrib_bits(LONGINT file_id, VCB *vcbp, GUEST<INTEGER> *refnump);
+/* MacPhoenix: an open desktop database's FCB (finder.cpp). */
+extern bool ROMlib_desktop_refnum_p(short refnum);
 
 
 #if !defined(NDEBUG)

@@ -22,7 +22,8 @@
  * Layer Manager selectors (process.cpp: GetLayerAtPoint, HoldProcess-
  * Switching, CallProcessRoutine, GetDesktopProcess, GetWindowProcess,
  * GetLayerWindowList, FindWindowInLayer), the Translation Manager
- * (TranslationMgr.yaml answers "none") and each other through the trap.
+ * (Easy Open's, or TranslationMgr.yaml's "none") and each other through
+ * the trap.
  * Everything here is what the patch did around them, in C++: the
  * dispatcher, the Finder's hook trampolines and the globals.
  *
@@ -434,7 +435,7 @@ OSErr Executor::C_SetFinderDragHooks(Ptr hooks, Boolean install)
     return noErr;
 }
 
-/* The Translation Manager is not loaded (Easy Open's): no translation. */
+/* Without Mac OS Easy Open there is no Translation Manager: no translation. */
 OSErr Executor::C_GetFlavorTranslation(int16_t, Handle, OSType, Ptr, ProcPtr)
 {
     return -3025; /* noTranslationPathErr */

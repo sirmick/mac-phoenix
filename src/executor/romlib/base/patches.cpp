@@ -101,6 +101,15 @@ RAW_68K_IMPLEMENTATION(Unimplemented)
 
 static int getTrapIndex(uint16_t trapnum, bool newTraps, bool &tool)
 {
+    /* MacPhoenix: a whole Toolbox trap word in the old numbering reaches
+       the full table, as on a 7.6.1 Quadra: Apple's linked-patch loader
+       (Mac OS Easy Open's INIT) installs $ABFC with SetTrapAddress $A447
+       and D0 = $ABFC, and a Mac has it in $ABFC's slot, not $A9FC's. */
+    if(!newTraps && (trapnum & 0xF800) == 0xA800)
+    {
+        tool = true;
+        return trapnum & 0x3FF;
+    }
     if(!newTraps)
     {
         trapnum &= 0x1FF;

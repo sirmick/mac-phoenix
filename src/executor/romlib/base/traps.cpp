@@ -190,8 +190,8 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
             WRITEUL(EM_A7, 0);
         return ret;
     }
-    snprintf(what, sizeof what, "%s selector $%x: no size in the selector, session stopped",
-             trap_name, (unsigned)sel);
+    snprintf(what, sizeof what, "%s selector $%x: no size in the selector, session stopped (called from $%x)",
+             trap_name, (unsigned)sel, (unsigned)READUL(EM_A7));
     log_unimplemented(what);
     return 0;
 }

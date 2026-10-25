@@ -19,6 +19,7 @@ Apple Menu Options
 Launcher
 Control Strip
 CloseView
+Mac OS Easy Open
 Clipping Extension
 AppleScript™
 Finder Scripting Extension

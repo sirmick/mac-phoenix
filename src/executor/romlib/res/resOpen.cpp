@@ -564,8 +564,17 @@ void Executor::C_CloseResFile(INTEGER rn)
         ROMlib_setreserr(resFNotFound);
 }
 
+/* MacPhoenix: a writing open (any permission but fsRdPerm) is answered
+   with an open map only if its path can write, or if no path could (a
+   locked file or volume); a map opened read-only gets a second path and
+   map, as on a 7.6.1 Quadra: Mac OS Easy Open's INIT keeps its own file
+   open with fsRdPerm (at the end of the chain), and the Finder, opening
+   the control panel with fsCurPerm, gets a new writable path; given the
+   INIT's, whose chain doesn't reach the Finder's file, it lost its own
+   resources and the panel never opened. */
 static INTEGER
-already_open_res_file(GUEST<INTEGER> swapped_vref, GUEST<LONGINT> swapped_file_num)
+already_open_res_file(GUEST<INTEGER> swapped_vref, GUEST<LONGINT> swapped_file_num,
+                      bool writable)
 {
     resmaphand map;
     fcbrec *fcbp;
@@ -579,8 +588,11 @@ already_open_res_file(GUEST<INTEGER> swapped_vref, GUEST<LONGINT> swapped_file_n
     {
         VCB *vptr;
         vptr = fcbp->fcvptr;
-        if(vptr->vcbVRefNum == swapped_vref && (fcbp->fcflags & fcfisres))
+        if(vptr->vcbVRefNum == swapped_vref && (fcbp->fcflags & fcfisres)
+           && (!writable || (fcbp->fcflags & fcwriteperm)))
+        {
             retval = (*map)->resfn;
+        }
     }
     EWALKMAP()
     return retval;
@@ -636,8 +648,10 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
         {
             INTEGER fref;
 
+            bool locked = (cpb.hFileInfo.ioFlAttrib & 1)
+                || (pbr.volumeParam.ioVAtrb & (HARDLOCKED | SOFTLOCKED));
             fref = already_open_res_file(pbr.volumeParam.ioVRefNum,
-                                         cpb.hFileInfo.ioDirID);
+                                         cpb.hFileInfo.ioDirID, !locked);
             if(fref != -1)
             {
                 LM(CurMap) = fref;

@@ -449,6 +449,8 @@ OSErr Executor::PBClose(ParmBlkPtr pb, Boolean async)
 
     if(to_driver(pb, async, Close, 0xA001, &retval))
         ;
+    else if(ROMlib_desktop_refnum_p(pb->ioParam.ioRefNum))
+        retval = noErr; /* PBDTCloseDown's */
     else if(Volume *v = getFileVolume(pb))
         retval = handleExceptions(*v, &Volume::PBClose, pb);
     else if(hfsfil((IOParam *)pb))
@@ -823,7 +825,9 @@ OSErr Executor::PBFlushFile(ParmBlkPtr pb, Boolean async)
 {
     OSErr retval;
 
-    if(Volume *v = getFileVolume(pb))
+    if(ROMlib_desktop_refnum_p(pb->ioParam.ioRefNum))
+        retval = noErr;
+    else if(Volume *v = getFileVolume(pb))
         retval = handleExceptions(*v, &Volume::PBFlushFile, pb);
     else if(hfsfil((IOParam *)pb))
         retval = hfsPBFlushFile(pb, async);

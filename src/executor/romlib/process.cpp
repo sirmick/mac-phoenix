@@ -1983,6 +1983,23 @@ static process_info_t *running_process_of(const FSSpec &app)
     return nullptr;
 }
 
+/* A launch's AppParameters {EventRecord, refcon.l, length.l, message},
+   posted to the process as its high-level event. The event's what isn't
+   looked at, as on 7.6.1: Mac OS Easy Open launches the application it
+   picked for a document with an 'aevt'/'odoc' whose what is 0. */
+static bool post_app_parameters(Ptr ap, ProcessSerialNumber to)
+{
+    EventRecord evt = *(EventRecord *)ap;
+    if(!evt.message)
+        return false;
+    evt.what = kHighLevelEvent;
+    int32_t refcon = *(GUEST<int32_t> *)(ap + 16);
+    int32_t length = *(GUEST<int32_t> *)(ap + 20);
+    PostHighLevelEvent(&evt, (Ptr)&to, refcon, ap + 24, length,
+                       0x8000 /* receiverIDisPSN */);
+    return true;
+}
+
 OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
 {
     /* As 7.5.5's Process Manager: launching an application that is
@@ -1995,18 +2012,7 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
         if(!(lpbp->launchControlFlags & 0x0400 /* launchDontSwitch */) && q != front_process)
             pending_front = q;
         if(Ptr ap = (Ptr)lpbp->launchAppParameters)
-        {
-            const uint8_t *b = (const uint8_t *)ap;
-            if(((b[0] << 8) | b[1]) == kHighLevelEvent)
-            {
-                EventRecord evt = *(EventRecord *)ap;
-                int32_t refcon = *(GUEST<int32_t> *)(ap + 16);
-                int32_t length = *(GUEST<int32_t> *)(ap + 20);
-                ProcessSerialNumber to = q->serial_number;
-                PostHighLevelEvent(&evt, (Ptr)&to, refcon, ap + 24, length,
-                                   0x8000 /* receiverIDisPSN */);
-            }
-        }
+            post_app_parameters(ap, q->serial_number);
         return noErr;
     }
 
@@ -2034,20 +2040,9 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     /* As 7.5.5's Process Manager: the launcher's AppParameters (Finder's
        'oapp'/'odoc', in Apple event wire format) become the new process's
        first high-level event: {EventRecord, refcon.l, length.l, message}. */
-    if(Ptr ap = (Ptr)lpbp->launchAppParameters)
-    {
-        const uint8_t *b = (const uint8_t *)ap;
-        if(((b[0] << 8) | b[1]) == kHighLevelEvent)
-        {
-            EventRecord evt = *(EventRecord *)ap;
-            int32_t refcon = *(GUEST<int32_t> *)(ap + 16);
-            int32_t length = *(GUEST<int32_t> *)(ap + 20);
-            ProcessSerialNumber to = p->serial_number; /* guest-visible */
-            PostHighLevelEvent(&evt, (Ptr)&to, refcon, ap + 24, length,
-                               0x8000 /* receiverIDisPSN */);
-            p->posted_open_event = true;
-        }
-    }
+    if(lpbp->launchAppParameters
+       && post_app_parameters((Ptr)lpbp->launchAppParameters, p->serial_number))
+        p->posted_open_event = true;
     else
     {
         /* No AppParameters: an 'oapp' (Apple event wire format, as

@@ -397,7 +397,9 @@ void LocalVolume::openCommon(GUEST<short>& refNum, ItemPtr item, Fork fork, int8
         fcbx.fcb->fcbMdRByt = 0;
         if(fork == Fork::resource)
             fcbx.fcb->fcbMdRByt |= RESOURCEBIT;
-        if(fcbx.access->canWrite())
+        /* MacPhoenix: an fsRdPerm path is read-only, as the Resource
+           Manager (UpdateResFile, HOpenResFile) sees it. */
+        if(permission != fsRdPerm && fcbx.access->canWrite())
             fcbx.fcb->fcbMdRByt |= WRITEBIT;
         fcbx.file = fileItem;
         refNum = fcbx.refNum;

@@ -57,6 +57,7 @@ struct DTAppl
 struct DesktopDB
 {
     short vRefNum = 0;
+    short refNum = 0; // its FCB's (see openFCB)
     fs::path file; // empty: not persisted
     bool existed = false;
     bool dirty = false;
@@ -76,6 +77,43 @@ struct DesktopDB
 };
 
 std::map<short, DesktopDB> databases; // by vRefNum
+
+/* MacPhoenix: a desktop database's refnum is an FCB's, as on a Mac (the
+   Desktop DB file's). With Mac OS Easy Open in, the Finder looks at it
+   with PBGetFCBInfo and reads the FCB itself (fcbVPtr's volume, to make
+   "Desktop DB 2" next to it when it rebuilds); -vRefNum, as it was, named
+   the first open file or nothing. The FCB is the volume's, named "Desktop
+   DB" in the root; nothing reads or writes through it (PBClose and PBFlushFile leave it alone,
+   ROMlib_desktop_refnum_p). */
+const unsigned char kDTName[] = "\012Desktop DB";
+
+short openFCB(HVCB *vcbp)
+{
+    filecontrolblock *fcbp = ROMlib_getfreefcbp();
+    if(!fcbp)
+        return 0;
+    memset(fcbp, 0, sizeof *fcbp);
+    /* A file number the catalog doesn't use: with the file's own, a path
+       the HFS code opens to it later takes this one's (empty) length and
+       extents, and the database's own reading of it came back empty. */
+    fcbp->fcbFlNum = 0x7FFF0000 | (uint16_t)vcbp->vcbVRefNum;
+    fcbp->fcbMdRByt = WRITEBIT;
+    fcbp->fcbVPtr = vcbp;
+    fcbp->fcbFType = "BTFL"_4;
+    fcbp->fcbDirID = 2;
+    memcpy(fcbp->fcbCName, kDTName, kDTName[0] + 1);
+    return (char *)fcbp - (char *)LM(FCBSPtr);
+}
+
+/* The FCB, if it is still the database's. */
+filecontrolblock *dbFCB(const DesktopDB& db)
+{
+    filecontrolblock *fcbp = db.refNum ? ROMlib_refnumtofcbp(db.refNum) : nullptr;
+    if(fcbp && fcbp->fcbVPtr && fcbp->fcbVPtr->vcbVRefNum == db.vRefNum
+       && memcmp(fcbp->fcbCName, kDTName, kDTName[0] + 1) == 0)
+        return fcbp;
+    return nullptr;
+}
 
 /* Host-only file, so host byte order; the magic catches anything else. */
 const char kMagic[8] = { 'X', 'D', 'T', 'D', 'B', '0', '0', '1' };
@@ -457,6 +495,75 @@ void addBundleIcons(DesktopDB& db, const DTAppl& a)
     SetResLoad(savedLoad);
 }
 
+/* MacPhoenix: Mac OS Easy Open's index in the database: for each file
+   type an application opens (its 'open' resources: creator, a reserved
+   word, a count, the types), an icon record of creator 'atco', that type
+   and icon type -1, whose 256 bytes are the creators that open it, ended
+   by a zero long (7.6.1.img's Desktop DB: 'TEXT' is ToyS, ttxt, notz).
+   A Finder with Easy Open in makes them when it rebuilds a database; for
+   the databases Executor builds, they come from here, else Easy Open
+   offers only the applications it asks about by creator. */
+const uint32_t kAtco = "atco"_4;
+
+void addOpenTypes(DesktopDB& db)
+{
+    if(std::any_of(db.icons.begin(), db.icons.end(), [](const DTIcon& e) {
+           return e.creator == kAtco && e.iconType == -1;
+       }))
+        return;
+    TheZoneGuard guard(LM(SysZone));
+    INTEGER saved = CurResFile();
+    Boolean savedLoad = LM(ResLoad);
+    SetResLoad(true);
+    for(const DTAppl& a : std::vector<DTAppl>(db.appls))
+    {
+        Str255 name;
+        name[0] = std::min<size_t>(a.name.size(), 255);
+        memcpy(name + 1, a.name.data(), name[0]);
+        INTEGER ref = HOpenResFile(db.vRefNum, a.parID, name, fsRdPerm);
+        if(ref == -1)
+            continue;
+        UseResFile(ref);
+        for(INTEGER i = 1; i <= Count1Resources("open"_4); i++)
+        {
+            Handle h = Get1IndResource("open"_4, i);
+            if(!h || !*h || GetHandleSize(h) < 8)
+                continue;
+            const uint8_t *p = (const uint8_t *)*h;
+            size_t size = GetHandleSize(h);
+            auto be32 = [p](size_t o) { return uint32_t(p[o] << 24 | p[o + 1] << 16 | p[o + 2] << 8 | p[o + 3]); };
+            uint32_t creator = be32(0);
+            size_t n = std::min<size_t>(p[6] << 8 | p[7], (size - 8) / 4);
+            for(size_t k = 0; k < n; k++)
+            {
+                uint32_t type = be32(8 + 4 * k);
+                auto rec = std::find_if(db.icons.begin(), db.icons.end(), [type](const DTIcon& e) {
+                    return e.creator == kAtco && e.type == type && e.iconType == -1;
+                });
+                if(rec == db.icons.end())
+                {
+                    db.icons.push_back({ kAtco, type, 0, -1, std::vector<uint8_t>(256) });
+                    rec = db.icons.end() - 1;
+                }
+                std::vector<uint8_t>& list = rec->data;
+                size_t j = 0;
+                for(; j + 8 <= list.size() && memcmp(&list[j], "\0\0\0\0", 4) != 0; j += 4)
+                    if(memcmp(&list[j], p, 4) == 0)
+                        break;
+                if(j + 8 <= list.size() && memcmp(&list[j], "\0\0\0\0", 4) == 0)
+                {
+                    for(int b = 0; b < 4; b++)
+                        list[j + b] = creator >> (24 - 8 * b);
+                    db.dirty = true;
+                }
+            }
+        }
+        CloseResFile(ref);
+    }
+    UseResFile(saved);
+    SetResLoad(savedLoad);
+}
+
 DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
 {
     LONGINT dir;
@@ -472,6 +579,7 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
     if(created)
     {
         db.vRefNum = vref;
+        db.refNum = openFCB(vcbp);
         if(auto *lv = dynamic_cast<LocalVolume *>(((VCBExtra *)vcbp)->volume))
         {
             db.file = lv->getRoot() / ".desktopdb";
@@ -489,6 +597,20 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
             for(const auto& a : std::vector<DTAppl>(db.appls))
                 addBundleIcons(db, a);
         }
+        /* MacPhoenix: the record a Finder that knows of Mac OS Easy Open
+           (Gestalt 'xlat') leaves in a database it rebuilds, creator and
+           type 'atco', icon type -2, the word 2 (7.6.1.img has it). That
+           Finder rebuilds a database without it, and Executor's Desktop
+           Manager can't carry the comments over (the Finder reads them
+           from Apple's own B*-tree, through the Desktop Manager's queue
+           in FSVars), so every boot stopped on "An error occurred while
+           rebuilding the desktop file". The databases Executor builds are
+           rebuilt ones. */
+        addOpenTypes(db);
+        if(std::none_of(db.icons.begin(), db.icons.end(), [](const DTIcon& e) {
+               return e.creator == kAtco && e.type == kAtco && e.iconType == -2;
+           }))
+            db.icons.push_back({ kAtco, kAtco, 0, -2, { 0, 2 } });
     }
     err = noErr;
     return &db;
@@ -496,14 +618,14 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
 
 DesktopDB *findDB(DTPBPtr dtp, OSErr& err)
 {
-    auto it = databases.find(-dtp->ioDTRefNum);
-    if(dtp->ioDTRefNum <= 0 || it == databases.end())
-    {
-        err = rfNumErr;
-        return nullptr;
-    }
-    err = noErr;
-    return &it->second;
+    for(auto& [vref, db] : databases)
+        if(db.refNum && db.refNum == dtp->ioDTRefNum)
+        {
+            err = noErr;
+            return &db;
+        }
+    err = rfNumErr;
+    return nullptr;
 }
 
 /* Catalog info for ioNamePtr in ioDirID (the directory itself if no name). */
@@ -539,7 +661,7 @@ Executor::PBDTGetPath(DTPBPtr dtp)
 {
     OSErr err;
     DesktopDB *db = openDB(dtp, err);
-    dtp->ioDTRefNum = db ? -db->vRefNum : 0;
+    dtp->ioDTRefNum = db ? db->refNum : 0;
     return finish(dtp, err);
 }
 
@@ -548,11 +670,19 @@ Executor::PBDTOpenInform(DTPBPtr dtp)
 {
     OSErr err;
     DesktopDB *db = openDB(dtp, err);
-    dtp->ioDTRefNum = db ? -db->vRefNum : 0;
+    dtp->ioDTRefNum = db ? db->refNum : 0;
     if(db)
         /* low bit 0: just created (empty), so Finder rebuilds it */
         dtp->ioTagInfo = db->existed ? 1 : 0;
     return finish(dtp, err);
+}
+
+bool Executor::ROMlib_desktop_refnum_p(short refnum)
+{
+    for(auto& [vref, db] : databases)
+        if(db.refNum == refnum && dbFCB(db))
+            return true;
+    return false;
 }
 
 OSErr
@@ -563,6 +693,8 @@ Executor::PBDTCloseDown(DTPBPtr dtp)
     {
         if(db->dirty)
             db->save();
+        if(filecontrolblock *fcbp = dbFCB(*db))
+            fcbp->fcbFlNum = 0;
         databases.erase(db->vRefNum);
     }
     return finish(dtp, err);

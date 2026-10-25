@@ -1,13 +1,14 @@
 # TranslationMgr.yaml — the Translation Manager's dispatcher (Macintosh
 # Easy Open), as far as Executor needs it.
 #
-# MacPhoenix. The Translation Manager is Easy Open's and is not loaded
-# (docs/executor/PLAN.md); without it the trap is Unimplemented, which
-# Executor treats as fatal. Apple's Drag Manager (System 'proc' -16513)
-# asks the dispatcher whether a flavor can be translated ('fmts', and a
-# flavor's data) and goes on without when the answer is an error, so one
-# selector answers "no translation" here. The name and the parameters'
-# meaning are guesses from the call sites.
+# MacPhoenix. The Translation Manager is Mac OS Easy Open's: its INIT
+# installs its own $ABFC dispatcher (its linked patches; the 'proc'
+# -16549..-16555 pieces are in its file), over this one. Without Easy Open
+# the trap would be Unimplemented, which Executor treats as fatal. Apple's
+# Drag Manager (System 'proc' -16513) asks the dispatcher whether a flavor
+# can be translated ('fmts', and a flavor's data) and goes on without when
+# the answer is an error, so one selector answers "no translation" here.
+# The name and the parameters' meaning are guesses from the call sites.
 
 - dispatcher:
     name: TranslationDispatch
