@@ -187,6 +187,14 @@ else()
             set_tests_properties(executor.hfsplus_write PROPERTIES
                 LABELS "executor;guest" TIMEOUT 400 SKIP_RETURN_CODE 77
                 ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
+            # A real application on an HFS+ volume: SimpleText saves, opens
+            # and saves again a note; its forks and fsck.hfsplus checked.
+            add_test(NAME executor.hfsplus_app
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_hfsplus_app.py
+                        --dump $<TARGET_FILE:hfsplus_dump>)
+            set_tests_properties(executor.hfsplus_app PROPERTIES
+                LABELS "executor;guest" TIMEOUT 300 SKIP_RETURN_CODE 77
+                ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
             # Executor's System from an HFS+ image (hfs_sideload.cpp)
             add_test(NAME executor.hfsplus_sideload
                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_hfsplus_sideload.py

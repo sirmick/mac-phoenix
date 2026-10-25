@@ -293,6 +293,13 @@ the File Manager has no call that makes one.
   Then `volwrite.py --big` (VolWrite's "big" script, a fork grown to the
   2 GB limit and past it, on a blank 8 GB volume made with mkfs.hfsplus)
   against `volwrite-big.txt`, and fsck on that volume.
+- `executor.hfsplus_app` (`tests/test_hfsplus_app.py`): Apple's SimpleText
+  on Executor (the tests-7.5.5 System) types a note and saves it onto a
+  writable blank through Standard File (driven from the keyboard:
+  Command-D, the volume typed, the name), saves again, quits; opened again
+  with `/api/launch` `open`, it takes more text and is saved. On the host
+  the data fork is the text, the resource fork a resource file with its
+  `styl`, and fsck.hfsplus finds the volume OK.
 - `executor.HFSPlusWriteTest.*`, `executor.HFSXWriteTest.*`: a blank
   volume (HFS+, HFSX) written in the gtest binary (natively and under
   node).
