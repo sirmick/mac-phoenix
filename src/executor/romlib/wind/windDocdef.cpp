@@ -1088,11 +1088,14 @@ LONGINT Executor::C_wdef0(INTEGER varcode, WindowPtr window, INTEGER message,
             }
             break;
         case wNew:
-            if(zoom_bit)
+            /* MacPhoenix: 7.6.1's WDEF 0 gives every window a WStateData,
+               zeroed unless it zooms; Color Picker 2.0 zooms its dBoxProc
+               dialog leftwards for More Choices only when it has one. */
+            WINDOW_DATA(w) = NewHandleClear((Size)sizeof(WStateData));
+            if(zoom_bit && WINDOW_DATA(w))
             {
                 WStateData *wsp;
 
-                WINDOW_DATA(w) = NewHandle((Size)sizeof(WStateData));
                 wsp = *(GUEST<WStateData *> *)WINDOW_DATA(w);
 
                 wsp->stdState = GD_BOUNDS(LM(TheGDevice));
@@ -1110,7 +1113,7 @@ LONGINT Executor::C_wdef0(INTEGER varcode, WindowPtr window, INTEGER message,
                 WINDOW_SPARE_FLAG(w) = false;
             break;
         case wDispose:
-            if(WINDOW_SPARE_FLAG(w))
+            if(WINDOW_DATA(w))
                 DisposeHandle(WINDOW_DATA(w));
             break;
         case wGrow:
