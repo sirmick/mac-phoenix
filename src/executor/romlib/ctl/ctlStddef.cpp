@@ -280,7 +280,9 @@ add_title(ControlHandle c)
     PORT_CLIP_REGION(control_owner) = NewRgn();
     r = CTL_RECT(c);
     RectRgn(PORT_CLIP_REGION(control_owner), &r);
-    r.left = r.left + 16;
+    /* MacPhoenix: 18, as 7.6.1's CDEF 0 (CloseView's radio titles, measured
+       on the ROM machine); 16 put them against the button. */
+    r.left = r.left + 18;
     drawlabel(CTL_TITLE(c), &r, justleft);
     DisposeRgn(PORT_CLIP_REGION(control_owner));
     PORT_CLIP_REGION(control_owner) = save;
