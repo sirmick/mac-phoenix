@@ -149,9 +149,12 @@ std::string to_string(ConstStringPtr p)
     return out;
 }
 
-/* Call one INIT: its code, as the loader does (JSR with A0 at the code).
-   An 'AINI' gets D0 = 0 as well, HLock's result in the loader, which the
-   ASLM Loader takes for its install message. */
+/* Call one INIT: its code, as the loader does (JSR with A0 holding the
+   INIT's handle: Control Strip detaches the handle it is given there to
+   keep its patches, and on a real boot its code stays as a locked handle
+   outside the resource map). An 'AINI' gets D0 = 0 as well, HLock's
+   result in the loader, which the ASLM Loader takes for its install
+   message. */
 void call_init(Handle h, bool aini = false)
 {
     HLock(h);
@@ -162,7 +165,7 @@ void call_init(Handle h, bool aini = false)
         a[i] = EM_AREG(i);
     if(aini)
         EM_D0 = 0;
-    EM_A0 = US_TO_SYN68K(*h);
+    EM_A0 = ptr_to_longint(h);
     execute68K(US_TO_SYN68K(*h));
     for(int i = 0; i < 8; i++)
         EM_DREG(i) = d[i];
@@ -572,5 +575,9 @@ void Executor::ROMlib_load_extensions()
                 run_file(vref, dirid, it);
         }
     }
+    /* What the INITs took from the top of RAM (BufPtr lowered: CloseView
+       keeps its code there) is no longer the Process Manager's. */
+    if(!ROMlib_shrink_pm_zone(LM(BufPtr)))
+        fprintf(stderr, "[Executor] extensions: BufPtr lowered into a used Process Manager heap\n");
     register_component_files();
 }

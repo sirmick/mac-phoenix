@@ -5,6 +5,7 @@
 #include <PPC.h>
 #include <ProcessMgr.h>
 #include <EventMgr.h>
+#include <functional>
 #include <vector>
 
 namespace Executor
@@ -83,6 +84,9 @@ extern void ROMlib_layers_clip_above(RgnHandle rgn);
 extern void ROMlib_layers_clip_below(RgnHandle rgn);
 extern void ROMlib_layers_paint_behind(RgnHandle rgn);
 extern void ROMlib_layers_calcvis_behind(RgnHandle rgn);
+/* Runs f with the layer that holds w as the one looked at (its windows in
+   WindowList); false if w is in no layer's list. */
+extern bool ROMlib_layers_with_window(WindowPeek w, const std::function<void()> &f);
 /* 7.5.5's Layer Manager (LayerDispatch), as far as the Help Manager's
    balloon window needs: a layer is a window record of its own; floating
    layers are in front of every process. */

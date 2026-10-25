@@ -222,11 +222,21 @@ static OSErr launch_like_finder(LaunchParamBlockRec *pb)
     return err;
 }
 
+static OSErr open_in_finder(const FSSpec *spec);
+
 static OSErr do_launch(const unsigned char *path)
 {
     FSSpec spec;
     OSErr err = FSMakeFSSpec(0, 0, path, &spec);
     if (err != noErr) return err;
+
+    /* LaunchApplication runs applications only. A desk accessory, a control
+     * panel or a folder opens as on a double-click: the Finder is asked. */
+    FInfo fndrInfo;
+    if (FSpGetFInfo(&spec, &fndrInfo) != noErr
+        || (fndrInfo.fdType != 'APPL' && fndrInfo.fdType != 'APPC'
+            && fndrInfo.fdType != 'APPD' && fndrInfo.fdType != 'appe'))
+        return open_in_finder(&spec);
 
     LaunchParamBlockRec pb;
     memset(&pb, 0, sizeof(pb));
@@ -619,6 +629,26 @@ static OSErr make_odoc(const AEAddressDesc *target, const FSSpec *docSpec, Apple
     }
     DisposeHandle((Handle)alias);
     if (err != noErr) AEDisposeDesc(evt);
+    return err;
+}
+
+/* The Finder's 'odoc' for an item opens it as a double-click does. */
+static OSErr open_in_finder(const FSSpec *spec)
+{
+    ProcessSerialNumber finderPSN;
+    OSErr err = psn_for_creator('MACS', &finderPSN);
+    if (err != noErr) return err;
+    SetFrontProcess(&finderPSN);
+    AEAddressDesc target;
+    err = AECreateDesc(typeProcessSerialNumber, &finderPSN, sizeof(finderPSN), &target);
+    if (err != noErr) return err;
+    AppleEvent evt;
+    err = make_odoc(&target, spec, &evt);
+    AEDisposeDesc(&target);
+    if (err != noErr) return err;
+    err = AESend(&evt, NULL, kAENoReply | kAEAlwaysInteract,
+                 kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
+    AEDisposeDesc(&evt);
     return err;
 }
 

@@ -65,7 +65,7 @@ guest memory directly and need nothing in the guest. How both work:
 
 | Endpoint | | |
 |---|---|---|
-| `/api/launch` | POST | `{"path":"Macintosh HD:App"}`; `"open": true` opens a document with its creator (`aevt`/`odoc`) |
+| `/api/launch` | POST | `{"path":"Macintosh HD:App"}`; a desk accessory, control panel or folder is opened by the Finder, as on a double-click; `"open": true` opens a document with its creator (`aevt`/`odoc`) |
 | `/api/quit` | POST | quit the front application (`aevt`/`quit`); `"agent": true` quits BridgeAgent |
 | `/api/script` | POST | `{"creator":"McPL", "script": ...}` (or `"script_b64"` for exact MacRoman): a `misc`/`dosc` event to any scriptable application (MacPerl, Frontier, MPW Shell, ToolServer, Script Editor) |
 | `/api/exec` | POST | `{"creator":"MPSX", "command": ...}`: do-script with the reply: `exit_status`, `stdout_b64`, `stderr_b64` (ToolServer) |

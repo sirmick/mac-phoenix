@@ -440,10 +440,12 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
     bool finder = false;
     static const std::vector<const char *> files = { "System", "Finder" };
     /* MacPhoenix: Launcher Items too (the Launcher control panel's buttons,
-       aliases to applications; it opened empty), and Shutdown Items */
+       aliases to applications; it opened empty), Shutdown Items, and
+       Control Strip Modules (Control Strip's modules) */
     static const std::vector<const char *> folders = { "Preferences", "Fonts", "Apple Menu Items",
                                                        "Extensions", "Control Panels", "Startup Items",
-                                                       "Launcher Items", "Shutdown Items" };
+                                                       "Launcher Items", "Shutdown Items",
+                                                       "Control Strip Modules" };
     for(const Entry& e : v.children(v.blessed()))
     {
         bool want = false;

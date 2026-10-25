@@ -16,6 +16,7 @@
 
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <dial/dial.h>
 #include <dial/itm.h>
 #include <ctl/ctl.h>
 #include <mman/mman.h>
@@ -431,6 +432,7 @@ void Executor::C_CloseDialog(DialogPtr dp) /* IMI-413 */
             BUMPIP(itp);
         }
     }
+    ROMlib_dialog_forget(dp);
     CloseWindow((WindowPtr)dp);
 }
 

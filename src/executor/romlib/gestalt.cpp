@@ -90,7 +90,8 @@ static gestaltentry_t gtable[] = {
     /*  gestaltScriptMgrVersion,	UNKNOWN,*/ /* should return gestaltUnknownErr */
     /*  gestaltSerialAttr,		0,	*/
     {
-        gestaltSoundAttr, 0x0C00,
+        /* MacPhoenix: + gestaltSoundIOMgrPresent (bit 3); no input device. */
+        gestaltSoundAttr, 0x0C08,
     },
     {
         gestaltSpeechAttr, 0x0001

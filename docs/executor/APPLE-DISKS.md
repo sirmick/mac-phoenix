@@ -47,18 +47,18 @@ same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 | 8 | ~~**Launcher** control panel~~ | Window opens empty (blue) | **Fixed**: see below. Its background is dithered at 256 colours (the ROM machine compared ran at millions) |
 | 9 | ~~**Labels** control panel~~ | Colour swatches all black (last one brown); names upside down | **Fixed**: see below |
 | 10 | **Speech** control panel (7.6.1) | Partly drawn; voice popup empty | Voice name, rate slider |
-| 11 | **SimpleSound** | "Sorry, this program requires Sound Manager 3.0 or later." | Runs. Check `SndSoundManagerVersion` (`romlib/sound/soundIMVI.cpp`) and `gestaltSoundAttr` (`romlib/gestalt.cpp`) |
+| 11 | ~~**SimpleSound**~~ (**Fixed**, STRAGGLERS 45) | "Sorry, this program requires Sound Manager 3.0 or later." | Runs. Check `SndSoundManagerVersion` (`romlib/sound/soundIMVI.cpp`) and `gestaltSoundAttr` (`romlib/gestalt.cpp`) |
 | 12 | ~~**AppleTalk** control panel (an application)~~ | Says it needs AppleTalk from Open Transport; `/api/quit` while that alert is up leaves it running | **Not a bug** (checked 2026-10-24): Executor's OT has no AppleTalk ('otan' $33: TCP only), so the alert is right; a modal alert doesn't take the Quit Apple Event (nor on a Mac), and `/api/quit` only reports the event delivered. OK (Return) and it quits by itself |
-| 13 | **Finder**, first open of a folder window | Icons drawn twice, overlapping (old and new positions), until the window is closed and reopened | Clean layout |
+| 13 | ~~**Finder**, first open of a folder window~~ (**Fixed**, STRAGGLERS 47: after the zoom box) | Icons drawn twice, overlapping (old and new positions), until the window is closed and reopened | Clean layout |
 
 ## 3. Interaction
 
 | # | Problem | Repro |
 |---|---------|-------|
 | 14 | ~~Clicking a background process's modal dialog doesn't bring that process forward~~ | **Fixed**: see below |
-| 15 | Escape doesn't cancel the "Choose a folder" Standard File dialog | Run **Synchronize Folders** or **Alert When Folder Changes**, press Escape |
-| 16 | `/api/launch` of a desk accessory (`dfil`) | `{"path":"Macintosh HD:System Folder:Apple Menu Items:Calculator"}` puts up "That application appears damaged (lacks CODE and cfrg)" (`romlib/wind/windInit.cpp:183`). The same DA opens fine from the Apple menu |
-| 17 | `/api/launch` of a control panel (`cdev`) | Returns `launched`; nothing opens. From the Finder (double-click) control panels open fine |
+| 15 | ~~Escape doesn't cancel the "Choose a folder" Standard File dialog~~ | **Fixed** (STRAGGLERS 48). Run **Synchronize Folders** or **Alert When Folder Changes**, press Escape |
+| 16 | ~~`/api/launch` of a desk accessory (`dfil`)~~ | **Fixed** (STRAGGLERS 49: BridgeAgent asks the Finder to open what isn't an application). Was: `{"path":"Macintosh HD:System Folder:Apple Menu Items:Calculator"}` puts up "That application appears damaged (lacks CODE and cfrg)" (`romlib/wind/windInit.cpp:183`). The same DA opens fine from the Apple menu |
+| 17 | ~~`/api/launch` of a control panel (`cdev`)~~ | **Fixed** (STRAGGLERS 49). Was: Returns `launched`; nothing opens. From the Finder (double-click) control panels open fine |
 
 ## 4. Blocked by Executor's extension policy (decide first)
 
@@ -72,7 +72,9 @@ turns off what they need. Each is a policy decision before it is a fix:
   File Sharing Monitor, Sharing Setup, Users & Groups, and the owner-name
   prompt in Apple IR File Exchange
 - **QuickTime**: QuickTime™ Settings (7.6.1), MoviePlayer (7.6.1)
-- **AutoRemounter, Control Strip, Easy Open, PC Exchange, CloseView** (7.6.1):
+- ~~**Control Strip**~~: on since 2026-10-25 (STRAGGLERS 52)
+- ~~**CloseView**~~: on since 2026-10-25 (magnification draws wrong, STRAGGLERS 52)
+- **AutoRemounter, Easy Open, PC Exchange** (7.6.1), see STRAGGLERS 52 for what each needs:
   say "not installed" when opened by hand
 - **Network Software Selector** (7.5.5): "Could not get information on the
   currently running networking code"
@@ -214,7 +216,7 @@ curl -X POST localhost:18760/api/emulator/start
 - **Policy-disabled panels**: with Executor running, move
   `executor-systems/<image>/System Folder/Control Panels (Disabled)` to the
   volume root and open it from the Executor volume's window.
-- **Desk accessories**: Apple menu (not `/api/launch`, item 16); `/api/quit`
+- **Desk accessories**: Apple menu or `/api/launch`; `/api/quit`
   closes them through the DA Handler.
 - **Applets** act on the Finder's selection: click empty desktop first. Their
   dialogs belong to the Finder, so answer them while the Finder is in front

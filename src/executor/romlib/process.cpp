@@ -636,6 +636,19 @@ void Executor::ROMlib_layers_clip_above(RgnHandle rgn)
         subtract_layer(l, rgn);
 }
 
+bool Executor::ROMlib_layers_with_window(WindowPeek w, const std::function<void()> &f)
+{
+    for(Layer l : layer_sequence())
+        for(WindowPeek x = chain_of(l); x; x = WINDOW_NEXT_WINDOW(x))
+            if(x == w)
+            {
+                LayerView view(l);
+                f();
+                return true;
+            }
+    return false;
+}
+
 void Executor::ROMlib_layers_clip_below(RgnHandle rgn)
 {
     if(!viewer())

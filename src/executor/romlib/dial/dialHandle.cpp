@@ -43,9 +43,15 @@ Boolean Executor::C_ROMlib_myfilt(DialogPtr dlg, EventRecord *evt,
     ControlHandle c;
     SignedByte flags;
 
+    INTEGER button = 0;
     if(evt->what == keyDown && ((evt->message & 0xFF) == '\r' || (evt->message & 0xFF) == NUMPAD_ENTER))
+        button = dp->aDefItem;
+    /* MacPhoenix: Escape and Command-period press the cancel item. */
+    else if(C_IsCancelEvent(evt))
+        button = ROMlib_dialog_cancel_item(dlg);
+    if(button)
     {
-        ip = ROMlib_dpnotoip(dp, *ith = dp->aDefItem, &flags);
+        ip = ROMlib_dpnotoip(dp, *ith = button, &flags);
         if(ip && (ip->itmtype & ctrlItem))
         {
             c = (ControlHandle)ip->itmhand;

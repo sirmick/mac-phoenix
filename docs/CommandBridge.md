@@ -210,7 +210,7 @@ native Finder doesn't call it through the trap table.
 | `/api/app` | GET | Current app name (`STATE`, else read command) |
 | `/api/windows` | GET | Window list as JSON (read command; in-process only) |
 | `/api/wait` | POST | `{"condition":"boot=Finder"\|"app=Name"\|"text=Substring","timeout":30}` — host-side polling every 200 ms; `app=` uses `STATE` like `/api/app`; `{"ok":false,"error":"timeout"}` when it runs out |
-| `/api/launch` | POST | `{"path":"Host:foo","open":true?}` — `LAUNCH` or `OPEN` via the agent (path converted to MacRoman). With `open:true`, the file is delivered as a generic `'aevt'/'odoc'` (Frontier `LAND`, MacPerl `McPL`, ResEdit, anything registered for the doc's creator). |
+| `/api/launch` | POST | `{"path":"Host:foo","open":true?}` — `LAUNCH` or `OPEN` via the agent (path converted to MacRoman). `LAUNCH` of anything but an application (a desk accessory, control panel, folder) sends the Finder an `'odoc'` for it, as a double-click. With `open:true`, the file is delivered as a generic `'aevt'/'odoc'` (Frontier `LAND`, MacPerl `McPL`, ResEdit, anything registered for the doc's creator). |
 | `/api/script` | POST | `{"creator":"<4-char>","script":"<utf-8 source>"}` (or `"script_b64"` for exact MacRoman bytes) — `SCRIPT <creator>` via the agent. Generic over MacPerl, Frontier, MPW Shell, AppleScript editor. 1 MiB cap. |
 | `/api/exec` | POST | `{"creator":"MPSX","command":"...","timeout":N}` (or `"command_b64"`; `timeout` seconds, default 60, 1–3600; 1 MiB cap) — `EXEC`: `{"success":true,"exit_status":n,"stdout_b64":...,"stderr_b64":...}`; an `OSERR` reply gives `error_code` |
 | `/api/copy` | POST | `{"from":"Vol:Item","to":"Vol:Folder:"}` — `COPY`; `"replace":true` merges into a folder of the same name, files replaced |

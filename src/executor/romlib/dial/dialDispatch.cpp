@@ -10,7 +10,24 @@
 #include <OSEvent.h>
 #include <syn68k_public.h>
 
+#include <unordered_map>
+
 using namespace Executor;
+
+/* MacPhoenix: the item SetDialogCancelItem names, per dialog, for the
+   standard filter's Escape and Command-period. */
+static std::unordered_map<DialogPtr, INTEGER> cancel_items;
+
+INTEGER Executor::ROMlib_dialog_cancel_item(DialogPtr dialog)
+{
+    auto it = cancel_items.find(dialog);
+    return it == cancel_items.end() ? 0 : it->second;
+}
+
+void Executor::ROMlib_dialog_forget(DialogPtr dialog)
+{
+    cancel_items.erase(dialog);
+}
 
 /* traps from the DialogDispatch trap */
 
@@ -35,12 +52,13 @@ OSErr Executor::C_SetDialogDefaultItem(DialogPtr dialog, int16_t new_item)
     return noErr;
 }
 
-/* These two probably adjust stuff that doesn't appear in Stock System 7 */
-
 OSErr Executor::C_SetDialogCancelItem(DialogPtr dialog, int16_t new_item)
 {
-    warning_unimplemented("");
-    return noErr; /* noErr is likely to be less upsetting than paramErr -- ctm */
+    if(new_item > 0)
+        cancel_items[dialog] = new_item;
+    else
+        cancel_items.erase(dialog);
+    return noErr;
 }
 
 OSErr Executor::C_SetDialogTracksCursor(DialogPtr dialog, Boolean tracks)

@@ -68,6 +68,10 @@ find_sub_dir(OSType folderType)
         {
             "timf"_4, "Timer Items",
         },
+        /* MacPhoenix: Control Strip finds its modules here */
+        {
+            "sdev"_4, "Control Strip Modules",
+        },
     };
     int i;
     const char *retval;
