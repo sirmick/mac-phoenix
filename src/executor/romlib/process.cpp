@@ -2583,8 +2583,29 @@ void Executor::ROMlib_process_port_name(PPCPortRec *port)
     port_name_of(current_process_info, port);
 }
 
+/* MacPhoenix: the system process (the Process Manager itself) has a port
+   too, so what it sends ('oapp' at launch, Quit All's Quits) is seen as
+   coming from it, not from the receiver (the receiver's name was given
+   for it, and the Apple Event Manager took such an event as the
+   application's own). */
+static const unsigned char system_port_name[] = "\x0fProcess Manager";
+
+static void system_port(PPCPortRec *port)
+{
+    memset(port, 0, sizeof *port);
+    memcpy(port->name, system_port_name, system_port_name[0] + 1);
+    port->portKindsSelector = 1; /* ppcByCreatorAndType */
+    port->u.port.creator = "MACS"_4;
+    port->u.port.type = "ep01"_4;
+}
+
 bool Executor::ROMlib_process_port_name_of(const ProcessSerialNumber *psn, PPCPortRec *port)
 {
+    if(psn->highLongOfPSN == 0 && psn->lowLongOfPSN == kSystemProcess)
+    {
+        system_port(port);
+        return true;
+    }
     for(process_info_t *p = process_info_list; p; p = p->next)
         if(PSN_EQ_P(*psn, p->serial_number))
         {
@@ -2597,6 +2618,11 @@ bool Executor::ROMlib_process_port_name_of(const ProcessSerialNumber *psn, PPCPo
 OSErr Executor::C_GetProcessSerialNumberFromPortName(
     PPCPortPtr port_name, ProcessSerialNumber *serial_number)
 {
+    if(EqualString(port_name->name, system_port_name, true, true))
+    {
+        *serial_number = { 0, kSystemProcess };
+        return noErr;
+    }
     for(process_info_t *p = process_info_list; p; p = p->next)
     {
         PPCPortRec theirs;

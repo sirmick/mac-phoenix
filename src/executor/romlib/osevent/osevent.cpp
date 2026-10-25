@@ -325,15 +325,10 @@ static Boolean OSEventCommon(INTEGER evmask, EventRecord *eventp,
                 GUEST<int16_t> major, minor;
                 GUEST<OSType> marker;
             } msg = { "aevt"_4, 1, 1, ";;;;"_4 };
-            EventRecord evt = {};
-            evt.what = kHighLevelEvent;
-            evt.message = "aevt"_4;
-            GUEST<uint32_t> id = "oapp"_4;
-            memcpy(&evt.where, &id, sizeof id);
             ProcessSerialNumber psn;
             GetCurrentProcess(&psn);
-            PostHighLevelEvent(&evt, (Ptr)&psn, 0, (Ptr)&msg, sizeof msg,
-                               0x8000 /* receiverIDisPSN */);
+            ROMlib_hle_post_from_system(&psn, "aevt"_4, "oapp"_4, 0,
+                                        (Ptr)&msg, sizeof msg);
         }
     }
     if(send_application_open_aevt_p
