@@ -47,7 +47,14 @@ OS Runtime Architectures*:
   to the data item).
 - **Arguments**: pushed right to left (C order, for Pascal routines too),
   each in a **4-byte slot** (shorts and Booleans widened, the value at the
-  slot's low end); the result in D0. A routine with fixed arguments **pops
+  slot's low end; a double takes 8, a float 4); the result in D0 (a
+  float's bits too). A **double result** goes through a hidden pointer:
+  the caller reserves 8 bytes and pushes their address last, so it is the
+  first argument; the callee stores the result there, answers the address
+  in D0 and pops it with the rest. A long double (SANE's extended) the
+  same way, 10 bytes. In variadic arguments a long double is 12 bytes, the
+  extended padded at the end (SC; it converts some to double first). Seen
+  in SC's output for our own code (`-model cfmflat`). A routine with fixed arguments **pops
   them itself** (`RTD`), Pascal or C (`c2pstr` too); only variadic ones
   (`CallUniversalProc`, `sprintf`) leave them to the caller. Seen as
   `MOVEM.L (A7)+` right after a call with no stack adjustment, in Apple's
@@ -117,9 +124,19 @@ OS Runtime Architectures*:
    through `$AA5A`, which stays `_Unimplemented` there, and the boot stops
    after the Speech Manager. Applications launched as above don't need it.
 
-Not done: segmented CFM-68K, MathLib's floating-point conventions (double
-results land in D0:D1, unverified), Apple's NuStdCLib for MPW-built
-applications on Executor's own System (it is in the Enabler's file), the
+6. **NuStdCLib and NuIntEnv** (2026-10-26, STRAGGLERS 60): MPW's CFM-68K
+   programs import StdCLib as these two libraries (the Enabler's file has
+   them); Executor's StdCLib answers both (docs/executor/PPCLibs.md). Its
+   typed routines are registered for CFM-68K from the definitions, the
+   printf and scanf family has CFM-68K entries reading the 68k stack, data
+   exports are there for both, `_iob`'s stride is 22 for a 68k client
+   (SC aligns `FILE` to 2 bytes; 24 on PowerPC), and qsort's comparison,
+   atexit and signal handlers are called as 68k code. `clib_cfm68k_executor`
+   runs CLibTest68K (191 checks), `clib_cfm68k` the same against Apple's
+   NuStdCLib with the Enabler.
+
+Not done: segmented CFM-68K, MathLib for CFM-68K programs (MPW links
+NuMathLib.o in; CodeWarrior's MathLibCFM68K is a static library too), the
 public `$AA5A` selectors for classic 68k callers (and then Gestalt
 `'cfrg'`).
 

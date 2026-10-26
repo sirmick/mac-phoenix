@@ -1,0 +1,1982 @@
+# StdCLib: the C library a Power Mac has in ROM, as Executor answers it
+# (romlib/clib/stdclib.cpp, stdio.cpp; docs/executor/PPCLibs.md). Only for
+# Executor: a guest program's own C headers declare these (Retro68's newlib,
+# MPW's CIncludes). Types are the implementations' (uint32_t for size_t and
+# for pointers the routine reads itself). Data exports (errno, _iob, ...)
+# are registered by stdclib.cpp; raw routines decode their own arguments.
+
+# ---- stdclib.cpp -------------------------------------------------
+
+- only-for: Executor
+  function:
+    name: "memcpy"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memcpy
+
+- only-for: Executor
+  function:
+    name: "_memcpy"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memcpy
+
+- only-for: Executor
+  function:
+    name: "memmove"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memmove
+
+- only-for: Executor
+  function:
+    name: "_rmemcpy"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memmove
+
+- only-for: Executor
+  function:
+    name: "memset"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "c"
+        type: "int32_t"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memset
+
+- only-for: Executor
+  function:
+    name: "memcmp"
+    return: "int32_t"
+    args:
+      - name: "a"
+        type: "const uint8_t*"
+      - name: "b"
+        type: "const uint8_t*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memcmp
+
+- only-for: Executor
+  function:
+    name: "memchr"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "c"
+        type: "int32_t"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memchr
+
+- only-for: Executor
+  function:
+    name: "_memchr"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "c"
+        type: "int32_t"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memchr
+
+- only-for: Executor
+  function:
+    name: "memccpy"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+      - name: "c"
+        type: "int32_t"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_memccpy
+
+- only-for: Executor
+  function:
+    name: "strlen"
+    return: "uint32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_strlen
+
+- only-for: Executor
+  function:
+    name: "strcpy"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_strcpy
+
+- only-for: Executor
+  function:
+    name: "strncpy"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_strncpy
+
+- only-for: Executor
+  function:
+    name: "strcat"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_strcat
+
+- only-for: Executor
+  function:
+    name: "strncat"
+    return: "char*"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_strncat
+
+- only-for: Executor
+  function:
+    name: "strcmp"
+    return: "int32_t"
+    args:
+      - name: "a"
+        type: "const uint8_t*"
+      - name: "b"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_strcmp
+
+- only-for: Executor
+  function:
+    name: "strncmp"
+    return: "int32_t"
+    args:
+      - name: "a"
+        type: "const uint8_t*"
+      - name: "b"
+        type: "const uint8_t*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_strncmp
+
+- only-for: Executor
+  function:
+    name: "strchr"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_strchr
+
+- only-for: Executor
+  function:
+    name: "strrchr"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_strrchr
+
+- only-for: Executor
+  function:
+    name: "strspn"
+    return: "uint32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+      - name: "set"
+        type: "const char*"
+    library: StdCLib
+    executor: c_strspn
+
+- only-for: Executor
+  function:
+    name: "strcspn"
+    return: "uint32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+      - name: "set"
+        type: "const char*"
+    library: StdCLib
+    executor: c_strcspn
+
+- only-for: Executor
+  function:
+    name: "strpbrk"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "set"
+        type: "const char*"
+    library: StdCLib
+    executor: c_strpbrk
+
+- only-for: Executor
+  function:
+    name: "strstr"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "t"
+        type: "const char*"
+    library: StdCLib
+    executor: c_strstr
+
+- only-for: Executor
+  function:
+    name: "strtok"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "sep"
+        type: "const char*"
+    library: StdCLib
+    executor: c_strtok
+
+- only-for: Executor
+  function:
+    name: "strcoll"
+    return: "int32_t"
+    args:
+      - name: "a"
+        type: "const uint8_t*"
+      - name: "b"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_strcoll
+
+- only-for: Executor
+  function:
+    name: "strxfrm"
+    return: "uint32_t"
+    args:
+      - name: "d"
+        type: "char*"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_strxfrm
+
+- only-for: Executor
+  function:
+    name: "strerror"
+    return: "char*"
+    args:
+      - name: "e"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_strerror
+
+- only-for: Executor
+  function:
+    name: "isalnum"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isalnum
+
+- only-for: Executor
+  function:
+    name: "isalpha"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isalpha
+
+- only-for: Executor
+  function:
+    name: "iscntrl"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_iscntrl
+
+- only-for: Executor
+  function:
+    name: "isdigit"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isdigit
+
+- only-for: Executor
+  function:
+    name: "isgraph"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isgraph
+
+- only-for: Executor
+  function:
+    name: "islower"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_islower
+
+- only-for: Executor
+  function:
+    name: "isprint"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isprint
+
+- only-for: Executor
+  function:
+    name: "ispunct"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_ispunct
+
+- only-for: Executor
+  function:
+    name: "isspace"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isspace
+
+- only-for: Executor
+  function:
+    name: "isupper"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isupper
+
+- only-for: Executor
+  function:
+    name: "isxdigit"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isxdigit
+
+- only-for: Executor
+  function:
+    name: "isascii"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_isascii
+
+- only-for: Executor
+  function:
+    name: "toascii"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_toascii
+
+- only-for: Executor
+  function:
+    name: "tolower"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_tolower
+
+- only-for: Executor
+  function:
+    name: "toupper"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_toupper
+
+- only-for: Executor
+  function:
+    name: "atoi"
+    return: "int32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_atoi
+
+- only-for: Executor
+  function:
+    name: "atol"
+    return: "int32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_atol
+
+- only-for: Executor
+  function:
+    name: "atof"
+    return: "double"
+    args:
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_atof
+
+- only-for: Executor
+  function:
+    name: "strtol"
+    return: "int32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+      - name: "endp"
+        type: "uint32_t"
+      - name: "base"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_strtol
+
+- only-for: Executor
+  function:
+    name: "strtoul"
+    return: "uint32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+      - name: "endp"
+        type: "uint32_t"
+      - name: "base"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_strtoul
+
+- only-for: Executor
+  function:
+    name: "strtod"
+    return: "double"
+    args:
+      - name: "s"
+        type: "const char*"
+      - name: "endp"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_strtod
+
+- only-for: Executor
+  function:
+    name: "abs"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_abs
+
+- only-for: Executor
+  function:
+    name: "labs"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_labs
+
+- only-for: Executor
+  function:
+    name: "div"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "ldiv"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "rand"
+    return: "int32_t"
+    library: StdCLib
+    executor: c_rand
+
+- only-for: Executor
+  function:
+    name: "srand"
+    args:
+      - name: "seed"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_srand
+
+- only-for: Executor
+  function:
+    name: "ecvt"
+    return: "char*"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "n"
+        type: "int32_t"
+      - name: "decpt"
+        type: "uint32_t"
+      - name: "sign"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_ecvt
+
+- only-for: Executor
+  function:
+    name: "fcvt"
+    return: "char*"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "n"
+        type: "int32_t"
+      - name: "decpt"
+        type: "uint32_t"
+      - name: "sign"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fcvt
+
+- only-for: Executor
+  function:
+    name: "mblen"
+    return: "int32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_mblen
+
+- only-for: Executor
+  function:
+    name: "mbtowc"
+    return: "int32_t"
+    args:
+      - name: "pwc"
+        type: "uint32_t"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_mbtowc
+
+- only-for: Executor
+  function:
+    name: "wctomb"
+    return: "int32_t"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "wc"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_wctomb
+
+- only-for: Executor
+  function:
+    name: "mbstowcs"
+    return: "uint32_t"
+    args:
+      - name: "pwcs"
+        type: "uint32_t"
+      - name: "s"
+        type: "const char*"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_mbstowcs
+
+- only-for: Executor
+  function:
+    name: "wcstombs"
+    return: "uint32_t"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "pwcs"
+        type: "uint32_t"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_wcstombs
+
+- only-for: Executor
+  function:
+    name: "malloc"
+    return: "char*"
+    args:
+      - name: "size"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_malloc
+
+- only-for: Executor
+  function:
+    name: "calloc"
+    return: "char*"
+    args:
+      - name: "n"
+        type: "uint32_t"
+      - name: "size"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_calloc
+
+- only-for: Executor
+  function:
+    name: "free"
+    args:
+      - name: "p"
+        type: "char*"
+    library: StdCLib
+    executor: c_free
+
+- only-for: Executor
+  function:
+    name: "realloc"
+    return: "char*"
+    args:
+      - name: "p"
+        type: "char*"
+      - name: "size"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_realloc
+
+- only-for: Executor
+  function:
+    name: "qsort"
+    args:
+      - name: "base"
+        type: "char*"
+      - name: "n"
+        type: "uint32_t"
+      - name: "size"
+        type: "uint32_t"
+      - name: "compar"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_qsort
+
+- only-for: Executor
+  function:
+    name: "bsearch"
+    return: "char*"
+    args:
+      - name: "key"
+        type: "const char*"
+      - name: "base"
+        type: "char*"
+      - name: "n"
+        type: "uint32_t"
+      - name: "size"
+        type: "uint32_t"
+      - name: "compar"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_bsearch
+
+- only-for: Executor
+  function:
+    name: "atexit"
+    return: "int32_t"
+    args:
+      - name: "func"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_atexit
+
+- only-for: Executor
+  function:
+    name: "exit"
+    args:
+      - name: "status"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_exit
+
+- only-for: Executor
+  function:
+    name: "_exit"
+    args:
+      - name: "status"
+        type: "int32_t"
+    library: StdCLib
+    executor: c__exit
+
+- only-for: Executor
+  function:
+    name: "abort"
+    library: StdCLib
+    executor: c_abort
+
+- only-for: Executor
+  function:
+    name: "__abort"
+    library: StdCLib
+    executor: c_abort
+
+- only-for: Executor
+  function:
+    name: "getenv"
+    return: "char*"
+    args:
+      - name: "arg1"
+        type: "const char*"
+    library: StdCLib
+    executor: c_getenv
+
+- only-for: Executor
+  function:
+    name: "system"
+    return: "int32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_system
+
+- only-for: Executor
+  function:
+    name: "_BreakPoint"
+    library: StdCLib
+    executor: c_breakpoint
+
+- only-for: Executor
+  function:
+    name: "__assertprint"
+    args:
+      - name: "file"
+        type: "const char*"
+      - name: "line"
+        type: "int32_t"
+      - name: "expr"
+        type: "const char*"
+    library: StdCLib
+    executor: c_assertprint
+
+- only-for: Executor
+  function:
+    name: "signal"
+    return: "uint32_t"
+    args:
+      - name: "sig"
+        type: "int32_t"
+      - name: "func"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_signal
+
+- only-for: Executor
+  function:
+    name: "raise"
+    return: "int32_t"
+    args:
+      - name: "sig"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_raise
+
+- only-for: Executor
+  function:
+    name: "__setjmp"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "longjmp"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "time"
+    return: "uint32_t"
+    args:
+      - name: "timer"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_time
+
+- only-for: Executor
+  function:
+    name: "clock"
+    return: "uint32_t"
+    library: StdCLib
+    executor: c_clock
+
+- only-for: Executor
+  function:
+    name: "difftime"
+    return: "double"
+    args:
+      - name: "t1"
+        type: "uint32_t"
+      - name: "t0"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_difftime
+
+- only-for: Executor
+  function:
+    name: "mktime"
+    return: "uint32_t"
+    args:
+      - name: "p"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_mktime
+
+- only-for: Executor
+  function:
+    name: "localtime"
+    return: "char*"
+    args:
+      - name: "timer"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_localtime
+
+- only-for: Executor
+  function:
+    name: "gmtime"
+    return: "char*"
+    args:
+      - name: "timer"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_gmtime
+
+- only-for: Executor
+  function:
+    name: "asctime"
+    return: "char*"
+    args:
+      - name: "p"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_asctime
+
+- only-for: Executor
+  function:
+    name: "ctime"
+    return: "char*"
+    args:
+      - name: "timer"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_ctime
+
+- only-for: Executor
+  function:
+    name: "strftime"
+    return: "uint32_t"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "max"
+        type: "uint32_t"
+      - name: "format"
+        type: "const char*"
+      - name: "p"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_strftime
+
+- only-for: Executor
+  function:
+    name: "setlocale"
+    return: "char*"
+    args:
+      - name: "category"
+        type: "int32_t"
+      - name: "locale"
+        type: "const char*"
+    library: StdCLib
+    executor: c_setlocale
+
+- only-for: Executor
+  function:
+    name: "localeconv"
+    return: "char*"
+    library: StdCLib
+    executor: c_localeconv
+
+- only-for: Executor
+  function:
+    name: "PLstrcmp"
+    return: "int16_t"
+    args:
+      - name: "a"
+        type: "const uint8_t*"
+      - name: "b"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_PLstrcmp
+
+- only-for: Executor
+  function:
+    name: "PLstrncmp"
+    return: "int16_t"
+    args:
+      - name: "a"
+        type: "const uint8_t*"
+      - name: "b"
+        type: "const uint8_t*"
+      - name: "num"
+        type: "int16_t"
+    library: StdCLib
+    executor: c_PLstrncmp
+
+- only-for: Executor
+  function:
+    name: "PLstrcpy"
+    return: "uint8_t*"
+    args:
+      - name: "d"
+        type: "uint8_t*"
+      - name: "s"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_PLstrcpy
+
+- only-for: Executor
+  function:
+    name: "PLstrncpy"
+    return: "uint8_t*"
+    args:
+      - name: "d"
+        type: "uint8_t*"
+      - name: "s"
+        type: "const uint8_t*"
+      - name: "num"
+        type: "int16_t"
+    library: StdCLib
+    executor: c_PLstrncpy
+
+- only-for: Executor
+  function:
+    name: "PLstrcat"
+    return: "uint8_t*"
+    args:
+      - name: "d"
+        type: "uint8_t*"
+      - name: "s"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_PLstrcat
+
+- only-for: Executor
+  function:
+    name: "PLstrncat"
+    return: "uint8_t*"
+    args:
+      - name: "d"
+        type: "uint8_t*"
+      - name: "s"
+        type: "const uint8_t*"
+      - name: "num"
+        type: "int16_t"
+    library: StdCLib
+    executor: c_PLstrncat
+
+- only-for: Executor
+  function:
+    name: "PLstrchr"
+    return: "uint8_t*"
+    args:
+      - name: "s"
+        type: "uint8_t*"
+      - name: "ch"
+        type: "int16_t"
+    library: StdCLib
+    executor: c_PLstrchr
+
+- only-for: Executor
+  function:
+    name: "PLstrrchr"
+    return: "uint8_t*"
+    args:
+      - name: "s"
+        type: "uint8_t*"
+      - name: "ch"
+        type: "int16_t"
+    library: StdCLib
+    executor: c_PLstrrchr
+
+- only-for: Executor
+  function:
+    name: "PLstrpbrk"
+    return: "uint8_t*"
+    args:
+      - name: "s"
+        type: "uint8_t*"
+      - name: "set"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_PLstrpbrk
+
+- only-for: Executor
+  function:
+    name: "PLstrspn"
+    return: "int16_t"
+    args:
+      - name: "s"
+        type: "const uint8_t*"
+      - name: "set"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_PLstrspn
+
+- only-for: Executor
+  function:
+    name: "PLstrstr"
+    return: "uint8_t*"
+    args:
+      - name: "s"
+        type: "uint8_t*"
+      - name: "t"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_PLstrstr
+
+- only-for: Executor
+  function:
+    name: "PLstrlen"
+    return: "int16_t"
+    args:
+      - name: "s"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_PLstrlen
+
+- only-for: Executor
+  function:
+    name: "PLpos"
+    return: "int16_t"
+    args:
+      - name: "sub"
+        type: "const uint8_t*"
+      - name: "str"
+        type: "const uint8_t*"
+    library: StdCLib
+    executor: c_PLpos
+
+- only-for: Executor
+  function:
+    name: "MakeResolvedFSSpec"
+    return: "OSErr"
+    args:
+      - name: "vol"
+        type: "int16_t"
+      - name: "dir"
+        type: "int32_t"
+      - name: "path"
+        type: "uint8_t*"
+      - name: "spec"
+        type: "FSSpec*"
+      - name: "isFolder"
+        type: "Boolean*"
+      - name: "hadAlias"
+        type: "Boolean*"
+      - name: "leafIsAlias"
+        type: "Boolean*"
+    library: StdCLib
+    executor: c_MakeResolvedFSSpec
+
+- only-for: Executor
+  function:
+    name: "ResolveFolderAliases"
+    return: "OSErr"
+    args:
+      - name: "vol"
+        type: "int16_t"
+      - name: "dir"
+        type: "int32_t"
+      - name: "path"
+        type: "uint8_t*"
+      - name: "resolveLeaf"
+        type: "Boolean"
+      - name: "spec"
+        type: "FSSpec*"
+      - name: "isFolder"
+        type: "Boolean*"
+      - name: "hadAlias"
+        type: "Boolean*"
+      - name: "leafIsAlias"
+        type: "Boolean*"
+    library: StdCLib
+    executor: c_ResolveFolderAliases
+
+- only-for: Executor
+  function:
+    name: "ResolvePath"
+    return: "OSErr"
+    args:
+      - name: "raw"
+        type: "const char*"
+      - name: "resolved"
+        type: "char*"
+      - name: "isFolder"
+        type: "Boolean*"
+      - name: "hadAlias"
+        type: "Boolean*"
+    library: StdCLib
+    executor: c_ResolvePath
+
+- only-for: Executor
+  function:
+    name: "IEResolvePath"
+    return: "OSErr"
+    args:
+      - name: "raw"
+        type: "const char*"
+      - name: "resolved"
+        type: "char*"
+      - name: "isFolder"
+        type: "Boolean*"
+      - name: "hadAlias"
+        type: "Boolean*"
+    library: StdCLib
+    executor: c_ResolvePath
+
+- only-for: Executor
+  function:
+    name: "MakeResolvedPath"
+    return: "OSErr"
+    args:
+      - name: "vol"
+        type: "int16_t"
+      - name: "dir"
+        type: "int32_t"
+      - name: "path"
+        type: "uint8_t*"
+      - name: "resolveLeaf"
+        type: "Boolean"
+      - name: "buffer"
+        type: "char*"
+      - name: "isFolder"
+        type: "Boolean*"
+      - name: "hadAlias"
+        type: "Boolean*"
+      - name: "leafIsAlias"
+        type: "Boolean*"
+    library: StdCLib
+    executor: c_MakeResolvedPath
+
+- only-for: Executor
+  function:
+    name: "TrapAvailable"
+    return: "Boolean"
+    args:
+      - name: "trapNum"
+        type: "int16_t"
+    library: StdCLib
+    executor: c_TrapAvailable
+
+- only-for: Executor
+  function:
+    name: "getpid"
+    return: "int32_t"
+    library: StdCLib
+    executor: c_getpid
+
+# ---- stdio.cpp ---------------------------------------------------
+
+- only-for: Executor
+  function:
+    name: "_filbuf"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_filbuf
+
+- only-for: Executor
+  function:
+    name: "_flsbuf"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "uint32_t"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_flsbuf
+
+- only-for: Executor
+  function:
+    name: "_xflsbuf"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_xflsbuf
+
+- only-for: Executor
+  function:
+    name: "_wrtchk"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_wrtchk
+
+- only-for: Executor
+  function:
+    name: "_bufsync"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_bufsync
+
+- only-for: Executor
+  function:
+    name: "_coExit"
+    library: StdCLib
+    executor: c_coExit
+
+- only-for: Executor
+  function:
+    name: "fgetc"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fgetc
+
+- only-for: Executor
+  function:
+    name: "getc"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fgetc
+
+- only-for: Executor
+  function:
+    name: "fputc"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fputc
+
+- only-for: Executor
+  function:
+    name: "putc"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fputc
+
+- only-for: Executor
+  function:
+    name: "getchar"
+    return: "int32_t"
+    library: StdCLib
+    executor: c_getchar
+
+- only-for: Executor
+  function:
+    name: "putchar"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_putchar
+
+- only-for: Executor
+  function:
+    name: "ungetc"
+    return: "int32_t"
+    args:
+      - name: "c"
+        type: "int32_t"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_ungetc
+
+- only-for: Executor
+  function:
+    name: "fgets"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+      - name: "n"
+        type: "int32_t"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fgets
+
+- only-for: Executor
+  function:
+    name: "gets"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+    library: StdCLib
+    executor: c_gets
+
+- only-for: Executor
+  function:
+    name: "fputs"
+    return: "int32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fputs
+
+- only-for: Executor
+  function:
+    name: "puts"
+    return: "int32_t"
+    args:
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_puts
+
+- only-for: Executor
+  function:
+    name: "getw"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_getw
+
+- only-for: Executor
+  function:
+    name: "putw"
+    return: "int32_t"
+    args:
+      - name: "w"
+        type: "int32_t"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_putw
+
+- only-for: Executor
+  function:
+    name: "fread"
+    return: "uint32_t"
+    args:
+      - name: "dst"
+        type: "uint32_t"
+      - name: "sz"
+        type: "uint32_t"
+      - name: "n"
+        type: "uint32_t"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fread
+
+- only-for: Executor
+  function:
+    name: "fwrite"
+    return: "uint32_t"
+    args:
+      - name: "src"
+        type: "uint32_t"
+      - name: "sz"
+        type: "uint32_t"
+      - name: "n"
+        type: "uint32_t"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fwrite
+
+- only-for: Executor
+  function:
+    name: "fopen"
+    return: "uint32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+      - name: "mode"
+        type: "const char*"
+    library: StdCLib
+    executor: c_fopen
+
+- only-for: Executor
+  function:
+    name: "freopen"
+    return: "uint32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+      - name: "mode"
+        type: "const char*"
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_freopen
+
+- only-for: Executor
+  function:
+    name: "fdopen"
+    return: "uint32_t"
+    args:
+      - name: "fd"
+        type: "int32_t"
+      - name: "mode"
+        type: "const char*"
+    library: StdCLib
+    executor: c_fdopen
+
+- only-for: Executor
+  function:
+    name: "fclose"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fclose
+
+- only-for: Executor
+  function:
+    name: "fflush"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fflush
+
+- only-for: Executor
+  function:
+    name: "fseek"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+      - name: "offset"
+        type: "int32_t"
+      - name: "whence"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_fseek
+
+- only-for: Executor
+  function:
+    name: "ftell"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_ftell
+
+- only-for: Executor
+  function:
+    name: "rewind"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_rewind
+
+- only-for: Executor
+  function:
+    name: "fgetpos"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+      - name: "pos"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fgetpos
+
+- only-for: Executor
+  function:
+    name: "fsetpos"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+      - name: "pos"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fsetpos
+
+- only-for: Executor
+  function:
+    name: "clearerr"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_clearerr
+
+- only-for: Executor
+  function:
+    name: "feof"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_feof
+
+- only-for: Executor
+  function:
+    name: "ferror"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_ferror
+
+- only-for: Executor
+  function:
+    name: "setvbuf"
+    return: "int32_t"
+    args:
+      - name: "f"
+        type: "uint32_t"
+      - name: "buf"
+        type: "uint32_t"
+      - name: "mode"
+        type: "int32_t"
+      - name: "sz"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_setvbuf
+
+- only-for: Executor
+  function:
+    name: "setbuf"
+    args:
+      - name: "f"
+        type: "uint32_t"
+      - name: "buf"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_setbuf
+
+- only-for: Executor
+  function:
+    name: "remove"
+    return: "int32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+    library: StdCLib
+    executor: c_remove
+
+- only-for: Executor
+  function:
+    name: "unlink"
+    return: "int32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+    library: StdCLib
+    executor: c_remove
+
+- only-for: Executor
+  function:
+    name: "rename"
+    return: "int32_t"
+    args:
+      - name: "from"
+        type: "const char*"
+      - name: "to"
+        type: "const char*"
+    library: StdCLib
+    executor: c_rename
+
+- only-for: Executor
+  function:
+    name: "tmpnam"
+    return: "char*"
+    args:
+      - name: "s"
+        type: "char*"
+    library: StdCLib
+    executor: c_tmpnam
+
+- only-for: Executor
+  function:
+    name: "tmpfile"
+    return: "uint32_t"
+    library: StdCLib
+    executor: c_tmpfile
+
+- only-for: Executor
+  function:
+    name: "mktemp"
+    return: "char*"
+    args:
+      - name: "tmpl"
+        type: "char*"
+    library: StdCLib
+    executor: c_mktemp
+
+- only-for: Executor
+  function:
+    name: "fsetfileinfo"
+    args:
+      - name: "path"
+        type: "const char*"
+      - name: "creator"
+        type: "uint32_t"
+      - name: "type"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_fsetfileinfo
+
+- only-for: Executor
+  function:
+    name: "perror"
+    args:
+      - name: "s"
+        type: "const char*"
+    library: StdCLib
+    executor: c_perror
+
+- only-for: Executor
+  function:
+    name: "open"
+    return: "int32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+      - name: "oflag"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_open
+
+- only-for: Executor
+  function:
+    name: "creat"
+    return: "int32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+    library: StdCLib
+    executor: c_creat
+
+- only-for: Executor
+  function:
+    name: "close"
+    return: "int32_t"
+    args:
+      - name: "fd"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_close
+
+- only-for: Executor
+  function:
+    name: "read"
+    return: "int32_t"
+    args:
+      - name: "fd"
+        type: "int32_t"
+      - name: "buf"
+        type: "uint32_t"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_read
+
+- only-for: Executor
+  function:
+    name: "write"
+    return: "int32_t"
+    args:
+      - name: "fd"
+        type: "int32_t"
+      - name: "buf"
+        type: "uint32_t"
+      - name: "n"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_write
+
+- only-for: Executor
+  function:
+    name: "lseek"
+    return: "int32_t"
+    args:
+      - name: "fd"
+        type: "int32_t"
+      - name: "off"
+        type: "int32_t"
+      - name: "whence"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_lseek
+
+- only-for: Executor
+  function:
+    name: "dup"
+    return: "int32_t"
+    args:
+      - name: "fd"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_dup
+
+- only-for: Executor
+  function:
+    name: "fcntl"
+    return: "int32_t"
+    args:
+      - name: "fd"
+        type: "int32_t"
+      - name: "cmd"
+        type: "uint32_t"
+      - name: "arg"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_fcntl
+
+- only-for: Executor
+  function:
+    name: "ioctl"
+    return: "int32_t"
+    args:
+      - name: "fd"
+        type: "int32_t"
+      - name: "cmd"
+        type: "uint32_t"
+      - name: "arg"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_ioctl
+
+- only-for: Executor
+  function:
+    name: "faccess"
+    return: "int32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+      - name: "cmd"
+        type: "uint32_t"
+      - name: "arg"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_faccess
+
+- only-for: Executor
+  function:
+    name: "_faccess"
+    return: "int32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+      - name: "cmd"
+        type: "uint32_t"
+      - name: "arg"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_faccess
+
+- only-for: Executor
+  function:
+    name: "access"
+    return: "int32_t"
+    args:
+      - name: "path"
+        type: "const char*"
+      - name: "arg2"
+        type: "int32_t"
+    library: StdCLib
+    executor: c_access
+
+- only-for: Executor
+  function:
+    name: "printf"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "fprintf"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "sprintf"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "vprintf"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "vfprintf"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "vsprintf"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "scanf"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "fscanf"
+    library: StdCLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "sscanf"
+    library: StdCLib
+    raw: true

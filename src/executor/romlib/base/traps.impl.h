@@ -91,6 +91,42 @@ syn68k_addr_t callback_install (const F& func)
     );
 }
 
+template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
+void LibraryFunction<Ret (Args...), fptr>::init()
+{
+    Entrypoint::init();
+#ifdef EXECUTOR_ENABLE_LOGGING
+    if(logging::enabled())
+        builtinlibs::addPPCEntrypoint(libname, name,
+            [this](PowerCore& cpu) {
+                if(auto ret = this->checkBreakPPC(cpu); ~ret)
+                    return ret;
+                return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, logging::makeLoggedFunction(name, fptr));
+            }
+        );
+    else
+#endif
+        builtinlibs::addPPCEntrypoint(libname, name,
+            [this](PowerCore& cpu) {
+                if(auto ret = this->checkBreakPPC(cpu); ~ret)
+                    return ret;
+                return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, fptr);
+            }
+        );
+    builtinlibs::addCFM68KEntrypoint(libname, name,
+        [this, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t addr) {
+            if(auto ret = this->checkBreak68K(addr); ~ret)
+                return ret;
+#ifdef EXECUTOR_ENABLE_LOGGING
+            if(logging::enabled())
+                return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(
+                    logging::makeLoggedFunction1<Ret (Args...)>(name, fptr), pops);
+#endif
+            return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(fptr, pops);
+        }
+    );
+}
+
 template<typename Ret, typename... Args, Ret (*fptr)(Args...), typename CallConv>
 void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
 {

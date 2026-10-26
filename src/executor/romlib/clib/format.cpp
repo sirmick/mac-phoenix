@@ -221,7 +221,7 @@ std::string Executor::clib::formatPrintf(const char *format, VarArgs &args)
             case 'g':
             case 'G':
             {
-                double v = args.dbl();
+                double v = s.length == 'L' ? args.longDouble() : args.dbl();
                 if(!std::isfinite(v))
                 {
                     /* Apple's: INF, NAN(code) with SANE's NaN code, upper case

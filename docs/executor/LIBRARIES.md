@@ -19,7 +19,7 @@ definitions, in a shape upstream multiversal can take.
 |---|---|---|---|---|
 | Traps | generated `PASCAL_TRAP`, `PASCAL_SUBTRAP`, `REGISTER_TRAP`, `NOTRAP_FUNCTION` (`base/traps.h`) | ~2,000 | from the C++ signature | the trap table; the same wrappers export each one from InterfaceLib for PowerPC and CFM-68K (`base/traps.impl.h`) |
 | Open Transport over ASLM | `Def{set, name, Conv, "LLLLL", 'L', impl}` (`opentransport/ot_*.cpp`), index-to-name lists (`ot_names.inc`) | ~130 of ~330 names | no: signature strings, `impl(const Call&)` reads its arguments | 68k only; no `OpenTransportLib` for PowerPC |
-| StdCLib, MathLib | `exportFn(LIB, "strlen", &c_strlen)`, `exportRaw` for variadic and hand-decoded routines, `exportData` (`clib/`) | ~250 + ~70 raw + 25 data | yes (`callfromPPC::Invoker`) | PowerPC only; no `NuStdCLib` for CFM-68K (STRAGGLERS 60) |
+| StdCLib, MathLib | `exportFn(LIB, "strlen", &c_strlen)`, `exportRaw` for variadic and hand-decoded routines, `exportData` (`clib/`) — in the definitions since step 2 | ~250 + ~70 raw + 25 data | yes (`callfromPPC::Invoker`) | PowerPC; StdCLib for CFM-68K too since step 2 |
 | CFM glue | `exportGlue("c2pstr", &fn)` (`cfm68k_glue.cpp`) | ~50 | yes | InterfaceLib, ObjectSupportLib, for CFM-68K and PowerPC |
 | AppleScriptLib (OSA) | `{ "OSALoad", 0x0001, { 4, 4, 4 } }` (`cfm68k_glue.cpp`) | 42 | no: parameter sizes | CFM-68K, re-pushed to `_ComponentDispatch` |
 | Component Manager | `switch` on the selector in `RAW_68K_IMPLEMENTATION(ComponentDispatch)` (`component.cpp`) | 35 selectors | no | 68k; `Components.yaml` declares no functions |
@@ -59,16 +59,24 @@ name, in which calling convention:
 - `aslm:` gives the ASLM function set and index the 68k glue binds by
   (Open Transport's static glue: `__SLM11FuncDispatch`). The set's
   library name and version go in a `- aslm-set:` entry, once per set.
-- `callconv:` decides argument order and who pops for CFM-68K (today
-  the hand-written `c_routines68k` list in `builtinlibs.cpp`). The name
-  is upstream's: its `funptr` entries already take `callconv: C` for
-  native C function pointers (Driver Services).
+- `callconv:` is for the 68k ASLM route (Open Transport has Pascal and
+  C routines) and for the C side's `pascal`. It does not decide who pops
+  in CFM-68K: there every routine with fixed arguments pops its own, C
+  or Pascal (`c2pstr` too); only a variadic one leaves them to its
+  caller (`c_routines68k` in `builtinlibs.cpp`), and a variadic routine
+  is raw anyway. The name is upstream's: its `funptr` entries take
+  `callconv: C` for native C function pointers (Driver Services).
 - `raw: true` for routines Executor decodes by hand (variadic `printf`,
-  `CallUniversalProc`): the C side is declared normally, and Executor
-  registers its own implementation, so the generator only checks that it
-  exists.
-- Data exports (StdCLib's `errno`, `_iob`) are `- data:` entries with
-  `library:` and a type.
+  MathLib's `l` routines on f1:f2): the C side is declared normally;
+  Executor's code registers the routine itself (they are templates and
+  lambdas the generated code can't name), and the generated code only
+  records that it is there: builtinlibs reports one declared but not
+  registered, or registered but not declared (`LIBRARY_RAW`).
+- `executor:` names the C++ routine as for traps (`c_` prefix + name, or
+  the whole name, so aliases share one: `_memcpy` is `c_memcpy`).
+- Data exports (StdCLib's `errno`, `_iob`) are to be `- data:` entries
+  with `library:` and a type; for now the sources register them (their
+  storage is allocated when the library is set up).
 
 A component call says its selector; the component type is the
 dispatcher's:
@@ -143,14 +151,17 @@ the generated headers alone (BridgeAgent without Apple's UI 3.4 first);
 
 The library routes:
 
-
-2. **Schema and generators; StdCLib and MathLib on them.** They are
-   typed already, so moving them is mechanical: the `exportFn` lists
-   become definitions (`StdCLib.yaml`, `MathLib.yaml`) and the
-   implementations stay. Adding CFM-68K to the libraries' architectures
-   is STRAGGLERS 60 (MPW's CFM-68K programs import `NuStdCLib` and
-   `NuIntEnv`). Check: `clib_executor`, `clib_rom_ppc`,
-   `guest_suite_ppc_executor`, a CFM-68K MPW tool.
+2. **Schema and generators; StdCLib and MathLib on them** — done
+   2026-10-26: `LIBRARY_FUNCTION`/`LIBRARY_RAW` (`base/traps.h`;
+   `LibraryFunction` registers PowerPC and CFM-68K, logged like traps),
+   `defs/StdCLib.yaml` (175 exports) and `defs/MathLib.yaml` (147),
+   `only-for: Executor` (a guest's C headers come with its C library),
+   the implementations in namespace Executor (their helper types and
+   templates in anonymous namespaces). Then NuStdCLib and NuIntEnv
+   (STRAGGLERS 60, done): the same StdCLib for CFM-68K programs, checked
+   by CLibTest68K on Executor and with Apple's NuStdCLib
+   (`clib_cfm68k_executor`, `clib_cfm68k`; PPCLibs.md). On the way:
+   CFM-68K's double and float results (CFM68K.md).
 3. **The CFM glue** (`cfm68k_glue.cpp`'s `exportGlue` list).
 4. **Open Transport.** The `Def` tables become definitions and the
    implementations take typed arguments instead of `Call`. By-products:

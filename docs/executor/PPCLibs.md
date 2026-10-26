@@ -9,19 +9,44 @@ C++, as it does InterfaceLib and Open Transport: `src/executor/romlib/clib/`.
 ```bash
 ctest -R clib_executor             # CLibTest on Executor's libraries
 ctest -R clib_rom_ppc              # the same on Apple's (Mac OS 9.0.4, mame-ppc): the reference
+ctest -R clib_cfm68k               # CLibTest68K on Executor's (_executor) and Apple's NuStdCLib
 ctest -R guest_suite_ppc_executor  # the fat MacPhoenixSuite's PowerPC code (--executor-ppc)
-tools/mpw/mpw build tests/guest/clib   # CLibTest: MrC + PPCLink on StdCLib and MathLib
+tools/mpw/mpw build tests/guest/clib   # CLibTest (MrC + PPCLink) and CLibTest68K (SC + ILink)
 ```
 
 ## What is there
 
 | File | What |
 |------|------|
-| `clib/clib.h` | guest memory access, a call's parameter words (`PPCArgs`), variadic arguments from a call or a `va_list` (`VarArgs`), export helpers |
-| `clib/stdclib.cpp` | string.h, ctype.h (`__p_CType`), stdlib.h (numbers, the Memory Manager's heap for `malloc`, `qsort`/`bsearch` calling PowerPC comparison routines, `atexit`, `exit`), setjmp.h, signal.h, time.h (Mac seconds since 1904), locale.h, PLStringFuncs.h, IntEnv.h's path routines, `TrapAvailable`, the data an MPW `__start` imports (`_IntEnv`, `__C_phase`, `__target_for_exit`, `_exit_status`, `__NubAt3`, `StandAlone`), float.h's constants |
+| `clib/clib.h` | guest memory access, a call's parameter words (`PPCArgs`; `CallArgs` for either processor), variadic arguments from a call or a `va_list` (`VarArgs`), export helpers |
+| `clib/stdclib.cpp` | string.h, ctype.h (`__p_CType`), stdlib.h (numbers, the Memory Manager's heap for `malloc`, `qsort`/`bsearch` calling the program's comparison routines (`callClient`), `atexit`, `exit`), setjmp.h, signal.h, time.h (Mac seconds since 1904), locale.h, PLStringFuncs.h, IntEnv.h's path routines, `TrapAvailable`, the data an MPW `__start` imports (`_IntEnv`, `__C_phase`, `__target_for_exit`, `_exit_status`, `__NubAt3`, `StandAlone`), float.h's constants |
 | `clib/stdio.cpp` | stdio.h on the File Manager (Mac paths, full or partial from the default directory), `_iob[40]` laid out as stdio.h's `FILE` (the `getc`/`putc` macros use `_cnt`/`_ptr`, then `_filbuf`/`_flsbuf`), the MPW low-level calls (`open`, `read`, `write`, `lseek`, `ioctl`, `faccess`) |
 | `clib/format.cpp` | printf and scanf conversions |
 | `clib/mathlib.cpp` | MathLib: double routines from the host's libm, the `l` routines on MathLib's double-double (a register pair, f1:f2), `fe*` on the guest's FPSCR, extended80 conversions, `num2dec`/`dec2num`/`str2dec`/`dec2str`, NaN codes |
+
+What each library exports is in the definitions,
+`multiversal/defs/StdCLib.yaml` and `MathLib.yaml` (docs/executor/
+LIBRARIES.md): one entry per export, with `library:` and the C++ routine
+that answers it (`executor: c_strlen`); the generator registers them for
+PowerPC and CFM-68K, typed from the declaration, and they go through
+`--executor-logtraps` like traps. Routines that read their own arguments
+(variadic ones, MathLib's `l` routines on f1:f2) are `raw: true`: the
+`exportRaw` calls in the sources register them, and builtinlibs reports a
+raw export in either place but not the other. Data exports (`errno`,
+`_iob`, ...) are registered by the sources. The entries are only for
+Executor: a guest program's C headers come with its C library.
+
+**CFM-68K** (STRAGGLERS 60): MPW's CFM-68K programs import StdCLib as
+`NuStdCLib` and `NuIntEnv`; both are Executor's StdCLib, for 68k callers.
+The printf and scanf family read their arguments from the 68k stack
+(`CallArgs`: `PPCCallArgs`, `CFM68KCallArgs`; a variadic long double is 12
+bytes there), `_iob`'s stride is the client's (`FILE` is 22 bytes in SC's
+code, 24 in MrC's), and callbacks into the program (`callClient`) run on
+its processor. CLibTest68K (the same `clib.c`, SC + ILink; build.mpw)
+passes on Executor and on the Quadra with Apple's NuStdCLib, which answers
+eleven things otherwise than Mac OS 9's StdCLib (printf's NaN codes and
+`-0`, `%#x` of 0, `%.20f` exact, `%p` in strftime, `tm_isdst` -1): the
+test takes either on 68k, and Executor's gives Mac OS 9's on both.
 
 StdCLib's state (streams, `atexit`, signal handlers, `errno`) starts afresh
 for each application that imports it and its streams are flushed and closed
@@ -65,8 +90,8 @@ approximation where Executor's gives `?`.
 
 ## Not done
 
-- Executor's CFM-68K side has no NuStdCLib yet (STRAGGLERS 60): the same C++
-  exported to `m68k` fragments.
+- MathLib for CFM-68K programs: none needs it as a shared library (MPW
+  links NuMathLib.o in); CLibTest68K's MathLib checks are PowerPC-only.
 - `fe*` exception flags: what Executor's MathLib raises it records in the
   FPSCR; what the guest's own floating-point instructions raise depends on
   the core (mame-ppc keeps no FPSCR exception bits).
@@ -97,6 +122,10 @@ approximation where Executor's gives `?`.
 
 From the MPW C headers' declarations and constants (stdio.h's `FILE`,
 fenv.h, fp.h's `decimal`, ...), the C standard, the Apple Numerics Manual,
-and CLibTest's answers on the Power Mac. No Apple library code was read.
+and CLibTest's answers on the Power Mac (and CLibTest68K's on the Quadra
+with the Enabler). No Apple library code was read. Which routines are in
+NuStdCLib and which in NuIntEnv came from the export tables (names only) of
+MPW's StdCLib stub library; the CFM-68K conventions from SC's code for our
+own sources.
 The survey of what applications import (StdCLib 138 PEF containers,
 MathLib 181 on the provisioned images) read only PEF import tables.

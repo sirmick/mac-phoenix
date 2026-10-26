@@ -16,6 +16,7 @@
 #include <rsys/cfm.h>
 
 #include <algorithm>
+#include <iostream>
 #include <cfloat>
 #include <climits>
 #include <clocale>
@@ -29,7 +30,7 @@ extern unsigned char XPRAM[8192];
 using namespace Executor;
 using namespace Executor::clib;
 
-namespace
+namespace Executor
 {
 
 const char LIB[] = "StdCLib";
@@ -61,7 +62,6 @@ alignas(8) uint8_t tmBuf_[36];
 alignas(8) uint8_t lconv_[48];
 alignas(8) char lconvStrings_[8];        /* "." and "" */
 alignas(8) char localeName_[16];         /* "#0#0#1#1#1" */
-alignas(8) char tmpnamBuf_[16];
 alignas(8) char ecvtBuf_[400];
 
 uint32_t clientZone = 0;   /* the application zone of StdCLib's client */
@@ -87,7 +87,7 @@ int signalIndex(int sig)
 
 /* ---- the C type table ------------------------------------------------------ */
 
-namespace
+namespace Executor
 {
 constexpr uint8_t UPP_ = 1, LOW_ = 2, DIG_ = 4, WSP_ = 8, PUN_ = 16, CTL_ = 32,
                   BLA_ = 64, HEX_ = 128;
@@ -106,6 +106,7 @@ constexpr uint8_t ctypeOf(int c)
     return t;
 }
 
+namespace {
 struct CTypeTable
 {
     uint8_t t[256];
@@ -115,6 +116,8 @@ struct CTypeTable
             t[c] = ctypeOf(c);
     }
 };
+}
+
 constexpr CTypeTable ctypeInit;
 }
 
@@ -168,6 +171,9 @@ int Executor::clib::errnoFromOSErr(int16_t err)
 void Executor::clib::exportRaw(const char *library, const char *name,
                                std::function<uint32_t(PowerCore &)> code)
 {
+    if(!builtinlibs::isExpectedRawExport(library, name))
+        std::cerr << "[Executor] " << library << ": raw " << name
+                  << " is not in the definitions (" << library << ".yaml)\n";
     builtinlibs::addPPCEntrypoint(library, name, [code](PowerCore &cpu) {
         /* Host code that runs 68k code (a patched trap) pushes below the
            caller's frame, as callfromPPC::Invoker has it. */
@@ -176,14 +182,29 @@ void Executor::clib::exportRaw(const char *library, const char *name,
     });
 }
 
+void Executor::clib::exportRaw68k(const char *library, const char *name,
+                                  std::function<uint32_t(const CallArgs &)> body, int argWords)
+{
+    builtinlibs::addCFM68KEntrypoint(library, name, [body, argWords](syn68k_addr_t) {
+        uint32_t d0 = body(CFM68KCallArgs(EM_A7));
+        EM_D0 = d0;
+        syn68k_addr_t ret = read32(EM_A7);
+        EM_A7 += 4;
+        if(argWords > 0)
+            EM_A7 += 4 * argWords;
+        return ret;
+    });
+}
+
 void Executor::clib::exportData(const char *library, const char *name, void *address)
 {
     builtinlibs::addPPCData(library, name, address);
+    builtinlibs::addCFM68KData(library, name, address);
 }
 
 /* ---- string.h ----------------------------------------------------------------- */
 
-namespace
+namespace Executor
 {
 char *c_memcpy(char *d, const char *s, uint32_t n) { memmove(d, s, n); return d; }
 char *c_memmove(char *d, const char *s, uint32_t n) { memmove(d, s, n); return d; }
@@ -354,7 +375,7 @@ std::string Executor::clib::errorMessage(int e)
 
 /* ---- ctype.h ------------------------------------------------------------------ */
 
-namespace
+namespace Executor
 {
 int32_t ct(int32_t c, uint8_t mask) { return (c >= 0 && c < 256) ? (ctypeTable[c] & mask) : 0; }
 int32_t c_isalnum(int32_t c) { return ct(c, UPP_ | LOW_ | DIG_); }
@@ -376,7 +397,7 @@ int32_t c_toupper(int32_t c) { return (c >= 'a' && c <= 'z') ? c - 32 : c; }
 
 /* ---- stdlib.h: numbers --------------------------------------------------------- */
 
-namespace
+namespace Executor
 {
 /* strtol and strtoul for 32-bit longs. */
 uint32_t parseInteger(const char *s, char **end, int base, bool isSigned, bool &overflow,
@@ -443,12 +464,15 @@ uint32_t parseInteger(const char *s, char **end, int base, bool isSigned, bool &
 }
 
 /* A guest char ** to store the end in, through a host char *. */
+namespace {
 struct EndPtr
 {
     uint32_t where;
     char *end = nullptr;
     void store() { if(where) write32(where, guest(end)); }
 };
+}
+
 
 int32_t c_strtol(const char *s, uint32_t endp, int32_t base)
 {
@@ -649,7 +673,7 @@ uint32_t c_wcstombs(char *s, uint32_t pwcs, uint32_t n)
 
 /* ---- stdlib.h: memory --------------------------------------------------------- */
 
-namespace
+namespace Executor
 {
 /* The Memory Manager's application heap, as a Mac C library has it. */
 char *c_malloc(uint32_t size)
@@ -709,7 +733,7 @@ char *c_realloc(char *p, uint32_t size)
 
 /* ---- stdlib.h: sorting --------------------------------------------------------- */
 
-namespace
+namespace Executor
 {
 void c_qsort(char *base, uint32_t n, uint32_t size, uint32_t compar)
 {
@@ -722,7 +746,7 @@ void c_qsort(char *base, uint32_t n, uint32_t size, uint32_t compar)
     /* A merge sort: the elements stay where they are while compared, and an
        inconsistent comparison routine can't send it out of bounds. */
     std::stable_sort(order.begin(), order.end(), [&](uint32_t x, uint32_t y) {
-        return (int32_t)callPPC(compar, { b + x * size, b + y * size }) < 0;
+        return (int32_t)callClient(compar, { b + x * size, b + y * size }) < 0;
     });
     std::vector<uint8_t> sorted((size_t)n * size);
     for(uint32_t i = 0; i < n; i++)
@@ -737,7 +761,7 @@ char *c_bsearch(const char *key, char *base, uint32_t n, uint32_t size, uint32_t
     while(lo < hi)
     {
         uint32_t mid = lo + (hi - lo) / 2;
-        int32_t c = (int32_t)callPPC(compar, { k, b + mid * size });
+        int32_t c = (int32_t)callClient(compar, { k, b + mid * size });
         if(c == 0)
             return base + (size_t)mid * size;
         if(c < 0)
@@ -751,7 +775,7 @@ char *c_bsearch(const char *key, char *base, uint32_t n, uint32_t size, uint32_t
 
 /* ---- the end of a program -------------------------------------------------------- */
 
-namespace
+namespace Executor
 {
 [[noreturn]] void endProcess()
 {
@@ -765,7 +789,7 @@ void runExitProcs()
     {
         uint32_t tv = atexitProcs.back();
         atexitProcs.pop_back();
-        callPPC(tv, {});
+        callClient(tv, {});
     }
 }
 
@@ -807,7 +831,7 @@ int32_t c_raise(int32_t sig)
         endProcess();
     }
     signalHandlers[i] = SIG_DFL_;
-    callPPC(h, { (uint32_t)sig });
+    callClient(h, { (uint32_t)sig });
     return 0;
 }
 
@@ -849,7 +873,7 @@ void c_assertprint(const char *file, int32_t line, const char *expr);
 /* ---- setjmp.h --------------------------------------------------------------- */
 
 /* A jmp_buf is 64 words: LR, SP, TOC, CR, r13-r31, then f14-f31. */
-namespace
+namespace Executor
 {
 uint32_t raw_setjmp(PowerCore &cpu)
 {
@@ -887,7 +911,7 @@ uint32_t raw_longjmp(PowerCore &cpu)
 /* ---- time.h -------------------------------------------------------------------- */
 
 /* time_t: seconds since 1 January 1904, local time, as the Mac's clock. */
-namespace
+namespace Executor
 {
 const char *const DAY_NAMES[] = { "Sunday", "Monday", "Tuesday", "Wednesday",
                                   "Thursday", "Friday", "Saturday" };
@@ -895,10 +919,13 @@ const char *const MONTH_NAMES[] = { "January", "February", "March", "April", "Ma
                                     "July", "August", "September", "October", "November",
                                     "December" };
 
+namespace {
 struct TM
 {
     int32_t sec, min, hour, mday, mon, year, wday, yday, isdst;
 };
+}
+
 
 TM readTM(uint32_t p)
 {
@@ -1128,7 +1155,7 @@ uint32_t c_strftime(char *s, uint32_t max, const char *format, uint32_t p)
 
 /* ---- locale.h ------------------------------------------------------------------ */
 
-namespace
+namespace Executor
 {
 /* Apple's answers name every category's locale at once, "#0#0#1#1#1":
    collate, ctype, monetary, numeric, time; the "C" locale is 0 0 1 1 1, the
@@ -1177,7 +1204,7 @@ void initLocale()
 
 /* ---- PLStringFuncs.h ---------------------------------------------------------- */
 
-namespace
+namespace Executor
 {
 int16_t c_PLstrcmp(const unsigned char *a, const unsigned char *b)
 {
@@ -1277,7 +1304,7 @@ int16_t c_PLpos(const unsigned char *sub, const unsigned char *str)
 
 /* ---- IntEnv.h: Mac paths ------------------------------------------------------ */
 
-namespace
+namespace Executor
 {
 OSErr c_MakeResolvedFSSpec(int16_t vol, int32_t dir, unsigned char *path, FSSpec *spec,
                            Boolean *isFolder, Boolean *hadAlias, Boolean *leafIsAlias)
@@ -1381,8 +1408,19 @@ int32_t c_getpid() { return 1; }
 
 /* ---- start and end ------------------------------------------------------------- */
 
-void Executor::clib::stdclibStart()
+namespace
 {
+bool clientM68K = false;
+}
+
+uint32_t Executor::clib::callClient(uint32_t tv, std::initializer_list<uint32_t> args)
+{
+    return clientM68K ? ROMlib_call_cfm68k(tv, args) : callPPC(tv, args);
+}
+
+void Executor::clib::stdclibStart(bool m68k)
+{
+    clientM68K = m68k;
     clientZone = guest_cast<uint32_t>(LM(ApplZone));
     memset(errno_, 0, sizeof errno_);
     memset(macOSErr_, 0, sizeof macOSErr_);
@@ -1419,7 +1457,7 @@ void Executor::clib::stdclibStart()
     atexitProcs.clear();
     for(auto &h : signalHandlers)
         h = SIG_DFL_;
-    stdioStart();
+    stdioStart(m68k);
 }
 
 void Executor::clib::stdclibProcessExit()
@@ -1433,7 +1471,7 @@ void Executor::clib::stdclibProcessExit()
 
 /* ---- the export table ---------------------------------------------------------- */
 
-namespace
+namespace Executor
 {
 void c_assertprint(const char *file, int32_t line, const char *expr)
 {
@@ -1470,130 +1508,24 @@ void Executor::clib::addStdCLib()
         exportData(LIB, internal[i], zeroData_[i]);
 
     /* string.h */
-    exportFn(LIB, "memcpy", &c_memcpy);
-    exportFn(LIB, "_memcpy", &c_memcpy);
-    exportFn(LIB, "memmove", &c_memmove);
-    exportFn(LIB, "_rmemcpy", &c_memmove);
-    exportFn(LIB, "memset", &c_memset);
-    exportFn(LIB, "memcmp", &c_memcmp);
-    exportFn(LIB, "memchr", &c_memchr);
-    exportFn(LIB, "_memchr", &c_memchr);
-    exportFn(LIB, "memccpy", &c_memccpy);
-    exportFn(LIB, "strlen", &c_strlen);
-    exportFn(LIB, "strcpy", &c_strcpy);
-    exportFn(LIB, "strncpy", &c_strncpy);
-    exportFn(LIB, "strcat", &c_strcat);
-    exportFn(LIB, "strncat", &c_strncat);
-    exportFn(LIB, "strcmp", &c_strcmp);
-    exportFn(LIB, "strncmp", &c_strncmp);
-    exportFn(LIB, "strchr", &c_strchr);
-    exportFn(LIB, "strrchr", &c_strrchr);
-    exportFn(LIB, "strspn", &c_strspn);
-    exportFn(LIB, "strcspn", &c_strcspn);
-    exportFn(LIB, "strpbrk", &c_strpbrk);
-    exportFn(LIB, "strstr", &c_strstr);
-    exportFn(LIB, "strtok", &c_strtok);
-    exportFn(LIB, "strcoll", &c_strcoll);
-    exportFn(LIB, "strxfrm", &c_strxfrm);
-    exportFn(LIB, "strerror", &c_strerror);
 
     /* ctype.h */
-    exportFn(LIB, "isalnum", &c_isalnum);
-    exportFn(LIB, "isalpha", &c_isalpha);
-    exportFn(LIB, "iscntrl", &c_iscntrl);
-    exportFn(LIB, "isdigit", &c_isdigit);
-    exportFn(LIB, "isgraph", &c_isgraph);
-    exportFn(LIB, "islower", &c_islower);
-    exportFn(LIB, "isprint", &c_isprint);
-    exportFn(LIB, "ispunct", &c_ispunct);
-    exportFn(LIB, "isspace", &c_isspace);
-    exportFn(LIB, "isupper", &c_isupper);
-    exportFn(LIB, "isxdigit", &c_isxdigit);
-    exportFn(LIB, "isascii", &c_isascii);
-    exportFn(LIB, "toascii", &c_toascii);
-    exportFn(LIB, "tolower", &c_tolower);
-    exportFn(LIB, "toupper", &c_toupper);
 
     /* stdlib.h */
-    exportFn(LIB, "atoi", &c_atoi);
-    exportFn(LIB, "atol", &c_atol);
-    exportFn(LIB, "atof", &c_atof);
-    exportFn(LIB, "strtol", &c_strtol);
-    exportFn(LIB, "strtoul", &c_strtoul);
-    exportFn(LIB, "strtod", &c_strtod);
-    exportFn(LIB, "abs", &c_abs);
-    exportFn(LIB, "labs", &c_labs);
     exportRaw(LIB, "div", &raw_div);
     exportRaw(LIB, "ldiv", &raw_div);
-    exportFn(LIB, "rand", &c_rand);
-    exportFn(LIB, "srand", &c_srand);
-    exportFn(LIB, "ecvt", &c_ecvt);
-    exportFn(LIB, "fcvt", &c_fcvt);
-    exportFn(LIB, "mblen", &c_mblen);
-    exportFn(LIB, "mbtowc", &c_mbtowc);
-    exportFn(LIB, "wctomb", &c_wctomb);
-    exportFn(LIB, "mbstowcs", &c_mbstowcs);
-    exportFn(LIB, "wcstombs", &c_wcstombs);
-    exportFn(LIB, "malloc", &c_malloc);
-    exportFn(LIB, "calloc", &c_calloc);
-    exportFn(LIB, "free", &c_free);
-    exportFn(LIB, "realloc", &c_realloc);
-    exportFn(LIB, "qsort", &c_qsort);
-    exportFn(LIB, "bsearch", &c_bsearch);
-    exportFn(LIB, "atexit", &c_atexit);
-    exportFn(LIB, "exit", &c_exit);
-    exportFn(LIB, "_exit", &c__exit);
-    exportFn(LIB, "abort", &c_abort);
-    exportFn(LIB, "__abort", &c_abort);
-    exportFn(LIB, "getenv", &c_getenv);
-    exportFn(LIB, "system", &c_system);
-    exportFn(LIB, "_BreakPoint", &c_breakpoint);
-    exportFn(LIB, "__assertprint", &c_assertprint);
 
     /* signal.h, setjmp.h */
-    exportFn(LIB, "signal", &c_signal);
-    exportFn(LIB, "raise", &c_raise);
     exportRaw(LIB, "__setjmp", &raw_setjmp);
     exportRaw(LIB, "longjmp", &raw_longjmp);
 
     /* time.h */
-    exportFn(LIB, "time", &c_time);
-    exportFn(LIB, "clock", &c_clock);
-    exportFn(LIB, "difftime", &c_difftime);
-    exportFn(LIB, "mktime", &c_mktime);
-    exportFn(LIB, "localtime", &c_localtime);
-    exportFn(LIB, "gmtime", &c_gmtime);
-    exportFn(LIB, "asctime", &c_asctime);
-    exportFn(LIB, "ctime", &c_ctime);
-    exportFn(LIB, "strftime", &c_strftime);
 
     /* locale.h */
-    exportFn(LIB, "setlocale", &c_setlocale);
-    exportFn(LIB, "localeconv", &c_localeconv);
 
     /* PLStringFuncs.h */
-    exportFn(LIB, "PLstrcmp", &c_PLstrcmp);
-    exportFn(LIB, "PLstrncmp", &c_PLstrncmp);
-    exportFn(LIB, "PLstrcpy", &c_PLstrcpy);
-    exportFn(LIB, "PLstrncpy", &c_PLstrncpy);
-    exportFn(LIB, "PLstrcat", &c_PLstrcat);
-    exportFn(LIB, "PLstrncat", &c_PLstrncat);
-    exportFn(LIB, "PLstrchr", &c_PLstrchr);
-    exportFn(LIB, "PLstrrchr", &c_PLstrrchr);
-    exportFn(LIB, "PLstrpbrk", &c_PLstrpbrk);
-    exportFn(LIB, "PLstrspn", &c_PLstrspn);
-    exportFn(LIB, "PLstrstr", &c_PLstrstr);
-    exportFn(LIB, "PLstrlen", &c_PLstrlen);
-    exportFn(LIB, "PLpos", &c_PLpos);
 
     /* IntEnv.h, MacRuntime.h */
-    exportFn(LIB, "MakeResolvedFSSpec", &c_MakeResolvedFSSpec);
-    exportFn(LIB, "ResolveFolderAliases", &c_ResolveFolderAliases);
-    exportFn(LIB, "ResolvePath", &c_ResolvePath);
-    exportFn(LIB, "IEResolvePath", &c_ResolvePath);
-    exportFn(LIB, "MakeResolvedPath", &c_MakeResolvedPath);
-    exportFn(LIB, "TrapAvailable", &c_TrapAvailable);
-    exportFn(LIB, "getpid", &c_getpid);
 
     addStdio();
 }

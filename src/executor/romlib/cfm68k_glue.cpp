@@ -612,6 +612,10 @@ void Executor::builtinlibs::addGlueEntrypoints()
     {
         exportGlue("c2pstr", &glue_c2pstr);
         exportGlue("p2cstr", &glue_p2cstr);
+        /* the older names (Strings.h's OLDROUTINENAMES): MPW's CFM-68K
+           runtime calls P2CStr for the application's name */
+        exportGlue("C2PStr", &glue_c2pstr);
+        exportGlue("P2CStr", &glue_p2cstr);
         exportGlue("c2pstrcpy", &glue_c2pstrcpy);
         exportGlue("p2cstrcpy", &glue_p2cstrcpy);
         exportGlue("CopyPascalStringToC", &glue_CopyPascalStringToC);

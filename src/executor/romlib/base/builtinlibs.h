@@ -39,6 +39,14 @@ namespace Executor
            leaves them to its caller (C, variadic). */
         bool cfm68kCalleePops(const char *function);
 
+        /* A library routine the definitions declare `raw: true`
+           (docs/executor/LIBRARIES.md): its library's code registers it.
+           checkRawExports reports any declared but not registered, and any
+           registered raw that the definitions don't declare. */
+        void expectRawExport(const char *library, const char *function);
+        bool isExpectedRawExport(const char *library, const char *function);
+        void checkRawExports(const char *library);
+
         /* InterfaceLib's glue routines (cfm68k_glue.cpp). */
         void addGlueEntrypoints();
 

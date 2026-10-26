@@ -1,7 +1,10 @@
 /* clib.c — CLibTest, a PowerPC application on StdCLib and MathLib (MrC,
    PPCLink; tools/mpw/mpw build tests/guest/clib). Executor's own StdCLib and
    MathLib (docs/executor/PPCLibs.md) against Apple's on a Power Mac: ctest
-   clib_executor and clib_rom_ppc (Mac OS 9.0.4, the reference). Each check
+   clib_executor and clib_rom_ppc (Mac OS 9.0.4, the reference). Built for
+   CFM-68K too (CLibTest68K, on NuStdCLib and NuIntEnv; the MathLib checks
+   are PowerPC-only): clib_cfm68k_executor and clib_cfm68k (the Quadra with
+   Apple's CFM-68K Runtime Enabler). Each check
    compares what a routine gives with what Apple's library gives; doubles are
    compared as their bits. Results go to Host:clib_results.txt through the
    File Manager (stdio is under test), in the guest suite's form: PASS/FAIL
@@ -17,6 +20,7 @@
 #include <Files.h>
 #include <Events.h>
 #include <OSUtils.h>
+#include <SegLoad.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -103,6 +107,20 @@ static void check(const char *label, const char *got, const char *want)
 static void check2(const char *label, const char *got, const char *apple, const char *exact)
 {
     check(label, got, strcmp(got, exact) == 0 ? exact : apple);
+}
+
+/* CFM-68K (CLibTest68K): Apple's NuStdCLib, the Enabler's (1996), answers
+   some things otherwise than Mac OS 9's StdCLib, which Executor's follows on
+   both processors; on 68k either passes. */
+#if defined(powerc) || defined(__powerc)
+#define ON68K 0
+#else
+#define ON68K 1
+#endif
+
+static void checkv(const char *label, const char *got, const char *want, const char *nu68k)
+{
+    check(label, got, ON68K && strcmp(got, nu68k) == 0 ? nu68k : want);
 }
 
 static void info(const char *label, const char *got)
@@ -323,12 +341,12 @@ static void test_printf(void)
         bits(nb, nn);
         check("nan_0_0", nb, "FFF8000000000000");
         sprintf(buf, "[%f|%e|%g|%5.1f|%-6e|]", 1.0 / z, -1.0 / z, nn, 1.0 / z, nan("5"));
-        check("pf_inf", buf, "[INF|-INF|-NAN(000)|  INF|NAN(005)|]");
+        checkv("pf_inf", buf, "[INF|-INF|-NAN(000)|  INF|NAN(005)|]", "[INF|-INF|-NAN(000)|  INF|-NAN(000)|]");
         sprintf(buf, "[%g|%f|%e]", -nn, nan("255"), -nan("3"));
-        check("pf_nan2", buf, "[NAN(000)|NAN(255)|-NAN(003)]");
+        checkv("pf_nan2", buf, "[NAN(000)|NAN(255)|-NAN(003)]", "[NAN(000)|-NAN(000)|NAN(000)]");
     }
     sprintf(buf, "[%f|%g|%e]", negzero(), negzero(), negzero());
-    check("pf_negzero", buf, "[-0.000000|-0|-0.000000e+00]");
+    checkv("pf_negzero", buf, "[-0.000000|-0|-0.000000e+00]", "[0.000000|0|0.000000e+00]");
     sprintf(buf, "[%hd|%ld|%*d|%-*d|%.*f]", (short)70000, 123456789L, 6, 7, 3, 8, 2, 3.14159);
     check("pf_mod", buf, "[4464|123456789|     7|8  |3.14]");
     sprintf(buf, "[%Lf]", (long double)1.5);
@@ -338,16 +356,19 @@ static void test_printf(void)
     sprintf(buf, "[%s]", (char *)NULL);
     check("pf_null", buf, "[]");
     sprintf(buf, "%p|%#o|%#X", (void *)0, 0, 0);
-    check("pf_zero_alt", buf, "0x0|0|0X0");
+    checkv("pf_zero_alt", buf, "0x0|0|0X0", "0|0|0");
     n = sprintf(buf, "abc%ndef", &k);
     checkl("pf_n", k, 3);
     checkl("pf_ret", n, 6);
     sprintf(buf, "%5.1f%%", 99.44);
     check("pf_pct", buf, " 99.4%");
     sprintf(buf, "%.20f", 0.1);
-    check2("pf_prec20", buf, "0.10000000000000000000", "0.10000000000000000555");
+    if(ON68K && strcmp(buf, "0.10000000000000000560") == 0)
+        check("pf_prec20", buf, buf);
+    else
+        check2("pf_prec20", buf, "0.10000000000000000000", "0.10000000000000000555");
     sprintf(buf, "%#.0f|%#g|%#x", 3.0, 1.5, 0);
-    check("pf_alt", buf, "3.|1.50000|0x0");
+    checkv("pf_alt", buf, "3.|1.50000|0x0", "3.|1.50000|0");
     sprintf(buf, "%.15g|%.17g|%.3e|%10.4f|%-10.2e|", 0.1, 0.1, 123456.789, -3.14159, 0.000123);
     check2("pf_digits", buf, "0.1|0.1|1.235e+05|   -3.1416|1.23e-04  |",
            "0.1|0.10000000000000001|1.235e+05|   -3.1416|1.23e-04  |");
@@ -556,12 +577,13 @@ static void test_time(void)
     checkl("mktime", (long)secs, (long)2908443909UL);
     checkl("mktime_wday", t.tm_wday, 4);
     checkl("mktime_yday", t.tm_yday, 59);
-    checkl("mktime_isdst", t.tm_isdst, 0);
+    checkl("mktime_isdst", ON68K && t.tm_isdst == -1 ? 0 : t.tm_isdst, 0);
     lt = localtime(&secs);
     checkl("localtime", lt->tm_year * 10000 + lt->tm_mon * 100 + lt->tm_mday, 960129);
     check("asctime", asctime(&t), "Thu Feb 29 13:05:09 1996\n");
     strftime(buf, sizeof buf, "%Y-%m-%d %H:%M:%S %a %A %b %B %j %w %y %p %I %U %W", &t);
-    check("strftime", buf, "1996-02-29 13:05:09 Thu Thursday Feb February 060 4 96  PM 01 08 09");
+    checkv("strftime", buf, "1996-02-29 13:05:09 Thu Thursday Feb February 060 4 96  PM 01 08 09",
+           "1996-02-29 13:05:09 Thu Thursday Feb February 060 4 96 %p 01 08 09");
     strftime(buf, sizeof buf, "[%c] [%x] [%X] [%Z]", &t);
     check("strftime_cxX", buf, "[01:05:09 PM Thursday, February 29, 1996] [Thursday, February 29, 1996] [01:05:09 PM] []");
     {
@@ -575,13 +597,14 @@ static void test_time(void)
         u.tm_sec = 3;
         mktime(&u);
         strftime(buf, sizeof buf, "[%c] [%x] [%X] [%p] [%d] [%I] [%j]", &u);
-        check("strftime_small", buf, "[08:04:03 AM Monday, March 5, 2001] [Monday, March 5, 2001] [08:04:03 AM] [ AM] [05] [08] [064]");
+        checkv("strftime_small", buf, "[08:04:03 AM Monday, March 5, 2001] [Monday, March 5, 2001] [08:04:03 AM] [ AM] [05] [08] [064]",
+               "[08:04:03 AM Monday, March 5, 2001] [Monday, March 5, 2001] [08:04:03 AM] [%p] [05] [08] [064]");
         u.tm_hour = 0;
         strftime(buf, sizeof buf, "[%X] [%p] [%I]", &u);
-        check("strftime_midnight", buf, "[12:04:03 AM] [ AM] [12]");
+        checkv("strftime_midnight", buf, "[12:04:03 AM] [ AM] [12]", "[12:04:03 AM] [%p] [12]");
         u.tm_hour = 12;
         strftime(buf, sizeof buf, "[%X] [%p] [%I]", &u);
-        check("strftime_noon", buf, "[12:04:03 PM] [ PM] [12]");
+        checkv("strftime_noon", buf, "[12:04:03 PM] [ PM] [12]", "[12:04:03 PM] [%p] [12]");
         check("asctime_small", asctime(&u), "Mon Mar  5 12:04:03 2001\n");
         checkl("strftime_short", strftime(buf, 5, "%Y-%m", &u), 0);
     }
@@ -591,7 +614,11 @@ static void test_time(void)
     checkl("mktime_norm", t.tm_year * 10000 + t.tm_mon * 100 + t.tm_mday, 970031);
     checkl("difftime", (long)difftime(100, 40), 60);
     checkl("time", time(NULL) > 2900000000UL, 1);
-    checkl("clock", clock() >= 0, 1);
+    {
+        /* in a variable: SC's CFM-68K code passed the comparison oddly */
+        clock_t c = clock();
+        checkl("clock", c != (clock_t)-1, 1);
+    }
 
     check("setlocale", setlocale(LC_ALL, NULL), "#0#0#1#1#1");
     check("setlocale_numeric", setlocale(LC_NUMERIC, NULL), "#0#0#1#1#1");
@@ -634,6 +661,10 @@ static void test_misc(void)
 }
 
 /* ---- MathLib ---- */
+
+/* PowerPC only: on 68k (the CFM-68K build, CLibTest68K) long double is
+   SANE's extended and MathLib is linked in (NuMathLib.o), not shared. */
+#if defined(powerc) || defined(__powerc)
 
 static void test_math(void)
 {
@@ -869,6 +900,8 @@ static void test_math(void)
     checkl("num2dec_17_exp", dc.exp, -17);
 }
 
+#endif /* powerc */
+
 int main(void)
 {
     OSErr err;
@@ -898,7 +931,9 @@ int main(void)
     test_control();
     test_time();
     test_misc();
+#if defined(powerc) || defined(__powerc)
     test_math();
+#endif
 
     ticks = TickCount();
     Delay(30, &ticks);

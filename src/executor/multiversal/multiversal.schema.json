@@ -126,6 +126,8 @@
                 "inline": { "type": "string" },
                 "noinline": { "type": "string" },
                 "executor": { "oneOf": [ {"type":"string"}, {"type":"boolean"}] },
+                "library": { "type": "string" },
+                "raw": { "type": "boolean" },
                 "returnreg": { "$ref": "#/definitions/reg" },
                 "variants": { "type": "array", "items": { "type": "string" }},
                 "executor_extras": { "type": "string" },

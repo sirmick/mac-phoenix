@@ -9,6 +9,7 @@
 #include <base/functions.impl.h>
 #include <base/logging.h>
 #include <base/dispatcher.h>
+#include <base/builtinlibs.h>
 #include <base/debugger.h>
 
 #include <assert.h>
@@ -54,6 +55,11 @@ void traps::internal::DeferredInit::initAll()
 void traps::Entrypoint::init()
 {
     entrypoints[name] = this;
+}
+
+void traps::LibraryRawExport::init()
+{
+    builtinlibs::expectRawExport(library, name);
 }
 
 uint32_t traps::Entrypoint::break68K(uint32_t addr)

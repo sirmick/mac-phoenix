@@ -26,7 +26,7 @@
 using namespace Executor;
 using namespace Executor::clib;
 
-namespace
+namespace Executor
 {
 
 const char LIB[] = "StdCLib";
@@ -43,7 +43,9 @@ constexpr uint16_t IOFBF = 0x00, IOREAD = 0x01, IOWRT = 0x02, IONBF = 0x04, IOMY
 constexpr int O_RDONLY_ = 0, O_WRONLY_ = 1, O_RDWR_ = 2, O_APPEND_ = 8, O_RSRC_ = 0x10,
               O_CREAT_ = 0x100, O_TRUNC_ = 0x200, O_EXCL_ = 0x400;
 
-/* struct FILE: _cnt, _ptr, _base, _end, _size, _flag, _file; 24 bytes. */
+/* struct FILE: _cnt, _ptr, _base, _end, _size, _flag, _file: 24 bytes on
+   PowerPC, 22 in a CFM-68K program (SC aligns structures to 2 bytes), so
+   _iob's stride is the client's. */
 alignas(8) uint8_t iob_[NFILE][24];
 alignas(8) uint8_t lastbuf_[4];
 alignas(8) uint8_t buffers_[NFILE][BUFSIZ_];
@@ -55,15 +57,19 @@ alignas(8) uint8_t nameBuf_[260];
 alignas(8) uint8_t finfo_[16];
 alignas(8) char tmpnamBuf_[32];
 
+namespace {
 struct FileState
 {
     bool writing = false;   /* the buffer holds output */
     bool deleteOnClose = false;
     std::string tmpPath;
 };
+}
+
 FileState files[NFILE];
 
 /* Descriptors. */
+namespace {
 struct Fd
 {
     bool open = false;
@@ -71,20 +77,24 @@ struct Fd
     int16_t refNum = 0;
     int flags = 0;
 };
+}
+
 constexpr int NFD = 64;
 Fd fds[NFD];
 std::string consoleLine[3];
 
 /* ---- FILE fields ---- */
 
-uint32_t fileAddr(int i) { return guest(iob_[i]); }
+uint32_t fileSize = 24;
+
+uint32_t fileAddr(int i) { return guest(iob_) + i * fileSize; }
 
 int fileIndex(uint32_t f)
 {
     uint32_t base = guest(iob_);
-    if(f < base || f >= base + NFILE * 24 || (f - base) % 24)
+    if(f < base || f >= base + NFILE * fileSize || (f - base) % fileSize)
         return -1;
-    return int((f - base) / 24);
+    return int((f - base) / fileSize);
 }
 
 int32_t cnt(uint32_t f) { return (int32_t)read32(f); }
@@ -563,7 +573,7 @@ bool parseMode(const char *mode, int &oflag, uint16_t &fl)
 void setupFile(uint32_t f, int fd, uint16_t fl)
 {
     int i = fileIndex(f);
-    memset(iob_[i], 0, 24);
+    memset(host(fileAddr(i)), 0, fileSize);
     files[i] = FileState();
     setFileFd(f, fd);
     setFlag(f, fl);
@@ -595,7 +605,7 @@ int closeStream(uint32_t f)
         result = EOF_;
     if(files[i].deleteOnClose && makeSpec(files[i].tmpPath.c_str()) == noErr)
         C_FSpDelete((FSSpecPtr)specBuf_);
-    memset(iob_[i], 0, 24);
+    memset(host(fileAddr(i)), 0, fileSize);
     files[i] = FileState();
     return result;
 }
@@ -1082,16 +1092,9 @@ int32_t c_access(const char *path, int32_t)
 
 /* ---- formatted I/O ---- */
 
-uint32_t raw_printf(PowerCore &cpu)
-{
-    CallVarArgs args(cpu, 1);
-    std::string s = formatPrintf(host<char>(cpu.r[3]), args);
-    uint32_t f = fileAddr(1);
-    for(char c : s)
-        putC((uint8_t)c, f);
-    cpu.r[3] = (uint32_t)s.size();
-    return cpu.lr;
-}
+/* Each once, on a call's arguments from either processor (CallArgs); the
+   raw_ routines are the PowerPC entries, CFM-68K's are registered in
+   addStdio. */
 
 int32_t writeFormatted(uint32_t f, const std::string &s)
 {
@@ -1103,50 +1106,58 @@ int32_t writeFormatted(uint32_t f, const std::string &s)
     return (int32_t)s.size();
 }
 
-uint32_t raw_fprintf(PowerCore &cpu)
+uint32_t f_printf(const CallArgs &a)
 {
-    CallVarArgs args(cpu, 2);
-    std::string s = formatPrintf(host<char>(cpu.r[4]), args);
-    cpu.r[3] = (uint32_t)writeFormatted(cpu.r[3], s);
-    return cpu.lr;
+    CallVarArgs args(a, 1);
+    std::string s = formatPrintf(host<char>(a.word(0)), args);
+    uint32_t f = fileAddr(1);
+    for(char c : s)
+        putC((uint8_t)c, f);
+    return (uint32_t)s.size();
 }
 
-uint32_t raw_sprintf(PowerCore &cpu)
+uint32_t f_fprintf(const CallArgs &a)
 {
-    uint32_t dst = cpu.r[3];
-    CallVarArgs args(cpu, 2);
-    std::string s = formatPrintf(host<char>(cpu.r[4]), args);
+    CallVarArgs args(a, 2);
+    std::string s = formatPrintf(host<char>(a.word(1)), args);
+    return (uint32_t)writeFormatted(a.word(0), s);
+}
+
+uint32_t f_sprintf(const CallArgs &a)
+{
+    uint32_t dst = a.word(0);
+    CallVarArgs args(a, 2);
+    std::string s = formatPrintf(host<char>(a.word(1)), args);
     memcpy(host(dst), s.c_str(), s.size() + 1);
-    cpu.r[3] = (uint32_t)s.size();
-    return cpu.lr;
+    return (uint32_t)s.size();
 }
 
-uint32_t raw_vprintf(PowerCore &cpu)
+bool isM68K(const CallArgs &a) { return a.address(0) != 0; }
+
+uint32_t f_vprintf(const CallArgs &a)
 {
-    ListVarArgs args(cpu.r[4]);
-    std::string s = formatPrintf(host<char>(cpu.r[3]), args);
-    cpu.r[3] = (uint32_t)writeFormatted(fileAddr(1), s);
-    return cpu.lr;
+    ListVarArgs args(a.word(1), isM68K(a));
+    std::string s = formatPrintf(host<char>(a.word(0)), args);
+    return (uint32_t)writeFormatted(fileAddr(1), s);
 }
 
-uint32_t raw_vfprintf(PowerCore &cpu)
+uint32_t f_vfprintf(const CallArgs &a)
 {
-    ListVarArgs args(cpu.r[5]);
-    std::string s = formatPrintf(host<char>(cpu.r[4]), args);
-    cpu.r[3] = (uint32_t)writeFormatted(cpu.r[3], s);
-    return cpu.lr;
+    ListVarArgs args(a.word(2), isM68K(a));
+    std::string s = formatPrintf(host<char>(a.word(1)), args);
+    return (uint32_t)writeFormatted(a.word(0), s);
 }
 
-uint32_t raw_vsprintf(PowerCore &cpu)
+uint32_t f_vsprintf(const CallArgs &a)
 {
-    uint32_t dst = cpu.r[3];
-    ListVarArgs args(cpu.r[5]);
-    std::string s = formatPrintf(host<char>(cpu.r[4]), args);
+    uint32_t dst = a.word(0);
+    ListVarArgs args(a.word(2), isM68K(a));
+    std::string s = formatPrintf(host<char>(a.word(1)), args);
     memcpy(host(dst), s.c_str(), s.size() + 1);
-    cpu.r[3] = (uint32_t)s.size();
-    return cpu.lr;
+    return (uint32_t)s.size();
 }
 
+namespace {
 struct StringSource : CharSource
 {
     const uint8_t *p;
@@ -1154,7 +1165,10 @@ struct StringSource : CharSource
     int get() override { return *p ? *p++ : -1; }
     void unget(int c) override { if(c >= 0) p--; }
 };
+}
 
+
+namespace {
 struct FileSource : CharSource
 {
     uint32_t f;
@@ -1162,35 +1176,44 @@ struct FileSource : CharSource
     int get() override { return getC(f); }
     void unget(int c) override { if(c >= 0) ungetC(c, f); }
 };
-
-uint32_t raw_sscanf(PowerCore &cpu)
-{
-    StringSource in(host<char>(cpu.r[3]));
-    CallVarArgs args(cpu, 2);
-    cpu.r[3] = (uint32_t)formatScanf(in, host<char>(cpu.r[4]), args);
-    return cpu.lr;
 }
 
-uint32_t raw_fscanf(PowerCore &cpu)
+
+uint32_t f_sscanf(const CallArgs &a)
 {
-    if(fileIndex(cpu.r[3]) < 0)
-    {
-        cpu.r[3] = (uint32_t)EOF_;
-        return cpu.lr;
-    }
-    FileSource in(cpu.r[3]);
-    CallVarArgs args(cpu, 2);
-    cpu.r[3] = (uint32_t)formatScanf(in, host<char>(cpu.r[4]), args);
-    return cpu.lr;
+    StringSource in(host<char>(a.word(0)));
+    CallVarArgs args(a, 2);
+    return (uint32_t)formatScanf(in, host<char>(a.word(1)), args);
 }
 
-uint32_t raw_scanf(PowerCore &cpu)
+uint32_t f_fscanf(const CallArgs &a)
+{
+    if(fileIndex(a.word(0)) < 0)
+        return (uint32_t)EOF_;
+    FileSource in(a.word(0));
+    CallVarArgs args(a, 2);
+    return (uint32_t)formatScanf(in, host<char>(a.word(1)), args);
+}
+
+uint32_t f_scanf(const CallArgs &a)
 {
     FileSource in(fileAddr(0));
-    CallVarArgs args(cpu, 1);
-    cpu.r[3] = (uint32_t)formatScanf(in, host<char>(cpu.r[3]), args);
-    return cpu.lr;
+    CallVarArgs args(a, 1);
+    return (uint32_t)formatScanf(in, host<char>(a.word(0)), args);
 }
+
+#define PPC_ENTRY(NAME) \
+    uint32_t raw_##NAME(PowerCore &cpu) { cpu.r[3] = f_##NAME(PPCCallArgs(cpu)); return cpu.lr; }
+PPC_ENTRY(printf)
+PPC_ENTRY(fprintf)
+PPC_ENTRY(sprintf)
+PPC_ENTRY(vprintf)
+PPC_ENTRY(vfprintf)
+PPC_ENTRY(vsprintf)
+PPC_ENTRY(sscanf)
+PPC_ENTRY(fscanf)
+PPC_ENTRY(scanf)
+#undef PPC_ENTRY
 
 /* stdio's internals some programs call */
 int32_t c_xflsbuf(uint32_t f) { return fileIndex(f) < 0 ? EOF_ : flushOut(f); }
@@ -1214,8 +1237,9 @@ void c_coExit() {}
 
 /* ---- start and end ---- */
 
-void Executor::clib::stdioStart()
+void Executor::clib::stdioStart(bool m68k)
 {
+    fileSize = m68k ? 22 : 24;
     for(auto &d : fds)
         d = Fd();
     for(int i = 0; i < 3; i++)
@@ -1257,63 +1281,7 @@ void Executor::clib::addStdio()
     exportData(LIB, "_iob", iob_);
     exportData(LIB, "_lastbuf", lastbuf_);
 
-    exportFn(LIB, "_filbuf", &c_filbuf);
-    exportFn(LIB, "_flsbuf", &c_flsbuf);
-    exportFn(LIB, "_xflsbuf", &c_xflsbuf);
-    exportFn(LIB, "_wrtchk", &c_wrtchk);
-    exportFn(LIB, "_bufsync", &c_bufsync);
-    exportFn(LIB, "_coExit", &c_coExit);
-    exportFn(LIB, "fgetc", &c_fgetc);
-    exportFn(LIB, "getc", &c_fgetc);
-    exportFn(LIB, "fputc", &c_fputc);
-    exportFn(LIB, "putc", &c_fputc);
-    exportFn(LIB, "getchar", &c_getchar);
-    exportFn(LIB, "putchar", &c_putchar);
-    exportFn(LIB, "ungetc", &c_ungetc);
-    exportFn(LIB, "fgets", &c_fgets);
-    exportFn(LIB, "gets", &c_gets);
-    exportFn(LIB, "fputs", &c_fputs);
-    exportFn(LIB, "puts", &c_puts);
-    exportFn(LIB, "getw", &c_getw);
-    exportFn(LIB, "putw", &c_putw);
-    exportFn(LIB, "fread", &c_fread);
-    exportFn(LIB, "fwrite", &c_fwrite);
-    exportFn(LIB, "fopen", &c_fopen);
-    exportFn(LIB, "freopen", &c_freopen);
-    exportFn(LIB, "fdopen", &c_fdopen);
-    exportFn(LIB, "fclose", &c_fclose);
-    exportFn(LIB, "fflush", &c_fflush);
-    exportFn(LIB, "fseek", &c_fseek);
-    exportFn(LIB, "ftell", &c_ftell);
-    exportFn(LIB, "rewind", &c_rewind);
-    exportFn(LIB, "fgetpos", &c_fgetpos);
-    exportFn(LIB, "fsetpos", &c_fsetpos);
-    exportFn(LIB, "clearerr", &c_clearerr);
-    exportFn(LIB, "feof", &c_feof);
-    exportFn(LIB, "ferror", &c_ferror);
-    exportFn(LIB, "setvbuf", &c_setvbuf);
-    exportFn(LIB, "setbuf", &c_setbuf);
-    exportFn(LIB, "remove", &c_remove);
-    exportFn(LIB, "unlink", &c_remove);
-    exportFn(LIB, "rename", &c_rename);
-    exportFn(LIB, "tmpnam", &c_tmpnam);
-    exportFn(LIB, "tmpfile", &c_tmpfile);
-    exportFn(LIB, "mktemp", &c_mktemp);
-    exportFn(LIB, "fsetfileinfo", &c_fsetfileinfo);
-    exportFn(LIB, "perror", &c_perror);
 
-    exportFn(LIB, "open", &c_open);
-    exportFn(LIB, "creat", &c_creat);
-    exportFn(LIB, "close", &c_close);
-    exportFn(LIB, "read", &c_read);
-    exportFn(LIB, "write", &c_write);
-    exportFn(LIB, "lseek", &c_lseek);
-    exportFn(LIB, "dup", &c_dup);
-    exportFn(LIB, "fcntl", &c_fcntl);
-    exportFn(LIB, "ioctl", &c_ioctl);
-    exportFn(LIB, "faccess", &c_faccess);
-    exportFn(LIB, "_faccess", &c_faccess);
-    exportFn(LIB, "access", &c_access);
 
     exportRaw(LIB, "printf", &raw_printf);
     exportRaw(LIB, "fprintf", &raw_fprintf);
@@ -1324,4 +1292,15 @@ void Executor::clib::addStdio()
     exportRaw(LIB, "scanf", &raw_scanf);
     exportRaw(LIB, "fscanf", &raw_fscanf);
     exportRaw(LIB, "sscanf", &raw_sscanf);
+    /* CFM-68K (NuStdCLib): the variadic ones leave their arguments to the
+       caller, the v ones pop theirs. */
+    exportRaw68k(LIB, "printf", &f_printf);
+    exportRaw68k(LIB, "fprintf", &f_fprintf);
+    exportRaw68k(LIB, "sprintf", &f_sprintf);
+    exportRaw68k(LIB, "vprintf", &f_vprintf, 2);
+    exportRaw68k(LIB, "vfprintf", &f_vfprintf, 3);
+    exportRaw68k(LIB, "vsprintf", &f_vsprintf, 3);
+    exportRaw68k(LIB, "scanf", &f_scanf);
+    exportRaw68k(LIB, "fscanf", &f_fscanf);
+    exportRaw68k(LIB, "sscanf", &f_sscanf);
 }

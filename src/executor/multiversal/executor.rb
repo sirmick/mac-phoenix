@@ -293,9 +293,26 @@ class ExecutorGenerator < Generator
         end
         two = name == cname ? "2" : ""
 
-        @out << (fun["return"] or "void") << " " << cname
-
         args = (fun["args"] or [])
+
+        if fun["library"] then
+            # A shared library's export (docs/executor/LIBRARIES.md): reached
+            # by name from PowerPC and CFM-68K code, not through a trap.
+            # A raw one reads its own arguments from the PowerPC registers
+            # and is registered by its library's code; here it is only
+            # declared to be there (checked when the library is set up).
+            lib = fun["library"]
+            if fun["raw"] then
+                @out << "LIBRARY_RAW(#{lib}, #{name});\n"
+            else
+                @out << (fun["return"] or "void") << " " << cname
+                @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"
+                @out << "LIBRARY_FUNCTION(#{lib}, #{name}, #{cname});\n"
+            end
+            return
+        end
+
+        @out << (fun["return"] or "void") << " " << cname
 
         @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"
 

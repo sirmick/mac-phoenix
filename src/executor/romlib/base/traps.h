@@ -228,15 +228,53 @@ private:
     const Trap& trap;
 };
 
+/* MacPhoenix: a routine a shared library exports (docs/executor/
+   LIBRARIES.md, `library:` in the definitions): PowerPC and CFM-68K code
+   import it by name; no trap and no 68k UPP. */
+template<typename F, F* fptr>
+class LibraryFunction {};
+
+template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
+class LibraryFunction<Ret (Args...), fptr> : public Entrypoint
+{
+public:
+    using Entrypoint::Entrypoint;
+    virtual void init() override;
+};
+
+/* ... and one that reads its own arguments from the PowerPC registers
+   (variadic, or decoded by hand: `raw: true`). Its library registers it
+   itself; the definitions only say it is there, and builtinlibs checks
+   that the two agree. */
+class LibraryRawExport : public internal::DeferredInit
+{
+public:
+    LibraryRawExport(const char *name, const char *library)
+        : name(name), library(library) {}
+    virtual void init() override;
+private:
+    const char *name;
+    const char *library;
+};
+
 #define EXTERN_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_DISPATCHER_TRAP(NAME, TRAP, SELECTOR) \
     extern Executor::traps::DispatcherTrap<Executor::traps::selectors::SELECTOR> NAME
+#define EXTERN_LIBRARY_FUNCTION(NAME, INIT, ...) \
+    extern Executor::traps::__VA_ARGS__ NAME
+#define EXTERN_LIBRARY_RAW(NAME, INIT) \
+    extern Executor::traps::LibraryRawExport NAME
 #define DEFINE_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
     Executor::traps::__VA_ARGS__ NAME INIT;   \
     template class Executor::traps::__VA_ARGS__;
 #define DEFINE_DISPATCHER_TRAP(NAME, TRAP, SELECTOR) \
     Executor::traps::DispatcherTrap<Executor::traps::selectors::SELECTOR> NAME { #NAME, TRAP }
+/* No explicit instantiation: two names (memcpy, _memcpy) can share one. */
+#define DEFINE_LIBRARY_FUNCTION(NAME, INIT, ...) \
+    Executor::traps::__VA_ARGS__ NAME INIT
+#define DEFINE_LIBRARY_RAW(NAME, INIT) \
+    Executor::traps::LibraryRawExport NAME INIT
 
 #ifndef TRAP_INSTANTIATION
 #define TRAP_INSTANTIATION EXTERN
@@ -246,6 +284,8 @@ private:
 #define PREPROCESSOR_CONCAT(A,B) PREPROCESSOR_CONCAT1(A,B)
 #define CREATE_FUNCTION_WRAPPER PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _FUNCTION_WRAPPER)
 #define DISPATCHER_TRAP PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _DISPATCHER_TRAP)
+#define CREATE_LIBRARY_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_FUNCTION)
+#define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
 
 #define COMMA ,
 #define PASCAL_TRAP(NAME, TRAP) \
@@ -261,6 +301,11 @@ private:
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, TRAPNAME, "InterfaceLib"), SubTrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA SELECTOR COMMA callconv::Register<__VA_ARGS__>>)
 #define REGISTER_SUBTRAP2(NAME, TRAP, SELECTOR, TRAPNAME, ...) \
     CREATE_FUNCTION_WRAPPER(stub_##NAME, &NAME, (#NAME, TRAPNAME, "InterfaceLib"), SubTrapFunction<decltype(NAME) COMMA &NAME COMMA TRAP COMMA SELECTOR COMMA callconv::Register<__VA_ARGS__>>)
+
+#define LIBRARY_FUNCTION(LIB, NAME, IMPL) \
+    CREATE_LIBRARY_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
+#define LIBRARY_RAW(LIB, NAME) \
+    CREATE_LIBRARY_RAW(lib_##LIB##_##NAME, (#NAME, #LIB))
 
 #define NOTRAP_FUNCTION(NAME) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, "InterfaceLib"), WrappedFunction<decltype(C_##NAME) COMMA &C_##NAME>)

@@ -21,7 +21,7 @@
 using namespace Executor;
 using namespace Executor::clib;
 
-namespace
+namespace Executor
 {
 
 const char LIB[] = "MathLib";
@@ -104,6 +104,7 @@ void c_feupdateenv(uint32_t envp)
 }
 
 /* What the host's computation raised, onto the guest's flags. */
+namespace {
 struct HostFlags
 {
     HostFlags() { std::feclearexcept(FE_ALL_EXCEPT); }
@@ -132,8 +133,11 @@ struct HostFlags
         setExceptions(bits);
     }
 };
+}
+
 
 /* The guest's rounding direction for the host's computation. */
+namespace {
 struct HostRounding
 {
     int old;
@@ -145,22 +149,30 @@ struct HostRounding
     }
     ~HostRounding() { std::fesetround(old); }
 };
+}
+
 
 /* ---- double ---- */
 
+namespace {
 template<double (*F)(double)>
 double unary(double x)
 {
     HostFlags flags;
     return F(x);
 }
+}
 
+
+namespace {
 template<double (*F)(double, double)>
 double binary(double x, double y)
 {
     HostFlags flags;
     return F(x, y);
 }
+}
+
 
 double m_cos(double x) { return std::cos(x); }
 double m_sin(double x) { return std::sin(x); }
@@ -399,6 +411,7 @@ void toPair(PowerCore &cpu, int f, long double v)
 
 long double argL(PowerCore &cpu, int f) { return fromPair(cpu.f[f], cpu.f[f + 1]); }
 
+namespace {
 template<long double (*F)(long double)>
 uint32_t unaryL(PowerCore &cpu)
 {
@@ -406,7 +419,10 @@ uint32_t unaryL(PowerCore &cpu)
     toPair(cpu, 1, F(argL(cpu, 1)));
     return cpu.lr;
 }
+}
 
+
+namespace {
 template<long double (*F)(long double, long double)>
 uint32_t binaryL(PowerCore &cpu)
 {
@@ -414,6 +430,8 @@ uint32_t binaryL(PowerCore &cpu)
     toPair(cpu, 1, F(argL(cpu, 1), argL(cpu, 3)));
     return cpu.lr;
 }
+}
+
 
 long double l_cos(long double x) { return std::cos(x); }
 long double l_sin(long double x) { return std::sin(x); }
@@ -617,12 +635,15 @@ void m_ldtox80(uint32_t xp, uint32_t x80)
    struct decform: style, unused, digits (short). */
 constexpr int SIGDIGLEN = 36;
 
+namespace {
 struct Decimal
 {
     bool neg = false;
     int exp = 0;
     std::string sig;
 };
+}
+
 
 Decimal readDecimal(uint32_t d)
 {
@@ -744,6 +765,7 @@ long double decimal2num(const Decimal &d)
     return d.neg ? -v : v;
 }
 
+namespace {
 struct CLocale
 {
     locale_t old;
@@ -754,6 +776,8 @@ struct CLocale
     }
     ~CLocale() { uselocale(old); }
 };
+}
+
 
 void m_num2dec(uint32_t f, double x, uint32_t d)
 {
@@ -999,6 +1023,55 @@ void m_dec2str(uint32_t f, uint32_t dp, char *out)
 
 }
 
+namespace Executor
+{
+
+/* The m_ routines MathLib exports as they are, host flags carried over
+   (MathLib.yaml): unary<> and binary<> by name. */
+double h_cos(double x) { return unary<m_cos>(x); }
+double h_sin(double x) { return unary<m_sin>(x); }
+double h_tan(double x) { return unary<m_tan>(x); }
+double h_acos(double x) { return unary<m_acos>(x); }
+double h_asin(double x) { return unary<m_asin>(x); }
+double h_atan(double x) { return unary<m_atan>(x); }
+double h_atan2(double x, double y) { return binary<m_atan2>(x, y); }
+double h_cosh(double x) { return unary<m_cosh>(x); }
+double h_sinh(double x) { return unary<m_sinh>(x); }
+double h_tanh(double x) { return unary<m_tanh>(x); }
+double h_acosh(double x) { return unary<m_acosh>(x); }
+double h_asinh(double x) { return unary<m_asinh>(x); }
+double h_atanh(double x) { return unary<m_atanh>(x); }
+double h_exp(double x) { return unary<m_exp>(x); }
+double h_expm1(double x) { return unary<m_expm1>(x); }
+double h_exp2(double x) { return unary<m_exp2>(x); }
+double h_log(double x) { return unary<m_log>(x); }
+double h_log2(double x) { return unary<m_log2>(x); }
+double h_log1p(double x) { return unary<m_log1p>(x); }
+double h_log10(double x) { return unary<m_log10>(x); }
+double h_logb(double x) { return unary<m_logb>(x); }
+double h_fabs(double x) { return unary<m_fabs>(x); }
+double h_sqrt(double x) { return unary<m_sqrt>(x); }
+double h_erf(double x) { return unary<m_erf>(x); }
+double h_erfc(double x) { return unary<m_erfc>(x); }
+double h_gamma(double x) { return unary<m_gamma>(x); }
+double h_lgamma(double x) { return unary<m_lgamma>(x); }
+double h_ceil(double x) { return unary<m_ceil>(x); }
+double h_floor(double x) { return unary<m_floor>(x); }
+double h_trunc(double x) { return unary<m_trunc>(x); }
+double h_round(double x) { return unary<m_round>(x); }
+double h_rint(double x) { return unary<m_rint>(x); }
+double h_nearbyint(double x) { return unary<m_nearbyint>(x); }
+double h_hypot(double x, double y) { return binary<m_hypot>(x, y); }
+double h_pow(double x, double y) { return binary<m_pow>(x, y); }
+double h_fmod(double x, double y) { return binary<m_fmod>(x, y); }
+double h_remainder(double x, double y) { return binary<m_remainder>(x, y); }
+double h_copysign(double x, double y) { return binary<m_copysign>(x, y); }
+double h_fdim(double x, double y) { return binary<m_fdim>(x, y); }
+double h_fmax(double x, double y) { return binary<m_fmax>(x, y); }
+double h_fmin(double x, double y) { return binary<m_fmin>(x, y); }
+double h_nextafterd(double x, double y) { return binary<m_nextafterd>(x, y); }
+}
+
 void Executor::clib::addMathLib()
 {
     writeDouble(guest(pi_), 3.14159265358979323846);
@@ -1006,92 +1079,13 @@ void Executor::clib::addMathLib()
     exportData(LIB, "pi", pi_);
     exportData(LIB, "_FE_DFL_ENV", feDflEnv_);
 
-    exportFn(LIB, "cos", &unary<m_cos>);
-    exportFn(LIB, "sin", &unary<m_sin>);
-    exportFn(LIB, "tan", &unary<m_tan>);
-    exportFn(LIB, "acos", &unary<m_acos>);
-    exportFn(LIB, "asin", &unary<m_asin>);
-    exportFn(LIB, "atan", &unary<m_atan>);
-    exportFn(LIB, "atan2", &binary<m_atan2>);
-    exportFn(LIB, "cosh", &unary<m_cosh>);
-    exportFn(LIB, "sinh", &unary<m_sinh>);
-    exportFn(LIB, "tanh", &unary<m_tanh>);
-    exportFn(LIB, "acosh", &unary<m_acosh>);
-    exportFn(LIB, "asinh", &unary<m_asinh>);
-    exportFn(LIB, "atanh", &unary<m_atanh>);
-    exportFn(LIB, "exp", &unary<m_exp>);
-    exportFn(LIB, "expm1", &unary<m_expm1>);
-    exportFn(LIB, "exp2", &unary<m_exp2>);
-    exportFn(LIB, "log", &unary<m_log>);
-    exportFn(LIB, "log2", &unary<m_log2>);
-    exportFn(LIB, "log1p", &unary<m_log1p>);
-    exportFn(LIB, "log10", &unary<m_log10>);
-    exportFn(LIB, "logb", &unary<m_logb>);
-    exportFn(LIB, "fabs", &unary<m_fabs>);
-    exportFn(LIB, "sqrt", &unary<m_sqrt>);
-    exportFn(LIB, "erf", &unary<m_erf>);
-    exportFn(LIB, "erfc", &unary<m_erfc>);
-    exportFn(LIB, "gamma", &unary<m_gamma>);
-    exportFn(LIB, "lgamma", &unary<m_lgamma>);
-    exportFn(LIB, "ceil", &unary<m_ceil>);
-    exportFn(LIB, "floor", &unary<m_floor>);
-    exportFn(LIB, "trunc", &unary<m_trunc>);
-    exportFn(LIB, "round", &unary<m_round>);
-    exportFn(LIB, "rint", &unary<m_rint>);
-    exportFn(LIB, "nearbyint", &unary<m_nearbyint>);
-    exportFn(LIB, "hypot", &binary<m_hypot>);
-    exportFn(LIB, "pow", &binary<m_pow>);
-    exportFn(LIB, "fmod", &binary<m_fmod>);
-    exportFn(LIB, "remainder", &binary<m_remainder>);
-    exportFn(LIB, "copysign", &binary<m_copysign>);
-    exportFn(LIB, "fdim", &binary<m_fdim>);
-    exportFn(LIB, "fmax", &binary<m_fmax>);
-    exportFn(LIB, "fmin", &binary<m_fmin>);
-    exportFn(LIB, "nextafterd", &binary<m_nextafterd>);
-    exportFn(LIB, "nextafterf", &m_nextafterf);
-    exportFn(LIB, "remquo", &m_remquo);
-    exportFn(LIB, "modf", &m_modf);
-    exportFn(LIB, "modff", &m_modff);
-    exportFn(LIB, "frexp", &m_frexp);
-    exportFn(LIB, "ldexp", &m_ldexp);
-    exportFn(LIB, "scalb", &m_scalb);
-    exportFn(LIB, "rinttol", &m_rinttol);
-    exportFn(LIB, "roundtol", &m_roundtol);
-    exportFn(LIB, "relation", &m_relation);
-    exportFn(LIB, "__fpclassifyd", &m_fpclassifyd);
-    exportFn(LIB, "__fpclassifyf", &m_fpclassifyf);
-    exportFn(LIB, "__isnormald", &m_isnormald);
-    exportFn(LIB, "__isnormalf", &m_isnormalf);
-    exportFn(LIB, "__isfinited", &m_isfinited);
-    exportFn(LIB, "__isfinitef", &m_isfinitef);
-    exportFn(LIB, "__isnand", &m_isnand);
-    exportFn(LIB, "__isnanf", &m_isnanf);
-    exportFn(LIB, "__signbitd", &m_signbitd);
-    exportFn(LIB, "__signbitf", &m_signbitf);
     exportRaw(LIB, "__fpclassify", [](PowerCore &cpu) { return raw_classifyL(cpu, m_fpclassifyd); });
     exportRaw(LIB, "__isnormal", [](PowerCore &cpu) { return raw_classifyL(cpu, m_isnormald); });
     exportRaw(LIB, "__isfinite", [](PowerCore &cpu) { return raw_classifyL(cpu, m_isfinited); });
     exportRaw(LIB, "__isnan", [](PowerCore &cpu) { return raw_classifyL(cpu, m_isnand); });
     exportRaw(LIB, "__signbit", [](PowerCore &cpu) { return raw_classifyL(cpu, m_signbitd); });
-    exportFn(LIB, "__inf", &m_inf);
-    exportFn(LIB, "nan", &m_nan);
-    exportFn(LIB, "nanf", &m_nanf);
     exportRaw(LIB, "nanl", &raw_nanl);
-    exportFn(LIB, "compound", &m_compound);
-    exportFn(LIB, "annuity", &m_annuity);
-    exportFn(LIB, "randomx", &m_randomx);
 
-    exportFn(LIB, "feclearexcept", &c_feclearexcept);
-    exportFn(LIB, "feraiseexcept", &c_feraiseexcept);
-    exportFn(LIB, "fetestexcept", &c_fetestexcept);
-    exportFn(LIB, "fegetexcept", &c_fegetexcept);
-    exportFn(LIB, "fesetexcept", &c_fesetexcept);
-    exportFn(LIB, "fegetround", &c_fegetround);
-    exportFn(LIB, "fesetround", &c_fesetround);
-    exportFn(LIB, "fegetenv", &c_fegetenv);
-    exportFn(LIB, "feholdexcept", &c_feholdexcept);
-    exportFn(LIB, "fesetenv", &c_fesetenv);
-    exportFn(LIB, "feupdateenv", &c_feupdateenv);
 
     exportRaw(LIB, "cosl", &unaryL<l_cos>);
     exportRaw(LIB, "sinl", &unaryL<l_sin>);
@@ -1143,18 +1137,8 @@ void Executor::clib::addMathLib()
     exportRaw(LIB, "roundtoll", &raw_roundtoll);
     exportRaw(LIB, "relationl", &raw_relationl);
 
-    exportFn(LIB, "x80tod", &m_x80tod);
-    exportFn(LIB, "dtox80", &m_dtox80);
     exportRaw(LIB, "x80told", &raw_x80told);
-    exportFn(LIB, "ldtox80", &m_ldtox80);
 
-    exportFn(LIB, "num2dec", &m_num2dec);
     exportRaw(LIB, "num2decl", &raw_num2decl);
-    exportFn(LIB, "dec2num", &m_dec2num);
     exportRaw(LIB, "dec2numl", &raw_dec2numl);
-    exportFn(LIB, "dec2f", &m_dec2f);
-    exportFn(LIB, "dec2s", &m_dec2s);
-    exportFn(LIB, "dec2l", &m_dec2l);
-    exportFn(LIB, "str2dec", &m_str2dec);
-    exportFn(LIB, "dec2str", &m_dec2str);
 }
