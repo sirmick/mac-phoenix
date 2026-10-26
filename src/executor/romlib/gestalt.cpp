@@ -72,8 +72,11 @@ static gestaltentry_t gtable[] = {
        TrueType-in-ROM bits; read with MacPerl's Mac::Gestalt). MacPerl
        won't start without it ("requires System 7.0 or later"). */
     { gestaltFontMgrAttr, 7 },
+    /* MacPhoenix: + the File System Manager (bit 2) and its loading a
+       file system's code at first use (bit 3), file/fsm.cpp; PC Exchange
+       installs only with both. */
     {
-        gestaltFSAttr, gestaltStandardFile58 | gestaltHasFSSpecCalls,
+        gestaltFSAttr, gestaltStandardFile58 | gestaltHasFSSpecCalls | (1 << 2) | (1 << 3),
     },
     /*  gestaltFXfrMgrAttr,		0,	*/
     /*  gestaltHardwareAttr,	0,	*/

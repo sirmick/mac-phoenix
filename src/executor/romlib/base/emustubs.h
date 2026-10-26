@@ -94,6 +94,12 @@ RAW_68K_FUNCTION(GNEFilterEnd);
 RAW_68K_FUNCTION(ShieldCursorEnd);
 /* MacPhoenix: the Component Manager (component.cpp). */
 RAW_68K_TRAP(ComponentDispatch, 0xA82A);
+/* MacPhoenix: the File System Manager and its HFS utility routines
+   (file/fsm.cpp). */
+RAW_68K_TRAP(FSMDispatch, 0xA0AC);
+RAW_68K_TRAP(HFSUtilDispatch, 0xA824);
+/* MacPhoenix: $A074, a private OS trap PC Exchange's INIT calls (file/fsm.cpp). */
+RAW_68K_TRAP(OSTrapA074, 0xA074);
 RAW_68K_TRAP(Fix2X, 0xA843);
 RAW_68K_TRAP(Frac2X, 0xA845);
 RAW_68K_TRAP(SCSIDispatch, 0xA815);

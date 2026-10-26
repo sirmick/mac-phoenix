@@ -28,6 +28,7 @@
 
 #include <base/trapglue.h>
 #include <file/file.h>
+#include <file/fsm.h>
 #include <sound/sounddriver.h>
 #include <prefs/prefs.h>
 #include <commandline/flags.h>
@@ -544,7 +545,10 @@ static void reinitialize_things(void)
         INTEGER rn;
 
         rn = (char *)fcbp - (char *)LM(FCBSPtr);
+        /* MacPhoenix: a foreign file system's own paths (file/fsm.cpp)
+           stay open: it opened them for its volume at startup */
         if(fcbp->fcbCName[0]
+           && !ROMlib_fsm_vcb_p(fcbp->fcbVPtr)
            /* && rn != Param_ram_rn */
            && rn != LM(SysMap)
            && std::find(system_chain.begin(), system_chain.end(), rn) == system_chain.end()

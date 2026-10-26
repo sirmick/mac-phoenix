@@ -15,7 +15,9 @@
 #include <hfs/hfs.h>
 #include <file/hfsplusvolume.h>
 #include <file/file.h>
+#include <file/fsm.h>
 #include <hfs/partition.h>
+#include <sys/stat.h>
 #include <algorithm>
 
 #if defined(MSDOS) || defined(CYGWIN32)
@@ -145,6 +147,8 @@ void Executor::ROMlib_OurClose(void)
         else
             ;   // ### TODO
     }
+    /* MacPhoenix: foreign file systems' volumes (file/fsm.cpp) */
+    ROMlib_fsm_unmount_all();
 }
 
 #if 0
@@ -585,6 +589,21 @@ Executor::try_to_mount_disk(const char *dname, LONGINT floppyfd, GUEST<LONGINT> 
                                flags, dqp);
             *messp = ((LONGINT)err << 16) | drivenum;
         }
+    }
+
+    /* MacPhoenix: a medium no file system of Executor's reads (a DOS
+       disk): the drive keeps it open, readable through its driver, its
+       size in blocks, for the File System Manager's foreign file systems
+       (file/fsm.cpp) */
+    struct stat sbuf;
+    if(!foundmap && fstat(floppyfd, &sbuf) == 0 && S_ISREG(sbuf.st_mode))
+    {
+        ULONGINT blocks = (sbuf.st_size - hfs.offset) / PHYSBSIZE;
+        dqp->hfs.fd = floppyfd;
+        dqp->dq.dQDrvSz = blocks;
+        dqp->dq.dQDrvSz2 = blocks >> 16;
+        ROMlib_fsm_unrecognised_drive(drivenum);
+        *messp = ((LONGINT)noMacDskErr << 16) | drivenum;
     }
 }
 

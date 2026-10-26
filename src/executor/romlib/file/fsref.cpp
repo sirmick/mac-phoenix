@@ -14,6 +14,7 @@
 #include <MemoryMgr.h>
 #include <OSUtil.h>
 #include <file/file.h>
+#include <file/fsm.h>
 #include <file/hfsplusvolume.h>
 #include <file/localvolume/item.h>
 #include <hfs/hfs.h>
@@ -78,7 +79,7 @@ struct Bypass
 
 HFSPlusVolume *hfsPlusVolume(HVCB *vcb)
 {
-    return vcb ? dynamic_cast<HFSPlusVolume *>(((VCBExtra *)vcb)->volume) : nullptr;
+    return vcb ? dynamic_cast<HFSPlusVolume *>(ROMlib_volume_of(vcb)) : nullptr;
 }
 
 HVCB *vcbFor(short vref)

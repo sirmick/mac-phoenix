@@ -79,8 +79,22 @@ std::set<std::string> load_allow_list()
         size_t start = 0;
         while(start < line.size() && isspace((unsigned char)line[start]))
             start++;
-        if(start < line.size())
-            allow.insert(line.substr(start));
+        if(start >= line.size())
+            continue;
+        line = line.substr(start);
+        /* "NAME @ 7.6": only on that System or a later one */
+        auto at = line.find(" @ ");
+        if(at != std::string::npos)
+        {
+            unsigned major = 0, minor = 0;
+            sscanf(line.c_str() + at + 3, "%u.%u", &major, &minor);
+            line.resize(at);
+            while(!line.empty() && isspace((unsigned char)line.back()))
+                line.pop_back();
+            if((uint16_t)LM(SysVersion) < ((major << 8) | (minor << 4)))
+                continue;
+        }
+        allow.insert(line);
     }
     return allow;
 }

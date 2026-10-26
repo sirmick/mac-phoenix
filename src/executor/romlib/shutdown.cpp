@@ -13,6 +13,7 @@
 #include <SegmentLdr.h>
 
 #include <rsys/segment.h>
+#include <file/fsm.h>
 
 using namespace Executor;
 
@@ -21,6 +22,7 @@ using namespace Executor;
    procs are not run (ShutDwnInstall is unimplemented). */
 void Executor::C_ShutDwnPower()
 {
+    ROMlib_fsm_unmount_all(); /* a DOS disk's file system writes back */
     ROMlib_exit = true;
     fprintf(stderr, "[Executor] ShutDwnPower: powering off\n");
     fflush(nullptr);
@@ -36,6 +38,7 @@ void Executor::C_ShutDwnPower()
    it starts the child again, as a ROM machine reboots. */
 void Executor::C_ShutDwnStart()
 {
+    ROMlib_fsm_unmount_all();
     ROMlib_exit = true;
     fprintf(stderr, "[Executor] ShutDwnStart: restarting\n");
     fflush(nullptr);

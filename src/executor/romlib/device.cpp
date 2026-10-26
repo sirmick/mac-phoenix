@@ -220,8 +220,15 @@ OSErr Executor::PBControl(ParmBlkPtr pbp, Boolean a) /* IMII-186 */
 {
     OSErr err;
 
-    if(pbp->cntrlParam.ioCRefNum == OURHFSDREF && ROMlib_image_drive_control(pbp, &err))
-        return err;
+    if(pbp->cntrlParam.ioCRefNum == OURHFSDREF)
+    {
+        /* MacPhoenix: as ROMlib_dispatch does, so the answer completes
+           an asynchronous call only (the Finder's stack pb had garbage
+           there, the async bit and a completion pointer among it) */
+        pbp->ioParam.ioTrap = a ? 0xA004 | asyncTrpBit : 0xA004;
+        if(ROMlib_image_drive_control(pbp, &err))
+            return err;
+    }
     err = ROMlib_dispatch(pbp, a, Ctl, 0);
     fs_err_hook(err);
     return err;
