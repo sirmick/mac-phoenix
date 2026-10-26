@@ -47,6 +47,11 @@ kTemporaryFolderType = "temp"_4,
 kFontFolderType = "font"_4,
 };
 
+enum {kOnSystemDisk = -32768,
+kCreateFolder = 1,
+kDontCreateFolder = 0,
+};
+
 DISPATCHER_TRAP(AliasDispatch, 0xA823, D0W);
 
 

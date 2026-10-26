@@ -78,23 +78,23 @@ OSErr C_DMGetIndexedDisplayModeFromList(Ptr panelList, uint32_t itemIndex, uint3
 
 
 // MacPhoenix: a display port component (7.6.1's PowerBook ZoomedVideo and the like) asks for an AVID as it registers. No AV ports here: kDMGenErr, and the component stays unregistered.
-OSErr C_DMNewAVIDByPortComponent(Component thePortComponent, OSType portKind, uint32_t reserved, GUEST<GUEST<uint32_t>> *newID);PASCAL_SUBTRAP(DMNewAVIDByPortComponent, 0xABEB, 0x082E, DisplayDispatch);
+OSErr C_DMNewAVIDByPortComponent(Component thePortComponent, OSType portKind, uint32_t reserved, GUEST<uint32_t> *newID);PASCAL_SUBTRAP(DMNewAVIDByPortComponent, 0xABEB, 0x082E, DisplayDispatch);
 
 
-OSErr C_DMGetPortComponentByAVID(uint32_t displayID, GUEST<GUEST<Component>> *portComponent, Ptr portDesc, GUEST<GUEST<OSType>> *portKind);PASCAL_SUBTRAP(DMGetPortComponentByAVID, 0xABEB, 0x082F, DisplayDispatch);
+OSErr C_DMGetPortComponentByAVID(uint32_t displayID, GUEST<Component> *portComponent, Ptr portDesc, GUEST<OSType> *portKind);PASCAL_SUBTRAP(DMGetPortComponentByAVID, 0xABEB, 0x082F, DisplayDispatch);
 
 
 OSErr C_DMSendDependentNotification(OSType notifyType, OSType notifyClass, uint32_t displayID, ComponentInstance notifyComponent);PASCAL_SUBTRAP(DMSendDependentNotification, 0xABEB, 0x0830, DisplayDispatch);
 
 
 // MacPhoenix: as DMNewAVIDByPortComponent, for a display device component: kDMGenErr.
-OSErr C_DMNewAVIDByDeviceComponent(Component theDeviceComponent, OSType portKind, uint32_t reserved, GUEST<GUEST<uint32_t>> *newID);PASCAL_SUBTRAP(DMNewAVIDByDeviceComponent, 0xABEB, 0x0833, DisplayDispatch);
+OSErr C_DMNewAVIDByDeviceComponent(Component theDeviceComponent, OSType portKind, uint32_t reserved, GUEST<uint32_t> *newID);PASCAL_SUBTRAP(DMNewAVIDByDeviceComponent, 0xABEB, 0x0833, DisplayDispatch);
 
 
-OSErr C_DMGetDeviceComponentByAVID(uint32_t displayID, GUEST<GUEST<Component>> *theDeviceComponent, Ptr theDesc, GUEST<GUEST<OSType>> *theKind);PASCAL_SUBTRAP(DMGetDeviceComponentByAVID, 0xABEB, 0x0835, DisplayDispatch);
+OSErr C_DMGetDeviceComponentByAVID(uint32_t displayID, GUEST<Component> *theDeviceComponent, Ptr theDesc, GUEST<OSType> *theKind);PASCAL_SUBTRAP(DMGetDeviceComponentByAVID, 0xABEB, 0x0835, DisplayDispatch);
 
 
-OSErr C_DMGetDeviceAVIDByPortAVID(uint32_t portAVID, GUEST<GUEST<uint32_t>> *deviceAVID);PASCAL_SUBTRAP(DMGetDeviceAVIDByPortAVID, 0xABEB, 0x043B, DisplayDispatch);
+OSErr C_DMGetDeviceAVIDByPortAVID(uint32_t portAVID, GUEST<uint32_t> *deviceAVID);PASCAL_SUBTRAP(DMGetDeviceAVIDByPortAVID, 0xABEB, 0x043B, DisplayDispatch);
 
 
 OSErr C_DMDisposeList(Ptr panelList);PASCAL_SUBTRAP(DMDisposeList, 0xABEB, 0x022C, DisplayDispatch);
@@ -121,7 +121,7 @@ void C_DMDrawDesktopRect(Rect *globalRect);PASCAL_SUBTRAP(DMDrawDesktopRect, 0xA
 void C_DMDrawDesktopRegion(RgnHandle globalRgn);PASCAL_SUBTRAP(DMDrawDesktopRegion, 0xABEB, 0x0003, DisplayDispatch);
 
 
-OSErr C_DMGetDeskRegion(GUEST<GUEST<RgnHandle>> *desktopRegion);PASCAL_SUBTRAP(DMGetDeskRegion, 0xABEB, 0x0213, DisplayDispatch);
+OSErr C_DMGetDeskRegion(GUEST<RgnHandle> *desktopRegion);PASCAL_SUBTRAP(DMGetDeskRegion, 0xABEB, 0x0213, DisplayDispatch);
 
 
 // MacPhoenix, as the rest below: Apple's Monitors control panel calls these.

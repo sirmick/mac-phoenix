@@ -105,6 +105,7 @@ static AppFile *AppFilePtr(short index)
     {
         AppFile *f = (AppFile *)p;
         p += (8 + 1 + f->fName[0] + 1) & ~1;
+        index--;
     }
     return (AppFile *)p;
 }
@@ -231,6 +232,8 @@ pascal OSErr HOpenRF(INTEGER vref, LONGINT dirid, ConstStringPtr name,
     pb.fileParam.ioDirID = dirid;
     pb.fileParam.ioNamePtr = (StringPtr)name;
     pb.ioParam.ioPermssn = perm;
+    pb.ioParam.ioMisc = NULL;
+    pb.fileParam.ioFVersNum = 0;
     OSErr err = PBHOpenRFSync(&pb);
     *refp = pb.ioParam.ioRefNum;
     return err;
@@ -243,6 +246,8 @@ pascal OSErr HOpen(INTEGER vref, LONGINT dirid, ConstStringPtr name,
     pb.fileParam.ioDirID = dirid;
     pb.fileParam.ioNamePtr = (StringPtr)name;
     pb.ioParam.ioPermssn = perm;
+    pb.ioParam.ioMisc = NULL;
+    pb.fileParam.ioFVersNum = 0;
     OSErr err = PBHOpenSync(&pb);
     *refp = pb.ioParam.ioRefNum;
     return err;
@@ -256,6 +261,8 @@ pascal OSErr HOpenDF(INTEGER vref, LONGINT dirid, ConstStringPtr name,
     pb.fileParam.ioDirID = dirid;
     pb.fileParam.ioNamePtr = (StringPtr)name;
     pb.ioParam.ioPermssn = perm;
+    pb.ioParam.ioMisc = NULL;
+    pb.fileParam.ioFVersNum = 0;
     OSErr err = PBHOpenDFSync(&pb);
     *refp = pb.ioParam.ioRefNum;
     return err;
@@ -411,7 +418,9 @@ pascal OSErr GetWDInfo(short wdRefNum, short *vRefNum, long *dirID,
 {
     OSErr err;
     WDPBRec pb;
+    pb.ioNamePtr = NULL;
     pb.ioVRefNum = wdRefNum;
+    pb.ioWDIndex = 0;
     err = PBGetWDInfoSync(&pb);
     *vRefNum = pb.ioWDVRefNum;
     *dirID = pb.ioWDDirID;
@@ -441,7 +450,8 @@ pascal OSErr SetFInfo(ConstStr255Param fileName, short vRefNum,
     pb.fileParam.ioVRefNum = vRefNum;
     pb.fileParam.ioNamePtr = (StringPtr)fileName;
     pb.fileParam.ioFVersNum = 0;
-    PBGetFInfoSync(&pb);
+    pb.fileParam.ioFDirIndex = 0;
+    err = PBGetFInfoSync(&pb);
     if(err)
         return err;
     pb.fileParam.ioFlFndrInfo = *fndrInfo;
@@ -488,6 +498,8 @@ pascal OSErr HSetFInfo(short vRefNum, long dirID, ConstStr255Param fileName,
     if(err)
         return err;
     pb.fileParam.ioFlFndrInfo = *fndrInfo;
+    // reset directory ID, overwritten by PBHGetFInfo
+    pb.fileParam.ioDirID = dirID;
     return PBHSetFInfoSync(&pb);
 }
 

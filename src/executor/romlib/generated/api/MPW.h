@@ -4,7 +4,7 @@
  *                                   =====                                   *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    LONGINT, OSType, INTEGER                                *
+ *     MacTypes.h    OSType, INTEGER, LONGINT                                *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -25,16 +25,16 @@ namespace Executor {
 
 struct MPWFile;
 
-using MPWFileProcPtr = UPP<LONGINT(MPWFile *file), callconv::CCall>;
+using MPWFileProcPtr = UPP<int32_t(MPWFile *file), callconv::CCall>;
 
 
 using MPWQuitProcPtr = UPP<void(), callconv::CCall>;
 
 
-using MPWAccessProcPtr = UPP<LONGINT(char *name, LONGINT op, MPWFile *file), callconv::CCall>;
+using MPWAccessProcPtr = UPP<int32_t(char *name, int32_t op, MPWFile *file), callconv::CCall>;
 
 
-using MPWIOCtlProcPtr = UPP<LONGINT(MPWFile *file, LONGINT cmd, void *param), callconv::CCall>;
+using MPWIOCtlProcPtr = UPP<int32_t(MPWFile *file, int32_t cmd, void *param), callconv::CCall>;
 
 
 struct fsysTable{GUEST_STRUCT;GUEST<OSType> magic;GUEST<MPWAccessProcPtr> access;GUEST<MPWFileProcPtr> close;GUEST<MPWFileProcPtr> read;GUEST<MPWFileProcPtr> write;GUEST<MPWIOCtlProcPtr> ioctl;};void describeStruct(const fsysTable&, std::ostream&);

@@ -203,7 +203,7 @@
     return: OSErr
     args:
       - name: layer
-        type: GUEST<WindowPtr>*
+        type: WindowPtr*
     dispatcher: OSDispatch
     selector: 0x0014
     executor: C_
@@ -254,9 +254,9 @@
     return: OSErr
     args:
       - name: freeBytes
-        type: GUEST<int32_t>*
+        type: int32_t*
       - name: maxBlock
-        type: GUEST<int32_t>*
+        type: int32_t*
     dispatcher: OSDispatch
     selector: 0x0047
     executor: C_
@@ -419,7 +419,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: GetFrontProcess
     return: OSErr
     args:

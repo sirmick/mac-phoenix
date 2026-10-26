@@ -6,7 +6,7 @@
  * Needs:                                                                    *
  *     MacTypes.h    OSType, LONGINT, Rect, INTEGER, SignedByte, Ptr,        *
  *                   ULONGINT, StringPtr, QElemPtr, Byte, Str63, OSErr,      *
- *                   ConstStringPtr, QHdrPtr, Boolean, ScriptCode            *
+ *                   ConstStringPtr, QHdrPtr, Boolean, Handle, ScriptCode    *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -132,6 +132,9 @@ fsFromStart = 1,
 fsFromLEOF = 2,
 fsFromMark = 3,
 rdVerify = 64,
+};
+
+enum {ioDirMask = 16,
 };
 
 enum {badMDBErr = -60,
@@ -637,6 +640,12 @@ OSErr PBOpenDF(ParmBlkPtr pb, Boolean async);
 OSErr PBHOpenDF(HParmBlkPtr pb, Boolean async);HFS_SUBTRAP(PBOpenDF, PBHOpenDF, HParmBlkPtr, 0xA060, 0x001A, FSDispatch);
 
 OSErr PBMakeFSSpec(HParmBlkPtr pb, Boolean async);FILE_SUBTRAP(PBMakeFSSpec, HParmBlkPtr, 0xA260, 0x001B, FSDispatch);
+
+struct GetVolParmsInfoBuffer{GUEST_STRUCT;GUEST<INTEGER> vMVersion;GUEST<LONGINT> vMAttrib;GUEST<Handle> vMLocalHand;GUEST<LONGINT> vMServerAdr;GUEST<LONGINT> vMVolumeGrade;GUEST<INTEGER> vMForeignPrivID;};static_assert(sizeof(GetVolParmsInfoBuffer) == 20);void describeStruct(const GetVolParmsInfoBuffer&, std::ostream&);
+
+enum {bHasExtFSVol = 16,
+bHasDesktopMgr = 12,
+};
 
 OSErr PBHGetVolParms(HParmBlkPtr pb, Boolean async);FILE_SUBTRAP(PBHGetVolParms, HParmBlkPtr, 0xA260, 0x0030, FSDispatch);
 

@@ -6,7 +6,7 @@
  * Needs:                                                                    *
  *     MacTypes.h     INTEGER, Handle, LONGINT, Str255, ConstStringPtr,      *
  *                    ResType, CharParameter, StringPtr, Boolean, Byte,      *
- *                    OSErr, Rect                                            *
+ *                    Rect, OSErr                                            *
  *     QuickDraw.h    RGBColor                                               *
  *                                                                           *
  *                                                                           *
@@ -323,6 +323,12 @@ void C_InvalMenuBar();PASCAL_TRAP(InvalMenuBar, 0xA81D);
 
 
 typedef MenuHandle MenuRef;
+
+using MenuDefUPP = UPP<void(INTEGER message, MenuRef theMenu, Rect *menuRect, Point hitPt, GUEST<INTEGER> *whichItem)>;
+
+
+using MenuBarDefUPP = UPP<LONGINT(INTEGER selector, INTEGER message, INTEGER parameter1, LONGINT parameter2)>;
+
 
 void CheckMenuItem(MenuHandle mh, INTEGER item, Boolean cflag);
 

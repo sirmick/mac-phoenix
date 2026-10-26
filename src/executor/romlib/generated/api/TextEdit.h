@@ -135,6 +135,9 @@ NOTRAP_FUNCTION2(LMGetTEDoText);
 NOTRAP_FUNCTION2(LMSetTEDoText);
 
 
+using TEDoTextUPP = UPP<INTEGER(TEPtr tep, INTEGER start, INTEGER end, INTEGER what), Register<D0(A3, D3, D4, D7)>>;
+
+
 // TextEdit IMI-391 (false);
 const LowMemGlobal<ProcPtr > TERecal{ 0xA74 };
 inline ProcPtr  LMGetTERecal() { return LM(TERecal); }

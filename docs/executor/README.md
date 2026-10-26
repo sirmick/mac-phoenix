@@ -91,6 +91,60 @@ and its tests. Not merged: the rewrite of trap and UPP marshalling into
 generated code (Phases 0–5, U1–U5, 2026-10-07 to 10-18), which touches the
 same files as most of MacPhoenix's trap work.
 
+Upstream's multiversal has moved on as well (50 commits by 2026-10-22, at
+`580f330`). Taken (2026-10-26, as upstream's own commits, `git am`): the
+definitions and the C side, 18 commits. Driver Services, Name Registry
+and PCI with the generator features they need (`callconv: C` function
+pointers, `align: power`, `define`); the high-level File Manager glue
+fixes (`HOpen`'s `ioMisc`, `ioFVersNum`, `AppFile`); register-output
+glue inlined; `GetGrayRgn` as a function (`C_GetGrayRgn` in
+`windInit.cpp`); `ControlRef` as `ControlHandle`; the def-proc,
+decompressor, `TEDoText` and sound modifier UPP types (and the `A3`,
+`D3`, `D4`, `D7` register names in `base/functions.h`); the Apple Event
+Manager's constants and the #327 declarations (`ioDirMask`,
+`GetVolParmsInfoBuffer`, `bHasExtFSVol`: out of `file/file.h` now).
+Kept ours: `GetFrontProcess`'s entry (the same fix, made here
+independently, with more on the second argument), `AEArrayType` as a
+byte (Apple's `SInt8`; upstream made it `int16_t`) and the private
+`_AE_hdlr_*` entry points, whose new signatures go with upstream
+Executor's Apple Event Manager rework (`1af5b3e2`, "PACK 8 spec
+conformance"). Not taken: the Executor-side generator rewrite (above),
+`Executor.yaml` (upstream Executor's `unixmount`), and upstream's fix to
+`ROMlib_dotext`'s register convention (`bf0c04b0`), an Executor change
+still to look at.
+
+## The definitions as Retro68's headers
+
+`multiversal/defs` is also the source of the Multiversal Interfaces, the
+free C headers Retro68 offers instead of Apple's Universal Interfaces, so
+what MacPhoenix adds there (215 functions since the import: the HFS Plus
+APIs, the Display Manager, layers and other Process Manager calls, the
+Thread Manager, ...) can reach Retro68 programs too:
+
+```bash
+cd src/executor/multiversal
+ruby make-multiverse.rb -G CIncludes -o OUT    # OUT/CIncludes, OUT/lib68k (glue)
+```
+
+`ctest -R multiversal_retro68` (`tests/test_multiversal_retro68.sh`)
+generates them, builds `tests/multiversal/mvtest.c` against them alone
+(none of Apple's headers), and compiles Retro68's samples. Definitions
+must be plain Mac types: `Handle*`, not `GUEST<Handle>*` (the Executor
+generator wraps pointers itself; the C generator would write `GUEST`).
+The generator names a header for each Universal Interfaces file the
+definitions cover (`cincludes.rb`; each just includes `Multiverse.h`).
+
+MacBrowser and parts of MacPhoenixSuite build against them alone (the
+test compiles them); the rest of MacPhoenix's guest programs don't yet.
+What they still miss: Open Transport, AppleScript/OSA and the Component
+Manager's calls (Executor implements them in C++ with no definitions:
+LIBRARIES.md is the plan), the HFS Plus constants (`kFSCatInfo*`),
+`fsRtDirID`, `SInt64`, MacTCP's parameter blocks and UPPs, `NMUPP`,
+`Video.h`'s records, `fp.h`, `TextCommon.h`, some high-level File
+Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`), and `ONEWORDINLINE`. Some Executor signatures differ from Apple's
+(`NewThread` takes `ProcPtr` and `LONGINT`s, not `ThreadEntryUPP`,
+`ThreadStyle` and `ThreadOptions`).
+
 ## Documentation
 
 | Document | What |
@@ -100,6 +154,7 @@ same files as most of MacPhoenix's trap work.
 | [STRAGGLERS.md](STRAGGLERS.md) | open problems and their fixes |
 | [MEMORY_MAP.md](MEMORY_MAP.md) | the System 7 memory map Executor rebuilds, from snapshots of real boots |
 | [OpenTransport.md](OpenTransport.md) | Open Transport on Executor |
+| [LIBRARIES.md](LIBRARIES.md) | plan: ASLM and CFM libraries and Component Manager calls in the definitions |
 | [../MPW.md](../MPW.md) | MPW and ToolServer running headless on Executor |
 
 Running it: `./build/mac-phoenix --backend executor` (Executor's own

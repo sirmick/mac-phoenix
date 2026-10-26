@@ -49,6 +49,17 @@
 
 # ####
 
+- enum:
+    values:
+      - name: kOnSystemDisk
+        value: -32768
+      - name: kCreateFolder
+        value: 1
+      - name: kDontCreateFolder
+        value: 0
+
+# ####
+
 - dispatcher:
     name: AliasDispatch
     trap: 0xA823

@@ -91,7 +91,7 @@ END_EXECUTOR_ONLY
 
 // The first caller (Finder) takes the Process Manager's desk layer: a window-shaped port whose visRgn is the desktop (GrayRgn), and gets protocolErr after that. Finder adopts its regions for its desktop window and SysErrors(41) unless this returns noErr.
 EXTERN_DISPATCHER_TRAP(OSDispatch, 0xA88F, StackW);
-OSErr C_TakeDesktopLayer(GUEST<GUEST<WindowPtr>> *layer);PASCAL_SUBTRAP(TakeDesktopLayer, 0xA88F, 0x0014, OSDispatch);
+OSErr C_TakeDesktopLayer(GUEST<WindowPtr> *layer);PASCAL_SUBTRAP(TakeDesktopLayer, 0xA88F, 0x0014, OSDispatch);
 
 
 // Apple's links {next, proc, refCon, current PSN} into a Process Manager list (PM globals -$136); Finder registers one of its routines.
@@ -103,7 +103,7 @@ OSErr C_RemoveProcessCallback(Ptr proc, int32_t refCon);PASCAL_SUBTRAP(RemovePro
 
 
 // Either pointer may be nil. Apple's fills them from HeapDispatch $19 and $18 (Process Manager heap); which one is the total free and which the largest block is our best reading. Finder checks memory with it.
-OSErr C_GetTempMemInfo(GUEST<GUEST<int32_t>> *freeBytes, GUEST<GUEST<int32_t>> *maxBlock);PASCAL_SUBTRAP(GetTempMemInfo, 0xA88F, 0x0047, OSDispatch);
+OSErr C_GetTempMemInfo(GUEST<int32_t> *freeBytes, GUEST<int32_t> *maxBlock);PASCAL_SUBTRAP(GetTempMemInfo, 0xA88F, 0x0047, OSDispatch);
 
 
 // Stores a long in the current process's record (+$15C in Apple's); Finder passes its drag-hook record (see DragDispatch $C301).

@@ -28,14 +28,16 @@ class CIncludesGenerator < Generator
         @out << "#define #{name}(#{args.map {|x|x["name"]}.compact.join(", ")}) (#{expr})\n"
     end
 
-    def generate_function_definition(out:, fun:, name:, args:, m68kinlines:)
+    def generate_function_definition(out:, fun:, name:, args:, m68kinlines:, prefix: "", null_safe: false)
         return if not m68kinlines
         writeback = ""
-        out << "pascal " << (fun["return"] or "void") << " " << name <<
+        assigns = ""   # after every declaration, so C90 accepts the inlined copy
+        out << prefix << "pascal " << (fun["return"] or "void") << " " << name <<
             "(" << args.map {|x| decl(x["type"],x["name"])}.join(", ") << ")"
         out << "{"
 
-        clobbers = Set.new(["%d0","%d1","%d2","%a0","%a1"])
+        # Inlined, the asm must clobber what the call it replaces did.
+        clobbers = Set.new(["%d0","%d1","%d2","%a0","%a1","cc","memory"])
         inputs = []
         outputs = []
         if fun["returnreg"] then
@@ -53,8 +55,10 @@ class CIncludesGenerator < Generator
                 if arg["type"] =~ /(.*)\*/ then
                     type = $1
                     out << "register #{type} _#{arg["name"]} __asm__(\"#{register}\");"
-                    out << "_#{arg["name"]} = *#{arg["name"]};" if io == "InOut"
-                    writeback << "*#{arg["name"]} = _#{arg["name"]};"
+                    assigns << "_#{arg["name"]} = *#{arg["name"]};" if io == "InOut"
+                    # Delay(n, NULL) is common; once inlined, GCC turns a store through NULL into a trap.
+                    guard = (null_safe and io == "Out") ? "if(#{arg["name"]}) " : ""
+                    writeback << "#{guard}*#{arg["name"]} = _#{arg["name"]};"
 
                     clobbers.delete?(register)
                     outputs << "\"=r\"(_#{arg["name"]})"
@@ -63,13 +67,14 @@ class CIncludesGenerator < Generator
             elsif arg["register"] =~ /[AD][0-7]/ then
                 register = "%" + arg["register"].downcase
                 out << "register #{arg["type"]} _#{arg["name"]} __asm__(\"#{register}\");"
-                out << "_#{arg["name"]} = #{arg["name"]};"
+                assigns << "_#{arg["name"]} = #{arg["name"]};"
 
                 clobbers.delete?(register)
                 inputs << "\"r\"(_#{arg["name"]})"
             end
         end
         
+        out << assigns
         out << "\n// clang-format off\n"
         out << "    __asm__ volatile(\".short #{m68kinlines.join(", ")}\"\n"
         out << " " * 8 << ": #{outputs.join(", ")}\n"
@@ -254,6 +259,11 @@ class CIncludesGenerator < Generator
             @out << ";\n"
 
             if complex and m68kinlines then
+                # gnu_inline: only ever inlined; -O0 and address-taken calls use the library copy.
+                @out << "#if TARGET_CPU_68K\n"
+                generate_function_definition(out:@out, fun:fun, name:name, args:args, m68kinlines:m68kinlines,
+                    prefix: "__attribute__((__gnu_inline__)) extern __inline__ ", null_safe: true)
+                @out << "\n#endif\n"
                 generate_function_definition(out:@impl_out, fun:fun, name:name, args:args, m68kinlines:m68kinlines)
             elsif fun["cfm"] then
                 generate_cfm_wrapper(out:@impl_out, fun:fun, name:name, args:args)
@@ -277,9 +287,13 @@ class CIncludesGenerator < Generator
         @out << "typedef #{what} #{value["name"]} #{value["name"]};"
                 
         if value["members"] then
+            # align: power is PowerPC alignment, in place of the 68k
+            # 2-byte packing every header is wrapped in.
+            @out << "\n#pragma pack(push)\n#pragma pack()\n" if value["align"] == "power"
             @out << "#{what} #{value["name"]} {"
             declare_members(value["members"])
             @out << "};"
+            @out << "\n#pragma pack(pop)\n" if value["align"] == "power"
         end
     end
 
@@ -289,6 +303,16 @@ class CIncludesGenerator < Generator
 
 
     def declare_funptr(value)
+        if value["callconv"] == "C" then
+            # A native C function pointer: no pascal, no UPP, name as given.
+            args = (value["args"] or [])
+            @out << "typedef " << (value["return"] or "void") << " "
+            @out << "(*" << value["name"] << ")("
+            @out << args.map {|arg|decl(arg["type"], arg["name"])}.join(", ")
+            @out << ");\n"
+            return
+        end
+
         @out << "typedef pascal "
 
         name = value["name"]
@@ -473,7 +497,14 @@ class CIncludesGenerator < Generator
             "Resources", "SegLoad", "Sound", "TextEdit", "TextUtils", "Timer",
             "ToolUtils", "Traps", "Types", "Windows", "ConditionalMacros",
             "Gestalt", "AppleEvents", "Serial", "StandardFile", "Strings",
-            "Navigation", "Drag"].each do |name|
+            "Navigation", "Drag", "DriverServices", "Kernel", "Interrupts",
+            "NameRegistry", "PCI",
+            # Universal Interfaces names for what the definitions cover too
+            "Aliases", "Balloons", "CodeFragments", "Controls", "Desk",
+            "DeskBus", "DiskInit", "Disks", "Displays", "Editions", "Finder",
+            "Folders", "Lists", "MacTCP", "Movies", "Notification", "Packages",
+            "Printing", "Retrace", "Scrap", "Script", "ShutDown", "Speech",
+            "TextServices", "Threads", "Translation"].each do |name|
             File.open("#{$options.output_dir}/CIncludes/#{name}.h", "w") do |f|
                 f << "#pragma once\n"
                 f << "#include \"Multiverse.h\"\n"

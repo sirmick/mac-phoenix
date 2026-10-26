@@ -237,6 +237,21 @@
 
 # ####
 
+- enum:
+    values:
+      - name: smTruncEnd
+        value: 0
+      - name: smTruncMiddle
+        value: 0x4000
+      - name: truncEnd
+        value: 0
+      - name: truncMiddle
+        value: 0x4000
+    comment: |
+      TruncText and TruncString truncation codes
+
+# ####
+
 - typedef:
     name: StyledLineBreakCode
     type: uint8_t

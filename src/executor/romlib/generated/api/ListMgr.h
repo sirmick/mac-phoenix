@@ -45,6 +45,9 @@ typedef ListRec *ListPtr;
 
 typedef GUEST<ListPtr> *ListHandle;
 
+using ListDefUPP = UPP<void(INTEGER lMessage, Boolean lSelect, Rect *lRect, Cell lCell, INTEGER lDataOffset, INTEGER lDataLen, ListHandle lHandle)>;
+
+
 enum {lGrowBox = 32,
 lMysteryFlags = 20,
 lDrawingModeOff = 8,

@@ -148,7 +148,6 @@ create_directory(INTEGER sys_vref, LONGINT sys_dirid, const char *sub_dirp,
 /* The folders at a volume's root, named as in Apple's Folder Manager
    (System 7.5.5 'lpch' 31); 'empt' is "Network Trash Folder" only on
    shared volumes. */
-enum { kOnSystemDisk = -32768 };
 
 static OSErr
 find_volume_folder(int16_t vRefNum, OSType folderType, Boolean createFolder,

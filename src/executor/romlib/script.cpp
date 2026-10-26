@@ -1172,7 +1172,7 @@ static INTEGER trunc_text(INTEGER width, unsigned char *text, int *length, Trunc
         return TruncErr;
     }
     std::vector<unsigned char> orig(text, text + len);
-    bool middle = (code & 0x4000) != 0;
+    bool middle = (code & truncMiddle) != 0;
     int best = 0;                               /* characters kept */
     for(int keep = len - 1; keep >= 0; keep--)
     {

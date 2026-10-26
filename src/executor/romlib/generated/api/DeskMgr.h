@@ -38,6 +38,10 @@ enum {accEvent = 64,
 accRun = 65,
 accMenu = 67,
 accUndo = 68,
+accCut = 70,
+accCopy = 71,
+accPaste = 72,
+accClear = 73,
 };
 
 // DeskMgr IMI-443 (false);

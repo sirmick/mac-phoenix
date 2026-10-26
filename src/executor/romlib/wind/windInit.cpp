@@ -90,6 +90,11 @@ void Executor::ROMLib_InitGrayRgn()
     CopyRgn(LM(GrayRgn), PORT_CLIP_REGION(wmgr_port));
 }
 
+RgnHandle Executor::C_GetGrayRgn()
+{
+    return LM(GrayRgn);
+}
+
 void Executor::C_InitWindows()
 {
     PatHandle ph;

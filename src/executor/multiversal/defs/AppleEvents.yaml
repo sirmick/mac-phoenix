@@ -211,6 +211,25 @@
 
 - enum:
     values:
+      - name: kAEIDoMinimum
+        value: 0x0000
+      - name: kAEIDoWhose
+        value: 0x0001
+      - name: kAEIDoMarking
+        value: 0x0004
+      - name: kAEPassSubDescs
+        value: 0x0008
+      - name: kAEResolveNestedLists
+        value: 0x0010
+      - name: kAEHandleSimpleRanges
+        value: 0x0020
+      - name: kAEUseRelativeIterators
+        value: 0x0040
+
+# ####
+
+- enum:
+    values:
       - name: kAutoGenerateReturnID
         value: -1
       - name: kAnyTransactionID
@@ -535,13 +554,20 @@
     name: _AE_hdlr_table_alloc
     return: OSErr
     args:
-      - type: int32_t
-      - type: int32_t
-      - type: int32_t
-      - type: int8_t
-      - type: AE_hdlr_table_h*
+      - name: n_elts
+        type: int32_t
+      - name: unknown_2
+        type: int32_t
+      - name: unknown_3
+        type: int32_t
+      - name: unknown_p
+        type: int8_t
+      - name: table_return
+        type: AE_hdlr_table_h*
     comment: |
-      "internal". TODO: verify if they really exist as entry points.
+      Private/undocumented entry point.  The first argument is the initial
+      table capacity (the ROM passes 16, HyperCard passes 175 and 105); the
+      remaining arguments are not understood.
     dispatcher: Pack8
     selector: 0x092E
     executor: C_
@@ -622,10 +648,18 @@
         value: -1700
       - name: errAEDescNotFound
         value: -1701
+      - name: errAECorruptData
+        value: -1702
       - name: errAEWrongDataType
         value: -1703
       - name: errAENotAEDesc
         value: -1704
+      - name: errAEBadListItem
+        value: -1705
+      - name: errAENewerVersion
+        value: -1706
+      - name: errAENotAppleEvent
+        value: -1707
 
 # ####
 
@@ -633,6 +667,20 @@
     values:
       - name: errAEEventNotHandled
         value: -1708
+      - name: errAEReplyNotValid
+        value: -1709
+      - name: errAEUnknownSendMode
+        value: -1710
+      - name: errAEWaitCanceled
+        value: -1711
+      - name: errAETimeout
+        value: -1712
+      - name: errAENoUserInteraction
+        value: -1713
+      - name: errAENotASpecialFunction
+        value: -1714
+      - name: errAEParamMissed
+        value: -1715
       - name: errAEUnknownAddressType
         value: -1716
 
@@ -642,8 +690,56 @@
     values:
       - name: errAEHandlerNotFound
         value: -1717
+      - name: errAEReplyNotArrived
+        value: -1718
       - name: errAEIllegalIndex
         value: -1719
+      - name: errAEImpossibleRange
+        value: -1720
+      - name: errAEWrongNumberArgs
+        value: -1721
+      - name: errAEDuplicateKey
+        value: -1722
+      - name: errAEAccessorNotFound
+        value: -1723
+      - name: errAEKeyNotFound
+        value: -1723
+      - name: errAEIndexOutOfRange
+        value: -1724
+      - name: errAENoSuchLogical
+        value: -1725
+      - name: errAEBadTestKey
+        value: -1726
+      - name: errAENotAnObjSpec
+        value: -1727
+      - name: errAENoSuchObject
+        value: -1728
+      - name: errAENegativeCount
+        value: -1729
+      - name: errAEEmptyListContainer
+        value: -1730
+      - name: errAEUnknownObjectType
+        value: -1731
+      - name: errAERecordingIsAlreadyOn
+        value: -1732
+      - name: errAEReceiveTerminate
+        value: -1733
+      - name: errAEReceiveEscapeCurrent
+        value: -1734
+      - name: errAEEventFiltered
+        value: -1735
+      - name: errAEDuplicateHandler
+        value: -1736
+      - name: errAEStreamBadNesting
+        value: -1737
+      - name: errAEStreamAlreadyConverted
+        value: -1738
+      - name: errAEDescIsNull
+        value: -1739
+      - name: errAEBuildSyntaxError
+        value: -1740
+      - name: errAEBufferTooSmall
+        value: -1741
 
 # ####
 
@@ -665,6 +761,14 @@
         value: "'sign'"
       - name: typeType
         value: "'type'"
+      - name: typeEnumerated
+        value: "'enum'"
+      - name: typeTrue
+        value: "'true'"
+      - name: typeFalse
+        value: "'fals'"
+      - name: typeSectionH
+        value: "'sect'"
       - name: typeWildCard
         value: "'****'"
       - name: typeAlias
@@ -702,10 +806,34 @@
         value: "'evcl'"
       - name: keyEventIDAttr
         value: "'evid'"
+      - name: keyEventSourceAttr
+        value: "'esrc'"
+      - name: keyInteractLevelAttr
+        value: "'inte'"
+      - name: keyMissedKeywordAttr
+        value: "'miss'"
+      - name: keyOptionalKeywordAttr
+        value: "'optk'"
+      - name: keyOriginalAddressAttr
+        value: "'from'"
+      - name: keyReturnIDAttr
+        value: "'rtid'"
+      - name: keyTimeoutAttr
+        value: "'timo'"
+      - name: keyTransactionIDAttr
+        value: "'tran'"
       - name: keyProcessSerialNumber
         value: "'psn '"
       - name: keyDirectObject
         value: "'----'"
+      - name: keyErrorNumber
+        value: "'errn'"
+      - name: keyErrorString
+        value: "'errs'"
+      - name: keyAEVersion
+        value: "'vers'"
+      - name: keyAERecorderCount
+        value: "'recr'"
 
 # ####
 
@@ -723,8 +851,50 @@
         value: "'ansr'"
       - name: kAEQuitApplication
         value: "'quit'"
+      - name: kAECoreSuite
+        value: "'core'"
+      - name: kAEFinderEvents
+        value: "'FNDR'"
+      - name: kSectionEventMsgClass
+        value: "'sect'"
       - name: keySelectProc
         value: "'selh'"
+      - name: keyPreDispatch
+        value: "'phac'"
+      - name: keyAECompareProc
+        value: "'cmpr'"
+      - name: keyAECountProc
+        value: "'cont'"
+      - name: keyDisposeTokenProc
+        value: "'xtok'"
+      - name: keyAEMarkTokenProc
+        value: "'mkid'"
+      - name: keyAEMarkProc
+        value: "'mark'"
+      - name: keyAEAdjustMarksProc
+        value: "'adjm'"
+      - name: keyAEGetErrDescProc
+        value: "'indc'"
+      - name: keyAEBlock
+        value: "'blck'"
+      - name: keyAEUnblock
+        value: "'unbk'"
+      - name: keyAENavigate
+        value: "'navt'"
+      - name: formAbsolutePosition
+        value: "'indx'"
+      - name: formRelativePosition
+        value: "'rele'"
+      - name: formTest
+        value: "'test'"
+      - name: formRange
+        value: "'rang'"
+      - name: formPropertyID
+        value: "'prop'"
+      - name: formName
+        value: "'name'"
+      - name: formUniqueID
+        value: "'ID  '"
 
 # ####
 
@@ -1560,7 +1730,7 @@
     name: AEManagerInfo
     return: OSErr
     args:
-      - name: keyWord
+      - name: keyword
         type: AEKeyword
       - name: resultp
         type: LONGINT*
@@ -1568,7 +1738,7 @@
     selector: 0x0441
     executor: C_
     comment: |
-      MacPhoenix: (keyWord, result *), 8 bytes, as the selector says (was
+      MacPhoenix: (keyword, result *), 8 bytes, as the selector says (was
       declared with the result alone). 7.5.5's PACK 8 has no routine $41
       (its table ends at $3E), so the call answers paramErr there; Disk Copy
       6.3.3 takes that and refuses to run on noErr with a version of 0.

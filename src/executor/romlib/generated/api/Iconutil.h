@@ -108,7 +108,7 @@ svAllAvailableData = 16777215,
 enum {noMaskFoundErr = -1000,
 };
 
-using IconActionUPP = UPP<OSErr(ResType theType, GUEST<GUEST<Handle>> *theIcon, void *yourDataPtr)>;
+using IconActionUPP = UPP<OSErr(ResType theType, GUEST<Handle> *theIcon, void *yourDataPtr)>;
 
 
 using IconGetterUPP = UPP<Handle(ResType theType, void *yourDataPtr)>;
@@ -184,7 +184,7 @@ int16_t C_GetSuiteLabel(Handle suite);PASCAL_SUBTRAP(GetSuiteLabel, 0xABC9, 0x02
 void C_SetIconDrawContext(int32_t context);PASCAL_SUBTRAP(SetIconDrawContext, 0xABC9, 0x0218, IconDispatch);
 
 
-void C_GetIconDrawContext(GUEST<GUEST<int32_t>> *context);PASCAL_SUBTRAP(GetIconDrawContext, 0xABC9, 0x0220, IconDispatch);
+void C_GetIconDrawContext(GUEST<int32_t> *context);PASCAL_SUBTRAP(GetIconDrawContext, 0xABC9, 0x0220, IconDispatch);
 
 
 OSErr C_SetSuiteLabel(Handle suite, int16_t label);PASCAL_SUBTRAP(SetSuiteLabel, 0xABC9, 0x0316, IconDispatch);

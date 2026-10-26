@@ -42,6 +42,20 @@ target_compile_features(test_cpu_cores PRIVATE cxx_std_17)
 add_test(NAME cpu_cores COMMAND test_cpu_cores)
 set_tests_properties(cpu_cores PROPERTIES TIMEOUT 10 LABELS "unit;mame")
 
+# Executor's API definitions as the Multiversal Interfaces for Retro68:
+# generate the C headers and glue library, build a program against them.
+# Skips (77) without Retro68's m68k compiler.
+add_test(
+  NAME multiversal_retro68
+  COMMAND bash ${TEST_DIR}/test_multiversal_retro68.sh
+          $<$<BOOL:${RETRO68_GCC}>:--gcc> $<$<BOOL:${RETRO68_GCC}>:${RETRO68_GCC}>
+)
+set_tests_properties(multiversal_retro68 PROPERTIES
+  TIMEOUT 120
+  LABELS "unit;executor"
+  SKIP_RETURN_CODE 77
+)
+
 add_test(
   NAME api_endpoints
   COMMAND bash ${TEST_DIR}/test_api_endpoints.sh

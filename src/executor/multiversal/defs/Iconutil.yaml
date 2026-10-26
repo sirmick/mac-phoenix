@@ -195,7 +195,7 @@
       - name: theType
         type: ResType
       - name: theIcon
-        type: GUEST<Handle>*
+        type: Handle*
       - name: yourDataPtr
         type: void*
     name: IconActionUPP
@@ -544,7 +544,7 @@
     name: GetIconDrawContext
     args:
       - name: context
-        type: GUEST<int32_t>*
+        type: int32_t*
     dispatcher: IconDispatch
     selector: 0x0220
     executor: C_

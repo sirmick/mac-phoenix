@@ -481,10 +481,12 @@
 
 # ####
 
-- only-for: Executor
-  verbatim: |
-    inline RgnHandle GetGrayRgn() { return LM(GrayRgn); }
-    NOTRAP_FUNCTION2(GetGrayRgn);
+- function:
+    name: GetGrayRgn
+    return: RgnHandle
+    executor: C_
+    inline: LMGetGrayRgn()
+    noinline: ppc
 
 # ####
 
@@ -1271,7 +1273,7 @@
       - name: pt
         type: Point
       - name: window
-        type: GUEST<WindowPtr>*
+        type: WindowPtr*
     dispatcher: LayerDispatch
     selector: 0x0407
     executor: C_

@@ -115,6 +115,15 @@ kAEDescArray,
 kAEKeyDescArray,
 };
 
+enum {kAEIDoMinimum = 0,
+kAEIDoWhose = 1,
+kAEIDoMarking = 4,
+kAEPassSubDescs = 8,
+kAEResolveNestedLists = 16,
+kAEHandleSimpleRanges = 32,
+kAEUseRelativeIterators = 64,
+};
+
 enum {kAutoGenerateReturnID = -1,
 kAnyTransactionID = 0,
 };
@@ -205,8 +214,10 @@ typedef AE_info_t *AE_info_ptr;
 DISPATCHER_TRAP(Pack8, 0xA816, D0W);
 
 
-// "internal". TODO: verify if they really exist as entry points.
-OSErr C__AE_hdlr_table_alloc(int32_t , int32_t , int32_t , int8_t , GUEST<AE_hdlr_table_h> *);PASCAL_SUBTRAP(_AE_hdlr_table_alloc, 0xA816, 0x092E, Pack8);
+// Private/undocumented entry point.  The first argument is the initial
+// table capacity (the ROM passes 16, HyperCard passes 175 and 105); the
+// remaining arguments are not understood.
+OSErr C__AE_hdlr_table_alloc(int32_t n_elts, int32_t unknown_2, int32_t unknown_3, int8_t unknown_p, GUEST<AE_hdlr_table_h> *table_return);PASCAL_SUBTRAP(_AE_hdlr_table_alloc, 0xA816, 0x092E, Pack8);
 
 
 OSErr C__AE_hdlr_delete(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *);PASCAL_SUBTRAP(_AE_hdlr_delete, 0xA816, 0x0632, Pack8);
@@ -242,16 +253,51 @@ enum {invalidConnection = -609,
 
 enum {errAECoercionFail = -1700,
 errAEDescNotFound = -1701,
+errAECorruptData = -1702,
 errAEWrongDataType = -1703,
 errAENotAEDesc = -1704,
+errAEBadListItem = -1705,
+errAENewerVersion = -1706,
+errAENotAppleEvent = -1707,
 };
 
 enum {errAEEventNotHandled = -1708,
+errAEReplyNotValid = -1709,
+errAEUnknownSendMode = -1710,
+errAEWaitCanceled = -1711,
+errAETimeout = -1712,
+errAENoUserInteraction = -1713,
+errAENotASpecialFunction = -1714,
+errAEParamMissed = -1715,
 errAEUnknownAddressType = -1716,
 };
 
 enum {errAEHandlerNotFound = -1717,
+errAEReplyNotArrived = -1718,
 errAEIllegalIndex = -1719,
+errAEImpossibleRange = -1720,
+errAEWrongNumberArgs = -1721,
+errAEDuplicateKey = -1722,
+errAEAccessorNotFound = -1723,
+errAEKeyNotFound = -1723,
+errAEIndexOutOfRange = -1724,
+errAENoSuchLogical = -1725,
+errAEBadTestKey = -1726,
+errAENotAnObjSpec = -1727,
+errAENoSuchObject = -1728,
+errAENegativeCount = -1729,
+errAEEmptyListContainer = -1730,
+errAEUnknownObjectType = -1731,
+errAERecordingIsAlreadyOn = -1732,
+errAEReceiveTerminate = -1733,
+errAEReceiveEscapeCurrent = -1734,
+errAEEventFiltered = -1735,
+errAEDuplicateHandler = -1736,
+errAEStreamBadNesting = -1737,
+errAEStreamAlreadyConverted = -1738,
+errAEDescIsNull = -1739,
+errAEBuildSyntaxError = -1740,
+errAEBufferTooSmall = -1741,
 };
 
 // types
@@ -263,6 +309,10 @@ typeProcessSerialNumber = "psn "_4,
 typeNull = "null"_4,
 typeApplSignature = "sign"_4,
 typeType = "type"_4,
+typeEnumerated = "enum"_4,
+typeTrue = "true"_4,
+typeFalse = "fals"_4,
+typeSectionH = "sect"_4,
 typeWildCard = "****"_4,
 typeAlias = "alis"_4,
 typeBoolean = "bool"_4,
@@ -280,8 +330,20 @@ typeDecimalStruct = "decm"_4,
 enum {keyAddressAttr = "addr"_4,
 keyEventClassAttr = "evcl"_4,
 keyEventIDAttr = "evid"_4,
+keyEventSourceAttr = "esrc"_4,
+keyInteractLevelAttr = "inte"_4,
+keyMissedKeywordAttr = "miss"_4,
+keyOptionalKeywordAttr = "optk"_4,
+keyOriginalAddressAttr = "from"_4,
+keyReturnIDAttr = "rtid"_4,
+keyTimeoutAttr = "timo"_4,
+keyTransactionIDAttr = "tran"_4,
 keyProcessSerialNumber = "psn "_4,
 keyDirectObject = "----"_4,
+keyErrorNumber = "errn"_4,
+keyErrorString = "errs"_4,
+keyAEVersion = "vers"_4,
+keyAERecorderCount = "recr"_4,
 };
 
 enum {kCoreEventClass = "aevt"_4,
@@ -290,7 +352,28 @@ kAEOpenDocuments = "odoc"_4,
 kAEPrintDocuments = "pdoc"_4,
 kAEAnswer = "ansr"_4,
 kAEQuitApplication = "quit"_4,
+kAECoreSuite = "core"_4,
+kAEFinderEvents = "FNDR"_4,
+kSectionEventMsgClass = "sect"_4,
 keySelectProc = "selh"_4,
+keyPreDispatch = "phac"_4,
+keyAECompareProc = "cmpr"_4,
+keyAECountProc = "cont"_4,
+keyDisposeTokenProc = "xtok"_4,
+keyAEMarkTokenProc = "mkid"_4,
+keyAEMarkProc = "mark"_4,
+keyAEAdjustMarksProc = "adjm"_4,
+keyAEGetErrDescProc = "indc"_4,
+keyAEBlock = "blck"_4,
+keyAEUnblock = "unbk"_4,
+keyAENavigate = "navt"_4,
+formAbsolutePosition = "indx"_4,
+formRelativePosition = "rele"_4,
+formTest = "test"_4,
+formRange = "rang"_4,
+formPropertyID = "prop"_4,
+formName = "name"_4,
+formUniqueID = "ID  "_4,
 };
 
 // AppleEvents AEGizmo (true);
@@ -446,11 +529,11 @@ OSErr C_AEPutPtr(GUEST<AEDescList> *list, int32_t index, DescType type, const vo
 OSErr C_AEInteractWithUser(int32_t timeout, NMRecPtr nm_req, IdleUPP idle_proc);PASCAL_SUBTRAP(AEInteractWithUser, 0xA816, 0x061C, Pack8);
 
 
-// MacPhoenix: (keyWord, result *), 8 bytes, as the selector says (was
+// MacPhoenix: (keyword, result *), 8 bytes, as the selector says (was
 // declared with the result alone). 7.5.5's PACK 8 has no routine $41
 // (its table ends at $3E), so the call answers paramErr there; Disk Copy
 // 6.3.3 takes that and refuses to run on noErr with a version of 0.
-OSErr C_AEManagerInfo(AEKeyword keyWord, GUEST<LONGINT> *resultp);PASCAL_SUBTRAP(AEManagerInfo, 0xA816, 0x0441, Pack8);
+OSErr C_AEManagerInfo(AEKeyword keyword, GUEST<LONGINT> *resultp);PASCAL_SUBTRAP(AEManagerInfo, 0xA816, 0x0441, Pack8);
 
 
 OSErr C_AEDisposeToken(AEDesc *theToken);PASCAL_SUBTRAP(AEDisposeToken, 0xA816, 0x023A, Pack8);

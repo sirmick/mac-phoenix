@@ -290,10 +290,7 @@ NOTRAP_FUNCTION2(LMGetDeskCPat);
 NOTRAP_FUNCTION2(LMSetDeskCPat);
 
 
-BEGIN_EXECUTOR_ONLY
-inline RgnHandle GetGrayRgn() { return LM(GrayRgn); }
-NOTRAP_FUNCTION2(GetGrayRgn);
-END_EXECUTOR_ONLY
+RgnHandle C_GetGrayRgn();NOTRAP_FUNCTION(GetGrayRgn);
 
 
 void C_SetWTitle(WindowPtr w, ConstStringPtr t);PASCAL_TRAP(SetWTitle, 0xA91A);
@@ -495,7 +492,7 @@ WindowPtr C_GetLayerWindowList(WindowPtr layer);PASCAL_SUBTRAP(GetLayerWindowLis
 // point (inContent, 3), and the caller makes it current and asks again
 // to descend (Drag Manager, 'proc' -16513 +$43d2; the Process Manager's
 // own GetLayerAtPoint). Here too.
-int16_t C_FindWindowInLayer(Point pt, GUEST<GUEST<WindowPtr>> *window);PASCAL_SUBTRAP(FindWindowInLayer, 0xA829, 0x0407, LayerDispatch);
+int16_t C_FindWindowInLayer(Point pt, GUEST<WindowPtr> *window);PASCAL_SUBTRAP(FindWindowInLayer, 0xA829, 0x0407, LayerDispatch);
 
 
 // Selector 1. Apple's makes the layer a window of WDEF 127 in the
