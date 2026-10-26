@@ -14,6 +14,10 @@ namespace Executor
 
         void addPPCEntrypoint(const char *library, const char *function, std::function<uint32_t (PowerCore&)> code);
 
+        /* MacPhoenix: a data export for PowerPC fragments (StdCLib's _iob,
+           errno): the import binds to `address`, guest-addressable storage. */
+        void addPPCData(const char *library, const char *name, void *address);
+
         /* MacPhoenix: the same routine for CFM-68K code (docs/executor/
            CFM68K.md): an 8-byte transition vector whose code is a callback;
            `code` gets the call as made, return address on top of the

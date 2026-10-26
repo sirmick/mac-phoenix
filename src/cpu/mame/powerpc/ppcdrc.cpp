@@ -2874,6 +2874,7 @@ bool ppc_device::generate_opcode(drcuml_block &block, compiler_state *compiler, 
 			UML_CALLC(block, cfunc_host_op, this);                                      // callc   host_op,ppc
 			load_fast_iregs(block);                                                     // <load fastregs>
 			load_fast_fregs(block);
+			generate_set_fmod(block);                                                   // the host may have set FPSCR[RN]
 			compiler->checkints = true;
 			generate_update_cycles(block, compiler, uml::mem(&m_core->pc), true);      // <subtract cycles>
 			UML_HASHJMP(block, uml::mem(&m_core->mode), uml::mem(&m_core->pc), *m_nocode); // hashjmp <mode>,<pc>,nocode

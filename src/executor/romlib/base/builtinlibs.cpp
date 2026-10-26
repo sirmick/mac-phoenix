@@ -15,6 +15,7 @@
 #include <cstring>
 
 #include <PowerCore.h>
+#include <clib/clib.h>
 
 using namespace Executor;
 
@@ -117,11 +118,11 @@ uint32_t builtinlibs::handleSC(PowerCore& cpu)
     {
         if(cb->implementation)
             return cb->implementation(cpu);
-        else
-        {
-            std::cerr << "Unimplemented PPC entrypoint: " << cb->name << std::endl << std::flush;
-            std::abort();
-        }
+        /* MacPhoenix: an import nothing exports. A PowerPC caller cleans
+           up after itself, so the call can be answered: 0, and logged. */
+        traps::log_unimplemented(std::string("PowerPC ") + cb->name);
+        cpu.r[3] = 0;
+        return cpu.lr;
     }
     else
     {
@@ -140,6 +141,11 @@ void builtinlibs::addPPCEntrypoint(const char *library, const char *function, st
     callback.name = function;
 
     builtins[library].push_back({function, &callback});
+}
+
+void builtinlibs::addPPCData(const char *library, const char *name, void *address)
+{
+    builtins[library].push_back({name, address});
 }
 
 static std::unordered_map<std::string, std::function<syn68k_addr_t (syn68k_addr_t)>>& overrides68k()
@@ -237,11 +243,23 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         return cid;
     }
 
+    /* MacPhoenix: StdCLib and MathLib, in ROM on a Power Mac
+       (docs/executor/PPCLibs.md). */
+    static bool clibs_added = false;
+    if(!clibs_added)
+    {
+        clibs_added = true;
+        clib::addStdCLib();
+        clib::addMathLib();
+    }
     auto it = builtins.find(name);
     if(it == builtins.end())
         return nullptr;
     else
     {
+        /* An application's own StdCLib: a connection per application. */
+        if(name == "StdCLib")
+            clib::stdclibStart();
         ConnectionID cid = ROMlib_new_connection(1);
         cid->lihp = ROMlib_build_pef_hash(it->second.data(), it->second.size());
         cid->ref_count = 1;
