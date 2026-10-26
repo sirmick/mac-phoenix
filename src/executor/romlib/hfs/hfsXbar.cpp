@@ -14,6 +14,7 @@
 #include <prefs/prefs.h>
 #include <base/cpu.h>
 #include <file/volume.h>
+#include <file/fsm.h>
 #include <file/localvolume/localvolume.h>
 
 using namespace Executor;
@@ -46,10 +47,7 @@ Volume *getVolume(void *vpb)
     if(!vcbp)
         vcbp = ROMlib_findvcb(pb->ioVRefNum, (StringPtr)0, &dir, true);
 
-    if(vcbp)
-        return ((VCBExtra*)vcbp)->volume;
-    else
-        return nullptr;
+    return ROMlib_volume_of(vcbp);
 }
 
 
@@ -59,10 +57,7 @@ Volume *getIVolume(void *vpb)
     if(pb->ioVolIndex > 0)
     {
         HVCB *vcbp = (HVCB *)ROMlib_indexqueue(&LM(VCBQHdr), pb->ioVolIndex);
-        if(vcbp)
-            return ((VCBExtra*)vcbp)->volume;
-        else
-            return nullptr;
+        return ROMlib_volume_of(vcbp);
     }
     else
         return getVolume(pb);
@@ -78,7 +73,7 @@ Volume *getFileVolume(void *vpb)
     if(fcbp)
     {
         vcbp = fcbp->fcbVPtr;
-        return ((VCBExtra*)vcbp)->volume;
+        return ROMlib_volume_of(vcbp);
     }
     else
         return nullptr;
@@ -174,8 +169,28 @@ OSErr handleExceptions(Volume& v, void (Volume::*member)(PB*), PB* pb)
     }
 }
 
+/* MacPhoenix: a call on a foreign file system's volume goes to it
+   (file/fsm.cpp): the trap word it reads from ioTrap, the selectCode its
+   HFS component gets, and how the call names its volume. */
+#define FSM_ROUTE(pb, async, trap, sel, target)                        \
+    do                                                                 \
+    {                                                                  \
+        OSErr fsm_err_;                                                \
+        if(ROMlib_fsm_route((pb), (trap), (sel), (target), &fsm_err_)) \
+            FAKEASYNC((pb), (async), fsm_err_);                        \
+    } while(0)
+
+#define FSM_ROUTE_SYNC(pb, trap, sel, target)                          \
+    do                                                                 \
+    {                                                                  \
+        OSErr fsm_err_;                                                \
+        if(ROMlib_fsm_route((pb), (trap), (sel), (target), &fsm_err_)) \
+            PBRETURN((pb), fsm_err_);                                  \
+    } while(0)
+
 OSErr Executor::PBHRename(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA20B, 0xA20B, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -189,6 +204,7 @@ OSErr Executor::PBHRename(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHCreate(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA208, 0xA208, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -202,6 +218,7 @@ OSErr Executor::PBHCreate(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBDirCreate(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x0006, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -215,6 +232,7 @@ OSErr Executor::PBDirCreate(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHDelete(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA209, 0xA209, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -256,6 +274,7 @@ static bool to_driver(ParmBlkPtr pb, Boolean async, DriverRoutineType routine,
 
 OSErr Executor::PBRead(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA002, 0xA002, FsmTarget::File);
     if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
     {
         OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
@@ -271,7 +290,9 @@ OSErr Executor::PBRead(ParmBlkPtr pb, Boolean async)
     switch(pb->ioParam.ioRefNum)
     {
         case OURHFSDREF:
-            if(ROMlib_directdiskaccess)
+            /* MacPhoenix: a drive a foreign file system reads (file/fsm.cpp)
+               answers without the direct disk access preference */
+            if(ROMlib_directdiskaccess || ROMlib_fsm_raw_drive_p(pb->ioParam.ioVRefNum))
             {
                 dqp = ROMlib_dqbydrive(pb->ioParam.ioVRefNum);
                 if(!dqp)
@@ -288,7 +309,7 @@ OSErr Executor::PBRead(ParmBlkPtr pb, Boolean async)
                         pb->ioParam.ioResult = nsvErr;
                         pb->ioParam.ioActCount = 0;
                     }
-                    else if(pb->ioParam.ioPosMode != fsFromStart)
+                    else if((pb->ioParam.ioPosMode & 3) != fsFromStart)
                     {
                         pb->ioParam.ioResult = paramErr; /* for now */
                         pb->ioParam.ioActCount = 0;
@@ -387,6 +408,7 @@ OSErr Executor::PBRead(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBWrite(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA003, 0xA003, FsmTarget::File);
     if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
     {
         OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
@@ -403,7 +425,7 @@ OSErr Executor::PBWrite(ParmBlkPtr pb, Boolean async)
     switch(pb->ioParam.ioRefNum)
     {
         case OURHFSDREF:
-            if(!ROMlib_directdiskaccess)
+            if(!ROMlib_directdiskaccess && !ROMlib_fsm_raw_drive_p(pb->ioParam.ioVRefNum))
                 pb->ioParam.ioResult = vLckdErr;
             else
             {
@@ -417,7 +439,7 @@ OSErr Executor::PBWrite(ParmBlkPtr pb, Boolean async)
                     pb->ioParam.ioResult = vLckdErr;
                 else if(vcbp && (vcbp->vcbAtrb & VHARDLOCKBIT))
                     pb->ioParam.ioResult = wPrErr;
-                else if(pb->ioParam.ioPosMode != fsFromStart)
+                else if((pb->ioParam.ioPosMode & 3) != fsFromStart)
                     pb->ioParam.ioResult = paramErr; /* for now */
                 else
                     pb->ioParam.ioResult = ROMlib_transphysblk(&dqp->hfs,
@@ -455,6 +477,7 @@ OSErr Executor::PBWrite(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBClose(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA001, 0xA001, FsmTarget::File);
     ROMlib_forkAPIClosed(pb->ioParam.ioRefNum);
     OSErr retval;
 
@@ -490,6 +513,8 @@ OSErr Executor::PBHOpen(HParmBlkPtr pb, Boolean async)
        && pb->ioParam.ioNamePtr[1] == '.')
         retval = ROMlib_driveropen((ParmBlkPtr)pb, async);
     
+    if(retval == fnfErr)
+        FSM_ROUTE(pb, async, 0xA200, 0xA200, FsmTarget::Path);
     if(retval != fnfErr)
         ;
     else if(Volume *v = getVolume(pb))
@@ -503,6 +528,7 @@ OSErr Executor::PBHOpen(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHOpenDF(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x001A, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -516,6 +542,7 @@ OSErr Executor::PBHOpenDF(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHOpenRF(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA20A, 0xA20A, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -550,6 +577,7 @@ swappedstr255print (const char *prefix, Str255 sp)
 
 OSErr Executor::PBGetCatInfo(CInfoPBPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x0009, pb->hFileInfo.ioFDirIndex != 0 ? FsmTarget::Ref : FsmTarget::Path);
     OSErr retval;
     Boolean ishfs;
     GUEST<StringPtr> savep;
@@ -578,6 +606,7 @@ OSErr Executor::PBGetCatInfo(CInfoPBPtr pb, Boolean async)
 
 OSErr Executor::PBSetCatInfo(CInfoPBPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x000A, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -591,6 +620,7 @@ OSErr Executor::PBSetCatInfo(CInfoPBPtr pb, Boolean async)
 
 OSErr Executor::PBCatMove(CMovePBPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x0005, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -604,6 +634,7 @@ OSErr Executor::PBCatMove(CMovePBPtr pb, Boolean async)
 
 OSErr Executor::PBGetVInfo(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA007, 0xA007, FsmTarget::VolIndex);
     OSErr retval;
 
     if(Volume *v = getIVolume(pb))
@@ -617,6 +648,7 @@ OSErr Executor::PBGetVInfo(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBUnmountVol(ParmBlkPtr pb)
 {
+    FSM_ROUTE_SYNC(pb, 0xA00E, 0xA00E, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -630,6 +662,7 @@ OSErr Executor::PBUnmountVol(ParmBlkPtr pb)
 
 OSErr Executor::PBEject(ParmBlkPtr pb)
 {
+    FSM_ROUTE_SYNC(pb, 0xA017, 0xA017, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -643,6 +676,7 @@ OSErr Executor::PBEject(ParmBlkPtr pb)
 
 OSErr Executor::PBAllocate(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA010, 0xA010, FsmTarget::File);
     if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
     {
         OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
@@ -661,6 +695,7 @@ OSErr Executor::PBAllocate(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBAllocContig(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA210, 0xA210, FsmTarget::File);
     if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
     {
         OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
@@ -679,6 +714,7 @@ OSErr Executor::PBAllocContig(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHGetFInfo(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA20C, 0xA20C, pb->fileParam.ioFDirIndex > 0 ? FsmTarget::Ref : FsmTarget::Path);
     OSErr retval;
     Boolean ishfs;
     GUEST<StringPtr> savep;
@@ -701,6 +737,7 @@ OSErr Executor::PBHGetFInfo(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBSetEOF(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA012, 0xA012, FsmTarget::File);
     if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
     {
         OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
@@ -725,6 +762,8 @@ OSErr Executor::PBOpen(ParmBlkPtr pb, Boolean async)
        && pb->ioParam.ioNamePtr[1] == '.')
         retval = ROMlib_driveropen(pb, async);
 
+    if(retval == fnfErr)
+        FSM_ROUTE(pb, async, 0xA000, 0xA000, FsmTarget::Path);
     if(retval != fnfErr)
         ;
     else if(Volume *v = getVolume(pb))
@@ -738,6 +777,7 @@ OSErr Executor::PBOpen(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBOpenDF(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x001A, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -771,6 +811,7 @@ void test_serial(void)
 
 OSErr Executor::PBOpenRF(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA00A, 0xA00A, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -784,6 +825,7 @@ OSErr Executor::PBOpenRF(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBLockRange(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x0010, FsmTarget::File);
     OSErr retval;
 
     if(Volume *v = getFileVolume(pb))
@@ -797,6 +839,7 @@ OSErr Executor::PBLockRange(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBUnlockRange(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x0011, FsmTarget::File);
     OSErr retval;
 
     if(Volume *v = getFileVolume(pb))
@@ -810,6 +853,7 @@ OSErr Executor::PBUnlockRange(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBGetFPos(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA018, 0xA018, FsmTarget::File);
     if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
     {
         OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
@@ -828,6 +872,7 @@ OSErr Executor::PBGetFPos(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBSetFPos(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA044, 0xA044, FsmTarget::File);
     if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
     {
         OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
@@ -846,6 +891,7 @@ OSErr Executor::PBSetFPos(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBGetEOF(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA011, 0xA011, FsmTarget::File);
     if(ROMlib_forkAPIRefused(pb->ioParam.ioRefNum))
     {
         OSErr refused = -1310;                  /* fsDataTooBigErr: a fork call's path (9.0.4) */
@@ -864,6 +910,7 @@ OSErr Executor::PBGetEOF(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBFlushFile(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA045, 0xA045, FsmTarget::File);
     OSErr retval;
 
     if(ROMlib_desktop_refnum_p(pb->ioParam.ioRefNum))
@@ -879,6 +926,7 @@ OSErr Executor::PBFlushFile(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBCreate(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA008, 0xA008, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -892,6 +940,7 @@ OSErr Executor::PBCreate(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBDelete(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA009, 0xA009, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -905,6 +954,7 @@ OSErr Executor::PBDelete(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBOpenWD(WDPBPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x0001, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -918,6 +968,7 @@ OSErr Executor::PBOpenWD(WDPBPtr pb, Boolean async)
 
 OSErr Executor::PBCloseWD(WDPBPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x0002, FsmTarget::WD);
     OSErr retval;
 
     retval = hfsPBCloseWD(pb, async);
@@ -934,6 +985,7 @@ OSErr Executor::PBGetWDInfo(WDPBPtr pb, Boolean async)
 
 OSErr Executor::PBGetFInfo(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA00C, 0xA00C, pb->fileParam.ioFDirIndex > 0 ? FsmTarget::Ref : FsmTarget::Path);
     Boolean ishfs;
     GUEST<StringPtr> savep;
     OSErr retval;
@@ -956,6 +1008,7 @@ OSErr Executor::PBGetFInfo(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBSetFInfo(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA00D, 0xA00D, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -969,6 +1022,7 @@ OSErr Executor::PBSetFInfo(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHSetFInfo(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA20D, 0xA20D, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -982,6 +1036,7 @@ OSErr Executor::PBHSetFInfo(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBSetFLock(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA041, 0xA041, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -995,6 +1050,7 @@ OSErr Executor::PBSetFLock(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHSetFLock(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA241, 0xA241, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -1008,6 +1064,7 @@ OSErr Executor::PBHSetFLock(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBRstFLock(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA042, 0xA042, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -1021,6 +1078,7 @@ OSErr Executor::PBRstFLock(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHRstFLock(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA242, 0xA242, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -1034,6 +1092,7 @@ OSErr Executor::PBHRstFLock(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBSetFVers(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA043, 0xA043, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -1047,6 +1106,7 @@ OSErr Executor::PBSetFVers(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBRename(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA00B, 0xA00B, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -1091,6 +1151,10 @@ OSErr Executor::PBMountVol(ParmBlkPtr pb)
     OSErr retval;
 
     vref = pb->ioParam.ioVRefNum;
+    /* MacPhoenix: a drive no volume is on goes to the foreign file systems
+       (file/fsm.cpp) */
+    if(ROMlib_fsm_mount(vref, pb, &retval))
+        PBRETURN(pb, retval);
     if(vref == 1 || vref == 2)
         retval = noErr;
     else
@@ -1101,6 +1165,7 @@ OSErr Executor::PBMountVol(ParmBlkPtr pb)
 
 OSErr Executor::PBHGetVInfo(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA207, 0xA207, FsmTarget::VolIndex);
     OSErr retval;
 
     if(Volume *v = getIVolume(pb))
@@ -1149,6 +1214,7 @@ enum
 
 OSErr Executor::PBHGetVolParms(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x0030, FsmTarget::Path);
     LONGINT dir;
     HVCB *vcbp;
     getvolparams_info_t *infop;
@@ -1208,6 +1274,7 @@ OSErr Executor::PBHGetVolParms(HParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBSetVInfo(HParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA260, 0x000B, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -1237,6 +1304,7 @@ OSErr Executor::PBHGetVol(WDPBPtr pb, Boolean async)
 
 OSErr Executor::PBSetVol(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA015, 0xA015, FsmTarget::Path);
     OSErr retval;
 
     retval = hfsPBSetVol(pb, async);
@@ -1245,6 +1313,7 @@ OSErr Executor::PBSetVol(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBHSetVol(WDPBPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA215, 0xA215, FsmTarget::Path);
     OSErr retval;
 
     retval = hfsPBHSetVol(pb, async);
@@ -1253,6 +1322,7 @@ OSErr Executor::PBHSetVol(WDPBPtr pb, Boolean async)
 
 OSErr Executor::PBFlushVol(ParmBlkPtr pb, Boolean async)
 {
+    FSM_ROUTE(pb, async, 0xA013, 0xA013, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))
@@ -1266,6 +1336,7 @@ OSErr Executor::PBFlushVol(ParmBlkPtr pb, Boolean async)
 
 OSErr Executor::PBOffLine(ParmBlkPtr pb)
 {
+    FSM_ROUTE_SYNC(pb, 0xA035, 0xA035, FsmTarget::Path);
     OSErr retval;
 
     if(Volume *v = getVolume(pb))

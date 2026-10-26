@@ -9,7 +9,8 @@
 # replaces this list). "System AINI <id>" allows one of the System file's
 # 'AINI' resources, which the loader runs before any INIT (-32700 is the
 # ASLM Loader, which starts the Shared Library Manager); a file's own
-# 'AINI' resources run when the file is allowed.
+# 'AINI' resources run when the file is allowed. "NAME @ 7.6": allowed only
+# on System 7.6 or later (7.5.5's PC Exchange 2.0.5 stays off: STRAGGLERS 62).
 WindowShade
 Mouse
 Find File Extension
@@ -20,6 +21,7 @@ Launcher
 Control Strip
 CloseView
 Mac OS Easy Open
+PC Exchange @ 7.6
 Clipping Extension
 AppleScript™
 Finder Scripting Extension

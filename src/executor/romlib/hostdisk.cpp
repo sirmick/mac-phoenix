@@ -17,6 +17,7 @@
 #include <mman/mman.h>
 
 #include <file/file.h>
+#include <file/fsm.h>
 #include <hfs/drive_flags.h>
 #include <rsys/device.h>
 #include <rsys/hostdisk.h>
@@ -192,7 +193,12 @@ bool Executor::ROMlib_image_drive_control(ParmBlkPtr pbp, OSErr *err)
     {
         case 21: /* drive icon */
         case 22: /* media icon */
-            *param = US_TO_SYN68K(drive_icon());
+            /* MacPhoenix: a foreign file system's volume (PC Exchange's
+               DOS disk) shows the icon that file system gives it */
+            if(Ptr icon = ROMlib_fsm_drive_icon(pbp->cntrlParam.ioVRefNum))
+                *param = US_TO_SYN68K(icon);
+            else
+                *param = US_TO_SYN68K(drive_icon());
             break;
         case 23: /* drive info: unspecified fixed SCSI disk */
             *param = 0x0601;

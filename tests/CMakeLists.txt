@@ -378,6 +378,19 @@ set_tests_properties(drag_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# A DOS disk (a FAT16 image) through PC Exchange on Executor's File System
+# Manager: read off it, written onto it, consistent after shutdown (7.6.1;
+# 7.5.5's PC Exchange 2.0.5 is off, STRAGGLERS 62).
+add_test(
+  NAME pcexchange_executor
+  COMMAND bash ${TEST_DIR}/test_pcexchange_executor.sh --timeout 90 --port 18450
+)
+set_tests_properties(pcexchange_executor PROPERTIES
+  TIMEOUT 160
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # --- Executor variants: Apple's 7.5.5 System on Executor's Toolbox, no ROM.
 # Runs on the System Folder of the test copy of tests-7.5.5.img (extracted
 # into <storage>/executor-systems on first use). The guest suite's network

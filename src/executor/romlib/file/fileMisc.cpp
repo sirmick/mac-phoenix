@@ -16,6 +16,7 @@
 
 #include <hfs/hfs.h>
 #include <file/file.h>
+#include <file/fsm.h>
 #include <hfs/futzwithdosdisks.h>
 #include <print/ini.h>
 #include <util/string.h>
@@ -467,6 +468,7 @@ void Executor::ROMlib_fileinit() /* INTERNAL */
 {
     GUEST<THz> savezone;
 
+    ROMlib_fsm_reset();
     LM(CurDirStore) = 2;
     memset(&LM(DrvQHdr), 0, sizeof(LM(DrvQHdr)));
     memset(&LM(VCBQHdr), 0, sizeof(LM(VCBQHdr)));
@@ -502,12 +504,13 @@ void Executor::ROMlib_fileinit() /* INTERNAL */
     INTEGER wdlen = NWDENTRIES * sizeof(wdentry) + sizeof(INTEGER);
     LM(WDCBsPtr) = NewPtr((Size)wdlen);
     /* MacPhoenix: the File System Manager's variables, as 7.5.5 allocates
-       them ($74 bytes, length word first); left zero, there being no File
-       System Manager. Code that looks at them (Apple Menu Options' file
-       trap patches) otherwise reads through $FFFFFFFF. */
+       them ($74 bytes, length word first); zero but for the FSM's own
+       record (file/fsm.cpp). Code that looks at them (Apple Menu Options'
+       file trap patches) otherwise reads through $FFFFFFFF. */
     LM(FSVars) = NewPtrClear(0x74);
     if(LM(FSVars))
         *(GUEST<INTEGER> *)LM(FSVars) = 0x74;
+    ROMlib_fsm_publish_vars(LM(FSVars));
     LM(TheZone) = savezone;
     memset(LM(WDCBsPtr), 0, wdlen);
     *(GUEST<INTEGER> *)LM(WDCBsPtr) = wdlen;

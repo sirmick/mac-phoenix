@@ -20,6 +20,7 @@
 #include <mman/mman.h>
 
 #include <file/file.h>
+#include <file/fsm.h>
 #include <hfs/hfs.h>
 #include <file/localvolume/localvolume.h>
 
@@ -580,7 +581,7 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
     {
         db.vRefNum = vref;
         db.refNum = openFCB(vcbp);
-        if(auto *lv = dynamic_cast<LocalVolume *>(((VCBExtra *)vcbp)->volume))
+        if(auto *lv = dynamic_cast<LocalVolume *>(ROMlib_volume_of(vcbp)))
         {
             db.file = lv->getRoot() / ".desktopdb";
             db.load();
@@ -656,9 +657,20 @@ OSErr finish(DTPBPtr dtp, OSErr err)
 }
 }
 
+/* MacPhoenix: a foreign file system's volume keeps its own desktop
+   database (file/fsm.cpp) */
+#define FSM_DT_ROUTE(dtp, async, sel, target)                          \
+    do                                                                 \
+    {                                                                  \
+        OSErr fsm_err_;                                                \
+        if(ROMlib_fsm_route((dtp), 0xA260, (sel), (target), &fsm_err_)) \
+            FAKEASYNC((dtp), (async), fsm_err_);                       \
+    } while(0)
+
 OSErr
 Executor::PBDTGetPath(DTPBPtr dtp)
 {
+    FSM_DT_ROUTE(dtp, false, 0x0020, FsmTarget::Path);
     OSErr err;
     DesktopDB *db = openDB(dtp, err);
     dtp->ioDTRefNum = db ? db->refNum : 0;
@@ -668,6 +680,7 @@ Executor::PBDTGetPath(DTPBPtr dtp)
 OSErr
 Executor::PBDTOpenInform(DTPBPtr dtp)
 {
+    FSM_DT_ROUTE(dtp, false, 0x002E, FsmTarget::Path);
     OSErr err;
     DesktopDB *db = openDB(dtp, err);
     dtp->ioDTRefNum = db ? db->refNum : 0;
@@ -688,6 +701,7 @@ bool Executor::ROMlib_desktop_refnum_p(short refnum)
 OSErr
 Executor::PBDTCloseDown(DTPBPtr dtp)
 {
+    FSM_DT_ROUTE(dtp, false, 0x0021, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -703,6 +717,7 @@ Executor::PBDTCloseDown(DTPBPtr dtp)
 OSErr
 Executor::PBDTGetIcon(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x0023, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -728,6 +743,7 @@ Executor::PBDTGetIcon(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTGetIconInfo(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x0024, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -751,6 +767,7 @@ Executor::PBDTGetIconInfo(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTGetAPPL(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x0027, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -792,6 +809,7 @@ Executor::PBDTGetAPPL(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTGetComment(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x002A, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -817,6 +835,7 @@ Executor::PBDTGetComment(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTAddIcon(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x0022, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -848,6 +867,7 @@ Executor::PBDTAddIcon(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTAddAPPL(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x0025, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -874,6 +894,7 @@ Executor::PBDTAddAPPL(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTSetComment(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x0028, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -894,6 +915,7 @@ Executor::PBDTSetComment(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTRemoveAPPL(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x0026, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -918,6 +940,7 @@ Executor::PBDTRemoveAPPL(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTRemoveComment(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x0029, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -938,6 +961,7 @@ Executor::PBDTRemoveComment(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTFlush(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x002B, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -951,6 +975,7 @@ Executor::PBDTFlush(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTGetInfo(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x002D, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
     {
@@ -970,6 +995,7 @@ Executor::PBDTGetInfo(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTReset(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x002C, FsmTarget::DTRef);
     OSErr err;
     if(DesktopDB *db = findDB(dtp, err))
         db->clear();
@@ -980,6 +1006,7 @@ Executor::PBDTReset(DTPBPtr dtp, Boolean async)
 OSErr
 Executor::PBDTDelete(DTPBPtr dtp, Boolean async)
 {
+    FSM_DT_ROUTE(dtp, async, 0x002F, FsmTarget::Path);
     /* by volume (ioNamePtr/ioVRefNum), and only when it isn't open */
     OSErr err;
     LONGINT dir;
@@ -991,7 +1018,7 @@ Executor::PBDTDelete(DTPBPtr dtp, Boolean async)
     else
     {
         err = noErr;
-        if(auto *lv = dynamic_cast<LocalVolume *>(((VCBExtra *)vcbp)->volume))
+        if(auto *lv = dynamic_cast<LocalVolume *>(ROMlib_volume_of(vcbp)))
         {
             std::error_code ec;
             fs::remove(lv->getRoot() / ".desktopdb", ec);

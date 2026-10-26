@@ -54,6 +54,9 @@ npx playwright test
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --no-executor-ot
 # CFM-68K applications (CodeWarrior IDE 3.2) run on Executor's own Code Fragment
 # Manager, no Enabler (docs/executor/CFM68K.md; ctest -R guest_suite_cfm68k)
+# DOS (FAT) disk images (--disk) mount through PC Exchange (7.6.1) on Executor's File
+# System Manager (docs/executor/FSM.md; ctest -R pcexchange_executor;
+# tests/lib/fat_image.py makes and checks them)
 # ... PowerPC code on mame-ppc: PowerPC-only apps always, fat apps' with
 # --executor-ppc (InterfaceLib only so far; no StdCLib/MathLib yet):
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc

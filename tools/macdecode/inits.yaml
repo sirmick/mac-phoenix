@@ -96,9 +96,11 @@ extensions:
   - {file: Foreign File Access, phase: later, lacks: [], note: "file system plug-ins: File System Manager"}
   - {file: ISO 9660 File Access, phase: later, lacks: []}
   - {file: High Sierra File Access, phase: later, lacks: []}
-  - {file: PC Exchange, phase: later, lacks: [InstallFS, "FSMDispatch#2/5/6"],
-     note: "runs to the end since RGetResource answers the ROM's 'clut' 8 (2026-10-25), then
-       declines to install without the File System Manager"}
+  - {file: PC Exchange, phase: 2, lacks: [], loaded: true,
+     note: "installs its DOS and ProDOS file systems on Executor's File System Manager
+       (file/fsm.cpp, docs/executor/FSM.md, 2026-10-26); FAT disk images mount, read and
+       write. 2.0.5 (7.5.5) keeps its own FSM out once FSVars' says version $012F,
+       but is off (policy 'PC Exchange @ 7.6'): STRAGGLERS 62"}
   - {file: CloseView, phase: 1, lacks: [], loaded: true,
      note: "keeps its code below a lowered BufPtr (the Process Manager heap ends there since
        2026-10-25); magnification draws only part of the screen, inverted"}

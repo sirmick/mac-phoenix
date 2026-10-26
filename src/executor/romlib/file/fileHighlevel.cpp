@@ -15,6 +15,7 @@
 #include <ProcessMgr.h>
 
 #include <file/file.h>
+#include <file/fsm.h>
 #include <util/string.h>
 #include <hfs/hfs.h>
 #include <file/hfsplusvolume.h>
@@ -253,7 +254,7 @@ OSErr Executor::C_FSpExchangeFiles(FSSpecPtr src, FSSpecPtr dst)
         return diffVolErr;
     LONGINT dir;
     if(HVCB *vcbp = ROMlib_findvcb(src->vRefNum, nullptr, &dir, false))
-        if(auto *hp = dynamic_cast<HFSPlusVolume *>(((VCBExtra *)vcbp)->volume))
+        if(auto *hp = dynamic_cast<HFSPlusVolume *>(ROMlib_volume_of(vcbp)))
             return hp->exchangeFiles(src, dst);
     if((err = file_cat_info(src, &src_info)) != noErr
        || (err = file_cat_info(dst, &dst_info)) != noErr)

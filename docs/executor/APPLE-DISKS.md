@@ -76,8 +76,11 @@ turns off what they need. Each is a policy decision before it is a fix:
 - ~~**CloseView**~~: on since 2026-10-25; magnification draws as on the ROM machine (STRAGGLERS 52; the panel's radio after a click is open)
 - ~~**Easy Open**~~: on since 2026-10-25 (STRAGGLERS 52); documents of unknown
   applications open through its Translation Choices dialog
-- **AutoRemounter, PC Exchange** (7.6.1), see STRAGGLERS 52 for what each needs:
-  say "not installed" when opened by hand
+- ~~**PC Exchange**~~: on since 2026-10-26 on 7.6.1 (STRAGGLERS 52,
+  docs/executor/FSM.md); DOS disk images mount through Executor's File System
+  Manager. 7.5.5's 2.0.5 stays off (STRAGGLERS 62)
+- **AutoRemounter** (7.6.1), see STRAGGLERS 52 for what it needs: says "not
+  installed" when opened by hand
 - **Network Software Selector** (7.5.5): "Could not get information on the
   currently running networking code"
 
