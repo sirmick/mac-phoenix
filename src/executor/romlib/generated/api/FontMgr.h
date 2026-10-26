@@ -336,4 +336,16 @@ Boolean C_GetPreserveGlyph();PASCAL_SUBTRAP(GetPreserveGlyph, 0xA854, 0x000B, Fo
 OSErr C_FlushFonts();PASCAL_SUBTRAP(FlushFonts, 0xA854, 0x000C, FontDispatch);
 
 
+INTEGER glue_GetSysFont();LIBRARY_FUNCTION(InterfaceLib, GetSysFont, glue_GetSysFont);
+
+
+INTEGER glue_GetAppFont();LIBRARY_FUNCTION(InterfaceLib, GetAppFont, glue_GetAppFont);
+
+
+INTEGER glue_LMGetSysFontSize();LIBRARY_FUNCTION(InterfaceLib, LMGetSysFontSize, glue_LMGetSysFontSize);
+
+
+void glue_LMSetSysFontSize(INTEGER size);LIBRARY_FUNCTION(InterfaceLib, LMSetSysFontSize, glue_LMSetSysFontSize);
+
+
 } /* namespace Executor */

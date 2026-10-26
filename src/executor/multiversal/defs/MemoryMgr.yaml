@@ -1188,3 +1188,28 @@
     selector: 0x0004
     returnreg: D0
     executor: C_
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code. Only for Executor until the C side has
+# 68k glue for them.
+
+- only-for: Executor
+  function:
+    name: GetMyZone
+    return: "THz"
+    library: InterfaceLib
+    executor: glue_GetMyZone
+
+# ####
+
+- only-for: Executor
+  function:
+    name: InlineGetHandleSize
+    return: "Size"
+    args:
+      - name: "h"
+        type: "Handle"
+    library: InterfaceLib
+    executor: glue_InlineGetHandleSize

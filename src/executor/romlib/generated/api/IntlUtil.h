@@ -128,12 +128,14 @@ void C_SetIntlResource(INTEGER rn, INTEGER id, Handle newh);PASCAL_SUBTRAP(SetIn
 INTEGER C_IUMagString(Ptr ptr1, Ptr ptr2, INTEGER len1, INTEGER len2);PASCAL_SUBTRAP(IUMagString, 0xA9ED, 0x000A, Pack6);
 
 
-INTEGER IUCompString(ConstStringPtr str1, ConstStringPtr str2);
+INTEGER IUCompString(ConstStringPtr str1, ConstStringPtr str2);LIBRARY_FUNCTION(InterfaceLib, IUCompString, IUCompString);
+
 
 INTEGER C_IUMagIDString(Ptr ptr1, Ptr ptr2, INTEGER len1, INTEGER len2);PASCAL_SUBTRAP(IUMagIDString, 0xA9ED, 0x000C, Pack6);
 
 
-INTEGER IUEqualString(ConstStringPtr str1, ConstStringPtr str2);
+INTEGER IUEqualString(ConstStringPtr str1, ConstStringPtr str2);LIBRARY_FUNCTION(InterfaceLib, IUEqualString, IUEqualString);
+
 
 void C_IUMystery(Ptr arg1, Ptr arg2, INTEGER arg3, INTEGER arg4);PASCAL_SUBTRAP(IUMystery, 0xA9ED, 0x0012, Pack6);
 
@@ -193,6 +195,12 @@ INTEGER C_TypeSelectFindItem(TypeSelectRecord *tsr, INTEGER listSize, INTEGER se
 
 
 INTEGER C_TypeSelectCompare(TypeSelectRecord *tsr, ScriptCode testStringScript, StringPtr testStringPtr);PASCAL_SUBTRAP(TypeSelectCompare, 0xA9ED, 0x002E, Pack6);
+
+
+INTEGER glue_IUEqualPString(ConstStringPtr a, ConstStringPtr b, Handle arg3);LIBRARY_FUNCTION(InterfaceLib, IUEqualPString, glue_IUEqualPString);
+
+
+INTEGER glue_IUCompPString(ConstStringPtr a, ConstStringPtr b, Handle arg3);LIBRARY_FUNCTION(InterfaceLib, IUCompPString, glue_IUCompPString);
 
 
 } /* namespace Executor */

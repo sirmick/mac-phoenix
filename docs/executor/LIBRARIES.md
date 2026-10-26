@@ -20,7 +20,7 @@ definitions, in a shape upstream multiversal can take.
 | Traps | generated `PASCAL_TRAP`, `PASCAL_SUBTRAP`, `REGISTER_TRAP`, `NOTRAP_FUNCTION` (`base/traps.h`) | ~2,000 | from the C++ signature | the trap table; the same wrappers export each one from InterfaceLib for PowerPC and CFM-68K (`base/traps.impl.h`) |
 | Open Transport over ASLM | `Def{set, name, Conv, "LLLLL", 'L', impl}` (`opentransport/ot_*.cpp`), index-to-name lists (`ot_names.inc`) | ~130 of ~330 names | no: signature strings, `impl(const Call&)` reads its arguments | 68k only; no `OpenTransportLib` for PowerPC |
 | StdCLib, MathLib | `exportFn(LIB, "strlen", &c_strlen)`, `exportRaw` for variadic and hand-decoded routines, `exportData` (`clib/`) — in the definitions since step 2 | ~250 + ~70 raw + 25 data | yes (`callfromPPC::Invoker`) | PowerPC; StdCLib for CFM-68K too since step 2 |
-| CFM glue | `exportGlue("c2pstr", &fn)` (`cfm68k_glue.cpp`) | ~50 | yes | InterfaceLib, ObjectSupportLib, for CFM-68K and PowerPC |
+| CFM glue | `exportGlue("c2pstr", &fn)` (`cfm68k_glue.cpp`) — in the definitions since step 3 | ~50 | yes | InterfaceLib, ObjectSupportLib, for CFM-68K and PowerPC |
 | AppleScriptLib (OSA) | `{ "OSALoad", 0x0001, { 4, 4, 4 } }` (`cfm68k_glue.cpp`) | 42 | no: parameter sizes | CFM-68K, re-pushed to `_ComponentDispatch` |
 | Component Manager | `switch` on the selector in `RAW_68K_IMPLEMENTATION(ComponentDispatch)` (`component.cpp`) | 35 selectors | no | 68k; `Components.yaml` declares no functions |
 
@@ -162,7 +162,16 @@ The library routes:
    by CLibTest68K on Executor and with Apple's NuStdCLib
    (`clib_cfm68k_executor`, `clib_cfm68k`; PPCLibs.md). On the way:
    CFM-68K's double and float results (CFM68K.md).
-3. **The CFM glue** (`cfm68k_glue.cpp`'s `exportGlue` list).
+3. **The CFM glue** (`cfm68k_glue.cpp`'s `exportGlue` list) — done
+   2026-10-26: its 51 InterfaceLib exports are definitions. 22 were in
+   them already for the C side only (no `executor:`): they got `library:
+   InterfaceLib`, and the 17 whose glue only passed its arguments on now
+   name Executor's own routine (`executor: EqualString`), the glue gone;
+   29 are new entries, `only-for: Executor` until the C side has 68k glue
+   for them (`c2pstr`, `ReadLocation`, `DirCreate`, the object
+   specifier builders, `OpenComponent`, ...). Left in `cfm68k_glue.cpp`:
+   the routines with bodies, `CallComponentUPP`, AppleScriptLib's table
+   (step 5) and the CFM-68K overrides.
 4. **Open Transport.** The `Def` tables become definitions and the
    implementations take typed arguments instead of `Call`. By-products:
    `OpenTransportLib`, `OTUtilityLib`, `OpenTptInternetLib` for PowerPC

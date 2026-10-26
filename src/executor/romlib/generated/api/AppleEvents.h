@@ -557,4 +557,22 @@ OSErr C_AECallObjectAccessor(DescType desiredClass, AEDesc *containerToken, Desc
 OSErr C_AESetObjectCallbacks(ProcPtr myCompareProc, ProcPtr myCountProc, ProcPtr myDisposeTokenProc, ProcPtr myGetMarkTokenProc, ProcPtr myMarkProc, ProcPtr myAdjustMarksProc, ProcPtr myGetErrDescProc);PASCAL_SUBTRAP(AESetObjectCallbacks, 0xA816, 0x0E35, Pack8);
 
 
+OSErr glue_AEObjectInit();LIBRARY_FUNCTION(InterfaceLib, AEObjectInit, glue_AEObjectInit);
+
+
+OSErr glue_CreateOffsetDescriptor(LONGINT offset, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateOffsetDescriptor, glue_CreateOffsetDescriptor);
+
+
+OSErr glue_CreateCompDescriptor(DescType op, AEDesc *operand1, AEDesc *operand2, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateCompDescriptor, glue_CreateCompDescriptor);
+
+
+OSErr glue_CreateLogicalDescriptor(AEDesc *terms, DescType op, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateLogicalDescriptor, glue_CreateLogicalDescriptor);
+
+
+OSErr glue_CreateObjSpecifier(DescType desiredClass, AEDesc *container, DescType keyForm, AEDesc *keyData, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateObjSpecifier, glue_CreateObjSpecifier);
+
+
+OSErr glue_CreateRangeDescriptor(AEDesc *start, AEDesc *stop, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateRangeDescriptor, glue_CreateRangeDescriptor);
+
+
 } /* namespace Executor */

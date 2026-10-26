@@ -274,7 +274,8 @@ void C_DrawJust(Ptr textbufp, INTEGER length, INTEGER slop);PASCAL_SUBTRAP(DrawJ
 String2DateStatus C_StringToTime(Ptr textp, LONGINT len, Ptr cachep, GUEST<LONGINT> *lenusedp, GUEST<Ptr> *datetimep);PASCAL_SUBTRAP(StringToTime, 0xA8B5, 0x8214FFF4, ScriptUtil);
 
 
-INTEGER GetSysDirection();
+INTEGER glue_GetSysDirection();LIBRARY_FUNCTION(InterfaceLib, GetSysDirection, glue_GetSysDirection);
+
 
 void SetSysDirection(INTEGER just);
 

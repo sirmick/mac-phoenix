@@ -1874,3 +1874,108 @@
     dispatcher: Pack8
     selector: 0x0E35
     executor: C_
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code. Only for Executor until the C side has
+# 68k glue for them.
+
+- only-for: Executor
+  function:
+    name: AEObjectInit
+    return: "OSErr"
+    library: InterfaceLib
+    executor: glue_AEObjectInit
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateOffsetDescriptor
+    return: "OSErr"
+    args:
+      - name: "offset"
+        type: "LONGINT"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateOffsetDescriptor
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateCompDescriptor
+    return: "OSErr"
+    args:
+      - name: "op"
+        type: "DescType"
+      - name: "operand1"
+        type: "AEDesc*"
+      - name: "operand2"
+        type: "AEDesc*"
+      - name: "disposeInputs"
+        type: "Boolean"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateCompDescriptor
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateLogicalDescriptor
+    return: "OSErr"
+    args:
+      - name: "terms"
+        type: "AEDesc*"
+      - name: "op"
+        type: "DescType"
+      - name: "disposeInputs"
+        type: "Boolean"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateLogicalDescriptor
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateObjSpecifier
+    return: "OSErr"
+    args:
+      - name: "desiredClass"
+        type: "DescType"
+      - name: "container"
+        type: "AEDesc*"
+      - name: "keyForm"
+        type: "DescType"
+      - name: "keyData"
+        type: "AEDesc*"
+      - name: "disposeInputs"
+        type: "Boolean"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateObjSpecifier
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateRangeDescriptor
+    return: "OSErr"
+    args:
+      - name: "start"
+        type: "AEDesc*"
+      - name: "stop"
+        type: "AEDesc*"
+      - name: "disposeInputs"
+        type: "Boolean"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateRangeDescriptor

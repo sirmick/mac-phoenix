@@ -570,6 +570,8 @@
     args:
       - name: dp
         type: DialogPtr
+    library: InterfaceLib
+    executor: DialogCut
 
 # ####
 
@@ -578,6 +580,8 @@
     args:
       - name: dp
         type: DialogPtr
+    library: InterfaceLib
+    executor: DialogCopy
 
 # ####
 
@@ -586,6 +590,8 @@
     args:
       - name: dp
         type: DialogPtr
+    library: InterfaceLib
+    executor: DialogPaste
 
 # ####
 
@@ -594,6 +600,8 @@
     args:
       - name: dp
         type: DialogPtr
+    library: InterfaceLib
+    executor: DialogDelete
 
 # ####
 
@@ -862,6 +870,8 @@
       - type: DialogPtr
       - type: Handle
       - type: DITLMethod
+    library: InterfaceLib
+    executor: AppendDITL
 
 # ####
 
@@ -870,6 +880,8 @@
     args:
       - type: DialogPtr
       - type: int16_t
+    library: InterfaceLib
+    executor: ShortenDITL
 
 # ####
 
@@ -878,6 +890,8 @@
     return: int16_t
     args:
       - type: DialogPtr
+    library: InterfaceLib
+    executor: CountDITL
 
 # ####
 

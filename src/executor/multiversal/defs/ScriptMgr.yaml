@@ -801,6 +801,8 @@
 - function:
     name: GetSysDirection
     return: INTEGER
+    library: InterfaceLib
+    executor: glue_GetSysDirection
 
 # ####
 

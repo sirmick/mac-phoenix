@@ -113,9 +113,11 @@ void C_GetKeys(uint8_t *keys);PASCAL_TRAP(GetKeys, 0xA976);
 ULONGINT C_TickCount();PASCAL_TRAP(TickCount, 0xA975);
 
 
-LONGINT GetDblTime();
+LONGINT GetDblTime();LIBRARY_FUNCTION(InterfaceLib, GetDblTime, GetDblTime);
 
-LONGINT GetCaretTime();
+
+LONGINT GetCaretTime();LIBRARY_FUNCTION(InterfaceLib, GetCaretTime, GetCaretTime);
+
 
 // MacPhoenix: GetNextEvent's filter (Tech Note 85): called after every
 // GetNextEvent with A1 at the event record and the Boolean result word

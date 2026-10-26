@@ -34,43 +34,21 @@ extern unsigned char XPRAM[8192];
 
 using namespace Executor;
 
-namespace
+namespace Executor
 {
 
-/* A routine for both CFM-68K and PowerPC fragments. */
-template<typename F>
-struct Export;
-
-template<typename Ret, typename... Args>
-struct Export<Ret (Args...)>
-{
-    static void add(const char *name, Ret (*fn)(Args...))
-    {
-        builtinlibs::addCFM68KEntrypoint("InterfaceLib", name,
-            [fn, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t) {
-                return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(fn, pops);
-            });
-        builtinlibs::addPPCEntrypoint("InterfaceLib", name,
-            [fn](PowerCore& cpu) {
-                return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, fn);
-            });
-    }
-};
-
-template<typename F>
-void exportGlue(const char *name, F *fn)
-{
-    Export<F>::add(name, fn);
-}
 
 /* A Pascal trap called as 68k code calls it: room for the result, then the
    arguments, the first deepest; D0 the selector of a dispatcher that takes
    it there. Through the trap table, so patches run. */
+namespace {
 struct PascalArg
 {
     int size; /* 2 or 4 */
     uint32_t value;
 };
+}
+
 
 uint32_t pascal_trap(uint16_t trap, uint32_t d0, int resultSize,
                      std::initializer_list<PascalArg> args)
@@ -160,26 +138,6 @@ void glue_CopyCStringToPascal(const char *src, StringPtr dst)
 
 /* ---- the Operating System and International Utilities ------------------- */
 
-Boolean glue_EqualString(ConstStringPtr a, ConstStringPtr b, Boolean caseSens, Boolean diacSens)
-{
-    return EqualString(a, b, caseSens, diacSens);
-}
-
-INTEGER glue_RelString(ConstStringPtr a, ConstStringPtr b, Boolean caseSens, Boolean diacSens)
-{
-    return RelString(a, b, caseSens, diacSens);
-}
-
-INTEGER glue_IUEqualString(ConstStringPtr a, ConstStringPtr b)
-{
-    return IUEqualString(a, b);
-}
-
-INTEGER glue_IUCompString(ConstStringPtr a, ConstStringPtr b)
-{
-    return IUCompString(a, b);
-}
-
 /* The itl2 handle chooses the sorting rules; Executor has one set. */
 INTEGER glue_IUEqualPString(ConstStringPtr a, ConstStringPtr b, Handle)
 {
@@ -189,16 +147,6 @@ INTEGER glue_IUEqualPString(ConstStringPtr a, ConstStringPtr b, Handle)
 INTEGER glue_IUCompPString(ConstStringPtr a, ConstStringPtr b, Handle)
 {
     return IUCompString(a, b);
-}
-
-LONGINT glue_SetCurrentA5()
-{
-    return SetCurrentA5();
-}
-
-LONGINT glue_SetA5(LONGINT a5)
-{
-    return SetA5(a5);
 }
 
 /* A MachineLocation: 12 bytes, kept in parameter RAM $E4..$EF (Inside
@@ -257,16 +205,6 @@ void glue_LMSetSysFontSize(INTEGER size)
     LM(SysFontSiz) = size;
 }
 
-LONGINT glue_GetDblTime()
-{
-    return GetDblTime();
-}
-
-LONGINT glue_GetCaretTime()
-{
-    return GetCaretTime();
-}
-
 INTEGER glue_GetSysDirection()
 {
     return LM(TESysJust); /* GetSysDirection: TESysJust */
@@ -274,40 +212,11 @@ INTEGER glue_GetSysDirection()
 
 /* ---- the Dialog Manager --------------------------------------------------- */
 
-void glue_DialogCut(DialogPtr d) { DialogCut(d); }
-void glue_DialogCopy(DialogPtr d) { DialogCopy(d); }
-void glue_DialogPaste(DialogPtr d) { DialogPaste(d); }
-void glue_DialogDelete(DialogPtr d) { DialogDelete(d); }
-
-INTEGER glue_CountDITL(DialogPtr d)
-{
-    return CountDITL(d);
-}
-
-void glue_AppendDITL(DialogPtr d, Handle h, INTEGER method)
-{
-    AppendDITL(d, h, (DITLMethod)method);
-}
-
-void glue_ShortenDITL(DialogPtr d, INTEGER n)
-{
-    ShortenDITL(d, n);
-}
-
-void glue_GetIndPattern(Byte *pat, INTEGER listID, INTEGER index)
-{
-    GetIndPattern(pat, listID, index);
-}
-
 /* ---- the File Manager ----------------------------------------------------- */
-
-OSErr glue_GetVInfo(INTEGER drive, StringPtr name, GUEST<INTEGER> *vRefNum, GUEST<LONGINT> *freeBytes)
-{
-    return GetVInfo(drive, name, vRefNum, freeBytes);
-}
 
 /* Guest memory for a parameter block or descriptor handed to the Toolbox:
    a patched trap gets its address, and host stacks aren't guest memory. */
+namespace {
 template<typename T>
 struct GuestTemp
 {
@@ -315,6 +224,8 @@ struct GuestTemp
     ~GuestTemp() { DisposePtr((Ptr)p); }
     T *operator->() { return p; }
 };
+}
+
 
 OSErr glue_DirCreate(INTEGER vRefNum, LONGINT parentDirID, ConstStringPtr name,
                      GUEST<LONGINT> *createdDirID)
@@ -354,18 +265,24 @@ OSErr glue_YieldToAnyThread()
    "Creating Object Specifier Records"): an object specifier and its range,
    comparison and logical descriptors are AE records of their own types,
    built from the keyword-specified descriptors listed there. */
+namespace {
 struct KeyedDesc
 {
     AEKeyword key;
     AEDesc *desc;
 };
+}
 
+
+namespace {
 struct KeyedType
 {
     AEKeyword key;
     DescType type;
     uint32_t value;
 };
+}
+
 
 OSErr build_record(DescType type, std::initializer_list<KeyedType> values,
                    std::initializer_list<KeyedDesc> descs, Boolean disposeInputs, AEDesc *result)
@@ -473,12 +390,15 @@ LONGINT glue_CallComponent(Ptr params)
    caller's ComponentCallNow(what, paramSize) would have them: room for the
    result, the instance (first parameter, deepest), the rest at their own
    sizes, then paramSize and what; D0 = 0. */
+namespace {
 struct ComponentRoutine
 {
     const char *name;
     uint16_t what;
     std::initializer_list<int> sizes; /* after the instance: 2 or 4 bytes */
 };
+}
+
 
 syn68k_addr_t call_component_routine(const ComponentRoutine& r)
 {
@@ -610,62 +530,11 @@ OSErr glue_CloseComponent(ComponentInstance ci)
 void Executor::builtinlibs::addGlueEntrypoints()
 {
     {
-        exportGlue("c2pstr", &glue_c2pstr);
-        exportGlue("p2cstr", &glue_p2cstr);
         /* the older names (Strings.h's OLDROUTINENAMES): MPW's CFM-68K
            runtime calls P2CStr for the application's name */
-        exportGlue("C2PStr", &glue_c2pstr);
-        exportGlue("P2CStr", &glue_p2cstr);
-        exportGlue("c2pstrcpy", &glue_c2pstrcpy);
-        exportGlue("p2cstrcpy", &glue_p2cstrcpy);
-        exportGlue("CopyPascalStringToC", &glue_CopyPascalStringToC);
-        exportGlue("CopyCStringToPascal", &glue_CopyCStringToPascal);
-        exportGlue("EqualString", &glue_EqualString);
-        exportGlue("RelString", &glue_RelString);
-        exportGlue("IUEqualString", &glue_IUEqualString);
-        exportGlue("IUCompString", &glue_IUCompString);
-        exportGlue("IUEqualPString", &glue_IUEqualPString);
-        exportGlue("IUCompPString", &glue_IUCompPString);
-        exportGlue("SetCurrentA5", &glue_SetCurrentA5);
-        exportGlue("SetA5", &glue_SetA5);
-        exportGlue("ReadLocation", &glue_ReadLocation);
-        exportGlue("WriteLocation", &glue_WriteLocation);
-        exportGlue("FlushInstructionCache", &glue_FlushInstructionCache);
-        exportGlue("FlushDataCache", &glue_FlushDataCache);
-        exportGlue("GetMyZone", &glue_GetMyZone);
-        exportGlue("InlineGetHandleSize", &glue_InlineGetHandleSize);
-        exportGlue("GetSysFont", &glue_GetSysFont);
-        exportGlue("GetAppFont", &glue_GetAppFont);
-        exportGlue("LMGetSysFontSize", &glue_LMGetSysFontSize);
-        exportGlue("LMSetSysFontSize", &glue_LMSetSysFontSize);
-        exportGlue("GetDblTime", &glue_GetDblTime);
-        exportGlue("GetCaretTime", &glue_GetCaretTime);
-        exportGlue("GetSysDirection", &glue_GetSysDirection);
-        exportGlue("DialogCut", &glue_DialogCut);
-        exportGlue("DialogCopy", &glue_DialogCopy);
-        exportGlue("DialogPaste", &glue_DialogPaste);
-        exportGlue("DialogDelete", &glue_DialogDelete);
-        exportGlue("CountDITL", &glue_CountDITL);
-        exportGlue("AppendDITL", &glue_AppendDITL);
-        exportGlue("ShortenDITL", &glue_ShortenDITL);
-        exportGlue("GetIndPattern", &glue_GetIndPattern);
-        exportGlue("GetVInfo", &glue_GetVInfo);
-        exportGlue("DirCreate", &glue_DirCreate);
-        exportGlue("PBHOpenRFDenySync", &glue_PBHOpenRFDenySync);
-        exportGlue("PBHOpenRFDenyAsync", &glue_PBHOpenRFDenyAsync);
-        exportGlue("YieldToAnyThread", &glue_YieldToAnyThread);
-        exportGlue("OpenDefaultComponent", &glue_OpenDefaultComponent);
-        exportGlue("OpenComponent", &glue_OpenComponent);
-        exportGlue("CloseComponent", &glue_CloseComponent);
-        exportGlue("AEObjectInit", &glue_AEObjectInit);
         add_call_component_upp();
         for(const ComponentRoutine& r : osa_routines)
             builtinlibs::addCFM68KEntrypoint("AppleScriptLib", r.name,
                 [&r](syn68k_addr_t) { return call_component_routine(r); });
-        exportGlue("CreateOffsetDescriptor", &glue_CreateOffsetDescriptor);
-        exportGlue("CreateCompDescriptor", &glue_CreateCompDescriptor);
-        exportGlue("CreateLogicalDescriptor", &glue_CreateLogicalDescriptor);
-        exportGlue("CreateObjSpecifier", &glue_CreateObjSpecifier);
-        exportGlue("CreateRangeDescriptor", &glue_CreateRangeDescriptor);
     }
 }

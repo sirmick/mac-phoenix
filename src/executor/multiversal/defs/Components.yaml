@@ -25,3 +25,45 @@
 - typedef:
     name: ComponentInstance
     type: ComponentInstanceRecord*
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code. Only for Executor until the C side has
+# 68k glue for them.
+
+- only-for: Executor
+  function:
+    name: OpenDefaultComponent
+    return: "ComponentInstance"
+    args:
+      - name: "type"
+        type: "OSType"
+      - name: "subType"
+        type: "OSType"
+    library: InterfaceLib
+    executor: glue_OpenDefaultComponent
+
+# ####
+
+- only-for: Executor
+  function:
+    name: OpenComponent
+    return: "ComponentInstance"
+    args:
+      - name: "c"
+        type: "Component"
+    library: InterfaceLib
+    executor: glue_OpenComponent
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CloseComponent
+    return: "OSErr"
+    args:
+      - name: "ci"
+        type: "ComponentInstance"
+    library: InterfaceLib
+    executor: glue_CloseComponent

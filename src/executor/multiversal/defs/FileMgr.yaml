@@ -1453,6 +1453,8 @@
         type: INTEGER*
       - name: freeb
         type: LONGINT*
+    library: InterfaceLib
+    executor: GetVInfo
 
 # ####
 
@@ -5221,3 +5223,49 @@
     executor: C_
 
 # ####
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code. Only for Executor until the C side has
+# 68k glue for them.
+
+- only-for: Executor
+  function:
+    name: DirCreate
+    return: "OSErr"
+    args:
+      - name: "vRefNum"
+        type: "INTEGER"
+      - name: "parentDirID"
+        type: "LONGINT"
+      - name: "name"
+        type: "ConstStringPtr"
+      - name: "createdDirID"
+        type: "LONGINT*"
+    library: InterfaceLib
+    executor: glue_DirCreate
+
+# ####
+
+- only-for: Executor
+  function:
+    name: PBHOpenRFDenySync
+    return: "OSErr"
+    args:
+      - name: "pb"
+        type: "HParmBlkPtr"
+    library: InterfaceLib
+    executor: glue_PBHOpenRFDenySync
+
+# ####
+
+- only-for: Executor
+  function:
+    name: PBHOpenRFDenyAsync
+    return: "OSErr"
+    args:
+      - name: "pb"
+        type: "HParmBlkPtr"
+    library: InterfaceLib
+    executor: glue_PBHOpenRFDenyAsync

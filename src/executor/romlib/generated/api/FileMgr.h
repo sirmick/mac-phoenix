@@ -496,7 +496,8 @@ QHdrPtr C_GetVCBQHdr();NOTRAP_FUNCTION(GetVCBQHdr);
 QHdrPtr C_GetDrvQHdr();NOTRAP_FUNCTION(GetDrvQHdr);
 
 
-OSErr GetVInfo(INTEGER drv, StringPtr voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *freeb);
+OSErr GetVInfo(INTEGER drv, StringPtr voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *freeb);LIBRARY_FUNCTION(InterfaceLib, GetVInfo, GetVInfo);
+
 
 OSErr GetVRefNum(INTEGER prn, GUEST<INTEGER> *vrn);
 
@@ -1015,6 +1016,15 @@ OSErr C_FSGetDataForkName(HFSUniStr255Ptr dataForkName);PASCAL_SUBTRAP(FSGetData
 
 
 OSErr C_FSGetResourceForkName(HFSUniStr255Ptr resourceForkName);PASCAL_SUBTRAP(FSGetResourceForkName, 0xAA52, 0x0019, HighLevelFSDispatch);
+
+
+OSErr glue_DirCreate(INTEGER vRefNum, LONGINT parentDirID, ConstStringPtr name, GUEST<LONGINT> *createdDirID);LIBRARY_FUNCTION(InterfaceLib, DirCreate, glue_DirCreate);
+
+
+OSErr glue_PBHOpenRFDenySync(HParmBlkPtr pb);LIBRARY_FUNCTION(InterfaceLib, PBHOpenRFDenySync, glue_PBHOpenRFDenySync);
+
+
+OSErr glue_PBHOpenRFDenyAsync(HParmBlkPtr pb);LIBRARY_FUNCTION(InterfaceLib, PBHOpenRFDenyAsync, glue_PBHOpenRFDenyAsync);
 
 
 } /* namespace Executor */

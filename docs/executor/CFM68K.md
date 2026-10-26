@@ -102,8 +102,9 @@ OS Runtime Architectures*:
    through the trap table when an extension patched them. InterfaceLib's
    other names (DragLib, ThreadsLib, AppearanceLib, PrivateInterfaceLib, ...)
    answer from the same table when no file has them.
-   `cfm68k_glue.cpp` adds what is glue on a Mac, not a trap Executor wraps
-   (InterfaceLib has it by name): string conversions and comparisons, Dialog
+   What is glue on a Mac, not a trap Executor wraps (InterfaceLib has it
+   by name), is in the definitions with `library: InterfaceLib` (LIBRARIES.md
+   step 3), the routines in `cfm68k_glue.cpp` or Executor's own: string conversions and comparisons, Dialog
    Manager glue, `DirCreate`, `ReadLocation`, the Object Support Library's
    record builders (`CreateObjSpecifier` & co.), component calls
    (`OpenDefaultComponent`, `CallComponentUPP` for a `ComponentParameters`
