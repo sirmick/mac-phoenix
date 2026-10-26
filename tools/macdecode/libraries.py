@@ -256,14 +256,19 @@ def executor_exports():
     and PowerPC), or "trap" (InterfaceLib's export of a trap Executor
     implements)."""
     out = defaultdict(dict)
-    for f in sorted(DEFS.glob("*.yaml")):
-        for item in yaml.safe_load(f.read_text()) or []:
+    files = {f: yaml.safe_load(f.read_text()) or [] for f in sorted(DEFS.glob("*.yaml"))}
+    component_dispatchers = {i["dispatcher"]["name"] for items in files.values() for i in items
+                             if isinstance(i, dict) and "dispatcher" in i
+                             and i["dispatcher"].get("selector-location") == "Component"}
+    for f, items in files.items():
+        for item in items:
             fn = item.get("function") if isinstance(item, dict) else None
             if not fn:
                 continue
             lib = fn.get("library")
             if lib:
-                how = "ot" if fn.get("aslm") else "raw" if fn.get("raw") else "typed"
+                how = ("ot" if fn.get("aslm") else "raw" if fn.get("raw")
+                       else "component" if fn.get("dispatcher") in component_dispatchers else "typed")
                 out[lib][fn["name"]] = {"how": how, "file": f.stem,
                                         "aslm": fn.get("aslm"), "executor": fn.get("executor")}
             elif fn.get("executor") and item.get("api") != "carbon":

@@ -532,12 +532,15 @@ class Site:
         us = set(q.get("u", [])) if filtered else {"used", "unused"}
         text = q.get("q", [""])[0].strip().lower()
         how_label = {"typed": "typed", "raw": "raw (PowerPC)", "ot": "Open Transport", "trap": "trap's export",
+                     "component": "component call (CFM-68K)",
                      "data": "data (sources)", "": "—"}
 
         def routes(r):
             h = r["how"]
             if not h:
                 return ""
+            if h == "component":
+                return "CFM-68K"
             out = ["PowerPC"]
             if h in ("typed", "trap", "ot", "data"):
                 out.append("CFM-68K" if h != "ot" else "68k ASLM")
